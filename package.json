@@ -11,7 +11,7 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server/index.js",
-    "test": "node --test js/money.test.js js/store.test.js"
+    "test": "node --test client/js/money.test.js client/js/store.test.js"
   },
   "dependencies": {
     "dotenv": "^16.4.5",

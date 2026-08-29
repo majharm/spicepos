@@ -16,9 +16,23 @@ import { getPlatformSettings } from "./settings.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.join(__dirname, "..");
+const publicDir = path.join(root, "client");
 const app = express();
 app.set("trust proxy", true);
 app.use(express.json({ limit: "8mb" }));
+app.use((req, _res, next) => {
+  const raw = req.url || "";
+  if (raw.startsWith("/api/") || raw === "/api") return next();
+  if (
+    raw.startsWith("/auth/") ||
+    raw.startsWith("/health") ||
+    raw.startsWith("/support-contact") ||
+    raw.startsWith("/bootstrap")
+  ) {
+    req.url = `/api${raw}`;
+  }
+  next();
+});
 app.use((req, res, next) => {
   if (req.path === "/.env" || req.path.startsWith("/.env.")) {
     res.status(404).end();
@@ -452,18 +466,34 @@ app.post("/api/checkout", requireStaff, requirePerm("counter"), async (req, res)
 });
 
 app.get("/", (_req, res) => {
-  res.sendFile(path.join(root, "index.html"));
+  res.sendFile(path.join(publicDir, "index.html"));
 });
 
-app.use(express.static(root));
+app.use("/api", (req, res) => {
+  res.status(404).json({ error: `Unknown API ${req.method} ${req.originalUrl}` });
+});
+
+app.use(express.static(publicDir));
 
 const port = Number(process.env.PORT || 5173);
 const host = process.env.HOST || "0.0.0.0";
-app.listen(port, host, () => {
-  console.log(`Multi-tenant POS listening on ${host}:${port}`);
-  ensureSchema()
-    .then(() => seedPlatform())
-    .catch((err) => {
-      console.error("Schema/seed error (API is still up; check DB env vars)", err);
+
+function startHttp() {
+  const passenger = globalThis.PhusionPassenger;
+  if (passenger) {
+    passenger.configure({ autoInstall: false });
+    app.listen("passenger");
+    console.log("Multi-tenant POS listening via Passenger");
+  } else {
+    app.listen(port, host, () => {
+      console.log(`Multi-tenant POS listening on ${host}:${port}`);
     });
-});
+  }
+}
+
+startHttp();
+ensureSchema()
+  .then(() => seedPlatform())
+  .catch((err) => {
+    console.error("Schema/seed error (API is still up; check DB env vars)", err);
+  });
