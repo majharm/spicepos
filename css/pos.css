@@ -247,7 +247,39 @@ th { color: var(--muted); font-size: 12px; font-weight: 600; }
   background: var(--bg-raised);
   color: var(--text);
 }
-#btn-reset { margin: 12px 20px 32px; }
+.settings.wide {
+  max-width: 920px;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  align-items: end;
+}
+.settings.wide button { margin-top: 18px; }
+.pack-compose {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 6px;
+}
+.pack-compose label {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  color: var(--text);
+}
+.pack-compose input[type="number"] { width: 110px; }
+.ticket-pack {
+  padding: 0 16px;
+  color: var(--saffron);
+  font-size: 13px;
+  font-weight: 700;
+}
+.print-actions { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+
+@media print {
+  body { background: #fff; color: #111; }
+  .nav, .topbar, .hint, .pay, .qty button, .nav-btn { display: none !important; }
+  .app { display: block; }
+  .view[hidden] { display: none !important; }
+  .receipt { background: #fff; color: #111; max-height: none; }
+}
 
 .lock, .modal {
   position: fixed;

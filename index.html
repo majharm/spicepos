@@ -21,6 +21,7 @@
         <button class="nav-btn" type="button" data-view="orders">Orders</button>
         <button class="nav-btn" type="button" data-view="purchases">Purchases</button>
         <button class="nav-btn" type="button" data-view="suppliers">Suppliers</button>
+        <button class="nav-btn" type="button" data-view="support">Support</button>
         <button class="nav-btn" type="button" data-view="reports">Reports</button>
         <button class="nav-btn" type="button" data-view="settings">Settings</button>
         <div class="nav-foot">
@@ -37,6 +38,9 @@
               <input id="search" type="search" placeholder="Search spice, Marathi name, or code" autocomplete="off" />
             </form>
             <select id="customer" class="select"></select>
+            <select id="pack-choice" class="select">
+              <option value="">Loose items (no pack)</option>
+            </select>
             <select id="pay-method" class="select">
               <option value="cash">Cash</option>
               <option value="upi">UPI</option>
@@ -48,6 +52,7 @@
             <div class="catalog" id="catalog"></div>
             <aside class="ticket">
               <h2>Current bill</h2>
+              <div class="ticket-pack" id="chosen-pack">Pack: Loose items</div>
               <div id="pack-bar" class="pack-bar"></div>
               <div class="lines" id="lines"></div>
               <div class="totals">
@@ -59,7 +64,7 @@
               <div class="pay">
                 <button class="btn danger" id="btn-clear" type="button">Clear</button>
                 <div class="pay-row">
-                  <button class="btn primary" id="btn-pay" type="button">Save order to MySQL</button>
+                  <button class="btn primary" id="btn-pay" type="button">Save</button>
                 </div>
                 <div class="hint" id="hint"></div>
               </div>
@@ -69,17 +74,57 @@
 
         <section class="view" id="view-items" hidden>
           <h2>Items</h2>
-          <p class="lede">Live stock from Hostinger MySQL. Rates are per KG. Stock is grams.</p>
+          <p class="lede">Category and subcategory, rates per kg, stock in grams.</p>
+          <form class="settings wide" id="item-form">
+            <input type="hidden" id="item-id" />
+            <label>Name <input id="item-name" required /></label>
+            <label>Local name <input id="item-local" /></label>
+            <label>Category
+              <input id="item-category" list="category-list" placeholder="Whole Spices" />
+            </label>
+            <label>Subcategory
+              <input id="item-subcategory" list="subcategory-list" placeholder="Haldi / Jeera" />
+            </label>
+            <datalist id="category-list"></datalist>
+            <datalist id="subcategory-list"></datalist>
+            <label>Retail ₹/kg <input id="item-retail" type="number" step="0.01" /></label>
+            <label>B2B ₹/kg <input id="item-b2b" type="number" step="0.01" /></label>
+            <label>Purchase ₹/kg <input id="item-purchase" type="number" step="0.01" /></label>
+            <label>GST % <input id="item-gst" type="number" step="0.01" value="5" /></label>
+            <label>Stock grams <input id="item-stock" type="number" /></label>
+            <button class="btn primary" type="submit">Save</button>
+            <button class="btn" type="button" id="item-cancel">Clear</button>
+          </form>
+          <div class="hint" id="item-hint"></div>
           <div class="table-wrap" id="items-table"></div>
         </section>
         <section class="view" id="view-customers" hidden>
           <h2>Customers</h2>
-          <p class="lede">Walk-in B2C uses retail rate. B2B (Shah Foods) uses wholesale rate.</p>
+          <form class="settings wide" id="customer-form">
+            <label>Name <input id="cust-name" required /></label>
+            <label>Business name <input id="cust-biz" /></label>
+            <label>Mobile <input id="cust-mobile" required /></label>
+            <label>Type
+              <select id="cust-type">
+                <option value="b2c">B2C retail</option>
+                <option value="b2b">B2B wholesale</option>
+              </select>
+            </label>
+            <label>GSTIN <input id="cust-gstin" /></label>
+            <button class="btn primary" type="submit">Save</button>
+          </form>
+          <div class="hint" id="cust-hint"></div>
           <div class="table-wrap" id="customers-table"></div>
         </section>
         <section class="view" id="view-packs" hidden>
           <h2>Packs</h2>
-          <p class="lede">Preset masala packs from the old Replit app.</p>
+          <p class="lede">Choose spices and grams for a pack type (e.g. Special Masala Pack — 5 KG).</p>
+          <form class="settings wide" id="pack-form">
+            <label>Pack name <input id="pack-name" required placeholder="Special Masala Pack — 5 KG" /></label>
+            <div id="pack-lines" class="pack-compose"></div>
+            <button class="btn primary" type="submit">Save</button>
+          </form>
+          <div class="hint" id="pack-hint"></div>
           <div class="table-wrap" id="packs-table"></div>
         </section>
         <section class="view" id="view-orders" hidden>
@@ -92,12 +137,39 @@
         </section>
         <section class="view" id="view-purchases" hidden>
           <h2>Purchases</h2>
-          <p class="lede">Supplier bills (PO) stored in MySQL.</p>
+          <form class="settings wide" id="purchase-form">
+            <label>Supplier <select id="po-supplier"></select></label>
+            <label>Invoice no. <input id="po-invoice" /></label>
+            <label>Date <input id="po-date" type="date" /></label>
+            <label>Pay
+              <select id="po-pay">
+                <option value="cash">Cash</option>
+                <option value="upi">UPI</option>
+                <option value="credit">Credit</option>
+              </select>
+            </label>
+            <div id="po-lines" class="pack-compose"></div>
+            <button class="btn primary" type="submit">Save</button>
+          </form>
+          <div class="hint" id="po-hint"></div>
           <div class="table-wrap" id="purchases-table"></div>
         </section>
         <section class="view" id="view-suppliers" hidden>
           <h2>Suppliers</h2>
+          <form class="settings wide" id="supplier-form">
+            <label>Name <input id="sup-name" required /></label>
+            <label>Contact <input id="sup-contact" /></label>
+            <label>Mobile <input id="sup-mobile" /></label>
+            <label>GSTIN <input id="sup-gstin" /></label>
+            <button class="btn primary" type="submit">Save</button>
+          </form>
+          <div class="hint" id="sup-hint"></div>
           <div class="table-wrap" id="suppliers-table"></div>
+        </section>
+        <section class="view" id="view-support" hidden>
+          <h2>Support</h2>
+          <p class="lede">Shop contact from company settings. Call or email for till help.</p>
+          <div class="report-grid" id="support-cards"></div>
         </section>
         <section class="view" id="view-reports" hidden>
           <h2>Today’s report</h2>
@@ -112,7 +184,7 @@
             <label>Phone <input id="set-phone" /></label>
             <label>Email <input id="set-email" /></label>
             <label>GSTIN <input id="set-gstin" /></label>
-            <button class="btn primary" type="submit">Save to MySQL</button>
+            <button class="btn primary" type="submit">Save</button>
           </form>
           <div class="hint" id="settings-hint"></div>
         </section>

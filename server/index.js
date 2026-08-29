@@ -3,19 +3,12 @@ import express from "express";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { BUSINESS_ID, query, withTransaction } from "./db.js";
+import { lineAmount, round2, registerCrud } from "./crud.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.join(__dirname, "..");
 const app = express();
 app.use(express.json({ limit: "1mb" }));
-
-function lineAmount(quantityGm, ratePerKg) {
-  return (Number(quantityGm) / 1000) * Number(ratePerKg);
-}
-
-function round2(n) {
-  return Math.round(Number(n) * 100) / 100;
-}
 
 app.get("/api/health", async (_req, res) => {
   try {
@@ -33,7 +26,7 @@ app.get("/api/bootstrap", async (_req, res) => {
       [BUSINESS_ID],
     );
     const items = await query(
-      "SELECT * FROM items WHERE business_id = ? AND status = 'active' ORDER BY name",
+      "SELECT * FROM items WHERE business_id = ? ORDER BY category, subcategory, name",
       [BUSINESS_ID],
     );
     const customers = await query(
@@ -41,7 +34,7 @@ app.get("/api/bootstrap", async (_req, res) => {
       [BUSINESS_ID],
     );
     const packs = await query(
-      "SELECT * FROM packs WHERE business_id = ? AND status = 'active' ORDER BY name",
+      "SELECT * FROM packs WHERE business_id = ? ORDER BY name",
       [BUSINESS_ID],
     );
     const packItems = packs.length
@@ -98,7 +91,19 @@ app.get("/api/purchases", async (_req, res) => {
       "SELECT * FROM purchases WHERE business_id = ? ORDER BY created_at DESC LIMIT 80",
       [BUSINESS_ID],
     );
-    res.json(purchases);
+    const ids = purchases.map((p) => p.id);
+    const lines = ids.length
+      ? await query(
+          `SELECT * FROM purchase_lines WHERE purchase_id IN (${ids.map(() => "?").join(",")})`,
+          ids,
+        )
+      : [];
+    res.json(
+      purchases.map((p) => ({
+        ...p,
+        lines: lines.filter((l) => l.purchase_id === p.id),
+      })),
+    );
   } catch (err) {
     res.status(500).json({ error: String(err.message) });
   }
@@ -193,6 +198,8 @@ app.post("/api/settings", async (req, res) => {
     res.status(500).json({ error: String(err.message) });
   }
 });
+
+registerCrud(app);
 
 app.post("/api/checkout", async (req, res) => {
   const { customerId, paymentMethod, lines, packId, packCount } = req.body || {};
