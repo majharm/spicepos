@@ -123,10 +123,17 @@ function renderStats() {
   els.todayCount.textContent = String(sales.count);
 }
 
+function setPayEnabled(enabled) {
+  for (const id of ["pay-cash", "pay-upi", "pay-card", "btn-hold", "btn-clear"]) {
+    document.getElementById(id).disabled = !enabled;
+  }
+}
+
 function renderAll() {
   renderCatalog();
   renderCart();
   renderStats();
+  setPayEnabled(state.cart.length > 0 && !state.locked);
   els.lock.hidden = !state.locked;
 }
 
@@ -168,6 +175,10 @@ function pay(method) {
   if (paying) return;
   paying = true;
   try {
+    if (state.cart.length === 0) {
+      setHint("Cart is empty", "error");
+      return;
+    }
     let tenderedPaise = 0;
     if (method === "cash") {
       const parsed = parseMoneyInput(els.tender.value);

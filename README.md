@@ -11,6 +11,12 @@ python3 -m http.server 5173 --bind 127.0.0.1
 
 Open `http://127.0.0.1:5173`. Unlock with PIN **1234**.
 
+Optional browser checklist (needs Chrome + `npm install puppeteer-core`):
+
+```bash
+node scripts/e2e.mjs
+```
+
 ## Shift flow
 
 1. Search or tap a spice pack to add it to the bill.

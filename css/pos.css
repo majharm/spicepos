@@ -176,7 +176,8 @@ button { cursor: pointer; }
   display: grid;
   gap: 8px;
 }
-.pay-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+.pay-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.pay-row .btn { width: 100%; }
 .tender {
   display: flex;
   gap: 8px;
@@ -258,7 +259,9 @@ button { cursor: pointer; }
 }
 
 @media (max-width: 900px) {
+  .topbar { flex-wrap: wrap; }
+  .search { order: 3; flex: 1 0 100%; }
+  .stats { display: none; }
   .workspace { grid-template-columns: 1fr; }
   .ticket { border-left: 0; border-top: 1px solid var(--line); min-height: 50vh; }
-  .stats { display: none; }
 }
