@@ -90,36 +90,52 @@ async function render() {
           ["POS devices", t.devices],
           ["Transactions", t.transactions],
           ["Today platform sales", money(t.todaySales)],
+          ["Monthly subscription fees", money(t.subscriptionRevenue)],
         ]
           .map(([k, v]) => `<div class="report-card"><span>${k}</span><strong>${v}</strong></div>`)
           .join("")}
       </div>
       <div class="table-wrap" style="padding:20px 0">${table(
-        ["Business", "Status", "Users", "Branches", "Today"],
-        d.businesses.map((b) => [b.name, b.computed_status, b.users, b.branches, money(b.today_sales)]),
+        ["Business", "Status", "Plan", "Fee / month", "Users", "Branches", "Today"],
+        d.businesses.map((b) => [
+          b.name,
+          b.computed_status,
+          b.plan_name || b.plan_id || "—",
+          money(b.fee_monthly),
+          b.users,
+          b.branches,
+          money(b.today_sales),
+        ]),
       )}</div>`;
     } else if (tab === "biz") {
-      const rows = await api("/api/master/businesses");
+      const [rows, plans] = await Promise.all([api("/api/master/businesses"), api("/api/master/plans")]);
+      const planOptions = plans
+        .map((p) => `<option value="${p.id}">${p.name} · ${money(p.fee_monthly)} / month</option>`)
+        .join("");
       body.innerHTML = `<form class="settings wide" id="biz-form">
         <label>Name <input name="name" required /></label>
         <label>Owner <input name="owner_name" /></label>
         <label>Mobile <input name="mobile" /></label>
         <label>Email <input name="email" /></label>
         <label>Type <input name="business_type" value="retail" /></label>
-        <label>Plan <input name="plan_id" value="trial" /></label>
+        <label>Plan <select name="plan_id">${planOptions}</select></label>
         <label>Expiry <input name="subscription_expires_at" type="date" /></label>
         <label>Admin email <input name="admin_email" /></label>
         <label>Admin password <input name="admin_password" type="password" /></label>
         <button class="btn primary" type="submit">Create business</button>
       </form>
       <div class="table-wrap">${table(
-        ["Name", "Code", "Status", "Plan", "Expiry", ""],
-        rows.map(
-          (b) =>
-            [b.name, b.code, b.computed_status, b.plan_id, b.subscription_expires_at || "—",
-              `<button class="btn" data-act="suspend" data-id="${b.id}">Suspend</button>
-               <button class="btn" data-act="activate" data-id="${b.id}">Activate</button>`],
-        ),
+        ["Name", "Code", "Status", "Plan", "Fee / month", "Expiry", ""],
+        rows.map((b) => [
+          b.name,
+          b.code,
+          b.computed_status,
+          b.plan_name || b.plan_id,
+          money(b.fee_monthly),
+          b.subscription_expires_at || "—",
+          `<button class="btn" data-act="suspend" data-id="${b.id}">Suspend</button>
+           <button class="btn" data-act="activate" data-id="${b.id}">Activate</button>`,
+        ]),
       )}</div>`;
       $("biz-form").onsubmit = async (e) => {
         e.preventDefault();
@@ -144,10 +160,36 @@ async function render() {
       );
     } else if (tab === "plans") {
       const rows = await api("/api/master/plans");
-      body.innerHTML = table(
-        ["Code", "Name", "Branches", "Users", "Devices", "Products", "Active"],
-        rows.map((p) => [p.code, p.name, p.max_branches, p.max_users, p.max_devices, p.max_products, p.active ? "yes" : "no"]),
-      );
+      body.innerHTML = `<form class="settings wide" id="plan-form">
+        <label>Code <input name="code" required placeholder="BASIC" /></label>
+        <label>Name <input name="name" required placeholder="Basic" /></label>
+        <label>Fee ₹ / month <input name="fee_monthly" type="number" min="0" step="0.01" required value="0" /></label>
+        <label>Max branches <input name="max_branches" type="number" min="1" value="1" /></label>
+        <label>Max users <input name="max_users" type="number" min="1" value="3" /></label>
+        <label>Max devices <input name="max_devices" type="number" min="1" value="2" /></label>
+        <label>Max products <input name="max_products" type="number" min="1" value="500" /></label>
+        <button class="btn primary" type="submit">Save plan</button>
+      </form>
+      <p class="lede">Same code updates an existing plan, including the subscription fee stored in MySQL.</p>
+      <div class="table-wrap">${table(
+        ["Code", "Name", "Fee / month", "Branches", "Users", "Devices", "Products", "Active"],
+        rows.map((p) => [
+          p.code,
+          p.name,
+          money(p.fee_monthly),
+          p.max_branches,
+          p.max_users,
+          p.max_devices,
+          p.max_products,
+          p.active ? "yes" : "no",
+        ]),
+      )}</div>`;
+      $("plan-form").onsubmit = async (e) => {
+        e.preventDefault();
+        const fd = Object.fromEntries(new FormData(e.target).entries());
+        await api("/api/master/plans", { method: "POST", body: JSON.stringify(fd) });
+        render();
+      };
     } else if (tab === "branches") {
       const rows = await api("/api/master/branches");
       body.innerHTML = table(

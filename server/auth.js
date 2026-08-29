@@ -335,13 +335,21 @@ export function registerAuth(app) {
     res.json({ ok: true });
   });
 
-  app.get("/api/auth/me", (req, res) => {
+  app.get("/api/auth/me", async (req, res) => {
     if (req.auth?.type === "master") {
       res.json({ ok: true, type: "master", admin: req.auth.admin });
       return;
     }
     if (req.auth?.type === "staff") {
       const status = publicStatus(req.auth.business);
+      let plan = null;
+      if (req.auth.business?.plan_id) {
+        const rows = await query(
+          "SELECT id, code, name, fee_monthly FROM subscription_plans WHERE id = ?",
+          [req.auth.business.plan_id],
+        );
+        plan = rows[0] || null;
+      }
       res.json({
         ok: true,
         type: "staff",
@@ -357,8 +365,10 @@ export function registerAuth(app) {
           id: req.auth.business?.id,
           name: req.auth.business?.name,
           status,
+          plan_id: req.auth.business?.plan_id,
           subscription_expires_at: req.auth.business?.subscription_expires_at,
         },
+        plan,
       });
       return;
     }

@@ -91,11 +91,13 @@ export async function ensureSchema() {
     max_devices INT NOT NULL DEFAULT 2,
     max_products INT NOT NULL DEFAULT 500,
     max_invoices INT NOT NULL DEFAULT 1000,
+    fee_monthly DECIMAL(12,2) NOT NULL DEFAULT 0,
     features_json TEXT NULL,
     active TINYINT NOT NULL DEFAULT 1,
     created_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     updated_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3)
   )`);
+  await addColumn("subscription_plans", "fee_monthly", "DECIMAL(12,2) NOT NULL DEFAULT 0");
 
   await create(`CREATE TABLE IF NOT EXISTS branches (
     id VARCHAR(255) PRIMARY KEY,
@@ -185,21 +187,22 @@ export async function ensureSchema() {
 
 async function seedPlans() {
   const plans = [
-    ["trial", "TRIAL", 1, 2, 1, 50, 100],
-    ["basic", "BASIC", 1, 5, 2, 500, 1000],
-    ["standard", "STANDARD", 3, 15, 5, 2000, 5000],
-    ["premium", "PREMIUM", 10, 40, 15, 10000, 20000],
-    ["enterprise", "ENTERPRISE", 100, 500, 200, 100000, 1000000],
+    ["trial", "TRIAL", 1, 2, 1, 50, 100, 0],
+    ["basic", "BASIC", 1, 5, 2, 500, 1000, 999],
+    ["standard", "STANDARD", 3, 15, 5, 2000, 5000, 2499],
+    ["premium", "PREMIUM", 10, 40, 15, 10000, 20000, 4999],
+    ["enterprise", "ENTERPRISE", 100, 500, 200, 100000, 1000000, 14999],
   ];
-  for (const [id, name, b, u, d, p, inv] of plans) {
+  for (const [id, name, b, u, d, p, inv, fee] of plans) {
     await query(
       `INSERT INTO subscription_plans
-         (id, code, name, max_branches, max_users, max_devices, max_products, max_invoices, active)
-       VALUES (?,?,?,?,?,?,?,?,1)
+         (id, code, name, max_branches, max_users, max_devices, max_products, max_invoices, fee_monthly, active)
+       VALUES (?,?,?,?,?,?,?,?,?,1)
        ON DUPLICATE KEY UPDATE name=VALUES(name), max_branches=VALUES(max_branches),
          max_users=VALUES(max_users), max_devices=VALUES(max_devices),
-         max_products=VALUES(max_products), max_invoices=VALUES(max_invoices)`,
-      [id, name, name, b, u, d, p, inv],
+         max_products=VALUES(max_products), max_invoices=VALUES(max_invoices),
+         fee_monthly = IF(fee_monthly = 0 AND VALUES(fee_monthly) > 0, VALUES(fee_monthly), fee_monthly)`,
+      [id, name, name, b, u, d, p, inv, fee],
     );
   }
 }

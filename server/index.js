@@ -94,6 +94,14 @@ app.get("/api/bootstrap", requireStaff, async (_req, res) => {
     res.json({
       company: company || { name: business?.name || "POS" },
       business,
+      plan: business?.plan_id
+        ? (
+            await query(
+              "SELECT id, code, name, fee_monthly, max_branches, max_users, max_devices FROM subscription_plans WHERE id = ?",
+              [business.plan_id],
+            )
+          )[0] || null
+        : null,
       support: await getPlatformSettings(),
       items,
       customers,

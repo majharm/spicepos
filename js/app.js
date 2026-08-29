@@ -15,6 +15,7 @@ const state = {
   session: null,
   perms: {},
   support: {},
+  plan: null,
 };
 
 function $(id) {
@@ -454,6 +455,7 @@ async function loadBootstrap() {
   const data = await api("/api/bootstrap");
   state.company = data.company;
   state.support = data.support || {};
+  state.plan = data.plan || null;
   state.items = data.items;
   state.customers = data.customers;
   state.packs = data.packs;
@@ -485,6 +487,8 @@ async function loadDashboard() {
       ["Today's purchase", money(d.purchase)],
       ["Stock value", money(d.stockValue)],
       ["Customer outstanding", money(d.outstanding)],
+      ["Plan", state.plan?.name || state.plan?.code || "—"],
+      ["Subscription fee / month", money(state.plan?.fee_monthly)],
     ]
       .map(([k, v]) => `<div class="report-card"><span>${k}</span><strong>${v}</strong></div>`)
       .join("");

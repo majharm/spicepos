@@ -27,12 +27,21 @@ export function registerMaster(app) {
       const [sales] = await query(
         `SELECT COALESCE(SUM(total),0) AS takings FROM sales_orders WHERE DATE(created_at)=CURDATE()`,
       );
+      const plans = await query("SELECT * FROM subscription_plans");
+      const planMap = Object.fromEntries(plans.map((p) => [p.id, p]));
+      const monthlyFees = businesses.reduce((sum, b) => {
+        if (publicStatus(b) !== "active") return sum;
+        return sum + Number(planMap[b.plan_id]?.fee_monthly || 0);
+      }, 0);
       const byBiz = await query(
-        `SELECT b.id, b.name, b.status, b.subscription_expires_at,
+        `SELECT b.id, b.name, b.status, b.subscription_expires_at, b.plan_id,
+                p.name AS plan_name, p.fee_monthly,
                 (SELECT COUNT(*) FROM staff_users u WHERE u.business_id=b.id) AS users,
                 (SELECT COUNT(*) FROM branches br WHERE br.business_id=b.id) AS branches,
                 (SELECT COALESCE(SUM(total),0) FROM sales_orders s WHERE s.business_id=b.id AND DATE(s.created_at)=CURDATE()) AS today_sales
-         FROM businesses b ORDER BY b.name`,
+         FROM businesses b
+         LEFT JOIN subscription_plans p ON p.id = b.plan_id
+         ORDER BY b.name`,
       );
       return {
         totals: {
@@ -47,6 +56,7 @@ export function registerMaster(app) {
           devices: devices.n,
           transactions: tx.n,
           todaySales: sales.takings,
+          subscriptionRevenue: monthlyFees,
         },
         businesses: byBiz.map((b) => ({ ...b, computed_status: publicStatus(b) })),
       };
@@ -66,11 +76,12 @@ export function registerMaster(app) {
         .slice(0, 32);
       await query(
         `INSERT INTO subscription_plans
-           (id, code, name, max_branches, max_users, max_devices, max_products, max_invoices, active)
-         VALUES (?,?,?,?,?,?,?,?,?)
+           (id, code, name, max_branches, max_users, max_devices, max_products, max_invoices, fee_monthly, active)
+         VALUES (?,?,?,?,?,?,?,?,?,?)
          ON DUPLICATE KEY UPDATE name=VALUES(name), max_branches=VALUES(max_branches),
            max_users=VALUES(max_users), max_devices=VALUES(max_devices),
-           max_products=VALUES(max_products), max_invoices=VALUES(max_invoices), active=VALUES(active)`,
+           max_products=VALUES(max_products), max_invoices=VALUES(max_invoices),
+           fee_monthly=VALUES(fee_monthly), active=VALUES(active)`,
         [
           id,
           String(b.code || id).toUpperCase(),
@@ -80,6 +91,7 @@ export function registerMaster(app) {
           Number(b.max_devices) || 2,
           Number(b.max_products) || 500,
           Number(b.max_invoices) || 1000,
+          Number(b.fee_monthly) || 0,
           b.active === false ? 0 : 1,
         ],
       );
@@ -91,7 +103,12 @@ export function registerMaster(app) {
 
   app.get("/api/master/businesses", (_req, res) =>
     send(res, async () => {
-      const rows = await query("SELECT * FROM businesses ORDER BY name");
+      const rows = await query(
+        `SELECT b.*, p.name AS plan_name, p.fee_monthly
+         FROM businesses b
+         LEFT JOIN subscription_plans p ON p.id = b.plan_id
+         ORDER BY b.name`,
+      );
       return rows.map((b) => ({ ...b, computed_status: publicStatus(b) }));
     }),
   );
