@@ -4,6 +4,7 @@ import { requireMaster } from "./auth.js";
 import { platformAudit } from "./audit.js";
 import { defaultPerms } from "./roles.js";
 import { publicStatus } from "./auth.js";
+import { getPlatformSettings, setPlatformSetting } from "./settings.js";
 
 function send(res, fn) {
   return Promise.resolve()
@@ -323,6 +324,20 @@ export function registerMaster(app) {
       sessionHours: 12,
       notifications: await query("SELECT * FROM notifications ORDER BY created_at DESC LIMIT 20"),
     })),
+  );
+
+  app.get("/api/master/support", (_req, res) => send(res, () => getPlatformSettings()));
+
+  app.post("/api/master/support", (req, res) =>
+    send(res, async () => {
+      const phone = String(req.body?.support_phone || "").trim();
+      const email = String(req.body?.support_email || "").trim();
+      if (!phone) throw new Error("Support number is required");
+      await setPlatformSetting("support_phone", phone);
+      await setPlatformSetting("support_email", email);
+      await platformAudit(req.auth.admin, "Settings Changed", { module: "support", target_name: phone }, req);
+      return { ok: true, ...(await getPlatformSettings()) };
+    }),
   );
 
   app.post("/api/master/notifications", (req, res) =>

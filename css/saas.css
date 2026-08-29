@@ -26,8 +26,8 @@
   border: 1px solid var(--line);
   background: #fff;
 }
-.auth-links { margin-top: 18px; }
-.auth-links a { color: var(--maroon); font-weight: 650; }
+.login-support { margin-top: 16px; color: var(--muted); }
+.login-support a { color: var(--maroon); font-weight: 700; }
 .master-shell {
   display: grid;
   grid-template-columns: 220px 1fr;

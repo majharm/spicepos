@@ -165,6 +165,21 @@ export async function ensureSchema() {
     created_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3)
   )`);
 
+  await create(`CREATE TABLE IF NOT EXISTS platform_settings (
+    setting_key VARCHAR(64) PRIMARY KEY,
+    setting_value TEXT NULL,
+    updated_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3)
+  )`);
+
+  await query(
+    `INSERT INTO platform_settings (setting_key, setting_value) VALUES ('support_phone', '')
+     ON DUPLICATE KEY UPDATE setting_key = setting_key`,
+  );
+  await query(
+    `INSERT INTO platform_settings (setting_key, setting_value) VALUES ('support_email', '')
+     ON DUPLICATE KEY UPDATE setting_key = setting_key`,
+  );
+
   await seedPlans();
 }
 

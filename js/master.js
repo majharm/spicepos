@@ -70,6 +70,7 @@ async function render() {
     devices: "POS devices",
     audit: "Audit log",
     notes: "Notifications",
+    support: "Support number",
   };
   $("panel-title").textContent = titles[tab];
   const body = $("panel-body");
@@ -177,10 +178,33 @@ async function render() {
         await api("/api/master/notifications", { method: "POST", body: JSON.stringify(fd) });
         e.target.reset();
       };
+    } else if (tab === "support") {
+      const s = await api("/api/master/support");
+      body.innerHTML = `<p class="lede">This number is stored in MySQL and shown to every shop user on Support (and on the login screen).</p>
+        <form class="settings" id="support-form">
+          <label>Support phone <input name="support_phone" required value="${attr(s.support_phone)}" placeholder="9876543210" /></label>
+          <label>Support email <input name="support_email" type="email" value="${attr(s.support_email)}" /></label>
+          <button class="btn primary" type="submit">Save</button>
+          <p class="hint" id="support-save-hint"></p>
+        </form>`;
+      $("support-form").onsubmit = async (e) => {
+        e.preventDefault();
+        const fd = Object.fromEntries(new FormData(e.target).entries());
+        await api("/api/master/support", { method: "POST", body: JSON.stringify(fd) });
+        document.getElementById("support-save-hint").textContent = "Saved to MySQL. All users will see this number.";
+        document.getElementById("support-save-hint").className = "hint ok";
+      };
     }
   } catch (err) {
     body.innerHTML = `<p class="hint error">${err.message}</p>`;
   }
+}
+
+function attr(value) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("<", "&lt;");
 }
 
 function table(headers, rows) {

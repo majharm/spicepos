@@ -195,7 +195,9 @@ select { appearance: none; background-image: linear-gradient(45deg, transparent 
   position: sticky;
   top: 0;
   z-index: 6;
+  flex-wrap: wrap;
 }
+.session-support a { color: var(--maroon); font-weight: 700; }
 .session-bar span { color: var(--muted); font-size: 13px; font-weight: 600; }
 .session-bar .btn-logout { width: auto; min-width: 110px; color: var(--maroon); background: #fff; border-color: var(--maroon); }
 
@@ -561,6 +563,8 @@ tr:hover td { background: #fff7ea; }
   .app { grid-template-columns: 1fr; }
   .nav { flex-direction: row; flex-wrap: wrap; border-right: 0; border-bottom: 1px solid rgba(243, 201, 107, 0.18); }
   .nav-foot { flex-direction: row; margin-top: 0; display: flex; flex-wrap: wrap; width: 100%; }
+  .nav-foot .btn-logout { width: auto; flex: 1; min-height: 44px; }
+  .session-bar .btn-logout { min-height: 44px; }
   .workspace, .split { grid-template-columns: 1fr; }
   .ticket { border-left: 0; border-top: 1px solid var(--line); }
   .view { min-height: 0; }

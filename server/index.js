@@ -12,6 +12,7 @@ import { attachAuth, registerAuth, requireStaff, requirePerm } from "./auth.js";
 import { registerMaster } from "./master.js";
 import { registerTenant } from "./tenant.js";
 import { audit } from "./audit.js";
+import { getPlatformSettings } from "./settings.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.join(__dirname, "..");
@@ -30,13 +31,26 @@ registerAuth(app);
 app.use((req, res, next) => {
   const url = String(req.originalUrl || "");
   if (!url.startsWith("/api")) return next();
-  if (url.startsWith("/api/auth") || url.startsWith("/api/health") || url.startsWith("/api/master")) {
+  if (
+    url.startsWith("/api/auth") ||
+    url.startsWith("/api/health") ||
+    url.startsWith("/api/master") ||
+    url.startsWith("/api/support-contact")
+  ) {
     return next();
   }
   return requireStaff(req, res, next);
 });
 registerMaster(app);
 registerTenant(app);
+
+app.get("/api/support-contact", async (_req, res) => {
+  try {
+    res.json(await getPlatformSettings());
+  } catch (err) {
+    res.status(500).json({ error: String(err.message) });
+  }
+});
 
 app.get("/api/health", async (_req, res) => {
   try {
@@ -80,6 +94,7 @@ app.get("/api/bootstrap", requireStaff, async (_req, res) => {
     res.json({
       company: company || { name: business?.name || "POS" },
       business,
+      support: await getPlatformSettings(),
       items,
       customers,
       packs: packs.map((p) => ({

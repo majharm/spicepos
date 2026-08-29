@@ -23,3 +23,13 @@ document.getElementById("login-form").addEventListener("submit", async (e) => {
     hint.className = "hint error";
   }
 });
+
+fetch("/api/support-contact")
+  .then((r) => r.json())
+  .then((s) => {
+    if (!s.support_phone) return;
+    const el = document.getElementById("login-support");
+    const tel = String(s.support_phone).replaceAll(/[^\d+]/g, "");
+    el.innerHTML = `Support <a href="tel:${tel}">${s.support_phone}</a>`;
+  })
+  .catch(() => {});

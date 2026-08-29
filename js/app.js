@@ -14,6 +14,7 @@ const state = {
   logoDraft: null,
   session: null,
   perms: {},
+  support: {},
 };
 
 function $(id) {
@@ -402,15 +403,42 @@ function renderSettings() {
   showLogo($("logo-preview"), state.company.logo_url);
 }
 
+function telHref(phone) {
+  return `tel:${String(phone || "").replaceAll(/[^\d+]/g, "")}`;
+}
+
+function paintPlatformSupport() {
+  const phone = state.support?.support_phone;
+  const el = $("session-support");
+  if (!el) return;
+  if (phone) {
+    el.hidden = false;
+    el.innerHTML = `Support <a href="${telHref(phone)}">${escapeHtml(phone)}</a>`;
+  } else {
+    el.hidden = true;
+    el.textContent = "";
+  }
+}
+
 function renderSupport() {
-  $("support-cards").innerHTML = [
-    ["Shop", state.company.name],
-    ["Address", state.company.address || "—"],
-    ["Phone", state.company.phone || "—"],
-    ["Email", state.company.email || "swami@atavtelecom.in"],
-    ["GSTIN", state.company.gstin || "—"],
-  ]
-    .map(([k, v]) => `<div class="report-card"><span>${k}</span><strong>${escapeHtml(v)}</strong></div>`)
+  const phone = state.support?.support_phone;
+  const email = state.support?.support_email;
+  const cards = [
+    [
+      "Platform support",
+      phone
+        ? `<a href="${telHref(phone)}">${escapeHtml(phone)}</a>`
+        : "Not set yet by Master Admin",
+    ],
+    ["Support email", email || "—"],
+    ["Shop", escapeHtml(state.company.name)],
+    ["Address", escapeHtml(state.company.address || "—")],
+    ["Shop phone", escapeHtml(state.company.phone || "—")],
+    ["Shop email", escapeHtml(state.company.email || "—")],
+    ["GSTIN", escapeHtml(state.company.gstin || "—")],
+  ];
+  $("support-cards").innerHTML = cards
+    .map(([k, v]) => `<div class="report-card"><span>${k}</span><strong>${v}</strong></div>`)
     .join("");
 }
 
@@ -425,10 +453,12 @@ function paintHeader() {
 async function loadBootstrap() {
   const data = await api("/api/bootstrap");
   state.company = data.company;
+  state.support = data.support || {};
   state.items = data.items;
   state.customers = data.customers;
   state.packs = data.packs;
   paintHeader();
+  paintPlatformSupport();
   renderCustomersSelect();
   renderCatalog();
   renderCart();
