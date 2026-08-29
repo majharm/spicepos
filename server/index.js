@@ -2,57 +2,70 @@ import "dotenv/config";
 import express from "express";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { BUSINESS_ID, query, withTransaction } from "./db.js";
+import { query, withTransaction } from "./db.js";
+import { bid, branchId, authUser } from "./context.js";
 import { lineAmount, round2, registerCrud } from "./crud.js";
 import { buildReports, reportsToSheets } from "./reports.js";
 import { workbookXml } from "./excel.js";
+import { ensureSchema, seedPlatform } from "./schema.js";
+import { attachAuth, registerAuth, requireStaff, requirePerm } from "./auth.js";
+import { registerMaster } from "./master.js";
+import { registerTenant } from "./tenant.js";
+import { audit } from "./audit.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.join(__dirname, "..");
 const app = express();
+app.set("trust proxy", true);
 app.use(express.json({ limit: "8mb" }));
-
-async function ensureLogoColumn() {
-  const cols = await query(
-    `SELECT DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS
-     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'company_settings' AND COLUMN_NAME = 'logo_url'`,
-  );
-  if (!cols.length) {
-    await query("ALTER TABLE company_settings ADD COLUMN logo_url MEDIUMTEXT NULL");
+app.use((req, res, next) => {
+  if (req.path === "/.env" || req.path.startsWith("/.env.")) {
+    res.status(404).end();
     return;
   }
-  const type = String(cols[0].DATA_TYPE || "").toLowerCase();
-  if (type !== "mediumtext" && type !== "longtext") {
-    await query("ALTER TABLE company_settings MODIFY logo_url MEDIUMTEXT");
+  next();
+});
+app.use(attachAuth);
+registerAuth(app);
+app.use((req, res, next) => {
+  const url = String(req.originalUrl || "");
+  if (!url.startsWith("/api")) return next();
+  if (url.startsWith("/api/auth") || url.startsWith("/api/health") || url.startsWith("/api/master")) {
+    return next();
   }
-}
+  return requireStaff(req, res, next);
+});
+registerMaster(app);
+registerTenant(app);
 
 app.get("/api/health", async (_req, res) => {
   try {
     await query("SELECT 1");
-    res.json({ ok: true, businessId: BUSINESS_ID });
+    res.json({ ok: true, multiTenant: true });
   } catch (err) {
     res.status(500).json({ ok: false, error: String(err.message) });
   }
 });
 
-app.get("/api/bootstrap", async (_req, res) => {
+app.get("/api/bootstrap", requireStaff, async (_req, res) => {
   try {
+    const businessId = bid();
     const [company] = await query(
       "SELECT * FROM company_settings WHERE business_id = ? LIMIT 1",
-      [BUSINESS_ID],
+      [businessId],
     );
+    const [business] = await query("SELECT * FROM businesses WHERE id = ?", [businessId]);
     const items = await query(
       "SELECT * FROM items WHERE business_id = ? ORDER BY category, subcategory, name",
-      [BUSINESS_ID],
+      [businessId],
     );
     const customers = await query(
       "SELECT * FROM customers WHERE business_id = ? ORDER BY name",
-      [BUSINESS_ID],
+      [businessId],
     );
     const packs = await query(
       "SELECT * FROM packs WHERE business_id = ? ORDER BY name",
-      [BUSINESS_ID],
+      [businessId],
     );
     const packItems = packs.length
       ? await query(
@@ -65,7 +78,8 @@ app.get("/api/bootstrap", async (_req, res) => {
         )
       : [];
     res.json({
-      company: company || { name: "SWAMI MASALE SASWAD" },
+      company: company || { name: business?.name || "POS" },
+      business,
       items,
       customers,
       packs: packs.map((p) => ({
@@ -78,11 +92,11 @@ app.get("/api/bootstrap", async (_req, res) => {
   }
 });
 
-app.get("/api/orders", async (_req, res) => {
+app.get("/api/orders", requireStaff, requirePerm("orders"), async (_req, res) => {
   try {
     const orders = await query(
       "SELECT * FROM sales_orders WHERE business_id = ? ORDER BY created_at DESC LIMIT 80",
-      [BUSINESS_ID],
+      [bid()],
     );
     const ids = orders.map((o) => o.id);
     const lines = ids.length
@@ -102,11 +116,11 @@ app.get("/api/orders", async (_req, res) => {
   }
 });
 
-app.get("/api/purchases", async (_req, res) => {
+app.get("/api/purchases", requireStaff, requirePerm("purchases"), async (_req, res) => {
   try {
     const purchases = await query(
       "SELECT * FROM purchases WHERE business_id = ? ORDER BY created_at DESC LIMIT 80",
-      [BUSINESS_ID],
+      [bid()],
     );
     const ids = purchases.map((p) => p.id);
     const lines = ids.length
@@ -126,20 +140,15 @@ app.get("/api/purchases", async (_req, res) => {
   }
 });
 
-app.get("/api/suppliers", async (_req, res) => {
+app.get("/api/suppliers", requireStaff, requirePerm("suppliers"), async (_req, res) => {
   try {
-    res.json(
-      await query(
-        "SELECT * FROM suppliers WHERE business_id = ? ORDER BY name",
-        [BUSINESS_ID],
-      ),
-    );
+    res.json(await query("SELECT * FROM suppliers WHERE business_id = ? ORDER BY name", [bid()]));
   } catch (err) {
     res.status(500).json({ error: String(err.message) });
   }
 });
 
-app.get("/api/today", async (_req, res) => {
+app.get("/api/today", requireStaff, async (_req, res) => {
   try {
     const [today] = await query(
       `SELECT COUNT(*) AS bills,
@@ -147,7 +156,7 @@ app.get("/api/today", async (_req, res) => {
               COALESCE(SUM(gst),0) AS gst
        FROM sales_orders
        WHERE business_id = ? AND DATE(created_at) = CURDATE()`,
-      [BUSINESS_ID],
+      [bid()],
     );
     res.json({ today: today || { bills: 0, takings: 0, gst: 0 } });
   } catch (err) {
@@ -155,7 +164,7 @@ app.get("/api/today", async (_req, res) => {
   }
 });
 
-app.get("/api/reports", async (req, res) => {
+app.get("/api/reports", requireStaff, requirePerm("reports"), async (req, res) => {
   const from = String(req.query.from || new Date().toISOString().slice(0, 10));
   const to = String(req.query.to || from);
   try {
@@ -165,7 +174,7 @@ app.get("/api/reports", async (req, res) => {
   }
 });
 
-app.get("/api/reports/excel", async (req, res) => {
+app.get("/api/reports/excel", requireStaff, requirePerm("reports"), async (req, res) => {
   const from = String(req.query.from || new Date().toISOString().slice(0, 10));
   const to = String(req.query.to || from);
   const sheet = req.query.sheet ? String(req.query.sheet) : "";
@@ -184,7 +193,7 @@ app.get("/api/reports/excel", async (req, res) => {
     res.setHeader("Content-Type", "application/vnd.ms-excel; charset=utf-8");
     res.setHeader(
       "Content-Disposition",
-      `attachment; filename="swami-reports-${slug}-${from}-to-${to}.xls"`,
+      `attachment; filename="reports-${slug}-${from}-to-${to}.xls"`,
     );
     res.send(xml);
   } catch (err) {
@@ -192,25 +201,29 @@ app.get("/api/reports/excel", async (req, res) => {
   }
 });
 
-app.post("/api/items/:id/receive", async (req, res) => {
+app.post("/api/items/:id/receive", requireStaff, requirePerm("stock"), async (req, res) => {
   const qty = Number(req.body?.quantity_gm);
   if (!Number.isFinite(qty) || qty <= 0) {
     res.status(400).json({ error: "quantity_gm must be positive" });
     return;
   }
   try {
-    await query(
-      "UPDATE items SET stock_gm = stock_gm + ? WHERE id = ? AND business_id = ?",
-      [qty, req.params.id, BUSINESS_ID],
-    );
-    const [item] = await query("SELECT * FROM items WHERE id = ?", [req.params.id]);
+    await query("UPDATE items SET stock_gm = stock_gm + ? WHERE id = ? AND business_id = ?", [
+      qty,
+      req.params.id,
+      bid(),
+    ]);
+    const [item] = await query("SELECT * FROM items WHERE id = ? AND business_id = ?", [
+      req.params.id,
+      bid(),
+    ]);
     res.json({ ok: true, item });
   } catch (err) {
     res.status(500).json({ error: String(err.message) });
   }
 });
 
-app.post("/api/settings", async (req, res) => {
+app.post("/api/settings", requireStaff, requirePerm("settings"), async (req, res) => {
   const body = req.body || {};
   const { name, address, phone, email, gstin } = body;
   if (!name || !String(name).trim()) {
@@ -238,19 +251,21 @@ app.post("/api/settings", async (req, res) => {
     logoSql = ", logo_url = ?";
     params.push(logo || null);
   }
-  params.push(BUSINESS_ID);
+  params.push(bid());
   try {
-    await ensureLogoColumn();
     await query(
       `UPDATE company_settings
        SET name = ?, address = ?, phone = ?, email = ?, gstin = ?${logoSql}
        WHERE business_id = ?`,
       params,
     );
-    const [company] = await query(
-      "SELECT * FROM company_settings WHERE business_id = ?",
-      [BUSINESS_ID],
+    await query(
+      `UPDATE businesses SET name = ?, address = COALESCE(?, address), mobile = COALESCE(?, mobile),
+         email = COALESCE(?, email), gstin = COALESCE(?, gstin) WHERE id = ?`,
+      [String(name).trim(), address || null, phone || null, email || null, gstin || null, bid()],
     );
+    const [company] = await query("SELECT * FROM company_settings WHERE business_id = ?", [bid()]);
+    await audit("Settings Changed", { module: "settings" }, req);
     res.json({ ok: true, company });
   } catch (err) {
     res.status(500).json({ error: String(err.message) });
@@ -259,8 +274,8 @@ app.post("/api/settings", async (req, res) => {
 
 registerCrud(app);
 
-app.post("/api/checkout", async (req, res) => {
-  const { customerId, paymentMethod, lines, packId, packCount } = req.body || {};
+app.post("/api/checkout", requireStaff, requirePerm("counter"), async (req, res) => {
+  const { customerId, paymentMethod, lines, packId, packCount, discount } = req.body || {};
   if (!Array.isArray(lines) || lines.length === 0) {
     res.status(400).json({ error: "Cart is empty" });
     return;
@@ -271,10 +286,11 @@ app.post("/api/checkout", async (req, res) => {
     return;
   }
   try {
+    const businessId = bid();
     const result = await withTransaction(async (conn) => {
       const [customers] = await conn.query(
         "SELECT * FROM customers WHERE id = ? AND business_id = ?",
-        [customerId, BUSINESS_ID],
+        [customerId, businessId],
       );
       const customer = customers[0];
       if (!customer) throw new Error("Customer not found");
@@ -283,7 +299,7 @@ app.post("/api/checkout", async (req, res) => {
       for (const line of lines) {
         const [items] = await conn.query(
           "SELECT * FROM items WHERE id = ? AND business_id = ?",
-          [line.itemId, BUSINESS_ID],
+          [line.itemId, businessId],
         );
         const item = items[0];
         if (!item) throw new Error("Unknown item");
@@ -296,34 +312,37 @@ app.post("/api/checkout", async (req, res) => {
       }
 
       const subtotal = round2(built.reduce((s, l) => s + l.amount, 0));
+      const billDiscount = round2(Number(discount) || 0);
       const gst = round2(built.reduce((s, l) => s + (l.amount * l.gstRate) / 100, 0));
-      const total = round2(subtotal + gst);
+      const total = round2(Math.max(0, subtotal + gst - billDiscount));
       const totalGm = built.reduce((s, l) => s + l.qty, 0);
 
       const [[seq]] = await conn.query(
         "SELECT next_value FROM number_sequences WHERE name = 'order' AND business_id = ? FOR UPDATE",
-        [BUSINESS_ID],
+        [businessId],
       );
-      const next = seq ? Number(seq.next_value) : 10036;
+      const next = seq ? Number(seq.next_value) : 10001;
       if (seq) {
         await conn.query(
           "UPDATE number_sequences SET next_value = ? WHERE name = 'order' AND business_id = ?",
-          [next + 1, BUSINESS_ID],
+          [next + 1, businessId],
         );
       } else {
         await conn.query(
           "INSERT INTO number_sequences (name, next_value, business_id) VALUES ('order', ?, ?)",
-          [next + 1, BUSINESS_ID],
+          [next + 1, businessId],
         );
       }
       const orderNumber = `SO-${next}`;
       const orderId = crypto.randomUUID();
-      const nowStatus = "confirmed";
       const payStatus = method === "credit" ? "partial" : "paid";
 
       let packName = null;
       if (packId) {
-        const [packs] = await conn.query("SELECT * FROM packs WHERE id = ?", [packId]);
+        const [packs] = await conn.query(
+          "SELECT * FROM packs WHERE id = ? AND business_id = ?",
+          [packId, businessId],
+        );
         packName = packs[0]?.name || null;
       }
 
@@ -331,8 +350,9 @@ app.post("/api/checkout", async (req, res) => {
         `INSERT INTO sales_orders (
            id, order_number, customer_id, customer_name, customer_type,
            pack_id, pack_name, pack_count, status, total_quantity_gm,
-           subtotal, discount, gst, total, payment_method, payment_status, business_id
-         ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+           subtotal, discount, gst, total, payment_method, payment_status, business_id,
+           branch_id, cashier_id
+         ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         [
           orderId,
           orderNumber,
@@ -342,15 +362,17 @@ app.post("/api/checkout", async (req, res) => {
           packId || null,
           packName,
           packCount || null,
-          nowStatus,
+          "confirmed",
           totalGm,
           subtotal,
-          0,
+          billDiscount,
           gst,
           total,
           method,
           payStatus,
-          BUSINESS_ID,
+          businessId,
+          branchId(),
+          authUser()?.id || null,
         ],
       );
 
@@ -371,35 +393,46 @@ app.post("/api/checkout", async (req, res) => {
             line.amount,
             line.gstRate,
             0,
-            BUSINESS_ID,
+            businessId,
           ],
         );
         await conn.query(
           "UPDATE items SET stock_gm = stock_gm - ? WHERE id = ? AND business_id = ?",
-          [line.qty, line.item.id, BUSINESS_ID],
+          [line.qty, line.item.id, businessId],
         );
       }
 
-      const [orders] = await conn.query("SELECT * FROM sales_orders WHERE id = ?", [orderId]);
-      const [orderLines] = await conn.query(
-        "SELECT * FROM sales_order_lines WHERE order_id = ?",
-        [orderId],
+      const [orders] = await conn.query(
+        "SELECT * FROM sales_orders WHERE id = ? AND business_id = ?",
+        [orderId, businessId],
       );
+      const [orderLines] = await conn.query("SELECT * FROM sales_order_lines WHERE order_id = ?", [
+        orderId,
+      ]);
       return { ...orders[0], lines: orderLines };
     });
+    await audit("Sale Created", { module: "sales", target_name: result.order_number }, req);
     res.json({ ok: true, order: result });
   } catch (err) {
     res.status(500).json({ error: String(err.message) });
   }
 });
 
+app.get("/", (_req, res) => {
+  res.sendFile(path.join(root, "index.html"));
+});
+
 app.use(express.static(root));
 
 const port = Number(process.env.PORT || 5173);
-ensureLogoColumn()
-  .catch((err) => console.error("logo column", err.message))
-  .finally(() => {
+ensureSchema()
+  .then(() => seedPlatform())
+  .then(() => {
     app.listen(port, "0.0.0.0", () => {
-      console.log(`SWAMI MASALE POS http://0.0.0.0:${port}`);
+      console.log(`Multi-tenant POS http://0.0.0.0:${port}`);
     });
+  })
+  .catch((err) => {
+    console.error(err);
+    process.exit(1);
   });

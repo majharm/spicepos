@@ -12,6 +12,8 @@ const state = {
   lastPack: null,
   editingOrderId: null,
   logoDraft: null,
+  session: null,
+  perms: {},
 };
 
 function $(id) {
@@ -60,7 +62,10 @@ async function api(path, options) {
     ...options,
   });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || res.statusText);
+  if (!res.ok) {
+    if (res.status === 401) location.href = "/login.html";
+    throw new Error(data.error || res.statusText);
+  }
   return data;
 }
 
@@ -117,6 +122,35 @@ function reportBlock(title, sheet, headers, rows) {
   </section>`;
 }
 
+function can(module) {
+  if (state.session?.role === "business_admin") return true;
+  return state.perms?.[module] === true;
+}
+
+function applyNav() {
+  document.querySelectorAll(".nav-btn").forEach((btn) => {
+    const view = btn.dataset.view;
+    const map = {
+      dashboard: "dashboard",
+      counter: "counter",
+      items: "items",
+      customers: "customers",
+      packs: "items",
+      orders: "orders",
+      purchases: "purchases",
+      suppliers: "suppliers",
+      stock: "stock",
+      staff: "staff",
+      branches: "branches",
+      devices: "devices",
+      support: "support",
+      reports: "reports",
+      settings: "settings",
+    };
+    btn.hidden = map[view] ? !can(map[view]) : false;
+  });
+}
+
 function showView(name) {
   document.querySelectorAll(".view").forEach((el) => {
     el.hidden = el.id !== `view-${name}`;
@@ -129,6 +163,11 @@ function showView(name) {
   if (name === "purchases") loadPurchases();
   if (name === "suppliers") loadSuppliers();
   if (name === "support") renderSupport();
+  if (name === "dashboard") loadDashboard();
+  if (name === "stock") loadStock();
+  if (name === "staff") loadStaff();
+  if (name === "branches") loadBranches();
+  if (name === "devices") loadDevices();
 }
 
 function setHint(msg, kind = "") {
@@ -403,6 +442,56 @@ async function loadBootstrap() {
   renderPoLines();
   loadToday();
   loadSuppliers();
+  loadDashboard();
+}
+
+async function loadDashboard() {
+  try {
+    const d = await api("/api/dashboard");
+    $("dash-welcome").textContent = `${state.session?.name || ""} · ${state.session?.role || ""} · ${state.company.name || ""}`;
+    $("dash-kpis").innerHTML = [
+      ["Today's sales", money(d.today?.takings)],
+      ["Today's bills", d.today?.bills],
+      ["Today's purchase", money(d.purchase)],
+      ["Stock value", money(d.stockValue)],
+      ["Customer outstanding", money(d.outstanding)],
+    ]
+      .map(([k, v]) => `<div class="report-card"><span>${k}</span><strong>${v}</strong></div>`)
+      .join("");
+  } catch (err) {
+    $("dash-kpis").innerHTML = `<p class="hint error">${escapeHtml(err.message)}</p>`;
+  }
+}
+
+async function loadStock() {
+  const rows = await api("/api/stock");
+  $("stock-table").innerHTML = `<table><thead><tr><th>Code</th><th>Item</th><th>Stock g</th><th>Reorder</th><th>Value</th></tr></thead><tbody>${rows
+    .map(
+      (r) =>
+        `<tr><td>${escapeHtml(r.code)}</td><td>${escapeHtml(r.name)}</td><td>${r.stock_gm}</td><td>${r.reorder_level_gm}</td><td>${money((Number(r.stock_gm) / 1000) * Number(r.purchase_rate))}</td></tr>`,
+    )
+    .join("")}</tbody></table>`;
+}
+
+async function loadStaff() {
+  const rows = await api("/api/staff");
+  $("staff-table").innerHTML = `<table><thead><tr><th>Email</th><th>Name</th><th>Role</th><th>Status</th></tr></thead><tbody>${rows
+    .map((u) => `<tr><td>${escapeHtml(u.email)}</td><td>${escapeHtml(u.first_name)} ${escapeHtml(u.last_name)}</td><td>${escapeHtml(u.role)}</td><td>${escapeHtml(u.status)}</td></tr>`)
+    .join("")}</tbody></table>`;
+}
+
+async function loadBranches() {
+  const rows = await api("/api/branches");
+  $("branch-table").innerHTML = `<table><thead><tr><th>Name</th><th>Address</th><th>Status</th></tr></thead><tbody>${rows
+    .map((b) => `<tr><td>${escapeHtml(b.name)}</td><td>${escapeHtml(b.address)}</td><td>${escapeHtml(b.status)}</td></tr>`)
+    .join("")}</tbody></table>`;
+}
+
+async function loadDevices() {
+  const rows = await api("/api/devices");
+  $("device-table").innerHTML = `<table><thead><tr><th>Name</th><th>Code</th><th>Branch</th><th>Status</th></tr></thead><tbody>${rows
+    .map((d) => `<tr><td>${escapeHtml(d.name)}</td><td>${escapeHtml(d.code)}</td><td>${escapeHtml(d.branch_name)}</td><td>${escapeHtml(d.status)}</td></tr>`)
+    .join("")}</tbody></table>`;
 }
 
 async function loadToday() {
@@ -912,7 +1001,100 @@ function tick() {
 tick();
 setInterval(tick, 15000);
 
-loadBootstrap().catch((err) => {
-  $("shop-place").textContent = err.message;
-  setHint(err.message, "error");
+$("btn-logout").addEventListener("click", async () => {
+  await fetch("/api/auth/logout", { method: "POST" });
+  location.href = "/login.html";
 });
+$("open-pos")?.addEventListener("click", () => showView("counter"));
+$("btn-hold")?.addEventListener("click", async () => {
+  try {
+    await api("/api/holds", {
+      method: "POST",
+      body: JSON.stringify({
+        label: `Hold ${new Date().toLocaleTimeString("en-IN")}`,
+        payload: { cart: state.cart, customerId: state.customerId, lastPack: state.lastPack },
+      }),
+    });
+    setHint("Bill held", "ok");
+    state.cart = [];
+    renderCart();
+  } catch (err) {
+    setHint(err.message, "error");
+  }
+});
+$("staff-form")?.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  try {
+    await api("/api/staff", {
+      method: "POST",
+      body: JSON.stringify({
+        first_name: $("st-first").value,
+        email: $("st-email").value,
+        password: $("st-pass").value,
+        role: $("st-role").value,
+      }),
+    });
+    $("staff-hint").textContent = "Saved";
+    $("staff-form").reset();
+    loadStaff();
+  } catch (err) {
+    $("staff-hint").textContent = err.message;
+  }
+});
+$("branch-form")?.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  await api("/api/branches", {
+    method: "POST",
+    body: JSON.stringify({ name: $("br-name").value, address: $("br-address").value, phone: $("br-phone").value }),
+  });
+  $("branch-form").reset();
+  loadBranches();
+});
+$("device-form")?.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  await api("/api/devices", {
+    method: "POST",
+    body: JSON.stringify({ name: $("dev-name").value, code: $("dev-code").value }),
+  });
+  $("device-form").reset();
+  loadDevices();
+});
+$("stock-form")?.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  await api("/api/stock/adjust", {
+    method: "POST",
+    body: JSON.stringify({
+      item_id: $("stk-item").value,
+      quantity_gm: $("stk-qty").value,
+      kind: $("stk-kind").value,
+      note: $("stk-note").value,
+    }),
+  });
+  loadStock();
+  loadBootstrap();
+});
+
+async function boot() {
+  try {
+    const me = await api("/api/auth/me");
+    if (me.type !== "staff") {
+      location.href = me.type === "master" ? "/master.html" : "/login.html";
+      return;
+    }
+    state.session = me.user;
+    state.perms = me.user.permissions || {};
+    applyNav();
+    if (me.business?.status && me.business.status !== "active") {
+      $("expired-banner").hidden = false;
+      $("shop-name").textContent = me.business.name || "POS";
+      showView("dashboard");
+      return;
+    }
+    await loadBootstrap();
+    showView(can("dashboard") ? "dashboard" : "counter");
+  } catch {
+    location.href = "/login.html";
+  }
+}
+
+boot();

@@ -9,6 +9,7 @@
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Outfit:wght@400;500;600;700&display=swap" />
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="./css/pos.css" />
+    <link rel="stylesheet" href="./css/saas.css" />
   </head>
   <body>
     <div class="app">
@@ -19,13 +20,18 @@
           <strong id="shop-name">SWAMI MASALE</strong>
           <span id="shop-place">Loading MySQL…</span>
         </div>
-        <button class="nav-btn active" type="button" data-view="counter">Counter</button>
+        <button class="nav-btn active" type="button" data-view="dashboard">Dashboard</button>
+        <button class="nav-btn" type="button" data-view="counter">Counter</button>
         <button class="nav-btn" type="button" data-view="items">Items</button>
         <button class="nav-btn" type="button" data-view="customers">Customers</button>
         <button class="nav-btn" type="button" data-view="packs">Packs</button>
         <button class="nav-btn" type="button" data-view="orders">Orders</button>
         <button class="nav-btn" type="button" data-view="purchases">Purchases</button>
         <button class="nav-btn" type="button" data-view="suppliers">Suppliers</button>
+        <button class="nav-btn" type="button" data-view="stock">Stock</button>
+        <button class="nav-btn" type="button" data-view="staff">Staff</button>
+        <button class="nav-btn" type="button" data-view="branches">Branches</button>
+        <button class="nav-btn" type="button" data-view="devices">Devices</button>
         <button class="nav-btn" type="button" data-view="support">Support</button>
         <button class="nav-btn" type="button" data-view="reports">Reports</button>
         <button class="nav-btn" type="button" data-view="settings">Settings</button>
@@ -33,11 +39,21 @@
           <div class="chip">Today <b id="today-total">₹0.00</b></div>
           <div class="chip">Bills <b id="today-count">0</b></div>
           <div class="chip" id="clock">--:--</div>
+          <button class="btn ghost" type="button" id="btn-logout">Sign out</button>
         </div>
       </nav>
 
       <div class="stage">
-        <section class="view" id="view-counter">
+        <div class="expired-banner" id="expired-banner" hidden>
+          Subscription expired. Data is kept. Ask the platform owner to renew this business.
+        </div>
+        <section class="view" id="view-dashboard">
+          <h2>Dashboard</h2>
+          <p class="lede" id="dash-welcome">Your shop today.</p>
+          <div class="report-grid" id="dash-kpis"></div>
+          <p class="lede"><button class="btn primary" type="button" data-view-jump="counter" id="open-pos">Open POS</button></p>
+        </section>
+        <section class="view" id="view-counter" hidden>
           <header class="topbar">
             <form class="search" id="search-form">
               <input id="search" type="search" placeholder="Search spice, Marathi name, or code" autocomplete="off" />
@@ -69,6 +85,7 @@
               <div class="pay">
                 <button class="btn danger" id="btn-clear" type="button">Clear</button>
                 <div class="pay-row">
+                  <button class="btn" id="btn-hold" type="button">Hold bill</button>
                   <button class="btn primary" id="btn-pay" type="button">Save</button>
                 </div>
                 <div class="hint" id="hint"></div>
@@ -170,6 +187,67 @@
           </form>
           <div class="hint" id="sup-hint"></div>
           <div class="table-wrap" id="suppliers-table"></div>
+        </section>
+        <section class="view" id="view-stock" hidden>
+          <h2>Stock</h2>
+          <p class="lede">Branch-wise stock, adjustments, transfers, and low-stock alerts.</p>
+          <form class="settings wide" id="stock-form">
+            <label>Item id <input id="stk-item" required /></label>
+            <label>Qty grams (+/−) <input id="stk-qty" type="number" required /></label>
+            <label>Kind
+              <select id="stk-kind">
+                <option value="adjustment">Adjustment</option>
+                <option value="opening">Opening</option>
+                <option value="damaged">Damaged</option>
+                <option value="expired">Expired</option>
+                <option value="returned">Returned</option>
+              </select>
+            </label>
+            <label>Note <input id="stk-note" /></label>
+            <button class="btn primary" type="submit">Post</button>
+          </form>
+          <div class="table-wrap" id="stock-table"></div>
+        </section>
+        <section class="view" id="view-staff" hidden>
+          <h2>Staff & roles</h2>
+          <form class="settings wide" id="staff-form">
+            <label>First name <input id="st-first" /></label>
+            <label>Email <input id="st-email" required /></label>
+            <label>Password <input id="st-pass" type="password" required /></label>
+            <label>Role
+              <select id="st-role">
+                <option value="cashier">Cashier</option>
+                <option value="manager">Manager</option>
+                <option value="branch_manager">Branch Manager</option>
+                <option value="stock_manager">Stock Manager</option>
+                <option value="accountant">Accountant</option>
+                <option value="staff">Staff</option>
+                <option value="business_admin">Business Admin</option>
+              </select>
+            </label>
+            <button class="btn primary" type="submit">Save</button>
+          </form>
+          <div class="hint" id="staff-hint"></div>
+          <div class="table-wrap" id="staff-table"></div>
+        </section>
+        <section class="view" id="view-branches" hidden>
+          <h2>Branches</h2>
+          <form class="settings wide" id="branch-form">
+            <label>Name <input id="br-name" required /></label>
+            <label>Address <input id="br-address" /></label>
+            <label>Phone <input id="br-phone" /></label>
+            <button class="btn primary" type="submit">Save</button>
+          </form>
+          <div class="table-wrap" id="branch-table"></div>
+        </section>
+        <section class="view" id="view-devices" hidden>
+          <h2>POS devices</h2>
+          <form class="settings wide" id="device-form">
+            <label>Name <input id="dev-name" required /></label>
+            <label>Code <input id="dev-code" placeholder="POS-02" /></label>
+            <button class="btn primary" type="submit">Save</button>
+          </form>
+          <div class="table-wrap" id="device-table"></div>
         </section>
         <section class="view" id="view-support" hidden>
           <h2>Support</h2>

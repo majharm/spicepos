@@ -349,7 +349,7 @@ a.btn { text-decoration: none; display: inline-block; }
 .totals .grand { font-size: 24px; font-weight: 800; color: var(--maroon); font-family: var(--display); }
 .totals .grand span:last-child { color: var(--saffron-deep); }
 .pay { padding: 12px 16px 18px; display: grid; gap: 8px; }
-.pay-row { display: grid; grid-template-columns: 1fr; gap: 8px; }
+.pay-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .pay-row .btn { width: 100%; }
 .tender { display: flex; gap: 8px; }
 .hint { color: var(--muted); font-size: 12px; min-height: 16px; }

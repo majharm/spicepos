@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Sign in · ATAV POS</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,650&family=Outfit:wght@400;500;600;700&display=swap" />
+    <link rel="icon" href="./favicon.svg" />
+    <link rel="stylesheet" href="./css/pos.css" />
+    <link rel="stylesheet" href="./css/saas.css" />
+  </head>
+  <body class="auth-body">
+    <main class="auth-card">
+      <div class="brand-mark" aria-hidden="true"></div>
+      <h1>ATAV POS</h1>
+      <p>Multi-business till. Sign in to your shop or open Master Admin.</p>
+      <form id="login-form">
+        <label>Email, username or mobile
+          <input name="identifier" autocomplete="username" required />
+        </label>
+        <label>Password
+          <input name="password" type="password" autocomplete="current-password" required />
+        </label>
+        <button class="btn primary" type="submit">Sign in</button>
+        <p class="hint" id="hint"></p>
+      </form>
+      <p class="auth-links"><a href="/master.html">Master Admin</a></p>
+    </main>
+    <script src="./js/login.js"></script>
+  </body>
+</html>

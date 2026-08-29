@@ -1,14 +1,25 @@
-# Spice POS — SWAMI MASALE SASWAD
+# ATAV Multi-Tenant POS
 
-Reconnects to the **old Replit MySQL** (Hostinger) and shows the live shop: items in grams, B2B/B2C rates, packs, sales orders, purchases, suppliers.
-
-Copy `.env.example` to `.env` and set the database user/password. Do not commit `.env`.
+Cloud POS for **many independent businesses** on one platform. Each shop is isolated by `business_id`. Master Admin is separate from Business Admin.
 
 ```bash
 npm install
+cp .env.example .env
 npm start
 ```
 
-Open http://127.0.0.1:5173
+Open http://127.0.0.1:5173 — you will be asked to sign in.
 
-Default business: `00000000-0000-4000-8000-000000000001` (`company_settings.name` = SWAMI MASALE SASWAD).
+## Sign in
+
+| Who | URL | Demo login (local seed) |
+| --- | --- | --- |
+| Master Admin | `/master.html` | `MASTER_ADMIN_EMAIL` / `MASTER_ADMIN_PASSWORD` in `.env` (default `master@atavpos.local` / `Master@12345` if unset) |
+| SWAMI MASALE cashier | `/login.html` | `cashier@swamimasale.local` / `Cashier@12345` |
+| Demo second tenant | `/login.html` | `admin@abc-supermart.local` / `Demo@12345` |
+
+The live SWAMI shop (`swami@atavtelecom.in`) stays a **Business Admin** for that tenant only. Master Admin cannot be that account.
+
+Expired subscriptions keep all data. The shop sees a renewal message until Master Admin extends the plan.
+
+Do not commit `.env`.

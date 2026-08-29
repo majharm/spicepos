@@ -1,4 +1,5 @@
-import { BUSINESS_ID, query, withTransaction } from "./db.js";
+import { query, withTransaction } from "./db.js";
+import { bid } from "./context.js";
 
 export function lineAmount(quantityGm, ratePerKg) {
   return (Number(quantityGm) / 1000) * Number(ratePerKg);
@@ -11,18 +12,18 @@ export function round2(n) {
 export async function nextSeq(conn, name, start) {
   const [rows] = await conn.query(
     "SELECT next_value FROM number_sequences WHERE name = ? AND business_id = ? FOR UPDATE",
-    [name, BUSINESS_ID],
+    [name, bid()],
   );
   const next = rows[0] ? Number(rows[0].next_value) : start;
   if (rows[0]) {
     await conn.query(
       "UPDATE number_sequences SET next_value = ? WHERE name = ? AND business_id = ?",
-      [next + 1, name, BUSINESS_ID],
+      [next + 1, name, bid()],
     );
   } else {
     await conn.query(
       "INSERT INTO number_sequences (name, next_value, business_id) VALUES (?,?,?)",
-      [name, next + 1, BUSINESS_ID],
+      [name, next + 1, bid()],
     );
   }
   return next;
@@ -54,7 +55,7 @@ export function registerCrud(app) {
             custType,
             gstin || null,
             Number(credit_limit) || 0,
-            BUSINESS_ID,
+            bid(),
           ],
         );
         const [rows] = await conn.query("SELECT * FROM customers WHERE id = ?", [id]);
@@ -98,7 +99,7 @@ export function registerCrud(app) {
             b.hsn || null,
             Number(b.stock_gm) || 0,
             Number(b.reorder_level_gm) || 0,
-            BUSINESS_ID,
+            bid(),
           ],
         );
         const [rows] = await conn.query("SELECT * FROM items WHERE id = ?", [id]);
@@ -133,7 +134,7 @@ export function registerCrud(app) {
           Number(b.reorder_level_gm) || 0,
           b.status || "active",
           req.params.id,
-          BUSINESS_ID,
+          bid(),
         ],
       );
       const [item] = await query("SELECT * FROM items WHERE id = ?", [req.params.id]);
@@ -157,13 +158,13 @@ export function registerCrud(app) {
         await conn.query(
           `INSERT INTO packs (id, code, name, total_quantity_gm, status, business_id)
            VALUES (?,?,?,?,'active',?)`,
-          [id, `PK-${String(n).padStart(3, "0")}`, String(name).trim(), total, BUSINESS_ID],
+          [id, `PK-${String(n).padStart(3, "0")}`, String(name).trim(), total, bid()],
         );
         let sort = 1;
         for (const row of items) {
           const [itemRows] = await conn.query(
             "SELECT * FROM items WHERE id = ? AND business_id = ?",
-            [row.item_id, BUSINESS_ID],
+            [row.item_id, bid()],
           );
           const item = itemRows[0];
           if (!item) throw new Error("Unknown item in pack");
@@ -179,7 +180,7 @@ export function registerCrud(app) {
               Number(item.retail_rate),
               Number(item.b2b_rate),
               sort++,
-              BUSINESS_ID,
+              bid(),
             ],
           );
         }
@@ -214,7 +215,7 @@ export function registerCrud(app) {
           email || null,
           address || null,
           gstin || null,
-          BUSINESS_ID,
+          bid(),
         ],
       );
       const [supplier] = await query("SELECT * FROM suppliers WHERE id = ?", [id]);
@@ -235,7 +236,7 @@ export function registerCrud(app) {
       const purchase = await withTransaction(async (conn) => {
         const [supRows] = await conn.query(
           "SELECT * FROM suppliers WHERE id = ? AND business_id = ?",
-          [supplier_id, BUSINESS_ID],
+          [supplier_id, bid()],
         );
         const supplier = supRows[0];
         if (!supplier) throw new Error("Supplier not found");
@@ -243,7 +244,7 @@ export function registerCrud(app) {
         for (const line of lines) {
           const [itemRows] = await conn.query(
             "SELECT * FROM items WHERE id = ? AND business_id = ?",
-            [line.item_id, BUSINESS_ID],
+            [line.item_id, bid()],
           );
           const item = itemRows[0];
           if (!item) throw new Error("Unknown item");
@@ -286,7 +287,7 @@ export function registerCrud(app) {
             gst,
             total,
             method,
-            BUSINESS_ID,
+            bid(),
           ],
         );
         for (const line of built) {
@@ -306,12 +307,12 @@ export function registerCrud(app) {
               line.amount,
               line.gstAmount,
               line.total,
-              BUSINESS_ID,
+              bid(),
             ],
           );
           await conn.query(
             "UPDATE items SET stock_gm = stock_gm + ? WHERE id = ? AND business_id = ?",
-            [line.qty, line.item.id, BUSINESS_ID],
+            [line.qty, line.item.id, bid()],
           );
         }
         const [rows] = await conn.query("SELECT * FROM purchases WHERE id = ?", [id]);
@@ -333,7 +334,7 @@ export function registerCrud(app) {
       const order = await withTransaction(async (conn) => {
         const [existRows] = await conn.query(
           "SELECT * FROM sales_orders WHERE id = ? AND business_id = ?",
-          [req.params.id, BUSINESS_ID],
+          [req.params.id, bid()],
         );
         const existing = existRows[0];
         if (!existing) throw new Error("Order not found");
@@ -344,14 +345,14 @@ export function registerCrud(app) {
         for (const line of oldLines) {
           await conn.query(
             "UPDATE items SET stock_gm = stock_gm + ? WHERE id = ? AND business_id = ?",
-            [line.quantity_gm, line.item_id, BUSINESS_ID],
+            [line.quantity_gm, line.item_id, bid()],
           );
         }
         await conn.query("DELETE FROM sales_order_lines WHERE order_id = ?", [existing.id]);
 
         const [custRows] = await conn.query(
           "SELECT * FROM customers WHERE id = ? AND business_id = ?",
-          [customerId || existing.customer_id, BUSINESS_ID],
+          [customerId || existing.customer_id, bid()],
         );
         const customer = custRows[0];
         if (!customer) throw new Error("Customer not found");
@@ -360,7 +361,7 @@ export function registerCrud(app) {
         for (const line of lines) {
           const [itemRows] = await conn.query(
             "SELECT * FROM items WHERE id = ? AND business_id = ?",
-            [line.itemId, BUSINESS_ID],
+            [line.itemId, bid()],
           );
           const item = itemRows[0];
           if (!item) throw new Error("Unknown item");
@@ -429,12 +430,12 @@ export function registerCrud(app) {
                 line.amount,
                 line.gstRate,
                 0,
-                BUSINESS_ID,
+                bid(),
               ],
             );
             await conn.query(
               "UPDATE items SET stock_gm = stock_gm - ? WHERE id = ? AND business_id = ?",
-              [line.qty, line.item.id, BUSINESS_ID],
+              [line.qty, line.item.id, bid()],
             );
           }
         }
