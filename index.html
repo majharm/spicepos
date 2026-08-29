@@ -11,6 +11,7 @@
     <div class="app">
       <nav class="nav" aria-label="App">
         <div class="brand">
+          <img id="shop-logo" class="brand-logo" alt="Company logo" hidden />
           <strong id="shop-name">SWAMI MASALE</strong>
           <span id="shop-place">Loading MySQL…</span>
         </div>
@@ -172,18 +173,32 @@
           <div class="report-grid" id="support-cards"></div>
         </section>
         <section class="view" id="view-reports" hidden>
-          <h2>Today’s report</h2>
-          <div class="report-grid" id="reports"></div>
+          <h2>Reports</h2>
+          <p class="lede">Every report type for the date range. Download one sheet or the full Excel workbook.</p>
+          <form class="report-toolbar" id="report-form">
+            <label>From <input id="rep-from" type="date" required /></label>
+            <label>To <input id="rep-to" type="date" required /></label>
+            <button class="btn primary" type="submit">Show</button>
+            <a class="btn" id="rep-excel-all" href="#">Download all Excel</a>
+          </form>
+          <div class="hint" id="reports-hint"></div>
+          <div class="report-grid" id="report-summary"></div>
+          <div id="reports"></div>
         </section>
         <section class="view" id="view-settings" hidden>
-          <h2>Company</h2>
-          <p class="lede">Writes to company_settings for this business.</p>
+          <h2>Company profile</h2>
+          <p class="lede">Shop details and logo saved on this business in MySQL.</p>
           <form class="settings" id="settings-form">
             <label>Name <input id="set-name" /></label>
             <label>Address <input id="set-address" /></label>
             <label>Phone <input id="set-phone" /></label>
             <label>Email <input id="set-email" /></label>
             <label>GSTIN <input id="set-gstin" /></label>
+            <label>Logo
+              <input id="set-logo" type="file" accept="image/*" />
+            </label>
+            <img id="logo-preview" class="logo-preview" alt="Logo preview" hidden />
+            <button class="btn" type="button" id="logo-clear">Remove logo</button>
             <button class="btn primary" type="submit">Save</button>
           </form>
           <div class="hint" id="settings-hint"></div>

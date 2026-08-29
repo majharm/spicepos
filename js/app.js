@@ -11,6 +11,7 @@ const state = {
   customerId: "",
   lastPack: null,
   editingOrderId: null,
+  logoDraft: null,
 };
 
 function $(id) {
@@ -61,6 +62,59 @@ async function api(path, options) {
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || res.statusText);
   return data;
+}
+
+function ymd(d = new Date()) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function showLogo(img, url) {
+  if (!img) return;
+  if (url) {
+    img.src = url;
+    img.hidden = false;
+  } else {
+    img.removeAttribute("src");
+    img.hidden = true;
+  }
+}
+
+function excelHref(sheet) {
+  const from = $("rep-from")?.value || ymd();
+  const to = $("rep-to")?.value || from;
+  const q = `/api/reports/excel?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`;
+  return sheet ? `${q}&sheet=${encodeURIComponent(sheet)}` : q;
+}
+
+function fmtCell(v) {
+  if (v == null || v === "") return "";
+  if (typeof v === "number") return Number.isInteger(v) ? String(v) : Number(v).toFixed(2);
+  return String(v);
+}
+
+function htmlTable(headers, rows) {
+  if (!rows.length) return `<p class="report-empty">No rows in this range</p>`;
+  return `<div class="table-wrap"><table><thead><tr>${headers
+    .map((h) => `<th>${escapeHtml(h)}</th>`)
+    .join("")}</tr></thead><tbody>${rows
+    .map(
+      (row) =>
+        `<tr>${row.map((c) => `<td>${escapeHtml(fmtCell(c))}</td>`).join("")}</tr>`,
+    )
+    .join("")}</tbody></table></div>`;
+}
+
+function reportBlock(title, sheet, headers, rows) {
+  return `<section class="report-block">
+    <div class="report-block-head">
+      <h3>${escapeHtml(title)}</h3>
+      <a class="btn" href="${excelHref(sheet)}">Excel</a>
+    </div>
+    ${htmlTable(headers, rows)}
+  </section>`;
 }
 
 function showView(name) {
@@ -304,6 +358,9 @@ function renderSettings() {
   $("set-phone").value = state.company.phone || "";
   $("set-email").value = state.company.email || "";
   $("set-gstin").value = state.company.gstin || "";
+  state.logoDraft = null;
+  $("set-logo").value = "";
+  showLogo($("logo-preview"), state.company.logo_url);
 }
 
 function renderSupport() {
@@ -321,6 +378,7 @@ function renderSupport() {
 function paintHeader() {
   $("shop-name").textContent = state.company.name || "SWAMI MASALE";
   $("shop-place").textContent = state.company.address || "";
+  showLogo($("shop-logo"), state.company.logo_url);
 }
 
 async function loadBootstrap() {
@@ -341,27 +399,57 @@ async function loadBootstrap() {
   renderPacksTable();
   renderSettings();
   renderPoLines();
-  loadReports();
+  loadToday();
   loadSuppliers();
 }
 
-async function loadReports() {
-  const data = await api("/api/reports");
-  const methodMap = Object.fromEntries((data.methods || []).map((m) => [m.payment_method, m.total]));
+async function loadToday() {
+  const data = await api("/api/today");
   $("today-total").textContent = money(data.today.takings);
   $("today-count").textContent = String(data.today.bills);
-  $("reports").innerHTML = [
-    ["Bills today", data.today.bills],
-    ["Takings", money(data.today.takings)],
-    ["GST", money(data.today.gst)],
-    ["Cash", money(methodMap.cash)],
-    ["UPI", money(methodMap.upi)],
-    ["Card", money(methodMap.card)],
-    ["Credit", money(methodMap.credit)],
-    ["Low stock SKUs", (data.low || []).length],
-  ]
-    .map(([k, v]) => `<div class="report-card"><span>${k}</span><strong>${v}</strong></div>`)
-    .join("");
+}
+
+async function loadReports() {
+  if (!$("rep-from").value) {
+    const now = new Date();
+    $("rep-from").value = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
+  }
+  if (!$("rep-to").value) $("rep-to").value = ymd();
+  const from = $("rep-from").value;
+  const to = $("rep-to").value;
+  $("rep-excel-all").href = excelHref();
+  $("reports-hint").textContent = "Loading…";
+  try {
+    const data = await api(`/api/reports?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`);
+    const s = data.summary || {};
+    $("report-summary").innerHTML = [
+      ["Range", `${data.from} → ${data.to}`],
+      ["Bills", s.bills],
+      ["Taxable", money(s.taxable)],
+      ["GST", money(s.gst)],
+      ["Takings", money(s.takings)],
+      ["Low stock SKUs", (data.low || []).length],
+    ]
+      .map(([k, v]) => `<div class="report-card"><span>${k}</span><strong>${v}</strong></div>`)
+      .join("");
+    $("reports").innerHTML = [
+      reportBlock("Sales bills", "Sales bills", ["Order", "Customer", "Type", "Pack", "Pack count", "Status", "Qty g", "Taxable", "GST", "Total", "Pay", "Pay status", "Date"], (data.sales || []).map((o) => [o.order_number, o.customer_name, o.customer_type, o.pack_name || "Loose items", Number(o.pack_count) || 0, o.status, Number(o.total_quantity_gm) || 0, Number(o.subtotal) || 0, Number(o.gst) || 0, Number(o.total) || 0, o.payment_method, o.payment_status, String(o.created_at)])),
+      reportBlock("Item sales", "Item sales", ["Item", "Qty g", "Amount", "GST"], (data.byItem || []).map((r) => [r.item_name, Number(r.quantity_gm) || 0, Number(r.amount) || 0, Number(r.gst) || 0])),
+      reportBlock("Customer sales", "Customer sales", ["Customer", "Type", "Bills", "Takings", "GST"], (data.byCustomer || []).map((r) => [r.customer_name, r.customer_type, Number(r.bills) || 0, Number(r.takings) || 0, Number(r.gst) || 0])),
+      reportBlock("Pack sales", "Pack sales", ["Pack type", "Pack count", "Bills", "Takings"], (data.byPack || []).map((r) => [r.pack_type, Number(r.pack_count) || 0, Number(r.bills) || 0, Number(r.takings) || 0])),
+      reportBlock("Payment", "Payment", ["Method", "Bills", "Takings"], (data.byPay || []).map((r) => [r.payment_method, Number(r.bills) || 0, Number(r.takings) || 0])),
+      reportBlock("GST daywise", "GST daywise", ["Day", "Taxable", "GST", "Total"], (data.gst || []).map((r) => [String(r.day), Number(r.taxable) || 0, Number(r.gst) || 0, Number(r.total) || 0])),
+      reportBlock("Stock", "Stock", ["Code", "Name", "Local", "Category", "Subcategory", "Stock g", "Reorder g", "Retail", "B2B", "Purchase", "GST %"], (data.stock || []).map((i) => [i.code, i.name, i.local_name, i.category, i.subcategory, Number(i.stock_gm) || 0, Number(i.reorder_level_gm) || 0, Number(i.retail_rate) || 0, Number(i.b2b_rate) || 0, Number(i.purchase_rate) || 0, Number(i.gst_rate) || 0])),
+      reportBlock("Low stock", "Low stock", ["Code", "Name", "Stock g", "Reorder g"], (data.low || []).map((i) => [i.code, i.name, Number(i.stock_gm) || 0, Number(i.reorder_level_gm) || 0])),
+      reportBlock("Purchases", "Purchases", ["PO", "Supplier", "Invoice", "Date", "Taxable", "GST", "Total", "Pay", "Status"], (data.purchases || []).map((p) => [p.purchase_number, p.supplier_name, p.supplier_invoice_number, p.purchase_date, Number(p.subtotal) || 0, Number(p.gst) || 0, Number(p.total) || 0, p.payment_method, p.payment_status])),
+      reportBlock("Customers", "Customers", ["Code", "Name", "Business", "Mobile", "Type", "GSTIN", "Credit limit", "Outstanding"], (data.customers || []).map((c) => [c.code, c.name, c.business_name, c.mobile, c.type, c.gstin, Number(c.credit_limit) || 0, Number(c.outstanding) || 0])),
+    ].join("");
+    $("reports-hint").textContent = "";
+    $("reports-hint").className = "hint";
+  } catch (err) {
+    $("reports-hint").textContent = err.message;
+    $("reports-hint").className = "hint error";
+  }
 }
 
 let orderCache = [];
@@ -394,10 +482,14 @@ function receiptText(o) {
 
 function printOrder(o) {
   const w = window.open("", "print", "width=720,height=900");
+  const logo = state.company.logo_url
+    ? `<img src="${state.company.logo_url}" alt="" style="max-height:80px;max-width:200px;display:block;margin:0 auto 12px">`
+    : "";
   w.document.write(`<!DOCTYPE html><html><head><title>${escapeHtml(o.order_number)}</title>
-    <style>body{font-family:ui-monospace,monospace;padding:24px} h1{font-size:18px} pre{white-space:pre-wrap}</style>
+    <style>body{font-family:ui-monospace,monospace;padding:24px;text-align:center} h1{font-size:18px} pre{white-space:pre-wrap;text-align:left}</style>
     </head><body>
-    <h1>${escapeHtml(o.order_number)}</h1>
+    ${logo}
+    <h1>${escapeHtml(state.company.name || "")}</h1>
     <pre>${escapeHtml(receiptText(o))}</pre>
     <script>window.onload=()=>{window.print();}</script>
     </body></html>`);
@@ -726,18 +818,22 @@ $("supplier-form").addEventListener("submit", async (e) => {
 $("settings-form").addEventListener("submit", async (e) => {
   e.preventDefault();
   try {
+    const payload = {
+      name: $("set-name").value,
+      address: $("set-address").value,
+      phone: $("set-phone").value,
+      email: $("set-email").value,
+      gstin: $("set-gstin").value,
+    };
+    if (state.logoDraft !== null) payload.logo_url = state.logoDraft;
     const data = await api("/api/settings", {
       method: "POST",
-      body: JSON.stringify({
-        name: $("set-name").value,
-        address: $("set-address").value,
-        phone: $("set-phone").value,
-        email: $("set-email").value,
-        gstin: $("set-gstin").value,
-      }),
+      body: JSON.stringify(payload),
     });
     state.company = data.company;
+    state.logoDraft = null;
     paintHeader();
+    renderSettings();
     $("settings-hint").textContent = "Saved";
     $("settings-hint").className = "hint ok";
   } catch (err) {
@@ -745,6 +841,66 @@ $("settings-form").addEventListener("submit", async (e) => {
     $("settings-hint").className = "hint error";
   }
 });
+
+$("set-logo").addEventListener("change", async (e) => {
+  const file = e.target.files?.[0];
+  if (!file) return;
+  try {
+    const url = await readLogoFile(file);
+    state.logoDraft = url;
+    showLogo($("logo-preview"), url);
+    $("settings-hint").textContent = "Logo ready — click Save";
+    $("settings-hint").className = "hint";
+  } catch (err) {
+    $("settings-hint").textContent = err.message;
+    $("settings-hint").className = "hint error";
+  }
+});
+
+$("logo-clear").addEventListener("click", () => {
+  state.logoDraft = "";
+  $("set-logo").value = "";
+  showLogo($("logo-preview"), "");
+  $("settings-hint").textContent = "Logo will be removed on Save";
+  $("settings-hint").className = "hint";
+});
+
+$("report-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  await loadReports();
+});
+
+function readLogoFile(file) {
+  return new Promise((resolve, reject) => {
+    if (file.size > 8_000_000) {
+      reject(new Error("Choose a smaller image"));
+      return;
+    }
+    const img = new Image();
+    const blobUrl = URL.createObjectURL(file);
+    img.onload = () => {
+      const max = 480;
+      let w = img.width;
+      let h = img.height;
+      if (w > max || h > max) {
+        const scale = max / Math.max(w, h);
+        w = Math.round(w * scale);
+        h = Math.round(h * scale);
+      }
+      const canvas = document.createElement("canvas");
+      canvas.width = w;
+      canvas.height = h;
+      canvas.getContext("2d").drawImage(img, 0, 0, w, h);
+      URL.revokeObjectURL(blobUrl);
+      resolve(canvas.toDataURL("image/jpeg", 0.86));
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(blobUrl);
+      reject(new Error("Could not read image"));
+    };
+    img.src = blobUrl;
+  });
+}
 
 $("po-date").value = new Date().toISOString().slice(0, 10);
 

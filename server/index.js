@@ -4,11 +4,28 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { BUSINESS_ID, query, withTransaction } from "./db.js";
 import { lineAmount, round2, registerCrud } from "./crud.js";
+import { buildReports, reportsToSheets } from "./reports.js";
+import { workbookXml } from "./excel.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.join(__dirname, "..");
 const app = express();
-app.use(express.json({ limit: "1mb" }));
+app.use(express.json({ limit: "8mb" }));
+
+async function ensureLogoColumn() {
+  const cols = await query(
+    `SELECT DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS
+     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'company_settings' AND COLUMN_NAME = 'logo_url'`,
+  );
+  if (!cols.length) {
+    await query("ALTER TABLE company_settings ADD COLUMN logo_url MEDIUMTEXT NULL");
+    return;
+  }
+  const type = String(cols[0].DATA_TYPE || "").toLowerCase();
+  if (type !== "mediumtext" && type !== "longtext") {
+    await query("ALTER TABLE company_settings MODIFY logo_url MEDIUMTEXT");
+  }
+}
 
 app.get("/api/health", async (_req, res) => {
   try {
@@ -122,7 +139,7 @@ app.get("/api/suppliers", async (_req, res) => {
   }
 });
 
-app.get("/api/reports", async (_req, res) => {
+app.get("/api/today", async (_req, res) => {
   try {
     const [today] = await query(
       `SELECT COUNT(*) AS bills,
@@ -132,20 +149,44 @@ app.get("/api/reports", async (_req, res) => {
        WHERE business_id = ? AND DATE(created_at) = CURDATE()`,
       [BUSINESS_ID],
     );
-    const methods = await query(
-      `SELECT payment_method, COALESCE(SUM(total),0) AS total
-       FROM sales_orders
-       WHERE business_id = ? AND DATE(created_at) = CURDATE()
-       GROUP BY payment_method`,
-      [BUSINESS_ID],
+    res.json({ today: today || { bills: 0, takings: 0, gst: 0 } });
+  } catch (err) {
+    res.status(500).json({ error: String(err.message) });
+  }
+});
+
+app.get("/api/reports", async (req, res) => {
+  const from = String(req.query.from || new Date().toISOString().slice(0, 10));
+  const to = String(req.query.to || from);
+  try {
+    res.json(await buildReports(from, to));
+  } catch (err) {
+    res.status(500).json({ error: String(err.message) });
+  }
+});
+
+app.get("/api/reports/excel", async (req, res) => {
+  const from = String(req.query.from || new Date().toISOString().slice(0, 10));
+  const to = String(req.query.to || from);
+  const sheet = req.query.sheet ? String(req.query.sheet) : "";
+  try {
+    const data = await buildReports(from, to);
+    let sheets = reportsToSheets(data);
+    if (sheet) {
+      sheets = sheets.filter((s) => s.name === sheet);
+      if (!sheets.length) {
+        res.status(400).json({ error: "Unknown report type" });
+        return;
+      }
+    }
+    const xml = workbookXml(sheets);
+    const slug = sheet ? sheet.toLowerCase().replaceAll(/[^a-z0-9]+/g, "-") : "all";
+    res.setHeader("Content-Type", "application/vnd.ms-excel; charset=utf-8");
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="swami-reports-${slug}-${from}-to-${to}.xls"`,
     );
-    const low = await query(
-      `SELECT name, local_name, stock_gm, reorder_level_gm
-       FROM items WHERE business_id = ? AND stock_gm <= reorder_level_gm
-       ORDER BY stock_gm`,
-      [BUSINESS_ID],
-    );
-    res.json({ today, methods, low });
+    res.send(xml);
   } catch (err) {
     res.status(500).json({ error: String(err.message) });
   }
@@ -170,24 +211,41 @@ app.post("/api/items/:id/receive", async (req, res) => {
 });
 
 app.post("/api/settings", async (req, res) => {
-  const { name, address, phone, email, gstin } = req.body || {};
+  const body = req.body || {};
+  const { name, address, phone, email, gstin } = body;
   if (!name || !String(name).trim()) {
     res.status(400).json({ error: "Shop name is required" });
     return;
   }
+  let logoSql = "";
+  const params = [
+    String(name).trim(),
+    address || null,
+    phone || null,
+    email || null,
+    gstin || null,
+  ];
+  if (Object.prototype.hasOwnProperty.call(body, "logo_url")) {
+    const logo = body.logo_url ? String(body.logo_url) : "";
+    if (logo && !logo.startsWith("data:image/")) {
+      res.status(400).json({ error: "Logo must be an uploaded image" });
+      return;
+    }
+    if (logo && logo.length > 6_000_000) {
+      res.status(400).json({ error: "Logo is too large" });
+      return;
+    }
+    logoSql = ", logo_url = ?";
+    params.push(logo || null);
+  }
+  params.push(BUSINESS_ID);
   try {
+    await ensureLogoColumn();
     await query(
       `UPDATE company_settings
-       SET name = ?, address = ?, phone = ?, email = ?, gstin = ?
+       SET name = ?, address = ?, phone = ?, email = ?, gstin = ?${logoSql}
        WHERE business_id = ?`,
-      [
-        String(name).trim(),
-        address || null,
-        phone || null,
-        email || null,
-        gstin || null,
-        BUSINESS_ID,
-      ],
+      params,
     );
     const [company] = await query(
       "SELECT * FROM company_settings WHERE business_id = ?",
@@ -338,6 +396,10 @@ app.post("/api/checkout", async (req, res) => {
 app.use(express.static(root));
 
 const port = Number(process.env.PORT || 5173);
-app.listen(port, "0.0.0.0", () => {
-  console.log(`SWAMI MASALE POS http://0.0.0.0:${port}`);
-});
+ensureLogoColumn()
+  .catch((err) => console.error("logo column", err.message))
+  .finally(() => {
+    app.listen(port, "0.0.0.0", () => {
+      console.log(`SWAMI MASALE POS http://0.0.0.0:${port}`);
+    });
+  });
