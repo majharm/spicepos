@@ -82,6 +82,7 @@
   color: var(--text);
   cursor: pointer;
   user-select: none;
+  position: relative;
 }
 .auth-card input:not([type="checkbox"]),
 .auth-card select,
@@ -93,22 +94,26 @@
   color: var(--text);
   font: inherit;
 }
-.auth-card input[type="checkbox"] {
-  -webkit-appearance: none;
-  appearance: none;
+.auth-card label.remember input[type="checkbox"] {
+  position: absolute;
+  opacity: 0;
   width: 18px;
   height: 18px;
   margin: 0;
   padding: 0;
+  cursor: pointer;
+}
+.auth-card .remember-ui {
+  width: 18px;
+  height: 18px;
   flex: 0 0 18px;
   border: 1.5px solid var(--line-strong, #c5ced8);
   border-radius: 4px;
-  background-color: #fff;
-  background-image: none;
-  box-shadow: none;
-  cursor: pointer;
+  background: #fff;
+  box-sizing: border-box;
+  pointer-events: none;
 }
-.auth-card input[type="checkbox"]:checked {
+.auth-card label.remember input[type="checkbox"]:checked + .remember-ui {
   border-color: var(--accent, #1f6feb);
   background-color: var(--accent, #1f6feb);
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill='none' stroke='%23fff' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round' d='M3.2 8.4 6.4 11.6 12.8 4.4'/%3E%3C/svg%3E");
@@ -116,7 +121,7 @@
   background-position: center;
   background-repeat: no-repeat;
 }
-.auth-card input[type="checkbox"]:focus-visible {
+.auth-card label.remember input[type="checkbox"]:focus-visible + .remember-ui {
   outline: 2px solid var(--accent, #1f6feb);
   outline-offset: 2px;
 }
