@@ -1,0 +1,1113 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Spice POS</title>
+    <style>
+:root {
+  --bg: #1a1410;
+  --bg-raised: #241c16;
+  --panel: #2c221b;
+  --line: #3d2f24;
+  --text: #f6efe6;
+  --muted: #c4b3a2;
+  --saffron: #e8a54b;
+  --saffron-deep: #c47a22;
+  --chili: #d4523e;
+  --mint: #7dba7a;
+  --danger: #ef6b5a;
+  --shadow: 0 18px 40px rgba(0, 0, 0, 0.35);
+  font-family: "Source Sans 3", "Segoe UI", sans-serif;
+}
+
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body {
+  background:
+    radial-gradient(1200px 500px at 10% -10%, #3a2718 0%, transparent 55%),
+    var(--bg);
+  color: var(--text);
+}
+
+button, input { font: inherit; }
+button { cursor: pointer; }
+
+.app {
+  height: 100%;
+  display: grid;
+  grid-template-rows: auto 1fr;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 18px;
+  border-bottom: 1px solid var(--line);
+  background: rgba(26, 20, 16, 0.92);
+  backdrop-filter: blur(8px);
+}
+.brand {
+  display: flex;
+  flex-direction: column;
+  min-width: 160px;
+}
+.brand strong { font-size: 18px; letter-spacing: 0.04em; }
+.brand span { color: var(--muted); font-size: 12px; }
+.search {
+  flex: 1;
+  display: flex;
+}
+.search input {
+  width: 100%;
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--bg-raised);
+  color: var(--text);
+}
+.stats, .top-actions { display: flex; gap: 8px; align-items: center; }
+.chip {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.chip b { color: var(--text); font-weight: 600; }
+.btn {
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--text);
+  border-radius: 10px;
+  padding: 8px 12px;
+}
+.btn.primary {
+  background: linear-gradient(180deg, var(--saffron), var(--saffron-deep));
+  border-color: transparent;
+  color: #1a120a;
+  font-weight: 700;
+}
+.btn.ghost { background: transparent; }
+.btn.danger { background: #4a221c; border-color: #6a3228; }
+.btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+.workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(320px, 0.9fr);
+  min-height: 0;
+}
+
+.catalog {
+  padding: 16px;
+  overflow: auto;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
+  gap: 12px;
+  align-content: start;
+}
+
+.card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 12px;
+  text-align: left;
+  color: inherit;
+  box-shadow: var(--shadow);
+  min-height: 132px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.card:hover { border-color: var(--saffron); }
+.card .sku { color: var(--muted); font-size: 11px; letter-spacing: 0.08em; }
+.card .name { font-weight: 700; }
+.card .meta { display: flex; justify-content: space-between; color: var(--muted); font-size: 13px; }
+.stock.ok { color: var(--mint); }
+.stock.low { color: var(--saffron); }
+.stock.out { color: var(--danger); }
+
+.ticket {
+  border-left: 1px solid var(--line);
+  background: var(--bg-raised);
+  display: grid;
+  grid-template-rows: auto 1fr auto auto;
+  min-height: 0;
+}
+.ticket h2 {
+  margin: 0;
+  padding: 14px 16px 8px;
+  font-size: 16px;
+}
+.lines {
+  overflow: auto;
+  padding: 0 8px 8px;
+}
+.line {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  padding: 10px 8px;
+  border-bottom: 1px solid var(--line);
+}
+.line .who { font-weight: 600; }
+.line .pack { color: var(--muted); font-size: 12px; }
+.qty {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.qty button {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--text);
+}
+.totals {
+  padding: 12px 16px;
+  border-top: 1px solid var(--line);
+  display: grid;
+  gap: 6px;
+  font-size: 14px;
+}
+.totals div { display: flex; justify-content: space-between; }
+.totals .grand { font-size: 22px; font-weight: 800; color: var(--saffron); }
+
+.pay {
+  padding: 12px 16px 16px;
+  display: grid;
+  gap: 8px;
+}
+.pay-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.pay-row .btn { width: 100%; }
+.tender {
+  display: flex;
+  gap: 8px;
+}
+.tender input {
+  flex: 1;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--text);
+}
+.hint { color: var(--muted); font-size: 12px; min-height: 16px; }
+.hint.error { color: var(--danger); }
+.hint.ok { color: var(--mint); }
+
+.lock, .modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(10, 7, 5, 0.72);
+  display: grid;
+  place-items: center;
+  z-index: 20;
+}
+.lock[hidden], .modal[hidden] { display: none; }
+.dialog {
+  width: min(520px, calc(100% - 32px));
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 22px;
+  box-shadow: var(--shadow);
+}
+.dialog h3 { margin: 0 0 8px; }
+.dialog p { color: var(--muted); }
+.pin {
+  display: flex;
+  gap: 8px;
+  margin: 16px 0;
+}
+#btn-demo-pin { width: 100%; }
+.pin input {
+  flex: 1;
+  padding: 12px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--text);
+  letter-spacing: 0.4em;
+  text-align: center;
+}
+.receipt {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 13px;
+  white-space: pre-wrap;
+  background: #fff7ea;
+  color: #2b1c12;
+  padding: 16px;
+  border-radius: 10px;
+  max-height: 360px;
+  overflow: auto;
+}
+.held-list, .order-list {
+  display: grid;
+  gap: 8px;
+  max-height: 360px;
+  overflow: auto;
+}
+.held-item, .order-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  align-items: center;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--bg-raised);
+  color: inherit;
+  text-align: left;
+}
+
+@media (max-width: 900px) {
+  .topbar { flex-wrap: wrap; }
+  .search { order: 3; flex: 1 0 100%; }
+  .stats { display: none; }
+  .workspace { grid-template-columns: 1fr; }
+  .ticket { border-left: 0; border-top: 1px solid var(--line); min-height: 50vh; }
+}
+
+</style>
+  </head>
+  <body>
+    <div class="app">
+      <header class="topbar">
+        <div class="brand">
+          <strong id="shop-name">Spice POS</strong>
+          <span id="shop-place">Counter</span>
+        </div>
+        <form class="search" id="search-form">
+          <input
+            id="search"
+            type="search"
+            placeholder="Search spice, SKU, or pack — / to focus"
+            autocomplete="off"
+          />
+        </form>
+        <div class="stats">
+          <div class="chip">Today <b id="today-total">₹0.00</b></div>
+          <div class="chip">Bills <b id="today-count">0</b></div>
+          <div class="chip" id="clock">--:--</div>
+        </div>
+        <div class="top-actions">
+          <button class="btn" id="btn-held" type="button">Held</button>
+          <button class="btn" id="btn-orders" type="button">Orders</button>
+          <button class="btn ghost" id="btn-lock" type="button">Lock</button>
+        </div>
+      </header>
+      <main class="workspace">
+        <section class="catalog" id="catalog" aria-label="Products"></section>
+        <aside class="ticket">
+          <h2>Current bill</h2>
+          <div class="lines" id="lines"></div>
+          <div class="totals">
+            <div><span>Taxable</span><span id="taxable">₹0.00</span></div>
+            <div><span>GST</span><span id="tax">₹0.00</span></div>
+            <div class="grand"><span>Total</span><span id="total">₹0.00</span></div>
+          </div>
+          <div class="pay">
+            <div class="tender">
+              <input id="tender" inputmode="decimal" placeholder="Cash tendered" />
+              <button class="btn" id="btn-hold" type="button">Hold</button>
+              <button class="btn danger" id="btn-clear" type="button">Clear</button>
+            </div>
+            <div class="pay-row">
+              <button class="btn primary" id="pay-cash" type="button">Cash</button>
+              <button class="btn" id="pay-upi" type="button">UPI</button>
+              <button class="btn" id="pay-card" type="button">Card</button>
+            </div>
+            <div class="hint" id="hint"></div>
+          </div>
+        </aside>
+      </main>
+    </div>
+
+    <div class="lock" id="lock">
+      <div class="dialog">
+        <h3>Unlock counter</h3>
+        <p>Enter cashier PIN. Demo PIN is <b>1234</b>.</p>
+        <form class="pin" id="pin-form" action="#" method="post">
+          <input id="pin" type="text" inputmode="numeric" maxlength="8" autocomplete="one-time-code" placeholder="PIN" />
+          <button class="btn primary" id="btn-unlock" type="submit">Unlock</button>
+        </form>
+        <button class="btn" id="btn-demo-pin" type="button">Fill demo PIN 1234</button>
+        <div class="hint" id="pin-hint"></div>
+      </div>
+    </div>
+
+    <div class="modal" id="modal" hidden>
+      <div class="dialog">
+        <h3 id="modal-title">Dialog</h3>
+        <div id="modal-body"></div>
+        <div style="margin-top: 14px; display: flex; gap: 8px; justify-content: flex-end">
+          <button class="btn" id="modal-close" type="button">Close</button>
+        </div>
+      </div>
+    </div>
+
+    <script>
+/* generated by scripts/bundle.mjs — do not edit by hand */
+(() => {
+/** All money is integer paise (1 INR = 100 paise) to avoid float rounding bugs. */
+
+function rupeesToPaise(rupees) {
+  if (!Number.isFinite(rupees)) throw new Error("Invalid rupees");
+  return Math.round(rupees * 100);
+}
+
+function paiseToRupees(paise) {
+  return paise / 100;
+}
+
+function formatINR(paise) {
+  const negative = paise < 0;
+  const abs = Math.abs(Math.trunc(paise));
+  const rupees = Math.floor(abs / 100);
+  const remainder = abs % 100;
+  const grouped = rupees.toLocaleString("en-IN");
+  const body = `₹${grouped}.${String(remainder).padStart(2, "0")}`;
+  return negative ? `-${body}` : body;
+}
+
+/** GST basis points: 500 = 5%. Tax is rounded to nearest paise per line. */
+function lineAmounts(unitPaise, qty, gstBps) {
+  if (!Number.isInteger(unitPaise) || unitPaise < 0) {
+    throw new Error("Invalid unit price");
+  }
+  if (!Number.isInteger(qty) || qty < 0) {
+    throw new Error("Invalid quantity");
+  }
+  if (!Number.isInteger(gstBps) || gstBps < 0) {
+    throw new Error("Invalid GST");
+  }
+  const taxable = unitPaise * qty;
+  const tax = Math.round((taxable * gstBps) / 10000);
+  return { taxable, tax, total: taxable + tax };
+}
+
+function sumCart(lines) {
+  return lines.reduce(
+    (acc, line) => {
+      const amounts = lineAmounts(line.unitPaise, line.qty, line.gstBps);
+      acc.taxable += amounts.taxable;
+      acc.tax += amounts.tax;
+      acc.total += amounts.total;
+      return acc;
+    },
+    { taxable: 0, tax: 0, total: 0 },
+  );
+}
+
+function changeDue(totalPaise, tenderedPaise) {
+  if (!Number.isInteger(totalPaise) || totalPaise < 0) {
+    throw new Error("Invalid total");
+  }
+  if (!Number.isInteger(tenderedPaise) || tenderedPaise < 0) {
+    throw new Error("Invalid tender");
+  }
+  if (tenderedPaise < totalPaise) {
+    return { ok: false, shortfall: totalPaise - tenderedPaise, change: 0 };
+  }
+  return { ok: true, shortfall: 0, change: tenderedPaise - totalPaise };
+}
+
+function parseMoneyInput(raw) {
+  if (raw == null) return { ok: false, error: "Enter an amount" };
+  const text = String(raw).trim().replace(/₹/g, "").replace(/,/g, "");
+  if (text === "") return { ok: false, error: "Enter an amount" };
+  if (!/^\d+(\.\d{1,2})?$/.test(text)) {
+    return { ok: false, error: "Use a valid amount (max 2 decimals)" };
+  }
+  const [whole, frac = ""] = text.split(".");
+  const paise = Number(whole) * 100 + Number(frac.padEnd(2, "0"));
+  if (!Number.isSafeInteger(paise)) {
+    return { ok: false, error: "Amount is too large" };
+  }
+  return { ok: true, paise };
+}
+
+/** Packed spices. Prices in paise. GST 5% (500 bps) for spices. */
+const CATALOG = [
+  { sku: "TUR-100", name: "Turmeric powder", pack: "100 g", unitPaise: 4500, gstBps: 500, stock: 48 },
+  { sku: "CUM-100", name: "Cumin seeds", pack: "100 g", unitPaise: 6200, gstBps: 500, stock: 36 },
+  { sku: "COR-100", name: "Coriander powder", pack: "100 g", unitPaise: 3800, gstBps: 500, stock: 40 },
+  { sku: "CHI-100", name: "Red chilli powder", pack: "100 g", unitPaise: 5500, gstBps: 500, stock: 32 },
+  { sku: "GAR-050", name: "Garam masala", pack: "50 g", unitPaise: 7200, gstBps: 500, stock: 24 },
+  { sku: "CAR-010", name: "Green cardamom", pack: "10 g", unitPaise: 18500, gstBps: 500, stock: 18 },
+  { sku: "PEP-050", name: "Black pepper", pack: "50 g", unitPaise: 9800, gstBps: 500, stock: 22 },
+  { sku: "MUS-100", name: "Mustard seeds", pack: "100 g", unitPaise: 3200, gstBps: 500, stock: 30 },
+  { sku: "FEN-100", name: "Fenugreek seeds", pack: "100 g", unitPaise: 2800, gstBps: 500, stock: 28 },
+  { sku: "ASA-050", name: "Asafoetida", pack: "50 g", unitPaise: 12500, gstBps: 500, stock: 12 },
+  { sku: "CIN-050", name: "Cinnamon sticks", pack: "50 g", unitPaise: 8900, gstBps: 500, stock: 16 },
+  { sku: "CLO-025", name: "Cloves", pack: "25 g", unitPaise: 7600, gstBps: 500, stock: 14 },
+  { sku: "BAY-020", name: "Bay leaves", pack: "20 g", unitPaise: 2400, gstBps: 500, stock: 20 },
+  { sku: "GIN-100", name: "Ginger powder", pack: "100 g", unitPaise: 5100, gstBps: 500, stock: 26 },
+  { sku: "GARL-100", name: "Garlic powder", pack: "100 g", unitPaise: 4900, gstBps: 500, stock: 26 },
+  { sku: "SAF-001", name: "Saffron", pack: "1 g", unitPaise: 45000, gstBps: 500, stock: 6 },
+];
+
+function searchCatalog(products, query) {
+  const q = String(query || "")
+    .trim()
+    .toLowerCase();
+  if (!q) return products;
+  return products.filter((p) => {
+    return (
+      p.name.toLowerCase().includes(q) ||
+      p.sku.toLowerCase().includes(q) ||
+      p.pack.toLowerCase().includes(q)
+    );
+  });
+}
+
+const STORAGE_KEY = "spicepos.v1";
+const DEMO_PIN = "1234";
+
+function clone(value) {
+  return JSON.parse(JSON.stringify(value));
+}
+
+function seedState() {
+  return {
+    version: 1,
+    shop: {
+      name: "Spice POS",
+      gstin: "27AABCU9603R1ZX",
+      place: "Pune",
+    },
+    products: clone(CATALOG),
+    cart: [],
+    held: [],
+    orders: [],
+    locked: true,
+  };
+}
+
+function loadState(storage = globalThis.localStorage) {
+  try {
+    const raw = storage?.getItem(STORAGE_KEY);
+    if (!raw) return seedState();
+    const parsed = JSON.parse(raw);
+    if (parsed?.version !== 1 || !Array.isArray(parsed.products)) {
+      return seedState();
+    }
+    return {
+      ...seedState(),
+      ...parsed,
+      cart: Array.isArray(parsed.cart) ? parsed.cart : [],
+      held: Array.isArray(parsed.held) ? parsed.held : [],
+      orders: Array.isArray(parsed.orders) ? parsed.orders : [],
+      locked: true,
+    };
+  } catch {
+    return seedState();
+  }
+}
+
+function saveState(state, storage = globalThis.localStorage) {
+  const persistable = { ...state, locked: true };
+  storage.setItem(STORAGE_KEY, JSON.stringify(persistable));
+}
+
+function productBySku(state, sku) {
+  return state.products.find((p) => p.sku === sku) || null;
+}
+
+function cartQtyForSku(state, sku) {
+  const line = state.cart.find((l) => l.sku === sku);
+  return line ? line.qty : 0;
+}
+
+function availableStock(state, sku) {
+  const product = productBySku(state, sku);
+  if (!product) return 0;
+  return Math.max(0, product.stock - cartQtyForSku(state, sku));
+}
+
+function addToCart(state, sku, qty = 1) {
+  if (!Number.isInteger(qty) || qty <= 0) {
+    return { ok: false, error: "Quantity must be a positive whole number" };
+  }
+  const product = productBySku(state, sku);
+  if (!product) return { ok: false, error: "Unknown SKU" };
+  const line = state.cart.find((l) => l.sku === sku);
+  const nextQty = (line?.qty || 0) + qty;
+  if (nextQty > product.stock) {
+    return {
+      ok: false,
+      error: `Only ${product.stock} in stock for ${product.name}`,
+    };
+  }
+  if (line) {
+    line.qty = nextQty;
+  } else {
+    state.cart.push({
+      sku: product.sku,
+      name: product.name,
+      pack: product.pack,
+      unitPaise: product.unitPaise,
+      gstBps: product.gstBps,
+      qty: nextQty,
+    });
+  }
+  return { ok: true };
+}
+
+function setCartQty(state, sku, qty) {
+  if (!Number.isInteger(qty) || qty < 0) {
+    return { ok: false, error: "Quantity must be a whole number" };
+  }
+  const product = productBySku(state, sku);
+  if (!product) return { ok: false, error: "Unknown SKU" };
+  if (qty === 0) {
+    state.cart = state.cart.filter((l) => l.sku !== sku);
+    return { ok: true };
+  }
+  if (qty > product.stock) {
+    return {
+      ok: false,
+      error: `Only ${product.stock} in stock for ${product.name}`,
+    };
+  }
+  const line = state.cart.find((l) => l.sku === sku);
+  if (line) line.qty = qty;
+  else {
+    state.cart.push({
+      sku: product.sku,
+      name: product.name,
+      pack: product.pack,
+      unitPaise: product.unitPaise,
+      gstBps: product.gstBps,
+      qty,
+    });
+  }
+  return { ok: true };
+}
+
+function clearCart(state) {
+  state.cart = [];
+}
+
+function cartTotals(state) {
+  return sumCart(state.cart);
+}
+
+function holdCart(state) {
+  if (state.cart.length === 0) return { ok: false, error: "Cart is empty" };
+  const id = `H-${Date.now().toString(36).toUpperCase()}`;
+  state.held.unshift({
+    id,
+    createdAt: new Date().toISOString(),
+    items: clone(state.cart),
+  });
+  state.cart = [];
+  return { ok: true, id };
+}
+
+function recallHeld(state, id) {
+  const ticket = state.held.find((h) => h.id === id);
+  if (!ticket) return { ok: false, error: "Held bill not found" };
+  if (state.cart.length > 0) {
+    return { ok: false, error: "Clear or hold the current cart first" };
+  }
+  for (const item of ticket.items) {
+    const product = productBySku(state, item.sku);
+    if (!product || item.qty > product.stock) {
+      return {
+        ok: false,
+        error: `Cannot recall ${id}: ${item.name} is short on stock`,
+      };
+    }
+  }
+  state.cart = clone(ticket.items);
+  state.held = state.held.filter((h) => h.id !== id);
+  return { ok: true };
+}
+
+function nextBillNo(state) {
+  const n = state.orders.length + 1;
+  return `SP-${String(n).padStart(4, "0")}`;
+}
+
+function checkout(state, { method, tenderedPaise = 0 }) {
+  if (state.cart.length === 0) {
+    return { ok: false, error: "Cart is empty" };
+  }
+  if (!["cash", "upi", "card"].includes(method)) {
+    return { ok: false, error: "Choose cash, UPI, or card" };
+  }
+  for (const line of state.cart) {
+    const product = productBySku(state, line.sku);
+    if (!product || line.qty > product.stock) {
+      return {
+        ok: false,
+        error: `Insufficient stock for ${line.name}`,
+      };
+    }
+    if (line.qty <= 0) {
+      return { ok: false, error: "Cart has an invalid quantity" };
+    }
+  }
+
+  const totals = cartTotals(state);
+  let tendered = tenderedPaise;
+  let change = 0;
+
+  if (method === "cash") {
+    const due = changeDue(totals.total, tenderedPaise);
+    if (!due.ok) {
+      return {
+        ok: false,
+        error: `Cash short by ${due.shortfall} paise`,
+        shortfall: due.shortfall,
+      };
+    }
+    change = due.change;
+    tendered = tenderedPaise;
+  } else {
+    tendered = totals.total;
+    change = 0;
+  }
+
+  const items = state.cart.map((line) => {
+    const amounts = lineAmounts(line.unitPaise, line.qty, line.gstBps);
+    return { ...line, taxable: amounts.taxable, tax: amounts.tax, total: amounts.total };
+  });
+
+  for (const line of items) {
+    const product = productBySku(state, line.sku);
+    product.stock -= line.qty;
+  }
+
+  const order = {
+    id: nextBillNo(state),
+    createdAt: new Date().toISOString(),
+    method,
+    items,
+    taxable: totals.taxable,
+    tax: totals.tax,
+    total: totals.total,
+    tendered,
+    change,
+    status: "paid",
+  };
+  state.orders.unshift(order);
+  state.cart = [];
+  return { ok: true, order };
+}
+
+function todaySales(state, now = new Date()) {
+  const start = new Date(now);
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(start);
+  end.setDate(end.getDate() + 1);
+  const startMs = start.getTime();
+  const endMs = end.getTime();
+  const todays = state.orders.filter((o) => {
+    const t = Date.parse(o.createdAt);
+    return t >= startMs && t < endMs && o.status === "paid";
+  });
+  return todays.reduce(
+    (acc, o) => {
+      acc.count += 1;
+      acc.total += o.total;
+      acc.tax += o.tax;
+      return acc;
+    },
+    { count: 0, total: 0, tax: 0 },
+  );
+}
+
+function verifyPin(pin) {
+  return String(pin) === DEMO_PIN;
+}
+
+function resetDemo(storage = globalThis.localStorage) {
+  const state = seedState();
+  saveState(state, storage);
+  return state;
+}
+
+const els = {
+  catalog: document.getElementById("catalog"),
+  lines: document.getElementById("lines"),
+  search: document.getElementById("search"),
+  searchForm: document.getElementById("search-form"),
+  taxable: document.getElementById("taxable"),
+  tax: document.getElementById("tax"),
+  total: document.getElementById("total"),
+  tender: document.getElementById("tender"),
+  hint: document.getElementById("hint"),
+  lock: document.getElementById("lock"),
+  pinForm: document.getElementById("pin-form"),
+  pin: document.getElementById("pin"),
+  pinHint: document.getElementById("pin-hint"),
+  shopName: document.getElementById("shop-name"),
+  shopPlace: document.getElementById("shop-place"),
+  todayTotal: document.getElementById("today-total"),
+  todayCount: document.getElementById("today-count"),
+  clock: document.getElementById("clock"),
+  modal: document.getElementById("modal"),
+  modalTitle: document.getElementById("modal-title"),
+  modalBody: document.getElementById("modal-body"),
+  modalClose: document.getElementById("modal-close"),
+};
+
+let state = loadState();
+let paying = false;
+
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
+function persist() {
+  saveState(state);
+}
+
+function setHint(message, kind = "") {
+  els.hint.textContent = message || "";
+  els.hint.className = `hint ${kind}`.trim();
+}
+
+function stockClass(stock) {
+  if (stock <= 0) return "out";
+  if (stock <= 8) return "low";
+  return "ok";
+}
+
+function renderCatalog() {
+  const products = searchCatalog(state.products, els.search.value);
+  els.catalog.innerHTML = products
+    .map((p) => {
+      const disabled = p.stock <= 0 ? "disabled" : "";
+      return `<button class="card" type="button" data-sku="${escapeHtml(p.sku)}" ${disabled}>
+        <div class="sku">${escapeHtml(p.sku)}</div>
+        <div class="name">${escapeHtml(p.name)}</div>
+        <div class="meta">
+          <span>${escapeHtml(p.pack)}</span>
+          <span>${escapeHtml(formatINR(p.unitPaise))}</span>
+        </div>
+        <div class="stock ${stockClass(p.stock)}">${p.stock} in stock</div>
+      </button>`;
+    })
+    .join("");
+}
+
+function renderCart() {
+  if (state.cart.length === 0) {
+    els.lines.innerHTML = `<p class="hint">Tap a spice to add it to the bill.</p>`;
+  } else {
+    els.lines.innerHTML = state.cart
+      .map(
+        (line) => `<div class="line" data-sku="${escapeHtml(line.sku)}">
+          <div>
+            <div class="who">${escapeHtml(line.name)}</div>
+            <div class="pack">${escapeHtml(line.pack)} · ${escapeHtml(formatINR(line.unitPaise))}</div>
+          </div>
+          <div>
+            <div class="qty">
+              <button type="button" data-act="dec" aria-label="Decrease">−</button>
+              <span>${line.qty}</span>
+              <button type="button" data-act="inc" aria-label="Increase">+</button>
+            </div>
+            <div class="pack" style="text-align:right;margin-top:4px">${escapeHtml(
+              formatINR(line.unitPaise * line.qty),
+            )}</div>
+          </div>
+        </div>`,
+      )
+      .join("");
+  }
+  const totals = cartTotals(state);
+  els.taxable.textContent = formatINR(totals.taxable);
+  els.tax.textContent = formatINR(totals.tax);
+  els.total.textContent = formatINR(totals.total);
+}
+
+function renderStats() {
+  els.shopName.textContent = state.shop.name;
+  els.shopPlace.textContent = `${state.shop.place} · GSTIN ${state.shop.gstin}`;
+  const sales = todaySales(state);
+  els.todayTotal.textContent = formatINR(sales.total);
+  els.todayCount.textContent = String(sales.count);
+}
+
+function setPayEnabled(enabled) {
+  for (const id of ["pay-cash", "pay-upi", "pay-card", "btn-hold", "btn-clear"]) {
+    document.getElementById(id).disabled = !enabled;
+  }
+}
+
+function renderAll() {
+  renderCatalog();
+  renderCart();
+  renderStats();
+  setPayEnabled(state.cart.length > 0 && !state.locked);
+  els.lock.hidden = !state.locked;
+}
+
+function showModal(title, html) {
+  els.modalTitle.textContent = title;
+  els.modalBody.innerHTML = html;
+  els.modal.hidden = false;
+}
+
+function hideModal() {
+  els.modal.hidden = true;
+  els.modalBody.replaceChildren();
+}
+
+function receiptText(order) {
+  const lines = [
+    state.shop.name,
+    state.shop.place,
+    `GSTIN ${state.shop.gstin}`,
+    `Bill ${order.id}`,
+    new Date(order.createdAt).toLocaleString("en-IN"),
+    "------------------------------",
+    ...order.items.map(
+      (i) =>
+        `${i.name} ${i.pack} x${i.qty}\n  ${formatINR(i.total)} (GST ${formatINR(i.tax)})`,
+    ),
+    "------------------------------",
+    `Taxable  ${formatINR(order.taxable)}`,
+    `GST      ${formatINR(order.tax)}`,
+    `TOTAL    ${formatINR(order.total)}`,
+    `Paid     ${order.method.toUpperCase()} ${formatINR(order.tendered)}`,
+    `Change   ${formatINR(order.change)}`,
+    "Thank you. Check the seal on packs.",
+  ];
+  return lines.join("\n");
+}
+
+function pay(method) {
+  if (paying) return;
+  paying = true;
+  try {
+    if (state.cart.length === 0) {
+      setHint("Cart is empty", "error");
+      return;
+    }
+    let tenderedPaise = 0;
+    if (method === "cash") {
+      const parsed = parseMoneyInput(els.tender.value);
+      if (!parsed.ok) {
+        setHint(parsed.error, "error");
+        return;
+      }
+      tenderedPaise = parsed.paise;
+    }
+    const result = checkout(state, { method, tenderedPaise });
+    if (!result.ok) {
+      if (result.shortfall) {
+        setHint(`Cash short by ${formatINR(result.shortfall)}`, "error");
+      } else {
+        setHint(result.error, "error");
+      }
+      return;
+    }
+    persist();
+    els.tender.value = "";
+    setHint(`Paid ${result.order.id} · change ${formatINR(result.order.change)}`, "ok");
+    renderAll();
+    showModal(
+      `Receipt ${result.order.id}`,
+      `<pre class="receipt">${escapeHtml(receiptText(result.order))}</pre>`,
+    );
+  } finally {
+    paying = false;
+  }
+}
+
+els.catalog.addEventListener("click", (event) => {
+  const card = event.target.closest("[data-sku]");
+  if (!card || state.locked) return;
+  const result = addToCart(state, card.dataset.sku, 1);
+  if (!result.ok) setHint(result.error, "error");
+  else {
+    persist();
+    setHint("");
+    renderAll();
+  }
+});
+
+els.lines.addEventListener("click", (event) => {
+  const btn = event.target.closest("button[data-act]");
+  const row = event.target.closest(".line");
+  if (!btn || !row) return;
+  const sku = row.dataset.sku;
+  const line = state.cart.find((l) => l.sku === sku);
+  if (!line) return;
+  const next = btn.dataset.act === "inc" ? line.qty + 1 : line.qty - 1;
+  const result = setCartQty(state, sku, next);
+  if (!result.ok) setHint(result.error, "error");
+  else {
+    persist();
+    setHint("");
+    renderAll();
+  }
+});
+
+els.searchForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  renderCatalog();
+});
+els.search.addEventListener("input", () => renderCatalog());
+
+document.getElementById("btn-clear").addEventListener("click", () => {
+  clearCart(state);
+  persist();
+  setHint("Cart cleared");
+  renderAll();
+});
+
+document.getElementById("btn-hold").addEventListener("click", () => {
+  const result = holdCart(state);
+  if (!result.ok) setHint(result.error, "error");
+  else {
+    persist();
+    setHint(`Held ${result.id}`, "ok");
+    renderAll();
+  }
+});
+
+document.getElementById("pay-cash").addEventListener("click", () => pay("cash"));
+document.getElementById("pay-upi").addEventListener("click", () => pay("upi"));
+document.getElementById("pay-card").addEventListener("click", () => pay("card"));
+
+document.getElementById("btn-held").addEventListener("click", () => {
+  if (state.held.length === 0) {
+    showModal("Held bills", `<p class="hint">No held bills.</p>`);
+    return;
+  }
+  showModal(
+    "Held bills",
+    `<div class="held-list">${state.held
+      .map(
+        (h) =>
+          `<button class="held-item" type="button" data-hold="${escapeHtml(h.id)}">
+            <span>${escapeHtml(h.id)}<br><small>${escapeHtml(
+              new Date(h.createdAt).toLocaleString("en-IN"),
+            )} · ${h.items.length} lines</small></span>
+            <span>Recall</span>
+          </button>`,
+      )
+      .join("")}</div>`,
+  );
+});
+
+document.getElementById("btn-orders").addEventListener("click", () => {
+  if (state.orders.length === 0) {
+    showModal("Orders", `<p class="hint">No paid bills yet.</p>`);
+    return;
+  }
+  showModal(
+    "Today and earlier",
+    `<div class="order-list">${state.orders
+      .map(
+        (o) =>
+          `<button class="order-item" type="button" data-order="${escapeHtml(o.id)}">
+            <span>${escapeHtml(o.id)} · ${escapeHtml(o.method.toUpperCase())}<br>
+            <small>${escapeHtml(new Date(o.createdAt).toLocaleString("en-IN"))}</small></span>
+            <span>${escapeHtml(formatINR(o.total))}</span>
+          </button>`,
+      )
+      .join("")}</div>`,
+  );
+});
+
+els.modalBody.addEventListener("click", (event) => {
+  const holdBtn = event.target.closest("[data-hold]");
+  if (holdBtn) {
+    const result = recallHeld(state, holdBtn.dataset.hold);
+    if (!result.ok) setHint(result.error, "error");
+    else {
+      persist();
+      setHint("Bill recalled", "ok");
+      renderAll();
+    }
+    hideModal();
+    return;
+  }
+  const orderBtn = event.target.closest("[data-order]");
+  if (orderBtn) {
+    const order = state.orders.find((o) => o.id === orderBtn.dataset.order);
+    if (order) {
+      showModal(
+        `Receipt ${order.id}`,
+        `<pre class="receipt">${escapeHtml(receiptText(order))}</pre>`,
+      );
+    }
+  }
+});
+
+els.modalClose.addEventListener("click", hideModal);
+els.modal.addEventListener("click", (event) => {
+  if (event.target === els.modal) hideModal();
+});
+
+document.getElementById("btn-lock").addEventListener("click", () => {
+  state.locked = true;
+  persist();
+  renderAll();
+  els.pin.focus();
+});
+
+els.pinForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  unlockWithPin(els.pin.value);
+});
+
+document.getElementById("btn-demo-pin").addEventListener("click", () => {
+  els.pin.value = "1234";
+  unlockWithPin("1234");
+});
+
+function unlockWithPin(pin) {
+  if (!verifyPin(pin)) {
+    els.pinHint.textContent = "Wrong PIN";
+    els.pinHint.className = "hint error";
+    return;
+  }
+  els.pin.value = "";
+  els.pinHint.textContent = "";
+  state.locked = false;
+  renderAll();
+}
+
+document.addEventListener("keydown", (event) => {
+  if (event.key === "/" && document.activeElement !== els.search && document.activeElement !== els.tender && document.activeElement !== els.pin) {
+    event.preventDefault();
+    els.search.focus();
+  }
+  if (event.key === "Escape") hideModal();
+});
+
+function tickClock() {
+  els.clock.textContent = new Date().toLocaleTimeString("en-IN", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+tickClock();
+setInterval(tickClock, 15000);
+renderAll();
+
+})();
+
+</script>
+    <noscript>Spice POS needs JavaScript. Open this folder with a local server or use the demo link in the README.</noscript>
+  </body>
+</html>

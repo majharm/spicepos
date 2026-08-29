@@ -4,14 +4,13 @@ Browser counter for a spice shop. Totals are integer **paise**, so GST and chang
 
 ## Open the till
 
-**Live demo (this branch):**  
-https://raw.githack.com/majharm/spicepos/cursor/pos-qa-checklist-fixes-1a88/index.html
+Use this link on your laptop (not `127.0.0.1` — that is only the Cloud Agent VM):
 
-Click **Fill demo PIN 1234**. Or type `1234` and Unlock.
+https://htmlpreview.github.io/?https://github.com/majharm/spicepos/blob/cursor/pos-qa-checklist-fixes-1a88/app.html
 
-`http://127.0.0.1:5173` only works on the machine that is running the server. It will not load from a Cloud Agent if you open that address on your laptop.
+Click **Fill demo PIN 1234**.
 
-You can also double-click `index.html` after checking out this branch — no install needed.
+You can also open `app.html` directly after checking out this branch.
 
 ```bash
 npm start
