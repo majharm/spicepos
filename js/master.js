@@ -129,6 +129,16 @@ function showLogin(on) {
   $("panel").hidden = on;
 }
 
+(() => {
+  const saved = localStorage.getItem("pos_remember_master");
+  if (!saved) return;
+  const form = $("master-login");
+  const email = form.querySelector('[name="email"]');
+  const box = form.querySelector('[name="remember"]');
+  if (email) email.value = saved;
+  if (box) box.checked = true;
+})();
+
 async function boot() {
   try {
     const me = await api("/api/auth/me");
@@ -146,8 +156,14 @@ $("master-login").addEventListener("submit", async (e) => {
   try {
     await api("/api/auth/master-login", {
       method: "POST",
-      body: JSON.stringify({ email: fd.get("email"), password: fd.get("password") }),
+      body: JSON.stringify({
+        email: fd.get("email"),
+        password: fd.get("password"),
+        remember: Boolean(fd.get("remember")),
+      }),
     });
+    if (fd.get("remember")) localStorage.setItem("pos_remember_master", String(fd.get("email") || ""));
+    else localStorage.removeItem("pos_remember_master");
     showLogin(false);
     await render();
   } catch (err) {

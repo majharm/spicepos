@@ -7,6 +7,16 @@ import { registerBusiness } from "./onboard.js";
 import { canonApiUrl } from "./http-path.js";
 
 const SESSION_HOURS = 12;
+const REMEMBER_DAYS = 30;
+
+function sessionSecs(remember) {
+  return remember ? REMEMBER_DAYS * 24 * 3600 : SESSION_HOURS * 3600;
+}
+
+function wantsRemember(body) {
+  const v = body?.remember;
+  return v === true || v === "true" || v === "1" || v === "on";
+}
 
 function cookies(req) {
   const out = {};
@@ -237,6 +247,7 @@ export function registerAuth(app) {
       await query("UPDATE staff_users SET failed_logins = 0, locked_until = NULL WHERE id = ?", [
         user.id,
       ]);
+      const ttl = sessionSecs(wantsRemember(req.body));
       const token = newToken();
       const sid = crypto.randomUUID();
       await query(
@@ -246,14 +257,14 @@ export function registerAuth(app) {
           sid,
           user.id,
           sha256(token),
-          new Date(Date.now() + SESSION_HOURS * 3600 * 1000),
+          new Date(Date.now() + ttl * 1000),
           user.business_id,
           clientIp(req),
           String(req.headers["user-agent"] || "").slice(0, 250),
           branchId || user.branch_id,
         ],
       );
-      setCookie(res, "pos_sid", token, SESSION_HOURS * 3600, req);
+      setCookie(res, "pos_sid", token, ttl, req);
       runTenant({ businessId: user.business_id, branchId: user.branch_id, user }, async () => {
         await audit("User Login", { module: "auth" }, req);
       });
@@ -283,6 +294,7 @@ export function registerAuth(app) {
     try {
       const { user } = await registerBusiness(req.body || {});
       const [business] = await query("SELECT * FROM businesses WHERE id = ?", [user.business_id]);
+      const ttl = sessionSecs(wantsRemember(req.body));
       const token = newToken();
       await query(
         `INSERT INTO staff_sessions (id, staff_user_id, token_hash, expires_at, business_id, ip, user_agent, branch_id)
@@ -291,14 +303,14 @@ export function registerAuth(app) {
           crypto.randomUUID(),
           user.id,
           sha256(token),
-          new Date(Date.now() + SESSION_HOURS * 3600 * 1000),
+          new Date(Date.now() + ttl * 1000),
           user.business_id,
           clientIp(req),
           String(req.headers["user-agent"] || "").slice(0, 250),
           user.branch_id,
         ],
       );
-      setCookie(res, "pos_sid", token, SESSION_HOURS * 3600, req);
+      setCookie(res, "pos_sid", token, ttl, req);
       res.json({
         ok: true,
         user: {
@@ -326,6 +338,7 @@ export function registerAuth(app) {
         res.status(401).json({ error: "Invalid master login" });
         return;
       }
+      const ttl = sessionSecs(wantsRemember(req.body));
       const token = newToken();
       await query(
         `INSERT INTO platform_sessions (id, admin_id, token_hash, expires_at, ip, user_agent)
@@ -334,12 +347,12 @@ export function registerAuth(app) {
           crypto.randomUUID(),
           admin.id,
           sha256(token),
-          new Date(Date.now() + SESSION_HOURS * 3600 * 1000),
+          new Date(Date.now() + ttl * 1000),
           clientIp(req),
           String(req.headers["user-agent"] || "").slice(0, 250),
         ],
       );
-      setCookie(res, "pos_master", token, SESSION_HOURS * 3600, req);
+      setCookie(res, "pos_master", token, ttl, req);
       await query(
         `INSERT INTO staff_audit_logs (
            id, actor_clerk_user_id, actor_name, module, target_name, action, details, business_id, ip

@@ -19,6 +19,15 @@ if (new URLSearchParams(location.search).get("tab") === "signup" || location.has
   document.querySelector('[data-panel="signup"]')?.click();
 }
 
+(() => {
+  const saved = localStorage.getItem("pos_remember_login");
+  if (!saved) return;
+  const input = loginForm.querySelector('[name="identifier"]');
+  const box = loginForm.querySelector('[name="remember"]');
+  if (input) input.value = saved;
+  if (box) box.checked = true;
+})();
+
 async function readJson(res) {
   const text = await res.text();
   try {
@@ -43,6 +52,7 @@ loginForm.addEventListener("submit", async (e) => {
       body: JSON.stringify({
         identifier: fd.get("identifier"),
         password: fd.get("password"),
+        remember: Boolean(fd.get("remember")),
       }),
     });
     const data = await readJson(res);
@@ -50,6 +60,8 @@ loginForm.addEventListener("submit", async (e) => {
     if (data.expired) {
       hint.textContent = "Subscription expired. You can view the renewal message after opening the dashboard.";
     }
+    if (fd.get("remember")) localStorage.setItem("pos_remember_login", String(fd.get("identifier") || ""));
+    else localStorage.removeItem("pos_remember_login");
     location.href = "/";
   } catch (err) {
     hint.textContent = err.message;
