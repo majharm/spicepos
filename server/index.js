@@ -16,7 +16,7 @@ import { getPlatformSettings } from "./settings.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.join(__dirname, "..");
-const publicDir = path.join(root, "client");
+const publicDir = path.join(root);
 const app = express();
 app.set("trust proxy", true);
 app.use(express.json({ limit: "8mb" }));
@@ -40,8 +40,12 @@ app.use((req, res, next) => {
   }
   if (
     req.path.startsWith("/server/") ||
-    req.path === "/server.js" ||
     req.path.startsWith("/node_modules/") ||
+    req.path.startsWith("/scripts/") ||
+    req.path === "/server.js" ||
+    req.path === "/app.js" ||
+    req.path === "/index.js" ||
+    req.path === "/Procfile" ||
     req.path === "/package.json" ||
     req.path === "/package-lock.json"
   ) {

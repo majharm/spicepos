@@ -42,7 +42,12 @@ This app is **Express + MySQL**, not a React/Vite frontend. In hPanel use **Node
 
 Do **not** deploy this as a normal PHP/static website in `public_html`. Create **Add website → Node.js web app → Express**, with **no output directory** and **no build command**.
 
-If the site shows **403 Forbidden / Access to this resource on the server is denied**, Hostinger’s `public_html/.htaccess` is missing or stale (this often happens after a redeploy). In hPanel click **Redeploy** so it can regenerate that file. Do not upload a custom `.htaccess`. Then **Restart** the Node process.
+If the site shows **403 Forbidden / Access to this resource on the server is denied**:
+1. Pull the latest commit (HTML is at the repo root again; there is no `index.js` for Apache to execute).
+2. In hPanel **Redeploy** so Hostinger regenerates `public_html/.htaccess`.
+3. **Restart** the Node process.
+4. Do not add your own `.htaccess`.
+5. Confirm `/` opens the POS and `/api/health` returns JSON.
 
 Open `https://your-domain/api/health` — it must be JSON, not a web page or 403.
 
