@@ -1,28 +1,14 @@
-# Spice POS
+# Spice POS — SWAMI MASALE SASWAD
 
-Full spice-shop till: **Counter**, **Inventory**, **Orders**, **Held**, **Reports**, and **Settings**. The counter opens unlocked so the whole app is on screen.
+Reconnects to the **old Replit MySQL** (Hostinger) and shows the live shop: items in grams, B2B/B2C rates, packs, sales orders, purchases, suppliers.
 
-## Open the till
-
-https://htmlpreview.github.io/?https://github.com/majharm/spicepos/blob/cursor/pos-qa-checklist-fixes-1a88/app.html
-
-Use the left (or top, on a phone) nav to move through every screen. Optional **Lock till** uses PIN `1234`.
-
-Or checkout this branch and open `app.html`.
+Copy `.env.example` to `.env` and set the database user/password. Do not commit `.env`.
 
 ```bash
+npm install
 npm start
-npm test
-npm run bundle
 ```
 
-`http://127.0.0.1:5173` only works on the computer running the server.
+Open http://127.0.0.1:5173
 
-## Screens
-
-1. **Counter** — search, spice grid, GST bill, cash/UPI/card.
-2. **Inventory** — every SKU and +10 receive.
-3. **Orders** — paid bills and reprint.
-4. **Held** — parked carts, recall when the live bill is empty.
-5. **Reports** — today’s takings by tender, GST, low stock.
-6. **Settings** — shop name / GSTIN on receipts, reset demo.
+Default business: `00000000-0000-4000-8000-000000000001` (`company_settings.name` = SWAMI MASALE SASWAD).

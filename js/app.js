@@ -1,488 +1,477 @@
-import { searchCatalog } from "./catalog.js";
-import { formatINR, parseMoneyInput } from "./money.js";
-import {
-  addToCart,
-  cartTotals,
-  checkout,
-  clearCart,
-  holdCart,
-  loadState,
-  recallHeld,
-  receiveStock,
-  resetDemo,
-  salesByMethod,
-  saveState,
-  setCartQty,
-  todaySales,
-  updateShop,
-  verifyPin,
-} from "./store.js";
+const inr = new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR" });
 
-const els = {
-  catalog: document.getElementById("catalog"),
-  lines: document.getElementById("lines"),
-  search: document.getElementById("search"),
-  searchForm: document.getElementById("search-form"),
-  taxable: document.getElementById("taxable"),
-  tax: document.getElementById("tax"),
-  total: document.getElementById("total"),
-  tender: document.getElementById("tender"),
-  hint: document.getElementById("hint"),
-  lock: document.getElementById("lock"),
-  pinForm: document.getElementById("pin-form"),
-  pin: document.getElementById("pin"),
-  pinHint: document.getElementById("pin-hint"),
-  shopName: document.getElementById("shop-name"),
-  shopPlace: document.getElementById("shop-place"),
-  todayTotal: document.getElementById("today-total"),
-  todayCount: document.getElementById("today-count"),
-  clock: document.getElementById("clock"),
-  modal: document.getElementById("modal"),
-  modalTitle: document.getElementById("modal-title"),
-  modalBody: document.getElementById("modal-body"),
-  modalClose: document.getElementById("modal-close"),
-  inventory: document.getElementById("inventory"),
-  orders: document.getElementById("orders"),
-  orderPane: document.getElementById("order-pane"),
-  held: document.getElementById("held"),
-  reports: document.getElementById("reports"),
-  setName: document.getElementById("set-name"),
-  setPlace: document.getElementById("set-place"),
-  setGstin: document.getElementById("set-gstin"),
-  settingsHint: document.getElementById("settings-hint"),
+const state = {
+  company: {},
+  items: [],
+  customers: [],
+  packs: [],
+  cart: [],
+  query: "",
+  customerId: "",
+  lastPack: null,
 };
 
-let state = loadState();
-let paying = false;
-let view = "counter";
+function $(id) {
+  return document.getElementById(id);
+}
 
 function escapeHtml(value) {
-  return String(value)
+  return String(value ?? "")
     .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#39;");
+    .replaceAll('"', "&quot;");
 }
 
-function persist() {
-  saveState(state);
+function money(n) {
+  return inr.format(Number(n) || 0);
 }
 
-function setHint(message, kind = "") {
-  els.hint.textContent = message || "";
-  els.hint.className = `hint ${kind}`.trim();
+function kg(gm) {
+  return `${(Number(gm) / 1000).toFixed(2)} kg`;
 }
 
-function stockClass(stock) {
-  if (stock <= 0) return "out";
-  if (stock <= 8) return "low";
-  return "ok";
+function customer() {
+  return state.customers.find((c) => c.id === state.customerId) || state.customers[0];
+}
+
+function rateFor(item) {
+  const type = customer()?.type || "b2c";
+  return Number(type === "b2b" ? item.b2b_rate : item.retail_rate);
+}
+
+function lineAmt(item, qtyGm) {
+  return (Number(qtyGm) / 1000) * rateFor(item);
+}
+
+async function api(path, options) {
+  const res = await fetch(path, {
+    headers: { "Content-Type": "application/json" },
+    ...options,
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || res.statusText);
+  return data;
 }
 
 function showView(name) {
-  view = name;
-  document.querySelectorAll(".view").forEach((section) => {
-    section.hidden = section.id !== `view-${name}`;
+  document.querySelectorAll(".view").forEach((el) => {
+    el.hidden = el.id !== `view-${name}`;
   });
   document.querySelectorAll(".nav-btn").forEach((btn) => {
     btn.classList.toggle("active", btn.dataset.view === name);
   });
-  renderAll();
+  if (name === "reports") loadReports();
+  if (name === "orders") loadOrders();
+  if (name === "purchases") loadPurchases();
+  if (name === "suppliers") loadSuppliers();
+}
+
+function setHint(msg, kind = "") {
+  $("hint").textContent = msg || "";
+  $("hint").className = `hint ${kind}`.trim();
+}
+
+function filteredItems() {
+  const q = state.query.trim().toLowerCase();
+  if (!q) return state.items;
+  return state.items.filter((i) =>
+    [i.name, i.local_name, i.code, i.category].join(" ").toLowerCase().includes(q),
+  );
 }
 
 function renderCatalog() {
-  const products = searchCatalog(state.products, els.search.value);
-  els.catalog.innerHTML = products
-    .map((p) => {
-      const disabled = p.stock <= 0 ? "disabled" : "";
-      return `<button class="card" type="button" data-sku="${escapeHtml(p.sku)}" ${disabled}>
-        <div class="sku">${escapeHtml(p.sku)}</div>
-        <div class="name">${escapeHtml(p.name)}</div>
-        <div class="meta">
-          <span>${escapeHtml(p.pack)}</span>
-          <span>${escapeHtml(formatINR(p.unitPaise))}</span>
-        </div>
-        <div class="stock ${stockClass(p.stock)}">${p.stock} in stock</div>
+  $("catalog").innerHTML = filteredItems()
+    .map((i) => {
+      const low = Number(i.stock_gm) <= Number(i.reorder_level_gm);
+      return `<button class="card" type="button" data-add="${escapeHtml(i.id)}">
+        <div class="sku">${escapeHtml(i.code)} · ${escapeHtml(i.category)}</div>
+        <div class="name">${escapeHtml(i.name)} <small>${escapeHtml(i.local_name || "")}</small></div>
+        <div class="meta"><span>${escapeHtml(kg(i.stock_gm))}</span><span>${money(rateFor(i))}/kg</span></div>
+        <div class="stock ${low ? "low" : "ok"}">GST ${escapeHtml(i.gst_rate)}%</div>
       </button>`;
     })
     .join("");
 }
 
+function cartTotals() {
+  return state.cart.reduce(
+    (acc, line) => {
+      const item = state.items.find((i) => i.id === line.itemId);
+      if (!item) return acc;
+      const amount = lineAmt(item, line.qtyGm);
+      acc.qty += line.qtyGm;
+      acc.taxable += amount;
+      acc.tax += (amount * Number(item.gst_rate)) / 100;
+      return acc;
+    },
+    { qty: 0, taxable: 0, tax: 0 },
+  );
+}
+
 function renderCart() {
-  if (state.cart.length === 0) {
-    els.lines.innerHTML = `<p class="hint">Tap a spice to add it to the bill.</p>`;
+  if (!state.cart.length) {
+    $("lines").innerHTML = `<p class="hint">Tap a spice (qty 100 g) or add a pack.</p>`;
   } else {
-    els.lines.innerHTML = state.cart
-      .map(
-        (line) => `<div class="line" data-sku="${escapeHtml(line.sku)}">
+    $("lines").innerHTML = state.cart
+      .map((line) => {
+        const item = state.items.find((i) => i.id === line.itemId);
+        if (!item) return "";
+        return `<div class="line">
           <div>
-            <div class="who">${escapeHtml(line.name)}</div>
-            <div class="pack">${escapeHtml(line.pack)} · ${escapeHtml(formatINR(line.unitPaise))}</div>
+            <div class="who">${escapeHtml(item.name)}</div>
+            <div class="pack">${escapeHtml(kg(line.qtyGm))} · ${money(rateFor(item))}/kg</div>
           </div>
           <div>
             <div class="qty">
-              <button type="button" data-act="dec" aria-label="Decrease">−</button>
-              <span>${line.qty}</span>
-              <button type="button" data-act="inc" aria-label="Increase">+</button>
+              <button type="button" data-chg="${escapeHtml(item.id)}" data-d="-50">−</button>
+              <span>${line.qtyGm} g</span>
+              <button type="button" data-chg="${escapeHtml(item.id)}" data-d="50">+</button>
             </div>
-            <div class="pack" style="text-align:right;margin-top:4px">${escapeHtml(
-              formatINR(line.unitPaise * line.qty),
-            )}</div>
+            <div class="pack" style="text-align:right;margin-top:4px">${money(lineAmt(item, line.qtyGm))}</div>
           </div>
-        </div>`,
-      )
+        </div>`;
+      })
       .join("");
   }
-  const totals = cartTotals(state);
-  els.taxable.textContent = formatINR(totals.taxable);
-  els.tax.textContent = formatINR(totals.tax);
-  els.total.textContent = formatINR(totals.total);
+  const t = cartTotals();
+  $("qty-total").textContent = `${t.qty} g`;
+  $("taxable").textContent = money(t.taxable);
+  $("tax").textContent = money(t.tax);
+  $("total").textContent = money(t.taxable + t.tax);
+  $("btn-pay").disabled = state.cart.length === 0;
+  $("btn-clear").disabled = state.cart.length === 0;
 }
 
-function renderInventory() {
-  els.inventory.innerHTML = `<table>
-    <thead><tr><th>SKU</th><th>Item</th><th>Pack</th><th>Price</th><th>Stock</th><th>Receive</th></tr></thead>
-    <tbody>${state.products
-      .map(
-        (p) => `<tr>
-        <td>${escapeHtml(p.sku)}</td>
-        <td>${escapeHtml(p.name)}</td>
-        <td>${escapeHtml(p.pack)}</td>
-        <td>${escapeHtml(formatINR(p.unitPaise))}</td>
-        <td class="stock ${stockClass(p.stock)}">${p.stock}</td>
-        <td><button class="btn" type="button" data-receive="${escapeHtml(p.sku)}">+10</button></td>
-      </tr>`,
-      )
-      .join("")}</tbody></table>`;
-}
-
-function renderOrders() {
-  if (state.orders.length === 0) {
-    els.orders.innerHTML = `<p class="hint">No paid bills yet. Take a sale on Counter.</p>`;
-    return;
-  }
-  els.orders.innerHTML = state.orders
+function renderCustomers() {
+  $("customer").innerHTML = state.customers
     .map(
-      (o) =>
-        `<button class="order-item" type="button" data-order="${escapeHtml(o.id)}">
-          <span>${escapeHtml(o.id)} · ${escapeHtml(o.method.toUpperCase())}<br>
-          <small>${escapeHtml(new Date(o.createdAt).toLocaleString("en-IN"))} · ${o.items.length} lines</small></span>
-          <span>${escapeHtml(formatINR(o.total))}</span>
-        </button>`,
+      (c) =>
+        `<option value="${escapeHtml(c.id)}">${escapeHtml(c.business_name || c.name)} (${escapeHtml(c.type)})</option>`,
+    )
+    .join("");
+  if (state.customerId) $("customer").value = state.customerId;
+  else {
+    const walk = state.customers.find((c) => c.code === "CUS-001") || state.customers[0];
+    state.customerId = walk?.id || "";
+    if (state.customerId) $("customer").value = state.customerId;
+  }
+}
+
+function renderPacksBar() {
+  $("pack-bar").innerHTML = state.packs
+    .map(
+      (p) =>
+        `<button class="btn" type="button" data-pack="${escapeHtml(p.id)}">Add ${escapeHtml(p.name)}</button>`,
     )
     .join("");
 }
 
-function renderHeld() {
-  if (state.held.length === 0) {
-    els.held.innerHTML = `<p class="hint">No held bills.</p>`;
-    return;
-  }
-  els.held.innerHTML = state.held
-    .map(
-      (h) =>
-        `<button class="held-item" type="button" data-hold="${escapeHtml(h.id)}">
-          <span>${escapeHtml(h.id)}<br><small>${escapeHtml(
-            new Date(h.createdAt).toLocaleString("en-IN"),
-          )} · ${h.items.length} lines</small></span>
-          <span>Recall to counter</span>
-        </button>`,
-    )
-    .join("");
+function addItem(id, qtyGm = 100) {
+  const item = state.items.find((i) => i.id === id);
+  if (!item) return;
+  const line = state.cart.find((l) => l.itemId === id);
+  if (line) line.qtyGm = Math.max(0, line.qtyGm + qtyGm);
+  else state.cart.push({ itemId: id, qtyGm });
+  state.cart = state.cart.filter((l) => l.qtyGm > 0);
+  renderCart();
 }
 
-function renderReports() {
-  const sales = salesByMethod(state);
-  const low = state.products.filter((p) => p.stock <= 8);
-  els.reports.innerHTML = `
-    <div class="report-card"><span>Bills today</span><strong>${sales.count}</strong></div>
-    <div class="report-card"><span>Takings</span><strong>${escapeHtml(formatINR(sales.total))}</strong></div>
-    <div class="report-card"><span>GST</span><strong>${escapeHtml(formatINR(sales.tax))}</strong></div>
-    <div class="report-card"><span>Cash</span><strong>${escapeHtml(formatINR(sales.methods.cash))}</strong></div>
-    <div class="report-card"><span>UPI</span><strong>${escapeHtml(formatINR(sales.methods.upi))}</strong></div>
-    <div class="report-card"><span>Card</span><strong>${escapeHtml(formatINR(sales.methods.card))}</strong></div>
-    <div class="report-card"><span>Low / out of stock</span><strong>${low.length}</strong><p class="hint">${
-      low.length ? low.map((p) => escapeHtml(p.name)).join(", ") : "All packs healthy"
-    }</p></div>
-    <div class="report-card"><span>Held bills</span><strong>${state.held.length}</strong></div>
-    <div class="report-card"><span>Catalog SKUs</span><strong>${state.products.length}</strong></div>`;
+function addPack(packId) {
+  const pack = state.packs.find((p) => p.id === packId);
+  if (!pack) return;
+  for (const row of pack.items || []) {
+    addItem(row.item_id, Number(row.quantity_gm));
+  }
+  state.lastPack = { id: pack.id, count: (state.lastPack?.id === pack.id ? state.lastPack.count : 0) + 1 };
+  setHint(`Added ${pack.name}`, "ok");
+  renderCart();
+}
+
+function renderItemsTable() {
+  $("items-table").innerHTML = `<table><thead><tr>
+    <th>Code</th><th>Item</th><th>Local</th><th>Retail/kg</th><th>B2B/kg</th><th>Stock</th><th></th>
+  </tr></thead><tbody>${state.items
+    .map(
+      (i) => `<tr>
+      <td>${escapeHtml(i.code)}</td>
+      <td>${escapeHtml(i.name)}</td>
+      <td>${escapeHtml(i.local_name || "")}</td>
+      <td>${money(i.retail_rate)}</td>
+      <td>${money(i.b2b_rate)}</td>
+      <td class="${Number(i.stock_gm) <= Number(i.reorder_level_gm) ? "stock low" : "stock ok"}">${escapeHtml(kg(i.stock_gm))}</td>
+      <td><button class="btn" data-recv="${escapeHtml(i.id)}" type="button">+1 kg</button></td>
+    </tr>`,
+    )
+    .join("")}</tbody></table>`;
+}
+
+function renderCustomersTable() {
+  $("customers-table").innerHTML = `<table><thead><tr>
+    <th>Code</th><th>Name</th><th>Type</th><th>Mobile</th><th>GSTIN</th><th>Outstanding</th>
+  </tr></thead><tbody>${state.customers
+    .map(
+      (c) => `<tr>
+      <td>${escapeHtml(c.code)}</td>
+      <td>${escapeHtml(c.business_name || c.name)}</td>
+      <td>${escapeHtml(c.type)}</td>
+      <td>${escapeHtml(c.mobile)}</td>
+      <td>${escapeHtml(c.gstin || "—")}</td>
+      <td>${money(c.outstanding)}</td>
+    </tr>`,
+    )
+    .join("")}</tbody></table>`;
+}
+
+function renderPacksTable() {
+  $("packs-table").innerHTML = state.packs
+    .map(
+      (p) => `<div class="report-card" style="margin:0 20px 12px">
+        <strong>${escapeHtml(p.name)}</strong>
+        <span>${escapeHtml(p.code)} · ${escapeHtml(kg(p.total_quantity_gm))}</span>
+        <p class="hint">${(p.items || [])
+          .map((i) => `${escapeHtml(i.spice_name)} ${i.quantity_gm}g`)
+          .join(" · ")}</p>
+      </div>`,
+    )
+    .join("");
 }
 
 function renderSettings() {
-  els.setName.value = state.shop.name;
-  els.setPlace.value = state.shop.place;
-  els.setGstin.value = state.shop.gstin;
+  $("set-name").value = state.company.name || "";
+  $("set-address").value = state.company.address || "";
+  $("set-phone").value = state.company.phone || "";
+  $("set-email").value = state.company.email || "";
+  $("set-gstin").value = state.company.gstin || "";
 }
 
-function renderStats() {
-  els.shopName.textContent = state.shop.name;
-  els.shopPlace.textContent = `${state.shop.place} · ${state.shop.gstin}`;
-  const sales = todaySales(state);
-  els.todayTotal.textContent = formatINR(sales.total);
-  els.todayCount.textContent = String(sales.count);
+function paintHeader() {
+  $("shop-name").textContent = state.company.name || "SWAMI MASALE";
+  $("shop-place").textContent = state.company.address || "MySQL connected";
 }
 
-function setPayEnabled(enabled) {
-  for (const id of ["pay-cash", "pay-upi", "pay-card", "btn-hold", "btn-clear"]) {
-    document.getElementById(id).disabled = !enabled;
-  }
-}
-
-function renderAll() {
+async function loadBootstrap() {
+  const data = await api("/api/bootstrap");
+  state.company = data.company;
+  state.items = data.items;
+  state.customers = data.customers;
+  state.packs = data.packs;
+  paintHeader();
+  renderCustomers();
   renderCatalog();
   renderCart();
-  renderInventory();
-  renderOrders();
-  renderHeld();
-  renderReports();
+  renderPacksBar();
+  renderItemsTable();
+  renderCustomersTable();
+  renderPacksTable();
   renderSettings();
-  renderStats();
-  setPayEnabled(state.cart.length > 0 && !state.locked);
-  els.lock.hidden = !state.locked;
+  loadReports();
 }
 
-function showModal(title, html) {
-  els.modalTitle.textContent = title;
-  els.modalBody.innerHTML = html;
-  els.modal.hidden = false;
-}
-
-function hideModal() {
-  els.modal.hidden = true;
-  els.modalBody.replaceChildren();
-}
-
-function receiptText(order) {
-  const lines = [
-    state.shop.name,
-    state.shop.place,
-    `GSTIN ${state.shop.gstin}`,
-    `Bill ${order.id}`,
-    new Date(order.createdAt).toLocaleString("en-IN"),
-    "------------------------------",
-    ...order.items.map(
-      (i) =>
-        `${i.name} ${i.pack} x${i.qty}\n  ${formatINR(i.total)} (GST ${formatINR(i.tax)})`,
-    ),
-    "------------------------------",
-    `Taxable  ${formatINR(order.taxable)}`,
-    `GST      ${formatINR(order.tax)}`,
-    `TOTAL    ${formatINR(order.total)}`,
-    `Paid     ${order.method.toUpperCase()} ${formatINR(order.tendered)}`,
-    `Change   ${formatINR(order.change)}`,
-    "Thank you. Check the seal on packs.",
-  ];
-  return lines.join("\n");
-}
-
-function pay(method) {
-  if (paying) return;
-  paying = true;
-  try {
-    if (state.cart.length === 0) {
-      setHint("Cart is empty", "error");
-      return;
-    }
-    let tenderedPaise = 0;
-    if (method === "cash") {
-      const parsed = parseMoneyInput(els.tender.value);
-      if (!parsed.ok) {
-        setHint(parsed.error, "error");
-        return;
-      }
-      tenderedPaise = parsed.paise;
-    }
-    const result = checkout(state, { method, tenderedPaise });
-    if (!result.ok) {
-      if (result.shortfall) {
-        setHint(`Cash short by ${formatINR(result.shortfall)}`, "error");
-      } else {
-        setHint(result.error, "error");
-      }
-      return;
-    }
-    persist();
-    els.tender.value = "";
-    setHint(`Paid ${result.order.id} · change ${formatINR(result.order.change)}`, "ok");
-    renderAll();
-    showModal(
-      `Receipt ${result.order.id}`,
-      `<pre class="receipt">${escapeHtml(receiptText(result.order))}</pre>`,
-    );
-  } finally {
-    paying = false;
+async function loadReports() {
+  const data = await api("/api/reports");
+  const methodMap = Object.fromEntries((data.methods || []).map((m) => [m.payment_method, m.total]));
+  $("today-total").textContent = money(data.today.takings);
+  $("today-count").textContent = String(data.today.bills);
+  $("reports").innerHTML = [
+    ["Bills today", data.today.bills],
+    ["Takings", money(data.today.takings)],
+    ["GST", money(data.today.gst)],
+    ["Cash", money(methodMap.cash)],
+    ["UPI", money(methodMap.upi)],
+    ["Card", money(methodMap.card)],
+    ["Credit", money(methodMap.credit)],
+    ["Low stock SKUs", (data.low || []).length],
+  ]
+    .map(
+      ([k, v]) =>
+        `<div class="report-card"><span>${k}</span><strong>${v}</strong></div>`,
+    )
+    .join("");
+  if (data.low?.length) {
+    $("reports").innerHTML += `<div class="report-card"><span>Below reorder</span><p class="hint">${data.low
+      .map((i) => `${escapeHtml(i.name)} (${escapeHtml(kg(i.stock_gm))})`)
+      .join(", ")}</p></div>`;
   }
 }
 
-document.querySelector(".nav").addEventListener("click", (event) => {
-  const btn = event.target.closest("[data-view]");
-  if (!btn || state.locked) return;
-  showView(btn.dataset.view);
+let orderCache = [];
+
+async function loadOrders() {
+  orderCache = await api("/api/orders");
+  $("orders").innerHTML = orderCache
+    .map(
+      (o) => `<button class="order-item" type="button" data-oid="${escapeHtml(o.id)}">
+        <span>${escapeHtml(o.order_number)} · ${escapeHtml(o.customer_name)}<br>
+        <small>${escapeHtml(o.payment_method)} · ${escapeHtml(o.status)}</small></span>
+        <span>${money(o.total)}</span>
+      </button>`,
+    )
+    .join("");
+}
+
+async function loadPurchases() {
+  const rows = await api("/api/purchases");
+  $("purchases-table").innerHTML = `<table><thead><tr>
+    <th>PO</th><th>Supplier</th><th>Date</th><th>Invoice</th><th>Total</th><th>Pay</th>
+  </tr></thead><tbody>${rows
+    .map(
+      (p) => `<tr>
+      <td>${escapeHtml(p.purchase_number)}</td>
+      <td>${escapeHtml(p.supplier_name)}</td>
+      <td>${escapeHtml(p.purchase_date)}</td>
+      <td>${escapeHtml(p.supplier_invoice_number || "—")}</td>
+      <td>${money(p.total)}</td>
+      <td>${escapeHtml(p.payment_status)}</td>
+    </tr>`,
+    )
+    .join("")}</tbody></table>`;
+}
+
+async function loadSuppliers() {
+  const rows = await api("/api/suppliers");
+  $("suppliers-table").innerHTML = `<table><thead><tr>
+    <th>Code</th><th>Name</th><th>Contact</th><th>Mobile</th><th>GSTIN</th>
+  </tr></thead><tbody>${rows
+    .map(
+      (s) => `<tr>
+      <td>${escapeHtml(s.code)}</td>
+      <td>${escapeHtml(s.name)}</td>
+      <td>${escapeHtml(s.contact_name || "—")}</td>
+      <td>${escapeHtml(s.mobile || "—")}</td>
+      <td>${escapeHtml(s.gstin || "—")}</td>
+    </tr>`,
+    )
+    .join("")}</tbody></table>`;
+}
+
+$("catalog").addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-add]");
+  if (btn) addItem(btn.dataset.add, 100);
 });
 
-els.catalog.addEventListener("click", (event) => {
-  const card = event.target.closest("[data-sku]");
-  if (!card || state.locked) return;
-  const result = addToCart(state, card.dataset.sku, 1);
-  if (!result.ok) setHint(result.error, "error");
-  else {
-    persist();
-    setHint("");
-    renderAll();
-  }
-});
-
-els.lines.addEventListener("click", (event) => {
-  const btn = event.target.closest("button[data-act]");
-  const row = event.target.closest(".line");
-  if (!btn || !row) return;
-  const sku = row.dataset.sku;
-  const line = state.cart.find((l) => l.sku === sku);
-  if (!line) return;
-  const next = btn.dataset.act === "inc" ? line.qty + 1 : line.qty - 1;
-  const result = setCartQty(state, sku, next);
-  if (!result.ok) setHint(result.error, "error");
-  else {
-    persist();
-    setHint("");
-    renderAll();
-  }
-});
-
-els.inventory.addEventListener("click", (event) => {
-  const btn = event.target.closest("[data-receive]");
+$("lines").addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-chg]");
   if (!btn) return;
-  const result = receiveStock(state, btn.dataset.receive, 10);
-  if (!result.ok) setHint(result.error, "error");
-  else {
-    persist();
-    renderAll();
-  }
+  addItem(btn.dataset.chg, Number(btn.dataset.d));
 });
 
-els.orders.addEventListener("click", (event) => {
-  const orderBtn = event.target.closest("[data-order]");
-  if (!orderBtn) return;
-  const order = state.orders.find((o) => o.id === orderBtn.dataset.order);
-  if (order) {
-    els.orderPane.innerHTML = `<pre class="receipt">${escapeHtml(receiptText(order))}</pre>`;
-  }
+$("pack-bar").addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-pack]");
+  if (btn) addPack(btn.dataset.pack);
 });
 
-els.held.addEventListener("click", (event) => {
-  const holdBtn = event.target.closest("[data-hold]");
-  if (!holdBtn) return;
-  const result = recallHeld(state, holdBtn.dataset.hold);
-  if (!result.ok) setHint(result.error, "error");
-  else {
-    persist();
-    setHint("Bill recalled", "ok");
-    showView("counter");
-  }
+$("items-table").addEventListener("click", async (e) => {
+  const btn = e.target.closest("[data-recv]");
+  if (!btn) return;
+  await api(`/api/items/${btn.dataset.recv}/receive`, {
+    method: "POST",
+    body: JSON.stringify({ quantity_gm: 1000 }),
+  });
+  await loadBootstrap();
 });
 
-els.searchForm.addEventListener("submit", (event) => {
-  event.preventDefault();
+$("orders").addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-oid]");
+  if (!btn) return;
+  const o = orderCache.find((row) => row.id === btn.dataset.oid);
+  if (!o) return;
+  $("order-pane").innerHTML = `<pre class="receipt">${escapeHtml(
+    [
+      state.company.name,
+      o.order_number,
+      o.customer_name,
+      o.created_at,
+      "----------------",
+      ...(o.lines || []).map((l) => `${l.item_name} ${l.quantity_gm}g @ ${l.rate_per_kg}/kg = ${money(l.amount)}`),
+      "----------------",
+      `Subtotal ${money(o.subtotal)}`,
+      `GST ${money(o.gst)}`,
+      `TOTAL ${money(o.total)}`,
+      `${o.payment_method} · ${o.payment_status}`,
+    ].join("\n"),
+  )}</pre>`;
+});
+
+$("search").addEventListener("input", () => {
+  state.query = $("search").value;
   renderCatalog();
 });
-els.search.addEventListener("input", () => renderCatalog());
-
-document.getElementById("btn-clear").addEventListener("click", () => {
-  clearCart(state);
-  persist();
+$("search-form").addEventListener("submit", (e) => e.preventDefault());
+$("customer").addEventListener("change", () => {
+  state.customerId = $("customer").value;
+  renderCatalog();
+  renderCart();
+});
+$("btn-clear").addEventListener("click", () => {
+  state.cart = [];
+  state.lastPack = null;
   setHint("Cart cleared");
-  renderAll();
+  renderCart();
 });
-
-document.getElementById("btn-hold").addEventListener("click", () => {
-  const result = holdCart(state);
-  if (!result.ok) setHint(result.error, "error");
-  else {
-    persist();
-    setHint(`Held ${result.id} — open Held to recall`, "ok");
-    renderAll();
+$("btn-pay").addEventListener("click", async () => {
+  try {
+    setHint("Saving…");
+    const order = await api("/api/checkout", {
+      method: "POST",
+      body: JSON.stringify({
+        customerId: state.customerId,
+        paymentMethod: $("pay-method").value,
+        packId: state.lastPack?.id || null,
+        packCount: state.lastPack?.count || null,
+        lines: state.cart.map((l) => ({ itemId: l.itemId, quantity_gm: l.qtyGm })),
+      }),
+    });
+    state.cart = [];
+    state.lastPack = null;
+    setHint(`Saved ${order.order.order_number} · ${money(order.order.total)}`, "ok");
+    $("modal-title").textContent = order.order.order_number;
+    $("modal-body").innerHTML = `<pre class="receipt">${escapeHtml(
+      `${order.order.order_number}\n${order.order.customer_name}\nTOTAL ${money(order.order.total)}\n${order.order.payment_method}`,
+    )}</pre>`;
+    $("modal").hidden = false;
+    await loadBootstrap();
+  } catch (err) {
+    setHint(err.message, "error");
+  }
+});
+$("modal-close").addEventListener("click", () => {
+  $("modal").hidden = true;
+});
+document.querySelector(".nav").addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-view]");
+  if (btn) showView(btn.dataset.view);
+});
+$("settings-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  try {
+    const data = await api("/api/settings", {
+      method: "POST",
+      body: JSON.stringify({
+        name: $("set-name").value,
+        address: $("set-address").value,
+        phone: $("set-phone").value,
+        email: $("set-email").value,
+        gstin: $("set-gstin").value,
+      }),
+    });
+    state.company = data.company;
+    paintHeader();
+    $("settings-hint").textContent = "Saved to MySQL";
+    $("settings-hint").className = "hint ok";
+  } catch (err) {
+    $("settings-hint").textContent = err.message;
+    $("settings-hint").className = "hint error";
   }
 });
 
-document.getElementById("pay-cash").addEventListener("click", () => pay("cash"));
-document.getElementById("pay-upi").addEventListener("click", () => pay("upi"));
-document.getElementById("pay-card").addEventListener("click", () => pay("card"));
-
-document.getElementById("settings-form").addEventListener("submit", (event) => {
-  event.preventDefault();
-  const result = updateShop(state, {
-    name: els.setName.value,
-    place: els.setPlace.value,
-    gstin: els.setGstin.value,
-  });
-  els.settingsHint.textContent = result.ok ? "Saved" : result.error;
-  els.settingsHint.className = `hint ${result.ok ? "ok" : "error"}`;
-  if (result.ok) {
-    persist();
-    renderAll();
-  }
-});
-
-document.getElementById("btn-reset").addEventListener("click", () => {
-  state = resetDemo();
-  state.locked = false;
-  persist();
-  els.orderPane.innerHTML = `<p class="hint">Select a bill.</p>`;
-  setHint("Demo reset");
-  showView("counter");
-});
-
-els.modalClose.addEventListener("click", hideModal);
-els.modal.addEventListener("click", (event) => {
-  if (event.target === els.modal) hideModal();
-});
-
-document.getElementById("btn-lock").addEventListener("click", () => {
-  state.locked = true;
-  persist();
-  renderAll();
-  els.pin.focus();
-});
-
-els.pinForm.addEventListener("submit", (event) => {
-  event.preventDefault();
-  unlockWithPin(els.pin.value);
-});
-
-document.getElementById("btn-demo-pin").addEventListener("click", () => {
-  els.pin.value = "1234";
-  unlockWithPin("1234");
-});
-
-function unlockWithPin(pin) {
-  if (!verifyPin(pin)) {
-    els.pinHint.textContent = "Wrong PIN";
-    els.pinHint.className = "hint error";
-    return;
-  }
-  els.pin.value = "";
-  els.pinHint.textContent = "";
-  state.locked = false;
-  persist();
-  renderAll();
+function tick() {
+  $("clock").textContent = new Date().toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
 }
+tick();
+setInterval(tick, 15000);
 
-document.addEventListener("keydown", (event) => {
-  if (event.key === "/" && document.activeElement !== els.search && document.activeElement !== els.tender && document.activeElement !== els.pin) {
-    event.preventDefault();
-    showView("counter");
-    els.search.focus();
-  }
-  if (event.key === "Escape") hideModal();
+loadBootstrap().catch((err) => {
+  $("shop-place").textContent = err.message;
+  setHint(`MySQL: ${err.message}`, "error");
 });
-
-function tickClock() {
-  els.clock.textContent = new Date().toLocaleTimeString("en-IN", {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
-tickClock();
-setInterval(tickClock, 15000);
-showView("counter");

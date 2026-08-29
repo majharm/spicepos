@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Spice POS</title>
+    <title>SWAMI MASALE POS</title>
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="./css/pos.css" />
   </head>
@@ -11,20 +11,22 @@
     <div class="app">
       <nav class="nav" aria-label="App">
         <div class="brand">
-          <strong id="shop-name">Spice POS</strong>
-          <span id="shop-place">Pune</span>
+          <strong id="shop-name">SWAMI MASALE</strong>
+          <span id="shop-place">Loading MySQL…</span>
         </div>
         <button class="nav-btn active" type="button" data-view="counter">Counter</button>
-        <button class="nav-btn" type="button" data-view="inventory">Inventory</button>
+        <button class="nav-btn" type="button" data-view="items">Items</button>
+        <button class="nav-btn" type="button" data-view="customers">Customers</button>
+        <button class="nav-btn" type="button" data-view="packs">Packs</button>
         <button class="nav-btn" type="button" data-view="orders">Orders</button>
-        <button class="nav-btn" type="button" data-view="held">Held</button>
+        <button class="nav-btn" type="button" data-view="purchases">Purchases</button>
+        <button class="nav-btn" type="button" data-view="suppliers">Suppliers</button>
         <button class="nav-btn" type="button" data-view="reports">Reports</button>
         <button class="nav-btn" type="button" data-view="settings">Settings</button>
         <div class="nav-foot">
           <div class="chip">Today <b id="today-total">₹0.00</b></div>
           <div class="chip">Bills <b id="today-count">0</b></div>
           <div class="chip" id="clock">--:--</div>
-          <button class="btn ghost" id="btn-lock" type="button">Lock till</button>
         </div>
       </nav>
 
@@ -32,34 +34,32 @@
         <section class="view" id="view-counter">
           <header class="topbar">
             <form class="search" id="search-form">
-              <input
-                id="search"
-                type="search"
-                placeholder="Search spice, SKU, or pack — / to focus"
-                autocomplete="off"
-              />
+              <input id="search" type="search" placeholder="Search spice, Marathi name, or code" autocomplete="off" />
             </form>
+            <select id="customer" class="select"></select>
+            <select id="pay-method" class="select">
+              <option value="cash">Cash</option>
+              <option value="upi">UPI</option>
+              <option value="card">Card</option>
+              <option value="credit">Credit</option>
+            </select>
           </header>
           <div class="workspace">
-            <div class="catalog" id="catalog" aria-label="Products"></div>
+            <div class="catalog" id="catalog"></div>
             <aside class="ticket">
               <h2>Current bill</h2>
+              <div id="pack-bar" class="pack-bar"></div>
               <div class="lines" id="lines"></div>
               <div class="totals">
+                <div><span>Qty</span><span id="qty-total">0 g</span></div>
                 <div><span>Taxable</span><span id="taxable">₹0.00</span></div>
                 <div><span>GST</span><span id="tax">₹0.00</span></div>
                 <div class="grand"><span>Total</span><span id="total">₹0.00</span></div>
               </div>
               <div class="pay">
-                <div class="tender">
-                  <input id="tender" inputmode="decimal" placeholder="Cash tendered" />
-                  <button class="btn" id="btn-hold" type="button">Hold</button>
-                  <button class="btn danger" id="btn-clear" type="button">Clear</button>
-                </div>
+                <button class="btn danger" id="btn-clear" type="button">Clear</button>
                 <div class="pay-row">
-                  <button class="btn primary" id="pay-cash" type="button">Cash</button>
-                  <button class="btn" id="pay-upi" type="button">UPI</button>
-                  <button class="btn" id="pay-card" type="button">Card</button>
+                  <button class="btn primary" id="btn-pay" type="button">Save order to MySQL</button>
                 </div>
                 <div class="hint" id="hint"></div>
               </div>
@@ -67,72 +67,66 @@
           </div>
         </section>
 
-        <section class="view" id="view-inventory" hidden>
-          <h2>Inventory</h2>
-          <p class="lede">Every pack on the shelf. Receive stock without leaving the till.</p>
-          <div class="table-wrap" id="inventory"></div>
+        <section class="view" id="view-items" hidden>
+          <h2>Items</h2>
+          <p class="lede">Live stock from Hostinger MySQL. Rates are per KG. Stock is grams.</p>
+          <div class="table-wrap" id="items-table"></div>
         </section>
-
+        <section class="view" id="view-customers" hidden>
+          <h2>Customers</h2>
+          <p class="lede">Walk-in B2C uses retail rate. B2B (Shah Foods) uses wholesale rate.</p>
+          <div class="table-wrap" id="customers-table"></div>
+        </section>
+        <section class="view" id="view-packs" hidden>
+          <h2>Packs</h2>
+          <p class="lede">Preset masala packs from the old Replit app.</p>
+          <div class="table-wrap" id="packs-table"></div>
+        </section>
         <section class="view" id="view-orders" hidden>
-          <h2>Orders</h2>
-          <p class="lede">Paid bills for this device. Open a row to reprint the receipt.</p>
+          <h2>Sales orders</h2>
+          <p class="lede">SO numbers from the live database.</p>
           <div class="split">
             <div class="table-wrap" id="orders"></div>
-            <div class="pane" id="order-pane"><p class="hint">Select a bill.</p></div>
+            <div class="pane" id="order-pane"><p class="hint">Select an order.</p></div>
           </div>
         </section>
-
-        <section class="view" id="view-held" hidden>
-          <h2>Held bills</h2>
-          <p class="lede">Customers who stepped aside. Recall only when the live cart is empty.</p>
-          <div class="table-wrap" id="held"></div>
+        <section class="view" id="view-purchases" hidden>
+          <h2>Purchases</h2>
+          <p class="lede">Supplier bills (PO) stored in MySQL.</p>
+          <div class="table-wrap" id="purchases-table"></div>
         </section>
-
+        <section class="view" id="view-suppliers" hidden>
+          <h2>Suppliers</h2>
+          <div class="table-wrap" id="suppliers-table"></div>
+        </section>
         <section class="view" id="view-reports" hidden>
           <h2>Today’s report</h2>
-          <p class="lede">GST-inclusive takings for the current calendar day.</p>
           <div class="report-grid" id="reports"></div>
         </section>
-
         <section class="view" id="view-settings" hidden>
-          <h2>Settings</h2>
-          <p class="lede">Shop print lines on every receipt. Demo PIN is 1234.</p>
+          <h2>Company</h2>
+          <p class="lede">Writes to company_settings for this business.</p>
           <form class="settings" id="settings-form">
-            <label>Shop name <input id="set-name" /></label>
-            <label>Place <input id="set-place" /></label>
+            <label>Name <input id="set-name" /></label>
+            <label>Address <input id="set-address" /></label>
+            <label>Phone <input id="set-phone" /></label>
+            <label>Email <input id="set-email" /></label>
             <label>GSTIN <input id="set-gstin" /></label>
-            <button class="btn primary" type="submit">Save shop</button>
+            <button class="btn primary" type="submit">Save to MySQL</button>
           </form>
           <div class="hint" id="settings-hint"></div>
-          <button class="btn danger" id="btn-reset" type="button">Reset demo data</button>
         </section>
       </div>
     </div>
-
-    <div class="lock" id="lock" hidden>
-      <div class="dialog">
-        <h3>Unlock counter</h3>
-        <p>Enter cashier PIN. Demo PIN is <b>1234</b>.</p>
-        <form class="pin" id="pin-form" action="#" method="post">
-          <input id="pin" type="text" inputmode="numeric" maxlength="8" autocomplete="one-time-code" placeholder="PIN" />
-          <button class="btn primary" id="btn-unlock" type="submit">Unlock</button>
-        </form>
-        <button class="btn" id="btn-demo-pin" type="button">Fill demo PIN 1234</button>
-        <div class="hint" id="pin-hint"></div>
-      </div>
-    </div>
-
     <div class="modal" id="modal" hidden>
       <div class="dialog">
-        <h3 id="modal-title">Dialog</h3>
+        <h3 id="modal-title">Receipt</h3>
         <div id="modal-body"></div>
-        <div style="margin-top: 14px; display: flex; gap: 8px; justify-content: flex-end">
+        <div style="margin-top: 14px; display: flex; justify-content: flex-end">
           <button class="btn" id="modal-close" type="button">Close</button>
         </div>
       </div>
     </div>
-
-    <script src="./js/pos.iife.js"></script>
-    <noscript>Spice POS needs JavaScript.</noscript>
+    <script src="./js/app.js"></script>
   </body>
 </html>

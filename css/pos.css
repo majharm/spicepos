@@ -73,14 +73,15 @@ button { cursor: pointer; }
   background: rgba(26, 20, 16, 0.92);
 }
 .search { flex: 1; display: flex; }
-.search input {
-  width: 100%;
-  padding: 10px 14px;
+.search input, .select {
+  padding: 10px 12px;
   border-radius: 10px;
   border: 1px solid var(--line);
   background: var(--bg-raised);
   color: var(--text);
 }
+.select { min-width: 160px; }
+.pack-bar { display: flex; flex-wrap: wrap; gap: 8px; padding: 0 12px 8px; }
 .chip {
   background: var(--panel);
   border: 1px solid var(--line);
