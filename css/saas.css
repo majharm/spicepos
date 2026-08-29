@@ -45,14 +45,6 @@
 .signup-grid .full {
   grid-column: 1 / -1;
 }
-.auth-card select,
-.auth-card textarea {
-  padding: 10px 12px;
-  border-radius: 8px;
-  border: 1px solid var(--line);
-  background: #fff;
-  font: inherit;
-}
 .auth-note {
   margin: 0;
   color: var(--muted);
@@ -74,29 +66,48 @@
 .auth-card > p { color: var(--muted); margin-top: 0; font-size: 14px; }
 .auth-card form { display: grid; gap: 12px; margin-top: 18px; }
 .auth-card form[hidden] { display: none !important; }
+.auth-card label {
+  display: grid;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+}
 .auth-card label.remember {
   display: flex;
   flex-direction: row;
   align-items: center;
-  gap: 8px;
-  text-transform: none;
-  letter-spacing: 0;
-  font-size: 13px;
-  font-weight: 600;
+  gap: 10px;
+  font-weight: 500;
   color: var(--text);
   cursor: pointer;
+  user-select: none;
 }
-.auth-card label.remember input {
-  width: 16px;
-  height: 16px;
-  padding: 0;
-  accent-color: var(--accent, #1f6feb);
-}
-.auth-card input {
+.auth-card input:not([type="checkbox"]),
+.auth-card select,
+.auth-card textarea {
   padding: 10px 12px;
   border-radius: 8px;
   border: 1px solid var(--line);
   background: #fff;
+  color: var(--text);
+  font: inherit;
+}
+.auth-card input[type="checkbox"] {
+  -webkit-appearance: checkbox;
+  appearance: auto;
+  width: 16px;
+  height: 16px;
+  min-width: 16px;
+  min-height: 16px;
+  margin: 0;
+  padding: 0;
+  flex-shrink: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  accent-color: var(--gold, #c9a227);
+  cursor: pointer;
 }
 .login-support { margin-top: 16px; color: var(--muted); font-size: 13px; }
 .login-support a { color: var(--accent); font-weight: 650; }
