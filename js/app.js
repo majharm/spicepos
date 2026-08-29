@@ -8,9 +8,13 @@ import {
   holdCart,
   loadState,
   recallHeld,
+  receiveStock,
+  resetDemo,
+  salesByMethod,
   saveState,
   setCartQty,
   todaySales,
+  updateShop,
   verifyPin,
 } from "./store.js";
 
@@ -37,10 +41,20 @@ const els = {
   modalTitle: document.getElementById("modal-title"),
   modalBody: document.getElementById("modal-body"),
   modalClose: document.getElementById("modal-close"),
+  inventory: document.getElementById("inventory"),
+  orders: document.getElementById("orders"),
+  orderPane: document.getElementById("order-pane"),
+  held: document.getElementById("held"),
+  reports: document.getElementById("reports"),
+  setName: document.getElementById("set-name"),
+  setPlace: document.getElementById("set-place"),
+  setGstin: document.getElementById("set-gstin"),
+  settingsHint: document.getElementById("settings-hint"),
 };
 
 let state = loadState();
 let paying = false;
+let view = "counter";
 
 function escapeHtml(value) {
   return String(value)
@@ -64,6 +78,17 @@ function stockClass(stock) {
   if (stock <= 0) return "out";
   if (stock <= 8) return "low";
   return "ok";
+}
+
+function showView(name) {
+  view = name;
+  document.querySelectorAll(".view").forEach((section) => {
+    section.hidden = section.id !== `view-${name}`;
+  });
+  document.querySelectorAll(".nav-btn").forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.view === name);
+  });
+  renderAll();
 }
 
 function renderCatalog() {
@@ -115,9 +140,84 @@ function renderCart() {
   els.total.textContent = formatINR(totals.total);
 }
 
+function renderInventory() {
+  els.inventory.innerHTML = `<table>
+    <thead><tr><th>SKU</th><th>Item</th><th>Pack</th><th>Price</th><th>Stock</th><th>Receive</th></tr></thead>
+    <tbody>${state.products
+      .map(
+        (p) => `<tr>
+        <td>${escapeHtml(p.sku)}</td>
+        <td>${escapeHtml(p.name)}</td>
+        <td>${escapeHtml(p.pack)}</td>
+        <td>${escapeHtml(formatINR(p.unitPaise))}</td>
+        <td class="stock ${stockClass(p.stock)}">${p.stock}</td>
+        <td><button class="btn" type="button" data-receive="${escapeHtml(p.sku)}">+10</button></td>
+      </tr>`,
+      )
+      .join("")}</tbody></table>`;
+}
+
+function renderOrders() {
+  if (state.orders.length === 0) {
+    els.orders.innerHTML = `<p class="hint">No paid bills yet. Take a sale on Counter.</p>`;
+    return;
+  }
+  els.orders.innerHTML = state.orders
+    .map(
+      (o) =>
+        `<button class="order-item" type="button" data-order="${escapeHtml(o.id)}">
+          <span>${escapeHtml(o.id)} · ${escapeHtml(o.method.toUpperCase())}<br>
+          <small>${escapeHtml(new Date(o.createdAt).toLocaleString("en-IN"))} · ${o.items.length} lines</small></span>
+          <span>${escapeHtml(formatINR(o.total))}</span>
+        </button>`,
+    )
+    .join("");
+}
+
+function renderHeld() {
+  if (state.held.length === 0) {
+    els.held.innerHTML = `<p class="hint">No held bills.</p>`;
+    return;
+  }
+  els.held.innerHTML = state.held
+    .map(
+      (h) =>
+        `<button class="held-item" type="button" data-hold="${escapeHtml(h.id)}">
+          <span>${escapeHtml(h.id)}<br><small>${escapeHtml(
+            new Date(h.createdAt).toLocaleString("en-IN"),
+          )} · ${h.items.length} lines</small></span>
+          <span>Recall to counter</span>
+        </button>`,
+    )
+    .join("");
+}
+
+function renderReports() {
+  const sales = salesByMethod(state);
+  const low = state.products.filter((p) => p.stock <= 8);
+  els.reports.innerHTML = `
+    <div class="report-card"><span>Bills today</span><strong>${sales.count}</strong></div>
+    <div class="report-card"><span>Takings</span><strong>${escapeHtml(formatINR(sales.total))}</strong></div>
+    <div class="report-card"><span>GST</span><strong>${escapeHtml(formatINR(sales.tax))}</strong></div>
+    <div class="report-card"><span>Cash</span><strong>${escapeHtml(formatINR(sales.methods.cash))}</strong></div>
+    <div class="report-card"><span>UPI</span><strong>${escapeHtml(formatINR(sales.methods.upi))}</strong></div>
+    <div class="report-card"><span>Card</span><strong>${escapeHtml(formatINR(sales.methods.card))}</strong></div>
+    <div class="report-card"><span>Low / out of stock</span><strong>${low.length}</strong><p class="hint">${
+      low.length ? low.map((p) => escapeHtml(p.name)).join(", ") : "All packs healthy"
+    }</p></div>
+    <div class="report-card"><span>Held bills</span><strong>${state.held.length}</strong></div>
+    <div class="report-card"><span>Catalog SKUs</span><strong>${state.products.length}</strong></div>`;
+}
+
+function renderSettings() {
+  els.setName.value = state.shop.name;
+  els.setPlace.value = state.shop.place;
+  els.setGstin.value = state.shop.gstin;
+}
+
 function renderStats() {
   els.shopName.textContent = state.shop.name;
-  els.shopPlace.textContent = `${state.shop.place} · GSTIN ${state.shop.gstin}`;
+  els.shopPlace.textContent = `${state.shop.place} · ${state.shop.gstin}`;
   const sales = todaySales(state);
   els.todayTotal.textContent = formatINR(sales.total);
   els.todayCount.textContent = String(sales.count);
@@ -132,6 +232,11 @@ function setPayEnabled(enabled) {
 function renderAll() {
   renderCatalog();
   renderCart();
+  renderInventory();
+  renderOrders();
+  renderHeld();
+  renderReports();
+  renderSettings();
   renderStats();
   setPayEnabled(state.cart.length > 0 && !state.locked);
   els.lock.hidden = !state.locked;
@@ -210,6 +315,12 @@ function pay(method) {
   }
 }
 
+document.querySelector(".nav").addEventListener("click", (event) => {
+  const btn = event.target.closest("[data-view]");
+  if (!btn || state.locked) return;
+  showView(btn.dataset.view);
+});
+
 els.catalog.addEventListener("click", (event) => {
   const card = event.target.closest("[data-sku]");
   if (!card || state.locked) return;
@@ -239,6 +350,38 @@ els.lines.addEventListener("click", (event) => {
   }
 });
 
+els.inventory.addEventListener("click", (event) => {
+  const btn = event.target.closest("[data-receive]");
+  if (!btn) return;
+  const result = receiveStock(state, btn.dataset.receive, 10);
+  if (!result.ok) setHint(result.error, "error");
+  else {
+    persist();
+    renderAll();
+  }
+});
+
+els.orders.addEventListener("click", (event) => {
+  const orderBtn = event.target.closest("[data-order]");
+  if (!orderBtn) return;
+  const order = state.orders.find((o) => o.id === orderBtn.dataset.order);
+  if (order) {
+    els.orderPane.innerHTML = `<pre class="receipt">${escapeHtml(receiptText(order))}</pre>`;
+  }
+});
+
+els.held.addEventListener("click", (event) => {
+  const holdBtn = event.target.closest("[data-hold]");
+  if (!holdBtn) return;
+  const result = recallHeld(state, holdBtn.dataset.hold);
+  if (!result.ok) setHint(result.error, "error");
+  else {
+    persist();
+    setHint("Bill recalled", "ok");
+    showView("counter");
+  }
+});
+
 els.searchForm.addEventListener("submit", (event) => {
   event.preventDefault();
   renderCatalog();
@@ -257,7 +400,7 @@ document.getElementById("btn-hold").addEventListener("click", () => {
   if (!result.ok) setHint(result.error, "error");
   else {
     persist();
-    setHint(`Held ${result.id}`, "ok");
+    setHint(`Held ${result.id} — open Held to recall`, "ok");
     renderAll();
   }
 });
@@ -266,70 +409,28 @@ document.getElementById("pay-cash").addEventListener("click", () => pay("cash"))
 document.getElementById("pay-upi").addEventListener("click", () => pay("upi"));
 document.getElementById("pay-card").addEventListener("click", () => pay("card"));
 
-document.getElementById("btn-held").addEventListener("click", () => {
-  if (state.held.length === 0) {
-    showModal("Held bills", `<p class="hint">No held bills.</p>`);
-    return;
+document.getElementById("settings-form").addEventListener("submit", (event) => {
+  event.preventDefault();
+  const result = updateShop(state, {
+    name: els.setName.value,
+    place: els.setPlace.value,
+    gstin: els.setGstin.value,
+  });
+  els.settingsHint.textContent = result.ok ? "Saved" : result.error;
+  els.settingsHint.className = `hint ${result.ok ? "ok" : "error"}`;
+  if (result.ok) {
+    persist();
+    renderAll();
   }
-  showModal(
-    "Held bills",
-    `<div class="held-list">${state.held
-      .map(
-        (h) =>
-          `<button class="held-item" type="button" data-hold="${escapeHtml(h.id)}">
-            <span>${escapeHtml(h.id)}<br><small>${escapeHtml(
-              new Date(h.createdAt).toLocaleString("en-IN"),
-            )} · ${h.items.length} lines</small></span>
-            <span>Recall</span>
-          </button>`,
-      )
-      .join("")}</div>`,
-  );
 });
 
-document.getElementById("btn-orders").addEventListener("click", () => {
-  if (state.orders.length === 0) {
-    showModal("Orders", `<p class="hint">No paid bills yet.</p>`);
-    return;
-  }
-  showModal(
-    "Today and earlier",
-    `<div class="order-list">${state.orders
-      .map(
-        (o) =>
-          `<button class="order-item" type="button" data-order="${escapeHtml(o.id)}">
-            <span>${escapeHtml(o.id)} · ${escapeHtml(o.method.toUpperCase())}<br>
-            <small>${escapeHtml(new Date(o.createdAt).toLocaleString("en-IN"))}</small></span>
-            <span>${escapeHtml(formatINR(o.total))}</span>
-          </button>`,
-      )
-      .join("")}</div>`,
-  );
-});
-
-els.modalBody.addEventListener("click", (event) => {
-  const holdBtn = event.target.closest("[data-hold]");
-  if (holdBtn) {
-    const result = recallHeld(state, holdBtn.dataset.hold);
-    if (!result.ok) setHint(result.error, "error");
-    else {
-      persist();
-      setHint("Bill recalled", "ok");
-      renderAll();
-    }
-    hideModal();
-    return;
-  }
-  const orderBtn = event.target.closest("[data-order]");
-  if (orderBtn) {
-    const order = state.orders.find((o) => o.id === orderBtn.dataset.order);
-    if (order) {
-      showModal(
-        `Receipt ${order.id}`,
-        `<pre class="receipt">${escapeHtml(receiptText(order))}</pre>`,
-      );
-    }
-  }
+document.getElementById("btn-reset").addEventListener("click", () => {
+  state = resetDemo();
+  state.locked = false;
+  persist();
+  els.orderPane.innerHTML = `<p class="hint">Select a bill.</p>`;
+  setHint("Demo reset");
+  showView("counter");
 });
 
 els.modalClose.addEventListener("click", hideModal);
@@ -363,12 +464,14 @@ function unlockWithPin(pin) {
   els.pin.value = "";
   els.pinHint.textContent = "";
   state.locked = false;
+  persist();
   renderAll();
 }
 
 document.addEventListener("keydown", (event) => {
   if (event.key === "/" && document.activeElement !== els.search && document.activeElement !== els.tender && document.activeElement !== els.pin) {
     event.preventDefault();
+    showView("counter");
     els.search.focus();
   }
   if (event.key === "Escape") hideModal();
@@ -382,4 +485,4 @@ function tickClock() {
 }
 tickClock();
 setInterval(tickClock, 15000);
-renderAll();
+showView("counter");

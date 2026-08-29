@@ -81,7 +81,7 @@ test("available stock subtracts units already in the cart", () => {
 });
 
 test("corrupt localStorage falls back to a seeded shop", () => {
-  const storage = memoryStorage({ "spicepos.v1": "{not-json" });
+  const storage = memoryStorage({ "spicepos.v2": "{not-json" });
   const state = loadState(storage);
   assert.equal(state.products.length > 0, true);
   assert.equal(state.cart.length, 0);

@@ -14,15 +14,15 @@
   --muted: #c4b3a2;
   --saffron: #e8a54b;
   --saffron-deep: #c47a22;
-  --chili: #d4523e;
   --mint: #7dba7a;
   --danger: #ef6b5a;
+  --nav: #140f0c;
   --shadow: 0 18px 40px rgba(0, 0, 0, 0.35);
-  font-family: "Source Sans 3", "Segoe UI", sans-serif;
+  font-family: "Segoe UI", "Source Sans 3", sans-serif;
 }
 
 * { box-sizing: border-box; }
-html, body { height: 100%; margin: 0; }
+html, body { margin: 0; min-height: 100vh; }
 body {
   background:
     radial-gradient(1200px 500px at 10% -10%, #3a2718 0%, transparent 55%),
@@ -34,10 +34,42 @@ button, input { font: inherit; }
 button { cursor: pointer; }
 
 .app {
-  height: 100%;
+  min-height: 100vh;
   display: grid;
-  grid-template-rows: auto 1fr;
+  grid-template-columns: 220px minmax(0, 1fr);
 }
+
+.nav {
+  background: var(--nav);
+  border-right: 1px solid var(--line);
+  padding: 18px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.brand {
+  display: flex;
+  flex-direction: column;
+  padding: 4px 10px 16px;
+}
+.brand strong { font-size: 18px; letter-spacing: 0.04em; }
+.brand span { color: var(--muted); font-size: 12px; word-break: break-all; }
+.nav-btn {
+  text-align: left;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+.nav-btn.active, .nav-btn:hover { background: var(--panel); }
+.nav-foot { margin-top: auto; display: grid; gap: 8px; padding-top: 16px; }
+
+.stage { min-width: 0; display: flex; flex-direction: column; }
+.view { display: block; padding: 0; min-height: 100vh; }
+.view[hidden] { display: none; }
+.view > h2 { margin: 20px 20px 4px; }
+.lede { margin: 0 20px 16px; color: var(--muted); }
 
 .topbar {
   display: flex;
@@ -46,19 +78,8 @@ button { cursor: pointer; }
   padding: 12px 18px;
   border-bottom: 1px solid var(--line);
   background: rgba(26, 20, 16, 0.92);
-  backdrop-filter: blur(8px);
 }
-.brand {
-  display: flex;
-  flex-direction: column;
-  min-width: 160px;
-}
-.brand strong { font-size: 18px; letter-spacing: 0.04em; }
-.brand span { color: var(--muted); font-size: 12px; }
-.search {
-  flex: 1;
-  display: flex;
-}
+.search { flex: 1; display: flex; }
 .search input {
   width: 100%;
   padding: 10px 14px;
@@ -67,7 +88,6 @@ button { cursor: pointer; }
   background: var(--bg-raised);
   color: var(--text);
 }
-.stats, .top-actions { display: flex; gap: 8px; align-items: center; }
 .chip {
   background: var(--panel);
   border: 1px solid var(--line);
@@ -96,13 +116,12 @@ button { cursor: pointer; }
 
 .workspace {
   display: grid;
-  grid-template-columns: minmax(0, 1.6fr) minmax(320px, 0.9fr);
-  min-height: 0;
+  grid-template-columns: minmax(0, 1.6fr) minmax(300px, 0.9fr);
+  min-height: calc(100vh - 64px);
 }
 
 .catalog {
   padding: 16px;
-  overflow: auto;
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
   gap: 12px;
@@ -137,15 +156,8 @@ button { cursor: pointer; }
   grid-template-rows: auto 1fr auto auto;
   min-height: 0;
 }
-.ticket h2 {
-  margin: 0;
-  padding: 14px 16px 8px;
-  font-size: 16px;
-}
-.lines {
-  overflow: auto;
-  padding: 0 8px 8px;
-}
+.ticket h2 { margin: 0; padding: 14px 16px 8px; font-size: 16px; }
+.lines { overflow: auto; padding: 0 8px 8px; max-height: 50vh; }
 .line {
   display: grid;
   grid-template-columns: 1fr auto;
@@ -155,11 +167,7 @@ button { cursor: pointer; }
 }
 .line .who { font-weight: 600; }
 .line .pack { color: var(--muted); font-size: 12px; }
-.qty {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
+.qty { display: flex; align-items: center; gap: 6px; }
 .qty button {
   width: 28px;
   height: 28px;
@@ -177,18 +185,10 @@ button { cursor: pointer; }
 }
 .totals div { display: flex; justify-content: space-between; }
 .totals .grand { font-size: 22px; font-weight: 800; color: var(--saffron); }
-
-.pay {
-  padding: 12px 16px 16px;
-  display: grid;
-  gap: 8px;
-}
+.pay { padding: 12px 16px 16px; display: grid; gap: 8px; }
 .pay-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
 .pay-row .btn { width: 100%; }
-.tender {
-  display: flex;
-  gap: 8px;
-}
+.tender { display: flex; gap: 8px; }
 .tender input {
   flex: 1;
   padding: 10px 12px;
@@ -200,6 +200,60 @@ button { cursor: pointer; }
 .hint { color: var(--muted); font-size: 12px; min-height: 16px; }
 .hint.error { color: var(--danger); }
 .hint.ok { color: var(--mint); }
+
+.table-wrap { padding: 0 20px 24px; overflow-x: auto; }
+table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  overflow: hidden;
+}
+th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); }
+th { color: var(--muted); font-size: 12px; font-weight: 600; }
+.split {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(260px, 0.8fr);
+  gap: 16px;
+  padding: 0 20px 24px;
+}
+.pane {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 12px;
+  min-height: 200px;
+}
+.report-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 12px;
+  padding: 0 20px 24px;
+}
+.report-card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 16px;
+}
+.report-card span { color: var(--muted); display: block; font-size: 12px; }
+.report-card strong { font-size: 22px; }
+.settings {
+  display: grid;
+  gap: 12px;
+  max-width: 420px;
+  margin: 0 20px 16px;
+}
+.settings label { display: grid; gap: 6px; color: var(--muted); font-size: 13px; }
+.settings input {
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--bg-raised);
+  color: var(--text);
+}
+#btn-reset { margin: 12px 20px 32px; }
 
 .lock, .modal {
   position: fixed;
@@ -220,11 +274,7 @@ button { cursor: pointer; }
 }
 .dialog h3 { margin: 0 0 8px; }
 .dialog p { color: var(--muted); }
-.pin {
-  display: flex;
-  gap: 8px;
-  margin: 16px 0;
-}
+.pin { display: flex; gap: 8px; margin: 16px 0; }
 #btn-demo-pin { width: 100%; }
 .pin input {
   flex: 1;
@@ -244,13 +294,7 @@ button { cursor: pointer; }
   color: #2b1c12;
   padding: 16px;
   border-radius: 10px;
-  max-height: 360px;
-  overflow: auto;
-}
-.held-list, .order-list {
-  display: grid;
-  gap: 8px;
-  max-height: 360px;
+  max-height: 480px;
   overflow: auto;
 }
 .held-item, .order-item {
@@ -264,72 +308,124 @@ button { cursor: pointer; }
   background: var(--bg-raised);
   color: inherit;
   text-align: left;
+  width: 100%;
+  margin-bottom: 8px;
 }
 
-@media (max-width: 900px) {
-  .topbar { flex-wrap: wrap; }
-  .search { order: 3; flex: 1 0 100%; }
-  .stats { display: none; }
-  .workspace { grid-template-columns: 1fr; }
-  .ticket { border-left: 0; border-top: 1px solid var(--line); min-height: 50vh; }
+@media (max-width: 980px) {
+  .app { grid-template-columns: 1fr; }
+  .nav { flex-direction: row; flex-wrap: wrap; border-right: 0; border-bottom: 1px solid var(--line); }
+  .nav-foot { flex-direction: row; margin-top: 0; display: flex; flex-wrap: wrap; width: 100%; }
+  .workspace, .split { grid-template-columns: 1fr; }
+  .ticket { border-left: 0; border-top: 1px solid var(--line); }
+  .view { min-height: 0; }
 }
 
 </style>
   </head>
   <body>
     <div class="app">
-      <header class="topbar">
+      <nav class="nav" aria-label="App">
         <div class="brand">
           <strong id="shop-name">Spice POS</strong>
-          <span id="shop-place">Counter</span>
+          <span id="shop-place">Pune</span>
         </div>
-        <form class="search" id="search-form">
-          <input
-            id="search"
-            type="search"
-            placeholder="Search spice, SKU, or pack — / to focus"
-            autocomplete="off"
-          />
-        </form>
-        <div class="stats">
+        <button class="nav-btn active" type="button" data-view="counter">Counter</button>
+        <button class="nav-btn" type="button" data-view="inventory">Inventory</button>
+        <button class="nav-btn" type="button" data-view="orders">Orders</button>
+        <button class="nav-btn" type="button" data-view="held">Held</button>
+        <button class="nav-btn" type="button" data-view="reports">Reports</button>
+        <button class="nav-btn" type="button" data-view="settings">Settings</button>
+        <div class="nav-foot">
           <div class="chip">Today <b id="today-total">₹0.00</b></div>
           <div class="chip">Bills <b id="today-count">0</b></div>
           <div class="chip" id="clock">--:--</div>
+          <button class="btn ghost" id="btn-lock" type="button">Lock till</button>
         </div>
-        <div class="top-actions">
-          <button class="btn" id="btn-held" type="button">Held</button>
-          <button class="btn" id="btn-orders" type="button">Orders</button>
-          <button class="btn ghost" id="btn-lock" type="button">Lock</button>
-        </div>
-      </header>
-      <main class="workspace">
-        <section class="catalog" id="catalog" aria-label="Products"></section>
-        <aside class="ticket">
-          <h2>Current bill</h2>
-          <div class="lines" id="lines"></div>
-          <div class="totals">
-            <div><span>Taxable</span><span id="taxable">₹0.00</span></div>
-            <div><span>GST</span><span id="tax">₹0.00</span></div>
-            <div class="grand"><span>Total</span><span id="total">₹0.00</span></div>
+      </nav>
+
+      <div class="stage">
+        <section class="view" id="view-counter">
+          <header class="topbar">
+            <form class="search" id="search-form">
+              <input
+                id="search"
+                type="search"
+                placeholder="Search spice, SKU, or pack — / to focus"
+                autocomplete="off"
+              />
+            </form>
+          </header>
+          <div class="workspace">
+            <div class="catalog" id="catalog" aria-label="Products"></div>
+            <aside class="ticket">
+              <h2>Current bill</h2>
+              <div class="lines" id="lines"></div>
+              <div class="totals">
+                <div><span>Taxable</span><span id="taxable">₹0.00</span></div>
+                <div><span>GST</span><span id="tax">₹0.00</span></div>
+                <div class="grand"><span>Total</span><span id="total">₹0.00</span></div>
+              </div>
+              <div class="pay">
+                <div class="tender">
+                  <input id="tender" inputmode="decimal" placeholder="Cash tendered" />
+                  <button class="btn" id="btn-hold" type="button">Hold</button>
+                  <button class="btn danger" id="btn-clear" type="button">Clear</button>
+                </div>
+                <div class="pay-row">
+                  <button class="btn primary" id="pay-cash" type="button">Cash</button>
+                  <button class="btn" id="pay-upi" type="button">UPI</button>
+                  <button class="btn" id="pay-card" type="button">Card</button>
+                </div>
+                <div class="hint" id="hint"></div>
+              </div>
+            </aside>
           </div>
-          <div class="pay">
-            <div class="tender">
-              <input id="tender" inputmode="decimal" placeholder="Cash tendered" />
-              <button class="btn" id="btn-hold" type="button">Hold</button>
-              <button class="btn danger" id="btn-clear" type="button">Clear</button>
-            </div>
-            <div class="pay-row">
-              <button class="btn primary" id="pay-cash" type="button">Cash</button>
-              <button class="btn" id="pay-upi" type="button">UPI</button>
-              <button class="btn" id="pay-card" type="button">Card</button>
-            </div>
-            <div class="hint" id="hint"></div>
+        </section>
+
+        <section class="view" id="view-inventory" hidden>
+          <h2>Inventory</h2>
+          <p class="lede">Every pack on the shelf. Receive stock without leaving the till.</p>
+          <div class="table-wrap" id="inventory"></div>
+        </section>
+
+        <section class="view" id="view-orders" hidden>
+          <h2>Orders</h2>
+          <p class="lede">Paid bills for this device. Open a row to reprint the receipt.</p>
+          <div class="split">
+            <div class="table-wrap" id="orders"></div>
+            <div class="pane" id="order-pane"><p class="hint">Select a bill.</p></div>
           </div>
-        </aside>
-      </main>
+        </section>
+
+        <section class="view" id="view-held" hidden>
+          <h2>Held bills</h2>
+          <p class="lede">Customers who stepped aside. Recall only when the live cart is empty.</p>
+          <div class="table-wrap" id="held"></div>
+        </section>
+
+        <section class="view" id="view-reports" hidden>
+          <h2>Today’s report</h2>
+          <p class="lede">GST-inclusive takings for the current calendar day.</p>
+          <div class="report-grid" id="reports"></div>
+        </section>
+
+        <section class="view" id="view-settings" hidden>
+          <h2>Settings</h2>
+          <p class="lede">Shop print lines on every receipt. Demo PIN is 1234.</p>
+          <form class="settings" id="settings-form">
+            <label>Shop name <input id="set-name" /></label>
+            <label>Place <input id="set-place" /></label>
+            <label>GSTIN <input id="set-gstin" /></label>
+            <button class="btn primary" type="submit">Save shop</button>
+          </form>
+          <div class="hint" id="settings-hint"></div>
+          <button class="btn danger" id="btn-reset" type="button">Reset demo data</button>
+        </section>
+      </div>
     </div>
 
-    <div class="lock" id="lock">
+    <div class="lock" id="lock" hidden>
       <div class="dialog">
         <h3>Unlock counter</h3>
         <p>Enter cashier PIN. Demo PIN is <b>1234</b>.</p>
@@ -467,7 +563,7 @@ function searchCatalog(products, query) {
   });
 }
 
-const STORAGE_KEY = "spicepos.v1";
+const STORAGE_KEY = "spicepos.v2";
 const DEMO_PIN = "1234";
 
 function clone(value) {
@@ -486,7 +582,7 @@ function seedState() {
     cart: [],
     held: [],
     orders: [],
-    locked: true,
+    locked: false,
   };
 }
 
@@ -504,7 +600,7 @@ function loadState(storage = globalThis.localStorage) {
       cart: Array.isArray(parsed.cart) ? parsed.cart : [],
       held: Array.isArray(parsed.held) ? parsed.held : [],
       orders: Array.isArray(parsed.orders) ? parsed.orders : [],
-      locked: true,
+      locked: parsed.locked === true,
     };
   } catch {
     return seedState();
@@ -512,8 +608,7 @@ function loadState(storage = globalThis.localStorage) {
 }
 
 function saveState(state, storage = globalThis.localStorage) {
-  const persistable = { ...state, locked: true };
-  storage.setItem(STORAGE_KEY, JSON.stringify(persistable));
+  storage.setItem(STORAGE_KEY, JSON.stringify(state));
 }
 
 function productBySku(state, sku) {
@@ -703,26 +798,52 @@ function checkout(state, { method, tenderedPaise = 0 }) {
   return { ok: true, order };
 }
 
-function todaySales(state, now = new Date()) {
+function receiveStock(state, sku, qty) {
+  if (!Number.isInteger(qty) || qty <= 0) {
+    return { ok: false, error: "Quantity must be a positive whole number" };
+  }
+  const product = productBySku(state, sku);
+  if (!product) return { ok: false, error: "Unknown SKU" };
+  product.stock += qty;
+  return { ok: true, stock: product.stock };
+}
+
+function updateShop(state, patch) {
+  const name = String(patch.name ?? state.shop.name).trim();
+  const gstin = String(patch.gstin ?? state.shop.gstin).trim();
+  const place = String(patch.place ?? state.shop.place).trim();
+  if (!name || !place || !gstin) {
+    return { ok: false, error: "Shop name, place, and GSTIN are required" };
+  }
+  state.shop = { name, gstin, place };
+  return { ok: true };
+}
+
+function salesByMethod(state, now = new Date()) {
   const start = new Date(now);
   start.setHours(0, 0, 0, 0);
   const end = new Date(start);
   end.setDate(end.getDate() + 1);
   const startMs = start.getTime();
   const endMs = end.getTime();
-  const todays = state.orders.filter((o) => {
-    const t = Date.parse(o.createdAt);
-    return t >= startMs && t < endMs && o.status === "paid";
-  });
-  return todays.reduce(
-    (acc, o) => {
-      acc.count += 1;
-      acc.total += o.total;
-      acc.tax += o.tax;
-      return acc;
-    },
-    { count: 0, total: 0, tax: 0 },
-  );
+  const methods = { cash: 0, upi: 0, card: 0 };
+  let count = 0;
+  let total = 0;
+  let tax = 0;
+  for (const order of state.orders) {
+    const t = Date.parse(order.createdAt);
+    if (t < startMs || t >= endMs || order.status !== "paid") continue;
+    count += 1;
+    total += order.total;
+    tax += order.tax;
+    if (methods[order.method] != null) methods[order.method] += order.total;
+  }
+  return { count, total, tax, methods };
+}
+
+function todaySales(state, now = new Date()) {
+  const sales = salesByMethod(state, now);
+  return { count: sales.count, total: sales.total, tax: sales.tax };
 }
 
 function verifyPin(pin) {
@@ -758,10 +879,20 @@ const els = {
   modalTitle: document.getElementById("modal-title"),
   modalBody: document.getElementById("modal-body"),
   modalClose: document.getElementById("modal-close"),
+  inventory: document.getElementById("inventory"),
+  orders: document.getElementById("orders"),
+  orderPane: document.getElementById("order-pane"),
+  held: document.getElementById("held"),
+  reports: document.getElementById("reports"),
+  setName: document.getElementById("set-name"),
+  setPlace: document.getElementById("set-place"),
+  setGstin: document.getElementById("set-gstin"),
+  settingsHint: document.getElementById("settings-hint"),
 };
 
 let state = loadState();
 let paying = false;
+let view = "counter";
 
 function escapeHtml(value) {
   return String(value)
@@ -785,6 +916,17 @@ function stockClass(stock) {
   if (stock <= 0) return "out";
   if (stock <= 8) return "low";
   return "ok";
+}
+
+function showView(name) {
+  view = name;
+  document.querySelectorAll(".view").forEach((section) => {
+    section.hidden = section.id !== `view-${name}`;
+  });
+  document.querySelectorAll(".nav-btn").forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.view === name);
+  });
+  renderAll();
 }
 
 function renderCatalog() {
@@ -836,9 +978,84 @@ function renderCart() {
   els.total.textContent = formatINR(totals.total);
 }
 
+function renderInventory() {
+  els.inventory.innerHTML = `<table>
+    <thead><tr><th>SKU</th><th>Item</th><th>Pack</th><th>Price</th><th>Stock</th><th>Receive</th></tr></thead>
+    <tbody>${state.products
+      .map(
+        (p) => `<tr>
+        <td>${escapeHtml(p.sku)}</td>
+        <td>${escapeHtml(p.name)}</td>
+        <td>${escapeHtml(p.pack)}</td>
+        <td>${escapeHtml(formatINR(p.unitPaise))}</td>
+        <td class="stock ${stockClass(p.stock)}">${p.stock}</td>
+        <td><button class="btn" type="button" data-receive="${escapeHtml(p.sku)}">+10</button></td>
+      </tr>`,
+      )
+      .join("")}</tbody></table>`;
+}
+
+function renderOrders() {
+  if (state.orders.length === 0) {
+    els.orders.innerHTML = `<p class="hint">No paid bills yet. Take a sale on Counter.</p>`;
+    return;
+  }
+  els.orders.innerHTML = state.orders
+    .map(
+      (o) =>
+        `<button class="order-item" type="button" data-order="${escapeHtml(o.id)}">
+          <span>${escapeHtml(o.id)} · ${escapeHtml(o.method.toUpperCase())}<br>
+          <small>${escapeHtml(new Date(o.createdAt).toLocaleString("en-IN"))} · ${o.items.length} lines</small></span>
+          <span>${escapeHtml(formatINR(o.total))}</span>
+        </button>`,
+    )
+    .join("");
+}
+
+function renderHeld() {
+  if (state.held.length === 0) {
+    els.held.innerHTML = `<p class="hint">No held bills.</p>`;
+    return;
+  }
+  els.held.innerHTML = state.held
+    .map(
+      (h) =>
+        `<button class="held-item" type="button" data-hold="${escapeHtml(h.id)}">
+          <span>${escapeHtml(h.id)}<br><small>${escapeHtml(
+            new Date(h.createdAt).toLocaleString("en-IN"),
+          )} · ${h.items.length} lines</small></span>
+          <span>Recall to counter</span>
+        </button>`,
+    )
+    .join("");
+}
+
+function renderReports() {
+  const sales = salesByMethod(state);
+  const low = state.products.filter((p) => p.stock <= 8);
+  els.reports.innerHTML = `
+    <div class="report-card"><span>Bills today</span><strong>${sales.count}</strong></div>
+    <div class="report-card"><span>Takings</span><strong>${escapeHtml(formatINR(sales.total))}</strong></div>
+    <div class="report-card"><span>GST</span><strong>${escapeHtml(formatINR(sales.tax))}</strong></div>
+    <div class="report-card"><span>Cash</span><strong>${escapeHtml(formatINR(sales.methods.cash))}</strong></div>
+    <div class="report-card"><span>UPI</span><strong>${escapeHtml(formatINR(sales.methods.upi))}</strong></div>
+    <div class="report-card"><span>Card</span><strong>${escapeHtml(formatINR(sales.methods.card))}</strong></div>
+    <div class="report-card"><span>Low / out of stock</span><strong>${low.length}</strong><p class="hint">${
+      low.length ? low.map((p) => escapeHtml(p.name)).join(", ") : "All packs healthy"
+    }</p></div>
+    <div class="report-card"><span>Held bills</span><strong>${state.held.length}</strong></div>
+    <div class="report-card"><span>Catalog SKUs</span><strong>${state.products.length}</strong></div>`;
+}
+
+function renderSettings() {
+  els.setName.value = state.shop.name;
+  els.setPlace.value = state.shop.place;
+  els.setGstin.value = state.shop.gstin;
+}
+
 function renderStats() {
   els.shopName.textContent = state.shop.name;
-  els.shopPlace.textContent = `${state.shop.place} · GSTIN ${state.shop.gstin}`;
+  els.shopPlace.textContent = `${state.shop.place} · ${state.shop.gstin}`;
   const sales = todaySales(state);
   els.todayTotal.textContent = formatINR(sales.total);
   els.todayCount.textContent = String(sales.count);
@@ -853,6 +1070,11 @@ function setPayEnabled(enabled) {
 function renderAll() {
   renderCatalog();
   renderCart();
+  renderInventory();
+  renderOrders();
+  renderHeld();
+  renderReports();
+  renderSettings();
   renderStats();
   setPayEnabled(state.cart.length > 0 && !state.locked);
   els.lock.hidden = !state.locked;
@@ -931,6 +1153,12 @@ function pay(method) {
   }
 }
 
+document.querySelector(".nav").addEventListener("click", (event) => {
+  const btn = event.target.closest("[data-view]");
+  if (!btn || state.locked) return;
+  showView(btn.dataset.view);
+});
+
 els.catalog.addEventListener("click", (event) => {
   const card = event.target.closest("[data-sku]");
   if (!card || state.locked) return;
@@ -960,6 +1188,38 @@ els.lines.addEventListener("click", (event) => {
   }
 });
 
+els.inventory.addEventListener("click", (event) => {
+  const btn = event.target.closest("[data-receive]");
+  if (!btn) return;
+  const result = receiveStock(state, btn.dataset.receive, 10);
+  if (!result.ok) setHint(result.error, "error");
+  else {
+    persist();
+    renderAll();
+  }
+});
+
+els.orders.addEventListener("click", (event) => {
+  const orderBtn = event.target.closest("[data-order]");
+  if (!orderBtn) return;
+  const order = state.orders.find((o) => o.id === orderBtn.dataset.order);
+  if (order) {
+    els.orderPane.innerHTML = `<pre class="receipt">${escapeHtml(receiptText(order))}</pre>`;
+  }
+});
+
+els.held.addEventListener("click", (event) => {
+  const holdBtn = event.target.closest("[data-hold]");
+  if (!holdBtn) return;
+  const result = recallHeld(state, holdBtn.dataset.hold);
+  if (!result.ok) setHint(result.error, "error");
+  else {
+    persist();
+    setHint("Bill recalled", "ok");
+    showView("counter");
+  }
+});
+
 els.searchForm.addEventListener("submit", (event) => {
   event.preventDefault();
   renderCatalog();
@@ -978,7 +1238,7 @@ document.getElementById("btn-hold").addEventListener("click", () => {
   if (!result.ok) setHint(result.error, "error");
   else {
     persist();
-    setHint(`Held ${result.id}`, "ok");
+    setHint(`Held ${result.id} — open Held to recall`, "ok");
     renderAll();
   }
 });
@@ -987,70 +1247,28 @@ document.getElementById("pay-cash").addEventListener("click", () => pay("cash"))
 document.getElementById("pay-upi").addEventListener("click", () => pay("upi"));
 document.getElementById("pay-card").addEventListener("click", () => pay("card"));
 
-document.getElementById("btn-held").addEventListener("click", () => {
-  if (state.held.length === 0) {
-    showModal("Held bills", `<p class="hint">No held bills.</p>`);
-    return;
+document.getElementById("settings-form").addEventListener("submit", (event) => {
+  event.preventDefault();
+  const result = updateShop(state, {
+    name: els.setName.value,
+    place: els.setPlace.value,
+    gstin: els.setGstin.value,
+  });
+  els.settingsHint.textContent = result.ok ? "Saved" : result.error;
+  els.settingsHint.className = `hint ${result.ok ? "ok" : "error"}`;
+  if (result.ok) {
+    persist();
+    renderAll();
   }
-  showModal(
-    "Held bills",
-    `<div class="held-list">${state.held
-      .map(
-        (h) =>
-          `<button class="held-item" type="button" data-hold="${escapeHtml(h.id)}">
-            <span>${escapeHtml(h.id)}<br><small>${escapeHtml(
-              new Date(h.createdAt).toLocaleString("en-IN"),
-            )} · ${h.items.length} lines</small></span>
-            <span>Recall</span>
-          </button>`,
-      )
-      .join("")}</div>`,
-  );
 });
 
-document.getElementById("btn-orders").addEventListener("click", () => {
-  if (state.orders.length === 0) {
-    showModal("Orders", `<p class="hint">No paid bills yet.</p>`);
-    return;
-  }
-  showModal(
-    "Today and earlier",
-    `<div class="order-list">${state.orders
-      .map(
-        (o) =>
-          `<button class="order-item" type="button" data-order="${escapeHtml(o.id)}">
-            <span>${escapeHtml(o.id)} · ${escapeHtml(o.method.toUpperCase())}<br>
-            <small>${escapeHtml(new Date(o.createdAt).toLocaleString("en-IN"))}</small></span>
-            <span>${escapeHtml(formatINR(o.total))}</span>
-          </button>`,
-      )
-      .join("")}</div>`,
-  );
-});
-
-els.modalBody.addEventListener("click", (event) => {
-  const holdBtn = event.target.closest("[data-hold]");
-  if (holdBtn) {
-    const result = recallHeld(state, holdBtn.dataset.hold);
-    if (!result.ok) setHint(result.error, "error");
-    else {
-      persist();
-      setHint("Bill recalled", "ok");
-      renderAll();
-    }
-    hideModal();
-    return;
-  }
-  const orderBtn = event.target.closest("[data-order]");
-  if (orderBtn) {
-    const order = state.orders.find((o) => o.id === orderBtn.dataset.order);
-    if (order) {
-      showModal(
-        `Receipt ${order.id}`,
-        `<pre class="receipt">${escapeHtml(receiptText(order))}</pre>`,
-      );
-    }
-  }
+document.getElementById("btn-reset").addEventListener("click", () => {
+  state = resetDemo();
+  state.locked = false;
+  persist();
+  els.orderPane.innerHTML = `<p class="hint">Select a bill.</p>`;
+  setHint("Demo reset");
+  showView("counter");
 });
 
 els.modalClose.addEventListener("click", hideModal);
@@ -1084,12 +1302,14 @@ function unlockWithPin(pin) {
   els.pin.value = "";
   els.pinHint.textContent = "";
   state.locked = false;
+  persist();
   renderAll();
 }
 
 document.addEventListener("keydown", (event) => {
   if (event.key === "/" && document.activeElement !== els.search && document.activeElement !== els.tender && document.activeElement !== els.pin) {
     event.preventDefault();
+    showView("counter");
     els.search.focus();
   }
   if (event.key === "Escape") hideModal();
@@ -1103,11 +1323,11 @@ function tickClock() {
 }
 tickClock();
 setInterval(tickClock, 15000);
-renderAll();
+showView("counter");
 
 })();
 
 </script>
-    <noscript>Spice POS needs JavaScript. Open this folder with a local server or use the demo link in the README.</noscript>
+    <noscript>Spice POS needs JavaScript.</noscript>
   </body>
 </html>

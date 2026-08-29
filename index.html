@@ -9,58 +9,107 @@
   </head>
   <body>
     <div class="app">
-      <header class="topbar">
+      <nav class="nav" aria-label="App">
         <div class="brand">
           <strong id="shop-name">Spice POS</strong>
-          <span id="shop-place">Counter</span>
+          <span id="shop-place">Pune</span>
         </div>
-        <form class="search" id="search-form">
-          <input
-            id="search"
-            type="search"
-            placeholder="Search spice, SKU, or pack — / to focus"
-            autocomplete="off"
-          />
-        </form>
-        <div class="stats">
+        <button class="nav-btn active" type="button" data-view="counter">Counter</button>
+        <button class="nav-btn" type="button" data-view="inventory">Inventory</button>
+        <button class="nav-btn" type="button" data-view="orders">Orders</button>
+        <button class="nav-btn" type="button" data-view="held">Held</button>
+        <button class="nav-btn" type="button" data-view="reports">Reports</button>
+        <button class="nav-btn" type="button" data-view="settings">Settings</button>
+        <div class="nav-foot">
           <div class="chip">Today <b id="today-total">₹0.00</b></div>
           <div class="chip">Bills <b id="today-count">0</b></div>
           <div class="chip" id="clock">--:--</div>
+          <button class="btn ghost" id="btn-lock" type="button">Lock till</button>
         </div>
-        <div class="top-actions">
-          <button class="btn" id="btn-held" type="button">Held</button>
-          <button class="btn" id="btn-orders" type="button">Orders</button>
-          <button class="btn ghost" id="btn-lock" type="button">Lock</button>
-        </div>
-      </header>
-      <main class="workspace">
-        <section class="catalog" id="catalog" aria-label="Products"></section>
-        <aside class="ticket">
-          <h2>Current bill</h2>
-          <div class="lines" id="lines"></div>
-          <div class="totals">
-            <div><span>Taxable</span><span id="taxable">₹0.00</span></div>
-            <div><span>GST</span><span id="tax">₹0.00</span></div>
-            <div class="grand"><span>Total</span><span id="total">₹0.00</span></div>
+      </nav>
+
+      <div class="stage">
+        <section class="view" id="view-counter">
+          <header class="topbar">
+            <form class="search" id="search-form">
+              <input
+                id="search"
+                type="search"
+                placeholder="Search spice, SKU, or pack — / to focus"
+                autocomplete="off"
+              />
+            </form>
+          </header>
+          <div class="workspace">
+            <div class="catalog" id="catalog" aria-label="Products"></div>
+            <aside class="ticket">
+              <h2>Current bill</h2>
+              <div class="lines" id="lines"></div>
+              <div class="totals">
+                <div><span>Taxable</span><span id="taxable">₹0.00</span></div>
+                <div><span>GST</span><span id="tax">₹0.00</span></div>
+                <div class="grand"><span>Total</span><span id="total">₹0.00</span></div>
+              </div>
+              <div class="pay">
+                <div class="tender">
+                  <input id="tender" inputmode="decimal" placeholder="Cash tendered" />
+                  <button class="btn" id="btn-hold" type="button">Hold</button>
+                  <button class="btn danger" id="btn-clear" type="button">Clear</button>
+                </div>
+                <div class="pay-row">
+                  <button class="btn primary" id="pay-cash" type="button">Cash</button>
+                  <button class="btn" id="pay-upi" type="button">UPI</button>
+                  <button class="btn" id="pay-card" type="button">Card</button>
+                </div>
+                <div class="hint" id="hint"></div>
+              </div>
+            </aside>
           </div>
-          <div class="pay">
-            <div class="tender">
-              <input id="tender" inputmode="decimal" placeholder="Cash tendered" />
-              <button class="btn" id="btn-hold" type="button">Hold</button>
-              <button class="btn danger" id="btn-clear" type="button">Clear</button>
-            </div>
-            <div class="pay-row">
-              <button class="btn primary" id="pay-cash" type="button">Cash</button>
-              <button class="btn" id="pay-upi" type="button">UPI</button>
-              <button class="btn" id="pay-card" type="button">Card</button>
-            </div>
-            <div class="hint" id="hint"></div>
+        </section>
+
+        <section class="view" id="view-inventory" hidden>
+          <h2>Inventory</h2>
+          <p class="lede">Every pack on the shelf. Receive stock without leaving the till.</p>
+          <div class="table-wrap" id="inventory"></div>
+        </section>
+
+        <section class="view" id="view-orders" hidden>
+          <h2>Orders</h2>
+          <p class="lede">Paid bills for this device. Open a row to reprint the receipt.</p>
+          <div class="split">
+            <div class="table-wrap" id="orders"></div>
+            <div class="pane" id="order-pane"><p class="hint">Select a bill.</p></div>
           </div>
-        </aside>
-      </main>
+        </section>
+
+        <section class="view" id="view-held" hidden>
+          <h2>Held bills</h2>
+          <p class="lede">Customers who stepped aside. Recall only when the live cart is empty.</p>
+          <div class="table-wrap" id="held"></div>
+        </section>
+
+        <section class="view" id="view-reports" hidden>
+          <h2>Today’s report</h2>
+          <p class="lede">GST-inclusive takings for the current calendar day.</p>
+          <div class="report-grid" id="reports"></div>
+        </section>
+
+        <section class="view" id="view-settings" hidden>
+          <h2>Settings</h2>
+          <p class="lede">Shop print lines on every receipt. Demo PIN is 1234.</p>
+          <form class="settings" id="settings-form">
+            <label>Shop name <input id="set-name" /></label>
+            <label>Place <input id="set-place" /></label>
+            <label>GSTIN <input id="set-gstin" /></label>
+            <button class="btn primary" type="submit">Save shop</button>
+          </form>
+          <div class="hint" id="settings-hint"></div>
+          <button class="btn danger" id="btn-reset" type="button">Reset demo data</button>
+        </section>
+      </div>
     </div>
 
-    <div class="lock" id="lock">
+    <div class="lock" id="lock" hidden>
       <div class="dialog">
         <h3>Unlock counter</h3>
         <p>Enter cashier PIN. Demo PIN is <b>1234</b>.</p>
@@ -84,6 +133,6 @@
     </div>
 
     <script src="./js/pos.iife.js"></script>
-    <noscript>Spice POS needs JavaScript. Open this folder with a local server or use the demo link in the README.</noscript>
+    <noscript>Spice POS needs JavaScript.</noscript>
   </body>
 </html>

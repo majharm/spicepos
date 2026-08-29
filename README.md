@@ -1,34 +1,28 @@
 # Spice POS
 
-Browser counter for a spice shop. Totals are integer **paise**, so GST and change do not drift.
+Full spice-shop till: **Counter**, **Inventory**, **Orders**, **Held**, **Reports**, and **Settings**. The counter opens unlocked so the whole app is on screen.
 
 ## Open the till
 
-Use this link on your laptop (not `127.0.0.1` — that is only the Cloud Agent VM):
-
 https://htmlpreview.github.io/?https://github.com/majharm/spicepos/blob/cursor/pos-qa-checklist-fixes-1a88/app.html
 
-Click **Fill demo PIN 1234**.
+Use the left (or top, on a phone) nav to move through every screen. Optional **Lock till** uses PIN `1234`.
 
-You can also open `app.html` directly after checking out this branch.
+Or checkout this branch and open `app.html`.
 
 ```bash
 npm start
-```
-
-Then open http://127.0.0.1:5173 on **that same computer**.
-
-```bash
 npm test
 npm run bundle
 ```
 
-## Shift flow
+`http://127.0.0.1:5173` only works on the computer running the server.
 
-1. Search or tap a spice pack to add it to the bill.
-2. Adjust quantity. Stock is checked against on-hand, including units already in the cart.
-3. Pay with **Cash** (enter tender, get change), **UPI**, or **Card**.
-4. Use **Hold** if a customer steps aside; **Held** recalls that bill when the live cart is empty.
-5. **Orders** reprints a receipt. **Lock** covers the counter.
+## Screens
 
-GST is 5% per line, rounded to the nearest paise. Today’s bill count and takings sit in the top bar.
+1. **Counter** — search, spice grid, GST bill, cash/UPI/card.
+2. **Inventory** — every SKU and +10 receive.
+3. **Orders** — paid bills and reprint.
+4. **Held** — parked carts, recall when the live bill is empty.
+5. **Reports** — today’s takings by tender, GST, low stock.
+6. **Settings** — shop name / GSTIN on receipts, reset demo.

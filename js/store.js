@@ -1,7 +1,7 @@
 import { CATALOG } from "./catalog.js";
 import { lineAmounts, sumCart, changeDue } from "./money.js";
 
-export const STORAGE_KEY = "spicepos.v1";
+export const STORAGE_KEY = "spicepos.v2";
 export const DEMO_PIN = "1234";
 
 function clone(value) {
@@ -20,7 +20,7 @@ export function seedState() {
     cart: [],
     held: [],
     orders: [],
-    locked: true,
+    locked: false,
   };
 }
 
@@ -38,7 +38,7 @@ export function loadState(storage = globalThis.localStorage) {
       cart: Array.isArray(parsed.cart) ? parsed.cart : [],
       held: Array.isArray(parsed.held) ? parsed.held : [],
       orders: Array.isArray(parsed.orders) ? parsed.orders : [],
-      locked: true,
+      locked: parsed.locked === true,
     };
   } catch {
     return seedState();
@@ -46,8 +46,7 @@ export function loadState(storage = globalThis.localStorage) {
 }
 
 export function saveState(state, storage = globalThis.localStorage) {
-  const persistable = { ...state, locked: true };
-  storage.setItem(STORAGE_KEY, JSON.stringify(persistable));
+  storage.setItem(STORAGE_KEY, JSON.stringify(state));
 }
 
 export function productBySku(state, sku) {
@@ -237,26 +236,52 @@ export function checkout(state, { method, tenderedPaise = 0 }) {
   return { ok: true, order };
 }
 
-export function todaySales(state, now = new Date()) {
+export function receiveStock(state, sku, qty) {
+  if (!Number.isInteger(qty) || qty <= 0) {
+    return { ok: false, error: "Quantity must be a positive whole number" };
+  }
+  const product = productBySku(state, sku);
+  if (!product) return { ok: false, error: "Unknown SKU" };
+  product.stock += qty;
+  return { ok: true, stock: product.stock };
+}
+
+export function updateShop(state, patch) {
+  const name = String(patch.name ?? state.shop.name).trim();
+  const gstin = String(patch.gstin ?? state.shop.gstin).trim();
+  const place = String(patch.place ?? state.shop.place).trim();
+  if (!name || !place || !gstin) {
+    return { ok: false, error: "Shop name, place, and GSTIN are required" };
+  }
+  state.shop = { name, gstin, place };
+  return { ok: true };
+}
+
+export function salesByMethod(state, now = new Date()) {
   const start = new Date(now);
   start.setHours(0, 0, 0, 0);
   const end = new Date(start);
   end.setDate(end.getDate() + 1);
   const startMs = start.getTime();
   const endMs = end.getTime();
-  const todays = state.orders.filter((o) => {
-    const t = Date.parse(o.createdAt);
-    return t >= startMs && t < endMs && o.status === "paid";
-  });
-  return todays.reduce(
-    (acc, o) => {
-      acc.count += 1;
-      acc.total += o.total;
-      acc.tax += o.tax;
-      return acc;
-    },
-    { count: 0, total: 0, tax: 0 },
-  );
+  const methods = { cash: 0, upi: 0, card: 0 };
+  let count = 0;
+  let total = 0;
+  let tax = 0;
+  for (const order of state.orders) {
+    const t = Date.parse(order.createdAt);
+    if (t < startMs || t >= endMs || order.status !== "paid") continue;
+    count += 1;
+    total += order.total;
+    tax += order.tax;
+    if (methods[order.method] != null) methods[order.method] += order.total;
+  }
+  return { count, total, tax, methods };
+}
+
+export function todaySales(state, now = new Date()) {
+  const sales = salesByMethod(state, now);
+  return { count: sales.count, total: sales.total, tax: sales.tax };
 }
 
 export function verifyPin(pin) {

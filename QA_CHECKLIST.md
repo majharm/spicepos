@@ -5,7 +5,8 @@ Executed automatically by `node scripts/e2e.mjs` (Chrome) plus `npm test`. Re-ru
 ## Counter lock
 
 - [x] Wrong PIN stays locked and shows an error.
-- [x] PIN 1234 unlocks the catalog and cart.
+- [x] PIN 1234 unlocks after Lock till.
+- [x] Counter, Inventory, Orders, Held, Reports, and Settings are all reachable.
 - [x] Lock returns the PIN screen; cart contents are still there after unlock.
 
 ## Catalog and cart
@@ -37,7 +38,7 @@ Executed automatically by `node scripts/e2e.mjs` (Chrome) plus `npm test`. Re-ru
 
 - [x] Reload keeps products, cart, held bills, and orders.
 - [x] Today’s takings ignore bills dated on another calendar day.
-- [x] Corrupt `localStorage` key `spicepos.v1` reseeds instead of crashing.
+- [x] Corrupt `localStorage` key `spicepos.v2` reseeds instead of crashing.
 
 ## Automated
 

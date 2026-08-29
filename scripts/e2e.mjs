@@ -63,8 +63,18 @@ try {
   await page.reload({ waitUntil: "networkidle0" });
 
   const lockVisible = await page.$eval("#lock", (el) => !el.hidden);
-  check("lock overlay on load", lockVisible);
+  check("full till visible on load", !lockVisible);
+  const navViews = await page.$$eval(".nav-btn", (btns) => btns.map((b) => b.dataset.view));
+  check(
+    "all app screens in nav",
+    ["counter", "inventory", "orders", "held", "reports", "settings"].every((v) =>
+      navViews.includes(v),
+    ),
+    navViews.join(","),
+  );
+  check("catalog shows full range", (await page.$$(".card")).length >= 16);
 
+  await page.click("#btn-lock");
   await fill("#pin", "0000");
   await page.click("#pin-form button[type='submit']");
   const wrong = await page.$eval("#pin-hint", (el) => el.textContent);
@@ -73,7 +83,18 @@ try {
 
   await unlock();
   check("PIN 1234 unlocks", await page.$eval("#lock", (el) => el.hidden));
-  await shot("screenshot_pos_unlocked_catalog");
+  await shot("screenshot_full_app_counter");
+
+  for (const name of ["inventory", "orders", "held", "reports", "settings", "counter"]) {
+    await page.click(`[data-view="${name}"]`);
+    const shown = await page.$eval(`#view-${name}`, (el) => !el.hidden);
+    check(`${name} screen opens`, shown);
+  }
+  await page.click('[data-view="inventory"]');
+  await shot("screenshot_full_app_inventory");
+  await page.click('[data-view="reports"]');
+  await shot("screenshot_full_app_reports");
+  await page.click('[data-view="counter"]');
 
   await fill("#search", "tur");
   await page.waitForFunction(() =>
@@ -158,7 +179,7 @@ try {
   const emptyCart = await page.$eval("#lines", (el) => el.innerText);
   check("cart empty after hold", /tap a spice/i.test(emptyCart));
 
-  await page.click("#btn-held");
+  await page.click('[data-view="held"]');
   await page.waitForSelector("[data-hold]");
   await page.click("[data-hold]");
   check("recall restores cumin", (await page.$eval("#lines", (el) => el.innerText)).includes("Cumin"));
@@ -166,14 +187,15 @@ try {
   await clickProduct("Coriander");
   await page.click("#btn-hold");
   await clickProduct("Coriander");
-  await page.click("#btn-held");
+  await page.click('[data-view="held"]');
   await page.click("[data-hold]");
   check(
     "recall blocked when cart live",
     /clear or hold/i.test(await page.$eval("#hint", (el) => el.textContent)),
   );
+  await page.click('[data-view="counter"]');
   await page.click("#btn-clear");
-  await page.click("#btn-held");
+  await page.click('[data-view="held"]');
   if (await page.$("[data-hold]")) {
     await page.click("[data-hold]");
   }
@@ -183,11 +205,11 @@ try {
   check("UPI change is zero", /Change\s+₹0\.00/.test(upiReceipt), upiReceipt);
   await page.click("#modal-close");
 
-  await page.click("#btn-orders");
+  await page.click('[data-view="orders"]');
   await page.waitForSelector("[data-order]");
   await page.click("[data-order]");
-  check("orders reprint receipt", Boolean(await page.$(".receipt")));
-  await page.click("#modal-close");
+  check("orders reprint receipt", Boolean(await page.$("#order-pane .receipt")));
+  await page.click('[data-view="counter"]');
 
   await page.click("#btn-lock");
   check("lock returns PIN", await page.$eval("#lock", (el) => !el.hidden));
@@ -195,8 +217,8 @@ try {
   check("unlock after lock", await page.$eval("#today-count", (el) => el.textContent !== "0"));
 
   await page.reload({ waitUntil: "networkidle0" });
-  await unlock();
   check("reload keeps today's sales", (await page.$eval("#today-total", (el) => el.textContent)) !== "₹0.00");
+  check("reload stays unlocked", await page.$eval("#lock", (el) => el.hidden));
   await shot("screenshot_pos_after_reload_sales");
 
   await page.setViewport({ width: 390, height: 844 });
