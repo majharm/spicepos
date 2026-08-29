@@ -1001,7 +1001,10 @@ function tick() {
 tick();
 setInterval(tick, 15000);
 
-$("btn-logout").addEventListener("click", async () => {
+document.addEventListener("click", async (e) => {
+  const logout = e.target.closest("[data-logout]");
+  if (!logout) return;
+  e.preventDefault();
   await fetch("/api/auth/logout", { method: "POST" });
   location.href = "/login.html";
 });
@@ -1083,6 +1086,9 @@ async function boot() {
     }
     state.session = me.user;
     state.perms = me.user.permissions || {};
+    if ($("session-who")) {
+      $("session-who").textContent = `${me.user.name || me.user.email} · ${me.user.role || ""} · ${me.business?.name || ""}`;
+    }
     applyNav();
     if (me.business?.status && me.business.status !== "active") {
       $("expired-banner").hidden = false;

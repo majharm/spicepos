@@ -50,7 +50,7 @@
   padding: 10px 12px;
   border-radius: 10px;
 }
-.master-nav button.active { background: linear-gradient(90deg, var(--saffron), var(--saffron-deep)); color: #2c1608; font-weight: 700; }
+.master-nav .btn-logout { margin-top: 8px; }
 .master-main { padding: 24px; overflow: auto; }
 .kpi-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; }
 .expired-banner {

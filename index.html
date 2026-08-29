@@ -39,11 +39,15 @@
           <div class="chip">Today <b id="today-total">₹0.00</b></div>
           <div class="chip">Bills <b id="today-count">0</b></div>
           <div class="chip" id="clock">--:--</div>
-          <button class="btn ghost" type="button" id="btn-logout">Sign out</button>
+          <button class="btn-logout" type="button" data-logout>Logout</button>
         </div>
       </nav>
 
       <div class="stage">
+        <div class="session-bar">
+          <span id="session-who">Signed in</span>
+          <button class="btn-logout" type="button" data-logout>Logout</button>
+        </div>
         <div class="expired-banner" id="expired-banner" hidden>
           Subscription expired. Data is kept. Ask the platform owner to renew this business.
         </div>
