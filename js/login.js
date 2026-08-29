@@ -15,6 +15,10 @@ document.querySelectorAll(".auth-tab").forEach((tab) => {
   });
 });
 
+if (new URLSearchParams(location.search).get("tab") === "signup" || location.hash === "#signup") {
+  document.querySelector('[data-panel="signup"]')?.click();
+}
+
 loginForm.addEventListener("submit", async (e) => {
   e.preventDefault();
   const hint = document.getElementById("hint");

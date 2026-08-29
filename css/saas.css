@@ -73,6 +73,7 @@
 }
 .auth-card > p { color: var(--muted); margin-top: 0; font-size: 14px; }
 .auth-card form { display: grid; gap: 12px; margin-top: 18px; }
+.auth-card form[hidden] { display: none !important; }
 .auth-card label { display: grid; gap: 6px; color: var(--muted); font-size: 12px; font-weight: 600; letter-spacing: 0.03em; }
 .auth-card input {
   padding: 10px 12px;
