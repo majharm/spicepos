@@ -95,6 +95,27 @@ function readLogo(file) {
   });
 }
 
+function ymd(v) {
+  if (!v) return "";
+  return String(v).slice(0, 10);
+}
+
+function streetAddress(b) {
+  let a = String(b.address || "");
+  const tail = b.city && b.state && b.pin_code ? `, ${b.city}, ${b.state} ${b.pin_code}` : "";
+  if (tail && a.endsWith(tail)) return a.slice(0, -tail.length);
+  return a;
+}
+
+function setSelect(sel, value) {
+  if (!value) {
+    sel.value = "";
+    return;
+  }
+  if (![...sel.options].some((o) => o.value === value)) sel.add(new Option(value, value));
+  sel.value = value;
+}
+
 function showLogin(on) {
   $("master-login").hidden = !on;
   $("panel").hidden = on;
@@ -193,7 +214,8 @@ async function render() {
         .map((p) => `<option value="${p.id}">${p.name} · ${money(p.fee_monthly)} / month</option>`)
         .join("");
       body.innerHTML = `<form class="settings wide biz-create" id="biz-form">
-        <h3 class="full">Add business</h3>
+        <h3 class="full" id="biz-title">Add business</h3>
+        <input type="hidden" name="business_id" />
         <div class="signup-grid">
           <label class="full">Business Name *
             <input name="businessName" required maxlength="180" />
@@ -234,6 +256,13 @@ async function render() {
           <label>Business Logo
             <input name="logo" type="file" accept="image/*" />
           </label>
+          <label>Status
+            <select name="status">
+              <option value="active">Active</option>
+              <option value="suspended">Suspended</option>
+              <option value="inactive">Inactive</option>
+            </select>
+          </label>
           <label>Admin Username *
             <input name="adminUsername" required maxlength="32" autocomplete="off" />
           </label>
@@ -250,7 +279,8 @@ async function render() {
             <input name="subscription_expires_at" type="date" />
           </label>
         </div>
-        <button class="btn primary" type="submit">Create business</button>
+        <button class="btn primary" type="submit" id="biz-save">Create business</button>
+        <button class="btn" type="button" id="biz-cancel" hidden>Cancel edit</button>
         <p class="hint full" id="biz-hint"></p>
       </form>
       <div class="table-wrap">${table(
@@ -264,24 +294,74 @@ async function render() {
           b.plan_name || b.plan_id,
           money(b.fee_monthly),
           b.subscription_expires_at || "—",
-          `<button class="btn" data-act="suspend" data-id="${b.id}">Suspend</button>
+          `<button class="btn" type="button" data-edit="${b.id}">Edit</button>
+           <button class="btn" data-act="suspend" data-id="${b.id}">Suspend</button>
            <button class="btn" data-act="activate" data-id="${b.id}">Activate</button>`,
         ]),
       )}</div>`;
-      $("biz-form").onsubmit = async (e) => {
-        e.preventDefault();
-        const hint = $("biz-hint");
+      const form = $("biz-form");
+      const hint = $("biz-hint");
+      function setAdminRequired(on) {
+        form.adminUsername.required = on;
+        form.password.required = on;
+        form.confirmPassword.required = on;
+        form.password.minLength = on ? 8 : 0;
+        form.confirmPassword.minLength = on ? 8 : 0;
+      }
+      function fillBusiness(b) {
+        form.business_id.value = b?.id || "";
+        form.businessName.value = b?.name || "";
+        setSelect(form.businessType, b?.business_type || "");
+        setSelect(form.businessCategory, b?.category || "");
+        form.ownerName.value = b?.owner_name || "";
+        form.mobile.value = b?.mobile || "";
+        form.email.value = b?.email || "";
+        form.gstNumber.value = b?.gstin || "";
+        form.panNumber.value = b?.pan || "";
+        form.address.value = b ? streetAddress(b) : "";
+        form.city.value = b?.city || "";
+        setSelect(form.state, b?.state || "");
+        form.pinCode.value = b?.pin_code || "";
+        form.logo.value = "";
+        form.status.value = b?.status === "suspended" || b?.status === "inactive" ? b.status : "active";
+        form.adminUsername.value = b?.admin_username || "";
+        form.password.value = "";
+        form.confirmPassword.value = "";
+        setSelect(form.plan_id, b?.plan_id || "");
+        form.subscription_expires_at.value = b ? ymd(b.subscription_expires_at) : "";
+        const editing = Boolean(b);
+        setAdminRequired(!editing);
+        $("biz-title").textContent = editing ? "Edit business" : "Add business";
+        $("biz-save").textContent = editing ? "Update business" : "Create business";
+        $("biz-cancel").hidden = !editing;
         hint.className = "hint";
-        hint.textContent = "Creating business…";
-        const form = e.target;
+        hint.textContent = editing
+          ? `Editing ${b.name}. Leave password blank to keep the current login.`
+          : "";
+        form.scrollIntoView({ block: "start" });
+      }
+      $("biz-cancel").onclick = () => fillBusiness(null);
+      body.querySelectorAll("[data-edit]").forEach((btn) => {
+        btn.onclick = () => {
+          const b = rows.find((r) => r.id === btn.dataset.edit);
+          if (b) fillBusiness(b);
+        };
+      });
+      form.onsubmit = async (e) => {
+        e.preventDefault();
+        hint.className = "hint";
         const fd = new FormData(form);
         const payload = Object.fromEntries(fd);
+        const id = payload.business_id;
+        delete payload.business_id;
         delete payload.logo;
-        const btn = form.querySelector("button[type=submit]");
+        const btn = $("biz-save");
         btn.disabled = true;
+        hint.textContent = id ? "Updating business…" : "Creating business…";
         try {
           payload.logoDataUrl = await readLogo(fd.get("logo"));
-          await api("/api/master/businesses", { method: "POST", body: JSON.stringify(payload) });
+          if (id) await api(`/api/master/businesses/${id}`, { method: "PUT", body: JSON.stringify(payload) });
+          else await api("/api/master/businesses", { method: "POST", body: JSON.stringify(payload) });
           render();
         } catch (err) {
           hint.textContent = err.message;

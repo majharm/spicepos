@@ -24,7 +24,8 @@ function pick(body, ...keys) {
   return "";
 }
 
-export function validateSignup(body) {
+export function validateSignup(body, opts = {}) {
+  const requireAdmin = opts.requireAdmin !== false;
   const raw = body || {};
   const b = {
     name: pick(raw, "name", "businessName"),
@@ -45,20 +46,24 @@ export function validateSignup(body) {
     confirm_password: pick(raw, "confirm_password", "confirmPassword", "admin_password_confirm"),
     plan_id: pick(raw, "plan_id"),
     subscription_expires_at: pick(raw, "subscription_expires_at"),
+    status: pick(raw, "status"),
   };
-  for (const key of REQUIRED) {
+  const required = requireAdmin ? REQUIRED : REQUIRED.filter((k) => k !== "username" && k !== "password");
+  for (const key of required) {
     if (!String(b[key] || "").trim()) throw new Error(`${key.replaceAll("_", " ")} is required`);
   }
-  if (String(b.password) !== String(b.confirm_password)) {
-    throw new Error("Password and confirm password do not match");
+  if (requireAdmin || b.password || b.confirm_password) {
+    if (String(b.password) !== String(b.confirm_password)) {
+      throw new Error("Password and confirm password do not match");
+    }
+    if (String(b.password).length < 8) throw new Error("Password must be at least 8 characters");
   }
-  if (String(b.password).length < 8) throw new Error("Password must be at least 8 characters");
   const mobile = String(b.mobile).replaceAll(/\D/g, "");
   if (mobile.length < 10) throw new Error("Enter a valid mobile number");
   const email = String(b.email).trim().toLowerCase();
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error("Enter a valid email ID");
-  const username = String(b.username).trim().toLowerCase();
-  if (!/^[a-z0-9._-]{3,32}$/.test(username)) {
+  const username = String(b.username || "").trim().toLowerCase();
+  if ((requireAdmin || username) && !/^[a-z0-9._-]{3,32}$/.test(username)) {
     throw new Error("Username must be 3–32 letters, numbers, dot, dash or underscore");
   }
   const pin = String(b.pin_code).replaceAll(/\D/g, "");
@@ -66,6 +71,8 @@ export function validateSignup(body) {
   let logo = b.logo_url ? String(b.logo_url) : "";
   if (logo && !logo.startsWith("data:image/")) throw new Error("Logo must be an uploaded image");
   if (logo && logo.length > 6_000_000) throw new Error("Logo is too large");
+  const status = String(b.status || "active").trim() || "active";
+  if (!["active", "inactive", "suspended"].includes(status)) throw new Error("Invalid status");
   return {
     name: String(b.name).trim(),
     business_type: String(b.business_type).trim(),
@@ -81,9 +88,10 @@ export function validateSignup(body) {
     pin_code: pin,
     logo_url: logo || null,
     username,
-    password: String(b.password),
+    password: String(b.password || ""),
     plan_id: String(b.plan_id || "trial").trim() || "trial",
     subscription_expires_at: String(b.subscription_expires_at || "").trim() || null,
+    status,
   };
 }
 
@@ -119,7 +127,7 @@ export async function registerBusiness(raw) {
         id,
         code,
         shopName,
-        "active",
+        b.status || "active",
         b.owner_name,
         b.mobile,
         b.email,
@@ -213,4 +221,76 @@ export async function registerBusiness(raw) {
   });
 
   return { businessId: id, user: admin };
+}
+
+export async function updateBusiness(id, raw) {
+  const b = validateSignup(raw, { requireAdmin: false });
+  const [existing] = await query("SELECT * FROM businesses WHERE id = ?", [id]);
+  if (!existing) throw new Error("Business not found");
+  const [emailTaken] = await query(
+    "SELECT id FROM staff_users WHERE email = ? AND business_id <> ? LIMIT 1",
+    [b.email, id],
+  );
+  if (emailTaken) throw new Error("This email is already registered");
+  if (b.username) {
+    const [userTaken] = await query(
+      "SELECT id FROM staff_users WHERE username = ? AND business_id <> ? LIMIT 1",
+      [b.username, id],
+    );
+    if (userTaken) throw new Error("This username is already taken");
+  }
+  const [planRow] = await query("SELECT id FROM subscription_plans WHERE id = ? OR code = ? LIMIT 1", [
+    b.plan_id,
+    b.plan_id.toUpperCase(),
+  ]);
+  const planId = planRow?.id || existing.plan_id || "trial";
+  const fullAddress = `${b.address}, ${b.city}, ${b.state} ${b.pin_code}`;
+  const logo = b.logo_url || existing.logo_url || null;
+  const expiry = b.subscription_expires_at || existing.subscription_expires_at;
+  await query(
+    `UPDATE businesses SET
+       name=?, owner_name=?, mobile=?, email=?, address=?, gstin=?, business_type=?,
+       status=?, plan_id=?, subscription_expires_at=?, logo_url=?,
+       category=?, pan=?, city=?, state=?, pin_code=?
+     WHERE id=?`,
+    [
+      b.name,
+      b.owner_name,
+      b.mobile,
+      b.email,
+      fullAddress,
+      b.gstin,
+      b.business_type,
+      b.status,
+      planId,
+      expiry,
+      logo,
+      b.category,
+      b.pan,
+      b.city,
+      b.state,
+      b.pin_code,
+      id,
+    ],
+  );
+  await query(
+    `UPDATE company_settings
+     SET name=?, address=?, phone=?, email=?, gstin=?, pan=?, city=?, state=?, pincode=?, logo_url=?
+     WHERE business_id=?`,
+    [b.name, fullAddress, b.mobile, b.email, b.gstin, b.pan, b.city, b.state, b.pin_code, logo, id],
+  );
+  const [admin] = await query(
+    `SELECT * FROM staff_users WHERE business_id = ? AND role = 'business_admin' LIMIT 1`,
+    [id],
+  );
+  if (admin) {
+    const nextUser = b.username || admin.username;
+    const nextHash = b.password ? await hashPassword(b.password) : admin.password_hash;
+    await query(
+      `UPDATE staff_users SET email=?, first_name=?, mobile=?, username=?, password_hash=? WHERE id=?`,
+      [b.email, b.owner_name, b.mobile, nextUser, nextHash, admin.id],
+    );
+  }
+  const [row] = await query("SELECT * FROM businesses WHERE id = ?", [id]);
+  return { business: row };
 }

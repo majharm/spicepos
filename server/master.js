@@ -2,7 +2,7 @@ import { query, withTransaction } from "./db.js";
 import { hashPassword } from "./password.js";
 import { requireMaster } from "./auth.js";
 import { platformAudit } from "./audit.js";
-import { registerBusiness } from "./onboard.js";
+import { registerBusiness, updateBusiness } from "./onboard.js";
 import { defaultPerms } from "./roles.js";
 import { publicStatus } from "./auth.js";
 import { getPlatformSettings, setPlatformSetting } from "./settings.js";
@@ -140,7 +140,9 @@ export function registerMaster(app) {
   app.get("/api/master/businesses", (_req, res) =>
     send(res, async () => {
       const rows = await query(
-        `SELECT b.*, p.name AS plan_name, p.fee_monthly
+        `SELECT b.*, p.name AS plan_name, p.fee_monthly,
+                (SELECT u.username FROM staff_users u
+                 WHERE u.business_id = b.id AND u.role = 'business_admin' LIMIT 1) AS admin_username
          FROM businesses b
          LEFT JOIN subscription_plans p ON p.id = b.plan_id
          ORDER BY b.name`,
@@ -167,41 +169,22 @@ export function registerMaster(app) {
     }
   });
 
-  app.put("/api/master/businesses/:id", (req, res) =>
-    send(res, async () => {
-      const b = req.body || {};
-      await query(
-        `UPDATE businesses SET
-           name=?, owner_name=?, mobile=?, email=?, address=?, gstin=?, business_type=?,
-           status=?, plan_id=?, subscription_expires_at=?, invoice_footer=?, invoice_terms=?,
-           category=?, pan=?, city=?, state=?, pin_code=?
-         WHERE id=?`,
-        [
-          b.name,
-          b.owner_name || null,
-          b.mobile || null,
-          b.email || null,
-          b.address || null,
-          b.gstin || null,
-          b.business_type || null,
-          b.status || "active",
-          b.plan_id || null,
-          b.subscription_expires_at || null,
-          b.invoice_footer || null,
-          b.invoice_terms || null,
-          b.category || null,
-          b.pan || null,
-          b.city || null,
-          b.state || null,
-          b.pin_code || null,
-          req.params.id,
-        ],
+  app.put("/api/master/businesses/:id", async (req, res) => {
+    try {
+      const { business } = await updateBusiness(req.params.id, req.body || {});
+      await platformAudit(
+        req.auth.admin,
+        "Business Edited",
+        { module: "businesses", target_id: req.params.id, target_name: business?.name },
+        req,
       );
-      await platformAudit(req.auth.admin, "Business Edited", { module: "businesses", target_id: req.params.id, target_name: b.name }, req);
-      const [row] = await query("SELECT * FROM businesses WHERE id = ?", [req.params.id]);
-      return { ok: true, business: row };
-    }),
-  );
+      res.json({ ok: true, business });
+    } catch (err) {
+      const msg = String(err.message || err);
+      const dup = /duplicate|already (registered|taken)/i.test(msg);
+      res.status(dup ? 409 : 400).json({ error: dup ? "This business or login is already registered" : msg });
+    }
+  });
 
   app.post("/api/master/businesses/:id/status", (req, res) =>
     send(res, async () => {
