@@ -49,7 +49,7 @@ If the site shows **403 Forbidden / Access to this resource on the server is den
 4. Do not add your own `.htaccess`.
 5. Confirm `/` opens the POS and `/api/health` returns JSON.
 
-Open `https://your-domain/api/health` — it must be JSON, not a web page or 403.
+Open `https://your-domain/pos-data/health` — it must be JSON, not a web page or 403.
 
 Hostinger sets `PORT` and `NODE_ENV=production`. The process must listen on `process.env.PORT` (already wired).
 

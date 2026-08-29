@@ -4,6 +4,7 @@ import { runTenant } from "./context.js";
 import { sha256, newToken, audit } from "./audit.js";
 import { defaultPerms, displayName, can } from "./roles.js";
 import { registerBusiness } from "./onboard.js";
+import { canonApiUrl } from "./http-path.js";
 
 const SESSION_HOURS = 12;
 
@@ -120,7 +121,8 @@ async function loadMasterSession(token) {
 export function attachAuth(req, res, next) {
   const token = cookies(req).pos_sid;
   const masterToken = cookies(req).pos_master;
-  const wantMaster = String(req.originalUrl || "").startsWith("/api/master");
+  const path = canonApiUrl(req.originalUrl || "").split("?")[0];
+  const wantMaster = path.startsWith("/api/master");
   Promise.resolve()
     .then(async () => {
       req.auth = null;
@@ -151,7 +153,7 @@ export function requireStaff(req, res, next) {
     return;
   }
   const status = publicStatus(req.auth.business);
-  const open = String(req.originalUrl || "").startsWith("/api/auth");
+  const open = canonApiUrl(req.originalUrl || "").split("?")[0].startsWith("/api/auth");
   if (!open && status !== "active") {
     res.status(403).json({
       error: "Subscription expired. Ask the platform owner to renew.",

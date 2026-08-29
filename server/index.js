@@ -13,6 +13,7 @@ import { registerMaster } from "./master.js";
 import { registerTenant } from "./tenant.js";
 import { audit } from "./audit.js";
 import { getPlatformSettings } from "./settings.js";
+import { canonApiUrl, isApiUrl } from "./http-path.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.join(__dirname, "..");
@@ -22,14 +23,18 @@ app.set("trust proxy", true);
 app.use(express.json({ limit: "8mb" }));
 app.use((req, _res, next) => {
   const raw = req.url || "";
-  if (raw.startsWith("/api/") || raw === "/api") return next();
+  if (raw === "/pos-data" || raw.startsWith("/pos-data/") || raw.startsWith("/pos-data?")) {
+    req.url = raw.replace(/^\/pos-data/, "/api") || "/api";
+  }
+  const u = req.url || "";
+  if (u.startsWith("/api/") || u === "/api") return next();
   if (
-    raw.startsWith("/auth/") ||
-    raw.startsWith("/health") ||
-    raw.startsWith("/support-contact") ||
-    raw.startsWith("/bootstrap")
+    u.startsWith("/auth/") ||
+    u.startsWith("/health") ||
+    u.startsWith("/support-contact") ||
+    u.startsWith("/bootstrap")
   ) {
-    req.url = `/api${raw}`;
+    req.url = `/api${u}`;
   }
   next();
 });
@@ -57,8 +62,8 @@ app.use((req, res, next) => {
 app.use(attachAuth);
 registerAuth(app);
 app.use((req, res, next) => {
-  const url = String(req.originalUrl || "");
-  if (!url.startsWith("/api")) return next();
+  const url = canonApiUrl(req.originalUrl || "");
+  if (!isApiUrl(url)) return next();
   if (
     url.startsWith("/api/auth") ||
     url.startsWith("/api/health") ||

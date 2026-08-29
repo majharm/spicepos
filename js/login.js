@@ -25,7 +25,7 @@ async function readJson(res) {
     return text ? JSON.parse(text) : {};
   } catch {
     throw new Error(
-      "Server returned a web page instead of JSON. Hostinger is not sending /api to Express. In hPanel use framework Express, entry server.js, no build command, then Restart and open /api/health",
+      "Sign-in did not reach the POS server (got a web page). After deploy, open /pos-data/health — it must be JSON. In hPanel use Express, entry server.js, empty build/output, then Redeploy and Restart.",
     );
   }
 }
@@ -37,7 +37,7 @@ loginForm.addEventListener("submit", async (e) => {
   hint.className = "hint";
   hint.textContent = "Signing in…";
   try {
-    const res = await fetch("/api/auth/login", {
+    const res = await fetch(posUrl("/api/auth/login"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -95,7 +95,7 @@ signupForm.addEventListener("submit", async (e) => {
       throw new Error("Password and confirm password do not match");
     }
     payload.logoDataUrl = await readLogo(fd.get("logo"));
-    const res = await fetch("/api/auth/signup", {
+    const res = await fetch(posUrl("/api/auth/signup"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
@@ -111,7 +111,7 @@ signupForm.addEventListener("submit", async (e) => {
   }
 });
 
-fetch("/api/support-contact")
+fetch(posUrl("/api/support-contact"))
   .then((r) => r.json())
   .then((s) => {
     if (!s.support_phone) return;

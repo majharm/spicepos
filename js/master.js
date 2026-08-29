@@ -2,7 +2,7 @@ const $ = (id) => document.getElementById(id);
 let tab = "dash";
 
 async function api(path, options) {
-  const res = await fetch(path, {
+  const res = await fetch(posUrl(path), {
     headers: { "Content-Type": "application/json" },
     ...options,
   });
@@ -12,7 +12,7 @@ async function api(path, options) {
     data = text ? JSON.parse(text) : {};
   } catch {
     throw new Error(
-      "Server returned a web page instead of JSON. Hostinger is not routing /api to Express (framework Express, entry server.js).",
+      "Sign-in did not reach the POS server (got a web page). Open /pos-data/health — it must be JSON.",
     );
   }
   if (!res.ok) throw new Error(data.error || res.statusText);

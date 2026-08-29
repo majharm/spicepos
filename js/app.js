@@ -59,7 +59,7 @@ function packLabel() {
 }
 
 async function api(path, options) {
-  const res = await fetch(path, {
+  const res = await fetch(posUrl(path), {
     headers: { "Content-Type": "application/json" },
     ...options,
   });
@@ -69,7 +69,7 @@ async function api(path, options) {
     data = text ? JSON.parse(text) : {};
   } catch {
     throw new Error(
-      "Server returned a web page instead of JSON. Hostinger is not routing /api to Express (framework Express, entry server.js).",
+      "Sign-in did not reach the POS server (got a web page). Open /pos-data/health — it must be JSON.",
     );
   }
   if (!res.ok) {
@@ -100,7 +100,7 @@ function showLogo(img, url) {
 function excelHref(sheet) {
   const from = $("rep-from")?.value || ymd();
   const to = $("rep-to")?.value || from;
-  const q = `/api/reports/excel?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`;
+  const q = posUrl(`/api/reports/excel?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`);
   return sheet ? `${q}&sheet=${encodeURIComponent(sheet)}` : q;
 }
 
@@ -1047,7 +1047,7 @@ document.addEventListener("click", async (e) => {
   const logout = e.target.closest("[data-logout]");
   if (!logout) return;
   e.preventDefault();
-  await fetch("/api/auth/logout", { method: "POST" });
+  await fetch(posUrl("/api/auth/logout"), { method: "POST" });
   location.href = "/login.html";
 });
 $("open-pos")?.addEventListener("click", () => showView("counter"));
