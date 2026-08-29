@@ -1,15 +1,33 @@
 import mysql from "mysql2/promise";
 
+function fromUrl(url) {
+  const u = new URL(url);
+  return {
+    host: u.hostname,
+    port: Number(u.port || 3306),
+    user: decodeURIComponent(u.username),
+    password: decodeURIComponent(u.password),
+    database: decodeURIComponent(u.pathname.replace(/^\//, "")),
+  };
+}
+
+const creds = process.env.DATABASE_URL
+  ? fromUrl(process.env.DATABASE_URL)
+  : {
+      host: process.env.DB_HOST,
+      port: Number(process.env.DB_PORT || 3306),
+      user: process.env.DB_USER,
+      password: process.env.DB_PASSWORD,
+      database: process.env.DB_NAME,
+    };
+
 const pool = mysql.createPool({
-  host: process.env.DB_HOST,
-  port: Number(process.env.DB_PORT || 3306),
-  user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
-  database: process.env.DB_NAME,
+  ...creds,
   waitForConnections: true,
-  connectionLimit: 8,
+  connectionLimit: Number(process.env.DB_POOL || 8),
   charset: "utf8mb4",
   timezone: "Z",
+  ssl: process.env.DB_SSL === "1" ? { rejectUnauthorized: false } : undefined,
 });
 
 export const BUSINESS_ID =

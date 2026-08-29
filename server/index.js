@@ -24,6 +24,16 @@ app.use((req, res, next) => {
     res.status(404).end();
     return;
   }
+  if (
+    req.path.startsWith("/server/") ||
+    req.path === "/server.js" ||
+    req.path.startsWith("/node_modules/") ||
+    req.path === "/package.json" ||
+    req.path === "/package-lock.json"
+  ) {
+    res.status(404).end();
+    return;
+  }
   next();
 });
 app.use(attachAuth);
@@ -451,8 +461,8 @@ const port = Number(process.env.PORT || 5173);
 ensureSchema()
   .then(() => seedPlatform())
   .then(() => {
-    app.listen(port, "0.0.0.0", () => {
-      console.log(`Multi-tenant POS http://0.0.0.0:${port}`);
+    app.listen(port, () => {
+      console.log(`Multi-tenant POS listening on ${port}`);
     });
   })
   .catch((err) => {

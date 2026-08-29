@@ -19,19 +19,22 @@ function cookies(req) {
   return out;
 }
 
+function cookieFlags() {
+  const secure =
+    process.env.COOKIE_SECURE === "1" ||
+    (process.env.NODE_ENV === "production" && process.env.COOKIE_SECURE !== "0");
+  return ["HttpOnly", "SameSite=Lax", secure ? "Secure" : ""].filter(Boolean).join("; ");
+}
+
 function setCookie(res, name, value, maxAgeSec) {
-  const parts = [
-    `${name}=${encodeURIComponent(value)}`,
-    "Path=/",
-    "HttpOnly",
-    "SameSite=Lax",
-    `Max-Age=${maxAgeSec}`,
-  ];
-  res.append("Set-Cookie", parts.join("; "));
+  res.append(
+    "Set-Cookie",
+    `${name}=${encodeURIComponent(value)}; Path=/; ${cookieFlags()}; Max-Age=${maxAgeSec}`,
+  );
 }
 
 function clearCookie(res, name) {
-  res.append("Set-Cookie", `${name}=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax`);
+  res.append("Set-Cookie", `${name}=; Path=/; Max-Age=0; ${cookieFlags()}`);
 }
 
 function clientIp(req) {
