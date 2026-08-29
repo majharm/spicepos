@@ -125,10 +125,12 @@ async function render() {
         <button class="btn primary" type="submit">Create business</button>
       </form>
       <div class="table-wrap">${table(
-        ["Name", "Code", "Status", "Plan", "Fee / month", "Expiry", ""],
+        ["Name", "Owner", "City", "Category", "Status", "Plan", "Fee / month", "Expiry", ""],
         rows.map((b) => [
           b.name,
-          b.code,
+          b.owner_name || "—",
+          b.city || "—",
+          b.category || b.business_type || "—",
           b.computed_status,
           b.plan_name || b.plan_id,
           money(b.fee_monthly),

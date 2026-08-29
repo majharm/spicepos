@@ -3,6 +3,7 @@ import { hashPassword, verifyPassword } from "./password.js";
 import { runTenant } from "./context.js";
 import { sha256, newToken, audit } from "./audit.js";
 import { defaultPerms, displayName, can } from "./roles.js";
+import { registerBusiness } from "./onboard.js";
 
 const SESSION_HOURS = 12;
 
@@ -271,6 +272,43 @@ export function registerAuth(app) {
       });
     } catch (err) {
       res.status(500).json({ error: String(err.message) });
+    }
+  });
+
+  app.post("/api/auth/signup", async (req, res) => {
+    try {
+      const { user } = await registerBusiness(req.body || {});
+      const [business] = await query("SELECT * FROM businesses WHERE id = ?", [user.business_id]);
+      const token = newToken();
+      await query(
+        `INSERT INTO staff_sessions (id, staff_user_id, token_hash, expires_at, business_id, ip, user_agent, branch_id)
+         VALUES (?,?,?,?,?,?,?,?)`,
+        [
+          crypto.randomUUID(),
+          user.id,
+          sha256(token),
+          new Date(Date.now() + SESSION_HOURS * 3600 * 1000),
+          user.business_id,
+          clientIp(req),
+          String(req.headers["user-agent"] || "").slice(0, 250),
+          user.branch_id,
+        ],
+      );
+      setCookie(res, "pos_sid", token, SESSION_HOURS * 3600);
+      res.json({
+        ok: true,
+        user: {
+          id: user.id,
+          email: user.email,
+          name: displayName(user),
+          role: user.role,
+        },
+        business: { id: business.id, name: business.name, status: "active" },
+      });
+    } catch (err) {
+      const msg = String(err.message || err);
+      const dup = /duplicate|already (registered|taken)/i.test(msg);
+      res.status(dup ? 409 : 400).json({ error: dup ? "This business or login is already registered" : msg });
     }
   });
 

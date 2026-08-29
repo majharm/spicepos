@@ -13,6 +13,56 @@
   padding: 32px 28px;
   box-shadow: 0 24px 48px rgba(0, 0, 0, 0.28);
 }
+.auth-card.signup {
+  width: min(760px, 100%);
+}
+.auth-tabs {
+  display: flex;
+  gap: 8px;
+  margin: 16px 0 0;
+}
+.auth-tab {
+  flex: 1;
+  border: 1px solid var(--line);
+  background: #f4f7fb;
+  color: var(--muted);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+}
+.auth-tab.is-active {
+  background: var(--navy, #0b1726);
+  border-color: var(--navy, #0b1726);
+  color: #fff;
+}
+.signup-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px 14px;
+}
+.signup-grid .full {
+  grid-column: 1 / -1;
+}
+.auth-card select,
+.auth-card textarea {
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: #fff;
+  font: inherit;
+}
+.auth-note {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+@media (max-width: 700px) {
+  .signup-grid {
+    grid-template-columns: 1fr;
+  }
+}
 .auth-card .brand-mark { margin-bottom: 16px; }
 .auth-card h1, .auth-card h2 {
   font-family: var(--font);
