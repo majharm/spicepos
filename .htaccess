@@ -1,6 +1,0 @@
-# Used when the app root is public_html (classic Node.js / Passenger).
-# Hostinger Node.js Web Apps keep the process under domains/{domain}/nodejs
-# and regenerate public_html/.htaccess — Redeploy if that copy is stale.
-PassengerEnabled On
-PassengerAppType node
-PassengerStartupFile server.js

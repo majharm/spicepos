@@ -40,10 +40,11 @@ This app is **Express + MySQL**, not a React/Vite frontend. In hPanel use **Node
 | Output directory | leave **blank** |
 | Entry file | `server.js` (or `index.js` / `app.js`) |
 
-Do **not** deploy this as a normal PHP/static website in `public_html`. If `master.html` opens but login returns HTML/JSON errors, Hostinger is serving files from Apache. Delete that website slot and create **Add website → Node.js web app → Express**, with **no output directory** and **no build command**, then Redeploy.
+Do **not** deploy this as a normal PHP/static website in `public_html`. Create **Add website → Node.js web app → Express**, with **no output directory** and **no build command**.
 
-Open `https://your-domain/api/health` — it must be JSON. If it is a web page, the Node process is not receiving traffic.
-| Start | `npm start` → `node server.js` |
+If the site shows **403 Forbidden / Access to this resource on the server is denied**, Hostinger’s `public_html/.htaccess` is missing or stale (this often happens after a redeploy). In hPanel click **Redeploy** so it can regenerate that file. Do not upload a custom `.htaccess`. Then **Restart** the Node process.
+
+Open `https://your-domain/api/health` — it must be JSON, not a web page or 403.
 
 Hostinger sets `PORT` and `NODE_ENV=production`. The process must listen on `process.env.PORT` (already wired).
 
