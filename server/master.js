@@ -112,6 +112,7 @@ export function registerMaster(app) {
         .toUpperCase()
         .replaceAll(/[^A-Z0-9]+/g, "")
         .slice(0, 32) || existing.code;
+      const n = (v, fallback) => (v === undefined || v === null || v === "" ? fallback : Number(v));
       await query(
         `UPDATE subscription_plans SET
            code=?, name=?, max_branches=?, max_users=?, max_devices=?, max_products=?,
@@ -120,12 +121,12 @@ export function registerMaster(app) {
         [
           code,
           b.name || existing.name,
-          Number(b.max_branches) || 1,
-          Number(b.max_users) || 3,
-          Number(b.max_devices) || 2,
-          Number(b.max_products) || 500,
-          Number(b.max_invoices) || existing.max_invoices || 1000,
-          Number(b.fee_monthly) || 0,
+          n(b.max_branches, existing.max_branches),
+          n(b.max_users, existing.max_users),
+          n(b.max_devices, existing.max_devices),
+          n(b.max_products, existing.max_products),
+          n(b.max_invoices, existing.max_invoices),
+          n(b.fee_monthly, existing.fee_monthly),
           b.active === false || b.active === 0 || b.active === "0" ? 0 : 1,
           id,
         ],
