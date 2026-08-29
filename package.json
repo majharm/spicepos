@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
+  "main": "server.js",
   "description": "ATAV multi-tenant POS — Express + MySQL (Hostinger Node.js web app).",
   "engines": {
     "node": "20.x"
