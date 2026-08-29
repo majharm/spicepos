@@ -72,7 +72,8 @@ Do **not** use the Web App “Connect a database” wizard (that is for Supabase
 5. After a green build, open Runtime Logs. You should see `Multi-tenant POS listening on …`.
 6. Open `/login.html` and `/master.html` on your domain.
 
-If the site 403s after a redeploy, Redeploy so Hostinger can regenerate `public_html/.htaccess`. If the app is not responding, check Runtime Logs for missing `DB_*` variables or the wrong bind port.
+If login shows `Unexpected token '<', "<!DOCTYPE "... is not valid JSON`, the browser got an HTML page for `/api/auth/login`. That means Apache is answering, not Express. Confirm framework **Express**, entry **`server.js`**, build command empty, then **Restart**. Open `https://your-domain/api/health` — you must see `{"ok":true,...}` JSON, not a website. Also set `DB_HOST=localhost` (same-account MySQL) or the process may crash before it can serve `/api`.
+
 
 Schema updates run on boot (`ensureSchema`). Master Admin is created from `MASTER_ADMIN_EMAIL` / `MASTER_ADMIN_PASSWORD` if that email is not already in `platform_admins`.
 

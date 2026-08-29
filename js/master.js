@@ -6,7 +6,15 @@ async function api(path, options) {
     headers: { "Content-Type": "application/json" },
     ...options,
   });
-  const data = await res.json().catch(() => ({}));
+  const text = await res.text();
+  let data = {};
+  try {
+    data = text ? JSON.parse(text) : {};
+  } catch {
+    throw new Error(
+      "Server returned a web page instead of JSON. Hostinger is not routing /api to Express (framework Express, entry server.js).",
+    );
+  }
   if (!res.ok) throw new Error(data.error || res.statusText);
   return data;
 }

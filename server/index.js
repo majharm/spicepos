@@ -458,14 +458,12 @@ app.get("/", (_req, res) => {
 app.use(express.static(root));
 
 const port = Number(process.env.PORT || 5173);
-ensureSchema()
-  .then(() => seedPlatform())
-  .then(() => {
-    app.listen(port, () => {
-      console.log(`Multi-tenant POS listening on ${port}`);
+const host = process.env.HOST || "0.0.0.0";
+app.listen(port, host, () => {
+  console.log(`Multi-tenant POS listening on ${host}:${port}`);
+  ensureSchema()
+    .then(() => seedPlatform())
+    .catch((err) => {
+      console.error("Schema/seed error (API is still up; check DB env vars)", err);
     });
-  })
-  .catch((err) => {
-    console.error(err);
-    process.exit(1);
-  });
+});

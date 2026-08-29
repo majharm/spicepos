@@ -19,6 +19,17 @@ if (new URLSearchParams(location.search).get("tab") === "signup" || location.has
   document.querySelector('[data-panel="signup"]')?.click();
 }
 
+async function readJson(res) {
+  const text = await res.text();
+  try {
+    return text ? JSON.parse(text) : {};
+  } catch {
+    throw new Error(
+      "Server returned a web page instead of JSON. Hostinger is not sending /api to Express. In hPanel use framework Express, entry server.js, no build command, then Restart and open /api/health",
+    );
+  }
+}
+
 loginForm.addEventListener("submit", async (e) => {
   e.preventDefault();
   const hint = document.getElementById("hint");
@@ -34,7 +45,7 @@ loginForm.addEventListener("submit", async (e) => {
         password: fd.get("password"),
       }),
     });
-    const data = await res.json();
+    const data = await readJson(res);
     if (!res.ok) throw new Error(data.error || "Login failed");
     if (data.expired) {
       hint.textContent = "Subscription expired. You can view the renewal message after opening the dashboard.";
@@ -89,7 +100,7 @@ signupForm.addEventListener("submit", async (e) => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
-    const data = await res.json().catch(() => ({}));
+    const data = await readJson(res);
     if (!res.ok) throw new Error(data.error || "Could not create business");
     location.href = "/";
   } catch (err) {

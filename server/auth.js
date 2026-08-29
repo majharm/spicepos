@@ -19,22 +19,21 @@ function cookies(req) {
   return out;
 }
 
-function cookieFlags() {
-  const secure =
-    process.env.COOKIE_SECURE === "1" ||
-    (process.env.NODE_ENV === "production" && process.env.COOKIE_SECURE !== "0");
+function cookieFlags(req) {
+  const proto = String(req?.headers["x-forwarded-proto"] || "").split(",")[0].trim();
+  const secure = process.env.COOKIE_SECURE === "1" || proto === "https";
   return ["HttpOnly", "SameSite=Lax", secure ? "Secure" : ""].filter(Boolean).join("; ");
 }
 
-function setCookie(res, name, value, maxAgeSec) {
+function setCookie(res, name, value, maxAgeSec, req) {
   res.append(
     "Set-Cookie",
-    `${name}=${encodeURIComponent(value)}; Path=/; ${cookieFlags()}; Max-Age=${maxAgeSec}`,
+    `${name}=${encodeURIComponent(value)}; Path=/; ${cookieFlags(req)}; Max-Age=${maxAgeSec}`,
   );
 }
 
-function clearCookie(res, name) {
-  res.append("Set-Cookie", `${name}=; Path=/; Max-Age=0; ${cookieFlags()}`);
+function clearCookie(res, name, req) {
+  res.append("Set-Cookie", `${name}=; Path=/; Max-Age=0; ${cookieFlags(req)}`);
 }
 
 function clientIp(req) {
@@ -191,7 +190,7 @@ async function findStaff(identifier) {
   if (!id) return null;
   const [row] = await query(
     `SELECT * FROM staff_users
-     WHERE email = ? OR username = ? OR mobile = ? OR clerk_user_id = ?
+     WHERE LOWER(email) = ? OR username = ? OR mobile = ? OR clerk_user_id = ?
      LIMIT 1`,
     [id.toLowerCase(), id, id, id],
   );
@@ -252,7 +251,7 @@ export function registerAuth(app) {
           branchId || user.branch_id,
         ],
       );
-      setCookie(res, "pos_sid", token, SESSION_HOURS * 3600);
+      setCookie(res, "pos_sid", token, SESSION_HOURS * 3600, req);
       runTenant({ businessId: user.business_id, branchId: user.branch_id, user }, async () => {
         await audit("User Login", { module: "auth" }, req);
       });
@@ -297,7 +296,7 @@ export function registerAuth(app) {
           user.branch_id,
         ],
       );
-      setCookie(res, "pos_sid", token, SESSION_HOURS * 3600);
+      setCookie(res, "pos_sid", token, SESSION_HOURS * 3600, req);
       res.json({
         ok: true,
         user: {
@@ -338,7 +337,7 @@ export function registerAuth(app) {
           String(req.headers["user-agent"] || "").slice(0, 250),
         ],
       );
-      setCookie(res, "pos_master", token, SESSION_HOURS * 3600);
+      setCookie(res, "pos_master", token, SESSION_HOURS * 3600, req);
       await query(
         `INSERT INTO staff_audit_logs (
            id, actor_clerk_user_id, actor_name, module, target_name, action, details, business_id, ip
@@ -371,8 +370,8 @@ export function registerAuth(app) {
         sha256(master),
       ]);
     }
-    clearCookie(res, "pos_sid");
-    clearCookie(res, "pos_master");
+    clearCookie(res, "pos_sid", req);
+    clearCookie(res, "pos_master", req);
     res.json({ ok: true });
   });
 
