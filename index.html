@@ -64,10 +64,11 @@
       <div class="dialog">
         <h3>Unlock counter</h3>
         <p>Enter cashier PIN. Demo PIN is <b>1234</b>.</p>
-        <form class="pin" id="pin-form">
-          <input id="pin" type="password" inputmode="numeric" maxlength="8" autocomplete="current-password" autofocus />
-          <button class="btn primary" type="submit">Unlock</button>
+        <form class="pin" id="pin-form" action="#" method="post">
+          <input id="pin" type="text" inputmode="numeric" maxlength="8" autocomplete="one-time-code" placeholder="PIN" />
+          <button class="btn primary" id="btn-unlock" type="submit">Unlock</button>
         </form>
+        <button class="btn" id="btn-demo-pin" type="button">Fill demo PIN 1234</button>
         <div class="hint" id="pin-hint"></div>
       </div>
     </div>
@@ -82,6 +83,7 @@
       </div>
     </div>
 
-    <script type="module" src="./js/app.js"></script>
+    <script src="./js/pos.iife.js"></script>
+    <noscript>Spice POS needs JavaScript. Open this folder with a local server or use the demo link in the README.</noscript>
   </body>
 </html>

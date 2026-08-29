@@ -5,7 +5,8 @@
   "type": "module",
   "description": "Counter POS for a spice shop: catalog, cart, GST, cash/UPI checkout, and order history.",
   "scripts": {
-    "start": "python3 -m http.server 5173 --bind 127.0.0.1",
+    "start": "python3 -m http.server 5173 --bind 0.0.0.0",
+    "bundle": "node scripts/bundle.mjs",
     "test": "node --test js/money.test.js js/store.test.js"
   }
 }

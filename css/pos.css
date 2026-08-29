@@ -218,6 +218,7 @@ button { cursor: pointer; }
   gap: 8px;
   margin: 16px 0;
 }
+#btn-demo-pin { width: 100%; }
 .pin input {
   flex: 1;
   padding: 12px;

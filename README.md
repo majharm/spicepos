@@ -1,20 +1,27 @@
 # Spice POS
 
-Counter POS for a spice shop. Runs in the browser, keeps the shift on this device, and prices everything in **paise** so GST and change cannot drift from floating-point rupees.
+Browser counter for a spice shop. Totals are integer **paise**, so GST and change do not drift.
 
-## Run
+## Open the till
+
+**Live demo (this branch):**  
+https://raw.githack.com/majharm/spicepos/cursor/pos-qa-checklist-fixes-1a88/index.html
+
+Click **Fill demo PIN 1234**. Or type `1234` and Unlock.
+
+`http://127.0.0.1:5173` only works on the machine that is running the server. It will not load from a Cloud Agent if you open that address on your laptop.
+
+You can also double-click `index.html` after checking out this branch — no install needed.
+
+```bash
+npm start
+```
+
+Then open http://127.0.0.1:5173 on **that same computer**.
 
 ```bash
 npm test
-python3 -m http.server 5173 --bind 127.0.0.1
-```
-
-Open `http://127.0.0.1:5173`. Unlock with PIN **1234**.
-
-Optional browser checklist (needs Chrome + `npm install puppeteer-core`):
-
-```bash
-node scripts/e2e.mjs
+npm run bundle
 ```
 
 ## Shift flow

@@ -346,7 +346,16 @@ document.getElementById("btn-lock").addEventListener("click", () => {
 
 els.pinForm.addEventListener("submit", (event) => {
   event.preventDefault();
-  if (!verifyPin(els.pin.value)) {
+  unlockWithPin(els.pin.value);
+});
+
+document.getElementById("btn-demo-pin").addEventListener("click", () => {
+  els.pin.value = "1234";
+  unlockWithPin("1234");
+});
+
+function unlockWithPin(pin) {
+  if (!verifyPin(pin)) {
     els.pinHint.textContent = "Wrong PIN";
     els.pinHint.className = "hint error";
     return;
@@ -355,7 +364,7 @@ els.pinForm.addEventListener("submit", (event) => {
   els.pinHint.textContent = "";
   state.locked = false;
   renderAll();
-});
+}
 
 document.addEventListener("keydown", (event) => {
   if (event.key === "/" && document.activeElement !== els.search && document.activeElement !== els.tender && document.activeElement !== els.pin) {
