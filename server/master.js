@@ -2,6 +2,7 @@ import { query, withTransaction } from "./db.js";
 import { hashPassword } from "./password.js";
 import { requireMaster } from "./auth.js";
 import { platformAudit } from "./audit.js";
+import { registerBusiness } from "./onboard.js";
 import { defaultPerms } from "./roles.js";
 import { publicStatus } from "./auth.js";
 import { getPlatformSettings, setPlatformSetting } from "./settings.js";
@@ -113,90 +114,23 @@ export function registerMaster(app) {
     }),
   );
 
-  app.post("/api/master/businesses", (req, res) =>
-    send(res, async () => {
-      const b = req.body || {};
-      if (!b.name) throw new Error("Business name is required");
-      const id = crypto.randomUUID();
-      const code = String(b.code || b.name)
-        .toUpperCase()
-        .replaceAll(/[^A-Z0-9]+/g, "")
-        .slice(0, 12) || `B${Date.now()}`;
-      await query(
-        `INSERT INTO businesses (
-           id, code, name, status, owner_name, mobile, email, address, gstin,
-           business_type, plan_id, subscription_expires_at, invoice_footer, invoice_terms
-         ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-        [
-          id,
-          code,
-          String(b.name).trim(),
-          b.status || "active",
-          b.owner_name || null,
-          b.mobile || null,
-          b.email || null,
-          b.address || null,
-          b.gstin || null,
-          b.business_type || "retail",
-          b.plan_id || "trial",
-          b.subscription_expires_at || null,
-          b.invoice_footer || null,
-          b.invoice_terms || null,
-        ],
+  app.post("/api/master/businesses", async (req, res) => {
+    try {
+      const { businessId } = await registerBusiness(req.body || {});
+      await platformAudit(
+        req.auth.admin,
+        "Business Created",
+        { module: "businesses", target_id: businessId, target_name: req.body?.name || req.body?.businessName },
+        req,
       );
-      await query(
-        `INSERT INTO company_settings (id, name, address, phone, email, gstin, business_id)
-         VALUES (?,?,?,?,?,?,?)`,
-        [crypto.randomUUID(), b.name, b.address || null, b.mobile || null, b.email || null, b.gstin || null, id],
-      );
-      const branchId = crypto.randomUUID();
-      await query(`INSERT INTO branches (id, business_id, name, status) VALUES (?,?, 'Main Branch', 'active')`, [
-        branchId,
-        id,
-      ]);
-      await query(
-        `INSERT INTO pos_devices (id, business_id, branch_id, name, code, status)
-         VALUES (?,?, 'POS 01', 'POS-01', 'active')`,
-        [crypto.randomUUID(), id, branchId],
-      );
-      await query(
-        `INSERT INTO number_sequences (name, next_value, business_id) VALUES
-         ('order', 10001, ?), ('customer', 1, ?), ('item', 1, ?), ('purchase', 10001, ?)`,
-        [id, id, id, id],
-      );
-      await query(
-        `INSERT INTO customers (id, code, name, mobile, type, outstanding, business_id)
-         VALUES (?, 'CUS-001', 'Walk-in', '0000000000', 'b2c', 0, ?)`,
-        [crypto.randomUUID(), id],
-      );
-      if (b.admin_email && b.admin_password) {
-        const uid = crypto.randomUUID();
-        await query(
-          `INSERT INTO staff_users (
-             id, clerk_user_id, email, first_name, last_name, role, status, password_hash,
-             business_id, branch_id, permissions_json, username, mobile
-           ) VALUES (?,?,?,?,?,?, 'active', ?,?,?,?,?,?)`,
-          [
-            uid,
-            `local:${uid}`,
-            String(b.admin_email).toLowerCase(),
-            b.admin_name || "Admin",
-            "",
-            "business_admin",
-            await hashPassword(b.admin_password),
-            id,
-            branchId,
-            JSON.stringify(defaultPerms("business_admin")),
-            b.admin_username || String(b.admin_email).split("@")[0],
-            b.mobile || null,
-          ],
-        );
-      }
-      await platformAudit(req.auth.admin, "Business Created", { module: "businesses", target_id: id, target_name: b.name }, req);
-      const [row] = await query("SELECT * FROM businesses WHERE id = ?", [id]);
-      return { ok: true, business: row };
-    }),
-  );
+      const [row] = await query("SELECT * FROM businesses WHERE id = ?", [businessId]);
+      res.json({ ok: true, business: row });
+    } catch (err) {
+      const msg = String(err.message || err);
+      const dup = /duplicate|already (registered|taken)/i.test(msg);
+      res.status(dup ? 409 : 400).json({ error: dup ? "This business or login is already registered" : msg });
+    }
+  });
 
   app.put("/api/master/businesses/:id", (req, res) =>
     send(res, async () => {
@@ -204,7 +138,8 @@ export function registerMaster(app) {
       await query(
         `UPDATE businesses SET
            name=?, owner_name=?, mobile=?, email=?, address=?, gstin=?, business_type=?,
-           status=?, plan_id=?, subscription_expires_at=?, invoice_footer=?, invoice_terms=?
+           status=?, plan_id=?, subscription_expires_at=?, invoice_footer=?, invoice_terms=?,
+           category=?, pan=?, city=?, state=?, pin_code=?
          WHERE id=?`,
         [
           b.name,
@@ -219,6 +154,11 @@ export function registerMaster(app) {
           b.subscription_expires_at || null,
           b.invoice_footer || null,
           b.invoice_terms || null,
+          b.category || null,
+          b.pan || null,
+          b.city || null,
+          b.state || null,
+          b.pin_code || null,
           req.params.id,
         ],
       );

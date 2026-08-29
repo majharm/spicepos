@@ -32,7 +32,7 @@ export function validateSignup(body) {
     category: pick(raw, "category", "businessCategory"),
     owner_name: pick(raw, "owner_name", "ownerName"),
     mobile: pick(raw, "mobile"),
-    email: pick(raw, "email"),
+    email: pick(raw, "email", "admin_email"),
     gstin: pick(raw, "gstin", "gstNumber"),
     pan: pick(raw, "pan", "panNumber"),
     address: pick(raw, "address"),
@@ -40,9 +40,11 @@ export function validateSignup(body) {
     state: pick(raw, "state"),
     pin_code: pick(raw, "pin_code", "pinCode"),
     logo_url: pick(raw, "logo_url", "logoDataUrl"),
-    username: pick(raw, "username", "adminUsername"),
-    password: pick(raw, "password"),
-    confirm_password: pick(raw, "confirm_password", "confirmPassword"),
+    username: pick(raw, "username", "adminUsername", "admin_username"),
+    password: pick(raw, "password", "admin_password"),
+    confirm_password: pick(raw, "confirm_password", "confirmPassword", "admin_password_confirm"),
+    plan_id: pick(raw, "plan_id"),
+    subscription_expires_at: pick(raw, "subscription_expires_at"),
   };
   for (const key of REQUIRED) {
     if (!String(b[key] || "").trim()) throw new Error(`${key.replaceAll("_", " ")} is required`);
@@ -80,6 +82,8 @@ export function validateSignup(body) {
     logo_url: logo || null,
     username,
     password: String(b.password),
+    plan_id: String(b.plan_id || "trial").trim() || "trial",
+    subscription_expires_at: String(b.subscription_expires_at || "").trim() || null,
   };
 }
 
@@ -97,13 +101,20 @@ export async function registerBusiness(raw) {
   const [nameHit] = await query("SELECT id FROM businesses WHERE name = ? LIMIT 1", [shopName]);
   if (nameHit) shopName = `${b.name} (${b.city})`;
 
+  const [planRow] = await query("SELECT id FROM subscription_plans WHERE id = ? OR code = ? LIMIT 1", [
+    b.plan_id,
+    b.plan_id.toUpperCase(),
+  ]);
+  const planId = planRow?.id || "trial";
+  const expiry = b.subscription_expires_at;
+
   const admin = await withTransaction(async (conn) => {
     await conn.query(
       `INSERT INTO businesses (
          id, code, name, status, owner_name, mobile, email, address, gstin,
          business_type, plan_id, subscription_expires_at, logo_url,
          category, pan, city, state, pin_code
-       ) VALUES (?,?,?,?,?,?,?,?,?,?, 'trial', DATE_ADD(CURDATE(), INTERVAL 30 DAY), ?,?,?,?,?,?)`,
+       ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       [
         id,
         code,
@@ -115,6 +126,8 @@ export async function registerBusiness(raw) {
         fullAddress,
         b.gstin,
         b.business_type,
+        planId,
+        expiry,
         b.logo_url,
         b.category,
         b.pan,
@@ -123,6 +136,12 @@ export async function registerBusiness(raw) {
         b.pin_code,
       ],
     );
+    if (!expiry) {
+      await conn.query(
+        `UPDATE businesses SET subscription_expires_at = DATE_ADD(CURDATE(), INTERVAL 30 DAY) WHERE id = ?`,
+        [id],
+      );
+    }
     await conn.query(
       `INSERT INTO company_settings (id, name, address, phone, email, gstin, pan, city, state, pincode, logo_url, business_id)
        VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,

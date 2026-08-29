@@ -15,6 +15,86 @@ function money(n) {
   return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR" }).format(Number(n) || 0);
 }
 
+const BIZ_TYPES = ["Retail", "Wholesale", "Distributor", "Restaurant", "Cafe", "Grocery", "Pharmacy", "Electronics", "Fashion", "Services", "Other"];
+const BIZ_CATEGORIES = [
+  "Spices & masala",
+  "Kirana / FMCG",
+  "Supermarket",
+  "Apparel",
+  "Mobile & electronics",
+  "Food & beverage",
+  "Hardware",
+  "Jewellery",
+  "Medical",
+  "General trade",
+  "Other",
+];
+const IN_STATES = [
+  "Andhra Pradesh",
+  "Arunachal Pradesh",
+  "Assam",
+  "Bihar",
+  "Chhattisgarh",
+  "Goa",
+  "Gujarat",
+  "Haryana",
+  "Himachal Pradesh",
+  "Jharkhand",
+  "Karnataka",
+  "Kerala",
+  "Madhya Pradesh",
+  "Maharashtra",
+  "Manipur",
+  "Meghalaya",
+  "Mizoram",
+  "Nagaland",
+  "Odisha",
+  "Punjab",
+  "Rajasthan",
+  "Sikkim",
+  "Tamil Nadu",
+  "Telangana",
+  "Tripura",
+  "Uttar Pradesh",
+  "Uttarakhand",
+  "West Bengal",
+  "Delhi",
+  "Jammu and Kashmir",
+  "Ladakh",
+  "Puducherry",
+  "Chandigarh",
+  "Andaman and Nicobar Islands",
+  "Dadra and Nagar Haveli and Daman and Diu",
+  "Lakshadweep",
+];
+
+function options(list, placeholder) {
+  return `<option value="">${placeholder}</option>${list.map((v) => `<option>${v}</option>`).join("")}`;
+}
+
+function readLogo(file) {
+  if (!file || !file.size) return Promise.resolve("");
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+      const max = 280;
+      const scale = Math.min(1, max / Math.max(img.width, img.height));
+      canvas.width = Math.max(1, Math.round(img.width * scale));
+      canvas.height = Math.max(1, Math.round(img.height * scale));
+      canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
+      URL.revokeObjectURL(url);
+      resolve(canvas.toDataURL("image/jpeg", 0.82));
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error("Could not read logo"));
+    };
+    img.src = url;
+  });
+}
+
 function showLogin(on) {
   $("master-login").hidden = !on;
   $("panel").hidden = on;
@@ -112,17 +192,66 @@ async function render() {
       const planOptions = plans
         .map((p) => `<option value="${p.id}">${p.name} · ${money(p.fee_monthly)} / month</option>`)
         .join("");
-      body.innerHTML = `<form class="settings wide" id="biz-form">
-        <label>Name <input name="name" required /></label>
-        <label>Owner <input name="owner_name" /></label>
-        <label>Mobile <input name="mobile" /></label>
-        <label>Email <input name="email" /></label>
-        <label>Type <input name="business_type" value="retail" /></label>
-        <label>Plan <select name="plan_id">${planOptions}</select></label>
-        <label>Expiry <input name="subscription_expires_at" type="date" /></label>
-        <label>Admin email <input name="admin_email" /></label>
-        <label>Admin password <input name="admin_password" type="password" /></label>
+      body.innerHTML = `<form class="settings wide biz-create" id="biz-form">
+        <h3 class="full">Add business</h3>
+        <div class="signup-grid">
+          <label class="full">Business Name *
+            <input name="businessName" required maxlength="180" />
+          </label>
+          <label>Business Type *
+            <select name="businessType" required>${options(BIZ_TYPES, "Select type")}</select>
+          </label>
+          <label>Business Category *
+            <select name="businessCategory" required>${options(BIZ_CATEGORIES, "Select category")}</select>
+          </label>
+          <label>Owner Name *
+            <input name="ownerName" required maxlength="120" />
+          </label>
+          <label>Mobile Number *
+            <input name="mobile" type="tel" required inputmode="numeric" maxlength="15" placeholder="10-digit mobile" />
+          </label>
+          <label class="full">Email ID *
+            <input name="email" type="email" required maxlength="160" />
+          </label>
+          <label>GST Number
+            <input name="gstNumber" maxlength="20" placeholder="Optional" />
+          </label>
+          <label>PAN Number
+            <input name="panNumber" maxlength="12" placeholder="Optional" />
+          </label>
+          <label class="full">Address *
+            <textarea name="address" required rows="2" maxlength="500"></textarea>
+          </label>
+          <label>City *
+            <input name="city" required maxlength="80" />
+          </label>
+          <label>State *
+            <select name="state" required>${options(IN_STATES, "Select state")}</select>
+          </label>
+          <label>PIN Code *
+            <input name="pinCode" required inputmode="numeric" maxlength="6" placeholder="6-digit PIN" />
+          </label>
+          <label>Business Logo
+            <input name="logo" type="file" accept="image/*" />
+          </label>
+          <label>Admin Username *
+            <input name="adminUsername" required maxlength="32" autocomplete="off" />
+          </label>
+          <label>Password *
+            <input name="password" type="password" required minlength="8" autocomplete="new-password" />
+          </label>
+          <label class="full">Confirm Password *
+            <input name="confirmPassword" type="password" required minlength="8" autocomplete="new-password" />
+          </label>
+          <label>Plan
+            <select name="plan_id">${planOptions}</select>
+          </label>
+          <label>Expiry
+            <input name="subscription_expires_at" type="date" />
+          </label>
+        </div>
         <button class="btn primary" type="submit">Create business</button>
+        <p class="hint full" id="biz-hint"></p>
       </form>
       <div class="table-wrap">${table(
         ["Name", "Owner", "City", "Category", "Status", "Plan", "Fee / month", "Expiry", ""],
@@ -141,9 +270,25 @@ async function render() {
       )}</div>`;
       $("biz-form").onsubmit = async (e) => {
         e.preventDefault();
-        const fd = Object.fromEntries(new FormData(e.target).entries());
-        await api("/api/master/businesses", { method: "POST", body: JSON.stringify(fd) });
-        render();
+        const hint = $("biz-hint");
+        hint.className = "hint";
+        hint.textContent = "Creating business…";
+        const form = e.target;
+        const fd = new FormData(form);
+        const payload = Object.fromEntries(fd);
+        delete payload.logo;
+        const btn = form.querySelector("button[type=submit]");
+        btn.disabled = true;
+        try {
+          payload.logoDataUrl = await readLogo(fd.get("logo"));
+          await api("/api/master/businesses", { method: "POST", body: JSON.stringify(payload) });
+          render();
+        } catch (err) {
+          hint.textContent = err.message;
+          hint.className = "hint error";
+        } finally {
+          btn.disabled = false;
+        }
       };
       body.querySelectorAll("[data-act]").forEach((btn) => {
         btn.onclick = async () => {

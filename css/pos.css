@@ -442,6 +442,27 @@ tr:hover td { background: #f8fafc; }
   grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
   align-items: end;
 }
+.settings.wide.biz-create {
+  grid-template-columns: 1fr;
+  align-items: stretch;
+  max-width: 960px;
+}
+.settings.wide.biz-create h3 {
+  margin: 0 0 4px;
+  font-size: 16px;
+}
+.settings.wide.biz-create .signup-grid {
+  margin: 0;
+}
+.settings textarea,
+.signup-grid select,
+.signup-grid textarea {
+  font: inherit;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: #fff;
+}
 .settings.wide button { margin-top: 8px; }
 .pack-compose {
   grid-column: 1 / -1;
