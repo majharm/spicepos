@@ -379,6 +379,8 @@ function paintHeader() {
   $("shop-name").textContent = state.company.name || "SWAMI MASALE";
   $("shop-place").textContent = state.company.address || "";
   showLogo($("shop-logo"), state.company.logo_url);
+  const mark = $("brand-mark");
+  if (mark) mark.hidden = Boolean(state.company.logo_url);
 }
 
 async function loadBootstrap() {
