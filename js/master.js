@@ -308,6 +308,7 @@ async function render() {
     } else if (tab === "plans") {
       const rows = await api("/api/master/plans");
       body.innerHTML = `<form class="settings wide" id="plan-form">
+        <input type="hidden" name="plan_id" />
         <label>Code <input name="code" required placeholder="BASIC" /></label>
         <label>Name <input name="name" required placeholder="Basic" /></label>
         <label>Fee ₹ / month <input name="fee_monthly" type="number" min="0" step="0.01" required value="0" /></label>
@@ -315,11 +316,14 @@ async function render() {
         <label>Max users <input name="max_users" type="number" min="1" value="3" /></label>
         <label>Max devices <input name="max_devices" type="number" min="1" value="2" /></label>
         <label>Max products <input name="max_products" type="number" min="1" value="500" /></label>
-        <button class="btn primary" type="submit">Save plan</button>
+        <label>Active <input name="active" type="checkbox" checked /></label>
+        <button class="btn primary" type="submit" id="plan-save">Save plan</button>
+        <button class="btn" type="button" id="plan-cancel" hidden>Cancel edit</button>
+        <p class="hint" id="plan-hint"></p>
       </form>
-      <p class="lede">Same code updates an existing plan, including the subscription fee stored in MySQL.</p>
+      <p class="lede">Use <strong>Edit</strong> to change an existing plan. New codes create a plan.</p>
       <div class="table-wrap">${table(
-        ["Code", "Name", "Fee / month", "Branches", "Users", "Devices", "Products", "Active"],
+        ["Code", "Name", "Fee / month", "Branches", "Users", "Devices", "Products", "Active", ""],
         rows.map((p) => [
           p.code,
           p.name,
@@ -329,13 +333,53 @@ async function render() {
           p.max_devices,
           p.max_products,
           p.active ? "yes" : "no",
+          `<button class="btn" type="button" data-edit="${p.id}">Edit</button>`,
         ]),
       )}</div>`;
-      $("plan-form").onsubmit = async (e) => {
+      const form = $("plan-form");
+      const saveBtn = $("plan-save");
+      const cancelBtn = $("plan-cancel");
+      const hint = $("plan-hint");
+      function fillPlan(p) {
+        form.plan_id.value = p?.id || "";
+        form.code.value = p?.code || "";
+        form.code.readOnly = Boolean(p);
+        form.name.value = p?.name || "";
+        form.fee_monthly.value = p ? Number(p.fee_monthly) || 0 : 0;
+        form.max_branches.value = p?.max_branches || 1;
+        form.max_users.value = p?.max_users || 3;
+        form.max_devices.value = p?.max_devices || 2;
+        form.max_products.value = p?.max_products || 500;
+        form.active.checked = p ? Boolean(Number(p.active)) : true;
+        saveBtn.textContent = p ? "Update plan" : "Save plan";
+        cancelBtn.hidden = !p;
+        hint.textContent = p ? `Editing ${p.code}` : "";
+        hint.className = "hint";
+        form.scrollIntoView({ block: "start" });
+      }
+      cancelBtn.onclick = () => fillPlan(null);
+      body.querySelectorAll("[data-edit]").forEach((btn) => {
+        btn.onclick = () => {
+          const p = rows.find((r) => r.id === btn.dataset.edit);
+          if (p) fillPlan(p);
+        };
+      });
+      form.onsubmit = async (e) => {
         e.preventDefault();
-        const fd = Object.fromEntries(new FormData(e.target).entries());
-        await api("/api/master/plans", { method: "POST", body: JSON.stringify(fd) });
-        render();
+        const fd = Object.fromEntries(new FormData(form).entries());
+        const id = fd.plan_id;
+        delete fd.plan_id;
+        fd.active = form.active.checked;
+        try {
+          hint.className = "hint";
+          hint.textContent = "Saving…";
+          if (id) await api(`/api/master/plans/${id}`, { method: "PUT", body: JSON.stringify(fd) });
+          else await api("/api/master/plans", { method: "POST", body: JSON.stringify(fd) });
+          render();
+        } catch (err) {
+          hint.textContent = err.message;
+          hint.className = "hint error";
+        }
       };
     } else if (tab === "branches") {
       const rows = await api("/api/master/branches");

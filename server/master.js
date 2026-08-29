@@ -93,10 +93,44 @@ export function registerMaster(app) {
           Number(b.max_products) || 500,
           Number(b.max_invoices) || 1000,
           Number(b.fee_monthly) || 0,
-          b.active === false ? 0 : 1,
+          b.active === false || b.active === 0 || b.active === "0" ? 0 : 1,
         ],
       );
       await platformAudit(req.auth.admin, "Plan Saved", { module: "plans", target_name: id }, req);
+      const [plan] = await query("SELECT * FROM subscription_plans WHERE id = ?", [id]);
+      return { ok: true, plan };
+    }),
+  );
+
+  app.put("/api/master/plans/:id", (req, res) =>
+    send(res, async () => {
+      const id = req.params.id;
+      const [existing] = await query("SELECT * FROM subscription_plans WHERE id = ?", [id]);
+      if (!existing) throw new Error("Plan not found");
+      const b = req.body || {};
+      const code = String(b.code || existing.code)
+        .toUpperCase()
+        .replaceAll(/[^A-Z0-9]+/g, "")
+        .slice(0, 32) || existing.code;
+      await query(
+        `UPDATE subscription_plans SET
+           code=?, name=?, max_branches=?, max_users=?, max_devices=?, max_products=?,
+           max_invoices=?, fee_monthly=?, active=?
+         WHERE id=?`,
+        [
+          code,
+          b.name || existing.name,
+          Number(b.max_branches) || 1,
+          Number(b.max_users) || 3,
+          Number(b.max_devices) || 2,
+          Number(b.max_products) || 500,
+          Number(b.max_invoices) || existing.max_invoices || 1000,
+          Number(b.fee_monthly) || 0,
+          b.active === false || b.active === 0 || b.active === "0" ? 0 : 1,
+          id,
+        ],
+      );
+      await platformAudit(req.auth.admin, "Plan Edited", { module: "plans", target_id: id, target_name: code }, req);
       const [plan] = await query("SELECT * FROM subscription_plans WHERE id = ?", [id]);
       return { ok: true, plan };
     }),
