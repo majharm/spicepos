@@ -179,6 +179,18 @@ function setHint(msg, kind = "") {
   $("hint").className = `hint ${kind}`.trim();
 }
 
+function clearCounterAfterSale(order) {
+  state.cart = [];
+  state.lastPack = null;
+  state.editingOrderId = null;
+  state.query = "";
+  $("search").value = "";
+  $("pack-choice").value = "";
+  renderCatalog();
+  renderCart();
+  setHint(`Order accepted · ${order.order_number} · ${money(order.total)}`, "ok");
+}
+
 function activeItems() {
   return state.items.filter((i) => i.status !== "inactive");
 }
@@ -802,18 +814,20 @@ $("btn-pay").addEventListener("click", async () => {
       : await api("/api/checkout", { method: "POST", body: JSON.stringify(payload) });
     const order = orderFromResult(result);
     if (!order) throw new Error("Checkout did not return an order");
-    state.cart = [];
-    state.lastPack = null;
-    state.editingOrderId = null;
-    $("pack-choice").value = "";
-    setHint(`Saved ${order.order_number} · ${money(order.total)}`, "ok");
+    clearCounterAfterSale(order);
     showOrder(order);
-    $("modal-title").textContent = order.order_number;
-    $("modal-body").innerHTML = `<pre class="receipt">${escapeHtml(receiptText(order))}</pre>
+    $("modal-title").textContent = `Order accepted · ${order.order_number}`;
+    $("modal-body").innerHTML = `<p class="hint ok">Bill saved. POS cleared for the next customer.</p>
+      <pre class="receipt">${escapeHtml(receiptText(order))}</pre>
       <div class="print-actions"><button class="btn primary" type="button" id="modal-print">Print</button></div>`;
     $("modal").hidden = false;
     $("modal-print").onclick = () => printOrder(order);
-    await loadBootstrap();
+    showView("counter");
+    try {
+      await Promise.all([loadBootstrap(), loadToday()]);
+    } catch {
+      /* order is already saved; keep the success message and cleared cart */
+    }
   } catch (err) {
     setHint(err.message, "error");
   }
