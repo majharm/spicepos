@@ -1298,6 +1298,16 @@ function paintImpersonationBanner(me) {
   }
 }
 
+$("exit-impersonate")?.addEventListener("click", async (e) => {
+  e.preventDefault();
+  try {
+    await api("/api/auth/exit-impersonate", { method: "POST" });
+  } catch {
+    /* keep navigation even if API fails */
+  }
+  location.href = "/master.html";
+});
+
 async function boot() {
   try {
     const { res, data: me } = await posRequest("/api/auth/me");

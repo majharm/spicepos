@@ -355,6 +355,38 @@ function pos_parse_perms($user) {
   return pos_default_perms($user["role"] ?? "staff");
 }
 
+function pos_staff_me_payload($staff) {
+  $status = pos_public_status($staff["business"]);
+  $plan = null;
+  if (!empty($staff["business"]["plan_id"])) {
+    $pr = pos_q("SELECT id, code, name, fee_monthly FROM subscription_plans WHERE id = ? LIMIT 1", "s", [$staff["business"]["plan_id"]]);
+    $plan = $pr[0] ?? null;
+  }
+  return [
+    "ok" => true,
+    "type" => "staff",
+    "user" => [
+      "id" => $staff["user"]["id"],
+      "email" => $staff["user"]["email"],
+      "name" => pos_display_name($staff["user"]),
+      "role" => $staff["user"]["role"],
+      "permissions" => pos_parse_perms($staff["user"]),
+      "branch_id" => $staff["branchId"],
+    ],
+    "business" => [
+      "id" => $staff["business"]["id"] ?? null,
+      "name" => $staff["business"]["name"] ?? null,
+      "status" => $status,
+      "plan_id" => $staff["business"]["plan_id"] ?? null,
+      "subscription_expires_at" => $staff["business"]["subscription_expires_at"] ?? null,
+    ],
+    "plan" => $plan,
+    "devToolsAllowed" => pos_env("POS_DEV_TOOLS", "1") !== "0",
+    "impersonating" => !empty($staff["impersonatorAdminId"]),
+    "impersonator" => $staff["impersonator"] ?? null,
+  ];
+}
+
 function pos_default_perms($role) {
   $all = [
     "dashboard" => true, "counter" => true, "items" => true, "customers" => true, "packs" => true,
@@ -918,41 +950,24 @@ function pos_php_dispatch($path, $method, $rawBody) {
       pos_send(200, ["ok" => true]);
     }
 
+    if ($path === "auth/exit-impersonate" && $method === "POST") {
+      $sid = pos_cookie("pos_sid");
+      if ($sid !== "") {
+        $staff = pos_staff_session();
+        if ($staff && !empty($staff["impersonatorAdminId"])) {
+          pos_q("UPDATE staff_sessions SET revoked_at = NOW() WHERE token_hash = ?", "s", [pos_sha256($sid)]);
+          pos_clear_cookie("pos_sid");
+        }
+      }
+      pos_send(200, ["ok" => true]);
+    }
+
     if ($path === "auth/me" && $method === "GET") {
       $master = pos_master_session();
       $staff = pos_staff_session();
+      if ($staff && !empty($staff["impersonatorAdminId"])) pos_send(200, pos_staff_me_payload($staff));
       if ($master) pos_send(200, ["ok" => true, "type" => "master", "admin" => $master["admin"]]);
-      if ($staff) {
-        $status = pos_public_status($staff["business"]);
-        $plan = null;
-        if (!empty($staff["business"]["plan_id"])) {
-          $pr = pos_q("SELECT id, code, name, fee_monthly FROM subscription_plans WHERE id = ? LIMIT 1", "s", [$staff["business"]["plan_id"]]);
-          $plan = $pr[0] ?? null;
-        }
-        pos_send(200, [
-          "ok" => true,
-          "type" => "staff",
-          "user" => [
-            "id" => $staff["user"]["id"],
-            "email" => $staff["user"]["email"],
-            "name" => pos_display_name($staff["user"]),
-            "role" => $staff["user"]["role"],
-            "permissions" => pos_parse_perms($staff["user"]),
-            "branch_id" => $staff["branchId"],
-          ],
-          "business" => [
-            "id" => $staff["business"]["id"] ?? null,
-            "name" => $staff["business"]["name"] ?? null,
-            "status" => $status,
-            "plan_id" => $staff["business"]["plan_id"] ?? null,
-            "subscription_expires_at" => $staff["business"]["subscription_expires_at"] ?? null,
-          ],
-          "plan" => $plan,
-          "devToolsAllowed" => pos_env("POS_DEV_TOOLS", "1") !== "0",
-          "impersonating" => !empty($staff["impersonatorAdminId"]),
-          "impersonator" => $staff["impersonator"] ?? null,
-        ]);
-      }
+      if ($staff) pos_send(200, pos_staff_me_payload($staff));
       pos_send(401, ["error" => "Not signed in"]);
     }
 

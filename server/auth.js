@@ -148,8 +148,9 @@ export function attachAuth(req, res, next) {
       const master = await loadMasterSession(masterToken);
       const staff = await loadStaffSession(token);
       if (wantMaster) req.auth = master || null;
-      else if (staff) req.auth = staff;
+      else if (staff?.impersonatorAdminId) req.auth = staff;
       else if (master) req.auth = master;
+      else if (staff) req.auth = staff;
       if (req.auth?.type === "staff") {
         runTenant(
           {
@@ -420,6 +421,20 @@ export function registerAuth(app) {
     }
     clearCookie(res, "pos_sid", req);
     clearCookie(res, "pos_master", req);
+    res.json({ ok: true });
+  });
+
+  app.post("/api/auth/exit-impersonate", async (req, res) => {
+    const token = cookies(req).pos_sid;
+    if (token) {
+      const session = await loadStaffSession(token);
+      if (session?.impersonatorAdminId) {
+        await query("UPDATE staff_sessions SET revoked_at = NOW() WHERE token_hash = ?", [
+          sha256(token),
+        ]);
+        clearCookie(res, "pos_sid", req);
+      }
+    }
     res.json({ ok: true });
   });
 
