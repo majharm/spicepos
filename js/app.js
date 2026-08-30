@@ -1109,7 +1109,11 @@ $("stock-form")?.addEventListener("submit", async (e) => {
 
 async function boot() {
   try {
-    const me = await api("/api/auth/me");
+    const { res, data: me } = await posRequest("/api/auth/me");
+    if (res.status === 401 || !me?.ok) {
+      location.href = "/login.html";
+      return;
+    }
     if (me.type !== "staff") {
       location.href = me.type === "master" ? "/master.html" : "/login.html";
       return;
@@ -1126,7 +1130,11 @@ async function boot() {
       showView("dashboard");
       return;
     }
-    await loadBootstrap();
+    try {
+      await loadBootstrap();
+    } catch (err) {
+      setHint(err.message || "Could not load shop data", "error");
+    }
     showView(can("dashboard") ? "dashboard" : "counter");
   } catch {
     location.href = "/login.html";

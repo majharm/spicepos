@@ -220,25 +220,22 @@ function pos_secure_cookie() {
 }
 
 function pos_set_cookie($name, $value, $ttl) {
-  $opts = [
-    "expires" => time() + (int) $ttl,
-    "path" => "/",
-    "secure" => pos_secure_cookie(),
-    "httponly" => true,
-    "samesite" => "Lax",
-  ];
-  setcookie($name, $value, $opts);
+  $ttl = (int) $ttl;
+  $secure = pos_secure_cookie() ? "; Secure" : "";
+  $exp = gmdate("D, d M Y H:i:s", time() + $ttl) . " GMT";
+  header(
+    "Set-Cookie: " . $name . "=" . rawurlencode($value) .
+    "; Expires=" . $exp . "; Max-Age=" . $ttl . "; Path=/; HttpOnly; SameSite=Lax" . $secure,
+    false
+  );
 }
 
 function pos_clear_cookie($name) {
-  $opts = [
-    "expires" => time() - 3600,
-    "path" => "/",
-    "secure" => pos_secure_cookie(),
-    "httponly" => true,
-    "samesite" => "Lax",
-  ];
-  setcookie($name, "", $opts);
+  $secure = pos_secure_cookie() ? "; Secure" : "";
+  header(
+    "Set-Cookie: " . $name . "=; Expires=Thu, 01 Jan 1970 00:00:00 GMT; Max-Age=0; Path=/; HttpOnly; SameSite=Lax" . $secure,
+    false
+  );
 }
 
 function pos_ip() {
@@ -634,9 +631,10 @@ function pos_php_dispatch($path, $method, $rawBody) {
       $ttl = pos_ttl(pos_remember($body));
       $token = pos_new_token();
       pos_q(
-        "INSERT INTO platform_sessions (id, admin_id, token_hash, expires_at, ip, user_agent) VALUES (?,?,?,?,?,?)",
-        "ssssss",
-        [pos_uuid(), $admin["id"], pos_sha256($token), date("Y-m-d H:i:s", time() + $ttl), pos_ip(), pos_ua()]
+        "INSERT INTO platform_sessions (id, admin_id, token_hash, expires_at, ip, user_agent)
+         VALUES (?,?,?,DATE_ADD(NOW(), INTERVAL ? SECOND),?,?)",
+        "sssiss",
+        [pos_uuid(), $admin["id"], pos_sha256($token), $ttl, pos_ip(), pos_ua()]
       );
       pos_set_cookie("pos_master", $token, $ttl);
       try {
@@ -695,9 +693,9 @@ function pos_php_dispatch($path, $method, $rawBody) {
       $branchId = $body["branchId"] ?? $user["branch_id"];
       pos_q(
         "INSERT INTO staff_sessions (id, staff_user_id, token_hash, expires_at, business_id, ip, user_agent, branch_id)
-         VALUES (?,?,?,?,?,?,?,?)",
-        "ssssssss",
-        [pos_uuid(), $user["id"], pos_sha256($token), date("Y-m-d H:i:s", time() + $ttl), $user["business_id"], pos_ip(), pos_ua(), $branchId]
+         VALUES (?,?,?,DATE_ADD(NOW(), INTERVAL ? SECOND),?,?,?,?)",
+        "sssissss",
+        [pos_uuid(), $user["id"], pos_sha256($token), $ttl, $user["business_id"], pos_ip(), pos_ua(), $branchId]
       );
       pos_set_cookie("pos_sid", $token, $ttl);
       pos_send(200, [
@@ -729,9 +727,9 @@ function pos_php_dispatch($path, $method, $rawBody) {
       $token = pos_new_token();
       pos_q(
         "INSERT INTO staff_sessions (id, staff_user_id, token_hash, expires_at, business_id, ip, user_agent, branch_id)
-         VALUES (?,?,?,?,?,?,?,?)",
-        "ssssssss",
-        [pos_uuid(), $user["id"], pos_sha256($token), date("Y-m-d H:i:s", time() + $ttl), $user["business_id"], pos_ip(), pos_ua(), $user["branch_id"]]
+         VALUES (?,?,?,DATE_ADD(NOW(), INTERVAL ? SECOND),?,?,?,?)",
+        "sssissss",
+        [pos_uuid(), $user["id"], pos_sha256($token), $ttl, $user["business_id"], pos_ip(), pos_ua(), $user["branch_id"]]
       );
       pos_set_cookie("pos_sid", $token, $ttl);
       pos_send(200, [
@@ -1024,6 +1022,11 @@ function pos_php_dispatch($path, $method, $rawBody) {
       $nid = pos_uuid();
       pos_q("INSERT INTO notifications (id, business_id, title, body) VALUES (?,?,?,?)", "ssss", [$nid, $body["business_id"] ?? null, $title, $body["body"] ?? null]);
       pos_send(200, ["ok" => true, "id" => $nid]);
+    }
+
+    if (strpos($path, "master/") !== 0) {
+      require_once __DIR__ . "/pos-php-till.php";
+      pos_php_till_dispatch($path, $method, $body);
     }
 
     pos_send(501, ["error" => "This action needs the Node.js POS process. PHP fallback covers sign-in and Master Admin lists only.", "php" => true]);
