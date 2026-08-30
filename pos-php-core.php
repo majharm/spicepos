@@ -486,6 +486,21 @@ function pos_register_business($raw) {
     "ssssssssssss",
     [$uid, "local:" . $uid, $b["email"], $b["owner_name"], "", "business_admin", $hash, $id, $branchId, $perms, $b["username"], $b["mobile"]]
   );
+  try {
+    pos_q(
+      "INSERT INTO customers (id, code, name, mobile, type, outstanding, business_id)
+       VALUES (?,?, 'Walk-in', '0000000000', 'b2c', 0, ?)",
+      "sss",
+      [pos_uuid(), "W" . strtoupper(base_convert((string) (int) (microtime(true) * 1000), 10, 36)), $id]
+    );
+  } catch (Exception $e) { /* optional */ }
+  try {
+    pos_q(
+      "INSERT INTO number_sequences (name, next_value, business_id) VALUES ('order', 10001, ?), ('customer', 2, ?), ('item', 2, ?)",
+      "sss",
+      [$id, $id, $id]
+    );
+  } catch (Exception $e) { /* optional */ }
   $users = pos_q("SELECT * FROM staff_users WHERE id = ? LIMIT 1", "s", [$uid]);
   return ["businessId" => $id, "user" => $users[0]];
 }

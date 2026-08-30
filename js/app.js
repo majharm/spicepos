@@ -783,6 +783,12 @@ $("btn-clear").addEventListener("click", () => {
 
 $("btn-pay").addEventListener("click", async () => {
   try {
+    if (!state.customerId) {
+      const walk = state.customers.find((c) => /walk-in/i.test(c.name));
+      state.customerId = walk?.id || state.customers[0]?.id || "";
+    }
+    if (!state.customerId) throw new Error("Add a customer before saving the bill");
+    if (!state.cart.length) throw new Error("Cart is empty");
     setHint("Saving…");
     const payload = {
       customerId: state.customerId,

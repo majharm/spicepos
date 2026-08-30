@@ -3,6 +3,110 @@ function pos_round2($n) {
   return round((float) $n, 2);
 }
 
+function pos_build_reports($bid, $from, $to) {
+  $summary = pos_q(
+    "SELECT COUNT(*) AS bills,
+            COALESCE(SUM(subtotal),0) AS taxable,
+            COALESCE(SUM(gst),0) AS gst,
+            COALESCE(SUM(total),0) AS takings
+     FROM sales_orders WHERE business_id = ? AND DATE(created_at) BETWEEN ? AND ?",
+    "sss",
+    [$bid, $from, $to]
+  );
+  $sales = pos_q(
+    "SELECT order_number, customer_name, customer_type, pack_name, pack_count,
+            status, total_quantity_gm, subtotal, gst, total, payment_method,
+            payment_status, created_at
+     FROM sales_orders WHERE business_id = ? AND DATE(created_at) BETWEEN ? AND ?
+     ORDER BY created_at",
+    "sss",
+    [$bid, $from, $to]
+  );
+  $byItem = pos_q(
+    "SELECT l.item_name, SUM(l.quantity_gm) AS quantity_gm, SUM(l.amount) AS amount,
+            SUM(l.amount * l.gst_rate / 100) AS gst
+     FROM sales_order_lines l
+     JOIN sales_orders o ON o.id = l.order_id
+     WHERE o.business_id = ? AND DATE(o.created_at) BETWEEN ? AND ? AND l.cancelled = 0
+     GROUP BY l.item_name ORDER BY amount DESC",
+    "sss",
+    [$bid, $from, $to]
+  );
+  $byCustomer = pos_q(
+    "SELECT customer_name, customer_type, COUNT(*) AS bills,
+            COALESCE(SUM(total),0) AS takings, COALESCE(SUM(gst),0) AS gst
+     FROM sales_orders WHERE business_id = ? AND DATE(created_at) BETWEEN ? AND ?
+     GROUP BY customer_name, customer_type ORDER BY takings DESC",
+    "sss",
+    [$bid, $from, $to]
+  );
+  $byPack = pos_q(
+    "SELECT COALESCE(pack_name, 'Loose items') AS pack_type,
+            COALESCE(SUM(pack_count),0) AS pack_count,
+            COUNT(*) AS bills, COALESCE(SUM(total),0) AS takings
+     FROM sales_orders WHERE business_id = ? AND DATE(created_at) BETWEEN ? AND ?
+     GROUP BY COALESCE(pack_name, 'Loose items') ORDER BY takings DESC",
+    "sss",
+    [$bid, $from, $to]
+  );
+  $byPay = pos_q(
+    "SELECT payment_method, COUNT(*) AS bills, COALESCE(SUM(total),0) AS takings
+     FROM sales_orders WHERE business_id = ? AND DATE(created_at) BETWEEN ? AND ?
+     GROUP BY payment_method",
+    "sss",
+    [$bid, $from, $to]
+  );
+  $gst = pos_q(
+    "SELECT DATE(created_at) AS day, COALESCE(SUM(subtotal),0) AS taxable,
+            COALESCE(SUM(gst),0) AS gst, COALESCE(SUM(total),0) AS total
+     FROM sales_orders WHERE business_id = ? AND DATE(created_at) BETWEEN ? AND ?
+     GROUP BY DATE(created_at) ORDER BY day",
+    "sss",
+    [$bid, $from, $to]
+  );
+  $stock = pos_q(
+    "SELECT code, name, local_name, category, subcategory, stock_gm, reorder_level_gm,
+            retail_rate, b2b_rate, purchase_rate, gst_rate
+     FROM items WHERE business_id = ? ORDER BY name",
+    "s",
+    [$bid]
+  );
+  $low = [];
+  foreach ($stock as $row) {
+    if ((float) ($row["stock_gm"] ?? 0) <= (float) ($row["reorder_level_gm"] ?? 0)) $low[] = $row;
+  }
+  $purchases = pos_q(
+    "SELECT purchase_number, supplier_name, supplier_invoice_number, purchase_date,
+            subtotal, gst, total, payment_method, payment_status
+     FROM purchases WHERE business_id = ? AND purchase_date BETWEEN ? AND ?
+     ORDER BY purchase_date",
+    "sss",
+    [$bid, $from, $to]
+  );
+  $customers = pos_q(
+    "SELECT code, name, business_name, mobile, type, gstin, credit_limit, outstanding
+     FROM customers WHERE business_id = ? ORDER BY name",
+    "s",
+    [$bid]
+  );
+  return [
+    "from" => $from,
+    "to" => $to,
+    "summary" => $summary[0] ?? ["bills" => 0, "taxable" => 0, "gst" => 0, "takings" => 0],
+    "sales" => $sales,
+    "byItem" => $byItem,
+    "byCustomer" => $byCustomer,
+    "byPack" => $byPack,
+    "byPay" => $byPay,
+    "gst" => $gst,
+    "stock" => $stock,
+    "low" => $low,
+    "purchases" => $purchases,
+    "customers" => $customers,
+    "php" => true,
+  ];
+}
+
 function pos_php_till_dispatch($path, $method, $body) {
   $head = explode("/", $path)[0];
   $staff = [
@@ -130,6 +234,19 @@ function pos_php_till_dispatch($path, $method, $body) {
   }
 
   if ($path === "stock" && $method === "GET") {
+    if ($branchId) {
+      pos_send(200, pos_q(
+        "SELECT i.id, i.code, i.name, i.unit, i.base_unit, i.stock_gm AS master_stock,
+                i.reorder_level_gm, i.purchase_rate, i.retail_rate,
+                COALESCE(bs.stock_gm, i.stock_gm) AS stock_gm, bs.branch_id
+         FROM items i
+         LEFT JOIN branch_stocks bs ON bs.item_id = i.id AND bs.branch_id = ?
+         WHERE i.business_id = ?
+         ORDER BY i.name",
+        "ss",
+        [$branchId, $bid]
+      ));
+    }
     pos_send(200, pos_q("SELECT * FROM items WHERE business_id = ? ORDER BY name", "s", [$bid]));
   }
 
@@ -173,7 +290,20 @@ function pos_php_till_dispatch($path, $method, $body) {
   }
 
   if ($path === "purchases" && $method === "GET") {
-    pos_send(200, pos_q("SELECT * FROM purchases WHERE business_id = ? ORDER BY purchase_date DESC, created_at DESC LIMIT 80", "s", [$bid]));
+    $purchases = pos_q("SELECT * FROM purchases WHERE business_id = ? ORDER BY purchase_date DESC, created_at DESC LIMIT 80", "s", [$bid]);
+    $ids = array_column($purchases, "id");
+    $lines = [];
+    if ($ids) {
+      $ph = implode(",", array_fill(0, count($ids), "?"));
+      $lines = pos_q("SELECT * FROM purchase_lines WHERE purchase_id IN ($ph) ORDER BY created_at", str_repeat("s", count($ids)), $ids);
+    }
+    foreach ($purchases as &$p) {
+      $p["lines"] = [];
+      foreach ($lines as $l) {
+        if ($l["purchase_id"] === $p["id"]) $p["lines"][] = $l;
+      }
+    }
+    pos_send(200, $purchases);
   }
 
   if ($path === "holds" && $method === "GET") {
@@ -191,13 +321,7 @@ function pos_php_till_dispatch($path, $method, $body) {
   if ($path === "reports" && $method === "GET") {
     $from = $_GET["from"] ?? date("Y-m-d");
     $to = $_GET["to"] ?? $from;
-    $sum = pos_q(
-      "SELECT COUNT(*) AS bills, COALESCE(SUM(subtotal),0) AS taxable, COALESCE(SUM(gst),0) AS gst, COALESCE(SUM(total),0) AS total
-       FROM sales_orders WHERE business_id = ? AND DATE(created_at) BETWEEN ? AND ?",
-      "sss",
-      [$bid, $from, $to]
-    );
-    pos_send(200, ["from" => $from, "to" => $to, "summary" => $sum[0] ?? ["bills" => 0, "taxable" => 0, "gst" => 0, "total" => 0], "php" => true]);
+    pos_send(200, pos_build_reports($bid, $from, $to));
   }
 
   if ($path === "checkout" && $method === "POST") {
