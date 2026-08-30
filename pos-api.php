@@ -27,6 +27,11 @@ $method = $_SERVER["REQUEST_METHOD"] ?? "GET";
 $body = file_get_contents("php://input");
 $cookie = $_SERVER["HTTP_COOKIE"] ?? "";
 
+if ($path === "health" && $method === "GET") {
+  require __DIR__ . "/api/health/index.php";
+  exit;
+}
+
 function pos_send_result($status, $contentType, $setCookies, $body) {
   http_response_code($status > 0 ? $status : 502);
   header("Content-Type: " . ($contentType ?: "application/json; charset=utf-8"));
@@ -211,7 +216,26 @@ if (is_file($logFile)) {
   if ($tail !== "") $hint = $tail;
 }
 
-require_once __DIR__ . "/pos-php-core.php";
+$coreFile = __DIR__ . "/pos-php-core.php";
+if (!is_file($coreFile)) {
+  http_response_code(503);
+  header("Content-Type: application/json; charset=utf-8");
+  echo json_encode(["error" => "pos-php-core.php missing on server", "php" => true]);
+  exit;
+}
+$coreSrc = (string) @file_get_contents($coreFile);
+if (!preg_match('/function\s+pos_send\s*\(/', $coreSrc)) {
+  http_response_code(503);
+  header("Content-Type: application/json; charset=utf-8");
+  echo json_encode([
+    "error" => "pos-php-core.php on server is broken. Re-upload pos-php-core.php from the latest deploy bundle.",
+    "php" => true,
+    "health" => "/api/health/",
+  ]);
+  exit;
+}
+
+require_once $coreFile;
 try {
   pos_php_dispatch($path, $method, $body);
 } catch (Throwable $e) {

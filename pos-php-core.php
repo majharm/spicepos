@@ -434,20 +434,7 @@ function pos_default_perms($role) {
   return ["dashboard" => true, "counter" => true, "support" => true];
 }
 
-<<<<<<< HEAD
-function pos_record_master_visit($admin, $businessId, $detail = "") {
-  try {
-    $who = trim((string) ($admin["name"] ?? $admin["email"] ?? "Master admin"));
-    $title = "Master admin login";
-    $body = $who . " opened this shop from Master Admin";
-    if ($detail !== "") $body .= " (" . $detail . ")";
-    $body .= ".";
-    pos_q("INSERT INTO notifications (id, business_id, title, body) VALUES (?,?,?,?)", "ssss", [pos_uuid(), $businessId, $title, $body]);
-  } catch (Exception $e) { /* optional */ }
-}
 
-=======
->>>>>>> cursor/business-password-fix-4cdb
 function pos_send($status, $payload) {
   http_response_code((int) $status);
   header("Content-Type: application/json; charset=utf-8");
