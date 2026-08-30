@@ -445,6 +445,7 @@ function pos_record_master_visit($admin, $businessId, $detail = "") {
   } catch (Exception $e) { /* optional */ }
 }
 
+function pos_send($status, $payload) {
   http_response_code((int) $status);
   header("Content-Type: application/json; charset=utf-8");
   echo json_encode($payload, JSON_UNESCAPED_UNICODE);
