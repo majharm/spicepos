@@ -276,8 +276,9 @@ function pos_php_till_dispatch($path, $method, $body) {
     }
     $orders = pos_q("SELECT * FROM sales_orders WHERE id = ? AND business_id = ? LIMIT 1", "ss", [$orderId, $bid]);
     $orderLines = pos_q("SELECT * FROM sales_order_lines WHERE order_id = ?", "s", [$orderId]);
-    $row = $orders[0];
+    $row = $orders[0] ?? null;
+    if (!$row) pos_send(500, ["error" => "Order was not saved"]);
     $row["lines"] = $orderLines;
-    pos_send(200, $row);
+    pos_send(200, ["ok" => true, "order" => $row]);
   }
 }
