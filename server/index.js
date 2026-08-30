@@ -488,7 +488,14 @@ app.post("/api/checkout", requireStaff, requirePerm("counter"), async (req, res)
         lines: orderLines,
       };
     });
-    await audit("Sale Created", { module: "sales", target_name: result.order_number }, req);
+    await audit("Sale Created", {
+      module: "sales",
+      target_id: result.id,
+      target_name: result.order_number,
+      total: result.total,
+      payment_method: result.payment_method,
+      customer_name: result.customer_name,
+    }, req);
     res.json({ ok: true, order: result });
   } catch (err) {
     res.status(500).json({ error: String(err.message) });

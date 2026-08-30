@@ -299,6 +299,14 @@ function pos_php_till_dispatch($path, $method, $body) {
       ];
     }
     $row["lines"] = $orderLines;
+    pos_staff_audit($auth["user"], "Sale Created", [
+      "module" => "sales",
+      "target_id" => $orderId,
+      "target_name" => $orderNumber,
+      "total" => $total,
+      "payment_method" => $methodPay,
+      "customer_name" => $custName,
+    ], $bid, $branchId);
     pos_send(200, ["ok" => true, "order" => $row]);
   }
 }

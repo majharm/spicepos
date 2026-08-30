@@ -528,6 +528,35 @@ function pos_audit($admin, $action, $details) {
   } catch (Exception $e) { /* audit is best-effort */ }
 }
 
+function pos_staff_audit($user, $action, $details, $businessId, $branchId = null) {
+  try {
+    $actorName = trim((string) ($user["email"] ?? ""));
+    if ($actorName === "") {
+      $actorName = trim(((string) ($user["first_name"] ?? "")) . " " . ((string) ($user["last_name"] ?? "")));
+    }
+    if ($actorName === "") $actorName = "staff";
+    pos_q(
+      "INSERT INTO staff_audit_logs (
+         id, actor_clerk_user_id, actor_name, module, target_id, target_name, action, details, business_id, branch_id, ip
+       ) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+      "sssssssssss",
+      [
+        pos_uuid(),
+        $user["clerk_user_id"] ?? $user["id"] ?? "staff",
+        $actorName,
+        $details["module"] ?? "sales",
+        $details["target_id"] ?? null,
+        $details["target_name"] ?? $action,
+        $action,
+        json_encode($details),
+        $businessId,
+        $branchId,
+        pos_ip(),
+      ]
+    );
+  } catch (Exception $e) { /* audit is best-effort */ }
+}
+
 function pos_n($v, $fallback) {
   if ($v === null || $v === "") return $fallback;
   return (int) $v;
@@ -991,7 +1020,13 @@ function pos_php_dispatch($path, $method, $rawBody) {
     }
 
     if ($path === "master/audit" && $method === "GET") {
-      pos_send(200, pos_q("SELECT * FROM staff_audit_logs ORDER BY created_at DESC LIMIT 200"));
+      pos_send(200, pos_q(
+        "SELECT l.*, b.name AS business_name
+         FROM staff_audit_logs l
+         LEFT JOIN businesses b ON b.id = l.business_id AND l.business_id <> 'platform'
+         ORDER BY l.created_at DESC
+         LIMIT 200"
+      ));
     }
 
     if ($path === "master/settings" && $method === "GET") {

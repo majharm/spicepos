@@ -288,7 +288,13 @@ export function registerMaster(app) {
 
   app.get("/api/master/audit", (_req, res) =>
     send(res, () =>
-      query("SELECT * FROM staff_audit_logs ORDER BY created_at DESC LIMIT 200"),
+      query(
+        `SELECT l.*, b.name AS business_name
+         FROM staff_audit_logs l
+         LEFT JOIN businesses b ON b.id = l.business_id AND l.business_id <> 'platform'
+         ORDER BY l.created_at DESC
+         LIMIT 200`,
+      ),
     ),
   );
 

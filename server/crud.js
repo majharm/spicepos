@@ -1,5 +1,6 @@
 import { query, withTransaction } from "./db.js";
 import { bid } from "./context.js";
+import { audit } from "./audit.js";
 
 export function lineAmount(quantityGm, ratePerKg) {
   return (Number(quantityGm) / 1000) * Number(ratePerKg);
@@ -446,6 +447,14 @@ export function registerCrud(app) {
         );
         return { ...orders[0], lines: orderLines };
       });
+      await audit("Sale Updated", {
+        module: "sales",
+        target_id: order.id,
+        target_name: order.order_number,
+        total: order.total,
+        payment_method: order.payment_method,
+        customer_name: order.customer_name,
+      }, req);
       res.json({ ok: true, order });
     } catch (err) {
       res.status(500).json({ error: String(err.message) });

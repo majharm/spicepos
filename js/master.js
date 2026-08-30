@@ -173,6 +173,30 @@ document.querySelectorAll("[data-tab]").forEach((btn) => {
   };
 });
 
+function auditDetails(row) {
+  const target = row.target_name || "";
+  let extra = "";
+  if (row.details) {
+    try {
+      const d = typeof row.details === "string" ? JSON.parse(row.details) : row.details;
+      const bits = [];
+      if (d.customer_name) bits.push(d.customer_name);
+      if (d.total != null) bits.push(`₹${Number(d.total).toFixed(2)}`);
+      if (d.payment_method) bits.push(String(d.payment_method).toUpperCase());
+      extra = bits.join(" · ");
+    } catch {
+      extra = String(row.details).slice(0, 80);
+    }
+  }
+  return [target, extra].filter(Boolean).join(" — ");
+}
+
+function businessLabel(row) {
+  if (row.business_name) return row.business_name;
+  if (row.business_id === "platform") return "Platform";
+  return row.business_id || "—";
+}
+
 async function render() {
   const titles = {
     dash: "Platform dashboard",
@@ -488,8 +512,15 @@ async function render() {
     } else if (tab === "audit") {
       const rows = await api("/api/master/audit");
       body.innerHTML = table(
-        ["When", "Actor", "Action", "Business", "Details"],
-        rows.map((r) => [r.created_at, r.actor_name, r.action, r.business_id, String(r.details || "").slice(0, 80)]),
+        ["When", "Actor", "Action", "Module", "Business", "Order / details"],
+        rows.map((r) => [
+          r.created_at,
+          r.actor_name,
+          r.action,
+          r.module,
+          businessLabel(r),
+          auditDetails(r),
+        ]),
       );
     } else if (tab === "notes") {
       body.innerHTML = `<form class="settings" id="note-form">
