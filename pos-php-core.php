@@ -1,0 +1,882 @@
+<?php
+require_once __DIR__ . "/pos-php-scrypt.php";
+
+function pos_env($key, $default = "") {
+  foreach ([getenv($key), $_ENV[$key] ?? null, $_SERVER[$key] ?? null] as $v) {
+    if ($v !== false && $v !== null && $v !== "") return (string) $v;
+  }
+  return $default;
+}
+
+function pos_load_dotenv() {
+  static $done = false;
+  if ($done) return;
+  $done = true;
+  $doc = rtrim((string) ($_SERVER["DOCUMENT_ROOT"] ?? __DIR__), "/");
+  $home = (string) (getenv("HOME") ?: "");
+  $files = [$doc . "/.env", __DIR__ . "/.env"];
+  if ($home) {
+    foreach (glob($home . "/domains/*/public_html/.env") ?: [] as $f) $files[] = $f;
+  }
+  foreach ($files as $file) {
+    if (!is_file($file) || !is_readable($file)) continue;
+    foreach (preg_split("/\r\n|\n|\r/", (string) file_get_contents($file)) as $line) {
+      $line = trim($line);
+      if ($line === "" || $line[0] === "#" || strpos($line, "=") === false) continue;
+      [$k, $v] = explode("=", $line, 2);
+      $k = trim($k);
+      $v = trim($v);
+      if ($v !== "" && ($v[0] === '"' || $v[0] === "'") && substr($v, -1) === $v[0]) {
+        $v = substr($v, 1, -1);
+      }
+      if ($k !== "" && getenv($k) === false) {
+        putenv($k . "=" . $v);
+        $_ENV[$k] = $v;
+      }
+    }
+    break;
+  }
+}
+
+function pos_db_cfg() {
+  pos_load_dotenv();
+  $url = pos_env("DATABASE_URL", pos_env("MYSQL_URL"));
+  $cfg = [
+    "host" => pos_env("DB_HOST", "localhost"),
+    "port" => (int) pos_env("DB_PORT", "3306"),
+    "name" => pos_env("DB_NAME"),
+    "user" => pos_env("DB_USER"),
+    "pass" => pos_env("DB_PASSWORD", pos_env("DB_PASS")),
+  ];
+  if ($url && preg_match("#^mysql://#i", $url)) {
+    $p = parse_url($url);
+    if (!empty($p["host"])) $cfg["host"] = $p["host"];
+    if (!empty($p["port"])) $cfg["port"] = (int) $p["port"];
+    if (!empty($p["user"])) $cfg["user"] = urldecode($p["user"]);
+    if (isset($p["pass"])) $cfg["pass"] = urldecode($p["pass"]);
+    $cfg["name"] = ltrim((string) ($p["path"] ?? ""), "/");
+  }
+  return $cfg;
+}
+
+function pos_db() {
+  static $db = null;
+  if ($db instanceof mysqli) return $db;
+  if (!class_exists("mysqli")) throw new Exception("PHP mysqli is not enabled");
+  $c = pos_db_cfg();
+  if ($c["name"] === "" || $c["user"] === "") {
+    throw new Exception("MySQL env missing. Put DB_HOST, DB_NAME, DB_USER, DB_PASSWORD in public_html/.env (same values as the Node app).");
+  }
+  mysqli_report(MYSQLI_REPORT_OFF);
+  $db = @new mysqli($c["host"], $c["user"], $c["pass"], $c["name"], $c["port"] ?: 3306);
+  if ($db->connect_errno) {
+    throw new Exception("MySQL connect failed. Check DB_* in .env (host is usually localhost on Hostinger).");
+  }
+  $db->set_charset("utf8mb4");
+  return $db;
+}
+
+function pos_q($sql, $types = "", $params = []) {
+  $db = pos_db();
+  foreach ($params as $i => $p) {
+    if ($p === null) $params[$i] = "";
+  }
+  if ($types === "") {
+    $res = $db->query($sql);
+    if ($res === false) throw new Exception("SQL error");
+    if ($res === true) return [];
+    $rows = $res->fetch_all(MYSQLI_ASSOC);
+    $res->free();
+    return $rows;
+  }
+  $st = $db->prepare($sql);
+  if (!$st) throw new Exception("SQL error");
+  $bind = [];
+  foreach ($params as $i => $p) {
+    $params[$i] = $p;
+    $bind[] = &$params[$i];
+  }
+  array_unshift($bind, $types);
+  call_user_func_array([$st, "bind_param"], $bind);
+  if (!$st->execute()) {
+    $err = $st->error;
+    $st->close();
+    throw new Exception($err ?: "SQL error");
+  }
+  $res = $st->get_result();
+  $rows = $res ? $res->fetch_all(MYSQLI_ASSOC) : [];
+  $st->close();
+  return $rows;
+}
+
+function pos_uuid() {
+  $d = random_bytes(16);
+  $d[6] = chr((ord($d[6]) & 0x0f) | 0x40);
+  $d[8] = chr((ord($d[8]) & 0x3f) | 0x80);
+  $h = bin2hex($d);
+  return substr($h, 0, 8) . "-" . substr($h, 8, 4) . "-" . substr($h, 12, 4) . "-" . substr($h, 16, 4) . "-" . substr($h, 20, 12);
+}
+
+function pos_sha256($v) {
+  return hash("sha256", (string) $v);
+}
+
+function pos_new_token() {
+  return bin2hex(random_bytes(32));
+}
+
+function pos_json_body($raw) {
+  $j = json_decode((string) $raw, true);
+  return is_array($j) ? $j : [];
+}
+
+function pos_remember($body) {
+  $v = $body["remember"] ?? false;
+  return $v === true || $v === "true" || $v === "1" || $v === "on";
+}
+
+function pos_ttl($remember) {
+  return $remember ? 30 * 24 * 3600 : 12 * 3600;
+}
+
+function pos_secure_cookie() {
+  $proto = strtolower(explode(",", (string) ($_SERVER["HTTP_X_FORWARDED_PROTO"] ?? ""))[0]);
+  return pos_env("COOKIE_SECURE") === "1" || $proto === "https" || (!empty($_SERVER["HTTPS"]) && $_SERVER["HTTPS"] !== "off");
+}
+
+function pos_set_cookie($name, $value, $ttl) {
+  $opts = [
+    "expires" => time() + (int) $ttl,
+    "path" => "/",
+    "secure" => pos_secure_cookie(),
+    "httponly" => true,
+    "samesite" => "Lax",
+  ];
+  setcookie($name, $value, $opts);
+}
+
+function pos_clear_cookie($name) {
+  $opts = [
+    "expires" => time() - 3600,
+    "path" => "/",
+    "secure" => pos_secure_cookie(),
+    "httponly" => true,
+    "samesite" => "Lax",
+  ];
+  setcookie($name, "", $opts);
+}
+
+function pos_ip() {
+  $xff = explode(",", (string) ($_SERVER["HTTP_X_FORWARDED_FOR"] ?? ""));
+  $ip = trim($xff[0]);
+  return $ip !== "" ? $ip : (string) ($_SERVER["REMOTE_ADDR"] ?? "");
+}
+
+function pos_ua() {
+  return substr((string) ($_SERVER["HTTP_USER_AGENT"] ?? ""), 0, 250);
+}
+
+function pos_cookie($name) {
+  return isset($_COOKIE[$name]) ? (string) $_COOKIE[$name] : "";
+}
+
+function pos_public_status($b) {
+  if (!$b) return "inactive";
+  $st = (string) ($b["status"] ?? "");
+  if ($st === "suspended" || $st === "inactive") return $st;
+  if (!empty($b["subscription_expires_at"])) {
+    $exp = strtotime($b["subscription_expires_at"]);
+    if ($exp && $exp < time()) return "expired";
+  }
+  return $st !== "" ? $st : "active";
+}
+
+function pos_display_name($u) {
+  $joined = trim(($u["first_name"] ?? "") . " " . ($u["last_name"] ?? ""));
+  return $joined !== "" ? $joined : ($u["email"] ?? "User");
+}
+
+function pos_parse_perms($user) {
+  if (!empty($user["permissions_json"])) {
+    $p = json_decode($user["permissions_json"], true);
+    if (is_array($p)) return $p;
+  }
+  return pos_default_perms($user["role"] ?? "staff");
+}
+
+function pos_default_perms($role) {
+  $all = [
+    "dashboard" => true, "counter" => true, "items" => true, "customers" => true, "packs" => true,
+    "orders" => true, "purchases" => true, "suppliers" => true, "stock" => true, "staff" => true,
+    "branches" => true, "devices" => true, "reports" => true, "settings" => true, "support" => true, "discount" => true,
+  ];
+  if ($role === "business_admin") return $all;
+  return ["dashboard" => true, "counter" => true, "support" => true];
+}
+
+function pos_send($status, $payload) {
+  http_response_code((int) $status);
+  header("Content-Type: application/json; charset=utf-8");
+  echo json_encode($payload, JSON_UNESCAPED_UNICODE);
+  exit;
+}
+
+function pos_master_session() {
+  $token = pos_cookie("pos_master");
+  if ($token === "") return null;
+  $hash = pos_sha256($token);
+  $rows = pos_q(
+    "SELECT s.*, a.email, a.name, a.status
+     FROM platform_sessions s
+     JOIN platform_admins a ON a.id = s.admin_id
+     WHERE s.token_hash = ? AND s.revoked_at IS NULL AND s.expires_at > NOW() LIMIT 1",
+    "s",
+    [$hash]
+  );
+  $row = $rows[0] ?? null;
+  if (!$row || ($row["status"] ?? "") !== "active") return null;
+  return ["type" => "master", "admin" => ["id" => $row["admin_id"], "email" => $row["email"], "name" => $row["name"]]];
+}
+
+function pos_staff_session() {
+  $token = pos_cookie("pos_sid");
+  if ($token === "") return null;
+  $hash = pos_sha256($token);
+  $rows = pos_q(
+    "SELECT s.*, u.email, u.first_name, u.last_name, u.role, u.status AS user_status,
+            u.business_id, u.branch_id AS user_branch_id, u.permissions_json, u.clerk_user_id, u.id AS staff_id
+     FROM staff_sessions s
+     JOIN staff_users u ON u.id = s.staff_user_id
+     WHERE s.token_hash = ? AND s.revoked_at IS NULL AND s.expires_at > NOW() LIMIT 1",
+    "s",
+    [$hash]
+  );
+  $row = $rows[0] ?? null;
+  if (!$row || ($row["user_status"] ?? "") !== "active") return null;
+  $biz = pos_q("SELECT * FROM businesses WHERE id = ? LIMIT 1", "s", [$row["business_id"]]);
+  return [
+    "type" => "staff",
+    "user" => [
+      "id" => $row["staff_id"],
+      "clerk_user_id" => $row["clerk_user_id"],
+      "email" => $row["email"],
+      "first_name" => $row["first_name"],
+      "last_name" => $row["last_name"],
+      "role" => $row["role"],
+      "business_id" => $row["business_id"],
+      "branch_id" => $row["branch_id"] ?: $row["user_branch_id"],
+      "permissions_json" => $row["permissions_json"],
+    ],
+    "business" => $biz[0] ?? null,
+    "branchId" => $row["branch_id"] ?: $row["user_branch_id"],
+  ];
+}
+
+function pos_require_master($path) {
+  if (strpos($path, "master/") !== 0) return pos_master_session() ?: pos_staff_session();
+  $auth = pos_master_session();
+  if (!$auth) pos_send(401, ["error" => "Master admin sign in required"]);
+  return $auth;
+}
+
+function pos_pick($body, ...$keys) {
+  foreach ($keys as $k) {
+    if (isset($body[$k]) && trim((string) $body[$k]) !== "") return $body[$k];
+  }
+  return "";
+}
+
+function pos_validate_signup($raw, $requireAdmin = true) {
+  $b = [
+    "name" => pos_pick($raw, "name", "businessName"),
+    "business_type" => pos_pick($raw, "business_type", "businessType"),
+    "category" => pos_pick($raw, "category", "businessCategory"),
+    "owner_name" => pos_pick($raw, "owner_name", "ownerName"),
+    "mobile" => pos_pick($raw, "mobile"),
+    "email" => pos_pick($raw, "email", "admin_email"),
+    "gstin" => pos_pick($raw, "gstin", "gstNumber"),
+    "pan" => pos_pick($raw, "pan", "panNumber"),
+    "address" => pos_pick($raw, "address"),
+    "city" => pos_pick($raw, "city"),
+    "state" => pos_pick($raw, "state"),
+    "pin_code" => pos_pick($raw, "pin_code", "pinCode"),
+    "logo_url" => pos_pick($raw, "logo_url", "logoDataUrl"),
+    "username" => pos_pick($raw, "username", "adminUsername", "admin_username"),
+    "password" => pos_pick($raw, "password", "admin_password"),
+    "confirm_password" => pos_pick($raw, "confirm_password", "confirmPassword", "admin_password_confirm"),
+    "plan_id" => pos_pick($raw, "plan_id"),
+    "subscription_expires_at" => pos_pick($raw, "subscription_expires_at"),
+    "status" => pos_pick($raw, "status"),
+  ];
+  $required = ["name", "business_type", "category", "owner_name", "mobile", "email", "address", "city", "state", "pin_code"];
+  if ($requireAdmin) {
+    $required[] = "username";
+    $required[] = "password";
+  }
+  foreach ($required as $key) {
+    if (trim((string) ($b[$key] ?? "")) === "") throw new Exception(str_replace("_", " ", $key) . " is required");
+  }
+  if ($requireAdmin || $b["password"] || $b["confirm_password"]) {
+    if ((string) $b["password"] !== (string) $b["confirm_password"]) throw new Exception("Password and confirm password do not match");
+    if (strlen((string) $b["password"]) < 8) throw new Exception("Password must be at least 8 characters");
+  }
+  $mobile = preg_replace("/\D/", "", (string) $b["mobile"]);
+  if (strlen($mobile) < 10) throw new Exception("Enter a valid mobile number");
+  $email = strtolower(trim((string) $b["email"]));
+  if (!preg_match("/^[^\s@]+@[^\s@]+\.[^\s@]+$/", $email)) throw new Exception("Enter a valid email ID");
+  $username = strtolower(trim((string) $b["username"]));
+  if (($requireAdmin || $username) && !preg_match("/^[a-z0-9._-]{3,32}$/", $username)) {
+    throw new Exception("Username must be 3–32 letters, numbers, dot, dash or underscore");
+  }
+  $pin = preg_replace("/\D/", "", (string) $b["pin_code"]);
+  if (strlen($pin) !== 6) throw new Exception("PIN code must be 6 digits");
+  $logo = $b["logo_url"] ? (string) $b["logo_url"] : "";
+  if ($logo && strpos($logo, "data:image/") !== 0) throw new Exception("Logo must be an uploaded image");
+  $status = trim((string) ($b["status"] ?: "active")) ?: "active";
+  if (!in_array($status, ["active", "inactive", "suspended"], true)) throw new Exception("Invalid status");
+  return [
+    "name" => trim((string) $b["name"]),
+    "business_type" => trim((string) $b["business_type"]),
+    "category" => trim((string) $b["category"]),
+    "owner_name" => trim((string) $b["owner_name"]),
+    "mobile" => $mobile,
+    "email" => $email,
+    "gstin" => trim((string) $b["gstin"]) ?: null,
+    "pan" => strtoupper(trim((string) $b["pan"])) ?: null,
+    "address" => trim((string) $b["address"]),
+    "city" => trim((string) $b["city"]),
+    "state" => trim((string) $b["state"]),
+    "pin_code" => $pin,
+    "logo_url" => $logo ?: null,
+    "username" => $username,
+    "password" => (string) $b["password"],
+    "plan_id" => trim((string) ($b["plan_id"] ?: "trial")) ?: "trial",
+    "subscription_expires_at" => trim((string) $b["subscription_expires_at"]) ?: null,
+    "status" => $status,
+  ];
+}
+
+function pos_register_business($raw) {
+  $b = pos_validate_signup($raw, true);
+  $taken = pos_q("SELECT id FROM staff_users WHERE email = ? LIMIT 1", "s", [$b["email"]]);
+  if ($taken) throw new Exception("This email is already registered");
+  $ut = pos_q("SELECT id FROM staff_users WHERE username = ? LIMIT 1", "s", [$b["username"]]);
+  if ($ut) throw new Exception("This username is already taken");
+  $full = $b["address"] . ", " . $b["city"] . ", " . $b["state"] . " " . $b["pin_code"];
+  $id = pos_uuid();
+  $code = substr("B" . strtoupper(base_convert((string) (int) (microtime(true) * 1000), 10, 36)), 0, 12);
+  $shop = $b["name"];
+  $nameHit = pos_q("SELECT id FROM businesses WHERE name = ? LIMIT 1", "s", [$shop]);
+  if ($nameHit) $shop = $b["name"] . " (" . $b["city"] . ")";
+  $planRow = pos_q("SELECT id FROM subscription_plans WHERE id = ? OR code = ? LIMIT 1", "ss", [$b["plan_id"], strtoupper($b["plan_id"])]);
+  $planId = $planRow[0]["id"] ?? "trial";
+  $expiry = $b["subscription_expires_at"] ?: date("Y-m-d", strtotime("+30 days"));
+  $hash = pos_hash_password($b["password"]);
+  $branchId = pos_uuid();
+  $uid = pos_uuid();
+  $perms = json_encode(pos_default_perms("business_admin"));
+  pos_q(
+    "INSERT INTO businesses (
+       id, code, name, status, owner_name, mobile, email, address, gstin,
+       business_type, plan_id, subscription_expires_at, logo_url, category, pan, city, state, pin_code
+     ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+    "ssssssssssssssssss",
+    [
+      $id, $code, $shop, $b["status"] ?: "active", $b["owner_name"], $b["mobile"], $b["email"], $full, $b["gstin"],
+      $b["business_type"], $planId, $expiry, $b["logo_url"], $b["category"], $b["pan"], $b["city"], $b["state"], $b["pin_code"],
+    ]
+  );
+  try {
+    pos_q(
+      "INSERT INTO company_settings (id, name, address, phone, email, gstin, pan, city, state, pincode, logo_url, business_id)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+      "ssssssssssss",
+      [pos_uuid(), $shop, $full, $b["mobile"], $b["email"], $b["gstin"], $b["pan"], $b["city"], $b["state"], $b["pin_code"], $b["logo_url"], $id]
+    );
+  } catch (Exception $e) { /* optional table */ }
+  pos_q(
+    "INSERT INTO branches (id, business_id, name, address, phone, status) VALUES (?,?,?,?,?, 'active')",
+    "sssss",
+    [$branchId, $id, "Main Branch", $full, $b["mobile"]]
+  );
+  try {
+    pos_q(
+      "INSERT INTO pos_devices (id, business_id, branch_id, name, code, status) VALUES (?,?,?,?,?, 'active')",
+      "sssss",
+      [pos_uuid(), $id, $branchId, "POS 01", "POS-" . $code]
+    );
+  } catch (Exception $e) { /* optional */ }
+  pos_q(
+    "INSERT INTO staff_users (
+       id, clerk_user_id, email, first_name, last_name, role, status, password_hash,
+       business_id, branch_id, permissions_json, username, mobile
+     ) VALUES (?,?,?,?,?,?, 'active', ?,?,?,?,?,?)",
+    "ssssssssssss",
+    [$uid, "local:" . $uid, $b["email"], $b["owner_name"], "", "business_admin", $hash, $id, $branchId, $perms, $b["username"], $b["mobile"]]
+  );
+  $users = pos_q("SELECT * FROM staff_users WHERE id = ? LIMIT 1", "s", [$uid]);
+  return ["businessId" => $id, "user" => $users[0]];
+}
+
+function pos_platform_settings() {
+  $rows = pos_q("SELECT setting_key, setting_value FROM platform_settings");
+  $map = [];
+  foreach ($rows as $r) $map[$r["setting_key"]] = $r["setting_value"] ?: "";
+  return ["support_phone" => $map["support_phone"] ?? "", "support_email" => $map["support_email"] ?? ""];
+}
+
+function pos_set_setting($key, $value) {
+  pos_q(
+    "INSERT INTO platform_settings (setting_key, setting_value) VALUES (?, ?)
+     ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value), updated_at = CURRENT_TIMESTAMP(3)",
+    "ss",
+    [$key, $value === null ? "" : trim((string) $value)]
+  );
+}
+
+function pos_audit($admin, $action, $details) {
+  try {
+    pos_q(
+      "INSERT INTO staff_audit_logs (
+         id, actor_clerk_user_id, actor_name, module, target_id, target_name, action, details, business_id, ip
+       ) VALUES (?,?,?,?,?,?,?,?, 'platform', ?)",
+      "sssssssss",
+      [
+        pos_uuid(),
+        $admin["id"] ?? "master",
+        $admin["email"] ?? "master",
+        $details["module"] ?? "master",
+        $details["target_id"] ?? null,
+        $details["target_name"] ?? $action,
+        $action,
+        json_encode($details),
+        pos_ip(),
+      ]
+    );
+  } catch (Exception $e) { /* audit is best-effort */ }
+}
+
+function pos_n($v, $fallback) {
+  if ($v === null || $v === "") return $fallback;
+  return (int) $v;
+}
+
+function pos_php_dispatch($path, $method, $rawBody) {
+  $method = strtoupper((string) $method);
+  $path = trim((string) $path, "/");
+  $body = pos_json_body($rawBody);
+  try {
+    if ($path === "health") {
+      pos_q("SELECT 1");
+      pos_send(200, ["ok" => true, "multiTenant" => true, "php" => true, "node" => false]);
+    }
+    if ($path === "support-contact" && $method === "GET") {
+      pos_send(200, pos_platform_settings());
+    }
+
+    if ($path === "auth/master-login" && $method === "POST") {
+      $email = strtolower(trim((string) ($body["email"] ?? "")));
+      $rows = pos_q("SELECT * FROM platform_admins WHERE email = ? LIMIT 1", "s", [$email]);
+      $admin = $rows[0] ?? null;
+      $pass = (string) ($body["password"] ?? "");
+      $envPass = pos_env("MASTER_ADMIN_PASSWORD");
+      $ok = false;
+      if ($admin && ($admin["status"] ?? "") === "active") {
+        if ($envPass !== "" && strlen($envPass) === strlen($pass) && hash_equals($envPass, $pass)) $ok = true;
+        else $ok = pos_verify_password($pass, $admin["password_hash"]);
+      }
+      if (!$ok) {
+        pos_send(401, ["error" => "Invalid master login"]);
+      }
+      $ttl = pos_ttl(pos_remember($body));
+      $token = pos_new_token();
+      pos_q(
+        "INSERT INTO platform_sessions (id, admin_id, token_hash, expires_at, ip, user_agent) VALUES (?,?,?,?,?,?)",
+        "ssssss",
+        [pos_uuid(), $admin["id"], pos_sha256($token), date("Y-m-d H:i:s", time() + $ttl), pos_ip(), pos_ua()]
+      );
+      pos_set_cookie("pos_master", $token, $ttl);
+      try {
+        pos_q(
+          "INSERT INTO staff_audit_logs (id, actor_clerk_user_id, actor_name, module, target_name, action, details, business_id, ip)
+           VALUES (?,?,?,?,?,?,?, 'platform', ?)",
+          "ssssssss",
+          [pos_uuid(), $admin["id"], $admin["email"], "master", "login", "User Login", "{}", pos_ip()]
+        );
+      } catch (Exception $e) { /* ignore */ }
+      pos_send(200, ["ok" => true, "admin" => ["id" => $admin["id"], "email" => $admin["email"], "name" => $admin["name"]], "php" => true]);
+    }
+
+    if ($path === "auth/login" && $method === "POST") {
+      $id = trim((string) ($body["identifier"] ?? $body["email"] ?? ""));
+      $low = strtolower($id);
+      $rows = pos_q(
+        "SELECT * FROM staff_users WHERE LOWER(email) = ? OR username = ? OR mobile = ? OR clerk_user_id = ? LIMIT 1",
+        "ssss",
+        [$low, $id, $id, $id]
+      );
+      $user = $rows[0] ?? null;
+      if (!$user) pos_send(401, ["error" => "Invalid login"]);
+      if (!empty($user["locked_until"]) && strtotime($user["locked_until"]) > time()) {
+        pos_send(423, ["error" => "Account locked. Try later."]);
+      }
+      if (($user["status"] ?? "") !== "active") pos_send(403, ["error" => "User is inactive"]);
+      if (!pos_verify_password($body["password"] ?? "", $user["password_hash"])) {
+        $fails = ((int) ($user["failed_logins"] ?? 0)) + 1;
+        if ($fails >= 8) {
+          pos_q("UPDATE staff_users SET failed_logins = ?, locked_until = ? WHERE id = ?", "iss", [$fails, date("Y-m-d H:i:s", time() + 15 * 60), $user["id"]]);
+        } else {
+          pos_q("UPDATE staff_users SET failed_logins = ? WHERE id = ?", "is", [$fails, $user["id"]]);
+        }
+        pos_send(401, ["error" => "Invalid login"]);
+      }
+      $bizRows = pos_q("SELECT * FROM businesses WHERE id = ? LIMIT 1", "s", [$user["business_id"]]);
+      $business = $bizRows[0] ?? null;
+      $status = pos_public_status($business);
+      if ($status === "suspended" || $status === "inactive") pos_send(403, ["error" => "Business is " . $status]);
+      pos_q("UPDATE staff_users SET failed_logins = 0, locked_until = NULL WHERE id = ?", "s", [$user["id"]]);
+      $ttl = pos_ttl(pos_remember($body));
+      $token = pos_new_token();
+      $branchId = $body["branchId"] ?? $user["branch_id"];
+      pos_q(
+        "INSERT INTO staff_sessions (id, staff_user_id, token_hash, expires_at, business_id, ip, user_agent, branch_id)
+         VALUES (?,?,?,?,?,?,?,?)",
+        "ssssssss",
+        [pos_uuid(), $user["id"], pos_sha256($token), date("Y-m-d H:i:s", time() + $ttl), $user["business_id"], pos_ip(), pos_ua(), $branchId]
+      );
+      pos_set_cookie("pos_sid", $token, $ttl);
+      pos_send(200, [
+        "ok" => true,
+        "expired" => $status === "expired",
+        "php" => true,
+        "user" => [
+          "id" => $user["id"],
+          "email" => $user["email"],
+          "name" => pos_display_name($user),
+          "role" => $user["role"],
+          "permissions" => pos_parse_perms($user),
+        ],
+        "business" => [
+          "id" => $business["id"] ?? null,
+          "name" => $business["name"] ?? null,
+          "status" => $status,
+          "subscription_expires_at" => $business["subscription_expires_at"] ?? null,
+        ],
+      ]);
+    }
+
+    if ($path === "auth/signup" && $method === "POST") {
+      $reg = pos_register_business($body);
+      $user = $reg["user"];
+      $bizRows = pos_q("SELECT * FROM businesses WHERE id = ? LIMIT 1", "s", [$user["business_id"]]);
+      $business = $bizRows[0];
+      $ttl = pos_ttl(pos_remember($body));
+      $token = pos_new_token();
+      pos_q(
+        "INSERT INTO staff_sessions (id, staff_user_id, token_hash, expires_at, business_id, ip, user_agent, branch_id)
+         VALUES (?,?,?,?,?,?,?,?)",
+        "ssssssss",
+        [pos_uuid(), $user["id"], pos_sha256($token), date("Y-m-d H:i:s", time() + $ttl), $user["business_id"], pos_ip(), pos_ua(), $user["branch_id"]]
+      );
+      pos_set_cookie("pos_sid", $token, $ttl);
+      pos_send(200, [
+        "ok" => true,
+        "php" => true,
+        "user" => ["id" => $user["id"], "email" => $user["email"], "name" => pos_display_name($user), "role" => $user["role"]],
+        "business" => ["id" => $business["id"], "name" => $business["name"], "status" => "active"],
+      ]);
+    }
+
+    if ($path === "auth/logout" && $method === "POST") {
+      $sid = pos_cookie("pos_sid");
+      $master = pos_cookie("pos_master");
+      if ($sid) pos_q("UPDATE staff_sessions SET revoked_at = NOW() WHERE token_hash = ?", "s", [pos_sha256($sid)]);
+      if ($master) pos_q("UPDATE platform_sessions SET revoked_at = NOW() WHERE token_hash = ?", "s", [pos_sha256($master)]);
+      pos_clear_cookie("pos_sid");
+      pos_clear_cookie("pos_master");
+      pos_send(200, ["ok" => true]);
+    }
+
+    if ($path === "auth/me" && $method === "GET") {
+      $master = pos_master_session();
+      $staff = pos_staff_session();
+      if ($master) pos_send(200, ["ok" => true, "type" => "master", "admin" => $master["admin"]]);
+      if ($staff) {
+        $status = pos_public_status($staff["business"]);
+        $plan = null;
+        if (!empty($staff["business"]["plan_id"])) {
+          $pr = pos_q("SELECT id, code, name, fee_monthly FROM subscription_plans WHERE id = ? LIMIT 1", "s", [$staff["business"]["plan_id"]]);
+          $plan = $pr[0] ?? null;
+        }
+        pos_send(200, [
+          "ok" => true,
+          "type" => "staff",
+          "user" => [
+            "id" => $staff["user"]["id"],
+            "email" => $staff["user"]["email"],
+            "name" => pos_display_name($staff["user"]),
+            "role" => $staff["user"]["role"],
+            "permissions" => pos_parse_perms($staff["user"]),
+            "branch_id" => $staff["branchId"],
+          ],
+          "business" => [
+            "id" => $staff["business"]["id"] ?? null,
+            "name" => $staff["business"]["name"] ?? null,
+            "status" => $status,
+            "plan_id" => $staff["business"]["plan_id"] ?? null,
+            "subscription_expires_at" => $staff["business"]["subscription_expires_at"] ?? null,
+          ],
+          "plan" => $plan,
+        ]);
+      }
+      pos_send(401, ["error" => "Not signed in"]);
+    }
+
+    $auth = pos_require_master($path);
+
+    if ($path === "master/dashboard" && $method === "GET") {
+      $businesses = pos_q("SELECT * FROM businesses");
+      $statuses = array_map("pos_public_status", $businesses);
+      $users = pos_q("SELECT COUNT(*) AS n FROM staff_users");
+      $branches = pos_q("SELECT COUNT(*) AS n FROM branches");
+      $devices = pos_q("SELECT COUNT(*) AS n FROM pos_devices");
+      $tx = pos_q("SELECT COUNT(*) AS n FROM sales_orders");
+      $sales = pos_q("SELECT COALESCE(SUM(total),0) AS takings FROM sales_orders WHERE DATE(created_at)=CURDATE()");
+      $plans = pos_q("SELECT * FROM subscription_plans");
+      $planMap = [];
+      foreach ($plans as $p) $planMap[$p["id"]] = $p;
+      $monthly = 0;
+      foreach ($businesses as $b) {
+        if (pos_public_status($b) !== "active") continue;
+        $monthly += (float) ($planMap[$b["plan_id"]]["fee_monthly"] ?? 0);
+      }
+      $byBiz = pos_q(
+        "SELECT b.id, b.name, b.status, b.subscription_expires_at, b.plan_id,
+                p.name AS plan_name, p.fee_monthly,
+                (SELECT COUNT(*) FROM staff_users u WHERE u.business_id=b.id) AS users,
+                (SELECT COUNT(*) FROM branches br WHERE br.business_id=b.id) AS branches,
+                (SELECT COALESCE(SUM(total),0) FROM sales_orders s WHERE s.business_id=b.id AND DATE(s.created_at)=CURDATE()) AS today_sales
+         FROM businesses b
+         LEFT JOIN subscription_plans p ON p.id = b.plan_id
+         ORDER BY b.name"
+      );
+      foreach ($byBiz as &$row) $row["computed_status"] = pos_public_status($row);
+      pos_send(200, [
+        "totals" => [
+          "businesses" => count($businesses),
+          "active" => count(array_filter($statuses, function ($s) { return $s === "active"; })),
+          "inactive" => count(array_filter($statuses, function ($s) { return $s === "inactive"; })),
+          "expired" => count(array_filter($statuses, function ($s) { return $s === "expired"; })),
+          "suspended" => count(array_filter($statuses, function ($s) { return $s === "suspended"; })),
+          "trial" => count(array_filter($businesses, function ($b) { return ($b["plan_id"] ?? "") === "trial"; })),
+          "users" => (int) ($users[0]["n"] ?? 0),
+          "branches" => (int) ($branches[0]["n"] ?? 0),
+          "devices" => (int) ($devices[0]["n"] ?? 0),
+          "transactions" => (int) ($tx[0]["n"] ?? 0),
+          "todaySales" => $sales[0]["takings"] ?? 0,
+          "subscriptionRevenue" => $monthly,
+        ],
+        "businesses" => $byBiz,
+      ]);
+    }
+
+    if ($path === "master/plans" && $method === "GET") {
+      pos_send(200, pos_q("SELECT * FROM subscription_plans ORDER BY max_users"));
+    }
+
+    if ($path === "master/plans" && $method === "POST") {
+      $id = strtolower((string) ($body["code"] ?? $body["name"] ?? "plan"));
+      $id = substr(preg_replace("/[^a-z0-9]+/", "-", $id), 0, 32);
+      pos_q(
+        "INSERT INTO subscription_plans
+           (id, code, name, max_branches, max_users, max_devices, max_products, max_invoices, fee_monthly, active)
+         VALUES (?,?,?,?,?,?,?,?,?,?)
+         ON DUPLICATE KEY UPDATE name=VALUES(name), max_branches=VALUES(max_branches),
+           max_users=VALUES(max_users), max_devices=VALUES(max_devices),
+           max_products=VALUES(max_products), max_invoices=VALUES(max_invoices),
+           fee_monthly=VALUES(fee_monthly), active=VALUES(active)",
+        "sssiiiiidi",
+        [
+          $id,
+          strtoupper((string) ($body["code"] ?? $id)),
+          $body["name"] ?? $id,
+          (int) ($body["max_branches"] ?? 1),
+          (int) ($body["max_users"] ?? 3),
+          (int) ($body["max_devices"] ?? 2),
+          (int) ($body["max_products"] ?? 500),
+          (int) ($body["max_invoices"] ?? 1000),
+          (float) ($body["fee_monthly"] ?? 0),
+          ($body["active"] === false || $body["active"] === 0 || $body["active"] === "0") ? 0 : 1,
+        ]
+      );
+      $plan = pos_q("SELECT * FROM subscription_plans WHERE id = ? LIMIT 1", "s", [$id]);
+      pos_audit($auth["admin"], "Plan Saved", ["module" => "plans", "target_name" => $id]);
+      pos_send(200, ["ok" => true, "plan" => $plan[0] ?? null]);
+    }
+
+    if (preg_match("#^master/plans/([^/]+)$#", $path, $m) && $method === "PUT") {
+      $id = $m[1];
+      $existing = pos_q("SELECT * FROM subscription_plans WHERE id = ? LIMIT 1", "s", [$id]);
+      if (!$existing) throw new Exception("Plan not found");
+      $ex = $existing[0];
+      $code = strtoupper((string) ($body["code"] ?? $ex["code"]));
+      $code = substr(preg_replace("/[^A-Z0-9]+/", "", $code), 0, 32) ?: $ex["code"];
+      pos_q(
+        "UPDATE subscription_plans SET code=?, name=?, max_branches=?, max_users=?, max_devices=?, max_products=?,
+           max_invoices=?, fee_monthly=?, active=? WHERE id=?",
+        "ssiiiiidis",
+        [
+          $code,
+          $body["name"] ?? $ex["name"],
+          pos_n($body["max_branches"] ?? null, $ex["max_branches"]),
+          pos_n($body["max_users"] ?? null, $ex["max_users"]),
+          pos_n($body["max_devices"] ?? null, $ex["max_devices"]),
+          pos_n($body["max_products"] ?? null, $ex["max_products"]),
+          pos_n($body["max_invoices"] ?? null, $ex["max_invoices"]),
+          pos_n($body["fee_monthly"] ?? null, $ex["fee_monthly"]),
+          ($body["active"] === false || $body["active"] === 0 || $body["active"] === "0") ? 0 : 1,
+          $id,
+        ]
+      );
+      $plan = pos_q("SELECT * FROM subscription_plans WHERE id = ? LIMIT 1", "s", [$id]);
+      pos_audit($auth["admin"], "Plan Edited", ["module" => "plans", "target_id" => $id, "target_name" => $code]);
+      pos_send(200, ["ok" => true, "plan" => $plan[0]]);
+    }
+
+    if ($path === "master/businesses" && $method === "GET") {
+      $rows = pos_q(
+        "SELECT b.*, p.name AS plan_name, p.fee_monthly,
+                (SELECT u.username FROM staff_users u
+                 WHERE u.business_id = b.id AND u.role = 'business_admin' LIMIT 1) AS admin_username
+         FROM businesses b
+         LEFT JOIN subscription_plans p ON p.id = b.plan_id
+         ORDER BY b.name"
+      );
+      foreach ($rows as &$row) $row["computed_status"] = pos_public_status($row);
+      pos_send(200, $rows);
+    }
+
+    if ($path === "master/businesses" && $method === "POST") {
+      $reg = pos_register_business($body);
+      pos_audit($auth["admin"], "Business Created", ["module" => "businesses", "target_id" => $reg["businessId"], "target_name" => $body["name"] ?? ""]);
+      $row = pos_q("SELECT * FROM businesses WHERE id = ? LIMIT 1", "s", [$reg["businessId"]]);
+      pos_send(200, ["ok" => true, "business" => $row[0]]);
+    }
+
+    if (preg_match("#^master/businesses/([^/]+)/status$#", $path, $m) && $method === "POST") {
+      $status = (string) ($body["status"] ?? "active");
+      if (!in_array($status, ["active", "inactive", "suspended"], true)) throw new Exception("Invalid status");
+      pos_q("UPDATE businesses SET status = ? WHERE id = ?", "ss", [$status, $m[1]]);
+      pos_audit($auth["admin"], "Business Status", ["module" => "businesses", "target_id" => $m[1], "status" => $status]);
+      pos_send(200, ["ok" => true, "status" => $status]);
+    }
+
+    if (preg_match("#^master/businesses/([^/]+)$#", $path, $m) && $method === "PUT") {
+      $id = $m[1];
+      $b = pos_validate_signup($body, false);
+      $existing = pos_q("SELECT * FROM businesses WHERE id = ? LIMIT 1", "s", [$id]);
+      if (!$existing) throw new Exception("Business not found");
+      $planRow = pos_q("SELECT id FROM subscription_plans WHERE id = ? OR code = ? LIMIT 1", "ss", [$b["plan_id"], strtoupper($b["plan_id"])]);
+      $planId = $planRow[0]["id"] ?? $existing[0]["plan_id"] ?? "trial";
+      $full = $b["address"] . ", " . $b["city"] . ", " . $b["state"] . " " . $b["pin_code"];
+      $logo = $b["logo_url"] ?: ($existing[0]["logo_url"] ?? null);
+      $expiry = $b["subscription_expires_at"] ?: ($existing[0]["subscription_expires_at"] ?? null);
+      pos_q(
+        "UPDATE businesses SET name=?, owner_name=?, mobile=?, email=?, address=?, gstin=?, business_type=?,
+           status=?, plan_id=?, subscription_expires_at=?, logo_url=?, category=?, pan=?, city=?, state=?, pin_code=?
+         WHERE id=?",
+        "sssssssssssssssss",
+        [
+          $b["name"], $b["owner_name"], $b["mobile"], $b["email"], $full, $b["gstin"], $b["business_type"],
+          $b["status"], $planId, $expiry, $logo, $b["category"], $b["pan"], $b["city"], $b["state"], $b["pin_code"], $id,
+        ]
+      );
+      $row = pos_q("SELECT * FROM businesses WHERE id = ? LIMIT 1", "s", [$id]);
+      pos_audit($auth["admin"], "Business Edited", ["module" => "businesses", "target_id" => $id, "target_name" => $row[0]["name"] ?? ""]);
+      pos_send(200, ["ok" => true, "business" => $row[0]]);
+    }
+
+    if (preg_match("#^master/businesses/([^/]+)$#", $path, $m) && $method === "DELETE") {
+      $id = $m[1];
+      $swami = pos_env("BUSINESS_ID", "00000000-0000-4000-8000-000000000001");
+      if ($id === $swami) throw new Exception("The primary live business cannot be deleted");
+      pos_q("UPDATE businesses SET status = 'inactive' WHERE id = ?", "s", [$id]);
+      pos_send(200, ["ok" => true, "note" => "Business set inactive. Data is retained."]);
+    }
+
+    if ($path === "master/users" && $method === "GET") {
+      pos_send(200, pos_q(
+        "SELECT u.id, u.email, u.first_name, u.last_name, u.role, u.status, u.business_id, u.mobile, u.username,
+                b.name AS business_name
+         FROM staff_users u LEFT JOIN businesses b ON b.id = u.business_id
+         ORDER BY u.email"
+      ));
+    }
+
+    if (preg_match("#^master/users/([^/]+)/reset-password$#", $path, $m) && $method === "POST") {
+      $password = $body["password"] ?? "";
+      if (strlen((string) $password) < 8) throw new Exception("Password must be 8+ characters");
+      pos_q("UPDATE staff_users SET password_hash = ?, failed_logins = 0, locked_until = NULL WHERE id = ?", "ss", [pos_hash_password($password), $m[1]]);
+      pos_send(200, ["ok" => true]);
+    }
+
+    if ($path === "master/branches" && $method === "GET") {
+      pos_send(200, pos_q(
+        "SELECT br.*, b.name AS business_name FROM branches br
+         JOIN businesses b ON b.id = br.business_id ORDER BY b.name, br.name"
+      ));
+    }
+
+    if ($path === "master/devices" && $method === "GET") {
+      pos_send(200, pos_q(
+        "SELECT d.*, b.name AS business_name, br.name AS branch_name
+         FROM pos_devices d
+         JOIN businesses b ON b.id = d.business_id
+         LEFT JOIN branches br ON br.id = d.branch_id
+         ORDER BY b.name, d.code"
+      ));
+    }
+
+    if ($path === "master/audit" && $method === "GET") {
+      pos_send(200, pos_q("SELECT * FROM staff_audit_logs ORDER BY created_at DESC LIMIT 200"));
+    }
+
+    if ($path === "master/settings" && $method === "GET") {
+      pos_send(200, [
+        "platform" => "ATAV Multi-Tenant POS",
+        "lockoutAttempts" => 8,
+        "sessionHours" => 12,
+        "notifications" => pos_q("SELECT * FROM notifications ORDER BY created_at DESC LIMIT 20"),
+      ]);
+    }
+
+    if ($path === "master/support" && $method === "GET") {
+      pos_send(200, pos_platform_settings());
+    }
+
+    if ($path === "master/support" && $method === "POST") {
+      $phone = trim((string) ($body["support_phone"] ?? ""));
+      $email = trim((string) ($body["support_email"] ?? ""));
+      if ($phone === "") throw new Exception("Support number is required");
+      pos_set_setting("support_phone", $phone);
+      pos_set_setting("support_email", $email);
+      pos_send(200, array_merge(["ok" => true], pos_platform_settings()));
+    }
+
+    if ($path === "master/notifications" && $method === "POST") {
+      $title = $body["title"] ?? "";
+      if (!$title) throw new Exception("Title is required");
+      $nid = pos_uuid();
+      pos_q("INSERT INTO notifications (id, business_id, title, body) VALUES (?,?,?,?)", "ssss", [$nid, $body["business_id"] ?? null, $title, $body["body"] ?? null]);
+      pos_send(200, ["ok" => true, "id" => $nid]);
+    }
+
+    pos_send(501, ["error" => "This action needs the Node.js POS process. PHP fallback covers sign-in and Master Admin lists only.", "php" => true]);
+  } catch (Exception $e) {
+    $msg = $e->getMessage();
+    $dup = preg_match("/duplicate|already (registered|taken)/i", $msg);
+    $code = $dup ? 409 : 400;
+    if (stripos($msg, "MySQL") !== false || stripos($msg, "env missing") !== false || stripos($msg, "mysqli") !== false) $code = 503;
+    pos_send($code, ["error" => $msg, "php" => true]);
+  }
+}

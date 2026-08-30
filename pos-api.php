@@ -1,4 +1,6 @@
 <?php
+@set_time_limit(180);
+@ini_set("memory_limit", "256M");
 header("Access-Control-Allow-Credentials: true");
 if (!empty($_SERVER["HTTP_ORIGIN"])) {
   header("Access-Control-Allow-Origin: " . $_SERVER["HTTP_ORIGIN"]);
@@ -187,11 +189,17 @@ if ($got) {
   exit;
 }
 
-$start = pos_try_start_node();
-$got = pos_try_proxy($suffix, $method, $body, $cookie);
-if ($got) {
-  pos_send_result($got[0], $got[1], $got[2], $got[3]);
-  exit;
+$start = "skipped";
+$canExec = function_exists("exec") || function_exists("shell_exec");
+if ($canExec) {
+  $start = pos_try_start_node();
+  $got = pos_try_proxy($suffix, $method, $body, $cookie);
+  if ($got) {
+    pos_send_result($got[0], $got[1], $got[2], $got[3]);
+    exit;
+  }
+} else {
+  $start = "PHP exec is disabled";
 }
 
 $hint = "";
@@ -203,10 +211,16 @@ if (is_file($logFile)) {
   if ($tail !== "") $hint = $tail;
 }
 
-http_response_code(503);
-header("Content-Type: application/json; charset=utf-8");
-echo json_encode([
-  "error" => "Node.js is not running on pos.atavtelecom.in. In hPanel this domain must be a Node.js web app (Express, entry server.js, empty build), with DB env vars, then Deploy and Restart. PHP start attempt: " . $start . ".",
-  "bridge" => "down",
-  "log" => $hint,
-]);
+require_once __DIR__ . "/pos-php-core.php";
+try {
+  pos_php_dispatch($path, $method, $body);
+} catch (Throwable $e) {
+  http_response_code(503);
+  header("Content-Type: application/json; charset=utf-8");
+  echo json_encode([
+    "error" => $e->getMessage(),
+    "php" => true,
+    "nodeStart" => $start,
+    "log" => $hint,
+  ]);
+}
