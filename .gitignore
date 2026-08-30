@@ -2,4 +2,7 @@ node_modules/
 .env
 pos-bridge.json
 pos-port.txt
+pos-node.log
+pos-node.startlock
+pos-node.json
 /.htaccess

@@ -135,18 +135,78 @@ function pos_read_ports() {
   return array_values($out);
 }
 
-$suffix = $path . ($qs !== "" ? "?" . $qs : "");
-foreach (pos_read_ports() as $port) {
-  $got = pos_curl("http://127.0.0.1:" . $port . "/api/" . $suffix, $method, $body, $cookie);
-  if ($got && pos_looks_json($got[3])) {
-    pos_send_result($got[0], $got[1], $got[2], $got[3]);
-    exit;
+function pos_try_proxy($suffix, $method, $body, $cookie) {
+  foreach (pos_read_ports() as $port) {
+    $got = pos_curl("http://127.0.0.1:" . $port . "/api/" . $suffix, $method, $body, $cookie);
+    if ($got && pos_looks_json($got[3])) return $got;
   }
+  return null;
+}
+
+function pos_which_node() {
+  foreach (["/opt/alt/alt-nodejs22/root/usr/bin/node", "/opt/alt/alt-nodejs20/root/usr/bin/node", "/opt/alt/alt-nodejs18/root/usr/bin/node", "/usr/bin/node", "/usr/local/bin/node"] as $p) {
+    if (is_executable($p)) return $p;
+  }
+  if (!function_exists("shell_exec")) return "";
+  foreach (["node", "nodejs"] as $bin) {
+    $p = trim((string) @shell_exec("command -v " . escapeshellarg($bin) . " 2>/dev/null"));
+    if ($p !== "" && is_executable($p)) return $p;
+  }
+  return "";
+}
+
+function pos_try_start_node() {
+  $root = rtrim((string) ($_SERVER["DOCUMENT_ROOT"] ?? __DIR__), "/");
+  if (!is_file($root . "/server.js")) return "missing server.js";
+  $lock = $root . "/pos-node.startlock";
+  if (is_file($lock) && filemtime($lock) > time() - 20) return "start already attempted";
+  @touch($lock);
+  $node = pos_which_node();
+  if ($node === "") return "node binary not found";
+  if (!function_exists("exec") && !function_exists("shell_exec")) return "PHP exec is disabled";
+  $port = 38473;
+  $log = $root . "/pos-node.log";
+  $cmd = "cd " . escapeshellarg($root) . " && HOST=127.0.0.1 PORT=" . $port . " nohup " . escapeshellarg($node) . " server.js >> " . escapeshellarg($log) . " 2>&1 & echo \$!";
+  $pid = "";
+  if (function_exists("exec")) {
+    $out = [];
+    @exec($cmd, $out);
+    $pid = trim((string) ($out[0] ?? ""));
+  } else {
+    $pid = trim((string) @shell_exec($cmd));
+  }
+  @file_put_contents($root . "/pos-node.json", json_encode(["host" => "127.0.0.1", "port" => $port]));
+  usleep(1500000);
+  return $pid !== "" ? "started pid " . $pid : "start command ran";
+}
+
+$suffix = $path . ($qs !== "" ? "?" . $qs : "");
+$got = pos_try_proxy($suffix, $method, $body, $cookie);
+if ($got) {
+  pos_send_result($got[0], $got[1], $got[2], $got[3]);
+  exit;
+}
+
+$start = pos_try_start_node();
+$got = pos_try_proxy($suffix, $method, $body, $cookie);
+if ($got) {
+  pos_send_result($got[0], $got[1], $got[2], $got[3]);
+  exit;
+}
+
+$hint = "";
+$logFile = rtrim((string) ($_SERVER["DOCUMENT_ROOT"] ?? __DIR__), "/") . "/pos-node.log";
+if (is_file($logFile)) {
+  $tail = trim((string) substr((string) @file_get_contents($logFile), -400));
+  $tail = preg_replace("/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+/", "[email]", $tail);
+  $tail = preg_replace("/password\\s*[=:]\\s*\\S+/i", "password=***", $tail);
+  if ($tail !== "") $hint = $tail;
 }
 
 http_response_code(503);
 header("Content-Type: application/json; charset=utf-8");
 echo json_encode([
-  "error" => "Node.js is not running on this Hostinger site. In hPanel create/open a Node.js web app on pos.atavtelecom.in (Express, entry server.js), paste DB env vars, Deploy, then Restart. Put the app port in pos-node.json if login still fails.",
+  "error" => "Node.js is not running on pos.atavtelecom.in. In hPanel this domain must be a Node.js web app (Express, entry server.js, empty build), with DB env vars, then Deploy and Restart. PHP start attempt: " . $start . ".",
   "bridge" => "down",
+  "log" => $hint,
 ]);
