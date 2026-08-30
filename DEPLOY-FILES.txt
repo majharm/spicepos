@@ -1,5 +1,5 @@
-Production deploy bundle — 20260830prof1
-=======================================
+Production deploy bundle — 20260830theme2
+========================================
 
 Upload ALL of these files to Hostinger public_html (overwrite):
 
@@ -25,14 +25,9 @@ PHP (required for checkout + audit on PHP-only hosting)
   server/timezone.js
   server/schema.js
 
-Optional .env fallback (if not set in POS Settings):
-  POS_TIMEZONE=Asia/Kolkata
-  POS_TZ_OFFSET=+05:30
-
 After upload: hard-refresh browser (Ctrl+Shift+R) on pos.atavtelecom.in
 
 Verify:
-  - index.html loads app.js?v=20260830prof1
-  - Settings page shows timezone dropdown under Regional
-  - Save order on counter → no order_number error
-  - Cart clears, shows "Order accepted · SO-xxxxx"
+  - index.html loads css/pos.css?v=20260830theme2
+  - Emerald/teal theme visible (green nav accents, gradient buttons)
+  - Settings timezone still works

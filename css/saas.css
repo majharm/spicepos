@@ -4,16 +4,17 @@
   place-items: center;
   padding: 24px;
   background:
-    radial-gradient(circle at top right, rgba(37, 99, 235, 0.14), transparent 32%),
-    linear-gradient(160deg, #1e293b 0%, #0f172a 55%, #020617 100%);
+    radial-gradient(circle at top right, rgba(5, 150, 105, 0.2), transparent 34%),
+    radial-gradient(circle at bottom left, rgba(20, 184, 166, 0.12), transparent 30%),
+    linear-gradient(160deg, #0f1f1c 0%, #0a1714 55%, #04100d 100%);
 }
 .auth-card {
   width: min(400px, 100%);
   background: #fff;
   border: 1px solid var(--line);
-  border-radius: 16px;
+  border-radius: 18px;
   padding: 32px 28px;
-  box-shadow: 0 24px 48px rgba(15, 23, 42, 0.22);
+  box-shadow: 0 28px 56px rgba(15, 31, 28, 0.28);
 }
 .auth-card.signup {
   width: min(760px, 100%);
@@ -35,8 +36,8 @@
   cursor: pointer;
 }
 .auth-tab.is-active {
-  background: var(--accent, #2563eb);
-  border-color: var(--accent, #2563eb);
+  background: linear-gradient(135deg, var(--accent, #059669), var(--gold, #14b8a6));
+  border-color: transparent;
   color: #fff;
 }
 .signup-grid {
@@ -116,15 +117,15 @@
   pointer-events: none;
 }
 .auth-card label.remember input[type="checkbox"]:checked + .remember-ui {
-  border-color: var(--accent, #2563eb);
-  background-color: var(--accent, #2563eb);
+  border-color: var(--accent, #059669);
+  background-color: var(--accent, #059669);
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill='none' stroke='%23fff' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round' d='M3.2 8.4 6.4 11.6 12.8 4.4'/%3E%3C/svg%3E");
   background-size: 12px 12px;
   background-position: center;
   background-repeat: no-repeat;
 }
 .auth-card label.remember input[type="checkbox"]:focus-visible + .remember-ui {
-  outline: 2px solid var(--accent, #2563eb);
+  outline: 2px solid var(--accent, #059669);
   outline-offset: 2px;
 }
 .login-support { margin-top: 16px; color: var(--muted); font-size: 13px; }
@@ -150,22 +151,23 @@
   letter-spacing: 0.12em;
   text-transform: uppercase;
   margin: 4px 8px 16px;
-  color: #94a3b8;
+  color: #8fb3a6;
 }
 .master-nav button {
   text-align: left;
   border: 0;
   background: transparent;
-  color: #94a3b8;
+  color: #8fb3a6;
   padding: 9px 12px;
   border-radius: 8px;
   font-size: 13.5px;
 }
-.master-nav button:hover { background: #1e293b; color: #fff; }
+.master-nav button:hover { background: #17302b; color: #fff; }
 .master-nav button.active {
-  background: var(--accent, #2563eb);
+  background: linear-gradient(135deg, var(--accent, #059669), var(--gold, #14b8a6));
   color: #fff;
   font-weight: 700;
+  box-shadow: 0 8px 18px rgba(5, 150, 105, 0.24);
 }
 .master-nav .nav-foot { margin-top: auto; padding-top: 16px; }
 .master-nav .btn-logout { margin-top: 8px; }
