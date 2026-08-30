@@ -1,9 +1,9 @@
-Production deploy bundle — 20260830dev
-=====================================
+Production deploy bundle — 20260830deploy2
+==========================================
 
-Upload ALL of these files to Hostinger public_html (overwrite):
+Upload ALL files below to Hostinger public_html (overwrite existing).
 
-Assets
+ASSETS (required for login logo)
   assets/atav-telecom-logo.png
 
 HTML
@@ -27,12 +27,18 @@ PHP
   pos-php-till.php
   pos-api.php
 
-Optional .env:
+OPTIONAL .env
   POS_DEV_TOOLS=1
+  POS_TIMEZONE=Asia/Kolkata
 
-After upload: hard-refresh browser (Ctrl+Shift+R)
+AFTER UPLOAD
+  1. Hard-refresh: Ctrl+Shift+R on pos.atavtelecom.in
+  2. Verify login page shows ATAV Telecom logo
+  3. Verify page source loads css/pos.css?v=20260830deploy2
+  4. Test counter Save — cart clears, no order_number error
 
-Developer mode:
-  - Settings → Developer mode (business admin only)
-  - Shortcut: Ctrl+Shift+D
-  - URL: ?dev=1
+THEME (ATAV Telecom logo colors)
+  Magenta #EC008C + Orange #F7941D — buttons, active nav
+  Cyan #00AEEF — accents, focus rings
+  Cobalt #2E3192 — bill panel header
+  Dark navy sidebar — matches logo background
