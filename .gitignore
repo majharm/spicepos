@@ -1,5 +1,6 @@
 node_modules/
 .env
+pos-db.php
 pos-bridge.json
 pos-port.txt
 pos-node.log

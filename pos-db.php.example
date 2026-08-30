@@ -1,0 +1,14 @@
+<?php
+/**
+ * Copy this file to public_html/pos-db.php in hPanel File Manager.
+ * Do not commit pos-db.php (it is gitignored).
+ * On Hostinger, DB_HOST must be localhost (not the public server IP).
+ */
+return [
+  "DB_HOST" => "localhost",
+  "DB_PORT" => "3306",
+  "DB_NAME" => "your-db-name",
+  "DB_USER" => "your-db-user",
+  "DB_PASSWORD" => "your-db-password",
+  "MASTER_ADMIN_PASSWORD" => "your-master-password",
+];

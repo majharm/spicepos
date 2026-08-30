@@ -82,7 +82,7 @@ Do **not** use the Web App “Connect a database” wizard (that is for Supabase
 
 If login shows a web-page error, Apache is answering instead of Node. Open `https://your-domain/pos-api.php?p=health`. Confirm framework **Express**, entry **`server.js`**, build command empty, then **Restart**. Also set `DB_HOST=localhost` (same-account MySQL) or the process may crash before it can serve the API.
 
-If the domain is still a PHP site (hPanel has not attached Node, or PHP `exec` is disabled), keep a `public_html/.env` with the same `DB_*` values. `pos-api.php` will then serve Master/shop sign-in and the Master Admin lists from MySQL directly. Prefer attaching a **Node.js web app** for the till (checkout, stock, reports).
+If the domain is still a PHP site (hPanel has not attached Node, or PHP `exec` is disabled), create **`public_html/pos-db.php`** from `pos-db.php.example` in File Manager (`DB_HOST=localhost` plus name, user, password). Git will not deploy `.env` or `pos-db.php`. `pos-api.php` will then serve Master/shop sign-in and the Master Admin lists from MySQL. Prefer attaching a **Node.js web app** for the till (checkout, stock, reports).
 
 
 Schema updates run on boot (`ensureSchema`). Master Admin is created from `MASTER_ADMIN_EMAIL` / `MASTER_ADMIN_PASSWORD` if that email is not already in `platform_admins`.

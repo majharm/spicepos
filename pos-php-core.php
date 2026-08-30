@@ -8,33 +8,64 @@ function pos_env($key, $default = "") {
   return $default;
 }
 
+function pos_set_env($key, $value) {
+  $key = trim((string) $key);
+  if ($key === "" || $value === null) return;
+  $value = (string) $value;
+  if (pos_env($key) !== "") return;
+  putenv($key . "=" . $value);
+  $_ENV[$key] = $value;
+}
+
+function pos_parse_env_text($raw) {
+  foreach (preg_split("/\r\n|\n|\r/", (string) $raw) as $line) {
+    $line = trim($line);
+    if ($line === "" || $line[0] === "#") continue;
+    if (stripos($line, "export ") === 0) $line = trim(substr($line, 7));
+    if (strpos($line, "=") === false) continue;
+    [$k, $v] = explode("=", $line, 2);
+    $k = trim($k);
+    $v = trim($v);
+    if ($v !== "" && (($v[0] === '"' && substr($v, -1) === '"') || ($v[0] === "'" && substr($v, -1) === "'"))) {
+      $v = substr($v, 1, -1);
+    }
+    pos_set_env($k, $v);
+  }
+}
+
 function pos_load_dotenv() {
   static $done = false;
   if ($done) return;
   $done = true;
   $doc = rtrim((string) ($_SERVER["DOCUMENT_ROOT"] ?? __DIR__), "/");
   $home = (string) (getenv("HOME") ?: "");
-  $files = [$doc . "/.env", __DIR__ . "/.env"];
+  $roots = array_unique(array_filter([$doc, __DIR__, dirname(__DIR__), $home]));
+  foreach ($roots as $root) {
+    $php = $root . "/pos-db.php";
+    if (is_file($php) && is_readable($php)) {
+      $map = include $php;
+      if (is_array($map)) {
+        foreach ($map as $k => $v) pos_set_env($k, $v);
+      }
+    }
+  }
+  $files = [];
+  foreach ($roots as $root) {
+    $files[] = $root . "/.env";
+    $files[] = $root . "/pos.env";
+  }
   if ($home) {
     foreach (glob($home . "/domains/*/public_html/.env") ?: [] as $f) $files[] = $f;
+    foreach (glob($home . "/domains/*/public_html/pos-db.php") ?: [] as $f) {
+      $map = @include $f;
+      if (is_array($map)) {
+        foreach ($map as $k => $v) pos_set_env($k, $v);
+      }
+    }
   }
   foreach ($files as $file) {
     if (!is_file($file) || !is_readable($file)) continue;
-    foreach (preg_split("/\r\n|\n|\r/", (string) file_get_contents($file)) as $line) {
-      $line = trim($line);
-      if ($line === "" || $line[0] === "#" || strpos($line, "=") === false) continue;
-      [$k, $v] = explode("=", $line, 2);
-      $k = trim($k);
-      $v = trim($v);
-      if ($v !== "" && ($v[0] === '"' || $v[0] === "'") && substr($v, -1) === $v[0]) {
-        $v = substr($v, 1, -1);
-      }
-      if ($k !== "" && getenv($k) === false) {
-        putenv($k . "=" . $v);
-        $_ENV[$k] = $v;
-      }
-    }
-    break;
+    pos_parse_env_text((string) @file_get_contents($file));
   }
 }
 
@@ -42,11 +73,11 @@ function pos_db_cfg() {
   pos_load_dotenv();
   $url = pos_env("DATABASE_URL", pos_env("MYSQL_URL"));
   $cfg = [
-    "host" => pos_env("DB_HOST", "localhost"),
-    "port" => (int) pos_env("DB_PORT", "3306"),
-    "name" => pos_env("DB_NAME"),
-    "user" => pos_env("DB_USER"),
-    "pass" => pos_env("DB_PASSWORD", pos_env("DB_PASS")),
+    "host" => pos_env("DB_HOST", pos_env("MYSQL_HOST", "localhost")),
+    "port" => (int) pos_env("DB_PORT", pos_env("MYSQL_PORT", "3306")),
+    "name" => pos_env("DB_NAME", pos_env("MYSQL_DATABASE", pos_env("MYSQL_DB"))),
+    "user" => pos_env("DB_USER", pos_env("MYSQL_USER")),
+    "pass" => pos_env("DB_PASSWORD", pos_env("DB_PASS", pos_env("MYSQL_PASSWORD"))),
   ];
   if ($url && preg_match("#^mysql://#i", $url)) {
     $p = parse_url($url);
@@ -56,6 +87,7 @@ function pos_db_cfg() {
     if (isset($p["pass"])) $cfg["pass"] = urldecode($p["pass"]);
     $cfg["name"] = ltrim((string) ($p["path"] ?? ""), "/");
   }
+  if ($cfg["host"] === "" || $cfg["host"] === "127.0.0.1") $cfg["host"] = "localhost";
   return $cfg;
 }
 
@@ -65,7 +97,7 @@ function pos_db() {
   if (!class_exists("mysqli")) throw new Exception("PHP mysqli is not enabled");
   $c = pos_db_cfg();
   if ($c["name"] === "" || $c["user"] === "") {
-    throw new Exception("MySQL env missing. Put DB_HOST, DB_NAME, DB_USER, DB_PASSWORD in public_html/.env (same values as the Node app).");
+    throw new Exception("MySQL env missing. In hPanel File Manager create public_html/pos-db.php from pos-db.php.example (DB_HOST=localhost, plus DB_NAME, DB_USER, DB_PASSWORD). Git does not deploy .env.");
   }
   mysqli_report(MYSQLI_REPORT_OFF);
   $db = @new mysqli($c["host"], $c["user"], $c["pass"], $c["name"], $c["port"] ?: 3306);
