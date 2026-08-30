@@ -1,4 +1,4 @@
-Production deploy bundle — 20260830deploy8
+Production deploy bundle — 20260830deploy9
 =========================================
 
 Upload ALL files below to Hostinger public_html (overwrite):
@@ -42,10 +42,10 @@ After upload:
   2. Hard-refresh browser (Ctrl+Shift+R)
 
 FIXES in this bundle
-  - Standalone /api/health (works even if pos-php-core.php has errors)
+  - Hide master admin viewing banner in business POS (keep Back to Master Admin in nav)
   - HOTFIX: restore pos_send() in pos-php-core.php (fixes /api/health 500)
   - Stop showing auto "Master admin login" notice in business POS
-  - Master admin impersonation banner stays visible (sticky, no flex collapse)
+  - Master admin impersonation works without visible shop banner
   - Platform notifications show on business dashboard (manual master notices only)
   - auth/me prefers active staff session over master cookie (business login fix)
   - Master admin Open POS per user (Users tab)

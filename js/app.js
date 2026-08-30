@@ -255,7 +255,7 @@ function showView(name) {
   if (name === "suppliers") loadSuppliers();
   if (name === "support") renderSupport();
   if (name === "dashboard") loadDashboard();
-  if (state.impersonating) paintImpersonationBanner({ impersonating: true, impersonator: state.impersonator, business: state.businessMeta });
+  paintImpersonationControls();
   if (name === "stock") loadStock();
   if (name === "staff") loadStaff();
   if (name === "branches") loadBranches();
@@ -1316,21 +1316,10 @@ function paintPlatformNotices(notes) {
   if (dash) dash.innerHTML = html;
 }
 
-function paintImpersonationBanner(me) {
-  const el = $("impersonate-banner");
-  if (!el) return;
-  if (me?.impersonating) {
-    el.removeAttribute("hidden");
-    el.hidden = false;
-    el.style.display = "flex";
-    const who = me.impersonator?.name || me.impersonator?.email || "Master admin";
-    const shop = me.business?.name || "this shop";
-    $("impersonate-text").textContent = `${who} is viewing ${shop} (full access).`;
-    $("expired-banner").hidden = true;
-  } else {
-    el.hidden = true;
-    el.style.display = "";
-  }
+function paintImpersonationControls() {
+  const exit = $("exit-impersonate");
+  if (exit) exit.hidden = !state.impersonating;
+  if (state.impersonating) $("expired-banner").hidden = true;
 }
 
 $("exit-impersonate")?.addEventListener("click", async (e) => {
@@ -1359,7 +1348,7 @@ async function boot() {
     state.businessMeta = me.business || null;
     state.impersonating = Boolean(me.impersonating);
     state.impersonator = me.impersonator || null;
-    paintImpersonationBanner(me);
+    paintImpersonationControls();
     if (window.DevMode) {
       DevMode.init({
         session: state.session,

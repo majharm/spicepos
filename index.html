@@ -9,8 +9,8 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" />
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./css/pos.css?v=20260830deploy7" />
-    <link rel="stylesheet" href="./css/saas.css?v=20260830deploy7" />
+    <link rel="stylesheet" href="./css/pos.css?v=20260830deploy9" />
+    <link rel="stylesheet" href="./css/saas.css?v=20260830deploy9" />
   </head>
   <body>
     <div class="app">
@@ -46,6 +46,7 @@
             <b id="clock">--:--</b>
             <small id="clock-meta"></small>
           </div>
+          <button class="btn-logout" type="button" id="exit-impersonate" hidden>Back to Master Admin</button>
           <button class="btn-logout" type="button" data-logout>Logout</button>
         </div>
       </nav>
@@ -58,10 +59,6 @@
         </div>
         <div class="expired-banner" id="expired-banner" hidden>
           Subscription expired. Data is kept. Ask the platform owner to renew this business.
-        </div>
-        <div class="impersonate-banner" id="impersonate-banner" hidden>
-          <span id="impersonate-text">Master admin is viewing this shop.</span>
-          <a class="btn" href="/master.html" id="exit-impersonate">Back to Master Admin</a>
         </div>
         <div class="platform-notices" id="platform-notices" hidden aria-live="polite"></div>
         <section class="view" id="view-dashboard">
@@ -381,8 +378,8 @@
         </section>
       </div>
     </aside>
-    <script src="./js/pos-api.js?v=20260830deploy7"></script>
-    <script src="./js/dev-mode.js?v=20260830deploy7"></script>
-    <script src="./js/app.js?v=20260830deploy7"></script>
+    <script src="./js/pos-api.js?v=20260830deploy9"></script>
+    <script src="./js/dev-mode.js?v=20260830deploy9"></script>
+    <script src="./js/app.js?v=20260830deploy9"></script>
   </body>
 </html>
