@@ -9,8 +9,8 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" />
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./css/pos.css?v=20260830deploy5" />
-    <link rel="stylesheet" href="./css/saas.css?v=20260830deploy5" />
+    <link rel="stylesheet" href="./css/pos.css?v=20260830reports1" />
+    <link rel="stylesheet" href="./css/saas.css?v=20260830reports1" />
   </head>
   <body>
     <div class="app">
@@ -76,7 +76,9 @@
             <form class="search" id="search-form">
               <input id="search" type="search" placeholder="Search spice, local name, or code…" autocomplete="off" />
             </form>
-            <select id="customer" class="select" aria-label="Customer"></select>
+            <div class="customer-picker">
+              <select id="customer" class="select" aria-label="Customer"></select>
+            </div>
             <select id="pack-choice" class="select" aria-label="Pack type">
               <option value="">Loose items (no pack)</option>
             </select>
@@ -86,6 +88,12 @@
               <option value="card">Card</option>
               <option value="credit">Credit</option>
             </select>
+            <form class="quick-customer" id="quick-customer-form" autocomplete="off">
+              <input id="qc-name" name="qc-name" placeholder="Customer name" maxlength="120" />
+              <input id="qc-mobile" name="qc-mobile" placeholder="Mobile no." inputmode="tel" maxlength="15" />
+              <button class="btn primary" type="submit" id="qc-save">Add customer</button>
+              <span class="hint" id="qc-hint"></span>
+            </form>
           </header>
           <div class="workspace">
             <div class="catalog" id="catalog"></div>
@@ -381,8 +389,8 @@
         </section>
       </div>
     </aside>
-    <script src="./js/pos-api.js?v=20260830deploy5"></script>
-    <script src="./js/dev-mode.js?v=20260830deploy5"></script>
-    <script src="./js/app.js?v=20260830deploy5"></script>
+    <script src="./js/pos-api.js?v=20260830reports1"></script>
+    <script src="./js/dev-mode.js?v=20260830reports1"></script>
+    <script src="./js/app.js?v=20260830reports1"></script>
   </body>
 </html>

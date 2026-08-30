@@ -244,16 +244,59 @@ function pos_php_till_dispatch($path, $method, $body) {
     pos_send(200, pos_q("SELECT * FROM staff_audit_logs WHERE business_id = ? ORDER BY created_at DESC LIMIT 100", "s", [$bid]));
   }
 
-  if ($path === "reports" && $method === "GET") {
+  if ($path === "customers" && $method === "GET") {
+    pos_send(200, pos_q("SELECT * FROM customers WHERE business_id = ? ORDER BY name", "s", [$bid]));
+  }
+
+  if ($path === "customers" && $method === "POST") {
+    $name = trim((string) ($body["name"] ?? ""));
+    $mobile = trim((string) ($body["mobile"] ?? ""));
+    if ($name === "" || $mobile === "") pos_send(400, ["error" => "Name and mobile are required"]);
+    $custType = (($body["type"] ?? "") === "b2b") ? "b2b" : "b2c";
+    $n = pos_next_seq("customer", 4, $bid);
+    $code = "CUS-" . str_pad((string) $n, 3, "0", STR_PAD_LEFT);
+    $id = pos_uuid();
+    pos_q(
+      "INSERT INTO customers (
+         id, code, name, business_name, mobile, type, gstin, credit_limit, outstanding, business_id
+       ) VALUES (?,?,?,?,?,?,?,?,0,?)",
+      "sssssssss",
+      [
+        $id,
+        $code,
+        $name,
+        trim((string) ($body["business_name"] ?? "")) ?: "",
+        $mobile,
+        $custType,
+        trim((string) ($body["gstin"] ?? "")) ?: "",
+        (string) (float) ($body["credit_limit"] ?? 0),
+        $bid,
+      ]
+    );
+    $rows = pos_q("SELECT * FROM customers WHERE id = ? AND business_id = ? LIMIT 1", "ss", [$id, $bid]);
+    pos_send(200, ["ok" => true, "customer" => $rows[0] ?? ["id" => $id, "code" => $code, "name" => $name, "mobile" => $mobile, "type" => $custType]]);
+  }
+
+  if (($path === "reports" || $path === "reports/excel") && $method === "GET") {
+    require_once __DIR__ . "/pos-php-reports.php";
     $from = $_GET["from"] ?? date("Y-m-d");
     $to = $_GET["to"] ?? $from;
-    $sum = pos_q(
-      "SELECT COUNT(*) AS bills, COALESCE(SUM(subtotal),0) AS taxable, COALESCE(SUM(gst),0) AS gst, COALESCE(SUM(total),0) AS total
-       FROM sales_orders WHERE business_id = ? AND DATE(created_at) BETWEEN ? AND ?",
-      "sss",
-      [$bid, $from, $to]
-    );
-    pos_send(200, ["from" => $from, "to" => $to, "summary" => $sum[0] ?? ["bills" => 0, "taxable" => 0, "gst" => 0, "total" => 0], "php" => true]);
+    $data = pos_build_reports($bid, $from, $to);
+    if ($path === "reports/excel") {
+      $sheets = pos_reports_to_sheets($data);
+      $sheet = (string) ($_GET["sheet"] ?? "");
+      if ($sheet !== "") {
+        $sheets = array_values(array_filter($sheets, function ($s) use ($sheet) {
+          return ($s["name"] ?? "") === $sheet;
+        }));
+        if (!$sheets) pos_send(400, ["error" => "Unknown report type"]);
+      }
+      $xml = pos_workbook_xml($sheets);
+      $slug = $sheet !== "" ? preg_replace("/[^a-z0-9]+/", "-", strtolower($sheet)) : "all";
+      $slug = trim((string) $slug, "-") ?: "all";
+      pos_send_file(200, "application/vnd.ms-excel; charset=utf-8", "reports-{$slug}-{$from}-to-{$to}.xls", $xml);
+    }
+    pos_send(200, $data);
   }
 
   if ($path === "checkout" && $method === "POST") {

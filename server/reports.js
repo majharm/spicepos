@@ -1,5 +1,8 @@
 import { query } from "./db.js";
 import { bid } from "./context.js";
+import { formatReportDay } from "./report-format.js";
+
+export { emptyReports, formatReportDay, reportsToSheets } from "./report-format.js";
 
 function range(from, to) {
   const end = to || new Date().toISOString().slice(0, 10);
@@ -58,13 +61,13 @@ export async function buildReports(from, to) {
      GROUP BY payment_method`,
     [tenant, start, end],
   );
-  const gst = await query(
+  const gst = (await query(
     `SELECT DATE(created_at) AS day, COALESCE(SUM(subtotal),0) AS taxable,
             COALESCE(SUM(gst),0) AS gst, COALESCE(SUM(total),0) AS total
      FROM sales_orders WHERE ${salesWhere}
      GROUP BY DATE(created_at) ORDER BY day`,
     [tenant, start, end],
-  );
+  )).map((r) => ({ ...r, day: formatReportDay(r.day) }));
   const stock = await query(
     `SELECT code, name, local_name, category, subcategory, stock_gm, reorder_level_gm,
             retail_rate, b2b_rate, purchase_rate, gst_rate
@@ -99,89 +102,4 @@ export async function buildReports(from, to) {
     purchases,
     customers,
   };
-}
-
-export function reportsToSheets(data) {
-  const num = (v) => Number(v) || 0;
-  return [
-    {
-      name: "Summary",
-      headers: ["From", "To", "Bills", "Taxable", "GST", "Takings"],
-      rows: [[data.from, data.to, num(data.summary.bills), num(data.summary.taxable), num(data.summary.gst), num(data.summary.takings)]],
-    },
-    {
-      name: "Sales bills",
-      headers: ["Order", "Customer", "Type", "Pack", "Pack count", "Status", "Qty g", "Taxable", "GST", "Total", "Pay", "Pay status", "Date"],
-      rows: data.sales.map((o) => [
-        o.order_number,
-        o.customer_name,
-        o.customer_type,
-        o.pack_name || "Loose items",
-        num(o.pack_count),
-        o.status,
-        num(o.total_quantity_gm),
-        num(o.subtotal),
-        num(o.gst),
-        num(o.total),
-        o.payment_method,
-        o.payment_status,
-        String(o.created_at),
-      ]),
-    },
-    {
-      name: "Item sales",
-      headers: ["Item", "Qty g", "Amount", "GST"],
-      rows: data.byItem.map((r) => [r.item_name, num(r.quantity_gm), num(r.amount), num(r.gst)]),
-    },
-    {
-      name: "Customer sales",
-      headers: ["Customer", "Type", "Bills", "Takings", "GST"],
-      rows: data.byCustomer.map((r) => [r.customer_name, r.customer_type, num(r.bills), num(r.takings), num(r.gst)]),
-    },
-    {
-      name: "Pack sales",
-      headers: ["Pack type", "Pack count", "Bills", "Takings"],
-      rows: data.byPack.map((r) => [r.pack_type, num(r.pack_count), num(r.bills), num(r.takings)]),
-    },
-    {
-      name: "Payment",
-      headers: ["Method", "Bills", "Takings"],
-      rows: data.byPay.map((r) => [r.payment_method, num(r.bills), num(r.takings)]),
-    },
-    {
-      name: "GST daywise",
-      headers: ["Day", "Taxable", "GST", "Total"],
-      rows: data.gst.map((r) => [String(r.day), num(r.taxable), num(r.gst), num(r.total)]),
-    },
-    {
-      name: "Stock",
-      headers: ["Code", "Name", "Local", "Category", "Subcategory", "Stock g", "Reorder g", "Retail", "B2B", "Purchase", "GST %"],
-      rows: data.stock.map((i) => [
-        i.code, i.name, i.local_name, i.category, i.subcategory,
-        num(i.stock_gm), num(i.reorder_level_gm), num(i.retail_rate), num(i.b2b_rate),
-        num(i.purchase_rate), num(i.gst_rate),
-      ]),
-    },
-    {
-      name: "Low stock",
-      headers: ["Code", "Name", "Stock g", "Reorder g"],
-      rows: data.low.map((i) => [i.code, i.name, num(i.stock_gm), num(i.reorder_level_gm)]),
-    },
-    {
-      name: "Purchases",
-      headers: ["PO", "Supplier", "Invoice", "Date", "Taxable", "GST", "Total", "Pay", "Status"],
-      rows: data.purchases.map((p) => [
-        p.purchase_number, p.supplier_name, p.supplier_invoice_number, p.purchase_date,
-        num(p.subtotal), num(p.gst), num(p.total), p.payment_method, p.payment_status,
-      ]),
-    },
-    {
-      name: "Customers",
-      headers: ["Code", "Name", "Business", "Mobile", "Type", "GSTIN", "Credit limit", "Outstanding"],
-      rows: data.customers.map((c) => [
-        c.code, c.name, c.business_name, c.mobile, c.type, c.gstin,
-        num(c.credit_limit), num(c.outstanding),
-      ]),
-    },
-  ];
 }

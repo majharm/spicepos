@@ -1,5 +1,5 @@
-Production deploy bundle — 20260830deploy6
-=========================================
+Production deploy bundle — 20260830reports1
+===========================================
 
 Upload ALL files below to Hostinger public_html (overwrite):
 
@@ -25,6 +25,7 @@ JavaScript
 PHP
   pos-php-core.php
   pos-php-till.php
+  pos-php-reports.php
   pos-api.php
 
 Node (if using hPanel Node.js web app — upload OR git pull then Restart)
@@ -33,26 +34,17 @@ Node (if using hPanel Node.js web app — upload OR git pull then Restart)
   server/master.js
   server/onboard.js
   server/index.js
+  server/reports.js
+  server/report-format.js
+  server/excel.js
   package.json
 
 After upload:
   1. hPanel → Node.js → Restart (if Node app enabled)
   2. Hard-refresh browser (Ctrl+Shift+R)
 
-  - HOTFIX: restore pos_send() in pos-php-core.php (fixes /api/health 500)
-  - Master admin impersonation banner stays visible (sticky, no flex collapse)
-  - Platform notifications show on business dashboard and top bar
-  - Auto "Master admin login" notice when master opens a shop
-  - auth/me prefers active staff session over master cookie (business login fix)
-  - Master admin Open POS per user (Users tab)
-  - Business password change on edit (PHP + date normalization)
-  - Exit impersonation without full logout
-  - Master admin panel auto-exits shop view when opened during impersonation
-  - Removed conflicting x-pos script from master.html / index.html
-
-How to use Open POS
-  1. Sign in at /master.html
-  2. Businesses → Open POS (enters as business admin)
-     OR Users → Open POS (enters as that specific user)
-  3. Shop POS opens with full access (even if expired/suspended)
-  4. Back to Master Admin ends shop view only
+  - Reports API (PHP + Node) returns every report type, not just a summary stub
+  - Excel download works on PHP fallback (`/api/reports/excel`)
+  - GST daywise dates show as YYYY-MM-DD
+  - Counter page: add customer with name + mobile only
+  - PHP POST /api/customers (name + mobile required)

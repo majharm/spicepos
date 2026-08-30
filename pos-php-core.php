@@ -452,6 +452,27 @@ function pos_send($status, $payload) {
   exit;
 }
 
+function pos_send_file($status, $contentType, $filename, $body) {
+  http_response_code((int) $status);
+  header("Content-Type: " . $contentType);
+  header('Content-Disposition: attachment; filename="' . str_replace(['"', "\r", "\n"], "", (string) $filename) . '"');
+  echo $body;
+  exit;
+}
+
+function pos_next_seq($name, $start, $bid) {
+  $seq = pos_q("SELECT next_value FROM number_sequences WHERE name = ? AND business_id = ? LIMIT 1", "ss", [$name, $bid]);
+  $next = $seq ? (int) $seq[0]["next_value"] : (int) $start;
+  if ($seq) {
+    pos_q("UPDATE number_sequences SET next_value = ? WHERE name = ? AND business_id = ?", "iss", [$next + 1, $name, $bid]);
+  } else {
+    try {
+      pos_q("INSERT INTO number_sequences (name, next_value, business_id) VALUES (?, ?, ?)", "sis", [$name, $next + 1, $bid]);
+    } catch (Exception $e) { /* ignore */ }
+  }
+  return $next;
+}
+
 function pos_master_session() {
   $token = pos_cookie("pos_master");
   if ($token === "") return null;
