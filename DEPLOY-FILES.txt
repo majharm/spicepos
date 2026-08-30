@@ -1,4 +1,4 @@
-Production deploy bundle — 20260830deploy10
+Production deploy bundle — 20260830deploy11
 =========================================
 
 Upload ALL files below to Hostinger public_html (overwrite):
@@ -25,6 +25,7 @@ JavaScript
 PHP
   pos-php-core.php
   pos-php-till.php
+  pos-reports.php
   pos-api.php
   api/health/index.php
   health.json
@@ -35,6 +36,7 @@ Node (if using hPanel Node.js web app — upload OR git pull then Restart)
   server/master.js
   server/onboard.js
   server/index.js
+  server/reports.js
   package.json
 
 After upload:
@@ -42,6 +44,9 @@ After upload:
   2. Hard-refresh browser (Ctrl+Shift+R)
 
 FIXES in this bundle
+  - GST reports: output/input by rate, HSN itemwise, B2B/B2C sales, net GST summary
+  - Full PHP reports API (not just summary) for production without Node
+  - Excel export for all GST sheets (PHP + Node)
   - Hide master admin viewing banner in business POS (keep Back to Master Admin in nav)
   - HOTFIX: restore pos_send() in pos-php-core.php (fixes /api/health 500)
   - Stop showing auto "Master admin login" notice in business POS

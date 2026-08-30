@@ -244,16 +244,14 @@ function pos_php_till_dispatch($path, $method, $body) {
     pos_send(200, pos_q("SELECT * FROM staff_audit_logs WHERE business_id = ? ORDER BY created_at DESC LIMIT 100", "s", [$bid]));
   }
 
-  if ($path === "reports" && $method === "GET") {
+  if (($path === "reports" || $path === "reports/excel") && $method === "GET") {
+    require_once __DIR__ . "/pos-reports.php";
     $from = $_GET["from"] ?? date("Y-m-d");
     $to = $_GET["to"] ?? $from;
-    $sum = pos_q(
-      "SELECT COUNT(*) AS bills, COALESCE(SUM(subtotal),0) AS taxable, COALESCE(SUM(gst),0) AS gst, COALESCE(SUM(total),0) AS total
-       FROM sales_orders WHERE business_id = ? AND DATE(created_at) BETWEEN ? AND ?",
-      "sss",
-      [$bid, $from, $to]
-    );
-    pos_send(200, ["from" => $from, "to" => $to, "summary" => $sum[0] ?? ["bills" => 0, "taxable" => 0, "gst" => 0, "total" => 0], "php" => true]);
+    if ($path === "reports/excel") {
+      pos_reports_excel_response($bid, $from, $to, trim((string) ($_GET["sheet"] ?? "")));
+    }
+    pos_send(200, pos_build_reports($bid, $from, $to));
   }
 
   if ($path === "checkout" && $method === "POST") {

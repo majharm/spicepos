@@ -83,17 +83,88 @@ export async function buildReports(from, to) {
      FROM customers WHERE business_id = ? ORDER BY name`,
     [tenant],
   );
+  const gstByRate = await query(
+    `SELECT l.gst_rate,
+            SUM(l.amount) AS taxable,
+            SUM(l.amount * l.gst_rate / 100) AS gst,
+            SUM(l.quantity_gm) AS quantity_gm,
+            COUNT(DISTINCT o.id) AS bills
+     FROM sales_order_lines l
+     JOIN sales_orders o ON o.id = l.order_id
+     WHERE o.business_id = ? AND DATE(o.created_at) BETWEEN ? AND ? AND l.cancelled = 0
+     GROUP BY l.gst_rate ORDER BY l.gst_rate`,
+    [tenant, start, end],
+  );
+  const gstInputByRate = await query(
+    `SELECT l.gst_rate,
+            SUM(l.amount) AS taxable,
+            COALESCE(SUM(l.gst_amount), SUM(l.amount * l.gst_rate / 100)) AS gst
+     FROM purchase_lines l
+     JOIN purchases p ON p.id = l.purchase_id
+     WHERE p.business_id = ? AND p.purchase_date BETWEEN ? AND ?
+     GROUP BY l.gst_rate ORDER BY l.gst_rate`,
+    [tenant, start, end],
+  );
+  const gstHsn = await query(
+    `SELECT COALESCE(i.code, '—') AS hsn, l.item_name, l.gst_rate,
+            SUM(l.quantity_gm) AS quantity_gm,
+            SUM(l.amount) AS taxable,
+            SUM(l.amount * l.gst_rate / 100) AS gst
+     FROM sales_order_lines l
+     JOIN sales_orders o ON o.id = l.order_id
+     LEFT JOIN items i ON i.id = l.item_id
+     WHERE o.business_id = ? AND DATE(o.created_at) BETWEEN ? AND ? AND l.cancelled = 0
+     GROUP BY COALESCE(i.code, '—'), l.item_name, l.gst_rate
+     ORDER BY hsn, l.item_name`,
+    [tenant, start, end],
+  );
+  const gstB2B = await query(
+    `SELECT o.order_number, DATE(o.created_at) AS bill_date, o.customer_name, c.gstin,
+            o.subtotal AS taxable, o.gst, o.total
+     FROM sales_orders o
+     LEFT JOIN customers c ON c.id = o.customer_id
+     WHERE o.business_id = ? AND DATE(o.created_at) BETWEEN ? AND ?
+       AND c.gstin IS NOT NULL AND TRIM(c.gstin) <> ''
+     ORDER BY o.created_at`,
+    [tenant, start, end],
+  );
+  const gstB2C = await query(
+    `SELECT o.order_number, DATE(o.created_at) AS bill_date, o.customer_name,
+            o.subtotal AS taxable, o.gst, o.total
+     FROM sales_orders o
+     LEFT JOIN customers c ON c.id = o.customer_id
+     WHERE o.business_id = ? AND DATE(o.created_at) BETWEEN ? AND ?
+       AND (c.gstin IS NULL OR TRIM(c.gstin) = '')
+     ORDER BY o.created_at`,
+    [tenant, start, end],
+  );
+  const purchaseGst = await query(
+    `SELECT COALESCE(SUM(subtotal),0) AS taxable, COALESCE(SUM(gst),0) AS gst, COALESCE(SUM(total),0) AS total
+     FROM purchases WHERE ${poWhere}`,
+    [tenant, start, end],
+  );
+  const outputGst = Number(summary[0]?.gst || 0);
+  const inputGst = Number(purchaseGst[0]?.gst || 0);
 
   return {
     from: start,
     to: end,
-    summary: summary[0] || { bills: 0, taxable: 0, gst: 0, takings: 0 },
+    summary: {
+      ...(summary[0] || { bills: 0, taxable: 0, gst: 0, takings: 0 }),
+      inputGst,
+      netGst: outputGst - inputGst,
+    },
     sales,
     byItem,
     byCustomer,
     byPack,
     byPay,
     gst,
+    gstByRate,
+    gstInputByRate,
+    gstHsn,
+    gstB2B,
+    gstB2C,
     stock,
     low,
     purchases,
@@ -103,11 +174,29 @@ export async function buildReports(from, to) {
 
 export function reportsToSheets(data) {
   const num = (v) => Number(v) || 0;
+  const half = (v) => num(v) / 2;
+  const gstRateRows = (data.gstByRate || []).map((r) => {
+    const gst = num(r.gst);
+    return [num(r.gst_rate), num(r.taxable), half(gst), half(gst), gst, num(r.bills)];
+  });
+  const gstInputRows = (data.gstInputByRate || []).map((r) => {
+    const gst = num(r.gst);
+    return [num(r.gst_rate), num(r.taxable), half(gst), half(gst), gst];
+  });
   return [
     {
       name: "Summary",
-      headers: ["From", "To", "Bills", "Taxable", "GST", "Takings"],
-      rows: [[data.from, data.to, num(data.summary.bills), num(data.summary.taxable), num(data.summary.gst), num(data.summary.takings)]],
+      headers: ["From", "To", "Bills", "Taxable", "Output GST", "Input GST", "Net GST", "Takings"],
+      rows: [[
+        data.from,
+        data.to,
+        num(data.summary.bills),
+        num(data.summary.taxable),
+        num(data.summary.gst),
+        num(data.summary.inputGst),
+        num(data.summary.netGst),
+        num(data.summary.takings),
+      ]],
     },
     {
       name: "Sales bills",
@@ -152,6 +241,37 @@ export function reportsToSheets(data) {
       name: "GST daywise",
       headers: ["Day", "Taxable", "GST", "Total"],
       rows: data.gst.map((r) => [String(r.day), num(r.taxable), num(r.gst), num(r.total)]),
+    },
+    {
+      name: "GST output by rate",
+      headers: ["GST %", "Taxable", "CGST", "SGST", "Total GST", "Bills"],
+      rows: gstRateRows,
+    },
+    {
+      name: "GST input by rate",
+      headers: ["GST %", "Taxable", "CGST", "SGST", "Total GST"],
+      rows: gstInputRows,
+    },
+    {
+      name: "GST HSN itemwise",
+      headers: ["HSN/SKU", "Item", "GST %", "Qty g", "Taxable", "GST"],
+      rows: (data.gstHsn || []).map((r) => [
+        r.hsn, r.item_name, num(r.gst_rate), num(r.quantity_gm), num(r.taxable), num(r.gst),
+      ]),
+    },
+    {
+      name: "GST B2B sales",
+      headers: ["Bill", "Date", "Customer", "GSTIN", "Taxable", "GST", "Total"],
+      rows: (data.gstB2B || []).map((r) => [
+        r.order_number, String(r.bill_date), r.customer_name, r.gstin, num(r.taxable), num(r.gst), num(r.total),
+      ]),
+    },
+    {
+      name: "GST B2C sales",
+      headers: ["Bill", "Date", "Customer", "Taxable", "GST", "Total"],
+      rows: (data.gstB2C || []).map((r) => [
+        r.order_number, String(r.bill_date), r.customer_name, num(r.taxable), num(r.gst), num(r.total),
+      ]),
     },
     {
       name: "Stock",

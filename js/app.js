@@ -201,6 +201,16 @@ function htmlTable(headers, rows) {
     .join("")}</tbody></table></div>`;
 }
 
+function gstRateRows(rows, withBills = true) {
+  return (rows || []).map((r) => {
+    const gst = Number(r.gst) || 0;
+    const half = gst / 2;
+    const row = [Number(r.gst_rate) || 0, Number(r.taxable) || 0, half, half, gst];
+    if (withBills) row.push(Number(r.bills) || 0);
+    return row;
+  });
+}
+
 function reportBlock(title, sheet, headers, rows) {
   return `<section class="report-block">
     <div class="report-block-head">
@@ -682,7 +692,9 @@ async function loadReports() {
       ["Range", `${data.from} → ${data.to}`],
       ["Bills", s.bills],
       ["Taxable", money(s.taxable)],
-      ["GST", money(s.gst)],
+      ["Output GST", money(s.gst)],
+      ["Input GST", money(s.inputGst)],
+      ["Net GST", money(s.netGst)],
       ["Takings", money(s.takings)],
       ["Low stock SKUs", (data.low || []).length],
     ]
@@ -695,6 +707,11 @@ async function loadReports() {
       reportBlock("Pack sales", "Pack sales", ["Pack type", "Pack count", "Bills", "Takings"], (data.byPack || []).map((r) => [r.pack_type, Number(r.pack_count) || 0, Number(r.bills) || 0, Number(r.takings) || 0])),
       reportBlock("Payment", "Payment", ["Method", "Bills", "Takings"], (data.byPay || []).map((r) => [r.payment_method, Number(r.bills) || 0, Number(r.takings) || 0])),
       reportBlock("GST daywise", "GST daywise", ["Day", "Taxable", "GST", "Total"], (data.gst || []).map((r) => [String(r.day), Number(r.taxable) || 0, Number(r.gst) || 0, Number(r.total) || 0])),
+      reportBlock("GST output by rate", "GST output by rate", ["GST %", "Taxable", "CGST", "SGST", "Total GST", "Bills"], gstRateRows(data.gstByRate)),
+      reportBlock("GST input by rate", "GST input by rate", ["GST %", "Taxable", "CGST", "SGST", "Total GST"], gstRateRows(data.gstInputByRate, false)),
+      reportBlock("GST HSN itemwise", "GST HSN itemwise", ["HSN/SKU", "Item", "GST %", "Qty g", "Taxable", "GST"], (data.gstHsn || []).map((r) => [r.hsn, r.item_name, Number(r.gst_rate) || 0, Number(r.quantity_gm) || 0, Number(r.taxable) || 0, Number(r.gst) || 0])),
+      reportBlock("GST B2B sales", "GST B2B sales", ["Bill", "Date", "Customer", "GSTIN", "Taxable", "GST", "Total"], (data.gstB2B || []).map((r) => [r.order_number, String(r.bill_date), r.customer_name, r.gstin, Number(r.taxable) || 0, Number(r.gst) || 0, Number(r.total) || 0])),
+      reportBlock("GST B2C sales", "GST B2C sales", ["Bill", "Date", "Customer", "Taxable", "GST", "Total"], (data.gstB2C || []).map((r) => [r.order_number, String(r.bill_date), r.customer_name, Number(r.taxable) || 0, Number(r.gst) || 0, Number(r.total) || 0])),
       reportBlock("Stock", "Stock", ["Code", "Name", "Local", "Category", "Subcategory", "Stock g", "Reorder g", "Retail", "B2B", "Purchase", "GST %"], (data.stock || []).map((i) => [i.code, i.name, i.local_name, i.category, i.subcategory, Number(i.stock_gm) || 0, Number(i.reorder_level_gm) || 0, Number(i.retail_rate) || 0, Number(i.b2b_rate) || 0, Number(i.purchase_rate) || 0, Number(i.gst_rate) || 0])),
       reportBlock("Low stock", "Low stock", ["Code", "Name", "Stock g", "Reorder g"], (data.low || []).map((i) => [i.code, i.name, Number(i.stock_gm) || 0, Number(i.reorder_level_gm) || 0])),
       reportBlock("Purchases", "Purchases", ["PO", "Supplier", "Invoice", "Date", "Taxable", "GST", "Total", "Pay", "Status"], (data.purchases || []).map((p) => [p.purchase_number, p.supplier_name, p.supplier_invoice_number, p.purchase_date, Number(p.subtotal) || 0, Number(p.gst) || 0, Number(p.total) || 0, p.payment_method, p.payment_status])),
