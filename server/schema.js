@@ -2,6 +2,15 @@ import { query } from "./db.js";
 import { hashPassword } from "./password.js";
 import { defaultPerms } from "./roles.js";
 
+async function hasTable(table) {
+  const rows = await query(
+    `SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES
+     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?`,
+    [table],
+  );
+  return rows.length > 0;
+}
+
 async function hasColumn(table, column) {
   const rows = await query(
     `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
@@ -12,6 +21,7 @@ async function hasColumn(table, column) {
 }
 
 async function addColumn(table, column, def) {
+  if (!(await hasTable(table))) return;
   if (!(await hasColumn(table, column))) {
     await query(`ALTER TABLE \`${table}\` ADD COLUMN ${column} ${def}`);
   }
@@ -21,7 +31,280 @@ async function create(sql) {
   await query(sql);
 }
 
+async function createBaseTables() {
+  await create(`CREATE TABLE IF NOT EXISTS businesses (
+    id VARCHAR(255) PRIMARY KEY,
+    code VARCHAR(64) NULL,
+    name VARCHAR(255) NOT NULL,
+    status VARCHAR(32) NOT NULL DEFAULT 'active',
+    owner_name VARCHAR(255) NULL,
+    mobile VARCHAR(32) NULL,
+    email VARCHAR(255) NULL,
+    address TEXT NULL,
+    gstin VARCHAR(32) NULL,
+    business_type VARCHAR(64) NULL,
+    logo_url MEDIUMTEXT NULL,
+    plan_id VARCHAR(255) NULL,
+    subscription_expires_at DATE NULL,
+    invoice_footer TEXT NULL,
+    invoice_terms TEXT NULL,
+    max_branches INT NULL,
+    max_users INT NULL,
+    max_devices INT NULL,
+    category VARCHAR(128) NULL,
+    pan VARCHAR(16) NULL,
+    city VARCHAR(128) NULL,
+    state VARCHAR(64) NULL,
+    pin_code VARCHAR(12) NULL,
+    created_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    updated_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3)
+  )`);
+
+  await create(`CREATE TABLE IF NOT EXISTS company_settings (
+    id VARCHAR(255) PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    address TEXT NULL,
+    phone VARCHAR(32) NULL,
+    email VARCHAR(255) NULL,
+    gstin VARCHAR(32) NULL,
+    logo_url MEDIUMTEXT NULL,
+    pan VARCHAR(16) NULL,
+    city VARCHAR(128) NULL,
+    state VARCHAR(64) NULL,
+    pincode VARCHAR(12) NULL,
+    business_id VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    updated_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+    INDEX (business_id)
+  )`);
+
+  await create(`CREATE TABLE IF NOT EXISTS staff_users (
+    id VARCHAR(255) PRIMARY KEY,
+    clerk_user_id VARCHAR(255) NOT NULL,
+    email VARCHAR(255) NOT NULL,
+    first_name VARCHAR(255) NULL,
+    last_name VARCHAR(255) NULL,
+    role VARCHAR(64) NOT NULL,
+    status VARCHAR(32) NOT NULL DEFAULT 'active',
+    password_hash VARCHAR(255) NOT NULL,
+    business_id VARCHAR(255) NOT NULL,
+    branch_id VARCHAR(255) NULL,
+    permissions_json TEXT NULL,
+    username VARCHAR(64) NULL,
+    mobile VARCHAR(32) NULL,
+    failed_logins INT NOT NULL DEFAULT 0,
+    locked_until TIMESTAMP(3) NULL,
+    created_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    updated_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+    INDEX (business_id),
+    INDEX (email)
+  )`);
+
+  await create(`CREATE TABLE IF NOT EXISTS staff_sessions (
+    id VARCHAR(255) PRIMARY KEY,
+    staff_user_id VARCHAR(255) NOT NULL,
+    token_hash VARCHAR(64) NOT NULL UNIQUE,
+    expires_at TIMESTAMP(3) NOT NULL,
+    business_id VARCHAR(255) NOT NULL,
+    ip VARCHAR(64) NULL,
+    user_agent VARCHAR(255) NULL,
+    branch_id VARCHAR(255) NULL,
+    revoked_at TIMESTAMP(3) NULL,
+    created_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    INDEX (staff_user_id),
+    INDEX (business_id)
+  )`);
+
+  await create(`CREATE TABLE IF NOT EXISTS staff_audit_logs (
+    id VARCHAR(255) PRIMARY KEY,
+    actor_clerk_user_id VARCHAR(255) NULL,
+    actor_name VARCHAR(255) NULL,
+    module VARCHAR(64) NULL,
+    target_id VARCHAR(255) NULL,
+    target_name VARCHAR(255) NULL,
+    action VARCHAR(255) NOT NULL,
+    details TEXT NULL,
+    business_id VARCHAR(255) NOT NULL,
+    branch_id VARCHAR(255) NULL,
+    ip VARCHAR(64) NULL,
+    created_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    INDEX (business_id)
+  )`);
+
+  await create(`CREATE TABLE IF NOT EXISTS items (
+    id VARCHAR(255) PRIMARY KEY,
+    code VARCHAR(64) NULL,
+    name VARCHAR(255) NOT NULL,
+    local_name VARCHAR(255) NULL,
+    category VARCHAR(128) NULL,
+    subcategory VARCHAR(128) NULL,
+    base_unit VARCHAR(32) NULL,
+    purchase_rate DECIMAL(12,2) NOT NULL DEFAULT 0,
+    retail_rate DECIMAL(12,2) NOT NULL DEFAULT 0,
+    b2b_rate DECIMAL(12,2) NOT NULL DEFAULT 0,
+    gst_rate DECIMAL(5,2) NOT NULL DEFAULT 0,
+    hsn VARCHAR(32) NULL,
+    stock_gm DECIMAL(14,3) NOT NULL DEFAULT 0,
+    reorder_level_gm DECIMAL(14,3) NOT NULL DEFAULT 0,
+    status VARCHAR(32) NOT NULL DEFAULT 'active',
+    business_id VARCHAR(255) NOT NULL,
+    unit VARCHAR(32) NULL,
+    barcode VARCHAR(64) NULL,
+    brand VARCHAR(128) NULL,
+    image_url MEDIUMTEXT NULL,
+    created_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    updated_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+    INDEX (business_id)
+  )`);
+
+  await create(`CREATE TABLE IF NOT EXISTS customers (
+    id VARCHAR(255) PRIMARY KEY,
+    code VARCHAR(64) NULL,
+    name VARCHAR(255) NOT NULL,
+    business_name VARCHAR(255) NULL,
+    mobile VARCHAR(32) NULL,
+    type VARCHAR(16) NOT NULL DEFAULT 'b2c',
+    gstin VARCHAR(32) NULL,
+    credit_limit DECIMAL(12,2) NOT NULL DEFAULT 0,
+    outstanding DECIMAL(12,2) NOT NULL DEFAULT 0,
+    business_id VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    updated_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+    INDEX (business_id)
+  )`);
+
+  await create(`CREATE TABLE IF NOT EXISTS number_sequences (
+    name VARCHAR(64) NOT NULL,
+    next_value INT NOT NULL DEFAULT 1,
+    business_id VARCHAR(255) NOT NULL,
+    PRIMARY KEY (name, business_id)
+  )`);
+
+  await create(`CREATE TABLE IF NOT EXISTS sales_orders (
+    id VARCHAR(255) PRIMARY KEY,
+    order_number VARCHAR(64) NOT NULL,
+    customer_id VARCHAR(255) NULL,
+    customer_name VARCHAR(255) NULL,
+    customer_type VARCHAR(16) NULL,
+    pack_id VARCHAR(255) NULL,
+    pack_name VARCHAR(255) NULL,
+    pack_count INT NULL,
+    status VARCHAR(32) NOT NULL DEFAULT 'confirmed',
+    total_quantity_gm DECIMAL(14,3) NOT NULL DEFAULT 0,
+    subtotal DECIMAL(12,2) NOT NULL DEFAULT 0,
+    discount DECIMAL(12,2) NOT NULL DEFAULT 0,
+    gst DECIMAL(12,2) NOT NULL DEFAULT 0,
+    total DECIMAL(12,2) NOT NULL DEFAULT 0,
+    payment_method VARCHAR(32) NULL,
+    payment_status VARCHAR(32) NULL,
+    business_id VARCHAR(255) NOT NULL,
+    branch_id VARCHAR(255) NULL,
+    device_id VARCHAR(255) NULL,
+    cashier_id VARCHAR(255) NULL,
+    held TINYINT NOT NULL DEFAULT 0,
+    created_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    updated_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+    INDEX (business_id)
+  )`);
+
+  await create(`CREATE TABLE IF NOT EXISTS sales_order_lines (
+    id VARCHAR(255) PRIMARY KEY,
+    order_id VARCHAR(255) NOT NULL,
+    item_id VARCHAR(255) NOT NULL,
+    item_name VARCHAR(255) NOT NULL,
+    quantity_gm DECIMAL(14,3) NOT NULL DEFAULT 0,
+    rate_per_kg DECIMAL(12,2) NOT NULL DEFAULT 0,
+    discount DECIMAL(12,2) NOT NULL DEFAULT 0,
+    amount DECIMAL(12,2) NOT NULL DEFAULT 0,
+    gst_rate DECIMAL(5,2) NOT NULL DEFAULT 0,
+    cancelled TINYINT NOT NULL DEFAULT 0,
+    business_id VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    INDEX (order_id),
+    INDEX (business_id)
+  )`);
+
+  await create(`CREATE TABLE IF NOT EXISTS purchases (
+    id VARCHAR(255) PRIMARY KEY,
+    purchase_number VARCHAR(64) NOT NULL,
+    supplier_id VARCHAR(255) NULL,
+    supplier_name VARCHAR(255) NULL,
+    supplier_invoice_number VARCHAR(64) NULL,
+    purchase_date DATE NULL,
+    notes TEXT NULL,
+    subtotal DECIMAL(12,2) NOT NULL DEFAULT 0,
+    gst DECIMAL(12,2) NOT NULL DEFAULT 0,
+    total DECIMAL(12,2) NOT NULL DEFAULT 0,
+    payment_method VARCHAR(32) NULL,
+    payment_status VARCHAR(32) NULL,
+    business_id VARCHAR(255) NOT NULL,
+    branch_id VARCHAR(255) NULL,
+    created_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    updated_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+    INDEX (business_id)
+  )`);
+
+  await create(`CREATE TABLE IF NOT EXISTS purchase_lines (
+    id VARCHAR(255) PRIMARY KEY,
+    purchase_id VARCHAR(255) NOT NULL,
+    item_id VARCHAR(255) NOT NULL,
+    item_name VARCHAR(255) NOT NULL,
+    quantity_gm DECIMAL(14,3) NOT NULL DEFAULT 0,
+    rate_per_kg DECIMAL(12,2) NOT NULL DEFAULT 0,
+    gst_rate DECIMAL(5,2) NOT NULL DEFAULT 0,
+    amount DECIMAL(12,2) NOT NULL DEFAULT 0,
+    gst_amount DECIMAL(12,2) NOT NULL DEFAULT 0,
+    total_amount DECIMAL(12,2) NOT NULL DEFAULT 0,
+    business_id VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    INDEX (purchase_id),
+    INDEX (business_id)
+  )`);
+
+  await create(`CREATE TABLE IF NOT EXISTS packs (
+    id VARCHAR(255) PRIMARY KEY,
+    code VARCHAR(64) NULL,
+    name VARCHAR(255) NOT NULL,
+    total_quantity_gm DECIMAL(14,3) NOT NULL DEFAULT 0,
+    status VARCHAR(32) NOT NULL DEFAULT 'active',
+    business_id VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    updated_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+    INDEX (business_id)
+  )`);
+
+  await create(`CREATE TABLE IF NOT EXISTS pack_items (
+    id VARCHAR(255) PRIMARY KEY,
+    pack_id VARCHAR(255) NOT NULL,
+    item_id VARCHAR(255) NOT NULL,
+    quantity_gm DECIMAL(14,3) NOT NULL DEFAULT 0,
+    retail_rate DECIMAL(12,2) NOT NULL DEFAULT 0,
+    b2b_rate DECIMAL(12,2) NOT NULL DEFAULT 0,
+    sort_order INT NOT NULL DEFAULT 0,
+    business_id VARCHAR(255) NOT NULL,
+    INDEX (pack_id),
+    INDEX (business_id)
+  )`);
+
+  await create(`CREATE TABLE IF NOT EXISTS suppliers (
+    id VARCHAR(255) PRIMARY KEY,
+    code VARCHAR(64) NULL,
+    name VARCHAR(255) NOT NULL,
+    contact_name VARCHAR(255) NULL,
+    mobile VARCHAR(32) NULL,
+    email VARCHAR(255) NULL,
+    address TEXT NULL,
+    gstin VARCHAR(32) NULL,
+    opening_balance DECIMAL(12,2) NOT NULL DEFAULT 0,
+    business_id VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    updated_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+    INDEX (business_id)
+  )`);
+}
+
 export async function ensureSchema() {
+  await createBaseTables();
   await addColumn("businesses", "owner_name", "VARCHAR(255) NULL");
   await addColumn("businesses", "mobile", "VARCHAR(32) NULL");
   await addColumn("businesses", "email", "VARCHAR(255) NULL");
@@ -232,6 +515,109 @@ export async function seedPlatform() {
   }
 
   const swamiId = process.env.BUSINESS_ID || "00000000-0000-4000-8000-000000000001";
+  const [swamiBiz] = await query("SELECT id FROM businesses WHERE id = ?", [swamiId]);
+  if (!swamiBiz) {
+    await query(
+      `INSERT INTO businesses (
+         id, code, name, status, owner_name, mobile, email, address, gstin,
+         business_type, plan_id, subscription_expires_at, category, city, state, pin_code
+       ) VALUES (?,?,?,?,?,?,?,?,?,?,?, DATE_ADD(CURDATE(), INTERVAL 365 DAY),?,?,?,?)`,
+      [
+        swamiId,
+        "SWAMI001",
+        "SWAMI MASALE SASWAD",
+        "active",
+        "SWAMI MASALE",
+        "9876543210",
+        "swami@atavtelecom.in",
+        "Saswad Baji Market, Purandhar, Pune 412301",
+        null,
+        "spice",
+        "premium",
+        "Whole Spices",
+        "Pune",
+        "Maharashtra",
+        "412301",
+      ],
+    );
+    await query(
+      `INSERT INTO company_settings (id, name, address, phone, email, business_id)
+       VALUES (?,?,?,?,?,?)`,
+      [
+        crypto.randomUUID(),
+        "SWAMI MASALE SASWAD",
+        "Saswad Baji Market, Purandhar, Pune 412301",
+        "9876543210",
+        "swami@atavtelecom.in",
+        swamiId,
+      ],
+    );
+    const swamiAdminId = crypto.randomUUID();
+    const swamiPass = process.env.DEMO_TENANT_PASSWORD || "Demo@12345";
+    const mainBranchSeed = crypto.randomUUID();
+    await query(
+      `INSERT INTO branches (id, business_id, name, address, status)
+       VALUES (?,?,?,?, 'active')`,
+      [mainBranchSeed, swamiId, "Main Branch", "Saswad Baji Market, Purandhar, Pune 412301"],
+    );
+    await query(
+      `INSERT INTO staff_users (
+         id, clerk_user_id, email, first_name, last_name, role, status, password_hash,
+         business_id, branch_id, permissions_json, username
+       ) VALUES (?,?,?,?,?,?, 'active', ?,?,?,?,?)`,
+      [
+        swamiAdminId,
+        `local:${swamiAdminId}`,
+        "swami@atavtelecom.in",
+        "SWAMI",
+        "Admin",
+        "business_admin",
+        await hashPassword(swamiPass),
+        swamiId,
+        mainBranchSeed,
+        JSON.stringify(defaultPerms("business_admin")),
+        "swamiadmin",
+      ],
+    );
+    const spiceItems = [
+      ["TUR-100", "Turmeric powder", "Whole Spices", 450, 5, 48000],
+      ["SAF-001", "Saffron", "Whole Spices", 12000, 5, 6000],
+      ["COR-100", "Coriander powder", "Whole Spices", 380, 5, 50000],
+      ["CUM-100", "Cumin seeds", "Whole Spices", 520, 5, 40000],
+    ];
+    for (const [code, name, category, retail, gst, stock] of spiceItems) {
+      await query(
+        `INSERT INTO items (
+           id, code, name, category, base_unit, purchase_rate, retail_rate, b2b_rate,
+           gst_rate, stock_gm, reorder_level_gm, status, business_id, unit
+         ) VALUES (?,?,?,?,?,?,?,?,?,?,?, 'active', ?, 'GM')`,
+        [
+          crypto.randomUUID(),
+          code,
+          name,
+          category,
+          "GM",
+          retail * 0.8,
+          retail,
+          retail * 0.9,
+          gst,
+          stock,
+          1000,
+          swamiId,
+        ],
+      );
+    }
+    await query(
+      `INSERT INTO customers (id, code, name, mobile, type, outstanding, business_id)
+       VALUES (?,?,?,?, 'b2c', 0, ?)`,
+      [crypto.randomUUID(), "CUS-001", "Walk-in", "0000000001", swamiId],
+    );
+    await query(
+      `INSERT INTO number_sequences (name, next_value, business_id) VALUES ('order', 10001, ?), ('customer', 2, ?), ('item', 5, ?)`,
+      [swamiId, swamiId, swamiId],
+    );
+  }
+
   await query(
     `UPDATE businesses b
      JOIN company_settings c ON c.business_id = b.id
