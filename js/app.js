@@ -1288,7 +1288,13 @@ $("stock-form")?.addEventListener("submit", async (e) => {
 });
 
 function paintPlatformNotices(notes) {
-  const list = Array.isArray(notes) ? notes : [];
+  const list = (Array.isArray(notes) ? notes : []).filter((n) => {
+    const title = String(n.title || "").trim().toLowerCase();
+    const body = String(n.body || "").toLowerCase();
+    if (title === "master admin login") return false;
+    if (body.includes("opened this shop from master admin")) return false;
+    return true;
+  });
   const top = $("platform-notices");
   const dash = $("dash-notes");
   const html = list
