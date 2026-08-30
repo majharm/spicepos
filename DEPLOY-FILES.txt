@@ -1,4 +1,4 @@
-Production deploy bundle — 20260830deploy12
+Production deploy bundle — 20260830deploy13
 =========================================
 
 Upload ALL files below to Hostinger public_html (overwrite):
@@ -26,6 +26,7 @@ JavaScript
 PHP
   pos-php-core.php
   pos-php-till.php
+  pos-orders.php
   pos-reports.php
   pos-api.php
   api/health/index.php
@@ -37,6 +38,7 @@ Node (if using hPanel Node.js web app — upload OR git pull then Restart)
   server/master.js
   server/onboard.js
   server/index.js
+  server/crud.js
   server/reports.js
   package.json
 
@@ -45,6 +47,9 @@ After upload:
   2. Hard-refresh browser (Ctrl+Shift+R)
 
 FIXES in this bundle
+  - Sales orders show order + payment status badges
+  - Change order status / payment status from Sales orders view
+  - Change line items (edit) with banner on POS counter; PHP PUT orders API
   - Thermal tax invoice print for sales orders (80mm, GST breakdown, HSN, CGST/SGST)
   - Sales orders renamed to Invoices in POS nav
   - GST reports: output/input by rate, HSN itemwise, B2B/B2C sales, net GST summary

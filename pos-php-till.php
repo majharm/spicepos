@@ -228,6 +228,14 @@ function pos_php_till_dispatch($path, $method, $body) {
     pos_send(200, $orders);
   }
 
+  if (preg_match('#^orders/([^/]+)$#', $path, $m)) {
+    require_once __DIR__ . "/pos-orders.php";
+    $orderId = $m[1];
+    if ($method === "PUT") pos_update_order($bid, $orderId, $body, $auth);
+    if ($method === "PATCH") pos_patch_order($bid, $orderId, $body, $auth);
+    pos_send(405, ["error" => "Method not allowed", "php" => true]);
+  }
+
   if ($path === "purchases" && $method === "GET") {
     pos_send(200, pos_q("SELECT * FROM purchases WHERE business_id = ? ORDER BY purchase_date DESC, created_at DESC LIMIT 80", "s", [$bid]));
   }

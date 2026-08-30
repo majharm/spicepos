@@ -339,6 +339,9 @@ export function registerCrud(app) {
         );
         const existing = existRows[0];
         if (!existing) throw new Error("Order not found");
+        if (String(existing.status || "").toLowerCase() === "cancelled") {
+          throw new Error("Cancelled orders cannot be edited. Change status first.");
+        }
         const [oldLines] = await conn.query(
           "SELECT * FROM sales_order_lines WHERE order_id = ? AND cancelled = 0",
           [existing.id],
@@ -454,6 +457,82 @@ export function registerCrud(app) {
         total: order.total,
         payment_method: order.payment_method,
         customer_name: order.customer_name,
+      }, req);
+      res.json({ ok: true, order });
+    } catch (err) {
+      res.status(500).json({ error: String(err.message) });
+    }
+  });
+
+  const orderStatuses = ["confirmed", "delivered", "cancelled"];
+  const paymentStatuses = ["paid", "partial", "unpaid"];
+
+  app.patch("/api/orders/:id", async (req, res) => {
+    const { status, payment_status } = req.body || {};
+    try {
+      const order = await withTransaction(async (conn) => {
+        const [existRows] = await conn.query(
+          "SELECT * FROM sales_orders WHERE id = ? AND business_id = ?",
+          [req.params.id, bid()],
+        );
+        const existing = existRows[0];
+        if (!existing) throw new Error("Order not found");
+
+        const oldStatus = String(existing.status || "confirmed").toLowerCase();
+        const newStatus = status ? String(status).toLowerCase() : oldStatus;
+        if (!orderStatuses.includes(newStatus)) throw new Error("Invalid order status");
+
+        let payStatus = existing.payment_status || "paid";
+        if (payment_status) {
+          payStatus = String(payment_status).toLowerCase();
+          if (!paymentStatuses.includes(payStatus)) throw new Error("Invalid payment status");
+        }
+
+        const [lines] = await conn.query(
+          "SELECT * FROM sales_order_lines WHERE order_id = ? AND cancelled = 0",
+          [existing.id],
+        );
+
+        if (newStatus === "cancelled" && oldStatus !== "cancelled") {
+          for (const line of lines) {
+            await conn.query(
+              "UPDATE items SET stock_gm = stock_gm + ? WHERE id = ? AND business_id = ?",
+              [line.quantity_gm, line.item_id, bid()],
+            );
+            await conn.query("UPDATE sales_order_lines SET cancelled = 1 WHERE id = ?", [line.id]);
+          }
+        } else if (oldStatus === "cancelled" && newStatus !== "cancelled") {
+          const [allLines] = await conn.query(
+            "SELECT * FROM sales_order_lines WHERE order_id = ?",
+            [existing.id],
+          );
+          for (const line of allLines) {
+            await conn.query(
+              "UPDATE items SET stock_gm = stock_gm - ? WHERE id = ? AND business_id = ?",
+              [line.quantity_gm, line.item_id, bid()],
+            );
+            await conn.query("UPDATE sales_order_lines SET cancelled = 0 WHERE id = ?", [line.id]);
+          }
+        }
+
+        await conn.query(
+          "UPDATE sales_orders SET status = ?, payment_status = ? WHERE id = ? AND business_id = ?",
+          [newStatus, payStatus, existing.id, bid()],
+        );
+
+        const [orders] = await conn.query("SELECT * FROM sales_orders WHERE id = ?", [existing.id]);
+        const [orderLines] = await conn.query(
+          "SELECT * FROM sales_order_lines WHERE order_id = ?",
+          [existing.id],
+        );
+        return { ...orders[0], lines: orderLines };
+      });
+      await audit("Sale Status Changed", {
+        module: "sales",
+        target_id: order.id,
+        target_name: order.order_number,
+        status: order.status,
+        payment_status: order.payment_status,
       }, req);
       res.json({ ok: true, order });
     } catch (err) {

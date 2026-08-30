@@ -9,8 +9,8 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" />
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./css/pos.css?v=20260830deploy12" />
-    <link rel="stylesheet" href="./css/saas.css?v=20260830deploy12" />
+    <link rel="stylesheet" href="./css/pos.css?v=20260830deploy13" />
+    <link rel="stylesheet" href="./css/saas.css?v=20260830deploy13" />
   </head>
   <body>
     <div class="app">
@@ -26,7 +26,7 @@
         <button class="nav-btn" type="button" data-view="items">Items</button>
         <button class="nav-btn" type="button" data-view="customers">Customers</button>
         <button class="nav-btn" type="button" data-view="packs">Packs</button>
-        <button class="nav-btn" type="button" data-view="orders">Invoices</button>
+        <button class="nav-btn" type="button" data-view="orders">Sales orders</button>
         <button class="nav-btn" type="button" data-view="purchases">Purchases</button>
         <button class="nav-btn" type="button" data-view="suppliers">Suppliers</button>
         <button class="nav-btn" type="button" data-view="stock">Stock</button>
@@ -69,6 +69,7 @@
           <p class="lede"><button class="btn primary" type="button" data-view-jump="counter" id="open-pos">Open POS</button></p>
         </section>
         <section class="view view-counter" id="view-counter" hidden>
+          <div class="edit-order-banner" id="edit-order-banner" hidden></div>
           <header class="topbar counter-topbar">
             <form class="search" id="search-form">
               <input id="search" type="search" placeholder="Search spice, local name, or code…" autocomplete="off" />
@@ -168,8 +169,8 @@
           <div class="table-wrap" id="packs-table"></div>
         </section>
         <section class="view" id="view-orders" hidden>
-          <h2>Invoices</h2>
-          <p class="lede">Sales orders are tax invoices (SO numbers). Select one to preview or reprint on thermal.</p>
+          <h2>Sales orders</h2>
+          <p class="lede">Tax invoices with order status. Update status, change line items, or reprint on thermal.</p>
           <div class="split">
             <div class="table-wrap" id="orders"></div>
             <div class="pane" id="order-pane"><p class="hint">Select an invoice.</p></div>
@@ -378,9 +379,9 @@
         </section>
       </div>
     </aside>
-    <script src="./js/pos-api.js?v=20260830deploy12"></script>
-    <script src="./js/dev-mode.js?v=20260830deploy12"></script>
-    <script src="./js/invoice.js?v=20260830deploy12"></script>
-    <script src="./js/app.js?v=20260830deploy12"></script>
+    <script src="./js/pos-api.js?v=20260830deploy13"></script>
+    <script src="./js/dev-mode.js?v=20260830deploy13"></script>
+    <script src="./js/invoice.js?v=20260830deploy13"></script>
+    <script src="./js/app.js?v=20260830deploy13"></script>
   </body>
 </html>

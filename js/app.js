@@ -38,6 +38,51 @@ function kg(gm) {
   return `${(Number(gm) / 1000).toFixed(2)} kg`;
 }
 
+const ORDER_STATUSES = ["confirmed", "delivered", "cancelled"];
+const PAYMENT_STATUSES = ["paid", "partial", "unpaid"];
+
+function orderStatusClass(status) {
+  const s = String(status || "confirmed").toLowerCase();
+  if (s === "cancelled") return "cancelled";
+  if (s === "delivered") return "delivered";
+  return "confirmed";
+}
+
+function orderStatusBadge(status) {
+  const s = String(status || "confirmed").toLowerCase();
+  return `<span class="order-status ${orderStatusClass(s)}">${escapeHtml(s)}</span>`;
+}
+
+function payStatusBadge(status) {
+  const s = String(status || "paid").toLowerCase();
+  return `<span class="pay-status ${escapeHtml(s)}">${escapeHtml(s)}</span>`;
+}
+
+function renderEditOrderBanner() {
+  const el = $("edit-order-banner");
+  if (!el) return;
+  if (!state.editingOrderId) {
+    el.hidden = true;
+    el.textContent = "";
+    return;
+  }
+  const o = orderCache.find((row) => row.id === state.editingOrderId);
+  const label = o?.order_number || state.editingOrderId;
+  el.hidden = false;
+  el.innerHTML = `Editing sales order <strong>${escapeHtml(label)}</strong>
+    <button class="btn" type="button" id="btn-cancel-edit">Cancel edit</button>`;
+}
+
+function cancelOrderEdit() {
+  state.editingOrderId = null;
+  state.cart = [];
+  state.lastPack = null;
+  $("pack-choice").value = "";
+  renderEditOrderBanner();
+  renderCart();
+  setHint("Edit cancelled");
+}
+
 function customer() {
   return state.customers.find((c) => c.id === state.customerId) || state.customers[0];
 }
@@ -352,7 +397,8 @@ function renderCart() {
   $("total").textContent = money(t.taxable + t.tax);
   $("btn-pay").disabled = state.cart.length === 0;
   $("btn-clear").disabled = state.cart.length === 0;
-  $("btn-pay").textContent = state.editingOrderId ? "Save" : "Save";
+  $("btn-pay").textContent = state.editingOrderId ? "Save changes" : "Save";
+  renderEditOrderBanner();
   if (window.DevMode?.isEnabled()) {
     DevMode.updateContext({ cartLines: state.cart.length });
   }
@@ -749,11 +795,50 @@ function printOrder(o) {
 }
 
 function showOrder(o) {
-  $("order-pane").innerHTML = `<div class="thermal-preview">${InvoicePrint.invoiceBody(o, invoiceCtx())}</div>
+  const statusOpts = ORDER_STATUSES.map(
+    (s) => `<option value="${s}"${String(o.status || "confirmed").toLowerCase() === s ? " selected" : ""}>${s}</option>`,
+  ).join("");
+  const payOpts = PAYMENT_STATUSES.map(
+    (s) => `<option value="${s}"${String(o.payment_status || "paid").toLowerCase() === s ? " selected" : ""}>${s}</option>`,
+  ).join("");
+  const cancelled = String(o.status || "").toLowerCase() === "cancelled";
+  $("order-pane").innerHTML = `<div class="order-detail-head">
+      <div class="order-badges">${orderStatusBadge(o.status)} ${payStatusBadge(o.payment_status)}</div>
+      <p class="hint">${escapeHtml(o.order_number)} · ${escapeHtml(o.customer_name)} · ${escapeHtml(formatShopDateTime(o.created_at))}</p>
+    </div>
+    <form class="order-status-form" id="order-status-form">
+      <label>Order status
+        <select id="order-status-select">${statusOpts}</select>
+      </label>
+      <label>Payment status
+        <select id="order-pay-status-select">${payOpts}</select>
+      </label>
+      <button class="btn primary" type="submit">Update status</button>
+    </form>
+    <div class="thermal-preview">${InvoicePrint.invoiceBody(o, invoiceCtx())}</div>
     <div class="print-actions">
       <button class="btn primary" type="button" data-print="${escapeHtml(o.id)}">Print invoice</button>
-      <button class="btn" type="button" data-edit-order="${escapeHtml(o.id)}">Edit</button>
+      <button class="btn" type="button" data-edit-order="${escapeHtml(o.id)}"${cancelled ? " disabled title=\"Restore order status before editing items\"" : ""}>Change items</button>
     </div>`;
+  $("order-status-form").onsubmit = async (e) => {
+    e.preventDefault();
+    try {
+      const status = $("order-status-select").value;
+      const payment_status = $("order-pay-status-select").value;
+      const data = await api(`/api/orders/${encodeURIComponent(o.id)}`, {
+        method: "PATCH",
+        body: JSON.stringify({ status, payment_status }),
+      });
+      const updated = data.order || { ...o, status, payment_status };
+      const idx = orderCache.findIndex((row) => row.id === o.id);
+      if (idx >= 0) orderCache[idx] = { ...orderCache[idx], ...updated };
+      showOrder(updated);
+      await loadOrders();
+      setHint(`Status updated · ${updated.order_number}`, "ok");
+    } catch (err) {
+      setHint(err.message, "error");
+    }
+  };
 }
 
 async function loadOrders() {
@@ -761,8 +846,9 @@ async function loadOrders() {
   $("orders").innerHTML = orderCache
     .map(
       (o) => `<button class="order-item" type="button" data-oid="${escapeHtml(o.id)}">
-        <span>${escapeHtml(o.order_number)} · ${escapeHtml(o.customer_name)}<br>
-        <small>Invoice · ${escapeHtml(o.pack_name ? `Pack: ${o.pack_name} × ${o.pack_count || 1}` : "Loose items")} · ${escapeHtml(o.payment_method)} · ${escapeHtml(formatShopDateTime(o.created_at))}</small></span>
+        <span>${escapeHtml(o.order_number)} · ${escapeHtml(o.customer_name)}
+        <span class="order-item-badges">${orderStatusBadge(o.status)} ${payStatusBadge(o.payment_status)}</span><br>
+        <small>${escapeHtml(o.pack_name ? `Pack: ${o.pack_name} × ${o.pack_count || 1}` : "Loose items")} · ${escapeHtml(o.payment_method)} · ${escapeHtml(formatShopDateTime(o.created_at))}</small></span>
         <span>${money(o.total)}</span>
       </button>`,
     )
@@ -874,6 +960,10 @@ $("order-pane").addEventListener("click", (e) => {
   if (editBtn) {
     const o = orderCache.find((row) => row.id === editBtn.dataset.editOrder);
     if (!o) return;
+    if (String(o.status || "").toLowerCase() === "cancelled") {
+      setHint("Change order status from cancelled before editing items", "error");
+      return;
+    }
     state.editingOrderId = o.id;
     state.customerId = o.customer_id;
     state.cart = (o.lines || []).map((l) => ({ itemId: l.item_id, qtyGm: Number(l.quantity_gm) }));
@@ -883,7 +973,7 @@ $("order-pane").addEventListener("click", (e) => {
     $("pack-choice").value = o.pack_id || "";
     showView("counter");
     renderCart();
-    setHint(`Editing ${o.order_number}`, "ok");
+    setHint(`Changing items for ${o.order_number}`, "ok");
   }
 });
 
@@ -898,12 +988,19 @@ $("customer").addEventListener("change", () => {
   renderCart();
 });
 $("btn-clear").addEventListener("click", () => {
+  if (state.editingOrderId) {
+    cancelOrderEdit();
+    return;
+  }
   state.cart = [];
   state.lastPack = null;
-  state.editingOrderId = null;
   $("pack-choice").value = "";
   setHint("Cart cleared");
   renderCart();
+});
+
+document.addEventListener("click", (e) => {
+  if (e.target.id === "btn-cancel-edit") cancelOrderEdit();
 });
 
 $("btn-pay").addEventListener("click", async () => {
@@ -927,7 +1024,13 @@ $("btn-pay").addEventListener("click", async () => {
       : await api("/api/checkout", { method: "POST", body: JSON.stringify(payload) });
     const order = orderFromResult(result);
     if (!orderSaved(result)) throw new Error("Checkout did not return an order");
+    const wasEdit = Boolean(state.editingOrderId);
     clearCounterAfterSale(order, result);
+    state.editingOrderId = null;
+    renderEditOrderBanner();
+    if (wasEdit) {
+      try { await loadOrders(); } catch { /* ignore */ }
+    }
     let receiptOrder = order;
     if (!receiptOrder) {
       receiptOrder = {
