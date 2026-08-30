@@ -12,6 +12,7 @@ export const MODULES = [
   "branches",
   "devices",
   "reports",
+  "accounts",
   "settings",
   "support",
   "discount",
@@ -37,6 +38,7 @@ export function defaultPerms(role) {
       staff: role === "branch_manager",
       settings: role === "branch_manager",
       discount: true,
+      accounts: true,
     };
   }
   if (role === "cashier") {
@@ -64,6 +66,7 @@ export function defaultPerms(role) {
     return {
       dashboard: true,
       reports: true,
+      accounts: true,
       purchases: true,
       suppliers: true,
       customers: true,

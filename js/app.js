@@ -6,6 +6,8 @@ const state = {
   customers: [],
   packs: [],
   suppliers: [],
+  accReceivables: [],
+  accPayables: [],
   cart: [],
   query: "",
   customerId: "",
@@ -234,6 +236,7 @@ function applyNav() {
       devices: "devices",
       support: "support",
       reports: "reports",
+      accounts: "accounts",
       settings: "settings",
     };
     btn.hidden = map[view] ? !can(map[view]) : false;
@@ -250,6 +253,7 @@ function showView(name) {
   document.body.classList.toggle("counter-mode", name === "counter");
   document.querySelector(".stage")?.classList.toggle("is-counter", name === "counter");
   if (name === "reports") loadReports();
+  if (name === "accounts") loadAccounts();
   if (name === "orders") loadOrders();
   if (name === "purchases") loadPurchases();
   if (name === "suppliers") loadSuppliers();
@@ -795,7 +799,7 @@ async function loadSuppliers() {
     .map((s) => `<option value="${escapeHtml(s.id)}">${escapeHtml(s.name)}</option>`)
     .join("");
   $("suppliers-table").innerHTML = `<table><thead><tr>
-    <th>Code</th><th>Name</th><th>Contact</th><th>Mobile</th><th>GSTIN</th>
+    <th>Code</th><th>Name</th><th>Contact</th><th>Mobile</th><th>GSTIN</th><th>Payable</th>
   </tr></thead><tbody>${rows
     .map(
       (s) => `<tr>
@@ -804,9 +808,192 @@ async function loadSuppliers() {
       <td>${escapeHtml(s.contact_name || "—")}</td>
       <td>${escapeHtml(s.mobile || "—")}</td>
       <td>${escapeHtml(s.gstin || "—")}</td>
+      <td>${money(Number(s.payable_balance) || 0)}</td>
     </tr>`,
     )
     .join("")}</tbody></table>`;
+}
+
+let accTab = "receivables";
+
+function setAccTab(name) {
+  accTab = name;
+  document.querySelectorAll("[data-acc-tab]").forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.accTab === name);
+  });
+  document.querySelectorAll(".acc-pane").forEach((pane) => {
+    pane.hidden = pane.id !== `acc-pane-${name}`;
+  });
+  if (name === "ledger") loadAccountsLedger();
+}
+
+function showReceiptModal(customer) {
+  $("modal-title").textContent = `Receipt · ${customer.business_name || customer.name}`;
+  $("modal-body").innerHTML = `<form class="settings" id="receipt-modal-form">
+    <p class="section-note">Outstanding: <strong>${money(Number(customer.outstanding) || 0)}</strong></p>
+    <label>Amount <input id="rcp-amount" type="number" min="0.01" step="0.01" max="${Number(customer.outstanding) || 0}" required value="${Number(customer.outstanding) || 0}" /></label>
+    <label>Method
+      <select id="rcp-method">
+        <option value="cash">Cash</option>
+        <option value="upi">UPI</option>
+        <option value="card">Card</option>
+        <option value="bank">Bank</option>
+      </select>
+    </label>
+    <label>Notes <input id="rcp-notes" placeholder="Optional" /></label>
+    <button class="btn primary" type="submit">Save receipt</button>
+  </form>
+  <div class="hint" id="rcp-hint"></div>`;
+  $("modal").hidden = false;
+  $("receipt-modal-form").onsubmit = async (e) => {
+    e.preventDefault();
+    try {
+      const data = await api("/api/accounts/receipts", {
+        method: "POST",
+        body: JSON.stringify({
+          customer_id: customer.id,
+          amount: Number($("rcp-amount").value),
+          payment_method: $("rcp-method").value,
+          notes: $("rcp-notes").value,
+        }),
+      });
+      $("rcp-hint").textContent = `Saved ${data.entryNo}`;
+      $("rcp-hint").className = "hint ok";
+      $("modal").hidden = true;
+      await loadAccounts();
+      await loadBootstrap();
+    } catch (err) {
+      $("rcp-hint").textContent = err.message;
+      $("rcp-hint").className = "hint error";
+    }
+  };
+}
+
+function showPaymentModal(supplier) {
+  $("modal-title").textContent = `Payment · ${supplier.name}`;
+  $("modal-body").innerHTML = `<form class="settings" id="payment-modal-form">
+    <p class="section-note">Payable: <strong>${money(Number(supplier.payable_balance) || 0)}</strong></p>
+    <label>Amount <input id="pay-amount" type="number" min="0.01" step="0.01" max="${Number(supplier.payable_balance) || 0}" required value="${Number(supplier.payable_balance) || 0}" /></label>
+    <label>Method
+      <select id="pay-method">
+        <option value="cash">Cash</option>
+        <option value="upi">UPI</option>
+        <option value="card">Card</option>
+        <option value="bank">Bank</option>
+      </select>
+    </label>
+    <label>Notes <input id="pay-notes" placeholder="Optional" /></label>
+    <button class="btn primary" type="submit">Save payment</button>
+  </form>
+  <div class="hint" id="pay-hint"></div>`;
+  $("modal").hidden = false;
+  $("payment-modal-form").onsubmit = async (e) => {
+    e.preventDefault();
+    try {
+      const data = await api("/api/accounts/payments", {
+        method: "POST",
+        body: JSON.stringify({
+          supplier_id: supplier.id,
+          amount: Number($("pay-amount").value),
+          payment_method: $("pay-method").value,
+          notes: $("pay-notes").value,
+        }),
+      });
+      $("pay-hint").textContent = `Saved ${data.entryNo}`;
+      $("pay-hint").className = "hint ok";
+      $("modal").hidden = true;
+      await loadAccounts();
+      await loadSuppliers();
+    } catch (err) {
+      $("pay-hint").textContent = err.message;
+      $("pay-hint").className = "hint error";
+    }
+  };
+}
+
+async function loadAccountsLedger() {
+  if (!$("acc-from")?.value) $("acc-from").value = ymd();
+  if (!$("acc-to")?.value) $("acc-to").value = ymd();
+  const from = $("acc-from").value;
+  const to = $("acc-to").value;
+  const rows = await api(`/api/accounts/ledger?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`);
+  $("acc-ledger-table").innerHTML = `<table><thead><tr>
+    <th>Entry</th><th>Type</th><th>Party</th><th>Amount</th><th>Method</th><th>Reference</th><th>Notes</th><th>Date</th>
+  </tr></thead><tbody>${rows
+    .map(
+      (r) => `<tr>
+      <td>${escapeHtml(r.entry_no)}</td>
+      <td>${escapeHtml(r.entry_type)}</td>
+      <td>${escapeHtml(r.party_name || "—")}</td>
+      <td>${money(Number(r.amount) || 0)}</td>
+      <td>${escapeHtml(r.payment_method || "—")}</td>
+      <td>${escapeHtml(r.reference_type || "—")}${r.reference_id ? ` · ${escapeHtml(String(r.reference_id).slice(0, 8))}` : ""}</td>
+      <td>${escapeHtml(r.notes || "—")}</td>
+      <td>${escapeHtml(formatShopDateTime(r.created_at))}</td>
+    </tr>`,
+    )
+    .join("")}</tbody></table>`;
+}
+
+async function loadAccounts() {
+  if (!$("acc-summary")) return;
+  $("acc-hint").textContent = "Loading…";
+  $("acc-hint").className = "hint";
+  try {
+    const [summary, receivables, payables] = await Promise.all([
+      api("/api/accounts/summary"),
+      api("/api/accounts/receivables"),
+      api("/api/accounts/payables"),
+    ]);
+    $("acc-summary").innerHTML = [
+      ["Receivables", money(summary.receivables)],
+      ["Payables", money(summary.payables)],
+      ["Customers due", summary.customersDue],
+      ["Suppliers due", summary.suppliersDue],
+    ]
+      .map(([k, v]) => `<div class="report-card"><span>${k}</span><strong>${v}</strong></div>`)
+      .join("");
+    $("acc-receivables-table").innerHTML = receivables.length
+      ? `<table><thead><tr>
+        <th>Code</th><th>Name</th><th>Business</th><th>Mobile</th><th>Credit limit</th><th>Outstanding</th><th></th>
+      </tr></thead><tbody>${receivables
+        .map(
+          (c) => `<tr>
+          <td>${escapeHtml(c.code)}</td>
+          <td>${escapeHtml(c.name)}</td>
+          <td>${escapeHtml(c.business_name || "—")}</td>
+          <td>${escapeHtml(c.mobile || "—")}</td>
+          <td>${money(Number(c.credit_limit) || 0)}</td>
+          <td>${money(Number(c.outstanding) || 0)}</td>
+          <td><button class="btn primary" type="button" data-rcp="${escapeHtml(c.id)}">Receipt</button></td>
+        </tr>`,
+        )
+        .join("")}</tbody></table>`
+      : `<p class="hint">No receivables.</p>`;
+    $("acc-payables-table").innerHTML = payables.length
+      ? `<table><thead><tr>
+        <th>Code</th><th>Name</th><th>Contact</th><th>Mobile</th><th>Payable</th><th></th>
+      </tr></thead><tbody>${payables
+        .map(
+          (s) => `<tr>
+          <td>${escapeHtml(s.code)}</td>
+          <td>${escapeHtml(s.name)}</td>
+          <td>${escapeHtml(s.contact_name || "—")}</td>
+          <td>${escapeHtml(s.mobile || "—")}</td>
+          <td>${money(Number(s.payable_balance) || 0)}</td>
+          <td><button class="btn primary" type="button" data-pay="${escapeHtml(s.id)}">Payment</button></td>
+        </tr>`,
+        )
+        .join("")}</tbody></table>`
+      : `<p class="hint">No payables.</p>`;
+    state.accReceivables = receivables;
+    state.accPayables = payables;
+    $("acc-hint").textContent = "";
+    if (accTab === "ledger") await loadAccountsLedger();
+  } catch (err) {
+    $("acc-hint").textContent = err.message;
+    $("acc-hint").className = "hint error";
+  }
 }
 
 $("catalog").addEventListener("click", (e) => {
@@ -968,6 +1155,32 @@ $("btn-pay").addEventListener("click", async () => {
 
 $("modal-close").addEventListener("click", () => {
   $("modal").hidden = true;
+});
+document.querySelector(".accounts-toolbar")?.addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-acc-tab]");
+  if (btn) setAccTab(btn.dataset.accTab);
+});
+$("view-accounts")?.addEventListener("click", (e) => {
+  const rcp = e.target.closest("[data-rcp]");
+  if (rcp) {
+    const customer = (state.accReceivables || []).find((c) => c.id === rcp.dataset.rcp);
+    if (customer) showReceiptModal(customer);
+    return;
+  }
+  const pay = e.target.closest("[data-pay]");
+  if (pay) {
+    const supplier = (state.accPayables || []).find((s) => s.id === pay.dataset.pay);
+    if (supplier) showPaymentModal(supplier);
+  }
+});
+$("acc-ledger-form")?.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  try {
+    await loadAccountsLedger();
+  } catch (err) {
+    $("acc-hint").textContent = err.message;
+    $("acc-hint").className = "hint error";
+  }
 });
 document.querySelector(".nav").addEventListener("click", (e) => {
   const btn = e.target.closest("[data-view]");
