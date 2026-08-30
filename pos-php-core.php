@@ -434,6 +434,7 @@ function pos_default_perms($role) {
   return ["dashboard" => true, "counter" => true, "support" => true];
 }
 
+<<<<<<< HEAD
 function pos_record_master_visit($admin, $businessId, $detail = "") {
   try {
     $who = trim((string) ($admin["name"] ?? $admin["email"] ?? "Master admin"));
@@ -445,6 +446,8 @@ function pos_record_master_visit($admin, $businessId, $detail = "") {
   } catch (Exception $e) { /* optional */ }
 }
 
+=======
+>>>>>>> cursor/business-password-fix-4cdb
 function pos_send($status, $payload) {
   http_response_code((int) $status);
   header("Content-Type: application/json; charset=utf-8");
@@ -1195,7 +1198,6 @@ function pos_php_dispatch($path, $method, $rawBody) {
       $branch = pos_q("SELECT id FROM branches WHERE business_id = ? LIMIT 1", "s", [$bizId]);
       $branchId = $branch[0]["id"] ?? ($user["branch_id"] ?? null);
       pos_issue_staff_session($user, $branchId, $auth["admin"]["id"]);
-      pos_record_master_visit($auth["admin"], $biz[0]["id"], pos_display_name($user));
       pos_audit($auth["admin"], "Entered Business POS", [
         "module" => "businesses",
         "target_id" => $biz[0]["id"],
@@ -1224,7 +1226,6 @@ function pos_php_dispatch($path, $method, $rawBody) {
       $branch = pos_q("SELECT id FROM branches WHERE business_id = ? LIMIT 1", "s", [$user["business_id"]]);
       $branchId = $branch[0]["id"] ?? ($user["branch_id"] ?? null);
       pos_issue_staff_session($user, $branchId, $auth["admin"]["id"]);
-      pos_record_master_visit($auth["admin"], $user["business_id"], $user["email"]);
       pos_audit($auth["admin"], "Entered User POS", [
         "module" => "users",
         "target_id" => $user["id"],

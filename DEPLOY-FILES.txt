@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 Production deploy bundle — 20260830deploy6
+=======
+Production deploy bundle — 20260830deploy7
+>>>>>>> cursor/business-password-fix-4cdb
 =========================================
 
 Upload ALL files below to Hostinger public_html (overwrite):
@@ -39,10 +43,15 @@ After upload:
   1. hPanel → Node.js → Restart (if Node app enabled)
   2. Hard-refresh browser (Ctrl+Shift+R)
 
+<<<<<<< HEAD
   - HOTFIX: restore pos_send() in pos-php-core.php (fixes /api/health 500)
+=======
+FIXES in this bundle
+  - HOTFIX: restore pos_send() in pos-php-core.php (fixes /api/health 500)
+  - Stop showing auto "Master admin login" notice in business POS
+>>>>>>> cursor/business-password-fix-4cdb
   - Master admin impersonation banner stays visible (sticky, no flex collapse)
-  - Platform notifications show on business dashboard and top bar
-  - Auto "Master admin login" notice when master opens a shop
+  - Platform notifications show on business dashboard (manual master notices only)
   - auth/me prefers active staff session over master cookie (business login fix)
   - Master admin Open POS per user (Users tab)
   - Business password change on edit (PHP + date normalization)
