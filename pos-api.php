@@ -63,7 +63,8 @@ function pos_curl($url, $method, $body, $cookie, $hostHeader = "") {
     CURLOPT_CUSTOMREQUEST => $method,
     CURLOPT_RETURNTRANSFER => true,
     CURLOPT_HEADER => true,
-    CURLOPT_TIMEOUT => 8,
+    CURLOPT_CONNECTTIMEOUT => 1,
+    CURLOPT_TIMEOUT => 3,
     CURLOPT_HTTPHEADER => $headers,
   ]);
   $raw = curl_exec($ch);
@@ -73,19 +74,58 @@ function pos_curl($url, $method, $body, $cookie, $hostHeader = "") {
   return pos_parse_http($raw, $headerSize, $status);
 }
 
+function pos_collect_files() {
+  $doc = rtrim((string) ($_SERVER["DOCUMENT_ROOT"] ?? __DIR__), "/");
+  $home = (string) (getenv("HOME") ?: "");
+  $out = [];
+  $add = function ($p) use (&$out) {
+    if ($p && is_file($p)) $out[$p] = $p;
+  };
+  foreach ([$doc, __DIR__, dirname(__DIR__), getcwd(), dirname($doc)] as $dir) {
+    if (!$dir) continue;
+    $add($dir . "/pos-node.json");
+    $add($dir . "/pos-bridge.json");
+    $add($dir . "/pos-port.txt");
+    $add($dir . "/.env");
+  }
+  if ($home) {
+    foreach (glob($home . "/domains/*/public_html/pos-bridge.json") ?: [] as $f) $add($f);
+    foreach (glob($home . "/domains/*/public_html/pos-node.json") ?: [] as $f) $add($f);
+    foreach (glob($home . "/domains/*/public_html/.env") ?: [] as $f) $add($f);
+    foreach (glob($home . "/domains/*/public_html/pos-port.txt") ?: [] as $f) $add($f);
+  }
+  return array_values($out);
+}
+
+function pos_ports_from_file($file) {
+  $ports = [];
+  $raw = (string) @file_get_contents($file);
+  $base = basename($file);
+  if ($base === "pos-port.txt") {
+    $ports[] = (int) trim($raw);
+    return $ports;
+  }
+  if (substr($base, -5) === ".json") {
+    $cfg = json_decode($raw, true);
+    if (!empty($cfg["port"])) $ports[] = (int) $cfg["port"];
+    return $ports;
+  }
+  foreach (preg_split("/\r\n|\n|\r/", $raw) as $line) {
+    $line = trim($line);
+    if ($line === "" || $line[0] === "#") continue;
+    if (preg_match("/^(?:PORT|POS_BRIDGE_PORT|NODE_PORT)\\s*=\\s*(\\d+)/i", $line, $m)) {
+      $ports[] = (int) $m[1];
+    }
+  }
+  return $ports;
+}
+
 function pos_read_ports() {
   $ports = [];
-  $dirs = [__DIR__, dirname(__DIR__), getcwd()];
-  foreach ($dirs as $dir) {
-    $json = $dir . "/pos-bridge.json";
-    if (is_file($json)) {
-      $cfg = json_decode((string) file_get_contents($json), true);
-      if (!empty($cfg["port"])) $ports[] = (int) $cfg["port"];
-    }
-    $txt = $dir . "/pos-port.txt";
-    if (is_file($txt)) $ports[] = (int) trim((string) file_get_contents($txt));
+  foreach (pos_collect_files() as $file) {
+    foreach (pos_ports_from_file($file) as $p) $ports[] = $p;
   }
-  foreach ([getenv("PORT"), getenv("POS_BRIDGE_PORT"), 5173, 38473, 3000, 8080, 4173] as $p) {
+  foreach ([getenv("PORT"), getenv("POS_BRIDGE_PORT"), getenv("NODE_PORT"), 3000, 3001, 5000, 5173, 8000, 8080, 8081, 4173, 38473, 10000, 12000, 16000] as $p) {
     $ports[] = (int) $p;
   }
   $out = [];
@@ -104,20 +144,9 @@ foreach (pos_read_ports() as $port) {
   }
 }
 
-$vhost = $_SERVER["HTTP_HOST"] ?? $_SERVER["SERVER_NAME"] ?? "";
-if ($vhost) {
-  foreach (["/api/", "/pos-data/"] as $prefix) {
-    $got = pos_curl("http://127.0.0.1" . $prefix . $suffix, $method, $body, $cookie, $vhost);
-    if ($got && pos_looks_json($got[3])) {
-      pos_send_result($got[0], $got[1], $got[2], $got[3]);
-      exit;
-    }
-  }
-}
-
 http_response_code(503);
 header("Content-Type: application/json; charset=utf-8");
 echo json_encode([
-  "error" => "POS Node is not reachable from PHP. Restart the Node.js web app (entry server.js). If /api/health is JSON in the browser, hard-refresh login.",
+  "error" => "Node.js is not running on this Hostinger site. In hPanel create/open a Node.js web app on pos.atavtelecom.in (Express, entry server.js), paste DB env vars, Deploy, then Restart. Put the app port in pos-node.json if login still fails.",
   "bridge" => "down",
 ]);

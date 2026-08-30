@@ -47,7 +47,7 @@ If the site shows **403 Forbidden** or Hostinger **This Page Does Not Exist** fo
 2. In hPanel open the **Node.js web app** for `pos.atavtelecom.in` (not a static/PHP website).
 3. Click **Redeploy** so Hostinger regenerates `public_html/.htaccess` with the CloudLinux Passenger block.
 4. **Restart** the Node process (entry `server.js`, Express, empty build/output).
-5. Open `/api/health` — it must be JSON `{"ok":true,...}`, not a 404 page.
+5. Open `/api/health` and `/pos-api.php?p=health`. After this change `/api/health` is a real PHP folder so it should return JSON (either POS health or a message that Node is not running). If it says Node is not running, the domain is only serving PHP/HTML — attach a **Node.js web app** to `pos.atavtelecom.in` and Restart. Optionally create `pos-node.json` from `pos-node.json.example` with the port shown in hPanel.
 
 Hostinger sets `PORT` and `NODE_ENV=production`. The process must listen on `process.env.PORT` (already wired).
 
