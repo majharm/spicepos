@@ -1009,11 +1009,10 @@ function pos_php_dispatch($path, $method, $rawBody) {
     }
 
     if ($path === "auth/me" && $method === "GET") {
-      $master = pos_master_session();
       $staff = pos_staff_session();
-      if ($staff && !empty($staff["impersonatorAdminId"])) pos_send(200, pos_staff_me_payload($staff));
-      if ($master) pos_send(200, ["ok" => true, "type" => "master", "admin" => $master["admin"]]);
       if ($staff) pos_send(200, pos_staff_me_payload($staff));
+      $master = pos_master_session();
+      if ($master) pos_send(200, ["ok" => true, "type" => "master", "admin" => $master["admin"]]);
       pos_send(401, ["error" => "Not signed in"]);
     }
 

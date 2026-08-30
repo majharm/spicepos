@@ -148,9 +148,8 @@ export function attachAuth(req, res, next) {
       const master = await loadMasterSession(masterToken);
       const staff = await loadStaffSession(token);
       if (wantMaster) req.auth = master || null;
-      else if (staff?.impersonatorAdminId) req.auth = staff;
-      else if (master) req.auth = master;
       else if (staff) req.auth = staff;
+      else if (master) req.auth = master;
       if (req.auth?.type === "staff") {
         runTenant(
           {
