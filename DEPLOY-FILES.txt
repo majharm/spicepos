@@ -1,0 +1,35 @@
+Production deploy bundle — 20260830deploy
+=======================================
+
+Upload ALL of these files to Hostinger public_html (overwrite):
+
+HTML
+  index.html
+  login.html
+  master.html
+
+CSS
+  css/pos.css
+  css/saas.css
+
+JavaScript
+  js/app.js
+  js/pos-api.js
+  js/master.js
+  js/x-pos-20260830e.js
+
+PHP (required for checkout + audit on PHP-only hosting)
+  pos-php-core.php
+  pos-php-till.php
+  pos-api.php
+
+Optional .env additions:
+  POS_TIMEZONE=Asia/Kolkata
+  POS_TZ_OFFSET=+05:30
+
+After upload: hard-refresh browser (Ctrl+Shift+R) on pos.atavtelecom.in
+
+Verify:
+  - index.html loads app.js?v=20260830deploy
+  - Save order on counter → no order_number error
+  - Cart clears, shows "Order accepted · SO-xxxxx"
