@@ -59,19 +59,7 @@ function packLabel() {
 }
 
 async function api(path, options) {
-  const res = await fetch(posUrl(path), {
-    headers: { "Content-Type": "application/json" },
-    ...options,
-  });
-  const text = await res.text();
-  let data = {};
-  try {
-    data = text ? JSON.parse(text) : {};
-  } catch {
-    throw new Error(
-      "Sign-in did not reach the POS server (got a web page). Open /pos-data/health — it must be JSON.",
-    );
-  }
+  const { res, data } = await posRequest(path, options);
   if (!res.ok) {
     if (res.status === 401) location.href = "/login.html";
     throw new Error(data.error || res.statusText);
@@ -1047,7 +1035,7 @@ document.addEventListener("click", async (e) => {
   const logout = e.target.closest("[data-logout]");
   if (!logout) return;
   e.preventDefault();
-  await fetch(posUrl("/api/auth/logout"), { method: "POST" });
+  await posRequest("/api/auth/logout", { method: "POST" });
   location.href = "/login.html";
 });
 $("open-pos")?.addEventListener("click", () => showView("counter"));

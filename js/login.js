@@ -28,17 +28,6 @@ if (new URLSearchParams(location.search).get("tab") === "signup" || location.has
   if (box) box.checked = true;
 })();
 
-async function readJson(res) {
-  const text = await res.text();
-  try {
-    return text ? JSON.parse(text) : {};
-  } catch {
-    throw new Error(
-      "Sign-in did not reach the POS server (got a web page). After deploy, open /pos-data/health — it must be JSON. In hPanel use Express, entry server.js, empty build/output, then Redeploy and Restart.",
-    );
-  }
-}
-
 loginForm.addEventListener("submit", async (e) => {
   e.preventDefault();
   const hint = document.getElementById("hint");
@@ -46,16 +35,14 @@ loginForm.addEventListener("submit", async (e) => {
   hint.className = "hint";
   hint.textContent = "Signing in…";
   try {
-    const res = await fetch(posUrl("/api/auth/login"), {
+    const { res, data } = await posRequest("/api/auth/login", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         identifier: fd.get("identifier"),
         password: fd.get("password"),
         remember: Boolean(fd.get("remember")),
       }),
     });
-    const data = await readJson(res);
     if (!res.ok) throw new Error(data.error || "Login failed");
     if (data.expired) {
       hint.textContent = "Subscription expired. You can view the renewal message after opening the dashboard.";
@@ -107,12 +94,10 @@ signupForm.addEventListener("submit", async (e) => {
       throw new Error("Password and confirm password do not match");
     }
     payload.logoDataUrl = await readLogo(fd.get("logo"));
-    const res = await fetch(posUrl("/api/auth/signup"), {
+    const { res, data } = await posRequest("/api/auth/signup", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
-    const data = await readJson(res);
     if (!res.ok) throw new Error(data.error || "Could not create business");
     location.href = "/";
   } catch (err) {
@@ -123,9 +108,8 @@ signupForm.addEventListener("submit", async (e) => {
   }
 });
 
-fetch(posUrl("/api/support-contact"))
-  .then((r) => r.json())
-  .then((s) => {
+posRequest("/api/support-contact")
+  .then(({ data: s }) => {
     if (!s.support_phone) return;
     const el = document.getElementById("login-support");
     const tel = String(s.support_phone).replaceAll(/[^\d+]/g, "");

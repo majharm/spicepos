@@ -2,19 +2,7 @@ const $ = (id) => document.getElementById(id);
 let tab = "dash";
 
 async function api(path, options) {
-  const res = await fetch(posUrl(path), {
-    headers: { "Content-Type": "application/json" },
-    ...options,
-  });
-  const text = await res.text();
-  let data = {};
-  try {
-    data = text ? JSON.parse(text) : {};
-  } catch {
-    throw new Error(
-      "Sign-in did not reach the POS server (got a web page). Open /pos-data/health — it must be JSON.",
-    );
-  }
+  const { res, data } = await posRequest(path, options);
   if (!res.ok) throw new Error(data.error || res.statusText);
   return data;
 }

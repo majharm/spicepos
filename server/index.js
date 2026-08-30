@@ -13,31 +13,28 @@ import { registerMaster } from "./master.js";
 import { registerTenant } from "./tenant.js";
 import { audit } from "./audit.js";
 import { getPlatformSettings } from "./settings.js";
-import { canonApiUrl, isApiUrl } from "./http-path.js";
+import { canonApiUrl, isAliasedApi, isApiUrl, rewriteToApi } from "./http-path.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.join(__dirname, "..");
 const publicDir = path.join(root);
 const app = express();
 app.set("trust proxy", true);
-app.use(express.json({ limit: "8mb" }));
 app.use((req, _res, next) => {
-  const raw = req.url || "";
-  if (raw === "/pos-data" || raw.startsWith("/pos-data/") || raw.startsWith("/pos-data?")) {
-    req.url = raw.replace(/^\/pos-data/, "/api") || "/api";
-  }
-  const u = req.url || "";
-  if (u.startsWith("/api/") || u === "/api") return next();
-  if (
-    u.startsWith("/auth/") ||
-    u.startsWith("/health") ||
-    u.startsWith("/support-contact") ||
-    u.startsWith("/bootstrap")
-  ) {
-    req.url = `/api${u}`;
+  const orig = req.originalUrl || req.url || "";
+  const mapped = rewriteToApi(orig, req.headers["x-pos-path"]);
+  const path = orig.split("?")[0];
+  const bare =
+    path.startsWith("/auth/") ||
+    path === "/health" ||
+    path.startsWith("/support-contact") ||
+    path.startsWith("/bootstrap");
+  if (mapped.startsWith("/api") && (isAliasedApi(orig) || bare)) {
+    req.url = mapped;
   }
   next();
 });
+app.use(express.json({ limit: "8mb" }));
 app.use((req, res, next) => {
   if (req.path === "/.env" || req.path.startsWith("/.env.")) {
     res.status(404).end();
@@ -62,7 +59,7 @@ app.use((req, res, next) => {
 app.use(attachAuth);
 registerAuth(app);
 app.use((req, res, next) => {
-  const url = canonApiUrl(req.originalUrl || "");
+  const url = canonApiUrl(req.originalUrl || "", req.headers["x-pos-path"]);
   if (!isApiUrl(url)) return next();
   if (
     url.startsWith("/api/auth") ||
@@ -480,6 +477,14 @@ app.get("/", (_req, res) => {
 
 app.use("/api", (req, res) => {
   res.status(404).json({ error: `Unknown API ${req.method} ${req.originalUrl}` });
+});
+
+app.use((req, res, next) => {
+  if (isApiUrl(req.originalUrl || req.url, req.headers["x-pos-path"])) {
+    res.status(404).json({ error: `Unknown API ${req.method} ${req.originalUrl}` });
+    return;
+  }
+  next();
 });
 
 app.use(express.static(publicDir));

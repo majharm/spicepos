@@ -131,7 +131,7 @@ async function loadMasterSession(token) {
 export function attachAuth(req, res, next) {
   const token = cookies(req).pos_sid;
   const masterToken = cookies(req).pos_master;
-  const path = canonApiUrl(req.originalUrl || "").split("?")[0];
+  const path = canonApiUrl(req.originalUrl || "", req.headers["x-pos-path"]).split("?")[0];
   const wantMaster = path.startsWith("/api/master");
   Promise.resolve()
     .then(async () => {
@@ -163,7 +163,7 @@ export function requireStaff(req, res, next) {
     return;
   }
   const status = publicStatus(req.auth.business);
-  const open = canonApiUrl(req.originalUrl || "").split("?")[0].startsWith("/api/auth");
+  const open = canonApiUrl(req.originalUrl || "", req.headers["x-pos-path"]).split("?")[0].startsWith("/api/auth");
   if (!open && status !== "active") {
     res.status(403).json({
       error: "Subscription expired. Ask the platform owner to renew.",

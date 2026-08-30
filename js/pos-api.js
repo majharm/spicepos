@@ -1,7 +1,162 @@
-window.POS_API = "/pos-data";
-window.posUrl = function posUrl(path) {
-  const p = String(path || "");
-  if (p.startsWith("/api/")) return "/pos-data/" + p.slice("/api/".length);
-  if (p === "/api") return "/pos-data";
-  return p;
-};
+(function () {
+  const RPC = "/atavpos-rpc.json";
+  const STORAGE = "pos_api_spec";
+
+  function pageDir() {
+    const p = location.pathname || "/";
+    if (p.endsWith("/")) return p;
+    return p.replace(/\/[^/]+$/, "/") || "/";
+  }
+
+  function specs() {
+    const dir = pageDir();
+    const prefixes = new Set([`${dir}pos-data`.replace(/\/{2,}/g, "/"), "/pos-data", `${dir}api`.replace(/\/{2,}/g, "/"), "/api", "/atav-data"]);
+    const out = [];
+    for (const base of prefixes) {
+      out.push({ mode: "prefix", base: base.replace(/\/$/, "") || "/" });
+    }
+    out.push({ mode: "rpc", base: RPC });
+    out.push({ mode: "rpc", base: `${dir}atavpos-rpc.json`.replace(/\/{2,}/g, "/") });
+    return out;
+  }
+
+  function applySpec(spec, apiPath) {
+    const raw = String(apiPath || "");
+    const q = raw.indexOf("?");
+    const path = (q === -1 ? raw : raw.slice(0, q)).replace(/^\/api\/?/, "");
+    const extra = q === -1 ? "" : raw.slice(q + 1);
+    if (spec.mode === "rpc") {
+      const params = new URLSearchParams(extra);
+      params.set("p", path || "health");
+      return `${spec.base}?${params.toString()}`;
+    }
+    const base = spec.base.replace(/\/$/, "");
+    return extra ? `${base}/${path}?${extra}` : `${base}/${path}`;
+  }
+
+  function looksLikeJson(text, res) {
+    const ct = String(res?.headers?.get("content-type") || "").toLowerCase();
+    if (ct.includes("json")) return true;
+    const t = String(text || "").trim();
+    if (!t || t.startsWith("<") || /^<!doctype/i.test(t)) return false;
+    if (t.startsWith("{") || t.startsWith("[")) {
+      try {
+        JSON.parse(t);
+        return true;
+      } catch {
+        return false;
+      }
+    }
+    return false;
+  }
+
+  function loadSpec() {
+    try {
+      const raw = sessionStorage.getItem(STORAGE);
+      if (!raw) return null;
+      const spec = JSON.parse(raw);
+      if (spec && spec.mode && spec.base) return spec;
+    } catch {
+      /* ignore */
+    }
+    return null;
+  }
+
+  function saveSpec(spec) {
+    window.POS_API_SPEC = spec;
+    window.POS_API = spec.mode === "rpc" ? spec.base : spec.base;
+    try {
+      sessionStorage.setItem(STORAGE, JSON.stringify(spec));
+    } catch {
+      /* ignore */
+    }
+  }
+
+  async function probe() {
+    const saved = loadSpec();
+    const list = specs();
+    if (saved) list.unshift(saved);
+    const seen = new Set();
+    for (const spec of list) {
+      const key = `${spec.mode}:${spec.base}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const health =
+        spec.mode === "rpc" ? applySpec(spec, "/api/health") : `${spec.base.replace(/\/$/, "")}/health`;
+      try {
+        const res = await fetch(health, { cache: "no-store", headers: { Accept: "application/json" } });
+        const text = await res.text();
+        if (looksLikeJson(text, res)) {
+          saveSpec(spec);
+          return spec;
+        }
+      } catch {
+        /* try next */
+      }
+    }
+    try {
+      const res = await fetch("/health.json", { cache: "no-store", headers: { Accept: "application/json" } });
+      const text = await res.text();
+      if (looksLikeJson(text, res)) {
+        const spec = { mode: "rpc", base: RPC };
+        saveSpec(spec);
+        return spec;
+      }
+    } catch {
+      /* ignore */
+    }
+    return list[0];
+  }
+
+  let ready = null;
+  function ensureSpec(force) {
+    if (force) ready = null;
+    if (!ready) ready = probe();
+    return ready;
+  }
+
+  window.posApiReady = ensureSpec();
+
+  window.posUrl = function posUrl(path) {
+    const spec = window.POS_API_SPEC || loadSpec() || { mode: "prefix", base: "/pos-data" };
+    return applySpec(spec, path);
+  };
+
+  window.posRequest = async function posRequest(path, options = {}) {
+    const headers = { Accept: "application/json", ...(options.headers || {}) };
+    if (!headers["Content-Type"] && !headers["content-type"] && options.body) {
+      headers["Content-Type"] = "application/json";
+    }
+    const trySpecs = [];
+    const first = await ensureSpec();
+    if (first) trySpecs.push(first);
+    for (const spec of specs()) trySpecs.push(spec);
+
+    const seen = new Set();
+    let lastText = "";
+    for (const spec of trySpecs) {
+      const key = `${spec.mode}:${spec.base}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const url = applySpec(spec, path);
+      const hdrs = { ...headers };
+      if (spec.mode === "rpc") hdrs["X-Pos-Path"] = String(path).replace(/^\/api\/?/, "").split("?")[0];
+      try {
+        const res = await fetch(url, { ...options, headers: hdrs });
+        const text = await res.text();
+        lastText = text;
+        if (!looksLikeJson(text, res)) continue;
+        saveSpec(spec);
+        return { res, data: text ? JSON.parse(text) : {}, text };
+      } catch {
+        /* try next */
+      }
+    }
+    const snippet = String(lastText || "").replace(/\s+/g, " ").slice(0, 80);
+    throw new Error(
+      snippet.startsWith("<") || /<!doctype/i.test(snippet)
+        ? "Sign-in did not reach the POS server (got a web page). Open /health.json or /atavpos-rpc.json?p=health — it must be JSON. In hPanel use Express, entry server.js, empty build/output, then Redeploy and Restart."
+        : "Could not reach the POS API. Redeploy and Restart the Node.js app in hPanel.",
+    );
+  };
+})();
