@@ -67,6 +67,12 @@ async function api(path, options) {
   return data;
 }
 
+function orderFromResult(result) {
+  if (result?.order) return result.order;
+  if (result?.order_number) return result;
+  return null;
+}
+
 function ymd(d = new Date()) {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");
@@ -788,7 +794,8 @@ $("btn-pay").addEventListener("click", async () => {
     const result = state.editingOrderId
       ? await api(`/api/orders/${state.editingOrderId}`, { method: "PUT", body: JSON.stringify(payload) })
       : await api("/api/checkout", { method: "POST", body: JSON.stringify(payload) });
-    const order = result.order;
+    const order = orderFromResult(result);
+    if (!order) throw new Error("Checkout did not return an order");
     state.cart = [];
     state.lastPack = null;
     state.editingOrderId = null;

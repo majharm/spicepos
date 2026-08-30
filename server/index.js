@@ -464,6 +464,7 @@ app.post("/api/checkout", requireStaff, requirePerm("counter"), async (req, res)
       const [orderLines] = await conn.query("SELECT * FROM sales_order_lines WHERE order_id = ?", [
         orderId,
       ]);
+      if (!orders[0]) throw new Error("Order was not saved");
       return { ...orders[0], lines: orderLines };
     });
     await audit("Sale Created", { module: "sales", target_name: result.order_number }, req);
