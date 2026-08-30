@@ -495,10 +495,19 @@ const port = Number(process.env.PORT || 5173);
 const host = process.env.HOST || "0.0.0.0";
 
 function writeBridge(info) {
-  try {
-    fs.writeFileSync(path.join(root, "pos-bridge.json"), JSON.stringify(info), "utf8");
-  } catch (err) {
-    console.error("Could not write pos-bridge.json", err);
+  const json = JSON.stringify(info);
+  const text = String(info.port);
+  for (const dir of new Set([root, process.cwd()])) {
+    try {
+      fs.writeFileSync(path.join(dir, "pos-bridge.json"), json, "utf8");
+    } catch (err) {
+      console.error("Could not write pos-bridge.json", err);
+    }
+    try {
+      fs.writeFileSync(path.join(dir, "pos-port.txt"), text, "utf8");
+    } catch {
+      /* ignore */
+    }
   }
 }
 
@@ -523,17 +532,20 @@ async function startHttp() {
     passenger.configure({ autoInstall: false });
     app.listen("passenger");
     console.log("Multi-tenant POS listening via Passenger");
-    const candidates = [...new Set([Number(process.env.POS_BRIDGE_PORT) || 0, port, 5173, 38473].filter(Boolean))];
+    const candidates = [...new Set([Number(process.env.POS_BRIDGE_PORT) || 0, port, 5173, 38473].filter((p) => p > 0)), 0];
     for (const p of candidates) {
       try {
-        await listenTcp("127.0.0.1", p);
-        writeBridge({ host: "127.0.0.1", port: p });
-        console.log(`POS PHP bridge on 127.0.0.1:${p}`);
+        const server = await listenTcp("127.0.0.1", p);
+        const addr = server.address();
+        const bound = typeof addr === "object" && addr ? addr.port : p;
+        writeBridge({ host: "127.0.0.1", port: bound });
+        console.log(`POS PHP bridge on 127.0.0.1:${bound}`);
         return;
       } catch (err) {
         if (err.code !== "EADDRINUSE") console.error(err);
       }
     }
+    if (port) writeBridge({ host: "127.0.0.1", port });
     console.error("POS PHP bridge could not bind a local TCP port");
     return;
   }

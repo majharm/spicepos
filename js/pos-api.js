@@ -1,6 +1,6 @@
 (function () {
   const RPC = "/atavpos-rpc.json";
-  const STORAGE = "pos_api_spec";
+  const STORAGE = "pos_api_spec_v2";
 
   function pageDir() {
     const p = location.pathname || "/";
@@ -10,12 +10,13 @@
 
   function specs() {
     const dir = pageDir();
-    const rpcFiles = [`${dir}pos-api.php`.replace(/\/{2,}/g, "/"), "/pos-api.php", `${dir}atavpos-rpc.json`.replace(/\/{2,}/g, "/"), "/atavpos-rpc.json"];
-    const out = rpcFiles.map((base) => ({ mode: "rpc", base }));
-    const prefixes = new Set([`${dir}pos-data`.replace(/\/{2,}/g, "/"), "/pos-data", `${dir}api`.replace(/\/{2,}/g, "/"), "/api", "/atav-data"]);
+    const out = [];
+    const prefixes = new Set(["/api", "/pos-data", "/atav-data", `${dir}api`.replace(/\/{2,}/g, "/"), `${dir}pos-data`.replace(/\/{2,}/g, "/")]);
     for (const base of prefixes) {
       out.push({ mode: "prefix", base: base.replace(/\/$/, "") || "/" });
     }
+    const rpcFiles = ["/atavpos-rpc.json", `${dir}atavpos-rpc.json`.replace(/\/{2,}/g, "/"), "/pos-api.php", `${dir}pos-api.php`.replace(/\/{2,}/g, "/")];
+    for (const base of rpcFiles) out.push({ mode: "rpc", base });
     return out;
   }
 
@@ -31,6 +32,14 @@
     }
     const base = spec.base.replace(/\/$/, "");
     return extra ? `${base}/${path}?${extra}` : `${base}/${path}`;
+  }
+
+  function isDeadBridge(data, res) {
+    if (!data || typeof data !== "object") return false;
+    if (data.bridge === "down") return true;
+    const err = String(data.error || "");
+    if (/not listening|not reachable from PHP|Could not reach POS Node/i.test(err)) return true;
+    return Boolean(res && (res.status === 502 || res.status === 503) && /Node/i.test(err));
   }
 
   function looksLikeJson(text, res) {
@@ -86,6 +95,13 @@
         const res = await fetch(health, { credentials: "same-origin", cache: "no-store", headers: { Accept: "application/json" } });
         const text = await res.text();
         if (looksLikeJson(text, res)) {
+          let data = {};
+          try {
+            data = text ? JSON.parse(text) : {};
+          } catch {
+            continue;
+          }
+          if (isDeadBridge(data, res)) continue;
           saveSpec(spec);
           return spec;
         }
@@ -97,9 +113,17 @@
       const res = await fetch("/health.json", { cache: "no-store", headers: { Accept: "application/json" } });
       const text = await res.text();
       if (looksLikeJson(text, res)) {
-        const spec = { mode: "rpc", base: RPC };
-        saveSpec(spec);
-        return spec;
+        let data = {};
+        try {
+          data = text ? JSON.parse(text) : {};
+        } catch {
+          data = {};
+        }
+        if (!isDeadBridge(data, res)) {
+          const spec = { mode: "rpc", base: RPC };
+          saveSpec(spec);
+          return spec;
+        }
       }
     } catch {
       /* ignore */
@@ -145,8 +169,10 @@
         const text = await res.text();
         lastText = text;
         if (!looksLikeJson(text, res)) continue;
+        const data = text ? JSON.parse(text) : {};
+        if (isDeadBridge(data, res)) continue;
         saveSpec(spec);
-        return { res, data: text ? JSON.parse(text) : {}, text };
+        return { res, data, text };
       } catch {
         /* try next */
       }
