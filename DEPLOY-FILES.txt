@@ -1,5 +1,5 @@
-Production deploy bundle — 20260830theme2
-========================================
+Production deploy bundle — 20260830theme3d
+=========================================
 
 Upload ALL of these files to Hostinger public_html (overwrite):
 
@@ -18,16 +18,14 @@ JavaScript
   js/master.js
   js/x-pos-20260830e.js
 
-PHP (required for checkout + audit on PHP-only hosting)
+PHP
   pos-php-core.php
   pos-php-till.php
   pos-api.php
-  server/timezone.js
-  server/schema.js
 
 After upload: hard-refresh browser (Ctrl+Shift+R) on pos.atavtelecom.in
 
 Verify:
-  - index.html loads css/pos.css?v=20260830theme2
-  - Emerald/teal theme visible (green nav accents, gradient buttons)
-  - Settings timezone still works
+  - index.html loads css/pos.css?v=20260830theme3d
+  - 3D raised cards, beveled buttons, inset search bar
+  - Bill panel floats with deep shadow
