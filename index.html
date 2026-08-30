@@ -6,10 +6,10 @@
     <title>SWAMI MASALE POS</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" />
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./css/pos.css" />
-    <link rel="stylesheet" href="./css/saas.css" />
+    <link rel="stylesheet" href="./css/pos.css?v=20260830j" />
+    <link rel="stylesheet" href="./css/saas.css?v=20260830j" />
   </head>
   <body>
     <div class="app">
@@ -58,16 +58,16 @@
           <div class="report-grid" id="dash-kpis"></div>
           <p class="lede"><button class="btn primary" type="button" data-view-jump="counter" id="open-pos">Open POS</button></p>
         </section>
-        <section class="view" id="view-counter" hidden>
-          <header class="topbar">
+        <section class="view view-counter" id="view-counter" hidden>
+          <header class="topbar counter-topbar">
             <form class="search" id="search-form">
-              <input id="search" type="search" placeholder="Search spice, Marathi name, or code" autocomplete="off" />
+              <input id="search" type="search" placeholder="Search spice, local name, or code…" autocomplete="off" />
             </form>
-            <select id="customer" class="select"></select>
-            <select id="pack-choice" class="select">
+            <select id="customer" class="select" aria-label="Customer"></select>
+            <select id="pack-choice" class="select" aria-label="Pack type">
               <option value="">Loose items (no pack)</option>
             </select>
-            <select id="pay-method" class="select">
+            <select id="pay-method" class="select" aria-label="Payment method">
               <option value="cash">Cash</option>
               <option value="upi">UPI</option>
               <option value="card">Card</option>
@@ -76,8 +76,11 @@
           </header>
           <div class="workspace">
             <div class="catalog" id="catalog"></div>
-            <aside class="ticket">
-              <h2>Current bill</h2>
+            <aside class="ticket bill-panel">
+              <div class="ticket-head">
+                <h2>Current bill</h2>
+                <p class="ticket-sub">Tap items to add · 100 g each</p>
+              </div>
               <div class="ticket-pack" id="chosen-pack">Pack: Loose items</div>
               <div id="pack-bar" class="pack-bar"></div>
               <div class="lines" id="lines"></div>
