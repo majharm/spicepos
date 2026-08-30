@@ -202,18 +202,7 @@ function setHint(msg, kind = "") {
   $("hint").className = `hint ${kind}`.trim();
 }
 
-function clearCounterAfterSale(order) {
-  state.cart = [];
-  state.lastPack = null;
-  state.editingOrderId = null;
-  state.query = "";
-  $("search").value = "";
-  $("pack-choice").value = "";
-  renderCatalog();
-  return null;
-}
-
-function ymd(d = new Date()) {
+function activeItems() {
   return state.items.filter((i) => i.status !== "inactive");
 }
 
@@ -817,6 +806,12 @@ $("btn-clear").addEventListener("click", () => {
 
 $("btn-pay").addEventListener("click", async () => {
   try {
+    if (!state.customerId) {
+      const walk = state.customers.find((c) => /walk-in/i.test(c.name));
+      state.customerId = walk?.id || state.customers[0]?.id || "";
+    }
+    if (!state.customerId) throw new Error("Add a customer before saving the bill");
+    if (!state.cart.length) throw new Error("Cart is empty");
     setHint("Saving…");
     const payload = {
       customerId: state.customerId,
