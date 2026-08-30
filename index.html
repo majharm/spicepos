@@ -9,8 +9,8 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" />
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./css/pos.css?v=20260830admin1" />
-    <link rel="stylesheet" href="./css/saas.css?v=20260830admin1" />
+    <link rel="stylesheet" href="./css/pos.css?v=20260830accounts1" />
+    <link rel="stylesheet" href="./css/saas.css?v=20260830accounts1" />
   </head>
   <body>
     <div class="app">
@@ -35,6 +35,7 @@
         <button class="nav-btn" type="button" data-view="devices">Devices</button>
         <button class="nav-btn" type="button" data-view="support">Support</button>
         <button class="nav-btn" type="button" data-view="reports">Reports</button>
+        <button class="nav-btn" type="button" data-view="accounts">Accounts</button>
         <button class="nav-btn" type="button" data-view="settings">Settings</button>
         <div class="nav-foot">
           <div class="platform-brand">
@@ -273,6 +274,31 @@
           <p class="lede">Platform helpline from Master Admin (MySQL). Shop details are below.</p>
           <div class="report-grid" id="support-cards"></div>
         </section>
+        <section class="view" id="view-accounts" hidden>
+          <h2>Accounts</h2>
+          <p class="lede">Receivables, payables, receipts, payments, and day book ledger.</p>
+          <div class="report-grid" id="acc-summary"></div>
+          <div class="accounts-toolbar">
+            <button class="btn acc-tab active" type="button" data-acc-tab="receivables">Receivables</button>
+            <button class="btn acc-tab" type="button" data-acc-tab="payables">Payables</button>
+            <button class="btn acc-tab" type="button" data-acc-tab="ledger">Ledger</button>
+          </div>
+          <div class="hint" id="acc-hint"></div>
+          <div id="acc-pane-receivables" class="acc-pane">
+            <div class="table-wrap" id="acc-receivables-table"></div>
+          </div>
+          <div id="acc-pane-payables" class="acc-pane" hidden>
+            <div class="table-wrap" id="acc-payables-table"></div>
+          </div>
+          <div id="acc-pane-ledger" class="acc-pane" hidden>
+            <form class="report-toolbar" id="acc-ledger-form">
+              <label>From <input id="acc-from" type="date" required /></label>
+              <label>To <input id="acc-to" type="date" required /></label>
+              <button class="btn primary" type="submit">Show</button>
+            </form>
+            <div class="table-wrap" id="acc-ledger-table"></div>
+          </div>
+        </section>
         <section class="view" id="view-reports" hidden>
           <h2>Reports</h2>
           <p class="lede">Every report type for the date range. Download one sheet or the full Excel workbook.</p>
@@ -379,9 +405,9 @@
         </section>
       </div>
     </aside>
-    <script src="./js/pos-api.js?v=20260830admin1"></script>
-    <script src="./js/dev-mode.js?v=20260830admin1"></script>
-    <script src="./js/app.js?v=20260830admin1"></script>
+    <script src="./js/pos-api.js?v=20260830accounts1"></script>
+    <script src="./js/dev-mode.js?v=20260830accounts1"></script>
+    <script src="./js/app.js?v=20260830accounts1"></script>
     <script src="./js/x-pos-20260830e.js"></script>
   </body>
 </html>

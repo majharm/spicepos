@@ -1,6 +1,7 @@
 import { query, withTransaction } from "./db.js";
 import { bid } from "./context.js";
 import { audit } from "./audit.js";
+import { recordCreditPurchase } from "./accounts.js";
 
 export function lineAmount(quantityGm, ratePerKg) {
   return (Number(quantityGm) / 1000) * Number(ratePerKg);
@@ -271,11 +272,12 @@ export function registerCrud(app) {
         const id = crypto.randomUUID();
         const purchaseNumber = `PO-${n}`;
         const method = payment_method || "cash";
+        const payStatus = method === "credit" ? "unpaid" : "paid";
         await conn.query(
           `INSERT INTO purchases (
              id, purchase_number, supplier_id, supplier_name, supplier_invoice_number,
              purchase_date, notes, subtotal, gst, total, payment_method, payment_status, business_id
-           ) VALUES (?,?,?,?,?,?,?,?,?,?,?, 'paid', ?)`,
+           ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
           [
             id,
             purchaseNumber,
@@ -288,6 +290,7 @@ export function registerCrud(app) {
             gst,
             total,
             method,
+            payStatus,
             bid(),
           ],
         );
@@ -316,6 +319,13 @@ export function registerCrud(app) {
             [line.qty, line.item.id, bid()],
           );
         }
+        await recordCreditPurchase(conn, {
+          supplier,
+          total,
+          purchaseId: id,
+          purchaseNumber,
+          method,
+        });
         const [rows] = await conn.query("SELECT * FROM purchases WHERE id = ?", [id]);
         return rows[0];
       });

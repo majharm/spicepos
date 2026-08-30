@@ -1,5 +1,5 @@
-Production deploy bundle — 20260830admin1
-=========================================
+Production deploy bundle — 20260830accounts1
+=============================================
 
 Upload ALL files below to Hostinger public_html (overwrite):
 
@@ -29,7 +29,8 @@ PHP
 
 After upload: hard-refresh (Ctrl+Shift+R)
 
-NEW: Master admin → Open POS on any business
-  1. Sign in at /master.html
-  2. Dashboard or Businesses → click "Open POS"
-  3. Opens that shop POS with full access (even if expired/suspended)
+NEW: Tally-style Accounts module
+  - Nav: Accounts (receivables, payables, receipts, payments, ledger)
+  - Credit sales update customer outstanding + ledger (JV entries)
+  - Credit purchases update supplier payable balance + ledger
+  - Roles: business_admin, manager, branch_manager, accountant

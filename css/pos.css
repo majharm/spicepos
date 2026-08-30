@@ -696,6 +696,20 @@ tr:hover td { background: #f4f6fd; }
   font-weight: 800;
   font-variant-numeric: tabular-nums;
 }
+.accounts-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 0 24px 16px;
+}
+.acc-tab.active {
+  background: linear-gradient(180deg, var(--brand-magenta) 0%, #c40072 100%);
+  color: #fff;
+  border-color: transparent;
+}
+.acc-pane {
+  padding: 0 24px 24px;
+}
 .settings {
   display: grid;
   gap: 12px;

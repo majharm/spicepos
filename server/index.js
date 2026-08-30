@@ -14,6 +14,7 @@ import { companyTimezone, normalizeTimezone, shopTimezonePayload, tzOffsetFor } 
 import { attachAuth, registerAuth, requireStaff, requirePerm } from "./auth.js";
 import { registerMaster } from "./master.js";
 import { registerTenant } from "./tenant.js";
+import { registerAccounts, recordCreditSale } from "./accounts.js";
 import { audit } from "./audit.js";
 import { getPlatformSettings } from "./settings.js";
 import { canonApiUrl, isAliasedApi, isApiUrl, rewriteToApi } from "./http-path.js";
@@ -76,6 +77,7 @@ app.use((req, res, next) => {
 });
 registerMaster(app);
 registerTenant(app);
+registerAccounts(app);
 
 app.get("/api/support-contact", async (_req, res) => {
   try {
@@ -464,6 +466,14 @@ app.post("/api/checkout", requireStaff, requirePerm("counter"), async (req, res)
           [line.qty, line.item.id, businessId],
         );
       }
+
+      await recordCreditSale(conn, {
+        customer,
+        total,
+        orderId,
+        orderNumber,
+        method,
+      });
 
       const [orders] = await conn.query(
         "SELECT * FROM sales_orders WHERE id = ? AND business_id = ?",

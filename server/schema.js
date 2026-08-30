@@ -63,6 +63,27 @@ export async function ensureSchema() {
   await addColumn("staff_sessions", "branch_id", "VARCHAR(255) NULL");
   await addColumn("staff_sessions", "impersonator_admin_id", "VARCHAR(255) NULL");
 
+  await addColumn("suppliers", "payable_balance", "DECIMAL(12,2) NOT NULL DEFAULT 0");
+
+  await create(`CREATE TABLE IF NOT EXISTS account_ledger (
+    id VARCHAR(255) PRIMARY KEY,
+    business_id VARCHAR(255) NOT NULL,
+    entry_no VARCHAR(32) NOT NULL,
+    entry_type VARCHAR(32) NOT NULL,
+    party_type VARCHAR(16) NOT NULL,
+    party_id VARCHAR(255) NOT NULL,
+    party_name VARCHAR(255) NULL,
+    amount DECIMAL(12,2) NOT NULL,
+    payment_method VARCHAR(32) NULL,
+    reference_type VARCHAR(32) NULL,
+    reference_id VARCHAR(255) NULL,
+    notes TEXT NULL,
+    created_by VARCHAR(255) NULL,
+    created_at TIMESTAMP(3) DEFAULT CURRENT_TIMESTAMP(3),
+    INDEX idx_account_ledger_biz_date (business_id, created_at),
+    INDEX idx_account_ledger_party (business_id, party_type, party_id)
+  )`);
+
   await addColumn("staff_audit_logs", "branch_id", "VARCHAR(255) NULL");
   await addColumn("staff_audit_logs", "ip", "VARCHAR(64) NULL");
 

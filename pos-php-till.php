@@ -1,14 +1,10 @@
 <?php
-function pos_round2($n) {
-  return round((float) $n, 2);
-}
-
 function pos_php_till_dispatch($path, $method, $body) {
   $head = explode("/", $path)[0];
   $staff = [
     "bootstrap", "dashboard", "today", "suppliers", "items", "customers", "packs",
     "orders", "purchases", "stock", "staff", "branches", "devices", "holds",
-    "checkout", "settings", "reports", "audit",
+    "checkout", "settings", "reports", "audit", "accounts",
   ];
   if (!in_array($head, $staff, true)) return;
   $auth = pos_staff_session();
@@ -235,6 +231,127 @@ function pos_php_till_dispatch($path, $method, $body) {
     pos_send(200, pos_q("SELECT * FROM staff_audit_logs WHERE business_id = ? ORDER BY created_at DESC LIMIT 100", "s", [$bid]));
   }
 
+  if (strpos($path, "accounts/") === 0) {
+    if (!pos_can($auth["user"], "accounts")) pos_send(403, ["error" => "Not allowed"]);
+    pos_ensure_accounts_schema();
+    if ($path === "accounts/summary" && $method === "GET") {
+      $recv = pos_q("SELECT COALESCE(SUM(outstanding),0) AS total FROM customers WHERE business_id = ?", "s", [$bid]);
+      $pay = pos_q("SELECT COALESCE(SUM(payable_balance),0) AS total FROM suppliers WHERE business_id = ?", "s", [$bid]);
+      $custs = pos_q("SELECT COUNT(*) AS n FROM customers WHERE business_id = ? AND outstanding > 0", "s", [$bid]);
+      $sups = pos_q("SELECT COUNT(*) AS n FROM suppliers WHERE business_id = ? AND COALESCE(payable_balance,0) > 0", "s", [$bid]);
+      pos_send(200, [
+        "receivables" => (float) ($recv[0]["total"] ?? 0),
+        "payables" => (float) ($pay[0]["total"] ?? 0),
+        "customersDue" => (int) ($custs[0]["n"] ?? 0),
+        "suppliersDue" => (int) ($sups[0]["n"] ?? 0),
+      ]);
+    }
+    if ($path === "accounts/receivables" && $method === "GET") {
+      pos_send(200, pos_q(
+        "SELECT id, code, name, business_name, mobile, type, credit_limit, outstanding
+         FROM customers WHERE business_id = ? AND outstanding > 0
+         ORDER BY outstanding DESC, name",
+        "s",
+        [$bid]
+      ));
+    }
+    if ($path === "accounts/payables" && $method === "GET") {
+      pos_send(200, pos_q(
+        "SELECT id, code, name, contact_name, mobile, gstin, COALESCE(payable_balance,0) AS payable_balance
+         FROM suppliers WHERE business_id = ? AND COALESCE(payable_balance,0) > 0
+         ORDER BY payable_balance DESC, name",
+        "s",
+        [$bid]
+      ));
+    }
+    if ($path === "accounts/ledger" && $method === "GET") {
+      $from = $_GET["from"] ?? date("Y-m-d");
+      $to = $_GET["to"] ?? $from;
+      pos_send(200, pos_q(
+        "SELECT * FROM account_ledger
+         WHERE business_id = ? AND DATE(created_at) BETWEEN ? AND ?
+         ORDER BY created_at DESC, entry_no DESC
+         LIMIT 500",
+        "sss",
+        [$bid, $from, $to]
+      ));
+    }
+    if ($path === "accounts/receipts" && $method === "POST") {
+      $customerId = $body["customer_id"] ?? "";
+      $amt = pos_round2((float) ($body["amount"] ?? 0));
+      if (!$customerId || $amt <= 0) pos_send(400, ["error" => "Customer and amount are required"]);
+      $methodPay = strtolower((string) ($body["payment_method"] ?? "cash"));
+      if (!in_array($methodPay, ["cash", "upi", "card", "bank"], true)) pos_send(400, ["error" => "Invalid payment method"]);
+      $cust = pos_q("SELECT * FROM customers WHERE id = ? AND business_id = ? LIMIT 1", "ss", [$customerId, $bid]);
+      $customer = $cust[0] ?? null;
+      if (!$customer) pos_send(400, ["error" => "Customer not found"]);
+      $outstanding = pos_round2((float) ($customer["outstanding"] ?? 0));
+      if ($outstanding <= 0) pos_send(400, ["error" => "No outstanding balance for this customer"]);
+      if ($amt > $outstanding) pos_send(400, ["error" => "Amount exceeds outstanding (₹" . number_format($outstanding, 2) . ")"]);
+      $next = pos_round2($outstanding - $amt);
+      pos_q("UPDATE customers SET outstanding = ? WHERE id = ? AND business_id = ?", "dss", [$next, $customer["id"], $bid]);
+      $n = pos_next_seq("receipt", $bid, 1001);
+      $entryNo = "RCP-{$n}";
+      $ledgerId = pos_insert_ledger([
+        "entry_no" => $entryNo,
+        "entry_type" => "receipt",
+        "party_type" => "customer",
+        "party_id" => $customer["id"],
+        "party_name" => $customer["business_name"] ?? $customer["name"],
+        "amount" => $amt,
+        "payment_method" => $methodPay,
+        "reference_type" => !empty($body["order_id"]) ? "sales_order" : "manual",
+        "reference_id" => $body["order_id"] ?? null,
+        "notes" => $body["notes"] ?? null,
+      ], $bid, $uid);
+      pos_staff_audit($auth["user"], "Customer Receipt", [
+        "module" => "accounts",
+        "target_id" => $ledgerId,
+        "target_name" => $entryNo,
+        "total" => $amt,
+        "customer_name" => $customer["business_name"] ?? $customer["name"],
+      ], $bid, $branchId);
+      pos_send(200, ["ok" => true, "entryNo" => $entryNo, "ledgerId" => $ledgerId, "customer" => array_merge($customer, ["outstanding" => $next]), "amount" => $amt]);
+    }
+    if ($path === "accounts/payments" && $method === "POST") {
+      $supplierId = $body["supplier_id"] ?? "";
+      $amt = pos_round2((float) ($body["amount"] ?? 0));
+      if (!$supplierId || $amt <= 0) pos_send(400, ["error" => "Supplier and amount are required"]);
+      $methodPay = strtolower((string) ($body["payment_method"] ?? "cash"));
+      if (!in_array($methodPay, ["cash", "upi", "card", "bank"], true)) pos_send(400, ["error" => "Invalid payment method"]);
+      $sup = pos_q("SELECT * FROM suppliers WHERE id = ? AND business_id = ? LIMIT 1", "ss", [$supplierId, $bid]);
+      $supplier = $sup[0] ?? null;
+      if (!$supplier) pos_send(400, ["error" => "Supplier not found"]);
+      $payable = pos_round2((float) ($supplier["payable_balance"] ?? 0));
+      if ($payable <= 0) pos_send(400, ["error" => "No payable balance for this supplier"]);
+      if ($amt > $payable) pos_send(400, ["error" => "Amount exceeds payable (₹" . number_format($payable, 2) . ")"]);
+      $next = pos_round2($payable - $amt);
+      pos_q("UPDATE suppliers SET payable_balance = ? WHERE id = ? AND business_id = ?", "dss", [$next, $supplier["id"], $bid]);
+      $n = pos_next_seq("payment", $bid, 1001);
+      $entryNo = "PAY-{$n}";
+      $ledgerId = pos_insert_ledger([
+        "entry_no" => $entryNo,
+        "entry_type" => "payment",
+        "party_type" => "supplier",
+        "party_id" => $supplier["id"],
+        "party_name" => $supplier["name"],
+        "amount" => $amt,
+        "payment_method" => $methodPay,
+        "reference_type" => !empty($body["purchase_id"]) ? "purchase" : "manual",
+        "reference_id" => $body["purchase_id"] ?? null,
+        "notes" => $body["notes"] ?? null,
+      ], $bid, $uid);
+      pos_staff_audit($auth["user"], "Supplier Payment", [
+        "module" => "accounts",
+        "target_id" => $ledgerId,
+        "target_name" => $entryNo,
+        "total" => $amt,
+        "supplier_name" => $supplier["name"],
+      ], $bid, $branchId);
+      pos_send(200, ["ok" => true, "entryNo" => $entryNo, "ledgerId" => $ledgerId, "supplier" => array_merge($supplier, ["payable_balance" => $next]), "amount" => $amt]);
+    }
+  }
+
   if ($path === "reports" && $method === "GET") {
     $from = $_GET["from"] ?? date("Y-m-d");
     $to = $_GET["to"] ?? $from;
@@ -274,6 +391,15 @@ function pos_php_till_dispatch($path, $method, $body) {
     $gst = pos_round2($gst);
     $total = pos_round2(max(0, $subtotal + $gst - $billDiscount));
     $totalGm = array_sum(array_column($built, "qty"));
+    if ($methodPay === "credit") {
+      $amt = pos_round2($total);
+      $current = pos_round2((float) ($customer["outstanding"] ?? 0));
+      $next = pos_round2($current + $amt);
+      $limit = (float) ($customer["credit_limit"] ?? 0);
+      if ($limit > 0 && $next > $limit) {
+        pos_send(400, ["error" => "Credit limit exceeded (limit ₹" . number_format($limit, 2) . ", outstanding would be ₹" . number_format($next, 2) . ")"]);
+      }
+    }
     $seq = pos_q("SELECT next_value FROM number_sequences WHERE name = 'order' AND business_id = ? LIMIT 1", "s", [$bid]);
     $next = $seq ? (int) $seq[0]["next_value"] : 10001;
     if ($seq) pos_q("UPDATE number_sequences SET next_value = ? WHERE name = 'order' AND business_id = ?", "is", [$next + 1, $bid]);
@@ -320,6 +446,9 @@ function pos_php_till_dispatch($path, $method, $body) {
         ]
       );
       pos_q("UPDATE items SET stock_gm = stock_gm - ? WHERE id = ? AND business_id = ?", "dss", [$line["qty"], $line["item"]["id"], $bid]);
+    }
+    if ($methodPay === "credit") {
+      pos_record_credit_sale($customer, $total, $orderId, $orderNumber, $methodPay, $bid, $uid);
     }
     $orders = pos_q("SELECT * FROM sales_orders WHERE id = ? AND business_id = ? LIMIT 1", "ss", [$orderId, $bid]);
     $orderLines = pos_q("SELECT * FROM sales_order_lines WHERE order_id = ?", "s", [$orderId]);
