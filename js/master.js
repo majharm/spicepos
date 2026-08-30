@@ -428,6 +428,11 @@ async function render() {
         const id = payload.business_id;
         delete payload.business_id;
         delete payload.logo;
+        if (id && !String(payload.password || "").trim()) {
+          delete payload.password;
+          delete payload.confirmPassword;
+        }
+        const passwordChanged = Boolean(String(fd.get("password") || "").trim());
         const btn = $("biz-save");
         btn.disabled = true;
         hint.textContent = id ? "Updating business…" : "Creating business…";
@@ -435,6 +440,8 @@ async function render() {
           payload.logoDataUrl = await readLogo(fd.get("logo"));
           if (id) await api(`/api/master/businesses/${id}`, { method: "PUT", body: JSON.stringify(payload) });
           else await api("/api/master/businesses", { method: "POST", body: JSON.stringify(payload) });
+          hint.textContent = id && passwordChanged ? "Business updated. Login password changed." : "Saved";
+          hint.className = "hint ok";
           render();
         } catch (err) {
           hint.textContent = err.message;

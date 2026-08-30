@@ -476,6 +476,11 @@ function pos_validate_signup($raw, $requireAdmin = true) {
     if (trim((string) ($b[$key] ?? "")) === "") throw new Exception(str_replace("_", " ", $key) . " is required");
   }
   if ($requireAdmin || $b["password"] || $b["confirm_password"]) {
+    if (!$requireAdmin && ($b["password"] || $b["confirm_password"])) {
+      if (!$b["password"] || !$b["confirm_password"]) {
+        throw new Exception("Enter and confirm the new password");
+      }
+    }
     if ((string) $b["password"] !== (string) $b["confirm_password"]) throw new Exception("Password and confirm password do not match");
     if (strlen((string) $b["password"]) < 8) throw new Exception("Password must be at least 8 characters");
   }
@@ -575,6 +580,53 @@ function pos_register_business($raw) {
   );
   $users = pos_q("SELECT * FROM staff_users WHERE id = ? LIMIT 1", "s", [$uid]);
   return ["businessId" => $id, "user" => $users[0]];
+}
+
+function pos_update_business($id, $raw) {
+  $b = pos_validate_signup($raw, false);
+  $existing = pos_q("SELECT * FROM businesses WHERE id = ? LIMIT 1", "s", [$id]);
+  if (!$existing) throw new Exception("Business not found");
+  $emailTaken = pos_q("SELECT id FROM staff_users WHERE email = ? AND business_id <> ? LIMIT 1", "ss", [$b["email"], $id]);
+  if ($emailTaken) throw new Exception("This email is already registered");
+  if ($b["username"]) {
+    $userTaken = pos_q("SELECT id FROM staff_users WHERE username = ? AND business_id <> ? LIMIT 1", "ss", [$b["username"], $id]);
+    if ($userTaken) throw new Exception("This username is already taken");
+  }
+  $planRow = pos_q("SELECT id FROM subscription_plans WHERE id = ? OR code = ? LIMIT 1", "ss", [$b["plan_id"], strtoupper($b["plan_id"])]);
+  $planId = $planRow[0]["id"] ?? $existing[0]["plan_id"] ?? "trial";
+  $full = $b["address"] . ", " . $b["city"] . ", " . $b["state"] . " " . $b["pin_code"];
+  $logo = $b["logo_url"] ?: ($existing[0]["logo_url"] ?? null);
+  $expiry = $b["subscription_expires_at"] ?: ($existing[0]["subscription_expires_at"] ?? null);
+  pos_q(
+    "UPDATE businesses SET name=?, owner_name=?, mobile=?, email=?, address=?, gstin=?, business_type=?,
+       status=?, plan_id=?, subscription_expires_at=?, logo_url=?, category=?, pan=?, city=?, state=?, pin_code=?
+     WHERE id=?",
+    "sssssssssssssssss",
+    [
+      $b["name"], $b["owner_name"], $b["mobile"], $b["email"], $full, $b["gstin"], $b["business_type"],
+      $b["status"], $planId, $expiry, $logo, $b["category"], $b["pan"], $b["city"], $b["state"], $b["pin_code"], $id,
+    ]
+  );
+  try {
+    pos_q(
+      "UPDATE company_settings SET name=?, address=?, phone=?, email=?, gstin=?, pan=?, city=?, state=?, pincode=?, logo_url=? WHERE business_id=?",
+      "sssssssssss",
+      [$b["name"], $full, $b["mobile"], $b["email"], $b["gstin"], $b["pan"], $b["city"], $b["state"], $b["pin_code"], $logo, $id]
+    );
+  } catch (Exception $e) { /* optional table */ }
+  $admins = pos_q("SELECT * FROM staff_users WHERE business_id = ? AND role = 'business_admin' LIMIT 1", "s", [$id]);
+  if ($admins) {
+    $admin = $admins[0];
+    $nextUser = $b["username"] ?: ($admin["username"] ?? "");
+    $nextHash = $b["password"] ? pos_hash_password($b["password"]) : $admin["password_hash"];
+    pos_q(
+      "UPDATE staff_users SET email=?, first_name=?, mobile=?, username=?, password_hash=?, failed_logins=0, locked_until=NULL WHERE id=?",
+      "ssssss",
+      [$b["email"], $b["owner_name"], $b["mobile"], $nextUser, $nextHash, $admin["id"]]
+    );
+  }
+  $row = pos_q("SELECT * FROM businesses WHERE id = ? LIMIT 1", "s", [$id]);
+  return $row[0];
 }
 
 function pos_platform_settings() {
@@ -1044,28 +1096,9 @@ function pos_php_dispatch($path, $method, $rawBody) {
     }
 
     if (preg_match("#^master/businesses/([^/]+)$#", $path, $m) && $method === "PUT") {
-      $id = $m[1];
-      $b = pos_validate_signup($body, false);
-      $existing = pos_q("SELECT * FROM businesses WHERE id = ? LIMIT 1", "s", [$id]);
-      if (!$existing) throw new Exception("Business not found");
-      $planRow = pos_q("SELECT id FROM subscription_plans WHERE id = ? OR code = ? LIMIT 1", "ss", [$b["plan_id"], strtoupper($b["plan_id"])]);
-      $planId = $planRow[0]["id"] ?? $existing[0]["plan_id"] ?? "trial";
-      $full = $b["address"] . ", " . $b["city"] . ", " . $b["state"] . " " . $b["pin_code"];
-      $logo = $b["logo_url"] ?: ($existing[0]["logo_url"] ?? null);
-      $expiry = $b["subscription_expires_at"] ?: ($existing[0]["subscription_expires_at"] ?? null);
-      pos_q(
-        "UPDATE businesses SET name=?, owner_name=?, mobile=?, email=?, address=?, gstin=?, business_type=?,
-           status=?, plan_id=?, subscription_expires_at=?, logo_url=?, category=?, pan=?, city=?, state=?, pin_code=?
-         WHERE id=?",
-        "sssssssssssssssss",
-        [
-          $b["name"], $b["owner_name"], $b["mobile"], $b["email"], $full, $b["gstin"], $b["business_type"],
-          $b["status"], $planId, $expiry, $logo, $b["category"], $b["pan"], $b["city"], $b["state"], $b["pin_code"], $id,
-        ]
-      );
-      $row = pos_q("SELECT * FROM businesses WHERE id = ? LIMIT 1", "s", [$id]);
-      pos_audit($auth["admin"], "Business Edited", ["module" => "businesses", "target_id" => $id, "target_name" => $row[0]["name"] ?? ""]);
-      pos_send(200, ["ok" => true, "business" => $row[0]]);
+      $row = pos_update_business($m[1], $body);
+      pos_audit($auth["admin"], "Business Edited", ["module" => "businesses", "target_id" => $m[1], "target_name" => $row["name"] ?? ""]);
+      pos_send(200, ["ok" => true, "business" => $row]);
     }
 
     if (preg_match("#^master/businesses/([^/]+)$#", $path, $m) && $method === "DELETE") {

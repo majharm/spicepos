@@ -53,6 +53,11 @@ export function validateSignup(body, opts = {}) {
     if (!String(b[key] || "").trim()) throw new Error(`${key.replaceAll("_", " ")} is required`);
   }
   if (requireAdmin || b.password || b.confirm_password) {
+    if (!requireAdmin && (b.password || b.confirm_password)) {
+      if (!b.password || !b.confirm_password) {
+        throw new Error("Enter and confirm the new password");
+      }
+    }
     if (String(b.password) !== String(b.confirm_password)) {
       throw new Error("Password and confirm password do not match");
     }
@@ -285,9 +290,10 @@ export async function updateBusiness(id, raw) {
   );
   if (admin) {
     const nextUser = b.username || admin.username;
-    const nextHash = b.password ? await hashPassword(b.password) : admin.password_hash;
+    const passwordChanged = Boolean(b.password);
+    const nextHash = passwordChanged ? await hashPassword(b.password) : admin.password_hash;
     await query(
-      `UPDATE staff_users SET email=?, first_name=?, mobile=?, username=?, password_hash=? WHERE id=?`,
+      `UPDATE staff_users SET email=?, first_name=?, mobile=?, username=?, password_hash=?, failed_logins=0, locked_until=NULL WHERE id=?`,
       [b.email, b.owner_name, b.mobile, nextUser, nextHash, admin.id],
     );
   }
