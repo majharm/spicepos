@@ -342,6 +342,9 @@ function renderCart() {
   $("btn-pay").disabled = state.cart.length === 0;
   $("btn-clear").disabled = state.cart.length === 0;
   $("btn-pay").textContent = state.editingOrderId ? "Save" : "Save";
+  if (window.DevMode?.isEnabled()) {
+    DevMode.updateContext({ cartLines: state.cart.length });
+  }
 }
 
 function renderCustomersSelect() {
@@ -493,6 +496,17 @@ function renderSettings() {
   state.logoDraft = null;
   $("set-logo").value = "";
   showLogo($("logo-preview"), state.company.logo_url);
+  if (window.DevMode) {
+    const section = $("dev-settings-section");
+    if (section) section.hidden = !DevMode.canUse(state.session);
+    DevMode.updateContext({
+      session: state.session,
+      business: state.businessMeta,
+      plan: state.plan,
+      timezone: shopTimezone(),
+      cartLines: state.cart.length,
+    });
+  }
 }
 
 function paintTimezonePreview() {
@@ -1283,6 +1297,15 @@ async function boot() {
     }
     state.session = me.user;
     state.perms = me.user.permissions || {};
+    state.businessMeta = me.business || null;
+    if (window.DevMode) {
+      DevMode.init({
+        session: state.session,
+        business: state.businessMeta,
+        plan: me.plan || null,
+        devToolsAllowed: me.devToolsAllowed !== false,
+      });
+    }
     if ($("session-who")) {
       $("session-who").textContent = `${me.user.name || me.user.email} · ${me.user.role || ""} · ${me.business?.name || ""}`;
     }
@@ -1297,6 +1320,15 @@ async function boot() {
       await loadBootstrap();
     } catch (err) {
       setHint(err.message || "Could not load shop data", "error");
+    }
+    if (window.DevMode) {
+      DevMode.updateContext({
+        session: state.session,
+        business: state.businessMeta,
+        plan: state.plan,
+        timezone: shopTimezone(),
+        cartLines: state.cart.length,
+      });
     }
     showView(can("dashboard") ? "dashboard" : "counter");
   } catch {

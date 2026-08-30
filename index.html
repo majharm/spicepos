@@ -9,8 +9,8 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" />
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./css/pos.css?v=20260830atav" />
-    <link rel="stylesheet" href="./css/saas.css?v=20260830atav" />
+    <link rel="stylesheet" href="./css/pos.css?v=20260830dev" />
+    <link rel="stylesheet" href="./css/saas.css?v=20260830dev" />
   </head>
   <body>
     <div class="app">
@@ -320,6 +320,18 @@
             <button class="btn primary" type="submit">Save settings</button>
           </form>
           <div class="hint" id="settings-hint"></div>
+          <div class="settings dev-settings-card" id="dev-settings-section" hidden>
+            <div class="settings-section">
+              <h3>Developer mode</h3>
+              <p class="section-note">Debug tools for this browser only. Business admins can enable API logs and session info.</p>
+              <label class="remember dev-toggle">
+                <input type="checkbox" id="set-dev-mode" />
+                <span class="remember-ui" aria-hidden="true"></span>
+                Enable developer mode
+              </label>
+              <p class="field-hint">Shortcut: Ctrl+Shift+D · Add <code>?dev=1</code> to the URL to auto-enable.</p>
+            </div>
+          </div>
         </section>
       </div>
     </div>
@@ -332,8 +344,40 @@
         </div>
       </div>
     </div>
-    <script src="./js/pos-api.js?v=20260830atav"></script>
-    <script src="./js/app.js?v=20260830atav"></script>
+    <div id="dev-badge" class="dev-badge" hidden title="Developer mode">DEV</div>
+    <aside id="dev-panel" class="dev-panel" hidden aria-label="Developer tools">
+      <header class="dev-panel-head">
+        <strong>Developer mode</strong>
+        <button type="button" class="btn dev-panel-close" id="dev-panel-close" aria-label="Close developer panel">×</button>
+      </header>
+      <div class="dev-panel-body">
+        <section class="dev-block">
+          <h4>Session</h4>
+          <pre id="dev-session-info" class="dev-pre">—</pre>
+        </section>
+        <section class="dev-block">
+          <h4>API bridge</h4>
+          <pre id="dev-api-spec" class="dev-pre">—</pre>
+          <div class="dev-actions">
+            <button type="button" class="btn" id="dev-reprobe">Re-probe API</button>
+            <button type="button" class="btn" id="dev-clear-cache">Clear cache</button>
+          </div>
+        </section>
+        <section class="dev-block">
+          <h4>Health</h4>
+          <pre id="dev-health-info" class="dev-pre">—</pre>
+          <button type="button" class="btn" id="dev-health-refresh">Refresh health</button>
+        </section>
+        <section class="dev-block">
+          <h4>Request log</h4>
+          <div id="dev-request-log" class="dev-log"></div>
+          <button type="button" class="btn" id="dev-clear-log">Clear log</button>
+        </section>
+      </div>
+    </aside>
+    <script src="./js/pos-api.js?v=20260830dev"></script>
+    <script src="./js/dev-mode.js?v=20260830dev"></script>
+    <script src="./js/app.js?v=20260830dev"></script>
     <script src="./js/x-pos-20260830e.js"></script>
   </body>
 </html>

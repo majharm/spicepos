@@ -876,6 +876,7 @@ function pos_php_dispatch($path, $method, $rawBody) {
             "subscription_expires_at" => $staff["business"]["subscription_expires_at"] ?? null,
           ],
           "plan" => $plan,
+          "devToolsAllowed" => pos_env("POS_DEV_TOOLS", "1") !== "0",
         ]);
       }
       pos_send(401, ["error" => "Not signed in"]);

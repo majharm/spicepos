@@ -1,5 +1,5 @@
-Production deploy bundle — 20260830atav
-======================================
+Production deploy bundle — 20260830dev
+=====================================
 
 Upload ALL of these files to Hostinger public_html (overwrite):
 
@@ -17,6 +17,7 @@ CSS
 
 JavaScript
   js/app.js
+  js/dev-mode.js
   js/pos-api.js
   js/master.js
   js/x-pos-20260830e.js
@@ -26,9 +27,12 @@ PHP
   pos-php-till.php
   pos-api.php
 
-After upload: hard-refresh browser (Ctrl+Shift+R) on pos.atavtelecom.in
+Optional .env:
+  POS_DEV_TOOLS=1
 
-Verify:
-  - Login page shows ATAV Telecom logo
-  - Theme uses magenta/orange/cyan/cobalt brand colors
-  - css/pos.css?v=20260830atav loads
+After upload: hard-refresh browser (Ctrl+Shift+R)
+
+Developer mode:
+  - Settings → Developer mode (business admin only)
+  - Shortcut: Ctrl+Shift+D
+  - URL: ?dev=1

@@ -250,3 +250,164 @@
   .qty button, .btn, .nav-btn { min-height: 44px; }
   .card { min-height: 120px; }
 }
+
+.dev-settings-card { margin-top: 0; }
+.dev-toggle {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  color: var(--text);
+  font-weight: 600;
+  cursor: pointer;
+  user-select: none;
+  position: relative;
+}
+.dev-toggle input[type="checkbox"] {
+  position: absolute;
+  opacity: 0;
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  cursor: pointer;
+}
+.dev-toggle .remember-ui {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+  border: 1.5px solid var(--line-strong, #b8c0de);
+  border-radius: 4px;
+  background: #fff;
+  box-sizing: border-box;
+  pointer-events: none;
+}
+.dev-toggle input[type="checkbox"]:checked + .remember-ui {
+  border-color: var(--atav-magenta, #ec008c);
+  background-color: var(--atav-magenta, #ec008c);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill='none' stroke='%23fff' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round' d='M3.2 8.4 6.4 11.6 12.8 4.4'/%3E%3C/svg%3E");
+  background-size: 12px 12px;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+.dev-badge {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 40;
+  background: var(--brand-gradient-v, linear-gradient(180deg, #ec008c, #f7941d));
+  color: #fff;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  padding: 8px 12px;
+  border-radius: 999px;
+  cursor: pointer;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    0 4px 0 #a80068,
+    0 10px 24px rgba(236, 0, 140, 0.35);
+}
+.dev-panel {
+  position: fixed;
+  right: 16px;
+  bottom: 56px;
+  width: min(420px, calc(100vw - 32px));
+  max-height: min(72vh, 640px);
+  z-index: 39;
+  display: flex;
+  flex-direction: column;
+  background: linear-gradient(180deg, #fff 0%, #f4f6fd 100%);
+  border: 1px solid var(--line-strong, #b8c0de);
+  border-radius: 16px;
+  box-shadow: var(--elev-float, 0 20px 48px rgba(26, 26, 46, 0.22));
+  overflow: hidden;
+}
+.dev-panel[hidden] { display: none !important; }
+.dev-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  background: var(--header-gradient, linear-gradient(135deg, #2e3192, #00aeef));
+  color: #fff;
+}
+.dev-panel-head strong { font-size: 14px; }
+.dev-panel-close {
+  min-width: 36px;
+  padding: 4px 10px;
+  font-size: 18px;
+  line-height: 1;
+}
+.dev-panel-body {
+  padding: 12px 14px 16px;
+  overflow: auto;
+  display: grid;
+  gap: 14px;
+}
+.dev-block h4 {
+  margin: 0 0 8px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.dev-pre {
+  margin: 0 0 8px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #0f1020;
+  color: #d7dbff;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 140px;
+  overflow: auto;
+}
+.dev-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.dev-log {
+  display: grid;
+  gap: 8px;
+  max-height: 180px;
+  overflow: auto;
+  margin-bottom: 8px;
+}
+.dev-log-row {
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: #fff;
+  font-size: 11px;
+}
+.dev-log-row.is-error {
+  border-color: #fecaca;
+  background: #fff5f5;
+}
+.dev-log-meta { font-weight: 600; color: var(--text); }
+.dev-log-time { color: var(--muted); margin-top: 2px; }
+.dev-log-error { color: #b91c1c; margin-top: 4px; }
+.dev-empty { margin: 0; color: var(--muted); font-size: 12px; }
+body.dev-mode .session-bar::after {
+  content: "Developer mode";
+  margin-left: auto;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--atav-magenta, #ec008c);
+}
+@media (max-width: 700px) {
+  .dev-panel {
+    right: 8px;
+    left: 8px;
+    width: auto;
+    bottom: 52px;
+  }
+}

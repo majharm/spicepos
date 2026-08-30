@@ -424,6 +424,7 @@ export function registerAuth(app) {
           subscription_expires_at: req.auth.business?.subscription_expires_at,
         },
         plan,
+        devToolsAllowed: process.env.POS_DEV_TOOLS !== "0",
       });
       return;
     }
