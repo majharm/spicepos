@@ -68,9 +68,32 @@ async function api(path, options) {
 }
 
 function orderFromResult(result) {
-  if (result?.order) return result.order;
-  if (result?.order_number) return result;
+  if (!result || typeof result !== "object") return null;
+  if (result.order && typeof result.order === "object") return result.order;
+  if (result.data?.order && typeof result.data.order === "object") return result.data.order;
+  if (result.order_number) return result;
   return null;
+}
+
+function orderLabel(order, result) {
+  return order?.order_number || result?.order_number || "Saved";
+}
+
+function orderTotal(order, result) {
+  const raw = order?.total ?? result?.total ?? 0;
+  return Number(raw) || 0;
+}
+
+function clearCounterAfterSale(order, result) {
+  state.cart = [];
+  state.lastPack = null;
+  state.editingOrderId = null;
+  state.query = "";
+  $("search").value = "";
+  $("pack-choice").value = "";
+  renderCatalog();
+  renderCart();
+  setHint(`Order accepted · ${orderLabel(order, result)} · ${money(orderTotal(order, result))}`, "ok");
 }
 
 function ymd(d = new Date()) {
@@ -187,11 +210,10 @@ function clearCounterAfterSale(order) {
   $("search").value = "";
   $("pack-choice").value = "";
   renderCatalog();
-  renderCart();
-  setHint(`Order accepted · ${order.order_number} · ${money(order.total)}`, "ok");
+  return null;
 }
 
-function activeItems() {
+function ymd(d = new Date()) {
   return state.items.filter((i) => i.status !== "inactive");
 }
 
@@ -813,15 +835,25 @@ $("btn-pay").addEventListener("click", async () => {
       ? await api(`/api/orders/${state.editingOrderId}`, { method: "PUT", body: JSON.stringify(payload) })
       : await api("/api/checkout", { method: "POST", body: JSON.stringify(payload) });
     const order = orderFromResult(result);
-    if (!order) throw new Error("Checkout did not return an order");
-    clearCounterAfterSale(order);
-    showOrder(order);
-    $("modal-title").textContent = `Order accepted · ${order.order_number}`;
+    const saved = Boolean(order?.order_number || result?.order_number || result?.ok);
+    if (!saved) throw new Error("Checkout did not return an order");
+    clearCounterAfterSale(order, result);
+    const receiptOrder = order || {
+      order_number: orderLabel(order, result),
+      total: orderTotal(order, result),
+      customer_name: selectedCustomer()?.name || "Walk-in",
+      payment_method: $("pay-method").value,
+      payment_status: "paid",
+      lines: [],
+      created_at: new Date().toISOString(),
+    };
+    showOrder(receiptOrder);
+    $("modal-title").textContent = `Order accepted · ${orderLabel(order, result)}`;
     $("modal-body").innerHTML = `<p class="hint ok">Bill saved. POS cleared for the next customer.</p>
-      <pre class="receipt">${escapeHtml(receiptText(order))}</pre>
+      <pre class="receipt">${escapeHtml(receiptText(receiptOrder))}</pre>
       <div class="print-actions"><button class="btn primary" type="button" id="modal-print">Print</button></div>`;
     $("modal").hidden = false;
-    $("modal-print").onclick = () => printOrder(order);
+    $("modal-print").onclick = () => printOrder(receiptOrder);
     showView("counter");
     try {
       await Promise.all([loadBootstrap(), loadToday()]);

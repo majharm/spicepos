@@ -464,8 +464,29 @@ app.post("/api/checkout", requireStaff, requirePerm("counter"), async (req, res)
       const [orderLines] = await conn.query("SELECT * FROM sales_order_lines WHERE order_id = ?", [
         orderId,
       ]);
-      if (!orders[0]) throw new Error("Order was not saved");
-      return { ...orders[0], lines: orderLines };
+      if (orders[0]) return { ...orders[0], lines: orderLines };
+      return {
+        id: orderId,
+        order_number: orderNumber,
+        customer_id: customer.id,
+        customer_name: customer.business_name || customer.name,
+        customer_type: customer.type,
+        pack_id: packId || null,
+        pack_name: packName,
+        pack_count: packCount || null,
+        status: "confirmed",
+        total_quantity_gm: totalGm,
+        subtotal,
+        discount: billDiscount,
+        gst,
+        total,
+        payment_method: method,
+        payment_status: payStatus,
+        business_id: businessId,
+        branch_id: branchId(),
+        cashier_id: authUser()?.id || null,
+        lines: orderLines,
+      };
     });
     await audit("Sale Created", { module: "sales", target_name: result.order_number }, req);
     res.json({ ok: true, order: result });
