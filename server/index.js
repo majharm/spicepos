@@ -1,6 +1,8 @@
 import "dotenv/config";
 import express from "express";
 import path from "node:path";
+import fs from "node:fs";
+import http from "node:http";
 import { fileURLToPath } from "node:url";
 import { query, withTransaction } from "./db.js";
 import { bid, branchId, authUser } from "./context.js";
@@ -23,12 +25,12 @@ app.set("trust proxy", true);
 app.use((req, _res, next) => {
   const orig = req.originalUrl || req.url || "";
   const mapped = rewriteToApi(orig, req.headers["x-pos-path"]);
-  const path = orig.split("?")[0];
+  const origPath = orig.split("?")[0];
   const bare =
-    path.startsWith("/auth/") ||
-    path === "/health" ||
-    path.startsWith("/support-contact") ||
-    path.startsWith("/bootstrap");
+    origPath.startsWith("/auth/") ||
+    origPath === "/health" ||
+    origPath.startsWith("/support-contact") ||
+    origPath.startsWith("/bootstrap");
   if (mapped.startsWith("/api") && (isAliasedApi(orig) || bare)) {
     req.url = mapped;
   }
@@ -36,7 +38,7 @@ app.use((req, _res, next) => {
 });
 app.use(express.json({ limit: "8mb" }));
 app.use((req, res, next) => {
-  if (req.path === "/.env" || req.path.startsWith("/.env.")) {
+  if (req.path === "/pos-bridge.json" || req.path === "/.env" || req.path.startsWith("/.env.")) {
     res.status(404).end();
     return;
   }
@@ -492,20 +494,58 @@ app.use(express.static(publicDir));
 const port = Number(process.env.PORT || 5173);
 const host = process.env.HOST || "0.0.0.0";
 
-function startHttp() {
+function writeBridge(info) {
+  try {
+    fs.writeFileSync(path.join(root, "pos-bridge.json"), JSON.stringify(info), "utf8");
+  } catch (err) {
+    console.error("Could not write pos-bridge.json", err);
+  }
+}
+
+function listenTcp(bindHost, bindPort) {
+  return new Promise((resolve, reject) => {
+    const server = http.createServer(app);
+    const onErr = (err) => {
+      server.close();
+      reject(err);
+    };
+    server.once("error", onErr);
+    server.listen(bindPort, bindHost, () => {
+      server.off("error", onErr);
+      resolve(server);
+    });
+  });
+}
+
+async function startHttp() {
   const passenger = globalThis.PhusionPassenger;
   if (passenger) {
     passenger.configure({ autoInstall: false });
     app.listen("passenger");
     console.log("Multi-tenant POS listening via Passenger");
-  } else {
-    app.listen(port, host, () => {
-      console.log(`Multi-tenant POS listening on ${host}:${port}`);
-    });
+    const candidates = [...new Set([Number(process.env.POS_BRIDGE_PORT) || 0, port, 5173, 38473].filter(Boolean))];
+    for (const p of candidates) {
+      try {
+        await listenTcp("127.0.0.1", p);
+        writeBridge({ host: "127.0.0.1", port: p });
+        console.log(`POS PHP bridge on 127.0.0.1:${p}`);
+        return;
+      } catch (err) {
+        if (err.code !== "EADDRINUSE") console.error(err);
+      }
+    }
+    console.error("POS PHP bridge could not bind a local TCP port");
+    return;
   }
+  await listenTcp(host, port);
+  writeBridge({ host: "127.0.0.1", port });
+  console.log(`Multi-tenant POS listening on ${host}:${port}`);
 }
 
-startHttp();
+startHttp().catch((err) => {
+  console.error("HTTP listen failed", err);
+  process.exit(1);
+});
 ensureSchema()
   .then(() => seedPlatform())
   .catch((err) => {

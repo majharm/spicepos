@@ -47,9 +47,9 @@ If the site shows **403 Forbidden / Access to this resource on the server is den
 2. In hPanel **Redeploy** so Hostinger regenerates `public_html/.htaccess`.
 3. **Restart** the Node process.
 4. Do not add your own `.htaccess`.
-5. Confirm `/` opens the POS and `/health.json` returns JSON.
+5. Confirm `/` opens the POS and `/pos-api.php?p=health` returns JSON.
 
-Open `https://your-domain/health.json` (or `/atavpos-rpc.json?p=health` or `/pos-data/health`) — it must be JSON, not a web page or 403.
+Open `https://your-domain/pos-api.php?p=health` — it must be JSON (`{"ok":true,...}`), not a web page or 403. That file exists so Apache will not replace it with `index.html`. Login uses it first.
 
 Hostinger sets `PORT` and `NODE_ENV=production`. The process must listen on `process.env.PORT` (already wired).
 
@@ -82,7 +82,7 @@ Do **not** use the Web App “Connect a database” wizard (that is for Supabase
 5. After a green build, open Runtime Logs. You should see `Multi-tenant POS listening on …`.
 6. Open `/login.html` and `/master.html` on your domain.
 
-If login shows `Unexpected token '<', "<!DOCTYPE "... is not valid JSON`, the browser got an HTML page for `/api/auth/login`. That means Apache is answering, not Express. Confirm framework **Express**, entry **`server.js`**, build command empty, then **Restart**. Open `https://your-domain/api/health` — you must see `{"ok":true,...}` JSON, not a website. Also set `DB_HOST=localhost` (same-account MySQL) or the process may crash before it can serve `/api`.
+If login shows a web-page error, Apache is answering instead of Node. Open `https://your-domain/pos-api.php?p=health`. Confirm framework **Express**, entry **`server.js`**, build command empty, then **Restart**. Also set `DB_HOST=localhost` (same-account MySQL) or the process may crash before it can serve the API.
 
 
 Schema updates run on boot (`ensureSchema`). Master Admin is created from `MASTER_ADMIN_EMAIL` / `MASTER_ADMIN_PASSWORD` if that email is not already in `platform_admins`.

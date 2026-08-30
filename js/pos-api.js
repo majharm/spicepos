@@ -10,13 +10,12 @@
 
   function specs() {
     const dir = pageDir();
+    const rpcFiles = [`${dir}pos-api.php`.replace(/\/{2,}/g, "/"), "/pos-api.php", `${dir}atavpos-rpc.json`.replace(/\/{2,}/g, "/"), "/atavpos-rpc.json"];
+    const out = rpcFiles.map((base) => ({ mode: "rpc", base }));
     const prefixes = new Set([`${dir}pos-data`.replace(/\/{2,}/g, "/"), "/pos-data", `${dir}api`.replace(/\/{2,}/g, "/"), "/api", "/atav-data"]);
-    const out = [];
     for (const base of prefixes) {
       out.push({ mode: "prefix", base: base.replace(/\/$/, "") || "/" });
     }
-    out.push({ mode: "rpc", base: RPC });
-    out.push({ mode: "rpc", base: `${dir}atavpos-rpc.json`.replace(/\/{2,}/g, "/") });
     return out;
   }
 
@@ -84,7 +83,7 @@
       const health =
         spec.mode === "rpc" ? applySpec(spec, "/api/health") : `${spec.base.replace(/\/$/, "")}/health`;
       try {
-        const res = await fetch(health, { cache: "no-store", headers: { Accept: "application/json" } });
+        const res = await fetch(health, { credentials: "same-origin", cache: "no-store", headers: { Accept: "application/json" } });
         const text = await res.text();
         if (looksLikeJson(text, res)) {
           saveSpec(spec);
@@ -142,7 +141,7 @@
       const hdrs = { ...headers };
       if (spec.mode === "rpc") hdrs["X-Pos-Path"] = String(path).replace(/^\/api\/?/, "").split("?")[0];
       try {
-        const res = await fetch(url, { ...options, headers: hdrs });
+        const res = await fetch(url, { credentials: "same-origin", cache: "no-store", ...options, headers: hdrs });
         const text = await res.text();
         lastText = text;
         if (!looksLikeJson(text, res)) continue;
@@ -155,7 +154,7 @@
     const snippet = String(lastText || "").replace(/\s+/g, " ").slice(0, 80);
     throw new Error(
       snippet.startsWith("<") || /<!doctype/i.test(snippet)
-        ? "Sign-in did not reach the POS server (got a web page). Open /health.json or /atavpos-rpc.json?p=health — it must be JSON. In hPanel use Express, entry server.js, empty build/output, then Redeploy and Restart."
+        ? "Sign-in did not reach the POS server (got a web page). Open /pos-api.php?p=health — it must be JSON. In hPanel use Express, entry server.js, empty build/output, then Redeploy and Restart."
         : "Could not reach the POS API. Redeploy and Restart the Node.js app in hPanel.",
     );
   };
