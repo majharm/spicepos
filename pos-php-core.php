@@ -33,40 +33,83 @@ function pos_parse_env_text($raw) {
   }
 }
 
-function pos_load_dotenv() {
-  static $done = false;
-  if ($done) return;
-  $done = true;
-  $doc = rtrim((string) ($_SERVER["DOCUMENT_ROOT"] ?? __DIR__), "/");
-  $home = (string) (getenv("HOME") ?: "");
-  $roots = array_unique(array_filter([$doc, __DIR__, dirname(__DIR__), $home]));
-  foreach ($roots as $root) {
-    $php = $root . "/pos-db.php";
-    if (is_file($php) && is_readable($php)) {
-      $map = include $php;
-      if (is_array($map)) {
-        foreach ($map as $k => $v) pos_set_env($k, $v);
-      }
-    }
-  }
-  $files = [];
-  foreach ($roots as $root) {
-    $files[] = $root . "/.env";
-    $files[] = $root . "/pos.env";
-  }
+function pos_config_roots() {
+  $out = [];
+  $add = function ($p) use (&$out) {
+    $p = rtrim(str_replace("\\", "/", (string) $p), "/");
+    if ($p !== "" && is_dir($p)) $out[$p] = $p;
+  };
+  $add(__DIR__);
+  $add($_SERVER["DOCUMENT_ROOT"] ?? "");
+  if (!empty($_SERVER["SCRIPT_FILENAME"])) $add(dirname($_SERVER["SCRIPT_FILENAME"]));
+  $add(getcwd());
+  $home = (string) (getenv("HOME") ?: ($_SERVER["HOME"] ?? ""));
+  $add($home);
+  $add($home . "/public_html");
   if ($home) {
-    foreach (glob($home . "/domains/*/public_html/.env") ?: [] as $f) $files[] = $f;
-    foreach (glob($home . "/domains/*/public_html/pos-db.php") ?: [] as $f) {
-      $map = @include $f;
-      if (is_array($map)) {
-        foreach ($map as $k => $v) pos_set_env($k, $v);
+    foreach (glob($home . "/domains/*/public_html") ?: [] as $d) $add($d);
+  }
+  return array_values($out);
+}
+
+function pos_apply_db_map($map) {
+  if (!is_array($map)) return;
+  foreach ($map as $k => $v) pos_set_env($k, $v);
+}
+
+function pos_include_db_php($file) {
+  if (!is_file($file) || !is_readable($file)) return;
+  $map = null;
+  try {
+    $map = include $file;
+  } catch (Throwable $e) {
+    $map = null;
+  }
+  if (is_array($map)) {
+    pos_apply_db_map($map);
+    return;
+  }
+  pos_parse_env_text((string) @file_get_contents($file));
+}
+
+function pos_load_dotenv($force = false) {
+  static $done = false;
+  if ($done && !$force) return;
+  $done = true;
+  $roots = pos_config_roots();
+  foreach ($roots as $root) {
+    pos_include_db_php($root . "/pos-db.php");
+    foreach (["/.env", "/pos.env", "/pos-db.json"] as $rel) {
+      $file = $root . $rel;
+      if (!is_file($file) || !is_readable($file)) continue;
+      if (substr($file, -5) === ".json") {
+        $j = json_decode((string) @file_get_contents($file), true);
+        pos_apply_db_map(is_array($j) ? $j : []);
+      } else {
+        pos_parse_env_text((string) @file_get_contents($file));
       }
     }
   }
-  foreach ($files as $file) {
-    if (!is_file($file) || !is_readable($file)) continue;
-    pos_parse_env_text((string) @file_get_contents($file));
+}
+
+function pos_write_dir() {
+  foreach (pos_config_roots() as $root) {
+    if (is_writable($root)) return $root;
   }
+  return __DIR__;
+}
+
+function pos_mysql_configured($c) {
+  return ($c["name"] ?? "") !== "" && ($c["user"] ?? "") !== "";
+}
+
+function pos_setup_payload($error) {
+  return [
+    "error" => $error,
+    "php" => true,
+    "setup" => "/setup.html",
+    "hint" => "Open /setup.html on this domain, enter localhost plus the MySQL name, user and password from hPanel → Databases, then Save.",
+  ];
 }
 
 function pos_db_cfg() {
@@ -96,8 +139,8 @@ function pos_db() {
   if ($db instanceof mysqli) return $db;
   if (!class_exists("mysqli")) throw new Exception("PHP mysqli is not enabled");
   $c = pos_db_cfg();
-  if ($c["name"] === "" || $c["user"] === "") {
-    throw new Exception("MySQL env missing. In hPanel File Manager create public_html/pos-db.php from pos-db.php.example (DB_HOST=localhost, plus DB_NAME, DB_USER, DB_PASSWORD). Git does not deploy .env.");
+  if (!pos_mysql_configured($c)) {
+    throw new Exception("Open /setup.html and save MySQL settings (DB_HOST=localhost, database name, user, password from hPanel).");
   }
   mysqli_report(MYSQLI_REPORT_OFF);
   $db = @new mysqli($c["host"], $c["user"], $c["pass"], $c["name"], $c["port"] ?: 3306);
@@ -498,7 +541,75 @@ function pos_php_dispatch($path, $method, $rawBody) {
   $path = trim((string) $path, "/");
   $body = pos_json_body($rawBody);
   try {
+    if ($path === "install") {
+      if ($method === "GET") {
+        $c = pos_db_cfg();
+        pos_send(pos_mysql_configured($c) ? 200 : 503, pos_setup_payload(
+          pos_mysql_configured($c)
+            ? "Database settings are already present."
+            : "Open /setup.html and save MySQL settings."
+        ) + ["ok" => pos_mysql_configured($c), "configured" => pos_mysql_configured($c)]);
+      }
+      if ($method !== "POST") pos_send(405, ["error" => "Use POST"]);
+      $host = trim((string) ($body["DB_HOST"] ?? $body["host"] ?? "localhost")) ?: "localhost";
+      if ($host === "127.0.0.1" || $host === "::1") $host = "localhost";
+      $name = trim((string) ($body["DB_NAME"] ?? $body["name"] ?? ""));
+      $user = trim((string) ($body["DB_USER"] ?? $body["user"] ?? ""));
+      $pass = (string) ($body["DB_PASSWORD"] ?? $body["password"] ?? "");
+      $master = (string) ($body["MASTER_ADMIN_PASSWORD"] ?? $body["master_password"] ?? "");
+      if ($name === "" || $user === "" || $pass === "") {
+        pos_send(400, pos_setup_payload("Database name, user and password are required."));
+      }
+      if (!preg_match("/^[A-Za-z0-9._-]{2,80}$/", $name) || !preg_match("/^[A-Za-z0-9._-]{2,80}$/", $user)) {
+        pos_send(400, pos_setup_payload("Database name and user look invalid."));
+      }
+      if (!preg_match("/^[A-Za-z0-9._-]{1,80}$/", $host)) {
+        pos_send(400, pos_setup_payload("DB host looks invalid. Use localhost on Hostinger."));
+      }
+      $existing = pos_db_cfg();
+      if (pos_mysql_configured($existing) && ($existing["pass"] ?? "") !== "") {
+        $probe = @new mysqli($existing["host"] ?: "localhost", $existing["user"], $existing["pass"], $existing["name"], (int) ($existing["port"] ?: 3306));
+        if ($probe && !$probe->connect_errno) {
+          $probe->close();
+          pos_send(409, ["error" => "Database is already configured.", "ok" => true, "php" => true]);
+        }
+      }
+      $dir = pos_write_dir();
+      if (!is_writable($dir)) {
+        pos_send(500, pos_setup_payload("PHP cannot write files in " . $dir . ". Create pos-db.php in File Manager."));
+      }
+      $map = [
+        "DB_HOST" => $host,
+        "DB_PORT" => "3306",
+        "DB_NAME" => $name,
+        "DB_USER" => $user,
+        "DB_PASSWORD" => $pass,
+      ];
+      if ($master !== "") $map["MASTER_ADMIN_PASSWORD"] = $master;
+      $code = "<?php\nreturn " . var_export($map, true) . ";\n";
+      if (@file_put_contents($dir . "/pos-db.php", $code, LOCK_EX) === false) {
+        pos_send(500, pos_setup_payload("Could not write pos-db.php. Use File Manager."));
+      }
+      pos_load_dotenv(true);
+      $db = @new mysqli($host, $user, $pass, $name, 3306);
+      if (!$db || $db->connect_errno) {
+        pos_send(503, [
+          "ok" => false,
+          "php" => true,
+          "setup" => "/setup.html",
+          "wrote" => $dir . "/pos-db.php",
+          "error" => "Saved pos-db.php but MySQL connect failed. Use DB_HOST=localhost (not the public IP) and the password from hPanel → Databases.",
+        ]);
+      }
+      $db->close();
+      pos_send(200, ["ok" => true, "php" => true, "wrote" => "pos-db.php", "next" => "/master.html"]);
+    }
+
     if ($path === "health") {
+      $c = pos_db_cfg();
+      if (!pos_mysql_configured($c)) {
+        pos_send(503, pos_setup_payload("Open /setup.html and save MySQL settings (localhost, database name, user, password)."));
+      }
       pos_q("SELECT 1");
       pos_send(200, ["ok" => true, "multiTenant" => true, "php" => true, "node" => false]);
     }
@@ -908,7 +1019,9 @@ function pos_php_dispatch($path, $method, $rawBody) {
     $msg = $e->getMessage();
     $dup = preg_match("/duplicate|already (registered|taken)/i", $msg);
     $code = $dup ? 409 : 400;
-    if (stripos($msg, "MySQL") !== false || stripos($msg, "env missing") !== false || stripos($msg, "mysqli") !== false) $code = 503;
+    if (stripos($msg, "MySQL") !== false || stripos($msg, "setup.html") !== false || stripos($msg, "mysqli") !== false) {
+      pos_send(503, pos_setup_payload($msg));
+    }
     pos_send($code, ["error" => $msg, "php" => true]);
   }
 }
