@@ -24,6 +24,15 @@ function pick(body, ...keys) {
   return "";
 }
 
+function normalizeDateOnly(val) {
+  if (val == null || val === "") return null;
+  const s = String(val).trim();
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+  const d = new Date(s);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toISOString().slice(0, 10);
+}
+
 export function validateSignup(body, opts = {}) {
   const requireAdmin = opts.requireAdmin !== false;
   const raw = body || {};
@@ -45,7 +54,7 @@ export function validateSignup(body, opts = {}) {
     password: pick(raw, "password", "admin_password"),
     confirm_password: pick(raw, "confirm_password", "confirmPassword", "admin_password_confirm"),
     plan_id: pick(raw, "plan_id"),
-    subscription_expires_at: pick(raw, "subscription_expires_at"),
+    subscription_expires_at: normalizeDateOnly(pick(raw, "subscription_expires_at")),
     status: pick(raw, "status"),
   };
   const required = requireAdmin ? REQUIRED : REQUIRED.filter((k) => k !== "username" && k !== "password");
@@ -95,7 +104,7 @@ export function validateSignup(body, opts = {}) {
     username,
     password: String(b.password || ""),
     plan_id: String(b.plan_id || "trial").trim() || "trial",
-    subscription_expires_at: String(b.subscription_expires_at || "").trim() || null,
+    subscription_expires_at: normalizeDateOnly(String(b.subscription_expires_at || "").trim() || null),
     status,
   };
 }
@@ -251,7 +260,7 @@ export async function updateBusiness(id, raw) {
   const planId = planRow?.id || existing.plan_id || "trial";
   const fullAddress = `${b.address}, ${b.city}, ${b.state} ${b.pin_code}`;
   const logo = b.logo_url || existing.logo_url || null;
-  const expiry = b.subscription_expires_at || existing.subscription_expires_at;
+  const expiry = normalizeDateOnly(b.subscription_expires_at) || normalizeDateOnly(existing.subscription_expires_at);
   await query(
     `UPDATE businesses SET
        name=?, owner_name=?, mobile=?, email=?, address=?, gstin=?, business_type=?,

@@ -1,4 +1,4 @@
-Production deploy bundle — 20260830admin1
+Production deploy bundle — 20260830deploy3
 =========================================
 
 Upload ALL files below to Hostinger public_html (overwrite):
@@ -27,9 +27,29 @@ PHP
   pos-php-till.php
   pos-api.php
 
-After upload: hard-refresh (Ctrl+Shift+R)
+Node (if using hPanel Node.js web app — upload OR git pull then Restart)
+  server.js
+  server/auth.js
+  server/master.js
+  server/onboard.js
+  server/index.js
+  package.json
 
-NEW: Master admin → Open POS on any business
+After upload:
+  1. hPanel → Node.js → Restart (if Node app enabled)
+  2. Hard-refresh browser (Ctrl+Shift+R)
+
+FIXES in this bundle
+  - Master admin Open POS (impersonation auth/me priority on PHP)
+  - Master admin Open POS per user (Users tab)
+  - Business password change on edit (PHP + date normalization)
+  - Exit impersonation without full logout
+  - Master admin panel auto-exits shop view when opened during impersonation
+  - Removed conflicting x-pos script from master.html / index.html
+
+How to use Open POS
   1. Sign in at /master.html
-  2. Dashboard or Businesses → click "Open POS"
-  3. Opens that shop POS with full access (even if expired/suspended)
+  2. Businesses → Open POS (enters as business admin)
+     OR Users → Open POS (enters as that specific user)
+  3. Shop POS opens with full access (even if expired/suspended)
+  4. Back to Master Admin ends shop view only

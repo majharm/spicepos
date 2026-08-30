@@ -221,6 +221,10 @@ async function findStaff(identifier) {
 }
 
 export async function issueStaffSession(req, res, { user, business, branchId, impersonatorAdminId }) {
+  const oldToken = cookies(req).pos_sid;
+  if (oldToken) {
+    await query("UPDATE staff_sessions SET revoked_at = NOW() WHERE token_hash = ?", [sha256(oldToken)]);
+  }
   const ttl = sessionSecs(false);
   const token = newToken();
   const sid = crypto.randomUUID();

@@ -214,7 +214,7 @@ export function registerMaster(app) {
     send(res, async () => {
       const [business] = await query("SELECT * FROM businesses WHERE id = ?", [req.params.id]);
       if (!business) throw new Error("Business not found");
-      let [user] = await query(
+      const [user] = await query(
         `SELECT * FROM staff_users
          WHERE business_id = ? AND status = 'active'
          ORDER BY CASE role WHEN 'business_admin' THEN 0 ELSE 1 END, email ASC
@@ -233,6 +233,34 @@ export function registerMaster(app) {
         req.auth.admin,
         "Entered Business POS",
         { module: "businesses", target_id: business.id, target_name: business.name, staff_user_id: user.id },
+        req,
+      );
+      return {
+        ok: true,
+        redirect: "/index.html",
+        business: { id: business.id, name: business.name },
+        user: { id: user.id, email: user.email, name: displayName(user), role: user.role },
+      };
+    }),
+  );
+
+  app.post("/api/master/users/:id/enter", (req, res) =>
+    send(res, async () => {
+      const [user] = await query("SELECT * FROM staff_users WHERE id = ?", [req.params.id]);
+      if (!user || user.status !== "active") throw new Error("User not found or inactive");
+      const [business] = await query("SELECT * FROM businesses WHERE id = ?", [user.business_id]);
+      if (!business) throw new Error("Business not found");
+      const [branch] = await query("SELECT id FROM branches WHERE business_id = ? LIMIT 1", [business.id]);
+      await issueStaffSession(req, res, {
+        user,
+        business,
+        branchId: branch?.id || user.branch_id,
+        impersonatorAdminId: req.auth.admin.id,
+      });
+      await platformAudit(
+        req.auth.admin,
+        "Entered User POS",
+        { module: "users", target_id: user.id, target_name: user.email, business_id: business.id },
         req,
       );
       return {

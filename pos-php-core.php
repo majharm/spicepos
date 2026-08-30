@@ -199,16 +199,53 @@ function pos_ensure_company_timezone_columns() {
   }
 }
 
-function pos_ensure_staff_session_impersonator_column() {
+function pos_ensure_staff_session_columns() {
   static $done = false;
   if ($done) return;
   $done = true;
   $db = pos_db();
-  $res = $db->query("SHOW COLUMNS FROM staff_sessions LIKE 'impersonator_admin_id'");
-  if ($res && $res->num_rows === 0) {
-    @$db->query("ALTER TABLE staff_sessions ADD COLUMN impersonator_admin_id VARCHAR(255) NULL");
+  foreach ([
+    "ip" => "VARCHAR(64) NULL",
+    "user_agent" => "VARCHAR(255) NULL",
+    "branch_id" => "VARCHAR(255) NULL",
+    "impersonator_admin_id" => "VARCHAR(255) NULL",
+  ] as $name => $def) {
+    $res = $db->query("SHOW COLUMNS FROM staff_sessions LIKE '" . $db->real_escape_string($name) . "'");
+    if ($res && $res->num_rows === 0) {
+      @$db->query("ALTER TABLE staff_sessions ADD COLUMN `{$name}` {$def}");
+    }
+    if ($res) $res->free();
   }
-  if ($res) $res->free();
+}
+
+function pos_issue_staff_session($user, $branchId, $impersonatorAdminId = null) {
+  pos_ensure_staff_session_columns();
+  $oldSid = pos_cookie("pos_sid");
+  if ($oldSid !== "") {
+    try {
+      pos_q("UPDATE staff_sessions SET revoked_at = NOW() WHERE token_hash = ?", "s", [pos_sha256($oldSid)]);
+    } catch (Exception $e) { /* ignore */ }
+  }
+  $token = pos_new_token();
+  $sid = pos_uuid();
+  $ttl = 12 * 3600;
+  if ($impersonatorAdminId) {
+    pos_q(
+      "INSERT INTO staff_sessions (id, staff_user_id, token_hash, expires_at, business_id, ip, user_agent, branch_id, impersonator_admin_id)
+       VALUES (?,?,?,DATE_ADD(NOW(), INTERVAL ? SECOND),?,?,?,?,?)",
+      "sssisssss",
+      [$sid, $user["id"], pos_sha256($token), $ttl, $user["business_id"], pos_ip(), pos_ua(), $branchId, $impersonatorAdminId]
+    );
+  } else {
+    pos_q(
+      "INSERT INTO staff_sessions (id, staff_user_id, token_hash, expires_at, business_id, ip, user_agent, branch_id)
+       VALUES (?,?,?,DATE_ADD(NOW(), INTERVAL ? SECOND),?,?,?,?)",
+      "sssissss",
+      [$sid, $user["id"], pos_sha256($token), $ttl, $user["business_id"], pos_ip(), pos_ua(), $branchId]
+    );
+  }
+  pos_set_cookie("pos_sid", $token, $ttl);
+  return $token;
 }
 
 function pos_db() {
@@ -424,7 +461,7 @@ function pos_master_session() {
 function pos_staff_session() {
   $token = pos_cookie("pos_sid");
   if ($token === "") return null;
-  pos_ensure_staff_session_impersonator_column();
+  pos_ensure_staff_session_columns();
   $hash = pos_sha256($token);
   $rows = pos_q(
     "SELECT s.*, u.email, u.first_name, u.last_name, u.role, u.status AS user_status,
@@ -475,6 +512,15 @@ function pos_pick($body, ...$keys) {
     if (isset($body[$k]) && trim((string) $body[$k]) !== "") return $body[$k];
   }
   return "";
+}
+
+function pos_normalize_date_only($val) {
+  if ($val === null || $val === "") return null;
+  $s = trim((string) $val);
+  if (preg_match('/^\d{4}-\d{2}-\d{2}/', $s)) return substr($s, 0, 10);
+  $ts = strtotime($s);
+  if ($ts === false) return null;
+  return gmdate("Y-m-d", $ts);
 }
 
 function pos_validate_signup($raw, $requireAdmin = true) {
@@ -547,7 +593,7 @@ function pos_validate_signup($raw, $requireAdmin = true) {
     "username" => $username,
     "password" => (string) $b["password"],
     "plan_id" => trim((string) ($b["plan_id"] ?: "trial")) ?: "trial",
-    "subscription_expires_at" => trim((string) $b["subscription_expires_at"]) ?: null,
+    "subscription_expires_at" => pos_normalize_date_only(trim((string) $b["subscription_expires_at"]) ?: null),
     "status" => $status,
   ];
 }
@@ -628,7 +674,7 @@ function pos_update_business($id, $raw) {
   $planId = $planRow[0]["id"] ?? $existing[0]["plan_id"] ?? "trial";
   $full = $b["address"] . ", " . $b["city"] . ", " . $b["state"] . " " . $b["pin_code"];
   $logo = $b["logo_url"] ?: ($existing[0]["logo_url"] ?? null);
-  $expiry = $b["subscription_expires_at"] ?: ($existing[0]["subscription_expires_at"] ?? null);
+  $expiry = pos_normalize_date_only($b["subscription_expires_at"]) ?: pos_normalize_date_only($existing[0]["subscription_expires_at"] ?? null);
   pos_q(
     "UPDATE businesses SET name=?, owner_name=?, mobile=?, email=?, address=?, gstin=?, business_type=?,
        status=?, plan_id=?, subscription_expires_at=?, logo_url=?, category=?, pan=?, city=?, state=?, pin_code=?
@@ -1138,32 +1184,40 @@ function pos_php_dispatch($path, $method, $rawBody) {
       $user = $users[0];
       $branch = pos_q("SELECT id FROM branches WHERE business_id = ? LIMIT 1", "s", [$bizId]);
       $branchId = $branch[0]["id"] ?? ($user["branch_id"] ?? null);
-      pos_ensure_staff_session_impersonator_column();
-      $token = pos_new_token();
-      $sid = pos_uuid();
-      $ttl = 12 * 3600;
-      pos_q(
-        "INSERT INTO staff_sessions (id, staff_user_id, token_hash, expires_at, business_id, ip, user_agent, branch_id, impersonator_admin_id)
-         VALUES (?,?,?,DATE_ADD(NOW(), INTERVAL ? SECOND),?,?,?,?,?)",
-        "sssisssss",
-        [
-          $sid,
-          $user["id"],
-          pos_sha256($token),
-          $ttl,
-          $user["business_id"],
-          pos_ip(),
-          pos_ua(),
-          $branchId,
-          $auth["admin"]["id"],
-        ]
-      );
-      pos_set_cookie("pos_sid", $token, $ttl);
+      pos_issue_staff_session($user, $branchId, $auth["admin"]["id"]);
       pos_audit($auth["admin"], "Entered Business POS", [
         "module" => "businesses",
         "target_id" => $biz[0]["id"],
         "target_name" => $biz[0]["name"],
         "staff_user_id" => $user["id"],
+      ]);
+      pos_send(200, [
+        "ok" => true,
+        "redirect" => "/index.html",
+        "business" => ["id" => $biz[0]["id"], "name" => $biz[0]["name"]],
+        "user" => [
+          "id" => $user["id"],
+          "email" => $user["email"],
+          "name" => pos_display_name($user),
+          "role" => $user["role"],
+        ],
+      ]);
+    }
+
+    if (preg_match("#^master/users/([^/]+)/enter$#", $path, $m) && $method === "POST") {
+      $users = pos_q("SELECT * FROM staff_users WHERE id = ? LIMIT 1", "s", [$m[1]]);
+      $user = $users[0] ?? null;
+      if (!$user || ($user["status"] ?? "") !== "active") throw new Exception("User not found or inactive");
+      $biz = pos_q("SELECT * FROM businesses WHERE id = ? LIMIT 1", "s", [$user["business_id"]]);
+      if (!$biz) throw new Exception("Business not found");
+      $branch = pos_q("SELECT id FROM branches WHERE business_id = ? LIMIT 1", "s", [$user["business_id"]]);
+      $branchId = $branch[0]["id"] ?? ($user["branch_id"] ?? null);
+      pos_issue_staff_session($user, $branchId, $auth["admin"]["id"]);
+      pos_audit($auth["admin"], "Entered User POS", [
+        "module" => "users",
+        "target_id" => $user["id"],
+        "target_name" => $user["email"],
+        "business_id" => $user["business_id"],
       ]);
       pos_send(200, [
         "ok" => true,

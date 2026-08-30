@@ -129,7 +129,11 @@ function showLogin(on) {
 
 async function boot() {
   try {
-    const me = await api("/api/auth/me");
+    let me = await api("/api/auth/me");
+    if (me.type === "staff" && me.impersonating) {
+      await api("/api/auth/exit-impersonate", { method: "POST" });
+      me = await api("/api/auth/me");
+    }
     if (me.type !== "master") throw new Error("not master");
     showLogin(false);
     await render();
@@ -213,7 +217,12 @@ function businessLabel(row) {
 
 async function enterBusinessPos(businessId) {
   await api(`/api/master/businesses/${businessId}/enter`, { method: "POST" });
-  location.href = "/index.html";
+  location.replace("/index.html");
+}
+
+async function enterUserPos(userId) {
+  await api(`/api/master/users/${userId}/enter`, { method: "POST" });
+  location.replace("/index.html");
 }
 
 function bindEnterPosButtons(root) {
@@ -222,6 +231,17 @@ function bindEnterPosButtons(root) {
       btn.disabled = true;
       try {
         await enterBusinessPos(btn.dataset.enter);
+      } catch (err) {
+        alert(err.message || "Could not open POS");
+        btn.disabled = false;
+      }
+    };
+  });
+  root.querySelectorAll("[data-enter-user]").forEach((btn) => {
+    btn.onclick = async () => {
+      btn.disabled = true;
+      try {
+        await enterUserPos(btn.dataset.enterUser);
       } catch (err) {
         alert(err.message || "Could not open POS");
         btn.disabled = false;
@@ -461,10 +481,20 @@ async function render() {
       });
     } else if (tab === "users") {
       const rows = await api("/api/master/users");
-      body.innerHTML = table(
-        ["Email", "Name", "Role", "Business", "Status"],
-        rows.map((u) => [u.email, `${u.first_name || ""} ${u.last_name || ""}`.trim(), u.role, u.business_name, u.status]),
-      );
+      body.innerHTML = `<div class="table-wrap">${table(
+        ["Email", "Name", "Role", "Business", "Status", ""],
+        rows.map((u) => [
+          u.email,
+          `${u.first_name || ""} ${u.last_name || ""}`.trim() || "—",
+          u.role,
+          u.business_name || "—",
+          u.status,
+          u.status === "active"
+            ? `<button class="btn primary" type="button" data-enter-user="${u.id}">Open POS</button>`
+            : "—",
+        ]),
+      )}</div>`;
+      bindEnterPosButtons(body);
     } else if (tab === "plans") {
       const rows = await api("/api/master/plans");
       body.innerHTML = `<form class="settings wide" id="plan-form">
