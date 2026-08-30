@@ -46,7 +46,7 @@ If the site shows **403 Forbidden / Access to this resource on the server is den
 1. Pull the latest commit (HTML is at the repo root again; there is no `index.js` for Apache to execute).
 2. In hPanel **Redeploy** so Hostinger regenerates `public_html/.htaccess`.
 3. **Restart** the Node process.
-4. Do not add your own `.htaccess`.
+4. If login still shows a web page for `/pos-data/health`, this repo now ships a Passenger `.htaccess` (no React `index.html` fallback). Restart Node. If you get **403**, in hPanel click **Redeploy** so Hostinger can merge its CloudLinux Passenger block, then Restart again.
 5. Confirm `/` opens the POS and `/pos-api.php?p=health` returns JSON.
 
 Open `https://your-domain/pos-api.php?p=health` — it must be JSON (`{"ok":true,...}`), not a web page or 403. That file exists so Apache will not replace it with `index.html`. Login uses it first.
