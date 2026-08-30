@@ -222,6 +222,8 @@ function showView(name) {
   document.querySelectorAll(".nav-btn").forEach((btn) => {
     btn.classList.toggle("active", btn.dataset.view === name);
   });
+  document.body.classList.toggle("counter-mode", name === "counter");
+  document.querySelector(".stage")?.classList.toggle("is-counter", name === "counter");
   if (name === "reports") loadReports();
   if (name === "orders") loadOrders();
   if (name === "purchases") loadPurchases();
