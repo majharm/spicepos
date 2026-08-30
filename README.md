@@ -15,6 +15,7 @@ Open http://127.0.0.1:5173 — you will be asked to sign in.
 | Who | URL | Demo login (local seed) |
 | --- | --- | --- |
 | Master Admin | `/master.html` | `MASTER_ADMIN_EMAIL` / `MASTER_ADMIN_PASSWORD` in `.env` (default `master@atavpos.local` / `Master@12345` if unset) |
+| SWAMI MASALE admin | `/login.html` | `swami@atavtelecom.in` (shop owner; not Master Admin) |
 | SWAMI MASALE cashier | `/login.html` | `cashier@swamimasale.local` / `Cashier@12345` |
 | Demo second tenant | `/login.html` | `admin@abc-supermart.local` / `Demo@12345` |
 

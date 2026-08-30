@@ -114,7 +114,20 @@ function pos_b64url_encode($bin) {
 
 function pos_verify_password($password, $stored) {
   if (!$stored || $password === null || $password === "") return false;
-  $parts = explode("$", (string) $stored);
+  $stored = (string) $stored;
+  if (preg_match("/^\\$2[aby]\\$/", $stored)) {
+    return password_verify((string) $password, $stored);
+  }
+  $parts = explode("$", $stored);
+  if ($parts[0] === "pbkdf2" && count($parts) >= 5) {
+    $algo = $parts[1] === "sha256" ? "sha256" : $parts[1];
+    $iters = (int) $parts[2];
+    $salt = pos_b64url_decode($parts[3]);
+    $expected = pos_b64url_decode($parts[4]);
+    if ($salt === "" || $expected === "" || $iters < 1000) return false;
+    $actual = hash_pbkdf2($algo, (string) $password, $salt, $iters, strlen($expected), true);
+    return hash_equals($expected, $actual);
+  }
   if (count($parts) < 6 || $parts[0] !== "scrypt") return false;
   $N = (int) $parts[1];
   $r = (int) $parts[2];
@@ -124,17 +137,16 @@ function pos_verify_password($password, $stored) {
   if ($salt === "" || $expected === "" || $N < 2 || $r < 1 || $p < 1) return false;
   @set_time_limit(180);
   @ini_set("memory_limit", "256M");
-  $actual = pos_scrypt_raw((string) $password, $salt, $N, $r, $p, strlen($expected));
-  return hash_equals($expected, $actual);
+  $dkLen = strlen($expected);
+  if ($dkLen > 32) $dkLen = 32;
+  $actual = pos_scrypt_raw((string) $password, $salt, $N, $r, $p, $dkLen);
+  if ($dkLen === strlen($expected)) return hash_equals($expected, $actual);
+  return hash_equals(substr($expected, 0, $dkLen), $actual);
 }
 
 function pos_hash_password($password) {
-  $N = 32768;
-  $r = 8;
-  $p = 1;
   $salt = random_bytes(16);
-  @set_time_limit(180);
-  @ini_set("memory_limit", "256M");
-  $key = pos_scrypt_raw((string) $password, $salt, $N, $r, $p, 32);
-  return "scrypt$" . $N . "$" . $r . "$" . $p . "$" . pos_b64url_encode($salt) . "$" . pos_b64url_encode($key);
+  $iters = 100000;
+  $key = hash_pbkdf2("sha256", (string) $password, $salt, $iters, 32, true);
+  return "pbkdf2$sha256$" . $iters . "$" . pos_b64url_encode($salt) . "$" . pos_b64url_encode($key);
 }
