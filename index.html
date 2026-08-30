@@ -281,13 +281,23 @@
         </section>
         <section class="view" id="view-settings" hidden>
           <h2>Company profile</h2>
-          <p class="lede">Shop details and logo saved on this business in MySQL.</p>
+          <p class="lede">Shop details, logo, and local timezone for clock and reports.</p>
           <form class="settings" id="settings-form">
             <label>Name <input id="set-name" /></label>
             <label>Address <input id="set-address" /></label>
             <label>Phone <input id="set-phone" /></label>
             <label>Email <input id="set-email" /></label>
             <label>GSTIN <input id="set-gstin" /></label>
+            <label>POS timezone
+              <select id="set-timezone" aria-label="Shop timezone">
+                <option value="Asia/Kolkata">India (IST, UTC+5:30)</option>
+                <option value="Asia/Dubai">UAE (UTC+4)</option>
+                <option value="Asia/Singapore">Singapore (UTC+8)</option>
+                <option value="Asia/Colombo">Sri Lanka (UTC+5:30)</option>
+                <option value="Asia/Kathmandu">Nepal (UTC+5:45)</option>
+                <option value="UTC">UTC</option>
+              </select>
+            </label>
             <label>Logo
               <input id="set-logo" type="file" accept="image/*" />
             </label>
@@ -309,7 +319,7 @@
       </div>
     </div>
     <script src="./js/pos-api.js?v=20260830deploy"></script>
-    <script src="./js/app.js?v=20260830deploy"></script>
+    <script src="./js/app.js?v=20260830deploy1"></script>
     <script src="./js/x-pos-20260830e.js"></script>
   </body>
 </html>

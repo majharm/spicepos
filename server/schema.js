@@ -48,6 +48,8 @@ export async function ensureSchema() {
   await addColumn("company_settings", "city", "VARCHAR(128) NULL");
   await addColumn("company_settings", "state", "VARCHAR(64) NULL");
   await addColumn("company_settings", "pincode", "VARCHAR(12) NULL");
+  await addColumn("company_settings", "timezone", "VARCHAR(64) NULL");
+  await addColumn("company_settings", "tz_offset", "VARCHAR(8) NULL");
 
   await addColumn("staff_users", "mobile", "VARCHAR(32) NULL");
   await addColumn("staff_users", "username", "VARCHAR(64) NULL");

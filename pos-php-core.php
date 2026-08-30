@@ -142,6 +142,63 @@ function pos_shop_tz_offset() {
   return pos_env("POS_TZ_OFFSET", "+05:30");
 }
 
+function pos_timezone_options() {
+  return [
+    ["Asia/Kolkata", "India (IST, UTC+5:30)", "+05:30"],
+    ["Asia/Dubai", "UAE (UTC+4)", "+04:00"],
+    ["Asia/Singapore", "Singapore (UTC+8)", "+08:00"],
+    ["Asia/Colombo", "Sri Lanka (UTC+5:30)", "+05:30"],
+    ["Asia/Kathmandu", "Nepal (UTC+5:45)", "+05:45"],
+    ["UTC", "UTC", "+00:00"],
+  ];
+}
+
+function pos_tz_offset_for($timezone) {
+  foreach (pos_timezone_options() as $row) {
+    if ($row[0] === $timezone) return $row[2];
+  }
+  return pos_shop_tz_offset();
+}
+
+function pos_normalize_timezone($timezone) {
+  $id = trim((string) $timezone);
+  foreach (pos_timezone_options() as $row) {
+    if ($row[0] === $id) return $id;
+  }
+  return pos_shop_timezone();
+}
+
+function pos_company_timezone($company = []) {
+  $tz = !empty($company["timezone"]) ? (string) $company["timezone"] : pos_shop_timezone();
+  $tz = pos_normalize_timezone($tz);
+  $off = !empty($company["tz_offset"]) ? (string) $company["tz_offset"] : pos_tz_offset_for($tz);
+  return ["timezone" => $tz, "tz_offset" => $off];
+}
+
+function pos_apply_business_timezone($businessId) {
+  pos_ensure_company_timezone_columns();
+  $rows = pos_q("SELECT timezone, tz_offset FROM company_settings WHERE business_id = ? LIMIT 1", "s", [$businessId]);
+  $meta = pos_company_timezone($rows[0] ?? []);
+  $db = pos_db();
+  $off = $meta["tz_offset"];
+  if ($off !== "") @$db->query("SET time_zone = '" . $db->real_escape_string($off) . "'");
+  return $meta;
+}
+
+function pos_ensure_company_timezone_columns() {
+  static $done = false;
+  if ($done) return;
+  $done = true;
+  $db = pos_db();
+  foreach (["timezone" => "VARCHAR(64) NULL", "tz_offset" => "VARCHAR(8) NULL"] as $name => $def) {
+    $res = $db->query("SHOW COLUMNS FROM company_settings LIKE '" . $db->real_escape_string($name) . "'");
+    if ($res && $res->num_rows === 0) {
+      @$db->query("ALTER TABLE company_settings ADD COLUMN `{$name}` {$def}");
+    }
+    if ($res) $res->free();
+  }
+}
+
 function pos_db() {
   static $db = null;
   if ($db instanceof mysqli) return $db;

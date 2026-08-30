@@ -22,8 +22,10 @@ PHP (required for checkout + audit on PHP-only hosting)
   pos-php-core.php
   pos-php-till.php
   pos-api.php
+  server/timezone.js
+  server/schema.js
 
-Optional .env additions:
+Optional .env fallback (if not set in POS Settings):
   POS_TIMEZONE=Asia/Kolkata
   POS_TZ_OFFSET=+05:30
 

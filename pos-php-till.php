@@ -16,6 +16,7 @@ function pos_php_till_dispatch($path, $method, $body) {
   $bid = $auth["user"]["business_id"];
   $branchId = $auth["branchId"] ?? $auth["user"]["branch_id"] ?? null;
   $uid = $auth["user"]["id"];
+  pos_apply_business_timezone($bid);
 
   if ($path === "bootstrap" && $method === "GET") {
     $co = [];
@@ -68,11 +69,12 @@ function pos_php_till_dispatch($path, $method, $body) {
       }
       $outPacks[] = $p;
     }
+    $coRow = $co[0] ?? ["name" => $business["name"] ?? "POS"];
+    $tzMeta = pos_company_timezone($coRow);
+    $coRow["timezone"] = $tzMeta["timezone"];
+    $coRow["tz_offset"] = $tzMeta["tz_offset"];
     pos_send(200, [
-      "company" => array_merge($co[0] ?? ["name" => $business["name"] ?? "POS"], [
-        "timezone" => pos_shop_timezone(),
-        "tzOffset" => pos_shop_tz_offset(),
-      ]),
+      "company" => $coRow,
       "business" => $business,
       "plan" => $plan,
       "support" => pos_platform_settings(),
@@ -126,6 +128,48 @@ function pos_php_till_dispatch($path, $method, $body) {
       [$bid]
     );
     pos_send(200, ["today" => $today[0] ?? ["bills" => 0, "takings" => 0, "gst" => 0]]);
+  }
+
+  if ($path === "settings" && $method === "POST") {
+    $name = trim((string) ($body["name"] ?? ""));
+    if ($name === "") pos_send(400, ["error" => "Shop name is required"]);
+    $tz = pos_normalize_timezone($body["timezone"] ?? "");
+    $tzOff = pos_tz_offset_for($tz);
+    $address = $body["address"] ?? null;
+    $phone = $body["phone"] ?? null;
+    $email = $body["email"] ?? null;
+    $gstin = $body["gstin"] ?? null;
+    $logoSql = "";
+    $params = [$name, $address, $phone, $email, $gstin, $tz, $tzOff];
+    $types = "sssssss";
+    if (array_key_exists("logo_url", $body)) {
+      $logo = (string) ($body["logo_url"] ?? "");
+      if ($logo !== "" && strpos($logo, "data:image/") !== 0) pos_send(400, ["error" => "Logo must be an uploaded image"]);
+      if (strlen($logo) > 6000000) pos_send(400, ["error" => "Logo is too large"]);
+      $logoSql = ", logo_url = ?";
+      $params[] = $logo !== "" ? $logo : null;
+      $types .= "s";
+    }
+    $params[] = $bid;
+    $types .= "s";
+    pos_q(
+      "UPDATE company_settings SET name = ?, address = ?, phone = ?, email = ?, gstin = ?, timezone = ?, tz_offset = ?{$logoSql} WHERE business_id = ?",
+      $types,
+      $params
+    );
+    pos_q(
+      "UPDATE businesses SET name = ?, address = COALESCE(?, address), mobile = COALESCE(?, mobile),
+         email = COALESCE(?, email), gstin = COALESCE(?, gstin) WHERE id = ?",
+      "ssssss",
+      [$name, $address, $phone, $email, $gstin, $bid]
+    );
+    $rows = pos_q("SELECT * FROM company_settings WHERE business_id = ? LIMIT 1", "s", [$bid]);
+    $co = $rows[0] ?? ["name" => $name];
+    $meta = pos_company_timezone($co);
+    $co["timezone"] = $meta["timezone"];
+    $co["tz_offset"] = $meta["tz_offset"];
+    pos_apply_business_timezone($bid);
+    pos_send(200, ["ok" => true, "company" => $co]);
   }
 
   if ($path === "suppliers" && $method === "GET") {

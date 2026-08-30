@@ -110,8 +110,19 @@ function clearCounterAfterSale(order, result) {
   setHint(`Order accepted · ${orderLabel(order, result)} · ${money(orderTotal(order, result))}`, "ok");
 }
 
+const SHOP_TIMEZONE_OPTIONS = [
+  { id: "Asia/Kolkata", label: "India (IST, UTC+5:30)" },
+  { id: "Asia/Dubai", label: "UAE (UTC+4)" },
+  { id: "Asia/Singapore", label: "Singapore (UTC+8)" },
+  { id: "Asia/Colombo", label: "Sri Lanka (UTC+5:30)" },
+  { id: "Asia/Kathmandu", label: "Nepal (UTC+5:45)" },
+  { id: "UTC", label: "UTC" },
+];
+
 function shopTimezone() {
-  return state.company?.timezone || "Asia/Kolkata";
+  const tz = state.company?.timezone;
+  if (tz && SHOP_TIMEZONE_OPTIONS.some((row) => row.id === tz)) return tz;
+  return "Asia/Kolkata";
 }
 
 function shopYmd(d = new Date()) {
@@ -477,6 +488,7 @@ function renderSettings() {
   $("set-phone").value = state.company.phone || "";
   $("set-email").value = state.company.email || "";
   $("set-gstin").value = state.company.gstin || "";
+  if ($("set-timezone")) $("set-timezone").value = shopTimezone();
   state.logoDraft = null;
   $("set-logo").value = "";
   showLogo($("logo-preview"), state.company.logo_url);
@@ -1061,6 +1073,7 @@ $("settings-form").addEventListener("submit", async (e) => {
       phone: $("set-phone").value,
       email: $("set-email").value,
       gstin: $("set-gstin").value,
+      timezone: $("set-timezone")?.value || shopTimezone(),
     };
     if (state.logoDraft !== null) payload.logo_url = state.logoDraft;
     const data = await api("/api/settings", {
@@ -1071,6 +1084,7 @@ $("settings-form").addEventListener("submit", async (e) => {
     state.logoDraft = null;
     paintHeader();
     renderSettings();
+    tick();
     $("settings-hint").textContent = "Saved";
     $("settings-hint").className = "hint ok";
   } catch (err) {

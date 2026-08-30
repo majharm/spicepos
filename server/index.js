@@ -10,7 +10,7 @@ import { lineAmount, round2, registerCrud } from "./crud.js";
 import { buildReports, reportsToSheets } from "./reports.js";
 import { workbookXml } from "./excel.js";
 import { ensureSchema, seedPlatform } from "./schema.js";
-import { shopTimezonePayload } from "./timezone.js";
+import { companyTimezone, normalizeTimezone, shopTimezonePayload, tzOffsetFor } from "./timezone.js";
 import { attachAuth, registerAuth, requireStaff, requirePerm } from "./auth.js";
 import { registerMaster } from "./master.js";
 import { registerTenant } from "./tenant.js";
@@ -125,7 +125,10 @@ app.get("/api/bootstrap", requireStaff, async (_req, res) => {
         )
       : [];
     res.json({
-      company: { ...(company || { name: business?.name || "POS" }), ...shopTimezonePayload() },
+      company: {
+        ...(company || { name: business?.name || "POS" }),
+        ...companyTimezone(company || {}),
+      },
       business,
       plan: business?.plan_id
         ? (
@@ -281,11 +284,13 @@ app.post("/api/items/:id/receive", requireStaff, requirePerm("stock"), async (re
 
 app.post("/api/settings", requireStaff, requirePerm("settings"), async (req, res) => {
   const body = req.body || {};
-  const { name, address, phone, email, gstin } = body;
+  const { name, address, phone, email, gstin, timezone } = body;
   if (!name || !String(name).trim()) {
     res.status(400).json({ error: "Shop name is required" });
     return;
   }
+  const tz = normalizeTimezone(timezone);
+  const tzOffset = tzOffsetFor(tz);
   let logoSql = "";
   const params = [
     String(name).trim(),
@@ -293,6 +298,8 @@ app.post("/api/settings", requireStaff, requirePerm("settings"), async (req, res
     phone || null,
     email || null,
     gstin || null,
+    tz,
+    tzOffset,
   ];
   if (Object.prototype.hasOwnProperty.call(body, "logo_url")) {
     const logo = body.logo_url ? String(body.logo_url) : "";
@@ -311,7 +318,7 @@ app.post("/api/settings", requireStaff, requirePerm("settings"), async (req, res
   try {
     await query(
       `UPDATE company_settings
-       SET name = ?, address = ?, phone = ?, email = ?, gstin = ?${logoSql}
+       SET name = ?, address = ?, phone = ?, email = ?, gstin = ?, timezone = ?, tz_offset = ?${logoSql}
        WHERE business_id = ?`,
       params,
     );
