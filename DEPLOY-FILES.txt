@@ -1,7 +1,10 @@
-Production deploy bundle — 20260830theme3d
-=========================================
+Production deploy bundle — 20260830atav
+======================================
 
 Upload ALL of these files to Hostinger public_html (overwrite):
+
+Assets
+  assets/atav-telecom-logo.png
 
 HTML
   index.html
@@ -26,6 +29,6 @@ PHP
 After upload: hard-refresh browser (Ctrl+Shift+R) on pos.atavtelecom.in
 
 Verify:
-  - index.html loads css/pos.css?v=20260830theme3d
-  - 3D raised cards, beveled buttons, inset search bar
-  - Bill panel floats with deep shadow
+  - Login page shows ATAV Telecom logo
+  - Theme uses magenta/orange/cyan/cobalt brand colors
+  - css/pos.css?v=20260830atav loads
