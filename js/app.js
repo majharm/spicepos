@@ -489,9 +489,27 @@ function renderSettings() {
   $("set-email").value = state.company.email || "";
   $("set-gstin").value = state.company.gstin || "";
   if ($("set-timezone")) $("set-timezone").value = shopTimezone();
+  paintTimezonePreview();
   state.logoDraft = null;
   $("set-logo").value = "";
   showLogo($("logo-preview"), state.company.logo_url);
+}
+
+function paintTimezonePreview() {
+  const el = $("timezone-preview");
+  if (!el) return;
+  const tz = $("set-timezone")?.value || shopTimezone();
+  const now = new Date();
+  const label = SHOP_TIMEZONE_OPTIONS.find((row) => row.id === tz)?.label || tz;
+  const time = now.toLocaleString("en-IN", {
+    timeZone: tz,
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+  el.textContent = `${label} · now ${time}`;
 }
 
 function telHref(phone) {
@@ -1063,6 +1081,8 @@ $("supplier-form").addEventListener("submit", async (e) => {
     $("sup-hint").className = "hint error";
   }
 });
+
+$("set-timezone")?.addEventListener("change", paintTimezonePreview);
 
 $("settings-form").addEventListener("submit", async (e) => {
   e.preventDefault();

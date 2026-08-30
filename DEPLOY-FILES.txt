@@ -1,4 +1,4 @@
-Production deploy bundle — 20260830deploy
+Production deploy bundle — 20260830prof1
 =======================================
 
 Upload ALL of these files to Hostinger public_html (overwrite):
@@ -32,6 +32,7 @@ Optional .env fallback (if not set in POS Settings):
 After upload: hard-refresh browser (Ctrl+Shift+R) on pos.atavtelecom.in
 
 Verify:
-  - index.html loads app.js?v=20260830deploy
+  - index.html loads app.js?v=20260830prof1
+  - Settings page shows timezone dropdown under Regional
   - Save order on counter → no order_number error
   - Cart clears, shows "Order accepted · SO-xxxxx"
