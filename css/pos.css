@@ -848,6 +848,49 @@ tr:hover td { background: #f4f6fd; }
   border: 1px solid var(--line-strong);
   box-shadow: var(--elev-inset);
 }
+.thermal-preview {
+  max-width: 360px;
+  margin: 0 auto;
+  padding: 12px;
+  background: #fff;
+  border: 1px dashed var(--line-strong);
+  border-radius: 10px;
+  overflow: auto;
+  max-height: 520px;
+  box-shadow: var(--elev-inset);
+}
+.thermal-preview .thermal-invoice {
+  font-family: "Courier New", Courier, ui-monospace, monospace;
+  font-size: 11px;
+  line-height: 1.35;
+  color: #111;
+}
+.thermal-preview .inv-logo { display: block; max-height: 52px; max-width: 100%; margin: 0 auto 6px; }
+.thermal-preview .inv-head { text-align: center; }
+.thermal-preview .inv-shop { font-size: 14px; margin: 0 0 4px; font-weight: 700; }
+.thermal-preview .inv-addr, .thermal-preview .inv-meta { margin: 2px 0; font-size: 10px; }
+.thermal-preview .inv-title { margin: 8px 0 2px; font-size: 12px; font-weight: 800; letter-spacing: 0.08em; }
+.thermal-preview .inv-rule { border-top: 1px dashed #111; margin: 6px 0; }
+.thermal-preview .inv-details .inv-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+  margin: 2px 0;
+  font-size: 10px;
+}
+.thermal-preview .inv-table, .thermal-preview .inv-totals { width: 100%; border-collapse: collapse; font-size: 10px; }
+.thermal-preview .inv-table th, .thermal-preview .inv-table td, .thermal-preview .inv-totals td { padding: 2px 0; vertical-align: top; }
+.thermal-preview .inv-table th { border-bottom: 1px solid #111; text-align: left; font-size: 9px; }
+.thermal-preview .inv-num { text-align: right; white-space: nowrap; }
+.thermal-preview .inv-item { font-weight: 700; padding-top: 4px; }
+.thermal-preview .inv-hsn { font-size: 9px; }
+.thermal-preview .inv-tax td { font-size: 9px; color: #333; padding-bottom: 3px; }
+.thermal-preview .inv-gst td { font-size: 9px; }
+.thermal-preview .inv-gst-total td { border-top: 1px dashed #111; padding-top: 4px; }
+.thermal-preview .inv-grand td { font-size: 12px; padding-top: 4px; }
+.thermal-preview .inv-pay { text-align: center; margin: 6px 0; font-size: 11px; }
+.thermal-preview .inv-footer, .thermal-preview .inv-terms { text-align: center; font-size: 9px; margin: 4px 0; }
+.thermal-preview .inv-powered { text-align: center; font-size: 8px; margin-top: 8px; color: #444; }
 .held-item, .order-item {
   display: flex;
   justify-content: space-between;

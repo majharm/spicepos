@@ -1,4 +1,4 @@
-Production deploy bundle — 20260830deploy11
+Production deploy bundle — 20260830deploy12
 =========================================
 
 Upload ALL files below to Hostinger public_html (overwrite):
@@ -17,6 +17,7 @@ CSS
 
 JavaScript
   js/app.js
+  js/invoice.js
   js/dev-mode.js
   js/master.js
   js/pos-api.js
@@ -44,6 +45,8 @@ After upload:
   2. Hard-refresh browser (Ctrl+Shift+R)
 
 FIXES in this bundle
+  - Thermal tax invoice print for sales orders (80mm, GST breakdown, HSN, CGST/SGST)
+  - Sales orders renamed to Invoices in POS nav
   - GST reports: output/input by rate, HSN itemwise, B2B/B2C sales, net GST summary
   - Full PHP reports API (not just summary) for production without Node
   - Excel export for all GST sheets (PHP + Node)

@@ -727,52 +727,31 @@ async function loadReports() {
 
 let orderCache = [];
 
-function receiptText(o) {
-  const pack =
-    o.pack_name
-      ? `Pack type: ${o.pack_name} × ${o.pack_count || 1}`
-      : "Pack type: Loose items (no pack)";
-  return [
-    state.company.name,
-    state.company.address,
-    o.order_number,
-    o.customer_name,
-    pack,
-    formatShopDateTime(o.created_at || ""),
-    "------------------------------",
-    ...(o.lines || []).map(
-      (l) => `${l.item_name} ${l.quantity_gm}g @ ${l.rate_per_kg}/kg = ${money(l.amount)}`,
-    ),
-    "------------------------------",
-    `Subtotal ${money(o.subtotal)}`,
-    `GST ${money(o.gst)}`,
-    `TOTAL ${money(o.total)}`,
-    `${o.payment_method} · ${o.payment_status}`,
-  ]
-    .filter((line) => line !== undefined)
-    .join("\n");
+function invoiceCtx() {
+  return {
+    company: state.company,
+    customers: state.customers,
+    items: state.items,
+    formatDateTime: formatShopDateTime,
+    money,
+    escapeHtml,
+  };
 }
 
 function printOrder(o) {
-  const w = window.open("", "print", "width=720,height=900");
-  const logo = state.company.logo_url
-    ? `<img src="${state.company.logo_url}" alt="" style="max-height:80px;max-width:200px;display:block;margin:0 auto 12px">`
-    : "";
-  w.document.write(`<!DOCTYPE html><html><head><title>${escapeHtml(o.order_number)}</title>
-    <style>body{font-family:ui-monospace,monospace;padding:24px;text-align:center} h1{font-size:18px} pre{white-space:pre-wrap;text-align:left}</style>
-    </head><body>
-    ${logo}
-    <h1>${escapeHtml(state.company.name || "")}</h1>
-    <pre>${escapeHtml(receiptText(o))}</pre>
-    <script>window.onload=()=>{window.print();}</script>
-    </body></html>`);
+  const w = window.open("", "invoice-print", "width=400,height=720");
+  if (!w) {
+    setHint("Allow pop-ups to print invoices", "error");
+    return;
+  }
+  w.document.write(InvoicePrint.thermalInvoiceDocument(o, invoiceCtx()));
   w.document.close();
 }
 
 function showOrder(o) {
-  $("order-pane").innerHTML = `<pre class="receipt">${escapeHtml(receiptText(o))}</pre>
+  $("order-pane").innerHTML = `<div class="thermal-preview">${InvoicePrint.invoiceBody(o, invoiceCtx())}</div>
     <div class="print-actions">
-      <button class="btn primary" type="button" data-print="${escapeHtml(o.id)}">Print</button>
+      <button class="btn primary" type="button" data-print="${escapeHtml(o.id)}">Print invoice</button>
       <button class="btn" type="button" data-edit-order="${escapeHtml(o.id)}">Edit</button>
     </div>`;
 }
@@ -783,7 +762,7 @@ async function loadOrders() {
     .map(
       (o) => `<button class="order-item" type="button" data-oid="${escapeHtml(o.id)}">
         <span>${escapeHtml(o.order_number)} · ${escapeHtml(o.customer_name)}<br>
-        <small>${escapeHtml(o.pack_name ? `Pack: ${o.pack_name} × ${o.pack_count || 1}` : "Loose items")} · ${escapeHtml(o.payment_method)} · ${escapeHtml(formatShopDateTime(o.created_at))}</small></span>
+        <small>Invoice · ${escapeHtml(o.pack_name ? `Pack: ${o.pack_name} × ${o.pack_count || 1}` : "Loose items")} · ${escapeHtml(o.payment_method)} · ${escapeHtml(formatShopDateTime(o.created_at))}</small></span>
         <span>${money(o.total)}</span>
       </button>`,
     )
@@ -949,30 +928,42 @@ $("btn-pay").addEventListener("click", async () => {
     const order = orderFromResult(result);
     if (!orderSaved(result)) throw new Error("Checkout did not return an order");
     clearCounterAfterSale(order, result);
-    const receiptOrder = {
-      order_number: orderLabel(order, result),
-      total: orderTotal(order, result),
-      customer_name: customer()?.name || "Walk-in",
-      payment_method: $("pay-method").value,
-      payment_status: "paid",
-      lines: order?.lines || state.cart.map((l) => {
-        const item = state.items.find((i) => i.id === l.itemId);
-        return {
-          item_name: item?.name || "Item",
-          quantity_gm: l.qtyGm,
-          rate_per_kg: item ? rateFor(item) : 0,
-          amount: item ? lineAmt(item, l.qtyGm) : 0,
-        };
-      }),
-      subtotal: order?.subtotal,
-      gst: order?.gst,
-      created_at: order?.created_at || new Date().toISOString(),
-    };
+    let receiptOrder = order;
+    if (!receiptOrder) {
+      receiptOrder = {
+        order_number: orderLabel(order, result),
+        total: orderTotal(order, result),
+        customer_name: customer()?.name || "Walk-in",
+        customer_id: state.customerId,
+        payment_method: $("pay-method").value,
+        payment_status: "paid",
+        lines: [],
+        subtotal: 0,
+        gst: 0,
+        created_at: new Date().toISOString(),
+      };
+    }
+    if (!receiptOrder.lines?.length) {
+      receiptOrder = {
+        ...receiptOrder,
+        lines: state.cart.map((l) => {
+          const item = state.items.find((i) => i.id === l.itemId);
+          return {
+            item_id: l.itemId,
+            item_name: item?.name || "Item",
+            quantity_gm: l.qtyGm,
+            rate_per_kg: item ? rateFor(item) : 0,
+            amount: item ? lineAmt(item, l.qtyGm) : 0,
+            gst_rate: item?.gst_rate || 0,
+          };
+        }),
+      };
+    }
     showOrder(receiptOrder);
-    $("modal-title").textContent = `Order accepted · ${orderLabel(order, result)}`;
+    $("modal-title").textContent = `Invoice ${orderLabel(order, result)}`;
     $("modal-body").innerHTML = `<p class="hint ok">Bill saved. POS cleared for the next customer.</p>
-      <pre class="receipt">${escapeHtml(receiptText(receiptOrder))}</pre>
-      <div class="print-actions"><button class="btn primary" type="button" id="modal-print">Print</button></div>`;
+      <div class="thermal-preview">${InvoicePrint.invoiceBody(receiptOrder, invoiceCtx())}</div>
+      <div class="print-actions"><button class="btn primary" type="button" id="modal-print">Print invoice</button></div>`;
     $("modal").hidden = false;
     $("modal-print").onclick = () => printOrder(receiptOrder);
     showView("counter");
