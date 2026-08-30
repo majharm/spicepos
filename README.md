@@ -42,14 +42,12 @@ This app is **Express + MySQL**, not a React/Vite frontend. In hPanel use **Node
 
 Do **not** deploy this as a normal PHP/static website in `public_html`. Create **Add website → Node.js web app → Express**, with **no output directory** and **no build command**.
 
-If the site shows **403 Forbidden / Access to this resource on the server is denied**:
-1. Pull the latest commit (HTML is at the repo root again; there is no `index.js` for Apache to execute).
-2. In hPanel **Redeploy** so Hostinger regenerates `public_html/.htaccess`.
-3. **Restart** the Node process.
-4. If login still shows a web page for `/pos-data/health`, this repo now ships a Passenger `.htaccess` (no React `index.html` fallback). Restart Node. If you get **403**, in hPanel click **Redeploy** so Hostinger can merge its CloudLinux Passenger block, then Restart again.
-5. Confirm `/` opens the POS and `/pos-api.php?p=health` returns JSON.
-
-Open `https://your-domain/pos-api.php?p=health` — it must be JSON (`{"ok":true,...}`), not a web page or 403. That file exists so Apache will not replace it with `index.html`. Login uses it first.
+If the site shows **403 Forbidden** or Hostinger **This Page Does Not Exist** for `/api/health`:
+1. This repo must **not** contain `.htaccess` (Hostinger writes that file itself).
+2. In hPanel open the **Node.js web app** for `pos.atavtelecom.in` (not a static/PHP website).
+3. Click **Redeploy** so Hostinger regenerates `public_html/.htaccess` with the CloudLinux Passenger block.
+4. **Restart** the Node process (entry `server.js`, Express, empty build/output).
+5. Open `/api/health` — it must be JSON `{"ok":true,...}`, not a 404 page.
 
 Hostinger sets `PORT` and `NODE_ENV=production`. The process must listen on `process.env.PORT` (already wired).
 
