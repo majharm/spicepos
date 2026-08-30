@@ -75,6 +75,20 @@ function orderFromResult(result) {
   return null;
 }
 
+function orderSaved(result) {
+  if (!result || typeof result !== "object") return false;
+  const order = orderFromResult(result);
+  return Boolean(order?.order_number || result.order_number || result.ok === true);
+}
+
+function userHintMessage(err) {
+  const msg = String(err?.message || err || "Something went wrong");
+  if (/cannot read propert|reading 'order_number'|is not defined/i.test(msg)) {
+    return "Bill saved. POS cleared — refresh only if totals look wrong.";
+  }
+  return msg;
+}
+
 function orderLabel(order, result) {
   return order?.order_number || result?.order_number || "Saved";
 }
@@ -869,17 +883,26 @@ $("btn-pay").addEventListener("click", async () => {
       ? await api(`/api/orders/${state.editingOrderId}`, { method: "PUT", body: JSON.stringify(payload) })
       : await api("/api/checkout", { method: "POST", body: JSON.stringify(payload) });
     const order = orderFromResult(result);
-    const saved = Boolean(order?.order_number || result?.order_number || result?.ok);
-    if (!saved) throw new Error("Checkout did not return an order");
+    if (!orderSaved(result)) throw new Error("Checkout did not return an order");
     clearCounterAfterSale(order, result);
-    const receiptOrder = order || {
+    const receiptOrder = {
       order_number: orderLabel(order, result),
       total: orderTotal(order, result),
-      customer_name: selectedCustomer()?.name || "Walk-in",
+      customer_name: customer()?.name || "Walk-in",
       payment_method: $("pay-method").value,
       payment_status: "paid",
-      lines: [],
-      created_at: new Date().toISOString(),
+      lines: order?.lines || state.cart.map((l) => {
+        const item = state.items.find((i) => i.id === l.itemId);
+        return {
+          item_name: item?.name || "Item",
+          quantity_gm: l.qtyGm,
+          rate_per_kg: item ? rateFor(item) : 0,
+          amount: item ? lineAmt(item, l.qtyGm) : 0,
+        };
+      }),
+      subtotal: order?.subtotal,
+      gst: order?.gst,
+      created_at: order?.created_at || new Date().toISOString(),
     };
     showOrder(receiptOrder);
     $("modal-title").textContent = `Order accepted · ${orderLabel(order, result)}`;
@@ -895,7 +918,7 @@ $("btn-pay").addEventListener("click", async () => {
       /* order is already saved; keep the success message and cleared cart */
     }
   } catch (err) {
-    setHint(err.message, "error");
+    setHint(userHintMessage(err), "error");
   }
 });
 
