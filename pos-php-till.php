@@ -69,7 +69,10 @@ function pos_php_till_dispatch($path, $method, $body) {
       $outPacks[] = $p;
     }
     pos_send(200, [
-      "company" => $co[0] ?? ["name" => $business["name"] ?? "POS"],
+      "company" => array_merge($co[0] ?? ["name" => $business["name"] ?? "POS"], [
+        "timezone" => pos_shop_timezone(),
+        "tzOffset" => pos_shop_tz_offset(),
+      ]),
       "business" => $business,
       "plan" => $plan,
       "support" => pos_platform_settings(),

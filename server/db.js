@@ -1,4 +1,5 @@
 import mysql from "mysql2/promise";
+import { SHOP_TZ_OFFSET } from "./timezone.js";
 
 function fromUrl(url) {
   const u = new URL(url);
@@ -28,6 +29,10 @@ const pool = mysql.createPool({
   charset: "utf8mb4",
   timezone: "Z",
   ssl: process.env.DB_SSL === "1" ? { rejectUnauthorized: false } : undefined,
+});
+
+pool.on("connection", (connection) => {
+  connection.query(`SET time_zone = '${SHOP_TZ_OFFSET}'`);
 });
 
 export const BUSINESS_ID =

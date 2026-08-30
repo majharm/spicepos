@@ -10,6 +10,7 @@ import { lineAmount, round2, registerCrud } from "./crud.js";
 import { buildReports, reportsToSheets } from "./reports.js";
 import { workbookXml } from "./excel.js";
 import { ensureSchema, seedPlatform } from "./schema.js";
+import { shopTimezonePayload } from "./timezone.js";
 import { attachAuth, registerAuth, requireStaff, requirePerm } from "./auth.js";
 import { registerMaster } from "./master.js";
 import { registerTenant } from "./tenant.js";
@@ -124,7 +125,7 @@ app.get("/api/bootstrap", requireStaff, async (_req, res) => {
         )
       : [];
     res.json({
-      company: company || { name: business?.name || "POS" },
+      company: { ...(company || { name: business?.name || "POS" }), ...shopTimezonePayload() },
       business,
       plan: business?.plan_id
         ? (

@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" />
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./css/pos.css?v=20260830j" />
+    <link rel="stylesheet" href="./css/pos.css?v=20260830k" />
     <link rel="stylesheet" href="./css/saas.css?v=20260830j" />
   </head>
   <body>
@@ -38,7 +38,10 @@
         <div class="nav-foot">
           <div class="chip">Today <b id="today-total">₹0.00</b></div>
           <div class="chip">Bills <b id="today-count">0</b></div>
-          <div class="chip" id="clock">--:--</div>
+          <div class="chip clock-chip" id="clock-chip" title="Shop local time">
+            <b id="clock">--:--</b>
+            <small id="clock-meta"></small>
+          </div>
           <button class="btn-logout" type="button" data-logout>Logout</button>
         </div>
       </nav>
@@ -305,7 +308,7 @@
       </div>
     </div>
     <script src="./js/pos-api.js?v=20260830f"></script>
-    <script src="./js/app.js?v=20260830i"></script>
+    <script src="./js/app.js?v=20260830j"></script>
     <script src="./js/x-pos-20260830e.js"></script>
   </body>
 </html>

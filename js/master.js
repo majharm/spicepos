@@ -173,6 +173,20 @@ document.querySelectorAll("[data-tab]").forEach((btn) => {
   };
 });
 
+function formatPlatformTime(value) {
+  if (!value) return "";
+  const d = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(d.getTime())) return String(value);
+  return d.toLocaleString("en-IN", {
+    timeZone: "Asia/Kolkata",
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 function auditDetails(row) {
   const target = row.target_name || "";
   let extra = "";
@@ -514,7 +528,7 @@ async function render() {
       body.innerHTML = table(
         ["When", "Actor", "Action", "Module", "Business", "Order / details"],
         rows.map((r) => [
-          r.created_at,
+          formatPlatformTime(r.created_at),
           r.actor_name,
           r.action,
           r.module,

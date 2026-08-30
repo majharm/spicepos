@@ -175,6 +175,7 @@ select {
   color: #d8c3b4;
 }
 .nav-foot .chip b { color: #fff; }
+.nav-foot .clock-chip b { color: #fff; }
 
 .btn-logout {
   width: 100%;
@@ -265,6 +266,22 @@ select {
   color: var(--muted);
 }
 .chip b { color: var(--text); font-weight: 800; }
+.clock-chip {
+  display: grid;
+  gap: 2px;
+  line-height: 1.2;
+  padding: 8px 12px;
+}
+.clock-chip b {
+  color: #fff;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+.clock-chip small {
+  color: #d8c3b4;
+  font-size: 10px;
+  font-weight: 600;
+}
 .btn {
   border: 1px solid var(--line-strong);
   background: #fff;

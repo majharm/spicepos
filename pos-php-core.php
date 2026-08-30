@@ -134,6 +134,14 @@ function pos_db_cfg() {
   return $cfg;
 }
 
+function pos_shop_timezone() {
+  return pos_env("POS_TIMEZONE", "Asia/Kolkata");
+}
+
+function pos_shop_tz_offset() {
+  return pos_env("POS_TZ_OFFSET", "+05:30");
+}
+
 function pos_db() {
   static $db = null;
   if ($db instanceof mysqli) return $db;
@@ -148,6 +156,8 @@ function pos_db() {
     throw new Exception("MySQL connect failed. Check DB_* in .env (host is usually localhost on Hostinger).");
   }
   $db->set_charset("utf8mb4");
+  $tz = pos_shop_tz_offset();
+  if ($tz !== "") @$db->query("SET time_zone = '" . $db->real_escape_string($tz) . "'");
   return $db;
 }
 

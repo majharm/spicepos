@@ -96,11 +96,48 @@ function clearCounterAfterSale(order, result) {
   setHint(`Order accepted · ${orderLabel(order, result)} · ${money(orderTotal(order, result))}`, "ok");
 }
 
-function ymd(d = new Date()) {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
+function shopTimezone() {
+  return state.company?.timezone || "Asia/Kolkata";
+}
+
+function shopYmd(d = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: shopTimezone(),
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(d);
+  const y = parts.find((p) => p.type === "year")?.value;
+  const m = parts.find((p) => p.type === "month")?.value;
+  const day = parts.find((p) => p.type === "day")?.value;
   return `${y}-${m}-${day}`;
+}
+
+function formatShopDateTime(value) {
+  if (!value) return "";
+  const d = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(d.getTime())) return String(value);
+  return d.toLocaleString("en-IN", {
+    timeZone: shopTimezone(),
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function formatShopTime(d = new Date()) {
+  return d.toLocaleTimeString("en-IN", {
+    timeZone: shopTimezone(),
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+}
+
+function ymd(d = new Date()) {
+  return shopYmd(d);
 }
 
 function showLogo(img, url) {
@@ -561,8 +598,14 @@ async function loadToday() {
 
 async function loadReports() {
   if (!$("rep-from").value) {
-    const now = new Date();
-    $("rep-from").value = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
+    const parts = new Intl.DateTimeFormat("en-CA", {
+      timeZone: shopTimezone(),
+      year: "numeric",
+      month: "2-digit",
+    }).formatToParts(new Date());
+    const year = parts.find((p) => p.type === "year")?.value;
+    const month = parts.find((p) => p.type === "month")?.value;
+    $("rep-from").value = `${year}-${month}-01`;
   }
   if (!$("rep-to").value) $("rep-to").value = ymd();
   const from = $("rep-from").value;
@@ -583,7 +626,7 @@ async function loadReports() {
       .map(([k, v]) => `<div class="report-card"><span>${k}</span><strong>${v}</strong></div>`)
       .join("");
     $("reports").innerHTML = [
-      reportBlock("Sales bills", "Sales bills", ["Order", "Customer", "Type", "Pack", "Pack count", "Status", "Qty g", "Taxable", "GST", "Total", "Pay", "Pay status", "Date"], (data.sales || []).map((o) => [o.order_number, o.customer_name, o.customer_type, o.pack_name || "Loose items", Number(o.pack_count) || 0, o.status, Number(o.total_quantity_gm) || 0, Number(o.subtotal) || 0, Number(o.gst) || 0, Number(o.total) || 0, o.payment_method, o.payment_status, String(o.created_at)])),
+      reportBlock("Sales bills", "Sales bills", ["Order", "Customer", "Type", "Pack", "Pack count", "Status", "Qty g", "Taxable", "GST", "Total", "Pay", "Pay status", "Date"], (data.sales || []).map((o) => [o.order_number, o.customer_name, o.customer_type, o.pack_name || "Loose items", Number(o.pack_count) || 0, o.status, Number(o.total_quantity_gm) || 0, Number(o.subtotal) || 0, Number(o.gst) || 0, Number(o.total) || 0, o.payment_method, o.payment_status, formatShopDateTime(o.created_at)])),
       reportBlock("Item sales", "Item sales", ["Item", "Qty g", "Amount", "GST"], (data.byItem || []).map((r) => [r.item_name, Number(r.quantity_gm) || 0, Number(r.amount) || 0, Number(r.gst) || 0])),
       reportBlock("Customer sales", "Customer sales", ["Customer", "Type", "Bills", "Takings", "GST"], (data.byCustomer || []).map((r) => [r.customer_name, r.customer_type, Number(r.bills) || 0, Number(r.takings) || 0, Number(r.gst) || 0])),
       reportBlock("Pack sales", "Pack sales", ["Pack type", "Pack count", "Bills", "Takings"], (data.byPack || []).map((r) => [r.pack_type, Number(r.pack_count) || 0, Number(r.bills) || 0, Number(r.takings) || 0])),
@@ -615,7 +658,7 @@ function receiptText(o) {
     o.order_number,
     o.customer_name,
     pack,
-    String(o.created_at || ""),
+    formatShopDateTime(o.created_at || ""),
     "------------------------------",
     ...(o.lines || []).map(
       (l) => `${l.item_name} ${l.quantity_gm}g @ ${l.rate_per_kg}/kg = ${money(l.amount)}`,
@@ -660,7 +703,7 @@ async function loadOrders() {
     .map(
       (o) => `<button class="order-item" type="button" data-oid="${escapeHtml(o.id)}">
         <span>${escapeHtml(o.order_number)} · ${escapeHtml(o.customer_name)}<br>
-        <small>${escapeHtml(o.pack_name ? `Pack: ${o.pack_name} × ${o.pack_count || 1}` : "Loose items")} · ${escapeHtml(o.payment_method)}</small></span>
+        <small>${escapeHtml(o.pack_name ? `Pack: ${o.pack_name} × ${o.pack_count || 1}` : "Loose items")} · ${escapeHtml(o.payment_method)} · ${escapeHtml(formatShopDateTime(o.created_at))}</small></span>
         <span>${money(o.total)}</span>
       </button>`,
     )
@@ -1071,13 +1114,26 @@ function readLogoFile(file) {
   });
 }
 
-$("po-date").value = new Date().toISOString().slice(0, 10);
+$("po-date").value = shopYmd();
 
 function tick() {
-  $("clock").textContent = new Date().toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
+  const now = new Date();
+  const tz = shopTimezone();
+  const clock = $("clock");
+  const meta = $("clock-meta");
+  if (clock) {
+    clock.textContent = formatShopTime(now);
+    const abbr =
+      new Intl.DateTimeFormat("en-IN", { timeZone: tz, timeZoneName: "short" })
+        .formatToParts(now)
+        .find((p) => p.type === "timeZoneName")?.value || tz;
+    const date = now.toLocaleDateString("en-IN", { timeZone: tz, weekday: "short", day: "numeric", month: "short" });
+    if (meta) meta.textContent = `${date} · ${abbr}`;
+    $("clock-chip")?.setAttribute("title", `${date} · ${abbr} (${tz})`);
+  }
 }
 tick();
-setInterval(tick, 15000);
+setInterval(tick, 1000);
 
 document.addEventListener("click", async (e) => {
   const logout = e.target.closest("[data-logout]");
@@ -1092,7 +1148,7 @@ $("btn-hold")?.addEventListener("click", async () => {
     await api("/api/holds", {
       method: "POST",
       body: JSON.stringify({
-        label: `Hold ${new Date().toLocaleTimeString("en-IN")}`,
+        label: `Hold ${formatShopTime()}`,
         payload: { cart: state.cart, customerId: state.customerId, lastPack: state.lastPack },
       }),
     });
