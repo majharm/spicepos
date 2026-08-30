@@ -124,6 +124,11 @@ app.get("/api/bootstrap", requireStaff, async (_req, res) => {
           packs.map((p) => p.id),
         )
       : [];
+    const notes = await query(
+      `SELECT id, title, body, created_at FROM notifications
+       WHERE business_id IS NULL OR business_id = ? ORDER BY created_at DESC LIMIT 8`,
+      [businessId],
+    );
     res.json({
       company: {
         ...(company || { name: business?.name || "POS" }),
@@ -139,6 +144,7 @@ app.get("/api/bootstrap", requireStaff, async (_req, res) => {
           )[0] || null
         : null,
       support: await getPlatformSettings(),
+      notes,
       items,
       customers,
       packs: packs.map((p) => ({

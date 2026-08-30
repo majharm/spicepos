@@ -597,16 +597,35 @@ async function render() {
         ]),
       );
     } else if (tab === "notes") {
-      body.innerHTML = `<form class="settings" id="note-form">
+      const businesses = await api("/api/master/businesses");
+      body.innerHTML = `<form class="settings wide" id="note-form">
+        <label>Send to
+          <select name="business_id">
+            <option value="">All businesses</option>
+            ${businesses.map((b) => `<option value="${attr(b.id)}">${attr(b.name)}</option>`).join("")}
+          </select>
+        </label>
         <label>Title <input name="title" required /></label>
-        <label>Body <input name="body" /></label>
-        <button class="btn primary">Send</button>
+        <label>Body <textarea name="body" rows="3"></textarea></label>
+        <button class="btn primary">Send notification</button>
+        <p class="hint" id="note-hint"></p>
       </form>`;
       $("note-form").onsubmit = async (e) => {
         e.preventDefault();
+        const hint = $("note-hint");
         const fd = Object.fromEntries(new FormData(e.target).entries());
-        await api("/api/master/notifications", { method: "POST", body: JSON.stringify(fd) });
-        e.target.reset();
+        if (!fd.business_id) delete fd.business_id;
+        hint.className = "hint";
+        hint.textContent = "Sending…";
+        try {
+          await api("/api/master/notifications", { method: "POST", body: JSON.stringify(fd) });
+          e.target.reset();
+          hint.textContent = "Notification sent. It appears on the business dashboard.";
+          hint.className = "hint ok";
+        } catch (err) {
+          hint.textContent = err.message;
+          hint.className = "hint error";
+        }
       };
     } else if (tab === "support") {
       const s = await api("/api/master/support");

@@ -73,11 +73,20 @@ function pos_php_till_dispatch($path, $method, $body) {
     $tzMeta = pos_company_timezone($coRow);
     $coRow["timezone"] = $tzMeta["timezone"];
     $coRow["tz_offset"] = $tzMeta["tz_offset"];
+    $notes = [];
+    try {
+      $notes = pos_q(
+        "SELECT id, title, body, created_at FROM notifications WHERE business_id IS NULL OR business_id = ? ORDER BY created_at DESC LIMIT 8",
+        "s",
+        [$bid]
+      );
+    } catch (Exception $e) { /* optional */ }
     pos_send(200, [
       "company" => $coRow,
       "business" => $business,
       "plan" => $plan,
       "support" => pos_platform_settings(),
+      "notes" => $notes,
       "items" => $items,
       "customers" => $customers,
       "packs" => $outPacks,

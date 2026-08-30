@@ -255,6 +255,7 @@ function showView(name) {
   if (name === "suppliers") loadSuppliers();
   if (name === "support") renderSupport();
   if (name === "dashboard") loadDashboard();
+  if (state.impersonating) paintImpersonationBanner({ impersonating: true, impersonator: state.impersonator, business: state.businessMeta });
   if (name === "stock") loadStock();
   if (name === "staff") loadStaff();
   if (name === "branches") loadBranches();
@@ -581,6 +582,7 @@ async function loadBootstrap() {
   state.items = data.items;
   state.customers = data.customers;
   state.packs = data.packs;
+  paintPlatformNotices(data.notes);
   paintHeader();
   paintPlatformSupport();
   renderCustomersSelect();
@@ -603,6 +605,7 @@ async function loadDashboard() {
   try {
     const d = await api("/api/dashboard");
     $("dash-welcome").textContent = `${state.session?.name || ""} · ${state.session?.role || ""} · ${state.company.name || ""}`;
+    paintPlatformNotices(d.notes);
     $("dash-kpis").innerHTML = [
       ["Today's sales", money(d.today?.takings)],
       ["Today's bills", d.today?.bills],
@@ -1284,17 +1287,43 @@ $("stock-form")?.addEventListener("submit", async (e) => {
   loadBootstrap();
 });
 
+function paintPlatformNotices(notes) {
+  const list = Array.isArray(notes) ? notes : [];
+  const top = $("platform-notices");
+  const dash = $("dash-notes");
+  const html = list
+    .map(
+      (n) =>
+        `<div class="platform-notice"><strong>${escapeHtml(n.title || "Notice")}</strong>${escapeHtml(n.body || "")}</div>`,
+    )
+    .join("");
+  if (top) {
+    if (list.length) {
+      top.innerHTML = html;
+      top.hidden = false;
+      top.removeAttribute("hidden");
+    } else {
+      top.innerHTML = "";
+      top.hidden = true;
+    }
+  }
+  if (dash) dash.innerHTML = html;
+}
+
 function paintImpersonationBanner(me) {
   const el = $("impersonate-banner");
   if (!el) return;
   if (me?.impersonating) {
+    el.removeAttribute("hidden");
     el.hidden = false;
+    el.style.display = "flex";
     const who = me.impersonator?.name || me.impersonator?.email || "Master admin";
     const shop = me.business?.name || "this shop";
     $("impersonate-text").textContent = `${who} is viewing ${shop} (full access).`;
     $("expired-banner").hidden = true;
   } else {
     el.hidden = true;
+    el.style.display = "";
   }
 }
 

@@ -7,6 +7,24 @@ import { registerBusiness, updateBusiness } from "./onboard.js";
 import { defaultPerms } from "./roles.js";
 import { publicStatus } from "./auth.js";
 import { getPlatformSettings, setPlatformSetting } from "./settings.js";
+import crypto from "node:crypto";
+
+async function recordMasterVisit(admin, businessId, detail = "") {
+  try {
+    const who = admin?.name || admin?.email || "Master admin";
+    let body = `${who} opened this shop from Master Admin`;
+    if (detail) body += ` (${detail})`;
+    body += ".";
+    await query("INSERT INTO notifications (id, business_id, title, body) VALUES (?,?,?,?)", [
+      crypto.randomUUID(),
+      businessId,
+      "Master admin login",
+      body,
+    ]);
+  } catch {
+    /* optional table */
+  }
+}
 
 function send(res, fn) {
   return Promise.resolve()
@@ -229,6 +247,7 @@ export function registerMaster(app) {
         branchId: branch?.id || user.branch_id,
         impersonatorAdminId: req.auth.admin.id,
       });
+      await recordMasterVisit(req.auth.admin, business.id, displayName(user));
       await platformAudit(
         req.auth.admin,
         "Entered Business POS",
@@ -257,6 +276,7 @@ export function registerMaster(app) {
         branchId: branch?.id || user.branch_id,
         impersonatorAdminId: req.auth.admin.id,
       });
+      await recordMasterVisit(req.auth.admin, business.id, user.email);
       await platformAudit(
         req.auth.admin,
         "Entered User POS",
