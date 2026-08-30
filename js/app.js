@@ -1284,6 +1284,20 @@ $("stock-form")?.addEventListener("submit", async (e) => {
   loadBootstrap();
 });
 
+function paintImpersonationBanner(me) {
+  const el = $("impersonate-banner");
+  if (!el) return;
+  if (me?.impersonating) {
+    el.hidden = false;
+    const who = me.impersonator?.name || me.impersonator?.email || "Master admin";
+    const shop = me.business?.name || "this shop";
+    $("impersonate-text").textContent = `${who} is viewing ${shop} (full access).`;
+    $("expired-banner").hidden = true;
+  } else {
+    el.hidden = true;
+  }
+}
+
 async function boot() {
   try {
     const { res, data: me } = await posRequest("/api/auth/me");
@@ -1298,6 +1312,9 @@ async function boot() {
     state.session = me.user;
     state.perms = me.user.permissions || {};
     state.businessMeta = me.business || null;
+    state.impersonating = Boolean(me.impersonating);
+    state.impersonator = me.impersonator || null;
+    paintImpersonationBanner(me);
     if (window.DevMode) {
       DevMode.init({
         session: state.session,
@@ -1310,7 +1327,7 @@ async function boot() {
       $("session-who").textContent = `${me.user.name || me.user.email} · ${me.user.role || ""} · ${me.business?.name || ""}`;
     }
     applyNav();
-    if (me.business?.status && me.business.status !== "active") {
+    if (me.business?.status && me.business.status !== "active" && !me.impersonating) {
       $("expired-banner").hidden = false;
       $("shop-name").textContent = me.business.name || "POS";
       showView("dashboard");

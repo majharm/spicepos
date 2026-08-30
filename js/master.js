@@ -211,6 +211,25 @@ function businessLabel(row) {
   return row.business_id || "—";
 }
 
+async function enterBusinessPos(businessId) {
+  await api(`/api/master/businesses/${businessId}/enter`, { method: "POST" });
+  location.href = "/index.html";
+}
+
+function bindEnterPosButtons(root) {
+  root.querySelectorAll("[data-enter]").forEach((btn) => {
+    btn.onclick = async () => {
+      btn.disabled = true;
+      try {
+        await enterBusinessPos(btn.dataset.enter);
+      } catch (err) {
+        alert(err.message || "Could not open POS");
+        btn.disabled = false;
+      }
+    };
+  });
+}
+
 async function render() {
   const titles = {
     dash: "Platform dashboard",
@@ -247,7 +266,7 @@ async function render() {
           .join("")}
       </div>
       <div class="table-wrap" style="padding:20px 0">${table(
-        ["Business", "Status", "Plan", "Fee / month", "Users", "Branches", "Today"],
+        ["Business", "Status", "Plan", "Fee / month", "Users", "Branches", "Today", "POS"],
         d.businesses.map((b) => [
           b.name,
           b.computed_status,
@@ -256,8 +275,10 @@ async function render() {
           b.users,
           b.branches,
           money(b.today_sales),
+          `<button class="btn primary" type="button" data-enter="${b.id}">Open POS</button>`,
         ]),
       )}</div>`;
+      bindEnterPosButtons(body);
     } else if (tab === "biz") {
       const [rows, plans] = await Promise.all([api("/api/master/businesses"), api("/api/master/plans")]);
       const planOptions = plans
@@ -334,7 +355,7 @@ async function render() {
         <p class="hint full" id="biz-hint"></p>
       </form>
       <div class="table-wrap">${table(
-        ["Name", "Owner", "City", "Category", "Status", "Plan", "Fee / month", "Expiry", ""],
+        ["Name", "Owner", "City", "Category", "Status", "Plan", "Fee / month", "Expiry", "Actions"],
         rows.map((b) => [
           b.name,
           b.owner_name || "—",
@@ -344,11 +365,13 @@ async function render() {
           b.plan_name || b.plan_id,
           money(b.fee_monthly),
           b.subscription_expires_at || "—",
-          `<button class="btn" type="button" data-edit="${b.id}">Edit</button>
+          `<button class="btn primary" type="button" data-enter="${b.id}">Open POS</button>
+           <button class="btn" type="button" data-edit="${b.id}">Edit</button>
            <button class="btn" data-act="suspend" data-id="${b.id}">Suspend</button>
            <button class="btn" data-act="activate" data-id="${b.id}">Activate</button>`,
         ]),
       )}</div>`;
+      bindEnterPosButtons(body);
       const form = $("biz-form");
       const hint = $("biz-hint");
       function setAdminRequired(on) {

@@ -199,6 +199,18 @@ function pos_ensure_company_timezone_columns() {
   }
 }
 
+function pos_ensure_staff_session_impersonator_column() {
+  static $done = false;
+  if ($done) return;
+  $done = true;
+  $db = pos_db();
+  $res = $db->query("SHOW COLUMNS FROM staff_sessions LIKE 'impersonator_admin_id'");
+  if ($res && $res->num_rows === 0) {
+    @$db->query("ALTER TABLE staff_sessions ADD COLUMN impersonator_admin_id VARCHAR(255) NULL");
+  }
+  if ($res) $res->free();
+}
+
 function pos_db() {
   static $db = null;
   if ($db instanceof mysqli) return $db;
@@ -380,6 +392,7 @@ function pos_master_session() {
 function pos_staff_session() {
   $token = pos_cookie("pos_sid");
   if ($token === "") return null;
+  pos_ensure_staff_session_impersonator_column();
   $hash = pos_sha256($token);
   $rows = pos_q(
     "SELECT s.*, u.email, u.first_name, u.last_name, u.role, u.status AS user_status,
@@ -393,8 +406,15 @@ function pos_staff_session() {
   $row = $rows[0] ?? null;
   if (!$row || ($row["user_status"] ?? "") !== "active") return null;
   $biz = pos_q("SELECT * FROM businesses WHERE id = ? LIMIT 1", "s", [$row["business_id"]]);
+  $impersonator = null;
+  if (!empty($row["impersonator_admin_id"])) {
+    $adm = pos_q("SELECT id, email, name FROM platform_admins WHERE id = ? LIMIT 1", "s", [$row["impersonator_admin_id"]]);
+    $impersonator = $adm[0] ?? ["id" => $row["impersonator_admin_id"]];
+  }
   return [
     "type" => "staff",
+    "impersonatorAdminId" => $row["impersonator_admin_id"] ?? null,
+    "impersonator" => $impersonator,
     "user" => [
       "id" => $row["staff_id"],
       "clerk_user_id" => $row["clerk_user_id"],
@@ -877,6 +897,8 @@ function pos_php_dispatch($path, $method, $rawBody) {
           ],
           "plan" => $plan,
           "devToolsAllowed" => pos_env("POS_DEV_TOOLS", "1") !== "0",
+          "impersonating" => !empty($staff["impersonatorAdminId"]),
+          "impersonator" => $staff["impersonator"] ?? null,
         ]);
       }
       pos_send(401, ["error" => "Not signed in"]);
@@ -1052,6 +1074,60 @@ function pos_php_dispatch($path, $method, $rawBody) {
       if ($id === $swami) throw new Exception("The primary live business cannot be deleted");
       pos_q("UPDATE businesses SET status = 'inactive' WHERE id = ?", "s", [$id]);
       pos_send(200, ["ok" => true, "note" => "Business set inactive. Data is retained."]);
+    }
+
+    if (preg_match("#^master/businesses/([^/]+)/enter$#", $path, $m) && $method === "POST") {
+      $bizId = $m[1];
+      $biz = pos_q("SELECT * FROM businesses WHERE id = ? LIMIT 1", "s", [$bizId]);
+      if (!$biz) throw new Exception("Business not found");
+      $users = pos_q(
+        "SELECT * FROM staff_users WHERE business_id = ? AND status = 'active'
+         ORDER BY CASE role WHEN 'business_admin' THEN 0 ELSE 1 END, email ASC LIMIT 1",
+        "s",
+        [$bizId]
+      );
+      if (!$users) throw new Exception("No active staff user for this business. Create a business admin first.");
+      $user = $users[0];
+      $branch = pos_q("SELECT id FROM branches WHERE business_id = ? LIMIT 1", "s", [$bizId]);
+      $branchId = $branch[0]["id"] ?? ($user["branch_id"] ?? null);
+      pos_ensure_staff_session_impersonator_column();
+      $token = pos_new_token();
+      $sid = pos_uuid();
+      $ttl = 12 * 3600;
+      pos_q(
+        "INSERT INTO staff_sessions (id, staff_user_id, token_hash, expires_at, business_id, ip, user_agent, branch_id, impersonator_admin_id)
+         VALUES (?,?,?,DATE_ADD(NOW(), INTERVAL ? SECOND),?,?,?,?,?)",
+        "sssisssss",
+        [
+          $sid,
+          $user["id"],
+          pos_sha256($token),
+          $ttl,
+          $user["business_id"],
+          pos_ip(),
+          pos_ua(),
+          $branchId,
+          $auth["admin"]["id"],
+        ]
+      );
+      pos_set_cookie("pos_sid", $token, $ttl);
+      pos_audit($auth["admin"], "Entered Business POS", [
+        "module" => "businesses",
+        "target_id" => $biz[0]["id"],
+        "target_name" => $biz[0]["name"],
+        "staff_user_id" => $user["id"],
+      ]);
+      pos_send(200, [
+        "ok" => true,
+        "redirect" => "/index.html",
+        "business" => ["id" => $biz[0]["id"], "name" => $biz[0]["name"]],
+        "user" => [
+          "id" => $user["id"],
+          "email" => $user["email"],
+          "name" => pos_display_name($user),
+          "role" => $user["role"],
+        ],
+      ]);
     }
 
     if ($path === "master/users" && $method === "GET") {

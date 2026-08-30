@@ -89,10 +89,19 @@ async function loadStaffSession(token) {
   if (!row) return null;
   if (row.user_status !== "active") return null;
   const [business] = await query("SELECT * FROM businesses WHERE id = ?", [row.business_id]);
+  let impersonator = null;
+  if (row.impersonator_admin_id) {
+    const [admin] = await query("SELECT id, email, name FROM platform_admins WHERE id = ?", [
+      row.impersonator_admin_id,
+    ]);
+    impersonator = admin || { id: row.impersonator_admin_id };
+  }
   return {
     type: "staff",
     tokenHash: hash,
     sessionId: row.id,
+    impersonatorAdminId: row.impersonator_admin_id || null,
+    impersonator,
     user: {
       id: row.staff_id,
       clerk_user_id: row.clerk_user_id,
@@ -164,7 +173,8 @@ export function requireStaff(req, res, next) {
   }
   const status = publicStatus(req.auth.business);
   const open = canonApiUrl(req.originalUrl || "", req.headers["x-pos-path"]).split("?")[0].startsWith("/api/auth");
-  if (!open && status !== "active") {
+  const impersonating = Boolean(req.auth.impersonatorAdminId);
+  if (!open && status !== "active" && !impersonating) {
     res.status(403).json({
       error: "Subscription expired. Ask the platform owner to renew.",
       status,
@@ -207,6 +217,29 @@ async function findStaff(identifier) {
     [id.toLowerCase(), id, id, id],
   );
   return row || null;
+}
+
+export async function issueStaffSession(req, res, { user, business, branchId, impersonatorAdminId }) {
+  const ttl = sessionSecs(false);
+  const token = newToken();
+  const sid = crypto.randomUUID();
+  await query(
+    `INSERT INTO staff_sessions (id, staff_user_id, token_hash, expires_at, business_id, ip, user_agent, branch_id, impersonator_admin_id)
+     VALUES (?,?,?,?,?,?,?,?,?)`,
+    [
+      sid,
+      user.id,
+      sha256(token),
+      new Date(Date.now() + ttl * 1000),
+      user.business_id,
+      clientIp(req),
+      String(req.headers["user-agent"] || "").slice(0, 250),
+      branchId || user.branch_id,
+      impersonatorAdminId || null,
+    ],
+  );
+  setCookie(res, "pos_sid", token, ttl, req);
+  return { token, ttl, sessionId: sid };
 }
 
 export function registerAuth(app) {
@@ -425,6 +458,8 @@ export function registerAuth(app) {
         },
         plan,
         devToolsAllowed: process.env.POS_DEV_TOOLS !== "0",
+        impersonating: Boolean(req.auth.impersonatorAdminId),
+        impersonator: req.auth.impersonator || null,
       });
       return;
     }

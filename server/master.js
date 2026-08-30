@@ -1,6 +1,7 @@
 import { query, withTransaction } from "./db.js";
 import { hashPassword } from "./password.js";
-import { requireMaster } from "./auth.js";
+import { requireMaster, issueStaffSession } from "./auth.js";
+import { displayName } from "./roles.js";
 import { platformAudit } from "./audit.js";
 import { registerBusiness, updateBusiness } from "./onboard.js";
 import { defaultPerms } from "./roles.js";
@@ -206,6 +207,40 @@ export function registerMaster(app) {
       });
       await platformAudit(req.auth.admin, "Business Deactivated", { module: "businesses", target_id: id }, req);
       return { ok: true, note: "Business set inactive. Data is retained." };
+    }),
+  );
+
+  app.post("/api/master/businesses/:id/enter", (req, res) =>
+    send(res, async () => {
+      const [business] = await query("SELECT * FROM businesses WHERE id = ?", [req.params.id]);
+      if (!business) throw new Error("Business not found");
+      let [user] = await query(
+        `SELECT * FROM staff_users
+         WHERE business_id = ? AND status = 'active'
+         ORDER BY CASE role WHEN 'business_admin' THEN 0 ELSE 1 END, email ASC
+         LIMIT 1`,
+        [req.params.id],
+      );
+      if (!user) throw new Error("No active staff user for this business. Create a business admin first.");
+      const [branch] = await query("SELECT id FROM branches WHERE business_id = ? LIMIT 1", [business.id]);
+      await issueStaffSession(req, res, {
+        user,
+        business,
+        branchId: branch?.id || user.branch_id,
+        impersonatorAdminId: req.auth.admin.id,
+      });
+      await platformAudit(
+        req.auth.admin,
+        "Entered Business POS",
+        { module: "businesses", target_id: business.id, target_name: business.name, staff_user_id: user.id },
+        req,
+      );
+      return {
+        ok: true,
+        redirect: "/index.html",
+        business: { id: business.id, name: business.name },
+        user: { id: user.id, email: user.email, name: displayName(user), role: user.role },
+      };
     }),
   );
 

@@ -1,9 +1,9 @@
-Production deploy bundle — 20260830deploy2
-==========================================
+Production deploy bundle — 20260830admin1
+=========================================
 
-Upload ALL files below to Hostinger public_html (overwrite existing).
+Upload ALL files below to Hostinger public_html (overwrite):
 
-ASSETS (required for login logo)
+Assets
   assets/atav-telecom-logo.png
 
 HTML
@@ -18,8 +18,8 @@ CSS
 JavaScript
   js/app.js
   js/dev-mode.js
-  js/pos-api.js
   js/master.js
+  js/pos-api.js
   js/x-pos-20260830e.js
 
 PHP
@@ -27,18 +27,9 @@ PHP
   pos-php-till.php
   pos-api.php
 
-OPTIONAL .env
-  POS_DEV_TOOLS=1
-  POS_TIMEZONE=Asia/Kolkata
+After upload: hard-refresh (Ctrl+Shift+R)
 
-AFTER UPLOAD
-  1. Hard-refresh: Ctrl+Shift+R on pos.atavtelecom.in
-  2. Verify login page shows ATAV Telecom logo
-  3. Verify page source loads css/pos.css?v=20260830deploy2
-  4. Test counter Save — cart clears, no order_number error
-
-THEME (ATAV Telecom logo colors)
-  Magenta #EC008C + Orange #F7941D — buttons, active nav
-  Cyan #00AEEF — accents, focus rings
-  Cobalt #2E3192 — bill panel header
-  Dark navy sidebar — matches logo background
+NEW: Master admin → Open POS on any business
+  1. Sign in at /master.html
+  2. Dashboard or Businesses → click "Open POS"
+  3. Opens that shop POS with full access (even if expired/suspended)
