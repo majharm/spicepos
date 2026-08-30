@@ -1293,6 +1293,7 @@ function paintPlatformNotices(notes) {
     const body = String(n.body || "").toLowerCase();
     if (title === "master admin login") return false;
     if (body.includes("opened this shop from master admin")) return false;
+    if (body.includes("viewing this shop") || body.includes("is viewing")) return false;
     return true;
   });
   const top = $("platform-notices");
