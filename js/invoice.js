@@ -1,4 +1,4 @@
-/** Thermal tax-invoice HTML for 80mm POS printers (sales orders = invoices). */
+/** Thermal tax-invoice HTML for 80mm POS printers (sales orders = invoices, purchases = bills). */
 (function () {
   function num(v) {
     return Number(v) || 0;
@@ -67,6 +67,165 @@
     if (s === "partial") return "PARTIAL";
     if (s === "unpaid") return "UNPAID";
     return "PAID";
+  }
+
+  function findSupplier(suppliers, purchase) {
+    if (!suppliers?.length) return null;
+    return suppliers.find((s) => s.id === purchase.supplier_id) || null;
+  }
+
+  function enrichPurchaseLines(purchase, items) {
+    return (purchase.lines || []).map((l) => {
+      const item = (items || []).find((i) => i.id === l.item_id);
+      const gstRate = num(l.gst_rate) || num(item?.gst_rate);
+      const amount = num(l.amount);
+      const gstAmount = num(l.gst_amount) || lineGst({ amount, gst_rate: gstRate });
+      return {
+        item_name: l.item_name || item?.name || "Item",
+        hsn: item?.hsn || item?.code || l.hsn || "—",
+        quantity_gm: num(l.quantity_gm),
+        rate_per_kg: num(l.rate_per_kg),
+        gst_rate: gstRate,
+        amount,
+        gst_amount: gstAmount,
+      };
+    });
+  }
+
+  function purchaseGstBreakdown(lines) {
+    return gstBreakdown(
+      lines.map((l) => ({
+        amount: l.amount,
+        gst_rate: l.gst_rate,
+        gst_amount: l.gst_amount,
+      })),
+    );
+  }
+
+  function purchaseBody(purchase, ctx) {
+    const { company, suppliers, items, formatDateTime, money, escapeHtml } = ctx;
+    const co = company || {};
+    const lines = enrichPurchaseLines(purchase, items);
+    const supplier = findSupplier(suppliers, purchase);
+    const supGstin = String(supplier?.gstin || purchase.supplier_gstin || "").trim();
+    const breakdown = purchaseGstBreakdown(lines);
+    const subtotal = round2(purchase.subtotal);
+    const gst = round2(purchase.gst);
+    const total = round2(purchase.total);
+    const poNo = escapeHtml(purchase.purchase_number || "—");
+    const supInv = escapeHtml(purchase.supplier_invoice_number || "—");
+    const when = formatDateTime(purchase.purchase_date || purchase.created_at || new Date().toISOString());
+    const logo = co.logo_url
+      ? `<img class="inv-logo" src="${escapeHtml(co.logo_url)}" alt="">`
+      : "";
+
+    const meta = [
+      co.phone ? `Ph: ${escapeHtml(co.phone)}` : "",
+      co.gstin ? `GSTIN: ${escapeHtml(co.gstin)}` : "",
+      co.pan ? `PAN: ${escapeHtml(co.pan)}` : "",
+    ]
+      .filter(Boolean)
+      .join(" · ");
+
+    const itemRows = lines
+      .map(
+        (l, i) => `<tr>
+        <td class="inv-item" colspan="4">${i + 1}. ${escapeHtml(l.item_name)}</td>
+      </tr>
+      <tr class="inv-line">
+        <td class="inv-hsn">HSN ${escapeHtml(l.hsn)}</td>
+        <td class="inv-num">${escapeHtml(formatQty(l.quantity_gm))}</td>
+        <td class="inv-num">${escapeHtml(money(l.rate_per_kg))}/kg</td>
+        <td class="inv-num">${escapeHtml(money(l.amount))}</td>
+      </tr>
+      <tr class="inv-tax"><td colspan="4">Input GST ${l.gst_rate}% · ${escapeHtml(money(l.gst_amount))}</td></tr>`,
+      )
+      .join("");
+
+    const gstRows = breakdown
+      .map(
+        (b) => `<tr class="inv-gst">
+        <td colspan="3">Taxable @ ${b.rate}%</td>
+        <td class="inv-num">${escapeHtml(money(b.taxable))}</td>
+      </tr>
+      <tr class="inv-gst">
+        <td colspan="3">Input CGST @ ${b.rate / 2}%</td>
+        <td class="inv-num">${escapeHtml(money(b.gst / 2))}</td>
+      </tr>
+      <tr class="inv-gst">
+        <td colspan="3">Input SGST @ ${b.rate / 2}%</td>
+        <td class="inv-num">${escapeHtml(money(b.gst / 2))}</td>
+      </tr>`,
+      )
+      .join("");
+
+    const notes = String(purchase.notes || "").trim();
+
+    return `<article class="thermal-invoice purchase-invoice">
+  ${logo}
+  <header class="inv-head">
+    <h1 class="inv-shop">${escapeHtml(co.name || "Shop")}</h1>
+    ${co.address ? `<p class="inv-addr">${escapeHtml(co.address)}</p>` : ""}
+    ${meta ? `<p class="inv-meta">${meta}</p>` : ""}
+    <p class="inv-title">PURCHASE BILL</p>
+  </header>
+  <div class="inv-rule"></div>
+  <div class="inv-details">
+    <div class="inv-row"><span>PO No.</span><strong>${poNo}</strong></div>
+    <div class="inv-row"><span>Supplier bill</span><strong>${supInv}</strong></div>
+    <div class="inv-row"><span>Date</span><span>${escapeHtml(when)}</span></div>
+    <div class="inv-row"><span>Supplier</span><span>${escapeHtml(purchase.supplier_name || supplier?.name || "—")}</span></div>
+    ${supplier?.contact_name ? `<div class="inv-row"><span>Contact</span><span>${escapeHtml(supplier.contact_name)}</span></div>` : ""}
+    ${supplier?.mobile ? `<div class="inv-row"><span>Mobile</span><span>${escapeHtml(supplier.mobile)}</span></div>` : ""}
+    ${supGstin ? `<div class="inv-row"><span>Supplier GSTIN</span><span>${escapeHtml(supGstin)}</span></div>` : ""}
+  </div>
+  <div class="inv-rule"></div>
+  <table class="inv-table">
+    <thead>
+      <tr>
+        <th>HSN / Item</th>
+        <th class="inv-num">Qty</th>
+        <th class="inv-num">Rate</th>
+        <th class="inv-num">Amt</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${itemRows || '<tr><td colspan="4" class="inv-empty">No line items</td></tr>'}
+    </tbody>
+  </table>
+  <div class="inv-rule"></div>
+  <table class="inv-totals">
+    <tbody>
+      <tr><td colspan="3">Taxable value</td><td class="inv-num">${escapeHtml(money(subtotal))}</td></tr>
+      ${gstRows}
+      <tr class="inv-gst-total"><td colspan="3">Total input GST</td><td class="inv-num">${escapeHtml(money(gst))}</td></tr>
+      <tr class="inv-grand"><td colspan="3"><strong>Grand total</strong></td><td class="inv-num"><strong>${escapeHtml(money(total))}</strong></td></tr>
+    </tbody>
+  </table>
+  <div class="inv-rule"></div>
+  <p class="inv-pay">Payment: <strong>${escapeHtml(payLabel(purchase.payment_method))}</strong> · ${escapeHtml(payStatusLabel(purchase.payment_status))}</p>
+  ${notes ? `<p class="inv-terms">${escapeHtml(notes)}</p>` : ""}
+  <p class="inv-footer">Goods received — stock updated</p>
+  <p class="inv-powered">ATAV POS</p>
+</article>`;
+  }
+
+  function thermalPurchaseDocument(purchase, ctx) {
+    const title = escapeHtml(purchase.purchase_number || "Purchase");
+    return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>${title}</title>
+  <style>${THERMAL_CSS}
+.purchase-invoice .inv-title { letter-spacing: 0.06em; }
+</style>
+</head>
+<body>
+${purchaseBody(purchase, ctx)}
+<script>window.onload=function(){window.focus();window.print();};<\/script>
+</body>
+</html>`;
   }
 
   function invoiceBody(order, ctx) {
@@ -256,7 +415,11 @@ ${invoiceBody(order, ctx)}
   window.InvoicePrint = {
     invoiceBody,
     thermalInvoiceDocument,
+    purchaseBody,
+    thermalPurchaseDocument,
     enrichLines,
+    enrichPurchaseLines,
     gstBreakdown,
+    purchaseGstBreakdown,
   };
 })();

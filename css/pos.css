@@ -848,6 +848,8 @@ tr:hover td { background: #f4f6fd; }
   border: 1px solid var(--line-strong);
   box-shadow: var(--elev-inset);
 }
+.purchases-split { margin-top: 12px; }
+
 .thermal-preview {
   max-width: 360px;
   margin: 0 auto;

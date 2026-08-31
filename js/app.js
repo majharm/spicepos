@@ -779,6 +779,7 @@ function invoiceCtx() {
   return {
     company: state.company,
     customers: state.customers,
+    suppliers: state.suppliers,
     items: state.items,
     formatDateTime: formatShopDateTime,
     money,
@@ -793,6 +794,16 @@ function printOrder(o) {
     return;
   }
   w.document.write(InvoicePrint.thermalInvoiceDocument(o, invoiceCtx()));
+  w.document.close();
+}
+
+function printPurchase(p) {
+  const w = window.open("", "purchase-print", "width=400,height=720");
+  if (!w) {
+    setHint("Allow pop-ups to print purchase bills", "error");
+    return;
+  }
+  w.document.write(InvoicePrint.thermalPurchaseDocument(p, invoiceCtx()));
   w.document.close();
 }
 
@@ -857,22 +868,34 @@ async function loadOrders() {
     .join("");
 }
 
+let purchaseCache = [];
+
+function showPurchase(p) {
+  $("purchase-pane").innerHTML = `<div class="order-detail-head">
+      <div class="order-badges">${payStatusBadge(p.payment_status)}</div>
+      <p class="hint">${escapeHtml(p.purchase_number)} · ${escapeHtml(p.supplier_name)} · ${escapeHtml(p.purchase_date || "")}</p>
+    </div>
+    <div class="thermal-preview">${InvoicePrint.purchaseBody(p, invoiceCtx())}</div>
+    <div class="print-actions">
+      <button class="btn primary" type="button" data-print-purchase="${escapeHtml(p.id)}">Print purchase bill</button>
+    </div>`;
+}
+
 async function loadPurchases() {
-  const rows = await api("/api/purchases");
-  $("purchases-table").innerHTML = `<table><thead><tr>
-    <th>PO</th><th>Supplier</th><th>Date</th><th>Invoice</th><th>Lines</th><th>Total</th>
-  </tr></thead><tbody>${rows
+  purchaseCache = await api("/api/purchases");
+  $("purchases-list").innerHTML = purchaseCache
     .map(
-      (p) => `<tr>
-      <td>${escapeHtml(p.purchase_number)}</td>
-      <td>${escapeHtml(p.supplier_name)}</td>
-      <td>${escapeHtml(p.purchase_date)}</td>
-      <td>${escapeHtml(p.supplier_invoice_number || "—")}</td>
-      <td>${(p.lines || []).map((l) => `${escapeHtml(l.item_name)} ${l.quantity_gm}g`).join(", ") || "—"}</td>
-      <td>${money(p.total)}</td>
-    </tr>`,
+      (p) => `<button class="order-item" type="button" data-pid="${escapeHtml(p.id)}">
+        <span>${escapeHtml(p.purchase_number)} · ${escapeHtml(p.supplier_name)}
+        <span class="order-item-badges">${payStatusBadge(p.payment_status)}</span><br>
+        <small>${escapeHtml(p.supplier_invoice_number ? `Bill: ${p.supplier_invoice_number}` : "No supplier bill")} · ${escapeHtml(p.payment_method)} · ${escapeHtml(p.purchase_date || "")}</small></span>
+        <span>${money(p.total)}</span>
+      </button>`,
     )
-    .join("")}</tbody></table>`;
+    .join("");
+  if (purchaseCache.length && !$("purchase-pane").querySelector(".thermal-preview")) {
+    showPurchase(purchaseCache[0]);
+  }
 }
 
 async function loadSuppliers() {
@@ -1132,6 +1155,20 @@ $("orders").addEventListener("click", (e) => {
   if (o) showOrder(o);
 });
 
+$("purchases-list").addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-pid]");
+  if (!btn) return;
+  const p = purchaseCache.find((row) => row.id === btn.dataset.pid);
+  if (p) showPurchase(p);
+});
+
+$("purchase-pane").addEventListener("click", (e) => {
+  const printBtn = e.target.closest("[data-print-purchase]");
+  if (!printBtn) return;
+  const p = purchaseCache.find((row) => row.id === printBtn.dataset.printPurchase);
+  if (p) printPurchase(p);
+});
+
 $("order-pane").addEventListener("click", (e) => {
   const printBtn = e.target.closest("[data-print]");
   const editBtn = e.target.closest("[data-edit-order]");
@@ -1388,8 +1425,10 @@ $("purchase-form").addEventListener("submit", async (e) => {
     });
     $("po-hint").textContent = "Saved";
     $("po-hint").className = "hint ok";
+    $("purchase-form").reset();
     await loadBootstrap();
     await loadPurchases();
+    if (purchaseCache.length) showPurchase(purchaseCache[0]);
   } catch (err) {
     $("po-hint").textContent = err.message;
     $("po-hint").className = "hint error";
