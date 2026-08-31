@@ -300,6 +300,23 @@ function pos_q($sql, $types = "", $params = []) {
   return $rows;
 }
 
+function pos_with_transaction(callable $fn) {
+  $db = pos_db();
+  $db->begin_transaction();
+  try {
+    $out = $fn();
+    $db->commit();
+    return $out;
+  } catch (Throwable $e) {
+    $db->rollback();
+    throw $e;
+  }
+}
+
+function pos_line_amount($quantityGm, $ratePerKg) {
+  return ((float) $quantityGm / 1000) * (float) $ratePerKg;
+}
+
 function pos_uuid() {
   $d = random_bytes(16);
   $d[6] = chr((ord($d[6]) & 0x0f) | 0x40);

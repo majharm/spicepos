@@ -126,6 +126,29 @@ function pos_post_sale_journal($bid, $uid, $order) {
   ]);
 }
 
+function pos_post_purchase_journal($bid, $uid, $purchase) {
+  if (pos_journal_exists($bid, "purchase", $purchase["id"])) return null;
+  $subtotal = pos_round2($purchase["subtotal"] ?? 0);
+  $gst = pos_split_gst($purchase["gst"] ?? 0);
+  $total = pos_round2($purchase["total"] ?? 0);
+  $lines = [
+    ["accountCode" => "5101", "debit" => $subtotal, "credit" => 0],
+  ];
+  if ($gst["cgst"] > 0) $lines[] = ["accountCode" => "2301", "debit" => $gst["cgst"], "credit" => 0];
+  if ($gst["sgst"] > 0) $lines[] = ["accountCode" => "2302", "debit" => $gst["sgst"], "credit" => 0];
+  $method = strtolower((string) ($purchase["payment_method"] ?? "cash"));
+  $creditCode = $method === "credit" ? "2101" : pos_asset_code_for_method($method);
+  $lines[] = ["accountCode" => $creditCode, "debit" => 0, "credit" => $total];
+  return pos_post_journal($bid, $uid, [
+    "voucher_type" => "purchase",
+    "voucher_date" => pos_normalize_date_only($purchase["purchase_date"] ?? null) ?? date("Y-m-d"),
+    "narration" => "Purchase " . ($purchase["purchase_number"] ?? ""),
+    "reference_type" => "purchase",
+    "reference_id" => $purchase["id"],
+    "lines" => $lines,
+  ]);
+}
+
 function pos_post_receipt_journal($bid, $uid, $amount, $method, $entryNo, $ledgerId) {
   $amt = pos_round2($amount);
   return pos_post_journal($bid, $uid, [

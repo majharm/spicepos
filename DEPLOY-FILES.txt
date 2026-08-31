@@ -1,4 +1,4 @@
-Production deploy bundle — 20260830deploy16
+Production deploy bundle — 20260830deploy17
 =========================================
 
 Upload ALL files below to Hostinger public_html (overwrite):
@@ -26,6 +26,7 @@ JavaScript
 PHP
   pos-php-core.php
   pos-php-till.php
+  pos-crud.php
   pos-orders.php
   pos-reports.php
   pos-accounting.php
@@ -52,9 +53,9 @@ After upload:
   2. Hard-refresh browser (Ctrl+Shift+R)
 
 FIXES in this bundle
-  - Purchases bill preview: PHP now returns line items (was empty on production)
-  - Purchases layout: collapsible new form, sticky bill preview pane, selected highlight
-  - Purchase bill dates formatted correctly (no midnight timezone shift)
+  - PHP parity: POST purchases, suppliers, customers, items, packs, holds, stock adjust, staff, branches, devices
+  - PHP purchase journal + credit payable posting; checkout wrapped in DB transaction
+  - Purchases bill preview: line items on PHP, improved layout (deploy16)
   - Full accounting module: receivables, payables, day book, COA, journal, trial balance, P&L, balance sheet, cash book
   - Double-entry GL with auto-posting on sales, credit sales, purchases, receipts, payments
   - Supplier payable balance tracking
