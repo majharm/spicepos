@@ -1,4 +1,4 @@
-Production deploy bundle — 20260830deploy17
+Production deploy bundle — 20260830deploy18
 =========================================
 
 Upload ALL files below to Hostinger public_html (overwrite):
@@ -53,7 +53,7 @@ After upload:
   2. Hard-refresh browser (Ctrl+Shift+R)
 
 FIXES in this bundle
-  - PHP parity: POST purchases, suppliers, customers, items, packs, holds, stock adjust, staff, branches, devices
+  - Sales orders: table list view with live SO numbers from database (sorted newest SO first)
   - PHP purchase journal + credit payable posting; checkout wrapped in DB transaction
   - Purchases bill preview: line items on PHP, improved layout (deploy16)
   - Full accounting module: receivables, payables, day book, COA, journal, trial balance, P&L, balance sheet, cash book

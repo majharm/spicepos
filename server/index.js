@@ -163,7 +163,9 @@ app.get("/api/bootstrap", requireStaff, async (_req, res) => {
 app.get("/api/orders", requireStaff, requirePerm("orders"), async (_req, res) => {
   try {
     const orders = await query(
-      "SELECT * FROM sales_orders WHERE business_id = ? ORDER BY created_at DESC LIMIT 80",
+      `SELECT * FROM sales_orders WHERE business_id = ?
+       ORDER BY CAST(SUBSTRING(order_number, 4) AS UNSIGNED) DESC, created_at DESC
+       LIMIT 80`,
       [bid()],
     );
     const ids = orders.map((o) => o.id);

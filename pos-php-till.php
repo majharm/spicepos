@@ -214,7 +214,13 @@ function pos_php_till_dispatch($path, $method, $body) {
   }
 
   if ($path === "orders" && $method === "GET") {
-    $orders = pos_q("SELECT * FROM sales_orders WHERE business_id = ? ORDER BY created_at DESC LIMIT 80", "s", [$bid]);
+    $orders = pos_q(
+      "SELECT * FROM sales_orders WHERE business_id = ?
+       ORDER BY CAST(SUBSTRING(order_number, 4) AS UNSIGNED) DESC, created_at DESC
+       LIMIT 80",
+      "s",
+      [$bid]
+    );
     $ids = array_column($orders, "id");
     $lines = [];
     if ($ids) {

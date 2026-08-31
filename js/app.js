@@ -138,6 +138,19 @@ function orderLabel(order, result) {
   return order?.order_number || result?.order_number || "Saved";
 }
 
+function soSortKey(orderNumber) {
+  const m = String(orderNumber || "").match(/(\d+)/);
+  return m ? Number(m[1]) : 0;
+}
+
+function sortOrders(rows) {
+  return [...rows].sort((a, b) => {
+    const diff = soSortKey(b.order_number) - soSortKey(a.order_number);
+    if (diff !== 0) return diff;
+    return String(b.created_at || "").localeCompare(String(a.created_at || ""));
+  });
+}
+
 function orderTotal(order, result) {
   const raw = order?.total ?? result?.total ?? 0;
   return Number(raw) || 0;
@@ -791,6 +804,7 @@ async function loadReports() {
 }
 
 let orderCache = [];
+let selectedOrderId = null;
 
 function invoiceCtx() {
   return {
@@ -826,6 +840,10 @@ function printPurchase(p) {
 }
 
 function showOrder(o) {
+  selectedOrderId = o.id;
+  document.querySelectorAll("#orders .order-row").forEach((row) => {
+    row.classList.toggle("is-selected", row.dataset.oid === o.id);
+  });
   const statusOpts = ORDER_STATUSES.map(
     (s) => `<option value="${s}"${String(o.status || "confirmed").toLowerCase() === s ? " selected" : ""}>${s}</option>`,
   ).join("");
@@ -873,17 +891,39 @@ function showOrder(o) {
 }
 
 async function loadOrders() {
-  orderCache = await api("/api/orders");
-  $("orders").innerHTML = orderCache
-    .map(
-      (o) => `<button class="order-item" type="button" data-oid="${escapeHtml(o.id)}">
-        <span>${escapeHtml(o.order_number)} · ${escapeHtml(o.customer_name)}
-        <span class="order-item-badges">${orderStatusBadge(o.status)} ${payStatusBadge(o.payment_status)}</span><br>
-        <small>${escapeHtml(o.pack_name ? `Pack: ${o.pack_name} × ${o.pack_count || 1}` : "Loose items")} · ${escapeHtml(o.payment_method)} · ${escapeHtml(formatShopDateTime(o.created_at))}</small></span>
-        <span>${money(o.total)}</span>
-      </button>`,
-    )
-    .join("");
+  orderCache = sortOrders(await api("/api/orders"));
+  if (!orderCache.length) {
+    $("orders").innerHTML = '<p class="hint">No sales orders yet. Save a bill from the Counter.</p>';
+    selectedOrderId = null;
+    $("order-pane").innerHTML = '<p class="hint">Select a sales order.</p>';
+    return;
+  }
+  $("orders").innerHTML = `<table class="orders-table">
+    <thead>
+      <tr>
+        <th>SO No</th>
+        <th>Date</th>
+        <th>Customer</th>
+        <th>Status</th>
+        <th>Pay</th>
+        <th class="num">Total</th>
+      </tr>
+    </thead>
+    <tbody>${orderCache
+      .map(
+        (o) => `<tr class="order-row${o.id === selectedOrderId ? " is-selected" : ""}" data-oid="${escapeHtml(o.id)}" tabindex="0" role="button">
+        <td class="so-no"><strong>${escapeHtml(o.order_number || "—")}</strong></td>
+        <td>${escapeHtml(formatShopDateTime(o.created_at))}</td>
+        <td>${escapeHtml(o.customer_name || "—")}</td>
+        <td>${orderStatusBadge(o.status)}</td>
+        <td>${payStatusBadge(o.payment_status)} ${escapeHtml(o.payment_method || "")}</td>
+        <td class="num">${money(o.total)}</td>
+      </tr>`,
+      )
+      .join("")}</tbody>
+  </table>`;
+  const current = orderCache.find((o) => o.id === selectedOrderId) || orderCache[0];
+  showOrder(current);
 }
 
 let purchaseCache = [];
@@ -1181,9 +1221,18 @@ $("items-table").addEventListener("click", async (e) => {
 });
 
 $("orders").addEventListener("click", (e) => {
-  const btn = e.target.closest("[data-oid]");
-  if (!btn) return;
-  const o = orderCache.find((row) => row.id === btn.dataset.oid);
+  const row = e.target.closest("[data-oid]");
+  if (!row) return;
+  const o = orderCache.find((r) => r.id === row.dataset.oid);
+  if (o) showOrder(o);
+});
+
+$("orders").addEventListener("keydown", (e) => {
+  if (e.key !== "Enter" && e.key !== " ") return;
+  const row = e.target.closest("[data-oid]");
+  if (!row) return;
+  e.preventDefault();
+  const o = orderCache.find((r) => r.id === row.dataset.oid);
   if (o) showOrder(o);
 });
 

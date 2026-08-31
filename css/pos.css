@@ -854,6 +854,43 @@ tr:hover td { background: #f4f6fd; }
   align-items: start;
   grid-template-columns: minmax(0, 1fr) minmax(300px, 420px);
 }
+.orders-split {
+  min-height: min(68vh, 680px);
+  align-items: start;
+  grid-template-columns: minmax(0, 1.1fr) minmax(300px, 0.9fr);
+}
+.orders-list-wrap {
+  max-height: min(72vh, 720px);
+  overflow: auto;
+  padding: 0 24px 28px;
+}
+.orders-list-wrap .orders-table {
+  margin: 0;
+}
+.orders-table .so-no {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.orders-table .num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.orders-table tbody tr.order-row {
+  cursor: pointer;
+}
+.orders-table tbody tr.order-row.is-selected td {
+  background: #eef4ff;
+}
+.orders-table tbody tr.order-row:hover td {
+  background: #f4f6fd;
+}
+.order-pane {
+  position: sticky;
+  top: 12px;
+  max-height: min(80vh, 820px);
+  overflow-y: auto;
+}
 .purchase-new {
   margin: 0 24px 12px;
   padding: 14px 16px;
