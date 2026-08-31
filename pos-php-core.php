@@ -385,11 +385,16 @@ function pos_display_name($u) {
 }
 
 function pos_parse_perms($user) {
+  $defaults = pos_default_perms($user["role"] ?? "staff");
+  $parsed = [];
   if (!empty($user["permissions_json"])) {
     $p = json_decode($user["permissions_json"], true);
-    if (is_array($p)) return $p;
+    if (is_array($p)) $parsed = $p;
   }
-  return pos_default_perms($user["role"] ?? "staff");
+  foreach ($defaults as $key => $value) {
+    if (!array_key_exists($key, $parsed)) $parsed[$key] = $value;
+  }
+  return $parsed;
 }
 
 function pos_staff_me_payload($staff) {
@@ -428,10 +433,185 @@ function pos_default_perms($role) {
   $all = [
     "dashboard" => true, "counter" => true, "items" => true, "customers" => true, "packs" => true,
     "orders" => true, "purchases" => true, "suppliers" => true, "stock" => true, "staff" => true,
-    "branches" => true, "devices" => true, "reports" => true, "settings" => true, "support" => true, "discount" => true,
+    "branches" => true, "devices" => true, "reports" => true, "accounts" => true, "settings" => true,
+    "support" => true, "discount" => true,
   ];
   if ($role === "business_admin") return $all;
+  if ($role === "branch_manager" || $role === "manager") {
+    return array_merge($all, [
+      "staff" => $role === "branch_manager",
+      "settings" => $role === "branch_manager",
+      "discount" => true,
+      "accounts" => true,
+    ]);
+  }
+  if ($role === "cashier") {
+    return ["dashboard" => true, "counter" => true, "customers" => true, "orders" => true, "support" => true];
+  }
+  if ($role === "stock_manager") {
+    return ["dashboard" => true, "items" => true, "stock" => true, "purchases" => true, "suppliers" => true, "reports" => true, "support" => true];
+  }
+  if ($role === "accountant") {
+    return ["dashboard" => true, "reports" => true, "accounts" => true, "purchases" => true, "suppliers" => true, "customers" => true, "orders" => true, "support" => true];
+  }
   return ["dashboard" => true, "counter" => true, "support" => true];
+}
+
+function pos_can($user, $module) {
+  if (($user["role"] ?? "") === "business_admin") return true;
+  $perms = pos_parse_perms($user);
+  return !empty($perms[$module]);
+}
+
+function pos_ensure_accounts_schema() {
+  static $done = false;
+  if ($done) return;
+  $done = true;
+  $db = pos_db();
+  $res = $db->query("SHOW COLUMNS FROM suppliers LIKE 'payable_balance'");
+  if ($res && $res->num_rows === 0) {
+    @$db->query("ALTER TABLE suppliers ADD COLUMN payable_balance DECIMAL(12,2) NOT NULL DEFAULT 0");
+  }
+  if ($res) $res->free();
+  @$db->query(
+    "CREATE TABLE IF NOT EXISTS account_ledger (
+      id VARCHAR(255) PRIMARY KEY,
+      business_id VARCHAR(255) NOT NULL,
+      entry_no VARCHAR(32) NOT NULL,
+      entry_type VARCHAR(32) NOT NULL,
+      party_type VARCHAR(16) NOT NULL,
+      party_id VARCHAR(255) NOT NULL,
+      party_name VARCHAR(255) NULL,
+      amount DECIMAL(12,2) NOT NULL,
+      payment_method VARCHAR(32) NULL,
+      reference_type VARCHAR(32) NULL,
+      reference_id VARCHAR(255) NULL,
+      notes TEXT NULL,
+      created_by VARCHAR(255) NULL,
+      created_at TIMESTAMP(3) DEFAULT CURRENT_TIMESTAMP(3),
+      INDEX idx_account_ledger_biz_date (business_id, created_at),
+      INDEX idx_account_ledger_party (business_id, party_type, party_id)
+    )"
+  );
+  @$db->query(
+    "CREATE TABLE IF NOT EXISTS chart_of_accounts (
+      id VARCHAR(255) PRIMARY KEY,
+      business_id VARCHAR(255) NOT NULL,
+      code VARCHAR(16) NOT NULL,
+      name VARCHAR(255) NOT NULL,
+      account_group VARCHAR(32) NOT NULL,
+      parent_id VARCHAR(255) NULL,
+      is_system TINYINT NOT NULL DEFAULT 0,
+      active TINYINT NOT NULL DEFAULT 1,
+      created_at TIMESTAMP(3) DEFAULT CURRENT_TIMESTAMP(3),
+      UNIQUE KEY uq_coa_biz_code (business_id, code),
+      INDEX idx_coa_biz_group (business_id, account_group)
+    )"
+  );
+  @$db->query(
+    "CREATE TABLE IF NOT EXISTS journal_entries (
+      id VARCHAR(255) PRIMARY KEY,
+      business_id VARCHAR(255) NOT NULL,
+      voucher_no VARCHAR(32) NOT NULL,
+      voucher_date DATE NOT NULL,
+      voucher_type VARCHAR(32) NOT NULL,
+      narration TEXT NULL,
+      reference_type VARCHAR(32) NULL,
+      reference_id VARCHAR(255) NULL,
+      created_by VARCHAR(255) NULL,
+      created_at TIMESTAMP(3) DEFAULT CURRENT_TIMESTAMP(3),
+      INDEX idx_journal_biz_date (business_id, voucher_date),
+      INDEX idx_journal_ref (business_id, reference_type, reference_id)
+    )"
+  );
+  @$db->query(
+    "CREATE TABLE IF NOT EXISTS journal_lines (
+      id VARCHAR(255) PRIMARY KEY,
+      journal_id VARCHAR(255) NOT NULL,
+      account_id VARCHAR(255) NOT NULL,
+      debit DECIMAL(12,2) NOT NULL DEFAULT 0,
+      credit DECIMAL(12,2) NOT NULL DEFAULT 0,
+      business_id VARCHAR(255) NOT NULL,
+      INDEX idx_jline_journal (journal_id),
+      INDEX idx_jline_account (business_id, account_id)
+    )"
+  );
+}
+
+function pos_next_seq($name, $businessId, $start = 1001) {
+  pos_ensure_accounts_schema();
+  $seq = pos_q("SELECT next_value FROM number_sequences WHERE name = ? AND business_id = ? LIMIT 1", "ss", [$name, $businessId]);
+  $next = $seq ? (int) $seq[0]["next_value"] : $start;
+  if ($seq) {
+    pos_q("UPDATE number_sequences SET next_value = ? WHERE name = ? AND business_id = ?", "iss", [$next + 1, $name, $businessId]);
+  } else {
+    try {
+      pos_q("INSERT INTO number_sequences (name, next_value, business_id) VALUES (?,?,?)", "sis", [$name, $next + 1, $businessId]);
+    } catch (Exception $e) { /* ignore */ }
+  }
+  return $next;
+}
+
+function pos_insert_ledger($row, $businessId, $createdBy = null) {
+  pos_ensure_accounts_schema();
+  $id = pos_uuid();
+  pos_q(
+    "INSERT INTO account_ledger (
+       id, business_id, entry_no, entry_type, party_type, party_id, party_name,
+       amount, payment_method, reference_type, reference_id, notes, created_by
+     ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+    "sssssssdsssss",
+    [
+      $id, $businessId, $row["entry_no"], $row["entry_type"], $row["party_type"], $row["party_id"],
+      $row["party_name"] ?? null, (float) $row["amount"], $row["payment_method"] ?? null,
+      $row["reference_type"] ?? null, $row["reference_id"] ?? null, $row["notes"] ?? null, $createdBy,
+    ]
+  );
+  return $id;
+}
+
+function pos_record_credit_sale($customer, $total, $orderId, $orderNumber, $method, $businessId, $uid = null) {
+  if ($method !== "credit") return;
+  $amt = pos_round2($total);
+  $current = pos_round2((float) ($customer["outstanding"] ?? 0));
+  $next = pos_round2($current + $amt);
+  $limit = (float) ($customer["credit_limit"] ?? 0);
+  if ($limit > 0 && $next > $limit) {
+    throw new Exception("Credit limit exceeded (limit ₹" . number_format($limit, 2) . ", outstanding would be ₹" . number_format($next, 2) . ")");
+  }
+  pos_q("UPDATE customers SET outstanding = ? WHERE id = ? AND business_id = ?", "dss", [$next, $customer["id"], $businessId]);
+  $n = pos_next_seq("account", $businessId, 1001);
+  pos_insert_ledger([
+    "entry_no" => "JV-{$n}",
+    "entry_type" => "sale_credit",
+    "party_type" => "customer",
+    "party_id" => $customer["id"],
+    "party_name" => $customer["business_name"] ?? $customer["name"],
+    "amount" => $amt,
+    "payment_method" => "credit",
+    "reference_type" => "sales_order",
+    "reference_id" => $orderId,
+    "notes" => $orderNumber,
+  ], $businessId, $uid);
+}
+
+function pos_record_credit_purchase($supplier, $total, $purchaseId, $purchaseNumber, $method, $businessId, $uid = null) {
+  if ($method !== "credit") return;
+  $amt = pos_round2($total);
+  pos_q("UPDATE suppliers SET payable_balance = COALESCE(payable_balance,0) + ? WHERE id = ? AND business_id = ?", "dss", [$amt, $supplier["id"], $businessId]);
+  $n = pos_next_seq("account", $businessId, 1001);
+  pos_insert_ledger([
+    "entry_no" => "JV-{$n}",
+    "entry_type" => "purchase_credit",
+    "party_type" => "supplier",
+    "party_id" => $supplier["id"],
+    "party_name" => $supplier["name"],
+    "amount" => $amt,
+    "payment_method" => "credit",
+    "reference_type" => "purchase",
+    "reference_id" => $purchaseId,
+    "notes" => $purchaseNumber,
+  ], $businessId, $uid);
 }
 
 

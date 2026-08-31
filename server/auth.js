@@ -53,15 +53,21 @@ function clientIp(req) {
 
 export function parsePerms(user) {
   if (!user) return {};
+  const defaults = defaultPerms(user.role);
+  let parsed = {};
   if (user.permissions_json) {
     try {
-      const parsed = JSON.parse(user.permissions_json);
-      if (parsed && typeof parsed === "object") return parsed;
+      const p = JSON.parse(user.permissions_json);
+      if (p && typeof p === "object") parsed = p;
     } catch {
       /* ignore */
     }
   }
-  return defaultPerms(user.role);
+  const out = { ...parsed };
+  for (const [key, value] of Object.entries(defaults)) {
+    if (out[key] === undefined) out[key] = value;
+  }
+  return out;
 }
 
 export function publicStatus(business) {

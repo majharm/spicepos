@@ -76,6 +76,67 @@ export async function ensureSchema() {
   await addColumn("items", "image_url", "MEDIUMTEXT NULL");
   await addColumn("items", "unit", "VARCHAR(32) NULL");
 
+  await addColumn("suppliers", "payable_balance", "DECIMAL(12,2) NOT NULL DEFAULT 0");
+
+  await create(`CREATE TABLE IF NOT EXISTS account_ledger (
+    id VARCHAR(255) PRIMARY KEY,
+    business_id VARCHAR(255) NOT NULL,
+    entry_no VARCHAR(32) NOT NULL,
+    entry_type VARCHAR(32) NOT NULL,
+    party_type VARCHAR(16) NOT NULL,
+    party_id VARCHAR(255) NOT NULL,
+    party_name VARCHAR(255) NULL,
+    amount DECIMAL(12,2) NOT NULL,
+    payment_method VARCHAR(32) NULL,
+    reference_type VARCHAR(32) NULL,
+    reference_id VARCHAR(255) NULL,
+    notes TEXT NULL,
+    created_by VARCHAR(255) NULL,
+    created_at TIMESTAMP(3) DEFAULT CURRENT_TIMESTAMP(3),
+    INDEX idx_account_ledger_biz_date (business_id, created_at),
+    INDEX idx_account_ledger_party (business_id, party_type, party_id)
+  )`);
+
+  await create(`CREATE TABLE IF NOT EXISTS chart_of_accounts (
+    id VARCHAR(255) PRIMARY KEY,
+    business_id VARCHAR(255) NOT NULL,
+    code VARCHAR(16) NOT NULL,
+    name VARCHAR(255) NOT NULL,
+    account_group VARCHAR(32) NOT NULL,
+    parent_id VARCHAR(255) NULL,
+    is_system TINYINT NOT NULL DEFAULT 0,
+    active TINYINT NOT NULL DEFAULT 1,
+    created_at TIMESTAMP(3) DEFAULT CURRENT_TIMESTAMP(3),
+    UNIQUE KEY uq_coa_biz_code (business_id, code),
+    INDEX idx_coa_biz_group (business_id, account_group)
+  )`);
+
+  await create(`CREATE TABLE IF NOT EXISTS journal_entries (
+    id VARCHAR(255) PRIMARY KEY,
+    business_id VARCHAR(255) NOT NULL,
+    voucher_no VARCHAR(32) NOT NULL,
+    voucher_date DATE NOT NULL,
+    voucher_type VARCHAR(32) NOT NULL,
+    narration TEXT NULL,
+    reference_type VARCHAR(32) NULL,
+    reference_id VARCHAR(255) NULL,
+    created_by VARCHAR(255) NULL,
+    created_at TIMESTAMP(3) DEFAULT CURRENT_TIMESTAMP(3),
+    INDEX idx_journal_biz_date (business_id, voucher_date),
+    INDEX idx_journal_ref (business_id, reference_type, reference_id)
+  )`);
+
+  await create(`CREATE TABLE IF NOT EXISTS journal_lines (
+    id VARCHAR(255) PRIMARY KEY,
+    journal_id VARCHAR(255) NOT NULL,
+    account_id VARCHAR(255) NOT NULL,
+    debit DECIMAL(12,2) NOT NULL DEFAULT 0,
+    credit DECIMAL(12,2) NOT NULL DEFAULT 0,
+    business_id VARCHAR(255) NOT NULL,
+    INDEX idx_jline_journal (journal_id),
+    INDEX idx_jline_account (business_id, account_id)
+  )`);
+
   await create(`CREATE TABLE IF NOT EXISTS platform_admins (
     id VARCHAR(255) PRIMARY KEY,
     name VARCHAR(255) NOT NULL,

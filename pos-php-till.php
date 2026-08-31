@@ -8,7 +8,7 @@ function pos_php_till_dispatch($path, $method, $body) {
   $staff = [
     "bootstrap", "dashboard", "today", "suppliers", "items", "customers", "packs",
     "orders", "purchases", "stock", "staff", "branches", "devices", "holds",
-    "checkout", "settings", "reports", "audit",
+    "checkout", "settings", "reports", "audit", "accounts",
   ];
   if (!in_array($head, $staff, true)) return;
   $auth = pos_staff_session();
@@ -252,6 +252,11 @@ function pos_php_till_dispatch($path, $method, $body) {
     pos_send(200, pos_q("SELECT * FROM staff_audit_logs WHERE business_id = ? ORDER BY created_at DESC LIMIT 100", "s", [$bid]));
   }
 
+  require_once __DIR__ . "/pos-accounting.php";
+  if (pos_accounts_dispatch($path, $method, $body, $bid, $auth, $branchId, $uid)) {
+    return;
+  }
+
   if (($path === "reports" || $path === "reports/excel") && $method === "GET") {
     require_once __DIR__ . "/pos-reports.php";
     $from = $_GET["from"] ?? date("Y-m-d");
@@ -361,6 +366,12 @@ function pos_php_till_dispatch($path, $method, $body) {
       ];
     }
     $row["lines"] = $orderLines;
+    try {
+      pos_record_credit_sale($customer, $total, $orderId, $orderNumber, $methodPay, $bid, $uid);
+      pos_post_sale_journal($bid, $uid, $row);
+    } catch (Exception $e) {
+      pos_send(400, ["error" => $e->getMessage(), "php" => true]);
+    }
     pos_staff_audit($auth["user"], "Sale Created", [
       "module" => "sales",
       "target_id" => $orderId,

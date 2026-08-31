@@ -14,6 +14,9 @@ import { companyTimezone, normalizeTimezone, shopTimezonePayload, tzOffsetFor } 
 import { attachAuth, registerAuth, requireStaff, requirePerm } from "./auth.js";
 import { registerMaster } from "./master.js";
 import { registerTenant } from "./tenant.js";
+import { registerAccounts } from "./accounts.js";
+import { postSaleJournal } from "./accounting.js";
+import { recordCreditSale } from "./accounts.js";
 import { audit } from "./audit.js";
 import { getPlatformSettings } from "./settings.js";
 import { canonApiUrl, isAliasedApi, isApiUrl, rewriteToApi } from "./http-path.js";
@@ -342,6 +345,7 @@ app.post("/api/settings", requireStaff, requirePerm("settings"), async (req, res
 });
 
 registerCrud(app);
+registerAccounts(app);
 
 app.post("/api/checkout", requireStaff, requirePerm("counter"), async (req, res) => {
   const { customerId, paymentMethod, lines, packId, packCount, discount } = req.body || {};
@@ -478,8 +482,7 @@ app.post("/api/checkout", requireStaff, requirePerm("counter"), async (req, res)
       const [orderLines] = await conn.query("SELECT * FROM sales_order_lines WHERE order_id = ?", [
         orderId,
       ]);
-      if (orders[0]) return { ...orders[0], lines: orderLines };
-      return {
+      const orderRow = orders[0] || {
         id: orderId,
         order_number: orderNumber,
         customer_id: customer.id,
@@ -499,8 +502,20 @@ app.post("/api/checkout", requireStaff, requirePerm("counter"), async (req, res)
         business_id: businessId,
         branch_id: branchId(),
         cashier_id: authUser()?.id || null,
+        created_at: new Date().toISOString(),
         lines: orderLines,
       };
+      if (!orders[0]) orderRow.lines = orderLines;
+      else orderRow.lines = orderLines;
+      await recordCreditSale(conn, {
+        customer,
+        total,
+        orderId: orderRow.id,
+        orderNumber: orderRow.order_number,
+        method,
+      });
+      await postSaleJournal(conn, orderRow);
+      return orderRow;
     });
     await audit("Sale Created", {
       module: "sales",

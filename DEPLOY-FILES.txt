@@ -1,4 +1,4 @@
-Production deploy bundle — 20260830deploy13
+Production deploy bundle — 20260830deploy14
 =========================================
 
 Upload ALL files below to Hostinger public_html (overwrite):
@@ -28,6 +28,7 @@ PHP
   pos-php-till.php
   pos-orders.php
   pos-reports.php
+  pos-accounting.php
   pos-api.php
   api/health/index.php
   health.json
@@ -40,6 +41,10 @@ Node (if using hPanel Node.js web app — upload OR git pull then Restart)
   server/index.js
   server/crud.js
   server/reports.js
+  server/accounting.js
+  server/accounts.js
+  server/roles.js
+  server/schema.js
   package.json
 
 After upload:
@@ -47,25 +52,17 @@ After upload:
   2. Hard-refresh browser (Ctrl+Shift+R)
 
 FIXES in this bundle
+  - Full accounting module: receivables, payables, day book, COA, journal, trial balance, P&L, balance sheet, cash book
+  - Double-entry GL with auto-posting on sales, credit sales, purchases, receipts, payments
+  - Supplier payable balance tracking
+  - Accounts tab in POS nav (admin, manager, accountant roles)
+  - PHP parity for all /api/accounts/* routes on production without Node
+  - Permissions merge: new modules (accounts) auto-enabled for existing users per role defaults
   - Sales orders show order + payment status badges
   - Change order status / payment status from Sales orders view
   - Change line items (edit) with banner on POS counter; PHP PUT orders API
   - Thermal tax invoice print for sales orders (80mm, GST breakdown, HSN, CGST/SGST)
-  - Sales orders renamed to Invoices in POS nav
   - GST reports: output/input by rate, HSN itemwise, B2B/B2C sales, net GST summary
-  - Full PHP reports API (not just summary) for production without Node
-  - Excel export for all GST sheets (PHP + Node)
-  - Hide master admin viewing banner in business POS (keep Back to Master Admin in nav)
-  - HOTFIX: restore pos_send() in pos-php-core.php (fixes /api/health 500)
-  - Stop showing auto "Master admin login" notice in business POS
-  - Master admin impersonation works without visible shop banner
-  - Platform notifications show on business dashboard (manual master notices only)
-  - auth/me prefers active staff session over master cookie (business login fix)
-  - Master admin Open POS per user (Users tab)
-  - Business password change on edit (PHP + date normalization)
-  - Exit impersonation without full logout
-  - Master admin panel auto-exits shop view when opened during impersonation
-  - Removed conflicting x-pos script from master.html / index.html
 
 How to use Open POS
   1. Sign in at /master.html

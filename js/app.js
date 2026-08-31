@@ -288,6 +288,7 @@ function applyNav() {
       branches: "branches",
       devices: "devices",
       support: "support",
+      accounts: "accounts",
       reports: "reports",
       settings: "settings",
     };
@@ -305,6 +306,7 @@ function showView(name) {
   document.body.classList.toggle("counter-mode", name === "counter");
   document.querySelector(".stage")?.classList.toggle("is-counter", name === "counter");
   if (name === "reports") loadReports();
+  if (name === "accounts") loadAccounts();
   if (name === "orders") loadOrders();
   if (name === "purchases") loadPurchases();
   if (name === "suppliers") loadSuppliers();
@@ -880,7 +882,7 @@ async function loadSuppliers() {
     .map((s) => `<option value="${escapeHtml(s.id)}">${escapeHtml(s.name)}</option>`)
     .join("");
   $("suppliers-table").innerHTML = `<table><thead><tr>
-    <th>Code</th><th>Name</th><th>Contact</th><th>Mobile</th><th>GSTIN</th>
+    <th>Code</th><th>Name</th><th>Contact</th><th>Mobile</th><th>GSTIN</th><th>Payable</th>
   </tr></thead><tbody>${rows
     .map(
       (s) => `<tr>
@@ -889,9 +891,189 @@ async function loadSuppliers() {
       <td>${escapeHtml(s.contact_name || "—")}</td>
       <td>${escapeHtml(s.mobile || "—")}</td>
       <td>${escapeHtml(s.gstin || "—")}</td>
+      <td>${money(Number(s.payable_balance) || 0)}</td>
     </tr>`,
     )
     .join("")}</tbody></table>`;
+}
+
+let accTab = "receivables";
+
+function accPeriod() {
+  if (!$("acc-from")?.value) {
+    const parts = new Intl.DateTimeFormat("en-CA", { timeZone: shopTimezone(), year: "numeric", month: "2-digit" }).formatToParts(new Date());
+    $("acc-from").value = `${parts.find((p) => p.type === "year")?.value}-${parts.find((p) => p.type === "month")?.value}-01`;
+  }
+  if (!$("acc-to")?.value) $("acc-to").value = ymd();
+  if (!$("acc-asof")?.value) $("acc-asof").value = $("acc-to").value;
+  return { from: $("acc-from").value, to: $("acc-to").value, asOf: $("acc-asof").value };
+}
+
+function setAccTab(name) {
+  accTab = name;
+  document.querySelectorAll("[data-acc-tab]").forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.accTab === name);
+  });
+  document.querySelectorAll(".acc-pane").forEach((pane) => {
+    pane.hidden = pane.id !== `acc-pane-${name}`;
+  });
+  loadAccountsTab(name);
+}
+
+async function loadAccountsTab(name) {
+  const { from, to, asOf } = accPeriod();
+  if (name === "ledger") {
+    const rows = await api(`/api/accounts/ledger?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`);
+    $("acc-ledger-table").innerHTML = `<table><thead><tr>
+      <th>Entry</th><th>Type</th><th>Party</th><th>Amount</th><th>Method</th><th>Reference</th><th>Notes</th><th>Date</th>
+    </tr></thead><tbody>${rows.map((r) => `<tr>
+      <td>${escapeHtml(r.entry_no)}</td><td>${escapeHtml(r.entry_type)}</td><td>${escapeHtml(r.party_name || "—")}</td>
+      <td>${money(Number(r.amount) || 0)}</td><td>${escapeHtml(r.payment_method || "—")}</td>
+      <td>${escapeHtml(r.reference_type || "—")}</td><td>${escapeHtml(r.notes || "—")}</td>
+      <td>${escapeHtml(formatShopDateTime(r.created_at))}</td></tr>`).join("")}</tbody></table>`;
+  }
+  if (name === "coa") {
+    const rows = await api("/api/accounts/coa");
+    $("acc-coa-table").innerHTML = `<table><thead><tr><th>Code</th><th>Name</th><th>Group</th></tr></thead><tbody>${rows
+      .map((r) => `<tr><td>${escapeHtml(r.code)}</td><td>${escapeHtml(r.name)}</td><td>${escapeHtml(r.account_group)}</td></tr>`)
+      .join("")}</tbody></table>`;
+  }
+  if (name === "journal") {
+    const rows = await api(`/api/accounts/journal?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`);
+    $("acc-journal-table").innerHTML = `<table><thead><tr><th>Voucher</th><th>Date</th><th>Type</th><th>Narration</th><th>Lines</th></tr></thead><tbody>${rows
+      .map((r) => `<tr><td>${escapeHtml(r.voucher_no)}</td><td>${escapeHtml(r.voucher_date)}</td><td>${escapeHtml(r.voucher_type)}</td><td>${escapeHtml(r.narration || "—")}</td><td>${escapeHtml(r.lines || "—")}</td></tr>`)
+      .join("")}</tbody></table>`;
+  }
+  if (name === "trial-balance") {
+    const data = await api(`/api/accounts/trial-balance?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`);
+    $("acc-tb-table").innerHTML = `<table><thead><tr><th>Code</th><th>Account</th><th>Group</th><th>Debit</th><th>Credit</th><th>Balance</th></tr></thead><tbody>${data.rows
+      .map((r) => `<tr><td>${escapeHtml(r.code)}</td><td>${escapeHtml(r.name)}</td><td>${escapeHtml(r.account_group)}</td><td>${money(r.debit)}</td><td>${money(r.credit)}</td><td>${money(r.balance)}</td></tr>`)
+      .join("")}<tr><td colspan="3"><strong>Totals</strong></td><td><strong>${money(data.totalDebit)}</strong></td><td><strong>${money(data.totalCredit)}</strong></td><td></td></tr></tbody></table>`;
+  }
+  if (name === "profit-loss") {
+    const data = await api(`/api/accounts/profit-loss?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`);
+    $("acc-pl-table").innerHTML = `<div class="report-grid">
+      <div class="report-card"><span>Income</span><strong>${money(data.income)}</strong></div>
+      <div class="report-card"><span>Expense</span><strong>${money(data.expense)}</strong></div>
+      <div class="report-card"><span>Net profit</span><strong>${money(data.netProfit)}</strong></div>
+    </div><table><thead><tr><th colspan="2">Income</th></tr></thead><tbody>${(data.incomeRows || [])
+      .map((r) => `<tr><td>${escapeHtml(r.code)} ${escapeHtml(r.name)}</td><td>${money(r.amount)}</td></tr>`)
+      .join("")}</tbody><thead><tr><th colspan="2">Expenses</th></tr></thead><tbody>${(data.expenseRows || [])
+      .map((r) => `<tr><td>${escapeHtml(r.code)} ${escapeHtml(r.name)}</td><td>${money(r.amount)}</td></tr>`)
+      .join("")}</tbody></table>`;
+  }
+  if (name === "balance-sheet") {
+    const data = await api(`/api/accounts/balance-sheet?asOf=${encodeURIComponent(asOf)}`);
+    const groupTable = (title, rows) => `<h3>${title}</h3><table><tbody>${(rows || [])
+      .map((r) => `<tr><td>${escapeHtml(r.code)} ${escapeHtml(r.name)}</td><td>${money(r.balance)}</td></tr>`)
+      .join("")}</tbody></table>`;
+    $("acc-bs-table").innerHTML = `<div class="report-grid">
+      <div class="report-card"><span>Assets</span><strong>${money(data.assets)}</strong></div>
+      <div class="report-card"><span>Liabilities</span><strong>${money(data.liabilities)}</strong></div>
+      <div class="report-card"><span>Equity (+ P&amp;L)</span><strong>${money(data.equity)}</strong></div>
+    </div>${groupTable("Assets", data.groups?.asset)}${groupTable("Liabilities", data.groups?.liability)}${groupTable("Equity", data.groups?.equity)}<p class="hint">Retained profit included: ${money(data.netProfit)}</p>`;
+  }
+  if (name === "cash-book") {
+    const data = await api(`/api/accounts/cash-book?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`);
+    $("acc-cash-table").innerHTML = `<p class="hint">Closing balance: <strong>${money(data.closingBalance)}</strong></p><table><thead><tr>
+      <th>Date</th><th>Voucher</th><th>Type</th><th>Account</th><th>Debit</th><th>Credit</th><th>Balance</th>
+    </tr></thead><tbody>${(data.entries || [])
+      .map((r) => `<tr><td>${escapeHtml(r.voucher_date)}</td><td>${escapeHtml(r.voucher_no)}</td><td>${escapeHtml(r.voucher_type)}</td><td>${escapeHtml(r.name)}</td><td>${money(r.debit)}</td><td>${money(r.credit)}</td><td>${money(r.balance)}</td></tr>`)
+      .join("")}</tbody></table>`;
+  }
+}
+
+function showReceiptModal(customer) {
+  $("modal-title").textContent = `Receipt · ${customer.business_name || customer.name}`;
+  $("modal-body").innerHTML = `<form class="settings" id="receipt-modal-form">
+    <p class="section-note">Outstanding: <strong>${money(Number(customer.outstanding) || 0)}</strong></p>
+    <label>Amount <input id="rcp-amount" type="number" min="0.01" step="0.01" max="${Number(customer.outstanding) || 0}" required value="${Number(customer.outstanding) || 0}" /></label>
+    <label>Method <select id="rcp-method"><option value="cash">Cash</option><option value="upi">UPI</option><option value="card">Card</option><option value="bank">Bank</option></select></label>
+    <label>Notes <input id="rcp-notes" placeholder="Optional" /></label>
+    <button class="btn primary" type="submit">Save receipt</button>
+  </form><div class="hint" id="rcp-hint"></div>`;
+  $("modal").hidden = false;
+  $("receipt-modal-form").onsubmit = async (e) => {
+    e.preventDefault();
+    try {
+      const data = await api("/api/accounts/receipts", {
+        method: "POST",
+        body: JSON.stringify({ customer_id: customer.id, amount: Number($("rcp-amount").value), payment_method: $("rcp-method").value, notes: $("rcp-notes").value }),
+      });
+      $("modal").hidden = true;
+      await loadAccounts();
+      await loadBootstrap();
+      setHint(`Receipt saved · ${data.entryNo}`, "ok");
+    } catch (err) {
+      $("rcp-hint").textContent = err.message;
+      $("rcp-hint").className = "hint error";
+    }
+  };
+}
+
+function showPaymentModal(supplier) {
+  $("modal-title").textContent = `Payment · ${supplier.name}`;
+  $("modal-body").innerHTML = `<form class="settings" id="payment-modal-form">
+    <p class="section-note">Payable: <strong>${money(Number(supplier.payable_balance) || 0)}</strong></p>
+    <label>Amount <input id="pay-acc-amount" type="number" min="0.01" step="0.01" max="${Number(supplier.payable_balance) || 0}" required value="${Number(supplier.payable_balance) || 0}" /></label>
+    <label>Method <select id="pay-acc-method"><option value="cash">Cash</option><option value="upi">UPI</option><option value="card">Card</option><option value="bank">Bank</option></select></label>
+    <label>Notes <input id="pay-acc-notes" placeholder="Optional" /></label>
+    <button class="btn primary" type="submit">Save payment</button>
+  </form><div class="hint" id="pay-acc-hint"></div>`;
+  $("modal").hidden = false;
+  $("payment-modal-form").onsubmit = async (e) => {
+    e.preventDefault();
+    try {
+      const data = await api("/api/accounts/payments", {
+        method: "POST",
+        body: JSON.stringify({ supplier_id: supplier.id, amount: Number($("pay-acc-amount").value), payment_method: $("pay-acc-method").value, notes: $("pay-acc-notes").value }),
+      });
+      $("modal").hidden = true;
+      await loadAccounts();
+      await loadSuppliers();
+      setHint(`Payment saved · ${data.entryNo}`, "ok");
+    } catch (err) {
+      $("pay-acc-hint").textContent = err.message;
+      $("pay-acc-hint").className = "hint error";
+    }
+  };
+}
+
+async function loadAccounts() {
+  if (!$("acc-summary")) return;
+  $("acc-hint").textContent = "Loading…";
+  $("acc-hint").className = "hint";
+  try {
+    accPeriod();
+    const [summary, receivables, payables] = await Promise.all([
+      api("/api/accounts/summary"),
+      api("/api/accounts/receivables"),
+      api("/api/accounts/payables"),
+    ]);
+    $("acc-summary").innerHTML = [
+      ["Receivables", money(summary.receivables)],
+      ["Payables", money(summary.payables)],
+      ["Customers due", summary.customersDue],
+      ["Suppliers due", summary.suppliersDue],
+    ].map(([k, v]) => `<div class="report-card"><span>${k}</span><strong>${v}</strong></div>`).join("");
+    $("acc-receivables-table").innerHTML = receivables.length
+      ? `<table><thead><tr><th>Code</th><th>Name</th><th>Business</th><th>Mobile</th><th>Credit limit</th><th>Outstanding</th><th></th></tr></thead><tbody>${receivables
+        .map((c) => `<tr><td>${escapeHtml(c.code)}</td><td>${escapeHtml(c.name)}</td><td>${escapeHtml(c.business_name || "—")}</td><td>${escapeHtml(c.mobile || "—")}</td><td>${money(Number(c.credit_limit) || 0)}</td><td>${money(Number(c.outstanding) || 0)}</td><td><button class="btn primary" type="button" data-rcp="${escapeHtml(c.id)}">Receipt</button></td></tr>`)
+        .join("")}</tbody></table>`
+      : `<p class="hint">No receivables.</p>`;
+    $("acc-payables-table").innerHTML = payables.length
+      ? `<table><thead><tr><th>Code</th><th>Name</th><th>Contact</th><th>Mobile</th><th>Payable</th><th></th></tr></thead><tbody>${payables
+        .map((s) => `<tr><td>${escapeHtml(s.code)}</td><td>${escapeHtml(s.name)}</td><td>${escapeHtml(s.contact_name || "—")}</td><td>${escapeHtml(s.mobile || "—")}</td><td>${money(Number(s.payable_balance) || 0)}</td><td><button class="btn primary" type="button" data-pay="${escapeHtml(s.id)}">Payment</button></td></tr>`)
+        .join("")}</tbody></table>`
+      : `<p class="hint">No payables.</p>`;
+    state.accReceivables = receivables;
+    state.accPayables = payables;
+    $("acc-hint").textContent = "";
+    if (!["receivables", "payables"].includes(accTab)) await loadAccountsTab(accTab);
+  } catch (err) {
+    $("acc-hint").textContent = err.message;
+    $("acc-hint").className = "hint error";
+  }
 }
 
 $("catalog").addEventListener("click", (e) => {
@@ -1082,6 +1264,32 @@ $("btn-pay").addEventListener("click", async () => {
 
 $("modal-close").addEventListener("click", () => {
   $("modal").hidden = true;
+});
+document.querySelector(".accounts-toolbar")?.addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-acc-tab]");
+  if (btn) setAccTab(btn.dataset.accTab);
+});
+$("acc-period-form")?.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  try {
+    await loadAccountsTab(accTab);
+  } catch (err) {
+    $("acc-hint").textContent = err.message;
+    $("acc-hint").className = "hint error";
+  }
+});
+$("view-accounts")?.addEventListener("click", (e) => {
+  const rcp = e.target.closest("[data-rcp]");
+  if (rcp) {
+    const customer = (state.accReceivables || []).find((c) => c.id === rcp.dataset.rcp);
+    if (customer) showReceiptModal(customer);
+    return;
+  }
+  const pay = e.target.closest("[data-pay]");
+  if (pay) {
+    const supplier = (state.accPayables || []).find((s) => s.id === pay.dataset.pay);
+    if (supplier) showPaymentModal(supplier);
+  }
 });
 document.querySelector(".nav").addEventListener("click", (e) => {
   const btn = e.target.closest("[data-view]");
