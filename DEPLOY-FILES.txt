@@ -1,4 +1,4 @@
-Production deploy bundle — 20260830deploy15
+Production deploy bundle — 20260830deploy16
 =========================================
 
 Upload ALL files below to Hostinger public_html (overwrite):
@@ -52,8 +52,9 @@ After upload:
   2. Hard-refresh browser (Ctrl+Shift+R)
 
 FIXES in this bundle
-  - Purchase bills: thermal 80mm design with supplier details, HSN, input CGST/SGST, preview and print
-  - Purchases list + detail pane (like sales invoices)
+  - Purchases bill preview: PHP now returns line items (was empty on production)
+  - Purchases layout: collapsible new form, sticky bill preview pane, selected highlight
+  - Purchase bill dates formatted correctly (no midnight timezone shift)
   - Full accounting module: receivables, payables, day book, COA, journal, trial balance, P&L, balance sheet, cash book
   - Double-entry GL with auto-posting on sales, credit sales, purchases, receipts, payments
   - Supplier payable balance tracking

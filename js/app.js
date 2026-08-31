@@ -197,6 +197,23 @@ function formatShopDateTime(value) {
   });
 }
 
+function formatShopDate(value) {
+  if (!value) return "";
+  const s = String(value).trim();
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) {
+    const d = new Date(`${s.slice(0, 10)}T12:00:00`);
+    if (!Number.isNaN(d.getTime())) {
+      return d.toLocaleDateString("en-IN", {
+        timeZone: shopTimezone(),
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+      });
+    }
+  }
+  return formatShopDateTime(value);
+}
+
 function formatShopTime(d = new Date()) {
   return d.toLocaleTimeString("en-IN", {
     timeZone: shopTimezone(),
@@ -782,6 +799,7 @@ function invoiceCtx() {
     suppliers: state.suppliers,
     items: state.items,
     formatDateTime: formatShopDateTime,
+    formatDate: formatShopDate,
     money,
     escapeHtml,
   };
@@ -869,11 +887,18 @@ async function loadOrders() {
 }
 
 let purchaseCache = [];
+let selectedPurchaseId = null;
 
 function showPurchase(p) {
+  selectedPurchaseId = p.id;
+  document.querySelectorAll("#purchases-list .order-item").forEach((btn) => {
+    btn.classList.toggle("is-selected", btn.dataset.pid === p.id);
+  });
+  const lineCount = (p.lines || []).length;
   $("purchase-pane").innerHTML = `<div class="order-detail-head">
       <div class="order-badges">${payStatusBadge(p.payment_status)}</div>
-      <p class="hint">${escapeHtml(p.purchase_number)} · ${escapeHtml(p.supplier_name)} · ${escapeHtml(p.purchase_date || "")}</p>
+      <p class="hint">${escapeHtml(p.purchase_number)} · ${escapeHtml(p.supplier_name)} · ${escapeHtml(formatShopDate(p.purchase_date))}</p>
+      ${lineCount ? "" : '<p class="hint error">Line items missing — refresh or re-upload pos-php-till.php</p>'}
     </div>
     <div class="thermal-preview">${InvoicePrint.purchaseBody(p, invoiceCtx())}</div>
     <div class="print-actions">
@@ -882,19 +907,26 @@ function showPurchase(p) {
 }
 
 async function loadPurchases() {
+  if (!state.suppliers?.length) await loadSuppliers();
   purchaseCache = await api("/api/purchases");
-  $("purchases-list").innerHTML = purchaseCache
-    .map(
-      (p) => `<button class="order-item" type="button" data-pid="${escapeHtml(p.id)}">
+  $("purchases-list").innerHTML = purchaseCache.length
+    ? purchaseCache
+        .map(
+          (p) => `<button class="order-item${p.id === selectedPurchaseId ? " is-selected" : ""}" type="button" data-pid="${escapeHtml(p.id)}">
         <span>${escapeHtml(p.purchase_number)} · ${escapeHtml(p.supplier_name)}
         <span class="order-item-badges">${payStatusBadge(p.payment_status)}</span><br>
-        <small>${escapeHtml(p.supplier_invoice_number ? `Bill: ${p.supplier_invoice_number}` : "No supplier bill")} · ${escapeHtml(p.payment_method)} · ${escapeHtml(p.purchase_date || "")}</small></span>
+        <small>${escapeHtml(p.supplier_invoice_number ? `Bill: ${p.supplier_invoice_number}` : "No supplier bill")} · ${escapeHtml(p.payment_method)} · ${escapeHtml(formatShopDate(p.purchase_date))}</small></span>
         <span>${money(p.total)}</span>
       </button>`,
-    )
-    .join("");
-  if (purchaseCache.length && !$("purchase-pane").querySelector(".thermal-preview")) {
-    showPurchase(purchaseCache[0]);
+        )
+        .join("")
+    : '<p class="hint">No purchases yet. Use <strong>New purchase</strong> above.</p>';
+  if (purchaseCache.length) {
+    const current = purchaseCache.find((p) => p.id === selectedPurchaseId) || purchaseCache[0];
+    showPurchase(current);
+  } else {
+    selectedPurchaseId = null;
+    $("purchase-pane").innerHTML = '<p class="hint">Select a purchase bill.</p>';
   }
 }
 
@@ -1426,6 +1458,7 @@ $("purchase-form").addEventListener("submit", async (e) => {
     $("po-hint").textContent = "Saved";
     $("po-hint").className = "hint ok";
     $("purchase-form").reset();
+    $("purchase-new").open = false;
     await loadBootstrap();
     await loadPurchases();
     if (purchaseCache.length) showPurchase(purchaseCache[0]);

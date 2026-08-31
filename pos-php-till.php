@@ -237,7 +237,21 @@ function pos_php_till_dispatch($path, $method, $body) {
   }
 
   if ($path === "purchases" && $method === "GET") {
-    pos_send(200, pos_q("SELECT * FROM purchases WHERE business_id = ? ORDER BY purchase_date DESC, created_at DESC LIMIT 80", "s", [$bid]));
+    $purchases = pos_q("SELECT * FROM purchases WHERE business_id = ? ORDER BY purchase_date DESC, created_at DESC LIMIT 80", "s", [$bid]);
+    $ids = array_column($purchases, "id");
+    $lines = [];
+    if ($ids) {
+      $ph = implode(",", array_fill(0, count($ids), "?"));
+      $lines = pos_q("SELECT * FROM purchase_lines WHERE purchase_id IN ($ph) ORDER BY created_at", str_repeat("s", count($ids)), $ids);
+    }
+    foreach ($purchases as &$p) {
+      $p["lines"] = [];
+      foreach ($lines as $l) {
+        if ($l["purchase_id"] === $p["id"]) $p["lines"][] = $l;
+      }
+    }
+    unset($p);
+    pos_send(200, $purchases);
   }
 
   if ($path === "holds" && $method === "GET") {

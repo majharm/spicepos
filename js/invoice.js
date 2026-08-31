@@ -103,7 +103,8 @@
   }
 
   function purchaseBody(purchase, ctx) {
-    const { company, suppliers, items, formatDateTime, money, escapeHtml } = ctx;
+    const { company, suppliers, items, formatDate, formatDateTime, money, escapeHtml } = ctx;
+    const formatWhen = formatDate || formatDateTime;
     const co = company || {};
     const lines = enrichPurchaseLines(purchase, items);
     const supplier = findSupplier(suppliers, purchase);
@@ -114,7 +115,7 @@
     const total = round2(purchase.total);
     const poNo = escapeHtml(purchase.purchase_number || "—");
     const supInv = escapeHtml(purchase.supplier_invoice_number || "—");
-    const when = formatDateTime(purchase.purchase_date || purchase.created_at || new Date().toISOString());
+    const when = formatWhen(purchase.purchase_date || purchase.created_at || new Date().toISOString());
     const logo = co.logo_url
       ? `<img class="inv-logo" src="${escapeHtml(co.logo_url)}" alt="">`
       : "";

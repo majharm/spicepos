@@ -9,8 +9,8 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" />
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./css/pos.css?v=20260830deploy15" />
-    <link rel="stylesheet" href="./css/saas.css?v=20260830deploy15" />
+    <link rel="stylesheet" href="./css/pos.css?v=20260830deploy16" />
+    <link rel="stylesheet" href="./css/saas.css?v=20260830deploy16" />
   </head>
   <body>
     <div class="app">
@@ -179,24 +179,28 @@
         </section>
         <section class="view" id="view-purchases" hidden>
           <h2>Purchases</h2>
-          <form class="settings wide" id="purchase-form">
-            <label>Supplier <select id="po-supplier"></select></label>
-            <label>Invoice no. <input id="po-invoice" /></label>
-            <label>Date <input id="po-date" type="date" /></label>
-            <label>Pay
-              <select id="po-pay">
-                <option value="cash">Cash</option>
-                <option value="upi">UPI</option>
-                <option value="credit">Credit</option>
-              </select>
-            </label>
-            <div id="po-lines" class="pack-compose"></div>
-            <button class="btn primary" type="submit">Save</button>
-          </form>
-          <div class="hint" id="po-hint"></div>
+          <p class="lede">Supplier purchase bills with thermal preview, input GST breakdown, and print.</p>
+          <details class="purchase-new" id="purchase-new">
+            <summary class="btn">New purchase</summary>
+            <form class="settings wide" id="purchase-form">
+              <label>Supplier <select id="po-supplier"></select></label>
+              <label>Invoice no. <input id="po-invoice" /></label>
+              <label>Date <input id="po-date" type="date" /></label>
+              <label>Pay
+                <select id="po-pay">
+                  <option value="cash">Cash</option>
+                  <option value="upi">UPI</option>
+                  <option value="credit">Credit</option>
+                </select>
+              </label>
+              <div id="po-lines" class="pack-compose"></div>
+              <button class="btn primary" type="submit">Save purchase</button>
+            </form>
+            <div class="hint" id="po-hint"></div>
+          </details>
           <div class="split purchases-split">
-            <div class="table-wrap" id="purchases-list"></div>
-            <div class="pane" id="purchase-pane"><p class="hint">Select a purchase bill.</p></div>
+            <div class="bill-list" id="purchases-list"></div>
+            <div class="pane purchase-pane" id="purchase-pane"><p class="hint">Select a purchase bill.</p></div>
           </div>
         </section>
         <section class="view" id="view-suppliers" hidden>
@@ -415,9 +419,9 @@
         </section>
       </div>
     </aside>
-    <script src="./js/pos-api.js?v=20260830deploy15"></script>
-    <script src="./js/dev-mode.js?v=20260830deploy15"></script>
-    <script src="./js/invoice.js?v=20260830deploy15"></script>
-    <script src="./js/app.js?v=20260830deploy15"></script>
+    <script src="./js/pos-api.js?v=20260830deploy16"></script>
+    <script src="./js/dev-mode.js?v=20260830deploy16"></script>
+    <script src="./js/invoice.js?v=20260830deploy16"></script>
+    <script src="./js/app.js?v=20260830deploy16"></script>
   </body>
 </html>
