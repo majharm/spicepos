@@ -94,6 +94,8 @@ export async function ensureSchema() {
     INDEX (business_id)
   )`);
 
+  await addColumn("suppliers", "email", "VARCHAR(255) NULL");
+  await addColumn("suppliers", "address", "TEXT NULL");
   await addColumn("suppliers", "payable_balance", "DECIMAL(12,2) NOT NULL DEFAULT 0");
 
   await create(`CREATE TABLE IF NOT EXISTS account_ledger (

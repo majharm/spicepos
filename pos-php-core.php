@@ -138,6 +138,8 @@ function pos_shop_timezone() {
   return pos_env("POS_TIMEZONE", "Asia/Kolkata");
 }
 
+require_once __DIR__ . "/pos-mail.php";
+
 function pos_shop_tz_offset() {
   return pos_env("POS_TZ_OFFSET", "+05:30");
 }
@@ -644,6 +646,13 @@ function pos_ensure_accounts_schema() {
     @$db->query("ALTER TABLE suppliers ADD COLUMN payable_balance DECIMAL(12,2) NOT NULL DEFAULT 0");
   }
   if ($res) $res->free();
+  foreach (["email" => "VARCHAR(255) NULL", "address" => "TEXT NULL"] as $name => $ddl) {
+    $res = $db->query("SHOW COLUMNS FROM suppliers LIKE '" . $db->real_escape_string($name) . "'");
+    if ($res && $res->num_rows === 0) {
+      @$db->query("ALTER TABLE suppliers ADD COLUMN {$name} {$ddl}");
+    }
+    if ($res) $res->free();
+  }
   @$db->query(
     "CREATE TABLE IF NOT EXISTS account_ledger (
       id VARCHAR(255) PRIMARY KEY,
@@ -1336,6 +1345,12 @@ function pos_php_dispatch($path, $method, $rawBody) {
       $user = $reg["user"];
       $bizRows = pos_q("SELECT * FROM businesses WHERE id = ? LIMIT 1", "s", [$user["business_id"]]);
       $business = $bizRows[0];
+      pos_send_welcome_signup([
+        "shopName" => $business["name"] ?? "",
+        "ownerName" => $user["first_name"] ?? "",
+        "email" => $user["email"] ?? "",
+        "username" => $user["username"] ?? "",
+      ]);
       $ttl = pos_ttl(pos_remember($body));
       $token = pos_new_token();
       pos_q(
@@ -1511,6 +1526,13 @@ function pos_php_dispatch($path, $method, $rawBody) {
       $reg = pos_register_business($body);
       pos_audit($auth["admin"], "Business Created", ["module" => "businesses", "target_id" => $reg["businessId"], "target_name" => $body["name"] ?? ""]);
       $row = pos_q("SELECT * FROM businesses WHERE id = ? LIMIT 1", "s", [$reg["businessId"]]);
+      $user = $reg["user"] ?? [];
+      pos_send_welcome_signup([
+        "shopName" => $row[0]["name"] ?? "",
+        "ownerName" => $user["first_name"] ?? "",
+        "email" => $user["email"] ?? "",
+        "username" => $user["username"] ?? "",
+      ]);
       pos_send(200, ["ok" => true, "business" => $row[0]]);
     }
 

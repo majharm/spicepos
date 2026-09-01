@@ -149,4 +149,7 @@ test("HTML and CSS cache stickers match deploy40", () => {
   assert.match(index, /logo-pick/);
   assert.match(index, /id="set-address"/);
   assert.match(index, /<textarea id="set-address"/);
+  assert.match(index, /id="sup-email"/);
+  assert.match(index, /id="sup-address"/);
+  assert.match(index, /<textarea id="sup-address"/);
 });

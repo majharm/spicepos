@@ -119,7 +119,7 @@ const VIEW_META = {
   packs: { title: "Packs", subtitle: "Pre-defined spice packs and compositions" },
   orders: { title: "Invoices", subtitle: "Tax invoices — search, print, update status" },
   purchases: { title: "Purchases", subtitle: "Supplier bills with GST and thermal print" },
-  suppliers: { title: "Suppliers", subtitle: "Vendor contacts and GSTIN" },
+  suppliers: { title: "Suppliers", subtitle: "Vendor contacts, address, and GSTIN" },
   stock: { title: "Stock", subtitle: "Adjustments, transfers, and low-stock alerts" },
   staff: { title: "Staff & roles", subtitle: "Users, roles, and access" },
   branches: { title: "Branches", subtitle: "Shop locations and contact details" },
@@ -1305,8 +1305,8 @@ async function loadSuppliers() {
   $("po-supplier").innerHTML = rows
     .map((s) => `<option value="${escapeHtml(s.id)}">${escapeHtml(s.name)}</option>`)
     .join("");
-  $("suppliers-table").innerHTML = `<table><thead><tr>
-    <th>Code</th><th>Name</th><th>Contact</th><th>Mobile</th><th>GSTIN</th><th>Payable</th>
+  $("suppliers-table").innerHTML = `<table class="suppliers-table"><thead><tr>
+    <th>Code</th><th>Name</th><th>Contact</th><th>Mobile</th><th>Email</th><th>Address</th><th>GSTIN</th><th>Payable</th>
   </tr></thead><tbody>${rows
     .map(
       (s) => `<tr>
@@ -1314,6 +1314,8 @@ async function loadSuppliers() {
       <td>${escapeHtml(s.name)}</td>
       <td>${escapeHtml(s.contact_name || "—")}</td>
       <td>${escapeHtml(s.mobile || "—")}</td>
+      <td>${escapeHtml(s.email || "—")}</td>
+      <td title="${escapeHtml(s.address || "")}">${escapeHtml(s.address || "—")}</td>
       <td>${escapeHtml(s.gstin || "—")}</td>
       <td>${money(Number(s.payable_balance) || 0)}</td>
     </tr>`,
@@ -2016,6 +2018,8 @@ $("supplier-form").addEventListener("submit", async (e) => {
         name: $("sup-name").value,
         contact_name: $("sup-contact").value,
         mobile: $("sup-mobile").value,
+        email: $("sup-email").value,
+        address: $("sup-address").value,
         gstin: $("sup-gstin").value,
       }),
     });

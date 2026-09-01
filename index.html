@@ -282,11 +282,16 @@
         </section>
         <section class="view" id="view-suppliers" hidden>
           <h2 class="visually-hidden">Suppliers</h2>
+          <p class="lede">Vendor name, contact, email, address, and GSTIN.</p>
           <form class="settings wide" id="supplier-form">
-            <label>Name <input id="sup-name" required /></label>
-            <label>Contact <input id="sup-contact" /></label>
-            <label>Mobile <input id="sup-mobile" /></label>
-            <label>GSTIN <input id="sup-gstin" /></label>
+            <label>Name <input id="sup-name" required maxlength="180" autocomplete="organization" /></label>
+            <label>Contact <input id="sup-contact" maxlength="120" autocomplete="name" /></label>
+            <label>Mobile <input id="sup-mobile" type="tel" inputmode="numeric" maxlength="15" placeholder="10-digit mobile" /></label>
+            <label>Email <input id="sup-email" type="email" maxlength="160" placeholder="vendor@email.com" autocomplete="email" /></label>
+            <label>GSTIN <input id="sup-gstin" maxlength="20" placeholder="Optional" autocomplete="off" /></label>
+            <label class="full">Address
+              <textarea id="sup-address" rows="2" maxlength="500" placeholder="Street, city, PIN"></textarea>
+            </label>
             <button class="btn primary" type="submit">Save</button>
           </form>
           <div class="hint" id="sup-hint"></div>

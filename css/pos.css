@@ -942,6 +942,13 @@ tr:last-child td { border-bottom: 0; }
   grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
   align-items: end;
 }
+.settings.wide .full { grid-column: 1 / -1; }
+.suppliers-table td:nth-child(6) {
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .settings.wide.biz-create {
   grid-template-columns: 1fr;
   align-items: stretch;
@@ -1603,4 +1610,6 @@ tr:last-child td { border-bottom: 0; }
   .orders-table td:nth-child(6) { display: none; }
   .orders-table th,
   .orders-table td { padding: 10px 8px; }
+  .suppliers-table th:nth-child(3),
+  .suppliers-table td:nth-child(3) { display: none; }
 }

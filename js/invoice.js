@@ -200,6 +200,8 @@
     <div class="inv-row"><span>Supplier</span><span>${escapeHtml(purchase.supplier_name || supplier?.name || "—")}</span></div>
     ${supplier?.contact_name ? `<div class="inv-row"><span>Contact</span><span>${escapeHtml(supplier.contact_name)}</span></div>` : ""}
     ${supplier?.mobile ? `<div class="inv-row"><span>Mobile</span><span>${escapeHtml(supplier.mobile)}</span></div>` : ""}
+    ${supplier?.email ? `<div class="inv-row"><span>Email</span><span>${escapeHtml(supplier.email)}</span></div>` : ""}
+    ${supplier?.address ? `<div class="inv-row"><span>Address</span><span>${escapeHtml(supplier.address)}</span></div>` : ""}
     ${supGstin ? `<div class="inv-row"><span>Supplier GSTIN</span><span>${escapeHtml(supGstin)}</span></div>` : ""}
   </div>
   <div class="inv-rule"></div>

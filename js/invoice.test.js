@@ -95,7 +95,7 @@ test("purchase bill HTML includes purchase header and input GST", () => {
     },
     {
       company: { name: "ATAV Spices", gstin: "27AABCU9603R1ZX", address: "Pune" },
-      suppliers: [{ id: "s1", name: "Spice Traders", gstin: "27AAAAA0000A1Z5", mobile: "9999999999" }],
+      suppliers: [{ id: "s1", name: "Spice Traders", gstin: "27AAAAA0000A1Z5", mobile: "9999999999", email: "traders@example.com", address: "Pune Market" }],
       items: [{ id: "i1", code: "0910", gst_rate: 5 }],
       formatDateTime: (v) => String(v),
       money: (n) => `₹${Number(n).toFixed(2)}`,
@@ -108,6 +108,8 @@ test("purchase bill HTML includes purchase header and input GST", () => {
   assert.match(html, /Input CGST/);
   assert.match(html, /Input SGST/);
   assert.match(html, /Spice Traders/);
+  assert.match(html, /traders@example.com/);
+  assert.match(html, /Pune Market/);
 });
 
 test("piece items print qty in pcs and rate per pc", () => {
