@@ -1,4 +1,4 @@
-Production deploy bundle — 20260901deploy32
+Production deploy bundle — 20260901deploy33
 =========================================
 
 Upload ALL files below to Hostinger public_html (overwrite):
@@ -33,6 +33,7 @@ PHP
   pos-holds.php
   pos-crud.php
   pos-backup.php
+  pos-units.php
   pos-orders.php
   pos-reports.php
   pos-accounting.php
@@ -43,6 +44,7 @@ PHP
   api/holds/index.php
   api/backup/index.php
   api/backup/restore/index.php
+  api/units/index.php
   pos-data/.htaccess
   health.json
 
@@ -61,6 +63,7 @@ Node (if using hPanel Node.js web app — upload OR git pull then Restart)
   server/schema.js
   server/backup.js
   server/backup-util.js
+  server/units.js
   package.json
 
 After upload:
@@ -68,6 +71,7 @@ After upload:
   2. Hard-refresh browser (Ctrl+Shift+R)
 
 FIXES in this bundle
+  - Inventory → Units: unit master (GM, KG, ML, LTR, PCS) used on item forms; add BOX/qty units
   - Settings: Download backup JSON and restore this shop's data
   - Item unit types: qty/pcs, g, kg, ml, litre (rates per pc / kg / ltr)
   - Save/Hold on PHP: POST /api/checkout no longer 301-redirects to GET (DirectorySlash Off; rewrite directories)
@@ -88,11 +92,4 @@ FIXES in this bundle
   - Performance: system fonts (no Google Fonts), deferred scripts, debounced search/filters
   - Parallel bootstrap API calls (today + dashboard + suppliers)
   - Lighter CSS: no backdrop blur, flat cards, content-visibility on views
-  - Clock DOM updates only when time text changes
-
-How to use Open POS
-  1. Sign in at /master.html
-  2. Businesses → Open POS (enters as business admin)
-     OR Users → Open POS (enters as that specific user)
-  3. Shop POS opens with full access (even if expired/suspended)
-  4. Back to Master Admin ends shop view only
+  - Clock DOM updates only when the time text changes

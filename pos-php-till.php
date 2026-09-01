@@ -10,7 +10,7 @@ function pos_php_till_dispatch($path, $method, $body) {
   $staff = [
     "bootstrap", "dashboard", "today", "suppliers", "items", "customers", "packs",
     "orders", "purchases", "stock", "staff", "branches", "devices", "holds",
-    "checkout", "settings", "reports", "audit", "accounts", "backup",
+    "checkout", "settings", "reports", "audit", "accounts", "backup", "units",
   ];
   if (!in_array($head, $staff, true)) return false;
   $auth = pos_staff_session();
@@ -23,6 +23,12 @@ function pos_php_till_dispatch($path, $method, $body) {
   if ($path === "backup" || $path === "backup/restore") {
     pos_require_backup();
     pos_dispatch_backup($path, $method, $body, $bid, $branchId, $uid, $auth);
+    return true;
+  }
+
+  if ($path === "units" || preg_match('#^units/#', $path)) {
+    pos_require_units();
+    pos_dispatch_units($path, $method, $body, $bid, $branchId, $uid, $auth);
     return true;
   }
 
@@ -105,6 +111,7 @@ function pos_php_till_dispatch($path, $method, $body) {
       "items" => $items,
       "customers" => $customers,
       "packs" => $outPacks,
+      "units" => function_exists("pos_list_units") ? pos_list_units($bid) : [],
       "php" => true,
     ]);
   }

@@ -6,8 +6,8 @@
     <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
     <title>SWAMI MASALE POS</title>
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./css/pos.css?v=20260901deploy32" />
-    <link rel="stylesheet" href="./css/saas.css?v=20260901deploy32" />
+    <link rel="stylesheet" href="./css/pos.css?v=20260901deploy33" />
+    <link rel="stylesheet" href="./css/saas.css?v=20260901deploy33" />
   </head>
   <body>
     <div class="app" id="app">
@@ -33,6 +33,7 @@
           <div class="nav-group">
             <p class="nav-group-label">Inventory</p>
             <button class="nav-btn" type="button" data-view="items"><span class="nav-icon" aria-hidden="true">◫</span>Items</button>
+            <button class="nav-btn" type="button" data-view="units"><span class="nav-icon" aria-hidden="true">⚖</span>Units</button>
             <button class="nav-btn" type="button" data-view="packs"><span class="nav-icon" aria-hidden="true">▦</span>Packs</button>
             <button class="nav-btn" type="button" data-view="stock"><span class="nav-icon" aria-hidden="true">▥</span>Stock</button>
             <button class="nav-btn" type="button" data-view="suppliers"><span class="nav-icon" aria-hidden="true">◇</span>Suppliers</button>
@@ -165,13 +166,7 @@
             <datalist id="category-list"></datalist>
             <datalist id="subcategory-list"></datalist>
             <label>Unit type
-              <select id="item-unit">
-                <option value="GM">Grams (g)</option>
-                <option value="KG">Kilogram (kg)</option>
-                <option value="ML">Millilitre (ml)</option>
-                <option value="LTR">Litre (L)</option>
-                <option value="PCS">Quantity (pcs)</option>
-              </select>
+              <select id="item-unit"></select>
             </label>
             <label><span id="item-retail-lab">Retail ₹/kg</span> <input id="item-retail" type="number" step="0.01" /></label>
             <label><span id="item-b2b-lab">B2B ₹/kg</span> <input id="item-b2b" type="number" step="0.01" /></label>
@@ -183,6 +178,28 @@
           </form>
           <div class="hint" id="item-hint"></div>
           <div class="table-wrap" id="items-table"></div>
+        </section>
+        <section class="view" id="view-units" hidden>
+          <h2 class="visually-hidden">Unit master</h2>
+          <p class="lede">Inventory unit master — the same units used when adding items (qty, kg, litre, and your own).</p>
+          <form class="settings wide" id="unit-form">
+            <input type="hidden" id="unit-id" />
+            <label>Code <input id="unit-code" required placeholder="BOX" maxlength="12" /></label>
+            <label>Name <input id="unit-name" required placeholder="Box" /></label>
+            <label>Kind
+              <select id="unit-family">
+                <option value="count">Quantity (pcs / box / qty)</option>
+                <option value="weight">Weight (g / kg)</option>
+                <option value="volume">Volume (ml / litre)</option>
+              </select>
+            </label>
+            <label>Rate shown as <input id="unit-rate-suffix" placeholder="/pc" /></label>
+            <label>Stock shown as <input id="unit-stock-suffix" placeholder="pcs" /></label>
+            <button class="btn primary" type="submit">Save unit</button>
+            <button class="btn" type="button" id="unit-cancel">Clear</button>
+          </form>
+          <div class="hint" id="unit-hint"></div>
+          <div class="table-wrap" id="units-table"></div>
         </section>
         <section class="view" id="view-customers" hidden>
           <h2 class="visually-hidden">Customers</h2>
@@ -498,10 +515,10 @@
         </section>
       </div>
     </aside>
-    <script src="./js/pos-api.js?v=20260901deploy32" defer></script>
-    <script src="./js/units.js?v=20260901deploy32" defer></script>
-    <script src="./js/dev-mode.js?v=20260901deploy32" defer></script>
-    <script src="./js/invoice.js?v=20260901deploy32" defer></script>
-    <script src="./js/app.js?v=20260901deploy32" defer></script>
+    <script src="./js/pos-api.js?v=20260901deploy33" defer></script>
+    <script src="./js/units.js?v=20260901deploy33" defer></script>
+    <script src="./js/dev-mode.js?v=20260901deploy33" defer></script>
+    <script src="./js/invoice.js?v=20260901deploy33" defer></script>
+    <script src="./js/app.js?v=20260901deploy33" defer></script>
   </body>
 </html>

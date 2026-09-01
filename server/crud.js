@@ -14,7 +14,11 @@ export function itemUnit(item) {
 }
 
 export function lineAmount(quantityGm, ratePerKg, unitOrItem) {
-  return POSUnits.lineAmount(quantityGm, ratePerKg, itemUnit(unitOrItem));
+  const code = itemUnit(unitOrItem);
+  const t = POSUnits.typeOf(code);
+  const known = t.code === code;
+  if (!known || t.family === "count") return (Number(quantityGm) || 0) * (Number(ratePerKg) || 0);
+  return POSUnits.lineAmount(quantityGm, ratePerKg, code);
 }
 
 export function round2(n) {

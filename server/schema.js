@@ -77,6 +77,23 @@ export async function ensureSchema() {
   await addColumn("items", "unit", "VARCHAR(32) NULL");
   await addColumn("items", "base_unit", "VARCHAR(32) NOT NULL DEFAULT 'GM'");
 
+  await create(`CREATE TABLE IF NOT EXISTS inventory_units (
+    id VARCHAR(255) PRIMARY KEY,
+    business_id VARCHAR(255) NOT NULL,
+    code VARCHAR(32) NOT NULL,
+    name VARCHAR(128) NOT NULL,
+    family VARCHAR(16) NOT NULL DEFAULT 'count',
+    rate_suffix VARCHAR(16) NOT NULL DEFAULT '/pc',
+    stock_suffix VARCHAR(16) NOT NULL DEFAULT 'pcs',
+    step DECIMAL(14,3) NOT NULL DEFAULT 1,
+    receive_qty DECIMAL(14,3) NOT NULL DEFAULT 1,
+    display_div DECIMAL(14,3) NOT NULL DEFAULT 1,
+    sort_order INT NOT NULL DEFAULT 0,
+    status VARCHAR(16) NOT NULL DEFAULT 'active',
+    UNIQUE KEY uniq_unit_biz_code (business_id, code),
+    INDEX (business_id)
+  )`);
+
   await addColumn("suppliers", "payable_balance", "DECIMAL(12,2) NOT NULL DEFAULT 0");
 
   await create(`CREATE TABLE IF NOT EXISTS account_ledger (

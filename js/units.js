@@ -3,13 +3,14 @@
   root.POSUnits = api;
   if (typeof window !== "undefined") window.POSUnits = api;
 })(typeof globalThis !== "undefined" ? globalThis : this, function () {
-  const TYPES = [
+  const DEFAULT_TYPES = [
     { code: "GM", label: "Grams (g)", family: "weight", rateSuffix: "/kg", stockSuffix: "g", step: 100, receive: 1000 },
     { code: "KG", label: "Kilogram (kg)", family: "weight", rateSuffix: "/kg", stockSuffix: "kg", step: 100, receive: 1000, displayDiv: 1000 },
     { code: "ML", label: "Millilitre (ml)", family: "volume", rateSuffix: "/ltr", stockSuffix: "ml", step: 100, receive: 1000 },
     { code: "LTR", label: "Litre (L)", family: "volume", rateSuffix: "/ltr", stockSuffix: "L", step: 100, receive: 1000, displayDiv: 1000 },
     { code: "PCS", label: "Quantity (pcs)", family: "count", rateSuffix: "/pc", stockSuffix: "pcs", step: 1, receive: 1 },
   ];
+  const TYPES = DEFAULT_TYPES.map((t) => ({ ...t }));
 
   const ALIAS = {
     G: "GM",
@@ -38,12 +39,51 @@
 
   function typeOf(code) {
     const c = normalize(code);
-    return TYPES.find((t) => t.code === c) || TYPES[0];
+    const found = TYPES.find((t) => t.code === c);
+    if (found) return found;
+    const d = familyDefaults("count");
+    return { code: c || "GM", label: c || "GM", family: "count", rateSuffix: d.rateSuffix, stockSuffix: d.stockSuffix, step: d.step, receive: d.receive };
   }
 
   function normalize(raw) {
-    const key = String(raw || "GM").trim().toUpperCase().replace(/[^A-Z]/g, "");
-    return ALIAS[key] || "GM";
+    const key = String(raw || "GM").trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
+    if (ALIAS[key]) return ALIAS[key];
+    if (TYPES.some((t) => t.code === key)) return key;
+    return key || "GM";
+  }
+
+  function familyDefaults(family) {
+    if (family === "volume") return { rateSuffix: "/ltr", stockSuffix: "ml", step: 100, receive: 1000 };
+    if (family === "count") return { rateSuffix: "/pc", stockSuffix: "pcs", step: 1, receive: 1 };
+    return { rateSuffix: "/kg", stockSuffix: "g", step: 100, receive: 1000 };
+  }
+
+  function hydrate(rows) {
+    TYPES.splice(0, TYPES.length, ...DEFAULT_TYPES.map((t) => ({ ...t })));
+    if (!Array.isArray(rows)) return TYPES.slice();
+    for (const r of rows) {
+      const code = String(r.code || "").trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
+      if (!code) continue;
+      const family = ["weight", "volume", "count"].includes(String(r.family || "").toLowerCase())
+        ? String(r.family).toLowerCase()
+        : "count";
+      const d = familyDefaults(family);
+      const rec = {
+        code,
+        label: String(r.name || r.label || code),
+        family,
+        rateSuffix: r.rate_suffix || r.rateSuffix || d.rateSuffix,
+        stockSuffix: r.stock_suffix || r.stockSuffix || d.stockSuffix,
+        step: Number(r.step) > 0 ? Number(r.step) : d.step,
+        receive: Number(r.receive_qty || r.receive) > 0 ? Number(r.receive_qty || r.receive) : d.receive,
+      };
+      const div = Number(r.display_div || r.displayDiv);
+      if (div > 1) rec.displayDiv = div;
+      const idx = TYPES.findIndex((t) => t.code === code);
+      if (idx >= 0) TYPES[idx] = { ...TYPES[idx], ...rec };
+      else TYPES.push(rec);
+    }
+    return TYPES.slice();
   }
 
   function isCount(code) {
@@ -60,7 +100,10 @@
 
   function receiveLabel(code) {
     const t = typeOf(code);
-    if (t.family === "count") return "+1 pc";
+    if (t.family === "count") {
+      const s = t.stockSuffix || "pc";
+      return `+1 ${s === "pcs" ? "pc" : s}`;
+    }
     if (t.family === "volume") return "+1 L";
     return "+1 kg";
   }
@@ -78,7 +121,7 @@
   function formatQty(qty, code) {
     const n = Number(qty) || 0;
     const t = typeOf(code);
-    if (t.family === "count") return `${n} pcs`;
+    if (t.family === "count") return `${n} ${t.stockSuffix || "pcs"}`;
     if (t.code === "KG" || (t.family === "weight" && n >= 1000 && t.code !== "GM")) {
       return `${(n / 1000).toFixed(n % 1000 === 0 ? 0 : 2)} kg`;
     }
@@ -126,6 +169,8 @@
 
   return {
     TYPES,
+    hydrate,
+    familyDefaults,
     normalize,
     typeOf,
     isCount,

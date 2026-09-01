@@ -3,6 +3,7 @@ const inr = new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR" 
 const state = {
   company: {},
   items: [],
+  units: [],
   customers: [],
   packs: [],
   suppliers: [],
@@ -58,6 +59,46 @@ function fmtQty(qty, item) {
   return POSUnits.formatQty(qty, itemUnit(item));
 }
 
+function fillItemUnitSelect(selected) {
+  const el = $("item-unit");
+  if (!el) return;
+  el.innerHTML = POSUnits.optionsHtml(selected || el.value || "GM");
+}
+
+function applyUnitMaster(rows) {
+  state.units = Array.isArray(rows) ? rows : [];
+  POSUnits.hydrate(state.units.filter((u) => u.status !== "inactive"));
+  fillItemUnitSelect();
+}
+
+function renderUnitsTable() {
+  const el = $("units-table");
+  if (!el) return;
+  const rows = state.units || [];
+  el.innerHTML = `<table><thead><tr>
+    <th>Code</th><th>Name</th><th>Kind</th><th>Rate</th><th>Stock</th><th></th>
+  </tr></thead><tbody>${rows
+    .map(
+      (u) => `<tr>
+      <td>${escapeHtml(u.code)}</td>
+      <td>${escapeHtml(u.name)}</td>
+      <td>${escapeHtml(u.family)}</td>
+      <td>₹${escapeHtml(u.rate_suffix)}</td>
+      <td>${escapeHtml(u.stock_suffix)}</td>
+      <td><button class="btn" data-edit-unit="${escapeHtml(u.id)}" type="button">Edit</button>
+          <button class="btn" data-del-unit="${escapeHtml(u.id)}" type="button">Delete</button></td>
+    </tr>`,
+    )
+    .join("")}</tbody></table>`;
+}
+
+function paintUnitFamilyDefaults() {
+  const family = $("unit-family")?.value || "count";
+  const d = POSUnits.familyDefaults(family);
+  if ($("unit-rate-suffix") && !$("unit-id").value) $("unit-rate-suffix").value = d.rateSuffix;
+  if ($("unit-stock-suffix") && !$("unit-id").value) $("unit-stock-suffix").value = d.stockSuffix;
+}
+
 function refreshItemUnitLabels() {
   const u = POSUnits.normalize($("item-unit")?.value);
   if ($("item-retail-lab")) $("item-retail-lab").textContent = POSUnits.rateLabel("Retail", u);
@@ -73,6 +114,7 @@ const VIEW_META = {
   dashboard: { title: "Dashboard", subtitle: "Your shop today" },
   counter: { title: "Counter", subtitle: "POS checkout — tap items to add" },
   items: { title: "Items", subtitle: "Unit type, rates, and stock" },
+  units: { title: "Unit master", subtitle: "Units used on items — qty, kg, litre, and custom" },
   customers: { title: "Customers", subtitle: "B2C retail and B2B wholesale accounts" },
   packs: { title: "Packs", subtitle: "Pre-defined spice packs and compositions" },
   orders: { title: "Invoices", subtitle: "Tax invoices — search, print, update status" },
@@ -421,6 +463,7 @@ function applyNav() {
       dashboard: "dashboard",
       counter: "counter",
       items: "items",
+      units: "items",
       customers: "customers",
       packs: "items",
       orders: "orders",
@@ -467,6 +510,11 @@ function showView(name) {
   if (name === "dashboard") loadDashboard();
   if (name === "counter") loadHolds();
   paintImpersonationControls();
+  if (name === "units") renderUnitsTable();
+  if (name === "items") {
+    fillItemUnitSelect($("item-unit")?.value || "GM");
+    refreshItemUnitLabels();
+  }
   if (name === "stock") loadStock();
   if (name === "staff") loadStaff();
   if (name === "branches") loadBranches();
@@ -902,6 +950,7 @@ async function loadBootstrap() {
   state.support = data.support || {};
   state.plan = data.plan || null;
   state.items = data.items;
+  applyUnitMaster(data.units || []);
   state.customers = data.customers;
   state.packs = data.packs;
   paintPlatformNotices(data.notes);
@@ -913,6 +962,7 @@ async function loadBootstrap() {
   renderPackChoice();
   fillDatalists();
   renderItemsTable();
+  renderUnitsTable();
   renderCustomersTable();
   renderPackCompose();
   renderPacksTable();
@@ -1474,6 +1524,7 @@ $("items-table").addEventListener("click", async (e) => {
     $("item-b2b").value = i.b2b_rate;
     $("item-purchase").value = i.purchase_rate;
     $("item-gst").value = i.gst_rate;
+    fillItemUnitSelect(itemUnit(i));
     $("item-unit").value = itemUnit(i);
     $("item-stock").value = POSUnits.fromBase(i.stock_gm, itemUnit(i));
     refreshItemUnitLabels();
@@ -1762,7 +1813,7 @@ $("item-form").addEventListener("submit", async (e) => {
     $("item-hint").className = "hint ok";
     $("item-form").reset();
     $("item-id").value = "";
-    $("item-unit").value = "GM";
+    fillItemUnitSelect("GM");
     refreshItemUnitLabels();
     await loadBootstrap();
   } catch (err) {
@@ -1773,10 +1824,74 @@ $("item-form").addEventListener("submit", async (e) => {
 $("item-cancel").addEventListener("click", () => {
   $("item-form").reset();
   $("item-id").value = "";
-  $("item-unit").value = "GM";
+  fillItemUnitSelect("GM");
   refreshItemUnitLabels();
 });
 $("item-unit")?.addEventListener("change", refreshItemUnitLabels);
+
+$("unit-family")?.addEventListener("change", () => {
+  const d = POSUnits.familyDefaults($("unit-family").value);
+  if ($("unit-rate-suffix")) $("unit-rate-suffix").value = d.rateSuffix;
+  if ($("unit-stock-suffix")) $("unit-stock-suffix").value = d.stockSuffix;
+});
+
+$("unit-form")?.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const body = {
+    code: $("unit-code").value,
+    name: $("unit-name").value,
+    family: $("unit-family").value,
+    rate_suffix: $("unit-rate-suffix").value,
+    stock_suffix: $("unit-stock-suffix").value,
+  };
+  try {
+    if ($("unit-id").value) await api(`/api/units/${$("unit-id").value}`, { method: "PUT", body: JSON.stringify(body) });
+    else await api("/api/units", { method: "POST", body: JSON.stringify(body) });
+    $("unit-hint").textContent = "Saved";
+    $("unit-hint").className = "hint ok";
+    $("unit-form").reset();
+    $("unit-id").value = "";
+    await loadBootstrap();
+    renderUnitsTable();
+  } catch (err) {
+    $("unit-hint").textContent = err.message;
+    $("unit-hint").className = "hint error";
+  }
+});
+$("unit-cancel")?.addEventListener("click", () => {
+  $("unit-form").reset();
+  $("unit-id").value = "";
+});
+$("units-table")?.addEventListener("click", async (e) => {
+  const edit = e.target.closest("[data-edit-unit]");
+  const del = e.target.closest("[data-del-unit]");
+  if (edit) {
+    const u = (state.units || []).find((x) => x.id === edit.dataset.editUnit);
+    if (!u) return;
+    $("unit-id").value = u.id;
+    $("unit-code").value = u.code;
+    $("unit-name").value = u.name;
+    $("unit-family").value = u.family || "count";
+    $("unit-rate-suffix").value = u.rate_suffix || "";
+    $("unit-stock-suffix").value = u.stock_suffix || "";
+    return;
+  }
+  if (del) {
+    const u = (state.units || []).find((x) => x.id === del.dataset.delUnit);
+    if (!u) return;
+    if (!confirm(`Delete unit ${u.code}?`)) return;
+    try {
+      await api(`/api/units/${u.id}`, { method: "DELETE" });
+      $("unit-hint").textContent = "Deleted";
+      $("unit-hint").className = "hint ok";
+      await loadBootstrap();
+      renderUnitsTable();
+    } catch (err) {
+      $("unit-hint").textContent = err.message;
+      $("unit-hint").className = "hint error";
+    }
+  }
+});
 
 $("customer-form").addEventListener("submit", async (e) => {
   e.preventDefault();

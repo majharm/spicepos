@@ -22,7 +22,9 @@ test("PHP fallback routes checkout, holds, and order updates through core", () =
   assert.match(core, /orders\/\[\^\/\]\+.*pos_dispatch_order_route/s);
   assert.match(core, /holds.*pos_dispatch_holds/s);
   assert.match(core, /backup.*pos_dispatch_backup/s);
+  assert.match(core, /units.*pos_dispatch_units/s);
   assert.match(core, /function pos_require_backup/);
+  assert.match(core, /function pos_require_units/);
   assert.match(core, /function pos_round2/);
   assert.match(core, /function pos_ensure_held_bills_schema/);
   assert.match(till, /pos_dispatch_order_route/);
@@ -66,6 +68,25 @@ test("PHP customer insert bind types match placeholders", () => {
   const index = read("index.html");
   assert.match(index, /js\/units\.js/);
   assert.match(index, /id="item-unit"/);
+  assert.match(index, /id="view-units"/);
+  assert.match(index, /data-view="units"/);
+  assert.match(read("pos-units.php"), /function pos_dispatch_units/);
+  assert.match(read("pos-units.php"), /CREATE TABLE IF NOT EXISTS inventory_units/);
+  assert.match(read("pos-php-till.php"), /pos_dispatch_units/);
+  assert.match(read("api/units/index.php"), /p.*=.*units/);
+  const unitInsert = read("pos-units.php").match(
+    /VALUES \(\?,\?,\?,\?,\?,\?,\?,\?,\?,\?,\?,'active'\)",\s*"([sid]+)",/,
+  );
+  assert.ok(unitInsert, "unit seed INSERT found");
+  assert.equal(unitInsert[1], "sssssssdddi");
+  const unitPost = read("pos-units.php").match(
+    /VALUES \(\?,\?,\?,\?,\?,\?,\?,\?,\?,\?,\?,\?\)",\s*"([sid]+)",/,
+  );
+  assert.ok(unitPost, "unit POST INSERT found");
+  assert.equal(unitPost[1], "sssssssdddis");
+  assert.match(read("server/units.js"), /registerUnits/);
+  assert.match(read("server/index.js"), /registerUnits\(app\)/);
+  assert.match(read("js/app.js"), /applyUnitMaster/);
   assert.match(read("server/crud.js"), /POSUnits\.lineAmount/);
   assert.match(read("js/app.js"), /POSUnits\.lineAmount/);
   assert.match(read("pos-orders.php"), /pos_line_amount_for_item/);

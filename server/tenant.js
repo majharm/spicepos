@@ -26,7 +26,7 @@ export function registerTenant(app) {
         [businessId],
       );
       const [stock] = await query(
-        `SELECT COALESCE(SUM(CASE WHEN UPPER(REPLACE(COALESCE(base_unit, unit, 'GM'), ' ', '')) IN ('PCS','PC','QTY','NOS','NO','COUNT','UNIT','UNITS') THEN stock_gm * purchase_rate ELSE stock_gm/1000.0 * purchase_rate END),0) AS value FROM items WHERE business_id = ?`,
+        `SELECT COALESCE(SUM(CASE WHEN LOWER(COALESCE(u.family,'')) = 'count' OR UPPER(REPLACE(COALESCE(i.base_unit, i.unit, 'GM'), ' ', '')) IN ('PCS','PC','QTY','NOS','NO','COUNT','UNIT','UNITS') THEN i.stock_gm * i.purchase_rate ELSE i.stock_gm/1000.0 * i.purchase_rate END),0) AS value FROM items i LEFT JOIN inventory_units u ON u.business_id = i.business_id AND u.code = COALESCE(i.base_unit, i.unit) WHERE i.business_id = ?`,
         [businessId],
       );
       const [out] = await query(
