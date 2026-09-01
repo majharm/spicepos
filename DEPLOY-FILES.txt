@@ -1,4 +1,4 @@
-Production deploy bundle — 20260901deploy27
+Production deploy bundle — 20260901deploy28
 =========================================
 
 Upload ALL files below to Hostinger public_html (overwrite):
@@ -58,6 +58,7 @@ After upload:
   2. Hard-refresh browser (Ctrl+Shift+R)
 
 FIXES in this bundle
+  - PHP-only shops: PATCH/PUT /api/orders/:id wired in pos-php-core.php (invoice status updates)
   - PHP-only shops: checkout wired in pos-php-core.php (works even if pos-php-till.php is stale)
   - PHP-only shops: save bills from Counter (POST /api/checkout) without Node.js
   - Auto-migrate sales_orders columns (discount, branch_id, cashier_id, status)

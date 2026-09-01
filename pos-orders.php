@@ -197,3 +197,12 @@ function pos_update_order($bid, $orderId, $body, $auth) {
   ], $bid, $auth["branchId"] ?? $auth["user"]["branch_id"] ?? null);
   pos_send(200, ["ok" => true, "order" => $row, "php" => true]);
 }
+
+function pos_dispatch_order_route($path, $method, $body, $bid, $auth) {
+  if (!preg_match('#^orders/([^/]+)$#', $path, $m)) return false;
+  $orderId = $m[1];
+  if ($method === "PUT") pos_update_order($bid, $orderId, $body, $auth);
+  if ($method === "PATCH") pos_patch_order($bid, $orderId, $body, $auth);
+  pos_send(405, ["error" => "Method not allowed", "path" => $path, "method" => $method, "php" => true]);
+  return true;
+}

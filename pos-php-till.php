@@ -277,10 +277,8 @@ function pos_php_till_dispatch($path, $method, $body) {
 
   if (preg_match('#^orders/([^/]+)$#', $path, $m)) {
     require_once __DIR__ . "/pos-orders.php";
-    $orderId = $m[1];
-    if ($method === "PUT") pos_update_order($bid, $orderId, $body, $auth);
-    if ($method === "PATCH") pos_patch_order($bid, $orderId, $body, $auth);
-    pos_send(405, ["error" => "Method not allowed", "php" => true]);
+    pos_dispatch_order_route($path, $method, $body, $bid, $auth);
+    return true;
   }
 
   if ($path === "purchases" && $method === "GET") {

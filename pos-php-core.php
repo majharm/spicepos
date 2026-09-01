@@ -1559,10 +1559,19 @@ function pos_php_dispatch($path, $method, $rawBody) {
           pos_send(503, [
             "error" => "pos-checkout.php on the server is broken or outdated.",
             "php" => true,
-            "hint" => "Re-upload pos-checkout.php from the deploy27 bundle.",
+            "hint" => "Re-upload pos-checkout.php from the latest deploy bundle.",
           ]);
         }
         pos_dispatch_checkout($path, $method, $body, $bid, $branchId, $uid, $auth);
+        return;
+      }
+      if (preg_match('#^orders/[^/]+$#', $path)) {
+        $auth = pos_staff_session();
+        if (!$auth || ($auth["type"] ?? "") !== "staff") pos_send(401, ["error" => "Sign in required"]);
+        $bid = $auth["user"]["business_id"];
+        pos_apply_business_timezone($bid);
+        require_once __DIR__ . "/pos-orders.php";
+        pos_dispatch_order_route($path, $method, $body, $bid, $auth);
         return;
       }
       require_once __DIR__ . "/pos-php-till.php";
@@ -1574,7 +1583,7 @@ function pos_php_dispatch($path, $method, $rawBody) {
       "path" => $path,
       "method" => $method,
       "php" => true,
-      "hint" => "Upload the latest pos-php-till.php, pos-checkout.php, pos-crud.php, and pos-orders.php from the deploy bundle, then hard-refresh.",
+      "hint" => "Upload pos-php-core.php, pos-checkout.php, pos-orders.php, pos-php-till.php, and pos-crud.php from the latest deploy bundle, then hard-refresh.",
     ]);
   } catch (Exception $e) {
     $msg = $e->getMessage();
