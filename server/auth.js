@@ -4,7 +4,8 @@ import { runTenant } from "./context.js";
 import { sha256, newToken, audit } from "./audit.js";
 import { defaultPerms, displayName, can } from "./roles.js";
 import { registerBusiness } from "./onboard.js";
-import { sendWelcomeSignup } from "./mail.js";
+import { sendWelcomeSignup, publicLoginUrl } from "./mail.js";
+import { sendWelcomeAlerts } from "./alerts.js";
 import { canonApiUrl } from "./http-path.js";
 
 const SESSION_HOURS = 12;
@@ -347,6 +348,21 @@ export function registerAuth(app) {
         },
         req,
       );
+      try {
+        await sendWelcomeAlerts({
+          businessId: user.business_id,
+          shopName: business?.name,
+          ownerName: user.first_name,
+          email: user.email,
+          username: user.username,
+          password: req.body?.password,
+          role: user.role || "business_admin",
+          mobile: req.body?.mobile,
+          signInUrl: publicLoginUrl(req),
+        });
+      } catch (err) {
+        console.error("welcome alerts failed:", err.message);
+      }
       const ttl = sessionSecs(wantsRemember(req.body));
       const token = newToken();
       await query(
