@@ -41,6 +41,25 @@ function kg(gm) {
 const ORDER_STATUSES = ["confirmed", "delivered", "cancelled"];
 const PAYMENT_STATUSES = ["paid", "partial", "unpaid"];
 
+const VIEW_META = {
+  dashboard: { title: "Dashboard", subtitle: "Your shop today" },
+  counter: { title: "Counter", subtitle: "POS checkout — tap items to add" },
+  items: { title: "Items", subtitle: "Category, rates per kg, and stock in grams" },
+  customers: { title: "Customers", subtitle: "B2C retail and B2B wholesale accounts" },
+  packs: { title: "Packs", subtitle: "Pre-defined spice packs and compositions" },
+  orders: { title: "Invoices", subtitle: "Tax invoices — search, print, update status" },
+  purchases: { title: "Purchases", subtitle: "Supplier bills with GST and thermal print" },
+  suppliers: { title: "Suppliers", subtitle: "Vendor contacts and GSTIN" },
+  stock: { title: "Stock", subtitle: "Adjustments, transfers, and low-stock alerts" },
+  staff: { title: "Staff & roles", subtitle: "Users, roles, and access" },
+  branches: { title: "Branches", subtitle: "Shop locations and contact details" },
+  devices: { title: "POS devices", subtitle: "Registers and terminal codes" },
+  support: { title: "Support", subtitle: "Platform helpline and shop details" },
+  accounts: { title: "Accounts", subtitle: "Receivables, payables, GL, and books" },
+  reports: { title: "Reports", subtitle: "Sales, stock, purchases, and GST" },
+  settings: { title: "Settings", subtitle: "Company profile, timezone, and branding" },
+};
+
 function orderStatusClass(status) {
   const s = String(status || "confirmed").toLowerCase();
   if (s === "cancelled") return "cancelled";
@@ -56,6 +75,14 @@ function orderStatusBadge(status) {
 function payStatusBadge(status) {
   const s = String(status || "paid").toLowerCase();
   return `<span class="pay-status ${escapeHtml(s)}">${escapeHtml(s)}</span>`;
+}
+
+function paymentMethodLabel(method) {
+  const m = String(method || "cash").toLowerCase();
+  if (m === "upi") return "UPI";
+  if (m === "credit") return "Credit";
+  if (m === "cash") return "Cash";
+  return method || "—";
 }
 
 function renderEditOrderBanner() {
@@ -326,6 +353,15 @@ function applyNav() {
   });
 }
 
+function paintViewHeader(name) {
+  const meta = VIEW_META[name] || { title: name, subtitle: "" };
+  const titleEl = $("view-title");
+  const subEl = $("view-subtitle");
+  if (titleEl) titleEl.textContent = meta.title;
+  if (subEl) subEl.textContent = meta.subtitle;
+  document.getElementById("view-topbar")?.classList.toggle("is-counter", name === "counter");
+}
+
 function showView(name) {
   document.querySelectorAll(".view").forEach((el) => {
     el.hidden = el.id !== `view-${name}`;
@@ -335,6 +371,7 @@ function showView(name) {
   });
   document.body.classList.toggle("counter-mode", name === "counter");
   document.querySelector(".stage")?.classList.toggle("is-counter", name === "counter");
+  paintViewHeader(name);
   if (name === "reports") loadReports();
   if (name === "accounts") loadAccounts();
   if (name === "orders") loadOrders();
@@ -743,8 +780,12 @@ async function loadDevices() {
 
 async function loadToday() {
   const data = await api("/api/today");
-  $("today-total").textContent = money(data.today.takings);
-  $("today-count").textContent = String(data.today.bills);
+  const total = money(data.today.takings);
+  const count = String(data.today.bills);
+  $("today-total").textContent = total;
+  $("today-count").textContent = count;
+  if ($("topbar-total")) $("topbar-total").textContent = total;
+  if ($("topbar-count")) $("topbar-count").textContent = count;
 }
 
 async function loadReports() {
@@ -805,6 +846,33 @@ async function loadReports() {
 
 let orderCache = [];
 let selectedOrderId = null;
+const orderFilter = { q: "", status: "", payment: "" };
+
+function filterOrders(rows) {
+  const q = orderFilter.q.trim().toLowerCase();
+  return rows.filter((o) => {
+    if (orderFilter.status && String(o.status || "").toLowerCase() !== orderFilter.status) return false;
+    if (orderFilter.payment && String(o.payment_status || "").toLowerCase() !== orderFilter.payment) return false;
+    if (!q) return true;
+    const hay = [o.order_number, o.customer_name, o.payment_method].join(" ").toLowerCase();
+    return hay.includes(q);
+  });
+}
+
+function renderOrdersSummary(filteredCount, totalCount) {
+  const el = $("orders-summary");
+  if (!el) return;
+  if (!totalCount) {
+    el.hidden = true;
+    el.textContent = "";
+    return;
+  }
+  el.hidden = false;
+  el.textContent =
+    filteredCount === totalCount
+      ? `${totalCount} invoice${totalCount === 1 ? "" : "s"}`
+      : `${filteredCount} of ${totalCount} invoice${totalCount === 1 ? "" : "s"}`;
+}
 
 function invoiceCtx() {
   return {
@@ -851,19 +919,34 @@ function showOrder(o) {
     (s) => `<option value="${s}"${String(o.payment_status || "paid").toLowerCase() === s ? " selected" : ""}>${s}</option>`,
   ).join("");
   const cancelled = String(o.status || "").toLowerCase() === "cancelled";
-  $("order-pane").innerHTML = `<div class="order-detail-head">
-      <div class="order-badges">${orderStatusBadge(o.status)} ${payStatusBadge(o.payment_status)}</div>
-      <p class="hint">${escapeHtml(o.order_number)} · ${escapeHtml(o.customer_name)} · ${escapeHtml(formatShopDateTime(o.created_at))}</p>
+  const lineCount = (o.lines || []).length;
+  $("order-pane").innerHTML = `<div class="invoice-detail-card">
+      <div class="invoice-detail-top">
+        <div>
+          <h3 class="invoice-so">${escapeHtml(o.order_number || "—")}</h3>
+          <p class="hint">${escapeHtml(o.customer_name || "Walk-in")}</p>
+          <p class="hint">${escapeHtml(formatShopDateTime(o.created_at))}</p>
+        </div>
+        <div class="invoice-detail-meta">
+          <div class="invoice-total">${money(o.total)}</div>
+          <div class="order-badges">${orderStatusBadge(o.status)} ${payStatusBadge(o.payment_status)}</div>
+          <span class="pay-method-chip">${escapeHtml(paymentMethodLabel(o.payment_method))}</span>
+        </div>
+      </div>
+      ${lineCount ? "" : '<p class="hint error">Line items missing — refresh or re-upload pos-php-till.php</p>'}
     </div>
-    <form class="order-status-form" id="order-status-form">
-      <label>Order status
-        <select id="order-status-select">${statusOpts}</select>
-      </label>
-      <label>Payment status
-        <select id="order-pay-status-select">${payOpts}</select>
-      </label>
-      <button class="btn primary" type="submit">Update status</button>
-    </form>
+    <details class="order-status-panel">
+      <summary>Update status</summary>
+      <form class="order-status-form" id="order-status-form">
+        <label>Order status
+          <select id="order-status-select">${statusOpts}</select>
+        </label>
+        <label>Payment status
+          <select id="order-pay-status-select">${payOpts}</select>
+        </label>
+        <button class="btn primary" type="submit">Save</button>
+      </form>
+    </details>
     <div class="thermal-preview">${InvoicePrint.invoiceBody(o, invoiceCtx())}</div>
     <div class="print-actions">
       <button class="btn primary" type="button" data-print="${escapeHtml(o.id)}">Print invoice</button>
@@ -890,14 +973,21 @@ function showOrder(o) {
   };
 }
 
-async function loadOrders() {
-  orderCache = sortOrders(await api("/api/orders"));
+function renderOrdersList() {
+  const filtered = filterOrders(orderCache);
+  renderOrdersSummary(filtered.length, orderCache.length);
   if (!orderCache.length) {
-    $("orders").innerHTML = '<p class="hint">No sales orders yet. Save a bill from the Counter.</p>';
+    $("orders").innerHTML = '<p class="hint">No invoices yet. Save a bill from the Counter.</p>';
     selectedOrderId = null;
-    $("order-pane").innerHTML = '<p class="hint">Select a sales order.</p>';
+    $("order-pane").innerHTML = '<p class="hint">Select an invoice.</p>';
     return;
   }
+  if (!filtered.length) {
+    $("orders").innerHTML = '<p class="hint">No invoices match your filters. Clear search or change filters.</p>';
+    $("order-pane").innerHTML = '<p class="hint">Select an invoice.</p>';
+    return;
+  }
+  if (!filtered.some((o) => o.id === selectedOrderId)) selectedOrderId = filtered[0].id;
   $("orders").innerHTML = `<table class="orders-table">
     <thead>
       <tr>
@@ -906,24 +996,31 @@ async function loadOrders() {
         <th>Customer</th>
         <th>Status</th>
         <th>Pay</th>
+        <th>Method</th>
         <th class="num">Total</th>
       </tr>
     </thead>
-    <tbody>${orderCache
+    <tbody>${filtered
       .map(
         (o) => `<tr class="order-row${o.id === selectedOrderId ? " is-selected" : ""}" data-oid="${escapeHtml(o.id)}" tabindex="0" role="button">
         <td class="so-no"><strong>${escapeHtml(o.order_number || "—")}</strong></td>
         <td>${escapeHtml(formatShopDateTime(o.created_at))}</td>
         <td>${escapeHtml(o.customer_name || "—")}</td>
         <td>${orderStatusBadge(o.status)}</td>
-        <td>${payStatusBadge(o.payment_status)} ${escapeHtml(o.payment_method || "")}</td>
+        <td>${payStatusBadge(o.payment_status)}</td>
+        <td>${escapeHtml(paymentMethodLabel(o.payment_method))}</td>
         <td class="num">${money(o.total)}</td>
       </tr>`,
       )
       .join("")}</tbody>
   </table>`;
-  const current = orderCache.find((o) => o.id === selectedOrderId) || orderCache[0];
+  const current = filtered.find((o) => o.id === selectedOrderId) || filtered[0];
   showOrder(current);
+}
+
+async function loadOrders() {
+  orderCache = sortOrders(await api("/api/orders"));
+  renderOrdersList();
 }
 
 let purchaseCache = [];
@@ -1225,6 +1322,31 @@ $("orders").addEventListener("click", (e) => {
   if (!row) return;
   const o = orderCache.find((r) => r.id === row.dataset.oid);
   if (o) showOrder(o);
+});
+
+$("orders-toolbar")?.addEventListener("submit", (e) => e.preventDefault());
+$("orders-search")?.addEventListener("input", () => {
+  orderFilter.q = $("orders-search").value;
+  renderOrdersList();
+});
+$("orders-status-filter")?.addEventListener("change", () => {
+  orderFilter.status = $("orders-status-filter").value;
+  renderOrdersList();
+});
+$("orders-pay-filter")?.addEventListener("change", () => {
+  orderFilter.payment = $("orders-pay-filter").value;
+  renderOrdersList();
+});
+$("orders-refresh")?.addEventListener("click", () => {
+  loadOrders().catch((err) => setHint(err.message, "error"));
+});
+
+$("nav-toggle")?.addEventListener("click", () => {
+  const app = document.getElementById("app");
+  const btn = $("nav-toggle");
+  if (!app || !btn) return;
+  const collapsed = app.classList.toggle("nav-collapsed");
+  btn.setAttribute("aria-expanded", collapsed ? "false" : "true");
 });
 
 $("orders").addEventListener("keydown", (e) => {
@@ -1635,10 +1757,13 @@ $("po-date").value = shopYmd();
 function tick() {
   const now = new Date();
   const tz = shopTimezone();
+  const timeText = formatShopTime(now);
   const clock = $("clock");
   const meta = $("clock-meta");
+  const topbarTime = $("topbar-time");
+  if (topbarTime) topbarTime.textContent = timeText;
   if (clock) {
-    clock.textContent = formatShopTime(now);
+    clock.textContent = timeText;
     const abbr =
       new Intl.DateTimeFormat("en-IN", { timeZone: tz, timeZoneName: "short" })
         .formatToParts(now)
@@ -1646,6 +1771,7 @@ function tick() {
     const date = now.toLocaleDateString("en-IN", { timeZone: tz, weekday: "short", day: "numeric", month: "short" });
     if (meta) meta.textContent = `${date} · ${abbr}`;
     $("clock-chip")?.setAttribute("title", `${date} · ${abbr} (${tz})`);
+    $("topbar-clock")?.setAttribute("title", `${date} · ${abbr} (${tz})`);
   }
 }
 tick();

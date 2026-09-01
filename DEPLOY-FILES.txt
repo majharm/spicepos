@@ -1,4 +1,4 @@
-Production deploy bundle — 20260830deploy18
+Production deploy bundle — 20260830deploy20
 =========================================
 
 Upload ALL files below to Hostinger public_html (overwrite):
@@ -53,18 +53,15 @@ After upload:
   2. Hard-refresh browser (Ctrl+Shift+R)
 
 FIXES in this bundle
-  - Sales orders: table list view with live SO numbers from database (sorted newest SO first)
+  - Full UI redesign: grouped sidebar nav, sticky view topbar, cleaner cards and buttons
+  - Mobile: slide-out nav with toggle; flatter modern design system (deploy20)
+  - Invoices UI: search + filters, invoice detail card, separate Pay/Method columns
+  - Sales orders table with live SO numbers from database (sorted newest SO first)
   - PHP purchase journal + credit payable posting; checkout wrapped in DB transaction
-  - Purchases bill preview: line items on PHP, improved layout (deploy16)
   - Full accounting module: receivables, payables, day book, COA, journal, trial balance, P&L, balance sheet, cash book
   - Double-entry GL with auto-posting on sales, credit sales, purchases, receipts, payments
-  - Supplier payable balance tracking
   - Accounts tab in POS nav (admin, manager, accountant roles)
   - PHP parity for all /api/accounts/* routes on production without Node
-  - Permissions merge: new modules (accounts) auto-enabled for existing users per role defaults
-  - Sales orders show order + payment status badges
-  - Change order status / payment status from Sales orders view
-  - Change line items (edit) with banner on POS counter; PHP PUT orders API
   - Thermal tax invoice print for sales orders (80mm, GST breakdown, HSN, CGST/SGST)
   - GST reports: output/input by rate, HSN itemwise, B2B/B2C sales, net GST summary
 

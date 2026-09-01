@@ -9,34 +9,51 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" />
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./css/pos.css?v=20260830deploy18" />
-    <link rel="stylesheet" href="./css/saas.css?v=20260830deploy18" />
+    <link rel="stylesheet" href="./css/pos.css?v=20260830deploy20" />
+    <link rel="stylesheet" href="./css/saas.css?v=20260830deploy20" />
   </head>
   <body>
-    <div class="app">
-      <nav class="nav" aria-label="App">
+    <div class="app" id="app">
+      <nav class="nav" id="app-nav" aria-label="App">
         <div class="brand">
           <img id="shop-logo" class="brand-logo" alt="Company logo" hidden />
           <div class="brand-mark" id="brand-mark" aria-hidden="true"></div>
           <strong id="shop-name">SWAMI MASALE</strong>
           <span id="shop-place">Loading MySQL…</span>
         </div>
-        <button class="nav-btn active" type="button" data-view="dashboard">Dashboard</button>
-        <button class="nav-btn" type="button" data-view="counter">Counter</button>
-        <button class="nav-btn" type="button" data-view="items">Items</button>
-        <button class="nav-btn" type="button" data-view="customers">Customers</button>
-        <button class="nav-btn" type="button" data-view="packs">Packs</button>
-        <button class="nav-btn" type="button" data-view="orders">Sales orders</button>
-        <button class="nav-btn" type="button" data-view="purchases">Purchases</button>
-        <button class="nav-btn" type="button" data-view="suppliers">Suppliers</button>
-        <button class="nav-btn" type="button" data-view="stock">Stock</button>
-        <button class="nav-btn" type="button" data-view="staff">Staff</button>
-        <button class="nav-btn" type="button" data-view="branches">Branches</button>
-        <button class="nav-btn" type="button" data-view="devices">Devices</button>
-        <button class="nav-btn" type="button" data-view="support">Support</button>
-        <button class="nav-btn" type="button" data-view="accounts">Accounts</button>
-        <button class="nav-btn" type="button" data-view="reports">Reports</button>
-        <button class="nav-btn" type="button" data-view="settings">Settings</button>
+        <div class="nav-scroll">
+          <div class="nav-group">
+            <p class="nav-group-label">Main</p>
+            <button class="nav-btn active" type="button" data-view="dashboard"><span class="nav-icon" aria-hidden="true">⌂</span>Dashboard</button>
+            <button class="nav-btn" type="button" data-view="counter"><span class="nav-icon" aria-hidden="true">⊞</span>Counter</button>
+          </div>
+          <div class="nav-group">
+            <p class="nav-group-label">Sales</p>
+            <button class="nav-btn" type="button" data-view="orders"><span class="nav-icon" aria-hidden="true">▤</span>Invoices</button>
+            <button class="nav-btn" type="button" data-view="customers"><span class="nav-icon" aria-hidden="true">◎</span>Customers</button>
+            <button class="nav-btn" type="button" data-view="purchases"><span class="nav-icon" aria-hidden="true">↘</span>Purchases</button>
+          </div>
+          <div class="nav-group">
+            <p class="nav-group-label">Inventory</p>
+            <button class="nav-btn" type="button" data-view="items"><span class="nav-icon" aria-hidden="true">◫</span>Items</button>
+            <button class="nav-btn" type="button" data-view="packs"><span class="nav-icon" aria-hidden="true">▦</span>Packs</button>
+            <button class="nav-btn" type="button" data-view="stock"><span class="nav-icon" aria-hidden="true">▥</span>Stock</button>
+            <button class="nav-btn" type="button" data-view="suppliers"><span class="nav-icon" aria-hidden="true">◇</span>Suppliers</button>
+          </div>
+          <div class="nav-group">
+            <p class="nav-group-label">Finance</p>
+            <button class="nav-btn" type="button" data-view="accounts"><span class="nav-icon" aria-hidden="true">₹</span>Accounts</button>
+            <button class="nav-btn" type="button" data-view="reports"><span class="nav-icon" aria-hidden="true">▣</span>Reports</button>
+          </div>
+          <div class="nav-group">
+            <p class="nav-group-label">Admin</p>
+            <button class="nav-btn" type="button" data-view="staff"><span class="nav-icon" aria-hidden="true">◉</span>Staff</button>
+            <button class="nav-btn" type="button" data-view="branches"><span class="nav-icon" aria-hidden="true">⬡</span>Branches</button>
+            <button class="nav-btn" type="button" data-view="devices"><span class="nav-icon" aria-hidden="true">⌁</span>Devices</button>
+            <button class="nav-btn" type="button" data-view="support"><span class="nav-icon" aria-hidden="true">?</span>Support</button>
+            <button class="nav-btn" type="button" data-view="settings"><span class="nav-icon" aria-hidden="true">⚙</span>Settings</button>
+          </div>
+        </div>
         <div class="nav-foot">
           <div class="platform-brand">
             <img src="./assets/atav-telecom-logo.png" alt="ATAV Telecom" width="120" height="36" />
@@ -53,6 +70,18 @@
       </nav>
 
       <div class="stage">
+        <header class="view-topbar" id="view-topbar">
+          <button type="button" class="btn icon-btn nav-toggle" id="nav-toggle" aria-label="Toggle menu" aria-expanded="true">☰</button>
+          <div class="view-topbar-titles">
+            <h1 id="view-title">Dashboard</h1>
+            <p id="view-subtitle">Your shop today</p>
+          </div>
+          <div class="view-topbar-stats" id="view-topbar-stats">
+            <span class="mini-stat">Today <b id="topbar-total">₹0.00</b></span>
+            <span class="mini-stat">Bills <b id="topbar-count">0</b></span>
+            <span class="mini-stat clock-mini" id="topbar-clock" title="Shop local time"><b id="topbar-time">--:--</b></span>
+          </div>
+        </header>
         <div class="session-bar">
           <span id="session-who">Signed in</span>
           <span id="session-support" class="session-support" hidden></span>
@@ -63,7 +92,7 @@
         </div>
         <div class="platform-notices" id="platform-notices" hidden aria-live="polite"></div>
         <section class="view" id="view-dashboard">
-          <h2>Dashboard</h2>
+          <h2 class="visually-hidden">Dashboard</h2>
           <p class="lede" id="dash-welcome">Your shop today.</p>
           <div class="platform-notes" id="dash-notes"></div>
           <div class="report-grid" id="dash-kpis"></div>
@@ -115,7 +144,7 @@
         </section>
 
         <section class="view" id="view-items" hidden>
-          <h2>Items</h2>
+          <h2 class="visually-hidden">Items</h2>
           <p class="lede">Category and subcategory, rates per kg, stock in grams.</p>
           <form class="settings wide" id="item-form">
             <input type="hidden" id="item-id" />
@@ -141,7 +170,7 @@
           <div class="table-wrap" id="items-table"></div>
         </section>
         <section class="view" id="view-customers" hidden>
-          <h2>Customers</h2>
+          <h2 class="visually-hidden">Customers</h2>
           <form class="settings wide" id="customer-form">
             <label>Name <input id="cust-name" required /></label>
             <label>Business name <input id="cust-biz" /></label>
@@ -159,7 +188,7 @@
           <div class="table-wrap" id="customers-table"></div>
         </section>
         <section class="view" id="view-packs" hidden>
-          <h2>Packs</h2>
+          <h2 class="visually-hidden">Packs</h2>
           <p class="lede">Choose spices and grams for a pack type (e.g. Special Masala Pack — 5 KG).</p>
           <form class="settings wide" id="pack-form">
             <label>Pack name <input id="pack-name" required placeholder="Special Masala Pack — 5 KG" /></label>
@@ -170,15 +199,38 @@
           <div class="table-wrap" id="packs-table"></div>
         </section>
         <section class="view" id="view-orders" hidden>
-          <h2>Sales orders</h2>
-          <p class="lede">Live SO numbers from your database. Select a row to view invoice, update status, or reprint.</p>
+          <h2 class="visually-hidden">Invoices</h2>
+          <p class="lede">Tax invoices with live SO numbers. Search, filter, print, or update order and payment status.</p>
+          <form class="report-toolbar orders-toolbar" id="orders-toolbar">
+            <label>Search
+              <input type="search" id="orders-search" placeholder="SO no, customer…" autocomplete="off" />
+            </label>
+            <label>Order status
+              <select id="orders-status-filter">
+                <option value="">All</option>
+                <option value="confirmed">Confirmed</option>
+                <option value="delivered">Delivered</option>
+                <option value="cancelled">Cancelled</option>
+              </select>
+            </label>
+            <label>Payment
+              <select id="orders-pay-filter">
+                <option value="">All</option>
+                <option value="paid">Paid</option>
+                <option value="partial">Partial</option>
+                <option value="unpaid">Unpaid</option>
+              </select>
+            </label>
+            <button class="btn" type="button" id="orders-refresh">Refresh</button>
+          </form>
+          <p class="hint orders-summary" id="orders-summary" hidden></p>
           <div class="split orders-split">
             <div class="orders-list-wrap" id="orders"></div>
-            <div class="pane order-pane" id="order-pane"><p class="hint">Select a sales order.</p></div>
+            <div class="pane order-pane" id="order-pane"><p class="hint">Select an invoice.</p></div>
           </div>
         </section>
         <section class="view" id="view-purchases" hidden>
-          <h2>Purchases</h2>
+          <h2 class="visually-hidden">Purchases</h2>
           <p class="lede">Supplier purchase bills with thermal preview, input GST breakdown, and print.</p>
           <details class="purchase-new" id="purchase-new">
             <summary class="btn">New purchase</summary>
@@ -204,7 +256,7 @@
           </div>
         </section>
         <section class="view" id="view-suppliers" hidden>
-          <h2>Suppliers</h2>
+          <h2 class="visually-hidden">Suppliers</h2>
           <form class="settings wide" id="supplier-form">
             <label>Name <input id="sup-name" required /></label>
             <label>Contact <input id="sup-contact" /></label>
@@ -216,7 +268,7 @@
           <div class="table-wrap" id="suppliers-table"></div>
         </section>
         <section class="view" id="view-stock" hidden>
-          <h2>Stock</h2>
+          <h2 class="visually-hidden">Stock</h2>
           <p class="lede">Branch-wise stock, adjustments, transfers, and low-stock alerts.</p>
           <form class="settings wide" id="stock-form">
             <label>Item id <input id="stk-item" required /></label>
@@ -236,7 +288,7 @@
           <div class="table-wrap" id="stock-table"></div>
         </section>
         <section class="view" id="view-staff" hidden>
-          <h2>Staff & roles</h2>
+          <h2 class="visually-hidden">Staff &amp; roles</h2>
           <form class="settings wide" id="staff-form">
             <label>First name <input id="st-first" /></label>
             <label>Email <input id="st-email" required /></label>
@@ -258,7 +310,7 @@
           <div class="table-wrap" id="staff-table"></div>
         </section>
         <section class="view" id="view-branches" hidden>
-          <h2>Branches</h2>
+          <h2 class="visually-hidden">Branches</h2>
           <form class="settings wide" id="branch-form">
             <label>Name <input id="br-name" required /></label>
             <label>Address <input id="br-address" /></label>
@@ -268,7 +320,7 @@
           <div class="table-wrap" id="branch-table"></div>
         </section>
         <section class="view" id="view-devices" hidden>
-          <h2>POS devices</h2>
+          <h2 class="visually-hidden">POS devices</h2>
           <form class="settings wide" id="device-form">
             <label>Name <input id="dev-name" required /></label>
             <label>Code <input id="dev-code" placeholder="POS-02" /></label>
@@ -277,12 +329,12 @@
           <div class="table-wrap" id="device-table"></div>
         </section>
         <section class="view" id="view-support" hidden>
-          <h2>Support</h2>
+          <h2 class="visually-hidden">Support</h2>
           <p class="lede">Platform helpline from Master Admin (MySQL). Shop details are below.</p>
           <div class="report-grid" id="support-cards"></div>
         </section>
         <section class="view" id="view-accounts" hidden>
-          <h2>Accounts</h2>
+          <h2 class="visually-hidden">Accounts</h2>
           <p class="lede">Double-entry books: receivables, payables, chart of accounts, trial balance, P&amp;L, balance sheet, and cash book.</p>
           <div class="report-grid" id="acc-summary"></div>
           <div class="accounts-toolbar">
@@ -314,7 +366,7 @@
           <div id="acc-pane-cash-book" class="acc-pane" hidden><div class="table-wrap" id="acc-cash-table"></div></div>
         </section>
         <section class="view" id="view-reports" hidden>
-          <h2>Reports</h2>
+          <h2 class="visually-hidden">Reports</h2>
           <p class="lede">Sales, stock, purchases, and GST reports (output/input by rate, HSN, B2B/B2C). Download one sheet or the full Excel workbook.</p>
           <form class="report-toolbar" id="report-form">
             <label>From <input id="rep-from" type="date" required /></label>
@@ -327,7 +379,7 @@
           <div id="reports"></div>
         </section>
         <section class="view" id="view-settings" hidden>
-          <h2>Settings</h2>
+          <h2 class="visually-hidden">Settings</h2>
           <p class="lede">Company profile, shop timezone, and branding.</p>
           <form class="settings" id="settings-form">
             <div class="settings-section">
@@ -419,9 +471,9 @@
         </section>
       </div>
     </aside>
-    <script src="./js/pos-api.js?v=20260830deploy18"></script>
-    <script src="./js/dev-mode.js?v=20260830deploy18"></script>
-    <script src="./js/invoice.js?v=20260830deploy18"></script>
-    <script src="./js/app.js?v=20260830deploy18"></script>
+    <script src="./js/pos-api.js?v=20260830deploy20"></script>
+    <script src="./js/dev-mode.js?v=20260830deploy20"></script>
+    <script src="./js/invoice.js?v=20260830deploy20"></script>
+    <script src="./js/app.js?v=20260830deploy20"></script>
   </body>
 </html>
