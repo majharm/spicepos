@@ -277,7 +277,19 @@ export async function ensureSchema() {
     business_id VARCHAR(255) NULL,
     title VARCHAR(255) NOT NULL,
     body TEXT NULL,
+    image_url MEDIUMTEXT NULL,
     created_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3)
+  )`);
+  await addColumn("notifications", "image_url", "MEDIUMTEXT NULL");
+
+  await create(`CREATE TABLE IF NOT EXISTS alert_sends (
+    id VARCHAR(255) PRIMARY KEY,
+    business_id VARCHAR(255) NOT NULL,
+    kind VARCHAR(32) NOT NULL,
+    item_id VARCHAR(255) NOT NULL DEFAULT '',
+    send_day DATE NOT NULL,
+    created_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    UNIQUE KEY uniq_alert_send (business_id, kind, item_id, send_day)
   )`);
 
   await create(`CREATE TABLE IF NOT EXISTS platform_settings (
@@ -296,6 +308,8 @@ export async function ensureSchema() {
   );
 
   await seedPlans();
+  const { ensureAlertSettings } = await import("./alerts.js");
+  await ensureAlertSettings();
 }
 
 async function seedPlans() {

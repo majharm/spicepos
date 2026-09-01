@@ -123,7 +123,16 @@ function pos_dot_stuff($body) {
   return implode("\r\n", $lines);
 }
 
-function pos_send_mail($to, $subject, $text, $html = "") {
+function pos_parse_data_image($image) {
+  if (!preg_match("#^data:(image/[a-zA-Z0-9.+-]+);base64,([A-Za-z0-9+/=\\s]+)$#", (string) $image, $m)) return null;
+  return ["mime" => $m[1], "base64" => preg_replace("/\\s+/", "", $m[2])];
+}
+
+function pos_wrap_base64($b64) {
+  return trim(chunk_split(preg_replace("/\\s+/", "", (string) $b64), 76, "\r\n"));
+}
+
+function pos_send_mail($to, $subject, $text, $html = "", $image = "") {
   $cfg = pos_smtp_config();
   if (!pos_smtp_configured($cfg)) return ["ok" => false, "skipped" => true];
   $recipient = trim((string) $to);
@@ -169,17 +178,36 @@ function pos_send_mail($to, $subject, $text, $html = "") {
     pos_smtp_write($fp, "DATA");
     $dataOk = pos_smtp_read($fp, $timeoutSec);
     if (!str_starts_with($dataOk, "3")) throw new Exception($dataOk ?: "DATA rejected");
-    $boundary = "pos" . bin2hex(random_bytes(6));
-    $payload = "From: " . pos_mail_from_header($cfg["from"], $cfg["fromName"]) . "\r\n"
+    $alt = "posalt" . bin2hex(random_bytes(6));
+    $htmlBody = $html !== "" ? $html : "<pre>" . pos_mail_escape($text) . "</pre>";
+    $altPart = "--{$alt}\r\nContent-Type: text/plain; charset=UTF-8\r\nContent-Transfer-Encoding: 8bit\r\n\r\n"
+      . pos_dot_stuff($text) . "\r\n"
+      . "--{$alt}\r\nContent-Type: text/html; charset=UTF-8\r\nContent-Transfer-Encoding: 8bit\r\n\r\n"
+      . pos_dot_stuff($htmlBody) . "\r\n"
+      . "--{$alt}--";
+    $parsed = pos_parse_data_image($image);
+    $headers = "From: " . pos_mail_from_header($cfg["from"], $cfg["fromName"]) . "\r\n"
       . "To: {$recipient}\r\n"
       . "Subject: " . pos_mail_subject($subject) . "\r\n"
-      . "MIME-Version: 1.0\r\n"
-      . "Content-Type: multipart/alternative; boundary=\"{$boundary}\"\r\n\r\n"
-      . "--{$boundary}\r\nContent-Type: text/plain; charset=UTF-8\r\nContent-Transfer-Encoding: 8bit\r\n\r\n"
-      . pos_dot_stuff($text) . "\r\n\r\n"
-      . "--{$boundary}\r\nContent-Type: text/html; charset=UTF-8\r\nContent-Transfer-Encoding: 8bit\r\n\r\n"
-      . pos_dot_stuff($html !== "" ? $html : "<pre>" . pos_mail_escape($text) . "</pre>") . "\r\n\r\n"
-      . "--{$boundary}--\r\n.";
+      . "MIME-Version: 1.0\r\n";
+    if ($parsed) {
+      $rel = "posrel" . bin2hex(random_bytes(6));
+      $ext = stripos($parsed["mime"], "png") !== false ? "png" : "jpg";
+      $payload = $headers
+        . "Content-Type: multipart/related; boundary=\"{$rel}\"\r\n\r\n"
+        . "--{$rel}\r\nContent-Type: multipart/alternative; boundary=\"{$alt}\"\r\n\r\n"
+        . $altPart . "\r\n"
+        . "--{$rel}\r\nContent-Type: " . $parsed["mime"] . "\r\n"
+        . "Content-Transfer-Encoding: base64\r\n"
+        . "Content-ID: <notice-image>\r\n"
+        . "Content-Disposition: inline; filename=\"notice.{$ext}\"\r\n\r\n"
+        . pos_wrap_base64($parsed["base64"]) . "\r\n"
+        . "--{$rel}--\r\n.";
+    } else {
+      $payload = $headers
+        . "Content-Type: multipart/alternative; boundary=\"{$alt}\"\r\n\r\n"
+        . $altPart . "\r\n.";
+    }
     fwrite($fp, $payload . "\r\n");
     $queued = pos_smtp_read($fp, $timeoutSec);
     if (!str_starts_with($queued, "2")) throw new Exception($queued ?: "Message not accepted");

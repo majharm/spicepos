@@ -1,4 +1,4 @@
-Production deploy bundle — 20260901deploy48
+Production deploy bundle — 20260901deploy49
 =========================================
 
 Upload ALL files below to Hostinger public_html (overwrite):
@@ -39,6 +39,7 @@ PHP
   pos-accounting.php
   pos-api.php
   pos-mail.php
+  pos-alerts.php
   api/.htaccess
   api/health/index.php
   api/checkout/index.php
@@ -46,6 +47,8 @@ PHP
   api/backup/index.php
   api/backup/restore/index.php
   api/units/index.php
+  api/master/notifications/index.php
+  api/master/alerts/index.php
   api/master/backup/index.php
   api/master/backup/restore/index.php
   api/master/backup/platform/index.php
@@ -70,6 +73,7 @@ Node (if using hPanel Node.js web app — upload OR git pull then Restart)
   server/backup-util.js
   server/units.js
   server/mail.js
+  server/alerts.js
   server/fy.js
   package.json
 
@@ -82,7 +86,8 @@ FIXES in this bundle
   - Suppliers form and list include address and email
   - Settings page: wider card, 2-column details, styled logo upload, keep card padding on mobile
   - CSS: Master Admin mobile nav wrap, hide nav until sign-in, backup file inputs, table overflow
-  - Cache sticker 20260901deploy48 on index, login, master, setup
+  - Cache sticker 20260901deploy49 on index, login, master, setup
+  - Master Admin Notifications: attach an image; send to dashboard, email, and WhatsApp
   - Counter bill slider: small hide/unhide button (persists in this browser)
   - Items page can save a product photo; Counter cards show it
   - Counter item cards and fonts are smaller so more products fit

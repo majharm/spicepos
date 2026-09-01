@@ -97,7 +97,7 @@ function pos_php_till_dispatch($path, $method, $body) {
     $notes = [];
     try {
       $notes = pos_q(
-        "SELECT id, title, body, created_at FROM notifications WHERE business_id IS NULL OR business_id = ? ORDER BY created_at DESC LIMIT 8",
+        "SELECT id, title, body, image_url, created_at FROM notifications WHERE business_id IS NULL OR business_id = '' OR business_id = ? ORDER BY created_at DESC LIMIT 8",
         "s",
         [$bid]
       );
@@ -136,7 +136,7 @@ function pos_php_till_dispatch($path, $method, $body) {
     $out = pos_q("SELECT COALESCE(SUM(outstanding),0) AS outstanding FROM customers WHERE business_id = ?", "s", [$bid]);
     $branches = pos_q("SELECT * FROM branches WHERE business_id = ? ORDER BY name", "s", [$bid]);
     $notes = pos_q(
-      "SELECT * FROM notifications WHERE business_id IS NULL OR business_id = ? ORDER BY created_at DESC LIMIT 8",
+      "SELECT * FROM notifications WHERE business_id IS NULL OR business_id = '' OR business_id = ? ORDER BY created_at DESC LIMIT 8",
       "s",
       [$bid]
     );

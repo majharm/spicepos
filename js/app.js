@@ -2643,7 +2643,9 @@ function paintPlatformNotices(notes) {
   const html = list
     .map(
       (n) =>
-        `<div class="platform-notice"><strong>${escapeHtml(n.title || "Notice")}</strong>${escapeHtml(n.body || "")}</div>`,
+        `<div class="platform-notice"><strong>${escapeHtml(n.title || "Notice")}</strong>${escapeHtml(n.body || "")}${
+          n.image_url ? `<img class="notice-thumb" src="${escapeHtml(n.image_url)}" alt="" />` : ""
+        }</div>`,
     )
     .join("");
   if (top) {

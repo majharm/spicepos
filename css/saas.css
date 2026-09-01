@@ -293,6 +293,15 @@
   box-shadow: var(--shadow-card);
 }
 .platform-notice strong { display: block; margin-bottom: 4px; color: #78350f; }
+.platform-notice img,
+.notice-thumb {
+  display: block;
+  max-width: min(280px, 100%);
+  max-height: 160px;
+  margin-top: 8px;
+  border-radius: 8px;
+  object-fit: cover;
+}
 .platform-notes {
   margin: 0 24px 16px;
   display: grid;
