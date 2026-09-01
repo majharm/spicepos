@@ -90,4 +90,8 @@ test("PHP customer insert bind types match placeholders", () => {
   assert.match(read("server/crud.js"), /POSUnits\.lineAmount/);
   assert.match(read("js/app.js"), /POSUnits\.lineAmount/);
   assert.match(read("pos-orders.php"), /pos_line_amount_for_item/);
+  assert.match(read("pos-reports.php"), /payDaywise/);
+  assert.match(read("pos-reports.php"), /Payment daywise/);
+  assert.match(read("js/app.js"), /Payment daywise/);
+  assert.match(read("server/reports.js"), /payDaywise/);
 });

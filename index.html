@@ -6,8 +6,8 @@
     <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
     <title>SWAMI MASALE POS</title>
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./css/pos.css?v=20260901deploy33" />
-    <link rel="stylesheet" href="./css/saas.css?v=20260901deploy33" />
+    <link rel="stylesheet" href="./css/pos.css?v=20260901deploy35" />
+    <link rel="stylesheet" href="./css/saas.css?v=20260901deploy35" />
   </head>
   <body>
     <div class="app" id="app">
@@ -53,15 +53,6 @@
           </div>
         </div>
         <div class="nav-foot">
-          <div class="platform-brand">
-            <img src="./assets/atav-telecom-logo.png" alt="ATAV Telecom" width="120" height="36" />
-          </div>
-          <div class="chip">Today <b id="today-total">₹0.00</b></div>
-          <div class="chip">Bills <b id="today-count">0</b></div>
-          <div class="chip clock-chip" id="clock-chip" title="Shop local time">
-            <b id="clock">--:--</b>
-            <small id="clock-meta"></small>
-          </div>
           <button class="btn-logout" type="button" id="exit-impersonate" hidden>Back to Master Admin</button>
           <button class="btn-logout" type="button" data-logout>Logout</button>
         </div>
@@ -399,7 +390,7 @@
         </section>
         <section class="view" id="view-reports" hidden>
           <h2 class="visually-hidden">Reports</h2>
-          <p class="lede">Sales, stock, purchases, and GST reports (output/input by rate, HSN, B2B/B2C). Download one sheet or the full Excel workbook.</p>
+          <p class="lede">Sales, stock, purchases, GST, and daywise payment summary. Download one sheet or the full Excel workbook.</p>
           <form class="report-toolbar" id="report-form">
             <label>From <input id="rep-from" type="date" required /></label>
             <label>To <input id="rep-to" type="date" required /></label>
@@ -424,7 +415,7 @@
             </div>
             <div class="settings-section">
               <h3>Regional</h3>
-              <p class="section-note">Used for the nav clock, reports, and order timestamps.</p>
+              <p class="section-note">Used for reports, invoices, and order timestamps.</p>
               <label>Shop timezone
                 <select id="set-timezone" aria-label="Shop timezone">
                   <option value="Asia/Kolkata">India (IST, UTC+5:30)</option>
@@ -515,10 +506,10 @@
         </section>
       </div>
     </aside>
-    <script src="./js/pos-api.js?v=20260901deploy33" defer></script>
-    <script src="./js/units.js?v=20260901deploy33" defer></script>
-    <script src="./js/dev-mode.js?v=20260901deploy33" defer></script>
-    <script src="./js/invoice.js?v=20260901deploy33" defer></script>
-    <script src="./js/app.js?v=20260901deploy33" defer></script>
+    <script src="./js/pos-api.js?v=20260901deploy35" defer></script>
+    <script src="./js/units.js?v=20260901deploy35" defer></script>
+    <script src="./js/dev-mode.js?v=20260901deploy35" defer></script>
+    <script src="./js/invoice.js?v=20260901deploy35" defer></script>
+    <script src="./js/app.js?v=20260901deploy35" defer></script>
   </body>
 </html>

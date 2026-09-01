@@ -126,7 +126,7 @@ const VIEW_META = {
   devices: { title: "POS devices", subtitle: "Registers and terminal codes" },
   support: { title: "Support", subtitle: "Platform helpline and shop details" },
   accounts: { title: "Accounts", subtitle: "Receivables, payables, GL, and books" },
-  reports: { title: "Reports", subtitle: "Sales, stock, purchases, and GST" },
+  reports: { title: "Reports", subtitle: "Sales, stock, GST, and daywise payments" },
   settings: { title: "Settings", subtitle: "Company profile, backup, and branding" },
 };
 
@@ -1027,8 +1027,6 @@ async function loadToday() {
   const data = await api("/api/today");
   const total = money(data.today.takings);
   const count = String(data.today.bills);
-  $("today-total").textContent = total;
-  $("today-count").textContent = count;
   if ($("topbar-total")) $("topbar-total").textContent = total;
   if ($("topbar-count")) $("topbar-count").textContent = count;
 }
@@ -1070,6 +1068,7 @@ async function loadReports() {
       reportBlock("Customer sales", "Customer sales", ["Customer", "Type", "Bills", "Takings", "GST"], (data.byCustomer || []).map((r) => [r.customer_name, r.customer_type, Number(r.bills) || 0, Number(r.takings) || 0, Number(r.gst) || 0])),
       reportBlock("Pack sales", "Pack sales", ["Pack type", "Pack count", "Bills", "Takings"], (data.byPack || []).map((r) => [r.pack_type, Number(r.pack_count) || 0, Number(r.bills) || 0, Number(r.takings) || 0])),
       reportBlock("Payment", "Payment", ["Method", "Bills", "Takings"], (data.byPay || []).map((r) => [r.payment_method, Number(r.bills) || 0, Number(r.takings) || 0])),
+      reportBlock("Payment daywise", "Payment daywise", ["Day", "Cash", "UPI", "Card", "Credit", "Other", "Bills", "Total"], (data.payDaywise || []).map((r) => [reportDay(r.day), Number(r.cash) || 0, Number(r.upi) || 0, Number(r.card) || 0, Number(r.credit) || 0, Number(r.other) || 0, Number(r.bills) || 0, Number(r.total) || 0])),
       reportBlock("GST daywise", "GST daywise", ["Day", "Taxable", "GST", "Total"], (data.gst || []).map((r) => [reportDay(r.day), Number(r.taxable) || 0, Number(r.gst) || 0, Number(r.total) || 0])),
       reportBlock("GST output by rate", "GST output by rate", ["GST %", "Taxable", "CGST", "SGST", "Total GST", "Bills"], gstRateRows(data.gstByRate)),
       reportBlock("GST input by rate", "GST input by rate", ["GST %", "Taxable", "CGST", "SGST", "Total GST"], gstRateRows(data.gstInputByRate, false)),
@@ -2144,23 +2143,17 @@ function tick() {
   const now = new Date();
   const tz = shopTimezone();
   const timeText = formatShopTime(now);
-  const clock = $("clock");
-  const meta = $("clock-meta");
   const topbarTime = $("topbar-time");
-  if (topbarTime && topbarTime.textContent !== timeText) topbarTime.textContent = timeText;
-  if (clock && clock.textContent !== timeText) {
-    clock.textContent = timeText;
-    const abbr =
-      new Intl.DateTimeFormat("en-IN", { timeZone: tz, timeZoneName: "short" })
-        .formatToParts(now)
-        .find((p) => p.type === "timeZoneName")?.value || tz;
-    const date = now.toLocaleDateString("en-IN", { timeZone: tz, weekday: "short", day: "numeric", month: "short" });
-    const metaText = `${date} · ${abbr}`;
-    if (meta && meta.textContent !== metaText) meta.textContent = metaText;
-    const title = `${date} · ${abbr} (${tz})`;
-    $("clock-chip")?.setAttribute("title", title);
-    $("topbar-clock")?.setAttribute("title", title);
-  }
+  if (!topbarTime || topbarTime.textContent === timeText) return;
+  topbarTime.textContent = timeText;
+  const topbarClock = $("topbar-clock");
+  if (!topbarClock) return;
+  const abbr =
+    new Intl.DateTimeFormat("en-IN", { timeZone: tz, timeZoneName: "short" })
+      .formatToParts(now)
+      .find((p) => p.type === "timeZoneName")?.value || tz;
+  const date = now.toLocaleDateString("en-IN", { timeZone: tz, weekday: "short", day: "numeric", month: "short" });
+  topbarClock.setAttribute("title", `${date} · ${abbr} (${tz})`);
 }
 tick();
 setInterval(tick, 1000);
