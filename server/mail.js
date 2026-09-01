@@ -30,9 +30,13 @@ export function publicAppUrl(req) {
   return host ? `${proto}://${host}` : "";
 }
 
-function loginUrl(req) {
+export function publicLoginUrl(req) {
   const base = publicAppUrl(req);
   return base ? `${base}/login.html` : "/login.html";
+}
+
+function loginUrl(req) {
+  return publicLoginUrl(req);
 }
 
 function encodeSubject(value) {

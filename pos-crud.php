@@ -308,6 +308,18 @@ function pos_crud_dispatch($path, $method, $body, $bid, $auth, $branchId, $uid) 
         "role" => $role,
       ]);
     }
+    if (function_exists("pos_send_credential_alerts")) {
+      pos_send_credential_alerts([
+        "businessId" => $bid,
+        "shopName" => $shop[0]["name"] ?? "",
+        "ownerName" => $body["first_name"] ?? $body["name"] ?? "Staff",
+        "email" => $email,
+        "username" => $username,
+        "password" => $password,
+        "role" => $role,
+        "mobile" => $body["mobile"] ?? "",
+      ]);
+    }
     pos_send(200, ["ok" => true, "id" => $id]);
   }
 
