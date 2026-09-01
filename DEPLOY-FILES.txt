@@ -82,7 +82,11 @@ FIXES in this bundle
   - Suppliers form and list include address and email
   - Settings page: wider card, 2-column details, styled logo upload, keep card padding on mobile
   - CSS: Master Admin mobile nav wrap, hide nav until sign-in, backup file inputs, table overflow
-  - Cache sticker 20260901deploy38 on index, login, master, setup
+  - Cache sticker 20260901deploy44 on index, login, master, setup
+  - Page scrolling on every shop view, Master Admin main pane, and login/signup
+  - New Purchase items as a searchable list/table
+  - Indian financial year 1 April–31 March on Reports, Accounts, Expenses
+  - Finance → Expenses module (PHP + Node)
   - Master Admin → Backup: download/restore one shop or the full platform
   - Shop POS Admin → Backup: download/restore this shop JSON
   - Mobile: Counter billing and Invoices/orders stack, sticky Save, overlay menu
