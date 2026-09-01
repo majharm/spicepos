@@ -9,8 +9,8 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" />
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./css/pos.css?v=20260830deploy18" />
-    <link rel="stylesheet" href="./css/saas.css?v=20260830deploy18" />
+    <link rel="stylesheet" href="./css/pos.css?v=20260830deploy19" />
+    <link rel="stylesheet" href="./css/saas.css?v=20260830deploy19" />
   </head>
   <body>
     <div class="app">
@@ -26,7 +26,7 @@
         <button class="nav-btn" type="button" data-view="items">Items</button>
         <button class="nav-btn" type="button" data-view="customers">Customers</button>
         <button class="nav-btn" type="button" data-view="packs">Packs</button>
-        <button class="nav-btn" type="button" data-view="orders">Sales orders</button>
+        <button class="nav-btn" type="button" data-view="orders">Invoices</button>
         <button class="nav-btn" type="button" data-view="purchases">Purchases</button>
         <button class="nav-btn" type="button" data-view="suppliers">Suppliers</button>
         <button class="nav-btn" type="button" data-view="stock">Stock</button>
@@ -170,11 +170,34 @@
           <div class="table-wrap" id="packs-table"></div>
         </section>
         <section class="view" id="view-orders" hidden>
-          <h2>Sales orders</h2>
-          <p class="lede">Live SO numbers from your database. Select a row to view invoice, update status, or reprint.</p>
+          <h2>Invoices</h2>
+          <p class="lede">Tax invoices with live SO numbers. Search, filter, print, or update order and payment status.</p>
+          <form class="report-toolbar orders-toolbar" id="orders-toolbar">
+            <label>Search
+              <input type="search" id="orders-search" placeholder="SO no, customer…" autocomplete="off" />
+            </label>
+            <label>Order status
+              <select id="orders-status-filter">
+                <option value="">All</option>
+                <option value="confirmed">Confirmed</option>
+                <option value="delivered">Delivered</option>
+                <option value="cancelled">Cancelled</option>
+              </select>
+            </label>
+            <label>Payment
+              <select id="orders-pay-filter">
+                <option value="">All</option>
+                <option value="paid">Paid</option>
+                <option value="partial">Partial</option>
+                <option value="unpaid">Unpaid</option>
+              </select>
+            </label>
+            <button class="btn" type="button" id="orders-refresh">Refresh</button>
+          </form>
+          <p class="hint orders-summary" id="orders-summary" hidden></p>
           <div class="split orders-split">
             <div class="orders-list-wrap" id="orders"></div>
-            <div class="pane order-pane" id="order-pane"><p class="hint">Select a sales order.</p></div>
+            <div class="pane order-pane" id="order-pane"><p class="hint">Select an invoice.</p></div>
           </div>
         </section>
         <section class="view" id="view-purchases" hidden>
@@ -422,6 +445,6 @@
     <script src="./js/pos-api.js?v=20260830deploy18"></script>
     <script src="./js/dev-mode.js?v=20260830deploy18"></script>
     <script src="./js/invoice.js?v=20260830deploy18"></script>
-    <script src="./js/app.js?v=20260830deploy18"></script>
+    <script src="./js/app.js?v=20260830deploy19"></script>
   </body>
 </html>

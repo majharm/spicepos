@@ -1,4 +1,4 @@
-Production deploy bundle — 20260830deploy18
+Production deploy bundle — 20260830deploy19
 =========================================
 
 Upload ALL files below to Hostinger public_html (overwrite):
@@ -53,6 +53,9 @@ After upload:
   2. Hard-refresh browser (Ctrl+Shift+R)
 
 FIXES in this bundle
+  - Invoices UI: renamed Sales orders tab; search + status/payment filters; invoice detail card
+  - Sales orders table: separate Pay and Method columns; sticky header; row count summary
+  - Collapsible status update panel; thermal preview fills detail pane (matches Purchases)
   - Sales orders: table list view with live SO numbers from database (sorted newest SO first)
   - PHP purchase journal + credit payable posting; checkout wrapped in DB transaction
   - Purchases bill preview: line items on PHP, improved layout (deploy16)

@@ -859,6 +859,21 @@ tr:hover td { background: #f4f6fd; }
   align-items: start;
   grid-template-columns: minmax(0, 1.1fr) minmax(300px, 0.9fr);
 }
+.orders-toolbar {
+  margin: 0 24px 8px;
+  align-items: end;
+}
+.orders-toolbar select {
+  min-width: 120px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--line-strong);
+  background: #fff;
+}
+.orders-summary {
+  margin: 0 24px 8px;
+  font-weight: 700;
+}
 .orders-list-wrap {
   max-height: min(72vh, 720px);
   overflow: auto;
@@ -885,11 +900,88 @@ tr:hover td { background: #f4f6fd; }
 .orders-table tbody tr.order-row:hover td {
   background: #f4f6fd;
 }
+.orders-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: #f8fafc;
+  box-shadow: 0 1px 0 var(--line-strong);
+}
 .order-pane {
   position: sticky;
   top: 12px;
   max-height: min(80vh, 820px);
   overflow-y: auto;
+}
+.invoice-detail-card {
+  margin-bottom: 12px;
+  padding: 14px 16px;
+  border: 1px solid var(--line-strong);
+  border-radius: 14px;
+  background: linear-gradient(180deg, #fff 0%, var(--bg-tint-soft) 100%);
+  box-shadow: var(--shadow-card);
+}
+.invoice-detail-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+}
+.invoice-so {
+  margin: 0 0 4px;
+  font-size: 1.25rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+.invoice-detail-meta {
+  text-align: right;
+  display: grid;
+  gap: 6px;
+  justify-items: end;
+}
+.invoice-total {
+  font-size: 1.35rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--accent, #1f6feb);
+}
+.pay-method-chip {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  background: #eef2ff;
+  color: #334155;
+}
+.order-status-panel {
+  margin: 0 0 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--line-strong);
+  border-radius: 12px;
+  background: #fff;
+}
+.order-status-panel > summary {
+  cursor: pointer;
+  font-weight: 800;
+  color: var(--text);
+  list-style: none;
+}
+.order-status-panel > summary::-webkit-details-marker { display: none; }
+.order-status-panel[open] > summary { margin-bottom: 10px; }
+.order-status-panel .order-status-form {
+  margin-bottom: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+.order-pane .thermal-preview {
+  max-width: 100%;
+  width: 100%;
+  max-height: none;
+  margin: 0;
 }
 .purchase-new {
   margin: 0 24px 12px;
