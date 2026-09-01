@@ -10,6 +10,7 @@ const state = {
   query: "",
   customerId: "",
   lastPack: null,
+  held: [],
   editingOrderId: null,
   logoDraft: null,
   session: null,
@@ -448,6 +449,7 @@ function showView(name) {
   if (name === "suppliers") loadSuppliers();
   if (name === "support") renderSupport();
   if (name === "dashboard") loadDashboard();
+  if (name === "counter") loadHolds();
   paintImpersonationControls();
   if (name === "stock") loadStock();
   if (name === "staff") loadStaff();
@@ -458,6 +460,82 @@ function showView(name) {
 function setHint(msg, kind = "") {
   $("hint").textContent = msg || "";
   $("hint").className = `hint ${kind}`.trim();
+}
+
+function holdPayload(row) {
+  if (row?.payload && typeof row.payload === "object" && !Array.isArray(row.payload)) return row.payload;
+  if (row?.payload && Array.isArray(row.payload.cart)) return row.payload;
+  const raw = row?.payload_json;
+  if (!raw) return null;
+  try {
+    const parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
+    return parsed && typeof parsed === "object" ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function renderHeldBills() {
+  const el = $("held-bills");
+  if (!el) return;
+  const list = Array.isArray(state.held) ? state.held : [];
+  if (!list.length) {
+    el.hidden = true;
+    el.innerHTML = "";
+    return;
+  }
+  el.hidden = false;
+  el.innerHTML =
+    `<div class="held-bills-title">Held bills (${list.length})</div>` +
+    list
+      .map((h) => {
+        const payload = holdPayload(h) || {};
+        const qty = (payload.cart || []).reduce((n, line) => n + (Number(line.qtyGm) || 0), 0);
+        const when = h.created_at ? new Date(h.created_at).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }) : "";
+        return `<button class="held-item" type="button" data-recall-hold="${escapeHtml(h.id)}">
+          <span>${escapeHtml(h.label || "Held bill")}${qty ? ` · ${qty} g` : ""}</span>
+          <span class="pack">${escapeHtml(when)}</span>
+        </button>`;
+      })
+      .join("");
+}
+
+async function loadHolds() {
+  try {
+    const rows = await api("/api/holds");
+    state.held = Array.isArray(rows) ? rows : [];
+  } catch {
+    state.held = [];
+  }
+  renderHeldBills();
+}
+
+async function recallHeldBill(id) {
+  if (state.editingOrderId) throw new Error("Finish or cancel the invoice edit first");
+  if (state.cart.length) throw new Error("Clear or hold the current cart first");
+  let row = (state.held || []).find((h) => h.id === id);
+  let payload = holdPayload(row);
+  if (!payload?.cart) {
+    const fresh = await api(`/api/holds/${encodeURIComponent(id)}`);
+    payload = holdPayload(fresh);
+    row = fresh;
+  }
+  if (!payload?.cart?.length) throw new Error("Held bill is empty");
+  state.cart = payload.cart.map((line) => ({ itemId: line.itemId, qtyGm: Number(line.qtyGm) || 0 })).filter((l) => l.itemId && l.qtyGm > 0);
+  if (payload.customerId) state.customerId = payload.customerId;
+  state.lastPack = payload.lastPack || null;
+  if (payload.customerId) $("customer").value = payload.customerId;
+  if (payload.lastPack?.id) $("pack-choice").value = payload.lastPack.id;
+  else $("pack-choice").value = "";
+  try {
+    await api(`/api/holds/${encodeURIComponent(id)}`, { method: "DELETE" });
+  } catch {
+    /* keep the recalled cart even if delete fails */
+  }
+  state.held = (state.held || []).filter((h) => h.id !== id);
+  renderCustomersSelect();
+  renderCart();
+  setHint(`Recalled ${row?.label || "held bill"}`, "ok");
 }
 
 function activeItems() {
@@ -535,7 +613,9 @@ function renderCart() {
   $("total").textContent = money(t.taxable + t.tax);
   $("btn-pay").disabled = state.cart.length === 0;
   $("btn-clear").disabled = state.cart.length === 0;
+  if ($("btn-hold")) $("btn-hold").disabled = state.cart.length === 0 || Boolean(state.editingOrderId);
   $("btn-pay").textContent = state.editingOrderId ? "Save changes" : "Save";
+  renderHeldBills();
   renderEditOrderBanner();
   if (window.DevMode?.isEnabled()) {
     DevMode.updateContext({ cartLines: state.cart.length });
@@ -810,7 +890,7 @@ async function loadBootstrap() {
   renderPacksTable();
   renderSettings();
   renderPoLines();
-  void Promise.all([loadToday(), loadDashboard(), loadSuppliers().catch(() => {})]);
+  void Promise.all([loadToday(), loadDashboard(), loadSuppliers().catch(() => {}), loadHolds().catch(() => {})]);
 }
 
 async function loadDashboard() {
@@ -1900,6 +1980,8 @@ document.addEventListener("click", async (e) => {
 $("open-pos")?.addEventListener("click", () => showView("counter"));
 $("btn-hold")?.addEventListener("click", async () => {
   try {
+    if (state.editingOrderId) throw new Error("Finish or cancel the invoice edit first");
+    if (!state.cart.length) throw new Error("Cart is empty");
     await api("/api/holds", {
       method: "POST",
       body: JSON.stringify({
@@ -1909,7 +1991,19 @@ $("btn-hold")?.addEventListener("click", async () => {
     });
     setHint("Bill held", "ok");
     state.cart = [];
+    state.lastPack = null;
+    $("pack-choice").value = "";
     renderCart();
+    await loadHolds();
+  } catch (err) {
+    setHint(err.message, "error");
+  }
+});
+$("held-bills")?.addEventListener("click", async (e) => {
+  const btn = e.target.closest("[data-recall-hold]");
+  if (!btn) return;
+  try {
+    await recallHeldBill(btn.dataset.recallHold);
   } catch (err) {
     setHint(err.message, "error");
   }

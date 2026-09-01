@@ -258,7 +258,26 @@ export function registerTenant(app) {
   );
 
   app.get("/api/holds", requireStaff, requirePerm("counter"), (_req, res) =>
-    send(res, () => query("SELECT id, label, created_at FROM held_bills WHERE business_id = ? ORDER BY created_at DESC", [bid()])),
+    send(res, async () => {
+      const rows = await query(
+        "SELECT id, label, created_at, payload_json FROM held_bills WHERE business_id = ? ORDER BY created_at DESC",
+        [bid()],
+      );
+      return rows.map((row) => {
+        let payload = {};
+        try {
+          payload = JSON.parse(row.payload_json || "{}") || {};
+        } catch {
+          payload = {};
+        }
+        return {
+          id: row.id,
+          label: row.label,
+          created_at: row.created_at,
+          payload,
+        };
+      });
+    }),
   );
 
   app.post("/api/holds", requireStaff, requirePerm("counter"), (req, res) =>

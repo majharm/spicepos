@@ -191,14 +191,10 @@ function pos_crud_dispatch($path, $method, $body, $bid, $auth, $branchId, $uid) 
     }
   }
 
-  if ($path === "holds" && $method === "POST") {
-    $id = pos_uuid();
-    pos_q(
-      "INSERT INTO held_bills (id, business_id, branch_id, user_id, label, payload_json) VALUES (?,?,?,?,?,?)",
-      "ssssss",
-      [$id, $bid, (string) $branchId, (string) $uid, $body["label"] ?? "Held bill", json_encode($body["payload"] ?? new stdClass())]
-    );
-    pos_send(200, ["ok" => true, "id" => $id]);
+  if ($path === "holds" || preg_match('#^holds/#', $path)) {
+    pos_require_holds();
+    pos_dispatch_holds($path, $method, $body, $bid, $branchId, $uid, $auth);
+    return true;
   }
 
   if ($path === "stock/adjust" && $method === "POST") {

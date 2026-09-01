@@ -42,6 +42,29 @@
     return Boolean(res && (res.status === 502 || res.status === 503) && /Node/i.test(err));
   }
 
+  function isPhpUnimplemented(data, res) {
+    if (!res || res.status !== 501 || !data || typeof data !== "object") return false;
+    return /not available in PHP fallback/i.test(String(data.error || ""));
+  }
+
+  function isMutating(method) {
+    const m = String(method || "GET").toUpperCase();
+    return m !== "GET" && m !== "HEAD" && m !== "OPTIONS";
+  }
+
+  function orderedSpecs(method, preferred) {
+    const list = specs();
+    const mutating = isMutating(method);
+    const rpc = list.filter((s) => s.mode === "rpc");
+    const prefix = list.filter((s) => s.mode !== "rpc");
+    const out = [];
+    if (preferred && !mutating) out.push(preferred);
+    if (mutating) out.push(...rpc, ...prefix);
+    else out.push(...prefix, ...rpc);
+    if (preferred && mutating) out.push(preferred);
+    return out;
+  }
+
   function looksLikeJson(text, res) {
     const ct = String(res?.headers?.get("content-type") || "").toLowerCase();
     if (ct.includes("json")) return true;
@@ -150,13 +173,12 @@
     if (!headers["Content-Type"] && !headers["content-type"] && options.body) {
       headers["Content-Type"] = "application/json";
     }
-    const trySpecs = [];
-    const first = await ensureSpec();
-    if (first) trySpecs.push(first);
-    for (const spec of specs()) trySpecs.push(spec);
+    const method = String(options.method || "GET").toUpperCase();
+    const trySpecs = orderedSpecs(method, await ensureSpec());
 
     const seen = new Set();
     let lastText = "";
+    let lastUnimplemented = null;
     for (const spec of trySpecs) {
       const key = `${spec.mode}:${spec.base}`;
       if (seen.has(key)) continue;
@@ -165,18 +187,23 @@
       const hdrs = { ...headers };
       if (spec.mode === "rpc") hdrs["X-Pos-Path"] = String(path).replace(/^\/api\/?/, "").split("?")[0];
       try {
-        const res = await fetch(url, { credentials: "same-origin", cache: "no-store", ...options, headers: hdrs });
+        const res = await fetch(url, { credentials: "same-origin", cache: "no-store", redirect: "follow", ...options, headers: hdrs });
         const text = await res.text();
         lastText = text;
         if (!looksLikeJson(text, res)) continue;
         const data = text ? JSON.parse(text) : {};
         if (isDeadBridge(data, res)) continue;
+        if (isPhpUnimplemented(data, res)) {
+          lastUnimplemented = { res, data, text };
+          continue;
+        }
         saveSpec(spec);
         return { res, data, text };
       } catch {
         /* try next */
       }
     }
+    if (lastUnimplemented) return lastUnimplemented;
     const snippet = String(lastText || "").replace(/\s+/g, " ").slice(0, 80);
     throw new Error(
       snippet.startsWith("<") || /<!doctype/i.test(snippet)
