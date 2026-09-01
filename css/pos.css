@@ -185,13 +185,15 @@ select {
   border-radius: 4px;
 }
 .logo-preview {
-  max-width: 180px;
-  max-height: 120px;
+  width: 132px;
+  height: 88px;
+  max-width: 132px;
+  max-height: 88px;
   object-fit: contain;
-  background: #fff;
+  background: var(--bg-tint-soft);
   border-radius: 12px;
   padding: 8px;
-  margin: 0 20px 8px;
+  margin: 0;
   border: 1px solid var(--line);
 }
 .brand strong {
@@ -279,9 +281,9 @@ select {
   justify-content: space-between;
   gap: 12px;
   padding: 10px 20px;
-  background: rgba(255, 253, 249, 0.95);
+  background: #fff;
   border-bottom: 1px solid var(--line);
-  box-shadow: 0 2px 8px rgba(44, 33, 24, 0.05);
+  box-shadow: none;
   position: sticky;
   top: 0;
   z-index: 6;
@@ -783,6 +785,9 @@ tr:last-child td { border-bottom: 0; }
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-card);
 }
+.settings-page {
+  max-width: 720px;
+}
 .settings-section {
   display: grid;
   gap: 12px;
@@ -808,6 +813,44 @@ tr:last-child td { border-bottom: 0; }
   line-height: 1.5;
 }
 .settings label { display: grid; gap: 6px; color: var(--muted); font-size: 12px; font-weight: 700; letter-spacing: 0.03em; }
+.settings label.dev-toggle {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  color: var(--text);
+  font-size: 13.5px;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+.settings-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px 14px;
+}
+.settings-grid .full { grid-column: 1 / -1; }
+.settings-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 16px;
+  padding-top: 6px;
+}
+.settings-actions .btn.primary { min-width: 168px; }
+.settings-actions .hint { margin: 0; min-height: 0; }
+.logo-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.logo-controls {
+  display: grid;
+  gap: 10px;
+  flex: 1 1 220px;
+  min-width: 200px;
+}
+.settings-page select { width: 100%; max-width: 360px; }
 .settings .field-hint {
   margin: -2px 0 0;
   color: var(--muted);
@@ -833,8 +876,16 @@ tr:last-child td { border-bottom: 0; }
   margin: 0;
 }
 .settings textarea,
-.signup-grid select,
 .signup-grid textarea {
+  font: inherit;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: #fff;
+  resize: vertical;
+  min-height: 72px;
+}
+.signup-grid select {
   font: inherit;
   padding: 10px 12px;
   border-radius: 10px;
@@ -1383,9 +1434,14 @@ tr:last-child td { border-bottom: 0; }
   .workspace, .split, .orders-split, .purchases-split { grid-template-columns: 1fr; height: auto; max-height: none; min-height: 0; }
   .split, .orders-split, .purchases-split { padding: 0 12px 24px; }
   .lede, .view > .hint, .orders-toolbar, .orders-summary { margin-left: 12px; margin-right: 12px; }
-  .settings { margin-left: 12px; margin-right: 12px; }
+  .settings {
+    margin-left: 12px;
+    margin-right: 12px;
+    padding: 18px 16px;
+  }
+  .settings-grid { grid-template-columns: 1fr; }
+  .settings-actions .btn.primary { width: 100%; }
   .table-wrap { padding: 0 12px 24px; }
-  .settings { padding: 0 12px 24px; grid-template-columns: 1fr; }
   .btn { min-height: 44px; }
   .qty button { width: 44px; height: 44px; }
 

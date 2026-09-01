@@ -396,6 +396,7 @@ function showLogo(img, url) {
     img.removeAttribute("src");
     img.hidden = true;
   }
+  if (img.id === "logo-preview" && $("logo-clear")) $("logo-clear").hidden = !url;
 }
 
 function excelHref(sheet) {

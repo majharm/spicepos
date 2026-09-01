@@ -127,16 +127,23 @@ test("PHP and HTML wire master admin backup", () => {
   );
 });
 
-test("HTML and CSS cache stickers match deploy38", () => {
+test("HTML and CSS cache stickers match deploy39", () => {
   for (const name of ["index.html", "master.html", "login.html", "setup.html"]) {
     const html = readFileSync(path.join(root, name), "utf8");
-    assert.match(html, /20260901deploy38/);
-    assert.doesNotMatch(html, /20260901deploy3[0-7]/);
+    assert.match(html, /20260901deploy39/);
+    assert.doesNotMatch(html, /20260901deploy3[0-8]/);
   }
   const saas = readFileSync(path.join(root, "css/saas.css"), "utf8");
   const pos = readFileSync(path.join(root, "css/pos.css"), "utf8");
+  const index = readFileSync(path.join(root, "index.html"), "utf8");
   assert.match(saas, /body\.master-locked/);
   assert.match(saas, /max-width: 900px/);
   assert.match(pos, /backup-file-lab input\[type="file"\]/);
   assert.match(pos, /settings input:not\(\[type="file"\]\)/);
+  assert.match(pos, /settings-page/);
+  assert.match(pos, /settings-grid/);
+  assert.match(pos, /logo-row/);
+  assert.match(index, /settings-page/);
+  assert.match(index, /id="set-address"/);
+  assert.match(index, /<textarea id="set-address"/);
 });
