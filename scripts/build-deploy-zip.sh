@@ -2,7 +2,7 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
-OUT="${1:-spicepos-deploy41.zip}"
+OUT="${1:-spicepos-deploy42.zip}"
 rm -f "$OUT"
 zip -r "$OUT" \
   DEPLOY-FILES.txt \
@@ -23,5 +23,6 @@ zip -r "$OUT" \
   server/accounts.js server/roles.js server/schema.js server/backup.js server/backup-util.js \
   server/units.js \
   server/mail.js \
+  server/fy.js \
   package.json
 echo "Created $OUT ($(du -h "$OUT" | cut -f1))"

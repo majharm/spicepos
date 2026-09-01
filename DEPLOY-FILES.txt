@@ -1,4 +1,4 @@
-Production deploy bundle — 20260901deploy41
+Production deploy bundle — 20260901deploy42
 =========================================
 
 Upload ALL files below to Hostinger public_html (overwrite):
@@ -70,6 +70,7 @@ Node (if using hPanel Node.js web app — upload OR git pull then Restart)
   server/backup-util.js
   server/units.js
   server/mail.js
+  server/fy.js
   package.json
 
 After upload:

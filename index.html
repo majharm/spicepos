@@ -6,8 +6,8 @@
     <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
     <title>SWAMI MASALE POS</title>
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./css/pos.css?v=20260901deploy41" />
-    <link rel="stylesheet" href="./css/saas.css?v=20260901deploy41" />
+    <link rel="stylesheet" href="./css/pos.css?v=20260901deploy42" />
+    <link rel="stylesheet" href="./css/saas.css?v=20260901deploy42" />
   </head>
   <body>
     <div class="app" id="app">
@@ -41,6 +41,7 @@
           <div class="nav-group">
             <p class="nav-group-label">Finance</p>
             <button class="nav-btn" type="button" data-view="accounts"><span class="nav-icon" aria-hidden="true">₹</span>Accounts</button>
+            <button class="nav-btn" type="button" data-view="expenses"><span class="nav-icon" aria-hidden="true">−</span>Expenses</button>
             <button class="nav-btn" type="button" data-view="reports"><span class="nav-icon" aria-hidden="true">▣</span>Reports</button>
           </div>
           <div class="nav-group">
@@ -259,19 +260,31 @@
           <p class="lede">Supplier purchase bills with thermal preview, input GST breakdown, and print.</p>
           <details class="purchase-new" id="purchase-new">
             <summary class="btn">New purchase</summary>
-            <form class="settings wide" id="purchase-form">
-              <label>Supplier <select id="po-supplier"></select></label>
-              <label>Invoice no. <input id="po-invoice" /></label>
-              <label>Date <input id="po-date" type="date" /></label>
-              <label>Pay
-                <select id="po-pay">
-                  <option value="cash">Cash</option>
-                  <option value="upi">UPI</option>
-                  <option value="credit">Credit</option>
-                </select>
-              </label>
-              <div id="po-lines" class="pack-compose"></div>
-              <button class="btn primary" type="submit">Save purchase</button>
+            <form class="settings purchase-form" id="purchase-form">
+              <div class="purchase-head">
+                <label>Supplier <select id="po-supplier"></select></label>
+                <label>Invoice no. <input id="po-invoice" autocomplete="off" /></label>
+                <label>Date <input id="po-date" type="date" /></label>
+                <label>Pay
+                  <select id="po-pay">
+                    <option value="cash">Cash</option>
+                    <option value="upi">UPI</option>
+                    <option value="credit">Credit</option>
+                  </select>
+                </label>
+              </div>
+              <div class="purchase-items">
+                <div class="purchase-items-bar">
+                  <h3>Item list</h3>
+                  <input id="po-item-search" type="search" placeholder="Search item or HSN…" autocomplete="off" />
+                  <span class="purchase-items-meta" id="po-selected-meta">0 selected</span>
+                </div>
+                <div id="po-lines" class="po-lines"></div>
+              </div>
+              <div class="purchase-foot">
+                <p class="po-total" id="po-total">₹0.00</p>
+                <button class="btn primary" type="submit">Save purchase</button>
+              </div>
             </form>
             <div class="hint" id="po-hint"></div>
           </details>
@@ -363,7 +376,7 @@
           <p class="lede">Platform helpline from Master Admin (MySQL). Shop details are below.</p>
           <div class="report-grid" id="support-cards"></div>
         </section>
-        <section class="view" id="view-accounts" hidden>
+        <section class="view view-finance" id="view-accounts" hidden>
           <h2 class="visually-hidden">Accounts</h2>
           <p class="lede">Double-entry books: receivables, payables, chart of accounts, trial balance, P&amp;L, balance sheet, and cash book.</p>
           <div class="report-grid" id="acc-summary"></div>
@@ -379,9 +392,11 @@
             <button class="btn acc-tab" type="button" data-acc-tab="cash-book">Cash book</button>
           </div>
           <form class="report-toolbar" id="acc-period-form">
+            <span class="fy-chip" id="acc-fy-label">FY</span>
             <label>From <input id="acc-from" type="date" /></label>
             <label>To <input id="acc-to" type="date" /></label>
             <label>As of <input id="acc-asof" type="date" /></label>
+            <button class="btn" type="button" id="acc-this-fy">This FY</button>
             <button class="btn primary" type="submit">Refresh</button>
           </form>
           <div class="hint" id="acc-hint"></div>
@@ -395,12 +410,48 @@
           <div id="acc-pane-balance-sheet" class="acc-pane" hidden><div class="table-wrap" id="acc-bs-table"></div></div>
           <div id="acc-pane-cash-book" class="acc-pane" hidden><div class="table-wrap" id="acc-cash-table"></div></div>
         </section>
-        <section class="view" id="view-reports" hidden>
+        <section class="view view-finance" id="view-expenses" hidden>
+          <h2 class="visually-hidden">Expenses</h2>
+          <p class="lede">Shop expenses for the Indian financial year (1 April–31 March). Saved entries post to Accounts.</p>
+          <form class="settings expense-form" id="expense-form">
+            <div class="purchase-head">
+              <label>Date <input id="exp-date" type="date" required /></label>
+              <label>Category <select id="exp-category"></select></label>
+              <label>Amount ₹ <input id="exp-amount" type="number" min="0.01" step="0.01" required /></label>
+              <label>GST ₹ <input id="exp-gst" type="number" min="0" step="0.01" value="0" /></label>
+              <label>Pay
+                <select id="exp-pay">
+                  <option value="cash">Cash</option>
+                  <option value="upi">UPI</option>
+                  <option value="card">Card</option>
+                  <option value="bank">Bank</option>
+                </select>
+              </label>
+              <label class="full">Notes <input id="exp-notes" maxlength="240" placeholder="Optional" /></label>
+            </div>
+            <div class="purchase-foot">
+              <p class="po-total" id="exp-total-preview">₹0.00</p>
+              <button class="btn primary" type="submit">Save expense</button>
+            </div>
+          </form>
+          <div class="hint" id="exp-hint"></div>
+          <form class="report-toolbar" id="exp-filter">
+            <span class="fy-chip" id="exp-fy-label">FY</span>
+            <label>From <input id="exp-from" type="date" /></label>
+            <label>To <input id="exp-to" type="date" /></label>
+            <button class="btn" type="button" id="exp-this-fy">This FY</button>
+            <button class="btn primary" type="submit">Show</button>
+          </form>
+          <div class="table-wrap" id="expenses-table"></div>
+        </section>
+        <section class="view view-finance" id="view-reports" hidden>
           <h2 class="visually-hidden">Reports</h2>
-          <p class="lede">Sales, stock, purchases, GST, and daywise payment summary. Download one sheet or the full Excel workbook.</p>
+          <p class="lede">Sales, stock, purchases, expenses, GST, and daywise payment summary for the Indian financial year (1 April–31 March).</p>
           <form class="report-toolbar" id="report-form">
+            <span class="fy-chip" id="rep-fy-label">FY</span>
             <label>From <input id="rep-from" type="date" required /></label>
             <label>To <input id="rep-to" type="date" required /></label>
+            <button class="btn" type="button" id="rep-this-fy">This FY</button>
             <button class="btn primary" type="submit">Show</button>
             <a class="btn" id="rep-excel-all" href="#">Download all Excel</a>
           </form>
@@ -544,10 +595,10 @@
         </section>
       </div>
     </aside>
-    <script src="./js/pos-api.js?v=20260901deploy41" defer></script>
-    <script src="./js/units.js?v=20260901deploy41" defer></script>
-    <script src="./js/dev-mode.js?v=20260901deploy41" defer></script>
-    <script src="./js/invoice.js?v=20260901deploy41" defer></script>
-    <script src="./js/app.js?v=20260901deploy41" defer></script>
+    <script src="./js/pos-api.js?v=20260901deploy42" defer></script>
+    <script src="./js/units.js?v=20260901deploy42" defer></script>
+    <script src="./js/dev-mode.js?v=20260901deploy42" defer></script>
+    <script src="./js/invoice.js?v=20260901deploy42" defer></script>
+    <script src="./js/app.js?v=20260901deploy42" defer></script>
   </body>
 </html>
