@@ -127,7 +127,8 @@ const VIEW_META = {
   support: { title: "Support", subtitle: "Platform helpline and shop details" },
   accounts: { title: "Accounts", subtitle: "Receivables, payables, GL, and books" },
   reports: { title: "Reports", subtitle: "Sales, stock, GST, and daywise payments" },
-  settings: { title: "Settings", subtitle: "Company profile, backup, and branding" },
+  settings: { title: "Settings", subtitle: "Company profile and branding" },
+  backup: { title: "Backup", subtitle: "Download or restore this shop" },
 };
 
 function orderStatusClass(status) {
@@ -451,6 +452,20 @@ function reportBlock(title, sheet, headers, rows) {
   </section>`;
 }
 
+function isMobileLayout() {
+  return window.matchMedia("(max-width: 980px)").matches;
+}
+
+function setNavCollapsed(collapsed) {
+  const app = document.getElementById("app");
+  const btn = $("nav-toggle");
+  if (!app) return;
+  app.classList.toggle("nav-collapsed", collapsed);
+  btn?.setAttribute("aria-expanded", collapsed ? "false" : "true");
+  const scrim = $("nav-scrim");
+  if (scrim) scrim.hidden = collapsed || !isMobileLayout();
+}
+
 function can(module) {
   if (state.session?.role === "business_admin") return true;
   return state.perms?.[module] === true;
@@ -477,6 +492,7 @@ function applyNav() {
       accounts: "accounts",
       reports: "reports",
       settings: "settings",
+      backup: "settings",
     };
     btn.hidden = map[view] ? !can(map[view]) : false;
   });
@@ -519,6 +535,7 @@ function showView(name) {
   if (name === "staff") loadStaff();
   if (name === "branches") loadBranches();
   if (name === "devices") loadDevices();
+  if (isMobileLayout()) setNavCollapsed(true);
 }
 
 function setHint(msg, kind = "") {
@@ -1556,11 +1573,10 @@ $("orders-refresh")?.addEventListener("click", () => {
 
 $("nav-toggle")?.addEventListener("click", () => {
   const app = document.getElementById("app");
-  const btn = $("nav-toggle");
-  if (!app || !btn) return;
-  const collapsed = app.classList.toggle("nav-collapsed");
-  btn.setAttribute("aria-expanded", collapsed ? "false" : "true");
+  if (!app) return;
+  setNavCollapsed(!app.classList.contains("nav-collapsed"));
 });
+$("nav-scrim")?.addEventListener("click", () => setNavCollapsed(true));
 
 $("orders").addEventListener("keydown", (e) => {
   if (e.key !== "Enter" && e.key !== " ") return;
@@ -2157,6 +2173,13 @@ function tick() {
 }
 tick();
 setInterval(tick, 1000);
+window.addEventListener("resize", () => {
+  if (!isMobileLayout()) {
+    setNavCollapsed(false);
+  } else if (!$("nav-scrim")?.hidden && document.getElementById("app")?.classList.contains("nav-collapsed")) {
+    setNavCollapsed(true);
+  }
+});
 
 document.addEventListener("click", async (e) => {
   const logout = e.target.closest("[data-logout]");
@@ -2323,6 +2346,7 @@ async function boot() {
       $("session-who").textContent = `${me.user.name || me.user.email} · ${me.user.role || ""} · ${me.business?.name || ""}`;
     }
     applyNav();
+    if (isMobileLayout()) setNavCollapsed(true);
     if (me.business?.status && me.business.status !== "active" && !me.impersonating) {
       $("expired-banner").hidden = false;
       $("shop-name").textContent = me.business.name || "POS";

@@ -52,4 +52,6 @@ test("PHP and HTML wire shop backup", () => {
   assert.match(till, /pos_dispatch_backup/);
   assert.match(index, /btn-backup-download/);
   assert.match(index, /btn-backup-restore/);
+  assert.match(index, /id="view-backup"/);
+  assert.match(index, /data-view="backup"/);
 });

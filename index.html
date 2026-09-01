@@ -2,12 +2,12 @@
 <html lang="en" data-theme="velocity">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
     <title>SWAMI MASALE POS</title>
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./css/pos.css?v=20260901deploy35" />
-    <link rel="stylesheet" href="./css/saas.css?v=20260901deploy35" />
+    <link rel="stylesheet" href="./css/pos.css?v=20260901deploy36" />
+    <link rel="stylesheet" href="./css/saas.css?v=20260901deploy36" />
   </head>
   <body>
     <div class="app" id="app">
@@ -50,6 +50,7 @@
             <button class="nav-btn" type="button" data-view="devices"><span class="nav-icon" aria-hidden="true">⌁</span>Devices</button>
             <button class="nav-btn" type="button" data-view="support"><span class="nav-icon" aria-hidden="true">?</span>Support</button>
             <button class="nav-btn" type="button" data-view="settings"><span class="nav-icon" aria-hidden="true">⚙</span>Settings</button>
+            <button class="nav-btn" type="button" data-view="backup"><span class="nav-icon" aria-hidden="true">⇩</span>Backup</button>
           </div>
         </div>
         <div class="nav-foot">
@@ -57,6 +58,7 @@
           <button class="btn-logout" type="button" data-logout>Logout</button>
         </div>
       </nav>
+      <div class="nav-scrim" id="nav-scrim" hidden></div>
 
       <div class="stage">
         <header class="view-topbar" id="view-topbar">
@@ -108,7 +110,7 @@
             <form class="quick-customer" id="quick-customer-form" autocomplete="off">
               <input id="qc-name" name="qc-name" placeholder="Customer name" maxlength="120" />
               <input id="qc-mobile" name="qc-mobile" placeholder="Mobile no." inputmode="tel" maxlength="15" />
-              <button class="btn primary" type="submit" id="qc-save">Add customer</button>
+              <button class="btn primary" type="submit" id="qc-save">Add</button>
               <span class="hint" id="qc-hint"></span>
             </form>
           </header>
@@ -403,7 +405,7 @@
         </section>
         <section class="view" id="view-settings" hidden>
           <h2 class="visually-hidden">Settings</h2>
-          <p class="lede">Company profile, shop timezone, and branding.</p>
+          <p class="lede">Company profile and branding. Shop backup is under Admin → Backup.</p>
           <form class="settings" id="settings-form">
             <div class="settings-section">
               <h3>Business details</h3>
@@ -439,18 +441,6 @@
             <button class="btn primary" type="submit">Save settings</button>
           </form>
           <div class="hint" id="settings-hint"></div>
-          <div class="settings" id="backup-card">
-            <div class="settings-section">
-              <h3>Backup</h3>
-              <p class="section-note">Download a JSON copy of this shop (items, stock, customers, invoices, purchases, accounts). Keep the file private. Restore only a backup from this same shop — it replaces current shop data.</p>
-              <a class="btn primary" id="btn-backup-download" href="#">Download backup</a>
-              <label>Restore file
-                <input id="backup-file" type="file" accept="application/json,.json" />
-              </label>
-              <button class="btn" type="button" id="btn-backup-restore">Restore backup</button>
-              <p class="hint" id="backup-hint"></p>
-            </div>
-          </div>
           <div class="settings dev-settings-card" id="dev-settings-section" hidden>
             <div class="settings-section">
               <h3>Developer mode</h3>
@@ -461,6 +451,24 @@
                 Enable developer mode
               </label>
               <p class="field-hint">Shortcut: Ctrl+Shift+D · Add <code>?dev=1</code> to the URL to auto-enable.</p>
+            </div>
+          </div>
+        </section>
+        <section class="view" id="view-backup" hidden>
+          <h2 class="visually-hidden">Backup</h2>
+          <p class="lede">Download a JSON copy of this shop, or restore a backup from this same shop.</p>
+          <div class="settings" id="backup-card">
+            <div class="settings-section backup-panel">
+              <h3>Shop backup</h3>
+              <p class="section-note">Includes items, stock, customers, invoices, purchases, and accounts. Keep the file private. Restore replaces current shop data for this business only.</p>
+              <div class="backup-actions">
+                <a class="btn primary" id="btn-backup-download" href="#">Download backup</a>
+                <label class="backup-file-lab">Restore file
+                  <input id="backup-file" type="file" accept="application/json,.json" />
+                </label>
+                <button class="btn" type="button" id="btn-backup-restore">Restore backup</button>
+              </div>
+              <p class="hint" id="backup-hint"></p>
             </div>
           </div>
         </section>
@@ -506,10 +514,10 @@
         </section>
       </div>
     </aside>
-    <script src="./js/pos-api.js?v=20260901deploy35" defer></script>
-    <script src="./js/units.js?v=20260901deploy35" defer></script>
-    <script src="./js/dev-mode.js?v=20260901deploy35" defer></script>
-    <script src="./js/invoice.js?v=20260901deploy35" defer></script>
-    <script src="./js/app.js?v=20260901deploy35" defer></script>
+    <script src="./js/pos-api.js?v=20260901deploy36" defer></script>
+    <script src="./js/units.js?v=20260901deploy36" defer></script>
+    <script src="./js/dev-mode.js?v=20260901deploy36" defer></script>
+    <script src="./js/invoice.js?v=20260901deploy36" defer></script>
+    <script src="./js/app.js?v=20260901deploy36" defer></script>
   </body>
 </html>

@@ -119,6 +119,9 @@ select {
   transition: transform 0.22s ease, opacity 0.22s ease;
   z-index: 12;
 }
+.nav-scrim {
+  display: none;
+}
 .nav-scroll {
   flex: 1 1 auto;
   min-height: 0;
@@ -839,6 +842,13 @@ tr:last-child td { border-bottom: 0; }
   background: #fff;
 }
 .settings.wide button { margin-top: 8px; }
+.backup-actions {
+  display: grid;
+  gap: 10px;
+  margin-top: 8px;
+}
+.backup-actions .btn { justify-self: start; }
+.backup-file-lab { display: grid; gap: 6px; }
 .pack-compose {
   grid-column: 1 / -1;
   display: grid;
@@ -1312,6 +1322,8 @@ tr:last-child td { border-bottom: 0; }
   .app { grid-template-columns: 1fr; height: auto; max-height: none; overflow: visible; }
   .app.nav-collapsed { grid-template-columns: 1fr; }
   body.counter-mode { overflow: auto; }
+  body.counter-mode .view-topbar { display: flex; }
+  body.counter-mode .session-bar { display: none; }
   .nav {
     position: fixed;
     inset: 0 auto 0 0;
@@ -1327,26 +1339,105 @@ tr:last-child td { border-bottom: 0; }
     opacity: 0;
     pointer-events: none;
   }
-  .view-topbar { padding: 12px 14px; }
+  .nav-scrim {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(11, 18, 32, 0.46);
+    z-index: 25;
+  }
+  .app.nav-collapsed .nav-scrim,
+  .nav-scrim[hidden] { display: none; }
+  .view-topbar { padding: 10px 12px; }
   .view-topbar-stats { display: none; }
-  .stage { height: auto; max-height: none; overflow: visible; }
-  .view-counter { height: auto; min-height: 70dvh; }
+  .stage { height: auto; max-height: none; overflow: visible; padding-bottom: env(safe-area-inset-bottom); }
   .nav-foot { flex-direction: row; margin-top: 0; display: flex; flex-wrap: wrap; width: 100%; }
   .nav-foot .btn-logout { width: auto; flex: 1; min-height: 44px; }
   .session-bar .btn-logout { min-height: 44px; }
-  body.counter-mode .session-bar { display: flex; }
-  .workspace, .split { grid-template-columns: 1fr; height: auto; }
-  .catalog { height: auto; max-height: 52dvh; }
-  .ticket, .bill-panel {
-    border-left: 0;
-    border-top: 1px solid var(--line);
-    margin: 0;
-    border-radius: 0;
+  .workspace, .split, .orders-split, .purchases-split { grid-template-columns: 1fr; height: auto; max-height: none; min-height: 0; }
+  .split, .orders-split, .purchases-split { padding: 0 12px 24px; }
+  .lede, .view > .hint, .orders-toolbar, .orders-summary { margin-left: 12px; margin-right: 12px; }
+  .table-wrap { padding: 0 12px 24px; }
+  .settings { padding: 0 12px 24px; grid-template-columns: 1fr; }
+  .btn { min-height: 44px; }
+  .qty button { width: 44px; height: 44px; }
+
+  .view-counter {
+    height: auto;
+    min-height: calc(100dvh - 56px);
+    overflow: visible;
+  }
+  .counter-topbar {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    padding: 10px 12px;
+    position: sticky;
+    top: 52px;
+    z-index: 7;
+  }
+  .counter-topbar .search { grid-column: 1 / -1; min-width: 0; }
+  .counter-topbar .select,
+  .counter-topbar .customer-picker { min-width: 0; width: 100%; }
+  .quick-customer { grid-column: 1 / -1; flex-wrap: wrap; }
+  .quick-customer input { min-width: 0; flex: 1 1 46%; }
+  .quick-customer .btn { flex: 1 1 100%; }
+  .catalog {
     height: auto;
     max-height: none;
+    min-height: 36dvh;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    margin: 8px;
   }
-  .lines { max-height: 28dvh; }
-  .counter-topbar { top: 0; }
+  .ticket, .bill-panel {
+    border-left: 0;
+    margin: 0 8px 16px;
+    border-radius: var(--radius-lg);
+    height: auto;
+    max-height: none;
+    padding-bottom: 8px;
+  }
+  .lines { max-height: none; overflow: visible; }
+  .view-counter:not([hidden]) .pay {
+    position: sticky;
+    bottom: 0;
+    z-index: 9;
+    box-shadow: 0 -10px 28px rgba(15, 23, 42, 0.12);
+    padding-bottom: calc(12px + env(safe-area-inset-bottom));
+  }
+  .pay-row { grid-template-columns: 1fr 1.2fr; }
+  .orders-toolbar {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    align-items: stretch;
+  }
+  .orders-toolbar label:first-child,
+  .orders-toolbar button { grid-column: 1 / -1; }
+  .orders-list-wrap { padding: 0; max-height: none; }
+  .order-pane, .purchase-pane {
+    position: static;
+    max-height: none;
+    min-height: 0;
+    height: auto;
+  }
+  .thermal-preview { max-width: 100%; overflow-x: auto; }
+  .print-actions .btn { flex: 1 1 140px; }
+  .backup-actions .btn,
+  .backup-actions .backup-file-lab { width: 100%; justify-self: stretch; }
+  .report-toolbar { margin: 0 12px 12px; }
   .view { min-height: 0; }
   .brand { width: 100%; border-bottom: 0; }
+}
+
+@media (max-width: 640px) {
+  .catalog { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .card { min-height: 96px; padding: 10px; }
+  .card .name { font-size: 14px; }
+  .orders-table th:nth-child(2),
+  .orders-table td:nth-child(2),
+  .orders-table th:nth-child(6),
+  .orders-table td:nth-child(6) { display: none; }
+  .orders-table th,
+  .orders-table td { padding: 10px 8px; }
 }
