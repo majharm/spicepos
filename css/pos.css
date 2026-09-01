@@ -1035,7 +1035,6 @@ tr:last-child td { border-bottom: 0; }
   align-self: stretch;
 }
 .order-pane > .invoice-detail-card,
-.order-pane > .order-status-panel,
 .purchase-pane > .order-detail-head {
   flex: 0 0 auto;
 }
@@ -1103,26 +1102,55 @@ tr:last-child td { border-bottom: 0; }
   background: var(--accent-soft);
   color: var(--vel-teal);
 }
-.order-status-panel {
-  margin: 0 0 14px;
-  padding: 12px 14px;
-  border: 1px solid var(--line-strong);
-  border-radius: 12px;
-  background: #fff;
+.order-status-controls {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+  display: grid;
+  gap: 12px;
 }
-.order-status-panel > summary {
-  cursor: pointer;
+.order-status-row {
+  display: grid;
+  gap: 8px;
+}
+.order-status-label {
+  font-size: 12px;
   font-weight: 800;
-  color: var(--text);
-  list-style: none;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
-.order-status-panel > summary::-webkit-details-marker { display: none; }
-.order-status-panel[open] > summary { margin-bottom: 10px; }
-.order-status-panel .order-status-form {
-  margin-bottom: 0;
-  padding: 0;
-  border: 0;
-  background: transparent;
+.order-status-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.order-status-btn {
+  min-height: 36px;
+  padding: 8px 12px;
+  font-size: 12px;
+  font-weight: 800;
+  border-width: 1px;
+}
+.order-status-btn.confirmed { background: #e8f5ef; color: #0d6b4e; border-color: #b7e4d2; }
+.order-status-btn.delivered { background: #e8f0ff; color: #1d4f91; border-color: #c5d9ff; }
+.order-status-btn.cancelled { background: #fdecea; color: #a12822; border-color: #f5c4c0; }
+.order-status-btn.is-active {
+  box-shadow: 0 0 0 2px rgba(13, 148, 136, 0.22);
+  border-color: var(--vel-teal);
+}
+.order-pay-status {
+  display: grid;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  max-width: 220px;
+}
+.order-pay-status select {
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--line-strong);
+  background: #fff;
 }
 .purchase-new {
   margin: 0 24px 12px;

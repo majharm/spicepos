@@ -88,6 +88,55 @@ function payStatusBadge(status) {
   return `<span class="pay-status ${escapeHtml(s)}">${escapeHtml(s)}</span>`;
 }
 
+function orderStatusLabel(status) {
+  const s = String(status || "confirmed").toLowerCase();
+  if (s === "cancelled") return "Cancelled";
+  if (s === "delivered") return "Delivered";
+  return "Confirmed";
+}
+
+function paymentStatusLabel(status) {
+  const s = String(status || "paid").toLowerCase();
+  if (s === "partial") return "Partial";
+  if (s === "unpaid") return "Unpaid";
+  return "Paid";
+}
+
+async function updateOrderStatus(order, patch) {
+  const body = {};
+  if (patch.status != null) body.status = patch.status;
+  if (patch.payment_status != null) body.payment_status = patch.payment_status;
+  const data = await api(`/api/orders/${encodeURIComponent(order.id)}`, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  });
+  const updated = data.order || { ...order, ...body };
+  const idx = orderCache.findIndex((row) => row.id === order.id);
+  if (idx >= 0) orderCache[idx] = { ...orderCache[idx], ...updated };
+  return updated;
+}
+
+function renderOrderStatusControls(o) {
+  const currentStatus = String(o.status || "confirmed").toLowerCase();
+  const currentPay = String(o.payment_status || "paid").toLowerCase();
+  const statusBtns = ORDER_STATUSES.map(
+    (s) => `<button class="btn order-status-btn ${orderStatusClass(s)}${currentStatus === s ? " is-active" : ""}" type="button" data-set-order-status="${escapeHtml(s)}" data-order-id="${escapeHtml(o.id)}">${escapeHtml(orderStatusLabel(s))}</button>`,
+  ).join("");
+  const payOpts = PAYMENT_STATUSES.map(
+    (s) => `<option value="${s}"${currentPay === s ? " selected" : ""}>${escapeHtml(paymentStatusLabel(s))}</option>`,
+  ).join("");
+  return `<div class="order-status-controls">
+      <div class="order-status-row">
+        <span class="order-status-label">Order status</span>
+        <div class="order-status-actions">${statusBtns}</div>
+      </div>
+      <label class="order-pay-status">
+        Payment status
+        <select id="order-pay-status-select" data-order-id="${escapeHtml(o.id)}">${payOpts}</select>
+      </label>
+    </div>`;
+}
+
 function paymentMethodLabel(method) {
   const m = String(method || "cash").toLowerCase();
   if (m === "upi") return "UPI";
@@ -950,12 +999,6 @@ function showOrder(o) {
   document.querySelectorAll("#orders .order-row").forEach((row) => {
     row.classList.toggle("is-selected", row.dataset.oid === o.id);
   });
-  const statusOpts = ORDER_STATUSES.map(
-    (s) => `<option value="${s}"${String(o.status || "confirmed").toLowerCase() === s ? " selected" : ""}>${s}</option>`,
-  ).join("");
-  const payOpts = PAYMENT_STATUSES.map(
-    (s) => `<option value="${s}"${String(o.payment_status || "paid").toLowerCase() === s ? " selected" : ""}>${s}</option>`,
-  ).join("");
   const cancelled = String(o.status || "").toLowerCase() === "cancelled";
   const lineCount = (o.lines || []).length;
   $("order-pane").innerHTML = `<div class="invoice-detail-card">
@@ -971,44 +1014,14 @@ function showOrder(o) {
           <span class="pay-method-chip">${escapeHtml(paymentMethodLabel(o.payment_method))}</span>
         </div>
       </div>
+      ${renderOrderStatusControls(o)}
       ${lineCount ? "" : '<p class="hint error">Line items missing — refresh or re-upload pos-php-till.php</p>'}
     </div>
-    <details class="order-status-panel">
-      <summary>Update status</summary>
-      <form class="order-status-form" id="order-status-form">
-        <label>Order status
-          <select id="order-status-select">${statusOpts}</select>
-        </label>
-        <label>Payment status
-          <select id="order-pay-status-select">${payOpts}</select>
-        </label>
-        <button class="btn primary" type="submit">Save</button>
-      </form>
-    </details>
     <div class="thermal-preview">${InvoicePrint.invoiceBody(o, invoiceCtx())}</div>
     <div class="print-actions">
       <button class="btn primary" type="button" data-print="${escapeHtml(o.id)}">Print invoice</button>
       <button class="btn" type="button" data-edit-order="${escapeHtml(o.id)}"${cancelled ? " disabled title=\"Restore order status before editing items\"" : ""}>Change items</button>
     </div>`;
-  $("order-status-form").onsubmit = async (e) => {
-    e.preventDefault();
-    try {
-      const status = $("order-status-select").value;
-      const payment_status = $("order-pay-status-select").value;
-      const data = await api(`/api/orders/${encodeURIComponent(o.id)}`, {
-        method: "PATCH",
-        body: JSON.stringify({ status, payment_status }),
-      });
-      const updated = data.order || { ...o, status, payment_status };
-      const idx = orderCache.findIndex((row) => row.id === o.id);
-      if (idx >= 0) orderCache[idx] = { ...orderCache[idx], ...updated };
-      showOrder(updated);
-      await loadOrders();
-      setHint(`Status updated · ${updated.order_number}`, "ok");
-    } catch (err) {
-      setHint(err.message, "error");
-    }
-  };
 }
 
 function renderOrdersList() {
@@ -1410,9 +1423,10 @@ $("purchase-pane").addEventListener("click", (e) => {
   if (p) printPurchase(p);
 });
 
-$("order-pane").addEventListener("click", (e) => {
+$("order-pane").addEventListener("click", async (e) => {
   const printBtn = e.target.closest("[data-print]");
   const editBtn = e.target.closest("[data-edit-order]");
+  const statusBtn = e.target.closest("[data-set-order-status]");
   if (printBtn) {
     const o = orderCache.find((row) => row.id === printBtn.dataset.print);
     if (o) printOrder(o);
@@ -1434,6 +1448,45 @@ $("order-pane").addEventListener("click", (e) => {
     showView("counter");
     renderCart();
     setHint(`Changing items for ${o.order_number}`, "ok");
+  }
+  if (statusBtn) {
+    const orderId = statusBtn.dataset.orderId;
+    const nextStatus = statusBtn.dataset.setOrderStatus;
+    const o = orderCache.find((row) => row.id === orderId);
+    if (!o || String(o.status || "").toLowerCase() === nextStatus) return;
+    if (nextStatus === "cancelled" && !window.confirm(`Cancel invoice ${o.order_number}? Stock will be restored.`)) return;
+    statusBtn.disabled = true;
+    try {
+      const updated = await updateOrderStatus(o, { status: nextStatus });
+      showOrder(updated);
+      renderOrdersList();
+      setHint(`${orderStatusLabel(nextStatus)} · ${updated.order_number}`, "ok");
+    } catch (err) {
+      setHint(err.message, "error");
+    } finally {
+      statusBtn.disabled = false;
+    }
+  }
+});
+
+$("order-pane").addEventListener("change", async (e) => {
+  const select = e.target.closest("#order-pay-status-select");
+  if (!select) return;
+  const orderId = select.dataset.orderId;
+  const o = orderCache.find((row) => row.id === orderId);
+  const payment_status = select.value;
+  if (!o || String(o.payment_status || "").toLowerCase() === payment_status) return;
+  select.disabled = true;
+  try {
+    const updated = await updateOrderStatus(o, { payment_status });
+    showOrder(updated);
+    renderOrdersList();
+    setHint(`Payment ${paymentStatusLabel(payment_status)} · ${updated.order_number}`, "ok");
+  } catch (err) {
+    select.value = String(o.payment_status || "paid").toLowerCase();
+    setHint(err.message, "error");
+  } finally {
+    select.disabled = false;
   }
 });
 
