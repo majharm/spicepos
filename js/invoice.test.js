@@ -137,3 +137,14 @@ test("piece items print qty in pcs and rate per pc", () => {
   assert.match(html, /2 pcs/);
   assert.match(html, /\/pc/);
 });
+
+test("invoice HSN uses item hsn ahead of SKU code", () => {
+  const InvoicePrint = loadInvoicePrint();
+  const lines = InvoicePrint.enrichLines(
+    {
+      lines: [{ item_name: "Turmeric", item_id: "i1", quantity_gm: 1000, rate_per_kg: 100, amount: 100, gst_rate: 5 }],
+    },
+    [{ id: "i1", code: "SP-007", hsn: "0910", gst_rate: 5 }],
+  );
+  assert.equal(lines[0].hsn, "0910");
+});

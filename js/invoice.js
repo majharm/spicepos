@@ -25,7 +25,7 @@
         const amount = num(l.amount);
         return {
           item_name: l.item_name || item?.name || "Item",
-          hsn: item?.code || l.hsn || "—",
+          hsn: item?.hsn || l.hsn || item?.code || "—",
           quantity_gm: num(l.quantity_gm),
           rate_per_kg: num(l.rate_per_kg),
           unit: lineUnit(item),

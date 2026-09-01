@@ -6,8 +6,8 @@
     <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
     <title>SWAMI MASALE POS</title>
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./css/pos.css?v=20260901deploy40" />
-    <link rel="stylesheet" href="./css/saas.css?v=20260901deploy40" />
+    <link rel="stylesheet" href="./css/pos.css?v=20260901deploy41" />
+    <link rel="stylesheet" href="./css/saas.css?v=20260901deploy41" />
   </head>
   <body>
     <div class="app" id="app">
@@ -93,7 +93,7 @@
           <div class="edit-order-banner" id="edit-order-banner" hidden></div>
           <header class="topbar counter-topbar">
             <form class="search" id="search-form">
-              <input id="search" type="search" placeholder="Search spice, local name, or code…" autocomplete="off" />
+              <input id="search" type="search" placeholder="Search spice, HSN, or code…" autocomplete="off" />
             </form>
             <div class="customer-picker">
               <select id="customer" class="select" aria-label="Customer"></select>
@@ -145,11 +145,11 @@
 
         <section class="view" id="view-items" hidden>
           <h2 class="visually-hidden">Items</h2>
-          <p class="lede">Unit type (qty / kg / litre), rates, and stock.</p>
+          <p class="lede">Name, HSN code, unit type, rates, and stock.</p>
           <form class="settings wide" id="item-form">
             <input type="hidden" id="item-id" />
-            <label>Name <input id="item-name" required /></label>
-            <label>Local name <input id="item-local" /></label>
+            <label>Name <input id="item-name" required maxlength="180" /></label>
+            <label>HSN code <input id="item-hsn" maxlength="16" placeholder="e.g. 0908" autocomplete="off" /></label>
             <label>Category
               <input id="item-category" list="category-list" placeholder="Whole Spices" />
             </label>
@@ -544,10 +544,10 @@
         </section>
       </div>
     </aside>
-    <script src="./js/pos-api.js?v=20260901deploy40" defer></script>
-    <script src="./js/units.js?v=20260901deploy40" defer></script>
-    <script src="./js/dev-mode.js?v=20260901deploy40" defer></script>
-    <script src="./js/invoice.js?v=20260901deploy40" defer></script>
-    <script src="./js/app.js?v=20260901deploy40" defer></script>
+    <script src="./js/pos-api.js?v=20260901deploy41" defer></script>
+    <script src="./js/units.js?v=20260901deploy41" defer></script>
+    <script src="./js/dev-mode.js?v=20260901deploy41" defer></script>
+    <script src="./js/invoice.js?v=20260901deploy41" defer></script>
+    <script src="./js/app.js?v=20260901deploy41" defer></script>
   </body>
 </html>

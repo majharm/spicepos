@@ -113,7 +113,7 @@ const PAYMENT_STATUSES = ["paid", "partial", "unpaid"];
 const VIEW_META = {
   dashboard: { title: "Dashboard", subtitle: "Your shop today" },
   counter: { title: "Counter", subtitle: "POS checkout — tap items to add" },
-  items: { title: "Items", subtitle: "Unit type, rates, and stock" },
+  items: { title: "Items", subtitle: "HSN, unit type, rates, and stock" },
   units: { title: "Unit master", subtitle: "Units used on items — qty, kg, litre, and custom" },
   customers: { title: "Customers", subtitle: "B2C retail and B2B wholesale accounts" },
   packs: { title: "Packs", subtitle: "Pre-defined spice packs and compositions" },
@@ -634,7 +634,7 @@ function filteredItems() {
   const list = activeItems();
   if (!q) return list;
   return list.filter((i) =>
-    [i.name, i.local_name, i.code, i.category, i.subcategory].join(" ").toLowerCase().includes(q),
+    [i.name, i.hsn, i.local_name, i.code, i.category, i.subcategory].join(" ").toLowerCase().includes(q),
   );
 }
 
@@ -644,7 +644,7 @@ function renderCatalog() {
       const low = Number(i.stock_gm) <= Number(i.reorder_level_gm);
       return `<button class="card" type="button" data-add="${escapeHtml(i.id)}">
         <div class="sku">${escapeHtml(i.category)} / ${escapeHtml(i.subcategory || "—")}</div>
-        <div class="name">${escapeHtml(i.name)} <small>${escapeHtml(i.local_name || "")}</small></div>
+        <div class="name">${escapeHtml(i.name)} <small>${escapeHtml(i.hsn ? `HSN ${i.hsn}` : "")}</small></div>
         <div class="meta"><span>${escapeHtml(fmtQty(i.stock_gm, i))}</span><span>${money(rateFor(i))}${escapeHtml(POSUnits.rateSuffix(itemUnit(i)))}</span></div>
         <div class="stock ${low ? "low" : "ok"}">${escapeHtml(i.code)} · GST ${escapeHtml(i.gst_rate)}%</div>
       </button>`;
@@ -800,12 +800,13 @@ function fillDatalists() {
 
 function renderItemsTable() {
   $("items-table").innerHTML = `<table><thead><tr>
-      <th>Code</th><th>Item</th><th>Unit</th><th>Category</th><th>Subcategory</th><th>Retail</th><th>B2B</th><th>Stock</th><th></th>
+      <th>Code</th><th>Item</th><th>HSN</th><th>Unit</th><th>Category</th><th>Subcategory</th><th>Retail</th><th>B2B</th><th>Stock</th><th></th>
   </tr></thead><tbody>${state.items
     .map(
       (i) => `<tr>
       <td>${escapeHtml(i.code)}</td>
       <td>${escapeHtml(i.name)}</td>
+      <td>${escapeHtml(i.hsn || "—")}</td>
       <td>${escapeHtml(itemUnit(i))}</td>
       <td>${escapeHtml(i.category)}</td>
       <td>${escapeHtml(i.subcategory || "—")}</td>
@@ -1099,7 +1100,7 @@ async function loadReports() {
       reportBlock("GST HSN itemwise", "GST HSN itemwise", ["HSN/SKU", "Item", "GST %", "Qty g", "Taxable", "GST"], (data.gstHsn || []).map((r) => [r.hsn, r.item_name, Number(r.gst_rate) || 0, Number(r.quantity_gm) || 0, Number(r.taxable) || 0, Number(r.gst) || 0])),
       reportBlock("GST B2B sales", "GST B2B sales", ["Bill", "Date", "Customer", "GSTIN", "Taxable", "GST", "Total"], (data.gstB2B || []).map((r) => [r.order_number, reportDay(r.bill_date), r.customer_name, r.gstin, Number(r.taxable) || 0, Number(r.gst) || 0, Number(r.total) || 0])),
       reportBlock("GST B2C sales", "GST B2C sales", ["Bill", "Date", "Customer", "Taxable", "GST", "Total"], (data.gstB2C || []).map((r) => [r.order_number, reportDay(r.bill_date), r.customer_name, Number(r.taxable) || 0, Number(r.gst) || 0, Number(r.total) || 0])),
-      reportBlock("Stock", "Stock", ["Code", "Name", "Local", "Category", "Subcategory", "Stock g", "Reorder g", "Retail", "B2B", "Purchase", "GST %"], (data.stock || []).map((i) => [i.code, i.name, i.local_name, i.category, i.subcategory, Number(i.stock_gm) || 0, Number(i.reorder_level_gm) || 0, Number(i.retail_rate) || 0, Number(i.b2b_rate) || 0, Number(i.purchase_rate) || 0, Number(i.gst_rate) || 0])),
+      reportBlock("Stock", "Stock", ["Code", "Name", "HSN", "Category", "Subcategory", "Stock g", "Reorder g", "Retail", "B2B", "Purchase", "GST %"], (data.stock || []).map((i) => [i.code, i.name, i.hsn, i.category, i.subcategory, Number(i.stock_gm) || 0, Number(i.reorder_level_gm) || 0, Number(i.retail_rate) || 0, Number(i.b2b_rate) || 0, Number(i.purchase_rate) || 0, Number(i.gst_rate) || 0])),
       reportBlock("Low stock", "Low stock", ["Code", "Name", "Stock g", "Reorder g"], (data.low || []).map((i) => [i.code, i.name, Number(i.stock_gm) || 0, Number(i.reorder_level_gm) || 0])),
       reportBlock("Purchases", "Purchases", ["PO", "Supplier", "Invoice", "Date", "Taxable", "GST", "Total", "Pay", "Status"], (data.purchases || []).map((p) => [p.purchase_number, p.supplier_name, p.supplier_invoice_number, p.purchase_date, Number(p.subtotal) || 0, Number(p.gst) || 0, Number(p.total) || 0, p.payment_method, p.payment_status])),
       reportBlock("Customers", "Customers", ["Code", "Name", "Business", "Mobile", "Type", "GSTIN", "Credit limit", "Outstanding"], (data.customers || []).map((c) => [c.code, c.name, c.business_name, c.mobile, c.type, c.gstin, Number(c.credit_limit) || 0, Number(c.outstanding) || 0])),
@@ -1542,7 +1543,7 @@ $("items-table").addEventListener("click", async (e) => {
     if (!i) return;
     $("item-id").value = i.id;
     $("item-name").value = i.name;
-    $("item-local").value = i.local_name || "";
+    $("item-hsn").value = i.hsn || "";
     $("item-category").value = i.category || "";
     $("item-subcategory").value = i.subcategory || "";
     $("item-retail").value = i.retail_rate;
@@ -1819,7 +1820,7 @@ $("item-form").addEventListener("submit", async (e) => {
   const unit = POSUnits.normalize($("item-unit").value);
   const body = {
     name: $("item-name").value,
-    local_name: $("item-local").value,
+    hsn: $("item-hsn").value,
     category: $("item-category").value || "Whole Spices",
     subcategory: $("item-subcategory").value,
     base_unit: unit,

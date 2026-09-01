@@ -95,7 +95,7 @@ function pos_build_reports($bid, $from, $to) {
     [$bid, $start, $end]
   );
   $stock = pos_q(
-    "SELECT code, name, local_name, category, subcategory, stock_gm, reorder_level_gm,
+    "SELECT code, name, hsn, local_name, category, subcategory, stock_gm, reorder_level_gm,
             retail_rate, b2b_rate, purchase_rate, gst_rate
      FROM items WHERE business_id = ? ORDER BY name",
     "s",
@@ -143,7 +143,7 @@ function pos_build_reports($bid, $from, $to) {
     [$bid, $start, $end]
   );
   $gstHsn = pos_q(
-    "SELECT COALESCE(i.code, '—') AS hsn, l.item_name, l.gst_rate,
+    "SELECT COALESCE(NULLIF(TRIM(i.hsn), ''), i.code, '—') AS hsn, l.item_name, l.gst_rate,
             SUM(l.quantity_gm) AS quantity_gm,
             SUM(l.amount) AS taxable,
             SUM(l.amount * l.gst_rate / 100) AS gst
@@ -354,10 +354,10 @@ function pos_reports_to_sheets($data) {
     ],
     [
       "name" => "Stock",
-      "headers" => ["Code", "Name", "Local", "Category", "Subcategory", "Stock g", "Reorder g", "Retail", "B2B", "Purchase", "GST %"],
+      "headers" => ["Code", "Name", "HSN", "Category", "Subcategory", "Stock g", "Reorder g", "Retail", "B2B", "Purchase", "GST %"],
       "rows" => array_map(function ($i) use ($num) {
         return [
-          $i["code"], $i["name"], $i["local_name"], $i["category"], $i["subcategory"],
+          $i["code"], $i["name"], $i["hsn"], $i["category"], $i["subcategory"],
           $num($i["stock_gm"]), $num($i["reorder_level_gm"]), $num($i["retail_rate"]), $num($i["b2b_rate"]),
           $num($i["purchase_rate"]), $num($i["gst_rate"]),
         ];

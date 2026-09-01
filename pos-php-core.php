@@ -334,6 +334,7 @@ function pos_ensure_item_unit_columns() {
   foreach ([
     "base_unit" => "VARCHAR(32) NOT NULL DEFAULT 'GM'",
     "unit" => "VARCHAR(32) NULL",
+    "hsn" => "VARCHAR(32) NULL",
   ] as $name => $def) {
     $res = $db->query("SHOW COLUMNS FROM items LIKE '" . $db->real_escape_string($name) . "'");
     if ($res && $res->num_rows === 0) {
