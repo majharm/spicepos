@@ -177,6 +177,7 @@ function pos_company_timezone($company = []) {
 
 function pos_apply_business_timezone($businessId) {
   pos_ensure_company_timezone_columns();
+  try { pos_ensure_item_unit_columns(); } catch (Throwable $e) { /* items table optional during setup */ }
   $rows = pos_q("SELECT timezone, tz_offset FROM company_settings WHERE business_id = ? LIMIT 1", "s", [$businessId]);
   $meta = pos_company_timezone($rows[0] ?? []);
   $db = pos_db();
@@ -318,8 +319,50 @@ function pos_with_transaction(callable $fn) {
   }
 }
 
-function pos_line_amount($quantityGm, $ratePerKg) {
-  return ((float) $quantityGm / 1000) * (float) $ratePerKg;
+function pos_ensure_item_unit_columns() {
+  static $done = false;
+  if ($done) return;
+  $done = true;
+  $db = pos_db();
+  foreach ([
+    "base_unit" => "VARCHAR(32) NOT NULL DEFAULT 'GM'",
+    "unit" => "VARCHAR(32) NULL",
+  ] as $name => $def) {
+    $res = $db->query("SHOW COLUMNS FROM items LIKE '" . $db->real_escape_string($name) . "'");
+    if ($res && $res->num_rows === 0) {
+      @$db->query("ALTER TABLE items ADD COLUMN `{$name}` {$def}");
+    }
+    if ($res) $res->free();
+  }
+}
+
+function pos_item_unit($item) {
+  $raw = is_array($item) ? ($item["base_unit"] ?? $item["unit"] ?? "GM") : $item;
+  $key = strtoupper(preg_replace("/[^A-Z]/", "", (string) $raw));
+  $alias = [
+    "G" => "GM", "GRAM" => "GM", "GRAMS" => "GM", "GM" => "GM",
+    "KG" => "KG", "KILO" => "KG", "KILOGRAM" => "KG",
+    "ML" => "ML", "MILLILITRE" => "ML", "MILLILITER" => "ML",
+    "L" => "LTR", "LTR" => "LTR", "LITRE" => "LTR", "LITER" => "LTR",
+    "PCS" => "PCS", "PC" => "PCS", "QTY" => "PCS", "NOS" => "PCS", "NO" => "PCS",
+    "COUNT" => "PCS", "UNIT" => "PCS", "UNITS" => "PCS",
+  ];
+  return $alias[$key] ?? "GM";
+}
+
+function pos_line_amount($quantityGm, $ratePerKg, $unit = "GM") {
+  $q = (float) $quantityGm;
+  $r = (float) $ratePerKg;
+  if (pos_item_unit($unit) === "PCS") return $q * $r;
+  return ($q / 1000) * $r;
+}
+
+function pos_line_amount_for_item($quantityGm, $rate, $item) {
+  return pos_line_amount($quantityGm, $rate, pos_item_unit($item));
+}
+
+function pos_stock_value_sql() {
+  return "SELECT COALESCE(SUM(CASE WHEN UPPER(REPLACE(COALESCE(base_unit, unit, 'GM'), ' ', '')) IN ('PCS','PC','QTY','NOS','NO','COUNT','UNIT','UNITS') THEN stock_gm * purchase_rate ELSE stock_gm/1000.0 * purchase_rate END),0) AS value FROM items WHERE business_id = ?";
 }
 
 function pos_round2($n) {

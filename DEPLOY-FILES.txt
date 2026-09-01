@@ -1,4 +1,4 @@
-Production deploy bundle — 20260901deploy30
+Production deploy bundle — 20260901deploy31
 =========================================
 
 Upload ALL files below to Hostinger public_html (overwrite):
@@ -18,6 +18,7 @@ CSS
 
 JavaScript
   js/app.js
+  js/units.js
   js/invoice.js
   js/dev-mode.js
   js/master.js
@@ -62,6 +63,7 @@ After upload:
   2. Hard-refresh browser (Ctrl+Shift+R)
 
 FIXES in this bundle
+  - Item unit types: qty/pcs, g, kg, ml, litre (rates per pc / kg / ltr)
   - Save/Hold on PHP: POST /api/checkout no longer 301-redirects to GET (DirectorySlash Off; rewrite directories)
   - Counter POSTs prefer /pos-api.php?p=… so Apache folders cannot swallow Save/Hold
   - PHP 501 fallback retries the next API spec instead of stopping on the first folder hit

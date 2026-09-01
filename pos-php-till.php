@@ -116,7 +116,7 @@ function pos_php_till_dispatch($path, $method, $body) {
       [$bid]
     );
     $stock = pos_q(
-      "SELECT COALESCE(SUM(stock_gm/1000 * purchase_rate),0) AS value FROM items WHERE business_id = ?",
+      pos_stock_value_sql(),
       "s",
       [$bid]
     );

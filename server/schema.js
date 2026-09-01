@@ -75,6 +75,7 @@ export async function ensureSchema() {
   await addColumn("items", "brand", "VARCHAR(128) NULL");
   await addColumn("items", "image_url", "MEDIUMTEXT NULL");
   await addColumn("items", "unit", "VARCHAR(32) NULL");
+  await addColumn("items", "base_unit", "VARCHAR(32) NOT NULL DEFAULT 'GM'");
 
   await addColumn("suppliers", "payable_balance", "DECIMAL(12,2) NOT NULL DEFAULT 0");
 

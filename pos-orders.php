@@ -118,7 +118,7 @@ function pos_update_order($bid, $orderId, $body, $auth) {
     $qty = (float) ($line["quantity_gm"] ?? 0);
     if ($qty <= 0) pos_send(400, ["error" => "Invalid quantity", "php" => true]);
     $rate = (($customer["type"] ?? "") === "b2b") ? (float) $item["b2b_rate"] : (float) $item["retail_rate"];
-    $amount = pos_round2(($qty / 1000) * $rate);
+    $amount = pos_round2(pos_line_amount_for_item($qty, $rate, $item));
     $built[] = ["item" => $item, "qty" => $qty, "rate" => $rate, "amount" => $amount, "gstRate" => (float) ($item["gst_rate"] ?? 0)];
   }
 

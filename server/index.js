@@ -382,7 +382,7 @@ app.post("/api/checkout", requireStaff, requirePerm("counter"), async (req, res)
         if (!Number.isFinite(qty) || qty <= 0) throw new Error("Invalid quantity");
         const rate =
           customer.type === "b2b" ? Number(item.b2b_rate) : Number(item.retail_rate);
-        const amount = round2(lineAmount(qty, rate));
+        const amount = round2(lineAmount(qty, rate, item));
         built.push({ item, qty, rate, amount, gstRate: Number(item.gst_rate) || 0 });
       }
 

@@ -6,8 +6,8 @@
     <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
     <title>SWAMI MASALE POS</title>
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./css/pos.css?v=20260901deploy30" />
-    <link rel="stylesheet" href="./css/saas.css?v=20260901deploy30" />
+    <link rel="stylesheet" href="./css/pos.css?v=20260901deploy31" />
+    <link rel="stylesheet" href="./css/saas.css?v=20260901deploy31" />
   </head>
   <body>
     <div class="app" id="app">
@@ -151,7 +151,7 @@
 
         <section class="view" id="view-items" hidden>
           <h2 class="visually-hidden">Items</h2>
-          <p class="lede">Category and subcategory, rates per kg, stock in grams.</p>
+          <p class="lede">Unit type (qty / kg / litre), rates, and stock.</p>
           <form class="settings wide" id="item-form">
             <input type="hidden" id="item-id" />
             <label>Name <input id="item-name" required /></label>
@@ -164,11 +164,20 @@
             </label>
             <datalist id="category-list"></datalist>
             <datalist id="subcategory-list"></datalist>
-            <label>Retail ₹/kg <input id="item-retail" type="number" step="0.01" /></label>
-            <label>B2B ₹/kg <input id="item-b2b" type="number" step="0.01" /></label>
-            <label>Purchase ₹/kg <input id="item-purchase" type="number" step="0.01" /></label>
+            <label>Unit type
+              <select id="item-unit">
+                <option value="GM">Grams (g)</option>
+                <option value="KG">Kilogram (kg)</option>
+                <option value="ML">Millilitre (ml)</option>
+                <option value="LTR">Litre (L)</option>
+                <option value="PCS">Quantity (pcs)</option>
+              </select>
+            </label>
+            <label><span id="item-retail-lab">Retail ₹/kg</span> <input id="item-retail" type="number" step="0.01" /></label>
+            <label><span id="item-b2b-lab">B2B ₹/kg</span> <input id="item-b2b" type="number" step="0.01" /></label>
+            <label><span id="item-purchase-lab">Purchase ₹/kg</span> <input id="item-purchase" type="number" step="0.01" /></label>
             <label>GST % <input id="item-gst" type="number" step="0.01" value="5" /></label>
-            <label>Stock grams <input id="item-stock" type="number" /></label>
+            <label><span id="item-stock-lab">Stock (g)</span> <input id="item-stock" type="number" step="0.001" /></label>
             <button class="btn primary" type="submit">Save</button>
             <button class="btn" type="button" id="item-cancel">Clear</button>
           </form>
@@ -477,9 +486,10 @@
         </section>
       </div>
     </aside>
-    <script src="./js/pos-api.js?v=20260901deploy30" defer></script>
-    <script src="./js/dev-mode.js?v=20260901deploy30" defer></script>
-    <script src="./js/invoice.js?v=20260901deploy30" defer></script>
-    <script src="./js/app.js?v=20260901deploy30" defer></script>
+    <script src="./js/pos-api.js?v=20260901deploy31" defer></script>
+    <script src="./js/units.js?v=20260901deploy31" defer></script>
+    <script src="./js/dev-mode.js?v=20260901deploy31" defer></script>
+    <script src="./js/invoice.js?v=20260901deploy31" defer></script>
+    <script src="./js/app.js?v=20260901deploy31" defer></script>
   </body>
 </html>

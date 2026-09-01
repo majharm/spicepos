@@ -4,9 +4,11 @@ import fs from "node:fs";
 import vm from "node:vm";
 
 function loadInvoicePrint() {
-  const code = fs.readFileSync(new URL("../js/invoice.js", import.meta.url), "utf8");
+  const units = fs.readFileSync(new URL("./units.js", import.meta.url), "utf8");
+  const code = fs.readFileSync(new URL("./invoice.js", import.meta.url), "utf8");
   const context = { window: {}, console };
   vm.createContext(context);
+  vm.runInContext(units, context);
   vm.runInContext(code, context);
   return context.window.InvoicePrint;
 }
@@ -106,4 +108,30 @@ test("purchase bill HTML includes purchase header and input GST", () => {
   assert.match(html, /Input CGST/);
   assert.match(html, /Input SGST/);
   assert.match(html, /Spice Traders/);
+});
+
+test("piece items print qty in pcs and rate per pc", () => {
+  const InvoicePrint = loadInvoicePrint();
+  const html = InvoicePrint.invoiceBody(
+    {
+      order_number: "SO-9",
+      customer_name: "Walk-in",
+      payment_method: "cash",
+      payment_status: "paid",
+      subtotal: 80,
+      gst: 4,
+      total: 84,
+      created_at: "2026-09-01",
+      lines: [{ item_name: "Bottle", item_id: "b1", quantity_gm: 2, rate_per_kg: 40, amount: 80, gst_rate: 5 }],
+    },
+    {
+      company: { name: "Shop" },
+      items: [{ id: "b1", code: "2201", base_unit: "PCS", gst_rate: 5 }],
+      formatDateTime: (v) => String(v),
+      money: (n) => `₹${Number(n).toFixed(2)}`,
+      escapeHtml: (v) => String(v),
+    },
+  );
+  assert.match(html, /2 pcs/);
+  assert.match(html, /\/pc/);
 });

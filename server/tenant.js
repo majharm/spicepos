@@ -26,7 +26,7 @@ export function registerTenant(app) {
         [businessId],
       );
       const [stock] = await query(
-        `SELECT COALESCE(SUM(stock_gm/1000 * purchase_rate),0) AS value FROM items WHERE business_id = ?`,
+        `SELECT COALESCE(SUM(CASE WHEN UPPER(REPLACE(COALESCE(base_unit, unit, 'GM'), ' ', '')) IN ('PCS','PC','QTY','NOS','NO','COUNT','UNIT','UNITS') THEN stock_gm * purchase_rate ELSE stock_gm/1000.0 * purchase_rate END),0) AS value FROM items WHERE business_id = ?`,
         [businessId],
       );
       const [out] = await query(

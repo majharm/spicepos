@@ -50,13 +50,29 @@ function kg(gm) {
   return `${(Number(gm) / 1000).toFixed(2)} kg`;
 }
 
+function itemUnit(item) {
+  return POSUnits.itemUnit(item);
+}
+
+function fmtQty(qty, item) {
+  return POSUnits.formatQty(qty, itemUnit(item));
+}
+
+function refreshItemUnitLabels() {
+  const u = POSUnits.normalize($("item-unit")?.value);
+  if ($("item-retail-lab")) $("item-retail-lab").textContent = POSUnits.rateLabel("Retail", u);
+  if ($("item-b2b-lab")) $("item-b2b-lab").textContent = POSUnits.rateLabel("B2B", u);
+  if ($("item-purchase-lab")) $("item-purchase-lab").textContent = POSUnits.rateLabel("Purchase", u);
+  if ($("item-stock-lab")) $("item-stock-lab").textContent = POSUnits.stockLabel(u);
+}
+
 const ORDER_STATUSES = ["confirmed", "delivered", "cancelled"];
 const PAYMENT_STATUSES = ["paid", "partial", "unpaid"];
 
 const VIEW_META = {
   dashboard: { title: "Dashboard", subtitle: "Your shop today" },
   counter: { title: "Counter", subtitle: "POS checkout — tap items to add" },
-  items: { title: "Items", subtitle: "Category, rates per kg, and stock in grams" },
+  items: { title: "Items", subtitle: "Unit type, rates, and stock" },
   customers: { title: "Customers", subtitle: "B2C retail and B2B wholesale accounts" },
   packs: { title: "Packs", subtitle: "Pre-defined spice packs and compositions" },
   orders: { title: "Invoices", subtitle: "Tax invoices — search, print, update status" },
@@ -181,7 +197,7 @@ function rateFor(item) {
 }
 
 function lineAmt(item, qtyGm) {
-  return (Number(qtyGm) / 1000) * rateFor(item);
+  return POSUnits.lineAmount(qtyGm, rateFor(item), itemUnit(item));
 }
 
 function packLabel() {
@@ -558,7 +574,7 @@ function renderCatalog() {
       return `<button class="card" type="button" data-add="${escapeHtml(i.id)}">
         <div class="sku">${escapeHtml(i.category)} / ${escapeHtml(i.subcategory || "—")}</div>
         <div class="name">${escapeHtml(i.name)} <small>${escapeHtml(i.local_name || "")}</small></div>
-        <div class="meta"><span>${escapeHtml(kg(i.stock_gm))}</span><span>${money(rateFor(i))}/kg</span></div>
+        <div class="meta"><span>${escapeHtml(fmtQty(i.stock_gm, i))}</span><span>${money(rateFor(i))}${escapeHtml(POSUnits.rateSuffix(itemUnit(i)))}</span></div>
         <div class="stock ${low ? "low" : "ok"}">${escapeHtml(i.code)} · GST ${escapeHtml(i.gst_rate)}%</div>
       </button>`;
     })
@@ -583,22 +599,23 @@ function cartTotals() {
 function renderCart() {
   $("chosen-pack").textContent = packLabel();
   if (!state.cart.length) {
-    $("lines").innerHTML = `<p class="hint">Tap a spice (100 g) or add a pack type.</p>`;
+    $("lines").innerHTML = `<p class="hint">Tap an item to add it, or choose a pack type.</p>`;
   } else {
     $("lines").innerHTML = state.cart
       .map((line) => {
         const item = state.items.find((i) => i.id === line.itemId);
         if (!item) return "";
+        const step = POSUnits.step(itemUnit(item));
         return `<div class="line">
           <div>
             <div class="who">${escapeHtml(item.name)}</div>
-            <div class="pack">${escapeHtml(item.category)} / ${escapeHtml(item.subcategory || "—")} · ${escapeHtml(kg(line.qtyGm))}</div>
+            <div class="pack">${escapeHtml(item.category)} / ${escapeHtml(item.subcategory || "—")} · ${escapeHtml(fmtQty(line.qtyGm, item))}</div>
           </div>
           <div>
             <div class="qty">
-              <button type="button" data-chg="${escapeHtml(item.id)}" data-d="-50">−</button>
-              <span>${line.qtyGm} g</span>
-              <button type="button" data-chg="${escapeHtml(item.id)}" data-d="50">+</button>
+              <button type="button" data-chg="${escapeHtml(item.id)}" data-d="${-step}">−</button>
+              <span>${escapeHtml(fmtQty(line.qtyGm, item))}</span>
+              <button type="button" data-chg="${escapeHtml(item.id)}" data-d="${step}">+</button>
             </div>
             <div class="pack" style="text-align:right;margin-top:4px">${money(lineAmt(item, line.qtyGm))}</div>
           </div>
@@ -607,7 +624,12 @@ function renderCart() {
       .join("");
   }
   const t = cartTotals();
-  $("qty-total").textContent = `${t.qty} g`;
+  const families = [...new Set(state.cart.map((l) => POSUnits.typeOf(itemUnit(state.items.find((i) => i.id === l.itemId))).family))];
+  $("qty-total").textContent = families.length <= 1 && state.cart.length
+    ? fmtQty(t.qty, state.items.find((i) => i.id === state.cart[0].itemId))
+    : families.length > 1
+      ? `${state.cart.length} lines`
+      : "0";
   $("taxable").textContent = money(t.taxable);
   $("tax").textContent = money(t.tax);
   $("total").textContent = money(t.taxable + t.tax);
@@ -671,12 +693,13 @@ function renderPackChoice() {
     .join("");
 }
 
-function addItem(id, qtyGm = 100) {
+function addItem(id, qtyGm) {
   const item = state.items.find((i) => i.id === id);
   if (!item) return;
+  const add = qtyGm == null ? POSUnits.step(itemUnit(item)) : Number(qtyGm);
   const line = state.cart.find((l) => l.itemId === id);
-  if (line) line.qtyGm = Math.max(0, line.qtyGm + qtyGm);
-  else state.cart.push({ itemId: id, qtyGm });
+  if (line) line.qtyGm = Math.max(0, line.qtyGm + add);
+  else state.cart.push({ itemId: id, qtyGm: add });
   state.cart = state.cart.filter((l) => l.qtyGm > 0);
   renderCart();
 }
@@ -706,19 +729,20 @@ function fillDatalists() {
 
 function renderItemsTable() {
   $("items-table").innerHTML = `<table><thead><tr>
-    <th>Code</th><th>Item</th><th>Category</th><th>Subcategory</th><th>Retail</th><th>B2B</th><th>Stock</th><th></th>
+      <th>Code</th><th>Item</th><th>Unit</th><th>Category</th><th>Subcategory</th><th>Retail</th><th>B2B</th><th>Stock</th><th></th>
   </tr></thead><tbody>${state.items
     .map(
       (i) => `<tr>
       <td>${escapeHtml(i.code)}</td>
       <td>${escapeHtml(i.name)}</td>
+      <td>${escapeHtml(itemUnit(i))}</td>
       <td>${escapeHtml(i.category)}</td>
       <td>${escapeHtml(i.subcategory || "—")}</td>
-      <td>${money(i.retail_rate)}</td>
-      <td>${money(i.b2b_rate)}</td>
-      <td class="${Number(i.stock_gm) <= Number(i.reorder_level_gm) ? "stock low" : "stock ok"}">${escapeHtml(kg(i.stock_gm))}</td>
+      <td>${money(i.retail_rate)}${escapeHtml(POSUnits.rateSuffix(itemUnit(i)))}</td>
+      <td>${money(i.b2b_rate)}${escapeHtml(POSUnits.rateSuffix(itemUnit(i)))}</td>
+      <td class="${Number(i.stock_gm) <= Number(i.reorder_level_gm) ? "stock low" : "stock ok"}">${escapeHtml(fmtQty(i.stock_gm, i))}</td>
       <td><button class="btn" data-edit-item="${escapeHtml(i.id)}" type="button">Edit</button>
-          <button class="btn" data-recv="${escapeHtml(i.id)}" type="button">+1 kg</button></td>
+          <button class="btn" data-recv="${escapeHtml(i.id)}" type="button">${escapeHtml(POSUnits.receiveLabel(itemUnit(i)))}</button></td>
     </tr>`,
     )
     .join("")}</tbody></table>`;
@@ -747,7 +771,7 @@ function renderPackCompose() {
       (i) => `<label>
         <input type="checkbox" data-pack-item="${escapeHtml(i.id)}" />
         ${escapeHtml(i.name)} (${escapeHtml(i.subcategory || i.category)})
-        <input type="number" min="0" step="50" value="500" data-pack-qty="${escapeHtml(i.id)}" /> g
+        <input type="number" min="0" step="${POSUnits.step(itemUnit(i))}" value="${POSUnits.isCount(itemUnit(i)) ? 1 : 500}" data-pack-qty="${escapeHtml(i.id)}" /> ${escapeHtml(POSUnits.isCount(itemUnit(i)) ? "pcs" : POSUnits.typeOf(itemUnit(i)).family === "volume" ? "ml" : "g")}
       </label>`,
     )
     .join("");
@@ -759,8 +783,8 @@ function renderPoLines() {
       (i) => `<label>
         <input type="checkbox" data-po-item="${escapeHtml(i.id)}" />
         ${escapeHtml(i.name)}
-        <input type="number" min="0" step="50" value="1000" data-po-qty="${escapeHtml(i.id)}" /> g
-        <input type="number" step="0.01" value="${escapeHtml(i.purchase_rate)}" data-po-rate="${escapeHtml(i.id)}" /> ₹/kg
+        <input type="number" min="0" step="${POSUnits.step(itemUnit(i))}" value="${POSUnits.isCount(itemUnit(i)) ? 1 : 1000}" data-po-qty="${escapeHtml(i.id)}" /> ${escapeHtml(POSUnits.isCount(itemUnit(i)) ? "pcs" : POSUnits.typeOf(itemUnit(i)).family === "volume" ? "ml" : "g")}
+        <input type="number" step="0.01" value="${escapeHtml(i.purchase_rate)}" data-po-rate="${escapeHtml(i.id)}" /> ₹${escapeHtml(POSUnits.rateSuffix(itemUnit(i)))}
       </label>`,
     )
     .join("");
@@ -773,7 +797,10 @@ function renderPacksTable() {
         <strong>${escapeHtml(p.name)}</strong>
         <span>${escapeHtml(p.code)} · ${escapeHtml(kg(p.total_quantity_gm))}</span>
         <p class="hint">${(p.items || [])
-          .map((i) => `${escapeHtml(i.spice_name)} ${i.quantity_gm}g`)
+          .map((i) => {
+            const it = state.items.find((x) => x.id === i.item_id);
+            return `${escapeHtml(i.spice_name)} ${escapeHtml(fmtQty(i.quantity_gm, it || i))}`;
+          })
           .join(" · ")}</p>
       </div>`,
     )
@@ -916,11 +943,11 @@ async function loadDashboard() {
 
 async function loadStock() {
   const rows = await api("/api/stock");
-  $("stock-table").innerHTML = `<table><thead><tr><th>Code</th><th>Item</th><th>Stock g</th><th>Reorder</th><th>Value</th></tr></thead><tbody>${rows
-    .map(
-      (r) =>
-        `<tr><td>${escapeHtml(r.code)}</td><td>${escapeHtml(r.name)}</td><td>${r.stock_gm}</td><td>${r.reorder_level_gm}</td><td>${money((Number(r.stock_gm) / 1000) * Number(r.purchase_rate))}</td></tr>`,
-    )
+  $("stock-table").innerHTML = `<table><thead><tr><th>Code</th><th>Item</th><th>Unit</th><th>Stock</th><th>Reorder</th><th>Value</th></tr></thead><tbody>${rows
+    .map((r) => {
+      const item = state.items.find((i) => i.id === r.id) || r;
+      return `<tr><td>${escapeHtml(r.code)}</td><td>${escapeHtml(r.name)}</td><td>${escapeHtml(itemUnit(item))}</td><td>${escapeHtml(fmtQty(r.stock_gm, item))}</td><td>${escapeHtml(fmtQty(r.reorder_level_gm, item))}</td><td>${money(POSUnits.lineAmount(r.stock_gm, r.purchase_rate, itemUnit(item)))}</td></tr>`;
+    })
     .join("")}</tbody></table>`;
 }
 
@@ -1401,7 +1428,7 @@ async function loadAccounts() {
 
 $("catalog").addEventListener("click", (e) => {
   const btn = e.target.closest("[data-add]");
-  if (btn) addItem(btn.dataset.add, 100);
+  if (btn) addItem(btn.dataset.add);
 });
 $("lines").addEventListener("click", (e) => {
   const btn = e.target.closest("[data-chg]");
@@ -1425,9 +1452,11 @@ $("items-table").addEventListener("click", async (e) => {
   const recv = e.target.closest("[data-recv]");
   const edit = e.target.closest("[data-edit-item]");
   if (recv) {
+    const item = state.items.find((x) => x.id === recv.dataset.recv);
+    const qty = item ? POSUnits.receiveQty(itemUnit(item)) : 1000;
     await api(`/api/items/${recv.dataset.recv}/receive`, {
       method: "POST",
-      body: JSON.stringify({ quantity_gm: 1000 }),
+      body: JSON.stringify({ quantity_gm: qty }),
     });
     await loadBootstrap();
     return;
@@ -1444,7 +1473,9 @@ $("items-table").addEventListener("click", async (e) => {
     $("item-b2b").value = i.b2b_rate;
     $("item-purchase").value = i.purchase_rate;
     $("item-gst").value = i.gst_rate;
-    $("item-stock").value = i.stock_gm;
+    $("item-unit").value = itemUnit(i);
+    $("item-stock").value = POSUnits.fromBase(i.stock_gm, itemUnit(i));
+    refreshItemUnitLabels();
   }
 });
 
@@ -1709,16 +1740,19 @@ document.querySelector(".nav").addEventListener("click", (e) => {
 
 $("item-form").addEventListener("submit", async (e) => {
   e.preventDefault();
+  const unit = POSUnits.normalize($("item-unit").value);
   const body = {
     name: $("item-name").value,
     local_name: $("item-local").value,
     category: $("item-category").value || "Whole Spices",
     subcategory: $("item-subcategory").value,
+    base_unit: unit,
+    unit,
     retail_rate: $("item-retail").value,
     b2b_rate: $("item-b2b").value,
     purchase_rate: $("item-purchase").value,
     gst_rate: $("item-gst").value,
-    stock_gm: $("item-stock").value,
+    stock_gm: POSUnits.toBase($("item-stock").value, unit),
   };
   try {
     if ($("item-id").value) await api(`/api/items/${$("item-id").value}`, { method: "PUT", body: JSON.stringify(body) });
@@ -1727,6 +1761,8 @@ $("item-form").addEventListener("submit", async (e) => {
     $("item-hint").className = "hint ok";
     $("item-form").reset();
     $("item-id").value = "";
+    $("item-unit").value = "GM";
+    refreshItemUnitLabels();
     await loadBootstrap();
   } catch (err) {
     $("item-hint").textContent = err.message;
@@ -1736,7 +1772,10 @@ $("item-form").addEventListener("submit", async (e) => {
 $("item-cancel").addEventListener("click", () => {
   $("item-form").reset();
   $("item-id").value = "";
+  $("item-unit").value = "GM";
+  refreshItemUnitLabels();
 });
+$("item-unit")?.addEventListener("change", refreshItemUnitLabels);
 
 $("customer-form").addEventListener("submit", async (e) => {
   e.preventDefault();
@@ -2156,6 +2195,7 @@ async function boot() {
       });
     }
     showView(can("dashboard") ? "dashboard" : "counter");
+    refreshItemUnitLabels();
   } catch {
     location.href = "/login.html";
   }
