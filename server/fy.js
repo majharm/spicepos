@@ -19,9 +19,11 @@ export function indianFinancialYear(ymd) {
 export function fyRangeForToday(todayYmd) {
   const today = String(todayYmd || new Date().toISOString().slice(0, 10)).slice(0, 10);
   const fy = indianFinancialYear(today);
+  const asOf = today < fy.from ? fy.from : today > fy.to ? fy.to : today;
   return {
     ...fy,
     from: fy.from,
-    to: today < fy.from ? fy.from : today > fy.to ? fy.to : today,
+    to: fy.to,
+    asOf,
   };
 }

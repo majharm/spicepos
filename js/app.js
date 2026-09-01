@@ -417,10 +417,12 @@ function indianFinancialYear(ymdStr) {
 function fyRangeForToday() {
   const today = ymd();
   const fy = indianFinancialYear(today);
+  const asOf = today < fy.from ? fy.from : today > fy.to ? fy.to : today;
   return {
     ...fy,
     from: fy.from,
-    to: today < fy.from ? fy.from : today > fy.to ? fy.to : today,
+    to: fy.to,
+    asOf,
   };
 }
 
@@ -433,7 +435,7 @@ function applyFyRange(fromId, toId, extraId) {
   const range = fyRangeForToday();
   if ($(fromId)) $(fromId).value = range.from;
   if ($(toId)) $(toId).value = range.to;
-  if (extraId && $(extraId)) $(extraId).value = range.to;
+  if (extraId && $(extraId)) $(extraId).value = range.asOf || ymd();
   return range;
 }
 
@@ -1181,6 +1183,7 @@ async function loadReports() {
     const s = data.summary || {};
     $("report-summary").innerHTML = [
       ["Range", `${data.from} → ${data.to}`],
+      ["Financial year", indianFinancialYear(data.from).label],
       ["Bills", s.bills ?? 0],
       ["Taxable", money(s.taxable)],
       ["Output GST", money(s.gst)],
