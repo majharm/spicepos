@@ -4,10 +4,10 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
-    <title>SWAMI MASALE POS</title>
+    <title>ATAV POS</title>
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./css/pos.css?v=20260901deploy44" />
-    <link rel="stylesheet" href="./css/saas.css?v=20260901deploy44" />
+    <link rel="stylesheet" href="./css/pos.css?v=20260901deploy49" />
+    <link rel="stylesheet" href="./css/saas.css?v=20260901deploy49" />
   </head>
   <body>
     <div class="app" id="app">
@@ -108,19 +108,25 @@
               <option value="card">Card</option>
               <option value="credit">Credit</option>
             </select>
-            <form class="quick-customer" id="quick-customer-form" autocomplete="off">
-              <input id="qc-name" name="qc-name" placeholder="Customer name" maxlength="120" />
-              <input id="qc-mobile" name="qc-mobile" placeholder="Mobile no." inputmode="tel" maxlength="15" />
-              <button class="btn primary" type="submit" id="qc-save">Add</button>
-              <span class="hint" id="qc-hint"></span>
-            </form>
+            <details class="quick-customer-wrap" id="quick-customer-wrap" open>
+              <summary>New customer</summary>
+              <form class="quick-customer" id="quick-customer-form" autocomplete="off">
+                <input id="qc-name" name="qc-name" placeholder="Customer name" maxlength="120" />
+                <input id="qc-mobile" name="qc-mobile" placeholder="Mobile no." inputmode="tel" maxlength="15" />
+                <button class="btn primary" type="submit" id="qc-save">Add</button>
+                <span class="hint" id="qc-hint"></span>
+              </form>
+            </details>
           </header>
           <div class="workspace">
             <div class="catalog" id="catalog"></div>
-            <aside class="ticket bill-panel">
+            <aside class="ticket bill-panel" id="bill-panel">
               <div class="ticket-head">
-                <h2>Current bill</h2>
-                <p class="ticket-sub">Tap items to add · 100 g each</p>
+                <div class="ticket-head-copy">
+                  <h2>Current bill</h2>
+                  <p class="ticket-sub">Tap items to add · 100 g each</p>
+                </div>
+                <button type="button" class="bill-toggle" id="bill-toggle" aria-controls="bill-panel" aria-expanded="true" aria-label="Hide bill" title="Hide bill">›</button>
               </div>
               <div class="ticket-pack" id="chosen-pack">Pack: Loose items</div>
               <div id="pack-bar" class="pack-bar"></div>
@@ -146,11 +152,24 @@
 
         <section class="view" id="view-items" hidden>
           <h2 class="visually-hidden">Items</h2>
-          <p class="lede">Name, HSN code, unit type, rates, and stock.</p>
+          <p class="lede">Name, photo, HSN code, unit type, rates, and stock.</p>
           <form class="settings wide" id="item-form">
             <input type="hidden" id="item-id" />
             <label>Name <input id="item-name" required maxlength="180" /></label>
             <label>HSN code <input id="item-hsn" maxlength="16" placeholder="e.g. 0908" autocomplete="off" /></label>
+            <div class="logo-row item-image-row full">
+              <div class="logo-preview-frame item-image-frame">
+                <img id="item-image-preview" class="logo-preview" alt="Item photo" hidden />
+              </div>
+              <div class="logo-controls">
+                <div class="logo-pick-row">
+                  <input id="item-image" class="logo-file-input" type="file" accept="image/*" />
+                  <label class="btn logo-pick" for="item-image">Choose photo</label>
+                  <span class="logo-file-name" id="item-image-name">PNG or JPG</span>
+                </div>
+                <button class="btn" type="button" id="item-image-clear" hidden>Remove photo</button>
+              </div>
+            </div>
             <label>Category
               <input id="item-category" list="category-list" placeholder="Whole Spices" />
             </label>
@@ -595,10 +614,10 @@
         </section>
       </div>
     </aside>
-    <script src="./js/pos-api.js?v=20260901deploy44" defer></script>
-    <script src="./js/units.js?v=20260901deploy44" defer></script>
-    <script src="./js/dev-mode.js?v=20260901deploy44" defer></script>
-    <script src="./js/invoice.js?v=20260901deploy44" defer></script>
-    <script src="./js/app.js?v=20260901deploy44" defer></script>
+    <script src="./js/pos-api.js?v=20260901deploy49" defer></script>
+    <script src="./js/units.js?v=20260901deploy49" defer></script>
+    <script src="./js/dev-mode.js?v=20260901deploy49" defer></script>
+    <script src="./js/invoice.js?v=20260901deploy49" defer></script>
+    <script src="./js/app.js?v=20260901deploy49" defer></script>
   </body>
 </html>

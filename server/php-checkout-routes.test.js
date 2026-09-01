@@ -58,11 +58,23 @@ test("PHP customer insert bind types match placeholders", () => {
   assert.equal(cust[1], "sssssssds");
 
   const items = crud.match(
-    /INSERT INTO items[\s\S]*?VALUES \(\?,\?,\?,\?,\?,\?,\?,\?,\?,\?,\?,\?,\?,\?, 'active', \?\)",\s*"([sid]+)",/,
+    /INSERT INTO items[\s\S]*?VALUES \(\?,\?,\?,\?,\?,\?,\?,\?,\?,\?,\?,\?,\?,\?,\?, 'active', \?\)",\s*"([sid]+)",/,
   );
   assert.ok(items, "item INSERT found");
-  assert.equal(items[1].length, 15);
-  assert.equal(items[1], "sssssssddddsdds");
+  assert.equal(items[1].length, 16);
+  assert.equal(items[1], "sssssssddddssdds");
+  assert.match(crud, /image_url/);
+  assert.match(core, /function pos_item_image_url/);
+  assert.match(core, /image_url.*MEDIUMTEXT/);
+  assert.match(core, /pos-alerts\.php/);
+  assert.match(core, /master\/alerts/);
+  assert.match(core, /INSERT INTO notifications[\s\S]*image_url/);
+  assert.match(read("pos-alerts.php"), /function pos_send_update_alerts/);
+  assert.match(read("pos-alerts.php"), /function pos_notice_image/);
+  assert.match(read("pos-alerts.php"), /cid:notice-image/);
+  assert.match(read("pos-mail.php"), /Content-ID: <notice-image>/);
+  assert.match(read("js/master.js"), /id="note-image"/);
+  assert.match(read("js/app.js"), /notice-thumb/);
 
   assert.match(core, /function pos_line_amount_for_item/);
   assert.match(core, /function pos_item_unit/);

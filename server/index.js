@@ -133,8 +133,8 @@ app.get("/api/bootstrap", requireStaff, async (_req, res) => {
         )
       : [];
     const notes = await query(
-      `SELECT id, title, body, created_at FROM notifications
-       WHERE business_id IS NULL OR business_id = ? ORDER BY created_at DESC LIMIT 8`,
+      `SELECT id, title, body, image_url, created_at FROM notifications
+       WHERE business_id IS NULL OR business_id = '' OR business_id = ? ORDER BY created_at DESC LIMIT 8`,
       [businessId],
     );
     let units = [];

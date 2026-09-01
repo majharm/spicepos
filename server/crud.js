@@ -25,6 +25,22 @@ export function round2(n) {
   return Math.round(Number(n) * 100) / 100;
 }
 
+function itemImageFromBody(b) {
+  if (!Object.prototype.hasOwnProperty.call(b || {}, "image_url")) return undefined;
+  const img = b.image_url ? String(b.image_url) : "";
+  if (img && !img.startsWith("data:image/")) {
+    const err = new Error("Item image must be an uploaded image");
+    err.status = 400;
+    throw err;
+  }
+  if (img && img.length > 6_000_000) {
+    const err = new Error("Item image is too large");
+    err.status = 400;
+    throw err;
+  }
+  return img || null;
+}
+
 export async function nextSeq(conn, name, start) {
   const [rows] = await conn.query(
     "SELECT next_value FROM number_sequences WHERE name = ? AND business_id = ? FOR UPDATE",
@@ -89,6 +105,13 @@ export function registerCrud(app) {
       res.status(400).json({ error: "Item name is required" });
       return;
     }
+    let imageUrl;
+    try {
+      imageUrl = itemImageFromBody(b);
+    } catch (err) {
+      res.status(err.status || 400).json({ error: String(err.message) });
+      return;
+    }
     try {
       const item = await withTransaction(async (conn) => {
         const n = await nextSeq(conn, "item", 7);
@@ -97,9 +120,9 @@ export function registerCrud(app) {
         await conn.query(
           `INSERT INTO items (
              id, code, name, local_name, category, subcategory, base_unit,
-             purchase_rate, retail_rate, b2b_rate, gst_rate, hsn, stock_gm,
+             purchase_rate, retail_rate, b2b_rate, gst_rate, hsn, image_url, stock_gm,
              reorder_level_gm, status, business_id
-           ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'active', ?)`,
+           ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'active', ?)`,
           [
             id,
             code,
@@ -113,6 +136,7 @@ export function registerCrud(app) {
             Number(b.b2b_rate) || 0,
             Number(b.gst_rate) || 5,
             String(b.hsn || b.local_name || "").trim() || null,
+            imageUrl === undefined ? null : imageUrl,
             Number(b.stock_gm) || 0,
             Number(b.reorder_level_gm) || 0,
             bid(),
@@ -129,30 +153,42 @@ export function registerCrud(app) {
 
   app.put("/api/items/:id", async (req, res) => {
     const b = req.body || {};
+    let imageUrl;
     try {
+      imageUrl = itemImageFromBody(b);
+    } catch (err) {
+      res.status(err.status || 400).json({ error: String(err.message) });
+      return;
+    }
+    try {
+      const params = [
+        b.name,
+        b.local_name || null,
+        b.category || "Whole Spices",
+        b.subcategory || null,
+        itemUnit(b.base_unit || b.unit || "GM"),
+        Number(b.purchase_rate) || 0,
+        Number(b.retail_rate) || 0,
+        Number(b.b2b_rate) || 0,
+        Number(b.gst_rate) || 5,
+        String(b.hsn || "").trim() || null,
+        Number(b.stock_gm) || 0,
+        Number(b.reorder_level_gm) || 0,
+        b.status || "active",
+      ];
+      let imageSql = "";
+      if (imageUrl !== undefined) {
+        imageSql = ", image_url=?";
+        params.push(imageUrl);
+      }
+      params.push(req.params.id, bid());
       await query(
         `UPDATE items SET
            name=?, local_name=?, category=?, subcategory=?, base_unit=?,
            purchase_rate=?, retail_rate=?, b2b_rate=?, gst_rate=?, hsn=?,
-           stock_gm=?, reorder_level_gm=?, status=?
+           stock_gm=?, reorder_level_gm=?, status=?${imageSql}
          WHERE id=? AND business_id=?`,
-        [
-          b.name,
-          b.local_name || null,
-          b.category || "Whole Spices",
-          b.subcategory || null,
-          itemUnit(b.base_unit || b.unit || "GM"),
-          Number(b.purchase_rate) || 0,
-          Number(b.retail_rate) || 0,
-          Number(b.b2b_rate) || 0,
-          Number(b.gst_rate) || 5,
-          String(b.hsn || "").trim() || null,
-          Number(b.stock_gm) || 0,
-          Number(b.reorder_level_gm) || 0,
-          b.status || "active",
-          req.params.id,
-          bid(),
-        ],
+        params,
       );
       const [item] = await query("SELECT * FROM items WHERE id = ?", [req.params.id]);
       res.json({ ok: true, item });

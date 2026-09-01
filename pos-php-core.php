@@ -139,6 +139,7 @@ function pos_shop_timezone() {
 }
 
 require_once __DIR__ . "/pos-mail.php";
+if (is_file(__DIR__ . "/pos-alerts.php")) require_once __DIR__ . "/pos-alerts.php";
 
 function pos_shop_tz_offset() {
   return pos_env("POS_TZ_OFFSET", "+05:30");
@@ -335,6 +336,7 @@ function pos_ensure_item_unit_columns() {
     "base_unit" => "VARCHAR(32) NOT NULL DEFAULT 'GM'",
     "unit" => "VARCHAR(32) NULL",
     "hsn" => "VARCHAR(32) NULL",
+    "image_url" => "MEDIUMTEXT NULL",
   ] as $name => $def) {
     $res = $db->query("SHOW COLUMNS FROM items LIKE '" . $db->real_escape_string($name) . "'");
     if ($res && $res->num_rows === 0) {
@@ -342,6 +344,15 @@ function pos_ensure_item_unit_columns() {
     }
     if ($res) $res->free();
   }
+}
+
+function pos_item_image_url($body) {
+  if (!is_array($body) || !array_key_exists("image_url", $body)) return null;
+  $img = (string) $body["image_url"];
+  if ($img === "") return "";
+  if (strpos($img, "data:image/") !== 0) pos_send(400, ["error" => "Item image must be an uploaded image"]);
+  if (strlen($img) > 6000000) pos_send(400, ["error" => "Item image is too large"]);
+  return $img;
 }
 
 function pos_item_unit($item) {
@@ -1720,12 +1731,35 @@ function pos_php_dispatch($path, $method, $rawBody) {
       pos_send(200, array_merge(["ok" => true], pos_platform_settings()));
     }
 
+    if ($path === "master/alerts" && $method === "GET") {
+      if (!function_exists("pos_alert_settings_public")) throw new Exception("pos-alerts.php is missing on this host");
+      pos_ensure_alert_schema();
+      pos_send(200, pos_alert_settings_public());
+    }
+
+    if ($path === "master/alerts" && $method === "POST") {
+      if (!function_exists("pos_save_alert_settings")) throw new Exception("pos-alerts.php is missing on this host");
+      pos_send(200, array_merge(["ok" => true], pos_alert_settings_public(pos_save_alert_settings($body))));
+    }
+
     if ($path === "master/notifications" && $method === "POST") {
       $title = $body["title"] ?? "";
       if (!$title) throw new Exception("Title is required");
+      if (function_exists("pos_ensure_notification_schema")) pos_ensure_notification_schema();
+      $image = function_exists("pos_notice_image") ? pos_notice_image($body["image_url"] ?? "") : "";
       $nid = pos_uuid();
-      pos_q("INSERT INTO notifications (id, business_id, title, body) VALUES (?,?,?,?)", "ssss", [$nid, $body["business_id"] ?? null, $title, $body["body"] ?? null]);
-      pos_send(200, ["ok" => true, "id" => $nid]);
+      $bid = $body["business_id"] ?? null;
+      if ($bid === "") $bid = null;
+      pos_q(
+        "INSERT INTO notifications (id, business_id, title, body, image_url) VALUES (?,?,?,?,?)",
+        "sssss",
+        [$nid, $bid, $title, $body["body"] ?? null, $image === "" ? null : $image]
+      );
+      $delivery = ["skipped" => true];
+      if (function_exists("pos_send_update_alerts")) {
+        $delivery = pos_send_update_alerts($title, $body["body"] ?? "", $bid, $image, true);
+      }
+      pos_send(200, ["ok" => true, "id" => $nid, "delivery" => $delivery]);
     }
 
     if (

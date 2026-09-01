@@ -214,7 +214,69 @@ function dotStuff(body) {
     .join("\r\n");
 }
 
-export async function sendMail({ to, subject, text, html }) {
+function wrapBase64(b64) {
+  return String(b64 || "")
+    .replace(/\s/g, "")
+    .replace(/(.{76})/g, "$1\r\n")
+    .replace(/\r\n$/, "");
+}
+
+export function parseDataImage(image) {
+  const s = String(image || "");
+  const m = s.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,([A-Za-z0-9+/=\s]+)$/);
+  if (!m) return null;
+  return { mime: m[1], base64: m[2].replace(/\s/g, "") };
+}
+
+function mimePayload({ from, fromName, to, subject, text, html, image }) {
+  const alt = `posalt${Date.now().toString(36)}`;
+  const htmlBody = html || `<pre>${escapeHtml(text)}</pre>`;
+  const altPart = [
+    `--${alt}`,
+    "Content-Type: text/plain; charset=UTF-8",
+    "Content-Transfer-Encoding: 8bit",
+    "",
+    dotStuff(text),
+    `--${alt}`,
+    "Content-Type: text/html; charset=UTF-8",
+    "Content-Transfer-Encoding: 8bit",
+    "",
+    dotStuff(htmlBody),
+    `--${alt}--`,
+  ].join("\r\n");
+  const headers = [
+    `From: ${headerAddress(from, fromName)}`,
+    `To: ${to}`,
+    `Subject: ${encodeSubject(subject)}`,
+    "MIME-Version: 1.0",
+  ];
+  const parsed = parseDataImage(image);
+  if (!parsed) {
+    return [...headers, `Content-Type: multipart/alternative; boundary="${alt}"`, "", altPart, "."].join("\r\n");
+  }
+  const rel = `posrel${Date.now().toString(36)}`;
+  const ext = /png/i.test(parsed.mime) ? "png" : "jpg";
+  return [
+    ...headers,
+    `Content-Type: multipart/related; boundary="${rel}"`,
+    "",
+    `--${rel}`,
+    `Content-Type: multipart/alternative; boundary="${alt}"`,
+    "",
+    altPart,
+    `--${rel}`,
+    `Content-Type: ${parsed.mime}`,
+    "Content-Transfer-Encoding: base64",
+    "Content-ID: <notice-image>",
+    `Content-Disposition: inline; filename="notice.${ext}"`,
+    "",
+    wrapBase64(parsed.base64),
+    `--${rel}--`,
+    ".",
+  ].join("\r\n");
+}
+
+export async function sendMail({ to, subject, text, html, image }) {
   const cfg = smtpConfig();
   if (!smtpConfigured(cfg)) return { ok: false, skipped: true };
   const recipient = String(to || "").trim();
@@ -258,29 +320,15 @@ export async function sendMail({ to, subject, text, html }) {
     await io.write("DATA");
     const dataOk = await io.read();
     if (!dataOk.startsWith("3")) throw new Error(dataOk || "DATA rejected");
-    const boundary = `pos${Date.now().toString(36)}`;
-    const payload = [
-      `From: ${headerAddress(cfg.from, cfg.fromName)}`,
-      `To: ${recipient}`,
-      `Subject: ${encodeSubject(subject)}`,
-      "MIME-Version: 1.0",
-      `Content-Type: multipart/alternative; boundary="${boundary}"`,
-      "",
-      `--${boundary}`,
-      "Content-Type: text/plain; charset=UTF-8",
-      "Content-Transfer-Encoding: 8bit",
-      "",
-      dotStuff(text),
-      "",
-      `--${boundary}`,
-      "Content-Type: text/html; charset=UTF-8",
-      "Content-Transfer-Encoding: 8bit",
-      "",
-      dotStuff(html || `<pre>${escapeHtml(text)}</pre>`),
-      "",
-      `--${boundary}--`,
-      ".",
-    ].join("\r\n");
+    const payload = mimePayload({
+      from: cfg.from,
+      fromName: cfg.fromName,
+      to: recipient,
+      subject,
+      text,
+      html,
+      image,
+    });
     await new Promise((resolve, reject) => {
       socket.write(`${payload}\r\n`, "utf8", (err) => (err ? reject(err) : resolve()));
     });

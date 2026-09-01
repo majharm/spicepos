@@ -68,15 +68,15 @@ function options(list, placeholder) {
   return `<option value="">${placeholder}</option>${list.map((v) => `<option>${v}</option>`).join("")}`;
 }
 
-function readLogo(file) {
+function readLogo(file, max = 280) {
   if (!file || !file.size) return Promise.resolve("");
   return new Promise((resolve, reject) => {
     const img = new Image();
     const url = URL.createObjectURL(file);
     img.onload = () => {
       const canvas = document.createElement("canvas");
-      const max = 280;
-      const scale = Math.min(1, max / Math.max(img.width, img.height));
+      const size = max;
+      const scale = Math.min(1, size / Math.max(img.width, img.height));
       canvas.width = Math.max(1, Math.round(img.width * scale));
       canvas.height = Math.max(1, Math.round(img.height * scale));
       canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
@@ -748,36 +748,114 @@ async function render() {
         </div>`;
       bindMasterBackup(body, shops);
     } else if (tab === "notes") {
-      const businesses = await api("/api/master/businesses");
-      body.innerHTML = `<form class="settings wide" id="note-form">
-        <label>Send to
-          <select name="business_id">
-            <option value="">All businesses</option>
-            ${businesses.map((b) => `<option value="${attr(b.id)}">${attr(b.name)}</option>`).join("")}
-          </select>
-        </label>
-        <label>Title <input name="title" required /></label>
-        <label>Body <textarea name="body" rows="3"></textarea></label>
-        <button class="btn primary">Send notification</button>
-        <p class="hint" id="note-hint"></p>
-      </form>`;
+      const [businesses, alerts, settings] = await Promise.all([
+        api("/api/master/businesses"),
+        api("/api/master/alerts").catch(() => null),
+        api("/api/master/settings").catch(() => ({ notifications: [] })),
+      ]);
+      const notes = settings.notifications || [];
+      body.innerHTML = `<p class="lede">Send to the shop dashboard, WhatsApp (shop mobile), and email (shop email). You can attach an image.</p>
+        <form class="settings wide" id="note-form">
+          <label>Send to
+            <select name="business_id">
+              <option value="">All businesses</option>
+              ${businesses.map((b) => `<option value="${attr(b.id)}">${attr(b.name)}</option>`).join("")}
+            </select>
+          </label>
+          <label>Title <input name="title" required /></label>
+          <label>Body <textarea name="body" rows="3"></textarea></label>
+          <label class="logo-row">Image
+            <div class="logo-preview-frame item-image-frame">
+              <img id="note-image-preview" class="logo-preview" alt="Notification image" hidden />
+            </div>
+            <label class="btn logo-pick">Choose image
+              <input id="note-image" name="note-image" type="file" accept="image/png,image/jpeg" hidden />
+            </label>
+            <button class="btn" type="button" id="note-image-clear" hidden>Remove</button>
+          </label>
+          <button class="btn primary">Send notification</button>
+          <p class="hint" id="note-hint"></p>
+        </form>
+        ${alerts ? `<form class="settings wide" id="wa-form">
+          <h3>WhatsApp API</h3>
+          <p class="section-note">Same gateway used for this notification. API key is stored on the platform and never shown in full.</p>
+          <label class="remember"><input type="checkbox" name="wa_enabled" ${alerts.wa_enabled === "1" ? "checked" : ""} /> Enable WhatsApp</label>
+          <label>API key <input name="wa_api_key" type="password" autocomplete="off" value="${attr(alerts.wa_api_key)}" /></label>
+          <label>Profile ID <input name="wa_profile_id" value="${attr(alerts.wa_profile_id)}" /></label>
+          <button class="btn" type="submit">Save WhatsApp</button>
+          <p class="hint" id="wa-hint"></p>
+        </form>` : ""}
+        ${notes.length ? `<div class="settings wide"><h3>Recent</h3>${notes
+          .map(
+            (n) =>
+              `<div class="platform-notice"><strong>${attr(n.title || "Notice")}</strong>${attr(n.body || "")}${
+                n.image_url ? `<img class="notice-thumb" src="${attr(n.image_url)}" alt="" />` : ""
+              }</div>`,
+          )
+          .join("")}</div>` : ""}`;
+      let noteImage = "";
+      const preview = $("note-image-preview");
+      const clearBtn = $("note-image-clear");
+      const paintNoteImage = () => {
+        if (preview) {
+          preview.src = noteImage || "";
+          preview.hidden = !noteImage;
+        }
+        if (clearBtn) clearBtn.hidden = !noteImage;
+      };
+      $("note-image")?.addEventListener("change", async (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        try {
+          noteImage = await readLogo(file, 640);
+          paintNoteImage();
+        } catch (err) {
+          $("note-hint").textContent = err.message;
+          $("note-hint").className = "hint error";
+        }
+      });
+      clearBtn?.addEventListener("click", () => {
+        noteImage = "";
+        if ($("note-image")) $("note-image").value = "";
+        paintNoteImage();
+      });
       $("note-form").onsubmit = async (e) => {
         e.preventDefault();
         const hint = $("note-hint");
         const fd = Object.fromEntries(new FormData(e.target).entries());
         if (!fd.business_id) delete fd.business_id;
+        delete fd["note-image"];
+        if (noteImage) fd.image_url = noteImage;
         hint.className = "hint";
         hint.textContent = "Sending…";
         try {
-          await api("/api/master/notifications", { method: "POST", body: JSON.stringify(fd) });
+          const out = await api("/api/master/notifications", { method: "POST", body: JSON.stringify(fd) });
           e.target.reset();
-          hint.textContent = "Notification sent. It appears on the business dashboard.";
+          noteImage = "";
+          paintNoteImage();
+          hint.textContent = summarizeNoticeDelivery(out.delivery);
           hint.className = "hint ok";
         } catch (err) {
           hint.textContent = err.message;
           hint.className = "hint error";
         }
       };
+      $("wa-form") && ($("wa-form").onsubmit = async (e) => {
+        e.preventDefault();
+        const hint = $("wa-hint");
+        const fd = Object.fromEntries(new FormData(e.target).entries());
+        fd.wa_enabled = e.target.wa_enabled?.checked ? "1" : "0";
+        hint.className = "hint";
+        hint.textContent = "Saving…";
+        try {
+          await api("/api/master/alerts", { method: "POST", body: JSON.stringify(fd) });
+          hint.textContent = "WhatsApp settings saved.";
+          hint.className = "hint ok";
+        } catch (err) {
+          hint.textContent = err.message;
+          hint.className = "hint error";
+        }
+      });
     } else if (tab === "support") {
       const s = await api("/api/master/support");
       body.innerHTML = `<p class="lede">This number is stored in MySQL and shown to every shop user on Support (and on the login screen).</p>
@@ -798,6 +876,20 @@ async function render() {
   } catch (err) {
     body.innerHTML = `<p class="hint error">${err.message}</p>`;
   }
+}
+
+function summarizeNoticeDelivery(delivery) {
+  const results = delivery?.results;
+  if (!Array.isArray(results) || !results.length) {
+    return "Saved on the shop dashboard. Add a shop mobile and email to also send WhatsApp and email.";
+  }
+  let wa = 0;
+  let mail = 0;
+  for (const row of results) {
+    if (row?.wa?.ok) wa += 1;
+    if ((row?.mail || []).some((m) => m?.ok)) mail += 1;
+  }
+  return `Saved on the shop dashboard. WhatsApp ${wa}/${results.length} · Email ${mail}/${results.length}.`;
 }
 
 function attr(value) {

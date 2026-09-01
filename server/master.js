@@ -9,6 +9,14 @@ import { publicStatus } from "./auth.js";
 import { getPlatformSettings, setPlatformSetting } from "./settings.js";
 import { registerMasterBackup } from "./backup.js";
 import { sendWelcomeSignup, sendWelcomeStaff } from "./mail.js";
+import {
+  sendUpdateAlerts,
+  loadAlertSettings,
+  saveAlertSettings,
+  publicAlertSettings,
+  sanitizeNoticeImage,
+  ensureAlertSettings,
+} from "./alerts.js";
 
 function send(res, fn) {
   return Promise.resolve()
@@ -406,16 +414,45 @@ export function registerMaster(app) {
     }),
   );
 
+  app.get("/api/master/alerts", (_req, res) =>
+    send(res, async () => {
+      await ensureAlertSettings();
+      return publicAlertSettings(await loadAlertSettings());
+    }),
+  );
+
+  app.post("/api/master/alerts", (req, res) =>
+    send(res, async () => {
+      const saved = await saveAlertSettings(req.body || {});
+      await platformAudit(req.auth.admin, "Settings Changed", { module: "alerts", target_name: "WhatsApp alerts" }, req);
+      return { ok: true, ...publicAlertSettings(saved) };
+    }),
+  );
+
   app.post("/api/master/notifications", (req, res) =>
     send(res, async () => {
-      const { title, body, business_id } = req.body || {};
+      const { title, body, business_id, image_url } = req.body || {};
       if (!title) throw new Error("Title is required");
+      const image = sanitizeNoticeImage(image_url);
       const id = crypto.randomUUID();
       await query(
-        `INSERT INTO notifications (id, business_id, title, body) VALUES (?,?,?,?)`,
-        [id, business_id || null, title, body || null],
+        `INSERT INTO notifications (id, business_id, title, body, image_url) VALUES (?,?,?,?,?)`,
+        [id, business_id || null, title, body || null, image || null],
       );
-      return { ok: true, id };
+      let delivery = { skipped: true };
+      try {
+        delivery = await sendUpdateAlerts({
+          businessId: business_id || "",
+          title,
+          body: body || "",
+          image,
+          force: true,
+        });
+      } catch (err) {
+        console.error("notification alerts failed:", err.message);
+        delivery = { ok: false, error: String(err.message || err) };
+      }
+      return { ok: true, id, delivery };
     }),
   );
 }

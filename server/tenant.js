@@ -36,7 +36,7 @@ export function registerTenant(app) {
       );
       const branches = await query("SELECT * FROM branches WHERE business_id = ? ORDER BY name", [businessId]);
       const notes = await query(
-        `SELECT * FROM notifications WHERE business_id IS NULL OR business_id = ? ORDER BY created_at DESC LIMIT 8`,
+        `SELECT * FROM notifications WHERE business_id IS NULL OR business_id = '' OR business_id = ? ORDER BY created_at DESC LIMIT 8`,
         [businessId],
       );
       return {
