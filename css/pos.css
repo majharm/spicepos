@@ -256,28 +256,6 @@ select {
 .nav-btn.active .nav-icon { opacity: 1; }
 .nav-btn:active { transform: scale(0.98); }
 .nav-foot { margin-top: auto; display: grid; gap: 8px; padding-top: 18px; }
-.platform-brand {
-  display: grid;
-  justify-items: center;
-  padding: 10px 8px 6px;
-  border-top: 1px solid rgba(212, 160, 23, 0.15);
-  margin-top: 4px;
-}
-.platform-brand img {
-  width: 118px;
-  height: auto;
-  object-fit: contain;
-  opacity: 0.92;
-  filter: drop-shadow(0 4px 12px rgba(212, 160, 23, 0.25));
-}
-.nav-foot .chip {
-  background: var(--nav-soft);
-  border-color: #334155;
-  color: #94a3b8;
-  box-shadow: none;
-}
-.nav-foot .chip b { color: #fff; }
-.nav-foot .clock-chip b { color: #fff; }
 
 .btn-logout {
   width: 100%;
