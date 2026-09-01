@@ -4,18 +4,18 @@
   place-items: center;
   padding: 24px;
   background:
-    radial-gradient(circle at 18% 12%, rgba(0, 174, 239, 0.22), transparent 32%),
-    radial-gradient(circle at 82% 8%, rgba(236, 0, 140, 0.18), transparent 30%),
-    radial-gradient(circle at 50% 88%, rgba(247, 148, 29, 0.1), transparent 36%),
-    linear-gradient(160deg, #0a0a12 0%, #12122a 45%, #06060c 100%);
+    radial-gradient(circle at 18% 12%, rgba(212, 160, 23, 0.2), transparent 32%),
+    radial-gradient(circle at 82% 8%, rgba(140, 29, 64, 0.16), transparent 30%),
+    radial-gradient(circle at 50% 88%, rgba(45, 106, 79, 0.08), transparent 36%),
+    linear-gradient(160deg, #1a1412 0%, #2d211c 45%, #120e0c 100%);
 }
 .auth-card {
   width: min(440px, 100%);
-  background: #fff;
+  background: #fffdf9;
   border: 1px solid var(--line);
   border-radius: 24px;
   padding: 32px 32px 36px;
-  box-shadow: var(--shadow-card, 0 24px 56px rgba(8, 8, 15, 0.2));
+  box-shadow: var(--shadow-card, 0 24px 56px rgba(26, 20, 16, 0.35));
 }
 .auth-card.signup {
   width: min(760px, 100%);
@@ -31,15 +31,16 @@
   width: min(280px, 100%);
   height: auto;
   object-fit: contain;
-  filter: drop-shadow(0 8px 24px rgba(236, 0, 140, 0.2));
+  filter: drop-shadow(0 8px 24px rgba(212, 160, 23, 0.25));
 }
 .auth-tagline {
   margin: 0;
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: 0.14em;
+  font-family: var(--display);
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
-  background: var(--brand-gradient, linear-gradient(90deg, #ec008c, #f7941d));
+  background: var(--brand-gradient, linear-gradient(135deg, #8c1d40, #d4a017));
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
@@ -52,23 +53,20 @@
 .auth-tab {
   flex: 1;
   border: 1px solid var(--line);
-  background: linear-gradient(180deg, #fff 0%, #eef1fb 100%);
+  background: var(--bg-tint-soft);
   color: var(--muted);
   border-radius: 10px;
   padding: 8px 10px;
   font-weight: 700;
   font-size: 13px;
   cursor: pointer;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.9),
-    0 2px 0 #c5c9e0,
-    0 4px 10px rgba(46, 49, 146, 0.08);
+  box-shadow: 0 1px 2px rgba(44, 33, 24, 0.05);
 }
 .auth-tab.is-active {
-  background: var(--brand-gradient, linear-gradient(135deg, #ec008c 0%, #f7941d 100%));
+  background: var(--brand-gradient, linear-gradient(135deg, #8c1d40 0%, #d4a017 100%));
   border-color: transparent;
   color: #fff;
-  box-shadow: 0 4px 14px rgba(236, 0, 140, 0.28);
+  box-shadow: 0 4px 14px rgba(140, 29, 64, 0.28);
 }
 .signup-grid {
   display: grid;
@@ -92,10 +90,10 @@
   }
 }
 .auth-card h1, .auth-card h2 {
-  font-family: var(--font);
+  font-family: var(--display);
   margin: 0 0 8px;
-  color: var(--text);
-  font-size: 22px;
+  color: var(--spice-maroon, var(--text));
+  font-size: 24px;
   font-weight: 650;
 }
 .auth-card > p { color: var(--muted); margin-top: 0; font-size: 14px; }
@@ -124,13 +122,11 @@
 .auth-card textarea {
   padding: 10px 12px;
   border-radius: 10px;
-  border: 1px solid var(--line-strong, #b8c0de);
-  background: linear-gradient(180deg, #f8f9fe 0%, #fff 100%);
+  border: 1px solid var(--line-strong, #d4c4b4);
+  background: #fffdf9;
   color: var(--text);
   font: inherit;
-  box-shadow:
-    inset 0 2px 6px rgba(46, 49, 146, 0.08),
-    inset 0 1px 0 rgba(255, 255, 255, 0.55);
+  box-shadow: var(--elev-inset);
 }
 .auth-card label.remember input[type="checkbox"] {
   position: absolute;
@@ -145,26 +141,26 @@
   width: 18px;
   height: 18px;
   flex: 0 0 18px;
-  border: 1.5px solid var(--line-strong, #b8c0de);
+  border: 1.5px solid var(--line-strong, #d4c4b4);
   border-radius: 4px;
-  background: #fff;
+  background: #fffdf9;
   box-sizing: border-box;
   pointer-events: none;
 }
 .auth-card label.remember input[type="checkbox"]:checked + .remember-ui {
-  border-color: var(--atav-magenta, #ec008c);
-  background-color: var(--atav-magenta, #ec008c);
+  border-color: var(--spice-maroon, #8c1d40);
+  background-color: var(--spice-maroon, #8c1d40);
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill='none' stroke='%23fff' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round' d='M3.2 8.4 6.4 11.6 12.8 4.4'/%3E%3C/svg%3E");
   background-size: 12px 12px;
   background-position: center;
   background-repeat: no-repeat;
 }
 .auth-card label.remember input[type="checkbox"]:focus-visible + .remember-ui {
-  outline: 2px solid var(--atav-cyan, #00aeef);
+  outline: 2px solid var(--spice-saffron, #d4a017);
   outline-offset: 2px;
 }
 .login-support { margin-top: 16px; color: var(--muted); font-size: 13px; }
-.login-support a { color: var(--atav-cobalt, #2e3192); font-weight: 650; }
+.login-support a { color: var(--spice-maroon, #8c1d40); font-weight: 650; }
 .master-shell {
   display: grid;
   grid-template-columns: 228px 1fr;
@@ -172,13 +168,13 @@
   background: var(--bg);
 }
 .master-nav {
-  background: linear-gradient(180deg, #1a1a32 0%, var(--nav) 40%, #06060c 100%);
+  background: linear-gradient(180deg, #241a16 0%, var(--nav) 40%, #100c0a 100%);
   color: var(--nav-text);
   padding: 20px 12px;
   display: flex;
   flex-direction: column;
   gap: 2px;
-  box-shadow: 8px 0 32px rgba(0, 0, 0, 0.28);
+  box-shadow: 8px 0 32px rgba(26, 20, 16, 0.28);
 }
 .master-brand {
   display: grid;
@@ -186,7 +182,7 @@
   gap: 6px;
   margin: 0 4px 14px;
   padding-bottom: 14px;
-  border-bottom: 1px solid rgba(0, 174, 239, 0.15);
+  border-bottom: 1px solid rgba(212, 160, 23, 0.15);
 }
 .master-brand img {
   width: 140px;
@@ -200,31 +196,33 @@
   letter-spacing: 0.14em;
   text-transform: uppercase;
   margin: 0;
-  color: #9aa3d4;
+  color: #9a8478;
 }
 .master-nav button {
   text-align: left;
   border: 0;
   background: transparent;
-  color: #9aa3d4;
+  color: #b8a89c;
   padding: 9px 12px;
   border-radius: 8px;
   font-size: 13.5px;
 }
-.master-nav button:hover { background: #1e1e3a; color: #fff; }
+.master-nav button:hover { background: rgba(212, 160, 23, 0.1); color: #fff5eb; }
 .master-nav button.active {
-  background: var(--brand-gradient, linear-gradient(135deg, #ec008c 0%, #f7941d 100%));
+  background: var(--brand-gradient, linear-gradient(135deg, #8c1d40 0%, #d4a017 100%));
   color: #fff;
   font-weight: 700;
-  box-shadow: 0 4px 14px rgba(236, 0, 140, 0.28);
+  box-shadow: 0 4px 14px rgba(140, 29, 64, 0.28);
 }
 .master-nav .nav-foot { margin-top: auto; padding-top: 16px; }
 .master-nav .btn-logout { margin-top: 8px; }
 .master-main { padding: 28px 32px; overflow: auto; }
 .master-main > #panel > h2 {
   margin: 0 0 18px;
-  font-size: 22px;
+  font-family: var(--display);
+  font-size: 24px;
   font-weight: 650;
+  color: var(--spice-maroon);
 }
 .kpi-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; }
 .expired-banner {
@@ -240,9 +238,9 @@
   margin: 12px 24px;
   padding: 12px 16px;
   border-radius: 10px;
-  background: linear-gradient(90deg, rgba(236, 0, 140, 0.1), rgba(0, 174, 239, 0.1));
+  background: linear-gradient(90deg, rgba(140, 29, 64, 0.08), rgba(212, 160, 23, 0.1));
   color: var(--text);
-  border: 1px solid rgba(46, 49, 146, 0.2);
+  border: 1px solid var(--line);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -313,15 +311,15 @@
   width: 18px;
   height: 18px;
   flex: 0 0 18px;
-  border: 1.5px solid var(--line-strong, #b8c0de);
+  border: 1.5px solid var(--line-strong, #d4c4b4);
   border-radius: 4px;
-  background: #fff;
+  background: #fffdf9;
   box-sizing: border-box;
   pointer-events: none;
 }
 .dev-toggle input[type="checkbox"]:checked + .remember-ui {
-  border-color: var(--atav-magenta, #ec008c);
-  background-color: var(--atav-magenta, #ec008c);
+  border-color: var(--spice-maroon, #8c1d40);
+  background-color: var(--spice-maroon, #8c1d40);
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill='none' stroke='%23fff' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round' d='M3.2 8.4 6.4 11.6 12.8 4.4'/%3E%3C/svg%3E");
   background-size: 12px 12px;
   background-position: center;
@@ -332,7 +330,7 @@
   right: 16px;
   bottom: 16px;
   z-index: 40;
-  background: var(--brand-gradient-v, linear-gradient(180deg, #ec008c, #f7941d));
+  background: var(--brand-gradient, linear-gradient(135deg, #8c1d40, #d4a017));
   color: #fff;
   font-size: 11px;
   font-weight: 800;
@@ -340,10 +338,7 @@
   padding: 8px 12px;
   border-radius: 999px;
   cursor: pointer;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.35),
-    0 4px 0 #a80068,
-    0 10px 24px rgba(236, 0, 140, 0.35);
+  box-shadow: 0 4px 14px rgba(140, 29, 64, 0.35);
 }
 .dev-panel {
   position: fixed;
@@ -354,10 +349,10 @@
   z-index: 39;
   display: flex;
   flex-direction: column;
-  background: linear-gradient(180deg, #fff 0%, #f4f6fd 100%);
-  border: 1px solid var(--line-strong, #b8c0de);
+  background: #fffdf9;
+  border: 1px solid var(--line-strong, #d4c4b4);
   border-radius: 16px;
-  box-shadow: var(--elev-float, 0 20px 48px rgba(26, 26, 46, 0.22));
+  box-shadow: var(--elev-float, 0 20px 48px rgba(44, 33, 24, 0.22));
   overflow: hidden;
 }
 .dev-panel[hidden] { display: none !important; }
@@ -367,7 +362,7 @@
   justify-content: space-between;
   gap: 12px;
   padding: 12px 14px;
-  background: var(--header-gradient, linear-gradient(135deg, #2e3192, #00aeef));
+  background: var(--header-gradient, linear-gradient(135deg, #5c2438, #8c1d40, #d4a017));
   color: #fff;
 }
 .dev-panel-head strong { font-size: 14px; }
@@ -395,8 +390,8 @@
   margin: 0 0 8px;
   padding: 10px 12px;
   border-radius: 10px;
-  background: #0f1020;
-  color: #d7dbff;
+  background: #1a1412;
+  color: #f5ebe0;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 11px;
   line-height: 1.45;
@@ -421,7 +416,7 @@
   padding: 8px 10px;
   border-radius: 10px;
   border: 1px solid var(--line);
-  background: #fff;
+  background: #fffdf9;
   font-size: 11px;
 }
 .dev-log-row.is-error {
@@ -439,7 +434,7 @@ body.dev-mode .session-bar::after {
   font-weight: 800;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--atav-magenta, #ec008c);
+  color: var(--spice-maroon, #8c1d40);
 }
 @media (max-width: 700px) {
   .dev-panel {
