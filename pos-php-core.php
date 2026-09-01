@@ -280,6 +280,11 @@ function pos_q($sql, $types = "", $params = []) {
     $res->free();
     return $rows;
   }
+  if (strlen($types) !== count($params)) {
+    throw new Exception(
+      "SQL bind mismatch: " . strlen($types) . " types vs " . count($params) . " values"
+    );
+  }
   $st = $db->prepare($sql);
   if (!$st) throw new Exception("SQL error");
   $bind = [];

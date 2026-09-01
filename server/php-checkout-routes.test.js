@@ -39,3 +39,23 @@ test("PHP fallback routes checkout, holds, and order updates through core", () =
   assert.match(apiJs, /isPhpUnimplemented/);
   assert.match(apiJs, /orderedSpecs/);
 });
+
+test("PHP customer insert bind types match placeholders", () => {
+  const crud = read("pos-crud.php");
+  const core = read("pos-php-core.php");
+  const cust = crud.match(
+    /INSERT INTO customers[\s\S]*?VALUES \(\?,\?,\?,\?,\?,\?,\?,\?,0,\?\)",\s*"([sid]+)",\s*\[/,
+  );
+  assert.ok(cust, "customer INSERT found");
+  assert.equal(cust[1].length, 9);
+  assert.equal(cust[1], "sssssssds");
+
+  const items = crud.match(
+    /INSERT INTO items[\s\S]*?VALUES \(\?,\?,\?,\?,\?,\?,\?,\?,\?,\?,\?,\?,\?,\?, 'active', \?\)",\s*"([sid]+)",/,
+  );
+  assert.ok(items, "item INSERT found");
+  assert.equal(items[1].length, 15);
+  assert.equal(items[1], "sssssssddddsdds");
+
+  assert.match(core, /SQL bind mismatch/);
+});

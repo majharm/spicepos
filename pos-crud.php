@@ -18,7 +18,7 @@ function pos_crud_dispatch($path, $method, $body, $bid, $auth, $branchId, $uid) 
     pos_q(
       "INSERT INTO customers (id, code, name, business_name, mobile, type, gstin, credit_limit, outstanding, business_id)
        VALUES (?,?,?,?,?,?,?,?,0,?)",
-      "sssssssdds",
+      "sssssssds",
       [$id, $code, $name, $body["business_name"] ?? null, $mobile, $type, $body["gstin"] ?? null, (float) ($body["credit_limit"] ?? 0), $bid]
     );
     $rows = pos_q("SELECT * FROM customers WHERE id = ? LIMIT 1", "s", [$id]);
@@ -37,7 +37,7 @@ function pos_crud_dispatch($path, $method, $body, $bid, $auth, $branchId, $uid) 
          purchase_rate, retail_rate, b2b_rate, gst_rate, hsn, stock_gm,
          reorder_level_gm, status, business_id
        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'active', ?)",
-      "sssssssddddddds",
+      "sssssssddddsdds",
       [
         $id, $code, $name, $body["local_name"] ?? null, $body["category"] ?? "Whole Spices",
         $body["subcategory"] ?? null, $body["base_unit"] ?? "GM",
