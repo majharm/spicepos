@@ -335,6 +335,7 @@ function pos_ensure_item_unit_columns() {
     "base_unit" => "VARCHAR(32) NOT NULL DEFAULT 'GM'",
     "unit" => "VARCHAR(32) NULL",
     "hsn" => "VARCHAR(32) NULL",
+    "image_url" => "MEDIUMTEXT NULL",
   ] as $name => $def) {
     $res = $db->query("SHOW COLUMNS FROM items LIKE '" . $db->real_escape_string($name) . "'");
     if ($res && $res->num_rows === 0) {
@@ -342,6 +343,15 @@ function pos_ensure_item_unit_columns() {
     }
     if ($res) $res->free();
   }
+}
+
+function pos_item_image_url($body) {
+  if (!is_array($body) || !array_key_exists("image_url", $body)) return null;
+  $img = (string) $body["image_url"];
+  if ($img === "") return "";
+  if (strpos($img, "data:image/") !== 0) pos_send(400, ["error" => "Item image must be an uploaded image"]);
+  if (strlen($img) > 6000000) pos_send(400, ["error" => "Item image is too large"]);
+  return $img;
 }
 
 function pos_item_unit($item) {

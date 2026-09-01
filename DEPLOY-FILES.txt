@@ -1,4 +1,4 @@
-Production deploy bundle — 20260901deploy46
+Production deploy bundle — 20260901deploy47
 =========================================
 
 Upload ALL files below to Hostinger public_html (overwrite):
@@ -82,7 +82,8 @@ FIXES in this bundle
   - Suppliers form and list include address and email
   - Settings page: wider card, 2-column details, styled logo upload, keep card padding on mobile
   - CSS: Master Admin mobile nav wrap, hide nav until sign-in, backup file inputs, table overflow
-  - Cache sticker 20260901deploy46 on index, login, master, setup
+  - Cache sticker 20260901deploy47 on index, login, master, setup
+  - Items page can save a product photo; Counter cards show it
   - Counter item cards and fonts are smaller so more products fit
   - Mobile Counter: item grid scrolls in place; bill and Save stay on screen
   - Page scrolling on every shop view, Master Admin main pane, and login/signup

@@ -14,6 +14,7 @@ const state = {
   held: [],
   editingOrderId: null,
   logoDraft: null,
+  itemImage: "",
   session: null,
   perms: {},
   support: {},
@@ -113,7 +114,7 @@ const PAYMENT_STATUSES = ["paid", "partial", "unpaid"];
 const VIEW_META = {
   dashboard: { title: "Dashboard", subtitle: "Your shop today" },
   counter: { title: "Counter", subtitle: "POS checkout — tap items to add" },
-  items: { title: "Items", subtitle: "HSN, unit type, rates, and stock" },
+  items: { title: "Items", subtitle: "Photo, HSN, unit type, rates, and stock" },
   units: { title: "Unit master", subtitle: "Units used on items — qty, kg, litre, and custom" },
   customers: { title: "Customers", subtitle: "B2C retail and B2B wholesale accounts" },
   packs: { title: "Packs", subtitle: "Pre-defined spice packs and compositions" },
@@ -696,11 +697,42 @@ function filteredItems() {
   );
 }
 
+function itemPhotoUrl(item) {
+  const s = String(item?.image_url || "");
+  return s.startsWith("data:image/") ? s : "";
+}
+
+function itemPhotoLetter(item) {
+  const ch = String(item?.name || "?").trim().charAt(0).toUpperCase();
+  return ch || "?";
+}
+
+function cardPhotoHtml(item) {
+  const src = itemPhotoUrl(item);
+  if (src) {
+    return `<div class="card-photo"><img src="${escapeHtml(src)}" alt="" draggable="false"></div>`;
+  }
+  return `<div class="card-photo card-photo-empty" aria-hidden="true">${escapeHtml(itemPhotoLetter(item))}</div>`;
+}
+
+function paintItemImage(url = "", fileName = "") {
+  state.itemImage = url || "";
+  showLogo($("item-image-preview"), state.itemImage);
+  if ($("item-image-clear")) $("item-image-clear").hidden = !state.itemImage;
+  if ($("item-image-name")) $("item-image-name").textContent = fileName || (state.itemImage ? "Photo attached" : "PNG or JPG");
+}
+
+function resetItemImage() {
+  if ($("item-image")) $("item-image").value = "";
+  paintItemImage("");
+}
+
 function renderCatalog() {
   $("catalog").innerHTML = filteredItems()
     .map((i) => {
       const low = Number(i.stock_gm) <= Number(i.reorder_level_gm);
       return `<button class="card" type="button" data-add="${escapeHtml(i.id)}">
+        ${cardPhotoHtml(i)}
         <div class="sku">${escapeHtml(i.category)} / ${escapeHtml(i.subcategory || "—")}</div>
         <div class="name">${escapeHtml(i.name)} <small>${escapeHtml(i.hsn ? `HSN ${i.hsn}` : "")}</small></div>
         <div class="meta"><span>${escapeHtml(fmtQty(i.stock_gm, i))}</span><span>${money(rateFor(i))}${escapeHtml(POSUnits.rateSuffix(itemUnit(i)))}</span></div>
@@ -861,10 +893,14 @@ function renderItemsTable() {
   $("items-table").innerHTML = `<table><thead><tr>
       <th>Code</th><th>Item</th><th>HSN</th><th>Unit</th><th>Category</th><th>Subcategory</th><th>Retail</th><th>B2B</th><th>Stock</th><th></th>
   </tr></thead><tbody>${state.items
-    .map(
-      (i) => `<tr>
+    .map((i) => {
+      const src = itemPhotoUrl(i);
+      const thumb = src
+        ? `<img class="item-thumb" src="${escapeHtml(src)}" alt="">`
+        : `<span class="item-thumb-empty" aria-hidden="true">${escapeHtml(itemPhotoLetter(i))}</span>`;
+      return `<tr>
       <td>${escapeHtml(i.code)}</td>
-      <td>${escapeHtml(i.name)}</td>
+      <td class="item-name-cell">${thumb}${escapeHtml(i.name)}</td>
       <td>${escapeHtml(i.hsn || "—")}</td>
       <td>${escapeHtml(itemUnit(i))}</td>
       <td>${escapeHtml(i.category)}</td>
@@ -874,8 +910,8 @@ function renderItemsTable() {
       <td class="${Number(i.stock_gm) <= Number(i.reorder_level_gm) ? "stock low" : "stock ok"}">${escapeHtml(fmtQty(i.stock_gm, i))}</td>
       <td><button class="btn" data-edit-item="${escapeHtml(i.id)}" type="button">Edit</button>
           <button class="btn" data-recv="${escapeHtml(i.id)}" type="button">${escapeHtml(POSUnits.receiveLabel(itemUnit(i)))}</button></td>
-    </tr>`,
-    )
+    </tr>`;
+    })
     .join("")}</tbody></table>`;
 }
 
@@ -1719,6 +1755,7 @@ $("items-table").addEventListener("click", async (e) => {
     $("item-unit").value = itemUnit(i);
     $("item-stock").value = POSUnits.fromBase(i.stock_gm, itemUnit(i));
     refreshItemUnitLabels();
+    paintItemImage(itemPhotoUrl(i));
   }
 });
 
@@ -1995,6 +2032,7 @@ $("item-form").addEventListener("submit", async (e) => {
     purchase_rate: $("item-purchase").value,
     gst_rate: $("item-gst").value,
     stock_gm: POSUnits.toBase($("item-stock").value, unit),
+    image_url: state.itemImage || "",
   };
   try {
     if ($("item-id").value) await api(`/api/items/${$("item-id").value}`, { method: "PUT", body: JSON.stringify(body) });
@@ -2003,6 +2041,7 @@ $("item-form").addEventListener("submit", async (e) => {
     $("item-hint").className = "hint ok";
     $("item-form").reset();
     $("item-id").value = "";
+    resetItemImage();
     fillItemUnitSelect("GM");
     refreshItemUnitLabels();
     await loadBootstrap();
@@ -2014,10 +2053,30 @@ $("item-form").addEventListener("submit", async (e) => {
 $("item-cancel").addEventListener("click", () => {
   $("item-form").reset();
   $("item-id").value = "";
+  resetItemImage();
   fillItemUnitSelect("GM");
   refreshItemUnitLabels();
 });
 $("item-unit")?.addEventListener("change", refreshItemUnitLabels);
+$("item-image")?.addEventListener("change", async (e) => {
+  const file = e.target.files?.[0];
+  if (!file) return;
+  try {
+    const url = await readLogoFile(file, 240);
+    paintItemImage(url, file.name);
+    $("item-hint").textContent = "Photo ready — click Save";
+    $("item-hint").className = "hint";
+  } catch (err) {
+    $("item-hint").textContent = err.message;
+    $("item-hint").className = "hint error";
+  }
+});
+$("item-image-clear")?.addEventListener("click", () => {
+  if ($("item-image")) $("item-image").value = "";
+  paintItemImage("");
+  $("item-hint").textContent = "Photo will be removed on Save";
+  $("item-hint").className = "hint";
+});
 
 $("unit-family")?.addEventListener("change", () => {
   const d = POSUnits.familyDefaults($("unit-family").value);
@@ -2373,7 +2432,7 @@ $("expense-form")?.addEventListener("submit", async (e) => {
   }
 });
 
-function readLogoFile(file) {
+function readLogoFile(file, max = 480) {
   return new Promise((resolve, reject) => {
     if (file.size > 8_000_000) {
       reject(new Error("Choose a smaller image"));
@@ -2382,7 +2441,6 @@ function readLogoFile(file) {
     const img = new Image();
     const blobUrl = URL.createObjectURL(file);
     img.onload = () => {
-      const max = 480;
       let w = img.width;
       let h = img.height;
       if (w > max || h > max) {

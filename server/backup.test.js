@@ -127,16 +127,17 @@ test("PHP and HTML wire master admin backup", () => {
   );
 });
 
-test("HTML and CSS cache stickers match deploy46", () => {
+test("HTML and CSS cache stickers match deploy47", () => {
   for (const name of ["index.html", "master.html", "login.html", "setup.html"]) {
     const html = readFileSync(path.join(root, name), "utf8");
-    assert.match(html, /20260901deploy46/);
+    assert.match(html, /20260901deploy47/);
     assert.doesNotMatch(html, /20260901deploy[0-3][0-9]/);
     assert.doesNotMatch(html, /20260901deploy41/);
     assert.doesNotMatch(html, /20260901deploy42/);
     assert.doesNotMatch(html, /20260901deploy43/);
     assert.doesNotMatch(html, /20260901deploy44/);
     assert.doesNotMatch(html, /20260901deploy45/);
+    assert.doesNotMatch(html, /20260901deploy46/);
   }
   const saas = readFileSync(path.join(root, "css/saas.css"), "utf8");
   const pos = readFileSync(path.join(root, "css/pos.css"), "utf8");
@@ -173,6 +174,11 @@ test("HTML and CSS cache stickers match deploy46", () => {
   assert.match(index, /id="sup-email"/);
   assert.match(index, /id="sup-address"/);
   assert.match(index, /<textarea id="sup-address"/);
+  assert.match(pos, /card-photo/);
+  assert.match(pos, /item-image-frame/);
+  assert.match(index, /id="item-image"/);
+  assert.match(index, /id="item-image-preview"/);
+  assert.match(index, /id="item-image-clear"/);
   assert.match(index, /id="item-hsn"/);
   assert.match(index, /HSN code/);
   assert.match(index, /id="po-lines"/);

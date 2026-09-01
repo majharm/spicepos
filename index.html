@@ -6,8 +6,8 @@
     <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
     <title>SWAMI MASALE POS</title>
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./css/pos.css?v=20260901deploy46" />
-    <link rel="stylesheet" href="./css/saas.css?v=20260901deploy46" />
+    <link rel="stylesheet" href="./css/pos.css?v=20260901deploy47" />
+    <link rel="stylesheet" href="./css/saas.css?v=20260901deploy47" />
   </head>
   <body>
     <div class="app" id="app">
@@ -149,11 +149,24 @@
 
         <section class="view" id="view-items" hidden>
           <h2 class="visually-hidden">Items</h2>
-          <p class="lede">Name, HSN code, unit type, rates, and stock.</p>
+          <p class="lede">Name, photo, HSN code, unit type, rates, and stock.</p>
           <form class="settings wide" id="item-form">
             <input type="hidden" id="item-id" />
             <label>Name <input id="item-name" required maxlength="180" /></label>
             <label>HSN code <input id="item-hsn" maxlength="16" placeholder="e.g. 0908" autocomplete="off" /></label>
+            <div class="logo-row item-image-row full">
+              <div class="logo-preview-frame item-image-frame">
+                <img id="item-image-preview" class="logo-preview" alt="Item photo" hidden />
+              </div>
+              <div class="logo-controls">
+                <div class="logo-pick-row">
+                  <input id="item-image" class="logo-file-input" type="file" accept="image/*" />
+                  <label class="btn logo-pick" for="item-image">Choose photo</label>
+                  <span class="logo-file-name" id="item-image-name">PNG or JPG</span>
+                </div>
+                <button class="btn" type="button" id="item-image-clear" hidden>Remove photo</button>
+              </div>
+            </div>
             <label>Category
               <input id="item-category" list="category-list" placeholder="Whole Spices" />
             </label>
@@ -598,10 +611,10 @@
         </section>
       </div>
     </aside>
-    <script src="./js/pos-api.js?v=20260901deploy46" defer></script>
-    <script src="./js/units.js?v=20260901deploy46" defer></script>
-    <script src="./js/dev-mode.js?v=20260901deploy46" defer></script>
-    <script src="./js/invoice.js?v=20260901deploy46" defer></script>
-    <script src="./js/app.js?v=20260901deploy46" defer></script>
+    <script src="./js/pos-api.js?v=20260901deploy47" defer></script>
+    <script src="./js/units.js?v=20260901deploy47" defer></script>
+    <script src="./js/dev-mode.js?v=20260901deploy47" defer></script>
+    <script src="./js/invoice.js?v=20260901deploy47" defer></script>
+    <script src="./js/app.js?v=20260901deploy47" defer></script>
   </body>
 </html>

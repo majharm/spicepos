@@ -231,6 +231,54 @@ select {
 .logo-preview-frame:has(img:not([hidden]))::before {
   display: none;
 }
+.item-image-frame::before { content: "No photo"; }
+.item-image-row { margin: 4px 0 2px; }
+.card-photo {
+  width: 100%;
+  height: 56px;
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--vel-muted-surface);
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+}
+.card-photo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  pointer-events: none;
+}
+.card-photo-empty {
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--vel-teal);
+  letter-spacing: 0.04em;
+}
+.item-thumb {
+  width: 36px;
+  height: 36px;
+  object-fit: cover;
+  border-radius: 6px;
+  background: var(--vel-muted-surface);
+  vertical-align: middle;
+  margin-right: 8px;
+}
+.item-thumb-empty {
+  display: inline-grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 6px;
+  background: var(--vel-muted-surface);
+  color: var(--vel-teal);
+  font-size: 13px;
+  font-weight: 800;
+  vertical-align: middle;
+  margin-right: 8px;
+}
+.item-name-cell { white-space: nowrap; }
 .logo-preview {
   width: 100%;
   height: 100%;
@@ -1862,6 +1910,7 @@ tr:last-child td { border-bottom: 0; }
   .stage.is-counter .card .name small { font-size: 8px; }
   .stage.is-counter .card .meta { font-size: 10px; }
   .stage.is-counter .card .stock { font-size: 8px; }
+  .stage.is-counter .card-photo { height: 44px; }
   .stage.is-counter .ticket,
   .stage.is-counter .bill-panel {
     border-left: 0;
