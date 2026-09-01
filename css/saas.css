@@ -10,16 +10,12 @@
     linear-gradient(160deg, #0a0a12 0%, #12122a 45%, #06060c 100%);
 }
 .auth-card {
-  width: min(420px, 100%);
-  background: linear-gradient(180deg, #fff 0%, #f6f7fd 100%);
-  border: 1px solid rgba(46, 49, 146, 0.18);
-  border-radius: 22px;
-  padding: 28px 28px 32px;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.95),
-    0 8px 0 rgba(8, 8, 15, 0.08),
-    0 24px 56px rgba(8, 8, 15, 0.45),
-    0 0 0 1px rgba(0, 174, 239, 0.08);
+  width: min(440px, 100%);
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 24px;
+  padding: 32px 32px 36px;
+  box-shadow: var(--shadow-card, 0 24px 56px rgba(8, 8, 15, 0.2));
 }
 .auth-card.signup {
   width: min(760px, 100%);
@@ -69,13 +65,10 @@
     0 4px 10px rgba(46, 49, 146, 0.08);
 }
 .auth-tab.is-active {
-  background: var(--brand-gradient-v, linear-gradient(180deg, #ec008c 0%, #f7941d 100%));
-  border-color: #a80068;
+  background: var(--brand-gradient, linear-gradient(135deg, #ec008c 0%, #f7941d 100%));
+  border-color: transparent;
   color: #fff;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.35),
-    0 4px 0 #a80068,
-    0 8px 16px rgba(236, 0, 140, 0.3);
+  box-shadow: 0 4px 14px rgba(236, 0, 140, 0.28);
 }
 .signup-grid {
   display: grid;
@@ -220,13 +213,10 @@
 }
 .master-nav button:hover { background: #1e1e3a; color: #fff; }
 .master-nav button.active {
-  background: var(--brand-gradient-v, linear-gradient(180deg, #ec008c 0%, #f7941d 100%));
+  background: var(--brand-gradient, linear-gradient(135deg, #ec008c 0%, #f7941d 100%));
   color: #fff;
   font-weight: 700;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.35),
-    0 4px 0 #a80068,
-    0 8px 18px rgba(236, 0, 140, 0.3);
+  box-shadow: 0 4px 14px rgba(236, 0, 140, 0.28);
 }
 .master-nav .nav-foot { margin-top: auto; padding-top: 16px; }
 .master-nav .btn-logout { margin-top: 8px; }

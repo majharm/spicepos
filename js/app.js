@@ -41,6 +41,25 @@ function kg(gm) {
 const ORDER_STATUSES = ["confirmed", "delivered", "cancelled"];
 const PAYMENT_STATUSES = ["paid", "partial", "unpaid"];
 
+const VIEW_META = {
+  dashboard: { title: "Dashboard", subtitle: "Your shop today" },
+  counter: { title: "Counter", subtitle: "POS checkout — tap items to add" },
+  items: { title: "Items", subtitle: "Category, rates per kg, and stock in grams" },
+  customers: { title: "Customers", subtitle: "B2C retail and B2B wholesale accounts" },
+  packs: { title: "Packs", subtitle: "Pre-defined spice packs and compositions" },
+  orders: { title: "Invoices", subtitle: "Tax invoices — search, print, update status" },
+  purchases: { title: "Purchases", subtitle: "Supplier bills with GST and thermal print" },
+  suppliers: { title: "Suppliers", subtitle: "Vendor contacts and GSTIN" },
+  stock: { title: "Stock", subtitle: "Adjustments, transfers, and low-stock alerts" },
+  staff: { title: "Staff & roles", subtitle: "Users, roles, and access" },
+  branches: { title: "Branches", subtitle: "Shop locations and contact details" },
+  devices: { title: "POS devices", subtitle: "Registers and terminal codes" },
+  support: { title: "Support", subtitle: "Platform helpline and shop details" },
+  accounts: { title: "Accounts", subtitle: "Receivables, payables, GL, and books" },
+  reports: { title: "Reports", subtitle: "Sales, stock, purchases, and GST" },
+  settings: { title: "Settings", subtitle: "Company profile, timezone, and branding" },
+};
+
 function orderStatusClass(status) {
   const s = String(status || "confirmed").toLowerCase();
   if (s === "cancelled") return "cancelled";
@@ -334,6 +353,15 @@ function applyNav() {
   });
 }
 
+function paintViewHeader(name) {
+  const meta = VIEW_META[name] || { title: name, subtitle: "" };
+  const titleEl = $("view-title");
+  const subEl = $("view-subtitle");
+  if (titleEl) titleEl.textContent = meta.title;
+  if (subEl) subEl.textContent = meta.subtitle;
+  document.getElementById("view-topbar")?.classList.toggle("is-counter", name === "counter");
+}
+
 function showView(name) {
   document.querySelectorAll(".view").forEach((el) => {
     el.hidden = el.id !== `view-${name}`;
@@ -343,6 +371,7 @@ function showView(name) {
   });
   document.body.classList.toggle("counter-mode", name === "counter");
   document.querySelector(".stage")?.classList.toggle("is-counter", name === "counter");
+  paintViewHeader(name);
   if (name === "reports") loadReports();
   if (name === "accounts") loadAccounts();
   if (name === "orders") loadOrders();
@@ -751,8 +780,12 @@ async function loadDevices() {
 
 async function loadToday() {
   const data = await api("/api/today");
-  $("today-total").textContent = money(data.today.takings);
-  $("today-count").textContent = String(data.today.bills);
+  const total = money(data.today.takings);
+  const count = String(data.today.bills);
+  $("today-total").textContent = total;
+  $("today-count").textContent = count;
+  if ($("topbar-total")) $("topbar-total").textContent = total;
+  if ($("topbar-count")) $("topbar-count").textContent = count;
 }
 
 async function loadReports() {
@@ -1308,6 +1341,14 @@ $("orders-refresh")?.addEventListener("click", () => {
   loadOrders().catch((err) => setHint(err.message, "error"));
 });
 
+$("nav-toggle")?.addEventListener("click", () => {
+  const app = document.getElementById("app");
+  const btn = $("nav-toggle");
+  if (!app || !btn) return;
+  const collapsed = app.classList.toggle("nav-collapsed");
+  btn.setAttribute("aria-expanded", collapsed ? "false" : "true");
+});
+
 $("orders").addEventListener("keydown", (e) => {
   if (e.key !== "Enter" && e.key !== " ") return;
   const row = e.target.closest("[data-oid]");
@@ -1716,10 +1757,13 @@ $("po-date").value = shopYmd();
 function tick() {
   const now = new Date();
   const tz = shopTimezone();
+  const timeText = formatShopTime(now);
   const clock = $("clock");
   const meta = $("clock-meta");
+  const topbarTime = $("topbar-time");
+  if (topbarTime) topbarTime.textContent = timeText;
   if (clock) {
-    clock.textContent = formatShopTime(now);
+    clock.textContent = timeText;
     const abbr =
       new Intl.DateTimeFormat("en-IN", { timeZone: tz, timeZoneName: "short" })
         .formatToParts(now)
@@ -1727,6 +1771,7 @@ function tick() {
     const date = now.toLocaleDateString("en-IN", { timeZone: tz, weekday: "short", day: "numeric", month: "short" });
     if (meta) meta.textContent = `${date} · ${abbr}`;
     $("clock-chip")?.setAttribute("title", `${date} · ${abbr} (${tz})`);
+    $("topbar-clock")?.setAttribute("title", `${date} · ${abbr} (${tz})`);
   }
 }
 tick();
