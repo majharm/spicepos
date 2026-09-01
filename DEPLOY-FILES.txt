@@ -26,6 +26,7 @@ JavaScript
 
 PHP
   pos-php-core.php
+  pos-php-scrypt.php
   pos-php-till.php
   pos-checkout.php
   pos-crud.php
@@ -33,7 +34,9 @@ PHP
   pos-reports.php
   pos-accounting.php
   pos-api.php
+  api/.htaccess
   api/health/index.php
+  api/checkout/index.php
   health.json
 
 Node (if using hPanel Node.js web app — upload OR git pull then Restart)
