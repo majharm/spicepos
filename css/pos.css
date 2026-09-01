@@ -917,13 +917,17 @@ tr:last-child td { border-bottom: 0; }
 }
 .purchases-split {
   margin-top: 12px;
-  min-height: min(68vh, 680px);
-  align-items: start;
+  flex: 1 1 auto;
+  min-height: 320px;
+  max-height: calc(100dvh - 248px);
+  align-items: stretch;
   grid-template-columns: minmax(0, 1fr) minmax(300px, 420px);
 }
 .orders-split {
-  min-height: min(68vh, 680px);
-  align-items: start;
+  flex: 1 1 auto;
+  min-height: 320px;
+  max-height: calc(100dvh - 248px);
+  align-items: stretch;
   grid-template-columns: minmax(0, 1.1fr) minmax(300px, 0.9fr);
 }
 .orders-toolbar {
@@ -942,7 +946,7 @@ tr:last-child td { border-bottom: 0; }
   font-weight: 700;
 }
 .orders-list-wrap {
-  max-height: min(72vh, 720px);
+  max-height: min(calc(100dvh - 248px), 680px);
   overflow: auto;
   padding: 0 24px 28px;
 }
@@ -974,23 +978,33 @@ tr:last-child td { border-bottom: 0; }
   background: var(--bg-tint);
   box-shadow: 0 1px 0 var(--line-strong);
 }
+#view-orders,
+#view-purchases {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
 .order-pane {
   position: sticky;
   top: 12px;
-  max-height: min(calc(100dvh - 120px), 820px);
+  max-height: min(calc(100dvh - 248px), 680px);
+  height: 100%;
   display: flex;
   flex-direction: column;
   overflow: hidden;
   min-height: 280px;
+  align-self: stretch;
 }
 .purchase-pane {
   position: sticky;
   top: 12px;
-  max-height: min(calc(100dvh - 120px), 820px);
+  max-height: min(calc(100dvh - 248px), 680px);
+  height: 100%;
   display: flex;
   flex-direction: column;
   overflow: hidden;
   min-height: 280px;
+  align-self: stretch;
 }
 .order-pane > .invoice-detail-card,
 .order-pane > .order-status-panel,

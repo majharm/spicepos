@@ -1,4 +1,4 @@
-Production deploy bundle — 20260830deploy22
+Production deploy bundle — 20260830deploy24
 =========================================
 
 Upload ALL files below to Hostinger public_html (overwrite):
@@ -54,6 +54,7 @@ After upload:
   2. Hard-refresh browser (Ctrl+Shift+R)
 
 FIXES in this bundle
+  - Invoices/Purchases: print button always visible; thermal preview scrolls inside pane (no zoom-out needed)
   - Velocity theme: slate + teal modern UI (all pages including setup)
   - Performance: system fonts (no Google Fonts), deferred scripts, debounced search/filters
   - Parallel bootstrap API calls (today + dashboard + suppliers)
