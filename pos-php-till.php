@@ -10,7 +10,7 @@ function pos_php_till_dispatch($path, $method, $body) {
   $staff = [
     "bootstrap", "dashboard", "today", "suppliers", "items", "customers", "packs",
     "orders", "purchases", "stock", "staff", "branches", "devices", "holds",
-    "checkout", "settings", "reports", "audit", "accounts",
+    "checkout", "settings", "reports", "audit", "accounts", "backup", "units",
   ];
   if (!in_array($head, $staff, true)) return false;
   $auth = pos_staff_session();
@@ -19,6 +19,18 @@ function pos_php_till_dispatch($path, $method, $body) {
   $branchId = $auth["branchId"] ?? $auth["user"]["branch_id"] ?? null;
   $uid = $auth["user"]["id"];
   pos_apply_business_timezone($bid);
+
+  if ($path === "backup" || $path === "backup/restore") {
+    pos_require_backup();
+    pos_dispatch_backup($path, $method, $body, $bid, $branchId, $uid, $auth);
+    return true;
+  }
+
+  if ($path === "units" || preg_match('#^units/#', $path)) {
+    pos_require_units();
+    pos_dispatch_units($path, $method, $body, $bid, $branchId, $uid, $auth);
+    return true;
+  }
 
   if ($path === "checkout" && $method === "POST") {
     pos_require_checkout();
@@ -99,6 +111,7 @@ function pos_php_till_dispatch($path, $method, $body) {
       "items" => $items,
       "customers" => $customers,
       "packs" => $outPacks,
+      "units" => function_exists("pos_list_units") ? pos_list_units($bid) : [],
       "php" => true,
     ]);
   }
@@ -116,7 +129,7 @@ function pos_php_till_dispatch($path, $method, $body) {
       [$bid]
     );
     $stock = pos_q(
-      "SELECT COALESCE(SUM(stock_gm/1000 * purchase_rate),0) AS value FROM items WHERE business_id = ?",
+      pos_stock_value_sql(),
       "s",
       [$bid]
     );

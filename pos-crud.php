@@ -18,7 +18,7 @@ function pos_crud_dispatch($path, $method, $body, $bid, $auth, $branchId, $uid) 
     pos_q(
       "INSERT INTO customers (id, code, name, business_name, mobile, type, gstin, credit_limit, outstanding, business_id)
        VALUES (?,?,?,?,?,?,?,?,0,?)",
-      "sssssssdds",
+      "sssssssds",
       [$id, $code, $name, $body["business_name"] ?? null, $mobile, $type, $body["gstin"] ?? null, (float) ($body["credit_limit"] ?? 0), $bid]
     );
     $rows = pos_q("SELECT * FROM customers WHERE id = ? LIMIT 1", "s", [$id]);
@@ -31,27 +31,34 @@ function pos_crud_dispatch($path, $method, $body, $bid, $auth, $branchId, $uid) 
     $id = pos_uuid();
     $n = pos_next_seq("item", $bid, 7);
     $code = $body["code"] ?? ("SP-" . str_pad((string) $n, 3, "0", STR_PAD_LEFT));
+    $unit = pos_item_unit($body["base_unit"] ?? $body["unit"] ?? "GM");
+    pos_ensure_item_unit_columns();
     pos_q(
       "INSERT INTO items (
          id, code, name, local_name, category, subcategory, base_unit,
          purchase_rate, retail_rate, b2b_rate, gst_rate, hsn, stock_gm,
          reorder_level_gm, status, business_id
        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'active', ?)",
-      "sssssssddddddds",
+      "sssssssddddsdds",
       [
         $id, $code, $name, $body["local_name"] ?? null, $body["category"] ?? "Whole Spices",
-        $body["subcategory"] ?? null, $body["base_unit"] ?? "GM",
+        $body["subcategory"] ?? null, $unit,
         (float) ($body["purchase_rate"] ?? 0), (float) ($body["retail_rate"] ?? 0),
         (float) ($body["b2b_rate"] ?? 0), (float) ($body["gst_rate"] ?? 5),
         $body["hsn"] ?? null, (float) ($body["stock_gm"] ?? 0), (float) ($body["reorder_level_gm"] ?? 0), $bid,
       ]
     );
+    try {
+      pos_q("UPDATE items SET unit = ? WHERE id = ?", "ss", [$unit, $id]);
+    } catch (Exception $e) { /* unit column optional */ }
     $rows = pos_q("SELECT * FROM items WHERE id = ? LIMIT 1", "s", [$id]);
     pos_send(200, ["ok" => true, "item" => $rows[0] ?? null]);
   }
 
   if (preg_match('#^items/([^/]+)$#', $path, $m) && $method === "PUT") {
     $itemId = $m[1];
+    $unit = pos_item_unit($body["base_unit"] ?? $body["unit"] ?? "GM");
+    pos_ensure_item_unit_columns();
     pos_q(
       "UPDATE items SET name=?, local_name=?, category=?, subcategory=?, base_unit=?,
          purchase_rate=?, retail_rate=?, b2b_rate=?, gst_rate=?, stock_gm=?, reorder_level_gm=?, status=?
@@ -59,13 +66,16 @@ function pos_crud_dispatch($path, $method, $body, $bid, $auth, $branchId, $uid) 
       "sssssddddddsss",
       [
         $body["name"] ?? "", $body["local_name"] ?? null, $body["category"] ?? "Whole Spices",
-        $body["subcategory"] ?? null, $body["base_unit"] ?? "GM",
+        $body["subcategory"] ?? null, $unit,
         (float) ($body["purchase_rate"] ?? 0), (float) ($body["retail_rate"] ?? 0),
         (float) ($body["b2b_rate"] ?? 0), (float) ($body["gst_rate"] ?? 5),
         (float) ($body["stock_gm"] ?? 0), (float) ($body["reorder_level_gm"] ?? 0),
         $body["status"] ?? "active", $itemId, $bid,
       ]
     );
+    try {
+      pos_q("UPDATE items SET unit = ? WHERE id = ?", "ss", [$unit, $itemId]);
+    } catch (Exception $e) { /* unit column optional */ }
     $rows = pos_q("SELECT * FROM items WHERE id = ? LIMIT 1", "s", [$itemId]);
     pos_send(200, ["ok" => true, "item" => $rows[0] ?? null]);
   }
@@ -140,7 +150,7 @@ function pos_crud_dispatch($path, $method, $body, $bid, $auth, $branchId, $uid) 
           if (!$item) throw new Exception("Unknown item");
           $qty = (float) ($line["quantity_gm"] ?? 0);
           $rate = (float) ($line["rate_per_kg"] ?? $item["purchase_rate"]);
-          $amount = pos_round2(pos_line_amount($qty, $rate));
+          $amount = pos_round2(pos_line_amount_for_item($qty, $rate, $item));
           $gstRate = (float) ($item["gst_rate"] ?? 0);
           $gstAmount = pos_round2(($amount * $gstRate) / 100);
           $built[] = ["item" => $item, "qty" => $qty, "rate" => $rate, "amount" => $amount, "gstRate" => $gstRate, "gstAmount" => $gstAmount, "total" => pos_round2($amount + $gstAmount)];

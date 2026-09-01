@@ -14,6 +14,8 @@ import { companyTimezone, normalizeTimezone, shopTimezonePayload, tzOffsetFor } 
 import { attachAuth, registerAuth, requireStaff, requirePerm } from "./auth.js";
 import { registerMaster } from "./master.js";
 import { registerTenant } from "./tenant.js";
+import { registerBackup } from "./backup.js";
+import { registerUnits, ensureInventoryUnits } from "./units.js";
 import { registerAccounts } from "./accounts.js";
 import { postSaleJournal } from "./accounting.js";
 import { recordCreditSale } from "./accounts.js";
@@ -79,6 +81,8 @@ app.use((req, res, next) => {
 });
 registerMaster(app);
 registerTenant(app);
+registerBackup(app);
+registerUnits(app);
 
 app.get("/api/support-contact", async (_req, res) => {
   try {
@@ -132,6 +136,12 @@ app.get("/api/bootstrap", requireStaff, async (_req, res) => {
        WHERE business_id IS NULL OR business_id = ? ORDER BY created_at DESC LIMIT 8`,
       [businessId],
     );
+    let units = [];
+    try {
+      units = await ensureInventoryUnits(businessId);
+    } catch {
+      units = [];
+    }
     res.json({
       company: {
         ...(company || { name: business?.name || "POS" }),
@@ -149,6 +159,7 @@ app.get("/api/bootstrap", requireStaff, async (_req, res) => {
       support: await getPlatformSettings(),
       notes,
       items,
+      units,
       customers,
       packs: packs.map((p) => ({
         ...p,
@@ -362,6 +373,11 @@ app.post("/api/checkout", requireStaff, requirePerm("counter"), async (req, res)
   }
   try {
     const businessId = bid();
+    try {
+      await ensureInventoryUnits(businessId);
+    } catch {
+      /* unit master optional */
+    }
     const result = await withTransaction(async (conn) => {
       const [customers] = await conn.query(
         "SELECT * FROM customers WHERE id = ? AND business_id = ?",
@@ -382,7 +398,7 @@ app.post("/api/checkout", requireStaff, requirePerm("counter"), async (req, res)
         if (!Number.isFinite(qty) || qty <= 0) throw new Error("Invalid quantity");
         const rate =
           customer.type === "b2b" ? Number(item.b2b_rate) : Number(item.retail_rate);
-        const amount = round2(lineAmount(qty, rate));
+        const amount = round2(lineAmount(qty, rate, item));
         built.push({ item, qty, rate, amount, gstRate: Number(item.gst_rate) || 0 });
       }
 

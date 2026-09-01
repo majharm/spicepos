@@ -1,11 +1,24 @@
+import "../js/units.js";
 import { query, withTransaction } from "./db.js";
 import { bid } from "./context.js";
 import { recordCreditPurchase } from "./accounts.js";
 import { postPurchaseJournal } from "./accounting.js";
 import { audit } from "./audit.js";
 
-export function lineAmount(quantityGm, ratePerKg) {
-  return (Number(quantityGm) / 1000) * Number(ratePerKg);
+const POSUnits = globalThis.POSUnits;
+
+export function itemUnit(item) {
+  if (item == null) return POSUnits.normalize("GM");
+  if (typeof item === "string") return POSUnits.normalize(item);
+  return POSUnits.normalize(item.base_unit || item.unit);
+}
+
+export function lineAmount(quantityGm, ratePerKg, unitOrItem) {
+  const code = itemUnit(unitOrItem);
+  const t = POSUnits.typeOf(code);
+  const known = t.code === code;
+  if (!known || t.family === "count") return (Number(quantityGm) || 0) * (Number(ratePerKg) || 0);
+  return POSUnits.lineAmount(quantityGm, ratePerKg, code);
 }
 
 export function round2(n) {
@@ -94,7 +107,7 @@ export function registerCrud(app) {
             b.local_name || null,
             b.category || "Whole Spices",
             b.subcategory || null,
-            b.base_unit || "GM",
+            itemUnit(b.base_unit || b.unit || "GM"),
             Number(b.purchase_rate) || 0,
             Number(b.retail_rate) || 0,
             Number(b.b2b_rate) || 0,
@@ -128,7 +141,7 @@ export function registerCrud(app) {
           b.local_name || null,
           b.category || "Whole Spices",
           b.subcategory || null,
-          b.base_unit || "GM",
+          itemUnit(b.base_unit || b.unit || "GM"),
           Number(b.purchase_rate) || 0,
           Number(b.retail_rate) || 0,
           Number(b.b2b_rate) || 0,
@@ -253,7 +266,7 @@ export function registerCrud(app) {
           if (!item) throw new Error("Unknown item");
           const qty = Number(line.quantity_gm);
           const rate = Number(line.rate_per_kg ?? item.purchase_rate);
-          const amount = round2(lineAmount(qty, rate));
+          const amount = round2(lineAmount(qty, rate, item));
           const gstRate = Number(item.gst_rate) || 0;
           const gstAmount = round2((amount * gstRate) / 100);
           built.push({
@@ -385,7 +398,7 @@ export function registerCrud(app) {
           const qty = Number(line.quantity_gm);
           const rate =
             customer.type === "b2b" ? Number(item.b2b_rate) : Number(item.retail_rate);
-          const amount = round2(lineAmount(qty, rate));
+          const amount = round2(lineAmount(qty, rate, item));
           built.push({ item, qty, rate, amount, gstRate: Number(item.gst_rate) || 0 });
         }
         const subtotal = round2(built.reduce((s, l) => s + l.amount, 0));

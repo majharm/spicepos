@@ -20,7 +20,7 @@ function pos_checkout_sale($bid, $branchId, $uid, $auth, $body) {
       $qty = (float) ($line["quantity_gm"] ?? 0);
       if ($qty <= 0) throw new Exception("Invalid quantity");
       $rate = (($customer["type"] ?? "") === "b2b") ? (float) $item["b2b_rate"] : (float) $item["retail_rate"];
-      $amount = pos_round2(pos_line_amount($qty, $rate));
+      $amount = pos_round2(pos_line_amount_for_item($qty, $rate, $item));
       $built[] = ["item" => $item, "qty" => $qty, "rate" => $rate, "amount" => $amount, "gstRate" => (float) ($item["gst_rate"] ?? 0)];
     }
     $subtotal = pos_round2(array_sum(array_column($built, "amount")));

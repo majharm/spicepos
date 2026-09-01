@@ -28,6 +28,7 @@
           hsn: item?.code || l.hsn || "—",
           quantity_gm: num(l.quantity_gm),
           rate_per_kg: num(l.rate_per_kg),
+          unit: lineUnit(item),
           gst_rate: gstRate,
           amount,
           gst_amount: lineGst({ amount, gst_rate: gstRate }),
@@ -52,10 +53,30 @@
     return customers.find((c) => c.id === order.customer_id) || null;
   }
 
-  function formatQty(gm) {
+  function unitsApi() {
+    if (typeof window !== "undefined" && window.POSUnits) return window.POSUnits;
+    if (typeof globalThis !== "undefined" && globalThis.POSUnits) return globalThis.POSUnits;
+    return null;
+  }
+
+  function formatQty(gm, unit) {
+    const U = unitsApi();
+    if (U) return U.formatQty(gm, unit);
     const g = num(gm);
     if (g >= 1000) return `${(g / 1000).toFixed(2)} kg`;
     return `${g} g`;
+  }
+
+  function rateSuffix(unit) {
+    const U = unitsApi();
+    if (U) return U.rateSuffix(unit);
+    return "/kg";
+  }
+
+  function lineUnit(item) {
+    const U = unitsApi();
+    if (U && item) return U.itemUnit(item);
+    return "GM";
   }
 
   function payLabel(method) {
@@ -85,6 +106,7 @@
         hsn: item?.hsn || item?.code || l.hsn || "—",
         quantity_gm: num(l.quantity_gm),
         rate_per_kg: num(l.rate_per_kg),
+        unit: lineUnit(item),
         gst_rate: gstRate,
         amount,
         gst_amount: gstAmount,
@@ -135,8 +157,8 @@
       </tr>
       <tr class="inv-line">
         <td class="inv-hsn">HSN ${escapeHtml(l.hsn)}</td>
-        <td class="inv-num">${escapeHtml(formatQty(l.quantity_gm))}</td>
-        <td class="inv-num">${escapeHtml(money(l.rate_per_kg))}/kg</td>
+        <td class="inv-num">${escapeHtml(formatQty(l.quantity_gm, l.unit))}</td>
+        <td class="inv-num">${escapeHtml(money(l.rate_per_kg))}${escapeHtml(rateSuffix(l.unit))}</td>
         <td class="inv-num">${escapeHtml(money(l.amount))}</td>
       </tr>
       <tr class="inv-tax"><td colspan="4">Input GST ${l.gst_rate}% · ${escapeHtml(money(l.gst_amount))}</td></tr>`,
@@ -265,8 +287,8 @@ ${purchaseBody(purchase, ctx)}
       </tr>
       <tr class="inv-line">
         <td class="inv-hsn">HSN ${escapeHtml(l.hsn)}</td>
-        <td class="inv-num">${escapeHtml(formatQty(l.quantity_gm))}</td>
-        <td class="inv-num">${escapeHtml(money(l.rate_per_kg))}/kg</td>
+        <td class="inv-num">${escapeHtml(formatQty(l.quantity_gm, l.unit))}</td>
+        <td class="inv-num">${escapeHtml(money(l.rate_per_kg))}${escapeHtml(rateSuffix(l.unit))}</td>
         <td class="inv-num">${escapeHtml(money(l.amount))}</td>
       </tr>
       <tr class="inv-tax"><td colspan="4">GST ${l.gst_rate}% · ${escapeHtml(money(l.gst_amount))}</td></tr>`,

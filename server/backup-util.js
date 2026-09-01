@@ -1,0 +1,48 @@
+export const BACKUP_KIND = "spicepos-shop-backup";
+
+export const BACKUP_SKIP_TABLES = new Set([
+  "staff_sessions",
+  "platform_admins",
+  "platform_sessions",
+  "platform_settings",
+  "subscription_plans",
+]);
+
+export function backupTableRank(name) {
+  if (/_lines$/.test(name) || ["pack_items", "branch_stocks", "journal_lines", "stock_movements"].includes(name)) {
+    return 0;
+  }
+  if (name === "staff_users") return 2;
+  return 1;
+}
+
+export function sortBackupTables(names, forInsert) {
+  return [...names].sort((a, b) => {
+    let d = backupTableRank(a) - backupTableRank(b);
+    if (forInsert) d = -d;
+    if (d !== 0) return d;
+    return a.localeCompare(b);
+  });
+}
+
+export function backupFilename(business) {
+  const name =
+    String(business?.name || "shop")
+      .replace(/[^a-zA-Z0-9]+/g, "-")
+      .replace(/^-|-$/g, "")
+      .toLowerCase() || "shop";
+  const stamp = new Date().toISOString().replace(/[-:]/g, "").replace("T", "-").slice(0, 15);
+  return `spicepos-backup-${name}-${stamp}.json`;
+}
+
+export function assertShopBackup(payload, businessId) {
+  if (!payload || payload.kind !== BACKUP_KIND) {
+    throw new Error("Not a SpicePOS shop backup file");
+  }
+  if (payload.business_id !== businessId) {
+    throw new Error("This backup belongs to another shop");
+  }
+  if (!payload.tables || typeof payload.tables !== "object") {
+    throw new Error("Backup has no tables");
+  }
+}

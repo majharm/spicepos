@@ -177,6 +177,12 @@ function pos_company_timezone($company = []) {
 
 function pos_apply_business_timezone($businessId) {
   pos_ensure_company_timezone_columns();
+  try { pos_ensure_item_unit_columns(); } catch (Throwable $e) { /* items table optional during setup */ }
+  $unitsFile = __DIR__ . "/pos-units.php";
+  if (is_file($unitsFile)) {
+    require_once $unitsFile;
+    try { pos_ensure_inventory_units_schema($businessId); } catch (Throwable $e) { /* unit master optional */ }
+  }
   $rows = pos_q("SELECT timezone, tz_offset FROM company_settings WHERE business_id = ? LIMIT 1", "s", [$businessId]);
   $meta = pos_company_timezone($rows[0] ?? []);
   $db = pos_db();
@@ -280,6 +286,11 @@ function pos_q($sql, $types = "", $params = []) {
     $res->free();
     return $rows;
   }
+  if (strlen($types) !== count($params)) {
+    throw new Exception(
+      "SQL bind mismatch: " . strlen($types) . " types vs " . count($params) . " values"
+    );
+  }
   $st = $db->prepare($sql);
   if (!$st) throw new Exception("SQL error");
   $bind = [];
@@ -313,8 +324,56 @@ function pos_with_transaction(callable $fn) {
   }
 }
 
-function pos_line_amount($quantityGm, $ratePerKg) {
-  return ((float) $quantityGm / 1000) * (float) $ratePerKg;
+function pos_ensure_item_unit_columns() {
+  static $done = false;
+  if ($done) return;
+  $done = true;
+  $db = pos_db();
+  foreach ([
+    "base_unit" => "VARCHAR(32) NOT NULL DEFAULT 'GM'",
+    "unit" => "VARCHAR(32) NULL",
+  ] as $name => $def) {
+    $res = $db->query("SHOW COLUMNS FROM items LIKE '" . $db->real_escape_string($name) . "'");
+    if ($res && $res->num_rows === 0) {
+      @$db->query("ALTER TABLE items ADD COLUMN `{$name}` {$def}");
+    }
+    if ($res) $res->free();
+  }
+}
+
+function pos_item_unit($item) {
+  $raw = is_array($item) ? ($item["base_unit"] ?? $item["unit"] ?? "GM") : $item;
+  if (function_exists("pos_unit_code")) return pos_unit_code($raw);
+  $key = strtoupper(preg_replace("/[^A-Z0-9]/", "", (string) $raw));
+  $alias = [
+    "G" => "GM", "GRAM" => "GM", "GRAMS" => "GM", "GM" => "GM",
+    "KG" => "KG", "KILO" => "KG", "KILOGRAM" => "KG",
+    "ML" => "ML", "MILLILITRE" => "ML", "MILLILITER" => "ML",
+    "L" => "LTR", "LTR" => "LTR", "LITRE" => "LTR", "LITER" => "LTR",
+    "PCS" => "PCS", "PC" => "PCS", "QTY" => "PCS", "NOS" => "PCS", "NO" => "PCS",
+    "COUNT" => "PCS", "UNIT" => "PCS", "UNITS" => "PCS",
+  ];
+  if (isset($alias[$key])) return $alias[$key];
+  return $key !== "" ? $key : "GM";
+}
+
+function pos_line_amount($quantityGm, $ratePerKg, $unit = "GM") {
+  $q = (float) $quantityGm;
+  $r = (float) $ratePerKg;
+  if (pos_item_unit($unit) === "PCS") return $q * $r;
+  return ($q / 1000) * $r;
+}
+
+function pos_line_amount_for_item($quantityGm, $rate, $item) {
+  $code = pos_item_unit($item);
+  if (function_exists("pos_unit_is_count") && pos_unit_is_count($code, $item)) {
+    return ((float) $quantityGm) * (float) $rate;
+  }
+  return pos_line_amount($quantityGm, $rate, $code);
+}
+
+function pos_stock_value_sql() {
+  return "SELECT COALESCE(SUM(CASE WHEN LOWER(COALESCE(u.family,'')) = 'count' OR UPPER(REPLACE(COALESCE(i.base_unit, i.unit, 'GM'), ' ', '')) IN ('PCS','PC','QTY','NOS','NO','COUNT','UNIT','UNITS') THEN i.stock_gm * i.purchase_rate ELSE i.stock_gm/1000.0 * i.purchase_rate END),0) AS value FROM items i LEFT JOIN inventory_units u ON u.business_id = i.business_id AND u.code = COALESCE(i.base_unit, i.unit) WHERE i.business_id = ?";
 }
 
 function pos_round2($n) {
@@ -503,6 +562,30 @@ function pos_require_holds() {
       "error" => "pos-holds.php is missing on the server.",
       "php" => true,
       "hint" => "Upload pos-holds.php from the latest deploy bundle to public_html, then hard-refresh.",
+    ]);
+  }
+  require_once $file;
+}
+
+function pos_require_backup() {
+  $file = __DIR__ . "/pos-backup.php";
+  if (!is_file($file)) {
+    pos_send(503, [
+      "error" => "pos-backup.php is missing on the server.",
+      "php" => true,
+      "hint" => "Upload pos-backup.php from the latest deploy bundle to public_html, then hard-refresh.",
+    ]);
+  }
+  require_once $file;
+}
+
+function pos_require_units() {
+  $file = __DIR__ . "/pos-units.php";
+  if (!is_file($file)) {
+    pos_send(503, [
+      "error" => "pos-units.php is missing on the server.",
+      "php" => true,
+      "hint" => "Upload pos-units.php from the latest deploy bundle to public_html, then hard-refresh.",
     ]);
   }
   require_once $file;
@@ -934,6 +1017,13 @@ function pos_register_business($raw) {
     [$uid, "local:" . $uid, $b["email"], $b["owner_name"], "", "business_admin", $hash, $id, $branchId, $perms, $b["username"], $b["mobile"]]
   );
   $users = pos_q("SELECT * FROM staff_users WHERE id = ? LIMIT 1", "s", [$uid]);
+  try {
+    $unitsFile = __DIR__ . "/pos-units.php";
+    if (is_file($unitsFile)) {
+      require_once $unitsFile;
+      pos_ensure_inventory_units_schema($id);
+    }
+  } catch (Throwable $e) { /* unit master optional */ }
   return ["businessId" => $id, "user" => $users[0]];
 }
 
@@ -1634,6 +1724,42 @@ function pos_php_dispatch($path, $method, $rawBody) {
           ]);
         }
         pos_dispatch_holds($path, $method, $body, $bid, $branchId, $uid, $auth);
+        return;
+      }
+      if ($path === "backup" || $path === "backup/restore") {
+        $auth = pos_staff_session();
+        if (!$auth || ($auth["type"] ?? "") !== "staff") pos_send(401, ["error" => "Sign in required"]);
+        $bid = $auth["user"]["business_id"];
+        $branchId = $auth["branchId"] ?? $auth["user"]["branch_id"] ?? null;
+        $uid = $auth["user"]["id"];
+        pos_apply_business_timezone($bid);
+        pos_require_backup();
+        if (!function_exists("pos_dispatch_backup")) {
+          pos_send(503, [
+            "error" => "pos-backup.php on the server is broken or outdated.",
+            "php" => true,
+            "hint" => "Re-upload pos-backup.php from the latest deploy bundle.",
+          ]);
+        }
+        pos_dispatch_backup($path, $method, $body, $bid, $branchId, $uid, $auth);
+        return;
+      }
+      if ($path === "units" || preg_match('#^units/#', $path)) {
+        $auth = pos_staff_session();
+        if (!$auth || ($auth["type"] ?? "") !== "staff") pos_send(401, ["error" => "Sign in required"]);
+        $bid = $auth["user"]["business_id"];
+        $branchId = $auth["branchId"] ?? $auth["user"]["branch_id"] ?? null;
+        $uid = $auth["user"]["id"];
+        pos_apply_business_timezone($bid);
+        pos_require_units();
+        if (!function_exists("pos_dispatch_units")) {
+          pos_send(503, [
+            "error" => "pos-units.php on the server is broken or outdated.",
+            "php" => true,
+            "hint" => "Re-upload pos-units.php from the latest deploy bundle.",
+          ]);
+        }
+        pos_dispatch_units($path, $method, $body, $bid, $branchId, $uid, $auth);
         return;
       }
       $handled = false;
