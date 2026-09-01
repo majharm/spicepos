@@ -1,4 +1,4 @@
-Production deploy bundle — 20260830deploy21
+Production deploy bundle — 20260830deploy24
 =========================================
 
 Upload ALL files below to Hostinger public_html (overwrite):
@@ -10,6 +10,7 @@ HTML
   index.html
   login.html
   master.html
+  setup.html
 
 CSS
   css/pos.css
@@ -53,11 +54,14 @@ After upload:
   2. Hard-refresh browser (Ctrl+Shift+R)
 
 FIXES in this bundle
-  - Spice Bazaar full theme: maroon, saffron gold, cream parchment (replaces magenta/cyan)
-  - Typography: Outfit UI + Fraunces headings
-  - Login, Master Admin, POS nav, cards, tables, counter all themed consistently
-  - Full UI redesign: grouped sidebar, view topbar, mobile nav toggle (deploy20)
-  - Invoices UI: search, filters, detail card (deploy19)
+  - Invoices/Purchases: print button always visible; thermal preview scrolls inside pane (no zoom-out needed)
+  - Counter: quick add customer (name + mobile) from POS topbar
+  - Reports: GST daywise dates show as YYYY-MM-DD
+  - Velocity theme: slate + teal modern UI (all pages including setup)
+  - Performance: system fonts (no Google Fonts), deferred scripts, debounced search/filters
+  - Parallel bootstrap API calls (today + dashboard + suppliers)
+  - Lighter CSS: no backdrop blur, flat cards, content-visibility on views
+  - Clock DOM updates only when time text changes
 
 How to use Open POS
   1. Sign in at /master.html
