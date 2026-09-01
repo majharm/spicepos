@@ -498,7 +498,7 @@ async function render() {
           b.computed_status,
           b.plan_name || b.plan_id,
           money(b.fee_monthly),
-          b.subscription_expires_at || "—",
+          ymd(b.subscription_expires_at) || "—",
           `<button class="btn primary" type="button" data-enter="${b.id}">Open POS</button>
            <button class="btn" type="button" data-edit="${b.id}">Edit</button>
            <button class="btn" data-act="suspend" data-id="${b.id}">Suspend</button>
