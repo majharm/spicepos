@@ -1,6 +1,8 @@
 <?php
-function pos_round2($n) {
-  return round((float) $n, 2);
+if (!function_exists("pos_round2")) {
+  function pos_round2($n) {
+    return round((float) $n, 2);
+  }
 }
 
 function pos_php_till_dispatch($path, $method, $body) {
@@ -299,12 +301,10 @@ function pos_php_till_dispatch($path, $method, $body) {
     pos_send(200, $purchases);
   }
 
-  if ($path === "holds" && $method === "GET") {
-    try {
-      pos_send(200, pos_q("SELECT * FROM held_bills WHERE business_id = ? ORDER BY created_at DESC LIMIT 50", "s", [$bid]));
-    } catch (Exception $e) {
-      pos_send(200, []);
-    }
+  if ($path === "holds" || preg_match('#^holds/#', $path)) {
+    pos_require_holds();
+    pos_dispatch_holds($path, $method, $body, $bid, $branchId, $uid, $auth);
+    return true;
   }
 
   if ($path === "audit" && $method === "GET") {

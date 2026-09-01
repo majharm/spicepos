@@ -317,6 +317,10 @@ function pos_line_amount($quantityGm, $ratePerKg) {
   return ((float) $quantityGm / 1000) * (float) $ratePerKg;
 }
 
+function pos_round2($n) {
+  return round((float) $n, 2);
+}
+
 function pos_uuid() {
   $d = random_bytes(16);
   $d[6] = chr((ord($d[6]) & 0x0f) | 0x40);
@@ -486,10 +490,41 @@ function pos_require_checkout() {
     pos_send(503, [
       "error" => "pos-checkout.php is missing on the server.",
       "php" => true,
-      "hint" => "Upload pos-checkout.php from the deploy27 bundle to public_html, then hard-refresh.",
+      "hint" => "Upload pos-checkout.php from the latest deploy bundle to public_html, then hard-refresh.",
     ]);
   }
   require_once $file;
+}
+
+function pos_require_holds() {
+  $file = __DIR__ . "/pos-holds.php";
+  if (!is_file($file)) {
+    pos_send(503, [
+      "error" => "pos-holds.php is missing on the server.",
+      "php" => true,
+      "hint" => "Upload pos-holds.php from the latest deploy bundle to public_html, then hard-refresh.",
+    ]);
+  }
+  require_once $file;
+}
+
+function pos_ensure_held_bills_schema() {
+  static $done = false;
+  if ($done) return;
+  $done = true;
+  $db = pos_db();
+  @$db->query(
+    "CREATE TABLE IF NOT EXISTS held_bills (
+      id VARCHAR(255) PRIMARY KEY,
+      business_id VARCHAR(255) NOT NULL,
+      branch_id VARCHAR(255) NULL,
+      user_id VARCHAR(255) NULL,
+      label VARCHAR(128) NULL,
+      payload_json MEDIUMTEXT NOT NULL,
+      created_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+      INDEX (business_id)
+    )"
+  );
 }
 
 function pos_ensure_sales_schema() {
@@ -1574,6 +1609,24 @@ function pos_php_dispatch($path, $method, $rawBody) {
         pos_dispatch_order_route($path, $method, $body, $bid, $auth);
         return;
       }
+      if ($path === "holds" || preg_match('#^holds/#', $path)) {
+        $auth = pos_staff_session();
+        if (!$auth || ($auth["type"] ?? "") !== "staff") pos_send(401, ["error" => "Sign in required"]);
+        $bid = $auth["user"]["business_id"];
+        $branchId = $auth["branchId"] ?? $auth["user"]["branch_id"] ?? null;
+        $uid = $auth["user"]["id"];
+        pos_apply_business_timezone($bid);
+        pos_require_holds();
+        if (!function_exists("pos_dispatch_holds")) {
+          pos_send(503, [
+            "error" => "pos-holds.php on the server is broken or outdated.",
+            "php" => true,
+            "hint" => "Re-upload pos-holds.php from the latest deploy bundle.",
+          ]);
+        }
+        pos_dispatch_holds($path, $method, $body, $bid, $branchId, $uid, $auth);
+        return;
+      }
       require_once __DIR__ . "/pos-php-till.php";
       if (pos_php_till_dispatch($path, $method, $body)) return;
     }
@@ -1583,7 +1636,7 @@ function pos_php_dispatch($path, $method, $rawBody) {
       "path" => $path,
       "method" => $method,
       "php" => true,
-      "hint" => "Upload pos-php-core.php, pos-checkout.php, pos-orders.php, pos-php-till.php, and pos-crud.php from the latest deploy bundle, then hard-refresh.",
+      "hint" => "Upload pos-php-core.php, pos-checkout.php, pos-holds.php, pos-orders.php, pos-php-till.php, and pos-crud.php from the latest deploy bundle, then hard-refresh.",
     ]);
   } catch (Exception $e) {
     $msg = $e->getMessage();
