@@ -4,6 +4,12 @@ function pos_report_num($v) {
   return (float) ($v ?? 0);
 }
 
+function pos_report_day($value) {
+  $s = (string) ($value ?? "");
+  if (preg_match("/^(\d{4}-\d{2}-\d{2})/", $s, $m)) return $m[1];
+  return $s;
+}
+
 function pos_report_range($from, $to) {
   $end = $to ?: date("Y-m-d");
   $start = $from ?: "2000-01-01";
@@ -63,6 +69,20 @@ function pos_build_reports($bid, $from, $to) {
     "SELECT payment_method, COUNT(*) AS bills, COALESCE(SUM(total),0) AS takings
      FROM sales_orders WHERE $salesWhere
      GROUP BY payment_method",
+    "sss",
+    [$bid, $start, $end]
+  );
+  $payDaywise = pos_q(
+    "SELECT DATE(created_at) AS day,
+            COUNT(*) AS bills,
+            COALESCE(SUM(CASE WHEN LOWER(payment_method) = 'cash' THEN total ELSE 0 END),0) AS cash,
+            COALESCE(SUM(CASE WHEN LOWER(payment_method) = 'upi' THEN total ELSE 0 END),0) AS upi,
+            COALESCE(SUM(CASE WHEN LOWER(payment_method) = 'card' THEN total ELSE 0 END),0) AS card,
+            COALESCE(SUM(CASE WHEN LOWER(payment_method) = 'credit' THEN total ELSE 0 END),0) AS credit,
+            COALESCE(SUM(CASE WHEN LOWER(COALESCE(payment_method,'')) NOT IN ('cash','upi','card','credit') THEN total ELSE 0 END),0) AS other,
+            COALESCE(SUM(total),0) AS total
+     FROM sales_orders WHERE $salesWhere
+     GROUP BY DATE(created_at) ORDER BY day",
     "sss",
     [$bid, $start, $end]
   );
@@ -181,6 +201,7 @@ function pos_build_reports($bid, $from, $to) {
     "byCustomer" => $byCustomer,
     "byPack" => $byPack,
     "byPay" => $byPay,
+    "payDaywise" => $payDaywise,
     "gst" => $gst,
     "gstByRate" => $gstByRate,
     "gstInputByRate" => $gstInputByRate,
@@ -278,10 +299,26 @@ function pos_reports_to_sheets($data) {
       }, $data["byPay"] ?? []),
     ],
     [
+      "name" => "Payment daywise",
+      "headers" => ["Day", "Cash", "UPI", "Card", "Credit", "Other", "Bills", "Total"],
+      "rows" => array_map(function ($r) use ($num) {
+        return [
+          pos_report_day($r["day"]),
+          $num($r["cash"]),
+          $num($r["upi"]),
+          $num($r["card"]),
+          $num($r["credit"]),
+          $num($r["other"]),
+          $num($r["bills"]),
+          $num($r["total"]),
+        ];
+      }, $data["payDaywise"] ?? []),
+    ],
+    [
       "name" => "GST daywise",
       "headers" => ["Day", "Taxable", "GST", "Total"],
       "rows" => array_map(function ($r) use ($num) {
-        return [(string) $r["day"], $num($r["taxable"]), $num($r["gst"]), $num($r["total"])];
+        return [pos_report_day($r["day"]), $num($r["taxable"]), $num($r["gst"]), $num($r["total"])];
       }, $data["gst"] ?? []),
     ],
     [

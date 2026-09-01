@@ -58,6 +58,19 @@ export async function buildReports(from, to) {
      GROUP BY payment_method`,
     [tenant, start, end],
   );
+  const payDaywise = await query(
+    `SELECT DATE(created_at) AS day,
+            COUNT(*) AS bills,
+            COALESCE(SUM(CASE WHEN LOWER(payment_method) = 'cash' THEN total ELSE 0 END),0) AS cash,
+            COALESCE(SUM(CASE WHEN LOWER(payment_method) = 'upi' THEN total ELSE 0 END),0) AS upi,
+            COALESCE(SUM(CASE WHEN LOWER(payment_method) = 'card' THEN total ELSE 0 END),0) AS card,
+            COALESCE(SUM(CASE WHEN LOWER(payment_method) = 'credit' THEN total ELSE 0 END),0) AS credit,
+            COALESCE(SUM(CASE WHEN LOWER(COALESCE(payment_method,'')) NOT IN ('cash','upi','card','credit') THEN total ELSE 0 END),0) AS other,
+            COALESCE(SUM(total),0) AS total
+     FROM sales_orders WHERE ${salesWhere}
+     GROUP BY DATE(created_at) ORDER BY day`,
+    [tenant, start, end],
+  );
   const gst = await query(
     `SELECT DATE(created_at) AS day, COALESCE(SUM(subtotal),0) AS taxable,
             COALESCE(SUM(gst),0) AS gst, COALESCE(SUM(total),0) AS total
@@ -159,6 +172,7 @@ export async function buildReports(from, to) {
     byCustomer,
     byPack,
     byPay,
+    payDaywise,
     gst,
     gstByRate,
     gstInputByRate,
@@ -245,6 +259,20 @@ export function reportsToSheets(data) {
       name: "Payment",
       headers: ["Method", "Bills", "Takings"],
       rows: data.byPay.map((r) => [r.payment_method, num(r.bills), num(r.takings)]),
+    },
+    {
+      name: "Payment daywise",
+      headers: ["Day", "Cash", "UPI", "Card", "Credit", "Other", "Bills", "Total"],
+      rows: (data.payDaywise || []).map((r) => [
+        formatReportDay(r.day),
+        num(r.cash),
+        num(r.upi),
+        num(r.card),
+        num(r.credit),
+        num(r.other),
+        num(r.bills),
+        num(r.total),
+      ]),
     },
     {
       name: "GST daywise",
