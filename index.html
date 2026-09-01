@@ -6,8 +6,8 @@
     <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
     <title>SWAMI MASALE POS</title>
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./css/pos.css?v=20260901deploy39" />
-    <link rel="stylesheet" href="./css/saas.css?v=20260901deploy39" />
+    <link rel="stylesheet" href="./css/pos.css?v=20260901deploy40" />
+    <link rel="stylesheet" href="./css/saas.css?v=20260901deploy40" />
   </head>
   <body>
     <div class="app" id="app">
@@ -414,7 +414,7 @@
                   <input id="set-name" maxlength="180" autocomplete="organization" />
                 </label>
                 <label class="full">Address
-                  <textarea id="set-address" rows="2" maxlength="500"></textarea>
+                  <textarea id="set-address" rows="2" maxlength="500" placeholder="Street, city, PIN"></textarea>
                 </label>
                 <label>Phone
                   <input id="set-phone" type="tel" inputmode="numeric" maxlength="15" placeholder="10-digit mobile" />
@@ -430,22 +430,27 @@
             <div class="settings-section">
               <h3>Regional</h3>
               <p class="section-note">Used for reports, invoices, and order timestamps.</p>
-              <label>Shop timezone
-                <select id="set-timezone" aria-label="Shop timezone">
-                  <option value="Asia/Kolkata">India (IST, UTC+5:30)</option>
-                  <option value="Asia/Dubai">UAE (UTC+4)</option>
-                  <option value="Asia/Singapore">Singapore (UTC+8)</option>
-                  <option value="Asia/Colombo">Sri Lanka (UTC+5:30)</option>
-                  <option value="Asia/Kathmandu">Nepal (UTC+5:45)</option>
-                  <option value="UTC">UTC</option>
-                </select>
-              </label>
+              <div class="settings-grid">
+                <label class="full">Shop timezone
+                  <select id="set-timezone" aria-label="Shop timezone">
+                    <option value="Asia/Kolkata">India (IST, UTC+5:30)</option>
+                    <option value="Asia/Dubai">UAE (UTC+4)</option>
+                    <option value="Asia/Singapore">Singapore (UTC+8)</option>
+                    <option value="Asia/Colombo">Sri Lanka (UTC+5:30)</option>
+                    <option value="Asia/Kathmandu">Nepal (UTC+5:45)</option>
+                    <option value="UTC">UTC</option>
+                  </select>
+                </label>
+              </div>
               <p class="field-hint" id="timezone-preview">Current shop time will appear in the nav after save.</p>
             </div>
             <div class="settings-section">
               <h3>Branding</h3>
+              <p class="section-note">Shown on the left nav and on printed invoices.</p>
               <div class="logo-row">
-                <img id="logo-preview" class="logo-preview" alt="Logo preview" hidden />
+                <div class="logo-preview-frame">
+                  <img id="logo-preview" class="logo-preview" alt="Logo preview" hidden />
+                </div>
                 <div class="logo-controls">
                   <label class="backup-file-lab">Shop logo
                     <input id="set-logo" type="file" accept="image/*" />
@@ -532,10 +537,10 @@
         </section>
       </div>
     </aside>
-    <script src="./js/pos-api.js?v=20260901deploy39" defer></script>
-    <script src="./js/units.js?v=20260901deploy39" defer></script>
-    <script src="./js/dev-mode.js?v=20260901deploy39" defer></script>
-    <script src="./js/invoice.js?v=20260901deploy39" defer></script>
-    <script src="./js/app.js?v=20260901deploy39" defer></script>
+    <script src="./js/pos-api.js?v=20260901deploy40" defer></script>
+    <script src="./js/units.js?v=20260901deploy40" defer></script>
+    <script src="./js/dev-mode.js?v=20260901deploy40" defer></script>
+    <script src="./js/invoice.js?v=20260901deploy40" defer></script>
+    <script src="./js/app.js?v=20260901deploy40" defer></script>
   </body>
 </html>
