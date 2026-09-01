@@ -1,4 +1,4 @@
-Production deploy bundle — 20260830deploy20
+Production deploy bundle — 20260830deploy21
 =========================================
 
 Upload ALL files below to Hostinger public_html (overwrite):
@@ -53,17 +53,11 @@ After upload:
   2. Hard-refresh browser (Ctrl+Shift+R)
 
 FIXES in this bundle
-  - Full UI redesign: grouped sidebar nav, sticky view topbar, cleaner cards and buttons
-  - Mobile: slide-out nav with toggle; flatter modern design system (deploy20)
-  - Invoices UI: search + filters, invoice detail card, separate Pay/Method columns
-  - Sales orders table with live SO numbers from database (sorted newest SO first)
-  - PHP purchase journal + credit payable posting; checkout wrapped in DB transaction
-  - Full accounting module: receivables, payables, day book, COA, journal, trial balance, P&L, balance sheet, cash book
-  - Double-entry GL with auto-posting on sales, credit sales, purchases, receipts, payments
-  - Accounts tab in POS nav (admin, manager, accountant roles)
-  - PHP parity for all /api/accounts/* routes on production without Node
-  - Thermal tax invoice print for sales orders (80mm, GST breakdown, HSN, CGST/SGST)
-  - GST reports: output/input by rate, HSN itemwise, B2B/B2C sales, net GST summary
+  - Spice Bazaar full theme: maroon, saffron gold, cream parchment (replaces magenta/cyan)
+  - Typography: Outfit UI + Fraunces headings
+  - Login, Master Admin, POS nav, cards, tables, counter all themed consistently
+  - Full UI redesign: grouped sidebar, view topbar, mobile nav toggle (deploy20)
+  - Invoices UI: search, filters, detail card (deploy19)
 
 How to use Open POS
   1. Sign in at /master.html
