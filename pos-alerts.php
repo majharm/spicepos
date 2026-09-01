@@ -13,7 +13,110 @@ function pos_alert_defaults() {
     "alert_closing" => "1",
     "alert_low_stock" => "1",
     "alert_closing_hour" => "22",
+    "tpl_welcome" => "",
+    "tpl_credentials" => "",
+    "tpl_updates" => "",
+    "tpl_closing" => "",
+    "tpl_low_stock" => "",
   ];
+}
+
+function pos_alert_kinds() {
+  return ["welcome", "credentials", "updates", "closing", "low_stock"];
+}
+
+function pos_alert_default_templates() {
+  return [
+    "welcome" => "Welcome to ATAV POS.\n\nHello {{name}}, shop \"{{shop}}\" is ready.\n\nSign in: {{signInUrl}}\nKeep your login private.\n\n— ATAV Telecom POS",
+    "credentials" => "ATAV POS login for \"{{shop}}\"\nRole: {{role}}\nUser ID: {{username}}\nEmail: {{email}}\nPassword: {{password}}\nSign in: {{signInUrl}}\n\nDo not share this message.\n— ATAV Telecom POS",
+    "updates" => "ATAV POS update · {{shop}}\n\n{{title}}\n\n{{body}}\n\n— ATAV Telecom POS",
+    "closing" => "{{shop}} — closing {{day}}\nBills: {{bills}}\nTotal: {{takings}}\nCash {{cash}} · UPI {{upi}} · Card {{card}} · Credit {{credit}}\nGST: {{gst}}\n{{lowStock}}\n\n— ATAV Telecom POS",
+    "low_stock" => "{{shop}} — low stock alert\n\n{{lowStock}}\n\n— ATAV Telecom POS",
+  ];
+}
+
+function pos_fill_template($tpl, $vars) {
+  return preg_replace_callback('/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/', function ($m) use ($vars) {
+    return (string) ($vars[$m[1]] ?? "");
+  }, (string) $tpl);
+}
+
+function pos_effective_tpl($kind, $stored) {
+  $text = trim((string) $stored);
+  if ($text !== "") return $text;
+  $defaults = pos_alert_default_templates();
+  return $defaults[$kind] ?? "";
+}
+
+function pos_alert_vars($payload) {
+  $items = $payload["items"] ?? ($payload["lowStock"] ?? []);
+  $bullets = [];
+  foreach ($items as $item) {
+    if (is_string($item)) {
+      $name = $item;
+      $qty = "";
+    } else {
+      $name = $item["name"] ?? "";
+      $qty = !empty($item["qtyLabel"]) ? (" (" . $item["qtyLabel"] . ")") : "";
+    }
+    if ($name !== "") $bullets[] = "• {$name}{$qty}";
+  }
+  $money = function ($key) use ($payload) {
+    $value = $payload[$key] ?? "";
+    if ($value === "" || $value === null) return "";
+    if (is_string($value) && strpos($value, "₹") !== false) return $value;
+    return pos_alert_inr($value);
+  };
+  $bills = $payload["bills"] ?? "";
+  return [
+    "shop" => $payload["shopName"] ?? ($payload["shop"] ?? ""),
+    "name" => $payload["ownerName"] ?? ($payload["name"] ?? ""),
+    "username" => $payload["username"] ?? "",
+    "email" => $payload["email"] ?? "",
+    "password" => $payload["password"] ?? "",
+    "role" => str_replace("_", " ", (string) ($payload["role"] ?? "")),
+    "signInUrl" => $payload["signInUrl"] ?? "",
+    "title" => $payload["title"] ?? "",
+    "body" => $payload["body"] ?? "",
+    "day" => $payload["day"] ?? "",
+    "bills" => ($bills === "" || $bills === null) ? "" : (string) ((int) $bills),
+    "takings" => $money("takings"),
+    "cash" => $money("cash"),
+    "upi" => $money("upi"),
+    "card" => $money("card"),
+    "credit" => $money("credit"),
+    "gst" => $money("gst"),
+    "lowStock" => $payload["lowStockText"] ?? implode("\n", $bullets),
+  ];
+}
+
+function pos_alert_sample_payload() {
+  return [
+    "shopName" => "SWAMI MASALE SASWAD",
+    "ownerName" => "Shop owner",
+    "username" => "swami.admin",
+    "email" => "admin@shop.local",
+    "password" => "********",
+    "role" => "business_admin",
+    "signInUrl" => "https://pos.atavtelecom.in/login.html",
+    "title" => "Holiday hours",
+    "body" => "Closed this Sunday.",
+    "day" => "2026-09-01",
+    "bills" => 12,
+    "takings" => 4500,
+    "cash" => 2000,
+    "upi" => 1500,
+    "card" => 800,
+    "credit" => 200,
+    "gst" => 225,
+    "items" => [["name" => "Turmeric powder", "qtyLabel" => "2 kg"]],
+  ];
+}
+
+function pos_render_alert($kind, $payload, $settings = null) {
+  $settings = $settings ?: [];
+  $tpl = pos_effective_tpl($kind, $settings["tpl_{$kind}"] ?? "");
+  return trim(pos_fill_template($tpl, pos_alert_vars($payload)));
 }
 
 function pos_alert_flag($value, $fallback = true) {
@@ -108,13 +211,26 @@ function pos_alert_settings() {
     "alert_closing" => pos_alert_flag($map["alert_closing"] ?? "1") ? "1" : "0",
     "alert_low_stock" => pos_alert_flag($map["alert_low_stock"] ?? "1") ? "1" : "0",
     "alert_closing_hour" => (string) $hour,
+    "tpl_welcome" => $map["tpl_welcome"] ?? "",
+    "tpl_credentials" => $map["tpl_credentials"] ?? "",
+    "tpl_updates" => $map["tpl_updates"] ?? "",
+    "tpl_closing" => $map["tpl_closing"] ?? "",
+    "tpl_low_stock" => $map["tpl_low_stock"] ?? "",
   ];
 }
 
 function pos_alert_settings_public($cfg = null) {
-  $cfg = $cfg ?: pos_alert_settings();
-  $cfg["wa_api_key_set"] = ($cfg["wa_api_key"] ?? "") !== "";
-  $cfg["wa_api_key"] = pos_mask_secret($cfg["wa_api_key"] ?? "");
+  $raw = $cfg ?: pos_alert_settings();
+  $cfg = $raw;
+  $cfg["wa_api_key_set"] = ($raw["wa_api_key"] ?? "") !== "";
+  $cfg["wa_api_key"] = pos_mask_secret($raw["wa_api_key"] ?? "");
+  $cfg["defaults"] = pos_alert_default_templates();
+  $cfg["sample_vars"] = pos_alert_vars(pos_alert_sample_payload());
+  $cfg["samples"] = [];
+  foreach (pos_alert_kinds() as $kind) {
+    $cfg["tpl_{$kind}"] = pos_effective_tpl($kind, $raw["tpl_{$kind}"] ?? "");
+    $cfg["samples"][$kind] = pos_render_alert($kind, pos_alert_sample_payload(), $raw);
+  }
   return $cfg;
 }
 
@@ -124,7 +240,9 @@ function pos_save_alert_settings($body) {
   foreach ($keys as $key) {
     if (!array_key_exists($key, $body)) continue;
     if ($key === "wa_api_key" && pos_looks_masked_secret($body[$key])) continue;
-    $cur[$key] = trim((string) $body[$key]);
+    $value = (string) $body[$key];
+    if (strpos($key, "tpl_") === 0) $value = substr($value, 0, 8000);
+    $cur[$key] = trim($value);
   }
   if ($cur["wa_api_url"] !== "" && stripos($cur["wa_api_url"], "https://") !== 0) {
     throw new Exception("WhatsApp API URL must be https");
@@ -141,55 +259,42 @@ function pos_save_alert_settings($body) {
   return pos_alert_settings();
 }
 
-function pos_alert_welcome_text($shop, $who) {
-  $shop = $shop ?: "your shop";
-  $who = $who ?: "there";
-  return "Welcome to ATAV POS.\n\nHello {$who}, shop \"{$shop}\" is ready.\n\nSign in at the POS login page. Keep your login private.\n\n— ATAV Telecom POS";
+function pos_alert_welcome_text($shop, $who, $settings = null, $extra = []) {
+  $settings = $settings ?: pos_alert_settings();
+  return pos_render_alert("welcome", array_merge($extra, [
+    "shopName" => $shop ?: "your shop",
+    "ownerName" => $who ?: "there",
+  ]), $settings);
 }
 
-function pos_alert_credentials_text($payload) {
-  $shop = $payload["shopName"] ?? "your shop";
-  $role = str_replace("_", " ", (string) ($payload["role"] ?? ""));
-  $lines = ["ATAV POS login for \"{$shop}\""];
-  if ($role !== "") $lines[] = "Role: {$role}";
-  if (!empty($payload["username"])) $lines[] = "User ID: " . $payload["username"];
-  if (!empty($payload["email"])) $lines[] = "Email: " . $payload["email"];
-  $lines[] = !empty($payload["password"]) ? ("Password: " . $payload["password"]) : "Password: the one you set. Keep it private.";
-  if (!empty($payload["signInUrl"])) $lines[] = "Sign in: " . $payload["signInUrl"];
-  $lines[] = "";
-  $lines[] = "Do not share this message.";
-  $lines[] = "— ATAV Telecom POS";
-  return implode("\n", $lines);
+function pos_alert_credentials_text($payload, $settings = null) {
+  $settings = $settings ?: pos_alert_settings();
+  $payload["shopName"] = $payload["shopName"] ?? "your shop";
+  if (empty($payload["password"])) $payload["password"] = "the one you set. Keep it private.";
+  return pos_render_alert("credentials", $payload, $settings);
 }
 
-function pos_alert_update_text($shop, $title, $body) {
-  $head = "ATAV POS update" . ($shop ? " · {$shop}" : "");
-  return trim($head . "\n\n" . ($title ?: "Update") . ($body ? "\n\n{$body}" : "") . "\n\n— ATAV Telecom POS");
+function pos_alert_update_text($shop, $title, $body, $settings = null) {
+  $settings = $settings ?: pos_alert_settings();
+  return pos_render_alert("updates", [
+    "shopName" => $shop,
+    "title" => $title ?: "Update",
+    "body" => $body,
+  ], $settings);
 }
 
-function pos_alert_low_stock_text($shop, $items) {
-  $rows = [];
-  foreach ($items as $i) $rows[] = "• " . ($i["name"] ?? "Item");
-  return ($shop ?: "Shop") . " — low stock alert\n\n" . implode("\n", $rows) . "\n\n— ATAV Telecom POS";
+function pos_alert_low_stock_text($shop, $items, $settings = null) {
+  $settings = $settings ?: pos_alert_settings();
+  return pos_render_alert("low_stock", [
+    "shopName" => $shop ?: "Shop",
+    "items" => $items ?: [["name" => "One or more items are at or below reorder level."]],
+  ], $settings);
 }
 
-function pos_alert_closing_text($payload) {
-  $low = "";
-  if (!empty($payload["lowStock"])) {
-    $names = [];
-    foreach (array_slice($payload["lowStock"], 0, 8) as $i) $names[] = $i["name"] ?? "";
-    $low = "\nLow stock: " . implode(", ", array_filter($names));
-  }
-  return ($payload["shopName"] ?? "Shop") . " — closing " . ($payload["day"] ?? "")
-    . "\nBills: " . (int) ($payload["bills"] ?? 0)
-    . "\nTotal: " . pos_alert_inr($payload["takings"] ?? 0)
-    . "\nCash " . pos_alert_inr($payload["cash"] ?? 0)
-    . " · UPI " . pos_alert_inr($payload["upi"] ?? 0)
-    . " · Card " . pos_alert_inr($payload["card"] ?? 0)
-    . " · Credit " . pos_alert_inr($payload["credit"] ?? 0)
-    . "\nGST: " . pos_alert_inr($payload["gst"] ?? 0)
-    . $low
-    . "\n\n— ATAV Telecom POS";
+function pos_alert_closing_text($payload, $settings = null) {
+  $settings = $settings ?: pos_alert_settings();
+  $payload["shopName"] = $payload["shopName"] ?? "Shop";
+  return pos_render_alert("closing", $payload, $settings);
 }
 
 function pos_shop_alert_contacts($bid) {
@@ -355,14 +460,40 @@ function pos_send_shop_welcome_alerts($payload) {
     $emails = array_values(array_unique($emails));
     $name = $payload["shopName"] ?? $shop["shopName"];
     if (pos_alert_flag($cfg["alert_welcome"])) {
-      pos_wa_send($cfg, $phones, pos_alert_welcome_text($name, $payload["ownerName"] ?? $payload["name"] ?? ""));
+      pos_wa_send($cfg, $phones, pos_alert_welcome_text($name, $payload["ownerName"] ?? $payload["name"] ?? "", $cfg, [
+        "signInUrl" => $payload["signInUrl"] ?? pos_login_url(),
+      ]));
     }
     if (pos_alert_flag($cfg["alert_credentials"]) && (!empty($payload["username"]) || !empty($payload["email"]) || !empty($payload["password"]))) {
-      $text = pos_alert_credentials_text(array_merge($payload, ["shopName" => $name, "signInUrl" => $payload["signInUrl"] ?? pos_login_url()]));
-      pos_alert_dispatch($phones, $emails, "ATAV POS login · {$name}", $text);
+      pos_send_credential_alerts(array_merge($payload, ["shopName" => $name, "phones" => $phones, "emails" => $emails, "settings" => $cfg]));
     }
   } catch (Throwable $e) {
     error_log("shop welcome alerts failed: " . $e->getMessage());
+  }
+}
+
+function pos_send_credential_alerts($payload) {
+  try {
+    $cfg = $payload["settings"] ?? pos_alert_settings();
+    if (!pos_alert_flag($cfg["alert_credentials"])) return ["skipped" => true];
+    if (empty($payload["username"]) && empty($payload["email"]) && empty($payload["password"])) return ["skipped" => true];
+    $shop = pos_shop_alert_contacts($payload["businessId"] ?? "");
+    $phones = $payload["phones"] ?? $shop["phones"];
+    $extra = pos_normalize_in_mobile($payload["mobile"] ?? "");
+    if ($extra !== "") $phones[] = $extra;
+    $phones = array_values(array_unique($phones));
+    $emails = $payload["emails"] ?? $shop["emails"];
+    if (!empty($payload["email"])) $emails[] = strtolower($payload["email"]);
+    $emails = array_values(array_unique($emails));
+    $name = $payload["shopName"] ?? $shop["shopName"];
+    $text = pos_alert_credentials_text(array_merge($payload, [
+      "shopName" => $name,
+      "signInUrl" => $payload["signInUrl"] ?? pos_login_url(),
+    ]), $cfg);
+    return pos_alert_dispatch($phones, $emails, "ATAV POS login · {$name}", $text);
+  } catch (Throwable $e) {
+    error_log("credential alerts failed: " . $e->getMessage());
+    return ["ok" => false, "error" => $e->getMessage()];
   }
 }
 
@@ -374,7 +505,7 @@ function pos_send_update_alerts($title, $body, $businessId = null, $image = "", 
     $results = [];
     foreach ($ids as $id) {
       $shop = pos_shop_alert_contacts($id);
-      $text = pos_alert_update_text($shop["shopName"], $title, $body);
+      $text = pos_alert_update_text($shop["shopName"], $title, $body, $cfg);
       $html = pos_notice_html($title, $body, $image);
       $results[] = pos_alert_dispatch($shop["phones"], $shop["emails"], "ATAV POS update · {$title}", $text, $html, $image);
     }
@@ -408,7 +539,7 @@ function pos_alert_low_stock($bid, $itemIds) {
     }
     if (!$fresh) return;
     $shop = pos_shop_alert_contacts($bid);
-    pos_alert_dispatch($shop["phones"], $shop["emails"], "Low stock · " . $shop["shopName"], pos_alert_low_stock_text($shop["shopName"], $fresh));
+    pos_alert_dispatch($shop["phones"], $shop["emails"], "Low stock · " . $shop["shopName"], pos_alert_low_stock_text($shop["shopName"], $fresh, $cfg));
   } catch (Throwable $e) {
     error_log("low stock alert failed: " . $e->getMessage());
   }
@@ -458,7 +589,7 @@ function pos_send_closing_alert($bid) {
     "card" => $row["card"] ?? 0,
     "credit" => $row["credit"] ?? 0,
     "lowStock" => $low,
-  ]);
+  ], $cfg);
   return pos_alert_dispatch($shop["phones"], $shop["emails"], "Closing sales · {$shop["shopName"]} · {$day}", $text);
 }
 

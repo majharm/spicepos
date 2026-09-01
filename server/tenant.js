@@ -3,7 +3,8 @@ import { bid, branchId, authUser } from "./context.js";
 import { requireStaff, requirePerm, parsePerms, hashPassword } from "./auth.js";
 import { defaultPerms, ROLES, MODULES } from "./roles.js";
 import { audit } from "./audit.js";
-import { sendWelcomeStaff } from "./mail.js";
+import { sendWelcomeStaff, publicLoginUrl } from "./mail.js";
+import { sendCredentialAlerts } from "./alerts.js";
 
 function send(res, fn) {
   return Promise.resolve()
@@ -161,6 +162,21 @@ export function registerTenant(app) {
         },
         req,
       );
+      try {
+        await sendCredentialAlerts({
+          businessId: bid(),
+          shopName: biz?.name,
+          ownerName: b.first_name || b.name || "Staff",
+          email: String(b.email).toLowerCase(),
+          username: b.username || String(b.email).split("@")[0],
+          password: b.password,
+          role,
+          mobile: b.mobile,
+          signInUrl: publicLoginUrl(req),
+        });
+      } catch (err) {
+        console.error("credential alerts failed:", err.message);
+      }
       return { ok: true, id, roles: ROLES, modules: MODULES };
     }),
   );

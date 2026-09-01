@@ -104,6 +104,12 @@ function pos_dispatch_checkout($path, $method, $body, $bid, $branchId, $uid, $au
       "payment_method" => $row["payment_method"],
       "customer_name" => $row["customer_name"],
     ], $bid, $branchId);
+    if (function_exists("pos_alert_low_stock")) {
+      pos_alert_low_stock($bid, array_column($row["lines"] ?? [], "item_id"));
+    }
+    if (function_exists("pos_tick_shop_alerts")) {
+      pos_tick_shop_alerts($bid);
+    }
     pos_send(200, ["ok" => true, "order" => $row, "php" => true]);
   } catch (Throwable $e) {
     pos_send(400, ["error" => $e->getMessage(), "php" => true]);
