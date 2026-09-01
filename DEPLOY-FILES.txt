@@ -55,6 +55,8 @@ After upload:
   2. Hard-refresh browser (Ctrl+Shift+R)
 
 FIXES in this bundle
+  - PHP-only shops: save bills from Counter (POST /api/checkout) without Node.js
+  - Auto-migrate sales_orders columns (discount, branch_id, cashier_id, status)
   - Invoices/Purchases: print button always visible; thermal preview scrolls inside pane (no zoom-out needed)
   - Counter: quick add customer (name + mobile) from POS topbar
   - Reports: GST daywise dates show as YYYY-MM-DD
