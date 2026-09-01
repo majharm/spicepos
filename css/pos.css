@@ -1856,20 +1856,28 @@ tr:last-child td { border-bottom: 0; }
     margin: 0;
     border-radius: 16px 16px 0 0;
     height: auto;
-    max-height: min(38vh, 340px);
+    max-height: min(30vh, 260px);
     min-height: 0;
     overflow: hidden;
     flex: 0 0 auto;
   }
-  .stage.is-counter .ticket-sub { display: none; }
-  .stage.is-counter .ticket-head { padding: 10px 12px 8px; }
-  .stage.is-counter .ticket-head h2 { font-size: 15px; }
+  .stage.is-counter .ticket-sub,
+  .stage.is-counter .ticket-head,
+  .stage.is-counter .ticket-pack { display: none; }
+  .stage.is-counter .totals div:not(.grand) { display: none; }
+  .stage.is-counter .totals { padding: 8px 12px 2px; }
+  .stage.is-counter .totals .grand { font-size: 18px; }
+  body:not(.has-cart) .stage.is-counter .lines { display: none; }
   .stage.is-counter .lines {
     flex: 1 1 auto;
     min-height: 0;
-    max-height: 18vh;
+    max-height: 12vh;
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
+  }
+  .stage.is-counter #btn-clear {
+    min-height: 40px;
+    padding: 8px 10px;
   }
   .stage.is-counter .pay {
     position: relative;
