@@ -13,7 +13,7 @@ import { ensureSchema, seedPlatform } from "./schema.js";
 import { companyTimezone, normalizeTimezone, shopTimezonePayload, tzOffsetFor } from "./timezone.js";
 import { attachAuth, registerAuth, requireStaff, requirePerm } from "./auth.js";
 import { registerMaster } from "./master.js";
-import { registerTenant } from "./tenant.js";
+import { registerBackup } from "./backup.js";
 import { registerAccounts } from "./accounts.js";
 import { postSaleJournal } from "./accounting.js";
 import { recordCreditSale } from "./accounts.js";
@@ -79,6 +79,7 @@ app.use((req, res, next) => {
 });
 registerMaster(app);
 registerTenant(app);
+registerBackup(app);
 
 app.get("/api/support-contact", async (_req, res) => {
   try {

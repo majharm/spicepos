@@ -85,7 +85,7 @@ const VIEW_META = {
   support: { title: "Support", subtitle: "Platform helpline and shop details" },
   accounts: { title: "Accounts", subtitle: "Receivables, payables, GL, and books" },
   reports: { title: "Reports", subtitle: "Sales, stock, purchases, and GST" },
-  settings: { title: "Settings", subtitle: "Company profile, timezone, and branding" },
+  settings: { title: "Settings", subtitle: "Company profile, backup, and branding" },
 };
 
 function orderStatusClass(status) {
@@ -818,6 +818,7 @@ function renderSettings() {
   state.logoDraft = null;
   $("set-logo").value = "";
   showLogo($("logo-preview"), state.company.logo_url);
+  if ($("btn-backup-download")) $("btn-backup-download").href = posUrl("/api/backup");
   if (window.DevMode) {
     const section = $("dev-settings-section");
     if (section) section.hidden = !DevMode.canUse(state.session);
@@ -1892,6 +1893,46 @@ $("supplier-form").addEventListener("submit", async (e) => {
 });
 
 $("set-timezone")?.addEventListener("change", paintTimezonePreview);
+
+$("btn-backup-download")?.addEventListener("click", () => {
+  if ($("btn-backup-download")) $("btn-backup-download").href = posUrl("/api/backup");
+});
+
+$("btn-backup-restore")?.addEventListener("click", async () => {
+  const hint = $("backup-hint");
+  const input = $("backup-file");
+  const file = input?.files?.[0];
+  if (!file) {
+    if (hint) {
+      hint.textContent = "Choose a backup JSON file first";
+      hint.className = "hint error";
+    }
+    return;
+  }
+  if (!confirm("Restore this backup? It replaces items, stock, customers, invoices, and purchases for this shop.")) {
+    return;
+  }
+  try {
+    const text = await file.text();
+    const payload = JSON.parse(text);
+    if (hint) {
+      hint.textContent = "Restoring…";
+      hint.className = "hint";
+    }
+    const data = await api("/api/backup/restore", { method: "POST", body: JSON.stringify(payload) });
+    if (hint) {
+      hint.textContent = `Restored ${data.tables || 0} tables`;
+      hint.className = "hint ok";
+    }
+    await loadBootstrap();
+    renderSettings();
+  } catch (err) {
+    if (hint) {
+      hint.textContent = err.message;
+      hint.className = "hint error";
+    }
+  }
+});
 
 $("settings-form").addEventListener("submit", async (e) => {
   e.preventDefault();

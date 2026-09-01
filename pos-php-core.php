@@ -556,6 +556,18 @@ function pos_require_holds() {
   require_once $file;
 }
 
+function pos_require_backup() {
+  $file = __DIR__ . "/pos-backup.php";
+  if (!is_file($file)) {
+    pos_send(503, [
+      "error" => "pos-backup.php is missing on the server.",
+      "php" => true,
+      "hint" => "Upload pos-backup.php from the latest deploy bundle to public_html, then hard-refresh.",
+    ]);
+  }
+  require_once $file;
+}
+
 function pos_ensure_held_bills_schema() {
   static $done = false;
   if ($done) return;
@@ -1682,6 +1694,24 @@ function pos_php_dispatch($path, $method, $rawBody) {
           ]);
         }
         pos_dispatch_holds($path, $method, $body, $bid, $branchId, $uid, $auth);
+        return;
+      }
+      if ($path === "backup" || $path === "backup/restore") {
+        $auth = pos_staff_session();
+        if (!$auth || ($auth["type"] ?? "") !== "staff") pos_send(401, ["error" => "Sign in required"]);
+        $bid = $auth["user"]["business_id"];
+        $branchId = $auth["branchId"] ?? $auth["user"]["branch_id"] ?? null;
+        $uid = $auth["user"]["id"];
+        pos_apply_business_timezone($bid);
+        pos_require_backup();
+        if (!function_exists("pos_dispatch_backup")) {
+          pos_send(503, [
+            "error" => "pos-backup.php on the server is broken or outdated.",
+            "php" => true,
+            "hint" => "Re-upload pos-backup.php from the latest deploy bundle.",
+          ]);
+        }
+        pos_dispatch_backup($path, $method, $body, $bid, $branchId, $uid, $auth);
         return;
       }
       $handled = false;

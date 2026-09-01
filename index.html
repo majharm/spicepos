@@ -6,8 +6,8 @@
     <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
     <title>SWAMI MASALE POS</title>
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./css/pos.css?v=20260901deploy31" />
-    <link rel="stylesheet" href="./css/saas.css?v=20260901deploy31" />
+    <link rel="stylesheet" href="./css/pos.css?v=20260901deploy32" />
+    <link rel="stylesheet" href="./css/saas.css?v=20260901deploy32" />
   </head>
   <body>
     <div class="app" id="app">
@@ -431,6 +431,18 @@
             <button class="btn primary" type="submit">Save settings</button>
           </form>
           <div class="hint" id="settings-hint"></div>
+          <div class="settings" id="backup-card">
+            <div class="settings-section">
+              <h3>Backup</h3>
+              <p class="section-note">Download a JSON copy of this shop (items, stock, customers, invoices, purchases, accounts). Keep the file private. Restore only a backup from this same shop — it replaces current shop data.</p>
+              <a class="btn primary" id="btn-backup-download" href="#">Download backup</a>
+              <label>Restore file
+                <input id="backup-file" type="file" accept="application/json,.json" />
+              </label>
+              <button class="btn" type="button" id="btn-backup-restore">Restore backup</button>
+              <p class="hint" id="backup-hint"></p>
+            </div>
+          </div>
           <div class="settings dev-settings-card" id="dev-settings-section" hidden>
             <div class="settings-section">
               <h3>Developer mode</h3>
@@ -486,10 +498,10 @@
         </section>
       </div>
     </aside>
-    <script src="./js/pos-api.js?v=20260901deploy31" defer></script>
-    <script src="./js/units.js?v=20260901deploy31" defer></script>
-    <script src="./js/dev-mode.js?v=20260901deploy31" defer></script>
-    <script src="./js/invoice.js?v=20260901deploy31" defer></script>
-    <script src="./js/app.js?v=20260901deploy31" defer></script>
+    <script src="./js/pos-api.js?v=20260901deploy32" defer></script>
+    <script src="./js/units.js?v=20260901deploy32" defer></script>
+    <script src="./js/dev-mode.js?v=20260901deploy32" defer></script>
+    <script src="./js/invoice.js?v=20260901deploy32" defer></script>
+    <script src="./js/app.js?v=20260901deploy32" defer></script>
   </body>
 </html>
