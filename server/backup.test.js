@@ -167,6 +167,8 @@ test("HTML and CSS cache stickers match deploy48", () => {
   assert.match(pos, /\.stage\.is-counter \.catalog[\s\S]{0,400}repeat\(3, minmax\(0, 1fr\)\)/);
   assert.match(pos, /stage\.is-counter > \.view-counter:not\(\[hidden\]\)/);
   assert.doesNotMatch(pos, /height: auto; max-height: none; overflow: visible/);
+  assert.match(index, /<title>ATAV POS<\/title>/);
+  assert.doesNotMatch(index, /SWAMI MASALE POS/);
   assert.match(index, /quick-customer-wrap/);
   assert.match(index, /id="bill-toggle"/);
   assert.match(index, /id="bill-panel"/);
