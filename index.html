@@ -101,7 +101,9 @@
             <form class="search" id="search-form">
               <input id="search" type="search" placeholder="Search spice, local name, or code…" autocomplete="off" />
             </form>
-            <select id="customer" class="select" aria-label="Customer"></select>
+            <div class="customer-picker">
+              <select id="customer" class="select" aria-label="Customer"></select>
+            </div>
             <select id="pack-choice" class="select" aria-label="Pack type">
               <option value="">Loose items (no pack)</option>
             </select>
@@ -111,6 +113,12 @@
               <option value="card">Card</option>
               <option value="credit">Credit</option>
             </select>
+            <form class="quick-customer" id="quick-customer-form" autocomplete="off">
+              <input id="qc-name" name="qc-name" placeholder="Customer name" maxlength="120" />
+              <input id="qc-mobile" name="qc-mobile" placeholder="Mobile no." inputmode="tel" maxlength="15" />
+              <button class="btn primary" type="submit" id="qc-save">Add customer</button>
+              <span class="hint" id="qc-hint"></span>
+            </form>
           </header>
           <div class="workspace">
             <div class="catalog" id="catalog"></div>

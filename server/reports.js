@@ -172,6 +172,15 @@ export async function buildReports(from, to) {
   };
 }
 
+export function formatReportDay(value) {
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return value.toISOString().slice(0, 10);
+  }
+  const s = String(value ?? "");
+  const m = s.match(/^(\d{4}-\d{2}-\d{2})/);
+  return m ? m[1] : s;
+}
+
 export function reportsToSheets(data) {
   const num = (v) => Number(v) || 0;
   const half = (v) => num(v) / 2;
@@ -240,7 +249,7 @@ export function reportsToSheets(data) {
     {
       name: "GST daywise",
       headers: ["Day", "Taxable", "GST", "Total"],
-      rows: data.gst.map((r) => [String(r.day), num(r.taxable), num(r.gst), num(r.total)]),
+      rows: data.gst.map((r) => [formatReportDay(r.day), num(r.taxable), num(r.gst), num(r.total)]),
     },
     {
       name: "GST output by rate",
@@ -263,14 +272,14 @@ export function reportsToSheets(data) {
       name: "GST B2B sales",
       headers: ["Bill", "Date", "Customer", "GSTIN", "Taxable", "GST", "Total"],
       rows: (data.gstB2B || []).map((r) => [
-        r.order_number, String(r.bill_date), r.customer_name, r.gstin, num(r.taxable), num(r.gst), num(r.total),
+        r.order_number, formatReportDay(r.bill_date), r.customer_name, r.gstin, num(r.taxable), num(r.gst), num(r.total),
       ]),
     },
     {
       name: "GST B2C sales",
       headers: ["Bill", "Date", "Customer", "Taxable", "GST", "Total"],
       rows: (data.gstB2C || []).map((r) => [
-        r.order_number, String(r.bill_date), r.customer_name, num(r.taxable), num(r.gst), num(r.total),
+        r.order_number, formatReportDay(r.bill_date), r.customer_name, num(r.taxable), num(r.gst), num(r.total),
       ]),
     },
     {

@@ -443,6 +443,34 @@ body.counter-mode .view-topbar { display: none; }
 }
 .counter-topbar .search { min-width: 200px; }
 .counter-topbar .select { min-width: 140px; flex: 0 1 auto; }
+.customer-picker {
+  display: flex;
+  align-items: center;
+  min-width: 160px;
+  flex: 0 1 auto;
+}
+.quick-customer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1 1 100%;
+  min-width: 0;
+}
+.quick-customer input {
+  min-width: 120px;
+  flex: 1;
+  padding: 11px 13px;
+  border-radius: 12px;
+  border: 1px solid var(--line-strong);
+  background: linear-gradient(180deg, #f8fbfa 0%, #fff 100%);
+  box-shadow: var(--elev-inset);
+}
+.quick-customer input:focus {
+  outline: none;
+  border-color: var(--atav-cyan);
+  box-shadow: var(--elev-inset), 0 0 0 3px rgba(0, 174, 239, 0.2);
+}
+.quick-customer .hint { margin: 0; white-space: nowrap; }
 .search { flex: 1; display: flex; }
 .search input, .select, .settings input, .settings select, .tender input, .report-toolbar input {
   padding: 11px 13px;

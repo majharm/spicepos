@@ -302,6 +302,15 @@ function fmtCell(v) {
   return String(v);
 }
 
+function reportDay(v) {
+  if (v instanceof Date && !Number.isNaN(v.getTime())) {
+    return v.toISOString().slice(0, 10);
+  }
+  const s = String(v ?? "");
+  const m = s.match(/^(\d{4}-\d{2}-\d{2})/);
+  return m ? m[1] : s;
+}
+
 function htmlTable(headers, rows) {
   if (!rows.length) return `<p class="report-empty">No rows in this range</p>`;
   return `<div class="table-wrap"><table><thead><tr>${headers
@@ -497,6 +506,26 @@ function renderCustomersSelect() {
     state.customerId = walk?.id || "";
     if (state.customerId) $("customer").value = state.customerId;
   }
+}
+
+async function saveCustomer(fields) {
+  const name = String(fields.name || "").trim();
+  const mobile = String(fields.mobile || "").replace(/\s+/g, "").trim();
+  if (!name || !mobile) throw new Error("Name and mobile are required");
+  const data = await api("/api/customers", {
+    method: "POST",
+    body: JSON.stringify({
+      name,
+      mobile,
+      business_name: fields.business_name || "",
+      type: fields.type === "b2b" ? "b2b" : "b2c",
+      gstin: fields.gstin || "",
+    }),
+  });
+  const customer = data.customer;
+  if (customer?.id) state.customerId = customer.id;
+  await loadBootstrap();
+  return customer;
 }
 
 function renderPackChoice() {
@@ -818,7 +847,7 @@ async function loadReports() {
     const s = data.summary || {};
     $("report-summary").innerHTML = [
       ["Range", `${data.from} → ${data.to}`],
-      ["Bills", s.bills],
+      ["Bills", s.bills ?? 0],
       ["Taxable", money(s.taxable)],
       ["Output GST", money(s.gst)],
       ["Input GST", money(s.inputGst)],
@@ -834,12 +863,12 @@ async function loadReports() {
       reportBlock("Customer sales", "Customer sales", ["Customer", "Type", "Bills", "Takings", "GST"], (data.byCustomer || []).map((r) => [r.customer_name, r.customer_type, Number(r.bills) || 0, Number(r.takings) || 0, Number(r.gst) || 0])),
       reportBlock("Pack sales", "Pack sales", ["Pack type", "Pack count", "Bills", "Takings"], (data.byPack || []).map((r) => [r.pack_type, Number(r.pack_count) || 0, Number(r.bills) || 0, Number(r.takings) || 0])),
       reportBlock("Payment", "Payment", ["Method", "Bills", "Takings"], (data.byPay || []).map((r) => [r.payment_method, Number(r.bills) || 0, Number(r.takings) || 0])),
-      reportBlock("GST daywise", "GST daywise", ["Day", "Taxable", "GST", "Total"], (data.gst || []).map((r) => [String(r.day), Number(r.taxable) || 0, Number(r.gst) || 0, Number(r.total) || 0])),
+      reportBlock("GST daywise", "GST daywise", ["Day", "Taxable", "GST", "Total"], (data.gst || []).map((r) => [reportDay(r.day), Number(r.taxable) || 0, Number(r.gst) || 0, Number(r.total) || 0])),
       reportBlock("GST output by rate", "GST output by rate", ["GST %", "Taxable", "CGST", "SGST", "Total GST", "Bills"], gstRateRows(data.gstByRate)),
       reportBlock("GST input by rate", "GST input by rate", ["GST %", "Taxable", "CGST", "SGST", "Total GST"], gstRateRows(data.gstInputByRate, false)),
       reportBlock("GST HSN itemwise", "GST HSN itemwise", ["HSN/SKU", "Item", "GST %", "Qty g", "Taxable", "GST"], (data.gstHsn || []).map((r) => [r.hsn, r.item_name, Number(r.gst_rate) || 0, Number(r.quantity_gm) || 0, Number(r.taxable) || 0, Number(r.gst) || 0])),
-      reportBlock("GST B2B sales", "GST B2B sales", ["Bill", "Date", "Customer", "GSTIN", "Taxable", "GST", "Total"], (data.gstB2B || []).map((r) => [r.order_number, String(r.bill_date), r.customer_name, r.gstin, Number(r.taxable) || 0, Number(r.gst) || 0, Number(r.total) || 0])),
-      reportBlock("GST B2C sales", "GST B2C sales", ["Bill", "Date", "Customer", "Taxable", "GST", "Total"], (data.gstB2C || []).map((r) => [r.order_number, String(r.bill_date), r.customer_name, Number(r.taxable) || 0, Number(r.gst) || 0, Number(r.total) || 0])),
+      reportBlock("GST B2B sales", "GST B2B sales", ["Bill", "Date", "Customer", "GSTIN", "Taxable", "GST", "Total"], (data.gstB2B || []).map((r) => [r.order_number, reportDay(r.bill_date), r.customer_name, r.gstin, Number(r.taxable) || 0, Number(r.gst) || 0, Number(r.total) || 0])),
+      reportBlock("GST B2C sales", "GST B2C sales", ["Bill", "Date", "Customer", "Taxable", "GST", "Total"], (data.gstB2C || []).map((r) => [r.order_number, reportDay(r.bill_date), r.customer_name, Number(r.taxable) || 0, Number(r.gst) || 0, Number(r.total) || 0])),
       reportBlock("Stock", "Stock", ["Code", "Name", "Local", "Category", "Subcategory", "Stock g", "Reorder g", "Retail", "B2B", "Purchase", "GST %"], (data.stock || []).map((i) => [i.code, i.name, i.local_name, i.category, i.subcategory, Number(i.stock_gm) || 0, Number(i.reorder_level_gm) || 0, Number(i.retail_rate) || 0, Number(i.b2b_rate) || 0, Number(i.purchase_rate) || 0, Number(i.gst_rate) || 0])),
       reportBlock("Low stock", "Low stock", ["Code", "Name", "Stock g", "Reorder g"], (data.low || []).map((i) => [i.code, i.name, Number(i.stock_gm) || 0, Number(i.reorder_level_gm) || 0])),
       reportBlock("Purchases", "Purchases", ["PO", "Supplier", "Invoice", "Date", "Taxable", "GST", "Total", "Pay", "Status"], (data.purchases || []).map((p) => [p.purchase_number, p.supplier_name, p.supplier_invoice_number, p.purchase_date, Number(p.subtotal) || 0, Number(p.gst) || 0, Number(p.total) || 0, p.payment_method, p.payment_status])),
@@ -1579,23 +1608,43 @@ $("item-cancel").addEventListener("click", () => {
 $("customer-form").addEventListener("submit", async (e) => {
   e.preventDefault();
   try {
-    await api("/api/customers", {
-      method: "POST",
-      body: JSON.stringify({
-        name: $("cust-name").value,
-        business_name: $("cust-biz").value,
-        mobile: $("cust-mobile").value,
-        type: $("cust-type").value,
-        gstin: $("cust-gstin").value,
-      }),
+    await saveCustomer({
+      name: $("cust-name").value,
+      business_name: $("cust-biz").value,
+      mobile: $("cust-mobile").value,
+      type: $("cust-type").value,
+      gstin: $("cust-gstin").value,
     });
     $("cust-hint").textContent = "Saved";
     $("cust-hint").className = "hint ok";
     $("customer-form").reset();
-    await loadBootstrap();
   } catch (err) {
     $("cust-hint").textContent = err.message;
     $("cust-hint").className = "hint error";
+  }
+});
+
+$("quick-customer-form")?.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const hint = $("qc-hint");
+  try {
+    const customer = await saveCustomer({
+      name: $("qc-name").value,
+      mobile: $("qc-mobile").value,
+    });
+    $("qc-name").value = "";
+    $("qc-mobile").value = "";
+    if (hint) {
+      hint.textContent = `Added ${customer?.name || "customer"}`;
+      hint.className = "hint ok";
+    }
+    setHint(`Customer added · ${customer?.name || ""}`, "ok");
+  } catch (err) {
+    if (hint) {
+      hint.textContent = err.message;
+      hint.className = "hint error";
+    }
+    setHint(err.message, "error");
   }
 });
 

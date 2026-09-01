@@ -639,6 +639,14 @@ function pos_send($status, $payload) {
   exit;
 }
 
+function pos_send_file($status, $contentType, $filename, $body) {
+  http_response_code((int) $status);
+  header("Content-Type: " . $contentType);
+  header('Content-Disposition: attachment; filename="' . str_replace(['"', "\r", "\n"], "", (string) $filename) . '"');
+  echo $body;
+  exit;
+}
+
 function pos_master_session() {
   $token = pos_cookie("pos_master");
   if ($token === "") return null;
