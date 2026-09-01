@@ -18,6 +18,17 @@ const state = {
   plan: null,
 };
 
+function debounce(fn, wait = 120) {
+  let timer;
+  return (...args) => {
+    clearTimeout(timer);
+    timer = setTimeout(() => fn(...args), wait);
+  };
+}
+
+const renderCatalogDebounced = debounce(() => renderCatalog(), 100);
+const renderOrdersListDebounced = debounce(() => renderOrdersList(), 100);
+
 function $(id) {
   return document.getElementById(id);
 }
@@ -721,9 +732,7 @@ async function loadBootstrap() {
   renderPacksTable();
   renderSettings();
   renderPoLines();
-  loadToday();
-  loadSuppliers();
-  loadDashboard();
+  void Promise.all([loadToday(), loadDashboard(), loadSuppliers().catch(() => {})]);
 }
 
 async function loadDashboard() {
@@ -1327,7 +1336,7 @@ $("orders").addEventListener("click", (e) => {
 $("orders-toolbar")?.addEventListener("submit", (e) => e.preventDefault());
 $("orders-search")?.addEventListener("input", () => {
   orderFilter.q = $("orders-search").value;
-  renderOrdersList();
+  renderOrdersListDebounced();
 });
 $("orders-status-filter")?.addEventListener("change", () => {
   orderFilter.status = $("orders-status-filter").value;
@@ -1401,7 +1410,7 @@ $("order-pane").addEventListener("click", (e) => {
 
 $("search").addEventListener("input", () => {
   state.query = $("search").value;
-  renderCatalog();
+  renderCatalogDebounced();
 });
 $("search-form").addEventListener("submit", (e) => e.preventDefault());
 $("customer").addEventListener("change", () => {
@@ -1761,17 +1770,19 @@ function tick() {
   const clock = $("clock");
   const meta = $("clock-meta");
   const topbarTime = $("topbar-time");
-  if (topbarTime) topbarTime.textContent = timeText;
-  if (clock) {
+  if (topbarTime && topbarTime.textContent !== timeText) topbarTime.textContent = timeText;
+  if (clock && clock.textContent !== timeText) {
     clock.textContent = timeText;
     const abbr =
       new Intl.DateTimeFormat("en-IN", { timeZone: tz, timeZoneName: "short" })
         .formatToParts(now)
         .find((p) => p.type === "timeZoneName")?.value || tz;
     const date = now.toLocaleDateString("en-IN", { timeZone: tz, weekday: "short", day: "numeric", month: "short" });
-    if (meta) meta.textContent = `${date} · ${abbr}`;
-    $("clock-chip")?.setAttribute("title", `${date} · ${abbr} (${tz})`);
-    $("topbar-clock")?.setAttribute("title", `${date} · ${abbr} (${tz})`);
+    const metaText = `${date} · ${abbr}`;
+    if (meta && meta.textContent !== metaText) meta.textContent = metaText;
+    const title = `${date} · ${abbr} (${tz})`;
+    $("clock-chip")?.setAttribute("title", title);
+    $("topbar-clock")?.setAttribute("title", title);
   }
 }
 tick();
