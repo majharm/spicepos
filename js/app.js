@@ -399,6 +399,11 @@ function showLogo(img, url) {
   if (img.id === "logo-preview" && $("logo-clear")) $("logo-clear").hidden = !url;
 }
 
+function paintLogoFileName(name = "") {
+  const el = $("logo-file-name");
+  if (el) el.textContent = name || "PNG, JPG, or SVG";
+}
+
 function excelHref(sheet) {
   const from = $("rep-from")?.value || ymd();
   const to = $("rep-to")?.value || from;
@@ -883,6 +888,7 @@ function renderSettings() {
   paintTimezonePreview();
   state.logoDraft = null;
   $("set-logo").value = "";
+  paintLogoFileName();
   showLogo($("logo-preview"), state.company.logo_url);
   if ($("btn-backup-download")) $("btn-backup-download").href = posUrl("/api/backup");
   if (window.DevMode) {
@@ -2101,6 +2107,7 @@ $("set-logo").addEventListener("change", async (e) => {
     const url = await readLogoFile(file);
     state.logoDraft = url;
     showLogo($("logo-preview"), url);
+    paintLogoFileName(file.name);
     $("settings-hint").textContent = "Logo ready — click Save";
     $("settings-hint").className = "hint";
   } catch (err) {
@@ -2112,6 +2119,7 @@ $("set-logo").addEventListener("change", async (e) => {
 $("logo-clear").addEventListener("click", () => {
   state.logoDraft = "";
   $("set-logo").value = "";
+  paintLogoFileName();
   showLogo($("logo-preview"), "");
   $("settings-hint").textContent = "Logo will be removed on Save";
   $("settings-hint").className = "hint";

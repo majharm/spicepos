@@ -452,9 +452,11 @@
                   <img id="logo-preview" class="logo-preview" alt="Logo preview" hidden />
                 </div>
                 <div class="logo-controls">
-                  <label class="backup-file-lab">Shop logo
-                    <input id="set-logo" type="file" accept="image/*" />
-                  </label>
+                  <div class="logo-pick-row">
+                    <input id="set-logo" class="logo-file-input" type="file" accept="image/*" />
+                    <label class="btn logo-pick" for="set-logo">Choose image</label>
+                    <span class="logo-file-name" id="logo-file-name">PNG, JPG, or SVG</span>
+                  </div>
                   <button class="btn" type="button" id="logo-clear" hidden>Remove logo</button>
                 </div>
               </div>
