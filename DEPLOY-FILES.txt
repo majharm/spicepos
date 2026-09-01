@@ -1,4 +1,4 @@
-Production deploy bundle — 20260901deploy35
+Production deploy bundle — 20260901deploy44
 =========================================
 
 Upload ALL files below to Hostinger public_html (overwrite):
@@ -38,6 +38,7 @@ PHP
   pos-reports.php
   pos-accounting.php
   pos-api.php
+  pos-mail.php
   api/.htaccess
   api/health/index.php
   api/checkout/index.php
@@ -45,6 +46,10 @@ PHP
   api/backup/index.php
   api/backup/restore/index.php
   api/units/index.php
+  api/master/backup/index.php
+  api/master/backup/restore/index.php
+  api/master/backup/platform/index.php
+  api/master/backup/platform/restore/index.php
   pos-data/.htaccess
   health.json
 
@@ -64,6 +69,8 @@ Node (if using hPanel Node.js web app — upload OR git pull then Restart)
   server/backup.js
   server/backup-util.js
   server/units.js
+  server/mail.js
+  server/fy.js
   package.json
 
 After upload:
@@ -71,10 +78,21 @@ After upload:
   2. Hard-refresh browser (Ctrl+Shift+R)
 
 FIXES in this bundle
+  - Welcome email on Create business / new staff (Hostinger SMTP pos@atavtelecom.in)
+  - Suppliers form and list include address and email
+  - Settings page: wider card, 2-column details, styled logo upload, keep card padding on mobile
+  - CSS: Master Admin mobile nav wrap, hide nav until sign-in, backup file inputs, table overflow
+  - Cache sticker 20260901deploy44 on index, login, master, setup
+  - Page scrolling on every shop view, Master Admin main pane, and login/signup
+  - New Purchase items as a searchable list/table
+  - Indian financial year 1 April–31 March on Reports, Accounts, Expenses
+  - Finance → Expenses module (PHP + Node)
+  - Master Admin → Backup: download/restore one shop or the full platform
+  - Shop POS Admin → Backup: download/restore this shop JSON
+  - Mobile: Counter billing and Invoices/orders stack, sticky Save, overlay menu
   - Left nav: remove ATAV logo, Today, Bills, and clock chips (keep Logout)
   - Reports: daywise payment summary (cash / UPI / card / credit per day)
   - Inventory → Units: unit master (GM, KG, ML, LTR, PCS) used on item forms; add BOX/qty units
-  - Settings: Download backup JSON and restore this shop's data
   - Item unit types: qty/pcs, g, kg, ml, litre (rates per pc / kg / ltr)
   - Save/Hold on PHP: POST /api/checkout no longer 301-redirects to GET (DirectorySlash Off; rewrite directories)
   - Counter POSTs prefer /pos-api.php?p=… so Apache folders cannot swallow Save/Hold

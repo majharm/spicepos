@@ -1,12 +1,19 @@
 .auth-body {
-  min-height: 100vh;
-  display: grid;
-  place-items: center;
+  min-height: 100dvh;
+  height: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
   padding: 24px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
   background: linear-gradient(160deg, #0b1220 0%, #0f172a 55%, #134e4a 100%);
 }
 .auth-card {
   width: min(440px, 100%);
+  margin-block: auto;
   background: var(--vel-surface, #fff);
   border: 1px solid var(--line, #e2e8f0);
   border-radius: 16px;
@@ -150,8 +157,12 @@
 .login-support a { color: var(--vel-teal, #0d9488); font-weight: 650; }
 .master-shell {
   display: grid;
-  grid-template-columns: 228px 1fr;
-  min-height: 100vh;
+  grid-template-columns: 228px minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  height: 100dvh;
+  max-height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
   background: var(--bg, #f1f5f9);
 }
 .master-nav {
@@ -161,6 +172,10 @@
   display: flex;
   flex-direction: column;
   gap: 2px;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 .master-brand {
   display: grid;
@@ -200,7 +215,31 @@
 }
 .master-nav .nav-foot { margin-top: auto; padding-top: 16px; }
 .master-nav .btn-logout { margin-top: 8px; }
-.master-main { padding: 28px 32px; overflow: auto; }
+.master-main {
+  padding: 28px 32px 40px;
+  min-width: 0;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+.master-main .settings {
+  margin-left: 0;
+  margin-right: 0;
+  max-width: 640px;
+}
+.master-main .lede {
+  margin: 0 0 16px;
+}
+.master-main .table-wrap {
+  padding-left: 0;
+  padding-right: 0;
+}
+.master-main #panel-body {
+  max-width: 100%;
+  overflow-x: auto;
+}
 .master-main > #panel > h2 {
   margin: 0 0 18px;
   font-size: 22px;
@@ -264,10 +303,69 @@
   text-decoration: none;
   white-space: nowrap;
 }
-@media (max-width: 800px) {
-  .master-shell { grid-template-columns: 1fr; }
+@media (max-width: 900px) {
+  .master-shell {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto minmax(0, 1fr);
+    height: 100dvh;
+    max-height: 100dvh;
+  }
+  .master-nav {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px;
+    padding: 10px 12px;
+  }
+  .master-brand {
+    flex: 1 0 100%;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 10px;
+    margin: 0 0 6px;
+    padding-bottom: 8px;
+  }
+  .master-brand img { width: 96px; }
+  .master-nav h1 { letter-spacing: 0.08em; }
+  .master-nav button {
+    padding: 8px 10px;
+    font-size: 12.5px;
+    min-height: 40px;
+    width: auto;
+    flex: 0 0 auto;
+    white-space: nowrap;
+  }
+  .master-nav .nav-foot {
+    margin-top: 0;
+    margin-left: auto;
+    padding-top: 0;
+  }
+  .master-nav .btn-logout { margin-top: 0; }
+  .master-main { padding: 16px 14px 24px; }
   .qty button, .btn, .nav-btn { min-height: 44px; }
   .card { min-height: 120px; }
+}
+body.master-locked .master-shell { grid-template-columns: 1fr; }
+body.master-locked .master-nav > button,
+body.master-locked .master-nav .nav-foot { display: none; }
+body.master-locked .master-nav {
+  justify-content: center;
+  position: static;
+}
+body.master-locked .master-brand {
+  margin: 0;
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+body.master-locked .master-main {
+  display: grid;
+  place-items: start center;
+  padding: 28px 16px 40px;
 }
 
 .dev-settings-card { margin-top: 0; }

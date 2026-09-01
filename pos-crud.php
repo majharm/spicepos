@@ -45,7 +45,7 @@ function pos_crud_dispatch($path, $method, $body, $bid, $auth, $branchId, $uid) 
         $body["subcategory"] ?? null, $unit,
         (float) ($body["purchase_rate"] ?? 0), (float) ($body["retail_rate"] ?? 0),
         (float) ($body["b2b_rate"] ?? 0), (float) ($body["gst_rate"] ?? 5),
-        $body["hsn"] ?? null, (float) ($body["stock_gm"] ?? 0), (float) ($body["reorder_level_gm"] ?? 0), $bid,
+        trim((string) ($body["hsn"] ?? $body["local_name"] ?? "")) ?: null, (float) ($body["stock_gm"] ?? 0), (float) ($body["reorder_level_gm"] ?? 0), $bid,
       ]
     );
     try {
@@ -61,14 +61,15 @@ function pos_crud_dispatch($path, $method, $body, $bid, $auth, $branchId, $uid) 
     pos_ensure_item_unit_columns();
     pos_q(
       "UPDATE items SET name=?, local_name=?, category=?, subcategory=?, base_unit=?,
-         purchase_rate=?, retail_rate=?, b2b_rate=?, gst_rate=?, stock_gm=?, reorder_level_gm=?, status=?
+         purchase_rate=?, retail_rate=?, b2b_rate=?, gst_rate=?, hsn=?, stock_gm=?, reorder_level_gm=?, status=?
        WHERE id=? AND business_id=?",
-      "sssssddddddsss",
+      "sssssddddsddsss",
       [
         $body["name"] ?? "", $body["local_name"] ?? null, $body["category"] ?? "Whole Spices",
         $body["subcategory"] ?? null, $unit,
         (float) ($body["purchase_rate"] ?? 0), (float) ($body["retail_rate"] ?? 0),
         (float) ($body["b2b_rate"] ?? 0), (float) ($body["gst_rate"] ?? 5),
+        trim((string) ($body["hsn"] ?? "")) ?: null,
         (float) ($body["stock_gm"] ?? 0), (float) ($body["reorder_level_gm"] ?? 0),
         $body["status"] ?? "active", $itemId, $bid,
       ]
@@ -281,6 +282,16 @@ function pos_crud_dispatch($path, $method, $body, $bid, $auth, $branchId, $uid) 
         json_encode($perms), $username, $body["mobile"] ?? null,
       ]
     );
+    $shop = pos_q("SELECT name FROM businesses WHERE id = ? LIMIT 1", "s", [$bid]);
+    if (function_exists("pos_send_welcome_staff")) {
+      pos_send_welcome_staff([
+        "shopName" => $shop[0]["name"] ?? "",
+        "name" => $body["first_name"] ?? $body["name"] ?? "Staff",
+        "email" => $email,
+        "username" => $username,
+        "role" => $role,
+      ]);
+    }
     pos_send(200, ["ok" => true, "id" => $id]);
   }
 

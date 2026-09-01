@@ -22,6 +22,7 @@ test("PHP fallback routes checkout, holds, and order updates through core", () =
   assert.match(core, /orders\/\[\^\/\]\+.*pos_dispatch_order_route/s);
   assert.match(core, /holds.*pos_dispatch_holds/s);
   assert.match(core, /backup.*pos_dispatch_backup/s);
+  assert.match(core, /pos_dispatch_master_backup/);
   assert.match(core, /units.*pos_dispatch_units/s);
   assert.match(core, /function pos_require_backup/);
   assert.match(core, /function pos_require_units/);
@@ -36,6 +37,8 @@ test("PHP fallback routes checkout, holds, and order updates through core", () =
   assert.match(holds, /INSERT INTO held_bills/);
   assert.match(orders, /function pos_dispatch_order_route/);
   assert.match(core, /This POS action is not available in PHP fallback yet \(\{\$method\} \{\$path\}\)/);
+  assert.match(read("pos-accounting.php"), /\$path === "expenses"/);
+  assert.match(read("pos-php-core.php"), /function pos_indian_fy/);
   const ht = read("api/.htaccess");
   assert.match(ht, /DirectorySlash Off/);
   assert.doesNotMatch(ht, /!-d/);

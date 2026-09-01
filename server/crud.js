@@ -112,7 +112,7 @@ export function registerCrud(app) {
             Number(b.retail_rate) || 0,
             Number(b.b2b_rate) || 0,
             Number(b.gst_rate) || 5,
-            b.hsn || null,
+            String(b.hsn || b.local_name || "").trim() || null,
             Number(b.stock_gm) || 0,
             Number(b.reorder_level_gm) || 0,
             bid(),
@@ -133,7 +133,7 @@ export function registerCrud(app) {
       await query(
         `UPDATE items SET
            name=?, local_name=?, category=?, subcategory=?, base_unit=?,
-           purchase_rate=?, retail_rate=?, b2b_rate=?, gst_rate=?,
+           purchase_rate=?, retail_rate=?, b2b_rate=?, gst_rate=?, hsn=?,
            stock_gm=?, reorder_level_gm=?, status=?
          WHERE id=? AND business_id=?`,
         [
@@ -146,6 +146,7 @@ export function registerCrud(app) {
           Number(b.retail_rate) || 0,
           Number(b.b2b_rate) || 0,
           Number(b.gst_rate) || 5,
+          String(b.hsn || "").trim() || null,
           Number(b.stock_gm) || 0,
           Number(b.reorder_level_gm) || 0,
           b.status || "active",
@@ -226,11 +227,11 @@ export function registerCrud(app) {
           id,
           code,
           String(name).trim(),
-          contact_name || null,
-          mobile || null,
-          email || null,
-          address || null,
-          gstin || null,
+          String(contact_name || "").trim() || null,
+          String(mobile || "").trim() || null,
+          String(email || "").trim() || null,
+          String(address || "").trim() || null,
+          String(gstin || "").trim() || null,
           bid(),
         ],
       );

@@ -7,12 +7,16 @@ import { audit } from "./audit.js";
 import {
   balanceSheet,
   cashBook,
+  ensureCoa,
+  EXPENSE_COA,
   getCoa,
+  postExpenseJournal,
   postPaymentJournal,
   postReceiptJournal,
   profitAndLoss,
   trialBalance,
 } from "./accounting.js";
+import { fyRangeForToday } from "./fy.js";
 
 async function insertLedger(conn, row) {
   const id = crypto.randomUUID();
@@ -351,6 +355,78 @@ export function registerAccounts(app) {
       res.json(rows);
     } catch (err) {
       res.status(500).json({ error: String(err.message) });
+    }
+  });
+
+  app.get("/api/expenses", requirePerm("accounts"), async (req, res) => {
+    const fy = fyRangeForToday();
+    const from = String(req.query.from || fy.from);
+    const to = String(req.query.to || fy.to);
+    try {
+      const rows = await query(
+        `SELECT * FROM expenses
+         WHERE business_id = ? AND expense_date BETWEEN ? AND ?
+         ORDER BY expense_date DESC, created_at DESC
+         LIMIT 200`,
+        [bid(), from, to],
+      );
+      res.json(rows);
+    } catch (err) {
+      res.status(500).json({ error: String(err.message) });
+    }
+  });
+
+  app.post("/api/expenses", requirePerm("accounts"), async (req, res) => {
+    const { expense_date, account_code, amount, gst, payment_method, notes, category } = req.body || {};
+    const cat = EXPENSE_COA.find((a) => a.code === String(account_code || "").trim());
+    if (!cat) {
+      res.status(400).json({ error: "Choose an expense category" });
+      return;
+    }
+    const amt = round2(amount);
+    if (!(amt > 0)) {
+      res.status(400).json({ error: "Amount is required" });
+      return;
+    }
+    const gstAmt = round2(gst);
+    const method = String(payment_method || "cash").toLowerCase();
+    if (!["cash", "upi", "card", "bank"].includes(method)) {
+      res.status(400).json({ error: "Invalid payment method" });
+      return;
+    }
+    try {
+      const expense = await withTransaction(async (conn) => {
+        await ensureCoa(conn);
+        const n = await nextSeq(conn, "expense", 1001);
+        const id = crypto.randomUUID();
+        const expenseNumber = `EXP-${n}`;
+        await conn.query(
+          `INSERT INTO expenses (
+             id, business_id, expense_number, expense_date, category, account_code,
+             amount, gst, payment_method, notes, created_by
+           ) VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+          [
+            id,
+            bid(),
+            expenseNumber,
+            expense_date || new Date().toISOString().slice(0, 10),
+            String(category || cat.name),
+            cat.code,
+            amt,
+            gstAmt,
+            method,
+            String(notes || "").trim() || null,
+            authUser()?.id || null,
+          ],
+        );
+        const [rows] = await conn.query("SELECT * FROM expenses WHERE id = ?", [id]);
+        await postExpenseJournal(conn, rows[0]);
+        return rows[0];
+      });
+      await audit("Expense", { module: "accounts", target_id: expense.id, target_name: expense.expense_number }, req);
+      res.json({ ok: true, expense });
+    } catch (err) {
+      res.status(400).json({ error: String(err.message) });
     }
   });
 }

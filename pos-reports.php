@@ -11,12 +11,14 @@ function pos_report_day($value) {
 }
 
 function pos_report_range($from, $to) {
+  $fy = function_exists("pos_indian_fy") ? pos_indian_fy() : ["from" => date("Y") . "-04-01", "to" => date("Y-m-d")];
   $end = $to ?: date("Y-m-d");
-  $start = $from ?: "2000-01-01";
+  $start = $from ?: $fy["from"];
   return [$start, $end];
 }
 
 function pos_build_reports($bid, $from, $to) {
+  if (function_exists("pos_ensure_accounts_schema")) pos_ensure_accounts_schema();
   [$start, $end] = pos_report_range($from, $to);
   $salesWhere = "business_id = ? AND DATE(created_at) BETWEEN ? AND ?";
   $poWhere = "business_id = ? AND purchase_date BETWEEN ? AND ?";
@@ -95,7 +97,7 @@ function pos_build_reports($bid, $from, $to) {
     [$bid, $start, $end]
   );
   $stock = pos_q(
-    "SELECT code, name, local_name, category, subcategory, stock_gm, reorder_level_gm,
+    "SELECT code, name, hsn, local_name, category, subcategory, stock_gm, reorder_level_gm,
             retail_rate, b2b_rate, purchase_rate, gst_rate
      FROM items WHERE business_id = ? ORDER BY name",
     "s",
@@ -112,6 +114,26 @@ function pos_build_reports($bid, $from, $to) {
     "sss",
     [$bid, $start, $end]
   );
+  $expenses = [];
+  $expenseSum = [["amount" => 0, "gst" => 0, "bills" => 0]];
+  try {
+    $expenses = pos_q(
+      "SELECT expense_number, expense_date, category, account_code, amount, gst, payment_method, notes,
+              (amount + gst) AS total
+       FROM expenses WHERE business_id = ? AND expense_date BETWEEN ? AND ?
+       ORDER BY expense_date",
+      "sss",
+      [$bid, $start, $end]
+    );
+    $expenseSum = pos_q(
+      "SELECT COALESCE(SUM(amount),0) AS amount, COALESCE(SUM(gst),0) AS gst, COUNT(*) AS bills
+       FROM expenses WHERE business_id = ? AND expense_date BETWEEN ? AND ?",
+      "sss",
+      [$bid, $start, $end]
+    ) ?: $expenseSum;
+  } catch (Exception $e) {
+    $expenses = [];
+  }
   $customers = pos_q(
     "SELECT code, name, business_name, mobile, type, gstin, credit_limit, outstanding
      FROM customers WHERE business_id = ? ORDER BY name",
@@ -143,7 +165,7 @@ function pos_build_reports($bid, $from, $to) {
     [$bid, $start, $end]
   );
   $gstHsn = pos_q(
-    "SELECT COALESCE(i.code, '—') AS hsn, l.item_name, l.gst_rate,
+    "SELECT COALESCE(NULLIF(TRIM(i.hsn), ''), i.code, '—') AS hsn, l.item_name, l.gst_rate,
             SUM(l.quantity_gm) AS quantity_gm,
             SUM(l.amount) AS taxable,
             SUM(l.amount * l.gst_rate / 100) AS gst
@@ -187,7 +209,7 @@ function pos_build_reports($bid, $from, $to) {
 
   $sum = $summary[0] ?? ["bills" => 0, "taxable" => 0, "gst" => 0, "takings" => 0];
   $outputGst = pos_report_num($sum["gst"]);
-  $inputGst = pos_report_num($purchaseGst[0]["gst"] ?? 0);
+  $inputGst = pos_report_num($purchaseGst[0]["gst"] ?? 0) + pos_report_num($expenseSum[0]["gst"] ?? 0);
 
   return [
     "from" => $start,
@@ -195,6 +217,8 @@ function pos_build_reports($bid, $from, $to) {
     "summary" => array_merge($sum, [
       "inputGst" => $inputGst,
       "netGst" => $outputGst - $inputGst,
+      "expenses" => pos_report_num($expenseSum[0]["amount"] ?? 0) + pos_report_num($expenseSum[0]["gst"] ?? 0),
+      "expenseBills" => (int) ($expenseSum[0]["bills"] ?? 0),
     ]),
     "sales" => $sales,
     "byItem" => $byItem,
@@ -211,6 +235,7 @@ function pos_build_reports($bid, $from, $to) {
     "stock" => $stock,
     "low" => $low,
     "purchases" => $purchases,
+    "expenses" => $expenses,
     "customers" => $customers,
     "php" => true,
   ];
@@ -354,10 +379,10 @@ function pos_reports_to_sheets($data) {
     ],
     [
       "name" => "Stock",
-      "headers" => ["Code", "Name", "Local", "Category", "Subcategory", "Stock g", "Reorder g", "Retail", "B2B", "Purchase", "GST %"],
+      "headers" => ["Code", "Name", "HSN", "Category", "Subcategory", "Stock g", "Reorder g", "Retail", "B2B", "Purchase", "GST %"],
       "rows" => array_map(function ($i) use ($num) {
         return [
-          $i["code"], $i["name"], $i["local_name"], $i["category"], $i["subcategory"],
+          $i["code"], $i["name"], $i["hsn"], $i["category"], $i["subcategory"],
           $num($i["stock_gm"]), $num($i["reorder_level_gm"]), $num($i["retail_rate"]), $num($i["b2b_rate"]),
           $num($i["purchase_rate"]), $num($i["gst_rate"]),
         ];
@@ -379,6 +404,17 @@ function pos_reports_to_sheets($data) {
           $num($p["subtotal"]), $num($p["gst"]), $num($p["total"]), $p["payment_method"], $p["payment_status"],
         ];
       }, $data["purchases"] ?? []),
+    ],
+    [
+      "name" => "Expenses",
+      "headers" => ["No.", "Date", "Category", "Amount", "GST", "Total", "Pay", "Notes"],
+      "rows" => array_map(function ($e) use ($num) {
+        return [
+          $e["expense_number"], $e["expense_date"], $e["category"],
+          $num($e["amount"]), $num($e["gst"]), $num($e["total"] ?? ($e["amount"] + $e["gst"])),
+          $e["payment_method"], $e["notes"],
+        ];
+      }, $data["expenses"] ?? []),
     ],
     [
       "name" => "Customers",

@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 import { query, withTransaction } from "./db.js";
 import { bid, branchId, authUser } from "./context.js";
 import { lineAmount, round2, registerCrud } from "./crud.js";
+import { fyRangeForToday } from "./fy.js";
 import { buildReports, reportsToSheets } from "./reports.js";
 import { workbookXml } from "./excel.js";
 import { ensureSchema, seedPlatform } from "./schema.js";
@@ -42,7 +43,7 @@ app.use((req, _res, next) => {
   }
   next();
 });
-app.use(express.json({ limit: "8mb" }));
+app.use(express.json({ limit: "32mb" }));
 app.use((req, res, next) => {
   if (req.path === "/pos-bridge.json" || req.path === "/.env" || req.path.startsWith("/.env.")) {
     res.status(404).end();
@@ -246,8 +247,9 @@ app.get("/api/today", requireStaff, async (_req, res) => {
 });
 
 app.get("/api/reports", requireStaff, requirePerm("reports"), async (req, res) => {
-  const from = String(req.query.from || new Date().toISOString().slice(0, 10));
-  const to = String(req.query.to || from);
+  const fy = fyRangeForToday();
+  const from = String(req.query.from || fy.from);
+  const to = String(req.query.to || fy.to);
   try {
     res.json(await buildReports(from, to));
   } catch (err) {
@@ -256,8 +258,9 @@ app.get("/api/reports", requireStaff, requirePerm("reports"), async (req, res) =
 });
 
 app.get("/api/reports/excel", requireStaff, requirePerm("reports"), async (req, res) => {
-  const from = String(req.query.from || new Date().toISOString().slice(0, 10));
-  const to = String(req.query.to || from);
+  const fy = fyRangeForToday();
+  const from = String(req.query.from || fy.from);
+  const to = String(req.query.to || fy.to);
   const sheet = req.query.sheet ? String(req.query.sheet) : "";
   try {
     const data = await buildReports(from, to);

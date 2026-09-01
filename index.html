@@ -2,12 +2,12 @@
 <html lang="en" data-theme="velocity">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
     <title>SWAMI MASALE POS</title>
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./css/pos.css?v=20260901deploy35" />
-    <link rel="stylesheet" href="./css/saas.css?v=20260901deploy35" />
+    <link rel="stylesheet" href="./css/pos.css?v=20260901deploy44" />
+    <link rel="stylesheet" href="./css/saas.css?v=20260901deploy44" />
   </head>
   <body>
     <div class="app" id="app">
@@ -41,6 +41,7 @@
           <div class="nav-group">
             <p class="nav-group-label">Finance</p>
             <button class="nav-btn" type="button" data-view="accounts"><span class="nav-icon" aria-hidden="true">₹</span>Accounts</button>
+            <button class="nav-btn" type="button" data-view="expenses"><span class="nav-icon" aria-hidden="true">−</span>Expenses</button>
             <button class="nav-btn" type="button" data-view="reports"><span class="nav-icon" aria-hidden="true">▣</span>Reports</button>
           </div>
           <div class="nav-group">
@@ -50,6 +51,7 @@
             <button class="nav-btn" type="button" data-view="devices"><span class="nav-icon" aria-hidden="true">⌁</span>Devices</button>
             <button class="nav-btn" type="button" data-view="support"><span class="nav-icon" aria-hidden="true">?</span>Support</button>
             <button class="nav-btn" type="button" data-view="settings"><span class="nav-icon" aria-hidden="true">⚙</span>Settings</button>
+            <button class="nav-btn" type="button" data-view="backup"><span class="nav-icon" aria-hidden="true">⇩</span>Backup</button>
           </div>
         </div>
         <div class="nav-foot">
@@ -57,6 +59,7 @@
           <button class="btn-logout" type="button" data-logout>Logout</button>
         </div>
       </nav>
+      <div class="nav-scrim" id="nav-scrim" hidden></div>
 
       <div class="stage">
         <header class="view-topbar" id="view-topbar">
@@ -91,7 +94,7 @@
           <div class="edit-order-banner" id="edit-order-banner" hidden></div>
           <header class="topbar counter-topbar">
             <form class="search" id="search-form">
-              <input id="search" type="search" placeholder="Search spice, local name, or code…" autocomplete="off" />
+              <input id="search" type="search" placeholder="Search spice, HSN, or code…" autocomplete="off" />
             </form>
             <div class="customer-picker">
               <select id="customer" class="select" aria-label="Customer"></select>
@@ -108,7 +111,7 @@
             <form class="quick-customer" id="quick-customer-form" autocomplete="off">
               <input id="qc-name" name="qc-name" placeholder="Customer name" maxlength="120" />
               <input id="qc-mobile" name="qc-mobile" placeholder="Mobile no." inputmode="tel" maxlength="15" />
-              <button class="btn primary" type="submit" id="qc-save">Add customer</button>
+              <button class="btn primary" type="submit" id="qc-save">Add</button>
               <span class="hint" id="qc-hint"></span>
             </form>
           </header>
@@ -143,11 +146,11 @@
 
         <section class="view" id="view-items" hidden>
           <h2 class="visually-hidden">Items</h2>
-          <p class="lede">Unit type (qty / kg / litre), rates, and stock.</p>
+          <p class="lede">Name, HSN code, unit type, rates, and stock.</p>
           <form class="settings wide" id="item-form">
             <input type="hidden" id="item-id" />
-            <label>Name <input id="item-name" required /></label>
-            <label>Local name <input id="item-local" /></label>
+            <label>Name <input id="item-name" required maxlength="180" /></label>
+            <label>HSN code <input id="item-hsn" maxlength="16" placeholder="e.g. 0908" autocomplete="off" /></label>
             <label>Category
               <input id="item-category" list="category-list" placeholder="Whole Spices" />
             </label>
@@ -257,19 +260,31 @@
           <p class="lede">Supplier purchase bills with thermal preview, input GST breakdown, and print.</p>
           <details class="purchase-new" id="purchase-new">
             <summary class="btn">New purchase</summary>
-            <form class="settings wide" id="purchase-form">
-              <label>Supplier <select id="po-supplier"></select></label>
-              <label>Invoice no. <input id="po-invoice" /></label>
-              <label>Date <input id="po-date" type="date" /></label>
-              <label>Pay
-                <select id="po-pay">
-                  <option value="cash">Cash</option>
-                  <option value="upi">UPI</option>
-                  <option value="credit">Credit</option>
-                </select>
-              </label>
-              <div id="po-lines" class="pack-compose"></div>
-              <button class="btn primary" type="submit">Save purchase</button>
+            <form class="settings purchase-form" id="purchase-form">
+              <div class="purchase-head">
+                <label>Supplier <select id="po-supplier"></select></label>
+                <label>Invoice no. <input id="po-invoice" autocomplete="off" /></label>
+                <label>Date <input id="po-date" type="date" /></label>
+                <label>Pay
+                  <select id="po-pay">
+                    <option value="cash">Cash</option>
+                    <option value="upi">UPI</option>
+                    <option value="credit">Credit</option>
+                  </select>
+                </label>
+              </div>
+              <div class="purchase-items">
+                <div class="purchase-items-bar">
+                  <h3>Item list</h3>
+                  <input id="po-item-search" type="search" placeholder="Search item or HSN…" autocomplete="off" />
+                  <span class="purchase-items-meta" id="po-selected-meta">0 selected</span>
+                </div>
+                <div id="po-lines" class="po-lines"></div>
+              </div>
+              <div class="purchase-foot">
+                <p class="po-total" id="po-total">₹0.00</p>
+                <button class="btn primary" type="submit">Save purchase</button>
+              </div>
             </form>
             <div class="hint" id="po-hint"></div>
           </details>
@@ -280,11 +295,16 @@
         </section>
         <section class="view" id="view-suppliers" hidden>
           <h2 class="visually-hidden">Suppliers</h2>
+          <p class="lede">Vendor name, contact, email, address, and GSTIN.</p>
           <form class="settings wide" id="supplier-form">
-            <label>Name <input id="sup-name" required /></label>
-            <label>Contact <input id="sup-contact" /></label>
-            <label>Mobile <input id="sup-mobile" /></label>
-            <label>GSTIN <input id="sup-gstin" /></label>
+            <label>Name <input id="sup-name" required maxlength="180" autocomplete="organization" /></label>
+            <label>Contact <input id="sup-contact" maxlength="120" autocomplete="name" /></label>
+            <label>Mobile <input id="sup-mobile" type="tel" inputmode="numeric" maxlength="15" placeholder="10-digit mobile" /></label>
+            <label>Email <input id="sup-email" type="email" maxlength="160" placeholder="vendor@email.com" autocomplete="email" /></label>
+            <label>GSTIN <input id="sup-gstin" maxlength="20" placeholder="Optional" autocomplete="off" /></label>
+            <label class="full">Address
+              <textarea id="sup-address" rows="2" maxlength="500" placeholder="Street, city, PIN"></textarea>
+            </label>
             <button class="btn primary" type="submit">Save</button>
           </form>
           <div class="hint" id="sup-hint"></div>
@@ -356,7 +376,7 @@
           <p class="lede">Platform helpline from Master Admin (MySQL). Shop details are below.</p>
           <div class="report-grid" id="support-cards"></div>
         </section>
-        <section class="view" id="view-accounts" hidden>
+        <section class="view view-finance" id="view-accounts" hidden>
           <h2 class="visually-hidden">Accounts</h2>
           <p class="lede">Double-entry books: receivables, payables, chart of accounts, trial balance, P&amp;L, balance sheet, and cash book.</p>
           <div class="report-grid" id="acc-summary"></div>
@@ -372,9 +392,11 @@
             <button class="btn acc-tab" type="button" data-acc-tab="cash-book">Cash book</button>
           </div>
           <form class="report-toolbar" id="acc-period-form">
+            <span class="fy-chip" id="acc-fy-label">FY</span>
             <label>From <input id="acc-from" type="date" /></label>
             <label>To <input id="acc-to" type="date" /></label>
             <label>As of <input id="acc-asof" type="date" /></label>
+            <button class="btn" type="button" id="acc-this-fy">This FY</button>
             <button class="btn primary" type="submit">Refresh</button>
           </form>
           <div class="hint" id="acc-hint"></div>
@@ -388,12 +410,48 @@
           <div id="acc-pane-balance-sheet" class="acc-pane" hidden><div class="table-wrap" id="acc-bs-table"></div></div>
           <div id="acc-pane-cash-book" class="acc-pane" hidden><div class="table-wrap" id="acc-cash-table"></div></div>
         </section>
-        <section class="view" id="view-reports" hidden>
+        <section class="view view-finance" id="view-expenses" hidden>
+          <h2 class="visually-hidden">Expenses</h2>
+          <p class="lede">Shop expenses for the Indian financial year (1 April–31 March). Saved entries post to Accounts.</p>
+          <form class="settings expense-form" id="expense-form">
+            <div class="purchase-head">
+              <label>Date <input id="exp-date" type="date" required /></label>
+              <label>Category <select id="exp-category"></select></label>
+              <label>Amount ₹ <input id="exp-amount" type="number" min="0.01" step="0.01" required /></label>
+              <label>GST ₹ <input id="exp-gst" type="number" min="0" step="0.01" value="0" /></label>
+              <label>Pay
+                <select id="exp-pay">
+                  <option value="cash">Cash</option>
+                  <option value="upi">UPI</option>
+                  <option value="card">Card</option>
+                  <option value="bank">Bank</option>
+                </select>
+              </label>
+              <label class="full">Notes <input id="exp-notes" maxlength="240" placeholder="Optional" /></label>
+            </div>
+            <div class="purchase-foot">
+              <p class="po-total" id="exp-total-preview">₹0.00</p>
+              <button class="btn primary" type="submit">Save expense</button>
+            </div>
+          </form>
+          <div class="hint" id="exp-hint"></div>
+          <form class="report-toolbar" id="exp-filter">
+            <span class="fy-chip" id="exp-fy-label">FY</span>
+            <label>From <input id="exp-from" type="date" /></label>
+            <label>To <input id="exp-to" type="date" /></label>
+            <button class="btn" type="button" id="exp-this-fy">This FY</button>
+            <button class="btn primary" type="submit">Show</button>
+          </form>
+          <div class="table-wrap" id="expenses-table"></div>
+        </section>
+        <section class="view view-finance" id="view-reports" hidden>
           <h2 class="visually-hidden">Reports</h2>
-          <p class="lede">Sales, stock, purchases, GST, and daywise payment summary. Download one sheet or the full Excel workbook.</p>
+          <p class="lede">Sales, stock, purchases, expenses, GST, and daywise payment summary for the Indian financial year (1 April–31 March).</p>
           <form class="report-toolbar" id="report-form">
+            <span class="fy-chip" id="rep-fy-label">FY</span>
             <label>From <input id="rep-from" type="date" required /></label>
             <label>To <input id="rep-to" type="date" required /></label>
+            <button class="btn" type="button" id="rep-this-fy">This FY</button>
             <button class="btn primary" type="submit">Show</button>
             <a class="btn" id="rep-excel-all" href="#">Download all Excel</a>
           </form>
@@ -403,55 +461,68 @@
         </section>
         <section class="view" id="view-settings" hidden>
           <h2 class="visually-hidden">Settings</h2>
-          <p class="lede">Company profile, shop timezone, and branding.</p>
-          <form class="settings" id="settings-form">
+          <p class="lede">Company profile, timezone, and shop logo. Shop backup is under Admin → Backup.</p>
+          <form class="settings settings-page" id="settings-form">
             <div class="settings-section">
               <h3>Business details</h3>
-              <label>Name <input id="set-name" /></label>
-              <label>Address <input id="set-address" /></label>
-              <label>Phone <input id="set-phone" /></label>
-              <label>Email <input id="set-email" /></label>
-              <label>GSTIN <input id="set-gstin" /></label>
+              <div class="settings-grid">
+                <label class="full">Name
+                  <input id="set-name" maxlength="180" autocomplete="organization" />
+                </label>
+                <label class="full">Address
+                  <textarea id="set-address" rows="2" maxlength="500" placeholder="Street, city, PIN"></textarea>
+                </label>
+                <label>Phone
+                  <input id="set-phone" type="tel" inputmode="numeric" maxlength="15" placeholder="10-digit mobile" />
+                </label>
+                <label>Email
+                  <input id="set-email" type="email" maxlength="160" placeholder="shop@email.com" />
+                </label>
+                <label class="full">GSTIN
+                  <input id="set-gstin" maxlength="20" placeholder="Optional" autocomplete="off" />
+                </label>
+              </div>
             </div>
             <div class="settings-section">
               <h3>Regional</h3>
               <p class="section-note">Used for reports, invoices, and order timestamps.</p>
-              <label>Shop timezone
-                <select id="set-timezone" aria-label="Shop timezone">
-                  <option value="Asia/Kolkata">India (IST, UTC+5:30)</option>
-                  <option value="Asia/Dubai">UAE (UTC+4)</option>
-                  <option value="Asia/Singapore">Singapore (UTC+8)</option>
-                  <option value="Asia/Colombo">Sri Lanka (UTC+5:30)</option>
-                  <option value="Asia/Kathmandu">Nepal (UTC+5:45)</option>
-                  <option value="UTC">UTC</option>
-                </select>
-              </label>
+              <div class="settings-grid">
+                <label class="full">Shop timezone
+                  <select id="set-timezone" aria-label="Shop timezone">
+                    <option value="Asia/Kolkata">India (IST, UTC+5:30)</option>
+                    <option value="Asia/Dubai">UAE (UTC+4)</option>
+                    <option value="Asia/Singapore">Singapore (UTC+8)</option>
+                    <option value="Asia/Colombo">Sri Lanka (UTC+5:30)</option>
+                    <option value="Asia/Kathmandu">Nepal (UTC+5:45)</option>
+                    <option value="UTC">UTC</option>
+                  </select>
+                </label>
+              </div>
               <p class="field-hint" id="timezone-preview">Current shop time will appear in the nav after save.</p>
             </div>
             <div class="settings-section">
               <h3>Branding</h3>
-              <label>Logo
-                <input id="set-logo" type="file" accept="image/*" />
-              </label>
-              <img id="logo-preview" class="logo-preview" alt="Logo preview" hidden />
-              <button class="btn" type="button" id="logo-clear">Remove logo</button>
+              <p class="section-note">Shown on the left nav and on printed invoices.</p>
+              <div class="logo-row">
+                <div class="logo-preview-frame">
+                  <img id="logo-preview" class="logo-preview" alt="Logo preview" hidden />
+                </div>
+                <div class="logo-controls">
+                  <div class="logo-pick-row">
+                    <input id="set-logo" class="logo-file-input" type="file" accept="image/*" />
+                    <label class="btn logo-pick" for="set-logo">Choose image</label>
+                    <span class="logo-file-name" id="logo-file-name">PNG, JPG, or SVG</span>
+                  </div>
+                  <button class="btn" type="button" id="logo-clear" hidden>Remove logo</button>
+                </div>
+              </div>
             </div>
-            <button class="btn primary" type="submit">Save settings</button>
+            <div class="settings-actions">
+              <button class="btn primary" type="submit">Save settings</button>
+              <p class="hint" id="settings-hint"></p>
+            </div>
           </form>
-          <div class="hint" id="settings-hint"></div>
-          <div class="settings" id="backup-card">
-            <div class="settings-section">
-              <h3>Backup</h3>
-              <p class="section-note">Download a JSON copy of this shop (items, stock, customers, invoices, purchases, accounts). Keep the file private. Restore only a backup from this same shop — it replaces current shop data.</p>
-              <a class="btn primary" id="btn-backup-download" href="#">Download backup</a>
-              <label>Restore file
-                <input id="backup-file" type="file" accept="application/json,.json" />
-              </label>
-              <button class="btn" type="button" id="btn-backup-restore">Restore backup</button>
-              <p class="hint" id="backup-hint"></p>
-            </div>
-          </div>
-          <div class="settings dev-settings-card" id="dev-settings-section" hidden>
+          <div class="settings settings-page dev-settings-card" id="dev-settings-section" hidden>
             <div class="settings-section">
               <h3>Developer mode</h3>
               <p class="section-note">Debug tools for this browser only. Business admins can enable API logs and session info.</p>
@@ -461,6 +532,24 @@
                 Enable developer mode
               </label>
               <p class="field-hint">Shortcut: Ctrl+Shift+D · Add <code>?dev=1</code> to the URL to auto-enable.</p>
+            </div>
+          </div>
+        </section>
+        <section class="view" id="view-backup" hidden>
+          <h2 class="visually-hidden">Backup</h2>
+          <p class="lede">Download a JSON copy of this shop, or restore a backup from this same shop.</p>
+          <div class="settings" id="backup-card">
+            <div class="settings-section backup-panel">
+              <h3>Shop backup</h3>
+              <p class="section-note">Includes items, stock, customers, invoices, purchases, and accounts. Keep the file private. Restore replaces current shop data for this business only.</p>
+              <div class="backup-actions">
+                <a class="btn primary" id="btn-backup-download" href="#">Download backup</a>
+                <label class="backup-file-lab">Restore file
+                  <input id="backup-file" type="file" accept="application/json,.json" />
+                </label>
+                <button class="btn" type="button" id="btn-backup-restore">Restore backup</button>
+              </div>
+              <p class="hint" id="backup-hint"></p>
             </div>
           </div>
         </section>
@@ -506,10 +595,10 @@
         </section>
       </div>
     </aside>
-    <script src="./js/pos-api.js?v=20260901deploy35" defer></script>
-    <script src="./js/units.js?v=20260901deploy35" defer></script>
-    <script src="./js/dev-mode.js?v=20260901deploy35" defer></script>
-    <script src="./js/invoice.js?v=20260901deploy35" defer></script>
-    <script src="./js/app.js?v=20260901deploy35" defer></script>
+    <script src="./js/pos-api.js?v=20260901deploy44" defer></script>
+    <script src="./js/units.js?v=20260901deploy44" defer></script>
+    <script src="./js/dev-mode.js?v=20260901deploy44" defer></script>
+    <script src="./js/invoice.js?v=20260901deploy44" defer></script>
+    <script src="./js/app.js?v=20260901deploy44" defer></script>
   </body>
 </html>

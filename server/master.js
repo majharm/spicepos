@@ -7,6 +7,8 @@ import { registerBusiness, updateBusiness } from "./onboard.js";
 import { defaultPerms } from "./roles.js";
 import { publicStatus } from "./auth.js";
 import { getPlatformSettings, setPlatformSetting } from "./settings.js";
+import { registerMasterBackup } from "./backup.js";
+import { sendWelcomeSignup, sendWelcomeStaff } from "./mail.js";
 
 function send(res, fn) {
   return Promise.resolve()
@@ -17,6 +19,7 @@ function send(res, fn) {
 
 export function registerMaster(app) {
   app.use("/api/master", requireMaster);
+  registerMasterBackup(app);
 
   app.get("/api/master/dashboard", (req, res) =>
     send(res, async () => {
@@ -154,7 +157,7 @@ export function registerMaster(app) {
 
   app.post("/api/master/businesses", async (req, res) => {
     try {
-      const { businessId } = await registerBusiness(req.body || {});
+      const { businessId, user } = await registerBusiness(req.body || {});
       await platformAudit(
         req.auth.admin,
         "Business Created",
@@ -162,6 +165,15 @@ export function registerMaster(app) {
         req,
       );
       const [row] = await query("SELECT * FROM businesses WHERE id = ?", [businessId]);
+      await sendWelcomeSignup(
+        {
+          shopName: row?.name,
+          ownerName: user?.first_name,
+          email: user?.email,
+          username: user?.username,
+        },
+        req,
+      );
       res.json({ ok: true, business: row });
     } catch (err) {
       const msg = String(err.message || err);
@@ -300,6 +312,16 @@ export function registerMaster(app) {
         ],
       );
       await platformAudit(req.auth.admin, "Business Admin Created", { module: "users", target_id: uid, target_name: b.email }, req);
+      await sendWelcomeStaff(
+        {
+          shopName: biz.name,
+          name: b.name || "Admin",
+          email: String(b.email).toLowerCase(),
+          username: b.username || String(b.email).split("@")[0],
+          role: "business_admin",
+        },
+        req,
+      );
       return { ok: true, userId: uid };
     }),
   );

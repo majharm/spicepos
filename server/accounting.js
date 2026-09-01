@@ -3,6 +3,17 @@ import { query } from "./db.js";
 import { bid, authUser } from "./context.js";
 import { nextSeq, round2 } from "./crud.js";
 
+export const EXPENSE_COA = [
+  { code: "5102", name: "Rent", account_group: "expense" },
+  { code: "5103", name: "Electricity", account_group: "expense" },
+  { code: "5104", name: "Salaries & wages", account_group: "expense" },
+  { code: "5105", name: "Transport & freight", account_group: "expense" },
+  { code: "5106", name: "Packaging", account_group: "expense" },
+  { code: "5107", name: "Telephone & internet", account_group: "expense" },
+  { code: "5108", name: "Repairs & maintenance", account_group: "expense" },
+  { code: "5199", name: "Miscellaneous expenses", account_group: "expense" },
+];
+
 export const DEFAULT_COA = [
   { code: "1001", name: "Cash in hand", account_group: "asset" },
   { code: "1002", name: "Bank account", account_group: "asset" },
@@ -17,6 +28,7 @@ export const DEFAULT_COA = [
   { code: "3101", name: "Capital account", account_group: "equity" },
   { code: "4101", name: "Sales", account_group: "income" },
   { code: "5101", name: "Purchase of goods", account_group: "expense" },
+  ...EXPENSE_COA,
 ];
 
 const CASH_CODES = new Set(["1001", "1002", "1003"]);
@@ -41,11 +53,12 @@ function assetCodeForMethod(method) {
 
 export async function ensureCoa(conn, businessId = bid()) {
   const [rows] = await conn.query(
-    "SELECT id FROM chart_of_accounts WHERE business_id = ? LIMIT 1",
+    "SELECT code FROM chart_of_accounts WHERE business_id = ?",
     [businessId],
   );
-  if (rows.length) return;
+  const have = new Set(rows.map((r) => r.code));
   for (const row of DEFAULT_COA) {
+    if (have.has(row.code)) continue;
     await conn.query(
       `INSERT INTO chart_of_accounts (id, business_id, code, name, account_group, is_system, active)
        VALUES (?,?,?,?,?,1,1)`,
@@ -186,6 +199,35 @@ export async function postReceiptJournal(conn, { amount, payment_method, entryNo
       { accountCode: assetCodeForMethod(payment_method), debit: round2(amount), credit: 0 },
       { accountCode: "1101", debit: 0, credit: round2(amount) },
     ],
+  });
+}
+
+export function expenseJournalLines({ amount, gst, payment_method, account_code }) {
+  const amt = round2(amount);
+  const gstAmt = round2(gst);
+  const { cgst, sgst } = splitGst(gstAmt);
+  const total = round2(amt + gstAmt);
+  const lines = [{ accountCode: account_code, debit: amt, credit: 0 }];
+  if (cgst > 0) lines.push({ accountCode: "2301", debit: cgst, credit: 0 });
+  if (sgst > 0) lines.push({ accountCode: "2302", debit: sgst, credit: 0 });
+  const method = String(payment_method || "cash").toLowerCase();
+  lines.push({
+    accountCode: method === "credit" ? "2101" : assetCodeForMethod(method),
+    debit: 0,
+    credit: total,
+  });
+  return lines;
+}
+
+export async function postExpenseJournal(conn, expense) {
+  if (await journalExists(conn, "expense", expense.id)) return null;
+  return postJournal(conn, {
+    voucherType: "expense",
+    voucherDate: isoDate(expense.expense_date),
+    narration: `Expense ${expense.expense_number} · ${expense.category}`,
+    referenceType: "expense",
+    referenceId: expense.id,
+    lines: expenseJournalLines(expense),
   });
 }
 

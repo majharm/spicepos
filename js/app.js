@@ -113,21 +113,23 @@ const PAYMENT_STATUSES = ["paid", "partial", "unpaid"];
 const VIEW_META = {
   dashboard: { title: "Dashboard", subtitle: "Your shop today" },
   counter: { title: "Counter", subtitle: "POS checkout — tap items to add" },
-  items: { title: "Items", subtitle: "Unit type, rates, and stock" },
+  items: { title: "Items", subtitle: "HSN, unit type, rates, and stock" },
   units: { title: "Unit master", subtitle: "Units used on items — qty, kg, litre, and custom" },
   customers: { title: "Customers", subtitle: "B2C retail and B2B wholesale accounts" },
   packs: { title: "Packs", subtitle: "Pre-defined spice packs and compositions" },
   orders: { title: "Invoices", subtitle: "Tax invoices — search, print, update status" },
   purchases: { title: "Purchases", subtitle: "Supplier bills with GST and thermal print" },
-  suppliers: { title: "Suppliers", subtitle: "Vendor contacts and GSTIN" },
+  suppliers: { title: "Suppliers", subtitle: "Vendor contacts, address, and GSTIN" },
   stock: { title: "Stock", subtitle: "Adjustments, transfers, and low-stock alerts" },
   staff: { title: "Staff & roles", subtitle: "Users, roles, and access" },
   branches: { title: "Branches", subtitle: "Shop locations and contact details" },
   devices: { title: "POS devices", subtitle: "Registers and terminal codes" },
   support: { title: "Support", subtitle: "Platform helpline and shop details" },
   accounts: { title: "Accounts", subtitle: "Receivables, payables, GL, and books" },
-  reports: { title: "Reports", subtitle: "Sales, stock, GST, and daywise payments" },
-  settings: { title: "Settings", subtitle: "Company profile, backup, and branding" },
+  expenses: { title: "Expenses", subtitle: "Rent, power, wages, and other shop costs" },
+  reports: { title: "Reports", subtitle: "Indian FY 1 Apr–31 Mar — sales, GST, expenses" },
+  settings: { title: "Settings", subtitle: "Company profile and branding" },
+  backup: { title: "Backup", subtitle: "Download or restore this shop" },
 };
 
 function orderStatusClass(status) {
@@ -386,6 +388,57 @@ function ymd(d = new Date()) {
   return shopYmd(d);
 }
 
+const EXPENSE_CATEGORIES = [
+  { code: "5102", name: "Rent" },
+  { code: "5103", name: "Electricity" },
+  { code: "5104", name: "Salaries & wages" },
+  { code: "5105", name: "Transport & freight" },
+  { code: "5106", name: "Packaging" },
+  { code: "5107", name: "Telephone & internet" },
+  { code: "5108", name: "Repairs & maintenance" },
+  { code: "5199", name: "Miscellaneous" },
+];
+
+function indianFinancialYear(ymdStr) {
+  const s = String(ymdStr || ymd()).slice(0, 10);
+  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  const year = m ? Number(m[1]) : new Date().getFullYear();
+  const month = m ? Number(m[2]) : new Date().getMonth() + 1;
+  const startYear = month >= 4 ? year : year - 1;
+  const endYear = startYear + 1;
+  return {
+    startYear,
+    from: `${startYear}-04-01`,
+    to: `${endYear}-03-31`,
+    label: `FY ${startYear}–${String(endYear).slice(-2)}`,
+  };
+}
+
+function fyRangeForToday() {
+  const today = ymd();
+  const fy = indianFinancialYear(today);
+  const asOf = today < fy.from ? fy.from : today > fy.to ? fy.to : today;
+  return {
+    ...fy,
+    from: fy.from,
+    to: fy.to,
+    asOf,
+  };
+}
+
+function paintFyChip(id, fy) {
+  const el = $(id);
+  if (el) el.textContent = fy.label;
+}
+
+function applyFyRange(fromId, toId, extraId) {
+  const range = fyRangeForToday();
+  if ($(fromId)) $(fromId).value = range.from;
+  if ($(toId)) $(toId).value = range.to;
+  if (extraId && $(extraId)) $(extraId).value = range.asOf || ymd();
+  return range;
+}
+
 function showLogo(img, url) {
   if (!img) return;
   if (url) {
@@ -395,6 +448,12 @@ function showLogo(img, url) {
     img.removeAttribute("src");
     img.hidden = true;
   }
+  if (img.id === "logo-preview" && $("logo-clear")) $("logo-clear").hidden = !url;
+}
+
+function paintLogoFileName(name = "") {
+  const el = $("logo-file-name");
+  if (el) el.textContent = name || "PNG, JPG, or SVG";
 }
 
 function excelHref(sheet) {
@@ -451,6 +510,20 @@ function reportBlock(title, sheet, headers, rows) {
   </section>`;
 }
 
+function isMobileLayout() {
+  return window.matchMedia("(max-width: 980px)").matches;
+}
+
+function setNavCollapsed(collapsed) {
+  const app = document.getElementById("app");
+  const btn = $("nav-toggle");
+  if (!app) return;
+  app.classList.toggle("nav-collapsed", collapsed);
+  btn?.setAttribute("aria-expanded", collapsed ? "false" : "true");
+  const scrim = $("nav-scrim");
+  if (scrim) scrim.hidden = collapsed || !isMobileLayout();
+}
+
 function can(module) {
   if (state.session?.role === "business_admin") return true;
   return state.perms?.[module] === true;
@@ -475,8 +548,10 @@ function applyNav() {
       devices: "devices",
       support: "support",
       accounts: "accounts",
+      expenses: "accounts",
       reports: "reports",
       settings: "settings",
+      backup: "settings",
     };
     btn.hidden = map[view] ? !can(map[view]) : false;
   });
@@ -500,9 +575,12 @@ function showView(name) {
   });
   document.body.classList.toggle("counter-mode", name === "counter");
   document.querySelector(".stage")?.classList.toggle("is-counter", name === "counter");
+  const page = document.getElementById(`view-${name}`);
+  if (page) page.scrollTop = 0;
   paintViewHeader(name);
   if (name === "reports") loadReports();
   if (name === "accounts") loadAccounts();
+  if (name === "expenses") loadExpenses();
   if (name === "orders") loadOrders();
   if (name === "purchases") loadPurchases();
   if (name === "suppliers") loadSuppliers();
@@ -519,6 +597,7 @@ function showView(name) {
   if (name === "staff") loadStaff();
   if (name === "branches") loadBranches();
   if (name === "devices") loadDevices();
+  if (isMobileLayout()) setNavCollapsed(true);
 }
 
 function setHint(msg, kind = "") {
@@ -611,7 +690,7 @@ function filteredItems() {
   const list = activeItems();
   if (!q) return list;
   return list.filter((i) =>
-    [i.name, i.local_name, i.code, i.category, i.subcategory].join(" ").toLowerCase().includes(q),
+    [i.name, i.hsn, i.local_name, i.code, i.category, i.subcategory].join(" ").toLowerCase().includes(q),
   );
 }
 
@@ -621,7 +700,7 @@ function renderCatalog() {
       const low = Number(i.stock_gm) <= Number(i.reorder_level_gm);
       return `<button class="card" type="button" data-add="${escapeHtml(i.id)}">
         <div class="sku">${escapeHtml(i.category)} / ${escapeHtml(i.subcategory || "—")}</div>
-        <div class="name">${escapeHtml(i.name)} <small>${escapeHtml(i.local_name || "")}</small></div>
+        <div class="name">${escapeHtml(i.name)} <small>${escapeHtml(i.hsn ? `HSN ${i.hsn}` : "")}</small></div>
         <div class="meta"><span>${escapeHtml(fmtQty(i.stock_gm, i))}</span><span>${money(rateFor(i))}${escapeHtml(POSUnits.rateSuffix(itemUnit(i)))}</span></div>
         <div class="stock ${low ? "low" : "ok"}">${escapeHtml(i.code)} · GST ${escapeHtml(i.gst_rate)}%</div>
       </button>`;
@@ -777,12 +856,13 @@ function fillDatalists() {
 
 function renderItemsTable() {
   $("items-table").innerHTML = `<table><thead><tr>
-      <th>Code</th><th>Item</th><th>Unit</th><th>Category</th><th>Subcategory</th><th>Retail</th><th>B2B</th><th>Stock</th><th></th>
+      <th>Code</th><th>Item</th><th>HSN</th><th>Unit</th><th>Category</th><th>Subcategory</th><th>Retail</th><th>B2B</th><th>Stock</th><th></th>
   </tr></thead><tbody>${state.items
     .map(
       (i) => `<tr>
       <td>${escapeHtml(i.code)}</td>
       <td>${escapeHtml(i.name)}</td>
+      <td>${escapeHtml(i.hsn || "—")}</td>
       <td>${escapeHtml(itemUnit(i))}</td>
       <td>${escapeHtml(i.category)}</td>
       <td>${escapeHtml(i.subcategory || "—")}</td>
@@ -825,17 +905,77 @@ function renderPackCompose() {
     .join("");
 }
 
+function poUnitLabel(item) {
+  const unit = itemUnit(item);
+  if (POSUnits.isCount(unit)) return "pcs";
+  if (POSUnits.typeOf(unit).family === "volume") return "ml";
+  return "g";
+}
+
 function renderPoLines() {
-  $("po-lines").innerHTML = activeItems()
-    .map(
-      (i) => `<label>
-        <input type="checkbox" data-po-item="${escapeHtml(i.id)}" />
-        ${escapeHtml(i.name)}
-        <input type="number" min="0" step="${POSUnits.step(itemUnit(i))}" value="${POSUnits.isCount(itemUnit(i)) ? 1 : 1000}" data-po-qty="${escapeHtml(i.id)}" /> ${escapeHtml(POSUnits.isCount(itemUnit(i)) ? "pcs" : POSUnits.typeOf(itemUnit(i)).family === "volume" ? "ml" : "g")}
-        <input type="number" step="0.01" value="${escapeHtml(i.purchase_rate)}" data-po-rate="${escapeHtml(i.id)}" /> ₹${escapeHtml(POSUnits.rateSuffix(itemUnit(i)))}
-      </label>`,
-    )
-    .join("");
+  const el = $("po-lines");
+  if (!el) return;
+  if ($("po-date") && !$("po-date").value) $("po-date").value = ymd();
+  const items = activeItems();
+  if (!items.length) {
+    el.innerHTML = '<p class="hint">No items in the catalog yet.</p>';
+    paintPoTotals();
+    return;
+  }
+  el.innerHTML = `<div class="po-table-wrap"><table class="po-table"><thead><tr>
+    <th class="po-check"></th><th>Item</th><th>HSN</th><th>Qty</th><th>Unit</th><th>Rate</th><th class="num">Amount</th>
+  </tr></thead><tbody>${items
+    .map((i) => {
+      const unit = itemUnit(i);
+      const qty = POSUnits.isCount(unit) ? 1 : 1000;
+      const search = [i.name, i.hsn, i.code, i.category, i.subcategory].join(" ").toLowerCase();
+      return `<tr data-po-row="${escapeHtml(i.id)}" data-po-search="${escapeHtml(search)}" data-po-unit="${escapeHtml(unit)}">
+        <td class="po-check"><input type="checkbox" data-po-item="${escapeHtml(i.id)}" /></td>
+        <td class="po-name">${escapeHtml(i.name)}</td>
+        <td class="po-hsn">${escapeHtml(i.hsn || "—")}</td>
+        <td><input type="number" min="0" step="${POSUnits.step(unit)}" value="${qty}" data-po-qty="${escapeHtml(i.id)}" /></td>
+        <td class="po-unit">${escapeHtml(poUnitLabel(i))}</td>
+        <td><div class="po-rate-cell"><input type="number" min="0" step="0.01" value="${escapeHtml(i.purchase_rate)}" data-po-rate="${escapeHtml(i.id)}" /><span class="po-suffix">₹${escapeHtml(POSUnits.rateSuffix(unit))}</span></div></td>
+        <td class="num" data-po-amt="${escapeHtml(i.id)}">${money(POSUnits.lineAmount(qty, i.purchase_rate, unit))}</td>
+      </tr>`;
+    })
+    .join("")}</tbody></table></div>`;
+  filterPoLines();
+  paintPoTotals();
+}
+
+function filterPoLines() {
+  const q = ($("po-item-search")?.value || "").trim().toLowerCase();
+  document.querySelectorAll("#po-lines tbody tr").forEach((tr) => {
+    const hay = tr.dataset.poSearch || "";
+    tr.hidden = Boolean(q) && !hay.includes(q);
+  });
+}
+
+function paintPoLineAmount(itemId) {
+  const qty = Number(document.querySelector(`[data-po-qty="${itemId}"]`)?.value) || 0;
+  const rate = Number(document.querySelector(`[data-po-rate="${itemId}"]`)?.value) || 0;
+  const unit = document.querySelector(`[data-po-row="${itemId}"]`)?.dataset.poUnit || "GM";
+  const cell = document.querySelector(`[data-po-amt="${itemId}"]`);
+  if (cell) cell.textContent = money(POSUnits.lineAmount(qty, rate, unit));
+}
+
+function paintPoTotals() {
+  const checked = [...document.querySelectorAll("[data-po-item]:checked")];
+  let total = 0;
+  checked.forEach((box) => {
+    const id = box.dataset.poItem;
+    const qty = Number(document.querySelector(`[data-po-qty="${id}"]`)?.value) || 0;
+    const rate = Number(document.querySelector(`[data-po-rate="${id}"]`)?.value) || 0;
+    const unit = document.querySelector(`[data-po-row="${id}"]`)?.dataset.poUnit || "GM";
+    total += POSUnits.lineAmount(qty, rate, unit);
+    box.closest("tr")?.classList.add("is-checked");
+  });
+  document.querySelectorAll("#po-lines tbody tr").forEach((tr) => {
+    if (!tr.querySelector("[data-po-item]:checked")) tr.classList.remove("is-checked");
+  });
+  if ($("po-selected-meta")) $("po-selected-meta").textContent = `${checked.length} selected`;
+  if ($("po-total")) $("po-total").textContent = money(total);
 }
 
 function renderPacksTable() {
@@ -865,6 +1005,7 @@ function renderSettings() {
   paintTimezonePreview();
   state.logoDraft = null;
   $("set-logo").value = "";
+  paintLogoFileName();
   showLogo($("logo-preview"), state.company.logo_url);
   if ($("btn-backup-download")) $("btn-backup-download").href = posUrl("/api/backup");
   if (window.DevMode) {
@@ -968,6 +1109,7 @@ async function loadBootstrap() {
   renderPacksTable();
   renderSettings();
   renderPoLines();
+  fillExpenseCategories();
   void Promise.all([loadToday(), loadDashboard(), loadSuppliers().catch(() => {}), loadHolds().catch(() => {})]);
 }
 
@@ -1032,17 +1174,8 @@ async function loadToday() {
 }
 
 async function loadReports() {
-  if (!$("rep-from").value) {
-    const parts = new Intl.DateTimeFormat("en-CA", {
-      timeZone: shopTimezone(),
-      year: "numeric",
-      month: "2-digit",
-    }).formatToParts(new Date());
-    const year = parts.find((p) => p.type === "year")?.value;
-    const month = parts.find((p) => p.type === "month")?.value;
-    $("rep-from").value = `${year}-${month}-01`;
-  }
-  if (!$("rep-to").value) $("rep-to").value = ymd();
+  if (!$("rep-from").value || !$("rep-to").value) applyFyRange("rep-from", "rep-to");
+  paintFyChip("rep-fy-label", indianFinancialYear($("rep-from").value || ymd()));
   const from = $("rep-from").value;
   const to = $("rep-to").value;
   $("rep-excel-all").href = excelHref();
@@ -1052,12 +1185,14 @@ async function loadReports() {
     const s = data.summary || {};
     $("report-summary").innerHTML = [
       ["Range", `${data.from} → ${data.to}`],
+      ["Financial year", indianFinancialYear(data.from).label],
       ["Bills", s.bills ?? 0],
       ["Taxable", money(s.taxable)],
       ["Output GST", money(s.gst)],
       ["Input GST", money(s.inputGst)],
       ["Net GST", money(s.netGst)],
       ["Takings", money(s.takings)],
+      ["Expenses", money(s.expenses)],
       ["Low stock SKUs", (data.low || []).length],
     ]
       .map(([k, v]) => `<div class="report-card"><span>${k}</span><strong>${v}</strong></div>`)
@@ -1075,9 +1210,10 @@ async function loadReports() {
       reportBlock("GST HSN itemwise", "GST HSN itemwise", ["HSN/SKU", "Item", "GST %", "Qty g", "Taxable", "GST"], (data.gstHsn || []).map((r) => [r.hsn, r.item_name, Number(r.gst_rate) || 0, Number(r.quantity_gm) || 0, Number(r.taxable) || 0, Number(r.gst) || 0])),
       reportBlock("GST B2B sales", "GST B2B sales", ["Bill", "Date", "Customer", "GSTIN", "Taxable", "GST", "Total"], (data.gstB2B || []).map((r) => [r.order_number, reportDay(r.bill_date), r.customer_name, r.gstin, Number(r.taxable) || 0, Number(r.gst) || 0, Number(r.total) || 0])),
       reportBlock("GST B2C sales", "GST B2C sales", ["Bill", "Date", "Customer", "Taxable", "GST", "Total"], (data.gstB2C || []).map((r) => [r.order_number, reportDay(r.bill_date), r.customer_name, Number(r.taxable) || 0, Number(r.gst) || 0, Number(r.total) || 0])),
-      reportBlock("Stock", "Stock", ["Code", "Name", "Local", "Category", "Subcategory", "Stock g", "Reorder g", "Retail", "B2B", "Purchase", "GST %"], (data.stock || []).map((i) => [i.code, i.name, i.local_name, i.category, i.subcategory, Number(i.stock_gm) || 0, Number(i.reorder_level_gm) || 0, Number(i.retail_rate) || 0, Number(i.b2b_rate) || 0, Number(i.purchase_rate) || 0, Number(i.gst_rate) || 0])),
+      reportBlock("Stock", "Stock", ["Code", "Name", "HSN", "Category", "Subcategory", "Stock g", "Reorder g", "Retail", "B2B", "Purchase", "GST %"], (data.stock || []).map((i) => [i.code, i.name, i.hsn, i.category, i.subcategory, Number(i.stock_gm) || 0, Number(i.reorder_level_gm) || 0, Number(i.retail_rate) || 0, Number(i.b2b_rate) || 0, Number(i.purchase_rate) || 0, Number(i.gst_rate) || 0])),
       reportBlock("Low stock", "Low stock", ["Code", "Name", "Stock g", "Reorder g"], (data.low || []).map((i) => [i.code, i.name, Number(i.stock_gm) || 0, Number(i.reorder_level_gm) || 0])),
       reportBlock("Purchases", "Purchases", ["PO", "Supplier", "Invoice", "Date", "Taxable", "GST", "Total", "Pay", "Status"], (data.purchases || []).map((p) => [p.purchase_number, p.supplier_name, p.supplier_invoice_number, p.purchase_date, Number(p.subtotal) || 0, Number(p.gst) || 0, Number(p.total) || 0, p.payment_method, p.payment_status])),
+      reportBlock("Expenses", "Expenses", ["No.", "Date", "Category", "Amount", "GST", "Total", "Pay", "Notes"], (data.expenses || []).map((e) => [e.expense_number, e.expense_date, e.category, Number(e.amount) || 0, Number(e.gst) || 0, Number(e.total) || (Number(e.amount) || 0) + (Number(e.gst) || 0), e.payment_method, e.notes])),
       reportBlock("Customers", "Customers", ["Code", "Name", "Business", "Mobile", "Type", "GSTIN", "Credit limit", "Outstanding"], (data.customers || []).map((c) => [c.code, c.name, c.business_name, c.mobile, c.type, c.gstin, Number(c.credit_limit) || 0, Number(c.outstanding) || 0])),
     ].join("");
     $("reports-hint").textContent = "";
@@ -1281,8 +1417,8 @@ async function loadSuppliers() {
   $("po-supplier").innerHTML = rows
     .map((s) => `<option value="${escapeHtml(s.id)}">${escapeHtml(s.name)}</option>`)
     .join("");
-  $("suppliers-table").innerHTML = `<table><thead><tr>
-    <th>Code</th><th>Name</th><th>Contact</th><th>Mobile</th><th>GSTIN</th><th>Payable</th>
+  $("suppliers-table").innerHTML = `<table class="suppliers-table"><thead><tr>
+    <th>Code</th><th>Name</th><th>Contact</th><th>Mobile</th><th>Email</th><th>Address</th><th>GSTIN</th><th>Payable</th>
   </tr></thead><tbody>${rows
     .map(
       (s) => `<tr>
@@ -1290,6 +1426,8 @@ async function loadSuppliers() {
       <td>${escapeHtml(s.name)}</td>
       <td>${escapeHtml(s.contact_name || "—")}</td>
       <td>${escapeHtml(s.mobile || "—")}</td>
+      <td>${escapeHtml(s.email || "—")}</td>
+      <td title="${escapeHtml(s.address || "")}">${escapeHtml(s.address || "—")}</td>
       <td>${escapeHtml(s.gstin || "—")}</td>
       <td>${money(Number(s.payable_balance) || 0)}</td>
     </tr>`,
@@ -1300,12 +1438,9 @@ async function loadSuppliers() {
 let accTab = "receivables";
 
 function accPeriod() {
-  if (!$("acc-from")?.value) {
-    const parts = new Intl.DateTimeFormat("en-CA", { timeZone: shopTimezone(), year: "numeric", month: "2-digit" }).formatToParts(new Date());
-    $("acc-from").value = `${parts.find((p) => p.type === "year")?.value}-${parts.find((p) => p.type === "month")?.value}-01`;
-  }
-  if (!$("acc-to")?.value) $("acc-to").value = ymd();
+  if (!$("acc-from")?.value || !$("acc-to")?.value) applyFyRange("acc-from", "acc-to", "acc-asof");
   if (!$("acc-asof")?.value) $("acc-asof").value = $("acc-to").value;
+  paintFyChip("acc-fy-label", indianFinancialYear($("acc-from").value || ymd()));
   return { from: $("acc-from").value, to: $("acc-to").value, asOf: $("acc-asof").value };
 }
 
@@ -1380,6 +1515,60 @@ async function loadAccountsTab(name) {
     </tr></thead><tbody>${(data.entries || [])
       .map((r) => `<tr><td>${escapeHtml(r.voucher_date)}</td><td>${escapeHtml(r.voucher_no)}</td><td>${escapeHtml(r.voucher_type)}</td><td>${escapeHtml(r.name)}</td><td>${money(r.debit)}</td><td>${money(r.credit)}</td><td>${money(r.balance)}</td></tr>`)
       .join("")}</tbody></table>`;
+  }
+}
+
+function fillExpenseCategories() {
+  const el = $("exp-category");
+  if (!el) return;
+  const cur = el.value;
+  el.innerHTML = EXPENSE_CATEGORIES.map(
+    (c) => `<option value="${escapeHtml(c.code)}"${c.code === cur ? " selected" : ""}>${escapeHtml(c.name)}</option>`,
+  ).join("");
+}
+
+function paintExpensePreview() {
+  const amt = Number($("exp-amount")?.value) || 0;
+  const gst = Number($("exp-gst")?.value) || 0;
+  if ($("exp-total-preview")) $("exp-total-preview").textContent = money(amt + gst);
+}
+
+async function loadExpenses() {
+  fillExpenseCategories();
+  if ($("exp-date") && !$("exp-date").value) $("exp-date").value = ymd();
+  if (!$("exp-from")?.value || !$("exp-to")?.value) applyFyRange("exp-from", "exp-to");
+  paintFyChip("exp-fy-label", indianFinancialYear($("exp-from")?.value || ymd()));
+  paintExpensePreview();
+  const from = $("exp-from").value;
+  const to = $("exp-to").value;
+  const el = $("expenses-table");
+  if (!el) return;
+  el.innerHTML = '<p class="hint">Loading…</p>';
+  try {
+    const rows = await api(`/api/expenses?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`);
+    if (!rows.length) {
+      el.innerHTML = '<p class="hint">No expenses in this period.</p>';
+      return;
+    }
+    el.innerHTML = `<table><thead><tr>
+      <th>No.</th><th>Date</th><th>Category</th><th>Amount</th><th>GST</th><th>Total</th><th>Pay</th><th>Notes</th>
+    </tr></thead><tbody>${rows
+      .map((r) => {
+        const total = (Number(r.amount) || 0) + (Number(r.gst) || 0);
+        return `<tr>
+        <td>${escapeHtml(r.expense_number)}</td>
+        <td>${escapeHtml(formatShopDate(r.expense_date))}</td>
+        <td>${escapeHtml(r.category)}</td>
+        <td>${money(r.amount)}</td>
+        <td>${money(r.gst)}</td>
+        <td>${money(total)}</td>
+        <td>${escapeHtml(r.payment_method)}</td>
+        <td>${escapeHtml(r.notes || "—")}</td>
+      </tr>`;
+      })
+      .join("")}</tbody></table>`;
+  } catch (err) {
+    el.innerHTML = `<p class="hint error">${escapeHtml(err.message)}</p>`;
   }
 }
 
@@ -1516,7 +1705,7 @@ $("items-table").addEventListener("click", async (e) => {
     if (!i) return;
     $("item-id").value = i.id;
     $("item-name").value = i.name;
-    $("item-local").value = i.local_name || "";
+    $("item-hsn").value = i.hsn || "";
     $("item-category").value = i.category || "";
     $("item-subcategory").value = i.subcategory || "";
     $("item-retail").value = i.retail_rate;
@@ -1556,11 +1745,10 @@ $("orders-refresh")?.addEventListener("click", () => {
 
 $("nav-toggle")?.addEventListener("click", () => {
   const app = document.getElementById("app");
-  const btn = $("nav-toggle");
-  if (!app || !btn) return;
-  const collapsed = app.classList.toggle("nav-collapsed");
-  btn.setAttribute("aria-expanded", collapsed ? "false" : "true");
+  if (!app) return;
+  setNavCollapsed(!app.classList.contains("nav-collapsed"));
 });
+$("nav-scrim")?.addEventListener("click", () => setNavCollapsed(true));
 
 $("orders").addEventListener("keydown", (e) => {
   if (e.key !== "Enter" && e.key !== " ") return;
@@ -1794,7 +1982,7 @@ $("item-form").addEventListener("submit", async (e) => {
   const unit = POSUnits.normalize($("item-unit").value);
   const body = {
     name: $("item-name").value,
-    local_name: $("item-local").value,
+    hsn: $("item-hsn").value,
     category: $("item-category").value || "Whole Spices",
     subcategory: $("item-subcategory").value,
     base_unit: unit,
@@ -1953,6 +2141,28 @@ $("pack-form").addEventListener("submit", async (e) => {
   }
 });
 
+$("purchase-form").addEventListener("input", (e) => {
+  if (e.target.id === "po-item-search") {
+    filterPoLines();
+    return;
+  }
+  if (e.target.matches("[data-po-qty],[data-po-rate]")) {
+    const id = e.target.dataset.poQty || e.target.dataset.poRate;
+    if (id) paintPoLineAmount(id);
+    paintPoTotals();
+  }
+});
+$("purchase-form").addEventListener("change", (e) => {
+  if (e.target.matches("[data-po-item]")) paintPoTotals();
+});
+$("po-lines")?.addEventListener("click", (e) => {
+  const tr = e.target.closest("tr[data-po-row]");
+  if (!tr || e.target.closest("input")) return;
+  const box = tr.querySelector("[data-po-item]");
+  if (!box) return;
+  box.checked = !box.checked;
+  paintPoTotals();
+});
 $("purchase-form").addEventListener("submit", async (e) => {
   e.preventDefault();
   const lines = [...document.querySelectorAll("[data-po-item]:checked")].map((box) => ({
@@ -1993,6 +2203,8 @@ $("supplier-form").addEventListener("submit", async (e) => {
         name: $("sup-name").value,
         contact_name: $("sup-contact").value,
         mobile: $("sup-mobile").value,
+        email: $("sup-email").value,
+        address: $("sup-address").value,
         gstin: $("sup-gstin").value,
       }),
     });
@@ -2084,6 +2296,7 @@ $("set-logo").addEventListener("change", async (e) => {
     const url = await readLogoFile(file);
     state.logoDraft = url;
     showLogo($("logo-preview"), url);
+    paintLogoFileName(file.name);
     $("settings-hint").textContent = "Logo ready — click Save";
     $("settings-hint").className = "hint";
   } catch (err) {
@@ -2095,6 +2308,7 @@ $("set-logo").addEventListener("change", async (e) => {
 $("logo-clear").addEventListener("click", () => {
   state.logoDraft = "";
   $("set-logo").value = "";
+  paintLogoFileName();
   showLogo($("logo-preview"), "");
   $("settings-hint").textContent = "Logo will be removed on Save";
   $("settings-hint").className = "hint";
@@ -2103,6 +2317,57 @@ $("logo-clear").addEventListener("click", () => {
 $("report-form").addEventListener("submit", async (e) => {
   e.preventDefault();
   await loadReports();
+});
+$("rep-this-fy")?.addEventListener("click", async () => {
+  applyFyRange("rep-from", "rep-to");
+  await loadReports();
+});
+$("acc-this-fy")?.addEventListener("click", async () => {
+  applyFyRange("acc-from", "acc-to", "acc-asof");
+  try {
+    await loadAccountsTab(accTab);
+  } catch (err) {
+    $("acc-hint").textContent = err.message;
+    $("acc-hint").className = "hint error";
+  }
+});
+$("exp-this-fy")?.addEventListener("click", async () => {
+  applyFyRange("exp-from", "exp-to");
+  await loadExpenses();
+});
+$("exp-filter")?.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  await loadExpenses();
+});
+$("expense-form")?.addEventListener("input", paintExpensePreview);
+$("expense-form")?.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const cat = EXPENSE_CATEGORIES.find((c) => c.code === $("exp-category").value);
+  try {
+    await api("/api/expenses", {
+      method: "POST",
+      body: JSON.stringify({
+        expense_date: $("exp-date").value,
+        account_code: $("exp-category").value,
+        category: cat?.name || "",
+        amount: Number($("exp-amount").value),
+        gst: Number($("exp-gst").value) || 0,
+        payment_method: $("exp-pay").value,
+        notes: $("exp-notes").value,
+      }),
+    });
+    $("exp-hint").textContent = "Saved";
+    $("exp-hint").className = "hint ok";
+    $("expense-form").reset();
+    if ($("exp-date")) $("exp-date").value = ymd();
+    if ($("exp-gst")) $("exp-gst").value = "0";
+    fillExpenseCategories();
+    paintExpensePreview();
+    await loadExpenses();
+  } catch (err) {
+    $("exp-hint").textContent = err.message;
+    $("exp-hint").className = "hint error";
+  }
 });
 
 function readLogoFile(file) {
@@ -2157,6 +2422,13 @@ function tick() {
 }
 tick();
 setInterval(tick, 1000);
+window.addEventListener("resize", () => {
+  if (!isMobileLayout()) {
+    setNavCollapsed(false);
+  } else if (!$("nav-scrim")?.hidden && document.getElementById("app")?.classList.contains("nav-collapsed")) {
+    setNavCollapsed(true);
+  }
+});
 
 document.addEventListener("click", async (e) => {
   const logout = e.target.closest("[data-logout]");
@@ -2323,6 +2595,7 @@ async function boot() {
       $("session-who").textContent = `${me.user.name || me.user.email} · ${me.user.role || ""} · ${me.business?.name || ""}`;
     }
     applyNav();
+    if (isMobileLayout()) setNavCollapsed(true);
     if (me.business?.status && me.business.status !== "active" && !me.impersonating) {
       $("expired-banner").hidden = false;
       $("shop-name").textContent = me.business.name || "POS";

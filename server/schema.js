@@ -71,6 +71,7 @@ export async function ensureSchema() {
   await addColumn("sales_orders", "cashier_id", "VARCHAR(255) NULL");
   await addColumn("sales_orders", "held", "TINYINT NOT NULL DEFAULT 0");
   await addColumn("purchases", "branch_id", "VARCHAR(255) NULL");
+  await addColumn("items", "hsn", "VARCHAR(32) NULL");
   await addColumn("items", "barcode", "VARCHAR(64) NULL");
   await addColumn("items", "brand", "VARCHAR(128) NULL");
   await addColumn("items", "image_url", "MEDIUMTEXT NULL");
@@ -94,6 +95,8 @@ export async function ensureSchema() {
     INDEX (business_id)
   )`);
 
+  await addColumn("suppliers", "email", "VARCHAR(255) NULL");
+  await addColumn("suppliers", "address", "TEXT NULL");
   await addColumn("suppliers", "payable_balance", "DECIMAL(12,2) NOT NULL DEFAULT 0");
 
   await create(`CREATE TABLE IF NOT EXISTS account_ledger (
@@ -153,6 +156,22 @@ export async function ensureSchema() {
     business_id VARCHAR(255) NOT NULL,
     INDEX idx_jline_journal (journal_id),
     INDEX idx_jline_account (business_id, account_id)
+  )`);
+
+  await create(`CREATE TABLE IF NOT EXISTS expenses (
+    id VARCHAR(255) PRIMARY KEY,
+    business_id VARCHAR(255) NOT NULL,
+    expense_number VARCHAR(32) NOT NULL,
+    expense_date DATE NOT NULL,
+    category VARCHAR(64) NOT NULL,
+    account_code VARCHAR(16) NOT NULL,
+    amount DECIMAL(12,2) NOT NULL,
+    gst DECIMAL(12,2) NOT NULL DEFAULT 0,
+    payment_method VARCHAR(32) NOT NULL DEFAULT 'cash',
+    notes TEXT NULL,
+    created_by VARCHAR(255) NULL,
+    created_at TIMESTAMP(3) DEFAULT CURRENT_TIMESTAMP(3),
+    INDEX idx_exp_biz_date (business_id, expense_date)
   )`);
 
   await create(`CREATE TABLE IF NOT EXISTS platform_admins (

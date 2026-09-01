@@ -336,8 +336,8 @@ function pos_php_till_dispatch($path, $method, $body) {
 
   if (($path === "reports" || $path === "reports/excel") && $method === "GET") {
     require_once __DIR__ . "/pos-reports.php";
-    $from = $_GET["from"] ?? date("Y-m-d");
-    $to = $_GET["to"] ?? $from;
+    $from = $_GET["from"] ?? (function_exists("pos_indian_fy") ? pos_indian_fy()["from"] : date("Y-m-d"));
+    $to = $_GET["to"] ?? date("Y-m-d");
     if ($path === "reports/excel") {
       pos_reports_excel_response($bid, $from, $to, trim((string) ($_GET["sheet"] ?? "")));
     }
