@@ -1,4 +1,4 @@
-Production deploy bundle — 20260901deploy37
+Production deploy bundle — 20260901deploy38
 =========================================
 
 Upload ALL files below to Hostinger public_html (overwrite):
@@ -75,6 +75,8 @@ After upload:
   2. Hard-refresh browser (Ctrl+Shift+R)
 
 FIXES in this bundle
+  - CSS: Master Admin mobile nav wrap, hide nav until sign-in, backup file inputs, table overflow
+  - Cache sticker 20260901deploy38 on index, login, master, setup
   - Master Admin → Backup: download/restore one shop or the full platform
   - Shop POS Admin → Backup: download/restore this shop JSON
   - Mobile: Counter billing and Invoices/orders stack, sticky Save, overlay menu

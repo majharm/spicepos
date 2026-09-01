@@ -1698,7 +1698,7 @@ function pos_php_dispatch($path, $method, $rawBody) {
             "php" => true,
             "path" => $path,
             "method" => $method,
-            "hint" => "Upload api/.htaccess from deploy30 (DirectorySlash Off) and js/pos-api.js, then hard-refresh.",
+            "hint" => "Upload api/.htaccess from deploy38 (DirectorySlash Off) and js/pos-api.js, then hard-refresh.",
           ]);
         }
         $bid = $auth["user"]["business_id"];
@@ -1815,7 +1815,7 @@ function pos_php_dispatch($path, $method, $rawBody) {
       "path" => $path,
       "method" => $method,
       "php" => true,
-      "hint" => "Upload pos-php-core.php, pos-checkout.php, pos-holds.php, pos-orders.php, pos-php-till.php, pos-crud.php, api/.htaccess, and js/pos-api.js from deploy30, then hard-refresh.",
+      "hint" => "Upload pos-php-core.php, pos-checkout.php, pos-holds.php, pos-orders.php, pos-php-till.php, pos-crud.php, api/.htaccess, and js/pos-api.js from deploy38, then hard-refresh.",
     ]);
   } catch (Exception $e) {
     $msg = $e->getMessage();

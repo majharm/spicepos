@@ -115,6 +115,7 @@ function setSelect(sel, value) {
 function showLogin(on) {
   $("master-login").hidden = !on;
   $("panel").hidden = on;
+  document.body.classList.toggle("master-locked", on);
 }
 
 (() => {

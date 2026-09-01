@@ -220,7 +220,9 @@ function pos_backup_restore($bid, $payload, $auth, $masterAdmin = null) {
         pos_q("DELETE FROM `{$t}` WHERE business_id = ?", "s", [$bid]);
       }
       foreach ($insertOrder as $t) {
-        foreach ($tables[$t] as $row) {
+        $rows = $tables[$t] ?? [];
+        if (!is_array($rows)) continue;
+        foreach ($rows as $row) {
           if (!is_array($row)) continue;
           $row["business_id"] = $bid;
           pos_backup_insert_row($t, $row);
@@ -266,7 +268,9 @@ function pos_backup_restore_platform($payload, $admin) {
         pos_q("DELETE FROM `{$t}`");
       }
       foreach ($insertOrder as $t) {
-        foreach ($tables[$t] as $row) {
+        $rows = $tables[$t] ?? [];
+        if (!is_array($rows)) continue;
+        foreach ($rows as $row) {
           if (!is_array($row)) continue;
           pos_backup_insert_row($t, $row);
         }
