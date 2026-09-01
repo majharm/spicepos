@@ -525,6 +525,46 @@ function setNavCollapsed(collapsed) {
   if (scrim) scrim.hidden = collapsed || !isMobileLayout();
 }
 
+const BILL_COLLAPSED_KEY = "spicepos-bill-collapsed";
+
+function billToggleGlyph(hide) {
+  if (isMobileLayout()) return hide ? "▴" : "▾";
+  return hide ? "‹" : "›";
+}
+
+function setBillCollapsed(collapsed) {
+  const hide = Boolean(collapsed);
+  document.body.classList.toggle("bill-collapsed", hide);
+  document.querySelector(".workspace")?.classList.toggle("bill-collapsed", hide);
+  const btn = $("bill-toggle");
+  if (btn) {
+    btn.setAttribute("aria-expanded", hide ? "false" : "true");
+    btn.setAttribute("aria-label", hide ? "Show bill" : "Hide bill");
+    btn.title = hide ? "Show bill" : "Hide bill";
+    btn.textContent = billToggleGlyph(hide);
+  }
+  try {
+    localStorage.setItem(BILL_COLLAPSED_KEY, hide ? "1" : "0");
+  } catch {
+    /* private mode / quota */
+  }
+}
+
+function restoreBillCollapsed() {
+  let collapsed = false;
+  try {
+    collapsed = localStorage.getItem(BILL_COLLAPSED_KEY) === "1";
+  } catch {
+    collapsed = false;
+  }
+  setBillCollapsed(collapsed);
+}
+
+function paintBillToggleCount() {
+  const btn = $("bill-toggle");
+  if (btn) btn.dataset.count = String(state.cart.length);
+}
+
 function can(module) {
   if (state.session?.role === "business_admin") return true;
   return state.perms?.[module] === true;
@@ -797,6 +837,7 @@ function renderCart() {
   $("btn-pay").disabled = state.cart.length === 0;
   $("btn-clear").disabled = state.cart.length === 0;
   document.body.classList.toggle("has-cart", state.cart.length > 0);
+  paintBillToggleCount();
   if ($("btn-hold")) $("btn-hold").disabled = state.cart.length === 0 || Boolean(state.editingOrderId);
   $("btn-pay").textContent = state.editingOrderId ? "Save changes" : "Save";
   renderHeldBills();
@@ -1789,6 +1830,10 @@ $("nav-toggle")?.addEventListener("click", () => {
   setNavCollapsed(!app.classList.contains("nav-collapsed"));
 });
 $("nav-scrim")?.addEventListener("click", () => setNavCollapsed(true));
+$("bill-toggle")?.addEventListener("click", () => {
+  setBillCollapsed(!document.body.classList.contains("bill-collapsed"));
+});
+restoreBillCollapsed();
 
 $("orders").addEventListener("keydown", (e) => {
   if (e.key !== "Enter" && e.key !== " ") return;
@@ -2491,6 +2536,7 @@ window.addEventListener("resize", () => {
   } else if (!$("nav-scrim")?.hidden && document.getElementById("app")?.classList.contains("nav-collapsed")) {
     setNavCollapsed(true);
   }
+  if ($("bill-toggle")) setBillCollapsed(document.body.classList.contains("bill-collapsed"));
 });
 
 document.addEventListener("click", async (e) => {
