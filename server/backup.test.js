@@ -6,9 +6,14 @@ import path from "node:path";
 import {
   BACKUP_KIND,
   BACKUP_SKIP_TABLES,
+  PLATFORM_BACKUP_KIND,
+  PLATFORM_SKIP_TABLES,
+  assertPlatformBackup,
   assertShopBackup,
   backupFilename,
   backupTableRank,
+  isSafeTableName,
+  platformBackupFilename,
   sortBackupTables,
 } from "./backup-util.js";
 
@@ -27,6 +32,19 @@ test("backup restore order deletes child rows first", () => {
   assert.ok(ins.indexOf("sales_orders") < ins.indexOf("sales_order_lines"));
 });
 
+test("platform restore deletes shops before plans", () => {
+  const names = ["items", "staff_users", "branches", "businesses", "subscription_plans", "platform_admins"];
+  const del = sortBackupTables(names, false);
+  assert.ok(del.indexOf("items") < del.indexOf("staff_users"));
+  assert.ok(del.indexOf("staff_users") < del.indexOf("branches"));
+  assert.ok(del.indexOf("branches") < del.indexOf("businesses"));
+  assert.ok(del.indexOf("businesses") < del.indexOf("subscription_plans"));
+  const ins = sortBackupTables(names, true);
+  assert.equal(ins[0], "platform_admins");
+  assert.ok(ins.indexOf("subscription_plans") < ins.indexOf("businesses"));
+  assert.ok(ins.indexOf("businesses") < ins.indexOf("branches"));
+});
+
 test("shop backup files are rejected when kind or shop id mismatch", () => {
   assert.throws(() => assertShopBackup({}, "b1"), /Not a SpicePOS/);
   assert.throws(
@@ -37,7 +55,19 @@ test("shop backup files are rejected when kind or shop id mismatch", () => {
     assertShopBackup({ kind: BACKUP_KIND, business_id: "b1", tables: { items: [] } }, "b1"),
   );
   assert.ok(BACKUP_SKIP_TABLES.has("staff_sessions"));
+  assert.ok(BACKUP_SKIP_TABLES.has("platform_admins"));
   assert.match(backupFilename({ name: "Swami Masale" }), /^spicepos-backup-swami-masale-/);
+});
+
+test("platform backup files are rejected when kind is wrong", () => {
+  assert.throws(() => assertPlatformBackup({ kind: BACKUP_KIND, tables: {} }), /platform backup/);
+  assert.doesNotThrow(() => assertPlatformBackup({ kind: PLATFORM_BACKUP_KIND, tables: { businesses: [] } }));
+  assert.ok(PLATFORM_SKIP_TABLES.has("staff_sessions"));
+  assert.ok(PLATFORM_SKIP_TABLES.has("platform_sessions"));
+  assert.equal(PLATFORM_SKIP_TABLES.has("platform_admins"), false);
+  assert.match(platformBackupFilename(), /^spicepos-platform-backup-/);
+  assert.equal(isSafeTableName("sales_orders"), true);
+  assert.equal(isSafeTableName("sales orders"), false);
 });
 
 test("PHP and HTML wire shop backup", () => {
@@ -54,4 +84,35 @@ test("PHP and HTML wire shop backup", () => {
   assert.match(index, /btn-backup-restore/);
   assert.match(index, /id="view-backup"/);
   assert.match(index, /data-view="backup"/);
+});
+
+test("PHP and HTML wire master admin backup", () => {
+  const core = readFileSync(path.join(root, "pos-php-core.php"), "utf8");
+  const backup = readFileSync(path.join(root, "pos-backup.php"), "utf8");
+  const masterHtml = readFileSync(path.join(root, "master.html"), "utf8");
+  const masterJs = readFileSync(path.join(root, "js/master.js"), "utf8");
+  const masterApi = readFileSync(path.join(root, "server/master.js"), "utf8");
+  const backupJs = readFileSync(path.join(root, "server/backup.js"), "utf8");
+  assert.match(core, /pos_dispatch_master_backup/);
+  assert.match(core, /master\/backup\/platform/);
+  assert.match(backup, /function pos_dispatch_master_backup/);
+  assert.match(backup, /spicepos-platform-backup/);
+  assert.match(backup, /function pos_backup_build_platform/);
+  assert.match(masterHtml, /data-tab="backup"/);
+  assert.match(masterJs, /\/api\/master\/backup/);
+  assert.match(masterJs, /\/api\/master\/backup\/platform\/restore/);
+  assert.match(masterJs, /RESTORE PLATFORM/);
+  assert.match(masterApi, /registerMasterBackup/);
+  assert.match(backupJs, /registerMasterBackup/);
+  assert.match(backupJs, /\/api\/master\/backup\/platform/);
+  assert.match(readFileSync(path.join(root, "api/master/backup/index.php"), "utf8"), /master\/backup/);
+  assert.match(readFileSync(path.join(root, "api/master/backup/restore/index.php"), "utf8"), /master\/backup\/restore/);
+  assert.match(
+    readFileSync(path.join(root, "api/master/backup/platform/index.php"), "utf8"),
+    /master\/backup\/platform/,
+  );
+  assert.match(
+    readFileSync(path.join(root, "api/master/backup/platform/restore/index.php"), "utf8"),
+    /master\/backup\/platform\/restore/,
+  );
 });

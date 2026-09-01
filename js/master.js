@@ -250,6 +250,118 @@ function bindEnterPosButtons(root) {
   });
 }
 
+async function readBackupFile(input) {
+  const file = input?.files?.[0];
+  if (!file) throw new Error("Choose a backup JSON file first");
+  const text = await file.text();
+  const payload = JSON.parse(text);
+  if (!payload || typeof payload !== "object") throw new Error("Backup file is not valid JSON");
+  return payload;
+}
+
+function bindMasterBackup(root, shops) {
+  const shopSel = root.querySelector("#master-backup-shop");
+  const shopDl = root.querySelector("#btn-master-shop-download");
+  const shopHint = root.querySelector("#master-shop-backup-hint");
+  const platformDl = root.querySelector("#btn-master-platform-download");
+  function selectedShop() {
+    return shops.find((s) => s.id === shopSel.value) || null;
+  }
+  function syncShopLink() {
+    const shop = selectedShop();
+    shopDl.href = shop ? posUrl(`/api/master/backup?business_id=${encodeURIComponent(shop.id)}`) : "#";
+  }
+  if (platformDl) platformDl.href = posUrl("/api/master/backup/platform");
+  shopSel.onchange = syncShopLink;
+  syncShopLink();
+  shopDl.addEventListener("click", (e) => {
+    syncShopLink();
+    if (!selectedShop()) {
+      e.preventDefault();
+      shopHint.textContent = "Select a shop first";
+      shopHint.className = "hint error";
+    }
+  });
+  root.querySelector("#btn-master-shop-restore").onclick = async () => {
+    shopHint.className = "hint";
+    shopHint.textContent = "";
+    const shop = selectedShop();
+    if (!shop) {
+      shopHint.textContent = "Select a shop first";
+      shopHint.className = "hint error";
+      return;
+    }
+    let payload;
+    try {
+      payload = await readBackupFile(root.querySelector("#master-shop-backup-file"));
+    } catch (err) {
+      shopHint.textContent = err.message;
+      shopHint.className = "hint error";
+      return;
+    }
+    if (payload.business_id && payload.business_id !== shop.id) {
+      shopHint.textContent = "This file belongs to another shop. Select that shop first.";
+      shopHint.className = "hint error";
+      return;
+    }
+    if (!confirm(`Restore this backup into ${shop.name}? It replaces items, stock, customers, invoices, and purchases for that shop.`)) {
+      return;
+    }
+    shopHint.textContent = "Restoring…";
+    try {
+      const data = await api(
+        `/api/master/backup/restore?business_id=${encodeURIComponent(shop.id)}`,
+        { method: "POST", body: JSON.stringify(payload) },
+      );
+      shopHint.textContent = `Restored ${data.tables || 0} tables into ${shop.name}.`;
+      shopHint.className = "hint ok";
+    } catch (err) {
+      shopHint.textContent = err.message;
+      shopHint.className = "hint error";
+    }
+  };
+  const platformHint = root.querySelector("#master-platform-backup-hint");
+  root.querySelector("#btn-master-platform-download").addEventListener("click", () => {
+    root.querySelector("#btn-master-platform-download").href = posUrl("/api/master/backup/platform");
+  });
+  root.querySelector("#btn-master-platform-restore").onclick = async () => {
+    platformHint.className = "hint";
+    platformHint.textContent = "";
+    let payload;
+    try {
+      payload = await readBackupFile(root.querySelector("#master-platform-backup-file"));
+    } catch (err) {
+      platformHint.textContent = err.message;
+      platformHint.className = "hint error";
+      return;
+    }
+    if (
+      !confirm(
+        "Restore the full platform backup? This replaces every shop, plan, and master-admin record. Sign-in sessions stay as they are.",
+      )
+    ) {
+      return;
+    }
+    const typed = prompt("Type RESTORE PLATFORM to confirm.");
+    if (typed !== "RESTORE PLATFORM") {
+      platformHint.textContent = "Platform restore cancelled.";
+      return;
+    }
+    platformHint.textContent = "Restoring platform…";
+    try {
+      const data = await api("/api/master/backup/platform/restore", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+      platformHint.textContent = `Restored ${data.tables || 0} platform tables.`;
+      platformHint.className = "hint ok";
+    } catch (err) {
+      platformHint.textContent = err.message;
+      platformHint.className = "hint error";
+    }
+  };
+}
+
 async function render() {
   const titles = {
     dash: "Platform dashboard",
@@ -259,6 +371,7 @@ async function render() {
     branches: "Branches",
     devices: "POS devices",
     audit: "Audit log",
+    backup: "Backup",
     notes: "Notifications",
     support: "Support number",
   };
@@ -596,6 +709,42 @@ async function render() {
           auditDetails(r),
         ]),
       );
+    } else if (tab === "backup") {
+      const shops = await api("/api/master/businesses");
+      body.innerHTML = `<p class="lede">Download or restore one shop, or the full platform. Shop backups match the files from POS Admin → Backup.</p>
+        <div class="settings" id="master-backup-card">
+          <div class="settings-section backup-panel">
+            <h3>Shop backup</h3>
+            <p class="section-note">Includes that shop’s items, stock, customers, invoices, purchases, and accounts. Restore replaces current data for the selected shop only.</p>
+            <label>Shop
+              <select id="master-backup-shop">
+                <option value="">Select shop</option>
+                ${shops.map((b) => `<option value="${attr(b.id)}">${attr(b.name)}</option>`).join("")}
+              </select>
+            </label>
+            <div class="backup-actions">
+              <a class="btn primary" id="btn-master-shop-download" href="#">Download shop backup</a>
+              <label class="backup-file-lab">Restore file
+                <input id="master-shop-backup-file" type="file" accept="application/json,.json" />
+              </label>
+              <button class="btn" type="button" id="btn-master-shop-restore">Restore into selected shop</button>
+            </div>
+            <p class="hint" id="master-shop-backup-hint"></p>
+          </div>
+          <div class="settings-section backup-panel">
+            <h3>Platform backup</h3>
+            <p class="backup-warn">Full restore overwrites every shop, subscription plan, and master admin. Keep the file private. Sessions are not included, so you stay signed in.</p>
+            <div class="backup-actions">
+              <a class="btn primary" id="btn-master-platform-download" href="#">Download platform backup</a>
+              <label class="backup-file-lab">Restore file
+                <input id="master-platform-backup-file" type="file" accept="application/json,.json" />
+              </label>
+              <button class="btn" type="button" id="btn-master-platform-restore">Restore platform backup</button>
+            </div>
+            <p class="hint" id="master-platform-backup-hint"></p>
+          </div>
+        </div>`;
+      bindMasterBackup(body, shops);
     } else if (tab === "notes") {
       const businesses = await api("/api/master/businesses");
       body.innerHTML = `<form class="settings wide" id="note-form">

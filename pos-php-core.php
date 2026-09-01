@@ -1671,6 +1671,23 @@ function pos_php_dispatch($path, $method, $rawBody) {
       pos_send(200, ["ok" => true, "id" => $nid]);
     }
 
+    if (
+      $path === "master/backup" ||
+      $path === "master/backup/restore" ||
+      $path === "master/backup/platform" ||
+      $path === "master/backup/platform/restore"
+    ) {
+      pos_require_backup();
+      if (!function_exists("pos_dispatch_master_backup")) {
+        pos_send(503, [
+          "error" => "pos-backup.php on the server is broken or outdated.",
+          "php" => true,
+          "hint" => "Re-upload pos-backup.php from the latest deploy bundle.",
+        ]);
+      }
+      pos_dispatch_master_backup($path, $method, $body, $auth);
+    }
+
     if (strpos($path, "master/") !== 0) {
       if ($path === "checkout") {
         $auth = pos_staff_session();

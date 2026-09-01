@@ -2,7 +2,7 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
-OUT="${1:-spicepos-deploy36.zip}"
+OUT="${1:-spicepos-deploy37.zip}"
 rm -f "$OUT"
 zip -r "$OUT" \
   DEPLOY-FILES.txt \
@@ -14,6 +14,8 @@ zip -r "$OUT" \
   pos-crud.php pos-backup.php pos-units.php pos-orders.php pos-reports.php pos-accounting.php pos-api.php \
   api/.htaccess api/health/index.php api/checkout/index.php api/holds/index.php \
   api/backup/index.php api/backup/restore/index.php api/units/index.php \
+  api/master/backup/index.php api/master/backup/restore/index.php \
+  api/master/backup/platform/index.php api/master/backup/platform/restore/index.php \
   pos-data/.htaccess \
   health.json \
   server.js server/auth.js server/master.js server/onboard.js \

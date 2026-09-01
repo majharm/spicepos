@@ -1,4 +1,4 @@
-Production deploy bundle — 20260901deploy36
+Production deploy bundle — 20260901deploy37
 =========================================
 
 Upload ALL files below to Hostinger public_html (overwrite):
@@ -45,6 +45,10 @@ PHP
   api/backup/index.php
   api/backup/restore/index.php
   api/units/index.php
+  api/master/backup/index.php
+  api/master/backup/restore/index.php
+  api/master/backup/platform/index.php
+  api/master/backup/platform/restore/index.php
   pos-data/.htaccess
   health.json
 
@@ -71,12 +75,12 @@ After upload:
   2. Hard-refresh browser (Ctrl+Shift+R)
 
 FIXES in this bundle
+  - Master Admin → Backup: download/restore one shop or the full platform
+  - Shop POS Admin → Backup: download/restore this shop JSON
   - Mobile: Counter billing and Invoices/orders stack, sticky Save, overlay menu
-  - Admin → Backup: download/restore shop JSON
   - Left nav: remove ATAV logo, Today, Bills, and clock chips (keep Logout)
   - Reports: daywise payment summary (cash / UPI / card / credit per day)
   - Inventory → Units: unit master (GM, KG, ML, LTR, PCS) used on item forms; add BOX/qty units
-  - Settings: Download backup JSON and restore this shop's data
   - Item unit types: qty/pcs, g, kg, ml, litre (rates per pc / kg / ltr)
   - Save/Hold on PHP: POST /api/checkout no longer 301-redirects to GET (DirectorySlash Off; rewrite directories)
   - Counter POSTs prefer /pos-api.php?p=… so Apache folders cannot swallow Save/Hold

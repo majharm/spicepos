@@ -201,6 +201,11 @@
 .master-nav .nav-foot { margin-top: auto; padding-top: 16px; }
 .master-nav .btn-logout { margin-top: 8px; }
 .master-main { padding: 28px 32px; overflow: auto; }
+.master-main .settings {
+  margin-left: 0;
+  margin-right: 0;
+  max-width: 640px;
+}
 .master-main > #panel > h2 {
   margin: 0 0 18px;
   font-size: 22px;

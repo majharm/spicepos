@@ -7,6 +7,7 @@ import { registerBusiness, updateBusiness } from "./onboard.js";
 import { defaultPerms } from "./roles.js";
 import { publicStatus } from "./auth.js";
 import { getPlatformSettings, setPlatformSetting } from "./settings.js";
+import { registerMasterBackup } from "./backup.js";
 
 function send(res, fn) {
   return Promise.resolve()
@@ -17,6 +18,7 @@ function send(res, fn) {
 
 export function registerMaster(app) {
   app.use("/api/master", requireMaster);
+  registerMasterBackup(app);
 
   app.get("/api/master/dashboard", (req, res) =>
     send(res, async () => {

@@ -42,7 +42,7 @@ app.use((req, _res, next) => {
   }
   next();
 });
-app.use(express.json({ limit: "8mb" }));
+app.use(express.json({ limit: "32mb" }));
 app.use((req, res, next) => {
   if (req.path === "/pos-bridge.json" || req.path === "/.env" || req.path.startsWith("/.env.")) {
     res.status(404).end();

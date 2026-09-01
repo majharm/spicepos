@@ -22,6 +22,7 @@ test("PHP fallback routes checkout, holds, and order updates through core", () =
   assert.match(core, /orders\/\[\^\/\]\+.*pos_dispatch_order_route/s);
   assert.match(core, /holds.*pos_dispatch_holds/s);
   assert.match(core, /backup.*pos_dispatch_backup/s);
+  assert.match(core, /pos_dispatch_master_backup/);
   assert.match(core, /units.*pos_dispatch_units/s);
   assert.match(core, /function pos_require_backup/);
   assert.match(core, /function pos_require_units/);
