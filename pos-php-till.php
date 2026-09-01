@@ -18,9 +18,10 @@ function pos_php_till_dispatch($path, $method, $body) {
   $uid = $auth["user"]["id"];
   pos_apply_business_timezone($bid);
 
-  require_once __DIR__ . "/pos-checkout.php";
   if ($path === "checkout" && $method === "POST") {
+    pos_require_checkout();
     pos_dispatch_checkout($path, $method, $body, $bid, $branchId, $uid, $auth);
+    return true;
   }
 
   if ($path === "bootstrap" && $method === "GET") {

@@ -1,6 +1,12 @@
 <?php
 
 function pos_crud_dispatch($path, $method, $body, $bid, $auth, $branchId, $uid) {
+  if ($path === "checkout" && $method === "POST") {
+    pos_require_checkout();
+    pos_dispatch_checkout($path, $method, $body, $bid, $branchId, $uid, $auth);
+    return true;
+  }
+
   if ($path === "customers" && $method === "POST") {
     $name = trim((string) ($body["name"] ?? ""));
     $mobile = trim((string) ($body["mobile"] ?? ""));
