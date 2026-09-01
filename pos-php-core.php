@@ -480,6 +480,30 @@ function pos_can($user, $module) {
   return !empty($perms[$module]);
 }
 
+function pos_ensure_sales_schema() {
+  static $done = false;
+  if ($done) return;
+  $done = true;
+  $db = pos_db();
+  $cols = [
+    "discount" => "DECIMAL(12,2) NOT NULL DEFAULT 0",
+    "branch_id" => "VARCHAR(255) NULL",
+    "cashier_id" => "VARCHAR(255) NULL",
+    "payment_status" => "VARCHAR(32) NOT NULL DEFAULT 'paid'",
+    "status" => "VARCHAR(32) NOT NULL DEFAULT 'confirmed'",
+    "pack_id" => "VARCHAR(255) NULL",
+    "pack_name" => "VARCHAR(255) NULL",
+    "pack_count" => "INT NULL",
+  ];
+  foreach ($cols as $name => $ddl) {
+    $res = $db->query("SHOW COLUMNS FROM sales_orders LIKE '" . $db->real_escape_string($name) . "'");
+    if ($res && $res->num_rows === 0) {
+      @$db->query("ALTER TABLE sales_orders ADD COLUMN {$name} {$ddl}");
+    }
+    if ($res) $res->free();
+  }
+}
+
 function pos_ensure_accounts_schema() {
   static $done = false;
   if ($done) return;
@@ -1512,10 +1536,16 @@ function pos_php_dispatch($path, $method, $rawBody) {
 
     if (strpos($path, "master/") !== 0) {
       require_once __DIR__ . "/pos-php-till.php";
-      pos_php_till_dispatch($path, $method, $body);
+      if (pos_php_till_dispatch($path, $method, $body)) return;
     }
 
-    pos_send(501, ["error" => "This action needs the Node.js POS process. PHP fallback covers sign-in and Master Admin lists only.", "php" => true]);
+    pos_send(501, [
+      "error" => "This POS action is not available in PHP fallback yet.",
+      "path" => $path,
+      "method" => $method,
+      "php" => true,
+      "hint" => "Upload the latest pos-php-till.php, pos-checkout.php, pos-crud.php, and pos-orders.php from the deploy bundle, then hard-refresh.",
+    ]);
   } catch (Exception $e) {
     $msg = $e->getMessage();
     $dup = preg_match("/duplicate|already (registered|taken)/i", $msg);

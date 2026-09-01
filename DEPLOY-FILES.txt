@@ -1,4 +1,4 @@
-Production deploy bundle — 20260830deploy24
+Production deploy bundle — 20260830deploy26
 =========================================
 
 Upload ALL files below to Hostinger public_html (overwrite):
@@ -27,6 +27,7 @@ JavaScript
 PHP
   pos-php-core.php
   pos-php-till.php
+  pos-checkout.php
   pos-crud.php
   pos-orders.php
   pos-reports.php
