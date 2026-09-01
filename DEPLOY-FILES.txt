@@ -1,4 +1,4 @@
-Production deploy bundle — 20260901deploy29
+Production deploy bundle — 20260901deploy30
 =========================================
 
 Upload ALL files below to Hostinger public_html (overwrite):
@@ -39,6 +39,7 @@ PHP
   api/health/index.php
   api/checkout/index.php
   api/holds/index.php
+  pos-data/.htaccess
   health.json
 
 Node (if using hPanel Node.js web app — upload OR git pull then Restart)
@@ -61,6 +62,9 @@ After upload:
   2. Hard-refresh browser (Ctrl+Shift+R)
 
 FIXES in this bundle
+  - Save/Hold on PHP: POST /api/checkout no longer 301-redirects to GET (DirectorySlash Off; rewrite directories)
+  - Counter POSTs prefer /pos-api.php?p=… so Apache folders cannot swallow Save/Hold
+  - PHP 501 fallback retries the next API spec instead of stopping on the first folder hit
   - PHP-only shops: Hold bill (POST/GET/DELETE /api/holds) wired in pos-php-core.php
   - PHP-only shops: creates held_bills table if missing
   - PHP-only shops: checkout wired in pos-php-core.php (works even if pos-php-till.php is stale)

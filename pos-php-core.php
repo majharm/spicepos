@@ -1582,9 +1582,18 @@ function pos_php_dispatch($path, $method, $rawBody) {
     }
 
     if (strpos($path, "master/") !== 0) {
-      if ($path === "checkout" && $method === "POST") {
+      if ($path === "checkout") {
         $auth = pos_staff_session();
         if (!$auth || ($auth["type"] ?? "") !== "staff") pos_send(401, ["error" => "Sign in required"]);
+        if ($method !== "POST") {
+          pos_send(405, [
+            "error" => "Use POST to save a bill. GET /api/checkout usually means Apache redirected into the api/checkout folder.",
+            "php" => true,
+            "path" => $path,
+            "method" => $method,
+            "hint" => "Upload api/.htaccess from deploy30 (DirectorySlash Off) and js/pos-api.js, then hard-refresh.",
+          ]);
+        }
         $bid = $auth["user"]["business_id"];
         $branchId = $auth["branchId"] ?? $auth["user"]["branch_id"] ?? null;
         $uid = $auth["user"]["id"];
@@ -1627,16 +1636,43 @@ function pos_php_dispatch($path, $method, $rawBody) {
         pos_dispatch_holds($path, $method, $body, $bid, $branchId, $uid, $auth);
         return;
       }
-      require_once __DIR__ . "/pos-php-till.php";
-      if (pos_php_till_dispatch($path, $method, $body)) return;
+      $handled = false;
+      $tillFile = __DIR__ . "/pos-php-till.php";
+      if (is_file($tillFile)) {
+        require_once $tillFile;
+        if (function_exists("pos_php_till_dispatch")) {
+          $handled = pos_php_till_dispatch($path, $method, $body);
+        }
+      }
+      if (!$handled) {
+        $auth = pos_staff_session();
+        if ($auth && ($auth["type"] ?? "") === "staff") {
+          $bid = $auth["user"]["business_id"];
+          $branchId = $auth["branchId"] ?? $auth["user"]["branch_id"] ?? null;
+          $uid = $auth["user"]["id"];
+          pos_apply_business_timezone($bid);
+          if (is_file(__DIR__ . "/pos-accounting.php")) {
+            require_once __DIR__ . "/pos-accounting.php";
+            if (function_exists("pos_accounts_dispatch") && pos_accounts_dispatch($path, $method, $body, $bid, $auth, $branchId, $uid)) {
+              return;
+            }
+          }
+          if (is_file(__DIR__ . "/pos-crud.php")) {
+            require_once __DIR__ . "/pos-crud.php";
+            if (function_exists("pos_crud_dispatch") && pos_crud_dispatch($path, $method, $body, $bid, $auth, $branchId, $uid)) {
+              return;
+            }
+          }
+        }
+      }
     }
 
     pos_send(501, [
-      "error" => "This POS action is not available in PHP fallback yet.",
+      "error" => "This POS action is not available in PHP fallback yet ({$method} {$path}).",
       "path" => $path,
       "method" => $method,
       "php" => true,
-      "hint" => "Upload pos-php-core.php, pos-checkout.php, pos-holds.php, pos-orders.php, pos-php-till.php, and pos-crud.php from the latest deploy bundle, then hard-refresh.",
+      "hint" => "Upload pos-php-core.php, pos-checkout.php, pos-holds.php, pos-orders.php, pos-php-till.php, pos-crud.php, api/.htaccess, and js/pos-api.js from deploy30, then hard-refresh.",
     ]);
   } catch (Exception $e) {
     $msg = $e->getMessage();

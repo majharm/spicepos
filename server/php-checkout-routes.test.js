@@ -31,5 +31,11 @@ test("PHP fallback routes checkout, holds, and order updates through core", () =
   assert.match(holds, /function pos_dispatch_holds/);
   assert.match(holds, /INSERT INTO held_bills/);
   assert.match(orders, /function pos_dispatch_order_route/);
-  assert.match(orders, /function pos_patch_order/);
+  assert.match(core, /This POS action is not available in PHP fallback yet \(\{\$method\} \{\$path\}\)/);
+  const ht = read("api/.htaccess");
+  assert.match(ht, /DirectorySlash Off/);
+  assert.doesNotMatch(ht, /!-d/);
+  const apiJs = read("js/pos-api.js");
+  assert.match(apiJs, /isPhpUnimplemented/);
+  assert.match(apiJs, /orderedSpecs/);
 });
