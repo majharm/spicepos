@@ -127,10 +127,10 @@ test("PHP and HTML wire master admin backup", () => {
   );
 });
 
-test("HTML and CSS cache stickers match deploy49", () => {
+test("HTML and CSS cache stickers match deploy51", () => {
   for (const name of ["index.html", "master.html", "login.html", "setup.html"]) {
     const html = readFileSync(path.join(root, name), "utf8");
-    assert.match(html, /20260901deploy49/);
+    assert.match(html, /20260901deploy51/);
     assert.doesNotMatch(html, /20260901deploy[0-3][0-9]/);
     assert.doesNotMatch(html, /20260901deploy41/);
     assert.doesNotMatch(html, /20260901deploy42/);
@@ -140,6 +140,8 @@ test("HTML and CSS cache stickers match deploy49", () => {
     assert.doesNotMatch(html, /20260901deploy46/);
     assert.doesNotMatch(html, /20260901deploy47/);
     assert.doesNotMatch(html, /20260901deploy48/);
+    assert.doesNotMatch(html, /20260901deploy49/);
+    assert.doesNotMatch(html, /20260901deploy50/);
   }
   const saas = readFileSync(path.join(root, "css/saas.css"), "utf8");
   const pos = readFileSync(path.join(root, "css/pos.css"), "utf8");
@@ -160,12 +162,12 @@ test("HTML and CSS cache stickers match deploy49", () => {
   assert.match(pos, /po-table/);
   assert.match(pos, /stage:not\(\.is-counter\) > \.view:not\(\[hidden\]\)/);
   assert.match(pos, /overscroll-behavior: contain/);
-  assert.match(pos, /mobile-counter: till dock/);
+  assert.match(pos, /mobile-counter: list scroll \+ taller order box/);
   assert.match(pos, /compact-catalog: smaller item cards/);
   assert.match(pos, /bill-slider: hide unhide/);
   assert.match(pos, /minmax\(118px, 1fr\)/);
   assert.match(pos, /repeat\(3, minmax\(0, 1fr\)\)/);
-  assert.match(pos, /\.stage\.is-counter \.catalog[\s\S]{0,400}repeat\(3, minmax\(0, 1fr\)\)/);
+  assert.match(pos, /\.stage\.is-counter \.catalog[\s\S]{0,500}flex-direction: column/);
   assert.match(pos, /stage\.is-counter > \.view-counter:not\(\[hidden\]\)/);
   assert.doesNotMatch(pos, /height: auto; max-height: none; overflow: visible/);
   assert.match(index, /<title>ATAV POS<\/title>/);

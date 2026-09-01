@@ -2,7 +2,7 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
-OUT="${1:-spicepos-deploy49.zip}"
+OUT="${1:-spicepos-deploy51.zip}"
 rm -f "$OUT"
 zip -r "$OUT" \
   DEPLOY-FILES.txt \
