@@ -308,6 +308,9 @@
     padding: 8px 10px;
     font-size: 12.5px;
     min-height: 40px;
+    width: auto;
+    flex: 0 0 auto;
+    white-space: nowrap;
   }
   .master-nav .nav-foot {
     margin-top: 0;
