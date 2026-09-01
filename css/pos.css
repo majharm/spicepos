@@ -1844,7 +1844,7 @@ tr:last-child td { border-bottom: 0; }
     -webkit-overflow-scrolling: touch;
     overscroll-behavior: contain;
     content-visibility: visible;
-    grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 5px;
     padding: 6px;
     margin: 6px 6px 0;
