@@ -11,6 +11,7 @@ import {
   assertShopBackup,
   backupFilename,
   isSafeTableName,
+  normalizeBackupRow,
   platformBackupFilename,
   sortBackupTables,
 } from "./backup-util.js";
@@ -39,7 +40,7 @@ async function insertBackupRows(conn, table, rows, patch) {
   const allowed = await tableColumns(conn, table);
   for (const row of rows || []) {
     if (!row || typeof row !== "object") continue;
-    const rec = patch ? patch({ ...row }) : { ...row };
+    const rec = normalizeBackupRow(patch ? patch({ ...row }) : { ...row });
     const cols = Object.keys(rec).filter((k) => allowed.has(k));
     if (!cols.length) continue;
     const ph = cols.map(() => "?").join(",");
@@ -76,7 +77,7 @@ export async function buildBackup(businessId) {
   const tables = {};
   for (const t of await listBizTables()) {
     try {
-      tables[t] = await query(`SELECT * FROM \`${t}\` WHERE business_id = ?`, [businessId]);
+      tables[t] = (await query(`SELECT * FROM \`${t}\` WHERE business_id = ?`, [businessId])).map(normalizeBackupRow);
     } catch {
       tables[t] = [];
     }
@@ -125,7 +126,7 @@ export async function buildPlatformBackup() {
   const tables = {};
   for (const t of await listPlatformTables()) {
     try {
-      tables[t] = await query(`SELECT * FROM \`${t}\``);
+      tables[t] = (await query(`SELECT * FROM \`${t}\``)).map(normalizeBackupRow);
     } catch {
       tables[t] = [];
     }

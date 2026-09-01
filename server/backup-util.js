@@ -64,6 +64,26 @@ export function assertShopBackup(payload, businessId) {
   }
 }
 
+export function toSqlValue(value) {
+  if (value == null) return value;
+  if (typeof value === "boolean") return value ? 1 : 0;
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return value.toISOString().slice(0, 23).replace("T", " ");
+  }
+  if (typeof value === "string") {
+    const m = value.match(/^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2}:\d{2})(\.\d+)?(Z|[+-]\d{2}:\d{2})?$/);
+    if (m) return `${m[1]} ${m[2]}${m[3] || ""}`;
+  }
+  return value;
+}
+
+export function normalizeBackupRow(row) {
+  if (!row || typeof row !== "object" || Array.isArray(row)) return row;
+  const out = {};
+  for (const [key, value] of Object.entries(row)) out[key] = toSqlValue(value);
+  return out;
+}
+
 export function assertPlatformBackup(payload) {
   if (!payload || payload.kind !== PLATFORM_BACKUP_KIND) {
     throw new Error("Not a SpicePOS platform backup file");

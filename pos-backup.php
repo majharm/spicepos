@@ -165,6 +165,15 @@ function pos_backup_build_platform() {
   ];
 }
 
+function pos_backup_sql_value($v) {
+  if (is_bool($v)) return $v ? 1 : 0;
+  if (!is_string($v)) return $v;
+  if (preg_match('/^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2}:\d{2})(\.\d+)?(Z|[+-]\d{2}:\d{2})?$/', $v, $m)) {
+    return $m[1] . " " . $m[2] . ($m[3] ?? "");
+  }
+  return $v;
+}
+
 function pos_backup_insert_row($table, $row) {
   $allowed = pos_backup_columns($table);
   $cols = [];
@@ -172,7 +181,7 @@ function pos_backup_insert_row($table, $row) {
   foreach ($row as $k => $v) {
     if (!isset($allowed[$k])) continue;
     $cols[] = $k;
-    $vals[] = $v;
+    $vals[] = pos_backup_sql_value($v);
   }
   if (!$cols) return;
   $safe = pos_backup_safe_table($table);

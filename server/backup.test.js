@@ -13,8 +13,10 @@ import {
   backupFilename,
   backupTableRank,
   isSafeTableName,
+  normalizeBackupRow,
   platformBackupFilename,
   sortBackupTables,
+  toSqlValue,
 } from "./backup-util.js";
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
@@ -70,6 +72,13 @@ test("platform backup files are rejected when kind is wrong", () => {
   assert.equal(isSafeTableName("sales orders"), false);
 });
 
+test("ISO timestamps are stored as MySQL datetimes", () => {
+  assert.equal(toSqlValue("2026-08-30T12:20:31.196Z"), "2026-08-30 12:20:31.196");
+  assert.equal(toSqlValue(true), 1);
+  assert.equal(toSqlValue(false), 0);
+  assert.equal(normalizeBackupRow({ created_at: "2026-08-30T12:20:31.000Z", ok: true }).created_at, "2026-08-30 12:20:31.000");
+});
+
 test("PHP and HTML wire shop backup", () => {
   const core = readFileSync(path.join(root, "pos-php-core.php"), "utf8");
   const backup = readFileSync(path.join(root, "pos-backup.php"), "utf8");
@@ -77,6 +86,7 @@ test("PHP and HTML wire shop backup", () => {
   const index = readFileSync(path.join(root, "index.html"), "utf8");
   assert.match(core, /pos_dispatch_backup/);
   assert.match(core, /function pos_require_backup/);
+  assert.match(backup, /function pos_backup_sql_value/);
   assert.match(backup, /function pos_dispatch_backup/);
   assert.match(backup, /spicepos-shop-backup/);
   assert.match(till, /pos_dispatch_backup/);
