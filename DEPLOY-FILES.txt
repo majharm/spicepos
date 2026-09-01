@@ -65,6 +65,7 @@ FIXES in this bundle
   - Save/Hold on PHP: POST /api/checkout no longer 301-redirects to GET (DirectorySlash Off; rewrite directories)
   - Counter POSTs prefer /pos-api.php?p=… so Apache folders cannot swallow Save/Hold
   - PHP 501 fallback retries the next API spec instead of stopping on the first folder hit
+  - PHP add-customer bind types match placeholders (fixes mysqli bind_param error)
   - PHP-only shops: Hold bill (POST/GET/DELETE /api/holds) wired in pos-php-core.php
   - PHP-only shops: creates held_bills table if missing
   - PHP-only shops: checkout wired in pos-php-core.php (works even if pos-php-till.php is stale)
