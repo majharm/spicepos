@@ -626,35 +626,36 @@ a.btn { text-decoration: none; display: inline-block; }
 }
 
 .catalog {
-  padding: 12px;
+  /* compact-catalog: smaller item cards */
+  padding: 8px;
   margin: 8px;
   border-radius: var(--radius-lg);
   background: var(--vel-muted-surface);
   border: 1px solid var(--line);
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(158px, 1fr));
-  gap: 10px;
+  grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
+  gap: 6px;
   align-content: start;
   overflow-y: auto;
   overflow-x: hidden;
   min-height: 0;
   height: calc(100% - 16px);
   content-visibility: auto;
-  contain-intrinsic-size: 600px;
+  contain-intrinsic-size: 480px;
 }
 
 .card {
   background: var(--vel-surface);
   border: 1px solid var(--line);
-  border-radius: var(--radius);
-  padding: 12px;
+  border-radius: 10px;
+  padding: 7px 8px;
   text-align: left;
   color: inherit;
   box-shadow: none;
-  min-height: 110px;
+  min-height: 72px;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 2px;
   contain: layout style paint;
 }
 .card::before { display: none; }
@@ -663,9 +664,11 @@ a.btn { text-decoration: none; display: inline-block; }
   box-shadow: 0 4px 12px rgba(15, 23, 42, 0.06);
 }
 .card:active { transform: none; }
-.card .sku { color: var(--muted); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; font-weight: 700; }
-.card .name { font-weight: 800; font-size: 15px; line-height: 1.3; }
-.card .meta { display: flex; justify-content: space-between; color: var(--muted); font-size: 13px; margin-top: auto; font-weight: 600; }
+.card .sku { color: var(--muted); font-size: 8px; letter-spacing: 0.06em; text-transform: uppercase; font-weight: 700; line-height: 1.2; }
+.card .name { font-weight: 700; font-size: 12px; line-height: 1.2; }
+.card .name small { font-size: 9px; font-weight: 600; color: var(--muted); }
+.card .meta { display: flex; justify-content: space-between; gap: 4px; color: var(--muted); font-size: 11px; margin-top: auto; font-weight: 600; line-height: 1.2; }
+.card .stock { font-size: 9px; font-weight: 700; line-height: 1.2; }
 .stock.ok { color: var(--mint); font-weight: 800; }
 .stock.low { color: #b45309; font-weight: 800; }
 .stock.out { color: var(--danger); font-weight: 800; }
@@ -1841,15 +1844,24 @@ tr:last-child td { border-bottom: 0; }
     -webkit-overflow-scrolling: touch;
     overscroll-behavior: contain;
     content-visibility: visible;
-    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-    margin: 8px 8px 0;
+    grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+    gap: 5px;
+    padding: 6px;
+    margin: 6px 6px 0;
     touch-action: manipulation;
   }
   .stage.is-counter .card {
     contain: none;
-    min-height: 88px;
+    min-height: 58px;
+    padding: 6px;
+    gap: 1px;
     touch-action: manipulation;
   }
+  .stage.is-counter .card .sku { font-size: 7px; }
+  .stage.is-counter .card .name { font-size: 11px; }
+  .stage.is-counter .card .name small { font-size: 8px; }
+  .stage.is-counter .card .meta { font-size: 10px; }
+  .stage.is-counter .card .stock { font-size: 8px; }
   .stage.is-counter .ticket,
   .stage.is-counter .bill-panel {
     border-left: 0;
@@ -1939,9 +1951,12 @@ tr:last-child td { border-bottom: 0; }
 }
 
 @media (max-width: 640px) {
-  .catalog { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
-  .card { min-height: 96px; padding: 10px; }
-  .card .name { font-size: 14px; }
+  .catalog { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; }
+  .card { min-height: 54px; padding: 5px 6px; }
+  .card .name { font-size: 11px; }
+  .card .sku { font-size: 7px; }
+  .card .meta { font-size: 10px; }
+  .card .stock { font-size: 8px; }
   .orders-table th:nth-child(2),
   .orders-table td:nth-child(2),
   .orders-table th:nth-child(6),
