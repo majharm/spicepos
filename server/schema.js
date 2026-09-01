@@ -158,6 +158,22 @@ export async function ensureSchema() {
     INDEX idx_jline_account (business_id, account_id)
   )`);
 
+  await create(`CREATE TABLE IF NOT EXISTS expenses (
+    id VARCHAR(255) PRIMARY KEY,
+    business_id VARCHAR(255) NOT NULL,
+    expense_number VARCHAR(32) NOT NULL,
+    expense_date DATE NOT NULL,
+    category VARCHAR(64) NOT NULL,
+    account_code VARCHAR(16) NOT NULL,
+    amount DECIMAL(12,2) NOT NULL,
+    gst DECIMAL(12,2) NOT NULL DEFAULT 0,
+    payment_method VARCHAR(32) NOT NULL DEFAULT 'cash',
+    notes TEXT NULL,
+    created_by VARCHAR(255) NULL,
+    created_at TIMESTAMP(3) DEFAULT CURRENT_TIMESTAMP(3),
+    INDEX idx_exp_biz_date (business_id, expense_date)
+  )`);
+
   await create(`CREATE TABLE IF NOT EXISTS platform_admins (
     id VARCHAR(255) PRIMARY KEY,
     name VARCHAR(255) NOT NULL,

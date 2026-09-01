@@ -379,6 +379,23 @@ function pos_stock_value_sql() {
   return "SELECT COALESCE(SUM(CASE WHEN LOWER(COALESCE(u.family,'')) = 'count' OR UPPER(REPLACE(COALESCE(i.base_unit, i.unit, 'GM'), ' ', '')) IN ('PCS','PC','QTY','NOS','NO','COUNT','UNIT','UNITS') THEN i.stock_gm * i.purchase_rate ELSE i.stock_gm/1000.0 * i.purchase_rate END),0) AS value FROM items i LEFT JOIN inventory_units u ON u.business_id = i.business_id AND u.code = COALESCE(i.base_unit, i.unit) WHERE i.business_id = ?";
 }
 
+function pos_indian_fy($ymd = null) {
+  $s = substr((string) ($ymd ?: date("Y-m-d")), 0, 10);
+  if (!preg_match("/^(\\d{4})-(\\d{2})-(\\d{2})$/", $s, $m)) {
+    $s = date("Y-m-d");
+    preg_match("/^(\\d{4})-(\\d{2})-(\\d{2})$/", $s, $m);
+  }
+  $year = (int) $m[1];
+  $month = (int) $m[2];
+  $startYear = $month >= 4 ? $year : $year - 1;
+  $endYear = $startYear + 1;
+  return [
+    "from" => sprintf("%d-04-01", $startYear),
+    "to" => sprintf("%d-03-31", $endYear),
+    "label" => sprintf("FY %d–%02d", $startYear, $endYear % 100),
+  ];
+}
+
 function pos_round2($n) {
   return round((float) $n, 2);
 }
@@ -715,6 +732,23 @@ function pos_ensure_accounts_schema() {
       business_id VARCHAR(255) NOT NULL,
       INDEX idx_jline_journal (journal_id),
       INDEX idx_jline_account (business_id, account_id)
+    )"
+  );
+  @$db->query(
+    "CREATE TABLE IF NOT EXISTS expenses (
+      id VARCHAR(255) PRIMARY KEY,
+      business_id VARCHAR(255) NOT NULL,
+      expense_number VARCHAR(32) NOT NULL,
+      expense_date DATE NOT NULL,
+      category VARCHAR(64) NOT NULL,
+      account_code VARCHAR(16) NOT NULL,
+      amount DECIMAL(12,2) NOT NULL,
+      gst DECIMAL(12,2) NOT NULL DEFAULT 0,
+      payment_method VARCHAR(32) NOT NULL DEFAULT 'cash',
+      notes TEXT NULL,
+      created_by VARCHAR(255) NULL,
+      created_at TIMESTAMP(3) DEFAULT CURRENT_TIMESTAMP(3),
+      INDEX idx_exp_biz_date (business_id, expense_date)
     )"
   );
 }

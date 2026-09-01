@@ -91,6 +91,18 @@ export async function buildReports(from, to) {
      FROM purchases WHERE ${poWhere} ORDER BY purchase_date`,
     [tenant, start, end],
   );
+  const expenses = await query(
+    `SELECT expense_number, expense_date, category, account_code, amount, gst, payment_method, notes,
+            (amount + gst) AS total
+     FROM expenses WHERE business_id = ? AND expense_date BETWEEN ? AND ?
+     ORDER BY expense_date`,
+    [tenant, start, end],
+  );
+  const expenseSum = await query(
+    `SELECT COALESCE(SUM(amount),0) AS amount, COALESCE(SUM(gst),0) AS gst, COUNT(*) AS bills
+     FROM expenses WHERE business_id = ? AND expense_date BETWEEN ? AND ?`,
+    [tenant, start, end],
+  );
   const customers = await query(
     `SELECT code, name, business_name, mobile, type, gstin, credit_limit, outstanding
      FROM customers WHERE business_id = ? ORDER BY name`,
@@ -157,7 +169,7 @@ export async function buildReports(from, to) {
     [tenant, start, end],
   );
   const outputGst = Number(summary[0]?.gst || 0);
-  const inputGst = Number(purchaseGst[0]?.gst || 0);
+  const inputGst = Number(purchaseGst[0]?.gst || 0) + Number(expenseSum[0]?.gst || 0);
 
   return {
     from: start,
@@ -166,6 +178,8 @@ export async function buildReports(from, to) {
       ...(summary[0] || { bills: 0, taxable: 0, gst: 0, takings: 0 }),
       inputGst,
       netGst: outputGst - inputGst,
+      expenses: Number(expenseSum[0]?.amount || 0) + Number(expenseSum[0]?.gst || 0),
+      expenseBills: Number(expenseSum[0]?.bills || 0),
     },
     sales,
     byItem,
@@ -182,6 +196,7 @@ export async function buildReports(from, to) {
     stock,
     low,
     purchases,
+    expenses,
     customers,
   };
 }
@@ -330,6 +345,14 @@ export function reportsToSheets(data) {
       rows: data.purchases.map((p) => [
         p.purchase_number, p.supplier_name, p.supplier_invoice_number, p.purchase_date,
         num(p.subtotal), num(p.gst), num(p.total), p.payment_method, p.payment_status,
+      ]),
+    },
+    {
+      name: "Expenses",
+      headers: ["No.", "Date", "Category", "Amount", "GST", "Total", "Pay", "Notes"],
+      rows: (data.expenses || []).map((e) => [
+        e.expense_number, e.expense_date, e.category, num(e.amount), num(e.gst),
+        num(e.total || Number(e.amount) + Number(e.gst)), e.payment_method, e.notes,
       ]),
     },
     {

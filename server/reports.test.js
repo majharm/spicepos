@@ -21,6 +21,7 @@ const emptyReports = (from, to) => ({
   stock: [],
   low: [],
   purchases: [],
+  expenses: [],
   customers: [],
 });
 
@@ -37,6 +38,7 @@ test("reportsToSheets includes extended GST report sheets", () => {
   assert.ok(sheets.some((s) => s.name === "GST output by rate"));
   assert.ok(sheets.some((s) => s.name === "GST B2B sales"));
   assert.ok(sheets.some((s) => s.name === "Payment daywise"));
+  assert.ok(sheets.some((s) => s.name === "Expenses"));
   assert.equal(sheets.find((s) => s.name === "Stock").headers[2], "HSN");
   assert.equal(sheets[0].rows[0][2], 0);
 });

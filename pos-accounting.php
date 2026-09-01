@@ -15,7 +15,23 @@ function pos_default_coa() {
     ["3101", "Capital account", "equity"],
     ["4101", "Sales", "income"],
     ["5101", "Purchase of goods", "expense"],
+    ["5102", "Rent", "expense"],
+    ["5103", "Electricity", "expense"],
+    ["5104", "Salaries & wages", "expense"],
+    ["5105", "Transport & freight", "expense"],
+    ["5106", "Packaging", "expense"],
+    ["5107", "Telephone & internet", "expense"],
+    ["5108", "Repairs & maintenance", "expense"],
+    ["5199", "Miscellaneous expenses", "expense"],
   ];
+}
+
+function pos_expense_categories() {
+  $out = [];
+  foreach (pos_default_coa() as $row) {
+    if ($row[0] >= "5102" && $row[2] === "expense") $out[] = ["code" => $row[0], "name" => $row[1]];
+  }
+  return $out;
 }
 
 function pos_asset_code_for_method($method) {
@@ -28,9 +44,11 @@ function pos_asset_code_for_method($method) {
 
 function pos_ensure_coa($bid) {
   pos_ensure_accounts_schema();
-  $rows = pos_q("SELECT id FROM chart_of_accounts WHERE business_id = ? LIMIT 1", "s", [$bid]);
-  if ($rows) return;
+  $rows = pos_q("SELECT code FROM chart_of_accounts WHERE business_id = ?", "s", [$bid]);
+  $have = [];
+  foreach ($rows as $r) $have[$r["code"]] = true;
   foreach (pos_default_coa() as $row) {
+    if (!empty($have[$row[0]])) continue;
     pos_q(
       "INSERT INTO chart_of_accounts (id, business_id, code, name, account_group, is_system, active) VALUES (?,?,?,?,?,1,1)",
       "sssss",
@@ -149,6 +167,29 @@ function pos_post_purchase_journal($bid, $uid, $purchase) {
   ]);
 }
 
+function pos_post_expense_journal($bid, $uid, $expense) {
+  if (pos_journal_exists($bid, "expense", $expense["id"])) return null;
+  $amt = pos_round2($expense["amount"] ?? 0);
+  $gst = pos_split_gst($expense["gst"] ?? 0);
+  $total = pos_round2($amt + ($expense["gst"] ?? 0));
+  $lines = [
+    ["accountCode" => $expense["account_code"], "debit" => $amt, "credit" => 0],
+  ];
+  if ($gst["cgst"] > 0) $lines[] = ["accountCode" => "2301", "debit" => $gst["cgst"], "credit" => 0];
+  if ($gst["sgst"] > 0) $lines[] = ["accountCode" => "2302", "debit" => $gst["sgst"], "credit" => 0];
+  $method = strtolower((string) ($expense["payment_method"] ?? "cash"));
+  $creditCode = $method === "credit" ? "2101" : pos_asset_code_for_method($method);
+  $lines[] = ["accountCode" => $creditCode, "debit" => 0, "credit" => $total];
+  return pos_post_journal($bid, $uid, [
+    "voucher_type" => "expense",
+    "voucher_date" => pos_normalize_date_only($expense["expense_date"] ?? null) ?? date("Y-m-d"),
+    "narration" => "Expense " . ($expense["expense_number"] ?? "") . " · " . ($expense["category"] ?? ""),
+    "reference_type" => "expense",
+    "reference_id" => $expense["id"],
+    "lines" => $lines,
+  ]);
+}
+
 function pos_post_receipt_journal($bid, $uid, $amount, $method, $entryNo, $ledgerId) {
   $amt = pos_round2($amount);
   return pos_post_journal($bid, $uid, [
@@ -196,10 +237,62 @@ function pos_lines_for_period($bid, $from, $to) {
 }
 
 function pos_accounts_dispatch($path, $method, $body, $bid, $auth, $branchId, $uid) {
-  if (strpos($path, "accounts/") !== 0) return false;
+  if (strpos($path, "accounts/") !== 0 && $path !== "expenses") return false;
   if (!pos_can($auth["user"], "accounts")) pos_send(403, ["error" => "Not allowed"]);
   pos_ensure_accounts_schema();
   pos_ensure_coa($bid);
+
+  if ($path === "expenses" && $method === "GET") {
+    $fy = pos_indian_fy();
+    $from = $_GET["from"] ?? $fy["from"];
+    $to = $_GET["to"] ?? $fy["to"];
+    pos_send(200, pos_q(
+      "SELECT * FROM expenses WHERE business_id = ? AND expense_date BETWEEN ? AND ?
+       ORDER BY expense_date DESC, created_at DESC LIMIT 200",
+      "sss",
+      [$bid, $from, $to]
+    ));
+  }
+
+  if ($path === "expenses" && $method === "POST") {
+    $code = trim((string) ($body["account_code"] ?? ""));
+    $cat = null;
+    foreach (pos_expense_categories() as $row) {
+      if ($row["code"] === $code) { $cat = $row; break; }
+    }
+    if (!$cat) pos_send(400, ["error" => "Choose an expense category"]);
+    $amt = pos_round2($body["amount"] ?? 0);
+    if ($amt <= 0) pos_send(400, ["error" => "Amount is required"]);
+    $gstAmt = pos_round2($body["gst"] ?? 0);
+    $methodPay = strtolower((string) ($body["payment_method"] ?? "cash"));
+    if (!in_array($methodPay, ["cash", "upi", "card", "bank"], true)) pos_send(400, ["error" => "Invalid payment method"]);
+    try {
+      $expense = pos_with_transaction(function () use ($body, $bid, $uid, $cat, $amt, $gstAmt, $methodPay) {
+        $n = pos_next_seq("expense", $bid, 1001);
+        $id = pos_uuid();
+        $expenseNumber = "EXP-{$n}";
+        pos_q(
+          "INSERT INTO expenses (
+             id, business_id, expense_number, expense_date, category, account_code,
+             amount, gst, payment_method, notes, created_by
+           ) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+          "ssssssddsss",
+          [
+            $id, $bid, $expenseNumber, $body["expense_date"] ?? date("Y-m-d"),
+            $body["category"] ?? $cat["name"], $cat["code"], $amt, $gstAmt, $methodPay,
+            trim((string) ($body["notes"] ?? "")) ?: null, $uid,
+          ]
+        );
+        $rows = pos_q("SELECT * FROM expenses WHERE id = ? LIMIT 1", "s", [$id]);
+        $expense = $rows[0] ?? null;
+        pos_post_expense_journal($bid, $uid, $expense);
+        return $expense;
+      });
+      pos_send(200, ["ok" => true, "expense" => $expense, "php" => true]);
+    } catch (Exception $e) {
+      pos_send(400, ["error" => $e->getMessage(), "php" => true]);
+    }
+  }
 
   if ($path === "accounts/summary" && $method === "GET") {
     $recv = pos_q("SELECT COALESCE(SUM(outstanding),0) AS total FROM customers WHERE business_id = ?", "s", [$bid]);
