@@ -174,6 +174,7 @@ document.querySelectorAll("[data-tab]").forEach((btn) => {
   btn.onclick = () => {
     tab = btn.dataset.tab;
     document.querySelectorAll("[data-tab]").forEach((b) => b.classList.toggle("active", b === btn));
+    document.querySelector(".master-main")?.scrollTo({ top: 0 });
     render();
   };
 });

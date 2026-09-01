@@ -127,19 +127,25 @@ test("PHP and HTML wire master admin backup", () => {
   );
 });
 
-test("HTML and CSS cache stickers match deploy43", () => {
+test("HTML and CSS cache stickers match deploy44", () => {
   for (const name of ["index.html", "master.html", "login.html", "setup.html"]) {
     const html = readFileSync(path.join(root, name), "utf8");
-    assert.match(html, /20260901deploy43/);
+    assert.match(html, /20260901deploy44/);
     assert.doesNotMatch(html, /20260901deploy[0-3][0-9]/);
     assert.doesNotMatch(html, /20260901deploy41/);
     assert.doesNotMatch(html, /20260901deploy42/);
+    assert.doesNotMatch(html, /20260901deploy43/);
   }
   const saas = readFileSync(path.join(root, "css/saas.css"), "utf8");
   const pos = readFileSync(path.join(root, "css/pos.css"), "utf8");
   const index = readFileSync(path.join(root, "index.html"), "utf8");
   assert.match(saas, /body\.master-locked/);
   assert.match(saas, /max-width: 900px/);
+  assert.match(saas, /height: 100dvh/);
+  assert.match(saas, /margin-block: auto/);
+  assert.match(pos, /page-scroll: shop views, master main, and auth document/);
+  assert.match(pos, /body:has\(\.app\),\s*body:has\(\.master-shell\)/);
+  assert.match(pos, /body\.auth-body/);
   assert.match(pos, /backup-file-lab input\[type="file"\]/);
   assert.match(pos, /settings input:not\(\[type="file"\]\)/);
   assert.match(pos, /settings-page/);
@@ -148,6 +154,8 @@ test("HTML and CSS cache stickers match deploy43", () => {
   assert.match(pos, /logo-row/);
   assert.match(pos, /po-table/);
   assert.match(pos, /stage:not\(\.is-counter\) > \.view:not\(\[hidden\]\)/);
+  assert.match(pos, /overscroll-behavior: contain/);
+  assert.doesNotMatch(pos, /height: auto; max-height: none; overflow: visible/);
   assert.match(index, /settings-page/);
   assert.match(index, /logo-preview-frame/);
   assert.match(index, /logo-pick/);

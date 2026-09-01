@@ -575,6 +575,8 @@ function showView(name) {
   });
   document.body.classList.toggle("counter-mode", name === "counter");
   document.querySelector(".stage")?.classList.toggle("is-counter", name === "counter");
+  const page = document.getElementById(`view-${name}`);
+  if (page) page.scrollTop = 0;
   paintViewHeader(name);
   if (name === "reports") loadReports();
   if (name === "accounts") loadAccounts();
