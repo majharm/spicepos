@@ -977,8 +977,46 @@ tr:last-child td { border-bottom: 0; }
 .order-pane {
   position: sticky;
   top: 12px;
-  max-height: min(80vh, 820px);
+  max-height: min(calc(100dvh - 120px), 820px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-height: 280px;
+}
+.purchase-pane {
+  position: sticky;
+  top: 12px;
+  max-height: min(calc(100dvh - 120px), 820px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-height: 280px;
+}
+.order-pane > .invoice-detail-card,
+.order-pane > .order-status-panel,
+.purchase-pane > .order-detail-head {
+  flex: 0 0 auto;
+}
+.order-pane > .thermal-preview,
+.purchase-pane > .thermal-preview {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: none;
+  width: 100%;
+  margin: 0 0 10px;
   overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.order-pane > .print-actions,
+.purchase-pane > .print-actions {
+  flex: 0 0 auto;
+  margin-top: auto;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+  background: inherit;
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
 }
 .invoice-detail-card {
   margin-bottom: 12px;
@@ -1044,12 +1082,6 @@ tr:last-child td { border-bottom: 0; }
   border: 0;
   background: transparent;
 }
-.order-pane .thermal-preview {
-  max-width: 100%;
-  width: 100%;
-  max-height: none;
-  margin: 0;
-}
 .purchase-new {
   margin: 0 24px 12px;
   padding: 14px 16px;
@@ -1074,18 +1106,6 @@ tr:last-child td { border-bottom: 0; }
   max-height: min(72vh, 720px);
   overflow-y: auto;
   padding-right: 4px;
-}
-.purchase-pane {
-  position: sticky;
-  top: 12px;
-  max-height: min(80vh, 820px);
-  overflow-y: auto;
-}
-.purchase-pane .thermal-preview {
-  max-width: 100%;
-  width: 100%;
-  max-height: none;
-  margin: 0;
 }
 .order-item.is-selected {
   border-color: var(--vel-teal);
