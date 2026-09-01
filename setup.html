@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>MySQL setup · ATAV POS</title>
+    <link rel="stylesheet" href="./css/saas.css?v=20260830setup" />
+  </head>
+  <body class="auth-body">
+    <main class="auth-card">
+      <h1>MySQL setup</h1>
+      <p class="hint">Git does not upload database passwords. Save them here once. On Hostinger the host must be <strong>localhost</strong>, not the public server IP.</p>
+      <form id="setup-form">
+        <label>DB host
+          <input name="DB_HOST" value="localhost" required />
+        </label>
+        <label>Database name
+          <input name="DB_NAME" value="u749262545_swamiatav" required autocomplete="off" />
+        </label>
+        <label>Database user
+          <input name="DB_USER" value="u749262545_atavswamsp" required autocomplete="off" />
+        </label>
+        <label>Database password
+          <input name="DB_PASSWORD" type="password" required autocomplete="new-password" />
+        </label>
+        <label>Master login password (optional, for faster Master sign-in)
+          <input name="MASTER_ADMIN_PASSWORD" type="password" autocomplete="off" />
+        </label>
+        <button class="btn primary" type="submit">Save and test</button>
+        <p class="hint" id="hint"></p>
+      </form>
+    </main>
+    <script>
+      document.getElementById("setup-form").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const hint = document.getElementById("hint");
+        hint.textContent = "Saving…";
+        hint.className = "hint";
+        const fd = new FormData(e.target);
+        const body = Object.fromEntries(fd.entries());
+        try {
+          const res = await fetch("/pos-api.php?p=install", {
+            method: "POST",
+            credentials: "same-origin",
+            headers: { "Content-Type": "application/json", Accept: "application/json" },
+            body: JSON.stringify(body),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || res.statusText);
+          hint.textContent = "Saved. Opening Master sign-in…";
+          location.href = data.next || "/master.html";
+        } catch (err) {
+          hint.textContent = err.message;
+          hint.className = "hint error";
+        }
+      });
+    </script>
+  </body>
+</html>

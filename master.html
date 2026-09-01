@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
+    <title>Master Admin · ATAV POS</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" />
+    <link rel="icon" href="./favicon.svg" />
+    <link rel="stylesheet" href="./css/pos.css?v=20260829j" />
+    <link rel="stylesheet" href="./css/saas.css?v=20260829j" />
+  </head>
+  <body>
+    <div class="master-shell">
+      <nav class="master-nav">
+        <h1>Master Admin</h1>
+        <button type="button" class="active" data-tab="dash">Dashboard</button>
+        <button type="button" data-tab="biz">Businesses</button>
+        <button type="button" data-tab="users">Users</button>
+        <button type="button" data-tab="plans">Plans</button>
+        <button type="button" data-tab="branches">Branches</button>
+        <button type="button" data-tab="devices">POS devices</button>
+        <button type="button" data-tab="audit">Audit log</button>
+        <button type="button" data-tab="notes">Notifications</button>
+        <button type="button" data-tab="support">Support number</button>
+        <div class="nav-foot">
+          <button class="btn-logout" type="button" id="logout" data-logout>Logout</button>
+        </div>
+      </nav>
+      <main class="master-main">
+        <form id="master-login" class="auth-card" hidden>
+          <h2>Master sign in</h2>
+          <label>Email <input name="email" type="email" required /></label>
+          <label>Password <input name="password" type="password" required /></label>
+          <label class="remember">
+            <input type="checkbox" name="remember" />
+            <span class="remember-ui" aria-hidden="true"></span>
+            Remember me
+          </label>
+          <button class="btn primary" type="submit">Enter</button>
+          <p class="hint" id="login-hint"></p>
+          <p class="hint"><a href="./setup.html">MySQL setup</a> (required once on this PHP host)</p>
+        </form>
+        <div id="panel" hidden>
+          <h2 id="panel-title">Dashboard</h2>
+          <div id="panel-body"></div>
+        </div>
+      </main>
+    </div>
+    <script src="./js/pos-api.js?v=20260830d"></script>
+    <script src="./js/master.js?v=20260830d"></script>
+    <script src="./js/x-pos-20260830e.js"></script>
+  </body>
+</html>

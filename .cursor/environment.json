@@ -1,0 +1,22 @@
+{
+  "name": "SpicePOS",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": "."
+  },
+  "user": "node",
+  "install": "chmod +x scripts/cloud-agent-install.sh scripts/cloud-agent-start.sh && ./scripts/cloud-agent-install.sh",
+  "start": "./scripts/cloud-agent-start.sh",
+  "terminals": [
+    {
+      "name": "pos-server",
+      "command": "npm start"
+    }
+  ],
+  "ports": [
+    {
+      "name": "POS HTTP",
+      "port": 5173
+    }
+  ]
+}

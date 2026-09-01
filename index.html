@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>SWAMI MASALE POS</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" />
+    <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="./css/pos.css" />
+    <link rel="stylesheet" href="./css/saas.css" />
+  </head>
+  <body>
+    <div class="app">
+      <nav class="nav" aria-label="App">
+        <div class="brand">
+          <img id="shop-logo" class="brand-logo" alt="Company logo" hidden />
+          <div class="brand-mark" id="brand-mark" aria-hidden="true"></div>
+          <strong id="shop-name">SWAMI MASALE</strong>
+          <span id="shop-place">Loading MySQL…</span>
+        </div>
+        <button class="nav-btn active" type="button" data-view="dashboard">Dashboard</button>
+        <button class="nav-btn" type="button" data-view="counter">Counter</button>
+        <button class="nav-btn" type="button" data-view="items">Items</button>
+        <button class="nav-btn" type="button" data-view="customers">Customers</button>
+        <button class="nav-btn" type="button" data-view="packs">Packs</button>
+        <button class="nav-btn" type="button" data-view="orders">Orders</button>
+        <button class="nav-btn" type="button" data-view="purchases">Purchases</button>
+        <button class="nav-btn" type="button" data-view="suppliers">Suppliers</button>
+        <button class="nav-btn" type="button" data-view="stock">Stock</button>
+        <button class="nav-btn" type="button" data-view="staff">Staff</button>
+        <button class="nav-btn" type="button" data-view="branches">Branches</button>
+        <button class="nav-btn" type="button" data-view="devices">Devices</button>
+        <button class="nav-btn" type="button" data-view="support">Support</button>
+        <button class="nav-btn" type="button" data-view="reports">Reports</button>
+        <button class="nav-btn" type="button" data-view="settings">Settings</button>
+        <div class="nav-foot">
+          <div class="chip">Today <b id="today-total">₹0.00</b></div>
+          <div class="chip">Bills <b id="today-count">0</b></div>
+          <div class="chip" id="clock">--:--</div>
+          <button class="btn-logout" type="button" data-logout>Logout</button>
+        </div>
+      </nav>
+
+      <div class="stage">
+        <div class="session-bar">
+          <span id="session-who">Signed in</span>
+          <span id="session-support" class="session-support" hidden></span>
+          <button class="btn-logout" type="button" data-logout>Logout</button>
+        </div>
+        <div class="expired-banner" id="expired-banner" hidden>
+          Subscription expired. Data is kept. Ask the platform owner to renew this business.
+        </div>
+        <section class="view" id="view-dashboard">
+          <h2>Dashboard</h2>
+          <p class="lede" id="dash-welcome">Your shop today.</p>
+          <div class="report-grid" id="dash-kpis"></div>
+          <p class="lede"><button class="btn primary" type="button" data-view-jump="counter" id="open-pos">Open POS</button></p>
+        </section>
+        <section class="view" id="view-counter" hidden>
+          <header class="topbar">
+            <form class="search" id="search-form">
+              <input id="search" type="search" placeholder="Search spice, Marathi name, or code" autocomplete="off" />
+            </form>
+            <select id="customer" class="select"></select>
+            <select id="pack-choice" class="select">
+              <option value="">Loose items (no pack)</option>
+            </select>
+            <select id="pay-method" class="select">
+              <option value="cash">Cash</option>
+              <option value="upi">UPI</option>
+              <option value="card">Card</option>
+              <option value="credit">Credit</option>
+            </select>
+          </header>
+          <div class="workspace">
+            <div class="catalog" id="catalog"></div>
+            <aside class="ticket">
+              <h2>Current bill</h2>
+              <div class="ticket-pack" id="chosen-pack">Pack: Loose items</div>
+              <div id="pack-bar" class="pack-bar"></div>
+              <div class="lines" id="lines"></div>
+              <div class="totals">
+                <div><span>Qty</span><span id="qty-total">0 g</span></div>
+                <div><span>Taxable</span><span id="taxable">₹0.00</span></div>
+                <div><span>GST</span><span id="tax">₹0.00</span></div>
+                <div class="grand"><span>Total</span><span id="total">₹0.00</span></div>
+              </div>
+              <div class="pay">
+                <button class="btn danger" id="btn-clear" type="button">Clear</button>
+                <div class="pay-row">
+                  <button class="btn" id="btn-hold" type="button">Hold bill</button>
+                  <button class="btn primary" id="btn-pay" type="button">Save</button>
+                </div>
+                <div class="hint" id="hint"></div>
+              </div>
+            </aside>
+          </div>
+        </section>
+
+        <section class="view" id="view-items" hidden>
+          <h2>Items</h2>
+          <p class="lede">Category and subcategory, rates per kg, stock in grams.</p>
+          <form class="settings wide" id="item-form">
+            <input type="hidden" id="item-id" />
+            <label>Name <input id="item-name" required /></label>
+            <label>Local name <input id="item-local" /></label>
+            <label>Category
+              <input id="item-category" list="category-list" placeholder="Whole Spices" />
+            </label>
+            <label>Subcategory
+              <input id="item-subcategory" list="subcategory-list" placeholder="Haldi / Jeera" />
+            </label>
+            <datalist id="category-list"></datalist>
+            <datalist id="subcategory-list"></datalist>
+            <label>Retail ₹/kg <input id="item-retail" type="number" step="0.01" /></label>
+            <label>B2B ₹/kg <input id="item-b2b" type="number" step="0.01" /></label>
+            <label>Purchase ₹/kg <input id="item-purchase" type="number" step="0.01" /></label>
+            <label>GST % <input id="item-gst" type="number" step="0.01" value="5" /></label>
+            <label>Stock grams <input id="item-stock" type="number" /></label>
+            <button class="btn primary" type="submit">Save</button>
+            <button class="btn" type="button" id="item-cancel">Clear</button>
+          </form>
+          <div class="hint" id="item-hint"></div>
+          <div class="table-wrap" id="items-table"></div>
+        </section>
+        <section class="view" id="view-customers" hidden>
+          <h2>Customers</h2>
+          <form class="settings wide" id="customer-form">
+            <label>Name <input id="cust-name" required /></label>
+            <label>Business name <input id="cust-biz" /></label>
+            <label>Mobile <input id="cust-mobile" required /></label>
+            <label>Type
+              <select id="cust-type">
+                <option value="b2c">B2C retail</option>
+                <option value="b2b">B2B wholesale</option>
+              </select>
+            </label>
+            <label>GSTIN <input id="cust-gstin" /></label>
+            <button class="btn primary" type="submit">Save</button>
+          </form>
+          <div class="hint" id="cust-hint"></div>
+          <div class="table-wrap" id="customers-table"></div>
+        </section>
+        <section class="view" id="view-packs" hidden>
+          <h2>Packs</h2>
+          <p class="lede">Choose spices and grams for a pack type (e.g. Special Masala Pack — 5 KG).</p>
+          <form class="settings wide" id="pack-form">
+            <label>Pack name <input id="pack-name" required placeholder="Special Masala Pack — 5 KG" /></label>
+            <div id="pack-lines" class="pack-compose"></div>
+            <button class="btn primary" type="submit">Save</button>
+          </form>
+          <div class="hint" id="pack-hint"></div>
+          <div class="table-wrap" id="packs-table"></div>
+        </section>
+        <section class="view" id="view-orders" hidden>
+          <h2>Sales orders</h2>
+          <p class="lede">SO numbers from the live database.</p>
+          <div class="split">
+            <div class="table-wrap" id="orders"></div>
+            <div class="pane" id="order-pane"><p class="hint">Select an order.</p></div>
+          </div>
+        </section>
+        <section class="view" id="view-purchases" hidden>
+          <h2>Purchases</h2>
+          <form class="settings wide" id="purchase-form">
+            <label>Supplier <select id="po-supplier"></select></label>
+            <label>Invoice no. <input id="po-invoice" /></label>
+            <label>Date <input id="po-date" type="date" /></label>
+            <label>Pay
+              <select id="po-pay">
+                <option value="cash">Cash</option>
+                <option value="upi">UPI</option>
+                <option value="credit">Credit</option>
+              </select>
+            </label>
+            <div id="po-lines" class="pack-compose"></div>
+            <button class="btn primary" type="submit">Save</button>
+          </form>
+          <div class="hint" id="po-hint"></div>
+          <div class="table-wrap" id="purchases-table"></div>
+        </section>
+        <section class="view" id="view-suppliers" hidden>
+          <h2>Suppliers</h2>
+          <form class="settings wide" id="supplier-form">
+            <label>Name <input id="sup-name" required /></label>
+            <label>Contact <input id="sup-contact" /></label>
+            <label>Mobile <input id="sup-mobile" /></label>
+            <label>GSTIN <input id="sup-gstin" /></label>
+            <button class="btn primary" type="submit">Save</button>
+          </form>
+          <div class="hint" id="sup-hint"></div>
+          <div class="table-wrap" id="suppliers-table"></div>
+        </section>
+        <section class="view" id="view-stock" hidden>
+          <h2>Stock</h2>
+          <p class="lede">Branch-wise stock, adjustments, transfers, and low-stock alerts.</p>
+          <form class="settings wide" id="stock-form">
+            <label>Item id <input id="stk-item" required /></label>
+            <label>Qty grams (+/−) <input id="stk-qty" type="number" required /></label>
+            <label>Kind
+              <select id="stk-kind">
+                <option value="adjustment">Adjustment</option>
+                <option value="opening">Opening</option>
+                <option value="damaged">Damaged</option>
+                <option value="expired">Expired</option>
+                <option value="returned">Returned</option>
+              </select>
+            </label>
+            <label>Note <input id="stk-note" /></label>
+            <button class="btn primary" type="submit">Post</button>
+          </form>
+          <div class="table-wrap" id="stock-table"></div>
+        </section>
+        <section class="view" id="view-staff" hidden>
+          <h2>Staff & roles</h2>
+          <form class="settings wide" id="staff-form">
+            <label>First name <input id="st-first" /></label>
+            <label>Email <input id="st-email" required /></label>
+            <label>Password <input id="st-pass" type="password" required /></label>
+            <label>Role
+              <select id="st-role">
+                <option value="cashier">Cashier</option>
+                <option value="manager">Manager</option>
+                <option value="branch_manager">Branch Manager</option>
+                <option value="stock_manager">Stock Manager</option>
+                <option value="accountant">Accountant</option>
+                <option value="staff">Staff</option>
+                <option value="business_admin">Business Admin</option>
+              </select>
+            </label>
+            <button class="btn primary" type="submit">Save</button>
+          </form>
+          <div class="hint" id="staff-hint"></div>
+          <div class="table-wrap" id="staff-table"></div>
+        </section>
+        <section class="view" id="view-branches" hidden>
+          <h2>Branches</h2>
+          <form class="settings wide" id="branch-form">
+            <label>Name <input id="br-name" required /></label>
+            <label>Address <input id="br-address" /></label>
+            <label>Phone <input id="br-phone" /></label>
+            <button class="btn primary" type="submit">Save</button>
+          </form>
+          <div class="table-wrap" id="branch-table"></div>
+        </section>
+        <section class="view" id="view-devices" hidden>
+          <h2>POS devices</h2>
+          <form class="settings wide" id="device-form">
+            <label>Name <input id="dev-name" required /></label>
+            <label>Code <input id="dev-code" placeholder="POS-02" /></label>
+            <button class="btn primary" type="submit">Save</button>
+          </form>
+          <div class="table-wrap" id="device-table"></div>
+        </section>
+        <section class="view" id="view-support" hidden>
+          <h2>Support</h2>
+          <p class="lede">Platform helpline from Master Admin (MySQL). Shop details are below.</p>
+          <div class="report-grid" id="support-cards"></div>
+        </section>
+        <section class="view" id="view-reports" hidden>
+          <h2>Reports</h2>
+          <p class="lede">Every report type for the date range. Download one sheet or the full Excel workbook.</p>
+          <form class="report-toolbar" id="report-form">
+            <label>From <input id="rep-from" type="date" required /></label>
+            <label>To <input id="rep-to" type="date" required /></label>
+            <button class="btn primary" type="submit">Show</button>
+            <a class="btn" id="rep-excel-all" href="#">Download all Excel</a>
+          </form>
+          <div class="hint" id="reports-hint"></div>
+          <div class="report-grid" id="report-summary"></div>
+          <div id="reports"></div>
+        </section>
+        <section class="view" id="view-settings" hidden>
+          <h2>Company profile</h2>
+          <p class="lede">Shop details and logo saved on this business in MySQL.</p>
+          <form class="settings" id="settings-form">
+            <label>Name <input id="set-name" /></label>
+            <label>Address <input id="set-address" /></label>
+            <label>Phone <input id="set-phone" /></label>
+            <label>Email <input id="set-email" /></label>
+            <label>GSTIN <input id="set-gstin" /></label>
+            <label>Logo
+              <input id="set-logo" type="file" accept="image/*" />
+            </label>
+            <img id="logo-preview" class="logo-preview" alt="Logo preview" hidden />
+            <button class="btn" type="button" id="logo-clear">Remove logo</button>
+            <button class="btn primary" type="submit">Save</button>
+          </form>
+          <div class="hint" id="settings-hint"></div>
+        </section>
+      </div>
+    </div>
+    <div class="modal" id="modal" hidden>
+      <div class="dialog">
+        <h3 id="modal-title">Receipt</h3>
+        <div id="modal-body"></div>
+        <div style="margin-top: 14px; display: flex; justify-content: flex-end">
+          <button class="btn" id="modal-close" type="button">Close</button>
+        </div>
+      </div>
+    </div>
+    <script src="./js/pos-api.js?v=20260830f"></script>
+    <script src="./js/app.js?v=20260830h"></script>
+    <script src="./js/x-pos-20260830e.js"></script>
+  </body>
+</html>

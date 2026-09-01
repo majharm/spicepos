@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <title>Sign in · ATAV POS</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" />
+    <link rel="icon" href="./favicon.svg" />
+    <link rel="stylesheet" href="./css/pos.css?v=20260829j" />
+    <link rel="stylesheet" href="./css/saas.css?v=20260829j" />
+  </head>
+  <body class="auth-body">
+    <main class="auth-card" id="auth-card">
+      <div class="brand-mark" aria-hidden="true"></div>
+      <h1>ATAV POS</h1>
+      <p id="auth-lead">Sign in to continue.</p>
+      <div class="auth-tabs" role="tablist">
+        <button type="button" class="auth-tab is-active" data-panel="signin" role="tab">Sign in</button>
+        <button type="button" class="auth-tab" data-panel="signup" role="tab">Create business</button>
+      </div>
+
+      <form id="login-form">
+        <label>Email, username or mobile
+          <input name="identifier" autocomplete="username" required />
+        </label>
+        <label>Password
+          <input name="password" type="password" autocomplete="current-password" required />
+        </label>
+        <label class="remember">
+          <input type="checkbox" name="remember" />
+          <span class="remember-ui" aria-hidden="true"></span>
+          Remember me
+        </label>
+        <button class="btn primary" type="submit">Sign in</button>
+        <p class="hint" id="hint"></p>
+      </form>
+
+      <form id="signup-form" hidden>
+        <div class="signup-grid">
+          <label class="full">Business Name *
+            <input name="businessName" required maxlength="180" />
+          </label>
+          <label>Business Type *
+            <select name="businessType" required>
+              <option value="">Select type</option>
+              <option>Retail</option>
+              <option>Wholesale</option>
+              <option>Distributor</option>
+              <option>Restaurant</option>
+              <option>Cafe</option>
+              <option>Grocery</option>
+              <option>Pharmacy</option>
+              <option>Electronics</option>
+              <option>Fashion</option>
+              <option>Services</option>
+              <option>Other</option>
+            </select>
+          </label>
+          <label>Business Category *
+            <select name="businessCategory" required>
+              <option value="">Select category</option>
+              <option>Spices &amp; masala</option>
+              <option>Kirana / FMCG</option>
+              <option>Supermarket</option>
+              <option>Apparel</option>
+              <option>Mobile &amp; electronics</option>
+              <option>Food &amp; beverage</option>
+              <option>Hardware</option>
+              <option>Jewellery</option>
+              <option>Medical</option>
+              <option>General trade</option>
+              <option>Other</option>
+            </select>
+          </label>
+          <label>Owner Name *
+            <input name="ownerName" required maxlength="120" />
+          </label>
+          <label>Mobile Number *
+            <input name="mobile" type="tel" required inputmode="numeric" maxlength="15" placeholder="10-digit mobile" />
+          </label>
+          <label class="full">Email ID *
+            <input name="email" type="email" required maxlength="160" />
+          </label>
+          <label>GST Number
+            <input name="gstNumber" maxlength="20" placeholder="Optional" />
+          </label>
+          <label>PAN Number
+            <input name="panNumber" maxlength="12" placeholder="Optional" />
+          </label>
+          <label class="full">Address *
+            <textarea name="address" required rows="2" maxlength="500"></textarea>
+          </label>
+          <label>City *
+            <input name="city" required maxlength="80" />
+          </label>
+          <label>State *
+            <select name="state" required>
+              <option value="">Select state</option>
+              <option>Andhra Pradesh</option>
+              <option>Arunachal Pradesh</option>
+              <option>Assam</option>
+              <option>Bihar</option>
+              <option>Chhattisgarh</option>
+              <option>Goa</option>
+              <option>Gujarat</option>
+              <option>Haryana</option>
+              <option>Himachal Pradesh</option>
+              <option>Jharkhand</option>
+              <option>Karnataka</option>
+              <option>Kerala</option>
+              <option>Madhya Pradesh</option>
+              <option>Maharashtra</option>
+              <option>Manipur</option>
+              <option>Meghalaya</option>
+              <option>Mizoram</option>
+              <option>Nagaland</option>
+              <option>Odisha</option>
+              <option>Punjab</option>
+              <option>Rajasthan</option>
+              <option>Sikkim</option>
+              <option>Tamil Nadu</option>
+              <option>Telangana</option>
+              <option>Tripura</option>
+              <option>Uttar Pradesh</option>
+              <option>Uttarakhand</option>
+              <option>West Bengal</option>
+              <option>Delhi</option>
+              <option>Jammu and Kashmir</option>
+              <option>Ladakh</option>
+              <option>Puducherry</option>
+              <option>Chandigarh</option>
+              <option>Andaman and Nicobar Islands</option>
+              <option>Dadra and Nagar Haveli and Daman and Diu</option>
+              <option>Lakshadweep</option>
+            </select>
+          </label>
+          <label>PIN Code *
+            <input name="pinCode" required inputmode="numeric" maxlength="6" placeholder="6-digit PIN" />
+          </label>
+          <label>Business Logo
+            <input name="logo" type="file" accept="image/*" />
+          </label>
+          <label>Admin Username *
+            <input name="adminUsername" required autocomplete="username" maxlength="32" />
+          </label>
+          <label>Password *
+            <input name="password" type="password" required autocomplete="new-password" minlength="8" />
+          </label>
+          <label class="full">Confirm Password *
+            <input name="confirmPassword" type="password" required autocomplete="new-password" minlength="8" />
+          </label>
+        </div>
+        <button class="btn primary" type="submit">Create business &amp; sign in</button>
+        <p class="hint" id="signup-hint"></p>
+        <p class="auth-note">You get a 30-day trial. After signup you open your own shop POS as business admin.</p>
+      </form>
+      <p class="login-support" id="login-support"></p>
+    </main>
+    <script src="./js/x-pos-20260830e.js"></script>
+  </body>
+</html>
