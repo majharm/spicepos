@@ -38,6 +38,7 @@ PHP
   pos-reports.php
   pos-accounting.php
   pos-api.php
+  pos-mail.php
   api/.htaccess
   api/health/index.php
   api/checkout/index.php
@@ -68,6 +69,7 @@ Node (if using hPanel Node.js web app — upload OR git pull then Restart)
   server/backup.js
   server/backup-util.js
   server/units.js
+  server/mail.js
   package.json
 
 After upload:
@@ -75,6 +77,8 @@ After upload:
   2. Hard-refresh browser (Ctrl+Shift+R)
 
 FIXES in this bundle
+  - Welcome email on Create business / new staff (Hostinger SMTP pos@atavtelecom.in)
+  - Suppliers form and list include address and email
   - Settings page: wider card, 2-column details, styled logo upload, keep card padding on mobile
   - CSS: Master Admin mobile nav wrap, hide nav until sign-in, backup file inputs, table overflow
   - Cache sticker 20260901deploy38 on index, login, master, setup

@@ -4,6 +4,7 @@ import { runTenant } from "./context.js";
 import { sha256, newToken, audit } from "./audit.js";
 import { defaultPerms, displayName, can } from "./roles.js";
 import { registerBusiness } from "./onboard.js";
+import { sendWelcomeSignup } from "./mail.js";
 import { canonApiUrl } from "./http-path.js";
 
 const SESSION_HOURS = 12;
@@ -337,6 +338,15 @@ export function registerAuth(app) {
     try {
       const { user } = await registerBusiness(req.body || {});
       const [business] = await query("SELECT * FROM businesses WHERE id = ?", [user.business_id]);
+      await sendWelcomeSignup(
+        {
+          shopName: business?.name,
+          ownerName: user.first_name,
+          email: user.email,
+          username: user.username,
+        },
+        req,
+      );
       const ttl = sessionSecs(wantsRemember(req.body));
       const token = newToken();
       await query(

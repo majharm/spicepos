@@ -66,6 +66,13 @@ DB_PASSWORD=...
 MASTER_ADMIN_EMAIL=...
 MASTER_ADMIN_PASSWORD=...
 BUSINESS_ID=00000000-0000-4000-8000-000000000001
+SMTP_HOST=smtp.hostinger.com
+SMTP_PORT=465
+SMTP_USER=pos@atavtelecom.in
+SMTP_PASS=...
+MAIL_FROM=pos@atavtelecom.in
+MAIL_FROM_NAME=ATAV POS
+APP_PUBLIC_URL=https://pos.atavtelecom.in
 ```
 
 Use `DB_HOST=localhost` when MySQL is on the same Hostinger account. If the database is remote, use that host and allow the hosting IP. Optional: `DATABASE_URL=mysql://user:pass@localhost:3306/dbname`.

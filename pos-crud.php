@@ -281,6 +281,16 @@ function pos_crud_dispatch($path, $method, $body, $bid, $auth, $branchId, $uid) 
         json_encode($perms), $username, $body["mobile"] ?? null,
       ]
     );
+    $shop = pos_q("SELECT name FROM businesses WHERE id = ? LIMIT 1", "s", [$bid]);
+    if (function_exists("pos_send_welcome_staff")) {
+      pos_send_welcome_staff([
+        "shopName" => $shop[0]["name"] ?? "",
+        "name" => $body["first_name"] ?? $body["name"] ?? "Staff",
+        "email" => $email,
+        "username" => $username,
+        "role" => $role,
+      ]);
+    }
     pos_send(200, ["ok" => true, "id" => $id]);
   }
 

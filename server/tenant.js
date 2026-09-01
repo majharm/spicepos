@@ -3,6 +3,7 @@ import { bid, branchId, authUser } from "./context.js";
 import { requireStaff, requirePerm, parsePerms, hashPassword } from "./auth.js";
 import { defaultPerms, ROLES, MODULES } from "./roles.js";
 import { audit } from "./audit.js";
+import { sendWelcomeStaff } from "./mail.js";
 
 function send(res, fn) {
   return Promise.resolve()
@@ -149,6 +150,17 @@ export function registerTenant(app) {
         ],
       );
       await audit("User Created", { module: "staff", target_id: id, target_name: b.email }, req);
+      const [biz] = await query("SELECT name FROM businesses WHERE id = ? LIMIT 1", [bid()]);
+      await sendWelcomeStaff(
+        {
+          shopName: biz?.name,
+          name: b.first_name || b.name || "Staff",
+          email: String(b.email).toLowerCase(),
+          username: b.username || String(b.email).split("@")[0],
+          role,
+        },
+        req,
+      );
       return { ok: true, id, roles: ROLES, modules: MODULES };
     }),
   );
