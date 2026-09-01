@@ -127,14 +127,15 @@ test("PHP and HTML wire master admin backup", () => {
   );
 });
 
-test("HTML and CSS cache stickers match deploy44", () => {
+test("HTML and CSS cache stickers match deploy45", () => {
   for (const name of ["index.html", "master.html", "login.html", "setup.html"]) {
     const html = readFileSync(path.join(root, name), "utf8");
-    assert.match(html, /20260901deploy44/);
+    assert.match(html, /20260901deploy45/);
     assert.doesNotMatch(html, /20260901deploy[0-3][0-9]/);
     assert.doesNotMatch(html, /20260901deploy41/);
     assert.doesNotMatch(html, /20260901deploy42/);
     assert.doesNotMatch(html, /20260901deploy43/);
+    assert.doesNotMatch(html, /20260901deploy44/);
   }
   const saas = readFileSync(path.join(root, "css/saas.css"), "utf8");
   const pos = readFileSync(path.join(root, "css/pos.css"), "utf8");
@@ -155,7 +156,10 @@ test("HTML and CSS cache stickers match deploy44", () => {
   assert.match(pos, /po-table/);
   assert.match(pos, /stage:not\(\.is-counter\) > \.view:not\(\[hidden\]\)/);
   assert.match(pos, /overscroll-behavior: contain/);
+  assert.match(pos, /mobile-counter: till dock/);
+  assert.match(pos, /stage\.is-counter > \.view-counter:not\(\[hidden\]\)/);
   assert.doesNotMatch(pos, /height: auto; max-height: none; overflow: visible/);
+  assert.match(index, /quick-customer-wrap/);
   assert.match(index, /settings-page/);
   assert.match(index, /logo-preview-frame/);
   assert.match(index, /logo-pick/);

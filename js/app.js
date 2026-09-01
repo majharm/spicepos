@@ -575,6 +575,8 @@ function showView(name) {
   });
   document.body.classList.toggle("counter-mode", name === "counter");
   document.querySelector(".stage")?.classList.toggle("is-counter", name === "counter");
+  const qcWrap = $("quick-customer-wrap");
+  if (qcWrap) qcWrap.open = !isMobileLayout();
   const page = document.getElementById(`view-${name}`);
   if (page) page.scrollTop = 0;
   paintViewHeader(name);
@@ -762,6 +764,7 @@ function renderCart() {
   $("total").textContent = money(t.taxable + t.tax);
   $("btn-pay").disabled = state.cart.length === 0;
   $("btn-clear").disabled = state.cart.length === 0;
+  document.body.classList.toggle("has-cart", state.cart.length > 0);
   if ($("btn-hold")) $("btn-hold").disabled = state.cart.length === 0 || Boolean(state.editingOrderId);
   $("btn-pay").textContent = state.editingOrderId ? "Save changes" : "Save";
   renderHeldBills();
@@ -2425,6 +2428,8 @@ setInterval(tick, 1000);
 window.addEventListener("resize", () => {
   if (!isMobileLayout()) {
     setNavCollapsed(false);
+    const wrap = $("quick-customer-wrap");
+    if (wrap) wrap.open = true;
   } else if (!$("nav-scrim")?.hidden && document.getElementById("app")?.classList.contains("nav-collapsed")) {
     setNavCollapsed(true);
   }

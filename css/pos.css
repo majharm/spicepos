@@ -490,6 +490,15 @@ body.counter-mode .view-topbar { display: none; }
   min-width: 160px;
   flex: 0 1 auto;
 }
+.quick-customer-wrap {
+  flex: 1 1 100%;
+  min-width: 0;
+}
+.quick-customer-wrap > summary {
+  display: none;
+  list-style: none;
+}
+.quick-customer-wrap > summary::-webkit-details-marker { display: none; }
 .quick-customer {
   display: flex;
   align-items: center;
@@ -1771,52 +1780,103 @@ tr:last-child td { border-bottom: 0; }
   .btn { min-height: 44px; }
   .qty button { width: 44px; height: 44px; }
 
-  .view-counter {
-    height: auto;
-    min-height: 0;
+  /* mobile-counter: till dock — catalog scrolls, bill+Save stay on screen */
+  .stage.is-counter {
+    overflow: hidden;
+    padding-bottom: 0;
+  }
+  .stage.is-counter > .view-counter:not([hidden]) {
+    display: flex;
+    flex-direction: column;
     flex: 1 1 auto;
-    overflow-x: hidden;
-    overflow-y: auto;
-    -webkit-overflow-scrolling: touch;
+    height: 0;
+    min-height: 0;
+    overflow: hidden;
+    padding-bottom: 0;
   }
   .counter-topbar {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 8px;
-    padding: 10px 12px;
-    position: sticky;
-    top: 52px;
+    padding: 8px 10px;
+    position: relative;
+    top: auto;
     z-index: 7;
+    flex: 0 0 auto;
   }
   .counter-topbar .search { grid-column: 1 / -1; min-width: 0; }
   .counter-topbar .select,
   .counter-topbar .customer-picker { min-width: 0; width: 100%; }
-  .quick-customer { grid-column: 1 / -1; flex-wrap: wrap; }
+  .quick-customer-wrap {
+    grid-column: 1 / -1;
+  }
+  .quick-customer-wrap > summary {
+    display: flex;
+    align-items: center;
+    min-height: 44px;
+    padding: 8px 4px;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--vel-teal);
+    cursor: pointer;
+  }
+  .quick-customer { flex-wrap: wrap; }
   .quick-customer input { min-width: 0; flex: 1 1 46%; }
   .quick-customer .btn { flex: 1 1 100%; }
-  .catalog {
+  .stage.is-counter .workspace {
+    display: grid;
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(0, 1fr) auto;
+    flex: 1 1 auto;
+    min-height: 0;
+    height: auto;
+    overflow: hidden;
+  }
+  .stage.is-counter .catalog {
     height: auto;
     max-height: none;
-    min-height: 36dvh;
-    overflow: visible;
+    min-height: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+    content-visibility: visible;
     grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-    margin: 8px;
+    margin: 8px 8px 0;
+    touch-action: manipulation;
   }
-  .ticket, .bill-panel {
+  .stage.is-counter .card {
+    contain: none;
+    min-height: 88px;
+    touch-action: manipulation;
+  }
+  .stage.is-counter .ticket,
+  .stage.is-counter .bill-panel {
     border-left: 0;
-    margin: 0 8px 16px;
-    border-radius: var(--radius-lg);
+    margin: 0;
+    border-radius: 16px 16px 0 0;
     height: auto;
-    max-height: none;
-    padding-bottom: 8px;
+    max-height: min(38vh, 340px);
+    min-height: 0;
+    overflow: hidden;
+    flex: 0 0 auto;
   }
-  .lines { max-height: none; overflow: visible; }
-  .view-counter:not([hidden]) .pay {
-    position: sticky;
-    bottom: 0;
+  .stage.is-counter .ticket-sub { display: none; }
+  .stage.is-counter .ticket-head { padding: 10px 12px 8px; }
+  .stage.is-counter .ticket-head h2 { font-size: 15px; }
+  .stage.is-counter .lines {
+    flex: 1 1 auto;
+    min-height: 0;
+    max-height: 18vh;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .stage.is-counter .pay {
+    position: relative;
+    bottom: auto;
     z-index: 9;
-    box-shadow: 0 -10px 28px rgba(15, 23, 42, 0.12);
-    padding-bottom: calc(12px + env(safe-area-inset-bottom));
+    box-shadow: 0 -8px 20px rgba(15, 23, 42, 0.08);
+    padding-bottom: calc(10px + env(safe-area-inset-bottom));
   }
   .pay-row { grid-template-columns: 1fr 1.2fr; }
   .orders-toolbar {
