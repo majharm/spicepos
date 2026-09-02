@@ -8,6 +8,8 @@
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="./css/pos.css?v=20260901deploy52" />
     <link rel="stylesheet" href="./css/saas.css?v=20260901deploy52" />
+    <link rel="stylesheet" href="./css/pos.css?v=20260901deploy58" />
+    <link rel="stylesheet" href="./css/saas.css?v=20260901deploy58" />
   </head>
   <body>
     <div class="app" id="app">
@@ -102,6 +104,18 @@
             <select id="pack-choice" class="select" aria-label="Pack type">
               <option value="">Loose items (no pack)</option>
             </select>
+            <select id="wearer-filter" class="select footwear-only" hidden aria-label="Girls or boys">
+              <option value="">All (girls &amp; boys)</option>
+              <option value="girls">Girls</option>
+              <option value="boys">Boys</option>
+              <option value="unisex">Unisex</option>
+            </select>
+            <select id="size-filter" class="select footwear-only" hidden aria-label="Size">
+              <option value="">All sizes</option>
+            </select>
+            <select id="color-filter" class="select footwear-only" hidden aria-label="Colour">
+              <option value="">All colours</option>
+            </select>
             <select id="pay-method" class="select" aria-label="Payment method">
               <option value="cash">Cash</option>
               <option value="upi">UPI</option>
@@ -124,7 +138,7 @@
               <div class="ticket-head">
                 <div class="ticket-head-copy">
                   <h2>Current bill</h2>
-                  <p class="ticket-sub">Tap items to add · 100 g each</p>
+                  <p class="ticket-sub" id="ticket-sub">Tap items to add · 100 g each</p>
                 </div>
                 <button type="button" class="bill-toggle" id="bill-toggle" aria-controls="bill-panel" aria-expanded="true" aria-label="Hide bill" title="Hide bill">›</button>
               </div>
@@ -152,7 +166,7 @@
 
         <section class="view" id="view-items" hidden>
           <h2 class="visually-hidden">Items</h2>
-          <p class="lede">Name, photo, HSN code, unit type, rates, and stock.</p>
+          <p class="lede" id="items-lede">Name, photo, HSN code, unit type, rates, and stock.</p>
           <form class="settings wide" id="item-form">
             <input type="hidden" id="item-id" />
             <label>Name <input id="item-name" required maxlength="180" /></label>
@@ -170,14 +184,30 @@
                 <button class="btn" type="button" id="item-image-clear" hidden>Remove photo</button>
               </div>
             </div>
-            <label>Category
+            <label><span id="item-category-lab">Category</span>
               <input id="item-category" list="category-list" placeholder="Whole Spices" />
             </label>
-            <label>Subcategory
+            <label><span id="item-subcategory-lab">Subcategory</span>
               <input id="item-subcategory" list="subcategory-list" placeholder="Haldi / Jeera" />
+            </label>
+            <label class="footwear-only" id="item-wearer-wrap" hidden>Type
+              <select id="item-wearer">
+                <option value="">Select girls / boys</option>
+                <option value="girls">Girls</option>
+                <option value="boys">Boys</option>
+                <option value="unisex">Unisex</option>
+              </select>
+            </label>
+            <label class="footwear-only" id="item-color-wrap" hidden>Colour
+              <input id="item-color" list="color-list" placeholder="Black" maxlength="40" />
+            </label>
+            <label class="footwear-only" id="item-size-wrap" hidden>Size
+              <input id="item-size" list="size-list" placeholder="5" maxlength="16" />
             </label>
             <datalist id="category-list"></datalist>
             <datalist id="subcategory-list"></datalist>
+            <datalist id="color-list"></datalist>
+            <datalist id="size-list"></datalist>
             <label>Unit type
               <select id="item-unit"></select>
             </label>
@@ -619,5 +649,11 @@
     <script src="./js/dev-mode.js?v=20260901deploy52" defer></script>
     <script src="./js/invoice.js?v=20260901deploy52" defer></script>
     <script src="./js/app.js?v=20260901deploy52" defer></script>
+    <script src="./js/pos-api.js?v=20260901deploy58" defer></script>
+    <script src="./js/units.js?v=20260901deploy58" defer></script>
+    <script src="./js/footwear.js?v=20260901deploy58" defer></script>
+    <script src="./js/dev-mode.js?v=20260901deploy58" defer></script>
+    <script src="./js/invoice.js?v=20260901deploy58" defer></script>
+    <script src="./js/app.js?v=20260901deploy58" defer></script>
   </body>
 </html>

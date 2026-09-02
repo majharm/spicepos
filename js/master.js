@@ -11,12 +11,13 @@ function money(n) {
   return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR" }).format(Number(n) || 0);
 }
 
-const BIZ_TYPES = ["Retail", "Wholesale", "Distributor", "Restaurant", "Cafe", "Grocery", "Pharmacy", "Electronics", "Fashion", "Services", "Other"];
+const BIZ_TYPES = ["Retail", "Wholesale", "Distributor", "Restaurant", "Cafe", "Grocery", "Pharmacy", "Electronics", "Fashion", "Footwear", "Services", "Other"];
 const BIZ_CATEGORIES = [
   "Spices & masala",
   "Kirana / FMCG",
   "Supermarket",
   "Apparel",
+  "Footwear",
   "Mobile & electronics",
   "Food & beverage",
   "Hardware",

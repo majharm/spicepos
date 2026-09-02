@@ -327,6 +327,8 @@ export function registerAuth(app) {
           id: business?.id,
           name: business?.name,
           status,
+          category: business?.category,
+          business_type: business?.business_type,
           subscription_expires_at: business?.subscription_expires_at,
         },
       });
@@ -503,6 +505,8 @@ export function registerAuth(app) {
           id: req.auth.business?.id,
           name: req.auth.business?.name,
           status,
+          category: req.auth.business?.category,
+          business_type: req.auth.business?.business_type,
           plan_id: req.auth.business?.plan_id,
           subscription_expires_at: req.auth.business?.subscription_expires_at,
         },

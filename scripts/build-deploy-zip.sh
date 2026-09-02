@@ -3,13 +3,14 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 OUT="${1:-spicepos-deploy52.zip}"
+OUT="${1:-spicepos-deploy58.zip}"
 rm -f "$OUT"
 zip -r "$OUT" \
   DEPLOY-FILES.txt \
   assets/atav-telecom-logo.png \
   index.html login.html master.html setup.html \
   css/pos.css css/saas.css \
-  js/app.js js/units.js js/invoice.js js/dev-mode.js js/master.js js/pos-api.js js/x-pos-20260830e.js \
+  js/app.js js/units.js js/footwear.js js/invoice.js js/dev-mode.js js/master.js js/pos-api.js js/x-pos-20260830e.js \
   pos-php-core.php pos-php-scrypt.php pos-php-till.php pos-checkout.php pos-holds.php \
   pos-crud.php pos-backup.php pos-units.php pos-orders.php pos-reports.php pos-accounting.php pos-api.php pos-mail.php pos-alerts.php \
   api/.htaccess api/health/index.php api/checkout/index.php api/holds/index.php \

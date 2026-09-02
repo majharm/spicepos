@@ -1,4 +1,5 @@
 import "../js/units.js";
+import "../js/footwear.js";
 import { query, withTransaction } from "./db.js";
 import { bid } from "./context.js";
 import { recordCreditPurchase } from "./accounts.js";
@@ -6,6 +7,11 @@ import { postPurchaseJournal } from "./accounting.js";
 import { audit } from "./audit.js";
 
 const POSUnits = globalThis.POSUnits;
+const POSFootwear = globalThis.POSFootwear;
+
+export function itemBillName(item) {
+  return POSFootwear.billName(item);
+}
 
 export function itemUnit(item) {
   if (item == null) return POSUnits.normalize("GM");
@@ -115,22 +121,29 @@ export function registerCrud(app) {
     try {
       const item = await withTransaction(async (conn) => {
         const n = await nextSeq(conn, "item", 7);
-        const code = b.code || `SP-${String(n).padStart(3, "0")}`;
+        const [bizRows] = await conn.query("SELECT category, business_type FROM businesses WHERE id = ?", [bid()]);
+        const footwear = POSFootwear.isFootwearShop(bizRows[0] || {});
+        const variants = POSFootwear.fieldsFromBody(b);
+        const prefix = footwear ? "FW" : "SP";
+        const code = b.code || `${prefix}-${String(n).padStart(3, "0")}`;
         const id = crypto.randomUUID();
         await conn.query(
           `INSERT INTO items (
-             id, code, name, local_name, category, subcategory, base_unit,
+             id, code, name, local_name, category, subcategory, color, size, wearer_type, base_unit,
              purchase_rate, retail_rate, b2b_rate, gst_rate, hsn, image_url, stock_gm,
              reorder_level_gm, status, business_id
-           ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'active', ?)`,
+           ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'active', ?)`,
           [
             id,
             code,
             String(b.name).trim(),
             b.local_name || null,
-            b.category || "Whole Spices",
+            b.category || POSFootwear.defaultCategory(bizRows[0] || {}),
             b.subcategory || null,
-            itemUnit(b.base_unit || b.unit || "GM"),
+            variants.color,
+            variants.size,
+            variants.wearer_type,
+            itemUnit(b.base_unit || b.unit || POSFootwear.defaultUnit(bizRows[0] || {})),
             Number(b.purchase_rate) || 0,
             Number(b.retail_rate) || 0,
             Number(b.b2b_rate) || 0,
@@ -161,12 +174,17 @@ export function registerCrud(app) {
       return;
     }
     try {
+      const variants = POSFootwear.fieldsFromBody(b);
+      const [bizRows] = await query("SELECT category, business_type FROM businesses WHERE id = ?", [bid()]);
       const params = [
         b.name,
         b.local_name || null,
-        b.category || "Whole Spices",
+        b.category || POSFootwear.defaultCategory(bizRows[0] || {}),
         b.subcategory || null,
-        itemUnit(b.base_unit || b.unit || "GM"),
+        variants.color,
+        variants.size,
+        variants.wearer_type,
+        itemUnit(b.base_unit || b.unit || POSFootwear.defaultUnit(bizRows[0] || {})),
         Number(b.purchase_rate) || 0,
         Number(b.retail_rate) || 0,
         Number(b.b2b_rate) || 0,
@@ -184,7 +202,7 @@ export function registerCrud(app) {
       params.push(req.params.id, bid());
       await query(
         `UPDATE items SET
-           name=?, local_name=?, category=?, subcategory=?, base_unit=?,
+           name=?, local_name=?, category=?, subcategory=?, color=?, size=?, wearer_type=?, base_unit=?,
            purchase_rate=?, retail_rate=?, b2b_rate=?, gst_rate=?, hsn=?,
            stock_gm=?, reorder_level_gm=?, status=?${imageSql}
          WHERE id=? AND business_id=?`,
@@ -355,7 +373,7 @@ export function registerCrud(app) {
               crypto.randomUUID(),
               id,
               line.item.id,
-              line.item.name,
+              itemBillName(line.item),
               line.qty,
               line.rate,
               line.gstRate,
@@ -490,7 +508,7 @@ export function registerCrud(app) {
                 crypto.randomUUID(),
                 existing.id,
                 line.item.id,
-                line.item.name,
+                itemBillName(line.item),
                 line.qty,
                 line.rate,
                 0,

@@ -180,6 +180,7 @@ function pos_company_timezone($company = []) {
 
 function pos_apply_business_timezone($businessId) {
   pos_ensure_company_timezone_columns();
+  try { pos_ensure_business_columns(); } catch (Throwable $e) { /* businesses table optional during setup */ }
   try { pos_ensure_item_unit_columns(); } catch (Throwable $e) { /* items table optional during setup */ }
   $unitsFile = __DIR__ . "/pos-units.php";
   if (is_file($unitsFile)) {
@@ -327,23 +328,62 @@ function pos_with_transaction(callable $fn) {
   }
 }
 
+function pos_ensure_columns($table, $cols) {
+  $db = pos_db();
+  foreach ($cols as $name => $def) {
+    $res = $db->query("SHOW COLUMNS FROM `{$table}` LIKE '" . $db->real_escape_string($name) . "'");
+    if ($res && $res->num_rows === 0) {
+      @$db->query("ALTER TABLE `{$table}` ADD COLUMN `{$name}` {$def}");
+    }
+    if ($res) $res->free();
+  }
+}
+
+function pos_ensure_business_columns() {
+  static $done = false;
+  if ($done) return;
+  $done = true;
+  pos_ensure_columns("businesses", [
+    "owner_name" => "VARCHAR(255) NULL",
+    "mobile" => "VARCHAR(32) NULL",
+    "email" => "VARCHAR(255) NULL",
+    "address" => "TEXT NULL",
+    "gstin" => "VARCHAR(32) NULL",
+    "business_type" => "VARCHAR(64) NULL",
+    "logo_url" => "MEDIUMTEXT NULL",
+    "plan_id" => "VARCHAR(255) NULL",
+    "subscription_expires_at" => "DATE NULL",
+    "invoice_footer" => "TEXT NULL",
+    "invoice_terms" => "TEXT NULL",
+    "max_branches" => "INT NULL",
+    "max_users" => "INT NULL",
+    "max_devices" => "INT NULL",
+    "category" => "VARCHAR(128) NULL",
+    "pan" => "VARCHAR(16) NULL",
+    "city" => "VARCHAR(128) NULL",
+    "state" => "VARCHAR(64) NULL",
+    "pin_code" => "VARCHAR(12) NULL",
+  ]);
+}
+
+function pos_is_footwear_shop($biz) {
+  $text = strtolower(trim((string) (($biz["category"] ?? "") . " " . ($biz["business_type"] ?? ""))));
+  return (bool) preg_match("/(^|[^a-z])(footwear|shoes?)([^a-z]|$)/", $text);
+}
+
 function pos_ensure_item_unit_columns() {
   static $done = false;
   if ($done) return;
   $done = true;
-  $db = pos_db();
-  foreach ([
+  pos_ensure_columns("items", [
     "base_unit" => "VARCHAR(32) NOT NULL DEFAULT 'GM'",
     "unit" => "VARCHAR(32) NULL",
     "hsn" => "VARCHAR(32) NULL",
     "image_url" => "MEDIUMTEXT NULL",
-  ] as $name => $def) {
-    $res = $db->query("SHOW COLUMNS FROM items LIKE '" . $db->real_escape_string($name) . "'");
-    if ($res && $res->num_rows === 0) {
-      @$db->query("ALTER TABLE items ADD COLUMN `{$name}` {$def}");
-    }
-    if ($res) $res->free();
-  }
+    "color" => "VARCHAR(64) NULL",
+    "size" => "VARCHAR(32) NULL",
+    "wearer_type" => "VARCHAR(16) NULL",
+  ]);
 }
 
 function pos_item_image_url($body) {
@@ -353,6 +393,29 @@ function pos_item_image_url($body) {
   if (strpos($img, "data:image/") !== 0) pos_send(400, ["error" => "Item image must be an uploaded image"]);
   if (strlen($img) > 6000000) pos_send(400, ["error" => "Item image is too large"]);
   return $img;
+}
+
+function pos_item_bill_name($item) {
+  if (!is_array($item)) return "Item";
+  $name = trim((string) ($item["name"] ?? "Item"));
+  if ($name === "") $name = "Item";
+  $type = strtolower(trim((string) ($item["wearer_type"] ?? "")));
+  $wear = $type === "girls" || $type === "girl" ? "Girls" : ($type === "boys" || $type === "boy" ? "Boys" : ($type === "unisex" ? "Unisex" : ""));
+  $color = trim((string) ($item["color"] ?? ""));
+  $size = trim((string) ($item["size"] ?? ""));
+  $bits = [];
+  if ($wear !== "") $bits[] = $wear;
+  if ($color !== "") $bits[] = $color;
+  if ($size !== "") $bits[] = "Sz " . $size;
+  return $bits ? $name . " (" . implode(" · ", $bits) . ")" : $name;
+}
+
+function pos_item_wearer($raw) {
+  $v = strtolower(trim((string) $raw));
+  if ($v === "girl" || $v === "girls") return "girls";
+  if ($v === "boy" || $v === "boys") return "boys";
+  if ($v === "unisex" || $v === "kids" || $v === "kid") return "unisex";
+  return "";
 }
 
 function pos_item_unit($item) {
@@ -530,6 +593,8 @@ function pos_staff_me_payload($staff) {
       "id" => $staff["business"]["id"] ?? null,
       "name" => $staff["business"]["name"] ?? null,
       "status" => $status,
+      "category" => $staff["business"]["category"] ?? null,
+      "business_type" => $staff["business"]["business_type"] ?? null,
       "plan_id" => $staff["business"]["plan_id"] ?? null,
       "subscription_expires_at" => $staff["business"]["subscription_expires_at"] ?? null,
     ],
@@ -1014,6 +1079,7 @@ function pos_validate_signup($raw, $requireAdmin = true) {
 }
 
 function pos_register_business($raw) {
+  pos_ensure_business_columns();
   $b = pos_validate_signup($raw, true);
   $taken = pos_q("SELECT id FROM staff_users WHERE email = ? LIMIT 1", "s", [$b["email"]]);
   if ($taken) throw new Exception("This email is already registered");
@@ -1083,6 +1149,7 @@ function pos_register_business($raw) {
 }
 
 function pos_update_business($id, $raw) {
+  pos_ensure_business_columns();
   $b = pos_validate_signup($raw, false);
   $existing = pos_q("SELECT * FROM businesses WHERE id = ? LIMIT 1", "s", [$id]);
   if (!$existing) throw new Exception("Business not found");
@@ -1381,6 +1448,8 @@ function pos_php_dispatch($path, $method, $rawBody) {
           "id" => $business["id"] ?? null,
           "name" => $business["name"] ?? null,
           "status" => $status,
+          "category" => $business["category"] ?? null,
+          "business_type" => $business["business_type"] ?? null,
           "subscription_expires_at" => $business["subscription_expires_at"] ?? null,
         ],
       ]);

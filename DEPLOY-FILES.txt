@@ -1,4 +1,5 @@
 Production deploy bundle — 20260901deploy52
+Production deploy bundle — 20260901deploy58
 =========================================
 
 Upload ALL files below to Hostinger public_html (overwrite):
@@ -19,6 +20,7 @@ CSS
 JavaScript
   js/app.js
   js/units.js
+  js/footwear.js
   js/invoice.js
   js/dev-mode.js
   js/master.js
@@ -88,6 +90,10 @@ FIXES in this bundle
   - CSS: Master Admin mobile nav wrap, hide nav until sign-in, backup file inputs, table overflow
   - Cache sticker 20260901deploy52 on index, login, master, setup
   - Mobile Counter: scrollable item list and a taller order box
+  - Cache sticker 20260901deploy58 on index, login, master, setup
+  - Footwear empty unit defaults to PCS (not GM); Items form keeps the shop unit
+  - Footwear module: item colour, size, and girls/boys type
+  - Mobile Counter: scrollable item list and a compact order list
   - Master Admin Settings: auto-send templates (welcome, login, update, closing, low stock) with Active/Inactive
   - Master Admin Notifications: attach an image; send to dashboard, email, and WhatsApp
   - Counter bill slider: small hide/unhide button (persists in this browser)

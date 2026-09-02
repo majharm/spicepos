@@ -132,6 +132,10 @@ test("HTML and CSS cache stickers match deploy52", () => {
   for (const name of ["index.html", "master.html", "login.html", "setup.html"]) {
     const html = readFileSync(path.join(root, name), "utf8");
     assert.match(html, /20260901deploy52/);
+test("HTML and CSS cache stickers match deploy58", () => {
+  for (const name of ["index.html", "master.html", "login.html", "setup.html"]) {
+    const html = readFileSync(path.join(root, name), "utf8");
+    assert.match(html, /20260901deploy58/);
     assert.doesNotMatch(html, /20260901deploy[0-3][0-9]/);
     assert.doesNotMatch(html, /20260901deploy41/);
     assert.doesNotMatch(html, /20260901deploy42/);
@@ -144,6 +148,12 @@ test("HTML and CSS cache stickers match deploy52", () => {
     assert.doesNotMatch(html, /20260901deploy49/);
     assert.doesNotMatch(html, /20260901deploy50/);
     assert.doesNotMatch(html, /20260901deploy51/);
+    assert.doesNotMatch(html, /20260901deploy52/);
+    assert.doesNotMatch(html, /20260901deploy53/);
+    assert.doesNotMatch(html, /20260901deploy54/);
+    assert.doesNotMatch(html, /20260901deploy55/);
+    assert.doesNotMatch(html, /20260901deploy56/);
+    assert.doesNotMatch(html, /20260901deploy57/);
   }
   const saas = readFileSync(path.join(root, "css/saas.css"), "utf8");
   const pos = readFileSync(path.join(root, "css/pos.css"), "utf8");
@@ -166,6 +176,16 @@ test("HTML and CSS cache stickers match deploy52", () => {
   assert.match(pos, /stage:not\(\.is-counter\) > \.view:not\(\[hidden\]\)/);
   assert.match(pos, /overscroll-behavior: contain/);
   assert.match(pos, /mobile-counter: list scroll \+ taller order box/);
+  assert.match(pos, /mobile-counter: list scroll \+ compact order list/);
+  assert.match(pos, /body\.footwear-mode #pack-choice/);
+  assert.match(pos, /stage\.is-counter \.line-ops/);
+  assert.match(pos, /stage\.is-counter \.line-amt/);
+  assert.match(pos, /minmax\(0, 240px\)/);
+  assert.doesNotMatch(pos, /minmax\(240px, 48vh\)/);
+  const appJs = readFileSync(path.join(root, "js/app.js"), "utf8");
+  assert.match(appJs, /class="line-info"/);
+  assert.match(appJs, /class="line-ops"/);
+  assert.match(appJs, /class="pack line-amt"/);
   assert.match(pos, /body\.counter-mode \.platform-notices/);
   assert.match(pos, /compact-catalog: smaller item cards/);
   assert.match(pos, /bill-slider: hide unhide/);
@@ -176,7 +196,8 @@ test("HTML and CSS cache stickers match deploy52", () => {
   assert.doesNotMatch(pos, /height: auto; max-height: none; overflow: visible/);
   assert.match(index, /<title>ATAV POS<\/title>/);
   assert.doesNotMatch(index, /SWAMI MASALE POS/);
-  assert.match(index, /quick-customer-wrap/);
+  assert.match(index, /id="item-wearer"/);
+  assert.match(index, /id="wearer-filter"/);
   assert.match(index, /id="bill-toggle"/);
   assert.match(index, /id="bill-panel"/);
   const masterJs = readFileSync(path.join(root, "js/master.js"), "utf8");
