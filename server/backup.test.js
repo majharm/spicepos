@@ -128,10 +128,11 @@ test("PHP and HTML wire master admin backup", () => {
   );
 });
 
-test("HTML and CSS cache stickers match deploy59", () => {
+test("HTML and CSS cache stickers match deploy60", () => {
   for (const name of ["index.html", "master.html", "login.html", "setup.html"]) {
     const html = readFileSync(path.join(root, name), "utf8");
-    assert.match(html, /20260901deploy59/);
+    assert.match(html, /20260902deploy60/);
+    assert.doesNotMatch(html, /20260901deploy59/);
     assert.doesNotMatch(html, /20260901deploy[0-3][0-9]/);
     assert.doesNotMatch(html, /20260901deploy41/);
     assert.doesNotMatch(html, /20260901deploy42/);
@@ -151,6 +152,7 @@ test("HTML and CSS cache stickers match deploy59", () => {
     assert.doesNotMatch(html, /20260901deploy56/);
     assert.doesNotMatch(html, /20260901deploy57/);
     assert.doesNotMatch(html, /20260901deploy58/);
+    assert.doesNotMatch(html, /20260901deploy59/);
   }
   const saas = readFileSync(path.join(root, "css/saas.css"), "utf8");
   const pos = readFileSync(path.join(root, "css/pos.css"), "utf8");
@@ -183,6 +185,18 @@ test("HTML and CSS cache stickers match deploy59", () => {
   assert.match(appJs, /Print official bill/);
   assert.match(appJs, /officeInvoiceBody/);
   assert.match(index, /official A4 list bill/);
+  assert.match(index, /id="support-page"/);
+  assert.match(index, /js\/support\.js/);
+  assert.match(pos, /support-page: helpline-first shop Support/);
+  assert.match(pos, /support-hero/);
+  assert.match(pos, /support-cols/);
+  assert.match(saas, /support-admin/);
+  assert.match(saas, /login-support-link/);
+  const supportJs = readFileSync(path.join(root, "js/support.js"), "utf8");
+  assert.match(supportJs, /Call now/);
+  assert.match(supportJs, /WhatsApp/);
+  assert.match(supportJs, /Helpline not set yet/);
+  assert.match(appJs, /SupportPage\.pageHtml/);
   assert.match(appJs, /class="line-info"/);
   assert.match(appJs, /class="line-ops"/);
   assert.match(appJs, /class="pack line-amt"/);

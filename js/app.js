@@ -201,7 +201,7 @@ const VIEW_META = {
   staff: { title: "Staff & roles", subtitle: "Users, roles, and access" },
   branches: { title: "Branches", subtitle: "Shop locations and contact details" },
   devices: { title: "POS devices", subtitle: "Registers and terminal codes" },
-  support: { title: "Support", subtitle: "Platform helpline and shop details" },
+  support: { title: "Support", subtitle: "Call, WhatsApp, or email platform support" },
   accounts: { title: "Accounts", subtitle: "Receivables, payables, GL, and books" },
   expenses: { title: "Expenses", subtitle: "Rent, power, wages, and other shop costs" },
   reports: { title: "Reports", subtitle: "Indian FY 1 Apr–31 Mar — sales, GST, expenses" },
@@ -1209,43 +1209,43 @@ function paintTimezonePreview() {
   el.textContent = `${label} · now ${time}`;
 }
 
-function telHref(phone) {
-  return `tel:${String(phone || "").replaceAll(/[^\d+]/g, "")}`;
-}
-
 function paintPlatformSupport() {
   const phone = state.support?.support_phone;
   const el = $("session-support");
   if (!el) return;
-  if (phone) {
+  const tel = window.SupportPage?.telHref(phone) || "";
+  if (phone && tel) {
     el.hidden = false;
-    el.innerHTML = `Support <a href="${telHref(phone)}">${escapeHtml(phone)}</a>`;
+    el.innerHTML = `<a href="${tel}">Support ${escapeHtml(phone)}</a>`;
   } else {
     el.hidden = true;
     el.textContent = "";
   }
 }
 
+function bindSupportCopy(root) {
+  root.querySelectorAll("[data-copy-phone]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const phone = btn.getAttribute("data-copy-phone") || "";
+      const label = btn.textContent;
+      try {
+        await navigator.clipboard.writeText(phone);
+        btn.textContent = "Copied";
+      } catch {
+        btn.textContent = "Copy failed";
+      }
+      setTimeout(() => {
+        btn.textContent = label;
+      }, 1400);
+    });
+  });
+}
+
 function renderSupport() {
-  const phone = state.support?.support_phone;
-  const email = state.support?.support_email;
-  const cards = [
-    [
-      "Platform support",
-      phone
-        ? `<a href="${telHref(phone)}">${escapeHtml(phone)}</a>`
-        : "Not set yet by Master Admin",
-    ],
-    ["Support email", email || "—"],
-    ["Shop", escapeHtml(state.company.name)],
-    ["Address", escapeHtml(state.company.address || "—")],
-    ["Shop phone", escapeHtml(state.company.phone || "—")],
-    ["Shop email", escapeHtml(state.company.email || "—")],
-    ["GSTIN", escapeHtml(state.company.gstin || "—")],
-  ];
-  $("support-cards").innerHTML = cards
-    .map(([k, v]) => `<div class="report-card"><span>${k}</span><strong>${v}</strong></div>`)
-    .join("");
+  const root = $("support-page");
+  if (!root || !window.SupportPage?.pageHtml) return;
+  root.innerHTML = SupportPage.pageHtml(state.support, state.company);
+  bindSupportCopy(root);
 }
 
 function paintHeader() {
