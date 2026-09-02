@@ -1919,7 +1919,6 @@ body.footwear-mode.counter-mode .stage.is-counter .card .sku { display: block; f
   .btn { min-height: 44px; }
   .qty button { width: 44px; height: 44px; }
 
-  /* mobile-counter: list scroll + taller order box */
   /* mobile-counter: list scroll + compact order list */
   .stage.is-counter {
     overflow: hidden;
@@ -1973,7 +1972,6 @@ body.footwear-mode.counter-mode .stage.is-counter .card .sku { display: block; f
     overflow: hidden;
   }
   body.has-cart .stage.is-counter .workspace {
-    grid-template-rows: minmax(0, 1fr) minmax(240px, 48vh);
     grid-template-rows: minmax(0, 1fr) minmax(0, 240px);
   }
   .stage.is-counter .catalog {
@@ -2039,7 +2037,6 @@ body.footwear-mode.counter-mode .stage.is-counter .card .sku { display: block; f
     margin: 0;
     border-radius: 16px 16px 0 0;
     height: auto;
-    max-height: min(42vh, 360px);
     max-height: 240px;
     min-height: 0;
     overflow: hidden;
@@ -2050,8 +2047,6 @@ body.footwear-mode.counter-mode .stage.is-counter .card .sku { display: block; f
   body.has-cart .stage.is-counter .ticket,
   body.has-cart .stage.is-counter .bill-panel {
     height: 100%;
-    max-height: none;
-    min-height: 240px;
     max-height: 240px;
     min-height: 0;
   }
@@ -2131,10 +2126,6 @@ body.footwear-mode.counter-mode .stage.is-counter .card .sku { display: block; f
   }
   body.has-cart .stage.is-counter .lines {
     display: block;
-    min-height: 120px;
-  }
-  .stage.is-counter .line {
-    padding: 8px 6px;
     min-height: 0;
   }
   .stage.is-counter .line {

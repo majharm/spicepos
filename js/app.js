@@ -894,8 +894,8 @@ function renderCart() {
         const step = POSUnits.step(itemUnit(item));
         return `<div class="line">
           <div class="line-info">
-            <div class="who">${escapeHtml(itemVariantText(item) ? `${item.name} · ${itemVariantText(item)}` : item.name)}</div>
-            <div class="pack">${escapeHtml(itemVariantText(item) || `${item.category} / ${item.subcategory || "—"}`)} · ${escapeHtml(fmtQty(line.qtyGm, item))}</div>
+            <div class="who">${escapeHtml(item.name)}</div>
+            <div class="pack">${escapeHtml(item.category)} / ${escapeHtml(item.subcategory || "—")} · ${escapeHtml(fmtQty(line.qtyGm, item))}</div>
           </div>
           <div class="line-ops">
             <div class="qty">
