@@ -7,6 +7,8 @@ export const WA_DEFAULT_COUNTRY = "91";
 export const WA_DEFAULT_KEY = "b99fcac4528c679916dcd461f5d834a098c9f9fa2fd349c67395fb028579cc1b";
 export const WA_DEFAULT_PROFILE = "acc_1782484414096";
 
+export const ALERT_KINDS = ["welcome", "credentials", "updates", "closing", "low_stock"];
+
 const ALERT_KEYS = [
   "wa_enabled",
   "wa_api_url",
@@ -19,7 +21,131 @@ const ALERT_KEYS = [
   "alert_closing",
   "alert_low_stock",
   "alert_closing_hour",
+  "tpl_welcome",
+  "tpl_credentials",
+  "tpl_updates",
+  "tpl_closing",
+  "tpl_low_stock",
 ];
+
+export const DEFAULT_TEMPLATES = {
+  welcome: `Welcome to ATAV POS.
+
+Hello {{name}}, shop "{{shop}}" is ready.
+
+Sign in: {{signInUrl}}
+Keep your login private.
+
+— ATAV Telecom POS`,
+  credentials: `ATAV POS login for "{{shop}}"
+Role: {{role}}
+User ID: {{username}}
+Email: {{email}}
+Password: {{password}}
+Sign in: {{signInUrl}}
+
+Do not share this message.
+— ATAV Telecom POS`,
+  updates: `ATAV POS update · {{shop}}
+
+{{title}}
+
+{{body}}
+
+— ATAV Telecom POS`,
+  closing: `{{shop}} — closing {{day}}
+Bills: {{bills}}
+Total: {{takings}}
+Cash {{cash}} · UPI {{upi}} · Card {{card}} · Credit {{credit}}
+GST: {{gst}}
+{{lowStock}}
+
+— ATAV Telecom POS`,
+  low_stock: `{{shop}} — low stock alert
+
+{{lowStock}}
+
+— ATAV Telecom POS`,
+};
+
+export const SAMPLE_PAYLOAD = {
+  shopName: "SWAMI MASALE SASWAD",
+  ownerName: "Shop owner",
+  username: "swami.admin",
+  email: "admin@shop.local",
+  password: "********",
+  role: "business_admin",
+  signInUrl: "https://pos.atavtelecom.in/login.html",
+  title: "Holiday hours",
+  body: "Closed this Sunday.",
+  day: "2026-09-01",
+  bills: 12,
+  takings: 4500,
+  cash: 2000,
+  upi: 1500,
+  card: 800,
+  credit: 200,
+  gst: 225,
+  items: [{ name: "Turmeric powder", qtyLabel: "2 kg" }],
+};
+
+export function fillTemplate(tpl, vars = {}) {
+  return String(tpl || "").replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (_, key) => {
+    const value = vars[key];
+    return value == null ? "" : String(value);
+  });
+}
+
+export function effectiveTemplate(kind, stored) {
+  const text = String(stored || "").trim();
+  return text || DEFAULT_TEMPLATES[kind] || "";
+}
+
+export function alertVars(payload = {}) {
+  const items = payload.items || payload.lowStock || [];
+  const bullets = items
+    .map((item) => {
+      const name = item?.name || (typeof item === "string" ? item : "");
+      const qty = item?.qtyLabel ? ` (${item.qtyLabel})` : "";
+      return name ? `• ${name}${qty}` : "";
+    })
+    .filter(Boolean)
+    .join("\n");
+  const money = (key) => {
+    const value = payload[key];
+    if (value == null || value === "") return "";
+    if (typeof value === "string" && value.includes("₹")) return value;
+    return formatInr(value);
+  };
+  return {
+    shop: payload.shopName || payload.shop || "",
+    name: payload.ownerName || payload.name || "",
+    username: payload.username || "",
+    email: payload.email || "",
+    password: payload.password || "",
+    role: String(payload.role || "").replaceAll("_", " "),
+    signInUrl: payload.signInUrl || "",
+    title: payload.title || "",
+    body: payload.body || "",
+    day: payload.day || "",
+    bills: payload.bills == null || payload.bills === "" ? "" : String(Number(payload.bills) || 0),
+    takings: money("takings"),
+    cash: money("cash"),
+    upi: money("upi"),
+    card: money("card"),
+    credit: money("credit"),
+    gst: money("gst"),
+    lowStock: payload.lowStockText || bullets,
+  };
+}
+
+export function sampleAlertVars() {
+  return alertVars(SAMPLE_PAYLOAD);
+}
+
+export function renderAlert(kind, payload = {}, settings = {}) {
+  return fillTemplate(effectiveTemplate(kind, settings[`tpl_${kind}`]), alertVars(payload)).trim();
+}
 
 export function normalizeInMobile(raw) {
   let d = String(raw || "").replace(/\D/g, "");
@@ -62,72 +188,41 @@ export function buildWaUrl(cfg, numbers, message, media) {
   return url.toString();
 }
 
-export function welcomeText({ shopName, ownerName }) {
-  const shop = shopName || "your shop";
-  const who = ownerName || "there";
-  return `Welcome to ATAV POS.
-
-Hello ${who}, shop "${shop}" is ready.
-
-Sign in at the POS login page. Keep your login private.
-
-— ATAV Telecom POS`;
+export function welcomeText(payload = {}, settings = {}) {
+  return renderAlert(
+    "welcome",
+    {
+      ...payload,
+      shopName: payload.shopName || "your shop",
+      ownerName: payload.ownerName || "there",
+    },
+    settings,
+  );
 }
 
-export function credentialsText({ shopName, username, email, password, role, signInUrl }) {
-  const shop = shopName || "your shop";
-  const lines = [
-    `ATAV POS login for "${shop}"`,
-    role ? `Role: ${String(role).replaceAll("_", " ")}` : null,
-    username ? `User ID: ${username}` : null,
-    email ? `Email: ${email}` : null,
-    password ? `Password: ${password}` : "Password: the one you set. Keep it private.",
-    signInUrl ? `Sign in: ${signInUrl}` : null,
-    "",
-    "Do not share this message.",
-    "— ATAV Telecom POS",
-  ];
-  return lines.filter((line) => line !== null).join("\n");
+export function credentialsText(payload = {}, settings = {}) {
+  return renderAlert(
+    "credentials",
+    {
+      ...payload,
+      shopName: payload.shopName || "your shop",
+      password: payload.password || "the one you set. Keep it private.",
+    },
+    settings,
+  );
 }
 
-export function updateText({ shopName, title, body }) {
-  return `ATAV POS update${shopName ? ` · ${shopName}` : ""}
-
-${title || "Update"}
-${body ? `\n${body}` : ""}
-
-— ATAV Telecom POS`.trim();
+export function updateText(payload = {}, settings = {}) {
+  return renderAlert("updates", { ...payload, title: payload.title || "Update" }, settings);
 }
 
-export function closingText({ shopName, day, bills, takings, gst, cash, upi, card, credit, lowStock }) {
-  const lines = [
-    `${shopName || "Shop"} — closing ${day}`,
-    `Bills: ${Number(bills) || 0}`,
-    `Total: ${formatInr(takings)}`,
-    `Cash ${formatInr(cash)} · UPI ${formatInr(upi)} · Card ${formatInr(card)} · Credit ${formatInr(credit)}`,
-    `GST: ${formatInr(gst)}`,
-  ];
-  if (lowStock && lowStock.length) {
-    lines.push(
-      `Low stock: ${lowStock
-        .slice(0, 8)
-        .map((i) => i.name)
-        .join(", ")}${lowStock.length > 8 ? "…" : ""}`,
-    );
-  }
-  lines.push("", "— ATAV Telecom POS");
-  return lines.join("\n");
+export function closingText(payload = {}, settings = {}) {
+  return renderAlert("closing", { shopName: "Shop", ...payload, shopName: payload.shopName || "Shop" }, settings);
 }
 
-export function lowStockText({ shopName, items }) {
-  const rows = (items || [])
-    .map((i) => `• ${i.name}${i.qtyLabel ? ` (${i.qtyLabel})` : ""}`)
-    .join("\n");
-  return `${shopName || "Shop"} — low stock alert
-
-${rows || "One or more items are at or below reorder level."}
-
-— ATAV Telecom POS`;
+export function lowStockText(payload = {}, settings = {}) {
+  const items = payload.items?.length ? payload.items : [{ name: "One or more items are at or below reorder level." }];
+  return renderAlert("low_stock", { ...payload, shopName: payload.shopName || "Shop", items }, settings);
 }
 
 export function noticeHtml({ title, body, image }) {
@@ -198,15 +293,28 @@ export async function loadAlertSettings() {
     alert_closing: flagOn(map.alert_closing, true) ? "1" : "0",
     alert_low_stock: flagOn(map.alert_low_stock, true) ? "1" : "0",
     alert_closing_hour: String(Math.min(23, Math.max(0, Number(map.alert_closing_hour ?? 22) || 22))),
+    tpl_welcome: map.tpl_welcome || "",
+    tpl_credentials: map.tpl_credentials || "",
+    tpl_updates: map.tpl_updates || "",
+    tpl_closing: map.tpl_closing || "",
+    tpl_low_stock: map.tpl_low_stock || "",
   };
 }
 
 export function publicAlertSettings(cfg) {
-  return {
+  const out = {
     ...cfg,
     wa_api_key: maskSecret(cfg.wa_api_key),
     wa_api_key_set: Boolean(cfg.wa_api_key),
+    defaults: { ...DEFAULT_TEMPLATES },
+    sample_vars: sampleAlertVars(),
+    samples: {},
   };
+  for (const kind of ALERT_KINDS) {
+    out[`tpl_${kind}`] = effectiveTemplate(kind, cfg[`tpl_${kind}`]);
+    out.samples[kind] = renderAlert(kind, SAMPLE_PAYLOAD, cfg);
+  }
+  return out;
 }
 
 export async function saveAlertSettings(body = {}) {
@@ -215,7 +323,9 @@ export async function saveAlertSettings(body = {}) {
   for (const key of ALERT_KEYS) {
     if (!Object.prototype.hasOwnProperty.call(body, key)) continue;
     if (key === "wa_api_key" && looksMaskedSecret(body[key])) continue;
-    next[key] = body[key] == null ? "" : String(body[key]).trim();
+    let value = body[key] == null ? "" : String(body[key]);
+    if (key.startsWith("tpl_")) value = value.slice(0, 8000);
+    next[key] = key.startsWith("tpl_") ? value.trim() : value.trim();
   }
   if (next.wa_api_url && !/^https:\/\//i.test(next.wa_api_url)) {
     throw new Error("WhatsApp API URL must be https");
@@ -385,19 +495,68 @@ export async function sendWelcomeAlerts({
   const name = shopName || shop.shopName;
   const out = { welcome: null, credentials: null };
   if (flagOn(settings.alert_welcome, true)) {
-    const text = welcomeText({ shopName: name, ownerName });
+    const text = welcomeText({ shopName: name, ownerName, signInUrl }, settings);
     out.welcome = await sendWhatsApp(waCfg(settings), phones, text);
   }
   if (flagOn(settings.alert_credentials, true) && (username || email || password)) {
-    const text = credentialsText({ shopName: name, username, email, password, role, signInUrl });
-    out.credentials = await dispatchAlert({
+    out.credentials = await sendCredentialAlerts({
+      businessId,
+      shopName: name,
+      ownerName,
+      email,
+      username,
+      password,
+      role,
+      mobile,
+      signInUrl,
       phones,
       emails,
-      subject: `ATAV POS login · ${name || "shop"}`,
-      text,
+      settings,
     });
   }
   return out;
+}
+
+export async function sendCredentialAlerts({
+  businessId,
+  shopName,
+  ownerName,
+  email,
+  username,
+  password,
+  role,
+  mobile,
+  signInUrl,
+  phones: givenPhones,
+  emails: givenEmails,
+  settings: givenSettings,
+}) {
+  const settings = givenSettings || (await loadAlertSettings());
+  if (!flagOn(settings.alert_credentials, true)) return { skipped: true };
+  if (!(username || email || password)) return { skipped: true };
+  const shop = givenPhones && givenEmails ? null : await shopContacts(businessId);
+  const extraPhone = normalizeInMobile(mobile);
+  const phones = givenPhones || (extraPhone ? [...new Set([...(shop?.phones || []), extraPhone])] : shop?.phones || []);
+  const emails = givenEmails || (email ? [...new Set([...(shop?.emails || []), String(email).toLowerCase()])] : shop?.emails || []);
+  const name = shopName || shop?.shopName || "";
+  const text = credentialsText(
+    {
+      shopName: name,
+      ownerName,
+      username,
+      email,
+      password: password || "the one you set. Keep it private.",
+      role,
+      signInUrl,
+    },
+    settings,
+  );
+  return dispatchAlert({
+    phones,
+    emails,
+    subject: `ATAV POS login · ${name || "shop"}`,
+    text,
+  });
 }
 
 export async function sendUpdateAlerts({ businessId, title, body, image, force = false }) {
@@ -409,7 +568,7 @@ export async function sendUpdateAlerts({ businessId, title, body, image, force =
   const results = [];
   for (const id of ids) {
     const shop = await shopContacts(id);
-    const text = updateText({ shopName: shop.shopName, title, body });
+    const text = updateText({ shopName: shop.shopName, title, body }, settings);
     results.push(
       await dispatchAlert({
         phones: shop.phones,
@@ -446,10 +605,13 @@ export async function sendLowStockAlerts(businessId, itemIds = []) {
   }
   if (!fresh.length) return { skipped: true, reason: "already-sent" };
   const shop = await shopContacts(businessId);
-  const text = lowStockText({
-    shopName: shop.shopName,
-    items: fresh.map((i) => ({ name: i.name, qtyLabel: `${Number(i.stock_gm) || 0}` })),
-  });
+  const text = lowStockText(
+    {
+      shopName: shop.shopName,
+      items: fresh.map((i) => ({ name: i.name, qtyLabel: `${Number(i.stock_gm) || 0}` })),
+    },
+    settings,
+  );
   return dispatchAlert({
     phones: shop.phones,
     emails: shop.emails,
@@ -509,18 +671,21 @@ export async function sendClosingAlerts(businessId) {
         [shop.businessId],
       )
     : [];
-  const text = closingText({
-    shopName: shop.shopName,
-    day,
-    bills: sum?.bills,
-    takings: sum?.takings,
-    gst: sum?.gst,
-    cash: sum?.cash,
-    upi: sum?.upi,
-    card: sum?.card,
-    credit: sum?.credit,
-    lowStock: low,
-  });
+  const text = closingText(
+    {
+      shopName: shop.shopName,
+      day,
+      bills: sum?.bills,
+      takings: sum?.takings,
+      gst: sum?.gst,
+      cash: sum?.cash,
+      upi: sum?.upi,
+      card: sum?.card,
+      credit: sum?.credit,
+      lowStock: low,
+    },
+    settings,
+  );
   return dispatchAlert({
     phones: shop.phones,
     emails: shop.emails,
@@ -562,7 +727,10 @@ export async function sendTestAlert({ number, businessId } = {}) {
 }
 
 let ticking = false;
+let schedulerStarted = false;
 export function startAlertScheduler() {
+  if (schedulerStarted) return;
+  schedulerStarted = true;
   const run = async () => {
     if (ticking) return;
     ticking = true;

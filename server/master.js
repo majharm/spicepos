@@ -8,9 +8,11 @@ import { defaultPerms } from "./roles.js";
 import { publicStatus } from "./auth.js";
 import { getPlatformSettings, setPlatformSetting } from "./settings.js";
 import { registerMasterBackup } from "./backup.js";
-import { sendWelcomeSignup, sendWelcomeStaff } from "./mail.js";
+import { sendWelcomeSignup, sendWelcomeStaff, publicLoginUrl } from "./mail.js";
 import {
   sendUpdateAlerts,
+  sendWelcomeAlerts,
+  sendCredentialAlerts,
   loadAlertSettings,
   saveAlertSettings,
   publicAlertSettings,
@@ -182,6 +184,21 @@ export function registerMaster(app) {
         },
         req,
       );
+      try {
+        await sendWelcomeAlerts({
+          businessId,
+          shopName: row?.name,
+          ownerName: user?.first_name,
+          email: user?.email,
+          username: user?.username,
+          password: req.body?.password,
+          role: user?.role || "business_admin",
+          mobile: req.body?.mobile,
+          signInUrl: publicLoginUrl(req),
+        });
+      } catch (err) {
+        console.error("welcome alerts failed:", err.message);
+      }
       res.json({ ok: true, business: row });
     } catch (err) {
       const msg = String(err.message || err);
@@ -330,6 +347,20 @@ export function registerMaster(app) {
         },
         req,
       );
+      try {
+        await sendCredentialAlerts({
+          businessId: biz.id,
+          shopName: biz.name,
+          ownerName: b.name || "Admin",
+          email: String(b.email).toLowerCase(),
+          username: b.username || String(b.email).split("@")[0],
+          password: b.password,
+          role: "business_admin",
+          signInUrl: publicLoginUrl(req),
+        });
+      } catch (err) {
+        console.error("credential alerts failed:", err.message);
+      }
       return { ok: true, userId: uid };
     }),
   );
@@ -343,6 +374,30 @@ export function registerMaster(app) {
         req.params.id,
       ]);
       await platformAudit(req.auth.admin, "Password Reset", { module: "users", target_id: req.params.id }, req);
+      try {
+        const [user] = await query(
+          "SELECT id, email, first_name, username, role, business_id, mobile FROM staff_users WHERE id = ? LIMIT 1",
+          [req.params.id],
+        );
+        const [biz] = user?.business_id
+          ? await query("SELECT name FROM businesses WHERE id = ? LIMIT 1", [user.business_id])
+          : [];
+        if (user) {
+          await sendCredentialAlerts({
+            businessId: user.business_id,
+            shopName: biz?.name,
+            ownerName: user.first_name,
+            email: user.email,
+            username: user.username,
+            password,
+            role: user.role,
+            mobile: user.mobile,
+            signInUrl: publicLoginUrl(req),
+          });
+        }
+      } catch (err) {
+        console.error("credential alerts failed:", err.message);
+      }
       return { ok: true };
     }),
   );
@@ -446,7 +501,6 @@ export function registerMaster(app) {
           title,
           body: body || "",
           image,
-          force: true,
         });
       } catch (err) {
         console.error("notification alerts failed:", err.message);

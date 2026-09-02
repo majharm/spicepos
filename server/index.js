@@ -22,6 +22,7 @@ import { postSaleJournal } from "./accounting.js";
 import { recordCreditSale } from "./accounts.js";
 import { audit } from "./audit.js";
 import { getPlatformSettings } from "./settings.js";
+import { sendLowStockAlerts, tickShopAlerts, startAlertScheduler } from "./alerts.js";
 import { canonApiUrl, isAliasedApi, isApiUrl, rewriteToApi } from "./http-path.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -546,6 +547,9 @@ app.post("/api/checkout", requireStaff, requirePerm("counter"), async (req, res)
       payment_method: result.payment_method,
       customer_name: result.customer_name,
     }, req);
+    const soldIds = (result.lines || []).map((line) => line.item_id).filter(Boolean);
+    void sendLowStockAlerts(businessId, soldIds).catch((err) => console.error("low stock alert failed:", err.message));
+    void tickShopAlerts(businessId).catch((err) => console.error("closing alert failed:", err.message));
     res.json({ ok: true, order: result });
   } catch (err) {
     res.status(500).json({ error: String(err.message) });
@@ -633,10 +637,14 @@ async function startHttp() {
   console.log(`Multi-tenant POS listening on ${host}:${port}`);
 }
 
-startHttp().catch((err) => {
-  console.error("HTTP listen failed", err);
-  process.exit(1);
-});
+startHttp()
+  .then(() => {
+    startAlertScheduler();
+  })
+  .catch((err) => {
+    console.error("HTTP listen failed", err);
+    process.exit(1);
+  });
 ensureSchema()
   .then(() => seedPlatform())
   .catch((err) => {
