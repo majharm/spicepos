@@ -191,6 +191,31 @@ test("official invoice is an A4 list view not a POS slip", () => {
   assert.doesNotMatch(doc, /size: 80mm/);
 });
 
+test("duplicate official invoice is the same A4 bill with a supplier copy label", () => {
+  const InvoicePrint = loadInvoicePrint();
+  const ctx = {
+    company: { name: "ATAV Spices" },
+    customers: [],
+    items: [],
+    formatDateTime: (v) => String(v),
+    money: (n) => `₹${Number(n).toFixed(2)}`,
+    escapeHtml: (v) => String(v),
+  };
+  const order = { order_number: "SO-10042", total: 840, lines: [] };
+  assert.equal(InvoicePrint.officeCopyLabel("duplicate"), "Duplicate for Supplier");
+  assert.equal(InvoicePrint.officeCopyLabel("original"), "Original for Recipient");
+  const html = InvoicePrint.officeInvoiceBody(order, ctx, { copy: "duplicate" });
+  assert.match(html, /class="office-invoice"/);
+  assert.match(html, /TAX INVOICE/);
+  assert.match(html, /Duplicate for Supplier/);
+  assert.doesNotMatch(html, /Original for Recipient/);
+  const doc = InvoicePrint.officeInvoiceDocument(order, ctx, { copy: "duplicate" });
+  assert.match(doc, /Duplicate for Supplier/);
+  assert.match(doc, /Tax invoice SO-10042 \(Duplicate\)/);
+  assert.match(doc, /size: A4/);
+  assert.doesNotMatch(doc, /size: 80mm/);
+});
+
 test("amount in words uses Indian numbering", () => {
   const InvoicePrint = loadInvoicePrint();
   assert.equal(InvoicePrint.amountInWords(0), "Rupees Zero Only");

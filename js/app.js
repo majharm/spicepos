@@ -194,7 +194,7 @@ const VIEW_META = {
   units: { title: "Unit master", subtitle: "Units used on items — qty, kg, litre, and custom" },
   customers: { title: "Customers", subtitle: "B2C retail and B2B wholesale accounts" },
   packs: { title: "Packs", subtitle: "Pre-defined spice packs and compositions" },
-  orders: { title: "Invoices", subtitle: "POS slip or official A4 list bill" },
+  orders: { title: "Invoices", subtitle: "POS slip, official A4, or duplicate copy" },
   purchases: { title: "Purchases", subtitle: "Supplier bills with GST and thermal print" },
   suppliers: { title: "Suppliers", subtitle: "Vendor contacts, address, and GSTIN" },
   stock: { title: "Stock", subtitle: "Adjustments, transfers, and low-stock alerts" },
@@ -1441,14 +1441,16 @@ function invoiceCtx() {
 
 function getInvoiceLook() {
   try {
-    return localStorage.getItem("pos-invoice-look") === "office" ? "office" : "pos";
+    const stored = localStorage.getItem("pos-invoice-look");
+    if (stored === "office" || stored === "duplicate") return stored;
+    return "pos";
   } catch {
     return "pos";
   }
 }
 
 function setInvoiceLook(look) {
-  const next = look === "office" ? "office" : "pos";
+  const next = look === "office" || look === "duplicate" ? look : "pos";
   try {
     localStorage.setItem("pos-invoice-look", next);
   } catch {
@@ -1457,29 +1459,52 @@ function setInvoiceLook(look) {
   return next;
 }
 
+function invoiceModalPrintActions(look) {
+  return `<div class="print-actions">
+      <button class="btn${look === "pos" ? " primary" : ""}" type="button" id="modal-print-pos">Print POS slip</button>
+      <button class="btn${look === "office" ? " primary" : ""}" type="button" id="modal-print-office">Print official bill</button>
+      <button class="btn${look === "duplicate" ? " primary" : ""}" type="button" id="modal-print-duplicate">Print duplicate</button>
+    </div>`;
+}
+
+function bindInvoiceModalPrint(order) {
+  const pos = $("modal-print-pos");
+  const office = $("modal-print-office");
+  const dup = $("modal-print-duplicate");
+  if (pos) pos.onclick = () => printOrder(order, "pos");
+  if (office) office.onclick = () => printOrder(order, "office");
+  if (dup) dup.onclick = () => printOrder(order, "duplicate");
+}
+
 function invoiceLookTabs(look) {
   return `<div class="invoice-look-tabs" role="tablist">
       <button class="btn${look === "pos" ? " primary" : ""}" type="button" data-invoice-look="pos" role="tab" aria-selected="${look === "pos"}">POS slip</button>
       <button class="btn${look === "office" ? " primary" : ""}" type="button" data-invoice-look="office" role="tab" aria-selected="${look === "office"}">Official bill</button>
+      <button class="btn${look === "duplicate" ? " primary" : ""}" type="button" data-invoice-look="duplicate" role="tab" aria-selected="${look === "duplicate"}">Duplicate</button>
     </div>`;
 }
 
 function invoicePreviewHtml(o, look) {
-  if (look === "office") {
-    return `<div class="office-preview">${InvoicePrint.officeInvoiceBody(o, invoiceCtx())}</div>`;
+  if (look === "office" || look === "duplicate") {
+    return `<div class="office-preview">${InvoicePrint.officeInvoiceBody(o, invoiceCtx(), { copy: look === "duplicate" ? "duplicate" : "original" })}</div>`;
   }
   return `<div class="thermal-preview">${InvoicePrint.invoiceBody(o, invoiceCtx())}</div>`;
 }
 
 function printOrder(o, look) {
-  const office = (look || getInvoiceLook()) === "office";
-  const w = window.open("", office ? "invoice-print-office" : "invoice-print", office ? "width=900,height=1100" : "width=400,height=720");
+  const kind = look || getInvoiceLook();
+  const office = kind === "office" || kind === "duplicate";
+  const copy = kind === "duplicate" ? "duplicate" : "original";
+  const name = kind === "duplicate" ? "invoice-print-office-dup" : office ? "invoice-print-office" : "invoice-print";
+  const w = window.open("", name, office ? "width=900,height=1100" : "width=400,height=720");
   if (!w) {
     setHint("Allow pop-ups to print invoices", "error");
     return;
   }
   w.document.write(
-    office ? InvoicePrint.officeInvoiceDocument(o, invoiceCtx()) : InvoicePrint.thermalInvoiceDocument(o, invoiceCtx()),
+    office
+      ? InvoicePrint.officeInvoiceDocument(o, invoiceCtx(), { copy })
+      : InvoicePrint.thermalInvoiceDocument(o, invoiceCtx()),
   );
   w.document.close();
 }
@@ -1523,6 +1548,7 @@ function showOrder(o) {
     <div class="print-actions">
       <button class="btn${look === "pos" ? " primary" : ""}" type="button" data-print="${escapeHtml(o.id)}" data-print-look="pos">Print POS slip</button>
       <button class="btn${look === "office" ? " primary" : ""}" type="button" data-print="${escapeHtml(o.id)}" data-print-look="office">Print official bill</button>
+      <button class="btn${look === "duplicate" ? " primary" : ""}" type="button" data-print="${escapeHtml(o.id)}" data-print-look="duplicate">Print duplicate</button>
       <button class="btn" type="button" data-edit-order="${escapeHtml(o.id)}"${cancelled ? " disabled title=\"Restore order status before editing items\"" : ""}>Change items</button>
     </div>`;
 }
@@ -2168,10 +2194,7 @@ $("btn-pay").addEventListener("click", async () => {
     $("modal-body").innerHTML = `<p class="hint ok">Bill saved. POS cleared for the next customer.</p>
       ${invoiceLookTabs(look)}
       ${invoicePreviewHtml(receiptOrder, look)}
-      <div class="print-actions">
-        <button class="btn${look === "pos" ? " primary" : ""}" type="button" id="modal-print-pos">Print POS slip</button>
-        <button class="btn${look === "office" ? " primary" : ""}" type="button" id="modal-print-office">Print official bill</button>
-      </div>`;
+      ${invoiceModalPrintActions(look)}`;
     $("modal").hidden = false;
     const bindModalLook = () => {
       $("modal-body").querySelectorAll("[data-invoice-look]").forEach((btn) => {
@@ -2180,18 +2203,13 @@ $("btn-pay").addEventListener("click", async () => {
           $("modal-body").innerHTML = `<p class="hint ok">Bill saved. POS cleared for the next customer.</p>
             ${invoiceLookTabs(next)}
             ${invoicePreviewHtml(receiptOrder, next)}
-            <div class="print-actions">
-              <button class="btn${next === "pos" ? " primary" : ""}" type="button" id="modal-print-pos">Print POS slip</button>
-              <button class="btn${next === "office" ? " primary" : ""}" type="button" id="modal-print-office">Print official bill</button>
-            </div>`;
-          $("modal-print-pos").onclick = () => printOrder(receiptOrder, "pos");
-          $("modal-print-office").onclick = () => printOrder(receiptOrder, "office");
+            ${invoiceModalPrintActions(next)}`;
+          bindInvoiceModalPrint(receiptOrder);
           bindModalLook();
         };
       });
     };
-    $("modal-print-pos").onclick = () => printOrder(receiptOrder, "pos");
-    $("modal-print-office").onclick = () => printOrder(receiptOrder, "office");
+    bindInvoiceModalPrint(receiptOrder);
     bindModalLook();
     showView("counter");
     try {
