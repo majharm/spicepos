@@ -128,10 +128,10 @@ test("PHP and HTML wire master admin backup", () => {
   );
 });
 
-test("HTML and CSS cache stickers match deploy55", () => {
+test("HTML and CSS cache stickers match deploy58", () => {
   for (const name of ["index.html", "master.html", "login.html", "setup.html"]) {
     const html = readFileSync(path.join(root, name), "utf8");
-    assert.match(html, /20260901deploy55/);
+    assert.match(html, /20260901deploy58/);
     assert.doesNotMatch(html, /20260901deploy[0-3][0-9]/);
     assert.doesNotMatch(html, /20260901deploy41/);
     assert.doesNotMatch(html, /20260901deploy42/);
@@ -147,6 +147,9 @@ test("HTML and CSS cache stickers match deploy55", () => {
     assert.doesNotMatch(html, /20260901deploy52/);
     assert.doesNotMatch(html, /20260901deploy53/);
     assert.doesNotMatch(html, /20260901deploy54/);
+    assert.doesNotMatch(html, /20260901deploy55/);
+    assert.doesNotMatch(html, /20260901deploy56/);
+    assert.doesNotMatch(html, /20260901deploy57/);
   }
   const saas = readFileSync(path.join(root, "css/saas.css"), "utf8");
   const pos = readFileSync(path.join(root, "css/pos.css"), "utf8");
@@ -169,6 +172,7 @@ test("HTML and CSS cache stickers match deploy55", () => {
   assert.match(pos, /stage:not\(\.is-counter\) > \.view:not\(\[hidden\]\)/);
   assert.match(pos, /overscroll-behavior: contain/);
   assert.match(pos, /mobile-counter: list scroll \+ compact order list/);
+  assert.match(pos, /body\.footwear-mode #pack-choice/);
   assert.match(pos, /stage\.is-counter \.line-ops/);
   assert.match(pos, /stage\.is-counter \.line-amt/);
   assert.match(pos, /minmax\(0, 240px\)/);
