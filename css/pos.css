@@ -846,6 +846,7 @@ body.bill-collapsed .bill-toggle[data-count]:not([data-count="0"])::after {
 }
 .line .who { font-weight: 700; }
 .line .pack { color: var(--muted); font-size: 12px; }
+.line-amt { text-align: right; margin-top: 4px; }
 .qty { display: flex; align-items: center; gap: 6px; }
 .qty button {
   width: 32px;
@@ -1105,6 +1106,20 @@ tr:last-child td { border-bottom: 0; }
   align-items: end;
 }
 .settings.wide .full { grid-column: 1 / -1; }
+body:not(.footwear-mode) .footwear-only { display: none !important; }
+body.footwear-mode #pack-choice { display: none; }
+body.footwear-mode.counter-mode .stage.is-counter .card .sku { display: block; font-size: 11px; }
+.wearer-chip {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  background: var(--bg-tint);
+  color: var(--vel-teal);
+}
 .suppliers-table td:nth-child(6) {
   max-width: 240px;
   overflow: hidden;
@@ -1904,7 +1919,7 @@ tr:last-child td { border-bottom: 0; }
   .btn { min-height: 44px; }
   .qty button { width: 44px; height: 44px; }
 
-  /* mobile-counter: list scroll + taller order box */
+  /* mobile-counter: list scroll + compact order list */
   .stage.is-counter {
     overflow: hidden;
     padding-bottom: 0;
@@ -1957,7 +1972,7 @@ tr:last-child td { border-bottom: 0; }
     overflow: hidden;
   }
   body.has-cart .stage.is-counter .workspace {
-    grid-template-rows: minmax(0, 1fr) minmax(240px, 48vh);
+    grid-template-rows: minmax(0, 1fr) minmax(0, 240px);
   }
   .stage.is-counter .catalog {
     display: flex;
@@ -2022,7 +2037,7 @@ tr:last-child td { border-bottom: 0; }
     margin: 0;
     border-radius: 16px 16px 0 0;
     height: auto;
-    max-height: min(42vh, 360px);
+    max-height: 240px;
     min-height: 0;
     overflow: hidden;
     flex: 0 0 auto;
@@ -2032,8 +2047,8 @@ tr:last-child td { border-bottom: 0; }
   body.has-cart .stage.is-counter .ticket,
   body.has-cart .stage.is-counter .bill-panel {
     height: 100%;
-    max-height: none;
-    min-height: 240px;
+    max-height: 240px;
+    min-height: 0;
   }
   .stage.is-counter .ticket-sub,
   .stage.is-counter .ticket-pack { display: none; }
@@ -2048,10 +2063,10 @@ tr:last-child td { border-bottom: 0; }
   }
   .stage.is-counter .ticket-head-copy { display: none; }
   .stage.is-counter .bill-toggle {
-    width: 56px;
-    min-width: 56px;
-    height: 36px;
-    min-height: 36px;
+    width: 48px;
+    min-width: 48px;
+    height: 28px;
+    min-height: 28px;
     border-radius: 999px;
     border: 0;
     background: var(--vel-line);
@@ -2098,8 +2113,8 @@ tr:last-child td { border-bottom: 0; }
     margin: 0;
   }
   .stage.is-counter .totals div:not(.grand) { display: none; }
-  .stage.is-counter .totals { padding: 8px 12px 2px; }
-  .stage.is-counter .totals .grand { font-size: 18px; }
+  .stage.is-counter .totals { padding: 4px 12px 0; }
+  .stage.is-counter .totals .grand { font-size: 16px; }
   body:not(.has-cart) .stage.is-counter .lines { display: none; }
   .stage.is-counter .lines {
     flex: 1 1 auto;
@@ -2107,13 +2122,61 @@ tr:last-child td { border-bottom: 0; }
     max-height: none;
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
+    padding: 2px 8px;
   }
   body.has-cart .stage.is-counter .lines {
     display: block;
-    min-height: 120px;
+    min-height: 0;
   }
   .stage.is-counter .line {
-    padding: 8px 6px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 2px;
+  }
+  .stage.is-counter .line-info {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+  .stage.is-counter .line-info .pack {
+    display: none;
+  }
+  .stage.is-counter .line .who {
+    font-size: 13px;
+    font-weight: 700;
+    line-height: 1.2;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .stage.is-counter .line-ops {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 0 0 auto;
+  }
+  .stage.is-counter .line .qty {
+    gap: 4px;
+  }
+  .stage.is-counter .line .qty span {
+    min-width: 2.6em;
+    font-size: 12px;
+    font-weight: 700;
+    text-align: center;
+  }
+  .stage.is-counter .line .qty button {
+    width: 28px;
+    height: 28px;
+    min-width: 28px;
+    min-height: 28px;
+    border-radius: 8px;
+  }
+  .stage.is-counter .line-amt {
+    margin-top: 0;
+    min-width: 3.6em;
+    font-size: 12px;
+    font-weight: 800;
+    text-align: right;
   }
   .stage.is-counter .pay {
     position: relative;
@@ -2121,14 +2184,17 @@ tr:last-child td { border-bottom: 0; }
     z-index: 9;
     display: grid;
     grid-template-columns: auto 1fr 1.3fr;
-    gap: 8px;
+    gap: 6px;
     align-items: center;
     box-shadow: 0 -8px 20px rgba(15, 23, 42, 0.08);
-    padding: 8px 10px calc(8px + env(safe-area-inset-bottom));
+    padding: 4px 10px calc(6px + env(safe-area-inset-bottom));
+  }
+  .stage.is-counter .pay .btn {
+    min-height: 36px;
   }
   .stage.is-counter #btn-clear {
-    min-height: 44px;
-    padding: 8px 10px;
+    min-height: 36px;
+    padding: 6px 8px;
     grid-column: 1;
     margin: 0;
   }
@@ -2143,9 +2209,11 @@ tr:last-child td { border-bottom: 0; }
   }
   .stage.is-counter .held-bills {
     grid-column: 1 / -1;
-    max-height: 40px;
-    overflow-y: auto;
+    max-height: 22px;
+    overflow: hidden;
     margin-top: 0;
+    font-size: 11px;
+    line-height: 1.2;
   }
   .orders-toolbar {
     display: grid;

@@ -19,6 +19,9 @@ const state = {
   perms: {},
   support: {},
   plan: null,
+  wearerFilter: "",
+  sizeFilter: "",
+  colorFilter: "",
 };
 
 function debounce(fn, wait = 120) {
@@ -63,7 +66,7 @@ function fmtQty(qty, item) {
 function fillItemUnitSelect(selected) {
   const el = $("item-unit");
   if (!el) return;
-  el.innerHTML = POSUnits.optionsHtml(selected || el.value || "GM");
+  el.innerHTML = POSUnits.optionsHtml(selected || el.value || defaultItemUnit());
 }
 
 function applyUnitMaster(rows) {
@@ -98,6 +101,79 @@ function paintUnitFamilyDefaults() {
   const d = POSUnits.familyDefaults(family);
   if ($("unit-rate-suffix") && !$("unit-id").value) $("unit-rate-suffix").value = d.rateSuffix;
   if ($("unit-stock-suffix") && !$("unit-id").value) $("unit-stock-suffix").value = d.stockSuffix;
+}
+
+function isFootwearShop() {
+  return Boolean(globalThis.POSFootwear?.isFootwearShop(state.businessMeta));
+}
+
+function itemVariantText(item) {
+  return globalThis.POSFootwear?.variantLabel(item) || "";
+}
+
+function itemBillName(item) {
+  return globalThis.POSFootwear?.billName(item) || item?.name || "Item";
+}
+
+function defaultItemCategory() {
+  return globalThis.POSFootwear?.defaultCategory(state.businessMeta) || "Whole Spices";
+}
+
+function defaultItemUnit() {
+  return globalThis.POSFootwear?.defaultUnit(state.businessMeta) || "GM";
+}
+
+function applyFootwearMode() {
+  const on = isFootwearShop();
+  document.body.classList.toggle("footwear-mode", on);
+  document.querySelectorAll(".footwear-only").forEach((el) => {
+    el.hidden = !on;
+  });
+  const search = $("search");
+  if (search) search.placeholder = on ? "Search shoe, colour, size, or code…" : "Search spice, HSN, or code…";
+  if ($("item-category-lab")) $("item-category-lab").textContent = on ? "Style" : "Category";
+  if ($("item-category")) $("item-category").placeholder = on ? "School / Sports / Sandal" : "Whole Spices";
+  if ($("item-subcategory-lab")) $("item-subcategory-lab").textContent = on ? "Brand" : "Subcategory";
+  if ($("item-subcategory")) $("item-subcategory").placeholder = on ? "Bata / Local" : "Haldi / Jeera";
+  if ($("items-lede")) {
+    $("items-lede").textContent = on
+      ? "Name, colour, size, girls/boys type, photo, rates, and stock."
+      : "Name, photo, HSN code, unit type, rates, and stock.";
+  }
+  if ($("ticket-sub")) {
+    $("ticket-sub").textContent = on ? "Tap a pair to add · choose girls or boys" : "Tap items to add · 100 g each";
+  }
+  VIEW_META.items.subtitle = on
+    ? "Colour, size, girls/boys type, rates, and stock"
+    : "Photo, HSN, unit type, rates, and stock";
+  VIEW_META.counter.subtitle = on ? "Footwear checkout — girls, boys, colour, size" : "POS checkout — tap items to add";
+  const pack = $("pack-choice");
+  if (pack) pack.hidden = on;
+  const colors = globalThis.POSFootwear?.COLORS || [];
+  const sizes = globalThis.POSFootwear?.SIZES || [];
+  if ($("color-list")) $("color-list").innerHTML = colors.map((c) => `<option value="${escapeHtml(c)}">`).join("");
+  if ($("size-list")) $("size-list").innerHTML = sizes.map((s) => `<option value="${escapeHtml(s)}">`).join("");
+  fillFootwearFilters();
+  applyNav();
+}
+
+function fillFootwearFilters() {
+  if (!isFootwearShop()) return;
+  const items = activeItems();
+  const sizes = [...new Set(items.map((i) => String(i.size || "").trim()).filter(Boolean))].sort((a, b) => Number(a) - Number(b) || a.localeCompare(b));
+  const colors = [...new Set(items.map((i) => String(i.color || "").trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+  const sizeEl = $("size-filter");
+  const colorEl = $("color-filter");
+  if (sizeEl) {
+    const cur = sizeEl.value;
+    sizeEl.innerHTML = `<option value="">All sizes</option>${sizes.map((s) => `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join("")}`;
+    if (sizes.includes(cur)) sizeEl.value = cur;
+  }
+  if (colorEl) {
+    const cur = colorEl.value;
+    colorEl.innerHTML = `<option value="">All colours</option>${colors.map((c) => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join("")}`;
+    if (colors.includes(cur)) colorEl.value = cur;
+  }
 }
 
 function refreshItemUnitLabels() {
@@ -595,6 +671,7 @@ function applyNav() {
       backup: "settings",
     };
     btn.hidden = map[view] ? !can(map[view]) : false;
+    if (view === "packs" && isFootwearShop()) btn.hidden = true;
   });
 }
 
@@ -633,7 +710,7 @@ function showView(name) {
   paintImpersonationControls();
   if (name === "units") renderUnitsTable();
   if (name === "items") {
-    fillItemUnitSelect($("item-unit")?.value || "GM");
+    fillItemUnitSelect($("item-unit")?.value || defaultItemUnit());
     refreshItemUnitLabels();
   }
   if (name === "stock") loadStock();
@@ -730,11 +807,19 @@ function activeItems() {
 
 function filteredItems() {
   const q = state.query.trim().toLowerCase();
-  const list = activeItems();
-  if (!q) return list;
-  return list.filter((i) =>
-    [i.name, i.hsn, i.local_name, i.code, i.category, i.subcategory].join(" ").toLowerCase().includes(q),
-  );
+  const wearer = String(state.wearerFilter || "").toLowerCase();
+  const size = String(state.sizeFilter || "").trim().toLowerCase();
+  const color = String(state.colorFilter || "").trim().toLowerCase();
+  return activeItems().filter((i) => {
+    if (wearer && globalThis.POSFootwear?.normalizeWearer(i.wearer_type) !== wearer) return false;
+    if (size && String(i.size || "").trim().toLowerCase() !== size) return false;
+    if (color && String(i.color || "").trim().toLowerCase() !== color) return false;
+    if (!q) return true;
+    return [i.name, i.hsn, i.local_name, i.code, i.category, i.subcategory, i.color, i.size, i.wearer_type]
+      .join(" ")
+      .toLowerCase()
+      .includes(q);
+  });
 }
 
 function itemPhotoUrl(item) {
@@ -773,8 +858,8 @@ function renderCatalog() {
       const low = Number(i.stock_gm) <= Number(i.reorder_level_gm);
       return `<button class="card" type="button" data-add="${escapeHtml(i.id)}">
         ${cardPhotoHtml(i)}
-        <div class="sku">${escapeHtml(i.category)} / ${escapeHtml(i.subcategory || "—")}</div>
-        <div class="name">${escapeHtml(i.name)} <small>${escapeHtml(i.hsn ? `HSN ${i.hsn}` : "")}</small></div>
+        <div class="sku">${escapeHtml(itemVariantText(i) || `${i.category} / ${i.subcategory || "—"}`)}</div>
+        <div class="name">${escapeHtml(i.name)} <small>${escapeHtml(itemVariantText(i) || (i.hsn ? `HSN ${i.hsn}` : ""))}</small></div>
         <div class="meta"><span>${escapeHtml(fmtQty(i.stock_gm, i))}</span><span>${money(rateFor(i))}${escapeHtml(POSUnits.rateSuffix(itemUnit(i)))}</span></div>
         <div class="stock ${low ? "low" : "ok"}">${escapeHtml(i.code)} · GST ${escapeHtml(i.gst_rate)}%</div>
       </button>`;
@@ -808,17 +893,17 @@ function renderCart() {
         if (!item) return "";
         const step = POSUnits.step(itemUnit(item));
         return `<div class="line">
-          <div>
-            <div class="who">${escapeHtml(item.name)}</div>
-            <div class="pack">${escapeHtml(item.category)} / ${escapeHtml(item.subcategory || "—")} · ${escapeHtml(fmtQty(line.qtyGm, item))}</div>
+          <div class="line-info">
+            <div class="who">${escapeHtml(itemVariantText(item) ? `${item.name} · ${itemVariantText(item)}` : item.name)}</div>
+            <div class="pack">${escapeHtml(itemVariantText(item) || `${item.category} / ${item.subcategory || "—"}`)} · ${escapeHtml(fmtQty(line.qtyGm, item))}</div>
           </div>
-          <div>
+          <div class="line-ops">
             <div class="qty">
               <button type="button" data-chg="${escapeHtml(item.id)}" data-d="${-step}">−</button>
               <span>${escapeHtml(fmtQty(line.qtyGm, item))}</span>
               <button type="button" data-chg="${escapeHtml(item.id)}" data-d="${step}">+</button>
             </div>
-            <div class="pack" style="text-align:right;margin-top:4px">${money(lineAmt(item, line.qtyGm))}</div>
+            <div class="pack line-amt">${money(lineAmt(item, line.qtyGm))}</div>
           </div>
         </div>`;
       })
@@ -931,18 +1016,24 @@ function fillDatalists() {
 }
 
 function renderItemsTable() {
+  const footwear = isFootwearShop();
   $("items-table").innerHTML = `<table><thead><tr>
-      <th>Code</th><th>Item</th><th>HSN</th><th>Unit</th><th>Category</th><th>Subcategory</th><th>Retail</th><th>B2B</th><th>Stock</th><th></th>
+      <th>Code</th><th>Item</th>${footwear ? "<th>Type</th><th>Colour</th><th>Size</th>" : "<th>HSN</th>"}<th>Unit</th><th>${footwear ? "Style" : "Category"}</th><th>${footwear ? "Brand" : "Subcategory"}</th><th>Retail</th><th>B2B</th><th>Stock</th><th></th>
   </tr></thead><tbody>${state.items
     .map((i) => {
       const src = itemPhotoUrl(i);
       const thumb = src
         ? `<img class="item-thumb" src="${escapeHtml(src)}" alt="">`
         : `<span class="item-thumb-empty" aria-hidden="true">${escapeHtml(itemPhotoLetter(i))}</span>`;
+      const extra = footwear
+        ? `<td>${escapeHtml(globalThis.POSFootwear?.wearerLabel(i.wearer_type) || "—")}</td>
+      <td>${escapeHtml(i.color || "—")}</td>
+      <td>${escapeHtml(i.size || "—")}</td>`
+        : `<td>${escapeHtml(i.hsn || "—")}</td>`;
       return `<tr>
       <td>${escapeHtml(i.code)}</td>
       <td class="item-name-cell">${thumb}${escapeHtml(i.name)}</td>
-      <td>${escapeHtml(i.hsn || "—")}</td>
+      ${extra}
       <td>${escapeHtml(itemUnit(i))}</td>
       <td>${escapeHtml(i.category)}</td>
       <td>${escapeHtml(i.subcategory || "—")}</td>
@@ -1182,6 +1273,7 @@ async function loadBootstrap() {
   renderCart();
   renderPackChoice();
   fillDatalists();
+  fillFootwearFilters();
   renderItemsTable();
   renderUnitsTable();
   renderCustomersTable();
@@ -1788,6 +1880,9 @@ $("items-table").addEventListener("click", async (e) => {
     $("item-hsn").value = i.hsn || "";
     $("item-category").value = i.category || "";
     $("item-subcategory").value = i.subcategory || "";
+    if ($("item-wearer")) $("item-wearer").value = globalThis.POSFootwear?.normalizeWearer(i.wearer_type) || "";
+    if ($("item-color")) $("item-color").value = i.color || "";
+    if ($("item-size")) $("item-size").value = i.size || "";
     $("item-retail").value = i.retail_rate;
     $("item-b2b").value = i.b2b_rate;
     $("item-purchase").value = i.purchase_rate;
@@ -1929,6 +2024,18 @@ $("search").addEventListener("input", () => {
   state.query = $("search").value;
   renderCatalogDebounced();
 });
+$("wearer-filter")?.addEventListener("change", () => {
+  state.wearerFilter = $("wearer-filter").value;
+  renderCatalog();
+});
+$("size-filter")?.addEventListener("change", () => {
+  state.sizeFilter = $("size-filter").value;
+  renderCatalog();
+});
+$("color-filter")?.addEventListener("change", () => {
+  state.colorFilter = $("color-filter").value;
+  renderCatalog();
+});
 $("search-form").addEventListener("submit", (e) => e.preventDefault());
 $("customer").addEventListener("change", () => {
   state.customerId = $("customer").value;
@@ -2001,7 +2108,7 @@ $("btn-pay").addEventListener("click", async () => {
           const item = state.items.find((i) => i.id === l.itemId);
           return {
             item_id: l.itemId,
-            item_name: item?.name || "Item",
+            item_name: itemBillName(item),
             quantity_gm: l.qtyGm,
             rate_per_kg: item ? rateFor(item) : 0,
             amount: item ? lineAmt(item, l.qtyGm) : 0,
@@ -2068,8 +2175,11 @@ $("item-form").addEventListener("submit", async (e) => {
   const body = {
     name: $("item-name").value,
     hsn: $("item-hsn").value,
-    category: $("item-category").value || "Whole Spices",
+    category: $("item-category").value || defaultItemCategory(),
     subcategory: $("item-subcategory").value,
+    color: $("item-color")?.value || "",
+    size: $("item-size")?.value || "",
+    wearer_type: $("item-wearer")?.value || "",
     base_unit: unit,
     unit,
     retail_rate: $("item-retail").value,
@@ -2087,7 +2197,7 @@ $("item-form").addEventListener("submit", async (e) => {
     $("item-form").reset();
     $("item-id").value = "";
     resetItemImage();
-    fillItemUnitSelect("GM");
+    fillItemUnitSelect(defaultItemUnit());
     refreshItemUnitLabels();
     await loadBootstrap();
   } catch (err) {
@@ -2099,7 +2209,7 @@ $("item-cancel").addEventListener("click", () => {
   $("item-form").reset();
   $("item-id").value = "";
   resetItemImage();
-  fillItemUnitSelect("GM");
+  fillItemUnitSelect(defaultItemUnit());
   refreshItemUnitLabels();
 });
 $("item-unit")?.addEventListener("change", refreshItemUnitLabels);
@@ -2693,6 +2803,19 @@ async function boot() {
     state.businessMeta = me.business || null;
     state.impersonating = Boolean(me.impersonating);
     state.impersonator = me.impersonator || null;
+    const looksFootwear = /(^|[^a-z])(footwear|shoes?)([^a-z]|$)/.test(
+      [me.business?.category, me.business?.business_type].filter(Boolean).join(" ").toLowerCase(),
+    );
+    if (looksFootwear && !globalThis.POSFootwear) {
+      const bar = $("expired-banner");
+      if (bar && bar.hidden) {
+        bar.hidden = false;
+        bar.textContent = "Footwear shop detected but js/footwear.js did not load. Hard-refresh, or re-upload that file.";
+      }
+    }
+    applyFootwearMode();
+    fillItemUnitSelect(defaultItemUnit());
+    refreshItemUnitLabels();
     paintImpersonationControls();
     if (window.DevMode) {
       DevMode.init({

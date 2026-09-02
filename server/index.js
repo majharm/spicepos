@@ -6,7 +6,7 @@ import http from "node:http";
 import { fileURLToPath } from "node:url";
 import { query, withTransaction } from "./db.js";
 import { bid, branchId, authUser } from "./context.js";
-import { lineAmount, round2, registerCrud } from "./crud.js";
+import { lineAmount, round2, registerCrud, itemBillName } from "./crud.js";
 import { fyRangeForToday } from "./fy.js";
 import { buildReports, reportsToSheets } from "./reports.js";
 import { workbookXml } from "./excel.js";
@@ -481,7 +481,7 @@ app.post("/api/checkout", requireStaff, requirePerm("counter"), async (req, res)
             crypto.randomUUID(),
             orderId,
             line.item.id,
-            line.item.name,
+            itemBillName(line.item),
             line.qty,
             line.rate,
             0,
