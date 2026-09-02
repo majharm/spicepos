@@ -470,7 +470,11 @@ ${invoiceBody(order, ctx)}
     return out + " Only";
   }
 
-  function officeInvoiceBody(order, ctx) {
+  function officeCopyLabel(copy) {
+    return copy === "duplicate" ? "Duplicate for Supplier" : "Original for Recipient";
+  }
+
+  function officeInvoiceBody(order, ctx, opts) {
     const { company, customers, items, formatDateTime, money, escapeHtml } = ctx;
     const co = company || {};
     const lines = enrichLines(order, items);
@@ -551,7 +555,7 @@ ${invoiceBody(order, ctx)}
     </div>
     <div class="off-doc">
       <p class="off-title">TAX INVOICE</p>
-      <p class="off-copy">Original for Recipient</p>
+      <p class="off-copy">${escapeHtml(officeCopyLabel(opts?.copy))}</p>
       <div class="off-kv"><span>Invoice No.</span><strong>${invNo}</strong></div>
       <div class="off-kv"><span>Date</span><span>${escapeHtml(when)}</span></div>
       <div class="off-kv"><span>Payment</span><span>${escapeHtml(payLabel(order.payment_method))} · ${escapeHtml(payStatusLabel(order.payment_status))}</span></div>
@@ -666,17 +670,19 @@ body {
 @media print { body { print-color-adjust: exact; -webkit-print-color-adjust: exact; } }
 `;
 
-  function officeInvoiceDocument(order, ctx) {
+  function officeInvoiceDocument(order, ctx, opts) {
     const title = escapeHtml(order.order_number || "Invoice");
+    const copy = opts?.copy === "duplicate" ? "duplicate" : "original";
+    const copyTitle = copy === "duplicate" ? "Duplicate" : "Original";
     return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>Tax invoice ${title}</title>
+  <title>Tax invoice ${title} (${copyTitle})</title>
   <style>${OFFICE_CSS}</style>
 </head>
 <body>
-${officeInvoiceBody(order, ctx)}
+${officeInvoiceBody(order, ctx, { copy })}
 <script>window.onload=function(){window.focus();window.print();};<\/script>
 </body>
 </html>`;
@@ -693,6 +699,7 @@ ${officeInvoiceBody(order, ctx)}
   window.InvoicePrint = {
     invoiceBody,
     thermalInvoiceDocument,
+    officeCopyLabel,
     officeInvoiceBody,
     officeInvoiceDocument,
     amountInWords,
