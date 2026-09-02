@@ -19,6 +19,7 @@ CSS
 JavaScript
   js/app.js
   js/units.js
+  js/footwear.js
   js/invoice.js
   js/dev-mode.js
   js/master.js

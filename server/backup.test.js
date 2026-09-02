@@ -187,7 +187,8 @@ test("HTML and CSS cache stickers match deploy55", () => {
   assert.doesNotMatch(pos, /height: auto; max-height: none; overflow: visible/);
   assert.match(index, /<title>ATAV POS<\/title>/);
   assert.doesNotMatch(index, /SWAMI MASALE POS/);
-  assert.match(index, /quick-customer-wrap/);
+  assert.match(index, /id="item-wearer"/);
+  assert.match(index, /id="wearer-filter"/);
   assert.match(index, /id="bill-toggle"/);
   assert.match(index, /id="bill-panel"/);
   const masterJs = readFileSync(path.join(root, "js/master.js"), "utf8");

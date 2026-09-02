@@ -59,12 +59,11 @@ test("PHP customer insert bind types match placeholders", () => {
   assert.equal(cust[1].length, 9);
   assert.equal(cust[1], "sssssssds");
 
-  const items = crud.match(
-    /INSERT INTO items[\s\S]*?VALUES \(\?,\?,\?,\?,\?,\?,\?,\?,\?,\?,\?,\?,\?,\?,\?, 'active', \?\)",\s*"([sid]+)",/,
-  );
+  assert.match(crud, /color, size, wearer_type, base_unit/);
+  const items = crud.match(/INSERT INTO items[\s\S]{0,500}"(ssssssssssddddssdds)"/);
   assert.ok(items, "item INSERT found");
-  assert.equal(items[1].length, 16);
-  assert.equal(items[1], "sssssssddddssdds");
+  assert.equal(items[1].length, 19);
+  assert.equal(items[1], "ssssssssssddddssdds");
   assert.match(crud, /image_url/);
   assert.match(core, /function pos_item_image_url/);
   assert.match(core, /image_url.*MEDIUMTEXT/);
@@ -78,12 +77,19 @@ test("PHP customer insert bind types match placeholders", () => {
   assert.match(read("js/master.js"), /id="note-image"/);
   assert.match(read("js/app.js"), /notice-thumb/);
 
-  assert.match(core, /function pos_line_amount_for_item/);
+  assert.match(core, /function pos_ensure_business_columns/);
+  assert.match(core, /function pos_is_footwear_shop/);
+  assert.match(crud, /pos_is_footwear_shop/);
+  assert.match(crud, /FW-/);
+  assert.match(crud, /\$unitRaw = trim\(\(string\) \(\$body\["base_unit"\] \?\? \$body\["unit"\] \?\? ""\)\)/);
+  assert.match(crud, /\$unitRaw !== "" \? \$unitRaw : \(\$footwear \? "PCS" : "GM"\)/);
   assert.match(core, /function pos_item_unit/);
   assert.match(read("pos-checkout.php"), /pos_line_amount_for_item/);
   assert.match(crud, /pos_line_amount_for_item/);
   const index = read("index.html");
   assert.match(index, /js\/units\.js/);
+  assert.match(index, /js\/footwear\.js/);
+  assert.match(index, /id="item-wearer"/);
   assert.match(index, /id="item-unit"/);
   assert.match(index, /id="view-units"/);
   assert.match(index, /data-view="units"/);

@@ -64,7 +64,7 @@ function pos_checkout_sale($bid, $branchId, $uid, $auth, $body) {
          ) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
         "sssssssssss",
         [
-          pos_uuid(), $orderId, $line["item"]["id"], $line["item"]["name"], (string) $line["qty"], (string) $line["rate"],
+          pos_uuid(), $orderId, $line["item"]["id"], pos_item_bill_name($line["item"]), (string) $line["qty"], (string) $line["rate"],
           "0", (string) $line["amount"], (string) $line["gstRate"], "0", $bid,
         ]
       );
