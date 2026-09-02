@@ -377,7 +377,7 @@ async function render() {
     backup: "Backup",
     notes: "Notifications",
     alerts: "Auto-send messages",
-    support: "Support number",
+    support: "Support helpline",
   };
   $("panel-title").textContent = titles[tab];
   const body = $("panel-body");
@@ -976,19 +976,45 @@ async function render() {
       };
     } else if (tab === "support") {
       const s = await api("/api/master/support");
-      body.innerHTML = `<p class="lede">This number is stored in MySQL and shown to every shop user on Support (and on the login screen).</p>
-        <form class="settings" id="support-form">
-          <label>Support phone <input name="support_phone" required value="${attr(s.support_phone)}" placeholder="9876543210" /></label>
-          <label>Support email <input name="support_email" type="email" value="${attr(s.support_email)}" /></label>
-          <button class="btn primary" type="submit">Save</button>
-          <p class="hint" id="support-save-hint"></p>
-        </form>`;
-      $("support-form").onsubmit = async (e) => {
+      body.innerHTML = `<div class="support-admin">
+        <div>
+          <p class="lede">Cashiers see this helpline on Support and on the sign-in screen. Use a mobile number so shops can Call or WhatsApp.</p>
+          <form class="settings settings-page" id="support-form">
+            <div class="settings-section">
+              <h3>Helpline</h3>
+              <p class="section-note">Stored in MySQL and shown to every shop.</p>
+              <div class="settings-grid">
+                <label>Support phone <input name="support_phone" required value="${attr(s.support_phone)}" placeholder="9876543210" /></label>
+                <label>Support email <input name="support_email" type="email" value="${attr(s.support_email)}" placeholder="support@example.com" /></label>
+              </div>
+            </div>
+            <div class="settings-actions">
+              <button class="btn primary" type="submit">Save helpline</button>
+              <p class="hint" id="support-save-hint"></p>
+            </div>
+          </form>
+        </div>
+        <aside>
+          <p class="support-preview-label">Shop preview</p>
+          <div class="support-page" id="support-preview"></div>
+        </aside>
+      </div>`;
+      const form = $("support-form");
+      const paintPreview = () => {
+        const preview = $("support-preview");
+        if (!preview || !window.SupportPage?.pageHtml) return;
+        const fd = Object.fromEntries(new FormData(form).entries());
+        preview.innerHTML = SupportPage.pageHtml(fd, {}, { compact: true });
+      };
+      paintPreview();
+      form.addEventListener("input", paintPreview);
+      form.onsubmit = async (e) => {
         e.preventDefault();
         const fd = Object.fromEntries(new FormData(e.target).entries());
         await api("/api/master/support", { method: "POST", body: JSON.stringify(fd) });
-        document.getElementById("support-save-hint").textContent = "Saved to MySQL. All users will see this number.";
+        document.getElementById("support-save-hint").textContent = "Saved. All shops will see this helpline.";
         document.getElementById("support-save-hint").className = "hint ok";
+        paintPreview();
       };
     }
   } catch (err) {

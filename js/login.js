@@ -110,9 +110,11 @@ signupForm.addEventListener("submit", async (e) => {
 
 posRequest("/api/support-contact")
   .then(({ data: s }) => {
-    if (!s.support_phone) return;
     const el = document.getElementById("login-support");
-    const tel = String(s.support_phone).replaceAll(/[^\d+]/g, "");
-    el.innerHTML = `Support <a href="tel:${tel}">${s.support_phone}</a>`;
+    if (!el) return;
+    const html = window.SupportPage?.loginHtml(s) || "";
+    if (!html) return;
+    el.innerHTML = html;
+    el.hidden = false;
   })
   .catch(() => {});
