@@ -1904,7 +1904,7 @@ tr:last-child td { border-bottom: 0; }
   .btn { min-height: 44px; }
   .qty button { width: 44px; height: 44px; }
 
-  /* mobile-counter: list scroll + taller order box */
+  /* mobile-counter: list scroll + compact order list */
   .stage.is-counter {
     overflow: hidden;
     padding-bottom: 0;
@@ -1957,7 +1957,7 @@ tr:last-child td { border-bottom: 0; }
     overflow: hidden;
   }
   body.has-cart .stage.is-counter .workspace {
-    grid-template-rows: minmax(0, 1fr) minmax(240px, 48vh);
+    grid-template-rows: minmax(0, 1fr) auto;
   }
   .stage.is-counter .catalog {
     display: flex;
@@ -2022,7 +2022,7 @@ tr:last-child td { border-bottom: 0; }
     margin: 0;
     border-radius: 16px 16px 0 0;
     height: auto;
-    max-height: min(42vh, 360px);
+    max-height: min(32vh, 260px);
     min-height: 0;
     overflow: hidden;
     flex: 0 0 auto;
@@ -2031,9 +2031,9 @@ tr:last-child td { border-bottom: 0; }
   }
   body.has-cart .stage.is-counter .ticket,
   body.has-cart .stage.is-counter .bill-panel {
-    height: 100%;
-    max-height: none;
-    min-height: 240px;
+    height: auto;
+    max-height: min(32vh, 260px);
+    min-height: 0;
   }
   .stage.is-counter .ticket-sub,
   .stage.is-counter .ticket-pack { display: none; }
@@ -2048,10 +2048,10 @@ tr:last-child td { border-bottom: 0; }
   }
   .stage.is-counter .ticket-head-copy { display: none; }
   .stage.is-counter .bill-toggle {
-    width: 56px;
-    min-width: 56px;
-    height: 36px;
-    min-height: 36px;
+    width: 48px;
+    min-width: 48px;
+    height: 28px;
+    min-height: 28px;
     border-radius: 999px;
     border: 0;
     background: var(--vel-line);
@@ -2098,22 +2098,67 @@ tr:last-child td { border-bottom: 0; }
     margin: 0;
   }
   .stage.is-counter .totals div:not(.grand) { display: none; }
-  .stage.is-counter .totals { padding: 8px 12px 2px; }
-  .stage.is-counter .totals .grand { font-size: 18px; }
+  .stage.is-counter .totals { padding: 4px 12px 0; }
+  .stage.is-counter .totals .grand { font-size: 16px; }
   body:not(.has-cart) .stage.is-counter .lines { display: none; }
   .stage.is-counter .lines {
-    flex: 1 1 auto;
+    flex: 0 1 auto;
     min-height: 0;
-    max-height: none;
+    max-height: min(18vh, 132px);
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
+    padding: 2px 8px;
   }
   body.has-cart .stage.is-counter .lines {
     display: block;
-    min-height: 120px;
+    min-height: 0;
   }
   .stage.is-counter .line {
-    padding: 8px 6px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 4px;
+  }
+  .stage.is-counter .line > div:first-child {
+    min-width: 0;
+  }
+  .stage.is-counter .line > div:first-child .pack {
+    display: none;
+  }
+  .stage.is-counter .line .who {
+    font-size: 13px;
+    font-weight: 700;
+    line-height: 1.2;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .stage.is-counter .line > div:last-child {
+    display: contents;
+  }
+  .stage.is-counter .line .qty {
+    gap: 4px;
+  }
+  .stage.is-counter .line .qty span {
+    min-width: 2.6em;
+    font-size: 12px;
+    font-weight: 700;
+    text-align: center;
+  }
+  .stage.is-counter .line .qty button {
+    width: 28px;
+    height: 28px;
+    min-width: 28px;
+    min-height: 28px;
+    border-radius: 8px;
+  }
+  .stage.is-counter .line > div:last-child .pack {
+    margin-top: 0 !important;
+    min-width: 3.6em;
+    font-size: 12px;
+    font-weight: 800;
+    text-align: right;
   }
   .stage.is-counter .pay {
     position: relative;
