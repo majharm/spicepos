@@ -194,7 +194,7 @@ const VIEW_META = {
   units: { title: "Unit master", subtitle: "Units used on items — qty, kg, litre, and custom" },
   customers: { title: "Customers", subtitle: "B2C retail and B2B wholesale accounts" },
   packs: { title: "Packs", subtitle: "Pre-defined spice packs and compositions" },
-  orders: { title: "Invoices", subtitle: "Tax invoices — search, print, update status" },
+  orders: { title: "Invoices", subtitle: "POS slip or official A4 list bill" },
   purchases: { title: "Purchases", subtitle: "Supplier bills with GST and thermal print" },
   suppliers: { title: "Suppliers", subtitle: "Vendor contacts, address, and GSTIN" },
   stock: { title: "Stock", subtitle: "Adjustments, transfers, and low-stock alerts" },
@@ -1439,13 +1439,48 @@ function invoiceCtx() {
   };
 }
 
-function printOrder(o) {
-  const w = window.open("", "invoice-print", "width=400,height=720");
+function getInvoiceLook() {
+  try {
+    return localStorage.getItem("pos-invoice-look") === "office" ? "office" : "pos";
+  } catch {
+    return "pos";
+  }
+}
+
+function setInvoiceLook(look) {
+  const next = look === "office" ? "office" : "pos";
+  try {
+    localStorage.setItem("pos-invoice-look", next);
+  } catch {
+    /* ignore quota */
+  }
+  return next;
+}
+
+function invoiceLookTabs(look) {
+  return `<div class="invoice-look-tabs" role="tablist">
+      <button class="btn${look === "pos" ? " primary" : ""}" type="button" data-invoice-look="pos" role="tab" aria-selected="${look === "pos"}">POS slip</button>
+      <button class="btn${look === "office" ? " primary" : ""}" type="button" data-invoice-look="office" role="tab" aria-selected="${look === "office"}">Official bill</button>
+    </div>`;
+}
+
+function invoicePreviewHtml(o, look) {
+  if (look === "office") {
+    return `<div class="office-preview">${InvoicePrint.officeInvoiceBody(o, invoiceCtx())}</div>`;
+  }
+  return `<div class="thermal-preview">${InvoicePrint.invoiceBody(o, invoiceCtx())}</div>`;
+}
+
+function printOrder(o, look) {
+  const office = (look || getInvoiceLook()) === "office";
+  const w = window.open("", office ? "invoice-print-office" : "invoice-print", office ? "width=900,height=1100" : "width=400,height=720");
   if (!w) {
     setHint("Allow pop-ups to print invoices", "error");
     return;
   }
-  w.document.write(InvoicePrint.thermalInvoiceDocument(o, invoiceCtx()));
+  w.document.write(
+    office ? InvoicePrint.officeInvoiceDocument(o, invoiceCtx()) : InvoicePrint.thermalInvoiceDocument(o, invoiceCtx()),
+  );
   w.document.close();
 }
 
@@ -1466,6 +1501,7 @@ function showOrder(o) {
   });
   const cancelled = String(o.status || "").toLowerCase() === "cancelled";
   const lineCount = (o.lines || []).length;
+  const look = getInvoiceLook();
   $("order-pane").innerHTML = `<div class="invoice-detail-card">
       <div class="invoice-detail-top">
         <div>
@@ -1482,9 +1518,11 @@ function showOrder(o) {
       ${renderOrderStatusControls(o)}
       ${lineCount ? "" : '<p class="hint error">Line items missing — refresh or re-upload pos-php-till.php</p>'}
     </div>
-    <div class="thermal-preview">${InvoicePrint.invoiceBody(o, invoiceCtx())}</div>
+    ${invoiceLookTabs(look)}
+    ${invoicePreviewHtml(o, look)}
     <div class="print-actions">
-      <button class="btn primary" type="button" data-print="${escapeHtml(o.id)}">Print invoice</button>
+      <button class="btn${look === "pos" ? " primary" : ""}" type="button" data-print="${escapeHtml(o.id)}" data-print-look="pos">Print POS slip</button>
+      <button class="btn${look === "office" ? " primary" : ""}" type="button" data-print="${escapeHtml(o.id)}" data-print-look="office">Print official bill</button>
       <button class="btn" type="button" data-edit-order="${escapeHtml(o.id)}"${cancelled ? " disabled title=\"Restore order status before editing items\"" : ""}>Change items</button>
     </div>`;
 }
@@ -1954,12 +1992,19 @@ $("purchase-pane").addEventListener("click", (e) => {
 });
 
 $("order-pane").addEventListener("click", async (e) => {
+  const lookBtn = e.target.closest("[data-invoice-look]");
+  if (lookBtn) {
+    setInvoiceLook(lookBtn.dataset.invoiceLook);
+    const current = orderCache.find((row) => row.id === selectedOrderId);
+    if (current) showOrder(current);
+    return;
+  }
   const printBtn = e.target.closest("[data-print]");
   const editBtn = e.target.closest("[data-edit-order]");
   const statusBtn = e.target.closest("[data-set-order-status]");
   if (printBtn) {
     const o = orderCache.find((row) => row.id === printBtn.dataset.print);
-    if (o) printOrder(o);
+    if (o) printOrder(o, printBtn.dataset.printLook);
   }
   if (editBtn) {
     const o = orderCache.find((row) => row.id === editBtn.dataset.editOrder);
@@ -2118,12 +2163,36 @@ $("btn-pay").addEventListener("click", async () => {
       };
     }
     showOrder(receiptOrder);
+    const look = getInvoiceLook();
     $("modal-title").textContent = `Invoice ${orderLabel(order, result)}`;
     $("modal-body").innerHTML = `<p class="hint ok">Bill saved. POS cleared for the next customer.</p>
-      <div class="thermal-preview">${InvoicePrint.invoiceBody(receiptOrder, invoiceCtx())}</div>
-      <div class="print-actions"><button class="btn primary" type="button" id="modal-print">Print invoice</button></div>`;
+      ${invoiceLookTabs(look)}
+      ${invoicePreviewHtml(receiptOrder, look)}
+      <div class="print-actions">
+        <button class="btn${look === "pos" ? " primary" : ""}" type="button" id="modal-print-pos">Print POS slip</button>
+        <button class="btn${look === "office" ? " primary" : ""}" type="button" id="modal-print-office">Print official bill</button>
+      </div>`;
     $("modal").hidden = false;
-    $("modal-print").onclick = () => printOrder(receiptOrder);
+    const bindModalLook = () => {
+      $("modal-body").querySelectorAll("[data-invoice-look]").forEach((btn) => {
+        btn.onclick = () => {
+          const next = setInvoiceLook(btn.dataset.invoiceLook);
+          $("modal-body").innerHTML = `<p class="hint ok">Bill saved. POS cleared for the next customer.</p>
+            ${invoiceLookTabs(next)}
+            ${invoicePreviewHtml(receiptOrder, next)}
+            <div class="print-actions">
+              <button class="btn${next === "pos" ? " primary" : ""}" type="button" id="modal-print-pos">Print POS slip</button>
+              <button class="btn${next === "office" ? " primary" : ""}" type="button" id="modal-print-office">Print official bill</button>
+            </div>`;
+          $("modal-print-pos").onclick = () => printOrder(receiptOrder, "pos");
+          $("modal-print-office").onclick = () => printOrder(receiptOrder, "office");
+          bindModalLook();
+        };
+      });
+    };
+    $("modal-print-pos").onclick = () => printOrder(receiptOrder, "pos");
+    $("modal-print-office").onclick = () => printOrder(receiptOrder, "office");
+    bindModalLook();
     showView("counter");
     try {
       await Promise.all([loadBootstrap(), loadToday()]);

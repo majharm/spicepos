@@ -1364,6 +1364,7 @@ body.footwear-mode.counter-mode .stage.is-counter .card .sku { display: block; f
   flex: 0 0 auto;
 }
 .order-pane > .thermal-preview,
+.order-pane > .office-preview,
 .purchase-pane > .thermal-preview {
   flex: 1 1 auto;
   min-height: 0;
@@ -1744,6 +1745,53 @@ body.footwear-mode.counter-mode .stage.is-counter .card .sku { display: block; f
 .thermal-preview .inv-pay { text-align: center; margin: 6px 0; font-size: 11px; }
 .thermal-preview .inv-footer, .thermal-preview .inv-terms { text-align: center; font-size: 9px; margin: 4px 0; }
 .thermal-preview .inv-powered { text-align: center; font-size: 8px; margin-top: 8px; color: #444; }
+.invoice-look-tabs {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 0 0 10px;
+}
+.office-preview {
+  width: 100%;
+  margin: 0 0 10px;
+  padding: 16px 18px;
+  background: #fff;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  overflow: auto;
+  max-height: 640px;
+  box-shadow: var(--elev-inset);
+  color: #111;
+  font-family: "Segoe UI", Calibri, Arial, sans-serif;
+  font-size: 12px;
+  line-height: 1.4;
+}
+.office-preview .off-head { display: flex; justify-content: space-between; gap: 20px; border-bottom: 2px solid #111; padding-bottom: 10px; }
+.office-preview .off-logo { max-height: 48px; max-width: 140px; display: block; margin-bottom: 6px; }
+.office-preview .off-shop { margin: 0 0 4px; font-size: 18px; }
+.office-preview .off-seller-meta { font-size: 11px; color: #333; }
+.office-preview .off-doc { min-width: 180px; text-align: right; }
+.office-preview .off-title { margin: 0; font-size: 16px; font-weight: 800; letter-spacing: 0.08em; }
+.office-preview .off-copy { margin: 2px 0 8px; font-size: 11px; color: #555; }
+.office-preview .off-kv { display: flex; justify-content: flex-end; gap: 10px; font-size: 12px; }
+.office-preview .off-parties { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 10px 0; border-bottom: 1px solid #bbb; }
+.office-preview .off-parties h2 { margin: 0 0 4px; font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: #555; }
+.office-preview .off-items, .office-preview .off-gst, .office-preview .off-totals { width: 100%; border-collapse: collapse; }
+.office-preview .off-items th, .office-preview .off-items td,
+.office-preview .off-gst th, .office-preview .off-gst td,
+.office-preview .off-totals td { border: 1px solid #222; padding: 5px 6px; }
+.office-preview .off-items thead th, .office-preview .off-gst thead th { background: #f3f3f3; font-size: 10px; text-transform: uppercase; }
+.office-preview .off-c { text-align: center; }
+.office-preview .off-n { text-align: right; white-space: nowrap; }
+.office-preview .off-bottom { display: grid; grid-template-columns: 1.3fr 0.7fr; gap: 12px; margin-top: 10px; }
+.office-preview .off-grand td { font-weight: 800; background: #f3f3f3; }
+.office-preview .off-sign { display: flex; justify-content: space-between; margin-top: 20px; }
+.office-preview .off-sign > div { min-width: 140px; border-top: 1px solid #111; padding-top: 6px; font-size: 11px; }
+@media (max-width: 900px) {
+  .office-preview .off-head, .office-preview .off-bottom, .office-preview .off-parties { display: block; }
+  .office-preview .off-doc { text-align: left; margin-top: 10px; }
+  .office-preview .off-kv { justify-content: flex-start; }
+}
 .held-bills {
   margin-top: 10px;
   display: grid;
