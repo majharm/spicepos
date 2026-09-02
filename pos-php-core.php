@@ -1397,6 +1397,18 @@ function pos_php_dispatch($path, $method, $rawBody) {
         "email" => $user["email"] ?? "",
         "username" => $user["username"] ?? "",
       ]);
+      if (function_exists("pos_send_shop_welcome_alerts")) {
+        pos_send_shop_welcome_alerts([
+          "businessId" => $user["business_id"],
+          "shopName" => $business["name"] ?? "",
+          "ownerName" => $user["first_name"] ?? "",
+          "email" => $user["email"] ?? "",
+          "username" => $user["username"] ?? "",
+          "password" => $body["password"] ?? "",
+          "role" => $user["role"] ?? "business_admin",
+          "mobile" => $body["mobile"] ?? "",
+        ]);
+      }
       $ttl = pos_ttl(pos_remember($body));
       $token = pos_new_token();
       pos_q(
@@ -1447,6 +1459,9 @@ function pos_php_dispatch($path, $method, $rawBody) {
     $auth = pos_require_master($path);
 
     if ($path === "master/dashboard" && $method === "GET") {
+      if (function_exists("pos_tick_shop_alerts")) {
+        try { pos_tick_shop_alerts(); } catch (Throwable $e) { /* closing tick is best-effort */ }
+      }
       $businesses = pos_q("SELECT * FROM businesses");
       $statuses = array_map("pos_public_status", $businesses);
       $users = pos_q("SELECT COUNT(*) AS n FROM staff_users");
@@ -1579,6 +1594,18 @@ function pos_php_dispatch($path, $method, $rawBody) {
         "email" => $user["email"] ?? "",
         "username" => $user["username"] ?? "",
       ]);
+      if (function_exists("pos_send_shop_welcome_alerts")) {
+        pos_send_shop_welcome_alerts([
+          "businessId" => $reg["businessId"],
+          "shopName" => $row[0]["name"] ?? "",
+          "ownerName" => $user["first_name"] ?? "",
+          "email" => $user["email"] ?? "",
+          "username" => $user["username"] ?? "",
+          "password" => $body["password"] ?? "",
+          "role" => $user["role"] ?? "business_admin",
+          "mobile" => $body["mobile"] ?? "",
+        ]);
+      }
       pos_send(200, ["ok" => true, "business" => $row[0]]);
     }
 
@@ -1679,6 +1706,26 @@ function pos_php_dispatch($path, $method, $rawBody) {
       $password = $body["password"] ?? "";
       if (strlen((string) $password) < 8) throw new Exception("Password must be 8+ characters");
       pos_q("UPDATE staff_users SET password_hash = ?, failed_logins = 0, locked_until = NULL WHERE id = ?", "ss", [pos_hash_password($password), $m[1]]);
+      if (function_exists("pos_send_credential_alerts")) {
+        $u = pos_q(
+          "SELECT u.email, u.first_name, u.username, u.role, u.business_id, u.mobile, b.name AS shop_name
+           FROM staff_users u LEFT JOIN businesses b ON b.id = u.business_id WHERE u.id = ? LIMIT 1",
+          "s",
+          [$m[1]]
+        );
+        if ($u) {
+          pos_send_credential_alerts([
+            "businessId" => $u[0]["business_id"] ?? "",
+            "shopName" => $u[0]["shop_name"] ?? "",
+            "ownerName" => $u[0]["first_name"] ?? "",
+            "email" => $u[0]["email"] ?? "",
+            "username" => $u[0]["username"] ?? "",
+            "password" => $password,
+            "role" => $u[0]["role"] ?? "",
+            "mobile" => $u[0]["mobile"] ?? "",
+          ]);
+        }
+      }
       pos_send(200, ["ok" => true]);
     }
 
@@ -1757,7 +1804,7 @@ function pos_php_dispatch($path, $method, $rawBody) {
       );
       $delivery = ["skipped" => true];
       if (function_exists("pos_send_update_alerts")) {
-        $delivery = pos_send_update_alerts($title, $body["body"] ?? "", $bid, $image, true);
+        $delivery = pos_send_update_alerts($title, $body["body"] ?? "", $bid, $image);
       }
       pos_send(200, ["ok" => true, "id" => $nid, "delivery" => $delivery]);
     }

@@ -375,6 +375,7 @@ async function render() {
     audit: "Audit log",
     backup: "Backup",
     notes: "Notifications",
+    alerts: "Auto-send messages",
     support: "Support number",
   };
   $("panel-title").textContent = titles[tab];
@@ -748,13 +749,12 @@ async function render() {
         </div>`;
       bindMasterBackup(body, shops);
     } else if (tab === "notes") {
-      const [businesses, alerts, settings] = await Promise.all([
+      const [businesses, settings] = await Promise.all([
         api("/api/master/businesses"),
-        api("/api/master/alerts").catch(() => null),
         api("/api/master/settings").catch(() => ({ notifications: [] })),
       ]);
       const notes = settings.notifications || [];
-      body.innerHTML = `<p class="lede">Send to the shop dashboard, WhatsApp (shop mobile), and email (shop email). You can attach an image.</p>
+      body.innerHTML = `<p class="lede">Send to the shop dashboard. If <strong>New update</strong> is Active in Settings, shops also get this by WhatsApp and email. Attach an image if you want.</p>
         <form class="settings wide" id="note-form">
           <label>Send to
             <select name="business_id">
@@ -776,15 +776,6 @@ async function render() {
           <button class="btn primary">Send notification</button>
           <p class="hint" id="note-hint"></p>
         </form>
-        ${alerts ? `<form class="settings wide" id="wa-form">
-          <h3>WhatsApp API</h3>
-          <p class="section-note">Same gateway used for this notification. API key is stored on the platform and never shown in full.</p>
-          <label class="remember"><input type="checkbox" name="wa_enabled" ${alerts.wa_enabled === "1" ? "checked" : ""} /> Enable WhatsApp</label>
-          <label>API key <input name="wa_api_key" type="password" autocomplete="off" value="${attr(alerts.wa_api_key)}" /></label>
-          <label>Profile ID <input name="wa_profile_id" value="${attr(alerts.wa_profile_id)}" /></label>
-          <button class="btn" type="submit">Save WhatsApp</button>
-          <p class="hint" id="wa-hint"></p>
-        </form>` : ""}
         ${notes.length ? `<div class="settings wide"><h3>Recent</h3>${notes
           .map(
             (n) =>
@@ -840,22 +831,148 @@ async function render() {
           hint.className = "hint error";
         }
       };
-      $("wa-form") && ($("wa-form").onsubmit = async (e) => {
+    } else if (tab === "alerts") {
+      const alerts = await api("/api/master/alerts");
+      const defs = [
+        {
+          key: "welcome",
+          flag: "alert_welcome",
+          title: "Welcome",
+          blurb: "WhatsApp when a shop is created or an owner signs up. The standard welcome email (no password) is still sent separately.",
+          placeholders: "{{shop}} {{name}} {{signInUrl}}",
+        },
+        {
+          key: "credentials",
+          flag: "alert_credentials",
+          title: "User ID & password",
+          blurb: "WhatsApp and email with login details when a shop, staff user, or password reset is created.",
+          placeholders: "{{shop}} {{name}} {{username}} {{email}} {{password}} {{role}} {{signInUrl}}",
+        },
+        {
+          key: "updates",
+          flag: "alert_updates",
+          title: "New update",
+          blurb: "WhatsApp and email when you send a notification from the Notifications tab.",
+          placeholders: "{{shop}} {{title}} {{body}}",
+        },
+        {
+          key: "closing",
+          flag: "alert_closing",
+          title: "Closing sales summary",
+          blurb: "Daily WhatsApp and email after the closing hour (shop timezone). Sent once per shop per day.",
+          placeholders: "{{shop}} {{day}} {{bills}} {{takings}} {{cash}} {{upi}} {{card}} {{credit}} {{gst}} {{lowStock}}",
+        },
+        {
+          key: "low_stock",
+          flag: "alert_low_stock",
+          title: "Low stock alert",
+          blurb: "WhatsApp and email after a sale when an item falls to or below reorder level. Once per item per day.",
+          placeholders: "{{shop}} {{lowStock}}",
+        },
+      ];
+      const vars = alerts.sample_vars || {};
+      const fill = (tpl) =>
+        String(tpl || "").replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (_, key) => (vars[key] == null ? "" : String(vars[key])));
+      body.innerHTML = `<form class="settings wide alert-settings" id="alert-form">
+        <p class="lede">Turn each auto-message Active or Inactive. Edit the template, then Save. Empty placeholders become blank. WhatsApp uses the shop mobile; email uses the shop email.</p>
+        <div class="alert-card">
+          <h3>WhatsApp API</h3>
+          <p class="section-note">API key is stored on the platform and never shown in full.</p>
+          <label class="alert-switch">
+            <input type="checkbox" name="wa_enabled" ${alerts.wa_enabled === "1" ? "checked" : ""} />
+            <span class="alert-switch-ui" aria-hidden="true"></span>
+            <span class="alert-switch-label">${alerts.wa_enabled === "1" ? "Active" : "Inactive"}</span>
+          </label>
+          <label>API URL <input name="wa_api_url" value="${attr(alerts.wa_api_url || "")}" /></label>
+          <label>API key <input name="wa_api_key" type="password" autocomplete="off" value="${attr(alerts.wa_api_key || "")}" /></label>
+          <label>Profile ID <input name="wa_profile_id" value="${attr(alerts.wa_profile_id || "")}" /></label>
+          <label>Country code <input name="wa_country_code" value="${attr(alerts.wa_country_code || "91")}" maxlength="3" /></label>
+        </div>
+        ${defs
+          .map((d) => {
+            const on = alerts[d.flag] === "1";
+            const tpl = alerts[`tpl_${d.key}`] || (alerts.defaults && alerts.defaults[d.key]) || "";
+            return `<article class="alert-card${on ? "" : " is-inactive"}" data-kind="${d.key}">
+              <header>
+                <div>
+                  <h3>${d.title}</h3>
+                  <p class="section-note">${d.blurb}</p>
+                </div>
+                <label class="alert-switch">
+                  <input type="checkbox" name="${d.flag}" ${on ? "checked" : ""} />
+                  <span class="alert-switch-ui" aria-hidden="true"></span>
+                  <span class="alert-switch-label">${on ? "Active" : "Inactive"}</span>
+                </label>
+              </header>
+              ${
+                d.key === "closing"
+                  ? `<label>Closing hour (0–23)
+                      <input name="alert_closing_hour" type="number" min="0" max="23" value="${attr(alerts.alert_closing_hour || "22")}" />
+                    </label>`
+                  : ""
+              }
+              <label>Message template
+                <textarea name="tpl_${d.key}" rows="8">${attr(tpl)}</textarea>
+              </label>
+              <p class="hint">Placeholders: ${d.placeholders}</p>
+              <button class="btn" type="button" data-reset-tpl="${d.key}">Reset template</button>
+              <pre class="alert-preview">${attr(fill(tpl))}</pre>
+            </article>`;
+          })
+          .join("")}
+        <div class="settings-actions">
+          <button class="btn primary" type="submit">Save message settings</button>
+          <p class="hint" id="alert-hint"></p>
+        </div>
+      </form>`;
+      const form = $("alert-form");
+      const paintSwitch = (input) => {
+        const label = input.closest(".alert-switch")?.querySelector(".alert-switch-label");
+        if (label) label.textContent = input.checked ? "Active" : "Inactive";
+        const card = input.closest(".alert-card");
+        if (card && input.name?.startsWith("alert_")) card.classList.toggle("is-inactive", !input.checked);
+      };
+      form.querySelectorAll(".alert-switch input[type=checkbox]").forEach((input) => {
+        input.addEventListener("change", () => paintSwitch(input));
+        paintSwitch(input);
+      });
+      const paintPreview = (kind) => {
+        const card = form.querySelector(`[data-kind="${kind}"]`);
+        const ta = card?.querySelector(`textarea[name="tpl_${kind}"]`);
+        const pre = card?.querySelector(".alert-preview");
+        if (ta && pre) pre.textContent = fill(ta.value);
+      };
+      form.querySelectorAll("textarea[name^='tpl_']").forEach((ta) => {
+        const kind = ta.name.replace("tpl_", "");
+        ta.addEventListener("input", () => paintPreview(kind));
+      });
+      form.querySelectorAll("[data-reset-tpl]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const kind = btn.dataset.resetTpl;
+          const ta = form.querySelector(`textarea[name="tpl_${kind}"]`);
+          if (ta) {
+            ta.value = (alerts.defaults && alerts.defaults[kind]) || "";
+            paintPreview(kind);
+          }
+        });
+      });
+      form.onsubmit = async (e) => {
         e.preventDefault();
-        const hint = $("wa-hint");
-        const fd = Object.fromEntries(new FormData(e.target).entries());
-        fd.wa_enabled = e.target.wa_enabled?.checked ? "1" : "0";
+        const hint = $("alert-hint");
+        const fd = Object.fromEntries(new FormData(form).entries());
+        fd.wa_enabled = form.wa_enabled?.checked ? "1" : "0";
+        for (const d of defs) fd[d.flag] = form[d.flag]?.checked ? "1" : "0";
         hint.className = "hint";
         hint.textContent = "Saving…";
         try {
           await api("/api/master/alerts", { method: "POST", body: JSON.stringify(fd) });
-          hint.textContent = "WhatsApp settings saved.";
+          hint.textContent = "Message settings saved. Active templates will auto-send.";
           hint.className = "hint ok";
         } catch (err) {
           hint.textContent = err.message;
           hint.className = "hint error";
         }
-      });
+      };
     } else if (tab === "support") {
       const s = await api("/api/master/support");
       body.innerHTML = `<p class="lede">This number is stored in MySQL and shown to every shop user on Support (and on the login screen).</p>
@@ -879,6 +996,9 @@ async function render() {
 }
 
 function summarizeNoticeDelivery(delivery) {
+  if (delivery?.skipped) {
+    return "Saved on the shop dashboard. New update WhatsApp/email is Inactive in Settings.";
+  }
   const results = delivery?.results;
   if (!Array.isArray(results) || !results.length) {
     return "Saved on the shop dashboard. Add a shop mobile and email to also send WhatsApp and email.";
