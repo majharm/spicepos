@@ -1958,7 +1958,7 @@ tr:last-child td { border-bottom: 0; }
     overflow: hidden;
   }
   body.has-cart .stage.is-counter .workspace {
-    grid-template-rows: minmax(0, 1fr) minmax(0, 200px);
+    grid-template-rows: minmax(0, 1fr) minmax(0, 240px);
   }
   .stage.is-counter .catalog {
     display: flex;
@@ -2023,7 +2023,7 @@ tr:last-child td { border-bottom: 0; }
     margin: 0;
     border-radius: 16px 16px 0 0;
     height: auto;
-    max-height: 200px;
+    max-height: 240px;
     min-height: 0;
     overflow: hidden;
     flex: 0 0 auto;
@@ -2032,8 +2032,8 @@ tr:last-child td { border-bottom: 0; }
   }
   body.has-cart .stage.is-counter .ticket,
   body.has-cart .stage.is-counter .bill-panel {
-    height: auto;
-    max-height: 200px;
+    height: 100%;
+    max-height: 240px;
     min-height: 0;
   }
   .stage.is-counter .ticket-sub,
@@ -2103,9 +2103,9 @@ tr:last-child td { border-bottom: 0; }
   .stage.is-counter .totals .grand { font-size: 16px; }
   body:not(.has-cart) .stage.is-counter .lines { display: none; }
   .stage.is-counter .lines {
-    flex: 0 1 auto;
+    flex: 1 1 auto;
     min-height: 0;
-    max-height: min(12vh, 80px);
+    max-height: none;
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
     padding: 2px 8px;
