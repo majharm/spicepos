@@ -4,6 +4,21 @@ import "./units.js";
 
 const U = globalThis.POSUnits;
 
+test("counter qty is any grams from 1 to 1e9, not a 100 g step", () => {
+  U.hydrate([]);
+  assert.equal(U.step("GM"), 1);
+  assert.equal(U.counterStep("GM"), 1);
+  assert.equal(U.qtyMin(), 1);
+  assert.equal(U.qtyMax(), 1000000000);
+  assert.equal(U.clampQty(5), 5);
+  assert.equal(U.clampQty(1), 1);
+  assert.equal(U.clampQty(1000000000), 1000000000);
+  assert.equal(U.clampQty(1000000001), 1000000000);
+  assert.equal(U.clampQty(0), 0);
+  assert.equal(U.clampQty(0.4), 0);
+  assert.equal(U.lineAmount(5, 1000, "GM"), 5);
+});
+
 test("unit aliases and count pricing", () => {
   assert.equal(U.normalize("qty"), "PCS");
   assert.equal(U.normalize("ltr"), "LTR");

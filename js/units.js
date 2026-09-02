@@ -4,10 +4,10 @@
   if (typeof window !== "undefined") window.POSUnits = api;
 })(typeof globalThis !== "undefined" ? globalThis : this, function () {
   const DEFAULT_TYPES = [
-    { code: "GM", label: "Grams (g)", family: "weight", rateSuffix: "/kg", stockSuffix: "g", step: 100, receive: 1000 },
-    { code: "KG", label: "Kilogram (kg)", family: "weight", rateSuffix: "/kg", stockSuffix: "kg", step: 100, receive: 1000, displayDiv: 1000 },
-    { code: "ML", label: "Millilitre (ml)", family: "volume", rateSuffix: "/ltr", stockSuffix: "ml", step: 100, receive: 1000 },
-    { code: "LTR", label: "Litre (L)", family: "volume", rateSuffix: "/ltr", stockSuffix: "L", step: 100, receive: 1000, displayDiv: 1000 },
+    { code: "GM", label: "Grams (g)", family: "weight", rateSuffix: "/kg", stockSuffix: "g", step: 1, receive: 1000 },
+    { code: "KG", label: "Kilogram (kg)", family: "weight", rateSuffix: "/kg", stockSuffix: "kg", step: 1, receive: 1000, displayDiv: 1000 },
+    { code: "ML", label: "Millilitre (ml)", family: "volume", rateSuffix: "/ltr", stockSuffix: "ml", step: 1, receive: 1000 },
+    { code: "LTR", label: "Litre (L)", family: "volume", rateSuffix: "/ltr", stockSuffix: "L", step: 1, receive: 1000, displayDiv: 1000 },
     { code: "PCS", label: "Quantity (pcs)", family: "count", rateSuffix: "/pc", stockSuffix: "pcs", step: 1, receive: 1 },
   ];
   const TYPES = DEFAULT_TYPES.map((t) => ({ ...t }));
@@ -53,9 +53,9 @@
   }
 
   function familyDefaults(family) {
-    if (family === "volume") return { rateSuffix: "/ltr", stockSuffix: "ml", step: 100, receive: 1000 };
+    if (family === "volume") return { rateSuffix: "/ltr", stockSuffix: "ml", step: 1, receive: 1000 };
     if (family === "count") return { rateSuffix: "/pc", stockSuffix: "pcs", step: 1, receive: 1 };
-    return { rateSuffix: "/kg", stockSuffix: "g", step: 100, receive: 1000 };
+    return { rateSuffix: "/kg", stockSuffix: "g", step: 1, receive: 1000 };
   }
 
   function hydrate(rows) {
@@ -88,6 +88,27 @@
 
   function isCount(code) {
     return typeOf(code).family === "count";
+  }
+
+  const QTY_MIN = 1;
+  const QTY_MAX = 1000000000;
+
+  function qtyMin() {
+    return QTY_MIN;
+  }
+
+  function qtyMax() {
+    return QTY_MAX;
+  }
+
+  function clampQty(n) {
+    const v = Number(n);
+    if (!Number.isFinite(v) || v < QTY_MIN) return 0;
+    return Math.min(QTY_MAX, Math.round(v));
+  }
+
+  function counterStep(_code) {
+    return 1;
   }
 
   function step(code) {
@@ -174,6 +195,10 @@
     normalize,
     typeOf,
     isCount,
+    qtyMin,
+    qtyMax,
+    clampQty,
+    counterStep,
     step,
     receiveQty,
     receiveLabel,
