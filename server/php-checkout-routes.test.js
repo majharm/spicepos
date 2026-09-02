@@ -81,6 +81,8 @@ test("PHP customer insert bind types match placeholders", () => {
   assert.match(core, /function pos_is_footwear_shop/);
   assert.match(crud, /pos_is_footwear_shop/);
   assert.match(crud, /FW-/);
+  assert.match(crud, /\$unitRaw = trim\(\(string\) \(\$body\["base_unit"\] \?\? \$body\["unit"\] \?\? ""\)\)/);
+  assert.match(crud, /\$unitRaw !== "" \? \$unitRaw : \(\$footwear \? "PCS" : "GM"\)/);
   assert.match(core, /function pos_item_unit/);
   assert.match(read("pos-checkout.php"), /pos_line_amount_for_item/);
   assert.match(crud, /pos_line_amount_for_item/);

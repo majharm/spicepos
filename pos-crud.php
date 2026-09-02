@@ -35,7 +35,8 @@ function pos_crud_dispatch($path, $method, $body, $bid, $auth, $branchId, $uid) 
     $id = pos_uuid();
     $n = pos_next_seq("item", $bid, 7);
     $code = $body["code"] ?? (($footwear ? "FW-" : "SP-") . str_pad((string) $n, 3, "0", STR_PAD_LEFT));
-    $unit = pos_item_unit($body["base_unit"] ?? $body["unit"] ?? ($footwear ? "PCS" : "GM"));
+    $unitRaw = trim((string) ($body["base_unit"] ?? $body["unit"] ?? ""));
+    $unit = pos_item_unit($unitRaw !== "" ? $unitRaw : ($footwear ? "PCS" : "GM"));
     $image = pos_item_image_url($body);
     $color = trim((string) ($body["color"] ?? "")) ?: null;
     $size = trim((string) ($body["size"] ?? "")) ?: null;
@@ -71,7 +72,8 @@ function pos_crud_dispatch($path, $method, $body, $bid, $auth, $branchId, $uid) 
     pos_ensure_item_unit_columns();
     $bizRows = pos_q("SELECT category, business_type FROM businesses WHERE id = ? LIMIT 1", "s", [$bid]);
     $footwear = pos_is_footwear_shop($bizRows[0] ?? []);
-    $unit = pos_item_unit($body["base_unit"] ?? $body["unit"] ?? ($footwear ? "PCS" : "GM"));
+    $unitRaw = trim((string) ($body["base_unit"] ?? $body["unit"] ?? ""));
+    $unit = pos_item_unit($unitRaw !== "" ? $unitRaw : ($footwear ? "PCS" : "GM"));
     $image = pos_item_image_url($body);
     $color = trim((string) ($body["color"] ?? "")) ?: null;
     $size = trim((string) ($body["size"] ?? "")) ?: null;

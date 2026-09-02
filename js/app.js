@@ -66,7 +66,7 @@ function fmtQty(qty, item) {
 function fillItemUnitSelect(selected) {
   const el = $("item-unit");
   if (!el) return;
-  el.innerHTML = POSUnits.optionsHtml(selected || el.value || "GM");
+  el.innerHTML = POSUnits.optionsHtml(selected || el.value || defaultItemUnit());
 }
 
 function applyUnitMaster(rows) {
@@ -710,7 +710,7 @@ function showView(name) {
   paintImpersonationControls();
   if (name === "units") renderUnitsTable();
   if (name === "items") {
-    fillItemUnitSelect($("item-unit")?.value || "GM");
+    fillItemUnitSelect($("item-unit")?.value || defaultItemUnit());
     refreshItemUnitLabels();
   }
   if (name === "stock") loadStock();

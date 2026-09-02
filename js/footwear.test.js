@@ -46,6 +46,8 @@ test("Item form and Counter expose colour, size, and girls/boys", () => {
   assert.match(master, /"Footwear"/);
   assert.match(app, /looksFootwear && !globalThis.POSFootwear/);
   assert.match(app, /wearer_type/);
+  assert.match(app, /fillItemUnitSelect\(\$\("item-unit"\)\?\.value \|\| defaultItemUnit\(\)\)/);
+  assert.match(app, /selected \|\| el\.value \|\| defaultItemUnit\(\)/);
   const crud = readFileSync(path.join(root, "server/crud.js"), "utf8");
   assert.match(crud, /wearer_type/);
   assert.match(crud, /POSFootwear\.billName/);
