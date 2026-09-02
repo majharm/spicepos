@@ -1223,13 +1223,38 @@ function paintPlatformSupport() {
   }
 }
 
+function copyText(text) {
+  const value = String(text || "");
+  if (navigator.clipboard?.writeText) {
+    return navigator.clipboard.writeText(value).catch(() => copyTextFallback(value));
+  }
+  return copyTextFallback(value);
+}
+
+function copyTextFallback(text) {
+  return new Promise((resolve, reject) => {
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.setAttribute("readonly", "");
+    ta.style.position = "fixed";
+    ta.style.left = "-9999px";
+    document.body.appendChild(ta);
+    ta.select();
+    const ok = document.execCommand("copy");
+    ta.remove();
+    if (ok) resolve();
+    else reject(new Error("copy failed"));
+  });
+}
+
 function bindSupportCopy(root) {
   root.querySelectorAll("[data-copy-phone]").forEach((btn) => {
     btn.addEventListener("click", async () => {
       const phone = btn.getAttribute("data-copy-phone") || "";
-      const label = btn.textContent;
+      const label = btn.getAttribute("data-idle-label") || btn.textContent;
+      btn.setAttribute("data-idle-label", label);
       try {
-        await navigator.clipboard.writeText(phone);
+        await copyText(phone);
         btn.textContent = "Copied";
       } catch {
         btn.textContent = "Copy failed";
