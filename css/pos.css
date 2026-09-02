@@ -1958,7 +1958,7 @@ tr:last-child td { border-bottom: 0; }
     overflow: hidden;
   }
   body.has-cart .stage.is-counter .workspace {
-    grid-template-rows: minmax(0, 1fr) auto;
+    grid-template-rows: minmax(0, 1fr) minmax(0, 200px);
   }
   .stage.is-counter .catalog {
     display: flex;
@@ -2023,7 +2023,7 @@ tr:last-child td { border-bottom: 0; }
     margin: 0;
     border-radius: 16px 16px 0 0;
     height: auto;
-    max-height: min(26vh, 210px);
+    max-height: 200px;
     min-height: 0;
     overflow: hidden;
     flex: 0 0 auto;
@@ -2033,7 +2033,7 @@ tr:last-child td { border-bottom: 0; }
   body.has-cart .stage.is-counter .ticket,
   body.has-cart .stage.is-counter .bill-panel {
     height: auto;
-    max-height: min(26vh, 210px);
+    max-height: 200px;
     min-height: 0;
   }
   .stage.is-counter .ticket-sub,
