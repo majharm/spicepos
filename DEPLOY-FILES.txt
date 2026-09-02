@@ -1,3 +1,4 @@
+Production deploy bundle — 20260901deploy51
 Production deploy bundle — 20260901deploy50
 =========================================
 
@@ -86,6 +87,8 @@ FIXES in this bundle
   - Suppliers form and list include address and email
   - Settings page: wider card, 2-column details, styled logo upload, keep card padding on mobile
   - CSS: Master Admin mobile nav wrap, hide nav until sign-in, backup file inputs, table overflow
+  - Cache sticker 20260901deploy51 on index, login, master, setup
+  - Mobile Counter: scrollable item list and a taller order box
   - Cache sticker 20260901deploy50 on index, login, master, setup
   - Master Admin Settings: auto-send templates (welcome, login, update, closing, low stock) with Active/Inactive
   - Master Admin Notifications: attach an image; send to dashboard, email, and WhatsApp

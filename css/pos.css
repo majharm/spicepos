@@ -422,6 +422,8 @@ select {
 }
 body.counter-mode .session-bar { display: none; }
 body.counter-mode .view-topbar { display: none; }
+body.counter-mode .platform-notices,
+body.counter-mode .expired-banner { display: none !important; }
 
 .view-topbar {
   display: flex;
@@ -1902,7 +1904,7 @@ tr:last-child td { border-bottom: 0; }
   .btn { min-height: 44px; }
   .qty button { width: 44px; height: 44px; }
 
-  /* mobile-counter: till dock — catalog scrolls, bill+Save stay on screen */
+  /* mobile-counter: list scroll + taller order box */
   .stage.is-counter {
     overflow: hidden;
     padding-bottom: 0;
@@ -1935,8 +1937,8 @@ tr:last-child td { border-bottom: 0; }
   .quick-customer-wrap > summary {
     display: flex;
     align-items: center;
-    min-height: 44px;
-    padding: 8px 4px;
+    min-height: 36px;
+    padding: 6px 4px;
     font-size: 13px;
     font-weight: 700;
     color: var(--vel-teal);
@@ -1951,48 +1953,87 @@ tr:last-child td { border-bottom: 0; }
     grid-template-rows: minmax(0, 1fr) auto;
     flex: 1 1 auto;
     min-height: 0;
-    height: auto;
+    height: 0;
     overflow: hidden;
   }
+  body.has-cart .stage.is-counter .workspace {
+    grid-template-rows: minmax(0, 1fr) minmax(240px, 48vh);
+  }
   .stage.is-counter .catalog {
-    height: auto;
-    max-height: none;
+    display: flex;
+    flex-direction: column;
+    align-content: stretch;
+    height: 100%;
+    max-height: 100%;
     min-height: 0;
     overflow-x: hidden;
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
     overscroll-behavior: contain;
     content-visibility: visible;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 5px;
+    gap: 4px;
     padding: 6px;
     margin: 6px 6px 0;
-    touch-action: manipulation;
+    touch-action: pan-y;
   }
   .stage.is-counter .card {
     contain: none;
-    min-height: 58px;
-    padding: 6px;
-    gap: 1px;
-    touch-action: manipulation;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: center;
+    width: 100%;
+    min-height: 56px;
+    padding: 6px 8px;
+    gap: 8px;
+    text-align: left;
+    touch-action: pan-y;
   }
-  .stage.is-counter .card .sku { font-size: 7px; }
-  .stage.is-counter .card .name { font-size: 11px; }
-  .stage.is-counter .card .name small { font-size: 8px; }
-  .stage.is-counter .card .meta { font-size: 10px; }
-  .stage.is-counter .card .stock { font-size: 8px; }
-  .stage.is-counter .card-photo { height: 44px; max-height: 44px; flex-basis: 44px; }
-  .stage.is-counter .card-photo img { height: 44px; max-height: 44px; }
+  .stage.is-counter .card .sku { display: none; }
+  .stage.is-counter .card .name {
+    flex: 1 1 auto;
+    min-width: 0;
+    font-size: 13px;
+    line-height: 1.25;
+  }
+  .stage.is-counter .card .name small { display: block; font-size: 10px; }
+  .stage.is-counter .card .meta {
+    flex: 0 0 auto;
+    flex-direction: column;
+    align-items: flex-end;
+    margin-top: 0;
+    font-size: 12px;
+    gap: 2px;
+  }
+  .stage.is-counter .card .stock { display: none; }
+  .stage.is-counter .card-photo {
+    width: 48px;
+    height: 48px;
+    max-height: 48px;
+    flex: 0 0 48px;
+  }
+  .stage.is-counter .card-photo img {
+    width: 48px;
+    height: 48px;
+    max-height: 48px;
+  }
   .stage.is-counter .ticket,
   .stage.is-counter .bill-panel {
     border-left: 0;
     margin: 0;
     border-radius: 16px 16px 0 0;
     height: auto;
-    max-height: min(30vh, 260px);
+    max-height: min(42vh, 360px);
     min-height: 0;
     overflow: hidden;
     flex: 0 0 auto;
+    display: flex;
+    flex-direction: column;
+  }
+  body.has-cart .stage.is-counter .ticket,
+  body.has-cart .stage.is-counter .bill-panel {
+    height: 100%;
+    max-height: none;
+    min-height: 240px;
   }
   .stage.is-counter .ticket-sub,
   .stage.is-counter .ticket-pack { display: none; }
@@ -2019,9 +2060,13 @@ tr:last-child td { border-bottom: 0; }
   }
   body.bill-collapsed .stage.is-counter .workspace {
     grid-template-columns: 1fr;
+    grid-template-rows: minmax(0, 1fr) auto;
   }
-  body.bill-collapsed .stage.is-counter .bill-panel {
+  body.bill-collapsed .stage.is-counter .bill-panel,
+  body.bill-collapsed.has-cart .stage.is-counter .bill-panel {
     max-height: none;
+    min-height: 0;
+    height: auto;
   }
   body.bill-collapsed .stage.is-counter .ticket-head {
     flex: 0 0 auto;
@@ -2059,13 +2104,16 @@ tr:last-child td { border-bottom: 0; }
   .stage.is-counter .lines {
     flex: 1 1 auto;
     min-height: 0;
-    max-height: 12vh;
+    max-height: none;
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
   }
   body.has-cart .stage.is-counter .lines {
     display: block;
-    min-height: 48px;
+    min-height: 120px;
+  }
+  .stage.is-counter .line {
+    padding: 8px 6px;
   }
   .stage.is-counter .pay {
     position: relative;
@@ -2128,6 +2176,12 @@ tr:last-child td { border-bottom: 0; }
 
 @media (max-width: 640px) {
   .catalog { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; }
+  .stage.is-counter .catalog {
+    display: flex;
+    flex-direction: column;
+    grid-template-columns: none;
+    gap: 4px;
+  }
   .card { min-height: 54px; padding: 5px 6px; }
   .card .name { font-size: 11px; }
   .card .sku { font-size: 7px; }
