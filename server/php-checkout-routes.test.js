@@ -77,7 +77,10 @@ test("PHP customer insert bind types match placeholders", () => {
   assert.match(read("js/master.js"), /id="note-image"/);
   assert.match(read("js/app.js"), /notice-thumb/);
 
-  assert.match(core, /function pos_line_amount_for_item/);
+  assert.match(core, /function pos_ensure_business_columns/);
+  assert.match(core, /function pos_is_footwear_shop/);
+  assert.match(crud, /pos_is_footwear_shop/);
+  assert.match(crud, /FW-/);
   assert.match(core, /function pos_item_unit/);
   assert.match(read("pos-checkout.php"), /pos_line_amount_for_item/);
   assert.match(crud, /pos_line_amount_for_item/);

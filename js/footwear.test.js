@@ -44,7 +44,7 @@ test("Item form and Counter expose colour, size, and girls/boys", () => {
   assert.match(index, /class="footwear-only"/);
   assert.match(login, /<option>Footwear<\/option>/);
   assert.match(master, /"Footwear"/);
-  assert.match(app, /POSFootwear\?\.isFootwearShop/);
+  assert.match(app, /looksFootwear && !globalThis.POSFootwear/);
   assert.match(app, /wearer_type/);
   const crud = readFileSync(path.join(root, "server/crud.js"), "utf8");
   assert.match(crud, /wearer_type/);

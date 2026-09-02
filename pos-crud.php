@@ -28,15 +28,19 @@ function pos_crud_dispatch($path, $method, $body, $bid, $auth, $branchId, $uid) 
   if ($path === "items" && $method === "POST") {
     $name = trim((string) ($body["name"] ?? ""));
     if ($name === "") pos_send(400, ["error" => "Item name is required"]);
+    pos_ensure_business_columns();
+    pos_ensure_item_unit_columns();
+    $bizRows = pos_q("SELECT category, business_type FROM businesses WHERE id = ? LIMIT 1", "s", [$bid]);
+    $footwear = pos_is_footwear_shop($bizRows[0] ?? []);
     $id = pos_uuid();
     $n = pos_next_seq("item", $bid, 7);
-    $code = $body["code"] ?? ("SP-" . str_pad((string) $n, 3, "0", STR_PAD_LEFT));
-    $unit = pos_item_unit($body["base_unit"] ?? $body["unit"] ?? "GM");
-    pos_ensure_item_unit_columns();
+    $code = $body["code"] ?? (($footwear ? "FW-" : "SP-") . str_pad((string) $n, 3, "0", STR_PAD_LEFT));
+    $unit = pos_item_unit($body["base_unit"] ?? $body["unit"] ?? ($footwear ? "PCS" : "GM"));
     $image = pos_item_image_url($body);
     $color = trim((string) ($body["color"] ?? "")) ?: null;
     $size = trim((string) ($body["size"] ?? "")) ?: null;
     $wearer = pos_item_wearer($body["wearer_type"] ?? "") ?: null;
+    $category = trim((string) ($body["category"] ?? "")) ?: ($footwear ? "Footwear" : "Whole Spices");
     pos_q(
       "INSERT INTO items (
          id, code, name, local_name, category, subcategory, color, size, wearer_type, base_unit,
@@ -45,7 +49,7 @@ function pos_crud_dispatch($path, $method, $body, $bid, $auth, $branchId, $uid) 
        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'active', ?)",
       "ssssssssssddddssdds",
       [
-        $id, $code, $name, $body["local_name"] ?? null, $body["category"] ?? "Whole Spices",
+        $id, $code, $name, $body["local_name"] ?? null, $category,
         $body["subcategory"] ?? null, $color, $size, $wearer, $unit,
         (float) ($body["purchase_rate"] ?? 0), (float) ($body["retail_rate"] ?? 0),
         (float) ($body["b2b_rate"] ?? 0), (float) ($body["gst_rate"] ?? 5),
@@ -63,12 +67,16 @@ function pos_crud_dispatch($path, $method, $body, $bid, $auth, $branchId, $uid) 
 
   if (preg_match('#^items/([^/]+)$#', $path, $m) && $method === "PUT") {
     $itemId = $m[1];
-    $unit = pos_item_unit($body["base_unit"] ?? $body["unit"] ?? "GM");
+    pos_ensure_business_columns();
     pos_ensure_item_unit_columns();
+    $bizRows = pos_q("SELECT category, business_type FROM businesses WHERE id = ? LIMIT 1", "s", [$bid]);
+    $footwear = pos_is_footwear_shop($bizRows[0] ?? []);
+    $unit = pos_item_unit($body["base_unit"] ?? $body["unit"] ?? ($footwear ? "PCS" : "GM"));
     $image = pos_item_image_url($body);
     $color = trim((string) ($body["color"] ?? "")) ?: null;
     $size = trim((string) ($body["size"] ?? "")) ?: null;
     $wearer = pos_item_wearer($body["wearer_type"] ?? "") ?: null;
+    $category = trim((string) ($body["category"] ?? "")) ?: ($footwear ? "Footwear" : "Whole Spices");
     $imageSql = "";
     $imageType = "";
     $imageVal = [];
@@ -84,7 +92,7 @@ function pos_crud_dispatch($path, $method, $body, $bid, $auth, $branchId, $uid) 
       "ssssssssddddsdds{$imageType}ss",
       array_merge(
         [
-          $body["name"] ?? "", $body["local_name"] ?? null, $body["category"] ?? "Whole Spices",
+          $body["name"] ?? "", $body["local_name"] ?? null, $category,
           $body["subcategory"] ?? null, $color, $size, $wearer, $unit,
           (float) ($body["purchase_rate"] ?? 0), (float) ($body["retail_rate"] ?? 0),
           (float) ($body["b2b_rate"] ?? 0), (float) ($body["gst_rate"] ?? 5),

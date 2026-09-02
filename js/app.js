@@ -2803,6 +2803,16 @@ async function boot() {
     state.businessMeta = me.business || null;
     state.impersonating = Boolean(me.impersonating);
     state.impersonator = me.impersonator || null;
+    const looksFootwear = /(^|[^a-z])(footwear|shoes?)([^a-z]|$)/.test(
+      [me.business?.category, me.business?.business_type].filter(Boolean).join(" ").toLowerCase(),
+    );
+    if (looksFootwear && !globalThis.POSFootwear) {
+      const bar = $("expired-banner");
+      if (bar && bar.hidden) {
+        bar.hidden = false;
+        bar.textContent = "Footwear shop detected but js/footwear.js did not load. Hard-refresh, or re-upload that file.";
+      }
+    }
     applyFootwearMode();
     fillItemUnitSelect(defaultItemUnit());
     refreshItemUnitLabels();
