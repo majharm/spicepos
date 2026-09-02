@@ -859,7 +859,7 @@ function renderCatalog() {
       return `<button class="card" type="button" data-add="${escapeHtml(i.id)}">
         ${cardPhotoHtml(i)}
         <div class="sku">${escapeHtml(itemVariantText(i) || `${i.category} / ${i.subcategory || "—"}`)}</div>
-        <div class="name">${escapeHtml(i.name)} <small>${escapeHtml(i.hsn ? `HSN ${i.hsn}` : "")}</small></div>
+        <div class="name">${escapeHtml(i.name)} <small>${escapeHtml(itemVariantText(i) || (i.hsn ? `HSN ${i.hsn}` : ""))}</small></div>
         <div class="meta"><span>${escapeHtml(fmtQty(i.stock_gm, i))}</span><span>${money(rateFor(i))}${escapeHtml(POSUnits.rateSuffix(itemUnit(i)))}</span></div>
         <div class="stock ${low ? "low" : "ok"}">${escapeHtml(i.code)} · GST ${escapeHtml(i.gst_rate)}%</div>
       </button>`;
@@ -894,7 +894,7 @@ function renderCart() {
         const step = POSUnits.step(itemUnit(item));
         return `<div class="line">
           <div class="line-info">
-            <div class="who">${escapeHtml(item.name)}</div>
+            <div class="who">${escapeHtml(itemVariantText(item) ? `${item.name} · ${itemVariantText(item)}` : item.name)}</div>
             <div class="pack">${escapeHtml(itemVariantText(item) || `${item.category} / ${item.subcategory || "—"}`)} · ${escapeHtml(fmtQty(line.qtyGm, item))}</div>
           </div>
           <div class="line-ops">

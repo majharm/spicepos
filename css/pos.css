@@ -1108,6 +1108,7 @@ tr:last-child td { border-bottom: 0; }
 .settings.wide .full { grid-column: 1 / -1; }
 body:not(.footwear-mode) .footwear-only { display: none !important; }
 body.footwear-mode #pack-choice { display: none; }
+body.footwear-mode.counter-mode .stage.is-counter .card .sku { display: block; font-size: 11px; }
 .wearer-chip {
   display: inline-block;
   margin-left: 6px;
