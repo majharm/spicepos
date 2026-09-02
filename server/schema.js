@@ -77,6 +77,9 @@ export async function ensureSchema() {
   await addColumn("items", "image_url", "MEDIUMTEXT NULL");
   await addColumn("items", "unit", "VARCHAR(32) NULL");
   await addColumn("items", "base_unit", "VARCHAR(32) NOT NULL DEFAULT 'GM'");
+  await addColumn("items", "color", "VARCHAR(64) NULL");
+  await addColumn("items", "size", "VARCHAR(32) NULL");
+  await addColumn("items", "wearer_type", "VARCHAR(16) NULL");
 
   await create(`CREATE TABLE IF NOT EXISTS inventory_units (
     id VARCHAR(255) PRIMARY KEY,

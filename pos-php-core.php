@@ -337,6 +337,9 @@ function pos_ensure_item_unit_columns() {
     "unit" => "VARCHAR(32) NULL",
     "hsn" => "VARCHAR(32) NULL",
     "image_url" => "MEDIUMTEXT NULL",
+    "color" => "VARCHAR(64) NULL",
+    "size" => "VARCHAR(32) NULL",
+    "wearer_type" => "VARCHAR(16) NULL",
   ] as $name => $def) {
     $res = $db->query("SHOW COLUMNS FROM items LIKE '" . $db->real_escape_string($name) . "'");
     if ($res && $res->num_rows === 0) {
@@ -353,6 +356,29 @@ function pos_item_image_url($body) {
   if (strpos($img, "data:image/") !== 0) pos_send(400, ["error" => "Item image must be an uploaded image"]);
   if (strlen($img) > 6000000) pos_send(400, ["error" => "Item image is too large"]);
   return $img;
+}
+
+function pos_item_bill_name($item) {
+  if (!is_array($item)) return "Item";
+  $name = trim((string) ($item["name"] ?? "Item"));
+  if ($name === "") $name = "Item";
+  $type = strtolower(trim((string) ($item["wearer_type"] ?? "")));
+  $wear = $type === "girls" || $type === "girl" ? "Girls" : ($type === "boys" || $type === "boy" ? "Boys" : ($type === "unisex" ? "Unisex" : ""));
+  $color = trim((string) ($item["color"] ?? ""));
+  $size = trim((string) ($item["size"] ?? ""));
+  $bits = [];
+  if ($wear !== "") $bits[] = $wear;
+  if ($color !== "") $bits[] = $color;
+  if ($size !== "") $bits[] = "Sz " . $size;
+  return $bits ? $name . " (" . implode(" · ", $bits) . ")" : $name;
+}
+
+function pos_item_wearer($raw) {
+  $v = strtolower(trim((string) $raw));
+  if ($v === "girl" || $v === "girls") return "girls";
+  if ($v === "boy" || $v === "boys") return "boys";
+  if ($v === "unisex" || $v === "kids" || $v === "kid") return "unisex";
+  return "";
 }
 
 function pos_item_unit($item) {
@@ -530,6 +556,8 @@ function pos_staff_me_payload($staff) {
       "id" => $staff["business"]["id"] ?? null,
       "name" => $staff["business"]["name"] ?? null,
       "status" => $status,
+      "category" => $staff["business"]["category"] ?? null,
+      "business_type" => $staff["business"]["business_type"] ?? null,
       "plan_id" => $staff["business"]["plan_id"] ?? null,
       "subscription_expires_at" => $staff["business"]["subscription_expires_at"] ?? null,
     ],
@@ -1381,6 +1409,8 @@ function pos_php_dispatch($path, $method, $rawBody) {
           "id" => $business["id"] ?? null,
           "name" => $business["name"] ?? null,
           "status" => $status,
+          "category" => $business["category"] ?? null,
+          "business_type" => $business["business_type"] ?? null,
           "subscription_expires_at" => $business["subscription_expires_at"] ?? null,
         ],
       ]);

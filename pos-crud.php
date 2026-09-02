@@ -34,16 +34,19 @@ function pos_crud_dispatch($path, $method, $body, $bid, $auth, $branchId, $uid) 
     $unit = pos_item_unit($body["base_unit"] ?? $body["unit"] ?? "GM");
     pos_ensure_item_unit_columns();
     $image = pos_item_image_url($body);
+    $color = trim((string) ($body["color"] ?? "")) ?: null;
+    $size = trim((string) ($body["size"] ?? "")) ?: null;
+    $wearer = pos_item_wearer($body["wearer_type"] ?? "") ?: null;
     pos_q(
       "INSERT INTO items (
-         id, code, name, local_name, category, subcategory, base_unit,
+         id, code, name, local_name, category, subcategory, color, size, wearer_type, base_unit,
          purchase_rate, retail_rate, b2b_rate, gst_rate, hsn, image_url, stock_gm,
          reorder_level_gm, status, business_id
-       ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'active', ?)",
-      "sssssssddddssdds",
+       ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'active', ?)",
+      "ssssssssssddddssdds",
       [
         $id, $code, $name, $body["local_name"] ?? null, $body["category"] ?? "Whole Spices",
-        $body["subcategory"] ?? null, $unit,
+        $body["subcategory"] ?? null, $color, $size, $wearer, $unit,
         (float) ($body["purchase_rate"] ?? 0), (float) ($body["retail_rate"] ?? 0),
         (float) ($body["b2b_rate"] ?? 0), (float) ($body["gst_rate"] ?? 5),
         trim((string) ($body["hsn"] ?? $body["local_name"] ?? "")) ?: null,
@@ -63,6 +66,9 @@ function pos_crud_dispatch($path, $method, $body, $bid, $auth, $branchId, $uid) 
     $unit = pos_item_unit($body["base_unit"] ?? $body["unit"] ?? "GM");
     pos_ensure_item_unit_columns();
     $image = pos_item_image_url($body);
+    $color = trim((string) ($body["color"] ?? "")) ?: null;
+    $size = trim((string) ($body["size"] ?? "")) ?: null;
+    $wearer = pos_item_wearer($body["wearer_type"] ?? "") ?: null;
     $imageSql = "";
     $imageType = "";
     $imageVal = [];
@@ -72,14 +78,14 @@ function pos_crud_dispatch($path, $method, $body, $bid, $auth, $branchId, $uid) 
       $imageVal = [$image === "" ? null : $image];
     }
     pos_q(
-      "UPDATE items SET name=?, local_name=?, category=?, subcategory=?, base_unit=?,
+      "UPDATE items SET name=?, local_name=?, category=?, subcategory=?, color=?, size=?, wearer_type=?, base_unit=?,
          purchase_rate=?, retail_rate=?, b2b_rate=?, gst_rate=?, hsn=?, stock_gm=?, reorder_level_gm=?, status=?{$imageSql}
        WHERE id=? AND business_id=?",
-      "sssssddddsdds{$imageType}ss",
+      "ssssssssddddsdds{$imageType}ss",
       array_merge(
         [
           $body["name"] ?? "", $body["local_name"] ?? null, $body["category"] ?? "Whole Spices",
-          $body["subcategory"] ?? null, $unit,
+          $body["subcategory"] ?? null, $color, $size, $wearer, $unit,
           (float) ($body["purchase_rate"] ?? 0), (float) ($body["retail_rate"] ?? 0),
           (float) ($body["b2b_rate"] ?? 0), (float) ($body["gst_rate"] ?? 5),
           trim((string) ($body["hsn"] ?? "")) ?: null,
@@ -199,7 +205,7 @@ function pos_crud_dispatch($path, $method, $body, $bid, $auth, $branchId, $uid) 
              ) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
             "ssssdddddds",
             [
-              pos_uuid(), $id, $line["item"]["id"], $line["item"]["name"], $line["qty"], $line["rate"],
+              pos_uuid(), $id, $line["item"]["id"], pos_item_bill_name($line["item"]), $line["qty"], $line["rate"],
               $line["gstRate"], $line["amount"], $line["gstAmount"], $line["total"], $bid,
             ]
           );
