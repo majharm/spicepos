@@ -846,6 +846,7 @@ body.bill-collapsed .bill-toggle[data-count]:not([data-count="0"])::after {
 }
 .line .who { font-weight: 700; }
 .line .pack { color: var(--muted); font-size: 12px; }
+.line-amt { text-align: right; margin-top: 4px; }
 .qty { display: flex; align-items: center; gap: 6px; }
 .qty button {
   width: 32px;
@@ -2114,16 +2115,16 @@ tr:last-child td { border-bottom: 0; }
     min-height: 0;
   }
   .stage.is-counter .line {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto auto;
+    display: flex;
     align-items: center;
     gap: 6px;
-    padding: 4px 4px;
+    padding: 3px 2px;
   }
-  .stage.is-counter .line > div:first-child {
+  .stage.is-counter .line-info {
+    flex: 1 1 auto;
     min-width: 0;
   }
-  .stage.is-counter .line > div:first-child .pack {
+  .stage.is-counter .line-info .pack {
     display: none;
   }
   .stage.is-counter .line .who {
@@ -2134,8 +2135,11 @@ tr:last-child td { border-bottom: 0; }
     overflow: hidden;
     text-overflow: ellipsis;
   }
-  .stage.is-counter .line > div:last-child {
-    display: contents;
+  .stage.is-counter .line-ops {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 0 0 auto;
   }
   .stage.is-counter .line .qty {
     gap: 4px;
@@ -2153,8 +2157,8 @@ tr:last-child td { border-bottom: 0; }
     min-height: 28px;
     border-radius: 8px;
   }
-  .stage.is-counter .line > div:last-child .pack {
-    margin-top: 0 !important;
+  .stage.is-counter .line-amt {
+    margin-top: 0;
     min-width: 3.6em;
     font-size: 12px;
     font-weight: 800;

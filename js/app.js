@@ -808,17 +808,17 @@ function renderCart() {
         if (!item) return "";
         const step = POSUnits.step(itemUnit(item));
         return `<div class="line">
-          <div>
+          <div class="line-info">
             <div class="who">${escapeHtml(item.name)}</div>
             <div class="pack">${escapeHtml(item.category)} / ${escapeHtml(item.subcategory || "—")} · ${escapeHtml(fmtQty(line.qtyGm, item))}</div>
           </div>
-          <div>
+          <div class="line-ops">
             <div class="qty">
               <button type="button" data-chg="${escapeHtml(item.id)}" data-d="${-step}">−</button>
               <span>${escapeHtml(fmtQty(line.qtyGm, item))}</span>
               <button type="button" data-chg="${escapeHtml(item.id)}" data-d="${step}">+</button>
             </div>
-            <div class="pack" style="text-align:right;margin-top:4px">${money(lineAmt(item, line.qtyGm))}</div>
+            <div class="pack line-amt">${money(lineAmt(item, line.qtyGm))}</div>
           </div>
         </div>`;
       })

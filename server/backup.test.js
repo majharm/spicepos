@@ -167,8 +167,13 @@ test("HTML and CSS cache stickers match deploy53", () => {
   assert.match(pos, /stage:not\(\.is-counter\) > \.view:not\(\[hidden\]\)/);
   assert.match(pos, /overscroll-behavior: contain/);
   assert.match(pos, /mobile-counter: list scroll \+ compact order list/);
-  assert.match(pos, /grid-template-columns: minmax\(0, 1fr\) auto auto/);
+  assert.match(pos, /stage\.is-counter \.line-ops/);
+  assert.match(pos, /stage\.is-counter \.line-amt/);
   assert.doesNotMatch(pos, /minmax\(240px, 48vh\)/);
+  const appJs = readFileSync(path.join(root, "js/app.js"), "utf8");
+  assert.match(appJs, /class="line-info"/);
+  assert.match(appJs, /class="line-ops"/);
+  assert.match(appJs, /class="pack line-amt"/);
   assert.match(pos, /body\.counter-mode \.platform-notices/);
   assert.match(pos, /compact-catalog: smaller item cards/);
   assert.match(pos, /bill-slider: hide unhide/);
