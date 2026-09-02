@@ -128,6 +128,10 @@ test("PHP and HTML wire master admin backup", () => {
   );
 });
 
+test("HTML and CSS cache stickers match deploy52", () => {
+  for (const name of ["index.html", "master.html", "login.html", "setup.html"]) {
+    const html = readFileSync(path.join(root, name), "utf8");
+    assert.match(html, /20260901deploy52/);
 test("HTML and CSS cache stickers match deploy58", () => {
   for (const name of ["index.html", "master.html", "login.html", "setup.html"]) {
     const html = readFileSync(path.join(root, name), "utf8");
@@ -171,6 +175,7 @@ test("HTML and CSS cache stickers match deploy58", () => {
   assert.match(pos, /po-table/);
   assert.match(pos, /stage:not\(\.is-counter\) > \.view:not\(\[hidden\]\)/);
   assert.match(pos, /overscroll-behavior: contain/);
+  assert.match(pos, /mobile-counter: list scroll \+ taller order box/);
   assert.match(pos, /mobile-counter: list scroll \+ compact order list/);
   assert.match(pos, /body\.footwear-mode #pack-choice/);
   assert.match(pos, /stage\.is-counter \.line-ops/);
