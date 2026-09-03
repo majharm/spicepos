@@ -415,6 +415,7 @@ export function registerCrud(app) {
             bid(),
           ],
         );
+        let barcodeCount = 0;
         for (let i = 0; i < built.length; i++) {
           const line = built[i];
           const lineId = crypto.randomUUID();
@@ -442,7 +443,7 @@ export function registerCrud(app) {
             [line.qty, line.item.id, bid()],
           );
           const src = lines[i] || {};
-          await onPurchaseLineSaved(conn, {
+          const batch = await onPurchaseLineSaved(conn, {
             businessId: bid(),
             branchId: null,
             userId: null,
@@ -454,13 +455,18 @@ export function registerCrud(app) {
             qty: line.qty,
             rate: line.rate,
             barcode: src.barcode,
+            barcodes: src.barcodes,
             batchNo: src.batch_no || src.batchNo,
             expiry: src.expiry_date || src.expiryDate,
             mrp: src.mrp,
           });
+          barcodeCount += Array.isArray(batch?.barcodes)
+            ? batch.barcodes.filter((r) => r.barcode).length
+            : (batch?.barcode ? 1 : 0);
         }
         const [rows] = await conn.query("SELECT * FROM purchases WHERE id = ?", [id]);
         const purchase = rows[0];
+        purchase.barcode_count = barcodeCount;
         await recordCreditPurchase(conn, {
           supplier,
           total,
@@ -473,7 +479,9 @@ export function registerCrud(app) {
       });
       res.json({ ok: true, purchase });
     } catch (err) {
-      res.status(500).json({ error: String(err.message) });
+      const msg = String(err.message);
+      const status = /barcodes for|Duplicate barcode|Max 500|Quantity required|already in stock/i.test(msg) ? 400 : 500;
+      res.status(status).json({ error: msg });
     }
   });
 

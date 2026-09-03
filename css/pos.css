@@ -1803,6 +1803,41 @@ body.footwear-mode.counter-mode .stage.is-counter .card .sku { display: block; f
 .po-table .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .po-table tbody tr { cursor: pointer; }
 .po-table tbody tr.is-checked td { background: #ecfdf5; }
+.po-table tbody tr.po-bc-row { cursor: default; }
+.po-table tbody tr.po-bc-row td {
+  background: #f8fafc;
+  padding: 8px 12px 12px;
+}
+.po-bc-box { display: grid; gap: 8px; }
+.po-bc-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: baseline;
+}
+.po-bc-scan,
+.po-bc-list {
+  width: 100%;
+  max-width: 560px;
+  min-height: 40px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: #fff;
+}
+.po-bc-list {
+  min-height: 72px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 13px;
+}
+.po-bc-saved {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  max-height: 240px;
+  overflow: auto;
+}
+.po-bc-saved code { font-size: 13px; }
 .po-table input[type="number"] {
   width: 100%;
   min-width: 88px;

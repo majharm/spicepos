@@ -14,6 +14,13 @@ test("EAN-13 checksum and in-store generator", () => {
   assert.equal(B.isValidEan13(code), true);
 });
 
+test("manual barcode list keeps typed codes and rejects duplicates", () => {
+  assert.deepEqual(B.parseManualCodes("A1\nB2\nC3"), ["A1", "B2", "C3"]);
+  assert.deepEqual(B.parseManualCodes(["  X-1 ", "X-2"]), ["X-1", "X-2"]);
+  assert.equal(B.parseManualCodes("").length, 0);
+  assert.throws(() => B.parseManualCodes("A1\nA1"), /Duplicate barcode A1/);
+});
+
 test("CODE128 encodes digits and prints label copies", () => {
   const bits = B.encodeCode128("8901234567893");
   assert.ok(bits.startsWith("0000000000"));

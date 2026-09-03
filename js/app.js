@@ -210,7 +210,7 @@ const VIEW_META = {
   loyalty: { title: "Royalty points", subtitle: "Earn, redeem, tiers, birthday and referral" },
   packs: { title: "Packs", subtitle: "Pre-defined spice packs and compositions" },
   orders: { title: "Invoices", subtitle: "POS slip, official A4, or duplicate copy" },
-  purchases: { title: "Purchases", subtitle: "Supplier bills with GST and thermal print" },
+  purchases: { title: "Purchases", subtitle: "20 pcs = 20 barcodes you type or scan" },
   suppliers: { title: "Suppliers", subtitle: "Vendor contacts, address, and GSTIN" },
   stock: { title: "Stock", subtitle: "Adjustments, transfers, and low-stock alerts" },
   staff: { title: "Staff & roles", subtitle: "Users, roles, and access" },
@@ -1395,6 +1395,20 @@ function renderPoLines() {
       const unit = itemUnit(i);
       const qty = POSUnits.isCount(unit) ? 1 : 1000;
       const search = [i.name, i.hsn, i.code, i.category, i.subcategory].join(" ").toLowerCase();
+      const bcRow = POSUnits.isCount(unit)
+        ? `<tr class="po-bc-row" data-po-bc-row="${escapeHtml(i.id)}" hidden>
+        <td colspan="8">
+          <div class="po-bc-box">
+            <div class="po-bc-head">
+              <strong>Barcodes for ${escapeHtml(i.name)}</strong>
+              <span class="hint" data-po-bc-count="${escapeHtml(i.id)}">0 / ${qty} — type or scan, one per piece</span>
+            </div>
+            <input class="po-bc-scan" data-po-bc-scan="${escapeHtml(i.id)}" maxlength="64" placeholder="Scan or type one barcode, then Enter" autocomplete="off" />
+            <textarea class="po-bc-list" data-po-barcodes="${escapeHtml(i.id)}" rows="3" placeholder="One barcode per line — ${qty} pcs needs ${qty} codes"></textarea>
+          </div>
+        </td>
+      </tr>`
+        : "";
       return `<tr data-po-row="${escapeHtml(i.id)}" data-po-search="${escapeHtml(search)}" data-po-unit="${escapeHtml(unit)}">
         <td class="po-check"><input type="checkbox" data-po-item="${escapeHtml(i.id)}" /></td>
         <td class="po-name">${escapeHtml(i.name)}</td>
@@ -1404,18 +1418,56 @@ function renderPoLines() {
         <td><div class="po-rate-cell"><input type="number" min="0" step="0.01" value="${escapeHtml(i.purchase_rate)}" data-po-rate="${escapeHtml(i.id)}" /><span class="po-suffix">₹${escapeHtml(POSUnits.rateSuffix(unit))}</span></div></td>
         <td><input type="date" data-po-expiry="${escapeHtml(i.id)}" /></td>
         <td class="num" data-po-amt="${escapeHtml(i.id)}">${money(POSUnits.lineAmount(qty, i.purchase_rate, unit))}</td>
-      </tr>`;
+      </tr>${bcRow}`;
     })
     .join("")}</tbody></table></div>`;
   filterPoLines();
   paintPoTotals();
+  refreshPoBarcodeRows();
 }
 
 function filterPoLines() {
   const q = ($("po-item-search")?.value || "").trim().toLowerCase();
-  document.querySelectorAll("#po-lines tbody tr").forEach((tr) => {
+  document.querySelectorAll("#po-lines tbody tr[data-po-row]").forEach((tr) => {
     const hay = tr.dataset.poSearch || "";
-    tr.hidden = Boolean(q) && !hay.includes(q);
+    const hide = Boolean(q) && !hay.includes(q);
+    tr.hidden = hide;
+    const bc = document.querySelector(`[data-po-bc-row="${tr.dataset.poRow}"]`);
+    if (bc && hide) bc.hidden = true;
+  });
+  if (!q) refreshPoBarcodeRows();
+}
+
+function parsePoBarcodes(raw) {
+  if (globalThis.POSBarcode?.parseManualCodes) return POSBarcode.parseManualCodes(raw);
+  return String(raw || "")
+    .split(/[\s,;]+/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+function refreshPoBarcodeRows() {
+  document.querySelectorAll("[data-po-bc-row]").forEach((row) => {
+    const id = row.dataset.poBcRow;
+    const box = document.querySelector(`[data-po-item="${id}"]`);
+    const qty = Math.max(0, Math.round(Number(document.querySelector(`[data-po-qty="${id}"]`)?.value) || 0));
+    row.hidden = !box?.checked;
+    const ta = document.querySelector(`[data-po-barcodes="${id}"]`);
+    let n = 0;
+    try {
+      n = parsePoBarcodes(ta?.value).length;
+    } catch {
+      n = 0;
+    }
+    const countEl = document.querySelector(`[data-po-bc-count="${id}"]`);
+    if (countEl) {
+      countEl.textContent = `${n} / ${qty} — type or scan, one barcode per piece`;
+      countEl.className = n === qty && qty > 0 ? "hint ok" : "hint";
+    }
+    if (ta) {
+      ta.placeholder = `${qty} barcode${qty === 1 ? "" : "s"}, one per line`;
+      ta.rows = Math.min(8, Math.max(3, qty));
+    }
   });
 }
 
@@ -1425,6 +1477,7 @@ function paintPoLineAmount(itemId) {
   const unit = document.querySelector(`[data-po-row="${itemId}"]`)?.dataset.poUnit || "GM";
   const cell = document.querySelector(`[data-po-amt="${itemId}"]`);
   if (cell) cell.textContent = money(POSUnits.lineAmount(qty, rate, unit));
+  refreshPoBarcodeRows();
 }
 
 function paintPoTotals() {
@@ -1443,6 +1496,7 @@ function paintPoTotals() {
   });
   if ($("po-selected-meta")) $("po-selected-meta").textContent = `${checked.length} selected`;
   if ($("po-total")) $("po-total").textContent = money(total);
+  refreshPoBarcodeRows();
 }
 
 function renderPacksTable() {
@@ -1972,7 +2026,7 @@ async function loadOrders() {
 let purchaseCache = [];
 let selectedPurchaseId = null;
 
-function showPurchase(p) {
+async function showPurchase(p) {
   selectedPurchaseId = p.id;
   document.querySelectorAll("#purchases-list .order-item").forEach((btn) => {
     btn.classList.toggle("is-selected", btn.dataset.pid === p.id);
@@ -1987,7 +2041,23 @@ function showPurchase(p) {
     <div class="print-actions">
       <button class="btn primary" type="button" data-print-purchase="${escapeHtml(p.id)}">Print purchase bill</button>
       <button class="btn" type="button" data-print-po-barcodes="${escapeHtml(p.id)}">Print barcodes</button>
-    </div>`;
+    </div>
+    <div id="purchase-barcodes"><p class="hint">Loading barcodes…</p></div>`;
+  try {
+    const rows = await api(`/api/barcodes?purchase_id=${encodeURIComponent(p.id)}`);
+    const codes = (Array.isArray(rows) ? rows : []).filter((r) => r.barcode);
+    const box = $("purchase-barcodes");
+    if (!box) return;
+    box.innerHTML = codes.length
+      ? `<p class="hint ok">${codes.length} barcode${codes.length === 1 ? "" : "s"} on this purchase</p>
+         <ul class="po-bc-saved">${codes
+           .map((r) => `<li><code>${escapeHtml(r.barcode)}</code> · ${escapeHtml(r.item_name || "")}</li>`)
+           .join("")}</ul>`
+      : '<p class="hint">No barcodes on this purchase.</p>';
+  } catch {
+    const box = $("purchase-barcodes");
+    if (box) box.innerHTML = "";
+  }
 }
 
 async function loadPurchases() {
@@ -2350,7 +2420,6 @@ $("items-table").addEventListener("click", async (e) => {
     if ($("item-mrp")) $("item-mrp").value = i.mrp || i.retail_rate || "";
     if ($("item-barcode")) $("item-barcode").value = i.barcode || "";
     if ($("item-mfr-barcode")) $("item-mfr-barcode").value = "";
-    if ($("item-barcode-qty")) $("item-barcode-qty").value = "";
     $("item-b2b").value = i.b2b_rate;
     $("item-purchase").value = i.purchase_rate;
     $("item-gst").value = i.gst_rate;
@@ -2424,13 +2493,15 @@ $("purchase-pane").addEventListener("click", async (e) => {
   if (!bcBtn) return;
   try {
     const rows = await api(`/api/barcodes?purchase_id=${encodeURIComponent(bcBtn.dataset.printPoBarcodes)}`);
-    const labels = (Array.isArray(rows) ? rows : []).map((r) => ({
-      name: r.item_name,
-      barcode: r.barcode,
-      mrp: r.label_mrp || r.mrp,
-      rate: r.retail_rate,
-      copies: Math.max(1, POSUnits.isCount(itemUnit(state.items.find((i) => i.id === r.item_id) || {})) ? Math.round(Number(r.qty_gm) || 1) : 1),
-    }));
+    const labels = (Array.isArray(rows) ? rows : [])
+      .filter((r) => r.barcode)
+      .map((r) => ({
+        name: r.item_name,
+        barcode: r.barcode,
+        mrp: r.label_mrp || r.mrp,
+        rate: r.retail_rate,
+        copies: 1,
+      }));
     if (!labels.length) throw new Error("No purchase barcodes yet — save this bill again after the update");
     if (!globalThis.POSBarcode?.printLabels(labels, 1)) setHint("Allow pop-ups to print barcodes", "error");
   } catch (err) {
@@ -2735,7 +2806,6 @@ $("item-form").addEventListener("submit", async (e) => {
     mrp: $("item-mrp")?.value || "",
     barcode: POSUnits.isCount(unit) ? ($("item-barcode")?.value || "") : "",
     mfr_barcode: POSUnits.isCount(unit) ? ($("item-mfr-barcode")?.value || "") : "",
-    barcode_qty: POSUnits.isCount(unit) ? Number($("item-barcode-qty")?.value) || 0 : 0,
     stock_gm: POSUnits.toBase($("item-stock").value, unit),
     image_url: state.itemImage || "",
   };
@@ -2926,11 +2996,41 @@ $("purchase-form").addEventListener("input", (e) => {
     filterPoLines();
     return;
   }
-  if (e.target.matches("[data-po-qty],[data-po-rate]")) {
-    const id = e.target.dataset.poQty || e.target.dataset.poRate;
-    if (id) paintPoLineAmount(id);
+  if (e.target.matches("[data-po-qty],[data-po-rate],[data-po-barcodes]")) {
+    const id = e.target.dataset.poQty || e.target.dataset.poRate || e.target.dataset.poBarcodes;
+    if (id && (e.target.dataset.poQty || e.target.dataset.poRate)) paintPoLineAmount(id);
     paintPoTotals();
   }
+});
+$("po-lines")?.addEventListener("keydown", (e) => {
+  if (e.key !== "Enter") return;
+  const scan = e.target.closest("[data-po-bc-scan]");
+  if (!scan) return;
+  e.preventDefault();
+  const id = scan.dataset.poBcScan;
+  const code = globalThis.POSBarcode?.cleanCode ? POSBarcode.cleanCode(scan.value) : String(scan.value || "").trim();
+  if (!code) return;
+  const ta = document.querySelector(`[data-po-barcodes="${id}"]`);
+  if (!ta) return;
+  let existing = [];
+  try {
+    existing = parsePoBarcodes(ta.value);
+  } catch (err) {
+    $("po-hint").textContent = err.message;
+    $("po-hint").className = "hint error";
+    return;
+  }
+  if (existing.includes(code)) {
+    $("po-hint").textContent = `Duplicate barcode ${code}`;
+    $("po-hint").className = "hint error";
+    scan.select();
+    return;
+  }
+  existing.push(code);
+  ta.value = existing.join("\n");
+  scan.value = "";
+  $("po-hint").textContent = "";
+  refreshPoBarcodeRows();
 });
 $("purchase-form").addEventListener("change", (e) => {
   if (e.target.matches("[data-po-item]")) paintPoTotals();
@@ -2945,14 +3045,30 @@ $("po-lines")?.addEventListener("click", (e) => {
 });
 $("purchase-form").addEventListener("submit", async (e) => {
   e.preventDefault();
-  const lines = [...document.querySelectorAll("[data-po-item]:checked")].map((box) => ({
-    item_id: box.dataset.poItem,
-    quantity_gm: Number(document.querySelector(`[data-po-qty="${box.dataset.poItem}"]`).value),
-    rate_per_kg: Number(document.querySelector(`[data-po-rate="${box.dataset.poItem}"]`).value),
-    expiry_date: document.querySelector(`[data-po-expiry="${box.dataset.poItem}"]`)?.value || "",
-  }));
+  const lines = [];
   try {
-    await api("/api/purchases", {
+    for (const box of document.querySelectorAll("[data-po-item]:checked")) {
+      const item = state.items.find((i) => i.id === box.dataset.poItem);
+      const unit = itemUnit(item || {});
+      const qtyInput = Number(document.querySelector(`[data-po-qty="${box.dataset.poItem}"]`)?.value);
+      const quantity_gm = POSUnits.toBase(qtyInput, unit);
+      let barcodes = [];
+      if (POSUnits.isCount(unit)) {
+        const pieces = Math.round(quantity_gm);
+        barcodes = parsePoBarcodes(document.querySelector(`[data-po-barcodes="${box.dataset.poItem}"]`)?.value);
+        if (barcodes.length !== pieces) {
+          throw new Error(`${item?.name || "Item"}: enter ${pieces} barcodes for ${pieces} pcs (entered ${barcodes.length})`);
+        }
+      }
+      lines.push({
+        item_id: box.dataset.poItem,
+        quantity_gm,
+        rate_per_kg: Number(document.querySelector(`[data-po-rate="${box.dataset.poItem}"]`)?.value),
+        expiry_date: document.querySelector(`[data-po-expiry="${box.dataset.poItem}"]`)?.value || "",
+        barcodes,
+      });
+    }
+    const saved = await api("/api/purchases", {
       method: "POST",
       body: JSON.stringify({
         supplier_id: $("po-supplier").value,
@@ -2962,7 +3078,8 @@ $("purchase-form").addEventListener("submit", async (e) => {
         lines,
       }),
     });
-    $("po-hint").textContent = "Saved";
+    const n = Number(saved?.purchase?.barcode_count || saved?.barcode_count) || 0;
+    $("po-hint").textContent = n ? `Saved — ${n} barcodes added` : "Saved";
     $("po-hint").className = "hint ok";
     $("purchase-form").reset();
     $("purchase-new").open = false;
@@ -3446,12 +3563,6 @@ document.getElementById("stock-mode")?.addEventListener("click", (e) => {
   state.stockMode = btn.dataset.stockMode;
   document.querySelectorAll("[data-stock-mode]").forEach((b) => b.classList.toggle("primary", b === btn));
   document.getElementById("view-stock")?.classList.toggle("is-advanced", state.stockMode === "advanced");
-});
-
-$("item-barcode-gen")?.addEventListener("click", () => {
-  const B = globalThis.POSBarcode;
-  if (!B || !$("item-barcode")) return;
-  $("item-barcode").value = B.generateEan13(Date.now() % 1000000, "20001");
 });
 
 ["bill-disc-type", "bill-disc-value", "loyalty-redeem"].forEach((id) => {

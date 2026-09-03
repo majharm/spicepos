@@ -6,8 +6,8 @@
     <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
     <title>ATAV POS</title>
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./css/pos.css?v=20260903deploy73" />
-    <link rel="stylesheet" href="./css/saas.css?v=20260903deploy73" />
+    <link rel="stylesheet" href="./css/pos.css?v=20260903deploy74" />
+    <link rel="stylesheet" href="./css/saas.css?v=20260903deploy74" />
   </head>
   <body>
     <div class="app" id="app">
@@ -233,13 +233,9 @@
             </label>
             <label>MRP ₹ <input id="item-mrp" type="number" step="0.01" min="0" /></label>
             <label class="pcs-barcode-only" id="item-barcode-wrap">Own barcode
-              <span class="barcode-field">
-                <input id="item-barcode" maxlength="32" placeholder="Auto on save" autocomplete="off" />
-                <button class="btn" type="button" id="item-barcode-gen">Generate</button>
-              </span>
+              <input id="item-barcode" maxlength="32" placeholder="Type or scan — not auto generated" autocomplete="off" />
             </label>
             <label class="pcs-barcode-only">Manufacturer barcode <input id="item-mfr-barcode" maxlength="32" placeholder="Optional factory code" autocomplete="off" /></label>
-            <label class="pcs-barcode-only">Qty-wise barcodes <input id="item-barcode-qty" type="number" min="0" max="500" step="1" placeholder="e.g. 10 unique pcs codes" /></label>
             <label><span id="item-retail-lab">Retail ₹/kg</span> <input id="item-retail" type="number" step="0.01" /></label>
             <label><span id="item-b2b-lab">B2B ₹/kg</span> <input id="item-b2b" type="number" step="0.01" /></label>
             <label><span id="item-purchase-lab">Purchase ₹/kg</span> <input id="item-purchase" type="number" step="0.01" /></label>
@@ -340,7 +336,7 @@
         </section>
         <section class="view" id="view-purchases" hidden>
           <h2 class="visually-hidden">Purchases</h2>
-          <p class="lede">Supplier purchase bills with thermal preview, input GST breakdown, and print.</p>
+          <p class="lede">Supplier bills. For Quantity (pcs), type or scan one barcode per piece — 20 pcs needs 20 codes. Nothing is auto generated.</p>
           <details class="purchase-new" id="purchase-new">
             <summary class="btn">New purchase</summary>
             <form class="settings purchase-form" id="purchase-form">
@@ -395,7 +391,7 @@
         </section>
         <section class="view" id="view-barcodes" hidden>
           <h2 class="visually-hidden">Barcodes</h2>
-          <p class="lede">Barcodes are only for Quantity (pcs) items — one unique code per piece, then print labels.</p>
+          <p class="lede">Quantity (pcs) only. Type or scan barcodes on Purchases (20 pcs = 20 codes). Use generate here only if you need extra labels.</p>
           <form class="settings wide" id="bc-qty-form">
             <label>Item
               <input id="bc-item-search" list="bc-item-list" placeholder="Search Quantity (pcs) item" />
@@ -828,16 +824,16 @@
         </section>
       </div>
     </aside>
-    <script src="./js/gst-supply.js?v=20260903deploy73" defer></script>
-    <script src="./js/pos-api.js?v=20260903deploy73" defer></script>
-    <script src="./js/units.js?v=20260903deploy73" defer></script>
-    <script src="./js/footwear.js?v=20260903deploy73" defer></script>
-    <script src="./js/discount.js?v=20260903deploy73" defer></script>
-    <script src="./js/loyalty.js?v=20260903deploy73" defer></script>
-    <script src="./js/barcode.js?v=20260903deploy73" defer></script>
-    <script src="./js/dev-mode.js?v=20260903deploy73" defer></script>
-    <script src="./js/invoice.js?v=20260903deploy73" defer></script>
-    <script src="./js/support.js?v=20260903deploy73" defer></script>
-    <script src="./js/app.js?v=20260903deploy73" defer></script>
+    <script src="./js/gst-supply.js?v=20260903deploy74" defer></script>
+    <script src="./js/pos-api.js?v=20260903deploy74" defer></script>
+    <script src="./js/units.js?v=20260903deploy74" defer></script>
+    <script src="./js/footwear.js?v=20260903deploy74" defer></script>
+    <script src="./js/discount.js?v=20260903deploy74" defer></script>
+    <script src="./js/loyalty.js?v=20260903deploy74" defer></script>
+    <script src="./js/barcode.js?v=20260903deploy74" defer></script>
+    <script src="./js/dev-mode.js?v=20260903deploy74" defer></script>
+    <script src="./js/invoice.js?v=20260903deploy74" defer></script>
+    <script src="./js/support.js?v=20260903deploy74" defer></script>
+    <script src="./js/app.js?v=20260903deploy74" defer></script>
   </body>
 </html>

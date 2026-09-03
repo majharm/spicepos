@@ -41,6 +41,21 @@
     return String(raw || "").trim().replace(/\s+/g, "");
   }
 
+  function parseManualCodes(raw) {
+    const parts = Array.isArray(raw) ? raw : String(raw ?? "").split(/[\s,;]+/);
+    const out = [];
+    const seen = Object.create(null);
+    for (const part of parts) {
+      const code = cleanCode(part);
+      if (!code) continue;
+      if (seen[code]) throw new Error("Duplicate barcode " + code);
+      seen[code] = true;
+      out.push(code);
+      if (out.length > 500) throw new Error("Max 500 barcodes at once");
+    }
+    return out;
+  }
+
   function code128Value(ch) {
     const c = ch.charCodeAt(0);
     if (c < 32 || c > 126) return -1;
@@ -168,6 +183,7 @@ body { margin: 0; font-family: "Segoe UI", sans-serif; color: #111; }
     isValidEan13,
     generateEan13,
     cleanCode,
+    parseManualCodes,
     encodeCode128,
     code128Svg,
     labelsDocument,
