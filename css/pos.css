@@ -2297,7 +2297,13 @@ body.footwear-mode.counter-mode .stage.is-counter .card .sku { display: block; f
     z-index: 7;
     flex: 0 0 auto;
   }
-  .scan-lane { grid-column: 1 / -1; }
+  .scan-lane {
+    grid-column: 1 / -1;
+    padding: 2px 10px;
+    box-shadow: 0 0 0 2px rgba(13, 148, 136, 0.14);
+  }
+  .scan-lane input { padding: 8px 0; font-size: 15px; }
+  .scan-status { max-width: 14ch; }
   .counter-topbar .search { grid-column: 1 / -1; min-width: 0; }
   .counter-tools { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1fr; }
   .counter-topbar .select,
@@ -2331,7 +2337,7 @@ body.footwear-mode.counter-mode .stage.is-counter .card .sku { display: block; f
     max-width: 100%;
   }
   body.has-cart .stage.is-counter .workspace {
-    grid-template-rows: minmax(0, 1fr) minmax(148px, 42vh);
+    grid-template-rows: minmax(0, 1fr) minmax(200px, 46vh);
   }
   .stage.is-counter .catalog {
     display: flex;
@@ -2530,6 +2536,7 @@ body.footwear-mode.counter-mode .stage.is-counter .card .sku { display: block; f
     overflow: hidden;
     text-overflow: ellipsis;
   }
+  .stage.is-counter .line-disc { display: none; }
   .stage.is-counter .line-ops {
     display: flex;
     align-items: center;
