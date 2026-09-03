@@ -128,10 +128,11 @@ test("PHP and HTML wire master admin backup", () => {
   );
 });
 
-test("HTML and CSS cache stickers match deploy64", () => {
+test("HTML and CSS cache stickers match deploy65", () => {
   for (const name of ["index.html", "master.html", "login.html", "setup.html"]) {
     const html = readFileSync(path.join(root, name), "utf8");
-    assert.match(html, /20260903deploy64/);
+    assert.match(html, /20260903deploy65/);
+    assert.doesNotMatch(html, /20260903deploy64/);
     assert.doesNotMatch(html, /20260903deploy63/);
     assert.doesNotMatch(html, /20260902deploy62/);
     assert.doesNotMatch(html, /20260902deploy61/);
@@ -261,5 +262,24 @@ test("HTML and CSS cache stickers match deploy64", () => {
   assert.match(index, /id="view-expenses"/);
   assert.match(index, /data-view="expenses"/);
   assert.match(index, /id="rep-this-fy"/);
+  assert.match(index, /id="acc-fy-year"/);
+  assert.match(index, /id="rep-fy-year"/);
+  assert.match(index, /id="exp-fy-year"/);
+  assert.match(index, /id="acc-print"/);
+  assert.match(index, /id="rep-print"/);
+  assert.match(index, /id="exp-print"/);
+  assert.match(appJs, /function fyYearList/);
+  assert.match(appJs, /function printFinance/);
+  assert.match(appJs, /data-print-report/);
+  assert.match(appJs, /printAccountsReport/);
+  assert.match(pos, /\.report-toolbar select/);
+  const login = readFileSync(path.join(root, "login.html"), "utf8");
+  assert.match(login, /class="auth-scene"/);
+  assert.match(login, /All types of businesses use ATAV POS/);
+  assert.match(login, /Bakery \/ cake shop/);
+  assert.match(login, />Bakery</);
+  assert.match(saas, /auth-scene-types/);
+  assert.match(saas, /auth-body:has\(\.auth-scene\)/);
+  assert.match(masterJs, /"Bakery"/);
   assert.doesNotMatch(index, /Local name/);
 });

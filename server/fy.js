@@ -27,3 +27,13 @@ export function fyRangeForToday(todayYmd) {
     asOf,
   };
 }
+
+/** Auto-generate Indian FY years (1 April–31 March) around today. */
+export function fyYearList(todayYmd, past = 10, future = 1) {
+  const current = indianFinancialYear(todayYmd).startYear;
+  const out = [];
+  for (let y = current + future; y >= current - past; y -= 1) {
+    out.push(indianFinancialYear(`${y}-04-01`));
+  }
+  return out;
+}

@@ -503,17 +503,117 @@ function fyRangeForToday() {
   };
 }
 
-function paintFyChip(id, fy) {
-  const el = $(id);
-  if (el) el.textContent = fy.label;
+function fyYearList(todayYmd, past = 10, future = 1) {
+  const current = indianFinancialYear(todayYmd || ymd()).startYear;
+  const out = [];
+  for (let y = current + future; y >= current - past; y -= 1) {
+    out.push(indianFinancialYear(`${y}-04-01`));
+  }
+  return out;
 }
 
-function applyFyRange(fromId, toId, extraId) {
+function fillFyYearSelect(selectId, startYear) {
+  const el = $(selectId);
+  if (!el) return;
+  const years = fyYearList();
+  const want = String(startYear ?? indianFinancialYear(ymd()).startYear);
+  el.innerHTML = years
+    .map((fy) => `<option value="${fy.startYear}">${escapeHtml(`${fy.label} · 1 Apr ${fy.startYear} – 31 Mar ${fy.startYear + 1}`)}</option>`)
+    .join("");
+  if ([...el.options].some((opt) => opt.value === want)) el.value = want;
+}
+
+function applyFyYear(startYear, fromId, toId, extraId) {
+  const fy = indianFinancialYear(`${Number(startYear) || indianFinancialYear(ymd()).startYear}-04-01`);
+  if ($(fromId)) $(fromId).value = fy.from;
+  if ($(toId)) $(toId).value = fy.to;
+  if (extraId && $(extraId)) {
+    const today = ymd();
+    $(extraId).value = today < fy.from ? fy.from : today > fy.to ? fy.to : today;
+  }
+  return fy;
+}
+
+function applyFyRange(fromId, toId, extraId, selectId) {
   const range = fyRangeForToday();
   if ($(fromId)) $(fromId).value = range.from;
   if ($(toId)) $(toId).value = range.to;
   if (extraId && $(extraId)) $(extraId).value = range.asOf || ymd();
+  if (selectId) fillFyYearSelect(selectId, range.startYear);
   return range;
+}
+
+function syncFySelectFromDates(selectId, fromId) {
+  fillFyYearSelect(selectId, indianFinancialYear($(fromId)?.value || ymd()).startYear);
+}
+
+const ACC_REPORT_TITLES = {
+  receivables: "Receivables",
+  payables: "Payables",
+  ledger: "Day book",
+  coa: "Chart of accounts",
+  journal: "Journal",
+  "trial-balance": "Trial balance",
+  "profit-loss": "Profit & loss",
+  "balance-sheet": "Balance sheet",
+  "cash-book": "Cash book",
+};
+
+function shopPrintName() {
+  return state.company?.name || $("shop-name")?.textContent?.trim() || "ATAV POS";
+}
+
+function sanitizePrintHtml(html) {
+  const wrap = document.createElement("div");
+  wrap.innerHTML = html;
+  wrap.querySelectorAll(".print-actions, button, a.btn").forEach((el) => el.remove());
+  return wrap.innerHTML;
+}
+
+function printFinance({ title, html, from, to, asOf }) {
+  const fy = indianFinancialYear(from || asOf || ymd());
+  const range = asOf ? `As of ${asOf}` : `${from || fy.from} to ${to || fy.to}`;
+  const w = window.open("", "finance-print", "width=960,height=720");
+  if (!w) {
+    setHint("Allow pop-ups to print reports", "error");
+    return;
+  }
+  w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${escapeHtml(title)} · ${escapeHtml(shopPrintName())}</title>
+<style>
+  body { font: 13px/1.45 ui-sans-serif, system-ui, sans-serif; color: #111; margin: 18px; }
+  h1 { font-size: 18px; margin: 0 0 4px; }
+  .meta { color: #475569; margin-bottom: 16px; }
+  table { width: 100%; border-collapse: collapse; margin: 0 0 16px; }
+  th, td { border: 1px solid #cbd5e1; padding: 6px 8px; text-align: left; font-size: 12px; }
+  th { background: #f1f5f9; }
+  .report-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; margin-bottom: 16px; }
+  .report-card { border: 1px solid #cbd5e1; padding: 8px 10px; border-radius: 8px; }
+  .report-card span { display: block; color: #64748b; font-size: 11px; }
+  .report-block { margin-bottom: 22px; page-break-inside: avoid; }
+  .hint { color: #475569; }
+  @media print { body { margin: 12px; } }
+</style></head><body>
+  <h1>${escapeHtml(shopPrintName())}</h1>
+  <div class="meta">${escapeHtml(title)} · ${escapeHtml(fy.label)} · 1 April–31 March · ${escapeHtml(range)}</div>
+  ${sanitizePrintHtml(html)}
+</body></html>`);
+  w.document.close();
+  w.focus();
+  w.print();
+}
+
+function printAccountsReport() {
+  const { from, to, asOf } = accPeriod();
+  const title = ACC_REPORT_TITLES[accTab] || "Accounts";
+  const pane = $(`acc-pane-${accTab}`);
+  const summary = ["receivables", "payables"].includes(accTab) ? $("acc-summary")?.outerHTML || "" : "";
+  printFinance({
+    title: `Accounts · ${title}`,
+    html: summary + (pane?.innerHTML || ""),
+    from,
+    to,
+    asOf: accTab === "balance-sheet" ? asOf : "",
+  });
 }
 
 function showLogo(img, url) {
@@ -578,10 +678,13 @@ function gstRateRows(rows, withBills = true) {
 }
 
 function reportBlock(title, sheet, headers, rows) {
-  return `<section class="report-block">
+  return `<section class="report-block" data-report-title="${escapeHtml(title)}">
     <div class="report-block-head">
       <h3>${escapeHtml(title)}</h3>
-      <a class="btn" href="${excelHref(sheet)}">Excel</a>
+      <div class="print-actions">
+        <button class="btn" type="button" data-print-report>Print</button>
+        <a class="btn" href="${excelHref(sheet)}">Excel</a>
+      </div>
     </div>
     ${htmlTable(headers, rows)}
   </section>`;
@@ -1451,8 +1554,8 @@ async function loadToday() {
 }
 
 async function loadReports() {
-  if (!$("rep-from").value || !$("rep-to").value) applyFyRange("rep-from", "rep-to");
-  paintFyChip("rep-fy-label", indianFinancialYear($("rep-from").value || ymd()));
+  if (!$("rep-from").value || !$("rep-to").value) applyFyRange("rep-from", "rep-to", null, "rep-fy-year");
+  else fillFyYearSelect("rep-fy-year", indianFinancialYear($("rep-from").value || ymd()).startYear);
   const from = $("rep-from").value;
   const to = $("rep-to").value;
   $("rep-excel-all").href = excelHref();
@@ -1779,9 +1882,9 @@ async function loadSuppliers() {
 let accTab = "receivables";
 
 function accPeriod() {
-  if (!$("acc-from")?.value || !$("acc-to")?.value) applyFyRange("acc-from", "acc-to", "acc-asof");
+  if (!$("acc-from")?.value || !$("acc-to")?.value) applyFyRange("acc-from", "acc-to", "acc-asof", "acc-fy-year");
+  else fillFyYearSelect("acc-fy-year", indianFinancialYear($("acc-from").value || ymd()).startYear);
   if (!$("acc-asof")?.value) $("acc-asof").value = $("acc-to").value;
-  paintFyChip("acc-fy-label", indianFinancialYear($("acc-from").value || ymd()));
   return { from: $("acc-from").value, to: $("acc-to").value, asOf: $("acc-asof").value };
 }
 
@@ -1877,8 +1980,8 @@ function paintExpensePreview() {
 async function loadExpenses() {
   fillExpenseCategories();
   if ($("exp-date") && !$("exp-date").value) $("exp-date").value = ymd();
-  if (!$("exp-from")?.value || !$("exp-to")?.value) applyFyRange("exp-from", "exp-to");
-  paintFyChip("exp-fy-label", indianFinancialYear($("exp-from")?.value || ymd()));
+  if (!$("exp-from")?.value || !$("exp-to")?.value) applyFyRange("exp-from", "exp-to", null, "exp-fy-year");
+  else fillFyYearSelect("exp-fy-year", indianFinancialYear($("exp-from")?.value || ymd()).startYear);
   paintExpensePreview();
   const from = $("exp-from").value;
   const to = $("exp-to").value;
@@ -2755,11 +2858,36 @@ $("report-form").addEventListener("submit", async (e) => {
   await loadReports();
 });
 $("rep-this-fy")?.addEventListener("click", async () => {
-  applyFyRange("rep-from", "rep-to");
+  applyFyRange("rep-from", "rep-to", null, "rep-fy-year");
   await loadReports();
 });
+$("rep-fy-year")?.addEventListener("change", async () => {
+  applyFyYear($("rep-fy-year").value, "rep-from", "rep-to");
+  await loadReports();
+});
+$("rep-from")?.addEventListener("change", () => syncFySelectFromDates("rep-fy-year", "rep-from"));
+$("rep-print")?.addEventListener("click", () => {
+  printFinance({
+    title: "Reports",
+    html: ($("report-summary")?.outerHTML || "") + ($("reports")?.innerHTML || ""),
+    from: $("rep-from")?.value,
+    to: $("rep-to")?.value,
+  });
+});
+$("reports")?.addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-print-report]");
+  if (!btn) return;
+  const block = btn.closest(".report-block");
+  const title = block?.dataset.reportTitle || block?.querySelector("h3")?.textContent || "Report";
+  printFinance({
+    title,
+    html: block?.outerHTML || "",
+    from: $("rep-from")?.value,
+    to: $("rep-to")?.value,
+  });
+});
 $("acc-this-fy")?.addEventListener("click", async () => {
-  applyFyRange("acc-from", "acc-to", "acc-asof");
+  applyFyRange("acc-from", "acc-to", "acc-asof", "acc-fy-year");
   try {
     await loadAccountsTab(accTab);
   } catch (err) {
@@ -2767,9 +2895,33 @@ $("acc-this-fy")?.addEventListener("click", async () => {
     $("acc-hint").className = "hint error";
   }
 });
+$("acc-fy-year")?.addEventListener("change", async () => {
+  applyFyYear($("acc-fy-year").value, "acc-from", "acc-to", "acc-asof");
+  try {
+    await loadAccountsTab(accTab);
+  } catch (err) {
+    $("acc-hint").textContent = err.message;
+    $("acc-hint").className = "hint error";
+  }
+});
+$("acc-from")?.addEventListener("change", () => syncFySelectFromDates("acc-fy-year", "acc-from"));
+$("acc-print")?.addEventListener("click", () => printAccountsReport());
 $("exp-this-fy")?.addEventListener("click", async () => {
-  applyFyRange("exp-from", "exp-to");
+  applyFyRange("exp-from", "exp-to", null, "exp-fy-year");
   await loadExpenses();
+});
+$("exp-fy-year")?.addEventListener("change", async () => {
+  applyFyYear($("exp-fy-year").value, "exp-from", "exp-to");
+  await loadExpenses();
+});
+$("exp-from")?.addEventListener("change", () => syncFySelectFromDates("exp-fy-year", "exp-from"));
+$("exp-print")?.addEventListener("click", () => {
+  printFinance({
+    title: "Expenses",
+    html: $("expenses-table")?.innerHTML || "",
+    from: $("exp-from")?.value,
+    to: $("exp-to")?.value,
+  });
 });
 $("exp-filter")?.addEventListener("submit", async (e) => {
   e.preventDefault();
