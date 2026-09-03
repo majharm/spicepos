@@ -2,10 +2,10 @@
 
 function pos_default_unit_masters() {
   return [
-    ["GM", "Grams (g)", "weight", "/kg", "g", 100, 1000, 1, 1],
-    ["KG", "Kilogram (kg)", "weight", "/kg", "kg", 100, 1000, 1000, 2],
-    ["ML", "Millilitre (ml)", "volume", "/ltr", "ml", 100, 1000, 1, 3],
-    ["LTR", "Litre (L)", "volume", "/ltr", "L", 100, 1000, 1000, 4],
+    ["GM", "Grams (g)", "weight", "/kg", "g", 1, 1000, 1, 1],
+    ["KG", "Kilogram (kg)", "weight", "/kg", "kg", 1, 1000, 1000, 2],
+    ["ML", "Millilitre (ml)", "volume", "/ltr", "ml", 1, 1000, 1, 3],
+    ["LTR", "Litre (L)", "volume", "/ltr", "L", 1, 1000, 1000, 4],
     ["PCS", "Quantity (pcs)", "count", "/pc", "pcs", 1, 1, 1, 5],
   ];
 }
@@ -33,6 +33,7 @@ function pos_ensure_inventory_units_schema($bid = null) {
          INDEX (business_id)
        )"
     );
+    @$db->query("UPDATE inventory_units SET step = 1 WHERE family IN ('weight', 'volume') AND step > 1");
   }
   if (!$bid) return;
   $n = pos_q("SELECT COUNT(*) AS c FROM inventory_units WHERE business_id = ?", "s", [$bid]);
@@ -108,7 +109,7 @@ function pos_unit_payload($body) {
   $stock = trim((string) ($body["stock_suffix"] ?? ""));
   if ($rate === "") $rate = $family === "volume" ? "/ltr" : ($family === "weight" ? "/kg" : "/pc");
   if ($stock === "") $stock = $family === "volume" ? "ml" : ($family === "weight" ? "g" : "pcs");
-  $step = (float) ($body["step"] ?? ($family === "count" ? 1 : 100));
+  $step = (float) ($body["step"] ?? 1);
   $recv = (float) ($body["receive_qty"] ?? ($family === "count" ? 1 : 1000));
   $div = (float) ($body["display_div"] ?? (($code === "KG" || $code === "LTR") ? 1000 : 1));
   if ($step <= 0) $step = 1;

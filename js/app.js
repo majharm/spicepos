@@ -141,7 +141,7 @@ function applyFootwearMode() {
       : "Name, photo, HSN code, unit type, rates, and stock.";
   }
   if ($("ticket-sub")) {
-    $("ticket-sub").textContent = on ? "Tap a pair to add · choose girls or boys" : "Tap items to add · 100 g each";
+    $("ticket-sub").textContent = on ? "Tap a pair to add · choose girls or boys" : "Tap items to add · type any grams";
   }
   VIEW_META.items.subtitle = on
     ? "Colour, size, girls/boys type, rates, and stock"
@@ -891,16 +891,18 @@ function renderCart() {
       .map((line) => {
         const item = state.items.find((i) => i.id === line.itemId);
         if (!item) return "";
-        const step = POSUnits.step(itemUnit(item));
+        const step = POSUnits.counterStep(itemUnit(item));
+        const unit = POSUnits.isCount(itemUnit(item)) ? "pcs" : POSUnits.typeOf(itemUnit(item)).family === "volume" ? "ml" : "g";
         return `<div class="line">
           <div class="line-info">
             <div class="who">${escapeHtml(itemVariantText(item) ? `${item.name} · ${itemVariantText(item)}` : item.name)}</div>
-            <div class="pack">${escapeHtml(itemVariantText(item) || `${item.category} / ${item.subcategory || "—"}`)} · ${escapeHtml(fmtQty(line.qtyGm, item))}</div>
+            <div class="pack">${escapeHtml(itemVariantText(item) || `${item.category} / ${item.subcategory || "—"}`)}</div>
           </div>
           <div class="line-ops">
             <div class="qty">
               <button type="button" data-chg="${escapeHtml(item.id)}" data-d="${-step}">−</button>
-              <span>${escapeHtml(fmtQty(line.qtyGm, item))}</span>
+              <input class="qty-input" type="number" inputmode="numeric" min="${POSUnits.qtyMin()}" max="${POSUnits.qtyMax()}" step="1" value="${escapeHtml(line.qtyGm)}" data-qty="${escapeHtml(item.id)}" aria-label="Quantity in ${unit}" />
+              <span class="qty-unit">${escapeHtml(unit)}</span>
               <button type="button" data-chg="${escapeHtml(item.id)}" data-d="${step}">+</button>
             </div>
             <div class="pack line-amt">${money(lineAmt(item, line.qtyGm))}</div>
@@ -984,11 +986,26 @@ function renderPackChoice() {
 function addItem(id, qtyGm) {
   const item = state.items.find((i) => i.id === id);
   if (!item) return;
-  const add = qtyGm == null ? POSUnits.step(itemUnit(item)) : Number(qtyGm);
+  const add = qtyGm == null ? POSUnits.counterStep(itemUnit(item)) : Number(qtyGm);
   const line = state.cart.find((l) => l.itemId === id);
-  if (line) line.qtyGm = Math.max(0, line.qtyGm + add);
-  else state.cart.push({ itemId: id, qtyGm: add });
+  if (line) line.qtyGm = POSUnits.clampQty(Number(line.qtyGm) + add);
+  else state.cart.push({ itemId: id, qtyGm: POSUnits.clampQty(add) });
   state.cart = state.cart.filter((l) => l.qtyGm > 0);
+  renderCart();
+}
+
+function setLineQty(id, qtyGm) {
+  const item = state.items.find((i) => i.id === id);
+  if (!item) return;
+  const next = POSUnits.clampQty(qtyGm);
+  const line = state.cart.find((l) => l.itemId === id);
+  if (next <= 0) {
+    state.cart = state.cart.filter((l) => l.itemId !== id);
+  } else if (line) {
+    line.qtyGm = next;
+  } else {
+    state.cart.push({ itemId: id, qtyGm: next });
+  }
   renderCart();
 }
 
@@ -1070,7 +1087,7 @@ function renderPackCompose() {
       (i) => `<label>
         <input type="checkbox" data-pack-item="${escapeHtml(i.id)}" />
         ${escapeHtml(i.name)} (${escapeHtml(i.subcategory || i.category)})
-        <input type="number" min="0" step="${POSUnits.step(itemUnit(i))}" value="${POSUnits.isCount(itemUnit(i)) ? 1 : 500}" data-pack-qty="${escapeHtml(i.id)}" /> ${escapeHtml(POSUnits.isCount(itemUnit(i)) ? "pcs" : POSUnits.typeOf(itemUnit(i)).family === "volume" ? "ml" : "g")}
+        <input type="number" min="${POSUnits.qtyMin()}" max="${POSUnits.qtyMax()}" step="1" value="${POSUnits.isCount(itemUnit(i)) ? 1 : 500}" data-pack-qty="${escapeHtml(i.id)}" /> ${escapeHtml(POSUnits.isCount(itemUnit(i)) ? "pcs" : POSUnits.typeOf(itemUnit(i)).family === "volume" ? "ml" : "g")}
       </label>`,
     )
     .join("");
@@ -1104,7 +1121,7 @@ function renderPoLines() {
         <td class="po-check"><input type="checkbox" data-po-item="${escapeHtml(i.id)}" /></td>
         <td class="po-name">${escapeHtml(i.name)}</td>
         <td class="po-hsn">${escapeHtml(i.hsn || "—")}</td>
-        <td><input type="number" min="0" step="${POSUnits.step(unit)}" value="${qty}" data-po-qty="${escapeHtml(i.id)}" /></td>
+        <td><input type="number" min="${POSUnits.qtyMin()}" max="${POSUnits.qtyMax()}" step="1" value="${qty}" data-po-qty="${escapeHtml(i.id)}" /></td>
         <td class="po-unit">${escapeHtml(poUnitLabel(i))}</td>
         <td><div class="po-rate-cell"><input type="number" min="0" step="0.01" value="${escapeHtml(i.purchase_rate)}" data-po-rate="${escapeHtml(i.id)}" /><span class="po-suffix">₹${escapeHtml(POSUnits.rateSuffix(unit))}</span></div></td>
         <td class="num" data-po-amt="${escapeHtml(i.id)}">${money(POSUnits.lineAmount(qty, i.purchase_rate, unit))}</td>
@@ -1931,9 +1948,22 @@ $("catalog").addEventListener("click", (e) => {
   if (btn) addItem(btn.dataset.add);
 });
 $("lines").addEventListener("click", (e) => {
+  if (e.target.closest("[data-qty]")) return;
   const btn = e.target.closest("[data-chg]");
   if (!btn) return;
   addItem(btn.dataset.chg, Number(btn.dataset.d));
+});
+$("lines").addEventListener("change", (e) => {
+  const input = e.target.closest("[data-qty]");
+  if (!input) return;
+  setLineQty(input.dataset.qty, input.value);
+});
+$("lines").addEventListener("keydown", (e) => {
+  if (e.key !== "Enter") return;
+  const input = e.target.closest("[data-qty]");
+  if (!input) return;
+  e.preventDefault();
+  input.blur();
 });
 $("pack-bar").addEventListener("click", (e) => {
   const btn = e.target.closest("[data-pack]");

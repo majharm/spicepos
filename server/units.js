@@ -5,10 +5,10 @@ import crypto from "node:crypto";
 import "../js/units.js";
 
 export const DEFAULT_UNIT_MASTERS = [
-  { code: "GM", name: "Grams (g)", family: "weight", rate_suffix: "/kg", stock_suffix: "g", step: 100, receive_qty: 1000, display_div: 1, sort_order: 1 },
-  { code: "KG", name: "Kilogram (kg)", family: "weight", rate_suffix: "/kg", stock_suffix: "kg", step: 100, receive_qty: 1000, display_div: 1000, sort_order: 2 },
-  { code: "ML", name: "Millilitre (ml)", family: "volume", rate_suffix: "/ltr", stock_suffix: "ml", step: 100, receive_qty: 1000, display_div: 1, sort_order: 3 },
-  { code: "LTR", name: "Litre (L)", family: "volume", rate_suffix: "/ltr", stock_suffix: "L", step: 100, receive_qty: 1000, display_div: 1000, sort_order: 4 },
+  { code: "GM", name: "Grams (g)", family: "weight", rate_suffix: "/kg", stock_suffix: "g", step: 1, receive_qty: 1000, display_div: 1, sort_order: 1 },
+  { code: "KG", name: "Kilogram (kg)", family: "weight", rate_suffix: "/kg", stock_suffix: "kg", step: 1, receive_qty: 1000, display_div: 1000, sort_order: 2 },
+  { code: "ML", name: "Millilitre (ml)", family: "volume", rate_suffix: "/ltr", stock_suffix: "ml", step: 1, receive_qty: 1000, display_div: 1, sort_order: 3 },
+  { code: "LTR", name: "Litre (L)", family: "volume", rate_suffix: "/ltr", stock_suffix: "L", step: 1, receive_qty: 1000, display_div: 1000, sort_order: 4 },
   { code: "PCS", name: "Quantity (pcs)", family: "count", rate_suffix: "/pc", stock_suffix: "pcs", step: 1, receive_qty: 1, display_div: 1, sort_order: 5 },
 ];
 
@@ -43,6 +43,9 @@ export async function ensureInventoryUnits(businessId) {
     UNIQUE KEY uniq_unit_biz_code (business_id, code),
     INDEX (business_id)
   )`);
+  await query(
+    "UPDATE inventory_units SET step = 1 WHERE family IN ('weight', 'volume') AND step > 1",
+  );
   if (!businessId) return [];
   const existing = await query("SELECT COUNT(*) AS c FROM inventory_units WHERE business_id = ?", [businessId]);
   if (Number(existing[0]?.c) > 0) {
@@ -84,7 +87,7 @@ function unitFields(body) {
   const name = String(body.name || code).trim() || code;
   const rate_suffix = String(body.rate_suffix || (family === "volume" ? "/ltr" : family === "weight" ? "/kg" : "/pc"));
   const stock_suffix = String(body.stock_suffix || (family === "volume" ? "ml" : family === "weight" ? "g" : "pcs"));
-  const step = Number(body.step) > 0 ? Number(body.step) : family === "count" ? 1 : 100;
+  const step = Number(body.step) > 0 ? Number(body.step) : 1;
   const receive_qty = Number(body.receive_qty) > 0 ? Number(body.receive_qty) : family === "count" ? 1 : 1000;
   const display_div = Number(body.display_div) > 0 ? Number(body.display_div) : code === "KG" || code === "LTR" ? 1000 : 1;
   const status = body.status === "inactive" ? "inactive" : "active";

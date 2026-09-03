@@ -859,6 +859,25 @@ body.bill-collapsed .bill-toggle[data-count]:not([data-count="0"])::after {
 .line .pack { color: var(--muted); font-size: 12px; }
 .line-amt { text-align: right; margin-top: 4px; }
 .qty { display: flex; align-items: center; gap: 6px; }
+.qty-input {
+  width: 5.6em;
+  min-width: 4.2em;
+  max-width: 8em;
+  min-height: 32px;
+  padding: 4px 6px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  text-align: center;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  background: #fff;
+}
+.qty-unit {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  min-width: 1.4em;
+}
 .qty button {
   width: 32px;
   height: 32px;
@@ -2370,11 +2389,18 @@ body.footwear-mode.counter-mode .stage.is-counter .card .sku { display: block; f
   .stage.is-counter .line .qty {
     gap: 4px;
   }
-  .stage.is-counter .line .qty span {
-    min-width: 2.6em;
+  .stage.is-counter .line .qty-input {
+    width: 4.6em;
+    min-width: 3.8em;
+    min-height: 28px;
     font-size: 12px;
     font-weight: 700;
     text-align: center;
+    padding: 2px 4px;
+  }
+  .stage.is-counter .line .qty-unit {
+    font-size: 11px;
+    min-width: 1.2em;
   }
   .stage.is-counter .line .qty button {
     width: 28px;
