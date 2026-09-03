@@ -1296,21 +1296,31 @@ function findCartLine(key) {
   return state.cart.find((l) => cartLineKey(l) === k) || null;
 }
 
+function isPieceBarcodeLine(line, item) {
+  return Boolean(String(line?.barcode || "").trim()) && POSUnits.isCount(itemUnit(item || {}));
+}
+
 function addItem(id, qtyGm, lineBarcode) {
   const item = state.items.find((i) => i.id === id);
   if (!item) return;
   const add = qtyGm == null ? POSUnits.counterStep(itemUnit(item)) : Number(qtyGm);
   const code = String(lineBarcode || "").trim();
-  if (code && POSUnits.isCount(itemUnit(item))) {
+  const count = POSUnits.isCount(itemUnit(item));
+  if (code) {
     const existing = state.cart.find((l) => String(l.barcode || "").trim() === code);
     if (existing) {
-      setHint("This piece is already on the bill", "error");
+      if (count) {
+        setHint("This piece is already on the bill", "error");
+        return;
+      }
+      existing.qtyGm = POSUnits.clampQty(Number(existing.qtyGm) + add);
+      renderCart();
       return;
     }
     state.cart.push({
       lineId: newCartLineId(),
       itemId: id,
-      qtyGm: POSUnits.clampQty(1),
+      qtyGm: POSUnits.clampQty(count ? 1 : add),
       discountType: "amt",
       discountValue: 0,
       barcode: code,
@@ -1337,20 +1347,19 @@ function addItem(id, qtyGm, lineBarcode) {
 function setLineQty(key, qtyGm) {
   const line = findCartLine(key);
   if (!line) return;
+  const item = state.items.find((i) => i.id === line.itemId);
   const next = POSUnits.clampQty(qtyGm);
   if (next <= 0) state.cart = state.cart.filter((l) => cartLineKey(l) !== String(key));
-  else if (String(line.barcode || "").trim() && POSUnits.isCount(itemUnit(state.items.find((i) => i.id === line.itemId) || {}))) {
-    line.qtyGm = 1;
-  } else {
-    line.qtyGm = next;
-  }
+  else if (isPieceBarcodeLine(line, item)) line.qtyGm = 1;
+  else line.qtyGm = next;
   renderCart();
 }
 
 function changeLineQty(key, delta) {
   const line = findCartLine(key);
   if (!line) return;
-  if (String(line.barcode || "").trim() && POSUnits.isCount(itemUnit(state.items.find((i) => i.id === line.itemId) || {}))) {
+  const item = state.items.find((i) => i.id === line.itemId);
+  if (isPieceBarcodeLine(line, item)) {
     if (Number(delta) < 0) setLineQty(key, 0);
     else setHint("Scan the next piece barcode", "ok");
     return;
