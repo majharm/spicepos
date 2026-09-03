@@ -1009,13 +1009,18 @@ body.bill-collapsed .bill-toggle[data-count]:not([data-count="0"])::after {
   display: grid;
   gap: 4px;
 }
+.totals-meta > div,
+.totals .grand {
+  display: flex;
+  justify-content: space-between;
+}
 .totals .grand span:last-child {
   background: var(--brand-gradient);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
 }
-.totals div { display: flex; justify-content: space-between; color: var(--muted); font-weight: 600; }
+.totals-meta > div { color: var(--muted); font-weight: 600; }
 .totals .grand { font-size: 20px; font-weight: 800; color: var(--text); font-variant-numeric: tabular-nums; }
 .pay { padding: 10px 14px 14px; display: grid; gap: 8px; background: linear-gradient(180deg, #fff 0%, var(--bg-tint-soft) 100%); flex: 0 0 auto; }
 .pay-row { display: grid; grid-template-columns: 1fr 1.1fr; gap: 10px; }
