@@ -117,4 +117,12 @@ test("PHP customer insert bind types match placeholders", () => {
   assert.match(read("pos-reports.php"), /Payment daywise/);
   assert.match(read("js/app.js"), /Payment daywise/);
   assert.match(read("server/reports.js"), /payDaywise/);
+  assert.match(crud, /function pos_normalize_pack_items/);
+  assert.match(crud, /function pos_insert_pack_lines/);
+  assert.match(crud, /#\^packs\/\(\[\^\/\]\+\)\$#.*PUT/s);
+  assert.match(crud, /DELETE FROM pack_items WHERE pack_id/);
+  assert.match(read("server/crud.js"), /app\.put\("\/api\/packs\/:id"/);
+  assert.match(read("js/app.js"), /data-edit-pack/);
+  assert.match(read("js/app.js"), /Update pack/);
+  assert.match(index, /id="pack-id"/);
 });

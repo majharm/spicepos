@@ -67,6 +67,40 @@ export async function nextSeq(conn, name, start) {
   return next;
 }
 
+function normalizePackItems(items) {
+  if (!Array.isArray(items)) return [];
+  return items
+    .map((row) => ({
+      item_id: String(row.item_id || "").trim(),
+      quantity_gm: Number(row.quantity_gm || 0),
+    }))
+    .filter((row) => row.item_id && row.quantity_gm > 0);
+}
+
+async function insertPackLines(conn, packId, items) {
+  let sort = 1;
+  for (const row of items) {
+    const [itemRows] = await conn.query("SELECT * FROM items WHERE id = ? AND business_id = ?", [row.item_id, bid()]);
+    const item = itemRows[0];
+    if (!item) throw new Error("Unknown item in pack");
+    await conn.query(
+      `INSERT INTO pack_items (
+         id, pack_id, item_id, quantity_gm, retail_rate, b2b_rate, sort_order, business_id
+       ) VALUES (?,?,?,?,?,?,?,?)`,
+      [
+        crypto.randomUUID(),
+        packId,
+        item.id,
+        Number(row.quantity_gm),
+        Number(item.retail_rate),
+        Number(item.b2b_rate),
+        sort++,
+        bid(),
+      ],
+    );
+  }
+}
+
 export function registerCrud(app) {
   app.post("/api/customers", async (req, res) => {
     const { name, business_name, mobile, type, gstin, credit_limit } = req.body || {};
@@ -216,8 +250,9 @@ export function registerCrud(app) {
   });
 
   app.post("/api/packs", async (req, res) => {
-    const { name, items } = req.body || {};
-    if (!name || !Array.isArray(items) || items.length === 0) {
+    const name = String(req.body?.name || "").trim();
+    const items = normalizePackItems(req.body?.items);
+    if (!name || items.length === 0) {
       res.status(400).json({ error: "Pack name and at least one spice are required" });
       return;
     }
@@ -229,38 +264,46 @@ export function registerCrud(app) {
         await conn.query(
           `INSERT INTO packs (id, code, name, total_quantity_gm, status, business_id)
            VALUES (?,?,?,?,'active',?)`,
-          [id, `PK-${String(n).padStart(3, "0")}`, String(name).trim(), total, bid()],
+          [id, `PK-${String(n).padStart(3, "0")}`, name, total, bid()],
         );
-        let sort = 1;
-        for (const row of items) {
-          const [itemRows] = await conn.query(
-            "SELECT * FROM items WHERE id = ? AND business_id = ?",
-            [row.item_id, bid()],
-          );
-          const item = itemRows[0];
-          if (!item) throw new Error("Unknown item in pack");
-          await conn.query(
-            `INSERT INTO pack_items (
-               id, pack_id, item_id, quantity_gm, retail_rate, b2b_rate, sort_order, business_id
-             ) VALUES (?,?,?,?,?,?,?,?)`,
-            [
-              crypto.randomUUID(),
-              id,
-              item.id,
-              Number(row.quantity_gm),
-              Number(item.retail_rate),
-              Number(item.b2b_rate),
-              sort++,
-              bid(),
-            ],
-          );
-        }
+        await insertPackLines(conn, id, items);
         const [rows] = await conn.query("SELECT * FROM packs WHERE id = ?", [id]);
         return rows[0];
       });
       res.json({ ok: true, pack });
     } catch (err) {
-      res.status(500).json({ error: String(err.message) });
+      res.status(err.message === "Unknown item in pack" ? 400 : 500).json({ error: String(err.message) });
+    }
+  });
+
+  app.put("/api/packs/:id", async (req, res) => {
+    const id = String(req.params.id || "").trim();
+    const name = String(req.body?.name || "").trim();
+    const items = normalizePackItems(req.body?.items);
+    if (!id || !name || items.length === 0) {
+      res.status(400).json({ error: "Pack name and at least one spice are required" });
+      return;
+    }
+    try {
+      const [found] = await query("SELECT id FROM packs WHERE id = ? AND business_id = ?", [id, bid()]);
+      if (!found) {
+        res.status(404).json({ error: "Pack not found" });
+        return;
+      }
+      const pack = await withTransaction(async (conn) => {
+        const total = items.reduce((s, i) => s + Number(i.quantity_gm || 0), 0);
+        await conn.query("DELETE FROM pack_items WHERE pack_id = ? AND business_id = ?", [id, bid()]);
+        await conn.query(
+          "UPDATE packs SET name=?, total_quantity_gm=? WHERE id=? AND business_id=?",
+          [name, total, id, bid()],
+        );
+        await insertPackLines(conn, id, items);
+        const [rows] = await conn.query("SELECT * FROM packs WHERE id = ?", [id]);
+        return rows[0];
+      });
+      res.json({ ok: true, pack });
+    } catch (err) {
+      res.status(err.message === "Unknown item in pack" ? 400 : 500).json({ error: String(err.message) });
     }
   });
 

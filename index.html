@@ -6,8 +6,8 @@
     <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
     <title>ATAV POS</title>
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./css/pos.css?v=20260902deploy62" />
-    <link rel="stylesheet" href="./css/saas.css?v=20260902deploy62" />
+    <link rel="stylesheet" href="./css/pos.css?v=20260903deploy63" />
+    <link rel="stylesheet" href="./css/saas.css?v=20260903deploy63" />
   </head>
   <body>
     <div class="app" id="app">
@@ -262,11 +262,13 @@
         </section>
         <section class="view" id="view-packs" hidden>
           <h2 class="visually-hidden">Packs</h2>
-          <p class="lede">Choose spices and grams for a pack type (e.g. Special Masala Pack — 5 KG).</p>
+          <p class="lede">Create a pack type, or edit one from the list. Choose spices and grams (e.g. Special Masala Pack — 5 KG).</p>
           <form class="settings wide" id="pack-form">
+            <input type="hidden" id="pack-id" />
             <label>Pack name <input id="pack-name" required placeholder="Special Masala Pack — 5 KG" /></label>
             <div id="pack-lines" class="pack-compose"></div>
-            <button class="btn primary" type="submit">Save</button>
+            <button class="btn primary" type="submit" id="pack-save">Save pack</button>
+            <button class="btn" type="button" id="pack-cancel">Clear</button>
           </form>
           <div class="hint" id="pack-hint"></div>
           <div class="table-wrap" id="packs-table"></div>
@@ -641,12 +643,12 @@
         </section>
       </div>
     </aside>
-    <script src="./js/pos-api.js?v=20260902deploy62" defer></script>
-    <script src="./js/units.js?v=20260902deploy62" defer></script>
-    <script src="./js/footwear.js?v=20260902deploy62" defer></script>
-    <script src="./js/dev-mode.js?v=20260902deploy62" defer></script>
-    <script src="./js/invoice.js?v=20260902deploy62" defer></script>
-    <script src="./js/support.js?v=20260902deploy62" defer></script>
-    <script src="./js/app.js?v=20260902deploy62" defer></script>
+    <script src="./js/pos-api.js?v=20260903deploy63" defer></script>
+    <script src="./js/units.js?v=20260903deploy63" defer></script>
+    <script src="./js/footwear.js?v=20260903deploy63" defer></script>
+    <script src="./js/dev-mode.js?v=20260903deploy63" defer></script>
+    <script src="./js/invoice.js?v=20260903deploy63" defer></script>
+    <script src="./js/support.js?v=20260903deploy63" defer></script>
+    <script src="./js/app.js?v=20260903deploy63" defer></script>
   </body>
 </html>
