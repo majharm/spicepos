@@ -1803,10 +1803,12 @@ body.footwear-mode.counter-mode .stage.is-counter .card .sku { display: block; f
 .po-table .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .po-table tbody tr { cursor: pointer; }
 .po-table tbody tr.is-checked td { background: #ecfdf5; }
-.po-table tbody tr.po-bc-row { cursor: default; }
-.po-table tbody tr.po-bc-row td {
+.po-bc-panel {
+  margin-top: 10px;
+  padding: 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 12px;
   background: #f8fafc;
-  padding: 8px 12px 12px;
 }
 .po-bc-box { display: grid; gap: 8px; }
 .po-bc-head {

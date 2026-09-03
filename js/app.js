@@ -1388,28 +1388,25 @@ function renderPoLines() {
     paintPoTotals();
     return;
   }
-  el.innerHTML = `<div class="po-table-wrap"><table class="po-table"><thead><tr>
-    <th class="po-check"></th><th>Item</th><th>HSN</th><th>Qty</th><th>Unit</th><th>Rate</th><th>Expiry</th><th class="num">Amount</th>
-  </tr></thead><tbody>${items
-    .map((i) => {
-      const unit = itemUnit(i);
-      const qty = POSUnits.isCount(unit) ? 1 : 1000;
-      const search = [i.name, i.hsn, i.code, i.category, i.subcategory].join(" ").toLowerCase();
-      const bcRow = POSUnits.isCount(unit)
-        ? `<tr class="po-bc-row" data-po-bc-row="${escapeHtml(i.id)}" hidden>
-        <td colspan="8">
-          <div class="po-bc-box">
-            <div class="po-bc-head">
-              <strong>Barcodes for ${escapeHtml(i.name)}</strong>
-              <span class="hint" data-po-bc-count="${escapeHtml(i.id)}">0 / ${qty} — type or scan, one per piece</span>
-            </div>
-            <input class="po-bc-scan" data-po-bc-scan="${escapeHtml(i.id)}" maxlength="64" placeholder="Scan or type one barcode, then Enter" autocomplete="off" />
-            <textarea class="po-bc-list" data-po-barcodes="${escapeHtml(i.id)}" rows="3" placeholder="One barcode per line — ${qty} pcs needs ${qty} codes"></textarea>
+  const rows = [];
+  const panels = [];
+  for (const i of items) {
+    const unit = itemUnit(i);
+    const qty = POSUnits.isCount(unit) ? 1 : 1000;
+    const search = [i.name, i.hsn, i.code, i.category, i.subcategory].join(" ").toLowerCase();
+    if (POSUnits.isCount(unit)) {
+      panels.push(`<div class="po-bc-panel" data-po-bc-row="${escapeHtml(i.id)}" hidden>
+        <div class="po-bc-box">
+          <div class="po-bc-head">
+            <strong>Barcodes for ${escapeHtml(i.name)}</strong>
+            <span class="hint" data-po-bc-count="${escapeHtml(i.id)}">0 / ${qty} — type or scan, one per piece</span>
           </div>
-        </td>
-      </tr>`
-        : "";
-      return `<tr data-po-row="${escapeHtml(i.id)}" data-po-search="${escapeHtml(search)}" data-po-unit="${escapeHtml(unit)}">
+          <input class="po-bc-scan" data-po-bc-scan="${escapeHtml(i.id)}" maxlength="64" placeholder="Scan or type one barcode, then Enter" autocomplete="off" />
+          <textarea class="po-bc-list" data-po-barcodes="${escapeHtml(i.id)}" rows="4" placeholder="One barcode per line — ${qty} pcs needs ${qty} codes"></textarea>
+        </div>
+      </div>`);
+    }
+    rows.push(`<tr data-po-row="${escapeHtml(i.id)}" data-po-search="${escapeHtml(search)}" data-po-unit="${escapeHtml(unit)}">
         <td class="po-check"><input type="checkbox" data-po-item="${escapeHtml(i.id)}" /></td>
         <td class="po-name">${escapeHtml(i.name)}</td>
         <td class="po-hsn">${escapeHtml(i.hsn || "—")}</td>
@@ -1418,9 +1415,12 @@ function renderPoLines() {
         <td><div class="po-rate-cell"><input type="number" min="0" step="0.01" value="${escapeHtml(i.purchase_rate)}" data-po-rate="${escapeHtml(i.id)}" /><span class="po-suffix">₹${escapeHtml(POSUnits.rateSuffix(unit))}</span></div></td>
         <td><input type="date" data-po-expiry="${escapeHtml(i.id)}" /></td>
         <td class="num" data-po-amt="${escapeHtml(i.id)}">${money(POSUnits.lineAmount(qty, i.purchase_rate, unit))}</td>
-      </tr>${bcRow}`;
-    })
-    .join("")}</tbody></table></div>`;
+      </tr>`);
+  }
+  el.innerHTML = `<div class="po-table-wrap"><table class="po-table"><thead><tr>
+    <th class="po-check"></th><th>Item</th><th>HSN</th><th>Qty</th><th>Unit</th><th>Rate</th><th>Expiry</th><th class="num">Amount</th>
+  </tr></thead><tbody>${rows.join("")}</tbody></table></div>
+    <div id="po-barcode-panels">${panels.join("")}</div>`;
   filterPoLines();
   paintPoTotals();
   refreshPoBarcodeRows();
