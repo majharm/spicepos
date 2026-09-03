@@ -109,3 +109,12 @@ test("PHP and Node wire welcome mail after signup", () => {
   assert.match(tenant, /sendWelcomeStaff/);
   assert.match(crud, /pos_send_welcome_staff/);
 });
+
+test("signup trial is 2 days", () => {
+  assert.match(readFileSync(path.join(root, "login.html"), "utf8"), /2-day trial/);
+  assert.doesNotMatch(readFileSync(path.join(root, "login.html"), "utf8"), /30-day trial/);
+  assert.match(readFileSync(path.join(root, "server/onboard.js"), "utf8"), /INTERVAL 2 DAY/);
+  assert.doesNotMatch(readFileSync(path.join(root, "server/onboard.js"), "utf8"), /INTERVAL 30 DAY/);
+  assert.match(readFileSync(path.join(root, "pos-php-core.php"), "utf8"), /strtotime\("\+2 days"\)/);
+  assert.doesNotMatch(readFileSync(path.join(root, "pos-php-core.php"), "utf8"), /strtotime\("\+30 days"\)/);
+});

@@ -19,7 +19,7 @@ Open http://127.0.0.1:5173 — you will be asked to sign in.
 | SWAMI MASALE cashier | `/login.html` | `cashier@swamimasale.local` / `Cashier@12345` |
 | Demo second tenant | `/login.html` | `admin@abc-supermart.local` / `Demo@12345` |
 
-New shops use **Create business** on `/login.html` (name, type, category, owner, mobile, email, address, city, state, PIN, optional GST/PAN/logo, admin username and password). Signup starts a 30-day trial and signs the owner in as business admin.
+New shops use **Create business** on `/login.html` (name, type, category, owner, mobile, email, address, city, state, PIN, optional GST/PAN/logo, admin username and password). Signup starts a 2-day trial and signs the owner in as business admin.
 
 
 The live SWAMI shop (`swami@atavtelecom.in`) stays a **Business Admin** for that tenant only. Master Admin cannot be that account.
