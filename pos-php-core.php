@@ -1559,6 +1559,27 @@ function pos_php_dispatch($path, $method, $rawBody) {
       pos_send(401, ["error" => "Not signed in"]);
     }
 
+    if ($path === "auth/reset-password" && $method === "POST") {
+      $staff = pos_staff_session();
+      if (!$staff) pos_send(401, ["error" => "Sign in required"]);
+      $current = (string) ($body["current"] ?? "");
+      $next = (string) ($body["next"] ?? "");
+      if (strlen($next) < 8) pos_send(400, ["error" => "New password must be at least 8 characters"]);
+      $uid = $staff["user"]["id"] ?? "";
+      $rows = pos_q("SELECT id, password_hash FROM staff_users WHERE id = ? LIMIT 1", "s", [$uid]);
+      $user = $rows[0] ?? null;
+      if (!$user || !pos_verify_password($current, $user["password_hash"])) {
+        pos_send(400, ["error" => "Current password is wrong"]);
+      }
+      pos_ensure_staff_lock_columns();
+      pos_q(
+        "UPDATE staff_users SET password_hash = ?, failed_logins = 0, locked_until = NULL WHERE id = ?",
+        "ss",
+        [pos_hash_password($next), $uid]
+      );
+      pos_send(200, ["ok" => true, "php" => true]);
+    }
+
     $auth = pos_require_master($path);
 
     if ($path === "master/dashboard" && $method === "GET") {

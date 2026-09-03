@@ -6,8 +6,8 @@
     <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
     <title>ATAV POS</title>
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./css/pos.css?v=20260903deploy67" />
-    <link rel="stylesheet" href="./css/saas.css?v=20260903deploy67" />
+    <link rel="stylesheet" href="./css/pos.css?v=20260903deploy68" />
+    <link rel="stylesheet" href="./css/saas.css?v=20260903deploy68" />
   </head>
   <body>
     <div class="app" id="app">
@@ -521,7 +521,7 @@
         </section>
         <section class="view" id="view-settings" hidden>
           <h2 class="visually-hidden">Settings</h2>
-          <p class="lede">Company profile, timezone, and shop logo. Shop backup is under Admin → Backup.</p>
+          <p class="lede">Company profile, timezone, shop logo, and your login password. Shop backup is under Admin → Backup.</p>
           <form class="settings settings-page" id="settings-form">
             <div class="settings-section">
               <h3>Business details</h3>
@@ -589,6 +589,27 @@
             <div class="settings-actions">
               <button class="btn primary" type="submit">Save settings</button>
               <p class="hint" id="settings-hint"></p>
+            </div>
+          </form>
+          <form class="settings settings-page" id="password-form">
+            <div class="settings-section">
+              <h3>Login password</h3>
+              <p class="section-note">Change the password for the account you are signed in with. Staff passwords for other users are under Staff &amp; roles.</p>
+              <div class="settings-grid">
+                <label>Current password
+                  <input id="pw-current" type="password" required autocomplete="current-password" />
+                </label>
+                <label>New password
+                  <input id="pw-next" type="password" required minlength="8" autocomplete="new-password" />
+                </label>
+                <label>Confirm new password
+                  <input id="pw-confirm" type="password" required minlength="8" autocomplete="new-password" />
+                </label>
+              </div>
+            </div>
+            <div class="settings-actions">
+              <button class="btn primary" type="submit">Save password</button>
+              <p class="hint" id="password-hint"></p>
             </div>
           </form>
           <div class="settings settings-page dev-settings-card" id="dev-settings-section" hidden>
@@ -664,13 +685,13 @@
         </section>
       </div>
     </aside>
-    <script src="./js/gst-supply.js?v=20260903deploy67" defer></script>
-    <script src="./js/pos-api.js?v=20260903deploy67" defer></script>
-    <script src="./js/units.js?v=20260903deploy67" defer></script>
-    <script src="./js/footwear.js?v=20260903deploy67" defer></script>
-    <script src="./js/dev-mode.js?v=20260903deploy67" defer></script>
-    <script src="./js/invoice.js?v=20260903deploy67" defer></script>
-    <script src="./js/support.js?v=20260903deploy67" defer></script>
-    <script src="./js/app.js?v=20260903deploy67" defer></script>
+    <script src="./js/gst-supply.js?v=20260903deploy68" defer></script>
+    <script src="./js/pos-api.js?v=20260903deploy68" defer></script>
+    <script src="./js/units.js?v=20260903deploy68" defer></script>
+    <script src="./js/footwear.js?v=20260903deploy68" defer></script>
+    <script src="./js/dev-mode.js?v=20260903deploy68" defer></script>
+    <script src="./js/invoice.js?v=20260903deploy68" defer></script>
+    <script src="./js/support.js?v=20260903deploy68" defer></script>
+    <script src="./js/app.js?v=20260903deploy68" defer></script>
   </body>
 </html>
