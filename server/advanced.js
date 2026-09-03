@@ -63,6 +63,16 @@ async function nextBarcodeSeq(conn, businessId) {
     await sqlExec(conn, "UPDATE number_sequences SET next_value = ? WHERE name = 'barcode' AND business_id = ?", [next + 1, businessId]);
   } else {
     await sqlExec(conn, "INSERT INTO number_sequences (name, next_value, business_id) VALUES ('barcode', ?, ?)", [next + 1, businessId]);
+  const run = conn || { query: (...a) => query(...a) };
+  const [rows] = await run.query(
+    "SELECT next_value FROM number_sequences WHERE name = 'barcode' AND business_id = ? FOR UPDATE",
+    [businessId],
+  );
+  const next = rows[0] ? Number(rows[0].next_value) : 1;
+  if (rows[0]) {
+    await run.query("UPDATE number_sequences SET next_value = ? WHERE name = 'barcode' AND business_id = ?", [next + 1, businessId]);
+  } else {
+    await run.query("INSERT INTO number_sequences (name, next_value, business_id) VALUES ('barcode', ?, ?)", [next + 1, businessId]);
   }
   return next;
 }
@@ -71,6 +81,13 @@ async function barcodeTaken(conn, businessId, code) {
   if (await sqlOne(conn, "SELECT id FROM item_barcodes WHERE business_id = ? AND barcode = ? LIMIT 1", [businessId, code])) return true;
   if (await sqlOne(conn, "SELECT id FROM items WHERE business_id = ? AND barcode = ? LIMIT 1", [businessId, code])) return true;
   return Boolean(await sqlOne(conn, "SELECT id FROM stock_batches WHERE business_id = ? AND barcode = ? LIMIT 1", [businessId, code]));
+  const run = conn || { query: (...a) => query(...a) };
+  const [a] = await run.query("SELECT id FROM item_barcodes WHERE business_id = ? AND barcode = ? LIMIT 1", [businessId, code]);
+  if (a[0]) return true;
+  const [b] = await run.query("SELECT id FROM items WHERE business_id = ? AND barcode = ? LIMIT 1", [businessId, code]);
+  if (b[0]) return true;
+  const [c] = await run.query("SELECT id FROM stock_batches WHERE business_id = ? AND barcode = ? LIMIT 1", [businessId, code]);
+  return Boolean(c[0]);
 }
 
 export async function uniqueEan13(conn, businessId) {
@@ -189,17 +206,28 @@ export async function attachItemBarcode(conn, businessId, itemId, code, kind = "
   const id = crypto.randomUUID();
   await sqlExec(
     conn,
+  const run = conn || { query: (...a) => query(...a) };
+  const [exist] = await run.query("SELECT * FROM item_barcodes WHERE business_id = ? AND barcode = ? LIMIT 1", [businessId, code]);
+  if (exist[0]) {
+    if (exist[0].item_id !== itemId) throw new Error("Barcode already used on another item");
+    return exist[0];
+  }
+  const id = crypto.randomUUID();
+  await run.query(
     "INSERT INTO item_barcodes (id, business_id, item_id, barcode, kind, is_primary) VALUES (?,?,?,?,?,?)",
     [id, businessId, itemId, code, kind, primary ? 1 : 0],
   );
   if (primary || kind === "own") {
     try {
       await sqlExec(conn, "UPDATE items SET barcode = ? WHERE id = ? AND business_id = ?", [code, itemId, businessId]);
+      await run.query("UPDATE items SET barcode = ? WHERE id = ? AND business_id = ?", [code, itemId, businessId]);
     } catch {
       /* optional */
     }
   }
   return sqlOne(conn, "SELECT * FROM item_barcodes WHERE id = ?", [id]);
+  const [rows] = await run.query("SELECT * FROM item_barcodes WHERE id = ?", [id]);
+  return rows[0];
 }
 
 export async function onItemSaved(conn, businessId, itemId, body = {}) {
@@ -209,6 +237,8 @@ export async function onItemSaved(conn, businessId, itemId, body = {}) {
   if (!own) {
     const cur = await sqlOne(conn, "SELECT barcode FROM items WHERE id = ? AND business_id = ?", [itemId, businessId]);
     own = String(cur?.barcode || "").trim();
+    const [cur] = await (conn || { query }).query("SELECT barcode FROM items WHERE id = ? AND business_id = ?", [itemId, businessId]);
+    own = String(cur[0]?.barcode || "").trim();
   }
   if (!own) own = await uniqueEan13(conn, businessId);
   await attachItemBarcode(conn, businessId, itemId, own, "own", true);
@@ -216,6 +246,7 @@ export async function onItemSaved(conn, businessId, itemId, body = {}) {
   if (body.mrp != null) {
     try {
       await sqlExec(conn, "UPDATE items SET mrp = ? WHERE id = ? AND business_id = ?", [Number(body.mrp) || 0, itemId, businessId]);
+      await (conn || { query }).query("UPDATE items SET mrp = ? WHERE id = ? AND business_id = ?", [Number(body.mrp) || 0, itemId, businessId]);
     } catch {
       /* optional */
     }
@@ -227,6 +258,9 @@ export async function writeMovement(conn, row) {
   try {
     await sqlExec(
       conn,
+  const run = conn || { query: (...a) => query(...a) };
+  try {
+    await run.query(
       `INSERT INTO stock_movements (id, business_id, branch_id, item_id, kind, quantity_gm, note, created_by, barcode, batch_id, unit_cost, reason, ref_type, ref_id)
        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       [
@@ -238,6 +272,7 @@ export async function writeMovement(conn, row) {
   } catch {
     await sqlExec(
       conn,
+    await run.query(
       `INSERT INTO stock_movements (id, business_id, branch_id, item_id, kind, quantity_gm, note, created_by)
        VALUES (?,?,?,?,?,?,?,?)`,
       [crypto.randomUUID(), row.businessId, row.branchId || null, row.itemId, row.kind, row.qty, row.note || null, row.userId || null],
@@ -415,6 +450,17 @@ async function loyaltySettings(businessId, conn = null) {
 async function recomputeLoyalty(businessId, customerId, conn = null) {
   const settings = await loyaltySettings(businessId, conn);
   const rows = await sqlAll(conn, "SELECT * FROM loyalty_ledger WHERE business_id=? AND customer_id=? ORDER BY created_at", [businessId, customerId]);
+async function loyaltySettings(businessId) {
+  const [rows] = await query("SELECT * FROM loyalty_settings WHERE business_id = ?", [businessId]);
+  if (rows[0]) return POSLoyalty.settingsFrom(rows[0]);
+  await query("INSERT INTO loyalty_settings (business_id) VALUES (?) ON DUPLICATE KEY UPDATE business_id = business_id", [businessId]);
+  const [fresh] = await query("SELECT * FROM loyalty_settings WHERE business_id = ?", [businessId]);
+  return POSLoyalty.settingsFrom(fresh[0] || {});
+}
+
+async function recomputeLoyalty(businessId, customerId) {
+  const settings = await loyaltySettings(businessId);
+  const [rows] = await query("SELECT * FROM loyalty_ledger WHERE business_id=? AND customer_id=? ORDER BY created_at", [businessId, customerId]);
   let bal = 0;
   let earned = 0;
   let redeemed = 0;
@@ -432,12 +478,18 @@ async function recomputeLoyalty(businessId, customerId, conn = null) {
   if (acc) {
     await sqlExec(
       conn,
+  const [acc] = await query("SELECT * FROM loyalty_accounts WHERE customer_id=?", [customerId]);
+  const spend = Number(acc[0]?.lifetime_spend) || 0;
+  const tier = POSLoyalty.tierFromSpend(spend, settings);
+  if (acc[0]) {
+    await query(
       "UPDATE loyalty_accounts SET points_balance=?, lifetime_earned=?, lifetime_redeemed=?, tier=? WHERE customer_id=?",
       [bal, earned, redeemed, tier, customerId],
     );
   } else {
     await sqlExec(
       conn,
+    await query(
       "INSERT INTO loyalty_accounts (customer_id, business_id, points_balance, lifetime_earned, lifetime_redeemed, lifetime_spend, tier) VALUES (?,?,?,?,?,0,?)",
       [customerId, businessId, bal, earned, redeemed, tier],
     );
@@ -450,6 +502,14 @@ async function loyaltyAccount(businessId, customerId, conn = null) {
   if (!row) {
     await sqlExec(
       conn,
+  const [fresh] = await query("SELECT * FROM loyalty_accounts WHERE customer_id=?", [customerId]);
+  return fresh[0];
+}
+
+async function loyaltyAccount(businessId, customerId) {
+  const [rows] = await query("SELECT * FROM loyalty_accounts WHERE customer_id=? AND business_id=?", [customerId, businessId]);
+  if (!rows[0]) {
+    await query(
       "INSERT INTO loyalty_accounts (customer_id, business_id, points_balance, lifetime_earned, lifetime_redeemed, lifetime_spend, tier) VALUES (?,?,0,0,0,0,'bronze')",
       [customerId, businessId],
     );
@@ -460,6 +520,11 @@ async function loyaltyAccount(businessId, customerId, conn = null) {
 async function postLoyalty(businessId, customerId, kind, points, rupees, note, orderId, userId, expiresAt, conn = null) {
   await sqlExec(
     conn,
+  return recomputeLoyalty(businessId, customerId);
+}
+
+async function postLoyalty(businessId, customerId, kind, points, rupees, note, orderId, userId, expiresAt) {
+  await query(
     `INSERT INTO loyalty_ledger (id, business_id, customer_id, kind, points, rupees, note, order_id, created_by, expires_at)
      VALUES (?,?,?,?,?,?,?,?,?,?)`,
     [crypto.randomUUID(), businessId, customerId, kind, points, rupees, note, orderId, userId, expiresAt],
@@ -470,6 +535,8 @@ export async function applyLoyaltyOnSale(conn, ctx) {
   await ensureAdvancedSchema();
   const settings = await loyaltySettings(ctx.businessId, conn);
   const acc = await loyaltyAccount(ctx.businessId, ctx.customer.id, conn);
+  const settings = await loyaltySettings(ctx.businessId);
+  const acc = await loyaltyAccount(ctx.businessId, ctx.customer.id);
   let redeemPts = 0;
   let redeemRs = 0;
   const want = Math.floor(Number(ctx.wantRedeem) || 0);
@@ -480,6 +547,7 @@ export async function applyLoyaltyOnSale(conn, ctx) {
       redeemPts = settings.rupees_per_point > 0 ? Math.floor(redeemRs / settings.rupees_per_point) : 0;
       if (redeemPts > 0) {
         await postLoyalty(ctx.businessId, ctx.customer.id, "redeem", -redeemPts, redeemRs, "Bill redeem", ctx.orderId, ctx.userId, null, conn);
+        await postLoyalty(ctx.businessId, ctx.customer.id, "redeem", -redeemPts, redeemRs, "Bill redeem", ctx.orderId, ctx.userId, null);
       }
     }
   }
@@ -490,6 +558,7 @@ export async function applyLoyaltyOnSale(conn, ctx) {
     if (earned > 0) {
       const exp = settings.expiry_days > 0 ? new Date(Date.now() + settings.expiry_days * 86400000) : null;
       await postLoyalty(ctx.businessId, ctx.customer.id, "earn", earned, paid, "Sale earn", ctx.orderId, ctx.userId, exp, conn);
+      await postLoyalty(ctx.businessId, ctx.customer.id, "earn", earned, paid, "Sale earn", ctx.orderId, ctx.userId, exp);
     }
   }
   const today = new Date().toISOString().slice(0, 10);
@@ -513,6 +582,24 @@ export async function applyLoyaltyOnSale(conn, ctx) {
   }
   await sqlExec(conn, "UPDATE loyalty_accounts SET lifetime_spend = lifetime_spend + ? WHERE customer_id=?", [paid, ctx.customer.id]);
   await recomputeLoyalty(ctx.businessId, ctx.customer.id, conn);
+    const [given] = await query(
+      "SELECT id FROM loyalty_ledger WHERE business_id=? AND customer_id=? AND kind='birthday' AND created_at >= ? LIMIT 1",
+      [ctx.businessId, ctx.customer.id, `${today.slice(0, 4)}-01-01`],
+    );
+    if (!given[0]) {
+      await postLoyalty(ctx.businessId, ctx.customer.id, "birthday", settings.birthday_bonus, 0, "Birthday bonus", ctx.orderId, ctx.userId, null);
+    }
+  }
+  if (ctx.customer.referred_by && settings.referral_points > 0) {
+    const [prior] = await query("SELECT id FROM sales_orders WHERE customer_id=? AND business_id=? AND id<>? LIMIT 1", [ctx.customer.id, ctx.businessId, ctx.orderId]);
+    const [already] = await query("SELECT id FROM loyalty_ledger WHERE business_id=? AND customer_id=? AND kind='referral' AND note LIKE ? LIMIT 1", [ctx.businessId, ctx.customer.referred_by, `%${ctx.customer.id}%`]);
+    if (!prior[0] && !already[0]) {
+      await loyaltyAccount(ctx.businessId, ctx.customer.referred_by);
+      await postLoyalty(ctx.businessId, ctx.customer.referred_by, "referral", settings.referral_points, 0, `Referral ${ctx.customer.id}`, ctx.orderId, ctx.userId, null);
+    }
+  }
+  await query("UPDATE loyalty_accounts SET lifetime_spend = lifetime_spend + ? WHERE customer_id=?", [paid, ctx.customer.id]);
+  await recomputeLoyalty(ctx.businessId, ctx.customer.id);
   return { points: redeemPts, rupees: redeemRs, earned };
 }
 
@@ -521,6 +608,7 @@ async function lookupBarcode(businessId, code) {
   if (!raw) return null;
   const batch = await sqlOne(
     null,
+  const [batch] = await query(
     `SELECT b.*, i.name AS item_name, i.code AS item_code, i.retail_rate, i.mrp AS item_mrp, i.gst_rate, i.base_unit, i.unit, i.purchase_rate, i.stock_gm
      FROM stock_batches b JOIN items i ON i.id = b.item_id
      WHERE b.business_id=? AND b.barcode=? LIMIT 1`,
@@ -529,6 +617,8 @@ async function lookupBarcode(businessId, code) {
   if (batch) return { ...batch, source: "batch" };
   const bc = await sqlOne(
     null,
+  if (batch[0]) return { ...batch[0], source: "batch" };
+  const [bc] = await query(
     `SELECT ib.*, i.name AS item_name, i.code AS item_code, i.retail_rate, i.mrp AS item_mrp, i.gst_rate, i.base_unit, i.unit, i.purchase_rate, i.stock_gm
      FROM item_barcodes ib JOIN items i ON i.id = ib.item_id
      WHERE ib.business_id=? AND ib.barcode=? LIMIT 1`,
@@ -537,6 +627,9 @@ async function lookupBarcode(businessId, code) {
   if (bc) return { ...bc, source: "item" };
   const item = await sqlOne(null, "SELECT * FROM items WHERE business_id=? AND barcode=? LIMIT 1", [businessId, raw]);
   if (item) return { ...item, source: "item", item_id: item.id, item_name: item.name, item_code: item.code };
+  if (bc[0]) return { ...bc[0], source: "item" };
+  const [item] = await query("SELECT * FROM items WHERE business_id=? AND barcode=? LIMIT 1", [businessId, raw]);
+  if (item[0]) return { ...item[0], source: "item", item_id: item[0].id, item_name: item[0].name, item_code: item[0].code };
   return null;
 }
 
@@ -569,6 +662,9 @@ function send(res, fn) {
     .then(fn)
     .then((data) => res.json(data))
     .catch((err) => res.status(err.status || 400).json({ error: String(err.message || err) }));
+    .then(fn)
+    .then((data) => res.json(data))
+    .catch((err) => res.status(400).json({ error: String(err.message || err) }));
 }
 
 export function registerAdvanced(app) {
@@ -619,6 +715,7 @@ export function registerAdvanced(app) {
       let generated = 0;
       for (const it of items) {
         const has = await sqlOne(null, "SELECT id FROM item_barcodes WHERE business_id=? AND item_id=? LIMIT 1", [bid(), it.id]);
+        const [has] = await query("SELECT id FROM item_barcodes WHERE business_id=? AND item_id=? LIMIT 1", [bid(), it.id]);
         if (has) continue;
         await onItemSaved(null, bid(), it.id, { barcode: it.barcode || "" });
         generated += 1;
@@ -715,6 +812,8 @@ export function registerAdvanced(app) {
       const qty = Math.abs(Number(b.quantity_gm) || 0);
       if (!itemId || qty <= 0) throw new Error("Item and quantity required");
       const item = await sqlOne(null, "SELECT * FROM items WHERE id=? AND business_id=?", [itemId, bid()]);
+      const [items] = await query("SELECT * FROM items WHERE id=? AND business_id=?", [itemId, bid()]);
+      const item = items[0];
       if (!item) throw new Error("Item not found");
       let batchId = String(b.batch_id || "");
       const barcode = String(b.barcode || "").trim();
@@ -726,6 +825,8 @@ export function registerAdvanced(app) {
       if (batchId) {
         const bt = await sqlOne(null, "SELECT * FROM stock_batches WHERE id=? AND business_id=?", [batchId, bid()]);
         if (bt) unitCost = Number(bt.unit_cost) || unitCost;
+        const [bt] = await query("SELECT * FROM stock_batches WHERE id=? AND business_id=?", [batchId, bid()]);
+        if (bt[0]) unitCost = Number(bt[0].unit_cost) || unitCost;
       }
       const loss = POSDiscount.round2(isCountItem(item) ? qty * unitCost : (qty / 1000) * unitCost);
       const role = authUser()?.role || "";
@@ -747,6 +848,9 @@ export function registerAdvanced(app) {
       const row = await sqlOne(null, "SELECT * FROM damage_records WHERE id=?", [id]);
       if (status === "approved") await applyDamageStock(row);
       return { ok: true, damage: row };
+      const [rows] = await query("SELECT * FROM damage_records WHERE id=?", [id]);
+      if (status === "approved") await applyDamageStock(rows[0]);
+      return { ok: true, damage: rows[0] };
     }),
   );
 
@@ -759,6 +863,13 @@ export function registerAdvanced(app) {
       const fresh = await sqlOne(null, "SELECT * FROM damage_records WHERE id=?", [req.params.id]);
       await applyDamageStock(fresh);
       return { ok: true, damage: fresh };
+      const [rows] = await query("SELECT * FROM damage_records WHERE id=? AND business_id=?", [req.params.id, bid()]);
+      if (!rows[0]) throw new Error("Damage record not found");
+      if (rows[0].status !== "pending") throw new Error("Already processed");
+      await query("UPDATE damage_records SET status='approved', approved_by=?, approved_at=NOW() WHERE id=?", [authUser()?.id || null, req.params.id]);
+      const [fresh] = await query("SELECT * FROM damage_records WHERE id=?", [req.params.id]);
+      await applyDamageStock(fresh[0]);
+      return { ok: true, damage: fresh[0] };
     }),
   );
 
@@ -770,6 +881,12 @@ export function registerAdvanced(app) {
       await query("UPDATE damage_records SET status='rejected', approved_by=?, approved_at=NOW() WHERE id=?", [authUser()?.id || null, req.params.id]);
       const fresh = await sqlOne(null, "SELECT * FROM damage_records WHERE id=?", [req.params.id]);
       return { ok: true, damage: fresh };
+      const [rows] = await query("SELECT * FROM damage_records WHERE id=? AND business_id=?", [req.params.id, bid()]);
+      if (!rows[0]) throw new Error("Damage record not found");
+      if (rows[0].status !== "pending") throw new Error("Already processed");
+      await query("UPDATE damage_records SET status='rejected', approved_by=?, approved_at=NOW() WHERE id=?", [authUser()?.id || null, req.params.id]);
+      const [fresh] = await query("SELECT * FROM damage_records WHERE id=?", [req.params.id]);
+      return { ok: true, damage: fresh[0] };
     }),
   );
 
@@ -823,6 +940,8 @@ export function registerAdvanced(app) {
       const customerId = String(req.body?.customer_id || "");
       const cust = await sqlOne(null, "SELECT * FROM customers WHERE id=? AND business_id=?", [customerId, bid()]);
       if (!cust) throw new Error("Customer not found");
+      const [cust] = await query("SELECT * FROM customers WHERE id=? AND business_id=?", [customerId, bid()]);
+      if (!cust[0]) throw new Error("Customer not found");
       const settings = await loyaltySettings(bid());
       if (settings.birthday_bonus <= 0) throw new Error("Birthday bonus is 0");
       await loyaltyAccount(bid(), customerId);
