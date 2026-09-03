@@ -1396,6 +1396,11 @@ function pos_php_dispatch($path, $method, $rawBody) {
       if (!$ok) {
         pos_send(401, ["error" => "Invalid master login"]);
       }
+      if (function_exists("pos_password_needs_rehash") && pos_password_needs_rehash($admin["password_hash"] ?? "")) {
+        try {
+          pos_q("UPDATE platform_admins SET password_hash = ? WHERE id = ?", "ss", [pos_hash_password($pass), $admin["id"]]);
+        } catch (Exception $e) { /* ignore rehash */ }
+      }
       $ttl = pos_ttl(pos_remember($body));
       $token = pos_new_token();
       pos_q(
@@ -1451,6 +1456,11 @@ function pos_php_dispatch($path, $method, $rawBody) {
           pos_q("UPDATE staff_users SET failed_logins = ? WHERE id = ?", "is", [$fails, $user["id"]]);
         }
         pos_send(401, ["error" => "Invalid login"]);
+      }
+      if (function_exists("pos_password_needs_rehash") && pos_password_needs_rehash($user["password_hash"] ?? "")) {
+        try {
+          pos_q("UPDATE staff_users SET password_hash = ? WHERE id = ?", "ss", [pos_hash_password($pass), $user["id"]]);
+        } catch (Exception $e) { /* ignore rehash */ }
       }
       $bizRows = pos_q("SELECT * FROM businesses WHERE id = ? LIMIT 1", "s", [$user["business_id"]]);
       $business = $bizRows[0] ?? null;

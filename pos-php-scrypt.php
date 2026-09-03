@@ -119,6 +119,11 @@ function pos_verify_password($password, $stored) {
     return password_verify((string) $password, $stored);
   }
   $parts = explode("$", $stored);
+  // Correct: pbkdf2$sha256$iters$salt$hash
+  // Legacy PHP bug wrote pbkdf2$iters$salt$hash because $sha256 was interpolated.
+  if ($parts[0] === "pbkdf2" && count($parts) === 4) {
+    array_splice($parts, 1, 0, "sha256");
+  }
   if ($parts[0] === "pbkdf2" && count($parts) >= 5) {
     $algo = $parts[1] === "sha256" ? "sha256" : $parts[1];
     $iters = (int) $parts[2];
@@ -144,9 +149,14 @@ function pos_verify_password($password, $stored) {
   return hash_equals(substr($expected, 0, $dkLen), $actual);
 }
 
+function pos_password_needs_rehash($stored) {
+  $parts = explode("$", (string) $stored);
+  return $parts[0] !== "pbkdf2" || ($parts[1] ?? "") !== "sha256" || count($parts) < 5;
+}
+
 function pos_hash_password($password) {
   $salt = random_bytes(16);
   $iters = 100000;
   $key = hash_pbkdf2("sha256", (string) $password, $salt, $iters, 32, true);
-  return "pbkdf2$sha256$" . $iters . "$" . pos_b64url_encode($salt) . "$" . pos_b64url_encode($key);
+  return "pbkdf2" . '$' . "sha256" . '$' . $iters . '$' . pos_b64url_encode($salt) . '$' . pos_b64url_encode($key);
 }
