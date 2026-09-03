@@ -1,5 +1,6 @@
 const $ = (id) => document.getElementById(id);
 let tab = "dash";
+let panelFlash = "";
 
 async function api(path, options) {
   const { res, data } = await posRequest(path, options);
@@ -253,6 +254,67 @@ function bindEnterPosButtons(root) {
   });
 }
 
+function accountLocked(u) {
+  if (!u?.locked_until) return false;
+  const until = new Date(u.locked_until);
+  return !Number.isNaN(until.getTime()) && until.getTime() > Date.now();
+}
+
+function accountStatusLabel(u) {
+  if (u.status && u.status !== "active") return u.status;
+  if (accountLocked(u)) return "Locked";
+  const fails = Number(u.failed_logins) || 0;
+  if (fails > 0) return `Active · ${fails} failed`;
+  return "Active";
+}
+
+function bindPasswordForm(form, hint, whoEl, cancelBtn, saveFn) {
+  if (!form) return {
+    open() {},
+  };
+  cancelBtn.onclick = () => {
+    form.hidden = true;
+    form.reset();
+    hint.textContent = "";
+    hint.className = "hint";
+  };
+  form.onsubmit = async (e) => {
+    e.preventDefault();
+    const fd = new FormData(form);
+    const password = String(fd.get("password") || "");
+    const confirm = String(fd.get("confirm") || "");
+    if (password !== confirm) {
+      hint.textContent = "Password and confirm password do not match";
+      hint.className = "hint error";
+      return;
+    }
+    try {
+      hint.className = "hint";
+      hint.textContent = "Saving password…";
+      await saveFn(fd, password);
+      panelFlash = "Password saved. The new login is ready.";
+      render();
+    } catch (err) {
+      hint.textContent = err.message;
+      hint.className = "hint error";
+    }
+  };
+  return {
+    open(id, label) {
+      form.hidden = false;
+      if (form.user_id) form.user_id.value = id;
+      if (form.business_id) form.business_id.value = id;
+      if (whoEl) whoEl.textContent = label;
+      form.password.value = "";
+      form.confirm.value = "";
+      hint.textContent = "";
+      hint.className = "hint";
+      form.scrollIntoView({ block: "start" });
+      form.password.focus();
+    },
+  };
+}
+
 async function readBackupFile(input) {
   const file = input?.files?.[0];
   if (!file) throw new Error("Choose a backup JSON file first");
@@ -421,7 +483,17 @@ async function render() {
       const planOptions = plans
         .map((p) => `<option value="${p.id}">${p.name} · ${money(p.fee_monthly)} / month</option>`)
         .join("");
-      body.innerHTML = `<form class="settings wide biz-create" id="biz-form">
+      body.innerHTML = `<form class="settings wide" id="biz-pw-form" hidden>
+        <h3 class="full">Set business login password</h3>
+        <input type="hidden" name="business_id" />
+        <p class="section-note" id="biz-pw-who"></p>
+        <label>New password <input name="password" type="password" required minlength="8" autocomplete="new-password" /></label>
+        <label>Confirm password <input name="confirm" type="password" required minlength="8" autocomplete="new-password" /></label>
+        <button class="btn primary" type="submit">Save password</button>
+        <button class="btn" type="button" id="biz-pw-cancel">Cancel</button>
+        <p class="hint" id="biz-pw-hint"></p>
+      </form>
+      <form class="settings wide biz-create" id="biz-form">
         <h3 class="full" id="biz-title">Add business</h3>
         <input type="hidden" name="business_id" />
         <div class="signup-grid">
@@ -504,6 +576,7 @@ async function render() {
           ymd(b.subscription_expires_at) || "—",
           `<button class="btn primary" type="button" data-enter="${b.id}">Open POS</button>
            <button class="btn" type="button" data-edit="${b.id}">Edit</button>
+           <button class="btn" type="button" data-reset-biz="${b.id}">Set password</button>
            <button class="btn" data-act="suspend" data-id="${b.id}">Suspend</button>
            <button class="btn" data-act="activate" data-id="${b.id}">Activate</button>`,
         ]),
@@ -577,8 +650,7 @@ async function render() {
           payload.logoDataUrl = await readLogo(fd.get("logo"));
           if (id) await api(`/api/master/businesses/${id}`, { method: "PUT", body: JSON.stringify(payload) });
           else await api("/api/master/businesses", { method: "POST", body: JSON.stringify(payload) });
-          hint.textContent = id && passwordChanged ? "Business updated. Login password changed." : "Saved";
-          hint.className = "hint ok";
+          panelFlash = id && passwordChanged ? "Business updated. Login password changed." : "Saved";
           render();
         } catch (err) {
           hint.textContent = err.message;
@@ -596,22 +668,85 @@ async function render() {
           render();
         };
       });
+      const bizPw = bindPasswordForm($("biz-pw-form"), $("biz-pw-hint"), $("biz-pw-who"), $("biz-pw-cancel"), async (fd, password) => {
+        const businessId = fd.get("business_id");
+        await api(`/api/master/businesses/${businessId}/reset-password`, {
+          method: "POST",
+          body: JSON.stringify({ password }),
+        });
+      });
+      body.querySelectorAll("[data-reset-biz]").forEach((btn) => {
+        btn.onclick = () => {
+          const b = rows.find((r) => r.id === btn.dataset.resetBiz);
+          bizPw.open(btn.dataset.resetBiz, `New login password for ${b?.name || "this shop"} (${b?.admin_username || b?.email || "business admin"}).`);
+        };
+      });
+      if (panelFlash) {
+        hint.textContent = panelFlash;
+        hint.className = "hint ok";
+        panelFlash = "";
+      }
     } else if (tab === "users") {
       const rows = await api("/api/master/users");
-      body.innerHTML = `<div class="table-wrap">${table(
+      body.innerHTML = `<p class="lede">Set a login password for any shop user, or unlock an account after too many failed sign-ins.</p>
+        <form class="settings wide" id="user-pw-form" hidden>
+          <h3 class="full">Set user password</h3>
+          <input type="hidden" name="user_id" />
+          <p class="section-note" id="user-pw-who"></p>
+          <label>New password <input name="password" type="password" required minlength="8" autocomplete="new-password" /></label>
+          <label>Confirm password <input name="confirm" type="password" required minlength="8" autocomplete="new-password" /></label>
+          <button class="btn primary" type="submit">Save password</button>
+          <button class="btn" type="button" id="user-pw-cancel">Cancel</button>
+          <p class="hint" id="user-pw-hint"></p>
+        </form>
+        <p class="hint" id="users-hint"></p>
+        <div class="table-wrap">${table(
         ["Email", "Name", "Role", "Business", "Status", ""],
         rows.map((u) => [
           u.email,
           `${u.first_name || ""} ${u.last_name || ""}`.trim() || "—",
           u.role,
           u.business_name || "—",
-          u.status,
-          u.status === "active"
-            ? `<button class="btn primary" type="button" data-enter-user="${u.id}">Open POS</button>`
-            : "—",
+          accountStatusLabel(u),
+          `${u.status === "active" ? `<button class="btn primary" type="button" data-enter-user="${u.id}">Open POS</button>` : ""}
+           <button class="btn" type="button" data-reset-user="${u.id}">Set password</button>
+           <button class="btn" type="button" data-unlock="${u.id}">Unlock</button>`,
         ]),
       )}</div>`;
       bindEnterPosButtons(body);
+      const usersHint = $("users-hint");
+      const userPw = bindPasswordForm($("user-pw-form"), $("user-pw-hint"), $("user-pw-who"), $("user-pw-cancel"), async (fd, password) => {
+        await api(`/api/master/users/${fd.get("user_id")}/reset-password`, {
+          method: "POST",
+          body: JSON.stringify({ password }),
+        });
+      });
+      body.querySelectorAll("[data-reset-user]").forEach((btn) => {
+        btn.onclick = () => {
+          const u = rows.find((r) => r.id === btn.dataset.resetUser);
+          const name = `${u?.first_name || ""} ${u?.last_name || ""}`.trim() || u?.email || "this user";
+          userPw.open(btn.dataset.resetUser, `New login password for ${name} (${u?.email || ""}).`);
+        };
+      });
+      body.querySelectorAll("[data-unlock]").forEach((btn) => {
+        btn.onclick = async () => {
+          btn.disabled = true;
+          try {
+            await api(`/api/master/users/${btn.dataset.unlock}/unlock`, { method: "POST" });
+            panelFlash = "Account unlocked. The user can sign in again.";
+            render();
+          } catch (err) {
+            usersHint.textContent = err.message;
+            usersHint.className = "hint error";
+            btn.disabled = false;
+          }
+        };
+      });
+      if (panelFlash) {
+        usersHint.textContent = panelFlash;
+        usersHint.className = "hint ok";
+        panelFlash = "";
+      }
     } else if (tab === "plans") {
       const rows = await api("/api/master/plans");
       body.innerHTML = `<form class="settings wide" id="plan-form">

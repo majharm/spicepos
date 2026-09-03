@@ -378,5 +378,39 @@ function pos_crud_dispatch($path, $method, $body, $bid, $auth, $branchId, $uid) 
     pos_send(200, ["ok" => true, "id" => $id]);
   }
 
+  if (preg_match('#^staff/([^/]+)$#', $path, $m) && $method === "PUT") {
+    $id = $m[1];
+    $b = $body ?: [];
+    $role = $b["role"] ?? "staff";
+    $perms = is_array($b["permissions"] ?? null) ? $b["permissions"] : pos_default_perms($role);
+    pos_q(
+      "UPDATE staff_users SET first_name=?, last_name=?, role=?, status=?, branch_id=?, permissions_json=?, mobile=?, username=?
+       WHERE id=? AND business_id=?",
+      "ssssssssss",
+      [
+        $b["first_name"] ?? $b["name"] ?? "",
+        $b["last_name"] ?? "",
+        $role,
+        $b["status"] ?? "active",
+        $b["branch_id"] ?? null,
+        json_encode($perms),
+        $b["mobile"] ?? null,
+        $b["username"] ?? null,
+        $id,
+        $bid,
+      ]
+    );
+    if (!empty($b["password"])) {
+      if (strlen((string) $b["password"]) < 8) pos_send(400, ["error" => "Password must be 8+ characters"]);
+      pos_ensure_staff_lock_columns();
+      pos_q(
+        "UPDATE staff_users SET password_hash = ?, failed_logins = 0, locked_until = NULL WHERE id=? AND business_id=?",
+        "sss",
+        [pos_hash_password($b["password"]), $id, $bid]
+      );
+    }
+    pos_send(200, ["ok" => true]);
+  }
+
   return false;
 }

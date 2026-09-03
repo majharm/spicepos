@@ -339,6 +339,38 @@ function pos_ensure_columns($table, $cols) {
   }
 }
 
+function pos_ensure_staff_lock_columns() {
+  pos_ensure_columns("staff_users", [
+    "failed_logins" => "INT NOT NULL DEFAULT 0",
+    "locked_until" => "TIMESTAMP(3) NULL",
+  ]);
+}
+
+function pos_unlock_staff_user($id) {
+  pos_ensure_staff_lock_columns();
+  $rows = pos_q("SELECT id, email FROM staff_users WHERE id = ? LIMIT 1", "s", [$id]);
+  if (!$rows) throw new Exception("User not found");
+  pos_q("UPDATE staff_users SET failed_logins = 0, locked_until = NULL WHERE id = ?", "s", [$id]);
+  return $rows[0];
+}
+
+function pos_set_staff_password($id, $password) {
+  pos_ensure_staff_lock_columns();
+  if (strlen((string) $password) < 8) throw new Exception("Password must be 8+ characters");
+  $rows = pos_q(
+    "SELECT id, email, first_name, username, role, business_id, mobile FROM staff_users WHERE id = ? LIMIT 1",
+    "s",
+    [$id]
+  );
+  if (!$rows) throw new Exception("User not found");
+  pos_q(
+    "UPDATE staff_users SET password_hash = ?, failed_logins = 0, locked_until = NULL WHERE id = ?",
+    "ss",
+    [pos_hash_password($password), $id]
+  );
+  return $rows[0];
+}
+
 function pos_ensure_business_columns() {
   static $done = false;
   if ($done) return;
@@ -1183,6 +1215,7 @@ function pos_update_business($id, $raw) {
   } catch (Exception $e) { /* optional table */ }
   $admins = pos_q("SELECT * FROM staff_users WHERE business_id = ? AND role = 'business_admin' LIMIT 1", "s", [$id]);
   if ($admins) {
+    pos_ensure_staff_lock_columns();
     $admin = $admins[0];
     $nextUser = $b["username"] ?: ($admin["username"] ?? "");
     $nextHash = $b["password"] ? pos_hash_password($b["password"]) : $admin["password_hash"];
@@ -1384,6 +1417,7 @@ function pos_php_dispatch($path, $method, $rawBody) {
     }
 
     if ($path === "auth/login" && $method === "POST") {
+      pos_ensure_staff_lock_columns();
       $id = trim((string) ($body["identifier"] ?? $body["email"] ?? ""));
       $low = strtolower($id);
       $rows = pos_q(
@@ -1734,6 +1768,37 @@ function pos_php_dispatch($path, $method, $rawBody) {
       ]);
     }
 
+    if (preg_match("#^master/businesses/([^/]+)/reset-password$#", $path, $m) && $method === "POST") {
+      $password = $body["password"] ?? "";
+      $admins = pos_q(
+        "SELECT id FROM staff_users WHERE business_id = ? AND role = 'business_admin' ORDER BY email ASC LIMIT 1",
+        "s",
+        [$m[1]]
+      );
+      if (!$admins) throw new Exception("No business admin login found for this shop");
+      $user = pos_set_staff_password($admins[0]["id"], $password);
+      pos_audit($auth["admin"], "Password Reset", [
+        "module" => "businesses",
+        "target_id" => $m[1],
+        "target_name" => $user["email"] ?? "",
+        "staff_user_id" => $user["id"] ?? "",
+      ]);
+      if (function_exists("pos_send_credential_alerts")) {
+        $biz = pos_q("SELECT name FROM businesses WHERE id = ? LIMIT 1", "s", [$m[1]]);
+        pos_send_credential_alerts([
+          "businessId" => $user["business_id"] ?? $m[1],
+          "shopName" => $biz[0]["name"] ?? "",
+          "ownerName" => $user["first_name"] ?? "",
+          "email" => $user["email"] ?? "",
+          "username" => $user["username"] ?? "",
+          "password" => $password,
+          "role" => $user["role"] ?? "",
+          "mobile" => $user["mobile"] ?? "",
+        ]);
+      }
+      pos_send(200, ["ok" => true, "email" => $user["email"] ?? ""]);
+    }
+
     if (preg_match("#^master/users/([^/]+)/enter$#", $path, $m) && $method === "POST") {
       $users = pos_q("SELECT * FROM staff_users WHERE id = ? LIMIT 1", "s", [$m[1]]);
       $user = $users[0] ?? null;
@@ -1763,9 +1828,10 @@ function pos_php_dispatch($path, $method, $rawBody) {
     }
 
     if ($path === "master/users" && $method === "GET") {
+      pos_ensure_staff_lock_columns();
       pos_send(200, pos_q(
         "SELECT u.id, u.email, u.first_name, u.last_name, u.role, u.status, u.business_id, u.mobile, u.username,
-                b.name AS business_name
+                u.failed_logins, u.locked_until, b.name AS business_name
          FROM staff_users u LEFT JOIN businesses b ON b.id = u.business_id
          ORDER BY u.email"
       ));
@@ -1773,29 +1839,28 @@ function pos_php_dispatch($path, $method, $rawBody) {
 
     if (preg_match("#^master/users/([^/]+)/reset-password$#", $path, $m) && $method === "POST") {
       $password = $body["password"] ?? "";
-      if (strlen((string) $password) < 8) throw new Exception("Password must be 8+ characters");
-      pos_q("UPDATE staff_users SET password_hash = ?, failed_logins = 0, locked_until = NULL WHERE id = ?", "ss", [pos_hash_password($password), $m[1]]);
+      $user = pos_set_staff_password($m[1], $password);
+      pos_audit($auth["admin"], "Password Reset", ["module" => "users", "target_id" => $m[1], "target_name" => $user["email"] ?? ""]);
       if (function_exists("pos_send_credential_alerts")) {
-        $u = pos_q(
-          "SELECT u.email, u.first_name, u.username, u.role, u.business_id, u.mobile, b.name AS shop_name
-           FROM staff_users u LEFT JOIN businesses b ON b.id = u.business_id WHERE u.id = ? LIMIT 1",
-          "s",
-          [$m[1]]
-        );
-        if ($u) {
-          pos_send_credential_alerts([
-            "businessId" => $u[0]["business_id"] ?? "",
-            "shopName" => $u[0]["shop_name"] ?? "",
-            "ownerName" => $u[0]["first_name"] ?? "",
-            "email" => $u[0]["email"] ?? "",
-            "username" => $u[0]["username"] ?? "",
-            "password" => $password,
-            "role" => $u[0]["role"] ?? "",
-            "mobile" => $u[0]["mobile"] ?? "",
-          ]);
-        }
+        $shop = pos_q("SELECT name FROM businesses WHERE id = ? LIMIT 1", "s", [$user["business_id"] ?? ""]);
+        pos_send_credential_alerts([
+          "businessId" => $user["business_id"] ?? "",
+          "shopName" => $shop[0]["name"] ?? "",
+          "ownerName" => $user["first_name"] ?? "",
+          "email" => $user["email"] ?? "",
+          "username" => $user["username"] ?? "",
+          "password" => $password,
+          "role" => $user["role"] ?? "",
+          "mobile" => $user["mobile"] ?? "",
+        ]);
       }
-      pos_send(200, ["ok" => true]);
+      pos_send(200, ["ok" => true, "email" => $user["email"] ?? ""]);
+    }
+
+    if (preg_match("#^master/users/([^/]+)/unlock$#", $path, $m) && $method === "POST") {
+      $user = pos_unlock_staff_user($m[1]);
+      pos_audit($auth["admin"], "Account Unlocked", ["module" => "users", "target_id" => $m[1], "target_name" => $user["email"] ?? ""]);
+      pos_send(200, ["ok" => true, "email" => $user["email"] ?? ""]);
     }
 
     if ($path === "master/branches" && $method === "GET") {

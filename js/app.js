@@ -18,6 +18,7 @@ const state = {
   session: null,
   perms: {},
   support: {},
+  staff: [],
   plan: null,
   wearerFilter: "",
   sizeFilter: "",
@@ -1547,9 +1548,30 @@ async function loadStock() {
 
 async function loadStaff() {
   const rows = await api("/api/staff");
-  $("staff-table").innerHTML = `<table><thead><tr><th>Email</th><th>Name</th><th>Role</th><th>Status</th></tr></thead><tbody>${rows
-    .map((u) => `<tr><td>${escapeHtml(u.email)}</td><td>${escapeHtml(u.first_name)} ${escapeHtml(u.last_name)}</td><td>${escapeHtml(u.role)}</td><td>${escapeHtml(u.status)}</td></tr>`)
+  state.staff = rows;
+  $("staff-table").innerHTML = `<table><thead><tr><th>Email</th><th>Name</th><th>Role</th><th>Status</th><th></th></tr></thead><tbody>${rows
+    .map(
+      (u) => `<tr>
+      <td>${escapeHtml(u.email)}</td>
+      <td>${escapeHtml(u.first_name)} ${escapeHtml(u.last_name)}</td>
+      <td>${escapeHtml(u.role)}</td>
+      <td>${escapeHtml(u.status)}</td>
+      <td><button class="btn" type="button" data-edit-staff="${escapeHtml(u.id)}">Edit</button></td>
+    </tr>`,
+    )
     .join("")}</tbody></table>`;
+}
+
+function fillStaffForm(u) {
+  $("st-id").value = u?.id || "";
+  $("st-first").value = u?.first_name || "";
+  $("st-email").value = u?.email || "";
+  $("st-pass").value = "";
+  $("st-pass").required = !u;
+  $("st-pass").placeholder = u ? "Leave blank to keep current password" : "";
+  $("st-role").value = u?.role || "cashier";
+  $("staff-save").textContent = u ? "Update staff" : "Save";
+  if ($("staff-cancel")) $("staff-cancel").hidden = !u;
 }
 
 async function loadBranches() {
@@ -3096,21 +3118,39 @@ $("held-bills")?.addEventListener("click", async (e) => {
 $("staff-form")?.addEventListener("submit", async (e) => {
   e.preventDefault();
   try {
-    await api("/api/staff", {
-      method: "POST",
-      body: JSON.stringify({
-        first_name: $("st-first").value,
-        email: $("st-email").value,
-        password: $("st-pass").value,
-        role: $("st-role").value,
-      }),
-    });
-    $("staff-hint").textContent = "Saved";
+    const id = $("st-id")?.value || "";
+    const payload = {
+      first_name: $("st-first").value,
+      email: $("st-email").value,
+      role: $("st-role").value,
+    };
+    const password = $("st-pass").value;
+    if (password) payload.password = password;
+    if (!id && !password) throw new Error("Password is required for a new staff login");
+    if (id) await api(`/api/staff/${id}`, { method: "PUT", body: JSON.stringify(payload) });
+    else await api("/api/staff", { method: "POST", body: JSON.stringify(payload) });
+    $("staff-hint").textContent = id && password ? "Staff updated. Login password changed." : "Saved";
+    $("staff-hint").className = "hint ok";
+    fillStaffForm(null);
     $("staff-form").reset();
+    if ($("st-id")) $("st-id").value = "";
+    if ($("st-pass")) $("st-pass").required = true;
     loadStaff();
   } catch (err) {
     $("staff-hint").textContent = err.message;
+    $("staff-hint").className = "hint error";
   }
+});
+$("staff-cancel")?.addEventListener("click", () => {
+  fillStaffForm(null);
+  $("staff-form").reset();
+  $("staff-hint").textContent = "";
+});
+$("staff-table")?.addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-edit-staff]");
+  if (!btn) return;
+  const u = (state.staff || []).find((row) => row.id === btn.dataset.editStaff);
+  if (u) fillStaffForm(u);
 });
 $("branch-form")?.addEventListener("submit", async (e) => {
   e.preventDefault();

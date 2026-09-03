@@ -126,3 +126,20 @@ test("PHP customer insert bind types match placeholders", () => {
   assert.match(read("js/app.js"), /Update pack/);
   assert.match(index, /id="pack-id"/);
 });
+
+test("Master Admin can set passwords and unlock locked accounts", () => {
+  const masterJs = read("js/master.js");
+  const masterApi = read("server/master.js");
+  const core = read("pos-php-core.php");
+  assert.match(masterJs, /data-reset-biz/);
+  assert.match(masterJs, /data-reset-user/);
+  assert.match(masterJs, /data-unlock/);
+  assert.match(masterJs, /accountStatusLabel/);
+  assert.match(masterApi, /\/api\/master\/users\/:id\/unlock/);
+  assert.match(masterApi, /\/api\/master\/businesses\/:id\/reset-password/);
+  assert.match(core, /users\/\(\[\^\/\]\+\)\/unlock/);
+  assert.match(core, /businesses\/\(\[\^\/\]\+\)\/reset-password/);
+  assert.match(core, /function pos_unlock_staff_user/);
+  assert.match(read("js/app.js"), /data-edit-staff/);
+  assert.match(read("pos-crud.php"), /staff\/\(\[\^\/\]\+\)\$#.*PUT/s);
+});

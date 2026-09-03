@@ -27,6 +27,48 @@ function send(res, fn) {
     .catch((err) => res.status(500).json({ error: String(err.message) }));
 }
 
+async function unlockStaffUser(id) {
+  const [user] = await query("SELECT id, email FROM staff_users WHERE id = ? LIMIT 1", [id]);
+  if (!user) throw new Error("User not found");
+  await query("UPDATE staff_users SET failed_logins = 0, locked_until = NULL WHERE id = ?", [id]);
+  return user;
+}
+
+async function setStaffPassword(id, password) {
+  if (!password || String(password).length < 8) throw new Error("Password must be 8+ characters");
+  const [user] = await query(
+    "SELECT id, email, first_name, username, role, business_id, mobile FROM staff_users WHERE id = ? LIMIT 1",
+    [id],
+  );
+  if (!user) throw new Error("User not found");
+  await query("UPDATE staff_users SET password_hash = ?, failed_logins = 0, locked_until = NULL WHERE id = ?", [
+    await hashPassword(password),
+    id,
+  ]);
+  return user;
+}
+
+async function notifyPasswordChange(user, password, req) {
+  try {
+    const [biz] = user?.business_id
+      ? await query("SELECT name FROM businesses WHERE id = ? LIMIT 1", [user.business_id])
+      : [];
+    await sendCredentialAlerts({
+      businessId: user.business_id,
+      shopName: biz?.name,
+      ownerName: user.first_name,
+      email: user.email,
+      username: user.username,
+      password,
+      role: user.role,
+      mobile: user.mobile,
+      signInUrl: publicLoginUrl(req),
+    });
+  } catch (err) {
+    console.error("credential alerts failed:", err.message);
+  }
+}
+
 export function registerMaster(app) {
   app.use("/api/master", requireMaster);
   registerMasterBackup(app);
@@ -365,40 +407,43 @@ export function registerMaster(app) {
     }),
   );
 
+  app.post("/api/master/businesses/:id/reset-password", (req, res) =>
+    send(res, async () => {
+      const password = req.body?.password;
+      const [admin] = await query(
+        `SELECT id, email, first_name, username, role, business_id, mobile FROM staff_users
+         WHERE business_id = ? AND role = 'business_admin'
+         ORDER BY email ASC LIMIT 1`,
+        [req.params.id],
+      );
+      if (!admin) throw new Error("No business admin login found for this shop");
+      const user = await setStaffPassword(admin.id, password);
+      await platformAudit(
+        req.auth.admin,
+        "Password Reset",
+        { module: "businesses", target_id: req.params.id, target_name: user.email, staff_user_id: user.id },
+        req,
+      );
+      await notifyPasswordChange(user, password, req);
+      return { ok: true, email: user.email };
+    }),
+  );
+
   app.post("/api/master/users/:id/reset-password", (req, res) =>
     send(res, async () => {
       const password = req.body?.password;
-      if (!password || String(password).length < 8) throw new Error("Password must be 8+ characters");
-      await query("UPDATE staff_users SET password_hash = ?, failed_logins = 0, locked_until = NULL WHERE id = ?", [
-        await hashPassword(password),
-        req.params.id,
-      ]);
-      await platformAudit(req.auth.admin, "Password Reset", { module: "users", target_id: req.params.id }, req);
-      try {
-        const [user] = await query(
-          "SELECT id, email, first_name, username, role, business_id, mobile FROM staff_users WHERE id = ? LIMIT 1",
-          [req.params.id],
-        );
-        const [biz] = user?.business_id
-          ? await query("SELECT name FROM businesses WHERE id = ? LIMIT 1", [user.business_id])
-          : [];
-        if (user) {
-          await sendCredentialAlerts({
-            businessId: user.business_id,
-            shopName: biz?.name,
-            ownerName: user.first_name,
-            email: user.email,
-            username: user.username,
-            password,
-            role: user.role,
-            mobile: user.mobile,
-            signInUrl: publicLoginUrl(req),
-          });
-        }
-      } catch (err) {
-        console.error("credential alerts failed:", err.message);
-      }
-      return { ok: true };
+      const user = await setStaffPassword(req.params.id, password);
+      await platformAudit(req.auth.admin, "Password Reset", { module: "users", target_id: user.id, target_name: user.email }, req);
+      await notifyPasswordChange(user, password, req);
+      return { ok: true, email: user.email };
+    }),
+  );
+
+  app.post("/api/master/users/:id/unlock", (req, res) =>
+    send(res, async () => {
+      const user = await unlockStaffUser(req.params.id);
+      await platformAudit(req.auth.admin, "Account Unlocked", { module: "users", target_id: user.id, target_name: user.email }, req);
+      return { ok: true, email: user.email };
     }),
   );
 
@@ -406,7 +451,7 @@ export function registerMaster(app) {
     send(res, () =>
       query(
         `SELECT u.id, u.email, u.first_name, u.last_name, u.role, u.status, u.business_id, u.mobile, u.username,
-                b.name AS business_name
+                u.failed_logins, u.locked_until, b.name AS business_name
          FROM staff_users u LEFT JOIN businesses b ON b.id = u.business_id
          ORDER BY u.email`,
       ),
