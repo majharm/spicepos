@@ -97,85 +97,97 @@
         <section class="view view-counter" id="view-counter" hidden>
           <div class="edit-order-banner" id="edit-order-banner" hidden></div>
           <header class="topbar counter-topbar">
-            <form class="search" id="search-form">
-              <input id="search" type="search" placeholder="Search name, HSN, or scan barcode…" autocomplete="off" />
+            <form class="scan-lane" id="scan-form" autocomplete="off">
+              <span class="scan-lane-ico" aria-hidden="true"></span>
+              <input id="scan-code" type="text" enterkeyhint="done" autocomplete="off" placeholder="Scan or type barcode, then Enter" />
+              <span class="scan-status" id="scan-status"></span>
             </form>
-            <div class="customer-picker">
-              <select id="customer" class="select" aria-label="Customer"></select>
+            <form class="search" id="search-form">
+              <input id="search" type="search" placeholder="Search name or HSN…" autocomplete="off" />
+            </form>
+            <div class="counter-tools">
+              <div class="customer-picker">
+                <select id="customer" class="select" aria-label="Customer"></select>
+              </div>
+              <select id="pack-choice" class="select" aria-label="Pack type">
+                <option value="">Loose items (no pack)</option>
+              </select>
+              <select id="wearer-filter" class="select footwear-only" hidden aria-label="Girls or boys">
+                <option value="">All (girls &amp; boys)</option>
+                <option value="girls">Girls</option>
+                <option value="boys">Boys</option>
+                <option value="unisex">Unisex</option>
+              </select>
+              <select id="size-filter" class="select footwear-only" hidden aria-label="Size">
+                <option value="">All sizes</option>
+              </select>
+              <select id="color-filter" class="select footwear-only" hidden aria-label="Colour">
+                <option value="">All colours</option>
+              </select>
+              <select id="pay-method" class="select" aria-label="Payment method">
+                <option value="cash">Cash</option>
+                <option value="upi">UPI</option>
+                <option value="card">Card</option>
+                <option value="credit">Credit</option>
+              </select>
+              <details class="quick-customer-wrap" id="quick-customer-wrap">
+                <summary>+ Customer</summary>
+                <form class="quick-customer" id="quick-customer-form" autocomplete="off">
+                  <input id="qc-name" name="qc-name" placeholder="Customer name" maxlength="120" />
+                  <input id="qc-mobile" name="qc-mobile" placeholder="Mobile no." inputmode="tel" maxlength="15" />
+                  <button class="btn primary" type="submit" id="qc-save">Add</button>
+                  <span class="hint" id="qc-hint"></span>
+                </form>
+              </details>
             </div>
-            <select id="pack-choice" class="select" aria-label="Pack type">
-              <option value="">Loose items (no pack)</option>
-            </select>
-            <select id="wearer-filter" class="select footwear-only" hidden aria-label="Girls or boys">
-              <option value="">All (girls &amp; boys)</option>
-              <option value="girls">Girls</option>
-              <option value="boys">Boys</option>
-              <option value="unisex">Unisex</option>
-            </select>
-            <select id="size-filter" class="select footwear-only" hidden aria-label="Size">
-              <option value="">All sizes</option>
-            </select>
-            <select id="color-filter" class="select footwear-only" hidden aria-label="Colour">
-              <option value="">All colours</option>
-            </select>
-            <select id="pay-method" class="select" aria-label="Payment method">
-              <option value="cash">Cash</option>
-              <option value="upi">UPI</option>
-              <option value="card">Card</option>
-              <option value="credit">Credit</option>
-            </select>
-            <details class="quick-customer-wrap" id="quick-customer-wrap" open>
-              <summary>New customer</summary>
-              <form class="quick-customer" id="quick-customer-form" autocomplete="off">
-                <input id="qc-name" name="qc-name" placeholder="Customer name" maxlength="120" />
-                <input id="qc-mobile" name="qc-mobile" placeholder="Mobile no." inputmode="tel" maxlength="15" />
-                <button class="btn primary" type="submit" id="qc-save">Add</button>
-                <span class="hint" id="qc-hint"></span>
-              </form>
-            </details>
           </header>
           <div class="workspace">
             <div class="catalog" id="catalog"></div>
             <aside class="ticket bill-panel" id="bill-panel">
               <div class="ticket-head">
                 <div class="ticket-head-copy">
-                  <h2>Current bill</h2>
-                  <p class="ticket-sub" id="ticket-sub">Tap items to add · type any grams</p>
+                  <h2>Bill</h2>
+                  <p class="ticket-sub" id="ticket-sub">Scan, tap, or search</p>
                 </div>
                 <button type="button" class="bill-toggle" id="bill-toggle" aria-controls="bill-panel" aria-expanded="true" aria-label="Hide bill" title="Hide bill">›</button>
               </div>
               <div class="ticket-pack" id="chosen-pack">Pack: Loose items</div>
               <div id="pack-bar" class="pack-bar"></div>
               <div class="lines" id="lines"></div>
-              <div class="bill-disc" id="bill-disc-wrap">
-                <label>Bill discount
-                  <span class="disc-pair">
-                    <select id="bill-disc-type" aria-label="Bill discount type">
-                      <option value="amt">₹</option>
-                      <option value="pct">%</option>
-                    </select>
-                    <input id="bill-disc-value" type="number" min="0" step="0.01" value="0" aria-label="Bill discount value" />
-                  </span>
-                </label>
-                <label class="loyalty-redeem" id="loyalty-redeem-wrap">Royalty redeem
-                  <input id="loyalty-redeem" type="number" min="0" step="1" value="0" aria-label="Points to redeem" />
-                  <span class="hint" id="loyalty-hint"></span>
-                </label>
-              </div>
+              <details class="bill-extras" id="bill-extras">
+                <summary>Discount &amp; royalty</summary>
+                <div class="bill-disc" id="bill-disc-wrap">
+                  <label>Bill discount
+                    <span class="disc-pair">
+                      <select id="bill-disc-type" aria-label="Bill discount type">
+                        <option value="amt">₹</option>
+                        <option value="pct">%</option>
+                      </select>
+                      <input id="bill-disc-value" type="number" min="0" step="0.01" value="0" aria-label="Bill discount value" />
+                    </span>
+                  </label>
+                  <label class="loyalty-redeem" id="loyalty-redeem-wrap">Royalty redeem
+                    <input id="loyalty-redeem" type="number" min="0" step="1" value="0" aria-label="Points to redeem" />
+                    <span class="hint" id="loyalty-hint"></span>
+                  </label>
+                </div>
+              </details>
               <div class="totals">
-                <div><span>Qty</span><span id="qty-total">0 g</span></div>
-                <div><span>Taxable</span><span id="taxable">₹0.00</span></div>
-                <div><span>GST</span><span id="tax">₹0.00</span></div>
-                <div id="disc-row"><span>Discount</span><span id="disc-total">₹0.00</span></div>
-                <div id="loyalty-row"><span>Royalty</span><span id="loyalty-total">₹0.00</span></div>
-                <div id="profit-row"><span>Profit</span><span id="profit-total">₹0.00</span></div>
+                <div class="totals-meta">
+                  <div><span>Qty</span><span id="qty-total">0</span></div>
+                  <div><span>Taxable</span><span id="taxable">₹0.00</span></div>
+                  <div><span>GST</span><span id="tax">₹0.00</span></div>
+                  <div id="disc-row"><span>Discount</span><span id="disc-total">₹0.00</span></div>
+                  <div id="loyalty-row"><span>Royalty</span><span id="loyalty-total">₹0.00</span></div>
+                  <div id="profit-row"><span>Profit</span><span id="profit-total">₹0.00</span></div>
+                </div>
                 <div class="grand"><span>Total</span><span id="total">₹0.00</span></div>
               </div>
               <div class="pay">
                 <button class="btn danger" id="btn-clear" type="button">Clear</button>
                 <div class="pay-row">
-                  <button class="btn" id="btn-hold" type="button">Hold bill</button>
-                  <button class="btn primary" id="btn-pay" type="button">Save</button>
+                  <button class="btn" id="btn-hold" type="button">Hold</button>
+                  <button class="btn primary" id="btn-pay" type="button">Pay</button>
                 </div>
                 <div class="hint" id="hint"></div>
                 <div class="held-bills" id="held-bills" hidden></div>
