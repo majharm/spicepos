@@ -189,6 +189,10 @@ function refreshItemUnitLabels() {
   if ($("item-b2b-lab")) $("item-b2b-lab").textContent = POSUnits.rateLabel("B2B", u);
   if ($("item-purchase-lab")) $("item-purchase-lab").textContent = POSUnits.rateLabel("Purchase", u);
   if ($("item-stock-lab")) $("item-stock-lab").textContent = POSUnits.stockLabel(u);
+  const pcs = POSUnits.isCount(u);
+  document.querySelectorAll(".pcs-barcode-only").forEach((el) => {
+    el.hidden = !pcs;
+  });
 }
 
 const ORDER_STATUSES = ["confirmed", "delivered", "cancelled"];
@@ -200,7 +204,7 @@ const VIEW_META = {
   items: { title: "Items", subtitle: "Photo, HSN, unit type, rates, and stock" },
   units: { title: "Unit master", subtitle: "Units used on items — qty, kg, litre, and custom" },
   customers: { title: "Customers", subtitle: "B2C retail and B2B wholesale accounts" },
-  barcodes: { title: "Barcodes", subtitle: "Generate, reprint, and print product labels" },
+  barcodes: { title: "Barcodes", subtitle: "Quantity (pcs) items only — one code per piece" },
   damage: { title: "Damage stock", subtitle: "Wastage, approval, and estimated loss" },
   ledger: { title: "Stock ledger", subtitle: "Purchase, sale, return, and damage history" },
   loyalty: { title: "Royalty points", subtitle: "Earn, redeem, tiers, birthday and referral" },
@@ -1612,6 +1616,7 @@ async function loadBootstrap() {
   renderPoLines();
   fillExpenseCategories();
   void Promise.all([loadToday(), loadDashboard(), loadSuppliers().catch(() => {}), loadHolds().catch(() => {})]);
+  void loadCustomerLoyalty();
 }
 
 async function loadDashboard() {
@@ -2345,6 +2350,7 @@ $("items-table").addEventListener("click", async (e) => {
     if ($("item-mrp")) $("item-mrp").value = i.mrp || i.retail_rate || "";
     if ($("item-barcode")) $("item-barcode").value = i.barcode || "";
     if ($("item-mfr-barcode")) $("item-mfr-barcode").value = "";
+    if ($("item-barcode-qty")) $("item-barcode-qty").value = "";
     $("item-b2b").value = i.b2b_rate;
     $("item-purchase").value = i.purchase_rate;
     $("item-gst").value = i.gst_rate;
@@ -2727,8 +2733,9 @@ $("item-form").addEventListener("submit", async (e) => {
     purchase_rate: $("item-purchase").value,
     gst_rate: $("item-gst").value,
     mrp: $("item-mrp")?.value || "",
-    barcode: $("item-barcode")?.value || "",
-    mfr_barcode: $("item-mfr-barcode")?.value || "",
+    barcode: POSUnits.isCount(unit) ? ($("item-barcode")?.value || "") : "",
+    mfr_barcode: POSUnits.isCount(unit) ? ($("item-mfr-barcode")?.value || "") : "",
+    barcode_qty: POSUnits.isCount(unit) ? Number($("item-barcode-qty")?.value) || 0 : 0,
     stock_gm: POSUnits.toBase($("item-stock").value, unit),
     image_url: state.itemImage || "",
   };
@@ -3390,10 +3397,11 @@ $("device-form")?.addEventListener("submit", async (e) => {
   $("device-form").reset();
   loadDevices();
 });
-function fillItemPicker(datalistId, searchId, hiddenId) {
+function fillItemPicker(datalistId, searchId, hiddenId, filterFn) {
   const list = $(datalistId);
   if (!list) return;
-  list.innerHTML = activeItems()
+  const items = activeItems().filter((i) => (filterFn ? filterFn(i) : true));
+  list.innerHTML = items
     .map((i) => `<option value="${escapeHtml(i.name)}" data-id="${escapeHtml(i.id)}" label="${escapeHtml(i.barcode || i.code || "")}"></option>`)
     .join("");
   const search = $(searchId);
@@ -3402,7 +3410,8 @@ function fillItemPicker(datalistId, searchId, hiddenId) {
     search.dataset.bound = "1";
     search.addEventListener("change", () => {
       const q = String(search.value || "").trim().toLowerCase();
-      const item = activeItems().find((i) => i.name.toLowerCase() === q || String(i.barcode || "").toLowerCase() === q || String(i.code || "").toLowerCase() === q);
+      const pool = activeItems().filter((i) => (filterFn ? filterFn(i) : true));
+      const item = pool.find((i) => i.name.toLowerCase() === q || String(i.barcode || "").toLowerCase() === q || String(i.code || "").toLowerCase() === q);
       hidden.value = item?.id || "";
     });
   }
@@ -3465,7 +3474,8 @@ $("customer")?.addEventListener("change", () => {
 });
 
 async function loadCustomerLoyalty() {
-  if (!state.customerId || !can("loyalty") && state.session?.role !== "business_admin") return;
+  if (!state.customerId) return;
+  if (!can("loyalty") && state.session?.role !== "business_admin") return;
   try {
     const data = await api(`/api/loyalty/customer/${encodeURIComponent(state.customerId)}`);
     state.loyaltyAccount = data.account;
@@ -3482,9 +3492,12 @@ async function loadCustomerLoyalty() {
 }
 
 async function loadBarcodesView() {
+  fillItemPicker("bc-item-list", "bc-item-search", "bc-item", (i) => POSUnits.isCount(itemUnit(i)));
   const hint = $("bc-hint");
   try {
-    const rows = await api("/api/barcodes");
+    const all = await api("/api/barcodes");
+    const countIds = new Set(state.items.filter((i) => POSUnits.isCount(itemUnit(i))).map((i) => i.id));
+    const rows = (Array.isArray(all) ? all : []).filter((r) => countIds.has(r.item_id));
     $("barcodes-table").innerHTML = `<table><thead><tr>
       <th></th><th>Item</th><th>Kind</th><th>Barcode</th><th>MRP</th><th>SP</th><th></th>
     </tr></thead><tbody>${(rows || [])
@@ -3506,6 +3519,43 @@ async function loadBarcodesView() {
   }
 }
 
+$("bc-qty-form")?.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const itemId = $("bc-item")?.value || "";
+  const qty = Number($("bc-qty")?.value) || 0;
+  const item = state.items.find((i) => i.id === itemId);
+  if (!itemId || !item) {
+    if ($("bc-hint")) $("bc-hint").textContent = "Select a Quantity (pcs) item";
+    return;
+  }
+  if (!POSUnits.isCount(itemUnit(item))) {
+    if ($("bc-hint")) $("bc-hint").textContent = "Barcodes are only for Quantity (pcs) items";
+    return;
+  }
+  try {
+    const data = await api("/api/barcodes/generate-qty", {
+      method: "POST",
+      body: JSON.stringify({ item_id: itemId, qty }),
+    });
+    const rows = data.barcodes || [];
+    if ($("bc-hint")) $("bc-hint").textContent = `Generated ${data.generated || rows.length} unique barcodes`;
+    await loadBootstrap();
+    await loadBarcodesView();
+    if ($("bc-qty-print")?.checked && rows.length && globalThis.POSBarcode?.printLabels) {
+      globalThis.POSBarcode.printLabels(
+        rows.map((r) => ({
+          name: item.name,
+          barcode: r.barcode,
+          mrp: item.mrp || item.retail_rate,
+          rate: item.retail_rate,
+        })),
+        1,
+      );
+    }
+  } catch (err) {
+    if ($("bc-hint")) $("bc-hint").textContent = err.message;
+  }
+});
 $("bc-generate-missing")?.addEventListener("click", async () => {
   try {
     const data = await api("/api/barcodes/generate-missing", { method: "POST", body: "{}" });
