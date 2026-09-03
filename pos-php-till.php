@@ -11,6 +11,7 @@ function pos_php_till_dispatch($path, $method, $body) {
     "bootstrap", "dashboard", "today", "suppliers", "items", "customers", "packs",
     "orders", "purchases", "stock", "staff", "branches", "devices", "holds",
     "checkout", "settings", "reports", "audit", "accounts", "backup", "units",
+    "barcodes", "damage", "loyalty", "batches",
   ];
   if (!in_array($head, $staff, true)) return false;
   $auth = pos_staff_session();
@@ -26,6 +27,10 @@ function pos_php_till_dispatch($path, $method, $body) {
     return true;
   }
 
+  if (function_exists("pos_is_advanced_path") && pos_is_advanced_path($path)) {
+    pos_require_advanced();
+    return (bool) pos_dispatch_advanced($path, $method, $body, $bid, $branchId, $uid, $auth);
+  }
   if ($path === "units" || preg_match('#^units/#', $path)) {
     pos_require_units();
     pos_dispatch_units($path, $method, $body, $bid, $branchId, $uid, $auth);

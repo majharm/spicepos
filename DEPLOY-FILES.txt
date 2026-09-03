@@ -1,4 +1,4 @@
-Production deploy bundle — 20260903deploy72
+Production deploy bundle — 20260903deploy73
 =========================================
 
 Upload ALL files below to Hostinger public_html (overwrite):
@@ -44,6 +44,9 @@ JavaScript
   js/app.js
   js/units.js
   js/footwear.js
+  js/discount.js
+  js/loyalty.js
+  js/barcode.js
   js/invoice.js
   js/support.js
   js/dev-mode.js
@@ -66,6 +69,7 @@ PHP
   pos-api.php
   pos-mail.php
   pos-alerts.php
+  pos-advanced.php
   api/.htaccess
   api/health/index.php
   api/checkout/index.php
@@ -100,6 +104,7 @@ Node (if using hPanel Node.js web app — upload OR git pull then Restart)
   server/units.js
   server/mail.js
   server/alerts.js
+  server/advanced.js
   server/fy.js
   package.json
 
@@ -112,7 +117,11 @@ FIXES in this bundle
   - Suppliers form and list include address and email
   - Settings page: wider card, 2-column details, styled logo upload, keep card padding on mobile
   - CSS: Master Admin mobile nav wrap, hide nav until sign-in, backup file inputs, table overflow
-  - Cache sticker 20260903deploy72 on index, login, master, setup
+  - Cache sticker 20260903deploy73 on index, login, master, setup
+  - Item barcodes (own + manufacturer), generator, and label print
+  - Counter scan + item-wise and bill ₹/% discount + royalty redeem
+  - Purchase batches/barcodes and damage approval workflow
+  - Stock ledger and customer royalty points
   - Login split layout: brand panel + form, grouped signup, legal footer on the form
   - Login footer uses https://atavtelecom.in/legal/{privacy,terms,data-deletion,refund,shipping,cookies}
   - Login: ATAV POS background for all business types

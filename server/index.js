@@ -23,6 +23,8 @@ import { recordCreditSale } from "./accounts.js";
 import { audit } from "./audit.js";
 import { getPlatformSettings } from "./settings.js";
 import { sendLowStockAlerts, tickShopAlerts, startAlertScheduler } from "./alerts.js";
+import { registerAdvanced, computeSaleLine, applySaleStock, applyLoyaltyOnSale } from "./advanced.js";
+import "../js/discount.js";
 import { canonApiUrl, isAliasedApi, isApiUrl, rewriteToApi } from "./http-path.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -83,6 +85,7 @@ app.use((req, res, next) => {
 });
 registerMaster(app);
 registerTenant(app);
+registerAdvanced(app);
 registerBackup(app);
 registerUnits(app);
 
@@ -380,7 +383,7 @@ registerCrud(app);
 registerAccounts(app);
 
 app.post("/api/checkout", requireStaff, requirePerm("counter"), async (req, res) => {
-  const { customerId, paymentMethod, lines, packId, packCount, discount } = req.body || {};
+  const { customerId, paymentMethod, lines, packId, packCount, discount, discountType, discountValue, loyaltyPoints } = req.body || {};
   if (!Array.isArray(lines) || lines.length === 0) {
     res.status(400).json({ error: "Cart is empty" });
     return;
@@ -415,16 +418,21 @@ app.post("/api/checkout", requireStaff, requirePerm("counter"), async (req, res)
         if (!item) throw new Error("Unknown item");
         const qty = Number(line.quantity_gm);
         if (!Number.isFinite(qty) || qty <= 0) throw new Error("Invalid quantity");
-        const rate =
-          customer.type === "b2b" ? Number(item.b2b_rate) : Number(item.retail_rate);
-        const amount = round2(lineAmount(qty, rate, item));
-        built.push({ item, qty, rate, amount, gstRate: Number(item.gst_rate) || 0 });
+        built.push(computeSaleLine(item, customer, line));
       }
 
-      const subtotal = round2(built.reduce((s, l) => s + l.amount, 0));
-      const billDiscount = round2(Number(discount) || 0);
-      const gst = round2(built.reduce((s, l) => s + (l.amount * l.gstRate) / 100, 0));
-      const total = round2(Math.max(0, subtotal + gst - billDiscount));
+      const D = globalThis.POSDiscount;
+      const bill = D.computeBill(built, {
+        discountType: discountType || (Number(discount) ? "amt" : "amt"),
+        discountValue: discountValue ?? discount ?? 0,
+      });
+      const subtotal = bill.subtotal;
+      const gst = bill.gst;
+      let billDiscount = bill.billDiscount;
+      let loyaltyDiscount = 0;
+      let loyaltyEarn = 0;
+      let loyaltyRedeem = 0;
+      let total = bill.total;
       const totalGm = built.reduce((s, l) => s + l.qty, 0);
 
       const [[seq]] = await conn.query(
@@ -456,6 +464,8 @@ app.post("/api/checkout", requireStaff, requirePerm("counter"), async (req, res)
         packName = packs[0]?.name || null;
       }
 
+      const afterBill = round2(Math.max(0, subtotal + gst - billDiscount));
+      total = afterBill;
       await conn.query(
         `INSERT INTO sales_orders (
            id, order_number, customer_id, customer_name, customer_type,
@@ -485,31 +495,79 @@ app.post("/api/checkout", requireStaff, requirePerm("counter"), async (req, res)
           authUser()?.id || null,
         ],
       );
+      try {
+        await conn.query(
+          `UPDATE sales_orders SET discount_type=?, discount_value=? WHERE id=? AND business_id=?`,
+          [bill.discountType, bill.discountValue, orderId, businessId],
+        );
+      } catch {
+        /* optional columns */
+      }
 
       for (const line of built) {
+        const lineId = crypto.randomUUID();
+        try {
+          await conn.query(
+            `INSERT INTO sales_order_lines (
+               id, order_id, item_id, item_name, quantity_gm, rate_per_kg,
+               discount, amount, gst_rate, cancelled, business_id,
+               mrp, discount_type, discount_value, barcode, batch_id, cost, profit
+             ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+            [
+              lineId, orderId, line.item.id, itemBillName(line.item), line.qty, line.rate,
+              line.discount, line.amount, line.gstRate, 0, businessId,
+              line.mrp, line.discountType, line.discountValue, line.barcode || null, null, line.cost, line.profit,
+            ],
+          );
+        } catch {
+          await conn.query(
+            `INSERT INTO sales_order_lines (
+               id, order_id, item_id, item_name, quantity_gm, rate_per_kg,
+               discount, amount, gst_rate, cancelled, business_id
+             ) VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+            [lineId, orderId, line.item.id, itemBillName(line.item), line.qty, line.rate, line.discount, line.amount, line.gstRate, 0, businessId],
+          );
+        }
+        const alloc = await applySaleStock(conn, {
+          businessId,
+          branchId: branchId(),
+          userId: authUser()?.id,
+          item: line.item,
+          qty: line.qty,
+          barcode: line.barcode,
+          batchId: line.batchId,
+          orderId,
+          orderNumber,
+          costRate: line.item.purchase_rate,
+        });
+        if (alloc?.batch?.id) {
+          try {
+            await conn.query("UPDATE sales_order_lines SET batch_id=?, barcode=COALESCE(NULLIF(barcode,''), ?) WHERE id=?", [alloc.batch.id, alloc.batch.barcode, lineId]);
+          } catch {
+            /* optional */
+          }
+        }
+      }
+
+      try {
+        const loyalty = await applyLoyaltyOnSale(conn, {
+          businessId,
+          customer,
+          orderId,
+          total: afterBill,
+          wantRedeem: loyaltyPoints,
+          userId: authUser()?.id,
+        });
+        loyaltyDiscount = loyalty.rupees;
+        loyaltyEarn = loyalty.earned;
+        loyaltyRedeem = loyalty.points;
+        total = round2(Math.max(0, afterBill - loyaltyDiscount));
         await conn.query(
-          `INSERT INTO sales_order_lines (
-             id, order_id, item_id, item_name, quantity_gm, rate_per_kg,
-             discount, amount, gst_rate, cancelled, business_id
-           ) VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
-          [
-            crypto.randomUUID(),
-            orderId,
-            line.item.id,
-            itemBillName(line.item),
-            line.qty,
-            line.rate,
-            0,
-            line.amount,
-            line.gstRate,
-            0,
-            businessId,
-          ],
+          `UPDATE sales_orders SET total=?, loyalty_points_redeemed=?, loyalty_points_earned=?, loyalty_discount=? WHERE id=?`,
+          [total, loyaltyRedeem, loyaltyEarn, loyaltyDiscount, orderId],
         );
-        await conn.query(
-          "UPDATE items SET stock_gm = stock_gm - ? WHERE id = ? AND business_id = ?",
-          [line.qty, line.item.id, businessId],
-        );
+      } catch {
+        /* loyalty optional */
       }
 
       const [orders] = await conn.query(
