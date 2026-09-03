@@ -435,6 +435,7 @@ body.counter-mode .session-bar { display: none; }
 body.counter-mode .view-topbar { display: none; }
 body.counter-mode .platform-notices,
 body.counter-mode .expired-banner { display: none !important; }
+body:not(.dashboard-mode):not(.counter-mode) .platform-notices { display: none !important; }
 
 .view-topbar {
   display: flex;

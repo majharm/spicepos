@@ -692,6 +692,7 @@ function showView(name) {
     btn.classList.toggle("active", btn.dataset.view === name);
   });
   document.body.classList.toggle("counter-mode", name === "counter");
+  document.body.classList.toggle("dashboard-mode", name === "dashboard");
   document.querySelector(".stage")?.classList.toggle("is-counter", name === "counter");
   const qcWrap = $("quick-customer-wrap");
   if (qcWrap) qcWrap.open = !isMobileLayout();

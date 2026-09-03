@@ -219,6 +219,8 @@ test("HTML and CSS cache stickers match deploy63", () => {
   assert.match(appJs, /class="line-ops"/);
   assert.match(appJs, /class="pack line-amt"/);
   assert.match(pos, /body\.counter-mode \.platform-notices/);
+  assert.match(pos, /body:not\(\.dashboard-mode\):not\(\.counter-mode\) \.platform-notices/);
+  assert.match(appJs, /dashboard-mode/);
   assert.match(pos, /compact-catalog: smaller item cards/);
   assert.match(pos, /bill-slider: hide unhide/);
   assert.match(pos, /minmax\(118px, 1fr\)/);
