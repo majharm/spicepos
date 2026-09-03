@@ -270,6 +270,7 @@
   .auth-shell:has(.auth-card.signup) {
     grid-template-columns: 1fr;
     max-height: none;
+    overflow: visible;
     width: min(560px, 100%);
   }
   .auth-shell .auth-scene {
@@ -277,13 +278,16 @@
     gap: 12px;
   }
   .auth-shell .auth-scene-copy { text-align: center; }
-  .auth-shell .auth-scene-types {
-    justify-content: center;
-    max-height: 76px;
-    overflow: hidden;
-  }
+  .auth-shell .auth-scene-types { display: none; }
   .auth-scene-trial { text-align: center; }
-  .auth-main { padding: 20px 18px 12px; }
+  .auth-main {
+    padding: 20px 18px 12px;
+    overflow: visible;
+  }
+  .auth-shell .login-legal {
+    justify-content: center;
+    text-align: center;
+  }
 }
 .auth-card h1, .auth-card h2 {
   margin: 0 0 8px;
