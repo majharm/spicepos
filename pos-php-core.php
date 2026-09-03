@@ -1125,7 +1125,7 @@ function pos_register_business($raw) {
   if ($nameHit) $shop = $b["name"] . " (" . $b["city"] . ")";
   $planRow = pos_q("SELECT id FROM subscription_plans WHERE id = ? OR code = ? LIMIT 1", "ss", [$b["plan_id"], strtoupper($b["plan_id"])]);
   $planId = $planRow[0]["id"] ?? "trial";
-  $expiry = $b["subscription_expires_at"] ?: date("Y-m-d", strtotime("+30 days"));
+  $expiry = $b["subscription_expires_at"] ?: date("Y-m-d", strtotime("+2 days"));
   $hash = pos_hash_password($b["password"]);
   $branchId = pos_uuid();
   $uid = pos_uuid();

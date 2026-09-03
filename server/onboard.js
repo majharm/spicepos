@@ -160,7 +160,7 @@ export async function registerBusiness(raw) {
     );
     if (!expiry) {
       await conn.query(
-        `UPDATE businesses SET subscription_expires_at = DATE_ADD(CURDATE(), INTERVAL 30 DAY) WHERE id = ?`,
+        `UPDATE businesses SET subscription_expires_at = DATE_ADD(CURDATE(), INTERVAL 2 DAY) WHERE id = ?`,
         [id],
       );
     }
