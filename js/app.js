@@ -206,7 +206,7 @@ const VIEW_META = {
   accounts: { title: "Accounts", subtitle: "Receivables, payables, GL, and books" },
   expenses: { title: "Expenses", subtitle: "Rent, power, wages, and other shop costs" },
   reports: { title: "Reports", subtitle: "Indian FY 1 Apr–31 Mar — sales, GST, expenses" },
-  settings: { title: "Settings", subtitle: "Company profile and branding" },
+  settings: { title: "Settings", subtitle: "Company profile, branding, and login password" },
   backup: { title: "Backup", subtitle: "Download or restore this shop" },
 };
 
@@ -2850,6 +2850,38 @@ $("btn-backup-restore")?.addEventListener("click", async () => {
       hint.textContent = err.message;
       hint.className = "hint error";
     }
+  }
+});
+
+$("password-form")?.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const hint = $("password-hint");
+  const current = $("pw-current")?.value || "";
+  const next = $("pw-next")?.value || "";
+  const confirm = $("pw-confirm")?.value || "";
+  if (next.length < 8) {
+    hint.textContent = "New password must be at least 8 characters";
+    hint.className = "hint error";
+    return;
+  }
+  if (next !== confirm) {
+    hint.textContent = "New password and confirm password do not match";
+    hint.className = "hint error";
+    return;
+  }
+  try {
+    hint.className = "hint";
+    hint.textContent = "Saving password…";
+    await api("/api/auth/reset-password", {
+      method: "POST",
+      body: JSON.stringify({ current, next }),
+    });
+    $("password-form").reset();
+    hint.textContent = "Password saved. Use the new password at the next sign-in.";
+    hint.className = "hint ok";
+  } catch (err) {
+    hint.textContent = err.message;
+    hint.className = "hint error";
   }
 });
 
