@@ -6,8 +6,8 @@
     <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
     <title>ATAV POS</title>
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./css/pos.css?v=20260903deploy64" />
-    <link rel="stylesheet" href="./css/saas.css?v=20260903deploy64" />
+    <link rel="stylesheet" href="./css/pos.css?v=20260903deploy65" />
+    <link rel="stylesheet" href="./css/saas.css?v=20260903deploy65" />
   </head>
   <body>
     <div class="app" id="app">
@@ -440,12 +440,15 @@
             <button class="btn acc-tab" type="button" data-acc-tab="cash-book">Cash book</button>
           </div>
           <form class="report-toolbar" id="acc-period-form">
-            <span class="fy-chip" id="acc-fy-label">FY</span>
+            <label>FY year
+              <select id="acc-fy-year" aria-label="Financial year"></select>
+            </label>
             <label>From <input id="acc-from" type="date" /></label>
             <label>To <input id="acc-to" type="date" /></label>
             <label>As of <input id="acc-asof" type="date" /></label>
             <button class="btn" type="button" id="acc-this-fy">This FY</button>
             <button class="btn primary" type="submit">Refresh</button>
+            <button class="btn" type="button" id="acc-print">Print</button>
           </form>
           <div class="hint" id="acc-hint"></div>
           <div id="acc-pane-receivables" class="acc-pane"><div class="table-wrap" id="acc-receivables-table"></div></div>
@@ -484,11 +487,14 @@
           </form>
           <div class="hint" id="exp-hint"></div>
           <form class="report-toolbar" id="exp-filter">
-            <span class="fy-chip" id="exp-fy-label">FY</span>
+            <label>FY year
+              <select id="exp-fy-year" aria-label="Financial year"></select>
+            </label>
             <label>From <input id="exp-from" type="date" /></label>
             <label>To <input id="exp-to" type="date" /></label>
             <button class="btn" type="button" id="exp-this-fy">This FY</button>
             <button class="btn primary" type="submit">Show</button>
+            <button class="btn" type="button" id="exp-print">Print</button>
           </form>
           <div class="table-wrap" id="expenses-table"></div>
         </section>
@@ -496,11 +502,14 @@
           <h2 class="visually-hidden">Reports</h2>
           <p class="lede">Sales, stock, purchases, expenses, GST, and daywise payment summary for the Indian financial year (1 April–31 March).</p>
           <form class="report-toolbar" id="report-form">
-            <span class="fy-chip" id="rep-fy-label">FY</span>
+            <label>FY year
+              <select id="rep-fy-year" aria-label="Financial year"></select>
+            </label>
             <label>From <input id="rep-from" type="date" required /></label>
             <label>To <input id="rep-to" type="date" required /></label>
             <button class="btn" type="button" id="rep-this-fy">This FY</button>
             <button class="btn primary" type="submit">Show</button>
+            <button class="btn" type="button" id="rep-print">Print</button>
             <a class="btn" id="rep-excel-all" href="#">Download all Excel</a>
           </form>
           <div class="hint" id="reports-hint"></div>
@@ -643,12 +652,12 @@
         </section>
       </div>
     </aside>
-    <script src="./js/pos-api.js?v=20260903deploy64" defer></script>
-    <script src="./js/units.js?v=20260903deploy64" defer></script>
-    <script src="./js/footwear.js?v=20260903deploy64" defer></script>
-    <script src="./js/dev-mode.js?v=20260903deploy64" defer></script>
-    <script src="./js/invoice.js?v=20260903deploy64" defer></script>
-    <script src="./js/support.js?v=20260903deploy64" defer></script>
-    <script src="./js/app.js?v=20260903deploy64" defer></script>
+    <script src="./js/pos-api.js?v=20260903deploy65" defer></script>
+    <script src="./js/units.js?v=20260903deploy65" defer></script>
+    <script src="./js/footwear.js?v=20260903deploy65" defer></script>
+    <script src="./js/dev-mode.js?v=20260903deploy65" defer></script>
+    <script src="./js/invoice.js?v=20260903deploy65" defer></script>
+    <script src="./js/support.js?v=20260903deploy65" defer></script>
+    <script src="./js/app.js?v=20260903deploy65" defer></script>
   </body>
 </html>
