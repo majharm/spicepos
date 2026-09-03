@@ -532,7 +532,7 @@ export function registerAuth(app) {
         res.status(400).json({ error: "Current password is wrong" });
         return;
       }
-      await query("UPDATE staff_users SET password_hash = ? WHERE id = ?", [
+      await query("UPDATE staff_users SET password_hash = ?, failed_logins = 0, locked_until = NULL WHERE id = ?", [
         await hashPassword(next),
         user.id,
       ]);

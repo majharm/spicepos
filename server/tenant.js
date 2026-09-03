@@ -203,11 +203,11 @@ export function registerTenant(app) {
         ],
       );
       if (b.password) {
-        await query("UPDATE staff_users SET password_hash = ? WHERE id=? AND business_id=?", [
-          await hashPassword(b.password),
-          req.params.id,
-          bid(),
-        ]);
+        if (String(b.password).length < 8) throw new Error("Password must be 8+ characters");
+        await query(
+          "UPDATE staff_users SET password_hash = ?, failed_logins = 0, locked_until = NULL WHERE id=? AND business_id=?",
+          [await hashPassword(b.password), req.params.id, bid()],
+        );
       }
       await audit("Permission Changed", { module: "staff", target_id: req.params.id }, req);
       return { ok: true };

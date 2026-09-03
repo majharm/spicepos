@@ -6,8 +6,8 @@
     <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
     <title>ATAV POS</title>
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./css/pos.css?v=20260903deploy66" />
-    <link rel="stylesheet" href="./css/saas.css?v=20260903deploy66" />
+    <link rel="stylesheet" href="./css/pos.css?v=20260903deploy67" />
+    <link rel="stylesheet" href="./css/saas.css?v=20260903deploy67" />
   </head>
   <body>
     <div class="app" id="app">
@@ -383,9 +383,10 @@
         <section class="view" id="view-staff" hidden>
           <h2 class="visually-hidden">Staff &amp; roles</h2>
           <form class="settings wide" id="staff-form">
+            <input type="hidden" id="st-id" />
             <label>First name <input id="st-first" /></label>
             <label>Email <input id="st-email" required /></label>
-            <label>Password <input id="st-pass" type="password" required /></label>
+            <label>Password <input id="st-pass" type="password" autocomplete="new-password" /></label>
             <label>Role
               <select id="st-role">
                 <option value="cashier">Cashier</option>
@@ -397,7 +398,8 @@
                 <option value="business_admin">Business Admin</option>
               </select>
             </label>
-            <button class="btn primary" type="submit">Save</button>
+            <button class="btn primary" type="submit" id="staff-save">Save</button>
+            <button class="btn" type="button" id="staff-cancel" hidden>Cancel edit</button>
           </form>
           <div class="hint" id="staff-hint"></div>
           <div class="table-wrap" id="staff-table"></div>
@@ -662,13 +664,13 @@
         </section>
       </div>
     </aside>
-    <script src="./js/gst-supply.js?v=20260903deploy66" defer></script>
-    <script src="./js/pos-api.js?v=20260903deploy66" defer></script>
-    <script src="./js/units.js?v=20260903deploy66" defer></script>
-    <script src="./js/footwear.js?v=20260903deploy66" defer></script>
-    <script src="./js/dev-mode.js?v=20260903deploy66" defer></script>
-    <script src="./js/invoice.js?v=20260903deploy66" defer></script>
-    <script src="./js/support.js?v=20260903deploy66" defer></script>
-    <script src="./js/app.js?v=20260903deploy66" defer></script>
+    <script src="./js/gst-supply.js?v=20260903deploy67" defer></script>
+    <script src="./js/pos-api.js?v=20260903deploy67" defer></script>
+    <script src="./js/units.js?v=20260903deploy67" defer></script>
+    <script src="./js/footwear.js?v=20260903deploy67" defer></script>
+    <script src="./js/dev-mode.js?v=20260903deploy67" defer></script>
+    <script src="./js/invoice.js?v=20260903deploy67" defer></script>
+    <script src="./js/support.js?v=20260903deploy67" defer></script>
+    <script src="./js/app.js?v=20260903deploy67" defer></script>
   </body>
 </html>
