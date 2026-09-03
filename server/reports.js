@@ -2,6 +2,7 @@ import { query } from "./db.js";
 import { bid } from "./context.js";
 import {
   aggregateGstByRate,
+  round2,
   splitGstAmount,
   splitOrderGst,
   sumSplitGst,
@@ -201,16 +202,21 @@ export async function buildReports(from, to) {
     cgst: purchaseInputSplit.cgst + expenseInputSplit.cgst,
     sgst: purchaseInputSplit.sgst + expenseInputSplit.sgst,
     igst: purchaseInputSplit.igst + expenseInputSplit.igst,
-    total: purchaseInputSplit.total + expenseInputSplit.total,
+    total: round2(
+      purchaseInputSplit.total +
+        expenseInputSplit.cgst +
+        expenseInputSplit.sgst +
+        expenseInputSplit.igst,
+    ),
   };
   const gstSummary = {
     output: outputSplit,
     input: inputSplit,
     net: {
-      cgst: outputSplit.cgst - inputSplit.cgst,
-      sgst: outputSplit.sgst - inputSplit.sgst,
-      igst: outputSplit.igst - inputSplit.igst,
-      total: outputSplit.total - inputSplit.total,
+      cgst: round2(outputSplit.cgst - inputSplit.cgst),
+      sgst: round2(outputSplit.sgst - inputSplit.sgst),
+      igst: round2(outputSplit.igst - inputSplit.igst),
+      total: round2(outputSplit.total - inputSplit.total),
     },
   };
   const gstB2BRows = gstB2B.map((row) => {

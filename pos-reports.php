@@ -229,7 +229,9 @@ function pos_build_reports($bid, $from, $to) {
     "cgst" => pos_gst_round2($purchaseInputSplit["cgst"] + $expenseInputSplit["cgst"]),
     "sgst" => pos_gst_round2($purchaseInputSplit["sgst"] + $expenseInputSplit["sgst"]),
     "igst" => pos_gst_round2($purchaseInputSplit["igst"] + $expenseInputSplit["igst"]),
-    "total" => pos_gst_round2($purchaseInputSplit["total"] + $expenseInputSplit["total"]),
+    "total" => pos_gst_round2(
+      $purchaseInputSplit["total"] + $expenseInputSplit["cgst"] + $expenseInputSplit["sgst"] + $expenseInputSplit["igst"]
+    ),
   ];
   $gstSummary = [
     "output" => $outputSplit,
