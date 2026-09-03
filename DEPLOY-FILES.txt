@@ -1,4 +1,4 @@
-Production deploy bundle — 20260903deploy69
+Production deploy bundle — 20260903deploy70
 =========================================
 
 Upload ALL files below to Hostinger public_html (overwrite):
@@ -11,6 +11,12 @@ HTML
   login.html
   master.html
   setup.html
+  privacy.html
+  terms.html
+  data-deletion.html
+  refund.html
+  shipping.html
+  cookies.html
 
 CSS
   css/pos.css
@@ -88,7 +94,8 @@ FIXES in this bundle
   - Suppliers form and list include address and email
   - Settings page: wider card, 2-column details, styled logo upload, keep card padding on mobile
   - CSS: Master Admin mobile nav wrap, hide nav until sign-in, backup file inputs, table overflow
-  - Cache sticker 20260903deploy69 on index, login, master, setup
+  - Cache sticker 20260903deploy70 on index, login, master, setup, and legal pages
+  - Login footer links Privacy, Terms, Data Deletion, Refund, Shipping, Cookie policies (Cashfree)
   - Login: ATAV POS background for all business types
   - FY year dropdown auto-generates 1 April–31 March years on Accounts, Reports, Expenses
   - Print button on Accounts, Reports (each block + all), and Expenses

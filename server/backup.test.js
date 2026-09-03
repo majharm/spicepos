@@ -128,10 +128,11 @@ test("PHP and HTML wire master admin backup", () => {
   );
 });
 
-test("HTML and CSS cache stickers match deploy69", () => {
+test("HTML and CSS cache stickers match deploy70", () => {
   for (const name of ["index.html", "master.html", "login.html", "setup.html"]) {
     const html = readFileSync(path.join(root, name), "utf8");
-    assert.match(html, /20260903deploy69/);
+    assert.match(html, /20260903deploy70/);
+    assert.doesNotMatch(html, /20260903deploy69/);
     assert.doesNotMatch(html, /20260903deploy68/);
     assert.doesNotMatch(html, /20260903deploy67/);
     assert.doesNotMatch(html, /20260903deploy66/);
@@ -281,8 +282,17 @@ test("HTML and CSS cache stickers match deploy69", () => {
   assert.match(login, /All types of businesses use ATAV POS/);
   assert.match(login, /Bakery \/ cake shop/);
   assert.match(login, />Bakery</);
+  assert.match(login, /class="login-legal"/);
+  assert.match(login, /href="\.\/privacy\.html">Privacy Policy</);
+  assert.match(login, /href="\.\/terms\.html">Terms &amp; Conditions</);
+  assert.match(login, /href="\.\/data-deletion\.html">Data Deletion Policy</);
+  assert.match(login, /href="\.\/refund\.html">Refund &amp; Cancellation</);
+  assert.match(login, /href="\.\/shipping\.html">Shipping &amp; Delivery</);
+  assert.match(login, /href="\.\/cookies\.html">Cookie Policy</);
   assert.match(saas, /auth-scene-types/);
   assert.match(saas, /auth-body:has\(\.auth-scene\)/);
+  assert.match(saas, /\.login-legal /);
+  assert.match(saas, /\.legal-card /);
   assert.match(masterJs, /"Bakery"/);
   assert.doesNotMatch(index, /Local name/);
 });
