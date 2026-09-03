@@ -203,11 +203,12 @@ test("HTML and CSS cache stickers match deploy73", () => {
   assert.match(appJs, /officeInvoiceBody/);
   assert.match(appJs, /setLineQty/);
   assert.match(appJs, /qty-input/);
-  assert.match(appJs, /type any grams/);
+  assert.match(appJs, /Scan, tap, or search/);
+  assert.match(appJs, /applyBarcodeScan/);
   assert.match(appJs, /data-edit-pack/);
   assert.match(appJs, /fillPackForm/);
   assert.match(appJs, /\/api\/packs\/\$\{id\}/);
-  assert.match(index, /type any grams/);
+  assert.match(index, /Scan, tap, or search/);
   assert.match(index, /id="pack-id"/);
   assert.match(index, /id="pack-save"/);
   assert.match(index, /id="pack-cancel"/);
@@ -229,7 +230,7 @@ test("HTML and CSS cache stickers match deploy73", () => {
   assert.match(appJs, /SupportPage\.pageHtml/);
   assert.match(appJs, /class="line-info"/);
   assert.match(appJs, /class="line-ops"/);
-  assert.match(appJs, /class="pack line-amt"/);
+  assert.match(appJs, /class="line-amt"/);
   assert.match(pos, /body\.counter-mode \.platform-notices/);
   assert.match(pos, /compact-catalog: smaller item cards/);
   assert.match(pos, /bill-slider: hide unhide/);

@@ -55,3 +55,17 @@ test("Item form and Counter expose colour, size, and girls/boys", () => {
   assert.match(php, /wearer_type/);
   assert.match(readFileSync(path.join(root, "pos-php-core.php"), "utf8"), /function pos_item_bill_name/);
 });
+
+test("Counter has a dedicated scan lane and Pay action", () => {
+  const index = readFileSync(path.join(root, "index.html"), "utf8");
+  const app = readFileSync(path.join(root, "js/app.js"), "utf8");
+  const css = readFileSync(path.join(root, "css/pos.css"), "utf8");
+  assert.match(index, /id="scan-form"/);
+  assert.match(index, /id="scan-code"/);
+  assert.match(index, /id="bill-extras"/);
+  assert.match(index, />Pay</);
+  assert.match(app, /async function applyBarcodeScan/);
+  assert.match(app, /function focusScanLane/);
+  assert.match(app, /Pay \$\{money\(payTotal\)\}/);
+  assert.match(css, /\.scan-lane/);
+});

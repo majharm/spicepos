@@ -148,12 +148,12 @@ function applyFootwearMode() {
       : "Name, photo, HSN code, unit type, rates, and stock.";
   }
   if ($("ticket-sub")) {
-    $("ticket-sub").textContent = on ? "Tap a pair to add · choose girls or boys" : "Tap items to add · type any grams";
+    $("ticket-sub").textContent = on ? "Scan or tap a pair · girls or boys" : "Scan, tap, or search";
   }
   VIEW_META.items.subtitle = on
     ? "Colour, size, girls/boys type, rates, and stock"
     : "Photo, HSN, unit type, rates, and stock";
-  VIEW_META.counter.subtitle = on ? "Footwear checkout — girls, boys, colour, size" : "POS checkout — tap items to add";
+  VIEW_META.counter.subtitle = on ? "Scan or tap a pair — girls, boys, colour, size" : "Scan, tap, or search — then Pay";
   const pack = $("pack-choice");
   if (pack) pack.hidden = on;
   const colors = globalThis.POSFootwear?.COLORS || [];
@@ -200,7 +200,7 @@ const PAYMENT_STATUSES = ["paid", "partial", "unpaid"];
 
 const VIEW_META = {
   dashboard: { title: "Dashboard", subtitle: "Your shop today" },
-  counter: { title: "Counter", subtitle: "POS checkout — tap items to add" },
+  counter: { title: "Counter", subtitle: "Scan, tap, or search — then Pay" },
   items: { title: "Items", subtitle: "Photo, HSN, unit type, rates, and stock" },
   units: { title: "Unit master", subtitle: "Units used on items — qty, kg, litre, and custom" },
   customers: { title: "Customers", subtitle: "B2C retail and B2B wholesale accounts" },
@@ -869,7 +869,7 @@ function showView(name) {
   document.body.classList.toggle("counter-mode", name === "counter");
   document.querySelector(".stage")?.classList.toggle("is-counter", name === "counter");
   const qcWrap = $("quick-customer-wrap");
-  if (qcWrap) qcWrap.open = !isMobileLayout();
+  if (qcWrap && name === "counter") qcWrap.open = false;
   const page = document.getElementById(`view-${name}`);
   if (page) page.scrollTop = 0;
   paintViewHeader(name);
@@ -881,7 +881,10 @@ function showView(name) {
   if (name === "suppliers") loadSuppliers();
   if (name === "support") renderSupport();
   if (name === "dashboard") loadDashboard();
-  if (name === "counter") loadHolds();
+  if (name === "counter") {
+    loadHolds();
+    queueMicrotask(focusScanLane);
+  }
   paintImpersonationControls();
   if (name === "units") renderUnitsTable();
   if (name === "items") {
@@ -1093,7 +1096,7 @@ function cartTotals() {
 function renderCart() {
   $("chosen-pack").textContent = packLabel();
   if (!state.cart.length) {
-    $("lines").innerHTML = `<p class="hint">Tap an item to add it, or choose a pack type.</p>`;
+    $("lines").innerHTML = `<p class="hint">Scan a barcode or tap an item.</p>`;
   } else {
     $("lines").innerHTML = state.cart
       .map((line) => {
@@ -1102,28 +1105,30 @@ function renderCart() {
         const step = POSUnits.counterStep(itemUnit(item));
         const unit = POSUnits.isCount(itemUnit(item)) ? "pcs" : POSUnits.typeOf(itemUnit(item)).family === "volume" ? "ml" : "g";
         const calc = lineCalc(item, line);
+        const bc = String(line.barcode || "").trim();
         return `<div class="line">
-          <div class="line-info">
-            <div class="who">${escapeHtml(itemVariantText(item) ? `${item.name} · ${itemVariantText(item)}` : item.name)}</div>
-            <div class="pack">${escapeHtml(itemVariantText(item) || `${item.category} / ${item.subcategory || "—"}`)}</div>
-          </div>
-          <div class="line-ops">
-            <div class="qty">
-              <button type="button" data-chg="${escapeHtml(item.id)}" data-d="${-step}">−</button>
-              <input class="qty-input" type="number" inputmode="numeric" min="${POSUnits.qtyMin()}" max="${POSUnits.qtyMax()}" step="1" value="${escapeHtml(line.qtyGm)}" data-qty="${escapeHtml(item.id)}" aria-label="Quantity in ${unit}" />
-              <span class="qty-unit">${escapeHtml(unit)}</span>
-              <button type="button" data-chg="${escapeHtml(item.id)}" data-d="${step}">+</button>
+          <div class="line-main">
+            <div class="line-info">
+              <div class="who">${escapeHtml(itemVariantText(item) ? `${item.name} · ${itemVariantText(item)}` : item.name)}</div>
+              <div class="pack">${escapeHtml(bc || itemVariantText(item) || item.hsn || "")}</div>
             </div>
-            <div class="pack line-amt">${money(calc.taxable)}</div>
-            ${canDiscount() ? `<div class="line-disc">
+            <div class="line-ops">
+              <div class="qty">
+                <button type="button" data-chg="${escapeHtml(item.id)}" data-d="${-step}">−</button>
+                <input class="qty-input" type="number" inputmode="numeric" min="${POSUnits.qtyMin()}" max="${POSUnits.qtyMax()}" step="1" value="${escapeHtml(line.qtyGm)}" data-qty="${escapeHtml(item.id)}" aria-label="Quantity in ${unit}" />
+                <span class="qty-unit">${escapeHtml(unit)}</span>
+                <button type="button" data-chg="${escapeHtml(item.id)}" data-d="${step}">+</button>
+              </div>
+              <div class="line-amt">${money(calc.taxable + calc.gst)}</div>
+            </div>
+          </div>
+          ${canDiscount() ? `<div class="line-disc">
               <select data-line-disc-type="${escapeHtml(item.id)}" aria-label="Line discount type">
                 <option value="amt"${(line.discountType || "amt") === "amt" ? " selected" : ""}>₹</option>
                 <option value="pct"${line.discountType === "pct" ? " selected" : ""}>%</option>
               </select>
               <input data-line-disc="${escapeHtml(item.id)}" type="number" min="0" step="0.01" value="${escapeHtml(line.discountValue || 0)}" aria-label="Line discount" />
-              <span class="line-meta">MRP ${money(calc.mrp)} · GST ${money(calc.gst)}${calc.profit || calc.profit === 0 ? ` · P ${money(calc.profit)}` : ""}</span>
             </div>` : ""}
-          </div>
         </div>`;
       })
       .join("");
@@ -1146,7 +1151,12 @@ function renderCart() {
   document.body.classList.toggle("has-cart", state.cart.length > 0);
   paintBillToggleCount();
   if ($("btn-hold")) $("btn-hold").disabled = state.cart.length === 0 || Boolean(state.editingOrderId);
-  $("btn-pay").textContent = state.editingOrderId ? "Save changes" : "Save";
+  const payTotal = t.total != null ? t.total : t.taxable + t.tax;
+  $("btn-pay").textContent = state.editingOrderId
+    ? "Save changes"
+    : state.cart.length
+      ? `Pay ${money(payTotal)}`
+      : "Pay";
   renderHeldBills();
   renderEditOrderBanner();
   if (window.DevMode?.isEnabled()) {
@@ -1203,6 +1213,65 @@ function renderPackChoice() {
   $("pack-bar").innerHTML = state.packs
     .map((p) => `<button class="btn" type="button" data-pack="${escapeHtml(p.id)}">${escapeHtml(p.name)}</button>`)
     .join("");
+}
+
+function focusScanLane() {
+  const el = $("scan-code");
+  if (!el || !document.body.classList.contains("counter-mode")) return;
+  const active = document.activeElement;
+  if (active && active !== el && active !== $("search") && (active.tagName === "INPUT" || active.tagName === "SELECT" || active.tagName === "TEXTAREA")) {
+    return;
+  }
+  try {
+    el.focus({ preventScroll: true });
+  } catch {
+    el.focus();
+  }
+}
+
+function paintScanLane(ok, label) {
+  const lane = $("scan-form");
+  const status = $("scan-status");
+  if (status) status.textContent = label || "";
+  if (!lane) return;
+  lane.classList.toggle("is-hit", Boolean(ok));
+  lane.classList.toggle("is-miss", ok === false);
+  clearTimeout(paintScanLane._t);
+  paintScanLane._t = setTimeout(() => {
+    lane.classList.remove("is-hit", "is-miss");
+  }, ok ? 600 : 900);
+}
+
+async function applyBarcodeScan(raw, sourceEl) {
+  const code = globalThis.POSBarcode?.cleanCode ? POSBarcode.cleanCode(raw) : String(raw || "").trim();
+  if (!code) return false;
+  let item = findItemByBarcode(code);
+  if (!item) {
+    try {
+      const data = await api(`/api/barcodes/lookup?code=${encodeURIComponent(code)}`);
+      const match = data.match || data;
+      const id = match.item_id || match.id;
+      item = state.items.find((i) => i.id === id);
+    } catch {
+      item = null;
+    }
+  }
+  if (item) {
+    addItem(item.id, null, code);
+    if (sourceEl) sourceEl.value = "";
+    if (sourceEl === $("search")) {
+      state.query = "";
+      renderCatalog();
+    }
+    paintScanLane(true, item.name);
+    setHint(`Added ${item.name}`, "ok");
+    focusScanLane();
+    return true;
+  }
+  paintScanLane(false, "Not found");
+  setHint(`Barcode not found: ${code}`, "error");
+  if (sourceEl === $("scan-code")) sourceEl.select();
+  return false;
 }
 
 function addItem(id, qtyGm, lineBarcode) {
@@ -2340,7 +2409,10 @@ async function loadAccounts() {
 
 $("catalog").addEventListener("click", (e) => {
   const btn = e.target.closest("[data-add]");
-  if (btn) addItem(btn.dataset.add);
+  if (btn) {
+    addItem(btn.dataset.add);
+    focusScanLane();
+  }
 });
 $("lines").addEventListener("click", (e) => {
   if (e.target.closest("[data-qty]")) return;
@@ -2600,30 +2672,16 @@ $("color-filter")?.addEventListener("change", () => {
   state.colorFilter = $("color-filter").value;
   renderCatalog();
 });
+$("scan-form")?.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  await applyBarcodeScan($("scan-code")?.value, $("scan-code"));
+});
 $("search-form").addEventListener("submit", async (e) => {
   e.preventDefault();
   const code = String($("search").value || "").trim();
   if (!code) return;
-  let item = findItemByBarcode(code);
-  if (!item) {
-    try {
-      const data = await api(`/api/barcodes/lookup?code=${encodeURIComponent(code)}`);
-      const match = data.match || data;
-      const id = match.item_id || match.id;
-      item = state.items.find((i) => i.id === id);
-      if (item) addItem(item.id, null, code);
-    } catch {
-      item = null;
-    }
-  } else {
-    addItem(item.id, null, code);
-  }
-  if (item) {
-    $("search").value = "";
-    state.query = "";
-    renderCatalog();
-    setHint(`Scanned ${item.name}`, "ok");
-  }
+  const scanned = await applyBarcodeScan(code, $("search"));
+  if (!scanned) $("search").focus();
 });
 $("customer").addEventListener("change", () => {
   state.customerId = $("customer").value;
@@ -3409,7 +3467,7 @@ window.addEventListener("resize", () => {
   if (!isMobileLayout()) {
     setNavCollapsed(false);
     const wrap = $("quick-customer-wrap");
-    if (wrap) wrap.open = true;
+    if (wrap && !isMobileLayout()) wrap.open = false;
   } else if (!$("nav-scrim")?.hidden && document.getElementById("app")?.classList.contains("nav-collapsed")) {
     setNavCollapsed(true);
   }
