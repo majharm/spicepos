@@ -46,6 +46,16 @@ test("PHP and Node wire barcode, damage, loyalty, and ledger modules", () => {
   assert.match(adv, /barcodes\/generate-qty/);
   assert.match(adv, /Barcodes are only for Quantity \(pcs\) items/);
   assert.match(index, /id="bc-qty-form"/);
+  assert.match(index, /Type or scan — not auto generated/);
+  assert.match(index, /pcs-barcode-only/);
+  assert.match(app, /parsePoBarcodes/);
+  assert.match(app, /data-po-barcodes/);
+  assert.match(app, /pcs-barcode-only/);
+  assert.match(nodeAdv, /export function parseManualBarcodes/);
+  assert.match(nodeAdv, /export function resolvePurchaseBarcodes/);
+  assert.match(nodeAdv, /Enter \$\{pieces\} barcodes for \$\{pieces\} pcs/);
+  assert.match(adv, /function pos_parse_manual_barcodes/);
+  assert.match(adv, /function pos_resolve_purchase_barcodes/);
   assert.match(index, /id="item-barcode-qty"/);
   assert.match(index, /pcs-barcode-only/);
   assert.match(app, /barcodes\/generate-qty/);
@@ -67,11 +77,22 @@ test("PHP and Node wire barcode, damage, loyalty, and ledger modules", () => {
   assert.match(app, /data-print-po-barcodes/);
 });
 
+test("resolvePurchaseBarcodes requires one typed code per piece", async () => {
+  const { parseManualBarcodes, resolvePurchaseBarcodes } = await import("./advanced.js");
+  assert.deepEqual(parseManualBarcodes("P1\nP2\nP3"), ["P1", "P2", "P3"]);
+  assert.throws(() => parseManualBarcodes("P1 P1"), /Duplicate barcode P1/);
+  const pcs = { base_unit: "PCS", unit: "PCS" };
+  assert.deepEqual(resolvePurchaseBarcodes(pcs, 3, { barcodes: ["A1", "A2", "A3"] }), ["A1", "A2", "A3"]);
+  assert.throws(() => resolvePurchaseBarcodes(pcs, 20, { barcodes: ["A1"] }), /Enter 20 barcodes for 20 pcs/);
+  assert.deepEqual(resolvePurchaseBarcodes({ base_unit: "GM" }, 1000, { barcodes: ["X"] }), []);
+});
+
 test("item save and checkout persist barcode and line discount fields", () => {
   const nodeCrud = read("server/crud.js");
   const nodeIndex = read("server/index.js");
   assert.match(nodeCrud, /onItemSaved/);
   assert.match(nodeCrud, /onPurchaseLineSaved/);
+  assert.match(nodeCrud, /barcode_count/);
   assert.match(nodeIndex, /computeSaleLine/);
   assert.match(nodeIndex, /applyLoyaltyOnSale/);
   assert.match(nodeIndex, /discount_type/);

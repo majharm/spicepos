@@ -266,6 +266,7 @@ function pos_crud_dispatch($path, $method, $body, $bid, $auth, $branchId, $uid) 
           ]
         );
         if (is_file(__DIR__ . "/pos-advanced.php")) require_once __DIR__ . "/pos-advanced.php";
+        $barcodeCount = 0;
         foreach ($built as $idx => $line) {
           $lineId = pos_uuid();
           pos_q(
@@ -282,14 +283,22 @@ function pos_crud_dispatch($path, $method, $body, $bid, $auth, $branchId, $uid) 
           pos_q("UPDATE items SET stock_gm = stock_gm + ? WHERE id = ? AND business_id = ?", "dss", [$line["qty"], $line["item"]["id"], $bid]);
           if (function_exists("pos_create_purchase_batch")) {
             $src = $lines[$idx] ?? [];
-            pos_create_purchase_batch($bid, $branchId ?? null, $uid, [
+            $batch = pos_create_purchase_batch($bid, $branchId ?? null, $uid, [
               "id" => $id, "purchase_number" => $purchaseNumber, "supplier_id" => $supplier["id"],
             ], $lineId, $line["item"], $line["qty"], $line["rate"], $src);
+            if (is_array($batch["barcodes"] ?? null)) {
+              foreach ($batch["barcodes"] as $bcRow) {
+                if (!empty($bcRow["barcode"])) $barcodeCount++;
+              }
+            } elseif (!empty($batch["barcode"])) {
+              $barcodeCount++;
+            }
           }
         }
         $rows = pos_q("SELECT * FROM purchases WHERE id = ? LIMIT 1", "s", [$id]);
         $purchase = $rows[0] ?? null;
         $purchase["lines"] = pos_q("SELECT * FROM purchase_lines WHERE purchase_id = ?", "s", [$id]);
+        $purchase["barcode_count"] = $barcodeCount;
         pos_record_credit_purchase($supplier, $total, $id, $purchaseNumber, $method, $bid, $uid);
         pos_post_purchase_journal($bid, $uid, $purchase);
         return $purchase;

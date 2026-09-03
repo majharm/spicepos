@@ -202,6 +202,34 @@ export async function attachItemBarcode(conn, businessId, itemId, code, kind = "
   return sqlOne(conn, "SELECT * FROM item_barcodes WHERE id = ?", [id]);
 }
 
+export function parseManualBarcodes(raw) {
+  const parts = Array.isArray(raw) ? raw : String(raw ?? "").split(/[\s,;]+/);
+  const out = [];
+  const seen = new Set();
+  for (const part of parts) {
+    const code = String(part || "").trim().replace(/\s+/g, "");
+    if (!code) continue;
+    if (seen.has(code)) throw new Error(`Duplicate barcode ${code}`);
+    seen.add(code);
+    out.push(code);
+    if (out.length > 500) throw new Error("Max 500 barcodes at once");
+  }
+  return out;
+}
+
+export function resolvePurchaseBarcodes(item, qty, lineIn = {}) {
+  if (!isCountItem(item)) return [];
+  const pieces = Math.max(0, Math.round(Number(qty) || 0));
+  const raw = lineIn.barcodes != null ? lineIn.barcodes : (lineIn.barcode || []);
+  const codes = parseManualBarcodes(raw);
+  if (pieces < 1) throw new Error("Quantity required");
+  if (pieces > 500) throw new Error("Max 500 barcodes at once");
+  if (codes.length !== pieces) {
+    throw new Error(`Enter ${pieces} barcodes for ${pieces} pcs (you entered ${codes.length})`);
+  }
+  return codes;
+}
+
 export async function onItemSaved(conn, businessId, itemId, body = {}) {
   await ensureAdvancedSchema();
   const item = await sqlOne(conn, "SELECT * FROM items WHERE id = ? AND business_id = ?", [itemId, businessId]);
@@ -215,6 +243,9 @@ export async function onItemSaved(conn, businessId, itemId, body = {}) {
     }
     return "";
   }
+  const own = String(body.barcode || "").trim();
+  const mfr = String(body.mfr_barcode || body.manufacturer_barcode || "").trim();
+  if (own) await attachItemBarcode(conn, businessId, itemId, own, "own", true);
   let own = String(body.barcode || "").trim();
   const mfr = String(body.mfr_barcode || body.manufacturer_barcode || "").trim();
   if (!own) own = String(item?.barcode || "").trim();
@@ -227,6 +258,10 @@ export async function onItemSaved(conn, businessId, itemId, body = {}) {
     } catch {
       /* optional */
     }
+  }
+  const extras = parseManualBarcodes(body.barcodes ?? body.barcode_list ?? []);
+  for (const code of extras) {
+    if (code !== own && code !== mfr) await attachItemBarcode(conn, businessId, itemId, code, "unit", false);
   }
   const extraQty = Math.floor(Number(body.barcode_qty ?? body.barcodeQty ?? 0) || 0);
   if (extraQty > 0) await generateQtyBarcodes(conn, businessId, itemId, extraQty);
@@ -316,6 +351,13 @@ async function insertPurchaseBatch(conn, ctx, barcode, batchNo, qty, kind) {
 export async function onPurchaseLineSaved(conn, ctx) {
   await ensureAdvancedSchema();
   const baseNo = String(ctx.batchNo || `${ctx.purchaseNumber || "PO"}-${ctx.item?.code || "IT"}-${String(ctx.lineId || "").slice(0, 4)}`);
+  const codes = resolvePurchaseBarcodes(ctx.item, ctx.qty, ctx);
+  if (codes.length) {
+    const rows = [];
+    for (let i = 0; i < codes.length; i++) {
+      const used = await sqlOne(conn, "SELECT id FROM stock_batches WHERE business_id=? AND barcode=? AND remaining_gm > 0 LIMIT 1", [ctx.businessId, codes[i]]);
+      if (used) throw new Error(`Barcode ${codes[i]} is already in stock`);
+      rows.push(await insertPurchaseBatch(conn, ctx, codes[i], `${baseNo}-${String(i + 1).padStart(3, "0")}`, 1, "unit"));
   const pieces = isCountItem(ctx.item) ? Math.max(0, Math.round(Number(ctx.qty) || 0)) : 0;
   const qtyWise = pieces > 1 && pieces <= 500;
   if (qtyWise) {
@@ -333,6 +375,7 @@ export async function onPurchaseLineSaved(conn, ctx) {
     }
     return { id: rows[0].id, batch_no: rows[0].batch_no, barcode: rows[0].barcode, barcodes: rows };
   }
+  const row = await insertPurchaseBatch(conn, ctx, "", baseNo, ctx.qty, "batch");
   const barcode = isCountItem(ctx.item)
     ? (String(ctx.barcode || "").trim() || (await uniqueEan13(conn, ctx.businessId)))
     : "";
