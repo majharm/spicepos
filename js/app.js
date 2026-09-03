@@ -2016,6 +2016,10 @@ $("lines").addEventListener("click", (e) => {
   if (!btn) return;
   addItem(btn.dataset.chg, Number(btn.dataset.d));
 });
+$("lines").addEventListener("focusin", (e) => {
+  const input = e.target.closest("[data-qty]");
+  if (input && typeof input.select === "function") input.select();
+});
 $("lines").addEventListener("change", (e) => {
   const input = e.target.closest("[data-qty]");
   if (!input) return;

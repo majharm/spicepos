@@ -2158,11 +2158,14 @@ body.footwear-mode.counter-mode .stage.is-counter .card .sku { display: block; f
   .btn { min-height: 44px; }
   .qty button { width: 44px; height: 44px; }
 
-  /* mobile-counter: list scroll + compact order list */
+  /* mobile-counter: list scroll + stacked order line */
   .stage.is-counter {
     overflow: hidden;
     padding-bottom: 0;
+    max-width: 100%;
   }
+  body.counter-mode .view-topbar-titles p { display: none; }
+  body.counter-mode .view-topbar { padding: 8px 10px; }
   .stage.is-counter > .view-counter:not([hidden]) {
     display: flex;
     flex-direction: column;
@@ -2171,6 +2174,7 @@ body.footwear-mode.counter-mode .stage.is-counter .card .sku { display: block; f
     min-height: 0;
     overflow: hidden;
     padding-bottom: 0;
+    max-width: 100%;
   }
   .counter-topbar {
     display: grid;
@@ -2185,6 +2189,7 @@ body.footwear-mode.counter-mode .stage.is-counter .card .sku { display: block; f
   .counter-topbar .search { grid-column: 1 / -1; min-width: 0; }
   .counter-topbar .select,
   .counter-topbar .customer-picker { min-width: 0; width: 100%; }
+  .counter-topbar #pay-method { grid-column: 1 / -1; }
   .quick-customer-wrap {
     grid-column: 1 / -1;
   }
@@ -2209,9 +2214,10 @@ body.footwear-mode.counter-mode .stage.is-counter .card .sku { display: block; f
     min-height: 0;
     height: 0;
     overflow: hidden;
+    max-width: 100%;
   }
   body.has-cart .stage.is-counter .workspace {
-    grid-template-rows: minmax(0, 1fr) minmax(0, 240px);
+    grid-template-rows: minmax(0, 1fr) minmax(148px, 42vh);
   }
   .stage.is-counter .catalog {
     display: flex;
@@ -2225,9 +2231,9 @@ body.footwear-mode.counter-mode .stage.is-counter .card .sku { display: block; f
     -webkit-overflow-scrolling: touch;
     overscroll-behavior: contain;
     content-visibility: visible;
-    gap: 4px;
-    padding: 6px;
-    margin: 6px 6px 0;
+    gap: 6px;
+    padding: 8px;
+    margin: 6px 8px 0;
     touch-action: pan-y;
   }
   .stage.is-counter .card {
@@ -2236,9 +2242,10 @@ body.footwear-mode.counter-mode .stage.is-counter .card .sku { display: block; f
     flex-wrap: nowrap;
     align-items: center;
     width: 100%;
+    max-width: 100%;
     min-height: 56px;
-    padding: 6px 8px;
-    gap: 8px;
+    padding: 8px 10px;
+    gap: 10px;
     text-align: left;
     touch-action: pan-y;
   }
@@ -2246,10 +2253,17 @@ body.footwear-mode.counter-mode .stage.is-counter .card .sku { display: block; f
   .stage.is-counter .card .name {
     flex: 1 1 auto;
     min-width: 0;
-    font-size: 13px;
+    font-size: 14px;
     line-height: 1.25;
+    overflow: hidden;
   }
-  .stage.is-counter .card .name small { display: block; font-size: 10px; }
+  .stage.is-counter .card .name small {
+    display: block;
+    font-size: 11px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
   .stage.is-counter .card .meta {
     flex: 0 0 auto;
     flex-direction: column;
@@ -2257,6 +2271,11 @@ body.footwear-mode.counter-mode .stage.is-counter .card .sku { display: block; f
     margin-top: 0;
     font-size: 12px;
     gap: 2px;
+    max-width: 42%;
+    text-align: right;
+  }
+  .stage.is-counter .card .meta span {
+    white-space: nowrap;
   }
   .stage.is-counter .card .stock { display: none; }
   .stage.is-counter .card-photo {
@@ -2276,21 +2295,23 @@ body.footwear-mode.counter-mode .stage.is-counter .card .sku { display: block; f
     margin: 0;
     border-radius: 16px 16px 0 0;
     height: auto;
-    max-height: 240px;
+    max-height: none;
     min-height: 0;
     overflow: hidden;
     flex: 0 0 auto;
     display: flex;
     flex-direction: column;
+    max-width: 100%;
   }
   body.has-cart .stage.is-counter .ticket,
   body.has-cart .stage.is-counter .bill-panel {
     height: 100%;
-    max-height: 240px;
+    max-height: none;
     min-height: 0;
   }
   .stage.is-counter .ticket-sub,
-  .stage.is-counter .ticket-pack { display: none; }
+  .stage.is-counter .ticket-pack,
+  .stage.is-counter .pack-bar { display: none; }
   .stage.is-counter .ticket-head {
     display: flex;
     justify-content: center;
@@ -2336,7 +2357,6 @@ body.footwear-mode.counter-mode .stage.is-counter .card .sku { display: block; f
   }
   body.bill-collapsed .stage.is-counter .pay {
     display: grid;
-    grid-template-columns: 1fr;
     padding: 6px 10px calc(8px + env(safe-area-inset-bottom));
     box-shadow: 0 -6px 16px rgba(15, 23, 42, 0.06);
   }
@@ -2347,7 +2367,8 @@ body.footwear-mode.counter-mode .stage.is-counter .card .sku { display: block; f
     display: none;
   }
   body.bill-collapsed .stage.is-counter .pay-row {
-    grid-column: 1;
+    display: grid;
+    grid-column: 1 / -1;
     grid-template-columns: 1fr;
     margin: 0;
   }
@@ -2360,8 +2381,9 @@ body.footwear-mode.counter-mode .stage.is-counter .card .sku { display: block; f
     min-height: 0;
     max-height: none;
     overflow-y: auto;
+    overflow-x: hidden;
     -webkit-overflow-scrolling: touch;
-    padding: 2px 8px;
+    padding: 4px 10px;
   }
   body.has-cart .stage.is-counter .lines {
     display: block;
@@ -2369,21 +2391,23 @@ body.footwear-mode.counter-mode .stage.is-counter .card .sku { display: block; f
   }
   .stage.is-counter .line {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
-    gap: 6px;
-    padding: 3px 2px;
+    gap: 4px 8px;
+    padding: 8px 2px;
+    max-width: 100%;
   }
   .stage.is-counter .line-info {
-    flex: 1 1 auto;
+    flex: 1 1 100%;
     min-width: 0;
   }
   .stage.is-counter .line-info .pack {
     display: none;
   }
   .stage.is-counter .line .who {
-    font-size: 13px;
+    font-size: 14px;
     font-weight: 700;
-    line-height: 1.2;
+    line-height: 1.25;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -2391,63 +2415,69 @@ body.footwear-mode.counter-mode .stage.is-counter .card .sku { display: block; f
   .stage.is-counter .line-ops {
     display: flex;
     align-items: center;
+    justify-content: space-between;
     gap: 8px;
-    flex: 0 0 auto;
+    flex: 1 1 100%;
+    min-width: 0;
+    width: 100%;
   }
   .stage.is-counter .line .qty {
-    gap: 4px;
+    gap: 6px;
+    flex: 1 1 auto;
+    min-width: 0;
   }
   .stage.is-counter .line .qty-input {
-    width: 4.6em;
-    min-width: 3.8em;
-    min-height: 28px;
-    font-size: 12px;
+    width: 5.2em;
+    min-width: 4.4em;
+    min-height: 40px;
+    font-size: 16px;
     font-weight: 700;
     text-align: center;
-    padding: 2px 4px;
+    padding: 4px 6px;
   }
   .stage.is-counter .line .qty-unit {
-    font-size: 11px;
+    font-size: 13px;
     min-width: 1.2em;
   }
   .stage.is-counter .line .qty button {
-    width: 28px;
-    height: 28px;
-    min-width: 28px;
-    min-height: 28px;
-    border-radius: 8px;
+    width: 40px;
+    height: 40px;
+    min-width: 40px;
+    min-height: 40px;
+    border-radius: 10px;
   }
   .stage.is-counter .line-amt {
     margin-top: 0;
-    min-width: 3.6em;
-    font-size: 12px;
+    min-width: 4.2em;
+    font-size: 14px;
     font-weight: 800;
     text-align: right;
+    flex: 0 0 auto;
   }
   .stage.is-counter .pay {
     position: relative;
     bottom: auto;
     z-index: 9;
     display: grid;
-    grid-template-columns: auto 1fr 1.3fr;
-    gap: 6px;
-    align-items: center;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.5fr);
+    gap: 8px;
+    align-items: stretch;
     box-shadow: 0 -8px 20px rgba(15, 23, 42, 0.08);
-    padding: 4px 10px calc(6px + env(safe-area-inset-bottom));
+    padding: 8px 10px calc(10px + env(safe-area-inset-bottom));
   }
   .stage.is-counter .pay .btn {
-    min-height: 36px;
+    min-height: 44px;
+    width: 100%;
+    margin: 0;
   }
   .stage.is-counter #btn-clear {
-    min-height: 36px;
-    padding: 6px 8px;
-    grid-column: 1;
+    min-height: 44px;
+    padding: 8px;
+    grid-column: auto;
     margin: 0;
   }
   .stage.is-counter .pay-row {
-    grid-column: 2 / -1;
-    grid-template-columns: 1fr 1.3fr;
-    margin: 0;
+    display: contents;
   }
   .stage.is-counter .hint {
     grid-column: 1 / -1;
@@ -2455,7 +2485,7 @@ body.footwear-mode.counter-mode .stage.is-counter .card .sku { display: block; f
   }
   .stage.is-counter .held-bills {
     grid-column: 1 / -1;
-    max-height: 22px;
+    max-height: 28px;
     overflow: hidden;
     margin-top: 0;
     font-size: 11px;
@@ -2494,8 +2524,11 @@ body.footwear-mode.counter-mode .stage.is-counter .card .sku { display: block; f
     display: flex;
     flex-direction: column;
     grid-template-columns: none;
-    gap: 4px;
+    gap: 6px;
   }
+  .stage.is-counter .card { min-height: 56px; padding: 8px 10px; }
+  .stage.is-counter .card .name { font-size: 14px; }
+  .stage.is-counter .card .meta { font-size: 12px; }
   .card { min-height: 54px; padding: 5px 6px; }
   .card .name { font-size: 11px; }
   .card .sku { font-size: 7px; }
