@@ -204,12 +204,20 @@ export async function attachItemBarcode(conn, businessId, itemId, code, kind = "
 
 export async function onItemSaved(conn, businessId, itemId, body = {}) {
   await ensureAdvancedSchema();
+  const item = await sqlOne(conn, "SELECT * FROM items WHERE id = ? AND business_id = ?", [itemId, businessId]);
+  if (!isCountItem(item || body)) {
+    if (body.mrp != null) {
+      try {
+        await sqlExec(conn, "UPDATE items SET mrp = ? WHERE id = ? AND business_id = ?", [Number(body.mrp) || 0, itemId, businessId]);
+      } catch {
+        /* optional */
+      }
+    }
+    return "";
+  }
   let own = String(body.barcode || "").trim();
   const mfr = String(body.mfr_barcode || body.manufacturer_barcode || "").trim();
-  if (!own) {
-    const cur = await sqlOne(conn, "SELECT barcode FROM items WHERE id = ? AND business_id = ?", [itemId, businessId]);
-    own = String(cur?.barcode || "").trim();
-  }
+  if (!own) own = String(item?.barcode || "").trim();
   if (!own) own = await uniqueEan13(conn, businessId);
   await attachItemBarcode(conn, businessId, itemId, own, "own", true);
   if (mfr && mfr !== own) await attachItemBarcode(conn, businessId, itemId, mfr, "manufacturer", false);
@@ -220,7 +228,30 @@ export async function onItemSaved(conn, businessId, itemId, body = {}) {
       /* optional */
     }
   }
+  const extraQty = Math.floor(Number(body.barcode_qty ?? body.barcodeQty ?? 0) || 0);
+  if (extraQty > 0) await generateQtyBarcodes(conn, businessId, itemId, extraQty);
   return own;
+}
+
+export function clampBarcodeQty(raw) {
+  const n = Math.floor(Number(raw) || 0);
+  if (n < 1) throw new Error("Quantity required");
+  if (n > 500) throw new Error("Max 500 barcodes at once");
+  return n;
+}
+
+export async function generateQtyBarcodes(conn, businessId, itemId, qty) {
+  await ensureAdvancedSchema();
+  const n = clampBarcodeQty(qty);
+  const item = await sqlOne(conn, "SELECT * FROM items WHERE id=? AND business_id=?", [itemId, businessId]);
+  if (!item) throw new Error("Item not found");
+  if (!isCountItem(item)) throw new Error("Barcodes are only for Quantity (pcs) items");
+  const out = [];
+  for (let i = 0; i < n; i++) {
+    const code = await uniqueEan13(conn, businessId);
+    out.push(await attachItemBarcode(conn, businessId, itemId, code, "unit", false));
+  }
+  return out;
 }
 
 export async function writeMovement(conn, row) {
@@ -245,10 +276,7 @@ export async function writeMovement(conn, row) {
   }
 }
 
-export async function onPurchaseLineSaved(conn, ctx) {
-  await ensureAdvancedSchema();
-  const barcode = String(ctx.barcode || "").trim() || (await uniqueEan13(conn, ctx.businessId));
-  const batchNo = String(ctx.batchNo || `${ctx.purchaseNumber || "PO"}-${ctx.item?.code || "IT"}-${String(ctx.lineId || "").slice(0, 4)}`);
+async function insertPurchaseBatch(conn, ctx, barcode, batchNo, qty, kind) {
   const id = crypto.randomUUID();
   const mrp = Number(ctx.mrp ?? ctx.item?.mrp ?? ctx.item?.retail_rate) || 0;
   await conn.query(
@@ -258,18 +286,15 @@ export async function onPurchaseLineSaved(conn, ctx) {
      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     [
       id, ctx.businessId, ctx.branchId || null, ctx.item.id, ctx.purchaseId, ctx.lineId, ctx.supplierId || null,
-      batchNo, barcode, ctx.qty, ctx.qty, ctx.rate, mrp, ctx.expiry || null,
+      batchNo, barcode, qty, qty, ctx.rate, mrp, ctx.expiry || null,
     ],
   );
-  try {
-    await conn.query("UPDATE purchase_lines SET batch_no=?, barcode=?, expiry_date=?, mrp=? WHERE id=?", [batchNo, barcode, ctx.expiry || null, mrp, ctx.lineId]);
-  } catch {
-    /* optional */
-  }
-  try {
-    await attachItemBarcode(conn, ctx.businessId, ctx.item.id, barcode, "batch", false);
-  } catch {
-    /* unique */
+  if (barcode) {
+    try {
+      await attachItemBarcode(conn, ctx.businessId, ctx.item.id, barcode, kind, false);
+    } catch {
+      /* unique */
+    }
   }
   await writeMovement(conn, {
     businessId: ctx.businessId,
@@ -277,7 +302,7 @@ export async function onPurchaseLineSaved(conn, ctx) {
     userId: ctx.userId,
     itemId: ctx.item.id,
     kind: "purchase",
-    qty: ctx.qty,
+    qty,
     note: batchNo,
     barcode,
     batchId: id,
@@ -286,6 +311,38 @@ export async function onPurchaseLineSaved(conn, ctx) {
     refId: ctx.purchaseId,
   });
   return { id, batch_no: batchNo, barcode };
+}
+
+export async function onPurchaseLineSaved(conn, ctx) {
+  await ensureAdvancedSchema();
+  const baseNo = String(ctx.batchNo || `${ctx.purchaseNumber || "PO"}-${ctx.item?.code || "IT"}-${String(ctx.lineId || "").slice(0, 4)}`);
+  const pieces = isCountItem(ctx.item) ? Math.max(0, Math.round(Number(ctx.qty) || 0)) : 0;
+  const qtyWise = pieces > 1 && pieces <= 500;
+  if (qtyWise) {
+    const rows = [];
+    for (let i = 0; i < pieces; i++) {
+      const code = i === 0 && String(ctx.barcode || "").trim()
+        ? String(ctx.barcode).trim()
+        : await uniqueEan13(conn, ctx.businessId);
+      rows.push(await insertPurchaseBatch(conn, ctx, code, `${baseNo}-${String(i + 1).padStart(3, "0")}`, 1, "unit"));
+    }
+    try {
+      await conn.query("UPDATE purchase_lines SET batch_no=?, barcode=?, expiry_date=?, mrp=? WHERE id=?", [rows[0].batch_no, rows[0].barcode, ctx.expiry || null, Number(ctx.mrp ?? ctx.item?.mrp ?? ctx.item?.retail_rate) || 0, ctx.lineId]);
+    } catch {
+      /* optional */
+    }
+    return { id: rows[0].id, batch_no: rows[0].batch_no, barcode: rows[0].barcode, barcodes: rows };
+  }
+  const barcode = isCountItem(ctx.item)
+    ? (String(ctx.barcode || "").trim() || (await uniqueEan13(conn, ctx.businessId)))
+    : "";
+  const row = await insertPurchaseBatch(conn, ctx, barcode, baseNo, ctx.qty, "batch");
+  try {
+    await conn.query("UPDATE purchase_lines SET batch_no=?, barcode=?, expiry_date=?, mrp=? WHERE id=?", [row.batch_no, row.barcode, ctx.expiry || null, Number(ctx.mrp ?? ctx.item?.mrp ?? ctx.item?.retail_rate) || 0, ctx.lineId]);
+  } catch {
+    /* optional */
+  }
+  return row;
 }
 
 export function computeSaleLine(item, customer, lineIn) {
@@ -615,9 +672,10 @@ export function registerAdvanced(app) {
 
   app.post("/api/barcodes/generate-missing", requireStaff, requirePerm("items"), (_req, res) =>
     send(res, async () => {
-      const items = await query("SELECT id, barcode FROM items WHERE business_id=?", [bid()]);
+      const items = await query("SELECT id, barcode, base_unit, unit FROM items WHERE business_id=?", [bid()]);
       let generated = 0;
       for (const it of items) {
+        if (!isCountItem(it)) continue;
         const has = await sqlOne(null, "SELECT id FROM item_barcodes WHERE business_id=? AND item_id=? LIMIT 1", [bid(), it.id]);
         if (has) continue;
         await onItemSaved(null, bid(), it.id, { barcode: it.barcode || "" });
@@ -627,10 +685,22 @@ export function registerAdvanced(app) {
     }),
   );
 
+  app.post("/api/barcodes/generate-qty", requireStaff, requirePerm("items"), (req, res) =>
+    send(res, async () => {
+      const itemId = String(req.body?.item_id || req.body?.itemId || "");
+      const qty = req.body?.qty ?? req.body?.quantity ?? req.body?.barcode_qty;
+      const barcodes = await generateQtyBarcodes(null, bid(), itemId, qty);
+      return { ok: true, generated: barcodes.length, barcodes };
+    }),
+  );
+
   app.post("/api/items/:id/barcodes", requireStaff, requirePerm("items"), (req, res) =>
     send(res, async () => {
+      const item = await sqlOne(null, "SELECT * FROM items WHERE id=? AND business_id=?", [req.params.id, bid()]);
+      if (!item) throw new Error("Item not found");
+      if (!isCountItem(item)) throw new Error("Barcodes are only for Quantity (pcs) items");
       let kind = String(req.body?.kind || "own");
-      if (!["own", "manufacturer", "batch"].includes(kind)) kind = "own";
+      if (!["own", "manufacturer", "batch", "unit"].includes(kind)) kind = "own";
       const code = String(req.body?.barcode || "").trim() || (await uniqueEan13(null, bid()));
       const row = await attachItemBarcode(null, bid(), req.params.id, code, kind, kind === "own");
       return { ok: true, barcode: row };
