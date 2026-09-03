@@ -284,7 +284,7 @@ function pos_q($sql, $types = "", $params = []) {
   }
   if ($types === "") {
     $res = $db->query($sql);
-    if ($res === false) throw new Exception("SQL error");
+    if ($res === false) throw new Exception($db->error ?: "SQL error");
     if ($res === true) return [];
     $rows = $res->fetch_all(MYSQLI_ASSOC);
     $res->free();
@@ -296,7 +296,7 @@ function pos_q($sql, $types = "", $params = []) {
     );
   }
   $st = $db->prepare($sql);
-  if (!$st) throw new Exception("SQL error");
+  if (!$st) throw new Exception($db->error ?: "SQL error");
   $bind = [];
   foreach ($params as $i => $p) {
     $params[$i] = $p;

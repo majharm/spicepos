@@ -118,6 +118,13 @@ test("PHP customer insert bind types match placeholders", () => {
   assert.match(read("pos-reports.php"), /Payment daywise/);
   assert.match(read("js/app.js"), /Payment daywise/);
   assert.match(read("server/reports.js"), /payDaywise/);
+  const reportPhp = read("pos-reports.php");
+  const reportJs = read("server/reports.js");
+  assert.match(reportPhp, /GROUP BY i\.hsn, i\.code, l\.item_name, l\.gst_rate/);
+  assert.match(reportJs, /GROUP BY i\.hsn, i\.code, l\.item_name, l\.gst_rate/);
+  assert.doesNotMatch(reportPhp, /GROUP BY COALESCE\(i\.code/);
+  assert.doesNotMatch(reportJs, /GROUP BY COALESCE\(i\.code/);
+  assert.match(read("pos-php-core.php"), /\$db->error \?: "SQL error"/);
   assert.match(crud, /function pos_normalize_pack_items/);
   assert.match(crud, /function pos_insert_pack_lines/);
   assert.match(crud, /#\^packs\/\(\[\^\/\]\+\)\$#.*PUT/s);

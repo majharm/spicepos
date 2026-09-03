@@ -147,8 +147,9 @@ export async function buildReports(from, to) {
     gstInputLines.map((r) => ({ ...r, order_id: r.purchase_id })),
     shop,
   );
+  const hsnExpr = "COALESCE(NULLIF(TRIM(i.hsn), ''), NULLIF(TRIM(i.code), ''), '-')";
   const gstHsn = await query(
-    `SELECT COALESCE(NULLIF(TRIM(i.hsn), ''), i.code, '—') AS hsn, l.item_name, l.gst_rate,
+    `SELECT ${hsnExpr} AS hsn, l.item_name, l.gst_rate,
             SUM(l.quantity_gm) AS quantity_gm,
             SUM(l.amount) AS taxable,
             SUM(l.amount * l.gst_rate / 100) AS gst
@@ -156,7 +157,7 @@ export async function buildReports(from, to) {
      JOIN sales_orders o ON o.id = l.order_id
      LEFT JOIN items i ON i.id = l.item_id
      WHERE o.business_id = ? AND DATE(o.created_at) BETWEEN ? AND ? AND l.cancelled = 0
-     GROUP BY COALESCE(i.code, '—'), l.item_name, l.gst_rate
+     GROUP BY i.hsn, i.code, l.item_name, l.gst_rate
      ORDER BY hsn, l.item_name`,
     [tenant, start, end],
   );

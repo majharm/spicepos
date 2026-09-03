@@ -19,8 +19,27 @@ function pos_report_range($from, $to) {
   return [$start, $end];
 }
 
+function pos_ensure_report_columns() {
+  if (!function_exists("pos_ensure_columns")) return;
+  pos_ensure_columns("items", [
+    "hsn" => "VARCHAR(32) NULL",
+    "local_name" => "VARCHAR(255) NULL",
+  ]);
+  pos_ensure_columns("customers", [
+    "state" => "VARCHAR(64) NULL",
+    "gstin" => "VARCHAR(32) NULL",
+  ]);
+  pos_ensure_columns("company_settings", [
+    "gstin" => "VARCHAR(32) NULL",
+    "state" => "VARCHAR(64) NULL",
+  ]);
+  pos_ensure_columns("purchase_lines", ["gst_amount" => "DECIMAL(12,2) NOT NULL DEFAULT 0"]);
+  pos_ensure_columns("suppliers", ["gstin" => "VARCHAR(32) NULL"]);
+}
+
 function pos_build_reports($bid, $from, $to) {
   if (function_exists("pos_ensure_accounts_schema")) pos_ensure_accounts_schema();
+  pos_ensure_report_columns();
   [$start, $end] = pos_report_range($from, $to);
   $salesWhere = "business_id = ? AND DATE(created_at) BETWEEN ? AND ?";
   $poWhere = "business_id = ? AND purchase_date BETWEEN ? AND ?";
@@ -176,8 +195,9 @@ function pos_build_reports($bid, $from, $to) {
     }, $gstInputLines),
     $shop
   );
+  $hsnExpr = "COALESCE(NULLIF(TRIM(i.hsn), ''), NULLIF(TRIM(i.code), ''), '-')";
   $gstHsn = pos_q(
-    "SELECT COALESCE(NULLIF(TRIM(i.hsn), ''), i.code, '—') AS hsn, l.item_name, l.gst_rate,
+    "SELECT $hsnExpr AS hsn, l.item_name, l.gst_rate,
             SUM(l.quantity_gm) AS quantity_gm,
             SUM(l.amount) AS taxable,
             SUM(l.amount * l.gst_rate / 100) AS gst
@@ -185,7 +205,7 @@ function pos_build_reports($bid, $from, $to) {
      JOIN sales_orders o ON o.id = l.order_id
      LEFT JOIN items i ON i.id = l.item_id
      WHERE o.business_id = ? AND DATE(o.created_at) BETWEEN ? AND ? AND l.cancelled = 0
-     GROUP BY COALESCE(i.code, '—'), l.item_name, l.gst_rate
+     GROUP BY i.hsn, i.code, l.item_name, l.gst_rate
      ORDER BY hsn, l.item_name",
     "sss",
     [$bid, $start, $end]
