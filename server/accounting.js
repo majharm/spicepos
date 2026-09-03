@@ -30,6 +30,7 @@ export const DEFAULT_COA = [
   { code: "2203", name: "GST output IGST", account_group: "liability" },
   { code: "3101", name: "Capital account", account_group: "equity" },
   { code: "4101", name: "Sales", account_group: "income" },
+  { code: "4102", name: "Sales discount", account_group: "income" },
   { code: "5101", name: "Purchase of goods", account_group: "expense" },
   ...EXPENSE_COA,
 ];
@@ -182,6 +183,13 @@ function pushGstInputLines(lines, split) {
   if (split.igst > 0) lines.push({ accountCode: "2303", debit: split.igst, credit: 0 });
 }
 
+export function saleDiscountAmount(order) {
+  const subtotal = round2(order.subtotal);
+  const gst = round2(order.gst);
+  const total = round2(order.total);
+  return round2(Math.max(0, subtotal + gst - total));
+}
+
 export async function postSaleJournal(conn, order) {
   if (await journalExists(conn, "sales_order", order.id)) return null;
   const businessId = bid();
@@ -191,8 +199,10 @@ export async function postSaleJournal(conn, order) {
   const interState = isInterStateSupply(shop, customer);
   const split = splitGst(order.gst, interState);
   const total = round2(order.total);
+  const discountOff = saleDiscountAmount(order);
   const lines = [
     { accountCode: assetCodeForMethod(order.payment_method), debit: total, credit: 0 },
+    { accountCode: "4102", debit: discountOff, credit: 0 },
     { accountCode: "4101", debit: 0, credit: subtotal },
   ];
   pushGstOutputLines(lines, split);

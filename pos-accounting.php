@@ -18,6 +18,7 @@ function pos_default_coa() {
     ["2203", "GST output IGST", "liability"],
     ["3101", "Capital account", "equity"],
     ["4101", "Sales", "income"],
+    ["4102", "Sales discount", "income"],
     ["5101", "Purchase of goods", "expense"],
     ["5102", "Rent", "expense"],
     ["5103", "Electricity", "expense"],
@@ -162,8 +163,11 @@ function pos_post_sale_journal($bid, $uid, $order) {
   $interState = pos_is_inter_state_supply($shop, $customer);
   $gst = pos_split_gst($order["gst"] ?? 0, $interState);
   $total = pos_round2($order["total"] ?? 0);
+  $gstAmt = pos_round2($order["gst"] ?? 0);
+  $discountOff = pos_round2(max(0, $subtotal + $gstAmt - $total));
   $lines = [
     ["accountCode" => pos_asset_code_for_method($order["payment_method"] ?? "cash"), "debit" => $total, "credit" => 0],
+    ["accountCode" => "4102", "debit" => $discountOff, "credit" => 0],
     ["accountCode" => "4101", "debit" => 0, "credit" => $subtotal],
   ];
   pos_push_gst_output_lines($lines, $gst);
