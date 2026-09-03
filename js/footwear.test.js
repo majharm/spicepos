@@ -66,6 +66,8 @@ test("Counter has a dedicated scan lane and Pay action", () => {
   assert.match(index, />Pay</);
   assert.match(app, /async function applyBarcodeScan/);
   assert.match(app, /function focusScanLane/);
+  assert.match(app, /function cartLineKey/);
+  assert.match(app, /This piece is already on the bill/);
   assert.match(app, /Pay \$\{money\(payTotal\)\}/);
   assert.match(css, /\.scan-lane/);
 });

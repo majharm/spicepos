@@ -75,6 +75,11 @@ test("PHP and Node wire barcode, damage, loyalty, and ledger modules", () => {
   assert.match(app, /barcodes\/lookup/);
   assert.match(app, /loyaltyPoints/);
   assert.match(app, /data-print-po-barcodes/);
+  assert.match(read("api/barcodes/lookup/index.php"), /barcodes\/lookup/);
+  assert.match(read("api/barcodes/generate-qty/index.php"), /barcodes\/generate-qty/);
+  assert.match(read("api/barcodes/generate-missing/index.php"), /barcodes\/generate-missing/);
+  assert.doesNotMatch(nodeAdv, /let own = String\(body\.barcode/);
+  assert.doesNotMatch(adv, /pos_unique_ean13\(\$bid\);\s*\n\s*pos_attach_item_barcode/);
 });
 
 test("resolvePurchaseBarcodes requires one typed code per piece", async () => {

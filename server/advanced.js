@@ -246,11 +246,6 @@ export async function onItemSaved(conn, businessId, itemId, body = {}) {
   const own = String(body.barcode || "").trim();
   const mfr = String(body.mfr_barcode || body.manufacturer_barcode || "").trim();
   if (own) await attachItemBarcode(conn, businessId, itemId, own, "own", true);
-  let own = String(body.barcode || "").trim();
-  const mfr = String(body.mfr_barcode || body.manufacturer_barcode || "").trim();
-  if (!own) own = String(item?.barcode || "").trim();
-  if (!own) own = await uniqueEan13(conn, businessId);
-  await attachItemBarcode(conn, businessId, itemId, own, "own", true);
   if (mfr && mfr !== own) await attachItemBarcode(conn, businessId, itemId, mfr, "manufacturer", false);
   if (body.mrp != null) {
     try {
@@ -263,8 +258,6 @@ export async function onItemSaved(conn, businessId, itemId, body = {}) {
   for (const code of extras) {
     if (code !== own && code !== mfr) await attachItemBarcode(conn, businessId, itemId, code, "unit", false);
   }
-  const extraQty = Math.floor(Number(body.barcode_qty ?? body.barcodeQty ?? 0) || 0);
-  if (extraQty > 0) await generateQtyBarcodes(conn, businessId, itemId, extraQty);
   return own;
 }
 
@@ -358,15 +351,6 @@ export async function onPurchaseLineSaved(conn, ctx) {
       const used = await sqlOne(conn, "SELECT id FROM stock_batches WHERE business_id=? AND barcode=? AND remaining_gm > 0 LIMIT 1", [ctx.businessId, codes[i]]);
       if (used) throw new Error(`Barcode ${codes[i]} is already in stock`);
       rows.push(await insertPurchaseBatch(conn, ctx, codes[i], `${baseNo}-${String(i + 1).padStart(3, "0")}`, 1, "unit"));
-  const pieces = isCountItem(ctx.item) ? Math.max(0, Math.round(Number(ctx.qty) || 0)) : 0;
-  const qtyWise = pieces > 1 && pieces <= 500;
-  if (qtyWise) {
-    const rows = [];
-    for (let i = 0; i < pieces; i++) {
-      const code = i === 0 && String(ctx.barcode || "").trim()
-        ? String(ctx.barcode).trim()
-        : await uniqueEan13(conn, ctx.businessId);
-      rows.push(await insertPurchaseBatch(conn, ctx, code, `${baseNo}-${String(i + 1).padStart(3, "0")}`, 1, "unit"));
     }
     try {
       await conn.query("UPDATE purchase_lines SET batch_no=?, barcode=?, expiry_date=?, mrp=? WHERE id=?", [rows[0].batch_no, rows[0].barcode, ctx.expiry || null, Number(ctx.mrp ?? ctx.item?.mrp ?? ctx.item?.retail_rate) || 0, ctx.lineId]);
@@ -376,10 +360,6 @@ export async function onPurchaseLineSaved(conn, ctx) {
     return { id: rows[0].id, batch_no: rows[0].batch_no, barcode: rows[0].barcode, barcodes: rows };
   }
   const row = await insertPurchaseBatch(conn, ctx, "", baseNo, ctx.qty, "batch");
-  const barcode = isCountItem(ctx.item)
-    ? (String(ctx.barcode || "").trim() || (await uniqueEan13(conn, ctx.businessId)))
-    : "";
-  const row = await insertPurchaseBatch(conn, ctx, barcode, baseNo, ctx.qty, "batch");
   try {
     await conn.query("UPDATE purchase_lines SET batch_no=?, barcode=?, expiry_date=?, mrp=? WHERE id=?", [row.batch_no, row.barcode, ctx.expiry || null, Number(ctx.mrp ?? ctx.item?.mrp ?? ctx.item?.retail_rate) || 0, ctx.lineId]);
   } catch {

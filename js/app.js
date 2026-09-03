@@ -1106,6 +1106,7 @@ function renderCart() {
         const unit = POSUnits.isCount(itemUnit(item)) ? "pcs" : POSUnits.typeOf(itemUnit(item)).family === "volume" ? "ml" : "g";
         const calc = lineCalc(item, line);
         const bc = String(line.barcode || "").trim();
+        const key = cartLineKey(line);
         return `<div class="line">
           <div class="line-main">
             <div class="line-info">
@@ -1114,20 +1115,20 @@ function renderCart() {
             </div>
             <div class="line-ops">
               <div class="qty">
-                <button type="button" data-chg="${escapeHtml(item.id)}" data-d="${-step}">−</button>
-                <input class="qty-input" type="number" inputmode="numeric" min="${POSUnits.qtyMin()}" max="${POSUnits.qtyMax()}" step="1" value="${escapeHtml(line.qtyGm)}" data-qty="${escapeHtml(item.id)}" aria-label="Quantity in ${unit}" />
+                <button type="button" data-chg="${escapeHtml(key)}" data-d="${-step}">−</button>
+                <input class="qty-input" type="number" inputmode="numeric" min="${POSUnits.qtyMin()}" max="${POSUnits.qtyMax()}" step="1" value="${escapeHtml(line.qtyGm)}" data-qty="${escapeHtml(key)}" aria-label="Quantity in ${unit}" />
                 <span class="qty-unit">${escapeHtml(unit)}</span>
-                <button type="button" data-chg="${escapeHtml(item.id)}" data-d="${step}">+</button>
+                <button type="button" data-chg="${escapeHtml(key)}" data-d="${step}">+</button>
               </div>
               <div class="line-amt">${money(calc.taxable + calc.gst)}</div>
             </div>
           </div>
           ${canDiscount() ? `<div class="line-disc">
-              <select data-line-disc-type="${escapeHtml(item.id)}" aria-label="Line discount type">
+              <select data-line-disc-type="${escapeHtml(key)}" aria-label="Line discount type">
                 <option value="amt"${(line.discountType || "amt") === "amt" ? " selected" : ""}>₹</option>
                 <option value="pct"${line.discountType === "pct" ? " selected" : ""}>%</option>
               </select>
-              <input data-line-disc="${escapeHtml(item.id)}" type="number" min="0" step="0.01" value="${escapeHtml(line.discountValue || 0)}" aria-label="Line discount" />
+              <input data-line-disc="${escapeHtml(key)}" type="number" min="0" step="0.01" value="${escapeHtml(line.discountValue || 0)}" aria-label="Line discount" />
             </div>` : ""}
         </div>`;
       })
@@ -1252,6 +1253,14 @@ async function applyBarcodeScan(raw, sourceEl) {
       const match = data.match || data;
       const id = match.item_id || match.id;
       item = state.items.find((i) => i.id === id);
+      if (!item && id) {
+        try {
+          await loadBootstrap();
+        } catch {
+          /* keep looking */
+        }
+        item = state.items.find((i) => i.id === id);
+      }
     } catch {
       item = null;
     }
@@ -1274,30 +1283,79 @@ async function applyBarcodeScan(raw, sourceEl) {
   return false;
 }
 
+function newCartLineId() {
+  return `ln-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
+}
+
+function cartLineKey(line) {
+  return String(line?.lineId || line?.barcode || line?.itemId || "");
+}
+
+function findCartLine(key) {
+  const k = String(key || "");
+  return state.cart.find((l) => cartLineKey(l) === k) || null;
+}
+
 function addItem(id, qtyGm, lineBarcode) {
   const item = state.items.find((i) => i.id === id);
   if (!item) return;
   const add = qtyGm == null ? POSUnits.counterStep(itemUnit(item)) : Number(qtyGm);
-  const line = state.cart.find((l) => l.itemId === id);
+  const code = String(lineBarcode || "").trim();
+  if (code && POSUnits.isCount(itemUnit(item))) {
+    const existing = state.cart.find((l) => String(l.barcode || "").trim() === code);
+    if (existing) {
+      setHint("This piece is already on the bill", "error");
+      return;
+    }
+    state.cart.push({
+      lineId: newCartLineId(),
+      itemId: id,
+      qtyGm: POSUnits.clampQty(1),
+      discountType: "amt",
+      discountValue: 0,
+      barcode: code,
+    });
+    renderCart();
+    return;
+  }
+  const line = state.cart.find((l) => l.itemId === id && !String(l.barcode || "").trim());
   if (line) line.qtyGm = POSUnits.clampQty(Number(line.qtyGm) + add);
-  else state.cart.push({ itemId: id, qtyGm: POSUnits.clampQty(add), discountType: "amt", discountValue: 0, barcode: lineBarcode || "" });
+  else {
+    state.cart.push({
+      lineId: newCartLineId(),
+      itemId: id,
+      qtyGm: POSUnits.clampQty(add),
+      discountType: "amt",
+      discountValue: 0,
+      barcode: "",
+    });
+  }
   state.cart = state.cart.filter((l) => l.qtyGm > 0);
   renderCart();
 }
 
-function setLineQty(id, qtyGm) {
-  const item = state.items.find((i) => i.id === id);
-  if (!item) return;
+function setLineQty(key, qtyGm) {
+  const line = findCartLine(key);
+  if (!line) return;
   const next = POSUnits.clampQty(qtyGm);
-  const line = state.cart.find((l) => l.itemId === id);
-  if (next <= 0) {
-    state.cart = state.cart.filter((l) => l.itemId !== id);
-  } else if (line) {
-    line.qtyGm = next;
+  if (next <= 0) state.cart = state.cart.filter((l) => cartLineKey(l) !== String(key));
+  else if (String(line.barcode || "").trim() && POSUnits.isCount(itemUnit(state.items.find((i) => i.id === line.itemId) || {}))) {
+    line.qtyGm = 1;
   } else {
-    state.cart.push({ itemId: id, qtyGm: next });
+    line.qtyGm = next;
   }
   renderCart();
+}
+
+function changeLineQty(key, delta) {
+  const line = findCartLine(key);
+  if (!line) return;
+  if (String(line.barcode || "").trim() && POSUnits.isCount(itemUnit(state.items.find((i) => i.id === line.itemId) || {}))) {
+    if (Number(delta) < 0) setLineQty(key, 0);
+    else setHint("Scan the next piece barcode", "ok");
+    return;
+  }
+  setLineQty(key, Number(line.qtyGm) + Number(delta));
 }
 
 function addPack(packId) {
@@ -2418,7 +2476,7 @@ $("lines").addEventListener("click", (e) => {
   if (e.target.closest("[data-qty]")) return;
   const btn = e.target.closest("[data-chg]");
   if (!btn) return;
-  addItem(btn.dataset.chg, Number(btn.dataset.d));
+  changeLineQty(btn.dataset.chg, Number(btn.dataset.d));
 });
 $("lines").addEventListener("focusin", (e) => {
   const input = e.target.closest("[data-qty]");
@@ -2432,14 +2490,14 @@ $("lines").addEventListener("change", (e) => {
   }
   const disc = e.target.closest("[data-line-disc]");
   if (disc) {
-    const line = state.cart.find((l) => l.itemId === disc.dataset.lineDisc);
+    const line = findCartLine(disc.dataset.lineDisc);
     if (line) line.discountValue = Number(disc.value) || 0;
     renderCart();
     return;
   }
   const dtype = e.target.closest("[data-line-disc-type]");
   if (dtype) {
-    const line = state.cart.find((l) => l.itemId === dtype.dataset.lineDiscType);
+    const line = findCartLine(dtype.dataset.lineDiscType);
     if (line) line.discountType = dtype.value === "pct" ? "pct" : "amt";
     renderCart();
   }
@@ -2717,6 +2775,7 @@ $("btn-pay").addEventListener("click", async () => {
     if (!state.customerId) throw new Error("Add a customer before saving the bill");
     if (!state.cart.length) throw new Error("Cart is empty");
     setHint("Saving…");
+    const cartSnapshot = state.cart.map((l) => ({ ...l }));
     const payload = {
       customerId: state.customerId,
       paymentMethod: $("pay-method").value,
@@ -2764,7 +2823,7 @@ $("btn-pay").addEventListener("click", async () => {
     if (!receiptOrder.lines?.length) {
       receiptOrder = {
         ...receiptOrder,
-        lines: state.cart.map((l) => {
+        lines: cartSnapshot.map((l) => {
           const item = state.items.find((i) => i.id === l.itemId);
           return {
             item_id: l.itemId,
