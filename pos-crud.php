@@ -1,5 +1,32 @@
 <?php
 
+function pos_normalize_pack_items($items) {
+  if (!is_array($items)) return [];
+  $out = [];
+  foreach ($items as $row) {
+    $itemId = trim((string) ($row["item_id"] ?? ""));
+    $qty = (float) ($row["quantity_gm"] ?? 0);
+    if ($itemId === "" || $qty <= 0) continue;
+    $out[] = ["item_id" => $itemId, "quantity_gm" => $qty];
+  }
+  return $out;
+}
+
+function pos_insert_pack_lines($packId, $items, $bid) {
+  $sort = 1;
+  foreach ($items as $row) {
+    $it = pos_q("SELECT * FROM items WHERE id = ? AND business_id = ? LIMIT 1", "ss", [$row["item_id"] ?? "", $bid]);
+    $item = $it[0] ?? null;
+    if (!$item) throw new Exception("Unknown item in pack");
+    pos_q(
+      "INSERT INTO pack_items (id, pack_id, item_id, quantity_gm, retail_rate, b2b_rate, sort_order, business_id)
+       VALUES (?,?,?,?,?,?,?,?)",
+      "sssdddis",
+      [pos_uuid(), $packId, $item["id"], (float) ($row["quantity_gm"] ?? 0), (float) $item["retail_rate"], (float) $item["b2b_rate"], $sort++, $bid]
+    );
+  }
+}
+
 function pos_crud_dispatch($path, $method, $body, $bid, $auth, $branchId, $uid) {
   if ($path === "checkout" && $method === "POST") {
     pos_require_checkout();
@@ -123,31 +150,42 @@ function pos_crud_dispatch($path, $method, $body, $bid, $auth, $branchId, $uid) 
 
   if ($path === "packs" && $method === "POST") {
     $name = trim((string) ($body["name"] ?? ""));
-    $items = $body["items"] ?? [];
-    if ($name === "" || !is_array($items) || !$items) pos_send(400, ["error" => "Pack name and at least one spice are required"]);
-    $packId = pos_uuid();
-    $n = pos_next_seq("pack", $bid, 6);
-    $total = 0;
-    foreach ($items as $row) $total += (float) ($row["quantity_gm"] ?? 0);
-    pos_q(
-      "INSERT INTO packs (id, code, name, total_quantity_gm, status, business_id) VALUES (?,?,?,?,'active',?)",
-      "sssds",
-      [$packId, "PK-" . str_pad((string) $n, 3, "0", STR_PAD_LEFT), $name, $total, $bid]
-    );
-    $sort = 1;
-    foreach ($items as $row) {
-      $it = pos_q("SELECT * FROM items WHERE id = ? AND business_id = ? LIMIT 1", "ss", [$row["item_id"] ?? "", $bid]);
-      $item = $it[0] ?? null;
-      if (!$item) throw new Exception("Unknown item in pack");
+    $items = pos_normalize_pack_items($body["items"] ?? []);
+    if ($name === "" || !$items) pos_send(400, ["error" => "Pack name and at least one spice are required"]);
+    $pack = pos_with_transaction(function () use ($name, $items, $bid) {
+      $packId = pos_uuid();
+      $n = pos_next_seq("pack", $bid, 6);
+      $total = 0;
+      foreach ($items as $row) $total += (float) $row["quantity_gm"];
       pos_q(
-        "INSERT INTO pack_items (id, pack_id, item_id, quantity_gm, retail_rate, b2b_rate, sort_order, business_id)
-         VALUES (?,?,?,?,?,?,?,?)",
-        "sssdddis",
-        [pos_uuid(), $packId, $item["id"], (float) ($row["quantity_gm"] ?? 0), (float) $item["retail_rate"], (float) $item["b2b_rate"], $sort++, $bid]
+        "INSERT INTO packs (id, code, name, total_quantity_gm, status, business_id) VALUES (?,?,?,?,'active',?)",
+        "sssds",
+        [$packId, "PK-" . str_pad((string) $n, 3, "0", STR_PAD_LEFT), $name, $total, $bid]
       );
-    }
-    $rows = pos_q("SELECT * FROM packs WHERE id = ? LIMIT 1", "s", [$packId]);
-    pos_send(200, ["ok" => true, "pack" => $rows[0] ?? null]);
+      pos_insert_pack_lines($packId, $items, $bid);
+      $rows = pos_q("SELECT * FROM packs WHERE id = ? LIMIT 1", "s", [$packId]);
+      return $rows[0] ?? null;
+    });
+    pos_send(200, ["ok" => true, "pack" => $pack]);
+  }
+
+  if (preg_match('#^packs/([^/]+)$#', $path, $m) && $method === "PUT") {
+    $packId = $m[1];
+    $name = trim((string) ($body["name"] ?? ""));
+    $items = pos_normalize_pack_items($body["items"] ?? []);
+    if ($name === "" || !$items) pos_send(400, ["error" => "Pack name and at least one spice are required"]);
+    $found = pos_q("SELECT id FROM packs WHERE id = ? AND business_id = ? LIMIT 1", "ss", [$packId, $bid]);
+    if (!$found) pos_send(404, ["error" => "Pack not found"]);
+    $pack = pos_with_transaction(function () use ($packId, $name, $items, $bid) {
+      $total = 0;
+      foreach ($items as $row) $total += (float) $row["quantity_gm"];
+      pos_q("DELETE FROM pack_items WHERE pack_id = ? AND business_id = ?", "ss", [$packId, $bid]);
+      pos_q("UPDATE packs SET name=?, total_quantity_gm=? WHERE id=? AND business_id=?", "sdss", [$name, $total, $packId, $bid]);
+      pos_insert_pack_lines($packId, $items, $bid);
+      $rows = pos_q("SELECT * FROM packs WHERE id = ? LIMIT 1", "s", [$packId]);
+      return $rows[0] ?? null;
+    });
+    pos_send(200, ["ok" => true, "pack" => $pack]);
   }
 
   if ($path === "suppliers" && $method === "POST") {

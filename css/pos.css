@@ -1380,6 +1380,14 @@ body.footwear-mode.counter-mode .stage.is-counter .card .sku { display: block; f
   padding: 8px 10px;
 }
 .pack-compose input[type="number"] { width: 110px; }
+.pack-card { margin: 0 20px 12px; }
+.pack-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.pack-card-head span { display: block; color: var(--muted); font-size: 12px; }
 .ticket-pack {
   padding: 8px 14px 0;
   color: var(--accent);

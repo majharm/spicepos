@@ -1081,8 +1081,62 @@ function renderCustomersTable() {
     .join("")}</tbody></table>`;
 }
 
+function packComposeItems() {
+  const seen = new Set();
+  const list = [];
+  for (const item of activeItems()) {
+    seen.add(item.id);
+    list.push(item);
+  }
+  const editing = state.packs.find((p) => p.id === $("pack-id")?.value);
+  for (const row of editing?.items || []) {
+    if (seen.has(row.item_id)) continue;
+    const item = state.items.find((x) => x.id === row.item_id);
+    if (item) {
+      seen.add(item.id);
+      list.push(item);
+    }
+  }
+  return list;
+}
+
+function readPackFormItems() {
+  return [...document.querySelectorAll("[data-pack-item]:checked")]
+    .map((box) => ({
+      item_id: box.dataset.packItem,
+      quantity_gm: POSUnits.clampQty(document.querySelector(`[data-pack-qty="${box.dataset.packItem}"]`)?.value),
+    }))
+    .filter((row) => row.quantity_gm > 0);
+}
+
+function resetPackForm() {
+  $("pack-form").reset();
+  if ($("pack-id")) $("pack-id").value = "";
+  if ($("pack-save")) $("pack-save").textContent = "Save pack";
+  renderPackCompose();
+}
+
+function fillPackForm(pack) {
+  if (!pack) return;
+  $("pack-id").value = pack.id;
+  $("pack-name").value = pack.name;
+  if ($("pack-save")) $("pack-save").textContent = "Update pack";
+  renderPackCompose();
+  const byItem = new Map((pack.items || []).map((row) => [row.item_id, row]));
+  document.querySelectorAll("[data-pack-item]").forEach((box) => {
+    const row = byItem.get(box.dataset.packItem);
+    box.checked = Boolean(row);
+    const qty = document.querySelector(`[data-pack-qty="${box.dataset.packItem}"]`);
+    if (row && qty) qty.value = Number(row.quantity_gm) || qty.value;
+  });
+  $("pack-hint").textContent = `Editing ${pack.code || pack.name}`;
+  $("pack-hint").className = "hint";
+  $("pack-form")?.scrollIntoView({ block: "start" });
+  $("pack-name")?.focus();
+}
+
 function renderPackCompose() {
-  $("pack-lines").innerHTML = activeItems()
+  $("pack-lines").innerHTML = packComposeItems()
     .map(
       (i) => `<label>
         <input type="checkbox" data-pack-item="${escapeHtml(i.id)}" />
@@ -1167,11 +1221,20 @@ function paintPoTotals() {
 }
 
 function renderPacksTable() {
+  if (!state.packs.length) {
+    $("packs-table").innerHTML = `<p class="hint">No pack types yet. Save one above.</p>`;
+    return;
+  }
   $("packs-table").innerHTML = state.packs
     .map(
-      (p) => `<div class="report-card" style="margin:0 20px 12px">
-        <strong>${escapeHtml(p.name)}</strong>
-        <span>${escapeHtml(p.code)} · ${escapeHtml(kg(p.total_quantity_gm))}</span>
+      (p) => `<div class="report-card pack-card">
+        <div class="pack-card-head">
+          <div>
+            <strong>${escapeHtml(p.name)}</strong>
+            <span>${escapeHtml(p.code)} · ${escapeHtml(kg(p.total_quantity_gm))}</span>
+          </div>
+          <button class="btn" type="button" data-edit-pack="${escapeHtml(p.id)}">Edit</button>
+        </div>
         <p class="hint">${(p.items || [])
           .map((i) => {
             const it = state.items.find((x) => x.id === i.item_id);
@@ -2484,20 +2547,30 @@ $("quick-customer-form")?.addEventListener("submit", async (e) => {
 
 $("pack-form").addEventListener("submit", async (e) => {
   e.preventDefault();
-  const items = [...document.querySelectorAll("[data-pack-item]:checked")].map((box) => ({
-    item_id: box.dataset.packItem,
-    quantity_gm: Number(document.querySelector(`[data-pack-qty="${box.dataset.packItem}"]`).value),
-  }));
+  const items = readPackFormItems();
+  const id = $("pack-id")?.value || "";
   try {
-    await api("/api/packs", { method: "POST", body: JSON.stringify({ name: $("pack-name").value, items }) });
-    $("pack-hint").textContent = "Saved";
+    if (id) await api(`/api/packs/${id}`, { method: "PUT", body: JSON.stringify({ name: $("pack-name").value, items }) });
+    else await api("/api/packs", { method: "POST", body: JSON.stringify({ name: $("pack-name").value, items }) });
+    $("pack-hint").textContent = id ? "Pack updated" : "Pack saved";
     $("pack-hint").className = "hint ok";
-    $("pack-form").reset();
+    resetPackForm();
     await loadBootstrap();
   } catch (err) {
     $("pack-hint").textContent = err.message;
     $("pack-hint").className = "hint error";
   }
+});
+$("pack-cancel")?.addEventListener("click", () => {
+  resetPackForm();
+  $("pack-hint").textContent = "";
+  $("pack-hint").className = "hint";
+});
+$("packs-table")?.addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-edit-pack]");
+  if (!btn) return;
+  const pack = state.packs.find((p) => p.id === btn.dataset.editPack);
+  if (pack) fillPackForm(pack);
 });
 
 $("purchase-form").addEventListener("input", (e) => {
