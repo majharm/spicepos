@@ -128,10 +128,11 @@ test("PHP and HTML wire master admin backup", () => {
   );
 });
 
-test("HTML and CSS cache stickers match deploy71", () => {
+test("HTML and CSS cache stickers match deploy72", () => {
   for (const name of ["index.html", "master.html", "login.html", "setup.html"]) {
     const html = readFileSync(path.join(root, name), "utf8");
-    assert.match(html, /20260903deploy71/);
+    assert.match(html, /20260903deploy72/);
+    assert.doesNotMatch(html, /20260903deploy71/);
     assert.doesNotMatch(html, /20260903deploy70/);
     assert.doesNotMatch(html, /20260903deploy69/);
     assert.doesNotMatch(html, /20260903deploy68/);
@@ -279,19 +280,22 @@ test("HTML and CSS cache stickers match deploy71", () => {
   assert.match(appJs, /printAccountsReport/);
   assert.match(pos, /\.report-toolbar select/);
   const login = readFileSync(path.join(root, "login.html"), "utf8");
+  assert.match(login, /class="auth-shell"/);
   assert.match(login, /class="auth-scene"/);
   assert.match(login, /All types of businesses use ATAV POS/);
   assert.match(login, /Bakery \/ cake shop/);
   assert.match(login, />Bakery</);
   assert.match(login, /class="login-legal"/);
-  assert.match(login, /href="https:\/\/atavtelecom\.in\/legal\/privacy">Privacy Policy</);
-  assert.match(login, /href="https:\/\/atavtelecom\.in\/legal\/terms">Terms &amp; Conditions</);
-  assert.match(login, /href="https:\/\/atavtelecom\.in\/legal\/data-deletion">Data Deletion Policy</);
-  assert.match(login, /href="https:\/\/atavtelecom\.in\/legal\/refund">Refund &amp; Cancellation</);
-  assert.match(login, /href="https:\/\/atavtelecom\.in\/legal\/shipping">Shipping &amp; Delivery</);
-  assert.match(login, /href="https:\/\/atavtelecom\.in\/legal\/cookies">Cookie Policy</);
+  assert.match(login, /href="https:\/\/atavtelecom\.in\/legal\/privacy"[^>]*>Privacy Policy</);
+  assert.match(login, /href="https:\/\/atavtelecom\.in\/legal\/terms"[^>]*>Terms &amp; Conditions</);
+  assert.match(login, /href="https:\/\/atavtelecom\.in\/legal\/data-deletion"[^>]*>Data Deletion Policy</);
+  assert.match(login, /href="https:\/\/atavtelecom\.in\/legal\/refund"[^>]*>Refund &amp; Cancellation</);
+  assert.match(login, /href="https:\/\/atavtelecom\.in\/legal\/shipping"[^>]*>Shipping &amp; Delivery</);
+  assert.match(login, /href="https:\/\/atavtelecom\.in\/legal\/cookies"[^>]*>Cookie Policy</);
+  assert.match(login, /class="signup-block"/);
   assert.match(saas, /auth-scene-types/);
   assert.match(saas, /auth-body:has\(\.auth-scene\)/);
+  assert.match(saas, /\.auth-shell /);
   assert.match(saas, /\.login-legal /);
   assert.match(saas, /\.legal-card /);
   assert.match(masterJs, /"Bakery"/);

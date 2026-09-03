@@ -20,7 +20,7 @@ test("login page links Cashfree legal URLs on atavtelecom.in", () => {
   assert.match(login, /class="login-legal"/);
   assert.match(login, /login-legal-agree/);
   for (const [slug, label] of pages) {
-    assert.match(login, new RegExp(`href="https://atavtelecom\\.in/legal/${slug}">${label}<`));
+    assert.match(login, new RegExp(`href="https://atavtelecom\\.in/legal/${slug}"[^>]*>${label}<`));
   }
 });
 

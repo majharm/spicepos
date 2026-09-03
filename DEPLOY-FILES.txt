@@ -1,4 +1,4 @@
-Production deploy bundle — 20260903deploy71
+Production deploy bundle — 20260903deploy72
 =========================================
 
 Upload ALL files below to Hostinger public_html (overwrite):
@@ -112,7 +112,8 @@ FIXES in this bundle
   - Suppliers form and list include address and email
   - Settings page: wider card, 2-column details, styled logo upload, keep card padding on mobile
   - CSS: Master Admin mobile nav wrap, hide nav until sign-in, backup file inputs, table overflow
-  - Cache sticker 20260903deploy71 on index, login, master, setup, and legal pages
+  - Cache sticker 20260903deploy72 on index, login, master, setup
+  - Login split layout: brand panel + form, grouped signup, legal footer on the form
   - Login footer uses https://atavtelecom.in/legal/{privacy,terms,data-deletion,refund,shipping,cookies}
   - Login: ATAV POS background for all business types
   - FY year dropdown auto-generates 1 April–31 March years on Accounts, Reports, Expenses

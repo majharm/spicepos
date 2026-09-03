@@ -5,8 +5,11 @@ const lead = document.getElementById("auth-lead");
 
 document.querySelectorAll(".auth-tab").forEach((tab) => {
   tab.addEventListener("click", () => {
-    document.querySelectorAll(".auth-tab").forEach((t) => t.classList.remove("is-active"));
-    tab.classList.add("is-active");
+    document.querySelectorAll(".auth-tab").forEach((t) => {
+      const on = t === tab;
+      t.classList.toggle("is-active", on);
+      t.setAttribute("aria-selected", on ? "true" : "false");
+    });
     const signup = tab.dataset.panel === "signup";
     loginForm.hidden = signup;
     signupForm.hidden = !signup;

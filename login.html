@@ -7,197 +7,213 @@
     <meta http-equiv="Pragma" content="no-cache" />
     <title>Sign in · ATAV POS</title>
     <link rel="icon" href="./favicon.svg" />
-    <link rel="stylesheet" href="./css/pos.css?v=20260903deploy71" />
-    <link rel="stylesheet" href="./css/saas.css?v=20260903deploy71" />
+    <link rel="stylesheet" href="./css/pos.css?v=20260903deploy72" />
+    <link rel="stylesheet" href="./css/saas.css?v=20260903deploy72" />
   </head>
   <body class="auth-body">
-    <div class="auth-scene" aria-hidden="true">
-      <div class="auth-scene-copy">
-        <p class="auth-scene-kicker">ATAV POS</p>
-        <p class="auth-scene-title">All types of businesses use ATAV POS</p>
-      </div>
-      <ul class="auth-scene-types">
-        <li>Retail</li>
-        <li>Wholesale</li>
-        <li>Distributor</li>
-        <li>Grocery</li>
-        <li>Kirana</li>
-        <li>Spices</li>
-        <li>Bakery / cake shop</li>
-        <li>Restaurant</li>
-        <li>Cafe</li>
-        <li>Pharmacy</li>
-        <li>Medical</li>
-        <li>Electronics</li>
-        <li>Mobile</li>
-        <li>Fashion</li>
-        <li>Footwear</li>
-        <li>Jewellery</li>
-        <li>Hardware</li>
-        <li>Services</li>
-      </ul>
-    </div>
-    <main class="auth-card" id="auth-card">
-      <div class="auth-brand">
-        <img class="auth-logo" src="./assets/atav-telecom-logo.png" alt="ATAV Telecom" width="280" height="120" />
-        <p class="auth-tagline">For every business</p>
-      </div>
-      <p id="auth-lead">Sign in to continue. ATAV POS is for every business type.</p>
-      <div class="auth-tabs" role="tablist">
-        <button type="button" class="auth-tab is-active" data-panel="signin" role="tab">Sign in</button>
-        <button type="button" class="auth-tab" data-panel="signup" role="tab">Create business</button>
-      </div>
-
-      <form id="login-form">
-        <label>Email, username or mobile
-          <input name="identifier" autocomplete="username" required />
-        </label>
-        <label>Password
-          <input name="password" type="password" autocomplete="current-password" required />
-        </label>
-        <label class="remember">
-          <input type="checkbox" name="remember" />
-          <span class="remember-ui" aria-hidden="true"></span>
-          Remember me
-        </label>
-        <button class="btn primary" type="submit">Sign in</button>
-        <p class="hint" id="hint"></p>
-      </form>
-
-      <form id="signup-form" hidden>
-        <div class="signup-grid">
-          <label class="full">Business Name *
-            <input name="businessName" required maxlength="180" />
-          </label>
-          <label>Business Type *
-            <select name="businessType" required>
-              <option value="">Select type</option>
-              <option>Retail</option>
-              <option>Wholesale</option>
-              <option>Distributor</option>
-              <option>Restaurant</option>
-              <option>Cafe</option>
-              <option>Bakery</option>
-              <option>Grocery</option>
-              <option>Pharmacy</option>
-              <option>Electronics</option>
-              <option>Fashion</option>
-              <option>Footwear</option>
-              <option>Services</option>
-              <option>Other</option>
-            </select>
-          </label>
-          <label>Business Category *
-            <select name="businessCategory" required>
-              <option value="">Select category</option>
-              <option>Spices &amp; masala</option>
-              <option>Kirana / FMCG</option>
-              <option>Supermarket</option>
-              <option>Apparel</option>
-              <option>Footwear</option>
-              <option>Mobile &amp; electronics</option>
-              <option>Food &amp; beverage</option>
-              <option>Hardware</option>
-              <option>Jewellery</option>
-              <option>Medical</option>
-              <option>General trade</option>
-              <option>Other</option>
-            </select>
-          </label>
-          <label>Owner Name *
-            <input name="ownerName" required maxlength="120" />
-          </label>
-          <label>Mobile Number *
-            <input name="mobile" type="tel" required inputmode="numeric" maxlength="15" placeholder="10-digit mobile" />
-          </label>
-          <label class="full">Email ID *
-            <input name="email" type="email" required maxlength="160" />
-          </label>
-          <label>GST Number
-            <input name="gstNumber" maxlength="20" placeholder="Optional" />
-          </label>
-          <label>PAN Number
-            <input name="panNumber" maxlength="12" placeholder="Optional" />
-          </label>
-          <label class="full">Address *
-            <textarea name="address" required rows="2" maxlength="500"></textarea>
-          </label>
-          <label>City *
-            <input name="city" required maxlength="80" />
-          </label>
-          <label>State *
-            <select name="state" required>
-              <option value="">Select state</option>
-              <option>Andhra Pradesh</option>
-              <option>Arunachal Pradesh</option>
-              <option>Assam</option>
-              <option>Bihar</option>
-              <option>Chhattisgarh</option>
-              <option>Goa</option>
-              <option>Gujarat</option>
-              <option>Haryana</option>
-              <option>Himachal Pradesh</option>
-              <option>Jharkhand</option>
-              <option>Karnataka</option>
-              <option>Kerala</option>
-              <option>Madhya Pradesh</option>
-              <option>Maharashtra</option>
-              <option>Manipur</option>
-              <option>Meghalaya</option>
-              <option>Mizoram</option>
-              <option>Nagaland</option>
-              <option>Odisha</option>
-              <option>Punjab</option>
-              <option>Rajasthan</option>
-              <option>Sikkim</option>
-              <option>Tamil Nadu</option>
-              <option>Telangana</option>
-              <option>Tripura</option>
-              <option>Uttar Pradesh</option>
-              <option>Uttarakhand</option>
-              <option>West Bengal</option>
-              <option>Delhi</option>
-              <option>Jammu and Kashmir</option>
-              <option>Ladakh</option>
-              <option>Puducherry</option>
-              <option>Chandigarh</option>
-              <option>Andaman and Nicobar Islands</option>
-              <option>Dadra and Nagar Haveli and Daman and Diu</option>
-              <option>Lakshadweep</option>
-            </select>
-          </label>
-          <label>PIN Code *
-            <input name="pinCode" required inputmode="numeric" maxlength="6" placeholder="6-digit PIN" />
-          </label>
-          <label>Business Logo
-            <input name="logo" type="file" accept="image/*" />
-          </label>
-          <label>Admin Username *
-            <input name="adminUsername" required autocomplete="username" maxlength="32" />
-          </label>
-          <label>Password *
-            <input name="password" type="password" required autocomplete="new-password" minlength="8" />
-          </label>
-          <label class="full">Confirm Password *
-            <input name="confirmPassword" type="password" required autocomplete="new-password" minlength="8" />
-          </label>
+    <div class="auth-shell">
+      <aside class="auth-scene" aria-hidden="true">
+        <div class="auth-scene-copy">
+          <p class="auth-scene-kicker">ATAV POS</p>
+          <p class="auth-scene-title">All types of businesses use ATAV POS</p>
+          <p class="auth-scene-lead">Billing, stock, and GST invoices in one shop login.</p>
         </div>
-        <p class="auth-note login-legal-agree">By creating a business you agree to our <a href="https://atavtelecom.in/legal/terms">Terms &amp; Conditions</a> and <a href="https://atavtelecom.in/legal/privacy">Privacy Policy</a>.</p>
-        <button class="btn primary" type="submit">Create business &amp; sign in</button>
-        <p class="hint" id="signup-hint"></p>
-        <p class="auth-note">You get a 2-day trial. After signup you open your own shop POS as business admin.</p>
-      </form>
-      <div class="login-support" id="login-support" hidden></div>
-    </main>
-    <nav class="login-legal" aria-label="Legal">
-      <a href="https://atavtelecom.in/legal/privacy">Privacy Policy</a>
-      <a href="https://atavtelecom.in/legal/terms">Terms &amp; Conditions</a>
-      <a href="https://atavtelecom.in/legal/data-deletion">Data Deletion Policy</a>
-      <a href="https://atavtelecom.in/legal/refund">Refund &amp; Cancellation</a>
-      <a href="https://atavtelecom.in/legal/shipping">Shipping &amp; Delivery</a>
-      <a href="https://atavtelecom.in/legal/cookies">Cookie Policy</a>
-    </nav>
-    <script src="./js/support.js?v=20260903deploy71"></script>
-    <script src="./js/x-pos-20260830e.js?v=20260903deploy71"></script>
+        <ul class="auth-scene-types">
+          <li>Retail</li>
+          <li>Wholesale</li>
+          <li>Distributor</li>
+          <li>Grocery</li>
+          <li>Kirana</li>
+          <li>Spices</li>
+          <li>Bakery / cake shop</li>
+          <li>Restaurant</li>
+          <li>Cafe</li>
+          <li>Pharmacy</li>
+          <li>Medical</li>
+          <li>Electronics</li>
+          <li>Mobile</li>
+          <li>Fashion</li>
+          <li>Footwear</li>
+          <li>Jewellery</li>
+          <li>Hardware</li>
+          <li>Services</li>
+        </ul>
+        <p class="auth-scene-trial">New shops get a 2-day trial. Subscribe later with Cashfree.</p>
+      </aside>
+      <div class="auth-main">
+        <main class="auth-card" id="auth-card">
+          <div class="auth-brand">
+            <img class="auth-logo" src="./assets/atav-telecom-logo.png" alt="ATAV Telecom" width="200" height="86" />
+            <p class="auth-tagline">For every business</p>
+          </div>
+          <p id="auth-lead">Sign in to continue.</p>
+          <div class="auth-tabs" role="tablist">
+            <button type="button" class="auth-tab is-active" data-panel="signin" role="tab" aria-selected="true">Sign in</button>
+            <button type="button" class="auth-tab" data-panel="signup" role="tab" aria-selected="false">Create business</button>
+          </div>
+
+          <form id="login-form">
+            <label>Email, username or mobile
+              <input name="identifier" autocomplete="username" required />
+            </label>
+            <label>Password
+              <input name="password" type="password" autocomplete="current-password" required />
+            </label>
+            <label class="remember">
+              <input type="checkbox" name="remember" />
+              <span class="remember-ui" aria-hidden="true"></span>
+              Remember me
+            </label>
+            <button class="btn primary" type="submit">Sign in</button>
+            <p class="hint" id="hint"></p>
+          </form>
+
+          <form id="signup-form" hidden>
+            <fieldset class="signup-block">
+              <legend>Business</legend>
+              <label class="full">Business Name *
+                <input name="businessName" required maxlength="180" />
+              </label>
+              <label>Business Type *
+                <select name="businessType" required>
+                  <option value="">Select type</option>
+                  <option>Retail</option>
+                  <option>Wholesale</option>
+                  <option>Distributor</option>
+                  <option>Restaurant</option>
+                  <option>Cafe</option>
+                  <option>Bakery</option>
+                  <option>Grocery</option>
+                  <option>Pharmacy</option>
+                  <option>Electronics</option>
+                  <option>Fashion</option>
+                  <option>Footwear</option>
+                  <option>Services</option>
+                  <option>Other</option>
+                </select>
+              </label>
+              <label>Business Category *
+                <select name="businessCategory" required>
+                  <option value="">Select category</option>
+                  <option>Spices &amp; masala</option>
+                  <option>Kirana / FMCG</option>
+                  <option>Supermarket</option>
+                  <option>Apparel</option>
+                  <option>Footwear</option>
+                  <option>Mobile &amp; electronics</option>
+                  <option>Food &amp; beverage</option>
+                  <option>Hardware</option>
+                  <option>Jewellery</option>
+                  <option>Medical</option>
+                  <option>General trade</option>
+                  <option>Other</option>
+                </select>
+              </label>
+              <label class="full">Business Logo
+                <input name="logo" type="file" accept="image/*" />
+              </label>
+            </fieldset>
+            <fieldset class="signup-block">
+              <legend>Owner</legend>
+              <label>Owner Name *
+                <input name="ownerName" required maxlength="120" />
+              </label>
+              <label>Mobile Number *
+                <input name="mobile" type="tel" required inputmode="numeric" maxlength="15" placeholder="10-digit mobile" />
+              </label>
+              <label class="full">Email ID *
+                <input name="email" type="email" required maxlength="160" />
+              </label>
+              <label>GST Number
+                <input name="gstNumber" maxlength="20" placeholder="Optional" />
+              </label>
+              <label>PAN Number
+                <input name="panNumber" maxlength="12" placeholder="Optional" />
+              </label>
+            </fieldset>
+            <fieldset class="signup-block">
+              <legend>Address</legend>
+              <label class="full">Address *
+                <textarea name="address" required rows="2" maxlength="500"></textarea>
+              </label>
+              <label>City *
+                <input name="city" required maxlength="80" />
+              </label>
+              <label>State *
+                <select name="state" required>
+                  <option value="">Select state</option>
+                  <option>Andhra Pradesh</option>
+                  <option>Arunachal Pradesh</option>
+                  <option>Assam</option>
+                  <option>Bihar</option>
+                  <option>Chhattisgarh</option>
+                  <option>Goa</option>
+                  <option>Gujarat</option>
+                  <option>Haryana</option>
+                  <option>Himachal Pradesh</option>
+                  <option>Jharkhand</option>
+                  <option>Karnataka</option>
+                  <option>Kerala</option>
+                  <option>Madhya Pradesh</option>
+                  <option>Maharashtra</option>
+                  <option>Manipur</option>
+                  <option>Meghalaya</option>
+                  <option>Mizoram</option>
+                  <option>Nagaland</option>
+                  <option>Odisha</option>
+                  <option>Punjab</option>
+                  <option>Rajasthan</option>
+                  <option>Sikkim</option>
+                  <option>Tamil Nadu</option>
+                  <option>Telangana</option>
+                  <option>Tripura</option>
+                  <option>Uttar Pradesh</option>
+                  <option>Uttarakhand</option>
+                  <option>West Bengal</option>
+                  <option>Delhi</option>
+                  <option>Jammu and Kashmir</option>
+                  <option>Ladakh</option>
+                  <option>Puducherry</option>
+                  <option>Chandigarh</option>
+                  <option>Andaman and Nicobar Islands</option>
+                  <option>Dadra and Nagar Haveli and Daman and Diu</option>
+                  <option>Lakshadweep</option>
+                </select>
+              </label>
+              <label>PIN Code *
+                <input name="pinCode" required inputmode="numeric" maxlength="6" placeholder="6-digit PIN" />
+              </label>
+            </fieldset>
+            <fieldset class="signup-block">
+              <legend>Admin login</legend>
+              <label class="full">Admin Username *
+                <input name="adminUsername" required autocomplete="username" maxlength="32" />
+              </label>
+              <label>Password *
+                <input name="password" type="password" required autocomplete="new-password" minlength="8" placeholder="At least 8 characters" />
+              </label>
+              <label>Confirm Password *
+                <input name="confirmPassword" type="password" required autocomplete="new-password" minlength="8" />
+              </label>
+            </fieldset>
+            <p class="auth-note login-legal-agree">By creating a business you agree to our <a href="https://atavtelecom.in/legal/terms" target="_blank" rel="noopener noreferrer">Terms &amp; Conditions</a> and <a href="https://atavtelecom.in/legal/privacy" target="_blank" rel="noopener noreferrer">Privacy Policy</a>.</p>
+            <button class="btn primary" type="submit">Create business &amp; sign in</button>
+            <p class="hint" id="signup-hint"></p>
+            <p class="auth-note">You get a 2-day trial. After signup you open your own shop POS as business admin.</p>
+          </form>
+          <div class="login-support" id="login-support" hidden></div>
+        </main>
+        <nav class="login-legal" aria-label="Legal">
+          <a href="https://atavtelecom.in/legal/privacy" target="_blank" rel="noopener noreferrer">Privacy Policy</a>
+          <a href="https://atavtelecom.in/legal/terms" target="_blank" rel="noopener noreferrer">Terms &amp; Conditions</a>
+          <a href="https://atavtelecom.in/legal/data-deletion" target="_blank" rel="noopener noreferrer">Data Deletion Policy</a>
+          <a href="https://atavtelecom.in/legal/refund" target="_blank" rel="noopener noreferrer">Refund &amp; Cancellation</a>
+          <a href="https://atavtelecom.in/legal/shipping" target="_blank" rel="noopener noreferrer">Shipping &amp; Delivery</a>
+          <a href="https://atavtelecom.in/legal/cookies" target="_blank" rel="noopener noreferrer">Cookie Policy</a>
+        </nav>
+      </div>
+    </div>
+    <script src="./js/support.js?v=20260903deploy72"></script>
+    <script src="./js/x-pos-20260830e.js?v=20260903deploy72"></script>
   </body>
 </html>
