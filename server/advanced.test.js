@@ -56,6 +56,11 @@ test("PHP and Node wire barcode, damage, loyalty, and ledger modules", () => {
   assert.match(nodeAdv, /Enter \$\{pieces\} barcodes for \$\{pieces\} pcs/);
   assert.match(adv, /function pos_parse_manual_barcodes/);
   assert.match(adv, /function pos_resolve_purchase_barcodes/);
+  assert.match(index, /id="item-barcode-qty"/);
+  assert.match(index, /pcs-barcode-only/);
+  assert.match(app, /barcodes\/generate-qty/);
+  assert.match(app, /barcode_qty/);
+  assert.match(app, /pcs-barcode-only/);
   assert.match(nodeAdv, /\/api\/damage/);
   assert.match(nodeAdv, /\/api\/loyalty\/settings/);
   assert.match(nodeAdv, /\/api\/stock\/ledger/);

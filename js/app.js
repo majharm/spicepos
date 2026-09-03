@@ -2420,6 +2420,7 @@ $("items-table").addEventListener("click", async (e) => {
     if ($("item-mrp")) $("item-mrp").value = i.mrp || i.retail_rate || "";
     if ($("item-barcode")) $("item-barcode").value = i.barcode || "";
     if ($("item-mfr-barcode")) $("item-mfr-barcode").value = "";
+    if ($("item-barcode-qty")) $("item-barcode-qty").value = "";
     $("item-b2b").value = i.b2b_rate;
     $("item-purchase").value = i.purchase_rate;
     $("item-gst").value = i.gst_rate;
@@ -2806,6 +2807,7 @@ $("item-form").addEventListener("submit", async (e) => {
     mrp: $("item-mrp")?.value || "",
     barcode: POSUnits.isCount(unit) ? ($("item-barcode")?.value || "") : "",
     mfr_barcode: POSUnits.isCount(unit) ? ($("item-mfr-barcode")?.value || "") : "",
+    barcode_qty: POSUnits.isCount(unit) ? Number($("item-barcode-qty")?.value) || 0 : 0,
     stock_gm: POSUnits.toBase($("item-stock").value, unit),
     image_url: state.itemImage || "",
   };
