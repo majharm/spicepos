@@ -72,7 +72,7 @@ function pos_backup_all_tables() {
 }
 
 function pos_backup_table_rank($name) {
-  if (preg_match('/_lines$/', $name) || in_array($name, ["pack_items", "branch_stocks", "journal_lines", "stock_movements"], true)) {
+  if (preg_match('/_lines$/', $name) || in_array($name, ["pack_items", "branch_stocks", "journal_lines", "stock_movements", "item_barcodes", "stock_batches", "damage_records", "loyalty_ledger", "loyalty_accounts"], true)) {
     return 0;
   }
   if ($name === "staff_users") return 2;

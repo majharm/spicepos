@@ -376,7 +376,7 @@ ${purchaseBody(purchase, ctx)}
         <td class="inv-num">${escapeHtml(money(l.rate_per_kg))}${escapeHtml(rateSuffix(l.unit))}</td>
         <td class="inv-num">${escapeHtml(money(l.amount))}</td>
       </tr>
-      <tr class="inv-tax"><td colspan="4">GST ${l.gst_rate}% · ${escapeHtml(money(l.gst_amount))}</td></tr>`,
+      <tr class="inv-tax"><td colspan="4">GST ${l.gst_rate}% · ${escapeHtml(money(l.gst_amount))}${Number(l.discount) > 0 ? ` · Disc ${escapeHtml(money(l.discount))}` : ""}</td></tr>`,
       )
       .join("");
 
@@ -422,6 +422,7 @@ ${purchaseBody(purchase, ctx)}
     <tbody>
       <tr><td colspan="3">Taxable value</td><td class="inv-num">${escapeHtml(money(subtotal))}</td></tr>
       ${discount > 0 ? `<tr><td colspan="3">Discount</td><td class="inv-num">-${escapeHtml(money(discount))}</td></tr>` : ""}
+      ${round2(order.loyalty_discount) > 0 ? `<tr><td colspan="3">Royalty</td><td class="inv-num">-${escapeHtml(money(order.loyalty_discount))}</td></tr>` : ""}
       ${gstRows}
       <tr class="inv-gst-total"><td colspan="3">Total GST</td><td class="inv-num">${escapeHtml(money(gst))}</td></tr>
       <tr class="inv-grand"><td colspan="3"><strong>Grand total</strong></td><td class="inv-num"><strong>${escapeHtml(money(total))}</strong></td></tr>
@@ -676,6 +677,7 @@ ${invoiceBody(order, ctx)}
       <tbody>
         <tr><td>Taxable value</td><td class="off-n">${escapeHtml(money(subtotal))}</td></tr>
         ${discount > 0 ? `<tr><td>Discount</td><td class="off-n">-${escapeHtml(money(discount))}</td></tr>` : ""}
+        ${round2(order.loyalty_discount) > 0 ? `<tr><td>Royalty</td><td class="off-n">-${escapeHtml(money(order.loyalty_discount))}</td></tr>` : ""}
         <tr><td>Total GST</td><td class="off-n">${escapeHtml(money(gst))}</td></tr>
         <tr class="off-grand"><td>Grand total</td><td class="off-n">${escapeHtml(money(total))}</td></tr>
       </tbody>

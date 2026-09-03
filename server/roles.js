@@ -16,6 +16,8 @@ export const MODULES = [
   "settings",
   "support",
   "discount",
+  "loyalty",
+  "damage",
 ];
 
 export const ROLES = [
@@ -49,6 +51,8 @@ export function defaultPerms(role) {
       orders: true,
       reports: false,
       support: true,
+      discount: true,
+      loyalty: true,
     };
   }
   if (role === "stock_manager") {
@@ -60,6 +64,7 @@ export function defaultPerms(role) {
       suppliers: true,
       reports: true,
       support: true,
+      damage: true,
     };
   }
   if (role === "accountant") {

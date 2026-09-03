@@ -27,6 +27,8 @@ test("PHP fallback routes checkout, holds, and order updates through core", () =
   assert.match(core, /units.*pos_dispatch_units/s);
   assert.match(core, /function pos_require_backup/);
   assert.match(core, /function pos_require_units/);
+  assert.match(core, /function pos_require_advanced/);
+  assert.match(core, /pos_dispatch_advanced/);
   assert.match(core, /function pos_round2/);
   assert.match(core, /function pos_ensure_held_bills_schema/);
   assert.match(till, /pos_dispatch_order_route/);

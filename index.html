@@ -6,8 +6,8 @@
     <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
     <title>ATAV POS</title>
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./css/pos.css?v=20260903deploy72" />
-    <link rel="stylesheet" href="./css/saas.css?v=20260903deploy72" />
+    <link rel="stylesheet" href="./css/pos.css?v=20260903deploy73" />
+    <link rel="stylesheet" href="./css/saas.css?v=20260903deploy73" />
   </head>
   <body>
     <div class="app" id="app">
@@ -28,6 +28,7 @@
             <p class="nav-group-label">Sales</p>
             <button class="nav-btn" type="button" data-view="orders"><span class="nav-icon" aria-hidden="true">▤</span>Invoices</button>
             <button class="nav-btn" type="button" data-view="customers"><span class="nav-icon" aria-hidden="true">◎</span>Customers</button>
+            <button class="nav-btn" type="button" data-view="loyalty"><span class="nav-icon" aria-hidden="true">★</span>Royalty</button>
             <button class="nav-btn" type="button" data-view="purchases"><span class="nav-icon" aria-hidden="true">↘</span>Purchases</button>
           </div>
           <div class="nav-group">
@@ -35,7 +36,10 @@
             <button class="nav-btn" type="button" data-view="items"><span class="nav-icon" aria-hidden="true">◫</span>Items</button>
             <button class="nav-btn" type="button" data-view="units"><span class="nav-icon" aria-hidden="true">⚖</span>Units</button>
             <button class="nav-btn" type="button" data-view="packs"><span class="nav-icon" aria-hidden="true">▦</span>Packs</button>
+            <button class="nav-btn" type="button" data-view="barcodes"><span class="nav-icon" aria-hidden="true">▦</span>Barcodes</button>
             <button class="nav-btn" type="button" data-view="stock"><span class="nav-icon" aria-hidden="true">▥</span>Stock</button>
+            <button class="nav-btn" type="button" data-view="damage"><span class="nav-icon" aria-hidden="true">⚠</span>Damage</button>
+            <button class="nav-btn" type="button" data-view="ledger"><span class="nav-icon" aria-hidden="true">☰</span>Ledger</button>
             <button class="nav-btn" type="button" data-view="suppliers"><span class="nav-icon" aria-hidden="true">◇</span>Suppliers</button>
           </div>
           <div class="nav-group">
@@ -94,7 +98,7 @@
           <div class="edit-order-banner" id="edit-order-banner" hidden></div>
           <header class="topbar counter-topbar">
             <form class="search" id="search-form">
-              <input id="search" type="search" placeholder="Search spice, HSN, or code…" autocomplete="off" />
+              <input id="search" type="search" placeholder="Search name, HSN, or scan barcode…" autocomplete="off" />
             </form>
             <div class="customer-picker">
               <select id="customer" class="select" aria-label="Customer"></select>
@@ -143,10 +147,28 @@
               <div class="ticket-pack" id="chosen-pack">Pack: Loose items</div>
               <div id="pack-bar" class="pack-bar"></div>
               <div class="lines" id="lines"></div>
+              <div class="bill-disc" id="bill-disc-wrap">
+                <label>Bill discount
+                  <span class="disc-pair">
+                    <select id="bill-disc-type" aria-label="Bill discount type">
+                      <option value="amt">₹</option>
+                      <option value="pct">%</option>
+                    </select>
+                    <input id="bill-disc-value" type="number" min="0" step="0.01" value="0" aria-label="Bill discount value" />
+                  </span>
+                </label>
+                <label class="loyalty-redeem" id="loyalty-redeem-wrap">Royalty redeem
+                  <input id="loyalty-redeem" type="number" min="0" step="1" value="0" aria-label="Points to redeem" />
+                  <span class="hint" id="loyalty-hint"></span>
+                </label>
+              </div>
               <div class="totals">
                 <div><span>Qty</span><span id="qty-total">0 g</span></div>
                 <div><span>Taxable</span><span id="taxable">₹0.00</span></div>
                 <div><span>GST</span><span id="tax">₹0.00</span></div>
+                <div id="disc-row"><span>Discount</span><span id="disc-total">₹0.00</span></div>
+                <div id="loyalty-row"><span>Royalty</span><span id="loyalty-total">₹0.00</span></div>
+                <div id="profit-row"><span>Profit</span><span id="profit-total">₹0.00</span></div>
                 <div class="grand"><span>Total</span><span id="total">₹0.00</span></div>
               </div>
               <div class="pay">
@@ -209,6 +231,14 @@
             <label>Unit type
               <select id="item-unit"></select>
             </label>
+            <label>MRP ₹ <input id="item-mrp" type="number" step="0.01" min="0" /></label>
+            <label>Own barcode
+              <span class="barcode-field">
+                <input id="item-barcode" maxlength="32" placeholder="Auto on save" autocomplete="off" />
+                <button class="btn" type="button" id="item-barcode-gen">Generate</button>
+              </span>
+            </label>
+            <label>Manufacturer barcode <input id="item-mfr-barcode" maxlength="32" placeholder="Optional factory code" autocomplete="off" /></label>
             <label><span id="item-retail-lab">Retail ₹/kg</span> <input id="item-retail" type="number" step="0.01" /></label>
             <label><span id="item-b2b-lab">B2B ₹/kg</span> <input id="item-b2b" type="number" step="0.01" /></label>
             <label><span id="item-purchase-lab">Purchase ₹/kg</span> <input id="item-purchase" type="number" step="0.01" /></label>
@@ -256,6 +286,8 @@
             </label>
             <label>GSTIN <input id="cust-gstin" /></label>
             <label>State <input id="cust-state" placeholder="e.g. Maharashtra" autocomplete="address-level1" /></label>
+            <label>Birthday <input id="cust-dob" type="date" /></label>
+            <label>Referred by customer id <input id="cust-ref" maxlength="64" placeholder="Optional" /></label>
             <button class="btn primary" type="submit">Save</button>
           </form>
           <div class="hint" id="cust-hint"></div>
@@ -360,12 +392,31 @@
           <div class="hint" id="sup-hint"></div>
           <div class="table-wrap" id="suppliers-table"></div>
         </section>
+        <section class="view" id="view-barcodes" hidden>
+          <h2 class="visually-hidden">Barcodes</h2>
+          <p class="lede">Product-wise barcode generator — own codes, manufacturer codes, and label reprint.</p>
+          <div class="toolbar-row">
+            <button class="btn primary" type="button" id="bc-generate-missing">Generate missing barcodes</button>
+            <label>Copies <input id="bc-copies" type="number" min="1" max="50" value="1" /></label>
+            <button class="btn" type="button" id="bc-print-selected">Print selected labels</button>
+            <span class="hint" id="bc-hint"></span>
+          </div>
+          <div class="table-wrap" id="barcodes-table"></div>
+        </section>
         <section class="view" id="view-stock" hidden>
           <h2 class="visually-hidden">Stock</h2>
           <p class="lede">Branch-wise stock, adjustments, transfers, and low-stock alerts.</p>
+          <div class="mode-toggle" id="stock-mode">
+            <button class="btn primary" type="button" data-stock-mode="simple">Simple</button>
+            <button class="btn" type="button" data-stock-mode="advanced">Advanced</button>
+          </div>
           <form class="settings wide" id="stock-form">
-            <label>Item id <input id="stk-item" required /></label>
-            <label>Qty grams (+/−) <input id="stk-qty" type="number" required /></label>
+            <label>Item
+              <input id="stk-item-search" list="stk-item-list" placeholder="Search item or barcode" />
+              <input type="hidden" id="stk-item" required />
+              <datalist id="stk-item-list"></datalist>
+            </label>
+            <label>Qty <input id="stk-qty" type="number" required /></label>
             <label>Kind
               <select id="stk-kind">
                 <option value="adjustment">Adjustment</option>
@@ -375,10 +426,91 @@
                 <option value="returned">Returned</option>
               </select>
             </label>
+            <label class="stock-adv">Reason
+              <select id="stk-reason">
+                <option value="broken">Broken</option>
+                <option value="spoilage">Spoilage</option>
+                <option value="expiry">Expiry</option>
+                <option value="moisture">Moisture</option>
+                <option value="other">Other</option>
+              </select>
+            </label>
             <label>Note <input id="stk-note" /></label>
             <button class="btn primary" type="submit">Post</button>
           </form>
           <div class="table-wrap" id="stock-table"></div>
+        </section>
+        <section class="view" id="view-damage" hidden>
+          <h2 class="visually-hidden">Damage stock</h2>
+          <p class="lede">Record damage or wastage, approve reductions, and see estimated loss.</p>
+          <form class="settings wide" id="damage-form">
+            <label>Item
+              <input id="dmg-item-search" list="dmg-item-list" placeholder="Search item or scan barcode" />
+              <input type="hidden" id="dmg-item" required />
+              <datalist id="dmg-item-list"></datalist>
+            </label>
+            <label>Barcode / batch <input id="dmg-barcode" placeholder="Optional" /></label>
+            <label>Qty <input id="dmg-qty" type="number" min="0.001" step="0.001" required /></label>
+            <label>Reason
+              <select id="dmg-reason">
+                <option value="broken">Broken</option>
+                <option value="spoilage">Spoilage</option>
+                <option value="expiry">Expiry</option>
+                <option value="moisture">Moisture</option>
+                <option value="other">Other</option>
+              </select>
+            </label>
+            <label>Note <input id="dmg-note" /></label>
+            <label class="full"><input type="checkbox" id="dmg-auto" /> Auto-approve (managers)</label>
+            <button class="btn primary" type="submit">Record damage</button>
+          </form>
+          <div class="hint" id="dmg-hint"></div>
+          <div class="report-grid" id="dmg-report"></div>
+          <div class="table-wrap" id="damage-table"></div>
+        </section>
+        <section class="view" id="view-ledger" hidden>
+          <h2 class="visually-hidden">Stock ledger</h2>
+          <p class="lede">Purchase → batch → sale → return → damage in one ledger.</p>
+          <form class="report-toolbar" id="ledger-toolbar">
+            <label>Kind
+              <select id="ledger-kind">
+                <option value="">All</option>
+                <option value="purchase">Purchase</option>
+                <option value="sale">Sale</option>
+                <option value="damaged">Damaged</option>
+                <option value="adjustment">Adjustment</option>
+                <option value="opening">Opening</option>
+                <option value="returned">Returned</option>
+                <option value="expired">Expired</option>
+              </select>
+            </label>
+            <button class="btn" type="button" id="ledger-refresh">Refresh</button>
+          </form>
+          <div class="table-wrap" id="ledger-table"></div>
+        </section>
+        <section class="view" id="view-loyalty" hidden>
+          <h2 class="visually-hidden">Royalty points</h2>
+          <p class="lede">Customer royalty / loyalty points — earn, redeem, tiers, birthday and referral bonus.</p>
+          <form class="settings wide" id="loyalty-settings-form">
+            <label>Earn points / ₹100 <input id="loy-earn" type="number" step="0.01" min="0" /></label>
+            <label>₹ per point <input id="loy-rate" type="number" step="0.01" min="0" /></label>
+            <label>Min redeem points <input id="loy-min" type="number" step="1" min="0" /></label>
+            <label>Expiry days <input id="loy-exp" type="number" step="1" min="0" /></label>
+            <label>Birthday bonus <input id="loy-bday" type="number" step="1" min="0" /></label>
+            <label>Referral points <input id="loy-ref" type="number" step="1" min="0" /></label>
+            <label class="full"><input type="checkbox" id="loy-on" checked /> Royalty system enabled</label>
+            <button class="btn primary" type="submit">Save royalty settings</button>
+          </form>
+          <div class="hint" id="loy-hint"></div>
+          <form class="settings wide" id="loyalty-adjust-form">
+            <label>Customer <select id="loy-cust"></select></label>
+            <label>Adjust points (+/−) <input id="loy-pts" type="number" step="1" required /></label>
+            <label>Note <input id="loy-note" placeholder="Manual adjustment" /></label>
+            <button class="btn" type="submit">Post points</button>
+            <button class="btn" type="button" id="loy-birthday">Birthday bonus</button>
+          </form>
+          <div class="table-wrap" id="loyalty-table"></div>
+          <div class="table-wrap" id="loyalty-history"></div>
         </section>
         <section class="view" id="view-staff" hidden>
           <h2 class="visually-hidden">Staff &amp; roles</h2>
@@ -685,13 +817,16 @@
         </section>
       </div>
     </aside>
-    <script src="./js/gst-supply.js?v=20260903deploy72" defer></script>
-    <script src="./js/pos-api.js?v=20260903deploy72" defer></script>
-    <script src="./js/units.js?v=20260903deploy72" defer></script>
-    <script src="./js/footwear.js?v=20260903deploy72" defer></script>
-    <script src="./js/dev-mode.js?v=20260903deploy72" defer></script>
-    <script src="./js/invoice.js?v=20260903deploy72" defer></script>
-    <script src="./js/support.js?v=20260903deploy72" defer></script>
-    <script src="./js/app.js?v=20260903deploy72" defer></script>
+    <script src="./js/gst-supply.js?v=20260903deploy73" defer></script>
+    <script src="./js/pos-api.js?v=20260903deploy73" defer></script>
+    <script src="./js/units.js?v=20260903deploy73" defer></script>
+    <script src="./js/footwear.js?v=20260903deploy73" defer></script>
+    <script src="./js/discount.js?v=20260903deploy73" defer></script>
+    <script src="./js/loyalty.js?v=20260903deploy73" defer></script>
+    <script src="./js/barcode.js?v=20260903deploy73" defer></script>
+    <script src="./js/dev-mode.js?v=20260903deploy73" defer></script>
+    <script src="./js/invoice.js?v=20260903deploy73" defer></script>
+    <script src="./js/support.js?v=20260903deploy73" defer></script>
+    <script src="./js/app.js?v=20260903deploy73" defer></script>
   </body>
 </html>

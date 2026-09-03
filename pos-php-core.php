@@ -415,6 +415,8 @@ function pos_ensure_item_unit_columns() {
     "color" => "VARCHAR(64) NULL",
     "size" => "VARCHAR(32) NULL",
     "wearer_type" => "VARCHAR(16) NULL",
+    "barcode" => "VARCHAR(64) NULL",
+    "mrp" => "DECIMAL(12,2) NULL",
   ]);
 }
 
@@ -642,7 +644,7 @@ function pos_default_perms($role) {
     "dashboard" => true, "counter" => true, "items" => true, "customers" => true, "packs" => true,
     "orders" => true, "purchases" => true, "suppliers" => true, "stock" => true, "staff" => true,
     "branches" => true, "devices" => true, "reports" => true, "accounts" => true, "settings" => true,
-    "support" => true, "discount" => true,
+    "support" => true, "discount" => true, "loyalty" => true, "damage" => true,
   ];
   if ($role === "business_admin") return $all;
   if ($role === "branch_manager" || $role === "manager") {
@@ -654,10 +656,10 @@ function pos_default_perms($role) {
     ]);
   }
   if ($role === "cashier") {
-    return ["dashboard" => true, "counter" => true, "customers" => true, "orders" => true, "support" => true];
+    return ["dashboard" => true, "counter" => true, "customers" => true, "orders" => true, "support" => true, "discount" => true, "loyalty" => true];
   }
   if ($role === "stock_manager") {
-    return ["dashboard" => true, "items" => true, "stock" => true, "purchases" => true, "suppliers" => true, "reports" => true, "support" => true];
+    return ["dashboard" => true, "items" => true, "stock" => true, "purchases" => true, "suppliers" => true, "reports" => true, "support" => true, "damage" => true];
   }
   if ($role === "accountant") {
     return ["dashboard" => true, "reports" => true, "accounts" => true, "purchases" => true, "suppliers" => true, "customers" => true, "orders" => true, "support" => true];
@@ -702,6 +704,28 @@ function pos_require_backup() {
       "error" => "pos-backup.php is missing on the server.",
       "php" => true,
       "hint" => "Upload pos-backup.php from the latest deploy bundle to public_html, then hard-refresh.",
+    ]);
+  }
+  require_once $file;
+}
+
+function pos_is_advanced_path($path) {
+  $p = (string) $path;
+  return $p === "barcodes" || strpos($p, "barcodes/") === 0
+    || $p === "damage" || strpos($p, "damage/") === 0
+    || $p === "loyalty" || strpos($p, "loyalty/") === 0
+    || $p === "batches" || strpos($p, "batches/") === 0
+    || $p === "stock/ledger" || $p === "stock/movements"
+    || (bool) preg_match('#^items/[^/]+/barcodes$#', $p);
+}
+
+function pos_require_advanced() {
+  $file = __DIR__ . "/pos-advanced.php";
+  if (!is_file($file)) {
+    pos_send(503, [
+      "error" => "pos-advanced.php is missing on the server.",
+      "php" => true,
+      "hint" => "Upload pos-advanced.php from the latest deploy bundle to public_html, then hard-refresh.",
     ]);
   }
   require_once $file;
@@ -2063,6 +2087,26 @@ function pos_php_dispatch($path, $method, $rawBody) {
         }
         pos_dispatch_backup($path, $method, $body, $bid, $branchId, $uid, $auth);
         return;
+      }
+      if (pos_is_advanced_path($path)) {
+        $auth = pos_staff_session();
+        if (!$auth || ($auth["type"] ?? "") !== "staff") pos_send(401, ["error" => "Sign in required"]);
+        $bid = $auth["user"]["business_id"];
+        $branchId = $auth["branchId"] ?? $auth["user"]["branch_id"] ?? null;
+        $uid = $auth["user"]["id"];
+        pos_apply_business_timezone($bid);
+        pos_require_advanced();
+        if (!function_exists("pos_dispatch_advanced")) {
+          pos_send(503, [
+            "error" => "pos-advanced.php on the server is broken or outdated.",
+            "php" => true,
+            "hint" => "Re-upload pos-advanced.php from the latest deploy bundle.",
+          ]);
+        }
+        if (pos_dispatch_advanced($path, $method, $body, $bid, $branchId, $uid, $auth)) {
+          return;
+        }
+        pos_send(404, ["error" => "Unknown advanced path", "path" => $path, "php" => true]);
       }
       if ($path === "units" || preg_match('#^units/#', $path)) {
         $auth = pos_staff_session();

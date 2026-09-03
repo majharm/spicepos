@@ -5,6 +5,7 @@ import { bid } from "./context.js";
 import { recordCreditPurchase } from "./accounts.js";
 import { postPurchaseJournal } from "./accounting.js";
 import { audit } from "./audit.js";
+import { onItemSaved, onPurchaseLineSaved } from "./advanced.js";
 
 const POSUnits = globalThis.POSUnits;
 const POSFootwear = globalThis.POSFootwear;
@@ -103,7 +104,7 @@ async function insertPackLines(conn, packId, items) {
 
 export function registerCrud(app) {
   app.post("/api/customers", async (req, res) => {
-    const { name, business_name, mobile, type, gstin, state, credit_limit } = req.body || {};
+    const { name, business_name, mobile, type, gstin, state, credit_limit, dob, referred_by } = req.body || {};
     if (!name || !mobile) {
       res.status(400).json({ error: "Name and mobile are required" });
       return;
@@ -131,6 +132,11 @@ export function registerCrud(app) {
             bid(),
           ],
         );
+        try {
+          await conn.query("UPDATE customers SET dob=?, referred_by=? WHERE id=?", [dob || null, referred_by || null, id]);
+        } catch {
+          /* optional */
+        }
         const [rows] = await conn.query("SELECT * FROM customers WHERE id = ?", [id]);
         return rows[0];
       });
@@ -190,6 +196,7 @@ export function registerCrud(app) {
             bid(),
           ],
         );
+        await onItemSaved(conn, bid(), id, b);
         const [rows] = await conn.query("SELECT * FROM items WHERE id = ?", [id]);
         return rows[0];
       });
@@ -243,6 +250,7 @@ export function registerCrud(app) {
          WHERE id=? AND business_id=?`,
         params,
       );
+      await onItemSaved(null, bid(), req.params.id, b);
       const [item] = await query("SELECT * FROM items WHERE id = ?", [req.params.id]);
       res.json({ ok: true, item });
     } catch (err) {
@@ -407,14 +415,16 @@ export function registerCrud(app) {
             bid(),
           ],
         );
-        for (const line of built) {
+        for (let i = 0; i < built.length; i++) {
+          const line = built[i];
+          const lineId = crypto.randomUUID();
           await conn.query(
             `INSERT INTO purchase_lines (
                id, purchase_id, item_id, item_name, quantity_gm, rate_per_kg,
                gst_rate, amount, gst_amount, total_amount, business_id
              ) VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
             [
-              crypto.randomUUID(),
+              lineId,
               id,
               line.item.id,
               itemBillName(line.item),
@@ -431,6 +441,23 @@ export function registerCrud(app) {
             "UPDATE items SET stock_gm = stock_gm + ? WHERE id = ? AND business_id = ?",
             [line.qty, line.item.id, bid()],
           );
+          const src = lines[i] || {};
+          await onPurchaseLineSaved(conn, {
+            businessId: bid(),
+            branchId: null,
+            userId: null,
+            purchaseId: id,
+            purchaseNumber,
+            supplierId: supplier.id,
+            lineId,
+            item: line.item,
+            qty: line.qty,
+            rate: line.rate,
+            barcode: src.barcode,
+            batchNo: src.batch_no || src.batchNo,
+            expiry: src.expiry_date || src.expiryDate,
+            mrp: src.mrp,
+          });
         }
         const [rows] = await conn.query("SELECT * FROM purchases WHERE id = ?", [id]);
         const purchase = rows[0];

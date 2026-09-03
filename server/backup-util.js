@@ -16,7 +16,7 @@ export function isSafeTableName(name) {
 }
 
 export function backupTableRank(name) {
-  if (/_lines$/.test(name) || ["pack_items", "branch_stocks", "journal_lines", "stock_movements"].includes(name)) {
+  if (/_lines$/.test(name) || ["pack_items", "branch_stocks", "journal_lines", "stock_movements", "item_barcodes", "stock_batches", "damage_records", "loyalty_ledger", "loyalty_accounts"].includes(name)) {
     return 0;
   }
   if (name === "staff_users") return 2;

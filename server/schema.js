@@ -73,6 +73,7 @@ export async function ensureSchema() {
   await addColumn("purchases", "branch_id", "VARCHAR(255) NULL");
   await addColumn("items", "hsn", "VARCHAR(32) NULL");
   await addColumn("items", "barcode", "VARCHAR(64) NULL");
+  await addColumn("items", "mrp", "DECIMAL(12,2) NULL");
   await addColumn("items", "brand", "VARCHAR(128) NULL");
   await addColumn("items", "image_url", "MEDIUMTEXT NULL");
   await addColumn("items", "unit", "VARCHAR(32) NULL");
@@ -81,6 +82,30 @@ export async function ensureSchema() {
   await addColumn("items", "size", "VARCHAR(32) NULL");
   await addColumn("items", "wearer_type", "VARCHAR(16) NULL");
   await addColumn("customers", "state", "VARCHAR(64) NULL");
+  await addColumn("customers", "dob", "DATE NULL");
+  await addColumn("customers", "referred_by", "VARCHAR(255) NULL");
+  await addColumn("sales_orders", "discount_type", "VARCHAR(16) NOT NULL DEFAULT 'amt'");
+  await addColumn("sales_orders", "discount_value", "DECIMAL(12,2) NOT NULL DEFAULT 0");
+  await addColumn("sales_orders", "loyalty_points_redeemed", "INT NOT NULL DEFAULT 0");
+  await addColumn("sales_orders", "loyalty_points_earned", "INT NOT NULL DEFAULT 0");
+  await addColumn("sales_orders", "loyalty_discount", "DECIMAL(12,2) NOT NULL DEFAULT 0");
+  await addColumn("sales_order_lines", "mrp", "DECIMAL(12,2) NOT NULL DEFAULT 0");
+  await addColumn("sales_order_lines", "discount_type", "VARCHAR(16) NOT NULL DEFAULT 'amt'");
+  await addColumn("sales_order_lines", "discount_value", "DECIMAL(12,2) NOT NULL DEFAULT 0");
+  await addColumn("sales_order_lines", "barcode", "VARCHAR(64) NULL");
+  await addColumn("sales_order_lines", "batch_id", "VARCHAR(255) NULL");
+  await addColumn("sales_order_lines", "cost", "DECIMAL(12,2) NOT NULL DEFAULT 0");
+  await addColumn("sales_order_lines", "profit", "DECIMAL(12,2) NOT NULL DEFAULT 0");
+  await addColumn("purchase_lines", "batch_no", "VARCHAR(64) NULL");
+  await addColumn("purchase_lines", "barcode", "VARCHAR(64) NULL");
+  await addColumn("purchase_lines", "expiry_date", "DATE NULL");
+  await addColumn("purchase_lines", "mrp", "DECIMAL(12,2) NULL");
+  await addColumn("stock_movements", "barcode", "VARCHAR(64) NULL");
+  await addColumn("stock_movements", "batch_id", "VARCHAR(255) NULL");
+  await addColumn("stock_movements", "unit_cost", "DECIMAL(12,4) NOT NULL DEFAULT 0");
+  await addColumn("stock_movements", "reason", "VARCHAR(64) NULL");
+  await addColumn("stock_movements", "ref_type", "VARCHAR(32) NULL");
+  await addColumn("stock_movements", "ref_id", "VARCHAR(255) NULL");
 
   await create(`CREATE TABLE IF NOT EXISTS inventory_units (
     id VARCHAR(255) PRIMARY KEY,
@@ -314,6 +339,12 @@ export async function ensureSchema() {
   await seedPlans();
   const { ensureAlertSettings } = await import("./alerts.js");
   await ensureAlertSettings();
+  try {
+    const { ensureAdvancedSchema } = await import("./advanced.js");
+    await ensureAdvancedSchema();
+  } catch {
+    /* advanced tables optional during early setup */
+  }
 }
 
 async function seedPlans() {

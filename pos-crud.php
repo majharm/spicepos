@@ -38,7 +38,7 @@ function pos_crud_dispatch($path, $method, $body, $bid, $auth, $branchId, $uid) 
     $name = trim((string) ($body["name"] ?? ""));
     $mobile = trim((string) ($body["mobile"] ?? ""));
     if ($name === "" || $mobile === "") pos_send(400, ["error" => "Name and mobile are required"]);
-    pos_ensure_columns("customers", ["state" => "VARCHAR(64) NULL"]);
+    pos_ensure_columns("customers", ["state" => "VARCHAR(64) NULL", "dob" => "DATE NULL", "referred_by" => "VARCHAR(255) NULL"]);
     $type = (($body["type"] ?? "") === "b2b") ? "b2b" : "b2c";
     $id = pos_uuid();
     $n = pos_next_seq("customer", $bid, 4);
@@ -49,6 +49,11 @@ function pos_crud_dispatch($path, $method, $body, $bid, $auth, $branchId, $uid) 
       "ssssssssds",
       [$id, $code, $name, $body["business_name"] ?? null, $mobile, $type, $body["gstin"] ?? null, $body["state"] ?? null, (float) ($body["credit_limit"] ?? 0), $bid]
     );
+    if (!empty($body["dob"]) || !empty($body["referred_by"])) {
+      try {
+        pos_q("UPDATE customers SET dob = ?, referred_by = ? WHERE id = ?", "sss", [$body["dob"] ?? null, $body["referred_by"] ?? null, $id]);
+      } catch (Exception $e) { /* optional */ }
+    }
     $rows = pos_q("SELECT * FROM customers WHERE id = ? LIMIT 1", "s", [$id]);
     pos_send(200, ["ok" => true, "customer" => $rows[0] ?? null]);
   }
@@ -90,6 +95,13 @@ function pos_crud_dispatch($path, $method, $body, $bid, $auth, $branchId, $uid) 
     try {
       pos_q("UPDATE items SET unit = ? WHERE id = ?", "ss", [$unit, $id]);
     } catch (Exception $e) { /* unit column optional */ }
+    if (is_file(__DIR__ . "/pos-advanced.php")) {
+      require_once __DIR__ . "/pos-advanced.php";
+      if (function_exists("pos_assign_item_barcodes")) pos_assign_item_barcodes($bid, $id, $body);
+    }
+    if (array_key_exists("mrp", $body)) {
+      try { pos_q("UPDATE items SET mrp = ? WHERE id = ?", "ds", [(float) $body["mrp"], $id]); } catch (Exception $e) { /* optional */ }
+    }
     $rows = pos_q("SELECT * FROM items WHERE id = ? LIMIT 1", "s", [$id]);
     pos_send(200, ["ok" => true, "item" => $rows[0] ?? null]);
   }
@@ -137,6 +149,13 @@ function pos_crud_dispatch($path, $method, $body, $bid, $auth, $branchId, $uid) 
     try {
       pos_q("UPDATE items SET unit = ? WHERE id = ?", "ss", [$unit, $itemId]);
     } catch (Exception $e) { /* unit column optional */ }
+    if (is_file(__DIR__ . "/pos-advanced.php")) {
+      require_once __DIR__ . "/pos-advanced.php";
+      if (function_exists("pos_assign_item_barcodes")) pos_assign_item_barcodes($bid, $itemId, $body);
+    }
+    if (array_key_exists("mrp", $body)) {
+      try { pos_q("UPDATE items SET mrp = ? WHERE id = ?", "ds", [(float) $body["mrp"], $itemId]); } catch (Exception $e) { /* optional */ }
+    }
     $rows = pos_q("SELECT * FROM items WHERE id = ? LIMIT 1", "s", [$itemId]);
     pos_send(200, ["ok" => true, "item" => $rows[0] ?? null]);
   }
@@ -246,7 +265,9 @@ function pos_crud_dispatch($path, $method, $body, $bid, $auth, $branchId, $uid) 
             $body["purchase_date"] ?? date("Y-m-d"), $body["notes"] ?? null, $subtotal, $gst, $total, $method, $payStatus, $bid,
           ]
         );
-        foreach ($built as $line) {
+        if (is_file(__DIR__ . "/pos-advanced.php")) require_once __DIR__ . "/pos-advanced.php";
+        foreach ($built as $idx => $line) {
+          $lineId = pos_uuid();
           pos_q(
             "INSERT INTO purchase_lines (
                id, purchase_id, item_id, item_name, quantity_gm, rate_per_kg,
@@ -254,11 +275,17 @@ function pos_crud_dispatch($path, $method, $body, $bid, $auth, $branchId, $uid) 
              ) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
             "ssssdddddds",
             [
-              pos_uuid(), $id, $line["item"]["id"], pos_item_bill_name($line["item"]), $line["qty"], $line["rate"],
+              $lineId, $id, $line["item"]["id"], pos_item_bill_name($line["item"]), $line["qty"], $line["rate"],
               $line["gstRate"], $line["amount"], $line["gstAmount"], $line["total"], $bid,
             ]
           );
           pos_q("UPDATE items SET stock_gm = stock_gm + ? WHERE id = ? AND business_id = ?", "dss", [$line["qty"], $line["item"]["id"], $bid]);
+          if (function_exists("pos_create_purchase_batch")) {
+            $src = $lines[$idx] ?? [];
+            pos_create_purchase_batch($bid, $branchId ?? null, $uid, [
+              "id" => $id, "purchase_number" => $purchaseNumber, "supplier_id" => $supplier["id"],
+            ], $lineId, $line["item"], $line["qty"], $line["rate"], $src);
+          }
         }
         $rows = pos_q("SELECT * FROM purchases WHERE id = ? LIMIT 1", "s", [$id]);
         $purchase = $rows[0] ?? null;
@@ -282,6 +309,8 @@ function pos_crud_dispatch($path, $method, $body, $bid, $auth, $branchId, $uid) 
   if ($path === "stock/adjust" && $method === "POST") {
     $itemId = $body["item_id"] ?? "";
     $qty = (float) ($body["quantity_gm"] ?? 0);
+    $kind = strtolower((string) ($body["kind"] ?? "adjustment"));
+    if (in_array($kind, ["damaged", "expired", "returned"], true) && $qty > 0) $qty = -$qty;
     if (!$itemId || !$qty) pos_send(400, ["error" => "Item and quantity required"]);
     $it = pos_q("SELECT * FROM items WHERE id = ? AND business_id = ? LIMIT 1", "ss", [$itemId, $bid]);
     if (!$it) pos_send(400, ["error" => "Item not found"]);

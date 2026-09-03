@@ -232,9 +232,10 @@ export function registerTenant(app) {
   app.post("/api/stock/adjust", requireStaff, requirePerm("stock"), (req, res) =>
     send(res, async () => {
       const { item_id, quantity_gm, kind, note } = req.body || {};
-      const qty = Number(quantity_gm);
-      if (!item_id || !Number.isFinite(qty) || !qty) throw new Error("Item and quantity required");
+      let qty = Number(quantity_gm);
       const k = String(kind || "adjustment");
+      if (["damaged", "expired", "returned"].includes(k) && qty > 0) qty = -qty;
+      if (!item_id || !Number.isFinite(qty) || !qty) throw new Error("Item and quantity required");
       const [item] = await query("SELECT * FROM items WHERE id=? AND business_id=?", [item_id, bid()]);
       if (!item) throw new Error("Item not found");
       await query("UPDATE items SET stock_gm = stock_gm + ? WHERE id=? AND business_id=?", [qty, item_id, bid()]);

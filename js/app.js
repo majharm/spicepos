@@ -23,6 +23,12 @@ const state = {
   wearerFilter: "",
   sizeFilter: "",
   colorFilter: "",
+  billDiscountType: "amt",
+  billDiscountValue: 0,
+  loyaltyRedeem: 0,
+  loyaltyAccount: null,
+  loyaltySettings: null,
+  stockMode: "simple",
 };
 
 function debounce(fn, wait = 120) {
@@ -194,6 +200,10 @@ const VIEW_META = {
   items: { title: "Items", subtitle: "Photo, HSN, unit type, rates, and stock" },
   units: { title: "Unit master", subtitle: "Units used on items — qty, kg, litre, and custom" },
   customers: { title: "Customers", subtitle: "B2C retail and B2B wholesale accounts" },
+  barcodes: { title: "Barcodes", subtitle: "Generate, reprint, and print product labels" },
+  damage: { title: "Damage stock", subtitle: "Wastage, approval, and estimated loss" },
+  ledger: { title: "Stock ledger", subtitle: "Purchase, sale, return, and damage history" },
+  loyalty: { title: "Royalty points", subtitle: "Earn, redeem, tiers, birthday and referral" },
   packs: { title: "Packs", subtitle: "Pre-defined spice packs and compositions" },
   orders: { title: "Invoices", subtitle: "POS slip, official A4, or duplicate copy" },
   purchases: { title: "Purchases", subtitle: "Supplier bills with GST and thermal print" },
@@ -322,6 +332,38 @@ function lineAmt(item, qtyGm) {
   return POSUnits.lineAmount(qtyGm, rateFor(item), itemUnit(item));
 }
 
+function canDiscount() {
+  return can("discount") || state.session?.role === "business_admin";
+}
+
+function lineCalc(item, line) {
+  const D = globalThis.POSDiscount;
+  if (!D) {
+    const amount = lineAmt(item, line.qtyGm);
+    return { taxable: amount, gst: (amount * Number(item.gst_rate)) / 100, discount: 0, profit: 0, mrp: amount, total: amount, gross: amount };
+  }
+  return D.computeLine({
+    qty: line.qtyGm,
+    rate: rateFor(item),
+    gstRate: Number(item.gst_rate) || 0,
+    mrp: Number(item.mrp || item.retail_rate) || rateFor(item),
+    purchase_rate: Number(item.purchase_rate) || 0,
+    isCount: POSUnits.isCount(itemUnit(item)),
+    discountType: line.discountType || "amt",
+    discountValue: line.discountValue || 0,
+  });
+}
+
+function findItemByBarcode(code) {
+  const q = String(code || "").trim();
+  if (!q) return null;
+  return activeItems().find((i) => {
+    if (String(i.barcode || "").trim() === q) return i;
+    const extra = Array.isArray(i.barcodes) ? i.barcodes : [];
+    return extra.some((b) => String(b.barcode || b).trim() === q);
+  }) || null;
+}
+
 function packLabel() {
   if (!state.lastPack) return "Pack: Loose items (no pack)";
   const pack = state.packs.find((p) => p.id === state.lastPack.id);
@@ -386,6 +428,10 @@ function clearCounterAfterSale(order, result) {
   state.cart = [];
   state.lastPack = null;
   state.editingOrderId = null;
+  state.billDiscountValue = 0;
+  state.loyaltyRedeem = 0;
+  if ($("bill-disc-value")) $("bill-disc-value").value = 0;
+  if ($("loyalty-redeem")) $("loyalty-redeem").value = 0;
   state.query = "";
   $("search").value = "";
   $("pack-choice").value = "";
@@ -790,6 +836,10 @@ function applyNav() {
       reports: "reports",
       settings: "settings",
       backup: "settings",
+      barcodes: "items",
+      damage: "stock",
+      ledger: "stock",
+      loyalty: "customers",
     };
     btn.hidden = map[view] ? !can(map[view]) : false;
     if (view === "packs" && isFootwearShop()) btn.hidden = true;
@@ -835,6 +885,10 @@ function showView(name) {
     refreshItemUnitLabels();
   }
   if (name === "stock") loadStock();
+  if (name === "barcodes") loadBarcodesView();
+  if (name === "damage") loadDamageView();
+  if (name === "ledger") loadLedgerView();
+  if (name === "loyalty") loadLoyaltyView();
   if (name === "staff") loadStaff();
   if (name === "branches") loadBranches();
   if (name === "devices") loadDevices();
@@ -905,7 +959,19 @@ async function recallHeldBill(id) {
     row = fresh;
   }
   if (!payload?.cart?.length) throw new Error("Held bill is empty");
-  state.cart = payload.cart.map((line) => ({ itemId: line.itemId, qtyGm: Number(line.qtyGm) || 0 })).filter((l) => l.itemId && l.qtyGm > 0);
+  state.cart = payload.cart.map((line) => ({
+    itemId: line.itemId,
+    qtyGm: Number(line.qtyGm) || 0,
+    discountType: line.discountType || "amt",
+    discountValue: Number(line.discountValue) || 0,
+    barcode: line.barcode || "",
+  })).filter((l) => l.itemId && l.qtyGm > 0);
+  state.billDiscountType = payload.billDiscountType || "amt";
+  state.billDiscountValue = Number(payload.billDiscountValue) || 0;
+  state.loyaltyRedeem = Number(payload.loyaltyRedeem) || 0;
+  if ($("bill-disc-type")) $("bill-disc-type").value = state.billDiscountType;
+  if ($("bill-disc-value")) $("bill-disc-value").value = state.billDiscountValue;
+  if ($("loyalty-redeem")) $("loyalty-redeem").value = state.loyaltyRedeem;
   if (payload.customerId) state.customerId = payload.customerId;
   state.lastPack = payload.lastPack || null;
   if (payload.customerId) $("customer").value = payload.customerId;
@@ -936,7 +1002,7 @@ function filteredItems() {
     if (size && String(i.size || "").trim().toLowerCase() !== size) return false;
     if (color && String(i.color || "").trim().toLowerCase() !== color) return false;
     if (!q) return true;
-    return [i.name, i.hsn, i.local_name, i.code, i.category, i.subcategory, i.color, i.size, i.wearer_type]
+    return [i.name, i.hsn, i.local_name, i.code, i.barcode, i.category, i.subcategory, i.color, i.size, i.wearer_type]
       .join(" ")
       .toLowerCase()
       .includes(q);
@@ -989,18 +1055,35 @@ function renderCatalog() {
 }
 
 function cartTotals() {
-  return state.cart.reduce(
-    (acc, line) => {
-      const item = state.items.find((i) => i.id === line.itemId);
-      if (!item) return acc;
-      const amount = lineAmt(item, line.qtyGm);
-      acc.qty += line.qtyGm;
-      acc.taxable += amount;
-      acc.tax += (amount * Number(item.gst_rate)) / 100;
-      return acc;
-    },
-    { qty: 0, taxable: 0, tax: 0 },
-  );
+  const lines = state.cart.map((line) => {
+    const item = state.items.find((i) => i.id === line.itemId);
+    return item ? lineCalc(item, line) : null;
+  }).filter(Boolean);
+  const D = globalThis.POSDiscount;
+  const L = globalThis.POSLoyalty;
+  const bill = D
+    ? D.computeBill(lines, {
+        discountType: state.billDiscountType,
+        discountValue: state.billDiscountValue,
+      })
+    : { subtotal: lines.reduce((s, l) => s + l.taxable, 0), gst: lines.reduce((s, l) => s + l.gst, 0), billDiscount: 0, total: 0, profit: 0 };
+  let loyaltyDiscount = 0;
+  if (L && state.loyaltySettings && state.loyaltyRedeem > 0) {
+    const check = L.canRedeem(state.loyaltyAccount?.points_balance || 0, state.loyaltyRedeem, state.loyaltySettings);
+    if (check.ok) loyaltyDiscount = Math.min(bill.total, check.rupees);
+  }
+  const total = D.round2(Math.max(0, bill.total - loyaltyDiscount));
+  const qty = state.cart.reduce((s, l) => s + (Number(l.qtyGm) || 0), 0);
+  return {
+    qty,
+    taxable: bill.subtotal,
+    tax: bill.gst,
+    discount: bill.billDiscount,
+    lineDiscount: lines.reduce((s, l) => s + (l.discount || 0), 0),
+    loyalty: loyaltyDiscount,
+    profit: D.round2((bill.profit || 0) - loyaltyDiscount),
+    total,
+  };
 }
 
 function renderCart() {
@@ -1014,6 +1097,7 @@ function renderCart() {
         if (!item) return "";
         const step = POSUnits.counterStep(itemUnit(item));
         const unit = POSUnits.isCount(itemUnit(item)) ? "pcs" : POSUnits.typeOf(itemUnit(item)).family === "volume" ? "ml" : "g";
+        const calc = lineCalc(item, line);
         return `<div class="line">
           <div class="line-info">
             <div class="who">${escapeHtml(itemVariantText(item) ? `${item.name} · ${itemVariantText(item)}` : item.name)}</div>
@@ -1026,7 +1110,15 @@ function renderCart() {
               <span class="qty-unit">${escapeHtml(unit)}</span>
               <button type="button" data-chg="${escapeHtml(item.id)}" data-d="${step}">+</button>
             </div>
-            <div class="pack line-amt">${money(lineAmt(item, line.qtyGm))}</div>
+            <div class="pack line-amt">${money(calc.taxable)}</div>
+            ${canDiscount() ? `<div class="line-disc">
+              <select data-line-disc-type="${escapeHtml(item.id)}" aria-label="Line discount type">
+                <option value="amt"${(line.discountType || "amt") === "amt" ? " selected" : ""}>₹</option>
+                <option value="pct"${line.discountType === "pct" ? " selected" : ""}>%</option>
+              </select>
+              <input data-line-disc="${escapeHtml(item.id)}" type="number" min="0" step="0.01" value="${escapeHtml(line.discountValue || 0)}" aria-label="Line discount" />
+              <span class="line-meta">MRP ${money(calc.mrp)} · GST ${money(calc.gst)}${calc.profit || calc.profit === 0 ? ` · P ${money(calc.profit)}` : ""}</span>
+            </div>` : ""}
           </div>
         </div>`;
       })
@@ -1041,7 +1133,10 @@ function renderCart() {
       : "0";
   $("taxable").textContent = money(t.taxable);
   $("tax").textContent = money(t.tax);
-  $("total").textContent = money(t.taxable + t.tax);
+  if ($("disc-total")) $("disc-total").textContent = money((t.discount || 0) + (t.lineDiscount || 0));
+  if ($("loyalty-total")) $("loyalty-total").textContent = money(t.loyalty || 0);
+  if ($("profit-total")) $("profit-total").textContent = money(t.profit || 0);
+  $("total").textContent = money(t.total != null ? t.total : t.taxable + t.tax);
   $("btn-pay").disabled = state.cart.length === 0;
   $("btn-clear").disabled = state.cart.length === 0;
   document.body.classList.toggle("has-cart", state.cart.length > 0);
@@ -1082,6 +1177,8 @@ async function saveCustomer(fields) {
       business_name: fields.business_name || "",
       type: fields.type === "b2b" ? "b2b" : "b2c",
       gstin: fields.gstin || "",
+      dob: fields.dob || "",
+      referred_by: fields.referred_by || "",
     }),
   });
   const customer = data.customer;
@@ -1104,13 +1201,13 @@ function renderPackChoice() {
     .join("");
 }
 
-function addItem(id, qtyGm) {
+function addItem(id, qtyGm, lineBarcode) {
   const item = state.items.find((i) => i.id === id);
   if (!item) return;
   const add = qtyGm == null ? POSUnits.counterStep(itemUnit(item)) : Number(qtyGm);
   const line = state.cart.find((l) => l.itemId === id);
   if (line) line.qtyGm = POSUnits.clampQty(Number(line.qtyGm) + add);
-  else state.cart.push({ itemId: id, qtyGm: POSUnits.clampQty(add) });
+  else state.cart.push({ itemId: id, qtyGm: POSUnits.clampQty(add), discountType: "amt", discountValue: 0, barcode: lineBarcode || "" });
   state.cart = state.cart.filter((l) => l.qtyGm > 0);
   renderCart();
 }
@@ -1156,7 +1253,7 @@ function fillDatalists() {
 function renderItemsTable() {
   const footwear = isFootwearShop();
   $("items-table").innerHTML = `<table><thead><tr>
-      <th>Code</th><th>Item</th>${footwear ? "<th>Type</th><th>Colour</th><th>Size</th>" : "<th>HSN</th>"}<th>Unit</th><th>${footwear ? "Style" : "Category"}</th><th>${footwear ? "Brand" : "Subcategory"}</th><th>Retail</th><th>B2B</th><th>Stock</th><th></th>
+      <th>Code</th><th>Item</th><th>Barcode</th>${footwear ? "<th>Type</th><th>Colour</th><th>Size</th>" : "<th>HSN</th>"}<th>Unit</th><th>${footwear ? "Style" : "Category"}</th><th>${footwear ? "Brand" : "Subcategory"}</th><th>Retail</th><th>B2B</th><th>Stock</th><th></th>
   </tr></thead><tbody>${state.items
     .map((i) => {
       const src = itemPhotoUrl(i);
@@ -1171,6 +1268,7 @@ function renderItemsTable() {
       return `<tr>
       <td>${escapeHtml(i.code)}</td>
       <td class="item-name-cell">${thumb}${escapeHtml(i.name)}</td>
+      <td>${escapeHtml(i.barcode || "—")}</td>
       ${extra}
       <td>${escapeHtml(itemUnit(i))}</td>
       <td>${escapeHtml(i.category)}</td>
@@ -1287,7 +1385,7 @@ function renderPoLines() {
     return;
   }
   el.innerHTML = `<div class="po-table-wrap"><table class="po-table"><thead><tr>
-    <th class="po-check"></th><th>Item</th><th>HSN</th><th>Qty</th><th>Unit</th><th>Rate</th><th class="num">Amount</th>
+    <th class="po-check"></th><th>Item</th><th>HSN</th><th>Qty</th><th>Unit</th><th>Rate</th><th>Expiry</th><th class="num">Amount</th>
   </tr></thead><tbody>${items
     .map((i) => {
       const unit = itemUnit(i);
@@ -1300,6 +1398,7 @@ function renderPoLines() {
         <td><input type="number" min="${POSUnits.qtyMin()}" max="${POSUnits.qtyMax()}" step="1" value="${qty}" data-po-qty="${escapeHtml(i.id)}" /></td>
         <td class="po-unit">${escapeHtml(poUnitLabel(i))}</td>
         <td><div class="po-rate-cell"><input type="number" min="0" step="0.01" value="${escapeHtml(i.purchase_rate)}" data-po-rate="${escapeHtml(i.id)}" /><span class="po-suffix">₹${escapeHtml(POSUnits.rateSuffix(unit))}</span></div></td>
+        <td><input type="date" data-po-expiry="${escapeHtml(i.id)}" /></td>
         <td class="num" data-po-amt="${escapeHtml(i.id)}">${money(POSUnits.lineAmount(qty, i.purchase_rate, unit))}</td>
       </tr>`;
     })
@@ -1537,6 +1636,7 @@ async function loadDashboard() {
 }
 
 async function loadStock() {
+  fillItemPicker("stk-item-list", "stk-item-search", "stk-item");
   const rows = await api("/api/stock");
   $("stock-table").innerHTML = `<table><thead><tr><th>Code</th><th>Item</th><th>Unit</th><th>Stock</th><th>Reorder</th><th>Value</th></tr></thead><tbody>${rows
     .map((r) => {
@@ -1881,6 +1981,7 @@ function showPurchase(p) {
     <div class="thermal-preview">${InvoicePrint.purchaseBody(p, invoiceCtx())}</div>
     <div class="print-actions">
       <button class="btn primary" type="button" data-print-purchase="${escapeHtml(p.id)}">Print purchase bill</button>
+      <button class="btn" type="button" data-print-po-barcodes="${escapeHtml(p.id)}">Print barcodes</button>
     </div>`;
 }
 
@@ -2178,8 +2279,23 @@ $("lines").addEventListener("focusin", (e) => {
 });
 $("lines").addEventListener("change", (e) => {
   const input = e.target.closest("[data-qty]");
-  if (!input) return;
-  setLineQty(input.dataset.qty, input.value);
+  if (input) {
+    setLineQty(input.dataset.qty, input.value);
+    return;
+  }
+  const disc = e.target.closest("[data-line-disc]");
+  if (disc) {
+    const line = state.cart.find((l) => l.itemId === disc.dataset.lineDisc);
+    if (line) line.discountValue = Number(disc.value) || 0;
+    renderCart();
+    return;
+  }
+  const dtype = e.target.closest("[data-line-disc-type]");
+  if (dtype) {
+    const line = state.cart.find((l) => l.itemId === dtype.dataset.lineDiscType);
+    if (line) line.discountType = dtype.value === "pct" ? "pct" : "amt";
+    renderCart();
+  }
 });
 $("lines").addEventListener("keydown", (e) => {
   if (e.key !== "Enter") return;
@@ -2226,6 +2342,9 @@ $("items-table").addEventListener("click", async (e) => {
     if ($("item-color")) $("item-color").value = i.color || "";
     if ($("item-size")) $("item-size").value = i.size || "";
     $("item-retail").value = i.retail_rate;
+    if ($("item-mrp")) $("item-mrp").value = i.mrp || i.retail_rate || "";
+    if ($("item-barcode")) $("item-barcode").value = i.barcode || "";
+    if ($("item-mfr-barcode")) $("item-mfr-barcode").value = "";
     $("item-b2b").value = i.b2b_rate;
     $("item-purchase").value = i.purchase_rate;
     $("item-gst").value = i.gst_rate;
@@ -2288,11 +2407,29 @@ $("purchases-list").addEventListener("click", (e) => {
   if (p) showPurchase(p);
 });
 
-$("purchase-pane").addEventListener("click", (e) => {
+$("purchase-pane").addEventListener("click", async (e) => {
   const printBtn = e.target.closest("[data-print-purchase]");
-  if (!printBtn) return;
-  const p = purchaseCache.find((row) => row.id === printBtn.dataset.printPurchase);
-  if (p) printPurchase(p);
+  if (printBtn) {
+    const p = purchaseCache.find((row) => row.id === printBtn.dataset.printPurchase);
+    if (p) printPurchase(p);
+    return;
+  }
+  const bcBtn = e.target.closest("[data-print-po-barcodes]");
+  if (!bcBtn) return;
+  try {
+    const rows = await api(`/api/barcodes?purchase_id=${encodeURIComponent(bcBtn.dataset.printPoBarcodes)}`);
+    const labels = (Array.isArray(rows) ? rows : []).map((r) => ({
+      name: r.item_name,
+      barcode: r.barcode,
+      mrp: r.label_mrp || r.mrp,
+      rate: r.retail_rate,
+      copies: Math.max(1, POSUnits.isCount(itemUnit(state.items.find((i) => i.id === r.item_id) || {})) ? Math.round(Number(r.qty_gm) || 1) : 1),
+    }));
+    if (!labels.length) throw new Error("No purchase barcodes yet — save this bill again after the update");
+    if (!globalThis.POSBarcode?.printLabels(labels, 1)) setHint("Allow pop-ups to print barcodes", "error");
+  } catch (err) {
+    setHint(err.message, "error");
+  }
 });
 
 $("order-pane").addEventListener("click", async (e) => {
@@ -2385,7 +2522,31 @@ $("color-filter")?.addEventListener("change", () => {
   state.colorFilter = $("color-filter").value;
   renderCatalog();
 });
-$("search-form").addEventListener("submit", (e) => e.preventDefault());
+$("search-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const code = String($("search").value || "").trim();
+  if (!code) return;
+  let item = findItemByBarcode(code);
+  if (!item) {
+    try {
+      const data = await api(`/api/barcodes/lookup?code=${encodeURIComponent(code)}`);
+      const match = data.match || data;
+      const id = match.item_id || match.id;
+      item = state.items.find((i) => i.id === id);
+      if (item) addItem(item.id, null, code);
+    } catch {
+      item = null;
+    }
+  } else {
+    addItem(item.id, null, code);
+  }
+  if (item) {
+    $("search").value = "";
+    state.query = "";
+    renderCatalog();
+    setHint(`Scanned ${item.name}`, "ok");
+  }
+});
 $("customer").addEventListener("change", () => {
   state.customerId = $("customer").value;
   renderCatalog();
@@ -2398,6 +2559,10 @@ $("btn-clear").addEventListener("click", () => {
   }
   state.cart = [];
   state.lastPack = null;
+  state.billDiscountValue = 0;
+  state.loyaltyRedeem = 0;
+  if ($("bill-disc-value")) $("bill-disc-value").value = 0;
+  if ($("loyalty-redeem")) $("loyalty-redeem").value = 0;
   $("pack-choice").value = "";
   setHint("Cart cleared");
   renderCart();
@@ -2421,7 +2586,17 @@ $("btn-pay").addEventListener("click", async () => {
       paymentMethod: $("pay-method").value,
       packId: state.lastPack?.id || null,
       packCount: state.lastPack?.count || null,
-      lines: state.cart.map((l) => ({ itemId: l.itemId, quantity_gm: l.qtyGm })),
+      discountType: state.billDiscountType,
+      discountValue: state.billDiscountValue,
+      discount: cartTotals().discount,
+      loyaltyPoints: state.loyaltyRedeem,
+      lines: state.cart.map((l) => ({
+        itemId: l.itemId,
+        quantity_gm: l.qtyGm,
+        discountType: l.discountType || "amt",
+        discountValue: l.discountValue || 0,
+        barcode: l.barcode || "",
+      })),
     };
     const result = state.editingOrderId
       ? await api(`/api/orders/${state.editingOrderId}`, { method: "PUT", body: JSON.stringify(payload) })
@@ -2551,6 +2726,9 @@ $("item-form").addEventListener("submit", async (e) => {
     b2b_rate: $("item-b2b").value,
     purchase_rate: $("item-purchase").value,
     gst_rate: $("item-gst").value,
+    mrp: $("item-mrp")?.value || "",
+    barcode: $("item-barcode")?.value || "",
+    mfr_barcode: $("item-mfr-barcode")?.value || "",
     stock_gm: POSUnits.toBase($("item-stock").value, unit),
     image_url: state.itemImage || "",
   };
@@ -2672,6 +2850,8 @@ $("customer-form").addEventListener("submit", async (e) => {
       type: $("cust-type").value,
       gstin: $("cust-gstin").value,
       state: $("cust-state")?.value || "",
+      dob: $("cust-dob")?.value || "",
+      referred_by: $("cust-ref")?.value || "",
     });
     $("cust-hint").textContent = "Saved";
     $("cust-hint").className = "hint ok";
@@ -2762,6 +2942,7 @@ $("purchase-form").addEventListener("submit", async (e) => {
     item_id: box.dataset.poItem,
     quantity_gm: Number(document.querySelector(`[data-po-qty="${box.dataset.poItem}"]`).value),
     rate_per_kg: Number(document.querySelector(`[data-po-rate="${box.dataset.poItem}"]`).value),
+    expiry_date: document.querySelector(`[data-po-expiry="${box.dataset.poItem}"]`)?.value || "",
   }));
   try {
     await api("/api/purchases", {
@@ -3125,7 +3306,14 @@ $("btn-hold")?.addEventListener("click", async () => {
       method: "POST",
       body: JSON.stringify({
         label: `Hold ${formatShopTime()}`,
-        payload: { cart: state.cart, customerId: state.customerId, lastPack: state.lastPack },
+        payload: {
+          cart: state.cart,
+          customerId: state.customerId,
+          lastPack: state.lastPack,
+          billDiscountType: state.billDiscountType,
+          billDiscountValue: state.billDiscountValue,
+          loyaltyRedeem: state.loyaltyRedeem,
+        },
       }),
     });
     setHint("Bill held", "ok");
@@ -3202,19 +3390,334 @@ $("device-form")?.addEventListener("submit", async (e) => {
   $("device-form").reset();
   loadDevices();
 });
+function fillItemPicker(datalistId, searchId, hiddenId) {
+  const list = $(datalistId);
+  if (!list) return;
+  list.innerHTML = activeItems()
+    .map((i) => `<option value="${escapeHtml(i.name)}" data-id="${escapeHtml(i.id)}" label="${escapeHtml(i.barcode || i.code || "")}"></option>`)
+    .join("");
+  const search = $(searchId);
+  const hidden = $(hiddenId);
+  if (search && hidden && !search.dataset.bound) {
+    search.dataset.bound = "1";
+    search.addEventListener("change", () => {
+      const q = String(search.value || "").trim().toLowerCase();
+      const item = activeItems().find((i) => i.name.toLowerCase() === q || String(i.barcode || "").toLowerCase() === q || String(i.code || "").toLowerCase() === q);
+      hidden.value = item?.id || "";
+    });
+  }
+}
+
+function qtyToBaseFromInput(item, raw) {
+  if (!item) return Number(raw) || 0;
+  return POSUnits.toBase(raw, itemUnit(item));
+}
+
 $("stock-form")?.addEventListener("submit", async (e) => {
   e.preventDefault();
+  const item = state.items.find((i) => i.id === $("stk-item").value);
+  const qty = item ? qtyToBaseFromInput(item, $("stk-qty").value) : Number($("stk-qty").value);
   await api("/api/stock/adjust", {
     method: "POST",
     body: JSON.stringify({
       item_id: $("stk-item").value,
-      quantity_gm: $("stk-qty").value,
+      quantity_gm: qty,
       kind: $("stk-kind").value,
+      reason: $("stk-reason")?.value || "",
       note: $("stk-note").value,
     }),
   });
   loadStock();
   loadBootstrap();
+});
+
+document.getElementById("stock-mode")?.addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-stock-mode]");
+  if (!btn) return;
+  state.stockMode = btn.dataset.stockMode;
+  document.querySelectorAll("[data-stock-mode]").forEach((b) => b.classList.toggle("primary", b === btn));
+  document.getElementById("view-stock")?.classList.toggle("is-advanced", state.stockMode === "advanced");
+});
+
+$("item-barcode-gen")?.addEventListener("click", () => {
+  const B = globalThis.POSBarcode;
+  if (!B || !$("item-barcode")) return;
+  $("item-barcode").value = B.generateEan13(Date.now() % 1000000, "20001");
+});
+
+["bill-disc-type", "bill-disc-value", "loyalty-redeem"].forEach((id) => {
+  $(id)?.addEventListener("input", () => {
+    state.billDiscountType = $("bill-disc-type")?.value || "amt";
+    state.billDiscountValue = Number($("bill-disc-value")?.value) || 0;
+    state.loyaltyRedeem = Number($("loyalty-redeem")?.value) || 0;
+    renderCart();
+  });
+  $(id)?.addEventListener("change", () => {
+    state.billDiscountType = $("bill-disc-type")?.value || "amt";
+    state.billDiscountValue = Number($("bill-disc-value")?.value) || 0;
+    state.loyaltyRedeem = Number($("loyalty-redeem")?.value) || 0;
+    renderCart();
+  });
+});
+
+$("customer")?.addEventListener("change", () => {
+  void loadCustomerLoyalty();
+});
+
+async function loadCustomerLoyalty() {
+  if (!state.customerId || !can("loyalty") && state.session?.role !== "business_admin") return;
+  try {
+    const data = await api(`/api/loyalty/customer/${encodeURIComponent(state.customerId)}`);
+    state.loyaltyAccount = data.account;
+    state.loyaltySettings = data.settings || state.loyaltySettings;
+    if ($("loyalty-hint")) {
+      $("loyalty-hint").textContent = data.account
+        ? `${data.account.points_balance || 0} pts · ${globalThis.POSLoyalty?.tierLabel(data.account.tier) || data.account.tier}`
+        : "";
+    }
+    renderCart();
+  } catch {
+    state.loyaltyAccount = null;
+  }
+}
+
+async function loadBarcodesView() {
+  const hint = $("bc-hint");
+  try {
+    const rows = await api("/api/barcodes");
+    $("barcodes-table").innerHTML = `<table><thead><tr>
+      <th></th><th>Item</th><th>Kind</th><th>Barcode</th><th>MRP</th><th>SP</th><th></th>
+    </tr></thead><tbody>${(rows || [])
+      .map(
+        (r) => `<tr>
+          <td><input type="checkbox" data-bc-pick="${escapeHtml(r.barcode)}" data-bc-name="${escapeHtml(r.item_name)}" data-bc-mrp="${escapeHtml(r.label_mrp || "")}" data-bc-rate="${escapeHtml(r.retail_rate || "")}" /></td>
+          <td>${escapeHtml(r.item_name)} <small>${escapeHtml(r.item_code || "")}</small></td>
+          <td>${escapeHtml(r.kind)}</td>
+          <td>${escapeHtml(r.barcode)}</td>
+          <td>${money(r.label_mrp)}</td>
+          <td>${money(r.retail_rate)}</td>
+          <td><button class="btn" type="button" data-bc-print="${escapeHtml(r.barcode)}" data-bc-name="${escapeHtml(r.item_name)}" data-bc-mrp="${escapeHtml(r.label_mrp || "")}" data-bc-rate="${escapeHtml(r.retail_rate || "")}">Print</button></td>
+        </tr>`,
+      )
+      .join("")}</tbody></table>`;
+    if (hint) hint.textContent = `${(rows || []).length} barcodes`;
+  } catch (err) {
+    if (hint) hint.textContent = err.message;
+  }
+}
+
+$("bc-generate-missing")?.addEventListener("click", async () => {
+  try {
+    const data = await api("/api/barcodes/generate-missing", { method: "POST", body: "{}" });
+    $("bc-hint").textContent = `Generated ${data.generated || 0}`;
+    await loadBootstrap();
+    loadBarcodesView();
+  } catch (err) {
+    $("bc-hint").textContent = err.message;
+  }
+});
+$("bc-print-selected")?.addEventListener("click", () => {
+  const copies = Number($("bc-copies")?.value) || 1;
+  const rows = [...document.querySelectorAll("[data-bc-pick]:checked")].map((el) => ({
+    name: el.dataset.bcName,
+    barcode: el.dataset.bcPick,
+    mrp: el.dataset.bcMrp,
+    rate: el.dataset.bcRate,
+    copies,
+  }));
+  if (!rows.length) {
+    $("bc-hint").textContent = "Select labels first";
+    return;
+  }
+  globalThis.POSBarcode?.printLabels(rows, copies);
+});
+$("barcodes-table")?.addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-bc-print]");
+  if (!btn) return;
+  globalThis.POSBarcode?.printLabels([{ name: btn.dataset.bcName, barcode: btn.dataset.bcPrint, mrp: btn.dataset.bcMrp, rate: btn.dataset.bcRate }], Number($("bc-copies")?.value) || 1);
+});
+
+async function loadDamageView() {
+  fillItemPicker("dmg-item-list", "dmg-item-search", "dmg-item");
+  try {
+    const [rows, report] = await Promise.all([api("/api/damage"), api("/api/damage/report")]);
+    $("damage-table").innerHTML = `<table><thead><tr>
+      <th>When</th><th>Item</th><th>Qty</th><th>Reason</th><th>Loss</th><th>Status</th><th></th>
+    </tr></thead><tbody>${(rows || [])
+      .map(
+        (r) => `<tr>
+          <td>${escapeHtml(formatShopDateTime(r.created_at))}</td>
+          <td>${escapeHtml(r.item_name)} ${r.barcode ? `<small>${escapeHtml(r.barcode)}</small>` : ""}</td>
+          <td>${escapeHtml(fmtQty(r.quantity_gm, state.items.find((i) => i.id === r.item_id) || r))}</td>
+          <td>${escapeHtml(r.reason)}</td>
+          <td>${money(r.loss_amount)}</td>
+          <td>${escapeHtml(r.status)}</td>
+          <td>${r.status === "pending" ? `<button class="btn" data-dmg-ok="${escapeHtml(r.id)}" type="button">Approve</button> <button class="btn" data-dmg-no="${escapeHtml(r.id)}" type="button">Reject</button>` : ""}</td>
+        </tr>`,
+      )
+      .join("")}</tbody></table>`;
+    $("dmg-report").innerHTML = (report.rows || [])
+      .map((r) => `<div class="report-card"><span>${escapeHtml(r.reason)} · ${escapeHtml(r.status)}</span><strong>${money(r.loss)}</strong><small>${escapeHtml(r.entries)} entries</small></div>`)
+      .join("");
+  } catch (err) {
+    if ($("dmg-hint")) $("dmg-hint").textContent = err.message;
+  }
+}
+
+$("damage-form")?.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const item = state.items.find((i) => i.id === $("dmg-item").value);
+  try {
+    await api("/api/damage", {
+      method: "POST",
+      body: JSON.stringify({
+        item_id: $("dmg-item").value,
+        quantity_gm: item ? qtyToBaseFromInput(item, $("dmg-qty").value) : $("dmg-qty").value,
+        reason: $("dmg-reason").value,
+        barcode: $("dmg-barcode").value,
+        note: $("dmg-note").value,
+        auto_approve: $("dmg-auto")?.checked,
+      }),
+    });
+    $("damage-form").reset();
+    $("dmg-hint").textContent = "Recorded";
+    $("dmg-hint").className = "hint ok";
+    loadDamageView();
+    loadBootstrap();
+  } catch (err) {
+    $("dmg-hint").textContent = err.message;
+    $("dmg-hint").className = "hint error";
+  }
+});
+$("damage-table")?.addEventListener("click", async (e) => {
+  const ok = e.target.closest("[data-dmg-ok]");
+  const no = e.target.closest("[data-dmg-no]");
+  try {
+    if (ok) await api(`/api/damage/${ok.dataset.dmgOk}/approve`, { method: "POST", body: "{}" });
+    if (no) await api(`/api/damage/${no.dataset.dmgNo}/reject`, { method: "POST", body: "{}" });
+    if (ok || no) {
+      loadDamageView();
+      loadBootstrap();
+    }
+  } catch (err) {
+    $("dmg-hint").textContent = err.message;
+  }
+});
+
+async function loadLedgerView() {
+  const kind = $("ledger-kind")?.value || "";
+  const q = kind ? `?kind=${encodeURIComponent(kind)}` : "";
+  try {
+    const rows = await api(`/api/stock/ledger${q}`);
+    $("ledger-table").innerHTML = `<table><thead><tr>
+      <th>When</th><th>Kind</th><th>Item</th><th>Qty</th><th>Barcode</th><th>Batch</th><th>Note</th>
+    </tr></thead><tbody>${(rows || [])
+      .map(
+        (r) => `<tr>
+          <td>${escapeHtml(formatShopDateTime(r.created_at))}</td>
+          <td>${escapeHtml(r.kind)}</td>
+          <td>${escapeHtml(r.item_name)}</td>
+          <td>${escapeHtml(fmtQty(r.quantity_gm, state.items.find((i) => i.id === r.item_id) || r))}</td>
+          <td>${escapeHtml(r.barcode || "—")}</td>
+          <td>${escapeHtml((r.batch_id || "").slice(0, 8) || "—")}</td>
+          <td>${escapeHtml(r.note || r.reason || "")}</td>
+        </tr>`,
+      )
+      .join("")}</tbody></table>`;
+  } catch (err) {
+    $("ledger-table").innerHTML = `<p class="hint error">${escapeHtml(err.message)}</p>`;
+  }
+}
+$("ledger-refresh")?.addEventListener("click", () => loadLedgerView());
+$("ledger-kind")?.addEventListener("change", () => loadLedgerView());
+
+async function loadLoyaltyView() {
+  try {
+    const settings = await api("/api/loyalty/settings");
+    state.loyaltySettings = settings;
+    if ($("loy-earn")) $("loy-earn").value = settings.earn_per_100 ?? 1;
+    if ($("loy-rate")) $("loy-rate").value = settings.rupees_per_point ?? 1;
+    if ($("loy-min")) $("loy-min").value = settings.min_redeem ?? 10;
+    if ($("loy-exp")) $("loy-exp").value = settings.expiry_days ?? 365;
+    if ($("loy-bday")) $("loy-bday").value = settings.birthday_bonus ?? 50;
+    if ($("loy-ref")) $("loy-ref").value = settings.referral_points ?? 25;
+    if ($("loy-on")) $("loy-on").checked = settings.enabled !== false && settings.enabled !== 0;
+    if ($("loy-cust")) {
+      $("loy-cust").innerHTML = state.customers.map((c) => `<option value="${escapeHtml(c.id)}">${escapeHtml(c.business_name || c.name)}</option>`).join("");
+    }
+    const rows = await Promise.all(
+      state.customers.slice(0, 40).map(async (c) => {
+        try {
+          const data = await api(`/api/loyalty/customer/${encodeURIComponent(c.id)}`);
+          return { customer: c, account: data.account };
+        } catch {
+          return { customer: c, account: null };
+        }
+      }),
+    );
+    $("loyalty-table").innerHTML = `<table><thead><tr><th>Customer</th><th>Tier</th><th>Points</th><th>Earned</th><th>Redeemed</th><th>Spend</th></tr></thead><tbody>${rows
+      .map(
+        (r) => `<tr>
+          <td>${escapeHtml(r.customer.business_name || r.customer.name)}</td>
+          <td>${escapeHtml(globalThis.POSLoyalty?.tierLabel(r.account?.tier) || r.account?.tier || "Bronze")}</td>
+          <td>${escapeHtml(r.account?.points_balance ?? 0)}</td>
+          <td>${escapeHtml(r.account?.lifetime_earned ?? 0)}</td>
+          <td>${escapeHtml(r.account?.lifetime_redeemed ?? 0)}</td>
+          <td>${money(r.account?.lifetime_spend)}</td>
+        </tr>`,
+      )
+      .join("")}</tbody></table>`;
+  } catch (err) {
+    if ($("loy-hint")) $("loy-hint").textContent = err.message;
+  }
+}
+
+$("loyalty-settings-form")?.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  try {
+    await api("/api/loyalty/settings", {
+      method: "PUT",
+      body: JSON.stringify({
+        enabled: $("loy-on")?.checked,
+        earn_per_100: $("loy-earn").value,
+        rupees_per_point: $("loy-rate").value,
+        min_redeem: $("loy-min").value,
+        expiry_days: $("loy-exp").value,
+        birthday_bonus: $("loy-bday").value,
+        referral_points: $("loy-ref").value,
+      }),
+    });
+    $("loy-hint").textContent = "Royalty settings saved";
+    $("loy-hint").className = "hint ok";
+    loadLoyaltyView();
+  } catch (err) {
+    $("loy-hint").textContent = err.message;
+    $("loy-hint").className = "hint error";
+  }
+});
+$("loyalty-adjust-form")?.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  try {
+    await api("/api/loyalty/adjust", {
+      method: "POST",
+      body: JSON.stringify({ customer_id: $("loy-cust").value, points: $("loy-pts").value, note: $("loy-note").value }),
+    });
+    $("loy-hint").textContent = "Points posted";
+    $("loy-hint").className = "hint ok";
+    loadLoyaltyView();
+  } catch (err) {
+    $("loy-hint").textContent = err.message;
+    $("loy-hint").className = "hint error";
+  }
+});
+$("loy-birthday")?.addEventListener("click", async () => {
+  try {
+    await api("/api/loyalty/birthday", { method: "POST", body: JSON.stringify({ customer_id: $("loy-cust").value }) });
+    $("loy-hint").textContent = "Birthday bonus posted";
+    loadLoyaltyView();
+  } catch (err) {
+    $("loy-hint").textContent = err.message;
+  }
 });
 
 function paintPlatformNotices(notes) {
