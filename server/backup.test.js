@@ -128,10 +128,11 @@ test("PHP and HTML wire master admin backup", () => {
   );
 });
 
-test("HTML and CSS cache stickers match deploy70", () => {
+test("HTML and CSS cache stickers match deploy71", () => {
   for (const name of ["index.html", "master.html", "login.html", "setup.html"]) {
     const html = readFileSync(path.join(root, name), "utf8");
-    assert.match(html, /20260903deploy70/);
+    assert.match(html, /20260903deploy71/);
+    assert.doesNotMatch(html, /20260903deploy70/);
     assert.doesNotMatch(html, /20260903deploy69/);
     assert.doesNotMatch(html, /20260903deploy68/);
     assert.doesNotMatch(html, /20260903deploy67/);
@@ -283,12 +284,12 @@ test("HTML and CSS cache stickers match deploy70", () => {
   assert.match(login, /Bakery \/ cake shop/);
   assert.match(login, />Bakery</);
   assert.match(login, /class="login-legal"/);
-  assert.match(login, /href="\.\/privacy\.html">Privacy Policy</);
-  assert.match(login, /href="\.\/terms\.html">Terms &amp; Conditions</);
-  assert.match(login, /href="\.\/data-deletion\.html">Data Deletion Policy</);
-  assert.match(login, /href="\.\/refund\.html">Refund &amp; Cancellation</);
-  assert.match(login, /href="\.\/shipping\.html">Shipping &amp; Delivery</);
-  assert.match(login, /href="\.\/cookies\.html">Cookie Policy</);
+  assert.match(login, /href="https:\/\/atavtelecom\.in\/legal\/privacy">Privacy Policy</);
+  assert.match(login, /href="https:\/\/atavtelecom\.in\/legal\/terms">Terms &amp; Conditions</);
+  assert.match(login, /href="https:\/\/atavtelecom\.in\/legal\/data-deletion">Data Deletion Policy</);
+  assert.match(login, /href="https:\/\/atavtelecom\.in\/legal\/refund">Refund &amp; Cancellation</);
+  assert.match(login, /href="https:\/\/atavtelecom\.in\/legal\/shipping">Shipping &amp; Delivery</);
+  assert.match(login, /href="https:\/\/atavtelecom\.in\/legal\/cookies">Cookie Policy</);
   assert.match(saas, /auth-scene-types/);
   assert.match(saas, /auth-body:has\(\.auth-scene\)/);
   assert.match(saas, /\.login-legal /);

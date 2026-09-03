@@ -1,4 +1,4 @@
-Production deploy bundle — 20260903deploy70
+Production deploy bundle — 20260903deploy71
 =========================================
 
 Upload ALL files below to Hostinger public_html (overwrite):
@@ -17,6 +17,24 @@ HTML
   refund.html
   shipping.html
   cookies.html
+  legal/.htaccess
+  legal/legal.css
+  legal/privacy/index.html
+  legal/terms/index.html
+  legal/data-deletion/index.html
+  legal/refund/index.html
+  legal/shipping/index.html
+  legal/cookies/index.html
+
+Cashfree / main website
+  Copy the whole legal/ folder to the atavtelecom.in public_html (not only pos.atavtelecom.in)
+  so these URLs work:
+    https://atavtelecom.in/legal/privacy
+    https://atavtelecom.in/legal/terms
+    https://atavtelecom.in/legal/data-deletion
+    https://atavtelecom.in/legal/refund
+    https://atavtelecom.in/legal/shipping
+    https://atavtelecom.in/legal/cookies
 
 CSS
   css/pos.css
@@ -94,8 +112,8 @@ FIXES in this bundle
   - Suppliers form and list include address and email
   - Settings page: wider card, 2-column details, styled logo upload, keep card padding on mobile
   - CSS: Master Admin mobile nav wrap, hide nav until sign-in, backup file inputs, table overflow
-  - Cache sticker 20260903deploy70 on index, login, master, setup, and legal pages
-  - Login footer links Privacy, Terms, Data Deletion, Refund, Shipping, Cookie policies (Cashfree)
+  - Cache sticker 20260903deploy71 on index, login, master, setup, and legal pages
+  - Login footer uses https://atavtelecom.in/legal/{privacy,terms,data-deletion,refund,shipping,cookies}
   - Login: ATAV POS background for all business types
   - FY year dropdown auto-generates 1 April–31 March years on Accounts, Reports, Expenses
   - Print button on Accounts, Reports (each block + all), and Expenses
