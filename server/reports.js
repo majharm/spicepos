@@ -1,5 +1,11 @@
 import { query } from "./db.js";
 import { bid } from "./context.js";
+import {
+  aggregateGstByRate,
+  splitGstAmount,
+  splitOrderGst,
+  sumSplitGst,
+} from "./gst-supply.js";
 
 function range(from, to) {
   const end = to || new Date().toISOString().slice(0, 10);
@@ -104,31 +110,41 @@ export async function buildReports(from, to) {
     [tenant, start, end],
   );
   const customers = await query(
-    `SELECT code, name, business_name, mobile, type, gstin, credit_limit, outstanding
+    `SELECT code, name, business_name, mobile, type, gstin, state, credit_limit, outstanding
      FROM customers WHERE business_id = ? ORDER BY name`,
     [tenant],
   );
-  const gstByRate = await query(
-    `SELECT l.gst_rate,
-            SUM(l.amount) AS taxable,
-            SUM(l.amount * l.gst_rate / 100) AS gst,
-            SUM(l.quantity_gm) AS quantity_gm,
-            COUNT(DISTINCT o.id) AS bills
+  const companyRows = await query(
+    "SELECT gstin, state FROM company_settings WHERE business_id = ? LIMIT 1",
+    [tenant],
+  );
+  const shop = {
+    gstin: companyRows[0]?.gstin,
+    state: companyRows[0]?.state,
+  };
+  const gstOutputLines = await query(
+    `SELECT l.gst_rate, l.amount, o.id AS order_id,
+            c.gstin AS party_gstin, c.state AS party_state
      FROM sales_order_lines l
      JOIN sales_orders o ON o.id = l.order_id
-     WHERE o.business_id = ? AND DATE(o.created_at) BETWEEN ? AND ? AND l.cancelled = 0
-     GROUP BY l.gst_rate ORDER BY l.gst_rate`,
+     LEFT JOIN customers c ON c.id = o.customer_id
+     WHERE o.business_id = ? AND DATE(o.created_at) BETWEEN ? AND ? AND l.cancelled = 0`,
     [tenant, start, end],
   );
-  const gstInputByRate = await query(
-    `SELECT l.gst_rate,
-            SUM(l.amount) AS taxable,
-            COALESCE(SUM(l.gst_amount), SUM(l.amount * l.gst_rate / 100)) AS gst
+  const gstInputLines = await query(
+    `SELECT l.gst_rate, l.amount,
+            COALESCE(l.gst_amount, l.amount * l.gst_rate / 100) AS gst,
+            p.id AS purchase_id, s.gstin AS party_gstin
      FROM purchase_lines l
      JOIN purchases p ON p.id = l.purchase_id
-     WHERE p.business_id = ? AND p.purchase_date BETWEEN ? AND ?
-     GROUP BY l.gst_rate ORDER BY l.gst_rate`,
+     LEFT JOIN suppliers s ON s.id = p.supplier_id
+     WHERE p.business_id = ? AND p.purchase_date BETWEEN ? AND ?`,
     [tenant, start, end],
+  );
+  const gstByRate = aggregateGstByRate(gstOutputLines, shop);
+  const gstInputByRate = aggregateGstByRate(
+    gstInputLines.map((r) => ({ ...r, order_id: r.purchase_id })),
+    shop,
   );
   const gstHsn = await query(
     `SELECT COALESCE(NULLIF(TRIM(i.hsn), ''), i.code, '—') AS hsn, l.item_name, l.gst_rate,
@@ -145,7 +161,7 @@ export async function buildReports(from, to) {
   );
   const gstB2B = await query(
     `SELECT o.order_number, DATE(o.created_at) AS bill_date, o.customer_name, c.gstin,
-            o.subtotal AS taxable, o.gst, o.total
+            c.state AS customer_state, o.subtotal AS taxable, o.gst, o.total
      FROM sales_orders o
      LEFT JOIN customers c ON c.id = o.customer_id
      WHERE o.business_id = ? AND DATE(o.created_at) BETWEEN ? AND ?
@@ -155,7 +171,7 @@ export async function buildReports(from, to) {
   );
   const gstB2C = await query(
     `SELECT o.order_number, DATE(o.created_at) AS bill_date, o.customer_name,
-            o.subtotal AS taxable, o.gst, o.total
+            c.state AS customer_state, o.subtotal AS taxable, o.gst, o.total
      FROM sales_orders o
      LEFT JOIN customers c ON c.id = o.customer_id
      WHERE o.business_id = ? AND DATE(o.created_at) BETWEEN ? AND ?
@@ -170,16 +186,53 @@ export async function buildReports(from, to) {
   );
   const outputGst = Number(summary[0]?.gst || 0);
   const inputGst = Number(purchaseGst[0]?.gst || 0) + Number(expenseSum[0]?.gst || 0);
+  const outputSplit = sumSplitGst(
+    gstOutputLines.map((r) => ({
+      gst_rate: r.gst_rate,
+      amount: r.amount,
+      party_gstin: r.party_gstin,
+      party_state: r.party_state,
+    })),
+    shop,
+  );
+  const purchaseInputSplit = sumSplitGst(gstInputLines, shop);
+  const expenseInputSplit = splitGstAmount(Number(expenseSum[0]?.gst || 0), false);
+  const inputSplit = {
+    cgst: purchaseInputSplit.cgst + expenseInputSplit.cgst,
+    sgst: purchaseInputSplit.sgst + expenseInputSplit.sgst,
+    igst: purchaseInputSplit.igst + expenseInputSplit.igst,
+    total: purchaseInputSplit.total + expenseInputSplit.total,
+  };
+  const gstSummary = {
+    output: outputSplit,
+    input: inputSplit,
+    net: {
+      cgst: outputSplit.cgst - inputSplit.cgst,
+      sgst: outputSplit.sgst - inputSplit.sgst,
+      igst: outputSplit.igst - inputSplit.igst,
+      total: outputSplit.total - inputSplit.total,
+    },
+  };
+  const gstB2BRows = gstB2B.map((row) => {
+    const split = splitOrderGst({ ...row, customer_gstin: row.gstin }, shop);
+    return { ...row, ...split };
+  });
+  const gstB2CRows = gstB2C.map((row) => {
+    const split = splitOrderGst(row, shop);
+    return { ...row, ...split };
+  });
 
   return {
     from: start,
     to: end,
+    shop,
     summary: {
       ...(summary[0] || { bills: 0, taxable: 0, gst: 0, takings: 0 }),
       inputGst,
       netGst: outputGst - inputGst,
       expenses: Number(expenseSum[0]?.amount || 0) + Number(expenseSum[0]?.gst || 0),
       expenseBills: Number(expenseSum[0]?.bills || 0),
+      gstSummary,
     },
     sales,
     byItem,
@@ -191,8 +244,8 @@ export async function buildReports(from, to) {
     gstByRate,
     gstInputByRate,
     gstHsn,
-    gstB2B,
-    gstB2C,
+    gstB2B: gstB2BRows,
+    gstB2C: gstB2CRows,
     stock,
     low,
     purchases,
@@ -212,16 +265,34 @@ export function formatReportDay(value) {
 
 export function reportsToSheets(data) {
   const num = (v) => Number(v) || 0;
-  const half = (v) => num(v) / 2;
-  const gstRateRows = (data.gstByRate || []).map((r) => {
-    const gst = num(r.gst);
-    return [num(r.gst_rate), num(r.taxable), half(gst), half(gst), gst, num(r.bills)];
-  });
-  const gstInputRows = (data.gstInputByRate || []).map((r) => {
-    const gst = num(r.gst);
-    return [num(r.gst_rate), num(r.taxable), half(gst), half(gst), gst];
-  });
+  const gstRateRows = (rows, withBills = true) =>
+    (rows || []).map((r) => {
+      const row = [
+        num(r.gst_rate),
+        num(r.taxable),
+        num(r.cgst),
+        num(r.sgst),
+        num(r.igst),
+        num(r.gst),
+      ];
+      if (withBills) row.push(num(r.bills));
+      return row;
+    });
+  const gstInputRows = gstRateRows(data.gstInputByRate, false);
+  const gstSummary = data.summary?.gstSummary || {};
+  const out = gstSummary.output || {};
+  const inp = gstSummary.input || {};
+  const net = gstSummary.net || {};
   return [
+    {
+      name: "GST summary",
+      headers: ["Type", "CGST", "SGST", "IGST", "Total GST"],
+      rows: [
+        ["Output", num(out.cgst), num(out.sgst), num(out.igst), num(out.total)],
+        ["Input", num(inp.cgst), num(inp.sgst), num(inp.igst), num(inp.total)],
+        ["Net payable", num(net.cgst), num(net.sgst), num(net.igst), num(net.total)],
+      ],
+    },
     {
       name: "Summary",
       headers: ["From", "To", "Bills", "Taxable", "Output GST", "Input GST", "Net GST", "Takings"],
@@ -296,12 +367,12 @@ export function reportsToSheets(data) {
     },
     {
       name: "GST output by rate",
-      headers: ["GST %", "Taxable", "CGST", "SGST", "Total GST", "Bills"],
-      rows: gstRateRows,
+      headers: ["GST %", "Taxable", "CGST", "SGST", "IGST", "Total GST", "Bills"],
+      rows: gstRateRows(data.gstByRate),
     },
     {
       name: "GST input by rate",
-      headers: ["GST %", "Taxable", "CGST", "SGST", "Total GST"],
+      headers: ["GST %", "Taxable", "CGST", "SGST", "IGST", "Total GST"],
       rows: gstInputRows,
     },
     {
@@ -313,16 +384,33 @@ export function reportsToSheets(data) {
     },
     {
       name: "GST B2B sales",
-      headers: ["Bill", "Date", "Customer", "GSTIN", "Taxable", "GST", "Total"],
+      headers: ["Bill", "Date", "Customer", "GSTIN", "Taxable", "CGST", "SGST", "IGST", "Total", "Supply"],
       rows: (data.gstB2B || []).map((r) => [
-        r.order_number, formatReportDay(r.bill_date), r.customer_name, r.gstin, num(r.taxable), num(r.gst), num(r.total),
+        r.order_number,
+        formatReportDay(r.bill_date),
+        r.customer_name,
+        r.gstin,
+        num(r.taxable),
+        num(r.cgst),
+        num(r.sgst),
+        num(r.igst),
+        num(r.total),
+        r.interState ? "Inter-state" : "Intra-state",
       ]),
     },
     {
       name: "GST B2C sales",
-      headers: ["Bill", "Date", "Customer", "Taxable", "GST", "Total"],
+      headers: ["Bill", "Date", "Customer", "Taxable", "CGST", "SGST", "IGST", "Total", "Supply"],
       rows: (data.gstB2C || []).map((r) => [
-        r.order_number, formatReportDay(r.bill_date), r.customer_name, num(r.taxable), num(r.gst), num(r.total),
+        r.order_number,
+        formatReportDay(r.bill_date),
+        r.customer_name,
+        num(r.taxable),
+        num(r.cgst),
+        num(r.sgst),
+        num(r.igst),
+        num(r.total),
+        r.interState ? "Inter-state" : "Intra-state",
       ]),
     },
     {
@@ -357,9 +445,9 @@ export function reportsToSheets(data) {
     },
     {
       name: "Customers",
-      headers: ["Code", "Name", "Business", "Mobile", "Type", "GSTIN", "Credit limit", "Outstanding"],
+      headers: ["Code", "Name", "Business", "Mobile", "Type", "State", "GSTIN", "Credit limit", "Outstanding"],
       rows: data.customers.map((c) => [
-        c.code, c.name, c.business_name, c.mobile, c.type, c.gstin,
+        c.code, c.name, c.business_name, c.mobile, c.type, c.state, c.gstin,
         num(c.credit_limit), num(c.outstanding),
       ]),
     },

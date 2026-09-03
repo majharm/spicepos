@@ -128,10 +128,11 @@ test("PHP and HTML wire master admin backup", () => {
   );
 });
 
-test("HTML and CSS cache stickers match deploy65", () => {
+test("HTML and CSS cache stickers match deploy66", () => {
   for (const name of ["index.html", "master.html", "login.html", "setup.html"]) {
     const html = readFileSync(path.join(root, name), "utf8");
-    assert.match(html, /20260903deploy65/);
+    assert.match(html, /20260903deploy66/);
+    assert.doesNotMatch(html, /20260903deploy65/);
     assert.doesNotMatch(html, /20260903deploy64/);
     assert.doesNotMatch(html, /20260903deploy63/);
     assert.doesNotMatch(html, /20260902deploy62/);

@@ -32,15 +32,15 @@ test("formatReportDay keeps calendar dates from ISO and Date values", () => {
   assert.equal(formatReportDay(""), "");
 });
 
-test("reportsToSheets includes extended GST report sheets", () => {
+test("reportsToSheets includes GST summary and IGST columns", () => {
   const sheets = reportsToSheets(emptyReports("2026-08-01", "2026-08-30"));
+  assert.ok(sheets.some((s) => s.name === "GST summary"));
   assert.ok(sheets.some((s) => s.name === "GST daywise"));
   assert.ok(sheets.some((s) => s.name === "GST output by rate"));
   assert.ok(sheets.some((s) => s.name === "GST B2B sales"));
-  assert.ok(sheets.some((s) => s.name === "Payment daywise"));
-  assert.ok(sheets.some((s) => s.name === "Expenses"));
+  assert.equal(sheets.find((s) => s.name === "GST output by rate").headers[4], "IGST");
   assert.equal(sheets.find((s) => s.name === "Stock").headers[2], "HSN");
-  assert.equal(sheets[0].rows[0][2], 0);
+  assert.equal(sheets.find((s) => s.name === "Summary").rows[0][2], 0);
 });
 
 test("GST daywise sheet uses YYYY-MM-DD not a Date string", () => {

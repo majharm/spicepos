@@ -6,8 +6,8 @@
     <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
     <title>ATAV POS</title>
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./css/pos.css?v=20260903deploy65" />
-    <link rel="stylesheet" href="./css/saas.css?v=20260903deploy65" />
+    <link rel="stylesheet" href="./css/pos.css?v=20260903deploy66" />
+    <link rel="stylesheet" href="./css/saas.css?v=20260903deploy66" />
   </head>
   <body>
     <div class="app" id="app">
@@ -255,6 +255,7 @@
               </select>
             </label>
             <label>GSTIN <input id="cust-gstin" /></label>
+            <label>State <input id="cust-state" placeholder="e.g. Maharashtra" autocomplete="address-level1" /></label>
             <button class="btn primary" type="submit">Save</button>
           </form>
           <div class="hint" id="cust-hint"></div>
@@ -538,6 +539,15 @@
                 <label class="full">GSTIN
                   <input id="set-gstin" maxlength="20" placeholder="Optional" autocomplete="off" />
                 </label>
+                <label>City
+                  <input id="set-city" maxlength="128" placeholder="e.g. Pune" autocomplete="address-level2" />
+                </label>
+                <label>State
+                  <input id="set-state" maxlength="64" placeholder="e.g. Maharashtra" autocomplete="address-level1" />
+                </label>
+                <label>PIN code
+                  <input id="set-pincode" maxlength="12" inputmode="numeric" placeholder="6-digit PIN" autocomplete="postal-code" />
+                </label>
               </div>
             </div>
             <div class="settings-section">
@@ -652,12 +662,13 @@
         </section>
       </div>
     </aside>
-    <script src="./js/pos-api.js?v=20260903deploy65" defer></script>
-    <script src="./js/units.js?v=20260903deploy65" defer></script>
-    <script src="./js/footwear.js?v=20260903deploy65" defer></script>
-    <script src="./js/dev-mode.js?v=20260903deploy65" defer></script>
-    <script src="./js/invoice.js?v=20260903deploy65" defer></script>
-    <script src="./js/support.js?v=20260903deploy65" defer></script>
-    <script src="./js/app.js?v=20260903deploy65" defer></script>
+    <script src="./js/gst-supply.js?v=20260903deploy66" defer></script>
+    <script src="./js/pos-api.js?v=20260903deploy66" defer></script>
+    <script src="./js/units.js?v=20260903deploy66" defer></script>
+    <script src="./js/footwear.js?v=20260903deploy66" defer></script>
+    <script src="./js/dev-mode.js?v=20260903deploy66" defer></script>
+    <script src="./js/invoice.js?v=20260903deploy66" defer></script>
+    <script src="./js/support.js?v=20260903deploy66" defer></script>
+    <script src="./js/app.js?v=20260903deploy66" defer></script>
   </body>
 </html>

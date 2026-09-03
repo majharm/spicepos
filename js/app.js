@@ -669,12 +669,29 @@ function htmlTable(headers, rows) {
 
 function gstRateRows(rows, withBills = true) {
   return (rows || []).map((r) => {
-    const gst = Number(r.gst) || 0;
-    const half = gst / 2;
-    const row = [Number(r.gst_rate) || 0, Number(r.taxable) || 0, half, half, gst];
+    const row = [
+      Number(r.gst_rate) || 0,
+      Number(r.taxable) || 0,
+      Number(r.cgst) || 0,
+      Number(r.sgst) || 0,
+      Number(r.igst) || 0,
+      Number(r.gst) || 0,
+    ];
     if (withBills) row.push(Number(r.bills) || 0);
     return row;
   });
+}
+
+function gstSummaryRows(summary) {
+  const s = summary?.gstSummary || {};
+  const out = s.output || {};
+  const inp = s.input || {};
+  const net = s.net || {};
+  return [
+    ["Output", Number(out.cgst) || 0, Number(out.sgst) || 0, Number(out.igst) || 0, Number(out.total) || 0],
+    ["Input", Number(inp.cgst) || 0, Number(inp.sgst) || 0, Number(inp.igst) || 0, Number(inp.total) || 0],
+    ["Net payable", Number(net.cgst) || 0, Number(net.sgst) || 0, Number(net.igst) || 0, Number(net.total) || 0],
+  ];
 }
 
 function reportBlock(title, sheet, headers, rows) {
@@ -1169,7 +1186,7 @@ function renderItemsTable() {
 
 function renderCustomersTable() {
   $("customers-table").innerHTML = `<table><thead><tr>
-    <th>Code</th><th>Name</th><th>Type</th><th>Mobile</th><th>GSTIN</th><th>Outstanding</th>
+    <th>Code</th><th>Name</th><th>Type</th><th>Mobile</th><th>State</th><th>GSTIN</th><th>Outstanding</th>
   </tr></thead><tbody>${state.customers
     .map(
       (c) => `<tr>
@@ -1177,6 +1194,7 @@ function renderCustomersTable() {
       <td>${escapeHtml(c.business_name || c.name)}</td>
       <td>${escapeHtml(c.type)}</td>
       <td>${escapeHtml(c.mobile)}</td>
+      <td>${escapeHtml(c.state || "—")}</td>
       <td>${escapeHtml(c.gstin || "—")}</td>
       <td>${money(c.outstanding)}</td>
     </tr>`,
@@ -1355,6 +1373,9 @@ function renderSettings() {
   $("set-phone").value = state.company.phone || "";
   $("set-email").value = state.company.email || "";
   $("set-gstin").value = state.company.gstin || "";
+  if ($("set-city")) $("set-city").value = state.company.city || "";
+  if ($("set-state")) $("set-state").value = state.company.state || "";
+  if ($("set-pincode")) $("set-pincode").value = state.company.pincode || state.company.pin_code || "";
   if ($("set-timezone")) $("set-timezone").value = shopTimezone();
   paintTimezonePreview();
   state.logoDraft = null;
@@ -1563,14 +1584,23 @@ async function loadReports() {
   try {
     const data = await api(`/api/reports?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`);
     const s = data.summary || {};
+    const gs = s.gstSummary || {};
+    const out = gs.output || {};
+    const net = gs.net || {};
     $("report-summary").innerHTML = [
       ["Range", `${data.from} → ${data.to}`],
       ["Financial year", indianFinancialYear(data.from).label],
       ["Bills", s.bills ?? 0],
       ["Taxable", money(s.taxable)],
+      ["Output CGST", money(out.cgst)],
+      ["Output SGST", money(out.sgst)],
+      ["Output IGST", money(out.igst)],
       ["Output GST", money(s.gst)],
       ["Input GST", money(s.inputGst)],
       ["Net GST", money(s.netGst)],
+      ["Net CGST", money(net.cgst)],
+      ["Net SGST", money(net.sgst)],
+      ["Net IGST", money(net.igst)],
       ["Takings", money(s.takings)],
       ["Expenses", money(s.expenses)],
       ["Low stock SKUs", (data.low || []).length],
@@ -1578,6 +1608,7 @@ async function loadReports() {
       .map(([k, v]) => `<div class="report-card"><span>${k}</span><strong>${v}</strong></div>`)
       .join("");
     $("reports").innerHTML = [
+      reportBlock("GST summary (India)", "GST summary", ["Type", "CGST", "SGST", "IGST", "Total GST"], gstSummaryRows(s)),
       reportBlock("Sales bills", "Sales bills", ["Order", "Customer", "Type", "Pack", "Pack count", "Status", "Qty g", "Taxable", "GST", "Total", "Pay", "Pay status", "Date"], (data.sales || []).map((o) => [o.order_number, o.customer_name, o.customer_type, o.pack_name || "Loose items", Number(o.pack_count) || 0, o.status, Number(o.total_quantity_gm) || 0, Number(o.subtotal) || 0, Number(o.gst) || 0, Number(o.total) || 0, o.payment_method, o.payment_status, formatShopDateTime(o.created_at)])),
       reportBlock("Item sales", "Item sales", ["Item", "Qty g", "Amount", "GST"], (data.byItem || []).map((r) => [r.item_name, Number(r.quantity_gm) || 0, Number(r.amount) || 0, Number(r.gst) || 0])),
       reportBlock("Customer sales", "Customer sales", ["Customer", "Type", "Bills", "Takings", "GST"], (data.byCustomer || []).map((r) => [r.customer_name, r.customer_type, Number(r.bills) || 0, Number(r.takings) || 0, Number(r.gst) || 0])),
@@ -1585,16 +1616,16 @@ async function loadReports() {
       reportBlock("Payment", "Payment", ["Method", "Bills", "Takings"], (data.byPay || []).map((r) => [r.payment_method, Number(r.bills) || 0, Number(r.takings) || 0])),
       reportBlock("Payment daywise", "Payment daywise", ["Day", "Cash", "UPI", "Card", "Credit", "Other", "Bills", "Total"], (data.payDaywise || []).map((r) => [reportDay(r.day), Number(r.cash) || 0, Number(r.upi) || 0, Number(r.card) || 0, Number(r.credit) || 0, Number(r.other) || 0, Number(r.bills) || 0, Number(r.total) || 0])),
       reportBlock("GST daywise", "GST daywise", ["Day", "Taxable", "GST", "Total"], (data.gst || []).map((r) => [reportDay(r.day), Number(r.taxable) || 0, Number(r.gst) || 0, Number(r.total) || 0])),
-      reportBlock("GST output by rate", "GST output by rate", ["GST %", "Taxable", "CGST", "SGST", "Total GST", "Bills"], gstRateRows(data.gstByRate)),
-      reportBlock("GST input by rate", "GST input by rate", ["GST %", "Taxable", "CGST", "SGST", "Total GST"], gstRateRows(data.gstInputByRate, false)),
+      reportBlock("GST output by rate", "GST output by rate", ["GST %", "Taxable", "CGST", "SGST", "IGST", "Total GST", "Bills"], gstRateRows(data.gstByRate)),
+      reportBlock("GST input by rate", "GST input by rate", ["GST %", "Taxable", "CGST", "SGST", "IGST", "Total GST"], gstRateRows(data.gstInputByRate, false)),
       reportBlock("GST HSN itemwise", "GST HSN itemwise", ["HSN/SKU", "Item", "GST %", "Qty g", "Taxable", "GST"], (data.gstHsn || []).map((r) => [r.hsn, r.item_name, Number(r.gst_rate) || 0, Number(r.quantity_gm) || 0, Number(r.taxable) || 0, Number(r.gst) || 0])),
-      reportBlock("GST B2B sales", "GST B2B sales", ["Bill", "Date", "Customer", "GSTIN", "Taxable", "GST", "Total"], (data.gstB2B || []).map((r) => [r.order_number, reportDay(r.bill_date), r.customer_name, r.gstin, Number(r.taxable) || 0, Number(r.gst) || 0, Number(r.total) || 0])),
-      reportBlock("GST B2C sales", "GST B2C sales", ["Bill", "Date", "Customer", "Taxable", "GST", "Total"], (data.gstB2C || []).map((r) => [r.order_number, reportDay(r.bill_date), r.customer_name, Number(r.taxable) || 0, Number(r.gst) || 0, Number(r.total) || 0])),
+      reportBlock("GST B2B sales", "GST B2B sales", ["Bill", "Date", "Customer", "GSTIN", "Taxable", "CGST", "SGST", "IGST", "Total", "Supply"], (data.gstB2B || []).map((r) => [r.order_number, reportDay(r.bill_date), r.customer_name, r.gstin, Number(r.taxable) || 0, Number(r.cgst) || 0, Number(r.sgst) || 0, Number(r.igst) || 0, Number(r.total) || 0, r.interState ? "Inter-state" : "Intra-state"])),
+      reportBlock("GST B2C sales", "GST B2C sales", ["Bill", "Date", "Customer", "Taxable", "CGST", "SGST", "IGST", "Total", "Supply"], (data.gstB2C || []).map((r) => [r.order_number, reportDay(r.bill_date), r.customer_name, Number(r.taxable) || 0, Number(r.cgst) || 0, Number(r.sgst) || 0, Number(r.igst) || 0, Number(r.total) || 0, r.interState ? "Inter-state" : "Intra-state"])),
       reportBlock("Stock", "Stock", ["Code", "Name", "HSN", "Category", "Subcategory", "Stock g", "Reorder g", "Retail", "B2B", "Purchase", "GST %"], (data.stock || []).map((i) => [i.code, i.name, i.hsn, i.category, i.subcategory, Number(i.stock_gm) || 0, Number(i.reorder_level_gm) || 0, Number(i.retail_rate) || 0, Number(i.b2b_rate) || 0, Number(i.purchase_rate) || 0, Number(i.gst_rate) || 0])),
       reportBlock("Low stock", "Low stock", ["Code", "Name", "Stock g", "Reorder g"], (data.low || []).map((i) => [i.code, i.name, Number(i.stock_gm) || 0, Number(i.reorder_level_gm) || 0])),
       reportBlock("Purchases", "Purchases", ["PO", "Supplier", "Invoice", "Date", "Taxable", "GST", "Total", "Pay", "Status"], (data.purchases || []).map((p) => [p.purchase_number, p.supplier_name, p.supplier_invoice_number, p.purchase_date, Number(p.subtotal) || 0, Number(p.gst) || 0, Number(p.total) || 0, p.payment_method, p.payment_status])),
       reportBlock("Expenses", "Expenses", ["No.", "Date", "Category", "Amount", "GST", "Total", "Pay", "Notes"], (data.expenses || []).map((e) => [e.expense_number, e.expense_date, e.category, Number(e.amount) || 0, Number(e.gst) || 0, Number(e.total) || (Number(e.amount) || 0) + (Number(e.gst) || 0), e.payment_method, e.notes])),
-      reportBlock("Customers", "Customers", ["Code", "Name", "Business", "Mobile", "Type", "GSTIN", "Credit limit", "Outstanding"], (data.customers || []).map((c) => [c.code, c.name, c.business_name, c.mobile, c.type, c.gstin, Number(c.credit_limit) || 0, Number(c.outstanding) || 0])),
+      reportBlock("Customers", "Customers", ["Code", "Name", "Business", "Mobile", "Type", "State", "GSTIN", "Credit limit", "Outstanding"], (data.customers || []).map((c) => [c.code, c.name, c.business_name, c.mobile, c.type, c.state, c.gstin, Number(c.credit_limit) || 0, Number(c.outstanding) || 0])),
     ].join("");
     $("reports-hint").textContent = "";
     $("reports-hint").className = "hint";
@@ -2618,6 +2649,7 @@ $("customer-form").addEventListener("submit", async (e) => {
       mobile: $("cust-mobile").value,
       type: $("cust-type").value,
       gstin: $("cust-gstin").value,
+      state: $("cust-state")?.value || "",
     });
     $("cust-hint").textContent = "Saved";
     $("cust-hint").className = "hint ok";
@@ -2808,6 +2840,9 @@ $("settings-form").addEventListener("submit", async (e) => {
       phone: $("set-phone").value,
       email: $("set-email").value,
       gstin: $("set-gstin").value,
+      city: $("set-city")?.value || "",
+      state: $("set-state")?.value || "",
+      pincode: $("set-pincode")?.value || "",
       timezone: $("set-timezone")?.value || shopTimezone(),
     };
     if (state.logoDraft !== null) payload.logo_url = state.logoDraft;

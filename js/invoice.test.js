@@ -4,10 +4,12 @@ import fs from "node:fs";
 import vm from "node:vm";
 
 function loadInvoicePrint() {
+  const gst = fs.readFileSync(new URL("./gst-supply.js", import.meta.url), "utf8");
   const units = fs.readFileSync(new URL("./units.js", import.meta.url), "utf8");
   const code = fs.readFileSync(new URL("./invoice.js", import.meta.url), "utf8");
   const context = { window: {}, console };
   vm.createContext(context);
+  vm.runInContext(gst, context);
   vm.runInContext(units, context);
   vm.runInContext(code, context);
   return context.window.InvoicePrint;
@@ -223,6 +225,33 @@ test("amount in words uses Indian numbering", () => {
   assert.equal(InvoicePrint.amountInWords(125000), "Rupees One Lakh Twenty Five Thousand Only");
 });
 
+test("thermal invoice HTML shows IGST for inter-state supply", () => {
+  const InvoicePrint = loadInvoicePrint();
+  const html = InvoicePrint.invoiceBody(
+    {
+      order_number: "SO-20001",
+      customer_name: "Delhi Traders",
+      customer_gstin: "07AABCU9603R1ZX",
+      subtotal: 1000,
+      gst: 180,
+      total: 1180,
+      payment_method: "cash",
+      payment_status: "paid",
+      created_at: "2026-08-30T10:30:00.000Z",
+      lines: [{ item_name: "Test", quantity_gm: 1000, rate_per_kg: 1000, amount: 1000, gst_rate: 18 }],
+    },
+    {
+      company: { name: "ATAV Spices", gstin: "27AABCU9603R1ZX", state: "Maharashtra" },
+      customers: [{ id: "c1", gstin: "07AABCU9603R1ZX", state: "Delhi" }],
+      items: [],
+      formatDateTime: (v) => String(v),
+      money: (n) => `₹${Number(n).toFixed(2)}`,
+      escapeHtml: (v) => String(v),
+    },
+  );
+  assert.match(html, /IGST @ 18%/);
+  assert.doesNotMatch(html, /CGST @ 9%/);
+});
 test("invoice HSN uses item hsn ahead of SKU code", () => {
   const InvoicePrint = loadInvoicePrint();
   const lines = InvoicePrint.enrichLines(
