@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
+import { execFileSync } from "node:child_process";
 import path from "node:path";
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
@@ -125,6 +126,22 @@ test("PHP customer insert bind types match placeholders", () => {
   assert.match(read("js/app.js"), /data-edit-pack/);
   assert.match(read("js/app.js"), /Update pack/);
   assert.match(index, /id="pack-id"/);
+});
+
+test("PHP password hashes include sha256 and verify round-trip", () => {
+  const src = read("pos-php-scrypt.php");
+  assert.match(src, /pos_password_needs_rehash/);
+  assert.doesNotMatch(src, /return "pbkdf2\$sha256\$"/);
+  const out = execFileSync(
+    "php",
+    [
+      "-r",
+      'require "pos-php-scrypt.php"; $h = pos_hash_password("Swami@12345"); if (!str_starts_with($h, \'pbkdf2$sha256$100000$\')) { fwrite(STDERR, $h); exit(2); } if (!pos_verify_password("Swami@12345", $h)) exit(3); if (pos_verify_password("wrong", $h)) exit(4); echo "HASH_OK needs=". (pos_password_needs_rehash($h) ? "yes" : "no");',
+    ],
+    { encoding: "utf8", cwd: root },
+  );
+  assert.match(out, /HASH_OK/);
+  assert.match(out, /needs=no/);
 });
 
 test("Master Admin can set passwords and unlock locked accounts", () => {
