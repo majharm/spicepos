@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import { query } from "./db.js";
 import { bid, authUser } from "./context.js";
 import { nextSeq, round2 } from "./crud.js";
+import { isInterStateSupply, splitGstAmount } from "./gst-supply.js";
 
 export const EXPENSE_COA = [
   { code: "5102", name: "Rent", account_group: "expense" },
@@ -22,9 +23,11 @@ export const DEFAULT_COA = [
   { code: "1201", name: "Stock in trade", account_group: "asset" },
   { code: "2301", name: "GST input CGST", account_group: "asset" },
   { code: "2302", name: "GST input SGST", account_group: "asset" },
+  { code: "2303", name: "GST input IGST", account_group: "asset" },
   { code: "2101", name: "Sundry creditors", account_group: "liability" },
   { code: "2201", name: "GST output CGST", account_group: "liability" },
   { code: "2202", name: "GST output SGST", account_group: "liability" },
+  { code: "2203", name: "GST output IGST", account_group: "liability" },
   { code: "3101", name: "Capital account", account_group: "equity" },
   { code: "4101", name: "Sales", account_group: "income" },
   { code: "5101", name: "Purchase of goods", account_group: "expense" },
@@ -137,23 +140,62 @@ export async function postJournal(conn, opts) {
   return journalId;
 }
 
-function splitGst(gst) {
-  const total = round2(gst);
-  const cgst = round2(total / 2);
-  return { cgst, sgst: round2(total - cgst) };
+function splitGst(gst, interState = false) {
+  return splitGstAmount(gst, interState);
+}
+
+async function shopProfile(conn, businessId = bid()) {
+  const [rows] = await conn.query(
+    "SELECT gstin, state FROM company_settings WHERE business_id = ? LIMIT 1",
+    [businessId],
+  );
+  return rows[0] || {};
+}
+
+async function customerProfile(conn, customerId, businessId = bid()) {
+  if (!customerId) return {};
+  const [rows] = await conn.query(
+    "SELECT gstin, state FROM customers WHERE id = ? AND business_id = ? LIMIT 1",
+    [customerId, businessId],
+  );
+  return rows[0] || {};
+}
+
+async function supplierProfile(conn, supplierId, businessId = bid()) {
+  if (!supplierId) return {};
+  const [rows] = await conn.query(
+    "SELECT gstin FROM suppliers WHERE id = ? AND business_id = ? LIMIT 1",
+    [supplierId, businessId],
+  );
+  return rows[0] || {};
+}
+
+function pushGstOutputLines(lines, split) {
+  if (split.cgst > 0) lines.push({ accountCode: "2201", debit: 0, credit: split.cgst });
+  if (split.sgst > 0) lines.push({ accountCode: "2202", debit: 0, credit: split.sgst });
+  if (split.igst > 0) lines.push({ accountCode: "2203", debit: 0, credit: split.igst });
+}
+
+function pushGstInputLines(lines, split) {
+  if (split.cgst > 0) lines.push({ accountCode: "2301", debit: split.cgst, credit: 0 });
+  if (split.sgst > 0) lines.push({ accountCode: "2302", debit: split.sgst, credit: 0 });
+  if (split.igst > 0) lines.push({ accountCode: "2303", debit: split.igst, credit: 0 });
 }
 
 export async function postSaleJournal(conn, order) {
   if (await journalExists(conn, "sales_order", order.id)) return null;
+  const businessId = bid();
   const subtotal = round2(order.subtotal);
-  const { cgst, sgst } = splitGst(order.gst);
+  const shop = await shopProfile(conn, businessId);
+  const customer = await customerProfile(conn, order.customer_id, businessId);
+  const interState = isInterStateSupply(shop, customer);
+  const split = splitGst(order.gst, interState);
   const total = round2(order.total);
   const lines = [
     { accountCode: assetCodeForMethod(order.payment_method), debit: total, credit: 0 },
     { accountCode: "4101", debit: 0, credit: subtotal },
   ];
-  if (cgst > 0) lines.push({ accountCode: "2201", debit: 0, credit: cgst });
-  if (sgst > 0) lines.push({ accountCode: "2202", debit: 0, credit: sgst });
+  pushGstOutputLines(lines, split);
   return postJournal(conn, {
     voucherType: "sale",
     voucherDate: isoDate(order.created_at),
@@ -166,14 +208,17 @@ export async function postSaleJournal(conn, order) {
 
 export async function postPurchaseJournal(conn, purchase) {
   if (await journalExists(conn, "purchase", purchase.id)) return null;
+  const businessId = bid();
   const subtotal = round2(purchase.subtotal);
-  const { cgst, sgst } = splitGst(purchase.gst);
+  const shop = await shopProfile(conn, businessId);
+  const supplier = await supplierProfile(conn, purchase.supplier_id, businessId);
+  const interState = isInterStateSupply(shop, supplier);
+  const split = splitGst(purchase.gst, interState);
   const total = round2(purchase.total);
   const lines = [
     { accountCode: "5101", debit: subtotal, credit: 0 },
   ];
-  if (cgst > 0) lines.push({ accountCode: "2301", debit: cgst, credit: 0 });
-  if (sgst > 0) lines.push({ accountCode: "2302", debit: sgst, credit: 0 });
+  pushGstInputLines(lines, split);
   lines.push({
     accountCode: purchase.payment_method === "credit" ? "2101" : assetCodeForMethod(purchase.payment_method),
     debit: 0,
@@ -204,12 +249,11 @@ export async function postReceiptJournal(conn, { amount, payment_method, entryNo
 
 export function expenseJournalLines({ amount, gst, payment_method, account_code }) {
   const amt = round2(amount);
-  const gstAmt = round2(gst);
-  const { cgst, sgst } = splitGst(gstAmt);
+  const split = splitGst(gst);
+  const gstAmt = round2(split.cgst + split.sgst + split.igst);
   const total = round2(amt + gstAmt);
   const lines = [{ accountCode: account_code, debit: amt, credit: 0 }];
-  if (cgst > 0) lines.push({ accountCode: "2301", debit: cgst, credit: 0 });
-  if (sgst > 0) lines.push({ accountCode: "2302", debit: sgst, credit: 0 });
+  pushGstInputLines(lines, split);
   const method = String(payment_method || "cash").toLowerCase();
   lines.push({
     accountCode: method === "credit" ? "2101" : assetCodeForMethod(method),

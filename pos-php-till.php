@@ -170,9 +170,12 @@ function pos_php_till_dispatch($path, $method, $body) {
     $phone = $body["phone"] ?? null;
     $email = $body["email"] ?? null;
     $gstin = $body["gstin"] ?? null;
+    $city = $body["city"] ?? null;
+    $state = $body["state"] ?? null;
+    $pincode = $body["pincode"] ?? null;
     $logoSql = "";
-    $params = [$name, $address, $phone, $email, $gstin, $tz, $tzOff];
-    $types = "sssssss";
+    $params = [$name, $address, $phone, $email, $gstin, $city, $state, $pincode, $tz, $tzOff];
+    $types = "ssssssssss";
     if (array_key_exists("logo_url", $body)) {
       $logo = (string) ($body["logo_url"] ?? "");
       if ($logo !== "" && strpos($logo, "data:image/") !== 0) pos_send(400, ["error" => "Logo must be an uploaded image"]);
@@ -184,15 +187,16 @@ function pos_php_till_dispatch($path, $method, $body) {
     $params[] = $bid;
     $types .= "s";
     pos_q(
-      "UPDATE company_settings SET name = ?, address = ?, phone = ?, email = ?, gstin = ?, timezone = ?, tz_offset = ?{$logoSql} WHERE business_id = ?",
+      "UPDATE company_settings SET name = ?, address = ?, phone = ?, email = ?, gstin = ?, city = ?, state = ?, pincode = ?, timezone = ?, tz_offset = ?{$logoSql} WHERE business_id = ?",
       $types,
       $params
     );
     pos_q(
       "UPDATE businesses SET name = ?, address = COALESCE(?, address), mobile = COALESCE(?, mobile),
-         email = COALESCE(?, email), gstin = COALESCE(?, gstin) WHERE id = ?",
-      "ssssss",
-      [$name, $address, $phone, $email, $gstin, $bid]
+         email = COALESCE(?, email), gstin = COALESCE(?, gstin),
+         city = COALESCE(?, city), state = COALESCE(?, state), pin_code = COALESCE(?, pin_code) WHERE id = ?",
+      "sssssssss",
+      [$name, $address, $phone, $email, $gstin, $city, $state, $pincode, $bid]
     );
     $rows = pos_q("SELECT * FROM company_settings WHERE business_id = ? LIMIT 1", "s", [$bid]);
     $co = $rows[0] ?? ["name" => $name];

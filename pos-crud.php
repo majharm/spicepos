@@ -38,15 +38,16 @@ function pos_crud_dispatch($path, $method, $body, $bid, $auth, $branchId, $uid) 
     $name = trim((string) ($body["name"] ?? ""));
     $mobile = trim((string) ($body["mobile"] ?? ""));
     if ($name === "" || $mobile === "") pos_send(400, ["error" => "Name and mobile are required"]);
+    pos_ensure_columns("customers", ["state" => "VARCHAR(64) NULL"]);
     $type = (($body["type"] ?? "") === "b2b") ? "b2b" : "b2c";
     $id = pos_uuid();
     $n = pos_next_seq("customer", $bid, 4);
     $code = "CUS-" . str_pad((string) $n, 3, "0", STR_PAD_LEFT);
     pos_q(
-      "INSERT INTO customers (id, code, name, business_name, mobile, type, gstin, credit_limit, outstanding, business_id)
-       VALUES (?,?,?,?,?,?,?,?,0,?)",
-      "sssssssds",
-      [$id, $code, $name, $body["business_name"] ?? null, $mobile, $type, $body["gstin"] ?? null, (float) ($body["credit_limit"] ?? 0), $bid]
+      "INSERT INTO customers (id, code, name, business_name, mobile, type, gstin, state, credit_limit, outstanding, business_id)
+       VALUES (?,?,?,?,?,?,?,?,?,0,?)",
+      "ssssssssds",
+      [$id, $code, $name, $body["business_name"] ?? null, $mobile, $type, $body["gstin"] ?? null, $body["state"] ?? null, (float) ($body["credit_limit"] ?? 0), $bid]
     );
     $rows = pos_q("SELECT * FROM customers WHERE id = ? LIMIT 1", "s", [$id]);
     pos_send(200, ["ok" => true, "customer" => $rows[0] ?? null]);

@@ -310,7 +310,7 @@ app.post("/api/items/:id/receive", requireStaff, requirePerm("stock"), async (re
 
 app.post("/api/settings", requireStaff, requirePerm("settings"), async (req, res) => {
   const body = req.body || {};
-  const { name, address, phone, email, gstin, timezone } = body;
+  const { name, address, phone, email, gstin, city, state, pincode, timezone } = body;
   if (!name || !String(name).trim()) {
     res.status(400).json({ error: "Shop name is required" });
     return;
@@ -324,6 +324,9 @@ app.post("/api/settings", requireStaff, requirePerm("settings"), async (req, res
     phone || null,
     email || null,
     gstin || null,
+    city || null,
+    state || null,
+    pincode || null,
     tz,
     tzOffset,
   ];
@@ -344,14 +347,26 @@ app.post("/api/settings", requireStaff, requirePerm("settings"), async (req, res
   try {
     await query(
       `UPDATE company_settings
-       SET name = ?, address = ?, phone = ?, email = ?, gstin = ?, timezone = ?, tz_offset = ?${logoSql}
+       SET name = ?, address = ?, phone = ?, email = ?, gstin = ?, city = ?, state = ?, pincode = ?, timezone = ?, tz_offset = ?${logoSql}
        WHERE business_id = ?`,
       params,
     );
     await query(
       `UPDATE businesses SET name = ?, address = COALESCE(?, address), mobile = COALESCE(?, mobile),
-         email = COALESCE(?, email), gstin = COALESCE(?, gstin) WHERE id = ?`,
-      [String(name).trim(), address || null, phone || null, email || null, gstin || null, bid()],
+         email = COALESCE(?, email), gstin = COALESCE(?, gstin),
+         city = COALESCE(?, city), state = COALESCE(?, state), pin_code = COALESCE(?, pin_code)
+       WHERE id = ?`,
+      [
+        String(name).trim(),
+        address || null,
+        phone || null,
+        email || null,
+        gstin || null,
+        city || null,
+        state || null,
+        pincode || null,
+        bid(),
+      ],
     );
     const [company] = await query("SELECT * FROM company_settings WHERE business_id = ?", [bid()]);
     await audit("Settings Changed", { module: "settings" }, req);

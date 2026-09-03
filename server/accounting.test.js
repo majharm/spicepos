@@ -1,15 +1,14 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { DEFAULT_COA, expenseJournalLines } from "./accounting.js";
+import { splitGstAmount } from "./gst-supply.js";
 
 function round2(n) {
   return Math.round(Number(n) * 100) / 100;
 }
 
-function splitGst(gst) {
-  const total = round2(gst);
-  const cgst = round2(total / 2);
-  return { cgst, sgst: round2(total - cgst) };
+function splitGst(gst, interState = false) {
+  return splitGstAmount(gst, interState);
 }
 
 function saleJournalLines(order) {
@@ -25,9 +24,11 @@ function saleJournalLines(order) {
   return lines;
 }
 
-test("DEFAULT_COA seeds core ledger and expense accounts", () => {
+test("DEFAULT_COA seeds core ledger, GST, and expense accounts", () => {
   assert.ok(DEFAULT_COA.some((a) => a.code === "4101" && a.account_group === "income"));
   assert.ok(DEFAULT_COA.some((a) => a.code === "1001" && a.account_group === "asset"));
+  assert.ok(DEFAULT_COA.some((a) => a.code === "2203" && a.account_group === "liability"));
+  assert.ok(DEFAULT_COA.some((a) => a.code === "2303" && a.account_group === "asset"));
   assert.ok(DEFAULT_COA.some((a) => a.code === "5102" && a.account_group === "expense"));
   assert.equal(DEFAULT_COA.filter((a) => a.account_group === "expense").length, 9);
 });

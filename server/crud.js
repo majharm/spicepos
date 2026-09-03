@@ -103,7 +103,7 @@ async function insertPackLines(conn, packId, items) {
 
 export function registerCrud(app) {
   app.post("/api/customers", async (req, res) => {
-    const { name, business_name, mobile, type, gstin, credit_limit } = req.body || {};
+    const { name, business_name, mobile, type, gstin, state, credit_limit } = req.body || {};
     if (!name || !mobile) {
       res.status(400).json({ error: "Name and mobile are required" });
       return;
@@ -116,8 +116,8 @@ export function registerCrud(app) {
         const id = crypto.randomUUID();
         await conn.query(
           `INSERT INTO customers (
-             id, code, name, business_name, mobile, type, gstin, credit_limit, outstanding, business_id
-           ) VALUES (?,?,?,?,?,?,?,?,0,?)`,
+             id, code, name, business_name, mobile, type, gstin, state, credit_limit, outstanding, business_id
+           ) VALUES (?,?,?,?,?,?,?,?,?,0,?)`,
           [
             id,
             code,
@@ -126,6 +126,7 @@ export function registerCrud(app) {
             String(mobile).trim(),
             custType,
             gstin || null,
+            state || null,
             Number(credit_limit) || 0,
             bid(),
           ],

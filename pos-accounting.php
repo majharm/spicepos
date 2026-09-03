@@ -1,5 +1,7 @@
 <?php
 
+require_once __DIR__ . "/pos-gst-supply.php";
+
 function pos_default_coa() {
   return [
     ["1001", "Cash in hand", "asset"],
@@ -9,9 +11,11 @@ function pos_default_coa() {
     ["1201", "Stock in trade", "asset"],
     ["2301", "GST input CGST", "asset"],
     ["2302", "GST input SGST", "asset"],
+    ["2303", "GST input IGST", "asset"],
     ["2101", "Sundry creditors", "liability"],
     ["2201", "GST output CGST", "liability"],
     ["2202", "GST output SGST", "liability"],
+    ["2203", "GST output IGST", "liability"],
     ["3101", "Capital account", "equity"],
     ["4101", "Sales", "income"],
     ["5101", "Purchase of goods", "expense"],
@@ -117,23 +121,52 @@ function pos_post_journal($bid, $uid, $opts) {
   return $jid;
 }
 
-function pos_split_gst($gst) {
-  $total = pos_round2($gst);
-  $cgst = pos_round2($total / 2);
-  return ["cgst" => $cgst, "sgst" => pos_round2($total - $cgst)];
+function pos_split_gst($gst, $interState = false) {
+  return pos_split_gst_amount($gst, $interState);
+}
+
+function pos_shop_profile($bid) {
+  $rows = pos_q("SELECT gstin, state FROM company_settings WHERE business_id = ? LIMIT 1", "s", [$bid]);
+  return $rows[0] ?? [];
+}
+
+function pos_customer_profile($bid, $customerId) {
+  if (!$customerId) return [];
+  $rows = pos_q("SELECT gstin, state FROM customers WHERE id = ? AND business_id = ? LIMIT 1", "ss", [$customerId, $bid]);
+  return $rows[0] ?? [];
+}
+
+function pos_supplier_profile($bid, $supplierId) {
+  if (!$supplierId) return [];
+  $rows = pos_q("SELECT gstin FROM suppliers WHERE id = ? AND business_id = ? LIMIT 1", "ss", [$supplierId, $bid]);
+  return $rows[0] ?? [];
+}
+
+function pos_push_gst_output_lines(&$lines, $split) {
+  if (($split["cgst"] ?? 0) > 0) $lines[] = ["accountCode" => "2201", "debit" => 0, "credit" => $split["cgst"]];
+  if (($split["sgst"] ?? 0) > 0) $lines[] = ["accountCode" => "2202", "debit" => 0, "credit" => $split["sgst"]];
+  if (($split["igst"] ?? 0) > 0) $lines[] = ["accountCode" => "2203", "debit" => 0, "credit" => $split["igst"]];
+}
+
+function pos_push_gst_input_lines(&$lines, $split) {
+  if (($split["cgst"] ?? 0) > 0) $lines[] = ["accountCode" => "2301", "debit" => $split["cgst"], "credit" => 0];
+  if (($split["sgst"] ?? 0) > 0) $lines[] = ["accountCode" => "2302", "debit" => $split["sgst"], "credit" => 0];
+  if (($split["igst"] ?? 0) > 0) $lines[] = ["accountCode" => "2303", "debit" => $split["igst"], "credit" => 0];
 }
 
 function pos_post_sale_journal($bid, $uid, $order) {
   if (pos_journal_exists($bid, "sales_order", $order["id"])) return null;
   $subtotal = pos_round2($order["subtotal"] ?? 0);
-  $gst = pos_split_gst($order["gst"] ?? 0);
+  $shop = pos_shop_profile($bid);
+  $customer = pos_customer_profile($bid, $order["customer_id"] ?? null);
+  $interState = pos_is_inter_state_supply($shop, $customer);
+  $gst = pos_split_gst($order["gst"] ?? 0, $interState);
   $total = pos_round2($order["total"] ?? 0);
   $lines = [
     ["accountCode" => pos_asset_code_for_method($order["payment_method"] ?? "cash"), "debit" => $total, "credit" => 0],
     ["accountCode" => "4101", "debit" => 0, "credit" => $subtotal],
   ];
-  if ($gst["cgst"] > 0) $lines[] = ["accountCode" => "2201", "debit" => 0, "credit" => $gst["cgst"]];
-  if ($gst["sgst"] > 0) $lines[] = ["accountCode" => "2202", "debit" => 0, "credit" => $gst["sgst"]];
+  pos_push_gst_output_lines($lines, $gst);
   return pos_post_journal($bid, $uid, [
     "voucher_type" => "sale",
     "voucher_date" => pos_normalize_date_only($order["created_at"] ?? null) ?? date("Y-m-d"),
@@ -147,13 +180,15 @@ function pos_post_sale_journal($bid, $uid, $order) {
 function pos_post_purchase_journal($bid, $uid, $purchase) {
   if (pos_journal_exists($bid, "purchase", $purchase["id"])) return null;
   $subtotal = pos_round2($purchase["subtotal"] ?? 0);
-  $gst = pos_split_gst($purchase["gst"] ?? 0);
+  $shop = pos_shop_profile($bid);
+  $supplier = pos_supplier_profile($bid, $purchase["supplier_id"] ?? null);
+  $interState = pos_is_inter_state_supply($shop, $supplier);
+  $gst = pos_split_gst($purchase["gst"] ?? 0, $interState);
   $total = pos_round2($purchase["total"] ?? 0);
   $lines = [
     ["accountCode" => "5101", "debit" => $subtotal, "credit" => 0],
   ];
-  if ($gst["cgst"] > 0) $lines[] = ["accountCode" => "2301", "debit" => $gst["cgst"], "credit" => 0];
-  if ($gst["sgst"] > 0) $lines[] = ["accountCode" => "2302", "debit" => $gst["sgst"], "credit" => 0];
+  pos_push_gst_input_lines($lines, $gst);
   $method = strtolower((string) ($purchase["payment_method"] ?? "cash"));
   $creditCode = $method === "credit" ? "2101" : pos_asset_code_for_method($method);
   $lines[] = ["accountCode" => $creditCode, "debit" => 0, "credit" => $total];
@@ -170,13 +205,12 @@ function pos_post_purchase_journal($bid, $uid, $purchase) {
 function pos_post_expense_journal($bid, $uid, $expense) {
   if (pos_journal_exists($bid, "expense", $expense["id"])) return null;
   $amt = pos_round2($expense["amount"] ?? 0);
-  $gst = pos_split_gst($expense["gst"] ?? 0);
+  $gst = pos_split_gst($expense["gst"] ?? 0, false);
   $total = pos_round2($amt + ($expense["gst"] ?? 0));
   $lines = [
     ["accountCode" => $expense["account_code"], "debit" => $amt, "credit" => 0],
   ];
-  if ($gst["cgst"] > 0) $lines[] = ["accountCode" => "2301", "debit" => $gst["cgst"], "credit" => 0];
-  if ($gst["sgst"] > 0) $lines[] = ["accountCode" => "2302", "debit" => $gst["sgst"], "credit" => 0];
+  pos_push_gst_input_lines($lines, $gst);
   $method = strtolower((string) ($expense["payment_method"] ?? "cash"));
   $creditCode = $method === "credit" ? "2101" : pos_asset_code_for_method($method);
   $lines[] = ["accountCode" => $creditCode, "debit" => 0, "credit" => $total];

@@ -36,6 +36,12 @@
       });
   }
 
+  function gstApi() {
+    if (typeof window !== "undefined" && window.GstSupply) return window.GstSupply;
+    if (typeof globalThis !== "undefined" && globalThis.GstSupply) return globalThis.GstSupply;
+    return null;
+  }
+
   function gstBreakdown(lines) {
     const map = new Map();
     for (const l of lines) {
@@ -46,6 +52,93 @@
       map.set(rate, cur);
     }
     return [...map.values()].sort((a, b) => a.rate - b.rate);
+  }
+
+  function shopProfile(company) {
+    const co = company || {};
+    return { gstin: co.gstin, state: co.state };
+  }
+
+  function saleInterState(order, ctx) {
+    const G = gstApi();
+    const cust = findCustomer(ctx.customers, order);
+    const party = {
+      gstin: cust?.gstin || order.customer_gstin,
+      state: cust?.state || order.customer_state,
+    };
+    return G ? G.isInterStateSupply(shopProfile(ctx.company), party) : false;
+  }
+
+  function purchaseInterState(purchase, ctx) {
+    const G = gstApi();
+    const supplier = findSupplier(ctx.suppliers, purchase);
+    const party = {
+      gstin: supplier?.gstin || purchase.supplier_gstin,
+      state: supplier?.state || purchase.supplier_state,
+    };
+    return G ? G.isInterStateSupply(shopProfile(ctx.company), party) : false;
+  }
+
+  function splitGstTotal(totalGst, interState) {
+    const G = gstApi();
+    if (G) return G.splitGstAmount(totalGst, interState);
+    const half = round2(totalGst / 2);
+    return { cgst: half, sgst: round2(totalGst - half), igst: 0 };
+  }
+
+  function gstSplitRows(breakdown, interState, money, escapeHtml, labels) {
+    const L = labels || { cgst: "CGST", sgst: "SGST", igst: "IGST" };
+    return breakdown
+      .map((b) => {
+        const split = splitGstTotal(b.gst, interState);
+        const rows = [`<tr class="inv-gst">
+        <td colspan="3">Taxable @ ${b.rate}%</td>
+        <td class="inv-num">${escapeHtml(money(b.taxable))}</td>
+      </tr>`];
+        if (interState) {
+          rows.push(`<tr class="inv-gst">
+        <td colspan="3">${L.igst} @ ${b.rate}%</td>
+        <td class="inv-num">${escapeHtml(money(split.igst))}</td>
+      </tr>`);
+        } else {
+          rows.push(`<tr class="inv-gst">
+        <td colspan="3">${L.cgst} @ ${b.rate / 2}%</td>
+        <td class="inv-num">${escapeHtml(money(split.cgst))}</td>
+      </tr>
+      <tr class="inv-gst">
+        <td colspan="3">${L.sgst} @ ${b.rate / 2}%</td>
+        <td class="inv-num">${escapeHtml(money(split.sgst))}</td>
+      </tr>`);
+        }
+        return rows.join("");
+      })
+      .join("");
+  }
+
+  function officeGstSplitRows(breakdown, interState, money, escapeHtml) {
+    return breakdown
+      .map((b) => {
+        const split = splitGstTotal(b.gst, interState);
+        if (interState) {
+          return `<tr>
+        <td class="off-n">${escapeHtml(String(b.rate))}%</td>
+        <td class="off-n">${escapeHtml(money(b.taxable))}</td>
+        <td class="off-n">—</td>
+        <td class="off-n">—</td>
+        <td class="off-n">${escapeHtml(money(split.igst))}</td>
+        <td class="off-n">${escapeHtml(money(b.gst))}</td>
+      </tr>`;
+        }
+        return `<tr>
+        <td class="off-n">${escapeHtml(String(b.rate))}%</td>
+        <td class="off-n">${escapeHtml(money(b.taxable))}</td>
+        <td class="off-n">${escapeHtml(money(split.cgst))}</td>
+        <td class="off-n">${escapeHtml(money(split.sgst))}</td>
+        <td class="off-n">—</td>
+        <td class="off-n">${escapeHtml(money(b.gst))}</td>
+      </tr>`;
+      })
+      .join("");
   }
 
   function findCustomer(customers, order) {
@@ -165,22 +258,12 @@
       )
       .join("");
 
-    const gstRows = breakdown
-      .map(
-        (b) => `<tr class="inv-gst">
-        <td colspan="3">Taxable @ ${b.rate}%</td>
-        <td class="inv-num">${escapeHtml(money(b.taxable))}</td>
-      </tr>
-      <tr class="inv-gst">
-        <td colspan="3">Input CGST @ ${b.rate / 2}%</td>
-        <td class="inv-num">${escapeHtml(money(b.gst / 2))}</td>
-      </tr>
-      <tr class="inv-gst">
-        <td colspan="3">Input SGST @ ${b.rate / 2}%</td>
-        <td class="inv-num">${escapeHtml(money(b.gst / 2))}</td>
-      </tr>`,
-      )
-      .join("");
+    const interState = purchaseInterState(purchase, ctx);
+    const gstRows = gstSplitRows(breakdown, interState, money, escapeHtml, {
+      cgst: "Input CGST",
+      sgst: "Input SGST",
+      igst: "Input IGST",
+    });
 
     const notes = String(purchase.notes || "").trim();
 
@@ -297,22 +380,8 @@ ${purchaseBody(purchase, ctx)}
       )
       .join("");
 
-    const gstRows = breakdown
-      .map(
-        (b) => `<tr class="inv-gst">
-        <td colspan="3">Taxable @ ${b.rate}%</td>
-        <td class="inv-num">${escapeHtml(money(b.taxable))}</td>
-      </tr>
-      <tr class="inv-gst">
-        <td colspan="3">CGST @ ${b.rate / 2}%</td>
-        <td class="inv-num">${escapeHtml(money(b.gst / 2))}</td>
-      </tr>
-      <tr class="inv-gst">
-        <td colspan="3">SGST @ ${b.rate / 2}%</td>
-        <td class="inv-num">${escapeHtml(money(b.gst / 2))}</td>
-      </tr>`,
-      )
-      .join("");
+    const interState = saleInterState(order, ctx);
+    const gstRows = gstSplitRows(breakdown, interState, money, escapeHtml);
 
     const footer = String(co.invoice_footer || co.footer || "").trim();
     const terms = String(co.invoice_terms || co.terms || "").trim();
@@ -528,17 +597,8 @@ ${invoiceBody(order, ctx)}
       })
       .join("");
 
-    const gstRows = breakdown
-      .map(
-        (b) => `<tr>
-        <td class="off-n">${escapeHtml(String(b.rate))}%</td>
-        <td class="off-n">${escapeHtml(money(b.taxable))}</td>
-        <td class="off-n">${escapeHtml(money(b.gst / 2))}</td>
-        <td class="off-n">${escapeHtml(money(b.gst / 2))}</td>
-        <td class="off-n">${escapeHtml(money(b.gst))}</td>
-      </tr>`,
-      )
-      .join("");
+    const interState = saleInterState(order, ctx);
+    const gstRows = officeGstSplitRows(breakdown, interState, money, escapeHtml);
 
     const footer = String(co.invoice_footer || co.footer || "").trim();
     const terms = String(co.invoice_terms || co.terms || "").trim();
@@ -600,11 +660,12 @@ ${invoiceBody(order, ctx)}
             <th class="off-n">Taxable</th>
             <th class="off-n">CGST</th>
             <th class="off-n">SGST</th>
+            <th class="off-n">IGST</th>
             <th class="off-n">Tax</th>
           </tr>
         </thead>
         <tbody>
-          ${gstRows || '<tr><td colspan="5" class="off-empty">—</td></tr>'}
+          ${gstRows || '<tr><td colspan="6" class="off-empty">—</td></tr>'}
         </tbody>
       </table>
       <p class="off-words"><strong>Amount in words:</strong> ${escapeHtml(amountInWords(total))}</p>

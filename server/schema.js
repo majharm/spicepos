@@ -80,6 +80,7 @@ export async function ensureSchema() {
   await addColumn("items", "color", "VARCHAR(64) NULL");
   await addColumn("items", "size", "VARCHAR(32) NULL");
   await addColumn("items", "wearer_type", "VARCHAR(16) NULL");
+  await addColumn("customers", "state", "VARCHAR(64) NULL");
 
   await create(`CREATE TABLE IF NOT EXISTS inventory_units (
     id VARCHAR(255) PRIMARY KEY,

@@ -1,5 +1,7 @@
 <?php
 
+require_once __DIR__ . "/pos-gst-supply.php";
+
 function pos_report_num($v) {
   return (float) ($v ?? 0);
 }
@@ -135,34 +137,44 @@ function pos_build_reports($bid, $from, $to) {
     $expenses = [];
   }
   $customers = pos_q(
-    "SELECT code, name, business_name, mobile, type, gstin, credit_limit, outstanding
+    "SELECT code, name, business_name, mobile, type, gstin, state, credit_limit, outstanding
      FROM customers WHERE business_id = ? ORDER BY name",
     "s",
     [$bid]
   );
-  $gstByRate = pos_q(
-    "SELECT l.gst_rate,
-            SUM(l.amount) AS taxable,
-            SUM(l.amount * l.gst_rate / 100) AS gst,
-            SUM(l.quantity_gm) AS quantity_gm,
-            COUNT(DISTINCT o.id) AS bills
+  $companyRows = pos_q("SELECT gstin, state FROM company_settings WHERE business_id = ? LIMIT 1", "s", [$bid]);
+  $shop = [
+    "gstin" => $companyRows[0]["gstin"] ?? null,
+    "state" => $companyRows[0]["state"] ?? null,
+  ];
+  $gstOutputLines = pos_q(
+    "SELECT l.gst_rate, l.amount, o.id AS order_id,
+            c.gstin AS party_gstin, c.state AS party_state
      FROM sales_order_lines l
      JOIN sales_orders o ON o.id = l.order_id
-     WHERE o.business_id = ? AND DATE(o.created_at) BETWEEN ? AND ? AND l.cancelled = 0
-     GROUP BY l.gst_rate ORDER BY l.gst_rate",
+     LEFT JOIN customers c ON c.id = o.customer_id
+     WHERE o.business_id = ? AND DATE(o.created_at) BETWEEN ? AND ? AND l.cancelled = 0",
     "sss",
     [$bid, $start, $end]
   );
-  $gstInputByRate = pos_q(
-    "SELECT l.gst_rate,
-            SUM(l.amount) AS taxable,
-            COALESCE(SUM(l.gst_amount), SUM(l.amount * l.gst_rate / 100)) AS gst
+  $gstInputLines = pos_q(
+    "SELECT l.gst_rate, l.amount,
+            COALESCE(l.gst_amount, l.amount * l.gst_rate / 100) AS gst,
+            p.id AS purchase_id, s.gstin AS party_gstin
      FROM purchase_lines l
      JOIN purchases p ON p.id = l.purchase_id
-     WHERE p.business_id = ? AND p.purchase_date BETWEEN ? AND ?
-     GROUP BY l.gst_rate ORDER BY l.gst_rate",
+     LEFT JOIN suppliers s ON s.id = p.supplier_id
+     WHERE p.business_id = ? AND p.purchase_date BETWEEN ? AND ?",
     "sss",
     [$bid, $start, $end]
+  );
+  $gstByRate = pos_aggregate_gst_by_rate($gstOutputLines, $shop);
+  $gstInputByRate = pos_aggregate_gst_by_rate(
+    array_map(function ($r) {
+      $r["order_id"] = $r["purchase_id"] ?? null;
+      return $r;
+    }, $gstInputLines),
+    $shop
   );
   $gstHsn = pos_q(
     "SELECT COALESCE(NULLIF(TRIM(i.hsn), ''), i.code, '—') AS hsn, l.item_name, l.gst_rate,
@@ -180,7 +192,7 @@ function pos_build_reports($bid, $from, $to) {
   );
   $gstB2B = pos_q(
     "SELECT o.order_number, DATE(o.created_at) AS bill_date, o.customer_name, c.gstin,
-            o.subtotal AS taxable, o.gst, o.total
+            c.state AS customer_state, o.subtotal AS taxable, o.gst, o.total
      FROM sales_orders o
      LEFT JOIN customers c ON c.id = o.customer_id
      WHERE o.business_id = ? AND DATE(o.created_at) BETWEEN ? AND ?
@@ -191,7 +203,7 @@ function pos_build_reports($bid, $from, $to) {
   );
   $gstB2C = pos_q(
     "SELECT o.order_number, DATE(o.created_at) AS bill_date, o.customer_name,
-            o.subtotal AS taxable, o.gst, o.total
+            c.state AS customer_state, o.subtotal AS taxable, o.gst, o.total
      FROM sales_orders o
      LEFT JOIN customers c ON c.id = o.customer_id
      WHERE o.business_id = ? AND DATE(o.created_at) BETWEEN ? AND ?
@@ -210,15 +222,45 @@ function pos_build_reports($bid, $from, $to) {
   $sum = $summary[0] ?? ["bills" => 0, "taxable" => 0, "gst" => 0, "takings" => 0];
   $outputGst = pos_report_num($sum["gst"]);
   $inputGst = pos_report_num($purchaseGst[0]["gst"] ?? 0) + pos_report_num($expenseSum[0]["gst"] ?? 0);
+  $outputSplit = pos_sum_split_gst($gstOutputLines, $shop);
+  $purchaseInputSplit = pos_sum_split_gst($gstInputLines, $shop);
+  $expenseInputSplit = pos_split_gst_amount(pos_report_num($expenseSum[0]["gst"] ?? 0), false);
+  $inputSplit = [
+    "cgst" => pos_gst_round2($purchaseInputSplit["cgst"] + $expenseInputSplit["cgst"]),
+    "sgst" => pos_gst_round2($purchaseInputSplit["sgst"] + $expenseInputSplit["sgst"]),
+    "igst" => pos_gst_round2($purchaseInputSplit["igst"] + $expenseInputSplit["igst"]),
+    "total" => pos_gst_round2(
+      $purchaseInputSplit["total"] + $expenseInputSplit["cgst"] + $expenseInputSplit["sgst"] + $expenseInputSplit["igst"]
+    ),
+  ];
+  $gstSummary = [
+    "output" => $outputSplit,
+    "input" => $inputSplit,
+    "net" => [
+      "cgst" => pos_gst_round2($outputSplit["cgst"] - $inputSplit["cgst"]),
+      "sgst" => pos_gst_round2($outputSplit["sgst"] - $inputSplit["sgst"]),
+      "igst" => pos_gst_round2($outputSplit["igst"] - $inputSplit["igst"]),
+      "total" => pos_gst_round2($outputSplit["total"] - $inputSplit["total"]),
+    ],
+  ];
+  $gstB2BRows = array_map(function ($row) use ($shop) {
+    $split = pos_split_order_gst(array_merge($row, ["customer_gstin" => $row["gstin"] ?? null]), $shop);
+    return array_merge($row, $split);
+  }, $gstB2B);
+  $gstB2CRows = array_map(function ($row) use ($shop) {
+    return array_merge($row, pos_split_order_gst($row, $shop));
+  }, $gstB2C);
 
   return [
     "from" => $start,
     "to" => $end,
+    "shop" => $shop,
     "summary" => array_merge($sum, [
       "inputGst" => $inputGst,
       "netGst" => $outputGst - $inputGst,
       "expenses" => pos_report_num($expenseSum[0]["amount"] ?? 0) + pos_report_num($expenseSum[0]["gst"] ?? 0),
       "expenseBills" => (int) ($expenseSum[0]["bills"] ?? 0),
+      "gstSummary" => $gstSummary,
     ]),
     "sales" => $sales,
     "byItem" => $byItem,
@@ -230,8 +272,8 @@ function pos_build_reports($bid, $from, $to) {
     "gstByRate" => $gstByRate,
     "gstInputByRate" => $gstInputByRate,
     "gstHsn" => $gstHsn,
-    "gstB2B" => $gstB2B,
-    "gstB2C" => $gstB2C,
+    "gstB2B" => $gstB2BRows,
+    "gstB2C" => $gstB2CRows,
     "stock" => $stock,
     "low" => $low,
     "purchases" => $purchases,
@@ -245,21 +287,44 @@ function pos_reports_to_sheets($data) {
   $num = function ($v) {
     return pos_report_num($v);
   };
-  $half = function ($v) use ($num) {
-    return $num($v) / 2;
-  };
   $gstRateRows = [];
   foreach ($data["gstByRate"] ?? [] as $r) {
-    $gst = $num($r["gst"]);
-    $gstRateRows[] = [$num($r["gst_rate"]), $num($r["taxable"]), $half($gst), $half($gst), $gst, $num($r["bills"])];
+    $gstRateRows[] = [
+      $num($r["gst_rate"]),
+      $num($r["taxable"]),
+      $num($r["cgst"] ?? 0),
+      $num($r["sgst"] ?? 0),
+      $num($r["igst"] ?? 0),
+      $num($r["gst"]),
+      $num($r["bills"] ?? 0),
+    ];
   }
   $gstInputRows = [];
   foreach ($data["gstInputByRate"] ?? [] as $r) {
-    $gst = $num($r["gst"]);
-    $gstInputRows[] = [$num($r["gst_rate"]), $num($r["taxable"]), $half($gst), $half($gst), $gst];
+    $gstInputRows[] = [
+      $num($r["gst_rate"]),
+      $num($r["taxable"]),
+      $num($r["cgst"] ?? 0),
+      $num($r["sgst"] ?? 0),
+      $num($r["igst"] ?? 0),
+      $num($r["gst"]),
+    ];
   }
   $s = $data["summary"] ?? [];
+  $gstSummary = $s["gstSummary"] ?? [];
+  $out = $gstSummary["output"] ?? [];
+  $inp = $gstSummary["input"] ?? [];
+  $net = $gstSummary["net"] ?? [];
   return [
+    [
+      "name" => "GST summary",
+      "headers" => ["Type", "CGST", "SGST", "IGST", "Total GST"],
+      "rows" => [
+        ["Output", $num($out["cgst"] ?? 0), $num($out["sgst"] ?? 0), $num($out["igst"] ?? 0), $num($out["total"] ?? 0)],
+        ["Input", $num($inp["cgst"] ?? 0), $num($inp["sgst"] ?? 0), $num($inp["igst"] ?? 0), $num($inp["total"] ?? 0)],
+        ["Net payable", $num($net["cgst"] ?? 0), $num($net["sgst"] ?? 0), $num($net["igst"] ?? 0), $num($net["total"] ?? 0)],
+      ],
+    ],
     [
       "name" => "Summary",
       "headers" => ["From", "To", "Bills", "Taxable", "Output GST", "Input GST", "Net GST", "Takings"],
@@ -348,12 +413,12 @@ function pos_reports_to_sheets($data) {
     ],
     [
       "name" => "GST output by rate",
-      "headers" => ["GST %", "Taxable", "CGST", "SGST", "Total GST", "Bills"],
+      "headers" => ["GST %", "Taxable", "CGST", "SGST", "IGST", "Total GST", "Bills"],
       "rows" => $gstRateRows,
     ],
     [
       "name" => "GST input by rate",
-      "headers" => ["GST %", "Taxable", "CGST", "SGST", "Total GST"],
+      "headers" => ["GST %", "Taxable", "CGST", "SGST", "IGST", "Total GST"],
       "rows" => $gstInputRows,
     ],
     [
@@ -365,16 +430,37 @@ function pos_reports_to_sheets($data) {
     ],
     [
       "name" => "GST B2B sales",
-      "headers" => ["Bill", "Date", "Customer", "GSTIN", "Taxable", "GST", "Total"],
+      "headers" => ["Bill", "Date", "Customer", "GSTIN", "Taxable", "CGST", "SGST", "IGST", "Total", "Supply"],
       "rows" => array_map(function ($r) use ($num) {
-        return [$r["order_number"], (string) $r["bill_date"], $r["customer_name"], $r["gstin"], $num($r["taxable"]), $num($r["gst"]), $num($r["total"])];
+        return [
+          $r["order_number"],
+          (string) $r["bill_date"],
+          $r["customer_name"],
+          $r["gstin"],
+          $num($r["taxable"]),
+          $num($r["cgst"] ?? 0),
+          $num($r["sgst"] ?? 0),
+          $num($r["igst"] ?? 0),
+          $num($r["total"]),
+          !empty($r["interState"]) ? "Inter-state" : "Intra-state",
+        ];
       }, $data["gstB2B"] ?? []),
     ],
     [
       "name" => "GST B2C sales",
-      "headers" => ["Bill", "Date", "Customer", "Taxable", "GST", "Total"],
+      "headers" => ["Bill", "Date", "Customer", "Taxable", "CGST", "SGST", "IGST", "Total", "Supply"],
       "rows" => array_map(function ($r) use ($num) {
-        return [$r["order_number"], (string) $r["bill_date"], $r["customer_name"], $num($r["taxable"]), $num($r["gst"]), $num($r["total"])];
+        return [
+          $r["order_number"],
+          (string) $r["bill_date"],
+          $r["customer_name"],
+          $num($r["taxable"]),
+          $num($r["cgst"] ?? 0),
+          $num($r["sgst"] ?? 0),
+          $num($r["igst"] ?? 0),
+          $num($r["total"]),
+          !empty($r["interState"]) ? "Inter-state" : "Intra-state",
+        ];
       }, $data["gstB2C"] ?? []),
     ],
     [
@@ -418,10 +504,10 @@ function pos_reports_to_sheets($data) {
     ],
     [
       "name" => "Customers",
-      "headers" => ["Code", "Name", "Business", "Mobile", "Type", "GSTIN", "Credit limit", "Outstanding"],
+      "headers" => ["Code", "Name", "Business", "Mobile", "Type", "State", "GSTIN", "Credit limit", "Outstanding"],
       "rows" => array_map(function ($c) use ($num) {
         return [
-          $c["code"], $c["name"], $c["business_name"], $c["mobile"], $c["type"], $c["gstin"],
+          $c["code"], $c["name"], $c["business_name"], $c["mobile"], $c["type"], $c["state"] ?? null, $c["gstin"],
           $num($c["credit_limit"]), $num($c["outstanding"]),
         ];
       }, $data["customers"] ?? []),

@@ -53,11 +53,11 @@ test("PHP customer insert bind types match placeholders", () => {
   const crud = read("pos-crud.php");
   const core = read("pos-php-core.php");
   const cust = crud.match(
-    /INSERT INTO customers[\s\S]*?VALUES \(\?,\?,\?,\?,\?,\?,\?,\?,0,\?\)",\s*"([sid]+)",\s*\[/,
+    /INSERT INTO customers[\s\S]*?VALUES \(\?,\?,\?,\?,\?,\?,\?,\?,\?,0,\?\)",\s*"([sid]+)",\s*\[/,
   );
   assert.ok(cust, "customer INSERT found");
-  assert.equal(cust[1].length, 9);
-  assert.equal(cust[1], "sssssssds");
+  assert.equal(cust[1].length, 10);
+  assert.equal(cust[1], "ssssssssds");
 
   assert.match(crud, /color, size, wearer_type, base_unit/);
   const items = crud.match(/INSERT INTO items[\s\S]{0,500}"(ssssssssssddddssdds)"/);
