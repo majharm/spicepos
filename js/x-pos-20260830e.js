@@ -137,6 +137,10 @@
       });
     });
 
+    if (new URLSearchParams(location.search).get("tab") === "signup" || location.hash === "#signup") {
+      document.querySelector('[data-panel="signup"]')?.click();
+    }
+
     const saved = localStorage.getItem("pos_remember_login");
     if (saved) {
       const input = loginForm.querySelector('[name="identifier"]');

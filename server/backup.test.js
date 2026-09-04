@@ -319,9 +319,15 @@ test("HTML and CSS cache stickers match deploy84", () => {
   assert.match(login, /href="https:\/\/atavtelecom\.in\/legal\/cookies"[^>]*>Cookie Policy</);
   assert.match(login, /class="signup-block"/);
   assert.match(login, /class="auth-trial-banner"/);
+  assert.match(login, /class="auth-trial-invite"/);
   assert.match(login, /Start 2-day trial/);
   assert.match(login, /New shops get a 2-day trial/);
+  const xpos = readFileSync(path.join(root, "js/x-pos-20260830e.js"), "utf8");
+  assert.match(xpos, /\.get\("tab"\) === "signup"/);
+  assert.match(xpos, /location\.hash === "#signup"/);
+  assert.match(xpos, /2-day free trial, no card/);
   assert.match(saas, /auth-trial-ui: 2-day banner 2026/);
+  assert.match(saas, /auth-card > p\.auth-trial-invite/);
   assert.match(saas, /auth-scene-types/);
   assert.match(saas, /auth-body:has\(\.auth-scene\)/);
   assert.match(saas, /\.auth-shell /);

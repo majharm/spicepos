@@ -108,6 +108,7 @@
 .auth-shell .auth-scene-copy {
   position: static;
   text-align: left;
+  flex: 0 0 auto;
 }
 .auth-shell .auth-scene-title {
   font-size: clamp(22px, 2.6vw, 34px);
@@ -234,8 +235,9 @@
   box-shadow: 0 1px 3px rgba(15, 23, 42, 0.12);
 }
 /* auth-trial-ui: 2-day banner 2026 */
+.auth-card > p.auth-trial-invite,
 .auth-trial-invite {
-  margin: 8px 0 0;
+  margin: 12px 0 0;
   color: var(--vel-teal, #0d9488);
   font-size: 13px;
   font-weight: 650;
@@ -336,7 +338,7 @@
   }
   .auth-shell .auth-scene-copy { text-align: center; }
   .auth-shell .auth-scene-types { display: none; }
-  .auth-scene-trial { text-align: left; }
+  .auth-scene-trial { text-align: center; }
   .auth-trial-banner { align-items: center; }
   .auth-main {
     padding: 20px 18px 12px;
