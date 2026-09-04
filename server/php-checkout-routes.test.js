@@ -2,10 +2,14 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import path from "node:path";
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
+
+function hasPhpCli() {
+  return spawnSync("php", ["-v"], { encoding: "utf8" }).status === 0;
+}
 
 function read(name) {
   return readFileSync(path.join(root, name), "utf8");
@@ -150,7 +154,7 @@ test("PHP customer insert bind types match placeholders", () => {
   assert.match(index, /id="pack-id"/);
 });
 
-test("PHP password hashes include sha256 and verify round-trip", () => {
+test("PHP password hashes include sha256 and verify round-trip", { skip: hasPhpCli() ? false : "php CLI not installed" }, () => {
   const src = read("pos-php-scrypt.php");
   assert.match(src, /pos_password_needs_rehash/);
   assert.doesNotMatch(src, /return "pbkdf2\$sha256\$"/);

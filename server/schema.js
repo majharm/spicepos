@@ -1,6 +1,20 @@
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { query } from "./db.js";
 import { hashPassword } from "./password.js";
 import { defaultPerms } from "./roles.js";
+
+const root = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
+
+async function hasTable(table) {
+  const rows = await query(
+    `SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES
+     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?`,
+    [table],
+  );
+  return rows.length > 0;
+}
 
 async function hasColumn(table, column) {
   const rows = await query(
@@ -12,6 +26,7 @@ async function hasColumn(table, column) {
 }
 
 async function addColumn(table, column, def) {
+  if (!(await hasTable(table))) return;
   if (!(await hasColumn(table, column))) {
     await query(`ALTER TABLE \`${table}\` ADD COLUMN ${column} ${def}`);
   }
@@ -21,8 +36,21 @@ async function create(sql) {
   await query(sql);
 }
 
+async function ensureBaseSchema() {
+  const file = path.join(root, "scripts", "base-schema.sql");
+  if (!fs.existsSync(file)) return;
+  const withoutComments = fs.readFileSync(file, "utf8").replace(/--.*$/gm, "");
+  const statements = withoutComments
+    .split(";")
+    .map((part) => part.trim())
+    .filter((part) => part && !/^SET\s+NAMES\b/i.test(part));
+  for (const part of statements) {
+    await create(`${part};`);
+  }
+}
+
 export async function ensureSchema() {
-  await addColumn("businesses", "owner_name", "VARCHAR(255) NULL");
+  await ensureBaseSchema();
   await addColumn("businesses", "mobile", "VARCHAR(32) NULL");
   await addColumn("businesses", "email", "VARCHAR(255) NULL");
   await addColumn("businesses", "address", "TEXT NULL");

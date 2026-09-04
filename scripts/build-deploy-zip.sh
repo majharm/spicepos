@@ -2,29 +2,28 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
-OUT="${1:-spicepos-deploy65.zip}"
+OUT="${1:-spicepos-deploy.zip}"
+
+mapfile -t JS_FILES < <(find js -maxdepth 1 -name '*.js' ! -name '*.test.js' | sort)
+mapfile -t SERVER_FILES < <(find server -name '*.js' ! -name '*.test.js' | sort)
+mapfile -t PHP_FILES < <(find . -maxdepth 1 -name 'pos-*.php' | sort)
+
 rm -f "$OUT"
 zip -r "$OUT" \
   DEPLOY-FILES.txt \
-  assets/atav-telecom-logo.png \
-  index.html login.html master.html setup.html \
-  css/pos.css css/saas.css \
-  js/app.js js/units.js js/footwear.js js/invoice.js js/support.js js/dev-mode.js js/master.js js/pos-api.js js/x-pos-20260830e.js \
-  pos-php-core.php pos-php-scrypt.php pos-php-till.php pos-checkout.php pos-holds.php \
-  pos-crud.php pos-backup.php pos-units.php pos-orders.php pos-reports.php pos-accounting.php pos-api.php pos-mail.php pos-alerts.php pos-item-import.php \
-  api/.htaccess api/health/index.php api/checkout/index.php api/holds/index.php \
-  api/backup/index.php api/backup/restore/index.php api/units/index.php \
-  api/master/notifications/index.php api/master/alerts/index.php \
-  api/master/backup/index.php api/master/backup/restore/index.php \
-  api/master/backup/platform/index.php api/master/backup/platform/restore/index.php \
-  pos-data/.htaccess \
+  README.md \
+  assets \
+  css \
+  legal \
+  api \
+  pos-data \
   health.json \
-  server.js server/auth.js server/master.js server/onboard.js \
-  server/index.js server/crud.js server/item-import.js server/excel.js server/tenant.js server/reports.js server/accounting.js \
-  server/accounts.js server/roles.js server/schema.js server/backup.js server/backup-util.js \
-  server/units.js \
-  server/mail.js \
-  server/alerts.js \
-  server/fy.js \
-  package.json
+  favicon.svg \
+  index.html login.html master.html setup.html app.html \
+  privacy.html terms.html data-deletion.html refund.html shipping.html cookies.html \
+  server.js package.json package-lock.json Procfile \
+  scripts/base-schema.sql \
+  "${JS_FILES[@]}" \
+  "${SERVER_FILES[@]}" \
+  "${PHP_FILES[@]}"
 echo "Created $OUT ($(du -h "$OUT" | cut -f1))"
