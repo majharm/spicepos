@@ -336,6 +336,8 @@ function digitsMobile(raw) {
 function isRealMobile(raw) {
   return /^[6-9]\d{9}$/.test(digitsMobile(raw));
 }
+
+function findCustomerByMobile(raw) {
   const d = digitsMobile(raw);
   if (d.length < 10) return null;
   return (state.customers || []).find((c) => digitsMobile(c.mobile) === d) || null;
