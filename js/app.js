@@ -3103,6 +3103,20 @@ $("scan-form")?.addEventListener("submit", async (e) => {
   e.preventDefault();
   await applyBarcodeScan($("scan-code")?.value, $("scan-code"));
 });
+function initCameraScan() {
+  const scan = globalThis.POSCameraScan;
+  if (!scan?.bindButton) return;
+  scan.bindButton($("scan-camera-btn"), {
+    onScan: async (code) => {
+      const el = $("scan-code");
+      if (el) el.value = code;
+      await applyBarcodeScan(code, el);
+      focusScanLane();
+    },
+    onError: (err) => setHint(err?.message || "Camera scan failed", "error"),
+  });
+}
+initCameraScan();
 $("search-form").addEventListener("submit", async (e) => {
   e.preventDefault();
   const code = String($("search").value || "").trim();
