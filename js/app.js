@@ -1479,37 +1479,134 @@ function fillDatalists() {
   $("subcategory-list").innerHTML = subs.map((c) => `<option value="${escapeHtml(c)}">`).join("");
 }
 
+function itemSearchHay(item) {
+  return `${item.name || ""} ${item.code || ""} ${item.hsn || ""} ${item.barcode || ""} ${item.mfr_barcode || ""} ${item.category || ""} ${item.subcategory || ""} ${item.color || ""} ${item.size || ""}`.toLowerCase();
+}
+
+function paintItemsHero() {
+  const stats = $("items-hero-stats");
+  if (!stats) return;
+  const items = state.items || [];
+  const low = items.filter((i) => Number(i.stock_gm) <= Number(i.reorder_level_gm)).length;
+  const cats = new Set(items.map((i) => i.category).filter(Boolean)).size;
+  stats.innerHTML = `<div class="items-stat"><span>Items</span><strong>${items.length}</strong></div>
+    <div class="items-stat${low ? " is-warn" : ""}"><span>Low stock</span><strong>${low}</strong></div>
+    <div class="items-stat"><span>Groups</span><strong>${cats}</strong></div>`;
+}
+
+function filterItemsCatalog() {
+  const q = String($("item-catalog-search")?.value || "").trim().toLowerCase();
+  const lowOnly = Boolean($("item-low-only")?.checked);
+  document.querySelectorAll("#items-table [data-item-card]").forEach((card) => {
+    const hay = card.dataset.itemSearch || "";
+    const low = card.dataset.itemLow === "1";
+    card.hidden = (Boolean(q) && !hay.includes(q)) || (lowOnly && !low);
+  });
+}
+
+function resetItemForm() {
+  $("item-form").reset();
+  $("item-id").value = "";
+  resetItemImage();
+  fillItemUnitSelect(defaultItemUnit());
+  refreshItemUnitLabels();
+  if ($("item-save")) $("item-save").textContent = "Save item";
+  if ($("item-mode")) $("item-mode").textContent = "New item";
+  $("item-form")?.classList.remove("is-editing");
+  document.querySelectorAll("#items-table .item-card.is-editing").forEach((el) => el.classList.remove("is-editing"));
+}
+
+function fillItemForm(i) {
+  if (!i) return;
+  $("item-id").value = i.id;
+  $("item-name").value = i.name;
+  $("item-hsn").value = i.hsn || "";
+  $("item-category").value = i.category || "";
+  $("item-subcategory").value = i.subcategory || "";
+  if ($("item-wearer")) $("item-wearer").value = globalThis.POSFootwear?.normalizeWearer(i.wearer_type) || "";
+  if ($("item-color")) $("item-color").value = i.color || "";
+  if ($("item-size")) $("item-size").value = i.size || "";
+  $("item-retail").value = i.retail_rate;
+  if ($("item-mrp")) $("item-mrp").value = i.mrp || i.retail_rate || "";
+  if ($("item-barcode")) $("item-barcode").value = i.barcode || "";
+  if ($("item-mfr-barcode")) $("item-mfr-barcode").value = i.mfr_barcode || "";
+  if ($("item-barcode-qty")) $("item-barcode-qty").value = "";
+  $("item-b2b").value = i.b2b_rate;
+  $("item-purchase").value = i.purchase_rate;
+  $("item-gst").value = i.gst_rate;
+  fillItemUnitSelect(itemUnit(i));
+  $("item-unit").value = itemUnit(i);
+  $("item-stock").value = POSUnits.fromBase(i.stock_gm, itemUnit(i));
+  refreshItemUnitLabels();
+  paintItemImage(itemPhotoUrl(i));
+  if ($("item-save")) $("item-save").textContent = "Update item";
+  if ($("item-mode")) $("item-mode").textContent = `Editing ${i.code || i.name}`;
+  $("item-form")?.classList.add("is-editing");
+  $("item-hint").textContent = `Editing ${i.code || i.name}`;
+  $("item-hint").className = "hint";
+  document.querySelectorAll("#items-table .item-card.is-editing").forEach((el) => el.classList.remove("is-editing"));
+  document.querySelector(`#items-table [data-edit-item="${CSS.escape(i.id)}"]`)?.classList.add("is-editing");
+  $("item-form")?.scrollIntoView({ block: "start" });
+  $("item-name")?.focus();
+}
+
 function renderItemsTable() {
+  const el = $("items-table");
+  if (!el) return;
   const footwear = isFootwearShop();
-  $("items-table").innerHTML = `<table><thead><tr>
-      <th>Code</th><th>Item</th><th>Barcode</th>${footwear ? "<th>Type</th><th>Colour</th><th>Size</th>" : "<th>HSN</th>"}<th>Unit</th><th>${footwear ? "Style" : "Category"}</th><th>${footwear ? "Brand" : "Subcategory"}</th><th>Retail</th><th>B2B</th><th>Stock</th><th></th>
-  </tr></thead><tbody>${state.items
+  paintItemsHero();
+  const items = state.items || [];
+  if (!items.length) {
+    el.innerHTML = `<div class="item-empty-card">
+      <strong>No items yet</strong>
+      <p>Add a name, unit, and rates on the left. Saved items show here and on Counter.</p>
+    </div>`;
+    return;
+  }
+  el.innerHTML = items
     .map((i) => {
       const src = itemPhotoUrl(i);
       const thumb = src
         ? `<img class="item-thumb" src="${escapeHtml(src)}" alt="">`
         : `<span class="item-thumb-empty" aria-hidden="true">${escapeHtml(itemPhotoLetter(i))}</span>`;
+      const low = Number(i.stock_gm) <= Number(i.reorder_level_gm);
       const extra = footwear
-        ? `<td>${escapeHtml(globalThis.POSFootwear?.wearerLabel(i.wearer_type) || "—")}</td>
-      <td>${escapeHtml(i.color || "—")}</td>
-      <td>${escapeHtml(i.size || "—")}</td>`
-        : `<td>${escapeHtml(i.hsn || "—")}</td>`;
-      return `<tr>
-      <td>${escapeHtml(i.code)}</td>
-      <td class="item-name-cell">${thumb}${escapeHtml(i.name)}</td>
-      <td>${escapeHtml(i.barcode || "—")}</td>
-      ${extra}
-      <td>${escapeHtml(itemUnit(i))}</td>
-      <td>${escapeHtml(i.category)}</td>
-      <td>${escapeHtml(i.subcategory || "—")}</td>
-      <td>${money(i.retail_rate)}${escapeHtml(POSUnits.rateSuffix(itemUnit(i)))}</td>
-      <td>${money(i.b2b_rate)}${escapeHtml(POSUnits.rateSuffix(itemUnit(i)))}</td>
-      <td class="${Number(i.stock_gm) <= Number(i.reorder_level_gm) ? "stock low" : "stock ok"}">${escapeHtml(fmtQty(i.stock_gm, i))}</td>
-      <td><button class="btn" data-edit-item="${escapeHtml(i.id)}" type="button">Edit</button>
-          <button class="btn" data-recv="${escapeHtml(i.id)}" type="button">${escapeHtml(POSUnits.receiveLabel(itemUnit(i)))}</button></td>
-    </tr>`;
+        ? `${escapeHtml(globalThis.POSFootwear?.wearerLabel(i.wearer_type) || "—")} · ${escapeHtml(i.color || "—")} · Sz ${escapeHtml(i.size || "—")}`
+        : `${escapeHtml(i.code || "")}${i.hsn ? ` · HSN ${escapeHtml(i.hsn)}` : ""}`;
+      const group = footwear
+        ? `${escapeHtml(i.category || "Style")} / ${escapeHtml(i.subcategory || "—")}`
+        : `${escapeHtml(i.category || "—")} / ${escapeHtml(i.subcategory || "—")}`;
+      const suffix = POSUnits.rateSuffix(itemUnit(i));
+      const search = itemSearchHay(i);
+      const editing = $("item-id")?.value === i.id;
+      return `<article class="report-card item-card${editing ? " is-editing" : ""}" data-item-card data-edit-item="${escapeHtml(i.id)}" data-item-search="${escapeHtml(search)}" data-item-low="${low ? "1" : "0"}">
+        <div class="item-card-head">
+          ${thumb}
+          <div class="item-card-copy">
+            <strong>${escapeHtml(i.name)}</strong>
+            <span>${extra}</span>
+          </div>
+        </div>
+        <div class="item-card-meta">
+          <span class="item-chip">${escapeHtml(itemUnit(i))}</span>
+          <span class="item-chip">${group}</span>
+          ${i.barcode ? `<span class="item-chip">${escapeHtml(i.barcode)}</span>` : ""}
+          <span class="item-chip ${low ? "stock low" : "stock ok"}">${escapeHtml(fmtQty(i.stock_gm, i))}</span>
+        </div>
+        <div class="item-card-foot">
+          <div class="item-card-rates">
+            <span>Retail <em>${money(i.retail_rate)}${escapeHtml(suffix)}</em></span>
+            <span>B2B <em>${money(i.b2b_rate)}${escapeHtml(suffix)}</em></span>
+          </div>
+          <div class="item-card-actions">
+            <button class="btn" data-edit-item="${escapeHtml(i.id)}" type="button">Edit</button>
+            <button class="btn" data-recv="${escapeHtml(i.id)}" type="button">${escapeHtml(POSUnits.receiveLabel(itemUnit(i)))}</button>
+          </div>
+        </div>
+      </article>`;
     })
-    .join("")}</tbody></table>`;
+    .join("");
+  filterItemsCatalog();
 }
 
 function renderCustomersTable() {
@@ -2771,28 +2868,7 @@ $("items-table").addEventListener("click", async (e) => {
   }
   if (edit) {
     const i = state.items.find((x) => x.id === edit.dataset.editItem);
-    if (!i) return;
-    $("item-id").value = i.id;
-    $("item-name").value = i.name;
-    $("item-hsn").value = i.hsn || "";
-    $("item-category").value = i.category || "";
-    $("item-subcategory").value = i.subcategory || "";
-    if ($("item-wearer")) $("item-wearer").value = globalThis.POSFootwear?.normalizeWearer(i.wearer_type) || "";
-    if ($("item-color")) $("item-color").value = i.color || "";
-    if ($("item-size")) $("item-size").value = i.size || "";
-    $("item-retail").value = i.retail_rate;
-    if ($("item-mrp")) $("item-mrp").value = i.mrp || i.retail_rate || "";
-    if ($("item-barcode")) $("item-barcode").value = i.barcode || "";
-    if ($("item-mfr-barcode")) $("item-mfr-barcode").value = "";
-    if ($("item-barcode-qty")) $("item-barcode-qty").value = "";
-    $("item-b2b").value = i.b2b_rate;
-    $("item-purchase").value = i.purchase_rate;
-    $("item-gst").value = i.gst_rate;
-    fillItemUnitSelect(itemUnit(i));
-    $("item-unit").value = itemUnit(i);
-    $("item-stock").value = POSUnits.fromBase(i.stock_gm, itemUnit(i));
-    refreshItemUnitLabels();
-    paintItemImage(itemPhotoUrl(i));
+    if (i) fillItemForm(i);
   }
 });
 
@@ -3174,11 +3250,7 @@ $("item-form").addEventListener("submit", async (e) => {
     else await api("/api/items", { method: "POST", body: JSON.stringify(body) });
     $("item-hint").textContent = "Saved";
     $("item-hint").className = "hint ok";
-    $("item-form").reset();
-    $("item-id").value = "";
-    resetItemImage();
-    fillItemUnitSelect(defaultItemUnit());
-    refreshItemUnitLabels();
+    resetItemForm();
     await loadBootstrap();
   } catch (err) {
     $("item-hint").textContent = err.message;
@@ -3186,13 +3258,11 @@ $("item-form").addEventListener("submit", async (e) => {
   }
 });
 $("item-cancel").addEventListener("click", () => {
-  $("item-form").reset();
-  $("item-id").value = "";
-  resetItemImage();
-  fillItemUnitSelect(defaultItemUnit());
-  refreshItemUnitLabels();
+  resetItemForm();
 });
 $("item-unit")?.addEventListener("change", refreshItemUnitLabels);
+$("item-catalog-search")?.addEventListener("input", filterItemsCatalog);
+$("item-low-only")?.addEventListener("change", filterItemsCatalog);
 $("item-image")?.addEventListener("change", async (e) => {
   const file = e.target.files?.[0];
   if (!file) return;
