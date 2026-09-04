@@ -1,0 +1,19 @@
+{
+  "name": "ATAV Multi-Tenant POS",
+  "user": "ubuntu",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": ".."
+  },
+  "install": "./scripts/cloud-agent-install.sh",
+  "start": "./scripts/cloud-agent-start.sh",
+  "terminals": [
+    {
+      "name": "pos-server",
+      "command": "npm start"
+    }
+  ],
+  "ports": [
+    5173
+  ]
+}
