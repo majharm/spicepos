@@ -1,0 +1,31 @@
+name: Hostinger Git deploy checks
+
+on:
+  push:
+    branches:
+      - cursor/multi-tenant-saas-pos-1a88
+      - main
+  pull_request:
+    branches:
+      - cursor/multi-tenant-saas-pos-1a88
+      - main
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Syntax-check main POS bundle
+        run: node --check js/app.js && node --check server.js
+
+      - name: Run unit tests
+        run: npm test

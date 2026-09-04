@@ -79,14 +79,33 @@ Use `DB_HOST=localhost` when MySQL is on the same Hostinger account. If the data
 
 Do **not** use the Web App “Connect a database” wizard (that is for Supabase/Mongo). This POS uses Hostinger MySQL via `mysql2`.
 
-### Deploy
+### Deploy (Git — no FTP)
 
-1. Push this repo to GitHub.
-2. hPanel → Websites → Add website → **Node.js web app** → Import Git repository.
-3. Confirm Express, entry `server.js`, no build command.
-4. Paste environment variables, then Deploy.
-5. After a green build, open Runtime Logs. You should see `Multi-tenant POS listening on …`.
-6. Open `/login.html` and `/master.html` on your domain.
+**Recommended:** connect the GitHub repo in Hostinger and deploy on every push. Do not upload `DEPLOY-FILES.txt` bundles or use FTP unless Git is unavailable.
+
+1. Push this repo to GitHub (branch `cursor/multi-tenant-saas-pos-1a88` or your connected branch).
+2. hPanel → **Websites** → **Add website** → **Node.js web app** → **Import Git repository**.
+3. Connect GitHub, pick this repo, and set:
+   - Framework: **Express**
+   - Branch: **`cursor/multi-tenant-saas-pos-1a88`** (or the branch you deploy from)
+   - Build command: **blank**
+   - Output directory: **blank**
+   - Entry file: **`server.js`**
+4. Add environment variables (MySQL, `MASTER_ADMIN_*`, SMTP, `APP_PUBLIC_URL`), then **Deploy**.
+5. After the first deploy, every `git push` to the connected branch triggers an automatic rebuild and restart.
+
+From your machine:
+
+```bash
+git checkout cursor/multi-tenant-saas-pos-1a88
+./scripts/deploy-via-git.sh
+```
+
+That runs tests, pushes the branch, and tags `deployYYYYMMDD` so you can match a Hostinger deployment to a commit. To redeploy the same commit without a new push: hPanel → **Deployments** → **Redeploy**.
+
+GitHub Actions (`.github/workflows/hostinger-git-deploy.yml`) runs `npm test` on pushes to the deploy branch so broken JS does not reach production.
+
+Legacy zip/FTP upload (`scripts/build-deploy-zip.sh`, `DEPLOY-FILES.txt`) is only for PHP-only fallback hosts without Git.
 
 If login shows a web-page error, Apache is answering instead of Node. Open `https://your-domain/pos-api.php?p=health`. Confirm framework **Express**, entry **`server.js`**, build command empty, then **Restart**. Also set `DB_HOST=localhost` (same-account MySQL) or the process may crash before it can serve the API.
 
