@@ -39,6 +39,19 @@ FLUSH PRIVILEGES;
   sudo mariadb -e "$sql" 2>/dev/null || sudo mysql -e "$sql"
 }
 
+apply_base_schema() {
+  local schema_file="$(dirname "$0")/cloud-agent-base-schema.sql"
+  if [[ ! -f "$schema_file" ]]; then
+    echo "No base schema file; skipping table bootstrap."
+    return 0
+  fi
+  if mariadb spicepos <"$schema_file" 2>/dev/null; then
+    return 0
+  fi
+  sudo mariadb spicepos <"$schema_file"
+}
+
 start_mariadb
 provision_db
+apply_base_schema
 echo "MariaDB ready for spicepos."
