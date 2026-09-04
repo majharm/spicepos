@@ -429,6 +429,15 @@ function pos_item_image_url($body) {
   return $img;
 }
 
+function pos_customer_label($customer) {
+  if (!is_array($customer)) return "Walk-in";
+  $biz = trim((string) ($customer["business_name"] ?? ""));
+  if ($biz !== "") return $biz;
+  $name = trim((string) ($customer["name"] ?? ""));
+  if ($name !== "") return $name;
+  return "Walk-in";
+}
+
 function pos_item_bill_name($item) {
   if (!is_array($item)) return "Item";
   $name = trim((string) ($item["name"] ?? "Item"));

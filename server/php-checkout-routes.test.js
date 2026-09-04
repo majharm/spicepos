@@ -35,6 +35,13 @@ test("PHP fallback routes checkout, holds, and order updates through core", () =
   assert.match(till, /pos_dispatch_holds/);
   assert.match(crud, /checkout.*POST.*pos_dispatch_checkout/s);
   assert.match(crud, /pos_dispatch_holds/);
+  assert.match(core, /function pos_customer_label/);
+  assert.match(checkout, /pos_customer_label\(\$customer\)/);
+  assert.match(orders, /pos_customer_label\(\$customer\)/);
+  assert.doesNotMatch(checkout, /\$customer\["business_name"\] \?\? \$customer\["name"\]/);
+  assert.doesNotMatch(orders, /\$customer\["business_name"\] \?\? \$customer\["name"\]/);
+  assert.match(till, /NULLIF\(TRIM\(o\.customer_name\)/);
+  assert.match(read("server/index.js"), /NULLIF\(TRIM\(o\.customer_name\)/);
   assert.match(checkout, /function pos_checkout_sale/);
   assert.match(checkout, /pos_alert_low_stock/);
   assert.match(checkout, /pos_tick_shop_alerts/);

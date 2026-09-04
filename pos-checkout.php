@@ -54,7 +54,7 @@ function pos_checkout_sale($bid, $branchId, $uid, $auth, $body) {
       $pk = pos_q("SELECT name FROM packs WHERE id = ? AND business_id = ? LIMIT 1", "ss", [$packId, $bid]);
       $packName = $pk[0]["name"] ?? null;
     }
-    $custName = $customer["business_name"] ?? $customer["name"];
+    $custName = pos_customer_label($customer);
     pos_q(
       "INSERT INTO sales_orders (
          id, order_number, customer_id, customer_name, customer_type,

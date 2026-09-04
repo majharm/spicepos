@@ -1958,13 +1958,21 @@ let orderCache = [];
 let selectedOrderId = null;
 const orderFilter = { q: "", status: "", payment: "" };
 
+function orderCustomerName(o) {
+  const stored = String(o?.customer_name || "").trim();
+  if (stored) return stored;
+  const c = (state.customers || []).find((x) => x.id === o?.customer_id);
+  const fromCust = String(c?.business_name || c?.name || "").trim();
+  return fromCust || "Walk-in";
+}
+
 function filterOrders(rows) {
   const q = orderFilter.q.trim().toLowerCase();
   return rows.filter((o) => {
     if (orderFilter.status && String(o.status || "").toLowerCase() !== orderFilter.status) return false;
     if (orderFilter.payment && String(o.payment_status || "").toLowerCase() !== orderFilter.payment) return false;
     if (!q) return true;
-    const hay = [o.order_number, o.customer_name, o.payment_method].join(" ").toLowerCase();
+    const hay = [o.order_number, orderCustomerName(o), o.payment_method].join(" ").toLowerCase();
     return hay.includes(q);
   });
 }
@@ -2089,7 +2097,7 @@ function showOrder(o) {
       <div class="invoice-detail-top">
         <div>
           <h3 class="invoice-so">${escapeHtml(o.order_number || "—")}</h3>
-          <p class="hint">${escapeHtml(o.customer_name || "Walk-in")}</p>
+          <p class="hint">${escapeHtml(orderCustomerName(o))}</p>
           <p class="hint">${escapeHtml(formatShopDateTime(o.created_at))}</p>
         </div>
         <div class="invoice-detail-meta">
@@ -2143,7 +2151,7 @@ function renderOrdersList() {
         (o) => `<tr class="order-row${o.id === selectedOrderId ? " is-selected" : ""}" data-oid="${escapeHtml(o.id)}" tabindex="0" role="button">
         <td class="so-no"><strong>${escapeHtml(o.order_number || "—")}</strong></td>
         <td>${escapeHtml(formatShopDateTime(o.created_at))}</td>
-        <td>${escapeHtml(o.customer_name || "—")}</td>
+        <td>${escapeHtml(orderCustomerName(o))}</td>
         <td>${orderStatusBadge(o.status)}</td>
         <td>${payStatusBadge(o.payment_status)}</td>
         <td>${escapeHtml(paymentMethodLabel(o.payment_method))}</td>
