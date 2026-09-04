@@ -327,6 +327,63 @@ function customer() {
   return state.customers.find((c) => c.id === state.customerId) || state.customers[0];
 }
 
+function digitsMobile(raw) {
+  const d = String(raw || "").replace(/\D+/g, "");
+  if (d.length >= 10) return d.slice(-10);
+  return d;
+}
+
+function findCustomerByMobile(raw) {
+  const d = digitsMobile(raw);
+  if (d.length < 10) return null;
+  return (state.customers || []).find((c) => digitsMobile(c.mobile) === d) || null;
+}
+
+function paintBillCustomer() {
+  const el = $("bill-customer");
+  if (!el) return;
+  const c = customer();
+  if (!c) {
+    el.textContent = "";
+    return;
+  }
+  const name = String(c.business_name || c.name || "Walk-in").trim() || "Walk-in";
+  const mobile = digitsMobile(c.mobile);
+  el.textContent = mobile.length === 10 && !/^0+$/.test(mobile) ? `${name} · ${mobile}` : name;
+}
+
+function selectCounterCustomer(cust, { hint = true } = {}) {
+  if (!cust?.id) return false;
+  state.customerId = cust.id;
+  if ($("customer")) $("customer").value = cust.id;
+  const mob = $("counter-mobile");
+  const shown = digitsMobile(cust.mobile);
+  if (mob && document.activeElement !== mob && shown.length === 10 && !/^0+$/.test(shown)) {
+    mob.value = shown;
+  }
+  paintBillCustomer();
+  renderCatalog();
+  renderCart();
+  void loadCustomerLoyalty();
+  if (hint) setHint(`Customer · ${cust.business_name || cust.name}`, "ok");
+  return true;
+}
+
+function applyCounterMobile(raw, { announceMiss = true } = {}) {
+  const d = digitsMobile(raw);
+  if (d.length < 10) return false;
+  const cust = findCustomerByMobile(d);
+  if (cust) return selectCounterCustomer(cust);
+  if (announceMiss) {
+    setHint("No customer for this mobile — add with + Customer", "error");
+    if ($("qc-mobile")) $("qc-mobile").value = d;
+    const wrap = $("quick-customer-wrap");
+    if (wrap) wrap.open = true;
+    $("qc-name")?.focus();
+  }
+  return false;
+}
+
 function rateFor(item) {
   const type = customer()?.type || "b2c";
   return Number(type === "b2b" ? item.b2b_rate : item.retail_rate);
@@ -1153,6 +1210,7 @@ function renderCart() {
   $("btn-clear").disabled = state.cart.length === 0;
   document.body.classList.toggle("has-cart", state.cart.length > 0);
   paintBillToggleCount();
+  paintBillCustomer();
   if ($("btn-hold")) $("btn-hold").disabled = state.cart.length === 0 || Boolean(state.editingOrderId);
   const payTotal = t.total != null ? t.total : t.taxable + t.tax;
   $("btn-pay").textContent = state.editingOrderId
@@ -1179,6 +1237,13 @@ function renderCustomersSelect() {
     const walk = state.customers.find((c) => c.code === "CUS-001") || state.customers[0];
     state.customerId = walk?.id || "";
     if (state.customerId) $("customer").value = state.customerId;
+    paintBillCustomer();
+    const mob = $("counter-mobile");
+    const c = customer();
+    const shown = digitsMobile(c?.mobile);
+    if (mob && document.activeElement !== mob && shown.length === 10 && !/^0+$/.test(shown)) {
+      mob.value = shown;
+    }
   }
 }
 
@@ -1276,6 +1341,12 @@ async function applyBarcodeScan(raw, sourceEl) {
     }
     paintScanLane(true, item.name);
     setHint(`Added ${item.name}`, "ok");
+    focusScanLane();
+    return true;
+  }
+  if (sourceEl === $("scan-code") && digitsMobile(code).length === 10 && applyCounterMobile(code, { announceMiss: false })) {
+    if (sourceEl) sourceEl.value = "";
+    paintScanLane(true, customer()?.name || "Customer");
     focusScanLane();
     return true;
   }
@@ -2762,8 +2833,15 @@ $("search-form").addEventListener("submit", async (e) => {
 });
 $("customer").addEventListener("change", () => {
   state.customerId = $("customer").value;
+  const c = customer();
+  const mob = $("counter-mobile");
+  const shown = digitsMobile(c?.mobile);
+  if (mob && shown.length === 10 && !/^0+$/.test(shown)) mob.value = shown;
+  else if (mob && document.activeElement !== mob) mob.value = "";
+  paintBillCustomer();
   renderCatalog();
   renderCart();
+  void loadCustomerLoyalty();
 });
 $("btn-clear").addEventListener("click", () => {
   if (state.editingOrderId) {
@@ -3092,6 +3170,7 @@ $("quick-customer-form")?.addEventListener("submit", async (e) => {
       hint.className = "hint ok";
     }
     setHint(`Customer added · ${customer?.name || ""}`, "ok");
+    if (customer) selectCounterCustomer(customer);
   } catch (err) {
     if (hint) {
       hint.textContent = err.message;
@@ -3718,8 +3797,23 @@ document.getElementById("stock-mode")?.addEventListener("click", (e) => {
   });
 });
 
-$("customer")?.addEventListener("change", () => {
-  void loadCustomerLoyalty();
+const applyCounterMobileDebounced = debounce(() => {
+  const el = $("counter-mobile");
+  if (!el) return;
+  if (digitsMobile(el.value).length === 10) applyCounterMobile(el.value);
+}, 160);
+
+$("counter-mobile")?.addEventListener("input", () => {
+  applyCounterMobileDebounced();
+});
+$("counter-mobile")?.addEventListener("keydown", (e) => {
+  if (e.key !== "Enter") return;
+  e.preventDefault();
+  applyCounterMobile($("counter-mobile").value);
+});
+$("counter-mobile")?.addEventListener("blur", () => {
+  const d = digitsMobile($("counter-mobile")?.value);
+  if (d.length === 10) applyCounterMobile($("counter-mobile").value, { announceMiss: false });
 });
 
 async function loadCustomerLoyalty() {

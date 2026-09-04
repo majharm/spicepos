@@ -646,10 +646,28 @@ body.counter-mode .expired-banner { display: none !important; }
   overflow-x: auto;
 }
 .customer-picker {
-  display: flex;
+  display: grid;
+  grid-template-columns: 7.6em minmax(7em, 1fr);
   align-items: center;
-  min-width: 160px;
-  flex: 1 1 160px;
+  gap: 6px;
+  min-width: 220px;
+  flex: 1 1 240px;
+}
+#counter-mobile {
+  min-width: 0;
+  min-height: 38px;
+  padding: 7px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--line-strong);
+  background: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+#counter-mobile:focus {
+  outline: none;
+  border-color: var(--vel-teal);
+  box-shadow: 0 0 0 3px rgba(13, 148, 136, 0.18);
 }
 .quick-customer-wrap {
   flex: 0 1 auto;
@@ -978,6 +996,12 @@ body.bill-collapsed .bill-toggle[data-count]:not([data-count="0"])::after {
   color: var(--muted);
   font-size: 12px;
   font-weight: 500;
+}
+.ticket-cust {
+  margin: 4px 0 0;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--vel-teal);
 }
 .lines {
   flex: 1 1 auto;
@@ -2418,6 +2442,10 @@ body.footwear-mode.counter-mode .stage.is-counter .card .sku { display: block; f
   .counter-tools { display: grid; grid-template-columns: 1fr 1fr; overflow: visible; }
   .counter-topbar .select,
   .counter-topbar .customer-picker { min-width: 0; width: 100%; }
+  .counter-topbar .customer-picker {
+    grid-column: 1 / -1;
+    grid-template-columns: 8em minmax(0, 1fr);
+  }
   .counter-topbar #pay-method { grid-column: auto; }
   .quick-customer-wrap {
     grid-column: auto;
