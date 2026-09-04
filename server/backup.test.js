@@ -128,11 +128,11 @@ test("PHP and HTML wire master admin backup", () => {
   );
 });
 
-test("HTML and CSS cache stickers match deploy86", () => {
+test("HTML and CSS cache stickers match deploy87", () => {
   for (const name of ["index.html", "master.html", "login.html", "setup.html"]) {
     const html = readFileSync(path.join(root, name), "utf8");
-    assert.match(html, /20260903deploy86/);
-    assert.doesNotMatch(html, /20260903deploy85/);
+    assert.match(html, /20260903deploy87/);
+    assert.doesNotMatch(html, /20260903deploy86/);
     assert.doesNotMatch(html, /20260903deploy84/);
     assert.doesNotMatch(html, /20260903deploy83/);
     assert.doesNotMatch(html, /20260903deploy82/);
@@ -245,6 +245,13 @@ test("HTML and CSS cache stickers match deploy86", () => {
   assert.match(appJs, /function fillItemForm/);
   assert.match(appJs, /function filterItemsCatalog/);
   assert.match(pos, /items-desk: composer \+ library/);
+  assert.match(index, /id="view-expiry"/);
+  assert.match(index, /expiry-desk/);
+  assert.match(index, /id="expiry-search"/);
+  assert.match(appJs, /function loadExpiryView/);
+  assert.match(appJs, /function filterExpiryList/);
+  assert.match(pos, /expiry-desk: dated on-hand batches/);
+  assert.match(pos, /\.expiry-card\[hidden\]/);
   assert.doesNotMatch(index, /100 g each/);
   assert.match(pos, /\.qty-input/);
   assert.match(index, /duplicate copy/);

@@ -68,6 +68,17 @@ test("PHP and Node wire barcode, damage, loyalty, and ledger modules", () => {
   assert.match(index, /id="view-damage"/);
   assert.match(index, /id="view-ledger"/);
   assert.match(index, /id="view-loyalty"/);
+  assert.match(index, /id="view-expiry"/);
+  assert.match(index, /data-view="expiry"/);
+  assert.match(index, /id="expiry-table"/);
+  assert.match(app, /loadExpiryView/);
+  assert.match(app, /\/api\/batches\/expiry/);
+  assert.match(app, /writeOffExpiryBatch/);
+  assert.match(nodeAdv, /\/api\/batches\/expiry/);
+  assert.match(nodeAdv, /DATEDIFF\(b\.expiry_date, CURDATE\(\)\) AS days_left/);
+  assert.match(adv, /batches\/expiry/);
+  assert.match(adv, /DATEDIFF\(b\.expiry_date, CURDATE\(\)\) AS days_left/);
+  assert.match(adv, /AND b\.remaining_gm > 0/);
   assert.match(index, /id="bill-disc-type"/);
   assert.match(index, /id="item-barcode"/);
   assert.match(index, /js\/barcode\.js/);

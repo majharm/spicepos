@@ -29,6 +29,8 @@ const state = {
   loyaltyAccount: null,
   loyaltySettings: null,
   stockMode: "simple",
+  expiryBatches: [],
+  expiryFilter: "all",
 };
 
 function debounce(fn, wait = 120) {
@@ -213,6 +215,7 @@ const VIEW_META = {
   purchases: { title: "Purchases", subtitle: "20 pcs = 20 barcodes you type or scan" },
   suppliers: { title: "Suppliers", subtitle: "Vendor contacts, address, and GSTIN" },
   stock: { title: "Stock", subtitle: "Adjustments, transfers, and low-stock alerts" },
+  expiry: { title: "Expiry", subtitle: "Dated batches still on hand — expired first" },
   staff: { title: "Staff & roles", subtitle: "Users, roles, and access" },
   branches: { title: "Branches", subtitle: "Shop locations and contact details" },
   devices: { title: "POS devices", subtitle: "Registers and terminal codes" },
@@ -904,6 +907,7 @@ function applyNav() {
       purchases: "purchases",
       suppliers: "suppliers",
       stock: "stock",
+      expiry: "stock",
       staff: "staff",
       branches: "branches",
       devices: "devices",
@@ -966,6 +970,7 @@ function showView(name) {
   }
   if (name === "stock") loadStock();
   if (name === "barcodes") loadBarcodesView();
+  if (name === "expiry") loadExpiryView();
   if (name === "damage") loadDamageView();
   if (name === "ledger") loadLedgerView();
   if (name === "loyalty") loadLoyaltyView();
@@ -3263,6 +3268,22 @@ $("item-cancel").addEventListener("click", () => {
 $("item-unit")?.addEventListener("change", refreshItemUnitLabels);
 $("item-catalog-search")?.addEventListener("input", filterItemsCatalog);
 $("item-low-only")?.addEventListener("change", filterItemsCatalog);
+$("expiry-search")?.addEventListener("input", filterExpiryList);
+$("expiry-filters")?.addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-expiry-filter]");
+  if (!btn) return;
+  setExpiryFilter(btn.dataset.expiryFilter);
+});
+$("expiry-hero-stats")?.addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-expiry-filter]");
+  if (!btn) return;
+  setExpiryFilter(btn.dataset.expiryFilter);
+});
+$("expiry-table")?.addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-expiry-damage]");
+  if (!btn) return;
+  writeOffExpiryBatch(btn.dataset.expiryDamage);
+});
 $("item-image")?.addEventListener("change", async (e) => {
   const file = e.target.files?.[0];
   if (!file) return;
@@ -4166,6 +4187,202 @@ $("barcodes-table")?.addEventListener("click", (e) => {
   if (!btn) return;
   globalThis.POSBarcode?.printLabels([{ name: btn.dataset.bcName, barcode: btn.dataset.bcPrint, mrp: btn.dataset.bcMrp, rate: btn.dataset.bcRate }], Number($("bc-copies")?.value) || 1);
 });
+
+function expiryDaysLeft(row) {
+  if (row?.days_left != null && row.days_left !== "") {
+    const n = Number(row.days_left);
+    if (Number.isFinite(n)) return n;
+  }
+  const s = String(row?.expiry_date || "").slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return null;
+  const exp = Date.parse(`${s}T12:00:00`);
+  const today = Date.parse(`${ymd()}T12:00:00`);
+  if (Number.isNaN(exp) || Number.isNaN(today)) return null;
+  return Math.round((exp - today) / 86400000);
+}
+
+function expiryMatchesFilter(days, filter) {
+  const d = Number(days);
+  if (!Number.isFinite(d)) return filter === "all";
+  if (filter === "expired") return d < 0;
+  if (filter === "7") return d >= 0 && d <= 7;
+  if (filter === "30") return d >= 0 && d <= 30;
+  if (filter === "90") return d >= 0 && d <= 90;
+  return true;
+}
+
+function expiryTone(days) {
+  const d = Number(days);
+  if (!Number.isFinite(d) || d < 0) return "expired";
+  if (d <= 7) return "soon";
+  if (d <= 30) return "watch";
+  return "ok";
+}
+
+function expiryDaysLabel(days) {
+  const d = Number(days);
+  if (!Number.isFinite(d)) return "Dated";
+  if (d < 0) {
+    const n = Math.abs(d);
+    return n === 1 ? "Expired yesterday" : `Expired ${n} days ago`;
+  }
+  if (d === 0) return "Expires today";
+  if (d === 1) return "Expires tomorrow";
+  return `Expires in ${d} days`;
+}
+
+function paintExpiryHero(rows) {
+  const stats = $("expiry-hero-stats");
+  if (!stats) return;
+  const list = Array.isArray(rows) ? rows : [];
+  const expired = list.filter((r) => {
+    const d = expiryDaysLeft(r);
+    return Number.isFinite(d) && d < 0;
+  }).length;
+  const week = list.filter((r) => {
+    const d = expiryDaysLeft(r);
+    return Number.isFinite(d) && d >= 0 && d <= 7;
+  }).length;
+  const month = list.filter((r) => {
+    const d = expiryDaysLeft(r);
+    return Number.isFinite(d) && d >= 0 && d <= 30;
+  }).length;
+  const active = state.expiryFilter || "all";
+  stats.innerHTML = `<button class="items-stat${expired ? " is-warn" : ""}${active === "expired" ? " is-active" : ""}" type="button" data-expiry-filter="expired">
+      <span>Expired</span><strong>${expired}</strong>
+    </button>
+    <button class="items-stat${week ? " is-warn" : ""}${active === "7" ? " is-active" : ""}" type="button" data-expiry-filter="7">
+      <span>7 days</span><strong>${week}</strong>
+    </button>
+    <button class="items-stat${active === "30" ? " is-active" : ""}" type="button" data-expiry-filter="30">
+      <span>30 days</span><strong>${month}</strong>
+    </button>`;
+}
+
+function setExpiryFilter(name) {
+  state.expiryFilter = name || "all";
+  document.querySelectorAll("#expiry-filters [data-expiry-filter]").forEach((btn) => {
+    btn.classList.toggle("primary", btn.dataset.expiryFilter === state.expiryFilter);
+  });
+  paintExpiryHero(state.expiryBatches);
+  filterExpiryList();
+}
+
+function filterExpiryList() {
+  const q = String($("expiry-search")?.value || "").trim().toLowerCase();
+  const filter = state.expiryFilter || "all";
+  let shown = 0;
+  let total = 0;
+  document.querySelectorAll("#expiry-table [data-expiry-card]").forEach((card) => {
+    total += 1;
+    const days = Number(card.dataset.expiryDays);
+    const hay = card.dataset.expirySearch || "";
+    const hide = (Boolean(q) && !hay.includes(q)) || !expiryMatchesFilter(days, filter);
+    card.hidden = hide;
+    if (!hide) shown += 1;
+  });
+  const empty = $("expiry-empty-filter");
+  if (empty) empty.hidden = shown > 0 || total === 0;
+}
+
+async function loadExpiryView() {
+  const el = $("expiry-table");
+  if (!el) return;
+  if ($("expiry-hint")) {
+    $("expiry-hint").textContent = "";
+    $("expiry-hint").className = "hint";
+  }
+  try {
+    const rows = await api("/api/batches/expiry");
+    state.expiryBatches = Array.isArray(rows) ? rows : [];
+    paintExpiryHero(state.expiryBatches);
+    if (!state.expiryBatches.length) {
+      el.innerHTML = `<div class="item-empty-card" id="expiry-empty">
+        <strong>No dated stock on hand</strong>
+        <p>Set an expiry date on a purchase line to track batches here.</p>
+      </div>`;
+      return;
+    }
+    el.innerHTML = `${state.expiryBatches
+      .map((r) => {
+        const item = state.items.find((i) => i.id === r.item_id) || r;
+        const days = expiryDaysLeft(r);
+        const tone = expiryTone(days);
+        const qty = fmtQty(r.remaining_gm, item);
+        const batch = r.batch_no || r.barcode || "—";
+        const search = `${r.item_name || ""} ${r.item_code || ""} ${r.batch_no || ""} ${r.barcode || ""} ${r.supplier_name || ""} ${r.hsn || ""} ${r.category || ""}`.toLowerCase();
+        return `<article class="report-card item-card expiry-card is-${tone}" data-expiry-card data-expiry-days="${days ?? ""}" data-expiry-search="${escapeHtml(search)}" data-expiry-id="${escapeHtml(r.id)}">
+          <div class="item-card-head">
+            <div class="item-card-copy">
+              <strong>${escapeHtml(r.item_name || "Item")}</strong>
+              <span>${escapeHtml(r.item_code || "")}${r.category ? ` · ${escapeHtml(r.category)}` : ""}</span>
+            </div>
+            <span class="expiry-badge ${tone}">${escapeHtml(expiryDaysLabel(days))}</span>
+          </div>
+          <div class="item-card-meta">
+            <span class="item-chip">Batch ${escapeHtml(batch)}</span>
+            <span class="item-chip">${escapeHtml(formatShopDate(r.expiry_date))}</span>
+            <span class="item-chip">${escapeHtml(qty)} left</span>
+            ${r.supplier_name ? `<span class="item-chip">${escapeHtml(r.supplier_name)}</span>` : ""}
+          </div>
+          <div class="item-card-foot">
+            <div class="item-card-rates">
+              <span>On hand <em>${escapeHtml(qty)}</em></span>
+              ${r.barcode ? `<span>Code <em>${escapeHtml(r.barcode)}</em></span>` : ""}
+            </div>
+            <div class="item-card-actions">
+              <button class="btn" type="button" data-expiry-damage="${escapeHtml(r.id)}">Write off</button>
+            </div>
+          </div>
+        </article>`;
+      })
+      .join("")}<div class="item-empty-card" id="expiry-empty-filter" hidden>
+        <strong>No batches in this window</strong>
+        <p>Try All dated, or search a different name / batch.</p>
+      </div>`;
+    filterExpiryList();
+  } catch (err) {
+    el.innerHTML = "";
+    if ($("expiry-hint")) {
+      $("expiry-hint").textContent = err.message;
+      $("expiry-hint").className = "hint error";
+    }
+  }
+}
+
+async function writeOffExpiryBatch(batchId) {
+  const row = state.expiryBatches.find((r) => r.id === batchId);
+  if (!row) return;
+  const item = state.items.find((i) => i.id === row.item_id) || row;
+  const qty = fmtQty(row.remaining_gm, item);
+  const when = formatShopDate(row.expiry_date) || "the expiry date";
+  if (!window.confirm(`Write off remaining ${qty} of ${row.item_name || "this item"} (expiry ${when}) as damage?`)) return;
+  try {
+    await api("/api/damage", {
+      method: "POST",
+      body: JSON.stringify({
+        item_id: row.item_id,
+        batch_id: row.id,
+        barcode: row.barcode || "",
+        quantity_gm: Number(row.remaining_gm) || 0,
+        reason: "expiry",
+        note: `Expired batch ${row.batch_no || row.barcode || row.id}`,
+        auto_approve: true,
+      }),
+    });
+    if ($("expiry-hint")) {
+      $("expiry-hint").textContent = `Wrote off ${qty} of ${row.item_name || "item"}`;
+      $("expiry-hint").className = "hint ok";
+    }
+    await loadExpiryView();
+    loadBootstrap();
+  } catch (err) {
+    if ($("expiry-hint")) {
+      $("expiry-hint").textContent = err.message;
+      $("expiry-hint").className = "hint error";
+    }
+  }
+}
 
 async function loadDamageView() {
   fillItemPicker("dmg-item-list", "dmg-item-search", "dmg-item");

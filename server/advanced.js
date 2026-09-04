@@ -737,6 +737,30 @@ export function registerAdvanced(app) {
     }),
   );
 
+  app.get("/api/batches/expiry", requireStaff, requirePerm("stock"), (_req, res) =>
+    send(res, async () => {
+      return query(
+        `SELECT b.id, b.business_id, b.branch_id, b.item_id, b.purchase_id, b.purchase_line_id,
+                b.supplier_id, b.batch_no, b.barcode, b.qty_gm, b.remaining_gm, b.unit_cost, b.mrp,
+                DATE_FORMAT(b.expiry_date, '%Y-%m-%d') AS expiry_date,
+                DATE_FORMAT(b.manufactured_date, '%Y-%m-%d') AS manufactured_date,
+                b.created_at,
+                i.name AS item_name, i.code AS item_code, i.base_unit, i.unit, i.hsn, i.category,
+                s.name AS supplier_name,
+                DATEDIFF(b.expiry_date, CURDATE()) AS days_left
+         FROM stock_batches b
+         JOIN items i ON i.id = b.item_id
+         LEFT JOIN suppliers s ON s.id = b.supplier_id
+         WHERE b.business_id = ?
+           AND b.expiry_date IS NOT NULL
+           AND b.remaining_gm > 0
+         ORDER BY b.expiry_date ASC, i.name ASC
+         LIMIT 500`,
+        [bid()],
+      );
+    }),
+  );
+
   app.get("/api/batches", requireStaff, requirePerm("stock"), (req, res) =>
     send(res, async () => {
       const itemId = String(req.query.item_id || "");

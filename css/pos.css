@@ -442,7 +442,8 @@ body.counter-mode .view-topbar { display: none; }
 body.counter-mode .platform-notices,
 body.counter-mode .expired-banner { display: none !important; }
 body:has(#view-packs:not([hidden])) .platform-notices,
-body:has(#view-items:not([hidden])) .platform-notices { display: none !important; }
+body:has(#view-items:not([hidden])) .platform-notices,
+body:has(#view-expiry:not([hidden])) .platform-notices { display: none !important; }
 
 .view-topbar {
   display: flex;
@@ -2124,6 +2125,69 @@ body.footwear-mode.counter-mode .stage.is-counter .card .sku { display: block; f
 }
 .item-empty-card strong { display: block; color: var(--text); margin-bottom: 6px; }
 .item-empty-card p { margin: 0; font-size: 13px; line-height: 1.45; }
+
+/* expiry-desk: dated on-hand batches */
+.expiry-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.expiry-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.expiry-toolbar input[type="search"] {
+  min-width: min(100%, 240px);
+  flex: 1 1 220px;
+  min-height: 40px;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+}
+.expiry-list {
+  padding: 0;
+  display: grid;
+  gap: 10px;
+  overflow: visible;
+}
+.expiry-card { cursor: default; }
+.expiry-card[hidden] { display: none !important; }
+.expiry-card.is-expired {
+  border-color: #fecaca;
+  background: #fff7f7;
+}
+.expiry-card.is-soon {
+  border-color: #fde68a;
+  background: #fffbeb;
+}
+.expiry-card .item-card-head {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+button.items-stat {
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+button.items-stat.is-active {
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.45);
+}
+.expiry-badge {
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+.expiry-badge.expired { background: #fee2e2; color: #991b1b; }
+.expiry-badge.soon { background: #fef3c7; color: #92400e; }
+.expiry-badge.watch { background: #e0f2fe; color: #075985; }
+.expiry-badge.ok { background: #d1fae5; color: #065f46; }
 .ticket-pack {
   padding: 8px 14px 0;
   color: var(--muted);
@@ -2912,9 +2976,12 @@ body.footwear-mode.counter-mode .stage.is-counter .card .sku { display: block; f
   .purchase-head { grid-template-columns: 1fr 1fr; }
   .purchase-items-bar { grid-template-columns: 1fr; }
   .packs-desk,
-  .items-desk { margin-left: 12px; margin-right: 12px; }
+  .items-desk,
+  .expiry-desk { margin-left: 12px; margin-right: 12px; }
   .packs-hero,
   .items-hero { flex-direction: column; align-items: stretch; padding: 14px; }
+  .expiry-toolbar { flex-direction: column; align-items: stretch; }
+  .expiry-toolbar input[type="search"] { min-width: 0; }
   .packs-split,
   .items-split,
   .pack-composer-top,
