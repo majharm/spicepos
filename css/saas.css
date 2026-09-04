@@ -170,17 +170,20 @@
 /* auth-login-scroll: visible 2026 */
 .auth-main::-webkit-scrollbar,
 .auth-shell .auth-scene-types::-webkit-scrollbar,
+html:has(body.auth-body)::-webkit-scrollbar,
 body.auth-body::-webkit-scrollbar {
   width: 10px;
 }
 .auth-main::-webkit-scrollbar-track,
 .auth-shell .auth-scene-types::-webkit-scrollbar-track,
+html:has(body.auth-body)::-webkit-scrollbar-track,
 body.auth-body::-webkit-scrollbar-track {
   background: #e2e8f0;
   border-radius: 8px;
 }
 .auth-main::-webkit-scrollbar-thumb,
 .auth-shell .auth-scene-types::-webkit-scrollbar-thumb,
+html:has(body.auth-body)::-webkit-scrollbar-thumb,
 body.auth-body::-webkit-scrollbar-thumb {
   background: #0d9488;
   border-radius: 8px;
@@ -380,6 +383,15 @@ body.auth-body::-webkit-scrollbar-thumb {
   body.auth-body {
     overflow-y: scroll;
     scrollbar-gutter: stable;
+  }
+  html:has(body.auth-body) {
+    overflow-y: scroll;
+    scrollbar-gutter: stable;
+    scrollbar-width: thin;
+    scrollbar-color: #0d9488 #0b1220;
+  }
+  html:has(body.auth-body)::-webkit-scrollbar-track {
+    background: #0b1220;
   }
   .auth-shell .login-legal {
     justify-content: center;
