@@ -2980,6 +2980,12 @@ button.items-stat.is-active {
   .expiry-desk { margin-left: 12px; margin-right: 12px; }
   .packs-hero,
   .items-hero { flex-direction: column; align-items: stretch; padding: 14px; }
+  .expiry-desk .items-hero { padding: 12px 14px; gap: 10px; }
+  .expiry-desk .items-hero h3 { font-size: 18px; }
+  .expiry-desk .items-hero .lede { display: none; }
+  .expiry-desk .items-hero-stats { gap: 8px; }
+  .expiry-desk .items-stat { min-width: 86px; padding: 8px 10px; }
+  .expiry-desk .items-stat strong { font-size: 18px; }
   .expiry-toolbar { flex-direction: column; align-items: stretch; }
   .expiry-toolbar input[type="search"] { min-width: 0; }
   .packs-split,
