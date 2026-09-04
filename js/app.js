@@ -1196,23 +1196,6 @@ function renderCart() {
             </div>
             <div class="line-ops">
               <div class="qty">
-                <button type="button" data-chg="${escapeHtml(item.id)}" data-d="${-step}">−</button>
-                <input class="qty-input" type="number" inputmode="numeric" min="${POSUnits.qtyMin()}" max="${POSUnits.qtyMax()}" step="1" value="${escapeHtml(line.qtyGm)}" data-qty="${escapeHtml(item.id)}" aria-label="Quantity in ${unit}" />
-                <span class="qty-unit">${escapeHtml(unit)}</span>
-                <button type="button" data-chg="${escapeHtml(item.id)}" data-d="${step}">+</button>
-              </div>
-              <div class="line-amt">${money(calc.taxable + calc.gst)}</div>
-            </div>
-          </div>
-          ${canDiscount() ? `<div class="line-disc">
-              <select data-line-disc-type="${escapeHtml(item.id)}" aria-label="Line discount type">
-                <option value="amt"${(line.discountType || "amt") === "amt" ? " selected" : ""}>₹</option>
-                <option value="pct"${line.discountType === "pct" ? " selected" : ""}>%</option>
-              </select>
-              <input data-line-disc="${escapeHtml(item.id)}" type="number" min="0" step="0.01" value="${escapeHtml(line.discountValue || 0)}" aria-label="Line discount" />
-            </div>
-            <div class="line-ops">
-              <div class="qty">
                 <button type="button" data-chg="${escapeHtml(key)}" data-d="${-step}">−</button>
                 <input class="qty-input" type="number" inputmode="numeric" min="${POSUnits.qtyMin()}" max="${POSUnits.qtyMax()}" step="1" value="${escapeHtml(line.qtyGm)}" data-qty="${escapeHtml(key)}" aria-label="Quantity in ${unit}" />
                 <span class="qty-unit">${escapeHtml(unit)}</span>
