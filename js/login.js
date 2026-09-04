@@ -14,7 +14,7 @@ document.querySelectorAll(".auth-tab").forEach((tab) => {
     loginForm.hidden = signup;
     signupForm.hidden = !signup;
     card.classList.toggle("signup", signup);
-    lead.textContent = signup ? "Register your business to start billing." : "Sign in to continue.";
+    lead.textContent = signup ? "Start billing in minutes — 2-day free trial, no card." : "Sign in to continue.";
   });
 });
 

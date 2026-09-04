@@ -100,8 +100,8 @@
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  justify-content: center;
-  gap: 20px;
+  justify-content: flex-start;
+  gap: 16px;
   padding: 36px 32px;
   min-height: 0;
 }
@@ -123,18 +123,30 @@
 .auth-shell .auth-scene-types {
   position: static;
   justify-content: flex-start;
-  margin-top: 4px;
+  margin-top: 0;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  align-content: flex-start;
 }
 .auth-scene-trial {
-  margin: 8px 0 0;
+  margin: 14px 0 0;
   color: #ecfeff;
   font-size: 13px;
   font-weight: 650;
-  line-height: 1.4;
-  padding: 10px 12px;
-  border-radius: 12px;
-  background: rgba(15, 23, 42, 0.28);
-  border: 1px solid rgba(94, 234, 212, 0.28);
+  line-height: 1.45;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: rgba(15, 23, 42, 0.34);
+  border: 1px solid rgba(94, 234, 212, 0.42);
+}
+.auth-scene-trial strong {
+  display: block;
+  margin-bottom: 2px;
+  font-size: 14px;
+  font-weight: 800;
+  color: #5eead4;
+  letter-spacing: 0.02em;
 }
 .auth-main {
   display: flex;
@@ -221,6 +233,51 @@
   color: var(--vel-text, #0f172a);
   box-shadow: 0 1px 3px rgba(15, 23, 42, 0.12);
 }
+/* auth-trial-ui: 2-day banner 2026 */
+.auth-trial-invite {
+  margin: 8px 0 0;
+  color: var(--vel-teal, #0d9488);
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.45;
+  text-align: center;
+}
+.auth-trial-invite strong { font-weight: 800; }
+.auth-trial-banner {
+  display: none;
+  align-items: flex-start;
+  gap: 12px;
+  margin: 14px 0 0;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, rgba(13, 148, 136, 0.1), rgba(8, 145, 178, 0.08));
+  border: 1px solid rgba(13, 148, 136, 0.28);
+}
+.auth-card.signup .auth-trial-invite { display: none; }
+.auth-card.signup .auth-trial-banner { display: flex; }
+.auth-trial-badge {
+  flex: 0 0 auto;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: var(--vel-teal, #0d9488);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.auth-trial-banner strong {
+  display: block;
+  font-size: 14px;
+  color: var(--vel-text, #0f172a);
+}
+.auth-trial-banner p {
+  margin: 2px 0 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--muted, #64748b);
+}
 .signup-grid,
 .signup-block {
   display: grid;
@@ -279,7 +336,8 @@
   }
   .auth-shell .auth-scene-copy { text-align: center; }
   .auth-shell .auth-scene-types { display: none; }
-  .auth-scene-trial { text-align: center; }
+  .auth-scene-trial { text-align: left; }
+  .auth-trial-banner { align-items: center; }
   .auth-main {
     padding: 20px 18px 12px;
     overflow: visible;

@@ -128,10 +128,11 @@ test("PHP and HTML wire master admin backup", () => {
   );
 });
 
-test("HTML and CSS cache stickers match deploy83", () => {
+test("HTML and CSS cache stickers match deploy84", () => {
   for (const name of ["index.html", "master.html", "login.html", "setup.html"]) {
     const html = readFileSync(path.join(root, name), "utf8");
-    assert.match(html, /20260903deploy83/);
+    assert.match(html, /20260903deploy84/);
+    assert.doesNotMatch(html, /20260903deploy83/);
     assert.doesNotMatch(html, /20260903deploy82/);
     assert.doesNotMatch(html, /20260903deploy81/);
     assert.doesNotMatch(html, /20260903deploy80/);
@@ -317,6 +318,10 @@ test("HTML and CSS cache stickers match deploy83", () => {
   assert.match(login, /href="https:\/\/atavtelecom\.in\/legal\/shipping"[^>]*>Shipping &amp; Delivery</);
   assert.match(login, /href="https:\/\/atavtelecom\.in\/legal\/cookies"[^>]*>Cookie Policy</);
   assert.match(login, /class="signup-block"/);
+  assert.match(login, /class="auth-trial-banner"/);
+  assert.match(login, /Start 2-day trial/);
+  assert.match(login, /New shops get a 2-day trial/);
+  assert.match(saas, /auth-trial-ui: 2-day banner 2026/);
   assert.match(saas, /auth-scene-types/);
   assert.match(saas, /auth-body:has\(\.auth-scene\)/);
   assert.match(saas, /\.auth-shell /);
