@@ -2405,7 +2405,7 @@ body.footwear-mode.counter-mode .stage.is-counter .card .sku { display: block; f
   }
   .counter-lane {
     display: grid;
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1.25fr) minmax(0, 0.85fr);
     gap: 6px;
   }
   .scan-lane {
@@ -2413,14 +2413,14 @@ body.footwear-mode.counter-mode .stage.is-counter .card .sku { display: block; f
     box-shadow: none;
   }
   .scan-lane input { padding: 8px 0; font-size: 15px; }
-  .scan-status { max-width: 14ch; }
+  .scan-status { max-width: 10ch; }
   .counter-topbar .search { min-width: 0; }
   .counter-tools { display: grid; grid-template-columns: 1fr 1fr; overflow: visible; }
   .counter-topbar .select,
   .counter-topbar .customer-picker { min-width: 0; width: 100%; }
-  .counter-topbar #pay-method { grid-column: 1 / -1; }
+  .counter-topbar #pay-method { grid-column: auto; }
   .quick-customer-wrap {
-    grid-column: 1 / -1;
+    grid-column: auto;
   }
   .quick-customer-wrap > summary {
     display: flex;
@@ -2810,6 +2810,7 @@ body.footwear-mode.counter-mode .stage.is-counter .card .sku { display: block; f
 .bill-disc label { display: grid; gap: 4px; font-size: 12px; font-weight: 600; color: var(--muted); }
 .disc-pair { display: grid; grid-template-columns: 56px 1fr; gap: 6px; }
 .disc-pair select, .disc-pair input, .loyalty-redeem input { min-height: 34px; }
+.view-counter .line-disc { display: none; }
 .line-disc {
   display: flex;
   flex-wrap: wrap;

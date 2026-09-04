@@ -137,7 +137,7 @@ function applyFootwearMode() {
     el.hidden = !on;
   });
   const search = $("search");
-  if (search) search.placeholder = on ? "Search shoe, colour, size, or code…" : "Search spice, HSN, or code…";
+  if (search) search.placeholder = on ? "Search shoe, colour, or size…" : "Search name or HSN…";
   if ($("item-category-lab")) $("item-category-lab").textContent = on ? "Style" : "Category";
   if ($("item-category")) $("item-category").placeholder = on ? "School / Sports / Sandal" : "Whole Spices";
   if ($("item-subcategory-lab")) $("item-subcategory-lab").textContent = on ? "Brand" : "Subcategory";
