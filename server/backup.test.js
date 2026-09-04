@@ -128,10 +128,11 @@ test("PHP and HTML wire master admin backup", () => {
   );
 });
 
-test("HTML and CSS cache stickers match deploy79", () => {
+test("HTML and CSS cache stickers match deploy80", () => {
   for (const name of ["index.html", "master.html", "login.html", "setup.html"]) {
     const html = readFileSync(path.join(root, name), "utf8");
-    assert.match(html, /20260903deploy79/);
+    assert.match(html, /20260903deploy80/);
+    assert.doesNotMatch(html, /20260903deploy79/);
     assert.doesNotMatch(html, /20260903deploy78/);
     assert.doesNotMatch(html, /20260903deploy77/);
     assert.doesNotMatch(html, /20260903deploy76/);
@@ -241,9 +242,10 @@ test("HTML and CSS cache stickers match deploy79", () => {
   assert.match(appJs, /class="line-ops"/);
   assert.match(appJs, /class="line-amt"/);
   assert.match(pos, /body\.counter-mode \.platform-notices/);
-  assert.match(pos, /compact-catalog: smaller item cards/);
+  assert.match(pos, /counter-ux: product tiles/);
+  assert.match(pos, /counter-ux: till-desk-2026/);
   assert.match(pos, /bill-slider: hide unhide/);
-  assert.match(pos, /minmax\(118px, 1fr\)/);
+  assert.match(pos, /minmax\(152px, 1fr\)/);
   assert.match(pos, /repeat\(3, minmax\(0, 1fr\)\)/);
   assert.match(pos, /\.stage\.is-counter \.catalog[\s\S]{0,500}flex-direction: column/);
   assert.match(pos, /stage\.is-counter > \.view-counter:not\(\[hidden\]\)/);

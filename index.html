@@ -6,8 +6,8 @@
     <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
     <title>ATAV POS</title>
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./css/pos.css?v=20260903deploy79" />
-    <link rel="stylesheet" href="./css/saas.css?v=20260903deploy79" />
+    <link rel="stylesheet" href="./css/pos.css?v=20260903deploy80" />
+    <link rel="stylesheet" href="./css/saas.css?v=20260903deploy80" />
   </head>
   <body>
     <div class="app" id="app">
@@ -97,14 +97,16 @@
         <section class="view view-counter" id="view-counter" hidden>
           <div class="edit-order-banner" id="edit-order-banner" hidden></div>
           <header class="topbar counter-topbar">
-            <form class="scan-lane" id="scan-form" autocomplete="off">
-              <span class="scan-lane-ico" aria-hidden="true"></span>
-              <input id="scan-code" type="text" enterkeyhint="done" autocomplete="off" placeholder="Scan or type barcode, then Enter" />
-              <span class="scan-status" id="scan-status"></span>
-            </form>
-            <form class="search" id="search-form">
-              <input id="search" type="search" placeholder="Search name or HSN…" autocomplete="off" />
-            </form>
+            <div class="counter-lane">
+              <form class="scan-lane" id="scan-form" autocomplete="off">
+                <span class="scan-lane-ico" aria-hidden="true"></span>
+                <input id="scan-code" type="text" enterkeyhint="done" autocomplete="off" placeholder="Scan or type barcode, then Enter" />
+                <span class="scan-status" id="scan-status"></span>
+              </form>
+              <form class="search" id="search-form">
+                <input id="search" type="search" placeholder="Search name or HSN…" autocomplete="off" />
+              </form>
+            </div>
             <div class="counter-tools">
               <div class="customer-picker">
                 <select id="customer" class="select" aria-label="Customer"></select>
@@ -184,9 +186,9 @@
                 <div class="grand"><span>Total</span><span id="total">₹0.00</span></div>
               </div>
               <div class="pay">
-                <button class="btn danger" id="btn-clear" type="button">Clear</button>
                 <div class="pay-row">
                   <button class="btn" id="btn-hold" type="button">Hold</button>
+                  <button class="btn danger" id="btn-clear" type="button">Clear</button>
                   <button class="btn primary" id="btn-pay" type="button">Pay</button>
                 </div>
                 <div class="hint" id="hint"></div>
@@ -844,16 +846,16 @@
         </section>
       </div>
     </aside>
-    <script src="./js/gst-supply.js?v=20260903deploy79" defer></script>
-    <script src="./js/pos-api.js?v=20260903deploy79" defer></script>
-    <script src="./js/units.js?v=20260903deploy79" defer></script>
-    <script src="./js/footwear.js?v=20260903deploy79" defer></script>
-    <script src="./js/discount.js?v=20260903deploy79" defer></script>
-    <script src="./js/loyalty.js?v=20260903deploy79" defer></script>
-    <script src="./js/barcode.js?v=20260903deploy79" defer></script>
-    <script src="./js/dev-mode.js?v=20260903deploy79" defer></script>
-    <script src="./js/invoice.js?v=20260903deploy79" defer></script>
-    <script src="./js/support.js?v=20260903deploy79" defer></script>
-    <script src="./js/app.js?v=20260903deploy79" defer></script>
+    <script src="./js/gst-supply.js?v=20260903deploy80" defer></script>
+    <script src="./js/pos-api.js?v=20260903deploy80" defer></script>
+    <script src="./js/units.js?v=20260903deploy80" defer></script>
+    <script src="./js/footwear.js?v=20260903deploy80" defer></script>
+    <script src="./js/discount.js?v=20260903deploy80" defer></script>
+    <script src="./js/loyalty.js?v=20260903deploy80" defer></script>
+    <script src="./js/barcode.js?v=20260903deploy80" defer></script>
+    <script src="./js/dev-mode.js?v=20260903deploy80" defer></script>
+    <script src="./js/invoice.js?v=20260903deploy80" defer></script>
+    <script src="./js/support.js?v=20260903deploy80" defer></script>
+    <script src="./js/app.js?v=20260903deploy80" defer></script>
   </body>
 </html>

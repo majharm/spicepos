@@ -1052,10 +1052,12 @@ function renderCatalog() {
       const low = Number(i.stock_gm) <= Number(i.reorder_level_gm);
       return `<button class="card" type="button" data-add="${escapeHtml(i.id)}">
         ${cardPhotoHtml(i)}
-        <div class="sku">${escapeHtml(itemVariantText(i) || `${i.category} / ${i.subcategory || "—"}`)}</div>
-        <div class="name">${escapeHtml(i.name)} <small>${escapeHtml(itemVariantText(i) || (i.hsn ? `HSN ${i.hsn}` : ""))}</small></div>
-        <div class="meta"><span>${escapeHtml(fmtQty(i.stock_gm, i))}</span><span>${money(rateFor(i))}${escapeHtml(POSUnits.rateSuffix(itemUnit(i)))}</span></div>
-        <div class="stock ${low ? "low" : "ok"}">${escapeHtml(i.code)} · GST ${escapeHtml(i.gst_rate)}%</div>
+        <div class="card-body">
+          <div class="sku">${escapeHtml(itemVariantText(i) || `${i.category} / ${i.subcategory || "—"}`)}</div>
+          <div class="name">${escapeHtml(i.name)} <small>${escapeHtml(itemVariantText(i) || (i.hsn ? `HSN ${i.hsn}` : ""))}</small></div>
+          <div class="meta"><span class="card-price">${money(rateFor(i))}${escapeHtml(POSUnits.rateSuffix(itemUnit(i)))}</span><span class="card-qty">${escapeHtml(fmtQty(i.stock_gm, i))}</span></div>
+          <div class="stock ${low ? "low" : "ok"}">${escapeHtml(i.code)} · GST ${escapeHtml(i.gst_rate)}%</div>
+        </div>
       </button>`;
     })
     .join("");
