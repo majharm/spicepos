@@ -377,8 +377,20 @@ function applyCounterMobile(raw, { announceMiss = true } = {}) {
   const d = digitsMobile(raw);
   if (d.length < 10) return false;
   const cust = findCustomerByMobile(d);
-  if (cust) return selectCounterCustomer(cust);
+  if (cust) {
+    const wrap = $("quick-customer-wrap");
+    if (wrap) wrap.open = false;
+    return selectCounterCustomer(cust);
+  }
   if (announceMiss) {
+    const walk = (state.customers || []).find((c) => c.code === "CUS-001" || /walk-?in/i.test(String(c.name || "")));
+    if (walk) {
+      state.customerId = walk.id;
+      if ($("customer")) $("customer").value = walk.id;
+      paintBillCustomer();
+      renderCatalog();
+      renderCart();
+    }
     setHint("No customer for this mobile — add with + Customer", "error");
     if ($("qc-mobile")) $("qc-mobile").value = d;
     const wrap = $("quick-customer-wrap");

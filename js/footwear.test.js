@@ -77,4 +77,6 @@ test("Counter has a dedicated scan lane and Pay action", () => {
   assert.match(app, /function findCustomerByMobile/);
   assert.match(app, /function applyCounterMobile/);
   assert.match(app, /function selectCounterCustomer/);
+  assert.match(app, /No customer for this mobile — add with \+ Customer/);
+  assert.match(app, /wrap\.open = false/);
 });
