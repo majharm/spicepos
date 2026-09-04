@@ -128,10 +128,11 @@ test("PHP and HTML wire master admin backup", () => {
   );
 });
 
-test("HTML and CSS cache stickers match deploy82", () => {
+test("HTML and CSS cache stickers match deploy83", () => {
   for (const name of ["index.html", "master.html", "login.html", "setup.html"]) {
     const html = readFileSync(path.join(root, name), "utf8");
-    assert.match(html, /20260903deploy82/);
+    assert.match(html, /20260903deploy83/);
+    assert.doesNotMatch(html, /20260903deploy82/);
     assert.doesNotMatch(html, /20260903deploy81/);
     assert.doesNotMatch(html, /20260903deploy80/);
     assert.doesNotMatch(html, /20260903deploy79/);
@@ -225,6 +226,12 @@ test("HTML and CSS cache stickers match deploy82", () => {
   assert.match(index, /id="pack-save"/);
   assert.match(index, /id="pack-cancel"/);
   assert.match(pos, /\.pack-card-head/);
+  assert.match(pos, /packs-desk: composer \+ library/);
+  assert.match(index, /id="pack-item-search"/);
+  assert.match(index, /id="pack-library-search"/);
+  assert.match(index, /class="packs-desk"/);
+  assert.match(appJs, /function paintPackLive/);
+  assert.match(appJs, /function filterPackCompose/);
   assert.doesNotMatch(index, /100 g each/);
   assert.match(pos, /\.qty-input/);
   assert.match(index, /duplicate copy/);

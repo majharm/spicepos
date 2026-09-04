@@ -208,7 +208,7 @@ const VIEW_META = {
   damage: { title: "Damage stock", subtitle: "Wastage, approval, and estimated loss" },
   ledger: { title: "Stock ledger", subtitle: "Purchase, sale, return, and damage history" },
   loyalty: { title: "Royalty points", subtitle: "Earn, redeem, tiers, birthday and referral" },
-  packs: { title: "Packs", subtitle: "Pre-defined spice packs and compositions" },
+  packs: { title: "Packs", subtitle: "Named spice mixes for the Counter" },
   orders: { title: "Invoices", subtitle: "POS slip, official A4, or duplicate copy" },
   purchases: { title: "Purchases", subtitle: "20 pcs = 20 barcodes you type or scan" },
   suppliers: { title: "Suppliers", subtitle: "Vendor contacts, address, and GSTIN" },
@@ -1558,10 +1558,94 @@ function readPackFormItems() {
     .filter((row) => row.quantity_gm > 0);
 }
 
+function packUnitLabel(item) {
+  return poUnitLabel(item);
+}
+
+function snapshotPackForm() {
+  const map = new Map();
+  document.querySelectorAll("[data-pack-item]").forEach((box) => {
+    const qty = document.querySelector(`[data-pack-qty="${box.dataset.packItem}"]`);
+    map.set(box.dataset.packItem, { checked: box.checked, qty: qty?.value });
+  });
+  return map;
+}
+
+function packRowAmount(item, qty) {
+  return POSUnits.lineAmount(qty, Number(item.retail_rate) || 0, itemUnit(item));
+}
+
+function paintPackLive() {
+  const el = $("pack-live");
+  const rows = readPackFormItems();
+  const n = rows.length;
+  let weight = 0;
+  let count = 0;
+  let volume = 0;
+  let amount = 0;
+  for (const row of rows) {
+    const item = state.items.find((x) => x.id === row.item_id);
+    if (!item) continue;
+    const unit = itemUnit(item);
+    const qty = Number(row.quantity_gm) || 0;
+    amount += packRowAmount(item, qty);
+    if (POSUnits.isCount(unit)) count += qty;
+    else if (POSUnits.typeOf(unit).family === "volume") volume += qty;
+    else weight += qty;
+  }
+  const bits = [];
+  if (weight) bits.push(kg(weight));
+  if (volume) bits.push(`${volume} ml`);
+  if (count) bits.push(`${count} pcs`);
+  const qtyLabel = bits.length ? bits.join(" + ") : "Empty";
+  if (el) {
+    el.innerHTML = `<span><strong>${n}</strong> spice${n === 1 ? "" : "s"}</span>
+      <span><strong>${escapeHtml(qtyLabel)}</strong></span>
+      <span>Est. ${money(amount)}</span>`;
+  }
+  const amtEls = document.querySelectorAll("[data-pack-amt]");
+  amtEls.forEach((cell) => {
+    const id = cell.dataset.packAmt;
+    const item = state.items.find((x) => x.id === id);
+    const box = document.querySelector(`[data-pack-item="${id}"]`);
+    const qty = Number(document.querySelector(`[data-pack-qty="${id}"]`)?.value) || 0;
+    cell.textContent = box?.checked && item ? money(packRowAmount(item, qty)) : "—";
+  });
+  document.querySelectorAll("[data-pack-row]").forEach((row) => {
+    const box = row.querySelector("[data-pack-item]");
+    row.classList.toggle("is-checked", Boolean(box?.checked));
+  });
+  filterPackCompose();
+}
+
+function filterPackCompose() {
+  const q = ($("pack-item-search")?.value || "").trim().toLowerCase();
+  const selectedOnly = Boolean($("pack-selected-only")?.checked);
+  document.querySelectorAll("[data-pack-row]").forEach((row) => {
+    const hay = row.dataset.packSearch || "";
+    const box = row.querySelector("[data-pack-item]");
+    const hideSearch = Boolean(q) && !hay.includes(q);
+    const hideSel = selectedOnly && !box?.checked;
+    row.hidden = hideSearch || hideSel;
+  });
+}
+
+function filterPackLibrary() {
+  const q = ($("pack-library-search")?.value || "").trim().toLowerCase();
+  document.querySelectorAll("#packs-table [data-pack-card]").forEach((card) => {
+    const hay = card.dataset.packSearch || "";
+    card.hidden = Boolean(q) && !hay.includes(q);
+  });
+}
+
 function resetPackForm() {
   $("pack-form").reset();
   if ($("pack-id")) $("pack-id").value = "";
   if ($("pack-save")) $("pack-save").textContent = "Save pack";
+  if ($("pack-mode")) $("pack-mode").textContent = "New pack";
+  $("pack-form")?.classList.remove("is-editing");
+  if ($("pack-item-search")) $("pack-item-search").value = "";
+  if ($("pack-selected-only")) $("pack-selected-only").checked = false;
   renderPackCompose();
 }
 
@@ -1570,6 +1654,10 @@ function fillPackForm(pack) {
   $("pack-id").value = pack.id;
   $("pack-name").value = pack.name;
   if ($("pack-save")) $("pack-save").textContent = "Update pack";
+  if ($("pack-mode")) $("pack-mode").textContent = `Editing ${pack.code || pack.name}`;
+  $("pack-form")?.classList.add("is-editing");
+  if ($("pack-item-search")) $("pack-item-search").value = "";
+  if ($("pack-selected-only")) $("pack-selected-only").checked = true;
   renderPackCompose();
   const byItem = new Map((pack.items || []).map((row) => [row.item_id, row]));
   document.querySelectorAll("[data-pack-item]").forEach((box) => {
@@ -1580,20 +1668,86 @@ function fillPackForm(pack) {
   });
   $("pack-hint").textContent = `Editing ${pack.code || pack.name}`;
   $("pack-hint").className = "hint";
+  paintPackLive();
   $("pack-form")?.scrollIntoView({ block: "start" });
   $("pack-name")?.focus();
 }
 
 function renderPackCompose() {
-  $("pack-lines").innerHTML = packComposeItems()
-    .map(
-      (i) => `<label>
-        <input type="checkbox" data-pack-item="${escapeHtml(i.id)}" />
-        ${escapeHtml(i.name)} (${escapeHtml(i.subcategory || i.category)})
-        <input type="number" min="${POSUnits.qtyMin()}" max="${POSUnits.qtyMax()}" step="1" value="${POSUnits.isCount(itemUnit(i)) ? 1 : 500}" data-pack-qty="${escapeHtml(i.id)}" /> ${escapeHtml(POSUnits.isCount(itemUnit(i)) ? "pcs" : POSUnits.typeOf(itemUnit(i)).family === "volume" ? "ml" : "g")}
-      </label>`,
-    )
+  const wrap = $("pack-lines");
+  if (!wrap) return;
+  const prev = snapshotPackForm();
+  const items = packComposeItems();
+  if (!items.length) {
+    wrap.innerHTML = `<p class="pack-empty">Add items first — packs are built from your catalog.</p>`;
+    paintPackLive();
+    return;
+  }
+  wrap.innerHTML = `<div class="pack-table-wrap"><table class="pack-table">
+    <thead><tr><th class="pack-check"></th><th>Spice</th><th>Group</th><th>Qty</th><th>Unit</th><th class="num">Est.</th></tr></thead>
+    <tbody>${items
+      .map((i) => {
+        const unit = packUnitLabel(i);
+        const snap = prev.get(i.id);
+        const checked = snap?.checked ? " checked" : "";
+        const qty = snap?.qty || (POSUnits.isCount(itemUnit(i)) ? 1 : 500);
+        const search = `${i.name} ${i.subcategory || ""} ${i.category || ""} ${i.hsn || ""} ${i.code || ""}`.toLowerCase();
+        return `<tr data-pack-row="${escapeHtml(i.id)}" data-pack-search="${escapeHtml(search)}"${snap?.checked ? ' class="is-checked"' : ""}>
+          <td class="pack-check"><input type="checkbox" data-pack-item="${escapeHtml(i.id)}"${checked} /></td>
+          <td class="pack-name-cell">${escapeHtml(i.name)}</td>
+          <td class="pack-group">${escapeHtml(i.subcategory || i.category || "—")}</td>
+          <td><input type="number" min="${POSUnits.qtyMin()}" max="${POSUnits.qtyMax()}" step="1" value="${escapeHtml(qty)}" data-pack-qty="${escapeHtml(i.id)}" /></td>
+          <td class="pack-unit">${escapeHtml(unit)}</td>
+          <td class="num" data-pack-amt="${escapeHtml(i.id)}">—</td>
+        </tr>`;
+      })
+      .join("")}</tbody></table></div>`;
+  paintPackLive();
+}
+
+function renderPacksTable() {
+  const el = $("packs-table");
+  if (!el) return;
+  const stats = $("packs-hero-stats");
+  const n = state.packs.length;
+  const lines = state.packs.reduce((s, p) => s + (p.items || []).length, 0);
+  if (stats) {
+    stats.innerHTML = `<div class="packs-stat"><span>Pack types</span><strong>${n}</strong></div>
+      <div class="packs-stat"><span>Recipe lines</span><strong>${lines}</strong></div>`;
+  }
+  if (!n) {
+    el.innerHTML = `<div class="pack-empty-card">
+      <strong>No pack types yet</strong>
+      <p>Name a pack on the left, tick spices, and save. It will appear here and on Counter.</p>
+    </div>`;
+    return;
+  }
+  el.innerHTML = state.packs
+    .map((p) => {
+      const items = p.items || [];
+      const search = `${p.name} ${p.code || ""} ${items.map((i) => i.spice_name || "").join(" ")}`.toLowerCase();
+      let amount = 0;
+      const chips = items
+        .map((i) => {
+          const it = state.items.find((x) => x.id === i.item_id);
+          if (it) amount += packRowAmount(it, Number(i.quantity_gm) || 0);
+          return `<li>${escapeHtml(i.spice_name)} <em>${escapeHtml(fmtQty(i.quantity_gm, it || i))}</em></li>`;
+        })
+        .join("");
+      return `<article class="report-card pack-card" data-pack-card data-edit-pack="${escapeHtml(p.id)}" data-pack-search="${escapeHtml(search)}">
+        <div class="pack-card-head">
+          <div>
+            <strong>${escapeHtml(p.name)}</strong>
+            <span>${escapeHtml(p.code || "")} · ${escapeHtml(kg(p.total_quantity_gm))}</span>
+          </div>
+          <button class="btn" type="button" data-edit-pack="${escapeHtml(p.id)}">Edit</button>
+        </div>
+        <ul class="pack-chips">${chips || "<li>No spices</li>"}</ul>
+        <p class="pack-card-foot">${items.length} spice${items.length === 1 ? "" : "s"} · Est. ${money(amount)}</p>
+      </article>`;
+    })
     .join("");
+  filterPackLibrary();
 }
 
 function poUnitLabel(item) {
@@ -1722,32 +1876,6 @@ function paintPoTotals() {
   if ($("po-selected-meta")) $("po-selected-meta").textContent = `${checked.length} selected`;
   if ($("po-total")) $("po-total").textContent = money(total);
   refreshPoBarcodeRows();
-}
-
-function renderPacksTable() {
-  if (!state.packs.length) {
-    $("packs-table").innerHTML = `<p class="hint">No pack types yet. Save one above.</p>`;
-    return;
-  }
-  $("packs-table").innerHTML = state.packs
-    .map(
-      (p) => `<div class="report-card pack-card">
-        <div class="pack-card-head">
-          <div>
-            <strong>${escapeHtml(p.name)}</strong>
-            <span>${escapeHtml(p.code)} · ${escapeHtml(kg(p.total_quantity_gm))}</span>
-          </div>
-          <button class="btn" type="button" data-edit-pack="${escapeHtml(p.id)}">Edit</button>
-        </div>
-        <p class="hint">${(p.items || [])
-          .map((i) => {
-            const it = state.items.find((x) => x.id === i.item_id);
-            return `${escapeHtml(i.spice_name)} ${escapeHtml(fmtQty(i.quantity_gm, it || i))}`;
-          })
-          .join(" · ")}</p>
-      </div>`,
-    )
-    .join("");
 }
 
 function renderSettings() {
@@ -3194,6 +3322,29 @@ $("quick-customer-form")?.addEventListener("submit", async (e) => {
     }
     setHint(err.message, "error");
   }
+});
+
+$("pack-item-search")?.addEventListener("input", filterPackCompose);
+$("pack-selected-only")?.addEventListener("change", filterPackCompose);
+$("pack-library-search")?.addEventListener("input", filterPackLibrary);
+$("pack-lines")?.addEventListener("input", (e) => {
+  if (e.target.matches("[data-pack-qty]")) {
+    const id = e.target.dataset.packQty;
+    const box = document.querySelector(`[data-pack-item="${id}"]`);
+    if (box && Number(e.target.value) > 0) box.checked = true;
+  }
+  if (e.target.matches("[data-pack-qty], [data-pack-item]")) paintPackLive();
+});
+$("pack-lines")?.addEventListener("change", (e) => {
+  if (e.target.matches("[data-pack-item], [data-pack-qty]")) paintPackLive();
+});
+$("pack-lines")?.addEventListener("click", (e) => {
+  const row = e.target.closest("[data-pack-row]");
+  if (!row || e.target.closest("input, button")) return;
+  const box = row.querySelector("[data-pack-item]");
+  if (!box) return;
+  box.checked = !box.checked;
+  paintPackLive();
 });
 
 $("pack-form").addEventListener("submit", async (e) => {

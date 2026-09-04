@@ -79,4 +79,8 @@ test("Counter has a dedicated scan lane and Pay action", () => {
   assert.match(app, /function selectCounterCustomer/);
   assert.match(app, /No customer for this mobile — add with \+ Customer/);
   assert.match(app, /wrap\.open = false/);
+  assert.match(index, /id="pack-item-search"/);
+  assert.match(index, /class="packs-desk"/);
+  assert.match(app, /function paintPackLive/);
+  assert.match(css, /packs-desk: composer \+ library/);
 });

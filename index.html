@@ -6,8 +6,8 @@
     <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
     <title>ATAV POS</title>
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./css/pos.css?v=20260903deploy82" />
-    <link rel="stylesheet" href="./css/saas.css?v=20260903deploy82" />
+    <link rel="stylesheet" href="./css/pos.css?v=20260903deploy83" />
+    <link rel="stylesheet" href="./css/saas.css?v=20260903deploy83" />
   </head>
   <body>
     <div class="app" id="app">
@@ -313,18 +313,50 @@
           <div class="hint" id="cust-hint"></div>
           <div class="table-wrap" id="customers-table"></div>
         </section>
-        <section class="view" id="view-packs" hidden>
+        <section class="view view-packs" id="view-packs" hidden>
           <h2 class="visually-hidden">Packs</h2>
-          <p class="lede">Create a pack type, or edit one from the list. Choose spices and grams (e.g. Special Masala Pack — 5 KG).</p>
-          <form class="settings wide" id="pack-form">
-            <input type="hidden" id="pack-id" />
-            <label>Pack name <input id="pack-name" required placeholder="Special Masala Pack — 5 KG" /></label>
-            <div id="pack-lines" class="pack-compose"></div>
-            <button class="btn primary" type="submit" id="pack-save">Save pack</button>
-            <button class="btn" type="button" id="pack-cancel">Clear</button>
-          </form>
-          <div class="hint" id="pack-hint"></div>
-          <div class="table-wrap" id="packs-table"></div>
+          <div class="packs-desk">
+            <header class="packs-hero">
+              <div class="packs-hero-copy">
+                <p class="packs-kicker">Inventory</p>
+                <h3>Pack types</h3>
+                <p class="packs-lede">Name a mix, tick spices, set grams or pcs. Saved packs show on Counter.</p>
+              </div>
+              <div class="packs-hero-stats" id="packs-hero-stats"></div>
+            </header>
+            <div class="packs-split">
+              <form class="pack-composer" id="pack-form" autocomplete="off">
+                <input type="hidden" id="pack-id" />
+                <div class="pack-composer-top">
+                  <div class="pack-name-block">
+                    <p class="pack-mode" id="pack-mode">New pack</p>
+                    <label class="pack-name-field">Pack name
+                      <input id="pack-name" required maxlength="120" placeholder="Special Masala Pack — 5 KG" />
+                    </label>
+                  </div>
+                  <div class="pack-live" id="pack-live"></div>
+                </div>
+                <div class="pack-items-bar">
+                  <h4>Recipe</h4>
+                  <input id="pack-item-search" type="search" placeholder="Search spice or HSN…" autocomplete="off" />
+                  <label class="pack-toggle"><input type="checkbox" id="pack-selected-only" /> Selected only</label>
+                </div>
+                <div id="pack-lines" class="pack-compose"></div>
+                <div class="pack-composer-actions">
+                  <button class="btn primary" type="submit" id="pack-save">Save pack</button>
+                  <button class="btn" type="button" id="pack-cancel">Clear</button>
+                  <div class="hint" id="pack-hint"></div>
+                </div>
+              </form>
+              <aside class="packs-library">
+                <div class="packs-library-head">
+                  <h4>Saved packs</h4>
+                  <input id="pack-library-search" type="search" placeholder="Find a pack…" autocomplete="off" />
+                </div>
+                <div id="packs-table" class="packs-library-list"></div>
+              </aside>
+            </div>
+          </div>
         </section>
         <section class="view" id="view-orders" hidden>
           <h2 class="visually-hidden">Invoices</h2>
@@ -848,16 +880,16 @@
         </section>
       </div>
     </aside>
-    <script src="./js/gst-supply.js?v=20260903deploy82" defer></script>
-    <script src="./js/pos-api.js?v=20260903deploy82" defer></script>
-    <script src="./js/units.js?v=20260903deploy82" defer></script>
-    <script src="./js/footwear.js?v=20260903deploy82" defer></script>
-    <script src="./js/discount.js?v=20260903deploy82" defer></script>
-    <script src="./js/loyalty.js?v=20260903deploy82" defer></script>
-    <script src="./js/barcode.js?v=20260903deploy82" defer></script>
-    <script src="./js/dev-mode.js?v=20260903deploy82" defer></script>
-    <script src="./js/invoice.js?v=20260903deploy82" defer></script>
-    <script src="./js/support.js?v=20260903deploy82" defer></script>
-    <script src="./js/app.js?v=20260903deploy82" defer></script>
+    <script src="./js/gst-supply.js?v=20260903deploy83" defer></script>
+    <script src="./js/pos-api.js?v=20260903deploy83" defer></script>
+    <script src="./js/units.js?v=20260903deploy83" defer></script>
+    <script src="./js/footwear.js?v=20260903deploy83" defer></script>
+    <script src="./js/discount.js?v=20260903deploy83" defer></script>
+    <script src="./js/loyalty.js?v=20260903deploy83" defer></script>
+    <script src="./js/barcode.js?v=20260903deploy83" defer></script>
+    <script src="./js/dev-mode.js?v=20260903deploy83" defer></script>
+    <script src="./js/invoice.js?v=20260903deploy83" defer></script>
+    <script src="./js/support.js?v=20260903deploy83" defer></script>
+    <script src="./js/app.js?v=20260903deploy83" defer></script>
   </body>
 </html>
