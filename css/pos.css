@@ -441,6 +441,7 @@ body.counter-mode .session-bar { display: none; }
 body.counter-mode .view-topbar { display: none; }
 body.counter-mode .platform-notices,
 body.counter-mode .expired-banner { display: none !important; }
+body:has(#view-packs:not([hidden])) .platform-notices { display: none !important; }
 
 .view-topbar {
   display: flex;
@@ -1695,6 +1696,10 @@ body.footwear-mode.counter-mode .stage.is-counter .card .sku { display: block; f
   background: #fff;
   font-size: 15px;
   font-weight: 700;
+}
+.pack-name-field input::placeholder {
+  color: #94a3b8;
+  font-weight: 500;
 }
 .pack-name-field input:focus {
   outline: none;
