@@ -278,8 +278,16 @@ function pos_php_till_dispatch($path, $method, $body) {
 
   if ($path === "orders" && $method === "GET") {
     $orders = pos_q(
-      "SELECT * FROM sales_orders WHERE business_id = ?
-       ORDER BY CAST(SUBSTRING(order_number, 4) AS UNSIGNED) DESC, created_at DESC
+      "SELECT o.*, COALESCE(
+         NULLIF(TRIM(o.customer_name), ''),
+         NULLIF(TRIM(c.business_name), ''),
+         NULLIF(TRIM(c.name), ''),
+         'Walk-in'
+       ) AS customer_name
+       FROM sales_orders o
+       LEFT JOIN customers c ON c.id = o.customer_id AND c.business_id = o.business_id
+       WHERE o.business_id = ?
+       ORDER BY CAST(SUBSTRING(o.order_number, 4) AS UNSIGNED) DESC, o.created_at DESC
        LIMIT 80",
       "s",
       [$bid]

@@ -29,6 +29,8 @@ const state = {
   loyaltyAccount: null,
   loyaltySettings: null,
   stockMode: "simple",
+  expiryBatches: [],
+  expiryFilter: "all",
 };
 
 function debounce(fn, wait = 120) {
@@ -137,7 +139,7 @@ function applyFootwearMode() {
     el.hidden = !on;
   });
   const search = $("search");
-  if (search) search.placeholder = on ? "Search shoe, colour, size, or code…" : "Search spice, HSN, or code…";
+  if (search) search.placeholder = on ? "Search shoe, colour, or size…" : "Search name or HSN…";
   if ($("item-category-lab")) $("item-category-lab").textContent = on ? "Style" : "Category";
   if ($("item-category")) $("item-category").placeholder = on ? "School / Sports / Sandal" : "Whole Spices";
   if ($("item-subcategory-lab")) $("item-subcategory-lab").textContent = on ? "Brand" : "Subcategory";
@@ -208,11 +210,12 @@ const VIEW_META = {
   damage: { title: "Damage stock", subtitle: "Wastage, approval, and estimated loss" },
   ledger: { title: "Stock ledger", subtitle: "Purchase, sale, return, and damage history" },
   loyalty: { title: "Royalty points", subtitle: "Earn, redeem, tiers, birthday and referral" },
-  packs: { title: "Packs", subtitle: "Pre-defined spice packs and compositions" },
+  packs: { title: "Packs", subtitle: "Named spice mixes for the Counter" },
   orders: { title: "Invoices", subtitle: "POS slip, official A4, or duplicate copy" },
-  purchases: { title: "Purchases", subtitle: "Supplier bills with GST and thermal print" },
+  purchases: { title: "Purchases", subtitle: "20 pcs = 20 barcodes you type or scan" },
   suppliers: { title: "Suppliers", subtitle: "Vendor contacts, address, and GSTIN" },
   stock: { title: "Stock", subtitle: "Adjustments, transfers, and low-stock alerts" },
+  expiry: { title: "Expiry", subtitle: "Dated batches still on hand — expired first" },
   staff: { title: "Staff & roles", subtitle: "Users, roles, and access" },
   branches: { title: "Branches", subtitle: "Shop locations and contact details" },
   devices: { title: "POS devices", subtitle: "Registers and terminal codes" },
@@ -325,6 +328,79 @@ function cancelOrderEdit() {
 
 function customer() {
   return state.customers.find((c) => c.id === state.customerId) || state.customers[0];
+}
+
+function digitsMobile(raw) {
+  const d = String(raw || "").replace(/\D+/g, "");
+  if (d.length >= 10) return d.slice(-10);
+  return d;
+}
+
+function isRealMobile(raw) {
+  return /^[6-9]\d{9}$/.test(digitsMobile(raw));
+}
+
+function findCustomerByMobile(raw) {
+  const d = digitsMobile(raw);
+  if (d.length < 10) return null;
+  return (state.customers || []).find((c) => digitsMobile(c.mobile) === d) || null;
+}
+
+function paintBillCustomer() {
+  const el = $("bill-customer");
+  if (!el) return;
+  const c = customer();
+  if (!c) {
+    el.textContent = "";
+    return;
+  }
+  const name = String(c.business_name || c.name || "Walk-in").trim() || "Walk-in";
+  const mobile = digitsMobile(c.mobile);
+  el.textContent = isRealMobile(mobile) ? `${name} · ${mobile}` : name;
+}
+
+function selectCounterCustomer(cust, { hint = true } = {}) {
+  if (!cust?.id) return false;
+  state.customerId = cust.id;
+  if ($("customer")) $("customer").value = cust.id;
+  const mob = $("counter-mobile");
+  const shown = digitsMobile(cust.mobile);
+  if (mob && document.activeElement !== mob && isRealMobile(shown)) {
+    mob.value = shown;
+  }
+  paintBillCustomer();
+  renderCatalog();
+  renderCart();
+  void loadCustomerLoyalty();
+  if (hint) setHint(`Customer · ${cust.business_name || cust.name}`, "ok");
+  return true;
+}
+
+function applyCounterMobile(raw, { announceMiss = true } = {}) {
+  const d = digitsMobile(raw);
+  if (d.length < 10) return false;
+  const cust = findCustomerByMobile(d);
+  if (cust) {
+    const wrap = $("quick-customer-wrap");
+    if (wrap) wrap.open = false;
+    return selectCounterCustomer(cust);
+  }
+  if (announceMiss) {
+    const walk = (state.customers || []).find((c) => c.code === "CUS-001" || /walk-?in/i.test(String(c.name || "")));
+    if (walk) {
+      state.customerId = walk.id;
+      if ($("customer")) $("customer").value = walk.id;
+      paintBillCustomer();
+      renderCatalog();
+      renderCart();
+    }
+    setHint("No customer for this mobile — add with + Customer", "error");
+    if ($("qc-mobile")) $("qc-mobile").value = d;
+    const wrap = $("quick-customer-wrap");
+    if (wrap) wrap.open = true;
+    $("qc-name")?.focus();
+  }
+  return false;
 }
 
 function rateFor(item) {
@@ -831,6 +907,7 @@ function applyNav() {
       purchases: "purchases",
       suppliers: "suppliers",
       stock: "stock",
+      expiry: "stock",
       staff: "staff",
       branches: "branches",
       devices: "devices",
@@ -893,6 +970,7 @@ function showView(name) {
   }
   if (name === "stock") loadStock();
   if (name === "barcodes") loadBarcodesView();
+  if (name === "expiry") loadExpiryView();
   if (name === "damage") loadDamageView();
   if (name === "ledger") loadLedgerView();
   if (name === "loyalty") loadLoyaltyView();
@@ -1052,10 +1130,12 @@ function renderCatalog() {
       const low = Number(i.stock_gm) <= Number(i.reorder_level_gm);
       return `<button class="card" type="button" data-add="${escapeHtml(i.id)}">
         ${cardPhotoHtml(i)}
-        <div class="sku">${escapeHtml(itemVariantText(i) || `${i.category} / ${i.subcategory || "—"}`)}</div>
-        <div class="name">${escapeHtml(i.name)} <small>${escapeHtml(itemVariantText(i) || (i.hsn ? `HSN ${i.hsn}` : ""))}</small></div>
-        <div class="meta"><span>${escapeHtml(fmtQty(i.stock_gm, i))}</span><span>${money(rateFor(i))}${escapeHtml(POSUnits.rateSuffix(itemUnit(i)))}</span></div>
-        <div class="stock ${low ? "low" : "ok"}">${escapeHtml(i.code)} · GST ${escapeHtml(i.gst_rate)}%</div>
+        <div class="card-body">
+          <div class="sku">${escapeHtml(itemVariantText(i) || `${i.category} / ${i.subcategory || "—"}`)}</div>
+          <div class="name">${escapeHtml(i.name)} <small>${escapeHtml(itemVariantText(i) || (i.hsn ? `HSN ${i.hsn}` : ""))}</small></div>
+          <div class="meta"><span class="card-price">${money(rateFor(i))}${escapeHtml(POSUnits.rateSuffix(itemUnit(i)))}</span><span class="card-qty">${escapeHtml(fmtQty(i.stock_gm, i))}</span></div>
+          <div class="stock ${low ? "low" : "ok"}">${escapeHtml(i.code)} · GST ${escapeHtml(i.gst_rate)}%</div>
+        </div>
       </button>`;
     })
     .join("");
@@ -1106,6 +1186,7 @@ function renderCart() {
         const unit = POSUnits.isCount(itemUnit(item)) ? "pcs" : POSUnits.typeOf(itemUnit(item)).family === "volume" ? "ml" : "g";
         const calc = lineCalc(item, line);
         const bc = String(line.barcode || "").trim();
+        const key = cartLineKey(line);
         return `<div class="line">
           <div class="line-main">
             <div class="line-info">
@@ -1128,6 +1209,23 @@ function renderCart() {
                 <option value="pct"${line.discountType === "pct" ? " selected" : ""}>%</option>
               </select>
               <input data-line-disc="${escapeHtml(item.id)}" type="number" min="0" step="0.01" value="${escapeHtml(line.discountValue || 0)}" aria-label="Line discount" />
+            </div>
+            <div class="line-ops">
+              <div class="qty">
+                <button type="button" data-chg="${escapeHtml(key)}" data-d="${-step}">−</button>
+                <input class="qty-input" type="number" inputmode="numeric" min="${POSUnits.qtyMin()}" max="${POSUnits.qtyMax()}" step="1" value="${escapeHtml(line.qtyGm)}" data-qty="${escapeHtml(key)}" aria-label="Quantity in ${unit}" />
+                <span class="qty-unit">${escapeHtml(unit)}</span>
+                <button type="button" data-chg="${escapeHtml(key)}" data-d="${step}">+</button>
+              </div>
+              <div class="line-amt">${money(calc.taxable + calc.gst)}</div>
+            </div>
+          </div>
+          ${canDiscount() ? `<div class="line-disc">
+              <select data-line-disc-type="${escapeHtml(key)}" aria-label="Line discount type">
+                <option value="amt"${(line.discountType || "amt") === "amt" ? " selected" : ""}>₹</option>
+                <option value="pct"${line.discountType === "pct" ? " selected" : ""}>%</option>
+              </select>
+              <input data-line-disc="${escapeHtml(key)}" type="number" min="0" step="0.01" value="${escapeHtml(line.discountValue || 0)}" aria-label="Line discount" />
             </div>` : ""}
         </div>`;
       })
@@ -1150,6 +1248,7 @@ function renderCart() {
   $("btn-clear").disabled = state.cart.length === 0;
   document.body.classList.toggle("has-cart", state.cart.length > 0);
   paintBillToggleCount();
+  paintBillCustomer();
   if ($("btn-hold")) $("btn-hold").disabled = state.cart.length === 0 || Boolean(state.editingOrderId);
   const payTotal = t.total != null ? t.total : t.taxable + t.tax;
   $("btn-pay").textContent = state.editingOrderId
@@ -1176,6 +1275,13 @@ function renderCustomersSelect() {
     const walk = state.customers.find((c) => c.code === "CUS-001") || state.customers[0];
     state.customerId = walk?.id || "";
     if (state.customerId) $("customer").value = state.customerId;
+    paintBillCustomer();
+    const mob = $("counter-mobile");
+    const c = customer();
+    const shown = digitsMobile(c?.mobile);
+    if (mob && document.activeElement !== mob && isRealMobile(shown)) {
+      mob.value = shown;
+    }
   }
 }
 
@@ -1252,6 +1358,14 @@ async function applyBarcodeScan(raw, sourceEl) {
       const match = data.match || data;
       const id = match.item_id || match.id;
       item = state.items.find((i) => i.id === id);
+      if (!item && id) {
+        try {
+          await loadBootstrap();
+        } catch {
+          /* keep looking */
+        }
+        item = state.items.find((i) => i.id === id);
+      }
     } catch {
       item = null;
     }
@@ -1268,36 +1382,100 @@ async function applyBarcodeScan(raw, sourceEl) {
     focusScanLane();
     return true;
   }
+  if (sourceEl === $("scan-code") && digitsMobile(code).length === 10 && applyCounterMobile(code, { announceMiss: false })) {
+    if (sourceEl) sourceEl.value = "";
+    paintScanLane(true, customer()?.name || "Customer");
+    focusScanLane();
+    return true;
+  }
   paintScanLane(false, "Not found");
   setHint(`Barcode not found: ${code}`, "error");
   if (sourceEl === $("scan-code")) sourceEl.select();
   return false;
 }
 
+function newCartLineId() {
+  return `ln-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
+}
+
+function cartLineKey(line) {
+  return String(line?.lineId || line?.barcode || line?.itemId || "");
+}
+
+function findCartLine(key) {
+  const k = String(key || "");
+  return state.cart.find((l) => cartLineKey(l) === k) || null;
+}
+
+function isPieceBarcodeLine(line, item) {
+  return Boolean(String(line?.barcode || "").trim()) && POSUnits.isCount(itemUnit(item || {}));
+}
+
 function addItem(id, qtyGm, lineBarcode) {
   const item = state.items.find((i) => i.id === id);
   if (!item) return;
   const add = qtyGm == null ? POSUnits.counterStep(itemUnit(item)) : Number(qtyGm);
-  const line = state.cart.find((l) => l.itemId === id);
+  const code = String(lineBarcode || "").trim();
+  const count = POSUnits.isCount(itemUnit(item));
+  if (code) {
+    const existing = state.cart.find((l) => String(l.barcode || "").trim() === code);
+    if (existing) {
+      if (count) {
+        setHint("This piece is already on the bill", "error");
+        return;
+      }
+      existing.qtyGm = POSUnits.clampQty(Number(existing.qtyGm) + add);
+      renderCart();
+      return;
+    }
+    state.cart.push({
+      lineId: newCartLineId(),
+      itemId: id,
+      qtyGm: POSUnits.clampQty(count ? 1 : add),
+      discountType: "amt",
+      discountValue: 0,
+      barcode: code,
+    });
+    renderCart();
+    return;
+  }
+  const line = state.cart.find((l) => l.itemId === id && !String(l.barcode || "").trim());
   if (line) line.qtyGm = POSUnits.clampQty(Number(line.qtyGm) + add);
-  else state.cart.push({ itemId: id, qtyGm: POSUnits.clampQty(add), discountType: "amt", discountValue: 0, barcode: lineBarcode || "" });
+  else {
+    state.cart.push({
+      lineId: newCartLineId(),
+      itemId: id,
+      qtyGm: POSUnits.clampQty(add),
+      discountType: "amt",
+      discountValue: 0,
+      barcode: "",
+    });
+  }
   state.cart = state.cart.filter((l) => l.qtyGm > 0);
   renderCart();
 }
 
-function setLineQty(id, qtyGm) {
-  const item = state.items.find((i) => i.id === id);
-  if (!item) return;
+function setLineQty(key, qtyGm) {
+  const line = findCartLine(key);
+  if (!line) return;
+  const item = state.items.find((i) => i.id === line.itemId);
   const next = POSUnits.clampQty(qtyGm);
-  const line = state.cart.find((l) => l.itemId === id);
-  if (next <= 0) {
-    state.cart = state.cart.filter((l) => l.itemId !== id);
-  } else if (line) {
-    line.qtyGm = next;
-  } else {
-    state.cart.push({ itemId: id, qtyGm: next });
-  }
+  if (next <= 0) state.cart = state.cart.filter((l) => cartLineKey(l) !== String(key));
+  else if (isPieceBarcodeLine(line, item)) line.qtyGm = 1;
+  else line.qtyGm = next;
   renderCart();
+}
+
+function changeLineQty(key, delta) {
+  const line = findCartLine(key);
+  if (!line) return;
+  const item = state.items.find((i) => i.id === line.itemId);
+  if (isPieceBarcodeLine(line, item)) {
+    if (Number(delta) < 0) setLineQty(key, 0);
+    else setHint("Scan the next piece barcode", "ok");
+    return;
+  }
+  setLineQty(key, Number(line.qtyGm) + Number(delta));
 }
 
 function addPack(packId) {
@@ -1323,37 +1501,134 @@ function fillDatalists() {
   $("subcategory-list").innerHTML = subs.map((c) => `<option value="${escapeHtml(c)}">`).join("");
 }
 
+function itemSearchHay(item) {
+  return `${item.name || ""} ${item.code || ""} ${item.hsn || ""} ${item.barcode || ""} ${item.mfr_barcode || ""} ${item.category || ""} ${item.subcategory || ""} ${item.color || ""} ${item.size || ""}`.toLowerCase();
+}
+
+function paintItemsHero() {
+  const stats = $("items-hero-stats");
+  if (!stats) return;
+  const items = state.items || [];
+  const low = items.filter((i) => Number(i.stock_gm) <= Number(i.reorder_level_gm)).length;
+  const cats = new Set(items.map((i) => i.category).filter(Boolean)).size;
+  stats.innerHTML = `<div class="items-stat"><span>Items</span><strong>${items.length}</strong></div>
+    <div class="items-stat${low ? " is-warn" : ""}"><span>Low stock</span><strong>${low}</strong></div>
+    <div class="items-stat"><span>Groups</span><strong>${cats}</strong></div>`;
+}
+
+function filterItemsCatalog() {
+  const q = String($("item-catalog-search")?.value || "").trim().toLowerCase();
+  const lowOnly = Boolean($("item-low-only")?.checked);
+  document.querySelectorAll("#items-table [data-item-card]").forEach((card) => {
+    const hay = card.dataset.itemSearch || "";
+    const low = card.dataset.itemLow === "1";
+    card.hidden = (Boolean(q) && !hay.includes(q)) || (lowOnly && !low);
+  });
+}
+
+function resetItemForm() {
+  $("item-form").reset();
+  $("item-id").value = "";
+  resetItemImage();
+  fillItemUnitSelect(defaultItemUnit());
+  refreshItemUnitLabels();
+  if ($("item-save")) $("item-save").textContent = "Save item";
+  if ($("item-mode")) $("item-mode").textContent = "New item";
+  $("item-form")?.classList.remove("is-editing");
+  document.querySelectorAll("#items-table .item-card.is-editing").forEach((el) => el.classList.remove("is-editing"));
+}
+
+function fillItemForm(i) {
+  if (!i) return;
+  $("item-id").value = i.id;
+  $("item-name").value = i.name;
+  $("item-hsn").value = i.hsn || "";
+  $("item-category").value = i.category || "";
+  $("item-subcategory").value = i.subcategory || "";
+  if ($("item-wearer")) $("item-wearer").value = globalThis.POSFootwear?.normalizeWearer(i.wearer_type) || "";
+  if ($("item-color")) $("item-color").value = i.color || "";
+  if ($("item-size")) $("item-size").value = i.size || "";
+  $("item-retail").value = i.retail_rate;
+  if ($("item-mrp")) $("item-mrp").value = i.mrp || i.retail_rate || "";
+  if ($("item-barcode")) $("item-barcode").value = i.barcode || "";
+  if ($("item-mfr-barcode")) $("item-mfr-barcode").value = i.mfr_barcode || "";
+  if ($("item-barcode-qty")) $("item-barcode-qty").value = "";
+  $("item-b2b").value = i.b2b_rate;
+  $("item-purchase").value = i.purchase_rate;
+  $("item-gst").value = i.gst_rate;
+  fillItemUnitSelect(itemUnit(i));
+  $("item-unit").value = itemUnit(i);
+  $("item-stock").value = POSUnits.fromBase(i.stock_gm, itemUnit(i));
+  refreshItemUnitLabels();
+  paintItemImage(itemPhotoUrl(i));
+  if ($("item-save")) $("item-save").textContent = "Update item";
+  if ($("item-mode")) $("item-mode").textContent = `Editing ${i.code || i.name}`;
+  $("item-form")?.classList.add("is-editing");
+  $("item-hint").textContent = `Editing ${i.code || i.name}`;
+  $("item-hint").className = "hint";
+  document.querySelectorAll("#items-table .item-card.is-editing").forEach((el) => el.classList.remove("is-editing"));
+  document.querySelector(`#items-table [data-edit-item="${CSS.escape(i.id)}"]`)?.classList.add("is-editing");
+  $("item-form")?.scrollIntoView({ block: "start" });
+  $("item-name")?.focus();
+}
+
 function renderItemsTable() {
+  const el = $("items-table");
+  if (!el) return;
   const footwear = isFootwearShop();
-  $("items-table").innerHTML = `<table><thead><tr>
-      <th>Code</th><th>Item</th><th>Barcode</th>${footwear ? "<th>Type</th><th>Colour</th><th>Size</th>" : "<th>HSN</th>"}<th>Unit</th><th>${footwear ? "Style" : "Category"}</th><th>${footwear ? "Brand" : "Subcategory"}</th><th>Retail</th><th>B2B</th><th>Stock</th><th></th>
-  </tr></thead><tbody>${state.items
+  paintItemsHero();
+  const items = state.items || [];
+  if (!items.length) {
+    el.innerHTML = `<div class="item-empty-card">
+      <strong>No items yet</strong>
+      <p>Add a name, unit, and rates on the left. Saved items show here and on Counter.</p>
+    </div>`;
+    return;
+  }
+  el.innerHTML = items
     .map((i) => {
       const src = itemPhotoUrl(i);
       const thumb = src
         ? `<img class="item-thumb" src="${escapeHtml(src)}" alt="">`
         : `<span class="item-thumb-empty" aria-hidden="true">${escapeHtml(itemPhotoLetter(i))}</span>`;
+      const low = Number(i.stock_gm) <= Number(i.reorder_level_gm);
       const extra = footwear
-        ? `<td>${escapeHtml(globalThis.POSFootwear?.wearerLabel(i.wearer_type) || "—")}</td>
-      <td>${escapeHtml(i.color || "—")}</td>
-      <td>${escapeHtml(i.size || "—")}</td>`
-        : `<td>${escapeHtml(i.hsn || "—")}</td>`;
-      return `<tr>
-      <td>${escapeHtml(i.code)}</td>
-      <td class="item-name-cell">${thumb}${escapeHtml(i.name)}</td>
-      <td>${escapeHtml(i.barcode || "—")}</td>
-      ${extra}
-      <td>${escapeHtml(itemUnit(i))}</td>
-      <td>${escapeHtml(i.category)}</td>
-      <td>${escapeHtml(i.subcategory || "—")}</td>
-      <td>${money(i.retail_rate)}${escapeHtml(POSUnits.rateSuffix(itemUnit(i)))}</td>
-      <td>${money(i.b2b_rate)}${escapeHtml(POSUnits.rateSuffix(itemUnit(i)))}</td>
-      <td class="${Number(i.stock_gm) <= Number(i.reorder_level_gm) ? "stock low" : "stock ok"}">${escapeHtml(fmtQty(i.stock_gm, i))}</td>
-      <td><button class="btn" data-edit-item="${escapeHtml(i.id)}" type="button">Edit</button>
-          <button class="btn" data-recv="${escapeHtml(i.id)}" type="button">${escapeHtml(POSUnits.receiveLabel(itemUnit(i)))}</button></td>
-    </tr>`;
+        ? `${escapeHtml(globalThis.POSFootwear?.wearerLabel(i.wearer_type) || "—")} · ${escapeHtml(i.color || "—")} · Sz ${escapeHtml(i.size || "—")}`
+        : `${escapeHtml(i.code || "")}${i.hsn ? ` · HSN ${escapeHtml(i.hsn)}` : ""}`;
+      const group = footwear
+        ? `${escapeHtml(i.category || "Style")} / ${escapeHtml(i.subcategory || "—")}`
+        : `${escapeHtml(i.category || "—")} / ${escapeHtml(i.subcategory || "—")}`;
+      const suffix = POSUnits.rateSuffix(itemUnit(i));
+      const search = itemSearchHay(i);
+      const editing = $("item-id")?.value === i.id;
+      return `<article class="report-card item-card${editing ? " is-editing" : ""}" data-item-card data-edit-item="${escapeHtml(i.id)}" data-item-search="${escapeHtml(search)}" data-item-low="${low ? "1" : "0"}">
+        <div class="item-card-head">
+          ${thumb}
+          <div class="item-card-copy">
+            <strong>${escapeHtml(i.name)}</strong>
+            <span>${extra}</span>
+          </div>
+        </div>
+        <div class="item-card-meta">
+          <span class="item-chip">${escapeHtml(itemUnit(i))}</span>
+          <span class="item-chip">${group}</span>
+          ${i.barcode ? `<span class="item-chip">${escapeHtml(i.barcode)}</span>` : ""}
+          <span class="item-chip ${low ? "stock low" : "stock ok"}">${escapeHtml(fmtQty(i.stock_gm, i))}</span>
+        </div>
+        <div class="item-card-foot">
+          <div class="item-card-rates">
+            <span>Retail <em>${money(i.retail_rate)}${escapeHtml(suffix)}</em></span>
+            <span>B2B <em>${money(i.b2b_rate)}${escapeHtml(suffix)}</em></span>
+          </div>
+          <div class="item-card-actions">
+            <button class="btn" data-edit-item="${escapeHtml(i.id)}" type="button">Edit</button>
+            <button class="btn" data-recv="${escapeHtml(i.id)}" type="button">${escapeHtml(POSUnits.receiveLabel(itemUnit(i)))}</button>
+          </div>
+        </div>
+      </article>`;
     })
-    .join("")}</tbody></table>`;
+    .join("");
+  filterItemsCatalog();
 }
 
 function renderCustomersTable() {
@@ -1402,10 +1677,94 @@ function readPackFormItems() {
     .filter((row) => row.quantity_gm > 0);
 }
 
+function packUnitLabel(item) {
+  return poUnitLabel(item);
+}
+
+function snapshotPackForm() {
+  const map = new Map();
+  document.querySelectorAll("[data-pack-item]").forEach((box) => {
+    const qty = document.querySelector(`[data-pack-qty="${box.dataset.packItem}"]`);
+    map.set(box.dataset.packItem, { checked: box.checked, qty: qty?.value });
+  });
+  return map;
+}
+
+function packRowAmount(item, qty) {
+  return POSUnits.lineAmount(qty, Number(item.retail_rate) || 0, itemUnit(item));
+}
+
+function paintPackLive() {
+  const el = $("pack-live");
+  const rows = readPackFormItems();
+  const n = rows.length;
+  let weight = 0;
+  let count = 0;
+  let volume = 0;
+  let amount = 0;
+  for (const row of rows) {
+    const item = state.items.find((x) => x.id === row.item_id);
+    if (!item) continue;
+    const unit = itemUnit(item);
+    const qty = Number(row.quantity_gm) || 0;
+    amount += packRowAmount(item, qty);
+    if (POSUnits.isCount(unit)) count += qty;
+    else if (POSUnits.typeOf(unit).family === "volume") volume += qty;
+    else weight += qty;
+  }
+  const bits = [];
+  if (weight) bits.push(kg(weight));
+  if (volume) bits.push(`${volume} ml`);
+  if (count) bits.push(`${count} pcs`);
+  const qtyLabel = bits.length ? bits.join(" + ") : "Empty";
+  if (el) {
+    el.innerHTML = `<span><strong>${n}</strong> spice${n === 1 ? "" : "s"}</span>
+      <span><strong>${escapeHtml(qtyLabel)}</strong></span>
+      <span>Est. ${money(amount)}</span>`;
+  }
+  const amtEls = document.querySelectorAll("[data-pack-amt]");
+  amtEls.forEach((cell) => {
+    const id = cell.dataset.packAmt;
+    const item = state.items.find((x) => x.id === id);
+    const box = document.querySelector(`[data-pack-item="${id}"]`);
+    const qty = Number(document.querySelector(`[data-pack-qty="${id}"]`)?.value) || 0;
+    cell.textContent = box?.checked && item ? money(packRowAmount(item, qty)) : "—";
+  });
+  document.querySelectorAll("[data-pack-row]").forEach((row) => {
+    const box = row.querySelector("[data-pack-item]");
+    row.classList.toggle("is-checked", Boolean(box?.checked));
+  });
+  filterPackCompose();
+}
+
+function filterPackCompose() {
+  const q = ($("pack-item-search")?.value || "").trim().toLowerCase();
+  const selectedOnly = Boolean($("pack-selected-only")?.checked);
+  document.querySelectorAll("[data-pack-row]").forEach((row) => {
+    const hay = row.dataset.packSearch || "";
+    const box = row.querySelector("[data-pack-item]");
+    const hideSearch = Boolean(q) && !hay.includes(q);
+    const hideSel = selectedOnly && !box?.checked;
+    row.hidden = hideSearch || hideSel;
+  });
+}
+
+function filterPackLibrary() {
+  const q = ($("pack-library-search")?.value || "").trim().toLowerCase();
+  document.querySelectorAll("#packs-table [data-pack-card]").forEach((card) => {
+    const hay = card.dataset.packSearch || "";
+    card.hidden = Boolean(q) && !hay.includes(q);
+  });
+}
+
 function resetPackForm() {
   $("pack-form").reset();
   if ($("pack-id")) $("pack-id").value = "";
   if ($("pack-save")) $("pack-save").textContent = "Save pack";
+  if ($("pack-mode")) $("pack-mode").textContent = "New pack";
+  $("pack-form")?.classList.remove("is-editing");
+  if ($("pack-item-search")) $("pack-item-search").value = "";
+  if ($("pack-selected-only")) $("pack-selected-only").checked = false;
   renderPackCompose();
 }
 
@@ -1414,6 +1773,10 @@ function fillPackForm(pack) {
   $("pack-id").value = pack.id;
   $("pack-name").value = pack.name;
   if ($("pack-save")) $("pack-save").textContent = "Update pack";
+  if ($("pack-mode")) $("pack-mode").textContent = `Editing ${pack.code || pack.name}`;
+  $("pack-form")?.classList.add("is-editing");
+  if ($("pack-item-search")) $("pack-item-search").value = "";
+  if ($("pack-selected-only")) $("pack-selected-only").checked = true;
   renderPackCompose();
   const byItem = new Map((pack.items || []).map((row) => [row.item_id, row]));
   document.querySelectorAll("[data-pack-item]").forEach((box) => {
@@ -1424,20 +1787,86 @@ function fillPackForm(pack) {
   });
   $("pack-hint").textContent = `Editing ${pack.code || pack.name}`;
   $("pack-hint").className = "hint";
+  paintPackLive();
   $("pack-form")?.scrollIntoView({ block: "start" });
   $("pack-name")?.focus();
 }
 
 function renderPackCompose() {
-  $("pack-lines").innerHTML = packComposeItems()
-    .map(
-      (i) => `<label>
-        <input type="checkbox" data-pack-item="${escapeHtml(i.id)}" />
-        ${escapeHtml(i.name)} (${escapeHtml(i.subcategory || i.category)})
-        <input type="number" min="${POSUnits.qtyMin()}" max="${POSUnits.qtyMax()}" step="1" value="${POSUnits.isCount(itemUnit(i)) ? 1 : 500}" data-pack-qty="${escapeHtml(i.id)}" /> ${escapeHtml(POSUnits.isCount(itemUnit(i)) ? "pcs" : POSUnits.typeOf(itemUnit(i)).family === "volume" ? "ml" : "g")}
-      </label>`,
-    )
+  const wrap = $("pack-lines");
+  if (!wrap) return;
+  const prev = snapshotPackForm();
+  const items = packComposeItems();
+  if (!items.length) {
+    wrap.innerHTML = `<p class="pack-empty">Add items first — packs are built from your catalog.</p>`;
+    paintPackLive();
+    return;
+  }
+  wrap.innerHTML = `<div class="pack-table-wrap"><table class="pack-table">
+    <thead><tr><th class="pack-check"></th><th>Spice</th><th>Group</th><th>Qty</th><th>Unit</th><th class="num">Est.</th></tr></thead>
+    <tbody>${items
+      .map((i) => {
+        const unit = packUnitLabel(i);
+        const snap = prev.get(i.id);
+        const checked = snap?.checked ? " checked" : "";
+        const qty = snap?.qty || (POSUnits.isCount(itemUnit(i)) ? 1 : 500);
+        const search = `${i.name} ${i.subcategory || ""} ${i.category || ""} ${i.hsn || ""} ${i.code || ""}`.toLowerCase();
+        return `<tr data-pack-row="${escapeHtml(i.id)}" data-pack-search="${escapeHtml(search)}"${snap?.checked ? ' class="is-checked"' : ""}>
+          <td class="pack-check"><input type="checkbox" data-pack-item="${escapeHtml(i.id)}"${checked} /></td>
+          <td class="pack-name-cell">${escapeHtml(i.name)}</td>
+          <td class="pack-group">${escapeHtml(i.subcategory || i.category || "—")}</td>
+          <td><input type="number" min="${POSUnits.qtyMin()}" max="${POSUnits.qtyMax()}" step="1" value="${escapeHtml(qty)}" data-pack-qty="${escapeHtml(i.id)}" /></td>
+          <td class="pack-unit">${escapeHtml(unit)}</td>
+          <td class="num" data-pack-amt="${escapeHtml(i.id)}">—</td>
+        </tr>`;
+      })
+      .join("")}</tbody></table></div>`;
+  paintPackLive();
+}
+
+function renderPacksTable() {
+  const el = $("packs-table");
+  if (!el) return;
+  const stats = $("packs-hero-stats");
+  const n = state.packs.length;
+  const lines = state.packs.reduce((s, p) => s + (p.items || []).length, 0);
+  if (stats) {
+    stats.innerHTML = `<div class="packs-stat"><span>Pack types</span><strong>${n}</strong></div>
+      <div class="packs-stat"><span>Recipe lines</span><strong>${lines}</strong></div>`;
+  }
+  if (!n) {
+    el.innerHTML = `<div class="pack-empty-card">
+      <strong>No pack types yet</strong>
+      <p>Name a pack on the left, tick spices, and save. It will appear here and on Counter.</p>
+    </div>`;
+    return;
+  }
+  el.innerHTML = state.packs
+    .map((p) => {
+      const items = p.items || [];
+      const search = `${p.name} ${p.code || ""} ${items.map((i) => i.spice_name || "").join(" ")}`.toLowerCase();
+      let amount = 0;
+      const chips = items
+        .map((i) => {
+          const it = state.items.find((x) => x.id === i.item_id);
+          if (it) amount += packRowAmount(it, Number(i.quantity_gm) || 0);
+          return `<li>${escapeHtml(i.spice_name)} <em>${escapeHtml(fmtQty(i.quantity_gm, it || i))}</em></li>`;
+        })
+        .join("");
+      return `<article class="report-card pack-card" data-pack-card data-edit-pack="${escapeHtml(p.id)}" data-pack-search="${escapeHtml(search)}">
+        <div class="pack-card-head">
+          <div>
+            <strong>${escapeHtml(p.name)}</strong>
+            <span>${escapeHtml(p.code || "")} · ${escapeHtml(kg(p.total_quantity_gm))}</span>
+          </div>
+          <button class="btn" type="button" data-edit-pack="${escapeHtml(p.id)}">Edit</button>
+        </div>
+        <ul class="pack-chips">${chips || "<li>No spices</li>"}</ul>
+        <p class="pack-card-foot">${items.length} spice${items.length === 1 ? "" : "s"} · Est. ${money(amount)}</p>
+      </article>`;
+    })
     .join("");
+  filterPackLibrary();
 }
 
 function poUnitLabel(item) {
@@ -1457,14 +1886,25 @@ function renderPoLines() {
     paintPoTotals();
     return;
   }
-  el.innerHTML = `<div class="po-table-wrap"><table class="po-table"><thead><tr>
-    <th class="po-check"></th><th>Item</th><th>HSN</th><th>Qty</th><th>Unit</th><th>Rate</th><th>Expiry</th><th class="num">Amount</th>
-  </tr></thead><tbody>${items
-    .map((i) => {
-      const unit = itemUnit(i);
-      const qty = POSUnits.isCount(unit) ? 1 : 1000;
-      const search = [i.name, i.hsn, i.code, i.category, i.subcategory].join(" ").toLowerCase();
-      return `<tr data-po-row="${escapeHtml(i.id)}" data-po-search="${escapeHtml(search)}" data-po-unit="${escapeHtml(unit)}">
+  const rows = [];
+  const panels = [];
+  for (const i of items) {
+    const unit = itemUnit(i);
+    const qty = POSUnits.isCount(unit) ? 1 : 1000;
+    const search = [i.name, i.hsn, i.code, i.category, i.subcategory].join(" ").toLowerCase();
+    if (POSUnits.isCount(unit)) {
+      panels.push(`<div class="po-bc-panel" data-po-bc-row="${escapeHtml(i.id)}" hidden>
+        <div class="po-bc-box">
+          <div class="po-bc-head">
+            <strong>Barcodes for ${escapeHtml(i.name)}</strong>
+            <span class="hint" data-po-bc-count="${escapeHtml(i.id)}">0 / ${qty} — type or scan, one per piece</span>
+          </div>
+          <input class="po-bc-scan" data-po-bc-scan="${escapeHtml(i.id)}" maxlength="64" placeholder="Scan or type one barcode, then Enter" autocomplete="off" />
+          <textarea class="po-bc-list" data-po-barcodes="${escapeHtml(i.id)}" rows="4" placeholder="One barcode per line — ${qty} pcs needs ${qty} codes"></textarea>
+        </div>
+      </div>`);
+    }
+    rows.push(`<tr data-po-row="${escapeHtml(i.id)}" data-po-search="${escapeHtml(search)}" data-po-unit="${escapeHtml(unit)}">
         <td class="po-check"><input type="checkbox" data-po-item="${escapeHtml(i.id)}" /></td>
         <td class="po-name">${escapeHtml(i.name)}</td>
         <td class="po-hsn">${escapeHtml(i.hsn || "—")}</td>
@@ -1473,18 +1913,59 @@ function renderPoLines() {
         <td><div class="po-rate-cell"><input type="number" min="0" step="0.01" value="${escapeHtml(i.purchase_rate)}" data-po-rate="${escapeHtml(i.id)}" /><span class="po-suffix">₹${escapeHtml(POSUnits.rateSuffix(unit))}</span></div></td>
         <td><input type="date" data-po-expiry="${escapeHtml(i.id)}" /></td>
         <td class="num" data-po-amt="${escapeHtml(i.id)}">${money(POSUnits.lineAmount(qty, i.purchase_rate, unit))}</td>
-      </tr>`;
-    })
-    .join("")}</tbody></table></div>`;
+      </tr>`);
+  }
+  el.innerHTML = `<div class="po-table-wrap"><table class="po-table"><thead><tr>
+    <th class="po-check"></th><th>Item</th><th>HSN</th><th>Qty</th><th>Unit</th><th>Rate</th><th>Expiry</th><th class="num">Amount</th>
+  </tr></thead><tbody>${rows.join("")}</tbody></table></div>
+    <div id="po-barcode-panels">${panels.join("")}</div>`;
   filterPoLines();
   paintPoTotals();
+  refreshPoBarcodeRows();
 }
 
 function filterPoLines() {
   const q = ($("po-item-search")?.value || "").trim().toLowerCase();
-  document.querySelectorAll("#po-lines tbody tr").forEach((tr) => {
+  document.querySelectorAll("#po-lines tbody tr[data-po-row]").forEach((tr) => {
     const hay = tr.dataset.poSearch || "";
-    tr.hidden = Boolean(q) && !hay.includes(q);
+    const hide = Boolean(q) && !hay.includes(q);
+    tr.hidden = hide;
+    const bc = document.querySelector(`[data-po-bc-row="${tr.dataset.poRow}"]`);
+    if (bc && hide) bc.hidden = true;
+  });
+  if (!q) refreshPoBarcodeRows();
+}
+
+function parsePoBarcodes(raw) {
+  if (globalThis.POSBarcode?.parseManualCodes) return POSBarcode.parseManualCodes(raw);
+  return String(raw || "")
+    .split(/[\s,;]+/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+function refreshPoBarcodeRows() {
+  document.querySelectorAll("[data-po-bc-row]").forEach((row) => {
+    const id = row.dataset.poBcRow;
+    const box = document.querySelector(`[data-po-item="${id}"]`);
+    const qty = Math.max(0, Math.round(Number(document.querySelector(`[data-po-qty="${id}"]`)?.value) || 0));
+    row.hidden = !box?.checked;
+    const ta = document.querySelector(`[data-po-barcodes="${id}"]`);
+    let n = 0;
+    try {
+      n = parsePoBarcodes(ta?.value).length;
+    } catch {
+      n = 0;
+    }
+    const countEl = document.querySelector(`[data-po-bc-count="${id}"]`);
+    if (countEl) {
+      countEl.textContent = `${n} / ${qty} — type or scan, one barcode per piece`;
+      countEl.className = n === qty && qty > 0 ? "hint ok" : "hint";
+    }
+    if (ta) {
+      ta.placeholder = `${qty} barcode${qty === 1 ? "" : "s"}, one per line`;
+      ta.rows = Math.min(8, Math.max(3, qty));
+    }
   });
 }
 
@@ -1494,6 +1975,7 @@ function paintPoLineAmount(itemId) {
   const unit = document.querySelector(`[data-po-row="${itemId}"]`)?.dataset.poUnit || "GM";
   const cell = document.querySelector(`[data-po-amt="${itemId}"]`);
   if (cell) cell.textContent = money(POSUnits.lineAmount(qty, rate, unit));
+  refreshPoBarcodeRows();
 }
 
 function paintPoTotals() {
@@ -1512,32 +1994,7 @@ function paintPoTotals() {
   });
   if ($("po-selected-meta")) $("po-selected-meta").textContent = `${checked.length} selected`;
   if ($("po-total")) $("po-total").textContent = money(total);
-}
-
-function renderPacksTable() {
-  if (!state.packs.length) {
-    $("packs-table").innerHTML = `<p class="hint">No pack types yet. Save one above.</p>`;
-    return;
-  }
-  $("packs-table").innerHTML = state.packs
-    .map(
-      (p) => `<div class="report-card pack-card">
-        <div class="pack-card-head">
-          <div>
-            <strong>${escapeHtml(p.name)}</strong>
-            <span>${escapeHtml(p.code)} · ${escapeHtml(kg(p.total_quantity_gm))}</span>
-          </div>
-          <button class="btn" type="button" data-edit-pack="${escapeHtml(p.id)}">Edit</button>
-        </div>
-        <p class="hint">${(p.items || [])
-          .map((i) => {
-            const it = state.items.find((x) => x.id === i.item_id);
-            return `${escapeHtml(i.spice_name)} ${escapeHtml(fmtQty(i.quantity_gm, it || i))}`;
-          })
-          .join(" · ")}</p>
-      </div>`,
-    )
-    .join("");
+  refreshPoBarcodeRows();
 }
 
 function renderSettings() {
@@ -1835,13 +2292,21 @@ let orderCache = [];
 let selectedOrderId = null;
 const orderFilter = { q: "", status: "", payment: "" };
 
+function orderCustomerName(o) {
+  const stored = String(o?.customer_name || "").trim();
+  if (stored) return stored;
+  const c = (state.customers || []).find((x) => x.id === o?.customer_id);
+  const fromCust = String(c?.business_name || c?.name || "").trim();
+  return fromCust || "Walk-in";
+}
+
 function filterOrders(rows) {
   const q = orderFilter.q.trim().toLowerCase();
   return rows.filter((o) => {
     if (orderFilter.status && String(o.status || "").toLowerCase() !== orderFilter.status) return false;
     if (orderFilter.payment && String(o.payment_status || "").toLowerCase() !== orderFilter.payment) return false;
     if (!q) return true;
-    const hay = [o.order_number, o.customer_name, o.payment_method].join(" ").toLowerCase();
+    const hay = [o.order_number, orderCustomerName(o), o.payment_method].join(" ").toLowerCase();
     return hay.includes(q);
   });
 }
@@ -1966,7 +2431,7 @@ function showOrder(o) {
       <div class="invoice-detail-top">
         <div>
           <h3 class="invoice-so">${escapeHtml(o.order_number || "—")}</h3>
-          <p class="hint">${escapeHtml(o.customer_name || "Walk-in")}</p>
+          <p class="hint">${escapeHtml(orderCustomerName(o))}</p>
           <p class="hint">${escapeHtml(formatShopDateTime(o.created_at))}</p>
         </div>
         <div class="invoice-detail-meta">
@@ -2020,7 +2485,7 @@ function renderOrdersList() {
         (o) => `<tr class="order-row${o.id === selectedOrderId ? " is-selected" : ""}" data-oid="${escapeHtml(o.id)}" tabindex="0" role="button">
         <td class="so-no"><strong>${escapeHtml(o.order_number || "—")}</strong></td>
         <td>${escapeHtml(formatShopDateTime(o.created_at))}</td>
-        <td>${escapeHtml(o.customer_name || "—")}</td>
+        <td>${escapeHtml(orderCustomerName(o))}</td>
         <td>${orderStatusBadge(o.status)}</td>
         <td>${payStatusBadge(o.payment_status)}</td>
         <td>${escapeHtml(paymentMethodLabel(o.payment_method))}</td>
@@ -2041,7 +2506,7 @@ async function loadOrders() {
 let purchaseCache = [];
 let selectedPurchaseId = null;
 
-function showPurchase(p) {
+async function showPurchase(p) {
   selectedPurchaseId = p.id;
   document.querySelectorAll("#purchases-list .order-item").forEach((btn) => {
     btn.classList.toggle("is-selected", btn.dataset.pid === p.id);
@@ -2056,7 +2521,23 @@ function showPurchase(p) {
     <div class="print-actions">
       <button class="btn primary" type="button" data-print-purchase="${escapeHtml(p.id)}">Print purchase bill</button>
       <button class="btn" type="button" data-print-po-barcodes="${escapeHtml(p.id)}">Print barcodes</button>
-    </div>`;
+    </div>
+    <div id="purchase-barcodes"><p class="hint">Loading barcodes…</p></div>`;
+  try {
+    const rows = await api(`/api/barcodes?purchase_id=${encodeURIComponent(p.id)}`);
+    const codes = (Array.isArray(rows) ? rows : []).filter((r) => r.barcode);
+    const box = $("purchase-barcodes");
+    if (!box) return;
+    box.innerHTML = codes.length
+      ? `<p class="hint ok">${codes.length} barcode${codes.length === 1 ? "" : "s"} on this purchase</p>
+         <ul class="po-bc-saved">${codes
+           .map((r) => `<li><code>${escapeHtml(r.barcode)}</code> · ${escapeHtml(r.item_name || "")}</li>`)
+           .join("")}</ul>`
+      : '<p class="hint">No barcodes on this purchase.</p>';
+  } catch {
+    const box = $("purchase-barcodes");
+    if (box) box.innerHTML = "";
+  }
 }
 
 async function loadPurchases() {
@@ -2348,7 +2829,7 @@ $("lines").addEventListener("click", (e) => {
   if (e.target.closest("[data-qty]")) return;
   const btn = e.target.closest("[data-chg]");
   if (!btn) return;
-  addItem(btn.dataset.chg, Number(btn.dataset.d));
+  changeLineQty(btn.dataset.chg, Number(btn.dataset.d));
 });
 $("lines").addEventListener("focusin", (e) => {
   const input = e.target.closest("[data-qty]");
@@ -2362,14 +2843,14 @@ $("lines").addEventListener("change", (e) => {
   }
   const disc = e.target.closest("[data-line-disc]");
   if (disc) {
-    const line = state.cart.find((l) => l.itemId === disc.dataset.lineDisc);
+    const line = findCartLine(disc.dataset.lineDisc);
     if (line) line.discountValue = Number(disc.value) || 0;
     renderCart();
     return;
   }
   const dtype = e.target.closest("[data-line-disc-type]");
   if (dtype) {
-    const line = state.cart.find((l) => l.itemId === dtype.dataset.lineDiscType);
+    const line = findCartLine(dtype.dataset.lineDiscType);
     if (line) line.discountType = dtype.value === "pct" ? "pct" : "amt";
     renderCart();
   }
@@ -2409,28 +2890,7 @@ $("items-table").addEventListener("click", async (e) => {
   }
   if (edit) {
     const i = state.items.find((x) => x.id === edit.dataset.editItem);
-    if (!i) return;
-    $("item-id").value = i.id;
-    $("item-name").value = i.name;
-    $("item-hsn").value = i.hsn || "";
-    $("item-category").value = i.category || "";
-    $("item-subcategory").value = i.subcategory || "";
-    if ($("item-wearer")) $("item-wearer").value = globalThis.POSFootwear?.normalizeWearer(i.wearer_type) || "";
-    if ($("item-color")) $("item-color").value = i.color || "";
-    if ($("item-size")) $("item-size").value = i.size || "";
-    $("item-retail").value = i.retail_rate;
-    if ($("item-mrp")) $("item-mrp").value = i.mrp || i.retail_rate || "";
-    if ($("item-barcode")) $("item-barcode").value = i.barcode || "";
-    if ($("item-mfr-barcode")) $("item-mfr-barcode").value = "";
-    if ($("item-barcode-qty")) $("item-barcode-qty").value = "";
-    $("item-b2b").value = i.b2b_rate;
-    $("item-purchase").value = i.purchase_rate;
-    $("item-gst").value = i.gst_rate;
-    fillItemUnitSelect(itemUnit(i));
-    $("item-unit").value = itemUnit(i);
-    $("item-stock").value = POSUnits.fromBase(i.stock_gm, itemUnit(i));
-    refreshItemUnitLabels();
-    paintItemImage(itemPhotoUrl(i));
+    if (i) fillItemForm(i);
   }
 });
 
@@ -2496,13 +2956,15 @@ $("purchase-pane").addEventListener("click", async (e) => {
   if (!bcBtn) return;
   try {
     const rows = await api(`/api/barcodes?purchase_id=${encodeURIComponent(bcBtn.dataset.printPoBarcodes)}`);
-    const labels = (Array.isArray(rows) ? rows : []).map((r) => ({
-      name: r.item_name,
-      barcode: r.barcode,
-      mrp: r.label_mrp || r.mrp,
-      rate: r.retail_rate,
-      copies: Math.max(1, POSUnits.isCount(itemUnit(state.items.find((i) => i.id === r.item_id) || {})) ? Math.round(Number(r.qty_gm) || 1) : 1),
-    }));
+    const labels = (Array.isArray(rows) ? rows : [])
+      .filter((r) => r.barcode)
+      .map((r) => ({
+        name: r.item_name,
+        barcode: r.barcode,
+        mrp: r.label_mrp || r.mrp,
+        rate: r.retail_rate,
+        copies: 1,
+      }));
     if (!labels.length) throw new Error("No purchase barcodes yet — save this bill again after the update");
     if (!globalThis.POSBarcode?.printLabels(labels, 1)) setHint("Allow pop-ups to print barcodes", "error");
   } catch (err) {
@@ -2613,8 +3075,15 @@ $("search-form").addEventListener("submit", async (e) => {
 });
 $("customer").addEventListener("change", () => {
   state.customerId = $("customer").value;
+  const c = customer();
+  const mob = $("counter-mobile");
+  const shown = digitsMobile(c?.mobile);
+  if (mob && isRealMobile(shown)) mob.value = shown;
+  else if (mob && document.activeElement !== mob) mob.value = "";
+  paintBillCustomer();
   renderCatalog();
   renderCart();
+  void loadCustomerLoyalty();
 });
 $("btn-clear").addEventListener("click", () => {
   if (state.editingOrderId) {
@@ -2645,6 +3114,7 @@ $("btn-pay").addEventListener("click", async () => {
     if (!state.customerId) throw new Error("Add a customer before saving the bill");
     if (!state.cart.length) throw new Error("Cart is empty");
     setHint("Saving…");
+    const cartSnapshot = state.cart.map((l) => ({ ...l }));
     const payload = {
       customerId: state.customerId,
       paymentMethod: $("pay-method").value,
@@ -2692,7 +3162,7 @@ $("btn-pay").addEventListener("click", async () => {
     if (!receiptOrder.lines?.length) {
       receiptOrder = {
         ...receiptOrder,
-        lines: state.cart.map((l) => {
+        lines: cartSnapshot.map((l) => {
           const item = state.items.find((i) => i.id === l.itemId);
           return {
             item_id: l.itemId,
@@ -2802,11 +3272,7 @@ $("item-form").addEventListener("submit", async (e) => {
     else await api("/api/items", { method: "POST", body: JSON.stringify(body) });
     $("item-hint").textContent = "Saved";
     $("item-hint").className = "hint ok";
-    $("item-form").reset();
-    $("item-id").value = "";
-    resetItemImage();
-    fillItemUnitSelect(defaultItemUnit());
-    refreshItemUnitLabels();
+    resetItemForm();
     await loadBootstrap();
   } catch (err) {
     $("item-hint").textContent = err.message;
@@ -2814,13 +3280,27 @@ $("item-form").addEventListener("submit", async (e) => {
   }
 });
 $("item-cancel").addEventListener("click", () => {
-  $("item-form").reset();
-  $("item-id").value = "";
-  resetItemImage();
-  fillItemUnitSelect(defaultItemUnit());
-  refreshItemUnitLabels();
+  resetItemForm();
 });
 $("item-unit")?.addEventListener("change", refreshItemUnitLabels);
+$("item-catalog-search")?.addEventListener("input", filterItemsCatalog);
+$("item-low-only")?.addEventListener("change", filterItemsCatalog);
+$("expiry-search")?.addEventListener("input", filterExpiryList);
+$("expiry-filters")?.addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-expiry-filter]");
+  if (!btn) return;
+  setExpiryFilter(btn.dataset.expiryFilter);
+});
+$("expiry-hero-stats")?.addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-expiry-filter]");
+  if (!btn) return;
+  setExpiryFilter(btn.dataset.expiryFilter);
+});
+$("expiry-table")?.addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-expiry-damage]");
+  if (!btn) return;
+  writeOffExpiryBatch(btn.dataset.expiryDamage);
+});
 $("item-image")?.addEventListener("change", async (e) => {
   const file = e.target.files?.[0];
   if (!file) return;
@@ -2942,6 +3422,7 @@ $("quick-customer-form")?.addEventListener("submit", async (e) => {
       hint.className = "hint ok";
     }
     setHint(`Customer added · ${customer?.name || ""}`, "ok");
+    if (customer) selectCounterCustomer(customer);
   } catch (err) {
     if (hint) {
       hint.textContent = err.message;
@@ -2949,6 +3430,29 @@ $("quick-customer-form")?.addEventListener("submit", async (e) => {
     }
     setHint(err.message, "error");
   }
+});
+
+$("pack-item-search")?.addEventListener("input", filterPackCompose);
+$("pack-selected-only")?.addEventListener("change", filterPackCompose);
+$("pack-library-search")?.addEventListener("input", filterPackLibrary);
+$("pack-lines")?.addEventListener("input", (e) => {
+  if (e.target.matches("[data-pack-qty]")) {
+    const id = e.target.dataset.packQty;
+    const box = document.querySelector(`[data-pack-item="${id}"]`);
+    if (box && Number(e.target.value) > 0) box.checked = true;
+  }
+  if (e.target.matches("[data-pack-qty], [data-pack-item]")) paintPackLive();
+});
+$("pack-lines")?.addEventListener("change", (e) => {
+  if (e.target.matches("[data-pack-item], [data-pack-qty]")) paintPackLive();
+});
+$("pack-lines")?.addEventListener("click", (e) => {
+  const row = e.target.closest("[data-pack-row]");
+  if (!row || e.target.closest("input, button")) return;
+  const box = row.querySelector("[data-pack-item]");
+  if (!box) return;
+  box.checked = !box.checked;
+  paintPackLive();
 });
 
 $("pack-form").addEventListener("submit", async (e) => {
@@ -2984,11 +3488,41 @@ $("purchase-form").addEventListener("input", (e) => {
     filterPoLines();
     return;
   }
-  if (e.target.matches("[data-po-qty],[data-po-rate]")) {
-    const id = e.target.dataset.poQty || e.target.dataset.poRate;
-    if (id) paintPoLineAmount(id);
+  if (e.target.matches("[data-po-qty],[data-po-rate],[data-po-barcodes]")) {
+    const id = e.target.dataset.poQty || e.target.dataset.poRate || e.target.dataset.poBarcodes;
+    if (id && (e.target.dataset.poQty || e.target.dataset.poRate)) paintPoLineAmount(id);
     paintPoTotals();
   }
+});
+$("po-lines")?.addEventListener("keydown", (e) => {
+  if (e.key !== "Enter") return;
+  const scan = e.target.closest("[data-po-bc-scan]");
+  if (!scan) return;
+  e.preventDefault();
+  const id = scan.dataset.poBcScan;
+  const code = globalThis.POSBarcode?.cleanCode ? POSBarcode.cleanCode(scan.value) : String(scan.value || "").trim();
+  if (!code) return;
+  const ta = document.querySelector(`[data-po-barcodes="${id}"]`);
+  if (!ta) return;
+  let existing = [];
+  try {
+    existing = parsePoBarcodes(ta.value);
+  } catch (err) {
+    $("po-hint").textContent = err.message;
+    $("po-hint").className = "hint error";
+    return;
+  }
+  if (existing.includes(code)) {
+    $("po-hint").textContent = `Duplicate barcode ${code}`;
+    $("po-hint").className = "hint error";
+    scan.select();
+    return;
+  }
+  existing.push(code);
+  ta.value = existing.join("\n");
+  scan.value = "";
+  $("po-hint").textContent = "";
+  refreshPoBarcodeRows();
 });
 $("purchase-form").addEventListener("change", (e) => {
   if (e.target.matches("[data-po-item]")) paintPoTotals();
@@ -3003,14 +3537,30 @@ $("po-lines")?.addEventListener("click", (e) => {
 });
 $("purchase-form").addEventListener("submit", async (e) => {
   e.preventDefault();
-  const lines = [...document.querySelectorAll("[data-po-item]:checked")].map((box) => ({
-    item_id: box.dataset.poItem,
-    quantity_gm: Number(document.querySelector(`[data-po-qty="${box.dataset.poItem}"]`).value),
-    rate_per_kg: Number(document.querySelector(`[data-po-rate="${box.dataset.poItem}"]`).value),
-    expiry_date: document.querySelector(`[data-po-expiry="${box.dataset.poItem}"]`)?.value || "",
-  }));
+  const lines = [];
   try {
-    await api("/api/purchases", {
+    for (const box of document.querySelectorAll("[data-po-item]:checked")) {
+      const item = state.items.find((i) => i.id === box.dataset.poItem);
+      const unit = itemUnit(item || {});
+      const qtyInput = Number(document.querySelector(`[data-po-qty="${box.dataset.poItem}"]`)?.value);
+      const quantity_gm = POSUnits.toBase(qtyInput, unit);
+      let barcodes = [];
+      if (POSUnits.isCount(unit)) {
+        const pieces = Math.round(quantity_gm);
+        barcodes = parsePoBarcodes(document.querySelector(`[data-po-barcodes="${box.dataset.poItem}"]`)?.value);
+        if (barcodes.length !== pieces) {
+          throw new Error(`${item?.name || "Item"}: enter ${pieces} barcodes for ${pieces} pcs (entered ${barcodes.length})`);
+        }
+      }
+      lines.push({
+        item_id: box.dataset.poItem,
+        quantity_gm,
+        rate_per_kg: Number(document.querySelector(`[data-po-rate="${box.dataset.poItem}"]`)?.value),
+        expiry_date: document.querySelector(`[data-po-expiry="${box.dataset.poItem}"]`)?.value || "",
+        barcodes,
+      });
+    }
+    const saved = await api("/api/purchases", {
       method: "POST",
       body: JSON.stringify({
         supplier_id: $("po-supplier").value,
@@ -3020,7 +3570,8 @@ $("purchase-form").addEventListener("submit", async (e) => {
         lines,
       }),
     });
-    $("po-hint").textContent = "Saved";
+    const n = Number(saved?.purchase?.barcode_count || saved?.barcode_count) || 0;
+    $("po-hint").textContent = n ? `Saved — ${n} barcodes added` : "Saved";
     $("po-hint").className = "hint ok";
     $("purchase-form").reset();
     $("purchase-new").open = false;
@@ -3506,12 +4057,6 @@ document.getElementById("stock-mode")?.addEventListener("click", (e) => {
   document.getElementById("view-stock")?.classList.toggle("is-advanced", state.stockMode === "advanced");
 });
 
-$("item-barcode-gen")?.addEventListener("click", () => {
-  const B = globalThis.POSBarcode;
-  if (!B || !$("item-barcode")) return;
-  $("item-barcode").value = B.generateEan13(Date.now() % 1000000, "20001");
-});
-
 ["bill-disc-type", "bill-disc-value", "loyalty-redeem"].forEach((id) => {
   $(id)?.addEventListener("input", () => {
     state.billDiscountType = $("bill-disc-type")?.value || "amt";
@@ -3527,8 +4072,23 @@ $("item-barcode-gen")?.addEventListener("click", () => {
   });
 });
 
-$("customer")?.addEventListener("change", () => {
-  void loadCustomerLoyalty();
+const applyCounterMobileDebounced = debounce(() => {
+  const el = $("counter-mobile");
+  if (!el) return;
+  if (digitsMobile(el.value).length === 10) applyCounterMobile(el.value);
+}, 160);
+
+$("counter-mobile")?.addEventListener("input", () => {
+  applyCounterMobileDebounced();
+});
+$("counter-mobile")?.addEventListener("keydown", (e) => {
+  if (e.key !== "Enter") return;
+  e.preventDefault();
+  applyCounterMobile($("counter-mobile").value);
+});
+$("counter-mobile")?.addEventListener("blur", () => {
+  const d = digitsMobile($("counter-mobile")?.value);
+  if (d.length === 10) applyCounterMobile($("counter-mobile").value, { announceMiss: false });
 });
 
 async function loadCustomerLoyalty() {
@@ -3644,6 +4204,202 @@ $("barcodes-table")?.addEventListener("click", (e) => {
   if (!btn) return;
   globalThis.POSBarcode?.printLabels([{ name: btn.dataset.bcName, barcode: btn.dataset.bcPrint, mrp: btn.dataset.bcMrp, rate: btn.dataset.bcRate }], Number($("bc-copies")?.value) || 1);
 });
+
+function expiryDaysLeft(row) {
+  if (row?.days_left != null && row.days_left !== "") {
+    const n = Number(row.days_left);
+    if (Number.isFinite(n)) return n;
+  }
+  const s = String(row?.expiry_date || "").slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return null;
+  const exp = Date.parse(`${s}T12:00:00`);
+  const today = Date.parse(`${ymd()}T12:00:00`);
+  if (Number.isNaN(exp) || Number.isNaN(today)) return null;
+  return Math.round((exp - today) / 86400000);
+}
+
+function expiryMatchesFilter(days, filter) {
+  const d = Number(days);
+  if (!Number.isFinite(d)) return filter === "all";
+  if (filter === "expired") return d < 0;
+  if (filter === "7") return d >= 0 && d <= 7;
+  if (filter === "30") return d >= 0 && d <= 30;
+  if (filter === "90") return d >= 0 && d <= 90;
+  return true;
+}
+
+function expiryTone(days) {
+  const d = Number(days);
+  if (!Number.isFinite(d) || d < 0) return "expired";
+  if (d <= 7) return "soon";
+  if (d <= 30) return "watch";
+  return "ok";
+}
+
+function expiryDaysLabel(days) {
+  const d = Number(days);
+  if (!Number.isFinite(d)) return "Dated";
+  if (d < 0) {
+    const n = Math.abs(d);
+    return n === 1 ? "Expired yesterday" : `Expired ${n} days ago`;
+  }
+  if (d === 0) return "Expires today";
+  if (d === 1) return "Expires tomorrow";
+  return `Expires in ${d} days`;
+}
+
+function paintExpiryHero(rows) {
+  const stats = $("expiry-hero-stats");
+  if (!stats) return;
+  const list = Array.isArray(rows) ? rows : [];
+  const expired = list.filter((r) => {
+    const d = expiryDaysLeft(r);
+    return Number.isFinite(d) && d < 0;
+  }).length;
+  const week = list.filter((r) => {
+    const d = expiryDaysLeft(r);
+    return Number.isFinite(d) && d >= 0 && d <= 7;
+  }).length;
+  const month = list.filter((r) => {
+    const d = expiryDaysLeft(r);
+    return Number.isFinite(d) && d >= 0 && d <= 30;
+  }).length;
+  const active = state.expiryFilter || "all";
+  stats.innerHTML = `<button class="items-stat${expired ? " is-warn" : ""}${active === "expired" ? " is-active" : ""}" type="button" data-expiry-filter="expired">
+      <span>Expired</span><strong>${expired}</strong>
+    </button>
+    <button class="items-stat${week ? " is-warn" : ""}${active === "7" ? " is-active" : ""}" type="button" data-expiry-filter="7">
+      <span>7 days</span><strong>${week}</strong>
+    </button>
+    <button class="items-stat${active === "30" ? " is-active" : ""}" type="button" data-expiry-filter="30">
+      <span>30 days</span><strong>${month}</strong>
+    </button>`;
+}
+
+function setExpiryFilter(name) {
+  state.expiryFilter = name || "all";
+  document.querySelectorAll("#expiry-filters [data-expiry-filter]").forEach((btn) => {
+    btn.classList.toggle("primary", btn.dataset.expiryFilter === state.expiryFilter);
+  });
+  paintExpiryHero(state.expiryBatches);
+  filterExpiryList();
+}
+
+function filterExpiryList() {
+  const q = String($("expiry-search")?.value || "").trim().toLowerCase();
+  const filter = state.expiryFilter || "all";
+  let shown = 0;
+  let total = 0;
+  document.querySelectorAll("#expiry-table [data-expiry-card]").forEach((card) => {
+    total += 1;
+    const days = Number(card.dataset.expiryDays);
+    const hay = card.dataset.expirySearch || "";
+    const hide = (Boolean(q) && !hay.includes(q)) || !expiryMatchesFilter(days, filter);
+    card.hidden = hide;
+    if (!hide) shown += 1;
+  });
+  const empty = $("expiry-empty-filter");
+  if (empty) empty.hidden = shown > 0 || total === 0;
+}
+
+async function loadExpiryView() {
+  const el = $("expiry-table");
+  if (!el) return;
+  if ($("expiry-hint")) {
+    $("expiry-hint").textContent = "";
+    $("expiry-hint").className = "hint";
+  }
+  try {
+    const rows = await api("/api/batches/expiry");
+    state.expiryBatches = Array.isArray(rows) ? rows : [];
+    paintExpiryHero(state.expiryBatches);
+    if (!state.expiryBatches.length) {
+      el.innerHTML = `<div class="item-empty-card" id="expiry-empty">
+        <strong>No dated stock on hand</strong>
+        <p>Set an expiry date on a purchase line to track batches here.</p>
+      </div>`;
+      return;
+    }
+    el.innerHTML = `${state.expiryBatches
+      .map((r) => {
+        const item = state.items.find((i) => i.id === r.item_id) || r;
+        const days = expiryDaysLeft(r);
+        const tone = expiryTone(days);
+        const qty = fmtQty(r.remaining_gm, item);
+        const batch = r.batch_no || r.barcode || "—";
+        const search = `${r.item_name || ""} ${r.item_code || ""} ${r.batch_no || ""} ${r.barcode || ""} ${r.supplier_name || ""} ${r.hsn || ""} ${r.category || ""}`.toLowerCase();
+        return `<article class="report-card item-card expiry-card is-${tone}" data-expiry-card data-expiry-days="${days ?? ""}" data-expiry-search="${escapeHtml(search)}" data-expiry-id="${escapeHtml(r.id)}">
+          <div class="item-card-head">
+            <div class="item-card-copy">
+              <strong>${escapeHtml(r.item_name || "Item")}</strong>
+              <span>${escapeHtml(r.item_code || "")}${r.category ? ` · ${escapeHtml(r.category)}` : ""}</span>
+            </div>
+            <span class="expiry-badge ${tone}">${escapeHtml(expiryDaysLabel(days))}</span>
+          </div>
+          <div class="item-card-meta">
+            <span class="item-chip">Batch ${escapeHtml(batch)}</span>
+            <span class="item-chip">${escapeHtml(formatShopDate(r.expiry_date))}</span>
+            <span class="item-chip">${escapeHtml(qty)} left</span>
+            ${r.supplier_name ? `<span class="item-chip">${escapeHtml(r.supplier_name)}</span>` : ""}
+          </div>
+          <div class="item-card-foot">
+            <div class="item-card-rates">
+              <span>On hand <em>${escapeHtml(qty)}</em></span>
+              ${r.barcode ? `<span>Code <em>${escapeHtml(r.barcode)}</em></span>` : ""}
+            </div>
+            <div class="item-card-actions">
+              <button class="btn" type="button" data-expiry-damage="${escapeHtml(r.id)}">Write off</button>
+            </div>
+          </div>
+        </article>`;
+      })
+      .join("")}<div class="item-empty-card" id="expiry-empty-filter" hidden>
+        <strong>No batches in this window</strong>
+        <p>Try All dated, or search a different name / batch.</p>
+      </div>`;
+    filterExpiryList();
+  } catch (err) {
+    el.innerHTML = "";
+    if ($("expiry-hint")) {
+      $("expiry-hint").textContent = err.message;
+      $("expiry-hint").className = "hint error";
+    }
+  }
+}
+
+async function writeOffExpiryBatch(batchId) {
+  const row = state.expiryBatches.find((r) => r.id === batchId);
+  if (!row) return;
+  const item = state.items.find((i) => i.id === row.item_id) || row;
+  const qty = fmtQty(row.remaining_gm, item);
+  const when = formatShopDate(row.expiry_date) || "the expiry date";
+  if (!window.confirm(`Write off remaining ${qty} of ${row.item_name || "this item"} (expiry ${when}) as damage?`)) return;
+  try {
+    await api("/api/damage", {
+      method: "POST",
+      body: JSON.stringify({
+        item_id: row.item_id,
+        batch_id: row.id,
+        barcode: row.barcode || "",
+        quantity_gm: Number(row.remaining_gm) || 0,
+        reason: "expiry",
+        note: `Expired batch ${row.batch_no || row.barcode || row.id}`,
+        auto_approve: true,
+      }),
+    });
+    if ($("expiry-hint")) {
+      $("expiry-hint").textContent = `Wrote off ${qty} of ${row.item_name || "item"}`;
+      $("expiry-hint").className = "hint ok";
+    }
+    await loadExpiryView();
+    loadBootstrap();
+  } catch (err) {
+    if ($("expiry-hint")) {
+      $("expiry-hint").textContent = err.message;
+      $("expiry-hint").className = "hint error";
+    }
+  }
+}
 
 async function loadDamageView() {
   fillItemPicker("dmg-item-list", "dmg-item-search", "dmg-item");

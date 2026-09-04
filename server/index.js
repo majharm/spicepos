@@ -179,8 +179,16 @@ app.get("/api/bootstrap", requireStaff, async (_req, res) => {
 app.get("/api/orders", requireStaff, requirePerm("orders"), async (_req, res) => {
   try {
     const orders = await query(
-      `SELECT * FROM sales_orders WHERE business_id = ?
-       ORDER BY CAST(SUBSTRING(order_number, 4) AS UNSIGNED) DESC, created_at DESC
+      `SELECT o.*, COALESCE(
+         NULLIF(TRIM(o.customer_name), ''),
+         NULLIF(TRIM(c.business_name), ''),
+         NULLIF(TRIM(c.name), ''),
+         'Walk-in'
+       ) AS customer_name
+       FROM sales_orders o
+       LEFT JOIN customers c ON c.id = o.customer_id AND c.business_id = o.business_id
+       WHERE o.business_id = ?
+       ORDER BY CAST(SUBSTRING(o.order_number, 4) AS UNSIGNED) DESC, o.created_at DESC
        LIMIT 80`,
       [bid()],
     );

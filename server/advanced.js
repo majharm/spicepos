@@ -202,6 +202,34 @@ export async function attachItemBarcode(conn, businessId, itemId, code, kind = "
   return sqlOne(conn, "SELECT * FROM item_barcodes WHERE id = ?", [id]);
 }
 
+export function parseManualBarcodes(raw) {
+  const parts = Array.isArray(raw) ? raw : String(raw ?? "").split(/[\s,;]+/);
+  const out = [];
+  const seen = new Set();
+  for (const part of parts) {
+    const code = String(part || "").trim().replace(/\s+/g, "");
+    if (!code) continue;
+    if (seen.has(code)) throw new Error(`Duplicate barcode ${code}`);
+    seen.add(code);
+    out.push(code);
+    if (out.length > 500) throw new Error("Max 500 barcodes at once");
+  }
+  return out;
+}
+
+export function resolvePurchaseBarcodes(item, qty, lineIn = {}) {
+  if (!isCountItem(item)) return [];
+  const pieces = Math.max(0, Math.round(Number(qty) || 0));
+  const raw = lineIn.barcodes != null ? lineIn.barcodes : (lineIn.barcode || []);
+  const codes = parseManualBarcodes(raw);
+  if (pieces < 1) throw new Error("Quantity required");
+  if (pieces > 500) throw new Error("Max 500 barcodes at once");
+  if (codes.length !== pieces) {
+    throw new Error(`Enter ${pieces} barcodes for ${pieces} pcs (you entered ${codes.length})`);
+  }
+  return codes;
+}
+
 export async function onItemSaved(conn, businessId, itemId, body = {}) {
   await ensureAdvancedSchema();
   const item = await sqlOne(conn, "SELECT * FROM items WHERE id = ? AND business_id = ?", [itemId, businessId]);
@@ -215,11 +243,9 @@ export async function onItemSaved(conn, businessId, itemId, body = {}) {
     }
     return "";
   }
-  let own = String(body.barcode || "").trim();
+  const own = String(body.barcode || "").trim();
   const mfr = String(body.mfr_barcode || body.manufacturer_barcode || "").trim();
-  if (!own) own = String(item?.barcode || "").trim();
-  if (!own) own = await uniqueEan13(conn, businessId);
-  await attachItemBarcode(conn, businessId, itemId, own, "own", true);
+  if (own) await attachItemBarcode(conn, businessId, itemId, own, "own", true);
   if (mfr && mfr !== own) await attachItemBarcode(conn, businessId, itemId, mfr, "manufacturer", false);
   if (body.mrp != null) {
     try {
@@ -228,8 +254,10 @@ export async function onItemSaved(conn, businessId, itemId, body = {}) {
       /* optional */
     }
   }
-  const extraQty = Math.floor(Number(body.barcode_qty ?? body.barcodeQty ?? 0) || 0);
-  if (extraQty > 0) await generateQtyBarcodes(conn, businessId, itemId, extraQty);
+  const extras = parseManualBarcodes(body.barcodes ?? body.barcode_list ?? []);
+  for (const code of extras) {
+    if (code !== own && code !== mfr) await attachItemBarcode(conn, businessId, itemId, code, "unit", false);
+  }
   return own;
 }
 
@@ -316,15 +344,13 @@ async function insertPurchaseBatch(conn, ctx, barcode, batchNo, qty, kind) {
 export async function onPurchaseLineSaved(conn, ctx) {
   await ensureAdvancedSchema();
   const baseNo = String(ctx.batchNo || `${ctx.purchaseNumber || "PO"}-${ctx.item?.code || "IT"}-${String(ctx.lineId || "").slice(0, 4)}`);
-  const pieces = isCountItem(ctx.item) ? Math.max(0, Math.round(Number(ctx.qty) || 0)) : 0;
-  const qtyWise = pieces > 1 && pieces <= 500;
-  if (qtyWise) {
+  const codes = resolvePurchaseBarcodes(ctx.item, ctx.qty, ctx);
+  if (codes.length) {
     const rows = [];
-    for (let i = 0; i < pieces; i++) {
-      const code = i === 0 && String(ctx.barcode || "").trim()
-        ? String(ctx.barcode).trim()
-        : await uniqueEan13(conn, ctx.businessId);
-      rows.push(await insertPurchaseBatch(conn, ctx, code, `${baseNo}-${String(i + 1).padStart(3, "0")}`, 1, "unit"));
+    for (let i = 0; i < codes.length; i++) {
+      const used = await sqlOne(conn, "SELECT id FROM stock_batches WHERE business_id=? AND barcode=? AND remaining_gm > 0 LIMIT 1", [ctx.businessId, codes[i]]);
+      if (used) throw new Error(`Barcode ${codes[i]} is already in stock`);
+      rows.push(await insertPurchaseBatch(conn, ctx, codes[i], `${baseNo}-${String(i + 1).padStart(3, "0")}`, 1, "unit"));
     }
     try {
       await conn.query("UPDATE purchase_lines SET batch_no=?, barcode=?, expiry_date=?, mrp=? WHERE id=?", [rows[0].batch_no, rows[0].barcode, ctx.expiry || null, Number(ctx.mrp ?? ctx.item?.mrp ?? ctx.item?.retail_rate) || 0, ctx.lineId]);
@@ -333,10 +359,7 @@ export async function onPurchaseLineSaved(conn, ctx) {
     }
     return { id: rows[0].id, batch_no: rows[0].batch_no, barcode: rows[0].barcode, barcodes: rows };
   }
-  const barcode = isCountItem(ctx.item)
-    ? (String(ctx.barcode || "").trim() || (await uniqueEan13(conn, ctx.businessId)))
-    : "";
-  const row = await insertPurchaseBatch(conn, ctx, barcode, baseNo, ctx.qty, "batch");
+  const row = await insertPurchaseBatch(conn, ctx, "", baseNo, ctx.qty, "batch");
   try {
     await conn.query("UPDATE purchase_lines SET batch_no=?, barcode=?, expiry_date=?, mrp=? WHERE id=?", [row.batch_no, row.barcode, ctx.expiry || null, Number(ctx.mrp ?? ctx.item?.mrp ?? ctx.item?.retail_rate) || 0, ctx.lineId]);
   } catch {
@@ -711,6 +734,30 @@ export function registerAdvanced(app) {
     send(res, async () => {
       await query("DELETE FROM item_barcodes WHERE id=? AND business_id=?", [req.params.id, bid()]);
       return { ok: true };
+    }),
+  );
+
+  app.get("/api/batches/expiry", requireStaff, requirePerm("stock"), (_req, res) =>
+    send(res, async () => {
+      return query(
+        `SELECT b.id, b.business_id, b.branch_id, b.item_id, b.purchase_id, b.purchase_line_id,
+                b.supplier_id, b.batch_no, b.barcode, b.qty_gm, b.remaining_gm, b.unit_cost, b.mrp,
+                DATE_FORMAT(b.expiry_date, '%Y-%m-%d') AS expiry_date,
+                DATE_FORMAT(b.manufactured_date, '%Y-%m-%d') AS manufactured_date,
+                b.created_at,
+                i.name AS item_name, i.code AS item_code, i.base_unit, i.unit, i.hsn, i.category,
+                s.name AS supplier_name,
+                DATEDIFF(b.expiry_date, CURDATE()) AS days_left
+         FROM stock_batches b
+         JOIN items i ON i.id = b.item_id
+         LEFT JOIN suppliers s ON s.id = b.supplier_id
+         WHERE b.business_id = ?
+           AND b.expiry_date IS NOT NULL
+           AND b.remaining_gm > 0
+         ORDER BY b.expiry_date ASC, i.name ASC
+         LIMIT 500`,
+        [bid()],
+      );
     }),
   );
 

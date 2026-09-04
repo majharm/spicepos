@@ -46,6 +46,16 @@ test("PHP and Node wire barcode, damage, loyalty, and ledger modules", () => {
   assert.match(adv, /barcodes\/generate-qty/);
   assert.match(adv, /Barcodes are only for Quantity \(pcs\) items/);
   assert.match(index, /id="bc-qty-form"/);
+  assert.match(index, /Type or scan — not auto generated/);
+  assert.match(index, /pcs-barcode-only/);
+  assert.match(app, /parsePoBarcodes/);
+  assert.match(app, /data-po-barcodes/);
+  assert.match(app, /pcs-barcode-only/);
+  assert.match(nodeAdv, /export function parseManualBarcodes/);
+  assert.match(nodeAdv, /export function resolvePurchaseBarcodes/);
+  assert.match(nodeAdv, /Enter \$\{pieces\} barcodes for \$\{pieces\} pcs/);
+  assert.match(adv, /function pos_parse_manual_barcodes/);
+  assert.match(adv, /function pos_resolve_purchase_barcodes/);
   assert.match(index, /id="item-barcode-qty"/);
   assert.match(index, /pcs-barcode-only/);
   assert.match(app, /barcodes\/generate-qty/);
@@ -58,6 +68,17 @@ test("PHP and Node wire barcode, damage, loyalty, and ledger modules", () => {
   assert.match(index, /id="view-damage"/);
   assert.match(index, /id="view-ledger"/);
   assert.match(index, /id="view-loyalty"/);
+  assert.match(index, /id="view-expiry"/);
+  assert.match(index, /data-view="expiry"/);
+  assert.match(index, /id="expiry-table"/);
+  assert.match(app, /loadExpiryView/);
+  assert.match(app, /\/api\/batches\/expiry/);
+  assert.match(app, /writeOffExpiryBatch/);
+  assert.match(nodeAdv, /\/api\/batches\/expiry/);
+  assert.match(nodeAdv, /DATEDIFF\(b\.expiry_date, CURDATE\(\)\) AS days_left/);
+  assert.match(adv, /batches\/expiry/);
+  assert.match(adv, /DATEDIFF\(b\.expiry_date, CURDATE\(\)\) AS days_left/);
+  assert.match(adv, /AND b\.remaining_gm > 0/);
   assert.match(index, /id="bill-disc-type"/);
   assert.match(index, /id="item-barcode"/);
   assert.match(index, /js\/barcode\.js/);
@@ -65,6 +86,21 @@ test("PHP and Node wire barcode, damage, loyalty, and ledger modules", () => {
   assert.match(app, /barcodes\/lookup/);
   assert.match(app, /loyaltyPoints/);
   assert.match(app, /data-print-po-barcodes/);
+  assert.match(read("api/barcodes/lookup/index.php"), /barcodes\/lookup/);
+  assert.match(read("api/barcodes/generate-qty/index.php"), /barcodes\/generate-qty/);
+  assert.match(read("api/barcodes/generate-missing/index.php"), /barcodes\/generate-missing/);
+  assert.doesNotMatch(nodeAdv, /let own = String\(body\.barcode/);
+  assert.doesNotMatch(adv, /pos_unique_ean13\(\$bid\);\s*\n\s*pos_attach_item_barcode/);
+});
+
+test("resolvePurchaseBarcodes requires one typed code per piece", async () => {
+  const { parseManualBarcodes, resolvePurchaseBarcodes } = await import("./advanced.js");
+  assert.deepEqual(parseManualBarcodes("P1\nP2\nP3"), ["P1", "P2", "P3"]);
+  assert.throws(() => parseManualBarcodes("P1 P1"), /Duplicate barcode P1/);
+  const pcs = { base_unit: "PCS", unit: "PCS" };
+  assert.deepEqual(resolvePurchaseBarcodes(pcs, 3, { barcodes: ["A1", "A2", "A3"] }), ["A1", "A2", "A3"]);
+  assert.throws(() => resolvePurchaseBarcodes(pcs, 20, { barcodes: ["A1"] }), /Enter 20 barcodes for 20 pcs/);
+  assert.deepEqual(resolvePurchaseBarcodes({ base_unit: "GM" }, 1000, { barcodes: ["X"] }), []);
 });
 
 test("item save and checkout persist barcode and line discount fields", () => {
@@ -72,6 +108,7 @@ test("item save and checkout persist barcode and line discount fields", () => {
   const nodeIndex = read("server/index.js");
   assert.match(nodeCrud, /onItemSaved/);
   assert.match(nodeCrud, /onPurchaseLineSaved/);
+  assert.match(nodeCrud, /barcode_count/);
   assert.match(nodeIndex, /computeSaleLine/);
   assert.match(nodeIndex, /applyLoyaltyOnSale/);
   assert.match(nodeIndex, /discount_type/);

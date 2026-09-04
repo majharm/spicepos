@@ -152,7 +152,7 @@ function pos_update_order($bid, $orderId, $body, $auth) {
     $packCount = null;
   }
 
-  $custName = $customer["business_name"] ?? $customer["name"];
+  $custName = pos_customer_label($customer);
   pos_q(
     "UPDATE sales_orders SET
        customer_id = ?, customer_name = ?, customer_type = ?,

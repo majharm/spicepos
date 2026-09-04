@@ -398,7 +398,7 @@ ${purchaseBody(purchase, ctx)}
   <div class="inv-details">
     <div class="inv-row"><span>Invoice No.</span><strong>${invNo}</strong></div>
     <div class="inv-row"><span>Date</span><span>${escapeHtml(when)}</span></div>
-    <div class="inv-row"><span>Customer</span><span>${escapeHtml(order.customer_name || cust?.name || "Walk-in")}</span></div>
+    <div class="inv-row"><span>Customer</span><span>${escapeHtml(order.customer_name || cust?.business_name || cust?.name || "Walk-in")}</span></div>
     ${custGstin ? `<div class="inv-row"><span>GSTIN</span><span>${escapeHtml(custGstin)}</span></div>` : ""}
     <div class="inv-row"><span>Type</span><span>${escapeHtml(String(order.customer_type || cust?.type || "b2c").toUpperCase())}</span></div>
     ${packLine}

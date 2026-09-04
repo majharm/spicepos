@@ -133,9 +133,13 @@
         loginForm.hidden = signup;
         if (signupForm) signupForm.hidden = !signup;
         card?.classList.toggle("signup", signup);
-        if (lead) lead.textContent = signup ? "Register your business to start billing." : "Sign in to continue.";
+        if (lead) lead.textContent = signup ? "Start billing in minutes — 2-day free trial, no card." : "Sign in to continue.";
       });
     });
+
+    if (new URLSearchParams(location.search).get("tab") === "signup" || location.hash === "#signup") {
+      document.querySelector('[data-panel="signup"]')?.click();
+    }
 
     const saved = localStorage.getItem("pos_remember_login");
     if (saved) {
