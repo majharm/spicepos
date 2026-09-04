@@ -1,0 +1,4 @@
+DirectorySlash Off
+RewriteEngine On
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteRule ^(.*)$ /pos-api.php?p=$1 [QSA,L]

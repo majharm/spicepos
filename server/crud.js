@@ -1,0 +1,879 @@
+import "../js/units.js";
+import "../js/footwear.js";
+import { query, withTransaction } from "./db.js";
+import { bid } from "./context.js";
+import { recordCreditPurchase } from "./accounts.js";
+import { postPurchaseJournal } from "./accounting.js";
+import { audit } from "./audit.js";
+import { onItemSaved, onPurchaseLineSaved } from "./advanced.js";
+import {
+  decodeImportUpload,
+  itemBodyFromImportRow,
+  itemImportTemplateXml,
+  mapItemImportRows,
+  parseItemImportGrid,
+} from "./item-import.js";
+
+const POSUnits = globalThis.POSUnits;
+const POSFootwear = globalThis.POSFootwear;
+
+export function itemBillName(item) {
+  return POSFootwear.billName(item);
+}
+
+export function itemUnit(item) {
+  if (item == null) return POSUnits.normalize("GM");
+  if (typeof item === "string") return POSUnits.normalize(item);
+  return POSUnits.normalize(item.base_unit || item.unit);
+}
+
+export function lineAmount(quantityGm, ratePerKg, unitOrItem) {
+  const code = itemUnit(unitOrItem);
+  const t = POSUnits.typeOf(code);
+  const known = t.code === code;
+  if (!known || t.family === "count") return (Number(quantityGm) || 0) * (Number(ratePerKg) || 0);
+  return POSUnits.lineAmount(quantityGm, ratePerKg, code);
+}
+
+export function round2(n) {
+  return Math.round(Number(n) * 100) / 100;
+}
+
+function itemImageFromBody(b) {
+  if (!Object.prototype.hasOwnProperty.call(b || {}, "image_url")) return undefined;
+  const img = b.image_url ? String(b.image_url) : "";
+  if (img && !img.startsWith("data:image/")) {
+    const err = new Error("Item image must be an uploaded image");
+    err.status = 400;
+    throw err;
+  }
+  if (img && img.length > 6_000_000) {
+    const err = new Error("Item image is too large");
+    err.status = 400;
+    throw err;
+  }
+  return img || null;
+}
+
+export async function nextSeq(conn, name, start) {
+  const [rows] = await conn.query(
+    "SELECT next_value FROM number_sequences WHERE name = ? AND business_id = ? FOR UPDATE",
+    [name, bid()],
+  );
+  const next = rows[0] ? Number(rows[0].next_value) : start;
+  if (rows[0]) {
+    await conn.query(
+      "UPDATE number_sequences SET next_value = ? WHERE name = ? AND business_id = ?",
+      [next + 1, name, bid()],
+    );
+  } else {
+    await conn.query(
+      "INSERT INTO number_sequences (name, next_value, business_id) VALUES (?,?,?)",
+      [name, next + 1, bid()],
+    );
+  }
+  return next;
+}
+
+function normalizePackItems(items) {
+  if (!Array.isArray(items)) return [];
+  return items
+    .map((row) => ({
+      item_id: String(row.item_id || "").trim(),
+      quantity_gm: Number(row.quantity_gm || 0),
+    }))
+    .filter((row) => row.item_id && row.quantity_gm > 0);
+}
+
+async function insertPackLines(conn, packId, items) {
+  let sort = 1;
+  for (const row of items) {
+    const [itemRows] = await conn.query("SELECT * FROM items WHERE id = ? AND business_id = ?", [row.item_id, bid()]);
+    const item = itemRows[0];
+    if (!item) throw new Error("Unknown item in pack");
+    await conn.query(
+      `INSERT INTO pack_items (
+         id, pack_id, item_id, quantity_gm, retail_rate, b2b_rate, sort_order, business_id
+       ) VALUES (?,?,?,?,?,?,?,?)`,
+      [
+        crypto.randomUUID(),
+        packId,
+        item.id,
+        Number(row.quantity_gm),
+        Number(item.retail_rate),
+        Number(item.b2b_rate),
+        sort++,
+        bid(),
+      ],
+    );
+  }
+}
+
+async function findItemForImport(conn, businessId, row) {
+  const code = String(row.code || "").trim();
+  if (code) {
+    const [rows] = await conn.query("SELECT * FROM items WHERE business_id=? AND code=? LIMIT 1", [businessId, code]);
+    if (rows[0]) return rows[0];
+  }
+  const barcode = String(row.barcode || "").trim();
+  if (!barcode) return null;
+  const [byItem] = await conn.query("SELECT * FROM items WHERE business_id=? AND barcode=? LIMIT 1", [businessId, barcode]);
+  if (byItem[0]) return byItem[0];
+  try {
+    const [byBc] = await conn.query(
+      `SELECT i.* FROM item_barcodes b JOIN items i ON i.id=b.item_id
+       WHERE b.business_id=? AND b.barcode=? LIMIT 1`,
+      [businessId, barcode],
+    );
+    if (byBc[0]) return byBc[0];
+  } catch {
+    /* item_barcodes optional */
+  }
+  return null;
+}
+
+async function insertImportedItem(conn, biz, body) {
+  const n = await nextSeq(conn, "item", 7);
+  const footwear = POSFootwear.isFootwearShop(biz || {});
+  const variants = POSFootwear.fieldsFromBody(body);
+  const prefix = footwear ? "FW" : "SP";
+  const code = body.code || `${prefix}-${String(n).padStart(3, "0")}`;
+  const id = crypto.randomUUID();
+  await conn.query(
+    `INSERT INTO items (
+       id, code, name, local_name, category, subcategory, color, size, wearer_type, base_unit,
+       purchase_rate, retail_rate, b2b_rate, gst_rate, hsn, image_url, stock_gm,
+       reorder_level_gm, status, business_id
+     ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'active', ?)`,
+    [
+      id,
+      code,
+      String(body.name).trim(),
+      body.local_name || null,
+      body.category || POSFootwear.defaultCategory(biz || {}),
+      body.subcategory || null,
+      variants.color,
+      variants.size,
+      variants.wearer_type,
+      itemUnit(body.base_unit || body.unit || POSFootwear.defaultUnit(biz || {})),
+      Number(body.purchase_rate) || 0,
+      Number(body.retail_rate) || 0,
+      Number(body.b2b_rate) || 0,
+      Number(body.gst_rate) || 5,
+      String(body.hsn || "").trim() || null,
+      null,
+      Number(body.stock_gm) || 0,
+      Number(body.reorder_level_gm) || 0,
+      bid(),
+    ],
+  );
+  try {
+    await conn.query("UPDATE items SET unit=? WHERE id=?", [itemUnit(body.base_unit || body.unit), id]);
+  } catch {
+    /* optional */
+  }
+  await onItemSaved(conn, bid(), id, body);
+  const [rows] = await conn.query("SELECT * FROM items WHERE id=?", [id]);
+  return rows[0];
+}
+
+async function updateImportedItem(conn, existing, biz, body, row) {
+  const variants = POSFootwear.fieldsFromBody({
+    color: row.color !== "" ? body.color : existing.color,
+    size: row.size !== "" ? body.size : existing.size,
+    wearer_type: row.wearer_type !== "" ? body.wearer_type : existing.wearer_type,
+  });
+  const unit = row.unit ? itemUnit(body.unit) : itemUnit(existing);
+  const name = row.name ? body.name : existing.name;
+  const category = row.category ? body.category : existing.category;
+  const subcategory = row.subcategory !== "" && row.subcategory != null ? body.subcategory : existing.subcategory;
+  const hsn = row.hsn !== "" && row.hsn != null ? body.hsn : existing.hsn;
+  const purchase = row.purchase !== "" && row.purchase != null ? Number(body.purchase_rate) || 0 : Number(existing.purchase_rate) || 0;
+  const retail = row.retail !== "" && row.retail != null ? Number(body.retail_rate) || 0 : Number(existing.retail_rate) || 0;
+  const b2b = row.b2b !== "" && row.b2b != null ? Number(body.b2b_rate) || 0 : Number(existing.b2b_rate) || 0;
+  const gst = row.gst !== "" && row.gst != null ? Number(body.gst_rate) || 5 : Number(existing.gst_rate) || 5;
+  const stock = Object.prototype.hasOwnProperty.call(body, "stock_gm") ? Number(body.stock_gm) || 0 : Number(existing.stock_gm) || 0;
+  await conn.query(
+    `UPDATE items SET
+       name=?, category=?, subcategory=?, color=?, size=?, wearer_type=?, base_unit=?,
+       purchase_rate=?, retail_rate=?, b2b_rate=?, gst_rate=?, hsn=?, stock_gm=?
+     WHERE id=? AND business_id=?`,
+    [
+      name,
+      category || POSFootwear.defaultCategory(biz || {}),
+      subcategory || null,
+      variants.color,
+      variants.size,
+      variants.wearer_type,
+      unit,
+      purchase,
+      retail,
+      b2b,
+      gst,
+      String(hsn || "").trim() || null,
+      stock,
+      existing.id,
+      bid(),
+    ],
+  );
+  try {
+    await conn.query("UPDATE items SET unit=? WHERE id=?", [unit, existing.id]);
+  } catch {
+    /* optional */
+  }
+  await onItemSaved(conn, bid(), existing.id, body);
+  const [rows] = await conn.query("SELECT * FROM items WHERE id=?", [existing.id]);
+  return rows[0];
+}
+
+export async function importShopItems(payload) {
+  const decoded = decodeImportUpload(payload);
+  const grid = decoded.rows ? decoded.rows : parseItemImportGrid(decoded.buf, decoded.filename);
+  const mapped = mapItemImportRows(grid);
+  const [bizRows] = await query("SELECT category, business_type FROM businesses WHERE id=?", [bid()]);
+  const biz = bizRows[0] || {};
+  const created = [];
+  const updated = [];
+  const errors = [];
+  for (const row of mapped) {
+    const line = row._line || "";
+    try {
+      if (!String(row.name || "").trim() && !String(row.code || "").trim()) continue;
+      const body = itemBodyFromImportRow(row, biz);
+      if (!body.name) throw new Error("Name is required");
+      await withTransaction(async (conn) => {
+        const existing = await findItemForImport(conn, bid(), row);
+        if (existing) {
+          updated.push((await updateImportedItem(conn, existing, biz, body, row)).code);
+        } else {
+          created.push((await insertImportedItem(conn, biz, body)).code);
+        }
+      });
+    } catch (err) {
+      errors.push({ line, name: row.name || row.code || "", error: String(err.message || err) });
+    }
+  }
+  return {
+    created: created.length,
+    updated: updated.length,
+    failed: errors.length,
+    created_codes: created,
+    updated_codes: updated,
+    errors,
+  };
+}
+
+export function registerCrud(app) {
+  app.post("/api/customers", async (req, res) => {
+    const { name, business_name, mobile, type, gstin, state, credit_limit, dob, referred_by } = req.body || {};
+    if (!name || !mobile) {
+      res.status(400).json({ error: "Name and mobile are required" });
+      return;
+    }
+    const custType = type === "b2b" ? "b2b" : "b2c";
+    try {
+      const customer = await withTransaction(async (conn) => {
+        const n = await nextSeq(conn, "customer", 4);
+        const code = `CUS-${String(n).padStart(3, "0")}`;
+        const id = crypto.randomUUID();
+        await conn.query(
+          `INSERT INTO customers (
+             id, code, name, business_name, mobile, type, gstin, state, credit_limit, outstanding, business_id
+           ) VALUES (?,?,?,?,?,?,?,?,?,0,?)`,
+          [
+            id,
+            code,
+            String(name).trim(),
+            business_name || null,
+            String(mobile).trim(),
+            custType,
+            gstin || null,
+            state || null,
+            Number(credit_limit) || 0,
+            bid(),
+          ],
+        );
+        try {
+          await conn.query("UPDATE customers SET dob=?, referred_by=? WHERE id=?", [dob || null, referred_by || null, id]);
+        } catch {
+          /* optional */
+        }
+        const [rows] = await conn.query("SELECT * FROM customers WHERE id = ?", [id]);
+        return rows[0];
+      });
+      res.json({ ok: true, customer });
+    } catch (err) {
+      res.status(500).json({ error: String(err.message) });
+    }
+  });
+
+  app.get("/api/items/import/template", (_req, res) => {
+    const xml = itemImportTemplateXml();
+    res.setHeader("Content-Type", "application/vnd.ms-excel; charset=utf-8");
+    res.setHeader("Content-Disposition", 'attachment; filename="pos-items-template.xls"');
+    res.send(xml);
+  });
+
+  app.post("/api/items/import", async (req, res) => {
+    try {
+      const result = await importShopItems(req.body || {});
+      res.json({ ok: true, ...result });
+    } catch (err) {
+      res.status(400).json({ error: String(err.message) });
+    }
+  });
+
+  app.post("/api/items", async (req, res) => {
+    const b = req.body || {};
+    if (!b.name) {
+      res.status(400).json({ error: "Item name is required" });
+      return;
+    }
+    let imageUrl;
+    try {
+      imageUrl = itemImageFromBody(b);
+    } catch (err) {
+      res.status(err.status || 400).json({ error: String(err.message) });
+      return;
+    }
+    try {
+      const item = await withTransaction(async (conn) => {
+        const n = await nextSeq(conn, "item", 7);
+        const [bizRows] = await conn.query("SELECT category, business_type FROM businesses WHERE id = ?", [bid()]);
+        const footwear = POSFootwear.isFootwearShop(bizRows[0] || {});
+        const variants = POSFootwear.fieldsFromBody(b);
+        const prefix = footwear ? "FW" : "SP";
+        const code = b.code || `${prefix}-${String(n).padStart(3, "0")}`;
+        const id = crypto.randomUUID();
+        await conn.query(
+          `INSERT INTO items (
+             id, code, name, local_name, category, subcategory, color, size, wearer_type, base_unit,
+             purchase_rate, retail_rate, b2b_rate, gst_rate, hsn, image_url, stock_gm,
+             reorder_level_gm, status, business_id
+           ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'active', ?)`,
+          [
+            id,
+            code,
+            String(b.name).trim(),
+            b.local_name || null,
+            b.category || POSFootwear.defaultCategory(bizRows[0] || {}),
+            b.subcategory || null,
+            variants.color,
+            variants.size,
+            variants.wearer_type,
+            itemUnit(b.base_unit || b.unit || POSFootwear.defaultUnit(bizRows[0] || {})),
+            Number(b.purchase_rate) || 0,
+            Number(b.retail_rate) || 0,
+            Number(b.b2b_rate) || 0,
+            Number(b.gst_rate) || 5,
+            String(b.hsn || b.local_name || "").trim() || null,
+            imageUrl === undefined ? null : imageUrl,
+            Number(b.stock_gm) || 0,
+            Number(b.reorder_level_gm) || 0,
+            bid(),
+          ],
+        );
+        await onItemSaved(conn, bid(), id, b);
+        const [rows] = await conn.query("SELECT * FROM items WHERE id = ?", [id]);
+        return rows[0];
+      });
+      res.json({ ok: true, item });
+    } catch (err) {
+      res.status(500).json({ error: String(err.message) });
+    }
+  });
+
+  app.put("/api/items/:id", async (req, res) => {
+    const b = req.body || {};
+    let imageUrl;
+    try {
+      imageUrl = itemImageFromBody(b);
+    } catch (err) {
+      res.status(err.status || 400).json({ error: String(err.message) });
+      return;
+    }
+    try {
+      const variants = POSFootwear.fieldsFromBody(b);
+      const [bizRows] = await query("SELECT category, business_type FROM businesses WHERE id = ?", [bid()]);
+      const params = [
+        b.name,
+        b.local_name || null,
+        b.category || POSFootwear.defaultCategory(bizRows[0] || {}),
+        b.subcategory || null,
+        variants.color,
+        variants.size,
+        variants.wearer_type,
+        itemUnit(b.base_unit || b.unit || POSFootwear.defaultUnit(bizRows[0] || {})),
+        Number(b.purchase_rate) || 0,
+        Number(b.retail_rate) || 0,
+        Number(b.b2b_rate) || 0,
+        Number(b.gst_rate) || 5,
+        String(b.hsn || "").trim() || null,
+        Number(b.stock_gm) || 0,
+        Number(b.reorder_level_gm) || 0,
+        b.status || "active",
+      ];
+      let imageSql = "";
+      if (imageUrl !== undefined) {
+        imageSql = ", image_url=?";
+        params.push(imageUrl);
+      }
+      params.push(req.params.id, bid());
+      await query(
+        `UPDATE items SET
+           name=?, local_name=?, category=?, subcategory=?, color=?, size=?, wearer_type=?, base_unit=?,
+           purchase_rate=?, retail_rate=?, b2b_rate=?, gst_rate=?, hsn=?,
+           stock_gm=?, reorder_level_gm=?, status=?${imageSql}
+         WHERE id=? AND business_id=?`,
+        params,
+      );
+      await onItemSaved(null, bid(), req.params.id, b);
+      const [item] = await query("SELECT * FROM items WHERE id = ?", [req.params.id]);
+      res.json({ ok: true, item });
+    } catch (err) {
+      res.status(500).json({ error: String(err.message) });
+    }
+  });
+
+  app.post("/api/packs", async (req, res) => {
+    const name = String(req.body?.name || "").trim();
+    const items = normalizePackItems(req.body?.items);
+    if (!name || items.length === 0) {
+      res.status(400).json({ error: "Pack name and at least one spice are required" });
+      return;
+    }
+    try {
+      const pack = await withTransaction(async (conn) => {
+        const n = await nextSeq(conn, "pack", 6);
+        const id = crypto.randomUUID();
+        const total = items.reduce((s, i) => s + Number(i.quantity_gm || 0), 0);
+        await conn.query(
+          `INSERT INTO packs (id, code, name, total_quantity_gm, status, business_id)
+           VALUES (?,?,?,?,'active',?)`,
+          [id, `PK-${String(n).padStart(3, "0")}`, name, total, bid()],
+        );
+        await insertPackLines(conn, id, items);
+        const [rows] = await conn.query("SELECT * FROM packs WHERE id = ?", [id]);
+        return rows[0];
+      });
+      res.json({ ok: true, pack });
+    } catch (err) {
+      res.status(err.message === "Unknown item in pack" ? 400 : 500).json({ error: String(err.message) });
+    }
+  });
+
+  app.put("/api/packs/:id", async (req, res) => {
+    const id = String(req.params.id || "").trim();
+    const name = String(req.body?.name || "").trim();
+    const items = normalizePackItems(req.body?.items);
+    if (!id || !name || items.length === 0) {
+      res.status(400).json({ error: "Pack name and at least one spice are required" });
+      return;
+    }
+    try {
+      const [found] = await query("SELECT id FROM packs WHERE id = ? AND business_id = ?", [id, bid()]);
+      if (!found) {
+        res.status(404).json({ error: "Pack not found" });
+        return;
+      }
+      const pack = await withTransaction(async (conn) => {
+        const total = items.reduce((s, i) => s + Number(i.quantity_gm || 0), 0);
+        await conn.query("DELETE FROM pack_items WHERE pack_id = ? AND business_id = ?", [id, bid()]);
+        await conn.query(
+          "UPDATE packs SET name=?, total_quantity_gm=? WHERE id=? AND business_id=?",
+          [name, total, id, bid()],
+        );
+        await insertPackLines(conn, id, items);
+        const [rows] = await conn.query("SELECT * FROM packs WHERE id = ?", [id]);
+        return rows[0];
+      });
+      res.json({ ok: true, pack });
+    } catch (err) {
+      res.status(err.message === "Unknown item in pack" ? 400 : 500).json({ error: String(err.message) });
+    }
+  });
+
+  app.post("/api/suppliers", async (req, res) => {
+    const { name, contact_name, mobile, email, address, gstin } = req.body || {};
+    if (!name) {
+      res.status(400).json({ error: "Supplier name is required" });
+      return;
+    }
+    try {
+      const id = crypto.randomUUID();
+      const code = `SUP-${Date.now().toString(36).toUpperCase()}`;
+      await query(
+        `INSERT INTO suppliers (
+           id, code, name, contact_name, mobile, email, address, gstin, opening_balance, business_id
+         ) VALUES (?,?,?,?,?,?,?,?,0,?)`,
+        [
+          id,
+          code,
+          String(name).trim(),
+          String(contact_name || "").trim() || null,
+          String(mobile || "").trim() || null,
+          String(email || "").trim() || null,
+          String(address || "").trim() || null,
+          String(gstin || "").trim() || null,
+          bid(),
+        ],
+      );
+      const [supplier] = await query("SELECT * FROM suppliers WHERE id = ?", [id]);
+      res.json({ ok: true, supplier });
+    } catch (err) {
+      res.status(500).json({ error: String(err.message) });
+    }
+  });
+
+  app.post("/api/purchases", async (req, res) => {
+    const { supplier_id, supplier_invoice_number, purchase_date, payment_method, lines, notes } =
+      req.body || {};
+    if (!supplier_id || !Array.isArray(lines) || lines.length === 0) {
+      res.status(400).json({ error: "Supplier and purchase lines are required" });
+      return;
+    }
+    try {
+      const purchase = await withTransaction(async (conn) => {
+        const [supRows] = await conn.query(
+          "SELECT * FROM suppliers WHERE id = ? AND business_id = ?",
+          [supplier_id, bid()],
+        );
+        const supplier = supRows[0];
+        if (!supplier) throw new Error("Supplier not found");
+        const built = [];
+        for (const line of lines) {
+          const [itemRows] = await conn.query(
+            "SELECT * FROM items WHERE id = ? AND business_id = ?",
+            [line.item_id, bid()],
+          );
+          const item = itemRows[0];
+          if (!item) throw new Error("Unknown item");
+          const qty = Number(line.quantity_gm);
+          const rate = Number(line.rate_per_kg ?? item.purchase_rate);
+          const amount = round2(lineAmount(qty, rate, item));
+          const gstRate = Number(item.gst_rate) || 0;
+          const gstAmount = round2((amount * gstRate) / 100);
+          built.push({
+            item,
+            qty,
+            rate,
+            amount,
+            gstRate,
+            gstAmount,
+            total: round2(amount + gstAmount),
+          });
+        }
+        const subtotal = round2(built.reduce((s, l) => s + l.amount, 0));
+        const gst = round2(built.reduce((s, l) => s + l.gstAmount, 0));
+        const total = round2(subtotal + gst);
+        const n = await nextSeq(conn, "purchase", 10002);
+        const id = crypto.randomUUID();
+        const purchaseNumber = `PO-${n}`;
+        const method = String(payment_method || "cash").toLowerCase();
+        const payStatus = method === "credit" ? "unpaid" : "paid";
+        await conn.query(
+          `INSERT INTO purchases (
+             id, purchase_number, supplier_id, supplier_name, supplier_invoice_number,
+             purchase_date, notes, subtotal, gst, total, payment_method, payment_status, business_id
+           ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+          [
+            id,
+            purchaseNumber,
+            supplier.id,
+            supplier.name,
+            supplier_invoice_number || null,
+            purchase_date || new Date().toISOString().slice(0, 10),
+            notes || null,
+            subtotal,
+            gst,
+            total,
+            method,
+            payStatus,
+            bid(),
+          ],
+        );
+        let barcodeCount = 0;
+        for (let i = 0; i < built.length; i++) {
+          const line = built[i];
+          const lineId = crypto.randomUUID();
+          await conn.query(
+            `INSERT INTO purchase_lines (
+               id, purchase_id, item_id, item_name, quantity_gm, rate_per_kg,
+               gst_rate, amount, gst_amount, total_amount, business_id
+             ) VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+            [
+              lineId,
+              id,
+              line.item.id,
+              itemBillName(line.item),
+              line.qty,
+              line.rate,
+              line.gstRate,
+              line.amount,
+              line.gstAmount,
+              line.total,
+              bid(),
+            ],
+          );
+          await conn.query(
+            "UPDATE items SET stock_gm = stock_gm + ? WHERE id = ? AND business_id = ?",
+            [line.qty, line.item.id, bid()],
+          );
+          const src = lines[i] || {};
+          const batch = await onPurchaseLineSaved(conn, {
+            businessId: bid(),
+            branchId: null,
+            userId: null,
+            purchaseId: id,
+            purchaseNumber,
+            supplierId: supplier.id,
+            lineId,
+            item: line.item,
+            qty: line.qty,
+            rate: line.rate,
+            barcode: src.barcode,
+            barcodes: src.barcodes,
+            batchNo: src.batch_no || src.batchNo,
+            expiry: src.expiry_date || src.expiryDate,
+            mrp: src.mrp,
+          });
+          barcodeCount += Array.isArray(batch?.barcodes)
+            ? batch.barcodes.filter((r) => r.barcode).length
+            : (batch?.barcode ? 1 : 0);
+        }
+        const [rows] = await conn.query("SELECT * FROM purchases WHERE id = ?", [id]);
+        const purchase = rows[0];
+        purchase.barcode_count = barcodeCount;
+        await recordCreditPurchase(conn, {
+          supplier,
+          total,
+          purchaseId: id,
+          purchaseNumber,
+          method,
+        });
+        await postPurchaseJournal(conn, purchase);
+        return purchase;
+      });
+      res.json({ ok: true, purchase });
+    } catch (err) {
+      const msg = String(err.message);
+      const status = /barcodes for|Duplicate barcode|Max 500|Quantity required|already in stock/i.test(msg) ? 400 : 500;
+      res.status(status).json({ error: msg });
+    }
+  });
+
+  app.put("/api/orders/:id", async (req, res) => {
+    const { customerId, paymentMethod, status, packId, packCount, lines } = req.body || {};
+    if (!Array.isArray(lines) || lines.length === 0) {
+      res.status(400).json({ error: "Order must have lines" });
+      return;
+    }
+    try {
+      const order = await withTransaction(async (conn) => {
+        const [existRows] = await conn.query(
+          "SELECT * FROM sales_orders WHERE id = ? AND business_id = ?",
+          [req.params.id, bid()],
+        );
+        const existing = existRows[0];
+        if (!existing) throw new Error("Order not found");
+        if (String(existing.status || "").toLowerCase() === "cancelled") {
+          throw new Error("Cancelled orders cannot be edited. Change status first.");
+        }
+        const [oldLines] = await conn.query(
+          "SELECT * FROM sales_order_lines WHERE order_id = ? AND cancelled = 0",
+          [existing.id],
+        );
+        for (const line of oldLines) {
+          await conn.query(
+            "UPDATE items SET stock_gm = stock_gm + ? WHERE id = ? AND business_id = ?",
+            [line.quantity_gm, line.item_id, bid()],
+          );
+        }
+        await conn.query("DELETE FROM sales_order_lines WHERE order_id = ?", [existing.id]);
+
+        const [custRows] = await conn.query(
+          "SELECT * FROM customers WHERE id = ? AND business_id = ?",
+          [customerId || existing.customer_id, bid()],
+        );
+        const customer = custRows[0];
+        if (!customer) throw new Error("Customer not found");
+
+        const built = [];
+        for (const line of lines) {
+          const [itemRows] = await conn.query(
+            "SELECT * FROM items WHERE id = ? AND business_id = ?",
+            [line.itemId, bid()],
+          );
+          const item = itemRows[0];
+          if (!item) throw new Error("Unknown item");
+          const qty = Number(line.quantity_gm);
+          const rate =
+            customer.type === "b2b" ? Number(item.b2b_rate) : Number(item.retail_rate);
+          const amount = round2(lineAmount(qty, rate, item));
+          built.push({ item, qty, rate, amount, gstRate: Number(item.gst_rate) || 0 });
+        }
+        const subtotal = round2(built.reduce((s, l) => s + l.amount, 0));
+        const gst = round2(built.reduce((s, l) => s + (l.amount * l.gstRate) / 100, 0));
+        const total = round2(subtotal + gst);
+        const totalGm = built.reduce((s, l) => s + l.qty, 0);
+        const method = String(paymentMethod || existing.payment_method).toLowerCase();
+        const payStatus = method === "credit" ? "partial" : "paid";
+        let packName = existing.pack_name;
+        let usePackId = packId === undefined ? existing.pack_id : packId;
+        if (packId) {
+          const [packs] = await conn.query("SELECT * FROM packs WHERE id = ?", [packId]);
+          packName = packs[0]?.name || packName;
+        }
+        if (packId === null) {
+          usePackId = null;
+          packName = null;
+        }
+        const newStatus = status || existing.status;
+        await conn.query(
+          `UPDATE sales_orders SET
+             customer_id=?, customer_name=?, customer_type=?,
+             pack_id=?, pack_name=?, pack_count=?, status=?,
+             total_quantity_gm=?, subtotal=?, gst=?, total=?,
+             payment_method=?, payment_status=?
+           WHERE id=?`,
+          [
+            customer.id,
+            customer.business_name || customer.name,
+            customer.type,
+            usePackId,
+            packName,
+            packCount ?? existing.pack_count,
+            newStatus,
+            totalGm,
+            subtotal,
+            gst,
+            total,
+            method,
+            payStatus,
+            existing.id,
+          ],
+        );
+        if (newStatus !== "cancelled") {
+          for (const line of built) {
+            await conn.query(
+              `INSERT INTO sales_order_lines (
+                 id, order_id, item_id, item_name, quantity_gm, rate_per_kg,
+                 discount, amount, gst_rate, cancelled, business_id
+               ) VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+              [
+                crypto.randomUUID(),
+                existing.id,
+                line.item.id,
+                itemBillName(line.item),
+                line.qty,
+                line.rate,
+                0,
+                line.amount,
+                line.gstRate,
+                0,
+                bid(),
+              ],
+            );
+            await conn.query(
+              "UPDATE items SET stock_gm = stock_gm - ? WHERE id = ? AND business_id = ?",
+              [line.qty, line.item.id, bid()],
+            );
+          }
+        }
+        const [orders] = await conn.query("SELECT * FROM sales_orders WHERE id = ?", [existing.id]);
+        const [orderLines] = await conn.query(
+          "SELECT * FROM sales_order_lines WHERE order_id = ?",
+          [existing.id],
+        );
+        return { ...orders[0], lines: orderLines };
+      });
+      await audit("Sale Updated", {
+        module: "sales",
+        target_id: order.id,
+        target_name: order.order_number,
+        total: order.total,
+        payment_method: order.payment_method,
+        customer_name: order.customer_name,
+      }, req);
+      res.json({ ok: true, order });
+    } catch (err) {
+      res.status(500).json({ error: String(err.message) });
+    }
+  });
+
+  const orderStatuses = ["confirmed", "delivered", "cancelled"];
+  const paymentStatuses = ["paid", "partial", "unpaid"];
+
+  app.patch("/api/orders/:id", async (req, res) => {
+    const { status, payment_status } = req.body || {};
+    try {
+      const order = await withTransaction(async (conn) => {
+        const [existRows] = await conn.query(
+          "SELECT * FROM sales_orders WHERE id = ? AND business_id = ?",
+          [req.params.id, bid()],
+        );
+        const existing = existRows[0];
+        if (!existing) throw new Error("Order not found");
+
+        const oldStatus = String(existing.status || "confirmed").toLowerCase();
+        const newStatus = status ? String(status).toLowerCase() : oldStatus;
+        if (!orderStatuses.includes(newStatus)) throw new Error("Invalid order status");
+
+        let payStatus = existing.payment_status || "paid";
+        if (payment_status) {
+          payStatus = String(payment_status).toLowerCase();
+          if (!paymentStatuses.includes(payStatus)) throw new Error("Invalid payment status");
+        }
+
+        const [lines] = await conn.query(
+          "SELECT * FROM sales_order_lines WHERE order_id = ? AND cancelled = 0",
+          [existing.id],
+        );
+
+        if (newStatus === "cancelled" && oldStatus !== "cancelled") {
+          for (const line of lines) {
+            await conn.query(
+              "UPDATE items SET stock_gm = stock_gm + ? WHERE id = ? AND business_id = ?",
+              [line.quantity_gm, line.item_id, bid()],
+            );
+            await conn.query("UPDATE sales_order_lines SET cancelled = 1 WHERE id = ?", [line.id]);
+          }
+        } else if (oldStatus === "cancelled" && newStatus !== "cancelled") {
+          const [allLines] = await conn.query(
+            "SELECT * FROM sales_order_lines WHERE order_id = ?",
+            [existing.id],
+          );
+          for (const line of allLines) {
+            await conn.query(
+              "UPDATE items SET stock_gm = stock_gm - ? WHERE id = ? AND business_id = ?",
+              [line.quantity_gm, line.item_id, bid()],
+            );
+            await conn.query("UPDATE sales_order_lines SET cancelled = 0 WHERE id = ?", [line.id]);
+          }
+        }
+
+        await conn.query(
+          "UPDATE sales_orders SET status = ?, payment_status = ? WHERE id = ? AND business_id = ?",
+          [newStatus, payStatus, existing.id, bid()],
+        );
+
+        const [orders] = await conn.query("SELECT * FROM sales_orders WHERE id = ?", [existing.id]);
+        const [orderLines] = await conn.query(
+          "SELECT * FROM sales_order_lines WHERE order_id = ?",
+          [existing.id],
+        );
+        return { ...orders[0], lines: orderLines };
+      });
+      await audit("Sale Status Changed", {
+        module: "sales",
+        target_id: order.id,
+        target_name: order.order_number,
+        status: order.status,
+        payment_status: order.payment_status,
+      }, req);
+      res.json({ ok: true, order });
+    } catch (err) {
+      res.status(500).json({ error: String(err.message) });
+    }
+  });
+}

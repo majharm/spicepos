@@ -1,0 +1,189 @@
+Production deploy bundle — 20260903deploy88
+=========================================
+
+Upload ALL files below to Hostinger public_html (overwrite):
+
+Assets
+  assets/atav-telecom-logo.png
+
+HTML
+  index.html
+  login.html
+  master.html
+  setup.html
+  privacy.html
+  terms.html
+  data-deletion.html
+  refund.html
+  shipping.html
+  cookies.html
+  legal/.htaccess
+  legal/legal.css
+  legal/privacy/index.html
+  legal/terms/index.html
+  legal/data-deletion/index.html
+  legal/refund/index.html
+  legal/shipping/index.html
+  legal/cookies/index.html
+
+Cashfree / main website
+  Copy the whole legal/ folder to the atavtelecom.in public_html (not only pos.atavtelecom.in)
+  so these URLs work:
+    https://atavtelecom.in/legal/privacy
+    https://atavtelecom.in/legal/terms
+    https://atavtelecom.in/legal/data-deletion
+    https://atavtelecom.in/legal/refund
+    https://atavtelecom.in/legal/shipping
+    https://atavtelecom.in/legal/cookies
+
+CSS
+  css/pos.css
+  css/saas.css
+
+JavaScript
+  js/app.js
+  js/units.js
+  js/footwear.js
+  js/discount.js
+  js/loyalty.js
+  js/barcode.js
+  js/invoice.js
+  js/support.js
+  js/dev-mode.js
+  js/master.js
+  js/pos-api.js
+  js/x-pos-20260830e.js
+
+PHP
+  pos-php-core.php
+  pos-php-scrypt.php
+  pos-php-till.php
+  pos-checkout.php
+  pos-holds.php
+  pos-crud.php
+  pos-backup.php
+  pos-units.php
+  pos-orders.php
+  pos-reports.php
+  pos-accounting.php
+  pos-api.php
+  pos-mail.php
+  pos-alerts.php
+  pos-advanced.php
+  pos-item-import.php
+  api/.htaccess
+  api/health/index.php
+  api/checkout/index.php
+  api/holds/index.php
+  api/barcodes/index.php
+  api/barcodes/lookup/index.php
+  api/barcodes/generate-qty/index.php
+  api/barcodes/generate-missing/index.php
+  api/backup/index.php
+  api/backup/restore/index.php
+  api/units/index.php
+  api/master/notifications/index.php
+  api/master/alerts/index.php
+  api/master/backup/index.php
+  api/master/backup/restore/index.php
+  api/master/backup/platform/index.php
+  api/master/backup/platform/restore/index.php
+  pos-data/.htaccess
+  health.json
+
+Node (if using hPanel Node.js web app — upload OR git pull then Restart)
+  server.js
+  server/auth.js
+  server/master.js
+  server/onboard.js
+  server/index.js
+  server/crud.js
+  server/item-import.js
+  server/excel.js
+  server/tenant.js
+  server/reports.js
+  server/accounting.js
+  server/accounts.js
+  server/roles.js
+  server/schema.js
+  server/backup.js
+  server/backup-util.js
+  server/units.js
+  server/mail.js
+  server/alerts.js
+  server/advanced.js
+  server/fy.js
+  package.json
+
+After upload:
+  1. hPanel → Node.js → Restart (if Node app enabled)
+  2. Hard-refresh browser (Ctrl+Shift+R)
+
+FIXES in this bundle
+  - Welcome email on Create business / new staff (Hostinger SMTP pos@atavtelecom.in)
+  - Suppliers form and list include address and email
+  - Settings page: wider card, 2-column details, styled logo upload, keep card padding on mobile
+  - CSS: Master Admin mobile nav wrap, hide nav until sign-in, backup file inputs, table overflow
+  - Cache sticker 20260903deploy88 on index, login, master, setup
+  - Items bulk Excel import: template download and .xlsx / CSV upload
+  - Inventory Expiry list: dated on-hand batches, 7/30/90 day filters, write-off as damage
+  - Login Create business shows a 2-day trial banner
+  - Packs desk: composer + saved library, spice search, live totals
+  - Counter bill type scale: 14px item names, 14px line amounts, 18px total
+  - Piece barcodes stay as separate Counter lines; receipt keeps sold items after checkout
+  - PHP /api/barcodes/lookup, generate-qty, and generate-missing folder stubs
+  - Restore purchase/item barcode handlers (no merge leftover auto-generate)
+  - Item barcodes (own + manufacturer), generator, and label print
+  - Counter scan + item-wise and bill ₹/% discount + royalty redeem
+  - Purchase batches/barcodes and damage approval workflow
+  - Stock ledger and customer royalty points
+  - Login split layout: brand panel + form, grouped signup, legal footer on the form
+  - Login footer uses https://atavtelecom.in/legal/{privacy,terms,data-deletion,refund,shipping,cookies}
+  - Login: ATAV POS background for all business types
+  - FY year dropdown auto-generates 1 April–31 March years on Accounts, Reports, Expenses
+  - Print button on Accounts, Reports (each block + all), and Expenses
+  - Mobile Counter: stacked qty row, aligned Save/Hold/Clear, no overflow
+  - Packs module: Edit a saved pack and Update name / spices / grams
+  - Counter qty is any grams from 1 to 1,000,000,000 (not a fixed 100 g tap)
+  - Official A4 tax invoice has Original and Duplicate print windows
+  - Support page: helpline-first Call / WhatsApp / Email layout
+  - Official A4 tax invoice list view (plus existing POS slip)
+  - Footwear empty unit defaults to PCS (not GM); Items form keeps the shop unit
+  - Footwear module: item colour, size, and girls/boys type
+  - Mobile Counter: scrollable item list and a compact order list
+  - Master Admin Settings: auto-send templates (welcome, login, update, closing, low stock) with Active/Inactive
+  - Master Admin Notifications: attach an image; send to dashboard, email, and WhatsApp
+  - Counter bill slider: small hide/unhide button (persists in this browser)
+  - Items page can save a product photo; Counter cards show it
+  - Counter item cards and fonts are smaller so more products fit
+  - Mobile Counter: item grid scrolls in place; bill and Save stay on screen
+  - Page scrolling on every shop view, Master Admin main pane, and login/signup
+  - New Purchase items as a searchable list/table
+  - Indian financial year 1 April–31 March on Reports, Accounts, Expenses
+  - Finance → Expenses module (PHP + Node)
+  - Master Admin → Backup: download/restore one shop or the full platform
+  - Shop POS Admin → Backup: download/restore this shop JSON
+  - Mobile: Counter billing and Invoices/orders stack, sticky Save, overlay menu
+  - Left nav: remove ATAV logo, Today, Bills, and clock chips (keep Logout)
+  - Reports: daywise payment summary (cash / UPI / card / credit per day)
+  - Inventory → Units: unit master (GM, KG, ML, LTR, PCS) used on item forms; add BOX/qty units
+  - Item unit types: qty/pcs, g, kg, ml, litre (rates per pc / kg / ltr)
+  - Save/Hold on PHP: POST /api/checkout no longer 301-redirects to GET (DirectorySlash Off; rewrite directories)
+  - Counter POSTs prefer /pos-api.php?p=… so Apache folders cannot swallow Save/Hold
+  - PHP 501 fallback retries the next API spec instead of stopping on the first folder hit
+  - PHP add-customer bind types match placeholders (fixes mysqli bind_param error)
+  - PHP-only shops: Hold bill (POST/GET/DELETE /api/holds) wired in pos-php-core.php
+  - PHP-only shops: creates held_bills table if missing
+  - PHP-only shops: checkout wired in pos-php-core.php (works even if pos-php-till.php is stale)
+  - PHP-only shops: PATCH/PUT /api/orders/:id wired in pos-php-core.php (invoice status updates)
+  - Counter lists held bills under Save so cashiers can recall them
+  - PHP-only shops: save bills from Counter (POST /api/checkout) without Node.js
+  - Auto-migrate sales_orders columns (discount, branch_id, cashier_id, status)
+  - Invoices/Purchases: print button always visible; thermal preview scrolls inside pane (no zoom-out needed)
+  - Counter: quick add customer (name + mobile) from POS topbar
+  - Reports: GST daywise dates show as YYYY-MM-DD
+  - Velocity theme: slate + teal modern UI (all pages including setup)
+  - Performance: system fonts (no Google Fonts), deferred scripts, debounced search/filters
+  - Parallel bootstrap API calls (today + dashboard + suppliers)
+  - Lighter CSS: no backdrop blur, flat cards, content-visibility on views
+  - Clock DOM updates only when the time text changes

@@ -1,0 +1,977 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="velocity">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
+    <title>ATAV POS</title>
+    <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="./css/pos.css?v=20260903deploy88" />
+    <link rel="stylesheet" href="./css/saas.css?v=20260903deploy88" />
+  </head>
+  <body>
+    <div class="app" id="app">
+      <nav class="nav" id="app-nav" aria-label="App">
+        <div class="brand">
+          <img id="shop-logo" class="brand-logo" alt="Company logo" hidden />
+          <div class="brand-mark" id="brand-mark" aria-hidden="true"></div>
+          <strong id="shop-name">SWAMI MASALE</strong>
+          <span id="shop-place">Loading MySQL…</span>
+        </div>
+        <div class="nav-scroll">
+          <div class="nav-group">
+            <p class="nav-group-label">Main</p>
+            <button class="nav-btn active" type="button" data-view="dashboard"><span class="nav-icon" aria-hidden="true">⌂</span>Dashboard</button>
+            <button class="nav-btn" type="button" data-view="counter"><span class="nav-icon" aria-hidden="true">⊞</span>Counter</button>
+          </div>
+          <div class="nav-group">
+            <p class="nav-group-label">Sales</p>
+            <button class="nav-btn" type="button" data-view="orders"><span class="nav-icon" aria-hidden="true">▤</span>Invoices</button>
+            <button class="nav-btn" type="button" data-view="customers"><span class="nav-icon" aria-hidden="true">◎</span>Customers</button>
+            <button class="nav-btn" type="button" data-view="loyalty"><span class="nav-icon" aria-hidden="true">★</span>Royalty</button>
+            <button class="nav-btn" type="button" data-view="purchases"><span class="nav-icon" aria-hidden="true">↘</span>Purchases</button>
+          </div>
+          <div class="nav-group">
+            <p class="nav-group-label">Inventory</p>
+            <button class="nav-btn" type="button" data-view="items"><span class="nav-icon" aria-hidden="true">◫</span>Items</button>
+            <button class="nav-btn" type="button" data-view="units"><span class="nav-icon" aria-hidden="true">⚖</span>Units</button>
+            <button class="nav-btn" type="button" data-view="packs"><span class="nav-icon" aria-hidden="true">▦</span>Packs</button>
+            <button class="nav-btn" type="button" data-view="barcodes"><span class="nav-icon" aria-hidden="true">▦</span>Barcodes</button>
+            <button class="nav-btn" type="button" data-view="stock"><span class="nav-icon" aria-hidden="true">▥</span>Stock</button>
+            <button class="nav-btn" type="button" data-view="expiry"><span class="nav-icon" aria-hidden="true">◷</span>Expiry</button>
+            <button class="nav-btn" type="button" data-view="damage"><span class="nav-icon" aria-hidden="true">⚠</span>Damage</button>
+            <button class="nav-btn" type="button" data-view="ledger"><span class="nav-icon" aria-hidden="true">☰</span>Ledger</button>
+            <button class="nav-btn" type="button" data-view="suppliers"><span class="nav-icon" aria-hidden="true">◇</span>Suppliers</button>
+          </div>
+          <div class="nav-group">
+            <p class="nav-group-label">Finance</p>
+            <button class="nav-btn" type="button" data-view="accounts"><span class="nav-icon" aria-hidden="true">₹</span>Accounts</button>
+            <button class="nav-btn" type="button" data-view="expenses"><span class="nav-icon" aria-hidden="true">−</span>Expenses</button>
+            <button class="nav-btn" type="button" data-view="reports"><span class="nav-icon" aria-hidden="true">▣</span>Reports</button>
+          </div>
+          <div class="nav-group">
+            <p class="nav-group-label">Admin</p>
+            <button class="nav-btn" type="button" data-view="staff"><span class="nav-icon" aria-hidden="true">◉</span>Staff</button>
+            <button class="nav-btn" type="button" data-view="branches"><span class="nav-icon" aria-hidden="true">⬡</span>Branches</button>
+            <button class="nav-btn" type="button" data-view="devices"><span class="nav-icon" aria-hidden="true">⌁</span>Devices</button>
+            <button class="nav-btn" type="button" data-view="support"><span class="nav-icon" aria-hidden="true">?</span>Support</button>
+            <button class="nav-btn" type="button" data-view="settings"><span class="nav-icon" aria-hidden="true">⚙</span>Settings</button>
+            <button class="nav-btn" type="button" data-view="backup"><span class="nav-icon" aria-hidden="true">⇩</span>Backup</button>
+          </div>
+        </div>
+        <div class="nav-foot">
+          <button class="btn-logout" type="button" id="exit-impersonate" hidden>Back to Master Admin</button>
+          <button class="btn-logout" type="button" data-logout>Logout</button>
+        </div>
+      </nav>
+      <div class="nav-scrim" id="nav-scrim" hidden></div>
+
+      <div class="stage">
+        <header class="view-topbar" id="view-topbar">
+          <button type="button" class="btn icon-btn nav-toggle" id="nav-toggle" aria-label="Toggle menu" aria-expanded="true">☰</button>
+          <div class="view-topbar-titles">
+            <h1 id="view-title">Dashboard</h1>
+            <p id="view-subtitle">Your shop today</p>
+          </div>
+          <div class="view-topbar-stats" id="view-topbar-stats">
+            <span class="mini-stat">Today <b id="topbar-total">₹0.00</b></span>
+            <span class="mini-stat">Bills <b id="topbar-count">0</b></span>
+            <span class="mini-stat clock-mini" id="topbar-clock" title="Shop local time"><b id="topbar-time">--:--</b></span>
+          </div>
+        </header>
+        <div class="session-bar">
+          <span id="session-who">Signed in</span>
+          <span id="session-support" class="session-support" hidden></span>
+          <button class="btn-logout" type="button" data-logout>Logout</button>
+        </div>
+        <div class="expired-banner" id="expired-banner" hidden>
+          Subscription expired. Data is kept. Ask the platform owner to renew this business.
+        </div>
+        <div class="platform-notices" id="platform-notices" hidden aria-live="polite"></div>
+        <section class="view" id="view-dashboard">
+          <h2 class="visually-hidden">Dashboard</h2>
+          <p class="lede" id="dash-welcome">Your shop today.</p>
+          <div class="platform-notes" id="dash-notes"></div>
+          <div class="report-grid" id="dash-kpis"></div>
+          <p class="lede"><button class="btn primary" type="button" data-view-jump="counter" id="open-pos">Open POS</button></p>
+        </section>
+        <section class="view view-counter" id="view-counter" hidden>
+          <div class="edit-order-banner" id="edit-order-banner" hidden></div>
+          <header class="topbar counter-topbar">
+            <form class="scan-lane" id="scan-form" autocomplete="off">
+              <span class="scan-lane-ico" aria-hidden="true"></span>
+              <input id="scan-code" type="text" enterkeyhint="done" autocomplete="off" placeholder="Scan or type barcode, then Enter" />
+              <span class="scan-status" id="scan-status"></span>
+            </form>
+            <form class="search" id="search-form">
+              <input id="search" type="search" placeholder="Search name or HSN…" autocomplete="off" />
+            </form>
+            <div class="counter-tools">
+              <div class="customer-picker">
+            <div class="counter-lane">
+              <form class="scan-lane" id="scan-form" autocomplete="off">
+                <span class="scan-lane-ico" aria-hidden="true"></span>
+                <input id="scan-code" type="text" enterkeyhint="done" autocomplete="off" placeholder="Scan or type barcode, then Enter" />
+                <span class="scan-status" id="scan-status"></span>
+              </form>
+              <form class="search" id="search-form">
+                <input id="search" type="search" placeholder="Search name or HSN…" autocomplete="off" />
+              </form>
+            </div>
+            <div class="counter-tools">
+              <div class="customer-picker">
+                <input id="counter-mobile" type="tel" inputmode="numeric" maxlength="15" autocomplete="off" placeholder="Mobile no." aria-label="Customer mobile" />
+                <select id="customer" class="select" aria-label="Customer"></select>
+              </div>
+              <select id="pack-choice" class="select" aria-label="Pack type">
+                <option value="">Loose items (no pack)</option>
+              </select>
+              <select id="wearer-filter" class="select footwear-only" hidden aria-label="Girls or boys">
+                <option value="">All (girls &amp; boys)</option>
+                <option value="girls">Girls</option>
+                <option value="boys">Boys</option>
+                <option value="unisex">Unisex</option>
+              </select>
+              <select id="size-filter" class="select footwear-only" hidden aria-label="Size">
+                <option value="">All sizes</option>
+              </select>
+              <select id="color-filter" class="select footwear-only" hidden aria-label="Colour">
+                <option value="">All colours</option>
+              </select>
+              <select id="pay-method" class="select" aria-label="Payment method">
+                <option value="cash">Cash</option>
+                <option value="upi">UPI</option>
+                <option value="card">Card</option>
+                <option value="credit">Credit</option>
+              </select>
+              <details class="quick-customer-wrap" id="quick-customer-wrap">
+                <summary>+ Customer</summary>
+                <form class="quick-customer" id="quick-customer-form" autocomplete="off">
+                  <input id="qc-name" name="qc-name" placeholder="Customer name" maxlength="120" />
+                  <input id="qc-mobile" name="qc-mobile" placeholder="Mobile no." inputmode="tel" maxlength="15" />
+                  <button class="btn primary" type="submit" id="qc-save">Add</button>
+                  <span class="hint" id="qc-hint"></span>
+                </form>
+              </details>
+            </div>
+          </header>
+          <div class="workspace">
+            <div class="catalog" id="catalog"></div>
+            <aside class="ticket bill-panel" id="bill-panel">
+              <div class="ticket-head">
+                <div class="ticket-head-copy">
+                  <h2>Bill</h2>
+                  <p class="ticket-sub" id="ticket-sub">Scan, tap, or search</p>
+                  <p class="ticket-cust" id="bill-customer"></p>
+                </div>
+                <button type="button" class="bill-toggle" id="bill-toggle" aria-controls="bill-panel" aria-expanded="true" aria-label="Hide bill" title="Hide bill">›</button>
+              </div>
+              <div class="ticket-pack" id="chosen-pack">Pack: Loose items</div>
+              <div id="pack-bar" class="pack-bar"></div>
+              <div class="lines" id="lines"></div>
+              <details class="bill-extras" id="bill-extras">
+                <summary>Discount &amp; royalty</summary>
+                <div class="bill-disc" id="bill-disc-wrap">
+                  <label>Bill discount
+                    <span class="disc-pair">
+                      <select id="bill-disc-type" aria-label="Bill discount type">
+                        <option value="amt">₹</option>
+                        <option value="pct">%</option>
+                      </select>
+                      <input id="bill-disc-value" type="number" min="0" step="0.01" value="0" aria-label="Bill discount value" />
+                    </span>
+                  </label>
+                  <label class="loyalty-redeem" id="loyalty-redeem-wrap">Royalty redeem
+                    <input id="loyalty-redeem" type="number" min="0" step="1" value="0" aria-label="Points to redeem" />
+                    <span class="hint" id="loyalty-hint"></span>
+                  </label>
+                </div>
+              </details>
+              <div class="totals">
+                <div class="totals-meta">
+                  <div><span>Qty</span><span id="qty-total">0</span></div>
+                  <div><span>Taxable</span><span id="taxable">₹0.00</span></div>
+                  <div><span>GST</span><span id="tax">₹0.00</span></div>
+                  <div id="disc-row"><span>Discount</span><span id="disc-total">₹0.00</span></div>
+                  <div id="loyalty-row"><span>Royalty</span><span id="loyalty-total">₹0.00</span></div>
+                  <div id="profit-row"><span>Profit</span><span id="profit-total">₹0.00</span></div>
+                </div>
+                <div class="grand"><span>Total</span><span id="total">₹0.00</span></div>
+              </div>
+              <div class="pay">
+                <div class="pay-row">
+                  <button class="btn" id="btn-hold" type="button">Hold</button>
+                  <button class="btn danger" id="btn-clear" type="button">Clear</button>
+                  <button class="btn primary" id="btn-pay" type="button">Pay</button>
+                </div>
+                <div class="hint" id="hint"></div>
+                <div class="held-bills" id="held-bills" hidden></div>
+              </div>
+            </aside>
+          </div>
+        </section>
+
+        <section class="view view-items" id="view-items" hidden>
+          <h2 class="visually-hidden">Items</h2>
+          <div class="items-desk">
+            <header class="items-hero">
+              <div class="items-hero-copy">
+                <p class="items-kicker">Inventory</p>
+                <h3>Items</h3>
+                <p class="lede" id="items-lede">Name, photo, HSN code, unit type, rates, and stock.</p>
+              </div>
+              <div class="items-hero-stats" id="items-hero-stats"></div>
+            </header>
+            <div class="item-import-bar">
+              <p class="item-import-copy">Bulk add from Excel. Download the template, fill one item per row, then upload .xlsx, Excel XML, or CSV.</p>
+              <div class="item-import-actions">
+                <a class="btn" id="item-import-template" href="#">Download template</a>
+                <input id="item-import-file" class="logo-file-input" type="file" accept=".xlsx,.xls,.csv,.xml,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv,text/xml" />
+                <label class="btn primary" for="item-import-file">Upload Excel</label>
+              </div>
+              <p class="hint" id="item-import-hint"></p>
+            </div>
+            <div class="items-split">
+              <form class="settings item-composer" id="item-form" autocomplete="off">
+                <input type="hidden" id="item-id" />
+                <div class="item-composer-top">
+                  <p class="item-mode" id="item-mode">New item</p>
+                  <p class="item-composer-note">Tap a catalog card to edit. Quantity items can take a typed or scanned barcode.</p>
+                </div>
+                <fieldset class="item-block">
+                  <legend>Identity</legend>
+                  <label class="full">Name <input id="item-name" required maxlength="180" placeholder="Turmeric powder" /></label>
+                  <label>HSN code <input id="item-hsn" maxlength="16" placeholder="e.g. 0908" autocomplete="off" /></label>
+                  <label>Unit type
+                    <select id="item-unit"></select>
+                  </label>
+                </fieldset>
+                <fieldset class="item-block">
+                  <legend>Photo</legend>
+                  <div class="logo-row item-image-row full">
+                    <div class="logo-preview-frame item-image-frame">
+                      <img id="item-image-preview" class="logo-preview" alt="Item photo" hidden />
+                    </div>
+                    <div class="logo-controls">
+                      <div class="logo-pick-row">
+                        <input id="item-image" class="logo-file-input" type="file" accept="image/*" />
+                        <label class="btn logo-pick" for="item-image">Choose photo</label>
+                        <span class="logo-file-name" id="item-image-name">PNG or JPG</span>
+                      </div>
+                      <button class="btn" type="button" id="item-image-clear" hidden>Remove photo</button>
+                    </div>
+                  </div>
+                </fieldset>
+                <fieldset class="item-block">
+                  <legend>Classification</legend>
+                  <label><span id="item-category-lab">Category</span>
+                    <input id="item-category" list="category-list" placeholder="Whole Spices" />
+                  </label>
+                  <label><span id="item-subcategory-lab">Subcategory</span>
+                    <input id="item-subcategory" list="subcategory-list" placeholder="Haldi / Jeera" />
+                  </label>
+                  <label class="footwear-only" id="item-wearer-wrap" hidden>Type
+                    <select id="item-wearer">
+                      <option value="">Select girls / boys</option>
+                      <option value="girls">Girls</option>
+                      <option value="boys">Boys</option>
+                      <option value="unisex">Unisex</option>
+                    </select>
+                  </label>
+                  <label class="footwear-only" id="item-color-wrap" hidden>Colour
+                    <input id="item-color" list="color-list" placeholder="Black" maxlength="40" />
+                  </label>
+                  <label class="footwear-only" id="item-size-wrap" hidden>Size
+                    <input id="item-size" list="size-list" placeholder="5" maxlength="16" />
+                  </label>
+                  <datalist id="category-list"></datalist>
+                  <datalist id="subcategory-list"></datalist>
+                  <datalist id="color-list"></datalist>
+                  <datalist id="size-list"></datalist>
+                </fieldset>
+                <fieldset class="item-block">
+                  <legend>Pricing &amp; stock</legend>
+                  <label>MRP ₹ <input id="item-mrp" type="number" step="0.01" min="0" /></label>
+                  <label>GST % <input id="item-gst" type="number" step="0.01" value="5" /></label>
+                  <label><span id="item-retail-lab">Retail ₹/kg</span> <input id="item-retail" type="number" step="0.01" /></label>
+                  <label><span id="item-b2b-lab">B2B ₹/kg</span> <input id="item-b2b" type="number" step="0.01" /></label>
+                  <label><span id="item-purchase-lab">Purchase ₹/kg</span> <input id="item-purchase" type="number" step="0.01" /></label>
+                  <label><span id="item-stock-lab">Stock (g)</span> <input id="item-stock" type="number" step="0.001" /></label>
+                </fieldset>
+                <fieldset class="item-block pcs-barcode-only" id="item-barcode-block">
+                  <legend>Barcodes</legend>
+                  <label id="item-barcode-wrap">Own barcode
+                    <input id="item-barcode" maxlength="32" placeholder="Type or scan — not auto generated" autocomplete="off" />
+                  </label>
+                  <label>Manufacturer barcode
+                    <input id="item-mfr-barcode" maxlength="32" placeholder="Optional factory code" autocomplete="off" />
+                  </label>
+                  <label class="full">Qty-wise barcodes
+                    <input id="item-barcode-qty" type="number" min="0" max="500" step="1" placeholder="e.g. 10 unique pcs codes" />
+                  </label>
+                </fieldset>
+                <div class="item-composer-actions">
+                  <button class="btn primary" type="submit" id="item-save">Save item</button>
+                  <button class="btn" type="button" id="item-cancel">Clear</button>
+                  <div class="hint" id="item-hint"></div>
+                </div>
+              </form>
+              <aside class="items-library">
+                <div class="items-library-head">
+                  <h4>Catalog</h4>
+                  <input id="item-catalog-search" type="search" placeholder="Search name, HSN, barcode…" autocomplete="off" />
+                  <label class="item-toggle"><input type="checkbox" id="item-low-only" /> Low stock</label>
+                </div>
+                <div class="table-wrap items-library-list" id="items-table"></div>
+              </aside>
+            </div>
+          </div>
+        </section>
+        <section class="view" id="view-units" hidden>
+          <h2 class="visually-hidden">Unit master</h2>
+          <p class="lede">Inventory unit master — the same units used when adding items (qty, kg, litre, and your own).</p>
+          <form class="settings wide" id="unit-form">
+            <input type="hidden" id="unit-id" />
+            <label>Code <input id="unit-code" required placeholder="BOX" maxlength="12" /></label>
+            <label>Name <input id="unit-name" required placeholder="Box" /></label>
+            <label>Kind
+              <select id="unit-family">
+                <option value="count">Quantity (pcs / box / qty)</option>
+                <option value="weight">Weight (g / kg)</option>
+                <option value="volume">Volume (ml / litre)</option>
+              </select>
+            </label>
+            <label>Rate shown as <input id="unit-rate-suffix" placeholder="/pc" /></label>
+            <label>Stock shown as <input id="unit-stock-suffix" placeholder="pcs" /></label>
+            <button class="btn primary" type="submit">Save unit</button>
+            <button class="btn" type="button" id="unit-cancel">Clear</button>
+          </form>
+          <div class="hint" id="unit-hint"></div>
+          <div class="table-wrap" id="units-table"></div>
+        </section>
+        <section class="view" id="view-customers" hidden>
+          <h2 class="visually-hidden">Customers</h2>
+          <form class="settings wide" id="customer-form">
+            <label>Name <input id="cust-name" required /></label>
+            <label>Business name <input id="cust-biz" /></label>
+            <label>Mobile <input id="cust-mobile" required /></label>
+            <label>Type
+              <select id="cust-type">
+                <option value="b2c">B2C retail</option>
+                <option value="b2b">B2B wholesale</option>
+              </select>
+            </label>
+            <label>GSTIN <input id="cust-gstin" /></label>
+            <label>State <input id="cust-state" placeholder="e.g. Maharashtra" autocomplete="address-level1" /></label>
+            <label>Birthday <input id="cust-dob" type="date" /></label>
+            <label>Referred by customer id <input id="cust-ref" maxlength="64" placeholder="Optional" /></label>
+            <button class="btn primary" type="submit">Save</button>
+          </form>
+          <div class="hint" id="cust-hint"></div>
+          <div class="table-wrap" id="customers-table"></div>
+        </section>
+        <section class="view view-packs" id="view-packs" hidden>
+          <h2 class="visually-hidden">Packs</h2>
+          <div class="packs-desk">
+            <header class="packs-hero">
+              <div class="packs-hero-copy">
+                <p class="packs-kicker">Inventory</p>
+                <h3>Pack types</h3>
+                <p class="packs-lede">Name a mix, tick spices, set grams or pcs. Saved packs show on Counter.</p>
+              </div>
+              <div class="packs-hero-stats" id="packs-hero-stats"></div>
+            </header>
+            <div class="packs-split">
+              <form class="pack-composer" id="pack-form" autocomplete="off">
+                <input type="hidden" id="pack-id" />
+                <div class="pack-composer-top">
+                  <div class="pack-name-block">
+                    <p class="pack-mode" id="pack-mode">New pack</p>
+                    <label class="pack-name-field">Pack name
+                      <input id="pack-name" required maxlength="120" placeholder="Special Masala Pack — 5 KG" />
+                    </label>
+                  </div>
+                  <div class="pack-live" id="pack-live"></div>
+                </div>
+                <div class="pack-items-bar">
+                  <h4>Recipe</h4>
+                  <input id="pack-item-search" type="search" placeholder="Search spice or HSN…" autocomplete="off" />
+                  <label class="pack-toggle"><input type="checkbox" id="pack-selected-only" /> Selected only</label>
+                </div>
+                <div id="pack-lines" class="pack-compose"></div>
+                <div class="pack-composer-actions">
+                  <button class="btn primary" type="submit" id="pack-save">Save pack</button>
+                  <button class="btn" type="button" id="pack-cancel">Clear</button>
+                  <div class="hint" id="pack-hint"></div>
+                </div>
+              </form>
+              <aside class="packs-library">
+                <div class="packs-library-head">
+                  <h4>Saved packs</h4>
+                  <input id="pack-library-search" type="search" placeholder="Find a pack…" autocomplete="off" />
+                </div>
+                <div id="packs-table" class="packs-library-list"></div>
+              </aside>
+            </div>
+          </div>
+        </section>
+        <section class="view" id="view-orders" hidden>
+          <h2 class="visually-hidden">Invoices</h2>
+          <p class="lede">Tax invoices with live SO numbers. Search, filter, print a POS slip, official A4 bill, or duplicate copy, or update order and payment status.</p>
+          <form class="report-toolbar orders-toolbar" id="orders-toolbar">
+            <label>Search
+              <input type="search" id="orders-search" placeholder="SO no, customer…" autocomplete="off" />
+            </label>
+            <label>Order status
+              <select id="orders-status-filter">
+                <option value="">All</option>
+                <option value="confirmed">Confirmed</option>
+                <option value="delivered">Delivered</option>
+                <option value="cancelled">Cancelled</option>
+              </select>
+            </label>
+            <label>Payment
+              <select id="orders-pay-filter">
+                <option value="">All</option>
+                <option value="paid">Paid</option>
+                <option value="partial">Partial</option>
+                <option value="unpaid">Unpaid</option>
+              </select>
+            </label>
+            <button class="btn" type="button" id="orders-refresh">Refresh</button>
+          </form>
+          <p class="hint orders-summary" id="orders-summary" hidden></p>
+          <div class="split orders-split">
+            <div class="orders-list-wrap" id="orders"></div>
+            <div class="pane order-pane" id="order-pane"><p class="hint">Select an invoice.</p></div>
+          </div>
+        </section>
+        <section class="view" id="view-purchases" hidden>
+          <h2 class="visually-hidden">Purchases</h2>
+          <p class="lede">Supplier bills. For Quantity (pcs), type or scan one barcode per piece — 20 pcs needs 20 codes. Nothing is auto generated.</p>
+          <details class="purchase-new" id="purchase-new">
+            <summary class="btn">New purchase</summary>
+            <form class="settings purchase-form" id="purchase-form">
+              <div class="purchase-head">
+                <label>Supplier <select id="po-supplier"></select></label>
+                <label>Invoice no. <input id="po-invoice" autocomplete="off" /></label>
+                <label>Date <input id="po-date" type="date" /></label>
+                <label>Pay
+                  <select id="po-pay">
+                    <option value="cash">Cash</option>
+                    <option value="upi">UPI</option>
+                    <option value="credit">Credit</option>
+                  </select>
+                </label>
+              </div>
+              <div class="purchase-items">
+                <div class="purchase-items-bar">
+                  <h3>Item list</h3>
+                  <input id="po-item-search" type="search" placeholder="Search item or HSN…" autocomplete="off" />
+                  <span class="purchase-items-meta" id="po-selected-meta">0 selected</span>
+                </div>
+                <div id="po-lines" class="po-lines"></div>
+              </div>
+              <div class="purchase-foot">
+                <p class="po-total" id="po-total">₹0.00</p>
+                <button class="btn primary" type="submit">Save purchase</button>
+              </div>
+            </form>
+            <div class="hint" id="po-hint"></div>
+          </details>
+          <div class="split purchases-split">
+            <div class="bill-list" id="purchases-list"></div>
+            <div class="pane purchase-pane" id="purchase-pane"><p class="hint">Select a purchase bill.</p></div>
+          </div>
+        </section>
+        <section class="view" id="view-suppliers" hidden>
+          <h2 class="visually-hidden">Suppliers</h2>
+          <p class="lede">Vendor name, contact, email, address, and GSTIN.</p>
+          <form class="settings wide" id="supplier-form">
+            <label>Name <input id="sup-name" required maxlength="180" autocomplete="organization" /></label>
+            <label>Contact <input id="sup-contact" maxlength="120" autocomplete="name" /></label>
+            <label>Mobile <input id="sup-mobile" type="tel" inputmode="numeric" maxlength="15" placeholder="10-digit mobile" /></label>
+            <label>Email <input id="sup-email" type="email" maxlength="160" placeholder="vendor@email.com" autocomplete="email" /></label>
+            <label>GSTIN <input id="sup-gstin" maxlength="20" placeholder="Optional" autocomplete="off" /></label>
+            <label class="full">Address
+              <textarea id="sup-address" rows="2" maxlength="500" placeholder="Street, city, PIN"></textarea>
+            </label>
+            <button class="btn primary" type="submit">Save</button>
+          </form>
+          <div class="hint" id="sup-hint"></div>
+          <div class="table-wrap" id="suppliers-table"></div>
+        </section>
+        <section class="view" id="view-barcodes" hidden>
+          <h2 class="visually-hidden">Barcodes</h2>
+          <p class="lede">Quantity (pcs) only. Type or scan barcodes on Purchases (20 pcs = 20 codes). Use generate here only if you need extra labels.</p>
+          <p class="lede">Barcodes are only for Quantity (pcs) items — one unique code per piece, then print labels.</p>
+          <form class="settings wide" id="bc-qty-form">
+            <label>Item
+              <input id="bc-item-search" list="bc-item-list" placeholder="Search Quantity (pcs) item" />
+              <input type="hidden" id="bc-item" required />
+              <datalist id="bc-item-list"></datalist>
+            </label>
+            <label>Qty (unique barcodes) <input id="bc-qty" type="number" min="1" max="500" step="1" value="1" required /></label>
+            <label class="full"><input type="checkbox" id="bc-qty-print" checked /> Print labels after generate</label>
+            <button class="btn primary" type="submit">Generate qty-wise</button>
+          </form>
+          <div class="toolbar-row">
+            <button class="btn" type="button" id="bc-generate-missing">Generate missing barcodes</button>
+            <label>Copies <input id="bc-copies" type="number" min="1" max="50" value="1" /></label>
+            <button class="btn" type="button" id="bc-print-selected">Print selected labels</button>
+            <span class="hint" id="bc-hint"></span>
+          </div>
+          <div class="table-wrap" id="barcodes-table"></div>
+        </section>
+        <section class="view" id="view-stock" hidden>
+          <h2 class="visually-hidden">Stock</h2>
+          <p class="lede">Branch-wise stock, adjustments, transfers, and low-stock alerts.</p>
+          <div class="mode-toggle" id="stock-mode">
+            <button class="btn primary" type="button" data-stock-mode="simple">Simple</button>
+            <button class="btn" type="button" data-stock-mode="advanced">Advanced</button>
+          </div>
+          <form class="settings wide" id="stock-form">
+            <label>Item
+              <input id="stk-item-search" list="stk-item-list" placeholder="Search item or barcode" />
+              <input type="hidden" id="stk-item" required />
+              <datalist id="stk-item-list"></datalist>
+            </label>
+            <label>Qty <input id="stk-qty" type="number" required /></label>
+            <label>Kind
+              <select id="stk-kind">
+                <option value="adjustment">Adjustment</option>
+                <option value="opening">Opening</option>
+                <option value="damaged">Damaged</option>
+                <option value="expired">Expired</option>
+                <option value="returned">Returned</option>
+              </select>
+            </label>
+            <label class="stock-adv">Reason
+              <select id="stk-reason">
+                <option value="broken">Broken</option>
+                <option value="spoilage">Spoilage</option>
+                <option value="expiry">Expiry</option>
+                <option value="moisture">Moisture</option>
+                <option value="other">Other</option>
+              </select>
+            </label>
+            <label>Note <input id="stk-note" /></label>
+            <button class="btn primary" type="submit">Post</button>
+          </form>
+          <div class="table-wrap" id="stock-table"></div>
+        </section>
+        <section class="view view-expiry" id="view-expiry" hidden>
+          <h2 class="visually-hidden">Expiry</h2>
+          <div class="items-desk expiry-desk">
+            <header class="items-hero">
+              <div class="items-hero-copy">
+                <p class="items-kicker">Inventory</p>
+                <h3>Product expiry</h3>
+                <p class="lede">Dated batches still on hand — expired first, then soonest to expire. Dates come from Purchases.</p>
+              </div>
+              <div class="items-hero-stats" id="expiry-hero-stats"></div>
+            </header>
+            <div class="expiry-toolbar">
+              <div class="expiry-filters" id="expiry-filters">
+                <button class="btn primary" type="button" data-expiry-filter="all">All dated</button>
+                <button class="btn" type="button" data-expiry-filter="expired">Expired</button>
+                <button class="btn" type="button" data-expiry-filter="7">7 days</button>
+                <button class="btn" type="button" data-expiry-filter="30">30 days</button>
+                <button class="btn" type="button" data-expiry-filter="90">90 days</button>
+              </div>
+              <input id="expiry-search" type="search" placeholder="Search item, batch, barcode…" autocomplete="off" />
+            </div>
+            <p class="hint" id="expiry-hint"></p>
+            <div class="table-wrap expiry-list" id="expiry-table"></div>
+          </div>
+        </section>
+        <section class="view" id="view-damage" hidden>
+          <h2 class="visually-hidden">Damage stock</h2>
+          <p class="lede">Record damage or wastage, approve reductions, and see estimated loss.</p>
+          <form class="settings wide" id="damage-form">
+            <label>Item
+              <input id="dmg-item-search" list="dmg-item-list" placeholder="Search item or scan barcode" />
+              <input type="hidden" id="dmg-item" required />
+              <datalist id="dmg-item-list"></datalist>
+            </label>
+            <label>Barcode / batch <input id="dmg-barcode" placeholder="Optional" /></label>
+            <label>Qty <input id="dmg-qty" type="number" min="0.001" step="0.001" required /></label>
+            <label>Reason
+              <select id="dmg-reason">
+                <option value="broken">Broken</option>
+                <option value="spoilage">Spoilage</option>
+                <option value="expiry">Expiry</option>
+                <option value="moisture">Moisture</option>
+                <option value="other">Other</option>
+              </select>
+            </label>
+            <label>Note <input id="dmg-note" /></label>
+            <label class="full"><input type="checkbox" id="dmg-auto" /> Auto-approve (managers)</label>
+            <button class="btn primary" type="submit">Record damage</button>
+          </form>
+          <div class="hint" id="dmg-hint"></div>
+          <div class="report-grid" id="dmg-report"></div>
+          <div class="table-wrap" id="damage-table"></div>
+        </section>
+        <section class="view" id="view-ledger" hidden>
+          <h2 class="visually-hidden">Stock ledger</h2>
+          <p class="lede">Purchase → batch → sale → return → damage in one ledger.</p>
+          <form class="report-toolbar" id="ledger-toolbar">
+            <label>Kind
+              <select id="ledger-kind">
+                <option value="">All</option>
+                <option value="purchase">Purchase</option>
+                <option value="sale">Sale</option>
+                <option value="damaged">Damaged</option>
+                <option value="adjustment">Adjustment</option>
+                <option value="opening">Opening</option>
+                <option value="returned">Returned</option>
+                <option value="expired">Expired</option>
+              </select>
+            </label>
+            <button class="btn" type="button" id="ledger-refresh">Refresh</button>
+          </form>
+          <div class="table-wrap" id="ledger-table"></div>
+        </section>
+        <section class="view" id="view-loyalty" hidden>
+          <h2 class="visually-hidden">Royalty points</h2>
+          <p class="lede">Customer royalty / loyalty points — earn, redeem, tiers, birthday and referral bonus.</p>
+          <form class="settings wide" id="loyalty-settings-form">
+            <label>Earn points / ₹100 <input id="loy-earn" type="number" step="0.01" min="0" /></label>
+            <label>₹ per point <input id="loy-rate" type="number" step="0.01" min="0" /></label>
+            <label>Min redeem points <input id="loy-min" type="number" step="1" min="0" /></label>
+            <label>Expiry days <input id="loy-exp" type="number" step="1" min="0" /></label>
+            <label>Birthday bonus <input id="loy-bday" type="number" step="1" min="0" /></label>
+            <label>Referral points <input id="loy-ref" type="number" step="1" min="0" /></label>
+            <label class="full"><input type="checkbox" id="loy-on" checked /> Royalty system enabled</label>
+            <button class="btn primary" type="submit">Save royalty settings</button>
+          </form>
+          <div class="hint" id="loy-hint"></div>
+          <form class="settings wide" id="loyalty-adjust-form">
+            <label>Customer <select id="loy-cust"></select></label>
+            <label>Adjust points (+/−) <input id="loy-pts" type="number" step="1" required /></label>
+            <label>Note <input id="loy-note" placeholder="Manual adjustment" /></label>
+            <button class="btn" type="submit">Post points</button>
+            <button class="btn" type="button" id="loy-birthday">Birthday bonus</button>
+          </form>
+          <div class="table-wrap" id="loyalty-table"></div>
+          <div class="table-wrap" id="loyalty-history"></div>
+        </section>
+        <section class="view" id="view-staff" hidden>
+          <h2 class="visually-hidden">Staff &amp; roles</h2>
+          <form class="settings wide" id="staff-form">
+            <input type="hidden" id="st-id" />
+            <label>First name <input id="st-first" /></label>
+            <label>Email <input id="st-email" required /></label>
+            <label>Password <input id="st-pass" type="password" autocomplete="new-password" /></label>
+            <label>Role
+              <select id="st-role">
+                <option value="cashier">Cashier</option>
+                <option value="manager">Manager</option>
+                <option value="branch_manager">Branch Manager</option>
+                <option value="stock_manager">Stock Manager</option>
+                <option value="accountant">Accountant</option>
+                <option value="staff">Staff</option>
+                <option value="business_admin">Business Admin</option>
+              </select>
+            </label>
+            <button class="btn primary" type="submit" id="staff-save">Save</button>
+            <button class="btn" type="button" id="staff-cancel" hidden>Cancel edit</button>
+          </form>
+          <div class="hint" id="staff-hint"></div>
+          <div class="table-wrap" id="staff-table"></div>
+        </section>
+        <section class="view" id="view-branches" hidden>
+          <h2 class="visually-hidden">Branches</h2>
+          <form class="settings wide" id="branch-form">
+            <label>Name <input id="br-name" required /></label>
+            <label>Address <input id="br-address" /></label>
+            <label>Phone <input id="br-phone" /></label>
+            <button class="btn primary" type="submit">Save</button>
+          </form>
+          <div class="table-wrap" id="branch-table"></div>
+        </section>
+        <section class="view" id="view-devices" hidden>
+          <h2 class="visually-hidden">POS devices</h2>
+          <form class="settings wide" id="device-form">
+            <label>Name <input id="dev-name" required /></label>
+            <label>Code <input id="dev-code" placeholder="POS-02" /></label>
+            <button class="btn primary" type="submit">Save</button>
+          </form>
+          <div class="table-wrap" id="device-table"></div>
+        </section>
+        <section class="view" id="view-support" hidden>
+          <h2 class="visually-hidden">Support</h2>
+          <div class="support-page" id="support-page"></div>
+        </section>
+        <section class="view view-finance" id="view-accounts" hidden>
+          <h2 class="visually-hidden">Accounts</h2>
+          <p class="lede">Double-entry books: receivables, payables, chart of accounts, trial balance, P&amp;L, balance sheet, and cash book.</p>
+          <div class="report-grid" id="acc-summary"></div>
+          <div class="accounts-toolbar">
+            <button class="btn acc-tab active" type="button" data-acc-tab="receivables">Receivables</button>
+            <button class="btn acc-tab" type="button" data-acc-tab="payables">Payables</button>
+            <button class="btn acc-tab" type="button" data-acc-tab="ledger">Day book</button>
+            <button class="btn acc-tab" type="button" data-acc-tab="coa">Chart of accounts</button>
+            <button class="btn acc-tab" type="button" data-acc-tab="journal">Journal</button>
+            <button class="btn acc-tab" type="button" data-acc-tab="trial-balance">Trial balance</button>
+            <button class="btn acc-tab" type="button" data-acc-tab="profit-loss">P&amp;L</button>
+            <button class="btn acc-tab" type="button" data-acc-tab="balance-sheet">Balance sheet</button>
+            <button class="btn acc-tab" type="button" data-acc-tab="cash-book">Cash book</button>
+          </div>
+          <form class="report-toolbar" id="acc-period-form">
+            <label>FY year
+              <select id="acc-fy-year" aria-label="Financial year"></select>
+            </label>
+            <label>From <input id="acc-from" type="date" /></label>
+            <label>To <input id="acc-to" type="date" /></label>
+            <label>As of <input id="acc-asof" type="date" /></label>
+            <button class="btn" type="button" id="acc-this-fy">This FY</button>
+            <button class="btn primary" type="submit">Refresh</button>
+            <button class="btn" type="button" id="acc-print">Print</button>
+          </form>
+          <div class="hint" id="acc-hint"></div>
+          <div id="acc-pane-receivables" class="acc-pane"><div class="table-wrap" id="acc-receivables-table"></div></div>
+          <div id="acc-pane-payables" class="acc-pane" hidden><div class="table-wrap" id="acc-payables-table"></div></div>
+          <div id="acc-pane-ledger" class="acc-pane" hidden><div class="table-wrap" id="acc-ledger-table"></div></div>
+          <div id="acc-pane-coa" class="acc-pane" hidden><div class="table-wrap" id="acc-coa-table"></div></div>
+          <div id="acc-pane-journal" class="acc-pane" hidden><div class="table-wrap" id="acc-journal-table"></div></div>
+          <div id="acc-pane-trial-balance" class="acc-pane" hidden><div class="table-wrap" id="acc-tb-table"></div></div>
+          <div id="acc-pane-profit-loss" class="acc-pane" hidden><div class="table-wrap" id="acc-pl-table"></div></div>
+          <div id="acc-pane-balance-sheet" class="acc-pane" hidden><div class="table-wrap" id="acc-bs-table"></div></div>
+          <div id="acc-pane-cash-book" class="acc-pane" hidden><div class="table-wrap" id="acc-cash-table"></div></div>
+        </section>
+        <section class="view view-finance" id="view-expenses" hidden>
+          <h2 class="visually-hidden">Expenses</h2>
+          <p class="lede">Shop expenses for the Indian financial year (1 April–31 March). Saved entries post to Accounts.</p>
+          <form class="settings expense-form" id="expense-form">
+            <div class="purchase-head">
+              <label>Date <input id="exp-date" type="date" required /></label>
+              <label>Category <select id="exp-category"></select></label>
+              <label>Amount ₹ <input id="exp-amount" type="number" min="0.01" step="0.01" required /></label>
+              <label>GST ₹ <input id="exp-gst" type="number" min="0" step="0.01" value="0" /></label>
+              <label>Pay
+                <select id="exp-pay">
+                  <option value="cash">Cash</option>
+                  <option value="upi">UPI</option>
+                  <option value="card">Card</option>
+                  <option value="bank">Bank</option>
+                </select>
+              </label>
+              <label class="full">Notes <input id="exp-notes" maxlength="240" placeholder="Optional" /></label>
+            </div>
+            <div class="purchase-foot">
+              <p class="po-total" id="exp-total-preview">₹0.00</p>
+              <button class="btn primary" type="submit">Save expense</button>
+            </div>
+          </form>
+          <div class="hint" id="exp-hint"></div>
+          <form class="report-toolbar" id="exp-filter">
+            <label>FY year
+              <select id="exp-fy-year" aria-label="Financial year"></select>
+            </label>
+            <label>From <input id="exp-from" type="date" /></label>
+            <label>To <input id="exp-to" type="date" /></label>
+            <button class="btn" type="button" id="exp-this-fy">This FY</button>
+            <button class="btn primary" type="submit">Show</button>
+            <button class="btn" type="button" id="exp-print">Print</button>
+          </form>
+          <div class="table-wrap" id="expenses-table"></div>
+        </section>
+        <section class="view view-finance" id="view-reports" hidden>
+          <h2 class="visually-hidden">Reports</h2>
+          <p class="lede">Sales, stock, purchases, expenses, GST, and daywise payment summary for the Indian financial year (1 April–31 March).</p>
+          <form class="report-toolbar" id="report-form">
+            <label>FY year
+              <select id="rep-fy-year" aria-label="Financial year"></select>
+            </label>
+            <label>From <input id="rep-from" type="date" required /></label>
+            <label>To <input id="rep-to" type="date" required /></label>
+            <button class="btn" type="button" id="rep-this-fy">This FY</button>
+            <button class="btn primary" type="submit">Show</button>
+            <button class="btn" type="button" id="rep-print">Print</button>
+            <a class="btn" id="rep-excel-all" href="#">Download all Excel</a>
+          </form>
+          <div class="hint" id="reports-hint"></div>
+          <div class="report-grid" id="report-summary"></div>
+          <div id="reports"></div>
+        </section>
+        <section class="view" id="view-settings" hidden>
+          <h2 class="visually-hidden">Settings</h2>
+          <p class="lede">Company profile, timezone, shop logo, and your login password. Shop backup is under Admin → Backup.</p>
+          <form class="settings settings-page" id="settings-form">
+            <div class="settings-section">
+              <h3>Business details</h3>
+              <div class="settings-grid">
+                <label class="full">Name
+                  <input id="set-name" maxlength="180" autocomplete="organization" />
+                </label>
+                <label class="full">Address
+                  <textarea id="set-address" rows="2" maxlength="500" placeholder="Street, city, PIN"></textarea>
+                </label>
+                <label>Phone
+                  <input id="set-phone" type="tel" inputmode="numeric" maxlength="15" placeholder="10-digit mobile" />
+                </label>
+                <label>Email
+                  <input id="set-email" type="email" maxlength="160" placeholder="shop@email.com" />
+                </label>
+                <label class="full">GSTIN
+                  <input id="set-gstin" maxlength="20" placeholder="Optional" autocomplete="off" />
+                </label>
+                <label>City
+                  <input id="set-city" maxlength="128" placeholder="e.g. Pune" autocomplete="address-level2" />
+                </label>
+                <label>State
+                  <input id="set-state" maxlength="64" placeholder="e.g. Maharashtra" autocomplete="address-level1" />
+                </label>
+                <label>PIN code
+                  <input id="set-pincode" maxlength="12" inputmode="numeric" placeholder="6-digit PIN" autocomplete="postal-code" />
+                </label>
+              </div>
+            </div>
+            <div class="settings-section">
+              <h3>Regional</h3>
+              <p class="section-note">Used for reports, invoices, and order timestamps.</p>
+              <div class="settings-grid">
+                <label class="full">Shop timezone
+                  <select id="set-timezone" aria-label="Shop timezone">
+                    <option value="Asia/Kolkata">India (IST, UTC+5:30)</option>
+                    <option value="Asia/Dubai">UAE (UTC+4)</option>
+                    <option value="Asia/Singapore">Singapore (UTC+8)</option>
+                    <option value="Asia/Colombo">Sri Lanka (UTC+5:30)</option>
+                    <option value="Asia/Kathmandu">Nepal (UTC+5:45)</option>
+                    <option value="UTC">UTC</option>
+                  </select>
+                </label>
+              </div>
+              <p class="field-hint" id="timezone-preview">Current shop time will appear in the nav after save.</p>
+            </div>
+            <div class="settings-section">
+              <h3>Branding</h3>
+              <p class="section-note">Shown on the left nav and on printed invoices.</p>
+              <div class="logo-row">
+                <div class="logo-preview-frame">
+                  <img id="logo-preview" class="logo-preview" alt="Logo preview" hidden />
+                </div>
+                <div class="logo-controls">
+                  <div class="logo-pick-row">
+                    <input id="set-logo" class="logo-file-input" type="file" accept="image/*" />
+                    <label class="btn logo-pick" for="set-logo">Choose image</label>
+                    <span class="logo-file-name" id="logo-file-name">PNG, JPG, or SVG</span>
+                  </div>
+                  <button class="btn" type="button" id="logo-clear" hidden>Remove logo</button>
+                </div>
+              </div>
+            </div>
+            <div class="settings-actions">
+              <button class="btn primary" type="submit">Save settings</button>
+              <p class="hint" id="settings-hint"></p>
+            </div>
+          </form>
+          <form class="settings settings-page" id="password-form">
+            <div class="settings-section">
+              <h3>Login password</h3>
+              <p class="section-note">Change the password for the account you are signed in with. Staff passwords for other users are under Staff &amp; roles.</p>
+              <div class="settings-grid">
+                <label>Current password
+                  <input id="pw-current" type="password" required autocomplete="current-password" />
+                </label>
+                <label>New password
+                  <input id="pw-next" type="password" required minlength="8" autocomplete="new-password" />
+                </label>
+                <label>Confirm new password
+                  <input id="pw-confirm" type="password" required minlength="8" autocomplete="new-password" />
+                </label>
+              </div>
+            </div>
+            <div class="settings-actions">
+              <button class="btn primary" type="submit">Save password</button>
+              <p class="hint" id="password-hint"></p>
+            </div>
+          </form>
+          <div class="settings settings-page dev-settings-card" id="dev-settings-section" hidden>
+            <div class="settings-section">
+              <h3>Developer mode</h3>
+              <p class="section-note">Debug tools for this browser only. Business admins can enable API logs and session info.</p>
+              <label class="remember dev-toggle">
+                <input type="checkbox" id="set-dev-mode" />
+                <span class="remember-ui" aria-hidden="true"></span>
+                Enable developer mode
+              </label>
+              <p class="field-hint">Shortcut: Ctrl+Shift+D · Add <code>?dev=1</code> to the URL to auto-enable.</p>
+            </div>
+          </div>
+        </section>
+        <section class="view" id="view-backup" hidden>
+          <h2 class="visually-hidden">Backup</h2>
+          <p class="lede">Download a JSON copy of this shop, or restore a backup from this same shop.</p>
+          <div class="settings" id="backup-card">
+            <div class="settings-section backup-panel">
+              <h3>Shop backup</h3>
+              <p class="section-note">Includes items, stock, customers, invoices, purchases, and accounts. Keep the file private. Restore replaces current shop data for this business only.</p>
+              <div class="backup-actions">
+                <a class="btn primary" id="btn-backup-download" href="#">Download backup</a>
+                <label class="backup-file-lab">Restore file
+                  <input id="backup-file" type="file" accept="application/json,.json" />
+                </label>
+                <button class="btn" type="button" id="btn-backup-restore">Restore backup</button>
+              </div>
+              <p class="hint" id="backup-hint"></p>
+            </div>
+          </div>
+        </section>
+      </div>
+    </div>
+    <div class="modal" id="modal" hidden>
+      <div class="dialog">
+        <h3 id="modal-title">Receipt</h3>
+        <div id="modal-body"></div>
+        <div style="margin-top: 14px; display: flex; justify-content: flex-end">
+          <button class="btn" id="modal-close" type="button">Close</button>
+        </div>
+      </div>
+    </div>
+    <div id="dev-badge" class="dev-badge" hidden title="Developer mode">DEV</div>
+    <aside id="dev-panel" class="dev-panel" hidden aria-label="Developer tools">
+      <header class="dev-panel-head">
+        <strong>Developer mode</strong>
+        <button type="button" class="btn dev-panel-close" id="dev-panel-close" aria-label="Close developer panel">×</button>
+      </header>
+      <div class="dev-panel-body">
+        <section class="dev-block">
+          <h4>Session</h4>
+          <pre id="dev-session-info" class="dev-pre">—</pre>
+        </section>
+        <section class="dev-block">
+          <h4>API bridge</h4>
+          <pre id="dev-api-spec" class="dev-pre">—</pre>
+          <div class="dev-actions">
+            <button type="button" class="btn" id="dev-reprobe">Re-probe API</button>
+            <button type="button" class="btn" id="dev-clear-cache">Clear cache</button>
+          </div>
+        </section>
+        <section class="dev-block">
+          <h4>Health</h4>
+          <pre id="dev-health-info" class="dev-pre">—</pre>
+          <button type="button" class="btn" id="dev-health-refresh">Refresh health</button>
+        </section>
+        <section class="dev-block">
+          <h4>Request log</h4>
+          <div id="dev-request-log" class="dev-log"></div>
+          <button type="button" class="btn" id="dev-clear-log">Clear log</button>
+        </section>
+      </div>
+    </aside>
+    <script src="./js/gst-supply.js?v=20260903deploy88" defer></script>
+    <script src="./js/pos-api.js?v=20260903deploy88" defer></script>
+    <script src="./js/units.js?v=20260903deploy88" defer></script>
+    <script src="./js/footwear.js?v=20260903deploy88" defer></script>
+    <script src="./js/discount.js?v=20260903deploy88" defer></script>
+    <script src="./js/loyalty.js?v=20260903deploy88" defer></script>
+    <script src="./js/barcode.js?v=20260903deploy88" defer></script>
+    <script src="./js/dev-mode.js?v=20260903deploy88" defer></script>
+    <script src="./js/invoice.js?v=20260903deploy88" defer></script>
+    <script src="./js/support.js?v=20260903deploy88" defer></script>
+    <script src="./js/app.js?v=20260903deploy88" defer></script>
+  </body>
+</html>
