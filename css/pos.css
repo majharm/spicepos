@@ -920,7 +920,7 @@ body.bill-collapsed .bill-toggle[data-count]:not([data-count="0"])::after {
   margin: 0;
   padding: 0;
   font-family: var(--display);
-  font-size: 20px;
+  font-size: 22px;
   font-weight: 700;
   color: #fff;
 }
@@ -950,12 +950,18 @@ body.bill-collapsed .bill-toggle[data-count]:not([data-count="0"])::after {
   align-items: center;
 }
 /* bill-type: till-readable scale */
-.line .who { font-weight: 700; font-size: 16px; line-height: 1.3; }
+.line .who { font-weight: 700; font-size: 18px; line-height: 1.3; }
 .line .pack { color: var(--muted); font-size: 13px; line-height: 1.35; }
+.line-ops {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
 .line-amt {
   text-align: right;
   margin-top: 0;
-  font-size: 16px;
+  font-size: 18px;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
   min-width: 4.5em;
@@ -970,7 +976,7 @@ body.bill-collapsed .bill-toggle[data-count]:not([data-count="0"])::after {
   border: 1px solid var(--line-strong);
   border-radius: 8px;
   text-align: center;
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   background: #fff;
@@ -1024,14 +1030,14 @@ body.bill-collapsed .bill-toggle[data-count]:not([data-count="0"])::after {
   background-clip: text;
   color: transparent;
 }
-.totals-meta > div { color: var(--muted); font-size: 13px; font-weight: 600; }
-.totals .grand { font-size: 24px; font-weight: 800; color: var(--text); font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
+.totals-meta > div { color: var(--muted); font-size: 14px; font-weight: 600; }
+.totals .grand { font-size: 26px; font-weight: 800; color: var(--text); font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
 .pay { padding: 10px 14px 14px; display: grid; gap: 8px; background: linear-gradient(180deg, #fff 0%, var(--bg-tint-soft) 100%); flex: 0 0 auto; }
 .pay-row { display: grid; grid-template-columns: 1fr 1.1fr; gap: 10px; }
 .pay-row .btn { width: 100%; }
 #btn-pay {
   min-height: 46px;
-  font-size: 16px;
+  font-size: 17px;
 }
 .tender { display: flex; gap: 8px; }
 .hint { color: var(--muted); font-size: 12px; min-height: 16px; font-weight: 600; }
@@ -2535,7 +2541,7 @@ body.footwear-mode.counter-mode .stage.is-counter .card .sku { display: block; f
   }
   .stage.is-counter .totals div:not(.grand) { display: none; }
   .stage.is-counter .totals { padding: 4px 12px 0; }
-  .stage.is-counter .totals .grand { font-size: 20px; }
+  .stage.is-counter .totals .grand { font-size: 22px; }
   body:not(.has-cart) .stage.is-counter .lines { display: none; }
   .stage.is-counter .lines {
     flex: 1 1 auto;
@@ -2570,7 +2576,7 @@ body.footwear-mode.counter-mode .stage.is-counter .card .sku { display: block; f
     display: none;
   }
   .stage.is-counter .line .who {
-    font-size: 15px;
+    font-size: 16px;
     font-weight: 700;
     line-height: 1.3;
     white-space: nowrap;
@@ -2615,7 +2621,7 @@ body.footwear-mode.counter-mode .stage.is-counter .card .sku { display: block; f
   .stage.is-counter .line-amt {
     margin-top: 0;
     min-width: 4.2em;
-    font-size: 16px;
+    font-size: 17px;
     font-weight: 800;
     text-align: right;
     flex: 0 0 auto;
