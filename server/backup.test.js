@@ -128,10 +128,11 @@ test("PHP and HTML wire master admin backup", () => {
   );
 });
 
-test("HTML and CSS cache stickers match deploy84", () => {
+test("HTML and CSS cache stickers match deploy85", () => {
   for (const name of ["index.html", "master.html", "login.html", "setup.html"]) {
     const html = readFileSync(path.join(root, name), "utf8");
-    assert.match(html, /20260903deploy84/);
+    assert.match(html, /20260903deploy85/);
+    assert.doesNotMatch(html, /20260903deploy84/);
     assert.doesNotMatch(html, /20260903deploy83/);
     assert.doesNotMatch(html, /20260903deploy82/);
     assert.doesNotMatch(html, /20260903deploy81/);
@@ -327,6 +328,9 @@ test("HTML and CSS cache stickers match deploy84", () => {
   assert.match(xpos, /location\.hash === "#signup"/);
   assert.match(xpos, /2-day free trial, no card/);
   assert.match(saas, /auth-trial-ui: 2-day banner 2026/);
+  assert.match(saas, /auth-login-scroll: visible 2026/);
+  assert.match(saas, /\.auth-main::-webkit-scrollbar/);
+  assert.match(saas, /overflow-y: scroll/);
   assert.match(saas, /auth-card > p\.auth-trial-invite/);
   assert.match(saas, /auth-scene-types/);
   assert.match(saas, /auth-body:has\(\.auth-scene\)/);

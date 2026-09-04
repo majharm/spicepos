@@ -1,4 +1,4 @@
-Production deploy bundle — 20260903deploy84
+Production deploy bundle — 20260903deploy85
 =========================================
 
 Upload ALL files below to Hostinger public_html (overwrite):
@@ -121,7 +121,7 @@ FIXES in this bundle
   - Suppliers form and list include address and email
   - Settings page: wider card, 2-column details, styled logo upload, keep card padding on mobile
   - CSS: Master Admin mobile nav wrap, hide nav until sign-in, backup file inputs, table overflow
-  - Cache sticker 20260903deploy84 on index, login, master, setup
+  - Cache sticker 20260903deploy85 on index, login, master, setup
   - Login Create business shows a 2-day trial banner
   - Packs desk: composer + saved library, spice search, live totals
   - Counter bill type scale: 14px item names, 14px line amounts, 18px total

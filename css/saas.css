@@ -81,7 +81,9 @@
   z-index: 1;
   display: grid;
   grid-template-columns: minmax(280px, 1fr) minmax(360px, 460px);
+  grid-template-rows: minmax(0, 1fr);
   width: min(1040px, 100%);
+  height: calc(100dvh - 32px);
   max-height: calc(100dvh - 32px);
   margin: auto;
   align-items: stretch;
@@ -154,10 +156,39 @@
   flex-direction: column;
   min-width: 0;
   min-height: 0;
+  max-height: 100%;
   background: #fff;
   padding: 28px 30px 16px;
-  overflow-y: auto;
+  overflow-x: hidden;
+  overflow-y: scroll;
+  overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: #0d9488 #e2e8f0;
+}
+/* auth-login-scroll: visible 2026 */
+.auth-main::-webkit-scrollbar,
+.auth-shell .auth-scene-types::-webkit-scrollbar,
+body.auth-body::-webkit-scrollbar {
+  width: 10px;
+}
+.auth-main::-webkit-scrollbar-track,
+.auth-shell .auth-scene-types::-webkit-scrollbar-track,
+body.auth-body::-webkit-scrollbar-track {
+  background: #e2e8f0;
+  border-radius: 8px;
+}
+.auth-main::-webkit-scrollbar-thumb,
+.auth-shell .auth-scene-types::-webkit-scrollbar-thumb,
+body.auth-body::-webkit-scrollbar-thumb {
+  background: #0d9488;
+  border-radius: 8px;
+  border: 2px solid #e2e8f0;
+}
+.auth-shell .auth-scene-types {
+  scrollbar-width: thin;
+  scrollbar-color: #5eead4 rgba(15, 23, 42, 0.35);
 }
 .auth-shell .auth-card,
 .auth-shell .auth-card.signup {
@@ -328,6 +359,7 @@
   .auth-shell,
   .auth-shell:has(.auth-card.signup) {
     grid-template-columns: 1fr;
+    height: auto;
     max-height: none;
     overflow: visible;
     width: min(560px, 100%);
@@ -342,7 +374,12 @@
   .auth-trial-banner { align-items: center; }
   .auth-main {
     padding: 20px 18px 12px;
+    max-height: none;
     overflow: visible;
+  }
+  body.auth-body {
+    overflow-y: scroll;
+    scrollbar-gutter: stable;
   }
   .auth-shell .login-legal {
     justify-content: center;
