@@ -24,6 +24,7 @@
         <button class="nav-btn" type="button" data-view="customers">Customers</button>
         <button class="nav-btn" type="button" data-view="packs">Packs</button>
         <button class="nav-btn" type="button" data-view="orders">Orders</button>
+        <button class="nav-btn" type="button" data-view="qr">QR orders <b id="qr-pending-nav" hidden></b></button>
         <button class="nav-btn" type="button" data-view="purchases">Purchases</button>
         <button class="nav-btn" type="button" data-view="suppliers">Suppliers</button>
         <button class="nav-btn" type="button" data-view="support">Support</button>
@@ -138,6 +139,26 @@
           <div class="split">
             <div class="table-wrap" id="orders"></div>
             <div class="pane" id="order-pane"><p class="hint">Select an order.</p></div>
+          </div>
+        </section>
+        <section class="view" id="view-qr" hidden>
+          <h2>QR ordering</h2>
+          <p class="lede">Print the shop QR. Customers scan it, pick spices in grams, and send an order to this till. Complete turns it into a sales bill.</p>
+          <div class="qr-poster" id="qr-poster">
+            <img id="qr-code-img" alt="Customer order QR code" width="220" height="220" />
+            <div>
+              <strong>Customer menu</strong>
+              <p class="hint" id="qr-link">Loading link…</p>
+              <div class="print-actions">
+                <a class="btn" id="qr-open" href="/order.html" target="_blank" rel="noopener">Open menu</a>
+                <button class="btn primary" type="button" id="qr-print">Print poster</button>
+                <button class="btn" type="button" id="qr-refresh">Refresh orders</button>
+              </div>
+            </div>
+          </div>
+          <div class="split">
+            <div class="table-wrap" id="qr-orders"><p class="hint">Loading QR orders…</p></div>
+            <div class="pane" id="qr-pane"><p class="hint">Select a QR order.</p></div>
           </div>
         </section>
         <section class="view" id="view-purchases" hidden>

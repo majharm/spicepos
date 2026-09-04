@@ -12,3 +12,7 @@ npm start
 Open http://127.0.0.1:5173
 
 Default business: `00000000-0000-4000-8000-000000000001` (`company_settings.name` = SWAMI MASALE SASWAD).
+
+## QR ordering
+
+Customers scan the shop QR (POS → **QR orders** → Print poster) and place a gram-based retail order at `/order.html`. Incoming tickets show on the till. **Complete & bill** creates a normal sales order, finds or creates the customer by mobile, and deducts stock.

@@ -3,9 +3,10 @@ import express from "express";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { BUSINESS_ID, query, withTransaction } from "./db.js";
-import { lineAmount, round2, registerCrud } from "./crud.js";
+import { buildPricedLines, insertSalesOrder, registerCrud } from "./crud.js";
 import { buildReports, reportsToSheets } from "./reports.js";
 import { workbookXml } from "./excel.js";
+import { ensureQrOrderSchema, registerQrOrdering } from "./qr-ordering.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.join(__dirname, "..");
@@ -258,6 +259,7 @@ app.post("/api/settings", async (req, res) => {
 });
 
 registerCrud(app);
+registerQrOrdering(app);
 
 app.post("/api/checkout", async (req, res) => {
   const { customerId, paymentMethod, lines, packId, packCount } = req.body || {};
@@ -278,114 +280,14 @@ app.post("/api/checkout", async (req, res) => {
       );
       const customer = customers[0];
       if (!customer) throw new Error("Customer not found");
-
-      const built = [];
-      for (const line of lines) {
-        const [items] = await conn.query(
-          "SELECT * FROM items WHERE id = ? AND business_id = ?",
-          [line.itemId, BUSINESS_ID],
-        );
-        const item = items[0];
-        if (!item) throw new Error("Unknown item");
-        const qty = Number(line.quantity_gm);
-        if (!Number.isFinite(qty) || qty <= 0) throw new Error("Invalid quantity");
-        const rate =
-          customer.type === "b2b" ? Number(item.b2b_rate) : Number(item.retail_rate);
-        const amount = round2(lineAmount(qty, rate));
-        built.push({ item, qty, rate, amount, gstRate: Number(item.gst_rate) || 0 });
-      }
-
-      const subtotal = round2(built.reduce((s, l) => s + l.amount, 0));
-      const gst = round2(built.reduce((s, l) => s + (l.amount * l.gstRate) / 100, 0));
-      const total = round2(subtotal + gst);
-      const totalGm = built.reduce((s, l) => s + l.qty, 0);
-
-      const [[seq]] = await conn.query(
-        "SELECT next_value FROM number_sequences WHERE name = 'order' AND business_id = ? FOR UPDATE",
-        [BUSINESS_ID],
-      );
-      const next = seq ? Number(seq.next_value) : 10036;
-      if (seq) {
-        await conn.query(
-          "UPDATE number_sequences SET next_value = ? WHERE name = 'order' AND business_id = ?",
-          [next + 1, BUSINESS_ID],
-        );
-      } else {
-        await conn.query(
-          "INSERT INTO number_sequences (name, next_value, business_id) VALUES ('order', ?, ?)",
-          [next + 1, BUSINESS_ID],
-        );
-      }
-      const orderNumber = `SO-${next}`;
-      const orderId = crypto.randomUUID();
-      const nowStatus = "confirmed";
-      const payStatus = method === "credit" ? "partial" : "paid";
-
-      let packName = null;
-      if (packId) {
-        const [packs] = await conn.query("SELECT * FROM packs WHERE id = ?", [packId]);
-        packName = packs[0]?.name || null;
-      }
-
-      await conn.query(
-        `INSERT INTO sales_orders (
-           id, order_number, customer_id, customer_name, customer_type,
-           pack_id, pack_name, pack_count, status, total_quantity_gm,
-           subtotal, discount, gst, total, payment_method, payment_status, business_id
-         ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-        [
-          orderId,
-          orderNumber,
-          customer.id,
-          customer.business_name || customer.name,
-          customer.type,
-          packId || null,
-          packName,
-          packCount || null,
-          nowStatus,
-          totalGm,
-          subtotal,
-          0,
-          gst,
-          total,
-          method,
-          payStatus,
-          BUSINESS_ID,
-        ],
-      );
-
-      for (const line of built) {
-        await conn.query(
-          `INSERT INTO sales_order_lines (
-             id, order_id, item_id, item_name, quantity_gm, rate_per_kg,
-             discount, amount, gst_rate, cancelled, business_id
-           ) VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
-          [
-            crypto.randomUUID(),
-            orderId,
-            line.item.id,
-            line.item.name,
-            line.qty,
-            line.rate,
-            0,
-            line.amount,
-            line.gstRate,
-            0,
-            BUSINESS_ID,
-          ],
-        );
-        await conn.query(
-          "UPDATE items SET stock_gm = stock_gm - ? WHERE id = ? AND business_id = ?",
-          [line.qty, line.item.id, BUSINESS_ID],
-        );
-      }
-
-      const [orders] = await conn.query("SELECT * FROM sales_orders WHERE id = ?", [orderId]);
-      const [orderLines] = await conn.query(
-        "SELECT * FROM sales_order_lines WHERE order_id = ?",
-        [orderId],
-      );
-      return { ...orders[0], lines: orderLines };
+      const built = await buildPricedLines(conn, customer, lines);
+      return insertSalesOrder(conn, {
+        customer,
+        built,
+        packId,
+        packCount,
+        paymentMethod: method,
+      });
     });
     res.json({ ok: true, order: result });
   } catch (err) {
@@ -396,8 +298,8 @@ app.post("/api/checkout", async (req, res) => {
 app.use(express.static(root));
 
 const port = Number(process.env.PORT || 5173);
-ensureLogoColumn()
-  .catch((err) => console.error("logo column", err.message))
+Promise.all([ensureLogoColumn(), ensureQrOrderSchema()])
+  .catch((err) => console.error("schema", err.message))
   .finally(() => {
     app.listen(port, "0.0.0.0", () => {
       console.log(`SWAMI MASALE POS http://0.0.0.0:${port}`);

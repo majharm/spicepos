@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#4a1416" />
+    <title>Order · SWAMI MASALE</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Outfit:wght@400;500;600;700&display=swap" />
+    <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="./css/qr-order.css" />
+  </head>
+  <body>
+    <header class="menu-head">
+      <div class="menu-brand">
+        <img id="shop-logo" alt="" hidden />
+        <div>
+          <p class="eyebrow">SCAN · CHOOSE · ORDER</p>
+          <h1 id="shop-name">Opening menu…</h1>
+          <p id="shop-address"></p>
+        </div>
+      </div>
+      <label class="menu-search">Search spices
+        <input id="menu-search" type="search" placeholder="Haldi, jeera, code…" autocomplete="off" />
+      </label>
+    </header>
+
+    <main>
+      <div class="category-pills" id="category-pills"></div>
+      <section class="menu-grid" id="menu-grid"><p class="empty">Loading available items…</p></section>
+    </main>
+
+    <button class="cart-dock" id="cart-open" type="button" hidden>
+      <span><strong id="cart-count">0</strong> items</span>
+      <strong id="cart-total">₹0.00</strong>
+      <span>View order →</span>
+    </button>
+
+    <div class="sheet-wrap" id="cart-sheet" hidden>
+      <section class="cart-sheet" role="dialog" aria-modal="true" aria-labelledby="cart-title">
+        <header>
+          <div>
+            <p class="eyebrow">YOUR ORDER</p>
+            <h2 id="cart-title">Review items</h2>
+          </div>
+          <button class="icon-btn" id="cart-close" type="button" aria-label="Close">×</button>
+        </header>
+        <div id="cart-lines"></div>
+        <div class="cart-totals" id="cart-totals"></div>
+        <form id="order-form">
+          <label>Name * <input name="customer_name" maxlength="160" required autocomplete="name" /></label>
+          <label>Mobile * <input name="mobile" maxlength="15" inputmode="tel" required autocomplete="tel" /></label>
+          <label>Pickup / table <input name="table_no" maxlength="64" placeholder="Counter or Table 2" /></label>
+          <label>Notes <textarea name="notes" maxlength="1000" rows="2" placeholder="Coarse grind, no chilli…"></textarea></label>
+          <button class="place-order" type="submit">Place order</button>
+          <p class="form-hint" id="order-hint"></p>
+        </form>
+      </section>
+    </div>
+
+    <section class="success-card" id="order-success" hidden>
+      <div class="success-check">✓</div>
+      <p class="eyebrow">ORDER SENT</p>
+      <h2 id="success-number"></h2>
+      <p>The shop received your order. Please keep this number.</p>
+      <button type="button" id="new-order">Order more</button>
+    </section>
+
+    <footer>QR ordering · SWAMI MASALE SASWAD</footer>
+    <script src="./js/qr-order.js" defer></script>
+  </body>
+</html>
