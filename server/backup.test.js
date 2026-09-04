@@ -128,10 +128,11 @@ test("PHP and HTML wire master admin backup", () => {
   );
 });
 
-test("HTML and CSS cache stickers match deploy78", () => {
+test("HTML and CSS cache stickers match deploy79", () => {
   for (const name of ["index.html", "master.html", "login.html", "setup.html"]) {
     const html = readFileSync(path.join(root, name), "utf8");
-    assert.match(html, /20260903deploy78/);
+    assert.match(html, /20260903deploy79/);
+    assert.doesNotMatch(html, /20260903deploy78/);
     assert.doesNotMatch(html, /20260903deploy77/);
     assert.doesNotMatch(html, /20260903deploy76/);
     assert.doesNotMatch(html, /20260903deploy75/);
@@ -197,10 +198,10 @@ test("HTML and CSS cache stickers match deploy78", () => {
   assert.match(pos, /body\.footwear-mode #pack-choice/);
   assert.match(pos, /stage\.is-counter \.line-amt/);
   assert.match(pos, /minmax\(200px, 46vh\)/);
-  assert.match(pos, /bill-type: till-readable scale/);
-  assert.match(pos, /\.line \.who \{ font-weight: 700; font-size: 18px/);
-  assert.match(pos, /\.totals \.grand \{ font-size: 26px/);
-  assert.match(pos, /\.stage\.is-counter \.totals \.grand \{ font-size: 22px; \}/);
+  assert.match(pos, /bill-type: compact till scale/);
+  assert.match(pos, /\.line \.who \{ font-weight: 700; font-size: 14px/);
+  assert.match(pos, /\.totals \.grand \{ font-size: 18px/);
+  assert.match(pos, /\.stage\.is-counter \.totals \.grand \{ font-size: 16px; \}/);
   assert.doesNotMatch(pos, /minmax\(0, 240px\)/);
   const appJs = readFileSync(path.join(root, "js/app.js"), "utf8");
   assert.match(appJs, /input\.select/);
