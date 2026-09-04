@@ -128,10 +128,11 @@ test("PHP and HTML wire master admin backup", () => {
   );
 });
 
-test("HTML and CSS cache stickers match deploy88", () => {
+test("HTML and CSS cache stickers match deploy89", () => {
   for (const name of ["index.html", "master.html", "login.html", "setup.html"]) {
     const html = readFileSync(path.join(root, name), "utf8");
-    assert.match(html, /20260903deploy88/);
+    assert.match(html, /20260904deploy89/);
+    assert.doesNotMatch(html, /20260903deploy88/);
     assert.doesNotMatch(html, /20260903deploy87/);
     assert.doesNotMatch(html, /20260903deploy84/);
     assert.doesNotMatch(html, /20260903deploy83/);
@@ -328,6 +329,17 @@ test("HTML and CSS cache stickers match deploy88", () => {
   assert.match(appJs, /data-print-report/);
   assert.match(appJs, /printAccountsReport/);
   assert.match(pos, /\.report-toolbar select/);
+  assert.match(appJs, /function printVoucher/);
+  assert.match(appJs, /function showVoucherResult/);
+  assert.match(appJs, /InvoicePrint\.voucherDocument/);
+  assert.match(appJs, /InvoicePrint\.voucherBody/);
+  assert.match(appJs, /data-voucher-print/);
+  assert.match(appJs, /Print \$\{label\.toLowerCase\(\)\}/);
+  const invoiceJs = readFileSync(path.join(root, "js/invoice.js"), "utf8");
+  assert.match(invoiceJs, /function voucherBody/);
+  assert.match(invoiceJs, /function voucherDocument/);
+  assert.match(invoiceJs, /RECEIPT VOUCHER/);
+  assert.match(invoiceJs, /PAYMENT VOUCHER/);
   const login = readFileSync(path.join(root, "login.html"), "utf8");
   assert.match(login, /class="auth-shell"/);
   assert.match(login, /class="auth-scene"/);

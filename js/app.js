@@ -2456,6 +2456,30 @@ function printPurchase(p) {
   w.document.close();
 }
 
+function printVoucher(entry) {
+  const w = window.open("", "voucher-print", "width=400,height=640");
+  if (!w) {
+    setHint("Allow pop-ups to print the receipt", "error");
+    return;
+  }
+  w.document.write(InvoicePrint.voucherDocument(entry, invoiceCtx()));
+  w.document.close();
+}
+
+function showVoucherResult(entry) {
+  const isPayment = entry.entry_type === "payment";
+  const label = isPayment ? "Payment" : "Receipt";
+  $("modal-title").textContent = `${label} · ${entry.entry_no}`;
+  $("modal-body").innerHTML = `<p class="hint ok">${label} saved · ${escapeHtml(entry.entry_no)}</p>
+    <div class="thermal-preview">${InvoicePrint.voucherBody(entry, invoiceCtx())}</div>
+    <div class="print-actions">
+      <button class="btn primary" type="button" id="modal-print-voucher">Print ${label.toLowerCase()}</button>
+    </div>`;
+  $("modal").hidden = false;
+  const btn = $("modal-print-voucher");
+  if (btn) btn.onclick = () => printVoucher(entry);
+}
+
 function showOrder(o) {
   selectedOrderId = o.id;
   document.querySelectorAll("#orders .order-row").forEach((row) => {
@@ -2649,13 +2673,18 @@ async function loadAccountsTab(name) {
   const { from, to, asOf } = accPeriod();
   if (name === "ledger") {
     const rows = await api(`/api/accounts/ledger?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`);
+    state.ledgerRows = rows;
     $("acc-ledger-table").innerHTML = `<table><thead><tr>
-      <th>Entry</th><th>Type</th><th>Party</th><th>Amount</th><th>Method</th><th>Reference</th><th>Notes</th><th>Date</th>
-    </tr></thead><tbody>${rows.map((r) => `<tr>
+      <th>Entry</th><th>Type</th><th>Party</th><th>Amount</th><th>Method</th><th>Reference</th><th>Notes</th><th>Date</th><th></th>
+    </tr></thead><tbody>${rows.map((r, i) => {
+      const printable = r.entry_type === "receipt" || r.entry_type === "payment";
+      return `<tr>
       <td>${escapeHtml(r.entry_no)}</td><td>${escapeHtml(r.entry_type)}</td><td>${escapeHtml(r.party_name || "—")}</td>
       <td>${money(Number(r.amount) || 0)}</td><td>${escapeHtml(r.payment_method || "—")}</td>
       <td>${escapeHtml(r.reference_type || "—")}</td><td>${escapeHtml(r.notes || "—")}</td>
-      <td>${escapeHtml(formatShopDateTime(r.created_at))}</td></tr>`).join("")}</tbody></table>`;
+      <td>${escapeHtml(formatShopDateTime(r.created_at))}</td>
+      <td>${printable ? `<button class="btn" type="button" data-voucher-print="${i}">Print</button>` : ""}</td></tr>`;
+    }).join("")}</tbody></table>`;
   }
   if (name === "coa") {
     const rows = await api("/api/accounts/coa");
@@ -2774,15 +2803,24 @@ function showReceiptModal(customer) {
   $("modal").hidden = false;
   $("receipt-modal-form").onsubmit = async (e) => {
     e.preventDefault();
+    const notes = $("rcp-notes").value;
+    const method = $("rcp-method").value;
     try {
       const data = await api("/api/accounts/receipts", {
         method: "POST",
-        body: JSON.stringify({ customer_id: customer.id, amount: Number($("rcp-amount").value), payment_method: $("rcp-method").value, notes: $("rcp-notes").value }),
+        body: JSON.stringify({ customer_id: customer.id, amount: Number($("rcp-amount").value), payment_method: method, notes }),
       });
-      $("modal").hidden = true;
       await loadAccounts();
       await loadBootstrap();
-      setHint(`Receipt saved · ${data.entryNo}`, "ok");
+      showVoucherResult({
+        entry_no: data.entryNo,
+        entry_type: "receipt",
+        party_name: data.customer?.business_name || data.customer?.name || customer.business_name || customer.name,
+        amount: data.amount,
+        payment_method: data.method || method,
+        notes,
+        created_at: new Date().toISOString(),
+      });
     } catch (err) {
       $("rcp-hint").textContent = err.message;
       $("rcp-hint").className = "hint error";
@@ -2802,15 +2840,24 @@ function showPaymentModal(supplier) {
   $("modal").hidden = false;
   $("payment-modal-form").onsubmit = async (e) => {
     e.preventDefault();
+    const notes = $("pay-acc-notes").value;
+    const method = $("pay-acc-method").value;
     try {
       const data = await api("/api/accounts/payments", {
         method: "POST",
-        body: JSON.stringify({ supplier_id: supplier.id, amount: Number($("pay-acc-amount").value), payment_method: $("pay-acc-method").value, notes: $("pay-acc-notes").value }),
+        body: JSON.stringify({ supplier_id: supplier.id, amount: Number($("pay-acc-amount").value), payment_method: method, notes }),
       });
-      $("modal").hidden = true;
       await loadAccounts();
       await loadSuppliers();
-      setHint(`Payment saved · ${data.entryNo}`, "ok");
+      showVoucherResult({
+        entry_no: data.entryNo,
+        entry_type: "payment",
+        party_name: data.supplier?.name || supplier.name,
+        amount: data.amount,
+        payment_method: data.method || method,
+        notes,
+        created_at: new Date().toISOString(),
+      });
     } catch (err) {
       $("pay-acc-hint").textContent = err.message;
       $("pay-acc-hint").className = "hint error";
@@ -3287,6 +3334,12 @@ $("view-accounts")?.addEventListener("click", (e) => {
   if (pay) {
     const supplier = (state.accPayables || []).find((s) => s.id === pay.dataset.pay);
     if (supplier) showPaymentModal(supplier);
+    return;
+  }
+  const voucher = e.target.closest("[data-voucher-print]");
+  if (voucher) {
+    const row = (state.ledgerRows || [])[Number(voucher.dataset.voucherPrint)];
+    if (row) printVoucher(row);
   }
 });
 document.querySelector(".nav").addEventListener("click", (e) => {

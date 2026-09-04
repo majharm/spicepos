@@ -759,6 +759,65 @@ ${officeInvoiceBody(order, ctx, { copy })}
       .replaceAll('"', "&quot;");
   }
 
+  function voucherTitle(entryType) {
+    return String(entryType).toLowerCase() === "payment" ? "PAYMENT VOUCHER" : "RECEIPT VOUCHER";
+  }
+
+  function voucherBody(entry, ctx) {
+    const { company, formatDateTime, money, escapeHtml } = ctx;
+    const co = company || {};
+    const isPayment = String(entry.entry_type).toLowerCase() === "payment";
+    const when = formatDateTime(entry.created_at || new Date().toISOString());
+    const meta = [co.phone ? `Ph: ${escapeHtml(co.phone)}` : "", co.gstin ? `GSTIN: ${escapeHtml(co.gstin)}` : ""]
+      .filter(Boolean)
+      .join(" · ");
+    const amount = round2(entry.amount);
+    const reference = String(entry.reference_type || "").trim();
+    return `<article class="thermal-invoice">
+  <header class="inv-head">
+    <h1 class="inv-shop">${escapeHtml(co.name || "Shop")}</h1>
+    ${co.address ? `<p class="inv-addr">${escapeHtml(co.address)}</p>` : ""}
+    ${meta ? `<p class="inv-meta">${meta}</p>` : ""}
+    <p class="inv-title">${voucherTitle(entry.entry_type)}</p>
+  </header>
+  <div class="inv-rule"></div>
+  <div class="inv-details">
+    <div class="inv-row"><span>Voucher No.</span><strong>${escapeHtml(entry.entry_no || "—")}</strong></div>
+    <div class="inv-row"><span>Date</span><span>${escapeHtml(when)}</span></div>
+    <div class="inv-row"><span>${isPayment ? "Paid to" : "Received from"}</span><span>${escapeHtml(entry.party_name || "—")}</span></div>
+    <div class="inv-row"><span>Mode</span><span>${escapeHtml(String(entry.payment_method || "cash").toUpperCase())}</span></div>
+    ${reference && reference !== "manual" ? `<div class="inv-row"><span>Reference</span><span>${escapeHtml(reference.replace(/_/g, " "))}</span></div>` : ""}
+    ${entry.notes ? `<div class="inv-row"><span>Notes</span><span>${escapeHtml(entry.notes)}</span></div>` : ""}
+  </div>
+  <div class="inv-rule"></div>
+  <table class="inv-totals">
+    <tbody>
+      <tr class="inv-grand"><td><strong>Amount</strong></td><td class="inv-num"><strong>${escapeHtml(money(amount))}</strong></td></tr>
+    </tbody>
+  </table>
+  <p class="inv-pay">In words: ${escapeHtml(amountInWords(amount))}</p>
+  <div class="inv-rule"></div>
+  <p class="inv-footer">${isPayment ? "Payment recorded. Thank you." : "Received with thanks."}</p>
+  <p class="inv-powered">ATAV POS</p>
+</article>`;
+  }
+
+  function voucherDocument(entry, ctx) {
+    const title = escapeHtml(entry.entry_no || (String(entry.entry_type).toLowerCase() === "payment" ? "Payment" : "Receipt"));
+    return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>${title}</title>
+  <style>${THERMAL_CSS}</style>
+</head>
+<body>
+${voucherBody(entry, ctx)}
+<script>window.onload=function(){window.focus();window.print();};<\/script>
+</body>
+</html>`;
+  }
+
   window.InvoicePrint = {
     invoiceBody,
     thermalInvoiceDocument,
@@ -768,6 +827,8 @@ ${officeInvoiceBody(order, ctx, { copy })}
     amountInWords,
     purchaseBody,
     thermalPurchaseDocument,
+    voucherBody,
+    voucherDocument,
     enrichLines,
     enrichPurchaseLines,
     gstBreakdown,

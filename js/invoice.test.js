@@ -225,6 +225,46 @@ test("amount in words uses Indian numbering", () => {
   assert.equal(InvoicePrint.amountInWords(125000), "Rupees One Lakh Twenty Five Thousand Only");
 });
 
+test("receipt voucher prints party, amount, and mode; payment voucher labels differ", () => {
+  const InvoicePrint = loadInvoicePrint();
+  const ctx = {
+    company: { name: "SWAMI MASALE SASWAD", phone: "9876543210", gstin: "27AAAAA0000A1Z5" },
+    formatDateTime: (v) => String(v),
+    money: (n) => `₹${Number(n).toFixed(2)}`,
+    escapeHtml: (v) => String(v),
+  };
+  const receipt = {
+    entry_no: "RCP-1001",
+    entry_type: "receipt",
+    party_name: "Ramesh Traders",
+    amount: 1500,
+    payment_method: "cash",
+    notes: "Part payment",
+    created_at: "2026-09-04T10:00:00.000Z",
+  };
+  const html = InvoicePrint.voucherBody(receipt, ctx);
+  assert.match(html, /RECEIPT VOUCHER/);
+  assert.match(html, /RCP-1001/);
+  assert.match(html, /Received from/);
+  assert.match(html, /Ramesh Traders/);
+  assert.match(html, /CASH/);
+  assert.match(html, /Part payment/);
+  assert.match(html, /₹1500\.00/);
+  assert.match(html, /One Thousand Five Hundred/);
+  assert.doesNotMatch(html, /Paid to/);
+
+  const payment = { ...receipt, entry_no: "PAY-2001", entry_type: "payment", party_name: "Spice Traders" };
+  const payHtml = InvoicePrint.voucherBody(payment, ctx);
+  assert.match(payHtml, /PAYMENT VOUCHER/);
+  assert.match(payHtml, /Paid to/);
+  assert.match(payHtml, /Spice Traders/);
+  assert.doesNotMatch(payHtml, /Received from/);
+
+  const doc = InvoicePrint.voucherDocument(receipt, ctx);
+  assert.match(doc, /RCP-1001/);
+  assert.match(doc, /window\.print\(\)/);
+});
+
 test("thermal invoice HTML shows IGST for inter-state supply", () => {
   const InvoicePrint = loadInvoicePrint();
   const html = InvoicePrint.invoiceBody(

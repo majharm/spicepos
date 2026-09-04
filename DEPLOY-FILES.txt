@@ -1,4 +1,4 @@
-Production deploy bundle — 20260903deploy88
+Production deploy bundle — 20260904deploy89
 =========================================
 
 Upload ALL files below to Hostinger public_html (overwrite):
@@ -124,7 +124,8 @@ FIXES in this bundle
   - Suppliers form and list include address and email
   - Settings page: wider card, 2-column details, styled logo upload, keep card padding on mobile
   - CSS: Master Admin mobile nav wrap, hide nav until sign-in, backup file inputs, table overflow
-  - Cache sticker 20260903deploy88 on index, login, master, setup
+  - Cache sticker 20260904deploy89 on index, login, master, setup
+  - Payment receipt / payment voucher print (Accounts: receive from customer, pay to supplier, reprint from Day book)
   - Items bulk Excel import: template download and .xlsx / CSV upload
   - Inventory Expiry list: dated on-hand batches, 7/30/90 day filters, write-off as damage
   - Login Create business shows a 2-day trial banner
