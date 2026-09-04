@@ -24,6 +24,7 @@ import { audit } from "./audit.js";
 import { getPlatformSettings } from "./settings.js";
 import { sendLowStockAlerts, tickShopAlerts, startAlertScheduler } from "./alerts.js";
 import { registerAdvanced, computeSaleLine, applySaleStock, applyLoyaltyOnSale } from "./advanced.js";
+import { registerQrPublic, registerQrStaff } from "./qr-ordering.js";
 import "../js/discount.js";
 import { canonApiUrl, isAliasedApi, isApiUrl, rewriteToApi } from "./http-path.js";
 
@@ -70,11 +71,13 @@ app.use((req, res, next) => {
 });
 app.use(attachAuth);
 registerAuth(app);
+registerQrPublic(app);
 app.use((req, res, next) => {
   const url = canonApiUrl(req.originalUrl || "", req.headers["x-pos-path"]);
   if (!isApiUrl(url)) return next();
   if (
     url.startsWith("/api/auth") ||
+    url.startsWith("/api/qr/") ||
     url.startsWith("/api/health") ||
     url.startsWith("/api/master") ||
     url.startsWith("/api/support-contact")
@@ -88,6 +91,7 @@ registerTenant(app);
 registerAdvanced(app);
 registerBackup(app);
 registerUnits(app);
+registerQrStaff(app);
 
 app.get("/api/support-contact", async (_req, res) => {
   try {

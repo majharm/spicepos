@@ -19,7 +19,7 @@ zip -r "$OUT" \
   pos-data \
   health.json \
   favicon.svg \
-  index.html login.html master.html setup.html app.html \
+  index.html login.html master.html setup.html app.html order.html \
   privacy.html terms.html data-deletion.html refund.html shipping.html cookies.html \
   server.js package.json package-lock.json Procfile \
   scripts/base-schema.sql \

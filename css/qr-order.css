@@ -1,0 +1,71 @@
+:root {
+  color-scheme: light;
+  --ink: #10211f;
+  --muted: #64748b;
+  --teal: #0f766e;
+  --teal-dark: #115e59;
+  --mint: #ecfdf5;
+  --line: #dce7e4;
+  --bg: #f4f7f6;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+* { box-sizing: border-box; }
+body { margin: 0; color: var(--ink); background: var(--bg); padding-bottom: 96px; }
+button, input, textarea { font: inherit; }
+button { cursor: pointer; }
+.menu-head { padding: 24px clamp(16px, 4vw, 44px) 18px; color: white; background: linear-gradient(135deg, #0f172a, #115e59 72%, #0d9488); }
+.menu-brand { display: flex; align-items: center; gap: 14px; max-width: 1180px; margin: auto; }
+.menu-brand img { width: 66px; height: 66px; border-radius: 16px; object-fit: contain; background: white; }
+.eyebrow { margin: 0 0 4px; font-size: 11px; font-weight: 800; letter-spacing: .14em; color: #99f6e4; }
+h1, h2 { margin: 0; letter-spacing: -.025em; }
+#shop-address { margin: 6px 0 0; color: #cbd5e1; font-size: 13px; }
+.menu-search { display: block; max-width: 1180px; margin: 18px auto 0; font-size: 12px; font-weight: 700; }
+.menu-search input { display: block; width: 100%; margin-top: 6px; padding: 13px 14px; border: 0; border-radius: 12px; outline: none; }
+main { max-width: 1180px; margin: auto; padding: 18px clamp(14px, 4vw, 44px) 30px; }
+.category-pills { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 12px; scrollbar-width: none; }
+.category-pills button { flex: 0 0 auto; padding: 8px 13px; border: 1px solid var(--line); border-radius: 999px; color: #334155; background: white; }
+.category-pills button.active { color: white; border-color: var(--teal); background: var(--teal); }
+.menu-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 13px; }
+.menu-card { display: grid; grid-template-columns: 74px 1fr; gap: 12px; min-height: 120px; padding: 13px; border: 1px solid var(--line); border-radius: 16px; background: white; box-shadow: 0 5px 18px rgba(15, 23, 42, .05); }
+.item-photo, .item-initial { width: 74px; height: 74px; border-radius: 13px; object-fit: cover; }
+.item-initial { display: grid; place-items: center; color: var(--teal-dark); background: var(--mint); font-size: 25px; font-weight: 900; }
+.menu-card h3 { margin: 0 0 3px; font-size: 16px; }
+.item-meta { margin: 0; color: var(--muted); font-size: 11px; text-transform: uppercase; }
+.item-price { margin: 8px 0 0; font-weight: 800; }
+.add-btn, .qty-control { grid-column: 1 / -1; height: 38px; border: 0; border-radius: 10px; }
+.add-btn { color: white; background: var(--teal); font-weight: 800; }
+.qty-control { display: grid; grid-template-columns: 42px 1fr 42px; align-items: center; background: var(--mint); text-align: center; font-weight: 800; }
+.qty-control button { height: 100%; border: 0; color: var(--teal-dark); background: transparent; font-size: 20px; }
+.empty { grid-column: 1 / -1; padding: 44px 16px; border: 1px dashed #b6c8c4; border-radius: 16px; color: var(--muted); text-align: center; background: white; }
+.cart-dock { position: fixed; z-index: 10; left: 50%; bottom: 16px; transform: translateX(-50%); display: grid; grid-template-columns: 1fr auto auto; gap: 18px; align-items: center; width: min(640px, calc(100% - 24px)); padding: 14px 18px; border: 0; border-radius: 15px; color: white; background: #0f172a; box-shadow: 0 14px 38px rgba(15, 23, 42, .32); }
+.sheet-wrap { position: fixed; z-index: 20; inset: 0; display: grid; place-items: end center; padding-top: 40px; background: rgba(15, 23, 42, .55); }
+.cart-sheet { width: min(680px, 100%); max-height: calc(100vh - 30px); overflow-y: auto; padding: 20px; border-radius: 22px 22px 0 0; background: white; }
+.cart-sheet > header { display: flex; justify-content: space-between; align-items: start; margin-bottom: 12px; }
+.cart-sheet .eyebrow, .success-card .eyebrow { color: var(--teal); }
+.icon-btn { width: 40px; height: 40px; border: 0; border-radius: 50%; background: #eef2f1; font-size: 25px; }
+.cart-line { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; padding: 11px 0; border-bottom: 1px solid var(--line); }
+.cart-line span { color: var(--muted); font-size: 12px; }
+.cart-line strong:last-child { grid-row: 1 / span 2; grid-column: 2; align-self: center; }
+.cart-totals { margin: 14px 0; padding: 12px; border-radius: 12px; background: var(--bg); }
+.cart-totals div { display: flex; justify-content: space-between; margin: 4px 0; }
+.cart-totals .grand { padding-top: 7px; border-top: 1px solid var(--line); font-size: 18px; font-weight: 900; }
+#order-form { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+#order-form label { color: #334155; font-size: 12px; font-weight: 700; }
+#order-form input, #order-form textarea { width: 100%; margin-top: 5px; padding: 11px 12px; border: 1px solid #cbd5e1; border-radius: 10px; outline-color: var(--teal); }
+#order-form label:last-of-type, .place-order, .form-hint { grid-column: 1 / -1; }
+.place-order, .success-card button { padding: 13px; border: 0; border-radius: 11px; color: white; background: var(--teal); font-weight: 800; }
+.form-hint { min-height: 18px; margin: 0; color: #b91c1c; font-size: 12px; }
+.success-card { position: fixed; z-index: 30; inset: 50% auto auto 50%; transform: translate(-50%, -50%); width: min(420px, calc(100% - 28px)); padding: 28px; border-radius: 22px; background: white; box-shadow: 0 22px 60px rgba(15, 23, 42, .35); text-align: center; }
+.success-check { display: grid; place-items: center; width: 58px; height: 58px; margin: 0 auto 14px; border-radius: 50%; color: white; background: var(--teal); font-size: 30px; }
+.success-card h2 { margin: 5px 0 10px; }
+.success-card p:not(.eyebrow) { color: var(--muted); }
+.success-card button { width: 100%; margin-top: 8px; }
+footer { padding: 24px; color: var(--muted); text-align: center; font-size: 12px; }
+[hidden] { display: none !important; }
+@media (max-width: 560px) {
+  .menu-head { padding-top: 18px; }
+  .menu-grid { grid-template-columns: 1fr; }
+  #order-form { grid-template-columns: 1fr; }
+  #order-form label, .place-order, .form-hint { grid-column: 1; }
+  .cart-dock { gap: 10px; font-size: 13px; }
+}

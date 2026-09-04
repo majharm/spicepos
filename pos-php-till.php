@@ -11,7 +11,7 @@ function pos_php_till_dispatch($path, $method, $body) {
     "bootstrap", "dashboard", "today", "suppliers", "items", "customers", "packs",
     "orders", "purchases", "stock", "staff", "branches", "devices", "holds",
     "checkout", "settings", "reports", "audit", "accounts", "backup", "units",
-    "barcodes", "damage", "loyalty", "batches",
+    "barcodes", "damage", "loyalty", "batches", "qr-orders",
   ];
   if (!in_array($head, $staff, true)) return false;
   $auth = pos_staff_session();
@@ -41,6 +41,11 @@ function pos_php_till_dispatch($path, $method, $body) {
     pos_require_checkout();
     pos_dispatch_checkout($path, $method, $body, $bid, $branchId, $uid, $auth);
     return true;
+  }
+
+  if ($path === "qr-orders" || strpos($path, "qr-orders/") === 0) {
+    require_once __DIR__ . "/pos-qr-ordering.php";
+    if (pos_qr_staff_dispatch($path, $method, $body, $bid, $branchId)) return true;
   }
 
   if ($path === "bootstrap" && $method === "GET") {

@@ -299,6 +299,42 @@ CREATE TABLE IF NOT EXISTS sales_order_lines (
   INDEX (business_id)
 );
 
+CREATE TABLE IF NOT EXISTS qr_orders (
+  id VARCHAR(255) PRIMARY KEY,
+  order_number VARCHAR(32) NOT NULL,
+  business_id VARCHAR(255) NOT NULL,
+  branch_id VARCHAR(255) NULL,
+  customer_name VARCHAR(160) NOT NULL,
+  mobile VARCHAR(32) NOT NULL,
+  table_no VARCHAR(64) NULL,
+  notes TEXT NULL,
+  status VARCHAR(24) NOT NULL DEFAULT 'pending',
+  subtotal DECIMAL(12,2) NOT NULL DEFAULT 0,
+  gst DECIMAL(12,2) NOT NULL DEFAULT 0,
+  total DECIMAL(12,2) NOT NULL DEFAULT 0,
+  created_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  updated_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+  UNIQUE KEY uq_qr_order_number (business_id, order_number),
+  INDEX idx_qr_orders_business_status (business_id, status, created_at)
+);
+
+CREATE TABLE IF NOT EXISTS qr_order_lines (
+  id VARCHAR(255) PRIMARY KEY,
+  order_id VARCHAR(255) NOT NULL,
+  business_id VARCHAR(255) NOT NULL,
+  item_id VARCHAR(255) NOT NULL,
+  item_name VARCHAR(255) NOT NULL,
+  unit VARCHAR(32) NOT NULL,
+  quantity_gm DECIMAL(14,3) NOT NULL,
+  rate_per_kg DECIMAL(12,4) NOT NULL,
+  gst_rate DECIMAL(5,2) NOT NULL DEFAULT 0,
+  amount DECIMAL(12,2) NOT NULL DEFAULT 0,
+  gst_amount DECIMAL(12,2) NOT NULL DEFAULT 0,
+  created_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  INDEX idx_qr_order_lines_order (order_id),
+  INDEX idx_qr_order_lines_business (business_id)
+);
+
 CREATE TABLE IF NOT EXISTS number_sequences (
   name VARCHAR(64) NOT NULL,
   next_value INT NOT NULL DEFAULT 1,
