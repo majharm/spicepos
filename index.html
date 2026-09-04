@@ -98,6 +98,16 @@
         <section class="view view-counter" id="view-counter" hidden>
           <div class="edit-order-banner" id="edit-order-banner" hidden></div>
           <header class="topbar counter-topbar">
+            <form class="scan-lane" id="scan-form" autocomplete="off">
+              <span class="scan-lane-ico" aria-hidden="true"></span>
+              <input id="scan-code" type="text" enterkeyhint="done" autocomplete="off" placeholder="Scan or type barcode, then Enter" />
+              <span class="scan-status" id="scan-status"></span>
+            </form>
+            <form class="search" id="search-form">
+              <input id="search" type="search" placeholder="Search name or HSN…" autocomplete="off" />
+            </form>
+            <div class="counter-tools">
+              <div class="customer-picker">
             <div class="counter-lane">
               <form class="scan-lane" id="scan-form" autocomplete="off">
                 <span class="scan-lane-ico" aria-hidden="true"></span>
