@@ -333,7 +333,9 @@ function digitsMobile(raw) {
   return d;
 }
 
-function findCustomerByMobile(raw) {
+function isRealMobile(raw) {
+  return /^[6-9]\d{9}$/.test(digitsMobile(raw));
+}
   const d = digitsMobile(raw);
   if (d.length < 10) return null;
   return (state.customers || []).find((c) => digitsMobile(c.mobile) === d) || null;
@@ -349,7 +351,7 @@ function paintBillCustomer() {
   }
   const name = String(c.business_name || c.name || "Walk-in").trim() || "Walk-in";
   const mobile = digitsMobile(c.mobile);
-  el.textContent = mobile.length === 10 && !/^0+$/.test(mobile) ? `${name} · ${mobile}` : name;
+  el.textContent = isRealMobile(mobile) ? `${name} · ${mobile}` : name;
 }
 
 function selectCounterCustomer(cust, { hint = true } = {}) {
@@ -358,7 +360,7 @@ function selectCounterCustomer(cust, { hint = true } = {}) {
   if ($("customer")) $("customer").value = cust.id;
   const mob = $("counter-mobile");
   const shown = digitsMobile(cust.mobile);
-  if (mob && document.activeElement !== mob && shown.length === 10 && !/^0+$/.test(shown)) {
+  if (mob && document.activeElement !== mob && isRealMobile(shown)) {
     mob.value = shown;
   }
   paintBillCustomer();
@@ -1241,7 +1243,7 @@ function renderCustomersSelect() {
     const mob = $("counter-mobile");
     const c = customer();
     const shown = digitsMobile(c?.mobile);
-    if (mob && document.activeElement !== mob && shown.length === 10 && !/^0+$/.test(shown)) {
+    if (mob && document.activeElement !== mob && isRealMobile(shown)) {
       mob.value = shown;
     }
   }
@@ -2836,7 +2838,7 @@ $("customer").addEventListener("change", () => {
   const c = customer();
   const mob = $("counter-mobile");
   const shown = digitsMobile(c?.mobile);
-  if (mob && shown.length === 10 && !/^0+$/.test(shown)) mob.value = shown;
+  if (mob && isRealMobile(shown)) mob.value = shown;
   else if (mob && document.activeElement !== mob) mob.value = "";
   paintBillCustomer();
   renderCatalog();
