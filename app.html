@@ -1,0 +1,1333 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Spice POS</title>
+    <style>
+:root {
+  --bg: #1a1410;
+  --bg-raised: #241c16;
+  --panel: #2c221b;
+  --line: #3d2f24;
+  --text: #f6efe6;
+  --muted: #c4b3a2;
+  --saffron: #e8a54b;
+  --saffron-deep: #c47a22;
+  --mint: #7dba7a;
+  --danger: #ef6b5a;
+  --nav: #140f0c;
+  --shadow: 0 18px 40px rgba(0, 0, 0, 0.35);
+  font-family: "Segoe UI", "Source Sans 3", sans-serif;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; min-height: 100vh; }
+body {
+  background:
+    radial-gradient(1200px 500px at 10% -10%, #3a2718 0%, transparent 55%),
+    var(--bg);
+  color: var(--text);
+}
+
+button, input { font: inherit; }
+button { cursor: pointer; }
+
+.app {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+}
+
+.nav {
+  background: var(--nav);
+  border-right: 1px solid var(--line);
+  padding: 18px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.brand {
+  display: flex;
+  flex-direction: column;
+  padding: 4px 10px 16px;
+}
+.brand strong { font-size: 18px; letter-spacing: 0.04em; }
+.brand span { color: var(--muted); font-size: 12px; word-break: break-all; }
+.nav-btn {
+  text-align: left;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+.nav-btn.active, .nav-btn:hover { background: var(--panel); }
+.nav-foot { margin-top: auto; display: grid; gap: 8px; padding-top: 16px; }
+
+.stage { min-width: 0; display: flex; flex-direction: column; }
+.view { display: block; padding: 0; min-height: 100vh; }
+.view[hidden] { display: none; }
+.view > h2 { margin: 20px 20px 4px; }
+.lede { margin: 0 20px 16px; color: var(--muted); }
+
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 18px;
+  border-bottom: 1px solid var(--line);
+  background: rgba(26, 20, 16, 0.92);
+}
+.search { flex: 1; display: flex; }
+.search input {
+  width: 100%;
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--bg-raised);
+  color: var(--text);
+}
+.chip {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.chip b { color: var(--text); font-weight: 600; }
+.btn {
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--text);
+  border-radius: 10px;
+  padding: 8px 12px;
+}
+.btn.primary {
+  background: linear-gradient(180deg, var(--saffron), var(--saffron-deep));
+  border-color: transparent;
+  color: #1a120a;
+  font-weight: 700;
+}
+.btn.ghost { background: transparent; }
+.btn.danger { background: #4a221c; border-color: #6a3228; }
+.btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+.workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(300px, 0.9fr);
+  min-height: calc(100vh - 64px);
+}
+
+.catalog {
+  padding: 16px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
+  gap: 12px;
+  align-content: start;
+}
+
+.card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 12px;
+  text-align: left;
+  color: inherit;
+  box-shadow: var(--shadow);
+  min-height: 132px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.card:hover { border-color: var(--saffron); }
+.card .sku { color: var(--muted); font-size: 11px; letter-spacing: 0.08em; }
+.card .name { font-weight: 700; }
+.card .meta { display: flex; justify-content: space-between; color: var(--muted); font-size: 13px; }
+.stock.ok { color: var(--mint); }
+.stock.low { color: var(--saffron); }
+.stock.out { color: var(--danger); }
+
+.ticket {
+  border-left: 1px solid var(--line);
+  background: var(--bg-raised);
+  display: grid;
+  grid-template-rows: auto 1fr auto auto;
+  min-height: 0;
+}
+.ticket h2 { margin: 0; padding: 14px 16px 8px; font-size: 16px; }
+.lines { overflow: auto; padding: 0 8px 8px; max-height: 50vh; }
+.line {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  padding: 10px 8px;
+  border-bottom: 1px solid var(--line);
+}
+.line .who { font-weight: 600; }
+.line .pack { color: var(--muted); font-size: 12px; }
+.qty { display: flex; align-items: center; gap: 6px; }
+.qty button {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--text);
+}
+.totals {
+  padding: 12px 16px;
+  border-top: 1px solid var(--line);
+  display: grid;
+  gap: 6px;
+  font-size: 14px;
+}
+.totals div { display: flex; justify-content: space-between; }
+.totals .grand { font-size: 22px; font-weight: 800; color: var(--saffron); }
+.pay { padding: 12px 16px 16px; display: grid; gap: 8px; }
+.pay-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.pay-row .btn { width: 100%; }
+.tender { display: flex; gap: 8px; }
+.tender input {
+  flex: 1;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--text);
+}
+.hint { color: var(--muted); font-size: 12px; min-height: 16px; }
+.hint.error { color: var(--danger); }
+.hint.ok { color: var(--mint); }
+
+.table-wrap { padding: 0 20px 24px; overflow-x: auto; }
+table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  overflow: hidden;
+}
+th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); }
+th { color: var(--muted); font-size: 12px; font-weight: 600; }
+.split {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(260px, 0.8fr);
+  gap: 16px;
+  padding: 0 20px 24px;
+}
+.pane {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 12px;
+  min-height: 200px;
+}
+.report-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 12px;
+  padding: 0 20px 24px;
+}
+.report-card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 16px;
+}
+.report-card span { color: var(--muted); display: block; font-size: 12px; }
+.report-card strong { font-size: 22px; }
+.settings {
+  display: grid;
+  gap: 12px;
+  max-width: 420px;
+  margin: 0 20px 16px;
+}
+.settings label { display: grid; gap: 6px; color: var(--muted); font-size: 13px; }
+.settings input {
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--bg-raised);
+  color: var(--text);
+}
+#btn-reset { margin: 12px 20px 32px; }
+
+.lock, .modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(10, 7, 5, 0.72);
+  display: grid;
+  place-items: center;
+  z-index: 20;
+}
+.lock[hidden], .modal[hidden] { display: none; }
+.dialog {
+  width: min(520px, calc(100% - 32px));
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 22px;
+  box-shadow: var(--shadow);
+}
+.dialog h3 { margin: 0 0 8px; }
+.dialog p { color: var(--muted); }
+.pin { display: flex; gap: 8px; margin: 16px 0; }
+#btn-demo-pin { width: 100%; }
+.pin input {
+  flex: 1;
+  padding: 12px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--text);
+  letter-spacing: 0.4em;
+  text-align: center;
+}
+.receipt {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 13px;
+  white-space: pre-wrap;
+  background: #fff7ea;
+  color: #2b1c12;
+  padding: 16px;
+  border-radius: 10px;
+  max-height: 480px;
+  overflow: auto;
+}
+.held-item, .order-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  align-items: center;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--bg-raised);
+  color: inherit;
+  text-align: left;
+  width: 100%;
+  margin-bottom: 8px;
+}
+
+@media (max-width: 980px) {
+  .app { grid-template-columns: 1fr; }
+  .nav { flex-direction: row; flex-wrap: wrap; border-right: 0; border-bottom: 1px solid var(--line); }
+  .nav-foot { flex-direction: row; margin-top: 0; display: flex; flex-wrap: wrap; width: 100%; }
+  .workspace, .split { grid-template-columns: 1fr; }
+  .ticket { border-left: 0; border-top: 1px solid var(--line); }
+  .view { min-height: 0; }
+}
+
+</style>
+  </head>
+  <body>
+    <div class="app">
+      <nav class="nav" aria-label="App">
+        <div class="brand">
+          <strong id="shop-name">Spice POS</strong>
+          <span id="shop-place">Pune</span>
+        </div>
+        <button class="nav-btn active" type="button" data-view="counter">Counter</button>
+        <button class="nav-btn" type="button" data-view="inventory">Inventory</button>
+        <button class="nav-btn" type="button" data-view="orders">Orders</button>
+        <button class="nav-btn" type="button" data-view="held">Held</button>
+        <button class="nav-btn" type="button" data-view="reports">Reports</button>
+        <button class="nav-btn" type="button" data-view="settings">Settings</button>
+        <div class="nav-foot">
+          <div class="chip">Today <b id="today-total">₹0.00</b></div>
+          <div class="chip">Bills <b id="today-count">0</b></div>
+          <div class="chip" id="clock">--:--</div>
+          <button class="btn ghost" id="btn-lock" type="button">Lock till</button>
+        </div>
+      </nav>
+
+      <div class="stage">
+        <section class="view" id="view-counter">
+          <header class="topbar">
+            <form class="search" id="search-form">
+              <input
+                id="search"
+                type="search"
+                placeholder="Search spice, SKU, or pack — / to focus"
+                autocomplete="off"
+              />
+            </form>
+          </header>
+          <div class="workspace">
+            <div class="catalog" id="catalog" aria-label="Products"></div>
+            <aside class="ticket">
+              <h2>Current bill</h2>
+              <div class="lines" id="lines"></div>
+              <div class="totals">
+                <div><span>Taxable</span><span id="taxable">₹0.00</span></div>
+                <div><span>GST</span><span id="tax">₹0.00</span></div>
+                <div class="grand"><span>Total</span><span id="total">₹0.00</span></div>
+              </div>
+              <div class="pay">
+                <div class="tender">
+                  <input id="tender" inputmode="decimal" placeholder="Cash tendered" />
+                  <button class="btn" id="btn-hold" type="button">Hold</button>
+                  <button class="btn danger" id="btn-clear" type="button">Clear</button>
+                </div>
+                <div class="pay-row">
+                  <button class="btn primary" id="pay-cash" type="button">Cash</button>
+                  <button class="btn" id="pay-upi" type="button">UPI</button>
+                  <button class="btn" id="pay-card" type="button">Card</button>
+                </div>
+                <div class="hint" id="hint"></div>
+              </div>
+            </aside>
+          </div>
+        </section>
+
+        <section class="view" id="view-inventory" hidden>
+          <h2>Inventory</h2>
+          <p class="lede">Every pack on the shelf. Receive stock without leaving the till.</p>
+          <div class="table-wrap" id="inventory"></div>
+        </section>
+
+        <section class="view" id="view-orders" hidden>
+          <h2>Orders</h2>
+          <p class="lede">Paid bills for this device. Open a row to reprint the receipt.</p>
+          <div class="split">
+            <div class="table-wrap" id="orders"></div>
+            <div class="pane" id="order-pane"><p class="hint">Select a bill.</p></div>
+          </div>
+        </section>
+
+        <section class="view" id="view-held" hidden>
+          <h2>Held bills</h2>
+          <p class="lede">Customers who stepped aside. Recall only when the live cart is empty.</p>
+          <div class="table-wrap" id="held"></div>
+        </section>
+
+        <section class="view" id="view-reports" hidden>
+          <h2>Today’s report</h2>
+          <p class="lede">GST-inclusive takings for the current calendar day.</p>
+          <div class="report-grid" id="reports"></div>
+        </section>
+
+        <section class="view" id="view-settings" hidden>
+          <h2>Settings</h2>
+          <p class="lede">Shop print lines on every receipt. Demo PIN is 1234.</p>
+          <form class="settings" id="settings-form">
+            <label>Shop name <input id="set-name" /></label>
+            <label>Place <input id="set-place" /></label>
+            <label>GSTIN <input id="set-gstin" /></label>
+            <button class="btn primary" type="submit">Save shop</button>
+          </form>
+          <div class="hint" id="settings-hint"></div>
+          <button class="btn danger" id="btn-reset" type="button">Reset demo data</button>
+        </section>
+      </div>
+    </div>
+
+    <div class="lock" id="lock" hidden>
+      <div class="dialog">
+        <h3>Unlock counter</h3>
+        <p>Enter cashier PIN. Demo PIN is <b>1234</b>.</p>
+        <form class="pin" id="pin-form" action="#" method="post">
+          <input id="pin" type="text" inputmode="numeric" maxlength="8" autocomplete="one-time-code" placeholder="PIN" />
+          <button class="btn primary" id="btn-unlock" type="submit">Unlock</button>
+        </form>
+        <button class="btn" id="btn-demo-pin" type="button">Fill demo PIN 1234</button>
+        <div class="hint" id="pin-hint"></div>
+      </div>
+    </div>
+
+    <div class="modal" id="modal" hidden>
+      <div class="dialog">
+        <h3 id="modal-title">Dialog</h3>
+        <div id="modal-body"></div>
+        <div style="margin-top: 14px; display: flex; gap: 8px; justify-content: flex-end">
+          <button class="btn" id="modal-close" type="button">Close</button>
+        </div>
+      </div>
+    </div>
+
+    <script>
+/* generated by scripts/bundle.mjs — do not edit by hand */
+(() => {
+/** All money is integer paise (1 INR = 100 paise) to avoid float rounding bugs. */
+
+function rupeesToPaise(rupees) {
+  if (!Number.isFinite(rupees)) throw new Error("Invalid rupees");
+  return Math.round(rupees * 100);
+}
+
+function paiseToRupees(paise) {
+  return paise / 100;
+}
+
+function formatINR(paise) {
+  const negative = paise < 0;
+  const abs = Math.abs(Math.trunc(paise));
+  const rupees = Math.floor(abs / 100);
+  const remainder = abs % 100;
+  const grouped = rupees.toLocaleString("en-IN");
+  const body = `₹${grouped}.${String(remainder).padStart(2, "0")}`;
+  return negative ? `-${body}` : body;
+}
+
+/** GST basis points: 500 = 5%. Tax is rounded to nearest paise per line. */
+function lineAmounts(unitPaise, qty, gstBps) {
+  if (!Number.isInteger(unitPaise) || unitPaise < 0) {
+    throw new Error("Invalid unit price");
+  }
+  if (!Number.isInteger(qty) || qty < 0) {
+    throw new Error("Invalid quantity");
+  }
+  if (!Number.isInteger(gstBps) || gstBps < 0) {
+    throw new Error("Invalid GST");
+  }
+  const taxable = unitPaise * qty;
+  const tax = Math.round((taxable * gstBps) / 10000);
+  return { taxable, tax, total: taxable + tax };
+}
+
+function sumCart(lines) {
+  return lines.reduce(
+    (acc, line) => {
+      const amounts = lineAmounts(line.unitPaise, line.qty, line.gstBps);
+      acc.taxable += amounts.taxable;
+      acc.tax += amounts.tax;
+      acc.total += amounts.total;
+      return acc;
+    },
+    { taxable: 0, tax: 0, total: 0 },
+  );
+}
+
+function changeDue(totalPaise, tenderedPaise) {
+  if (!Number.isInteger(totalPaise) || totalPaise < 0) {
+    throw new Error("Invalid total");
+  }
+  if (!Number.isInteger(tenderedPaise) || tenderedPaise < 0) {
+    throw new Error("Invalid tender");
+  }
+  if (tenderedPaise < totalPaise) {
+    return { ok: false, shortfall: totalPaise - tenderedPaise, change: 0 };
+  }
+  return { ok: true, shortfall: 0, change: tenderedPaise - totalPaise };
+}
+
+function parseMoneyInput(raw) {
+  if (raw == null) return { ok: false, error: "Enter an amount" };
+  const text = String(raw).trim().replace(/₹/g, "").replace(/,/g, "");
+  if (text === "") return { ok: false, error: "Enter an amount" };
+  if (!/^\d+(\.\d{1,2})?$/.test(text)) {
+    return { ok: false, error: "Use a valid amount (max 2 decimals)" };
+  }
+  const [whole, frac = ""] = text.split(".");
+  const paise = Number(whole) * 100 + Number(frac.padEnd(2, "0"));
+  if (!Number.isSafeInteger(paise)) {
+    return { ok: false, error: "Amount is too large" };
+  }
+  return { ok: true, paise };
+}
+
+/** Packed spices. Prices in paise. GST 5% (500 bps) for spices. */
+const CATALOG = [
+  { sku: "TUR-100", name: "Turmeric powder", pack: "100 g", unitPaise: 4500, gstBps: 500, stock: 48 },
+  { sku: "CUM-100", name: "Cumin seeds", pack: "100 g", unitPaise: 6200, gstBps: 500, stock: 36 },
+  { sku: "COR-100", name: "Coriander powder", pack: "100 g", unitPaise: 3800, gstBps: 500, stock: 40 },
+  { sku: "CHI-100", name: "Red chilli powder", pack: "100 g", unitPaise: 5500, gstBps: 500, stock: 32 },
+  { sku: "GAR-050", name: "Garam masala", pack: "50 g", unitPaise: 7200, gstBps: 500, stock: 24 },
+  { sku: "CAR-010", name: "Green cardamom", pack: "10 g", unitPaise: 18500, gstBps: 500, stock: 18 },
+  { sku: "PEP-050", name: "Black pepper", pack: "50 g", unitPaise: 9800, gstBps: 500, stock: 22 },
+  { sku: "MUS-100", name: "Mustard seeds", pack: "100 g", unitPaise: 3200, gstBps: 500, stock: 30 },
+  { sku: "FEN-100", name: "Fenugreek seeds", pack: "100 g", unitPaise: 2800, gstBps: 500, stock: 28 },
+  { sku: "ASA-050", name: "Asafoetida", pack: "50 g", unitPaise: 12500, gstBps: 500, stock: 12 },
+  { sku: "CIN-050", name: "Cinnamon sticks", pack: "50 g", unitPaise: 8900, gstBps: 500, stock: 16 },
+  { sku: "CLO-025", name: "Cloves", pack: "25 g", unitPaise: 7600, gstBps: 500, stock: 14 },
+  { sku: "BAY-020", name: "Bay leaves", pack: "20 g", unitPaise: 2400, gstBps: 500, stock: 20 },
+  { sku: "GIN-100", name: "Ginger powder", pack: "100 g", unitPaise: 5100, gstBps: 500, stock: 26 },
+  { sku: "GARL-100", name: "Garlic powder", pack: "100 g", unitPaise: 4900, gstBps: 500, stock: 26 },
+  { sku: "SAF-001", name: "Saffron", pack: "1 g", unitPaise: 45000, gstBps: 500, stock: 6 },
+];
+
+function searchCatalog(products, query) {
+  const q = String(query || "")
+    .trim()
+    .toLowerCase();
+  if (!q) return products;
+  return products.filter((p) => {
+    return (
+      p.name.toLowerCase().includes(q) ||
+      p.sku.toLowerCase().includes(q) ||
+      p.pack.toLowerCase().includes(q)
+    );
+  });
+}
+
+const STORAGE_KEY = "spicepos.v2";
+const DEMO_PIN = "1234";
+
+function clone(value) {
+  return JSON.parse(JSON.stringify(value));
+}
+
+function seedState() {
+  return {
+    version: 1,
+    shop: {
+      name: "Spice POS",
+      gstin: "27AABCU9603R1ZX",
+      place: "Pune",
+    },
+    products: clone(CATALOG),
+    cart: [],
+    held: [],
+    orders: [],
+    locked: false,
+  };
+}
+
+function loadState(storage = globalThis.localStorage) {
+  try {
+    const raw = storage?.getItem(STORAGE_KEY);
+    if (!raw) return seedState();
+    const parsed = JSON.parse(raw);
+    if (parsed?.version !== 1 || !Array.isArray(parsed.products)) {
+      return seedState();
+    }
+    return {
+      ...seedState(),
+      ...parsed,
+      cart: Array.isArray(parsed.cart) ? parsed.cart : [],
+      held: Array.isArray(parsed.held) ? parsed.held : [],
+      orders: Array.isArray(parsed.orders) ? parsed.orders : [],
+      locked: parsed.locked === true,
+    };
+  } catch {
+    return seedState();
+  }
+}
+
+function saveState(state, storage = globalThis.localStorage) {
+  storage.setItem(STORAGE_KEY, JSON.stringify(state));
+}
+
+function productBySku(state, sku) {
+  return state.products.find((p) => p.sku === sku) || null;
+}
+
+function cartQtyForSku(state, sku) {
+  const line = state.cart.find((l) => l.sku === sku);
+  return line ? line.qty : 0;
+}
+
+function availableStock(state, sku) {
+  const product = productBySku(state, sku);
+  if (!product) return 0;
+  return Math.max(0, product.stock - cartQtyForSku(state, sku));
+}
+
+function addToCart(state, sku, qty = 1) {
+  if (!Number.isInteger(qty) || qty <= 0) {
+    return { ok: false, error: "Quantity must be a positive whole number" };
+  }
+  const product = productBySku(state, sku);
+  if (!product) return { ok: false, error: "Unknown SKU" };
+  const line = state.cart.find((l) => l.sku === sku);
+  const nextQty = (line?.qty || 0) + qty;
+  if (nextQty > product.stock) {
+    return {
+      ok: false,
+      error: `Only ${product.stock} in stock for ${product.name}`,
+    };
+  }
+  if (line) {
+    line.qty = nextQty;
+  } else {
+    state.cart.push({
+      sku: product.sku,
+      name: product.name,
+      pack: product.pack,
+      unitPaise: product.unitPaise,
+      gstBps: product.gstBps,
+      qty: nextQty,
+    });
+  }
+  return { ok: true };
+}
+
+function setCartQty(state, sku, qty) {
+  if (!Number.isInteger(qty) || qty < 0) {
+    return { ok: false, error: "Quantity must be a whole number" };
+  }
+  const product = productBySku(state, sku);
+  if (!product) return { ok: false, error: "Unknown SKU" };
+  if (qty === 0) {
+    state.cart = state.cart.filter((l) => l.sku !== sku);
+    return { ok: true };
+  }
+  if (qty > product.stock) {
+    return {
+      ok: false,
+      error: `Only ${product.stock} in stock for ${product.name}`,
+    };
+  }
+  const line = state.cart.find((l) => l.sku === sku);
+  if (line) line.qty = qty;
+  else {
+    state.cart.push({
+      sku: product.sku,
+      name: product.name,
+      pack: product.pack,
+      unitPaise: product.unitPaise,
+      gstBps: product.gstBps,
+      qty,
+    });
+  }
+  return { ok: true };
+}
+
+function clearCart(state) {
+  state.cart = [];
+}
+
+function cartTotals(state) {
+  return sumCart(state.cart);
+}
+
+function holdCart(state) {
+  if (state.cart.length === 0) return { ok: false, error: "Cart is empty" };
+  const id = `H-${Date.now().toString(36).toUpperCase()}`;
+  state.held.unshift({
+    id,
+    createdAt: new Date().toISOString(),
+    items: clone(state.cart),
+  });
+  state.cart = [];
+  return { ok: true, id };
+}
+
+function recallHeld(state, id) {
+  const ticket = state.held.find((h) => h.id === id);
+  if (!ticket) return { ok: false, error: "Held bill not found" };
+  if (state.cart.length > 0) {
+    return { ok: false, error: "Clear or hold the current cart first" };
+  }
+  for (const item of ticket.items) {
+    const product = productBySku(state, item.sku);
+    if (!product || item.qty > product.stock) {
+      return {
+        ok: false,
+        error: `Cannot recall ${id}: ${item.name} is short on stock`,
+      };
+    }
+  }
+  state.cart = clone(ticket.items);
+  state.held = state.held.filter((h) => h.id !== id);
+  return { ok: true };
+}
+
+function nextBillNo(state) {
+  const n = state.orders.length + 1;
+  return `SP-${String(n).padStart(4, "0")}`;
+}
+
+function checkout(state, { method, tenderedPaise = 0 }) {
+  if (state.cart.length === 0) {
+    return { ok: false, error: "Cart is empty" };
+  }
+  if (!["cash", "upi", "card"].includes(method)) {
+    return { ok: false, error: "Choose cash, UPI, or card" };
+  }
+  for (const line of state.cart) {
+    const product = productBySku(state, line.sku);
+    if (!product || line.qty > product.stock) {
+      return {
+        ok: false,
+        error: `Insufficient stock for ${line.name}`,
+      };
+    }
+    if (line.qty <= 0) {
+      return { ok: false, error: "Cart has an invalid quantity" };
+    }
+  }
+
+  const totals = cartTotals(state);
+  let tendered = tenderedPaise;
+  let change = 0;
+
+  if (method === "cash") {
+    const due = changeDue(totals.total, tenderedPaise);
+    if (!due.ok) {
+      return {
+        ok: false,
+        error: `Cash short by ${due.shortfall} paise`,
+        shortfall: due.shortfall,
+      };
+    }
+    change = due.change;
+    tendered = tenderedPaise;
+  } else {
+    tendered = totals.total;
+    change = 0;
+  }
+
+  const items = state.cart.map((line) => {
+    const amounts = lineAmounts(line.unitPaise, line.qty, line.gstBps);
+    return { ...line, taxable: amounts.taxable, tax: amounts.tax, total: amounts.total };
+  });
+
+  for (const line of items) {
+    const product = productBySku(state, line.sku);
+    product.stock -= line.qty;
+  }
+
+  const order = {
+    id: nextBillNo(state),
+    createdAt: new Date().toISOString(),
+    method,
+    items,
+    taxable: totals.taxable,
+    tax: totals.tax,
+    total: totals.total,
+    tendered,
+    change,
+    status: "paid",
+  };
+  state.orders.unshift(order);
+  state.cart = [];
+  return { ok: true, order };
+}
+
+function receiveStock(state, sku, qty) {
+  if (!Number.isInteger(qty) || qty <= 0) {
+    return { ok: false, error: "Quantity must be a positive whole number" };
+  }
+  const product = productBySku(state, sku);
+  if (!product) return { ok: false, error: "Unknown SKU" };
+  product.stock += qty;
+  return { ok: true, stock: product.stock };
+}
+
+function updateShop(state, patch) {
+  const name = String(patch.name ?? state.shop.name).trim();
+  const gstin = String(patch.gstin ?? state.shop.gstin).trim();
+  const place = String(patch.place ?? state.shop.place).trim();
+  if (!name || !place || !gstin) {
+    return { ok: false, error: "Shop name, place, and GSTIN are required" };
+  }
+  state.shop = { name, gstin, place };
+  return { ok: true };
+}
+
+function salesByMethod(state, now = new Date()) {
+  const start = new Date(now);
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(start);
+  end.setDate(end.getDate() + 1);
+  const startMs = start.getTime();
+  const endMs = end.getTime();
+  const methods = { cash: 0, upi: 0, card: 0 };
+  let count = 0;
+  let total = 0;
+  let tax = 0;
+  for (const order of state.orders) {
+    const t = Date.parse(order.createdAt);
+    if (t < startMs || t >= endMs || order.status !== "paid") continue;
+    count += 1;
+    total += order.total;
+    tax += order.tax;
+    if (methods[order.method] != null) methods[order.method] += order.total;
+  }
+  return { count, total, tax, methods };
+}
+
+function todaySales(state, now = new Date()) {
+  const sales = salesByMethod(state, now);
+  return { count: sales.count, total: sales.total, tax: sales.tax };
+}
+
+function verifyPin(pin) {
+  return String(pin) === DEMO_PIN;
+}
+
+function resetDemo(storage = globalThis.localStorage) {
+  const state = seedState();
+  saveState(state, storage);
+  return state;
+}
+
+const els = {
+  catalog: document.getElementById("catalog"),
+  lines: document.getElementById("lines"),
+  search: document.getElementById("search"),
+  searchForm: document.getElementById("search-form"),
+  taxable: document.getElementById("taxable"),
+  tax: document.getElementById("tax"),
+  total: document.getElementById("total"),
+  tender: document.getElementById("tender"),
+  hint: document.getElementById("hint"),
+  lock: document.getElementById("lock"),
+  pinForm: document.getElementById("pin-form"),
+  pin: document.getElementById("pin"),
+  pinHint: document.getElementById("pin-hint"),
+  shopName: document.getElementById("shop-name"),
+  shopPlace: document.getElementById("shop-place"),
+  todayTotal: document.getElementById("today-total"),
+  todayCount: document.getElementById("today-count"),
+  clock: document.getElementById("clock"),
+  modal: document.getElementById("modal"),
+  modalTitle: document.getElementById("modal-title"),
+  modalBody: document.getElementById("modal-body"),
+  modalClose: document.getElementById("modal-close"),
+  inventory: document.getElementById("inventory"),
+  orders: document.getElementById("orders"),
+  orderPane: document.getElementById("order-pane"),
+  held: document.getElementById("held"),
+  reports: document.getElementById("reports"),
+  setName: document.getElementById("set-name"),
+  setPlace: document.getElementById("set-place"),
+  setGstin: document.getElementById("set-gstin"),
+  settingsHint: document.getElementById("settings-hint"),
+};
+
+let state = loadState();
+let paying = false;
+let view = "counter";
+
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
+function persist() {
+  saveState(state);
+}
+
+function setHint(message, kind = "") {
+  els.hint.textContent = message || "";
+  els.hint.className = `hint ${kind}`.trim();
+}
+
+function stockClass(stock) {
+  if (stock <= 0) return "out";
+  if (stock <= 8) return "low";
+  return "ok";
+}
+
+function showView(name) {
+  view = name;
+  document.querySelectorAll(".view").forEach((section) => {
+    section.hidden = section.id !== `view-${name}`;
+  });
+  document.querySelectorAll(".nav-btn").forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.view === name);
+  });
+  renderAll();
+}
+
+function renderCatalog() {
+  const products = searchCatalog(state.products, els.search.value);
+  els.catalog.innerHTML = products
+    .map((p) => {
+      const disabled = p.stock <= 0 ? "disabled" : "";
+      return `<button class="card" type="button" data-sku="${escapeHtml(p.sku)}" ${disabled}>
+        <div class="sku">${escapeHtml(p.sku)}</div>
+        <div class="name">${escapeHtml(p.name)}</div>
+        <div class="meta">
+          <span>${escapeHtml(p.pack)}</span>
+          <span>${escapeHtml(formatINR(p.unitPaise))}</span>
+        </div>
+        <div class="stock ${stockClass(p.stock)}">${p.stock} in stock</div>
+      </button>`;
+    })
+    .join("");
+}
+
+function renderCart() {
+  if (state.cart.length === 0) {
+    els.lines.innerHTML = `<p class="hint">Tap a spice to add it to the bill.</p>`;
+  } else {
+    els.lines.innerHTML = state.cart
+      .map(
+        (line) => `<div class="line" data-sku="${escapeHtml(line.sku)}">
+          <div>
+            <div class="who">${escapeHtml(line.name)}</div>
+            <div class="pack">${escapeHtml(line.pack)} · ${escapeHtml(formatINR(line.unitPaise))}</div>
+          </div>
+          <div>
+            <div class="qty">
+              <button type="button" data-act="dec" aria-label="Decrease">−</button>
+              <span>${line.qty}</span>
+              <button type="button" data-act="inc" aria-label="Increase">+</button>
+            </div>
+            <div class="pack" style="text-align:right;margin-top:4px">${escapeHtml(
+              formatINR(line.unitPaise * line.qty),
+            )}</div>
+          </div>
+        </div>`,
+      )
+      .join("");
+  }
+  const totals = cartTotals(state);
+  els.taxable.textContent = formatINR(totals.taxable);
+  els.tax.textContent = formatINR(totals.tax);
+  els.total.textContent = formatINR(totals.total);
+}
+
+function renderInventory() {
+  els.inventory.innerHTML = `<table>
+    <thead><tr><th>SKU</th><th>Item</th><th>Pack</th><th>Price</th><th>Stock</th><th>Receive</th></tr></thead>
+    <tbody>${state.products
+      .map(
+        (p) => `<tr>
+        <td>${escapeHtml(p.sku)}</td>
+        <td>${escapeHtml(p.name)}</td>
+        <td>${escapeHtml(p.pack)}</td>
+        <td>${escapeHtml(formatINR(p.unitPaise))}</td>
+        <td class="stock ${stockClass(p.stock)}">${p.stock}</td>
+        <td><button class="btn" type="button" data-receive="${escapeHtml(p.sku)}">+10</button></td>
+      </tr>`,
+      )
+      .join("")}</tbody></table>`;
+}
+
+function renderOrders() {
+  if (state.orders.length === 0) {
+    els.orders.innerHTML = `<p class="hint">No paid bills yet. Take a sale on Counter.</p>`;
+    return;
+  }
+  els.orders.innerHTML = state.orders
+    .map(
+      (o) =>
+        `<button class="order-item" type="button" data-order="${escapeHtml(o.id)}">
+          <span>${escapeHtml(o.id)} · ${escapeHtml(o.method.toUpperCase())}<br>
+          <small>${escapeHtml(new Date(o.createdAt).toLocaleString("en-IN"))} · ${o.items.length} lines</small></span>
+          <span>${escapeHtml(formatINR(o.total))}</span>
+        </button>`,
+    )
+    .join("");
+}
+
+function renderHeld() {
+  if (state.held.length === 0) {
+    els.held.innerHTML = `<p class="hint">No held bills.</p>`;
+    return;
+  }
+  els.held.innerHTML = state.held
+    .map(
+      (h) =>
+        `<button class="held-item" type="button" data-hold="${escapeHtml(h.id)}">
+          <span>${escapeHtml(h.id)}<br><small>${escapeHtml(
+            new Date(h.createdAt).toLocaleString("en-IN"),
+          )} · ${h.items.length} lines</small></span>
+          <span>Recall to counter</span>
+        </button>`,
+    )
+    .join("");
+}
+
+function renderReports() {
+  const sales = salesByMethod(state);
+  const low = state.products.filter((p) => p.stock <= 8);
+  els.reports.innerHTML = `
+    <div class="report-card"><span>Bills today</span><strong>${sales.count}</strong></div>
+    <div class="report-card"><span>Takings</span><strong>${escapeHtml(formatINR(sales.total))}</strong></div>
+    <div class="report-card"><span>GST</span><strong>${escapeHtml(formatINR(sales.tax))}</strong></div>
+    <div class="report-card"><span>Cash</span><strong>${escapeHtml(formatINR(sales.methods.cash))}</strong></div>
+    <div class="report-card"><span>UPI</span><strong>${escapeHtml(formatINR(sales.methods.upi))}</strong></div>
+    <div class="report-card"><span>Card</span><strong>${escapeHtml(formatINR(sales.methods.card))}</strong></div>
+    <div class="report-card"><span>Low / out of stock</span><strong>${low.length}</strong><p class="hint">${
+      low.length ? low.map((p) => escapeHtml(p.name)).join(", ") : "All packs healthy"
+    }</p></div>
+    <div class="report-card"><span>Held bills</span><strong>${state.held.length}</strong></div>
+    <div class="report-card"><span>Catalog SKUs</span><strong>${state.products.length}</strong></div>`;
+}
+
+function renderSettings() {
+  els.setName.value = state.shop.name;
+  els.setPlace.value = state.shop.place;
+  els.setGstin.value = state.shop.gstin;
+}
+
+function renderStats() {
+  els.shopName.textContent = state.shop.name;
+  els.shopPlace.textContent = `${state.shop.place} · ${state.shop.gstin}`;
+  const sales = todaySales(state);
+  els.todayTotal.textContent = formatINR(sales.total);
+  els.todayCount.textContent = String(sales.count);
+}
+
+function setPayEnabled(enabled) {
+  for (const id of ["pay-cash", "pay-upi", "pay-card", "btn-hold", "btn-clear"]) {
+    document.getElementById(id).disabled = !enabled;
+  }
+}
+
+function renderAll() {
+  renderCatalog();
+  renderCart();
+  renderInventory();
+  renderOrders();
+  renderHeld();
+  renderReports();
+  renderSettings();
+  renderStats();
+  setPayEnabled(state.cart.length > 0 && !state.locked);
+  els.lock.hidden = !state.locked;
+}
+
+function showModal(title, html) {
+  els.modalTitle.textContent = title;
+  els.modalBody.innerHTML = html;
+  els.modal.hidden = false;
+}
+
+function hideModal() {
+  els.modal.hidden = true;
+  els.modalBody.replaceChildren();
+}
+
+function receiptText(order) {
+  const lines = [
+    state.shop.name,
+    state.shop.place,
+    `GSTIN ${state.shop.gstin}`,
+    `Bill ${order.id}`,
+    new Date(order.createdAt).toLocaleString("en-IN"),
+    "------------------------------",
+    ...order.items.map(
+      (i) =>
+        `${i.name} ${i.pack} x${i.qty}\n  ${formatINR(i.total)} (GST ${formatINR(i.tax)})`,
+    ),
+    "------------------------------",
+    `Taxable  ${formatINR(order.taxable)}`,
+    `GST      ${formatINR(order.tax)}`,
+    `TOTAL    ${formatINR(order.total)}`,
+    `Paid     ${order.method.toUpperCase()} ${formatINR(order.tendered)}`,
+    `Change   ${formatINR(order.change)}`,
+    "Thank you. Check the seal on packs.",
+  ];
+  return lines.join("\n");
+}
+
+function pay(method) {
+  if (paying) return;
+  paying = true;
+  try {
+    if (state.cart.length === 0) {
+      setHint("Cart is empty", "error");
+      return;
+    }
+    let tenderedPaise = 0;
+    if (method === "cash") {
+      const parsed = parseMoneyInput(els.tender.value);
+      if (!parsed.ok) {
+        setHint(parsed.error, "error");
+        return;
+      }
+      tenderedPaise = parsed.paise;
+    }
+    const result = checkout(state, { method, tenderedPaise });
+    if (!result.ok) {
+      if (result.shortfall) {
+        setHint(`Cash short by ${formatINR(result.shortfall)}`, "error");
+      } else {
+        setHint(result.error, "error");
+      }
+      return;
+    }
+    persist();
+    els.tender.value = "";
+    setHint(`Paid ${result.order.id} · change ${formatINR(result.order.change)}`, "ok");
+    renderAll();
+    showModal(
+      `Receipt ${result.order.id}`,
+      `<pre class="receipt">${escapeHtml(receiptText(result.order))}</pre>`,
+    );
+  } finally {
+    paying = false;
+  }
+}
+
+document.querySelector(".nav").addEventListener("click", (event) => {
+  const btn = event.target.closest("[data-view]");
+  if (!btn || state.locked) return;
+  showView(btn.dataset.view);
+});
+
+els.catalog.addEventListener("click", (event) => {
+  const card = event.target.closest("[data-sku]");
+  if (!card || state.locked) return;
+  const result = addToCart(state, card.dataset.sku, 1);
+  if (!result.ok) setHint(result.error, "error");
+  else {
+    persist();
+    setHint("");
+    renderAll();
+  }
+});
+
+els.lines.addEventListener("click", (event) => {
+  const btn = event.target.closest("button[data-act]");
+  const row = event.target.closest(".line");
+  if (!btn || !row) return;
+  const sku = row.dataset.sku;
+  const line = state.cart.find((l) => l.sku === sku);
+  if (!line) return;
+  const next = btn.dataset.act === "inc" ? line.qty + 1 : line.qty - 1;
+  const result = setCartQty(state, sku, next);
+  if (!result.ok) setHint(result.error, "error");
+  else {
+    persist();
+    setHint("");
+    renderAll();
+  }
+});
+
+els.inventory.addEventListener("click", (event) => {
+  const btn = event.target.closest("[data-receive]");
+  if (!btn) return;
+  const result = receiveStock(state, btn.dataset.receive, 10);
+  if (!result.ok) setHint(result.error, "error");
+  else {
+    persist();
+    renderAll();
+  }
+});
+
+els.orders.addEventListener("click", (event) => {
+  const orderBtn = event.target.closest("[data-order]");
+  if (!orderBtn) return;
+  const order = state.orders.find((o) => o.id === orderBtn.dataset.order);
+  if (order) {
+    els.orderPane.innerHTML = `<pre class="receipt">${escapeHtml(receiptText(order))}</pre>`;
+  }
+});
+
+els.held.addEventListener("click", (event) => {
+  const holdBtn = event.target.closest("[data-hold]");
+  if (!holdBtn) return;
+  const result = recallHeld(state, holdBtn.dataset.hold);
+  if (!result.ok) setHint(result.error, "error");
+  else {
+    persist();
+    setHint("Bill recalled", "ok");
+    showView("counter");
+  }
+});
+
+els.searchForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  renderCatalog();
+});
+els.search.addEventListener("input", () => renderCatalog());
+
+document.getElementById("btn-clear").addEventListener("click", () => {
+  clearCart(state);
+  persist();
+  setHint("Cart cleared");
+  renderAll();
+});
+
+document.getElementById("btn-hold").addEventListener("click", () => {
+  const result = holdCart(state);
+  if (!result.ok) setHint(result.error, "error");
+  else {
+    persist();
+    setHint(`Held ${result.id} — open Held to recall`, "ok");
+    renderAll();
+  }
+});
+
+document.getElementById("pay-cash").addEventListener("click", () => pay("cash"));
+document.getElementById("pay-upi").addEventListener("click", () => pay("upi"));
+document.getElementById("pay-card").addEventListener("click", () => pay("card"));
+
+document.getElementById("settings-form").addEventListener("submit", (event) => {
+  event.preventDefault();
+  const result = updateShop(state, {
+    name: els.setName.value,
+    place: els.setPlace.value,
+    gstin: els.setGstin.value,
+  });
+  els.settingsHint.textContent = result.ok ? "Saved" : result.error;
+  els.settingsHint.className = `hint ${result.ok ? "ok" : "error"}`;
+  if (result.ok) {
+    persist();
+    renderAll();
+  }
+});
+
+document.getElementById("btn-reset").addEventListener("click", () => {
+  state = resetDemo();
+  state.locked = false;
+  persist();
+  els.orderPane.innerHTML = `<p class="hint">Select a bill.</p>`;
+  setHint("Demo reset");
+  showView("counter");
+});
+
+els.modalClose.addEventListener("click", hideModal);
+els.modal.addEventListener("click", (event) => {
+  if (event.target === els.modal) hideModal();
+});
+
+document.getElementById("btn-lock").addEventListener("click", () => {
+  state.locked = true;
+  persist();
+  renderAll();
+  els.pin.focus();
+});
+
+els.pinForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  unlockWithPin(els.pin.value);
+});
+
+document.getElementById("btn-demo-pin").addEventListener("click", () => {
+  els.pin.value = "1234";
+  unlockWithPin("1234");
+});
+
+function unlockWithPin(pin) {
+  if (!verifyPin(pin)) {
+    els.pinHint.textContent = "Wrong PIN";
+    els.pinHint.className = "hint error";
+    return;
+  }
+  els.pin.value = "";
+  els.pinHint.textContent = "";
+  state.locked = false;
+  persist();
+  renderAll();
+}
+
+document.addEventListener("keydown", (event) => {
+  if (event.key === "/" && document.activeElement !== els.search && document.activeElement !== els.tender && document.activeElement !== els.pin) {
+    event.preventDefault();
+    showView("counter");
+    els.search.focus();
+  }
+  if (event.key === "Escape") hideModal();
+});
+
+function tickClock() {
+  els.clock.textContent = new Date().toLocaleTimeString("en-IN", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+tickClock();
+setInterval(tickClock, 15000);
+showView("counter");
+
+})();
+
+</script>
+    <noscript>Spice POS needs JavaScript.</noscript>
+  </body>
+</html>
