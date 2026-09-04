@@ -6,8 +6,8 @@
     <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
     <title>ATAV POS</title>
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./css/pos.css?v=20260903deploy87" />
-    <link rel="stylesheet" href="./css/saas.css?v=20260903deploy87" />
+    <link rel="stylesheet" href="./css/pos.css?v=20260903deploy88" />
+    <link rel="stylesheet" href="./css/saas.css?v=20260903deploy88" />
   </head>
   <body>
     <div class="app" id="app">
@@ -212,6 +212,15 @@
               </div>
               <div class="items-hero-stats" id="items-hero-stats"></div>
             </header>
+            <div class="item-import-bar">
+              <p class="item-import-copy">Bulk add from Excel. Download the template, fill one item per row, then upload .xlsx, Excel XML, or CSV.</p>
+              <div class="item-import-actions">
+                <a class="btn" id="item-import-template" href="#">Download template</a>
+                <input id="item-import-file" class="logo-file-input" type="file" accept=".xlsx,.xls,.csv,.xml,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv,text/xml" />
+                <label class="btn primary" for="item-import-file">Upload Excel</label>
+              </div>
+              <p class="hint" id="item-import-hint"></p>
+            </div>
             <div class="items-split">
               <form class="settings item-composer" id="item-form" autocomplete="off">
                 <input type="hidden" id="item-id" />
@@ -943,16 +952,16 @@
         </section>
       </div>
     </aside>
-    <script src="./js/gst-supply.js?v=20260903deploy87" defer></script>
-    <script src="./js/pos-api.js?v=20260903deploy87" defer></script>
-    <script src="./js/units.js?v=20260903deploy87" defer></script>
-    <script src="./js/footwear.js?v=20260903deploy87" defer></script>
-    <script src="./js/discount.js?v=20260903deploy87" defer></script>
-    <script src="./js/loyalty.js?v=20260903deploy87" defer></script>
-    <script src="./js/barcode.js?v=20260903deploy87" defer></script>
-    <script src="./js/dev-mode.js?v=20260903deploy87" defer></script>
-    <script src="./js/invoice.js?v=20260903deploy87" defer></script>
-    <script src="./js/support.js?v=20260903deploy87" defer></script>
-    <script src="./js/app.js?v=20260903deploy87" defer></script>
+    <script src="./js/gst-supply.js?v=20260903deploy88" defer></script>
+    <script src="./js/pos-api.js?v=20260903deploy88" defer></script>
+    <script src="./js/units.js?v=20260903deploy88" defer></script>
+    <script src="./js/footwear.js?v=20260903deploy88" defer></script>
+    <script src="./js/discount.js?v=20260903deploy88" defer></script>
+    <script src="./js/loyalty.js?v=20260903deploy88" defer></script>
+    <script src="./js/barcode.js?v=20260903deploy88" defer></script>
+    <script src="./js/dev-mode.js?v=20260903deploy88" defer></script>
+    <script src="./js/invoice.js?v=20260903deploy88" defer></script>
+    <script src="./js/support.js?v=20260903deploy88" defer></script>
+    <script src="./js/app.js?v=20260903deploy88" defer></script>
   </body>
 </html>

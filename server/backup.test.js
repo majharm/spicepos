@@ -128,11 +128,11 @@ test("PHP and HTML wire master admin backup", () => {
   );
 });
 
-test("HTML and CSS cache stickers match deploy87", () => {
+test("HTML and CSS cache stickers match deploy88", () => {
   for (const name of ["index.html", "master.html", "login.html", "setup.html"]) {
     const html = readFileSync(path.join(root, name), "utf8");
-    assert.match(html, /20260903deploy87/);
-    assert.doesNotMatch(html, /20260903deploy86/);
+    assert.match(html, /20260903deploy88/);
+    assert.doesNotMatch(html, /20260903deploy87/);
     assert.doesNotMatch(html, /20260903deploy84/);
     assert.doesNotMatch(html, /20260903deploy83/);
     assert.doesNotMatch(html, /20260903deploy82/);
@@ -245,6 +245,11 @@ test("HTML and CSS cache stickers match deploy87", () => {
   assert.match(appJs, /function fillItemForm/);
   assert.match(appJs, /function filterItemsCatalog/);
   assert.match(pos, /items-desk: composer \+ library/);
+  assert.match(index, /id="item-import-file"/);
+  assert.match(index, /id="item-import-template"/);
+  assert.match(appJs, /function uploadItemsExcel/);
+  assert.match(appJs, /\/api\/items\/import/);
+  assert.match(pos, /\.item-import-bar/);
   assert.match(index, /id="view-expiry"/);
   assert.match(index, /expiry-desk/);
   assert.match(index, /id="expiry-search"/);

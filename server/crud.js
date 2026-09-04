@@ -6,6 +6,13 @@ import { recordCreditPurchase } from "./accounts.js";
 import { postPurchaseJournal } from "./accounting.js";
 import { audit } from "./audit.js";
 import { onItemSaved, onPurchaseLineSaved } from "./advanced.js";
+import {
+  decodeImportUpload,
+  itemBodyFromImportRow,
+  itemImportTemplateXml,
+  mapItemImportRows,
+  parseItemImportGrid,
+} from "./item-import.js";
 
 const POSUnits = globalThis.POSUnits;
 const POSFootwear = globalThis.POSFootwear;
@@ -102,6 +109,160 @@ async function insertPackLines(conn, packId, items) {
   }
 }
 
+async function findItemForImport(conn, businessId, row) {
+  const code = String(row.code || "").trim();
+  if (code) {
+    const [rows] = await conn.query("SELECT * FROM items WHERE business_id=? AND code=? LIMIT 1", [businessId, code]);
+    if (rows[0]) return rows[0];
+  }
+  const barcode = String(row.barcode || "").trim();
+  if (!barcode) return null;
+  const [byItem] = await conn.query("SELECT * FROM items WHERE business_id=? AND barcode=? LIMIT 1", [businessId, barcode]);
+  if (byItem[0]) return byItem[0];
+  try {
+    const [byBc] = await conn.query(
+      `SELECT i.* FROM item_barcodes b JOIN items i ON i.id=b.item_id
+       WHERE b.business_id=? AND b.barcode=? LIMIT 1`,
+      [businessId, barcode],
+    );
+    if (byBc[0]) return byBc[0];
+  } catch {
+    /* item_barcodes optional */
+  }
+  return null;
+}
+
+async function insertImportedItem(conn, biz, body) {
+  const n = await nextSeq(conn, "item", 7);
+  const footwear = POSFootwear.isFootwearShop(biz || {});
+  const variants = POSFootwear.fieldsFromBody(body);
+  const prefix = footwear ? "FW" : "SP";
+  const code = body.code || `${prefix}-${String(n).padStart(3, "0")}`;
+  const id = crypto.randomUUID();
+  await conn.query(
+    `INSERT INTO items (
+       id, code, name, local_name, category, subcategory, color, size, wearer_type, base_unit,
+       purchase_rate, retail_rate, b2b_rate, gst_rate, hsn, image_url, stock_gm,
+       reorder_level_gm, status, business_id
+     ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'active', ?)`,
+    [
+      id,
+      code,
+      String(body.name).trim(),
+      body.local_name || null,
+      body.category || POSFootwear.defaultCategory(biz || {}),
+      body.subcategory || null,
+      variants.color,
+      variants.size,
+      variants.wearer_type,
+      itemUnit(body.base_unit || body.unit || POSFootwear.defaultUnit(biz || {})),
+      Number(body.purchase_rate) || 0,
+      Number(body.retail_rate) || 0,
+      Number(body.b2b_rate) || 0,
+      Number(body.gst_rate) || 5,
+      String(body.hsn || "").trim() || null,
+      null,
+      Number(body.stock_gm) || 0,
+      Number(body.reorder_level_gm) || 0,
+      bid(),
+    ],
+  );
+  try {
+    await conn.query("UPDATE items SET unit=? WHERE id=?", [itemUnit(body.base_unit || body.unit), id]);
+  } catch {
+    /* optional */
+  }
+  await onItemSaved(conn, bid(), id, body);
+  const [rows] = await conn.query("SELECT * FROM items WHERE id=?", [id]);
+  return rows[0];
+}
+
+async function updateImportedItem(conn, existing, biz, body, row) {
+  const variants = POSFootwear.fieldsFromBody({
+    color: row.color !== "" ? body.color : existing.color,
+    size: row.size !== "" ? body.size : existing.size,
+    wearer_type: row.wearer_type !== "" ? body.wearer_type : existing.wearer_type,
+  });
+  const unit = row.unit ? itemUnit(body.unit) : itemUnit(existing);
+  const name = row.name ? body.name : existing.name;
+  const category = row.category ? body.category : existing.category;
+  const subcategory = row.subcategory !== "" && row.subcategory != null ? body.subcategory : existing.subcategory;
+  const hsn = row.hsn !== "" && row.hsn != null ? body.hsn : existing.hsn;
+  const purchase = row.purchase !== "" && row.purchase != null ? Number(body.purchase_rate) || 0 : Number(existing.purchase_rate) || 0;
+  const retail = row.retail !== "" && row.retail != null ? Number(body.retail_rate) || 0 : Number(existing.retail_rate) || 0;
+  const b2b = row.b2b !== "" && row.b2b != null ? Number(body.b2b_rate) || 0 : Number(existing.b2b_rate) || 0;
+  const gst = row.gst !== "" && row.gst != null ? Number(body.gst_rate) || 5 : Number(existing.gst_rate) || 5;
+  const stock = Object.prototype.hasOwnProperty.call(body, "stock_gm") ? Number(body.stock_gm) || 0 : Number(existing.stock_gm) || 0;
+  await conn.query(
+    `UPDATE items SET
+       name=?, category=?, subcategory=?, color=?, size=?, wearer_type=?, base_unit=?,
+       purchase_rate=?, retail_rate=?, b2b_rate=?, gst_rate=?, hsn=?, stock_gm=?
+     WHERE id=? AND business_id=?`,
+    [
+      name,
+      category || POSFootwear.defaultCategory(biz || {}),
+      subcategory || null,
+      variants.color,
+      variants.size,
+      variants.wearer_type,
+      unit,
+      purchase,
+      retail,
+      b2b,
+      gst,
+      String(hsn || "").trim() || null,
+      stock,
+      existing.id,
+      bid(),
+    ],
+  );
+  try {
+    await conn.query("UPDATE items SET unit=? WHERE id=?", [unit, existing.id]);
+  } catch {
+    /* optional */
+  }
+  await onItemSaved(conn, bid(), existing.id, body);
+  const [rows] = await conn.query("SELECT * FROM items WHERE id=?", [existing.id]);
+  return rows[0];
+}
+
+export async function importShopItems(payload) {
+  const decoded = decodeImportUpload(payload);
+  const grid = decoded.rows ? decoded.rows : parseItemImportGrid(decoded.buf, decoded.filename);
+  const mapped = mapItemImportRows(grid);
+  const [bizRows] = await query("SELECT category, business_type FROM businesses WHERE id=?", [bid()]);
+  const biz = bizRows[0] || {};
+  const created = [];
+  const updated = [];
+  const errors = [];
+  for (const row of mapped) {
+    const line = row._line || "";
+    try {
+      if (!String(row.name || "").trim() && !String(row.code || "").trim()) continue;
+      const body = itemBodyFromImportRow(row, biz);
+      if (!body.name) throw new Error("Name is required");
+      await withTransaction(async (conn) => {
+        const existing = await findItemForImport(conn, bid(), row);
+        if (existing) {
+          updated.push((await updateImportedItem(conn, existing, biz, body, row)).code);
+        } else {
+          created.push((await insertImportedItem(conn, biz, body)).code);
+        }
+      });
+    } catch (err) {
+      errors.push({ line, name: row.name || row.code || "", error: String(err.message || err) });
+    }
+  }
+  return {
+    created: created.length,
+    updated: updated.length,
+    failed: errors.length,
+    created_codes: created,
+    updated_codes: updated,
+    errors,
+  };
+}
+
 export function registerCrud(app) {
   app.post("/api/customers", async (req, res) => {
     const { name, business_name, mobile, type, gstin, state, credit_limit, dob, referred_by } = req.body || {};
@@ -143,6 +304,22 @@ export function registerCrud(app) {
       res.json({ ok: true, customer });
     } catch (err) {
       res.status(500).json({ error: String(err.message) });
+    }
+  });
+
+  app.get("/api/items/import/template", (_req, res) => {
+    const xml = itemImportTemplateXml();
+    res.setHeader("Content-Type", "application/vnd.ms-excel; charset=utf-8");
+    res.setHeader("Content-Disposition", 'attachment; filename="pos-items-template.xls"');
+    res.send(xml);
+  });
+
+  app.post("/api/items/import", async (req, res) => {
+    try {
+      const result = await importShopItems(req.body || {});
+      res.json({ ok: true, ...result });
+    } catch (err) {
+      res.status(400).json({ error: String(err.message) });
     }
   });
 

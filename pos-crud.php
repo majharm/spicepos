@@ -28,6 +28,11 @@ function pos_insert_pack_lines($packId, $items, $bid) {
 }
 
 function pos_crud_dispatch($path, $method, $body, $bid, $auth, $branchId, $uid) {
+  if ($path === "items/import" || $path === "items/import/template") {
+    require_once __DIR__ . "/pos-item-import.php";
+    return (bool) pos_item_import_dispatch($path, $method, $body, $bid);
+  }
+
   if ($path === "checkout" && $method === "POST") {
     pos_require_checkout();
     pos_dispatch_checkout($path, $method, $body, $bid, $branchId, $uid, $auth);

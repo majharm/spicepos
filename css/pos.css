@@ -2126,6 +2126,36 @@ body.footwear-mode.counter-mode .stage.is-counter .card .sku { display: block; f
 .item-empty-card strong { display: block; color: var(--text); margin-bottom: 6px; }
 .item-empty-card p { margin: 0; font-size: 13px; line-height: 1.45; }
 
+.item-import-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--line-strong);
+  border-radius: 14px;
+  background: #fff;
+}
+.item-import-copy {
+  margin: 0;
+  flex: 1 1 220px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+.item-import-actions {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.item-import-bar .hint {
+  flex: 1 1 100%;
+  margin: 0;
+  min-height: 0;
+}
+
 /* expiry-desk: dated on-hand batches */
 .expiry-toolbar {
   display: flex;
@@ -2988,6 +3018,7 @@ button.items-stat.is-active {
   .expiry-desk .items-stat strong { font-size: 18px; }
   .expiry-toolbar { flex-direction: column; align-items: stretch; }
   .expiry-toolbar input[type="search"] { min-width: 0; }
+  .item-import-bar { align-items: stretch; }
   .packs-split,
   .items-split,
   .pack-composer-top,

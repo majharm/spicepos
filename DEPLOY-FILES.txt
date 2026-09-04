@@ -1,4 +1,4 @@
-Production deploy bundle — 20260903deploy87
+Production deploy bundle — 20260903deploy88
 =========================================
 
 Upload ALL files below to Hostinger public_html (overwrite):
@@ -70,6 +70,7 @@ PHP
   pos-mail.php
   pos-alerts.php
   pos-advanced.php
+  pos-item-import.php
   api/.htaccess
   api/health/index.php
   api/checkout/index.php
@@ -97,6 +98,8 @@ Node (if using hPanel Node.js web app — upload OR git pull then Restart)
   server/onboard.js
   server/index.js
   server/crud.js
+  server/item-import.js
+  server/excel.js
   server/tenant.js
   server/reports.js
   server/accounting.js
@@ -121,7 +124,8 @@ FIXES in this bundle
   - Suppliers form and list include address and email
   - Settings page: wider card, 2-column details, styled logo upload, keep card padding on mobile
   - CSS: Master Admin mobile nav wrap, hide nav until sign-in, backup file inputs, table overflow
-  - Cache sticker 20260903deploy87 on index, login, master, setup
+  - Cache sticker 20260903deploy88 on index, login, master, setup
+  - Items bulk Excel import: template download and .xlsx / CSV upload
   - Inventory Expiry list: dated on-hand batches, 7/30/90 day filters, write-off as damage
   - Login Create business shows a 2-day trial banner
   - Packs desk: composer + saved library, spice search, live totals

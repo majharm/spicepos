@@ -967,6 +967,7 @@ function showView(name) {
   if (name === "items") {
     fillItemUnitSelect($("item-unit")?.value || defaultItemUnit());
     refreshItemUnitLabels();
+    paintItemImportLink();
   }
   if (name === "stock") loadStock();
   if (name === "barcodes") loadBarcodesView();
@@ -1507,6 +1508,58 @@ function filterItemsCatalog() {
     const low = card.dataset.itemLow === "1";
     card.hidden = (Boolean(q) && !hay.includes(q)) || (lowOnly && !low);
   });
+}
+
+function paintItemImportLink() {
+  const a = $("item-import-template");
+  if (a && typeof posUrl === "function") a.href = posUrl("/api/items/import/template");
+}
+
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const s = String(reader.result || "");
+      const i = s.indexOf(",");
+      resolve(i >= 0 ? s.slice(i + 1) : s);
+    };
+    reader.onerror = () => reject(new Error("Could not read the file"));
+    reader.readAsDataURL(file);
+  });
+}
+
+async function uploadItemsExcel(file) {
+  const hint = $("item-import-hint");
+  if (!file) return;
+  if (hint) {
+    hint.textContent = `Uploading ${file.name}…`;
+    hint.className = "hint";
+  }
+  try {
+    const content = await fileToBase64(file);
+    const data = await api("/api/items/import", {
+      method: "POST",
+      body: JSON.stringify({ filename: file.name, content }),
+    });
+    const created = Number(data.created) || 0;
+    const updated = Number(data.updated) || 0;
+    const failed = Number(data.failed) || 0;
+    const extra = failed && Array.isArray(data.errors) && data.errors[0]
+      ? ` First error: row ${data.errors[0].line || "?"} ${data.errors[0].error || ""}`
+      : "";
+    if (hint) {
+      hint.textContent = `Imported ${created} new, updated ${updated}${failed ? `, ${failed} failed.` : "."}${extra}`;
+      hint.className = failed && !created && !updated ? "hint error" : "hint ok";
+    }
+    await loadBootstrap();
+  } catch (err) {
+    if (hint) {
+      hint.textContent = err.message;
+      hint.className = "hint error";
+    }
+  } finally {
+    if ($("item-import-file")) $("item-import-file").value = "";
+  }
 }
 
 function resetItemForm() {
@@ -2117,6 +2170,7 @@ async function loadBootstrap() {
   fillDatalists();
   fillFootwearFilters();
   renderItemsTable();
+  paintItemImportLink();
   renderUnitsTable();
   renderCustomersTable();
   renderPackCompose();
@@ -3268,6 +3322,13 @@ $("item-cancel").addEventListener("click", () => {
 $("item-unit")?.addEventListener("change", refreshItemUnitLabels);
 $("item-catalog-search")?.addEventListener("input", filterItemsCatalog);
 $("item-low-only")?.addEventListener("change", filterItemsCatalog);
+$("item-import-file")?.addEventListener("change", (e) => {
+  const file = e.target.files?.[0];
+  if (file) uploadItemsExcel(file);
+});
+$("item-import-template")?.addEventListener("click", () => {
+  paintItemImportLink();
+});
 $("expiry-search")?.addEventListener("input", filterExpiryList);
 $("expiry-filters")?.addEventListener("click", (e) => {
   const btn = e.target.closest("[data-expiry-filter]");
