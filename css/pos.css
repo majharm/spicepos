@@ -2052,6 +2052,7 @@ body.footwear-mode.counter-mode .stage.is-counter .card .sku { display: block; f
   display: grid;
   gap: 8px;
 }
+.item-card[hidden] { display: none !important; }
 .item-card.is-editing {
   box-shadow: 0 0 0 2px rgba(13, 148, 136, 0.28);
 }
