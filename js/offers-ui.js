@@ -251,6 +251,7 @@ async function loadOffersDesk(force) {
     paintOfferList();
     paintOfferIdeas(ideas?.ideas || offerEngine()?.suggestFromGrowth({}, state.items) || []);
     if (settings && $("off-shop-stack")) $("off-shop-stack").value = settings.stacking || "product_and_bill";
+    if (typeof paintComboBar === "function") paintComboBar();
     if (typeof paintOfferBar === "function") paintOfferBar();
     $("offers-hint").textContent = "Offers use this shop's catalog, bills, and stock — not an external model.";
     $("offers-hint").className = "hint ok";
