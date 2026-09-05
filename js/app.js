@@ -582,19 +582,59 @@ function showQrOrder(o) {
     </div>`;
 }
 
+function orderMenuUrl() {
+  return `${location.origin}/order.html`;
+}
+
+function paintRemoteQr(img, url) {
+  img.src = `https://api.qrserver.com/v1/create-qr-code/?size=360x360&margin=8&data=${encodeURIComponent(url)}`;
+}
+
+async function showQrPoster() {
+  const img = $("qr-code-img");
+  const fallback = orderMenuUrl();
+  if ($("qr-open")) $("qr-open").href = "/order.html";
+  let url = fallback;
+  if ($("qr-link")) $("qr-link").textContent = url;
+  if (!img) return;
+
+  const useRemote = () => {
+    paintRemoteQr(img, url);
+    img.onerror = () => {
+      img.onerror = null;
+      if ($("qr-link")) {
+        $("qr-link").textContent = `${url} — QR image failed. Open the menu link and make a QR from that URL.`;
+        $("qr-link").className = "hint error";
+      }
+    };
+  };
+
+  try {
+    const link = await api("/api/qr/link");
+    url = link.url || fallback;
+    if ($("qr-link")) {
+      $("qr-link").textContent = url;
+      $("qr-link").className = "hint";
+    }
+    if (link.dataUrl) {
+      img.src = link.dataUrl;
+      img.dataset.ready = "1";
+      return;
+    }
+    img.src = `/api/qr/code?t=${Date.now()}`;
+    img.onerror = useRemote;
+  } catch {
+    img.src = `/api/qr/code?t=${Date.now()}`;
+    img.onerror = useRemote;
+  }
+}
+
 async function loadQrOrders(silent = false) {
+  await showQrPoster();
   try {
     const data = await api("/api/qr-orders");
     qrCache = data.orders || [];
     paintQrBadge(data.pending);
-    const img = $("qr-code-img");
-    if (img && !img.dataset.ready) {
-      img.src = `/api/qr/code.png?t=${Date.now()}`;
-      img.dataset.ready = "1";
-    }
-    const link = await api("/api/qr/link").catch(() => ({ url: `${location.origin}/order.html` }));
-    if ($("qr-link")) $("qr-link").textContent = link.url;
-    if ($("qr-open")) $("qr-open").href = link.path || "/order.html";
     if (!$("qr-orders")) return;
     $("qr-orders").innerHTML = qrCache.length
       ? qrCache
@@ -613,18 +653,19 @@ async function loadQrOrders(silent = false) {
 }
 
 function printQrPoster() {
-  const url = $("qr-link")?.textContent || `${location.origin}/order.html`;
+  const url = $("qr-link")?.textContent?.split(" — ")[0] || orderMenuUrl();
+  const src = $("qr-code-img")?.src || `/api/qr/code`;
   const w = window.open("", "qr-poster", "width=640,height=860");
   const logo = state.company.logo_url
     ? `<img src="${state.company.logo_url}" alt="" style="max-height:72px;max-width:180px;display:block;margin:0 auto 12px">`
     : "";
   w.document.write(`<!DOCTYPE html><html><head><title>QR order poster</title>
-    <style>body{font-family:Georgia,serif;text-align:center;padding:36px;color:#4a1416} img.qr{width:280px;height:280px} p{color:#7a5c48}</style>
+    <style>body{font-family:Georgia,serif;text-align:center;padding:36px;color:#4a1416} img.qr{width:280px;height:280px;background:#fff;padding:12px} p{color:#7a5c48}</style>
     </head><body>
     ${logo}
     <h1>${escapeHtml(state.company.name || "SWAMI MASALE")}</h1>
     <p>Scan to order spices</p>
-    <img class="qr" src="/api/qr/code.png" alt="QR">
+    <img class="qr" src="${escapeHtml(src)}" alt="QR">
     <p>${escapeHtml(url)}</p>
     <script>window.onload=()=>{window.print();}</script>
     </body></html>`);

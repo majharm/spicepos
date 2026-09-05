@@ -528,9 +528,11 @@ tr:hover td { background: #fff7ea; }
 .qr-poster img {
   width: 220px;
   height: 220px;
+  object-fit: contain;
   background: #fff;
   border-radius: 16px;
   padding: 10px;
+  border: 1px solid var(--line);
 }
 .qr-poster strong {
   font-family: var(--display);

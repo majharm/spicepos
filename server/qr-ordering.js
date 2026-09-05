@@ -151,7 +151,7 @@ export function registerQrOrdering(app) {
     }
   });
 
-  app.get("/api/qr/code.png", async (req, res) => {
+  async function qrPng(req, res) {
     try {
       const png = await QRCode.toBuffer(publicOrderUrl(req), {
         type: "png",
@@ -159,17 +159,29 @@ export function registerQrOrdering(app) {
         margin: 1,
         errorCorrectionLevel: "M",
       });
+      res.status(200);
       res.setHeader("Content-Type", "image/png");
       res.setHeader("Cache-Control", "no-store");
-      res.send(png);
+      res.end(png);
     } catch (err) {
       res.status(500).json({ error: String(err.message) });
     }
-  });
+  }
+  app.get("/api/qr/code", qrPng);
+  app.get("/api/qr/code.png", qrPng);
 
-  app.get("/api/qr/link", (req, res) => {
-    const url = publicOrderUrl(req);
-    res.json({ url, path: "/order.html" });
+  app.get("/api/qr/link", async (req, res) => {
+    try {
+      const url = publicOrderUrl(req);
+      const dataUrl = await QRCode.toDataURL(url, {
+        width: 360,
+        margin: 1,
+        errorCorrectionLevel: "M",
+      });
+      res.json({ url, path: "/order.html", dataUrl });
+    } catch (err) {
+      res.status(500).json({ error: String(err.message) });
+    }
   });
 
   app.post("/api/qr/orders", async (req, res) => {
