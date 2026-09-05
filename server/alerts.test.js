@@ -24,6 +24,7 @@ import {
   WA_DEFAULT_URL,
   WA_DEFAULT_KEY,
   WA_REVOKED_KEYS,
+  normalizeSmtpConnection,
 } from "./alerts.js";
 import { parseDataImage } from "./mail.js";
 
@@ -152,13 +153,21 @@ test("Master Admin Settings lives under Backup with Active/Inactive templates", 
   assert.match(master, /Outgoing email \(SMTP\)/);
   assert.match(master, /pos-smtp\.php/);
   assert.match(master, /imap\.hostinger\.com/);
+  assert.match(master, /smtp-from-display/);
+  assert.match(master, /Save SMTP connection/);
+  assert.match(master, /\/api\/master\/alerts\/smtp/);
   assert.match(master, /name="smtp_user"/);
   assert.match(master, /name="smtp_pass"/);
-  assert.match(master, /name="smtp_host"/);
-  assert.match(nodeAlerts, /smtp_pass/);
-  assert.match(nodeAlerts, /DEFAULT_SMTP_USER/);
-  assert.match(alerts, /smtp_host/);
-  assert.match(alerts, /pos@atavtelecom\.in/);
+  assert.match(master, /name="mail_from"/);
+  assert.match(nodeAlerts, /persistSmtpConnection/);
+  assert.match(nodeAlerts, /saveSmtpConnection/);
+  assert.match(alerts, /pos_persist_smtp_connection/);
+  assert.match(alerts, /pos_save_smtp_connection/);
+  assert.match(php, /master\/alerts\/smtp/);
+  const smtp = normalizeSmtpConnection({});
+  assert.equal(smtp.mail_from, "pos@atavtelecom.in");
+  assert.equal(smtp.smtp_host, "smtp.hostinger.com");
+  assert.equal(smtp.smtp_user, "pos@atavtelecom.in");
   assert.match(master, /uniqueAlertBits/);
   assert.match(master, /WA Master hit its per-minute limit/);
   assert.match(master, /Open WA & Email log/);

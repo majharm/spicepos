@@ -15,6 +15,7 @@ import {
   sendCredentialAlerts,
   loadAlertSettings,
   saveAlertSettings,
+  saveSmtpConnection,
   publicAlertSettings,
   sanitizeNoticeImage,
   ensureAlertSettings,
@@ -664,6 +665,19 @@ export function registerMaster(app) {
       const saved = await saveAlertSettings(req.body || {});
       await platformAudit(req.auth.admin, "Settings Changed", { module: "alerts", target_name: "WhatsApp alerts" }, req);
       return { ok: true, ...publicAlertSettings(saved) };
+    }),
+  );
+
+  app.post("/api/master/alerts/smtp", (req, res) =>
+    send(res, async () => {
+      const stored = await saveSmtpConnection(req.body || {});
+      await platformAudit(req.auth.admin, "Settings Changed", { module: "alerts", target_name: "SMTP connection" }, req);
+      return {
+        ok: true,
+        stored: true,
+        from: stored.mail_from,
+        ...publicAlertSettings(await loadAlertSettings()),
+      };
     }),
   );
 

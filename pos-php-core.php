@@ -1462,11 +1462,13 @@ function pos_platform_settings() {
 }
 
 function pos_set_setting($key, $value) {
+  $raw = $value === null ? "" : (string) $value;
+  $stored = in_array($key, ["smtp_pass", "wa_api_key"], true) ? $raw : trim($raw);
   pos_q(
     "INSERT INTO platform_settings (setting_key, setting_value) VALUES (?, ?)
      ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value), updated_at = CURRENT_TIMESTAMP(3)",
     "ss",
-    [$key, $value === null ? "" : trim((string) $value)]
+    [$key, $stored]
   );
 }
 
@@ -2284,6 +2286,15 @@ function pos_php_dispatch($path, $method, $rawBody) {
     if ($path === "master/alerts" && $method === "POST") {
       if (!function_exists("pos_save_alert_settings")) throw new Exception("pos-alerts.php is missing on this host");
       pos_send(200, array_merge(["ok" => true], pos_alert_settings_public(pos_save_alert_settings($body))));
+    }
+
+    if ($path === "master/alerts/smtp" && $method === "POST") {
+      if (!function_exists("pos_save_smtp_connection")) throw new Exception("pos-alerts.php is missing on this host");
+      $stored = pos_save_smtp_connection($body);
+      pos_send(200, array_merge(
+        ["ok" => true, "stored" => true, "from" => $stored["mail_from"] ?? ""],
+        pos_alert_settings_public()
+      ));
     }
 
     if ($path === "master/alerts/send" && $method === "POST") {

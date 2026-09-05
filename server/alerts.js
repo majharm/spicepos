@@ -59,6 +59,37 @@ const ALERT_KEYS = [
   "tpl_renewal_expired",
 ];
 
+export const SMTP_KEYS = [
+  "smtp_enabled",
+  "smtp_host",
+  "smtp_port",
+  "smtp_secure",
+  "smtp_user",
+  "smtp_pass",
+  "mail_from",
+  "mail_from_name",
+];
+
+export function normalizeSmtpConnection(cfg = {}) {
+  return {
+    smtp_enabled: flagOn(cfg.smtp_enabled, true) ? "1" : "0",
+    smtp_host: String(cfg.smtp_host || DEFAULT_SMTP_HOST).trim() || DEFAULT_SMTP_HOST,
+    smtp_port: String(Number(cfg.smtp_port || 465) || 465),
+    smtp_secure: flagOn(cfg.smtp_secure, Number(cfg.smtp_port || 465) === 465) ? "1" : "0",
+    smtp_user: String(cfg.smtp_user || DEFAULT_SMTP_USER).trim() || DEFAULT_SMTP_USER,
+    smtp_pass: cfg.smtp_pass == null || cfg.smtp_pass === "" ? DEFAULT_SMTP_PASS : String(cfg.smtp_pass),
+    mail_from: String(cfg.mail_from || cfg.smtp_user || DEFAULT_SMTP_FROM).trim() || DEFAULT_SMTP_FROM,
+    mail_from_name: String(cfg.mail_from_name || DEFAULT_FROM_NAME).trim() || DEFAULT_FROM_NAME,
+  };
+}
+
+export async function persistSmtpConnection(cfg = {}) {
+  const conn = normalizeSmtpConnection(cfg);
+  for (const key of SMTP_KEYS) await setPlatformSetting(key, conn[key]);
+  applySmtpSettings(conn);
+  return conn;
+}
+
 export const DEFAULT_TEMPLATES = {
   welcome: `Welcome to ATAV POS.
 
@@ -504,7 +535,8 @@ export async function loadAlertSettings() {
     tpl_renewal_before: map.tpl_renewal_before || "",
     tpl_renewal_expired: map.tpl_renewal_expired || "",
   };
-  applySmtpSettings(cfg);
+  const stored = await persistSmtpConnection(cfg);
+  Object.assign(cfg, stored);
   return cfg;
 }
 
@@ -515,6 +547,8 @@ export function publicAlertSettings(cfg) {
     wa_api_key_set: Boolean(cfg.wa_api_key),
     smtp_pass: maskSecret(cfg.smtp_pass),
     smtp_pass_set: Boolean(cfg.smtp_pass),
+    from: cfg.mail_from || DEFAULT_SMTP_FROM,
+    smtp_stored: Boolean(cfg.smtp_host && cfg.smtp_user && cfg.smtp_pass),
     defaults: { ...DEFAULT_TEMPLATES },
     sample_vars: sampleAlertVars(),
     samples: {},
@@ -561,7 +595,21 @@ export async function saveAlertSettings(body = {}) {
   next.mail_from = next.mail_from || next.smtp_user || DEFAULT_SMTP_FROM;
   next.mail_from_name = next.mail_from_name || DEFAULT_FROM_NAME;
   for (const key of ALERT_KEYS) await setPlatformSetting(key, next[key]);
+  await persistSmtpConnection(next);
   return loadAlertSettings();
+}
+
+export async function saveSmtpConnection(body = {}) {
+  const current = await loadAlertSettings();
+  const next = { ...current };
+  for (const key of SMTP_KEYS) {
+    if (!Object.prototype.hasOwnProperty.call(body, key)) continue;
+    if (key === "smtp_pass" && looksMaskedSecret(body[key])) continue;
+    next[key] = body[key] == null ? "" : String(body[key]);
+    if (key !== "smtp_pass") next[key] = next[key].trim();
+  }
+  const stored = await persistSmtpConnection(next);
+  return stored;
 }
 
 async function shopContacts(businessId) {

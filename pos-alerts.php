@@ -37,6 +37,39 @@ function pos_alert_defaults() {
   ];
 }
 
+function pos_smtp_keys() {
+  return ["smtp_enabled", "smtp_host", "smtp_port", "smtp_secure", "smtp_user", "smtp_pass", "mail_from", "mail_from_name"];
+}
+
+function pos_persist_smtp_connection($cfg = []) {
+  $d = pos_alert_defaults();
+  $port = (string) (((int) ($cfg["smtp_port"] ?? $d["smtp_port"])) ?: 465);
+  $pass = $cfg["smtp_pass"] ?? "";
+  $conn = [
+    "smtp_enabled" => pos_alert_flag($cfg["smtp_enabled"] ?? "1") ? "1" : "0",
+    "smtp_host" => trim((string) ($cfg["smtp_host"] ?? "")) ?: $d["smtp_host"],
+    "smtp_port" => $port,
+    "smtp_secure" => pos_alert_flag($cfg["smtp_secure"] ?? ($port === "465" ? "1" : "0")) ? "1" : "0",
+    "smtp_user" => trim((string) ($cfg["smtp_user"] ?? "")) ?: $d["smtp_user"],
+    "smtp_pass" => $pass === "" ? $d["smtp_pass"] : (string) $pass,
+    "mail_from" => trim((string) ($cfg["mail_from"] ?? "")) ?: ($d["mail_from"] ?? $d["smtp_user"]),
+    "mail_from_name" => trim((string) ($cfg["mail_from_name"] ?? "")) ?: $d["mail_from_name"],
+  ];
+  foreach ($conn as $key => $value) pos_set_setting($key, $value);
+  return $conn;
+}
+
+function pos_save_smtp_connection($body) {
+  $cur = pos_alert_settings();
+  foreach (pos_smtp_keys() as $key) {
+    if (!array_key_exists($key, $body)) continue;
+    if ($key === "smtp_pass" && pos_looks_masked_secret($body[$key])) continue;
+    $value = (string) $body[$key];
+    $cur[$key] = $key === "smtp_pass" ? $value : trim($value);
+  }
+  return pos_persist_smtp_connection($cur);
+}
+
 function pos_alert_kinds() {
   return ["welcome", "credentials", "updates", "closing", "low_stock", "renewal_before", "renewal_expired"];
 }
@@ -298,7 +331,7 @@ function pos_alert_settings() {
   $d = pos_alert_defaults();
   $hour = (int) ($map["alert_closing_hour"] ?? $d["alert_closing_hour"]);
   if ($hour < 0 || $hour > 23) $hour = 22;
-  return [
+  $cfg = [
     "wa_enabled" => pos_alert_flag($map["wa_enabled"] ?? "1") ? "1" : "0",
     "wa_api_url" => $map["wa_api_url"] ?: $d["wa_api_url"],
     "wa_api_key" => $map["wa_api_key"] ?: "",
@@ -328,6 +361,8 @@ function pos_alert_settings() {
     "tpl_renewal_before" => $map["tpl_renewal_before"] ?? "",
     "tpl_renewal_expired" => $map["tpl_renewal_expired"] ?? "",
   ];
+  $stored = pos_persist_smtp_connection($cfg);
+  return array_merge($cfg, $stored);
 }
 
 function pos_alert_settings_public($cfg = null) {
@@ -337,6 +372,8 @@ function pos_alert_settings_public($cfg = null) {
   $cfg["wa_api_key"] = pos_mask_secret($raw["wa_api_key"] ?? "");
   $cfg["smtp_pass_set"] = ($raw["smtp_pass"] ?? "") !== "";
   $cfg["smtp_pass"] = pos_mask_secret($raw["smtp_pass"] ?? "");
+  $cfg["from"] = $raw["mail_from"] ?? "pos@atavtelecom.in";
+  $cfg["smtp_stored"] = ($raw["smtp_host"] ?? "") !== "" && ($raw["smtp_user"] ?? "") !== "" && ($raw["smtp_pass"] ?? "") !== "";
   $cfg["defaults"] = pos_alert_default_templates();
   $cfg["sample_vars"] = pos_alert_vars(pos_alert_sample_payload());
   $cfg["samples"] = [];

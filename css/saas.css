@@ -1196,6 +1196,10 @@ body.dev-mode .session-bar::after {
 .msg-settings .item-composer-top .item-composer-note { grid-column: 1; margin: 0; }
 .msg-settings .item-composer-top .alert-switch { grid-column: 2; grid-row: 1 / span 2; align-self: center; }
 .msg-wa { margin: 0; }
+.smtp-from-line {
+  margin: 0 16px 4px;
+  font-size: 15px;
+}
 .msg-split { align-items: start; }
 .msg-nav { padding: 16px; }
 .msg-nav-list {

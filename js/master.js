@@ -1030,6 +1030,7 @@ function alertsFormHtml(alerts) {
     String(tpl || "").replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (_, key) => (vars[key] == null ? "" : String(vars[key])));
   const waOn = alerts.wa_enabled === "1";
   const smtpOn = alerts.smtp_enabled !== "0";
+  const fromAddr = alerts.from || alerts.mail_from || alerts.smtp_user || "pos@atavtelecom.in";
   return `<form class="msg-settings" id="alert-form">
     <section class="settings item-composer msg-wa">
       <div class="item-composer-top">
@@ -1059,14 +1060,19 @@ function alertsFormHtml(alerts) {
           <span class="alert-switch-label">${smtpOn ? "Active" : "Inactive"}</span>
         </label>
       </div>
+      <p class="smtp-from-line" id="smtp-from-display">From <strong>${attr(fromAddr)}</strong>${alerts.smtp_stored ? " · saved on the platform" : ""}</p>
       <fieldset class="item-block">
         <legend>Mailbox</legend>
         <label>From / username <input name="smtp_user" value="${attr(alerts.smtp_user || "pos@atavtelecom.in")}" autocomplete="off" /></label>
         <label>Password <input name="smtp_pass" type="password" autocomplete="off" value="${attr(alerts.smtp_pass || "")}" /></label>
         <label>SMTP host <input name="smtp_host" value="${attr(alerts.smtp_host || "smtp.hostinger.com")}" autocomplete="off" /></label>
         <label>Port <input name="smtp_port" inputmode="numeric" value="${attr(alerts.smtp_port || "465")}" /></label>
-        <label>From address <input name="mail_from" value="${attr(alerts.mail_from || alerts.smtp_user || "pos@atavtelecom.in")}" autocomplete="off" /></label>
+        <label>From address <input name="mail_from" value="${attr(fromAddr)}" autocomplete="off" /></label>
         <label>From name <input name="mail_from_name" value="${attr(alerts.mail_from_name || "ATAV POS")}" autocomplete="off" /></label>
+        <div class="backup-actions full">
+          <button class="btn primary" type="button" id="smtp-save-connection">Save SMTP connection</button>
+        </div>
+        <p class="hint full" id="smtp-hint">${alerts.smtp_stored ? `Saved on the platform. From ${fromAddr}.` : "Save to store this mailbox on the platform."}</p>
       </fieldset>
     </section>
     <div class="items-split msg-split">
@@ -1221,14 +1227,42 @@ function bindAlertsForm(alerts) {
     hint.className = "hint";
     hint.textContent = "Saving…";
     try {
-      await api("/api/master/alerts", { method: "POST", body: JSON.stringify(fd) });
-      hint.textContent = "Saved. Active templates will auto-send.";
+      const saved = await api("/api/master/alerts", { method: "POST", body: JSON.stringify(fd) });
+      const from = saved?.from || fd.mail_from || fd.smtp_user || "pos@atavtelecom.in";
+      hint.textContent = `Saved on the platform. From ${from}. Active templates will auto-send.`;
       hint.className = "hint ok";
+      const fromLine = $("smtp-from-display");
+      if (fromLine) fromLine.innerHTML = `From <strong>${attr(from)}</strong> · saved on the platform`;
     } catch (err) {
       hint.textContent = err.message;
       hint.className = "hint error";
     }
   };
+  $("smtp-save-connection")?.addEventListener("click", async () => {
+    const hint = $("smtp-hint");
+    const fd = Object.fromEntries(new FormData(form).entries());
+    fd.smtp_enabled = form.smtp_enabled?.checked ? "1" : "0";
+    fd.smtp_secure = String(fd.smtp_port || "465") === "465" ? "1" : "0";
+    if (hint) {
+      hint.className = "hint";
+      hint.textContent = "Saving SMTP connection…";
+    }
+    try {
+      const saved = await api("/api/master/alerts/smtp", { method: "POST", body: JSON.stringify(fd) });
+      const from = saved?.from || fd.mail_from || fd.smtp_user || "pos@atavtelecom.in";
+      if (hint) {
+        hint.textContent = `Saved on the platform. From ${from}.`;
+        hint.className = "hint ok";
+      }
+      const fromLine = $("smtp-from-display");
+      if (fromLine) fromLine.innerHTML = `From <strong>${attr(from)}</strong> · saved on the platform`;
+    } catch (err) {
+      if (hint) {
+        hint.textContent = err.message;
+        hint.className = "hint error";
+      }
+    }
+  });
   $("alert-send-expiry")?.addEventListener("click", async () => {
     const hint = $("alert-hint");
     if (!confirm("Send expiry alerts (WhatsApp + email) to all shops with a subscription expiry date?")) return;
@@ -1870,7 +1904,7 @@ async function render() {
             ? [{ label: "Shops", value: shops.length }]
             : [
                 { label: "WhatsApp", value: alerts?.wa_enabled === "1" ? "On" : "Off" },
-                { label: "Email", value: alerts?.smtp_enabled !== "0" && alerts?.smtp_pass_set ? "On" : "Off" },
+                { label: "From", value: alerts?.from || alerts?.mail_from || "pos@atavtelecom.in" },
                 { label: "Active", value: `${activeMsgs}/${ALERT_DEFS.length}` },
               ],
         )}

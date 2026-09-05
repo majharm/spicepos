@@ -32,9 +32,11 @@ export async function shopSupportContact(businessId) {
 }
 
 export async function setPlatformSetting(key, value) {
+  const raw = value == null ? "" : String(value);
+  const stored = key === "smtp_pass" || key === "wa_api_key" ? raw : raw.trim();
   await query(
     `INSERT INTO platform_settings (setting_key, setting_value) VALUES (?, ?)
      ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value), updated_at = CURRENT_TIMESTAMP(3)`,
-    [key, value == null ? "" : String(value).trim()],
+    [key, stored],
   );
 }
