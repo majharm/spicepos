@@ -183,10 +183,12 @@
 
   function cloneOfferInput(row = {}) {
     const cond = parseConditions(row);
+    const srcStatus = String(row.status || row.live_status || "draft");
+    const status = srcStatus === "scheduled" ? "scheduled" : srcStatus === "active" ? "active" : "draft";
     const n = normalize({
       ...row,
       name: copyName(row.name),
-      status: "draft",
+      status,
       used_count: 0,
       item_ids: cond.item_ids,
       category: cond.category,

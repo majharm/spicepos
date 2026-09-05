@@ -126,9 +126,12 @@ test("duplicate clone keeps products and names the copy", () => {
   src.profit = { warning: "ignore" };
   const copy = O.cloneOfferInput(src);
   assert.equal(copy.name, "Tea + Biscuits copy");
-  assert.equal(copy.status, "draft");
+  assert.equal(copy.status, "active");
   assert.deepEqual(copy.conditions.item_ids, ["tea", "biscuits"]);
   assert.equal(copy.discount_value, 8);
+  const draftCopy = O.cloneOfferInput({ ...src, status: "draft", live_status: "draft" });
+  assert.equal(draftCopy.status, "draft");
+  assert.equal(draftCopy.name, "Tea + Biscuits copy");
 });
 
 test("legacy combo rows convert and AI suggest builds a combo draft", () => {

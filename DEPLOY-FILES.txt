@@ -1,4 +1,4 @@
-Production deploy bundle — 20260905deploy123
+Production deploy bundle — 20260905deploy124
 =========================================
 
 Upload ALL files below to Hostinger public_html (overwrite):
@@ -162,7 +162,7 @@ FIXES in this bundle
   - Force expiry send always delivers (expires today counts as expired); skip reason shown
   - AI Growth dashboard: shop KPIs, SVG charts, Action Center, Ask Business AI, PDF/Excel
   - AI Growth sits in Main (under Dashboard) plus a Dashboard button so it is visible without scrolling
-  - Cache sticker 20260905deploy123 on shop Offers desk (deploy118 on master)
+  - Cache sticker 20260905deploy124 on shop Offers desk (deploy118 on master)
   - Duplicate offer creates a visible draft copy and keeps the same products
   - Offers & promotions desk: templates, AI suggestions, profit check, Counter auto-apply
   - Create combo offer from AI Growth; Counter buttons add both items and apply the discount

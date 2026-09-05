@@ -227,7 +227,8 @@ function pos_duplicate_offer($bid, $id) {
   $name = trim(preg_replace('/\s+copy(?:\s+\d+)?$/i', "", (string) ($row["name"] ?? "Offer")));
   if ($name === "") $name = "Offer";
   $row["name"] = substr($name . " copy", 0, 180);
-  $row["status"] = "draft";
+  $srcStatus = (string) ($row["status"] ?? "draft");
+  $row["status"] = $srcStatus === "scheduled" ? "scheduled" : ($srcStatus === "active" ? "active" : "draft");
   $row["used_count"] = 0;
   unset($row["id"], $row["business_id"], $row["created_at"], $row["updated_at"], $row["live_status"], $row["profit"], $row["legacy_combo"]);
   return pos_create_offer($bid, $row);

@@ -21,7 +21,9 @@ test("shop UI wires the Offers desk and Counter auto-apply", () => {
   assert.match(app, /offerIds/);
   assert.match(ui, /\/api\/offers/);
   assert.match(ui, /duplicateOfferById/);
+  assert.match(ui, /Duplicated offer/);
   assert.match(php, /pos_duplicate_offer/);
+  assert.match(php, /srcStatus === "active"/);
   assert.match(node, /duplicateOffer/);
   assert.match(node, /createOffer/);
   assert.match(node, /recordOfferRedemptions/);

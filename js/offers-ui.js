@@ -109,6 +109,13 @@ function paintOfferProfit() {
     ${p.warning ? `<p class="hint error">${escapeHtml(p.warning)}</p>` : `<p class="hint ok">Margin stays healthy on this basket.</p>`}`;
 }
 
+function setOfferFilter(next) {
+  offerFilter = next || "all";
+  document.querySelectorAll("[data-offer-filter]").forEach((b) => {
+    b.classList.toggle("primary", b.dataset.offerFilter === offerFilter);
+  });
+}
+
 function applyOfferDraft(draft, id) {
   offerDraft = { ...(draft || {}), id: id || draft?.id || "" };
   fillOfferSelects();
@@ -251,14 +258,30 @@ async function duplicateOfferById(id) {
   try {
     $("offers-hint").textContent = "Copying offer…";
     $("offers-hint").className = "hint";
-    const data = await api(`/api/offers/${encodeURIComponent(id)}/duplicate`, { method: "POST" });
+    let data;
+    try {
+      data = await api(`/api/offers/${encodeURIComponent(id)}/duplicate`, { method: "POST" });
+    } catch (err) {
+      const src = offerList.find((o) => String(o.id) === String(id));
+      const input = offerEngine()?.cloneOfferInput(src || {});
+      if (!input) throw err;
+      data = await api("/api/offers", { method: "POST", body: JSON.stringify(input) });
+    }
     const offer = data.offer || data;
-    offerFilter = "all";
-    document.querySelectorAll("[data-offer-filter]").forEach((b) => b.classList.toggle("primary", b.dataset.offerFilter === "all"));
+    const st = offer?.live_status || offer?.status || "all";
+    setOfferFilter(["active", "scheduled", "draft"].includes(st) ? st : "all");
     await loadOffersDesk(true);
-    if (offer) applyOfferDraft(offer, offer.id);
-    $("offers-hint").textContent = `${offer?.name || "Copy"} created as a draft. Activate it when you want it on the Counter.`;
+    if (offer) {
+      applyOfferDraft(offer, offer.id);
+      if ($("off-form-title")) $("off-form-title").textContent = "Duplicated offer";
+    }
+    const live = offer?.live_status || offer?.status || "draft";
+    $("offers-hint").textContent =
+      live === "active"
+        ? `${offer?.name || "Copy"} created and is Active. Counter will apply it when the cart matches.`
+        : `${offer?.name || "Copy"} created as ${live}. Activate it when you want it on the Counter.`;
     $("offers-hint").className = "hint ok";
+    $("offer-form-wrap")?.scrollIntoView({ block: "nearest" });
   } catch (err) {
     $("offers-hint").textContent = err.message || "Could not duplicate this offer";
     $("offers-hint").className = "hint error";
@@ -348,8 +371,7 @@ function bindOffersUi() {
   });
   document.querySelectorAll("[data-offer-filter]").forEach((btn) => {
     btn.addEventListener("click", () => {
-      offerFilter = btn.dataset.offerFilter;
-      document.querySelectorAll("[data-offer-filter]").forEach((b) => b.classList.toggle("primary", b === btn));
+      setOfferFilter(btn.dataset.offerFilter);
       paintOfferList();
     });
   });
