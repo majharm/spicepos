@@ -352,6 +352,25 @@ export async function ensureSchema() {
     UNIQUE KEY uniq_alert_send (business_id, kind, item_id, send_day)
   )`);
 
+  await create(`CREATE TABLE IF NOT EXISTS alert_delivery_logs (
+    id VARCHAR(255) PRIMARY KEY,
+    channel VARCHAR(16) NOT NULL,
+    kind VARCHAR(32) NOT NULL DEFAULT '',
+    business_id VARCHAR(255) NOT NULL DEFAULT '',
+    shop_name VARCHAR(255) NOT NULL DEFAULT '',
+    recipient VARCHAR(255) NOT NULL DEFAULT '',
+    subject VARCHAR(255) NOT NULL DEFAULT '',
+    preview TEXT NULL,
+    status VARCHAR(16) NOT NULL DEFAULT '',
+    ok TINYINT(1) NOT NULL DEFAULT 0,
+    error VARCHAR(255) NULL,
+    detail VARCHAR(255) NULL,
+    created_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    INDEX idx_adl_created (created_at),
+    INDEX idx_adl_channel (channel),
+    INDEX idx_adl_biz (business_id)
+  )`);
+
   await create(`CREATE TABLE IF NOT EXISTS platform_settings (
     setting_key VARCHAR(64) PRIMARY KEY,
     setting_value TEXT NULL,

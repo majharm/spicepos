@@ -220,6 +220,128 @@ document.querySelectorAll(".master-nav [data-tab]").forEach((btn) => {
   btn.onclick = () => setMasterTab(btn.dataset.tab, btn.dataset.backupPane);
 });
 
+const ALERT_LOG_KIND_LABEL = {
+  welcome: "Welcome",
+  credentials: "User ID",
+  updates: "Update",
+  closing: "Closing",
+  low_stock: "Low stock",
+  renewal_before: "Renewal",
+  renewal_expired: "Expired",
+  test: "Test",
+};
+
+function alertLogKindLabel(kind) {
+  return ALERT_LOG_KIND_LABEL[kind] || kind || "—";
+}
+
+function alertLogStatusChip(status) {
+  const s = String(status || "—");
+  const kind = s === "failed" ? "is-bad" : s === "skipped" ? "is-warn" : "is-ok";
+  const label = s === "queued" ? "Queued" : s === "sent" ? "Sent" : s === "skipped" ? "Skipped" : s === "failed" ? "Failed" : s;
+  return `<span class="item-chip ${kind}">${label}</span>`;
+}
+
+function alertLogChannelLabel(channel) {
+  return channel === "whatsapp" ? "WhatsApp" : channel === "email" ? "Email" : channel || "—";
+}
+
+function formatAlertLogTo(row) {
+  const n = String(row?.recipient || "").replace(/\D/g, "");
+  if (row?.channel === "whatsapp" && n) return n.length === 10 ? `+91${n}` : `+${n}`;
+  return row?.recipient || "—";
+}
+
+function alertLogRowHay(row) {
+  return `${row.shop_name || ""} ${row.recipient || ""} ${row.kind || ""} ${row.channel || ""} ${row.subject || ""} ${row.error || ""} ${row.detail || ""}`.toLowerCase();
+}
+
+function alertLogPageHtml(rows) {
+  const list = rows || [];
+  const waN = list.filter((r) => r.channel === "whatsapp").length;
+  const mailN = list.filter((r) => r.channel === "email").length;
+  const failN = list.filter((r) => r.status === "failed").length;
+  const skipN = list.filter((r) => r.status === "skipped").length;
+  return `<div class="items-desk master-desk expiry-alerts-desk">
+    ${masterHero("Platform", "WA Master & Email log", "Every WhatsApp queue and email attempt. WhatsApp Queued means WA Master accepted the number — not that the phone received it.", [
+      { label: "Rows", value: list.length },
+      { label: "WhatsApp", value: waN },
+      { label: "Email", value: mailN },
+      { label: "Failed", value: failN, warn: failN > 0 },
+    ])}
+    <section class="settings item-composer expiry-alerts-panel">
+      <div class="items-library-head expiry-alerts-filters">
+        <div class="settings-tabs" role="tablist" aria-label="Channel filters">
+          <button class="btn active" type="button" data-alert-log-filter="all">All</button>
+          <button class="btn" type="button" data-alert-log-filter="whatsapp">WhatsApp</button>
+          <button class="btn" type="button" data-alert-log-filter="email">Email</button>
+          <button class="btn" type="button" data-alert-log-filter="failed">Failed</button>
+          <button class="btn" type="button" data-alert-log-filter="skipped">Skipped</button>
+        </div>
+        <input id="alert-log-search" type="search" placeholder="Search shop, number, email…" autocomplete="off" />
+      </div>
+      <div class="table-wrap expired-accounts-table">
+        ${
+          list.length
+            ? table(
+                ["When", "Channel", "Shop", "To", "Type", "Status", "Detail"],
+                list.map((r) => [
+                  formatPlatformTime(r.created_at),
+                  alertLogChannelLabel(r.channel),
+                  attr(r.shop_name || "—"),
+                  attr(formatAlertLogTo(r)),
+                  alertLogKindLabel(r.kind),
+                  alertLogStatusChip(r.status),
+                  attr(r.error || r.detail || r.subject || "—"),
+                ]),
+              ).replace("<tbody>", `<tbody id="alert-log-body">`)
+            : `<p class="hint">No WhatsApp or email attempts yet. Send an alert, then refresh this page.</p>`
+        }
+      </div>
+      <p class="hint">${skipN ? `${skipN} skipped (often SMTP not configured). ` : ""}Latest 200 rows.</p>
+    </section>
+  </div>`;
+}
+
+function bindAlertLogPage(rows) {
+  const list = rows || [];
+  const body = $("alert-log-body");
+  if (!body) return;
+  let filter = "all";
+  const paint = () => {
+    const q = String($("alert-log-search")?.value || "").trim().toLowerCase();
+    const shown = list.filter((r) => {
+      if (filter === "whatsapp" || filter === "email") {
+        if (r.channel !== filter) return false;
+      } else if (filter === "failed" || filter === "skipped") {
+        if (r.status !== filter) return false;
+      }
+      return !q || alertLogRowHay(r).includes(q);
+    });
+    body.innerHTML = shown
+      .map(
+        (r) => `<tr>
+          <td>${formatPlatformTime(r.created_at)}</td>
+          <td>${alertLogChannelLabel(r.channel)}</td>
+          <td>${attr(r.shop_name || "—")}</td>
+          <td>${attr(formatAlertLogTo(r))}</td>
+          <td>${alertLogKindLabel(r.kind)}</td>
+          <td>${alertLogStatusChip(r.status)}</td>
+          <td>${attr(r.error || r.detail || r.subject || "—")}</td>
+        </tr>`,
+      )
+      .join("");
+  };
+  document.querySelectorAll("[data-alert-log-filter]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      filter = btn.dataset.alertLogFilter || "all";
+      document.querySelectorAll("[data-alert-log-filter]").forEach((b) => b.classList.toggle("active", b === btn));
+      paint();
+    });
+  });
+  $("alert-log-search")?.addEventListener("input", paint);
+}
+
 function formatPlatformTime(value) {
   if (!value) return "";
   const d = value instanceof Date ? value : new Date(value);
@@ -651,6 +773,7 @@ function expiryAlertsPageHtml(shops) {
         <button class="btn primary" type="button" id="send-alert-all-shops">Send to all shops</button>
         <button class="btn" type="button" id="expiry-send-expired">Expired only</button>
         <button class="btn" type="button" id="expiry-send-all">Renewal + expired</button>
+        <button class="btn" type="button" id="open-alert-log">WA & Email log</button>
       </div>
       <div class="items-library-head expiry-alerts-filters">
         <div class="settings-tabs" role="tablist" aria-label="Shop filters">
@@ -703,6 +826,7 @@ function expiryAlertsPageHtml(shops) {
 }
 
 function bindExpiryAlertsPage(shops) {
+  $("open-alert-log")?.addEventListener("click", () => setMasterTab("alert-log"));
   const hint = $("expiry-page-hint");
   const allTypes = $("send-alert-all-types");
   const kindBoxes = [...document.querySelectorAll("[data-send-kind]")];
@@ -1089,13 +1213,14 @@ async function render() {
     devices: "POS devices",
     audit: "Audit log",
     expiry: "Send alerts",
+    "alert-log": "WA Master & Email log",
     backup: backupPane === "settings" ? "Settings" : "Backup",
     notes: "Messages",
     alerts: "Settings",
     support: "Support helpline",
   };
   $("panel-title").textContent = titles[tab] || "Dashboard";
-  $("panel")?.classList.toggle("has-desk", ["biz", "managers", "backup", "alerts", "notes", "expiry"].includes(tab));
+  $("panel")?.classList.toggle("has-desk", ["biz", "managers", "backup", "alerts", "notes", "expiry", "alert-log"].includes(tab));
   const body = $("panel-body");
   body.innerHTML = "<p class='hint'>Loading…</p>";
   try {
@@ -1668,6 +1793,10 @@ async function render() {
         ["Business", "Branch", "Device", "Code", "Status"],
         rows.map((r) => [r.business_name, r.branch_name, r.name, r.code, r.status]),
       );
+    } else if (tab === "alert-log") {
+      const rows = await api("/api/master/alert-log");
+      body.innerHTML = alertLogPageHtml(rows);
+      bindAlertLogPage(rows);
     } else if (tab === "audit") {
       const rows = await api("/api/master/audit");
       body.innerHTML = table(

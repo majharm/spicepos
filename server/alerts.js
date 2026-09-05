@@ -358,6 +358,27 @@ export function sanitizeNoticeImage(raw) {
 }
 
 export async function ensureAlertSettings() {
+  try {
+    await query(
+      `CREATE TABLE IF NOT EXISTS alert_delivery_logs (
+        id VARCHAR(255) PRIMARY KEY,
+        channel VARCHAR(16) NOT NULL,
+        kind VARCHAR(32) NOT NULL DEFAULT '',
+        business_id VARCHAR(255) NOT NULL DEFAULT '',
+        shop_name VARCHAR(255) NOT NULL DEFAULT '',
+        recipient VARCHAR(255) NOT NULL DEFAULT '',
+        subject VARCHAR(255) NOT NULL DEFAULT '',
+        preview TEXT NULL,
+        status VARCHAR(16) NOT NULL DEFAULT '',
+        ok TINYINT(1) NOT NULL DEFAULT 0,
+        error VARCHAR(255) NULL,
+        detail VARCHAR(255) NULL,
+        created_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3)
+      )`,
+    );
+  } catch {
+    /* created by schema.js on boot */
+  }
   const rows = await query("SELECT setting_key, setting_value FROM platform_settings");
   const map = Object.fromEntries(rows.map((r) => [r.setting_key, r.setting_value ?? ""]));
   const defaults = {
@@ -633,12 +654,124 @@ function escapeHtml(value) {
     .replaceAll(">", "&gt;");
 }
 
-export async function dispatchAlert({ phones = [], emails = [], subject, text, html, image = "", extraPhones = [], extraEmails = [] }) {
+export function buildDeliveryLogRows({
+  kind = "",
+  businessId = "",
+  shopName = "",
+  subject = "",
+  text = "",
+  wa = null,
+  mail = [],
+} = {}) {
+  const preview = String(text || "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 160);
+  const base = {
+    kind: String(kind || ""),
+    businessId: String(businessId || ""),
+    shopName: String(shopName || ""),
+    subject: String(subject || "").slice(0, 255),
+    preview,
+  };
+  const rows = [];
+  const waResults = Array.isArray(wa?.results) ? wa.results : [];
+  if (waResults.length) {
+    for (const r of waResults) {
+      rows.push({
+        ...base,
+        channel: "whatsapp",
+        recipient: String(r.number || r.to || ""),
+        status: r.ok ? "queued" : r.skipped ? "skipped" : "failed",
+        ok: r.ok ? 1 : 0,
+        error: String(r.error || r.reason || "").slice(0, 255),
+        detail: String(r.ok ? `HTTP ${r.status || 200}` : r.body || r.error || "").slice(0, 255),
+      });
+    }
+  } else if (wa) {
+    rows.push({
+      ...base,
+      channel: "whatsapp",
+      recipient: Array.isArray(wa.to) ? String(wa.to[0] || "") : String(wa.to || ""),
+      status: wa.ok ? "queued" : wa.skipped ? "skipped" : "failed",
+      ok: wa.ok ? 1 : 0,
+      error: String(wa.reason || wa.error || "").slice(0, 255),
+      detail: "",
+    });
+  }
+  for (const r of mail || []) {
+    if (!r) continue;
+    rows.push({
+      ...base,
+      channel: "email",
+      recipient: String(r.to || ""),
+      status: r.ok ? "sent" : r.skipped ? "skipped" : "failed",
+      ok: r.ok ? 1 : 0,
+      error: String(r.error || "").slice(0, 255),
+      detail: String(r.via || r.error || "").slice(0, 255),
+    });
+  }
+  return rows;
+}
+
+export async function logAlertDeliveries(payload) {
+  try {
+    await ensureAlertSettings();
+    const rows = buildDeliveryLogRows(payload);
+    for (const row of rows) {
+      await query(
+        `INSERT INTO alert_delivery_logs
+         (id, channel, kind, business_id, shop_name, recipient, subject, preview, status, ok, error, detail)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
+        [
+          crypto.randomUUID(),
+          row.channel,
+          row.kind,
+          row.businessId,
+          row.shopName,
+          row.recipient,
+          row.subject,
+          row.preview,
+          row.status,
+          row.ok,
+          row.error || null,
+          row.detail || null,
+        ],
+      );
+    }
+  } catch (err) {
+    console.error("alert delivery log failed:", err.message);
+  }
+}
+
+export async function listAlertDeliveryLogs({ limit = 200 } = {}) {
+  await ensureAlertSettings();
+  const n = Math.min(500, Math.max(1, Number(limit) || 200));
+  return query(`SELECT * FROM alert_delivery_logs ORDER BY created_at DESC LIMIT ${n}`);
+}
+
+export async function dispatchAlert({
+  phones = [],
+  emails = [],
+  subject,
+  text,
+  html,
+  image = "",
+  extraPhones = [],
+  extraEmails = [],
+  kind = "",
+  businessId = "",
+  shopName = "",
+}) {
   const settings = await loadAlertSettings();
   const nums = [...phones, ...extraPhones];
   const mailTo = [...emails, ...extraEmails];
   const wa = await sendWhatsApp(waCfg(settings), nums, text, fetch, image);
-  const mail = await sendEmailSafe({ to: mailTo, subject, text, html, image });
+  const mail = (await sendEmailSafe({ to: mailTo, subject, text, html, image })).map((row, i) => ({
+    ...row,
+    to: row.to || mailTo[i] || "",
+  }));
+  await logAlertDeliveries({ kind, businessId, shopName, subject, text, wa, mail });
   return { wa, mail };
 }
 
@@ -689,6 +822,9 @@ export async function sendWelcomeAlerts({
       emails,
       subject: `Welcome to ATAV POS · ${name}`,
       text,
+      kind: "welcome",
+      businessId,
+      shopName: name,
     });
   }
   if (flagOn(settings.alert_credentials, true) && (username || email || password)) {
@@ -749,6 +885,9 @@ export async function sendCredentialAlerts({
     emails,
     subject: `ATAV POS login · ${name || "shop"}`,
     text,
+    kind: "credentials",
+    businessId,
+    shopName: name,
   });
 }
 
@@ -770,6 +909,9 @@ export async function sendUpdateAlerts({ businessId, title, body, image, force =
         text,
         html: noticeHtml({ title, body, image }),
         image: image || "",
+        kind: "updates",
+        businessId: id,
+        shopName: shop.shopName,
       }),
     );
   }
@@ -822,6 +964,9 @@ export async function sendLowStockAlerts(businessId, itemIds = [], { force = fal
     emails: shop.emails,
     subject: `Low stock · ${shop.shopName}`,
     text,
+    kind: "low_stock",
+    businessId,
+    shopName: shop.shopName,
   });
 }
 
@@ -897,6 +1042,9 @@ export async function sendClosingAlerts(businessId, { force = false } = {}) {
     emails: shop.emails,
     subject: `Closing sales · ${shop.shopName} · ${day}`,
     text,
+    kind: "closing",
+    businessId: shop.businessId,
+    shopName: shop.shopName,
   });
   if (!force && alertDelivered(out)) await markSent(shop.businessId, "closing", day, "");
   return out;
@@ -983,6 +1131,9 @@ export async function sendRenewalAlerts(
       emails: shop.emails,
       subject: expired ? `ATAV POS expired · ${payload.shopName}` : `Renew ATAV POS · ${payload.shopName}`,
       text,
+      kind,
+      businessId: row.id,
+      shopName: payload.shopName,
     });
     if (!force && alertDelivered(out)) await markSent(row.id, kind, expiry, "");
     results.push({ businessId: row.id, shopName: payload.shopName, kind, days, ...out });
@@ -1096,7 +1247,15 @@ async function sendOneManualAlert({
   const username = admin?.username || email;
   if (kind === "welcome") {
     const text = welcomeText({ shopName: name, ownerName, signInUrl }, settings);
-    return dispatchAlert({ phones: shop.phones, emails: shop.emails, subject: `Welcome to ATAV POS · ${name}`, text });
+    return dispatchAlert({
+      phones: shop.phones,
+      emails: shop.emails,
+      subject: `Welcome to ATAV POS · ${name}`,
+      text,
+      kind: "welcome",
+      businessId: biz.id,
+      shopName: name,
+    });
   }
   if (kind === "credentials") {
     const text = credentialsText(
@@ -1111,7 +1270,15 @@ async function sendOneManualAlert({
       },
       settings,
     );
-    return dispatchAlert({ phones: shop.phones, emails: shop.emails, subject: `ATAV POS login · ${name}`, text });
+    return dispatchAlert({
+      phones: shop.phones,
+      emails: shop.emails,
+      subject: `ATAV POS login · ${name}`,
+      text,
+      kind: "credentials",
+      businessId: biz.id,
+      shopName: name,
+    });
   }
   if (kind === "updates") {
     const heading = String(title || "ATAV POS update").trim() || "ATAV POS update";
@@ -1122,6 +1289,9 @@ async function sendOneManualAlert({
       subject: `ATAV POS update · ${heading}`,
       text,
       html: noticeHtml({ title: heading, body: body || "" }),
+      kind: "updates",
+      businessId: biz.id,
+      shopName: name,
     });
   }
   if (kind === "closing") {
@@ -1147,6 +1317,9 @@ async function sendOneManualAlert({
       emails: shop.emails,
       subject: kind === "renewal_expired" ? `ATAV POS expired · ${name}` : `Renew ATAV POS · ${name}`,
       text,
+      kind,
+      businessId: biz.id,
+      shopName: name,
     });
   }
   return { skipped: true, reason: "unknown-kind" };
@@ -1183,6 +1356,9 @@ export async function sendTestAlert({ number, businessId } = {}) {
     emails: [...shop.emails, ...extraEmail],
     subject: "ATAV POS WhatsApp test",
     text,
+    kind: "test",
+    businessId: businessId || "",
+    shopName: shop.shopName || "Master Admin",
   });
 }
 

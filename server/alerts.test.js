@@ -17,6 +17,7 @@ import {
   waIntlNumber,
   waResponseOk,
   sendWhatsApp,
+  buildDeliveryLogRows,
   DEFAULT_TEMPLATES,
   WA_DEFAULT_URL,
   WA_DEFAULT_KEY,
@@ -124,6 +125,14 @@ test("Master Admin Settings lives under Backup with Active/Inactive templates", 
   assert.match(nodeAlerts, /dispatchAlert\(\{[\s\S]*Welcome to ATAV POS/s);
   assert.match(master, /alert-send-expiry/);
   assert.match(masterHtml, /data-tab="expiry">Send alerts</);
+  assert.match(masterHtml, /data-tab="alert-log">WA & Email log</);
+  assert.match(master, /alertLogPageHtml/);
+  assert.match(master, /\/api\/master\/alert-log/);
+  assert.match(nodeAlerts, /alert_delivery_logs/);
+  assert.match(nodeAlerts, /buildDeliveryLogRows/);
+  assert.match(alerts, /alert_delivery_logs/);
+  assert.match(alerts, /pos_list_alert_delivery_logs/);
+  assert.match(php, /master\/alert-log/);
   assert.match(master, /expiryAlertsPageHtml/);
   assert.match(master, /send-alert-all-shops/);
   assert.match(master, /data-send-kind/);
@@ -168,6 +177,25 @@ test("notice HTML inlines https images and uses CID for uploads", () => {
   assert.match(https, /src="https:\/\/cdn\.example\/a\.jpg"/);
   const cid = noticeHtml({ title: "Hi", body: "Body", image: "data:image/jpeg;base64,abc" });
   assert.match(cid, /cid:notice-image/);
+});
+
+test("delivery log rows record WhatsApp queue and email skip", () => {
+  const rows = buildDeliveryLogRows({
+    kind: "renewal_expired",
+    businessId: "b1",
+    shopName: "SWAMI MASALE",
+    subject: "ATAV POS expired · SWAMI MASALE",
+    text: "Plan expired",
+    wa: { ok: true, results: [{ ok: true, number: "919876543210", status: 200 }] },
+    mail: [{ ok: false, skipped: true, error: "SMTP not configured", to: "shop@example.com" }],
+  });
+  assert.equal(rows.length, 2);
+  assert.equal(rows[0].channel, "whatsapp");
+  assert.equal(rows[0].status, "queued");
+  assert.equal(rows[0].recipient, "919876543210");
+  assert.equal(rows[1].channel, "email");
+  assert.equal(rows[1].status, "skipped");
+  assert.match(rows[1].error, /SMTP/);
 });
 
 test("WhatsApp send is confirmed only from JSON ok, not HTML", async () => {

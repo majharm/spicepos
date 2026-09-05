@@ -2189,6 +2189,10 @@ function pos_php_dispatch($path, $method, $rawBody) {
       ));
     }
 
+    if ($path === "master/alert-log" && $method === "GET") {
+      pos_send(200, pos_list_alert_delivery_logs(200));
+    }
+
     if ($path === "master/settings" && $method === "GET") {
       pos_send(200, [
         "platform" => "ATAV Multi-Tenant POS",

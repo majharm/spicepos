@@ -227,6 +227,26 @@ function pos_ensure_alert_schema() {
       UNIQUE KEY uniq_alert_send (business_id, kind, item_id, send_day)
     )"
   );
+  @$db->query(
+    "CREATE TABLE IF NOT EXISTS alert_delivery_logs (
+      id VARCHAR(255) PRIMARY KEY,
+      channel VARCHAR(16) NOT NULL,
+      kind VARCHAR(32) NOT NULL DEFAULT '',
+      business_id VARCHAR(255) NOT NULL DEFAULT '',
+      shop_name VARCHAR(255) NOT NULL DEFAULT '',
+      recipient VARCHAR(255) NOT NULL DEFAULT '',
+      subject VARCHAR(255) NOT NULL DEFAULT '',
+      preview TEXT NULL,
+      status VARCHAR(16) NOT NULL DEFAULT '',
+      ok TINYINT(1) NOT NULL DEFAULT 0,
+      error VARCHAR(255) NULL,
+      detail VARCHAR(255) NULL,
+      created_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+      INDEX idx_adl_created (created_at),
+      INDEX idx_adl_channel (channel),
+      INDEX idx_adl_biz (business_id)
+    )"
+  );
   foreach (pos_alert_defaults() as $key => $value) {
     $row = pos_q("SELECT setting_value FROM platform_settings WHERE setting_key = ? LIMIT 1", "s", [$key]);
     if (!$row) pos_set_setting($key, $value);
@@ -518,15 +538,113 @@ function pos_alert_delivered($out) {
   return false;
 }
 
-function pos_alert_dispatch($phones, $emails, $subject, $text, $html = "", $image = "") {
+function pos_alert_log_meta($kind, $shop = [], $extra = []) {
+  return [
+    "kind" => (string) ($kind ?: ""),
+    "businessId" => (string) ($extra["businessId"] ?? ($shop["businessId"] ?? ($shop["id"] ?? ""))),
+    "shopName" => (string) ($extra["shopName"] ?? ($shop["shopName"] ?? ($shop["name"] ?? ""))),
+  ];
+}
+
+function pos_build_delivery_log_rows($meta, $subject, $text, $wa, $mail) {
+  $preview = substr(trim(preg_replace("/\\s+/", " ", (string) $text)), 0, 160);
+  $base = [
+    "kind" => (string) ($meta["kind"] ?? ""),
+    "businessId" => (string) ($meta["businessId"] ?? ""),
+    "shopName" => (string) ($meta["shopName"] ?? ""),
+    "subject" => substr((string) $subject, 0, 255),
+    "preview" => $preview,
+  ];
+  $rows = [];
+  $waResults = $wa["results"] ?? [];
+  if ($waResults) {
+    foreach ($waResults as $r) {
+      $ok = !empty($r["ok"]);
+      $rows[] = array_merge($base, [
+        "channel" => "whatsapp",
+        "recipient" => (string) ($r["number"] ?? ($r["to"] ?? "")),
+        "status" => $ok ? "queued" : (!empty($r["skipped"]) ? "skipped" : "failed"),
+        "ok" => $ok ? 1 : 0,
+        "error" => substr((string) ($r["error"] ?? ($r["reason"] ?? "")), 0, 255),
+        "detail" => substr((string) ($ok ? ("HTTP " . ($r["status"] ?? 200)) : ($r["body"] ?? ($r["error"] ?? ""))), 0, 255),
+      ]);
+    }
+  } elseif (is_array($wa)) {
+    $ok = !empty($wa["ok"]);
+    $to = $wa["to"] ?? "";
+    if (is_array($to)) $to = $to[0] ?? "";
+    $rows[] = array_merge($base, [
+      "channel" => "whatsapp",
+      "recipient" => (string) $to,
+      "status" => $ok ? "queued" : (!empty($wa["skipped"]) ? "skipped" : "failed"),
+      "ok" => $ok ? 1 : 0,
+      "error" => substr((string) ($wa["reason"] ?? ($wa["error"] ?? "")), 0, 255),
+      "detail" => "",
+    ]);
+  }
+  foreach ($mail ?? [] as $r) {
+    if (!is_array($r)) continue;
+    $ok = !empty($r["ok"]);
+    $rows[] = array_merge($base, [
+      "channel" => "email",
+      "recipient" => (string) ($r["to"] ?? ""),
+      "status" => $ok ? "sent" : (!empty($r["skipped"]) ? "skipped" : "failed"),
+      "ok" => $ok ? 1 : 0,
+      "error" => substr((string) ($r["error"] ?? ""), 0, 255),
+      "detail" => substr((string) ($r["via"] ?? ($r["error"] ?? "")), 0, 255),
+    ]);
+  }
+  return $rows;
+}
+
+function pos_log_alert_deliveries($meta, $subject, $text, $wa, $mail) {
+  try {
+    pos_ensure_alert_schema();
+    foreach (pos_build_delivery_log_rows($meta, $subject, $text, $wa, $mail) as $row) {
+      pos_q(
+        "INSERT INTO alert_delivery_logs
+         (id, channel, kind, business_id, shop_name, recipient, subject, preview, status, ok, error, detail)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+        "ssssssssssss",
+        [
+          pos_uuid(),
+          $row["channel"],
+          $row["kind"],
+          $row["businessId"],
+          $row["shopName"],
+          $row["recipient"],
+          $row["subject"],
+          $row["preview"],
+          $row["status"],
+          !empty($row["ok"]) ? "1" : "0",
+          $row["error"] !== "" ? $row["error"] : "",
+          $row["detail"] !== "" ? $row["detail"] : "",
+        ]
+      );
+    }
+  } catch (Throwable $e) {
+    error_log("alert delivery log failed: " . $e->getMessage());
+  }
+}
+
+function pos_list_alert_delivery_logs($limit = 200) {
+  pos_ensure_alert_schema();
+  $n = (int) $limit;
+  if ($n < 1) $n = 200;
+  if ($n > 500) $n = 500;
+  return pos_q("SELECT * FROM alert_delivery_logs ORDER BY created_at DESC LIMIT {$n}");
+}
+
+function pos_alert_dispatch($phones, $emails, $subject, $text, $html = "", $image = "", $meta = []) {
   $cfg = pos_alert_settings();
   $wa = pos_wa_send($cfg, $phones, $text, $image);
   $mail = [];
   $html = $html !== "" ? $html : "<pre style=\"font-family:inherit\">" . pos_mail_escape($text) . "</pre>";
   foreach (array_unique($emails) as $to) {
     if (strpos($to, "@") === false) continue;
-    $mail[] = pos_send_mail($to, $subject, $text, $html, $image);
+    $mail[] = array_merge(pos_send_mail($to, $subject, $text, $html, $image), ["to" => $to]);
   }
+  pos_log_alert_deliveries(is_array($meta) ? $meta : [], $subject, $text, $wa, $mail);
   return ["wa" => $wa, "mail" => $mail];
 }
 
@@ -570,7 +688,7 @@ function pos_send_shop_welcome_alerts($payload) {
       $text = pos_alert_welcome_text($name, $payload["ownerName"] ?? $payload["name"] ?? "", $cfg, [
         "signInUrl" => $payload["signInUrl"] ?? pos_login_url(),
       ]);
-      pos_alert_dispatch($phones, $emails, "Welcome to ATAV POS · {$name}", $text);
+      pos_alert_dispatch($phones, $emails, "Welcome to ATAV POS · {$name}", $text, "", "", pos_alert_log_meta("welcome", $shop, ["businessId" => $payload["businessId"] ?? "", "shopName" => $name]));
     }
     if (pos_alert_flag($cfg["alert_credentials"]) && (!empty($payload["username"]) || !empty($payload["email"]) || !empty($payload["password"]))) {
       pos_send_credential_alerts(array_merge($payload, ["shopName" => $name, "phones" => $phones, "emails" => $emails, "settings" => $cfg]));
@@ -598,7 +716,7 @@ function pos_send_credential_alerts($payload) {
       "shopName" => $name,
       "signInUrl" => $payload["signInUrl"] ?? pos_login_url(),
     ]), $cfg);
-    return pos_alert_dispatch($phones, $emails, "ATAV POS login · {$name}", $text);
+    return pos_alert_dispatch($phones, $emails, "ATAV POS login · {$name}", $text, "", "", pos_alert_log_meta("credentials", $shop, ["businessId" => $payload["businessId"] ?? "", "shopName" => $name]));
   } catch (Throwable $e) {
     error_log("credential alerts failed: " . $e->getMessage());
     return ["ok" => false, "error" => $e->getMessage()];
@@ -615,7 +733,7 @@ function pos_send_update_alerts($title, $body, $businessId = null, $image = "", 
       $shop = pos_shop_alert_contacts($id);
       $text = pos_alert_update_text($shop["shopName"], $title, $body, $cfg);
       $html = pos_notice_html($title, $body, $image);
-      $results[] = pos_alert_dispatch($shop["phones"], $shop["emails"], "ATAV POS update · {$title}", $text, $html, $image);
+      $results[] = pos_alert_dispatch($shop["phones"], $shop["emails"], "ATAV POS update · {$title}", $text, $html, $image, pos_alert_log_meta("updates", $shop));
     }
     return ["ok" => true, "results" => $results];
   } catch (Throwable $e) {
@@ -647,7 +765,7 @@ function pos_alert_low_stock($bid, $itemIds) {
     }
     if (!$fresh) return;
     $shop = pos_shop_alert_contacts($bid);
-    pos_alert_dispatch($shop["phones"], $shop["emails"], "Low stock · " . $shop["shopName"], pos_alert_low_stock_text($shop["shopName"], $fresh, $cfg));
+    pos_alert_dispatch($shop["phones"], $shop["emails"], "Low stock · " . $shop["shopName"], pos_alert_low_stock_text($shop["shopName"], $fresh, $cfg), "", "", pos_alert_log_meta("low_stock", $shop));
   } catch (Throwable $e) {
     error_log("low stock alert failed: " . $e->getMessage());
   }
@@ -713,7 +831,7 @@ function pos_send_closing_alert($bid, $force = false) {
     "credit" => $row["credit"] ?? 0,
     "lowStock" => $low,
   ], $cfg);
-  $out = pos_alert_dispatch($shop["phones"], $shop["emails"], "Closing sales · {$shop["shopName"]} · {$day}", $text);
+  $out = pos_alert_dispatch($shop["phones"], $shop["emails"], "Closing sales · {$shop["shopName"]} · {$day}", $text, "", "", pos_alert_log_meta("closing", $shop));
   if (!$force && pos_alert_delivered($out)) pos_alert_mark($shop["businessId"], "closing", $day, "");
   return $out;
 }
@@ -807,7 +925,7 @@ function pos_send_renewal_alerts($bid = null, $force = false, $opts = []) {
     if (!$force && pos_alert_sent($row["id"], $kind, $expiry, "")) continue;
     $text = pos_render_alert($kind, $payload, $cfg);
     $subject = $expired ? "ATAV POS expired · {$payload["shopName"]}" : "Renew ATAV POS · {$payload["shopName"]}";
-    $out = pos_alert_dispatch($shop["phones"], $shop["emails"], $subject, $text);
+    $out = pos_alert_dispatch($shop["phones"], $shop["emails"], $subject, $text, "", "", pos_alert_log_meta($kind, $shop, ["shopName" => $payload["shopName"]]));
     if (!$force && pos_alert_delivered($out)) pos_alert_mark($row["id"], $kind, $expiry, "");
     $results[] = array_merge(["businessId" => $row["id"], "shopName" => $payload["shopName"], "kind" => $kind, "days" => $days], $out);
   }
@@ -846,7 +964,7 @@ function pos_send_low_stock_now($bid) {
   );
   if (!$items) return ["skipped" => true, "reason" => "no-low-stock"];
   $shop = pos_shop_alert_contacts($bid);
-  return pos_alert_dispatch($shop["phones"], $shop["emails"], "Low stock · " . $shop["shopName"], pos_alert_low_stock_text($shop["shopName"], $items, $cfg));
+  return pos_alert_dispatch($shop["phones"], $shop["emails"], "Low stock · " . $shop["shopName"], pos_alert_low_stock_text($shop["shopName"], $items, $cfg), "", "", pos_alert_log_meta("low_stock", $shop));
 }
 
 function pos_send_manual_alerts($kinds = [], $bid = null, $title = "", $body = "") {
@@ -911,7 +1029,7 @@ function pos_send_one_manual_alert($kind, $biz, $shop, $admin, $cfg, $support, $
   $username = $admin["username"] ?? $email;
   if ($kind === "welcome") {
     $text = pos_alert_welcome_text($name, $owner, $cfg, ["signInUrl" => $signIn]);
-    return pos_alert_dispatch($shop["phones"], $shop["emails"], "Welcome to ATAV POS · {$name}", $text);
+    return pos_alert_dispatch($shop["phones"], $shop["emails"], "Welcome to ATAV POS · {$name}", $text, "", "", pos_alert_log_meta("welcome", $shop, ["shopName" => $name]));
   }
   if ($kind === "credentials") {
     $text = pos_alert_credentials_text([
@@ -923,12 +1041,12 @@ function pos_send_one_manual_alert($kind, $biz, $shop, $admin, $cfg, $support, $
       "role" => $admin["role"] ?? "business_admin",
       "signInUrl" => $signIn,
     ], $cfg);
-    return pos_alert_dispatch($shop["phones"], $shop["emails"], "ATAV POS login · {$name}", $text);
+    return pos_alert_dispatch($shop["phones"], $shop["emails"], "ATAV POS login · {$name}", $text, "", "", pos_alert_log_meta("credentials", $shop, ["shopName" => $name]));
   }
   if ($kind === "updates") {
     $heading = trim((string) $title) !== "" ? trim((string) $title) : "ATAV POS update";
     $text = pos_alert_update_text($name, $heading, $body, $cfg);
-    return pos_alert_dispatch($shop["phones"], $shop["emails"], "ATAV POS update · {$heading}", $text, pos_notice_html($heading, $body, ""));
+    return pos_alert_dispatch($shop["phones"], $shop["emails"], "ATAV POS update · {$heading}", $text, pos_notice_html($heading, $body, ""), "", pos_alert_log_meta("updates", $shop, ["shopName" => $name]));
   }
   if ($kind === "closing") return pos_send_closing_alert($biz["id"], true);
   if ($kind === "low_stock") return pos_send_low_stock_now($biz["id"]);
@@ -945,7 +1063,7 @@ function pos_send_one_manual_alert($kind, $biz, $shop, $admin, $cfg, $support, $
     ];
     $text = pos_render_alert($kind, $payload, $cfg);
     $subject = $kind === "renewal_expired" ? "ATAV POS expired · {$name}" : "Renew ATAV POS · {$name}";
-    return pos_alert_dispatch($shop["phones"], $shop["emails"], $subject, $text);
+    return pos_alert_dispatch($shop["phones"], $shop["emails"], $subject, $text, "", "", pos_alert_log_meta($kind, $shop, ["shopName" => $name]));
   }
   return ["skipped" => true, "reason" => "unknown-kind"];
 }
@@ -978,5 +1096,5 @@ function pos_send_test_alert($number = "", $businessId = null) {
   $support = pos_platform_settings();
   $emails = $shop["emails"];
   if (!empty($support["support_email"]) && strpos($support["support_email"], "@") !== false) $emails[] = $support["support_email"];
-  return pos_alert_dispatch([$phone], $emails, "ATAV POS WhatsApp test", $text);
+  return pos_alert_dispatch([$phone], $emails, "ATAV POS WhatsApp test", $text, "", "", pos_alert_log_meta("test", $shop, ["businessId" => (string) $businessId, "shopName" => $shop["shopName"] ?? "Master Admin"]));
 }

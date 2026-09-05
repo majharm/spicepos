@@ -20,6 +20,7 @@ import {
   ensureAlertSettings,
   sendRenewalAlerts,
   sendManualAlerts,
+  listAlertDeliveryLogs,
 } from "./alerts.js";
 
 function send(res, fn) {
@@ -565,6 +566,8 @@ export function registerMaster(app) {
       ),
     ),
   );
+
+  app.get("/api/master/alert-log", (_req, res) => send(res, () => listAlertDeliveryLogs({ limit: 200 })));
 
   app.get("/api/master/settings", (_req, res) =>
     send(res, async () => ({

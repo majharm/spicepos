@@ -66,6 +66,8 @@ test("PHP fallback routes checkout, holds, and order updates through core", () =
   assert.match(read("pos-php-till.php"), /pos_shop_support\(\$bid\)/);
   assert.match(read("server/settings.js"), /export async function shopSupportContact/);
   assert.match(read("api/master/account-managers/index.php"), /master\/account-managers/);
+  assert.match(read("api/master/alert-log/index.php"), /master\/alert-log/);
+  assert.match(core, /master\/alert-log/);
   const ht = read("api/.htaccess");
   assert.match(ht, /DirectorySlash Off/);
   assert.doesNotMatch(ht, /!-d/);
