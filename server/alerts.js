@@ -230,8 +230,8 @@ export function waRetryWaitMs(status, headers, attempt = 0) {
   if (Number(status) !== 429) return 0;
   const raw = headers?.get?.("retry-after") || headers?.["retry-after"] || headers?.["Retry-After"] || "";
   const sec = Number(raw);
-  if (Number.isFinite(sec) && sec > 0) return Math.min(20000, Math.round(sec * 1000));
-  return Math.min(16000, 1500 * 2 ** attempt);
+  if (Number.isFinite(sec) && sec > 0) return Math.min(60000, Math.round(sec * 1000));
+  return Math.min(60000, 20000 * (attempt + 1));
 }
 
 async function waSleep(ms, fetchImpl) {

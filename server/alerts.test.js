@@ -143,7 +143,7 @@ test("Master Admin Settings lives under Backup with Active/Inactive templates", 
   assert.match(alerts, /pos_send_manual_alerts/);
   assert.match(php, /master\/alerts\/send/);
   assert.match(master, /data-send-alert-row/);
-  assert.match(master, /\/api\/master\/alerts\/send-expired/);
+  assert.match(master, /expiry-send-expired/);
   assert.match(master, /data-send-expiry/);
   assert.match(master, /summarizeAlertDelivery/);
   assert.match(master, /formatAlertWaTo/);
@@ -152,7 +152,13 @@ test("Master Admin Settings lives under Backup with Active/Inactive templates", 
   assert.match(master, /uniqueAlertBits/);
   assert.match(master, /WA Master hit its per-minute limit/);
   assert.match(master, /Open WA & Email log/);
-  assert.match(master, /300 chats a minute/);
+  assert.match(master, /300-chats-a-minute/);
+  assert.match(master, /DEFAULT_SEND_KINDS/);
+  assert.match(master, /postSendShops/);
+  assert.match(master, /one shop at a time/);
+  assert.doesNotMatch(master, /id="send-alert-all-types" checked/);
+  assert.match(master, /DEFAULT_SEND_KINDS.has\(d.key\) \? "checked"/);
+  assert.equal(waRetryWaitMs(429, { get: () => "" }, 0), 20000);
   assert.match(nodeAlerts, /WA_RATE_LIMIT_ERROR/);
   assert.match(alerts, /pos_wa_rate_limit_error/);
   assert.match(master, /\/api\/master\/alerts\/send-expiry/);

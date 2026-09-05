@@ -617,6 +617,8 @@ function letterMark(name) {
   return (t[0] || "?").toUpperCase();
 }
 
+const DEFAULT_SEND_KINDS = new Set(["renewal_before", "renewal_expired"]);
+
 const ALERT_DEFS = [
   {
     key: "welcome",
@@ -747,18 +749,18 @@ function expiryAlertsPageHtml(shops) {
     <section class="settings item-composer expiry-alerts-panel">
       <div class="item-composer-top">
         <p class="item-mode">Alert types</p>
-        <p class="item-composer-note">Tick the messages to send. Send all types uses every template. Renewal + expired together send the matching one for each shop. WA Master allows about 300 chats a minute — all types to every shop can hit that limit.</p>
+        <p class="item-composer-note">Renewal and expired are ticked by default. All types to every shop hits WA Master’s 300-chats-a-minute limit. Send shops one by one if you just saw HTTP 429.</p>
       </div>
       <fieldset class="item-block" id="send-alert-kinds">
         <legend>Send</legend>
         <label class="alert-switch">
-          <input type="checkbox" id="send-alert-all-types" checked />
+          <input type="checkbox" id="send-alert-all-types" />
           <span class="alert-switch-ui" aria-hidden="true"></span>
           <span class="alert-switch-label">All types</span>
         </label>
         ${ALERT_DEFS.map(
           (d) => `<label class="alert-switch">
-            <input type="checkbox" data-send-kind="${d.key}" checked />
+            <input type="checkbox" data-send-kind="${d.key}" ${DEFAULT_SEND_KINDS.has(d.key) ? "checked" : ""} />
             <span class="alert-switch-ui" aria-hidden="true"></span>
             <span class="alert-switch-label">${d.title}</span>
           </label>`,
@@ -852,27 +854,24 @@ function bindExpiryAlertsPage(shops) {
   kindBoxes.forEach((el) => el.addEventListener("change", toggleUpdateFields));
   allTypes?.addEventListener("change", toggleUpdateFields);
   toggleUpdateFields();
-  const postSend = async (payload, confirmText) => {
-    if (confirmText && !confirm(confirmText)) return;
-    if (hint) {
-      hint.className = "hint";
-      hint.textContent = "Sending…";
-    }
-    try {
-      const out = await api("/api/master/alerts/send", { method: "POST", body: JSON.stringify(payload) });
-      if (hint) {
-        hint.textContent = summarizeAlertDelivery(out);
-        hint.className = "hint ok";
-      }
-    } catch (err) {
-      if (hint) {
-        hint.textContent = err.message;
-        hint.className = "hint error";
-      }
-    }
+  const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  const alertResultLimited = (out) =>
+    (out?.results || []).some((r) => /429|rate limited/i.test(String(r.wa?.error || r.wa?.reason || "")));
+  const mergeAlertResults = (parts) => {
+    const results = parts.flatMap((p) => (Array.isArray(p?.results) ? p.results : []));
+    return {
+      ok: true,
+      results,
+      summary: {
+        wa: results.filter((r) => r.wa?.ok).length,
+        mail: results.filter((r) => (r.mail || []).some((m) => m?.ok)).length,
+        sent: results.filter((r) => r.wa?.ok || (r.mail || []).some((m) => m?.ok)).length,
+        skipped: results.filter((r) => r.skipped).length,
+        total: results.length,
+      },
+    };
   };
-  $("send-alert-all-shops")?.addEventListener("click", async () => {
-    const kinds = selectedKinds();
+  const postSendShops = async (kinds, list, confirmText) => {
     if (!kinds.length) {
       if (hint) {
         hint.textContent = "Tick at least one alert type.";
@@ -880,13 +879,64 @@ function bindExpiryAlertsPage(shops) {
       }
       return;
     }
-    await postSend(
-      {
-        kinds,
-        title: $("send-alert-title")?.value || "",
-        body: $("send-alert-body")?.value || "",
-      },
-      `Send ${kinds.length} alert type${kinds.length === 1 ? "" : "s"} to all ${shops.length} shop${shops.length === 1 ? "" : "s"}? WA Master allows about 300 chats a minute, so this can take a minute.`,
+    if (!list.length) {
+      if (hint) {
+        hint.textContent = "No shops to send to.";
+        hint.className = "hint";
+      }
+      return;
+    }
+    if (confirmText && !confirm(confirmText)) return;
+    if (hint) {
+      hint.className = "hint";
+      hint.textContent = `Sending 1/${list.length}…`;
+    }
+    const parts = [];
+    const title = $("send-alert-title")?.value || "";
+    const body = $("send-alert-body")?.value || "";
+    for (let i = 0; i < list.length; i++) {
+      const shop = list[i];
+      if (hint) hint.textContent = `Sending ${i + 1}/${list.length} · ${shop.name || "shop"}…`;
+      let tries = 0;
+      while (tries < 3) {
+        try {
+          const out = await api("/api/master/alerts/send", {
+            method: "POST",
+            body: JSON.stringify({ kinds, business_id: shop.id, title, body }),
+          });
+          parts.push(out);
+          if (alertResultLimited(out) && i < list.length - 1) {
+            if (hint) hint.textContent = `WA Master rate limit. Waiting 60s, then ${i + 2}/${list.length}…`;
+            await sleep(60000);
+          } else {
+            await sleep(400);
+          }
+          break;
+        } catch (err) {
+          tries += 1;
+          if (/429|rate/i.test(String(err.message || "")) && tries < 3) {
+            if (hint) hint.textContent = `Rate limit. Waiting 60s (${tries}/3)…`;
+            await sleep(60000);
+            continue;
+          }
+          parts.push({
+            results: [{ shopName: shop.name, wa: { ok: false, error: String(err.message || err) }, mail: [] }],
+          });
+          break;
+        }
+      }
+    }
+    if (hint) {
+      hint.textContent = summarizeAlertDelivery(mergeAlertResults(parts));
+      hint.className = "hint ok";
+    }
+  };
+  $("send-alert-all-shops")?.addEventListener("click", async () => {
+    const kinds = selectedKinds();
+    await postSendShops(
+      kinds,
+      shops || [],
+      `Send ${kinds.length} alert type${kinds.length === 1 ? "" : "s"} to all ${(shops || []).length} shop${(shops || []).length === 1 ? "" : "s"}, one shop at a time? If you just saw HTTP 429, wait a minute first.`,
     );
   });
   let filter = "all";
@@ -911,50 +961,20 @@ function bindExpiryAlertsPage(shops) {
   $("expiry-search")?.addEventListener("input", applyFilter);
   applyFilter();
   $("expiry-send-expired")?.addEventListener("click", async () => {
-    const n = (shops || []).filter(isExpiredBusiness).length;
-    if (!n) {
-      if (hint) {
-        hint.textContent = "No expired shops right now.";
-        hint.className = "hint";
-      }
-      return;
-    }
-    if (!confirm(`Send expired-plan alerts (WhatsApp + email) to ${n} expired shop${n === 1 ? "" : "s"}?`)) return;
-    if (hint) {
-      hint.className = "hint";
-      hint.textContent = "Sending…";
-    }
-    try {
-      const out = await api("/api/master/alerts/send-expired", { method: "POST", body: "{}" });
-      if (hint) {
-        hint.textContent = summarizeAlertDelivery(out);
-        hint.className = "hint ok";
-      }
-    } catch (err) {
-      if (hint) {
-        hint.textContent = err.message;
-        hint.className = "hint error";
-      }
-    }
+    const expired = (shops || []).filter(isExpiredBusiness);
+    await postSendShops(
+      ["renewal_expired"],
+      expired,
+      `Send expired-plan alerts to ${expired.length} expired shop${expired.length === 1 ? "" : "s"}, one shop at a time?`,
+    );
   });
   $("expiry-send-all")?.addEventListener("click", async () => {
-    if (!confirm("Send expiry alerts (WhatsApp + email) to all shops with a subscription expiry date?")) return;
-    if (hint) {
-      hint.className = "hint";
-      hint.textContent = "Sending…";
-    }
-    try {
-      const out = await api("/api/master/alerts/send-expiry", { method: "POST", body: JSON.stringify({ scope: "all" }) });
-      if (hint) {
-        hint.textContent = summarizeAlertDelivery(out);
-        hint.className = "hint ok";
-      }
-    } catch (err) {
-      if (hint) {
-        hint.textContent = err.message;
-        hint.className = "hint error";
-      }
-    }
+    const due = (shops || []).filter((b) => ymd(b?.subscription_expires_at));
+    await postSendShops(
+      ["renewal_before", "renewal_expired"],
+      due,
+      `Send renewal/expired alerts to ${due.length} shop${due.length === 1 ? "" : "s"} with an expiry date, one shop at a time?`,
+    );
   });
   document.querySelectorAll("[data-send-alert-row]").forEach((btn) => {
     btn.addEventListener("click", async () => {

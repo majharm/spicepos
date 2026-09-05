@@ -166,10 +166,10 @@ function pos_wa_retry_wait_us($status, $headers, $attempt = 0) {
   foreach ((array) $headers as $line) {
     if (stripos($line, "Retry-After:") === 0) {
       $sec = (int) trim(substr($line, 12));
-      if ($sec > 0) return min(20000000, $sec * 1000000);
+      if ($sec > 0) return min(60000000, $sec * 1000000);
     }
   }
-  return min(16000000, (int) (1500000 * (2 ** $attempt)));
+  return min(60000000, 20000000 * ((int) $attempt + 1));
 }
 
 function pos_wa_pace() {
