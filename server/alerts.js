@@ -208,9 +208,31 @@ export function renderAlert(kind, payload = {}, settings = {}) {
 
 export function normalizeInMobile(raw) {
   let d = String(raw || "").replace(/\D/g, "");
-  if (d.startsWith("91") && d.length >= 12) d = d.slice(-10);
-  if (d.startsWith("0") && d.length === 11) d = d.slice(1);
-  return /^\d{10}$/.test(d) ? d : "";
+  if (d.startsWith("00")) d = d.slice(2);
+  if (d.startsWith("91") && d.length >= 12) d = d.slice(d.length - 10);
+  else if (d.startsWith("0") && d.length === 11) d = d.slice(1);
+  else if (d.length > 10) d = d.slice(-10);
+  return /^\d{10}$/.test(d) && /^[6-9]/.test(d) ? d : "";
+}
+
+export function addYmd(ymd, days) {
+  const day = expiryYmd(ymd);
+  if (!day) return "";
+  const ms = Date.UTC(Number(day.slice(0, 4)), Number(day.slice(5, 7)) - 1, Number(day.slice(8, 10))) + days * 86400000;
+  const d = new Date(ms);
+  const y = d.getUTCFullYear();
+  const m = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const dd = String(d.getUTCDate()).padStart(2, "0");
+  return `${y}-${m}-${dd}`;
+}
+
+export function closingAlertDay(hour, closeHour, todayYmd) {
+  const today = expiryYmd(todayYmd);
+  const h = Number(hour);
+  const close = Number(closeHour);
+  if (!today) return "";
+  if (Number.isFinite(h) && Number.isFinite(close) && h < close) return addYmd(today, -1);
+  return today;
 }
 
 export function flagOn(value, fallback = true) {
@@ -420,8 +442,32 @@ async function shopContacts(businessId) {
   const [co] = businessId
     ? await query("SELECT phone, email, name, timezone FROM company_settings WHERE business_id = ? LIMIT 1", [businessId])
     : [];
-  const phones = [...new Set([normalizeInMobile(biz?.mobile), normalizeInMobile(co?.phone)].filter(Boolean))];
-  const emails = [...new Set([biz?.email, co?.email].map((v) => String(v || "").trim().toLowerCase()).filter((v) => v.includes("@")))];
+  let staff = [];
+  try {
+    staff = businessId
+      ? await query(
+          "SELECT mobile, email FROM staff_users WHERE business_id = ? AND role = 'business_admin'",
+          [businessId],
+        )
+      : [];
+  } catch {
+    staff = [];
+  }
+  const phones = [];
+  const push = (raw) => {
+    const n = normalizeInMobile(raw);
+    if (n && !phones.includes(n)) phones.push(n);
+  };
+  push(biz?.mobile);
+  for (const row of staff) {
+    push(row.mobile);
+  }
+  push(co?.phone);
+  const emails = [...new Set(
+    [biz?.email, co?.email, ...staff.map((row) => row.email)]
+      .map((v) => String(v || "").trim().toLowerCase())
+      .filter((v) => v.includes("@")),
+  )];
   return {
     businessId: biz?.id || businessId || "",
     shopName: biz?.name || co?.name || "",
@@ -441,48 +487,64 @@ export async function sendWhatsApp(cfg, numbers, message, fetchImpl = fetch, med
   if (!flagOn(cfg.wa_enabled, true) || !cfg.apiKey || !cfg.profileId) {
     return { ok: false, skipped: true, reason: "wa-off" };
   }
+  const results = [];
+  for (const number of list) {
+    results.push(await sendWhatsAppOne(cfg, number, message, fetchImpl, media));
+  }
+  const ok = results.some((r) => r.ok);
+  return { ok, results, skipped: results.every((r) => r.skipped), reason: ok ? "" : results[0]?.reason || results[0]?.error || "wa-failed" };
+}
+
+async function sendWhatsAppOne(cfg, number, message, fetchImpl, media = "") {
   const httpsMedia = media && /^https:\/\//i.test(media) ? media : "";
   const dataMedia = media && String(media).startsWith("data:image/") ? String(media) : "";
   const endpoint = String(cfg.wa_api_url || WA_DEFAULT_URL).split("?")[0];
+  const country = cfg.wa_country_code || cfg.countryCode || WA_DEFAULT_COUNTRY;
+  const payload = {
+    api_key: cfg.apiKey,
+    profile_id: cfg.profileId || cfg.wa_profile_id,
+    numbers: number,
+    message: String(message || ""),
+    country_code: country,
+  };
   try {
     if (dataMedia) {
       const res = await fetchImpl(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json", Accept: "application/json" },
-        body: JSON.stringify({
-          api_key: cfg.apiKey,
-          profile_id: cfg.profileId || cfg.wa_profile_id,
-          numbers: list.join(","),
-          message: String(message || ""),
-          country_code: cfg.wa_country_code || WA_DEFAULT_COUNTRY,
-          media: dataMedia,
-          type: "media",
-        }),
+        body: JSON.stringify({ ...payload, media: dataMedia, type: "media" }),
         signal: AbortSignal.timeout(20000),
       });
       const text = await res.text();
-      if (!res.ok) {
-        return sendWhatsApp(cfg, list, message, fetchImpl, "");
-      }
-      return { ok: true, status: res.status, body: String(text).slice(0, 240) };
+      if (res.ok) return { ok: true, status: res.status, body: String(text).slice(0, 240), number };
+      return sendWhatsAppOne(cfg, number, message, fetchImpl, "");
     }
+    const res = await fetchImpl(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify(httpsMedia ? { ...payload, media: httpsMedia, media_url: httpsMedia } : payload),
+      signal: AbortSignal.timeout(20000),
+    });
+    const text = await res.text();
+    if (res.ok) return { ok: true, status: res.status, body: String(text).slice(0, 240), number };
     const url = buildWaUrl(
       {
         apiUrl: cfg.wa_api_url,
         apiKey: cfg.api_key || cfg.apiKey,
         profileId: cfg.wa_profile_id || cfg.profileId,
-        countryCode: cfg.wa_country_code,
+        countryCode: country,
       },
-      list,
+      [number],
       message,
       httpsMedia,
     );
-    const res = await fetchImpl(url, { method: "GET", signal: AbortSignal.timeout(8000) });
-    const text = await res.text();
-    if (!res.ok) return { ok: false, error: `WhatsApp HTTP ${res.status}`, status: res.status };
-    return { ok: true, status: res.status, body: String(text).slice(0, 240) };
+    if (url.length > 1800) return { ok: false, error: `WhatsApp HTTP ${res.status}`, status: res.status, number };
+    const getRes = await fetchImpl(url, { method: "GET", signal: AbortSignal.timeout(8000) });
+    const getText = await getRes.text();
+    if (!getRes.ok) return { ok: false, error: `WhatsApp HTTP ${getRes.status}`, status: getRes.status, number };
+    return { ok: true, status: getRes.status, body: String(getText).slice(0, 240), number };
   } catch (err) {
-    return { ok: false, error: String(err.message || err) };
+    return { ok: false, error: String(err.message || err), number };
   }
 }
 
@@ -718,12 +780,13 @@ export async function sendClosingAlerts(businessId) {
   if (!flagOn(settings.alert_closing, true)) return { skipped: true };
   const shop = await shopContacts(businessId);
   if (!shop.businessId) return { skipped: true };
+  if (!shop.phones.length && !shop.emails.length) return { skipped: true, reason: "no-number" };
   const hour = hourInZone(shop.timezone);
   const closeHour = Number(settings.alert_closing_hour) || 22;
-  if (hour < closeHour) return { skipped: true, reason: "before-close" };
-  const day = ymdInZone(shop.timezone);
+  const today = ymdInZone(shop.timezone);
+  const day = closingAlertDay(hour, closeHour, today);
+  if (!day) return { skipped: true };
   if (await alreadySent(shop.businessId, "closing", day, "")) return { skipped: true, reason: "already-sent" };
-  if (!(await markSent(shop.businessId, "closing", day, ""))) return { skipped: true, reason: "already-sent" };
   const [sum] = await query(
     `SELECT COUNT(*) AS bills,
             COALESCE(SUM(total),0) AS takings,
@@ -759,19 +822,26 @@ export async function sendClosingAlerts(businessId) {
     },
     settings,
   );
-  return dispatchAlert({
+  const out = await dispatchAlert({
     phones: shop.phones,
     emails: shop.emails,
     subject: `Closing sales · ${shop.shopName} · ${day}`,
     text,
   });
+  if (alertDelivered(out)) await markSent(shop.businessId, "closing", day, "");
+  return out;
 }
 
-export async function sendRenewalAlerts(businessId) {
+function alertDelivered(out) {
+  if (out?.wa?.ok) return true;
+  return (out?.mail || []).some((row) => row && row.ok);
+}
+
+export async function sendRenewalAlerts(businessId = null, { force = false } = {}) {
   const settings = await loadAlertSettings();
   const beforeOn = flagOn(settings.alert_renewal_before, true);
   const expiredOn = flagOn(settings.alert_renewal_expired, true);
-  if (!beforeOn && !expiredOn) return { skipped: true };
+  if (!force && !beforeOn && !expiredOn) return { skipped: true, reason: "alerts-off" };
   const support = await getPlatformSettings();
   const base = publicAppUrl();
   const signInUrl = base ? `${base}/login.html` : "https://pos.atavtelecom.in/login.html";
@@ -790,6 +860,10 @@ export async function sendRenewalAlerts(businessId) {
     const expiry = expiryYmd(row.subscription_expires_at);
     if (!expiry) continue;
     const shop = await shopContacts(row.id);
+    if (!shop.phones.length && !shop.emails.length) {
+      results.push({ businessId: row.id, shopName: row.name, skipped: true, reason: "no-number" });
+      continue;
+    }
     const today = ymdInZone(shop.timezone || "Asia/Kolkata");
     const days = daysUntilExpiry(expiry, today);
     if (days == null) continue;
@@ -802,38 +876,61 @@ export async function sendRenewalAlerts(businessId) {
       signInUrl,
       supportPhone: support.support_phone || "",
     };
-    if (beforeOn && days >= 0 && days <= RENEWAL_BEFORE_DAYS) {
-      if (!(await alreadySent(row.id, "renewal_before", expiry, ""))) {
-        if (await markSent(row.id, "renewal_before", expiry, "")) {
-          const text = renderAlert("renewal_before", payload, settings);
-          results.push(
-            await dispatchAlert({
-              phones: shop.phones,
-              emails: shop.emails,
-              subject: `Renew ATAV POS · ${payload.shopName}`,
-              text,
-            }),
-          );
-        }
+    if ((force || beforeOn) && days >= 0 && days <= RENEWAL_BEFORE_DAYS) {
+      if (force || !(await alreadySent(row.id, "renewal_before", expiry, ""))) {
+        const text = renderAlert("renewal_before", payload, settings);
+        const out = await dispatchAlert({
+          phones: shop.phones,
+          emails: shop.emails,
+          subject: `Renew ATAV POS · ${payload.shopName}`,
+          text,
+        });
+        if (!force && alertDelivered(out)) await markSent(row.id, "renewal_before", expiry, "");
+        results.push({ businessId: row.id, shopName: payload.shopName, kind: "renewal_before", ...out });
       }
-    }
-    if (expiredOn && days < 0) {
-      if (!(await alreadySent(row.id, "renewal_expired", expiry, ""))) {
-        if (await markSent(row.id, "renewal_expired", expiry, "")) {
-          const text = renderAlert("renewal_expired", payload, settings);
-          results.push(
-            await dispatchAlert({
-              phones: shop.phones,
-              emails: shop.emails,
-              subject: `ATAV POS expired · ${payload.shopName}`,
-              text,
-            }),
-          );
-        }
+    } else if ((force || expiredOn) && days < 0) {
+      if (force || !(await alreadySent(row.id, "renewal_expired", expiry, ""))) {
+        const text = renderAlert("renewal_expired", payload, settings);
+        const out = await dispatchAlert({
+          phones: shop.phones,
+          emails: shop.emails,
+          subject: `ATAV POS expired · ${payload.shopName}`,
+          text,
+        });
+        if (!force && alertDelivered(out)) await markSent(row.id, "renewal_expired", expiry, "");
+        results.push({ businessId: row.id, shopName: payload.shopName, kind: "renewal_expired", ...out });
       }
+    } else if (force) {
+      results.push({
+        businessId: row.id,
+        shopName: payload.shopName,
+        skipped: true,
+        reason: days > RENEWAL_BEFORE_DAYS ? "not-due-yet" : "not-expired",
+        days,
+      });
     }
   }
-  return { ok: true, results };
+  if (businessId && !results.length) {
+    throw new Error("This shop has no subscription expiry date, or is not due for a renewal/expired alert yet");
+  }
+  return { ok: true, results, summary: summarizeAlertResults(results) };
+}
+
+export function summarizeAlertResults(results = []) {
+  let wa = 0;
+  let mail = 0;
+  let sent = 0;
+  let skipped = 0;
+  for (const row of results) {
+    if (row.skipped) {
+      skipped += 1;
+      continue;
+    }
+    if (row.wa?.ok) wa += 1;
+    if ((row.mail || []).some((m) => m?.ok)) mail += 1;
+    if (alertDelivered(row)) sent += 1;
+  }
+  return { sent, skipped, wa, mail, total: results.length };
 }
 
 export async function tickShopAlerts(businessId, opts = {}) {
@@ -888,4 +985,12 @@ export function startAlertScheduler() {
   };
   setTimeout(run, 15000);
   setInterval(run, 5 * 60 * 1000);
+}
+
+let lastHealthTick = 0;
+export function scheduleAlertTick() {
+  const now = Date.now();
+  if (now - lastHealthTick < 45000) return;
+  lastHealthTick = now;
+  void tickAllClosingAlerts().catch((err) => console.error("alert tick:", err.message));
 }

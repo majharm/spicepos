@@ -649,6 +649,7 @@ function alertsFormHtml(alerts) {
     </div>
     <div class="msg-savebar">
       <button class="btn primary" type="submit">Save message settings</button>
+      <button class="btn" type="button" id="alert-send-expiry">Send expiry alerts now</button>
       <p class="hint" id="alert-hint"></p>
     </div>
   </form>`;
@@ -743,6 +744,20 @@ function bindAlertsForm(alerts) {
       hint.className = "hint error";
     }
   };
+  $("alert-send-expiry")?.addEventListener("click", async () => {
+    const hint = $("alert-hint");
+    if (!confirm("Send expiry alerts (WhatsApp + email) to all shops with a subscription expiry date?")) return;
+    hint.className = "hint";
+    hint.textContent = "Sending…";
+    try {
+      const out = await api("/api/master/alerts/send-expiry", { method: "POST", body: "{}" });
+      hint.textContent = summarizeAlertDelivery(out);
+      hint.className = "hint ok";
+    } catch (err) {
+      hint.textContent = err.message;
+      hint.className = "hint error";
+    }
+  });
 }
 
 async function render() {
@@ -984,6 +999,7 @@ async function render() {
                       <button class="btn primary" type="button" data-enter="${attr(b.id)}">Open POS</button>
                       <button class="btn" type="button" data-edit="${attr(b.id)}">Edit</button>
                       <button class="btn" type="button" data-reset-biz="${attr(b.id)}">Password</button>
+                      <button class="btn" type="button" data-send-expiry="${attr(b.id)}">Expiry alert</button>
                       <button class="btn danger" type="button" data-clean-biz="${attr(b.id)}">Clean data</button>
                       <button class="btn" type="button" data-act="suspend" data-id="${attr(b.id)}">Suspend</button>
                       <button class="btn" type="button" data-act="activate" data-id="${attr(b.id)}">Activate</button>
@@ -1090,6 +1106,25 @@ async function render() {
             body: JSON.stringify({ status: btn.dataset.act === "activate" ? "active" : "suspended" }),
           });
           render();
+        };
+      });
+      body.querySelectorAll("[data-send-expiry]").forEach((btn) => {
+        btn.onclick = async () => {
+          const shop = rows.find((r) => r.id === btn.dataset.sendExpiry);
+          if (!confirm(`Send expiry alert (WhatsApp + email) to ${shop?.name || "this shop"}?`)) return;
+          btn.disabled = true;
+          try {
+            const out = await api(`/api/master/businesses/${btn.dataset.sendExpiry}/send-expiry-alert`, {
+              method: "POST",
+              body: "{}",
+            });
+            panelFlash = summarizeAlertDelivery(out);
+            render();
+          } catch (err) {
+            alert(err.message);
+          } finally {
+            btn.disabled = false;
+          }
         };
       });
       const bizPw = bindPasswordForm($("biz-pw-form"), $("biz-pw-hint"), $("biz-pw-who"), $("biz-pw-cancel"), async (fd, password) => {
@@ -1388,7 +1423,17 @@ async function render() {
       </div>`;
       bindBackupFamilyTabs(body);
       if (pane === "backup") bindMasterBackup(body, shops);
-      else bindAlertsForm(alerts);
+      else {
+        bindAlertsForm(alerts);
+        if (panelFlash) {
+          const alertHint = $("alert-hint");
+          if (alertHint) {
+            alertHint.textContent = panelFlash;
+            alertHint.className = "hint ok";
+          }
+          panelFlash = "";
+        }
+      }
     } else if (tab === "notes") {
       const [businesses, settings] = await Promise.all([
         api("/api/master/businesses"),
@@ -1754,6 +1799,36 @@ function summarizeNoticeDelivery(delivery) {
     if ((row?.mail || []).some((m) => m?.ok)) mail += 1;
   }
   return `Saved on the shop dashboard. WhatsApp ${wa}/${results.length} · Email ${mail}/${results.length}.`;
+}
+
+function summarizeAlertDelivery(out) {
+  if (out?.skipped) {
+    return out.reason === "alerts-off"
+      ? "Renewal and expired alerts are inactive in Settings."
+      : "No expiry alerts were sent.";
+  }
+  const s = out?.summary;
+  if (s) {
+    return `Expiry alerts sent. WhatsApp ${s.wa}/${s.total} · Email ${s.mail}/${s.total} · Delivered ${s.sent}, skipped ${s.skipped}.`;
+  }
+  const results = out?.results;
+  if (!Array.isArray(results) || !results.length) {
+    return "No shops with an expiry date matched a renewal or expired alert.";
+  }
+  let wa = 0;
+  let mail = 0;
+  let sent = 0;
+  let skipped = 0;
+  for (const row of results) {
+    if (row.skipped) {
+      skipped += 1;
+      continue;
+    }
+    if (row.wa?.ok) wa += 1;
+    if ((row.mail || []).some((m) => m?.ok)) mail += 1;
+    if (row.wa?.ok || (row.mail || []).some((m) => m?.ok)) sent += 1;
+  }
+  return `Expiry alerts sent. WhatsApp ${wa}/${results.length} · Email ${mail}/${results.length} · Delivered ${sent}, skipped ${skipped}.`;
 }
 
 function attr(value) {

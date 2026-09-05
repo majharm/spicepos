@@ -140,9 +140,11 @@ function pos_alert_flag($value, $fallback = true) {
 
 function pos_normalize_in_mobile($raw) {
   $d = preg_replace("/\D+/", "", (string) $raw);
+  if (strpos($d, "00") === 0) $d = substr($d, 2);
   if (strpos($d, "91") === 0 && strlen($d) >= 12) $d = substr($d, -10);
-  if (strpos($d, "0") === 0 && strlen($d) === 11) $d = substr($d, 1);
-  return preg_match("/^\d{10}$/", $d) ? $d : "";
+  elseif (strpos($d, "0") === 0 && strlen($d) === 11) $d = substr($d, 1);
+  elseif (strlen($d) > 10) $d = substr($d, -10);
+  return preg_match("/^[6-9]\d{9}$/", $d) ? $d : "";
 }
 
 function pos_mask_secret($value) {
@@ -318,15 +320,30 @@ function pos_alert_closing_text($payload, $settings = null) {
 function pos_shop_alert_contacts($bid) {
   $biz = $bid ? pos_q("SELECT id, name, mobile, email FROM businesses WHERE id = ? LIMIT 1", "s", [$bid]) : [];
   $co = $bid ? pos_q("SELECT phone, email, name, timezone FROM company_settings WHERE business_id = ? LIMIT 1", "s", [$bid]) : [];
+  $staff = [];
+  try {
+    $staff = $bid ? pos_q("SELECT mobile, email FROM staff_users WHERE business_id = ? AND role = 'business_admin'", "s", [$bid]) : [];
+  } catch (Throwable $e) {
+    $staff = [];
+  }
   $b = $biz[0] ?? [];
   $c = $co[0] ?? [];
   $phones = [];
-  foreach ([pos_normalize_in_mobile($b["mobile"] ?? ""), pos_normalize_in_mobile($c["phone"] ?? "")] as $n) {
-    if ($n !== "") $phones[$n] = $n;
+  foreach ([$b["mobile"] ?? "", $c["phone"] ?? ""] as $n) {
+    $d = pos_normalize_in_mobile($n);
+    if ($d !== "") $phones[$d] = $d;
+  }
+  foreach ($staff as $row) {
+    $d = pos_normalize_in_mobile($row["mobile"] ?? "");
+    if ($d !== "") $phones[$d] = $d;
   }
   $emails = [];
   foreach ([$b["email"] ?? "", $c["email"] ?? ""] as $e) {
     $e = strtolower(trim((string) $e));
+    if (strpos($e, "@") !== false) $emails[$e] = $e;
+  }
+  foreach ($staff as $row) {
+    $e = strtolower(trim((string) ($row["email"] ?? "")));
     if (strpos($e, "@") !== false) $emails[$e] = $e;
   }
   return [
@@ -372,51 +389,58 @@ function pos_wa_send($cfg, $numbers, $message, $media = "") {
   if (!pos_alert_flag($cfg["wa_enabled"] ?? "1") || ($cfg["wa_api_key"] ?? "") === "" || ($cfg["wa_profile_id"] ?? "") === "") {
     return ["ok" => false, "skipped" => true, "reason" => "wa-off"];
   }
+  $results = [];
+  foreach ($list as $number) {
+    $results[] = pos_wa_send_one($cfg, $number, $message, $media);
+  }
+  $ok = false;
+  foreach ($results as $row) {
+    if (!empty($row["ok"])) $ok = true;
+  }
+  return ["ok" => $ok, "results" => $results, "skipped" => !$ok, "reason" => $ok ? "" : ($results[0]["reason"] ?? $results[0]["error"] ?? "wa-failed")];
+}
+
+function pos_wa_send_one($cfg, $number, $message, $media = "") {
   $httpsMedia = (stripos((string) $media, "https://") === 0) ? $media : "";
   $dataMedia = (strpos((string) $media, "data:image/") === 0) ? $media : "";
   $base = $cfg["wa_api_url"] ?: "https://wamaster.atavtelecom.in/api/v1/send";
   $endpoint = explode("?", $base, 2)[0];
-  if ($dataMedia !== "") {
-    $payload = json_encode([
-      "api_key" => $cfg["wa_api_key"],
-      "profile_id" => $cfg["wa_profile_id"],
-      "numbers" => implode(",", $list),
-      "message" => $message,
-      "country_code" => $cfg["wa_country_code"] ?: "91",
-      "media" => $dataMedia,
-      "type" => "media",
-    ]);
-    $ctx = stream_context_create([
-      "http" => [
-        "method" => "POST",
-        "header" => "Content-Type: application/json\r\nAccept: application/json\r\n",
-        "content" => $payload,
-        "timeout" => 20,
-        "ignore_errors" => true,
-      ],
-      "ssl" => ["verify_peer" => true],
-    ]);
-    $body = @file_get_contents($endpoint, false, $ctx);
-    $status = 0;
-    if (!empty($http_response_header[0]) && preg_match("/\\s(\\d{3})\\s/", $http_response_header[0], $m)) $status = (int) $m[1];
-    if ($body !== false && $status && $status < 400) {
-      return ["ok" => true, "status" => $status, "body" => substr((string) $body, 0, 240)];
-    }
-    $media = "";
-    $httpsMedia = "";
-  }
-  $query = [
+  $country = $cfg["wa_country_code"] ?: "91";
+  $payload = [
     "api_key" => $cfg["wa_api_key"],
     "profile_id" => $cfg["wa_profile_id"],
-    "numbers" => implode(",", $list),
+    "numbers" => $number,
     "message" => $message,
-    "country_code" => $cfg["wa_country_code"] ?: "91",
+    "country_code" => $country,
   ];
-  if ($httpsMedia !== "") {
-    $query["media"] = $httpsMedia;
-    $query["media_url"] = $httpsMedia;
+  if ($dataMedia !== "") {
+    $payload["media"] = $dataMedia;
+    $payload["type"] = "media";
+  } elseif ($httpsMedia !== "") {
+    $payload["media"] = $httpsMedia;
+    $payload["media_url"] = $httpsMedia;
   }
+  $ctx = stream_context_create([
+    "http" => [
+      "method" => "POST",
+      "header" => "Content-Type: application/json\r\nAccept: application/json\r\n",
+      "content" => json_encode($payload),
+      "timeout" => 20,
+      "ignore_errors" => true,
+    ],
+    "ssl" => ["verify_peer" => true],
+  ]);
+  $body = @file_get_contents($endpoint, false, $ctx);
+  $status = 0;
+  if (!empty($http_response_header[0]) && preg_match("/\\s(\\d{3})\\s/", $http_response_header[0], $m)) $status = (int) $m[1];
+  if ($body !== false && $status && $status < 400) {
+    return ["ok" => true, "status" => $status, "body" => substr((string) $body, 0, 240), "number" => $number];
+  }
+  if ($dataMedia !== "") return pos_wa_send_one($cfg, $number, $message, "");
+  $query = $payload;
+  unset($query["type"]);
   $url = $endpoint . "?" . http_build_query($query);
+  if (strlen($url) > 1800) return ["ok" => false, "error" => "WhatsApp HTTP {$status}", "status" => $status, "number" => $number];
   $ctx = stream_context_create([
     "http" => ["method" => "GET", "timeout" => 8, "ignore_errors" => true],
     "ssl" => ["verify_peer" => true],
@@ -424,9 +448,17 @@ function pos_wa_send($cfg, $numbers, $message, $media = "") {
   $body = @file_get_contents($url, false, $ctx);
   $status = 0;
   if (!empty($http_response_header[0]) && preg_match("/\\s(\\d{3})\\s/", $http_response_header[0], $m)) $status = (int) $m[1];
-  if ($body === false) return ["ok" => false, "error" => "WhatsApp request failed"];
-  if ($status && $status >= 400) return ["ok" => false, "error" => "WhatsApp HTTP {$status}", "status" => $status];
-  return ["ok" => true, "status" => $status, "body" => substr((string) $body, 0, 240)];
+  if ($body === false) return ["ok" => false, "error" => "WhatsApp request failed", "number" => $number];
+  if ($status && $status >= 400) return ["ok" => false, "error" => "WhatsApp HTTP {$status}", "status" => $status, "number" => $number];
+  return ["ok" => true, "status" => $status, "body" => substr((string) $body, 0, 240), "number" => $number];
+}
+
+function pos_alert_delivered($out) {
+  if (!empty($out["wa"]["ok"])) return true;
+  foreach ($out["mail"] ?? [] as $row) {
+    if (!empty($row["ok"])) return true;
+  }
+  return false;
 }
 
 function pos_alert_dispatch($phones, $emails, $subject, $text, $html = "", $image = "") {
@@ -563,17 +595,32 @@ function pos_alert_low_stock($bid, $itemIds) {
   }
 }
 
+function pos_add_ymd($ymd, $days) {
+  $day = pos_expiry_ymd($ymd);
+  if ($day === "") return "";
+  $ts = strtotime($day . " UTC") + ((int) $days * 86400);
+  return gmdate("Y-m-d", $ts);
+}
+
+function pos_closing_alert_day($hour, $closeHour, $todayYmd) {
+  $today = pos_expiry_ymd($todayYmd);
+  if ($today === "") return "";
+  if ((int) $hour < (int) $closeHour) return pos_add_ymd($today, -1);
+  return $today;
+}
+
 function pos_send_closing_alert($bid) {
   $cfg = pos_alert_settings();
   if (!pos_alert_flag($cfg["alert_closing"])) return ["skipped" => true];
   $shop = pos_shop_alert_contacts($bid);
   if (!$shop["businessId"]) return ["skipped" => true];
+  if (!$shop["phones"] && !$shop["emails"]) return ["skipped" => true, "reason" => "no-number"];
   $hour = (int) date("G");
   $close = (int) $cfg["alert_closing_hour"];
-  if ($hour < $close) return ["skipped" => true, "reason" => "before-close"];
-  $day = date("Y-m-d");
+  $today = date("Y-m-d");
+  $day = pos_closing_alert_day($hour, $close, $today);
+  if ($day === "") return ["skipped" => true];
   if (pos_alert_sent($shop["businessId"], "closing", $day, "")) return ["skipped" => true, "reason" => "already-sent"];
-  if (!pos_alert_mark($shop["businessId"], "closing", $day, "")) return ["skipped" => true, "reason" => "already-sent"];
   $sum = pos_q(
     "SELECT COUNT(*) AS bills,
             COALESCE(SUM(total),0) AS takings,
@@ -608,7 +655,9 @@ function pos_send_closing_alert($bid) {
     "credit" => $row["credit"] ?? 0,
     "lowStock" => $low,
   ], $cfg);
-  return pos_alert_dispatch($shop["phones"], $shop["emails"], "Closing sales · {$shop["shopName"]} · {$day}", $text);
+  $out = pos_alert_dispatch($shop["phones"], $shop["emails"], "Closing sales · {$shop["shopName"]} · {$day}", $text);
+  if (pos_alert_delivered($out)) pos_alert_mark($shop["businessId"], "closing", $day, "");
+  return $out;
 }
 
 function pos_expiry_ymd($value) {
@@ -625,11 +674,11 @@ function pos_days_until_expiry($expiry, $today) {
   return (int) round((strtotime($exp . " UTC") - strtotime($day . " UTC")) / 86400);
 }
 
-function pos_send_renewal_alerts($bid = null) {
+function pos_send_renewal_alerts($bid = null, $force = false) {
   $cfg = pos_alert_settings();
   $beforeOn = pos_alert_flag($cfg["alert_renewal_before"] ?? "1");
   $expiredOn = pos_alert_flag($cfg["alert_renewal_expired"] ?? "1");
-  if (!$beforeOn && !$expiredOn) return ["skipped" => true];
+  if (!$force && !$beforeOn && !$expiredOn) return ["skipped" => true, "reason" => "alerts-off"];
   $support = function_exists("pos_platform_settings") ? pos_platform_settings() : [];
   $signIn = function_exists("pos_login_url") ? pos_login_url() : "/login.html";
   $sql = "SELECT b.id, b.name, b.owner_name, b.subscription_expires_at, p.name AS plan_name
@@ -655,6 +704,10 @@ function pos_send_renewal_alerts($bid = null) {
     $days = pos_days_until_expiry($expiry, $today);
     if ($days === null) continue;
     $shop = pos_shop_alert_contacts($row["id"]);
+    if (!$shop["phones"] && !$shop["emails"]) {
+      $results[] = ["businessId" => $row["id"], "shopName" => $row["name"], "skipped" => true, "reason" => "no-number"];
+      continue;
+    }
     $payload = [
       "shopName" => $row["name"] ?? $shop["shopName"],
       "ownerName" => $row["owner_name"] ?? "",
@@ -664,20 +717,53 @@ function pos_send_renewal_alerts($bid = null) {
       "signInUrl" => $signIn,
       "supportPhone" => $support["support_phone"] ?? "",
     ];
-    if ($beforeOn && $days >= 0 && $days <= 7) {
-      if (!pos_alert_sent($row["id"], "renewal_before", $expiry, "") && pos_alert_mark($row["id"], "renewal_before", $expiry, "")) {
+    if (($force || $beforeOn) && $days >= 0 && $days <= 7) {
+      if ($force || !pos_alert_sent($row["id"], "renewal_before", $expiry, "")) {
         $text = pos_render_alert("renewal_before", $payload, $cfg);
-        $results[] = pos_alert_dispatch($shop["phones"], $shop["emails"], "Renew ATAV POS · {$payload["shopName"]}", $text);
+        $out = pos_alert_dispatch($shop["phones"], $shop["emails"], "Renew ATAV POS · {$payload["shopName"]}", $text);
+        if (!$force && pos_alert_delivered($out)) pos_alert_mark($row["id"], "renewal_before", $expiry, "");
+        $results[] = array_merge(["businessId" => $row["id"], "shopName" => $payload["shopName"], "kind" => "renewal_before"], $out);
       }
-    }
-    if ($expiredOn && $days < 0) {
-      if (!pos_alert_sent($row["id"], "renewal_expired", $expiry, "") && pos_alert_mark($row["id"], "renewal_expired", $expiry, "")) {
+    } elseif (($force || $expiredOn) && $days < 0) {
+      if ($force || !pos_alert_sent($row["id"], "renewal_expired", $expiry, "")) {
         $text = pos_render_alert("renewal_expired", $payload, $cfg);
-        $results[] = pos_alert_dispatch($shop["phones"], $shop["emails"], "ATAV POS expired · {$payload["shopName"]}", $text);
+        $out = pos_alert_dispatch($shop["phones"], $shop["emails"], "ATAV POS expired · {$payload["shopName"]}", $text);
+        if (!$force && pos_alert_delivered($out)) pos_alert_mark($row["id"], "renewal_expired", $expiry, "");
+        $results[] = array_merge(["businessId" => $row["id"], "shopName" => $payload["shopName"], "kind" => "renewal_expired"], $out);
       }
+    } elseif ($force) {
+      $results[] = [
+        "businessId" => $row["id"],
+        "shopName" => $payload["shopName"],
+        "skipped" => true,
+        "reason" => $days > 7 ? "not-due-yet" : "not-expired",
+        "days" => $days,
+      ];
     }
   }
-  return ["ok" => true, "results" => $results];
+  if ($bid && !$results) throw new Exception("This shop has no subscription expiry date, or is not due for a renewal/expired alert yet");
+  return ["ok" => true, "results" => $results, "summary" => pos_summarize_alert_results($results)];
+}
+
+function pos_summarize_alert_results($results = []) {
+  $wa = 0;
+  $mail = 0;
+  $sent = 0;
+  $skipped = 0;
+  foreach ($results as $row) {
+    if (!empty($row["skipped"])) {
+      $skipped++;
+      continue;
+    }
+    if (!empty($row["wa"]["ok"])) $wa++;
+    $mailOk = false;
+    foreach ($row["mail"] ?? [] as $m) {
+      if (!empty($m["ok"])) $mailOk = true;
+    }
+    if ($mailOk) $mail++;
+    if (!empty($row["wa"]["ok"]) || $mailOk) $sent++;
+  }
+  return ["sent" => $sent, "skipped" => $skipped, "wa" => $wa, "mail" => $mail, "total" => count($results)];
 }
 
 function pos_tick_shop_alerts($bid = null) {

@@ -18,6 +18,7 @@ import {
   publicAlertSettings,
   sanitizeNoticeImage,
   ensureAlertSettings,
+  sendRenewalAlerts,
 } from "./alerts.js";
 
 function send(res, fn) {
@@ -654,6 +655,29 @@ export function registerMaster(app) {
       const saved = await saveAlertSettings(req.body || {});
       await platformAudit(req.auth.admin, "Settings Changed", { module: "alerts", target_name: "WhatsApp alerts" }, req);
       return { ok: true, ...publicAlertSettings(saved) };
+    }),
+  );
+
+  app.post("/api/master/alerts/send-expiry", (req, res) =>
+    send(res, async () => {
+      const out = await sendRenewalAlerts(null, { force: true });
+      await platformAudit(req.auth.admin, "Expiry Alerts Sent", { module: "alerts", target_name: "all shops" }, req);
+      return out;
+    }),
+  );
+
+  app.post("/api/master/businesses/:id/send-expiry-alert", (req, res) =>
+    send(res, async () => {
+      const [biz] = await query("SELECT id, name FROM businesses WHERE id = ? LIMIT 1", [req.params.id]);
+      if (!biz) throw new Error("Business not found");
+      const out = await sendRenewalAlerts(req.params.id, { force: true });
+      await platformAudit(
+        req.auth.admin,
+        "Expiry Alert Sent",
+        { module: "businesses", target_id: biz.id, target_name: biz.name },
+        req,
+      );
+      return out;
     }),
   );
 

@@ -108,6 +108,14 @@ test("Master Admin Settings lives under Backup with Active/Inactive templates", 
   assert.match(alerts, /tpl_renewal_before/);
   assert.match(alerts, /renewal_expired/);
   assert.match(nodeAlerts, /sendRenewalAlerts/);
+  assert.match(nodeAlerts, /summarizeAlertResults/);
+  assert.match(master, /alert-send-expiry/);
+  assert.match(master, /data-send-expiry/);
+  assert.match(master, /summarizeAlertDelivery/);
+  assert.match(master, /\/api\/master\/alerts\/send-expiry/);
+  assert.match(php, /master\/alerts\/send-expiry/);
+  assert.match(php, /send-expiry-alert/);
+  assert.match(alerts, /pos_summarize_alert_results/);
   assert.match(alerts, /tpl_welcome/);
   assert.match(alerts, /pos_fill_template/);
   assert.match(nodeAlerts, /startAlertScheduler/);
