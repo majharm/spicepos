@@ -57,6 +57,15 @@ test("PHP fallback routes checkout, holds, and order updates through core", () =
   assert.match(read("pos-accounting.php"), /accounts\/receipts\/\(\[\^\/\]\+\)/);
   assert.match(read("pos-accounting.php"), /function pos_replace_ledger_journal/);
   assert.match(read("pos-php-core.php"), /function pos_indian_fy/);
+  assert.match(core, /function pos_ensure_account_managers/);
+  assert.match(core, /function pos_shop_support/);
+  assert.match(core, /function pos_list_account_managers/);
+  assert.match(core, /master\/account-managers/);
+  assert.match(core, /businesses\/\(\[\^\/\]\+\)\/account-manager/);
+  assert.match(core, /account_manager_id/);
+  assert.match(read("pos-php-till.php"), /pos_shop_support\(\$bid\)/);
+  assert.match(read("server/settings.js"), /export async function shopSupportContact/);
+  assert.match(read("api/master/account-managers/index.php"), /master\/account-managers/);
   const ht = read("api/.htaccess");
   assert.match(ht, /DirectorySlash Off/);
   assert.doesNotMatch(ht, /!-d/);

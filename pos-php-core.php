@@ -395,7 +395,94 @@ function pos_ensure_business_columns() {
     "city" => "VARCHAR(128) NULL",
     "state" => "VARCHAR(64) NULL",
     "pin_code" => "VARCHAR(12) NULL",
+    "account_manager_id" => "VARCHAR(255) NULL",
   ]);
+}
+
+function pos_ensure_account_managers() {
+  static $done = false;
+  if ($done) return;
+  $done = true;
+  pos_ensure_business_columns();
+  $db = pos_db();
+  @$db->query(
+    "CREATE TABLE IF NOT EXISTS account_managers (
+      id VARCHAR(255) PRIMARY KEY,
+      name VARCHAR(128) NOT NULL,
+      mobile VARCHAR(32) NULL,
+      email VARCHAR(255) NULL,
+      status VARCHAR(16) NOT NULL DEFAULT 'active',
+      notes VARCHAR(255) NULL,
+      created_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+      updated_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+      INDEX (status)
+    )"
+  );
+}
+
+function pos_normalize_manager($body) {
+  $name = trim((string) ($body["name"] ?? ""));
+  $mobile = preg_replace("/\D/", "", (string) ($body["mobile"] ?? ""));
+  $email = strtolower(trim((string) ($body["email"] ?? "")));
+  $notes = trim((string) ($body["notes"] ?? ""));
+  $status = strtolower((string) ($body["status"] ?? "active")) === "inactive" ? "inactive" : "active";
+  if ($name === "") throw new Exception("Account manager name is required");
+  if (strlen($mobile) < 10) throw new Exception("Enter a valid mobile number");
+  if ($email !== "" && !preg_match('/^[^\s@]+@[^\s@]+\.[^\s@]+$/', $email)) {
+    throw new Exception("Enter a valid email ID");
+  }
+  return ["name" => $name, "mobile" => $mobile, "email" => $email, "notes" => $notes, "status" => $status];
+}
+
+function pos_list_account_managers() {
+  pos_ensure_account_managers();
+  $rows = pos_q(
+    "SELECT m.*,
+            (SELECT COUNT(*) FROM businesses b WHERE b.account_manager_id = m.id) AS shops
+     FROM account_managers m
+     ORDER BY m.status ASC, m.name ASC"
+  );
+  $shops = [];
+  try {
+    $shops = pos_q(
+      "SELECT id, name, city, account_manager_id FROM businesses
+       WHERE account_manager_id IS NOT NULL AND account_manager_id <> ''
+       ORDER BY name"
+    );
+  } catch (Exception $e) {
+    $shops = [];
+  }
+  foreach ($rows as &$m) {
+    $m["shops"] = (int) ($m["shops"] ?? 0);
+    $m["businesses"] = [];
+    foreach ($shops as $b) {
+      if (($b["account_manager_id"] ?? "") === $m["id"]) $m["businesses"][] = $b;
+    }
+  }
+  return $rows;
+}
+
+function pos_shop_support($bid) {
+  $platform = pos_platform_settings();
+  if (!$bid) return $platform;
+  try {
+    pos_ensure_account_managers();
+    $biz = pos_q("SELECT account_manager_id FROM businesses WHERE id = ? LIMIT 1", "s", [$bid]);
+    $amId = $biz[0]["account_manager_id"] ?? "";
+    if ($amId === "") return $platform;
+    $am = pos_q("SELECT name, mobile, email, status FROM account_managers WHERE id = ? LIMIT 1", "s", [$amId]);
+    $row = $am[0] ?? null;
+    if (!$row || ($row["status"] ?? "") !== "active") return $platform;
+    $phone = trim((string) ($row["mobile"] ?? ""));
+    $email = trim((string) ($row["email"] ?? ""));
+    return [
+      "support_phone" => $phone !== "" ? $phone : ($platform["support_phone"] ?? ""),
+      "support_email" => $email !== "" ? $email : ($platform["support_email"] ?? ""),
+      "account_manager_name" => trim((string) ($row["name"] ?? "")),
+    ];
+  } catch (Exception $e) {
+    return $platform;
+  }
 }
 
 function pos_is_footwear_shop($biz) {
@@ -1174,6 +1261,7 @@ function pos_validate_signup($raw, $requireAdmin = true) {
     "plan_id" => pos_pick($raw, "plan_id"),
     "subscription_expires_at" => pos_pick($raw, "subscription_expires_at"),
     "status" => pos_pick($raw, "status"),
+    "account_manager_id" => pos_pick($raw, "account_manager_id"),
   ];
   $required = ["name", "business_type", "category", "owner_name", "mobile", "email", "address", "city", "state", "pin_code"];
   if ($requireAdmin) {
@@ -1225,6 +1313,7 @@ function pos_validate_signup($raw, $requireAdmin = true) {
     "plan_id" => trim((string) ($b["plan_id"] ?: "trial")) ?: "trial",
     "subscription_expires_at" => pos_normalize_date_only(trim((string) $b["subscription_expires_at"]) ?: null),
     "status" => $status,
+    "account_manager_id" => trim((string) ($b["account_manager_id"] ?? "")),
   ];
 }
 
@@ -1256,9 +1345,16 @@ function pos_register_business($raw) {
     "ssssssssssssssssss",
     [
       $id, $code, $shop, $b["status"] ?: "active", $b["owner_name"], $b["mobile"], $b["email"], $full, $b["gstin"],
-      $b["business_type"], $planId, $expiry, $b["logo_url"], $b["category"], $b["pan"], $b["city"], $b["state"], $b["pin_code"],
+      $b["business_type"], $planId, $expiry, $b["logo_url"], $b["category"], $b["pan"],       $b["city"], $b["state"], $b["pin_code"],
     ]
   );
+  $amId = trim((string) ($b["account_manager_id"] ?? ""));
+  if ($amId !== "") {
+    pos_ensure_account_managers();
+    $am = pos_q("SELECT id FROM account_managers WHERE id = ? AND status = 'active' LIMIT 1", "s", [$amId]);
+    if (!$am) throw new Exception("Account manager not found");
+    pos_q("UPDATE businesses SET account_manager_id = ? WHERE id = ?", "ss", [$amId, $id]);
+  }
   try {
     pos_q(
       "INSERT INTO company_settings (id, name, address, phone, email, gstin, pan, city, state, pincode, logo_url, business_id)
@@ -1314,14 +1410,22 @@ function pos_update_business($id, $raw) {
   $full = $b["address"] . ", " . $b["city"] . ", " . $b["state"] . " " . $b["pin_code"];
   $logo = $b["logo_url"] ?: ($existing[0]["logo_url"] ?? null);
   $expiry = pos_normalize_date_only($b["subscription_expires_at"]) ?: pos_normalize_date_only($existing[0]["subscription_expires_at"] ?? null);
+  $amId = trim((string) ($b["account_manager_id"] ?? ""));
+  if ($amId !== "") {
+    pos_ensure_account_managers();
+    $am = pos_q("SELECT id FROM account_managers WHERE id = ? AND status = 'active' LIMIT 1", "s", [$amId]);
+    if (!$am) throw new Exception("Account manager not found");
+  } else {
+    $amId = null;
+  }
   pos_q(
     "UPDATE businesses SET name=?, owner_name=?, mobile=?, email=?, address=?, gstin=?, business_type=?,
-       status=?, plan_id=?, subscription_expires_at=?, logo_url=?, category=?, pan=?, city=?, state=?, pin_code=?
+       status=?, plan_id=?, subscription_expires_at=?, logo_url=?, category=?, pan=?, city=?, state=?, pin_code=?, account_manager_id=?
      WHERE id=?",
-    "sssssssssssssssss",
+    "ssssssssssssssssss",
     [
       $b["name"], $b["owner_name"], $b["mobile"], $b["email"], $full, $b["gstin"], $b["business_type"],
-      $b["status"], $planId, $expiry, $logo, $b["category"], $b["pan"], $b["city"], $b["state"], $b["pin_code"], $id,
+      $b["status"], $planId, $expiry, $logo, $b["category"], $b["pan"], $b["city"], $b["state"], $b["pin_code"], $amId === null ? "" : $amId, $id,
     ]
   );
   try {
@@ -1827,12 +1931,15 @@ function pos_php_dispatch($path, $method, $rawBody) {
     }
 
     if ($path === "master/businesses" && $method === "GET") {
+      pos_ensure_account_managers();
       $rows = pos_q(
         "SELECT b.*, p.name AS plan_name, p.fee_monthly,
+                am.name AS account_manager_name, am.mobile AS account_manager_mobile,
                 (SELECT u.username FROM staff_users u
                  WHERE u.business_id = b.id AND u.role = 'business_admin' LIMIT 1) AS admin_username
          FROM businesses b
          LEFT JOIN subscription_plans p ON p.id = b.plan_id
+         LEFT JOIN account_managers am ON am.id = b.account_manager_id
          ORDER BY b.name"
       );
       foreach ($rows as &$row) $row["computed_status"] = pos_public_status($row);
@@ -2085,6 +2192,65 @@ function pos_php_dispatch($path, $method, $rawBody) {
 
     if ($path === "master/support" && $method === "GET") {
       pos_send(200, pos_platform_settings());
+    }
+
+    if ($path === "master/account-managers" && $method === "GET") {
+      pos_send(200, pos_list_account_managers());
+    }
+
+    if ($path === "master/account-managers" && $method === "POST") {
+      $b = pos_normalize_manager($body);
+      $id = pos_uuid();
+      pos_q(
+        "INSERT INTO account_managers (id, name, mobile, email, status, notes) VALUES (?,?,?,?,?,?)",
+        "ssssss",
+        [$id, $b["name"], $b["mobile"], $b["email"], $b["status"], $b["notes"]]
+      );
+      pos_audit($auth["admin"], "Account Manager Created", ["module" => "account_managers", "target_id" => $id, "target_name" => $b["name"]]);
+      pos_send(200, ["ok" => true, "id" => $id, "managers" => pos_list_account_managers(), "php" => true]);
+    }
+
+    if (preg_match("#^master/account-managers/([^/]+)$#", $path, $m) && $method === "PUT") {
+      $b = pos_normalize_manager($body);
+      $row = pos_q("SELECT id FROM account_managers WHERE id = ? LIMIT 1", "s", [$m[1]]);
+      if (!$row) throw new Exception("Account manager not found");
+      pos_q(
+        "UPDATE account_managers SET name=?, mobile=?, email=?, status=?, notes=? WHERE id=?",
+        "ssssss",
+        [$b["name"], $b["mobile"], $b["email"], $b["status"], $b["notes"], $m[1]]
+      );
+      pos_audit($auth["admin"], "Account Manager Edited", ["module" => "account_managers", "target_id" => $m[1], "target_name" => $b["name"]]);
+      pos_send(200, ["ok" => true, "managers" => pos_list_account_managers(), "php" => true]);
+    }
+
+    if (preg_match("#^master/account-managers/([^/]+)$#", $path, $m) && $method === "DELETE") {
+      $row = pos_q("SELECT id, name FROM account_managers WHERE id = ? LIMIT 1", "s", [$m[1]]);
+      if (!$row) throw new Exception("Account manager not found");
+      pos_q("UPDATE businesses SET account_manager_id = NULL WHERE account_manager_id = ?", "s", [$m[1]]);
+      pos_q("DELETE FROM account_managers WHERE id = ?", "s", [$m[1]]);
+      pos_audit($auth["admin"], "Account Manager Removed", ["module" => "account_managers", "target_id" => $m[1], "target_name" => $row[0]["name"] ?? ""]);
+      pos_send(200, ["ok" => true, "managers" => pos_list_account_managers(), "php" => true]);
+    }
+
+    if (preg_match("#^master/businesses/([^/]+)/account-manager$#", $path, $m) && $method === "POST") {
+      pos_ensure_account_managers();
+      $biz = pos_q("SELECT id, name FROM businesses WHERE id = ? LIMIT 1", "s", [$m[1]]);
+      if (!$biz) throw new Exception("Business not found");
+      $amId = trim((string) ($body["account_manager_id"] ?? ""));
+      if ($amId !== "") {
+        $am = pos_q("SELECT id FROM account_managers WHERE id = ? AND status = 'active' LIMIT 1", "s", [$amId]);
+        if (!$am) throw new Exception("Account manager not found");
+      } else {
+        $amId = "";
+      }
+      pos_q("UPDATE businesses SET account_manager_id = ? WHERE id = ?", "ss", [$amId, $m[1]]);
+      pos_audit($auth["admin"], "Account Manager Assigned", [
+        "module" => "businesses",
+        "target_id" => $m[1],
+        "target_name" => $biz[0]["name"] ?? "",
+        "account_manager_id" => $amId,
+      ]);
+      pos_send(200, ["ok" => true, "account_manager_id" => $amId, "php" => true]);
     }
 
     if ($path === "master/support" && $method === "POST") {

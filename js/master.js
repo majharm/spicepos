@@ -726,6 +726,7 @@ async function render() {
   const titles = {
     dash: "Platform dashboard",
     biz: "Businesses",
+    managers: "Account managers",
     users: "Users",
     plans: "Subscription plans",
     branches: "Branches",
@@ -737,7 +738,7 @@ async function render() {
     support: "Support helpline",
   };
   $("panel-title").textContent = titles[tab] || "Dashboard";
-  $("panel")?.classList.toggle("has-desk", ["biz", "backup", "alerts", "notes"].includes(tab));
+  $("panel")?.classList.toggle("has-desk", ["biz", "managers", "backup", "alerts", "notes"].includes(tab));
   const body = $("panel-body");
   body.innerHTML = "<p class='hint'>Loading…</p>";
   try {
@@ -773,9 +774,17 @@ async function render() {
       )}</div>`;
       bindEnterPosButtons(body);
     } else if (tab === "biz") {
-      const [rows, plans] = await Promise.all([api("/api/master/businesses"), api("/api/master/plans")]);
+      const [rows, plans, managers] = await Promise.all([
+        api("/api/master/businesses"),
+        api("/api/master/plans"),
+        api("/api/master/account-managers").catch(() => []),
+      ]);
       const planOptions = plans
         .map((p) => `<option value="${p.id}">${p.name} · ${money(p.fee_monthly)} / month</option>`)
+        .join("");
+      const managerOptions = (Array.isArray(managers) ? managers : [])
+        .filter((m) => m.status !== "inactive" || rows.some((b) => b.account_manager_id === m.id))
+        .map((m) => `<option value="${attr(m.id)}">${attr(m.name)} · ${attr(m.mobile || "")}${m.status === "inactive" ? " (inactive)" : ""}</option>`)
         .join("");
       const activeN = rows.filter((b) => String(b.computed_status || b.status).toLowerCase() === "active").length;
       const expiredN = rows.filter((b) => /expir/.test(String(b.computed_status || "").toLowerCase())).length;
@@ -905,6 +914,12 @@ async function render() {
                 <label>Expiry
                   <input name="subscription_expires_at" type="date" />
                 </label>
+                <label class="full">Account manager
+                  <select name="account_manager_id">
+                    <option value="">None — platform helpline</option>
+                    ${managerOptions}
+                  </select>
+                </label>
               </fieldset>
               <div class="item-composer-actions">
                 <button class="btn primary" type="submit" id="biz-save">Create business</button>
@@ -920,7 +935,7 @@ async function render() {
             </div>
             <div class="items-library-list" id="biz-library">${rows
               .map((b) => {
-                const hay = `${b.name || ""} ${b.owner_name || ""} ${b.city || ""} ${b.category || ""} ${b.plan_name || ""}`.toLowerCase();
+                const hay = `${b.name || ""} ${b.owner_name || ""} ${b.city || ""} ${b.category || ""} ${b.plan_name || ""} ${b.account_manager_name || ""}`.toLowerCase();
                 const src = String(b.logo_url || "").trim();
                 const thumb = src
                   ? `<img class="item-thumb" src="${attr(src)}" alt="">`
@@ -939,6 +954,7 @@ async function render() {
                     <span class="item-chip">${attr(b.plan_name || b.plan_id || "—")}</span>
                     <span class="item-chip">${money(b.fee_monthly)}</span>
                     <span class="item-chip">Exp ${attr(ymd(b.subscription_expires_at) || "—")}</span>
+                    <span class="item-chip">${attr(b.account_manager_name || "No account manager")}</span>
                   </div>
                   <div class="item-card-foot">
                     <div class="item-card-actions">
@@ -994,6 +1010,7 @@ async function render() {
         form.confirmPassword.value = "";
         setSelect(form.plan_id, b?.plan_id || "");
         form.subscription_expires_at.value = b ? ymd(b.subscription_expires_at) : "";
+        setSelect(form.account_manager_id, b?.account_manager_id || "");
         const editing = Boolean(b);
         setAdminRequired(!editing);
         $("biz-title").textContent = editing ? "Edit business" : "Add business";
@@ -1474,15 +1491,192 @@ async function render() {
         }
         panelFlash = "";
       }
+    } else if (tab === "managers") {
+      const [managers, shops] = await Promise.all([
+        api("/api/master/account-managers"),
+        api("/api/master/businesses"),
+      ]);
+      const activeN = managers.filter((m) => m.status !== "inactive").length;
+      const assignedN = shops.filter((b) => b.account_manager_id).length;
+      body.innerHTML = `<div class="items-desk master-desk">
+        ${masterHero("Platform", "Account managers", "Add support staff, then assign each shop. That person is who the shop sees on Support.", [
+          { label: "Managers", value: managers.length },
+          { label: "Active", value: activeN },
+          { label: "Shops assigned", value: assignedN },
+          { label: "Unassigned shops", value: shops.length - assignedN, warn: shops.length - assignedN > 0 },
+        ])}
+        <div class="items-split">
+          <div class="master-compose">
+            <form class="settings item-composer" id="am-form">
+              <div class="item-composer-top">
+                <p class="item-mode" id="am-title">Add account manager</p>
+                <p class="item-composer-note">Name and mobile are shown to assigned shops for support.</p>
+              </div>
+              <input type="hidden" name="manager_id" />
+              <fieldset class="item-block">
+                <legend>Contact</legend>
+                <label class="full">Name *
+                  <input name="name" required maxlength="120" />
+                </label>
+                <label>Mobile *
+                  <input name="mobile" type="tel" required inputmode="numeric" maxlength="15" placeholder="10-digit mobile" />
+                </label>
+                <label>Email
+                  <input name="email" type="email" maxlength="160" />
+                </label>
+                <label>Status
+                  <select name="status">
+                    <option value="active">Active</option>
+                    <option value="inactive">Inactive</option>
+                  </select>
+                </label>
+                <label class="full">Notes
+                  <input name="notes" maxlength="200" placeholder="Optional" />
+                </label>
+              </fieldset>
+              <div class="item-composer-actions">
+                <button class="btn primary" type="submit" id="am-save">Save manager</button>
+                <button class="btn" type="button" id="am-cancel" hidden>Cancel edit</button>
+                <p class="hint" id="am-hint"></p>
+              </div>
+            </form>
+          </div>
+          <aside class="items-library">
+            <div class="items-library-head">
+              <h4>Managers</h4>
+              <input id="am-search" type="search" placeholder="Search name or mobile…" autocomplete="off" />
+            </div>
+            <div class="items-library-list">${managers
+              .map((m) => {
+                const hay = `${m.name || ""} ${m.mobile || ""} ${m.email || ""}`.toLowerCase();
+                const assigned = m.businesses || [];
+                const assignOpts = shops
+                  .filter((b) => b.account_manager_id !== m.id)
+                  .map((b) => `<option value="${attr(b.id)}">${attr(b.name)}</option>`)
+                  .join("");
+                return `<article class="report-card item-card" data-am-card data-am-search="${attr(hay)}">
+                  <div class="item-card-head">
+                    <span class="item-thumb-empty" aria-hidden="true">${attr(letterMark(m.name))}</span>
+                    <div class="item-card-copy">
+                      <strong>${attr(m.name)}</strong>
+                      <span>${attr(m.mobile || "—")}${m.email ? ` · ${attr(m.email)}` : ""}</span>
+                    </div>
+                    ${statusChip(m.status)}
+                  </div>
+                  <div class="item-card-meta">
+                    <span class="item-chip">${assigned.length} shop${assigned.length === 1 ? "" : "s"}</span>
+                    ${assigned.map((b) => `<span class="item-chip">${attr(b.name)}</span>`).join("")}
+                  </div>
+                  <div class="item-card-foot">
+                    <div class="item-card-actions">
+                      <button class="btn" type="button" data-edit-am="${attr(m.id)}">Edit</button>
+                      ${m.status !== "inactive" && assignOpts ? `<label class="item-chip">Assign
+                        <select data-assign-am="${attr(m.id)}"><option value="">Select shop…</option>${assignOpts}</select>
+                      </label>` : ""}
+                      ${assigned
+                        .map(
+                          (b) =>
+                            `<button class="btn" type="button" data-unassign-shop="${attr(b.id)}">Remove ${attr(b.name)}</button>`,
+                        )
+                        .join("")}
+                      <button class="btn danger" type="button" data-del-am="${attr(m.id)}">Delete</button>
+                    </div>
+                  </div>
+                </article>`;
+              })
+              .join("") || `<div class="item-empty-card"><strong>No account managers yet</strong><p>Add the first support person on the left.</p></div>`}
+            </div>
+          </aside>
+        </div>
+      </div>`;
+      $("am-search")?.addEventListener("input", () => {
+        const q = String($("am-search").value || "").trim().toLowerCase();
+        body.querySelectorAll("[data-am-card]").forEach((el) => {
+          el.hidden = Boolean(q) && !String(el.dataset.amSearch || "").includes(q);
+        });
+      });
+      const form = $("am-form");
+      const hint = $("am-hint");
+      function fillManager(m) {
+        form.manager_id.value = m?.id || "";
+        form.name.value = m?.name || "";
+        form.mobile.value = m?.mobile || "";
+        form.email.value = m?.email || "";
+        form.notes.value = m?.notes || "";
+        form.status.value = m?.status === "inactive" ? "inactive" : "active";
+        $("am-title").textContent = m ? "Edit account manager" : "Add account manager";
+        $("am-save").textContent = m ? "Update manager" : "Save manager";
+        $("am-cancel").hidden = !m;
+        hint.className = "hint";
+        hint.textContent = m ? `Editing ${m.name}` : "";
+        form.scrollIntoView({ block: "start" });
+      }
+      $("am-cancel").onclick = () => fillManager(null);
+      body.querySelectorAll("[data-edit-am]").forEach((btn) => {
+        btn.onclick = () => fillManager(managers.find((m) => m.id === btn.dataset.editAm));
+      });
+      body.querySelectorAll("[data-del-am]").forEach((btn) => {
+        btn.onclick = async () => {
+          const m = managers.find((row) => row.id === btn.dataset.delAm);
+          if (!confirm(`Delete ${m?.name || "this account manager"}? Assigned shops will use the platform helpline.`)) return;
+          await api(`/api/master/account-managers/${btn.dataset.delAm}`, { method: "DELETE" });
+          panelFlash = "Account manager removed";
+          render();
+        };
+      });
+      body.querySelectorAll("[data-assign-am]").forEach((sel) => {
+        sel.onchange = async () => {
+          const shopId = sel.value;
+          if (!shopId) return;
+          await api(`/api/master/businesses/${shopId}/account-manager`, {
+            method: "POST",
+            body: JSON.stringify({ account_manager_id: sel.dataset.assignAm }),
+          });
+          panelFlash = "Shop assigned";
+          render();
+        };
+      });
+      body.querySelectorAll("[data-unassign-shop]").forEach((btn) => {
+        btn.onclick = async () => {
+          await api(`/api/master/businesses/${btn.dataset.unassignShop}/account-manager`, {
+            method: "POST",
+            body: JSON.stringify({ account_manager_id: "" }),
+          });
+          panelFlash = "Shop unassigned";
+          render();
+        };
+      });
+      form.onsubmit = async (e) => {
+        e.preventDefault();
+        const fd = Object.fromEntries(new FormData(form).entries());
+        const id = fd.manager_id;
+        delete fd.manager_id;
+        hint.className = "hint";
+        hint.textContent = "Saving…";
+        try {
+          if (id) await api(`/api/master/account-managers/${id}`, { method: "PUT", body: JSON.stringify(fd) });
+          else await api("/api/master/account-managers", { method: "POST", body: JSON.stringify(fd) });
+          panelFlash = "Account manager saved";
+          render();
+        } catch (err) {
+          hint.textContent = err.message;
+          hint.className = "hint error";
+        }
+      };
+      if (panelFlash) {
+        hint.textContent = panelFlash;
+        hint.className = "hint ok";
+        panelFlash = "";
+      }
     } else if (tab === "support") {
       const s = await api("/api/master/support");
       body.innerHTML = `<div class="support-admin">
         <div>
-          <p class="lede">Cashiers see this helpline on Support and on the sign-in screen. Use a mobile number so shops can Call or WhatsApp.</p>
+          <p class="lede">The sign-in screen always uses this platform helpline. Assigned shops see their account manager on Support instead; shops without one see this number.</p>
           <form class="settings settings-page" id="support-form">
             <div class="settings-section">
               <h3>Helpline</h3>
-              <p class="section-note">Stored in MySQL and shown to every shop.</p>
+              <p class="section-note">Fallback contact when a shop has no account manager, or the manager is inactive.</p>
               <div class="settings-grid">
                 <label>Support phone <input name="support_phone" required value="${attr(s.support_phone)}" placeholder="9876543210" /></label>
                 <label>Support email <input name="support_email" type="email" value="${attr(s.support_email)}" placeholder="support@example.com" /></label>

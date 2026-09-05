@@ -69,6 +69,7 @@ export async function ensureSchema() {
   await addColumn("businesses", "city", "VARCHAR(128) NULL");
   await addColumn("businesses", "state", "VARCHAR(64) NULL");
   await addColumn("businesses", "pin_code", "VARCHAR(12) NULL");
+  await addColumn("businesses", "account_manager_id", "VARCHAR(255) NULL");
 
   await addColumn("company_settings", "gstin", "VARCHAR(32) NULL");
   await addColumn("company_settings", "logo_url", "MEDIUMTEXT NULL");
@@ -353,6 +354,18 @@ export async function ensureSchema() {
     setting_key VARCHAR(64) PRIMARY KEY,
     setting_value TEXT NULL,
     updated_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3)
+  )`);
+
+  await create(`CREATE TABLE IF NOT EXISTS account_managers (
+    id VARCHAR(255) PRIMARY KEY,
+    name VARCHAR(128) NOT NULL,
+    mobile VARCHAR(32) NULL,
+    email VARCHAR(255) NULL,
+    status VARCHAR(16) NOT NULL DEFAULT 'active',
+    notes VARCHAR(255) NULL,
+    created_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    updated_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+    INDEX (status)
   )`);
 
   await query(

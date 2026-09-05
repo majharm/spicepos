@@ -1,4 +1,4 @@
-Production deploy bundle — 20260905deploy102
+Production deploy bundle — 20260905deploy103
 =========================================
 
 Upload ALL files below to Hostinger public_html (overwrite):
@@ -90,6 +90,7 @@ PHP
   api/backup/clean/index.php
   api/units/index.php
   api/master/notifications/index.php
+  api/master/account-managers/index.php
   api/master/alerts/index.php
   api/master/backup/index.php
   api/master/backup/restore/index.php
@@ -132,7 +133,9 @@ FIXES in this bundle
   - Suppliers form and list include address and email
   - Settings page: wider card, 2-column details, styled logo upload, keep card padding on mobile
   - CSS: Master Admin mobile nav wrap, hide nav until sign-in, backup file inputs, table overflow
-  - Cache sticker 20260905deploy102 on index, login, master, setup, order
+  - Cache sticker 20260905deploy103 on index, login, master, setup, order
+  - Master Admin Account managers tab: assign a support person to each shop
+  - Shop Support shows the assigned account manager phone/email (login stays platform helpline)
   - Alter saved customer receipts / supplier payments (wrong amount)
   - Shop Settings → Backup: Clean all data (login password required)
   - Master Admin Businesses: Clean data (password required) wipes sales/stock/items, keeps login
