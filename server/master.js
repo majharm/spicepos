@@ -1,5 +1,5 @@
 import { query, withTransaction } from "./db.js";
-import { hashPassword } from "./password.js";
+import { hashPassword, verifyPassword } from "./password.js";
 import { requireMaster, issueStaffSession } from "./auth.js";
 import { displayName } from "./roles.js";
 import { platformAudit } from "./audit.js";
@@ -7,7 +7,7 @@ import { registerBusiness, updateBusiness } from "./onboard.js";
 import { defaultPerms } from "./roles.js";
 import { publicStatus } from "./auth.js";
 import { getPlatformSettings, setPlatformSetting } from "./settings.js";
-import { registerMasterBackup } from "./backup.js";
+import { cleanShopData, registerMasterBackup } from "./backup.js";
 import { sendWelcomeSignup, sendWelcomeStaff, publicLoginUrl } from "./mail.js";
 import {
   sendUpdateAlerts,
@@ -275,6 +275,41 @@ export function registerMaster(app) {
       return { ok: true, status };
     }),
   );
+
+  app.post("/api/master/businesses/:id/clean", async (req, res) => {
+    try {
+      const password = String(req.body?.password || "");
+      if (!password) {
+        res.status(400).json({ error: "Master Admin password is required" });
+        return;
+      }
+      const [admin] = await query("SELECT * FROM platform_admins WHERE id = ? LIMIT 1", [req.auth.admin.id]);
+      if (!admin || admin.status !== "active" || !(await verifyPassword(password, admin.password_hash))) {
+        res.status(401).json({ error: "Master Admin password is incorrect" });
+        return;
+      }
+      const [biz] = await query("SELECT id, name FROM businesses WHERE id = ? LIMIT 1", [req.params.id]);
+      if (!biz) {
+        res.status(404).json({ error: "Business not found" });
+        return;
+      }
+      const result = await cleanShopData(biz.id);
+      await platformAudit(
+        req.auth.admin,
+        "Business data cleaned",
+        { module: "businesses", target_id: biz.id, target_name: biz.name, tables: result.tables },
+        req,
+      );
+      res.json({
+        ok: true,
+        business: biz.name,
+        tables: result.tables,
+        note: "Sales, stock, items, and customers were removed. Login, branches, devices, and shop settings were kept.",
+      });
+    } catch (err) {
+      res.status(500).json({ error: String(err.message) });
+    }
+  });
 
   app.delete("/api/master/businesses/:id", (req, res) =>
     send(res, async () => {

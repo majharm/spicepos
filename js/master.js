@@ -806,6 +806,24 @@ async function render() {
                 <p class="hint" id="biz-pw-hint"></p>
               </div>
             </form>
+            <form class="settings item-composer" id="biz-clean-form" hidden>
+              <div class="item-composer-top">
+                <p class="item-mode">Clean all shop data</p>
+                <p class="item-composer-note" id="biz-clean-who"></p>
+              </div>
+              <input type="hidden" name="business_id" />
+              <fieldset class="item-block">
+                <legend>Master Admin password</legend>
+                <p class="item-composer-note">Enter your Master Admin password to confirm. This cannot be undone. Login, branches, devices, and shop settings stay.</p>
+                <label>Password <input name="password" type="password" required autocomplete="current-password" /></label>
+                <label>Confirm password <input name="confirm" type="password" required autocomplete="current-password" /></label>
+              </fieldset>
+              <div class="item-composer-actions">
+                <button class="btn danger" type="submit">Clean all data</button>
+                <button class="btn" type="button" id="biz-clean-cancel">Cancel</button>
+                <p class="hint" id="biz-clean-hint"></p>
+              </div>
+            </form>
             <form class="settings item-composer biz-create" id="biz-form">
               <div class="item-composer-top">
                 <p class="item-mode" id="biz-title">Add business</p>
@@ -927,6 +945,7 @@ async function render() {
                       <button class="btn primary" type="button" data-enter="${attr(b.id)}">Open POS</button>
                       <button class="btn" type="button" data-edit="${attr(b.id)}">Edit</button>
                       <button class="btn" type="button" data-reset-biz="${attr(b.id)}">Password</button>
+                      <button class="btn danger" type="button" data-clean-biz="${attr(b.id)}">Clean data</button>
                       <button class="btn" type="button" data-act="suspend" data-id="${attr(b.id)}">Suspend</button>
                       <button class="btn" type="button" data-act="activate" data-id="${attr(b.id)}">Activate</button>
                     </div>
@@ -1040,10 +1059,61 @@ async function render() {
           body: JSON.stringify({ password }),
         });
       });
+      const bizCleanForm = $("biz-clean-form");
+      const bizCleanHint = $("biz-clean-hint");
+      const bizCleanWho = $("biz-clean-who");
+      $("biz-clean-cancel").onclick = () => {
+        bizCleanForm.hidden = true;
+        bizCleanForm.reset();
+        bizCleanHint.textContent = "";
+        bizCleanHint.className = "hint";
+      };
+      bizCleanForm.onsubmit = async (e) => {
+        e.preventDefault();
+        const fd = new FormData(bizCleanForm);
+        const password = String(fd.get("password") || "");
+        const confirm = String(fd.get("confirm") || "");
+        if (password !== confirm) {
+          bizCleanHint.textContent = "Password and confirm password do not match";
+          bizCleanHint.className = "hint error";
+          return;
+        }
+        const businessId = fd.get("business_id");
+        const shop = rows.find((r) => r.id === businessId);
+        try {
+          bizCleanHint.className = "hint";
+          bizCleanHint.textContent = "Checking password and cleaning data…";
+          await api(`/api/master/businesses/${businessId}/clean`, {
+            method: "POST",
+            body: JSON.stringify({ password }),
+          });
+          panelFlash = `Cleaned all data for ${shop?.name || "this shop"}. Login and shop settings were kept.`;
+          render();
+        } catch (err) {
+          bizCleanHint.textContent = err.message;
+          bizCleanHint.className = "hint error";
+        }
+      };
       body.querySelectorAll("[data-reset-biz]").forEach((btn) => {
         btn.onclick = () => {
+          bizCleanForm.hidden = true;
           const b = rows.find((r) => r.id === btn.dataset.resetBiz);
           bizPw.open(btn.dataset.resetBiz, `New login password for ${b?.name || "this shop"} (${b?.admin_username || b?.email || "business admin"}).`);
+        };
+      });
+      body.querySelectorAll("[data-clean-biz]").forEach((btn) => {
+        btn.onclick = () => {
+          $("biz-pw-form").hidden = true;
+          const b = rows.find((r) => r.id === btn.dataset.cleanBiz);
+          bizCleanForm.hidden = false;
+          bizCleanForm.business_id.value = btn.dataset.cleanBiz;
+          bizCleanWho.textContent = `Delete sales, purchases, stock, items, customers, and bills for ${b?.name || "this shop"}.`;
+          bizCleanForm.password.value = "";
+          bizCleanForm.confirm.value = "";
+          bizCleanHint.textContent = "";
+          bizCleanHint.className = "hint";
+          bizCleanForm.scrollIntoView({ block: "start" });
+          bizCleanForm.password.focus();
         };
       });
       if (panelFlash) {

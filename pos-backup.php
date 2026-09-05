@@ -17,6 +17,19 @@ function pos_backup_platform_skip_tables() {
   ];
 }
 
+function pos_shop_clean_keep_tables() {
+  return [
+    "businesses" => true,
+    "staff_users" => true,
+    "branches" => true,
+    "pos_devices" => true,
+    "company_settings" => true,
+    "inventory_units" => true,
+    "units" => true,
+    "loyalty_settings" => true,
+  ];
+}
+
 function pos_backup_prepare() {
   @set_time_limit(300);
   @ini_set("memory_limit", "512M");
@@ -198,6 +211,41 @@ function pos_backup_matching_tables($payloadTables, $known) {
   return array_values(array_filter(array_keys($payloadTables), function ($t) use ($knownMap) {
     return isset($knownMap[$t]);
   }));
+}
+
+function pos_clean_shop_data($bid) {
+  pos_backup_prepare();
+  $keep = pos_shop_clean_keep_tables();
+  $names = [];
+  foreach (pos_backup_biz_tables() as $t) {
+    if (!isset($keep[$t])) $names[] = $t;
+  }
+  $deleteOrder = pos_backup_sort_tables($names, false);
+  pos_with_transaction(function () use ($bid, $deleteOrder) {
+    pos_q("SET FOREIGN_KEY_CHECKS=0");
+    try {
+      try {
+        pos_q("DELETE FROM staff_sessions WHERE business_id = ?", "s", [$bid]);
+      } catch (Exception $e) {
+        /* optional */
+      }
+      try {
+        pos_q(
+          "DELETE s FROM staff_sessions s INNER JOIN staff_users u ON u.id = s.staff_user_id WHERE u.business_id = ?",
+          "s",
+          [$bid]
+        );
+      } catch (Exception $e) {
+        /* optional */
+      }
+      foreach ($deleteOrder as $t) {
+        pos_q("DELETE FROM `{$t}` WHERE business_id = ?", "s", [$bid]);
+      }
+    } finally {
+      pos_q("SET FOREIGN_KEY_CHECKS=1");
+    }
+  });
+  return ["ok" => true, "tables" => count($names)];
 }
 
 function pos_backup_restore($bid, $payload, $auth, $masterAdmin = null) {

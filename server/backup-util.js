@@ -11,6 +11,18 @@ export const BACKUP_SKIP_TABLES = new Set([
 
 export const PLATFORM_SKIP_TABLES = new Set(["staff_sessions", "platform_sessions"]);
 
+/** Shop identity kept when Master Admin cleans operational data. */
+export const SHOP_CLEAN_KEEP_TABLES = new Set([
+  "businesses",
+  "staff_users",
+  "branches",
+  "pos_devices",
+  "company_settings",
+  "inventory_units",
+  "units",
+  "loyalty_settings",
+]);
+
 export function isSafeTableName(name) {
   return typeof name === "string" && /^[A-Za-z0-9_]+$/.test(name);
 }

@@ -1879,6 +1879,37 @@ function pos_php_dispatch($path, $method, $rawBody) {
       pos_send(200, ["ok" => true, "business" => $row]);
     }
 
+    if (preg_match("#^master/businesses/([^/]+)/clean$#", $path, $m) && $method === "POST") {
+      $password = (string) ($body["password"] ?? "");
+      if ($password === "") pos_send(400, ["error" => "Master Admin password is required", "php" => true]);
+      $admins = pos_q("SELECT * FROM platform_admins WHERE id = ? LIMIT 1", "s", [$auth["admin"]["id"]]);
+      $adminRow = $admins[0] ?? null;
+      $envPass = pos_env("MASTER_ADMIN_PASSWORD");
+      $ok = false;
+      if ($adminRow && ($adminRow["status"] ?? "") === "active") {
+        if ($envPass !== "" && hash_equals($envPass, $password)) $ok = true;
+        else $ok = pos_verify_password($password, $adminRow["password_hash"] ?? "");
+      }
+      if (!$ok) pos_send(401, ["error" => "Master Admin password is incorrect", "php" => true]);
+      $biz = pos_q("SELECT id, name FROM businesses WHERE id = ? LIMIT 1", "s", [$m[1]]);
+      if (!$biz) throw new Exception("Business not found");
+      pos_require_backup();
+      $out = pos_clean_shop_data($m[1]);
+      pos_audit($auth["admin"], "Business data cleaned", [
+        "module" => "businesses",
+        "target_id" => $m[1],
+        "target_name" => $biz[0]["name"] ?? "",
+        "tables" => $out["tables"] ?? 0,
+      ]);
+      pos_send(200, [
+        "ok" => true,
+        "business" => $biz[0]["name"] ?? "",
+        "tables" => $out["tables"] ?? 0,
+        "note" => "Sales, stock, items, and customers were removed. Login, branches, devices, and shop settings were kept.",
+        "php" => true,
+      ]);
+    }
+
     if (preg_match("#^master/businesses/([^/]+)$#", $path, $m) && $method === "DELETE") {
       $id = $m[1];
       $swami = pos_env("BUSINESS_ID", "00000000-0000-4000-8000-000000000001");

@@ -185,8 +185,11 @@ test("Master Admin can set passwords and unlock locked accounts", () => {
   assert.match(masterJs, /accountStatusLabel/);
   assert.match(masterApi, /\/api\/master\/users\/:id\/unlock/);
   assert.match(masterApi, /\/api\/master\/businesses\/:id\/reset-password/);
+  assert.match(masterApi, /\/api\/master\/businesses\/:id\/clean/);
+  assert.match(masterJs, /data-clean-biz/);
   assert.match(core, /users\/\(\[\^\/\]\+\)\/unlock/);
   assert.match(core, /businesses\/\(\[\^\/\]\+\)\/reset-password/);
+  assert.match(core, /businesses\/\(\[\^\/\]\+\)\/clean/);
   assert.match(core, /function pos_unlock_staff_user/);
   assert.match(core, /auth\/reset-password/);
   assert.match(read("js/app.js"), /data-edit-staff/);
