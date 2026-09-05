@@ -120,6 +120,8 @@ test("PHP and HTML wire master admin backup", () => {
   assert.match(backup, /spicepos-platform-backup/);
   assert.match(backup, /function pos_backup_build_platform/);
   assert.match(masterHtml, /data-tab="backup"/);
+  assert.match(masterHtml, /data-backup-pane="settings"/);
+  assert.match(masterHtml, />Messages</);
   assert.doesNotMatch(masterHtml, /data-tab="alerts"/);
   assert.match(masterJs, /data-master-pane="settings"/);
   assert.match(masterJs, /\/api\/master\/backup/);
@@ -140,11 +142,11 @@ test("PHP and HTML wire master admin backup", () => {
   );
 });
 
-test("HTML and CSS cache stickers match deploy96", () => {
+test("HTML and CSS cache stickers match deploy97", () => {
   for (const name of ["index.html", "master.html", "login.html", "setup.html", "order.html"]) {
     const html = readFileSync(path.join(root, name), "utf8");
-    assert.match(html, /20260905deploy96/);
-    assert.doesNotMatch(html, /20260905deploy95/);
+    assert.match(html, /20260905deploy97/);
+    assert.doesNotMatch(html, /20260905deploy96/);
     assert.doesNotMatch(html, /20260904deploy90/);
     assert.doesNotMatch(html, /20260904deploy89/);
     assert.doesNotMatch(html, /20260903deploy88/);

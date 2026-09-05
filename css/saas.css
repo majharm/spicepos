@@ -553,6 +553,16 @@ body.auth-body::-webkit-scrollbar-thumb {
   color: #fff;
   font-weight: 700;
 }
+.master-nav-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.master-nav .nav-sub {
+  margin-left: 10px;
+  padding-left: 14px;
+  font-size: 13px;
+}
 .master-nav .nav-foot { margin-top: auto; padding-top: 16px; }
 .master-nav .btn-logout { margin-top: 8px; }
 .master-main {
@@ -712,12 +722,19 @@ body.auth-body::-webkit-scrollbar-thumb {
     padding-top: 0;
   }
   .master-nav .btn-logout { margin-top: 0; }
+  .master-nav-group {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .master-nav .nav-sub { margin-left: 0; }
   .master-main { padding: 16px 14px 24px; }
   .support-admin { grid-template-columns: 1fr; }
   .qty button, .btn, .nav-btn { min-height: 44px; }
 }
 body.master-locked .master-shell { grid-template-columns: 1fr; }
 body.master-locked .master-nav > button,
+body.master-locked .master-nav-group,
 body.master-locked .master-nav .nav-foot { display: none; }
 body.master-locked .master-nav {
   justify-content: center;

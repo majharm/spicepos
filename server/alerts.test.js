@@ -56,7 +56,8 @@ test("Master Admin Settings lives under Backup with Active/Inactive templates", 
   const nodeAlerts = readFileSync(path.join(root, "server/alerts.js"), "utf8");
   const index = readFileSync(path.join(root, "server/index.js"), "utf8");
   assert.doesNotMatch(masterHtml, /data-tab="alerts"/);
-  assert.match(masterHtml, /data-tab="backup"/);
+  assert.match(masterHtml, /data-backup-pane="settings"/);
+  assert.match(masterHtml, />Messages</);
   assert.match(master, /data-master-pane="settings"/);
   assert.match(master, /id="alert-form"/);
   assert.match(master, /class="msg-settings"/);
