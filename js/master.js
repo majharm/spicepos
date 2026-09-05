@@ -616,7 +616,7 @@ function expiryAlertsPageHtml(shops) {
   const dueN = rows.filter((b) => expiryFilterKind(b) === "due").length;
   const noExpN = rows.filter((b) => !ymd(b.subscription_expires_at)).length;
   return `<div class="items-desk master-desk expiry-alerts-desk">
-    ${masterHero("Platform", "Send alerts", "Pick alert types, then send WhatsApp and email to one shop or every shop. Templates live in Settings.", [
+    ${masterHero("Platform", "Send alerts", "Pick alert types, then send WhatsApp and email to one shop or every shop. WhatsApp is queued by WA Master — reconnect that QR if the phone stays empty. Email needs SMTP. Templates live in Settings.", [
       { label: "Shops", value: rows.length },
       { label: "Expired", value: expiredN, warn: expiredN > 0 },
       { label: "Due in 7 days", value: dueN, warn: dueN > 0 },
@@ -889,7 +889,7 @@ function alertsFormHtml(alerts) {
     <section class="settings item-composer msg-wa">
       <div class="item-composer-top">
         <p class="item-mode">WhatsApp connection</p>
-        <p class="item-composer-note">API key is stored on the platform and never shown in full. Shops are messaged on their mobile number.</p>
+        <p class="item-composer-note">API key is stored on the platform and never shown in full. Shops are messaged on their mobile number. WA Master only queues the chat — keep the profile QR connected or the phone stays empty.</p>
         <label class="alert-switch">
           <input type="checkbox" name="wa_enabled" ${waOn ? "checked" : ""} />
           <span class="alert-switch-ui" aria-hidden="true"></span>
@@ -2148,6 +2148,23 @@ function alertSkipReason(row) {
   }
 }
 
+function formatAlertWaTo(row) {
+  const raw = Array.isArray(row?.wa?.to) ? row.wa.to[0] : row?.wa?.to;
+  const n = String(raw || row?.wa?.number || row?.wa?.results?.[0]?.number || "").replace(/\D/g, "");
+  if (!n) return "";
+  return n.length === 10 ? `+91${n}` : `+${n}`;
+}
+
+function mailFailReason(row) {
+  const mails = row?.mail || [];
+  if (!mails.length) return "";
+  const fail = mails.find((m) => m && !m.ok);
+  if (!fail) return "";
+  if (fail.error) return fail.error;
+  if (fail.skipped) return "SMTP not configured";
+  return "email failed";
+}
+
 function summarizeAlertDelivery(out) {
   if (out?.skipped) {
     return out.reason === "alerts-off"
@@ -2168,11 +2185,18 @@ function summarizeAlertDelivery(out) {
     .filter((r) => !r.skipped && !(r.wa?.ok || (r.mail || []).some((m) => m?.ok)))
     .map((r) => {
       const waWhy = r.wa?.reason || r.wa?.error || (r.wa?.skipped ? "WhatsApp skipped" : "");
-      const mailWhy = (r.mail || []).find((m) => m && !m.ok)?.error || ((r.mail || []).some((m) => m?.skipped) ? "email SMTP not configured" : "");
+      const mailWhy = mailFailReason(r);
       const why = [waWhy, mailWhy].filter(Boolean).join(" · ") || "not delivered";
       return `${r.shopName || "Shop"}: ${why}`;
     });
-  let msg = `Expiry alerts sent. WhatsApp ${wa}/${results.length} · Email ${mail}/${results.length} · Delivered ${sent}, skipped ${skipped}.`;
+  const tos = [...new Set(results.map(formatAlertWaTo).filter(Boolean))];
+  const mailWhy = [...new Set(results.map(mailFailReason).filter(Boolean))];
+  let msg = `Alerts sent. WhatsApp ${wa}/${results.length}`;
+  if (tos.length) msg += ` queued to ${tos.slice(0, 3).join(", ")}`;
+  msg += ` · Email ${mail}/${results.length}`;
+  if (mail < results.length && mailWhy.length) msg += ` (${mailWhy.slice(0, 2).join("; ")})`;
+  msg += ` · Delivered ${sent}, skipped ${skipped}.`;
+  if (wa > 0) msg += " WA Master accepted the queue — reconnect the WhatsApp QR if the phone stays empty.";
   if (skipBits.length) msg += ` ${skipBits.slice(0, 3).join(" · ")}`;
   if (failBits.length) msg += ` ${failBits.slice(0, 3).join(" · ")}`;
   return msg;

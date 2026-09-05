@@ -147,6 +147,31 @@ function pos_normalize_in_mobile($raw) {
   return preg_match("/^\d{10}$/", $d) ? $d : "";
 }
 
+function pos_wa_intl_number($raw, $country = "91") {
+  $local = pos_normalize_in_mobile($raw);
+  $cc = preg_replace("/\D+/", "", (string) $country) ?: "91";
+  return $local !== "" ? $cc . $local : "";
+}
+
+function pos_wa_response_ok($status, $body) {
+  $code = (int) $status;
+  if ($code >= 400) return ["ok" => false, "error" => "WhatsApp HTTP {$code}"];
+  $text = trim((string) $body);
+  if ($text === "") return ["ok" => false, "error" => "WhatsApp empty response"];
+  if (isset($text[0]) && $text[0] === "<") return ["ok" => false, "error" => "WhatsApp API returned a web page, not JSON"];
+  $json = json_decode($text, true);
+  if (!is_array($json)) {
+    if (preg_match("/sent|success|ok/i", $text) && !preg_match("/error|fail/i", $text)) return ["ok" => true];
+    return ["ok" => false, "error" => substr($text, 0, 160) ?: "WhatsApp response was not JSON"];
+  }
+  if (($json["ok"] ?? null) === false) return ["ok" => false, "error" => $json["error"] ?? ($json["message"] ?? "WhatsApp rejected the send")];
+  if (($json["ok"] ?? null) === true || (int) ($json["sent"] ?? 0) > 0) {
+    return ["ok" => true, "to" => $json["results"][0]["number"] ?? ($json["number"] ?? "")];
+  }
+  if (($json["success"] ?? null) === true || ($json["status"] ?? "") === "success") return ["ok" => true];
+  return ["ok" => false, "error" => $json["error"] ?? ($json["message"] ?? "WhatsApp did not confirm the send")];
+}
+
 function pos_mask_secret($value) {
   $s = (string) $value;
   if ($s === "") return "";
@@ -401,10 +426,14 @@ function pos_wa_send($cfg, $numbers, $message, $media = "") {
     $results[] = pos_wa_send_one($cfg, $number, $message, $media);
   }
   $ok = false;
+  $to = [];
   foreach ($results as $row) {
-    if (!empty($row["ok"])) $ok = true;
+    if (!empty($row["ok"])) {
+      $ok = true;
+      if (!empty($row["number"])) $to[] = $row["number"];
+    }
   }
-  return ["ok" => $ok, "results" => $results, "skipped" => !$ok, "reason" => $ok ? "" : ($results[0]["reason"] ?? $results[0]["error"] ?? "wa-failed")];
+  return ["ok" => $ok, "results" => $results, "to" => $to, "skipped" => !$ok, "reason" => $ok ? "" : ($results[0]["reason"] ?? $results[0]["error"] ?? "wa-failed")];
 }
 
 function pos_wa_send_one($cfg, $number, $message, $media = "") {
@@ -413,12 +442,15 @@ function pos_wa_send_one($cfg, $number, $message, $media = "") {
   $base = $cfg["wa_api_url"] ?: "https://wamaster.atavtelecom.in/api/v1/send";
   $endpoint = explode("?", $base, 2)[0];
   $country = $cfg["wa_country_code"] ?: "91";
+  $local = pos_normalize_in_mobile($number) ?: (string) $number;
+  $intl = pos_wa_intl_number($number, $country);
   $payload = [
     "api_key" => $cfg["wa_api_key"],
     "profile_id" => $cfg["wa_profile_id"],
-    "numbers" => $number,
+    "numbers" => $local,
     "message" => $message,
     "country_code" => $country,
+    "type" => "text",
   ];
   if ($dataMedia !== "") {
     $payload["media"] = $dataMedia;
@@ -430,34 +462,46 @@ function pos_wa_send_one($cfg, $number, $message, $media = "") {
   $ctx = stream_context_create([
     "http" => [
       "method" => "POST",
-      "header" => "Content-Type: application/json\r\nAccept: application/json\r\n",
+      "header" => "Content-Type: application/json\r\nAccept: application/json\r\nX-API-Key: " . $cfg["wa_api_key"] . "\r\n",
       "content" => json_encode($payload),
       "timeout" => 20,
       "ignore_errors" => true,
+      "follow_location" => 1,
+      "max_redirects" => 3,
     ],
     "ssl" => ["verify_peer" => true],
   ]);
   $body = @file_get_contents($endpoint, false, $ctx);
   $status = 0;
   if (!empty($http_response_header[0]) && preg_match("/\\s(\\d{3})\\s/", $http_response_header[0], $m)) $status = (int) $m[1];
-  if ($body !== false && $status && $status < 400) {
-    return ["ok" => true, "status" => $status, "body" => substr((string) $body, 0, 240), "number" => $number];
+  $parsed = pos_wa_response_ok($status, $body === false ? "" : $body);
+  $shown = $parsed["to"] ?? ($intl !== "" ? $intl : $local);
+  if ($parsed["ok"]) {
+    return ["ok" => true, "queued" => true, "status" => $status, "body" => substr((string) $body, 0, 240), "number" => $shown];
   }
   if ($dataMedia !== "") return pos_wa_send_one($cfg, $number, $message, "");
   $query = $payload;
   unset($query["type"]);
   $url = $endpoint . "?" . http_build_query($query);
-  if (strlen($url) > 1800) return ["ok" => false, "error" => "WhatsApp HTTP {$status}", "status" => $status, "number" => $number];
+  if (strlen($url) > 1800) return ["ok" => false, "error" => $parsed["error"] ?? "WhatsApp HTTP {$status}", "status" => $status, "number" => $shown];
   $ctx = stream_context_create([
-    "http" => ["method" => "GET", "timeout" => 8, "ignore_errors" => true],
+    "http" => [
+      "method" => "GET",
+      "header" => "Accept: application/json\r\nX-API-Key: " . $cfg["wa_api_key"] . "\r\n",
+      "timeout" => 8,
+      "ignore_errors" => true,
+      "follow_location" => 1,
+      "max_redirects" => 3,
+    ],
     "ssl" => ["verify_peer" => true],
   ]);
   $body = @file_get_contents($url, false, $ctx);
   $status = 0;
   if (!empty($http_response_header[0]) && preg_match("/\\s(\\d{3})\\s/", $http_response_header[0], $m)) $status = (int) $m[1];
-  if ($body === false) return ["ok" => false, "error" => "WhatsApp request failed", "number" => $number];
-  if ($status && $status >= 400) return ["ok" => false, "error" => "WhatsApp HTTP {$status}", "status" => $status, "number" => $number];
-  return ["ok" => true, "status" => $status, "body" => substr((string) $body, 0, 240), "number" => $number];
+  if ($body === false) return ["ok" => false, "error" => "WhatsApp request failed", "number" => $shown];
+  $getParsed = pos_wa_response_ok($status, $body);
+  if (empty($getParsed["ok"])) return ["ok" => false, "error" => $getParsed["error"] ?? "WhatsApp HTTP {$status}", "status" => $status, "number" => $shown];
+  return ["ok" => true, "queued" => true, "status" => $status, "body" => substr((string) $body, 0, 240), "number" => $getParsed["to"] ?? $shown];
 }
 
 function pos_alert_delivered($out) {

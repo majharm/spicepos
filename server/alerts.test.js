@@ -14,6 +14,9 @@ import {
   credentialsText,
   daysUntilExpiry,
   normalizeInMobile,
+  waIntlNumber,
+  waResponseOk,
+  sendWhatsApp,
   DEFAULT_TEMPLATES,
   WA_DEFAULT_URL,
 } from "./alerts.js";
@@ -130,11 +133,22 @@ test("Master Admin Settings lives under Backup with Active/Inactive templates", 
   assert.match(master, /\/api\/master\/alerts\/send-expired/);
   assert.match(master, /data-send-expiry/);
   assert.match(master, /summarizeAlertDelivery/);
+  assert.match(master, /formatAlertWaTo/);
+  assert.match(master, /queued to/);
+  assert.match(master, /SMTP not configured/);
+  assert.match(master, /WA Master accepted the queue/);
   assert.match(master, /\/api\/master\/alerts\/send-expiry/);
   assert.match(php, /master\/alerts\/send-expiry/);
   assert.match(php, /master\/alerts\/send-expired/);
   assert.match(php, /send-expiry-alert/);
   assert.match(alerts, /pos_summarize_alert_results/);
+  assert.match(alerts, /pos_wa_response_ok/);
+  assert.match(nodeAlerts, /waResponseOk/);
+  assert.match(nodeAlerts, /X-API-Key/);
+  assert.match(alerts, /X-API-Key/);
+  const mailPhp = readFileSync(path.join(root, "pos-mail.php"), "utf8");
+  assert.match(mailPhp, /pos_send_mail_fallback/);
+  assert.match(mailPhp, /SMTP not configured/);
   assert.match(alerts, /pos_alert_dispatch\(\$phones, \$emails, "Welcome to ATAV POS/);
   assert.match(alerts, /tpl_welcome/);
   assert.match(alerts, /pos_fill_template/);
@@ -148,6 +162,46 @@ test("notice HTML inlines https images and uses CID for uploads", () => {
   assert.match(https, /src="https:\/\/cdn\.example\/a\.jpg"/);
   const cid = noticeHtml({ title: "Hi", body: "Body", image: "data:image/jpeg;base64,abc" });
   assert.match(cid, /cid:notice-image/);
+});
+
+test("WhatsApp send is confirmed only from JSON ok, not HTML", async () => {
+  assert.equal(waIntlNumber("09876543210"), "919876543210");
+  assert.equal(waIntlNumber("919876543210"), "919876543210");
+  assert.equal(waResponseOk(200, "").ok, false);
+  assert.equal(waResponseOk(200, "<!DOCTYPE html>").ok, false);
+  assert.equal(waResponseOk(404, '{"ok":true}').ok, false);
+  assert.equal(waResponseOk(200, '{"ok":false,"error":"profile offline"}').ok, false);
+  const queued = waResponseOk(200, '{"ok":true,"sent":1,"results":[{"number":"919876543210","ok":true}]}');
+  assert.equal(queued.ok, true);
+  assert.equal(queued.to, "919876543210");
+  const calls = [];
+  const okFetch = async (url, opts) => {
+    calls.push({ url, opts });
+    return {
+      status: 200,
+      text: async () => JSON.stringify({ ok: true, sent: 1, results: [{ number: "919876543210", ok: true }] }),
+    };
+  };
+  const sent = await sendWhatsApp(
+    { wa_enabled: "1", apiKey: "k", profileId: "acc_1", wa_country_code: "91" },
+    ["09876543210"],
+    "Hello",
+    okFetch,
+  );
+  assert.equal(sent.ok, true);
+  assert.deepEqual(sent.to, ["919876543210"]);
+  const body = JSON.parse(calls[0].opts.body);
+  assert.equal(body.numbers, "9876543210");
+  assert.equal(body.country_code, "91");
+  assert.equal(calls[0].opts.headers["X-API-Key"], "k");
+  const htmlFetch = async () => ({ status: 200, text: async () => "<!DOCTYPE html><html></html>" });
+  const fake = await sendWhatsApp(
+    { wa_enabled: "1", apiKey: "k", profileId: "acc_1" },
+    ["9876543210"],
+    "Hello",
+    htmlFetch,
+  );
+  assert.equal(fake.ok, false);
 });
 
 test("WhatsApp URL adds https media and keeps the message", () => {

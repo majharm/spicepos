@@ -59,6 +59,7 @@ test("SMTP is skipped when credentials are missing", async (t) => {
   const result = await sendMail({ to: "a@b.co", subject: "x", text: "y" });
   assert.equal(result.skipped, true);
   assert.equal(result.ok, false);
+  assert.equal(result.error, "SMTP not configured");
 });
 
 test("public app URL prefers APP_PUBLIC_URL then forwarded host", (t) => {

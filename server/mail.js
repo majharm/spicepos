@@ -282,7 +282,7 @@ function mimePayload({ from, fromName, to, subject, text, html, image }) {
 
 export async function sendMail({ to, subject, text, html, image }) {
   const cfg = smtpConfig();
-  if (!smtpConfigured(cfg)) return { ok: false, skipped: true };
+  if (!smtpConfigured(cfg)) return { ok: false, skipped: true, error: "SMTP not configured" };
   const recipient = String(to || "").trim();
   if (!recipient || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipient)) {
     return { ok: false, error: "Invalid recipient" };
@@ -358,7 +358,7 @@ export async function sendMail({ to, subject, text, html, image }) {
 
 export async function sendWelcomeSignup(payload, req) {
   try {
-    if (!smtpConfigured()) return { ok: false, skipped: true };
+    if (!smtpConfigured()) return { ok: false, skipped: true, error: "SMTP not configured" };
     const msg = welcomeSignupMessage({ ...payload, signInUrl: loginUrl(req) });
     const recipients = [
       payload.email,
@@ -388,7 +388,7 @@ export async function sendWelcomeSignup(payload, req) {
 
 export async function sendWelcomeStaff(payload, req) {
   try {
-    if (!smtpConfigured()) return { ok: false, skipped: true };
+    if (!smtpConfigured()) return { ok: false, skipped: true, error: "SMTP not configured" };
     const msg = welcomeStaffMessage({ ...payload, signInUrl: loginUrl(req) });
     const result = await sendMail({ to: payload.email, ...msg });
     if (!result.ok && !result.skipped) console.error("welcome staff email failed:", result.error);

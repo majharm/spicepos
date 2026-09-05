@@ -133,10 +133,32 @@ function pos_wrap_base64($b64) {
   return trim(chunk_split(preg_replace("/\\s+/", "", (string) $b64), 76, "\r\n"));
 }
 
+function pos_mail_header_safe($value) {
+  return trim(preg_replace("/[\\r\\n]+/", " ", (string) $value));
+}
+
+function pos_send_mail_fallback($to, $subject, $text) {
+  $recipient = pos_mail_header_safe($to);
+  if ($recipient === "" || !preg_match("/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/", $recipient)) {
+    return ["ok" => false, "error" => "Invalid recipient"];
+  }
+  $from = pos_mail_header_safe(pos_env("MAIL_FROM", pos_env("SMTP_FROM", pos_env("SMTP_USER", "noreply@atavtelecom.in"))));
+  $fromName = pos_mail_header_safe(pos_env("MAIL_FROM_NAME", "ATAV POS")) ?: "ATAV POS";
+  $safeSubject = pos_mail_header_safe($subject);
+  $headers = "MIME-Version: 1.0\r\nContent-Type: text/plain; charset=UTF-8\r\nFrom: {$fromName} <{$from}>\r\n";
+  $ok = @mail($recipient, $safeSubject, (string) $text, $headers);
+  if ($ok) return ["ok" => true, "via" => "php-mail"];
+  return ["ok" => false, "error" => "SMTP not configured and PHP mail() failed"];
+}
+
 function pos_send_mail($to, $subject, $text, $html = "", $image = "") {
   if (function_exists("pos_load_dotenv")) pos_load_dotenv();
   $cfg = pos_smtp_config();
-  if (!pos_smtp_configured($cfg)) return ["ok" => false, "skipped" => true];
+  if (!pos_smtp_configured($cfg)) {
+    $fallback = pos_send_mail_fallback($to, $subject, $text);
+    if (!empty($fallback["ok"])) return $fallback;
+    return ["ok" => false, "skipped" => true, "error" => $fallback["error"] ?? "SMTP not configured"];
+  }
   $recipient = trim((string) $to);
   if ($recipient === "" || !preg_match("/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/", $recipient)) {
     return ["ok" => false, "error" => "Invalid recipient"];
@@ -239,7 +261,7 @@ function pos_welcome_recipients($payload) {
 
 function pos_send_welcome_signup($payload) {
   try {
-    if (!pos_smtp_configured()) return ["ok" => false, "skipped" => true];
+    if (!pos_smtp_configured()) return ["ok" => false, "skipped" => true, "error" => "SMTP not configured"];
     $msg = pos_welcome_signup_message(array_merge($payload, ["signInUrl" => pos_login_url()]));
     $recipients = pos_welcome_recipients($payload);
     if (!$recipients) return ["ok" => false, "error" => "No recipient email"];
@@ -268,7 +290,7 @@ function pos_send_welcome_signup($payload) {
 
 function pos_send_welcome_staff($payload) {
   try {
-    if (!pos_smtp_configured()) return ["ok" => false, "skipped" => true];
+    if (!pos_smtp_configured()) return ["ok" => false, "skipped" => true, "error" => "SMTP not configured"];
     $msg = pos_welcome_staff_message(array_merge($payload, ["signInUrl" => pos_login_url()]));
     $result = pos_send_mail($payload["email"] ?? "", $msg["subject"], $msg["text"], $msg["html"]);
     if (empty($result["ok"]) && empty($result["skipped"])) {

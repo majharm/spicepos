@@ -215,6 +215,33 @@ export function normalizeInMobile(raw) {
   return /^\d{10}$/.test(d) ? d : "";
 }
 
+export function waIntlNumber(raw, country = WA_DEFAULT_COUNTRY) {
+  const local = normalizeInMobile(raw);
+  const cc = String(country || WA_DEFAULT_COUNTRY).replace(/\D/g, "") || WA_DEFAULT_COUNTRY;
+  return local ? `${cc}${local}` : "";
+}
+
+export function waResponseOk(status, body) {
+  const code = Number(status) || 0;
+  if (code >= 400) return { ok: false, error: `WhatsApp HTTP ${code}` };
+  const text = String(body || "").trim();
+  if (!text) return { ok: false, error: "WhatsApp empty response" };
+  if (text[0] === "<") return { ok: false, error: "WhatsApp API returned a web page, not JSON" };
+  try {
+    const json = JSON.parse(text);
+    if (json && json.ok === false) return { ok: false, error: json.error || json.message || "WhatsApp rejected the send" };
+    if (json && (json.ok === true || Number(json.sent) > 0)) {
+      const to = json.results?.[0]?.number || json.number || "";
+      return { ok: true, to, json };
+    }
+    if (json && (json.success === true || json.status === "success")) return { ok: true, json };
+    return { ok: false, error: json?.error || json?.message || "WhatsApp did not confirm the send" };
+  } catch {
+    if (/sent|success|ok/i.test(text) && !/error|fail/i.test(text)) return { ok: true };
+    return { ok: false, error: text.slice(0, 160) || "WhatsApp response was not JSON" };
+  }
+}
+
 export function addYmd(ymd, days) {
   const day = expiryYmd(ymd);
   if (!day) return "";
@@ -497,7 +524,14 @@ export async function sendWhatsApp(cfg, numbers, message, fetchImpl = fetch, med
     results.push(await sendWhatsAppOne(cfg, number, message, fetchImpl, media));
   }
   const ok = results.some((r) => r.ok);
-  return { ok, results, skipped: results.every((r) => r.skipped), reason: ok ? "" : results[0]?.reason || results[0]?.error || "wa-failed" };
+  const to = results.filter((r) => r.ok).map((r) => r.number).filter(Boolean);
+  return {
+    ok,
+    results,
+    to,
+    skipped: results.every((r) => r.skipped),
+    reason: ok ? "" : results[0]?.reason || results[0]?.error || "wa-failed",
+  };
 }
 
 async function sendWhatsAppOne(cfg, number, message, fetchImpl, media = "") {
@@ -505,33 +539,43 @@ async function sendWhatsAppOne(cfg, number, message, fetchImpl, media = "") {
   const dataMedia = media && String(media).startsWith("data:image/") ? String(media) : "";
   const endpoint = String(cfg.wa_api_url || WA_DEFAULT_URL).split("?")[0];
   const country = cfg.wa_country_code || cfg.countryCode || WA_DEFAULT_COUNTRY;
+  const local = normalizeInMobile(number) || String(number || "");
+  const intl = waIntlNumber(number, country);
   const payload = {
     api_key: cfg.apiKey,
     profile_id: cfg.profileId || cfg.wa_profile_id,
-    numbers: number,
+    numbers: local,
     message: String(message || ""),
     country_code: country,
+    type: "text",
+  };
+  const headers = {
+    "Content-Type": "application/json",
+    Accept: "application/json",
+    "X-API-Key": cfg.apiKey || cfg.wa_api_key || "",
   };
   try {
     if (dataMedia) {
       const res = await fetchImpl(endpoint, {
         method: "POST",
-        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        headers,
         body: JSON.stringify({ ...payload, media: dataMedia, type: "media" }),
         signal: AbortSignal.timeout(20000),
       });
       const text = await res.text();
-      if (res.ok) return { ok: true, status: res.status, body: String(text).slice(0, 240), number };
+      const parsed = waResponseOk(res.status, text);
+      if (parsed.ok) return { ok: true, queued: true, status: res.status, body: String(text).slice(0, 240), number: parsed.to || intl || local };
       return sendWhatsAppOne(cfg, number, message, fetchImpl, "");
     }
     const res = await fetchImpl(endpoint, {
       method: "POST",
-      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      headers,
       body: JSON.stringify(httpsMedia ? { ...payload, media: httpsMedia, media_url: httpsMedia } : payload),
       signal: AbortSignal.timeout(20000),
     });
     const text = await res.text();
-    if (res.ok) return { ok: true, status: res.status, body: String(text).slice(0, 240), number };
+    const parsed = waResponseOk(res.status, text);
+    if (parsed.ok) return { ok: true, queued: true, status: res.status, body: String(text).slice(0, 240), number: parsed.to || intl || local };
     const url = buildWaUrl(
       {
         apiUrl: cfg.wa_api_url,
@@ -539,17 +583,18 @@ async function sendWhatsAppOne(cfg, number, message, fetchImpl, media = "") {
         profileId: cfg.wa_profile_id || cfg.profileId,
         countryCode: country,
       },
-      [number],
+      [local],
       message,
       httpsMedia,
     );
-    if (url.length > 1800) return { ok: false, error: `WhatsApp HTTP ${res.status}`, status: res.status, number };
-    const getRes = await fetchImpl(url, { method: "GET", signal: AbortSignal.timeout(8000) });
+    if (url.length > 1800) return { ok: false, error: parsed.error || `WhatsApp HTTP ${res.status}`, status: res.status, number: intl || local };
+    const getRes = await fetchImpl(url, { method: "GET", headers: { Accept: "application/json", "X-API-Key": headers["X-API-Key"] }, signal: AbortSignal.timeout(8000) });
     const getText = await getRes.text();
-    if (!getRes.ok) return { ok: false, error: `WhatsApp HTTP ${getRes.status}`, status: getRes.status, number };
-    return { ok: true, status: getRes.status, body: String(getText).slice(0, 240), number };
+    const getParsed = waResponseOk(getRes.status, getText);
+    if (!getParsed.ok) return { ok: false, error: getParsed.error || `WhatsApp HTTP ${getRes.status}`, status: getRes.status, number: intl || local };
+    return { ok: true, queued: true, status: getRes.status, body: String(getText).slice(0, 240), number: getParsed.to || intl || local };
   } catch (err) {
-    return { ok: false, error: String(err.message || err), number };
+    return { ok: false, error: String(err.message || err), number: intl || local };
   }
 }
 
