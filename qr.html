@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Order QR · SWAMI MASALE</title>
+    <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
+    <style>
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        font-family: Georgia, "Times New Roman", serif;
+        background: #f4ebe0;
+        color: #4a1416;
+        text-align: center;
+        padding: 24px;
+      }
+      img.qr {
+        width: min(320px, 80vw);
+        height: auto;
+        background: #fff;
+        padding: 16px;
+        border-radius: 20px;
+        box-shadow: 0 12px 32px rgba(74, 20, 22, 0.12);
+      }
+      h1 { margin: 0 0 8px; font-size: 28px; }
+      p { color: #7a5c48; word-break: break-all; max-width: 28em; }
+      .actions { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-top: 16px; }
+      a, button {
+        font: 600 15px/1 "Segoe UI", sans-serif;
+        padding: 10px 16px;
+        border-radius: 12px;
+        border: 1px solid #d4b896;
+        background: #fff;
+        color: #4a1416;
+        text-decoration: none;
+        cursor: pointer;
+      }
+      button.primary { background: linear-gradient(180deg, #f0b145, #c46a14); border-color: transparent; }
+      @media print {
+        .actions { display: none; }
+        body { background: #fff; }
+      }
+    </style>
+  </head>
+  <body>
+    <div>
+      <p style="letter-spacing:0.14em;font-size:12px;font-weight:700;font-family:sans-serif">SCAN TO ORDER</p>
+      <h1 id="shop-name">SWAMI MASALE</h1>
+      <img class="qr" id="qr-code-img" width="320" height="320" alt="QR code for customer ordering" />
+      <p id="qr-link"></p>
+      <div class="actions">
+        <a id="open-menu" href="./order.html">Open menu</a>
+        <button class="primary" type="button" id="print-btn">Print</button>
+        <a href="./">Back to till</a>
+      </div>
+    </div>
+    <script src="./js/qrcode.iife.js"></script>
+    <script>
+      const url = new URL("order.html", location.href).href;
+      document.getElementById("qr-link").textContent = url;
+      document.getElementById("open-menu").href = url;
+      function fail(msg) {
+        document.getElementById("qr-link").textContent = url + " — " + msg;
+      }
+      function paint(dataUrl) {
+        document.getElementById("qr-code-img").src = dataUrl;
+      }
+      if (typeof QRCodeLib === "undefined") {
+        fail("QR library missing");
+      } else {
+        QRCodeLib.toDataURL(url, { width: 360, margin: 1, errorCorrectionLevel: "M" })
+          .then(paint)
+          .catch(() => fail("Could not draw QR"));
+      }
+      document.getElementById("print-btn").onclick = () => window.print();
+      fetch("/api/qr/menu")
+        .then((r) => r.json())
+        .then((data) => {
+          if (data.shop?.name) document.getElementById("shop-name").textContent = data.shop.name;
+        })
+        .catch(() => {});
+    </script>
+  </body>
+</html>

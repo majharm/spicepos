@@ -129,7 +129,10 @@ function showView(name) {
   if (name === "purchases") loadPurchases();
   if (name === "suppliers") loadSuppliers();
   if (name === "support") renderSupport();
-  if (name === "qr") loadQrOrders();
+  if (name === "qr") {
+    showQrPoster();
+    loadQrOrders();
+  }
 }
 
 function setHint(msg, kind = "") {
@@ -583,49 +586,49 @@ function showQrOrder(o) {
 }
 
 function orderMenuUrl() {
-  return `${location.origin}/order.html`;
+  return new URL("order.html", location.href).href;
 }
 
-function paintRemoteQr(img, url) {
-  img.src = `https://api.qrserver.com/v1/create-qr-code/?size=360x360&margin=8&data=${encodeURIComponent(url)}`;
+function paintLocalQr(img, url) {
+  if (!img || typeof QRCodeLib === "undefined" || typeof QRCodeLib.toDataURL !== "function") {
+    return Promise.reject(new Error("QR library missing"));
+  }
+  return QRCodeLib.toDataURL(url, { width: 360, margin: 1, errorCorrectionLevel: "M" }).then((dataUrl) => {
+    img.src = dataUrl;
+    img.dataset.ready = "1";
+    return dataUrl;
+  });
 }
 
 async function showQrPoster() {
   const img = $("qr-code-img");
   const fallback = orderMenuUrl();
-  if ($("qr-open")) $("qr-open").href = "/order.html";
+  if ($("qr-open")) $("qr-open").href = "./order.html";
   let url = fallback;
-  if ($("qr-link")) $("qr-link").textContent = url;
+  if ($("qr-link")) {
+    $("qr-link").textContent = url;
+    $("qr-link").className = "hint";
+  }
   if (!img) return;
 
-  const useRemote = () => {
-    paintRemoteQr(img, url);
-    img.onerror = () => {
-      img.onerror = null;
-      if ($("qr-link")) {
-        $("qr-link").textContent = `${url} — QR image failed. Open the menu link and make a QR from that URL.`;
-        $("qr-link").className = "hint error";
-      }
-    };
-  };
+  try {
+    await paintLocalQr(img, url);
+  } catch {
+    img.src = `/api/qr/code?t=${Date.now()}`;
+  }
 
   try {
     const link = await api("/api/qr/link");
-    url = link.url || fallback;
-    if ($("qr-link")) {
-      $("qr-link").textContent = url;
-      $("qr-link").className = "hint";
-    }
+    if (link.url) url = link.url;
+    if ($("qr-link")) $("qr-link").textContent = url;
     if (link.dataUrl) {
       img.src = link.dataUrl;
       img.dataset.ready = "1";
-      return;
+    } else {
+      await paintLocalQr(img, url);
     }
-    img.src = `/api/qr/code?t=${Date.now()}`;
-    img.onerror = useRemote;
   } catch {
-    img.src = `/api/qr/code?t=${Date.now()}`;
-    img.onerror = useRemote;
+    /* local QR already drawn */
   }
 }
 
@@ -1104,9 +1107,11 @@ function tick() {
 }
 tick();
 setInterval(tick, 15000);
+showQrPoster().catch(() => {});
 setInterval(() => loadQrOrders(true), 12000);
 
 loadBootstrap().catch((err) => {
   $("shop-place").textContent = err.message;
   setHint(err.message, "error");
+  showQrPoster().catch(() => {});
 });

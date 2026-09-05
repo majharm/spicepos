@@ -41,4 +41,4 @@ GitHub Actions (`.github/workflows/hostinger-git-deploy.yml`) runs `npm test` on
 
 ## QR ordering
 
-Customers scan the shop QR (POS → **QR orders** → Print poster) and place a gram-based retail order at `/order.html`. Incoming tickets show on the till. **Complete & bill** creates a normal sales order, finds or creates the customer by mobile, and deducts stock.
+Customers scan the shop QR (open **QR code** on the till, or go to `/qr.html`) and place a gram-based retail order at `/order.html`. Incoming tickets show on the till. **Complete & bill** creates a normal sales order, finds or creates the customer by mobile, and deducts stock.

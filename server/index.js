@@ -296,6 +296,9 @@ app.post("/api/checkout", async (req, res) => {
 });
 
 app.use(express.static(root));
+app.get(["/qr", "/qr/"], (_req, res) => {
+  res.redirect("/qr.html");
+});
 
 const port = Number(process.env.PORT || 5173);
 Promise.all([ensureLogoColumn(), ensureQrOrderSchema()])
