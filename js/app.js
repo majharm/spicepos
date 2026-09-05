@@ -129,6 +129,10 @@ function showView(name) {
   if (name === "purchases") loadPurchases();
   if (name === "suppliers") loadSuppliers();
   if (name === "support") renderSupport();
+  if (name === "qr") {
+    showQrPoster();
+    loadQrOrders();
+  }
 }
 
 function setHint(msg, kind = "") {
@@ -403,6 +407,7 @@ async function loadBootstrap() {
   renderPoLines();
   loadToday();
   loadSuppliers();
+  loadQrOrders(true);
 }
 
 async function loadToday() {
@@ -519,6 +524,157 @@ async function loadOrders() {
     .join("");
 }
 
+let qrCache = [];
+
+function paintQrBadge(pending) {
+  const badge = $("qr-pending-nav");
+  if (!badge) return;
+  const n = Number(pending) || 0;
+  badge.textContent = String(n);
+  badge.hidden = n <= 0;
+}
+
+function qrStatusButtons(o) {
+  if (o.status === "completed" || o.status === "cancelled") return "";
+  const next = [
+    ["accepted", "Accept"],
+    ["preparing", "Preparing"],
+    ["ready", "Ready"],
+    ["cancelled", "Cancel"],
+  ].filter(([status]) => status !== o.status);
+  return next
+    .map(
+      ([status, label]) =>
+        `<button class="btn ${status === "cancelled" ? "danger" : ""}" type="button" data-qr-status="${escapeHtml(o.id)}" data-status="${status}">${label}</button>`,
+    )
+    .join("");
+}
+
+function showQrOrder(o) {
+  const lines = (o.lines || [])
+    .map((l) => `${l.item_name} ${l.quantity_gm}g @ ${l.rate_per_kg}/kg = ${money(l.amount)}`)
+    .join("\n");
+  $("qr-pane").innerHTML = `<pre class="receipt">${escapeHtml(
+    [
+      o.order_number,
+      o.customer_name,
+      o.mobile,
+      o.table_no ? `Pickup: ${o.table_no}` : "",
+      o.notes ? `Notes: ${o.notes}` : "",
+      String(o.created_at || ""),
+      "------------------------------",
+      lines,
+      "------------------------------",
+      `Subtotal ${money(o.subtotal)}`,
+      `GST ${money(o.gst)}`,
+      `TOTAL ${money(o.total)}`,
+      `Status: ${o.status}`,
+      o.sales_order_id ? "Billed to sales order" : "",
+    ]
+      .filter(Boolean)
+      .join("\n"),
+  )}</pre>
+    <div class="print-actions">
+      ${qrStatusButtons(o)}
+      ${
+        o.status !== "completed" && o.status !== "cancelled"
+          ? `<select id="qr-pay"><option value="cash">Cash</option><option value="upi">UPI</option><option value="card">Card</option><option value="credit">Credit</option></select>
+             <button class="btn primary" type="button" data-qr-complete="${escapeHtml(o.id)}">Complete &amp; bill</button>`
+          : ""
+      }
+    </div>`;
+}
+
+function orderMenuUrl() {
+  return new URL("order.html", location.href).href;
+}
+
+function paintLocalQr(img, url) {
+  if (!img || typeof QRCodeLib === "undefined" || typeof QRCodeLib.toDataURL !== "function") {
+    return Promise.reject(new Error("QR library missing"));
+  }
+  return QRCodeLib.toDataURL(url, { width: 360, margin: 1, errorCorrectionLevel: "M" }).then((dataUrl) => {
+    img.src = dataUrl;
+    img.dataset.ready = "1";
+    return dataUrl;
+  });
+}
+
+async function showQrPoster() {
+  const img = $("qr-code-img");
+  const fallback = orderMenuUrl();
+  if ($("qr-open")) $("qr-open").href = "./order.html";
+  let url = fallback;
+  if ($("qr-link")) {
+    $("qr-link").textContent = url;
+    $("qr-link").className = "hint";
+  }
+  if (!img) return;
+
+  try {
+    await paintLocalQr(img, url);
+  } catch {
+    img.src = `/api/qr/code?t=${Date.now()}`;
+  }
+
+  try {
+    const link = await api("/api/qr/link");
+    if (link.url) url = link.url;
+    if ($("qr-link")) $("qr-link").textContent = url;
+    if (link.dataUrl) {
+      img.src = link.dataUrl;
+      img.dataset.ready = "1";
+    } else {
+      await paintLocalQr(img, url);
+    }
+  } catch {
+    /* local QR already drawn */
+  }
+}
+
+async function loadQrOrders(silent = false) {
+  await showQrPoster();
+  try {
+    const data = await api("/api/qr-orders");
+    qrCache = data.orders || [];
+    paintQrBadge(data.pending);
+    if (!$("qr-orders")) return;
+    $("qr-orders").innerHTML = qrCache.length
+      ? qrCache
+          .map(
+            (o) => `<button class="order-item" type="button" data-qid="${escapeHtml(o.id)}">
+        <span>${escapeHtml(o.order_number)} · ${escapeHtml(o.customer_name)}<br>
+        <small>${escapeHtml(o.table_no || "Shop")} · ${escapeHtml(o.mobile)}</small></span>
+        <span><span class="qr-status ${escapeHtml(o.status)}">${escapeHtml(o.status)}</span><br>${money(o.total)}</span>
+      </button>`,
+          )
+          .join("")
+      : `<p class="hint">No QR orders yet. Print the poster so customers can scan.</p>`;
+  } catch (err) {
+    if (!silent && $("qr-orders")) $("qr-orders").innerHTML = `<p class="hint error">${escapeHtml(err.message)}</p>`;
+  }
+}
+
+function printQrPoster() {
+  const url = $("qr-link")?.textContent?.split(" — ")[0] || orderMenuUrl();
+  const src = $("qr-code-img")?.src || `/api/qr/code`;
+  const w = window.open("", "qr-poster", "width=640,height=860");
+  const logo = state.company.logo_url
+    ? `<img src="${state.company.logo_url}" alt="" style="max-height:72px;max-width:180px;display:block;margin:0 auto 12px">`
+    : "";
+  w.document.write(`<!DOCTYPE html><html><head><title>QR order poster</title>
+    <style>body{font-family:Georgia,serif;text-align:center;padding:36px;color:#4a1416} img.qr{width:280px;height:280px;background:#fff;padding:12px} p{color:#7a5c48}</style>
+    </head><body>
+    ${logo}
+    <h1>${escapeHtml(state.company.name || "SWAMI MASALE")}</h1>
+    <p>Scan to order spices</p>
+    <img class="qr" src="${escapeHtml(src)}" alt="QR">
+    <p>${escapeHtml(url)}</p>
+    <script>window.onload=()=>{window.print();}</script>
+    </body></html>`);
+  w.document.close();
+}
+
 async function loadPurchases() {
   const rows = await api("/api/purchases");
   $("purchases-table").innerHTML = `<table><thead><tr>
@@ -613,6 +769,46 @@ $("orders").addEventListener("click", (e) => {
   const o = orderCache.find((row) => row.id === btn.dataset.oid);
   if (o) showOrder(o);
 });
+
+$("qr-orders").addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-qid]");
+  if (!btn) return;
+  const o = qrCache.find((row) => row.id === btn.dataset.qid);
+  if (o) showQrOrder(o);
+});
+
+$("qr-pane").addEventListener("click", async (e) => {
+  const statusBtn = e.target.closest("[data-qr-status]");
+  const completeBtn = e.target.closest("[data-qr-complete]");
+  try {
+    if (statusBtn) {
+      await api(`/api/qr-orders/${statusBtn.dataset.qrStatus}`, {
+        method: "PATCH",
+        body: JSON.stringify({ status: statusBtn.dataset.status }),
+      });
+      await loadQrOrders();
+      const o = qrCache.find((row) => row.id === statusBtn.dataset.qrStatus);
+      if (o) showQrOrder(o);
+    }
+    if (completeBtn) {
+      const pay = $("qr-pay")?.value || "cash";
+      const data = await api(`/api/qr-orders/${completeBtn.dataset.qrComplete}/complete`, {
+        method: "POST",
+        body: JSON.stringify({ paymentMethod: pay }),
+      });
+      await loadQrOrders();
+      await loadToday();
+      const o = qrCache.find((row) => row.id === completeBtn.dataset.qrComplete);
+      if (o) showQrOrder(o);
+      setHint(`Billed ${data.sale?.order_number || ""} · ${money(data.sale?.total)}`, "ok");
+    }
+  } catch (err) {
+    $("qr-pane").insertAdjacentHTML("beforeend", `<p class="hint error">${escapeHtml(err.message)}</p>`);
+  }
+});
+
+$("qr-print").addEventListener("click", printQrPoster);
+$("qr-refresh").addEventListener("click", () => loadQrOrders());
 
 $("order-pane").addEventListener("click", (e) => {
   const printBtn = e.target.closest("[data-print]");
@@ -911,8 +1107,11 @@ function tick() {
 }
 tick();
 setInterval(tick, 15000);
+showQrPoster().catch(() => {});
+setInterval(() => loadQrOrders(true), 12000);
 
 loadBootstrap().catch((err) => {
   $("shop-place").textContent = err.message;
   setHint(err.message, "error");
+  showQrPoster().catch(() => {});
 });

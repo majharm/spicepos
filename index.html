@@ -24,6 +24,7 @@
         <button class="nav-btn" type="button" data-view="customers">Customers</button>
         <button class="nav-btn" type="button" data-view="packs">Packs</button>
         <button class="nav-btn" type="button" data-view="orders">Orders</button>
+        <button class="nav-btn" type="button" data-view="qr">QR code</button>
         <button class="nav-btn" type="button" data-view="purchases">Purchases</button>
         <button class="nav-btn" type="button" data-view="suppliers">Suppliers</button>
         <button class="nav-btn" type="button" data-view="support">Support</button>
@@ -52,6 +53,7 @@
               <option value="card">Card</option>
               <option value="credit">Credit</option>
             </select>
+            <a class="btn primary" href="./qr.html" target="_blank" rel="noopener">QR code</a>
           </header>
           <div class="workspace">
             <div class="catalog" id="catalog"></div>
@@ -140,6 +142,27 @@
             <div class="pane" id="order-pane"><p class="hint">Select an order.</p></div>
           </div>
         </section>
+        <section class="view" id="view-qr" hidden>
+          <h2>QR code</h2>
+          <p class="lede">This square is the shop order QR. Print it, or open <a href="./qr.html">qr.html</a> if the image is blank. Customers scan it to order at <code>/order.html</code>.</p>
+          <div class="qr-poster" id="qr-poster">
+            <img id="qr-code-img" alt="Customer order QR code" width="220" height="220" />
+            <div>
+              <strong>Customer menu</strong>
+              <p class="hint" id="qr-link">Loading link…</p>
+              <div class="print-actions">
+                <a class="btn" id="qr-open" href="./order.html" target="_blank" rel="noopener">Open menu</a>
+                <a class="btn" href="./qr.html" target="_blank" rel="noopener">Full poster</a>
+                <button class="btn primary" type="button" id="qr-print">Print poster</button>
+                <button class="btn" type="button" id="qr-refresh">Refresh orders</button>
+              </div>
+            </div>
+          </div>
+          <div class="split">
+            <div class="table-wrap" id="qr-orders"><p class="hint">Loading QR orders…</p></div>
+            <div class="pane" id="qr-pane"><p class="hint">Select a QR order.</p></div>
+          </div>
+        </section>
         <section class="view" id="view-purchases" hidden>
           <h2>Purchases</h2>
           <form class="settings wide" id="purchase-form">
@@ -218,6 +241,7 @@
         </div>
       </div>
     </div>
+    <script src="./js/qrcode.iife.js"></script>
     <script src="./js/app.js"></script>
   </body>
 </html>

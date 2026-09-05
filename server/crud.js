@@ -8,6 +8,96 @@ export function round2(n) {
   return Math.round(Number(n) * 100) / 100;
 }
 
+export async function buildPricedLines(conn, customer, lines) {
+  const built = [];
+  for (const line of lines) {
+    const [items] = await conn.query(
+      "SELECT * FROM items WHERE id = ? AND business_id = ?",
+      [line.itemId, BUSINESS_ID],
+    );
+    const item = items[0];
+    if (!item) throw new Error("Unknown item");
+    const qty = Number(line.quantity_gm);
+    if (!Number.isFinite(qty) || qty <= 0) throw new Error("Invalid quantity");
+    if (qty > Number(item.stock_gm || 0)) throw new Error(`${item.name} does not have enough stock`);
+    const rate = customer.type === "b2b" ? Number(item.b2b_rate) : Number(item.retail_rate);
+    const amount = round2(lineAmount(qty, rate));
+    built.push({ item, qty, rate, amount, gstRate: Number(item.gst_rate) || 0 });
+  }
+  return built;
+}
+
+export async function insertSalesOrder(conn, { customer, built, packId, packCount, paymentMethod, status = "confirmed" }) {
+  const method = String(paymentMethod || "cash").toLowerCase();
+  const subtotal = round2(built.reduce((s, l) => s + l.amount, 0));
+  const gst = round2(built.reduce((s, l) => s + (l.amount * l.gstRate) / 100, 0));
+  const total = round2(subtotal + gst);
+  const totalGm = built.reduce((s, l) => s + l.qty, 0);
+  const next = await nextSeq(conn, "order", 10036);
+  const orderNumber = `SO-${next}`;
+  const orderId = crypto.randomUUID();
+  const payStatus = method === "credit" ? "partial" : "paid";
+  let packName = null;
+  if (packId) {
+    const [packs] = await conn.query("SELECT * FROM packs WHERE id = ?", [packId]);
+    packName = packs[0]?.name || null;
+  }
+  await conn.query(
+    `INSERT INTO sales_orders (
+       id, order_number, customer_id, customer_name, customer_type,
+       pack_id, pack_name, pack_count, status, total_quantity_gm,
+       subtotal, discount, gst, total, payment_method, payment_status, business_id
+     ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    [
+      orderId,
+      orderNumber,
+      customer.id,
+      customer.business_name || customer.name,
+      customer.type,
+      packId || null,
+      packName,
+      packCount || null,
+      status,
+      totalGm,
+      subtotal,
+      0,
+      gst,
+      total,
+      method,
+      payStatus,
+      BUSINESS_ID,
+    ],
+  );
+  for (const line of built) {
+    await conn.query(
+      `INSERT INTO sales_order_lines (
+         id, order_id, item_id, item_name, quantity_gm, rate_per_kg,
+         discount, amount, gst_rate, cancelled, business_id
+       ) VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+      [
+        crypto.randomUUID(),
+        orderId,
+        line.item.id,
+        line.item.name,
+        line.qty,
+        line.rate,
+        0,
+        line.amount,
+        line.gstRate,
+        0,
+        BUSINESS_ID,
+      ],
+    );
+    await conn.query(
+      "UPDATE items SET stock_gm = stock_gm - ? WHERE id = ? AND business_id = ?",
+      [line.qty, line.item.id, BUSINESS_ID],
+    );
+  }
+  const [orders] = await conn.query("SELECT * FROM sales_orders WHERE id = ?", [orderId]);
+  const [orderLines] = await conn.query("SELECT * FROM sales_order_lines WHERE order_id = ?", [orderId]);
+  return { ...orders[0], lines: orderLines };
+}
+
 export async function nextSeq(conn, name, start) {
   const [rows] = await conn.query(
     "SELECT next_value FROM number_sequences WHERE name = ? AND business_id = ? FOR UPDATE",
