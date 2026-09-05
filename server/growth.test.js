@@ -92,7 +92,8 @@ test("shop UI and PHP wire the AI Growth dashboard", () => {
   const php = readFileSync(path.join(root, "pos-php-till.php"), "utf8");
   const growthPhp = readFileSync(path.join(root, "pos-growth.php"), "utf8");
   const roles = readFileSync(path.join(root, "server/roles.js"), "utf8");
-  assert.match(index, /data-view="growth"/);
+  assert.match(index, /data-view="dashboard"[\s\S]{0,400}data-view="growth"/);
+  assert.match(index, /id="open-growth"/);
   assert.match(index, /id="view-growth"/);
   assert.match(index, /js\/growth\.js/);
   assert.match(app, /loadGrowthDashboard/);

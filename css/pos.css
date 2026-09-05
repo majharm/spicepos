@@ -535,6 +535,7 @@ body:has(#view-expiry:not([hidden])) .platform-notices { display: none !importan
   margin: 0;
 }
 .lede { margin: 8px 24px 18px; color: var(--muted); max-width: 72ch; line-height: 1.55; font-size: 14px; }
+.dash-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
 .view > .hint { margin: 0 24px 12px; }
 
 .topbar {

@@ -1,4 +1,4 @@
-Production deploy bundle — 20260905deploy119
+Production deploy bundle — 20260905deploy120
 =========================================
 
 Upload ALL files below to Hostinger public_html (overwrite):
@@ -150,7 +150,8 @@ FIXES in this bundle
   - Master Admin Send alerts page: all types to one shop or all shops
   - Force expiry send always delivers (expires today counts as expired); skip reason shown
   - AI Growth dashboard: shop KPIs, SVG charts, Action Center, Ask Business AI, PDF/Excel
-  - Cache sticker 20260905deploy119 on shop index / AI Growth (deploy118 on master)
+  - AI Growth sits in Main (under Dashboard) plus a Dashboard button so it is visible without scrolling
+  - Cache sticker 20260905deploy120 on shop index / AI Growth (deploy118 on master)
   - Settings shows From pos@atavtelecom.in at the top and saves SMTP on the platform
   - Send alerts defaults to renewal/expired and sends one shop at a time; wait 60s after HTTP 429
   - Retry WhatsApp HTTP 429 with backoff and pace sends under WA Master's 300/minute limit

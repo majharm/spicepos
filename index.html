@@ -6,8 +6,8 @@
     <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
     <title>ATAV POS</title>
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./css/pos.css?v=20260905deploy119" />
-    <link rel="stylesheet" href="./css/saas.css?v=20260905deploy119" />
+    <link rel="stylesheet" href="./css/pos.css?v=20260905deploy120" />
+    <link rel="stylesheet" href="./css/saas.css?v=20260905deploy120" />
   </head>
   <body>
     <div class="app" id="app">
@@ -22,6 +22,7 @@
           <div class="nav-group">
             <p class="nav-group-label">Main</p>
             <button class="nav-btn active" type="button" data-view="dashboard"><span class="nav-icon" aria-hidden="true">⌂</span>Dashboard</button>
+            <button class="nav-btn" type="button" data-view="growth"><span class="nav-icon" aria-hidden="true">◈</span>AI Growth</button>
             <button class="nav-btn" type="button" data-view="counter"><span class="nav-icon" aria-hidden="true">⊞</span>Counter</button>
           </div>
           <div class="nav-group">
@@ -48,7 +49,6 @@
             <p class="nav-group-label">Finance</p>
             <button class="nav-btn" type="button" data-view="accounts"><span class="nav-icon" aria-hidden="true">₹</span>Accounts</button>
             <button class="nav-btn" type="button" data-view="expenses"><span class="nav-icon" aria-hidden="true">−</span>Expenses</button>
-            <button class="nav-btn" type="button" data-view="growth"><span class="nav-icon" aria-hidden="true">◈</span>AI Growth</button>
             <button class="nav-btn" type="button" data-view="reports"><span class="nav-icon" aria-hidden="true">▣</span>Reports</button>
           </div>
           <div class="nav-group">
@@ -94,7 +94,10 @@
           <p class="lede" id="dash-welcome">Your shop today.</p>
           <div class="platform-notes" id="dash-notes"></div>
           <div class="report-grid" id="dash-kpis"></div>
-          <p class="lede"><button class="btn primary" type="button" data-view-jump="counter" id="open-pos">Open POS</button></p>
+          <p class="lede dash-actions">
+            <button class="btn primary" type="button" data-view-jump="counter" id="open-pos">Open POS</button>
+            <button class="btn" type="button" id="open-growth">AI Growth</button>
+          </p>
         </section>
         <section class="view view-counter" id="view-counter" hidden>
           <div class="edit-order-banner" id="edit-order-banner" hidden></div>
@@ -1192,19 +1195,19 @@
         </section>
       </div>
     </aside>
-    <script src="./js/gst-supply.js?v=20260905deploy119" defer></script>
-    <script src="./js/pos-api.js?v=20260905deploy119" defer></script>
-    <script src="./js/units.js?v=20260905deploy119" defer></script>
-    <script src="./js/footwear.js?v=20260905deploy119" defer></script>
-    <script src="./js/discount.js?v=20260905deploy119" defer></script>
-    <script src="./js/loyalty.js?v=20260905deploy119" defer></script>
-    <script src="./js/barcode.js?v=20260905deploy119" defer></script>
+    <script src="./js/gst-supply.js?v=20260905deploy120" defer></script>
+    <script src="./js/pos-api.js?v=20260905deploy120" defer></script>
+    <script src="./js/units.js?v=20260905deploy120" defer></script>
+    <script src="./js/footwear.js?v=20260905deploy120" defer></script>
+    <script src="./js/discount.js?v=20260905deploy120" defer></script>
+    <script src="./js/loyalty.js?v=20260905deploy120" defer></script>
+    <script src="./js/barcode.js?v=20260905deploy120" defer></script>
     <script src="./js/camera-scan.js?v=20260904camera1" defer></script>
-    <script src="./js/dev-mode.js?v=20260905deploy119" defer></script>
-    <script src="./js/invoice.js?v=20260905deploy119" defer></script>
-    <script src="./js/support.js?v=20260905deploy119" defer></script>
+    <script src="./js/dev-mode.js?v=20260905deploy120" defer></script>
+    <script src="./js/invoice.js?v=20260905deploy120" defer></script>
+    <script src="./js/support.js?v=20260905deploy120" defer></script>
     <script src="./js/qrcode.iife.js?v=20260905qr1"></script>
-    <script src="./js/app.js?v=20260905deploy119" defer></script>
-    <script src="./js/growth.js?v=20260905deploy119" defer></script>
+    <script src="./js/app.js?v=20260905deploy120" defer></script>
+    <script src="./js/growth.js?v=20260905deploy120" defer></script>
   </body>
 </html>

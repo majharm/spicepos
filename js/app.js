@@ -931,6 +931,8 @@ function applyNav() {
     if (view === "growth") btn.hidden = !(can("growth") || can("reports"));
     if (view === "packs" && isFootwearShop()) btn.hidden = true;
   });
+  const growthBtn = $("open-growth");
+  if (growthBtn) growthBtn.hidden = !(can("growth") || can("reports"));
 }
 
 function paintViewHeader(name) {
@@ -4616,6 +4618,7 @@ document.addEventListener("click", async (e) => {
   location.href = "/login.html";
 });
 $("open-pos")?.addEventListener("click", () => showView("counter"));
+$("open-growth")?.addEventListener("click", () => showView("growth"));
 $("btn-hold")?.addEventListener("click", async () => {
   try {
     if (state.editingOrderId) throw new Error("Finish or cancel the invoice edit first");
