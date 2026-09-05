@@ -111,9 +111,10 @@ test("Master Admin Settings lives under Backup with Active/Inactive templates", 
   assert.match(nodeAlerts, /summarizeAlertResults/);
   assert.match(nodeAlerts, /dispatchAlert\(\{[\s\S]*Welcome to ATAV POS/s);
   assert.match(master, /alert-send-expiry/);
-  assert.match(master, /alert-send-expired/);
-  assert.match(master, /expiredAccountsHtml/);
-  assert.match(master, /data-send-expired/);
+  assert.match(masterHtml, /data-tab="expiry">Expiry alerts</);
+  assert.match(master, /expiryAlertsPageHtml/);
+  assert.match(master, /expiry-send-expired/);
+  assert.match(master, /data-send-expiry-row/);
   assert.match(master, /\/api\/master\/alerts\/send-expired/);
   assert.match(master, /data-send-expiry/);
   assert.match(master, /summarizeAlertDelivery/);

@@ -209,12 +209,15 @@ test("Master Admin can set passwords and unlock locked accounts", () => {
   assert.match(masterApi, /\/api\/master\/businesses\/:id\/clean/);
   assert.match(masterJs, /data-send-expiry/);
   assert.match(masterJs, /alert-send-expiry/);
-  assert.match(masterJs, /alert-send-expired/);
-  assert.match(masterJs, /expiredAccountsHtml/);
-  assert.match(masterJs, /data-send-expired/);
+  assert.match(masterJs, /expiryAlertsPageHtml/);
+  assert.match(masterJs, /expiry-send-expired/);
+  assert.match(masterJs, /activationDate/);
+  assert.match(masterApi, /activated_at/);
+  assert.match(masterJs, /data-send-expiry-row/);
   assert.match(masterJs, /data-clean-biz/);
   assert.match(core, /users\/\(\[\^\/\]\+\)\/unlock/);
   assert.match(core, /businesses\/\(\[\^\/\]\+\)\/send-expiry-alert/);
+  assert.match(core, /activated_at/);
   assert.match(core, /master\/alerts\/send-expired/);
   assert.match(core, /function pos_unlock_staff_user/);
   assert.match(core, /auth\/reset-password/);

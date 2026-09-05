@@ -231,11 +231,15 @@ export function registerMaster(app) {
         `SELECT b.*, p.name AS plan_name, p.fee_monthly,
                 am.name AS account_manager_name, am.mobile AS account_manager_mobile,
                 (SELECT u.username FROM staff_users u
-                 WHERE u.business_id = b.id AND u.role = 'business_admin' LIMIT 1) AS admin_username
+                 WHERE u.business_id = b.id AND u.role = 'business_admin' LIMIT 1) AS admin_username,
+                COALESCE(
+                  b.created_at,
+                  (SELECT MIN(u.created_at) FROM staff_users u WHERE u.business_id = b.id)
+                ) AS activated_at
          FROM businesses b
          LEFT JOIN subscription_plans p ON p.id = b.plan_id
          LEFT JOIN account_managers am ON am.id = b.account_manager_id
-         ORDER BY b.name`,
+         ORDER BY COALESCE(b.subscription_expires_at, '9999-12-31'), b.name`,
       );
       return rows.map((b) => ({ ...b, computed_status: publicStatus(b) }));
     }),
