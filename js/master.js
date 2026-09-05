@@ -463,92 +463,138 @@ const ALERT_DEFS = [
     key: "welcome",
     flag: "alert_welcome",
     title: "Welcome",
-    blurb: "WhatsApp when a shop is created or an owner signs up. The standard welcome email (no password) is still sent separately.",
+    blurb: "Sent when a shop is created or an owner signs up. The standard welcome email (no password) is still sent separately.",
+    channels: "WhatsApp",
     placeholders: "{{shop}} {{name}} {{signInUrl}}",
   },
   {
     key: "credentials",
     flag: "alert_credentials",
     title: "User ID & password",
-    blurb: "WhatsApp and email with login details when a shop, staff user, or password reset is created.",
+    blurb: "Login details when a shop, staff user, or password reset is created.",
+    channels: "WhatsApp · Email",
     placeholders: "{{shop}} {{name}} {{username}} {{email}} {{password}} {{role}} {{signInUrl}}",
   },
   {
     key: "updates",
     flag: "alert_updates",
     title: "New update",
-    blurb: "WhatsApp and email when you send a notification from the Notifications tab.",
+    blurb: "When you send a notification from the Notifications tab.",
+    channels: "WhatsApp · Email",
     placeholders: "{{shop}} {{title}} {{body}}",
   },
   {
     key: "closing",
     flag: "alert_closing",
     title: "Closing sales summary",
-    blurb: "Daily WhatsApp and email after the closing hour (shop timezone). Sent once per shop per day.",
+    blurb: "Once per shop per day after the closing hour (shop timezone).",
+    channels: "WhatsApp · Email",
     placeholders: "{{shop}} {{day}} {{bills}} {{takings}} {{cash}} {{upi}} {{card}} {{credit}} {{gst}} {{lowStock}}",
   },
   {
     key: "low_stock",
     flag: "alert_low_stock",
     title: "Low stock alert",
-    blurb: "WhatsApp and email after a sale when an item falls to or below reorder level. Once per item per day.",
+    blurb: "After a sale when an item falls to or below reorder level. Once per item per day.",
+    channels: "WhatsApp · Email",
     placeholders: "{{shop}} {{lowStock}}",
   },
 ];
+
+function placeholderChips(raw) {
+  return String(raw || "")
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((token) => `<button class="msg-chip" type="button" data-insert="${attr(token)}">${attr(token)}</button>`)
+    .join("");
+}
 
 function alertsFormHtml(alerts) {
   const vars = alerts.sample_vars || {};
   const fill = (tpl) =>
     String(tpl || "").replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (_, key) => (vars[key] == null ? "" : String(vars[key])));
-  return `<form class="settings wide alert-settings" id="alert-form">
-    <div class="alert-card">
-      <header>
-        <div>
-          <h3>WhatsApp API</h3>
-          <p class="section-note">API key is stored on the platform and never shown in full.</p>
-        </div>
+  const waOn = alerts.wa_enabled === "1";
+  return `<form class="msg-settings" id="alert-form">
+    <section class="settings item-composer msg-wa">
+      <div class="item-composer-top">
+        <p class="item-mode">WhatsApp connection</p>
+        <p class="item-composer-note">API key is stored on the platform and never shown in full. Shops are messaged on their mobile number.</p>
         <label class="alert-switch">
-          <input type="checkbox" name="wa_enabled" ${alerts.wa_enabled === "1" ? "checked" : ""} />
+          <input type="checkbox" name="wa_enabled" ${waOn ? "checked" : ""} />
           <span class="alert-switch-ui" aria-hidden="true"></span>
-          <span class="alert-switch-label">${alerts.wa_enabled === "1" ? "Active" : "Inactive"}</span>
+          <span class="alert-switch-label">${waOn ? "Active" : "Inactive"}</span>
         </label>
-      </header>
-      <label>API URL <input name="wa_api_url" value="${attr(alerts.wa_api_url || "")}" /></label>
-      <label>API key <input name="wa_api_key" type="password" autocomplete="off" value="${attr(alerts.wa_api_key || "")}" /></label>
-      <label>Profile ID <input name="wa_profile_id" value="${attr(alerts.wa_profile_id || "")}" /></label>
-      <label>Country code <input name="wa_country_code" value="${attr(alerts.wa_country_code || "91")}" maxlength="3" /></label>
+      </div>
+      <fieldset class="item-block">
+        <legend>API</legend>
+        <label class="full">API URL <input name="wa_api_url" value="${attr(alerts.wa_api_url || "")}" placeholder="https://…" autocomplete="off" /></label>
+        <label>API key <input name="wa_api_key" type="password" autocomplete="off" value="${attr(alerts.wa_api_key || "")}" /></label>
+        <label>Profile ID <input name="wa_profile_id" value="${attr(alerts.wa_profile_id || "")}" autocomplete="off" /></label>
+        <label>Country code <input name="wa_country_code" value="${attr(alerts.wa_country_code || "91")}" maxlength="3" inputmode="numeric" /></label>
+      </fieldset>
+    </section>
+    <div class="items-split msg-split">
+      <aside class="items-library msg-nav">
+        <div class="items-library-head">
+          <h4>Auto-messages</h4>
+          <p class="item-composer-note">Turn a message Active, then edit its template on the right.</p>
+        </div>
+        <div class="msg-nav-list" role="tablist" aria-label="Auto-messages">
+          ${ALERT_DEFS.map((d, i) => {
+            const on = alerts[d.flag] === "1";
+            return `<button class="msg-nav-item${i === 0 ? " is-active" : ""}" type="button" role="tab" aria-selected="${i === 0}" data-msg-kind="${d.key}">
+              <span class="msg-nav-copy">
+                <strong>${d.title}</strong>
+                <span>${d.channels}</span>
+              </span>
+              <span class="item-chip ${on ? "is-ok" : "is-bad"}" data-msg-flag="${d.key}">${on ? "Active" : "Off"}</span>
+            </button>`;
+          }).join("")}
+        </div>
+      </aside>
+      <div class="msg-editors">
+        ${ALERT_DEFS.map((d, i) => {
+          const on = alerts[d.flag] === "1";
+          const tpl = alerts[`tpl_${d.key}`] || (alerts.defaults && alerts.defaults[d.key]) || "";
+          return `<article class="settings item-composer alert-card${on ? "" : " is-inactive"}" data-kind="${d.key}" ${i ? "hidden" : ""}>
+            <div class="item-composer-top">
+              <p class="item-mode">${d.title}</p>
+              <p class="item-composer-note">${d.blurb}</p>
+              <label class="alert-switch">
+                <input type="checkbox" name="${d.flag}" ${on ? "checked" : ""} />
+                <span class="alert-switch-ui" aria-hidden="true"></span>
+                <span class="alert-switch-label">${on ? "Active" : "Inactive"}</span>
+              </label>
+            </div>
+            ${
+              d.key === "closing"
+                ? `<fieldset class="item-block">
+                    <legend>Schedule</legend>
+                    <label>Closing hour (0–23)
+                      <input name="alert_closing_hour" type="number" min="0" max="23" value="${attr(alerts.alert_closing_hour || "22")}" />
+                    </label>
+                  </fieldset>`
+                : ""
+            }
+            <fieldset class="item-block">
+              <legend>Template</legend>
+              <label class="full">Message
+                <textarea name="tpl_${d.key}" rows="8">${attr(tpl)}</textarea>
+              </label>
+              <div class="msg-chips full" data-chips-for="${d.key}">${placeholderChips(d.placeholders)}</div>
+            </fieldset>
+            <div class="msg-preview-block">
+              <div class="msg-preview-head">
+                <span>Live preview</span>
+                <button class="btn" type="button" data-reset-tpl="${d.key}">Reset template</button>
+              </div>
+              <pre class="alert-preview">${attr(fill(tpl))}</pre>
+            </div>
+          </article>`;
+        }).join("")}
+      </div>
     </div>
-    ${ALERT_DEFS.map((d) => {
-      const on = alerts[d.flag] === "1";
-      const tpl = alerts[`tpl_${d.key}`] || (alerts.defaults && alerts.defaults[d.key]) || "";
-      return `<article class="alert-card${on ? "" : " is-inactive"}" data-kind="${d.key}">
-        <header>
-          <div>
-            <h3>${d.title}</h3>
-            <p class="section-note">${d.blurb}</p>
-          </div>
-          <label class="alert-switch">
-            <input type="checkbox" name="${d.flag}" ${on ? "checked" : ""} />
-            <span class="alert-switch-ui" aria-hidden="true"></span>
-            <span class="alert-switch-label">${on ? "Active" : "Inactive"}</span>
-          </label>
-        </header>
-        ${
-          d.key === "closing"
-            ? `<label>Closing hour (0–23)
-                <input name="alert_closing_hour" type="number" min="0" max="23" value="${attr(alerts.alert_closing_hour || "22")}" />
-              </label>`
-            : ""
-        }
-        <label>Message template
-          <textarea name="tpl_${d.key}" rows="6">${attr(tpl)}</textarea>
-        </label>
-        <p class="hint">Placeholders: ${d.placeholders}</p>
-        <button class="btn" type="button" data-reset-tpl="${d.key}">Reset template</button>
-        <pre class="alert-preview">${attr(fill(tpl))}</pre>
-      </article>`;
-    }).join("")}
-    <div class="settings-actions">
+    <div class="msg-savebar">
       <button class="btn primary" type="submit">Save message settings</button>
       <p class="hint" id="alert-hint"></p>
     </div>
@@ -561,15 +607,36 @@ function bindAlertsForm(alerts) {
   const vars = alerts.sample_vars || {};
   const fill = (tpl) =>
     String(tpl || "").replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (_, key) => (vars[key] == null ? "" : String(vars[key])));
+  const showKind = (kind) => {
+    form.querySelectorAll("[data-kind]").forEach((el) => {
+      el.hidden = el.dataset.kind !== kind;
+    });
+    form.querySelectorAll("[data-msg-kind]").forEach((btn) => {
+      const on = btn.dataset.msgKind === kind;
+      btn.classList.toggle("is-active", on);
+      btn.setAttribute("aria-selected", on ? "true" : "false");
+    });
+  };
   const paintSwitch = (input) => {
     const label = input.closest(".alert-switch")?.querySelector(".alert-switch-label");
     if (label) label.textContent = input.checked ? "Active" : "Inactive";
-    const card = input.closest(".alert-card");
-    if (card && input.name?.startsWith("alert_")) card.classList.toggle("is-inactive", !input.checked);
+    const card = input.closest("[data-kind]");
+    if (card && input.name?.startsWith("alert_")) {
+      card.classList.toggle("is-inactive", !input.checked);
+      const chip = form.querySelector(`[data-msg-flag="${card.dataset.kind}"]`);
+      if (chip) {
+        chip.textContent = input.checked ? "Active" : "Off";
+        chip.classList.toggle("is-ok", input.checked);
+        chip.classList.toggle("is-bad", !input.checked);
+      }
+    }
   };
   form.querySelectorAll(".alert-switch input[type=checkbox]").forEach((input) => {
     input.addEventListener("change", () => paintSwitch(input));
     paintSwitch(input);
+  });
+  form.querySelectorAll("[data-msg-kind]").forEach((btn) => {
+    btn.addEventListener("click", () => showKind(btn.dataset.msgKind));
   });
   const paintPreview = (kind) => {
     const card = form.querySelector(`[data-kind="${kind}"]`);
@@ -580,6 +647,21 @@ function bindAlertsForm(alerts) {
   form.querySelectorAll("textarea[name^='tpl_']").forEach((ta) => {
     const kind = ta.name.replace("tpl_", "");
     ta.addEventListener("input", () => paintPreview(kind));
+  });
+  form.querySelectorAll("[data-insert]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const kind = btn.closest("[data-kind]")?.dataset.kind;
+      const ta = form.querySelector(`textarea[name="tpl_${kind}"]`);
+      if (!ta) return;
+      const start = ta.selectionStart ?? ta.value.length;
+      const end = ta.selectionEnd ?? ta.value.length;
+      const token = btn.dataset.insert || "";
+      ta.value = `${ta.value.slice(0, start)}${token}${ta.value.slice(end)}`;
+      ta.focus();
+      const pos = start + token.length;
+      ta.setSelectionRange(pos, pos);
+      paintPreview(kind);
+    });
   });
   form.querySelectorAll("[data-reset-tpl]").forEach((btn) => {
     btn.addEventListener("click", () => {
@@ -601,7 +683,7 @@ function bindAlertsForm(alerts) {
     hint.textContent = "Saving…";
     try {
       await api("/api/master/alerts", { method: "POST", body: JSON.stringify(fd) });
-      hint.textContent = "Message settings saved. Active templates will auto-send.";
+      hint.textContent = "Saved. Active templates will auto-send.";
       hint.className = "hint ok";
     } catch (err) {
       hint.textContent = err.message;
@@ -1106,20 +1188,24 @@ async function render() {
       const shops = await api("/api/master/businesses");
       const alerts = backupPane === "settings" ? await api("/api/master/alerts") : null;
       const pane = backupPane === "settings" ? "settings" : "backup";
+      const activeMsgs = pane === "settings" ? ALERT_DEFS.filter((d) => alerts?.[d.flag] === "1").length : 0;
       body.innerHTML = `<div class="items-desk settings-desk master-desk">
         ${masterHero(
           "Platform",
-          pane === "settings" ? "Settings" : "Backup",
+          pane === "settings" ? "Message settings" : "Backup",
           pane === "settings"
-            ? "WhatsApp API and auto-message templates. Open Backup for shop and platform JSON files."
+            ? "Connect WhatsApp, then turn each auto-message Active or Inactive. Shops receive WhatsApp on their mobile and email on their shop email."
             : "Download or restore one shop, or the full platform. Message settings are under Backup → Settings.",
           pane === "backup"
             ? [{ label: "Shops", value: shops.length }]
-            : [{ label: "WhatsApp", value: alerts?.wa_enabled === "1" ? "On" : "Off" }],
+            : [
+                { label: "WhatsApp", value: alerts?.wa_enabled === "1" ? "On" : "Off" },
+                { label: "Active", value: `${activeMsgs}/${ALERT_DEFS.length}` },
+              ],
         )}
         <div class="settings-tabs" role="tablist" aria-label="Backup and settings">
           <button class="btn${pane === "backup" ? " active" : ""}" type="button" role="tab" aria-selected="${pane === "backup"}" data-master-pane="backup">Backup</button>
-          <button class="btn${pane === "settings" ? " active" : ""}" type="button" role="tab" aria-selected="${pane === "settings"}" data-master-pane="settings" data-tab-alerts>Settings</button>
+          <button class="btn${pane === "settings" ? " active" : ""}" type="button" role="tab" aria-selected="${pane === "settings"}" data-master-pane="settings" data-tab-alerts>Messages</button>
         </div>
         <div class="settings-pane" id="master-pane-backup" ${pane === "backup" ? "" : "hidden"}>
           <div class="master-backup-grid">

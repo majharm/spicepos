@@ -59,6 +59,9 @@ test("Master Admin Settings lives under Backup with Active/Inactive templates", 
   assert.match(masterHtml, /data-tab="backup"/);
   assert.match(master, /data-master-pane="settings"/);
   assert.match(master, /id="alert-form"/);
+  assert.match(master, /class="msg-settings"/);
+  assert.match(master, /Message settings/);
+  assert.match(master, /WhatsApp connection/);
   assert.match(master, /User ID & password/);
   assert.match(master, /Closing sales summary/);
   assert.match(master, /Low stock alert/);
@@ -111,7 +114,7 @@ test("Master Admin notifications form can attach an image", () => {
   const mail = readFileSync(path.join(root, "pos-mail.php"), "utf8");
   assert.match(master, /id="note-image"/);
   assert.match(master, /image_url/);
-  assert.match(master, /WhatsApp API/);
+  assert.match(master, /WhatsApp connection/);
   assert.match(php, /master\/alerts/);
   assert.match(php, /image_url/);
   assert.match(php, /pos_send_update_alerts/);
