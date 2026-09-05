@@ -526,7 +526,17 @@ function pos_accounts_dispatch($path, $method, $body, $bid, $auth, $branchId, $u
       "reference_id" => $body["order_id"] ?? null, "notes" => $body["notes"] ?? null,
     ], $bid, $uid);
     pos_post_receipt_journal($bid, $uid, $amt, $methodPay, $entryNo, $ledgerId);
-    pos_send(200, ["ok" => true, "entryNo" => $entryNo, "ledgerId" => $ledgerId, "customer" => array_merge($customer, ["outstanding" => $next]), "amount" => $amt, "php" => true]);
+    pos_send(200, [
+      "ok" => true,
+      "entryNo" => $entryNo,
+      "ledgerId" => $ledgerId,
+      "customer" => array_merge($customer, ["outstanding" => $next]),
+      "amount" => $amt,
+      "method" => $methodPay,
+      "previous_due" => $outstanding,
+      "balance_due" => $next,
+      "php" => true,
+    ]);
   }
 
   if ($path === "accounts/payments" && $method === "POST") {

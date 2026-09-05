@@ -784,6 +784,7 @@ ${officeInvoiceBody(order, ctx, { copy })}
   <div class="inv-details">
     <div class="inv-row"><span>Voucher No.</span><strong>${escapeHtml(entry.entry_no || "—")}</strong></div>
     <div class="inv-row"><span>Date</span><span>${escapeHtml(when)}</span></div>
+    ${entry.party_mobile ? `<div class="inv-row"><span>Mobile</span><span>${escapeHtml(entry.party_mobile)}</span></div>` : ""}
     <div class="inv-row"><span>${isPayment ? "Paid to" : "Received from"}</span><span>${escapeHtml(entry.party_name || "—")}</span></div>
     <div class="inv-row"><span>Mode</span><span>${escapeHtml(String(entry.payment_method || "cash").toUpperCase())}</span></div>
     ${reference && reference !== "manual" ? `<div class="inv-row"><span>Reference</span><span>${escapeHtml(reference.replace(/_/g, " "))}</span></div>` : ""}
@@ -792,7 +793,9 @@ ${officeInvoiceBody(order, ctx, { copy })}
   <div class="inv-rule"></div>
   <table class="inv-totals">
     <tbody>
-      <tr class="inv-grand"><td><strong>Amount</strong></td><td class="inv-num"><strong>${escapeHtml(money(amount))}</strong></td></tr>
+      ${!isPayment && (entry.previous_due != null || entry.previousDue != null) ? `<tr><td>Previous due</td><td class="inv-num">${escapeHtml(money(entry.previous_due ?? entry.previousDue))}</td></tr>` : ""}
+      <tr class="inv-grand"><td><strong>${isPayment ? "Amount paid" : "Amount received"}</strong></td><td class="inv-num"><strong>${escapeHtml(money(amount))}</strong></td></tr>
+      ${!isPayment && (entry.balance_due != null || entry.balanceDue != null) ? `<tr><td>Balance due</td><td class="inv-num">${escapeHtml(money(entry.balance_due ?? entry.balanceDue))}</td></tr>` : ""}
     </tbody>
   </table>
   <p class="inv-pay">In words: ${escapeHtml(amountInWords(amount))}</p>

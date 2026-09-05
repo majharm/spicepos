@@ -95,6 +95,21 @@ export async function ensureAdvancedSchema() {
     INDEX (business_id),
     INDEX (item_id)
   )`);
+  try {
+    await query(`ALTER TABLE item_barcodes ADD COLUMN status VARCHAR(16) NOT NULL DEFAULT 'active'`);
+  } catch {
+    /* exists */
+  }
+  try {
+    await query(`ALTER TABLE item_barcodes ADD COLUMN used_kind VARCHAR(16) NULL`);
+  } catch {
+    /* exists */
+  }
+  try {
+    await query(`ALTER TABLE item_barcodes ADD COLUMN used_at TIMESTAMP(3) NULL`);
+  } catch {
+    /* exists */
+  }
   await query(`CREATE TABLE IF NOT EXISTS stock_batches (
     id VARCHAR(255) PRIMARY KEY,
     business_id VARCHAR(255) NOT NULL,
@@ -481,6 +496,7 @@ export async function applySaleStock(conn, ctx) {
       });
     }
   }
+  await consumePieceBarcode(conn, ctx.businessId, ctx.barcode || first?.batch?.barcode, "sold");
   return first;
 }
 
@@ -596,6 +612,54 @@ export async function applyLoyaltyOnSale(conn, ctx) {
   return { points: redeemPts, rupees: redeemRs, earned };
 }
 
+export async function consumePieceBarcode(conn, businessId, code, kind = "sold") {
+  const raw = String(code || "").trim();
+  if (!raw) return;
+  await ensureAdvancedSchema();
+  const status = kind === "damaged" ? "damaged" : "sold";
+  const row = await sqlOne(
+    conn,
+    `SELECT ib.*, i.base_unit, i.unit, i.barcode AS item_barcode
+     FROM item_barcodes ib JOIN items i ON i.id = ib.item_id
+     WHERE ib.business_id=? AND ib.barcode=? LIMIT 1`,
+    [businessId, raw],
+  );
+  if (row) {
+    const st = String(row.status || "active").toLowerCase() || "active";
+    if (st !== "active") throw new Error(`This barcode is inactive (${st})`);
+    const manufacturer = String(row.kind || "") === "manufacturer";
+    if (isCountItem(row) && !manufacturer) {
+      await sqlExec(
+        conn,
+        `UPDATE item_barcodes SET status=?, used_kind=?, used_at=CURRENT_TIMESTAMP(3)
+         WHERE id=? AND business_id=?`,
+        [status, kind, row.id, businessId],
+      );
+    }
+  }
+  if (isCountItem(row || {})) {
+    await sqlExec(
+      conn,
+      "UPDATE stock_batches SET remaining_gm=0 WHERE business_id=? AND barcode=? AND remaining_gm>0",
+      [businessId, raw],
+    );
+  } else {
+    const batchItem = await sqlOne(
+      conn,
+      `SELECT i.base_unit, i.unit FROM stock_batches b JOIN items i ON i.id=b.item_id
+       WHERE b.business_id=? AND b.barcode=? LIMIT 1`,
+      [businessId, raw],
+    );
+    if (batchItem && isCountItem(batchItem)) {
+      await sqlExec(
+        conn,
+        "UPDATE stock_batches SET remaining_gm=0 WHERE business_id=? AND barcode=? AND remaining_gm>0",
+        [businessId, raw],
+      );
+    }
+  }
+}
+
 async function lookupBarcode(businessId, code) {
   const raw = String(code || "").trim();
   if (!raw) return null;
@@ -603,7 +667,7 @@ async function lookupBarcode(businessId, code) {
     null,
     `SELECT b.*, i.name AS item_name, i.code AS item_code, i.retail_rate, i.mrp AS item_mrp, i.gst_rate, i.base_unit, i.unit, i.purchase_rate, i.stock_gm
      FROM stock_batches b JOIN items i ON i.id = b.item_id
-     WHERE b.business_id=? AND b.barcode=? LIMIT 1`,
+     WHERE b.business_id=? AND b.barcode=? AND b.remaining_gm > 0 LIMIT 1`,
     [businessId, raw],
   );
   if (batch) return { ...batch, source: "batch" };
@@ -614,7 +678,15 @@ async function lookupBarcode(businessId, code) {
      WHERE ib.business_id=? AND ib.barcode=? LIMIT 1`,
     [businessId, raw],
   );
-  if (bc) return { ...bc, source: "item" };
+  if (bc) {
+    const st = String(bc.status || "active").toLowerCase() || "active";
+    if (st !== "active") {
+      const err = new Error(`This barcode is inactive (${st})`);
+      err.status = 409;
+      throw err;
+    }
+    return { ...bc, source: "item" };
+  }
   const item = await sqlOne(null, "SELECT * FROM items WHERE business_id=? AND barcode=? LIMIT 1", [businessId, raw]);
   if (item) return { ...item, source: "item", item_id: item.id, item_name: item.name, item_code: item.code };
   return null;
@@ -641,6 +713,11 @@ async function applyDamageStock(row) {
     refType: "damage",
     refId: row.id,
   });
+  try {
+    await consumePieceBarcode(null, row.business_id, row.barcode, "damaged");
+  } catch {
+    /* already inactive or not a unique piece */
+  }
 }
 
 function send(res, fn) {

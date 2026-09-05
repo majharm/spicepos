@@ -6,8 +6,8 @@
     <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
     <title>ATAV POS</title>
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./css/pos.css?v=20260905deploy92" />
-    <link rel="stylesheet" href="./css/saas.css?v=20260905deploy92" />
+    <link rel="stylesheet" href="./css/pos.css?v=20260905deploy93" />
+    <link rel="stylesheet" href="./css/saas.css?v=20260905deploy93" />
   </head>
   <body>
     <div class="app" id="app">
@@ -344,24 +344,75 @@
         </section>
         <section class="view" id="view-customers" hidden>
           <h2 class="visually-hidden">Customers</h2>
-          <form class="settings wide" id="customer-form">
-            <label>Name <input id="cust-name" required /></label>
-            <label>Business name <input id="cust-biz" /></label>
-            <label>Mobile <input id="cust-mobile" required /></label>
-            <label>Type
-              <select id="cust-type">
-                <option value="b2c">B2C retail</option>
-                <option value="b2b">B2B wholesale</option>
-              </select>
-            </label>
-            <label>GSTIN <input id="cust-gstin" /></label>
-            <label>State <input id="cust-state" placeholder="e.g. Maharashtra" autocomplete="address-level1" /></label>
-            <label>Birthday <input id="cust-dob" type="date" /></label>
-            <label>Referred by customer id <input id="cust-ref" maxlength="64" placeholder="Optional" /></label>
-            <button class="btn primary" type="submit">Save</button>
-          </form>
-          <div class="hint" id="cust-hint"></div>
-          <div class="table-wrap" id="customers-table"></div>
+          <div class="items-desk customers-desk">
+            <header class="items-hero">
+              <div class="items-hero-copy">
+                <p class="items-kicker">Sales</p>
+                <h3>Customers</h3>
+                <p class="lede">Add accounts, collect outstanding dues, and print a receipt.</p>
+              </div>
+              <div class="items-hero-stats" id="customers-hero-stats"></div>
+            </header>
+            <div class="items-split">
+              <form class="settings item-composer" id="customer-form" autocomplete="off">
+                <div class="item-composer-top">
+                  <p class="item-mode">Customer</p>
+                  <p class="item-composer-note">B2C retail or B2B wholesale. Outstanding grows on credit sales.</p>
+                </div>
+                <fieldset class="item-block">
+                  <legend>Details</legend>
+                  <label>Name <input id="cust-name" required /></label>
+                  <label>Business name <input id="cust-biz" /></label>
+                  <label>Mobile <input id="cust-mobile" required /></label>
+                  <label>Type
+                    <select id="cust-type">
+                      <option value="b2c">B2C retail</option>
+                      <option value="b2b">B2B wholesale</option>
+                    </select>
+                  </label>
+                  <label>GSTIN <input id="cust-gstin" /></label>
+                  <label>State <input id="cust-state" placeholder="e.g. Maharashtra" autocomplete="address-level1" /></label>
+                  <label>Birthday <input id="cust-dob" type="date" /></label>
+                  <label>Referred by customer id <input id="cust-ref" maxlength="64" placeholder="Optional" /></label>
+                </fieldset>
+                <div class="item-composer-actions">
+                  <button class="btn primary" type="submit">Save customer</button>
+                  <p class="hint" id="cust-hint"></p>
+                </div>
+              </form>
+              <form class="settings item-composer" id="due-collect-form" autocomplete="off">
+                <div class="item-composer-top">
+                  <p class="item-mode">Collect due</p>
+                  <p class="item-composer-note">Receive cash, UPI, card, or bank against a customer’s outstanding. A receipt prints after save.</p>
+                </div>
+                <fieldset class="item-block">
+                  <legend>Payment</legend>
+                  <label class="full">Customer
+                    <select id="due-customer" required>
+                      <option value="">Select customer with due…</option>
+                    </select>
+                  </label>
+                  <p class="item-composer-note full" id="due-outstanding">Outstanding: —</p>
+                  <label>Amount <input id="due-amount" type="number" min="0.01" step="0.01" required /></label>
+                  <label>Method
+                    <select id="due-method">
+                      <option value="cash">Cash</option>
+                      <option value="upi">UPI</option>
+                      <option value="card">Card</option>
+                      <option value="bank">Bank</option>
+                    </select>
+                  </label>
+                  <label class="full">Reference / UPI ID <input id="due-ref" maxlength="80" placeholder="Optional txn id" /></label>
+                  <label class="full">Notes <input id="due-notes" maxlength="160" placeholder="Optional" /></label>
+                </fieldset>
+                <div class="item-composer-actions">
+                  <button class="btn primary" type="submit">Collect &amp; print receipt</button>
+                  <p class="hint" id="due-hint"></p>
+                </div>
+              </form>
+            </div>
+            <div class="table-wrap" id="customers-table"></div>
+          </div>
         </section>
         <section class="view view-packs" id="view-packs" hidden>
           <h2 class="visually-hidden">Packs</h2>
@@ -539,8 +590,7 @@
         </section>
         <section class="view" id="view-barcodes" hidden>
           <h2 class="visually-hidden">Barcodes</h2>
-          <p class="lede">Quantity (pcs) only. Type or scan barcodes on Purchases (20 pcs = 20 codes). Use generate here only if you need extra labels.</p>
-          <p class="lede">Barcodes are only for Quantity (pcs) items — one unique code per piece, then print labels.</p>
+          <p class="lede">Quantity (pcs) only. One unique barcode per piece. Sold or damaged piece codes become inactive and cannot be scanned again.</p>
           <form class="settings wide" id="bc-qty-form">
             <label>Item
               <input id="bc-item-search" list="bc-item-list" placeholder="Search Quantity (pcs) item" />
@@ -630,7 +680,7 @@
               <input type="hidden" id="dmg-item" required />
               <datalist id="dmg-item-list"></datalist>
             </label>
-            <label>Barcode / batch <input id="dmg-barcode" placeholder="Optional" /></label>
+            <label>Barcode / batch <input id="dmg-barcode" placeholder="Scan unique piece barcode" /></label>
             <label>Qty <input id="dmg-qty" type="number" min="0.001" step="0.001" required /></label>
             <label>Reason
               <select id="dmg-reason">
@@ -1048,18 +1098,18 @@
         </section>
       </div>
     </aside>
-    <script src="./js/gst-supply.js?v=20260905deploy92" defer></script>
-    <script src="./js/pos-api.js?v=20260905deploy92" defer></script>
-    <script src="./js/units.js?v=20260905deploy92" defer></script>
-    <script src="./js/footwear.js?v=20260905deploy92" defer></script>
-    <script src="./js/discount.js?v=20260905deploy92" defer></script>
-    <script src="./js/loyalty.js?v=20260905deploy92" defer></script>
-    <script src="./js/barcode.js?v=20260905deploy92" defer></script>
+    <script src="./js/gst-supply.js?v=20260905deploy93" defer></script>
+    <script src="./js/pos-api.js?v=20260905deploy93" defer></script>
+    <script src="./js/units.js?v=20260905deploy93" defer></script>
+    <script src="./js/footwear.js?v=20260905deploy93" defer></script>
+    <script src="./js/discount.js?v=20260905deploy93" defer></script>
+    <script src="./js/loyalty.js?v=20260905deploy93" defer></script>
+    <script src="./js/barcode.js?v=20260905deploy93" defer></script>
     <script src="./js/camera-scan.js?v=20260904camera1" defer></script>
-    <script src="./js/dev-mode.js?v=20260905deploy92" defer></script>
-    <script src="./js/invoice.js?v=20260905deploy92" defer></script>
-    <script src="./js/support.js?v=20260905deploy92" defer></script>
+    <script src="./js/dev-mode.js?v=20260905deploy93" defer></script>
+    <script src="./js/invoice.js?v=20260905deploy93" defer></script>
+    <script src="./js/support.js?v=20260905deploy93" defer></script>
     <script src="./js/qrcode.iife.js?v=20260905qr1"></script>
-    <script src="./js/app.js?v=20260905deploy92" defer></script>
+    <script src="./js/app.js?v=20260905deploy93" defer></script>
   </body>
 </html>

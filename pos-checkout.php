@@ -120,6 +120,9 @@ function pos_checkout_sale($bid, $branchId, $uid, $auth, $body) {
         }
       }
       pos_q("UPDATE items SET stock_gm = stock_gm - ? WHERE id = ? AND business_id = ?", "dss", [$line["qty"], $line["item"]["id"], $bid]);
+      if (function_exists("pos_consume_piece_barcode")) {
+        pos_consume_piece_barcode($bid, $line["barcode"] ?? ($firstBatch["barcode"] ?? ""), "sold");
+      }
     }
     if (function_exists("pos_loyalty_apply_sale")) {
       $loy = pos_loyalty_apply_sale($bid, $customer, $orderId, $afterBill, $body["loyaltyPoints"] ?? $body["loyalty_points"] ?? 0, $uid);
