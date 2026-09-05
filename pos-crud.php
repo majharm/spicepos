@@ -352,14 +352,60 @@ function pos_crud_dispatch($path, $method, $body, $bid, $auth, $branchId, $uid) 
   if ($path === "branches" && $method === "POST") {
     $name = trim((string) ($body["name"] ?? ""));
     if ($name === "") pos_send(400, ["error" => "Branch name is required"]);
+    $status = strtolower((string) ($body["status"] ?? "active")) === "inactive" ? "inactive" : "active";
     $id = pos_uuid();
     pos_q(
       "INSERT INTO branches (id, business_id, name, address, phone, status) VALUES (?,?,?,?,?,?)",
       "ssssss",
-      [$id, $bid, $name, $body["address"] ?? null, $body["phone"] ?? null, $body["status"] ?? "active"]
+      [$id, $bid, $name, $body["address"] ?? null, $body["phone"] ?? null, $status]
     );
-    $rows = pos_q("SELECT * FROM branches WHERE id = ? LIMIT 1", "s", [$id]);
-    pos_send(200, ["ok" => true, "branch" => $rows[0] ?? null]);
+    pos_upsert_branch_login(
+      $bid,
+      $id,
+      $name,
+      $body["username"] ?? $body["login_username"] ?? "",
+      $body["password"] ?? "",
+      true,
+      $status
+    );
+    $rows = pos_list_branches($bid);
+    $branch = null;
+    foreach ($rows as $row) {
+      if (($row["id"] ?? "") === $id) { $branch = $row; break; }
+    }
+    pos_send(200, ["ok" => true, "branch" => $branch]);
+  }
+
+  if (preg_match('#^branches/([^/]+)$#', $path, $m) && $method === "PUT") {
+    $id = $m[1];
+    $existing = pos_q("SELECT * FROM branches WHERE id = ? AND business_id = ? LIMIT 1", "ss", [$id, $bid]);
+    $cur = $existing[0] ?? null;
+    if (!$cur) pos_send(400, ["error" => "Branch not found"]);
+    $name = trim((string) ($body["name"] ?? $cur["name"] ?? ""));
+    if ($name === "") pos_send(400, ["error" => "Branch name is required"]);
+    $status = strtolower((string) ($body["status"] ?? $cur["status"] ?? "active")) === "inactive" ? "inactive" : "active";
+    $address = array_key_exists("address", $body) ? ($body["address"] ?? null) : ($cur["address"] ?? null);
+    $phone = array_key_exists("phone", $body) ? ($body["phone"] ?? null) : ($cur["phone"] ?? null);
+    pos_q(
+      "UPDATE branches SET name=?, address=?, phone=?, status=? WHERE id=? AND business_id=?",
+      "ssssss",
+      [$name, $address, $phone, $status, $id, $bid]
+    );
+    pos_upsert_branch_login(
+      $bid,
+      $id,
+      $name,
+      $body["username"] ?? $body["login_username"] ?? "",
+      $body["password"] ?? "",
+      false,
+      $status
+    );
+    $rows = pos_list_branches($bid);
+    $branch = null;
+    foreach ($rows as $row) {
+      if (($row["id"] ?? "") === $id) { $branch = $row; break; }
+    }
+    pos_send(200, ["ok" => true, "branch" => $branch]);
   }
 
   if ($path === "devices" && $method === "POST") {

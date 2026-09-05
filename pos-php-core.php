@@ -676,6 +676,91 @@ function pos_default_perms($role) {
   return ["dashboard" => true, "counter" => true, "support" => true];
 }
 
+function pos_list_branches($bid) {
+  return pos_q(
+    "SELECT b.*,
+      (SELECT s.username FROM staff_users s
+       WHERE s.branch_id = b.id AND s.business_id = b.business_id AND s.role = 'branch_manager'
+       ORDER BY s.created_at DESC LIMIT 1) AS login_username
+     FROM branches b
+     WHERE b.business_id = ?
+     ORDER BY b.name",
+    "s",
+    [$bid]
+  );
+}
+
+function pos_upsert_branch_login($bid, $branchId, $branchName, $username, $password, $isCreate, $status) {
+  $staffStatus = strtolower((string) ($status ?: "active")) === "inactive" ? "inactive" : "active";
+  $uname = strtolower(trim((string) $username));
+  $existing = pos_q(
+    "SELECT id, username, email FROM staff_users
+     WHERE business_id = ? AND branch_id = ? AND role = 'branch_manager'
+     ORDER BY created_at DESC LIMIT 1",
+    "ss",
+    [$bid, $branchId]
+  );
+  $row = $existing[0] ?? null;
+
+  if ($uname === "") {
+    if ($isCreate) pos_send(400, ["error" => "Branch login user ID is required"]);
+    if ($row) {
+      pos_q("UPDATE staff_users SET status = ? WHERE id = ? AND business_id = ?", "sss", [$staffStatus, $row["id"], $bid]);
+    }
+    return;
+  }
+  if (!preg_match("/^[a-z0-9._-]{3,32}$/", $uname)) {
+    pos_send(400, ["error" => "Login user ID must be 3–32 letters, numbers, dot, dash, or underscore"]);
+  }
+  $pwd = (string) $password;
+  if ($isCreate && strlen($pwd) < 8) pos_send(400, ["error" => "Password must be 8+ characters"]);
+  if ($pwd !== "" && strlen($pwd) < 8) pos_send(400, ["error" => "Password must be 8+ characters"]);
+
+  $taken = pos_q("SELECT id FROM staff_users WHERE LOWER(username) = ? LIMIT 1", "s", [$uname]);
+  if ($taken && (!$row || $taken[0]["id"] !== $row["id"])) {
+    pos_send(400, ["error" => "This login user ID is already taken"]);
+  }
+
+  $perms = json_encode(pos_default_perms("branch_manager"));
+  $display = trim((string) $branchName);
+  if ($display === "") $display = "Branch";
+
+  if ($row) {
+    pos_q(
+      "UPDATE staff_users SET username=?, first_name=?, status=?, permissions_json=?, branch_id=?
+       WHERE id=? AND business_id=?",
+      "sssssss",
+      [$uname, $display, $staffStatus, $perms, $branchId, $row["id"], $bid]
+    );
+    if ($pwd !== "") {
+      if (function_exists("pos_ensure_staff_lock_columns")) pos_ensure_staff_lock_columns();
+      pos_q(
+        "UPDATE staff_users SET password_hash = ?, failed_logins = 0, locked_until = NULL WHERE id=? AND business_id=?",
+        "sss",
+        [pos_hash_password($pwd), $row["id"], $bid]
+      );
+    }
+    return;
+  }
+
+  if ($pwd === "") pos_send(400, ["error" => "Password is required for a new branch login"]);
+  $id = pos_uuid();
+  $email = $uname . "@branch.local";
+  $emailTaken = pos_q("SELECT id FROM staff_users WHERE LOWER(email) = ? LIMIT 1", "s", [$email]);
+  if ($emailTaken) $email = $uname . "." . substr((string) $branchId, 0, 8) . "@branch.local";
+  pos_q(
+    "INSERT INTO staff_users (
+       id, clerk_user_id, email, first_name, last_name, role, status, password_hash,
+       business_id, branch_id, permissions_json, username, mobile
+     ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+    "sssssssssssss",
+    [
+      $id, "local:{$id}", $email, $display, "", "branch_manager", $staffStatus, pos_hash_password($pwd),
+      $bid, $branchId, $perms, $uname, null,
+    ]
+  );
+}
+
 function pos_can($user, $module) {
   if (($user["role"] ?? "") === "business_admin") return true;
   $perms = pos_parse_perms($user);

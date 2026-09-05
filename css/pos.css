@@ -2230,6 +2230,11 @@ body.footwear-mode.counter-mode .stage.is-counter .card .sku { display: block; f
   color: var(--text);
 }
 .item-card-actions { display: flex; gap: 8px; }
+.branch-card.is-inactive {
+  opacity: 0.72;
+  background: linear-gradient(180deg, #fff 0%, #f8fafc 100%);
+}
+.branch-card .item-card-actions .btn { min-height: 40px; }
 .item-empty-card {
   margin: 0;
   padding: 22px 16px;
@@ -3163,6 +3168,7 @@ button.items-stat.is-active {
   .purchase-items-bar { grid-template-columns: 1fr; }
   .packs-desk,
   .items-desk,
+  .branches-desk,
   .expiry-desk { margin-left: 12px; margin-right: 12px; }
   .packs-hero,
   .items-hero { flex-direction: column; align-items: stretch; padding: 14px; }

@@ -13,6 +13,90 @@ function send(res, fn) {
     .catch((err) => res.status(400).json({ error: String(err.message) }));
 }
 
+const BRANCH_LIST_SQL = `SELECT b.*,
+    (SELECT s.username FROM staff_users s
+     WHERE s.branch_id = b.id AND s.business_id = b.business_id AND s.role = 'branch_manager'
+     ORDER BY s.created_at DESC LIMIT 1) AS login_username
+   FROM branches b`;
+
+export async function upsertBranchLogin(businessId, branchId, branchName, username, password, opts = {}) {
+  const isCreate = Boolean(opts.isCreate);
+  const status = String(opts.status || "active").toLowerCase() === "inactive" ? "inactive" : "active";
+  const uname = String(username || "").trim().toLowerCase();
+  const [existing] = await query(
+    `SELECT id, username, email FROM staff_users
+     WHERE business_id = ? AND branch_id = ? AND role = 'branch_manager'
+     ORDER BY created_at DESC LIMIT 1`,
+    [businessId, branchId],
+  );
+
+  if (!uname) {
+    if (isCreate) throw new Error("Branch login user ID is required");
+    if (existing) {
+      await query("UPDATE staff_users SET status = ? WHERE id = ? AND business_id = ?", [
+        status,
+        existing.id,
+        businessId,
+      ]);
+    }
+    return;
+  }
+  if (!/^[a-z0-9._-]{3,32}$/.test(uname)) {
+    throw new Error("Login user ID must be 3–32 letters, numbers, dot, dash, or underscore");
+  }
+  const pwd = String(password || "");
+  if (isCreate && pwd.length < 8) throw new Error("Password must be 8+ characters");
+  if (pwd && pwd.length < 8) throw new Error("Password must be 8+ characters");
+
+  const [taken] = await query("SELECT id FROM staff_users WHERE LOWER(username) = ? LIMIT 1", [uname]);
+  if (taken && taken.id !== existing?.id) throw new Error("This login user ID is already taken");
+
+  const perms = JSON.stringify(defaultPerms("branch_manager"));
+  const displayName = String(branchName || "Branch").trim() || "Branch";
+
+  if (existing) {
+    await query(
+      `UPDATE staff_users SET username=?, first_name=?, status=?, permissions_json=?, branch_id=?
+       WHERE id=? AND business_id=?`,
+      [uname, displayName, status, perms, branchId, existing.id, businessId],
+    );
+    if (pwd) {
+      await query(
+        "UPDATE staff_users SET password_hash = ?, failed_logins = 0, locked_until = NULL WHERE id=? AND business_id=?",
+        [await hashPassword(pwd), existing.id, businessId],
+      );
+    }
+    return;
+  }
+
+  if (!pwd) throw new Error("Password is required for a new branch login");
+  const id = crypto.randomUUID();
+  let email = `${uname}@branch.local`;
+  const [emailTaken] = await query("SELECT id FROM staff_users WHERE LOWER(email) = ? LIMIT 1", [email]);
+  if (emailTaken) email = `${uname}.${String(branchId).slice(0, 8)}@branch.local`;
+  await query(
+    `INSERT INTO staff_users (
+       id, clerk_user_id, email, first_name, last_name, role, status, password_hash,
+       business_id, branch_id, permissions_json, username, mobile
+     ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    [
+      id,
+      `local:${id}`,
+      email,
+      displayName,
+      "",
+      "branch_manager",
+      status,
+      await hashPassword(pwd),
+      businessId,
+      branchId,
+      perms,
+      uname,
+      null,
+    ],
+  );
+}
+
 export function registerTenant(app) {
   app.get("/api/dashboard", requireStaff, (req, res) =>
     send(res, async () => {
@@ -57,32 +141,52 @@ export function registerTenant(app) {
   );
 
   app.get("/api/branches", requireStaff, requirePerm("branches"), (_req, res) =>
-    send(res, () => query("SELECT * FROM branches WHERE business_id = ? ORDER BY name", [bid()])),
+    send(res, () =>
+      query(`${BRANCH_LIST_SQL} WHERE b.business_id = ? ORDER BY b.name`, [bid()]),
+    ),
   );
 
   app.post("/api/branches", requireStaff, requirePerm("branches"), (req, res) =>
     send(res, async () => {
-      const { name, address, phone, status } = req.body || {};
+      const b = req.body || {};
+      const name = String(b.name || "").trim();
       if (!name) throw new Error("Branch name is required");
+      const status = String(b.status || "active").toLowerCase() === "inactive" ? "inactive" : "active";
       const id = crypto.randomUUID();
       await query(
         `INSERT INTO branches (id, business_id, name, address, phone, status) VALUES (?,?,?,?,?,?)`,
-        [id, bid(), name, address || null, phone || null, status || "active"],
+        [id, bid(), name, b.address || null, b.phone || null, status],
       );
+      await upsertBranchLogin(bid(), id, name, b.username || b.login_username, b.password, {
+        isCreate: true,
+        status,
+      });
       await audit("Settings Changed", { module: "branches", target_id: id, target_name: name }, req);
-      const [row] = await query("SELECT * FROM branches WHERE id = ?", [id]);
+      const [row] = await query(`${BRANCH_LIST_SQL} WHERE b.id = ?`, [id]);
       return { ok: true, branch: row };
     }),
   );
 
   app.put("/api/branches/:id", requireStaff, requirePerm("branches"), (req, res) =>
     send(res, async () => {
-      const { name, address, phone, status } = req.body || {};
+      const b = req.body || {};
+      const [existing] = await query("SELECT * FROM branches WHERE id=? AND business_id=?", [req.params.id, bid()]);
+      if (!existing) throw new Error("Branch not found");
+      const name = String(b.name ?? existing.name ?? "").trim();
+      if (!name) throw new Error("Branch name is required");
+      const status =
+        String(b.status ?? existing.status ?? "active").toLowerCase() === "inactive" ? "inactive" : "active";
+      const address = b.address !== undefined ? b.address || null : existing.address;
+      const phone = b.phone !== undefined ? b.phone || null : existing.phone;
       await query(
         `UPDATE branches SET name=?, address=?, phone=?, status=? WHERE id=? AND business_id=?`,
-        [name, address || null, phone || null, status || "active", req.params.id, bid()],
+        [name, address, phone, status, req.params.id, bid()],
       );
-      const [row] = await query("SELECT * FROM branches WHERE id=? AND business_id=?", [req.params.id, bid()]);
+      await upsertBranchLogin(bid(), req.params.id, name, b.username || b.login_username, b.password, {
+        isCreate: false,
+        status,
+      });
+      const [row] = await query(`${BRANCH_LIST_SQL} WHERE b.id = ? AND b.business_id = ?`, [req.params.id, bid()]);
       return { ok: true, branch: row };
     }),
   );

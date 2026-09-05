@@ -144,7 +144,9 @@ function pos_php_till_dispatch($path, $method, $body) {
       [$bid]
     );
     $out = pos_q("SELECT COALESCE(SUM(outstanding),0) AS outstanding FROM customers WHERE business_id = ?", "s", [$bid]);
-    $branches = pos_q("SELECT * FROM branches WHERE business_id = ? ORDER BY name", "s", [$bid]);
+    $branches = function_exists("pos_list_branches")
+      ? pos_list_branches($bid)
+      : pos_q("SELECT * FROM branches WHERE business_id = ? ORDER BY name", "s", [$bid]);
     $notes = pos_q(
       "SELECT * FROM notifications WHERE business_id IS NULL OR business_id = '' OR business_id = ? ORDER BY created_at DESC LIMIT 8",
       "s",
@@ -268,7 +270,9 @@ function pos_php_till_dispatch($path, $method, $body) {
   }
 
   if ($path === "branches" && $method === "GET") {
-    pos_send(200, pos_q("SELECT * FROM branches WHERE business_id = ? ORDER BY name", "s", [$bid]));
+    pos_send(200, function_exists("pos_list_branches")
+      ? pos_list_branches($bid)
+      : pos_q("SELECT * FROM branches WHERE business_id = ? ORDER BY name", "s", [$bid]));
   }
 
   if ($path === "devices" && $method === "GET") {
