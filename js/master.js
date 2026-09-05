@@ -562,6 +562,226 @@ function placeholderChips(raw) {
     .join("");
 }
 
+function isExpiredBusiness(b) {
+  const st = String(b?.computed_status || b?.status || "").toLowerCase();
+  if (st === "expired") return true;
+  const exp = ymd(b?.subscription_expires_at);
+  if (!exp) return false;
+  const today = new Date().toISOString().slice(0, 10);
+  return exp < today;
+}
+
+function formatPlatformDate(value) {
+  if (!value) return "—";
+  const d = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(d.getTime())) return String(value).slice(0, 10);
+  return d.toLocaleDateString("en-IN", {
+    timeZone: "Asia/Kolkata",
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+}
+
+function activationDate(b) {
+  return formatPlatformDate(b?.activated_at || b?.created_at);
+}
+
+function expiryDaysLabel(b) {
+  const exp = ymd(b?.subscription_expires_at);
+  if (!exp) return "—";
+  const today = new Date().toISOString().slice(0, 10);
+  const days = Math.round((Date.parse(`${exp}T00:00:00Z`) - Date.parse(`${today}T00:00:00Z`)) / 86400000);
+  if (days < 0) return `${Math.abs(days)} day${Math.abs(days) === 1 ? "" : "s"} ago`;
+  if (days === 0) return "Today";
+  return `${days} day${days === 1 ? "" : "s"} left`;
+}
+
+function expiryFilterKind(b) {
+  if (isExpiredBusiness(b)) return "expired";
+  const exp = ymd(b?.subscription_expires_at);
+  if (!exp) return "none";
+  const today = new Date().toISOString().slice(0, 10);
+  const days = Math.round((Date.parse(`${exp}T00:00:00Z`) - Date.parse(`${today}T00:00:00Z`)) / 86400000);
+  if (days >= 0 && days <= 7) return "due";
+  return "active";
+}
+
+function expiryAlertsPageHtml(shops) {
+  const rows = shops || [];
+  const expiredN = rows.filter(isExpiredBusiness).length;
+  const dueN = rows.filter((b) => expiryFilterKind(b) === "due").length;
+  const noExpN = rows.filter((b) => !ymd(b.subscription_expires_at)).length;
+  return `<div class="items-desk master-desk expiry-alerts-desk">
+    ${masterHero("Platform", "Expiry alerts", "All shops with activation date, plan expiry, and quick send for renewal or expired alerts.", [
+      { label: "Shops", value: rows.length },
+      { label: "Expired", value: expiredN, warn: expiredN > 0 },
+      { label: "Due in 7 days", value: dueN, warn: dueN > 0 },
+      { label: "No expiry date", value: noExpN },
+    ])}
+    <section class="settings item-composer expiry-alerts-panel">
+      <div class="item-composer-top">
+        <p class="item-mode">Subscription expiry</p>
+        <p class="item-composer-note">Send WhatsApp and email using the templates in Settings. Expired alerts go to shops past the end date; expiry alerts include due-soon and expired.</p>
+        <div class="backup-actions">
+          <button class="btn primary" type="button" id="expiry-send-expired">Send expired alerts</button>
+          <button class="btn" type="button" id="expiry-send-all">Send expiry alerts</button>
+        </div>
+      </div>
+      <div class="items-library-head expiry-alerts-filters">
+        <div class="settings-tabs" role="tablist" aria-label="Expiry filters">
+          <button class="btn active" type="button" data-expiry-filter="all">All</button>
+          <button class="btn" type="button" data-expiry-filter="expired">Expired</button>
+          <button class="btn" type="button" data-expiry-filter="due">Due in 7 days</button>
+          <button class="btn" type="button" data-expiry-filter="active">Active</button>
+          <button class="btn" type="button" data-expiry-filter="none">No expiry</button>
+        </div>
+        <input id="expiry-search" type="search" placeholder="Search shop, owner, mobile…" autocomplete="off" />
+      </div>
+      <div class="table-wrap expired-accounts-table">
+        <table id="expiry-table">
+          <thead>
+            <tr>
+              <th>Shop</th>
+              <th>Owner</th>
+              <th>Status</th>
+              <th>Activated</th>
+              <th>Expires</th>
+              <th>Days</th>
+              <th>Mobile</th>
+              <th>Email</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows
+              .map((b) => {
+                const hay = `${b.name || ""} ${b.owner_name || ""} ${b.mobile || ""} ${b.email || ""} ${b.city || ""}`.toLowerCase();
+                return `<tr data-expiry-row data-expiry-kind="${attr(expiryFilterKind(b))}" data-expiry-search="${attr(hay)}">
+                  <td><strong>${attr(b.name)}</strong><br><span class="item-chip">${attr(b.plan_name || b.plan_id || "—")}</span></td>
+                  <td>${attr(b.owner_name || "—")}</td>
+                  <td>${statusChip(b.computed_status || b.status)}</td>
+                  <td>${attr(activationDate(b))}</td>
+                  <td>${attr(ymd(b.subscription_expires_at) || "—")}</td>
+                  <td>${attr(expiryDaysLabel(b))}</td>
+                  <td>${attr(b.mobile || "—")}</td>
+                  <td>${attr(b.email || "—")}</td>
+                  <td><button class="btn" type="button" data-send-expiry-row="${attr(b.id)}">Send alert</button></td>
+                </tr>`;
+              })
+              .join("")}
+          </tbody>
+        </table>
+      </div>
+      <p class="hint" id="expiry-page-hint"></p>
+    </section>
+  </div>`;
+}
+
+function bindExpiryAlertsPage(shops) {
+  const hint = $("expiry-page-hint");
+  let filter = "all";
+  const applyFilter = () => {
+    const q = String($("expiry-search")?.value || "").trim().toLowerCase();
+    document.querySelectorAll("[data-expiry-row]").forEach((row) => {
+      const kind = row.dataset.expiryKind || "";
+      const matchFilter = filter === "all" || kind === filter;
+      const matchSearch = !q || String(row.dataset.expirySearch || "").includes(q);
+      row.hidden = !matchFilter || !matchSearch;
+    });
+    document.querySelectorAll("[data-expiry-filter]").forEach((btn) => {
+      btn.classList.toggle("active", btn.dataset.expiryFilter === filter);
+    });
+  };
+  document.querySelectorAll("[data-expiry-filter]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      filter = btn.dataset.expiryFilter || "all";
+      applyFilter();
+    });
+  });
+  $("expiry-search")?.addEventListener("input", applyFilter);
+  applyFilter();
+  $("expiry-send-expired")?.addEventListener("click", async () => {
+    const n = (shops || []).filter(isExpiredBusiness).length;
+    if (!n) {
+      if (hint) {
+        hint.textContent = "No expired shops right now.";
+        hint.className = "hint";
+      }
+      return;
+    }
+    if (!confirm(`Send expired-plan alerts (WhatsApp + email) to ${n} expired shop${n === 1 ? "" : "s"}?`)) return;
+    if (hint) {
+      hint.className = "hint";
+      hint.textContent = "Sending…";
+    }
+    try {
+      const out = await api("/api/master/alerts/send-expired", { method: "POST", body: "{}" });
+      if (hint) {
+        hint.textContent = summarizeAlertDelivery(out);
+        hint.className = "hint ok";
+      }
+    } catch (err) {
+      if (hint) {
+        hint.textContent = err.message;
+        hint.className = "hint error";
+      }
+    }
+  });
+  $("expiry-send-all")?.addEventListener("click", async () => {
+    if (!confirm("Send expiry alerts (WhatsApp + email) to all shops with a subscription expiry date?")) return;
+    if (hint) {
+      hint.className = "hint";
+      hint.textContent = "Sending…";
+    }
+    try {
+      const out = await api("/api/master/alerts/send-expiry", { method: "POST", body: JSON.stringify({ scope: "all" }) });
+      if (hint) {
+        hint.textContent = summarizeAlertDelivery(out);
+        hint.className = "hint ok";
+      }
+    } catch (err) {
+      if (hint) {
+        hint.textContent = err.message;
+        hint.className = "hint error";
+      }
+    }
+  });
+  document.querySelectorAll("[data-send-expiry-row]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const shop = (shops || []).find((b) => b.id === btn.dataset.sendExpiryRow);
+      if (!confirm(`Send expiry alert to ${shop?.name || "this shop"}?`)) return;
+      btn.disabled = true;
+      if (hint) {
+        hint.className = "hint";
+        hint.textContent = "Sending…";
+      }
+      try {
+        const out = await api(`/api/master/businesses/${btn.dataset.sendExpiryRow}/send-expiry-alert`, {
+          method: "POST",
+          body: "{}",
+        });
+        if (hint) {
+          hint.textContent = summarizeAlertDelivery(out);
+          hint.className = "hint ok";
+        }
+      } catch (err) {
+        if (hint) {
+          hint.textContent = err.message;
+          hint.className = "hint error";
+        }
+      } finally {
+        btn.disabled = false;
+      }
+    });
+  });
+  if (panelFlash && hint) {
+    hint.textContent = panelFlash;
+    hint.className = "hint ok";
+    panelFlash = "";
+  }
+}
+
 function alertsFormHtml(alerts) {
   const vars = alerts.sample_vars || {};
   const fill = (tpl) =>
@@ -649,6 +869,7 @@ function alertsFormHtml(alerts) {
     </div>
     <div class="msg-savebar">
       <button class="btn primary" type="submit">Save message settings</button>
+      <button class="btn" type="button" id="alert-send-expiry">Send expiry alerts now</button>
       <p class="hint" id="alert-hint"></p>
     </div>
   </form>`;
@@ -743,6 +964,20 @@ function bindAlertsForm(alerts) {
       hint.className = "hint error";
     }
   };
+  $("alert-send-expiry")?.addEventListener("click", async () => {
+    const hint = $("alert-hint");
+    if (!confirm("Send expiry alerts (WhatsApp + email) to all shops with a subscription expiry date?")) return;
+    hint.className = "hint";
+    hint.textContent = "Sending…";
+    try {
+      const out = await api("/api/master/alerts/send-expiry", { method: "POST", body: JSON.stringify({ scope: "all" }) });
+      hint.textContent = summarizeAlertDelivery(out);
+      hint.className = "hint ok";
+    } catch (err) {
+      hint.textContent = err.message;
+      hint.className = "hint error";
+    }
+  });
 }
 
 async function render() {
@@ -755,13 +990,14 @@ async function render() {
     branches: "Branches",
     devices: "POS devices",
     audit: "Audit log",
+    expiry: "Expiry alerts",
     backup: backupPane === "settings" ? "Settings" : "Backup",
     notes: "Messages",
     alerts: "Settings",
     support: "Support helpline",
   };
   $("panel-title").textContent = titles[tab] || "Dashboard";
-  $("panel")?.classList.toggle("has-desk", ["biz", "managers", "backup", "alerts", "notes"].includes(tab));
+  $("panel")?.classList.toggle("has-desk", ["biz", "managers", "backup", "alerts", "notes", "expiry"].includes(tab));
   const body = $("panel-body");
   body.innerHTML = "<p class='hint'>Loading…</p>";
   try {
@@ -984,6 +1220,7 @@ async function render() {
                       <button class="btn primary" type="button" data-enter="${attr(b.id)}">Open POS</button>
                       <button class="btn" type="button" data-edit="${attr(b.id)}">Edit</button>
                       <button class="btn" type="button" data-reset-biz="${attr(b.id)}">Password</button>
+                      <button class="btn" type="button" data-send-expiry="${attr(b.id)}">Expiry alert</button>
                       <button class="btn danger" type="button" data-clean-biz="${attr(b.id)}">Clean data</button>
                       <button class="btn" type="button" data-act="suspend" data-id="${attr(b.id)}">Suspend</button>
                       <button class="btn" type="button" data-act="activate" data-id="${attr(b.id)}">Activate</button>
@@ -1092,6 +1329,25 @@ async function render() {
           render();
         };
       });
+      body.querySelectorAll("[data-send-expiry]").forEach((btn) => {
+        btn.onclick = async () => {
+          const shop = rows.find((r) => r.id === btn.dataset.sendExpiry);
+          if (!confirm(`Send expiry alert (WhatsApp + email) to ${shop?.name || "this shop"}?`)) return;
+          btn.disabled = true;
+          try {
+            const out = await api(`/api/master/businesses/${btn.dataset.sendExpiry}/send-expiry-alert`, {
+              method: "POST",
+              body: "{}",
+            });
+            panelFlash = summarizeAlertDelivery(out);
+            render();
+          } catch (err) {
+            alert(err.message);
+          } finally {
+            btn.disabled = false;
+          }
+        };
+      });
       const bizPw = bindPasswordForm($("biz-pw-form"), $("biz-pw-hint"), $("biz-pw-who"), $("biz-pw-cancel"), async (fd, password) => {
         const businessId = fd.get("business_id");
         await api(`/api/master/businesses/${businessId}/reset-password`, {
@@ -1161,6 +1417,10 @@ async function render() {
         hint.className = "hint ok";
         panelFlash = "";
       }
+    } else if (tab === "expiry") {
+      const shops = await api("/api/master/businesses");
+      body.innerHTML = expiryAlertsPageHtml(shops);
+      bindExpiryAlertsPage(shops);
     } else if (tab === "users") {
       const rows = await api("/api/master/users");
       body.innerHTML = `<p class="lede">Set a login password for any shop user, or unlock an account after too many failed sign-ins.</p>
@@ -1388,7 +1648,17 @@ async function render() {
       </div>`;
       bindBackupFamilyTabs(body);
       if (pane === "backup") bindMasterBackup(body, shops);
-      else bindAlertsForm(alerts);
+      else {
+        bindAlertsForm(alerts);
+        if (panelFlash) {
+          const alertHint = $("alert-hint");
+          if (alertHint) {
+            alertHint.textContent = panelFlash;
+            alertHint.className = "hint ok";
+          }
+          panelFlash = "";
+        }
+      }
     } else if (tab === "notes") {
       const [businesses, settings] = await Promise.all([
         api("/api/master/businesses"),
@@ -1754,6 +2024,36 @@ function summarizeNoticeDelivery(delivery) {
     if ((row?.mail || []).some((m) => m?.ok)) mail += 1;
   }
   return `Saved on the shop dashboard. WhatsApp ${wa}/${results.length} · Email ${mail}/${results.length}.`;
+}
+
+function summarizeAlertDelivery(out) {
+  if (out?.skipped) {
+    return out.reason === "alerts-off"
+      ? "Renewal and expired alerts are inactive in Settings."
+      : "No expiry alerts were sent.";
+  }
+  const s = out?.summary;
+  if (s) {
+    return `Expiry alerts sent. WhatsApp ${s.wa}/${s.total} · Email ${s.mail}/${s.total} · Delivered ${s.sent}, skipped ${s.skipped}.`;
+  }
+  const results = out?.results;
+  if (!Array.isArray(results) || !results.length) {
+    return "No shops with an expiry date matched a renewal or expired alert.";
+  }
+  let wa = 0;
+  let mail = 0;
+  let sent = 0;
+  let skipped = 0;
+  for (const row of results) {
+    if (row.skipped) {
+      skipped += 1;
+      continue;
+    }
+    if (row.wa?.ok) wa += 1;
+    if ((row.mail || []).some((m) => m?.ok)) mail += 1;
+    if (row.wa?.ok || (row.mail || []).some((m) => m?.ok)) sent += 1;
+  }
+  return `Expiry alerts sent. WhatsApp ${wa}/${results.length} · Email ${mail}/${results.length} · Delivered ${sent}, skipped ${skipped}.`;
 }
 
 function attr(value) {

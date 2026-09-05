@@ -360,9 +360,26 @@ export async function sendWelcomeSignup(payload, req) {
   try {
     if (!smtpConfigured()) return { ok: false, skipped: true };
     const msg = welcomeSignupMessage({ ...payload, signInUrl: loginUrl(req) });
-    const result = await sendMail({ to: payload.email, ...msg });
-    if (!result.ok && !result.skipped) console.error("welcome signup email failed:", result.error);
-    return result;
+    const recipients = [
+      payload.email,
+      payload.businessEmail,
+      ...(Array.isArray(payload.emails) ? payload.emails : []),
+    ]
+      .map((v) => String(v || "").trim().toLowerCase())
+      .filter((v) => v.includes("@"));
+    const unique = [...new Set(recipients)];
+    if (!unique.length) return { ok: false, error: "No recipient email" };
+    const results = [];
+    for (const to of unique) {
+      results.push(await sendMail({ to, ...msg }));
+    }
+    const ok = results.some((row) => row.ok);
+    if (!ok && !results.some((row) => row.skipped)) {
+      const err = results.find((row) => row.error)?.error || "welcome signup email failed";
+      console.error("welcome signup email failed:", err);
+      return { ok: false, error: err, results };
+    }
+    return { ok, results, skipped: results.every((row) => row.skipped) };
   } catch (err) {
     console.error("welcome signup email failed:", err.message);
     return { ok: false, error: String(err.message || err) };

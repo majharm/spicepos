@@ -1,4 +1,4 @@
-Production deploy bundle — 20260905deploy105
+Production deploy bundle — 20260905deploy108
 =========================================
 
 Upload ALL files below to Hostinger public_html (overwrite):
@@ -92,6 +92,8 @@ PHP
   api/master/notifications/index.php
   api/master/account-managers/index.php
   api/master/alerts/index.php
+  api/master/alerts/send-expiry/index.php
+  api/master/alerts/send-expired/index.php
   api/master/backup/index.php
   api/master/backup/restore/index.php
   api/master/backup/platform/index.php
@@ -120,6 +122,8 @@ Node (if using hPanel Node.js web app — upload OR git pull then Restart)
   server/units.js
   server/mail.js
   server/alerts.js
+  server/load-env.js
+  server/mail.js
   server/advanced.js
   server/fy.js
   package.json
@@ -133,7 +137,11 @@ FIXES in this bundle
   - Suppliers form and list include address and email
   - Settings page: wider card, 2-column details, styled logo upload, keep card padding on mobile
   - CSS: Master Admin mobile nav wrap, hide nav until sign-in, backup file inputs, table overflow
-  - Cache sticker 20260905deploy105 on index, login, master, setup, order
+  - Master Admin Expiry alerts page: all shops with activation + expiry dates, filters, send buttons
+  - Cache sticker 20260905deploy108 on master (deploy106 on index, login, setup, order)
+  - WhatsApp/daily alerts: better mobile lookup, per-number send, mark sent only after delivery
+  - Master Admin: Send expiry alert per shop + bulk send in Settings (WhatsApp + email)
+  - Welcome email: SMTP env from pos-db.php/.env, welcome alert also emails, business email fallback
   - Renewal WhatsApp/email to every shop: 7 days before expiry, and once after expired
   - Business category includes Garments, Clothing, Boutique, Saree Shop, Ladies/Mens/Kids Fashion
   - Master Admin Account managers tab: assign a support person to each shop

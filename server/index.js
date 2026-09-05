@@ -1,4 +1,4 @@
-import "dotenv/config";
+import "./load-env.js";
 import express from "express";
 import path from "node:path";
 import fs from "node:fs";
@@ -22,7 +22,7 @@ import { postSaleJournal } from "./accounting.js";
 import { recordCreditSale } from "./accounts.js";
 import { audit } from "./audit.js";
 import { getPlatformSettings, shopSupportContact } from "./settings.js";
-import { sendLowStockAlerts, tickShopAlerts, startAlertScheduler } from "./alerts.js";
+import { sendLowStockAlerts, tickShopAlerts, startAlertScheduler, scheduleAlertTick } from "./alerts.js";
 import { registerAdvanced, computeSaleLine, applySaleStock, applyLoyaltyOnSale } from "./advanced.js";
 import { registerQrPublic, registerQrStaff } from "./qr-ordering.js";
 import "../js/discount.js";
@@ -104,6 +104,7 @@ app.get("/api/support-contact", async (_req, res) => {
 app.get("/api/health", async (_req, res) => {
   try {
     await query("SELECT 1");
+    scheduleAlertTick();
     res.json({ ok: true, multiTenant: true });
   } catch (err) {
     res.status(500).json({ ok: false, error: String(err.message) });
@@ -175,6 +176,7 @@ app.get("/api/bootstrap", requireStaff, async (_req, res) => {
         items: packItems.filter((row) => row.pack_id === p.id),
       })),
     });
+    void tickShopAlerts(businessId).catch((err) => console.error("shop alert tick failed:", err.message));
   } catch (err) {
     res.status(500).json({ error: String(err.message) });
   }

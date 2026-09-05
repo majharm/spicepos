@@ -70,6 +70,8 @@ export async function ensureSchema() {
   await addColumn("businesses", "state", "VARCHAR(64) NULL");
   await addColumn("businesses", "pin_code", "VARCHAR(12) NULL");
   await addColumn("businesses", "account_manager_id", "VARCHAR(255) NULL");
+  await addColumn("businesses", "created_at", "TIMESTAMP(3) NULL");
+  await addColumn("businesses", "updated_at", "TIMESTAMP(3) NULL");
 
   await addColumn("company_settings", "gstin", "VARCHAR(32) NULL");
   await addColumn("company_settings", "logo_url", "MEDIUMTEXT NULL");

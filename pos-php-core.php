@@ -396,6 +396,8 @@ function pos_ensure_business_columns() {
     "state" => "VARCHAR(64) NULL",
     "pin_code" => "VARCHAR(12) NULL",
     "account_manager_id" => "VARCHAR(255) NULL",
+    "created_at" => "TIMESTAMP(3) NULL",
+    "updated_at" => "TIMESTAMP(3) NULL",
   ]);
 }
 
@@ -1734,6 +1736,7 @@ function pos_php_dispatch($path, $method, $rawBody) {
         "shopName" => $business["name"] ?? "",
         "ownerName" => $user["first_name"] ?? "",
         "email" => $user["email"] ?? "",
+        "businessEmail" => $business["email"] ?? "",
         "username" => $user["username"] ?? "",
       ]);
       if (function_exists("pos_send_shop_welcome_alerts")) {
@@ -1936,11 +1939,15 @@ function pos_php_dispatch($path, $method, $rawBody) {
         "SELECT b.*, p.name AS plan_name, p.fee_monthly,
                 am.name AS account_manager_name, am.mobile AS account_manager_mobile,
                 (SELECT u.username FROM staff_users u
-                 WHERE u.business_id = b.id AND u.role = 'business_admin' LIMIT 1) AS admin_username
+                 WHERE u.business_id = b.id AND u.role = 'business_admin' LIMIT 1) AS admin_username,
+                COALESCE(
+                  b.created_at,
+                  (SELECT MIN(u.created_at) FROM staff_users u WHERE u.business_id = b.id)
+                ) AS activated_at
          FROM businesses b
          LEFT JOIN subscription_plans p ON p.id = b.plan_id
          LEFT JOIN account_managers am ON am.id = b.account_manager_id
-         ORDER BY b.name"
+         ORDER BY COALESCE(b.subscription_expires_at, '9999-12-31'), b.name"
       );
       foreach ($rows as &$row) $row["computed_status"] = pos_public_status($row);
       pos_send(200, $rows);
@@ -1955,6 +1962,7 @@ function pos_php_dispatch($path, $method, $rawBody) {
         "shopName" => $row[0]["name"] ?? "",
         "ownerName" => $user["first_name"] ?? "",
         "email" => $user["email"] ?? "",
+        "businessEmail" => $row[0]["email"] ?? "",
         "username" => $user["username"] ?? "",
       ]);
       if (function_exists("pos_send_shop_welcome_alerts")) {
@@ -2271,6 +2279,25 @@ function pos_php_dispatch($path, $method, $rawBody) {
     if ($path === "master/alerts" && $method === "POST") {
       if (!function_exists("pos_save_alert_settings")) throw new Exception("pos-alerts.php is missing on this host");
       pos_send(200, array_merge(["ok" => true], pos_alert_settings_public(pos_save_alert_settings($body))));
+    }
+
+    if ($path === "master/alerts/send-expiry" && $method === "POST") {
+      if (!function_exists("pos_send_renewal_alerts")) throw new Exception("pos-alerts.php is missing on this host");
+      $scope = (string) ($body["scope"] ?? "all");
+      $opts = [];
+      if ($scope === "expired") $opts["expiredOnly"] = true;
+      if ($scope === "due") $opts["dueOnly"] = true;
+      pos_send(200, pos_send_renewal_alerts(null, true, $opts));
+    }
+
+    if ($path === "master/alerts/send-expired" && $method === "POST") {
+      if (!function_exists("pos_send_renewal_alerts")) throw new Exception("pos-alerts.php is missing on this host");
+      pos_send(200, pos_send_renewal_alerts(null, true, ["expiredOnly" => true]));
+    }
+
+    if (preg_match("#^master/businesses/([^/]+)/send-expiry-alert$#", $path, $m) && $method === "POST") {
+      if (!function_exists("pos_send_renewal_alerts")) throw new Exception("pos-alerts.php is missing on this host");
+      pos_send(200, pos_send_renewal_alerts($m[1], true));
     }
 
     if ($path === "master/notifications" && $method === "POST") {
