@@ -1619,8 +1619,6 @@ function fillItemForm(i) {
   if ($("item-size")) $("item-size").value = i.size || "";
   $("item-retail").value = i.retail_rate;
   if ($("item-mrp")) $("item-mrp").value = i.mrp || i.retail_rate || "";
-  if ($("item-barcode")) $("item-barcode").value = i.barcode || "";
-  if ($("item-mfr-barcode")) $("item-mfr-barcode").value = i.mfr_barcode || "";
   if ($("item-barcode-qty")) $("item-barcode-qty").value = "";
   $("item-b2b").value = i.b2b_rate;
   $("item-purchase").value = i.purchase_rate;
@@ -1681,7 +1679,6 @@ function renderItemsTable() {
         <div class="item-card-meta">
           <span class="item-chip">${escapeHtml(itemUnit(i))}</span>
           <span class="item-chip">${group}</span>
-          ${i.barcode ? `<span class="item-chip">${escapeHtml(i.barcode)}</span>` : ""}
           <span class="item-chip ${low ? "stock low" : "stock ok"}">${escapeHtml(fmtQty(i.stock_gm, i))}</span>
         </div>
         <div class="item-card-foot">
@@ -3741,8 +3738,6 @@ $("item-form").addEventListener("submit", async (e) => {
     purchase_rate: $("item-purchase").value,
     gst_rate: $("item-gst").value,
     mrp: $("item-mrp")?.value || "",
-    barcode: POSUnits.isCount(unit) ? ($("item-barcode")?.value || "") : "",
-    mfr_barcode: POSUnits.isCount(unit) ? ($("item-mfr-barcode")?.value || "") : "",
     barcode_qty: POSUnits.isCount(unit) ? Number($("item-barcode-qty")?.value) || 0 : 0,
     stock_gm: POSUnits.toBase($("item-stock").value, unit),
     image_url: state.itemImage || "",
@@ -4758,7 +4753,10 @@ async function loadBarcodesView() {
   try {
     const all = await api("/api/barcodes");
     const countIds = new Set(state.items.filter((i) => POSUnits.isCount(itemUnit(i))).map((i) => i.id));
-    const rows = (Array.isArray(all) ? all : []).filter((r) => countIds.has(r.item_id));
+    const rows = (Array.isArray(all) ? all : []).filter((r) => {
+      const kind = String(r.kind || "").toLowerCase();
+      return countIds.has(r.item_id) && kind !== "own" && kind !== "manufacturer";
+    });
     $("barcodes-table").innerHTML = `<table><thead><tr>
       <th></th><th>Item</th><th>Kind</th><th>Barcode</th><th>Status</th><th>MRP</th><th>SP</th><th></th>
     </tr></thead><tbody>${(rows || [])
