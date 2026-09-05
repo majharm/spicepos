@@ -1754,6 +1754,8 @@ async function collectCustomerDue(customer, amount, method, notes) {
     created_at: new Date().toISOString(),
     previous_due: data.previous_due,
     balance_due: data.balance_due ?? data.customer?.outstanding,
+    id: data.ledgerId,
+    party_id: customer.id,
   };
   showVoucherResult(entry, { autoPrint: true });
   return data;
@@ -2668,16 +2670,110 @@ function printVoucher(entry) {
 function showVoucherResult(entry, opts = {}) {
   const isPayment = entry.entry_type === "payment";
   const label = isPayment ? "Payment" : "Receipt";
+  const canAlter = Boolean(entry.id);
   $("modal-title").textContent = `${label} · ${entry.entry_no}`;
   $("modal-body").innerHTML = `<p class="hint ok">${label} saved · ${escapeHtml(entry.entry_no)}</p>
     <div class="thermal-preview">${InvoicePrint.voucherBody(entry, invoiceCtx())}</div>
     <div class="print-actions">
       <button class="btn primary" type="button" id="modal-print-voucher">Print ${label.toLowerCase()}</button>
+      ${canAlter ? `<button class="btn" type="button" id="modal-alter-voucher">Alter amount</button>` : ""}
     </div>`;
   $("modal").hidden = false;
   const btn = $("modal-print-voucher");
   if (btn) btn.onclick = () => printVoucher(entry);
+  const alter = $("modal-alter-voucher");
+  if (alter) alter.onclick = () => showAlterVoucherModal(entry);
   if (opts.autoPrint) printVoucher(entry);
+}
+
+function voucherMethodOptions(selected) {
+  const cur = String(selected || "cash").toLowerCase();
+  return ["cash", "upi", "card", "bank"]
+    .map((m) => `<option value="${m}"${m === cur ? " selected" : ""}>${m.toUpperCase()}</option>`)
+    .join("");
+}
+
+function voucherMaxAmount(entry) {
+  const oldAmt = Number(entry.amount) || 0;
+  if (entry.entry_type === "payment") {
+    const s =
+      (state.suppliers || []).find((x) => x.id === entry.party_id) ||
+      (state.accPayables || []).find((x) => x.id === entry.party_id);
+    return (Number(s?.payable_balance) || 0) + oldAmt;
+  }
+  const c = (state.customers || []).find((x) => x.id === entry.party_id);
+  return (Number(c?.outstanding) || 0) + oldAmt;
+}
+
+function showAlterVoucherModal(entry) {
+  if (!entry?.id) return;
+  const isPayment = entry.entry_type === "payment";
+  const label = isPayment ? "Payment" : "Receipt";
+  const max = voucherMaxAmount(entry);
+  $("modal-title").textContent = `Alter ${label.toLowerCase()} · ${entry.entry_no}`;
+  $("modal-body").innerHTML = `<form class="settings" id="alter-voucher-form">
+    <p class="section-note">Correct a wrong amount or method. The customer due / supplier payable is updated. Reprint after save.</p>
+    <label>Amount <input id="alter-amount" type="number" min="0.01" step="0.01"${max > 0 ? ` max="${max}"` : ""} required value="${Number(entry.amount) || ""}" /></label>
+    <label>Method <select id="alter-method">${voucherMethodOptions(entry.payment_method)}</select></label>
+    <label>Notes <input id="alter-notes" maxlength="200" value="${escapeHtml(entry.notes || "")}" /></label>
+    <button class="btn primary" type="submit">Save changes</button>
+    <button class="btn" type="button" id="alter-cancel">Cancel</button>
+  </form><p class="hint" id="alter-hint"></p>`;
+  $("modal").hidden = false;
+  $("alter-cancel").onclick = () => {
+    $("modal").hidden = true;
+  };
+  $("alter-voucher-form").onsubmit = async (e) => {
+    e.preventDefault();
+    const hint = $("alter-hint");
+    try {
+      if (hint) {
+        hint.textContent = "Saving…";
+        hint.className = "hint";
+      }
+      const isPay = entry.entry_type === "payment";
+      const path = isPay ? `/api/accounts/payments/${entry.id}` : `/api/accounts/receipts/${entry.id}`;
+      const notes = $("alter-notes").value;
+      const method = $("alter-method").value;
+      const data = await api(path, {
+        method: "PUT",
+        body: JSON.stringify({
+          amount: Number($("alter-amount").value),
+          payment_method: method,
+          notes,
+        }),
+      });
+      await loadBootstrap();
+      fillDueCustomerSelect();
+      renderCustomersTable();
+      try {
+        await loadAccounts();
+      } catch {
+        /* optional */
+      }
+      try {
+        await loadSuppliers();
+      } catch {
+        /* optional */
+      }
+      showVoucherResult({
+        ...entry,
+        id: data.ledgerId || entry.id,
+        amount: data.amount,
+        payment_method: data.method || method,
+        notes: data.notes != null ? data.notes : notes,
+        previous_due: data.previous_due,
+        balance_due: data.balance_due,
+        party_name:
+          data.customer?.business_name || data.customer?.name || data.supplier?.name || entry.party_name,
+      });
+    } catch (err) {
+      if (hint) {
+        hint.textContent = err.message;
+        hint.className = "hint error";
+      }
+    }
+  };
 }
 
 function showOrder(o) {
@@ -3012,7 +3108,7 @@ async function loadAccountsTab(name) {
       <td>${money(Number(r.amount) || 0)}</td><td>${escapeHtml(r.payment_method || "—")}</td>
       <td>${escapeHtml(r.reference_type || "—")}</td><td>${escapeHtml(r.notes || "—")}</td>
       <td>${escapeHtml(formatShopDateTime(r.created_at))}</td>
-      <td>${printable ? `<button class="btn" type="button" data-voucher-print="${i}">Print</button>` : ""}</td></tr>`;
+      <td>${printable ? `<button class="btn" type="button" data-voucher-print="${i}">Print</button> <button class="btn" type="button" data-voucher-alter="${i}">Alter</button>` : ""}</td></tr>`;
     }).join("")}</tbody></table>`;
   }
   if (name === "coa") {
@@ -3169,6 +3265,8 @@ function showPaymentModal(supplier) {
       await loadAccounts();
       await loadSuppliers();
       showVoucherResult({
+        id: data.ledgerId,
+        party_id: supplier.id,
         entry_no: data.entryNo,
         entry_type: "payment",
         party_name: data.supplier?.name || supplier.name,
@@ -3659,6 +3757,12 @@ $("view-accounts")?.addEventListener("click", (e) => {
   if (voucher) {
     const row = (state.ledgerRows || [])[Number(voucher.dataset.voucherPrint)];
     if (row) printVoucher(row);
+    return;
+  }
+  const alter = e.target.closest("[data-voucher-alter]");
+  if (alter) {
+    const row = (state.ledgerRows || [])[Number(alter.dataset.voucherAlter)];
+    if (row) showAlterVoucherModal(row);
   }
 });
 $("qr-orders-refresh")?.addEventListener("click", loadQrOrders);

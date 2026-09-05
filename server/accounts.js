@@ -13,6 +13,7 @@ import {
   postExpenseJournal,
   postPaymentJournal,
   postReceiptJournal,
+  replaceLedgerJournal,
   profitAndLoss,
   trialBalance,
 } from "./accounting.js";
@@ -240,6 +241,80 @@ export function registerAccounts(app) {
     }
   });
 
+  app.put("/api/accounts/receipts/:id", requirePerm("accounts"), async (req, res) => {
+    const amt = round2(req.body?.amount);
+    if (amt <= 0) {
+      res.status(400).json({ error: "Amount is required" });
+      return;
+    }
+    const method = String(req.body?.payment_method || "cash").toLowerCase();
+    if (!["cash", "upi", "card", "bank"].includes(method)) {
+      res.status(400).json({ error: "Invalid payment method" });
+      return;
+    }
+    try {
+      const result = await withTransaction(async (conn) => {
+        const [ledgers] = await conn.query(
+          "SELECT * FROM account_ledger WHERE id = ? AND business_id = ? FOR UPDATE",
+          [req.params.id, bid()],
+        );
+        const entry = ledgers[0];
+        if (!entry || entry.entry_type !== "receipt") throw new Error("Receipt not found");
+        const [custRows] = await conn.query(
+          "SELECT * FROM customers WHERE id = ? AND business_id = ? FOR UPDATE",
+          [entry.party_id, bid()],
+        );
+        const customer = custRows[0];
+        if (!customer) throw new Error("Customer not found");
+        const oldAmt = round2(Number(entry.amount || 0));
+        const outstanding = round2(Number(customer.outstanding || 0));
+        const next = round2(outstanding + oldAmt - amt);
+        if (next < 0) throw new Error(`Amount exceeds outstanding (₹${round2(outstanding + oldAmt).toFixed(2)})`);
+        const limit = Number(customer.credit_limit || 0);
+        if (limit > 0 && next > limit) {
+          throw new Error(`Credit limit exceeded (limit ₹${limit.toFixed(2)}, outstanding would be ₹${next.toFixed(2)})`);
+        }
+        await conn.query("UPDATE customers SET outstanding = ? WHERE id = ? AND business_id = ?", [
+          next,
+          customer.id,
+          bid(),
+        ]);
+        const notes = req.body?.notes != null ? String(req.body.notes) : entry.notes;
+        await conn.query(
+          "UPDATE account_ledger SET amount = ?, payment_method = ?, notes = ? WHERE id = ? AND business_id = ?",
+          [amt, method, notes || null, entry.id, bid()],
+        );
+        await replaceLedgerJournal(conn, {
+          kind: "receipt",
+          amount: amt,
+          payment_method: method,
+          entryNo: entry.entry_no,
+          ledgerId: entry.id,
+        });
+        return {
+          entryNo: entry.entry_no,
+          ledgerId: entry.id,
+          customer: { ...customer, outstanding: next },
+          amount: amt,
+          method,
+          previous_due: round2(outstanding + oldAmt),
+          balance_due: next,
+          notes: notes || null,
+        };
+      });
+      await audit("Customer Receipt Altered", {
+        module: "accounts",
+        target_id: result.ledgerId,
+        target_name: result.entryNo,
+        total: result.amount,
+        customer_name: result.customer.business_name || result.customer.name,
+      });
+      res.json({ ok: true, ...result });
+    } catch (err) {
+      res.status(400).json({ error: String(err.message) });
+    }
+  });
+
   app.post("/api/accounts/payments", requirePerm("accounts"), async (req, res) => {
     const { supplier_id, amount, payment_method, notes, purchase_id } = req.body || {};
     const amt = round2(amount);
@@ -286,6 +361,74 @@ export function registerAccounts(app) {
         return { entryNo, ledgerId, supplier: { ...supplier, payable_balance: next }, amount: amt, method };
       });
       await audit("Supplier Payment", {
+        module: "accounts",
+        target_id: result.ledgerId,
+        target_name: result.entryNo,
+        total: result.amount,
+        supplier_name: result.supplier.name,
+      });
+      res.json({ ok: true, ...result });
+    } catch (err) {
+      res.status(400).json({ error: String(err.message) });
+    }
+  });
+
+  app.put("/api/accounts/payments/:id", requirePerm("accounts"), async (req, res) => {
+    const amt = round2(req.body?.amount);
+    if (amt <= 0) {
+      res.status(400).json({ error: "Amount is required" });
+      return;
+    }
+    const method = String(req.body?.payment_method || "cash").toLowerCase();
+    if (!["cash", "upi", "card", "bank"].includes(method)) {
+      res.status(400).json({ error: "Invalid payment method" });
+      return;
+    }
+    try {
+      const result = await withTransaction(async (conn) => {
+        const [ledgers] = await conn.query(
+          "SELECT * FROM account_ledger WHERE id = ? AND business_id = ? FOR UPDATE",
+          [req.params.id, bid()],
+        );
+        const entry = ledgers[0];
+        if (!entry || entry.entry_type !== "payment") throw new Error("Payment not found");
+        const [supRows] = await conn.query(
+          "SELECT * FROM suppliers WHERE id = ? AND business_id = ? FOR UPDATE",
+          [entry.party_id, bid()],
+        );
+        const supplier = supRows[0];
+        if (!supplier) throw new Error("Supplier not found");
+        const oldAmt = round2(Number(entry.amount || 0));
+        const payable = round2(Number(supplier.payable_balance || 0));
+        const next = round2(payable + oldAmt - amt);
+        if (next < 0) throw new Error(`Amount exceeds payable (₹${round2(payable + oldAmt).toFixed(2)})`);
+        await conn.query("UPDATE suppliers SET payable_balance = ? WHERE id = ? AND business_id = ?", [
+          next,
+          supplier.id,
+          bid(),
+        ]);
+        const notes = req.body?.notes != null ? String(req.body.notes) : entry.notes;
+        await conn.query(
+          "UPDATE account_ledger SET amount = ?, payment_method = ?, notes = ? WHERE id = ? AND business_id = ?",
+          [amt, method, notes || null, entry.id, bid()],
+        );
+        await replaceLedgerJournal(conn, {
+          kind: "payment",
+          amount: amt,
+          payment_method: method,
+          entryNo: entry.entry_no,
+          ledgerId: entry.id,
+        });
+        return {
+          entryNo: entry.entry_no,
+          ledgerId: entry.id,
+          supplier: { ...supplier, payable_balance: next },
+          amount: amt,
+          method,
+          notes: notes || null,
+        };
+      });
+      await audit("Supplier Payment Altered", {
         module: "accounts",
         target_id: result.ledgerId,
         target_name: result.entryNo,

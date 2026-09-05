@@ -298,6 +298,22 @@ export async function postPaymentJournal(conn, { amount, payment_method, entryNo
   });
 }
 
+export async function replaceLedgerJournal(conn, { kind, amount, payment_method, entryNo, ledgerId }) {
+  const [entries] = await conn.query(
+    `SELECT id FROM journal_entries
+     WHERE business_id = ? AND reference_type = 'account_ledger' AND reference_id = ?`,
+    [bid(), ledgerId],
+  );
+  for (const row of entries) {
+    await conn.query("DELETE FROM journal_lines WHERE journal_id = ?", [row.id]);
+    await conn.query("DELETE FROM journal_entries WHERE id = ? AND business_id = ?", [row.id, bid()]);
+  }
+  if (kind === "payment") {
+    return postPaymentJournal(conn, { amount, payment_method, entryNo, ledgerId });
+  }
+  return postReceiptJournal(conn, { amount, payment_method, entryNo, ledgerId });
+}
+
 async function linesForPeriod(from, to, businessId = bid()) {
   return query(
     `SELECT a.code, a.name, a.account_group,

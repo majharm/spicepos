@@ -181,11 +181,11 @@ test("PHP and HTML wire master admin backup", () => {
   );
 });
 
-test("HTML and CSS cache stickers match deploy101", () => {
+test("HTML and CSS cache stickers match deploy102", () => {
   for (const name of ["index.html", "master.html", "login.html", "setup.html", "order.html"]) {
     const html = readFileSync(path.join(root, name), "utf8");
-    assert.match(html, /20260905deploy101/);
-    assert.doesNotMatch(html, /20260905deploy100/);
+    assert.match(html, /20260905deploy102/);
+    assert.doesNotMatch(html, /20260905deploy101/);
     assert.doesNotMatch(html, /20260904deploy90/);
     assert.doesNotMatch(html, /20260904deploy89/);
     assert.doesNotMatch(html, /20260903deploy88/);
@@ -407,6 +407,8 @@ test("HTML and CSS cache stickers match deploy101", () => {
   assert.match(appJs, /InvoicePrint\.voucherDocument/);
   assert.match(appJs, /InvoicePrint\.voucherBody/);
   assert.match(appJs, /data-voucher-print/);
+  assert.match(appJs, /data-voucher-alter/);
+  assert.match(appJs, /function showAlterVoucherModal/);
   assert.match(appJs, /Print \$\{label\.toLowerCase\(\)\}/);
   const invoiceJs = readFileSync(path.join(root, "js/invoice.js"), "utf8");
   assert.match(invoiceJs, /function voucherBody/);

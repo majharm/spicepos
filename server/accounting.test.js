@@ -1,7 +1,12 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import path from "node:path";
 import { DEFAULT_COA, expenseJournalLines, saleDiscountAmount } from "./accounting.js";
 import { splitGstAmount } from "./gst-supply.js";
+
+const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 
 function round2(n) {
   return Math.round(Number(n) * 100) / 100;
@@ -67,4 +72,22 @@ test("expense journal lines are balanced with optional GST", () => {
   assert.equal(debit, 1180);
   assert.ok(lines.some((l) => l.accountCode === "5103" && l.debit === 1000));
   assert.ok(lines.some((l) => l.accountCode === "1003" && l.credit === 1180));
+});
+
+test("receipts and payments can be altered after save", () => {
+  const accounts = readFileSync(path.join(root, "server/accounts.js"), "utf8");
+  const accounting = readFileSync(path.join(root, "server/accounting.js"), "utf8");
+  const php = readFileSync(path.join(root, "pos-accounting.php"), "utf8");
+  const app = readFileSync(path.join(root, "js/app.js"), "utf8");
+  assert.match(accounting, /export async function replaceLedgerJournal/);
+  assert.match(accounts, /\/api\/accounts\/receipts\/:id/);
+  assert.match(accounts, /\/api\/accounts\/payments\/:id/);
+  assert.match(accounts, /Customer Receipt Altered/);
+  assert.match(php, /accounts\/receipts\/\(\[\^\/\]\+\)/);
+  assert.match(php, /function pos_replace_ledger_journal/);
+  assert.match(php, /accounts\/payments\/\(\[\^\/\]\+\)/);
+  assert.match(app, /function showAlterVoucherModal/);
+  assert.match(app, /data-voucher-alter/);
+  assert.match(app, /modal-alter-voucher/);
+  assert.match(app, /\/api\/accounts\/receipts\/\$\{entry\.id\}/);
 });
