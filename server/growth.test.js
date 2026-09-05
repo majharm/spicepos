@@ -36,8 +36,8 @@ const snap = {
     { label: "Saturday", takings: 22000 },
   ],
   products: [
-    { name: "Tea 250g", amount: 42500, profit: 9800, margin: 23, qtyDay: 18, stock: 42, daysLeft: 2, growth: 31, reorder: 20 },
-    { name: "Biscuits", amount: 18000, profit: 2200, margin: 6, qtyDay: 8, stock: 80, daysLeft: 10, growth: 12, reorder: 10 },
+    { itemId: "tea-1", name: "Tea 250g", amount: 42500, profit: 9800, margin: 23, qtyDay: 18, stock: 42, daysLeft: 2, growth: 31, reorder: 20 },
+    { itemId: "bisc-1", name: "Biscuits", amount: 18000, profit: 2200, margin: 6, qtyDay: 8, stock: 80, daysLeft: 10, growth: 12, reorder: 10 },
     { name: "Rice 5kg", amount: 36000, profit: 4100, margin: 11, qtyDay: 6, stock: 12, daysLeft: 2, growth: 8, reorder: 15 },
     { name: "Old mix", amount: 0, profit: 0, margin: 0, qtyDay: 0, stock: 40, daysLeft: 99, growth: -40, reorder: 5 },
   ],
@@ -70,6 +70,7 @@ test("AI growth analysis writes a shop summary and actions", () => {
   assert.equal(out.kpis.todaySales, 18000);
   assert.ok(out.score.score >= 1 && out.score.score <= 100);
   assert.ok(out.actions.some((a) => a.level === "urgent"));
+  assert.ok(out.actions.some((a) => a.kind === "combo" && a.action === "Create offer"));
   assert.ok(out.inventory.reorders.some((r) => /Rice|Tea|Salt/.test(r.name)));
   assert.ok(out.recommendations.length >= 3);
   assert.ok(out.promotions.length >= 1);

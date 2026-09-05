@@ -10,6 +10,7 @@ import { lineAmount, round2, registerCrud, itemBillName } from "./crud.js";
 import { fyRangeForToday } from "./fy.js";
 import { buildReports, reportsToSheets } from "./reports.js";
 import { buildGrowthDashboard, answerGrowthQuestion, growthToSheets } from "./growth.js";
+import { listCombos, createCombo } from "./combos.js";
 import { workbookXml } from "./excel.js";
 import { ensureSchema, seedPlatform } from "./schema.js";
 import { companyTimezone, normalizeTimezone, shopTimezonePayload, tzOffsetFor } from "./timezone.js";
@@ -176,6 +177,7 @@ app.get("/api/bootstrap", requireStaff, async (_req, res) => {
         ...p,
         items: packItems.filter((row) => row.pack_id === p.id),
       })),
+      combos: await listCombos(businessId).catch(() => []),
     });
     void tickShopAlerts(businessId).catch((err) => console.error("shop alert tick failed:", err.message));
   } catch (err) {
@@ -273,6 +275,23 @@ app.get("/api/reports", requireStaff, requirePerm("reports"), async (req, res) =
     res.json(await buildReports(from, to));
   } catch (err) {
     res.status(500).json({ error: String(err.message) });
+  }
+});
+
+app.get("/api/combos", requireStaff, async (_req, res) => {
+  try {
+    res.json(await listCombos());
+  } catch (err) {
+    res.status(500).json({ error: String(err.message || "Combos failed") });
+  }
+});
+
+app.post("/api/combos", requireStaff, async (req, res) => {
+  try {
+    const combo = await createCombo(req.body || {});
+    res.json({ ok: true, combo });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: String(err.message || "Could not create combo") });
   }
 });
 

@@ -196,10 +196,15 @@ export function analyzeGrowth(snap = {}) {
   if (topRev[0] && topRev[1]) {
     actions.push({
       level: "growth",
+      kind: "combo",
       title: "Create a combo offer",
       detail: `Customers who buy ${topRev[0].name} often add other fast movers. Try a ${topRev[0].name} + ${topRev[1].name} bundle.`,
-      jump: "counter",
-      action: "Open counter",
+      jump: "combo",
+      action: "Create offer",
+      itemA: { id: topRev[0].itemId || topRev[0].id || "", name: topRev[0].name },
+      itemB: { id: topRev[1].itemId || topRev[1].id || "", name: topRev[1].name },
+      discountType: "pct",
+      discountValue: 8,
     });
   }
   if (fast.length) {
@@ -655,7 +660,8 @@ export async function buildGrowthDashboard() {
     [tenant, last90, today],
   );
   const products = await query(
-    `SELECT l.item_name AS name,
+    `SELECT COALESCE(MAX(l.item_id),'') AS item_id,
+            l.item_name AS name,
             COALESCE(MAX(i.category),'') AS category,
             COALESCE(MAX(i.stock_gm),0) AS stock_gm,
             COALESCE(MAX(i.reorder_level_gm),0) AS reorder_gm,
@@ -690,6 +696,7 @@ export async function buildGrowthDashboard() {
     const qtyUnits = isCount && qty > 200 ? qty / 1000 : qty;
     const day = Math.max(qtyUnits / daysInMonth, 0);
     return {
+      itemId: p.item_id || "",
       name: p.name,
       category: p.category || "General",
       amount: num(p.amount),

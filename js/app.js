@@ -6,6 +6,7 @@ const state = {
   units: [],
   customers: [],
   packs: [],
+  combos: [],
   suppliers: [],
   cart: [],
   query: "",
@@ -1275,6 +1276,7 @@ function renderCart() {
       : "Pay";
   renderHeldBills();
   renderEditOrderBanner();
+  paintComboBanner();
   if (window.DevMode?.isEnabled()) {
     DevMode.updateContext({ cartLines: state.cart.length });
   }
@@ -1515,6 +1517,67 @@ function addPack(packId) {
   $("pack-choice").value = pack.id;
   setHint(`Pack type: ${pack.name}`, "ok");
   renderCart();
+}
+
+function paintComboBar() {
+  const bar = $("combo-bar");
+  if (!bar) return;
+  const rows = (state.combos || []).filter((c) => String(c.status || "active") === "active");
+  bar.hidden = !rows.length;
+  bar.innerHTML = rows
+    .map(
+      (c) =>
+        `<button class="btn" type="button" data-apply-combo="${escapeHtml(c.id)}">${escapeHtml(c.name || "Combo")}</button>`,
+    )
+    .join("");
+}
+
+function applyComboOffer(id) {
+  const combo = (state.combos || []).find((c) => c.id === id);
+  if (!combo) return;
+  const a = state.items.find((i) => i.id === combo.item_a_id);
+  const b = state.items.find((i) => i.id === combo.item_b_id);
+  if (!a || !b) {
+    setHint("Combo items are missing from this shop's catalog", "error");
+    return;
+  }
+  const ids = state.cart.map((l) => l.itemId);
+  if (!ids.includes(combo.item_a_id)) addItem(combo.item_a_id);
+  if (!ids.includes(combo.item_b_id)) addItem(combo.item_b_id);
+  state.billDiscountType = String(combo.discount_type || "pct") === "amt" ? "amt" : "pct";
+  state.billDiscountValue = Number(combo.discount_value) || 0;
+  if ($("bill-disc-type")) $("bill-disc-type").value = state.billDiscountType;
+  if ($("bill-disc-value")) $("bill-disc-value").value = state.billDiscountValue;
+  const extras = $("bill-extras");
+  if (extras) extras.open = true;
+  setHint(`Combo ${combo.name}: ${state.billDiscountType === "pct" ? `${state.billDiscountValue}%` : money(state.billDiscountValue)} off applied`, "ok");
+  renderCart();
+}
+
+function paintComboBanner() {
+  const el = $("combo-banner");
+  if (!el) return;
+  const ids = state.cart.map((l) => l.itemId);
+  const match = (state.combos || []).find((c) => {
+    const a = ids.includes(c.item_a_id);
+    const b = ids.includes(c.item_b_id);
+    return a && b && String(c.status || "active") === "active";
+  });
+  if (!match) {
+    el.hidden = true;
+    el.innerHTML = "";
+    return;
+  }
+  const already =
+    state.billDiscountType === (String(match.discount_type || "pct") === "amt" ? "amt" : "pct") &&
+    Number(state.billDiscountValue) === Number(match.discount_value);
+  el.hidden = false;
+  el.innerHTML = already
+    ? `<strong>${escapeHtml(match.name)}</strong> discount is on this bill.`
+    : `<strong>${escapeHtml(match.name)}</strong> is on this bill.
+       <button class="btn" type="button" data-apply-combo="${escapeHtml(match.id)}">Apply ${
+         String(match.discount_type) === "amt" ? money(match.discount_value) : `${Number(match.discount_value) || 0}%`
+       } off</button>`;
 }
 
 function fillDatalists() {
@@ -2287,6 +2350,7 @@ async function loadBootstrap() {
   applyUnitMaster(data.units || []);
   state.customers = data.customers;
   state.packs = data.packs;
+  state.combos = data.combos || [];
   paintPlatformNotices(data.notes);
   paintHeader();
   paintPlatformSupport();
@@ -2294,6 +2358,7 @@ async function loadBootstrap() {
   renderCatalog();
   renderCart();
   renderPackChoice();
+  paintComboBar();
   fillDatalists();
   fillFootwearFilters();
   renderItemsTable();
@@ -4618,6 +4683,11 @@ document.addEventListener("click", async (e) => {
   location.href = "/login.html";
 });
 $("open-pos")?.addEventListener("click", () => showView("counter"));
+document.addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-apply-combo]");
+  if (!btn) return;
+  applyComboOffer(btn.dataset.applyCombo);
+});
 $("open-growth")?.addEventListener("click", () => showView("growth"));
 $("btn-hold")?.addEventListener("click", async () => {
   try {

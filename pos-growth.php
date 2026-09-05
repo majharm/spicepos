@@ -133,7 +133,20 @@ function pos_analyze_growth($snap) {
   if ($slow) $actions[] = ["level" => "attention", "title" => count($slow) . " slow-moving products", "detail" => "Clearance or a bundle can free shelf space.", "jump" => "items", "action" => "Review items"];
   if (count($inactive) >= 5) $actions[] = ["level" => "attention", "title" => count($inactive) . " customers have not purchased in 45 days", "detail" => "A re-engagement offer can lift repeat sales.", "jump" => "customers", "action" => "View customers"];
   if ($margin > 0 && $margin < 12) $actions[] = ["level" => "attention", "title" => "Gross margin is thin", "detail" => "This month's margin is {$margin}%.", "jump" => "items", "action" => "Adjust price"];
-  if ($topRev && count($topRev) > 1) $actions[] = ["level" => "growth", "title" => "Create a combo offer", "detail" => "Try a " . $topRev[0]["name"] . " + " . $topRev[1]["name"] . " bundle.", "jump" => "counter", "action" => "Open counter"];
+  if ($topRev && count($topRev) > 1) {
+    $actions[] = [
+      "level" => "growth",
+      "kind" => "combo",
+      "title" => "Create a combo offer",
+      "detail" => "Try a " . $topRev[0]["name"] . " + " . $topRev[1]["name"] . " bundle.",
+      "jump" => "combo",
+      "action" => "Create offer",
+      "itemA" => ["id" => $topRev[0]["itemId"] ?? "", "name" => $topRev[0]["name"]],
+      "itemB" => ["id" => $topRev[1]["itemId"] ?? "", "name" => $topRev[1]["name"]],
+      "discountType" => "pct",
+      "discountValue" => 8,
+    ];
+  }
   if ($fast) $actions[] = ["level" => "growth", "title" => "Reorder fast-moving products", "detail" => implode(", ", array_slice(array_column($fast, "name"), 0, 3)), "jump" => "purchases", "action" => "Reorder"];
   if ($weakMargin) $actions[] = ["level" => "growth", "title" => "Lift profit on a top seller", "detail" => $weakMargin[0]["name"] . " margin is only " . pos_growth_round($weakMargin[0]["margin"]) . "%.", "jump" => "items", "action" => "Adjust price"];
 
@@ -364,7 +377,7 @@ function pos_build_growth($bid) {
   $daysInMonth = max(1, (int) date("j"));
   $products = [];
   foreach (pos_q(
-    "SELECT l.item_name AS name, COALESCE(MAX(i.category),'') AS category, COALESCE(MAX(i.stock_gm),0) AS stock_gm, COALESCE(MAX(i.reorder_level_gm),0) AS reorder_gm, SUM(l.quantity_gm) AS qty, SUM(l.amount) AS amount, SUM(COALESCE(l.profit, l.amount - COALESCE(l.cost,0))) AS profit FROM sales_order_lines l JOIN sales_orders o ON o.id = l.order_id LEFT JOIN items i ON i.id = l.item_id WHERE o.business_id = ? AND DATE(o.created_at) BETWEEN ? AND ? AND l.cancelled = 0 GROUP BY l.item_name ORDER BY amount DESC",
+    "SELECT COALESCE(MAX(l.item_id),'') AS item_id, l.item_name AS name, COALESCE(MAX(i.category),'') AS category, COALESCE(MAX(i.stock_gm),0) AS stock_gm, COALESCE(MAX(i.reorder_level_gm),0) AS reorder_gm, SUM(l.quantity_gm) AS qty, SUM(l.amount) AS amount, SUM(COALESCE(l.profit, l.amount - COALESCE(l.cost,0))) AS profit FROM sales_order_lines l JOIN sales_orders o ON o.id = l.order_id LEFT JOIN items i ON i.id = l.item_id WHERE o.business_id = ? AND DATE(o.created_at) BETWEEN ? AND ? AND l.cancelled = 0 GROUP BY l.item_name ORDER BY amount DESC",
     "sss",
     [$bid, $monthStart, $today]
   ) as $p) {
@@ -374,6 +387,7 @@ function pos_build_growth($bid) {
     $qtyU = ($qty > 200) ? $qty / 1000 : $qty;
     $day = $qtyU / $daysInMonth;
     $products[] = [
+      "itemId" => $p["item_id"] ?? "",
       "name" => $p["name"],
       "category" => $p["category"] ?: "General",
       "amount" => pos_growth_num($p["amount"]),

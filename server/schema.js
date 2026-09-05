@@ -377,6 +377,19 @@ export async function ensureSchema() {
     updated_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3)
   )`);
 
+  await create(`CREATE TABLE IF NOT EXISTS combo_offers (
+    id VARCHAR(255) PRIMARY KEY,
+    business_id VARCHAR(255) NOT NULL,
+    name VARCHAR(180) NOT NULL,
+    item_a_id VARCHAR(255) NOT NULL,
+    item_b_id VARCHAR(255) NOT NULL,
+    discount_type VARCHAR(8) NOT NULL DEFAULT 'pct',
+    discount_value DECIMAL(12,2) NOT NULL DEFAULT 8,
+    status VARCHAR(16) NOT NULL DEFAULT 'active',
+    created_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    INDEX idx_combo_biz (business_id)
+  )`);
+
   await create(`CREATE TABLE IF NOT EXISTS account_managers (
     id VARCHAR(255) PRIMARY KEY,
     name VARCHAR(128) NOT NULL,

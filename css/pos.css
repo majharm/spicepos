@@ -3873,6 +3873,30 @@ button.items-stat.is-active {
   font-size: 12px;
   font-weight: 700;
 }
+.growth-combo-form {
+  margin-top: 14px;
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid #99f6e4;
+  border-radius: 12px;
+  background: #f0fdfa;
+}
+.growth-combo-form h4 { margin: 0; }
+.combo-banner {
+  margin: 8px 12px 0;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: #f0fdfa;
+  border: 1px solid #99f6e4;
+  font-size: 13px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+}
+.combo-bar { margin-top: 6px; }
 .growth-ask-form { display: flex; gap: 8px; }
 .growth-ask-form input { flex: 1; min-height: 40px; }
 .growth-ask-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }

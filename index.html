@@ -6,8 +6,8 @@
     <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
     <title>ATAV POS</title>
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./css/pos.css?v=20260905deploy120" />
-    <link rel="stylesheet" href="./css/saas.css?v=20260905deploy120" />
+    <link rel="stylesheet" href="./css/pos.css?v=20260905deploy121" />
+    <link rel="stylesheet" href="./css/saas.css?v=20260905deploy121" />
   </head>
   <body>
     <div class="app" id="app">
@@ -165,6 +165,8 @@
               </div>
               <div class="ticket-pack" id="chosen-pack">Pack: Loose items</div>
               <div id="pack-bar" class="pack-bar"></div>
+              <div id="combo-bar" class="pack-bar combo-bar"></div>
+              <div id="combo-banner" class="combo-banner" hidden></div>
               <div class="lines" id="lines"></div>
               <details class="bill-extras" id="bill-extras">
                 <summary>Discount &amp; royalty</summary>
@@ -967,6 +969,19 @@
             <article class="growth-panel">
               <h3>Growth opportunities</h3>
               <div id="growth-recs"></div>
+              <form class="growth-combo-form" id="growth-combo-form" hidden>
+                <h4>Create combo offer</h4>
+                <p class="hint" id="combo-hint">Bundle two products and apply a small bill discount at the Counter.</p>
+                <label>Offer name <input id="combo-name" maxlength="180" required /></label>
+                <label>Discount % <input id="combo-pct" type="number" min="0" max="50" step="0.5" value="8" /></label>
+                <label>First item <select id="combo-item-a" required></select></label>
+                <label>Second item <select id="combo-item-b" required></select></label>
+                <p class="hint" id="combo-saved"></p>
+                <div class="dash-actions">
+                  <button class="btn primary" type="submit">Save combo</button>
+                  <button class="btn" type="button" id="combo-open-counter">Open counter</button>
+                </div>
+              </form>
             </article>
             <article class="growth-panel">
               <h3>Sales forecast</h3>
@@ -1195,19 +1210,19 @@
         </section>
       </div>
     </aside>
-    <script src="./js/gst-supply.js?v=20260905deploy120" defer></script>
-    <script src="./js/pos-api.js?v=20260905deploy120" defer></script>
-    <script src="./js/units.js?v=20260905deploy120" defer></script>
-    <script src="./js/footwear.js?v=20260905deploy120" defer></script>
-    <script src="./js/discount.js?v=20260905deploy120" defer></script>
-    <script src="./js/loyalty.js?v=20260905deploy120" defer></script>
-    <script src="./js/barcode.js?v=20260905deploy120" defer></script>
+    <script src="./js/gst-supply.js?v=20260905deploy121" defer></script>
+    <script src="./js/pos-api.js?v=20260905deploy121" defer></script>
+    <script src="./js/units.js?v=20260905deploy121" defer></script>
+    <script src="./js/footwear.js?v=20260905deploy121" defer></script>
+    <script src="./js/discount.js?v=20260905deploy121" defer></script>
+    <script src="./js/loyalty.js?v=20260905deploy121" defer></script>
+    <script src="./js/barcode.js?v=20260905deploy121" defer></script>
     <script src="./js/camera-scan.js?v=20260904camera1" defer></script>
-    <script src="./js/dev-mode.js?v=20260905deploy120" defer></script>
-    <script src="./js/invoice.js?v=20260905deploy120" defer></script>
-    <script src="./js/support.js?v=20260905deploy120" defer></script>
+    <script src="./js/dev-mode.js?v=20260905deploy121" defer></script>
+    <script src="./js/invoice.js?v=20260905deploy121" defer></script>
+    <script src="./js/support.js?v=20260905deploy121" defer></script>
     <script src="./js/qrcode.iife.js?v=20260905qr1"></script>
-    <script src="./js/app.js?v=20260905deploy120" defer></script>
-    <script src="./js/growth.js?v=20260905deploy120" defer></script>
+    <script src="./js/app.js?v=20260905deploy121" defer></script>
+    <script src="./js/growth.js?v=20260905deploy121" defer></script>
   </body>
 </html>

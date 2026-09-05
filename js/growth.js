@@ -181,7 +181,11 @@ function renderGrowthActions(data) {
           .map(
             (a) => `<article class="growth-action">
               <div><strong>${escapeHtml(a.title)}</strong><p>${escapeHtml(a.detail || "")}</p></div>
-              <button class="btn primary" type="button" data-growth-jump="${escapeHtml(a.jump || "reports")}">${escapeHtml(a.action || "Open")}</button>
+              <button class="btn primary" type="button" ${
+                a.kind === "combo" || a.jump === "combo"
+                  ? `data-growth-combo="1"`
+                  : `data-growth-jump="${escapeHtml(a.jump || "reports")}"`
+              }>${escapeHtml(a.action || "Open")}</button>
             </article>`,
           )
           .join("")}
@@ -270,7 +274,11 @@ function renderGrowthRecs(data) {
     <h4 class="growth-subhead">Suggested campaigns</h4>
     <div class="growth-rec-grid">
       ${promos
-        .map((p) => `<article class="growth-rec"><h4>${escapeHtml(p.name)}</h4><p>${escapeHtml(p.text)}</p><em>${escapeHtml(p.expected || "")}</em></article>`)
+        .map(
+          (p) => `<article class="growth-rec"><h4>${escapeHtml(p.name)}</h4><p>${escapeHtml(p.text)}</p><em>${escapeHtml(p.expected || "")}</em>${
+            /combo/i.test(p.name || "") ? `<button class="btn" type="button" data-growth-combo="1">Create offer</button>` : ""
+          }</article>`,
+        )
         .join("") || `<p class="hint">More campaign ideas appear after a few weeks of bills.</p>`}
     </div>
     <p class="hint">${escapeHtml(data.discount?.note || "")}</p>`;
@@ -357,6 +365,10 @@ function bindGrowthUi() {
   growthBound = true;
   const root = $("view-growth");
   root?.addEventListener("click", (e) => {
+    if (e.target.closest("[data-growth-combo]")) {
+      openComboDraft();
+      return;
+    }
     const jump = e.target.closest("[data-growth-jump]");
     if (jump) {
       showView(jump.dataset.growthJump);
@@ -375,6 +387,10 @@ function bindGrowthUi() {
   $("growth-chart-range")?.addEventListener("change", () => {
     if (growthData) renderGrowthCharts(growthData);
   });
+  $("growth-combo-form")?.addEventListener("submit", (e) => void saveComboOffer(e));
+  $("combo-item-a")?.addEventListener("change", syncComboNameFromItems);
+  $("combo-item-b")?.addEventListener("change", syncComboNameFromItems);
+  $("combo-open-counter")?.addEventListener("click", () => showView("counter"));
   $("growth-refresh")?.addEventListener("click", () => loadGrowthDashboard(true));
   $("growth-print")?.addEventListener("click", () => {
     printFinance({
@@ -383,6 +399,111 @@ function bindGrowthUi() {
       asOf: growthData?.range?.today,
     });
   });
+}
+
+function findShopItem(ref) {
+  if (!ref) return null;
+  const items = typeof state !== "undefined" ? state.items || [] : [];
+  const id = String(ref.id || ref.itemId || "").trim();
+  if (id) return items.find((i) => i.id === id) || { id, name: ref.name || "" };
+  const name = String(ref.name || "").trim().toLowerCase();
+  return items.find((i) => String(i.name || "").trim().toLowerCase() === name) || null;
+}
+
+function fillComboItemSelects(selectedA, selectedB) {
+  const items = ((typeof state !== "undefined" ? state.items : []) || [])
+    .slice()
+    .sort((a, b) => String(a.name || "").localeCompare(String(b.name || "")));
+  const opts = `<option value="">Select item</option>${items
+    .map((i) => `<option value="${escapeHtml(i.id)}">${escapeHtml(i.name)}</option>`)
+    .join("")}`;
+  ["combo-item-a", "combo-item-b"].forEach((id, idx) => {
+    const el = $(id);
+    if (!el) return;
+    el.innerHTML = opts;
+    el.value = idx === 0 ? selectedA || "" : selectedB || "";
+  });
+}
+
+function paintSavedCombos() {
+  const el = $("combo-saved");
+  if (!el) return;
+  const rows = ((typeof state !== "undefined" ? state.combos : []) || []).filter((c) => String(c.status || "active") === "active");
+  el.textContent = rows.length ? `Saved: ${rows.map((c) => c.name).join(" · ")}` : "";
+}
+
+function comboDraftFromAnalysis() {
+  const action = (growthData?.actions || []).find((a) => a.kind === "combo") || {};
+  const top = growthData?.products?.top || [];
+  const a = findShopItem(action.itemA) || findShopItem(top[0]);
+  const b = findShopItem(action.itemB) || findShopItem(top[1]);
+  return {
+    name: a && b ? `${a.name} + ${b.name}` : "Combo offer",
+    itemA: a,
+    itemB: b,
+    discountValue: Number(action.discountValue || 8),
+  };
+}
+
+function syncComboNameFromItems() {
+  const items = (typeof state !== "undefined" ? state.items : []) || [];
+  const a = items.find((i) => i.id === $("combo-item-a")?.value);
+  const b = items.find((i) => i.id === $("combo-item-b")?.value);
+  if (a && b && $("combo-name")) $("combo-name").value = `${a.name} + ${b.name}`;
+}
+
+function openComboDraft() {
+  // Create combo offer from the two top-selling catalog items.
+  const draft = comboDraftFromAnalysis();
+  const form = $("growth-combo-form");
+  if (!form) return;
+  form.hidden = false;
+  fillComboItemSelects(draft.itemA?.id || "", draft.itemB?.id || "");
+  paintSavedCombos();
+  if ($("combo-name")) $("combo-name").value = draft.name;
+  if ($("combo-pct")) $("combo-pct").value = draft.discountValue;
+  if ($("combo-hint")) {
+    $("combo-hint").textContent = draft.itemA && draft.itemB
+      ? `Bundle ${draft.itemA.name} with ${draft.itemB.name}. Counter can add both and apply the discount.`
+      : "Pick two catalog items to save a combo for the Counter.";
+    $("combo-hint").className = draft.itemA && draft.itemB ? "hint" : "hint";
+  }
+  form.scrollIntoView({ block: "nearest" });
+  $("combo-name")?.focus();
+}
+
+async function saveComboOffer(e) {
+  e?.preventDefault?.();
+  const draft = comboDraftFromAnalysis();
+  const name = ($("combo-name")?.value || draft.name || "").trim();
+  const pct = Number($("combo-pct")?.value || draft.discountValue || 8);
+  const a = $("combo-item-a")?.value || draft.itemA?.id || "";
+  const b = $("combo-item-b")?.value || draft.itemB?.id || "";
+  if (!name || !a || !b) {
+    $("combo-hint").textContent = "Pick two different items from this shop's catalog.";
+    $("combo-hint").className = "hint error";
+    return;
+  }
+  try {
+    $("combo-hint").textContent = "Saving combo…";
+    $("combo-hint").className = "hint";
+    const data = await api("/api/combos", {
+      method: "POST",
+      body: JSON.stringify({ name, item_a_id: a, item_b_id: b, discount_type: "pct", discount_value: pct }),
+    });
+    if (typeof state !== "undefined") {
+      state.combos = [...(state.combos || []).filter((c) => c.id !== data.combo?.id), data.combo].filter(Boolean);
+      if (typeof paintComboBar === "function") paintComboBar();
+    }
+    paintSavedCombos();
+    $("combo-hint").textContent = `${data.combo?.name || name} saved. Open Counter and tap the combo to add both items with ${pct}% off.`;
+    $("combo-hint").className = "hint ok";
+    $("growth-hint").textContent = "Combo offer saved — use it on the next bill.";
+    $("growth-hint").className = "hint ok";
+  } catch (err) {
+    $("combo-hint").textContent = err.message;
+    $("combo-hint").className = "hint error";
+  }
 }
 
 async function askGrowthQuestion(question) {
