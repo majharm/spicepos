@@ -192,6 +192,12 @@ test("Master Admin can set passwords and unlock locked accounts", () => {
   const core = read("pos-php-core.php");
   assert.match(masterJs, /data-reset-biz/);
   assert.match(masterJs, /data-reset-user/);
+  assert.match(masterJs, /"Garments"/);
+  assert.match(masterJs, /"Saree Shop"/);
+  assert.match(masterJs, /"Ladies Fashion"/);
+  assert.match(masterJs, /"Mens Fashion"/);
+  assert.match(masterJs, /"Kids Fashion"/);
+  assert.match(read("login.html"), />Boutique</);
   assert.match(masterJs, /data-unlock/);
   assert.match(masterJs, /accountStatusLabel/);
   assert.match(masterApi, /\/api\/master\/users\/:id\/unlock/);

@@ -14,6 +14,8 @@ test("Footwear shop is detected from category or type", () => {
   assert.equal(F.isFootwearShop({ category: "Shoes" }), true);
   assert.equal(F.isFootwearShop({ category: "Spices & masala" }), false);
   assert.equal(F.isFootwearShop({ category: "Apparel" }), false);
+  assert.equal(F.isFootwearShop({ category: "Garments" }), false);
+  assert.equal(F.isFootwearShop({ category: "Kids Fashion" }), false);
 });
 
 test("Girls and boys type plus colour and size make a bill name", () => {
