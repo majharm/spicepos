@@ -189,7 +189,7 @@ test("HTML and CSS cache stickers match deploy90", () => {
   assert.match(index, /data-view="qr-orders"/);
   assert.match(index, /id="qr-menu-code"/);
   assert.match(index, /id="qr-order-list"/);
-  assert.match(index, /qr\.html/);
+  assert.match(index, /id="qr-shop-id"/);
   const qrPoster = readFileSync(path.join(root, "qr.html"), "utf8");
   assert.match(qrPoster, /qrcode\.iife\.js/);
   assert.match(qrPoster, /order\.html\?shop=/);

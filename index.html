@@ -424,6 +424,9 @@
                 <p class="items-kicker">YOUR SHOP QR</p>
                 <h3>Print or share this code</h3>
                 <p>Place it at the counter, table, or storefront. The link opens a public mobile menu—no customer login required.</p>
+                <p class="field-hint">Shop ID for <code>/qr.html?shop=</code>: <code id="qr-shop-id">—</code>
+                  <button class="btn" type="button" id="qr-copy-shop-id">Copy ID</button>
+                </p>
                 <div class="qr-link-row">
                   <input id="qr-menu-link" readonly aria-label="Public QR menu link" />
                   <button class="btn" type="button" id="qr-copy-link">Copy link</button>
@@ -835,9 +838,9 @@
           <p class="lede">Company profile, timezone, shop logo, and your login password. Shop backup is under Admin → Backup.</p>
           <form class="settings settings-page" id="settings-form">
             <div class="settings-section">
-              <h3>Business details</h3>
-              <div class="settings-grid">
-                <label class="full">Name
+                <label class="full">Shop ID
+                  <input id="set-shop-id" readonly autocomplete="off" />
+                </label>
                   <input id="set-name" maxlength="180" autocomplete="organization" />
                 </label>
                 <label class="full">Address

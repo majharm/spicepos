@@ -2051,6 +2051,7 @@ function renderSettings() {
   $("set-logo").value = "";
   paintLogoFileName();
   showLogo($("logo-preview"), state.company.logo_url);
+  if ($("set-shop-id")) $("set-shop-id").value = shopBusinessId();
   if ($("btn-backup-download")) $("btn-backup-download").href = posUrl("/api/backup");
   if (window.DevMode) {
     const section = $("dev-settings-section");
@@ -2570,23 +2571,30 @@ async function loadOrders() {
 let qrOrderCache = [];
 let qrOrderStatus = "";
 
+function shopBusinessId() {
+  return state.businessMeta?.id || state.company?.business_id || state.session?.business_id || "";
+}
+
 function qrMenuUrl() {
-  const shop = state.company?.business_id || "";
+  const shop = shopBusinessId();
   return `${location.origin}/order.html?shop=${encodeURIComponent(shop)}`;
 }
 
 function qrPosterUrl() {
-  const shop = state.company?.business_id || "";
+  const shop = shopBusinessId();
   return `${location.origin}/qr.html?shop=${encodeURIComponent(shop)}`;
 }
 
 function paintQrMenuSetup() {
   const url = qrMenuUrl();
   const poster = qrPosterUrl();
+  const shopId = shopBusinessId();
   const input = $("qr-menu-link");
   const open = $("qr-open-menu");
   const posterLink = $("qr-poster-page");
   const code = $("qr-menu-code");
+  const idEl = $("qr-shop-id");
+  if (idEl) idEl.textContent = shopId || "—";
   if (input) input.value = url;
   if (open) open.href = url;
   if (posterLink) posterLink.href = poster;
@@ -3499,6 +3507,17 @@ $("qr-copy-link")?.addEventListener("click", async () => {
     document.execCommand("copy");
   }
   $("qr-orders-hint").textContent = "Menu link copied.";
+  $("qr-orders-hint").className = "hint ok";
+});
+$("qr-copy-shop-id")?.addEventListener("click", async () => {
+  const text = shopBusinessId();
+  if (!text) return;
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch {
+    /* ignore */
+  }
+  $("qr-orders-hint").textContent = "Shop ID copied.";
   $("qr-orders-hint").className = "hint ok";
 });
 $("qr-print-code")?.addEventListener("click", () => {
