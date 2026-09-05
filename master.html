@@ -6,8 +6,8 @@
     <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
     <title>Master Admin · ATAV POS</title>
     <link rel="icon" href="./favicon.svg" />
-    <link rel="stylesheet" href="./css/pos.css?v=20260905deploy96" />
-    <link rel="stylesheet" href="./css/saas.css?v=20260905deploy96" />
+    <link rel="stylesheet" href="./css/pos.css?v=20260905deploy97" />
+    <link rel="stylesheet" href="./css/saas.css?v=20260905deploy97" />
   </head>
   <body class="master-locked">
     <div class="master-shell">
@@ -23,7 +23,10 @@
         <button type="button" data-tab="branches">Branches</button>
         <button type="button" data-tab="devices">POS devices</button>
         <button type="button" data-tab="audit">Audit log</button>
-        <button type="button" data-tab="backup">Backup</button>
+        <div class="master-nav-group">
+          <button type="button" data-tab="backup" data-backup-pane="backup">Backup</button>
+          <button type="button" class="nav-sub" data-tab="backup" data-backup-pane="settings">Messages</button>
+        </div>
         <button type="button" data-tab="notes">Notifications</button>
         <button type="button" data-tab="support">Support helpline</button>
         <div class="nav-foot">
@@ -50,8 +53,8 @@
         </div>
       </main>
     </div>
-    <script src="./js/pos-api.js?v=20260905deploy96" defer></script>
-    <script src="./js/support.js?v=20260905deploy96" defer></script>
-    <script src="./js/master.js?v=20260905deploy96" defer></script>
+    <script src="./js/pos-api.js?v=20260905deploy97" defer></script>
+    <script src="./js/support.js?v=20260905deploy97" defer></script>
+    <script src="./js/master.js?v=20260905deploy97" defer></script>
   </body>
 </html>

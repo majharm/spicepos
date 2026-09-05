@@ -173,14 +173,24 @@ $("logout").onclick = async () => {
   location.href = "/login.html";
 };
 
-document.querySelectorAll("[data-tab]").forEach((btn) => {
-  btn.onclick = () => {
-    tab = btn.dataset.tab;
-    if (tab === "backup") backupPane = "backup";
-    document.querySelectorAll(".master-nav [data-tab]").forEach((b) => b.classList.toggle("active", b === btn));
-    document.querySelector(".master-main")?.scrollTo({ top: 0 });
-    render();
-  };
+function syncMasterNav() {
+  document.querySelectorAll(".master-nav [data-tab]").forEach((b) => {
+    const pane = b.dataset.backupPane;
+    const on = b.dataset.tab === tab && (pane == null || pane === backupPane);
+    b.classList.toggle("active", on);
+  });
+}
+
+function setMasterTab(next, pane) {
+  tab = next;
+  if (next === "backup") backupPane = pane || "backup";
+  syncMasterNav();
+  document.querySelector(".master-main")?.scrollTo({ top: 0 });
+  render();
+}
+
+document.querySelectorAll(".master-nav [data-tab]").forEach((btn) => {
+  btn.onclick = () => setMasterTab(btn.dataset.tab, btn.dataset.backupPane);
 });
 
 function formatPlatformTime(value) {
@@ -701,7 +711,7 @@ async function render() {
     branches: "Branches",
     devices: "POS devices",
     audit: "Audit log",
-    backup: backupPane === "settings" ? "Settings" : "Backup",
+    backup: backupPane === "settings" ? "Messages" : "Backup",
     notes: "Notifications",
     alerts: "Settings",
     support: "Support helpline",
@@ -1195,7 +1205,7 @@ async function render() {
           pane === "settings" ? "Message settings" : "Backup",
           pane === "settings"
             ? "Connect WhatsApp, then turn each auto-message Active or Inactive. Shops receive WhatsApp on their mobile and email on their shop email."
-            : "Download or restore one shop, or the full platform. Message settings are under Backup → Settings.",
+            : "Download or restore one shop, or the full platform. Message settings are under Backup → Messages.",
           pane === "backup"
             ? [{ label: "Shops", value: shops.length }]
             : [
@@ -1250,12 +1260,7 @@ async function render() {
         </div>
       </div>`;
       body.querySelectorAll("[data-master-pane]").forEach((btn) => {
-        btn.onclick = () => {
-          backupPane = btn.dataset.masterPane;
-          tab = "backup";
-          document.querySelectorAll(".master-nav [data-tab]").forEach((b) => b.classList.toggle("active", b.dataset.tab === "backup"));
-          render();
-        };
+        btn.onclick = () => setMasterTab("backup", btn.dataset.masterPane);
       });
       if (pane === "backup") bindMasterBackup(body, shops);
       else bindAlertsForm(alerts);
@@ -1266,7 +1271,7 @@ async function render() {
       ]);
       const notes = settings.notifications || [];
       body.innerHTML = `<div class="items-desk master-desk">
-        ${masterHero("Platform", "Notifications", "Post to the shop dashboard. If New update is Active under Backup → Settings, shops also get WhatsApp and email.", [
+        ${masterHero("Platform", "Notifications", "Post to the shop dashboard. If New update is Active under Backup → Messages, shops also get WhatsApp and email.", [
           { label: "Recent", value: notes.length },
           { label: "Shops", value: businesses.length },
         ])}
@@ -1432,7 +1437,7 @@ async function render() {
 
 function summarizeNoticeDelivery(delivery) {
   if (delivery?.skipped) {
-    return "Saved on the shop dashboard. New update WhatsApp/email is Inactive under Backup → Settings.";
+    return "Saved on the shop dashboard. New update WhatsApp/email is Inactive under Backup → Messages.";
   }
   const results = delivery?.results;
   if (!Array.isArray(results) || !results.length) {
