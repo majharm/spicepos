@@ -1734,6 +1734,7 @@ function pos_php_dispatch($path, $method, $rawBody) {
         "shopName" => $business["name"] ?? "",
         "ownerName" => $user["first_name"] ?? "",
         "email" => $user["email"] ?? "",
+        "businessEmail" => $business["email"] ?? "",
         "username" => $user["username"] ?? "",
       ]);
       if (function_exists("pos_send_shop_welcome_alerts")) {
@@ -1955,6 +1956,7 @@ function pos_php_dispatch($path, $method, $rawBody) {
         "shopName" => $row[0]["name"] ?? "",
         "ownerName" => $user["first_name"] ?? "",
         "email" => $user["email"] ?? "",
+        "businessEmail" => $row[0]["email"] ?? "",
         "username" => $user["username"] ?? "",
       ]);
       if (function_exists("pos_send_shop_welcome_alerts")) {

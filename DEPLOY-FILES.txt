@@ -121,6 +121,8 @@ Node (if using hPanel Node.js web app — upload OR git pull then Restart)
   server/units.js
   server/mail.js
   server/alerts.js
+  server/load-env.js
+  server/mail.js
   server/advanced.js
   server/fy.js
   package.json
@@ -137,6 +139,7 @@ FIXES in this bundle
   - Cache sticker 20260905deploy106 on index, login, master, setup, order
   - WhatsApp/daily alerts: better mobile lookup, per-number send, mark sent only after delivery
   - Master Admin: Send expiry alert per shop + bulk send in Settings (WhatsApp + email)
+  - Welcome email: SMTP env from pos-db.php/.env, welcome alert also emails, business email fallback
   - Renewal WhatsApp/email to every shop: 7 days before expiry, and once after expired
   - Business category includes Garments, Clothing, Boutique, Saree Shop, Ladies/Mens/Kids Fashion
   - Master Admin Account managers tab: assign a support person to each shop

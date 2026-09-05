@@ -256,6 +256,7 @@ export function registerMaster(app) {
           shopName: row?.name,
           ownerName: user?.first_name,
           email: user?.email,
+          businessEmail: row?.email,
           username: user?.username,
         },
         req,

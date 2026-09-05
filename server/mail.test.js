@@ -101,11 +101,18 @@ test("PHP and Node wire welcome mail after signup", () => {
   const master = readFileSync(path.join(root, "server/master.js"), "utf8");
   const tenant = readFileSync(path.join(root, "server/tenant.js"), "utf8");
   const crud = readFileSync(path.join(root, "pos-crud.php"), "utf8");
+  const loadEnv = readFileSync(path.join(root, "server/load-env.js"), "utf8");
   assert.match(phpCore, /pos-mail\.php/);
   assert.match(phpCore, /pos_send_welcome_signup/);
+  assert.match(phpCore, /businessEmail/);
   assert.match(phpMail, /smtp\.hostinger\.com/);
+  assert.match(phpMail, /pos_welcome_recipients/);
+  assert.match(phpMail, /pos_load_dotenv/);
+  assert.match(loadEnv, /pos-db\.php/);
   assert.match(auth, /sendWelcomeSignup/);
+  assert.match(auth, /businessEmail/);
   assert.match(master, /sendWelcomeSignup/);
+  assert.match(master, /businessEmail/);
   assert.match(tenant, /sendWelcomeStaff/);
   assert.match(crud, /pos_send_welcome_staff/);
 });

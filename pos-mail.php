@@ -1,6 +1,7 @@
 <?php
 
 function pos_smtp_config() {
+  if (function_exists("pos_load_dotenv")) pos_load_dotenv();
   $user = trim(pos_env("SMTP_USER", pos_env("MAIL_USER")));
   $pass = pos_env("SMTP_PASS", pos_env("MAIL_PASS", pos_env("SMTP_PASSWORD")));
   $host = trim(pos_env("SMTP_HOST", $user !== "" ? "smtp.hostinger.com" : ""));
@@ -133,6 +134,7 @@ function pos_wrap_base64($b64) {
 }
 
 function pos_send_mail($to, $subject, $text, $html = "", $image = "") {
+  if (function_exists("pos_load_dotenv")) pos_load_dotenv();
   $cfg = pos_smtp_config();
   if (!pos_smtp_configured($cfg)) return ["ok" => false, "skipped" => true];
   $recipient = trim((string) $to);
@@ -220,15 +222,44 @@ function pos_send_mail($to, $subject, $text, $html = "", $image = "") {
   }
 }
 
+function pos_welcome_recipients($payload) {
+  $out = [];
+  foreach (["email", "businessEmail"] as $key) {
+    $v = strtolower(trim((string) ($payload[$key] ?? "")));
+    if ($v !== "" && strpos($v, "@") !== false) $out[] = $v;
+  }
+  if (!empty($payload["emails"]) && is_array($payload["emails"])) {
+    foreach ($payload["emails"] as $v) {
+      $v = strtolower(trim((string) $v));
+      if ($v !== "" && strpos($v, "@") !== false) $out[] = $v;
+    }
+  }
+  return array_values(array_unique($out));
+}
+
 function pos_send_welcome_signup($payload) {
   try {
     if (!pos_smtp_configured()) return ["ok" => false, "skipped" => true];
     $msg = pos_welcome_signup_message(array_merge($payload, ["signInUrl" => pos_login_url()]));
-    $result = pos_send_mail($payload["email"] ?? "", $msg["subject"], $msg["text"], $msg["html"]);
-    if (empty($result["ok"]) && empty($result["skipped"])) {
-      error_log("welcome signup email failed: " . ($result["error"] ?? "unknown"));
+    $recipients = pos_welcome_recipients($payload);
+    if (!$recipients) return ["ok" => false, "error" => "No recipient email"];
+    $results = [];
+    foreach ($recipients as $to) {
+      $results[] = pos_send_mail($to, $msg["subject"], $msg["text"], $msg["html"]);
     }
-    return $result;
+    $ok = false;
+    foreach ($results as $row) {
+      if (!empty($row["ok"])) $ok = true;
+    }
+    if (!$ok) {
+      foreach ($results as $row) {
+        if (empty($row["skipped"]) && empty($row["ok"])) {
+          error_log("welcome signup email failed: " . ($row["error"] ?? "unknown"));
+          return ["ok" => false, "error" => $row["error"] ?? "welcome signup email failed", "results" => $results];
+        }
+      }
+    }
+    return ["ok" => $ok, "results" => $results, "skipped" => !$ok && !empty($results[0]["skipped"])];
   } catch (Throwable $e) {
     error_log("welcome signup email failed: " . $e->getMessage());
     return ["ok" => false, "error" => $e->getMessage()];

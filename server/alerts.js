@@ -631,7 +631,12 @@ export async function sendWelcomeAlerts({
   const out = { welcome: null, credentials: null };
   if (flagOn(settings.alert_welcome, true)) {
     const text = welcomeText({ shopName: name, ownerName, signInUrl }, settings);
-    out.welcome = await sendWhatsApp(waCfg(settings), phones, text);
+    out.welcome = await dispatchAlert({
+      phones,
+      emails,
+      subject: `Welcome to ATAV POS · ${name}`,
+      text,
+    });
   }
   if (flagOn(settings.alert_credentials, true) && (username || email || password)) {
     out.credentials = await sendCredentialAlerts({

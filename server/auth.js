@@ -346,6 +346,7 @@ export function registerAuth(app) {
           shopName: business?.name,
           ownerName: user.first_name,
           email: user.email,
+          businessEmail: business?.email,
           username: user.username,
         },
         req,

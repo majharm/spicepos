@@ -109,6 +109,7 @@ test("Master Admin Settings lives under Backup with Active/Inactive templates", 
   assert.match(alerts, /renewal_expired/);
   assert.match(nodeAlerts, /sendRenewalAlerts/);
   assert.match(nodeAlerts, /summarizeAlertResults/);
+  assert.match(nodeAlerts, /dispatchAlert\(\{[\s\S]*Welcome to ATAV POS/s);
   assert.match(master, /alert-send-expiry/);
   assert.match(master, /data-send-expiry/);
   assert.match(master, /summarizeAlertDelivery/);
@@ -116,6 +117,7 @@ test("Master Admin Settings lives under Backup with Active/Inactive templates", 
   assert.match(php, /master\/alerts\/send-expiry/);
   assert.match(php, /send-expiry-alert/);
   assert.match(alerts, /pos_summarize_alert_results/);
+  assert.match(alerts, /pos_alert_dispatch\(\$phones, \$emails, "Welcome to ATAV POS/);
   assert.match(alerts, /tpl_welcome/);
   assert.match(alerts, /pos_fill_template/);
   assert.match(nodeAlerts, /startAlertScheduler/);

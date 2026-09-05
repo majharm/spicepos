@@ -510,9 +510,10 @@ function pos_send_shop_welcome_alerts($payload) {
     $emails = array_values(array_unique($emails));
     $name = $payload["shopName"] ?? $shop["shopName"];
     if (pos_alert_flag($cfg["alert_welcome"])) {
-      pos_wa_send($cfg, $phones, pos_alert_welcome_text($name, $payload["ownerName"] ?? $payload["name"] ?? "", $cfg, [
+      $text = pos_alert_welcome_text($name, $payload["ownerName"] ?? $payload["name"] ?? "", $cfg, [
         "signInUrl" => $payload["signInUrl"] ?? pos_login_url(),
-      ]));
+      ]);
+      pos_alert_dispatch($phones, $emails, "Welcome to ATAV POS · {$name}", $text);
     }
     if (pos_alert_flag($cfg["alert_credentials"]) && (!empty($payload["username"]) || !empty($payload["email"]) || !empty($payload["password"]))) {
       pos_send_credential_alerts(array_merge($payload, ["shopName" => $name, "phones" => $phones, "emails" => $emails, "settings" => $cfg]));
