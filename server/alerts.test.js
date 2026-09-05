@@ -48,19 +48,24 @@ test("message templates fill placeholders and honor custom text", () => {
   assert.match(login, /Secret#1/);
 });
 
-test("Master Admin Settings shows Active/Inactive message templates", () => {
+test("Master Admin Settings lives under Backup with Active/Inactive templates", () => {
   const masterHtml = readFileSync(path.join(root, "master.html"), "utf8");
   const master = readFileSync(path.join(root, "js/master.js"), "utf8");
   const php = readFileSync(path.join(root, "pos-php-core.php"), "utf8");
   const alerts = readFileSync(path.join(root, "pos-alerts.php"), "utf8");
   const nodeAlerts = readFileSync(path.join(root, "server/alerts.js"), "utf8");
   const index = readFileSync(path.join(root, "server/index.js"), "utf8");
-  assert.match(masterHtml, /data-tab="alerts"/);
+  assert.doesNotMatch(masterHtml, /data-tab="alerts"/);
+  assert.match(masterHtml, /data-tab="backup"/);
+  assert.match(master, /data-master-pane="settings"/);
   assert.match(master, /id="alert-form"/);
   assert.match(master, /User ID & password/);
   assert.match(master, /Closing sales summary/);
   assert.match(master, /Low stock alert/);
   assert.match(master, /alert-switch-label/);
+  assert.doesNotMatch(master, /Today platform sales/);
+  assert.match(master, /id="biz-search"/);
+  assert.match(master, /id="note-form"/);
   assert.match(php, /pos_send_shop_welcome_alerts/);
   assert.match(php, /pos_send_credential_alerts/);
   assert.match(php, /pos_tick_shop_alerts/);

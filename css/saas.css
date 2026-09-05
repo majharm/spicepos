@@ -1109,3 +1109,63 @@ body.dev-mode .session-bar::after {
   .legal-card { padding: 20px 16px 28px; }
   .legal-article h1 { font-size: 22px; }
 }
+
+.master-main #panel.has-desk > h2 {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+.master-main .master-desk {
+  margin: 0;
+}
+.master-main .master-desk .settings,
+.master-main .master-desk .alert-settings {
+  max-width: none;
+  margin: 0;
+}
+.master-compose {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+.master-backup-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  align-items: start;
+}
+.master-desk .item-chip.is-ok {
+  color: #0f766e;
+  background: #ecfdf5;
+  border-color: #a7f3d0;
+}
+.master-desk .item-chip.is-warn {
+  color: #92400e;
+  background: #fffbeb;
+  border-color: #fde68a;
+}
+.master-desk .item-chip.is-bad {
+  color: #991b1b;
+  background: #fef2f2;
+  border-color: #fecaca;
+}
+.master-desk .platform-notice .item-card-copy span {
+  white-space: pre-wrap;
+  line-height: 1.45;
+}
+.master-desk .notice-thumb {
+  width: 100%;
+  max-height: 160px;
+  object-fit: cover;
+  border-radius: 10px;
+}
+@media (max-width: 980px) {
+  .master-backup-grid { grid-template-columns: 1fr; }
+}
+

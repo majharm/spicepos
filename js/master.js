@@ -1,5 +1,6 @@
 const $ = (id) => document.getElementById(id);
 let tab = "dash";
+let backupPane = "backup";
 let panelFlash = "";
 
 async function api(path, options) {
@@ -175,7 +176,8 @@ $("logout").onclick = async () => {
 document.querySelectorAll("[data-tab]").forEach((btn) => {
   btn.onclick = () => {
     tab = btn.dataset.tab;
-    document.querySelectorAll("[data-tab]").forEach((b) => b.classList.toggle("active", b === btn));
+    if (tab === "backup") backupPane = "backup";
+    document.querySelectorAll(".master-nav [data-tab]").forEach((b) => b.classList.toggle("active", b === btn));
     document.querySelector(".master-main")?.scrollTo({ top: 0 });
     render();
   };
@@ -427,6 +429,187 @@ function bindMasterBackup(root, shops) {
   };
 }
 
+function masterHero(kicker, title, lede, stats = []) {
+  const statHtml = stats
+    .map(
+      (s) =>
+        `<div class="items-stat${s.warn ? " is-warn" : ""}"><span>${s.label}</span><strong>${s.value}</strong></div>`,
+    )
+    .join("");
+  return `<header class="items-hero">
+    <div class="items-hero-copy">
+      <p class="items-kicker">${kicker}</p>
+      <h3>${title}</h3>
+      <p class="lede">${lede}</p>
+    </div>
+    ${statHtml ? `<div class="items-hero-stats">${statHtml}</div>` : ""}
+  </header>`;
+}
+
+function statusChip(status) {
+  const s = String(status || "—");
+  const low = s.toLowerCase();
+  const kind = /expir/.test(low) ? "is-warn" : /suspend|inactiv|lock/.test(low) ? "is-bad" : "is-ok";
+  return `<span class="item-chip ${kind}">${attr(s)}</span>`;
+}
+
+function letterMark(name) {
+  const t = String(name || "?").trim();
+  return (t[0] || "?").toUpperCase();
+}
+
+const ALERT_DEFS = [
+  {
+    key: "welcome",
+    flag: "alert_welcome",
+    title: "Welcome",
+    blurb: "WhatsApp when a shop is created or an owner signs up. The standard welcome email (no password) is still sent separately.",
+    placeholders: "{{shop}} {{name}} {{signInUrl}}",
+  },
+  {
+    key: "credentials",
+    flag: "alert_credentials",
+    title: "User ID & password",
+    blurb: "WhatsApp and email with login details when a shop, staff user, or password reset is created.",
+    placeholders: "{{shop}} {{name}} {{username}} {{email}} {{password}} {{role}} {{signInUrl}}",
+  },
+  {
+    key: "updates",
+    flag: "alert_updates",
+    title: "New update",
+    blurb: "WhatsApp and email when you send a notification from the Notifications tab.",
+    placeholders: "{{shop}} {{title}} {{body}}",
+  },
+  {
+    key: "closing",
+    flag: "alert_closing",
+    title: "Closing sales summary",
+    blurb: "Daily WhatsApp and email after the closing hour (shop timezone). Sent once per shop per day.",
+    placeholders: "{{shop}} {{day}} {{bills}} {{takings}} {{cash}} {{upi}} {{card}} {{credit}} {{gst}} {{lowStock}}",
+  },
+  {
+    key: "low_stock",
+    flag: "alert_low_stock",
+    title: "Low stock alert",
+    blurb: "WhatsApp and email after a sale when an item falls to or below reorder level. Once per item per day.",
+    placeholders: "{{shop}} {{lowStock}}",
+  },
+];
+
+function alertsFormHtml(alerts) {
+  const vars = alerts.sample_vars || {};
+  const fill = (tpl) =>
+    String(tpl || "").replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (_, key) => (vars[key] == null ? "" : String(vars[key])));
+  return `<form class="settings wide alert-settings" id="alert-form">
+    <div class="alert-card">
+      <header>
+        <div>
+          <h3>WhatsApp API</h3>
+          <p class="section-note">API key is stored on the platform and never shown in full.</p>
+        </div>
+        <label class="alert-switch">
+          <input type="checkbox" name="wa_enabled" ${alerts.wa_enabled === "1" ? "checked" : ""} />
+          <span class="alert-switch-ui" aria-hidden="true"></span>
+          <span class="alert-switch-label">${alerts.wa_enabled === "1" ? "Active" : "Inactive"}</span>
+        </label>
+      </header>
+      <label>API URL <input name="wa_api_url" value="${attr(alerts.wa_api_url || "")}" /></label>
+      <label>API key <input name="wa_api_key" type="password" autocomplete="off" value="${attr(alerts.wa_api_key || "")}" /></label>
+      <label>Profile ID <input name="wa_profile_id" value="${attr(alerts.wa_profile_id || "")}" /></label>
+      <label>Country code <input name="wa_country_code" value="${attr(alerts.wa_country_code || "91")}" maxlength="3" /></label>
+    </div>
+    ${ALERT_DEFS.map((d) => {
+      const on = alerts[d.flag] === "1";
+      const tpl = alerts[`tpl_${d.key}`] || (alerts.defaults && alerts.defaults[d.key]) || "";
+      return `<article class="alert-card${on ? "" : " is-inactive"}" data-kind="${d.key}">
+        <header>
+          <div>
+            <h3>${d.title}</h3>
+            <p class="section-note">${d.blurb}</p>
+          </div>
+          <label class="alert-switch">
+            <input type="checkbox" name="${d.flag}" ${on ? "checked" : ""} />
+            <span class="alert-switch-ui" aria-hidden="true"></span>
+            <span class="alert-switch-label">${on ? "Active" : "Inactive"}</span>
+          </label>
+        </header>
+        ${
+          d.key === "closing"
+            ? `<label>Closing hour (0–23)
+                <input name="alert_closing_hour" type="number" min="0" max="23" value="${attr(alerts.alert_closing_hour || "22")}" />
+              </label>`
+            : ""
+        }
+        <label>Message template
+          <textarea name="tpl_${d.key}" rows="6">${attr(tpl)}</textarea>
+        </label>
+        <p class="hint">Placeholders: ${d.placeholders}</p>
+        <button class="btn" type="button" data-reset-tpl="${d.key}">Reset template</button>
+        <pre class="alert-preview">${attr(fill(tpl))}</pre>
+      </article>`;
+    }).join("")}
+    <div class="settings-actions">
+      <button class="btn primary" type="submit">Save message settings</button>
+      <p class="hint" id="alert-hint"></p>
+    </div>
+  </form>`;
+}
+
+function bindAlertsForm(alerts) {
+  const form = $("alert-form");
+  if (!form) return;
+  const vars = alerts.sample_vars || {};
+  const fill = (tpl) =>
+    String(tpl || "").replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (_, key) => (vars[key] == null ? "" : String(vars[key])));
+  const paintSwitch = (input) => {
+    const label = input.closest(".alert-switch")?.querySelector(".alert-switch-label");
+    if (label) label.textContent = input.checked ? "Active" : "Inactive";
+    const card = input.closest(".alert-card");
+    if (card && input.name?.startsWith("alert_")) card.classList.toggle("is-inactive", !input.checked);
+  };
+  form.querySelectorAll(".alert-switch input[type=checkbox]").forEach((input) => {
+    input.addEventListener("change", () => paintSwitch(input));
+    paintSwitch(input);
+  });
+  const paintPreview = (kind) => {
+    const card = form.querySelector(`[data-kind="${kind}"]`);
+    const ta = card?.querySelector(`textarea[name="tpl_${kind}"]`);
+    const pre = card?.querySelector(".alert-preview");
+    if (ta && pre) pre.textContent = fill(ta.value);
+  };
+  form.querySelectorAll("textarea[name^='tpl_']").forEach((ta) => {
+    const kind = ta.name.replace("tpl_", "");
+    ta.addEventListener("input", () => paintPreview(kind));
+  });
+  form.querySelectorAll("[data-reset-tpl]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const kind = btn.dataset.resetTpl;
+      const ta = form.querySelector(`textarea[name="tpl_${kind}"]`);
+      if (ta) {
+        ta.value = (alerts.defaults && alerts.defaults[kind]) || "";
+        paintPreview(kind);
+      }
+    });
+  });
+  form.onsubmit = async (e) => {
+    e.preventDefault();
+    const hint = $("alert-hint");
+    const fd = Object.fromEntries(new FormData(form).entries());
+    fd.wa_enabled = form.wa_enabled?.checked ? "1" : "0";
+    for (const d of ALERT_DEFS) fd[d.flag] = form[d.flag]?.checked ? "1" : "0";
+    hint.className = "hint";
+    hint.textContent = "Saving…";
+    try {
+      await api("/api/master/alerts", { method: "POST", body: JSON.stringify(fd) });
+      hint.textContent = "Message settings saved. Active templates will auto-send.";
+      hint.className = "hint ok";
+    } catch (err) {
+      hint.textContent = err.message;
+      hint.className = "hint error";
+    }
+  };
+}
+
 async function render() {
   const titles = {
     dash: "Platform dashboard",
@@ -436,12 +619,13 @@ async function render() {
     branches: "Branches",
     devices: "POS devices",
     audit: "Audit log",
-    backup: "Backup",
+    backup: backupPane === "settings" ? "Settings" : "Backup",
     notes: "Notifications",
-    alerts: "Auto-send messages",
+    alerts: "Settings",
     support: "Support helpline",
   };
-  $("panel-title").textContent = titles[tab];
+  $("panel-title").textContent = titles[tab] || "Dashboard";
+  $("panel")?.classList.toggle("has-desk", ["biz", "backup", "alerts", "notes"].includes(tab));
   const body = $("panel-body");
   body.innerHTML = "<p class='hint'>Loading…</p>";
   try {
@@ -458,14 +642,13 @@ async function render() {
           ["Branches", t.branches],
           ["POS devices", t.devices],
           ["Transactions", t.transactions],
-          ["Today platform sales", money(t.todaySales)],
           ["Monthly subscription fees", money(t.subscriptionRevenue)],
         ]
           .map(([k, v]) => `<div class="report-card"><span>${k}</span><strong>${v}</strong></div>`)
           .join("")}
       </div>
       <div class="table-wrap" style="padding:20px 0">${table(
-        ["Business", "Status", "Plan", "Fee / month", "Users", "Branches", "Today", "POS"],
+        ["Business", "Status", "Plan", "Fee / month", "Users", "Branches", "POS"],
         d.businesses.map((b) => [
           b.name,
           b.computed_status,
@@ -473,7 +656,6 @@ async function render() {
           money(b.fee_monthly),
           b.users,
           b.branches,
-          money(b.today_sales),
           `<button class="btn primary" type="button" data-enter="${b.id}">Open POS</button>`,
         ]),
       )}</div>`;
@@ -483,105 +665,174 @@ async function render() {
       const planOptions = plans
         .map((p) => `<option value="${p.id}">${p.name} · ${money(p.fee_monthly)} / month</option>`)
         .join("");
-      body.innerHTML = `<form class="settings wide" id="biz-pw-form" hidden>
-        <h3 class="full">Set business login password</h3>
-        <input type="hidden" name="business_id" />
-        <p class="section-note" id="biz-pw-who"></p>
-        <label>New password <input name="password" type="password" required minlength="8" autocomplete="new-password" /></label>
-        <label>Confirm password <input name="confirm" type="password" required minlength="8" autocomplete="new-password" /></label>
-        <button class="btn primary" type="submit">Save password</button>
-        <button class="btn" type="button" id="biz-pw-cancel">Cancel</button>
-        <p class="hint" id="biz-pw-hint"></p>
-      </form>
-      <form class="settings wide biz-create" id="biz-form">
-        <h3 class="full" id="biz-title">Add business</h3>
-        <input type="hidden" name="business_id" />
-        <div class="signup-grid">
-          <label class="full">Business Name *
-            <input name="businessName" required maxlength="180" />
-          </label>
-          <label>Business Type *
-            <select name="businessType" required>${options(BIZ_TYPES, "Select type")}</select>
-          </label>
-          <label>Business Category *
-            <select name="businessCategory" required>${options(BIZ_CATEGORIES, "Select category")}</select>
-          </label>
-          <label>Owner Name *
-            <input name="ownerName" required maxlength="120" />
-          </label>
-          <label>Mobile Number *
-            <input name="mobile" type="tel" required inputmode="numeric" maxlength="15" placeholder="10-digit mobile" />
-          </label>
-          <label class="full">Email ID *
-            <input name="email" type="email" required maxlength="160" />
-          </label>
-          <label>GST Number
-            <input name="gstNumber" maxlength="20" placeholder="Optional" />
-          </label>
-          <label>PAN Number
-            <input name="panNumber" maxlength="12" placeholder="Optional" />
-          </label>
-          <label class="full">Address *
-            <textarea name="address" required rows="2" maxlength="500"></textarea>
-          </label>
-          <label>City *
-            <input name="city" required maxlength="80" />
-          </label>
-          <label>State *
-            <select name="state" required>${options(IN_STATES, "Select state")}</select>
-          </label>
-          <label>PIN Code *
-            <input name="pinCode" required inputmode="numeric" maxlength="6" placeholder="6-digit PIN" />
-          </label>
-          <label>Business Logo
-            <input name="logo" type="file" accept="image/*" />
-          </label>
-          <label>Status
-            <select name="status">
-              <option value="active">Active</option>
-              <option value="suspended">Suspended</option>
-              <option value="inactive">Inactive</option>
-            </select>
-          </label>
-          <label>Admin Username *
-            <input name="adminUsername" required maxlength="32" autocomplete="off" />
-          </label>
-          <label>Password *
-            <input name="password" type="password" required minlength="8" autocomplete="new-password" />
-          </label>
-          <label class="full">Confirm Password *
-            <input name="confirmPassword" type="password" required minlength="8" autocomplete="new-password" />
-          </label>
-          <label>Plan
-            <select name="plan_id">${planOptions}</select>
-          </label>
-          <label>Expiry
-            <input name="subscription_expires_at" type="date" />
-          </label>
+      const activeN = rows.filter((b) => String(b.computed_status || b.status).toLowerCase() === "active").length;
+      const expiredN = rows.filter((b) => /expir/.test(String(b.computed_status || "").toLowerCase())).length;
+      const trialN = rows.filter((b) => /trial/.test(String(b.computed_status || b.plan_name || "").toLowerCase())).length;
+      body.innerHTML = `<div class="items-desk master-desk">
+        ${masterHero("Platform", "Businesses", "Add or edit a shop, set login, and open POS. Status and plan sit on each shop card.", [
+          { label: "Shops", value: rows.length },
+          { label: "Active", value: activeN },
+          { label: "Expired", value: expiredN, warn: expiredN > 0 },
+          { label: "Trial", value: trialN },
+        ])}
+        <div class="items-split">
+          <div class="master-compose">
+            <form class="settings item-composer" id="biz-pw-form" hidden>
+              <div class="item-composer-top">
+                <p class="item-mode">Set login password</p>
+                <p class="item-composer-note" id="biz-pw-who"></p>
+              </div>
+              <input type="hidden" name="business_id" />
+              <fieldset class="item-block">
+                <legend>Password</legend>
+                <label>New password <input name="password" type="password" required minlength="8" autocomplete="new-password" /></label>
+                <label>Confirm password <input name="confirm" type="password" required minlength="8" autocomplete="new-password" /></label>
+              </fieldset>
+              <div class="item-composer-actions">
+                <button class="btn primary" type="submit">Save password</button>
+                <button class="btn" type="button" id="biz-pw-cancel">Cancel</button>
+                <p class="hint" id="biz-pw-hint"></p>
+              </div>
+            </form>
+            <form class="settings item-composer biz-create" id="biz-form">
+              <div class="item-composer-top">
+                <p class="item-mode" id="biz-title">Add business</p>
+                <p class="item-composer-note">Shop profile, owner contact, login, and subscription plan.</p>
+              </div>
+              <input type="hidden" name="business_id" />
+              <fieldset class="item-block">
+                <legend>Shop</legend>
+                <label class="full">Business name *
+                  <input name="businessName" required maxlength="180" />
+                </label>
+                <label>Type *
+                  <select name="businessType" required>${options(BIZ_TYPES, "Select type")}</select>
+                </label>
+                <label>Category *
+                  <select name="businessCategory" required>${options(BIZ_CATEGORIES, "Select category")}</select>
+                </label>
+                <label>Logo
+                  <input name="logo" type="file" accept="image/*" />
+                </label>
+                <label>Status
+                  <select name="status">
+                    <option value="active">Active</option>
+                    <option value="suspended">Suspended</option>
+                    <option value="inactive">Inactive</option>
+                  </select>
+                </label>
+              </fieldset>
+              <fieldset class="item-block">
+                <legend>Owner</legend>
+                <label>Owner name *
+                  <input name="ownerName" required maxlength="120" />
+                </label>
+                <label>Mobile *
+                  <input name="mobile" type="tel" required inputmode="numeric" maxlength="15" placeholder="10-digit mobile" />
+                </label>
+                <label class="full">Email *
+                  <input name="email" type="email" required maxlength="160" />
+                </label>
+                <label>GSTIN
+                  <input name="gstNumber" maxlength="20" placeholder="Optional" />
+                </label>
+                <label>PAN
+                  <input name="panNumber" maxlength="12" placeholder="Optional" />
+                </label>
+              </fieldset>
+              <fieldset class="item-block">
+                <legend>Address</legend>
+                <label class="full">Street *
+                  <textarea name="address" required rows="2" maxlength="500"></textarea>
+                </label>
+                <label>City *
+                  <input name="city" required maxlength="80" />
+                </label>
+                <label>State *
+                  <select name="state" required>${options(IN_STATES, "Select state")}</select>
+                </label>
+                <label>PIN code *
+                  <input name="pinCode" required inputmode="numeric" maxlength="6" placeholder="6-digit PIN" />
+                </label>
+              </fieldset>
+              <fieldset class="item-block">
+                <legend>Login</legend>
+                <label>Admin username *
+                  <input name="adminUsername" required maxlength="32" autocomplete="off" />
+                </label>
+                <label>Password *
+                  <input name="password" type="password" required minlength="8" autocomplete="new-password" />
+                </label>
+                <label class="full">Confirm password *
+                  <input name="confirmPassword" type="password" required minlength="8" autocomplete="new-password" />
+                </label>
+              </fieldset>
+              <fieldset class="item-block">
+                <legend>Plan</legend>
+                <label>Plan
+                  <select name="plan_id">${planOptions}</select>
+                </label>
+                <label>Expiry
+                  <input name="subscription_expires_at" type="date" />
+                </label>
+              </fieldset>
+              <div class="item-composer-actions">
+                <button class="btn primary" type="submit" id="biz-save">Create business</button>
+                <button class="btn" type="button" id="biz-cancel" hidden>Cancel edit</button>
+                <p class="hint" id="biz-hint"></p>
+              </div>
+            </form>
+          </div>
+          <aside class="items-library">
+            <div class="items-library-head">
+              <h4>Shops</h4>
+              <input id="biz-search" type="search" placeholder="Search name, city, owner…" autocomplete="off" />
+            </div>
+            <div class="items-library-list" id="biz-library">${rows
+              .map((b) => {
+                const hay = `${b.name || ""} ${b.owner_name || ""} ${b.city || ""} ${b.category || ""} ${b.plan_name || ""}`.toLowerCase();
+                const src = String(b.logo_url || "").trim();
+                const thumb = src
+                  ? `<img class="item-thumb" src="${attr(src)}" alt="">`
+                  : `<span class="item-thumb-empty" aria-hidden="true">${attr(letterMark(b.name))}</span>`;
+                return `<article class="report-card item-card" data-biz-card data-biz-search="${attr(hay)}">
+                  <div class="item-card-head">
+                    ${thumb}
+                    <div class="item-card-copy">
+                      <strong>${attr(b.name)}</strong>
+                      <span>${attr(b.owner_name || "—")} · ${attr(b.city || "—")}</span>
+                    </div>
+                    ${statusChip(b.computed_status || b.status)}
+                  </div>
+                  <div class="item-card-meta">
+                    <span class="item-chip">${attr(b.category || b.business_type || "—")}</span>
+                    <span class="item-chip">${attr(b.plan_name || b.plan_id || "—")}</span>
+                    <span class="item-chip">${money(b.fee_monthly)}</span>
+                    <span class="item-chip">Exp ${attr(ymd(b.subscription_expires_at) || "—")}</span>
+                  </div>
+                  <div class="item-card-foot">
+                    <div class="item-card-actions">
+                      <button class="btn primary" type="button" data-enter="${attr(b.id)}">Open POS</button>
+                      <button class="btn" type="button" data-edit="${attr(b.id)}">Edit</button>
+                      <button class="btn" type="button" data-reset-biz="${attr(b.id)}">Password</button>
+                      <button class="btn" type="button" data-act="suspend" data-id="${attr(b.id)}">Suspend</button>
+                      <button class="btn" type="button" data-act="activate" data-id="${attr(b.id)}">Activate</button>
+                    </div>
+                  </div>
+                </article>`;
+              })
+              .join("") || `<div class="item-empty-card"><strong>No shops yet</strong><p>Create the first business on the left.</p></div>`}
+            </div>
+          </aside>
         </div>
-        <button class="btn primary" type="submit" id="biz-save">Create business</button>
-        <button class="btn" type="button" id="biz-cancel" hidden>Cancel edit</button>
-        <p class="hint full" id="biz-hint"></p>
-      </form>
-      <div class="table-wrap">${table(
-        ["Name", "Owner", "City", "Category", "Status", "Plan", "Fee / month", "Expiry", "Actions"],
-        rows.map((b) => [
-          b.name,
-          b.owner_name || "—",
-          b.city || "—",
-          b.category || b.business_type || "—",
-          b.computed_status,
-          b.plan_name || b.plan_id,
-          money(b.fee_monthly),
-          ymd(b.subscription_expires_at) || "—",
-          `<button class="btn primary" type="button" data-enter="${b.id}">Open POS</button>
-           <button class="btn" type="button" data-edit="${b.id}">Edit</button>
-           <button class="btn" type="button" data-reset-biz="${b.id}">Set password</button>
-           <button class="btn" data-act="suspend" data-id="${b.id}">Suspend</button>
-           <button class="btn" data-act="activate" data-id="${b.id}">Activate</button>`,
-        ]),
-      )}</div>`;
+      </div>`;
       bindEnterPosButtons(body);
+      $("biz-search")?.addEventListener("input", () => {
+        const q = String($("biz-search").value || "").trim().toLowerCase();
+        body.querySelectorAll("[data-biz-card]").forEach((el) => {
+          el.hidden = Boolean(q) && !String(el.dataset.bizSearch || "").includes(q);
+        });
+      });
       const form = $("biz-form");
       const hint = $("biz-hint");
       function setAdminRequired(on) {
@@ -617,6 +868,8 @@ async function render() {
         $("biz-title").textContent = editing ? "Edit business" : "Add business";
         $("biz-save").textContent = editing ? "Update business" : "Create business";
         $("biz-cancel").hidden = !editing;
+        body.querySelectorAll("[data-biz-card]").forEach((el) => el.classList.remove("is-editing"));
+        if (editing) body.querySelector(`[data-edit="${CSS.escape(b.id)}"]`)?.closest("[data-biz-card]")?.classList.add("is-editing");
         hint.className = "hint";
         hint.textContent = editing
           ? `Editing ${b.name}. Leave password blank to keep the current login.`
@@ -848,78 +1101,149 @@ async function render() {
           auditDetails(r),
         ]),
       );
-    } else if (tab === "backup") {
+    } else if (tab === "backup" || tab === "alerts") {
+      if (tab === "alerts") backupPane = "settings";
       const shops = await api("/api/master/businesses");
-      body.innerHTML = `<p class="lede">Download or restore one shop, or the full platform. Shop backups match the files from POS Settings → Backup.</p>
-        <div class="settings" id="master-backup-card">
-          <div class="settings-section backup-panel">
-            <h3>Shop backup</h3>
-            <p class="section-note">Includes that shop’s items, stock, customers, invoices, purchases, and accounts. Restore replaces current data for the selected shop only.</p>
-            <label>Shop
-              <select id="master-backup-shop">
-                <option value="">Select shop</option>
-                ${shops.map((b) => `<option value="${attr(b.id)}">${attr(b.name)}</option>`).join("")}
-              </select>
-            </label>
-            <div class="backup-actions">
-              <a class="btn primary" id="btn-master-shop-download" href="#">Download shop backup</a>
-              <label class="backup-file-lab">Restore file
-                <input id="master-shop-backup-file" type="file" accept="application/json,.json" />
-              </label>
-              <button class="btn" type="button" id="btn-master-shop-restore">Restore into selected shop</button>
+      const alerts = backupPane === "settings" ? await api("/api/master/alerts") : null;
+      const pane = backupPane === "settings" ? "settings" : "backup";
+      body.innerHTML = `<div class="items-desk settings-desk master-desk">
+        ${masterHero(
+          "Platform",
+          pane === "settings" ? "Settings" : "Backup",
+          pane === "settings"
+            ? "WhatsApp API and auto-message templates. Open Backup for shop and platform JSON files."
+            : "Download or restore one shop, or the full platform. Message settings are under Backup → Settings.",
+          pane === "backup"
+            ? [{ label: "Shops", value: shops.length }]
+            : [{ label: "WhatsApp", value: alerts?.wa_enabled === "1" ? "On" : "Off" }],
+        )}
+        <div class="settings-tabs" role="tablist" aria-label="Backup and settings">
+          <button class="btn${pane === "backup" ? " active" : ""}" type="button" role="tab" aria-selected="${pane === "backup"}" data-master-pane="backup">Backup</button>
+          <button class="btn${pane === "settings" ? " active" : ""}" type="button" role="tab" aria-selected="${pane === "settings"}" data-master-pane="settings" data-tab-alerts>Settings</button>
+        </div>
+        <div class="settings-pane" id="master-pane-backup" ${pane === "backup" ? "" : "hidden"}>
+          <div class="master-backup-grid">
+            <div class="settings" id="master-backup-card">
+              <div class="settings-section backup-panel">
+                <h3>Shop backup</h3>
+                <p class="section-note">Includes that shop’s items, stock, customers, invoices, purchases, and accounts. Restore replaces current data for the selected shop only.</p>
+                <label>Shop
+                  <select id="master-backup-shop">
+                    <option value="">Select shop</option>
+                    ${shops.map((b) => `<option value="${attr(b.id)}">${attr(b.name)}</option>`).join("")}
+                  </select>
+                </label>
+                <div class="backup-actions">
+                  <a class="btn primary" id="btn-master-shop-download" href="#">Download shop backup</a>
+                  <label class="backup-file-lab">Restore file
+                    <input id="master-shop-backup-file" type="file" accept="application/json,.json" />
+                  </label>
+                  <button class="btn" type="button" id="btn-master-shop-restore">Restore into selected shop</button>
+                </div>
+                <p class="hint" id="master-shop-backup-hint"></p>
+              </div>
             </div>
-            <p class="hint" id="master-shop-backup-hint"></p>
-          </div>
-          <div class="settings-section backup-panel">
-            <h3>Platform backup</h3>
-            <p class="backup-warn">Full restore overwrites every shop, subscription plan, and master admin. Keep the file private. Sessions are not included, so you stay signed in.</p>
-            <div class="backup-actions">
-              <a class="btn primary" id="btn-master-platform-download" href="#">Download platform backup</a>
-              <label class="backup-file-lab">Restore file
-                <input id="master-platform-backup-file" type="file" accept="application/json,.json" />
-              </label>
-              <button class="btn" type="button" id="btn-master-platform-restore">Restore platform backup</button>
+            <div class="settings">
+              <div class="settings-section backup-panel">
+                <h3>Platform backup</h3>
+                <p class="backup-warn">Full restore overwrites every shop, subscription plan, and master admin. Keep the file private. Sessions are not included, so you stay signed in.</p>
+                <div class="backup-actions">
+                  <a class="btn primary" id="btn-master-platform-download" href="#">Download platform backup</a>
+                  <label class="backup-file-lab">Restore file
+                    <input id="master-platform-backup-file" type="file" accept="application/json,.json" />
+                  </label>
+                  <button class="btn" type="button" id="btn-master-platform-restore">Restore platform backup</button>
+                </div>
+                <p class="hint" id="master-platform-backup-hint"></p>
+              </div>
             </div>
-            <p class="hint" id="master-platform-backup-hint"></p>
           </div>
-        </div>`;
-      bindMasterBackup(body, shops);
+        </div>
+        <div class="settings-pane" id="master-pane-settings" ${pane === "settings" ? "" : "hidden"}>
+          ${pane === "settings" ? alertsFormHtml(alerts) : ""}
+        </div>
+      </div>`;
+      body.querySelectorAll("[data-master-pane]").forEach((btn) => {
+        btn.onclick = () => {
+          backupPane = btn.dataset.masterPane;
+          tab = "backup";
+          document.querySelectorAll(".master-nav [data-tab]").forEach((b) => b.classList.toggle("active", b.dataset.tab === "backup"));
+          render();
+        };
+      });
+      if (pane === "backup") bindMasterBackup(body, shops);
+      else bindAlertsForm(alerts);
     } else if (tab === "notes") {
       const [businesses, settings] = await Promise.all([
         api("/api/master/businesses"),
         api("/api/master/settings").catch(() => ({ notifications: [] })),
       ]);
       const notes = settings.notifications || [];
-      body.innerHTML = `<p class="lede">Send to the shop dashboard. If <strong>New update</strong> is Active in Settings, shops also get this by WhatsApp and email. Attach an image if you want.</p>
-        <form class="settings wide" id="note-form">
-          <label>Send to
-            <select name="business_id">
-              <option value="">All businesses</option>
-              ${businesses.map((b) => `<option value="${attr(b.id)}">${attr(b.name)}</option>`).join("")}
-            </select>
-          </label>
-          <label>Title <input name="title" required /></label>
-          <label>Body <textarea name="body" rows="3"></textarea></label>
-          <label class="logo-row">Image
-            <div class="logo-preview-frame item-image-frame">
-              <img id="note-image-preview" class="logo-preview" alt="Notification image" hidden />
+      body.innerHTML = `<div class="items-desk master-desk">
+        ${masterHero("Platform", "Notifications", "Post to the shop dashboard. If New update is Active under Backup → Settings, shops also get WhatsApp and email.", [
+          { label: "Recent", value: notes.length },
+          { label: "Shops", value: businesses.length },
+        ])}
+        <div class="items-split">
+          <form class="settings item-composer" id="note-form">
+            <div class="item-composer-top">
+              <p class="item-mode">New notification</p>
+              <p class="item-composer-note">Choose one shop or all businesses. Optional image prints on the dashboard card.</p>
             </div>
-            <label class="btn logo-pick">Choose image
-              <input id="note-image" name="note-image" type="file" accept="image/png,image/jpeg" hidden />
-            </label>
-            <button class="btn" type="button" id="note-image-clear" hidden>Remove</button>
-          </label>
-          <button class="btn primary">Send notification</button>
-          <p class="hint" id="note-hint"></p>
-        </form>
-        ${notes.length ? `<div class="settings wide"><h3>Recent</h3>${notes
-          .map(
-            (n) =>
-              `<div class="platform-notice"><strong>${attr(n.title || "Notice")}</strong>${attr(n.body || "")}${
-                n.image_url ? `<img class="notice-thumb" src="${attr(n.image_url)}" alt="" />` : ""
-              }</div>`,
-          )
-          .join("")}</div>` : ""}`;
+            <fieldset class="item-block">
+              <legend>Message</legend>
+              <label class="full">Send to
+                <select name="business_id">
+                  <option value="">All businesses</option>
+                  ${businesses.map((b) => `<option value="${attr(b.id)}">${attr(b.name)}</option>`).join("")}
+                </select>
+              </label>
+              <label class="full">Title <input name="title" required maxlength="180" placeholder="Holiday hours" /></label>
+              <label class="full">Body <textarea name="body" rows="4" maxlength="2000" placeholder="What shops should see…"></textarea></label>
+            </fieldset>
+            <fieldset class="item-block">
+              <legend>Image</legend>
+              <div class="logo-row full">
+                <div class="logo-preview-frame item-image-frame">
+                  <img id="note-image-preview" class="logo-preview" alt="Notification image" hidden />
+                </div>
+                <div class="logo-controls">
+                  <div class="logo-pick-row">
+                    <input id="note-image" name="note-image" class="logo-file-input" type="file" accept="image/png,image/jpeg" />
+                    <label class="btn logo-pick" for="note-image">Choose image</label>
+                    <button class="btn" type="button" id="note-image-clear" hidden>Remove</button>
+                  </div>
+                </div>
+              </div>
+            </fieldset>
+            <div class="item-composer-actions">
+              <button class="btn primary" type="submit">Send notification</button>
+              <p class="hint" id="note-hint"></p>
+            </div>
+          </form>
+          <aside class="items-library">
+            <div class="items-library-head">
+              <h4>Recent</h4>
+            </div>
+            <div class="items-library-list">${
+              notes.length
+                ? notes
+                    .map(
+                      (n) =>
+                        `<article class="report-card item-card platform-notice">
+                          <div class="item-card-copy">
+                            <strong>${attr(n.title || "Notice")}</strong>
+                            <span>${attr(n.body || "")}</span>
+                          </div>
+                          ${n.image_url ? `<img class="notice-thumb" src="${attr(n.image_url)}" alt="" />` : ""}
+                        </article>`,
+                    )
+                    .join("")
+                : `<div class="item-empty-card"><strong>No notifications yet</strong><p>Send the first update from the left.</p></div>`
+            }</div>
+          </aside>
+        </div>
+      </div>`;
       let noteImage = "";
       const preview = $("note-image-preview");
       const clearBtn = $("note-image-clear");
@@ -957,158 +1281,21 @@ async function render() {
         hint.textContent = "Sending…";
         try {
           const out = await api("/api/master/notifications", { method: "POST", body: JSON.stringify(fd) });
-          e.target.reset();
-          noteImage = "";
-          paintNoteImage();
-          hint.textContent = summarizeNoticeDelivery(out.delivery);
-          hint.className = "hint ok";
+          panelFlash = summarizeNoticeDelivery(out.delivery);
+          render();
         } catch (err) {
           hint.textContent = err.message;
           hint.className = "hint error";
         }
       };
-    } else if (tab === "alerts") {
-      const alerts = await api("/api/master/alerts");
-      const defs = [
-        {
-          key: "welcome",
-          flag: "alert_welcome",
-          title: "Welcome",
-          blurb: "WhatsApp when a shop is created or an owner signs up. The standard welcome email (no password) is still sent separately.",
-          placeholders: "{{shop}} {{name}} {{signInUrl}}",
-        },
-        {
-          key: "credentials",
-          flag: "alert_credentials",
-          title: "User ID & password",
-          blurb: "WhatsApp and email with login details when a shop, staff user, or password reset is created.",
-          placeholders: "{{shop}} {{name}} {{username}} {{email}} {{password}} {{role}} {{signInUrl}}",
-        },
-        {
-          key: "updates",
-          flag: "alert_updates",
-          title: "New update",
-          blurb: "WhatsApp and email when you send a notification from the Notifications tab.",
-          placeholders: "{{shop}} {{title}} {{body}}",
-        },
-        {
-          key: "closing",
-          flag: "alert_closing",
-          title: "Closing sales summary",
-          blurb: "Daily WhatsApp and email after the closing hour (shop timezone). Sent once per shop per day.",
-          placeholders: "{{shop}} {{day}} {{bills}} {{takings}} {{cash}} {{upi}} {{card}} {{credit}} {{gst}} {{lowStock}}",
-        },
-        {
-          key: "low_stock",
-          flag: "alert_low_stock",
-          title: "Low stock alert",
-          blurb: "WhatsApp and email after a sale when an item falls to or below reorder level. Once per item per day.",
-          placeholders: "{{shop}} {{lowStock}}",
-        },
-      ];
-      const vars = alerts.sample_vars || {};
-      const fill = (tpl) =>
-        String(tpl || "").replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (_, key) => (vars[key] == null ? "" : String(vars[key])));
-      body.innerHTML = `<form class="settings wide alert-settings" id="alert-form">
-        <p class="lede">Turn each auto-message Active or Inactive. Edit the template, then Save. Empty placeholders become blank. WhatsApp uses the shop mobile; email uses the shop email.</p>
-        <div class="alert-card">
-          <h3>WhatsApp API</h3>
-          <p class="section-note">API key is stored on the platform and never shown in full.</p>
-          <label class="alert-switch">
-            <input type="checkbox" name="wa_enabled" ${alerts.wa_enabled === "1" ? "checked" : ""} />
-            <span class="alert-switch-ui" aria-hidden="true"></span>
-            <span class="alert-switch-label">${alerts.wa_enabled === "1" ? "Active" : "Inactive"}</span>
-          </label>
-          <label>API URL <input name="wa_api_url" value="${attr(alerts.wa_api_url || "")}" /></label>
-          <label>API key <input name="wa_api_key" type="password" autocomplete="off" value="${attr(alerts.wa_api_key || "")}" /></label>
-          <label>Profile ID <input name="wa_profile_id" value="${attr(alerts.wa_profile_id || "")}" /></label>
-          <label>Country code <input name="wa_country_code" value="${attr(alerts.wa_country_code || "91")}" maxlength="3" /></label>
-        </div>
-        ${defs
-          .map((d) => {
-            const on = alerts[d.flag] === "1";
-            const tpl = alerts[`tpl_${d.key}`] || (alerts.defaults && alerts.defaults[d.key]) || "";
-            return `<article class="alert-card${on ? "" : " is-inactive"}" data-kind="${d.key}">
-              <header>
-                <div>
-                  <h3>${d.title}</h3>
-                  <p class="section-note">${d.blurb}</p>
-                </div>
-                <label class="alert-switch">
-                  <input type="checkbox" name="${d.flag}" ${on ? "checked" : ""} />
-                  <span class="alert-switch-ui" aria-hidden="true"></span>
-                  <span class="alert-switch-label">${on ? "Active" : "Inactive"}</span>
-                </label>
-              </header>
-              ${
-                d.key === "closing"
-                  ? `<label>Closing hour (0–23)
-                      <input name="alert_closing_hour" type="number" min="0" max="23" value="${attr(alerts.alert_closing_hour || "22")}" />
-                    </label>`
-                  : ""
-              }
-              <label>Message template
-                <textarea name="tpl_${d.key}" rows="8">${attr(tpl)}</textarea>
-              </label>
-              <p class="hint">Placeholders: ${d.placeholders}</p>
-              <button class="btn" type="button" data-reset-tpl="${d.key}">Reset template</button>
-              <pre class="alert-preview">${attr(fill(tpl))}</pre>
-            </article>`;
-          })
-          .join("")}
-        <div class="settings-actions">
-          <button class="btn primary" type="submit">Save message settings</button>
-          <p class="hint" id="alert-hint"></p>
-        </div>
-      </form>`;
-      const form = $("alert-form");
-      const paintSwitch = (input) => {
-        const label = input.closest(".alert-switch")?.querySelector(".alert-switch-label");
-        if (label) label.textContent = input.checked ? "Active" : "Inactive";
-        const card = input.closest(".alert-card");
-        if (card && input.name?.startsWith("alert_")) card.classList.toggle("is-inactive", !input.checked);
-      };
-      form.querySelectorAll(".alert-switch input[type=checkbox]").forEach((input) => {
-        input.addEventListener("change", () => paintSwitch(input));
-        paintSwitch(input);
-      });
-      const paintPreview = (kind) => {
-        const card = form.querySelector(`[data-kind="${kind}"]`);
-        const ta = card?.querySelector(`textarea[name="tpl_${kind}"]`);
-        const pre = card?.querySelector(".alert-preview");
-        if (ta && pre) pre.textContent = fill(ta.value);
-      };
-      form.querySelectorAll("textarea[name^='tpl_']").forEach((ta) => {
-        const kind = ta.name.replace("tpl_", "");
-        ta.addEventListener("input", () => paintPreview(kind));
-      });
-      form.querySelectorAll("[data-reset-tpl]").forEach((btn) => {
-        btn.addEventListener("click", () => {
-          const kind = btn.dataset.resetTpl;
-          const ta = form.querySelector(`textarea[name="tpl_${kind}"]`);
-          if (ta) {
-            ta.value = (alerts.defaults && alerts.defaults[kind]) || "";
-            paintPreview(kind);
-          }
-        });
-      });
-      form.onsubmit = async (e) => {
-        e.preventDefault();
-        const hint = $("alert-hint");
-        const fd = Object.fromEntries(new FormData(form).entries());
-        fd.wa_enabled = form.wa_enabled?.checked ? "1" : "0";
-        for (const d of defs) fd[d.flag] = form[d.flag]?.checked ? "1" : "0";
-        hint.className = "hint";
-        hint.textContent = "Saving…";
-        try {
-          await api("/api/master/alerts", { method: "POST", body: JSON.stringify(fd) });
-          hint.textContent = "Message settings saved. Active templates will auto-send.";
-          hint.className = "hint ok";
-        } catch (err) {
-          hint.textContent = err.message;
-          hint.className = "hint error";
+      if (panelFlash) {
+        const noteHint = $("note-hint");
+        if (noteHint) {
+          noteHint.textContent = panelFlash;
+          noteHint.className = "hint ok";
         }
-      };
+        panelFlash = "";
+      }
     } else if (tab === "support") {
       const s = await api("/api/master/support");
       body.innerHTML = `<div class="support-admin">
@@ -1159,7 +1346,7 @@ async function render() {
 
 function summarizeNoticeDelivery(delivery) {
   if (delivery?.skipped) {
-    return "Saved on the shop dashboard. New update WhatsApp/email is Inactive in Settings.";
+    return "Saved on the shop dashboard. New update WhatsApp/email is Inactive under Backup → Settings.";
   }
   const results = delivery?.results;
   if (!Array.isArray(results) || !results.length) {
