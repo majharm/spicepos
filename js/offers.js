@@ -417,9 +417,35 @@
       const buyQ = poolLines.reduce((s, l) => s + pieceQty(l), 0);
       const getQ = getLines.reduce((s, l) => s + pieceQty(l), 0);
       const freeQ = bogoFreeQty(cond.buy_qty, cond.get_qty, buyQ, getQ, sameItem);
-      if (freeQ <= 0 || !getLines.length) return null;
-      const getGross = getLines.reduce((s, l) => s + lineGrossOf(l), 0);
-      const unit = getQ > 0 ? getGross / getQ : 0;
+      const poolGross = (sameItem ? poolLines : getLines).reduce((s, l) => s + lineGrossOf(l), 0);
+      const poolQ = sameItem ? buyQ : getQ;
+      const unit = poolQ > 0 ? poolGross / poolQ : 0;
+      if (freeQ <= 0 || !getLines.length) {
+        const cycle = Math.max(1, num(cond.buy_qty, 1)) + Math.max(0, num(cond.get_qty, 1));
+        const have = buyQ;
+        const needQty = have > 0 ? cycle - (have % cycle) : Math.max(1, num(cond.buy_qty, 1));
+        if (sameItem && have > 0 && needQty > 0 && needQty < cycle) {
+          const wouldSave = discountOn(round2(unit * Math.max(0, num(cond.get_qty, 1))), cond.get_discount_type || "pct", cond.get_discount_value);
+          return {
+            id: offer.id,
+            name: offer.name,
+            offer_type: type,
+            scope: "lines",
+            discount: 0,
+            savings: 0,
+            message: `Add ${needQty} more for ${offer.name}`,
+            lineDiscounts: {},
+            priority: num(offer.priority, 50),
+            stacking: offer.stacking || "stack",
+            loyalty_multiplier: num(offer.loyalty_multiplier, 1),
+            exclusive: false,
+            pending: true,
+            needQty,
+            wouldSave: round2(wouldSave),
+          };
+        }
+        return null;
+      }
       const applyQ = Math.min(freeQ, getQ);
       discount = discountOn(round2(unit * applyQ), cond.get_discount_type || "pct", cond.get_discount_value);
       if (discount <= 0) return null;
@@ -518,9 +544,22 @@
 
   function evaluateAll(offers, ctx = {}) {
     const rule = ctx.stacking || ctx.settings?.stacking || "product_and_bill";
-    const matches = (offers || []).map((o) => evaluateOffer(o, ctx)).filter(Boolean);
+    const results = (offers || []).map((o) => evaluateOffer(o, ctx)).filter(Boolean);
+    const pending = results.filter((m) => m.pending);
+    const matches = results.filter((m) => !m.pending);
     matches.sort((a, b) => b.discount - a.discount || a.priority - b.priority);
-    if (!matches.length) return { applied: [], available: [], discount: 0, billDiscount: 0, lineDiscounts: {}, loyaltyMultiplier: 1, message: "" };
+    if (!matches.length) {
+      return {
+        applied: [],
+        available: pending,
+        pending,
+        discount: 0,
+        billDiscount: 0,
+        lineDiscounts: {},
+        loyaltyMultiplier: 1,
+        message: pending[0]?.message || "",
+      };
+    }
     let chosen = matches;
     if (rule === "one" || rule === "highest") chosen = [matches[0]];
     else if (rule === "priority") chosen = [matches.slice().sort((a, b) => a.priority - b.priority)[0]];
@@ -544,7 +583,8 @@
     const loyaltyMultiplier = Math.max(1, ...chosen.map((m) => num(m.loyalty_multiplier, 1)));
     return {
       applied: chosen,
-      available: matches,
+      available: [...matches, ...pending],
+      pending,
       discount,
       billDiscount,
       lineDiscounts,

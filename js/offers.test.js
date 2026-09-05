@@ -35,13 +35,13 @@ test("buy 2 get 1 free on the same item", () => {
     get_qty: 1,
     get_item_id: "soap",
   });
-  assert.equal(
-    O.evaluateOffer(offer, {
-      cart: [line("soap", 60, { qty: 2, isCount: true })],
-      now: new Date("2026-09-05T10:00:00"),
-    }),
-    null,
-  );
+  const waiting = O.evaluateOffer(offer, {
+    cart: [line("soap", 60, { qty: 2, isCount: true })],
+    now: new Date("2026-09-05T10:00:00"),
+  });
+  assert.equal(waiting?.pending, true);
+  assert.equal(waiting?.needQty, 1);
+  assert.equal(waiting?.discount, 0);
   const hit = O.evaluateOffer(offer, {
     cart: [line("soap", 90, { qty: 3, isCount: true })],
     now: new Date("2026-09-05T10:00:00"),
@@ -65,12 +65,21 @@ test("buy 1 get 1 does not make a single pack free", () => {
     cart: [line("halad", 190, { qty: 1, isCount: true })],
     now: new Date("2026-09-05T10:00:00"),
   });
-  assert.equal(one, null);
+  assert.equal(one?.pending, true);
+  assert.equal(one?.discount, 0);
+  assert.equal(one?.needQty, 1);
+  const preview = O.evaluateAll([offer], {
+    cart: [line("halad", 190, { qty: 1, isCount: true })],
+    now: new Date("2026-09-05T10:00:00"),
+  });
+  assert.equal(preview.applied.length, 0);
+  assert.equal(preview.pending[0]?.needQty, 1);
   const two = O.evaluateOffer(offer, {
     cart: [line("halad", 380, { qty: 2, isCount: true })],
     now: new Date("2026-09-05T10:00:00"),
   });
   assert.ok(two);
+  assert.equal(two.pending, undefined);
   assert.equal(two.discount, 190);
   assert.equal(O.bogoFreeQty(1, 1, 1, 1, true), 0);
   assert.equal(O.bogoFreeQty(1, 1, 2, 2, true), 1);
@@ -80,6 +89,48 @@ test("buy 1 get 1 does not make a single pack free", () => {
   );
   assert.ok(gated);
   assert.equal(gated.discount, 190);
+});
+
+test("live-shaped Buy 1 Get 1 uses Counter line ids and leftover min spend", () => {
+  const offer = {
+    id: "aa5ebfa5-92da-41f1-a964-84d31f1a1555",
+    name: "Buy 1 Get 1",
+    offer_type: "bogo",
+    status: "active",
+    live_status: "active",
+    min_qty: "1.00",
+    max_qty: "10.00",
+    min_spend: "100.00",
+    discount_type: "pct",
+    discount_value: "50.00",
+    start_date: "2026-09-01",
+    end_date: "2026-09-22",
+    customer_eligibility: "all",
+    conditions: {
+      item_ids: ["19c93463-8f6f-4c19-9887-bcdf14b2fc72"],
+      buy_qty: 1,
+      get_qty: 1,
+      get_item_id: "",
+      get_discount_type: "pct",
+      get_discount_value: 100,
+    },
+  };
+  const now = new Date("2026-09-05T20:10:00");
+  const row = (qty, lineId) => ({
+    itemId: "19c93463-8f6f-4c19-9887-bcdf14b2fc72",
+    lineId,
+    qty,
+    qtyGm: qty,
+    isCount: true,
+    gross: 190 * qty,
+    taxable: 190 * qty,
+  });
+  const one = O.evaluateAll([offer], { cart: [row(1, "ln-1")], now });
+  assert.equal(one.applied.length, 0);
+  assert.equal(one.pending[0]?.needQty, 1);
+  const two = O.evaluateAll([offer], { cart: [row(2, "ln-1")], now });
+  assert.equal(two.applied[0]?.discount, 190);
+  assert.equal(two.lineDiscounts["ln-1"], 190);
 });
 
 test("mix and match pick 3 for 299", () => {

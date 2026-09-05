@@ -1636,7 +1636,9 @@ function applyOffersToCart() {
   const result = O.evaluateAll(offers, offerCartContext());
   state.appliedOffers = result;
   state.cart.forEach((line) => {
-    const d = result.lineDiscounts?.[line.lineId] || result.lineDiscounts?.[line.itemId] || 0;
+    const byLine = result.lineDiscounts?.[line.lineId];
+    const byItem = result.lineDiscounts?.[line.itemId];
+    const d = Number(byLine != null ? byLine : byItem || 0);
     const item = state.items.find((i) => i.id === line.itemId);
     const gross = item ? Number(lineCalc(item, { ...line, discountType: "amt", discountValue: 0 }).gross || 0) : 0;
     const capped = Math.min(Math.max(0, d), gross);
@@ -1670,6 +1672,7 @@ function paintOfferBanner() {
   const result = state.appliedOffers;
   const available = result?.available || [];
   const applied = result?.applied || [];
+  const pending = (result?.pending || available).filter((o) => o.pending);
   if (!available.length && !applied.length) {
     el.hidden = true;
     el.innerHTML = "";
@@ -1677,11 +1680,20 @@ function paintOfferBanner() {
   }
   el.hidden = false;
   const save = result?.discount || 0;
-  const names = (applied.length ? applied : available).map((o) => o.name).join(" · ");
-  el.innerHTML = applied.length
-    ? `<strong>Offer applied</strong> ${escapeHtml(names)}. You save ${money(save)}.
-       <button class="btn" type="button" data-skip-offers="1">Skip offers</button>`
-    : `<strong>Offer available</strong> ${escapeHtml(names)}.
+  if (applied.length) {
+    const names = applied.map((o) => o.name).join(" · ");
+    el.innerHTML = `<strong>Offer applied</strong> ${escapeHtml(names)}. You save ${money(save)}.
+       <button class="btn" type="button" data-skip-offers="1">Skip offers</button>`;
+    return;
+  }
+  if (pending.length) {
+    const wait = pending[0];
+    const extra = Number(wait.wouldSave) > 0 ? ` You will save ${money(wait.wouldSave)}.` : "";
+    el.innerHTML = `<strong>Offer waiting</strong> ${escapeHtml(wait.message || wait.name)}.${extra}`;
+    return;
+  }
+  const names = available.map((o) => o.name).join(" · ");
+  el.innerHTML = `<strong>Offer available</strong> ${escapeHtml(names)}.
        <button class="btn" type="button" data-use-offers="1">Apply</button>`;
 }
 
