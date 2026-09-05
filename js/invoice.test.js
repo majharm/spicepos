@@ -249,6 +249,7 @@ test("receipt voucher prints party, amount, and mode; payment voucher labels dif
   assert.match(html, /Ramesh Traders/);
   assert.match(html, /CASH/);
   assert.match(html, /Part payment/);
+  assert.match(html, /Amount received/);
   assert.match(html, /₹1500\.00/);
   assert.match(html, /One Thousand Five Hundred/);
   assert.doesNotMatch(html, /Paid to/);

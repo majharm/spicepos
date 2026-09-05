@@ -206,7 +206,7 @@ const VIEW_META = {
   counter: { title: "Counter", subtitle: "Scan, tap, or search — then Pay" },
   items: { title: "Items", subtitle: "Photo, HSN, unit type, rates, and stock" },
   units: { title: "Unit master", subtitle: "Units used on items — qty, kg, litre, and custom" },
-  customers: { title: "Customers", subtitle: "B2C retail and B2B wholesale accounts" },
+  customers: { title: "Customers", subtitle: "Accounts, due collection, and receipts" },
   barcodes: { title: "Barcodes", subtitle: "Quantity (pcs) items only — one code per piece" },
   damage: { title: "Damage stock", subtitle: "Wastage, approval, and estimated loss" },
   ledger: { title: "Stock ledger", subtitle: "Purchase, sale, return, and damage history" },
@@ -999,6 +999,10 @@ function showView(name) {
   if (name === "ledger") loadLedgerView();
   if (name === "loyalty") loadLoyaltyView();
   if (name === "staff") loadStaff();
+  if (name === "customers") {
+    renderCustomersTable();
+    fillDueCustomerSelect();
+  }
   if (name === "branches") loadBranches();
   if (name === "devices") loadDevices();
   if (isMobileLayout()) setNavCollapsed(true);
@@ -1358,24 +1362,30 @@ function paintScanLane(ok, label) {
 async function applyBarcodeScan(raw, sourceEl) {
   const code = globalThis.POSBarcode?.cleanCode ? POSBarcode.cleanCode(raw) : String(raw || "").trim();
   if (!code) return false;
-  let item = findItemByBarcode(code);
-  if (!item) {
-    try {
-      const data = await api(`/api/barcodes/lookup?code=${encodeURIComponent(code)}`);
-      const match = data.match || data;
-      const id = match.item_id || match.id;
-      item = state.items.find((i) => i.id === id);
-      if (!item && id) {
-        try {
-          await loadBootstrap();
-        } catch {
-          /* keep looking */
-        }
-        item = state.items.find((i) => i.id === id);
+  let item = null;
+  try {
+    const data = await api(`/api/barcodes/lookup?code=${encodeURIComponent(code)}`);
+    const match = data.match || data;
+    const id = match.item_id || match.id;
+    item = state.items.find((i) => i.id === id);
+    if (!item && id) {
+      try {
+        await loadBootstrap();
+      } catch {
+        /* keep looking */
       }
-    } catch {
-      item = null;
+      item = state.items.find((i) => i.id === id);
     }
+  } catch (err) {
+    const msg = String(err.message || "");
+    if (/inactive|already sold|already damaged/i.test(msg)) {
+      if (sourceEl) sourceEl.value = "";
+      paintScanLane(false, "Inactive");
+      setHint(msg, "error");
+      focusScanLane();
+      return false;
+    }
+    item = findItemByBarcode(code);
   }
   if (item) {
     addItem(item.id, null, code);
@@ -1690,9 +1700,83 @@ function renderItemsTable() {
   filterItemsCatalog();
 }
 
+function dueCustomers() {
+  return (state.customers || []).filter((c) => Number(c.outstanding) > 0);
+}
+
+function fillDueCustomerSelect(selectedId) {
+  const el = $("due-customer");
+  if (!el) return;
+  const due = dueCustomers();
+  const cur = selectedId || el.value;
+  el.innerHTML = `<option value="">Select customer with due…</option>${due
+    .map((c) => `<option value="${escapeHtml(c.id)}">${escapeHtml(c.business_name || c.name)} · ${money(c.outstanding)}</option>`)
+    .join("")}`;
+  if (cur && due.some((c) => c.id === cur)) el.value = cur;
+  paintDueOutstanding();
+}
+
+function paintDueOutstanding() {
+  const el = $("due-outstanding");
+  const id = $("due-customer")?.value;
+  const c = (state.customers || []).find((row) => row.id === id);
+  const due = Number(c?.outstanding) || 0;
+  if (el) el.textContent = c ? `Outstanding: ${money(due)}` : "Outstanding: —";
+  if ($("due-amount") && c) {
+    $("due-amount").max = String(due);
+    if (!$("due-amount").value) $("due-amount").value = String(due);
+  }
+}
+
+async function collectCustomerDue(customer, amount, method, notes) {
+  const data = await api("/api/accounts/receipts", {
+    method: "POST",
+    body: JSON.stringify({
+      customer_id: customer.id,
+      amount: Number(amount),
+      payment_method: method,
+      notes,
+    }),
+  });
+  await loadBootstrap();
+  fillDueCustomerSelect();
+  renderCustomersTable();
+  try {
+    await loadAccounts();
+  } catch {
+    /* accounts view optional */
+  }
+  const entry = {
+    entry_no: data.entryNo,
+    entry_type: "receipt",
+    party_name: data.customer?.business_name || data.customer?.name || customer.business_name || customer.name,
+    party_mobile: data.customer?.mobile || customer.mobile,
+    amount: data.amount,
+    payment_method: data.method || method,
+    notes,
+    created_at: new Date().toISOString(),
+    previous_due: data.previous_due,
+    balance_due: data.balance_due ?? data.customer?.outstanding,
+  };
+  showVoucherResult(entry, { autoPrint: true });
+  return data;
+}
+
 function renderCustomersTable() {
+  const dueTotal = dueCustomers().reduce((s, c) => s + (Number(c.outstanding) || 0), 0);
+  const stats = $("customers-hero-stats");
+  if (stats) {
+    stats.innerHTML = [
+      ["Customers", (state.customers || []).length],
+      ["With due", dueCustomers().length],
+      ["Outstanding", money(dueTotal)],
+    ]
+      .map(([k, v]) => `<div class="items-stat"><span>${k}</span><strong>${typeof v === "number" ? v : escapeHtml(String(v))}</strong></div>`)
+      .join("");
+  }
+  fillDueCustomerSelect();
   $("customers-table").innerHTML = `<table><thead><tr>
-    <th>Code</th><th>Name</th><th>Type</th><th>Mobile</th><th>State</th><th>GSTIN</th><th>Outstanding</th>
+    <th>Code</th><th>Name</th><th>Type</th><th>Mobile</th><th>State</th><th>GSTIN</th><th>Outstanding</th><th></th>
   </tr></thead><tbody>${state.customers
     .map(
       (c) => `<tr>
@@ -1703,6 +1787,7 @@ function renderCustomersTable() {
       <td>${escapeHtml(c.state || "—")}</td>
       <td>${escapeHtml(c.gstin || "—")}</td>
       <td>${money(c.outstanding)}</td>
+      <td>${Number(c.outstanding) > 0 ? `<button class="btn primary" type="button" data-collect-due="${escapeHtml(c.id)}">Collect</button>` : ""}</td>
     </tr>`,
     )
     .join("")}</tbody></table>`;
@@ -2583,7 +2668,7 @@ function printVoucher(entry) {
   w.document.close();
 }
 
-function showVoucherResult(entry) {
+function showVoucherResult(entry, opts = {}) {
   const isPayment = entry.entry_type === "payment";
   const label = isPayment ? "Payment" : "Receipt";
   $("modal-title").textContent = `${label} · ${entry.entry_no}`;
@@ -2595,6 +2680,7 @@ function showVoucherResult(entry) {
   $("modal").hidden = false;
   const btn = $("modal-print-voucher");
   if (btn) btn.onclick = () => printVoucher(entry);
+  if (opts.autoPrint) printVoucher(entry);
 }
 
 function showOrder(o) {
@@ -3038,35 +3124,25 @@ async function loadExpenses() {
 }
 
 function showReceiptModal(customer) {
-  $("modal-title").textContent = `Receipt · ${customer.business_name || customer.name}`;
+  const due = Number(customer.outstanding) || 0;
+  $("modal-title").textContent = `Collect due · ${customer.business_name || customer.name}`;
   $("modal-body").innerHTML = `<form class="settings" id="receipt-modal-form">
-    <p class="section-note">Outstanding: <strong>${money(Number(customer.outstanding) || 0)}</strong></p>
-    <label>Amount <input id="rcp-amount" type="number" min="0.01" step="0.01" max="${Number(customer.outstanding) || 0}" required value="${Number(customer.outstanding) || 0}" /></label>
+    <p class="section-note">Outstanding: <strong>${money(due)}</strong>${customer.mobile ? ` · ${escapeHtml(customer.mobile)}` : ""}</p>
+    <label>Amount <input id="rcp-amount" type="number" min="0.01" step="0.01" max="${due}" required value="${due}" /></label>
     <label>Method <select id="rcp-method"><option value="cash">Cash</option><option value="upi">UPI</option><option value="card">Card</option><option value="bank">Bank</option></select></label>
+    <label>Reference / UPI ID <input id="rcp-ref" maxlength="80" placeholder="Optional" /></label>
     <label>Notes <input id="rcp-notes" placeholder="Optional" /></label>
-    <button class="btn primary" type="submit">Save receipt</button>
+    <button class="btn primary" type="submit">Collect &amp; print receipt</button>
   </form><div class="hint" id="rcp-hint"></div>`;
   $("modal").hidden = false;
   $("receipt-modal-form").onsubmit = async (e) => {
     e.preventDefault();
-    const notes = $("rcp-notes").value;
+    const ref = String($("rcp-ref")?.value || "").trim();
+    const note = String($("rcp-notes").value || "").trim();
+    const notes = [ref, note].filter(Boolean).join(" · ");
     const method = $("rcp-method").value;
     try {
-      const data = await api("/api/accounts/receipts", {
-        method: "POST",
-        body: JSON.stringify({ customer_id: customer.id, amount: Number($("rcp-amount").value), payment_method: method, notes }),
-      });
-      await loadAccounts();
-      await loadBootstrap();
-      showVoucherResult({
-        entry_no: data.entryNo,
-        entry_type: "receipt",
-        party_name: data.customer?.business_name || data.customer?.name || customer.business_name || customer.name,
-        amount: data.amount,
-        payment_method: data.method || method,
-        notes,
-        created_at: new Date().toISOString(),
-      });
+      await collectCustomerDue(customer, $("rcp-amount").value, method, notes);
     } catch (err) {
       $("rcp-hint").textContent = err.message;
       $("rcp-hint").className = "hint error";
@@ -3816,6 +3892,47 @@ $("customer-form").addEventListener("submit", async (e) => {
     $("cust-hint").textContent = err.message;
     $("cust-hint").className = "hint error";
   }
+});
+
+$("due-customer")?.addEventListener("change", () => {
+  const c = (state.customers || []).find((row) => row.id === $("due-customer").value);
+  paintDueOutstanding();
+  if (c) $("due-amount").value = String(Number(c.outstanding) || 0);
+});
+
+$("due-collect-form")?.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const hint = $("due-hint");
+  const c = (state.customers || []).find((row) => row.id === $("due-customer")?.value);
+  try {
+    if (!c) throw new Error("Select a customer with outstanding due");
+    const ref = String($("due-ref")?.value || "").trim();
+    const note = String($("due-notes")?.value || "").trim();
+    await collectCustomerDue(c, $("due-amount").value, $("due-method")?.value || "cash", [ref, note].filter(Boolean).join(" · "));
+    $("due-collect-form").reset();
+    fillDueCustomerSelect();
+    if (hint) {
+      hint.textContent = "Receipt saved and sent to printer.";
+      hint.className = "hint ok";
+    }
+  } catch (err) {
+    if (hint) {
+      hint.textContent = err.message;
+      hint.className = "hint error";
+    }
+  }
+});
+
+$("customers-table")?.addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-collect-due]");
+  if (!btn) return;
+  const c = (state.customers || []).find((row) => row.id === btn.dataset.collectDue);
+  if (!c) return;
+  fillDueCustomerSelect(c.id);
+  $("due-amount").value = String(Number(c.outstanding) || 0);
+  paintDueOutstanding();
+  $("due-collect-form")?.scrollIntoView({ block: "nearest" });
+  $("due-amount")?.focus();
 });
 
 $("quick-customer-form")?.addEventListener("submit", async (e) => {
@@ -4643,18 +4760,23 @@ async function loadBarcodesView() {
     const countIds = new Set(state.items.filter((i) => POSUnits.isCount(itemUnit(i))).map((i) => i.id));
     const rows = (Array.isArray(all) ? all : []).filter((r) => countIds.has(r.item_id));
     $("barcodes-table").innerHTML = `<table><thead><tr>
-      <th></th><th>Item</th><th>Kind</th><th>Barcode</th><th>MRP</th><th>SP</th><th></th>
+      <th></th><th>Item</th><th>Kind</th><th>Barcode</th><th>Status</th><th>MRP</th><th>SP</th><th></th>
     </tr></thead><tbody>${(rows || [])
       .map(
-        (r) => `<tr>
-          <td><input type="checkbox" data-bc-pick="${escapeHtml(r.barcode)}" data-bc-name="${escapeHtml(r.item_name)}" data-bc-mrp="${escapeHtml(r.label_mrp || "")}" data-bc-rate="${escapeHtml(r.retail_rate || "")}" /></td>
+        (r) => {
+          const st = String(r.status || "active").toLowerCase() || "active";
+          const inactive = st !== "active";
+          return `<tr class="${inactive ? "is-inactive" : ""}">
+          <td>${inactive ? "" : `<input type="checkbox" data-bc-pick="${escapeHtml(r.barcode)}" data-bc-name="${escapeHtml(r.item_name)}" data-bc-mrp="${escapeHtml(r.label_mrp || "")}" data-bc-rate="${escapeHtml(r.retail_rate || "")}" />`}</td>
           <td>${escapeHtml(r.item_name)} <small>${escapeHtml(r.item_code || "")}</small></td>
           <td>${escapeHtml(r.kind)}</td>
           <td>${escapeHtml(r.barcode)}</td>
+          <td>${escapeHtml(st)}</td>
           <td>${money(r.label_mrp)}</td>
           <td>${money(r.retail_rate)}</td>
-          <td><button class="btn" type="button" data-bc-print="${escapeHtml(r.barcode)}" data-bc-name="${escapeHtml(r.item_name)}" data-bc-mrp="${escapeHtml(r.label_mrp || "")}" data-bc-rate="${escapeHtml(r.retail_rate || "")}">Print</button></td>
-        </tr>`,
+          <td>${inactive ? "" : `<button class="btn" type="button" data-bc-print="${escapeHtml(r.barcode)}" data-bc-name="${escapeHtml(r.item_name)}" data-bc-mrp="${escapeHtml(r.label_mrp || "")}" data-bc-rate="${escapeHtml(r.retail_rate || "")}">Print</button>`}</td>
+        </tr>`;
+        },
       )
       .join("")}</tbody></table>`;
     if (hint) hint.textContent = `${(rows || []).length} barcodes`;
@@ -4954,6 +5076,30 @@ async function loadDamageView() {
   }
 }
 
+$("dmg-barcode")?.addEventListener("change", async () => {
+  const code = String($("dmg-barcode").value || "").trim();
+  if (!code) return;
+  try {
+    const data = await api(`/api/barcodes/lookup?code=${encodeURIComponent(code)}`);
+    const match = data.match || data;
+    const id = match.item_id || match.id;
+    const item = state.items.find((i) => i.id === id);
+    if (item) {
+      if ($("dmg-item")) $("dmg-item").value = item.id;
+      if ($("dmg-item-search")) $("dmg-item-search").value = item.name;
+      if ($("dmg-qty") && POSUnits.isCount(itemUnit(item)) && !$("dmg-qty").value) $("dmg-qty").value = "1";
+      if ($("dmg-hint")) {
+        $("dmg-hint").textContent = `Piece ${code} · ${item.name}`;
+        $("dmg-hint").className = "hint ok";
+      }
+    }
+  } catch (err) {
+    if ($("dmg-hint")) {
+      $("dmg-hint").textContent = err.message;
+      $("dmg-hint").className = "hint error";
+    }
+  }
+});
 $("damage-form")?.addEventListener("submit", async (e) => {
   e.preventDefault();
   const item = state.items.find((i) => i.id === $("dmg-item").value);

@@ -37,7 +37,14 @@ test("PHP and Node wire barcode, damage, loyalty, and ledger modules", () => {
   assert.match(nodeAdv, /export function registerAdvanced/);
   assert.match(nodeAdv, /"unit"/);
   assert.match(nodeAdv, /async function sqlAll/);
-  assert.match(nodeAdv, /\/api\/barcodes\/lookup/);
+  assert.match(nodeAdv, /consumePieceBarcode/);
+  assert.match(adv, /function pos_consume_piece_barcode/);
+  assert.match(checkout, /pos_consume_piece_barcode/);
+  assert.match(index, /id="due-collect-form"/);
+  assert.match(app, /collectCustomerDue/);
+  assert.match(nodeAdv, /This barcode is inactive/);
+  assert.match(adv, /This barcode is inactive/);
+  assert.match(app, /inactive/);
   assert.match(nodeAdv, /\/api\/barcodes\/generate-qty/);
   assert.match(nodeAdv, /export async function generateQtyBarcodes/);
   assert.match(nodeAdv, /Barcodes are only for Quantity \(pcs\) items/);

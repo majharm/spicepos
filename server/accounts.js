@@ -217,7 +217,15 @@ export function registerAccounts(app) {
           notes: notes || null,
         });
         await postReceiptJournal(conn, { amount: amt, payment_method: method, entryNo, ledgerId });
-        return { entryNo, ledgerId, customer: { ...customer, outstanding: next }, amount: amt, method };
+        return {
+          entryNo,
+          ledgerId,
+          customer: { ...customer, outstanding: next },
+          amount: amt,
+          method,
+          previous_due: outstanding,
+          balance_due: next,
+        };
       });
       await audit("Customer Receipt", {
         module: "accounts",

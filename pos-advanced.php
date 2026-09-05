@@ -77,6 +77,13 @@ function pos_ensure_advanced_schema() {
       INDEX (item_id)
     )"
   );
+  if (function_exists("pos_ensure_columns")) {
+    pos_ensure_columns("item_barcodes", [
+      "status" => "VARCHAR(16) NOT NULL DEFAULT 'active'",
+      "used_kind" => "VARCHAR(16) NULL",
+      "used_at" => "TIMESTAMP(3) NULL",
+    ]);
+  }
   @$db->query(
     "CREATE TABLE IF NOT EXISTS stock_batches (
       id VARCHAR(255) PRIMARY KEY,
@@ -308,7 +315,7 @@ function pos_lookup_barcode($bid, $code) {
   $batch = pos_q(
     "SELECT b.*, i.name AS item_name, i.code AS item_code, i.retail_rate, i.mrp AS item_mrp, i.gst_rate, i.base_unit, i.unit, i.purchase_rate, i.stock_gm
      FROM stock_batches b JOIN items i ON i.id = b.item_id
-     WHERE b.business_id = ? AND b.barcode = ? LIMIT 1",
+     WHERE b.business_id = ? AND b.barcode = ? AND b.remaining_gm > 0 LIMIT 1",
     "ss",
     [$bid, $code]
   );
@@ -327,6 +334,9 @@ function pos_lookup_barcode($bid, $code) {
   );
   if ($bc) {
     $row = $bc[0];
+    $st = strtolower((string) ($row["status"] ?? "active"));
+    if ($st === "") $st = "active";
+    if ($st !== "active") throw new Exception("This barcode is inactive ({$st})");
     $row["source"] = "item";
     return $row;
   }
@@ -341,6 +351,46 @@ function pos_lookup_barcode($bid, $code) {
     return $row;
   }
   return null;
+}
+
+function pos_consume_piece_barcode($bid, $code, $kind = "sold") {
+  $raw = trim((string) $code);
+  if ($raw === "") return;
+  pos_ensure_advanced_schema();
+  $status = $kind === "damaged" ? "damaged" : "sold";
+  $rows = pos_q(
+    "SELECT ib.*, i.base_unit, i.unit FROM item_barcodes ib JOIN items i ON i.id = ib.item_id
+     WHERE ib.business_id = ? AND ib.barcode = ? LIMIT 1",
+    "ss",
+    [$bid, $raw]
+  );
+  $row = $rows[0] ?? null;
+  if ($row) {
+    $st = strtolower((string) ($row["status"] ?? "active"));
+    if ($st === "") $st = "active";
+    if ($st !== "active") throw new Exception("This barcode is inactive ({$st})");
+    $manufacturer = (($row["kind"] ?? "") === "manufacturer");
+    if (pos_item_is_count($row) && !$manufacturer) {
+      pos_q(
+        "UPDATE item_barcodes SET status=?, used_kind=?, used_at=CURRENT_TIMESTAMP(3) WHERE id=? AND business_id=?",
+        "ssss",
+        [$status, $kind, $row["id"], $bid]
+      );
+    }
+  }
+  $countItem = $row && pos_item_is_count($row);
+  if (!$countItem) {
+    $batchItem = pos_q(
+      "SELECT i.base_unit, i.unit FROM stock_batches b JOIN items i ON i.id = b.item_id
+       WHERE b.business_id = ? AND b.barcode = ? LIMIT 1",
+      "ss",
+      [$bid, $raw]
+    );
+    $countItem = $batchItem && pos_item_is_count($batchItem[0]);
+  }
+  if ($countItem) {
+    pos_q("UPDATE stock_batches SET remaining_gm=0 WHERE business_id=? AND barcode=? AND remaining_gm>0", "ss", [$bid, $raw]);
+  }
 }
 
 function pos_item_is_count($item) {
@@ -667,6 +717,9 @@ function pos_apply_damage_stock($bid, $branchId, $uid, $row) {
     "ref_type" => "damage",
     "ref_id" => $row["id"],
   ]);
+  try {
+    pos_consume_piece_barcode($bid, $row["barcode"] ?? "", "damaged");
+  } catch (Exception $e) { /* already inactive or not a unique piece */ }
 }
 
 function pos_staff_name_map($bid, $ids) {
@@ -691,9 +744,13 @@ function pos_dispatch_advanced($path, $method, $body, $bid, $branchId, $uid, $au
 
   if ($path === "barcodes/lookup" && $method === "GET") {
     $code = trim((string) ($_GET["code"] ?? $_GET["barcode"] ?? ""));
-    $row = pos_lookup_barcode($bid, $code);
-    if (!$row) pos_send(404, ["error" => "Barcode not found", "php" => true]);
-    pos_send(200, ["ok" => true, "match" => $row, "php" => true]);
+    try {
+      $row = pos_lookup_barcode($bid, $code);
+      if (!$row) pos_send(404, ["error" => "Barcode not found", "php" => true]);
+      pos_send(200, ["ok" => true, "match" => $row, "php" => true]);
+    } catch (Exception $e) {
+      pos_send(409, ["error" => $e->getMessage(), "php" => true]);
+    }
   }
 
   if ($path === "barcodes" && $method === "GET") {
