@@ -562,6 +562,67 @@ function placeholderChips(raw) {
     .join("");
 }
 
+function isExpiredBusiness(b) {
+  const st = String(b?.computed_status || b?.status || "").toLowerCase();
+  if (st === "expired") return true;
+  const exp = ymd(b?.subscription_expires_at);
+  if (!exp) return false;
+  const today = new Date().toISOString().slice(0, 10);
+  return exp < today;
+}
+
+function expiredAccountsHtml(shops) {
+  const expired = (shops || []).filter(isExpiredBusiness).sort((a, b) => {
+    const ae = ymd(a.subscription_expires_at) || "";
+    const be = ymd(b.subscription_expires_at) || "";
+    return ae.localeCompare(be);
+  });
+  if (!expired.length) {
+    return `<section class="settings item-composer expired-accounts-panel">
+      <div class="item-composer-top">
+        <p class="item-mode">Expired accounts</p>
+        <p class="item-composer-note">No shops are past their plan end date right now.</p>
+      </div>
+    </section>`;
+  }
+  return `<section class="settings item-composer expired-accounts-panel">
+    <div class="item-composer-top">
+      <p class="item-mode">Expired accounts (${expired.length})</p>
+      <p class="item-composer-note">Shops past their plan end date. Send the expired-plan WhatsApp and email alert to all listed below.</p>
+      <button class="btn primary" type="button" id="alert-send-expired">Send expired alerts</button>
+    </div>
+    <div class="table-wrap expired-accounts-table">
+      <table>
+        <thead>
+          <tr>
+            <th>Shop</th>
+            <th>Owner</th>
+            <th>Mobile</th>
+            <th>Email</th>
+            <th>Expired on</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          ${expired
+            .map(
+              (b) => `<tr>
+                <td><strong>${attr(b.name)}</strong><br><span class="item-chip">${attr(b.plan_name || b.plan_id || "—")}</span></td>
+                <td>${attr(b.owner_name || "—")}</td>
+                <td>${attr(b.mobile || "—")}</td>
+                <td>${attr(b.email || "—")}</td>
+                <td>${attr(ymd(b.subscription_expires_at) || "—")}</td>
+                <td><button class="btn" type="button" data-send-expired="${attr(b.id)}">Send alert</button></td>
+              </tr>`,
+            )
+            .join("")}
+        </tbody>
+      </table>
+    </div>
+    <p class="hint" id="expired-alert-hint"></p>
+  </section>`;
+}
+
 function alertsFormHtml(alerts) {
   const vars = alerts.sample_vars || {};
   const fill = (tpl) =>
@@ -655,7 +716,7 @@ function alertsFormHtml(alerts) {
   </form>`;
 }
 
-function bindAlertsForm(alerts) {
+function bindAlertsForm(alerts, shops = []) {
   const form = $("alert-form");
   if (!form) return;
   const vars = alerts.sample_vars || {};
@@ -750,13 +811,62 @@ function bindAlertsForm(alerts) {
     hint.className = "hint";
     hint.textContent = "Sending…";
     try {
-      const out = await api("/api/master/alerts/send-expiry", { method: "POST", body: "{}" });
+      const out = await api("/api/master/alerts/send-expiry", { method: "POST", body: JSON.stringify({ scope: "all" }) });
       hint.textContent = summarizeAlertDelivery(out);
       hint.className = "hint ok";
     } catch (err) {
       hint.textContent = err.message;
       hint.className = "hint error";
     }
+  });
+  const expiredHint = $("expired-alert-hint");
+  $("alert-send-expired")?.addEventListener("click", async () => {
+    const n = (shops || []).filter(isExpiredBusiness).length;
+    if (!confirm(`Send expired-plan alerts (WhatsApp + email) to ${n} expired shop${n === 1 ? "" : "s"}?`)) return;
+    if (expiredHint) {
+      expiredHint.className = "hint";
+      expiredHint.textContent = "Sending…";
+    }
+    try {
+      const out = await api("/api/master/alerts/send-expired", { method: "POST", body: "{}" });
+      if (expiredHint) {
+        expiredHint.textContent = summarizeAlertDelivery(out);
+        expiredHint.className = "hint ok";
+      }
+    } catch (err) {
+      if (expiredHint) {
+        expiredHint.textContent = err.message;
+        expiredHint.className = "hint error";
+      }
+    }
+  });
+  document.querySelectorAll("[data-send-expired]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const shop = (shops || []).find((b) => b.id === btn.dataset.sendExpired);
+      if (!confirm(`Send expired-plan alert to ${shop?.name || "this shop"}?`)) return;
+      btn.disabled = true;
+      if (expiredHint) {
+        expiredHint.className = "hint";
+        expiredHint.textContent = "Sending…";
+      }
+      try {
+        const out = await api(`/api/master/businesses/${btn.dataset.sendExpired}/send-expiry-alert`, {
+          method: "POST",
+          body: "{}",
+        });
+        if (expiredHint) {
+          expiredHint.textContent = summarizeAlertDelivery(out);
+          expiredHint.className = "hint ok";
+        }
+      } catch (err) {
+        if (expiredHint) {
+          expiredHint.textContent = err.message;
+          expiredHint.className = "hint error";
+        }
+      } finally {
+        btn.disabled = false;
+      }
+    });
   });
 }
 
@@ -1418,18 +1528,22 @@ async function render() {
           </div>
         </div>
         <div class="settings-pane" id="master-pane-settings" ${pane === "settings" ? "" : "hidden"}>
-          ${pane === "settings" ? alertsFormHtml(alerts) : ""}
+          ${pane === "settings" ? `${alertsFormHtml(alerts)}${expiredAccountsHtml(shops)}` : ""}
         </div>
       </div>`;
       bindBackupFamilyTabs(body);
       if (pane === "backup") bindMasterBackup(body, shops);
       else {
-        bindAlertsForm(alerts);
+        bindAlertsForm(alerts, shops);
         if (panelFlash) {
           const alertHint = $("alert-hint");
+          const expiredHint = $("expired-alert-hint");
           if (alertHint) {
             alertHint.textContent = panelFlash;
             alertHint.className = "hint ok";
+          } else if (expiredHint) {
+            expiredHint.textContent = panelFlash;
+            expiredHint.className = "hint ok";
           }
           panelFlash = "";
         }

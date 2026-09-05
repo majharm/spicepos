@@ -2277,7 +2277,16 @@ function pos_php_dispatch($path, $method, $rawBody) {
 
     if ($path === "master/alerts/send-expiry" && $method === "POST") {
       if (!function_exists("pos_send_renewal_alerts")) throw new Exception("pos-alerts.php is missing on this host");
-      pos_send(200, pos_send_renewal_alerts(null, true));
+      $scope = (string) ($body["scope"] ?? "all");
+      $opts = [];
+      if ($scope === "expired") $opts["expiredOnly"] = true;
+      if ($scope === "due") $opts["dueOnly"] = true;
+      pos_send(200, pos_send_renewal_alerts(null, true, $opts));
+    }
+
+    if ($path === "master/alerts/send-expired" && $method === "POST") {
+      if (!function_exists("pos_send_renewal_alerts")) throw new Exception("pos-alerts.php is missing on this host");
+      pos_send(200, pos_send_renewal_alerts(null, true, ["expiredOnly" => true]));
     }
 
     if (preg_match("#^master/businesses/([^/]+)/send-expiry-alert$#", $path, $m) && $method === "POST") {

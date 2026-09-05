@@ -675,7 +675,10 @@ function pos_days_until_expiry($expiry, $today) {
   return (int) round((strtotime($exp . " UTC") - strtotime($day . " UTC")) / 86400);
 }
 
-function pos_send_renewal_alerts($bid = null, $force = false) {
+function pos_send_renewal_alerts($bid = null, $force = false, $opts = []) {
+  $expiredOnly = !empty($opts["expiredOnly"]);
+  $dueOnly = !empty($opts["dueOnly"]);
+  if ($expiredOnly && $dueOnly) $dueOnly = false;
   $cfg = pos_alert_settings();
   $beforeOn = pos_alert_flag($cfg["alert_renewal_before"] ?? "1");
   $expiredOn = pos_alert_flag($cfg["alert_renewal_expired"] ?? "1");
@@ -718,14 +721,14 @@ function pos_send_renewal_alerts($bid = null, $force = false) {
       "signInUrl" => $signIn,
       "supportPhone" => $support["support_phone"] ?? "",
     ];
-    if (($force || $beforeOn) && $days >= 0 && $days <= 7) {
+    if (!$expiredOnly && ($force || $beforeOn) && $days >= 0 && $days <= 7) {
       if ($force || !pos_alert_sent($row["id"], "renewal_before", $expiry, "")) {
         $text = pos_render_alert("renewal_before", $payload, $cfg);
         $out = pos_alert_dispatch($shop["phones"], $shop["emails"], "Renew ATAV POS · {$payload["shopName"]}", $text);
         if (!$force && pos_alert_delivered($out)) pos_alert_mark($row["id"], "renewal_before", $expiry, "");
         $results[] = array_merge(["businessId" => $row["id"], "shopName" => $payload["shopName"], "kind" => "renewal_before"], $out);
       }
-    } elseif (($force || $expiredOn) && $days < 0) {
+    } elseif (!$dueOnly && ($force || $expiredOn) && $days < 0) {
       if ($force || !pos_alert_sent($row["id"], "renewal_expired", $expiry, "")) {
         $text = pos_render_alert("renewal_expired", $payload, $cfg);
         $out = pos_alert_dispatch($shop["phones"], $shop["emails"], "ATAV POS expired · {$payload["shopName"]}", $text);
@@ -733,11 +736,14 @@ function pos_send_renewal_alerts($bid = null, $force = false) {
         $results[] = array_merge(["businessId" => $row["id"], "shopName" => $payload["shopName"], "kind" => "renewal_expired"], $out);
       }
     } elseif ($force) {
+      $reason = "not-due-yet";
+      if ($days < 0) $reason = $expiredOnly ? "already-sent" : "not-expired";
+      elseif ($days > 7) $reason = $dueOnly ? "not-due-yet" : "not-expired";
       $results[] = [
         "businessId" => $row["id"],
         "shopName" => $payload["shopName"],
         "skipped" => true,
-        "reason" => $days > 7 ? "not-due-yet" : "not-expired",
+        "reason" => $reason,
         "days" => $days,
       ];
     }

@@ -1,4 +1,4 @@
-Production deploy bundle — 20260905deploy106
+Production deploy bundle — 20260905deploy107
 =========================================
 
 Upload ALL files below to Hostinger public_html (overwrite):
@@ -93,6 +93,7 @@ PHP
   api/master/account-managers/index.php
   api/master/alerts/index.php
   api/master/alerts/send-expiry/index.php
+  api/master/alerts/send-expired/index.php
   api/master/backup/index.php
   api/master/backup/restore/index.php
   api/master/backup/platform/index.php
@@ -136,7 +137,8 @@ FIXES in this bundle
   - Suppliers form and list include address and email
   - Settings page: wider card, 2-column details, styled logo upload, keep card padding on mobile
   - CSS: Master Admin mobile nav wrap, hide nav until sign-in, backup file inputs, table overflow
-  - Cache sticker 20260905deploy106 on index, login, master, setup, order
+  - Master Admin Settings: expired accounts list + Send expired alerts button
+  - Cache sticker 20260905deploy107 on master (deploy106 on index, login, setup, order)
   - WhatsApp/daily alerts: better mobile lookup, per-number send, mark sent only after delivery
   - Master Admin: Send expiry alert per shop + bulk send in Settings (WhatsApp + email)
   - Welcome email: SMTP env from pos-db.php/.env, welcome alert also emails, business email fallback

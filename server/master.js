@@ -661,8 +661,21 @@ export function registerMaster(app) {
 
   app.post("/api/master/alerts/send-expiry", (req, res) =>
     send(res, async () => {
-      const out = await sendRenewalAlerts(null, { force: true });
-      await platformAudit(req.auth.admin, "Expiry Alerts Sent", { module: "alerts", target_name: "all shops" }, req);
+      const scope = String(req.body?.scope || "all");
+      const out = await sendRenewalAlerts(null, {
+        force: true,
+        expiredOnly: scope === "expired",
+        dueOnly: scope === "due",
+      });
+      await platformAudit(req.auth.admin, "Expiry Alerts Sent", { module: "alerts", target_name: scope }, req);
+      return out;
+    }),
+  );
+
+  app.post("/api/master/alerts/send-expired", (req, res) =>
+    send(res, async () => {
+      const out = await sendRenewalAlerts(null, { force: true, expiredOnly: true });
+      await platformAudit(req.auth.admin, "Expired Alerts Sent", { module: "alerts", target_name: "expired shops" }, req);
       return out;
     }),
   );

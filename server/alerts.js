@@ -842,11 +842,15 @@ function alertDelivered(out) {
   return (out?.mail || []).some((row) => row && row.ok);
 }
 
-export async function sendRenewalAlerts(businessId = null, { force = false } = {}) {
+export async function sendRenewalAlerts(
+  businessId = null,
+  { force = false, expiredOnly = false, dueOnly = false } = {},
+) {
   const settings = await loadAlertSettings();
   const beforeOn = flagOn(settings.alert_renewal_before, true);
   const expiredOn = flagOn(settings.alert_renewal_expired, true);
   if (!force && !beforeOn && !expiredOn) return { skipped: true, reason: "alerts-off" };
+  if (expiredOnly && dueOnly) dueOnly = false;
   const support = await getPlatformSettings();
   const base = publicAppUrl();
   const signInUrl = base ? `${base}/login.html` : "https://pos.atavtelecom.in/login.html";
@@ -881,7 +885,7 @@ export async function sendRenewalAlerts(businessId = null, { force = false } = {
       signInUrl,
       supportPhone: support.support_phone || "",
     };
-    if ((force || beforeOn) && days >= 0 && days <= RENEWAL_BEFORE_DAYS) {
+    if (!expiredOnly && (force || beforeOn) && days >= 0 && days <= RENEWAL_BEFORE_DAYS) {
       if (force || !(await alreadySent(row.id, "renewal_before", expiry, ""))) {
         const text = renderAlert("renewal_before", payload, settings);
         const out = await dispatchAlert({
@@ -893,7 +897,7 @@ export async function sendRenewalAlerts(businessId = null, { force = false } = {
         if (!force && alertDelivered(out)) await markSent(row.id, "renewal_before", expiry, "");
         results.push({ businessId: row.id, shopName: payload.shopName, kind: "renewal_before", ...out });
       }
-    } else if ((force || expiredOn) && days < 0) {
+    } else if (!dueOnly && (force || expiredOn) && days < 0) {
       if (force || !(await alreadySent(row.id, "renewal_expired", expiry, ""))) {
         const text = renderAlert("renewal_expired", payload, settings);
         const out = await dispatchAlert({
@@ -906,11 +910,14 @@ export async function sendRenewalAlerts(businessId = null, { force = false } = {
         results.push({ businessId: row.id, shopName: payload.shopName, kind: "renewal_expired", ...out });
       }
     } else if (force) {
+      let reason = "not-due-yet";
+      if (days < 0) reason = expiredOnly ? "already-sent" : "not-expired";
+      else if (days > RENEWAL_BEFORE_DAYS) reason = dueOnly ? "not-due-yet" : "not-expired";
       results.push({
         businessId: row.id,
         shopName: payload.shopName,
         skipped: true,
-        reason: days > RENEWAL_BEFORE_DAYS ? "not-due-yet" : "not-expired",
+        reason,
         days,
       });
     }
