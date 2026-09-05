@@ -160,7 +160,7 @@ test("PHP and HTML wire master admin backup", () => {
   assert.match(masterHtml, /nav-sub" data-tab="backup" data-backup-pane="backup">Backup</);
   assert.match(masterHtml, /nav-sub" data-tab="notes">Messages</);
   assert.match(masterHtml, /data-tab="managers">Account managers</);
-  assert.match(masterHtml, /data-tab="expiry">Expiry alerts</);
+  assert.match(masterHtml, /data-tab="expiry">Send alerts</);
   assert.match(masterJs, /tab === "managers"/);
   assert.match(masterJs, /\/api\/master\/account-managers/);
   assert.match(masterJs, /\/api\/master\/businesses\/\$\{shopId\}\/account-manager/);
@@ -243,8 +243,8 @@ test("HTML and CSS cache stickers match deploy106", () => {
     assert.doesNotMatch(html, /20260901deploy59/);
   }
   const masterHtml = readFileSync(path.join(root, "master.html"), "utf8");
-  assert.match(masterHtml, /20260905deploy109/);
-  assert.doesNotMatch(masterHtml, /20260905deploy108/);
+  assert.match(masterHtml, /20260905deploy110/);
+  assert.doesNotMatch(masterHtml, /20260905deploy109/);
   const saas = readFileSync(path.join(root, "css/saas.css"), "utf8");
   const pos = readFileSync(path.join(root, "css/pos.css"), "utf8");
   const index = readFileSync(path.join(root, "index.html"), "utf8");

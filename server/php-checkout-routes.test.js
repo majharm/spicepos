@@ -205,6 +205,9 @@ test("Master Admin can set passwords and unlock locked accounts", () => {
   assert.match(masterApi, /\/api\/master\/businesses\/:id\/send-expiry-alert/);
   assert.match(masterApi, /\/api\/master\/alerts\/send-expiry/);
   assert.match(masterApi, /\/api\/master\/alerts\/send-expired/);
+  assert.match(masterApi, /\/api\/master\/alerts\/send/);
+  assert.match(masterJs, /send-alert-all-shops/);
+  assert.match(core, /pos_send_manual_alerts|master\/alerts\/send/);
   assert.match(masterApi, /expiredOnly/);
   assert.match(masterApi, /\/api\/master\/businesses\/:id\/clean/);
   assert.match(masterJs, /data-send-expiry/);
@@ -213,7 +216,7 @@ test("Master Admin can set passwords and unlock locked accounts", () => {
   assert.match(masterJs, /expiry-send-expired/);
   assert.match(masterJs, /activationDate/);
   assert.match(masterApi, /activated_at/);
-  assert.match(masterJs, /data-send-expiry-row/);
+  assert.match(masterJs, /data-send-alert-row/);
   assert.match(masterJs, /data-clean-biz/);
   assert.match(core, /users\/\(\[\^\/\]\+\)\/unlock/);
   assert.match(core, /businesses\/\(\[\^\/\]\+\)\/send-expiry-alert/);

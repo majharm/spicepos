@@ -728,11 +728,20 @@ export async function sendUpdateAlerts({ businessId, title, body, image, force =
   return { ok: true, results };
 }
 
-export async function sendLowStockAlerts(businessId, itemIds = []) {
+export async function sendLowStockAlerts(businessId, itemIds = [], { force = false } = {}) {
   const settings = await loadAlertSettings();
-  if (!flagOn(settings.alert_low_stock, true) || !businessId) return { skipped: true };
-  const ids = [...new Set((itemIds || []).filter(Boolean))];
-  if (!ids.length) return { skipped: true };
+  if (!force && !flagOn(settings.alert_low_stock, true)) return { skipped: true };
+  if (!businessId) return { skipped: true };
+  let ids = [...new Set((itemIds || []).filter(Boolean))];
+  if (!ids.length && force) {
+    const all = await query(
+      `SELECT id FROM items
+       WHERE business_id = ? AND status = 'active' AND reorder_level_gm > 0 AND stock_gm <= reorder_level_gm`,
+      [businessId],
+    );
+    ids = all.map((r) => r.id);
+  }
+  if (!ids.length) return { skipped: true, reason: "no-low-stock" };
   const ph = ids.map(() => "?").join(",");
   const items = await query(
     `SELECT id, name, stock_gm, reorder_level_gm FROM items
@@ -744,9 +753,12 @@ export async function sendLowStockAlerts(businessId, itemIds = []) {
   const day = new Date().toISOString().slice(0, 10);
   const fresh = [];
   for (const item of items) {
-    if (await alreadySent(businessId, "low_stock", day, item.id)) continue;
-    const marked = await markSent(businessId, "low_stock", day, item.id);
-    if (marked) fresh.push(item);
+    if (!force && (await alreadySent(businessId, "low_stock", day, item.id))) continue;
+    if (!force) {
+      const marked = await markSent(businessId, "low_stock", day, item.id);
+      if (!marked) continue;
+    }
+    fresh.push(item);
   }
   if (!fresh.length) return { skipped: true, reason: "already-sent" };
   const shop = await shopContacts(businessId);
@@ -785,18 +797,18 @@ function hourInZone(timeZone) {
   return Number(hour);
 }
 
-export async function sendClosingAlerts(businessId) {
+export async function sendClosingAlerts(businessId, { force = false } = {}) {
   const settings = await loadAlertSettings();
-  if (!flagOn(settings.alert_closing, true)) return { skipped: true };
+  if (!force && !flagOn(settings.alert_closing, true)) return { skipped: true };
   const shop = await shopContacts(businessId);
   if (!shop.businessId) return { skipped: true };
   if (!shop.phones.length && !shop.emails.length) return { skipped: true, reason: "no-number" };
   const hour = hourInZone(shop.timezone);
   const closeHour = Number(settings.alert_closing_hour) || 22;
   const today = ymdInZone(shop.timezone);
-  const day = closingAlertDay(hour, closeHour, today);
+  const day = force ? today : closingAlertDay(hour, closeHour, today);
   if (!day) return { skipped: true };
-  if (await alreadySent(shop.businessId, "closing", day, "")) return { skipped: true, reason: "already-sent" };
+  if (!force && (await alreadySent(shop.businessId, "closing", day, ""))) return { skipped: true, reason: "already-sent" };
   const [sum] = await query(
     `SELECT COUNT(*) AS bills,
             COALESCE(SUM(total),0) AS takings,
@@ -838,7 +850,7 @@ export async function sendClosingAlerts(businessId) {
     subject: `Closing sales · ${shop.shopName} · ${day}`,
     text,
   });
-  if (alertDelivered(out)) await markSent(shop.businessId, "closing", day, "");
+  if (!force && alertDelivered(out)) await markSent(shop.businessId, "closing", day, "");
   return out;
 }
 
@@ -948,6 +960,148 @@ export function summarizeAlertResults(results = []) {
     if (alertDelivered(row)) sent += 1;
   }
   return { sent, skipped, wa, mail, total: results.length };
+}
+
+export const MANUAL_ALERT_KINDS = ALERT_KINDS;
+
+export async function sendManualAlerts({ kinds = [], businessId = null, title = "", body = "" } = {}) {
+  const wanted = (Array.isArray(kinds) && kinds.length ? kinds : MANUAL_ALERT_KINDS).filter((k) =>
+    MANUAL_ALERT_KINDS.includes(k),
+  );
+  if (!wanted.length) throw new Error("Select at least one alert type");
+  const settings = await loadAlertSettings();
+  const support = await getPlatformSettings();
+  const base = publicAppUrl();
+  const signInUrl = base ? `${base}/login.html` : "https://pos.atavtelecom.in/login.html";
+  const ids = businessId
+    ? [businessId]
+    : (await query("SELECT id FROM businesses ORDER BY name")).map((r) => r.id);
+  if (!ids.length) throw new Error("No shops to send to");
+  const sendBothRenewals = wanted.includes("renewal_before") && wanted.includes("renewal_expired");
+  const results = [];
+  for (const id of ids) {
+    const [biz] = await query(
+      `SELECT b.id, b.name, b.owner_name, b.mobile, b.email, b.subscription_expires_at, p.name AS plan_name
+       FROM businesses b LEFT JOIN subscription_plans p ON p.id = b.plan_id WHERE b.id = ? LIMIT 1`,
+      [id],
+    );
+    if (!biz) {
+      results.push({ businessId: id, shopName: id, skipped: true, reason: "not-found" });
+      continue;
+    }
+    const shop = await shopContacts(id);
+    if (!shop.phones.length && !shop.emails.length) {
+      results.push({ businessId: id, shopName: biz.name, skipped: true, reason: "no-number" });
+      continue;
+    }
+    let admin = {};
+    try {
+      [admin] = await query(
+        "SELECT username, email, mobile, first_name, role FROM staff_users WHERE business_id = ? AND role = 'business_admin' LIMIT 1",
+        [id],
+      );
+    } catch {
+      admin = {};
+    }
+    const expiry = expiryYmd(biz.subscription_expires_at);
+    const today = ymdInZone(shop.timezone || "Asia/Kolkata");
+    const days = expiry ? daysUntilExpiry(expiry, today) : null;
+    const expired = days != null && days <= 0;
+    for (const kind of wanted) {
+      if (sendBothRenewals && kind === "renewal_before" && expired) continue;
+      if (sendBothRenewals && kind === "renewal_expired" && !expired) continue;
+      const out = await sendOneManualAlert({
+        kind,
+        biz,
+        shop,
+        admin,
+        settings,
+        support,
+        signInUrl,
+        expiry,
+        days,
+        title,
+        body,
+      });
+      results.push({ businessId: id, shopName: biz.name, kind, days, ...out });
+    }
+  }
+  return { ok: true, results, summary: summarizeAlertResults(results) };
+}
+
+async function sendOneManualAlert({
+  kind,
+  biz,
+  shop,
+  admin,
+  settings,
+  support,
+  signInUrl,
+  expiry,
+  days,
+  title,
+  body,
+}) {
+  const name = biz.name || shop.shopName;
+  const ownerName = biz.owner_name || admin?.first_name || "";
+  const email = admin?.email || biz.email || shop.emails[0] || "";
+  const username = admin?.username || email;
+  if (kind === "welcome") {
+    const text = welcomeText({ shopName: name, ownerName, signInUrl }, settings);
+    return dispatchAlert({ phones: shop.phones, emails: shop.emails, subject: `Welcome to ATAV POS · ${name}`, text });
+  }
+  if (kind === "credentials") {
+    const text = credentialsText(
+      {
+        shopName: name,
+        ownerName,
+        username,
+        email,
+        password: "the password already set for this login",
+        role: admin?.role || "business_admin",
+        signInUrl,
+      },
+      settings,
+    );
+    return dispatchAlert({ phones: shop.phones, emails: shop.emails, subject: `ATAV POS login · ${name}`, text });
+  }
+  if (kind === "updates") {
+    const heading = String(title || "ATAV POS update").trim() || "ATAV POS update";
+    const text = updateText({ shopName: name, title: heading, body: body || "" }, settings);
+    return dispatchAlert({
+      phones: shop.phones,
+      emails: shop.emails,
+      subject: `ATAV POS update · ${heading}`,
+      text,
+      html: noticeHtml({ title: heading, body: body || "" }),
+    });
+  }
+  if (kind === "closing") {
+    return sendClosingAlerts(biz.id, { force: true });
+  }
+  if (kind === "low_stock") {
+    return sendLowStockAlerts(biz.id, [], { force: true });
+  }
+  if (kind === "renewal_before" || kind === "renewal_expired") {
+    if (!expiry) return { skipped: true, reason: "no-expiry" };
+    const payload = {
+      shopName: name,
+      ownerName,
+      plan: biz.plan_name || "subscription",
+      expiry,
+      days: days ?? "",
+      signInUrl,
+      supportPhone: support.support_phone || "",
+    };
+    const text = renderAlert(kind, payload, settings);
+    return dispatchAlert({
+      phones: shop.phones,
+      emails: shop.emails,
+      subject: kind === "renewal_expired" ? `ATAV POS expired · ${name}` : `Renew ATAV POS · ${name}`,
+      text,
+    });
+  }
+  return { skipped: true, reason: "unknown-kind" };
 }
 
 export async function tickShopAlerts(businessId, opts = {}) {
