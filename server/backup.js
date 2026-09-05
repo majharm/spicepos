@@ -2,6 +2,7 @@ import { query, withTransaction } from "./db.js";
 import { bid } from "./context.js";
 import { requireStaff, requirePerm } from "./auth.js";
 import { audit, platformAudit } from "./audit.js";
+import { verifyPassword } from "./password.js";
 import {
   BACKUP_KIND,
   BACKUP_SKIP_TABLES,
@@ -252,5 +253,33 @@ export function registerBackup(app) {
       .then(() => restoreBackup(req.body || {}, bid(), req))
       .then((out) => res.json(out))
       .catch((err) => res.status(400).json({ error: String(err.message) }));
+  });
+
+  app.post("/api/backup/clean", requireStaff, requirePerm("settings"), async (req, res) => {
+    try {
+      const password = String(req.body?.password || "");
+      if (!password) {
+        res.status(400).json({ error: "Your login password is required" });
+        return;
+      }
+      const [user] = await query("SELECT * FROM staff_users WHERE id = ? LIMIT 1", [req.auth.user.id]);
+      if (!user || !(await verifyPassword(password, user.password_hash))) {
+        res.status(401).json({ error: "Login password is incorrect" });
+        return;
+      }
+      const result = await cleanShopData(bid());
+      try {
+        await audit("Shop data cleaned", { module: "settings", tables: result.tables }, req);
+      } catch {
+        /* audit is best-effort */
+      }
+      res.json({
+        ok: true,
+        tables: result.tables,
+        note: "Sales, stock, items, and customers were removed. Login, branches, devices, and shop settings were kept.",
+      });
+    } catch (err) {
+      res.status(500).json({ error: String(err.message) });
+    }
   });
 }

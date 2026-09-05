@@ -21,7 +21,7 @@ function pos_php_till_dispatch($path, $method, $body) {
   $uid = $auth["user"]["id"];
   pos_apply_business_timezone($bid);
 
-  if ($path === "backup" || $path === "backup/restore") {
+  if ($path === "backup" || $path === "backup/restore" || $path === "backup/clean") {
     pos_require_backup();
     pos_dispatch_backup($path, $method, $body, $bid, $branchId, $uid, $auth);
     return true;

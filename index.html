@@ -6,8 +6,8 @@
     <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
     <title>ATAV POS</title>
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./css/pos.css?v=20260905deploy100" />
-    <link rel="stylesheet" href="./css/saas.css?v=20260905deploy100" />
+    <link rel="stylesheet" href="./css/pos.css?v=20260905deploy101" />
+    <link rel="stylesheet" href="./css/saas.css?v=20260905deploy101" />
   </head>
   <body>
     <div class="app" id="app">
@@ -1046,6 +1046,21 @@
                   </div>
                   <p class="hint" id="backup-hint"></p>
                 </div>
+                <div class="settings-section backup-panel" id="shop-clean-card">
+                  <h3>Clean all shop data</h3>
+                  <p class="section-note">Deletes sales, purchases, stock, items, customers, and bills for this shop. Login, branches, devices, and shop settings stay. This cannot be undone — download a backup first if you need a copy.</p>
+                  <form class="settings item-composer" id="shop-clean-form" autocomplete="off">
+                    <fieldset class="item-block">
+                      <legend>Your login password</legend>
+                      <label>Password <input name="password" type="password" required autocomplete="current-password" /></label>
+                      <label>Confirm password <input name="confirm" type="password" required autocomplete="current-password" /></label>
+                    </fieldset>
+                    <div class="item-composer-actions">
+                      <button class="btn danger" type="submit">Clean all data</button>
+                      <p class="hint" id="shop-clean-hint"></p>
+                    </div>
+                  </form>
+                </div>
               </div>
             </div>
           </div>
@@ -1092,18 +1107,18 @@
         </section>
       </div>
     </aside>
-    <script src="./js/gst-supply.js?v=20260905deploy100" defer></script>
-    <script src="./js/pos-api.js?v=20260905deploy100" defer></script>
-    <script src="./js/units.js?v=20260905deploy100" defer></script>
-    <script src="./js/footwear.js?v=20260905deploy100" defer></script>
-    <script src="./js/discount.js?v=20260905deploy100" defer></script>
-    <script src="./js/loyalty.js?v=20260905deploy100" defer></script>
-    <script src="./js/barcode.js?v=20260905deploy100" defer></script>
+    <script src="./js/gst-supply.js?v=20260905deploy101" defer></script>
+    <script src="./js/pos-api.js?v=20260905deploy101" defer></script>
+    <script src="./js/units.js?v=20260905deploy101" defer></script>
+    <script src="./js/footwear.js?v=20260905deploy101" defer></script>
+    <script src="./js/discount.js?v=20260905deploy101" defer></script>
+    <script src="./js/loyalty.js?v=20260905deploy101" defer></script>
+    <script src="./js/barcode.js?v=20260905deploy101" defer></script>
     <script src="./js/camera-scan.js?v=20260904camera1" defer></script>
-    <script src="./js/dev-mode.js?v=20260905deploy100" defer></script>
-    <script src="./js/invoice.js?v=20260905deploy100" defer></script>
-    <script src="./js/support.js?v=20260905deploy100" defer></script>
+    <script src="./js/dev-mode.js?v=20260905deploy101" defer></script>
+    <script src="./js/invoice.js?v=20260905deploy101" defer></script>
+    <script src="./js/support.js?v=20260905deploy101" defer></script>
     <script src="./js/qrcode.iife.js?v=20260905qr1"></script>
-    <script src="./js/app.js?v=20260905deploy100" defer></script>
+    <script src="./js/app.js?v=20260905deploy101" defer></script>
   </body>
 </html>

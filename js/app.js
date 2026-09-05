@@ -4169,6 +4169,45 @@ $("btn-backup-download")?.addEventListener("click", () => {
   if ($("btn-backup-download")) $("btn-backup-download").href = posUrl("/api/backup");
 });
 
+$("shop-clean-form")?.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const form = $("shop-clean-form");
+  const hint = $("shop-clean-hint");
+  const fd = new FormData(form);
+  const password = String(fd.get("password") || "");
+  const confirm = String(fd.get("confirm") || "");
+  if (password !== confirm) {
+    if (hint) {
+      hint.textContent = "Password and confirm password do not match";
+      hint.className = "hint error";
+    }
+    return;
+  }
+  try {
+    if (hint) {
+      hint.textContent = "Checking password and cleaning data…";
+      hint.className = "hint";
+    }
+    const data = await api("/api/backup/clean", {
+      method: "POST",
+      body: JSON.stringify({ password }),
+    });
+    form.reset();
+    await loadBootstrap();
+    renderSettings();
+    const after = $("shop-clean-hint");
+    if (after) {
+      after.textContent = data.note || "Shop data cleaned. Login and settings were kept.";
+      after.className = "hint ok";
+    }
+  } catch (err) {
+    if (hint) {
+      hint.textContent = err.message;
+      hint.className = "hint error";
+    }
+  }
+});
+
 $("btn-backup-restore")?.addEventListener("click", async () => {
   const hint = $("backup-hint");
   const input = $("backup-file");

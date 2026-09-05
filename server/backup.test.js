@@ -113,12 +113,14 @@ test("PHP and HTML wire shop backup", () => {
   const till = readFileSync(path.join(root, "pos-php-till.php"), "utf8");
   const index = readFileSync(path.join(root, "index.html"), "utf8");
   const app = readFileSync(path.join(root, "js/app.js"), "utf8");
+  const backupJs = readFileSync(path.join(root, "server/backup.js"), "utf8");
   assert.match(core, /pos_dispatch_backup/);
   assert.match(core, /function pos_require_backup/);
   assert.match(backup, /function pos_backup_sql_value/);
   assert.match(backup, /function pos_dispatch_backup/);
   assert.match(backup, /spicepos-shop-backup/);
-  assert.match(till, /pos_dispatch_backup/);
+  assert.match(core, /backup\/clean/);
+  assert.match(till, /backup\/clean/);
   assert.match(index, /id="settings-form"/);
   assert.match(index, /id="set-name"/);
   assert.match(index, /id="set-timezone"/);
@@ -128,6 +130,13 @@ test("PHP and HTML wire shop backup", () => {
   assert.match(app, /showSettingsTab/);
   assert.match(index, /btn-backup-download/);
   assert.match(index, /btn-backup-restore/);
+  assert.match(index, /id="shop-clean-form"/);
+  assert.match(index, /id="shop-clean-card"/);
+  assert.match(app, /\/api\/backup\/clean/);
+  assert.match(app, /shop-clean-form/);
+  assert.match(backup, /backup\/clean/);
+  assert.match(backupJs, /\/api\/backup\/clean/);
+  assert.match(readFileSync(path.join(root, "api/backup/clean/index.php"), "utf8"), /backup\/clean/);
   assert.match(index, /id="view-backup"/);
   assert.match(index, /data-settings-tab="backup"/);
   assert.match(index, /data-view="backup"/);
@@ -172,11 +181,11 @@ test("PHP and HTML wire master admin backup", () => {
   );
 });
 
-test("HTML and CSS cache stickers match deploy100", () => {
+test("HTML and CSS cache stickers match deploy101", () => {
   for (const name of ["index.html", "master.html", "login.html", "setup.html", "order.html"]) {
     const html = readFileSync(path.join(root, name), "utf8");
-    assert.match(html, /20260905deploy100/);
-    assert.doesNotMatch(html, /20260905deploy99/);
+    assert.match(html, /20260905deploy101/);
+    assert.doesNotMatch(html, /20260905deploy100/);
     assert.doesNotMatch(html, /20260904deploy90/);
     assert.doesNotMatch(html, /20260904deploy89/);
     assert.doesNotMatch(html, /20260903deploy88/);

@@ -2199,7 +2199,7 @@ function pos_php_dispatch($path, $method, $rawBody) {
         pos_dispatch_holds($path, $method, $body, $bid, $branchId, $uid, $auth);
         return;
       }
-      if ($path === "backup" || $path === "backup/restore") {
+      if ($path === "backup" || $path === "backup/restore" || $path === "backup/clean") {
         $auth = pos_staff_session();
         if (!$auth || ($auth["type"] ?? "") !== "staff") pos_send(401, ["error" => "Sign in required"]);
         $bid = $auth["user"]["business_id"];

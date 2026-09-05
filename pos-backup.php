@@ -353,6 +353,26 @@ function pos_dispatch_backup($path, $method, $body, $bid, $branchId, $uid, $auth
   if (($path === "backup/restore" || $path === "backup") && $method === "POST") {
     pos_send(200, pos_backup_restore($bid, $body, $auth));
   }
+  if ($path === "backup/clean" && $method === "POST") {
+    $password = (string) ($body["password"] ?? "");
+    if ($password === "") pos_send(400, ["error" => "Your login password is required", "php" => true]);
+    $rows = pos_q("SELECT id, password_hash FROM staff_users WHERE id = ? LIMIT 1", "s", [$uid]);
+    $user = $rows[0] ?? null;
+    if (!$user || !pos_verify_password($password, $user["password_hash"] ?? "")) {
+      pos_send(401, ["error" => "Login password is incorrect", "php" => true]);
+    }
+    $out = pos_clean_shop_data($bid);
+    pos_staff_audit($auth["user"], "Shop data cleaned", [
+      "module" => "settings",
+      "tables" => $out["tables"] ?? 0,
+    ], $bid, $branchId);
+    pos_send(200, [
+      "ok" => true,
+      "tables" => $out["tables"] ?? 0,
+      "note" => "Sales, stock, items, and customers were removed. Login, branches, devices, and shop settings were kept.",
+      "php" => true,
+    ]);
+  }
   return false;
 }
 
