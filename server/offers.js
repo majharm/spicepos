@@ -96,16 +96,28 @@ export async function savePromoSettings(body, tenant = bid()) {
   return getPromoSettings(tenant);
 }
 
-async function legacyCombos(tenant) {
+function normalizeOfferStatus(status) {
+  const raw = String(status || "").trim().toLowerCase();
+  if (raw === "inactive") return "paused";
+  return raw;
+}
+
+async function legacyCombos(tenant, { all = false } = {}) {
   try {
     const rows = await query(
-      "SELECT * FROM combo_offers WHERE business_id = ? AND status = 'active'",
+      all
+        ? "SELECT * FROM combo_offers WHERE business_id = ? ORDER BY created_at DESC"
+        : "SELECT * FROM combo_offers WHERE business_id = ? AND status = 'active'",
       [tenant],
     );
     return (rows || []).map((c) => O.comboFromLegacy(c)).filter(Boolean);
   } catch {
     return [];
   }
+}
+
+async function findLegacyCombo(id, tenant) {
+  return (await legacyCombos(tenant, { all: true })).find((c) => String(c.id) === String(id)) || null;
 }
 
 export async function listOffers(tenant = bid()) {
@@ -119,7 +131,7 @@ export async function listOffers(tenant = bid()) {
     }
     return publicRow(r);
   });
-  const combos = await legacyCombos(tenant);
+  const combos = await legacyCombos(tenant, { all: true });
   const have = new Set(live.map((r) => `${r.offer_type}:${(r.conditions?.item_ids || []).join("+")}`));
   combos.forEach((c) => {
     const key = `combo:${O.parseConditions(c).item_ids.join("+")}`;
@@ -178,14 +190,49 @@ export async function updateOffer(id, body, tenant = bid()) {
 }
 
 export async function setOfferStatus(id, status, tenant = bid()) {
-  if (!O.STATUSES.includes(status)) {
+  const next = normalizeOfferStatus(status);
+  if (!O.STATUSES.includes(next)) {
     const err = new Error("Unknown offer status");
     err.status = 400;
     throw err;
   }
   await ensurePromoOffers();
-  await query("UPDATE promo_offers SET status = ? WHERE id = ? AND business_id = ?", [status, id, tenant]);
-  return getOffer(id, tenant);
+  await query("UPDATE promo_offers SET status = ? WHERE id = ? AND business_id = ?", [next, id, tenant]);
+  try {
+    await query("UPDATE combo_offers SET status = ? WHERE id = ? AND business_id = ?", [next, id, tenant]);
+  } catch {
+    /* optional */
+  }
+  try {
+    return await getOffer(id, tenant);
+  } catch (err) {
+    const legacy = await findLegacyCombo(id, tenant);
+    if (!legacy) throw err;
+    return publicRow({ ...legacy, business_id: tenant });
+  }
+}
+
+export async function deleteOffer(id, tenant = bid()) {
+  await ensurePromoOffers();
+  let found = false;
+  try {
+    await getOffer(id, tenant);
+    found = true;
+  } catch {
+    found = Boolean(await findLegacyCombo(id, tenant));
+  }
+  if (!found) {
+    const err = new Error("Offer not found");
+    err.status = 404;
+    throw err;
+  }
+  await query("DELETE FROM promo_offers WHERE id = ? AND business_id = ?", [id, tenant]);
+  try {
+    await query("DELETE FROM combo_offers WHERE id = ? AND business_id = ?", [id, tenant]);
+  } catch {
+    /* optional */
+  }
+  return { ok: true, id };
 }
 
 export async function duplicateOffer(id, tenant = bid()) {
@@ -193,7 +240,7 @@ export async function duplicateOffer(id, tenant = bid()) {
   try {
     row = await getOffer(id, tenant);
   } catch (err) {
-    const legacy = (await legacyCombos(tenant)).find((c) => String(c.id) === String(id));
+    const legacy = await findLegacyCombo(id, tenant);
     if (!legacy) throw err;
     row = publicRow({ ...legacy, business_id: tenant });
   }

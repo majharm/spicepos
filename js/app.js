@@ -1632,7 +1632,7 @@ function applyOffersToCart() {
     state.appliedOffers = null;
     return;
   }
-  const offers = (state.offers || []).filter((o) => ["active", "scheduled"].includes(o.live_status || o.status) || o.legacy_combo);
+  const offers = (state.offers || []).filter((o) => ["active", "scheduled"].includes(o.live_status || o.status));
   const result = O.evaluateAll(offers, offerCartContext());
   state.appliedOffers = result;
   state.cart.forEach((line) => {

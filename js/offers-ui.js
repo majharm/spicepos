@@ -197,11 +197,17 @@ function paintOfferIdeas(ideas) {
   root._ideas = ideas || [];
 }
 
+function offerStatusLabel(st) {
+  if (st === "paused") return "inactive";
+  return st || "draft";
+}
+
 function paintOfferList() {
   const rows = offerList.filter((o) => {
     const st = o.live_status || o.status;
     if (offerFilter === "all") return true;
     if (offerFilter === "expiring") return (offerStats?.expiring || []).some((x) => x.id === o.id);
+    if (offerFilter === "paused") return st === "paused" || st === "completed";
     return st === offerFilter;
   });
   $("offer-list").innerHTML = rows
@@ -209,18 +215,19 @@ function paintOfferList() {
       const st = o.live_status || o.status;
       const cond = o.conditions || {};
       const items = (cond.item_ids || []).map((id) => state.items.find((i) => i.id === id)?.name || id).filter(Boolean);
+      const label = offerStatusLabel(st);
       return `<article class="offer-card is-${escapeHtml(st)}">
         <header>
           <strong>${escapeHtml(o.name)}</strong>
-          <span class="offer-status">${escapeHtml(st)}</span>
+          <span class="offer-status">${escapeHtml(label)}</span>
         </header>
         <p>${escapeHtml(o.description || o.offer_type)} ${items.length ? `· ${escapeHtml(items.slice(0, 3).join(" + "))}` : ""}</p>
         <p class="hint">${escapeHtml(o.offer_type)} · ${o.discount_type === "pct" ? `${o.discount_value}%` : money(o.offer_price || o.discount_value)} off · used ${o.used_count || 0}${o.usage_limit ? `/${o.usage_limit}` : ""}</p>
         <div class="dash-actions">
           <button class="btn" type="button" data-offer-edit="${escapeHtml(o.id)}">Edit</button>
-          <button class="btn" type="button" data-offer-status="${escapeHtml(o.id)}" data-status="${st === "active" ? "paused" : "active"}">${st === "active" ? "Pause" : "Activate"}</button>
+          <button class="btn" type="button" data-offer-status="${escapeHtml(o.id)}" data-status="${st === "active" ? "paused" : "active"}">${st === "active" ? "Inactive" : "Activate"}</button>
           <button class="btn" type="button" data-offer-dup="${escapeHtml(o.id)}">Duplicate</button>
-          <button class="btn" type="button" data-offer-status="${escapeHtml(o.id)}" data-status="completed">End</button>
+          <button class="btn danger" type="button" data-offer-del="${escapeHtml(o.id)}">Delete</button>
         </div>
       </article>`;
     })
@@ -288,6 +295,52 @@ async function duplicateOfferById(id) {
   }
 }
 
+async function setOfferStatusById(id, status) {
+  if (!id || !status) return;
+  try {
+    $("offers-hint").textContent = status === "paused" ? "Making offer inactive…" : "Updating offer…";
+    $("offers-hint").className = "hint";
+    const data = await api(`/api/offers/${encodeURIComponent(id)}/status`, {
+      method: "POST",
+      body: JSON.stringify({ status }),
+    });
+    const offer = data.offer || data;
+    const st = offer?.live_status || offer?.status || status;
+    setOfferFilter(st === "paused" || st === "completed" ? "paused" : st === "active" ? "active" : "all");
+    await loadOffersDesk(true);
+    $("offers-hint").textContent =
+      st === "paused"
+        ? `${offer?.name || "Offer"} is inactive. Counter will not apply it.`
+        : `${offer?.name || "Offer"} is ${offerStatusLabel(st)}.`;
+    $("offers-hint").className = "hint ok";
+  } catch (err) {
+    $("offers-hint").textContent = err.message || "Could not update this offer";
+    $("offers-hint").className = "hint error";
+  }
+}
+
+async function deleteOfferById(id) {
+  if (!id) return;
+  const row = offerList.find((o) => String(o.id) === String(id));
+  const name = row?.name || "this offer";
+  if (!confirm(`Delete ${name}? Counter will stop using it.`)) return;
+  try {
+    $("offers-hint").textContent = "Deleting offer…";
+    $("offers-hint").className = "hint";
+    await api(`/api/offers/${encodeURIComponent(id)}`, { method: "DELETE" });
+    if ($("off-id")?.value === id) {
+      $("offer-form-wrap").hidden = true;
+      if ($("off-id")) $("off-id").value = "";
+    }
+    await loadOffersDesk(true);
+    $("offers-hint").textContent = `${name} deleted.`;
+    $("offers-hint").className = "hint ok";
+  } catch (err) {
+    $("offers-hint").textContent = err.message || "Could not delete this offer";
+    $("offers-hint").className = "hint error";
+  }
+}
+
 async function saveOfferForm(e) {
   e?.preventDefault?.();
   const draft = readOfferForm();
@@ -350,12 +403,14 @@ function bindOffersUi() {
       void duplicateOfferById(dup.dataset.offerDup);
       return;
     }
+    const del = e.target.closest("[data-offer-del]");
+    if (del) {
+      void deleteOfferById(del.dataset.offerDel);
+      return;
+    }
     const st = e.target.closest("[data-offer-status]");
     if (st) {
-      void api(`/api/offers/${encodeURIComponent(st.dataset.offerStatus)}/status`, {
-        method: "POST",
-        body: JSON.stringify({ status: st.dataset.status }),
-      }).then(() => loadOffersDesk(true));
+      void setOfferStatusById(st.dataset.offerStatus, st.dataset.status);
     }
   });
   $("offer-create")?.addEventListener("click", () => resetOfferForm());

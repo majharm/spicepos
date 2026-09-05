@@ -112,6 +112,19 @@ test("profit preview warns when margin collapses", () => {
   assert.match(preview.warning, /margin/i);
 });
 
+test("inactive and paused offers do not apply on the Counter", () => {
+  const offer = O.normalize({
+    name: "Tea deal",
+    type: "product",
+    status: "paused",
+    discount_type: "pct",
+    discount_value: 10,
+    item_ids: ["tea"],
+  });
+  assert.equal(O.liveStatus(offer), "paused");
+  assert.equal(O.evaluateOffer(offer, { cart: [line("tea", 100)], now: new Date("2026-09-05T10:00:00") }), null);
+});
+
 test("duplicate clone keeps products and names the copy", () => {
   const src = O.normalize({
     name: "Tea + Biscuits",

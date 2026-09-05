@@ -21,10 +21,15 @@ test("shop UI wires the Offers desk and Counter auto-apply", () => {
   assert.match(app, /offerIds/);
   assert.match(ui, /\/api\/offers/);
   assert.match(ui, /duplicateOfferById/);
-  assert.match(ui, /Duplicated offer/);
+  assert.match(ui, /deleteOfferById/);
+  assert.match(ui, /data-offer-del/);
+  assert.match(ui, /Inactive/);
+  assert.match(html, /data-offer-filter="paused"/);
   assert.match(php, /pos_duplicate_offer/);
-  assert.match(php, /srcStatus === "active"/);
+  assert.match(php, /pos_delete_offer/);
+  assert.match(php, /pos_set_offer_status/);
   assert.match(node, /duplicateOffer/);
+  assert.match(node, /deleteOffer/);
   assert.match(node, /createOffer/);
   assert.match(node, /recordOfferRedemptions/);
   assert.match(php, /pos_create_offer/);

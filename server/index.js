@@ -11,7 +11,7 @@ import { fyRangeForToday } from "./fy.js";
 import { buildReports, reportsToSheets } from "./reports.js";
 import { buildGrowthDashboard, answerGrowthQuestion, growthToSheets } from "./growth.js";
 import { listCombos, createCombo } from "./combos.js";
-import { listOffers, createOffer, updateOffer, getOffer, setOfferStatus, duplicateOffer, offerStats, suggestOffers, getPromoSettings, savePromoSettings, recordOfferRedemptions } from "./offers.js";
+import { listOffers, createOffer, updateOffer, getOffer, setOfferStatus, deleteOffer, duplicateOffer, offerStats, suggestOffers, getPromoSettings, savePromoSettings, recordOfferRedemptions } from "./offers.js";
 import { workbookXml } from "./excel.js";
 import { ensureSchema, seedPlatform } from "./schema.js";
 import { companyTimezone, normalizeTimezone, shopTimezonePayload, tzOffsetFor } from "./timezone.js";
@@ -363,6 +363,13 @@ app.post("/api/offers/:id/status", requireStaff, async (req, res) => {
     res.json({ ok: true, offer: await setOfferStatus(req.params.id, String(req.body?.status || "paused")) });
   } catch (err) {
     res.status(err.status || 500).json({ error: String(err.message || "Could not update offer status") });
+  }
+});
+app.delete("/api/offers/:id", requireStaff, async (req, res) => {
+  try {
+    res.json(await deleteOffer(req.params.id));
+  } catch (err) {
+    res.status(err.status || 500).json({ error: String(err.message || "Could not delete offer") });
   }
 });
 app.post("/api/offers/:id/duplicate", requireStaff, async (req, res) => {

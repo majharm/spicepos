@@ -184,7 +184,7 @@ function pos_list_offers($bid) {
   $out = [];
   foreach ($rows as $row) $out[] = pos_offer_public($row);
   try {
-    $combos = pos_q("SELECT * FROM combo_offers WHERE business_id = ? AND status = 'active'", "s", [$bid]);
+    $combos = pos_q("SELECT * FROM combo_offers WHERE business_id = ?", "s", [$bid]);
     foreach ($combos as $c) {
       $out[] = pos_offer_public([
         "id" => $c["id"],
@@ -219,6 +219,35 @@ function pos_get_offer($bid, $id) {
   $row = pos_find_offer($bid, $id);
   if (!$row) pos_send(404, ["error" => "Offer not found", "php" => true]);
   return $row;
+}
+
+function pos_normalize_offer_status($status) {
+  $st = strtolower(trim((string) $status));
+  if ($st === "inactive") return "paused";
+  return $st;
+}
+
+function pos_set_offer_status($bid, $id, $status) {
+  $next = pos_normalize_offer_status($status);
+  $ok = ["draft", "scheduled", "active", "paused", "expired", "completed"];
+  if (!in_array($next, $ok, true)) pos_send(400, ["error" => "Unknown offer status", "php" => true]);
+  pos_ensure_promo_offers();
+  pos_q("UPDATE promo_offers SET status = ? WHERE id = ? AND business_id = ?", "sss", [$next, $id, $bid]);
+  try {
+    pos_q("UPDATE combo_offers SET status = ? WHERE id = ? AND business_id = ?", "sss", [$next, $id, $bid]);
+  } catch (Exception $e) { /* optional */ }
+  return pos_get_offer($bid, $id);
+}
+
+function pos_delete_offer($bid, $id) {
+  $row = pos_find_offer($bid, $id);
+  if (!$row) pos_send(404, ["error" => "Offer not found", "php" => true]);
+  pos_ensure_promo_offers();
+  pos_q("DELETE FROM promo_offers WHERE id = ? AND business_id = ?", "ss", [$id, $bid]);
+  try {
+    pos_q("DELETE FROM combo_offers WHERE id = ? AND business_id = ?", "ss", [$id, $bid]);
+  } catch (Exception $e) { /* optional */ }
+  return ["ok" => true, "id" => $id];
 }
 
 function pos_duplicate_offer($bid, $id) {
@@ -379,9 +408,10 @@ function pos_offers_dispatch($path, $method, $body, $bid) {
   if ($path === "offers/settings" && in_array($method, ["POST", "PUT"], true)) pos_send(200, ["ok" => true, "settings" => pos_save_promo_settings($bid, $body ?: [])]);
   if ($path === "offers/suggest" && $method === "GET") pos_send(200, ["ok" => true, "ideas" => pos_suggest_offers($bid)]);
   if (preg_match('#^offers/([^/]+)/status$#', $path, $m) && in_array($method, ["POST", "PATCH"], true)) {
-    $st = (string) (($body["status"] ?? ""));
-    pos_q("UPDATE promo_offers SET status = ? WHERE id = ? AND business_id = ?", "sss", [$st, $m[1], $bid]);
-    pos_send(200, ["ok" => true, "offer" => pos_get_offer($bid, $m[1])]);
+    pos_send(200, ["ok" => true, "offer" => pos_set_offer_status($bid, $m[1], $body["status"] ?? "")]);
+  }
+  if (preg_match('#^offers/([^/]+)$#', $path, $m) && $method === "DELETE") {
+    pos_send(200, pos_delete_offer($bid, $m[1]));
   }
   if (preg_match('#^offers/([^/]+)/duplicate$#', $path, $m) && $method === "POST") {
     pos_send(200, ["ok" => true, "offer" => pos_duplicate_offer($bid, $m[1])]);
