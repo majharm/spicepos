@@ -21,7 +21,7 @@ import { registerAccounts } from "./accounts.js";
 import { postSaleJournal } from "./accounting.js";
 import { recordCreditSale } from "./accounts.js";
 import { audit } from "./audit.js";
-import { getPlatformSettings } from "./settings.js";
+import { getPlatformSettings, shopSupportContact } from "./settings.js";
 import { sendLowStockAlerts, tickShopAlerts, startAlertScheduler } from "./alerts.js";
 import { registerAdvanced, computeSaleLine, applySaleStock, applyLoyaltyOnSale } from "./advanced.js";
 import { registerQrPublic, registerQrStaff } from "./qr-ordering.js";
@@ -165,7 +165,7 @@ app.get("/api/bootstrap", requireStaff, async (_req, res) => {
             )
           )[0] || null
         : null,
-      support: await getPlatformSettings(),
+      support: await shopSupportContact(businessId),
       notes,
       items,
       units,

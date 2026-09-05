@@ -15,6 +15,17 @@ test("support tel WhatsApp and mail hrefs", () => {
   assert.equal(S.telHref(""), "");
 });
 
+test("support page names the assigned account manager", () => {
+  const html = S.pageHtml(
+    { support_phone: "9876543210", support_email: "am@atavtelecom.in", account_manager_name: "Priya Shah" },
+    { name: "SWAMI MASALE" },
+  );
+  assert.match(html, /Your account manager/);
+  assert.match(html, /Priya Shah/);
+  assert.match(html, /assigned ATAV POS account manager/);
+  assert.doesNotMatch(html, /ATAV POS helpline/);
+});
+
 test("support page html has call actions and shop details", () => {
   const html = S.pageHtml(
     { support_phone: "9876543210", support_email: "help@atavtelecom.in" },

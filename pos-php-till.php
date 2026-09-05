@@ -116,7 +116,7 @@ function pos_php_till_dispatch($path, $method, $body) {
       "company" => $coRow,
       "business" => $business,
       "plan" => $plan,
-      "support" => pos_platform_settings(),
+      "support" => pos_shop_support($bid),
       "notes" => $notes,
       "items" => $items,
       "customers" => $customers,

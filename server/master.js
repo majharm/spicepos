@@ -27,6 +27,37 @@ function send(res, fn) {
     .catch((err) => res.status(500).json({ error: String(err.message) }));
 }
 
+function normalizeManagerPayload(body) {
+  const name = String(body?.name || "").trim();
+  const mobile = String(body?.mobile || "").replaceAll(/\D/g, "");
+  const email = String(body?.email || "").trim().toLowerCase();
+  const notes = String(body?.notes || "").trim();
+  const status = String(body?.status || "active").toLowerCase() === "inactive" ? "inactive" : "active";
+  if (!name) throw new Error("Account manager name is required");
+  if (mobile.length < 10) throw new Error("Enter a valid mobile number");
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error("Enter a valid email ID");
+  return { name, mobile, email, notes, status };
+}
+
+async function listAccountManagers() {
+  const rows = await query(
+    `SELECT m.*,
+            (SELECT COUNT(*) FROM businesses b WHERE b.account_manager_id = m.id) AS shops
+     FROM account_managers m
+     ORDER BY m.status ASC, m.name ASC`,
+  );
+  const shops = await query(
+    `SELECT id, name, city, account_manager_id FROM businesses
+     WHERE account_manager_id IS NOT NULL AND account_manager_id <> ''
+     ORDER BY name`,
+  );
+  return rows.map((m) => ({
+    ...m,
+    shops: Number(m.shops) || 0,
+    businesses: shops.filter((b) => b.account_manager_id === m.id),
+  }));
+}
+
 async function unlockStaffUser(id) {
   const [user] = await query("SELECT id, email FROM staff_users WHERE id = ? LIMIT 1", [id]);
   if (!user) throw new Error("User not found");
@@ -197,10 +228,12 @@ export function registerMaster(app) {
     send(res, async () => {
       const rows = await query(
         `SELECT b.*, p.name AS plan_name, p.fee_monthly,
+                am.name AS account_manager_name, am.mobile AS account_manager_mobile,
                 (SELECT u.username FROM staff_users u
                  WHERE u.business_id = b.id AND u.role = 'business_admin' LIMIT 1) AS admin_username
          FROM businesses b
          LEFT JOIN subscription_plans p ON p.id = b.plan_id
+         LEFT JOIN account_managers am ON am.id = b.account_manager_id
          ORDER BY b.name`,
       );
       return rows.map((b) => ({ ...b, computed_status: publicStatus(b) }));
@@ -536,6 +569,66 @@ export function registerMaster(app) {
   );
 
   app.get("/api/master/support", (_req, res) => send(res, () => getPlatformSettings()));
+
+  app.get("/api/master/account-managers", (_req, res) => send(res, () => listAccountManagers()));
+
+  app.post("/api/master/account-managers", (req, res) =>
+    send(res, async () => {
+      const b = normalizeManagerPayload(req.body || {});
+      const id = crypto.randomUUID();
+      await query(
+        "INSERT INTO account_managers (id, name, mobile, email, status, notes) VALUES (?,?,?,?,?,?)",
+        [id, b.name, b.mobile, b.email || null, b.status, b.notes || null],
+      );
+      await platformAudit(req.auth.admin, "Account Manager Created", { module: "account_managers", target_id: id, target_name: b.name }, req);
+      return { ok: true, id, managers: await listAccountManagers() };
+    }),
+  );
+
+  app.put("/api/master/account-managers/:id", (req, res) =>
+    send(res, async () => {
+      const b = normalizeManagerPayload(req.body || {});
+      const [row] = await query("SELECT id FROM account_managers WHERE id = ? LIMIT 1", [req.params.id]);
+      if (!row) throw new Error("Account manager not found");
+      await query(
+        "UPDATE account_managers SET name=?, mobile=?, email=?, status=?, notes=? WHERE id=?",
+        [b.name, b.mobile, b.email || null, b.status, b.notes || null, req.params.id],
+      );
+      await platformAudit(req.auth.admin, "Account Manager Edited", { module: "account_managers", target_id: req.params.id, target_name: b.name }, req);
+      return { ok: true, managers: await listAccountManagers() };
+    }),
+  );
+
+  app.delete("/api/master/account-managers/:id", (req, res) =>
+    send(res, async () => {
+      const [row] = await query("SELECT id, name FROM account_managers WHERE id = ? LIMIT 1", [req.params.id]);
+      if (!row) throw new Error("Account manager not found");
+      await query("UPDATE businesses SET account_manager_id = NULL WHERE account_manager_id = ?", [req.params.id]);
+      await query("DELETE FROM account_managers WHERE id = ?", [req.params.id]);
+      await platformAudit(req.auth.admin, "Account Manager Removed", { module: "account_managers", target_id: req.params.id, target_name: row.name }, req);
+      return { ok: true, managers: await listAccountManagers() };
+    }),
+  );
+
+  app.post("/api/master/businesses/:id/account-manager", (req, res) =>
+    send(res, async () => {
+      const [biz] = await query("SELECT id, name FROM businesses WHERE id = ? LIMIT 1", [req.params.id]);
+      if (!biz) throw new Error("Business not found");
+      const amId = String(req.body?.account_manager_id || "").trim() || null;
+      if (amId) {
+        const [am] = await query("SELECT id, name FROM account_managers WHERE id = ? AND status = 'active' LIMIT 1", [amId]);
+        if (!am) throw new Error("Account manager not found");
+      }
+      await query("UPDATE businesses SET account_manager_id = ? WHERE id = ?", [amId, req.params.id]);
+      await platformAudit(
+        req.auth.admin,
+        "Account Manager Assigned",
+        { module: "businesses", target_id: biz.id, target_name: biz.name, account_manager_id: amId },
+        req,
+      );
+      return { ok: true, account_manager_id: amId };
+    }),
+  );
 
   app.post("/api/master/support", (req, res) =>
     send(res, async () => {
