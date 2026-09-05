@@ -246,6 +246,25 @@ async function loadOffersDesk(force) {
   }
 }
 
+async function duplicateOfferById(id) {
+  if (!id) return;
+  try {
+    $("offers-hint").textContent = "Copying offer…";
+    $("offers-hint").className = "hint";
+    const data = await api(`/api/offers/${encodeURIComponent(id)}/duplicate`, { method: "POST" });
+    const offer = data.offer || data;
+    offerFilter = "all";
+    document.querySelectorAll("[data-offer-filter]").forEach((b) => b.classList.toggle("primary", b.dataset.offerFilter === "all"));
+    await loadOffersDesk(true);
+    if (offer) applyOfferDraft(offer, offer.id);
+    $("offers-hint").textContent = `${offer?.name || "Copy"} created as a draft. Activate it when you want it on the Counter.`;
+    $("offers-hint").className = "hint ok";
+  } catch (err) {
+    $("offers-hint").textContent = err.message || "Could not duplicate this offer";
+    $("offers-hint").className = "hint error";
+  }
+}
+
 async function saveOfferForm(e) {
   e?.preventDefault?.();
   const draft = readOfferForm();
@@ -305,7 +324,7 @@ function bindOffersUi() {
     }
     const dup = e.target.closest("[data-offer-dup]");
     if (dup) {
-      void api(`/api/offers/${encodeURIComponent(dup.dataset.offerDup)}/duplicate`, { method: "POST" }).then(() => loadOffersDesk(true));
+      void duplicateOfferById(dup.dataset.offerDup);
       return;
     }
     const st = e.target.closest("[data-offer-status]");

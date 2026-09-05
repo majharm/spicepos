@@ -189,8 +189,21 @@ export async function setOfferStatus(id, status, tenant = bid()) {
 }
 
 export async function duplicateOffer(id, tenant = bid()) {
-  const row = await getOffer(id, tenant);
-  return createOffer({ ...row, name: `${row.name} copy`, status: "draft", used_count: 0 }, tenant);
+  let row;
+  try {
+    row = await getOffer(id, tenant);
+  } catch (err) {
+    const legacy = (await legacyCombos(tenant)).find((c) => String(c.id) === String(id));
+    if (!legacy) throw err;
+    row = publicRow({ ...legacy, business_id: tenant });
+  }
+  const input = O.cloneOfferInput(row);
+  if (!input) {
+    const err = new Error("Offer needs a name");
+    err.status = 400;
+    throw err;
+  }
+  return createOffer(input, tenant);
 }
 
 export async function recordOfferRedemptions({ offerIds, orderId, customerId, discount, total }, tenant = bid()) {

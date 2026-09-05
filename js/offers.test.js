@@ -112,6 +112,25 @@ test("profit preview warns when margin collapses", () => {
   assert.match(preview.warning, /margin/i);
 });
 
+test("duplicate clone keeps products and names the copy", () => {
+  const src = O.normalize({
+    name: "Tea + Biscuits",
+    type: "combo",
+    status: "active",
+    discount_type: "pct",
+    discount_value: 8,
+    item_ids: ["tea", "biscuits"],
+  });
+  src.id = "offer-1";
+  src.live_status = "active";
+  src.profit = { warning: "ignore" };
+  const copy = O.cloneOfferInput(src);
+  assert.equal(copy.name, "Tea + Biscuits copy");
+  assert.equal(copy.status, "draft");
+  assert.deepEqual(copy.conditions.item_ids, ["tea", "biscuits"]);
+  assert.equal(copy.discount_value, 8);
+});
+
 test("legacy combo rows convert and AI suggest builds a combo draft", () => {
   const legacy = O.comboFromLegacy({ id: "c1", name: "Tea combo", item_a_id: "a", item_b_id: "b", discount_type: "pct", discount_value: 8, status: "active" });
   assert.equal(legacy.offer_type, "combo");

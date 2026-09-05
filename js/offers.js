@@ -176,6 +176,33 @@
     };
   }
 
+  function copyName(name) {
+    const base = String(name || "Offer").replace(/\s+copy(?:\s+\d+)?$/i, "").trim() || "Offer";
+    return `${base} copy`.slice(0, 180);
+  }
+
+  function cloneOfferInput(row = {}) {
+    const cond = parseConditions(row);
+    const n = normalize({
+      ...row,
+      name: copyName(row.name),
+      status: "draft",
+      used_count: 0,
+      item_ids: cond.item_ids,
+      category: cond.category,
+      buy_qty: cond.buy_qty,
+      get_qty: cond.get_qty,
+      get_item_id: cond.get_item_id,
+      pick_count: cond.pick_count,
+      bundle_price: cond.bundle_price,
+      free_item_id: cond.free_item_id,
+      qty_tiers: cond.qty_tiers,
+      spend_tiers: cond.spend_tiers,
+    });
+    if (n) n.used_count = 0;
+    return n;
+  }
+
   function liveStatus(offer, now = new Date()) {
     const st = String(offer?.status || "draft");
     if (st === "paused" || st === "completed" || st === "draft") return st;
@@ -649,6 +676,8 @@
     typeMeta,
     parseConditions,
     normalize,
+    copyName,
+    cloneOfferInput,
     liveStatus,
     inWindow,
     customerGroup,

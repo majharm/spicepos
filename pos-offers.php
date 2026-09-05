@@ -60,9 +60,18 @@ function pos_ensure_promo_offers() {
 
 function pos_offer_conditions($body, $existing = []) {
   $prev = [];
-  if (!empty($existing["conditions_json"])) {
-    $dec = json_decode($existing["conditions_json"], true);
-    if (is_array($dec)) $prev = $dec;
+  foreach ([$body, $existing] as $src) {
+    if (!empty($src["conditions"]) && is_array($src["conditions"])) {
+      $prev = $src["conditions"];
+      break;
+    }
+    if (!empty($src["conditions_json"])) {
+      $dec = json_decode($src["conditions_json"], true);
+      if (is_array($dec)) {
+        $prev = $dec;
+        break;
+      }
+    }
   }
   $ids = $body["item_ids"] ?? $body["itemIds"] ?? $prev["item_ids"] ?? [];
   if (!empty($body["item_a_id"]) && !empty($body["item_b_id"])) $ids = [$body["item_a_id"], $body["item_b_id"]];
@@ -196,11 +205,32 @@ function pos_list_offers($bid) {
   return $out;
 }
 
-function pos_get_offer($bid, $id) {
+function pos_find_offer($bid, $id) {
   pos_ensure_promo_offers();
   $rows = pos_q("SELECT * FROM promo_offers WHERE id = ? AND business_id = ?", "ss", [$id, $bid]);
-  if (!$rows) pos_send(404, ["error" => "Offer not found", "php" => true]);
-  return pos_offer_public($rows[0]);
+  if ($rows) return pos_offer_public($rows[0]);
+  foreach (pos_list_offers($bid) as $row) {
+    if ((string) ($row["id"] ?? "") === (string) $id) return $row;
+  }
+  return null;
+}
+
+function pos_get_offer($bid, $id) {
+  $row = pos_find_offer($bid, $id);
+  if (!$row) pos_send(404, ["error" => "Offer not found", "php" => true]);
+  return $row;
+}
+
+function pos_duplicate_offer($bid, $id) {
+  $row = pos_find_offer($bid, $id);
+  if (!$row) pos_send(404, ["error" => "Offer not found", "php" => true]);
+  $name = trim(preg_replace('/\s+copy(?:\s+\d+)?$/i', "", (string) ($row["name"] ?? "Offer")));
+  if ($name === "") $name = "Offer";
+  $row["name"] = substr($name . " copy", 0, 180);
+  $row["status"] = "draft";
+  $row["used_count"] = 0;
+  unset($row["id"], $row["business_id"], $row["created_at"], $row["updated_at"], $row["live_status"], $row["profit"], $row["legacy_combo"]);
+  return pos_create_offer($bid, $row);
 }
 
 function pos_insert_offer($bid, $n) {
@@ -353,10 +383,7 @@ function pos_offers_dispatch($path, $method, $body, $bid) {
     pos_send(200, ["ok" => true, "offer" => pos_get_offer($bid, $m[1])]);
   }
   if (preg_match('#^offers/([^/]+)/duplicate$#', $path, $m) && $method === "POST") {
-    $row = pos_get_offer($bid, $m[1]);
-    $row["name"] = $row["name"] . " copy";
-    $row["status"] = "draft";
-    pos_send(200, ["ok" => true, "offer" => pos_create_offer($bid, $row)]);
+    pos_send(200, ["ok" => true, "offer" => pos_duplicate_offer($bid, $m[1])]);
   }
   if (preg_match('#^offers/([^/]+)$#', $path, $m) && $method === "GET") pos_send(200, pos_get_offer($bid, $m[1]));
   if (preg_match('#^offers/([^/]+)$#', $path, $m) && in_array($method, ["PUT", "PATCH"], true)) {
