@@ -6,8 +6,8 @@
     <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
     <title>ATAV POS</title>
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./css/pos.css?v=20260904deploy90" />
-    <link rel="stylesheet" href="./css/saas.css?v=20260904deploy90" />
+    <link rel="stylesheet" href="./css/pos.css?v=20260905deploy91" />
+    <link rel="stylesheet" href="./css/saas.css?v=20260905deploy91" />
   </head>
   <body>
     <div class="app" id="app">
@@ -718,15 +718,58 @@
           <div class="hint" id="staff-hint"></div>
           <div class="table-wrap" id="staff-table"></div>
         </section>
-        <section class="view" id="view-branches" hidden>
+        <section class="view view-branches" id="view-branches" hidden>
           <h2 class="visually-hidden">Branches</h2>
-          <form class="settings wide" id="branch-form">
-            <label>Name <input id="br-name" required /></label>
-            <label>Address <input id="br-address" /></label>
-            <label>Phone <input id="br-phone" /></label>
-            <button class="btn primary" type="submit">Save</button>
-          </form>
-          <div class="table-wrap" id="branch-table"></div>
+          <div class="items-desk branches-desk">
+            <header class="items-hero">
+              <div class="items-hero-copy">
+                <p class="items-kicker">Locations</p>
+                <h3>Branches</h3>
+                <p class="lede">Add shop locations, switch them active or inactive, and set a login user ID and password for each branch.</p>
+              </div>
+              <div class="items-hero-stats" id="branches-hero-stats"></div>
+            </header>
+            <div class="items-split">
+              <form class="settings item-composer" id="branch-form" autocomplete="off">
+                <input type="hidden" id="br-id" />
+                <div class="item-composer-top">
+                  <p class="item-mode" id="branch-mode">New branch</p>
+                  <p class="item-composer-note">Each branch can sign in on the login page with its own user ID and password.</p>
+                </div>
+                <fieldset class="item-block">
+                  <legend>Shop</legend>
+                  <label class="full">Name <input id="br-name" required maxlength="120" placeholder="Saswad main" /></label>
+                  <label class="full">Address <input id="br-address" maxlength="240" placeholder="Street, area, city" /></label>
+                  <label>Phone <input id="br-phone" maxlength="32" placeholder="Mobile or landline" /></label>
+                  <label>Status
+                    <select id="br-status">
+                      <option value="active">Active</option>
+                      <option value="inactive">Inactive</option>
+                    </select>
+                  </label>
+                </fieldset>
+                <fieldset class="item-block">
+                  <legend>Branch login</legend>
+                  <label>User ID <input id="br-login" required minlength="3" maxlength="32" autocomplete="off" placeholder="saswad.manager" /></label>
+                  <label>Password <input id="br-pass" type="password" required minlength="8" autocomplete="new-password" placeholder="8+ characters" /></label>
+                  <p class="item-composer-note full">User ID: 3–32 letters, numbers, dot, dash, or underscore. On edit, leave password blank to keep the current one.</p>
+                </fieldset>
+                <div class="item-composer-actions">
+                  <button class="btn primary" type="submit" id="branch-save">Save branch</button>
+                  <button class="btn" type="button" id="branch-cancel" hidden>Cancel edit</button>
+                  <p class="hint" id="branch-hint"></p>
+                </div>
+              </form>
+              <div class="items-library">
+                <div class="items-library-head">
+                  <h4>All branches</h4>
+                  <input id="branch-search" type="search" placeholder="Search name, address, login…" />
+                  <label class="item-toggle"><input id="branch-hide-inactive" type="checkbox" /> Hide inactive</label>
+                </div>
+                <div class="table-wrap items-library-list" id="branch-table"></div>
+              </div>
+            </div>
+          </div>
         </section>
         <section class="view" id="view-devices" hidden>
           <h2 class="visually-hidden">POS devices</h2>
@@ -999,18 +1042,18 @@
         </section>
       </div>
     </aside>
-    <script src="./js/gst-supply.js?v=20260904deploy90" defer></script>
-    <script src="./js/pos-api.js?v=20260904deploy90" defer></script>
-    <script src="./js/units.js?v=20260904deploy90" defer></script>
-    <script src="./js/footwear.js?v=20260904deploy90" defer></script>
-    <script src="./js/discount.js?v=20260904deploy90" defer></script>
-    <script src="./js/loyalty.js?v=20260904deploy90" defer></script>
-    <script src="./js/barcode.js?v=20260904deploy90" defer></script>
+    <script src="./js/gst-supply.js?v=20260905deploy91" defer></script>
+    <script src="./js/pos-api.js?v=20260905deploy91" defer></script>
+    <script src="./js/units.js?v=20260905deploy91" defer></script>
+    <script src="./js/footwear.js?v=20260905deploy91" defer></script>
+    <script src="./js/discount.js?v=20260905deploy91" defer></script>
+    <script src="./js/loyalty.js?v=20260905deploy91" defer></script>
+    <script src="./js/barcode.js?v=20260905deploy91" defer></script>
     <script src="./js/camera-scan.js?v=20260904camera1" defer></script>
-    <script src="./js/dev-mode.js?v=20260904deploy90" defer></script>
-    <script src="./js/invoice.js?v=20260904deploy90" defer></script>
-    <script src="./js/support.js?v=20260904deploy90" defer></script>
+    <script src="./js/dev-mode.js?v=20260905deploy91" defer></script>
+    <script src="./js/invoice.js?v=20260905deploy91" defer></script>
+    <script src="./js/support.js?v=20260905deploy91" defer></script>
     <script src="./js/qrcode.iife.js?v=20260905qr1"></script>
-    <script src="./js/app.js?v=20260904deploy90" defer></script>
+    <script src="./js/app.js?v=20260905deploy91" defer></script>
   </body>
 </html>

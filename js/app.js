@@ -19,6 +19,7 @@ const state = {
   perms: {},
   support: {},
   staff: [],
+  branches: [],
   plan: null,
   wearerFilter: "",
   sizeFilter: "",
@@ -218,7 +219,7 @@ const VIEW_META = {
   stock: { title: "Stock", subtitle: "Adjustments, transfers, and low-stock alerts" },
   expiry: { title: "Expiry", subtitle: "Dated batches still on hand — expired first" },
   staff: { title: "Staff & roles", subtitle: "Users, roles, and access" },
-  branches: { title: "Branches", subtitle: "Shop locations and contact details" },
+  branches: { title: "Branches", subtitle: "Locations, active status, and branch login" },
   devices: { title: "POS devices", subtitle: "Registers and terminal codes" },
   support: { title: "Support", subtitle: "Call, WhatsApp, or email platform support" },
   accounts: { title: "Accounts", subtitle: "Receivables, payables, GL, and books" },
@@ -2246,11 +2247,91 @@ function fillStaffForm(u) {
   if ($("staff-cancel")) $("staff-cancel").hidden = !u;
 }
 
+function fillBranchForm(b) {
+  const editing = Boolean(b?.id);
+  if ($("br-id")) $("br-id").value = b?.id || "";
+  if ($("br-name")) $("br-name").value = b?.name || "";
+  if ($("br-address")) $("br-address").value = b?.address || "";
+  if ($("br-phone")) $("br-phone").value = b?.phone || "";
+  if ($("br-status")) $("br-status").value = b?.status === "inactive" ? "inactive" : "active";
+  if ($("br-login")) {
+    $("br-login").value = b?.login_username || b?.username || "";
+    $("br-login").required = !editing;
+  }
+  if ($("br-pass")) {
+    $("br-pass").value = "";
+    $("br-pass").required = !editing;
+    $("br-pass").placeholder = editing ? "Leave blank to keep current password" : "8+ characters";
+  }
+  if ($("branch-mode")) $("branch-mode").textContent = editing ? "Edit branch" : "New branch";
+  if ($("branch-save")) $("branch-save").textContent = editing ? "Update branch" : "Save branch";
+  if ($("branch-cancel")) $("branch-cancel").hidden = !editing;
+  $("branch-form")?.classList.toggle("is-editing", editing);
+}
+
+function branchSearchHay(b) {
+  return [b.name, b.address, b.phone, b.login_username, b.username, b.status].map((v) => String(v || "").toLowerCase()).join(" ");
+}
+
+function renderBranches() {
+  const rows = state.branches || [];
+  const q = String($("branch-search")?.value || "").trim().toLowerCase();
+  const hideInactive = Boolean($("branch-hide-inactive")?.checked);
+  const active = rows.filter((b) => b.status !== "inactive").length;
+  const stats = $("branches-hero-stats");
+  if (stats) {
+    stats.innerHTML = [
+      ["Total", rows.length],
+      ["Active", active],
+      ["Inactive", rows.length - active],
+    ]
+      .map(([k, v]) => `<div class="items-stat"><span>${k}</span><strong>${v}</strong></div>`)
+      .join("");
+  }
+  const visible = rows.filter((b) => {
+    if (hideInactive && b.status === "inactive") return false;
+    if (q && !branchSearchHay(b).includes(q)) return false;
+    return true;
+  });
+  const editingId = $("br-id")?.value || "";
+  const el = $("branch-table");
+  if (!el) return;
+  if (!visible.length) {
+    el.innerHTML = `<p class="hint">${rows.length ? "No branches match this filter." : "No branches yet. Add the first shop on the left."}</p>`;
+    return;
+  }
+  el.innerHTML = visible
+    .map((b) => {
+      const inactive = b.status === "inactive";
+      const login = b.login_username || b.username || "";
+      return `<article class="report-card item-card branch-card${editingId === b.id ? " is-editing" : ""}${inactive ? " is-inactive" : ""}" data-branch-id="${escapeHtml(b.id)}">
+        <div class="item-card-head">
+          <span class="item-thumb-empty" aria-hidden="true">${escapeHtml(String(b.name || "?").slice(0, 1).toUpperCase())}</span>
+          <div class="item-card-copy">
+            <strong>${escapeHtml(b.name || "")}</strong>
+            <span>${escapeHtml(b.address || "No address")}</span>
+          </div>
+        </div>
+        <div class="item-card-meta">
+          <span class="item-chip ${inactive ? "stock low" : "stock ok"}">${inactive ? "Inactive" : "Active"}</span>
+          ${b.phone ? `<span class="item-chip">${escapeHtml(b.phone)}</span>` : ""}
+          <span class="item-chip">${login ? `Login ${escapeHtml(login)}` : "No login yet"}</span>
+        </div>
+        <div class="item-card-foot">
+          <div class="item-card-actions">
+            <button class="btn" type="button" data-edit-branch="${escapeHtml(b.id)}">Edit</button>
+            <button class="btn" type="button" data-toggle-branch="${escapeHtml(b.id)}">${inactive ? "Activate" : "Deactivate"}</button>
+          </div>
+        </div>
+      </article>`;
+    })
+    .join("");
+}
+
 async function loadBranches() {
   const rows = await api("/api/branches");
-  $("branch-table").innerHTML = `<table><thead><tr><th>Name</th><th>Address</th><th>Status</th></tr></thead><tbody>${rows
-    .map((b) => `<tr><td>${escapeHtml(b.name)}</td><td>${escapeHtml(b.address)}</td><td>${escapeHtml(b.status)}</td></tr>`)
-    .join("")}</tbody></table>`;
+  state.branches = Array.isArray(rows) ? rows : [];
+  renderBranches();
 }
 
 async function loadDevices() {
@@ -4288,12 +4369,95 @@ $("staff-table")?.addEventListener("click", (e) => {
 });
 $("branch-form")?.addEventListener("submit", async (e) => {
   e.preventDefault();
-  await api("/api/branches", {
-    method: "POST",
-    body: JSON.stringify({ name: $("br-name").value, address: $("br-address").value, phone: $("br-phone").value }),
-  });
-  $("branch-form").reset();
-  loadBranches();
+  const hint = $("branch-hint");
+  try {
+    const id = $("br-id")?.value || "";
+    const payload = {
+      name: $("br-name").value,
+      address: $("br-address").value,
+      phone: $("br-phone").value,
+      status: $("br-status")?.value || "active",
+      username: String($("br-login")?.value || "").trim().toLowerCase(),
+    };
+    const password = $("br-pass")?.value || "";
+    if (password) payload.password = password;
+    if (!id && !payload.username) throw new Error("Branch login user ID is required");
+    if (!id && !password) throw new Error("Password is required for a new branch login");
+    if (password && password.length < 8) throw new Error("Password must be 8+ characters");
+    if (id) await api(`/api/branches/${id}`, { method: "PUT", body: JSON.stringify(payload) });
+    else await api("/api/branches", { method: "POST", body: JSON.stringify(payload) });
+    if (hint) {
+      hint.textContent = id ? "Branch updated." : "Branch saved. Sign in with the user ID and password on the login page.";
+      hint.className = "hint ok";
+    }
+    $("branch-form").reset();
+    fillBranchForm(null);
+    loadBranches();
+  } catch (err) {
+    if (hint) {
+      hint.textContent = err.message;
+      hint.className = "hint error";
+    } else {
+      setHint(err.message, "error");
+    }
+  }
+});
+$("branch-cancel")?.addEventListener("click", () => {
+  $("branch-form")?.reset();
+  fillBranchForm(null);
+  if ($("branch-hint")) {
+    $("branch-hint").textContent = "";
+    $("branch-hint").className = "hint";
+  }
+  renderBranches();
+});
+$("branch-search")?.addEventListener("input", renderBranches);
+$("branch-hide-inactive")?.addEventListener("change", renderBranches);
+$("branch-table")?.addEventListener("click", async (e) => {
+  const edit = e.target.closest("[data-edit-branch]");
+  if (edit) {
+    const b = (state.branches || []).find((row) => row.id === edit.dataset.editBranch);
+    if (b) {
+      fillBranchForm(b);
+      $("br-name")?.focus();
+      renderBranches();
+      $("branch-form")?.scrollIntoView({ block: "nearest" });
+    }
+    return;
+  }
+  const toggle = e.target.closest("[data-toggle-branch]");
+  if (!toggle) return;
+  const b = (state.branches || []).find((row) => row.id === toggle.dataset.toggleBranch);
+  if (!b) return;
+  const hint = $("branch-hint");
+  try {
+    toggle.disabled = true;
+    const next = b.status === "inactive" ? "active" : "inactive";
+    await api(`/api/branches/${b.id}`, {
+      method: "PUT",
+      body: JSON.stringify({
+        name: b.name,
+        address: b.address,
+        phone: b.phone,
+        status: next,
+        username: b.login_username || b.username || "",
+      }),
+    });
+    if (hint) {
+      hint.textContent = next === "active" ? "Branch activated." : "Branch deactivated. Its login cannot sign in until you activate it again.";
+      hint.className = "hint ok";
+    }
+    await loadBranches();
+  } catch (err) {
+    if (hint) {
+      hint.textContent = err.message;
+      hint.className = "hint error";
+    } else {
+      setHint(err.message, "error");
+    }
+  } finally {
+    toggle.disabled = false;
+  }
 });
 $("device-form")?.addEventListener("submit", async (e) => {
   e.preventDefault();
