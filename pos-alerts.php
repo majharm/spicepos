@@ -12,17 +12,21 @@ function pos_alert_defaults() {
     "alert_updates" => "1",
     "alert_closing" => "1",
     "alert_low_stock" => "1",
+    "alert_renewal_before" => "1",
+    "alert_renewal_expired" => "1",
     "alert_closing_hour" => "22",
     "tpl_welcome" => "",
     "tpl_credentials" => "",
     "tpl_updates" => "",
     "tpl_closing" => "",
     "tpl_low_stock" => "",
+    "tpl_renewal_before" => "",
+    "tpl_renewal_expired" => "",
   ];
 }
 
 function pos_alert_kinds() {
-  return ["welcome", "credentials", "updates", "closing", "low_stock"];
+  return ["welcome", "credentials", "updates", "closing", "low_stock", "renewal_before", "renewal_expired"];
 }
 
 function pos_alert_default_templates() {
@@ -32,6 +36,8 @@ function pos_alert_default_templates() {
     "updates" => "ATAV POS update · {{shop}}\n\n{{title}}\n\n{{body}}\n\n— ATAV Telecom POS",
     "closing" => "{{shop}} — closing {{day}}\nBills: {{bills}}\nTotal: {{takings}}\nCash {{cash}} · UPI {{upi}} · Card {{card}} · Credit {{credit}}\nGST: {{gst}}\n{{lowStock}}\n\n— ATAV Telecom POS",
     "low_stock" => "{{shop}} — low stock alert\n\n{{lowStock}}\n\n— ATAV Telecom POS",
+    "renewal_before" => "ATAV POS renewal reminder · {{shop}}\n\nHello {{name}}, your {{plan}} plan expires on {{expiry}} ({{days}} day(s) left).\n\nRenew now so billing and login stay on.\nSign in: {{signInUrl}}\nHelp: {{supportPhone}}\n\n— ATAV Telecom POS",
+    "renewal_expired" => "ATAV POS subscription expired · {{shop}}\n\nHello {{name}}, the {{plan}} plan expired on {{expiry}}.\n\nRenew to restore billing and staff login.\nSign in: {{signInUrl}}\nHelp: {{supportPhone}}\n\n— ATAV Telecom POS",
   ];
 }
 
@@ -87,6 +93,10 @@ function pos_alert_vars($payload) {
     "credit" => $money("credit"),
     "gst" => $money("gst"),
     "lowStock" => $payload["lowStockText"] ?? implode("\n", $bullets),
+    "expiry" => $payload["expiry"] ?? "",
+    "days" => (($payload["days"] ?? "") === "" || ($payload["days"] ?? null) === null) ? "" : (string) $payload["days"],
+    "plan" => $payload["plan"] ?? ($payload["planName"] ?? ""),
+    "supportPhone" => $payload["supportPhone"] ?? ($payload["support_phone"] ?? ""),
   ];
 }
 
@@ -110,6 +120,10 @@ function pos_alert_sample_payload() {
     "credit" => 200,
     "gst" => 225,
     "items" => [["name" => "Turmeric powder", "qtyLabel" => "2 kg"]],
+    "expiry" => "2026-09-12",
+    "days" => "7",
+    "plan" => "Yearly",
+    "supportPhone" => "9876543210",
   ];
 }
 
@@ -210,12 +224,16 @@ function pos_alert_settings() {
     "alert_updates" => pos_alert_flag($map["alert_updates"] ?? "1") ? "1" : "0",
     "alert_closing" => pos_alert_flag($map["alert_closing"] ?? "1") ? "1" : "0",
     "alert_low_stock" => pos_alert_flag($map["alert_low_stock"] ?? "1") ? "1" : "0",
+    "alert_renewal_before" => pos_alert_flag($map["alert_renewal_before"] ?? "1") ? "1" : "0",
+    "alert_renewal_expired" => pos_alert_flag($map["alert_renewal_expired"] ?? "1") ? "1" : "0",
     "alert_closing_hour" => (string) $hour,
     "tpl_welcome" => $map["tpl_welcome"] ?? "",
     "tpl_credentials" => $map["tpl_credentials"] ?? "",
     "tpl_updates" => $map["tpl_updates"] ?? "",
     "tpl_closing" => $map["tpl_closing"] ?? "",
     "tpl_low_stock" => $map["tpl_low_stock"] ?? "",
+    "tpl_renewal_before" => $map["tpl_renewal_before"] ?? "",
+    "tpl_renewal_expired" => $map["tpl_renewal_expired"] ?? "",
   ];
 }
 
@@ -248,7 +266,7 @@ function pos_save_alert_settings($body) {
     throw new Exception("WhatsApp API URL must be https");
   }
   $cur["wa_enabled"] = pos_alert_flag($cur["wa_enabled"]) ? "1" : "0";
-  foreach (["alert_welcome", "alert_credentials", "alert_updates", "alert_closing", "alert_low_stock"] as $k) {
+  foreach (["alert_welcome", "alert_credentials", "alert_updates", "alert_closing", "alert_low_stock", "alert_renewal_before", "alert_renewal_expired"] as $k) {
     $cur[$k] = pos_alert_flag($cur[$k]) ? "1" : "0";
   }
   $hour = (int) $cur["alert_closing_hour"];
@@ -593,12 +611,83 @@ function pos_send_closing_alert($bid) {
   return pos_alert_dispatch($shop["phones"], $shop["emails"], "Closing sales · {$shop["shopName"]} · {$day}", $text);
 }
 
+function pos_expiry_ymd($value) {
+  $s = trim((string) $value);
+  if (preg_match("/^(\d{4}-\d{2}-\d{2})/", $s, $m)) return $m[1];
+  $ts = strtotime($s);
+  return $ts ? gmdate("Y-m-d", $ts) : "";
+}
+
+function pos_days_until_expiry($expiry, $today) {
+  $exp = pos_expiry_ymd($expiry);
+  $day = pos_expiry_ymd($today);
+  if ($exp === "" || $day === "") return null;
+  return (int) round((strtotime($exp . " UTC") - strtotime($day . " UTC")) / 86400);
+}
+
+function pos_send_renewal_alerts($bid = null) {
+  $cfg = pos_alert_settings();
+  $beforeOn = pos_alert_flag($cfg["alert_renewal_before"] ?? "1");
+  $expiredOn = pos_alert_flag($cfg["alert_renewal_expired"] ?? "1");
+  if (!$beforeOn && !$expiredOn) return ["skipped" => true];
+  $support = function_exists("pos_platform_settings") ? pos_platform_settings() : [];
+  $signIn = function_exists("pos_login_url") ? pos_login_url() : "/login.html";
+  $sql = "SELECT b.id, b.name, b.owner_name, b.subscription_expires_at, p.name AS plan_name
+          FROM businesses b
+          LEFT JOIN subscription_plans p ON p.id = b.plan_id
+          WHERE b.subscription_expires_at IS NOT NULL";
+  $types = "";
+  $args = [];
+  if ($bid) {
+    $sql .= " AND b.id = ?";
+    $types = "s";
+    $args[] = $bid;
+  }
+  $shops = $types ? pos_q($sql, $types, $args) : pos_q($sql);
+  $results = [];
+  foreach ($shops as $row) {
+    $expiry = pos_expiry_ymd($row["subscription_expires_at"] ?? "");
+    if ($expiry === "") continue;
+    try {
+      if (function_exists("pos_apply_business_timezone")) pos_apply_business_timezone($row["id"]);
+    } catch (Throwable $e) { /* keep IST */ }
+    $today = date("Y-m-d");
+    $days = pos_days_until_expiry($expiry, $today);
+    if ($days === null) continue;
+    $shop = pos_shop_alert_contacts($row["id"]);
+    $payload = [
+      "shopName" => $row["name"] ?? $shop["shopName"],
+      "ownerName" => $row["owner_name"] ?? "",
+      "plan" => ($row["plan_name"] ?? "") !== "" ? $row["plan_name"] : "subscription",
+      "expiry" => $expiry,
+      "days" => $days,
+      "signInUrl" => $signIn,
+      "supportPhone" => $support["support_phone"] ?? "",
+    ];
+    if ($beforeOn && $days >= 0 && $days <= 7) {
+      if (!pos_alert_sent($row["id"], "renewal_before", $expiry, "") && pos_alert_mark($row["id"], "renewal_before", $expiry, "")) {
+        $text = pos_render_alert("renewal_before", $payload, $cfg);
+        $results[] = pos_alert_dispatch($shop["phones"], $shop["emails"], "Renew ATAV POS · {$payload["shopName"]}", $text);
+      }
+    }
+    if ($expiredOn && $days < 0) {
+      if (!pos_alert_sent($row["id"], "renewal_expired", $expiry, "") && pos_alert_mark($row["id"], "renewal_expired", $expiry, "")) {
+        $text = pos_render_alert("renewal_expired", $payload, $cfg);
+        $results[] = pos_alert_dispatch($shop["phones"], $shop["emails"], "ATAV POS expired · {$payload["shopName"]}", $text);
+      }
+    }
+  }
+  return ["ok" => true, "results" => $results];
+}
+
 function pos_tick_shop_alerts($bid = null) {
   try {
     if ($bid) {
       pos_apply_business_timezone($bid);
+      pos_send_renewal_alerts($bid);
       return pos_send_closing_alert($bid);
     }
+    pos_send_renewal_alerts();
     foreach (pos_q("SELECT id FROM businesses WHERE COALESCE(status,'active') = 'active'") as $s) {
       try {
         pos_apply_business_timezone($s["id"]);

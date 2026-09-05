@@ -1,4 +1,4 @@
-Production deploy bundle — 20260905deploy104
+Production deploy bundle — 20260905deploy105
 =========================================
 
 Upload ALL files below to Hostinger public_html (overwrite):
@@ -133,7 +133,8 @@ FIXES in this bundle
   - Suppliers form and list include address and email
   - Settings page: wider card, 2-column details, styled logo upload, keep card padding on mobile
   - CSS: Master Admin mobile nav wrap, hide nav until sign-in, backup file inputs, table overflow
-  - Cache sticker 20260905deploy104 on index, login, master, setup, order
+  - Cache sticker 20260905deploy105 on index, login, master, setup, order
+  - Renewal WhatsApp/email to every shop: 7 days before expiry, and once after expired
   - Business category includes Garments, Clothing, Boutique, Saree Shop, Ladies/Mens/Kids Fashion
   - Master Admin Account managers tab: assign a support person to each shop
   - Shop Support shows the assigned account manager phone/email (login stays platform helpline)

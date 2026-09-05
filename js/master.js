@@ -536,6 +536,22 @@ const ALERT_DEFS = [
     channels: "WhatsApp · Email",
     placeholders: "{{shop}} {{lowStock}}",
   },
+  {
+    key: "renewal_before",
+    flag: "alert_renewal_before",
+    title: "Renewal before expiry",
+    blurb: "Once per shop in the last 7 days before the plan end date. Sent to every business with an expiry date.",
+    channels: "WhatsApp · Email",
+    placeholders: "{{shop}} {{name}} {{plan}} {{expiry}} {{days}} {{signInUrl}} {{supportPhone}}",
+  },
+  {
+    key: "renewal_expired",
+    flag: "alert_renewal_expired",
+    title: "Expired plan",
+    blurb: "Once after the plan end date. Sent to every expired business until they renew.",
+    channels: "WhatsApp · Email",
+    placeholders: "{{shop}} {{name}} {{plan}} {{expiry}} {{signInUrl}} {{supportPhone}}",
+  },
 ];
 
 function placeholderChips(raw) {

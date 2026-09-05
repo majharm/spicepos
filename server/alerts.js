@@ -1,5 +1,5 @@
 import { query } from "./db.js";
-import { sendMail } from "./mail.js";
+import { sendMail, publicAppUrl } from "./mail.js";
 import { getPlatformSettings, setPlatformSetting } from "./settings.js";
 
 export const WA_DEFAULT_URL = "https://wamaster.atavtelecom.in/api/v1/send";
@@ -7,7 +7,16 @@ export const WA_DEFAULT_COUNTRY = "91";
 export const WA_DEFAULT_KEY = "b99fcac4528c679916dcd461f5d834a098c9f9fa2fd349c67395fb028579cc1b";
 export const WA_DEFAULT_PROFILE = "acc_1782484414096";
 
-export const ALERT_KINDS = ["welcome", "credentials", "updates", "closing", "low_stock"];
+export const ALERT_KINDS = [
+  "welcome",
+  "credentials",
+  "updates",
+  "closing",
+  "low_stock",
+  "renewal_before",
+  "renewal_expired",
+];
+export const RENEWAL_BEFORE_DAYS = 7;
 
 const ALERT_KEYS = [
   "wa_enabled",
@@ -20,12 +29,16 @@ const ALERT_KEYS = [
   "alert_updates",
   "alert_closing",
   "alert_low_stock",
+  "alert_renewal_before",
+  "alert_renewal_expired",
   "alert_closing_hour",
   "tpl_welcome",
   "tpl_credentials",
   "tpl_updates",
   "tpl_closing",
   "tpl_low_stock",
+  "tpl_renewal_before",
+  "tpl_renewal_expired",
 ];
 
 export const DEFAULT_TEMPLATES = {
@@ -66,6 +79,24 @@ GST: {{gst}}
 {{lowStock}}
 
 — ATAV Telecom POS`,
+  renewal_before: `ATAV POS renewal reminder · {{shop}}
+
+Hello {{name}}, your {{plan}} plan expires on {{expiry}} ({{days}} day(s) left).
+
+Renew now so billing and login stay on.
+Sign in: {{signInUrl}}
+Help: {{supportPhone}}
+
+— ATAV Telecom POS`,
+  renewal_expired: `ATAV POS subscription expired · {{shop}}
+
+Hello {{name}}, the {{plan}} plan expired on {{expiry}}.
+
+Renew to restore billing and staff login.
+Sign in: {{signInUrl}}
+Help: {{supportPhone}}
+
+— ATAV Telecom POS`,
 };
 
 export const SAMPLE_PAYLOAD = {
@@ -87,6 +118,10 @@ export const SAMPLE_PAYLOAD = {
   credit: 200,
   gst: 225,
   items: [{ name: "Turmeric powder", qtyLabel: "2 kg" }],
+  expiry: "2026-09-12",
+  days: "7",
+  plan: "Yearly",
+  supportPhone: "9876543210",
 };
 
 export function fillTemplate(tpl, vars = {}) {
@@ -136,7 +171,31 @@ export function alertVars(payload = {}) {
     credit: money("credit"),
     gst: money("gst"),
     lowStock: payload.lowStockText || bullets,
+    expiry: payload.expiry || "",
+    days: payload.days == null || payload.days === "" ? "" : String(payload.days),
+    plan: payload.plan || payload.planName || "",
+    supportPhone: payload.supportPhone || payload.support_phone || "",
   };
+}
+
+export function expiryYmd(value) {
+  const s = String(value || "").trim();
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+  const d = value instanceof Date ? value : new Date(s);
+  if (Number.isNaN(d.getTime())) return "";
+  const y = d.getUTCFullYear();
+  const m = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(d.getUTCDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+export function daysUntilExpiry(expiry, today) {
+  const exp = expiryYmd(expiry);
+  const day = expiryYmd(today);
+  if (!exp || !day) return null;
+  const a = Date.UTC(Number(exp.slice(0, 4)), Number(exp.slice(5, 7)) - 1, Number(exp.slice(8, 10)));
+  const b = Date.UTC(Number(day.slice(0, 4)), Number(day.slice(5, 7)) - 1, Number(day.slice(8, 10)));
+  return Math.round((a - b) / 86400000);
 }
 
 export function sampleAlertVars() {
@@ -262,6 +321,8 @@ export async function ensureAlertSettings() {
     alert_updates: "1",
     alert_closing: "1",
     alert_low_stock: "1",
+    alert_renewal_before: "1",
+    alert_renewal_expired: "1",
     alert_closing_hour: "22",
   };
   for (const [key, value] of Object.entries(defaults)) {
@@ -292,12 +353,16 @@ export async function loadAlertSettings() {
     alert_updates: flagOn(map.alert_updates, true) ? "1" : "0",
     alert_closing: flagOn(map.alert_closing, true) ? "1" : "0",
     alert_low_stock: flagOn(map.alert_low_stock, true) ? "1" : "0",
+    alert_renewal_before: flagOn(map.alert_renewal_before, true) ? "1" : "0",
+    alert_renewal_expired: flagOn(map.alert_renewal_expired, true) ? "1" : "0",
     alert_closing_hour: String(Math.min(23, Math.max(0, Number(map.alert_closing_hour ?? 22) || 22))),
     tpl_welcome: map.tpl_welcome || "",
     tpl_credentials: map.tpl_credentials || "",
     tpl_updates: map.tpl_updates || "",
     tpl_closing: map.tpl_closing || "",
     tpl_low_stock: map.tpl_low_stock || "",
+    tpl_renewal_before: map.tpl_renewal_before || "",
+    tpl_renewal_expired: map.tpl_renewal_expired || "",
   };
 }
 
@@ -331,7 +396,15 @@ export async function saveAlertSettings(body = {}) {
     throw new Error("WhatsApp API URL must be https");
   }
   next.wa_enabled = flagOn(next.wa_enabled, true) ? "1" : "0";
-  for (const key of ["alert_welcome", "alert_credentials", "alert_updates", "alert_closing", "alert_low_stock"]) {
+  for (const key of [
+    "alert_welcome",
+    "alert_credentials",
+    "alert_updates",
+    "alert_closing",
+    "alert_low_stock",
+    "alert_renewal_before",
+    "alert_renewal_expired",
+  ]) {
     next[key] = flagOn(next[key], true) ? "1" : "0";
   }
   next.alert_closing_hour = String(Math.min(23, Math.max(0, Number(next.alert_closing_hour) || 22)));
@@ -694,19 +767,90 @@ export async function sendClosingAlerts(businessId) {
   });
 }
 
-export async function tickShopAlerts(businessId) {
+export async function sendRenewalAlerts(businessId) {
+  const settings = await loadAlertSettings();
+  const beforeOn = flagOn(settings.alert_renewal_before, true);
+  const expiredOn = flagOn(settings.alert_renewal_expired, true);
+  if (!beforeOn && !expiredOn) return { skipped: true };
+  const support = await getPlatformSettings();
+  const base = publicAppUrl();
+  const signInUrl = base ? `${base}/login.html` : "https://pos.atavtelecom.in/login.html";
+  const args = [];
+  let sql = `SELECT b.id, b.name, b.owner_name, b.subscription_expires_at, p.name AS plan_name
+     FROM businesses b
+     LEFT JOIN subscription_plans p ON p.id = b.plan_id
+     WHERE b.subscription_expires_at IS NOT NULL`;
+  if (businessId) {
+    sql += " AND b.id = ?";
+    args.push(businessId);
+  }
+  const shops = await query(sql, args);
+  const results = [];
+  for (const row of shops) {
+    const expiry = expiryYmd(row.subscription_expires_at);
+    if (!expiry) continue;
+    const shop = await shopContacts(row.id);
+    const today = ymdInZone(shop.timezone || "Asia/Kolkata");
+    const days = daysUntilExpiry(expiry, today);
+    if (days == null) continue;
+    const payload = {
+      shopName: row.name || shop.shopName,
+      ownerName: row.owner_name || "",
+      plan: row.plan_name || "subscription",
+      expiry,
+      days,
+      signInUrl,
+      supportPhone: support.support_phone || "",
+    };
+    if (beforeOn && days >= 0 && days <= RENEWAL_BEFORE_DAYS) {
+      if (!(await alreadySent(row.id, "renewal_before", expiry, ""))) {
+        if (await markSent(row.id, "renewal_before", expiry, "")) {
+          const text = renderAlert("renewal_before", payload, settings);
+          results.push(
+            await dispatchAlert({
+              phones: shop.phones,
+              emails: shop.emails,
+              subject: `Renew ATAV POS · ${payload.shopName}`,
+              text,
+            }),
+          );
+        }
+      }
+    }
+    if (expiredOn && days < 0) {
+      if (!(await alreadySent(row.id, "renewal_expired", expiry, ""))) {
+        if (await markSent(row.id, "renewal_expired", expiry, "")) {
+          const text = renderAlert("renewal_expired", payload, settings);
+          results.push(
+            await dispatchAlert({
+              phones: shop.phones,
+              emails: shop.emails,
+              subject: `ATAV POS expired · ${payload.shopName}`,
+              text,
+            }),
+          );
+        }
+      }
+    }
+  }
+  return { ok: true, results };
+}
+
+export async function tickShopAlerts(businessId, opts = {}) {
   try {
+    if (opts.renewal !== false) await sendRenewalAlerts(businessId);
     return await sendClosingAlerts(businessId);
   } catch (err) {
-    console.error("closing alert failed:", err.message);
+    console.error("shop alert tick failed:", err.message);
     return { ok: false, error: String(err.message || err) };
   }
 }
 
 export async function tickAllClosingAlerts() {
+  await sendRenewalAlerts();
   const shops = await query("SELECT id FROM businesses WHERE COALESCE(status,'active') = 'active'");
   const results = [];
-  for (const row of shops) results.push(await tickShopAlerts(row.id));
+  for (const row of shops) results.push(await tickShopAlerts(row.id, { renewal: false }));
   return results;
 }
 

@@ -12,6 +12,7 @@ import {
   updateText,
   welcomeText,
   credentialsText,
+  daysUntilExpiry,
   DEFAULT_TEMPLATES,
   WA_DEFAULT_URL,
 } from "./alerts.js";
@@ -48,6 +49,33 @@ test("message templates fill placeholders and honor custom text", () => {
   assert.match(login, /Secret#1/);
 });
 
+test("renewal alerts cover the week before expiry and after expiry", () => {
+  assert.equal(daysUntilExpiry("2026-09-12", "2026-09-05"), 7);
+  assert.equal(daysUntilExpiry("2026-09-05", "2026-09-06"), -1);
+  const before = renderAlert("renewal_before", {
+    shopName: "SWAMI MASALE",
+    ownerName: "Ravi",
+    plan: "Yearly",
+    expiry: "2026-09-12",
+    days: 7,
+    signInUrl: "https://pos.atavtelecom.in/login.html",
+    supportPhone: "9876543210",
+  });
+  assert.match(before, /renewal reminder/);
+  assert.match(before, /SWAMI MASALE/);
+  assert.match(before, /2026-09-12/);
+  assert.match(before, /7 day/);
+  const expired = renderAlert("renewal_expired", {
+    shopName: "SWAMI MASALE",
+    ownerName: "Ravi",
+    plan: "Yearly",
+    expiry: "2026-09-01",
+    signInUrl: "https://pos.atavtelecom.in/login.html",
+  });
+  assert.match(expired, /expired/);
+  assert.match(expired, /SWAMI MASALE/);
+});
+
 test("Master Admin Settings lives under Backup with Active/Inactive templates", () => {
   const masterHtml = readFileSync(path.join(root, "master.html"), "utf8");
   const master = readFileSync(path.join(root, "js/master.js"), "utf8");
@@ -67,6 +95,8 @@ test("Master Admin Settings lives under Backup with Active/Inactive templates", 
   assert.match(master, /User ID & password/);
   assert.match(master, /Closing sales summary/);
   assert.match(master, /Low stock alert/);
+  assert.match(master, /Renewal before expiry/);
+  assert.match(master, /Expired plan/);
   assert.match(master, /alert-switch-label/);
   assert.doesNotMatch(master, /Today platform sales/);
   assert.match(master, /id="biz-search"/);
@@ -74,6 +104,10 @@ test("Master Admin Settings lives under Backup with Active/Inactive templates", 
   assert.match(php, /pos_send_shop_welcome_alerts/);
   assert.match(php, /pos_send_credential_alerts/);
   assert.match(php, /pos_tick_shop_alerts/);
+  assert.match(alerts, /pos_send_renewal_alerts/);
+  assert.match(alerts, /tpl_renewal_before/);
+  assert.match(alerts, /renewal_expired/);
+  assert.match(nodeAlerts, /sendRenewalAlerts/);
   assert.match(alerts, /tpl_welcome/);
   assert.match(alerts, /pos_fill_template/);
   assert.match(nodeAlerts, /startAlertScheduler/);
