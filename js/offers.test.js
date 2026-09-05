@@ -74,6 +74,12 @@ test("buy 1 get 1 does not make a single pack free", () => {
   assert.equal(two.discount, 190);
   assert.equal(O.bogoFreeQty(1, 1, 1, 1, true), 0);
   assert.equal(O.bogoFreeQty(1, 1, 2, 2, true), 1);
+  const gated = O.evaluateOffer(
+    { ...offer, min_qty: 1, max_qty: 1, min_spend: 10000 },
+    { cart: [line("halad", 380, { qty: 2, isCount: true })], now: new Date("2026-09-05T10:00:00") },
+  );
+  assert.ok(gated);
+  assert.equal(gated.discount, 190);
 });
 
 test("mix and match pick 3 for 299", () => {

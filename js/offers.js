@@ -358,13 +358,17 @@
     const qty = lines.reduce((s, l) => s + pieceQty(l), 0);
     const spend = round2(lines.reduce((s, l) => s + lineGrossOf(l), 0));
     const billSpend = round2(cart.reduce((s, l) => s + lineGrossOf(l), 0));
-    if (offer.min_qty != null && qty < num(offer.min_qty)) return null;
-    if (offer.max_qty != null && qty > num(offer.max_qty)) return null;
-    const minSpend = num(offer.min_spend);
-    const scopeSpend = ["spend", "min_purchase", "customer", "first_purchase", "repeat", "time", "day", "festival"].includes(type)
-      ? (cond.item_ids.length || cond.category ? spend : billSpend)
-      : spend;
-    if (minSpend > 0 && scopeSpend < minSpend) return null;
+    const qtyBound = (v) => v != null && v !== "" && num(v) > 0;
+    const skipQtySpendGates = type === "bogo" || type === "combo" || type === "mix_match";
+    if (!skipQtySpendGates) {
+      if (qtyBound(offer.min_qty) && qty < num(offer.min_qty)) return null;
+      if (qtyBound(offer.max_qty) && qty > num(offer.max_qty)) return null;
+      const minSpend = num(offer.min_spend);
+      const scopeSpend = ["spend", "min_purchase", "customer", "first_purchase", "repeat", "time", "day", "festival"].includes(type)
+        ? (cond.item_ids.length || cond.category ? spend : billSpend)
+        : spend;
+      if (minSpend > 0 && scopeSpend < minSpend) return null;
+    }
 
     let discount = 0;
     let message = offer.name || "Offer";
