@@ -149,6 +149,15 @@ test("Master Admin Settings lives under Backup with Active/Inactive templates", 
   assert.match(master, /formatAlertWaTo/);
   assert.match(master, /queued to/);
   assert.match(master, /SMTP not configured/);
+  assert.match(master, /Outgoing email \(SMTP\)/);
+  assert.match(master, /imap\.hostinger\.com/);
+  assert.match(master, /name="smtp_user"/);
+  assert.match(master, /name="smtp_pass"/);
+  assert.match(master, /name="smtp_host"/);
+  assert.match(nodeAlerts, /smtp_pass/);
+  assert.match(nodeAlerts, /DEFAULT_SMTP_USER/);
+  assert.match(alerts, /smtp_host/);
+  assert.match(alerts, /pos@atavtelecom\.in/);
   assert.match(master, /uniqueAlertBits/);
   assert.match(master, /WA Master hit its per-minute limit/);
   assert.match(master, /Open WA & Email log/);

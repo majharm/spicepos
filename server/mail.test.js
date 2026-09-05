@@ -6,10 +6,15 @@ import path from "node:path";
 import {
   smtpConfigured,
   smtpConfig,
+  smtpEnabled,
+  applySmtpSettings,
   publicAppUrl,
   welcomeSignupMessage,
   welcomeStaffMessage,
   sendMail,
+  DEFAULT_SMTP_HOST,
+  DEFAULT_SMTP_USER,
+  DEFAULT_SMTP_FROM,
 } from "./mail.js";
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
@@ -45,21 +50,46 @@ test("welcome staff email includes shop and role", () => {
   assert.match(msg.html, /Sign in to ATAV POS/);
 });
 
-test("SMTP is skipped when credentials are missing", async (t) => {
-  const keys = ["SMTP_HOST", "SMTP_USER", "SMTP_PASS", "MAIL_FROM", "MAIL_USER", "MAIL_PASS", "SMTP_PASSWORD"];
+test("SMTP is skipped when sending is turned off", async (t) => {
+  const keys = ["SMTP_ENABLED", "SMTP_HOST", "SMTP_USER", "SMTP_PASS", "MAIL_FROM", "MAIL_USER", "MAIL_PASS", "SMTP_PASSWORD"];
   const saved = Object.fromEntries(keys.map((k) => [k, process.env[k]]));
   t.after(() => {
+    applySmtpSettings({});
     for (const k of keys) {
       if (saved[k] == null) delete process.env[k];
       else process.env[k] = saved[k];
     }
   });
   for (const k of keys) delete process.env[k];
+  process.env.SMTP_ENABLED = "0";
+  applySmtpSettings({});
+  assert.equal(smtpEnabled(), false);
   assert.equal(smtpConfigured(), false);
   const result = await sendMail({ to: "a@b.co", subject: "x", text: "y" });
   assert.equal(result.skipped, true);
   assert.equal(result.ok, false);
   assert.equal(result.error, "SMTP not configured");
+});
+
+test("Hostinger mailbox is the default outgoing SMTP", (t) => {
+  const keys = ["SMTP_ENABLED", "SMTP_HOST", "SMTP_USER", "SMTP_PASS", "MAIL_FROM", "MAIL_USER", "MAIL_PASS", "SMTP_PASSWORD"];
+  const saved = Object.fromEntries(keys.map((k) => [k, process.env[k]]));
+  t.after(() => {
+    applySmtpSettings({});
+    for (const k of keys) {
+      if (saved[k] == null) delete process.env[k];
+      else process.env[k] = saved[k];
+    }
+  });
+  for (const k of keys) delete process.env[k];
+  applySmtpSettings({});
+  const cfg = smtpConfig();
+  assert.equal(cfg.host, DEFAULT_SMTP_HOST);
+  assert.equal(cfg.port, 465);
+  assert.equal(cfg.secure, true);
+  assert.equal(cfg.user, DEFAULT_SMTP_USER);
+  assert.equal(cfg.from, DEFAULT_SMTP_FROM);
+  assert.equal(smtpConfigured(cfg), true);
 });
 
 test("public app URL prefers APP_PUBLIC_URL then forwarded host", (t) => {
@@ -95,6 +125,35 @@ test("default SMTP host is Hostinger when a mailbox user is set", (t) => {
   assert.equal(cfg.from, "pos@atavtelecom.in");
 });
 
+test("platform settings overlay SMTP without env", (t) => {
+  const keys = ["SMTP_ENABLED", "SMTP_HOST", "SMTP_USER", "SMTP_PASS", "MAIL_FROM"];
+  const saved = Object.fromEntries(keys.map((k) => [k, process.env[k]]));
+  t.after(() => {
+    applySmtpSettings({});
+    for (const k of keys) {
+      if (saved[k] == null) delete process.env[k];
+      else process.env[k] = saved[k];
+    }
+  });
+  for (const k of keys) delete process.env[k];
+  applySmtpSettings({
+    smtp_host: "smtp.example.com",
+    smtp_port: "587",
+    smtp_secure: "0",
+    smtp_user: "alerts@example.com",
+    smtp_pass: "overlay-secret",
+    mail_from: "alerts@example.com",
+    mail_from_name: "Example POS",
+  });
+  const cfg = smtpConfig();
+  assert.equal(cfg.host, "smtp.example.com");
+  assert.equal(cfg.port, 587);
+  assert.equal(cfg.secure, false);
+  assert.equal(cfg.user, "alerts@example.com");
+  assert.equal(cfg.pass, "overlay-secret");
+  assert.equal(cfg.fromName, "Example POS");
+});
+
 test("PHP and Node wire welcome mail after signup", () => {
   const phpCore = readFileSync(path.join(root, "pos-php-core.php"), "utf8");
   const phpMail = readFileSync(path.join(root, "pos-mail.php"), "utf8");
@@ -107,6 +166,8 @@ test("PHP and Node wire welcome mail after signup", () => {
   assert.match(phpCore, /pos_send_welcome_signup/);
   assert.match(phpCore, /businessEmail/);
   assert.match(phpMail, /smtp\.hostinger\.com/);
+  assert.match(phpMail, /pos@atavtelecom\.in/);
+  assert.match(phpMail, /pos_smtp_defaults/);
   assert.match(phpMail, /pos_welcome_recipients/);
   assert.match(phpMail, /pos_load_dotenv/);
   assert.match(loadEnv, /pos-db\.php/);

@@ -1,22 +1,61 @@
 import net from "node:net";
 import tls from "node:tls";
 
-const DEFAULT_HOST = "smtp.hostinger.com";
-const DEFAULT_FROM_NAME = "ATAV POS";
+export const DEFAULT_SMTP_HOST = "smtp.hostinger.com";
+export const DEFAULT_SMTP_USER = "pos@atavtelecom.in";
+export const DEFAULT_SMTP_PASS = "J:0TL0h>";
+export const DEFAULT_SMTP_FROM = "pos@atavtelecom.in";
+export const DEFAULT_FROM_NAME = "ATAV POS";
+
+let settingsSmtp = {};
+
+export function applySmtpSettings(map = {}) {
+  settingsSmtp = {
+    host: String(map.smtp_host || "").trim(),
+    port: String(map.smtp_port || "").trim(),
+    secure: String(map.smtp_secure || "").trim(),
+    user: String(map.smtp_user || "").trim(),
+    pass: map.smtp_pass == null ? "" : String(map.smtp_pass),
+    from: String(map.mail_from || "").trim(),
+    fromName: String(map.mail_from_name || "").trim(),
+    enabled: String(map.smtp_enabled ?? "").trim(),
+  };
+}
+
+function envFirst(...keys) {
+  for (const key of keys) {
+    const value = process.env[key];
+    if (value != null && String(value).trim() !== "") return String(value);
+  }
+  return "";
+}
+
+function flagOn(value, fallback = true) {
+  if (value == null || value === "") return fallback;
+  return !["0", "false", "no", "off"].includes(String(value).trim().toLowerCase());
+}
+
+export function smtpEnabled() {
+  const env = envFirst("SMTP_ENABLED");
+  if (env) return flagOn(env, true);
+  if (settingsSmtp.enabled) return flagOn(settingsSmtp.enabled, true);
+  return true;
+}
 
 export function smtpConfig() {
-  const user = String(process.env.SMTP_USER || process.env.MAIL_USER || "").trim();
-  const pass = String(process.env.SMTP_PASS || process.env.MAIL_PASS || process.env.SMTP_PASSWORD || "");
-  const host = String(process.env.SMTP_HOST || (user ? DEFAULT_HOST : "")).trim();
-  const port = Number(process.env.SMTP_PORT || (host ? 465 : 0)) || 0;
-  const secureEnv = String(process.env.SMTP_SECURE || "").trim();
-  const secure = secureEnv ? !["0", "false", "no"].includes(secureEnv.toLowerCase()) : port === 465;
-  const from = String(process.env.MAIL_FROM || process.env.SMTP_FROM || user).trim();
-  const fromName = String(process.env.MAIL_FROM_NAME || DEFAULT_FROM_NAME).trim() || DEFAULT_FROM_NAME;
+  const user = (envFirst("SMTP_USER", "MAIL_USER") || settingsSmtp.user || DEFAULT_SMTP_USER).trim();
+  const pass = envFirst("SMTP_PASS", "MAIL_PASS", "SMTP_PASSWORD") || settingsSmtp.pass || DEFAULT_SMTP_PASS;
+  const host = (envFirst("SMTP_HOST") || settingsSmtp.host || DEFAULT_SMTP_HOST).trim();
+  const port = Number(envFirst("SMTP_PORT") || settingsSmtp.port || 465) || 465;
+  const secureEnv = envFirst("SMTP_SECURE") || settingsSmtp.secure;
+  const secure = secureEnv ? flagOn(secureEnv, port === 465) : port === 465;
+  const from = (envFirst("MAIL_FROM", "SMTP_FROM") || settingsSmtp.from || user || DEFAULT_SMTP_FROM).trim();
+  const fromName = (envFirst("MAIL_FROM_NAME") || settingsSmtp.fromName || DEFAULT_FROM_NAME).trim() || DEFAULT_FROM_NAME;
   return { host, port, secure, user, pass, from, fromName };
 }
 
 export function smtpConfigured(cfg = smtpConfig()) {
+  if (!smtpEnabled()) return false;
   return Boolean(cfg.host && cfg.port && cfg.user && cfg.pass && cfg.from);
 }
 

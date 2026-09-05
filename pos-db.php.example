@@ -11,4 +11,10 @@ return [
   "DB_USER" => "your-db-user",
   "DB_PASSWORD" => "your-db-password",
   "MASTER_ADMIN_PASSWORD" => "your-master-password",
+  // Optional. POS already defaults to Hostinger SMTP + pos@atavtelecom.in.
+  // "SMTP_HOST" => "smtp.hostinger.com",
+  // "SMTP_PORT" => "465",
+  // "SMTP_USER" => "pos@atavtelecom.in",
+  // "SMTP_PASS" => "your-mailbox-password",
+  // "MAIL_FROM" => "pos@atavtelecom.in",
 ];

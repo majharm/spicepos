@@ -1,5 +1,14 @@
 import { query } from "./db.js";
-import { sendMail, publicAppUrl } from "./mail.js";
+import {
+  sendMail,
+  publicAppUrl,
+  applySmtpSettings,
+  DEFAULT_SMTP_HOST,
+  DEFAULT_SMTP_USER,
+  DEFAULT_SMTP_PASS,
+  DEFAULT_SMTP_FROM,
+  DEFAULT_FROM_NAME,
+} from "./mail.js";
 import { getPlatformSettings, setPlatformSetting } from "./settings.js";
 
 export const WA_DEFAULT_URL = "https://wamaster.atavtelecom.in/api/v1/send";
@@ -33,6 +42,14 @@ const ALERT_KEYS = [
   "alert_renewal_before",
   "alert_renewal_expired",
   "alert_closing_hour",
+  "smtp_enabled",
+  "smtp_host",
+  "smtp_port",
+  "smtp_secure",
+  "smtp_user",
+  "smtp_pass",
+  "mail_from",
+  "mail_from_name",
   "tpl_welcome",
   "tpl_credentials",
   "tpl_updates",
@@ -420,11 +437,28 @@ export async function ensureAlertSettings() {
     alert_renewal_before: "1",
     alert_renewal_expired: "1",
     alert_closing_hour: "22",
+    smtp_enabled: "1",
+    smtp_host: DEFAULT_SMTP_HOST,
+    smtp_port: "465",
+    smtp_secure: "1",
+    smtp_user: DEFAULT_SMTP_USER,
+    smtp_pass: DEFAULT_SMTP_PASS,
+    mail_from: DEFAULT_SMTP_FROM,
+    mail_from_name: DEFAULT_FROM_NAME,
   };
+  const fillIfEmpty = [
+    "wa_api_key",
+    "wa_profile_id",
+    "wa_api_url",
+    "smtp_host",
+    "smtp_user",
+    "smtp_pass",
+    "mail_from",
+  ];
   for (const [key, value] of Object.entries(defaults)) {
     const cur = map[key];
     if (cur == null) await setPlatformSetting(key, value);
-    else if (cur === "" && ["wa_api_key", "wa_profile_id", "wa_api_url"].includes(key)) {
+    else if (cur === "" && fillIfEmpty.includes(key)) {
       await setPlatformSetting(key, value);
     } else if (key === "wa_api_key" && WA_REVOKED_KEYS.includes(cur)) {
       await setPlatformSetting(key, value);
@@ -440,7 +474,7 @@ export async function loadAlertSettings() {
   await ensureAlertSettings();
   const rows = await query("SELECT setting_key, setting_value FROM platform_settings");
   const map = Object.fromEntries(rows.map((r) => [r.setting_key, r.setting_value ?? ""]));
-  return {
+  const cfg = {
     wa_enabled: flagOn(map.wa_enabled, true) ? "1" : "0",
     wa_api_url: map.wa_api_url || WA_DEFAULT_URL,
     wa_api_key: map.wa_api_key || "",
@@ -454,6 +488,14 @@ export async function loadAlertSettings() {
     alert_renewal_before: flagOn(map.alert_renewal_before, true) ? "1" : "0",
     alert_renewal_expired: flagOn(map.alert_renewal_expired, true) ? "1" : "0",
     alert_closing_hour: String(Math.min(23, Math.max(0, Number(map.alert_closing_hour ?? 22) || 22))),
+    smtp_enabled: flagOn(map.smtp_enabled, true) ? "1" : "0",
+    smtp_host: map.smtp_host || DEFAULT_SMTP_HOST,
+    smtp_port: String(Number(map.smtp_port || 465) || 465),
+    smtp_secure: flagOn(map.smtp_secure, true) ? "1" : "0",
+    smtp_user: map.smtp_user || DEFAULT_SMTP_USER,
+    smtp_pass: map.smtp_pass || DEFAULT_SMTP_PASS,
+    mail_from: map.mail_from || DEFAULT_SMTP_FROM,
+    mail_from_name: map.mail_from_name || DEFAULT_FROM_NAME,
     tpl_welcome: map.tpl_welcome || "",
     tpl_credentials: map.tpl_credentials || "",
     tpl_updates: map.tpl_updates || "",
@@ -462,6 +504,8 @@ export async function loadAlertSettings() {
     tpl_renewal_before: map.tpl_renewal_before || "",
     tpl_renewal_expired: map.tpl_renewal_expired || "",
   };
+  applySmtpSettings(cfg);
+  return cfg;
 }
 
 export function publicAlertSettings(cfg) {
@@ -469,6 +513,8 @@ export function publicAlertSettings(cfg) {
     ...cfg,
     wa_api_key: maskSecret(cfg.wa_api_key),
     wa_api_key_set: Boolean(cfg.wa_api_key),
+    smtp_pass: maskSecret(cfg.smtp_pass),
+    smtp_pass_set: Boolean(cfg.smtp_pass),
     defaults: { ...DEFAULT_TEMPLATES },
     sample_vars: sampleAlertVars(),
     samples: {},
@@ -485,7 +531,7 @@ export async function saveAlertSettings(body = {}) {
   const next = { ...current };
   for (const key of ALERT_KEYS) {
     if (!Object.prototype.hasOwnProperty.call(body, key)) continue;
-    if (key === "wa_api_key" && looksMaskedSecret(body[key])) continue;
+    if ((key === "wa_api_key" || key === "smtp_pass") && looksMaskedSecret(body[key])) continue;
     let value = body[key] == null ? "" : String(body[key]);
     if (key.startsWith("tpl_")) value = value.slice(0, 8000);
     next[key] = key.startsWith("tpl_") ? value.trim() : value.trim();
@@ -507,6 +553,13 @@ export async function saveAlertSettings(body = {}) {
   }
   next.alert_closing_hour = String(Math.min(23, Math.max(0, Number(next.alert_closing_hour) || 22)));
   next.wa_country_code = (next.wa_country_code || WA_DEFAULT_COUNTRY).replace(/\D/g, "").slice(0, 3) || WA_DEFAULT_COUNTRY;
+  next.smtp_enabled = flagOn(next.smtp_enabled, true) ? "1" : "0";
+  next.smtp_secure = flagOn(next.smtp_secure, Number(next.smtp_port) === 465) ? "1" : "0";
+  next.smtp_host = next.smtp_host || DEFAULT_SMTP_HOST;
+  next.smtp_port = String(Number(next.smtp_port) || 465);
+  next.smtp_user = next.smtp_user || DEFAULT_SMTP_USER;
+  next.mail_from = next.mail_from || next.smtp_user || DEFAULT_SMTP_FROM;
+  next.mail_from_name = next.mail_from_name || DEFAULT_FROM_NAME;
   for (const key of ALERT_KEYS) await setPlatformSetting(key, next[key]);
   return loadAlertSettings();
 }

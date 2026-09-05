@@ -1,16 +1,67 @@
 <?php
 
+function pos_smtp_defaults() {
+  return [
+    "host" => "smtp.hostinger.com",
+    "port" => 465,
+    "user" => "pos@atavtelecom.in",
+    "pass" => "J:0TL0h>",
+    "from" => "pos@atavtelecom.in",
+    "fromName" => "ATAV POS",
+  ];
+}
+
+function pos_smtp_settings_map() {
+  if (!function_exists("pos_q")) return [];
+  try {
+    $rows = pos_q(
+      "SELECT setting_key, setting_value FROM platform_settings WHERE setting_key IN ('smtp_host','smtp_port','smtp_user','smtp_pass','smtp_secure','smtp_enabled','mail_from','mail_from_name')"
+    );
+    $map = [];
+    foreach ($rows as $r) $map[$r["setting_key"]] = $r["setting_value"] ?? "";
+    return $map;
+  } catch (Throwable $e) {
+    return [];
+  }
+}
+
+function pos_smtp_flag($value, $fallback = true) {
+  if ($value === null || $value === "") return $fallback;
+  return !in_array(strtolower(trim((string) $value)), ["0", "false", "no", "off"], true);
+}
+
+function pos_smtp_enabled($map = null) {
+  $env = trim(pos_env("SMTP_ENABLED"));
+  if ($env !== "") return pos_smtp_flag($env, true);
+  $map = $map === null ? pos_smtp_settings_map() : $map;
+  if (($map["smtp_enabled"] ?? "") !== "") return pos_smtp_flag($map["smtp_enabled"], true);
+  return true;
+}
+
+function pos_smtp_pick($envKeys, $settingKey, $map, $fallback) {
+  foreach ($envKeys as $key) {
+    $value = pos_env($key);
+    if ($value !== "") return $value;
+  }
+  $stored = trim((string) ($map[$settingKey] ?? ""));
+  if ($stored !== "") return $stored;
+  return $fallback;
+}
+
 function pos_smtp_config() {
   if (function_exists("pos_load_dotenv")) pos_load_dotenv();
-  $user = trim(pos_env("SMTP_USER", pos_env("MAIL_USER")));
-  $pass = pos_env("SMTP_PASS", pos_env("MAIL_PASS", pos_env("SMTP_PASSWORD")));
-  $host = trim(pos_env("SMTP_HOST", $user !== "" ? "smtp.hostinger.com" : ""));
-  $port = (int) pos_env("SMTP_PORT", $host !== "" ? "465" : "0");
-  $secureEnv = strtolower(trim(pos_env("SMTP_SECURE")));
+  $d = pos_smtp_defaults();
+  $map = pos_smtp_settings_map();
+  $user = trim(pos_smtp_pick(["SMTP_USER", "MAIL_USER"], "smtp_user", $map, $d["user"]));
+  $pass = pos_smtp_pick(["SMTP_PASS", "MAIL_PASS", "SMTP_PASSWORD"], "smtp_pass", $map, $d["pass"]);
+  $host = trim(pos_smtp_pick(["SMTP_HOST"], "smtp_host", $map, $d["host"]));
+  $port = (int) pos_smtp_pick(["SMTP_PORT"], "smtp_port", $map, (string) $d["port"]);
+  if ($port <= 0) $port = $d["port"];
+  $secureEnv = pos_smtp_pick(["SMTP_SECURE"], "smtp_secure", $map, "");
   $secure = $port === 465;
-  if ($secureEnv !== "") $secure = !in_array($secureEnv, ["0", "false", "no"], true);
-  $from = trim(pos_env("MAIL_FROM", pos_env("SMTP_FROM", $user)));
-  $fromName = trim(pos_env("MAIL_FROM_NAME", "ATAV POS")) ?: "ATAV POS";
+  if ($secureEnv !== "") $secure = pos_smtp_flag($secureEnv, $port === 465);
+  $from = trim(pos_smtp_pick(["MAIL_FROM", "SMTP_FROM"], "mail_from", $map, $user ?: $d["from"]));
+  $fromName = trim(pos_smtp_pick(["MAIL_FROM_NAME"], "mail_from_name", $map, $d["fromName"])) ?: $d["fromName"];
   return [
     "host" => $host,
     "port" => $port,
@@ -23,6 +74,7 @@ function pos_smtp_config() {
 }
 
 function pos_smtp_configured($cfg = null) {
+  if (!pos_smtp_enabled()) return false;
   $cfg = $cfg ?: pos_smtp_config();
   return $cfg["host"] !== "" && $cfg["port"] > 0 && $cfg["user"] !== "" && $cfg["pass"] !== "" && $cfg["from"] !== "";
 }

@@ -740,7 +740,7 @@ function expiryAlertsPageHtml(shops) {
   const dueN = rows.filter((b) => expiryFilterKind(b) === "due").length;
   const noExpN = rows.filter((b) => !ymd(b.subscription_expires_at)).length;
   return `<div class="items-desk master-desk expiry-alerts-desk">
-    ${masterHero("Platform", "Send alerts", "Pick alert types, then send WhatsApp and email to one shop or every shop. WhatsApp is queued by WA Master — reconnect that QR if the phone stays empty. Email needs SMTP. Templates live in Settings.", [
+    ${masterHero("Platform", "Send alerts", "Pick alert types, then send WhatsApp and email to one shop or every shop. WhatsApp is queued by WA Master — reconnect that QR if the phone stays empty. Email sends from pos@atavtelecom.in via Hostinger SMTP. Templates live in Settings.", [
       { label: "Shops", value: rows.length },
       { label: "Expired", value: expiredN, warn: expiredN > 0 },
       { label: "Due in 7 days", value: dueN, warn: dueN > 0 },
@@ -1029,6 +1029,7 @@ function alertsFormHtml(alerts) {
   const fill = (tpl) =>
     String(tpl || "").replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (_, key) => (vars[key] == null ? "" : String(vars[key])));
   const waOn = alerts.wa_enabled === "1";
+  const smtpOn = alerts.smtp_enabled !== "0";
   return `<form class="msg-settings" id="alert-form">
     <section class="settings item-composer msg-wa">
       <div class="item-composer-top">
@@ -1046,6 +1047,26 @@ function alertsFormHtml(alerts) {
         <label>API key <input name="wa_api_key" type="password" autocomplete="off" value="${attr(alerts.wa_api_key || "")}" /></label>
         <label>Profile ID <input name="wa_profile_id" value="${attr(alerts.wa_profile_id || "")}" autocomplete="off" /></label>
         <label>Country code <input name="wa_country_code" value="${attr(alerts.wa_country_code || "91")}" maxlength="3" inputmode="numeric" /></label>
+      </fieldset>
+    </section>
+    <section class="settings item-composer msg-wa">
+      <div class="item-composer-top">
+        <p class="item-mode">Outgoing email (SMTP)</p>
+        <p class="item-composer-note">Hostinger mailbox. POS only sends mail — use SMTP here. IMAP (imap.hostinger.com) is for receiving in Outlook or a phone app, not for alerts. Port 465 uses SSL.</p>
+        <label class="alert-switch">
+          <input type="checkbox" name="smtp_enabled" ${smtpOn ? "checked" : ""} />
+          <span class="alert-switch-ui" aria-hidden="true"></span>
+          <span class="alert-switch-label">${smtpOn ? "Active" : "Inactive"}</span>
+        </label>
+      </div>
+      <fieldset class="item-block">
+        <legend>Mailbox</legend>
+        <label>From / username <input name="smtp_user" value="${attr(alerts.smtp_user || "pos@atavtelecom.in")}" autocomplete="off" /></label>
+        <label>Password <input name="smtp_pass" type="password" autocomplete="off" value="${attr(alerts.smtp_pass || "")}" /></label>
+        <label>SMTP host <input name="smtp_host" value="${attr(alerts.smtp_host || "smtp.hostinger.com")}" autocomplete="off" /></label>
+        <label>Port <input name="smtp_port" inputmode="numeric" value="${attr(alerts.smtp_port || "465")}" /></label>
+        <label>From address <input name="mail_from" value="${attr(alerts.mail_from || alerts.smtp_user || "pos@atavtelecom.in")}" autocomplete="off" /></label>
+        <label>From name <input name="mail_from_name" value="${attr(alerts.mail_from_name || "ATAV POS")}" autocomplete="off" /></label>
       </fieldset>
     </section>
     <div class="items-split msg-split">
@@ -1194,6 +1215,8 @@ function bindAlertsForm(alerts) {
     const hint = $("alert-hint");
     const fd = Object.fromEntries(new FormData(form).entries());
     fd.wa_enabled = form.wa_enabled?.checked ? "1" : "0";
+    fd.smtp_enabled = form.smtp_enabled?.checked ? "1" : "0";
+    fd.smtp_secure = String(fd.smtp_port || "465") === "465" ? "1" : "0";
     for (const d of ALERT_DEFS) fd[d.flag] = form[d.flag]?.checked ? "1" : "0";
     hint.className = "hint";
     hint.textContent = "Saving…";
@@ -1841,12 +1864,13 @@ async function render() {
           "Platform",
           pane === "settings" ? "Settings" : "Backup",
           pane === "settings"
-            ? "Connect WhatsApp, then turn each auto-message Active or Inactive. Shops receive WhatsApp on their mobile and email on their shop email."
+            ? "Connect WhatsApp and Hostinger SMTP, then turn each auto-message Active or Inactive. Shops receive WhatsApp on their mobile and email from pos@atavtelecom.in."
             : "Download or restore one shop, or the full platform. Backup and Messages are under Settings.",
           pane === "backup"
             ? [{ label: "Shops", value: shops.length }]
             : [
                 { label: "WhatsApp", value: alerts?.wa_enabled === "1" ? "On" : "Off" },
+                { label: "Email", value: alerts?.smtp_enabled !== "0" && alerts?.smtp_pass_set ? "On" : "Off" },
                 { label: "Active", value: `${activeMsgs}/${ALERT_DEFS.length}` },
               ],
         )}

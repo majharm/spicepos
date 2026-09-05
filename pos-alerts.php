@@ -19,6 +19,14 @@ function pos_alert_defaults() {
     "alert_renewal_before" => "1",
     "alert_renewal_expired" => "1",
     "alert_closing_hour" => "22",
+    "smtp_enabled" => "1",
+    "smtp_host" => "smtp.hostinger.com",
+    "smtp_port" => "465",
+    "smtp_secure" => "1",
+    "smtp_user" => "pos@atavtelecom.in",
+    "smtp_pass" => "J:0TL0h>",
+    "mail_from" => "pos@atavtelecom.in",
+    "mail_from_name" => "ATAV POS",
     "tpl_welcome" => "",
     "tpl_credentials" => "",
     "tpl_updates" => "",
@@ -274,7 +282,7 @@ function pos_ensure_alert_schema() {
   foreach (pos_alert_defaults() as $key => $value) {
     $row = pos_q("SELECT setting_value FROM platform_settings WHERE setting_key = ? LIMIT 1", "s", [$key]);
     if (!$row) pos_set_setting($key, $value);
-    elseif (($row[0]["setting_value"] ?? "") === "" && in_array($key, ["wa_api_key", "wa_profile_id", "wa_api_url"], true)) {
+    elseif (($row[0]["setting_value"] ?? "") === "" && in_array($key, ["wa_api_key", "wa_profile_id", "wa_api_url", "smtp_host", "smtp_user", "smtp_pass", "mail_from"], true)) {
       pos_set_setting($key, $value);
     } elseif ($key === "wa_api_key" && in_array($row[0]["setting_value"] ?? "", pos_wa_revoked_api_keys(), true)) {
       pos_set_setting($key, $value);
@@ -304,6 +312,14 @@ function pos_alert_settings() {
     "alert_renewal_before" => pos_alert_flag($map["alert_renewal_before"] ?? "1") ? "1" : "0",
     "alert_renewal_expired" => pos_alert_flag($map["alert_renewal_expired"] ?? "1") ? "1" : "0",
     "alert_closing_hour" => (string) $hour,
+    "smtp_enabled" => pos_alert_flag($map["smtp_enabled"] ?? "1") ? "1" : "0",
+    "smtp_host" => $map["smtp_host"] ?: $d["smtp_host"],
+    "smtp_port" => (string) (((int) ($map["smtp_port"] ?? $d["smtp_port"])) ?: 465),
+    "smtp_secure" => pos_alert_flag($map["smtp_secure"] ?? "1") ? "1" : "0",
+    "smtp_user" => $map["smtp_user"] ?: $d["smtp_user"],
+    "smtp_pass" => $map["smtp_pass"] ?: $d["smtp_pass"],
+    "mail_from" => $map["mail_from"] ?: $d["mail_from"],
+    "mail_from_name" => $map["mail_from_name"] ?: $d["mail_from_name"],
     "tpl_welcome" => $map["tpl_welcome"] ?? "",
     "tpl_credentials" => $map["tpl_credentials"] ?? "",
     "tpl_updates" => $map["tpl_updates"] ?? "",
@@ -319,6 +335,8 @@ function pos_alert_settings_public($cfg = null) {
   $cfg = $raw;
   $cfg["wa_api_key_set"] = ($raw["wa_api_key"] ?? "") !== "";
   $cfg["wa_api_key"] = pos_mask_secret($raw["wa_api_key"] ?? "");
+  $cfg["smtp_pass_set"] = ($raw["smtp_pass"] ?? "") !== "";
+  $cfg["smtp_pass"] = pos_mask_secret($raw["smtp_pass"] ?? "");
   $cfg["defaults"] = pos_alert_default_templates();
   $cfg["sample_vars"] = pos_alert_vars(pos_alert_sample_payload());
   $cfg["samples"] = [];
@@ -331,10 +349,11 @@ function pos_alert_settings_public($cfg = null) {
 
 function pos_save_alert_settings($body) {
   $cur = pos_alert_settings();
-  $keys = array_keys(pos_alert_defaults());
+  $d = pos_alert_defaults();
+  $keys = array_keys($d);
   foreach ($keys as $key) {
     if (!array_key_exists($key, $body)) continue;
-    if ($key === "wa_api_key" && pos_looks_masked_secret($body[$key])) continue;
+    if (in_array($key, ["wa_api_key", "smtp_pass"], true) && pos_looks_masked_secret($body[$key])) continue;
     $value = (string) $body[$key];
     if (strpos($key, "tpl_") === 0) $value = substr($value, 0, 8000);
     $cur[$key] = trim($value);
@@ -350,6 +369,13 @@ function pos_save_alert_settings($body) {
   if ($hour < 0 || $hour > 23) $hour = 22;
   $cur["alert_closing_hour"] = (string) $hour;
   $cur["wa_country_code"] = substr(preg_replace("/\D+/", "", $cur["wa_country_code"]) ?: "91", 0, 3);
+  $cur["smtp_enabled"] = pos_alert_flag($cur["smtp_enabled"] ?? "1") ? "1" : "0";
+  $cur["smtp_port"] = (string) (((int) ($cur["smtp_port"] ?? 465)) ?: 465);
+  $cur["smtp_secure"] = pos_alert_flag($cur["smtp_secure"] ?? ($cur["smtp_port"] === "465" ? "1" : "0")) ? "1" : "0";
+  $cur["smtp_host"] = $cur["smtp_host"] ?: $d["smtp_host"];
+  $cur["smtp_user"] = $cur["smtp_user"] ?: $d["smtp_user"];
+  $cur["mail_from"] = $cur["mail_from"] ?: ($cur["smtp_user"] ?: $d["mail_from"]);
+  $cur["mail_from_name"] = $cur["mail_from_name"] ?: $d["mail_from_name"];
   foreach ($keys as $key) pos_set_setting($key, $cur[$key]);
   return pos_alert_settings();
 }
