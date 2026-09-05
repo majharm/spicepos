@@ -1,10 +1,14 @@
 <?php
 
+function pos_wa_revoked_api_keys() {
+  return ["b99fcac4528c679916dcd461f5d834a098c9f9fa2fd349c67395fb028579cc1b"];
+}
+
 function pos_alert_defaults() {
   return [
     "wa_enabled" => "1",
     "wa_api_url" => "https://wamaster.atavtelecom.in/api/v1/send",
-    "wa_api_key" => "b99fcac4528c679916dcd461f5d834a098c9f9fa2fd349c67395fb028579cc1b",
+    "wa_api_key" => "56e4be3511d76e32c1ec4b9c26afc48e9cb8d2833984095a62f9357894c6f814",
     "wa_profile_id" => "acc_1782484414096",
     "wa_country_code" => "91",
     "alert_welcome" => "1",
@@ -227,6 +231,8 @@ function pos_ensure_alert_schema() {
     $row = pos_q("SELECT setting_value FROM platform_settings WHERE setting_key = ? LIMIT 1", "s", [$key]);
     if (!$row) pos_set_setting($key, $value);
     elseif (($row[0]["setting_value"] ?? "") === "" && in_array($key, ["wa_api_key", "wa_profile_id", "wa_api_url"], true)) {
+      pos_set_setting($key, $value);
+    } elseif ($key === "wa_api_key" && in_array($row[0]["setting_value"] ?? "", pos_wa_revoked_api_keys(), true)) {
       pos_set_setting($key, $value);
     }
   }

@@ -19,6 +19,8 @@ import {
   sendWhatsApp,
   DEFAULT_TEMPLATES,
   WA_DEFAULT_URL,
+  WA_DEFAULT_KEY,
+  WA_REVOKED_KEYS,
 } from "./alerts.js";
 import { parseDataImage } from "./mail.js";
 
@@ -143,6 +145,10 @@ test("Master Admin Settings lives under Backup with Active/Inactive templates", 
   assert.match(php, /send-expiry-alert/);
   assert.match(alerts, /pos_summarize_alert_results/);
   assert.match(alerts, /pos_wa_response_ok/);
+  assert.match(alerts, /pos_wa_revoked_api_keys/);
+  assert.equal(WA_DEFAULT_KEY, "56e4be3511d76e32c1ec4b9c26afc48e9cb8d2833984095a62f9357894c6f814");
+  assert.ok(WA_REVOKED_KEYS.includes("b99fcac4528c679916dcd461f5d834a098c9f9fa2fd349c67395fb028579cc1b"));
+  assert.doesNotMatch(alerts, /"wa_api_key" => "b99fcac4528c6799/);
   assert.match(nodeAlerts, /waResponseOk/);
   assert.match(nodeAlerts, /X-API-Key/);
   assert.match(alerts, /X-API-Key/);

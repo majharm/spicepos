@@ -142,6 +142,7 @@ FIXES in this bundle
   - Force expiry send always delivers (expires today counts as expired); skip reason shown
   - Cache sticker 20260905deploy111 on master (deploy106 on index, login, setup, order)
   - WhatsApp send requires JSON ok from WA Master; summary shows queued number and SMTP skip reason
+  - Rotate WA Master API key: replace revoked default, keep profile acc_1782484414096
   - WhatsApp/daily alerts: better mobile lookup, per-number send, mark sent only after delivery
   - Master Admin: Send expiry alert per shop + bulk send in Settings (WhatsApp + email)
   - Welcome email: SMTP env from pos-db.php/.env, welcome alert also emails, business email fallback
