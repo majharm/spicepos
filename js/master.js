@@ -181,6 +181,26 @@ function syncMasterNav() {
   });
 }
 
+function backupFamilyTabs(active) {
+  const tabBtn = (id, label) =>
+    `<button class="btn${active === id ? " active" : ""}" type="button" role="tab" aria-selected="${active === id}" data-master-pane="${id}">${label}</button>`;
+  return `<div class="settings-tabs" role="tablist" aria-label="Backup, settings, and messages">
+    ${tabBtn("backup", "Backup")}
+    ${tabBtn("settings", "Settings")}
+    ${tabBtn("notes", "Messages")}
+  </div>`;
+}
+
+function bindBackupFamilyTabs(root) {
+  root?.querySelectorAll("[data-master-pane]").forEach((btn) => {
+    btn.onclick = () => {
+      const pane = btn.dataset.masterPane;
+      if (pane === "notes") setMasterTab("notes");
+      else setMasterTab("backup", pane);
+    };
+  });
+}
+
 function setMasterTab(next, pane) {
   tab = next;
   if (next === "backup") backupPane = pane || "backup";
@@ -489,7 +509,7 @@ const ALERT_DEFS = [
     key: "updates",
     flag: "alert_updates",
     title: "New update",
-    blurb: "When you send a notification from the Notifications tab.",
+    blurb: "When you send a shop update from Backup → Messages.",
     channels: "WhatsApp · Email",
     placeholders: "{{shop}} {{title}} {{body}}",
   },
@@ -711,8 +731,8 @@ async function render() {
     branches: "Branches",
     devices: "POS devices",
     audit: "Audit log",
-    backup: backupPane === "settings" ? "Messages" : "Backup",
-    notes: "Notifications",
+    backup: backupPane === "settings" ? "Settings" : "Backup",
+    notes: "Messages",
     alerts: "Settings",
     support: "Support helpline",
   };
@@ -1202,10 +1222,10 @@ async function render() {
       body.innerHTML = `<div class="items-desk settings-desk master-desk">
         ${masterHero(
           "Platform",
-          pane === "settings" ? "Message settings" : "Backup",
+          pane === "settings" ? "Settings" : "Backup",
           pane === "settings"
             ? "Connect WhatsApp, then turn each auto-message Active or Inactive. Shops receive WhatsApp on their mobile and email on their shop email."
-            : "Download or restore one shop, or the full platform. Message settings are under Backup → Messages.",
+            : "Download or restore one shop, or the full platform. Settings and Messages sit under Backup.",
           pane === "backup"
             ? [{ label: "Shops", value: shops.length }]
             : [
@@ -1213,10 +1233,7 @@ async function render() {
                 { label: "Active", value: `${activeMsgs}/${ALERT_DEFS.length}` },
               ],
         )}
-        <div class="settings-tabs" role="tablist" aria-label="Backup and settings">
-          <button class="btn${pane === "backup" ? " active" : ""}" type="button" role="tab" aria-selected="${pane === "backup"}" data-master-pane="backup">Backup</button>
-          <button class="btn${pane === "settings" ? " active" : ""}" type="button" role="tab" aria-selected="${pane === "settings"}" data-master-pane="settings" data-tab-alerts>Messages</button>
-        </div>
+        ${backupFamilyTabs(pane)}
         <div class="settings-pane" id="master-pane-backup" ${pane === "backup" ? "" : "hidden"}>
           <div class="master-backup-grid">
             <div class="settings" id="master-backup-card">
@@ -1259,9 +1276,7 @@ async function render() {
           ${pane === "settings" ? alertsFormHtml(alerts) : ""}
         </div>
       </div>`;
-      body.querySelectorAll("[data-master-pane]").forEach((btn) => {
-        btn.onclick = () => setMasterTab("backup", btn.dataset.masterPane);
-      });
+      bindBackupFamilyTabs(body);
       if (pane === "backup") bindMasterBackup(body, shops);
       else bindAlertsForm(alerts);
     } else if (tab === "notes") {
@@ -1271,10 +1286,11 @@ async function render() {
       ]);
       const notes = settings.notifications || [];
       body.innerHTML = `<div class="items-desk master-desk">
-        ${masterHero("Platform", "Notifications", "Post to the shop dashboard. If New update is Active under Backup → Messages, shops also get WhatsApp and email.", [
+        ${masterHero("Platform", "Messages", "Post to the shop dashboard. If New update is Active under Backup → Settings, shops also get WhatsApp and email.", [
           { label: "Recent", value: notes.length },
           { label: "Shops", value: businesses.length },
         ])}
+        ${backupFamilyTabs("notes")}
         <div class="items-split">
           <form class="settings item-composer" id="note-form">
             <div class="item-composer-top">
@@ -1335,6 +1351,7 @@ async function render() {
           </aside>
         </div>
       </div>`;
+      bindBackupFamilyTabs(body);
       let noteImage = "";
       const preview = $("note-image-preview");
       const clearBtn = $("note-image-clear");
@@ -1437,7 +1454,7 @@ async function render() {
 
 function summarizeNoticeDelivery(delivery) {
   if (delivery?.skipped) {
-    return "Saved on the shop dashboard. New update WhatsApp/email is Inactive under Backup → Messages.";
+    return "Saved on the shop dashboard. New update WhatsApp/email is Inactive under Backup → Settings.";
   }
   const results = delivery?.results;
   if (!Array.isArray(results) || !results.length) {

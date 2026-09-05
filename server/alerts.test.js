@@ -57,11 +57,12 @@ test("Master Admin Settings lives under Backup with Active/Inactive templates", 
   const index = readFileSync(path.join(root, "server/index.js"), "utf8");
   assert.doesNotMatch(masterHtml, /data-tab="alerts"/);
   assert.match(masterHtml, /data-backup-pane="settings"/);
+  assert.match(masterHtml, />Settings</);
   assert.match(masterHtml, />Messages</);
-  assert.match(master, /data-master-pane="settings"/);
+  assert.doesNotMatch(masterHtml, />Notifications</);
+  assert.match(master, /function backupFamilyTabs/);
   assert.match(master, /id="alert-form"/);
   assert.match(master, /class="msg-settings"/);
-  assert.match(master, /Message settings/);
   assert.match(master, /WhatsApp connection/);
   assert.match(master, /User ID & password/);
   assert.match(master, /Closing sales summary/);
