@@ -138,7 +138,7 @@ FIXES in this bundle
   - Suppliers form and list include address and email
   - Settings page: wider card, 2-column details, styled logo upload, keep card padding on mobile
   - CSS: Master Admin mobile nav wrap, hide nav until sign-in, backup file inputs, table overflow
-  - Master Admin Send alerts page: all types to one shop or all shops: all shops with activation + expiry dates, filters, send buttons
+  - Master Admin Send alerts page: all types to one shop or all shops
   - Force expiry send always delivers (expires today counts as expired); skip reason shown
   - Cache sticker 20260905deploy110 on master (deploy106 on index, login, setup, order)
   - WhatsApp/daily alerts: better mobile lookup, per-number send, mark sent only after delivery
