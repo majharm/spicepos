@@ -29,8 +29,8 @@ test("shop UI can create a combo offer from AI Growth", () => {
   const node = readFileSync(path.join(root, "server/index.js"), "utf8");
   const php = readFileSync(path.join(root, "pos-combos.php"), "utf8");
   const till = readFileSync(path.join(root, "pos-php-till.php"), "utf8");
-  assert.match(growthUi, /Create combo offer/);
-  assert.match(growthUi, /\/api\/combos/);
+  assert.match(growthUi, /openOffersCreate/);
+  assert.match(growthUi, /type: "combo"/);
   assert.match(app, /applyComboOffer/);
   assert.match(node, /createCombo/);
   assert.match(php, /pos_create_combo/);

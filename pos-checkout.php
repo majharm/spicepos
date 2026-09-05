@@ -140,6 +140,16 @@ function pos_checkout_sale($bid, $branchId, $uid, $auth, $body) {
         pos_q("UPDATE sales_orders SET total = ? WHERE id = ?", "ss", [(string) $total, $orderId]);
       }
     }
+    if (function_exists("pos_record_offer_redemptions")) {
+      try {
+        pos_record_offer_redemptions($bid, $body["offerIds"] ?? $body["offer_ids"] ?? [], $orderId, $customer["id"] ?? "", $billDiscount ?? 0, $total ?? $afterBill);
+      } catch (Exception $e) { /* optional */ }
+    } else {
+      try {
+        require_once __DIR__ . "/pos-offers.php";
+        pos_record_offer_redemptions($bid, $body["offerIds"] ?? $body["offer_ids"] ?? [], $orderId, $customer["id"] ?? "", $billDiscount ?? 0, $total ?? $afterBill);
+      } catch (Exception $e) { /* optional */ }
+    }
     $orders = pos_q("SELECT * FROM sales_orders WHERE id = ? AND business_id = ? LIMIT 1", "ss", [$orderId, $bid]);
     $orderLines = pos_q("SELECT * FROM sales_order_lines WHERE order_id = ?", "s", [$orderId]);
     $orderRow = $orders[0] ?? [

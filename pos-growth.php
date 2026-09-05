@@ -130,7 +130,18 @@ function pos_analyze_growth($snap) {
     $actions[] = ["level" => "urgent", "title" => $snap["overdueInvoices"] . " overdue invoices", "detail" => "Outstanding " . pos_growth_inr($snap["outstanding"] ?? 0), "jump" => "accounts", "action" => "Collect"];
   }
   if ($monthGrowth <= -12) $actions[] = ["level" => "urgent", "title" => "Sales dropped this month", "detail" => "This month is " . abs($monthGrowth) . "% below last month.", "jump" => "reports", "action" => "View report"];
-  if ($slow) $actions[] = ["level" => "attention", "title" => count($slow) . " slow-moving products", "detail" => "Clearance or a bundle can free shelf space.", "jump" => "items", "action" => "Review items"];
+  if ($slow) {
+    $actions[] = ["level" => "attention", "title" => count($slow) . " slow-moving products", "detail" => "Clearance or a bundle can free shelf space.", "jump" => "items", "action" => "Review items"];
+    $actions[] = [
+      "level" => "growth",
+      "kind" => "clearance",
+      "title" => "Clearance opportunity",
+      "detail" => implode(", ", array_slice(array_column($slow, "name"), 0, 4)) . " have not been moving.",
+      "jump" => "offers",
+      "action" => "Create clearance offer",
+      "itemIds" => array_values(array_filter(array_map(function ($p) { return $p["itemId"] ?? ""; }, array_slice($slow, 0, 12)))),
+    ];
+  }
   if (count($inactive) >= 5) $actions[] = ["level" => "attention", "title" => count($inactive) . " customers have not purchased in 45 days", "detail" => "A re-engagement offer can lift repeat sales.", "jump" => "customers", "action" => "View customers"];
   if ($margin > 0 && $margin < 12) $actions[] = ["level" => "attention", "title" => "Gross margin is thin", "detail" => "This month's margin is {$margin}%.", "jump" => "items", "action" => "Adjust price"];
   if ($topRev && count($topRev) > 1) {
@@ -139,7 +150,7 @@ function pos_analyze_growth($snap) {
       "kind" => "combo",
       "title" => "Create a combo offer",
       "detail" => "Try a " . $topRev[0]["name"] . " + " . $topRev[1]["name"] . " bundle.",
-      "jump" => "combo",
+      "jump" => "offers",
       "action" => "Create offer",
       "itemA" => ["id" => $topRev[0]["itemId"] ?? "", "name" => $topRev[0]["name"]],
       "itemB" => ["id" => $topRev[1]["itemId"] ?? "", "name" => $topRev[1]["name"]],

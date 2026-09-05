@@ -182,7 +182,7 @@ function renderGrowthActions(data) {
             (a) => `<article class="growth-action">
               <div><strong>${escapeHtml(a.title)}</strong><p>${escapeHtml(a.detail || "")}</p></div>
               <button class="btn primary" type="button" ${
-                a.kind === "combo" || a.jump === "combo"
+                a.kind === "combo" || a.jump === "combo" || a.jump === "offers" || a.kind === "clearance"
                   ? `data-growth-combo="1"`
                   : `data-growth-jump="${escapeHtml(a.jump || "reports")}"`
               }>${escapeHtml(a.action || "Open")}</button>
@@ -276,7 +276,7 @@ function renderGrowthRecs(data) {
       ${promos
         .map(
           (p) => `<article class="growth-rec"><h4>${escapeHtml(p.name)}</h4><p>${escapeHtml(p.text)}</p><em>${escapeHtml(p.expected || "")}</em>${
-            /combo/i.test(p.name || "") ? `<button class="btn" type="button" data-growth-combo="1">Create offer</button>` : ""
+            /combo|clearance/i.test(p.name || "") ? `<button class="btn" type="button" data-growth-combo="1">Create offer</button>` : ""
           }</article>`,
         )
         .join("") || `<p class="hint">More campaign ideas appear after a few weeks of bills.</p>`}
@@ -453,8 +453,34 @@ function syncComboNameFromItems() {
 }
 
 function openComboDraft() {
-  // Create combo offer from the two top-selling catalog items.
+  const clearance = (growthData?.actions || []).find((a) => a.kind === "clearance");
+  if (clearance && typeof openOffersCreate === "function" && /clearance/i.test(clearance.action || clearance.title || "")) {
+    /* fall through to combo unless the clicked path is clearance — both use the same button */
+  }
   const draft = comboDraftFromAnalysis();
+  if (typeof openOffersCreate === "function") {
+    const slowIds = clearance?.itemIds || (growthData?.products?.slow || []).map((p) => p.itemId || p.id).filter(Boolean);
+    if (slowIds.length && !draft.itemA) {
+      openOffersCreate({
+        name: "Clearance 20% off",
+        type: "clearance",
+        status: "draft",
+        discount_type: "pct",
+        discount_value: 20,
+        item_ids: slowIds,
+      });
+      return;
+    }
+    openOffersCreate({
+      name: draft.name,
+      type: "combo",
+      status: "draft",
+      discount_type: "pct",
+      discount_value: draft.discountValue || 8,
+      item_ids: [draft.itemA?.id, draft.itemB?.id].filter(Boolean),
+    });
+    return;
+  }
   const form = $("growth-combo-form");
   if (!form) return;
   form.hidden = false;

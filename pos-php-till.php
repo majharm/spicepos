@@ -11,7 +11,7 @@ function pos_php_till_dispatch($path, $method, $body) {
     "bootstrap", "dashboard", "today", "suppliers", "items", "customers", "packs",
     "orders", "purchases", "stock", "staff", "branches", "devices", "holds",
     "checkout", "settings", "reports", "growth", "audit", "accounts", "backup", "units",
-    "barcodes", "damage", "loyalty", "batches", "qr-orders", "combos",
+    "barcodes", "damage", "loyalty", "batches", "qr-orders", "combos", "offers",
   ];
   if (!in_array($head, $staff, true)) return false;
   $auth = pos_staff_session();
@@ -51,6 +51,7 @@ function pos_php_till_dispatch($path, $method, $body) {
   if ($path === "bootstrap" && $method === "GET") {
     pos_ensure_accounts_schema();
     require_once __DIR__ . "/pos-combos.php";
+    require_once __DIR__ . "/pos-offers.php";
     $co = [];
     try {
       $co = pos_q("SELECT * FROM company_settings WHERE business_id = ? LIMIT 1", "s", [$bid]);
@@ -127,6 +128,20 @@ function pos_php_till_dispatch($path, $method, $body) {
           return function_exists("pos_list_combos") ? pos_list_combos($bid) : [];
         } catch (Exception $e) {
           return [];
+        }
+      })(),
+      "offers" => (function () use ($bid) {
+        try {
+          return function_exists("pos_list_offers") ? pos_list_offers($bid) : [];
+        } catch (Exception $e) {
+          return [];
+        }
+      })(),
+      "offerSettings" => (function () use ($bid) {
+        try {
+          return function_exists("pos_get_promo_settings") ? pos_get_promo_settings($bid) : ["stacking" => "product_and_bill"];
+        } catch (Exception $e) {
+          return ["stacking" => "product_and_bill"];
         }
       })(),
       "units" => function_exists("pos_list_units") ? pos_list_units($bid) : [],
@@ -371,6 +386,11 @@ function pos_php_till_dispatch($path, $method, $body) {
   if ($path === "combos" || str_starts_with($path, "combos/")) {
     require_once __DIR__ . "/pos-combos.php";
     if (pos_combos_dispatch($path, $method, $body, $bid)) return true;
+  }
+
+  if ($path === "offers" || str_starts_with($path, "offers/")) {
+    require_once __DIR__ . "/pos-offers.php";
+    if (pos_offers_dispatch($path, $method, $body, $bid)) return true;
   }
 
   if ($path === "growth" && $method === "GET") {

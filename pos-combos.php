@@ -62,6 +62,18 @@ function pos_create_combo($bid, $body) {
     "s",
     [$id]
   );
+  if (function_exists("pos_create_offer")) {
+    try {
+      pos_create_offer($bid, [
+        "name" => $name,
+        "type" => "combo",
+        "status" => "active",
+        "item_ids" => [$a, $b],
+        "discount_type" => $type,
+        "discount_value" => $value,
+      ]);
+    } catch (Exception $e) { /* optional */ }
+  }
   return $row[0] ?? ["id" => $id, "name" => $name, "item_a_id" => $a, "item_b_id" => $b, "discount_type" => $type, "discount_value" => $value];
 }
 

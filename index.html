@@ -6,8 +6,8 @@
     <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
     <title>ATAV POS</title>
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./css/pos.css?v=20260905deploy121" />
-    <link rel="stylesheet" href="./css/saas.css?v=20260905deploy121" />
+    <link rel="stylesheet" href="./css/pos.css?v=20260905deploy122" />
+    <link rel="stylesheet" href="./css/saas.css?v=20260905deploy122" />
   </head>
   <body>
     <div class="app" id="app">
@@ -31,6 +31,7 @@
             <button class="nav-btn" type="button" data-view="qr-orders"><span class="nav-icon" aria-hidden="true">▦</span>QR Orders <span class="nav-badge" id="qr-order-badge" hidden></span></button>
             <button class="nav-btn" type="button" data-view="customers"><span class="nav-icon" aria-hidden="true">◎</span>Customers</button>
             <button class="nav-btn" type="button" data-view="loyalty"><span class="nav-icon" aria-hidden="true">★</span>Royalty</button>
+            <button class="nav-btn" type="button" data-view="offers"><span class="nav-icon" aria-hidden="true">%</span>Offers</button>
             <button class="nav-btn" type="button" data-view="purchases"><span class="nav-icon" aria-hidden="true">↘</span>Purchases</button>
           </div>
           <div class="nav-group">
@@ -97,6 +98,7 @@
           <p class="lede dash-actions">
             <button class="btn primary" type="button" data-view-jump="counter" id="open-pos">Open POS</button>
             <button class="btn" type="button" id="open-growth">AI Growth</button>
+            <button class="btn" type="button" id="open-offers">Offers</button>
           </p>
         </section>
         <section class="view view-counter" id="view-counter" hidden>
@@ -167,6 +169,7 @@
               <div id="pack-bar" class="pack-bar"></div>
               <div id="combo-bar" class="pack-bar combo-bar"></div>
               <div id="combo-banner" class="combo-banner" hidden></div>
+              <div id="offer-banner" class="combo-banner offer-banner" hidden></div>
               <div class="lines" id="lines"></div>
               <details class="bill-extras" id="bill-extras">
                 <summary>Discount &amp; royalty</summary>
@@ -743,6 +746,95 @@
           <div class="table-wrap" id="loyalty-table"></div>
           <div class="table-wrap" id="loyalty-history"></div>
         </section>
+        <section class="view view-offers" id="view-offers" hidden>
+          <h2 class="visually-hidden">Offers &amp; promotions</h2>
+          <p class="lede">Create, schedule, and track product, combo, and bill offers. Counter applies matching offers automatically.</p>
+          <p class="dash-actions">
+            <button class="btn primary" type="button" id="offer-create">Create new offer</button>
+            <button class="btn" type="button" id="offer-ai-btn">AI suggest best offer</button>
+          </p>
+          <div class="offer-dash" id="offer-dash"></div>
+          <p class="hint" id="offers-hint">Offers use this shop's own bills and catalog.</p>
+          <div class="offer-filters">
+            <button class="btn primary" type="button" data-offer-filter="active">Active</button>
+            <button class="btn" type="button" data-offer-filter="scheduled">Scheduled</button>
+            <button class="btn" type="button" data-offer-filter="expiring">Expiring soon</button>
+            <button class="btn" type="button" data-offer-filter="draft">Draft</button>
+            <button class="btn" type="button" data-offer-filter="all">All</button>
+          </div>
+          <label class="offer-stack-label">Stacking rule
+            <select id="off-shop-stack"></select>
+          </label>
+          <h3 class="growth-subhead">Templates</h3>
+          <div class="offer-templates" id="offer-templates"></div>
+          <h3 class="growth-subhead">AI recommendations</h3>
+          <div class="offer-ai" id="offer-ai"></div>
+          <h3 class="growth-subhead">Offers</h3>
+          <div class="offer-list" id="offer-list"></div>
+          <div class="growth-combo-form offer-form-wrap" id="offer-form-wrap" hidden>
+            <h4 id="off-form-title">Create new offer</h4>
+            <p class="hint" id="off-form-hint">Fill the offer, check profit, then save and activate.</p>
+            <form class="settings wide offer-form" id="offer-form">
+              <input type="hidden" id="off-id" />
+              <label>Offer name <input id="off-name" maxlength="180" required /></label>
+              <label>Offer type <select id="off-type"></select></label>
+              <label class="full">Description <input id="off-desc" maxlength="240" /></label>
+              <label>Products
+                <select id="off-items" multiple size="6"></select>
+              </label>
+              <label>Category <select id="off-category"></select></label>
+              <label>Start date <input id="off-start" type="date" /></label>
+              <label>End date <input id="off-end" type="date" /></label>
+              <label>Start time <input id="off-start-time" type="time" /></label>
+              <label>End time <input id="off-end-time" type="time" /></label>
+              <label>Days (0=Sun, 6=Sat) <input id="off-days" placeholder="0,6" /></label>
+              <label>Min qty <input id="off-min-qty" type="number" min="0" step="1" /></label>
+              <label>Max qty <input id="off-max-qty" type="number" min="0" step="1" /></label>
+              <label>Min purchase ₹ <input id="off-min-spend" type="number" min="0" step="1" /></label>
+              <label>Discount
+                <span class="disc-pair">
+                  <select id="off-disc-type">
+                    <option value="pct">%</option>
+                    <option value="amt">₹</option>
+                    <option value="price">Special price</option>
+                    <option value="combo_price">Combo price</option>
+                  </select>
+                  <input id="off-disc-value" type="number" min="0" step="0.01" />
+                </span>
+              </label>
+              <label>Offer / combo price <input id="off-price" type="number" min="0" step="0.01" /></label>
+              <label>Customer eligibility <select id="off-elig"></select></label>
+              <label>Branch <select id="off-branch"></select></label>
+              <label>Status
+                <select id="off-status">
+                  <option value="draft">Draft</option>
+                  <option value="scheduled">Scheduled</option>
+                  <option value="active">Active</option>
+                  <option value="paused">Paused</option>
+                  <option value="expired">Expired</option>
+                  <option value="completed">Completed</option>
+                </select>
+              </label>
+              <label>Usage limit <input id="off-limit" type="number" min="0" step="1" /></label>
+              <label>Priority (1 first) <input id="off-priority" type="number" min="1" max="100" value="50" /></label>
+              <label>Stacking <select id="off-stack"></select></label>
+              <label>Loyalty points × <input id="off-loyalty" type="number" min="1" step="0.5" value="1" /></label>
+              <label>Buy qty (X) <input id="off-buy-qty" type="number" min="1" step="1" value="1" /></label>
+              <label>Get qty (Y) <input id="off-get-qty" type="number" min="1" step="1" value="1" /></label>
+              <label>Get product <select id="off-get-item"></select></label>
+              <label>Mix &amp; match pick <input id="off-pick" type="number" min="1" step="1" value="3" /></label>
+              <label>Bundle price <input id="off-bundle" type="number" min="0" step="0.01" /></label>
+              <label>Free / gift item <select id="off-free-item"></select></label>
+              <label class="full">Qty tiers (qty type value) <textarea id="off-qty-tiers" rows="3" placeholder="2 pct 5&#10;3 pct 10&#10;5 pct 15"></textarea></label>
+              <label class="full">Spend tiers (spend type value) <textarea id="off-spend-tiers" rows="3" placeholder="500 pct 5&#10;1000 pct 10"></textarea></label>
+              <div class="full offer-profit" id="off-profit"></div>
+              <div class="dash-actions full">
+                <button class="btn primary" type="submit">Save offer</button>
+                <button class="btn" type="button" id="off-cancel">Close</button>
+              </div>
+            </form>
+          </div>
+        </section>
         <section class="view" id="view-staff" hidden>
           <h2 class="visually-hidden">Staff &amp; roles</h2>
           <form class="settings wide" id="staff-form">
@@ -1210,19 +1302,21 @@
         </section>
       </div>
     </aside>
-    <script src="./js/gst-supply.js?v=20260905deploy121" defer></script>
-    <script src="./js/pos-api.js?v=20260905deploy121" defer></script>
-    <script src="./js/units.js?v=20260905deploy121" defer></script>
-    <script src="./js/footwear.js?v=20260905deploy121" defer></script>
-    <script src="./js/discount.js?v=20260905deploy121" defer></script>
-    <script src="./js/loyalty.js?v=20260905deploy121" defer></script>
-    <script src="./js/barcode.js?v=20260905deploy121" defer></script>
+    <script src="./js/gst-supply.js?v=20260905deploy122" defer></script>
+    <script src="./js/pos-api.js?v=20260905deploy122" defer></script>
+    <script src="./js/units.js?v=20260905deploy122" defer></script>
+    <script src="./js/footwear.js?v=20260905deploy122" defer></script>
+    <script src="./js/discount.js?v=20260905deploy122" defer></script>
+    <script src="./js/offers.js?v=20260905deploy122" defer></script>
+    <script src="./js/loyalty.js?v=20260905deploy122" defer></script>
+    <script src="./js/barcode.js?v=20260905deploy122" defer></script>
     <script src="./js/camera-scan.js?v=20260904camera1" defer></script>
-    <script src="./js/dev-mode.js?v=20260905deploy121" defer></script>
-    <script src="./js/invoice.js?v=20260905deploy121" defer></script>
-    <script src="./js/support.js?v=20260905deploy121" defer></script>
+    <script src="./js/dev-mode.js?v=20260905deploy122" defer></script>
+    <script src="./js/invoice.js?v=20260905deploy122" defer></script>
+    <script src="./js/support.js?v=20260905deploy122" defer></script>
     <script src="./js/qrcode.iife.js?v=20260905qr1"></script>
-    <script src="./js/app.js?v=20260905deploy121" defer></script>
-    <script src="./js/growth.js?v=20260905deploy121" defer></script>
+    <script src="./js/app.js?v=20260905deploy122" defer></script>
+    <script src="./js/growth.js?v=20260905deploy122" defer></script>
+    <script src="./js/offers-ui.js?v=20260905deploy122" defer></script>
   </body>
 </html>

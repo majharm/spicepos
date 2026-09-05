@@ -7,6 +7,11 @@ const state = {
   customers: [],
   packs: [],
   combos: [],
+  offers: [],
+  offerSettings: { stacking: "product_and_bill" },
+  appliedOffers: null,
+  offerAuto: true,
+  offerBillLocked: false,
   suppliers: [],
   cart: [],
   query: "",
@@ -212,6 +217,7 @@ const VIEW_META = {
   damage: { title: "Damage stock", subtitle: "Wastage, approval, and estimated loss" },
   ledger: { title: "Stock ledger", subtitle: "Purchase, sale, return, and damage history" },
   loyalty: { title: "Royalty points", subtitle: "Earn, redeem, tiers, birthday and referral" },
+  offers: { title: "Offers & promotions", subtitle: "Combos, discounts, happy hours, and AI suggestions" },
   packs: { title: "Packs", subtitle: "Named spice mixes for the Counter" },
   orders: { title: "Invoices", subtitle: "POS slip, official A4, or duplicate copy" },
   "qr-orders": { title: "QR Orders", subtitle: "Incoming customer self-orders" },
@@ -927,13 +933,17 @@ function applyNav() {
       damage: "stock",
       ledger: "stock",
       loyalty: "customers",
+      offers: "discount",
     };
     btn.hidden = map[view] ? !can(map[view]) : false;
     if (view === "growth") btn.hidden = !(can("growth") || can("reports"));
+    if (view === "offers") btn.hidden = !(can("discount") || can("items") || can("growth"));
     if (view === "packs" && isFootwearShop()) btn.hidden = true;
   });
   const growthBtn = $("open-growth");
   if (growthBtn) growthBtn.hidden = !(can("growth") || can("reports"));
+  const offersBtn = $("open-offers");
+  if (offersBtn) offersBtn.hidden = !(can("discount") || can("items") || can("growth"));
 }
 
 function paintViewHeader(name) {
@@ -1005,6 +1015,10 @@ function showView(name) {
   if (name === "damage") loadDamageView();
   if (name === "ledger") loadLedgerView();
   if (name === "loyalty") loadLoyaltyView();
+  if (name === "offers") {
+    bindOffersUi?.();
+    loadOffersDesk?.(true);
+  }
   if (name === "staff") loadStaff();
   if (name === "customers") {
     renderCustomersTable();
@@ -1209,6 +1223,7 @@ function cartTotals() {
 }
 
 function renderCart() {
+  applyOffersToCart();
   $("chosen-pack").textContent = packLabel();
   if (!state.cart.length) {
     $("lines").innerHTML = `<p class="hint">Scan a barcode or tap an item.</p>`;
@@ -1277,6 +1292,7 @@ function renderCart() {
   renderHeldBills();
   renderEditOrderBanner();
   paintComboBanner();
+  paintOfferBanner();
   if (window.DevMode?.isEnabled()) {
     DevMode.updateContext({ cartLines: state.cart.length });
   }
@@ -1523,6 +1539,21 @@ function paintComboBar() {
   const bar = $("combo-bar");
   if (!bar) return;
   const rows = (state.combos || []).filter((c) => String(c.status || "active") === "active");
+  (state.offers || []).forEach((o) => {
+    if ((o.offer_type || o.type) !== "combo") return;
+    if (!["active"].includes(o.live_status || o.status)) return;
+    if (rows.some((c) => c.id === o.id)) return;
+    const ids = o.conditions?.item_ids || [];
+    rows.push({
+      id: o.id,
+      name: o.name,
+      item_a_id: ids[0],
+      item_b_id: ids[1],
+      discount_type: o.discount_type === "combo_price" ? "amt" : o.discount_type,
+      discount_value: o.offer_price || o.discount_value,
+      status: "active",
+    });
+  });
   bar.hidden = !rows.length;
   bar.innerHTML = rows
     .map(
@@ -1533,7 +1564,15 @@ function paintComboBar() {
 }
 
 function applyComboOffer(id) {
-  const combo = (state.combos || []).find((c) => c.id === id);
+  const combo = (state.combos || []).find((c) => c.id === id) || (state.offers || []).filter((o) => o.offer_type === "combo").map((o) => ({
+    id: o.id,
+    name: o.name,
+    item_a_id: o.conditions?.item_ids?.[0],
+    item_b_id: o.conditions?.item_ids?.[1],
+    discount_type: o.discount_type,
+    discount_value: o.offer_price || o.discount_value,
+    status: o.status,
+  })).find((c) => c.id === id);
   if (!combo) return;
   const a = state.items.find((i) => i.id === combo.item_a_id);
   const b = state.items.find((i) => i.id === combo.item_b_id);
@@ -1552,6 +1591,95 @@ function applyComboOffer(id) {
   if (extras) extras.open = true;
   setHint(`Combo ${combo.name}: ${state.billDiscountType === "pct" ? `${state.billDiscountValue}%` : money(state.billDiscountValue)} off applied`, "ok");
   renderCart();
+}
+
+function offerCartContext() {
+  const cust = typeof customer === "function" ? customer() || {} : {};
+  const loy = state.loyaltyAccount || {};
+  return {
+    now: new Date(),
+    cart: state.cart.map((line) => {
+      const item = state.items.find((i) => i.id === line.itemId);
+      const calc = item ? lineCalc(item, { ...line, discountType: "amt", discountValue: 0 }) : { gross: 0, taxable: 0 };
+      return {
+        itemId: line.itemId,
+        lineId: line.lineId,
+        qty: line.qtyGm,
+        qtyGm: line.qtyGm,
+        isCount: item ? POSUnits.isCount(itemUnit(item)) : true,
+        gross: calc.gross || calc.taxable,
+        taxable: calc.gross || calc.taxable,
+        category: item?.category,
+        item,
+      };
+    }),
+    customer: {
+      id: cust.id,
+      type: cust.type,
+      bills: Number(loy.lifetime_bills || 0) || (Number(loy.lifetime_spend) > 0 ? 2 : 0),
+      lifetime_spend: Number(loy.lifetime_spend || 0),
+      isBirthday: globalThis.POSLoyalty?.isBirthdayToday?.(cust.dob),
+    },
+    items: state.items,
+    stacking: state.offerSettings?.stacking || "product_and_bill",
+    branchId: state.session?.branch_id || state.session?.branchId,
+  };
+}
+
+function applyOffersToCart() {
+  const O = globalThis.POSOffers;
+  if (!O || state.offerAuto === false) {
+    state.appliedOffers = null;
+    return;
+  }
+  const offers = (state.offers || []).filter((o) => ["active", "scheduled"].includes(o.live_status || o.status) || o.legacy_combo);
+  const result = O.evaluateAll(offers, offerCartContext());
+  state.appliedOffers = result;
+  state.cart.forEach((line) => {
+    const d = result.lineDiscounts?.[line.lineId] || result.lineDiscounts?.[line.itemId] || 0;
+    if (d > 0) {
+      line.discountType = "amt";
+      line.discountValue = d;
+      line.offerId = true;
+    } else if (line.offerId) {
+      line.discountType = "amt";
+      line.discountValue = 0;
+      line.offerId = "";
+    }
+  });
+  if (!state.offerBillLocked) {
+    if (result.billDiscount > 0) {
+      state.billDiscountType = "amt";
+      state.billDiscountValue = result.billDiscount;
+      state.offerDroveBill = true;
+    } else if (state.offerDroveBill) {
+      state.billDiscountValue = 0;
+      state.offerDroveBill = false;
+    }
+    if ($("bill-disc-type")) $("bill-disc-type").value = state.billDiscountType;
+    if ($("bill-disc-value")) $("bill-disc-value").value = state.billDiscountValue;
+  }
+}
+
+function paintOfferBanner() {
+  const el = $("offer-banner");
+  if (!el) return;
+  const result = state.appliedOffers;
+  const available = result?.available || [];
+  const applied = result?.applied || [];
+  if (!available.length && !applied.length) {
+    el.hidden = true;
+    el.innerHTML = "";
+    return;
+  }
+  el.hidden = false;
+  const save = result?.discount || 0;
+  const names = (applied.length ? applied : available).map((o) => o.name).join(" · ");
+  el.innerHTML = applied.length
+    ? `<strong>Offer applied</strong> ${escapeHtml(names)}. You save ${money(save)}.
+       <button class="btn" type="button" data-skip-offers="1">Skip offers</button>`
+    : `<strong>Offer available</strong> ${escapeHtml(names)}.
+       <button class="btn" type="button" data-use-offers="1">Apply</button>`;
 }
 
 function paintComboBanner() {
@@ -2351,6 +2479,8 @@ async function loadBootstrap() {
   state.customers = data.customers;
   state.packs = data.packs;
   state.combos = data.combos || [];
+  state.offers = data.offers || [];
+  state.offerSettings = data.offerSettings || { stacking: "product_and_bill" };
   paintPlatformNotices(data.notes);
   paintHeader();
   paintPlatformSupport();
@@ -3680,6 +3810,8 @@ $("btn-clear").addEventListener("click", () => {
   state.lastPack = null;
   state.billDiscountValue = 0;
   state.loyaltyRedeem = 0;
+  state.offerAuto = true;
+  state.offerBillLocked = false;
   if ($("bill-disc-value")) $("bill-disc-value").value = 0;
   if ($("loyalty-redeem")) $("loyalty-redeem").value = 0;
   $("pack-choice").value = "";
@@ -3710,6 +3842,8 @@ $("btn-pay").addEventListener("click", async () => {
       discountValue: state.billDiscountValue,
       discount: cartTotals().discount,
       loyaltyPoints: state.loyaltyRedeem,
+      offerIds: (state.appliedOffers?.applied || []).map((o) => o.id).filter(Boolean),
+      offerLoyaltyMultiplier: state.appliedOffers?.loyaltyMultiplier || 1,
       lines: state.cart.map((l) => ({
         itemId: l.itemId,
         quantity_gm: l.qtyGm,
@@ -4689,6 +4823,29 @@ document.addEventListener("click", (e) => {
   applyComboOffer(btn.dataset.applyCombo);
 });
 $("open-growth")?.addEventListener("click", () => showView("growth"));
+$("open-offers")?.addEventListener("click", () => showView("offers"));
+document.addEventListener("click", (e) => {
+  if (e.target.closest("[data-skip-offers]")) {
+    state.offerAuto = false;
+    state.cart.forEach((l) => {
+      if (l.offerId) {
+        l.discountValue = 0;
+        l.offerId = "";
+      }
+    });
+    if (!state.offerBillLocked) {
+      state.billDiscountValue = 0;
+      if ($("bill-disc-value")) $("bill-disc-value").value = 0;
+    }
+    renderCart();
+    return;
+  }
+  if (e.target.closest("[data-use-offers]")) {
+    state.offerAuto = true;
+    state.offerBillLocked = false;
+    renderCart();
+  }
+});
 $("btn-hold")?.addEventListener("click", async () => {
   try {
     if (state.editingOrderId) throw new Error("Finish or cancel the invoice edit first");
@@ -4920,12 +5077,14 @@ document.getElementById("stock-mode")?.addEventListener("click", (e) => {
     state.billDiscountType = $("bill-disc-type")?.value || "amt";
     state.billDiscountValue = Number($("bill-disc-value")?.value) || 0;
     state.loyaltyRedeem = Number($("loyalty-redeem")?.value) || 0;
+    if (id !== "loyalty-redeem") state.offerBillLocked = true;
     renderCart();
   });
   $(id)?.addEventListener("change", () => {
     state.billDiscountType = $("bill-disc-type")?.value || "amt";
     state.billDiscountValue = Number($("bill-disc-value")?.value) || 0;
     state.loyaltyRedeem = Number($("loyalty-redeem")?.value) || 0;
+    if (id !== "loyalty-redeem") state.offerBillLocked = true;
     renderCart();
   });
 });

@@ -377,6 +377,58 @@ export async function ensureSchema() {
     updated_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3)
   )`);
 
+  await create(`CREATE TABLE IF NOT EXISTS promo_offers (
+    id VARCHAR(255) PRIMARY KEY,
+    business_id VARCHAR(255) NOT NULL,
+    name VARCHAR(180) NOT NULL,
+    offer_type VARCHAR(32) NOT NULL DEFAULT 'product',
+    description TEXT NULL,
+    status VARCHAR(16) NOT NULL DEFAULT 'draft',
+    start_date DATE NULL,
+    end_date DATE NULL,
+    start_time VARCHAR(8) NULL,
+    end_time VARCHAR(8) NULL,
+    days_of_week VARCHAR(32) NULL,
+    min_qty DECIMAL(12,2) NULL,
+    max_qty DECIMAL(12,2) NULL,
+    min_spend DECIMAL(12,2) NULL,
+    discount_type VARCHAR(16) NOT NULL DEFAULT 'pct',
+    discount_value DECIMAL(12,2) NOT NULL DEFAULT 0,
+    offer_price DECIMAL(12,2) NULL,
+    usage_limit INT NULL,
+    used_count INT NOT NULL DEFAULT 0,
+    customer_eligibility VARCHAR(32) NOT NULL DEFAULT 'all',
+    branch_id VARCHAR(255) NULL,
+    stacking VARCHAR(24) NOT NULL DEFAULT 'stack',
+    priority INT NOT NULL DEFAULT 50,
+    loyalty_multiplier DECIMAL(6,2) NOT NULL DEFAULT 1,
+    conditions_json TEXT NULL,
+    created_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    updated_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+    INDEX idx_promo_biz (business_id),
+    INDEX idx_promo_status (business_id, status)
+  )`);
+
+  await create(`CREATE TABLE IF NOT EXISTS promo_offer_redemptions (
+    id VARCHAR(255) PRIMARY KEY,
+    business_id VARCHAR(255) NOT NULL,
+    offer_id VARCHAR(255) NOT NULL,
+    order_id VARCHAR(255) NULL,
+    customer_id VARCHAR(255) NULL,
+    discount_amount DECIMAL(12,2) NOT NULL DEFAULT 0,
+    bill_total DECIMAL(12,2) NOT NULL DEFAULT 0,
+    created_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    INDEX idx_por_offer (offer_id),
+    INDEX idx_por_biz (business_id)
+  )`);
+
+  await create(`CREATE TABLE IF NOT EXISTS promo_settings (
+    business_id VARCHAR(255) PRIMARY KEY,
+    stacking VARCHAR(24) NOT NULL DEFAULT 'product_and_bill',
+    allow_loyalty TINYINT(1) NOT NULL DEFAULT 1,
+    updated_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3)
+  )`);
+
   await create(`CREATE TABLE IF NOT EXISTS combo_offers (
     id VARCHAR(255) PRIMARY KEY,
     business_id VARCHAR(255) NOT NULL,

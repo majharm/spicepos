@@ -1,4 +1,4 @@
-Production deploy bundle — 20260905deploy121
+Production deploy bundle — 20260905deploy122
 =========================================
 
 Upload ALL files below to Hostinger public_html (overwrite):
@@ -46,6 +46,8 @@ CSS
 JavaScript
   js/app.js
   js/growth.js
+  js/offers.js
+  js/offers-ui.js
   js/units.js
   js/footwear.js
   js/discount.js
@@ -73,6 +75,7 @@ PHP
   pos-reports.php
   pos-growth.php
   pos-combos.php
+  pos-offers.php
   pos-accounting.php
   pos-api.php
   pos-mail.php
@@ -97,6 +100,10 @@ PHP
   api/growth/ask/index.php
   api/growth/excel/index.php
   api/combos/index.php
+  api/offers/index.php
+  api/offers/stats/index.php
+  api/offers/settings/index.php
+  api/offers/suggest/index.php
   api/master/notifications/index.php
   api/master/account-managers/index.php
   api/master/alerts/index.php
@@ -126,6 +133,7 @@ Node (if using hPanel Node.js web app — upload OR git pull then Restart)
   server/reports.js
   server/growth.js
   server/combos.js
+  server/offers.js
   server/accounting.js
   server/accounts.js
   server/roles.js
@@ -154,7 +162,8 @@ FIXES in this bundle
   - Force expiry send always delivers (expires today counts as expired); skip reason shown
   - AI Growth dashboard: shop KPIs, SVG charts, Action Center, Ask Business AI, PDF/Excel
   - AI Growth sits in Main (under Dashboard) plus a Dashboard button so it is visible without scrolling
-  - Cache sticker 20260905deploy121 on shop index / combo offers (deploy118 on master)
+  - Cache sticker 20260905deploy122 on shop Offers desk (deploy118 on master)
+  - Offers & promotions desk: templates, AI suggestions, profit check, Counter auto-apply
   - Create combo offer from AI Growth; Counter buttons add both items and apply the discount
   - Settings shows From pos@atavtelecom.in at the top and saves SMTP on the platform
   - Send alerts defaults to renewal/expired and sends one shop at a time; wait 60s after HTTP 429

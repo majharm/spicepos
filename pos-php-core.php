@@ -743,7 +743,7 @@ function pos_default_perms($role) {
     "dashboard" => true, "counter" => true, "items" => true, "customers" => true, "packs" => true,
     "orders" => true, "purchases" => true, "suppliers" => true, "stock" => true, "staff" => true,
     "branches" => true, "devices" => true, "reports" => true, "growth" => true, "accounts" => true, "settings" => true,
-    "support" => true, "discount" => true, "loyalty" => true, "damage" => true,
+    "support" => true, "discount" => true, "loyalty" => true, "offers" => true, "damage" => true,
   ];
   if ($role === "business_admin") return $all;
   if ($role === "branch_manager" || $role === "manager") {
@@ -755,7 +755,7 @@ function pos_default_perms($role) {
     ]);
   }
   if ($role === "cashier") {
-    return ["dashboard" => true, "counter" => true, "customers" => true, "orders" => true, "support" => true, "discount" => true, "loyalty" => true];
+    return ["dashboard" => true, "counter" => true, "customers" => true, "orders" => true, "support" => true, "discount" => true, "loyalty" => true, "offers" => true];
   }
   if ($role === "stock_manager") {
     return ["dashboard" => true, "items" => true, "stock" => true, "purchases" => true, "suppliers" => true, "reports" => true, "growth" => true, "support" => true, "damage" => true];

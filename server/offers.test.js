@@ -1,0 +1,27 @@
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import test from "node:test";
+import { fileURLToPath } from "node:url";
+
+const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
+
+test("shop UI wires the Offers desk and Counter auto-apply", () => {
+  const html = readFileSync(path.join(root, "index.html"), "utf8");
+  const app = readFileSync(path.join(root, "js/app.js"), "utf8");
+  const ui = readFileSync(path.join(root, "js/offers-ui.js"), "utf8");
+  const node = readFileSync(path.join(root, "server/index.js"), "utf8");
+  const php = readFileSync(path.join(root, "pos-offers.php"), "utf8");
+  const till = readFileSync(path.join(root, "pos-php-till.php"), "utf8");
+  assert.match(html, /data-view="offers"/);
+  assert.match(html, /Create new offer/);
+  assert.match(html, /js\/offers\.js/);
+  assert.match(html, /offer-banner/);
+  assert.match(app, /applyOffersToCart/);
+  assert.match(app, /offerIds/);
+  assert.match(ui, /\/api\/offers/);
+  assert.match(node, /createOffer/);
+  assert.match(node, /recordOfferRedemptions/);
+  assert.match(php, /pos_create_offer/);
+  assert.match(till, /pos_offers_dispatch/);
+});

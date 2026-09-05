@@ -3897,6 +3897,46 @@ button.items-stat.is-active {
   justify-content: space-between;
 }
 .combo-bar { margin-top: 6px; }
+.offer-banner { background: #ecfdf5; border-color: #6ee7b7; }
+.offer-dash {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+  margin: 12px 0;
+}
+.offer-kpi {
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+}
+.offer-kpi strong { display: block; font-size: 20px; }
+.offer-kpi span { color: #64748b; font-size: 12px; }
+.offer-filters, .offer-templates, .offer-ai, .offer-list { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 16px; }
+.offer-idea, .offer-card {
+  flex: 1 1 240px;
+  padding: 12px 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #fff;
+}
+.offer-card header { display: flex; justify-content: space-between; gap: 8px; align-items: start; }
+.offer-status {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  background: #ecfdf5;
+  color: #047857;
+  border-radius: 999px;
+  padding: 2px 8px;
+}
+.offer-card.is-paused .offer-status, .offer-card.is-draft .offer-status { background: #f1f5f9; color: #475569; }
+.offer-card.is-expired .offer-status, .offer-card.is-completed .offer-status { background: #fef2f2; color: #b91c1c; }
+.offer-card.is-scheduled .offer-status { background: #eff6ff; color: #1d4ed8; }
+.offer-stack-label { display: block; max-width: 320px; margin: 8px 0 16px; }
+.offer-form select[multiple] { min-height: 120px; }
+.offer-profit-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 6px; padding: 0; list-style: none; }
+.offer-form-wrap { margin-top: 18px; }
 .growth-ask-form { display: flex; gap: 8px; }
 .growth-ask-form input { flex: 1; min-height: 40px; }
 .growth-ask-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }

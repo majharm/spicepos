@@ -11,6 +11,7 @@ import { fyRangeForToday } from "./fy.js";
 import { buildReports, reportsToSheets } from "./reports.js";
 import { buildGrowthDashboard, answerGrowthQuestion, growthToSheets } from "./growth.js";
 import { listCombos, createCombo } from "./combos.js";
+import { listOffers, createOffer, updateOffer, getOffer, setOfferStatus, duplicateOffer, offerStats, suggestOffers, getPromoSettings, savePromoSettings, recordOfferRedemptions } from "./offers.js";
 import { workbookXml } from "./excel.js";
 import { ensureSchema, seedPlatform } from "./schema.js";
 import { companyTimezone, normalizeTimezone, shopTimezonePayload, tzOffsetFor } from "./timezone.js";
@@ -178,6 +179,8 @@ app.get("/api/bootstrap", requireStaff, async (_req, res) => {
         items: packItems.filter((row) => row.pack_id === p.id),
       })),
       combos: await listCombos(businessId).catch(() => []),
+      offers: await listOffers(businessId).catch(() => []),
+      offerSettings: await getPromoSettings(businessId).catch(() => ({ stacking: "product_and_bill" })),
     });
     void tickShopAlerts(businessId).catch((err) => console.error("shop alert tick failed:", err.message));
   } catch (err) {
@@ -292,6 +295,81 @@ app.post("/api/combos", requireStaff, async (req, res) => {
     res.json({ ok: true, combo });
   } catch (err) {
     res.status(err.status || 500).json({ error: String(err.message || "Could not create combo") });
+  }
+});
+
+app.get("/api/offers", requireStaff, async (_req, res) => {
+  try {
+    res.json(await listOffers());
+  } catch (err) {
+    res.status(500).json({ error: String(err.message || "Offers failed") });
+  }
+});
+app.get("/api/offers/stats", requireStaff, async (_req, res) => {
+  try {
+    res.json(await offerStats());
+  } catch (err) {
+    res.status(500).json({ error: String(err.message || "Offer stats failed") });
+  }
+});
+app.get("/api/offers/settings", requireStaff, async (_req, res) => {
+  try {
+    res.json(await getPromoSettings());
+  } catch (err) {
+    res.status(500).json({ error: String(err.message || "Offer settings failed") });
+  }
+});
+app.put("/api/offers/settings", requireStaff, async (req, res) => {
+  try {
+    res.json({ ok: true, settings: await savePromoSettings(req.body || {}) });
+  } catch (err) {
+    res.status(500).json({ error: String(err.message || "Could not save offer settings") });
+  }
+});
+app.get("/api/offers/suggest", requireStaff, async (_req, res) => {
+  try {
+    let growth = {};
+    try { growth = await buildGrowthDashboard(); } catch { /* optional */ }
+    const items = await query("SELECT * FROM items WHERE business_id = ?", [bid()]).catch(() => []);
+    res.json({ ok: true, ideas: await suggestOffers(growth, items) });
+  } catch (err) {
+    res.status(500).json({ error: String(err.message || "Offer suggestions failed") });
+  }
+});
+app.post("/api/offers", requireStaff, async (req, res) => {
+  try {
+    const offer = await createOffer(req.body || {});
+    res.json({ ok: true, offer });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: String(err.message || "Could not create offer") });
+  }
+});
+app.get("/api/offers/:id", requireStaff, async (req, res) => {
+  try {
+    res.json(await getOffer(req.params.id));
+  } catch (err) {
+    res.status(err.status || 500).json({ error: String(err.message || "Offer not found") });
+  }
+});
+app.put("/api/offers/:id", requireStaff, async (req, res) => {
+  try {
+    res.json({ ok: true, offer: await updateOffer(req.params.id, req.body || {}) });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: String(err.message || "Could not update offer") });
+  }
+});
+app.post("/api/offers/:id/status", requireStaff, async (req, res) => {
+  try {
+    res.json({ ok: true, offer: await setOfferStatus(req.params.id, String(req.body?.status || "paused")) });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: String(err.message || "Could not update offer status") });
+  }
+});
+app.post("/api/offers/:id/duplicate", requireStaff, async (req, res) => {
+  try {
+    res.json({ ok: true, offer: await duplicateOffer(req.params.id) });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: String(err.message || "Could not duplicate offer") });
   }
 });
 
@@ -447,7 +525,7 @@ registerCrud(app);
 registerAccounts(app);
 
 app.post("/api/checkout", requireStaff, requirePerm("counter"), async (req, res) => {
-  const { customerId, paymentMethod, lines, packId, packCount, discount, discountType, discountValue, loyaltyPoints } = req.body || {};
+  const { customerId, paymentMethod, lines, packId, packCount, discount, discountType, discountValue, loyaltyPoints, offerIds } = req.body || {};
   if (!Array.isArray(lines) || lines.length === 0) {
     res.status(400).json({ error: "Cart is empty" });
     return;
@@ -632,6 +710,18 @@ app.post("/api/checkout", requireStaff, requirePerm("counter"), async (req, res)
         );
       } catch {
         /* loyalty optional */
+      }
+
+      try {
+        await recordOfferRedemptions({
+          offerIds,
+          orderId,
+          customerId: customer.id,
+          discount: billDiscount,
+          total,
+        }, businessId);
+      } catch {
+        /* offers optional */
       }
 
       const [orders] = await conn.query(

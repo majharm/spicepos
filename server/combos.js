@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import { query } from "./db.js";
 import { bid } from "./context.js";
+import { createOffer } from "./offers.js";
 
 export function normalizeComboInput(body = {}) {
   const name = String(body.name || "").trim();
@@ -79,5 +80,17 @@ export async function createCombo(body, tenant = bid()) {
      WHERE c.id = ?`,
     [id],
   );
+  try {
+    await createOffer({
+      name: input.name,
+      type: "combo",
+      status: "active",
+      item_ids: [input.item_a_id, input.item_b_id],
+      discount_type: input.discount_type,
+      discount_value: input.discount_value,
+    }, tenant);
+  } catch {
+    /* promo table optional */
+  }
   return row;
 }

@@ -165,6 +165,15 @@ export function analyzeGrowth(snap = {}) {
       jump: "items",
       action: "Review items",
     });
+    actions.push({
+      level: "growth",
+      kind: "clearance",
+      title: "Clearance opportunity",
+      detail: `${slow.slice(0, 4).map((p) => p.name).join(", ")} have not been moving. A 15–30% clearance offer can free stock.`,
+      jump: "offers",
+      action: "Create clearance offer",
+      itemIds: slow.slice(0, 12).map((p) => p.itemId || p.id).filter(Boolean),
+    });
   }
   if (inactive.length >= 5) {
     actions.push({
@@ -199,7 +208,7 @@ export function analyzeGrowth(snap = {}) {
       kind: "combo",
       title: "Create a combo offer",
       detail: `Customers who buy ${topRev[0].name} often add other fast movers. Try a ${topRev[0].name} + ${topRev[1].name} bundle.`,
-      jump: "combo",
+      jump: "offers",
       action: "Create offer",
       itemA: { id: topRev[0].itemId || topRev[0].id || "", name: topRev[0].name },
       itemB: { id: topRev[1].itemId || topRev[1].id || "", name: topRev[1].name },
