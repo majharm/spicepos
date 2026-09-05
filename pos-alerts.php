@@ -157,8 +157,32 @@ function pos_wa_intl_number($raw, $country = "91") {
   return $local !== "" ? $cc . $local : "";
 }
 
+function pos_wa_rate_limit_error() {
+  return "WhatsApp rate limited (HTTP 429). Wait a minute and send again.";
+}
+
+function pos_wa_retry_wait_us($status, $headers, $attempt = 0) {
+  if ((int) $status !== 429) return 0;
+  foreach ((array) $headers as $line) {
+    if (stripos($line, "Retry-After:") === 0) {
+      $sec = (int) trim(substr($line, 12));
+      if ($sec > 0) return min(20000000, $sec * 1000000);
+    }
+  }
+  return min(16000000, (int) (1500000 * (2 ** $attempt)));
+}
+
+function pos_wa_pace() {
+  static $last = 0;
+  $now = (int) floor(microtime(true) * 1000000);
+  $wait = $last + 220000 - $now;
+  if ($wait > 0) usleep($wait);
+  $last = (int) floor(microtime(true) * 1000000);
+}
+
 function pos_wa_response_ok($status, $body) {
   $code = (int) $status;
+  if ($code === 429) return ["ok" => false, "error" => pos_wa_rate_limit_error(), "status" => 429];
   if ($code >= 400) return ["ok" => false, "error" => "WhatsApp HTTP {$code}"];
   $text = trim((string) $body);
   if ($text === "") return ["ok" => false, "error" => "WhatsApp empty response"];
@@ -462,6 +486,27 @@ function pos_wa_send($cfg, $numbers, $message, $media = "") {
   return ["ok" => $ok, "results" => $results, "to" => $to, "skipped" => !$ok, "reason" => $ok ? "" : ($results[0]["reason"] ?? $results[0]["error"] ?? "wa-failed")];
 }
 
+function pos_wa_post($endpoint, $payload, $apiKey) {
+  pos_wa_pace();
+  $ctx = stream_context_create([
+    "http" => [
+      "method" => "POST",
+      "header" => "Content-Type: application/json\r\nAccept: application/json\r\nX-API-Key: " . $apiKey . "\r\n",
+      "content" => json_encode($payload),
+      "timeout" => 20,
+      "ignore_errors" => true,
+      "follow_location" => 1,
+      "max_redirects" => 3,
+    ],
+    "ssl" => ["verify_peer" => true],
+  ]);
+  $body = @file_get_contents($endpoint, false, $ctx);
+  $status = 0;
+  $headers = $http_response_header ?? [];
+  if (!empty($headers[0]) && preg_match("/\\s(\\d{3})\\s/", $headers[0], $m)) $status = (int) $m[1];
+  return ["status" => $status, "body" => $body === false ? "" : $body, "headers" => $headers];
+}
+
 function pos_wa_send_one($cfg, $number, $message, $media = "") {
   $httpsMedia = (stripos((string) $media, "https://") === 0) ? $media : "";
   $dataMedia = (strpos((string) $media, "data:image/") === 0) ? $media : "";
@@ -485,27 +530,29 @@ function pos_wa_send_one($cfg, $number, $message, $media = "") {
     $payload["media"] = $httpsMedia;
     $payload["media_url"] = $httpsMedia;
   }
-  $ctx = stream_context_create([
-    "http" => [
-      "method" => "POST",
-      "header" => "Content-Type: application/json\r\nAccept: application/json\r\nX-API-Key: " . $cfg["wa_api_key"] . "\r\n",
-      "content" => json_encode($payload),
-      "timeout" => 20,
-      "ignore_errors" => true,
-      "follow_location" => 1,
-      "max_redirects" => 3,
-    ],
-    "ssl" => ["verify_peer" => true],
-  ]);
-  $body = @file_get_contents($endpoint, false, $ctx);
-  $status = 0;
-  if (!empty($http_response_header[0]) && preg_match("/\\s(\\d{3})\\s/", $http_response_header[0], $m)) $status = (int) $m[1];
-  $parsed = pos_wa_response_ok($status, $body === false ? "" : $body);
-  $shown = $parsed["to"] ?? ($intl !== "" ? $intl : $local);
-  if ($parsed["ok"]) {
-    return ["ok" => true, "queued" => true, "status" => $status, "body" => substr((string) $body, 0, 240), "number" => $shown];
+  $last = ["status" => 0, "body" => "", "headers" => []];
+  $parsed = ["ok" => false, "error" => "WhatsApp request failed"];
+  for ($attempt = 0; $attempt < 4; $attempt++) {
+    $last = pos_wa_post($endpoint, $payload, $cfg["wa_api_key"]);
+    $parsed = pos_wa_response_ok($last["status"], $last["body"]);
+    $shown = $parsed["to"] ?? ($intl !== "" ? $intl : $local);
+    if (!empty($parsed["ok"])) {
+      return ["ok" => true, "queued" => true, "status" => $last["status"], "body" => substr((string) $last["body"], 0, 240), "number" => $shown];
+    }
+    if (($last["status"] ?? 0) === 429 && $attempt < 3) {
+      $wait = pos_wa_retry_wait_us($last["status"], $last["headers"], $attempt);
+      if ($wait > 0) usleep($wait);
+      continue;
+    }
+    break;
   }
+  $shown = $parsed["to"] ?? ($intl !== "" ? $intl : $local);
   if ($dataMedia !== "") return pos_wa_send_one($cfg, $number, $message, "");
+  if (($last["status"] ?? 0) === 429) {
+    return ["ok" => false, "error" => $parsed["error"] ?? pos_wa_rate_limit_error(), "status" => 429, "number" => $shown];
+  }
+  $body = $last["body"];
+  $status = $last["status"];
   $query = $payload;
   unset($query["type"]);
   $url = $endpoint . "?" . http_build_query($query);
@@ -968,6 +1015,7 @@ function pos_send_low_stock_now($bid) {
 }
 
 function pos_send_manual_alerts($kinds = [], $bid = null, $title = "", $body = "") {
+  if (function_exists("set_time_limit")) @set_time_limit(180);
   $all = pos_alert_kinds();
   $wanted = [];
   foreach ((array) $kinds as $k) {

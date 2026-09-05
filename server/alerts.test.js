@@ -16,8 +16,10 @@ import {
   normalizeInMobile,
   waIntlNumber,
   waResponseOk,
+  waRetryWaitMs,
   sendWhatsApp,
   buildDeliveryLogRows,
+  WA_RATE_LIMIT_ERROR,
   DEFAULT_TEMPLATES,
   WA_DEFAULT_URL,
   WA_DEFAULT_KEY,
@@ -147,7 +149,12 @@ test("Master Admin Settings lives under Backup with Active/Inactive templates", 
   assert.match(master, /formatAlertWaTo/);
   assert.match(master, /queued to/);
   assert.match(master, /SMTP not configured/);
-  assert.match(master, /WA Master accepted the queue/);
+  assert.match(master, /uniqueAlertBits/);
+  assert.match(master, /WA Master hit its per-minute limit/);
+  assert.match(master, /Open WA & Email log/);
+  assert.match(master, /300 chats a minute/);
+  assert.match(nodeAlerts, /WA_RATE_LIMIT_ERROR/);
+  assert.match(alerts, /pos_wa_rate_limit_error/);
   assert.match(master, /\/api\/master\/alerts\/send-expiry/);
   assert.match(php, /master\/alerts\/send-expiry/);
   assert.match(php, /master\/alerts\/send-expired/);
@@ -203,6 +210,9 @@ test("WhatsApp send is confirmed only from JSON ok, not HTML", async () => {
   assert.equal(waIntlNumber("919876543210"), "919876543210");
   assert.equal(waResponseOk(200, "").ok, false);
   assert.equal(waResponseOk(200, "<!DOCTYPE html>").ok, false);
+  assert.equal(waResponseOk(429, '{"ok":false}').ok, false);
+  assert.equal(waResponseOk(429, "").error, WA_RATE_LIMIT_ERROR);
+  assert.equal(waRetryWaitMs(429, { get: () => "2" }, 0), 2000);
   assert.equal(waResponseOk(404, '{"ok":true}').ok, false);
   assert.equal(waResponseOk(200, '{"ok":false,"error":"profile offline"}').ok, false);
   const queued = waResponseOk(200, '{"ok":true,"sent":1,"results":[{"number":"919876543210","ok":true}]}');
@@ -228,6 +238,26 @@ test("WhatsApp send is confirmed only from JSON ok, not HTML", async () => {
   assert.equal(body.numbers, "9876543210");
   assert.equal(body.country_code, "91");
   assert.equal(calls[0].opts.headers["X-API-Key"], "k");
+  let hits = 0;
+  const rateFetch = async () => {
+    hits += 1;
+    if (hits === 1) {
+      return { status: 429, headers: { get: () => "" }, text: async () => '{"ok":false,"error":"rate"}' };
+    }
+    return {
+      status: 200,
+      headers: { get: () => "" },
+      text: async () => JSON.stringify({ ok: true, sent: 1, results: [{ number: "919876543210", ok: true }] }),
+    };
+  };
+  const retried = await sendWhatsApp(
+    { wa_enabled: "1", apiKey: "k", profileId: "acc_1" },
+    ["9876543210"],
+    "Hello",
+    rateFetch,
+  );
+  assert.equal(retried.ok, true);
+  assert.equal(hits, 2);
   const htmlFetch = async () => ({ status: 200, text: async () => "<!DOCTYPE html><html></html>" });
   const fake = await sendWhatsApp(
     { wa_enabled: "1", apiKey: "k", profileId: "acc_1" },

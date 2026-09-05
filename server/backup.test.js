@@ -243,8 +243,8 @@ test("HTML and CSS cache stickers match deploy106", () => {
     assert.doesNotMatch(html, /20260901deploy59/);
   }
   const masterHtml = readFileSync(path.join(root, "master.html"), "utf8");
-  assert.match(masterHtml, /20260905deploy112/);
-  assert.doesNotMatch(masterHtml, /20260905deploy111/);
+  assert.match(masterHtml, /20260905deploy113/);
+  assert.doesNotMatch(masterHtml, /20260905deploy112/);
   assert.match(masterHtml, /data-tab="alert-log">WA & Email log</);
   const saas = readFileSync(path.join(root, "css/saas.css"), "utf8");
   const pos = readFileSync(path.join(root, "css/pos.css"), "utf8");

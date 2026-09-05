@@ -222,8 +222,33 @@ export function waIntlNumber(raw, country = WA_DEFAULT_COUNTRY) {
   return local ? `${cc}${local}` : "";
 }
 
+export const WA_RATE_LIMIT_ERROR = "WhatsApp rate limited (HTTP 429). Wait a minute and send again.";
+const WA_SEND_GAP_MS = 220;
+let lastWaSendAt = 0;
+
+export function waRetryWaitMs(status, headers, attempt = 0) {
+  if (Number(status) !== 429) return 0;
+  const raw = headers?.get?.("retry-after") || headers?.["retry-after"] || headers?.["Retry-After"] || "";
+  const sec = Number(raw);
+  if (Number.isFinite(sec) && sec > 0) return Math.min(20000, Math.round(sec * 1000));
+  return Math.min(16000, 1500 * 2 ** attempt);
+}
+
+async function waSleep(ms, fetchImpl) {
+  if (!ms || fetchImpl !== fetch) return;
+  await new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function waPace(fetchImpl) {
+  if (fetchImpl !== fetch) return;
+  const wait = lastWaSendAt + WA_SEND_GAP_MS - Date.now();
+  if (wait > 0) await new Promise((resolve) => setTimeout(resolve, wait));
+  lastWaSendAt = Date.now();
+}
+
 export function waResponseOk(status, body) {
   const code = Number(status) || 0;
+  if (code === 429) return { ok: false, error: WA_RATE_LIMIT_ERROR, status: 429 };
   if (code >= 400) return { ok: false, error: `WhatsApp HTTP ${code}` };
   const text = String(body || "").trim();
   if (!text) return { ok: false, error: "WhatsApp empty response" };
@@ -578,28 +603,43 @@ async function sendWhatsAppOne(cfg, number, message, fetchImpl, media = "") {
     Accept: "application/json",
     "X-API-Key": cfg.apiKey || cfg.wa_api_key || "",
   };
-  try {
-    if (dataMedia) {
-      const res = await fetchImpl(endpoint, {
-        method: "POST",
-        headers,
-        body: JSON.stringify({ ...payload, media: dataMedia, type: "media" }),
-        signal: AbortSignal.timeout(20000),
-      });
-      const text = await res.text();
-      const parsed = waResponseOk(res.status, text);
-      if (parsed.ok) return { ok: true, queued: true, status: res.status, body: String(text).slice(0, 240), number: parsed.to || intl || local };
-      return sendWhatsAppOne(cfg, number, message, fetchImpl, "");
-    }
+  const postOnce = async (bodyPayload) => {
+    await waPace(fetchImpl);
     const res = await fetchImpl(endpoint, {
       method: "POST",
       headers,
-      body: JSON.stringify(httpsMedia ? { ...payload, media: httpsMedia, media_url: httpsMedia } : payload),
+      body: JSON.stringify(bodyPayload),
       signal: AbortSignal.timeout(20000),
     });
     const text = await res.text();
-    const parsed = waResponseOk(res.status, text);
-    if (parsed.ok) return { ok: true, queued: true, status: res.status, body: String(text).slice(0, 240), number: parsed.to || intl || local };
+    return { status: res.status, text, headers: res.headers };
+  };
+  const postWithRetry = async (bodyPayload) => {
+    let last = { status: 0, text: "", headers: null };
+    for (let attempt = 0; attempt < 4; attempt++) {
+      last = await postOnce(bodyPayload);
+      const parsed = waResponseOk(last.status, last.text);
+      if (parsed.ok) {
+        return { ok: true, queued: true, status: last.status, body: String(last.text).slice(0, 240), number: parsed.to || intl || local };
+      }
+      if (last.status === 429 && attempt < 3) {
+        await waSleep(waRetryWaitMs(last.status, last.headers, attempt), fetchImpl);
+        continue;
+      }
+      return { parsed, status: last.status, text: last.text };
+    }
+    return { parsed: waResponseOk(last.status, last.text), status: last.status, text: last.text };
+  };
+  try {
+    if (dataMedia) {
+      const first = await postWithRetry({ ...payload, media: dataMedia, type: "media" });
+      if (first.ok) return first;
+      return sendWhatsAppOne(cfg, number, message, fetchImpl, "");
+    }
+    const posted = await postWithRetry(httpsMedia ? { ...payload, media: httpsMedia, media_url: httpsMedia } : payload);
+    if (posted.ok) return posted;
+    const parsed = posted.parsed || { error: `WhatsApp HTTP ${posted.status}` };
+    if (posted.status === 429) return { ok: false, error: parsed.error || WA_RATE_LIMIT_ERROR, status: 429, number: intl || local };
     const url = buildWaUrl(
       {
         apiUrl: cfg.wa_api_url,
@@ -611,7 +651,7 @@ async function sendWhatsAppOne(cfg, number, message, fetchImpl, media = "") {
       message,
       httpsMedia,
     );
-    if (url.length > 1800) return { ok: false, error: parsed.error || `WhatsApp HTTP ${res.status}`, status: res.status, number: intl || local };
+    if (url.length > 1800) return { ok: false, error: parsed.error || `WhatsApp HTTP ${posted.status}`, status: posted.status, number: intl || local };
     const getRes = await fetchImpl(url, { method: "GET", headers: { Accept: "application/json", "X-API-Key": headers["X-API-Key"] }, signal: AbortSignal.timeout(8000) });
     const getText = await getRes.text();
     const getParsed = waResponseOk(getRes.status, getText);

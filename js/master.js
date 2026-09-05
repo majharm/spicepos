@@ -747,7 +747,7 @@ function expiryAlertsPageHtml(shops) {
     <section class="settings item-composer expiry-alerts-panel">
       <div class="item-composer-top">
         <p class="item-mode">Alert types</p>
-        <p class="item-composer-note">Tick the messages to send. Send all types uses every template. Renewal + expired together send the matching one for each shop.</p>
+        <p class="item-composer-note">Tick the messages to send. Send all types uses every template. Renewal + expired together send the matching one for each shop. WA Master allows about 300 chats a minute — all types to every shop can hit that limit.</p>
       </div>
       <fieldset class="item-block" id="send-alert-kinds">
         <legend>Send</legend>
@@ -886,7 +886,7 @@ function bindExpiryAlertsPage(shops) {
         title: $("send-alert-title")?.value || "",
         body: $("send-alert-body")?.value || "",
       },
-      `Send ${kinds.length} alert type${kinds.length === 1 ? "" : "s"} to all ${shops.length} shop${shops.length === 1 ? "" : "s"}?`,
+      `Send ${kinds.length} alert type${kinds.length === 1 ? "" : "s"} to all ${shops.length} shop${shops.length === 1 ? "" : "s"}? WA Master allows about 300 chats a minute, so this can take a minute.`,
     );
   });
   let filter = "all";
@@ -2294,6 +2294,13 @@ function mailFailReason(row) {
   return "email failed";
 }
 
+function uniqueAlertBits(items, max = 3) {
+  const u = [...new Set((items || []).filter(Boolean))];
+  if (!u.length) return "";
+  const head = u.slice(0, max).join(" · ");
+  return u.length > max ? `${head} · +${u.length - max} more` : head;
+}
+
 function summarizeAlertDelivery(out) {
   if (out?.skipped) {
     return out.reason === "alerts-off"
@@ -2309,25 +2316,31 @@ function summarizeAlertDelivery(out) {
   const mail = s.mail ?? results.filter((r) => (r.mail || []).some((m) => m?.ok)).length;
   const sent = s.sent ?? results.filter((r) => r.wa?.ok || (r.mail || []).some((m) => m?.ok)).length;
   const skipped = s.skipped ?? results.filter((r) => r.skipped).length;
-  const skipBits = results.filter((r) => r.skipped).map(alertSkipReason);
-  const failBits = results
-    .filter((r) => !r.skipped && !(r.wa?.ok || (r.mail || []).some((m) => m?.ok)))
-    .map((r) => {
-      const waWhy = r.wa?.reason || r.wa?.error || (r.wa?.skipped ? "WhatsApp skipped" : "");
-      const mailWhy = mailFailReason(r);
-      const why = [waWhy, mailWhy].filter(Boolean).join(" · ") || "not delivered";
-      return `${r.shopName || "Shop"}: ${why}`;
-    });
+  const skipBits = uniqueAlertBits(results.filter((r) => r.skipped).map(alertSkipReason));
+  const failByShop = new Map();
+  for (const r of results.filter((row) => !row.skipped && !(row.wa?.ok || (row.mail || []).some((m) => m?.ok)))) {
+    const waWhy = r.wa?.reason || r.wa?.error || (r.wa?.skipped ? "WhatsApp skipped" : "");
+    const mailWhy = mailFailReason(r);
+    const why = [waWhy, mailWhy].filter(Boolean).join(" · ") || "not delivered";
+    const name = r.shopName || "Shop";
+    const prev = failByShop.get(name) || new Set();
+    prev.add(why);
+    failByShop.set(name, prev);
+  }
+  const failBits = uniqueAlertBits([...failByShop.entries()].map(([name, set]) => `${name}: ${[...set].join(" · ")}`));
   const tos = [...new Set(results.map(formatAlertWaTo).filter(Boolean))];
   const mailWhy = [...new Set(results.map(mailFailReason).filter(Boolean))];
+  const rateLimited = results.some((r) => /429|rate limited/i.test(String(r.wa?.error || r.wa?.reason || "")));
   let msg = `Alerts sent. WhatsApp ${wa}/${results.length}`;
   if (tos.length) msg += ` queued to ${tos.slice(0, 3).join(", ")}`;
   msg += ` · Email ${mail}/${results.length}`;
   if (mail < results.length && mailWhy.length) msg += ` (${mailWhy.slice(0, 2).join("; ")})`;
   msg += ` · Delivered ${sent}, skipped ${skipped}.`;
-  if (wa > 0) msg += " WA Master accepted the queue — reconnect the WhatsApp QR if the phone stays empty.";
-  if (skipBits.length) msg += ` ${skipBits.slice(0, 3).join(" · ")}`;
-  if (failBits.length) msg += ` ${failBits.slice(0, 3).join(" · ")}`;
+  if (rateLimited) msg += " WA Master hit its per-minute limit. Wait one minute, then send again for the shops that failed.";
+  else if (wa > 0) msg += " WA Master accepted the queue — reconnect the WhatsApp QR if the phone stays empty.";
+  msg += " Open WA & Email log for every number.";
+  if (skipBits) msg += ` ${skipBits}`;
+  if (failBits) msg += ` ${failBits}`;
   return msg;
 }
 
