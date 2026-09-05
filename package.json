@@ -5,8 +5,11 @@
   "type": "module",
   "description": "SWAMI MASALE SASWAD POS — MySQL backend matching the old Replit app.",
   "scripts": {
-    "start": "node server/index.js",
+    "start": "node server.js",
     "test": "node --test js/money.test.js js/store.test.js server/qr-ordering.test.js"
+  },
+  "engines": {
+    "node": ">=20"
   },
   "dependencies": {
     "dotenv": "^16.4.5",
