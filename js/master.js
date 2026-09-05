@@ -562,13 +562,16 @@ function placeholderChips(raw) {
     .join("");
 }
 
+function todayYmdIst() {
+  return new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
+}
+
 function isExpiredBusiness(b) {
   const st = String(b?.computed_status || b?.status || "").toLowerCase();
   if (st === "expired") return true;
   const exp = ymd(b?.subscription_expires_at);
   if (!exp) return false;
-  const today = new Date().toISOString().slice(0, 10);
-  return exp < today;
+  return exp <= todayYmdIst();
 }
 
 function formatPlatformDate(value) {
@@ -590,7 +593,7 @@ function activationDate(b) {
 function expiryDaysLabel(b) {
   const exp = ymd(b?.subscription_expires_at);
   if (!exp) return "—";
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayYmdIst();
   const days = Math.round((Date.parse(`${exp}T00:00:00Z`) - Date.parse(`${today}T00:00:00Z`)) / 86400000);
   if (days < 0) return `${Math.abs(days)} day${Math.abs(days) === 1 ? "" : "s"} ago`;
   if (days === 0) return "Today";
@@ -601,7 +604,7 @@ function expiryFilterKind(b) {
   if (isExpiredBusiness(b)) return "expired";
   const exp = ymd(b?.subscription_expires_at);
   if (!exp) return "none";
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayYmdIst();
   const days = Math.round((Date.parse(`${exp}T00:00:00Z`) - Date.parse(`${today}T00:00:00Z`)) / 86400000);
   if (days >= 0 && days <= 7) return "due";
   return "active";
@@ -2026,34 +2029,54 @@ function summarizeNoticeDelivery(delivery) {
   return `Saved on the shop dashboard. WhatsApp ${wa}/${results.length} · Email ${mail}/${results.length}.`;
 }
 
+function alertSkipReason(row) {
+  const name = row?.shopName || "This shop";
+  switch (row?.reason) {
+    case "no-number":
+      return `${name}: no mobile or email on file`;
+    case "not-due-yet":
+      return `${name}: not in the last 7 days${row.days != null ? ` (${row.days} days left)` : ""}`;
+    case "not-expired":
+      return `${name}: not expired yet${row.days != null ? ` (${row.days} days left)` : ""}`;
+    case "already-expired":
+      return `${name}: already expired`;
+    case "already-sent":
+      return `${name}: already sent`;
+    case "alerts-off":
+      return "Renewal and expired alerts are inactive in Settings";
+    default:
+      return row?.reason ? `${name}: ${row.reason}` : name;
+  }
+}
+
 function summarizeAlertDelivery(out) {
   if (out?.skipped) {
     return out.reason === "alerts-off"
       ? "Renewal and expired alerts are inactive in Settings."
       : "No expiry alerts were sent.";
   }
-  const s = out?.summary;
-  if (s) {
-    return `Expiry alerts sent. WhatsApp ${s.wa}/${s.total} · Email ${s.mail}/${s.total} · Delivered ${s.sent}, skipped ${s.skipped}.`;
-  }
-  const results = out?.results;
-  if (!Array.isArray(results) || !results.length) {
+  const results = Array.isArray(out?.results) ? out.results : [];
+  if (!results.length) {
     return "No shops with an expiry date matched a renewal or expired alert.";
   }
-  let wa = 0;
-  let mail = 0;
-  let sent = 0;
-  let skipped = 0;
-  for (const row of results) {
-    if (row.skipped) {
-      skipped += 1;
-      continue;
-    }
-    if (row.wa?.ok) wa += 1;
-    if ((row.mail || []).some((m) => m?.ok)) mail += 1;
-    if (row.wa?.ok || (row.mail || []).some((m) => m?.ok)) sent += 1;
-  }
-  return `Expiry alerts sent. WhatsApp ${wa}/${results.length} · Email ${mail}/${results.length} · Delivered ${sent}, skipped ${skipped}.`;
+  const s = out?.summary || {};
+  const wa = s.wa ?? results.filter((r) => r.wa?.ok).length;
+  const mail = s.mail ?? results.filter((r) => (r.mail || []).some((m) => m?.ok)).length;
+  const sent = s.sent ?? results.filter((r) => r.wa?.ok || (r.mail || []).some((m) => m?.ok)).length;
+  const skipped = s.skipped ?? results.filter((r) => r.skipped).length;
+  const skipBits = results.filter((r) => r.skipped).map(alertSkipReason);
+  const failBits = results
+    .filter((r) => !r.skipped && !(r.wa?.ok || (r.mail || []).some((m) => m?.ok)))
+    .map((r) => {
+      const waWhy = r.wa?.reason || r.wa?.error || (r.wa?.skipped ? "WhatsApp skipped" : "");
+      const mailWhy = (r.mail || []).find((m) => m && !m.ok)?.error || ((r.mail || []).some((m) => m?.skipped) ? "email SMTP not configured" : "");
+      const why = [waWhy, mailWhy].filter(Boolean).join(" · ") || "not delivered";
+      return `${r.shopName || "Shop"}: ${why}`;
+    });
+  let msg = `Expiry alerts sent. WhatsApp ${wa}/${results.length} · Email ${mail}/${results.length} · Delivered ${sent}, skipped ${skipped}.`;
+  if (skipBits.length) msg += ` ${skipBits.slice(0, 3).join(" · ")}`;
+  if (failBits.length) msg += ` ${failBits.slice(0, 3).join(" · ")}`;
+  return msg;
 }
 
 function attr(value) {

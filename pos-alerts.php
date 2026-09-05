@@ -144,7 +144,7 @@ function pos_normalize_in_mobile($raw) {
   if (strpos($d, "91") === 0 && strlen($d) >= 12) $d = substr($d, -10);
   elseif (strpos($d, "0") === 0 && strlen($d) === 11) $d = substr($d, 1);
   elseif (strlen($d) > 10) $d = substr($d, -10);
-  return preg_match("/^[6-9]\d{9}$/", $d) ? $d : "";
+  return preg_match("/^\d{10}$/", $d) ? $d : "";
 }
 
 function pos_mask_secret($value) {
@@ -322,7 +322,7 @@ function pos_shop_alert_contacts($bid) {
   $co = $bid ? pos_q("SELECT phone, email, name, timezone FROM company_settings WHERE business_id = ? LIMIT 1", "s", [$bid]) : [];
   $staff = [];
   try {
-    $staff = $bid ? pos_q("SELECT mobile, email FROM staff_users WHERE business_id = ? AND role = 'business_admin'", "s", [$bid]) : [];
+    $staff = $bid ? pos_q("SELECT mobile, email FROM staff_users WHERE business_id = ?", "s", [$bid]) : [];
   } catch (Throwable $e) {
     $staff = [];
   }
@@ -346,6 +346,13 @@ function pos_shop_alert_contacts($bid) {
     $e = strtolower(trim((string) ($row["email"] ?? "")));
     if (strpos($e, "@") !== false) $emails[$e] = $e;
   }
+  try {
+    $branches = $bid ? pos_q("SELECT phone FROM branches WHERE business_id = ?", "s", [$bid]) : [];
+    foreach ($branches as $row) {
+      $d = pos_normalize_in_mobile($row["phone"] ?? "");
+      if ($d !== "") $phones[$d] = $d;
+    }
+  } catch (Throwable $e) { /* optional */ }
   return [
     "businessId" => $b["id"] ?? $bid,
     "shopName" => $b["name"] ?? ($c["name"] ?? ""),
@@ -721,32 +728,38 @@ function pos_send_renewal_alerts($bid = null, $force = false, $opts = []) {
       "signInUrl" => $signIn,
       "supportPhone" => $support["support_phone"] ?? "",
     ];
-    if (!$expiredOnly && ($force || $beforeOn) && $days >= 0 && $days <= 7) {
-      if ($force || !pos_alert_sent($row["id"], "renewal_before", $expiry, "")) {
-        $text = pos_render_alert("renewal_before", $payload, $cfg);
-        $out = pos_alert_dispatch($shop["phones"], $shop["emails"], "Renew ATAV POS · {$payload["shopName"]}", $text);
-        if (!$force && pos_alert_delivered($out)) pos_alert_mark($row["id"], "renewal_before", $expiry, "");
-        $results[] = array_merge(["businessId" => $row["id"], "shopName" => $payload["shopName"], "kind" => "renewal_before"], $out);
-      }
-    } elseif (!$dueOnly && ($force || $expiredOn) && $days < 0) {
-      if ($force || !pos_alert_sent($row["id"], "renewal_expired", $expiry, "")) {
-        $text = pos_render_alert("renewal_expired", $payload, $cfg);
-        $out = pos_alert_dispatch($shop["phones"], $shop["emails"], "ATAV POS expired · {$payload["shopName"]}", $text);
-        if (!$force && pos_alert_delivered($out)) pos_alert_mark($row["id"], "renewal_expired", $expiry, "");
-        $results[] = array_merge(["businessId" => $row["id"], "shopName" => $payload["shopName"], "kind" => "renewal_expired"], $out);
-      }
-    } elseif ($force) {
-      $reason = "not-due-yet";
-      if ($days < 0) $reason = $expiredOnly ? "already-sent" : "not-expired";
-      elseif ($days > 7) $reason = $dueOnly ? "not-due-yet" : "not-expired";
+    $expired = $days <= 0;
+    $dueSoon = $days >= 0 && $days <= 7;
+    if ($expiredOnly && !$expired) {
       $results[] = [
         "businessId" => $row["id"],
         "shopName" => $payload["shopName"],
         "skipped" => true,
-        "reason" => $reason,
+        "reason" => "not-expired",
         "days" => $days,
       ];
+      continue;
     }
+    if ($dueOnly && !$dueSoon) {
+      $results[] = [
+        "businessId" => $row["id"],
+        "shopName" => $payload["shopName"],
+        "skipped" => true,
+        "reason" => $expired ? "already-expired" : "not-due-yet",
+        "days" => $days,
+      ];
+      continue;
+    }
+    $kind = $expired ? "renewal_expired" : "renewal_before";
+    $kindOn = $expired ? $expiredOn : $beforeOn;
+    if (!$force && !$kindOn) continue;
+    if (!$force && !$expired && !$dueSoon) continue;
+    if (!$force && pos_alert_sent($row["id"], $kind, $expiry, "")) continue;
+    $text = pos_render_alert($kind, $payload, $cfg);
+    $subject = $expired ? "ATAV POS expired · {$payload["shopName"]}" : "Renew ATAV POS · {$payload["shopName"]}";
+    $out = pos_alert_dispatch($shop["phones"], $shop["emails"], $subject, $text);
+    if (!$force && pos_alert_delivered($out)) pos_alert_mark($row["id"], $kind, $expiry, "");
+    $results[] = array_merge(["businessId" => $row["id"], "shopName" => $payload["shopName"], "kind" => $kind, "days" => $days], $out);
   }
   if ($bid && !$results) throw new Exception("This shop has no subscription expiry date, or is not due for a renewal/expired alert yet");
   return ["ok" => true, "results" => $results, "summary" => pos_summarize_alert_results($results)];
