@@ -13,6 +13,7 @@ import {
   isSafeTableName,
   normalizeBackupRow,
   platformBackupFilename,
+  SHOP_CLEAN_KEEP_TABLES,
   sortBackupTables,
 } from "./backup-util.js";
 
@@ -162,6 +163,35 @@ export async function restorePlatformBackup(payload, req, admin) {
     /* audit is best-effort */
   }
   return { ok: true, tables: names.length };
+}
+
+export async function cleanShopData(businessId) {
+  const known = await listBizTables();
+  const names = known.filter((t) => !SHOP_CLEAN_KEEP_TABLES.has(t));
+  const deleteOrder = sortBackupTables(names, false);
+  await withTransaction(async (conn) => {
+    await withFkOff(conn, async () => {
+      try {
+        await conn.query("DELETE FROM staff_sessions WHERE business_id = ?", [businessId]);
+      } catch {
+        /* optional table */
+      }
+      try {
+        await conn.query(
+          `DELETE s FROM staff_sessions s
+           INNER JOIN staff_users u ON u.id = s.staff_user_id
+           WHERE u.business_id = ?`,
+          [businessId],
+        );
+      } catch {
+        /* optional table */
+      }
+      for (const t of deleteOrder) {
+        await conn.query(`DELETE FROM \`${t}\` WHERE business_id = ?`, [businessId]);
+      }
+    });
+  });
+  return { ok: true, tables: names.length, kept: [...SHOP_CLEAN_KEEP_TABLES].sort() };
 }
 
 async function requireShop(businessId) {

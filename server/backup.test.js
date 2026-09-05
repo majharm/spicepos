@@ -15,6 +15,7 @@ import {
   isSafeTableName,
   normalizeBackupRow,
   platformBackupFilename,
+  SHOP_CLEAN_KEEP_TABLES,
   sortBackupTables,
   toSqlValue,
 } from "./backup-util.js";
@@ -70,6 +71,33 @@ test("platform backup files are rejected when kind is wrong", () => {
   assert.match(platformBackupFilename(), /^spicepos-platform-backup-/);
   assert.equal(isSafeTableName("sales_orders"), true);
   assert.equal(isSafeTableName("sales orders"), false);
+});
+
+test("shop clean keeps login and settings tables", () => {
+  assert.ok(SHOP_CLEAN_KEEP_TABLES.has("businesses"));
+  assert.ok(SHOP_CLEAN_KEEP_TABLES.has("staff_users"));
+  assert.ok(SHOP_CLEAN_KEEP_TABLES.has("branches"));
+  assert.ok(SHOP_CLEAN_KEEP_TABLES.has("pos_devices"));
+  assert.ok(SHOP_CLEAN_KEEP_TABLES.has("company_settings"));
+  assert.equal(SHOP_CLEAN_KEEP_TABLES.has("sales_orders"), false);
+  assert.equal(SHOP_CLEAN_KEEP_TABLES.has("items"), false);
+  assert.equal(SHOP_CLEAN_KEEP_TABLES.has("customers"), false);
+  const backupPhp = readFileSync(path.join(root, "pos-backup.php"), "utf8");
+  const backupJs = readFileSync(path.join(root, "server/backup.js"), "utf8");
+  const masterApi = readFileSync(path.join(root, "server/master.js"), "utf8");
+  const masterJs = readFileSync(path.join(root, "js/master.js"), "utf8");
+  const core = readFileSync(path.join(root, "pos-php-core.php"), "utf8");
+  assert.match(backupJs, /export async function cleanShopData/);
+  assert.match(backupJs, /SHOP_CLEAN_KEEP_TABLES/);
+  assert.match(backupPhp, /function pos_clean_shop_data/);
+  assert.match(backupPhp, /function pos_shop_clean_keep_tables/);
+  assert.match(masterApi, /\/api\/master\/businesses\/:id\/clean/);
+  assert.match(masterApi, /verifyPassword\(password, admin\.password_hash\)/);
+  assert.match(core, /businesses\/\(\[\^\/\]\+\)\/clean/);
+  assert.match(core, /Master Admin password is incorrect/);
+  assert.match(masterJs, /data-clean-biz/);
+  assert.match(masterJs, /\/api\/master\/businesses\/\$\{businessId\}\/clean/);
+  assert.match(masterJs, /id="biz-clean-form"/);
 });
 
 test("ISO timestamps are stored as MySQL datetimes", () => {
@@ -144,11 +172,11 @@ test("PHP and HTML wire master admin backup", () => {
   );
 });
 
-test("HTML and CSS cache stickers match deploy99", () => {
+test("HTML and CSS cache stickers match deploy100", () => {
   for (const name of ["index.html", "master.html", "login.html", "setup.html", "order.html"]) {
     const html = readFileSync(path.join(root, name), "utf8");
-    assert.match(html, /20260905deploy99/);
-    assert.doesNotMatch(html, /20260905deploy98/);
+    assert.match(html, /20260905deploy100/);
+    assert.doesNotMatch(html, /20260905deploy99/);
     assert.doesNotMatch(html, /20260904deploy90/);
     assert.doesNotMatch(html, /20260904deploy89/);
     assert.doesNotMatch(html, /20260903deploy88/);
