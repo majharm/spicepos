@@ -1194,12 +1194,15 @@ body.dev-mode .session-bar::after {
 }
 .msg-settings .item-composer-top .item-mode { grid-column: 1; }
 .msg-settings .item-composer-top .item-composer-note { grid-column: 1; margin: 0; }
-.msg-settings .item-composer-top .alert-switch { grid-column: 2; grid-row: 1 / span 2; align-self: center; }
+.msg-settings .item-composer-top .alert-switch { grid-column: 2; grid-row: 1 / span 3; align-self: center; }
 .msg-wa { margin: 0; }
 .smtp-from-line {
-  margin: 0 16px 4px;
-  font-size: 15px;
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.3;
 }
+.msg-settings .item-composer-top .smtp-from-line { grid-column: 1; }
 .msg-split { align-items: start; }
 .msg-nav { padding: 16px; }
 .msg-nav-list {

@@ -740,10 +740,10 @@ function expiryAlertsPageHtml(shops) {
   const dueN = rows.filter((b) => expiryFilterKind(b) === "due").length;
   const noExpN = rows.filter((b) => !ymd(b.subscription_expires_at)).length;
   return `<div class="items-desk master-desk expiry-alerts-desk">
-    ${masterHero("Platform", "Send alerts", "Pick alert types, then send WhatsApp and email to one shop or every shop. WhatsApp is queued by WA Master — reconnect that QR if the phone stays empty. Email sends from pos@atavtelecom.in via Hostinger SMTP. Templates live in Settings.", [
+    ${masterHero("Platform", "Send alerts", "Pick alert types, then send WhatsApp and email to one shop or every shop. WhatsApp is queued by WA Master — reconnect that QR if the phone stays empty. Email From is pos@atavtelecom.in. Templates live in Settings.", [
       { label: "Shops", value: rows.length },
       { label: "Expired", value: expiredN, warn: expiredN > 0 },
-      { label: "Due in 7 days", value: dueN, warn: dueN > 0 },
+      { label: "From", value: "pos@atavtelecom.in" },
       { label: "Types", value: ALERT_DEFS.length },
     ])}
     <section class="settings item-composer expiry-alerts-panel">
@@ -1024,7 +1024,7 @@ function bindExpiryAlertsPage(shops) {
   }
 }
 
-function alertsFormHtml(alerts) {
+function alertsFormHtml(alerts = {}) {
   const vars = alerts.sample_vars || {};
   const fill = (tpl) =>
     String(tpl || "").replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (_, key) => (vars[key] == null ? "" : String(vars[key])));
@@ -1032,6 +1032,31 @@ function alertsFormHtml(alerts) {
   const smtpOn = alerts.smtp_enabled !== "0";
   const fromAddr = alerts.from || alerts.mail_from || alerts.smtp_user || "pos@atavtelecom.in";
   return `<form class="msg-settings" id="alert-form">
+    <section class="settings item-composer msg-wa">
+      <div class="item-composer-top">
+        <p class="item-mode">Outgoing email (SMTP)</p>
+        <p class="smtp-from-line" id="smtp-from-display">From <strong>${attr(fromAddr)}</strong>${alerts.smtp_stored ? " · saved on the platform" : ""}</p>
+        <p class="item-composer-note">Hostinger mailbox. POS only sends mail. IMAP (imap.hostinger.com:993) is for receiving in a mail app. Save stores this connection in platform settings.</p>
+        <label class="alert-switch">
+          <input type="checkbox" name="smtp_enabled" ${smtpOn ? "checked" : ""} />
+          <span class="alert-switch-ui" aria-hidden="true"></span>
+          <span class="alert-switch-label">${smtpOn ? "Active" : "Inactive"}</span>
+        </label>
+      </div>
+      <fieldset class="item-block">
+        <legend>Mailbox</legend>
+        <label>From / username <input name="smtp_user" value="${attr(alerts.smtp_user || "pos@atavtelecom.in")}" autocomplete="off" /></label>
+        <label>Password <input name="smtp_pass" type="password" autocomplete="off" value="${attr(alerts.smtp_pass || "")}" /></label>
+        <label>SMTP host <input name="smtp_host" value="${attr(alerts.smtp_host || "smtp.hostinger.com")}" autocomplete="off" /></label>
+        <label>Port <input name="smtp_port" inputmode="numeric" value="${attr(alerts.smtp_port || "465")}" /></label>
+        <label>From address <input name="mail_from" value="${attr(fromAddr)}" autocomplete="off" /></label>
+        <label>From name <input name="mail_from_name" value="${attr(alerts.mail_from_name || "ATAV POS")}" autocomplete="off" /></label>
+        <div class="backup-actions full">
+          <button class="btn primary" type="button" id="smtp-save-connection">Save SMTP connection</button>
+        </div>
+        <p class="hint full" id="smtp-hint">${alerts.smtp_stored ? `Saved on the platform. From ${fromAddr}.` : "Save to store this mailbox on the platform."}</p>
+      </fieldset>
+    </section>
     <section class="settings item-composer msg-wa">
       <div class="item-composer-top">
         <p class="item-mode">WhatsApp connection</p>
@@ -1048,31 +1073,6 @@ function alertsFormHtml(alerts) {
         <label>API key <input name="wa_api_key" type="password" autocomplete="off" value="${attr(alerts.wa_api_key || "")}" /></label>
         <label>Profile ID <input name="wa_profile_id" value="${attr(alerts.wa_profile_id || "")}" autocomplete="off" /></label>
         <label>Country code <input name="wa_country_code" value="${attr(alerts.wa_country_code || "91")}" maxlength="3" inputmode="numeric" /></label>
-      </fieldset>
-    </section>
-    <section class="settings item-composer msg-wa">
-      <div class="item-composer-top">
-        <p class="item-mode">Outgoing email (SMTP)</p>
-        <p class="item-composer-note">Config file pos-smtp.php: pos@atavtelecom.in → smtp.hostinger.com:465 SSL. POS only sends mail. IMAP (imap.hostinger.com:993) is for receiving in Outlook or a phone app, not for alerts.</p>
-        <label class="alert-switch">
-          <input type="checkbox" name="smtp_enabled" ${smtpOn ? "checked" : ""} />
-          <span class="alert-switch-ui" aria-hidden="true"></span>
-          <span class="alert-switch-label">${smtpOn ? "Active" : "Inactive"}</span>
-        </label>
-      </div>
-      <p class="smtp-from-line" id="smtp-from-display">From <strong>${attr(fromAddr)}</strong>${alerts.smtp_stored ? " · saved on the platform" : ""}</p>
-      <fieldset class="item-block">
-        <legend>Mailbox</legend>
-        <label>From / username <input name="smtp_user" value="${attr(alerts.smtp_user || "pos@atavtelecom.in")}" autocomplete="off" /></label>
-        <label>Password <input name="smtp_pass" type="password" autocomplete="off" value="${attr(alerts.smtp_pass || "")}" /></label>
-        <label>SMTP host <input name="smtp_host" value="${attr(alerts.smtp_host || "smtp.hostinger.com")}" autocomplete="off" /></label>
-        <label>Port <input name="smtp_port" inputmode="numeric" value="${attr(alerts.smtp_port || "465")}" /></label>
-        <label>From address <input name="mail_from" value="${attr(fromAddr)}" autocomplete="off" /></label>
-        <label>From name <input name="mail_from_name" value="${attr(alerts.mail_from_name || "ATAV POS")}" autocomplete="off" /></label>
-        <div class="backup-actions full">
-          <button class="btn primary" type="button" id="smtp-save-connection">Save SMTP connection</button>
-        </div>
-        <p class="hint full" id="smtp-hint">${alerts.smtp_stored ? `Saved on the platform. From ${fromAddr}.` : "Save to store this mailbox on the platform."}</p>
       </fieldset>
     </section>
     <div class="items-split msg-split">
@@ -1890,7 +1890,22 @@ async function render() {
     } else if (tab === "backup" || tab === "alerts") {
       if (tab === "alerts") backupPane = "settings";
       const shops = await api("/api/master/businesses");
-      const alerts = backupPane === "settings" ? await api("/api/master/alerts") : null;
+      let alerts = {};
+      if (backupPane === "settings") {
+        try {
+          alerts = (await api("/api/master/alerts")) || {};
+        } catch {
+          alerts = {
+            from: "pos@atavtelecom.in",
+            mail_from: "pos@atavtelecom.in",
+            smtp_user: "pos@atavtelecom.in",
+            smtp_host: "smtp.hostinger.com",
+            smtp_port: "465",
+            smtp_enabled: "1",
+            mail_from_name: "ATAV POS",
+          };
+        }
+      }
       const pane = backupPane === "settings" ? "settings" : "backup";
       const activeMsgs = pane === "settings" ? ALERT_DEFS.filter((d) => alerts?.[d.flag] === "1").length : 0;
       body.innerHTML = `<div class="items-desk settings-desk master-desk">

@@ -1,4 +1,4 @@
-Production deploy bundle — 20260905deploy117
+Production deploy bundle — 20260905deploy118
 =========================================
 
 Upload ALL files below to Hostinger public_html (overwrite):
@@ -143,8 +143,8 @@ FIXES in this bundle
   - CSS: Master Admin mobile nav wrap, hide nav until sign-in, backup file inputs, table overflow
   - Master Admin Send alerts page: all types to one shop or all shops
   - Force expiry send always delivers (expires today counts as expired); skip reason shown
-  - Cache sticker 20260905deploy117 on master (deploy106 on index, login, setup, order)
-  - Save Hostinger SMTP connection into platform_settings; Settings shows From pos@atavtelecom.in
+  - Cache sticker 20260905deploy118 on master (deploy106 on index, login, setup, order)
+  - Settings shows From pos@atavtelecom.in at the top and saves SMTP on the platform
   - Send alerts defaults to renewal/expired and sends one shop at a time; wait 60s after HTTP 429
   - Retry WhatsApp HTTP 429 with backoff and pace sends under WA Master's 300/minute limit
   - Master Admin WA Master & Email log of every WhatsApp queue and email attempt
