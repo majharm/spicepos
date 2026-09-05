@@ -850,7 +850,7 @@ async function render() {
       );
     } else if (tab === "backup") {
       const shops = await api("/api/master/businesses");
-      body.innerHTML = `<p class="lede">Download or restore one shop, or the full platform. Shop backups match the files from POS Admin → Backup.</p>
+      body.innerHTML = `<p class="lede">Download or restore one shop, or the full platform. Shop backups match the files from POS Settings → Backup.</p>
         <div class="settings" id="master-backup-card">
           <div class="settings-section backup-panel">
             <h3>Shop backup</h3>

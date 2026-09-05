@@ -84,16 +84,27 @@ test("PHP and HTML wire shop backup", () => {
   const backup = readFileSync(path.join(root, "pos-backup.php"), "utf8");
   const till = readFileSync(path.join(root, "pos-php-till.php"), "utf8");
   const index = readFileSync(path.join(root, "index.html"), "utf8");
+  const app = readFileSync(path.join(root, "js/app.js"), "utf8");
   assert.match(core, /pos_dispatch_backup/);
   assert.match(core, /function pos_require_backup/);
   assert.match(backup, /function pos_backup_sql_value/);
   assert.match(backup, /function pos_dispatch_backup/);
   assert.match(backup, /spicepos-shop-backup/);
   assert.match(till, /pos_dispatch_backup/);
+  assert.match(index, /id="settings-form"/);
+  assert.match(index, /id="set-name"/);
+  assert.match(index, /id="set-timezone"/);
+  assert.match(index, /id="set-logo"/);
+  assert.match(index, /id="password-form"/);
+  assert.match(index, /id="settings-pane-profile"/);
+  assert.match(app, /showSettingsTab/);
   assert.match(index, /btn-backup-download/);
   assert.match(index, /btn-backup-restore/);
   assert.match(index, /id="view-backup"/);
+  assert.match(index, /data-settings-tab="backup"/);
   assert.match(index, /data-view="backup"/);
+  assert.match(index, /Settings → Backup/);
+  assert.doesNotMatch(index, /data-view="backup"><span class="nav-icon"/);
 });
 
 test("PHP and HTML wire master admin backup", () => {
@@ -128,10 +139,11 @@ test("PHP and HTML wire master admin backup", () => {
   );
 });
 
-test("HTML and CSS cache stickers match deploy91", () => {
+test("HTML and CSS cache stickers match deploy92", () => {
   for (const name of ["index.html", "master.html", "login.html", "setup.html", "order.html"]) {
     const html = readFileSync(path.join(root, name), "utf8");
-    assert.match(html, /20260905deploy91/);
+    assert.match(html, /20260905deploy92/);
+    assert.doesNotMatch(html, /20260905deploy91/);
     assert.doesNotMatch(html, /20260904deploy90/);
     assert.doesNotMatch(html, /20260904deploy89/);
     assert.doesNotMatch(html, /20260903deploy88/);
@@ -210,7 +222,7 @@ test("HTML and CSS cache stickers match deploy91", () => {
   assert.match(pos, /body\.auth-body/);
   assert.match(pos, /backup-file-lab input\[type="file"\]/);
   assert.match(pos, /settings input:not\(\[type="file"\]\)/);
-  assert.match(pos, /settings-page/);
+  assert.match(pos, /settings-desk/);
   assert.match(pos, /settings-grid/);
   assert.match(pos, /logo-preview-frame/);
   assert.match(pos, /logo-row/);
@@ -315,7 +327,7 @@ test("HTML and CSS cache stickers match deploy91", () => {
   assert.match(masterJs, /id="note-image"/);
   assert.match(masterJs, /id="alert-form"/);
   assert.match(saas, /notice-thumb/);
-  assert.match(index, /settings-page/);
+  assert.match(index, /settings-desk/);
   assert.match(index, /logo-preview-frame/);
   assert.match(index, /logo-pick/);
   assert.match(index, /id="set-address"/);

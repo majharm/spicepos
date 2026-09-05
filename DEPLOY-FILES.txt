@@ -1,4 +1,4 @@
-Production deploy bundle — 20260905deploy91
+Production deploy bundle — 20260905deploy92
 =========================================
 
 Upload ALL files below to Hostinger public_html (overwrite):
@@ -131,7 +131,7 @@ FIXES in this bundle
   - Suppliers form and list include address and email
   - Settings page: wider card, 2-column details, styled logo upload, keep card padding on mobile
   - CSS: Master Admin mobile nav wrap, hide nav until sign-in, backup file inputs, table overflow
-  - Cache sticker 20260905deploy91 on index, login, master, setup, order
+  - Cache sticker 20260905deploy92 on index, login, master, setup, order
   - QR ordering: public mobile menu, customer cart/order, staff inbox, status flow, and Open in Counter
   - Payment receipt / payment voucher print (Accounts: receive from customer, pay to supplier, reprint from Day book)
   - Items bulk Excel import: template download and .xlsx / CSV upload
@@ -171,7 +171,7 @@ FIXES in this bundle
   - Indian financial year 1 April–31 March on Reports, Accounts, Expenses
   - Finance → Expenses module (PHP + Node)
   - Master Admin → Backup: download/restore one shop or the full platform
-  - Shop POS Admin → Backup: download/restore this shop JSON
+  - Shop POS Settings → Backup: download/restore this shop JSON
   - Mobile: Counter billing and Invoices/orders stack, sticky Save, overlay menu
   - Left nav: remove ATAV logo, Today, Bills, and clock chips (keep Logout)
   - Reports: daywise payment summary (cash / UPI / card / credit per day)

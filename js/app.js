@@ -225,8 +225,8 @@ const VIEW_META = {
   accounts: { title: "Accounts", subtitle: "Receivables, payables, GL, and books" },
   expenses: { title: "Expenses", subtitle: "Rent, power, wages, and other shop costs" },
   reports: { title: "Reports", subtitle: "Indian FY 1 Apr–31 Mar — sales, GST, expenses" },
-  settings: { title: "Settings", subtitle: "Company profile, branding, and login password" },
-  backup: { title: "Backup", subtitle: "Download or restore this shop" },
+  settings: { title: "Shop profile", subtitle: "Company profile, timezone, logo, and login password" },
+  backup: { title: "Shop backup", subtitle: "Download or restore this shop from Settings → Backup" },
 };
 
 function orderStatusClass(status) {
@@ -939,7 +939,25 @@ function paintViewHeader(name) {
   document.getElementById("view-topbar")?.classList.toggle("is-counter", name === "counter");
 }
 
+function showSettingsTab(tab) {
+  const backup = tab === "backup";
+  if ($("settings-pane-profile")) $("settings-pane-profile").hidden = backup;
+  if ($("settings-pane-backup")) $("settings-pane-backup").hidden = !backup;
+  document.querySelectorAll("[data-settings-tab]").forEach((btn) => {
+    const on = btn.dataset.settingsTab === (backup ? "backup" : "profile");
+    btn.classList.toggle("active", on);
+    btn.setAttribute("aria-selected", on ? "true" : "false");
+  });
+  paintViewHeader(backup ? "backup" : "settings");
+  document.querySelectorAll(".nav-btn").forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.view === "settings");
+  });
+  if (backup && $("btn-backup-download")) $("btn-backup-download").href = posUrl("/api/backup");
+}
+
 function showView(name) {
+  const requested = name;
+  if (name === "backup") name = "settings";
   document.querySelectorAll(".view").forEach((el) => {
     el.hidden = el.id !== `view-${name}`;
   });
@@ -953,6 +971,7 @@ function showView(name) {
   const page = document.getElementById(`view-${name}`);
   if (page) page.scrollTop = 0;
   paintViewHeader(name);
+  if (name === "settings") showSettingsTab(requested === "backup" ? "backup" : "profile");
   if (name === "reports") loadReports();
   if (name === "accounts") loadAccounts();
   if (name === "expenses") loadExpenses();
@@ -2053,6 +2072,19 @@ function renderSettings() {
   paintLogoFileName();
   showLogo($("logo-preview"), state.company.logo_url);
   if ($("set-shop-id")) $("set-shop-id").value = shopBusinessId();
+  const stats = $("settings-hero-stats");
+  if (stats) {
+    const tz = shopTimezone();
+    const tzLabel = SHOP_TIMEZONE_OPTIONS.find((row) => row.id === tz)?.label || tz;
+    const login = state.session?.username || state.session?.email || state.session?.name || "—";
+    stats.innerHTML = [
+      ["Shop", state.company.name || "—"],
+      ["Timezone", tzLabel],
+      ["Signed in", login],
+    ]
+      .map(([k, v]) => `<div class="items-stat"><span>${k}</span><strong>${escapeHtml(String(v))}</strong></div>`)
+      .join("");
+  }
   if ($("btn-backup-download")) $("btn-backup-download").href = posUrl("/api/backup");
   if (window.DevMode) {
     const section = $("dev-settings-section");
@@ -3988,6 +4020,38 @@ $("supplier-form").addEventListener("submit", async (e) => {
 });
 
 $("set-timezone")?.addEventListener("change", paintTimezonePreview);
+
+$("set-copy-shop-id")?.addEventListener("click", async () => {
+  const id = $("set-shop-id")?.value || shopBusinessId();
+  const hint = $("settings-hint");
+  if (!id) {
+    if (hint) {
+      hint.textContent = "Shop ID is not available yet.";
+      hint.className = "hint error";
+    }
+    return;
+  }
+  try {
+    await copyText(id);
+    if (hint) {
+      hint.textContent = "Shop ID copied.";
+      hint.className = "hint ok";
+    }
+  } catch {
+    if (hint) {
+      hint.textContent = "Could not copy Shop ID.";
+      hint.className = "hint error";
+    }
+  }
+});
+
+document.querySelector(".settings-tabs")?.addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-settings-tab]");
+  if (!btn) return;
+  e.preventDefault();
+  e.stopPropagation();
+  showSettingsTab(btn.dataset.settingsTab);
+});
 
 $("btn-backup-download")?.addEventListener("click", () => {
   if ($("btn-backup-download")) $("btn-backup-download").href = posUrl("/api/backup");
