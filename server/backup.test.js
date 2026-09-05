@@ -139,11 +139,11 @@ test("PHP and HTML wire master admin backup", () => {
   );
 });
 
-test("HTML and CSS cache stickers match deploy93", () => {
+test("HTML and CSS cache stickers match deploy94", () => {
   for (const name of ["index.html", "master.html", "login.html", "setup.html", "order.html"]) {
     const html = readFileSync(path.join(root, name), "utf8");
-    assert.match(html, /20260905deploy93/);
-    assert.doesNotMatch(html, /20260905deploy92/);
+    assert.match(html, /20260905deploy94/);
+    assert.doesNotMatch(html, /20260905deploy93/);
     assert.doesNotMatch(html, /20260904deploy90/);
     assert.doesNotMatch(html, /20260904deploy89/);
     assert.doesNotMatch(html, /20260903deploy88/);
@@ -270,8 +270,9 @@ test("HTML and CSS cache stickers match deploy93", () => {
   assert.match(index, /id="item-catalog-search"/);
   assert.match(index, /id="item-mode"/);
   assert.match(index, /id="item-save"/);
-  assert.equal((index.match(/id="item-barcode"/g) || []).length, 1);
-  assert.equal((index.match(/id="item-mfr-barcode"/g) || []).length, 1);
+  assert.equal((index.match(/id="item-barcode"/g) || []).length, 0);
+  assert.equal((index.match(/id="item-mfr-barcode"/g) || []).length, 0);
+  assert.match(index, /id="item-barcode-qty"/);
   assert.doesNotMatch(index, /item-barcode-gen/);
   assert.match(appJs, /function fillItemForm/);
   assert.match(appJs, /function filterItemsCatalog/);

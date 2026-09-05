@@ -273,6 +273,8 @@ export async function onItemSaved(conn, businessId, itemId, body = {}) {
   for (const code of extras) {
     if (code !== own && code !== mfr) await attachItemBarcode(conn, businessId, itemId, code, "unit", false);
   }
+  const qty = Math.floor(Number(body.barcode_qty ?? body.qty_barcodes ?? 0) || 0);
+  if (qty > 0) await generateQtyBarcodes(conn, businessId, itemId, qty);
   return own;
 }
 

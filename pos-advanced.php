@@ -284,6 +284,8 @@ function pos_assign_item_barcodes($bid, $itemId, $body = []) {
   foreach ($extras as $code) {
     if ($code !== $own && $code !== $mfr) pos_attach_item_barcode($bid, $itemId, $code, "unit", false);
   }
+  $qty = (int) ($body["barcode_qty"] ?? $body["qty_barcodes"] ?? 0);
+  if ($qty > 0) pos_generate_qty_barcodes($bid, $itemId, $qty);
   return $own;
 }
 
