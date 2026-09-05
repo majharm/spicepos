@@ -2575,14 +2575,34 @@ function qrMenuUrl() {
   return `${location.origin}/order.html?shop=${encodeURIComponent(shop)}`;
 }
 
+function qrPosterUrl() {
+  const shop = state.company?.business_id || "";
+  return `${location.origin}/qr.html?shop=${encodeURIComponent(shop)}`;
+}
+
 function paintQrMenuSetup() {
   const url = qrMenuUrl();
+  const poster = qrPosterUrl();
   const input = $("qr-menu-link");
   const open = $("qr-open-menu");
+  const posterLink = $("qr-poster-page");
   const code = $("qr-menu-code");
   if (input) input.value = url;
   if (open) open.href = url;
-  if (code) code.src = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&margin=8&data=${encodeURIComponent(url)}`;
+  if (posterLink) posterLink.href = poster;
+  if (!code) return;
+  const remote = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&margin=8&data=${encodeURIComponent(url)}`;
+  if (typeof QRCodeLib !== "undefined" && typeof QRCodeLib.toDataURL === "function") {
+    QRCodeLib.toDataURL(url, { width: 220, margin: 1, errorCorrectionLevel: "M" })
+      .then((dataUrl) => {
+        code.src = dataUrl;
+      })
+      .catch(() => {
+        code.src = remote;
+      });
+    return;
+  }
+  code.src = remote;
 }
 
 function qrOrderQty(line) {

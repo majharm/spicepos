@@ -8,6 +8,7 @@ Assets
 
 HTML
   index.html
+  qr.html
   order.html
   login.html
   master.html
@@ -56,6 +57,7 @@ JavaScript
   js/pos-api.js
   js/x-pos-20260830e.js
   js/qr-order.js
+  js/qrcode.iife.js
 
 PHP
   pos-php-core.php
