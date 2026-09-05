@@ -212,6 +212,7 @@ const VIEW_META = {
   loyalty: { title: "Royalty points", subtitle: "Earn, redeem, tiers, birthday and referral" },
   packs: { title: "Packs", subtitle: "Named spice mixes for the Counter" },
   orders: { title: "Invoices", subtitle: "POS slip, official A4, or duplicate copy" },
+  "qr-orders": { title: "QR Orders", subtitle: "Incoming customer self-orders" },
   purchases: { title: "Purchases", subtitle: "20 pcs = 20 barcodes you type or scan" },
   suppliers: { title: "Suppliers", subtitle: "Vendor contacts, address, and GSTIN" },
   stock: { title: "Stock", subtitle: "Adjustments, transfers, and low-stock alerts" },
@@ -904,6 +905,7 @@ function applyNav() {
       customers: "customers",
       packs: "items",
       orders: "orders",
+      "qr-orders": "orders",
       purchases: "purchases",
       suppliers: "suppliers",
       stock: "stock",
@@ -954,6 +956,7 @@ function showView(name) {
   if (name === "accounts") loadAccounts();
   if (name === "expenses") loadExpenses();
   if (name === "orders") loadOrders();
+  if (name === "qr-orders") loadQrOrders();
   if (name === "purchases") loadPurchases();
   if (name === "suppliers") loadSuppliers();
   if (name === "support") renderSupport();
@@ -2048,6 +2051,7 @@ function renderSettings() {
   $("set-logo").value = "";
   paintLogoFileName();
   showLogo($("logo-preview"), state.company.logo_url);
+  if ($("set-shop-id")) $("set-shop-id").value = shopBusinessId();
   if ($("btn-backup-download")) $("btn-backup-download").href = posUrl("/api/backup");
   if (window.DevMode) {
     const section = $("dev-settings-section");
@@ -2562,6 +2566,135 @@ function renderOrdersList() {
 async function loadOrders() {
   orderCache = sortOrders(await api("/api/orders"));
   renderOrdersList();
+}
+
+let qrOrderCache = [];
+let qrOrderStatus = "";
+
+function shopBusinessId() {
+  return state.businessMeta?.id || state.company?.business_id || state.session?.business_id || "";
+}
+
+function qrMenuUrl() {
+  const shop = shopBusinessId();
+  return `${location.origin}/order.html?shop=${encodeURIComponent(shop)}`;
+}
+
+function qrPosterUrl() {
+  const shop = shopBusinessId();
+  return `${location.origin}/qr.html?shop=${encodeURIComponent(shop)}`;
+}
+
+function paintQrMenuSetup() {
+  const url = qrMenuUrl();
+  const poster = qrPosterUrl();
+  const shopId = shopBusinessId();
+  const input = $("qr-menu-link");
+  const open = $("qr-open-menu");
+  const posterLink = $("qr-poster-page");
+  const code = $("qr-menu-code");
+  const idEl = $("qr-shop-id");
+  if (idEl) idEl.textContent = shopId || "—";
+  if (input) input.value = url;
+  if (open) open.href = url;
+  if (posterLink) posterLink.href = poster;
+  if (!code) return;
+  const remote = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&margin=8&data=${encodeURIComponent(url)}`;
+  if (typeof QRCodeLib !== "undefined" && typeof QRCodeLib.toDataURL === "function") {
+    QRCodeLib.toDataURL(url, { width: 220, margin: 1, errorCorrectionLevel: "M" })
+      .then((dataUrl) => {
+        code.src = dataUrl;
+      })
+      .catch(() => {
+        code.src = remote;
+      });
+    return;
+  }
+  code.src = remote;
+}
+
+function qrOrderQty(line) {
+  return fmtQty(Number(line.quantity_gm) || 0, { base_unit: line.unit || "PCS" });
+}
+
+function renderQrOrders() {
+  const query = String($("qr-order-search")?.value || "").trim().toLowerCase();
+  const rows = qrOrderCache.filter((order) => {
+    if (qrOrderStatus && order.status !== qrOrderStatus) return false;
+    const hay = [order.order_number, order.customer_name, order.mobile, order.table_no, order.notes].join(" ").toLowerCase();
+    return !query || hay.includes(query);
+  });
+  const pending = qrOrderCache.filter((order) => order.status === "pending").length;
+  const badge = $("qr-order-badge");
+  if (badge) {
+    badge.textContent = String(pending);
+    badge.hidden = pending === 0;
+  }
+  $("qr-order-list").innerHTML = rows.length
+    ? rows.map((order) => `<article class="qr-order-card${order.status === "pending" ? " is-pending" : ""}" data-qr-order="${escapeHtml(order.id)}">
+        <header class="qr-order-head">
+          <div><h3>${escapeHtml(order.order_number)}</h3><p class="qr-order-meta">${escapeHtml(formatShopDateTime(order.created_at))}</p></div>
+          <span class="qr-order-status">${escapeHtml(order.status)}</span>
+        </header>
+        <p class="qr-order-meta"><strong>${escapeHtml(order.customer_name)}</strong> · ${escapeHtml(order.mobile)}${order.table_no ? ` · ${escapeHtml(order.table_no)}` : ""}</p>
+        <div class="qr-order-lines">${(order.lines || []).map((line) =>
+          `<div class="qr-order-line"><span>${escapeHtml(line.item_name)} · ${escapeHtml(qrOrderQty(line))}</span><strong>${money(line.amount)}</strong></div>`,
+        ).join("")}</div>
+        <div class="qr-order-total"><span>Total incl. GST</span><strong>${money(order.total)}</strong></div>
+        ${order.notes ? `<p class="qr-order-note">Note: ${escapeHtml(order.notes)}</p>` : ""}
+        <div class="qr-order-actions">
+          ${!["completed", "cancelled"].includes(order.status) ? `<button class="btn primary" type="button" data-qr-counter="${escapeHtml(order.id)}">Open in Counter</button>` : ""}
+          ${order.status === "pending" ? `<button class="btn" type="button" data-qr-status-next="accepted">Accept</button>` : ""}
+          ${order.status === "accepted" ? `<button class="btn" type="button" data-qr-status-next="preparing">Preparing</button>` : ""}
+          ${order.status === "preparing" ? `<button class="btn" type="button" data-qr-status-next="ready">Ready</button>` : ""}
+          ${order.status === "ready" ? `<button class="btn" type="button" data-qr-status-next="completed">Complete</button>` : ""}
+          ${!["completed", "cancelled"].includes(order.status) ? `<button class="btn danger" type="button" data-qr-status-next="cancelled">Cancel</button>` : ""}
+        </div>
+      </article>`).join("")
+    : '<p class="item-empty-card"><strong>No QR orders here</strong><span>New customer orders will appear automatically after they scan your code.</span></p>';
+}
+
+async function loadQrOrders() {
+  paintQrMenuSetup();
+  const hint = $("qr-orders-hint");
+  if (hint) hint.textContent = "Checking for orders…";
+  try {
+    qrOrderCache = await api("/api/qr-orders");
+    renderQrOrders();
+    if (hint) hint.textContent = qrOrderCache.length ? `${qrOrderCache.length} QR order${qrOrderCache.length === 1 ? "" : "s"}` : "";
+  } catch (err) {
+    if (hint) {
+      hint.textContent = err.message;
+      hint.className = "hint error";
+    }
+  }
+}
+
+async function updateQrOrder(order, status) {
+  const data = await api(`/api/qr-orders/${encodeURIComponent(order.id)}`, {
+    method: "PATCH",
+    body: JSON.stringify({ status }),
+  });
+  const index = qrOrderCache.findIndex((row) => row.id === order.id);
+  if (index >= 0 && data.order) qrOrderCache[index] = data.order;
+  renderQrOrders();
+  return data.order || order;
+}
+
+async function openQrOrderInCounter(order) {
+  const liveLines = (order.lines || []).filter((line) => state.items.some((item) => item.id === line.item_id));
+  if (!liveLines.length) throw new Error("This order has no available catalog items");
+  if (state.cart.length && !confirm("Replace the current Counter bill with this QR order?")) return;
+  if (order.status === "pending") order = await updateQrOrder(order, "accepted");
+  state.cart = liveLines.map((line) => ({ itemId: line.item_id, qtyGm: Number(line.quantity_gm) }));
+  const known = state.customers.find((customer) => digitsMobile(customer.mobile) === digitsMobile(order.mobile));
+  const walkIn = state.customers.find((customer) => customer.code === "CUS-001") || state.customers[0];
+  state.customerId = known?.id || walkIn?.id || "";
+  renderCustomersSelect();
+  renderCatalog();
+  renderCart();
+  setHint(`QR order ${order.order_number} loaded. Check payment and tap Pay.`, "ok");
+  showView("counter");
 }
 
 let purchaseCache = [];
@@ -3341,6 +3474,60 @@ $("view-accounts")?.addEventListener("click", (e) => {
     const row = (state.ledgerRows || [])[Number(voucher.dataset.voucherPrint)];
     if (row) printVoucher(row);
   }
+});
+$("qr-orders-refresh")?.addEventListener("click", loadQrOrders);
+$("qr-order-search")?.addEventListener("input", renderQrOrders);
+$("qr-status-tabs")?.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-qr-status]");
+  if (!button) return;
+  qrOrderStatus = button.dataset.qrStatus;
+  $("qr-status-tabs").querySelectorAll("[data-qr-status]").forEach((row) => row.classList.toggle("active", row === button));
+  renderQrOrders();
+});
+$("qr-order-list")?.addEventListener("click", async (event) => {
+  const card = event.target.closest("[data-qr-order]");
+  const order = qrOrderCache.find((row) => row.id === card?.dataset.qrOrder);
+  if (!order) return;
+  try {
+    const counter = event.target.closest("[data-qr-counter]");
+    const next = event.target.closest("[data-qr-status-next]");
+    if (counter) await openQrOrderInCounter(order);
+    else if (next) await updateQrOrder(order, next.dataset.qrStatusNext);
+  } catch (err) {
+    $("qr-orders-hint").textContent = err.message;
+    $("qr-orders-hint").className = "hint error";
+  }
+});
+$("qr-copy-link")?.addEventListener("click", async () => {
+  const text = $("qr-menu-link")?.value || qrMenuUrl();
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch {
+    $("qr-menu-link")?.select();
+    document.execCommand("copy");
+  }
+  $("qr-orders-hint").textContent = "Menu link copied.";
+  $("qr-orders-hint").className = "hint ok";
+});
+$("qr-copy-shop-id")?.addEventListener("click", async () => {
+  const text = shopBusinessId();
+  if (!text) return;
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch {
+    /* ignore */
+  }
+  $("qr-orders-hint").textContent = "Shop ID copied.";
+  $("qr-orders-hint").className = "hint ok";
+});
+$("qr-print-code")?.addEventListener("click", () => {
+  const image = $("qr-menu-code")?.src || "";
+  const w = window.open("", "qr-menu-print", "width=500,height=680");
+  if (!w) return setHint("Allow pop-ups to print the QR code", "error");
+  w.document.write(`<!doctype html><html><head><title>QR ordering · ${escapeHtml(shopPrintName())}</title>
+    <style>body{font:16px system-ui;text-align:center;padding:28px;color:#0f172a}img{width:280px;height:280px}h1{margin-bottom:4px}p{color:#475569}@media print{button{display:none}}</style></head>
+    <body><h1>${escapeHtml(shopPrintName())}</h1><p>Scan to view the menu and place your order</p><img src="${escapeHtml(image)}" onload="window.focus();window.print()"><p>${escapeHtml(qrMenuUrl())}</p></body></html>`);
+  w.document.close();
 });
 document.querySelector(".nav").addEventListener("click", (e) => {
   const btn = e.target.closest("[data-view]");

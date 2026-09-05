@@ -106,6 +106,11 @@ test("PHP customer insert bind types match placeholders", () => {
   assert.match(read("pos-item-import.php"), /\(string\) \$src, \$blocks/);
   assert.match(read("server/crud.js"), /\/api\/items\/import/);
   assert.match(read("server/item-import.js"), /ITEM_IMPORT_HEADERS/);
+  assert.match(read("pos-php-core.php"), /pos_qr_public_dispatch/);
+  assert.match(read("pos-php-till.php"), /pos_qr_staff_dispatch/);
+  assert.match(read("pos-qr-ordering.php"), /CREATE TABLE IF NOT EXISTS qr_orders/);
+  assert.match(read("server/index.js"), /registerQrPublic/);
+  assert.match(read("server/index.js"), /registerQrStaff/);
   const index = read("index.html");
   assert.match(index, /js\/units\.js/);
   assert.match(index, /js\/footwear\.js/);

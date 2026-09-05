@@ -6,8 +6,8 @@
     <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
     <title>ATAV POS</title>
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./css/pos.css?v=20260904deploy89" />
-    <link rel="stylesheet" href="./css/saas.css?v=20260904deploy89" />
+    <link rel="stylesheet" href="./css/pos.css?v=20260904deploy90" />
+    <link rel="stylesheet" href="./css/saas.css?v=20260904deploy90" />
   </head>
   <body>
     <div class="app" id="app">
@@ -27,6 +27,7 @@
           <div class="nav-group">
             <p class="nav-group-label">Sales</p>
             <button class="nav-btn" type="button" data-view="orders"><span class="nav-icon" aria-hidden="true">▤</span>Invoices</button>
+            <button class="nav-btn" type="button" data-view="qr-orders"><span class="nav-icon" aria-hidden="true">▦</span>QR Orders <span class="nav-badge" id="qr-order-badge" hidden></span></button>
             <button class="nav-btn" type="button" data-view="customers"><span class="nav-icon" aria-hidden="true">◎</span>Customers</button>
             <button class="nav-btn" type="button" data-view="loyalty"><span class="nav-icon" aria-hidden="true">★</span>Royalty</button>
             <button class="nav-btn" type="button" data-view="purchases"><span class="nav-icon" aria-hidden="true">↘</span>Purchases</button>
@@ -406,6 +407,49 @@
                 <div id="packs-table" class="packs-library-list"></div>
               </aside>
             </div>
+          </div>
+        </section>
+        <section class="view" id="view-qr-orders" hidden>
+          <div class="qr-orders-page">
+            <header class="qr-orders-hero">
+              <div>
+                <p class="items-kicker">Customer self-ordering</p>
+                <h2>QR Orders</h2>
+                <p>Customers scan, choose available items, and send an order. Stock changes only after you open it in Counter and complete the bill.</p>
+              </div>
+              <button class="btn" type="button" id="qr-orders-refresh">Refresh orders</button>
+            </header>
+            <section class="qr-setup-card">
+              <div>
+                <p class="items-kicker">YOUR SHOP QR</p>
+                <h3>Print or share this code</h3>
+                <p>Place it at the counter, table, or storefront. The link opens a public mobile menu—no customer login required.</p>
+                <p class="field-hint">Shop ID for <code>/qr.html?shop=</code>: <code id="qr-shop-id">—</code>
+                  <button class="btn" type="button" id="qr-copy-shop-id">Copy ID</button>
+                </p>
+                <div class="qr-link-row">
+                  <input id="qr-menu-link" readonly aria-label="Public QR menu link" />
+                  <button class="btn" type="button" id="qr-copy-link">Copy link</button>
+                  <a class="btn primary" id="qr-open-menu" target="_blank" rel="noopener">Open menu</a>
+                  <a class="btn" id="qr-poster-page" href="./qr.html" target="_blank" rel="noopener">Open /qr.html</a>
+                  <button class="btn" type="button" id="qr-print-code">Print QR</button>
+                </div>
+              </div>
+              <img id="qr-menu-code" alt="QR code for customer ordering menu" />
+            </section>
+            <div class="qr-orders-toolbar">
+              <div class="qr-status-tabs" id="qr-status-tabs">
+                <button type="button" class="active" data-qr-status="">All</button>
+                <button type="button" data-qr-status="pending">New</button>
+                <button type="button" data-qr-status="accepted">Accepted</button>
+                <button type="button" data-qr-status="preparing">Preparing</button>
+                <button type="button" data-qr-status="ready">Ready</button>
+                <button type="button" data-qr-status="completed">Completed</button>
+              </div>
+              <input id="qr-order-search" type="search" placeholder="Order no, name, mobile, table…" autocomplete="off" />
+            </div>
+            <p class="hint" id="qr-orders-hint"></p>
+            <div class="qr-order-list" id="qr-order-list"></div>
           </div>
         </section>
         <section class="view" id="view-orders" hidden>
@@ -794,9 +838,9 @@
           <p class="lede">Company profile, timezone, shop logo, and your login password. Shop backup is under Admin → Backup.</p>
           <form class="settings settings-page" id="settings-form">
             <div class="settings-section">
-              <h3>Business details</h3>
-              <div class="settings-grid">
-                <label class="full">Name
+                <label class="full">Shop ID
+                  <input id="set-shop-id" readonly autocomplete="off" />
+                </label>
                   <input id="set-name" maxlength="180" autocomplete="organization" />
                 </label>
                 <label class="full">Address
@@ -955,17 +999,18 @@
         </section>
       </div>
     </aside>
-    <script src="./js/gst-supply.js?v=20260904deploy89" defer></script>
-    <script src="./js/pos-api.js?v=20260904deploy89" defer></script>
-    <script src="./js/units.js?v=20260904deploy89" defer></script>
-    <script src="./js/footwear.js?v=20260904deploy89" defer></script>
-    <script src="./js/discount.js?v=20260904deploy89" defer></script>
-    <script src="./js/loyalty.js?v=20260904deploy89" defer></script>
-    <script src="./js/barcode.js?v=20260904deploy89" defer></script>
+    <script src="./js/gst-supply.js?v=20260904deploy90" defer></script>
+    <script src="./js/pos-api.js?v=20260904deploy90" defer></script>
+    <script src="./js/units.js?v=20260904deploy90" defer></script>
+    <script src="./js/footwear.js?v=20260904deploy90" defer></script>
+    <script src="./js/discount.js?v=20260904deploy90" defer></script>
+    <script src="./js/loyalty.js?v=20260904deploy90" defer></script>
+    <script src="./js/barcode.js?v=20260904deploy90" defer></script>
     <script src="./js/camera-scan.js?v=20260904camera1" defer></script>
-    <script src="./js/dev-mode.js?v=20260904deploy89" defer></script>
-    <script src="./js/invoice.js?v=20260904deploy89" defer></script>
-    <script src="./js/support.js?v=20260904deploy89" defer></script>
-    <script src="./js/app.js?v=20260904deploy89" defer></script>
+    <script src="./js/dev-mode.js?v=20260904deploy90" defer></script>
+    <script src="./js/invoice.js?v=20260904deploy90" defer></script>
+    <script src="./js/support.js?v=20260904deploy90" defer></script>
+    <script src="./js/qrcode.iife.js?v=20260905qr1"></script>
+    <script src="./js/app.js?v=20260904deploy90" defer></script>
   </body>
 </html>

@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - cursor/multi-tenant-saas-pos-1a88
+      - cursor/live-qr-html-357a
       - main
   pull_request:
     branches:

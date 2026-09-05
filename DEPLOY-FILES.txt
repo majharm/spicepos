@@ -1,4 +1,4 @@
-Production deploy bundle — 20260904deploy89
+Production deploy bundle — 20260904deploy90
 =========================================
 
 Upload ALL files below to Hostinger public_html (overwrite):
@@ -8,6 +8,8 @@ Assets
 
 HTML
   index.html
+  qr.html
+  order.html
   login.html
   master.html
   setup.html
@@ -39,6 +41,7 @@ Cashfree / main website
 CSS
   css/pos.css
   css/saas.css
+  css/qr-order.css
 
 JavaScript
   js/app.js
@@ -53,6 +56,8 @@ JavaScript
   js/master.js
   js/pos-api.js
   js/x-pos-20260830e.js
+  js/qr-order.js
+  js/qrcode.iife.js
 
 PHP
   pos-php-core.php
@@ -71,6 +76,7 @@ PHP
   pos-alerts.php
   pos-advanced.php
   pos-item-import.php
+  pos-qr-ordering.php
   api/.htaccess
   api/health/index.php
   api/checkout/index.php
@@ -99,6 +105,7 @@ Node (if using hPanel Node.js web app — upload OR git pull then Restart)
   server/index.js
   server/crud.js
   server/item-import.js
+  server/qr-ordering.js
   server/excel.js
   server/tenant.js
   server/reports.js
@@ -124,7 +131,8 @@ FIXES in this bundle
   - Suppliers form and list include address and email
   - Settings page: wider card, 2-column details, styled logo upload, keep card padding on mobile
   - CSS: Master Admin mobile nav wrap, hide nav until sign-in, backup file inputs, table overflow
-  - Cache sticker 20260904deploy89 on index, login, master, setup
+  - Cache sticker 20260904deploy90 on index, login, master, setup, order
+  - QR ordering: public mobile menu, customer cart/order, staff inbox, status flow, and Open in Counter
   - Payment receipt / payment voucher print (Accounts: receive from customer, pay to supplier, reprint from Day book)
   - Items bulk Excel import: template download and .xlsx / CSV upload
   - Inventory Expiry list: dated on-hand batches, 7/30/90 day filters, write-off as damage

@@ -128,10 +128,11 @@ test("PHP and HTML wire master admin backup", () => {
   );
 });
 
-test("HTML and CSS cache stickers match deploy89", () => {
-  for (const name of ["index.html", "master.html", "login.html", "setup.html"]) {
+test("HTML and CSS cache stickers match deploy90", () => {
+  for (const name of ["index.html", "master.html", "login.html", "setup.html", "order.html"]) {
     const html = readFileSync(path.join(root, name), "utf8");
-    assert.match(html, /20260904deploy89/);
+    assert.match(html, /20260904deploy90/);
+    assert.doesNotMatch(html, /20260904deploy89/);
     assert.doesNotMatch(html, /20260903deploy88/);
     assert.doesNotMatch(html, /20260903deploy87/);
     assert.doesNotMatch(html, /20260903deploy84/);
@@ -182,6 +183,22 @@ test("HTML and CSS cache stickers match deploy89", () => {
   const saas = readFileSync(path.join(root, "css/saas.css"), "utf8");
   const pos = readFileSync(path.join(root, "css/pos.css"), "utf8");
   const index = readFileSync(path.join(root, "index.html"), "utf8");
+  const qrOrder = readFileSync(path.join(root, "order.html"), "utf8");
+  const qrOrderJs = readFileSync(path.join(root, "js/qr-order.js"), "utf8");
+  const qrOrderPhp = readFileSync(path.join(root, "pos-qr-ordering.php"), "utf8");
+  assert.match(index, /data-view="qr-orders"/);
+  assert.match(index, /id="qr-menu-code"/);
+  assert.match(index, /id="qr-order-list"/);
+  assert.match(index, /id="qr-shop-id"/);
+  const qrPoster = readFileSync(path.join(root, "qr.html"), "utf8");
+  assert.match(qrPoster, /qrcode\.iife\.js/);
+  assert.match(qrPoster, /order\.html\?shop=/);
+  assert.match(qrOrder, /id="order-form"/);
+  assert.match(qrOrder, /id="cart-sheet"/);
+  assert.match(qrOrderJs, /\/api\/qr\/menu/);
+  assert.match(qrOrderJs, /\/api\/qr\/orders/);
+  assert.match(qrOrderPhp, /function pos_qr_public_dispatch/);
+  assert.match(qrOrderPhp, /function pos_qr_staff_dispatch/);
   assert.match(saas, /alert-switch-ui/);
   assert.match(saas, /alert-card/);
   assert.match(saas, /max-width: 900px/);
