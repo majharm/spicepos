@@ -20,6 +20,7 @@ test("shop UI wires the Offers desk and Counter auto-apply", () => {
   assert.match(html, /offer-banner/);
   assert.match(app, /applyOffersToCart/);
   assert.match(app, /Offer waiting/);
+  assert.match(app, /appliedOffers\?\.pending/);
   assert.match(app, /offerIds/);
   assert.match(ui, /\/api\/offers/);
   assert.match(ui, /duplicateOfferById/);

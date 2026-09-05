@@ -442,6 +442,7 @@
             pending: true,
             needQty,
             wouldSave: round2(wouldSave),
+            itemIds: [...new Set(poolLines.map((l) => String(l.itemId || l.item_id || "")).filter(Boolean))],
           };
         }
         return null;

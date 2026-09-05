@@ -1237,11 +1237,12 @@ function renderCart() {
         const calc = lineCalc(item, line);
         const bc = String(line.barcode || "").trim();
         const key = cartLineKey(line);
+        const wait = (state.appliedOffers?.pending || []).find((o) => !o.itemIds?.length || o.itemIds.includes(String(line.itemId)));
         return `<div class="line">
           <div class="line-main">
             <div class="line-info">
               <div class="who">${escapeHtml(itemVariantText(item) ? `${item.name} · ${itemVariantText(item)}` : item.name)}</div>
-              <div class="pack">${escapeHtml(bc || itemVariantText(item) || item.hsn || "")}</div>
+              <div class="pack">${escapeHtml(wait?.message || bc || itemVariantText(item) || item.hsn || "")}</div>
             </div>
             <div class="line-ops">
               <div class="qty">
@@ -1672,8 +1673,10 @@ function paintOfferBanner() {
   const result = state.appliedOffers;
   const available = result?.available || [];
   const applied = result?.applied || [];
-  const pending = (result?.pending || available).filter((o) => o.pending);
-  if (!available.length && !applied.length) {
+  const pending = [...(Array.isArray(result?.pending) ? result.pending : []), ...available].filter(
+    (o, i, arr) => o.pending && arr.findIndex((x) => (x.id || x.name) === (o.id || o.name)) === i,
+  );
+  if (!available.length && !applied.length && !pending.length) {
     el.hidden = true;
     el.innerHTML = "";
     return;

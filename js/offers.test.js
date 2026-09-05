@@ -128,6 +128,7 @@ test("live-shaped Buy 1 Get 1 uses Counter line ids and leftover min spend", () 
   const one = O.evaluateAll([offer], { cart: [row(1, "ln-1")], now });
   assert.equal(one.applied.length, 0);
   assert.equal(one.pending[0]?.needQty, 1);
+  assert.deepEqual(one.pending[0]?.itemIds, ["19c93463-8f6f-4c19-9887-bcdf14b2fc72"]);
   const two = O.evaluateAll([offer], { cart: [row(2, "ln-1")], now });
   assert.equal(two.applied[0]?.discount, 190);
   assert.equal(two.lineDiscounts["ln-1"], 190);
