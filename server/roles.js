@@ -12,6 +12,7 @@ export const MODULES = [
   "branches",
   "devices",
   "reports",
+  "growth",
   "accounts",
   "settings",
   "support",
@@ -63,6 +64,7 @@ export function defaultPerms(role) {
       purchases: true,
       suppliers: true,
       reports: true,
+      growth: true,
       support: true,
       damage: true,
     };
@@ -71,6 +73,7 @@ export function defaultPerms(role) {
     return {
       dashboard: true,
       reports: true,
+      growth: true,
       accounts: true,
       purchases: true,
       suppliers: true,

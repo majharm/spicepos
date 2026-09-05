@@ -6,8 +6,8 @@
     <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
     <title>ATAV POS</title>
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./css/pos.css?v=20260905deploy106" />
-    <link rel="stylesheet" href="./css/saas.css?v=20260905deploy106" />
+    <link rel="stylesheet" href="./css/pos.css?v=20260905deploy119" />
+    <link rel="stylesheet" href="./css/saas.css?v=20260905deploy119" />
   </head>
   <body>
     <div class="app" id="app">
@@ -48,6 +48,7 @@
             <p class="nav-group-label">Finance</p>
             <button class="nav-btn" type="button" data-view="accounts"><span class="nav-icon" aria-hidden="true">₹</span>Accounts</button>
             <button class="nav-btn" type="button" data-view="expenses"><span class="nav-icon" aria-hidden="true">−</span>Expenses</button>
+            <button class="nav-btn" type="button" data-view="growth"><span class="nav-icon" aria-hidden="true">◈</span>AI Growth</button>
             <button class="nav-btn" type="button" data-view="reports"><span class="nav-icon" aria-hidden="true">▣</span>Reports</button>
           </div>
           <div class="nav-group">
@@ -901,6 +902,90 @@
           </form>
           <div class="table-wrap" id="expenses-table"></div>
         </section>
+        <section class="view view-finance" id="view-growth" hidden>
+          <div class="items-desk growth-desk">
+            <header class="items-hero">
+              <div class="items-hero-copy">
+                <p class="items-kicker">AI Growth</p>
+                <h3>Business growth dashboard</h3>
+                <p class="lede">What happened, why it happened, what may happen next, and what you should do — from this shop's sales, stock, and customers.</p>
+              </div>
+              <div class="items-hero-stats" id="growth-hero-stats"></div>
+            </header>
+            <form class="report-toolbar growth-toolbar" id="growth-toolbar">
+              <label>Charts
+                <select id="growth-chart-range" aria-label="Chart range">
+                  <option value="day">Day</option>
+                  <option value="week">Week</option>
+                  <option value="month" selected>Month</option>
+                  <option value="quarter">Quarter</option>
+                  <option value="year">Year</option>
+                </select>
+              </label>
+              <button class="btn" type="button" id="growth-refresh">Refresh</button>
+              <button class="btn" type="button" id="growth-print">Print / PDF</button>
+              <a class="btn" id="growth-excel" href="#">Download Excel</a>
+            </form>
+            <div class="hint" id="growth-hint"></div>
+            <div class="report-grid" id="growth-kpis"></div>
+            <div id="growth-score"></div>
+            <article class="growth-panel">
+              <h3>AI Business Summary</h3>
+              <p id="growth-summary">Open AI Growth after you have sales on this shop.</p>
+              <p class="lede" id="growth-opportunity"></p>
+              <div id="growth-alerts"></div>
+            </article>
+            <article class="growth-panel">
+              <h3>Sales &amp; profit</h3>
+              <div id="growth-charts" class="growth-charts"></div>
+            </article>
+            <article class="growth-panel">
+              <h3>AI Action Center</h3>
+              <div id="growth-actions" class="growth-actions"></div>
+            </article>
+            <div class="growth-split">
+              <article class="growth-panel">
+                <h3>Top products</h3>
+                <div id="growth-top-products"></div>
+              </article>
+              <article class="growth-panel">
+                <h3>Slow / weak products</h3>
+                <div id="growth-slow-products"></div>
+              </article>
+            </div>
+            <article class="growth-panel">
+              <h3>Inventory intelligence</h3>
+              <div id="growth-inventory"></div>
+            </article>
+            <article class="growth-panel">
+              <h3>Customer insights</h3>
+              <div id="growth-customers"></div>
+            </article>
+            <article class="growth-panel">
+              <h3>Growth opportunities</h3>
+              <div id="growth-recs"></div>
+            </article>
+            <article class="growth-panel">
+              <h3>Sales forecast</h3>
+              <div id="growth-forecast"></div>
+            </article>
+            <article class="growth-panel">
+              <h3>Expansion &amp; market ideas</h3>
+              <p class="hint">Shop ideas use your billed data. Market ideas are general estimates, not this shop's numbers.</p>
+              <div id="growth-expand"></div>
+            </article>
+            <article class="growth-panel growth-ask">
+              <h3>Ask Business AI</h3>
+              <p class="hint">Answers use this shop's available sales, stock, customers, and expenses — not an external chat model.</p>
+              <form class="growth-ask-form" id="growth-ask-form">
+                <input id="growth-ask-q" maxlength="240" placeholder="Why did my sales drop this month?" autocomplete="off" />
+                <button class="btn primary" type="submit">Ask</button>
+              </form>
+              <div class="growth-ask-chips" id="growth-ask-chips"></div>
+              <p class="growth-ask-answer" id="growth-ask-answer"></p>
+            </article>
+          </div>
+        </section>
         <section class="view view-finance" id="view-reports" hidden>
           <h2 class="visually-hidden">Reports</h2>
           <p class="lede">Sales, stock, purchases, expenses, GST, and daywise payment summary for the Indian financial year (1 April–31 March).</p>
@@ -1107,18 +1192,19 @@
         </section>
       </div>
     </aside>
-    <script src="./js/gst-supply.js?v=20260905deploy106" defer></script>
-    <script src="./js/pos-api.js?v=20260905deploy106" defer></script>
-    <script src="./js/units.js?v=20260905deploy106" defer></script>
-    <script src="./js/footwear.js?v=20260905deploy106" defer></script>
-    <script src="./js/discount.js?v=20260905deploy106" defer></script>
-    <script src="./js/loyalty.js?v=20260905deploy106" defer></script>
-    <script src="./js/barcode.js?v=20260905deploy106" defer></script>
+    <script src="./js/gst-supply.js?v=20260905deploy119" defer></script>
+    <script src="./js/pos-api.js?v=20260905deploy119" defer></script>
+    <script src="./js/units.js?v=20260905deploy119" defer></script>
+    <script src="./js/footwear.js?v=20260905deploy119" defer></script>
+    <script src="./js/discount.js?v=20260905deploy119" defer></script>
+    <script src="./js/loyalty.js?v=20260905deploy119" defer></script>
+    <script src="./js/barcode.js?v=20260905deploy119" defer></script>
     <script src="./js/camera-scan.js?v=20260904camera1" defer></script>
-    <script src="./js/dev-mode.js?v=20260905deploy106" defer></script>
-    <script src="./js/invoice.js?v=20260905deploy106" defer></script>
-    <script src="./js/support.js?v=20260905deploy106" defer></script>
+    <script src="./js/dev-mode.js?v=20260905deploy119" defer></script>
+    <script src="./js/invoice.js?v=20260905deploy119" defer></script>
+    <script src="./js/support.js?v=20260905deploy119" defer></script>
     <script src="./js/qrcode.iife.js?v=20260905qr1"></script>
-    <script src="./js/app.js?v=20260905deploy106" defer></script>
+    <script src="./js/app.js?v=20260905deploy119" defer></script>
+    <script src="./js/growth.js?v=20260905deploy119" defer></script>
   </body>
 </html>

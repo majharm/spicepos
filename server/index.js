@@ -9,6 +9,7 @@ import { bid, branchId, authUser } from "./context.js";
 import { lineAmount, round2, registerCrud, itemBillName } from "./crud.js";
 import { fyRangeForToday } from "./fy.js";
 import { buildReports, reportsToSheets } from "./reports.js";
+import { buildGrowthDashboard, answerGrowthQuestion, growthToSheets } from "./growth.js";
 import { workbookXml } from "./excel.js";
 import { ensureSchema, seedPlatform } from "./schema.js";
 import { companyTimezone, normalizeTimezone, shopTimezonePayload, tzOffsetFor } from "./timezone.js";
@@ -272,6 +273,36 @@ app.get("/api/reports", requireStaff, requirePerm("reports"), async (req, res) =
     res.json(await buildReports(from, to));
   } catch (err) {
     res.status(500).json({ error: String(err.message) });
+  }
+});
+
+app.get("/api/growth", requireStaff, requirePerm("reports"), async (req, res) => {
+  try {
+    res.json(await buildGrowthDashboard());
+  } catch (err) {
+    res.status(500).json({ error: String(err.message || "Growth failed") });
+  }
+});
+
+app.post("/api/growth/ask", requireStaff, requirePerm("reports"), async (req, res) => {
+  try {
+    const data = await buildGrowthDashboard();
+    const question = String(req.body?.question || "");
+    res.json({ ok: true, answer: answerGrowthQuestion(question, data), question });
+  } catch (err) {
+    res.status(500).json({ error: String(err.message || "Ask failed") });
+  }
+});
+
+app.get("/api/growth/excel", requireStaff, requirePerm("reports"), async (req, res) => {
+  try {
+    const data = await buildGrowthDashboard();
+    const xml = workbookXml(growthToSheets(data));
+    res.setHeader("Content-Type", "application/vnd.ms-excel; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename="ai-growth-${data.range?.today || "today"}.xls"`);
+    res.send(xml);
+  } catch (err) {
+    res.status(500).json({ error: String(err.message || "Growth Excel failed") });
   }
 });
 

@@ -225,6 +225,7 @@ const VIEW_META = {
   accounts: { title: "Accounts", subtitle: "Receivables, payables, GL, and books" },
   expenses: { title: "Expenses", subtitle: "Rent, power, wages, and other shop costs" },
   reports: { title: "Reports", subtitle: "Indian FY 1 Apr–31 Mar — sales, GST, expenses" },
+  growth: { title: "AI Growth", subtitle: "What happened, why, what to do next — from this shop's data" },
   settings: { title: "Shop profile", subtitle: "Company profile, timezone, logo, and login password" },
   backup: { title: "Shop backup", subtitle: "Download or restore this shop from Settings → Backup" },
 };
@@ -918,6 +919,7 @@ function applyNav() {
       accounts: "accounts",
       expenses: "accounts",
       reports: "reports",
+      growth: "reports",
       settings: "settings",
       backup: "settings",
       barcodes: "items",
@@ -926,6 +928,7 @@ function applyNav() {
       loyalty: "customers",
     };
     btn.hidden = map[view] ? !can(map[view]) : false;
+    if (view === "growth") btn.hidden = !(can("growth") || can("reports"));
     if (view === "packs" && isFootwearShop()) btn.hidden = true;
   });
 }
@@ -973,6 +976,7 @@ function showView(name) {
   paintViewHeader(name);
   if (name === "settings") showSettingsTab(requested === "backup" ? "backup" : "profile");
   if (name === "reports") loadReports();
+  if (name === "growth") loadGrowthDashboard();
   if (name === "accounts") loadAccounts();
   if (name === "expenses") loadExpenses();
   if (name === "orders") loadOrders();

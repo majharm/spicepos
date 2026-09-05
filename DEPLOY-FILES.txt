@@ -1,4 +1,4 @@
-Production deploy bundle — 20260905deploy118
+Production deploy bundle — 20260905deploy119
 =========================================
 
 Upload ALL files below to Hostinger public_html (overwrite):
@@ -45,6 +45,7 @@ CSS
 
 JavaScript
   js/app.js
+  js/growth.js
   js/units.js
   js/footwear.js
   js/discount.js
@@ -70,6 +71,7 @@ PHP
   pos-units.php
   pos-orders.php
   pos-reports.php
+  pos-growth.php
   pos-accounting.php
   pos-api.php
   pos-mail.php
@@ -90,6 +92,9 @@ PHP
   api/backup/restore/index.php
   api/backup/clean/index.php
   api/units/index.php
+  api/growth/index.php
+  api/growth/ask/index.php
+  api/growth/excel/index.php
   api/master/notifications/index.php
   api/master/account-managers/index.php
   api/master/alerts/index.php
@@ -117,6 +122,7 @@ Node (if using hPanel Node.js web app — upload OR git pull then Restart)
   server/excel.js
   server/tenant.js
   server/reports.js
+  server/growth.js
   server/accounting.js
   server/accounts.js
   server/roles.js
@@ -143,7 +149,8 @@ FIXES in this bundle
   - CSS: Master Admin mobile nav wrap, hide nav until sign-in, backup file inputs, table overflow
   - Master Admin Send alerts page: all types to one shop or all shops
   - Force expiry send always delivers (expires today counts as expired); skip reason shown
-  - Cache sticker 20260905deploy118 on master (deploy106 on index, login, setup, order)
+  - AI Growth dashboard: shop KPIs, SVG charts, Action Center, Ask Business AI, PDF/Excel
+  - Cache sticker 20260905deploy119 on shop index / AI Growth (deploy118 on master)
   - Settings shows From pos@atavtelecom.in at the top and saves SMTP on the platform
   - Send alerts defaults to renewal/expired and sends one shop at a time; wait 60s after HTTP 429
   - Retry WhatsApp HTTP 429 with backoff and pace sends under WA Master's 300/minute limit

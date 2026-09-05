@@ -742,7 +742,7 @@ function pos_default_perms($role) {
   $all = [
     "dashboard" => true, "counter" => true, "items" => true, "customers" => true, "packs" => true,
     "orders" => true, "purchases" => true, "suppliers" => true, "stock" => true, "staff" => true,
-    "branches" => true, "devices" => true, "reports" => true, "accounts" => true, "settings" => true,
+    "branches" => true, "devices" => true, "reports" => true, "growth" => true, "accounts" => true, "settings" => true,
     "support" => true, "discount" => true, "loyalty" => true, "damage" => true,
   ];
   if ($role === "business_admin") return $all;
@@ -758,10 +758,10 @@ function pos_default_perms($role) {
     return ["dashboard" => true, "counter" => true, "customers" => true, "orders" => true, "support" => true, "discount" => true, "loyalty" => true];
   }
   if ($role === "stock_manager") {
-    return ["dashboard" => true, "items" => true, "stock" => true, "purchases" => true, "suppliers" => true, "reports" => true, "support" => true, "damage" => true];
+    return ["dashboard" => true, "items" => true, "stock" => true, "purchases" => true, "suppliers" => true, "reports" => true, "growth" => true, "support" => true, "damage" => true];
   }
   if ($role === "accountant") {
-    return ["dashboard" => true, "reports" => true, "accounts" => true, "purchases" => true, "suppliers" => true, "customers" => true, "orders" => true, "support" => true];
+    return ["dashboard" => true, "reports" => true, "growth" => true, "accounts" => true, "purchases" => true, "suppliers" => true, "customers" => true, "orders" => true, "support" => true];
   }
   return ["dashboard" => true, "counter" => true, "support" => true];
 }

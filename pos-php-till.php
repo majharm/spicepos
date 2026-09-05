@@ -10,7 +10,7 @@ function pos_php_till_dispatch($path, $method, $body) {
   $staff = [
     "bootstrap", "dashboard", "today", "suppliers", "items", "customers", "packs",
     "orders", "purchases", "stock", "staff", "branches", "devices", "holds",
-    "checkout", "settings", "reports", "audit", "accounts", "backup", "units",
+    "checkout", "settings", "reports", "growth", "audit", "accounts", "backup", "units",
     "barcodes", "damage", "loyalty", "batches", "qr-orders",
   ];
   if (!in_array($head, $staff, true)) return false;
@@ -358,6 +358,21 @@ function pos_php_till_dispatch($path, $method, $body) {
   require_once __DIR__ . "/pos-crud.php";
   if (pos_crud_dispatch($path, $method, $body, $bid, $auth, $branchId, $uid)) {
     return;
+  }
+
+  if ($path === "growth" && $method === "GET") {
+    require_once __DIR__ . "/pos-growth.php";
+    pos_send(200, pos_build_growth($bid));
+  }
+  if ($path === "growth/ask" && $method === "POST") {
+    require_once __DIR__ . "/pos-growth.php";
+    $data = pos_build_growth($bid);
+    $q = (string) ($body["question"] ?? "");
+    pos_send(200, ["ok" => true, "answer" => pos_growth_ask($q, $data), "question" => $q]);
+  }
+  if ($path === "growth/excel" && $method === "GET") {
+    require_once __DIR__ . "/pos-growth.php";
+    pos_growth_excel_response($bid);
   }
 
   if (($path === "reports" || $path === "reports/excel") && $method === "GET") {
