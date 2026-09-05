@@ -184,9 +184,9 @@ function syncMasterNav() {
 function backupFamilyTabs(active) {
   const tabBtn = (id, label) =>
     `<button class="btn${active === id ? " active" : ""}" type="button" role="tab" aria-selected="${active === id}" data-master-pane="${id}">${label}</button>`;
-  return `<div class="settings-tabs" role="tablist" aria-label="Backup, settings, and messages">
-    ${tabBtn("backup", "Backup")}
+  return `<div class="settings-tabs" role="tablist" aria-label="Settings, backup, and messages">
     ${tabBtn("settings", "Settings")}
+    ${tabBtn("backup", "Backup")}
     ${tabBtn("notes", "Messages")}
   </div>`;
 }
@@ -203,7 +203,7 @@ function bindBackupFamilyTabs(root) {
 
 function setMasterTab(next, pane) {
   tab = next;
-  if (next === "backup") backupPane = pane || "backup";
+  if (next === "backup") backupPane = pane || "settings";
   syncMasterNav();
   document.querySelector(".master-main")?.scrollTo({ top: 0 });
   render();
@@ -509,7 +509,7 @@ const ALERT_DEFS = [
     key: "updates",
     flag: "alert_updates",
     title: "New update",
-    blurb: "When you send a shop update from Backup → Messages.",
+    blurb: "When you send a shop update from Settings → Messages.",
     channels: "WhatsApp · Email",
     placeholders: "{{shop}} {{title}} {{body}}",
   },
@@ -1225,7 +1225,7 @@ async function render() {
           pane === "settings" ? "Settings" : "Backup",
           pane === "settings"
             ? "Connect WhatsApp, then turn each auto-message Active or Inactive. Shops receive WhatsApp on their mobile and email on their shop email."
-            : "Download or restore one shop, or the full platform. Settings and Messages sit under Backup.",
+            : "Download or restore one shop, or the full platform. Backup and Messages are under Settings.",
           pane === "backup"
             ? [{ label: "Shops", value: shops.length }]
             : [
@@ -1286,7 +1286,7 @@ async function render() {
       ]);
       const notes = settings.notifications || [];
       body.innerHTML = `<div class="items-desk master-desk">
-        ${masterHero("Platform", "Messages", "Post to the shop dashboard. If New update is Active under Backup → Settings, shops also get WhatsApp and email.", [
+        ${masterHero("Platform", "Messages", "Post to the shop dashboard. If New update is Active in Settings, shops also get WhatsApp and email.", [
           { label: "Recent", value: notes.length },
           { label: "Shops", value: businesses.length },
         ])}
@@ -1454,7 +1454,7 @@ async function render() {
 
 function summarizeNoticeDelivery(delivery) {
   if (delivery?.skipped) {
-    return "Saved on the shop dashboard. New update WhatsApp/email is Inactive under Backup → Settings.";
+    return "Saved on the shop dashboard. New update WhatsApp/email is Inactive in Settings.";
   }
   const results = delivery?.results;
   if (!Array.isArray(results) || !results.length) {

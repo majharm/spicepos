@@ -119,10 +119,9 @@ test("PHP and HTML wire master admin backup", () => {
   assert.match(backup, /function pos_dispatch_master_backup/);
   assert.match(backup, /spicepos-platform-backup/);
   assert.match(backup, /function pos_backup_build_platform/);
-  assert.match(masterHtml, /data-tab="backup"/);
-  assert.match(masterHtml, /data-backup-pane="settings"/);
-  assert.match(masterHtml, />Settings</);
-  assert.match(masterHtml, />Messages</);
+  assert.match(masterHtml, /data-backup-pane="settings">Settings</);
+  assert.match(masterHtml, /nav-sub" data-tab="backup" data-backup-pane="backup">Backup</);
+  assert.match(masterHtml, /nav-sub" data-tab="notes">Messages</);
   assert.doesNotMatch(masterHtml, />Notifications</);
   assert.doesNotMatch(masterHtml, /data-tab="alerts"/);
   assert.match(masterJs, /function backupFamilyTabs/);
@@ -145,11 +144,11 @@ test("PHP and HTML wire master admin backup", () => {
   );
 });
 
-test("HTML and CSS cache stickers match deploy98", () => {
+test("HTML and CSS cache stickers match deploy99", () => {
   for (const name of ["index.html", "master.html", "login.html", "setup.html", "order.html"]) {
     const html = readFileSync(path.join(root, name), "utf8");
-    assert.match(html, /20260905deploy98/);
-    assert.doesNotMatch(html, /20260905deploy97/);
+    assert.match(html, /20260905deploy99/);
+    assert.doesNotMatch(html, /20260905deploy98/);
     assert.doesNotMatch(html, /20260904deploy90/);
     assert.doesNotMatch(html, /20260904deploy89/);
     assert.doesNotMatch(html, /20260903deploy88/);
