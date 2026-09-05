@@ -1052,7 +1052,7 @@ function alertsFormHtml(alerts) {
     <section class="settings item-composer msg-wa">
       <div class="item-composer-top">
         <p class="item-mode">Outgoing email (SMTP)</p>
-        <p class="item-composer-note">Hostinger mailbox. POS only sends mail — use SMTP here. IMAP (imap.hostinger.com) is for receiving in Outlook or a phone app, not for alerts. Port 465 uses SSL.</p>
+        <p class="item-composer-note">Config file pos-smtp.php: pos@atavtelecom.in → smtp.hostinger.com:465 SSL. POS only sends mail. IMAP (imap.hostinger.com:993) is for receiving in Outlook or a phone app, not for alerts.</p>
         <label class="alert-switch">
           <input type="checkbox" name="smtp_enabled" ${smtpOn ? "checked" : ""} />
           <span class="alert-switch-ui" aria-hidden="true"></span>

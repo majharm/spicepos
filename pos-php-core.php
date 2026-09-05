@@ -89,6 +89,7 @@ function pos_load_dotenv($force = false) {
         pos_parse_env_text((string) @file_get_contents($file));
       }
     }
+    pos_include_db_php($root . "/pos-smtp.php");
   }
 }
 

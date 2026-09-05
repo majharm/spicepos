@@ -171,6 +171,14 @@ test("PHP and Node wire welcome mail after signup", () => {
   assert.match(phpMail, /pos_welcome_recipients/);
   assert.match(phpMail, /pos_load_dotenv/);
   assert.match(loadEnv, /pos-db\.php/);
+  assert.match(loadEnv, /pos-smtp\.php/);
+  assert.match(phpCore, /pos-smtp\.php/);
+  const smtpPhp = readFileSync(path.join(root, "pos-smtp.php"), "utf8");
+  assert.match(smtpPhp, /SMTP_HOST/);
+  assert.match(smtpPhp, /smtp\.hostinger\.com/);
+  assert.match(smtpPhp, /pos@atavtelecom\.in/);
+  assert.match(smtpPhp, /IMAP_HOST/);
+  assert.match(smtpPhp, /imap\.hostinger\.com/);
   assert.match(auth, /sendWelcomeSignup/);
   assert.match(auth, /businessEmail/);
   assert.match(master, /sendWelcomeSignup/);

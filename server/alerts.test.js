@@ -150,6 +150,7 @@ test("Master Admin Settings lives under Backup with Active/Inactive templates", 
   assert.match(master, /queued to/);
   assert.match(master, /SMTP not configured/);
   assert.match(master, /Outgoing email \(SMTP\)/);
+  assert.match(master, /pos-smtp\.php/);
   assert.match(master, /imap\.hostinger\.com/);
   assert.match(master, /name="smtp_user"/);
   assert.match(master, /name="smtp_pass"/);

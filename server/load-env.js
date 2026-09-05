@@ -74,6 +74,12 @@ export function loadSharedEnv() {
     }
     const dbJson = path.join(dir, "pos-db.json");
     if (fs.existsSync(dbJson)) loadJsonEnv(dbJson);
+    const smtpPhp = path.join(dir, "pos-smtp.php");
+    if (fs.existsSync(smtpPhp)) {
+      for (const [key, value] of Object.entries(parsePosDbPhp(fs.readFileSync(smtpPhp, "utf8")))) {
+        setEnv(key, value);
+      }
+    }
   }
 }
 
