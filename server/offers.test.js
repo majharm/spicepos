@@ -10,6 +10,7 @@ test("shop UI wires the Offers desk and Counter auto-apply", () => {
   const html = readFileSync(path.join(root, "index.html"), "utf8");
   const app = readFileSync(path.join(root, "js/app.js"), "utf8");
   const ui = readFileSync(path.join(root, "js/offers-ui.js"), "utf8");
+  const engine = readFileSync(path.join(root, "js/offers.js"), "utf8");
   const node = readFileSync(path.join(root, "server/index.js"), "utf8");
   const php = readFileSync(path.join(root, "pos-offers.php"), "utf8");
   const till = readFileSync(path.join(root, "pos-php-till.php"), "utf8");
@@ -21,6 +22,7 @@ test("shop UI wires the Offers desk and Counter auto-apply", () => {
   assert.match(app, /offerIds/);
   assert.match(ui, /\/api\/offers/);
   assert.match(ui, /duplicateOfferById/);
+  assert.match(engine, /bogoFreeQty/);
   assert.match(ui, /deleteOfferById/);
   assert.match(ui, /data-offer-del/);
   assert.match(ui, /Inactive/);

@@ -287,6 +287,18 @@
     return num(line.gross ?? line.taxable ?? line.amount ?? line.total);
   }
 
+  function bogoFreeQty(buyQty, getQty, buyCount, getCount, sameItem) {
+    const buyNeed = Math.max(1, num(buyQty, 1));
+    const getNeed = Math.max(0, num(getQty, 1));
+    if (getNeed <= 0) return 0;
+    if (sameItem) {
+      const cycle = buyNeed + getNeed;
+      return Math.floor(num(buyCount) / cycle) * getNeed;
+    }
+    const sets = Math.floor(num(buyCount) / buyNeed);
+    return Math.min(sets * getNeed, Math.max(0, num(getCount)));
+  }
+
   function qualifyingLines(offer, cart) {
     const cond = parseConditions(offer);
     const type = offer.offer_type || offer.type;
@@ -389,22 +401,28 @@
       message = `${offer.name}: pick ${n} for ₹${price}`;
       scope = "bill";
     } else if (type === "bogo") {
-      const buyIds = cond.item_ids;
-      const getId = cond.get_item_id || buyIds[0];
+      const buyIds = cond.item_ids.map(String);
+      const getId = String(cond.get_item_id || buyIds[0] || "");
+      if (!buyIds.length && !getId) return null;
       const buyLines = cart.filter((l) => buyIds.includes(String(l.itemId || l.item_id)));
-      const getLines = cart.filter((l) => String(l.itemId || l.item_id) === String(getId));
-      const buyQ = buyLines.reduce((s, l) => s + pieceQty(l), 0);
-      const sets = Math.floor(buyQ / Math.max(1, cond.buy_qty));
-      const freeQ = sets * Math.max(0, cond.get_qty);
+      const getLines = getId
+        ? cart.filter((l) => String(l.itemId || l.item_id) === getId)
+        : buyLines;
+      const sameItem = !getId || !buyIds.length || buyIds.includes(getId);
+      const poolLines = sameItem ? (buyLines.length ? buyLines : getLines) : buyLines;
+      const buyQ = poolLines.reduce((s, l) => s + pieceQty(l), 0);
+      const getQ = getLines.reduce((s, l) => s + pieceQty(l), 0);
+      const freeQ = bogoFreeQty(cond.buy_qty, cond.get_qty, buyQ, getQ, sameItem);
       if (freeQ <= 0 || !getLines.length) return null;
       const getGross = getLines.reduce((s, l) => s + lineGrossOf(l), 0);
-      const getQ = getLines.reduce((s, l) => s + pieceQty(l), 0);
       const unit = getQ > 0 ? getGross / getQ : 0;
       const applyQ = Math.min(freeQ, getQ);
-      discount = discountOn(round2(unit * applyQ), cond.get_discount_type, cond.get_discount_value);
+      discount = discountOn(round2(unit * applyQ), cond.get_discount_type || "pct", cond.get_discount_value);
+      if (discount <= 0) return null;
       getLines.forEach((l) => {
         const key = l.lineId || l.itemId;
-        lineDiscounts[key] = round2((lineDiscounts[key] || 0) + discount / getLines.length);
+        const share = round2(Math.min(lineGrossOf(l), discount / getLines.length));
+        lineDiscounts[key] = round2((lineDiscounts[key] || 0) + share);
       });
       message = `${offer.name}: Buy ${cond.buy_qty} Get ${cond.get_qty}`;
       scope = "lines";
@@ -684,6 +702,7 @@
     inWindow,
     customerGroup,
     eligibleCustomer,
+    bogoFreeQty,
     qualifyingLines,
     comboFromLegacy,
     evaluateOffer,

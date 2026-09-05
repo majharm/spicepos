@@ -1637,9 +1637,12 @@ function applyOffersToCart() {
   state.appliedOffers = result;
   state.cart.forEach((line) => {
     const d = result.lineDiscounts?.[line.lineId] || result.lineDiscounts?.[line.itemId] || 0;
-    if (d > 0) {
+    const item = state.items.find((i) => i.id === line.itemId);
+    const gross = item ? Number(lineCalc(item, { ...line, discountType: "amt", discountValue: 0 }).gross || 0) : 0;
+    const capped = Math.min(Math.max(0, d), gross);
+    if (capped > 0) {
       line.discountType = "amt";
-      line.discountValue = d;
+      line.discountValue = capped;
       line.offerId = true;
     } else if (line.offerId) {
       line.discountType = "amt";

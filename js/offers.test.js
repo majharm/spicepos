@@ -35,12 +35,45 @@ test("buy 2 get 1 free on the same item", () => {
     get_qty: 1,
     get_item_id: "soap",
   });
+  assert.equal(
+    O.evaluateOffer(offer, {
+      cart: [line("soap", 60, { qty: 2, isCount: true })],
+      now: new Date("2026-09-05T10:00:00"),
+    }),
+    null,
+  );
   const hit = O.evaluateOffer(offer, {
     cart: [line("soap", 90, { qty: 3, isCount: true })],
     now: new Date("2026-09-05T10:00:00"),
   });
   assert.ok(hit);
   assert.equal(hit.discount, 30);
+});
+
+test("buy 1 get 1 does not make a single pack free", () => {
+  const offer = O.normalize({
+    name: "Buy 1 Get 1",
+    type: "bogo",
+    status: "active",
+    item_ids: ["halad"],
+    buy_qty: 1,
+    get_qty: 1,
+    discount_type: "pct",
+    discount_value: 100,
+  });
+  const one = O.evaluateOffer(offer, {
+    cart: [line("halad", 190, { qty: 1, isCount: true })],
+    now: new Date("2026-09-05T10:00:00"),
+  });
+  assert.equal(one, null);
+  const two = O.evaluateOffer(offer, {
+    cart: [line("halad", 380, { qty: 2, isCount: true })],
+    now: new Date("2026-09-05T10:00:00"),
+  });
+  assert.ok(two);
+  assert.equal(two.discount, 190);
+  assert.equal(O.bogoFreeQty(1, 1, 1, 1, true), 0);
+  assert.equal(O.bogoFreeQty(1, 1, 2, 2, true), 1);
 });
 
 test("mix and match pick 3 for 299", () => {
