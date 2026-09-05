@@ -212,7 +212,7 @@ export function normalizeInMobile(raw) {
   if (d.startsWith("91") && d.length >= 12) d = d.slice(d.length - 10);
   else if (d.startsWith("0") && d.length === 11) d = d.slice(1);
   else if (d.length > 10) d = d.slice(-10);
-  return /^\d{10}$/.test(d) && /^[6-9]/.test(d) ? d : "";
+  return /^\d{10}$/.test(d) ? d : "";
 }
 
 export function addYmd(ymd, days) {
@@ -445,10 +445,7 @@ async function shopContacts(businessId) {
   let staff = [];
   try {
     staff = businessId
-      ? await query(
-          "SELECT mobile, email FROM staff_users WHERE business_id = ? AND role = 'business_admin'",
-          [businessId],
-        )
+      ? await query("SELECT mobile, email FROM staff_users WHERE business_id = ?", [businessId])
       : [];
   } catch {
     staff = [];
@@ -459,10 +456,18 @@ async function shopContacts(businessId) {
     if (n && !phones.includes(n)) phones.push(n);
   };
   push(biz?.mobile);
+  push(co?.phone);
   for (const row of staff) {
     push(row.mobile);
   }
-  push(co?.phone);
+  try {
+    const branches = businessId
+      ? await query("SELECT phone FROM branches WHERE business_id = ?", [businessId])
+      : [];
+    for (const row of branches) push(row.phone);
+  } catch {
+    /* optional */
+  }
   const emails = [...new Set(
     [biz?.email, co?.email, ...staff.map((row) => row.email)]
       .map((v) => String(v || "").trim().toLowerCase())
@@ -885,42 +890,42 @@ export async function sendRenewalAlerts(
       signInUrl,
       supportPhone: support.support_phone || "",
     };
-    if (!expiredOnly && (force || beforeOn) && days >= 0 && days <= RENEWAL_BEFORE_DAYS) {
-      if (force || !(await alreadySent(row.id, "renewal_before", expiry, ""))) {
-        const text = renderAlert("renewal_before", payload, settings);
-        const out = await dispatchAlert({
-          phones: shop.phones,
-          emails: shop.emails,
-          subject: `Renew ATAV POS · ${payload.shopName}`,
-          text,
-        });
-        if (!force && alertDelivered(out)) await markSent(row.id, "renewal_before", expiry, "");
-        results.push({ businessId: row.id, shopName: payload.shopName, kind: "renewal_before", ...out });
-      }
-    } else if (!dueOnly && (force || expiredOn) && days < 0) {
-      if (force || !(await alreadySent(row.id, "renewal_expired", expiry, ""))) {
-        const text = renderAlert("renewal_expired", payload, settings);
-        const out = await dispatchAlert({
-          phones: shop.phones,
-          emails: shop.emails,
-          subject: `ATAV POS expired · ${payload.shopName}`,
-          text,
-        });
-        if (!force && alertDelivered(out)) await markSent(row.id, "renewal_expired", expiry, "");
-        results.push({ businessId: row.id, shopName: payload.shopName, kind: "renewal_expired", ...out });
-      }
-    } else if (force) {
-      let reason = "not-due-yet";
-      if (days < 0) reason = expiredOnly ? "already-sent" : "not-expired";
-      else if (days > RENEWAL_BEFORE_DAYS) reason = dueOnly ? "not-due-yet" : "not-expired";
+    const expired = days <= 0;
+    const dueSoon = days >= 0 && days <= RENEWAL_BEFORE_DAYS;
+    if (expiredOnly && !expired) {
       results.push({
         businessId: row.id,
         shopName: payload.shopName,
         skipped: true,
-        reason,
+        reason: "not-expired",
         days,
       });
+      continue;
     }
+    if (dueOnly && !dueSoon) {
+      results.push({
+        businessId: row.id,
+        shopName: payload.shopName,
+        skipped: true,
+        reason: expired ? "already-expired" : "not-due-yet",
+        days,
+      });
+      continue;
+    }
+    const kind = expired ? "renewal_expired" : "renewal_before";
+    const kindOn = expired ? expiredOn : beforeOn;
+    if (!force && !kindOn) continue;
+    if (!force && !expired && !dueSoon) continue;
+    if (!force && (await alreadySent(row.id, kind, expiry, ""))) continue;
+    const text = renderAlert(kind, payload, settings);
+    const out = await dispatchAlert({
+      phones: shop.phones,
+      emails: shop.emails,
+      subject: expired ? `ATAV POS expired · ${payload.shopName}` : `Renew ATAV POS · ${payload.shopName}`,
+      text,
+    });
+    if (!force && alertDelivered(out)) await markSent(row.id, kind, expiry, "");
+    results.push({ businessId: row.id, shopName: payload.shopName, kind, days, ...out });
   }
   if (businessId && !results.length) {
     throw new Error("This shop has no subscription expiry date, or is not due for a renewal/expired alert yet");

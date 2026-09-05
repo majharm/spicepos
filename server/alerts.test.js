@@ -13,6 +13,7 @@ import {
   welcomeText,
   credentialsText,
   daysUntilExpiry,
+  normalizeInMobile,
   DEFAULT_TEMPLATES,
   WA_DEFAULT_URL,
 } from "./alerts.js";
@@ -51,7 +52,10 @@ test("message templates fill placeholders and honor custom text", () => {
 
 test("renewal alerts cover the week before expiry and after expiry", () => {
   assert.equal(daysUntilExpiry("2026-09-12", "2026-09-05"), 7);
+  assert.equal(daysUntilExpiry("2026-09-05", "2026-09-05"), 0);
   assert.equal(daysUntilExpiry("2026-09-05", "2026-09-06"), -1);
+  assert.equal(normalizeInMobile("09876543210"), "9876543210");
+  assert.equal(normalizeInMobile("919876543210"), "9876543210");
   const before = renderAlert("renewal_before", {
     shopName: "SWAMI MASALE",
     ownerName: "Ravi",
@@ -109,6 +113,9 @@ test("Master Admin Settings lives under Backup with Active/Inactive templates", 
   assert.match(alerts, /renewal_expired/);
   assert.match(nodeAlerts, /sendRenewalAlerts/);
   assert.match(nodeAlerts, /summarizeAlertResults/);
+  assert.match(nodeAlerts, /const expired = days <= 0/);
+  assert.match(master, /alertSkipReason/);
+  assert.match(alerts, /\$expired = \$days <= 0/);
   assert.match(nodeAlerts, /dispatchAlert\(\{[\s\S]*Welcome to ATAV POS/s);
   assert.match(master, /alert-send-expiry/);
   assert.match(masterHtml, /data-tab="expiry">Expiry alerts</);
