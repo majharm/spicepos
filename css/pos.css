@@ -1395,6 +1395,56 @@ tr:last-child td { border-bottom: 0; }
 .settings-actions .btn.primary { min-width: 168px; }
 .settings-actions .hint { margin: 0; min-height: 0; }
 
+.settings-desk {
+  margin: 8px 24px 28px;
+  display: grid;
+  gap: 16px;
+}
+.settings-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.settings-tabs .btn.active {
+  background: var(--vel-teal);
+  color: #fff;
+  border-color: var(--vel-teal);
+}
+.settings-pane { min-width: 0; }
+.settings-profile-split { align-items: start; }
+.settings-side {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+.settings-desk .item-composer.settings,
+.settings-desk #view-backup.settings {
+  margin: 0;
+  max-width: none;
+}
+.shop-id-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.shop-id-row input {
+  flex: 1;
+  min-width: 0;
+}
+.shop-id-row .btn {
+  margin: 0;
+  flex: 0 0 auto;
+}
+#settings-hero-stats .items-stat {
+  min-width: 120px;
+  max-width: 220px;
+}
+#settings-hero-stats .items-stat strong {
+  font-size: 15px;
+  line-height: 1.25;
+  word-break: break-word;
+}
+
 /* support-page: helpline-first shop Support */
 .support-page {
   display: grid;
@@ -3169,6 +3219,7 @@ button.items-stat.is-active {
   .packs-desk,
   .items-desk,
   .branches-desk,
+  .settings-desk,
   .expiry-desk { margin-left: 12px; margin-right: 12px; }
   .packs-hero,
   .items-hero { flex-direction: column; align-items: stretch; padding: 14px; }

@@ -6,8 +6,8 @@
     <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
     <title>ATAV POS</title>
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./css/pos.css?v=20260905deploy91" />
-    <link rel="stylesheet" href="./css/saas.css?v=20260905deploy91" />
+    <link rel="stylesheet" href="./css/pos.css?v=20260905deploy92" />
+    <link rel="stylesheet" href="./css/saas.css?v=20260905deploy92" />
   </head>
   <body>
     <div class="app" id="app">
@@ -57,7 +57,6 @@
             <button class="nav-btn" type="button" data-view="devices"><span class="nav-icon" aria-hidden="true">⌁</span>Devices</button>
             <button class="nav-btn" type="button" data-view="support"><span class="nav-icon" aria-hidden="true">?</span>Support</button>
             <button class="nav-btn" type="button" data-view="settings"><span class="nav-icon" aria-hidden="true">⚙</span>Settings</button>
-            <button class="nav-btn" type="button" data-view="backup"><span class="nav-icon" aria-hidden="true">⇩</span>Backup</button>
           </div>
         </div>
         <div class="nav-foot">
@@ -876,127 +875,134 @@
           <div class="report-grid" id="report-summary"></div>
           <div id="reports"></div>
         </section>
-        <section class="view" id="view-settings" hidden>
+        <section class="view view-settings" id="view-settings" hidden>
           <h2 class="visually-hidden">Settings</h2>
-          <p class="lede">Company profile, timezone, shop logo, and your login password. Shop backup is under Admin → Backup.</p>
-          <form class="settings settings-page" id="settings-form">
-            <div class="settings-section">
-                <label class="full">Shop ID
-                  <input id="set-shop-id" readonly autocomplete="off" />
-                </label>
-                  <input id="set-name" maxlength="180" autocomplete="organization" />
-                </label>
-                <label class="full">Address
-                  <textarea id="set-address" rows="2" maxlength="500" placeholder="Street, city, PIN"></textarea>
-                </label>
-                <label>Phone
-                  <input id="set-phone" type="tel" inputmode="numeric" maxlength="15" placeholder="10-digit mobile" />
-                </label>
-                <label>Email
-                  <input id="set-email" type="email" maxlength="160" placeholder="shop@email.com" />
-                </label>
-                <label class="full">GSTIN
-                  <input id="set-gstin" maxlength="20" placeholder="Optional" autocomplete="off" />
-                </label>
-                <label>City
-                  <input id="set-city" maxlength="128" placeholder="e.g. Pune" autocomplete="address-level2" />
-                </label>
-                <label>State
-                  <input id="set-state" maxlength="64" placeholder="e.g. Maharashtra" autocomplete="address-level1" />
-                </label>
-                <label>PIN code
-                  <input id="set-pincode" maxlength="12" inputmode="numeric" placeholder="6-digit PIN" autocomplete="postal-code" />
-                </label>
+          <div class="items-desk settings-desk">
+            <header class="items-hero">
+              <div class="items-hero-copy">
+                <p class="items-kicker">Account</p>
+                <h3>Shop profile</h3>
+                <p class="lede">Company profile, timezone, shop logo, and your login password. Shop backup is under Settings → Backup.</p>
               </div>
+              <div class="items-hero-stats" id="settings-hero-stats"></div>
+            </header>
+            <div class="settings-tabs" role="tablist" aria-label="Settings sections">
+              <button class="btn active" type="button" role="tab" aria-selected="true" data-settings-tab="profile">Profile</button>
+              <button class="btn" type="button" role="tab" aria-selected="false" data-settings-tab="backup" data-view="backup">Backup</button>
             </div>
-            <div class="settings-section">
-              <h3>Regional</h3>
-              <p class="section-note">Used for reports, invoices, and order timestamps.</p>
-              <div class="settings-grid">
-                <label class="full">Shop timezone
-                  <select id="set-timezone" aria-label="Shop timezone">
-                    <option value="Asia/Kolkata">India (IST, UTC+5:30)</option>
-                    <option value="Asia/Dubai">UAE (UTC+4)</option>
-                    <option value="Asia/Singapore">Singapore (UTC+8)</option>
-                    <option value="Asia/Colombo">Sri Lanka (UTC+5:30)</option>
-                    <option value="Asia/Kathmandu">Nepal (UTC+5:45)</option>
-                    <option value="UTC">UTC</option>
-                  </select>
-                </label>
-              </div>
-              <p class="field-hint" id="timezone-preview">Current shop time will appear in the nav after save.</p>
-            </div>
-            <div class="settings-section">
-              <h3>Branding</h3>
-              <p class="section-note">Shown on the left nav and on printed invoices.</p>
-              <div class="logo-row">
-                <div class="logo-preview-frame">
-                  <img id="logo-preview" class="logo-preview" alt="Logo preview" hidden />
-                </div>
-                <div class="logo-controls">
-                  <div class="logo-pick-row">
-                    <input id="set-logo" class="logo-file-input" type="file" accept="image/*" />
-                    <label class="btn logo-pick" for="set-logo">Choose image</label>
-                    <span class="logo-file-name" id="logo-file-name">PNG, JPG, or SVG</span>
+            <div class="settings-pane" id="settings-pane-profile">
+              <div class="items-split settings-profile-split">
+                <form class="settings item-composer" id="settings-form" autocomplete="off">
+                  <div class="item-composer-top">
+                    <p class="item-mode">Company profile</p>
+                    <p class="item-composer-note">This name, address, GSTIN, and logo print on invoices and appear in the left nav.</p>
                   </div>
-                  <button class="btn" type="button" id="logo-clear" hidden>Remove logo</button>
+                  <fieldset class="item-block">
+                    <legend>Shop</legend>
+                    <label class="full">Shop ID
+                      <span class="shop-id-row">
+                        <input id="set-shop-id" readonly autocomplete="off" />
+                        <button class="btn" type="button" id="set-copy-shop-id">Copy</button>
+                      </span>
+                    </label>
+                    <label class="full">Shop name <input id="set-name" maxlength="180" autocomplete="organization" placeholder="Your shop name" /></label>
+                    <label class="full">Address <textarea id="set-address" rows="2" maxlength="500" placeholder="Street, city, PIN"></textarea></label>
+                    <label>Phone <input id="set-phone" type="tel" inputmode="numeric" maxlength="15" placeholder="10-digit mobile" /></label>
+                    <label>Email <input id="set-email" type="email" maxlength="160" placeholder="shop@email.com" /></label>
+                    <label class="full">GSTIN <input id="set-gstin" maxlength="20" placeholder="Optional" autocomplete="off" /></label>
+                    <label>City <input id="set-city" maxlength="128" placeholder="e.g. Pune" autocomplete="address-level2" /></label>
+                    <label>State <input id="set-state" maxlength="64" placeholder="e.g. Maharashtra" autocomplete="address-level1" /></label>
+                    <label>PIN code <input id="set-pincode" maxlength="12" inputmode="numeric" placeholder="6-digit PIN" autocomplete="postal-code" /></label>
+                  </fieldset>
+                  <fieldset class="item-block">
+                    <legend>Timezone</legend>
+                    <label class="full">Shop timezone
+                      <select id="set-timezone" aria-label="Shop timezone">
+                        <option value="Asia/Kolkata">India (IST, UTC+5:30)</option>
+                        <option value="Asia/Dubai">UAE (UTC+4)</option>
+                        <option value="Asia/Singapore">Singapore (UTC+8)</option>
+                        <option value="Asia/Colombo">Sri Lanka (UTC+5:30)</option>
+                        <option value="Asia/Kathmandu">Nepal (UTC+5:45)</option>
+                        <option value="UTC">UTC</option>
+                      </select>
+                    </label>
+                    <p class="item-composer-note full" id="timezone-preview">Used for reports, invoices, and order timestamps.</p>
+                  </fieldset>
+                  <fieldset class="item-block">
+                    <legend>Shop logo</legend>
+                    <div class="logo-row full">
+                      <div class="logo-preview-frame">
+                        <img id="logo-preview" class="logo-preview" alt="Logo preview" hidden />
+                      </div>
+                      <div class="logo-controls">
+                        <p class="item-composer-note">Shown on the left nav and on printed invoices.</p>
+                        <div class="logo-pick-row">
+                          <input id="set-logo" class="logo-file-input" type="file" accept="image/*" />
+                          <label class="btn logo-pick" for="set-logo">Choose image</label>
+                          <span class="logo-file-name" id="logo-file-name">PNG, JPG, or SVG</span>
+                        </div>
+                        <button class="btn" type="button" id="logo-clear" hidden>Remove logo</button>
+                      </div>
+                    </div>
+                  </fieldset>
+                  <div class="item-composer-actions">
+                    <button class="btn primary" type="submit">Save profile</button>
+                    <p class="hint" id="settings-hint"></p>
+                  </div>
+                </form>
+                <div class="settings-side">
+                  <form class="settings item-composer" id="password-form">
+                    <div class="item-composer-top">
+                      <p class="item-mode">Login password</p>
+                      <p class="item-composer-note">Change the password for the account you are signed in with. Other users are under Staff &amp; roles.</p>
+                    </div>
+                    <fieldset class="item-block">
+                      <legend>Your password</legend>
+                      <label class="full">Current password
+                        <input id="pw-current" type="password" required autocomplete="current-password" />
+                      </label>
+                      <label class="full">New password
+                        <input id="pw-next" type="password" required minlength="8" autocomplete="new-password" />
+                      </label>
+                      <label class="full">Confirm new password
+                        <input id="pw-confirm" type="password" required minlength="8" autocomplete="new-password" />
+                      </label>
+                    </fieldset>
+                    <div class="item-composer-actions">
+                      <button class="btn primary" type="submit">Save password</button>
+                      <p class="hint" id="password-hint"></p>
+                    </div>
+                  </form>
+                  <div class="settings item-composer dev-settings-card" id="dev-settings-section" hidden>
+                    <div class="item-composer-top">
+                      <p class="item-mode">Developer mode</p>
+                      <p class="item-composer-note">Debug tools for this browser only. Business admins can enable API logs and session info.</p>
+                    </div>
+                    <label class="remember dev-toggle">
+                      <input type="checkbox" id="set-dev-mode" />
+                      <span class="remember-ui" aria-hidden="true"></span>
+                      Enable developer mode
+                    </label>
+                    <p class="field-hint">Shortcut: Ctrl+Shift+D · Add <code>?dev=1</code> to the URL to auto-enable.</p>
+                  </div>
                 </div>
               </div>
             </div>
-            <div class="settings-actions">
-              <button class="btn primary" type="submit">Save settings</button>
-              <p class="hint" id="settings-hint"></p>
-            </div>
-          </form>
-          <form class="settings settings-page" id="password-form">
-            <div class="settings-section">
-              <h3>Login password</h3>
-              <p class="section-note">Change the password for the account you are signed in with. Staff passwords for other users are under Staff &amp; roles.</p>
-              <div class="settings-grid">
-                <label>Current password
-                  <input id="pw-current" type="password" required autocomplete="current-password" />
-                </label>
-                <label>New password
-                  <input id="pw-next" type="password" required minlength="8" autocomplete="new-password" />
-                </label>
-                <label>Confirm new password
-                  <input id="pw-confirm" type="password" required minlength="8" autocomplete="new-password" />
-                </label>
+            <div class="settings-pane" id="settings-pane-backup" hidden>
+              <div class="settings" id="view-backup">
+                <div class="settings-section backup-panel" id="backup-card">
+                  <h3>Shop backup</h3>
+                  <p class="section-note">Download a JSON copy of this shop, or restore a backup from this same shop. Includes items, stock, customers, invoices, purchases, and accounts. Keep the file private. Restore replaces current shop data for this business only.</p>
+                  <div class="backup-actions">
+                    <a class="btn primary" id="btn-backup-download" href="#">Download backup</a>
+                    <label class="backup-file-lab">Restore file
+                      <input id="backup-file" type="file" accept="application/json,.json" />
+                    </label>
+                    <button class="btn" type="button" id="btn-backup-restore">Restore backup</button>
+                  </div>
+                  <p class="hint" id="backup-hint"></p>
+                </div>
               </div>
-            </div>
-            <div class="settings-actions">
-              <button class="btn primary" type="submit">Save password</button>
-              <p class="hint" id="password-hint"></p>
-            </div>
-          </form>
-          <div class="settings settings-page dev-settings-card" id="dev-settings-section" hidden>
-            <div class="settings-section">
-              <h3>Developer mode</h3>
-              <p class="section-note">Debug tools for this browser only. Business admins can enable API logs and session info.</p>
-              <label class="remember dev-toggle">
-                <input type="checkbox" id="set-dev-mode" />
-                <span class="remember-ui" aria-hidden="true"></span>
-                Enable developer mode
-              </label>
-              <p class="field-hint">Shortcut: Ctrl+Shift+D · Add <code>?dev=1</code> to the URL to auto-enable.</p>
-            </div>
-          </div>
-        </section>
-        <section class="view" id="view-backup" hidden>
-          <h2 class="visually-hidden">Backup</h2>
-          <p class="lede">Download a JSON copy of this shop, or restore a backup from this same shop.</p>
-          <div class="settings" id="backup-card">
-            <div class="settings-section backup-panel">
-              <h3>Shop backup</h3>
-              <p class="section-note">Includes items, stock, customers, invoices, purchases, and accounts. Keep the file private. Restore replaces current shop data for this business only.</p>
-              <div class="backup-actions">
-                <a class="btn primary" id="btn-backup-download" href="#">Download backup</a>
-                <label class="backup-file-lab">Restore file
-                  <input id="backup-file" type="file" accept="application/json,.json" />
-                </label>
-                <button class="btn" type="button" id="btn-backup-restore">Restore backup</button>
-              </div>
-              <p class="hint" id="backup-hint"></p>
             </div>
           </div>
         </section>
@@ -1042,18 +1048,18 @@
         </section>
       </div>
     </aside>
-    <script src="./js/gst-supply.js?v=20260905deploy91" defer></script>
-    <script src="./js/pos-api.js?v=20260905deploy91" defer></script>
-    <script src="./js/units.js?v=20260905deploy91" defer></script>
-    <script src="./js/footwear.js?v=20260905deploy91" defer></script>
-    <script src="./js/discount.js?v=20260905deploy91" defer></script>
-    <script src="./js/loyalty.js?v=20260905deploy91" defer></script>
-    <script src="./js/barcode.js?v=20260905deploy91" defer></script>
+    <script src="./js/gst-supply.js?v=20260905deploy92" defer></script>
+    <script src="./js/pos-api.js?v=20260905deploy92" defer></script>
+    <script src="./js/units.js?v=20260905deploy92" defer></script>
+    <script src="./js/footwear.js?v=20260905deploy92" defer></script>
+    <script src="./js/discount.js?v=20260905deploy92" defer></script>
+    <script src="./js/loyalty.js?v=20260905deploy92" defer></script>
+    <script src="./js/barcode.js?v=20260905deploy92" defer></script>
     <script src="./js/camera-scan.js?v=20260904camera1" defer></script>
-    <script src="./js/dev-mode.js?v=20260905deploy91" defer></script>
-    <script src="./js/invoice.js?v=20260905deploy91" defer></script>
-    <script src="./js/support.js?v=20260905deploy91" defer></script>
+    <script src="./js/dev-mode.js?v=20260905deploy92" defer></script>
+    <script src="./js/invoice.js?v=20260905deploy92" defer></script>
+    <script src="./js/support.js?v=20260905deploy92" defer></script>
     <script src="./js/qrcode.iife.js?v=20260905qr1"></script>
-    <script src="./js/app.js?v=20260905deploy91" defer></script>
+    <script src="./js/app.js?v=20260905deploy92" defer></script>
   </body>
 </html>
