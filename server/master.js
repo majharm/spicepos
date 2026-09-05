@@ -19,6 +19,7 @@ import {
   sanitizeNoticeImage,
   ensureAlertSettings,
   sendRenewalAlerts,
+  sendManualAlerts,
 } from "./alerts.js";
 
 function send(res, fn) {
@@ -660,6 +661,24 @@ export function registerMaster(app) {
       const saved = await saveAlertSettings(req.body || {});
       await platformAudit(req.auth.admin, "Settings Changed", { module: "alerts", target_name: "WhatsApp alerts" }, req);
       return { ok: true, ...publicAlertSettings(saved) };
+    }),
+  );
+
+  app.post("/api/master/alerts/send", (req, res) =>
+    send(res, async () => {
+      const kinds = Array.isArray(req.body?.kinds) ? req.body.kinds : [];
+      const out = await sendManualAlerts({
+        kinds,
+        businessId: req.body?.business_id || req.body?.businessId || null,
+        title: req.body?.title || "",
+        body: req.body?.body || "",
+      });
+      await platformAudit(req.auth.admin, "Alerts Sent", {
+        module: "alerts",
+        target_name: kinds.join(",") || "all types",
+        target_id: req.body?.business_id || "all shops",
+      }, req);
+      return out;
     }),
   );
 

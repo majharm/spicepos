@@ -616,23 +616,44 @@ function expiryAlertsPageHtml(shops) {
   const dueN = rows.filter((b) => expiryFilterKind(b) === "due").length;
   const noExpN = rows.filter((b) => !ymd(b.subscription_expires_at)).length;
   return `<div class="items-desk master-desk expiry-alerts-desk">
-    ${masterHero("Platform", "Expiry alerts", "All shops with activation date, plan expiry, and quick send for renewal or expired alerts.", [
+    ${masterHero("Platform", "Send alerts", "Pick alert types, then send WhatsApp and email to one shop or every shop. Templates live in Settings.", [
       { label: "Shops", value: rows.length },
       { label: "Expired", value: expiredN, warn: expiredN > 0 },
       { label: "Due in 7 days", value: dueN, warn: dueN > 0 },
-      { label: "No expiry date", value: noExpN },
+      { label: "Types", value: ALERT_DEFS.length },
     ])}
     <section class="settings item-composer expiry-alerts-panel">
       <div class="item-composer-top">
-        <p class="item-mode">Subscription expiry</p>
-        <p class="item-composer-note">Send WhatsApp and email using the templates in Settings. Expired alerts go to shops past the end date; expiry alerts include due-soon and expired.</p>
-        <div class="backup-actions">
-          <button class="btn primary" type="button" id="expiry-send-expired">Send expired alerts</button>
-          <button class="btn" type="button" id="expiry-send-all">Send expiry alerts</button>
-        </div>
+        <p class="item-mode">Alert types</p>
+        <p class="item-composer-note">Tick the messages to send. Send all types uses every template. Renewal + expired together send the matching one for each shop.</p>
+      </div>
+      <fieldset class="item-block" id="send-alert-kinds">
+        <legend>Send</legend>
+        <label class="alert-switch">
+          <input type="checkbox" id="send-alert-all-types" checked />
+          <span class="alert-switch-ui" aria-hidden="true"></span>
+          <span class="alert-switch-label">All types</span>
+        </label>
+        ${ALERT_DEFS.map(
+          (d) => `<label class="alert-switch">
+            <input type="checkbox" data-send-kind="${d.key}" checked />
+            <span class="alert-switch-ui" aria-hidden="true"></span>
+            <span class="alert-switch-label">${d.title}</span>
+          </label>`,
+        ).join("")}
+      </fieldset>
+      <fieldset class="item-block" id="send-alert-update-fields">
+        <legend>New update text</legend>
+        <label class="full">Title <input id="send-alert-title" maxlength="180" placeholder="Holiday hours" /></label>
+        <label class="full">Body <textarea id="send-alert-body" rows="3" maxlength="2000" placeholder="Optional details…"></textarea></label>
+      </fieldset>
+      <div class="item-composer-actions backup-actions">
+        <button class="btn primary" type="button" id="send-alert-all-shops">Send to all shops</button>
+        <button class="btn" type="button" id="expiry-send-expired">Expired only</button>
+        <button class="btn" type="button" id="expiry-send-all">Renewal + expired</button>
       </div>
       <div class="items-library-head expiry-alerts-filters">
-        <div class="settings-tabs" role="tablist" aria-label="Expiry filters">
+        <div class="settings-tabs" role="tablist" aria-label="Shop filters">
           <button class="btn active" type="button" data-expiry-filter="all">All</button>
           <button class="btn" type="button" data-expiry-filter="expired">Expired</button>
           <button class="btn" type="button" data-expiry-filter="due">Due in 7 days</button>
@@ -669,7 +690,7 @@ function expiryAlertsPageHtml(shops) {
                   <td>${attr(expiryDaysLabel(b))}</td>
                   <td>${attr(b.mobile || "—")}</td>
                   <td>${attr(b.email || "—")}</td>
-                  <td><button class="btn" type="button" data-send-expiry-row="${attr(b.id)}">Send alert</button></td>
+                  <td><button class="btn" type="button" data-send-alert-row="${attr(b.id)}">Send</button></td>
                 </tr>`;
               })
               .join("")}
@@ -683,6 +704,67 @@ function expiryAlertsPageHtml(shops) {
 
 function bindExpiryAlertsPage(shops) {
   const hint = $("expiry-page-hint");
+  const allTypes = $("send-alert-all-types");
+  const kindBoxes = [...document.querySelectorAll("[data-send-kind]")];
+  const selectedKinds = () => {
+    if (allTypes?.checked) return ALERT_DEFS.map((d) => d.key);
+    return kindBoxes.filter((el) => el.checked).map((el) => el.dataset.sendKind);
+  };
+  const syncAllTypes = () => {
+    if (!allTypes) return;
+    allTypes.checked = kindBoxes.length > 0 && kindBoxes.every((el) => el.checked);
+  };
+  allTypes?.addEventListener("change", () => {
+    kindBoxes.forEach((el) => {
+      el.checked = allTypes.checked;
+    });
+  });
+  kindBoxes.forEach((el) => el.addEventListener("change", syncAllTypes));
+  const updateFields = $("send-alert-update-fields");
+  const toggleUpdateFields = () => {
+    const kinds = selectedKinds();
+    if (updateFields) updateFields.hidden = !kinds.includes("updates");
+  };
+  kindBoxes.forEach((el) => el.addEventListener("change", toggleUpdateFields));
+  allTypes?.addEventListener("change", toggleUpdateFields);
+  toggleUpdateFields();
+  const postSend = async (payload, confirmText) => {
+    if (confirmText && !confirm(confirmText)) return;
+    if (hint) {
+      hint.className = "hint";
+      hint.textContent = "Sending…";
+    }
+    try {
+      const out = await api("/api/master/alerts/send", { method: "POST", body: JSON.stringify(payload) });
+      if (hint) {
+        hint.textContent = summarizeAlertDelivery(out);
+        hint.className = "hint ok";
+      }
+    } catch (err) {
+      if (hint) {
+        hint.textContent = err.message;
+        hint.className = "hint error";
+      }
+    }
+  };
+  $("send-alert-all-shops")?.addEventListener("click", async () => {
+    const kinds = selectedKinds();
+    if (!kinds.length) {
+      if (hint) {
+        hint.textContent = "Tick at least one alert type.";
+        hint.className = "hint error";
+      }
+      return;
+    }
+    await postSend(
+      {
+        kinds,
+        title: $("send-alert-title")?.value || "",
+        body: $("send-alert-body")?.value || "",
+      },
+      `Send ${kinds.length} alert type${kinds.length === 1 ? "" : "s"} to all ${shops.length} shop${shops.length === 1 ? "" : "s"}?`,
+    );
+  });
   let filter = "all";
   const applyFilter = () => {
     const q = String($("expiry-search")?.value || "").trim().toLowerCase();
@@ -750,19 +832,32 @@ function bindExpiryAlertsPage(shops) {
       }
     }
   });
-  document.querySelectorAll("[data-send-expiry-row]").forEach((btn) => {
+  document.querySelectorAll("[data-send-alert-row]").forEach((btn) => {
     btn.addEventListener("click", async () => {
-      const shop = (shops || []).find((b) => b.id === btn.dataset.sendExpiryRow);
-      if (!confirm(`Send expiry alert to ${shop?.name || "this shop"}?`)) return;
+      const shop = (shops || []).find((b) => b.id === btn.dataset.sendAlertRow);
+      const kinds = selectedKinds();
+      if (!kinds.length) {
+        if (hint) {
+          hint.textContent = "Tick at least one alert type.";
+          hint.className = "hint error";
+        }
+        return;
+      }
+      if (!confirm(`Send ${kinds.length} alert type${kinds.length === 1 ? "" : "s"} to ${shop?.name || "this shop"}?`)) return;
       btn.disabled = true;
       if (hint) {
         hint.className = "hint";
         hint.textContent = "Sending…";
       }
       try {
-        const out = await api(`/api/master/businesses/${btn.dataset.sendExpiryRow}/send-expiry-alert`, {
+        const out = await api("/api/master/alerts/send", {
           method: "POST",
-          body: "{}",
+          body: JSON.stringify({
+            kinds,
+            business_id: btn.dataset.sendAlertRow,
+            title: $("send-alert-title")?.value || "",
+            body: $("send-alert-body")?.value || "",
+          }),
         });
         if (hint) {
           hint.textContent = summarizeAlertDelivery(out);
@@ -993,7 +1088,7 @@ async function render() {
     branches: "Branches",
     devices: "POS devices",
     audit: "Audit log",
-    expiry: "Expiry alerts",
+    expiry: "Send alerts",
     backup: backupPane === "settings" ? "Settings" : "Backup",
     notes: "Messages",
     alerts: "Settings",
@@ -2034,6 +2129,10 @@ function alertSkipReason(row) {
   switch (row?.reason) {
     case "no-number":
       return `${name}: no mobile or email on file`;
+    case "no-low-stock":
+      return `${name}: no items at reorder level`;
+    case "no-expiry":
+      return `${name}: no expiry date`;
     case "not-due-yet":
       return `${name}: not in the last 7 days${row.days != null ? ` (${row.days} days left)` : ""}`;
     case "not-expired":

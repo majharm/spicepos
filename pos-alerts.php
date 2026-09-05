@@ -617,18 +617,18 @@ function pos_closing_alert_day($hour, $closeHour, $todayYmd) {
   return $today;
 }
 
-function pos_send_closing_alert($bid) {
+function pos_send_closing_alert($bid, $force = false) {
   $cfg = pos_alert_settings();
-  if (!pos_alert_flag($cfg["alert_closing"])) return ["skipped" => true];
+  if (!$force && !pos_alert_flag($cfg["alert_closing"])) return ["skipped" => true];
   $shop = pos_shop_alert_contacts($bid);
   if (!$shop["businessId"]) return ["skipped" => true];
   if (!$shop["phones"] && !$shop["emails"]) return ["skipped" => true, "reason" => "no-number"];
   $hour = (int) date("G");
   $close = (int) $cfg["alert_closing_hour"];
   $today = date("Y-m-d");
-  $day = pos_closing_alert_day($hour, $close, $today);
+  $day = $force ? $today : pos_closing_alert_day($hour, $close, $today);
   if ($day === "") return ["skipped" => true];
-  if (pos_alert_sent($shop["businessId"], "closing", $day, "")) return ["skipped" => true, "reason" => "already-sent"];
+  if (!$force && pos_alert_sent($shop["businessId"], "closing", $day, "")) return ["skipped" => true, "reason" => "already-sent"];
   $sum = pos_q(
     "SELECT COUNT(*) AS bills,
             COALESCE(SUM(total),0) AS takings,
@@ -664,7 +664,7 @@ function pos_send_closing_alert($bid) {
     "lowStock" => $low,
   ], $cfg);
   $out = pos_alert_dispatch($shop["phones"], $shop["emails"], "Closing sales · {$shop["shopName"]} · {$day}", $text);
-  if (pos_alert_delivered($out)) pos_alert_mark($shop["businessId"], "closing", $day, "");
+  if (!$force && pos_alert_delivered($out)) pos_alert_mark($shop["businessId"], "closing", $day, "");
   return $out;
 }
 
@@ -784,6 +784,120 @@ function pos_summarize_alert_results($results = []) {
     if (!empty($row["wa"]["ok"]) || $mailOk) $sent++;
   }
   return ["sent" => $sent, "skipped" => $skipped, "wa" => $wa, "mail" => $mail, "total" => count($results)];
+}
+
+function pos_send_low_stock_now($bid) {
+  $cfg = pos_alert_settings();
+  $items = pos_q(
+    "SELECT id, name, stock_gm, reorder_level_gm FROM items
+     WHERE business_id = ? AND status = 'active' AND reorder_level_gm > 0 AND stock_gm <= reorder_level_gm",
+    "s",
+    [$bid]
+  );
+  if (!$items) return ["skipped" => true, "reason" => "no-low-stock"];
+  $shop = pos_shop_alert_contacts($bid);
+  return pos_alert_dispatch($shop["phones"], $shop["emails"], "Low stock · " . $shop["shopName"], pos_alert_low_stock_text($shop["shopName"], $items, $cfg));
+}
+
+function pos_send_manual_alerts($kinds = [], $bid = null, $title = "", $body = "") {
+  $all = pos_alert_kinds();
+  $wanted = [];
+  foreach ((array) $kinds as $k) {
+    if (in_array($k, $all, true)) $wanted[] = $k;
+  }
+  if (!$wanted) $wanted = $all;
+  $ids = $bid ? [$bid] : array_column(pos_q("SELECT id FROM businesses ORDER BY name"), "id");
+  if (!$ids) throw new Exception("No shops to send to");
+  $cfg = pos_alert_settings();
+  $support = function_exists("pos_platform_settings") ? pos_platform_settings() : [];
+  $signIn = function_exists("pos_login_url") ? pos_login_url() : "/login.html";
+  $bothRenewal = in_array("renewal_before", $wanted, true) && in_array("renewal_expired", $wanted, true);
+  $results = [];
+  foreach ($ids as $id) {
+    $biz = pos_q(
+      "SELECT b.id, b.name, b.owner_name, b.mobile, b.email, b.subscription_expires_at, p.name AS plan_name
+       FROM businesses b LEFT JOIN subscription_plans p ON p.id = b.plan_id WHERE b.id = ? LIMIT 1",
+      "s",
+      [$id]
+    );
+    $row = $biz[0] ?? null;
+    if (!$row) {
+      $results[] = ["businessId" => $id, "shopName" => $id, "skipped" => true, "reason" => "not-found"];
+      continue;
+    }
+    $shop = pos_shop_alert_contacts($id);
+    if (!$shop["phones"] && !$shop["emails"]) {
+      $results[] = ["businessId" => $id, "shopName" => $row["name"], "skipped" => true, "reason" => "no-number"];
+      continue;
+    }
+    $admin = [];
+    try {
+      $admins = pos_q("SELECT username, email, mobile, first_name, role FROM staff_users WHERE business_id = ? AND role = 'business_admin' LIMIT 1", "s", [$id]);
+      $admin = $admins[0] ?? [];
+    } catch (Throwable $e) {
+      $admin = [];
+    }
+    try {
+      if (function_exists("pos_apply_business_timezone")) pos_apply_business_timezone($id);
+    } catch (Throwable $e) { /* IST */ }
+    $expiry = pos_expiry_ymd($row["subscription_expires_at"] ?? "");
+    $today = date("Y-m-d");
+    $days = $expiry !== "" ? pos_days_until_expiry($expiry, $today) : null;
+    $expired = $days !== null && $days <= 0;
+    foreach ($wanted as $kind) {
+      if ($bothRenewal && $kind === "renewal_before" && $expired) continue;
+      if ($bothRenewal && $kind === "renewal_expired" && !$expired) continue;
+      $out = pos_send_one_manual_alert($kind, $row, $shop, $admin, $cfg, $support, $signIn, $expiry, $days, $title, $body);
+      $results[] = array_merge(["businessId" => $id, "shopName" => $row["name"], "kind" => $kind, "days" => $days], $out);
+    }
+  }
+  return ["ok" => true, "results" => $results, "summary" => pos_summarize_alert_results($results)];
+}
+
+function pos_send_one_manual_alert($kind, $biz, $shop, $admin, $cfg, $support, $signIn, $expiry, $days, $title, $body) {
+  $name = $biz["name"] ?? $shop["shopName"];
+  $owner = $biz["owner_name"] ?? ($admin["first_name"] ?? "");
+  $email = $admin["email"] ?? ($biz["email"] ?? ($shop["emails"][0] ?? ""));
+  $username = $admin["username"] ?? $email;
+  if ($kind === "welcome") {
+    $text = pos_alert_welcome_text($name, $owner, $cfg, ["signInUrl" => $signIn]);
+    return pos_alert_dispatch($shop["phones"], $shop["emails"], "Welcome to ATAV POS · {$name}", $text);
+  }
+  if ($kind === "credentials") {
+    $text = pos_alert_credentials_text([
+      "shopName" => $name,
+      "ownerName" => $owner,
+      "username" => $username,
+      "email" => $email,
+      "password" => "the password already set for this login",
+      "role" => $admin["role"] ?? "business_admin",
+      "signInUrl" => $signIn,
+    ], $cfg);
+    return pos_alert_dispatch($shop["phones"], $shop["emails"], "ATAV POS login · {$name}", $text);
+  }
+  if ($kind === "updates") {
+    $heading = trim((string) $title) !== "" ? trim((string) $title) : "ATAV POS update";
+    $text = pos_alert_update_text($name, $heading, $body, $cfg);
+    return pos_alert_dispatch($shop["phones"], $shop["emails"], "ATAV POS update · {$heading}", $text, pos_notice_html($heading, $body, ""));
+  }
+  if ($kind === "closing") return pos_send_closing_alert($biz["id"], true);
+  if ($kind === "low_stock") return pos_send_low_stock_now($biz["id"]);
+  if ($kind === "renewal_before" || $kind === "renewal_expired") {
+    if ($expiry === "") return ["skipped" => true, "reason" => "no-expiry"];
+    $payload = [
+      "shopName" => $name,
+      "ownerName" => $owner,
+      "plan" => ($biz["plan_name"] ?? "") !== "" ? $biz["plan_name"] : "subscription",
+      "expiry" => $expiry,
+      "days" => $days,
+      "signInUrl" => $signIn,
+      "supportPhone" => $support["support_phone"] ?? "",
+    ];
+    $text = pos_render_alert($kind, $payload, $cfg);
+    $subject = $kind === "renewal_expired" ? "ATAV POS expired · {$name}" : "Renew ATAV POS · {$name}";
+    return pos_alert_dispatch($shop["phones"], $shop["emails"], $subject, $text);
+  }
+  return ["skipped" => true, "reason" => "unknown-kind"];
 }
 
 function pos_tick_shop_alerts($bid = null) {
