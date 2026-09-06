@@ -16,6 +16,7 @@ import { workbookXml } from "./excel.js";
 import { ensureSchema, seedPlatform } from "./schema.js";
 import { companyTimezone, normalizeTimezone, shopTimezonePayload, tzOffsetFor } from "./timezone.js";
 import { attachAuth, registerAuth, requireStaff, requirePerm } from "./auth.js";
+import { normalizeLocale, normalizeInvoiceLanguage, normalizeWhatsappLanguage } from "./i18n.js";
 import { registerMaster } from "./master.js";
 import { registerTenant } from "./tenant.js";
 import { registerBackup } from "./backup.js";
@@ -392,7 +393,16 @@ app.post("/api/growth/ask", requireStaff, requirePerm("reports"), async (req, re
   try {
     const data = await buildGrowthDashboard();
     const question = String(req.body?.question || "");
-    res.json({ ok: true, answer: answerGrowthQuestion(question, data), question });
+    const locale = normalizeLocale(req.body?.locale) || "";
+    res.json({
+      ok: true,
+      answer: answerGrowthQuestion(question, data),
+      question,
+      locale,
+      todaySales: data.kpis?.todaySales,
+      salesGrowth: data.compare?.weekVsLast,
+      topCategory: data.kpis?.topCategory || data.categories?.[0]?.name || "",
+    });
   } catch (err) {
     res.status(500).json({ error: String(err.message || "Ask failed") });
   }
@@ -469,7 +479,21 @@ app.post("/api/settings", requireStaff, requirePerm("settings"), async (req, res
   }
   const tz = normalizeTimezone(timezone);
   const tzOffset = tzOffsetFor(tz);
+  const shopLocale = Object.prototype.hasOwnProperty.call(body, "locale") ? normalizeLocale(body.locale) || "en" : null;
+  const invoiceLanguage = Object.prototype.hasOwnProperty.call(body, "invoice_language")
+    ? normalizeInvoiceLanguage(body.invoice_language)
+    : null;
+  const whatsappLanguage = Object.prototype.hasOwnProperty.call(body, "whatsapp_language")
+    ? normalizeWhatsappLanguage(body.whatsapp_language)
+    : null;
+  const emailLanguage = Object.prototype.hasOwnProperty.call(body, "email_language")
+    ? normalizeLocale(body.email_language) || "en"
+    : null;
+  const aiLanguage = Object.prototype.hasOwnProperty.call(body, "ai_language")
+    ? normalizeLocale(body.ai_language) || "en"
+    : null;
   let logoSql = "";
+  let langSql = "";
   const params = [
     String(name).trim(),
     address || null,
@@ -495,11 +519,31 @@ app.post("/api/settings", requireStaff, requirePerm("settings"), async (req, res
     logoSql = ", logo_url = ?";
     params.push(logo || null);
   }
+  if (shopLocale != null) {
+    langSql += ", locale = ?";
+    params.push(shopLocale);
+  }
+  if (invoiceLanguage != null) {
+    langSql += ", invoice_language = ?";
+    params.push(invoiceLanguage);
+  }
+  if (whatsappLanguage != null) {
+    langSql += ", whatsapp_language = ?";
+    params.push(whatsappLanguage);
+  }
+  if (emailLanguage != null) {
+    langSql += ", email_language = ?";
+    params.push(emailLanguage);
+  }
+  if (aiLanguage != null) {
+    langSql += ", ai_language = ?";
+    params.push(aiLanguage);
+  }
   params.push(bid());
   try {
     await query(
       `UPDATE company_settings
-       SET name = ?, address = ?, phone = ?, email = ?, gstin = ?, city = ?, state = ?, pincode = ?, timezone = ?, tz_offset = ?${logoSql}
+       SET name = ?, address = ?, phone = ?, email = ?, gstin = ?, city = ?, state = ?, pincode = ?, timezone = ?, tz_offset = ?${logoSql}${langSql}
        WHERE business_id = ?`,
       params,
     );

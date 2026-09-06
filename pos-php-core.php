@@ -340,6 +340,43 @@ function pos_ensure_columns($table, $cols) {
   }
 }
 
+function pos_normalize_locale($raw) {
+  $s = strtolower(trim(str_replace("_", "-", (string) $raw)));
+  if ($s === "" || $s === "shop" || $s === "default") return "";
+  $base = explode("-", $s)[0];
+  $ok = ["en","hi","mr","gu","bn","ta","te","kn","ml","pa","or","as","ur"];
+  if (in_array($base, $ok, true)) return $base;
+  if (strpos($s, "en") === 0) return "en";
+  return "";
+}
+
+function pos_normalize_invoice_language($raw) {
+  $s = strtolower(trim((string) $raw));
+  return in_array($s, ["en", "bilingual", "shop"], true) ? $s : "shop";
+}
+
+function pos_normalize_whatsapp_language($raw) {
+  $s = strtolower(trim((string) $raw));
+  return in_array($s, ["customer", "shop", "en"], true) ? $s : "customer";
+}
+
+function pos_ensure_i18n_columns() {
+  static $done = false;
+  if ($done) return;
+  $done = true;
+  pos_ensure_columns("company_settings", [
+    "locale" => "VARCHAR(16) NULL",
+    "invoice_language" => "VARCHAR(16) NULL",
+    "whatsapp_language" => "VARCHAR(16) NULL",
+    "email_language" => "VARCHAR(16) NULL",
+    "ai_language" => "VARCHAR(16) NULL",
+  ]);
+  pos_ensure_columns("staff_users", ["locale" => "VARCHAR(16) NULL"]);
+  pos_ensure_columns("customers", ["locale" => "VARCHAR(16) NULL"]);
+  pos_ensure_columns("items", ["local_name" => "VARCHAR(255) NULL"]);
+  pos_ensure_columns("notifications", ["locale" => "VARCHAR(16) NULL"]);
+}
+
 function pos_ensure_staff_lock_columns() {
   pos_ensure_columns("staff_users", [
     "failed_logins" => "INT NOT NULL DEFAULT 0",
@@ -705,6 +742,7 @@ function pos_parse_perms($user) {
 }
 
 function pos_staff_me_payload($staff) {
+  pos_ensure_i18n_columns();
   $status = pos_public_status($staff["business"]);
   $plan = null;
   if (!empty($staff["business"]["plan_id"])) {
@@ -721,6 +759,7 @@ function pos_staff_me_payload($staff) {
       "role" => $staff["user"]["role"],
       "permissions" => pos_parse_perms($staff["user"]),
       "branch_id" => $staff["branchId"],
+      "locale" => pos_normalize_locale($staff["user"]["locale"] ?? ""),
     ],
     "business" => [
       "id" => $staff["business"]["id"] ?? null,
@@ -1793,6 +1832,15 @@ function pos_php_dispatch($path, $method, $rawBody) {
       pos_send(200, ["ok" => true]);
     }
 
+    if ($path === "me/locale" && $method === "POST") {
+      $auth = pos_staff_session();
+      if (!$auth || ($auth["type"] ?? "") !== "staff") pos_send(401, ["error" => "Sign in required"]);
+      pos_ensure_i18n_columns();
+      $locale = pos_normalize_locale($body["locale"] ?? "");
+      pos_q("UPDATE staff_users SET locale = ? WHERE id = ?", "ss", [$locale !== "" ? $locale : null, $auth["user"]["id"]]);
+      pos_send(200, ["ok" => true, "locale" => $locale]);
+    }
+
     if ($path === "auth/me" && $method === "GET") {
       $staff = pos_staff_session();
       if ($staff) pos_send(200, pos_staff_me_payload($staff));
@@ -2328,6 +2376,22 @@ function pos_php_dispatch($path, $method, $rawBody) {
       pos_send(200, pos_send_renewal_alerts($m[1], true));
     }
 
+    if ($path === "master/languages" && $method === "GET") {
+      $rows = pos_q("SELECT setting_value FROM platform_settings WHERE setting_key = 'i18n_overrides' LIMIT 1");
+      $overrides = [];
+      if ($rows) {
+        $decoded = json_decode($rows[0]["setting_value"] ?? "{}", true);
+        if (is_array($decoded)) $overrides = $decoded;
+      }
+      pos_send(200, ["ok" => true, "overrides" => $overrides]);
+    }
+
+    if ($path === "master/languages" && $method === "POST") {
+      $overrides = is_array($body["overrides"] ?? null) ? $body["overrides"] : [];
+      pos_set_setting("i18n_overrides", json_encode($overrides));
+      pos_send(200, ["ok" => true, "overrides" => $overrides]);
+    }
+
     if ($path === "master/notifications" && $method === "POST") {
       $title = $body["title"] ?? "";
       if (!$title) throw new Exception("Title is required");
@@ -2336,11 +2400,21 @@ function pos_php_dispatch($path, $method, $rawBody) {
       $nid = pos_uuid();
       $bid = $body["business_id"] ?? null;
       if ($bid === "") $bid = null;
-      pos_q(
-        "INSERT INTO notifications (id, business_id, title, body, image_url) VALUES (?,?,?,?,?)",
-        "sssss",
-        [$nid, $bid, $title, $body["body"] ?? null, $image === "" ? null : $image]
-      );
+      pos_ensure_i18n_columns();
+      $locale = pos_normalize_locale($body["locale"] ?? "");
+      try {
+        pos_q(
+          "INSERT INTO notifications (id, business_id, title, body, image_url, locale) VALUES (?,?,?,?,?,?)",
+          "ssssss",
+          [$nid, $bid, $title, $body["body"] ?? null, $image === "" ? null : $image, $locale !== "" ? $locale : null]
+        );
+      } catch (Exception $e) {
+        pos_q(
+          "INSERT INTO notifications (id, business_id, title, body, image_url) VALUES (?,?,?,?,?)",
+          "sssss",
+          [$nid, $bid, $title, $body["body"] ?? null, $image === "" ? null : $image]
+        );
+      }
       $delivery = ["skipped" => true];
       if (function_exists("pos_send_update_alerts")) {
         $delivery = pos_send_update_alerts($title, $body["body"] ?? "", $bid, $image);

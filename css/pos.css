@@ -4151,3 +4151,51 @@ button.items-stat.is-active {
   .growth-ask-form { flex-direction: column; }
   .growth-action { flex-direction: column; }
 }
+
+html[dir="rtl"] .app {
+  grid-template-columns: minmax(0, 1fr) var(--nav-width);
+}
+html[dir="rtl"] .app.nav-collapsed {
+  grid-template-columns: minmax(0, 1fr) var(--nav-width-collapsed);
+}
+html[dir="rtl"] .nav {
+  border-right: 0;
+  border-left: 1px solid rgba(255, 255, 255, 0.06);
+}
+html[dir="rtl"] .app.nav-collapsed .nav {
+  transform: translateX(100%);
+}
+html[dir="rtl"] input,
+html[dir="rtl"] textarea,
+html[dir="rtl"] select {
+  text-align: right;
+}
+.session-lang select {
+  min-height: 32px;
+  max-width: 11rem;
+  font-size: 13px;
+}
+.customer-face {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+}
+.customer-face-kicker {
+  margin: 0 0 6px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+.customer-face-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 14px;
+}
+.customer-face-thanks {
+  margin: 8px 0 0;
+  font-weight: 700;
+}

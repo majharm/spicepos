@@ -25,6 +25,8 @@
         const amount = num(l.amount);
         return {
           item_name: l.item_name || item?.name || "Item",
+          local_name: l.local_name || item?.local_name || "",
+          name: l.item_name || item?.name || "Item",
           hsn: item?.hsn || l.hsn || item?.code || "—",
           quantity_gm: num(l.quantity_gm),
           rate_per_kg: num(l.rate_per_kg),
@@ -246,7 +248,7 @@
     const itemRows = lines
       .map(
         (l, i) => `<tr>
-        <td class="inv-item" colspan="4">${i + 1}. ${escapeHtml(l.item_name)}</td>
+        <td class="inv-item" colspan="4">${i + 1}. ${escapeHtml(lineName(l, ctx))}</td>
       </tr>
       <tr class="inv-line">
         <td class="inv-hsn">HSN ${escapeHtml(l.hsn)}</td>
@@ -336,6 +338,17 @@ ${purchaseBody(purchase, ctx)}
 </html>`;
   }
 
+  function L(ctx, key, fallback) {
+    if (ctx && typeof ctx.invoiceLabel === "function") return ctx.invoiceLabel(key);
+    if (typeof window !== "undefined" && window.POSI18n) return window.POSI18n.invoiceLabel(key, ctx?.locale, ctx?.invoiceMode);
+    return fallback || key;
+  }
+
+  function lineName(l, ctx) {
+    if (ctx && typeof ctx.displayItemName === "function") return ctx.displayItemName(l);
+    return l.item_name || l.name || "Item";
+  }
+
   function invoiceBody(order, ctx) {
     const { company, customers, items, formatDateTime, money, escapeHtml } = ctx;
     const co = company || {};
@@ -368,7 +381,7 @@ ${purchaseBody(purchase, ctx)}
     const itemRows = lines
       .map(
         (l, i) => `<tr>
-        <td class="inv-item" colspan="4">${i + 1}. ${escapeHtml(l.item_name)}</td>
+        <td class="inv-item" colspan="4">${i + 1}. ${escapeHtml(lineName(l, ctx))}</td>
       </tr>
       <tr class="inv-line">
         <td class="inv-hsn">HSN ${escapeHtml(l.hsn)}</td>
@@ -392,13 +405,13 @@ ${purchaseBody(purchase, ctx)}
     <h1 class="inv-shop">${escapeHtml(co.name || "Shop")}</h1>
     ${co.address ? `<p class="inv-addr">${escapeHtml(co.address)}</p>` : ""}
     ${meta ? `<p class="inv-meta">${meta}</p>` : ""}
-    <p class="inv-title">TAX INVOICE</p>
+    <p class="inv-title">${escapeHtml(L(ctx, "invoice.tax_invoice", "TAX INVOICE"))}</p>
   </header>
   <div class="inv-rule"></div>
   <div class="inv-details">
-    <div class="inv-row"><span>Invoice No.</span><strong>${invNo}</strong></div>
-    <div class="inv-row"><span>Date</span><span>${escapeHtml(when)}</span></div>
-    <div class="inv-row"><span>Customer</span><span>${escapeHtml(order.customer_name || cust?.business_name || cust?.name || "Walk-in")}</span></div>
+    <div class="inv-row"><span>${escapeHtml(L(ctx, "invoice.no", "Invoice No."))}</span><strong>${invNo}</strong></div>
+    <div class="inv-row"><span>${escapeHtml(L(ctx, "invoice.date", "Date"))}</span><span>${escapeHtml(when)}</span></div>
+    <div class="inv-row"><span>${escapeHtml(L(ctx, "invoice.customer", "Customer"))}</span><span>${escapeHtml(order.customer_name || cust?.business_name || cust?.name || "Walk-in")}</span></div>
     ${custGstin ? `<div class="inv-row"><span>GSTIN</span><span>${escapeHtml(custGstin)}</span></div>` : ""}
     <div class="inv-row"><span>Type</span><span>${escapeHtml(String(order.customer_type || cust?.type || "b2c").toUpperCase())}</span></div>
     ${packLine}
@@ -407,10 +420,10 @@ ${purchaseBody(purchase, ctx)}
   <table class="inv-table">
     <thead>
       <tr>
-        <th>HSN / Item</th>
-        <th class="inv-num">Qty</th>
-        <th class="inv-num">Rate</th>
-        <th class="inv-num">Amt</th>
+        <th>${escapeHtml(L(ctx, "invoice.hsn", "HSN"))} / ${escapeHtml(L(ctx, "invoice.item", "Item"))}</th>
+        <th class="inv-num">${escapeHtml(L(ctx, "invoice.qty", "Qty"))}</th>
+        <th class="inv-num">${escapeHtml(L(ctx, "invoice.rate", "Rate"))}</th>
+        <th class="inv-num">${escapeHtml(L(ctx, "invoice.amount", "Amt"))}</th>
       </tr>
     </thead>
     <tbody>
@@ -420,17 +433,17 @@ ${purchaseBody(purchase, ctx)}
   <div class="inv-rule"></div>
   <table class="inv-totals">
     <tbody>
-      <tr><td colspan="3">Taxable value</td><td class="inv-num">${escapeHtml(money(subtotal))}</td></tr>
-      ${discount > 0 ? `<tr><td colspan="3">Discount</td><td class="inv-num">-${escapeHtml(money(discount))}</td></tr>` : ""}
+      <tr><td colspan="3">${escapeHtml(L(ctx, "invoice.taxable", "Taxable value"))}</td><td class="inv-num">${escapeHtml(money(subtotal))}</td></tr>
+      ${discount > 0 ? `<tr><td colspan="3">${escapeHtml(L(ctx, "invoice.discount", "Discount"))}</td><td class="inv-num">-${escapeHtml(money(discount))}</td></tr>` : ""}
       ${round2(order.loyalty_discount) > 0 ? `<tr><td colspan="3">Royalty</td><td class="inv-num">-${escapeHtml(money(order.loyalty_discount))}</td></tr>` : ""}
       ${gstRows}
-      <tr class="inv-gst-total"><td colspan="3">Total GST</td><td class="inv-num">${escapeHtml(money(gst))}</td></tr>
-      <tr class="inv-grand"><td colspan="3"><strong>Grand total</strong></td><td class="inv-num"><strong>${escapeHtml(money(total))}</strong></td></tr>
+      <tr class="inv-gst-total"><td colspan="3">${escapeHtml(L(ctx, "invoice.total_gst", "Total GST"))}</td><td class="inv-num">${escapeHtml(money(gst))}</td></tr>
+      <tr class="inv-grand"><td colspan="3"><strong>${escapeHtml(L(ctx, "invoice.grand_total", "Grand total"))}</strong></td><td class="inv-num"><strong>${escapeHtml(money(total))}</strong></td></tr>
     </tbody>
   </table>
   <div class="inv-rule"></div>
-  <p class="inv-pay">Payment: <strong>${escapeHtml(payLabel(order.payment_method))}</strong> · ${escapeHtml(payStatusLabel(order.payment_status))}</p>
-  ${footer ? `<p class="inv-footer">${escapeHtml(footer)}</p>` : '<p class="inv-footer">Thank you for your business!</p>'}
+  <p class="inv-pay">${escapeHtml(L(ctx, "invoice.payment", "Payment"))}: <strong>${escapeHtml(payLabel(order.payment_method))}</strong> · ${escapeHtml(payStatusLabel(order.payment_status))}</p>
+  ${footer ? `<p class="inv-footer">${escapeHtml(footer)}</p>` : `<p class="inv-footer">${escapeHtml(L(ctx, "invoice.thank_you", "Thank you for your business!"))}</p>`}
   ${terms ? `<p class="inv-terms">${escapeHtml(terms)}</p>` : ""}
   <p class="inv-powered">ATAV POS</p>
 </article>`;

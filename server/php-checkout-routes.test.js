@@ -67,6 +67,15 @@ test("PHP fallback routes checkout, holds, and order updates through core", () =
   assert.match(read("server/settings.js"), /export async function shopSupportContact/);
   assert.match(read("api/master/account-managers/index.php"), /master\/account-managers/);
   assert.match(read("api/master/alert-log/index.php"), /master\/alert-log/);
+  assert.match(read("api/me/locale/index.php"), /me\/locale/);
+  assert.match(read("api/master/languages/index.php"), /master\/languages/);
+  assert.match(core, /function pos_normalize_locale/);
+  assert.match(core, /function pos_ensure_i18n_columns/);
+  assert.match(core, /me\/locale/);
+  assert.match(core, /master\/languages/);
+  assert.match(till, /invoice_language/);
+  assert.match(read("index.html"), /settings-pane-language/);
+  assert.match(read("index.html"), /i18n-catalog\.js/);
   assert.match(core, /master\/alert-log/);
   const ht = read("api/.htaccess");
   assert.match(ht, /DirectorySlash Off/);

@@ -717,6 +717,7 @@ function advanceHubHtml() {
       ${advanceCard("backup", "settings", "Settings", "WhatsApp, Hostinger SMTP, and Active or Inactive auto-messages.")}
       ${advanceCard("backup", "backup", "Backup", "Download or restore one shop, or the full platform.")}
       ${advanceCard("notes", "", "Messages", "Post a notice to one shop or every business.")}
+      ${advanceCard("languages", "", "Languages", "India language pack coverage, missing keys, and import or export.")}
       ${advanceCard("branches", "", "Branches", "Every shop branch and its status.")}
       ${advanceCard("devices", "", "POS devices", "Registered tills and device codes.")}
       ${advanceCard("audit", "", "Audit log", "Who changed what across the platform.")}
@@ -1428,6 +1429,7 @@ async function render() {
     "alert-log": "WA Master & Email log",
     backup: backupPane === "settings" ? "Settings" : "Backup",
     notes: "Messages",
+    languages: "Languages",
     alerts: "Settings",
     support: "Support helpline",
     advance: "Advance",
@@ -2021,6 +2023,59 @@ async function render() {
     } else if (tab === "advance") {
       body.innerHTML = advanceHubHtml();
       bindAdvanceCards(body);
+    } else if (tab === "languages") {
+      const I = window.POSI18n;
+      const remote = await api("/api/master/languages").catch(() => ({ overrides: {} }));
+      if (I && remote.overrides) I.setOverrides(remote.overrides);
+      const rows = I ? I.coverage() : [];
+      const missing = rows.flatMap((r) => (r.percent < 100 ? r.missing.slice(0, 8).map((k) => [r.name, k]) : []));
+      body.innerHTML = masterDesk(
+        "Platform",
+        "Languages",
+        "Translation coverage for the India language pack. Missing keys fall back to English — never to the raw key.",
+        rows.slice(0, 4).map((r) => ({ label: r.name, value: `${r.percent}%` })),
+        `<div class="table-wrap">${table(
+          ["Language", "Native", "Coverage", "Missing"],
+          rows.map((r) => [r.name, r.native, `${r.percent}%`, String(r.missing.length)]),
+        )}</div>
+        <div class="item-composer-actions" style="margin-top:12px">
+          <button class="btn" type="button" id="i18n-export">Export catalog</button>
+          <label class="btn">Import overrides
+            <input id="i18n-import" type="file" accept="application/json,.json" hidden />
+          </label>
+          <p class="hint" id="i18n-hint"></p>
+        </div>
+        ${missing.length ? `<h3>Missing sample</h3><div class="table-wrap">${table(["Language", "Key"], missing)}</div>` : ""}`,
+      );
+      $("i18n-export")?.addEventListener("click", () => {
+        const blob = new Blob([JSON.stringify({ strings: I?.STRINGS || {}, overrides: remote.overrides || {} }, null, 2)], {
+          type: "application/json",
+        });
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = "atav-i18n.json";
+        a.click();
+      });
+      $("i18n-import")?.addEventListener("change", async (e) => {
+        const file = e.target.files?.[0];
+        const hint = $("i18n-hint");
+        if (!file) return;
+        try {
+          const parsed = JSON.parse(await file.text());
+          const overrides = parsed.overrides || parsed;
+          await api("/api/master/languages", { method: "POST", body: JSON.stringify({ overrides }) });
+          if (hint) {
+            hint.textContent = "Overrides saved";
+            hint.className = "hint ok";
+          }
+          setMasterTab("languages");
+        } catch (err) {
+          if (hint) {
+            hint.textContent = err.message;
+            hint.className = "hint error";
+          }
+        }
+      });
     } else if (tab === "branches") {
       const rows = await api("/api/master/branches");
       body.innerHTML = masterDesk(
@@ -2187,6 +2242,16 @@ async function render() {
                 </select>
               </label>
               <label class="full">Title <input name="title" required maxlength="180" placeholder="Holiday hours" /></label>
+              <label class="full">Language
+                <select name="locale">
+                  <option value="">All languages</option>
+                  ${
+                    window.POSI18n
+                      ? window.POSI18n.LOCALES.map((l) => `<option value="${attr(l.code)}">${attr(l.native)} ${attr(l.name)}</option>`).join("")
+                      : `<option value="en">English</option>`
+                  }
+                </select>
+              </label>
               <label class="full">Body <textarea name="body" rows="4" maxlength="2000" placeholder="What shops should see…"></textarea></label>
             </fieldset>
             <fieldset class="item-block">

@@ -81,6 +81,11 @@ export async function ensureSchema() {
   await addColumn("company_settings", "pincode", "VARCHAR(12) NULL");
   await addColumn("company_settings", "timezone", "VARCHAR(64) NULL");
   await addColumn("company_settings", "tz_offset", "VARCHAR(8) NULL");
+  await addColumn("company_settings", "locale", "VARCHAR(16) NULL");
+  await addColumn("company_settings", "invoice_language", "VARCHAR(16) NULL");
+  await addColumn("company_settings", "whatsapp_language", "VARCHAR(16) NULL");
+  await addColumn("company_settings", "email_language", "VARCHAR(16) NULL");
+  await addColumn("company_settings", "ai_language", "VARCHAR(16) NULL");
 
   await addColumn("staff_users", "mobile", "VARCHAR(32) NULL");
   await addColumn("staff_users", "username", "VARCHAR(64) NULL");
@@ -88,6 +93,7 @@ export async function ensureSchema() {
   await addColumn("staff_users", "permissions_json", "TEXT NULL");
   await addColumn("staff_users", "failed_logins", "INT NOT NULL DEFAULT 0");
   await addColumn("staff_users", "locked_until", "TIMESTAMP(3) NULL");
+  await addColumn("staff_users", "locale", "VARCHAR(16) NULL");
 
   await addColumn("staff_sessions", "ip", "VARCHAR(64) NULL");
   await addColumn("staff_sessions", "user_agent", "VARCHAR(255) NULL");
@@ -112,9 +118,11 @@ export async function ensureSchema() {
   await addColumn("items", "color", "VARCHAR(64) NULL");
   await addColumn("items", "size", "VARCHAR(32) NULL");
   await addColumn("items", "wearer_type", "VARCHAR(16) NULL");
+  await addColumn("items", "local_name", "VARCHAR(255) NULL");
   await addColumn("customers", "state", "VARCHAR(64) NULL");
   await addColumn("customers", "dob", "DATE NULL");
   await addColumn("customers", "referred_by", "VARCHAR(255) NULL");
+  await addColumn("customers", "locale", "VARCHAR(16) NULL");
   await addColumn("sales_orders", "discount_type", "VARCHAR(16) NOT NULL DEFAULT 'amt'");
   await addColumn("sales_orders", "discount_value", "DECIMAL(12,2) NOT NULL DEFAULT 0");
   await addColumn("sales_orders", "loyalty_points_redeemed", "INT NOT NULL DEFAULT 0");
@@ -341,6 +349,7 @@ export async function ensureSchema() {
     created_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3)
   )`);
   await addColumn("notifications", "image_url", "MEDIUMTEXT NULL");
+  await addColumn("notifications", "locale", "VARCHAR(16) NULL");
 
   await create(`CREATE TABLE IF NOT EXISTS alert_sends (
     id VARCHAR(255) PRIMARY KEY,

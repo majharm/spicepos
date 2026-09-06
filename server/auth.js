@@ -7,6 +7,7 @@ import { registerBusiness } from "./onboard.js";
 import { sendWelcomeSignup, publicLoginUrl } from "./mail.js";
 import { sendWelcomeAlerts } from "./alerts.js";
 import { canonApiUrl } from "./http-path.js";
+import { normalizeLocale } from "./i18n.js";
 
 const SESSION_HOURS = 12;
 const REMEMBER_DAYS = 30;
@@ -501,6 +502,7 @@ export function registerAuth(app) {
           role: req.auth.user.role,
           permissions: parsePerms(req.auth.user),
           branch_id: req.auth.branchId,
+          locale: normalizeLocale(req.auth.user.locale) || "",
         },
         business: {
           id: req.auth.business?.id,
@@ -519,6 +521,17 @@ export function registerAuth(app) {
       return;
     }
     res.status(401).json({ error: "Not signed in" });
+  });
+
+  app.post("/api/me/locale", requireStaff, async (req, res) => {
+    const locale = normalizeLocale(req.body?.locale);
+    try {
+      await query("UPDATE staff_users SET locale = ? WHERE id = ?", [locale || null, req.auth.user.id]);
+      req.auth.user.locale = locale || null;
+      res.json({ ok: true, locale: locale || "" });
+    } catch (err) {
+      res.status(500).json({ error: String(err.message) });
+    }
   });
 
   app.post("/api/auth/reset-password", requireStaff, async (req, res) => {

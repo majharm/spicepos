@@ -43,7 +43,7 @@ function pos_crud_dispatch($path, $method, $body, $bid, $auth, $branchId, $uid) 
     $name = trim((string) ($body["name"] ?? ""));
     $mobile = trim((string) ($body["mobile"] ?? ""));
     if ($name === "" || $mobile === "") pos_send(400, ["error" => "Name and mobile are required"]);
-    pos_ensure_columns("customers", ["state" => "VARCHAR(64) NULL", "dob" => "DATE NULL", "referred_by" => "VARCHAR(255) NULL"]);
+    pos_ensure_columns("customers", ["state" => "VARCHAR(64) NULL", "dob" => "DATE NULL", "referred_by" => "VARCHAR(255) NULL", "locale" => "VARCHAR(16) NULL"]);
     $type = (($body["type"] ?? "") === "b2b") ? "b2b" : "b2c";
     $id = pos_uuid();
     $n = pos_next_seq("customer", $bid, 4);
@@ -54,10 +54,15 @@ function pos_crud_dispatch($path, $method, $body, $bid, $auth, $branchId, $uid) 
       "ssssssssds",
       [$id, $code, $name, $body["business_name"] ?? null, $mobile, $type, $body["gstin"] ?? null, $body["state"] ?? null, (float) ($body["credit_limit"] ?? 0), $bid]
     );
-    if (!empty($body["dob"]) || !empty($body["referred_by"])) {
+    if (!empty($body["dob"]) || !empty($body["referred_by"]) || array_key_exists("locale", $body)) {
       try {
-        pos_q("UPDATE customers SET dob = ?, referred_by = ? WHERE id = ?", "sss", [$body["dob"] ?? null, $body["referred_by"] ?? null, $id]);
-      } catch (Exception $e) { /* optional */ }
+        $locale = function_exists("pos_normalize_locale") ? pos_normalize_locale($body["locale"] ?? "") : "";
+        pos_q("UPDATE customers SET dob = ?, referred_by = ?, locale = ? WHERE id = ?", "ssss", [$body["dob"] ?? null, $body["referred_by"] ?? null, $locale !== "" ? $locale : null, $id]);
+      } catch (Exception $e) {
+        try {
+          pos_q("UPDATE customers SET dob = ?, referred_by = ? WHERE id = ?", "sss", [$body["dob"] ?? null, $body["referred_by"] ?? null, $id]);
+        } catch (Exception $e2) { /* optional */ }
+      }
     }
     $rows = pos_q("SELECT * FROM customers WHERE id = ? LIMIT 1", "s", [$id]);
     pos_send(200, ["ok" => true, "customer" => $rows[0] ?? null]);

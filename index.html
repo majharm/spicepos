@@ -6,7 +6,7 @@
     <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
     <title>ATAV POS</title>
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./css/pos.css?v=20260905deploy144" />
+    <link rel="stylesheet" href="./css/pos.css?v=20260905deploy145" />
     <link rel="stylesheet" href="./css/saas.css?v=20260905deploy136" />
   </head>
   <body>
@@ -20,45 +20,45 @@
         </div>
         <div class="nav-scroll">
           <div class="nav-group">
-            <p class="nav-group-label">Main</p>
-            <button class="nav-btn active" type="button" data-view="dashboard"><span class="nav-icon" aria-hidden="true">⌂</span>Dashboard</button>
-            <button class="nav-btn" type="button" data-view="growth"><span class="nav-icon" aria-hidden="true">◈</span>AI Growth</button>
-            <button class="nav-btn" type="button" data-view="counter"><span class="nav-icon" aria-hidden="true">⊞</span>Counter</button>
+            <p class="nav-group-label" data-i18n="nav.main">Main</p>
+            <button class="nav-btn active" type="button" data-view="dashboard"><span class="nav-icon" aria-hidden="true">⌂</span><span data-i18n="nav.dashboard">Dashboard</span></button>
+            <button class="nav-btn" type="button" data-view="growth"><span class="nav-icon" aria-hidden="true">◈</span><span data-i18n="nav.growth">AI Growth</span></button>
+            <button class="nav-btn" type="button" data-view="counter"><span class="nav-icon" aria-hidden="true">⊞</span><span data-i18n="nav.counter">Counter</span></button>
           </div>
           <div class="nav-group">
-            <p class="nav-group-label">Sales</p>
-            <button class="nav-btn" type="button" data-view="orders"><span class="nav-icon" aria-hidden="true">▤</span>Invoices</button>
-            <button class="nav-btn" type="button" data-view="qr-orders"><span class="nav-icon" aria-hidden="true">▦</span>QR Orders <span class="nav-badge" id="qr-order-badge" hidden></span></button>
-            <button class="nav-btn" type="button" data-view="customers"><span class="nav-icon" aria-hidden="true">◎</span>Customers</button>
-            <button class="nav-btn" type="button" data-view="loyalty"><span class="nav-icon" aria-hidden="true">★</span>Royalty</button>
-            <button class="nav-btn" type="button" data-view="offers"><span class="nav-icon" aria-hidden="true">%</span>Offers</button>
-            <button class="nav-btn" type="button" data-view="purchases"><span class="nav-icon" aria-hidden="true">↘</span>Purchases</button>
+            <p class="nav-group-label" data-i18n="nav.sales">Sales</p>
+            <button class="nav-btn" type="button" data-view="orders"><span class="nav-icon" aria-hidden="true">▤</span><span data-i18n="nav.invoices">Invoices</span></button>
+            <button class="nav-btn" type="button" data-view="qr-orders"><span class="nav-icon" aria-hidden="true">▦</span><span data-i18n="nav.qr_orders">QR Orders</span> <span class="nav-badge" id="qr-order-badge" hidden></span></button>
+            <button class="nav-btn" type="button" data-view="customers"><span class="nav-icon" aria-hidden="true">◎</span><span data-i18n="nav.customers">Customers</span></button>
+            <button class="nav-btn" type="button" data-view="loyalty"><span class="nav-icon" aria-hidden="true">★</span><span data-i18n="nav.loyalty">Royalty</span></button>
+            <button class="nav-btn" type="button" data-view="offers"><span class="nav-icon" aria-hidden="true">%</span><span data-i18n="nav.offers">Offers</span></button>
+            <button class="nav-btn" type="button" data-view="purchases"><span class="nav-icon" aria-hidden="true">↘</span><span data-i18n="nav.purchases">Purchases</span></button>
           </div>
           <div class="nav-group">
-            <p class="nav-group-label">Inventory</p>
-            <button class="nav-btn" type="button" data-view="items"><span class="nav-icon" aria-hidden="true">◫</span>Items</button>
+            <p class="nav-group-label" data-i18n="nav.inventory">Inventory</p>
+            <button class="nav-btn" type="button" data-view="items"><span class="nav-icon" aria-hidden="true">◫</span><span data-i18n="pos.items">Items</span></button>
             <button class="nav-btn" type="button" data-view="units"><span class="nav-icon" aria-hidden="true">⚖</span>Units</button>
             <button class="nav-btn" type="button" data-view="packs"><span class="nav-icon" aria-hidden="true">▦</span>Packs</button>
             <button class="nav-btn" type="button" data-view="barcodes"><span class="nav-icon" aria-hidden="true">▦</span>Barcodes</button>
-            <button class="nav-btn" type="button" data-view="stock"><span class="nav-icon" aria-hidden="true">▥</span>Stock</button>
+            <button class="nav-btn" type="button" data-view="stock"><span class="nav-icon" aria-hidden="true">▥</span><span data-i18n="nav.stock">Stock</span></button>
             <button class="nav-btn" type="button" data-view="expiry"><span class="nav-icon" aria-hidden="true">◷</span>Expiry</button>
             <button class="nav-btn" type="button" data-view="damage"><span class="nav-icon" aria-hidden="true">⚠</span>Damage</button>
             <button class="nav-btn" type="button" data-view="ledger"><span class="nav-icon" aria-hidden="true">☰</span>Ledger</button>
-            <button class="nav-btn" type="button" data-view="suppliers"><span class="nav-icon" aria-hidden="true">◇</span>Suppliers</button>
+            <button class="nav-btn" type="button" data-view="suppliers"><span class="nav-icon" aria-hidden="true">◇</span><span data-i18n="nav.suppliers">Suppliers</span></button>
           </div>
           <div class="nav-group">
-            <p class="nav-group-label">Finance</p>
-            <button class="nav-btn" type="button" data-view="accounts"><span class="nav-icon" aria-hidden="true">₹</span>Accounts</button>
-            <button class="nav-btn" type="button" data-view="expenses"><span class="nav-icon" aria-hidden="true">−</span>Expenses</button>
-            <button class="nav-btn" type="button" data-view="reports"><span class="nav-icon" aria-hidden="true">▣</span>Reports</button>
+            <p class="nav-group-label" data-i18n="nav.finance">Finance</p>
+            <button class="nav-btn" type="button" data-view="accounts"><span class="nav-icon" aria-hidden="true">₹</span><span data-i18n="nav.accounts">Accounts</span></button>
+            <button class="nav-btn" type="button" data-view="expenses"><span class="nav-icon" aria-hidden="true">−</span><span data-i18n="nav.expenses">Expenses</span></button>
+            <button class="nav-btn" type="button" data-view="reports"><span class="nav-icon" aria-hidden="true">▣</span><span data-i18n="nav.reports">Reports</span></button>
           </div>
           <div class="nav-group">
-            <p class="nav-group-label">Admin</p>
-            <button class="nav-btn" type="button" data-view="staff"><span class="nav-icon" aria-hidden="true">◉</span>Staff</button>
+            <p class="nav-group-label" data-i18n="nav.admin">Admin</p>
+            <button class="nav-btn" type="button" data-view="staff"><span class="nav-icon" aria-hidden="true">◉</span><span data-i18n="nav.staff">Staff</span></button>
             <button class="nav-btn" type="button" data-view="branches"><span class="nav-icon" aria-hidden="true">⬡</span>Branches</button>
             <button class="nav-btn" type="button" data-view="devices"><span class="nav-icon" aria-hidden="true">⌁</span>Devices</button>
             <button class="nav-btn" type="button" data-view="support"><span class="nav-icon" aria-hidden="true">?</span>Support</button>
-            <button class="nav-btn" type="button" data-view="settings"><span class="nav-icon" aria-hidden="true">⚙</span>Settings</button>
+            <button class="nav-btn" type="button" data-view="settings"><span class="nav-icon" aria-hidden="true">⚙</span><span data-i18n="nav.settings">Settings</span></button>
           </div>
         </div>
         <div class="nav-foot">
@@ -83,8 +83,12 @@
         </header>
         <div class="session-bar">
           <span id="session-who">Signed in</span>
+          <label class="session-lang">
+            <span class="visually-hidden" data-i18n="app.language">Language</span>
+            <select id="topbar-locale" aria-label="Interface language"></select>
+          </label>
           <span id="session-support" class="session-support" hidden></span>
-          <button class="btn-logout" type="button" data-logout>Logout</button>
+          <button class="btn-logout" type="button" data-logout data-i18n="app.logout">Logout</button>
         </div>
         <div class="expired-banner" id="expired-banner" hidden>
           Subscription expired. Data is kept. Ask the platform owner to renew this business.
@@ -107,7 +111,7 @@
             <div class="counter-lane">
               <form class="scan-lane" id="scan-form" autocomplete="off">
                 <span class="scan-lane-ico" aria-hidden="true"></span>
-                <input id="scan-code" type="search" enterkeyhint="search" autocomplete="off" placeholder="Scan or search" />
+                <input id="scan-code" type="search" enterkeyhint="search" autocomplete="off" placeholder="Scan or search" data-i18n="pos.scan" data-i18n-attr="placeholder" />
                 <button type="button" class="scan-camera-btn" id="scan-camera-btn" aria-label="Scan with camera" title="Camera scan" hidden>
                   <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M9.5 4.5v2H7.8c-.5 0-.9.2-1.2.5L4.7 9.5H3.5c-.8 0-1.5.7-1.5 1.5v7c0 .8.7 1.5 1.5 1.5h17c.8 0 1.5-.7 1.5-1.5v-7c0-.8-.7-1.5-1.5-1.5h-1.2l-1.9-2.5c-.3-.3-.7-.5-1.2-.5h-1.7v-2c0-.8-.7-1.5-1.5-1.5h-3c-.8 0-1.5.7-1.5 1.5zm3 11.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z"/></svg>
                 </button>
@@ -117,10 +121,10 @@
                 <option value="">Loose items</option>
               </select>
               <select id="pay-method" class="select" aria-label="Payment method">
-                <option value="cash">Cash</option>
-                <option value="upi">UPI</option>
-                <option value="card">Card</option>
-                <option value="credit">Credit</option>
+                    <option value="cash" data-i18n="pos.cash">Cash</option>
+                    <option value="upi" data-i18n="pos.upi">UPI</option>
+                    <option value="card" data-i18n="pos.card">Card</option>
+                    <option value="credit" data-i18n="pos.credit">Credit</option>
               </select>
               <input id="counter-mobile" type="tel" inputmode="numeric" maxlength="15" autocomplete="off" placeholder="Mobile" aria-label="Customer mobile" />
               <select id="customer" class="select" aria-label="Customer"></select>
@@ -155,7 +159,7 @@
             <aside class="ticket bill-panel" id="bill-panel">
               <div class="ticket-head">
                 <div class="ticket-head-copy">
-                  <h2>Bill</h2>
+                  <h2 data-i18n="pos.bill">Bill</h2>
                   <p class="ticket-sub" id="ticket-sub">Tap a product or scan</p>
                   <p class="ticket-cust" id="bill-customer"></p>
                 </div>
@@ -187,19 +191,26 @@
               </details>
               <div class="totals">
                 <div class="totals-meta">
-                  <div><span>Qty</span><span id="qty-total">0</span></div>
-                  <div><span>Taxable</span><span id="taxable">₹0.00</span></div>
-                  <div><span>GST</span><span id="tax">₹0.00</span></div>
-                  <div id="disc-row"><span>Discount</span><span id="disc-total">₹0.00</span></div>
-                  <div id="loyalty-row"><span>Royalty</span><span id="loyalty-total">₹0.00</span></div>
-                  <div id="profit-row"><span>Profit</span><span id="profit-total">₹0.00</span></div>
+                  <div><span data-i18n="pos.quantity">Qty</span><span id="qty-total">0</span></div>
+                  <div><span data-i18n="pos.taxable">Taxable</span><span id="taxable">₹0.00</span></div>
+                  <div><span data-i18n="pos.gst">GST</span><span id="tax">₹0.00</span></div>
+                  <div id="disc-row"><span data-i18n="pos.discount">Discount</span><span id="disc-total">₹0.00</span></div>
+                  <div id="loyalty-row"><span data-i18n="pos.royalty">Royalty</span><span id="loyalty-total">₹0.00</span></div>
+                  <div id="profit-row"><span data-i18n="pos.profit">Profit</span><span id="profit-total">₹0.00</span></div>
                 </div>
-                <div class="grand"><span>Total</span><span id="total">₹0.00</span></div>
+                <div class="grand"><span data-i18n="pos.total">Total</span><span id="total">₹0.00</span></div>
+                <div class="customer-face" id="customer-face" hidden>
+                  <p class="customer-face-kicker" data-i18n="pos.customer_display">Customer display</p>
+                  <div class="customer-face-row"><span data-i18n="pos.subtotal">Subtotal</span><strong id="face-subtotal">₹0.00</strong></div>
+                  <div class="customer-face-row"><span data-i18n="pos.discount">Discount</span><strong id="face-discount">₹0.00</strong></div>
+                  <div class="customer-face-row"><span data-i18n="pos.total">Total</span><strong id="face-total">₹0.00</strong></div>
+                  <p class="customer-face-thanks" data-i18n="pos.thank_you">Thank you</p>
+                </div>
               </div>
               <div class="pay">
                 <div class="pay-row">
-                  <button class="btn" id="btn-hold" type="button">Hold</button>
-                  <button class="btn danger" id="btn-clear" type="button">Clear</button>
+                  <button class="btn" id="btn-hold" type="button" data-i18n="pos.hold">Hold</button>
+                  <button class="btn danger" id="btn-clear" type="button" data-i18n="pos.clear">Clear</button>
                   <button class="btn primary" id="btn-pay" type="button">Pay</button>
                 </div>
                 <div class="hint" id="hint"></div>
@@ -239,6 +250,7 @@
                 <fieldset class="item-block">
                   <legend>Identity</legend>
                   <label class="full">Name <input id="item-name" required maxlength="180" placeholder="Turmeric powder" /></label>
+                  <label class="full"><span data-i18n="settings.product_local_name">Regional name</span> <input id="item-local-name" maxlength="180" placeholder="चावल / तांदूळ / Rice" /></label>
                   <label>HSN code <input id="item-hsn" maxlength="16" placeholder="e.g. 0908" autocomplete="off" /></label>
                   <label>Unit type
                     <select id="item-unit"></select>
@@ -373,6 +385,11 @@
                   <label>State <input id="cust-state" placeholder="e.g. Maharashtra" autocomplete="address-level1" /></label>
                   <label>Birthday <input id="cust-dob" type="date" /></label>
                   <label>Referred by customer id <input id="cust-ref" maxlength="64" placeholder="Optional" /></label>
+                  <label><span data-i18n="app.language">Language</span>
+                    <select id="cust-locale">
+                      <option value="">Shop default</option>
+                    </select>
+                  </label>
                 </fieldset>
                 <div class="item-composer-actions">
                   <button class="btn primary" type="submit">Save customer</button>
@@ -1144,8 +1161,9 @@
               <div class="items-hero-stats" id="settings-hero-stats"></div>
             </header>
             <div class="settings-tabs" role="tablist" aria-label="Settings sections">
-              <button class="btn active" type="button" role="tab" aria-selected="true" data-settings-tab="profile">Profile</button>
-              <button class="btn" type="button" role="tab" aria-selected="false" data-settings-tab="backup" data-view="backup">Backup</button>
+              <button class="btn active" type="button" role="tab" aria-selected="true" data-settings-tab="profile" data-i18n="settings.profile">Profile</button>
+              <button class="btn" type="button" role="tab" aria-selected="false" data-settings-tab="language" data-i18n="settings.language_region">Language &amp; Region</button>
+              <button class="btn" type="button" role="tab" aria-selected="false" data-settings-tab="backup" data-view="backup" data-i18n="settings.backup">Backup</button>
             </div>
             <div class="settings-pane" id="settings-pane-profile">
               <div class="items-split settings-profile-split">
@@ -1244,6 +1262,60 @@
                   </div>
                 </div>
               </div>
+            </div>
+            <div class="settings-pane" id="settings-pane-language" hidden>
+              <form class="settings item-composer" id="language-form" autocomplete="off">
+                <div class="item-composer-top">
+                  <p class="item-mode" data-i18n="settings.language_region">Language &amp; Region</p>
+                  <p class="item-composer-note" data-i18n="settings.hint">Your language applies to this login. Shop language is the default for staff who have not chosen one.</p>
+                </div>
+                <fieldset class="item-block">
+                  <legend data-i18n="app.language">Language</legend>
+                  <label class="full"><span data-i18n="settings.user_language">Your language</span>
+                    <select id="set-user-locale"></select>
+                  </label>
+                  <label class="full shop-lang-only"><span data-i18n="settings.shop_language">Shop language</span>
+                    <select id="set-shop-locale"></select>
+                  </label>
+                  <label class="full shop-lang-only"><span data-i18n="settings.invoice_language">Invoice language</span>
+                    <select id="set-invoice-language">
+                      <option value="en" data-i18n="settings.invoice_en">English</option>
+                      <option value="shop" data-i18n="settings.invoice_shop">Shop language</option>
+                      <option value="bilingual" data-i18n="settings.invoice_bilingual">English + regional</option>
+                    </select>
+                  </label>
+                  <label class="full shop-lang-only"><span data-i18n="settings.whatsapp_language">WhatsApp language</span>
+                    <select id="set-wa-language">
+                      <option value="customer" data-i18n="settings.wa_customer">Customer preferred</option>
+                      <option value="shop" data-i18n="settings.wa_shop">Shop language</option>
+                      <option value="en" data-i18n="settings.wa_en">English</option>
+                    </select>
+                  </label>
+                  <label class="full shop-lang-only"><span data-i18n="settings.email_language">Email language</span>
+                    <select id="set-email-language"></select>
+                  </label>
+                  <label class="full shop-lang-only"><span data-i18n="settings.ai_language">AI assistant language</span>
+                    <select id="set-ai-language"></select>
+                  </label>
+                </fieldset>
+                <fieldset class="item-block">
+                  <legend data-i18n="app.region">Region</legend>
+                  <label><span data-i18n="settings.number_format">Number format</span>
+                    <input value="Indian (12,50,000)" readonly />
+                  </label>
+                  <label><span data-i18n="settings.currency">Currency</span>
+                    <input value="INR ₹" readonly />
+                  </label>
+                  <label><span data-i18n="settings.date_format">Date format</span>
+                    <input value="DD/MM/YYYY" readonly />
+                  </label>
+                </fieldset>
+                <p class="item-composer-note full" data-i18n="settings.voice_note">Voice POS for Indian languages is planned.</p>
+                <div class="item-composer-actions">
+                  <button class="btn primary" type="submit" data-i18n="app.save">Save</button>
+                  <p class="hint" id="language-hint"></p>
+                </div>
+              </form>
             </div>
             <div class="settings-pane" id="settings-pane-backup" hidden>
               <div class="settings" id="view-backup">
@@ -1350,6 +1422,8 @@
         </section>
       </div>
     </aside>
+    <script src="./js/i18n-catalog.js?v=20260905deploy145"></script>
+    <script src="./js/i18n.js?v=20260905deploy145"></script>
     <script src="./js/gst-supply.js?v=20260905deploy136" defer></script>
     <script src="./js/pos-api.js?v=20260905deploy136" defer></script>
     <script src="./js/units.js?v=20260905deploy136" defer></script>
@@ -1360,12 +1434,12 @@
     <script src="./js/barcode.js?v=20260905deploy136" defer></script>
     <script src="./js/camera-scan.js?v=20260904camera1" defer></script>
     <script src="./js/dev-mode.js?v=20260905deploy136" defer></script>
-    <script src="./js/invoice.js?v=20260905deploy136" defer></script>
+    <script src="./js/invoice.js?v=20260905deploy137" defer></script>
     <script src="./js/support.js?v=20260905deploy136" defer></script>
     <script src="./js/qrcode.iife.js?v=20260905qr1"></script>
     <script src="./js/qr-notify.js?v=20260905deploy144" defer></script>
-    <script src="./js/app.js?v=20260905deploy144" defer></script>
-    <script src="./js/growth.js?v=20260905deploy136" defer></script>
+    <script src="./js/app.js?v=20260905deploy145" defer></script>
+    <script src="./js/growth.js?v=20260905deploy145" defer></script>
     <script src="./js/offers-ui.js?v=20260905deploy136" defer></script>
   </body>
 </html>

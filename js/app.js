@@ -37,6 +37,7 @@ const state = {
   loyaltyRedeem: 0,
   loyaltyAccount: null,
   loyaltySettings: null,
+  currentView: "dashboard",
   stockMode: "simple",
   expiryBatches: [],
   expiryFilter: "all",
@@ -983,33 +984,103 @@ function applyNav() {
   if (offersBtn) offersBtn.hidden = !(can("discount") || can("items") || can("growth"));
 }
 
+function tt(key, fallback, vars) {
+  if (window.POSI18n) return window.POSI18n.t(key, vars);
+  return fallback != null ? fallback : key;
+}
+
+function selectedCustomer() {
+  return (state.customers || []).find((c) => c.id === state.customerId) || null;
+}
+
+function applyUiLocale() {
+  const I = window.POSI18n;
+  if (!I) return I;
+  const shop = state.company?.locale || "";
+  const user = state.session?.locale || "";
+  const customer = selectedCustomer()?.locale || "";
+  const locale = I.resolveLocale({ customer: "", user, shop, platform: "en" });
+  I.setLocale(locale);
+  I.setInvoiceMode(state.company?.invoice_language || "shop");
+  I.applyDocument();
+  fillLocaleSelects();
+  paintViewHeader(state.currentView || "dashboard");
+  return I;
+}
+
+function fillLocaleSelects() {
+  const I = window.POSI18n;
+  if (!I) return;
+  const userLoc = I.normalizeLocale(state.session?.locale) || I.normalizeLocale(state.company?.locale) || "en";
+  const shopLoc = I.normalizeLocale(state.company?.locale) || "en";
+  const setOpts = (el, selected, includeBlank) => {
+    if (!el) return;
+    const blank = includeBlank ? `<option value="">${tt("settings.invoice_shop", "Shop language")}</option>` : "";
+    el.innerHTML = blank + I.optionsHtml(selected);
+    if (selected) el.value = selected;
+  };
+  setOpts($("topbar-locale"), userLoc);
+  setOpts($("set-user-locale"), userLoc);
+  setOpts($("set-shop-locale"), shopLoc);
+  setOpts($("set-email-language"), I.normalizeLocale(state.company?.email_language) || shopLoc);
+  setOpts($("set-ai-language"), I.normalizeLocale(state.company?.ai_language) || shopLoc);
+  setOpts($("cust-locale"), I.normalizeLocale(selectedCustomer()?.locale) || "", true);
+  if ($("set-invoice-language")) $("set-invoice-language").value = state.company?.invoice_language || "shop";
+  if ($("set-wa-language")) $("set-wa-language").value = state.company?.whatsapp_language || "customer";
+  document.querySelectorAll(".shop-lang-only").forEach((el) => {
+    el.hidden = !can("settings");
+  });
+}
+
 function paintViewHeader(name) {
   const meta = VIEW_META[name] || { title: name, subtitle: "" };
+  const titleKeys = {
+    dashboard: "nav.dashboard",
+    counter: "nav.counter",
+    items: "pos.items",
+    customers: "nav.customers",
+    orders: "nav.invoices",
+    "qr-orders": "nav.qr_orders",
+    purchases: "nav.purchases",
+    suppliers: "nav.suppliers",
+    stock: "nav.stock",
+    reports: "nav.reports",
+    growth: "nav.growth",
+    settings: "nav.settings",
+    backup: "nav.backup",
+    accounts: "nav.accounts",
+    expenses: "nav.expenses",
+    staff: "nav.staff",
+    offers: "nav.offers",
+    loyalty: "nav.loyalty",
+  };
   const titleEl = $("view-title");
   const subEl = $("view-subtitle");
-  if (titleEl) titleEl.textContent = meta.title;
+  if (titleEl) titleEl.textContent = titleKeys[name] ? tt(titleKeys[name], meta.title) : meta.title;
   if (subEl) subEl.textContent = meta.subtitle;
   document.getElementById("view-topbar")?.classList.toggle("is-counter", name === "counter");
 }
 
 function showSettingsTab(tab) {
-  const backup = tab === "backup";
-  if ($("settings-pane-profile")) $("settings-pane-profile").hidden = backup;
-  if ($("settings-pane-backup")) $("settings-pane-backup").hidden = !backup;
+  const name = tab === "backup" || tab === "language" ? tab : "profile";
+  if ($("settings-pane-profile")) $("settings-pane-profile").hidden = name !== "profile";
+  if ($("settings-pane-language")) $("settings-pane-language").hidden = name !== "language";
+  if ($("settings-pane-backup")) $("settings-pane-backup").hidden = name !== "backup";
   document.querySelectorAll("[data-settings-tab]").forEach((btn) => {
-    const on = btn.dataset.settingsTab === (backup ? "backup" : "profile");
+    const on = btn.dataset.settingsTab === name;
     btn.classList.toggle("active", on);
     btn.setAttribute("aria-selected", on ? "true" : "false");
   });
-  paintViewHeader(backup ? "backup" : "settings");
+  paintViewHeader(name === "backup" ? "backup" : "settings");
   document.querySelectorAll(".nav-btn").forEach((btn) => {
     btn.classList.toggle("active", btn.dataset.view === "settings");
   });
-  if (backup && $("btn-backup-download")) $("btn-backup-download").href = posUrl("/api/backup");
+  if (name === "backup" && $("btn-backup-download")) $("btn-backup-download").href = posUrl("/api/backup");
 }
 
 function showView(name) {
   const requested = name;
+  state.currentView = name === "backup" || name === "language" ? "settings" : name;
   if (name === "backup") name = "settings";
   document.querySelectorAll(".view").forEach((el) => {
     el.hidden = el.id !== `view-${name}`;
@@ -1024,7 +1095,7 @@ function showView(name) {
   const page = document.getElementById(`view-${name}`);
   if (page) page.scrollTop = 0;
   paintViewHeader(name);
-  if (name === "settings") showSettingsTab(requested === "backup" ? "backup" : "profile");
+  if (name === "settings") showSettingsTab(requested === "backup" || requested === "language" ? requested : "profile");
   if (name === "reports") loadReports();
   if (name === "growth") loadGrowthDashboard();
   if (name === "accounts") loadAccounts();
@@ -1173,6 +1244,7 @@ function filteredItems() {
     if (size && String(i.size || "").trim().toLowerCase() !== size) return false;
     if (color && String(i.color || "").trim().toLowerCase() !== color) return false;
     if (!q) return true;
+    if (window.POSI18n?.matchesQuery) return window.POSI18n.matchesQuery(i, q);
     return [i.name, i.hsn, i.local_name, i.code, i.barcode, i.category, i.subcategory, i.color, i.size, i.wearer_type]
       .join(" ")
       .toLowerCase()
@@ -1343,10 +1415,17 @@ function renderCart() {
   if ($("btn-hold")) $("btn-hold").disabled = state.cart.length === 0 || Boolean(state.editingOrderId);
   const payTotal = t.total != null ? t.total : t.taxable + t.tax;
   $("btn-pay").textContent = state.editingOrderId
-    ? "Save changes"
+    ? tt("pos.save_changes", "Save changes")
     : state.cart.length
-      ? `Pay ${money(payTotal)}`
-      : "Pay";
+      ? tt("pos.pay_amount", `Pay ${money(payTotal)}`, { amount: money(payTotal) })
+      : tt("pos.pay", "Pay");
+  const face = $("customer-face");
+  if (face) {
+    face.hidden = state.cart.length === 0;
+    if ($("face-subtotal")) $("face-subtotal").textContent = money(t.taxable);
+    if ($("face-discount")) $("face-discount").textContent = money((t.discount || 0) + (t.lineDiscount || 0));
+    if ($("face-total")) $("face-total").textContent = money(t.total != null ? t.total : t.taxable + t.tax);
+  }
   renderHeldBills();
   renderEditOrderBanner();
   paintComboBanner();
@@ -1394,6 +1473,7 @@ async function saveCustomer(fields) {
       gstin: fields.gstin || "",
       dob: fields.dob || "",
       referred_by: fields.referred_by || "",
+      locale: fields.locale || "",
     }),
   });
   const customer = data.customer;
@@ -1882,7 +1962,9 @@ function fillDatalists() {
 }
 
 function itemSearchHay(item) {
-  return `${item.name || ""} ${item.code || ""} ${item.hsn || ""} ${item.barcode || ""} ${item.mfr_barcode || ""} ${item.category || ""} ${item.subcategory || ""} ${item.color || ""} ${item.size || ""}`.toLowerCase();
+  const raw = `${item.name || ""} ${item.local_name || ""} ${item.code || ""} ${item.hsn || ""} ${item.barcode || ""} ${item.mfr_barcode || ""} ${item.category || ""} ${item.subcategory || ""} ${item.color || ""} ${item.size || ""}`;
+  const I = window.POSI18n;
+  return I ? I.searchBlob(item) : raw.toLowerCase();
 }
 
 function paintItemsHero() {
@@ -1974,6 +2056,7 @@ function fillItemForm(i) {
   if (!i) return;
   $("item-id").value = i.id;
   $("item-name").value = i.name;
+  if ($("item-local-name")) $("item-local-name").value = i.local_name || "";
   $("item-hsn").value = i.hsn || "";
   $("item-category").value = i.category || "";
   $("item-subcategory").value = i.subcategory || "";
@@ -2533,6 +2616,7 @@ function renderSettings() {
       .join("");
   }
   if ($("btn-backup-download")) $("btn-backup-download").href = posUrl("/api/backup");
+  fillLocaleSelects();
   if (window.DevMode) {
     const section = $("dev-settings-section");
     if (section) section.hidden = !DevMode.canUse(state.session);
@@ -2664,6 +2748,7 @@ async function loadBootstrap() {
   renderPackCompose();
   renderPacksTable();
   renderSettings();
+  applyUiLocale();
   renderPoLines();
   fillExpenseCategories();
   void Promise.all([loadToday(), loadDashboard(), loadSuppliers().catch(() => {}), loadHolds().catch(() => {})]);
@@ -2676,11 +2761,11 @@ async function loadDashboard() {
     $("dash-welcome").textContent = `${state.session?.name || ""} · ${state.session?.role || ""} · ${state.company.name || ""}`;
     paintPlatformNotices(d.notes);
     $("dash-kpis").innerHTML = [
-      ["Today's sales", money(d.today?.takings)],
-      ["Today's bills", d.today?.bills],
-      ["Today's purchase", money(d.purchase)],
-      ["Stock value", money(d.stockValue)],
-      ["Customer outstanding", money(d.outstanding)],
+      [tt("dashboard.today_sales", "Today's sales"), money(d.today?.takings)],
+      [tt("dashboard.today_bills", "Today's bills"), d.today?.bills],
+      [tt("dashboard.today_purchase", "Today's purchase"), money(d.purchase)],
+      [tt("dashboard.stock_value", "Stock value"), money(d.stockValue)],
+      [tt("dashboard.outstanding", "Customer outstanding"), money(d.outstanding)],
       ["Plan", state.plan?.name || state.plan?.code || "—"],
       ["Subscription fee / month", money(state.plan?.fee_monthly)],
     ]
@@ -2932,6 +3017,12 @@ function renderOrdersSummary(filteredCount, totalCount) {
 }
 
 function invoiceCtx() {
+  const I = window.POSI18n;
+  const shop = state.company?.locale || "";
+  const user = state.session?.locale || "";
+  const customer = selectedCustomer()?.locale || "";
+  const locale = I ? I.resolveLocale({ customer, user, shop, platform: "en" }) : "en";
+  const mode = state.company?.invoice_language || "shop";
   return {
     company: state.company,
     customers: state.customers,
@@ -2941,6 +3032,10 @@ function invoiceCtx() {
     formatDate: formatShopDate,
     money,
     escapeHtml,
+    locale,
+    invoiceMode: mode,
+    invoiceLabel: (key) => (I ? I.invoiceLabel(key, locale, mode) : key),
+    displayItemName: (item) => (I ? I.displayItemName(item, locale, mode) : item?.name || item?.item_name || ""),
   };
 }
 
@@ -4440,6 +4535,7 @@ $("item-form").addEventListener("submit", async (e) => {
   const unit = POSUnits.normalize($("item-unit").value);
   const body = {
     name: $("item-name").value,
+    local_name: $("item-local-name")?.value || "",
     hsn: $("item-hsn").value,
     category: $("item-category").value || defaultItemCategory(),
     subcategory: $("item-subcategory").value,
@@ -4599,6 +4695,7 @@ $("customer-form").addEventListener("submit", async (e) => {
       state: $("cust-state")?.value || "",
       dob: $("cust-dob")?.value || "",
       referred_by: $("cust-ref")?.value || "",
+      locale: $("cust-locale")?.value || "",
     });
     $("cust-hint").textContent = "Saved";
     $("cust-hint").className = "hint ok";
@@ -4995,6 +5092,64 @@ $("password-form")?.addEventListener("submit", async (e) => {
     hint.className = "hint error";
   }
 });
+
+$("language-form")?.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const hint = $("language-hint");
+  try {
+    const userLocale = $("set-user-locale")?.value || "";
+    await api("/api/me/locale", { method: "POST", body: JSON.stringify({ locale: userLocale }) });
+    if (state.session) state.session.locale = userLocale;
+    if (can("settings")) {
+      const payload = {
+        name: state.company.name || $("set-name")?.value || "",
+        address: state.company.address || "",
+        phone: state.company.phone || "",
+        email: state.company.email || "",
+        gstin: state.company.gstin || "",
+        city: state.company.city || "",
+        state: state.company.state || "",
+        pincode: state.company.pincode || state.company.pin_code || "",
+        timezone: state.company.timezone || shopTimezone(),
+        locale: $("set-shop-locale")?.value || "en",
+        invoice_language: $("set-invoice-language")?.value || "shop",
+        whatsapp_language: $("set-wa-language")?.value || "customer",
+        email_language: $("set-email-language")?.value || "en",
+        ai_language: $("set-ai-language")?.value || "en",
+      };
+      const data = await api("/api/settings", { method: "POST", body: JSON.stringify(payload) });
+      state.company = data.company;
+    }
+    applyUiLocale();
+    if (hint) {
+      hint.textContent = tt("settings.saved", "Language settings saved");
+      hint.className = "hint ok";
+    }
+  } catch (err) {
+    if (hint) {
+      hint.textContent = err.message;
+      hint.className = "hint error";
+    }
+  }
+});
+
+if ($("topbar-locale")) {
+  $("topbar-locale").addEventListener("change", async () => {
+    const locale = $("topbar-locale").value || "";
+    try {
+      await api("/api/me/locale", { method: "POST", body: JSON.stringify({ locale }) });
+      if (state.session) state.session.locale = locale;
+      applyUiLocale();
+      renderCart();
+    } catch (err) {
+      const hint = $("language-hint");
+      if (hint) {
+        hint.textContent = err.message;
+        hint.className = "hint error";
+      }
+    }
+  });
+}
 
 $("settings-form").addEventListener("submit", async (e) => {
   e.preventDefault();
@@ -6062,12 +6217,17 @@ $("loy-birthday")?.addEventListener("click", async () => {
 });
 
 function paintPlatformNotices(notes) {
+  const I = window.POSI18n;
+  const uiLocale = I?.locale() || "en";
+  const shopLocale = I?.normalizeLocale(state.company?.locale) || "en";
   const list = (Array.isArray(notes) ? notes : []).filter((n) => {
     const title = String(n.title || "").trim().toLowerCase();
     const body = String(n.body || "").toLowerCase();
     if (title === "master admin login") return false;
     if (body.includes("opened this shop from master admin")) return false;
     if (body.includes("viewing this shop") || body.includes("is viewing")) return false;
+    const noteLoc = I?.normalizeLocale(n.locale) || "";
+    if (noteLoc && noteLoc !== uiLocale && noteLoc !== shopLocale && noteLoc !== "en") return false;
     return true;
   });
   const top = $("platform-notices");
@@ -6150,6 +6310,7 @@ async function boot() {
     if ($("session-who")) {
       $("session-who").textContent = `${me.user.name || me.user.email} · ${me.user.role || ""} · ${me.business?.name || ""}`;
     }
+    applyUiLocale();
     applyNav();
     if (isMobileLayout()) setNavCollapsed(true);
     if (me.business?.status && me.business.status !== "active" && !me.impersonating) {

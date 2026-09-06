@@ -49,6 +49,7 @@ function pos_php_till_dispatch($path, $method, $body) {
   }
 
   if ($path === "bootstrap" && $method === "GET") {
+    pos_ensure_i18n_columns();
     pos_ensure_accounts_schema();
     require_once __DIR__ . "/pos-combos.php";
     require_once __DIR__ . "/pos-offers.php";
@@ -208,7 +209,9 @@ function pos_php_till_dispatch($path, $method, $body) {
     $city = $body["city"] ?? null;
     $state = $body["state"] ?? null;
     $pincode = $body["pincode"] ?? null;
+    pos_ensure_i18n_columns();
     $logoSql = "";
+    $langSql = "";
     $params = [$name, $address, $phone, $email, $gstin, $city, $state, $pincode, $tz, $tzOff];
     $types = "ssssssssss";
     if (array_key_exists("logo_url", $body)) {
@@ -219,10 +222,35 @@ function pos_php_till_dispatch($path, $method, $body) {
       $params[] = $logo !== "" ? $logo : null;
       $types .= "s";
     }
+    if (array_key_exists("locale", $body)) {
+      $langSql .= ", locale = ?";
+      $params[] = pos_normalize_locale($body["locale"]) ?: "en";
+      $types .= "s";
+    }
+    if (array_key_exists("invoice_language", $body)) {
+      $langSql .= ", invoice_language = ?";
+      $params[] = pos_normalize_invoice_language($body["invoice_language"]);
+      $types .= "s";
+    }
+    if (array_key_exists("whatsapp_language", $body)) {
+      $langSql .= ", whatsapp_language = ?";
+      $params[] = pos_normalize_whatsapp_language($body["whatsapp_language"]);
+      $types .= "s";
+    }
+    if (array_key_exists("email_language", $body)) {
+      $langSql .= ", email_language = ?";
+      $params[] = pos_normalize_locale($body["email_language"]) ?: "en";
+      $types .= "s";
+    }
+    if (array_key_exists("ai_language", $body)) {
+      $langSql .= ", ai_language = ?";
+      $params[] = pos_normalize_locale($body["ai_language"]) ?: "en";
+      $types .= "s";
+    }
     $params[] = $bid;
     $types .= "s";
     pos_q(
-      "UPDATE company_settings SET name = ?, address = ?, phone = ?, email = ?, gstin = ?, city = ?, state = ?, pincode = ?, timezone = ?, tz_offset = ?{$logoSql} WHERE business_id = ?",
+      "UPDATE company_settings SET name = ?, address = ?, phone = ?, email = ?, gstin = ?, city = ?, state = ?, pincode = ?, timezone = ?, tz_offset = ?{$logoSql}{$langSql} WHERE business_id = ?",
       $types,
       $params
     );

@@ -537,8 +537,14 @@ async function askGrowthQuestion(question) {
   if (!q) return;
   $("growth-ask-answer").textContent = "Reading this shop's latest bills…";
   try {
-    const data = await api("/api/growth/ask", { method: "POST", body: JSON.stringify({ question: q }) });
-    $("growth-ask-answer").textContent = data.answer || "No answer from this shop's data yet.";
+    const locale = window.POSI18n?.locale() || "en";
+    const data = await api("/api/growth/ask", { method: "POST", body: JSON.stringify({ question: q, locale }) });
+    let answer = data.answer || "No answer from this shop's data yet.";
+    if (window.POSI18n && /sales|विक्री|बिक्री|विक्री किती|आज/.test(String(q).toLowerCase()) && data.todaySales != null) {
+      const localized = window.POSI18n.t("ai.today_sales", { amount: money(data.todaySales) });
+      if (localized && window.POSI18n.locale() !== "en") answer = localized;
+    }
+    $("growth-ask-answer").textContent = answer;
     $("growth-hint").textContent = "Answer uses this shop's billed sales, stock, and customers — not an external model.";
     $("growth-hint").className = "hint ok";
   } catch (err) {

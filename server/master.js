@@ -7,6 +7,7 @@ import { registerBusiness, updateBusiness } from "./onboard.js";
 import { defaultPerms } from "./roles.js";
 import { publicStatus } from "./auth.js";
 import { getPlatformSettings, setPlatformSetting } from "./settings.js";
+import { normalizeLocale } from "./i18n.js";
 import { cleanShopData, registerMasterBackup } from "./backup.js";
 import { sendWelcomeSignup, sendWelcomeStaff, publicLoginUrl } from "./mail.js";
 import {
@@ -756,10 +757,11 @@ export function registerMaster(app) {
       const { title, body, business_id, image_url } = req.body || {};
       if (!title) throw new Error("Title is required");
       const image = sanitizeNoticeImage(image_url);
+      const locale = normalizeLocale(req.body?.locale) || "";
       const id = crypto.randomUUID();
       await query(
-        `INSERT INTO notifications (id, business_id, title, body, image_url) VALUES (?,?,?,?,?)`,
-        [id, business_id || null, title, body || null, image || null],
+        `INSERT INTO notifications (id, business_id, title, body, image_url, locale) VALUES (?,?,?,?,?,?)`,
+        [id, business_id || null, title, body || null, image || null, locale || null],
       );
       let delivery = { skipped: true };
       try {
@@ -774,6 +776,28 @@ export function registerMaster(app) {
         delivery = { ok: false, error: String(err.message || err) };
       }
       return { ok: true, id, delivery };
+    }),
+  );
+
+  app.get("/api/master/languages", (_req, res) =>
+    send(res, async () => {
+      const rows = await query("SELECT setting_value FROM platform_settings WHERE setting_key = 'i18n_overrides' LIMIT 1");
+      let overrides = {};
+      try {
+        overrides = JSON.parse(rows[0]?.setting_value || "{}") || {};
+      } catch {
+        overrides = {};
+      }
+      return { ok: true, overrides };
+    }),
+  );
+
+  app.post("/api/master/languages", (req, res) =>
+    send(res, async () => {
+      const overrides = req.body?.overrides && typeof req.body.overrides === "object" ? req.body.overrides : {};
+      await setPlatformSetting("i18n_overrides", JSON.stringify(overrides));
+      await platformAudit(req.auth.admin, "Languages Updated", { module: "languages" }, req);
+      return { ok: true, overrides };
     }),
   );
 }
