@@ -191,7 +191,7 @@ test("PHP and HTML wire master admin backup", () => {
 });
 
 test("HTML and CSS cache stickers match deploy136", () => {
-  for (const name of ["index.html", "login.html", "setup.html", "order.html"]) {
+  for (const name of ["index.html", "login.html", "setup.html"]) {
     const html = readFileSync(path.join(root, name), "utf8");
     assert.match(html, /20260905deploy136/);
     assert.doesNotMatch(html, /20260905deploy135/);
@@ -260,6 +260,9 @@ test("HTML and CSS cache stickers match deploy136", () => {
     assert.doesNotMatch(html, /20260901deploy58/);
     assert.doesNotMatch(html, /20260901deploy59/);
   }
+  const orderSticker = readFileSync(path.join(root, "order.html"), "utf8");
+  assert.match(orderSticker, /20260905deploy139/);
+  assert.doesNotMatch(orderSticker, /20260905deploy136/);
   const masterHtml = readFileSync(path.join(root, "master.html"), "utf8");
   assert.match(masterHtml, /20260905deploy138/);
   assert.doesNotMatch(masterHtml, /20260905deploy137/);
@@ -283,8 +286,13 @@ test("HTML and CSS cache stickers match deploy136", () => {
   assert.match(qrPoster, /order\.html\?shop=/);
   assert.match(qrOrder, /id="order-form"/);
   assert.match(qrOrder, /id="cart-sheet"/);
+  assert.match(qrOrder, /id="offer-strip"/);
+  assert.match(qrOrder, /js\/offers\.js/);
   assert.match(qrOrderJs, /\/api\/qr\/menu/);
   assert.match(qrOrderJs, /\/api\/qr\/orders/);
+  assert.match(qrOrderJs, /function offerResult/);
+  assert.match(qrOrderPhp, /pos_apply_qr_offers/);
+  assert.match(qrOrderPhp, /offer_label/);
   assert.match(qrOrderPhp, /function pos_qr_public_dispatch/);
   assert.match(qrOrderPhp, /function pos_qr_staff_dispatch/);
   assert.match(saas, /alert-switch-ui/);

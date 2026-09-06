@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { normalizeQrOrderPayload, qrLineAmount, qrQuantityToBase } from "./qr-ordering.js";
+import { normalizeQrOrderPayload, qrLineAmount, qrQuantityToBase, applyQrOffers } from "./qr-ordering.js";
+import "../js/offers.js";
 
 test("QR order payload requires customer, mobile, and item lines", () => {
   assert.throws(() => normalizeQrOrderPayload({}), /Customer name/);
@@ -31,6 +32,37 @@ test("QR order payload normalizes public customer fields and valid lines", () =>
   assert.equal(row.tableNo, "Table 4");
   assert.equal(row.lines.length, 1);
   assert.deepEqual(row.lines[0], { item_id: "i1", quantity: 1.5 });
+});
+
+test("QR based orders apply an active product offer to the line total", () => {
+  const O = globalThis.POSOffers;
+  const offer = O.normalize({
+    name: "Vase 10% off",
+    type: "product",
+    status: "active",
+    discount_type: "pct",
+    discount_value: 10,
+    item_ids: ["vase"],
+  });
+  offer.live_status = "active";
+  const priced = applyQrOffers(
+    [
+      {
+        item: { id: "vase", name: "Vase", category: "Decor", base_unit: "PCS" },
+        unit: "PCS",
+        quantityBase: 1,
+        amount: 500,
+        gstRate: 18,
+        gstAmount: 90,
+      },
+    ],
+    { offers: [offer], stacking: "product_and_bill" },
+  );
+  assert.equal(priced.discount, 50);
+  assert.equal(priced.subtotal, 450);
+  assert.equal(priced.gst, 81);
+  assert.equal(priced.total, 531);
+  assert.match(priced.message, /Vase 10% off/);
 });
 
 test("QR menu quantities convert kg/litre and piece orders to base stock", () => {

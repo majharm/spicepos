@@ -35,6 +35,8 @@ test("shop UI wires the Offers desk and Counter auto-apply", () => {
   assert.match(ui, /Inactive/);
   assert.match(html, /data-offer-filter="paused"/);
   assert.match(php, /pos_duplicate_offer/);
+  assert.match(php, /function pos_apply_qr_offers/);
+  assert.match(php, /function pos_evaluate_offers/);
   assert.match(php, /pos_delete_offer/);
   assert.match(php, /pos_set_offer_status/);
   assert.match(node, /duplicateOffer/);

@@ -27,6 +27,8 @@ function pos_qr_ensure_schema() {
     )"
   );
   if ($db->errno) throw new Exception($db->error ?: "Could not prepare QR ordering");
+  @$db->query("ALTER TABLE qr_orders ADD COLUMN discount DECIMAL(12,2) NOT NULL DEFAULT 0");
+  @$db->query("ALTER TABLE qr_orders ADD COLUMN offer_label VARCHAR(255) NULL");
   $db->query(
     "CREATE TABLE IF NOT EXISTS qr_order_lines (
       id VARCHAR(255) PRIMARY KEY,
@@ -127,6 +129,13 @@ function pos_qr_public_dispatch($path, $method, $body) {
       "s",
       [$business["id"]]
     );
+    require_once __DIR__ . "/pos-offers.php";
+    $offers = [];
+    $stacking = "product_and_bill";
+    try {
+      $offers = pos_qr_live_offers($business["id"]);
+      $stacking = pos_get_promo_settings($business["id"])["stacking"] ?? "product_and_bill";
+    } catch (Throwable $e) { /* menu still opens */ }
     pos_send(200, [
       "shop" => [
         "id" => $business["id"], "code" => $business["code"],
@@ -136,6 +145,8 @@ function pos_qr_public_dispatch($path, $method, $body) {
         "logo_url" => $business["company_logo"] ?: ($business["logo_url"] ?? ""),
       ],
       "items" => $items,
+      "offers" => $offers,
+      "offerSettings" => ["stacking" => $stacking],
       "php" => true,
     ]);
   }
@@ -148,7 +159,7 @@ function pos_qr_public_dispatch($path, $method, $body) {
     $built = [];
     foreach ($input["lines"] as $line) {
       $items = pos_q(
-        "SELECT id, name, base_unit, unit, retail_rate, gst_rate, stock_gm
+        "SELECT id, name, category, base_unit, unit, retail_rate, gst_rate, stock_gm
          FROM items WHERE id = ? AND business_id = ? AND status = 'active' LIMIT 1",
         "ss",
         [$line["item_id"], $business["id"]]
@@ -162,9 +173,14 @@ function pos_qr_public_dispatch($path, $method, $body) {
       $gstRate = (float) ($item["gst_rate"] ?? 0);
       $built[] = ["item" => $item, "unit" => $unit, "qty" => $qty, "amount" => $amount, "gst_rate" => $gstRate, "gst" => pos_round2($amount * $gstRate / 100)];
     }
-    $subtotal = pos_round2(array_sum(array_column($built, "amount")));
-    $gst = pos_round2(array_sum(array_column($built, "gst")));
-    $total = pos_round2($subtotal + $gst);
+    require_once __DIR__ . "/pos-offers.php";
+    $priced = pos_apply_qr_offers($built, $business["id"]);
+    $built = $priced["built"];
+    $subtotal = $priced["subtotal"];
+    $gst = $priced["gst"];
+    $total = $priced["total"];
+    $discount = $priced["discount"];
+    $offerLabel = $priced["message"];
     $id = pos_uuid();
     $number = pos_qr_order_number();
     $db = pos_db();
@@ -172,10 +188,10 @@ function pos_qr_public_dispatch($path, $method, $body) {
     try {
       pos_q(
         "INSERT INTO qr_orders
-         (id, order_number, business_id, customer_name, mobile, table_no, notes, status, subtotal, gst, total)
-         VALUES (?,?,?,?,?,?,?,'pending',?,?,?)",
-        "sssssssddd",
-        [$id, $number, $business["id"], $input["customer_name"], $input["mobile"], $input["table_no"], $input["notes"], $subtotal, $gst, $total]
+         (id, order_number, business_id, customer_name, mobile, table_no, notes, status, subtotal, gst, total, discount, offer_label)
+         VALUES (?,?,?,?,?,?,?,'pending',?,?,?,?,?)",
+        "sssssssdddds",
+        [$id, $number, $business["id"], $input["customer_name"], $input["mobile"], $input["table_no"], $input["notes"], $subtotal, $gst, $total, $discount, $offerLabel]
       );
       foreach ($built as $line) {
         pos_q(
@@ -191,7 +207,7 @@ function pos_qr_public_dispatch($path, $method, $body) {
       $db->rollback();
       throw $e;
     }
-    pos_send(201, ["ok" => true, "order" => ["id" => $id, "order_number" => $number, "status" => "pending", "subtotal" => $subtotal, "gst" => $gst, "total" => $total], "php" => true]);
+    pos_send(201, ["ok" => true, "order" => ["id" => $id, "order_number" => $number, "status" => "pending", "subtotal" => $subtotal, "gst" => $gst, "total" => $total, "discount" => $discount, "offer_label" => $offerLabel], "php" => true]);
   }
   return false;
 }

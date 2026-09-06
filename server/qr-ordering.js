@@ -3,6 +3,7 @@ import "../js/units.js";
 import { query, withTransaction } from "./db.js";
 import { bid, branchId } from "./context.js";
 import { requirePerm } from "./auth.js";
+import { listOffers, getPromoSettings, POSOffers } from "./offers.js";
 
 const POSUnits = globalThis.POSUnits;
 const QR_STATUSES = ["pending", "accepted", "preparing", "ready", "completed", "cancelled"];
@@ -27,6 +28,16 @@ export async function ensureQrOrderSchema(conn = null) {
     UNIQUE KEY uq_qr_order_number (business_id, order_number),
     INDEX idx_qr_orders_business_status (business_id, status, created_at)
   )`);
+  try {
+    await exec("ALTER TABLE qr_orders ADD COLUMN discount DECIMAL(12,2) NOT NULL DEFAULT 0");
+  } catch {
+    /* already present */
+  }
+  try {
+    await exec("ALTER TABLE qr_orders ADD COLUMN offer_label VARCHAR(255) NULL");
+  } catch {
+    /* already present */
+  }
   await exec(`CREATE TABLE IF NOT EXISTS qr_order_lines (
     id VARCHAR(255) PRIMARY KEY,
     order_id VARCHAR(255) NOT NULL,
@@ -78,6 +89,77 @@ export function qrQuantityToBase(quantity, unit) {
 
 export function qrLineAmount(quantityBase, rate, unit) {
   return Math.round(POSUnits.lineAmount(quantityBase, Number(rate) || 0, POSUnits.normalize(unit)) * 100) / 100;
+}
+
+function qrRound2(n) {
+  return Math.round((Number(n) || 0) * 100) / 100;
+}
+
+export function qrOfferCart(built) {
+  return (built || []).map((line) => {
+    const item = line.item || {};
+    const unit = POSUnits.normalize(line.unit || item.base_unit || item.unit);
+    const isCount = POSUnits.isCount(unit);
+    return {
+      itemId: item.id,
+      lineId: item.id,
+      qty: line.quantityBase ?? line.qty,
+      qtyGm: line.quantityBase ?? line.qty,
+      isCount,
+      gross: Number(line.amount) || 0,
+      taxable: Number(line.amount) || 0,
+      category: item.category || "",
+      item,
+    };
+  });
+}
+
+export function applyQrOffers(built, { offers = [], stacking = "product_and_bill", items = [], now } = {}) {
+  const O = POSOffers || globalThis.POSOffers;
+  const source = Array.isArray(built) ? built.map((line) => ({ ...line })) : [];
+  if (!O || !source.length) {
+    const subtotal = qrRound2(source.reduce((sum, line) => sum + (Number(line.amount) || 0), 0));
+    const gst = qrRound2(source.reduce((sum, line) => sum + (Number(line.gstAmount ?? line.gst) || 0), 0));
+    return { built: source, subtotal, gst, total: qrRound2(subtotal + gst), discount: 0, applied: [], message: "" };
+  }
+  const live = (offers || []).filter((offer) => (offer.live_status || offer.status) === "active");
+  const result = O.evaluateAll(live, {
+    now: now || new Date(),
+    cart: qrOfferCart(source),
+    items: items.length ? items : source.map((line) => line.item).filter(Boolean),
+    stacking,
+    customer: { bills: 0, lifetime_spend: 0 },
+  });
+  const next = source.map((line) => {
+    const id = String(line.item?.id || "");
+    const d = Math.min(Math.max(0, Number(result.lineDiscounts?.[id] || 0)), Number(line.amount) || 0);
+    const amount = qrRound2((Number(line.amount) || 0) - d);
+    const gstRate = Number(line.gstRate ?? line.gst_rate) || 0;
+    return { ...line, amount, gstAmount: qrRound2((amount * gstRate) / 100), discount: d };
+  });
+  let subtotal = qrRound2(next.reduce((sum, line) => sum + (Number(line.amount) || 0), 0));
+  const bill = Math.min(Math.max(0, Number(result.billDiscount) || 0), subtotal);
+  if (bill > 0 && subtotal > 0) {
+    let left = bill;
+    next.forEach((line, index) => {
+      const share = index === next.length - 1 ? left : qrRound2((bill * (Number(line.amount) || 0)) / subtotal);
+      left = qrRound2(left - share);
+      line.amount = qrRound2((Number(line.amount) || 0) - share);
+      line.discount = qrRound2((Number(line.discount) || 0) + share);
+      line.gstAmount = qrRound2((line.amount * (Number(line.gstRate ?? line.gst_rate) || 0)) / 100);
+    });
+    subtotal = qrRound2(next.reduce((sum, line) => sum + (Number(line.amount) || 0), 0));
+  }
+  const gst = qrRound2(next.reduce((sum, line) => sum + (Number(line.gstAmount) || 0), 0));
+  return {
+    built: next,
+    subtotal,
+    gst,
+    total: qrRound2(subtotal + gst),
+    discount: qrRound2(result.discount || 0),
+    applied: result.applied || [],
+    message: result.message || result.applied?.[0]?.name || "",
+  };
 }
 
 function orderNumber() {
@@ -133,6 +215,10 @@ export function registerQrPublic(app) {
          ORDER BY category, subcategory, name`,
         [business.id],
       );
+      const [offers, settings] = await Promise.all([
+        listOffers(business.id).catch(() => []),
+        getPromoSettings(business.id).catch(() => ({ stacking: "product_and_bill" })),
+      ]);
       res.json({
         shop: {
           id: business.id,
@@ -143,6 +229,8 @@ export function registerQrPublic(app) {
           logo_url: business.company_logo || business.logo_url || "",
         },
         items,
+        offers: (offers || []).filter((offer) => (offer.live_status || offer.status) === "active"),
+        offerSettings: { stacking: settings?.stacking || "product_and_bill" },
       });
     } catch (err) {
       res.status(500).json({ error: String(err.message) });
@@ -159,7 +247,7 @@ export function registerQrPublic(app) {
         const built = [];
         for (const line of input.lines) {
           const [rows] = await conn.query(
-            `SELECT id, name, base_unit, unit, retail_rate, gst_rate, stock_gm
+            `SELECT id, name, category, base_unit, unit, retail_rate, gst_rate, stock_gm
              FROM items WHERE id = ? AND business_id = ? AND status = 'active' LIMIT 1`,
             [line.item_id, business.id],
           );
@@ -172,18 +260,26 @@ export function registerQrPublic(app) {
           const gstRate = Number(item.gst_rate) || 0;
           built.push({ item, unit, quantityBase, amount, gstRate, gstAmount: Math.round(amount * gstRate) / 100 });
         }
-        const subtotal = Math.round(built.reduce((sum, line) => sum + line.amount, 0) * 100) / 100;
-        const gst = Math.round(built.reduce((sum, line) => sum + line.gstAmount, 0) * 100) / 100;
-        const total = Math.round((subtotal + gst) * 100) / 100;
+        const [offers, settings] = await Promise.all([
+          listOffers(business.id).catch(() => []),
+          getPromoSettings(business.id).catch(() => ({ stacking: "product_and_bill" })),
+        ]);
+        const priced = applyQrOffers(built, {
+          offers,
+          stacking: settings?.stacking || "product_and_bill",
+          items: built.map((line) => line.item),
+        });
+        const { subtotal, gst, total, discount, message } = priced;
+        const pricedLines = priced.built;
         const id = crypto.randomUUID();
         const number = orderNumber();
         await conn.query(
           `INSERT INTO qr_orders
-           (id, order_number, business_id, customer_name, mobile, table_no, notes, status, subtotal, gst, total)
-           VALUES (?,?,?,?,?,?,?,'pending',?,?,?)`,
-          [id, number, business.id, input.customerName, input.mobile, input.tableNo || null, input.notes || null, subtotal, gst, total],
+           (id, order_number, business_id, customer_name, mobile, table_no, notes, status, subtotal, gst, total, discount, offer_label)
+           VALUES (?,?,?,?,?,?,?,'pending',?,?,?,?,?)`,
+          [id, number, business.id, input.customerName, input.mobile, input.tableNo || null, input.notes || null, subtotal, gst, total, discount, message || null],
         );
-        for (const line of built) {
+        for (const line of pricedLines) {
           await conn.query(
             `INSERT INTO qr_order_lines
              (id, order_id, business_id, item_id, item_name, unit, quantity_gm, rate_per_kg, gst_rate, amount, gst_amount)
@@ -194,7 +290,7 @@ export function registerQrPublic(app) {
             ],
           );
         }
-        return { id, order_number: number, status: "pending", subtotal, gst, total };
+        return { id, order_number: number, status: "pending", subtotal, gst, total, discount, offer_label: message || "" };
       });
       res.status(201).json({ ok: true, order: result });
     } catch (err) {

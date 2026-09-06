@@ -3300,6 +3300,7 @@ function renderQrOrders() {
           `<div class="qr-order-line"><span>${escapeHtml(line.item_name)} · ${escapeHtml(qrOrderQty(line))}</span><strong>${money(line.amount)}</strong></div>`,
         ).join("")}</div>
         <div class="qr-order-total"><span>Total incl. GST</span><strong>${money(order.total)}</strong></div>
+        ${Number(order.discount) > 0 || order.offer_label ? `<p class="qr-order-note">Offer: ${escapeHtml(order.offer_label || "Applied")} · save ${money(order.discount)}</p>` : ""}
         ${order.notes ? `<p class="qr-order-note">Note: ${escapeHtml(order.notes)}</p>` : ""}
         <div class="qr-order-actions">
           ${!["completed", "cancelled"].includes(order.status) ? `<button class="btn primary" type="button" data-qr-counter="${escapeHtml(order.id)}">Open in Counter</button>` : ""}
