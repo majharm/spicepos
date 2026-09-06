@@ -316,6 +316,22 @@ export function waResponseOk(status, body) {
   }
 }
 
+export function waDeliveryState(parsed, httpStatus) {
+  const code = Number(httpStatus) || 200;
+  const json = parsed?.json;
+  const sent = Number(json?.sent) || 0;
+  const resultOk = Array.isArray(json?.results) && json.results.some((row) => row && row.ok === true);
+  if (!parsed?.ok) {
+    return { status: "failed", detail: String(parsed?.error || `HTTP ${code}`).slice(0, 255) };
+  }
+  if (json?.status === "queued" || json?.queued === true) {
+    return { status: "queued", detail: `HTTP ${code} · queued on WA Master` };
+  }
+  if (sent > 0) return { status: "sent", detail: `HTTP ${code} · sent ${sent}` };
+  if (resultOk) return { status: "sent", detail: `HTTP ${code} · sent` };
+  return { status: "sent", detail: `HTTP ${code}` };
+}
+
 export function addYmd(ymd, days) {
   const day = expiryYmd(ymd);
   if (!day) return "";
@@ -721,7 +737,17 @@ async function sendWhatsAppOne(cfg, number, message, fetchImpl, media = "") {
       last = await postOnce(bodyPayload);
       const parsed = waResponseOk(last.status, last.text);
       if (parsed.ok) {
-        return { ok: true, queued: true, status: last.status, body: String(last.text).slice(0, 240), number: parsed.to || intl || local };
+        const delivery = waDeliveryState(parsed, last.status);
+        return {
+          ok: true,
+          queued: delivery.status === "queued",
+          status: last.status,
+          body: String(last.text).slice(0, 240),
+          number: parsed.to || intl || local,
+          json: parsed.json,
+          delivery: delivery.status,
+          detail: delivery.detail,
+        };
       }
       if (last.status === 429 && attempt < 3) {
         await waSleep(waRetryWaitMs(last.status, last.headers, attempt), fetchImpl);
@@ -757,7 +783,17 @@ async function sendWhatsAppOne(cfg, number, message, fetchImpl, media = "") {
     const getText = await getRes.text();
     const getParsed = waResponseOk(getRes.status, getText);
     if (!getParsed.ok) return { ok: false, error: getParsed.error || `WhatsApp HTTP ${getRes.status}`, status: getRes.status, number: intl || local };
-    return { ok: true, queued: true, status: getRes.status, body: String(getText).slice(0, 240), number: getParsed.to || intl || local };
+    const delivery = waDeliveryState(getParsed, getRes.status);
+    return {
+      ok: true,
+      queued: delivery.status === "queued",
+      status: getRes.status,
+      body: String(getText).slice(0, 240),
+      number: getParsed.to || intl || local,
+      json: getParsed.json,
+      delivery: delivery.status,
+      detail: delivery.detail,
+    };
   } catch (err) {
     return { ok: false, error: String(err.message || err), number: intl || local };
   }
@@ -823,10 +859,10 @@ export function buildDeliveryLogRows({
         ...base,
         channel: "whatsapp",
         recipient: String(r.number || r.to || ""),
-        status: r.ok ? "queued" : r.skipped ? "skipped" : "failed",
+        status: r.ok ? (r.delivery || "sent") : r.skipped ? "skipped" : "failed",
         ok: r.ok ? 1 : 0,
         error: String(r.error || r.reason || "").slice(0, 255),
-        detail: String(r.ok ? `HTTP ${r.status || 200}` : r.body || r.error || "").slice(0, 255),
+        detail: String(r.ok ? (r.detail || `HTTP ${r.status || 200}`) : r.body || r.error || "").slice(0, 255),
       });
     }
   } else if (wa) {
@@ -834,10 +870,10 @@ export function buildDeliveryLogRows({
       ...base,
       channel: "whatsapp",
       recipient: Array.isArray(wa.to) ? String(wa.to[0] || "") : String(wa.to || ""),
-      status: wa.ok ? "queued" : wa.skipped ? "skipped" : "failed",
+      status: wa.ok ? (wa.delivery || "sent") : wa.skipped ? "skipped" : "failed",
       ok: wa.ok ? 1 : 0,
       error: String(wa.reason || wa.error || "").slice(0, 255),
-      detail: "",
+      detail: String(wa.ok ? (wa.detail || `HTTP ${wa.status || 200}`) : "").slice(0, 255),
     });
   }
   for (const r of mail || []) {

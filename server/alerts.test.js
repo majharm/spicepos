@@ -16,6 +16,7 @@ import {
   normalizeInMobile,
   waIntlNumber,
   waResponseOk,
+  waDeliveryState,
   waRetryWaitMs,
   sendWhatsApp,
   buildDeliveryLogRows,
@@ -155,7 +156,7 @@ test("Master Admin Settings lives under Backup with Active/Inactive templates", 
   assert.match(master, /data-send-expiry/);
   assert.match(master, /summarizeAlertDelivery/);
   assert.match(master, /formatAlertWaTo/);
-  assert.match(master, /queued to/);
+  assert.match(master, /sent to/);
   assert.match(master, /SMTP not configured/);
   assert.match(master, /Outgoing email \(SMTP\)/);
   assert.match(master, /imap\.hostinger\.com/);
@@ -177,6 +178,8 @@ test("Master Admin Settings lives under Backup with Active/Inactive templates", 
   assert.equal(smtp.smtp_user, "pos@atavtelecom.in");
   assert.match(master, /uniqueAlertBits/);
   assert.match(master, /WA Master hit its per-minute limit/);
+  assert.match(master, /function alertLogStatusValue/);
+  assert.match(master, /WA Master accepted/);
   assert.match(master, /function openWaEmailLog/);
   assert.match(master, /function alertLogRowHay/);
   assert.match(master, /search.value = digits \|\| to/);
@@ -199,6 +202,7 @@ test("Master Admin Settings lives under Backup with Active/Inactive templates", 
   assert.match(php, /send-expiry-alert/);
   assert.match(alerts, /pos_summarize_alert_results/);
   assert.match(alerts, /pos_wa_response_ok/);
+  assert.match(alerts, /pos_wa_delivery_state/);
   assert.match(alerts, /pos_wa_revoked_api_keys/);
   assert.equal(WA_DEFAULT_KEY, "56e4be3511d76e32c1ec4b9c26afc48e9cb8d2833984095a62f9357894c6f814");
   assert.ok(WA_REVOKED_KEYS.includes("b99fcac4528c679916dcd461f5d834a098c9f9fa2fd349c67395fb028579cc1b"));
@@ -236,7 +240,8 @@ test("delivery log rows record WhatsApp queue and email skip", () => {
   });
   assert.equal(rows.length, 2);
   assert.equal(rows[0].channel, "whatsapp");
-  assert.equal(rows[0].status, "queued");
+  assert.equal(rows[0].status, "sent");
+  assert.match(rows[0].detail || "HTTP 200", /HTTP 200/);
   assert.equal(rows[0].recipient, "919876543210");
   assert.equal(rows[1].channel, "email");
   assert.equal(rows[1].status, "skipped");
@@ -256,6 +261,9 @@ test("WhatsApp send is confirmed only from JSON ok, not HTML", async () => {
   const queued = waResponseOk(200, '{"ok":true,"sent":1,"results":[{"number":"919876543210","ok":true}]}');
   assert.equal(queued.ok, true);
   assert.equal(queued.to, "919876543210");
+  assert.equal(waDeliveryState(queued, 200).status, "sent");
+  assert.match(waDeliveryState(queued, 200).detail, /sent 1/);
+  assert.equal(waDeliveryState({ ok: true, json: { ok: true, queued: true } }, 200).status, "queued");
   const calls = [];
   const okFetch = async (url, opts) => {
     calls.push({ url, opts });

@@ -235,10 +235,29 @@ function pos_wa_response_ok($status, $body) {
   }
   if (($json["ok"] ?? null) === false) return ["ok" => false, "error" => $json["error"] ?? ($json["message"] ?? "WhatsApp rejected the send")];
   if (($json["ok"] ?? null) === true || (int) ($json["sent"] ?? 0) > 0) {
-    return ["ok" => true, "to" => $json["results"][0]["number"] ?? ($json["number"] ?? "")];
+    return ["ok" => true, "to" => $json["results"][0]["number"] ?? ($json["number"] ?? ""), "json" => $json];
   }
-  if (($json["success"] ?? null) === true || ($json["status"] ?? "") === "success") return ["ok" => true];
+  if (($json["success"] ?? null) === true || ($json["status"] ?? "") === "success") return ["ok" => true, "json" => $json];
   return ["ok" => false, "error" => $json["error"] ?? ($json["message"] ?? "WhatsApp did not confirm the send")];
+}
+
+function pos_wa_delivery_state($parsed, $httpStatus) {
+  $code = (int) $httpStatus ?: 200;
+  $json = is_array($parsed["json"] ?? null) ? $parsed["json"] : [];
+  $sent = (int) ($json["sent"] ?? 0);
+  $resultOk = false;
+  foreach ($json["results"] ?? [] as $row) {
+    if (is_array($row) && ($row["ok"] ?? null) === true) $resultOk = true;
+  }
+  if (empty($parsed["ok"])) {
+    return ["status" => "failed", "detail" => substr((string) ($parsed["error"] ?? "HTTP {$code}"), 0, 255)];
+  }
+  if (($json["status"] ?? "") === "queued" || !empty($json["queued"])) {
+    return ["status" => "queued", "detail" => "HTTP {$code} · queued on WA Master"];
+  }
+  if ($sent > 0) return ["status" => "sent", "detail" => "HTTP {$code} · sent {$sent}"];
+  if ($resultOk) return ["status" => "sent", "detail" => "HTTP {$code} · sent"];
+  return ["status" => "sent", "detail" => "HTTP {$code}"];
 }
 
 function pos_mask_secret($value) {
@@ -600,7 +619,16 @@ function pos_wa_send_one($cfg, $number, $message, $media = "") {
     $parsed = pos_wa_response_ok($last["status"], $last["body"]);
     $shown = $parsed["to"] ?? ($intl !== "" ? $intl : $local);
     if (!empty($parsed["ok"])) {
-      return ["ok" => true, "queued" => true, "status" => $last["status"], "body" => substr((string) $last["body"], 0, 240), "number" => $shown];
+      $delivery = pos_wa_delivery_state($parsed, $last["status"]);
+      return [
+        "ok" => true,
+        "queued" => ($delivery["status"] === "queued"),
+        "status" => $last["status"],
+        "body" => substr((string) $last["body"], 0, 240),
+        "number" => $shown,
+        "delivery" => $delivery["status"],
+        "detail" => $delivery["detail"],
+      ];
     }
     if (($last["status"] ?? 0) === 429 && $attempt < 3) {
       $wait = pos_wa_retry_wait_us($last["status"], $last["headers"], $attempt);
@@ -637,7 +665,16 @@ function pos_wa_send_one($cfg, $number, $message, $media = "") {
   if ($body === false) return ["ok" => false, "error" => "WhatsApp request failed", "number" => $shown];
   $getParsed = pos_wa_response_ok($status, $body);
   if (empty($getParsed["ok"])) return ["ok" => false, "error" => $getParsed["error"] ?? "WhatsApp HTTP {$status}", "status" => $status, "number" => $shown];
-  return ["ok" => true, "queued" => true, "status" => $status, "body" => substr((string) $body, 0, 240), "number" => $getParsed["to"] ?? $shown];
+  $delivery = pos_wa_delivery_state($getParsed, $status);
+  return [
+    "ok" => true,
+    "queued" => ($delivery["status"] === "queued"),
+    "status" => $status,
+    "body" => substr((string) $body, 0, 240),
+    "number" => $getParsed["to"] ?? $shown,
+    "delivery" => $delivery["status"],
+    "detail" => $delivery["detail"],
+  ];
 }
 
 function pos_alert_delivered($out) {
@@ -673,10 +710,10 @@ function pos_build_delivery_log_rows($meta, $subject, $text, $wa, $mail) {
       $rows[] = array_merge($base, [
         "channel" => "whatsapp",
         "recipient" => (string) ($r["number"] ?? ($r["to"] ?? "")),
-        "status" => $ok ? "queued" : (!empty($r["skipped"]) ? "skipped" : "failed"),
+        "status" => $ok ? ($r["delivery"] ?? "sent") : (!empty($r["skipped"]) ? "skipped" : "failed"),
         "ok" => $ok ? 1 : 0,
         "error" => substr((string) ($r["error"] ?? ($r["reason"] ?? "")), 0, 255),
-        "detail" => substr((string) ($ok ? ("HTTP " . ($r["status"] ?? 200)) : ($r["body"] ?? ($r["error"] ?? ""))), 0, 255),
+        "detail" => substr((string) ($ok ? ($r["detail"] ?? ("HTTP " . ($r["status"] ?? 200))) : ($r["body"] ?? ($r["error"] ?? ""))), 0, 255),
       ]);
     }
   } elseif (is_array($wa)) {
@@ -686,10 +723,10 @@ function pos_build_delivery_log_rows($meta, $subject, $text, $wa, $mail) {
     $rows[] = array_merge($base, [
       "channel" => "whatsapp",
       "recipient" => (string) $to,
-      "status" => $ok ? "queued" : (!empty($wa["skipped"]) ? "skipped" : "failed"),
+      "status" => $ok ? ($wa["delivery"] ?? "sent") : (!empty($wa["skipped"]) ? "skipped" : "failed"),
       "ok" => $ok ? 1 : 0,
       "error" => substr((string) ($wa["reason"] ?? ($wa["error"] ?? "")), 0, 255),
-      "detail" => "",
+      "detail" => substr((string) ($ok ? ($wa["detail"] ?? ("HTTP " . ($wa["status"] ?? 200))) : ""), 0, 255),
     ]);
   }
   foreach ($mail ?? [] as $r) {

@@ -236,11 +236,25 @@ function alertLogKindLabel(kind) {
   return ALERT_LOG_KIND_LABEL[kind] || kind || "—";
 }
 
-function alertLogStatusChip(status) {
-  const s = String(status || "—");
-  const kind = s === "failed" ? "is-bad" : s === "skipped" ? "is-warn" : "is-ok";
+function alertLogStatusValue(row) {
+  const s = String(row?.status || "");
+  if (s === "queued" && /HTTP 20\d/.test(String(row?.detail || row?.error || ""))) return "sent";
+  return s || "—";
+}
+
+function alertLogStatusChip(row) {
+  const s = typeof row === "string" ? row : alertLogStatusValue(row);
+  const kind = s === "failed" ? "is-bad" : s === "skipped" || s === "queued" ? "is-warn" : "is-ok";
   const label = s === "queued" ? "Queued" : s === "sent" ? "Sent" : s === "skipped" ? "Skipped" : s === "failed" ? "Failed" : s;
   return `<span class="item-chip ${kind}">${label}</span>`;
+}
+
+function alertLogDetail(row) {
+  const err = String(row?.error || "").trim();
+  const detail = String(row?.detail || "").trim();
+  if (err) return err;
+  if (/^HTTP 20\d$/.test(detail)) return `${detail} · WA Master accepted`;
+  return detail || row?.subject || "—";
 }
 
 function alertLogChannelLabel(channel) {
@@ -310,7 +324,7 @@ function alertLogPageHtml(rows) {
     ? `<p class="hint ok" id="alert-log-flash">${attr(panelFlash)}</p>`
     : "";
   return `<div class="items-desk master-desk expiry-alerts-desk">
-    ${masterHero("Platform", "WA Master & Email log", "Every WhatsApp number and email this platform queued or mailed. WhatsApp Queued means WA Master accepted the number — not that the phone received it.", [
+    ${masterHero("Platform", "WA Master & Email log", "Every WhatsApp number and email this platform sent or mailed. Sent + HTTP 200 means WA Master accepted the chat — reconnect that QR if the phone stays empty.", [
       { label: "Rows", value: list.length },
       { label: "Numbers", value: recips.wa.length },
       { label: "Emails", value: recips.mail.length },
@@ -349,8 +363,8 @@ function alertLogPageHtml(rows) {
                   attr(r.shop_name || "—"),
                   attr(formatAlertLogTo(r)),
                   alertLogKindLabel(r.kind),
-                  alertLogStatusChip(r.status),
-                  attr(r.error || r.detail || r.subject || "—"),
+                  alertLogStatusChip(r),
+                  attr(alertLogDetail(r)),
                 ]),
               ).replace("<tbody>", `<tbody id="alert-log-body">`)
             : `<p class="hint">No WhatsApp or email attempts yet. Send an alert, then refresh this page.</p>`
@@ -2574,7 +2588,7 @@ function summarizeAlertDelivery(out) {
   const mailWhy = [...new Set(results.map(mailFailReason).filter(Boolean))];
   const rateLimited = results.some((r) => /429|rate limited/i.test(String(r.wa?.error || r.wa?.reason || "")));
   let msg = `Alerts sent. WhatsApp ${wa}/${results.length}`;
-  if (tos.length) msg += ` queued to ${tos.slice(0, 3).join(", ")}`;
+  if (tos.length) msg += ` sent to ${tos.slice(0, 3).join(", ")}`;
   msg += ` · Email ${mail}/${results.length}`;
   if (mail < results.length && mailWhy.length) msg += ` (${mailWhy.slice(0, 2).join("; ")})`;
   msg += ` · Delivered ${sent}, skipped ${skipped}.`;
