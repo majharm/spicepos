@@ -4352,13 +4352,14 @@ $("qr-orders-refresh")?.addEventListener("click", loadQrOrders);
 const qrSoundToggle = $("qr-sound-toggle");
 if (qrSoundToggle) {
   qrSoundToggle.addEventListener("click", () => {
-    const next = !(globalThis.POSQrNotify?.soundOn() !== false);
-    globalThis.POSQrNotify?.setSoundOn?.(next);
-    if (next) {
+    const on = globalThis.POSQrNotify?.soundOn() !== false;
+    const needs = globalThis.POSQrNotify?.needsUnlock?.() === true;
+    if (!on || needs) {
       armQrOrderSound();
       setHint("QR order sound on. New orders will ding.", "ok");
       return;
     }
+    globalThis.POSQrNotify?.setSoundOn?.(false);
     paintQrSoundToggle();
     paintQrSoundArm();
     setHint("QR order sound off.", "ok");

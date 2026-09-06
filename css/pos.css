@@ -2388,6 +2388,8 @@ body.footwear-mode.counter-mode .stage.is-counter .card .sku { display: block; f
 .qr-sound-arm strong { display: block; font-size: 15px; }
 .qr-sound-arm p { margin: 4px 0 0; font-size: 13px; }
 .qr-sound-arm .qr-toast-kicker { color: #b45309; }
+.qr-sound-arm[hidden],
+.qr-order-toast[hidden] { display: none !important; }
 .qr-order-toast {
   position: fixed;
   z-index: 42;

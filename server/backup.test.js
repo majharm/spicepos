@@ -306,6 +306,7 @@ test("HTML and CSS cache stickers match deploy136", () => {
   assert.match(qrNotify, /data:audio\/wav/);
   assert.match(pos, /qr-order-toast/);
   assert.match(pos, /qr-sound-arm/);
+  assert.match(pos, /qr-sound-arm\[hidden\]/);
   assert.match(qrOrderPhp, /pos_apply_qr_offers/);
   assert.match(qrOrderPhp, /offer_label/);
   assert.match(qrOrderPhp, /pos_qr_pack_cards/);
