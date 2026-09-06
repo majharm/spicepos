@@ -3364,11 +3364,6 @@ button.items-stat.is-active {
     width: 100%;
     max-width: none;
   }
-  .counter-lane .select {
-    width: 7.2em;
-    min-width: 6.4em;
-    max-width: 8em;
-  }
   .scan-lane {
     padding: 0 8px;
     flex: 1 1 120px;
@@ -3380,13 +3375,18 @@ button.items-stat.is-active {
   .scan-status { max-width: 10ch; }
   .counter-topbar .search { min-width: 0; }
   .counter-tools { display: grid; grid-template-columns: 1fr 1fr; overflow: visible; width: 100%; }
-  .counter-topbar .select,
+  .counter-tools .select,
   .counter-topbar .customer-picker { min-width: 0; width: 100%; }
   .counter-topbar .customer-picker {
     grid-column: 1 / -1;
     grid-template-columns: 8em minmax(0, 1fr);
   }
-  .counter-topbar #pay-method { grid-column: auto; }
+  .counter-lane .select {
+    flex: 0 0 auto;
+    width: 7.2em;
+    min-width: 6.4em;
+    max-width: 8em;
+  }
   .quick-customer-wrap {
     grid-column: auto;
   }
