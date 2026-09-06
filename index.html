@@ -6,8 +6,8 @@
     <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
     <title>ATAV POS</title>
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./css/pos.css?v=20260905deploy134" />
-    <link rel="stylesheet" href="./css/saas.css?v=20260905deploy134" />
+    <link rel="stylesheet" href="./css/pos.css?v=20260905deploy135" />
+    <link rel="stylesheet" href="./css/saas.css?v=20260905deploy135" />
   </head>
   <body>
     <div class="app" id="app">
@@ -924,11 +924,13 @@
         </section>
         <section class="view view-finance" id="view-accounts" hidden>
           <h2 class="visually-hidden">Accounts</h2>
-          <p class="lede">Double-entry books: receivables, payables, chart of accounts, trial balance, P&amp;L, balance sheet, and cash book.</p>
+          <p class="lede">Double-entry books: receivables, payables, customer and supplier ledgers, chart of accounts, trial balance, P&amp;L, balance sheet, and cash book.</p>
           <div class="report-grid" id="acc-summary"></div>
           <div class="accounts-toolbar">
             <button class="btn acc-tab active" type="button" data-acc-tab="receivables">Receivables</button>
             <button class="btn acc-tab" type="button" data-acc-tab="payables">Payables</button>
+            <button class="btn acc-tab" type="button" data-acc-tab="customer-ledger">Customer ledger</button>
+            <button class="btn acc-tab" type="button" data-acc-tab="supplier-ledger">Supplier ledger</button>
             <button class="btn acc-tab" type="button" data-acc-tab="ledger">Day book</button>
             <button class="btn acc-tab" type="button" data-acc-tab="coa">Chart of accounts</button>
             <button class="btn acc-tab" type="button" data-acc-tab="journal">Journal</button>
@@ -951,6 +953,22 @@
           <div class="hint" id="acc-hint"></div>
           <div id="acc-pane-receivables" class="acc-pane"><div class="table-wrap" id="acc-receivables-table"></div></div>
           <div id="acc-pane-payables" class="acc-pane" hidden><div class="table-wrap" id="acc-payables-table"></div></div>
+          <div id="acc-pane-customer-ledger" class="acc-pane" hidden>
+            <div class="acc-party-bar">
+              <label>Customer
+                <select id="acc-customer" aria-label="Customer ledger"></select>
+              </label>
+            </div>
+            <div class="table-wrap" id="acc-customer-ledger-table"></div>
+          </div>
+          <div id="acc-pane-supplier-ledger" class="acc-pane" hidden>
+            <div class="acc-party-bar">
+              <label>Supplier
+                <select id="acc-supplier" aria-label="Supplier ledger"></select>
+              </label>
+            </div>
+            <div class="table-wrap" id="acc-supplier-ledger-table"></div>
+          </div>
           <div id="acc-pane-ledger" class="acc-pane" hidden><div class="table-wrap" id="acc-ledger-table"></div></div>
           <div id="acc-pane-coa" class="acc-pane" hidden><div class="table-wrap" id="acc-coa-table"></div></div>
           <div id="acc-pane-journal" class="acc-pane" hidden><div class="table-wrap" id="acc-journal-table"></div></div>
@@ -1311,21 +1329,21 @@
         </section>
       </div>
     </aside>
-    <script src="./js/gst-supply.js?v=20260905deploy134" defer></script>
-    <script src="./js/pos-api.js?v=20260905deploy134" defer></script>
-    <script src="./js/units.js?v=20260905deploy134" defer></script>
-    <script src="./js/footwear.js?v=20260905deploy134" defer></script>
-    <script src="./js/discount.js?v=20260905deploy134" defer></script>
-    <script src="./js/offers.js?v=20260905deploy134" defer></script>
-    <script src="./js/loyalty.js?v=20260905deploy134" defer></script>
-    <script src="./js/barcode.js?v=20260905deploy134" defer></script>
+    <script src="./js/gst-supply.js?v=20260905deploy135" defer></script>
+    <script src="./js/pos-api.js?v=20260905deploy135" defer></script>
+    <script src="./js/units.js?v=20260905deploy135" defer></script>
+    <script src="./js/footwear.js?v=20260905deploy135" defer></script>
+    <script src="./js/discount.js?v=20260905deploy135" defer></script>
+    <script src="./js/offers.js?v=20260905deploy135" defer></script>
+    <script src="./js/loyalty.js?v=20260905deploy135" defer></script>
+    <script src="./js/barcode.js?v=20260905deploy135" defer></script>
     <script src="./js/camera-scan.js?v=20260904camera1" defer></script>
-    <script src="./js/dev-mode.js?v=20260905deploy134" defer></script>
-    <script src="./js/invoice.js?v=20260905deploy134" defer></script>
-    <script src="./js/support.js?v=20260905deploy134" defer></script>
+    <script src="./js/dev-mode.js?v=20260905deploy135" defer></script>
+    <script src="./js/invoice.js?v=20260905deploy135" defer></script>
+    <script src="./js/support.js?v=20260905deploy135" defer></script>
     <script src="./js/qrcode.iife.js?v=20260905qr1"></script>
-    <script src="./js/app.js?v=20260905deploy134" defer></script>
-    <script src="./js/growth.js?v=20260905deploy134" defer></script>
-    <script src="./js/offers-ui.js?v=20260905deploy134" defer></script>
+    <script src="./js/app.js?v=20260905deploy135" defer></script>
+    <script src="./js/growth.js?v=20260905deploy135" defer></script>
+    <script src="./js/offers-ui.js?v=20260905deploy135" defer></script>
   </body>
 </html>

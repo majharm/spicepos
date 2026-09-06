@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
-import { DEFAULT_COA, expenseJournalLines, saleDiscountAmount } from "./accounting.js";
+import { DEFAULT_COA, expenseJournalLines, saleDiscountAmount, buildPartyLedger } from "./accounting.js";
 import { splitGstAmount } from "./gst-supply.js";
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
@@ -72,6 +72,54 @@ test("expense journal lines are balanced with optional GST", () => {
   assert.equal(debit, 1180);
   assert.ok(lines.some((l) => l.accountCode === "5103" && l.debit === 1000));
   assert.ok(lines.some((l) => l.accountCode === "1003" && l.credit === 1180));
+});
+
+test("party ledger running balance for customer and supplier", () => {
+  const customer = buildPartyLedger({
+    opening: 200,
+    rows: [
+      { entry_type: "sale_credit", amount: 500, entry_no: "JV-1" },
+      { entry_type: "receipt", amount: 150, entry_no: "RCP-1" },
+    ],
+  });
+  assert.equal(customer.opening, 200);
+  assert.equal(customer.rows[0].debit, 500);
+  assert.equal(customer.rows[0].credit, 0);
+  assert.equal(customer.rows[0].balance, 700);
+  assert.equal(customer.rows[1].debit, 0);
+  assert.equal(customer.rows[1].credit, 150);
+  assert.equal(customer.rows[1].balance, 550);
+  assert.equal(customer.closing, 550);
+
+  const supplier = buildPartyLedger({
+    opening: 80,
+    rows: [
+      { entry_type: "purchase_credit", amount: 400, entry_no: "JV-2" },
+      { entry_type: "payment", amount: 100, entry_no: "PMT-1" },
+    ],
+  });
+  assert.equal(supplier.rows[0].credit, 400);
+  assert.equal(supplier.rows[0].balance, 480);
+  assert.equal(supplier.rows[1].debit, 100);
+  assert.equal(supplier.closing, 380);
+});
+
+test("Accounts wires customer and supplier ledgers", () => {
+  const accounts = readFileSync(path.join(root, "server/accounts.js"), "utf8");
+  const php = readFileSync(path.join(root, "pos-accounting.php"), "utf8");
+  const app = readFileSync(path.join(root, "js/app.js"), "utf8");
+  const index = readFileSync(path.join(root, "index.html"), "utf8");
+  assert.match(accounts, /\/api\/accounts\/party-ledger/);
+  assert.match(php, /accounts\/party-ledger/);
+  assert.match(php, /function pos_build_party_ledger/);
+  assert.match(app, /function loadPartyLedgerTab/);
+  assert.match(app, /\/api\/accounts\/party-ledger/);
+  assert.match(index, /data-acc-tab="customer-ledger"/);
+  assert.match(index, /data-acc-tab="supplier-ledger"/);
+  assert.match(index, /id="acc-customer"/);
+  assert.match(index, /id="acc-supplier"/);
+  assert.match(index, /id="acc-pane-customer-ledger"/);
+  assert.match(index, /id="acc-pane-supplier-ledger"/);
 });
 
 test("receipts and payments can be altered after save", () => {

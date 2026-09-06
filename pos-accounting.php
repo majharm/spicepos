@@ -290,6 +290,36 @@ function pos_lines_for_period($bid, $from, $to) {
   );
 }
 
+function pos_party_ledger_signed_amount($entryType, $amount) {
+  $amt = pos_round2($amount);
+  if ($entryType === "sale_credit" || $entryType === "purchase_credit") return $amt;
+  if ($entryType === "receipt" || $entryType === "payment") return -$amt;
+  return 0.0;
+}
+
+function pos_party_ledger_sides($entryType, $amount) {
+  $amt = pos_round2($amount);
+  if ($entryType === "sale_credit") return ["debit" => $amt, "credit" => 0.0];
+  if ($entryType === "receipt") return ["debit" => 0.0, "credit" => $amt];
+  if ($entryType === "purchase_credit") return ["debit" => 0.0, "credit" => $amt];
+  if ($entryType === "payment") return ["debit" => $amt, "credit" => 0.0];
+  return ["debit" => 0.0, "credit" => 0.0];
+}
+
+function pos_build_party_ledger($opening, $rows) {
+  $balance = pos_round2($opening);
+  $out = [];
+  foreach ($rows as $r) {
+    $sides = pos_party_ledger_sides($r["entry_type"] ?? "", $r["amount"] ?? 0);
+    $balance = pos_round2($balance + pos_party_ledger_signed_amount($r["entry_type"] ?? "", $r["amount"] ?? 0));
+    $r["debit"] = $sides["debit"];
+    $r["credit"] = $sides["credit"];
+    $r["balance"] = $balance;
+    $out[] = $r;
+  }
+  return ["opening" => pos_round2($opening), "closing" => $balance, "rows" => $out];
+}
+
 function pos_accounts_dispatch($path, $method, $body, $bid, $auth, $branchId, $uid) {
   if (strpos($path, "accounts/") !== 0 && $path !== "expenses") return false;
   if (!pos_can($auth["user"], "accounts")) pos_send(403, ["error" => "Not allowed"]);
@@ -381,11 +411,76 @@ function pos_accounts_dispatch($path, $method, $body, $bid, $auth, $branchId, $u
   if ($path === "accounts/ledger" && $method === "GET") {
     $from = $_GET["from"] ?? date("Y-m-d");
     $to = $_GET["to"] ?? $from;
+    $partyType = strtolower(trim((string) ($_GET["party_type"] ?? "")));
+    $partyId = trim((string) ($_GET["party_id"] ?? ""));
+    if (($partyType === "customer" || $partyType === "supplier") && $partyId !== "") {
+      pos_send(200, pos_q(
+        "SELECT * FROM account_ledger WHERE business_id = ? AND DATE(created_at) BETWEEN ? AND ?
+         AND party_type = ? AND party_id = ?
+         ORDER BY created_at DESC, entry_no DESC LIMIT 500",
+        "sssss", [$bid, $from, $to, $partyType, $partyId]
+      ));
+    }
     pos_send(200, pos_q(
       "SELECT * FROM account_ledger WHERE business_id = ? AND DATE(created_at) BETWEEN ? AND ?
        ORDER BY created_at DESC, entry_no DESC LIMIT 500",
       "sss", [$bid, $from, $to]
     ));
+  }
+
+  if ($path === "accounts/party-ledger" && $method === "GET") {
+    $partyType = strtolower(trim((string) ($_GET["party_type"] ?? "")));
+    $partyId = trim((string) ($_GET["party_id"] ?? ""));
+    if ($partyType !== "customer" && $partyType !== "supplier") {
+      pos_send(400, ["error" => "party_type must be customer or supplier", "php" => true]);
+    }
+    if ($partyId === "") {
+      pos_send(400, ["error" => "party_id is required", "php" => true]);
+    }
+    $from = $_GET["from"] ?? date("Y-m-d");
+    $to = $_GET["to"] ?? $from;
+    $prior = pos_q(
+      "SELECT entry_type, amount FROM account_ledger
+       WHERE business_id = ? AND party_type = ? AND party_id = ? AND DATE(created_at) < ?",
+      "ssss",
+      [$bid, $partyType, $partyId, $from]
+    );
+    $opening = 0.0;
+    foreach ($prior as $row) {
+      $opening = pos_round2($opening + pos_party_ledger_signed_amount($row["entry_type"] ?? "", $row["amount"] ?? 0));
+    }
+    $rows = pos_q(
+      "SELECT * FROM account_ledger
+       WHERE business_id = ? AND party_type = ? AND party_id = ? AND DATE(created_at) BETWEEN ? AND ?
+       ORDER BY created_at ASC, entry_no ASC LIMIT 1000",
+      "sssss",
+      [$bid, $partyType, $partyId, $from, $to]
+    );
+    $party = null;
+    if ($partyType === "customer") {
+      $found = pos_q(
+        "SELECT id, code, name, business_name, mobile, outstanding FROM customers WHERE id = ? AND business_id = ? LIMIT 1",
+        "ss",
+        [$partyId, $bid]
+      );
+      $party = $found[0] ?? ["id" => $partyId, "name" => $rows[0]["party_name"] ?? "Customer"];
+    } else {
+      $found = pos_q(
+        "SELECT id, code, name, contact_name, mobile, COALESCE(payable_balance,0) AS payable_balance
+         FROM suppliers WHERE id = ? AND business_id = ? LIMIT 1",
+        "ss",
+        [$partyId, $bid]
+      );
+      $party = $found[0] ?? ["id" => $partyId, "name" => $rows[0]["party_name"] ?? "Supplier"];
+    }
+    $built = pos_build_party_ledger($opening, $rows);
+    pos_send(200, array_merge([
+      "partyType" => $partyType,
+      "party" => $party,
+      "from" => $from,
+      "to" => $to,
+      "php" => true,
+    ], $built));
   }
 
   if ($path === "accounts/coa" && $method === "GET") {

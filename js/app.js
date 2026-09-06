@@ -719,6 +719,8 @@ function syncFySelectFromDates(selectId, fromId) {
 const ACC_REPORT_TITLES = {
   receivables: "Receivables",
   payables: "Payables",
+  "customer-ledger": "Customer ledger",
+  "supplier-ledger": "Supplier ledger",
   ledger: "Day book",
   coa: "Chart of accounts",
   journal: "Journal",
@@ -773,7 +775,10 @@ function printFinance({ title, html, from, to, asOf }) {
 
 function printAccountsReport() {
   const { from, to, asOf } = accPeriod();
-  const title = ACC_REPORT_TITLES[accTab] || "Accounts";
+  let title = ACC_REPORT_TITLES[accTab] || "Accounts";
+  const partySel = accTab === "customer-ledger" ? $("acc-customer") : accTab === "supplier-ledger" ? $("acc-supplier") : null;
+  const partyName = partySel?.selectedOptions?.[0]?.textContent?.trim();
+  if (partyName && partySel?.value) title = `${title} · ${partyName}`;
   const pane = $(`acc-pane-${accTab}`);
   const summary = ["receivables", "payables"].includes(accTab) ? $("acc-summary")?.outerHTML || "" : "";
   printFinance({
@@ -3456,8 +3461,95 @@ function setAccTab(name) {
   loadAccountsTab(name);
 }
 
+function fillAccPartySelect(selectId, parties, labelFn) {
+  const el = $(selectId);
+  if (!el) return "";
+  const list = parties || [];
+  const cur = el.value;
+  el.innerHTML = `<option value="">Select…</option>${list
+    .map((p) => `<option value="${escapeHtml(p.id)}">${escapeHtml(labelFn(p))}</option>`)
+    .join("")}`;
+  if (cur && list.some((p) => p.id === cur)) el.value = cur;
+  else if (list.length === 1) el.value = list[0].id;
+  return el.value;
+}
+
+function accPartyLabel(party, kind) {
+  if (!party) return "—";
+  const name = kind === "customer" ? party.business_name || party.name : party.name;
+  const due = kind === "customer" ? Number(party.outstanding) || 0 : Number(party.payable_balance) || 0;
+  return due ? `${name} · ${money(due)}` : name;
+}
+
+function renderPartyLedgerTable(targetId, data, kind) {
+  const el = $(targetId);
+  if (!el) return;
+  const party = data?.party;
+  const rows = data?.rows || [];
+  const due = kind === "customer" ? Number(party?.outstanding) || 0 : Number(party?.payable_balance) || 0;
+  const action = kind === "customer" && due > 0 && party?.id
+    ? `<button class="btn primary" type="button" data-rcp="${escapeHtml(party.id)}">Receipt</button>`
+    : kind === "supplier" && due > 0 && party?.id
+      ? `<button class="btn primary" type="button" data-pay="${escapeHtml(party.id)}">Payment</button>`
+      : "";
+  const head = `<div class="report-grid">
+    <div class="report-card"><span>Opening</span><strong>${money(data?.opening || 0)}</strong></div>
+    <div class="report-card"><span>Closing</span><strong>${money(data?.closing || 0)}</strong></div>
+    <div class="report-card"><span>${kind === "customer" ? "Outstanding" : "Payable"}</span><strong>${money(due)}</strong></div>
+  </div>${action ? `<p class="hint">${action}</p>` : ""}`;
+  if (!rows.length) {
+    el.innerHTML = `${head}<p class="hint">No ${kind} ledger entries in this period.</p>`;
+    return;
+  }
+  el.innerHTML = `${head}<table><thead><tr>
+    <th>Date</th><th>Entry</th><th>Type</th><th>Debit</th><th>Credit</th><th>Balance</th><th>Method</th><th>Notes</th><th></th>
+  </tr></thead><tbody>${rows
+    .map((r, i) => {
+      const printable = r.entry_type === "receipt" || r.entry_type === "payment";
+      return `<tr>
+      <td>${escapeHtml(formatShopDateTime(r.created_at))}</td>
+      <td>${escapeHtml(r.entry_no)}</td>
+      <td>${escapeHtml(r.entry_type)}</td>
+      <td>${r.debit ? money(r.debit) : "—"}</td>
+      <td>${r.credit ? money(r.credit) : "—"}</td>
+      <td>${money(r.balance)}</td>
+      <td>${escapeHtml(r.payment_method || "—")}</td>
+      <td>${escapeHtml(r.notes || "—")}</td>
+      <td>${printable ? `<button class="btn" type="button" data-voucher-print="${i}">Print</button> <button class="btn" type="button" data-voucher-alter="${i}">Alter</button>` : ""}</td>
+    </tr>`;
+    })
+    .join("")}</tbody></table>`;
+}
+
+async function loadPartyLedgerTab(kind) {
+  const selectId = kind === "customer" ? "acc-customer" : "acc-supplier";
+  const tableId = kind === "customer" ? "acc-customer-ledger-table" : "acc-supplier-ledger-table";
+  if (kind === "supplier" && !state.suppliers?.length) await loadSuppliers();
+  const parties = kind === "customer" ? state.customers || [] : state.suppliers || [];
+  const partyId = fillAccPartySelect(selectId, parties, (p) => accPartyLabel(p, kind));
+  if (!partyId) {
+    $(tableId).innerHTML = `<p class="hint">Select a ${kind} to see the ledger.</p>`;
+    state.ledgerRows = [];
+    return;
+  }
+  const { from, to } = accPeriod();
+  const data = await api(
+    `/api/accounts/party-ledger?party_type=${encodeURIComponent(kind)}&party_id=${encodeURIComponent(partyId)}&from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
+  );
+  state.ledgerRows = data.rows || [];
+  renderPartyLedgerTable(tableId, data, kind);
+}
+
 async function loadAccountsTab(name) {
   const { from, to, asOf } = accPeriod();
+  if (name === "customer-ledger") {
+    await loadPartyLedgerTab("customer");
+    return;
+  }
+  if (name === "supplier-ledger") {
+    await loadPartyLedgerTab("supplier");
+    return;
+  }
   if (name === "ledger") {
     const rows = await api(`/api/accounts/ledger?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`);
     state.ledgerRows = rows;
@@ -4100,6 +4192,18 @@ document.querySelector(".accounts-toolbar")?.addEventListener("click", (e) => {
   const btn = e.target.closest("[data-acc-tab]");
   if (btn) setAccTab(btn.dataset.accTab);
 });
+$("acc-customer")?.addEventListener("change", () => {
+  if (accTab === "customer-ledger") loadPartyLedgerTab("customer").catch((err) => {
+    $("acc-hint").textContent = err.message;
+    $("acc-hint").className = "hint error";
+  });
+});
+$("acc-supplier")?.addEventListener("change", () => {
+  if (accTab === "supplier-ledger") loadPartyLedgerTab("supplier").catch((err) => {
+    $("acc-hint").textContent = err.message;
+    $("acc-hint").className = "hint error";
+  });
+});
 $("acc-period-form")?.addEventListener("submit", async (e) => {
   e.preventDefault();
   try {
@@ -4112,13 +4216,15 @@ $("acc-period-form")?.addEventListener("submit", async (e) => {
 $("view-accounts")?.addEventListener("click", (e) => {
   const rcp = e.target.closest("[data-rcp]");
   if (rcp) {
-    const customer = (state.accReceivables || []).find((c) => c.id === rcp.dataset.rcp);
+    const customer = (state.accReceivables || []).find((c) => c.id === rcp.dataset.rcp)
+      || (state.customers || []).find((c) => c.id === rcp.dataset.rcp);
     if (customer) showReceiptModal(customer);
     return;
   }
   const pay = e.target.closest("[data-pay]");
   if (pay) {
-    const supplier = (state.accPayables || []).find((s) => s.id === pay.dataset.pay);
+    const supplier = (state.accPayables || []).find((s) => s.id === pay.dataset.pay)
+      || (state.suppliers || []).find((s) => s.id === pay.dataset.pay);
     if (supplier) showPaymentModal(supplier);
     return;
   }

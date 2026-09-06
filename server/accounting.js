@@ -444,3 +444,30 @@ export async function cashBook(from, to, businessId = bid()) {
 export function isCashAccount(code) {
   return CASH_CODES.has(code);
 }
+
+/** Customer: sale_credit raises due; receipt lowers it. Supplier: purchase_credit raises payable; payment lowers it. */
+export function partyLedgerSignedAmount(entryType, amount) {
+  const amt = round2(amount);
+  if (entryType === "sale_credit" || entryType === "purchase_credit") return amt;
+  if (entryType === "receipt" || entryType === "payment") return -amt;
+  return 0;
+}
+
+export function partyLedgerSides(entryType, amount) {
+  const amt = round2(amount);
+  if (entryType === "sale_credit") return { debit: amt, credit: 0 };
+  if (entryType === "receipt") return { debit: 0, credit: amt };
+  if (entryType === "purchase_credit") return { debit: 0, credit: amt };
+  if (entryType === "payment") return { debit: amt, credit: 0 };
+  return { debit: 0, credit: 0 };
+}
+
+export function buildPartyLedger({ opening = 0, rows = [] } = {}) {
+  let balance = round2(opening);
+  const out = (rows || []).map((r) => {
+    const sides = partyLedgerSides(r.entry_type, r.amount);
+    balance = round2(balance + partyLedgerSignedAmount(r.entry_type, r.amount));
+    return { ...r, debit: sides.debit, credit: sides.credit, balance };
+  });
+  return { opening: round2(opening), closing: balance, rows: out };
+}

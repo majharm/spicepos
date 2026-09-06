@@ -16,6 +16,8 @@ import {
   replaceLedgerJournal,
   profitAndLoss,
   trialBalance,
+  buildPartyLedger,
+  partyLedgerSignedAmount,
 } from "./accounting.js";
 import { fyRangeForToday } from "./fy.js";
 
@@ -161,14 +163,73 @@ export function registerAccounts(app) {
     try {
       const from = req.query.from || new Date().toISOString().slice(0, 10);
       const to = req.query.to || from;
+      const partyType = String(req.query.party_type || "").trim().toLowerCase();
+      const partyId = String(req.query.party_id || "").trim();
+      const filters = ["business_id = ?", "DATE(created_at) BETWEEN ? AND ?"];
+      const params = [bid(), from, to];
+      if ((partyType === "customer" || partyType === "supplier") && partyId) {
+        filters.push("party_type = ?", "party_id = ?");
+        params.push(partyType, partyId);
+      }
       const rows = await query(
         `SELECT * FROM account_ledger
-         WHERE business_id = ? AND DATE(created_at) BETWEEN ? AND ?
+         WHERE ${filters.join(" AND ")}
          ORDER BY created_at DESC, entry_no DESC
          LIMIT 500`,
-        [bid(), from, to],
+        params,
       );
       res.json(rows);
+    } catch (err) {
+      res.status(500).json({ error: String(err.message) });
+    }
+  });
+
+  app.get("/api/accounts/party-ledger", requirePerm("accounts"), async (req, res) => {
+    try {
+      const partyType = String(req.query.party_type || "").trim().toLowerCase();
+      const partyId = String(req.query.party_id || "").trim();
+      if (partyType !== "customer" && partyType !== "supplier") {
+        res.status(400).json({ error: "party_type must be customer or supplier" });
+        return;
+      }
+      if (!partyId) {
+        res.status(400).json({ error: "party_id is required" });
+        return;
+      }
+      const from = req.query.from || new Date().toISOString().slice(0, 10);
+      const to = req.query.to || from;
+      const prior = await query(
+        `SELECT entry_type, amount FROM account_ledger
+         WHERE business_id = ? AND party_type = ? AND party_id = ? AND DATE(created_at) < ?`,
+        [bid(), partyType, partyId, from],
+      );
+      const opening = round2(
+        prior.reduce((sum, row) => sum + partyLedgerSignedAmount(row.entry_type, row.amount), 0),
+      );
+      const rows = await query(
+        `SELECT * FROM account_ledger
+         WHERE business_id = ? AND party_type = ? AND party_id = ? AND DATE(created_at) BETWEEN ? AND ?
+         ORDER BY created_at ASC, entry_no ASC
+         LIMIT 1000`,
+        [bid(), partyType, partyId, from, to],
+      );
+      let party = null;
+      if (partyType === "customer") {
+        const found = await query(
+          `SELECT id, code, name, business_name, mobile, outstanding
+           FROM customers WHERE id = ? AND business_id = ? LIMIT 1`,
+          [partyId, bid()],
+        );
+        party = found[0] || { id: partyId, name: rows[0]?.party_name || "Customer" };
+      } else {
+        const found = await query(
+          `SELECT id, code, name, contact_name, mobile, COALESCE(payable_balance,0) AS payable_balance
+           FROM suppliers WHERE id = ? AND business_id = ? LIMIT 1`,
+          [partyId, bid()],
+        );
+        party = found[0] || { id: partyId, name: rows[0]?.party_name || "Supplier" };
+      }
+      res.json({ partyType, party, from, to, ...buildPartyLedger({ opening, rows }) });
     } catch (err) {
       res.status(500).json({ error: String(err.message) });
     }
