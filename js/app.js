@@ -148,7 +148,7 @@ function applyFootwearMode() {
   const search = $("search");
   if (search) search.placeholder = on ? "Search shoe, colour, or size…" : "Search name or HSN…";
   const scan = $("scan-code");
-  if (scan) scan.placeholder = on ? "Scan, tap, or search shoe, colour, or size" : "Scan, tap, or search name, HSN, SKU, or barcode";
+  if (scan) scan.placeholder = on ? "Scan or search shoe" : "Scan or search";
   if ($("item-category-lab")) $("item-category-lab").textContent = on ? "Style" : "Category";
   if ($("item-category")) $("item-category").placeholder = on ? "School / Sports / Sandal" : "Whole Spices";
   if ($("item-subcategory-lab")) $("item-subcategory-lab").textContent = on ? "Brand" : "Subcategory";

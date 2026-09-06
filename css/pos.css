@@ -556,24 +556,28 @@ body:has(#view-expiry:not([hidden])) .platform-notices { display: none !importan
   top: auto;
   flex-wrap: wrap;
   gap: 8px 10px;
-  align-items: stretch;
+  align-items: center;
 }
 .counter-lane {
-  flex: 1 1 100%;
+  /* scan-box: compact 2026 */
+  flex: 0 1 220px;
+  width: min(100%, 220px);
+  max-width: 220px;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: 8px;
+  gap: 6px;
   min-width: 0;
 }
 .scan-lane {
   display: grid;
-  grid-template-columns: 22px minmax(0, 1fr) auto auto;
+  grid-template-columns: 14px minmax(0, 1fr) auto auto;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   min-width: 0;
-  padding: 2px 12px;
-  border-radius: 12px;
-  border: 1.5px solid var(--vel-teal);
+  max-width: 220px;
+  padding: 0 8px;
+  border-radius: 8px;
+  border: 1px solid var(--vel-teal);
   background: #f0fdfa;
   box-shadow: none;
 }
@@ -588,10 +592,10 @@ body:has(#view-expiry:not([hidden])) .platform-notices { display: none !importan
   box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.12);
 }
 .scan-lane-ico {
-  width: 16px;
-  height: 16px;
-  border: 2px solid var(--vel-teal);
-  border-radius: 3px;
+  width: 12px;
+  height: 12px;
+  border: 1.5px solid var(--vel-teal);
+  border-radius: 2px;
   position: relative;
 }
 .scan-lane-ico::after {
@@ -609,20 +613,20 @@ body:has(#view-expiry:not([hidden])) .platform-notices { display: none !importan
   border: 0;
   background: transparent;
   box-shadow: none;
-  padding: 8px 0;
-  font-size: 15px;
-  font-weight: 650;
+  padding: 4px 0;
+  font-size: 13px;
+  font-weight: 600;
 }
 .scan-lane input:focus { outline: none; box-shadow: none; }
 .scan-camera-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
+  width: 28px;
+  height: 28px;
   padding: 0;
   border: 0;
-  border-radius: 10px;
+  border-radius: 7px;
   background: var(--vel-teal);
   color: #fff;
   cursor: pointer;
@@ -631,11 +635,11 @@ body:has(#view-expiry:not([hidden])) .platform-notices { display: none !importan
 .scan-camera-btn:hover { filter: brightness(1.05); }
 .scan-camera-btn:active { transform: scale(0.97); }
 .scan-status {
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
   color: var(--vel-teal);
   white-space: nowrap;
-  max-width: 22ch;
+  max-width: 10ch;
   overflow: hidden;
   text-overflow: ellipsis;
 }
@@ -3362,18 +3366,21 @@ button.items-stat.is-active {
     display: grid;
     grid-template-columns: 1fr;
     gap: 6px;
+    flex: 1 1 100%;
     width: 100%;
+    max-width: none;
   }
   .bill-tools {
     grid-template-columns: minmax(0, 1fr) 6.8em;
     padding: 6px 12px 0;
   }
   .scan-lane {
-    padding: 2px 10px;
+    padding: 0 8px;
+    max-width: none;
     box-shadow: none;
-    grid-template-columns: 18px minmax(0, 1fr) auto auto;
+    grid-template-columns: 14px minmax(0, 1fr) auto auto;
   }
-  .scan-lane input { padding: 8px 0; font-size: 15px; }
+  .scan-lane input { padding: 5px 0; font-size: 13px; }
   .scan-status { max-width: 10ch; }
   .counter-topbar .search { min-width: 0; }
   .counter-tools { display: grid; grid-template-columns: 1fr 1fr; overflow: visible; width: 100%; }

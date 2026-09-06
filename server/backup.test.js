@@ -188,10 +188,11 @@ test("PHP and HTML wire master admin backup", () => {
   );
 });
 
-test("HTML and CSS cache stickers match deploy130", () => {
+test("HTML and CSS cache stickers match deploy131", () => {
   for (const name of ["index.html", "login.html", "setup.html", "order.html"]) {
     const html = readFileSync(path.join(root, name), "utf8");
-    assert.match(html, /20260905deploy130/);
+    assert.match(html, /20260905deploy131/);
+    assert.doesNotMatch(html, /20260905deploy130/);
     assert.doesNotMatch(html, /20260905deploy129/);
     assert.doesNotMatch(html, /20260905deploy128/);
     assert.doesNotMatch(html, /20260905deploy127/);
@@ -318,7 +319,7 @@ test("HTML and CSS cache stickers match deploy130", () => {
   assert.match(appJs, /data-edit-pack/);
   assert.match(appJs, /fillPackForm/);
   assert.match(appJs, /\/api\/packs\/\$\{id\}/);
-  assert.match(index, /Scan, tap, or search/);
+  assert.match(index, /Scan or search/);
   assert.match(index, /id="pack-id"/);
   assert.match(index, /id="pack-save"/);
   assert.match(index, /id="pack-cancel"/);
@@ -375,6 +376,7 @@ test("HTML and CSS cache stickers match deploy130", () => {
   assert.match(pos, /body\.counter-mode \.platform-notices/);
   assert.match(pos, /counter-ux: product tiles/);
   assert.match(pos, /counter-ux: till-desk-2026/);
+  assert.match(pos, /scan-box: compact 2026/);
   assert.match(pos, /catalog-empty/);
   assert.match(pos, /bill-slider: hide unhide/);
   assert.match(pos, /minmax\(152px, 1fr\)/);
