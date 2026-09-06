@@ -270,6 +270,12 @@ export function waIntlNumber(raw, country = WA_DEFAULT_COUNTRY) {
   return local ? `${cc}${local}` : "";
 }
 
+export function waApiNumber(raw, country = WA_DEFAULT_COUNTRY) {
+  const intl = waIntlNumber(raw, country);
+  if (intl) return intl;
+  return String(raw || "").replace(/\D/g, "");
+}
+
 export const WA_RATE_LIMIT_ERROR = "WhatsApp rate limited (HTTP 429). Wait a minute and send again.";
 const WA_SEND_GAP_MS = 220;
 let lastWaSendAt = 0;
@@ -374,11 +380,12 @@ export function formatInr(n) {
 
 export function buildWaUrl(cfg, numbers, message, media) {
   const url = new URL(cfg.apiUrl || WA_DEFAULT_URL);
+  const country = cfg.countryCode || WA_DEFAULT_COUNTRY;
   url.searchParams.set("api_key", cfg.apiKey || "");
   url.searchParams.set("profile_id", cfg.profileId || "");
-  url.searchParams.set("numbers", (numbers || []).join(","));
+  url.searchParams.set("numbers", (numbers || []).map((n) => waApiNumber(n, country)).filter(Boolean).join(","));
   url.searchParams.set("message", String(message || ""));
-  url.searchParams.set("country_code", cfg.countryCode || WA_DEFAULT_COUNTRY);
+  url.searchParams.set("country_code", country);
   if (media && /^https:\/\//i.test(media)) {
     url.searchParams.set("media", media);
     url.searchParams.set("media_url", media);
@@ -705,12 +712,12 @@ async function sendWhatsAppOne(cfg, number, message, fetchImpl, media = "") {
   const dataMedia = media && String(media).startsWith("data:image/") ? String(media) : "";
   const endpoint = String(cfg.wa_api_url || WA_DEFAULT_URL).split("?")[0];
   const country = cfg.wa_country_code || cfg.countryCode || WA_DEFAULT_COUNTRY;
-  const local = normalizeInMobile(number) || String(number || "");
-  const intl = waIntlNumber(number, country);
+  const local = normalizeInMobile(number) || String(number || "").replace(/\D/g, "");
+  const intl = waApiNumber(number, country);
   const payload = {
     api_key: cfg.apiKey,
     profile_id: cfg.profileId || cfg.wa_profile_id,
-    numbers: local,
+    numbers: intl,
     message: String(message || ""),
     country_code: country,
     type: "text",
@@ -774,7 +781,7 @@ async function sendWhatsAppOne(cfg, number, message, fetchImpl, media = "") {
         profileId: cfg.wa_profile_id || cfg.profileId,
         countryCode: country,
       },
-      [local],
+      [intl || local],
       message,
       httpsMedia,
     );

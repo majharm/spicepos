@@ -15,6 +15,7 @@ import {
   daysUntilExpiry,
   normalizeInMobile,
   waIntlNumber,
+  waApiNumber,
   waResponseOk,
   waDeliveryState,
   waRetryWaitMs,
@@ -208,6 +209,10 @@ test("Master Admin Settings lives under Backup with Active/Inactive templates", 
   assert.match(nodeAlerts, /wrapTestAlertResult/);
   assert.match(alerts, /function pos_send_test_alert/);
   assert.match(alerts, /function pos_wrap_test_alert_result/);
+  assert.match(alerts, /function pos_wa_api_number/);
+  assert.match(nodeAlerts, /export function waApiNumber/);
+  assert.match(alerts, /"numbers" => \$intl/);
+  assert.match(nodeAlerts, /numbers: intl/);
   assert.match(master, /Test WhatsApp accepted/);
   assert.match(alerts, /pos_summarize_alert_results/);
   assert.match(alerts, /pos_wa_response_ok/);
@@ -260,6 +265,8 @@ test("delivery log rows record WhatsApp queue and email skip", () => {
 test("WhatsApp send is confirmed only from JSON ok, not HTML", async () => {
   assert.equal(waIntlNumber("09876543210"), "919876543210");
   assert.equal(waIntlNumber("919876543210"), "919876543210");
+  assert.equal(waIntlNumber("+919112090347"), "919112090347");
+  assert.doesNotMatch(waIntlNumber("+919112090347"), /\+/);
   assert.equal(waResponseOk(200, "").ok, false);
   assert.equal(waResponseOk(200, "<!DOCTYPE html>").ok, false);
   assert.equal(waResponseOk(429, '{"ok":false}').ok, false);
@@ -281,6 +288,25 @@ test("WhatsApp send is confirmed only from JSON ok, not HTML", async () => {
       text: async () => JSON.stringify({ ok: true, sent: 1, results: [{ number: "919876543210", ok: true }] }),
     };
   };
+  const plusCalls = [];
+  const plusFetch = async (_url, opts) => {
+    plusCalls.push(JSON.parse(opts.body));
+    return {
+      status: 200,
+      text: async () => JSON.stringify({ ok: true, sent: 1, results: [{ number: "919112090347", ok: true }] }),
+    };
+  };
+  const plusSent = await sendWhatsApp(
+    { wa_enabled: "1", apiKey: "k", profileId: "acc_1", wa_country_code: "91" },
+    ["+919112090347"],
+    "Hello",
+    plusFetch,
+  );
+  assert.equal(plusSent.ok, true);
+  assert.equal(plusCalls[0].numbers, "919112090347");
+  assert.doesNotMatch(plusCalls[0].numbers, /\+/);
+  assert.equal(waApiNumber("+919112090347"), "919112090347");
+
   const sent = await sendWhatsApp(
     { wa_enabled: "1", apiKey: "k", profileId: "acc_1", wa_country_code: "91" },
     ["09876543210"],
@@ -290,7 +316,8 @@ test("WhatsApp send is confirmed only from JSON ok, not HTML", async () => {
   assert.equal(sent.ok, true);
   assert.deepEqual(sent.to, ["919876543210"]);
   const body = JSON.parse(calls[0].opts.body);
-  assert.equal(body.numbers, "9876543210");
+  assert.equal(body.numbers, "919876543210");
+  assert.doesNotMatch(body.numbers, /\+/);
   assert.equal(body.country_code, "91");
   assert.equal(calls[0].opts.headers["X-API-Key"], "k");
   let hits = 0;
@@ -330,7 +357,8 @@ test("WhatsApp URL adds https media and keeps the message", () => {
     "Hello",
     "https://cdn.example/notice.jpg",
   );
-  assert.match(url, /numbers=9876543210/);
+  assert.match(url, /numbers=919876543210/);
+  assert.doesNotMatch(url, /numbers=%2B|numbers=\+/);
   assert.match(url, /message=Hello/);
   assert.match(url, /media=https/);
   assert.doesNotMatch(url, /data:image/);

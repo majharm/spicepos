@@ -198,6 +198,12 @@ function pos_wa_intl_number($raw, $country = "91") {
   return $local !== "" ? $cc . $local : "";
 }
 
+function pos_wa_api_number($raw, $country = "91") {
+  $intl = pos_wa_intl_number($raw, $country);
+  if ($intl !== "") return $intl;
+  return preg_replace("/\D+/", "", (string) $raw);
+}
+
 function pos_wa_rate_limit_error() {
   return "WhatsApp rate limited (HTTP 429). Wait a minute and send again.";
 }
@@ -595,12 +601,12 @@ function pos_wa_send_one($cfg, $number, $message, $media = "") {
   $base = $cfg["wa_api_url"] ?: "https://wamaster.atavtelecom.in/api/v1/send";
   $endpoint = explode("?", $base, 2)[0];
   $country = $cfg["wa_country_code"] ?: "91";
-  $local = pos_normalize_in_mobile($number) ?: (string) $number;
-  $intl = pos_wa_intl_number($number, $country);
+  $local = pos_normalize_in_mobile($number) ?: preg_replace("/\D+/", "", (string) $number);
+  $intl = pos_wa_api_number($number, $country);
   $payload = [
     "api_key" => $cfg["wa_api_key"],
     "profile_id" => $cfg["wa_profile_id"],
-    "numbers" => $local,
+    "numbers" => $intl,
     "message" => $message,
     "country_code" => $country,
     "type" => "text",
