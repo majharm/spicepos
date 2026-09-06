@@ -6,8 +6,8 @@
     <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
     <title>ATAV POS</title>
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./css/pos.css?v=20260905deploy133" />
-    <link rel="stylesheet" href="./css/saas.css?v=20260905deploy133" />
+    <link rel="stylesheet" href="./css/pos.css?v=20260905deploy134" />
+    <link rel="stylesheet" href="./css/saas.css?v=20260905deploy134" />
   </head>
   <body>
     <div class="app" id="app">
@@ -122,15 +122,17 @@
                 <option value="card">Card</option>
                 <option value="credit">Credit</option>
               </select>
-              <form class="search visually-hidden" id="search-form" aria-hidden="true">
-                <input id="search" type="search" placeholder="Search name or HSN…" autocomplete="off" tabindex="-1" />
-              </form>
-            </div>
-            <div class="counter-tools">
-              <div class="customer-picker">
-                <input id="counter-mobile" type="tel" inputmode="numeric" maxlength="15" autocomplete="off" placeholder="Mobile no." aria-label="Customer mobile" />
-                <select id="customer" class="select" aria-label="Customer"></select>
-              </div>
+              <input id="counter-mobile" type="tel" inputmode="numeric" maxlength="15" autocomplete="off" placeholder="Mobile" aria-label="Customer mobile" />
+              <select id="customer" class="select" aria-label="Customer"></select>
+              <details class="quick-customer-wrap" id="quick-customer-wrap">
+                <summary title="Add customer">+</summary>
+                <form class="quick-customer" id="quick-customer-form" autocomplete="off">
+                  <input id="qc-name" name="qc-name" placeholder="Customer name" maxlength="120" />
+                  <input id="qc-mobile" name="qc-mobile" placeholder="Mobile no." inputmode="tel" maxlength="15" />
+                  <button class="btn primary" type="submit" id="qc-save">Add</button>
+                  <span class="hint" id="qc-hint"></span>
+                </form>
+              </details>
               <select id="wearer-filter" class="select footwear-only" hidden aria-label="Girls or boys">
                 <option value="">All (girls &amp; boys)</option>
                 <option value="girls">Girls</option>
@@ -143,15 +145,9 @@
               <select id="color-filter" class="select footwear-only" hidden aria-label="Colour">
                 <option value="">All colours</option>
               </select>
-              <details class="quick-customer-wrap" id="quick-customer-wrap">
-                <summary>+ Customer</summary>
-                <form class="quick-customer" id="quick-customer-form" autocomplete="off">
-                  <input id="qc-name" name="qc-name" placeholder="Customer name" maxlength="120" />
-                  <input id="qc-mobile" name="qc-mobile" placeholder="Mobile no." inputmode="tel" maxlength="15" />
-                  <button class="btn primary" type="submit" id="qc-save">Add</button>
-                  <span class="hint" id="qc-hint"></span>
-                </form>
-              </details>
+              <form class="search visually-hidden" id="search-form" aria-hidden="true">
+                <input id="search" type="search" placeholder="Search name or HSN…" autocomplete="off" tabindex="-1" />
+              </form>
             </div>
           </header>
           <div class="workspace">
@@ -1315,21 +1311,21 @@
         </section>
       </div>
     </aside>
-    <script src="./js/gst-supply.js?v=20260905deploy133" defer></script>
-    <script src="./js/pos-api.js?v=20260905deploy133" defer></script>
-    <script src="./js/units.js?v=20260905deploy133" defer></script>
-    <script src="./js/footwear.js?v=20260905deploy133" defer></script>
-    <script src="./js/discount.js?v=20260905deploy133" defer></script>
-    <script src="./js/offers.js?v=20260905deploy133" defer></script>
-    <script src="./js/loyalty.js?v=20260905deploy133" defer></script>
-    <script src="./js/barcode.js?v=20260905deploy133" defer></script>
+    <script src="./js/gst-supply.js?v=20260905deploy134" defer></script>
+    <script src="./js/pos-api.js?v=20260905deploy134" defer></script>
+    <script src="./js/units.js?v=20260905deploy134" defer></script>
+    <script src="./js/footwear.js?v=20260905deploy134" defer></script>
+    <script src="./js/discount.js?v=20260905deploy134" defer></script>
+    <script src="./js/offers.js?v=20260905deploy134" defer></script>
+    <script src="./js/loyalty.js?v=20260905deploy134" defer></script>
+    <script src="./js/barcode.js?v=20260905deploy134" defer></script>
     <script src="./js/camera-scan.js?v=20260904camera1" defer></script>
-    <script src="./js/dev-mode.js?v=20260905deploy133" defer></script>
-    <script src="./js/invoice.js?v=20260905deploy133" defer></script>
-    <script src="./js/support.js?v=20260905deploy133" defer></script>
+    <script src="./js/dev-mode.js?v=20260905deploy134" defer></script>
+    <script src="./js/invoice.js?v=20260905deploy134" defer></script>
+    <script src="./js/support.js?v=20260905deploy134" defer></script>
     <script src="./js/qrcode.iife.js?v=20260905qr1"></script>
-    <script src="./js/app.js?v=20260905deploy133" defer></script>
-    <script src="./js/growth.js?v=20260905deploy133" defer></script>
-    <script src="./js/offers-ui.js?v=20260905deploy133" defer></script>
+    <script src="./js/app.js?v=20260905deploy134" defer></script>
+    <script src="./js/growth.js?v=20260905deploy134" defer></script>
+    <script src="./js/offers-ui.js?v=20260905deploy134" defer></script>
   </body>
 </html>

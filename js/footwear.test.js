@@ -73,6 +73,10 @@ test("Counter has a dedicated scan lane and Pay action", () => {
   assert.match(index, /class="counter-lane"/);
   assert.match(index, /id="pack-choice"/);
   assert.match(index, /id="pay-method"/);
+  assert.match(index, /id="scan-form"[\s\S]*id="pack-choice"[\s\S]*id="pay-method"[\s\S]*id="counter-mobile"[\s\S]*id="customer"/);
+  assert.match(css, /counter-row: one line small 2026/);
+  assert.doesNotMatch(index, /class="counter-tools"/);
+  assert.doesNotMatch(index, /class="customer-picker"/);
   assert.match(index, /id="offer-popup"/);
   assert.match(app, /function showBestOfferPopup/);
   assert.match(css, /\.offer-popup-sheet/);

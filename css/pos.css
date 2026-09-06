@@ -553,31 +553,47 @@ body:has(#view-expiry:not([hidden])) .platform-notices { display: none !importan
 }
 /* counter-ux: till-desk-2026 */
 .counter-topbar {
+  /* counter-row: one line small 2026 */
   top: auto;
-  flex-wrap: wrap;
-  gap: 8px 10px;
+  flex-wrap: nowrap;
+  gap: 6px;
   align-items: center;
+  padding: 6px 10px;
 }
 .counter-lane {
   /* scan-box: compact 2026 */
-  flex: 0 1 auto;
-  width: auto;
+  flex: 1 1 auto;
+  width: 100%;
   max-width: none;
   display: flex;
   flex-wrap: nowrap;
   align-items: center;
   gap: 6px;
   min-width: 0;
+  overflow-x: auto;
 }
-.counter-lane .select {
+.counter-lane .select,
+.counter-topbar .select {
   flex: 0 0 auto;
-  width: 8.4em;
-  min-width: 7.2em;
-  max-width: 9.5em;
-  min-height: 32px;
-  padding: 4px 24px 4px 8px;
-  border-radius: 8px;
+  width: 7.6em;
+  min-width: 6.4em;
+  max-width: 9em;
+  min-height: 30px;
+  height: 30px;
+  padding: 3px 22px 3px 7px;
+  border-radius: 7px;
   font-size: 12px;
+}
+.counter-lane #pay-method {
+  width: 5.8em;
+  min-width: 5.2em;
+  max-width: 6.6em;
+}
+.counter-lane #customer {
+  flex: 1 1 9em;
+  width: auto;
+  min-width: 7.5em;
+  max-width: 14em;
 }
 .counter-lane #pack-choice[hidden] { display: none; }
 .scan-lane {
@@ -585,11 +601,12 @@ body:has(#view-expiry:not([hidden])) .platform-notices { display: none !importan
   grid-template-columns: 14px minmax(0, 1fr) auto auto;
   align-items: center;
   gap: 6px;
-  flex: 0 1 200px;
-  min-width: 140px;
-  max-width: 200px;
+  flex: 0 1 168px;
+  min-width: 128px;
+  max-width: 180px;
+  height: 30px;
   padding: 0 8px;
-  border-radius: 8px;
+  border-radius: 7px;
   border: 1px solid var(--vel-teal);
   background: #f0fdfa;
   box-shadow: none;
@@ -659,42 +676,21 @@ body:has(#view-expiry:not([hidden])) .platform-notices { display: none !importan
 .scan-lane.is-miss .scan-status { color: var(--danger); }
 .counter-topbar .search { min-width: 0; }
 .counter-topbar .search input {
-  min-height: 40px;
-  padding: 8px 12px;
-  border-radius: 12px;
-}
-.counter-topbar .select {
-  min-width: 118px;
-  flex: 0 1 auto;
-  min-height: 38px;
-  padding: 7px 28px 7px 10px;
-  border-radius: 10px;
-  font-size: 13px;
-}
-.counter-tools {
-  flex: 1 1 100%;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-}
-.customer-picker {
-  display: grid;
-  grid-template-columns: 7.6em minmax(7em, 1fr);
-  align-items: center;
-  gap: 6px;
-  min-width: 220px;
-  flex: 1 1 240px;
+  min-height: 30px;
+  padding: 4px 8px;
+  border-radius: 7px;
 }
 #counter-mobile {
-  min-width: 0;
-  min-height: 38px;
-  padding: 7px 10px;
-  border-radius: 10px;
+  flex: 0 0 7.2em;
+  width: 7.2em;
+  min-width: 6.4em;
+  min-height: 30px;
+  height: 30px;
+  padding: 3px 8px;
+  border-radius: 7px;
   border: 1px solid var(--line-strong);
   background: #fff;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
@@ -779,19 +775,24 @@ body.camera-scan-open { overflow: hidden; }
 .quick-customer-wrap > summary {
   display: flex;
   align-items: center;
-  min-height: 40px;
-  padding: 0 12px;
-  border-radius: 10px;
+  justify-content: center;
+  min-width: 30px;
+  width: 30px;
+  min-height: 30px;
+  height: 30px;
+  padding: 0;
+  border-radius: 7px;
   border: 1px solid var(--line-strong);
   background: #fff;
-  font-size: 13px;
+  font-size: 16px;
   font-weight: 700;
+  line-height: 1;
   color: var(--vel-teal);
   cursor: pointer;
   list-style: none;
 }
 .quick-customer-wrap > summary::-webkit-details-marker { display: none; }
-.counter-tools:has(.quick-customer-wrap[open]) {
+.counter-lane:has(.quick-customer-wrap[open]) {
   flex-wrap: wrap;
 }
 .quick-customer-wrap[open] {
@@ -3348,9 +3349,10 @@ button.items-stat.is-active {
   }
   .counter-topbar {
     display: flex;
-    flex-direction: column;
-    gap: 6px;
-    padding: 8px 10px;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    gap: 4px;
+    padding: 6px 8px;
     position: relative;
     top: auto;
     z-index: 7;
@@ -3359,47 +3361,64 @@ button.items-stat.is-active {
   .counter-lane {
     display: flex;
     flex-wrap: nowrap;
-    gap: 6px;
-    flex: 1 1 100%;
+    gap: 4px;
+    flex: 1 1 auto;
     width: 100%;
     max-width: none;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
   }
   .scan-lane {
-    padding: 0 8px;
-    flex: 1 1 120px;
-    max-width: none;
+    padding: 0 6px;
+    flex: 0 0 132px;
+    width: 132px;
+    min-width: 120px;
+    max-width: 148px;
+    height: 30px;
     box-shadow: none;
-    grid-template-columns: 14px minmax(0, 1fr) auto auto;
+    grid-template-columns: 12px minmax(0, 1fr) auto auto;
   }
-  .scan-lane input { padding: 5px 0; font-size: 13px; }
-  .scan-status { max-width: 10ch; }
+  .scan-lane input { padding: 4px 0; font-size: 12px; }
+  .scan-status { max-width: 8ch; }
   .counter-topbar .search { min-width: 0; }
-  .counter-tools { display: grid; grid-template-columns: 1fr 1fr; overflow: visible; width: 100%; }
-  .counter-tools .select,
-  .counter-topbar .customer-picker { min-width: 0; width: 100%; }
-  .counter-topbar .customer-picker {
-    grid-column: 1 / -1;
-    grid-template-columns: 8em minmax(0, 1fr);
-  }
-  .counter-lane .select {
+  .counter-lane .select,
+  .counter-topbar .select {
     flex: 0 0 auto;
-    width: 7.2em;
-    min-width: 6.4em;
-    max-width: 8em;
+    width: 6.6em;
+    min-width: 5.8em;
+    max-width: 7.4em;
+    min-height: 30px;
+    height: 30px;
+    padding: 2px 18px 2px 6px;
+    font-size: 11px;
   }
-  .quick-customer-wrap {
-    grid-column: auto;
+  .counter-lane #pay-method {
+    width: 5em;
+    min-width: 4.6em;
+    max-width: 5.6em;
+  }
+  .counter-lane #customer {
+    flex: 0 1 7em;
+    width: 7em;
+    min-width: 6em;
+    max-width: 9em;
+  }
+  #counter-mobile {
+    flex: 0 0 6.4em;
+    width: 6.4em;
+    min-width: 5.8em;
+    min-height: 30px;
+    height: 30px;
+    padding: 2px 6px;
+    font-size: 11px;
   }
   .quick-customer-wrap > summary {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    min-height: 40px;
-    padding: 6px 10px;
-    font-size: 13px;
-    font-weight: 700;
-    color: var(--vel-teal);
-    cursor: pointer;
+    min-width: 30px;
+    width: 30px;
+    min-height: 30px;
+    height: 30px;
+    padding: 0;
+    font-size: 16px;
   }
   .quick-customer { flex-wrap: wrap; }
   .quick-customer input { min-width: 0; flex: 1 1 46%; }
