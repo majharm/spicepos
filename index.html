@@ -6,8 +6,8 @@
     <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
     <title>ATAV POS</title>
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./css/pos.css?v=20260905deploy131" />
-    <link rel="stylesheet" href="./css/saas.css?v=20260905deploy131" />
+    <link rel="stylesheet" href="./css/pos.css?v=20260905deploy132" />
+    <link rel="stylesheet" href="./css/saas.css?v=20260905deploy132" />
   </head>
   <body>
     <div class="app" id="app">
@@ -113,6 +113,15 @@
                 </button>
                 <span class="scan-status" id="scan-status"></span>
               </form>
+              <select id="pack-choice" class="select" aria-label="Pack type">
+                <option value="">Loose items</option>
+              </select>
+              <select id="pay-method" class="select" aria-label="Payment method">
+                <option value="cash">Cash</option>
+                <option value="upi">UPI</option>
+                <option value="card">Card</option>
+                <option value="credit">Credit</option>
+              </select>
               <form class="search visually-hidden" id="search-form" aria-hidden="true">
                 <input id="search" type="search" placeholder="Search name or HSN…" autocomplete="off" tabindex="-1" />
               </form>
@@ -155,17 +164,6 @@
                   <p class="ticket-cust" id="bill-customer"></p>
                 </div>
                 <button type="button" class="bill-toggle" id="bill-toggle" aria-controls="bill-panel" aria-expanded="true" aria-label="Hide bill" title="Hide bill">›</button>
-              </div>
-              <div class="bill-tools" id="bill-tools">
-                <select id="pack-choice" class="select" aria-label="Pack type">
-                  <option value="">Loose items</option>
-                </select>
-                <select id="pay-method" class="select" aria-label="Payment method">
-                  <option value="cash">Cash</option>
-                  <option value="upi">UPI</option>
-                  <option value="card">Card</option>
-                  <option value="credit">Credit</option>
-                </select>
               </div>
               <div class="ticket-pack" id="chosen-pack" hidden></div>
               <div id="pack-bar" class="pack-bar" hidden></div>
@@ -1305,21 +1303,21 @@
         </section>
       </div>
     </aside>
-    <script src="./js/gst-supply.js?v=20260905deploy131" defer></script>
-    <script src="./js/pos-api.js?v=20260905deploy131" defer></script>
-    <script src="./js/units.js?v=20260905deploy131" defer></script>
-    <script src="./js/footwear.js?v=20260905deploy131" defer></script>
-    <script src="./js/discount.js?v=20260905deploy131" defer></script>
-    <script src="./js/offers.js?v=20260905deploy131" defer></script>
-    <script src="./js/loyalty.js?v=20260905deploy131" defer></script>
-    <script src="./js/barcode.js?v=20260905deploy131" defer></script>
+    <script src="./js/gst-supply.js?v=20260905deploy132" defer></script>
+    <script src="./js/pos-api.js?v=20260905deploy132" defer></script>
+    <script src="./js/units.js?v=20260905deploy132" defer></script>
+    <script src="./js/footwear.js?v=20260905deploy132" defer></script>
+    <script src="./js/discount.js?v=20260905deploy132" defer></script>
+    <script src="./js/offers.js?v=20260905deploy132" defer></script>
+    <script src="./js/loyalty.js?v=20260905deploy132" defer></script>
+    <script src="./js/barcode.js?v=20260905deploy132" defer></script>
     <script src="./js/camera-scan.js?v=20260904camera1" defer></script>
-    <script src="./js/dev-mode.js?v=20260905deploy131" defer></script>
-    <script src="./js/invoice.js?v=20260905deploy131" defer></script>
-    <script src="./js/support.js?v=20260905deploy131" defer></script>
+    <script src="./js/dev-mode.js?v=20260905deploy132" defer></script>
+    <script src="./js/invoice.js?v=20260905deploy132" defer></script>
+    <script src="./js/support.js?v=20260905deploy132" defer></script>
     <script src="./js/qrcode.iife.js?v=20260905qr1"></script>
-    <script src="./js/app.js?v=20260905deploy131" defer></script>
-    <script src="./js/growth.js?v=20260905deploy131" defer></script>
-    <script src="./js/offers-ui.js?v=20260905deploy131" defer></script>
+    <script src="./js/app.js?v=20260905deploy132" defer></script>
+    <script src="./js/growth.js?v=20260905deploy132" defer></script>
+    <script src="./js/offers-ui.js?v=20260905deploy132" defer></script>
   </body>
 </html>

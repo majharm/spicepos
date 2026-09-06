@@ -560,21 +560,34 @@ body:has(#view-expiry:not([hidden])) .platform-notices { display: none !importan
 }
 .counter-lane {
   /* scan-box: compact 2026 */
-  flex: 0 1 220px;
-  width: min(100%, 220px);
-  max-width: 220px;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
+  flex: 0 1 auto;
+  width: auto;
+  max-width: none;
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
   gap: 6px;
   min-width: 0;
 }
+.counter-lane .select {
+  flex: 0 0 auto;
+  width: 8.4em;
+  min-width: 7.2em;
+  max-width: 9.5em;
+  min-height: 32px;
+  padding: 4px 24px 4px 8px;
+  border-radius: 8px;
+  font-size: 12px;
+}
+.counter-lane #pack-choice[hidden] { display: none; }
 .scan-lane {
   display: grid;
   grid-template-columns: 14px minmax(0, 1fr) auto auto;
   align-items: center;
   gap: 6px;
-  min-width: 0;
-  max-width: 220px;
+  flex: 0 1 200px;
+  min-width: 140px;
+  max-width: 200px;
   padding: 0 8px;
   border-radius: 8px;
   border: 1px solid var(--vel-teal);
@@ -1050,7 +1063,6 @@ body.bill-collapsed .bill-toggle {
 body.bill-collapsed .ticket-head-copy,
 body.bill-collapsed .ticket-pack,
 body.bill-collapsed .pack-bar,
-body.bill-collapsed .bill-tools,
 body.bill-collapsed .combo-banner,
 body.bill-collapsed .offer-banner,
 body.bill-collapsed .lines,
@@ -1095,24 +1107,6 @@ body.bill-collapsed .bill-toggle[data-count]:not([data-count="0"])::after {
   font-size: 12px;
   font-weight: 700;
   color: var(--vel-teal);
-}
-.bill-tools {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 7.2em;
-  gap: 8px;
-  padding: 10px 14px 0;
-  flex: 0 0 auto;
-}
-.bill-tools .select {
-  min-width: 0;
-  min-height: 36px;
-  width: 100%;
-}
-.bill-tools #pack-choice[hidden] {
-  display: none;
-}
-.bill-tools:has(#pack-choice[hidden]) {
-  grid-template-columns: 1fr;
 }
 .catalog-empty {
   grid-column: 1 / -1;
@@ -3363,19 +3357,21 @@ button.items-stat.is-active {
     flex: 0 0 auto;
   }
   .counter-lane {
-    display: grid;
-    grid-template-columns: 1fr;
+    display: flex;
+    flex-wrap: nowrap;
     gap: 6px;
     flex: 1 1 100%;
     width: 100%;
     max-width: none;
   }
-  .bill-tools {
-    grid-template-columns: minmax(0, 1fr) 6.8em;
-    padding: 6px 12px 0;
+  .counter-lane .select {
+    width: 7.2em;
+    min-width: 6.4em;
+    max-width: 8em;
   }
   .scan-lane {
     padding: 0 8px;
+    flex: 1 1 120px;
     max-width: none;
     box-shadow: none;
     grid-template-columns: 14px minmax(0, 1fr) auto auto;

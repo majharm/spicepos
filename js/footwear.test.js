@@ -70,8 +70,9 @@ test("Counter has a dedicated scan lane and Pay action", () => {
   assert.match(app, /function findItemBySkuOrHsn/);
   assert.match(app, /No item matches/);
   assert.match(app, /function focusScanLane/);
-  assert.match(index, /id="bill-tools"/);
-  assert.match(css, /bill-tools/);
+  assert.match(index, /class="counter-lane"/);
+  assert.match(index, /id="pack-choice"/);
+  assert.match(index, /id="pay-method"/);
   assert.match(css, /catalog-empty/);
   assert.match(app, /Pay \$\{money\(payTotal\)\}/);
   assert.match(css, /\.scan-lane/);
