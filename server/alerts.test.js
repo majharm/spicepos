@@ -19,6 +19,7 @@ import {
   waDeliveryState,
   waRetryWaitMs,
   sendWhatsApp,
+  wrapTestAlertResult,
   buildDeliveryLogRows,
   WA_RATE_LIMIT_ERROR,
   DEFAULT_TEMPLATES,
@@ -200,6 +201,14 @@ test("Master Admin Settings lives under Backup with Active/Inactive templates", 
   assert.match(php, /master\/alerts\/send-expiry/);
   assert.match(php, /master\/alerts\/send-expired/);
   assert.match(php, /send-expiry-alert/);
+  assert.match(master, /id="alert-send-test"/);
+  assert.match(master, /\/api\/master\/alerts\/test/);
+  assert.match(php, /master\/alerts\/test/);
+  assert.match(nodeAlerts, /export async function sendTestAlert/);
+  assert.match(nodeAlerts, /wrapTestAlertResult/);
+  assert.match(alerts, /function pos_send_test_alert/);
+  assert.match(alerts, /function pos_wrap_test_alert_result/);
+  assert.match(master, /Test WhatsApp accepted/);
   assert.match(alerts, /pos_summarize_alert_results/);
   assert.match(alerts, /pos_wa_response_ok/);
   assert.match(alerts, /pos_wa_delivery_state/);
@@ -325,6 +334,17 @@ test("WhatsApp URL adds https media and keeps the message", () => {
   assert.match(url, /message=Hello/);
   assert.match(url, /media=https/);
   assert.doesNotMatch(url, /data:image/);
+});
+
+test("wrapTestAlertResult shapes a Master Admin test send", () => {
+  const out = wrapTestAlertResult({
+    wa: { ok: true, to: ["9112090347"], status: 200 },
+    mail: [{ ok: false, error: "SMTP not configured" }],
+  });
+  assert.equal(out.ok, true);
+  assert.equal(out.kind, "test");
+  assert.equal(out.summary.wa, 1);
+  assert.equal(out.results[0].wa.to[0], "9112090347");
 });
 
 test("notice images must be uploads or https", () => {

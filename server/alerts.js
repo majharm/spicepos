@@ -1520,23 +1520,41 @@ export async function tickAllClosingAlerts() {
   return results;
 }
 
+export function wrapTestAlertResult(delivery, shopName = "Master Admin") {
+  const wa = delivery?.wa || {};
+  const mail = Array.isArray(delivery?.mail) ? delivery.mail : [];
+  const sent = Boolean(wa.ok || mail.some((m) => m?.ok));
+  return {
+    ok: sent,
+    kind: "test",
+    results: [{ shopName, kind: "test", wa, mail }],
+    summary: {
+      wa: wa.ok ? 1 : 0,
+      mail: mail.filter((m) => m?.ok).length,
+      sent: sent ? 1 : 0,
+      skipped: 0,
+    },
+  };
+}
+
 export async function sendTestAlert({ number, businessId } = {}) {
-  const settings = await loadAlertSettings();
   const shop = businessId ? await shopContacts(businessId) : { phones: [], emails: [], shopName: "Master Admin" };
   const phone = normalizeInMobile(number) || shop.phones[0];
   if (!phone) throw new Error("Enter a 10-digit mobile number");
   const text = testText();
   const support = await getPlatformSettings();
   const extraEmail = support.support_email && support.support_email.includes("@") ? [support.support_email] : [];
-  return dispatchAlert({
+  const shopName = shop.shopName || "Master Admin";
+  const delivery = await dispatchAlert({
     phones: [phone],
     emails: [...shop.emails, ...extraEmail],
     subject: "ATAV POS WhatsApp test",
     text,
     kind: "test",
     businessId: businessId || "",
-    shopName: shop.shopName || "Master Admin",
+    shopName,
   });
+  return wrapTestAlertResult(delivery, shopName);
 }
 
 let ticking = false;

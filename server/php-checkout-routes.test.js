@@ -208,6 +208,9 @@ test("Master Admin can set passwords and unlock locked accounts", () => {
   assert.match(masterApi, /\/api\/master\/alerts\/send-expiry/);
   assert.match(masterApi, /\/api\/master\/alerts\/send-expired/);
   assert.match(masterApi, /\/api\/master\/alerts\/send/);
+  assert.match(masterApi, /\/api\/master\/alerts\/test/);
+  assert.match(masterJs, /id="alert-send-test"/);
+  assert.match(core, /master\/alerts\/test/);
   assert.match(masterJs, /send-alert-all-shops/);
   assert.match(core, /pos_send_manual_alerts|master\/alerts\/send/);
   assert.match(masterApi, /expiredOnly/);

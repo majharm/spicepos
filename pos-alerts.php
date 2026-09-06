@@ -1236,6 +1236,32 @@ function pos_tick_shop_alerts($bid = null) {
   return ["ok" => true];
 }
 
+function pos_wrap_test_alert_result($delivery, $shopName = "Master Admin") {
+  $wa = is_array($delivery["wa"] ?? null) ? $delivery["wa"] : [];
+  $mail = is_array($delivery["mail"] ?? null) ? $delivery["mail"] : [];
+  $mailOk = 0;
+  foreach ($mail as $row) {
+    if (!empty($row["ok"])) $mailOk += 1;
+  }
+  $sent = !empty($wa["ok"]) || $mailOk > 0;
+  return [
+    "ok" => $sent,
+    "kind" => "test",
+    "results" => [[
+      "shopName" => $shopName,
+      "kind" => "test",
+      "wa" => $wa,
+      "mail" => $mail,
+    ]],
+    "summary" => [
+      "wa" => !empty($wa["ok"]) ? 1 : 0,
+      "mail" => $mailOk,
+      "sent" => $sent ? 1 : 0,
+      "skipped" => 0,
+    ],
+  ];
+}
+
 function pos_send_test_alert($number = "", $businessId = null) {
   $shop = $businessId ? pos_shop_alert_contacts($businessId) : ["phones" => [], "emails" => []];
   $phone = pos_normalize_in_mobile($number) ?: ($shop["phones"][0] ?? "");
@@ -1244,5 +1270,7 @@ function pos_send_test_alert($number = "", $businessId = null) {
   $support = pos_platform_settings();
   $emails = $shop["emails"];
   if (!empty($support["support_email"]) && strpos($support["support_email"], "@") !== false) $emails[] = $support["support_email"];
-  return pos_alert_dispatch([$phone], $emails, "ATAV POS WhatsApp test", $text, "", "", pos_alert_log_meta("test", $shop, ["businessId" => (string) $businessId, "shopName" => $shop["shopName"] ?? "Master Admin"]));
+  $shopName = $shop["shopName"] ?? "Master Admin";
+  $delivery = pos_alert_dispatch([$phone], $emails, "ATAV POS WhatsApp test", $text, "", "", pos_alert_log_meta("test", $shop, ["businessId" => (string) $businessId, "shopName" => $shopName]));
+  return pos_wrap_test_alert_result($delivery, $shopName);
 }

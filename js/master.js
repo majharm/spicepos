@@ -1186,6 +1186,11 @@ function alertsFormHtml(alerts = {}) {
         <label>API key <input name="wa_api_key" type="password" autocomplete="off" value="${attr(alerts.wa_api_key || "")}" /></label>
         <label>Profile ID <input name="wa_profile_id" value="${attr(alerts.wa_profile_id || "")}" autocomplete="off" /></label>
         <label>Country code <input name="wa_country_code" value="${attr(alerts.wa_country_code || "91")}" maxlength="3" inputmode="numeric" /></label>
+        <label>Test mobile <input id="alert-test-number" inputmode="tel" placeholder="+91…" autocomplete="off" /></label>
+        <div class="backup-actions full">
+          <button class="btn primary" type="button" id="alert-send-test">Send test WhatsApp</button>
+        </div>
+        <p class="hint full" id="alert-test-hint">Sends a short test chat to this number, then opens the WA &amp; Email log.</p>
       </fieldset>
     </section>
     <div class="items-split msg-split">
@@ -1387,6 +1392,24 @@ function bindAlertsForm(alerts) {
     } catch (err) {
       hint.textContent = err.message;
       hint.className = "hint error";
+    }
+  });
+  const sendTest = $("alert-send-test");
+  if (sendTest) sendTest.addEventListener("click", async () => {
+    const hint = $("alert-test-hint") || $("alert-hint");
+    const number = $("alert-test-number")?.value || "";
+    if (hint) {
+      hint.className = "hint";
+      hint.textContent = "Sending test…";
+    }
+    try {
+      const out = await api("/api/master/alerts/test", { method: "POST", body: JSON.stringify({ number }) });
+      openWaEmailLog(out);
+    } catch (err) {
+      if (hint) {
+        hint.textContent = err.message;
+        hint.className = "hint error";
+      }
     }
   });
 }
@@ -2558,6 +2581,15 @@ function uniqueAlertBits(items, max = 3) {
 }
 
 function summarizeAlertDelivery(out) {
+  if (out?.kind === "test") {
+    const row = Array.isArray(out?.results) ? out.results[0] : null;
+    const to = formatAlertWaTo(row) || "the number";
+    if (row?.wa?.ok) {
+      return `Test WhatsApp accepted for ${to}. Reconnect the WA Master QR if the phone stays empty.`;
+    }
+    const why = row?.wa?.error || row?.wa?.reason || out?.error || "WhatsApp did not accept the test";
+    return `Test WhatsApp failed for ${to}: ${why}`;
+  }
   if (out?.skipped) {
     return out.reason === "alerts-off"
       ? "Renewal and expired alerts are inactive in Settings."

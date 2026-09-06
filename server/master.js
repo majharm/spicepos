@@ -21,6 +21,7 @@ import {
   ensureAlertSettings,
   sendRenewalAlerts,
   sendManualAlerts,
+  sendTestAlert,
   listAlertDeliveryLogs,
 } from "./alerts.js";
 
@@ -694,6 +695,21 @@ export function registerMaster(app) {
         module: "alerts",
         target_name: kinds.join(",") || "all types",
         target_id: req.body?.business_id || "all shops",
+      }, req);
+      return out;
+    }),
+  );
+
+  app.post("/api/master/alerts/test", (req, res) =>
+    send(res, async () => {
+      const number = req.body?.number || req.body?.mobile || "";
+      const out = await sendTestAlert({
+        number,
+        businessId: req.body?.business_id || req.body?.businessId || null,
+      });
+      await platformAudit(req.auth.admin, "Test Alert Sent", {
+        module: "alerts",
+        target_name: String(number || "test").slice(0, 20),
       }, req);
       return out;
     }),

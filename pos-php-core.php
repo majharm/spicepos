@@ -2304,6 +2304,11 @@ function pos_php_dispatch($path, $method, $rawBody) {
       pos_send(200, pos_send_manual_alerts($kinds, $body["business_id"] ?? ($body["businessId"] ?? null), $body["title"] ?? "", $body["body"] ?? ""));
     }
 
+    if ($path === "master/alerts/test" && $method === "POST") {
+      if (!function_exists("pos_send_test_alert")) throw new Exception("pos-alerts.php is missing on this host");
+      pos_send(200, pos_send_test_alert($body["number"] ?? ($body["mobile"] ?? ""), $body["business_id"] ?? ($body["businessId"] ?? null)));
+    }
+
     if ($path === "master/alerts/send-expiry" && $method === "POST") {
       if (!function_exists("pos_send_renewal_alerts")) throw new Exception("pos-alerts.php is missing on this host");
       $scope = (string) ($body["scope"] ?? "all");
