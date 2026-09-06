@@ -2,6 +2,7 @@ const $ = (id) => document.getElementById(id);
 let tab = "dash";
 let backupPane = "backup";
 let panelFlash = "";
+let alertLogFocus = "";
 
 async function api(path, options) {
   const { res, data } = await posRequest(path, options);
@@ -252,6 +253,46 @@ function formatAlertLogTo(row) {
   return row?.recipient || "—";
 }
 
+function uniqueAlertLogRecipients(list) {
+  const wa = [];
+  const mail = [];
+  const seenWa = new Set();
+  const seenMail = new Set();
+  for (const row of list || []) {
+    if (row?.channel === "whatsapp") {
+      const to = formatAlertLogTo(row);
+      if (to && to !== "—" && !seenWa.has(to)) {
+        seenWa.add(to);
+        wa.push(to);
+      }
+    } else if (row?.channel === "email") {
+      const to = String(row?.recipient || "").trim();
+      if (to && !seenMail.has(to.toLowerCase())) {
+        seenMail.add(to.toLowerCase());
+        mail.push(to);
+      }
+    }
+  }
+  return { wa, mail };
+}
+
+function alertLogRecipientChips(items, empty) {
+  if (!items.length) return `<span class="hint">${empty}</span>`;
+  return items.map((to) => `<button class="item-chip is-ok" type="button" data-alert-log-to="${attr(to)}">${attr(to)}</button>`).join("");
+}
+
+function alertRecipientsFromSend(out) {
+  const results = Array.isArray(out?.results) ? out.results : [];
+  return [...new Set(results.map(formatAlertWaTo).filter(Boolean))];
+}
+
+function openWaEmailLog(out) {
+  panelFlash = summarizeAlertDelivery(out);
+  const tos = alertRecipientsFromSend(out);
+  alertLogFocus = tos[0] ? String(tos[0]).replace(/\D/g, "").slice(-10) : "";
+  setMasterTab("alert-log");
+}
+
 function alertLogRowHay(row) {
   return `${row.shop_name || ""} ${row.recipient || ""} ${row.kind || ""} ${row.channel || ""} ${row.subject || ""} ${row.error || ""} ${row.detail || ""}`.toLowerCase();
 }
@@ -262,14 +303,29 @@ function alertLogPageHtml(rows) {
   const mailN = list.filter((r) => r.channel === "email").length;
   const failN = list.filter((r) => r.status === "failed").length;
   const skipN = list.filter((r) => r.status === "skipped").length;
+  const recips = uniqueAlertLogRecipients(list);
+  const flash = panelFlash
+    ? `<p class="hint ok" id="alert-log-flash">${attr(panelFlash)}</p>`
+    : "";
   return `<div class="items-desk master-desk expiry-alerts-desk">
-    ${masterHero("Platform", "WA Master & Email log", "Every WhatsApp queue and email attempt. WhatsApp Queued means WA Master accepted the number — not that the phone received it.", [
+    ${masterHero("Platform", "WA Master & Email log", "Every WhatsApp number and email this platform queued or mailed. WhatsApp Queued means WA Master accepted the number — not that the phone received it.", [
       { label: "Rows", value: list.length },
-      { label: "WhatsApp", value: waN },
-      { label: "Email", value: mailN },
+      { label: "Numbers", value: recips.wa.length },
+      { label: "Emails", value: recips.mail.length },
       { label: "Failed", value: failN, warn: failN > 0 },
     ])}
     <section class="settings item-composer expiry-alerts-panel">
+      ${flash}
+      <div class="alert-log-recipients">
+        <div>
+          <p class="support-preview-label">Every number</p>
+          <div class="msg-chips" id="alert-log-wa-chips">${alertLogRecipientChips(recips.wa, "No WhatsApp numbers yet.")}</div>
+        </div>
+        <div>
+          <p class="support-preview-label">Every email</p>
+          <div class="msg-chips" id="alert-log-mail-chips">${alertLogRecipientChips(recips.mail, "No emails yet.")}</div>
+        </div>
+      </div>
       <div class="items-library-head expiry-alerts-filters">
         <div class="settings-tabs" role="tablist" aria-label="Channel filters">
           <button class="btn active" type="button" data-alert-log-filter="all">All</button>
@@ -306,6 +362,7 @@ function alertLogPageHtml(rows) {
 function bindAlertLogPage(rows) {
   const list = rows || [];
   const body = $("alert-log-body");
+  if (panelFlash) panelFlash = "";
   if (!body) return;
   let filter = "all";
   const paint = () => {
@@ -339,7 +396,19 @@ function bindAlertLogPage(rows) {
       paint();
     });
   });
-  $("alert-log-search")?.addEventListener("input", paint);
+  const search = $("alert-log-search");
+  search?.addEventListener("input", paint);
+  document.querySelectorAll("[data-alert-log-to]").forEach((chip) => {
+    const to = chip.dataset.alertLogTo || "";
+    const digits = to.replace(/\D/g, "");
+    if (alertLogFocus && digits.endsWith(alertLogFocus)) chip.classList.add("is-warn");
+    chip.onclick = () => {
+      if (!search) return;
+      search.value = to;
+      paint();
+    };
+  });
+  alertLogFocus = "";
 }
 
 function formatPlatformTime(value) {
@@ -960,10 +1029,7 @@ function bindExpiryAlertsPage(shops) {
         }
       }
     }
-    if (hint) {
-      hint.textContent = summarizeAlertDelivery(mergeAlertResults(parts));
-      hint.className = "hint ok";
-    }
+    openWaEmailLog(mergeAlertResults(parts));
   };
   $("send-alert-all-shops")?.addEventListener("click", async () => {
     const kinds = selectedKinds();
@@ -1037,10 +1103,7 @@ function bindExpiryAlertsPage(shops) {
             body: $("send-alert-body")?.value || "",
           }),
         });
-        if (hint) {
-          hint.textContent = summarizeAlertDelivery(out);
-          hint.className = "hint ok";
-        }
+        openWaEmailLog(out);
       } catch (err) {
         if (hint) {
           hint.textContent = err.message;
@@ -1304,8 +1367,7 @@ function bindAlertsForm(alerts) {
     hint.textContent = "Sending…";
     try {
       const out = await api("/api/master/alerts/send-expiry", { method: "POST", body: JSON.stringify({ scope: "all" }) });
-      hint.textContent = summarizeAlertDelivery(out);
-      hint.className = "hint ok";
+      openWaEmailLog(out);
     } catch (err) {
       hint.textContent = err.message;
       hint.className = "hint error";
@@ -1685,8 +1747,7 @@ async function render() {
               method: "POST",
               body: "{}",
             });
-            panelFlash = summarizeAlertDelivery(out);
-            render();
+            openWaEmailLog(out);
           } catch (err) {
             alert(err.message);
           } finally {
@@ -2517,7 +2578,6 @@ function summarizeAlertDelivery(out) {
   msg += ` · Delivered ${sent}, skipped ${skipped}.`;
   if (rateLimited) msg += " WA Master hit its per-minute limit. Wait one minute, then send again for the shops that failed.";
   else if (wa > 0) msg += " WA Master accepted the queue — reconnect the WhatsApp QR if the phone stays empty.";
-  msg += " Open WA & Email log for every number.";
   if (skipBits) msg += ` ${skipBits}`;
   if (failBits) msg += ` ${failBits}`;
   return msg;

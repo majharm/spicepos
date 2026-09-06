@@ -177,7 +177,11 @@ test("Master Admin Settings lives under Backup with Active/Inactive templates", 
   assert.equal(smtp.smtp_user, "pos@atavtelecom.in");
   assert.match(master, /uniqueAlertBits/);
   assert.match(master, /WA Master hit its per-minute limit/);
-  assert.match(master, /Open WA & Email log/);
+  assert.match(master, /function openWaEmailLog/);
+  assert.match(master, /Every number/);
+  assert.match(master, /uniqueAlertLogRecipients/);
+  assert.match(master, /alert-log-recipients/);
+  assert.match(master, /id="alert-log-flash"/);
   assert.match(master, /300-chats-a-minute/);
   assert.match(master, /DEFAULT_SEND_KINDS/);
   assert.match(master, /postSendShops/);

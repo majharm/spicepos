@@ -1223,6 +1223,17 @@ body.dev-mode .session-bar::after {
   line-height: 1.45;
   color: var(--muted, #64748b);
 }
+.alert-log-recipients {
+  display: grid;
+  gap: 14px;
+  margin: 0 0 16px;
+}
+.alert-log-recipients .msg-chips {
+  margin-top: 6px;
+}
+.alert-log-recipients .item-chip {
+  cursor: pointer;
+}
 .master-desk .item-chip.is-ok {
   color: #0f766e;
   background: #ecfdf5;
