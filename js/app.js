@@ -12,6 +12,8 @@ const state = {
   appliedOffers: null,
   offerAuto: true,
   offerBillLocked: false,
+  offerPopupSig: "",
+  offerPopupDismissed: "",
   suppliers: [],
   cart: [],
   query: "",
@@ -332,6 +334,7 @@ function cancelOrderEdit() {
   state.editingOrderId = null;
   state.cart = [];
   state.lastPack = null;
+  resetOfferPopup();
   $("pack-choice").value = "";
   renderEditOrderBanner();
   renderCart();
@@ -544,6 +547,7 @@ function orderTotal(order, result) {
 function clearCounterAfterSale(order, result) {
   state.cart = [];
   state.lastPack = null;
+  resetOfferPopup();
   state.editingOrderId = null;
   state.billDiscountValue = 0;
   state.loyaltyRedeem = 0;
@@ -1342,6 +1346,8 @@ function renderCart() {
   renderEditOrderBanner();
   paintComboBanner();
   paintOfferBanner();
+  if (!state.cart.length) resetOfferPopup();
+  else showBestOfferPopup(pickBestOfferForCart(), false);
   if (window.DevMode?.isEnabled()) {
     DevMode.updateContext({ cartLines: state.cart.length });
   }
@@ -1606,29 +1612,8 @@ function addPack(packId) {
 function paintComboBar() {
   const bar = $("combo-bar");
   if (!bar) return;
-  const rows = (state.combos || []).filter((c) => String(c.status || "active") === "active");
-  (state.offers || []).forEach((o) => {
-    if ((o.offer_type || o.type) !== "combo") return;
-    if (!["active"].includes(o.live_status || o.status)) return;
-    if (rows.some((c) => c.id === o.id)) return;
-    const ids = o.conditions?.item_ids || [];
-    rows.push({
-      id: o.id,
-      name: o.name,
-      item_a_id: ids[0],
-      item_b_id: ids[1],
-      discount_type: o.discount_type === "combo_price" ? "amt" : o.discount_type,
-      discount_value: o.offer_price || o.discount_value,
-      status: "active",
-    });
-  });
-  bar.hidden = !rows.length;
-  bar.innerHTML = rows
-    .map(
-      (c) =>
-        `<button class="btn" type="button" data-apply-combo="${escapeHtml(c.id)}">${escapeHtml(c.name || "Combo")}</button>`,
-    )
-    .join("");
+  bar.hidden = true;
+  bar.innerHTML = "";
 }
 
 function applyComboOffer(id) {
@@ -1734,63 +1719,154 @@ function applyOffersToCart() {
   }
 }
 
+function findLegacyComboOnBill() {
+  const ids = state.cart.map((l) => l.itemId);
+  return (state.combos || []).find((c) => {
+    const a = ids.includes(c.item_a_id);
+    const b = ids.includes(c.item_b_id);
+    return a && b && String(c.status || "active") === "active";
+  });
+}
+
+function pickBestOfferForCart() {
+  const O = globalThis.POSOffers;
+  const best = O?.pickBest?.(state.appliedOffers);
+  if (best) return best;
+  const match = findLegacyComboOnBill();
+  if (!match) return null;
+  const pct = String(match.discount_type || "pct") !== "amt";
+  const val = Number(match.discount_value) || 0;
+  const already =
+    state.billDiscountType === (pct ? "pct" : "amt") && Number(state.billDiscountValue) === val;
+  const base = Number(cartTotals().taxable || 0);
+  const round2 = globalThis.POSDiscount?.round2 || ((n) => Math.round(Number(n) * 100) / 100);
+  const save = pct ? round2((base * val) / 100) : round2(val);
+  return {
+    kind: already ? "applied" : "available",
+    offer: { id: match.id, name: match.name, discount: save, message: match.name },
+    save,
+    legacyCombo: true,
+  };
+}
+
+function bestOfferSignature(best) {
+  if (!best) return "";
+  const o = best.offer || {};
+  return `${best.kind}:${o.id || o.name}:${best.save || 0}:${o.needQty || 0}`;
+}
+
+function hideBestOfferPopup() {
+  const el = $("offer-popup");
+  if (el) el.hidden = true;
+}
+
+function resetOfferPopup() {
+  state.offerPopupSig = "";
+  state.offerPopupDismissed = "";
+  hideBestOfferPopup();
+}
+
+function paintBestOfferPopup(best) {
+  const title = $("offer-popup-title");
+  const saveEl = $("offer-popup-save");
+  const copy = $("offer-popup-copy");
+  const skip = $("offer-popup-skip");
+  const ok = $("offer-popup-ok");
+  if (!title || !saveEl || !copy || !skip || !ok) return;
+  const name = best.offer?.name || "Offer";
+  title.textContent = name;
+  if (best.kind === "pending") {
+    saveEl.textContent = best.save > 0 ? `You will save ${money(best.save)}` : "";
+    copy.textContent = `Offer waiting. ${best.offer?.message || "Add the next item to unlock this offer."}`;
+    skip.hidden = true;
+    ok.textContent = "OK";
+    return;
+  }
+  skip.hidden = false;
+  skip.textContent = "Skip offer";
+  if (best.kind === "applied") {
+    saveEl.textContent = best.save > 0 ? `You save ${money(best.save)}` : "";
+    copy.textContent = "Offer applied. This is the best offer on this bill.";
+    ok.textContent = "Keep offer";
+    return;
+  }
+  saveEl.textContent = best.save > 0 ? `You save ${money(best.save)}` : "";
+  copy.textContent = "Best offer is ready to apply on this bill.";
+  ok.textContent = "Apply offer";
+}
+
+function showBestOfferPopup(best, force) {
+  const el = $("offer-popup");
+  if (!el) return;
+  if (!best) {
+    hideBestOfferPopup();
+    return;
+  }
+  const sig = bestOfferSignature(best);
+  if (!force && (sig === state.offerPopupSig || sig === state.offerPopupDismissed)) return;
+  state.offerPopupSig = sig;
+  paintBestOfferPopup(best);
+  el.hidden = false;
+}
+
+function dismissBestOfferPopup(skip) {
+  const best = pickBestOfferForCart();
+  state.offerPopupDismissed = bestOfferSignature(best) || state.offerPopupSig;
+  hideBestOfferPopup();
+  if (skip) {
+    state.offerAuto = false;
+    state.cart.forEach((l) => {
+      if (l.offerId) {
+        l.discountValue = 0;
+        l.offerId = "";
+      }
+    });
+    if (!state.offerBillLocked) {
+      state.billDiscountValue = 0;
+      if ($("bill-disc-value")) $("bill-disc-value").value = 0;
+    }
+    renderCart();
+    return;
+  }
+  if (best?.kind === "available") {
+    if (best.legacyCombo) {
+      applyComboOffer(best.offer.id);
+      return;
+    }
+    state.offerAuto = true;
+    state.offerBillLocked = false;
+    renderCart();
+  }
+}
+
 function paintOfferBanner() {
   const el = $("offer-banner");
   if (!el) return;
-  const result = state.appliedOffers;
-  const available = result?.available || [];
-  const applied = result?.applied || [];
-  const pending = [...(Array.isArray(result?.pending) ? result.pending : []), ...available].filter(
-    (o, i, arr) => o.pending && arr.findIndex((x) => (x.id || x.name) === (o.id || o.name)) === i,
-  );
-  if (!available.length && !applied.length && !pending.length) {
+  const best = pickBestOfferForCart();
+  if (!best) {
     el.hidden = true;
     el.innerHTML = "";
     return;
   }
   el.hidden = false;
-  const save = result?.discount || 0;
-  if (applied.length) {
-    const names = applied.map((o) => o.name).join(" · ");
-    el.innerHTML = `<strong>Offer applied</strong> ${escapeHtml(names)}. You save ${money(save)}.
-       <button class="btn" type="button" data-skip-offers="1">Skip offers</button>`;
-    return;
-  }
-  if (pending.length) {
-    const wait = pending[0];
-    const extra = Number(wait.wouldSave) > 0 ? ` You will save ${money(wait.wouldSave)}.` : "";
-    el.innerHTML = `<strong>Offer waiting</strong> ${escapeHtml(wait.message || wait.name)}.${extra}`;
-    return;
-  }
-  const names = available.map((o) => o.name).join(" · ");
-  el.innerHTML = `<strong>Offer available</strong> ${escapeHtml(names)}.
-       <button class="btn" type="button" data-use-offers="1">Apply</button>`;
+  const save = best.save > 0
+    ? best.kind === "pending"
+      ? `Will save ${money(best.save)}`
+      : `Save ${money(best.save)}`
+    : best.kind === "pending"
+      ? "Offer waiting"
+      : "Offer applied";
+  el.innerHTML = `<button class="offer-chip" type="button" data-open-best-offer="1">
+    <strong>Best offer</strong>
+    <span>${escapeHtml(best.offer?.name || "Offer")} · ${escapeHtml(save)}</span>
+  </button>`;
 }
 
 function paintComboBanner() {
   const el = $("combo-banner");
   if (!el) return;
-  const ids = state.cart.map((l) => l.itemId);
-  const match = (state.combos || []).find((c) => {
-    const a = ids.includes(c.item_a_id);
-    const b = ids.includes(c.item_b_id);
-    return a && b && String(c.status || "active") === "active";
-  });
-  if (!match) {
-    el.hidden = true;
-    el.innerHTML = "";
-    return;
-  }
-  const already =
-    state.billDiscountType === (String(match.discount_type || "pct") === "amt" ? "amt" : "pct") &&
-    Number(state.billDiscountValue) === Number(match.discount_value);
-  el.hidden = false;
-  el.innerHTML = already
-    ? `<strong>${escapeHtml(match.name)}</strong> discount is on this bill.`
-    : `<strong>${escapeHtml(match.name)}</strong> is on this bill.
-       <button class="btn" type="button" data-apply-combo="${escapeHtml(match.id)}">Apply ${
-         String(match.discount_type) === "amt" ? money(match.discount_value) : `${Number(match.discount_value) || 0}%`
-       } off</button>`;
+  el.hidden = true;
+  el.innerHTML = "";
 }
 
 function fillDatalists() {
@@ -3899,6 +3975,7 @@ $("btn-clear").addEventListener("click", () => {
   state.loyaltyRedeem = 0;
   state.offerAuto = true;
   state.offerBillLocked = false;
+  resetOfferPopup();
   if ($("bill-disc-value")) $("bill-disc-value").value = 0;
   if ($("loyalty-redeem")) $("loyalty-redeem").value = 0;
   $("pack-choice").value = "";
@@ -4912,6 +4989,10 @@ document.addEventListener("click", (e) => {
 $("open-growth")?.addEventListener("click", () => showView("growth"));
 $("open-offers")?.addEventListener("click", () => showView("offers"));
 document.addEventListener("click", (e) => {
+  if (e.target.closest("[data-open-best-offer]")) {
+    showBestOfferPopup(pickBestOfferForCart(), true);
+    return;
+  }
   if (e.target.closest("[data-skip-offers]")) {
     state.offerAuto = false;
     state.cart.forEach((l) => {
@@ -4931,6 +5012,19 @@ document.addEventListener("click", (e) => {
     state.offerAuto = true;
     state.offerBillLocked = false;
     renderCart();
+  }
+});
+$("offer-popup")?.addEventListener("click", (e) => {
+  if (e.target.id === "offer-popup") {
+    dismissBestOfferPopup(false);
+    return;
+  }
+  if (e.target.id === "offer-popup-skip") {
+    dismissBestOfferPopup(true);
+    return;
+  }
+  if (e.target.id === "offer-popup-ok") {
+    dismissBestOfferPopup(false);
   }
 });
 $("btn-hold")?.addEventListener("click", async () => {

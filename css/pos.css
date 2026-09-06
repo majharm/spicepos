@@ -2492,7 +2492,7 @@ button.items-stat.is-active {
 @media print {
   body { background: #fff; color: #111; }
   .nav, .topbar, .hint, .pay, .qty button, .nav-btn, .session-bar,
-  .report-toolbar, .accounts-toolbar, .print-actions { display: none !important; }
+  .report-toolbar, .accounts-toolbar, .print-actions, .offer-popup { display: none !important; }
   .app { display: block; }
   .view[hidden] { display: none !important; }
   .receipt { background: #fff; color: #111; max-height: none; }
@@ -3950,8 +3950,61 @@ button.items-stat.is-active {
   align-items: center;
   justify-content: space-between;
 }
-.combo-bar { margin-top: 6px; }
-.offer-banner { background: #ecfdf5; border-color: #6ee7b7; }
+.combo-bar { margin-top: 6px; display: none; }
+.offer-banner {
+  background: transparent;
+  border: 0;
+  padding: 6px 12px 0;
+  margin: 0;
+}
+.offer-chip {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid #6ee7b7;
+  background: #ecfdf5;
+  color: #065f46;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+}
+.offer-chip strong { font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase; }
+.offer-chip span { font-size: 13px; font-weight: 700; color: #047857; }
+.offer-popup { z-index: 24; }
+.offer-popup-sheet {
+  width: min(400px, calc(100% - 32px));
+  text-align: center;
+  padding: 22px 22px 18px;
+}
+.offer-popup-kicker {
+  margin: 0 0 6px;
+  color: #0f766e;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.offer-popup-sheet h3 {
+  margin: 0 0 8px;
+  font-size: 20px;
+}
+.offer-popup-save {
+  margin: 0 0 8px;
+  color: #047857;
+  font-size: 22px;
+  font-weight: 800;
+}
+.offer-popup-copy { margin: 0 0 16px; }
+.offer-popup-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+}
+.offer-popup-actions .btn { min-width: 7.5em; }
 .offer-dash {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));

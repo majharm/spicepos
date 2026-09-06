@@ -18,8 +18,12 @@ test("shop UI wires the Offers desk and Counter auto-apply", () => {
   assert.match(html, /Create new offer/);
   assert.match(html, /js\/offers\.js/);
   assert.match(html, /offer-banner/);
+  assert.match(html, /id="offer-popup"/);
+  assert.match(html, /Best offer/);
   assert.match(app, /applyOffersToCart/);
+  assert.match(app, /showBestOfferPopup/);
   assert.match(app, /Offer waiting/);
+  assert.match(engine, /pickBest/);
   assert.match(app, /appliedOffers\?\.pending/);
   assert.match(app, /offerIds/);
   assert.match(ui, /\/api\/offers/);

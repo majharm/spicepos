@@ -594,6 +594,31 @@
     };
   }
 
+  function pickBest(result) {
+    if (!result) return null;
+    const applied = [...(result.applied || [])].sort(
+      (a, b) => num(b.discount) - num(a.discount) || num(a.priority, 50) - num(b.priority, 50),
+    );
+    if (applied[0]) {
+      return {
+        kind: "applied",
+        offer: applied[0],
+        save: round2(num(result.discount, applied[0].discount)),
+      };
+    }
+    const pending = [...(result.pending || [])].sort((a, b) => num(b.wouldSave) - num(a.wouldSave));
+    if (pending[0]) {
+      return { kind: "pending", offer: pending[0], save: round2(num(pending[0].wouldSave)) };
+    }
+    const avail = [...(result.available || [])]
+      .filter((o) => !o.pending)
+      .sort((a, b) => num(b.discount) - num(a.discount));
+    if (avail[0]) {
+      return { kind: "available", offer: avail[0], save: round2(num(avail[0].discount)) };
+    }
+    return null;
+  }
+
   function profitPreview(offer, items = []) {
     const cond = parseConditions(offer);
     const ids = cond.item_ids;
@@ -752,6 +777,7 @@
     comboFromLegacy,
     evaluateOffer,
     evaluateAll,
+    pickBest,
     profitPreview,
     suggestFromGrowth,
     resultNarrative,

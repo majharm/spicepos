@@ -73,6 +73,9 @@ test("Counter has a dedicated scan lane and Pay action", () => {
   assert.match(index, /class="counter-lane"/);
   assert.match(index, /id="pack-choice"/);
   assert.match(index, /id="pay-method"/);
+  assert.match(index, /id="offer-popup"/);
+  assert.match(app, /function showBestOfferPopup/);
+  assert.match(css, /\.offer-popup-sheet/);
   assert.match(css, /catalog-empty/);
   assert.match(app, /Pay \$\{money\(payTotal\)\}/);
   assert.match(css, /\.scan-lane/);

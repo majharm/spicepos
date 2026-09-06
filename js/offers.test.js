@@ -238,6 +238,41 @@ test("duplicate clone keeps products and names the copy", () => {
   assert.equal(draftCopy.name, "Tea + Biscuits copy");
 });
 
+test("pickBest shows the applied combo with the biggest save", () => {
+  const combo = O.normalize({
+    name: "Black Pepper + हळद पावडर 1kg",
+    type: "combo",
+    status: "active",
+    discount_type: "pct",
+    discount_value: 8,
+    item_ids: ["pepper", "halad"],
+  });
+  const result = O.evaluateAll([combo], {
+    cart: [line("pepper", 603), line("halad", 400)],
+    now: new Date("2026-09-05T10:00:00"),
+  });
+  const best = O.pickBest(result);
+  assert.equal(best.kind, "applied");
+  assert.equal(best.offer.name, "Black Pepper + हळद पावडर 1kg");
+  assert.equal(best.save, 80.24);
+  const waiting = O.evaluateAll(
+    [
+      O.normalize({
+        name: "Buy 1 Get 1",
+        type: "bogo",
+        status: "active",
+        item_ids: ["halad"],
+        buy_qty: 1,
+        get_qty: 1,
+      }),
+    ],
+    { cart: [line("halad", 190, { qty: 1, isCount: true })], now: new Date("2026-09-05T10:00:00") },
+  );
+  const pending = O.pickBest(waiting);
+  assert.equal(pending.kind, "pending");
+  assert.ok(pending.save > 0);
+});
+
 test("legacy combo rows convert and AI suggest builds a combo draft", () => {
   const legacy = O.comboFromLegacy({ id: "c1", name: "Tea combo", item_a_id: "a", item_b_id: "b", discount_type: "pct", discount_value: 8, status: "active" });
   assert.equal(legacy.offer_type, "combo");
