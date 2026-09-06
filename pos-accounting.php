@@ -603,7 +603,7 @@ function pos_accounts_dispatch($path, $method, $body, $bid, $auth, $branchId, $u
     $from = $_GET["from"] ?? date("Y-m-d");
     $to = $_GET["to"] ?? $from;
     pos_send(200, pos_q(
-      "SELECT j.*, GROUP_CONCAT(CONCAT(a.code, ':', l.debit, '/', l.credit) SEPARATOR ' | ') AS lines
+      "SELECT j.*, GROUP_CONCAT(CONCAT(a.code, ':', l.debit, '/', l.credit) SEPARATOR ' | ') AS `lines`
        FROM journal_entries j
        LEFT JOIN journal_lines l ON l.journal_id = j.id
        LEFT JOIN chart_of_accounts a ON a.id = l.account_id

@@ -755,7 +755,7 @@ function pos_default_perms($role) {
     ]);
   }
   if ($role === "cashier") {
-    return ["dashboard" => true, "counter" => true, "customers" => true, "orders" => true, "support" => true, "discount" => true, "loyalty" => true, "offers" => true];
+    return ["dashboard" => true, "counter" => true, "customers" => true, "orders" => true, "accounts" => true, "support" => true, "discount" => true, "loyalty" => true, "offers" => true];
   }
   if ($role === "stock_manager") {
     return ["dashboard" => true, "items" => true, "stock" => true, "purchases" => true, "suppliers" => true, "reports" => true, "growth" => true, "support" => true, "damage" => true];

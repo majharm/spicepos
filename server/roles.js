@@ -51,6 +51,7 @@ export function defaultPerms(role) {
       counter: true,
       customers: true,
       orders: true,
+      accounts: true,
       reports: false,
       support: true,
       discount: true,

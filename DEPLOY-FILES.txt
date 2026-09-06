@@ -1,4 +1,4 @@
-Production deploy bundle — 20260905deploy135
+Production deploy bundle — 20260905deploy136
 =========================================
 
 Upload ALL files below to Hostinger public_html (overwrite):
@@ -162,7 +162,10 @@ FIXES in this bundle
   - Force expiry send always delivers (expires today counts as expired); skip reason shown
   - AI Growth dashboard: shop KPIs, SVG charts, Action Center, Ask Business AI, PDF/Excel
   - AI Growth sits in Main (under Dashboard) plus a Dashboard button so it is visible without scrolling
-  - Cache sticker 20260905deploy135 on shop Offers desk (deploy118 on master)
+  - Cache sticker 20260905deploy136 on shop Offers desk (deploy118 on master)
+  - Fix MariaDB reserved keyword syntax error in accounts journal query (\`lines\`)
+  - Footwear: allow comma/space separated multiple sizes when adding a single item
+  - Grant cashier role access to accounts module so ledger views work
   - Accounts Customer ledger and Supplier ledger with running balance
   - Counter scan, Loose items, payment, mobile, and customer stay on one small line
   - Counter Best offer popup instead of stacked combo/offer banners

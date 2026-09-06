@@ -120,6 +120,8 @@ test("Accounts wires customer and supplier ledgers", () => {
   assert.match(index, /id="acc-supplier"/);
   assert.match(index, /id="acc-pane-customer-ledger"/);
   assert.match(index, /id="acc-pane-supplier-ledger"/);
+  assert.match(accounts, /AS \\`lines\\`/);
+  assert.match(php, /AS `lines`/);
 });
 
 test("receipts and payments can be altered after save", () => {

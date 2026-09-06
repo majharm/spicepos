@@ -337,47 +337,52 @@ export function registerCrud(app) {
       return;
     }
     try {
-      const item = await withTransaction(async (conn) => {
-        const n = await nextSeq(conn, "item", 7);
+      const items = await withTransaction(async (conn) => {
         const [bizRows] = await conn.query("SELECT category, business_type FROM businesses WHERE id = ?", [bid()]);
         const footwear = POSFootwear.isFootwearShop(bizRows[0] || {});
         const variants = POSFootwear.fieldsFromBody(b);
         const prefix = footwear ? "FW" : "SP";
-        const code = b.code || `${prefix}-${String(n).padStart(3, "0")}`;
-        const id = crypto.randomUUID();
-        await conn.query(
-          `INSERT INTO items (
-             id, code, name, local_name, category, subcategory, color, size, wearer_type, base_unit,
-             purchase_rate, retail_rate, b2b_rate, gst_rate, hsn, image_url, stock_gm,
-             reorder_level_gm, status, business_id
-           ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'active', ?)`,
-          [
-            id,
-            code,
-            String(b.name).trim(),
-            b.local_name || null,
-            b.category || POSFootwear.defaultCategory(bizRows[0] || {}),
-            b.subcategory || null,
-            variants.color,
-            variants.size,
-            variants.wearer_type,
-            itemUnit(b.base_unit || b.unit || POSFootwear.defaultUnit(bizRows[0] || {})),
-            Number(b.purchase_rate) || 0,
-            Number(b.retail_rate) || 0,
-            Number(b.b2b_rate) || 0,
-            Number(b.gst_rate) || 5,
-            String(b.hsn || b.local_name || "").trim() || null,
-            imageUrl === undefined ? null : imageUrl,
-            Number(b.stock_gm) || 0,
-            Number(b.reorder_level_gm) || 0,
-            bid(),
-          ],
-        );
-        await onItemSaved(conn, bid(), id, b);
-        const [rows] = await conn.query("SELECT * FROM items WHERE id = ?", [id]);
-        return rows[0];
+        const sizesToCreate = footwear && variants.sizes?.length > 1 ? variants.sizes : [variants.size];
+        const created = [];
+        for (const sz of sizesToCreate) {
+          const n = await nextSeq(conn, "item", 7);
+          const code = (sizesToCreate.length === 1 && b.code) ? b.code : `${prefix}-${String(n).padStart(3, "0")}`;
+          const id = crypto.randomUUID();
+          await conn.query(
+            `INSERT INTO items (
+               id, code, name, local_name, category, subcategory, color, size, wearer_type, base_unit,
+               purchase_rate, retail_rate, b2b_rate, gst_rate, hsn, image_url, stock_gm,
+               reorder_level_gm, status, business_id
+             ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'active', ?)`,
+            [
+              id,
+              code,
+              String(b.name).trim(),
+              b.local_name || null,
+              b.category || POSFootwear.defaultCategory(bizRows[0] || {}),
+              b.subcategory || null,
+              variants.color,
+              sz || null,
+              variants.wearer_type,
+              itemUnit(b.base_unit || b.unit || POSFootwear.defaultUnit(bizRows[0] || {})),
+              Number(b.purchase_rate) || 0,
+              Number(b.retail_rate) || 0,
+              Number(b.b2b_rate) || 0,
+              Number(b.gst_rate) || 5,
+              String(b.hsn || b.local_name || "").trim() || null,
+              imageUrl === undefined ? null : imageUrl,
+              Number(b.stock_gm) || 0,
+              Number(b.reorder_level_gm) || 0,
+              bid(),
+            ],
+          );
+          await onItemSaved(conn, bid(), id, { ...b, size: sz });
+          const [rows] = await conn.query("SELECT * FROM items WHERE id = ?", [id]);
+          if (rows[0]) created.push(rows[0]);
+        }
+        return created;
       });
-      res.json({ ok: true, item });
+      res.json({ ok: true, item: items[0], items, created_count: items.length });
     } catch (err) {
       res.status(500).json({ error: String(err.message) });
     }

@@ -554,7 +554,7 @@ export function registerAccounts(app) {
       const from = req.query.from || new Date().toISOString().slice(0, 10);
       const to = req.query.to || from;
       const rows = await query(
-        `SELECT j.*, GROUP_CONCAT(CONCAT(a.code, ':', l.debit, '/', l.credit) SEPARATOR ' | ') AS lines
+        `SELECT j.*, GROUP_CONCAT(CONCAT(a.code, ':', l.debit, '/', l.credit) SEPARATOR ' | ') AS \`lines\`
          FROM journal_entries j
          LEFT JOIN journal_lines l ON l.journal_id = j.id
          LEFT JOIN chart_of_accounts a ON a.id = l.account_id

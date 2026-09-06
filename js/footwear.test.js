@@ -54,8 +54,12 @@ test("Item form and Counter expose colour, size, and girls/boys", () => {
   assert.match(crud, /wearer_type/);
   assert.match(crud, /POSFootwear\.billName/);
   const php = readFileSync(path.join(root, "pos-crud.php"), "utf8");
-  assert.match(php, /wearer_type/);
-  assert.match(readFileSync(path.join(root, "pos-php-core.php"), "utf8"), /function pos_item_bill_name/);
+  assert.match(crud, /variants\.sizes/);
+  assert.match(php, /sizesToCreate/);
+  assert.deepEqual(F.parseSizes("6, 7, 8"), ["6", "7", "8"]);
+  assert.deepEqual(F.parseSizes(" 5 6 7 "), ["5", "6", "7"]);
+  assert.deepEqual(F.parseSizes("7"), ["7"]);
+  assert.equal(F.fieldsFromBody({ size: "6,7,8" }).sizes.length, 3);
 });
 
 test("Counter has a dedicated scan lane and Pay action", () => {

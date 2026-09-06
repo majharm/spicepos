@@ -4322,9 +4322,14 @@ $("item-form").addEventListener("submit", async (e) => {
     image_url: state.itemImage || "",
   };
   try {
-    if ($("item-id").value) await api(`/api/items/${$("item-id").value}`, { method: "PUT", body: JSON.stringify(body) });
-    else await api("/api/items", { method: "POST", body: JSON.stringify(body) });
-    $("item-hint").textContent = "Saved";
+    if ($("item-id").value) {
+      await api(`/api/items/${$("item-id").value}`, { method: "PUT", body: JSON.stringify(body) });
+      $("item-hint").textContent = "Saved";
+    } else {
+      const res = await api("/api/items", { method: "POST", body: JSON.stringify(body) });
+      const count = res?.created_count || (res?.items ? res.items.length : 1);
+      $("item-hint").textContent = count > 1 ? `Created ${count} sizes` : "Saved";
+    }
     $("item-hint").className = "hint ok";
     resetItemForm();
     await loadBootstrap();

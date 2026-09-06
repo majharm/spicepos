@@ -70,45 +70,73 @@ function pos_crud_dispatch($path, $method, $body, $bid, $auth, $branchId, $uid) 
     pos_ensure_item_unit_columns();
     $bizRows = pos_q("SELECT category, business_type FROM businesses WHERE id = ? LIMIT 1", "s", [$bid]);
     $footwear = pos_is_footwear_shop($bizRows[0] ?? []);
-    $id = pos_uuid();
-    $n = pos_next_seq("item", $bid, 7);
-    $code = $body["code"] ?? (($footwear ? "FW-" : "SP-") . str_pad((string) $n, 3, "0", STR_PAD_LEFT));
     $unitRaw = trim((string) ($body["base_unit"] ?? $body["unit"] ?? ""));
     $unit = pos_item_unit($unitRaw !== "" ? $unitRaw : ($footwear ? "PCS" : "GM"));
     $image = pos_item_image_url($body);
     $color = trim((string) ($body["color"] ?? "")) ?: null;
-    $size = trim((string) ($body["size"] ?? "")) ?: null;
+    $rawSizes = $body["sizes"] ?? $body["size"] ?? "";
+    $sizesList = [];
+    if (is_array($rawSizes)) {
+      foreach ($rawSizes as $sz) {
+        $st = trim((string) $sz);
+        if ($st !== "") $sizesList[] = $st;
+      }
+    } else {
+      $split = preg_split('/[\s,+/]+/', trim((string) $rawSizes));
+      if ($split) {
+        foreach ($split as $st) {
+          $st = trim($st);
+          if ($st !== "") $sizesList[] = $st;
+        }
+      }
+    }
+    $sizesList = array_values(array_unique($sizesList));
+    $sizesToCreate = ($footwear && count($sizesList) > 1) ? $sizesList : [count($sizesList) === 1 ? $sizesList[0] : (trim((string) ($body["size"] ?? "")) ?: null)];
     $wearer = pos_item_wearer($body["wearer_type"] ?? "") ?: null;
     $category = trim((string) ($body["category"] ?? "")) ?: ($footwear ? "Footwear" : "Whole Spices");
-    pos_q(
-      "INSERT INTO items (
-         id, code, name, local_name, category, subcategory, color, size, wearer_type, base_unit,
-         purchase_rate, retail_rate, b2b_rate, gst_rate, hsn, image_url, stock_gm,
-         reorder_level_gm, status, business_id
-       ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'active', ?)",
-      "ssssssssssddddssdds",
-      [
-        $id, $code, $name, $body["local_name"] ?? null, $category,
-        $body["subcategory"] ?? null, $color, $size, $wearer, $unit,
-        (float) ($body["purchase_rate"] ?? 0), (float) ($body["retail_rate"] ?? 0),
-        (float) ($body["b2b_rate"] ?? 0), (float) ($body["gst_rate"] ?? 5),
-        trim((string) ($body["hsn"] ?? $body["local_name"] ?? "")) ?: null,
-        ($image === null || $image === "") ? null : $image,
-        (float) ($body["stock_gm"] ?? 0), (float) ($body["reorder_level_gm"] ?? 0), $bid,
-      ]
-    );
-    try {
-      pos_q("UPDATE items SET unit = ? WHERE id = ?", "ss", [$unit, $id]);
-    } catch (Exception $e) { /* unit column optional */ }
-    if (is_file(__DIR__ . "/pos-advanced.php")) {
-      require_once __DIR__ . "/pos-advanced.php";
-      if (function_exists("pos_assign_item_barcodes")) pos_assign_item_barcodes($bid, $id, $body);
+    $createdItems = [];
+    foreach ($sizesToCreate as $size) {
+      $id = pos_uuid();
+      $n = pos_next_seq("item", $bid, 7);
+      $code = (count($sizesToCreate) === 1 && !empty($body["code"]))
+        ? $body["code"]
+        : (($footwear ? "FW-" : "SP-") . str_pad((string) $n, 3, "0", STR_PAD_LEFT));
+      pos_q(
+        "INSERT INTO items (
+           id, code, name, local_name, category, subcategory, color, size, wearer_type, base_unit,
+           purchase_rate, retail_rate, b2b_rate, gst_rate, hsn, image_url, stock_gm,
+           reorder_level_gm, status, business_id
+         ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'active', ?)",
+        "ssssssssssddddssdds",
+        [
+          $id, $code, $name, $body["local_name"] ?? null, $category,
+          $body["subcategory"] ?? null, $color, $size, $wearer, $unit,
+          (float) ($body["purchase_rate"] ?? 0), (float) ($body["retail_rate"] ?? 0),
+          (float) ($body["b2b_rate"] ?? 0), (float) ($body["gst_rate"] ?? 5),
+          trim((string) ($body["hsn"] ?? $body["local_name"] ?? "")) ?: null,
+          ($image === null || $image === "") ? null : $image,
+          (float) ($body["stock_gm"] ?? 0), (float) ($body["reorder_level_gm"] ?? 0), $bid,
+        ]
+      );
+      try {
+        pos_q("UPDATE items SET unit = ? WHERE id = ?", "ss", [$unit, $id]);
+      } catch (Exception $e) { /* unit column optional */ }
+      if (is_file(__DIR__ . "/pos-advanced.php")) {
+        require_once __DIR__ . "/pos-advanced.php";
+        if (function_exists("pos_assign_item_barcodes")) pos_assign_item_barcodes($bid, $id, array_merge($body, ["size" => $size]));
+      }
+      if (array_key_exists("mrp", $body)) {
+        try { pos_q("UPDATE items SET mrp = ? WHERE id = ?", "ds", [(float) $body["mrp"], $id]); } catch (Exception $e) { /* optional */ }
+      }
+      $rows = pos_q("SELECT * FROM items WHERE id = ? LIMIT 1", "s", [$id]);
+      if (!empty($rows[0])) $createdItems[] = $rows[0];
     }
-    if (array_key_exists("mrp", $body)) {
-      try { pos_q("UPDATE items SET mrp = ? WHERE id = ?", "ds", [(float) $body["mrp"], $id]); } catch (Exception $e) { /* optional */ }
-    }
-    $rows = pos_q("SELECT * FROM items WHERE id = ? LIMIT 1", "s", [$id]);
-    pos_send(200, ["ok" => true, "item" => $rows[0] ?? null]);
+    pos_send(200, [
+      "ok" => true,
+      "item" => $createdItems[0] ?? null,
+      "items" => $createdItems,
+      "created_count" => count($createdItems),
+    ]);
   }
 
   if (preg_match('#^items/([^/]+)$#', $path, $m) && $method === "PUT") {

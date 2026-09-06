@@ -65,10 +65,21 @@
     return isFootwearShop(biz) ? "PCS" : "GM";
   }
 
+  function parseSizes(raw) {
+    if (Array.isArray(raw)) return [...new Set(raw.map((s) => String(s || "").trim()).filter(Boolean))];
+    const s = String(raw || "").trim();
+    if (!s) return [];
+    return [...new Set(s.split(/[\s,+/]+/).map((p) => p.trim()).filter(Boolean))];
+  }
+
   function fieldsFromBody(body) {
+    const rawSizes = body?.sizes !== undefined ? body.sizes : body?.size;
+    const list = parseSizes(rawSizes);
+    const size = list.length === 1 ? list[0] : (String(body?.size || "").trim() || (list[0] || null));
     return {
       color: String(body?.color || "").trim() || null,
-      size: String(body?.size || "").trim() || null,
+      size,
+      sizes: list,
       wearer_type: normalizeWearer(body?.wearer_type) || null,
     };
   }
@@ -84,6 +95,7 @@
     billName,
     defaultCategory,
     defaultUnit,
+    parseSizes,
     fieldsFromBody,
   };
 });
