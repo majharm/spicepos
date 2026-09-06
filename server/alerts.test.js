@@ -97,9 +97,16 @@ test("Master Admin Settings lives under Backup with Active/Inactive templates", 
   const nodeAlerts = readFileSync(path.join(root, "server/alerts.js"), "utf8");
   const index = readFileSync(path.join(root, "server/index.js"), "utf8");
   assert.doesNotMatch(masterHtml, /data-tab="alerts"/);
+  assert.match(masterHtml, /nav-group-label">Advance</);
+  assert.match(masterHtml, /data-tab="advance"/);
   assert.match(masterHtml, /data-backup-pane="settings">Settings</);
   assert.match(masterHtml, /nav-sub" data-tab="backup" data-backup-pane="backup">Backup</);
   assert.match(masterHtml, /nav-sub" data-tab="notes">Messages</);
+  assert.match(masterHtml, /nav-sub" data-tab="branches">Branches</);
+  assert.match(masterHtml, /nav-sub" data-tab="devices">POS devices</);
+  assert.match(masterHtml, /nav-sub" data-tab="audit">Audit log</);
+  assert.match(master, /function advanceHubHtml/);
+  assert.match(master, /tab === "advance"/);
   assert.doesNotMatch(masterHtml, />Notifications</);
   assert.match(master, /function backupFamilyTabs/);
   assert.match(master, /id="alert-form"/);
@@ -127,8 +134,8 @@ test("Master Admin Settings lives under Backup with Active/Inactive templates", 
   assert.match(alerts, /\$expired = \$days <= 0/);
   assert.match(nodeAlerts, /dispatchAlert\(\{[\s\S]*Welcome to ATAV POS/s);
   assert.match(master, /alert-send-expiry/);
-  assert.match(masterHtml, /data-tab="expiry">Send alerts</);
-  assert.match(masterHtml, /data-tab="alert-log">WA & Email log</);
+  assert.match(masterHtml, /data-tab="expiry"[^>]*>[\s\S]*?Send alerts</);
+  assert.match(masterHtml, /data-tab="alert-log"[^>]*>[\s\S]*?WA & Email log</);
   assert.match(master, /alertLogPageHtml/);
   assert.match(master, /\/api\/master\/alert-log/);
   assert.match(nodeAlerts, /alert_delivery_logs/);

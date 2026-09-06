@@ -6,8 +6,8 @@
     <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
     <title>Master Admin · ATAV POS</title>
     <link rel="icon" href="./favicon.svg" />
-    <link rel="stylesheet" href="./css/pos.css?v=20260905deploy118" />
-    <link rel="stylesheet" href="./css/saas.css?v=20260905deploy118" />
+    <link rel="stylesheet" href="./css/pos.css?v=20260905deploy137" />
+    <link rel="stylesheet" href="./css/saas.css?v=20260905deploy137" />
   </head>
   <body class="master-locked">
     <div class="master-shell">
@@ -16,22 +16,35 @@
           <img src="./assets/atav-telecom-logo.png" alt="ATAV Telecom" width="140" height="60" />
           <h1>Master Admin</h1>
         </div>
-        <button type="button" class="active" data-tab="dash">Dashboard</button>
-        <button type="button" data-tab="biz">Businesses</button>
-        <button type="button" data-tab="expiry">Send alerts</button>
-        <button type="button" data-tab="alert-log">WA & Email log</button>
-        <button type="button" data-tab="managers">Account managers</button>
-        <button type="button" data-tab="users">Users</button>
-        <button type="button" data-tab="plans">Plans</button>
-        <button type="button" data-tab="branches">Branches</button>
-        <button type="button" data-tab="devices">POS devices</button>
-        <button type="button" data-tab="audit">Audit log</button>
-        <div class="master-nav-group">
-          <button type="button" data-tab="backup" data-backup-pane="settings">Settings</button>
-          <button type="button" class="nav-sub" data-tab="backup" data-backup-pane="backup">Backup</button>
-          <button type="button" class="nav-sub" data-tab="notes">Messages</button>
+        <div class="master-nav-scroll">
+          <div class="master-nav-group">
+            <p class="nav-group-label">Main</p>
+            <button type="button" class="active" data-tab="dash"><span class="nav-icon" aria-hidden="true">⌂</span>Dashboard</button>
+            <button type="button" data-tab="biz"><span class="nav-icon" aria-hidden="true">◈</span>Businesses</button>
+            <button type="button" data-tab="users"><span class="nav-icon" aria-hidden="true">◉</span>Users</button>
+            <button type="button" data-tab="plans"><span class="nav-icon" aria-hidden="true">▤</span>Plans</button>
+          </div>
+          <div class="master-nav-group">
+            <p class="nav-group-label">Alerts</p>
+            <button type="button" data-tab="expiry"><span class="nav-icon" aria-hidden="true">⚑</span>Send alerts</button>
+            <button type="button" data-tab="alert-log"><span class="nav-icon" aria-hidden="true">▤</span>WA & Email log</button>
+          </div>
+          <div class="master-nav-group">
+            <p class="nav-group-label">People</p>
+            <button type="button" data-tab="managers"><span class="nav-icon" aria-hidden="true">◎</span>Account managers</button>
+            <button type="button" data-tab="support"><span class="nav-icon" aria-hidden="true">?</span>Support helpline</button>
+          </div>
+          <div class="master-nav-group">
+            <p class="nav-group-label">Advance</p>
+            <button type="button" data-tab="advance"><span class="nav-icon" aria-hidden="true">⚙</span>Advance</button>
+            <button type="button" class="nav-sub" data-tab="backup" data-backup-pane="settings">Settings</button>
+            <button type="button" class="nav-sub" data-tab="backup" data-backup-pane="backup">Backup</button>
+            <button type="button" class="nav-sub" data-tab="notes">Messages</button>
+            <button type="button" class="nav-sub" data-tab="branches">Branches</button>
+            <button type="button" class="nav-sub" data-tab="devices">POS devices</button>
+            <button type="button" class="nav-sub" data-tab="audit">Audit log</button>
+          </div>
         </div>
-        <button type="button" data-tab="support">Support helpline</button>
         <div class="nav-foot">
           <button class="btn-logout" type="button" id="logout" data-logout>Logout</button>
         </div>
@@ -56,8 +69,8 @@
         </div>
       </main>
     </div>
-    <script src="./js/pos-api.js?v=20260905deploy118" defer></script>
-    <script src="./js/support.js?v=20260905deploy118" defer></script>
-    <script src="./js/master.js?v=20260905deploy118" defer></script>
+    <script src="./js/pos-api.js?v=20260905deploy137" defer></script>
+    <script src="./js/support.js?v=20260905deploy137" defer></script>
+    <script src="./js/master.js?v=20260905deploy137" defer></script>
   </body>
 </html>

@@ -605,6 +605,40 @@ function masterHero(kicker, title, lede, stats = []) {
   </header>`;
 }
 
+function masterDesk(kicker, title, lede, stats, inner) {
+  return `<div class="items-desk master-desk">${masterHero(kicker, title, lede, stats)}${inner}</div>`;
+}
+
+function advanceCard(tabId, pane, title, blurb) {
+  return `<button class="master-advance-card" type="button" data-advance-tab="${tabId}"${pane ? ` data-advance-pane="${pane}"` : ""}>
+    <strong>${title}</strong>
+    <span>${blurb}</span>
+  </button>`;
+}
+
+function bindAdvanceCards(root) {
+  root?.querySelectorAll("[data-advance-tab]").forEach((btn) => {
+    btn.onclick = () => setMasterTab(btn.dataset.advanceTab, btn.dataset.advancePane || undefined);
+  });
+}
+
+function advanceHubHtml() {
+  return masterDesk(
+    "Platform",
+    "Advance",
+    "Platform tools: WhatsApp and SMTP, backups, shop notices, and the full branch, device, and audit lists.",
+    [],
+    `<div class="master-advance-grid">
+      ${advanceCard("backup", "settings", "Settings", "WhatsApp, Hostinger SMTP, and Active or Inactive auto-messages.")}
+      ${advanceCard("backup", "backup", "Backup", "Download or restore one shop, or the full platform.")}
+      ${advanceCard("notes", "", "Messages", "Post a notice to one shop or every business.")}
+      ${advanceCard("branches", "", "Branches", "Every shop branch and its status.")}
+      ${advanceCard("devices", "", "POS devices", "Registered tills and device codes.")}
+      ${advanceCard("audit", "", "Audit log", "Who changed what across the platform.")}
+    </div>`,
+  );
+}
+
 function statusChip(status) {
   const s = String(status || "—");
   const low = s.toLowerCase();
@@ -1295,16 +1329,27 @@ async function render() {
     notes: "Messages",
     alerts: "Settings",
     support: "Support helpline",
+    advance: "Advance",
   };
   $("panel-title").textContent = titles[tab] || "Dashboard";
-  $("panel")?.classList.toggle("has-desk", ["biz", "managers", "backup", "alerts", "notes", "expiry", "alert-log"].includes(tab));
+  $("panel")?.classList.toggle("has-desk", true);
   const body = $("panel-body");
   body.innerHTML = "<p class='hint'>Loading…</p>";
   try {
     if (tab === "dash") {
       const d = await api("/api/master/dashboard");
       const t = d.totals;
-      body.innerHTML = `<div class="kpi-grid">
+      body.innerHTML = masterDesk(
+        "Platform",
+        "Dashboard",
+        "Shops, subscriptions, and a shortcut into any POS.",
+        [
+          { label: "Shops", value: t.businesses },
+          { label: "Active", value: t.active },
+          { label: "Expired", value: t.expired, warn: Number(t.expired) > 0 },
+          { label: "Users", value: t.users },
+        ],
+        `<div class="kpi-grid">
         ${[
           ["Total businesses", t.businesses],
           ["Active", t.active],
@@ -1330,7 +1375,8 @@ async function render() {
           b.branches,
           `<button class="btn primary" type="button" data-enter="${b.id}">Open POS</button>`,
         ]),
-      )}</div>`;
+      )}</div>`,
+      );
       bindEnterPosButtons(body);
     } else if (tab === "biz") {
       const [rows, plans, managers] = await Promise.all([
@@ -1723,8 +1769,16 @@ async function render() {
       bindExpiryAlertsPage(shops);
     } else if (tab === "users") {
       const rows = await api("/api/master/users");
-      body.innerHTML = `<p class="lede">Set a login password for any shop user, or unlock an account after too many failed sign-ins.</p>
-        <form class="settings wide" id="user-pw-form" hidden>
+      const lockedN = rows.filter((u) => /lock/i.test(accountStatusLabel(u))).length;
+      body.innerHTML = masterDesk(
+        "Platform",
+        "Users",
+        "Set a login password for any shop user, or unlock an account after too many failed sign-ins.",
+        [
+          { label: "Users", value: rows.length },
+          { label: "Locked", value: lockedN, warn: lockedN > 0 },
+        ],
+        `<form class="settings wide" id="user-pw-form" hidden>
           <h3 class="full">Set user password</h3>
           <input type="hidden" name="user_id" />
           <p class="section-note" id="user-pw-who"></p>
@@ -1747,7 +1801,8 @@ async function render() {
            <button class="btn" type="button" data-reset-user="${u.id}">Set password</button>
            <button class="btn" type="button" data-unlock="${u.id}">Unlock</button>`,
         ]),
-      )}</div>`;
+      )}</div>`,
+      );
       bindEnterPosButtons(body);
       const usersHint = $("users-hint");
       const userPw = bindPasswordForm($("user-pw-form"), $("user-pw-hint"), $("user-pw-who"), $("user-pw-cancel"), async (fd, password) => {
@@ -1784,7 +1839,12 @@ async function render() {
       }
     } else if (tab === "plans") {
       const rows = await api("/api/master/plans");
-      body.innerHTML = `<form class="settings wide" id="plan-form">
+      body.innerHTML = masterDesk(
+        "Platform",
+        "Plans",
+        "Use Edit to change an existing plan. A new code creates a plan.",
+        [{ label: "Plans", value: rows.length }],
+        `<form class="settings wide" id="plan-form">
         <input type="hidden" name="plan_id" />
         <label>Code <input name="code" required placeholder="BASIC" /></label>
         <label>Name <input name="name" required placeholder="Basic" /></label>
@@ -1798,7 +1858,6 @@ async function render() {
         <button class="btn" type="button" id="plan-cancel" hidden>Cancel edit</button>
         <p class="hint" id="plan-hint"></p>
       </form>
-      <p class="lede">Use <strong>Edit</strong> to change an existing plan. New codes create a plan.</p>
       <div class="table-wrap">${table(
         ["Code", "Name", "Fee / month", "Branches", "Users", "Devices", "Products", "Active", ""],
         rows.map((p) => [
@@ -1812,7 +1871,8 @@ async function render() {
           p.active ? "yes" : "no",
           `<button class="btn" type="button" data-edit="${p.id}">Edit</button>`,
         ]),
-      )}</div>`;
+      )}</div>`,
+      );
       const form = $("plan-form");
       const saveBtn = $("plan-save");
       const cancelBtn = $("plan-cancel");
@@ -1858,17 +1918,32 @@ async function render() {
           hint.className = "hint error";
         }
       };
+    } else if (tab === "advance") {
+      body.innerHTML = advanceHubHtml();
+      bindAdvanceCards(body);
     } else if (tab === "branches") {
       const rows = await api("/api/master/branches");
-      body.innerHTML = table(
-        ["Business", "Branch", "Status"],
-        rows.map((r) => [r.business_name, r.name, r.status]),
+      body.innerHTML = masterDesk(
+        "Advance",
+        "Branches",
+        "Every shop branch on the platform.",
+        [{ label: "Branches", value: rows.length }],
+        `<div class="table-wrap">${table(
+          ["Business", "Branch", "Status"],
+          rows.map((r) => [r.business_name, r.name, statusChip(r.status)]),
+        )}</div>`,
       );
     } else if (tab === "devices") {
       const rows = await api("/api/master/devices");
-      body.innerHTML = table(
-        ["Business", "Branch", "Device", "Code", "Status"],
-        rows.map((r) => [r.business_name, r.branch_name, r.name, r.code, r.status]),
+      body.innerHTML = masterDesk(
+        "Advance",
+        "POS devices",
+        "Registered tills and device codes.",
+        [{ label: "Devices", value: rows.length }],
+        `<div class="table-wrap">${table(
+          ["Business", "Branch", "Device", "Code", "Status"],
+          rows.map((r) => [r.business_name, r.branch_name, r.name, r.code, statusChip(r.status)]),
+        )}</div>`,
       );
     } else if (tab === "alert-log") {
       const rows = await api("/api/master/alert-log");
@@ -1876,16 +1951,22 @@ async function render() {
       bindAlertLogPage(rows);
     } else if (tab === "audit") {
       const rows = await api("/api/master/audit");
-      body.innerHTML = table(
-        ["When", "Actor", "Action", "Module", "Business", "Order / details"],
-        rows.map((r) => [
-          formatPlatformTime(r.created_at),
-          r.actor_name,
-          r.action,
-          r.module,
-          businessLabel(r),
-          auditDetails(r),
-        ]),
+      body.innerHTML = masterDesk(
+        "Advance",
+        "Audit log",
+        "Who changed what across the platform.",
+        [{ label: "Rows", value: rows.length }],
+        `<div class="table-wrap">${table(
+          ["When", "Actor", "Action", "Module", "Business", "Order / details"],
+          rows.map((r) => [
+            formatPlatformTime(r.created_at),
+            r.actor_name,
+            r.action,
+            r.module,
+            businessLabel(r),
+            auditDetails(r),
+          ]),
+        )}</div>`,
       );
     } else if (tab === "backup" || tab === "alerts") {
       if (tab === "alerts") backupPane = "settings";
@@ -1914,7 +1995,7 @@ async function render() {
           pane === "settings" ? "Settings" : "Backup",
           pane === "settings"
             ? "Connect WhatsApp and Hostinger SMTP, then turn each auto-message Active or Inactive. Shops receive WhatsApp on their mobile and email from pos@atavtelecom.in."
-            : "Download or restore one shop, or the full platform. Backup and Messages are under Settings.",
+            : "Download or restore one shop, or the full platform. Settings, Backup, and Messages live under Advance.",
           pane === "backup"
             ? [{ label: "Shops", value: shops.length }]
             : [
@@ -2283,9 +2364,13 @@ async function render() {
       }
     } else if (tab === "support") {
       const s = await api("/api/master/support");
-      body.innerHTML = `<div class="support-admin">
+      body.innerHTML = masterDesk(
+        "People",
+        "Support helpline",
+        "The sign-in screen always uses this platform helpline. Assigned shops see their account manager on Support instead; shops without one see this number.",
+        [],
+        `<div class="support-admin">
         <div>
-          <p class="lede">The sign-in screen always uses this platform helpline. Assigned shops see their account manager on Support instead; shops without one see this number.</p>
           <form class="settings settings-page" id="support-form">
             <div class="settings-section">
               <h3>Helpline</h3>
@@ -2305,7 +2390,8 @@ async function render() {
           <p class="support-preview-label">Shop preview</p>
           <div class="support-page" id="support-preview"></div>
         </aside>
-      </div>`;
+      </div>`,
+      );
       const form = $("support-form");
       const paintPreview = () => {
         const preview = $("support-preview");

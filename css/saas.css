@@ -513,9 +513,17 @@ body.auth-body::-webkit-scrollbar-thumb {
   flex-direction: column;
   gap: 2px;
   min-height: 0;
+  overflow: hidden;
+}
+.master-nav-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
   overflow-x: hidden;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
+  display: grid;
+  gap: 12px;
+  padding-right: 2px;
 }
 .master-brand {
   display: grid;
@@ -557,6 +565,17 @@ body.auth-body::-webkit-scrollbar-thumb {
   display: flex;
   flex-direction: column;
   gap: 2px;
+}
+.master-nav .nav-group-label {
+  margin: 0 8px 4px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #64748b;
+}
+.master-nav .nav-icon {
+  color: inherit;
 }
 .master-nav .nav-sub {
   margin-left: 10px;
@@ -695,6 +714,16 @@ body.auth-body::-webkit-scrollbar-thumb {
     align-items: center;
     gap: 4px;
     padding: 10px 12px;
+    overflow: visible;
+  }
+  .master-nav-scroll {
+    flex: 1 1 100%;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 8px;
+    overflow: visible;
+    padding-right: 0;
   }
   .master-brand {
     flex: 1 0 100%;
@@ -726,15 +755,21 @@ body.auth-body::-webkit-scrollbar-thumb {
     flex-direction: row;
     flex-wrap: wrap;
     align-items: center;
+    gap: 4px;
+  }
+  .master-nav .nav-group-label {
+    flex: 1 0 100%;
+    margin: 6px 4px 0;
   }
   .master-nav .nav-sub { margin-left: 0; }
   .master-main { padding: 16px 14px 24px; }
   .support-admin { grid-template-columns: 1fr; }
+  .master-backup-grid,
+  .master-advance-grid { grid-template-columns: 1fr; }
   .qty button, .btn, .nav-btn { min-height: 44px; }
 }
 body.master-locked .master-shell { grid-template-columns: 1fr; }
-body.master-locked .master-nav > button,
-body.master-locked .master-nav-group,
+body.master-locked .master-nav-scroll,
 body.master-locked .master-nav .nav-foot { display: none; }
 body.master-locked .master-nav {
   justify-content: center;
@@ -1156,6 +1191,37 @@ body.dev-mode .session-bar::after {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;
   align-items: start;
+}
+.master-advance-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px;
+}
+.master-advance-card {
+  display: grid;
+  gap: 6px;
+  text-align: left;
+  padding: 16px 16px 18px;
+  border-radius: 14px;
+  border: 1px solid var(--line, #e2e8f0);
+  background: #fff;
+  box-shadow: var(--shadow-card);
+  cursor: pointer;
+  color: inherit;
+}
+.master-advance-card:hover {
+  border-color: var(--vel-teal, #0d9488);
+  box-shadow: 0 0 0 3px rgba(13, 148, 136, 0.12);
+}
+.master-advance-card strong {
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--vel-text, #0f172a);
+}
+.master-advance-card span {
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--muted, #64748b);
 }
 .master-desk .item-chip.is-ok {
   color: #0f766e;
