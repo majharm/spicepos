@@ -593,8 +593,8 @@ function pos_evaluate_offer($o, $cart) {
     foreach ($lines as $line) {
       $id = (string) ($line["itemId"] ?? "");
       $gross = (float) ($line["gross"] ?? 0);
-      if (($o["discount_type"] ?? "") === "price" || isset($o["offer_price"])) {
-        $special = (float) ($o["offer_price"] ?? 0);
+      $special = (float) ($o["offer_price"] ?? 0);
+      if (($o["discount_type"] ?? "") === "price" && $special > 0) {
         $d = pos_offer_r2(max(0, $gross - $special * max(1, pos_offer_piece_qty($line))));
       } else {
         $d = pos_offer_discount_on($gross, $o["discount_type"] ?? "pct", $o["discount_value"] ?? 0);

@@ -162,7 +162,7 @@ FIXES in this bundle
   - Force expiry send always delivers (expires today counts as expired); skip reason shown
   - AI Growth dashboard: shop KPIs, SVG charts, Action Center, Ask Business AI, PDF/Excel
   - AI Growth sits in Main (under Dashboard) plus a Dashboard button so it is visible without scrolling
-  - Cache sticker 20260905deploy136 on shop Offers desk (deploy139 on QR order, deploy138 on master)
+  - Cache sticker 20260905deploy136 on shop Offers desk (deploy140 on QR order and shop app.js, deploy138 on master)
   - After Send alerts, open WA & Email log and list every number
   - QR based orders apply active shop offers on the menu, cart, and saved order
   - Master Admin grouped nav (Main, Alerts, People, Advance) plus Advance hub

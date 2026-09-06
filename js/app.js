@@ -3276,6 +3276,17 @@ function qrOrderQty(line) {
   return fmtQty(Number(line.quantity_gm) || 0, { base_unit: line.unit || "PCS" });
 }
 
+function qrOrderTotalsHtml(order) {
+  const save = Math.round((Number(order.discount) || 0) * 100) / 100;
+  const items = Math.round(((Number(order.subtotal) || 0) + save) * 100) / 100;
+  const label = String(order.offer_label || "Offer").trim();
+  const disc = save > 0 || order.offer_label
+    ? `<div class="qr-order-total"><span>Items</span><strong>${money(items)}</strong></div>
+        <div class="qr-order-total qr-order-discount"><span>Discount${label ? ` · ${escapeHtml(label)}` : ""}</span><strong>−${money(save)}</strong></div>`
+    : "";
+  return `${disc}<div class="qr-order-total"><span>Total incl. GST</span><strong>${money(order.total)}</strong></div>`;
+}
+
 function renderQrOrders() {
   const query = String($("qr-order-search")?.value || "").trim().toLowerCase();
   const rows = qrOrderCache.filter((order) => {
@@ -3299,8 +3310,7 @@ function renderQrOrders() {
         <div class="qr-order-lines">${(order.lines || []).map((line) =>
           `<div class="qr-order-line"><span>${escapeHtml(line.item_name)} · ${escapeHtml(qrOrderQty(line))}</span><strong>${money(line.amount)}</strong></div>`,
         ).join("")}</div>
-        <div class="qr-order-total"><span>Total incl. GST</span><strong>${money(order.total)}</strong></div>
-        ${Number(order.discount) > 0 || order.offer_label ? `<p class="qr-order-note">Offer: ${escapeHtml(order.offer_label || "Applied")} · save ${money(order.discount)}</p>` : ""}
+        ${qrOrderTotalsHtml(order)}
         ${order.notes ? `<p class="qr-order-note">Note: ${escapeHtml(order.notes)}</p>` : ""}
         <div class="qr-order-actions">
           ${!["completed", "cancelled"].includes(order.status) ? `<button class="btn primary" type="button" data-qr-counter="${escapeHtml(order.id)}">Open in Counter</button>` : ""}

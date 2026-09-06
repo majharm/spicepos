@@ -501,8 +501,8 @@
       if (!lines.length) return null;
       lines.forEach((l) => {
         let d = 0;
-        if (offer.discount_type === "price" || offer.offer_price != null) {
-          const special = num(offer.offer_price);
+        const special = num(offer.offer_price);
+        if (offer.discount_type === "price" && special > 0) {
           d = round2(Math.max(0, lineGrossOf(l) - special * (l.isCount ? pieceQty(l) : 1)));
         } else {
           d = discountOn(lineGrossOf(l), offer.discount_type, offer.discount_value);
@@ -628,7 +628,7 @@
     const original = round2(pick.reduce((s, i) => s + num(i.retail_rate || i.rate_per_kg || i.mrp), 0));
     const cost = round2(pick.reduce((s, i) => s + num(i.purchase_rate || i.cost), 0));
     let discount = 0;
-    if (offer.discount_type === "combo_price" || offer.offer_price != null) {
+    if (offer.discount_type === "combo_price" || (offer.discount_type === "price" && num(offer.offer_price) > 0)) {
       discount = round2(Math.max(0, original - num(offer.offer_price ?? cond.bundle_price ?? offer.discount_value)));
     } else {
       discount = discountOn(original, offer.discount_type, offer.discount_value);

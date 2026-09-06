@@ -2402,6 +2402,7 @@ body.footwear-mode.counter-mode .stage.is-counter .card .sku { display: block; f
 .qr-order-lines { display: grid; gap: 5px; margin: 0 0 10px; padding: 10px; border-radius: 10px; background: #f8fafc; }
 .qr-order-line { display: flex; justify-content: space-between; gap: 10px; font-size: 12px; }
 .qr-order-total { display: flex; justify-content: space-between; padding-top: 8px; border-top: 1px solid var(--line); font-size: 15px; }
+.qr-order-discount { color: #0f766e; font-weight: 800; border-top: 0; padding-top: 4px; }
 .qr-order-note { margin: 9px 0 0; color: var(--muted); font-size: 12px; }
 .qr-order-actions { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 12px; }
 .nav-badge { min-width: 18px; margin-left: auto; padding: 2px 5px; border-radius: 999px; color: #7c2d12; background: #fed7aa; font-size: 10px; text-align: center; }

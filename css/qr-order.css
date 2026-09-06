@@ -33,8 +33,11 @@ main { max-width: 1180px; margin: auto; padding: 18px clamp(14px, 4vw, 44px) 30p
   font-weight: 700;
 }
 .item-offer { margin: 4px 0 0; color: #0f766e; font-size: 12px; font-weight: 800; }
+.item-price s { margin-right: 6px; color: #94a3b8; font-weight: 600; }
 .offer-save, .offer-wait { display: flex; justify-content: space-between; margin: 4px 0 8px; color: #0f766e; font-weight: 800; }
-.offer-wait { display: block; }
+.offer-wait { display: block; padding: 8px 10px; border-radius: 10px; background: #ecfdf5; }
+.success-save { margin: 0 0 6px; color: #0f766e !important; font-weight: 800; }
+.success-total { margin: 0 0 8px; color: #10211f !important; font-weight: 800; }
 .category-pills { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 12px; scrollbar-width: none; }
 .category-pills button { flex: 0 0 auto; padding: 8px 13px; border: 1px solid var(--line); border-radius: 999px; color: #334155; background: white; }
 .category-pills button.active { color: white; border-color: var(--teal); background: var(--teal); }

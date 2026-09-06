@@ -273,6 +273,25 @@ test("pickBest shows the applied combo with the biggest save", () => {
   assert.ok(pending.save > 0);
 });
 
+test("PHP-shaped percent offer ignores leftover offer_price 0 so the discount applies", () => {
+  const offer = {
+    name: "Vase 10% off",
+    offer_type: "product",
+    status: "active",
+    live_status: "active",
+    discount_type: "pct",
+    discount_value: "10.00",
+    offer_price: "0.00",
+    conditions_json: JSON.stringify({ item_ids: ["vase"] }),
+  };
+  const hit = O.evaluateAll([offer], {
+    cart: [line("vase", 500)],
+    now: new Date("2026-09-06T10:00:00"),
+  });
+  assert.equal(hit.discount, 50);
+  assert.equal(hit.lineDiscounts.vase, 50);
+});
+
 test("legacy combo rows convert and AI suggest builds a combo draft", () => {
   const legacy = O.comboFromLegacy({ id: "c1", name: "Tea combo", item_a_id: "a", item_b_id: "b", discount_type: "pct", discount_value: 8, status: "active" });
   assert.equal(legacy.offer_type, "combo");
