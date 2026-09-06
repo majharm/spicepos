@@ -147,6 +147,8 @@ function applyFootwearMode() {
   });
   const search = $("search");
   if (search) search.placeholder = on ? "Search shoe, colour, or size…" : "Search name or HSN…";
+  const scan = $("scan-code");
+  if (scan) scan.placeholder = on ? "Scan, tap, or search shoe, colour, or size" : "Scan, tap, or search name, HSN, SKU, or barcode";
   if ($("item-category-lab")) $("item-category-lab").textContent = on ? "Style" : "Category";
   if ($("item-category")) $("item-category").placeholder = on ? "School / Sports / Sandal" : "Whole Spices";
   if ($("item-subcategory-lab")) $("item-subcategory-lab").textContent = on ? "Brand" : "Subcategory";
@@ -156,8 +158,8 @@ function applyFootwearMode() {
       ? "Name, colour, size, girls/boys type, photo, rates, and stock."
       : "Name, photo, HSN code, unit type, rates, and stock.";
   }
-  if ($("ticket-sub")) {
-    $("ticket-sub").textContent = on ? "Scan or tap a pair · girls or boys" : "Scan, tap, or search";
+  if ($("ticket-sub") && !state.cart?.length) {
+    $("ticket-sub").textContent = on ? "Scan or tap a pair · girls or boys" : "Tap a product or scan";
   }
   VIEW_META.items.subtitle = on
     ? "Colour, size, girls/boys type, rates, and stock"
@@ -454,8 +456,33 @@ function findItemByBarcode(code) {
   }) || null;
 }
 
+function findItemBySkuOrHsn(code) {
+  const q = String(code || "").trim().toLowerCase();
+  if (!q) return null;
+  const hits = activeItems().filter((i) =>
+    [i.code, i.hsn, i.sku].some((v) => String(v || "").trim().toLowerCase() === q),
+  );
+  return hits.length === 1 ? hits[0] : null;
+}
+
+function syncCounterQuery(raw, sourceEl) {
+  const q = String(raw || "");
+  state.query = q;
+  if ($("search") && sourceEl !== $("search")) $("search").value = q;
+  if ($("scan-code") && sourceEl !== $("scan-code")) $("scan-code").value = q;
+  renderCatalogDebounced();
+}
+
+function clearCounterQuery(sourceEl) {
+  state.query = "";
+  if ($("search")) $("search").value = "";
+  if ($("scan-code") && sourceEl !== $("scan-code")) $("scan-code").value = "";
+  if (sourceEl) sourceEl.value = "";
+  renderCatalog();
+}
+
 function packLabel() {
-  if (!state.lastPack) return "Pack: Loose items (no pack)";
+  if (!state.lastPack) return "";
   const pack = state.packs.find((p) => p.id === state.lastPack.id);
   const name = pack?.name || state.lastPack.name || "Pack";
   return `Pack: ${name} × ${state.lastPack.count || 1}`;
@@ -523,8 +550,9 @@ function clearCounterAfterSale(order, result) {
   if ($("bill-disc-value")) $("bill-disc-value").value = 0;
   if ($("loyalty-redeem")) $("loyalty-redeem").value = 0;
   state.query = "";
-  $("search").value = "";
-  $("pack-choice").value = "";
+  if ($("search")) $("search").value = "";
+  if ($("scan-code")) $("scan-code").value = "";
+  if ($("pack-choice")) $("pack-choice").value = "";
   renderCatalog();
   renderCart();
   setHint(`Order accepted · ${orderLabel(order, result)} · ${money(orderTotal(order, result))}`, "ok");
@@ -1174,7 +1202,15 @@ function resetItemImage() {
 }
 
 function renderCatalog() {
-  $("catalog").innerHTML = filteredItems()
+  const rows = filteredItems();
+  if (!rows.length) {
+    const q = String(state.query || "").trim();
+    $("catalog").innerHTML = `<div class="catalog-empty">${
+      q ? `No items match “${escapeHtml(q)}”. Try another name, HSN, or SKU.` : "No items in this shop yet."
+    }</div>`;
+    return;
+  }
+  $("catalog").innerHTML = rows
     .map((i) => {
       const low = Number(i.stock_gm) <= Number(i.reorder_level_gm);
       return `<button class="card" type="button" data-add="${escapeHtml(i.id)}">
@@ -1224,9 +1260,21 @@ function cartTotals() {
 
 function renderCart() {
   applyOffersToCart();
-  $("chosen-pack").textContent = packLabel();
+  const packEl = $("chosen-pack");
+  const packText = packLabel();
+  if (packEl) {
+    packEl.textContent = packText;
+    packEl.hidden = !packText;
+  }
+  if ($("ticket-sub")) {
+    $("ticket-sub").textContent = state.cart.length
+      ? `${state.cart.length} line${state.cart.length === 1 ? "" : "s"}`
+      : isFootwearShop()
+        ? "Scan or tap a pair · girls or boys"
+        : "Tap a product or scan";
+  }
   if (!state.cart.length) {
-    $("lines").innerHTML = `<p class="hint">Scan a barcode or tap an item.</p>`;
+    $("lines").innerHTML = `<p class="catalog-empty lines-empty">Tap a product or scan a barcode.</p>`;
   } else {
     $("lines").innerHTML = state.cart
       .map((line) => {
@@ -1344,17 +1392,24 @@ async function saveCustomer(fields) {
 }
 
 function renderPackChoice() {
-  const current = $("pack-choice").value;
-  $("pack-choice").innerHTML =
-    `<option value="">Loose items (no pack)</option>` +
+  const sel = $("pack-choice");
+  if (!sel) return;
+  const current = sel.value;
+  sel.innerHTML =
+    `<option value="">Loose items</option>` +
     state.packs
       .map((p) => `<option value="${escapeHtml(p.id)}">${escapeHtml(p.name)}</option>`)
       .join("");
-  if (state.lastPack?.id) $("pack-choice").value = state.lastPack.id;
-  else $("pack-choice").value = current || "";
-  $("pack-bar").innerHTML = state.packs
-    .map((p) => `<button class="btn" type="button" data-pack="${escapeHtml(p.id)}">${escapeHtml(p.name)}</button>`)
-    .join("");
+  if (state.lastPack?.id) sel.value = state.lastPack.id;
+  else sel.value = current || "";
+  sel.hidden = isFootwearShop() || !state.packs.length;
+  const bar = $("pack-bar");
+  if (bar) {
+    bar.innerHTML = state.packs
+      .map((p) => `<button class="btn" type="button" data-pack="${escapeHtml(p.id)}">${escapeHtml(p.name)}</button>`)
+      .join("");
+    bar.hidden = true;
+  }
 }
 
 function focusScanLane() {
@@ -1412,27 +1467,39 @@ async function applyBarcodeScan(raw, sourceEl) {
     }
     item = findItemByBarcode(code);
   }
+  if (!item) item = findItemBySkuOrHsn(code);
   if (item) {
-    addItem(item.id, null, code);
-    if (sourceEl) sourceEl.value = "";
-    if (sourceEl === $("search")) {
-      state.query = "";
-      renderCatalog();
-    }
+    addItem(item.id, null, findItemByBarcode(code) ? code : "");
+    clearCounterQuery(sourceEl);
     paintScanLane(true, item.name);
     setHint(`Added ${item.name}`, "ok");
     focusScanLane();
     return true;
   }
-  if (sourceEl === $("scan-code") && digitsMobile(code).length === 10 && applyCounterMobile(code, { announceMiss: false })) {
-    if (sourceEl) sourceEl.value = "";
+  if (digitsMobile(code).length === 10 && applyCounterMobile(code, { announceMiss: false })) {
+    clearCounterQuery(sourceEl);
     paintScanLane(true, customer()?.name || "Customer");
     focusScanLane();
     return true;
   }
-  paintScanLane(false, "Not found");
-  setHint(`Barcode not found: ${code}`, "error");
-  if (sourceEl === $("scan-code")) sourceEl.select();
+  syncCounterQuery(code, sourceEl);
+  const hits = filteredItems();
+  if (hits.length === 1) {
+    addItem(hits[0].id);
+    clearCounterQuery(sourceEl);
+    paintScanLane(true, hits[0].name);
+    setHint(`Added ${hits[0].name}`, "ok");
+    focusScanLane();
+    return true;
+  }
+  if (hits.length > 1) {
+    paintScanLane(true, `${hits.length} matches`);
+    setHint(`Pick one of ${hits.length} matches`, "ok");
+    return false;
+  }
+  paintScanLane(false, "No match");
+  setHint(`No item matches “${code}”`, "error");
+  if (sourceEl === $("scan-code") || sourceEl === $("search")) sourceEl.select();
   return false;
 }
 
@@ -3767,8 +3834,10 @@ $("order-pane").addEventListener("change", async (e) => {
 });
 
 $("search").addEventListener("input", () => {
-  state.query = $("search").value;
-  renderCatalogDebounced();
+  syncCounterQuery($("search").value, $("search"));
+});
+$("scan-code")?.addEventListener("input", () => {
+  syncCounterQuery($("scan-code").value, $("scan-code"));
 });
 $("wearer-filter")?.addEventListener("change", () => {
   state.wearerFilter = $("wearer-filter").value;
