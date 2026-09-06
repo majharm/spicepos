@@ -282,6 +282,9 @@ test("HTML and CSS cache stickers match deploy136", () => {
   assert.match(index, /id="qr-menu-code"/);
   assert.match(index, /id="qr-order-list"/);
   assert.match(index, /id="qr-shop-id"/);
+  assert.match(index, /id="qr-order-toast"/);
+  assert.match(index, /id="qr-sound-toggle"/);
+  assert.match(index, /js\/qr-notify\.js/);
   const qrPoster = readFileSync(path.join(root, "qr.html"), "utf8");
   assert.match(qrPoster, /qrcode\.iife\.js/);
   assert.match(qrPoster, /order\.html\?shop=/);
@@ -294,6 +297,9 @@ test("HTML and CSS cache stickers match deploy136", () => {
   assert.match(qrOrderJs, /\/api\/qr\/orders/);
   assert.match(qrOrderJs, /function offerResult/);
   assert.match(qrOrderJs, /Discount/);
+  const qrNotify = readFileSync(path.join(root, "js/qr-notify.js"), "utf8");
+  assert.match(qrNotify, /function playTone/);
+  assert.match(pos, /qr-order-toast/);
   assert.match(qrOrderPhp, /pos_apply_qr_offers/);
   assert.match(qrOrderPhp, /offer_label/);
   assert.match(qrOrderPhp, /function pos_qr_public_dispatch/);
@@ -328,6 +334,7 @@ test("HTML and CSS cache stickers match deploy136", () => {
   assert.match(pos, /\.stage\.is-counter \.totals \.grand \{ font-size: 16px; \}/);
   assert.doesNotMatch(pos, /minmax\(0, 240px\)/);
   const appJs = readFileSync(path.join(root, "js/app.js"), "utf8");
+  assert.match(appJs, /function startQrOrderWatch/);
   assert.match(appJs, /input\.select/);
   assert.match(pos, /office-preview/);
   assert.match(appJs, /Print official bill/);

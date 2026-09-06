@@ -6,7 +6,7 @@
     <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
     <title>ATAV POS</title>
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./css/pos.css?v=20260905deploy140" />
+    <link rel="stylesheet" href="./css/pos.css?v=20260905deploy141" />
     <link rel="stylesheet" href="./css/saas.css?v=20260905deploy136" />
   </head>
   <body>
@@ -466,7 +466,10 @@
                 <h2>QR Orders</h2>
                 <p>Customers scan, choose available items, and send an order. Stock changes only after you open it in Counter and complete the bill.</p>
               </div>
-              <button class="btn" type="button" id="qr-orders-refresh">Refresh orders</button>
+              <div class="qr-orders-hero-actions">
+                <button class="btn" type="button" id="qr-sound-toggle" aria-pressed="true">Sound on</button>
+                <button class="btn" type="button" id="qr-orders-refresh">Refresh orders</button>
+              </div>
             </header>
             <section class="qr-setup-card">
               <div>
@@ -1277,6 +1280,15 @@
         </section>
       </div>
     </div>
+    <div class="qr-order-toast" id="qr-order-toast" hidden role="status" aria-live="assertive">
+      <div>
+        <p class="qr-toast-kicker">NEW QR ORDER</p>
+        <strong id="qr-toast-title">New customer order</strong>
+        <p id="qr-toast-copy"></p>
+      </div>
+      <button class="btn primary" type="button" id="qr-toast-open">Open</button>
+      <button class="icon-btn qr-toast-x" type="button" id="qr-toast-dismiss" aria-label="Dismiss">×</button>
+    </div>
     <div class="modal offer-popup" id="offer-popup" hidden>
       <div class="dialog offer-popup-sheet" role="dialog" aria-modal="true" aria-labelledby="offer-popup-title">
         <p class="offer-popup-kicker">Best offer</p>
@@ -1342,7 +1354,8 @@
     <script src="./js/invoice.js?v=20260905deploy136" defer></script>
     <script src="./js/support.js?v=20260905deploy136" defer></script>
     <script src="./js/qrcode.iife.js?v=20260905qr1"></script>
-    <script src="./js/app.js?v=20260905deploy140" defer></script>
+    <script src="./js/qr-notify.js?v=20260905deploy141" defer></script>
+    <script src="./js/app.js?v=20260905deploy141" defer></script>
     <script src="./js/growth.js?v=20260905deploy136" defer></script>
     <script src="./js/offers-ui.js?v=20260905deploy136" defer></script>
   </body>

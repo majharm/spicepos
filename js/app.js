@@ -3228,6 +3228,10 @@ async function loadOrders() {
 }
 
 let qrOrderCache = [];
+let qrSeenOrderIds = null;
+let qrPollTimer = null;
+let qrToastTimer = 0;
+let qrToastOrderId = "";
 let qrOrderStatus = "";
 
 function shopBusinessId() {
@@ -3276,6 +3280,81 @@ function qrOrderQty(line) {
   return fmtQty(Number(line.quantity_gm) || 0, { base_unit: line.unit || "PCS" });
 }
 
+function paintQrOrderBadge() {
+  const pending = qrOrderCache.filter((order) => order.status === "pending").length;
+  const badge = $("qr-order-badge");
+  if (badge) {
+    badge.textContent = String(pending);
+    badge.hidden = pending === 0;
+  }
+}
+
+function paintQrSoundToggle() {
+  const btn = $("qr-sound-toggle");
+  if (!btn) return;
+  const on = globalThis.POSQrNotify?.soundOn() !== false;
+  btn.textContent = on ? "Sound on" : "Sound off";
+  btn.setAttribute("aria-pressed", on ? "true" : "false");
+}
+
+function hideQrOrderToast() {
+  const toast = $("qr-order-toast");
+  if (toast) toast.hidden = true;
+  qrToastOrderId = "";
+  if (qrToastTimer) clearTimeout(qrToastTimer);
+  qrToastTimer = 0;
+}
+
+function showQrOrderToast(order, extra = 0) {
+  const toast = $("qr-order-toast");
+  if (!toast || !order) return;
+  qrToastOrderId = order.id || "";
+  const title = $("qr-toast-title");
+  const copy = $("qr-toast-copy");
+  if (title) title.textContent = extra > 0 ? `${extra + 1} new QR orders` : "New QR order";
+  if (copy) copy.textContent = `${globalThis.POSQrNotify?.toastCopy?.(order, extra) || order.order_number} · ${money(order.total)}`;
+  toast.hidden = false;
+  if (qrToastTimer) clearTimeout(qrToastTimer);
+  qrToastTimer = setTimeout(hideQrOrderToast, 14000);
+}
+
+function applyQrOrderSnapshot(rows, { announce = false } = {}) {
+  const list = Array.isArray(rows) ? rows : [];
+  const incoming = globalThis.POSQrNotify?.newPending?.(qrSeenOrderIds, list) || [];
+  qrOrderCache = list;
+  if (qrSeenOrderIds == null) qrSeenOrderIds = new Set(list.map((order) => String(order.id)).filter(Boolean));
+  else list.forEach((order) => {
+    if (order?.id) qrSeenOrderIds.add(String(order.id));
+  });
+  paintQrOrderBadge();
+  const page = $("view-qr-orders");
+  if (page && !page.hidden) renderQrOrders();
+  if (!announce || !incoming.length) return incoming;
+  incoming.forEach((order) => qrSeenOrderIds.add(String(order.id)));
+  globalThis.POSQrNotify?.playTone?.();
+  globalThis.POSQrNotify?.desktopNotify?.(incoming[0], incoming.length - 1);
+  showQrOrderToast(incoming[0], incoming.length - 1);
+  return incoming;
+}
+
+async function pollQrOrders({ announce = true } = {}) {
+  if (!can("orders")) return;
+  try {
+    const rows = await api("/api/qr-orders");
+    applyQrOrderSnapshot(rows, { announce });
+  } catch {
+    /* keep last list */
+  }
+}
+
+function startQrOrderWatch() {
+  if (qrPollTimer || !can("orders")) return;
+  paintQrSoundToggle();
+  void pollQrOrders({ announce: false });
+  qrPollTimer = setInterval(() => void pollQrOrders({ announce: true }), 8000);
+  document.addEventListener("pointerdown", () => globalThis.POSQrNotify?.unlock?.(), { once: true });
+}
+
 function qrOrderTotalsHtml(order) {
   const save = Math.round((Number(order.discount) || 0) * 100) / 100;
   const items = Math.round(((Number(order.subtotal) || 0) + save) * 100) / 100;
@@ -3294,12 +3373,7 @@ function renderQrOrders() {
     const hay = [order.order_number, order.customer_name, order.mobile, order.table_no, order.notes].join(" ").toLowerCase();
     return !query || hay.includes(query);
   });
-  const pending = qrOrderCache.filter((order) => order.status === "pending").length;
-  const badge = $("qr-order-badge");
-  if (badge) {
-    badge.textContent = String(pending);
-    badge.hidden = pending === 0;
-  }
+  paintQrOrderBadge();
   $("qr-order-list").innerHTML = rows.length
     ? rows.map((order) => `<article class="qr-order-card${order.status === "pending" ? " is-pending" : ""}" data-qr-order="${escapeHtml(order.id)}">
         <header class="qr-order-head">
@@ -3321,15 +3395,17 @@ function renderQrOrders() {
           ${!["completed", "cancelled"].includes(order.status) ? `<button class="btn danger" type="button" data-qr-status-next="cancelled">Cancel</button>` : ""}
         </div>
       </article>`).join("")
-    : '<p class="item-empty-card"><strong>No QR orders here</strong><span>New customer orders will appear automatically after they scan your code.</span></p>';
+    : '<p class="item-empty-card"><strong>No QR orders here</strong><span>New customer orders ding and appear here after they scan your code.</span></p>';
 }
 
 async function loadQrOrders() {
   paintQrMenuSetup();
+  paintQrSoundToggle();
   const hint = $("qr-orders-hint");
   if (hint) hint.textContent = "Checking for orders…";
   try {
-    qrOrderCache = await api("/api/qr-orders");
+    const rows = await api("/api/qr-orders");
+    applyQrOrderSnapshot(rows, { announce: qrSeenOrderIds != null });
     renderQrOrders();
     if (hint) hint.textContent = qrOrderCache.length ? `${qrOrderCache.length} QR order${qrOrderCache.length === 1 ? "" : "s"}` : "";
   } catch (err) {
@@ -4252,6 +4328,22 @@ $("view-accounts")?.addEventListener("click", (e) => {
   }
 });
 $("qr-orders-refresh")?.addEventListener("click", loadQrOrders);
+$("qr-sound-toggle")?.addEventListener("click", () => {
+  const next = !(globalThis.POSQrNotify?.soundOn() !== false);
+  globalThis.POSQrNotify?.setSoundOn?.(next);
+  globalThis.POSQrNotify?.unlock?.();
+  if (next) {
+    globalThis.POSQrNotify?.playTone?.();
+    globalThis.POSQrNotify?.askNotifyPermission?.();
+  }
+  paintQrSoundToggle();
+  setHint(next ? "QR order sound on. New orders will ding.", "ok");
+});
+$("qr-toast-open")?.addEventListener("click", () => {
+  hideQrOrderToast();
+  showView("qr-orders");
+});
+$("qr-toast-dismiss")?.addEventListener("click", hideQrOrderToast);
 $("qr-order-search")?.addEventListener("input", renderQrOrders);
 $("qr-status-tabs")?.addEventListener("click", (event) => {
   const button = event.target.closest("[data-qr-status]");
@@ -6048,6 +6140,7 @@ async function boot() {
       });
     }
     showView(can("dashboard") ? "dashboard" : "counter");
+    startQrOrderWatch();
     refreshItemUnitLabels();
   } catch {
     location.href = "/login.html";
