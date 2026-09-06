@@ -47,6 +47,7 @@ main { max-width: 1180px; margin: auto; padding: 18px clamp(14px, 4vw, 44px) 30p
 .item-initial { display: grid; place-items: center; color: var(--teal-dark); background: var(--mint); font-size: 25px; font-weight: 900; }
 .menu-card h3 { margin: 0 0 3px; font-size: 16px; }
 .item-meta { margin: 0; color: var(--muted); font-size: 11px; text-transform: uppercase; }
+.item-pack { margin: 4px 0 0; color: #334155; font-size: 12px; line-height: 1.35; }
 .item-price { margin: 8px 0 0; font-weight: 800; }
 .add-btn, .qty-control { grid-column: 1 / -1; height: 38px; border: 0; border-radius: 10px; }
 .add-btn { color: white; background: var(--teal); font-weight: 800; }

@@ -32,3 +32,11 @@ test("QR notify does not play when sound is off", () => {
   assert.equal(N.playTone(), false);
   N.setSoundOn(true);
 });
+
+test("QR notify asks for a tap until sound is unlocked", () => {
+  N.setSoundOn(true);
+  assert.equal(N.needsUnlock(), !N.isArmed());
+  N.unlock();
+  assert.equal(N.isArmed(), true);
+  assert.equal(N.needsUnlock(), false);
+});

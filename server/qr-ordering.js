@@ -95,6 +95,127 @@ function qrRound2(n) {
   return Math.round((Number(n) || 0) * 100) / 100;
 }
 
+export function packMenuId(packId) {
+  return `pack:${String(packId || "")}`;
+}
+
+export function parsePackMenuId(id) {
+  const raw = String(id || "");
+  return raw.startsWith("pack:") ? raw.slice(5) : "";
+}
+
+export function qrPackAvailable(rows, itemById) {
+  let max = Infinity;
+  for (const row of rows || []) {
+    const item = itemById.get(String(row.item_id || row.itemId || ""));
+    const need = Number(row.quantity_gm) || 0;
+    if (!item || need <= 0) return 0;
+    if (String(item.status || "active") !== "active") return 0;
+    max = Math.min(max, Math.floor((Number(item.stock_gm) || 0) / need));
+  }
+  return Number.isFinite(max) ? Math.max(0, max) : 0;
+}
+
+export function qrPackPrice(rows, itemById) {
+  let amount = 0;
+  let gstAmt = 0;
+  for (const row of rows || []) {
+    const item = itemById.get(String(row.item_id || row.itemId || ""));
+    if (!item) continue;
+    const qty = Number(row.quantity_gm) || 0;
+    const line = qrLineAmount(qty, item.retail_rate, item.base_unit || item.unit);
+    amount += line;
+    gstAmt += (line * (Number(item.gst_rate) || 0)) / 100;
+  }
+  return {
+    price: qrRound2(amount),
+    gst_rate: amount > 0 ? qrRound2((gstAmt / amount) * 100) : 0,
+  };
+}
+
+export function toQrPackCards(packs, items) {
+  const itemById = new Map((items || []).map((item) => [String(item.id), item]));
+  return (packs || [])
+    .filter((pack) => String(pack.status || "active") === "active")
+    .map((pack) => {
+      const rows = pack.items || [];
+      if (!rows.length) return null;
+      const available = qrPackAvailable(rows, itemById);
+      if (available <= 0) return null;
+      const priced = qrPackPrice(rows, itemById);
+      if (priced.price <= 0) return null;
+      return {
+        id: packMenuId(pack.id),
+        pack_id: pack.id,
+        code: pack.code || "",
+        name: pack.name,
+        category: "Packs",
+        base_unit: "PCS",
+        unit: "PCS",
+        retail_rate: priced.price,
+        gst_rate: priced.gst_rate,
+        stock_gm: available,
+        kind: "pack",
+        image_url: "",
+        pack_items: rows.map((row) => ({
+          item_id: row.item_id,
+          name: row.spice_name || row.item_name || row.name || "",
+          quantity_gm: Number(row.quantity_gm) || 0,
+        })),
+      };
+    })
+    .filter(Boolean);
+}
+
+export function expandQrPackLine(line, pack, itemById) {
+  const count = Math.round(Number(line.quantity) || 0);
+  if (count <= 0) throw new Error("Invalid pack quantity");
+  if (!pack || String(pack.status || "active") !== "active") throw new Error("That pack is no longer available");
+  const rows = pack.items || [];
+  if (!rows.length) throw new Error("That pack has no items");
+  return rows.map((row) => {
+    const item = itemById.get(String(row.item_id));
+    if (!item || String(item.status || "active") !== "active") throw new Error(`${pack.name} is no longer available`);
+    const quantityBase = (Number(row.quantity_gm) || 0) * count;
+    if (quantityBase <= 0) throw new Error(`${pack.name} is no longer available`);
+    if (quantityBase > Number(item.stock_gm || 0)) throw new Error(`${pack.name} does not have enough stock`);
+    const unit = POSUnits.normalize(item.base_unit || item.unit);
+    const amount = qrLineAmount(quantityBase, item.retail_rate, unit);
+    const gstRate = Number(item.gst_rate) || 0;
+    return { item, unit, quantityBase, amount, gstRate, gstAmount: qrRound2((amount * gstRate) / 100) };
+  });
+}
+
+async function loadQrPacks(businessId, conn = null) {
+  const exec = conn ? (sql, params = []) => conn.query(sql, params).then(([rows]) => rows) : query;
+  let packs = [];
+  try {
+    packs = await exec(
+      "SELECT * FROM packs WHERE business_id = ? AND (status = 'active' OR status IS NULL OR status = '') ORDER BY name",
+      [businessId],
+    );
+  } catch {
+    return [];
+  }
+  if (!packs.length) return [];
+  const ids = packs.map((pack) => pack.id);
+  let rows = [];
+  try {
+    rows = await exec(
+      `SELECT pi.*, i.name AS spice_name, i.local_name, i.code AS item_code
+       FROM pack_items pi JOIN items i ON i.id = pi.item_id
+       WHERE pi.pack_id IN (${ids.map(() => "?").join(",")}) ORDER BY pi.sort_order`,
+      ids,
+    );
+  } catch {
+    return [];
+  }
+  return packs.map((pack) => ({
+    ...pack,
+    items: rows.filter((row) => row.pack_id === pack.id),
+  }));
+}
+
 export function qrOfferCart(built) {
   return (built || []).map((line) => {
     const item = line.item || {};
@@ -210,11 +331,18 @@ export function registerQrPublic(app) {
       if (!business) return res.status(404).json({ error: "Shop not found" });
       const items = await query(
         `SELECT id, code, name, category, subcategory, base_unit, unit, retail_rate, gst_rate,
-                hsn, image_url, stock_gm
+                hsn, image_url, stock_gm, status
          FROM items WHERE business_id = ? AND status = 'active' AND stock_gm > 0
          ORDER BY category, subcategory, name`,
         [business.id],
       );
+      const catalog = await query(
+        `SELECT id, name, category, base_unit, unit, retail_rate, gst_rate, stock_gm, status
+         FROM items WHERE business_id = ?`,
+        [business.id],
+      );
+      const packs = await loadQrPacks(business.id);
+      const packCards = toQrPackCards(packs, catalog);
       const [offers, settings] = await Promise.all([
         listOffers(business.id).catch(() => []),
         getPromoSettings(business.id).catch(() => ({ stacking: "product_and_bill" })),
@@ -228,7 +356,8 @@ export function registerQrPublic(app) {
           phone: business.company_phone || business.mobile || "",
           logo_url: business.company_logo || business.logo_url || "",
         },
-        items,
+        items: [...packCards, ...items],
+        packs: packCards,
         offers: (offers || []).filter((offer) => (offer.live_status || offer.status) === "active"),
         offerSettings: { stacking: settings?.stacking || "product_and_bill" },
       });
@@ -245,14 +374,22 @@ export function registerQrPublic(app) {
       const result = await withTransaction(async (conn) => {
         await ensureQrOrderSchema(conn);
         const built = [];
+        const catalogRows = await conn.query(
+          `SELECT id, name, category, base_unit, unit, retail_rate, gst_rate, stock_gm, status
+           FROM items WHERE business_id = ?`,
+          [business.id],
+        ).then(([rows]) => rows);
+        const itemById = new Map(catalogRows.map((item) => [String(item.id), item]));
+        const packs = await loadQrPacks(business.id, conn);
+        const packById = new Map(packs.map((pack) => [String(pack.id), pack]));
         for (const line of input.lines) {
-          const [rows] = await conn.query(
-            `SELECT id, name, category, base_unit, unit, retail_rate, gst_rate, stock_gm
-             FROM items WHERE id = ? AND business_id = ? AND status = 'active' LIMIT 1`,
-            [line.item_id, business.id],
-          );
-          const item = rows[0];
-          if (!item) throw new Error("One selected item is no longer available");
+          const packId = parsePackMenuId(line.item_id);
+          if (packId) {
+            built.push(...expandQrPackLine(line, packById.get(packId), itemById));
+            continue;
+          }
+          const item = itemById.get(String(line.item_id));
+          if (!item || String(item.status || "active") !== "active") throw new Error("One selected item is no longer available");
           const unit = POSUnits.normalize(item.base_unit || item.unit);
           const quantityBase = qrQuantityToBase(line.quantity, unit);
           if (quantityBase > Number(item.stock_gm || 0)) throw new Error(`${item.name} does not have enough stock`);

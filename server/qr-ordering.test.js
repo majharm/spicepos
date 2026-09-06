@@ -1,6 +1,15 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { normalizeQrOrderPayload, qrLineAmount, qrQuantityToBase, applyQrOffers } from "./qr-ordering.js";
+import {
+  normalizeQrOrderPayload,
+  qrLineAmount,
+  qrQuantityToBase,
+  applyQrOffers,
+  toQrPackCards,
+  expandQrPackLine,
+  packMenuId,
+  parsePackMenuId,
+} from "./qr-ordering.js";
 import "../js/offers.js";
 
 test("QR order payload requires customer, mobile, and item lines", () => {
@@ -135,6 +144,70 @@ test("QR based orders apply Buy 1 Get 1 when two packs are in the cart", () => {
   );
   assert.equal(priced.discount, 190);
   assert.equal(priced.subtotal, 190);
+});
+
+test("QR menu pack ids use a pack: prefix", () => {
+  assert.equal(packMenuId("p1"), "pack:p1");
+  assert.equal(parsePackMenuId("pack:p1"), "p1");
+  assert.equal(parsePackMenuId("plain-item"), "");
+});
+
+test("QR menu cards include sellable packs as PCS", () => {
+  const items = [
+    { id: "haldi", name: "Haldi", category: "Ground", base_unit: "KG", retail_rate: 200, gst_rate: 5, stock_gm: 5000, status: "active" },
+    { id: "mirchi", name: "Mirchi", category: "Ground", base_unit: "KG", retail_rate: 300, gst_rate: 5, stock_gm: 2000, status: "active" },
+  ];
+  const cards = toQrPackCards(
+    [
+      {
+        id: "p1",
+        name: "Kitchen mix",
+        status: "active",
+        items: [
+          { item_id: "haldi", spice_name: "Haldi", quantity_gm: 500 },
+          { item_id: "mirchi", spice_name: "Mirchi", quantity_gm: 250 },
+        ],
+      },
+    ],
+    items,
+  );
+  assert.equal(cards.length, 1);
+  assert.equal(cards[0].id, "pack:p1");
+  assert.equal(cards[0].kind, "pack");
+  assert.equal(cards[0].category, "Packs");
+  assert.equal(cards[0].base_unit, "PCS");
+  assert.equal(cards[0].stock_gm, 8);
+  assert.equal(cards[0].retail_rate, 175);
+});
+
+test("QR pack cards hide packs without enough stock", () => {
+  const cards = toQrPackCards(
+    [{ id: "p1", name: "Empty", status: "active", items: [{ item_id: "haldi", quantity_gm: 500 }] }],
+    [{ id: "haldi", stock_gm: 100, status: "active", retail_rate: 200, base_unit: "KG" }],
+  );
+  assert.equal(cards.length, 0);
+});
+
+test("QR pack order expands two packs into component stock lines", () => {
+  const itemById = new Map([
+    ["haldi", { id: "haldi", name: "Haldi", base_unit: "KG", retail_rate: 200, gst_rate: 0, stock_gm: 5000, status: "active" }],
+    ["mirchi", { id: "mirchi", name: "Mirchi", base_unit: "KG", retail_rate: 300, gst_rate: 0, stock_gm: 2000, status: "active" }],
+  ]);
+  const pack = {
+    id: "p1",
+    name: "Kitchen mix",
+    status: "active",
+    items: [
+      { item_id: "haldi", quantity_gm: 500 },
+      { item_id: "mirchi", quantity_gm: 250 },
+    ],
+  };
+  const built = expandQrPackLine({ quantity: 2 }, pack, itemById);
+  assert.equal(built.length, 2);
+  assert.equal(built[0].quantityBase, 1000);
+  assert.equal(built[1].quantityBase, 500);
+  assert.equal(built[0].amount, 200);
+  assert.equal(built[1].amount, 150);
 });
 
 test("QR menu quantities convert kg/litre and piece orders to base stock", () => {

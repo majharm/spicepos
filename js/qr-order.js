@@ -10,7 +10,39 @@
       .replaceAll(">", "&gt;")
       .replaceAll('"', "&quot;");
 
+  function isPack(item) {
+    return String(item?.kind || "") === "pack" || String(item?.id || "").startsWith("pack:");
+  }
+
+  function packContents(item) {
+    if (!isPack(item) || !Array.isArray(item.pack_items)) return "";
+    return item.pack_items
+      .map((row) => {
+        const name = String(row.name || "").trim();
+        const qty = Number(row.quantity_gm) || 0;
+        if (!name) return "";
+        if (qty >= 1000) return `${name} ${(qty / 1000).toFixed(qty % 1000 ? 2 : 0)}kg`;
+        if (qty > 0) return `${name} ${qty % 1 ? qty.toFixed(1) : qty}g`;
+        return name;
+      })
+      .filter(Boolean)
+      .join(" · ");
+  }
+
+  function mergeMenuItems(data) {
+    const items = Array.isArray(data?.items) ? data.items.slice() : [];
+    const have = new Set(items.map((row) => String(row.id)));
+    (Array.isArray(data?.packs) ? data.packs : []).forEach((pack) => {
+      if (pack && !have.has(String(pack.id))) {
+        have.add(String(pack.id));
+        items.unshift(pack);
+      }
+    });
+    return items;
+  }
+
   function orderUnit(item) {
+    if (isPack(item)) return { label: "pack", step: 1 };
     const unit = String(item.base_unit || item.unit || "PCS").toUpperCase();
     if (unit === "GM" || unit === "KG") return { label: "kg", step: 0.25 };
     if (unit === "ML" || unit === "LTR") return { label: "L", step: 0.25 };
@@ -22,6 +54,7 @@
   }
 
   function isCountItem(item) {
+    if (isPack(item)) return true;
     const unit = String(item.base_unit || item.unit || "PCS").toUpperCase();
     return !["GM", "KG", "ML", "LTR"].includes(unit);
   }
@@ -132,7 +165,8 @@
     const item = findItem(id);
     if (!item) return;
     const { step } = orderUnit(item);
-    const qty = Math.round(Math.max(0, Number(next) || 0) / step) * step;
+    let qty = Math.round(Math.max(0, Number(next) || 0) / step) * step;
+    if (isPack(item) && Number(item.stock_gm) > 0) qty = Math.min(qty, Number(item.stock_gm));
     if (qty > 0) state.cart.set(id, Math.round(qty * 1000) / 1000);
     else state.cart.delete(id);
     renderMenu();
@@ -140,7 +174,9 @@
   }
 
   function renderCategories() {
-    const cats = ["All", ...new Set(state.items.map((item) => item.category || "Other"))];
+    const found = new Set(state.items.map((item) => item.category || "Other"));
+    const rest = [...found].filter((cat) => cat !== "Packs");
+    const cats = ["All", ...(found.has("Packs") ? ["Packs"] : []), ...rest];
     $("category-pills").innerHTML = cats
       .map((cat) => `<button type="button" class="${state.category === cat ? "active" : ""}" data-category="${esc(cat)}">${esc(cat)}</button>`)
       .join("");
@@ -171,7 +207,8 @@
             ${photo}
             <div>
               <h3>${esc(item.name)}</h3>
-              <p class="item-meta">${esc(item.category || "Menu")} ${item.hsn ? `· HSN ${esc(item.hsn)}` : ""}</p>
+              <p class="item-meta">${esc(isPack(item) ? "Pack" : item.category || "Menu")}${!isPack(item) && item.hsn ? ` · HSN ${esc(item.hsn)}` : ""}</p>
+              ${isPack(item) && packContents(item) ? `<p class="item-pack">${esc(packContents(item))}</p>` : ""}
               ${priceHtml}
               ${offerHtml}
             </div>
@@ -241,7 +278,7 @@
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.error || "Could not open this menu");
     state.shop = data.shop;
-    state.items = Array.isArray(data.items) ? data.items : [];
+    state.items = mergeMenuItems(data);
     state.offers = Array.isArray(data.offers) ? data.offers : [];
     state.offerSettings = data.offerSettings || { stacking: "product_and_bill" };
     document.title = `Order from ${data.shop.name}`;

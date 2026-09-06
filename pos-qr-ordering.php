@@ -116,6 +116,151 @@ function pos_qr_orders_with_lines($bid, $status = "") {
   return $orders;
 }
 
+function pos_qr_pack_menu_id($packId) {
+  return "pack:" . (string) $packId;
+}
+
+function pos_qr_parse_pack_id($id) {
+  $raw = (string) $id;
+  return str_starts_with($raw, "pack:") ? substr($raw, 5) : "";
+}
+
+function pos_qr_load_packs($bid) {
+  try {
+    $packs = pos_q(
+      "SELECT * FROM packs WHERE business_id = ? AND (status = 'active' OR status IS NULL OR status = '') ORDER BY name",
+      "s",
+      [$bid]
+    );
+  } catch (Throwable $e) {
+    return [];
+  }
+  if (!$packs) return [];
+  $ids = array_column($packs, "id");
+  $ph = implode(",", array_fill(0, count($ids), "?"));
+  try {
+    $rows = pos_q(
+      "SELECT pi.*, i.name AS spice_name, i.local_name, i.code AS item_code
+       FROM pack_items pi JOIN items i ON i.id = pi.item_id
+       WHERE pi.pack_id IN ($ph) ORDER BY pi.sort_order",
+      str_repeat("s", count($ids)),
+      $ids
+    );
+  } catch (Throwable $e) {
+    return [];
+  }
+  $out = [];
+  foreach ($packs as $pack) {
+    $pack["items"] = [];
+    foreach ($rows as $row) {
+      if (($row["pack_id"] ?? "") === $pack["id"]) $pack["items"][] = $row;
+    }
+    $out[] = $pack;
+  }
+  return $out;
+}
+
+function pos_qr_pack_available($rows, $byId) {
+  $max = PHP_INT_MAX;
+  foreach ($rows as $row) {
+    $item = $byId[$row["item_id"] ?? ""] ?? null;
+    $need = (float) ($row["quantity_gm"] ?? 0);
+    if (!$item || $need <= 0) return 0;
+    if (($item["status"] ?? "active") !== "active") return 0;
+    $max = min($max, (int) floor(((float) ($item["stock_gm"] ?? 0)) / $need));
+  }
+  return $max === PHP_INT_MAX ? 0 : max(0, $max);
+}
+
+function pos_qr_pack_price($rows, $byId) {
+  $amount = 0.0;
+  $gstAmt = 0.0;
+  foreach ($rows as $row) {
+    $item = $byId[$row["item_id"] ?? ""] ?? null;
+    if (!$item) continue;
+    $qty = (float) ($row["quantity_gm"] ?? 0);
+    $line = pos_round2(pos_line_amount_for_item($qty, (float) $item["retail_rate"], $item));
+    $amount += $line;
+    $gstAmt += $line * ((float) ($item["gst_rate"] ?? 0)) / 100;
+  }
+  $amount = pos_round2($amount);
+  return [
+    "price" => $amount,
+    "gst_rate" => $amount > 0 ? pos_round2(($gstAmt / $amount) * 100) : 0,
+  ];
+}
+
+function pos_qr_pack_cards($packs, $items) {
+  $byId = [];
+  foreach ($items as $item) $byId[(string) $item["id"]] = $item;
+  $cards = [];
+  foreach ($packs as $pack) {
+    $status = (string) ($pack["status"] ?? "active");
+    if ($status !== "active" && $status !== "") continue;
+    $rows = $pack["items"] ?? [];
+    if (!$rows) continue;
+    $available = pos_qr_pack_available($rows, $byId);
+    if ($available <= 0) continue;
+    $priced = pos_qr_pack_price($rows, $byId);
+    if ($priced["price"] <= 0) continue;
+    $contents = [];
+    foreach ($rows as $row) {
+      $contents[] = [
+        "item_id" => $row["item_id"] ?? "",
+        "name" => $row["spice_name"] ?? $row["item_name"] ?? $row["name"] ?? "",
+        "quantity_gm" => (float) ($row["quantity_gm"] ?? 0),
+      ];
+    }
+    $cards[] = [
+      "id" => pos_qr_pack_menu_id($pack["id"]),
+      "pack_id" => $pack["id"],
+      "code" => $pack["code"] ?? "",
+      "name" => $pack["name"],
+      "category" => "Packs",
+      "base_unit" => "PCS",
+      "unit" => "PCS",
+      "retail_rate" => $priced["price"],
+      "gst_rate" => $priced["gst_rate"],
+      "stock_gm" => $available,
+      "kind" => "pack",
+      "image_url" => "",
+      "pack_items" => $contents,
+    ];
+  }
+  return $cards;
+}
+
+function pos_qr_expand_pack_line($line, $pack, $byId) {
+  $count = (int) round((float) ($line["quantity"] ?? 0));
+  if ($count <= 0) throw new Exception("Invalid pack quantity");
+  $status = (string) ($pack["status"] ?? "active");
+  if (!$pack || ($status !== "active" && $status !== "")) throw new Exception("That pack is no longer available");
+  $rows = $pack["items"] ?? [];
+  if (!$rows) throw new Exception("That pack has no items");
+  $out = [];
+  foreach ($rows as $row) {
+    $item = $byId[$row["item_id"] ?? ""] ?? null;
+    if (!$item || (($item["status"] ?? "active") !== "active")) {
+      throw new Exception(($pack["name"] ?? "Pack") . " is no longer available");
+    }
+    $qty = ((float) ($row["quantity_gm"] ?? 0)) * $count;
+    if ($qty <= 0) throw new Exception(($pack["name"] ?? "Pack") . " is no longer available");
+    if ($qty > (float) ($item["stock_gm"] ?? 0)) throw new Exception(($pack["name"] ?? "Pack") . " does not have enough stock");
+    $unit = pos_item_unit($item);
+    $amount = pos_round2(pos_line_amount_for_item($qty, (float) $item["retail_rate"], $item));
+    $gstRate = (float) ($item["gst_rate"] ?? 0);
+    $out[] = [
+      "item" => $item,
+      "unit" => $unit,
+      "qty" => $qty,
+      "amount" => $amount,
+      "gst_rate" => $gstRate,
+      "gst" => pos_round2($amount * $gstRate / 100),
+    ];
+  }
+  return $out;
+}
+
 function pos_qr_public_dispatch($path, $method, $body) {
   if ($path === "qr/menu" && $method === "GET") {
     pos_qr_ensure_schema();
@@ -129,6 +274,19 @@ function pos_qr_public_dispatch($path, $method, $body) {
       "s",
       [$business["id"]]
     );
+    $catalog = [];
+    $packCards = [];
+    try {
+      $catalog = pos_q(
+        "SELECT id, name, category, base_unit, unit, retail_rate, gst_rate, stock_gm, status
+         FROM items WHERE business_id = ?",
+        "s",
+        [$business["id"]]
+      );
+      $packCards = pos_qr_pack_cards(pos_qr_load_packs($business["id"]), $catalog);
+    } catch (Throwable $e) {
+      $packCards = [];
+    }
     require_once __DIR__ . "/pos-offers.php";
     $offers = [];
     $stacking = "product_and_bill";
@@ -144,7 +302,8 @@ function pos_qr_public_dispatch($path, $method, $body) {
         "phone" => $business["company_phone"] ?: ($business["mobile"] ?? ""),
         "logo_url" => $business["company_logo"] ?: ($business["logo_url"] ?? ""),
       ],
-      "items" => $items,
+      "items" => array_merge($packCards, $items),
+      "packs" => $packCards,
       "offers" => $offers,
       "offerSettings" => ["stacking" => $stacking],
       "php" => true,
@@ -156,16 +315,25 @@ function pos_qr_public_dispatch($path, $method, $body) {
     $input = pos_qr_validate_order(is_array($body) ? $body : []);
     $business = pos_qr_business($body["shop"] ?? "");
     if (!$business) pos_send(404, ["error" => "Shop not found", "php" => true]);
+    $catalog = pos_q(
+      "SELECT id, name, category, base_unit, unit, retail_rate, gst_rate, stock_gm, status
+       FROM items WHERE business_id = ?",
+      "s",
+      [$business["id"]]
+    );
+    $byId = [];
+    foreach ($catalog as $row) $byId[(string) $row["id"]] = $row;
+    $packById = [];
+    foreach (pos_qr_load_packs($business["id"]) as $pack) $packById[(string) $pack["id"]] = $pack;
     $built = [];
     foreach ($input["lines"] as $line) {
-      $items = pos_q(
-        "SELECT id, name, category, base_unit, unit, retail_rate, gst_rate, stock_gm
-         FROM items WHERE id = ? AND business_id = ? AND status = 'active' LIMIT 1",
-        "ss",
-        [$line["item_id"], $business["id"]]
-      );
-      $item = $items[0] ?? null;
-      if (!$item) throw new Exception("One selected item is no longer available");
+      $packId = pos_qr_parse_pack_id($line["item_id"]);
+      if ($packId !== "") {
+        foreach (pos_qr_expand_pack_line($line, $packById[$packId] ?? null, $byId) as $row) $built[] = $row;
+        continue;
+      }
+      $item = $byId[(string) $line["item_id"]] ?? null;
+      if (!$item || (($item["status"] ?? "active") !== "active")) throw new Exception("One selected item is no longer available");
       $unit = pos_item_unit($item);
       $qty = pos_qr_quantity_to_base($line["quantity"], $unit);
       if ($qty > (float) ($item["stock_gm"] ?? 0)) throw new Exception($item["name"] . " does not have enough stock");
@@ -173,6 +341,7 @@ function pos_qr_public_dispatch($path, $method, $body) {
       $gstRate = (float) ($item["gst_rate"] ?? 0);
       $built[] = ["item" => $item, "unit" => $unit, "qty" => $qty, "amount" => $amount, "gst_rate" => $gstRate, "gst" => pos_round2($amount * $gstRate / 100)];
     }
+    if (!$built || count($built) > 200) throw new Exception("That pack order is too large.");
     require_once __DIR__ . "/pos-offers.php";
     $priced = pos_apply_qr_offers($built, $business["id"]);
     $built = $priced["built"];

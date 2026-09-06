@@ -261,7 +261,7 @@ test("HTML and CSS cache stickers match deploy136", () => {
     assert.doesNotMatch(html, /20260901deploy59/);
   }
   const orderSticker = readFileSync(path.join(root, "order.html"), "utf8");
-  assert.match(orderSticker, /20260905deploy140/);
+  assert.match(orderSticker, /20260905deploy142/);
   assert.doesNotMatch(orderSticker, /20260905deploy139/);
   assert.doesNotMatch(orderSticker, /20260905deploy136/);
   const masterHtml = readFileSync(path.join(root, "master.html"), "utf8");
@@ -284,6 +284,7 @@ test("HTML and CSS cache stickers match deploy136", () => {
   assert.match(index, /id="qr-shop-id"/);
   assert.match(index, /id="qr-order-toast"/);
   assert.match(index, /id="qr-sound-toggle"/);
+  assert.match(index, /id="qr-sound-arm"/);
   assert.match(index, /js\/qr-notify\.js/);
   const qrPoster = readFileSync(path.join(root, "qr.html"), "utf8");
   assert.match(qrPoster, /qrcode\.iife\.js/);
@@ -297,11 +298,19 @@ test("HTML and CSS cache stickers match deploy136", () => {
   assert.match(qrOrderJs, /\/api\/qr\/orders/);
   assert.match(qrOrderJs, /function offerResult/);
   assert.match(qrOrderJs, /Discount/);
+  assert.match(qrOrderJs, /function isPack/);
+  assert.match(qrOrderJs, /function mergeMenuItems/);
   const qrNotify = readFileSync(path.join(root, "js/qr-notify.js"), "utf8");
   assert.match(qrNotify, /function playTone/);
+  assert.match(qrNotify, /function playWav/);
+  assert.match(qrNotify, /data:audio\/wav/);
   assert.match(pos, /qr-order-toast/);
+  assert.match(pos, /qr-sound-arm/);
   assert.match(qrOrderPhp, /pos_apply_qr_offers/);
   assert.match(qrOrderPhp, /offer_label/);
+  assert.match(qrOrderPhp, /pos_qr_pack_cards/);
+  assert.match(qrOrderPhp, /pos_qr_expand_pack_line/);
+  assert.match(qrOrderPhp, /"packs"/);
   assert.match(qrOrderPhp, /function pos_qr_public_dispatch/);
   assert.match(qrOrderPhp, /function pos_qr_staff_dispatch/);
   assert.match(saas, /alert-switch-ui/);

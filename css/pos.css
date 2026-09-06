@@ -2369,6 +2369,25 @@ body.footwear-mode.counter-mode .stage.is-counter .card .sku { display: block; f
 /* qr-orders: public menu setup + incoming order inbox */
 .qr-orders-page { display: grid; gap: 14px; margin: 8px 24px 28px; }
 .qr-orders-hero-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.qr-sound-arm {
+  position: fixed;
+  z-index: 41;
+  left: 16px;
+  bottom: 16px;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  width: min(420px, calc(100vw - 24px));
+  padding: 14px 16px;
+  border: 2px solid #b45309;
+  border-radius: 14px;
+  color: #7c2d12;
+  background: #fffbeb;
+  box-shadow: 0 16px 40px rgba(15, 23, 42, .18);
+}
+.qr-sound-arm strong { display: block; font-size: 15px; }
+.qr-sound-arm p { margin: 4px 0 0; font-size: 13px; }
+.qr-sound-arm .qr-toast-kicker { color: #b45309; }
 .qr-order-toast {
   position: fixed;
   z-index: 42;
@@ -3328,6 +3347,7 @@ button.items-stat.is-active {
   .qr-orders-page { margin-left: 12px; margin-right: 12px; }
   .qr-orders-hero { align-items: stretch; flex-direction: column; }
   .qr-order-toast { right: 10px; left: 10px; top: 10px; width: auto; }
+  .qr-sound-arm { left: 10px; right: 10px; bottom: 10px; width: auto; }
   .qr-setup-card { grid-template-columns: 1fr; }
   .qr-setup-card > img { justify-self: center; }
   .qr-orders-toolbar { align-items: stretch; flex-direction: column; }
