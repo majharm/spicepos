@@ -2416,6 +2416,7 @@ body.footwear-mode.counter-mode .stage.is-counter .card .sku { display: block; f
   background: linear-gradient(135deg, #0f172a, #134e4a 68%, #0d9488);
 }
 .qr-orders-hero .btn { color: #042f2e; background: #ecfdf5; border-color: transparent; }
+#qr-sound-toggle.is-sounding { outline: 3px solid #fbbf24; box-shadow: 0 0 0 4px rgba(251, 191, 36, .35); }
 .qr-orders-hero h2 { margin: 0; font-size: 23px; }
 .qr-orders-hero p:not(.items-kicker) { max-width: 66ch; margin: 6px 0 0; color: #cbd5e1; font-size: 13px; line-height: 1.5; }
 .qr-setup-card {

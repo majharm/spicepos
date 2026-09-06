@@ -1,10 +1,12 @@
 (function (root) {
   const SOUND_KEY = "atav.qrOrderSound";
+  const FILE_SRC = "./sounds/qr-order.wav";
   let audioCtx = null;
   let lastPlayAt = 0;
   let memorySound = "on";
-  let armed = false;
-  let primedAudio = null;
+  let heard = false;
+  let fileAudio = null;
+  let fallbackAudio = null;
   let wavUri = "";
 
   function store() {
@@ -19,6 +21,22 @@
         memorySound = String(v);
       },
     };
+  }
+
+  function emit() {
+    try {
+      root.document?.dispatchEvent(new root.CustomEvent("pos-qr-sound", {
+        detail: { heard, soundOn: soundOn() },
+      }));
+    } catch {
+      /* Node tests */
+    }
+  }
+
+  function markHeard(ok) {
+    heard = ok !== false;
+    emit();
+    return heard;
   }
 
   function newPending(seen, rows) {
@@ -48,24 +66,24 @@
   }
 
   function needsUnlock() {
-    return soundOn() && !armed;
+    return soundOn() && !heard;
   }
 
   function makeChimeWav() {
     const sampleRate = 16000;
     const notes = [
-      [880, 0, 0.16],
-      [1175, 0.14, 0.16],
-      [1568, 0.28, 0.18],
+      [784, 0, 0.18],
+      [988, 0.16, 0.2],
+      [1175, 0.34, 0.26],
     ];
-    const n = Math.floor(sampleRate * 0.52);
+    const n = Math.floor(sampleRate * 0.68);
     const pcm = new Int16Array(n);
     for (const [freq, start, dur] of notes) {
       const s0 = Math.floor(start * sampleRate);
       const len = Math.floor(dur * sampleRate);
       for (let i = 0; i < len && s0 + i < n; i++) {
         const env = Math.sin((Math.PI * i) / Math.max(1, len - 1));
-        const sample = Math.round(0.42 * 32767 * env * Math.sin((2 * Math.PI * freq * i) / sampleRate));
+        const sample = Math.round(0.7 * 32767 * env * Math.sin((2 * Math.PI * freq * i) / sampleRate));
         const next = pcm[s0 + i] + sample;
         pcm[s0 + i] = Math.max(-32767, Math.min(32767, next));
       }
@@ -89,7 +107,7 @@
     view.setUint16(34, 16, true);
     writeStr(36, "data");
     view.setUint32(40, bytes, true);
-    new Uint8Array(buf, 44).set(new Uint8Array(pcm.buffer));
+    new Uint8Array(buf, 44).set(new Uint8Array(pcm.buffer, pcm.byteOffset, bytes));
     const u8 = new Uint8Array(buf);
     let bin = "";
     for (let i = 0; i < u8.length; i++) bin += String.fromCharCode(u8[i]);
@@ -97,87 +115,125 @@
     return `data:audio/wav;base64,${b64}`;
   }
 
-  function wavSrc() {
+  function dataUri() {
     if (!wavUri) wavUri = makeChimeWav();
     return wavUri;
   }
 
-  function playWav() {
+  function fileUrl() {
+    const el = root.document?.getElementById("qr-order-chime");
+    const src = el?.getAttribute("src") || el?.currentSrc || FILE_SRC;
+    return src || FILE_SRC;
+  }
+
+  function bindFileAudio() {
+    if (typeof root.Audio !== "function") return null;
+    if (fileAudio) return fileAudio;
+    const el = root.document?.getElementById("qr-order-chime");
+    if (el) {
+      el.preload = "auto";
+      el.setAttribute("playsinline", "");
+      el.muted = false;
+      fileAudio = el;
+      return el;
+    }
+    fileAudio = new root.Audio(fileUrl());
+    fileAudio.preload = "auto";
+    return fileAudio;
+  }
+
+  function startElement(el, onFail) {
+    if (!el) return false;
+    try {
+      el.muted = false;
+      el.volume = 1;
+      try {
+        if (el.readyState >= 1) el.currentTime = 0;
+      } catch {
+        /* not seekable yet */
+      }
+      const played = el.play();
+      if (played && typeof played.then === "function") {
+        played.then(() => markHeard(true)).catch(() => {
+          if (typeof onFail === "function") onFail();
+          else markHeard(false);
+        });
+      } else {
+        markHeard(true);
+      }
+      return true;
+    } catch {
+      if (typeof onFail === "function") onFail();
+      return false;
+    }
+  }
+
+  function playDataUri() {
     if (typeof root.Audio !== "function") return false;
     try {
-      if (!primedAudio) primedAudio = new root.Audio(wavSrc());
-      primedAudio.volume = 0.9;
-      primedAudio.currentTime = 0;
-      const played = primedAudio.play();
-      if (played && typeof played.catch === "function") played.catch(() => {});
-      return true;
+      if (!fallbackAudio) fallbackAudio = new root.Audio(dataUri());
+      fallbackAudio.src = dataUri();
+      return startElement(fallbackAudio);
     } catch {
       return false;
     }
   }
 
+  function playWav() {
+    const file = bindFileAudio();
+    if (file && startElement(file, () => playDataUri())) return true;
+    return playDataUri();
+  }
+
   function playOsc(ctx) {
     if (!ctx || ctx.state !== "running") return false;
     const now = ctx.currentTime;
-    [880, 1175, 1568].forEach((freq, i) => {
+    [784, 988, 1175].forEach((freq, i) => {
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
-      osc.type = "sine";
+      osc.type = "square";
       osc.frequency.value = freq;
-      const start = now + i * 0.15;
+      const start = now + i * 0.16;
       gain.gain.setValueAtTime(0.0001, start);
-      gain.gain.exponentialRampToValueAtTime(0.2, start + 0.02);
-      gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.22);
+      gain.gain.exponentialRampToValueAtTime(0.22, start + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.26);
       osc.connect(gain);
       gain.connect(ctx.destination);
       osc.start(start);
-      osc.stop(start + 0.24);
+      osc.stop(start + 0.28);
     });
     return true;
   }
 
   function unlock() {
-    armed = true;
     const AC = root.AudioContext || root.webkitAudioContext;
     if (AC) {
       if (!audioCtx) audioCtx = new AC();
       if (audioCtx.state === "suspended") audioCtx.resume().catch(() => {});
     }
-    if (typeof root.Audio === "function" && !primedAudio) {
-      try {
-        primedAudio = new root.Audio(wavSrc());
-        primedAudio.volume = 0.01;
-        const primed = primedAudio.play();
-        if (primed && typeof primed.then === "function") {
-          primed.then(() => {
-            primedAudio.pause();
-            primedAudio.currentTime = 0;
-            primedAudio.volume = 0.9;
-          }).catch(() => {});
-        }
-      } catch {
-        primedAudio = null;
-      }
-    }
+    bindFileAudio();
     return audioCtx;
   }
 
-  function playTone() {
+  function pulse() {
+    const btn = root.document?.getElementById("qr-sound-toggle");
+    if (!btn) return;
+    btn.classList.add("is-sounding");
+    root.setTimeout?.(() => btn.classList.remove("is-sounding"), 900);
+  }
+
+  function playTone(opts = {}) {
     if (!soundOn()) return false;
+    const force = opts.force === true;
     const nowMs = Date.now();
-    if (nowMs - lastPlayAt < 1200) return false;
+    if (!force && nowMs - lastPlayAt < 800) return false;
     lastPlayAt = nowMs;
     const ctx = unlock();
-    if (ctx && ctx.state === "suspended") {
-      ctx.resume().then(() => {
-        if (!playOsc(ctx)) playWav();
-      }).catch(() => {
-        playWav();
-      });
-      return true;
-    }
-    if (playOsc(ctx)) return true;
-    return playWav();
+    const wavOk = playWav();
+    if (ctx && ctx.state === "running") playOsc(ctx);
+    else if (ctx && ctx.state === "suspended") ctx.resume().then(() => playOsc(ctx)).catch(() => {});
+    pulse();
+    return wavOk || Boolean(ctx);
   }
 
   function desktopNotify(order, extra = 0) {
@@ -200,12 +256,6 @@
     return root.Notification.requestPermission().catch(() => "denied");
   }
 
-  if (root.document?.addEventListener) {
-    ["pointerdown", "keydown", "touchstart"].forEach((type) => {
-      root.document.addEventListener(type, () => unlock(), true);
-    });
-  }
-
   root.POSQrNotify = {
     newPending,
     toastCopy,
@@ -215,7 +265,8 @@
     playTone,
     playWav,
     needsUnlock,
-    isArmed: () => armed,
+    isArmed: () => heard,
+    markHeard,
     desktopNotify,
     askNotifyPermission,
     SOUND_KEY,

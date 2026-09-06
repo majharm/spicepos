@@ -3305,11 +3305,11 @@ function paintQrSoundArm() {
 
 function armQrOrderSound() {
   globalThis.POSQrNotify?.setSoundOn?.(true);
-  globalThis.POSQrNotify?.unlock?.();
-  globalThis.POSQrNotify?.playTone?.();
+  const played = globalThis.POSQrNotify?.playTone?.({ force: true });
   globalThis.POSQrNotify?.askNotifyPermission?.();
   paintQrSoundToggle();
   paintQrSoundArm();
+  return played !== false;
 }
 
 function hideQrOrderToast() {
@@ -3346,9 +3346,11 @@ function applyQrOrderSnapshot(rows, { announce = false } = {}) {
   if (page && !page.hidden) renderQrOrders();
   if (!announce || !incoming.length) return incoming;
   incoming.forEach((order) => qrSeenOrderIds.add(String(order.id)));
-  globalThis.POSQrNotify?.playTone?.();
+  globalThis.POSQrNotify?.playTone?.({ force: true });
+  setTimeout(() => globalThis.POSQrNotify?.playTone?.({ force: true }), 450);
   globalThis.POSQrNotify?.desktopNotify?.(incoming[0], incoming.length - 1);
   showQrOrderToast(incoming[0], incoming.length - 1);
+  paintQrSoundArm();
   return incoming;
 }
 
@@ -3368,11 +3370,9 @@ function startQrOrderWatch() {
   void pollQrOrders({ announce: false });
   qrPollTimer = setInterval(() => void pollQrOrders({ announce: true }), 4000);
   paintQrSoundArm();
-  ["pointerdown", "keydown", "touchstart"].forEach((type) => {
-    document.addEventListener(type, () => {
-      globalThis.POSQrNotify?.unlock?.();
-      paintQrSoundArm();
-    }, true);
+  document.addEventListener("pos-qr-sound", () => {
+    paintQrSoundToggle();
+    paintQrSoundArm();
   });
 }
 
@@ -4355,8 +4355,8 @@ if (qrSoundToggle) {
     const on = globalThis.POSQrNotify?.soundOn() !== false;
     const needs = globalThis.POSQrNotify?.needsUnlock?.() === true;
     if (!on || needs) {
-      armQrOrderSound();
-      setHint("QR order sound on. New orders will ding.", "ok");
+      const ok = armQrOrderSound();
+      setHint(ok ? "QR order sound on. You should hear a ding now." : "Tap Enable sound again if you did not hear a ding.", ok ? "ok" : "error");
       return;
     }
     globalThis.POSQrNotify?.setSoundOn?.(false);
@@ -4368,8 +4368,8 @@ if (qrSoundToggle) {
 const qrSoundArmBtn = $("qr-sound-arm-btn");
 if (qrSoundArmBtn) {
   qrSoundArmBtn.addEventListener("click", () => {
-    armQrOrderSound();
-    setHint("QR order sound on. New orders will ding.", "ok");
+    const ok = armQrOrderSound();
+    setHint(ok ? "QR order sound on. You should hear a ding now." : "Tap Enable sound again if you did not hear a ding.", ok ? "ok" : "error");
   });
 }
 $("qr-toast-open")?.addEventListener("click", () => {

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import {
@@ -285,6 +285,9 @@ test("HTML and CSS cache stickers match deploy136", () => {
   assert.match(index, /id="qr-order-toast"/);
   assert.match(index, /id="qr-sound-toggle"/);
   assert.match(index, /id="qr-sound-arm"/);
+  assert.match(index, /id="qr-order-chime"/);
+  assert.match(index, /sounds\/qr-order\.wav/);
+  assert.ok(existsSync(path.join(root, "sounds/qr-order.wav")));
   assert.match(index, /js\/qr-notify\.js/);
   const qrPoster = readFileSync(path.join(root, "qr.html"), "utf8");
   assert.match(qrPoster, /qrcode\.iife\.js/);
@@ -303,6 +306,7 @@ test("HTML and CSS cache stickers match deploy136", () => {
   const qrNotify = readFileSync(path.join(root, "js/qr-notify.js"), "utf8");
   assert.match(qrNotify, /function playTone/);
   assert.match(qrNotify, /function playWav/);
+  assert.match(qrNotify, /qr-order-chime/);
   assert.match(qrNotify, /data:audio\/wav/);
   assert.match(pos, /qr-order-toast/);
   assert.match(pos, /qr-sound-arm/);
