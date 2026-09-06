@@ -294,7 +294,9 @@ function openWaEmailLog(out) {
 }
 
 function alertLogRowHay(row) {
-  return `${row.shop_name || ""} ${row.recipient || ""} ${row.kind || ""} ${row.channel || ""} ${row.subject || ""} ${row.error || ""} ${row.detail || ""}`.toLowerCase();
+  const to = formatAlertLogTo(row);
+  const digits = String(row?.recipient || to || "").replace(/\D/g, "");
+  return `${row.shop_name || ""} ${row.recipient || ""} ${to} ${digits} ${row.kind || ""} ${row.channel || ""} ${row.subject || ""} ${row.error || ""} ${row.detail || ""}`.toLowerCase();
 }
 
 function alertLogPageHtml(rows) {
@@ -404,7 +406,7 @@ function bindAlertLogPage(rows) {
     if (alertLogFocus && digits.endsWith(alertLogFocus)) chip.classList.add("is-warn");
     chip.onclick = () => {
       if (!search) return;
-      search.value = to;
+      search.value = digits || to;
       paint();
     };
   });

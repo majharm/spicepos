@@ -178,6 +178,8 @@ test("Master Admin Settings lives under Backup with Active/Inactive templates", 
   assert.match(master, /uniqueAlertBits/);
   assert.match(master, /WA Master hit its per-minute limit/);
   assert.match(master, /function openWaEmailLog/);
+  assert.match(master, /function alertLogRowHay/);
+  assert.match(master, /search.value = digits \|\| to/);
   assert.match(master, /Every number/);
   assert.match(master, /uniqueAlertLogRecipients/);
   assert.match(master, /alert-log-recipients/);
