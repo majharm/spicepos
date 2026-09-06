@@ -4328,17 +4328,20 @@ $("view-accounts")?.addEventListener("click", (e) => {
   }
 });
 $("qr-orders-refresh")?.addEventListener("click", loadQrOrders);
-$("qr-sound-toggle")?.addEventListener("click", () => {
-  const next = !(globalThis.POSQrNotify?.soundOn() !== false);
-  globalThis.POSQrNotify?.setSoundOn?.(next);
-  globalThis.POSQrNotify?.unlock?.();
-  if (next) {
-    globalThis.POSQrNotify?.playTone?.();
-    globalThis.POSQrNotify?.askNotifyPermission?.();
-  }
-  paintQrSoundToggle();
-  setHint(next ? "QR order sound on. New orders will ding.", "ok");
-});
+const qrSoundToggle = $("qr-sound-toggle");
+if (qrSoundToggle) {
+  qrSoundToggle.addEventListener("click", () => {
+    const next = !(globalThis.POSQrNotify?.soundOn() !== false);
+    globalThis.POSQrNotify?.setSoundOn?.(next);
+    globalThis.POSQrNotify?.unlock?.();
+    if (next) {
+      globalThis.POSQrNotify?.playTone?.();
+      globalThis.POSQrNotify?.askNotifyPermission?.();
+    }
+    paintQrSoundToggle();
+    setHint(next ? "QR order sound on. New orders will ding." : "QR order sound off.", "ok");
+  });
+}
 $("qr-toast-open")?.addEventListener("click", () => {
   hideQrOrderToast();
   showView("qr-orders");
