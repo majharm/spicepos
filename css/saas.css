@@ -127,10 +127,51 @@
   position: static;
   justify-content: flex-start;
   margin-top: 0;
-  flex: 1 1 auto;
+  flex: 0 0 auto;
   min-height: 0;
+  max-height: 88px;
   overflow-y: auto;
   align-content: flex-start;
+}
+/* login-pos-shots: counter invoice stock */
+.auth-scene-shots {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.auth-scene-shots .is-hero {
+  grid-column: 1 / -1;
+  min-height: 140px;
+}
+.auth-scene-shots figure {
+  margin: 0;
+  position: relative;
+  min-height: 0;
+  border-radius: 14px;
+  overflow: hidden;
+  background: rgba(15, 23, 42, 0.35);
+  box-shadow: inset 0 0 0 1px rgba(94, 234, 212, 0.18);
+}
+.auth-scene-shots img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+}
+.auth-scene-shots figcaption {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 18px 10px 8px;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  color: #ecfeff;
+  background: linear-gradient(transparent, rgba(2, 8, 23, 0.78));
 }
 .auth-scene-trial {
   margin: 14px 0 0;
@@ -373,6 +414,16 @@ body.auth-body::-webkit-scrollbar-thumb {
   }
   .auth-shell .auth-scene-copy { text-align: center; }
   .auth-shell .auth-scene-types { display: none; }
+  .auth-scene-shots {
+    grid-template-columns: 1fr 1fr 1fr;
+    flex: 0 0 auto;
+  }
+  .auth-scene-shots .is-hero {
+    grid-column: auto;
+    min-height: 0;
+  }
+  .auth-scene-shots figure { height: 92px; }
+  .auth-scene-shots figcaption { font-size: 10px; padding: 12px 6px 6px; }
   .auth-scene-trial { text-align: center; }
   .auth-trial-banner { align-items: center; }
   .auth-main {

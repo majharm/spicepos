@@ -522,6 +522,10 @@ test("HTML and CSS cache stickers match deploy136", () => {
   assert.match(login, /class="auth-shell"/);
   assert.match(login, /class="auth-scene"/);
   assert.match(login, /All types of businesses use ATAV POS/);
+  assert.match(login, /class="auth-scene-shots"/);
+  assert.match(login, /assets\/login-pos-counter\.jpg/);
+  assert.match(login, /assets\/login-pos-invoice\.jpg/);
+  assert.match(login, /assets\/login-pos-stock\.jpg/);
   assert.match(login, /Bakery \/ cake shop/);
   assert.match(login, />Bakery</);
   assert.match(login, /class="login-legal"/);
@@ -546,6 +550,7 @@ test("HTML and CSS cache stickers match deploy136", () => {
   assert.match(saas, /overflow-y: scroll/);
   assert.match(saas, /auth-card > p\.auth-trial-invite/);
   assert.match(saas, /auth-scene-types/);
+  assert.match(saas, /login-pos-shots: counter invoice stock/);
   assert.match(saas, /auth-body:has\(\.auth-scene\)/);
   assert.match(saas, /\.auth-shell /);
   assert.match(saas, /\.login-legal /);
