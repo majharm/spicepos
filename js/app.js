@@ -366,17 +366,62 @@ function findCustomerByMobile(raw) {
   return (state.customers || []).find((c) => digitsMobile(c.mobile) === d) || null;
 }
 
+function customerDue(c) {
+  return Number(c?.outstanding) || 0;
+}
+
+function customerOptionLabel(c) {
+  const name = c.business_name || c.name || "Customer";
+  const type = c.type || "b2c";
+  const due = customerDue(c);
+  return due > 0 ? `${name} (${type}) · Due ${money(due)}` : `${name} (${type})`;
+}
+
+function paintCounterDue(c) {
+  const cust = c === undefined ? customer() : c;
+  const due = customerDue(cust);
+  const method = $("pay-method")?.value;
+  let bill = 0;
+  if (typeof cartTotals === "function") {
+    const t = cartTotals();
+    bill = Number(t.total != null ? t.total : (t.taxable || 0) + (t.tax || 0)) || 0;
+  }
+  const creditAfter = method === "credit" && bill > 0;
+  const after = due + (creditAfter ? bill : 0);
+  let label = "";
+  if (creditAfter && due > 0) label = `Due ${money(due)} · after credit ${money(after)}`;
+  else if (creditAfter) label = `After credit ${money(after)}`;
+  else if (due > 0) label = `Due ${money(due)}`;
+  const chip = $("bill-due");
+  if (chip) {
+    chip.hidden = !label;
+    chip.textContent = label;
+  }
+  const row = $("due-row");
+  if (row) row.hidden = !(due > 0);
+  if ($("due-total")) $("due-total").textContent = money(due);
+  const faceRow = $("face-due-row");
+  if (faceRow) faceRow.hidden = !(due > 0);
+  if ($("face-due")) $("face-due").textContent = money(due);
+  $("customer")?.classList.toggle("has-due", due > 0);
+}
+
 function paintBillCustomer() {
   const el = $("bill-customer");
-  if (!el) return;
+  if (!el) {
+    paintCounterDue();
+    return;
+  }
   const c = customer();
   if (!c) {
     el.textContent = "";
+    paintCounterDue(null);
     return;
   }
   const name = String(c.business_name || c.name || "Walk-in").trim() || "Walk-in";
   const mobile = digitsMobile(c.mobile);
   el.textContent = isRealMobile(mobile) ? `${name} · ${mobile}` : name;
+  paintCounterDue(c);
 }
 
 function selectCounterCustomer(cust, { hint = true } = {}) {
@@ -392,7 +437,10 @@ function selectCounterCustomer(cust, { hint = true } = {}) {
   renderCatalog();
   renderCart();
   void loadCustomerLoyalty();
-  if (hint) setHint(`Customer · ${cust.business_name || cust.name}`, "ok");
+  if (hint) {
+    const due = customerDue(cust);
+    setHint(due > 0 ? `Customer · ${cust.business_name || cust.name} · Due ${money(due)}` : `Customer · ${cust.business_name || cust.name}`, "ok");
+  }
   return true;
 }
 
@@ -1452,7 +1500,7 @@ function renderCustomersSelect() {
   $("customer").innerHTML = state.customers
     .map(
       (c) =>
-        `<option value="${escapeHtml(c.id)}">${escapeHtml(c.business_name || c.name)} (${escapeHtml(c.type)})</option>`,
+        `<option value="${escapeHtml(c.id)}">${escapeHtml(customerOptionLabel(c))}</option>`,
     )
     .join("");
   if (state.customerId) $("customer").value = state.customerId;
@@ -4511,6 +4559,9 @@ $("customer").addEventListener("change", () => {
   renderCatalog();
   renderCart();
   void loadCustomerLoyalty();
+});
+$("pay-method")?.addEventListener("change", () => {
+  paintCounterDue();
 });
 $("btn-clear").addEventListener("click", () => {
   if (state.editingOrderId) {

@@ -1117,6 +1117,21 @@ body.bill-collapsed .bill-toggle[data-count]:not([data-count="0"])::after {
   font-weight: 700;
   color: var(--vel-teal);
 }
+.ticket-due {
+  margin: 2px 0 0;
+  font-size: 12px;
+  font-weight: 800;
+  color: #b45309;
+}
+.ticket-due[hidden],
+#due-row[hidden],
+#face-due-row[hidden] { display: none; }
+#due-row span:last-child,
+#face-due { color: #b45309; }
+.counter-lane #customer.has-due {
+  color: #92400e;
+  font-weight: 700;
+}
 .catalog-empty {
   grid-column: 1 / -1;
   margin: 24px 8px;
