@@ -29,6 +29,8 @@ function pos_qr_ensure_schema() {
   if ($db->errno) throw new Exception($db->error ?: "Could not prepare QR ordering");
   @$db->query("ALTER TABLE qr_orders ADD COLUMN discount DECIMAL(12,2) NOT NULL DEFAULT 0");
   @$db->query("ALTER TABLE qr_orders ADD COLUMN offer_label VARCHAR(255) NULL");
+  @$db->query("ALTER TABLE qr_orders ADD COLUMN sales_order_id VARCHAR(255) NULL");
+  @$db->query("ALTER TABLE sales_orders ADD COLUMN qr_order_id VARCHAR(255) NULL");
   $db->query(
     "CREATE TABLE IF NOT EXISTS qr_order_lines (
       id VARCHAR(255) PRIMARY KEY,
@@ -98,22 +100,178 @@ function pos_qr_order_number() {
 }
 
 function pos_qr_orders_with_lines($bid, $status = "") {
-  $sql = "SELECT * FROM qr_orders WHERE business_id = ?";
+  pos_qr_ensure_schema();
+  $sql = "SELECT q.*, s.order_number AS invoice_number FROM qr_orders q
+          LEFT JOIN sales_orders s ON s.id = q.sales_order_id AND s.business_id = q.business_id
+          WHERE q.business_id = ?";
   $types = "s";
   $params = [$bid];
   if ($status !== "" && in_array($status, pos_qr_statuses(), true)) {
-    $sql .= " AND status = ?";
+    $sql .= " AND q.status = ?";
     $types .= "s";
     $params[] = $status;
   }
-  $sql .= " ORDER BY CASE status WHEN 'pending' THEN 0 WHEN 'accepted' THEN 1 WHEN 'preparing' THEN 2
-            WHEN 'ready' THEN 3 ELSE 4 END, created_at DESC LIMIT 100";
+  $sql .= " ORDER BY CASE q.status WHEN 'pending' THEN 0 WHEN 'accepted' THEN 1 WHEN 'preparing' THEN 2
+            WHEN 'ready' THEN 3 ELSE 4 END, q.created_at DESC LIMIT 100";
   $orders = pos_q($sql, $types, $params);
   foreach ($orders as &$order) {
     $order["lines"] = pos_q("SELECT * FROM qr_order_lines WHERE order_id = ? ORDER BY created_at", "s", [$order["id"]]);
   }
   unset($order);
   return $orders;
+}
+
+function pos_qr_mobile_digits($raw) {
+  return substr(preg_replace('/\D/', '', (string) $raw), -10);
+}
+
+function pos_qr_pay_method($raw) {
+  $method = strtolower((string) $raw);
+  return in_array($method, ["cash", "upi", "card", "credit"], true) ? $method : "cash";
+}
+
+function pos_qr_find_or_create_customer($bid, $order) {
+  $digits = pos_qr_mobile_digits($order["mobile"] ?? "");
+  $all = pos_q("SELECT * FROM customers WHERE business_id = ?", "s", [$bid]);
+  foreach ($all as $row) {
+    if ($digits !== "" && strlen($digits) >= 10 && pos_qr_mobile_digits($row["mobile"] ?? "") === $digits) return $row;
+  }
+  $id = pos_uuid();
+  $n = pos_next_seq("customer", $bid, 4);
+  $code = "CUS-" . str_pad((string) $n, 3, "0", STR_PAD_LEFT);
+  $name = substr(trim((string) ($order["customer_name"] ?? "Customer")), 0, 160);
+  $mobile = substr(trim((string) ($order["mobile"] ?? "")), 0, 32);
+  pos_q(
+    "INSERT INTO customers (id, code, name, business_name, mobile, type, gstin, state, credit_limit, outstanding, business_id)
+     VALUES (?,?,?,?,?,?,?,?,?,0,?)",
+    "ssssssssds",
+    [$id, $code, $name, null, $mobile, "b2c", null, null, 0, $bid]
+  );
+  $rows = pos_q("SELECT * FROM customers WHERE id = ? LIMIT 1", "s", [$id]);
+  return $rows[0];
+}
+
+function pos_qr_link_sale($bid, $qrOrderId, $saleId, $branchId = "") {
+  $qrOrderId = trim((string) $qrOrderId);
+  if ($qrOrderId === "" || !$saleId) return;
+  pos_qr_ensure_schema();
+  pos_ensure_sales_schema();
+  $rows = pos_q("SELECT id, sales_order_id FROM qr_orders WHERE id = ? AND business_id = ? LIMIT 1", "ss", [$qrOrderId, $bid]);
+  $qr = $rows[0] ?? null;
+  if (!$qr) throw new Exception("QR order not found");
+  if (!empty($qr["sales_order_id"]) && $qr["sales_order_id"] !== $saleId) throw new Exception("This QR order is already invoiced");
+  pos_q(
+    "UPDATE qr_orders SET status = 'completed', sales_order_id = ?, branch_id = COALESCE(branch_id, ?) WHERE id = ? AND business_id = ?",
+    "ssss",
+    [$saleId, $branchId, $qrOrderId, $bid]
+  );
+  try {
+    pos_q("UPDATE sales_orders SET qr_order_id = ? WHERE id = ? AND business_id = ?", "sss", [$qrOrderId, $saleId, $bid]);
+  } catch (Exception $e) { /* optional */ }
+}
+
+function pos_qr_load_sale($bid, $saleId) {
+  $orders = pos_q("SELECT * FROM sales_orders WHERE id = ? AND business_id = ? LIMIT 1", "ss", [$saleId, $bid]);
+  if (!$orders) return null;
+  $order = $orders[0];
+  $order["lines"] = pos_q("SELECT * FROM sales_order_lines WHERE order_id = ?", "s", [$saleId]);
+  return $order;
+}
+
+function pos_qr_ensure_invoice($bid, $branchId, $uid, $qrOrderId, $paymentMethod = "cash") {
+  pos_qr_ensure_schema();
+  pos_ensure_sales_schema();
+  return pos_with_transaction(function () use ($bid, $branchId, $uid, $qrOrderId, $paymentMethod) {
+    $rows = pos_q("SELECT * FROM qr_orders WHERE id = ? AND business_id = ? LIMIT 1", "ss", [$qrOrderId, $bid]);
+    $order = $rows[0] ?? null;
+    if (!$order) throw new Exception("QR order not found");
+    if (($order["status"] ?? "") === "cancelled") throw new Exception("Cancelled QR orders cannot be invoiced");
+    if (!empty($order["sales_order_id"])) {
+      $existing = pos_qr_load_sale($bid, $order["sales_order_id"]);
+      if ($existing) return $existing;
+    }
+    $qrLines = pos_q("SELECT * FROM qr_order_lines WHERE order_id = ? ORDER BY created_at", "s", [$qrOrderId]);
+    if (!$qrLines) throw new Exception("This QR order has no items");
+    $customer = pos_qr_find_or_create_customer($bid, $order);
+    $methodPay = pos_qr_pay_method($paymentMethod);
+    $payStatus = $methodPay === "credit" ? "partial" : "paid";
+    $subtotal = pos_round2($order["subtotal"] ?? 0);
+    $discount = pos_round2($order["discount"] ?? 0);
+    $gst = pos_round2($order["gst"] ?? 0);
+    $total = pos_round2($order["total"] ?? 0);
+    $totalGm = 0;
+    foreach ($qrLines as $line) $totalGm += (float) ($line["quantity_gm"] ?? 0);
+    $next = pos_next_seq("order", $bid, 10001);
+    $orderNumber = "SO-" . $next;
+    $orderId = pos_uuid();
+    $custName = function_exists("pos_customer_label") ? pos_customer_label($customer) : ($customer["name"] ?? $order["customer_name"]);
+    pos_q(
+      "INSERT INTO sales_orders (
+         id, order_number, customer_id, customer_name, customer_type,
+         pack_id, pack_name, pack_count, status, total_quantity_gm,
+         subtotal, discount, gst, total, payment_method, payment_status, business_id,
+         branch_id, cashier_id
+       ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+      "sssssssssssssssssss",
+      [
+        $orderId, $orderNumber, $customer["id"], $custName, (string) ($customer["type"] ?? "b2c"),
+        null, null, null, "confirmed", (string) $totalGm,
+        (string) $subtotal, (string) $discount, (string) $gst, (string) $total, $methodPay, $payStatus, $bid,
+        $branchId ? (string) $branchId : null, $uid ? (string) $uid : null,
+      ]
+    );
+    try {
+      pos_q("UPDATE sales_orders SET qr_order_id = ? WHERE id = ? AND business_id = ?", "sss", [$qrOrderId, $orderId, $bid]);
+    } catch (Exception $e) { /* optional */ }
+    if (is_file(__DIR__ . "/pos-advanced.php")) require_once __DIR__ . "/pos-advanced.php";
+    if (is_file(__DIR__ . "/pos-accounting.php")) require_once __DIR__ . "/pos-accounting.php";
+    foreach ($qrLines as $line) {
+      $it = pos_q("SELECT * FROM items WHERE id = ? AND business_id = ? LIMIT 1", "ss", [$line["item_id"], $bid]);
+      $item = $it[0] ?? null;
+      if (!$item) throw new Exception("One selected item is no longer available");
+      $qty = (float) ($line["quantity_gm"] ?? 0);
+      if ($qty <= 0) throw new Exception("Invalid quantity");
+      if ($qty > (float) ($item["stock_gm"] ?? 0)) throw new Exception($item["name"] . " does not have enough stock");
+      $lineId = pos_uuid();
+      $lineDisc = (string) ($line["discount"] ?? 0);
+      pos_q(
+        "INSERT INTO sales_order_lines (
+           id, order_id, item_id, item_name, quantity_gm, rate_per_kg,
+           discount, amount, gst_rate, cancelled, business_id
+         ) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+        "sssssssssss",
+        [
+          $lineId, $orderId, $item["id"], $line["item_name"] ?: ($item["name"] ?? "Item"), (string) $qty, (string) ($line["rate_per_kg"] ?? 0),
+          $lineDisc, (string) ($line["amount"] ?? 0), (string) ($line["gst_rate"] ?? 0), "0", $bid,
+        ]
+      );
+      if (function_exists("pos_allocate_batches")) {
+        $allocs = pos_allocate_batches($bid, $item["id"], $qty, "", "");
+        foreach ($allocs as $al) {
+          if (function_exists("pos_write_stock_movement")) {
+            pos_write_stock_movement($bid, $branchId, $uid, $item["id"], "sale", -((float) $al["qty"]), $orderNumber, [
+              "barcode" => $al["batch"]["barcode"] ?? null, "batch_id" => $al["batch"]["id"] ?? null,
+              "unit_cost" => $al["batch"]["unit_cost"] ?? 0, "ref_type" => "sale", "ref_id" => $orderId,
+            ]);
+          }
+        }
+      }
+      pos_q("UPDATE items SET stock_gm = stock_gm - ? WHERE id = ? AND business_id = ?", "dss", [$qty, $item["id"], $bid]);
+    }
+    $sale = pos_qr_load_sale($bid, $orderId);
+    try {
+      if (function_exists("pos_record_credit_sale")) pos_record_credit_sale($customer, $total, $orderId, $orderNumber, $methodPay, $bid, $uid);
+    } catch (Throwable $e) { /* optional */ }
+    try {
+      if (function_exists("pos_post_sale_journal")) pos_post_sale_journal($bid, $uid, $sale);
+    } catch (Throwable $e) { /* optional */ }
+    pos_q(
+      "UPDATE qr_orders SET status = 'completed', sales_order_id = ?, branch_id = COALESCE(branch_id, ?) WHERE id = ? AND business_id = ?",
+      "ssss",
+      [$orderId, $branchId, $qrOrderId, $bid]
+    );
+    return $sale;
+  });
 }
 
 function pos_qr_pack_menu_id($packId) {
@@ -381,7 +539,7 @@ function pos_qr_public_dispatch($path, $method, $body) {
   return false;
 }
 
-function pos_qr_staff_dispatch($path, $method, $body, $bid, $branchId) {
+function pos_qr_staff_dispatch($path, $method, $body, $bid, $branchId, $uid = "") {
   pos_qr_ensure_schema();
   if ($path === "qr-orders" && $method === "GET") {
     $status = strtolower(pos_qr_clean($_GET["status"] ?? "", 24));
@@ -390,12 +548,17 @@ function pos_qr_staff_dispatch($path, $method, $body, $bid, $branchId) {
   if (preg_match('#^qr-orders/([^/]+)$#', $path, $m) && $method === "PATCH") {
     $status = strtolower(pos_qr_clean($body["status"] ?? "", 24));
     if (!in_array($status, pos_qr_statuses(), true)) pos_send(400, ["error" => "Invalid QR order status", "php" => true]);
-    pos_q("UPDATE qr_orders SET status = ?, branch_id = COALESCE(branch_id, ?) WHERE id = ? AND business_id = ?", "ssss", [$status, $branchId, $m[1], $bid]);
+    $invoice = null;
+    if ($status === "completed") {
+      $invoice = pos_qr_ensure_invoice($bid, $branchId, $uid, $m[1], $body["payment_method"] ?? $body["paymentMethod"] ?? "cash");
+    } else {
+      pos_q("UPDATE qr_orders SET status = ?, branch_id = COALESCE(branch_id, ?) WHERE id = ? AND business_id = ?", "ssss", [$status, $branchId, $m[1], $bid]);
+    }
     $rows = pos_qr_orders_with_lines($bid);
     $found = null;
     foreach ($rows as $row) if ($row["id"] === $m[1]) $found = $row;
     if (!$found) pos_send(404, ["error" => "QR order not found", "php" => true]);
-    pos_send(200, ["ok" => true, "order" => $found, "php" => true]);
+    pos_send(200, ["ok" => true, "order" => $found, "invoice" => $invoice, "php" => true]);
   }
   return false;
 }

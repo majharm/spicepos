@@ -45,7 +45,7 @@ function pos_php_till_dispatch($path, $method, $body) {
 
   if ($path === "qr-orders" || strpos($path, "qr-orders/") === 0) {
     require_once __DIR__ . "/pos-qr-ordering.php";
-    if (pos_qr_staff_dispatch($path, $method, $body, $bid, $branchId)) return true;
+    if (pos_qr_staff_dispatch($path, $method, $body, $bid, $branchId, $uid)) return true;
   }
 
   if ($path === "bootstrap" && $method === "GET") {

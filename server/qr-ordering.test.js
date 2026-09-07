@@ -9,6 +9,7 @@ import {
   expandQrPackLine,
   packMenuId,
   parsePackMenuId,
+  qrMobileDigits,
 } from "./qr-ordering.js";
 import "../js/offers.js";
 
@@ -217,4 +218,10 @@ test("QR menu quantities convert kg/litre and piece orders to base stock", () =>
   assert.equal(qrQuantityToBase(3, "PCS"), 3);
   assert.equal(qrLineAmount(1500, 200, "GM"), 300);
   assert.equal(qrLineAmount(3, 25, "PCS"), 75);
+});
+
+test("QR mobile digits match customers on the last ten numbers", () => {
+  assert.equal(qrMobileDigits("+91 98765-43210"), "9876543210");
+  assert.equal(qrMobileDigits("09876543210"), "9876543210");
+  assert.equal(qrMobileDigits("9876543210"), "9876543210");
 });

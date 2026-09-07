@@ -28,7 +28,7 @@ import { audit } from "./audit.js";
 import { getPlatformSettings, shopSupportContact } from "./settings.js";
 import { sendLowStockAlerts, tickShopAlerts, startAlertScheduler, scheduleAlertTick } from "./alerts.js";
 import { registerAdvanced, computeSaleLine, applySaleStock, applyLoyaltyOnSale } from "./advanced.js";
-import { registerQrPublic, registerQrStaff } from "./qr-ordering.js";
+import { registerQrPublic, registerQrStaff, linkQrOrderSale, ensureQrOrderSchema } from "./qr-ordering.js";
 import "../js/discount.js";
 import { canonApiUrl, isAliasedApi, isApiUrl, rewriteToApi } from "./http-path.js";
 
@@ -607,6 +607,7 @@ registerAccounts(app);
 
 app.post("/api/checkout", requireStaff, requirePerm("counter"), async (req, res) => {
   const { customerId, paymentMethod, lines, packId, packCount, discount, discountType, discountValue, loyaltyPoints, offerIds } = req.body || {};
+  const qrOrderId = String(req.body?.qrOrderId || req.body?.qr_order_id || "").trim();
   if (!Array.isArray(lines) || lines.length === 0) {
     res.status(400).json({ error: "Cart is empty" });
     return;
@@ -623,6 +624,7 @@ app.post("/api/checkout", requireStaff, requirePerm("counter"), async (req, res)
     } catch {
       /* unit master optional */
     }
+    if (qrOrderId) await ensureQrOrderSchema();
     const result = await withTransaction(async (conn) => {
       const [customers] = await conn.query(
         "SELECT * FROM customers WHERE id = ? AND business_id = ?",
@@ -837,6 +839,7 @@ app.post("/api/checkout", requireStaff, requirePerm("counter"), async (req, res)
       };
       if (!orders[0]) orderRow.lines = orderLines;
       else orderRow.lines = orderLines;
+      if (qrOrderId) await linkQrOrderSale(conn, { businessId, qrOrderId, saleId: orderId });
       await recordCreditSale(conn, {
         customer,
         total,

@@ -1,9 +1,13 @@
 import crypto from "node:crypto";
 import "../js/units.js";
 import { query, withTransaction } from "./db.js";
-import { bid, branchId } from "./context.js";
+import { bid, branchId, authUser } from "./context.js";
 import { requirePerm } from "./auth.js";
 import { listOffers, getPromoSettings, POSOffers } from "./offers.js";
+import { nextSeq, itemBillName, round2 } from "./crud.js";
+import { applySaleStock } from "./advanced.js";
+import { recordCreditSale } from "./accounts.js";
+import { postSaleJournal } from "./accounting.js";
 
 const POSUnits = globalThis.POSUnits;
 const QR_STATUSES = ["pending", "accepted", "preparing", "ready", "completed", "cancelled"];
@@ -35,6 +39,16 @@ export async function ensureQrOrderSchema(conn = null) {
   }
   try {
     await exec("ALTER TABLE qr_orders ADD COLUMN offer_label VARCHAR(255) NULL");
+  } catch {
+    /* already present */
+  }
+  try {
+    await exec("ALTER TABLE qr_orders ADD COLUMN sales_order_id VARCHAR(255) NULL");
+  } catch {
+    /* already present */
+  }
+  try {
+    await exec("ALTER TABLE sales_orders ADD COLUMN qr_order_id VARCHAR(255) NULL");
   } catch {
     /* already present */
   }
@@ -309,9 +323,12 @@ async function qrOrdersWithLines(businessId, status = "") {
     params.push(status);
   }
   const orders = await query(
-    `SELECT * FROM qr_orders WHERE business_id = ?${statusSql}
-     ORDER BY CASE status WHEN 'pending' THEN 0 WHEN 'accepted' THEN 1 WHEN 'preparing' THEN 2
-       WHEN 'ready' THEN 3 ELSE 4 END, created_at DESC LIMIT 100`,
+    `SELECT q.*, s.order_number AS invoice_number
+     FROM qr_orders q
+     LEFT JOIN sales_orders s ON s.id = q.sales_order_id AND s.business_id = q.business_id
+     WHERE q.business_id = ?${statusSql}
+     ORDER BY CASE q.status WHEN 'pending' THEN 0 WHEN 'accepted' THEN 1 WHEN 'preparing' THEN 2
+       WHEN 'ready' THEN 3 ELSE 4 END, q.created_at DESC LIMIT 100`,
     params,
   );
   if (!orders.length) return [];
@@ -321,6 +338,215 @@ async function qrOrdersWithLines(businessId, status = "") {
     ids,
   );
   return orders.map((order) => ({ ...order, lines: lines.filter((line) => line.order_id === order.id) }));
+}
+
+export function qrMobileDigits(raw) {
+  return String(raw || "").replace(/\D/g, "").slice(-10);
+}
+
+function qrPayMethod(raw) {
+  const method = String(raw || "cash").toLowerCase();
+  return ["cash", "upi", "card", "credit"].includes(method) ? method : "cash";
+}
+
+async function findOrCreateQrCustomer(conn, order, businessId) {
+  const digits = qrMobileDigits(order.mobile);
+  const [all] = await conn.query("SELECT * FROM customers WHERE business_id = ?", [businessId]);
+  const found = (all || []).find((row) => qrMobileDigits(row.mobile) === digits && digits.length >= 10);
+  if (found) return found;
+  const n = await nextSeq(conn, "customer", 4);
+  const code = `CUS-${String(n).padStart(3, "0")}`;
+  const id = crypto.randomUUID();
+  await conn.query(
+    `INSERT INTO customers (id, code, name, business_name, mobile, type, gstin, state, credit_limit, outstanding, business_id)
+     VALUES (?,?,?,?,?,?,?,?,?,0,?)`,
+    [
+      id,
+      code,
+      String(order.customer_name || "Customer").trim().slice(0, 160),
+      null,
+      String(order.mobile || "").trim().slice(0, 32),
+      "b2c",
+      null,
+      null,
+      0,
+      businessId,
+    ],
+  );
+  const [rows] = await conn.query("SELECT * FROM customers WHERE id = ?", [id]);
+  return rows[0];
+}
+
+async function loadSaleWithLines(conn, saleId, businessId) {
+  const [orders] = await conn.query("SELECT * FROM sales_orders WHERE id = ? AND business_id = ?", [saleId, businessId]);
+  if (!orders[0]) return null;
+  const [lines] = await conn.query("SELECT * FROM sales_order_lines WHERE order_id = ?", [saleId]);
+  return { ...orders[0], lines };
+}
+
+export async function linkQrOrderSale(conn, { businessId, qrOrderId, saleId }) {
+  const id = String(qrOrderId || "").trim();
+  if (!id || !saleId) return;
+  const [rows] = await conn.query(
+    "SELECT id, sales_order_id FROM qr_orders WHERE id = ? AND business_id = ? LIMIT 1",
+    [id, businessId],
+  );
+  const qr = rows[0];
+  if (!qr) throw new Error("QR order not found");
+  if (qr.sales_order_id && qr.sales_order_id !== saleId) throw new Error("This QR order is already invoiced");
+  await conn.query(
+    "UPDATE qr_orders SET status = 'completed', sales_order_id = ?, branch_id = COALESCE(branch_id, ?) WHERE id = ? AND business_id = ?",
+    [saleId, branchId(), id, businessId],
+  );
+  try {
+    await conn.query("UPDATE sales_orders SET qr_order_id = ? WHERE id = ? AND business_id = ?", [id, saleId, businessId]);
+  } catch {
+    /* column optional until migrate */
+  }
+}
+
+export async function ensureQrInvoice(qrOrderId, { paymentMethod = "cash" } = {}) {
+  const businessId = bid();
+  await ensureQrOrderSchema();
+  return withTransaction(async (conn) => {
+    const [orderRows] = await conn.query(
+      "SELECT * FROM qr_orders WHERE id = ? AND business_id = ? LIMIT 1",
+      [qrOrderId, businessId],
+    );
+    const order = orderRows[0];
+    if (!order) throw new Error("QR order not found");
+    if (String(order.status) === "cancelled") throw new Error("Cancelled QR orders cannot be invoiced");
+    if (order.sales_order_id) {
+      const existing = await loadSaleWithLines(conn, order.sales_order_id, businessId);
+      if (existing) return existing;
+    }
+    const [qrLines] = await conn.query(
+      "SELECT * FROM qr_order_lines WHERE order_id = ? ORDER BY created_at",
+      [qrOrderId],
+    );
+    if (!qrLines.length) throw new Error("This QR order has no items");
+    const customer = await findOrCreateQrCustomer(conn, order, businessId);
+    const method = qrPayMethod(paymentMethod);
+    const payStatus = method === "credit" ? "partial" : "paid";
+    const subtotal = round2(order.subtotal);
+    const discount = round2(order.discount);
+    const gst = round2(order.gst);
+    const total = round2(order.total);
+    const totalGm = qrLines.reduce((sum, line) => sum + (Number(line.quantity_gm) || 0), 0);
+    const next = await nextSeq(conn, "order", 10001);
+    const orderNumber = `SO-${next}`;
+    const orderId = crypto.randomUUID();
+    await conn.query(
+      `INSERT INTO sales_orders (
+         id, order_number, customer_id, customer_name, customer_type,
+         pack_id, pack_name, pack_count, status, total_quantity_gm,
+         subtotal, discount, gst, total, payment_method, payment_status, business_id,
+         branch_id, cashier_id
+       ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      [
+        orderId,
+        orderNumber,
+        customer.id,
+        customer.business_name || customer.name || order.customer_name,
+        customer.type || "b2c",
+        null,
+        null,
+        null,
+        "confirmed",
+        totalGm,
+        subtotal,
+        discount,
+        gst,
+        total,
+        method,
+        payStatus,
+        businessId,
+        branchId(),
+        authUser()?.id || null,
+      ],
+    );
+    try {
+      await conn.query("UPDATE sales_orders SET qr_order_id = ?, discount_type = ?, discount_value = ? WHERE id = ? AND business_id = ?", [
+        qrOrderId,
+        "amt",
+        discount,
+        orderId,
+        businessId,
+      ]);
+    } catch {
+      try {
+        await conn.query("UPDATE sales_orders SET qr_order_id = ? WHERE id = ? AND business_id = ?", [qrOrderId, orderId, businessId]);
+      } catch {
+        /* optional */
+      }
+    }
+    for (const line of qrLines) {
+      const [items] = await conn.query("SELECT * FROM items WHERE id = ? AND business_id = ?", [line.item_id, businessId]);
+      const item = items[0];
+      if (!item) throw new Error("One selected item is no longer available");
+      const qty = Number(line.quantity_gm) || 0;
+      if (qty <= 0) throw new Error("Invalid quantity");
+      if (qty > Number(item.stock_gm || 0)) throw new Error(`${item.name} does not have enough stock`);
+      const lineId = crypto.randomUUID();
+      const amount = round2(line.amount);
+      const gstRate = Number(line.gst_rate) || 0;
+      const rate = Number(line.rate_per_kg) || 0;
+      const lineDisc = round2(Math.max(0, Number(line.discount) || 0));
+      try {
+        await conn.query(
+          `INSERT INTO sales_order_lines (
+             id, order_id, item_id, item_name, quantity_gm, rate_per_kg,
+             discount, amount, gst_rate, cancelled, business_id
+           ) VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+          [
+            lineId,
+            orderId,
+            item.id,
+            line.item_name || itemBillName(item),
+            qty,
+            rate,
+            lineDisc,
+            amount,
+            gstRate,
+            0,
+            businessId,
+          ],
+        );
+      } catch {
+        await conn.query(
+          `INSERT INTO sales_order_lines (
+             id, order_id, item_id, item_name, quantity_gm, rate_per_kg,
+             discount, amount, gst_rate, cancelled, business_id
+           ) VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+          [lineId, orderId, item.id, line.item_name || item.name, qty, rate, lineDisc, amount, gstRate, 0, businessId],
+        );
+      }
+      await applySaleStock(conn, {
+        businessId,
+        branchId: branchId(),
+        userId: authUser()?.id,
+        item,
+        qty,
+        orderId,
+        orderNumber,
+        costRate: item.purchase_rate,
+      });
+    }
+    const sale = await loadSaleWithLines(conn, orderId, businessId);
+    await recordCreditSale(conn, {
+      customer,
+      total,
+      orderId,
+      orderNumber,
+      method,
+    });
+    await postSaleJournal(conn, sale);
+    await conn.query(
+      "UPDATE qr_orders SET status = 'completed', sales_order_id = ?, branch_id = COALESCE(branch_id, ?) WHERE id = ? AND business_id = ?",
+      [orderId, branchId(), qrOrderId, businessId],
+    );
+    return sale;
+  });
 }
 
 export function registerQrPublic(app) {
@@ -451,13 +677,20 @@ export function registerQrStaff(app) {
       const status = cleanText(req.body?.status, 24).toLowerCase();
       if (!QR_STATUSES.includes(status)) return res.status(400).json({ error: "Invalid QR order status" });
       await ensureQrOrderSchema();
-      const result = await query(
-        "UPDATE qr_orders SET status = ?, branch_id = COALESCE(branch_id, ?) WHERE id = ? AND business_id = ?",
-        [status, branchId(), req.params.id, bid()],
-      );
-      if (!result.affectedRows) return res.status(404).json({ error: "QR order not found" });
+      let invoice = null;
+      if (status === "completed") {
+        invoice = await ensureQrInvoice(req.params.id, { paymentMethod: req.body?.payment_method || req.body?.paymentMethod });
+      } else {
+        const result = await query(
+          "UPDATE qr_orders SET status = ?, branch_id = COALESCE(branch_id, ?) WHERE id = ? AND business_id = ?",
+          [status, branchId(), req.params.id, bid()],
+        );
+        if (!result.affectedRows) return res.status(404).json({ error: "QR order not found" });
+      }
       const rows = await qrOrdersWithLines(bid());
-      res.json({ ok: true, order: rows.find((row) => row.id === req.params.id) });
+      const order = rows.find((row) => row.id === req.params.id);
+      if (!order) return res.status(404).json({ error: "QR order not found" });
+      res.json({ ok: true, order, invoice });
     } catch (err) {
       res.status(400).json({ error: String(err.message) });
     }

@@ -320,6 +320,8 @@ test("HTML and CSS cache stickers match deploy136", () => {
   assert.match(qrOrderPhp, /"packs"/);
   assert.match(qrOrderPhp, /function pos_qr_public_dispatch/);
   assert.match(qrOrderPhp, /function pos_qr_staff_dispatch/);
+  assert.match(qrOrderPhp, /function pos_qr_ensure_invoice/);
+  assert.match(readFileSync(path.join(root, "js/app.js"), "utf8"), /openInvoiceFromQr/);
   assert.match(saas, /alert-switch-ui/);
   assert.match(saas, /alert-card/);
   assert.match(saas, /max-width: 900px/);

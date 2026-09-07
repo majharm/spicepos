@@ -3,7 +3,12 @@
 function pos_checkout_sale($bid, $branchId, $uid, $auth, $body) {
   require_once __DIR__ . "/pos-accounting.php";
   pos_ensure_sales_schema();
-  return pos_with_transaction(function () use ($body, $bid, $branchId, $uid, $auth) {
+  $qrOrderId = trim((string) ($body["qrOrderId"] ?? $body["qr_order_id"] ?? ""));
+  if ($qrOrderId !== "") {
+    require_once __DIR__ . "/pos-qr-ordering.php";
+    pos_qr_ensure_schema();
+  }
+  return pos_with_transaction(function () use ($body, $bid, $branchId, $uid, $auth, $qrOrderId) {
     $lines = $body["lines"] ?? [];
     if (!is_array($lines) || !$lines) throw new Exception("Cart is empty");
     $methodPay = strtolower((string) ($body["paymentMethod"] ?? "cash"));
@@ -162,6 +167,9 @@ function pos_checkout_sale($bid, $branchId, $uid, $auth, $body) {
       "created_at" => date("c"),
     ];
     $orderRow["lines"] = $orderLines;
+    if ($qrOrderId !== "") {
+      pos_qr_link_sale($bid, $qrOrderId, $orderId, $branchId);
+    }
     try {
       pos_record_credit_sale($customer, $total, $orderId, $orderNumber, $methodPay, $bid, $uid);
     } catch (Throwable $e) { /* credit ledger optional */ }

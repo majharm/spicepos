@@ -41,6 +41,7 @@ const state = {
   stockMode: "simple",
   expiryBatches: [],
   expiryFilter: "all",
+  activeQrOrderId: "",
 };
 
 function debounce(fn, wait = 120) {
@@ -550,6 +551,7 @@ function clearCounterAfterSale(order, result) {
   state.lastPack = null;
   resetOfferPopup();
   state.editingOrderId = null;
+  state.activeQrOrderId = "";
   state.billDiscountValue = 0;
   state.loyaltyRedeem = 0;
   if ($("bill-disc-value")) $("bill-disc-value").value = 0;
@@ -3510,6 +3512,8 @@ function renderQrOrders() {
           ${order.status === "accepted" ? `<button class="btn" type="button" data-qr-status-next="preparing">Preparing</button>` : ""}
           ${order.status === "preparing" ? `<button class="btn" type="button" data-qr-status-next="ready">Ready</button>` : ""}
           ${order.status === "ready" ? `<button class="btn" type="button" data-qr-status-next="completed">Complete</button>` : ""}
+          ${order.status === "completed" && !order.sales_order_id ? `<button class="btn primary" type="button" data-qr-status-next="completed">Save invoice</button>` : ""}
+          ${order.sales_order_id ? `<button class="btn" type="button" data-qr-invoice="${escapeHtml(order.sales_order_id)}">View invoice${order.invoice_number ? ` ${escapeHtml(order.invoice_number)}` : ""}</button>` : ""}
           ${!["completed", "cancelled"].includes(order.status) ? `<button class="btn danger" type="button" data-qr-status-next="cancelled">Cancel</button>` : ""}
         </div>
       </article>`).join("")
@@ -3542,7 +3546,22 @@ async function updateQrOrder(order, status) {
   const index = qrOrderCache.findIndex((row) => row.id === order.id);
   if (index >= 0 && data.order) qrOrderCache[index] = data.order;
   renderQrOrders();
+  if (status === "completed" && data.invoice) await openInvoiceFromQr(data.invoice);
   return data.order || order;
+}
+
+async function openInvoiceFromQr(invoice) {
+  if (!invoice?.id) return;
+  showView("orders");
+  try {
+    await loadOrders();
+  } catch {
+    /* still show the invoice we just saved */
+  }
+  if (!orderCache.some((row) => row.id === invoice.id)) orderCache.unshift(invoice);
+  selectedOrderId = invoice.id;
+  renderOrdersList();
+  showOrder(invoice);
 }
 
 async function openQrOrderInCounter(order) {
@@ -3550,6 +3569,7 @@ async function openQrOrderInCounter(order) {
   if (!liveLines.length) throw new Error("This order has no available catalog items");
   if (state.cart.length && !confirm("Replace the current Counter bill with this QR order?")) return;
   if (order.status === "pending") order = await updateQrOrder(order, "accepted");
+  state.activeQrOrderId = order.id;
   state.cart = liveLines.map((line) => ({ itemId: line.item_id, qtyGm: Number(line.quantity_gm) }));
   const known = state.customers.find((customer) => digitsMobile(customer.mobile) === digitsMobile(order.mobile));
   const walkIn = state.customers.find((customer) => customer.code === "CUS-001") || state.customers[0];
@@ -4268,6 +4288,7 @@ $("btn-clear").addEventListener("click", () => {
   }
   state.cart = [];
   state.lastPack = null;
+  state.activeQrOrderId = "";
   state.billDiscountValue = 0;
   state.loyaltyRedeem = 0;
   state.offerAuto = true;
@@ -4305,6 +4326,7 @@ $("btn-pay").addEventListener("click", async () => {
       loyaltyPoints: state.loyaltyRedeem,
       offerIds: (state.appliedOffers?.applied || []).map((o) => o.id).filter(Boolean),
       offerLoyaltyMultiplier: state.appliedOffers?.loyaltyMultiplier || 1,
+      qrOrderId: state.activeQrOrderId || undefined,
       lines: state.cart.map((l) => ({
         itemId: l.itemId,
         quantity_gm: l.qtyGm,
@@ -4489,8 +4511,22 @@ $("qr-order-list")?.addEventListener("click", async (event) => {
   try {
     const counter = event.target.closest("[data-qr-counter]");
     const next = event.target.closest("[data-qr-status-next]");
+    const invoiceBtn = event.target.closest("[data-qr-invoice]");
     if (counter) await openQrOrderInCounter(order);
-    else if (next) await updateQrOrder(order, next.dataset.qrStatusNext);
+    else if (invoiceBtn) {
+      const invoiceId = invoiceBtn.dataset.qrInvoice;
+      showView("orders");
+      try { await loadOrders(); } catch { /* ignore */ }
+      const found = orderCache.find((row) => row.id === invoiceId);
+      if (found) {
+        selectedOrderId = found.id;
+        renderOrdersList();
+        showOrder(found);
+      } else {
+        $("qr-orders-hint").textContent = "Invoice saved. Open Invoices to print it.";
+        $("qr-orders-hint").className = "hint ok";
+      }
+    } else if (next) await updateQrOrder(order, next.dataset.qrStatusNext);
   } catch (err) {
     $("qr-orders-hint").textContent = err.message;
     $("qr-orders-hint").className = "hint error";
