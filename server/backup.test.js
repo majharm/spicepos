@@ -290,6 +290,7 @@ test("HTML and CSS cache stickers match deploy136", () => {
   assert.match(index, /id="qr-sound-toggle"/);
   assert.match(index, /id="qr-sound-arm"/);
   assert.match(index, /id="qr-order-chime"/);
+  assert.match(index, /preload="none"/);
   assert.match(index, /sounds\/qr-order\.wav/);
   assert.ok(existsSync(path.join(root, "sounds/qr-order.wav")));
   assert.match(index, /js\/qr-notify\.js/);

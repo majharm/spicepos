@@ -115,6 +115,40 @@ app.get("/api/health", async (_req, res) => {
   }
 });
 
+const CATALOG_ITEM_SELECT = `id, code, name, local_name, category, subcategory, color, size, wearer_type,
+  base_unit, unit, purchase_rate, retail_rate, b2b_rate, gst_rate, hsn, barcode, mrp, brand,
+  stock_gm, reorder_level_gm, status, business_id,
+  (image_url IS NOT NULL AND image_url <> '') AS has_image`;
+
+function slimCatalogItem(row) {
+  if (!row || typeof row !== "object") return row;
+  const url = String(row.image_url || "");
+  const has = Boolean(row.has_image) || url !== "";
+  if (url.startsWith("data:")) {
+    const { image_url, ...rest } = row;
+    return { ...rest, has_image: true };
+  }
+  const out = { ...row, has_image: has };
+  if (!url) delete out.image_url;
+  return out;
+}
+
+async function listCatalogItems(businessId) {
+  try {
+    const rows = await query(
+      `SELECT ${CATALOG_ITEM_SELECT} FROM items WHERE business_id = ? ORDER BY category, subcategory, name`,
+      [businessId],
+    );
+    return (rows || []).map(slimCatalogItem);
+  } catch {
+    const rows = await query(
+      "SELECT * FROM items WHERE business_id = ? ORDER BY category, subcategory, name",
+      [businessId],
+    );
+    return (rows || []).map(slimCatalogItem);
+  }
+}
+
 app.get("/api/bootstrap", requireStaff, async (_req, res) => {
   try {
     const businessId = bid();
@@ -123,10 +157,7 @@ app.get("/api/bootstrap", requireStaff, async (_req, res) => {
       [businessId],
     );
     const [business] = await query("SELECT * FROM businesses WHERE id = ?", [businessId]);
-    const items = await query(
-      "SELECT * FROM items WHERE business_id = ? ORDER BY category, subcategory, name",
-      [businessId],
-    );
+    const items = await listCatalogItems(businessId);
     const customers = await query(
       "SELECT * FROM customers WHERE business_id = ? ORDER BY name",
       [businessId],
@@ -184,6 +215,22 @@ app.get("/api/bootstrap", requireStaff, async (_req, res) => {
       offerSettings: await getPromoSettings(businessId).catch(() => ({ stacking: "product_and_bill" })),
     });
     void tickShopAlerts(businessId).catch((err) => console.error("shop alert tick failed:", err.message));
+  } catch (err) {
+    res.status(500).json({ error: String(err.message) });
+  }
+});
+
+app.get("/api/items/:id", requireStaff, async (req, res) => {
+  try {
+    const [item] = await query("SELECT * FROM items WHERE id = ? AND business_id = ? LIMIT 1", [
+      req.params.id,
+      bid(),
+    ]);
+    if (!item) {
+      res.status(404).json({ error: "Item not found" });
+      return;
+    }
+    res.json({ item });
   } catch (err) {
     res.status(500).json({ error: String(err.message) });
   }

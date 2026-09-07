@@ -1249,18 +1249,12 @@ function showView(name) {
   if (name === "suppliers") loadSuppliers();
   if (name === "support") renderSupport();
   if (name === "dashboard") loadDashboard();
+  paintDeskState(name);
+  if (name === "stock") loadStock();
   if (name === "counter") {
     loadHolds();
     queueMicrotask(focusScanLane);
   }
-  paintImpersonationControls();
-  if (name === "units") renderUnitsTable();
-  if (name === "items") {
-    fillItemUnitSelect($("item-unit")?.value || defaultItemUnit());
-    refreshItemUnitLabels();
-    paintItemImportLink();
-  }
-  if (name === "stock") loadStock();
   if (name === "barcodes") loadBarcodesView();
   if (name === "expiry") loadExpiryView();
   if (name === "damage") loadDamageView();
@@ -1277,7 +1271,41 @@ function showView(name) {
   }
   if (name === "branches") loadBranches();
   if (name === "devices") loadDevices();
+  paintImpersonationControls();
   if (isMobileLayout()) setNavCollapsed(true);
+}
+
+function paintDeskState(name) {
+  if (name === "units") renderUnitsTable();
+  if (name === "items") {
+    fillDatalists();
+    renderItemsTable();
+    fillItemUnitSelect($("item-unit")?.value || defaultItemUnit());
+    refreshItemUnitLabels();
+    paintItemImportLink();
+  }
+  if (name === "packs") {
+    fillDatalists();
+    renderPackCompose();
+    renderPacksTable();
+  }
+  if (name === "purchases") {
+    fillDatalists();
+    renderPoLines();
+  }
+  if (name === "stock") fillDatalists();
+  if (name === "counter") {
+    renderCatalog();
+    renderCart();
+    renderPackChoice();
+    paintComboBar();
+    fillFootwearFilters();
+  }
+  if (name === "settings") renderSettings();
+  if (name === "customers") {
+    renderCustomersTable();
+    fillDueCustomerSelect();
+  }
 }
 
 function setHint(msg, kind = "") {
@@ -2098,10 +2126,10 @@ function paintComboBanner() {
 }
 
 function fillDatalists() {
-  const cats = [...new Set(state.items.map((i) => i.category).filter(Boolean))];
-  const subs = [...new Set(state.items.map((i) => i.subcategory).filter(Boolean))];
-  $("category-list").innerHTML = cats.map((c) => `<option value="${escapeHtml(c)}">`).join("");
-  $("subcategory-list").innerHTML = subs.map((c) => `<option value="${escapeHtml(c)}">`).join("");
+  const cats = [...new Set((state.items || []).map((i) => i.category).filter(Boolean))];
+  const subs = [...new Set((state.items || []).map((i) => i.subcategory).filter(Boolean))];
+  if ($("category-list")) $("category-list").innerHTML = cats.map((c) => `<option value="${escapeHtml(c)}">`).join("");
+  if ($("subcategory-list")) $("subcategory-list").innerHTML = subs.map((c) => `<option value="${escapeHtml(c)}">`).join("");
 }
 
 function itemSearchHay(item) {
@@ -2231,6 +2259,18 @@ function fillItemForm(i) {
   document.querySelector(`#items-table [data-edit-item="${CSS.escape(i.id)}"]`)?.classList.add("is-editing");
   $("item-form")?.scrollIntoView({ block: "start" });
   $("item-name")?.focus();
+  if (!itemPhotoUrl(i) && i.has_image && i.id) {
+    void api(`/api/items/${encodeURIComponent(i.id)}`)
+      .then((data) => {
+        const img = data.item?.image_url || data.image_url;
+        if (!img) return;
+        i.image_url = img;
+        const row = (state.items || []).find((x) => x.id === i.id);
+        if (row) row.image_url = img;
+        if ($("item-id")?.value === i.id) paintItemImage(itemPhotoUrl(i));
+      })
+      .catch(() => {});
+  }
 }
 
 function renderItemsTable() {
@@ -2890,23 +2930,13 @@ async function loadBootstrap() {
   paintHeader();
   paintPlatformSupport();
   renderCustomersSelect();
-  renderCatalog();
-  renderCart();
-  renderPackChoice();
-  paintComboBar();
-  fillDatalists();
-  fillFootwearFilters();
-  renderItemsTable();
-  paintItemImportLink();
-  renderUnitsTable();
-  renderCustomersTable();
-  renderPackCompose();
-  renderPacksTable();
-  renderSettings();
   applyUiLocale();
-  renderPoLines();
   fillExpenseCategories();
-  void Promise.all([loadToday(), loadDashboard(), loadSuppliers().catch(() => {}), loadHolds().catch(() => {})]);
+  paintDeskState(state.currentView || "dashboard");
+  if ($("dash-welcome") && state.session) {
+    $("dash-welcome").textContent = `${state.session.name || ""} · ${state.session.role || ""} · ${state.company.name || ""}`;
+  }
+  void loadToday();
   void loadCustomerLoyalty();
 }
 
@@ -3837,7 +3867,9 @@ async function pollQrOrders({ announce = true } = {}) {
 function startQrOrderWatch() {
   if (qrPollTimer || !can("orders")) return;
   paintQrSoundToggle();
-  void pollQrOrders({ announce: false });
+  const kick = () => void pollQrOrders({ announce: false });
+  if (typeof requestIdleCallback === "function") requestIdleCallback(kick, { timeout: 2500 });
+  else setTimeout(kick, 1200);
   qrPollTimer = setInterval(() => void pollQrOrders({ announce: true }), 4000);
   paintQrSoundArm();
   document.addEventListener("pos-qr-sound", () => {
@@ -6882,12 +6914,14 @@ async function boot() {
     applyUiLocale();
     applyNav();
     if (isMobileLayout()) setNavCollapsed(true);
+    const landing = can("dashboard") ? "dashboard" : "counter";
     if (me.business?.status && me.business.status !== "active" && !me.impersonating) {
       $("expired-banner").hidden = false;
       $("shop-name").textContent = me.business.name || "POS";
       showView("dashboard");
       return;
     }
+    showView(landing);
     try {
       await loadBootstrap();
     } catch (err) {
@@ -6902,7 +6936,6 @@ async function boot() {
         cartLines: state.cart.length,
       });
     }
-    showView(can("dashboard") ? "dashboard" : "counter");
     startQrOrderWatch();
     refreshItemUnitLabels();
   } catch {

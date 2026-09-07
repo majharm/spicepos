@@ -584,6 +584,42 @@ function pos_item_image_url($body) {
   return $img;
 }
 
+function pos_slim_catalog_item($row) {
+  if (!is_array($row)) return $row;
+  $url = (string) ($row["image_url"] ?? "");
+  $flag = $row["has_image"] ?? false;
+  $has = $url !== "" || $flag === true || $flag === 1 || $flag === "1";
+  if (strpos($url, "data:") === 0) {
+    unset($row["image_url"]);
+    $has = true;
+  }
+  $row["has_image"] = $has;
+  return $row;
+}
+
+function pos_slim_catalog_items($rows) {
+  if (!is_array($rows)) return [];
+  $out = [];
+  foreach ($rows as $row) $out[] = pos_slim_catalog_item($row);
+  return $out;
+}
+
+function pos_catalog_item_select_sql() {
+  return "id, code, name, local_name, category, subcategory, color, size, wearer_type, base_unit, unit, purchase_rate, retail_rate, b2b_rate, gst_rate, hsn, barcode, mrp, brand, stock_gm, reorder_level_gm, status, business_id, (image_url IS NOT NULL AND image_url <> '') AS has_image";
+}
+
+function pos_catalog_items($bid) {
+  try {
+    return pos_slim_catalog_items(pos_q(
+      "SELECT " . pos_catalog_item_select_sql() . " FROM items WHERE business_id = ? ORDER BY category, subcategory, name",
+      "s",
+      [$bid]
+    ));
+  } catch (Exception $e) {
+    return pos_slim_catalog_items(pos_q("SELECT * FROM items WHERE business_id = ? ORDER BY category, subcategory, name", "s", [$bid]));
+  }
+}
+
 function pos_customer_label($customer) {
   if (!is_array($customer)) return "Walk-in";
   $biz = trim((string) ($customer["business_name"] ?? ""));
