@@ -85,6 +85,11 @@ test("Counter has a dedicated scan lane and Pay action", () => {
   assert.match(app, /function showBestOfferPopup/);
   assert.match(css, /\.offer-popup-sheet/);
   assert.match(css, /catalog-empty/);
+  assert.match(index, /id="catalog-cats"/);
+  assert.match(index, /class="catalog-pane"/);
+  assert.match(app, /function renderCatalogCats/);
+  assert.match(app, /function itemCategoryLabel/);
+  assert.match(css, /counter-cats: category chips/);
   assert.match(app, /Pay \$\{money\(payTotal\)\}/);
   assert.match(css, /\.scan-lane/);
   assert.match(app, /function cartLineKey/);
