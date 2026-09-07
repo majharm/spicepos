@@ -111,7 +111,7 @@ export function validateSignup(body, opts = {}) {
   };
 }
 
-export async function registerBusiness(raw) {
+export async function registerBusiness(raw, opts = {}) {
   const b = validateSignup(raw);
   const [emailTaken] = await query("SELECT id FROM staff_users WHERE email = ? LIMIT 1", [b.email]);
   if (emailTaken) throw new Error("This email is already registered");
@@ -168,7 +168,9 @@ export async function registerBusiness(raw) {
     );
     if (!expiry) {
       await conn.query(
-        `UPDATE businesses SET subscription_expires_at = DATE_ADD(CURDATE(), INTERVAL 2 DAY) WHERE id = ?`,
+        opts.yearly
+          ? `UPDATE businesses SET subscription_expires_at = DATE_ADD(CURDATE(), INTERVAL 1 YEAR) WHERE id = ?`
+          : `UPDATE businesses SET subscription_expires_at = DATE_ADD(CURDATE(), INTERVAL 2 DAY) WHERE id = ?`,
         [id],
       );
     }

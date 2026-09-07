@@ -107,6 +107,15 @@ function ymd(v) {
   return String(v).slice(0, 10);
 }
 
+function yearlyStartYmd(fromYmd) {
+  const base = ymd(fromYmd) || todayYmdIst();
+  const [year, month, day] = base.split("-").map(Number);
+  if (!year || !month || !day) return "";
+  const dt = new Date(Date.UTC(year, month - 1, day));
+  dt.setUTCFullYear(dt.getUTCFullYear() + 1);
+  return dt.toISOString().slice(0, 10);
+}
+
 function streetAddress(b) {
   let a = String(b.address || "");
   const tail = b.city && b.state && b.pin_code ? `, ${b.city}, ${b.state} ${b.pin_code}` : "";
@@ -1462,13 +1471,13 @@ async function render() {
           ["Branches", t.branches],
           ["POS devices", t.devices],
           ["Transactions", t.transactions],
-          ["Monthly subscription fees", money(t.subscriptionRevenue)],
+          ["Yearly subscription fees", money(t.subscriptionRevenue)],
         ]
           .map(([k, v]) => `<div class="report-card"><span>${k}</span><strong>${v}</strong></div>`)
           .join("")}
       </div>
       <div class="table-wrap" style="padding:20px 0">${table(
-        ["Business", "Status", "Plan", "Fee / month", "Users", "Branches", "POS"],
+        ["Business", "Status", "Plan", "Fee / year", "Users", "Branches", "POS"],
         d.businesses.map((b) => [
           b.name,
           b.computed_status,
@@ -1488,7 +1497,7 @@ async function render() {
         api("/api/master/account-managers").catch(() => []),
       ]);
       const planOptions = plans
-        .map((p) => `<option value="${p.id}">${p.name} · ${money(p.fee_monthly)} / month</option>`)
+        .map((p) => `<option value="${p.id}">${p.name} · ${money(p.fee_monthly)} / year</option>`)
         .join("");
       const managerOptions = (Array.isArray(managers) ? managers : [])
         .filter((m) => m.status !== "inactive" || rows.some((b) => b.account_manager_id === m.id))
@@ -1620,8 +1629,9 @@ async function render() {
                   <select name="plan_id">${planOptions}</select>
                 </label>
                 <label>Expiry
-                  <input name="subscription_expires_at" type="date" />
+                  <input name="subscription_expires_at" type="date" value="${attr(yearlyStartYmd())}" />
                 </label>
+                <p class="item-composer-note full">Every plan starts yearly. Changing the plan sets expiry to one year from today.</p>
                 <label class="full">Account manager
                   <select name="account_manager_id">
                     <option value="">None — platform helpline</option>
@@ -1660,7 +1670,7 @@ async function render() {
                   <div class="item-card-meta">
                     <span class="item-chip">${attr(b.category || b.business_type || "—")}</span>
                     <span class="item-chip">${attr(b.plan_name || b.plan_id || "—")}</span>
-                    <span class="item-chip">${money(b.fee_monthly)}</span>
+                    <span class="item-chip">${money(b.fee_monthly)} / year</span>
                     <span class="item-chip">Exp ${attr(ymd(b.subscription_expires_at) || "—")}</span>
                     <span class="item-chip">${attr(b.account_manager_name || "No account manager")}</span>
                   </div>
@@ -1718,7 +1728,7 @@ async function render() {
         form.password.value = "";
         form.confirmPassword.value = "";
         setSelect(form.plan_id, b?.plan_id || "");
-        form.subscription_expires_at.value = b ? ymd(b.subscription_expires_at) : "";
+        form.subscription_expires_at.value = b ? ymd(b.subscription_expires_at) : yearlyStartYmd();
         setSelect(form.account_manager_id, b?.account_manager_id || "");
         const editing = Boolean(b);
         setAdminRequired(!editing);
@@ -1734,6 +1744,9 @@ async function render() {
         form.scrollIntoView({ block: "start" });
       }
       $("biz-cancel").onclick = () => fillBusiness(null);
+      form.plan_id.addEventListener("change", () => {
+        form.subscription_expires_at.value = yearlyStartYmd();
+      });
       body.querySelectorAll("[data-edit]").forEach((btn) => {
         btn.onclick = () => {
           const b = rows.find((r) => r.id === btn.dataset.edit);
@@ -1944,13 +1957,13 @@ async function render() {
       body.innerHTML = masterDesk(
         "Platform",
         "Plans",
-        "Use Edit to change an existing plan. A new code creates a plan.",
+        "Fees are yearly. Use Edit to change an existing plan. A new code creates a plan.",
         [{ label: "Plans", value: rows.length }],
         `<form class="settings wide" id="plan-form">
         <input type="hidden" name="plan_id" />
         <label>Code <input name="code" required placeholder="BASIC" /></label>
         <label>Name <input name="name" required placeholder="Basic" /></label>
-        <label>Fee ₹ / month <input name="fee_monthly" type="number" min="0" step="0.01" required value="0" /></label>
+        <label>Fee ₹ / year <input name="fee_monthly" type="number" min="0" step="0.01" required value="0" /></label>
         <label>Max branches <input name="max_branches" type="number" min="1" value="1" /></label>
         <label>Max users <input name="max_users" type="number" min="1" value="3" /></label>
         <label>Max devices <input name="max_devices" type="number" min="1" value="2" /></label>
@@ -1961,7 +1974,7 @@ async function render() {
         <p class="hint" id="plan-hint"></p>
       </form>
       <div class="table-wrap">${table(
-        ["Code", "Name", "Fee / month", "Branches", "Users", "Devices", "Products", "Active", ""],
+        ["Code", "Name", "Fee / year", "Branches", "Users", "Devices", "Products", "Active", ""],
         rows.map((p) => [
           p.code,
           p.name,

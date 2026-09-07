@@ -3011,7 +3011,7 @@ async function loadDashboard() {
       [tt("dashboard.stock_value", "Stock value"), money(d.stockValue)],
       [tt("dashboard.outstanding", "Customer outstanding"), money(d.outstanding)],
       ["Plan", state.plan?.name || state.plan?.code || "—"],
-      ["Subscription fee / month", money(state.plan?.fee_monthly)],
+      ["Subscription fee / year", money(state.plan?.fee_monthly)],
     ]
       .map(([k, v]) => `<div class="report-card"><span>${k}</span><strong>${v}</strong></div>`)
       .join("");

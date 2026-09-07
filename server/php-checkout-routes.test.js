@@ -255,6 +255,17 @@ test("Master Admin can set passwords and unlock locked accounts", () => {
   assert.match(masterApi, /activated_at/);
   assert.match(masterJs, /data-send-alert-row/);
   assert.match(masterJs, /data-clean-biz/);
+  assert.match(masterJs, /function yearlyStartYmd/);
+  assert.match(masterJs, /Fee ₹ \/ year/);
+  assert.match(masterJs, /Every plan starts yearly/);
+  assert.match(masterJs, /Fee \/ year/);
+  assert.doesNotMatch(masterJs, /Fee ₹ \/ month/);
+  assert.match(masterApi, /registerBusiness\(req\.body \|\| \{\}, \{ yearly: true \}\)/);
+  assert.match(core, /pos_register_business\(\$body, true\)/);
+  assert.match(core, /strtotime\("\+1 year"\)/);
+  assert.match(read("server/onboard.js"), /INTERVAL 1 YEAR/);
+  assert.match(read("master.html"), /master\.js\?v=20260905deploy157/);
+  assert.match(read("js/app.js"), /Subscription fee \/ year/);
   assert.match(core, /users\/\(\[\^\/\]\+\)\/unlock/);
   assert.match(core, /businesses\/\(\[\^\/\]\+\)\/send-expiry-alert/);
   assert.match(core, /activated_at/);
@@ -295,7 +306,7 @@ test("POS boot skips API probe and slims catalog photos", () => {
   assert.match(index, /qrcode\.iife\.js[^>]+defer/);
   assert.match(index, /preload="none"/);
   assert.match(index, /pos-api\.js\?v=20260905deploy154/);
-  assert.match(index, /app\.js\?v=20260905deploy156/);
+  assert.match(index, /app\.js\?v=20260905deploy157/);
   assert.match(login, /x-pos-20260830e\.js\?v=20260905deploy154/);
   assert.match(loginJs, /saveLoginSpec/);
   assert.match(core, /function pos_catalog_items/);

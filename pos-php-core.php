@@ -1424,7 +1424,7 @@ function pos_validate_signup($raw, $requireAdmin = true) {
   ];
 }
 
-function pos_register_business($raw) {
+function pos_register_business($raw, $yearly = false) {
   pos_ensure_business_columns();
   $b = pos_validate_signup($raw, true);
   $taken = pos_q("SELECT id FROM staff_users WHERE email = ? LIMIT 1", "s", [$b["email"]]);
@@ -1439,7 +1439,13 @@ function pos_register_business($raw) {
   if ($nameHit) $shop = $b["name"] . " (" . $b["city"] . ")";
   $planRow = pos_q("SELECT id FROM subscription_plans WHERE id = ? OR code = ? LIMIT 1", "ss", [$b["plan_id"], strtoupper($b["plan_id"])]);
   $planId = $planRow[0]["id"] ?? "trial";
-  $expiry = $b["subscription_expires_at"] ?: date("Y-m-d", strtotime("+2 days"));
+  if ($b["subscription_expires_at"]) {
+    $expiry = $b["subscription_expires_at"];
+  } elseif ($yearly) {
+    $expiry = date("Y-m-d", strtotime("+1 year"));
+  } else {
+    $expiry = date("Y-m-d", strtotime("+2 days"));
+  }
   $hash = pos_hash_password($b["password"]);
   $branchId = pos_uuid();
   $uid = pos_uuid();
@@ -2070,7 +2076,7 @@ function pos_php_dispatch($path, $method, $rawBody) {
     }
 
     if ($path === "master/businesses" && $method === "POST") {
-      $reg = pos_register_business($body);
+      $reg = pos_register_business($body, true);
       pos_audit($auth["admin"], "Business Created", ["module" => "businesses", "target_id" => $reg["businessId"], "target_name" => $body["name"] ?? ""]);
       $row = pos_q("SELECT * FROM businesses WHERE id = ? LIMIT 1", "s", [$reg["businessId"]]);
       $user = $reg["user"] ?? [];

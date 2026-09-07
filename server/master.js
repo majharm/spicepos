@@ -252,7 +252,7 @@ export function registerMaster(app) {
 
   app.post("/api/master/businesses", async (req, res) => {
     try {
-      const { businessId, user } = await registerBusiness(req.body || {});
+      const { businessId, user } = await registerBusiness(req.body || {}, { yearly: true });
       await platformAudit(
         req.auth.admin,
         "Business Created",
