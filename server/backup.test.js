@@ -483,6 +483,11 @@ test("HTML and CSS cache stickers match deploy136", () => {
   assert.match(index, /id="rep-this-fy"/);
   assert.match(index, /id="acc-fy-year"/);
   assert.match(index, /id="rep-fy-year"/);
+  assert.match(index, /class="items-desk reports-desk"/);
+  assert.match(index, /id="reports-hero-stats"/);
+  assert.match(index, /id="reports-tabs"/);
+  assert.match(index, /id="rep-search"/);
+  assert.match(index, /data-report-tab="gst"/);
   assert.match(index, /id="exp-fy-year"/);
   assert.match(index, /id="acc-print"/);
   assert.match(index, /id="rep-print"/);
@@ -490,6 +495,10 @@ test("HTML and CSS cache stickers match deploy136", () => {
   assert.match(appJs, /function fyYearList/);
   assert.match(appJs, /function printFinance/);
   assert.match(appJs, /data-print-report/);
+  assert.match(appJs, /function applyReportsFilter/);
+  assert.match(appJs, /function paintReportsHero/);
+  assert.match(appJs, /function setReportTab/);
+  assert.match(pos, /reports-desk: hero \+ tabs/);
   assert.match(appJs, /printAccountsReport/);
   assert.match(pos, /\.report-toolbar select/);
   assert.match(appJs, /function printVoucher/);

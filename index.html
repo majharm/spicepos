@@ -6,7 +6,7 @@
     <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
     <title>ATAV POS</title>
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./css/pos.css?v=20260905deploy152" />
+    <link rel="stylesheet" href="./css/pos.css?v=20260905deploy153" />
     <link rel="stylesheet" href="./css/saas.css?v=20260905deploy136" />
   </head>
   <body>
@@ -1171,21 +1171,42 @@
         </section>
         <section class="view view-finance" id="view-reports" hidden>
           <h2 class="visually-hidden">Reports</h2>
-          <p class="lede">Sales, stock, purchases, expenses, GST, and daywise payment summary for the Indian financial year (1 April–31 March).</p>
-          <form class="report-toolbar" id="report-form">
-            <label>FY year
-              <select id="rep-fy-year" aria-label="Financial year"></select>
-            </label>
-            <label>From <input id="rep-from" type="date" required /></label>
-            <label>To <input id="rep-to" type="date" required /></label>
-            <button class="btn" type="button" id="rep-this-fy">This FY</button>
-            <button class="btn primary" type="submit">Show</button>
-            <button class="btn" type="button" id="rep-print">Print</button>
-            <a class="btn" id="rep-excel-all" href="#">Download all Excel</a>
-          </form>
-          <div class="hint" id="reports-hint"></div>
-          <div class="report-grid" id="report-summary"></div>
-          <div id="reports"></div>
+          <div class="items-desk reports-desk">
+            <header class="items-hero">
+              <div class="items-hero-copy">
+                <p class="items-kicker">Finance</p>
+                <h3>Reports</h3>
+                <p class="lede">Sales, GST, payments, stock, and expenses for the Indian financial year (1 April–31 March). Pick a range, then open the section you need.</p>
+              </div>
+              <div class="items-hero-stats" id="reports-hero-stats"></div>
+            </header>
+            <form class="report-toolbar reports-toolbar" id="report-form">
+              <label>FY year
+                <select id="rep-fy-year" aria-label="Financial year"></select>
+              </label>
+              <label>From <input id="rep-from" type="date" required /></label>
+              <label>To <input id="rep-to" type="date" required /></label>
+              <button class="btn" type="button" id="rep-this-fy">This FY</button>
+              <button class="btn primary" type="submit">Show</button>
+              <button class="btn" type="button" id="rep-print">Print</button>
+              <a class="btn" id="rep-excel-all" href="#">Download all Excel</a>
+              <label class="reports-search-label">Find
+                <input id="rep-search" type="search" placeholder="Bill, item, customer…" autocomplete="off" />
+              </label>
+            </form>
+            <div class="reports-tabs" id="reports-tabs" role="tablist" aria-label="Report sections">
+              <button class="reports-tab is-on" type="button" role="tab" aria-selected="true" data-report-tab="summary">Summary</button>
+              <button class="reports-tab" type="button" role="tab" aria-selected="false" data-report-tab="sales">Sales</button>
+              <button class="reports-tab" type="button" role="tab" aria-selected="false" data-report-tab="gst">GST</button>
+              <button class="reports-tab" type="button" role="tab" aria-selected="false" data-report-tab="payment">Payment</button>
+              <button class="reports-tab" type="button" role="tab" aria-selected="false" data-report-tab="stock">Stock</button>
+              <button class="reports-tab" type="button" role="tab" aria-selected="false" data-report-tab="books">Books</button>
+            </div>
+            <p class="hint" id="reports-hint"></p>
+            <p class="hint" id="reports-filter-hint"></p>
+            <div class="report-grid" id="report-summary"></div>
+            <div id="reports"></div>
+          </div>
         </section>
         <section class="view view-settings" id="view-settings" hidden>
           <h2 class="visually-hidden">Settings</h2>
@@ -1507,7 +1528,7 @@
     <script src="./js/support.js?v=20260905deploy136" defer></script>
     <script src="./js/qrcode.iife.js?v=20260905qr1"></script>
     <script src="./js/qr-notify.js?v=20260905deploy144" defer></script>
-    <script src="./js/app.js?v=20260905deploy152" defer></script>
+    <script src="./js/app.js?v=20260905deploy153" defer></script>
     <script src="./js/growth.js?v=20260905deploy145" defer></script>
     <script src="./js/offers-ui.js?v=20260905deploy136" defer></script>
   </body>
