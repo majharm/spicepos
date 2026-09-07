@@ -5,6 +5,8 @@ import { defaultPerms, ROLES, MODULES } from "./roles.js";
 import { audit } from "./audit.js";
 import { sendWelcomeStaff, publicLoginUrl } from "./mail.js";
 import { sendCredentialAlerts } from "./alerts.js";
+import { workbookXml } from "./excel.js";
+import { stockToSheets } from "./stock-excel.js";
 
 function send(res, fn) {
   return Promise.resolve()
@@ -332,6 +334,19 @@ export function registerTenant(app) {
       ),
     ),
   );
+
+  app.get("/api/stock/excel", requireStaff, requirePerm("stock"), async (_req, res) => {
+    try {
+      const rows = await query("SELECT * FROM items WHERE business_id=? ORDER BY name", [bid()]);
+      const xml = workbookXml(stockToSheets(rows));
+      const day = new Date().toISOString().slice(0, 10);
+      res.setHeader("Content-Type", "application/vnd.ms-excel; charset=utf-8");
+      res.setHeader("Content-Disposition", `attachment; filename="stock-list-${day}.xls"`);
+      res.send(xml);
+    } catch (err) {
+      res.status(500).json({ error: String(err.message || "Stock Excel failed") });
+    }
+  });
 
   app.post("/api/stock/adjust", requireStaff, requirePerm("stock"), (req, res) =>
     send(res, async () => {

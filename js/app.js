@@ -2058,6 +2058,11 @@ function paintItemImportLink() {
   if (a && typeof posUrl === "function") a.href = posUrl("/api/items/import/template");
 }
 
+function paintStockExcelLink() {
+  const a = $("stock-excel");
+  if (a && typeof posUrl === "function") a.href = posUrl("/api/stock/excel");
+}
+
 function fileToBase64(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -3054,6 +3059,7 @@ function paintStockList(rows) {
 
 async function loadStock() {
   fillItemPicker("stk-item-list", "stk-item-search", "stk-item");
+  paintStockExcelLink();
   try {
     const rows = await api("/api/stock");
     state.stockRows = Array.isArray(rows) ? rows : [];
@@ -4908,6 +4914,9 @@ $("item-import-file")?.addEventListener("change", (e) => {
 });
 $("item-import-template")?.addEventListener("click", () => {
   paintItemImportLink();
+});
+$("stock-excel")?.addEventListener("click", () => {
+  paintStockExcelLink();
 });
 $("expiry-search")?.addEventListener("input", filterExpiryList);
 $("expiry-filters")?.addEventListener("click", (e) => {

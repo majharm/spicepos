@@ -3967,6 +3967,7 @@ button.items-stat.is-active {
 .stock-pill.is-low { background: #fef3c7; color: #92400e; }
 .stock-pill.is-out { background: #fee2e2; color: #991b1b; }
 .stock-card[hidden] { display: none !important; }
+.stock-export-bar { justify-content: space-between; }
 
 .growth-desk .report-grid { padding: 0; }
 .growth-desk .report-card em {

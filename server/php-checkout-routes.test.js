@@ -263,6 +263,11 @@ test("Master Admin can set passwords and unlock locked accounts", () => {
   assert.match(read("index.html"), /id="password-form"/);
   assert.match(read("index.html"), /stock-desk/);
   assert.match(read("index.html"), /id="stock-hint"/);
+  assert.match(read("index.html"), /id="stock-excel"/);
   assert.match(read("js/app.js"), /function resolvePickerItem/);
+  assert.match(read("js/app.js"), /\/api\/stock\/excel/);
+  assert.match(read("pos-php-till.php"), /stock\/excel/);
+  assert.match(read("pos-stock-excel.php"), /function pos_stock_excel_response/);
+  assert.match(read("server/tenant.js"), /\/api\/stock\/excel/);
   assert.match(read("pos-crud.php"), /staff\/\(\[\^\/\]\+\)\$#.*PUT/s);
 });
