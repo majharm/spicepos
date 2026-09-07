@@ -376,6 +376,11 @@ function pos_php_till_dispatch($path, $method, $body) {
     pos_send(200, $outPacks);
   }
 
+  if ($path === "stock/excel" && $method === "GET") {
+    require_once __DIR__ . "/pos-stock-excel.php";
+    pos_stock_excel_response($bid);
+  }
+
   if ($path === "stock" && $method === "GET") {
     pos_send(200, pos_q("SELECT * FROM items WHERE business_id = ? ORDER BY name", "s", [$bid]));
   }

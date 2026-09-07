@@ -408,6 +408,9 @@ test("HTML and CSS cache stickers match deploy136", () => {
   assert.match(index, /id="stock-hint"/);
   assert.match(index, /id="stock-selected"/);
   assert.match(index, /id="stock-post"/);
+  assert.match(index, /id="stock-excel"/);
+  assert.match(appJs, /function paintStockExcelLink/);
+  assert.match(appJs, /\/api\/stock\/excel/);
   assert.match(appJs, /function resolvePickerItem/);
   assert.match(appJs, /function paintStockList/);
   assert.match(appJs, /function filterStockList/);
