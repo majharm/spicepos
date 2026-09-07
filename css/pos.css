@@ -231,6 +231,14 @@ select {
 .logo-preview-frame:has(img:not([hidden]))::before {
   display: none;
 }
+.logo-preview-frame.pay-qr-frame {
+  width: 120px;
+  height: 120px;
+  flex: 0 0 120px;
+}
+.logo-preview-frame.pay-qr-frame::before {
+  content: "No QR";
+}
 .item-image-frame::before { content: "No photo"; }
 .item-image-row { margin: 4px 0 2px; }
 .card-photo {

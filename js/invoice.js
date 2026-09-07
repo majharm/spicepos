@@ -348,6 +348,20 @@ ${purchaseBody(purchase, ctx)}
     return fallback || key;
   }
 
+  function paymentQrHtml(co, ctx, kind) {
+    const escapeHtml = (ctx && ctx.escapeHtml) || ((v) => String(v ?? ""));
+    const url = String(co?.payment_qr_url || "").trim();
+    if (!/^(data:image\/|https?:\/\/)/i.test(url)) return "";
+    const upi = String(co?.payment_upi || "").trim();
+    const title = L(ctx, "invoice.scan_to_pay", "Scan to pay");
+    const prefix = kind === "office" ? "off" : "inv";
+    return `<div class="${prefix}-pay-qr">
+      <p class="${prefix}-pay-qr-title">${escapeHtml(title)}</p>
+      <img class="${prefix}-pay-qr-img" src="${escapeHtml(url)}" alt="${escapeHtml(title)}" />
+      ${upi ? `<p class="${prefix}-pay-qr-upi">${escapeHtml(upi)}</p>` : ""}
+    </div>`;
+  }
+
   function lineName(l, ctx) {
     if (ctx && typeof ctx.displayItemName === "function") return ctx.displayItemName(l);
     return l.item_name || l.name || "Item";
@@ -447,6 +461,7 @@ ${purchaseBody(purchase, ctx)}
   </table>
   <div class="inv-rule"></div>
   <p class="inv-pay">${escapeHtml(L(ctx, "invoice.payment", "Payment"))}: <strong>${escapeHtml(payLabel(order.payment_method))}</strong> · ${escapeHtml(payStatusLabel(order.payment_status))}</p>
+  ${paymentQrHtml(co, ctx, "pos")}
   ${footer ? `<p class="inv-footer">${noteHtml(footer, escapeHtml)}</p>` : `<p class="inv-footer">${escapeHtml(L(ctx, "invoice.thank_you", "Thank you for your business!"))}</p>`}
   ${terms ? `<p class="inv-terms"><strong>${escapeHtml(L(ctx, "invoice.terms", "Terms & conditions"))}</strong><br>${noteHtml(terms, escapeHtml)}</p>` : ""}
   <p class="inv-powered">ATAV POS</p>
@@ -492,6 +507,10 @@ body {
 .inv-gst-total td { border-top: 1px dashed #000; padding-top: 4px; }
 .inv-grand td { font-size: 12px; padding-top: 4px; }
 .inv-pay { text-align: center; margin: 6px 0; font-size: 11px; }
+.inv-pay-qr { text-align: center; margin: 8px 0 6px; }
+.inv-pay-qr-title { margin: 0 0 4px; font-size: 10px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; }
+.inv-pay-qr-img { display: block; width: 28mm; height: 28mm; object-fit: contain; margin: 0 auto; background: #fff; }
+.inv-pay-qr-upi { margin: 4px 0 0; font-size: 10px; font-weight: 700; }
 .inv-footer, .inv-terms { text-align: center; font-size: 9px; margin: 4px 0; }
 .inv-powered { text-align: center; font-size: 8px; margin-top: 8px; color: #444; }
 .inv-empty { text-align: center; padding: 8px 0; }
@@ -700,6 +719,7 @@ ${invoiceBody(order, ctx)}
       </tbody>
     </table>
   </div>
+  ${paymentQrHtml(co, ctx, "office")}
   <footer class="off-sign">
     <div>Customer signature</div>
     <div>For ${escapeHtml(co.name || "Shop")}<br><span>Authorised signatory</span></div>
@@ -745,6 +765,10 @@ body {
 .off-words { margin: 12px 0 6px; font-size: 12px; }
 .off-note { margin: 4px 0; font-size: 11px; color: #333; }
 .off-grand td { font-weight: 800; font-size: 14px; background: #f3f3f3; }
+.off-pay-qr { text-align: center; margin: 16px 0 0; }
+.off-pay-qr-title { margin: 0 0 6px; font-size: 11px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: #333; }
+.off-pay-qr-img { display: block; width: 110px; height: 110px; object-fit: contain; margin: 0 auto; background: #fff; }
+.off-pay-qr-upi { margin: 6px 0 0; font-size: 12px; font-weight: 700; }
 .off-sign { display: flex; justify-content: space-between; gap: 24px; margin-top: 28px; }
 .off-sign > div { min-width: 180px; border-top: 1px solid #111; padding-top: 6px; font-size: 11px; }
 @media print { body { print-color-adjust: exact; -webkit-print-color-adjust: exact; } }

@@ -225,6 +225,27 @@ function pos_php_till_dispatch($path, $method, $body) {
       $params[] = $logo !== "" ? $logo : null;
       $types .= "s";
     }
+    $paymentQrUrl = null;
+    $paymentUpi = null;
+    $hasPayQr = false;
+    $hasPayUpi = false;
+    if (array_key_exists("payment_qr_url", $body)) {
+      $payQr = (string) ($body["payment_qr_url"] ?? "");
+      if ($payQr !== "" && strpos($payQr, "data:image/") !== 0) pos_send(400, ["error" => "Payment QR must be an uploaded image"]);
+      if (strlen($payQr) > 6000000) pos_send(400, ["error" => "Payment QR is too large"]);
+      $paymentQrUrl = $payQr !== "" ? $payQr : null;
+      $hasPayQr = true;
+      $langSql .= ", payment_qr_url = ?";
+      $params[] = $paymentQrUrl;
+      $types .= "s";
+    }
+    if (array_key_exists("payment_upi", $body)) {
+      $paymentUpi = pos_clip_invoice_text($body["payment_upi"], 160);
+      $hasPayUpi = true;
+      $langSql .= ", payment_upi = ?";
+      $params[] = $paymentUpi;
+      $types .= "s";
+    }
     if (array_key_exists("locale", $body)) {
       $langSql .= ", locale = ?";
       $params[] = pos_normalize_locale($body["locale"]) ?: "en";
@@ -278,7 +299,7 @@ function pos_php_till_dispatch($path, $method, $body) {
       "sssssssss",
       [$name, $address, $phone, $email, $gstin, $city, $state, $pincode, $bid]
     );
-    if ($invoiceFooter !== null || $invoiceTerms !== null) {
+    if ($invoiceFooter !== null || $invoiceTerms !== null || $hasPayQr || $hasPayUpi) {
       pos_ensure_business_columns();
       $bizSql = [];
       $bizParams = [];
@@ -293,12 +314,22 @@ function pos_php_till_dispatch($path, $method, $body) {
         $bizParams[] = $invoiceTerms;
         $bizTypes .= "s";
       }
+      if ($hasPayQr) {
+        $bizSql[] = "payment_qr_url = ?";
+        $bizParams[] = $paymentQrUrl;
+        $bizTypes .= "s";
+      }
+      if ($hasPayUpi) {
+        $bizSql[] = "payment_upi = ?";
+        $bizParams[] = $paymentUpi;
+        $bizTypes .= "s";
+      }
       $bizParams[] = $bid;
       $bizTypes .= "s";
       pos_q("UPDATE businesses SET " . implode(", ", $bizSql) . " WHERE id = ?", $bizTypes, $bizParams);
     }
     $rows = pos_q("SELECT * FROM company_settings WHERE business_id = ? LIMIT 1", "s", [$bid]);
-    $bizInv = pos_q("SELECT invoice_footer, invoice_terms FROM businesses WHERE id = ? LIMIT 1", "s", [$bid]);
+    $bizInv = pos_q("SELECT invoice_footer, invoice_terms, payment_qr_url, payment_upi FROM businesses WHERE id = ? LIMIT 1", "s", [$bid]);
     $co = pos_attach_invoice_text($rows[0] ?? ["name" => $name], $bizInv[0] ?? []);
     $meta = pos_company_timezone($co);
     $co["timezone"] = $meta["timezone"];

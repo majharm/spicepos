@@ -61,6 +61,8 @@ export async function ensureSchema() {
   await addColumn("businesses", "subscription_expires_at", "DATE NULL");
   await addColumn("businesses", "invoice_footer", "TEXT NULL");
   await addColumn("businesses", "invoice_terms", "TEXT NULL");
+  await addColumn("businesses", "payment_qr_url", "MEDIUMTEXT NULL");
+  await addColumn("businesses", "payment_upi", "VARCHAR(160) NULL");
   await addColumn("businesses", "max_branches", "INT NULL");
   await addColumn("businesses", "max_users", "INT NULL");
   await addColumn("businesses", "max_devices", "INT NULL");
@@ -88,12 +90,16 @@ export async function ensureSchema() {
   await addColumn("company_settings", "ai_language", "VARCHAR(16) NULL");
   await addColumn("company_settings", "invoice_footer", "TEXT NULL");
   await addColumn("company_settings", "invoice_terms", "TEXT NULL");
+  await addColumn("company_settings", "payment_qr_url", "MEDIUMTEXT NULL");
+  await addColumn("company_settings", "payment_upi", "VARCHAR(160) NULL");
   try {
     await query(
       `UPDATE company_settings cs
        INNER JOIN businesses b ON b.id = cs.business_id
        SET cs.invoice_footer = COALESCE(cs.invoice_footer, b.invoice_footer),
-           cs.invoice_terms = COALESCE(cs.invoice_terms, b.invoice_terms)`,
+           cs.invoice_terms = COALESCE(cs.invoice_terms, b.invoice_terms),
+           cs.payment_qr_url = COALESCE(cs.payment_qr_url, b.payment_qr_url),
+           cs.payment_upi = COALESCE(cs.payment_upi, b.payment_upi)`,
     );
   } catch {
     /* businesses invoice columns are ensured above */

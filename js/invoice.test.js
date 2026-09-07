@@ -343,3 +343,39 @@ test("POS slip and official bill print customer notes and terms from the shop pr
   assert.match(blank, /Thank you for your business/);
   assert.doesNotMatch(blank, /class="inv-terms"/);
 });
+
+test("POS slip and official bill print the shop payment QR for customers to pay", () => {
+  const InvoicePrint = loadInvoicePrint();
+  const order = {
+    order_number: "SO-2101",
+    customer_name: "Walk-in",
+    subtotal: 100,
+    gst: 5,
+    total: 105,
+    payment_method: "upi",
+    payment_status: "paid",
+    created_at: "2026-09-07T10:00:00.000Z",
+    lines: [{ item_name: "Test", quantity_gm: 500, rate_per_kg: 200, amount: 100, gst_rate: 5 }],
+  };
+  const qr = "data:image/png;base64,iVBORw0KGgo=";
+  const ctx = {
+    company: { name: "ATAV Spices", payment_qr_url: qr, payment_upi: "shop@upi" },
+    customers: [],
+    items: [],
+    formatDateTime: (v) => String(v),
+    money: (n) => `₹${Number(n).toFixed(2)}`,
+    escapeHtml: (v) => String(v ?? ""),
+  };
+  const slip = InvoicePrint.invoiceBody(order, ctx);
+  assert.match(slip, /class="inv-pay-qr"/);
+  assert.match(slip, /Scan to pay/);
+  assert.match(slip, /data:image\/png;base64,iVBORw0KGgo=/);
+  assert.match(slip, /shop@upi/);
+  const office = InvoicePrint.officeInvoiceBody(order, ctx);
+  assert.match(office, /class="off-pay-qr"/);
+  assert.match(office, /Scan to pay/);
+  assert.match(office, /shop@upi/);
+  const none = InvoicePrint.invoiceBody(order, { ...ctx, company: { name: "ATAV Spices" } });
+  assert.doesNotMatch(none, /inv-pay-qr/);
+  assert.doesNotMatch(none, /javascript:/);
+});

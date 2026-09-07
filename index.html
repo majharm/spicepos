@@ -1221,6 +1221,26 @@
                     </div>
                   </fieldset>
                   <fieldset class="item-block">
+                    <legend data-i18n="settings.collect_payment">Collect payment</legend>
+                    <div class="logo-row full">
+                      <div class="logo-preview-frame pay-qr-frame">
+                        <img id="pay-qr-preview" class="logo-preview" alt="Payment QR preview" hidden />
+                      </div>
+                      <div class="logo-controls">
+                        <p class="item-composer-note full" data-i18n="settings.collect_payment_hint">Upload the shop UPI / payment QR. It prints on customer invoices so they can pay you.</p>
+                        <div class="logo-pick-row">
+                          <input id="set-pay-qr" class="logo-file-input" type="file" accept="image/*" />
+                          <label class="btn logo-pick" for="set-pay-qr">Choose QR image</label>
+                          <span class="logo-file-name" id="pay-qr-file-name">PNG or JPG</span>
+                        </div>
+                        <button class="btn" type="button" id="pay-qr-clear" hidden>Remove QR</button>
+                      </div>
+                    </div>
+                    <label class="full"><span data-i18n="settings.payment_upi">UPI ID (optional)</span>
+                      <input id="set-payment-upi" maxlength="160" placeholder="shop@upi" autocomplete="off" />
+                    </label>
+                  </fieldset>
+                  <fieldset class="item-block">
                     <legend data-i18n="settings.invoice_text">Invoice text</legend>
                     <label class="full"><span data-i18n="settings.customer_notes">Customer notes</span>
                       <textarea id="set-invoice-footer" rows="3" maxlength="4000" placeholder="Thank you for your business!"></textarea>
@@ -1433,7 +1453,7 @@
         </section>
       </div>
     </aside>
-    <script src="./js/i18n-catalog.js?v=20260905deploy148"></script>
+    <script src="./js/i18n-catalog.js?v=20260905deploy150"></script>
     <script src="./js/i18n.js?v=20260905deploy145"></script>
     <script src="./js/gst-supply.js?v=20260905deploy136" defer></script>
     <script src="./js/pos-api.js?v=20260905deploy136" defer></script>
@@ -1445,11 +1465,11 @@
     <script src="./js/barcode.js?v=20260905deploy136" defer></script>
     <script src="./js/camera-scan.js?v=20260904camera1" defer></script>
     <script src="./js/dev-mode.js?v=20260905deploy136" defer></script>
-    <script src="./js/invoice.js?v=20260905deploy148" defer></script>
+    <script src="./js/invoice.js?v=20260905deploy150" defer></script>
     <script src="./js/support.js?v=20260905deploy136" defer></script>
     <script src="./js/qrcode.iife.js?v=20260905qr1"></script>
     <script src="./js/qr-notify.js?v=20260905deploy144" defer></script>
-    <script src="./js/app.js?v=20260905deploy149" defer></script>
+    <script src="./js/app.js?v=20260905deploy150" defer></script>
     <script src="./js/growth.js?v=20260905deploy145" defer></script>
     <script src="./js/offers-ui.js?v=20260905deploy136" defer></script>
   </body>

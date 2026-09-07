@@ -35,5 +35,7 @@ export function attachInvoiceText(company, business) {
   const row = { ...(company || { name: business?.name || "POS" }) };
   if (row.invoice_footer == null) row.invoice_footer = business?.invoice_footer || "";
   if (row.invoice_terms == null) row.invoice_terms = business?.invoice_terms || "";
+  if (row.payment_qr_url == null) row.payment_qr_url = business?.payment_qr_url || "";
+  if (row.payment_upi == null) row.payment_upi = business?.payment_upi || "";
   return row;
 }

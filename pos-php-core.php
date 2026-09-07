@@ -373,6 +373,12 @@ function pos_attach_invoice_text($company, $business) {
   if (!array_key_exists("invoice_terms", $row) || $row["invoice_terms"] === null) {
     $row["invoice_terms"] = $business["invoice_terms"] ?? "";
   }
+  if (!array_key_exists("payment_qr_url", $row) || $row["payment_qr_url"] === null) {
+    $row["payment_qr_url"] = $business["payment_qr_url"] ?? "";
+  }
+  if (!array_key_exists("payment_upi", $row) || $row["payment_upi"] === null) {
+    $row["payment_upi"] = $business["payment_upi"] ?? "";
+  }
   return $row;
 }
 
@@ -388,6 +394,8 @@ function pos_ensure_i18n_columns() {
     "ai_language" => "VARCHAR(16) NULL",
     "invoice_footer" => "TEXT NULL",
     "invoice_terms" => "TEXT NULL",
+    "payment_qr_url" => "MEDIUMTEXT NULL",
+    "payment_upi" => "VARCHAR(160) NULL",
   ]);
   pos_ensure_columns("staff_users", ["locale" => "VARCHAR(16) NULL"]);
   pos_ensure_columns("customers", ["locale" => "VARCHAR(16) NULL"]);
@@ -443,6 +451,8 @@ function pos_ensure_business_columns() {
     "subscription_expires_at" => "DATE NULL",
     "invoice_footer" => "TEXT NULL",
     "invoice_terms" => "TEXT NULL",
+    "payment_qr_url" => "MEDIUMTEXT NULL",
+    "payment_upi" => "VARCHAR(160) NULL",
     "max_branches" => "INT NULL",
     "max_users" => "INT NULL",
     "max_devices" => "INT NULL",

@@ -519,6 +519,27 @@ app.post("/api/settings", requireStaff, requirePerm("settings"), async (req, res
     logoSql = ", logo_url = ?";
     params.push(logo || null);
   }
+  let paymentQrUrl;
+  let paymentUpi;
+  if (Object.prototype.hasOwnProperty.call(body, "payment_qr_url")) {
+    const payQr = body.payment_qr_url ? String(body.payment_qr_url) : "";
+    if (payQr && !payQr.startsWith("data:image/")) {
+      res.status(400).json({ error: "Payment QR must be an uploaded image" });
+      return;
+    }
+    if (payQr && payQr.length > 6_000_000) {
+      res.status(400).json({ error: "Payment QR is too large" });
+      return;
+    }
+    paymentQrUrl = payQr || null;
+    langSql += ", payment_qr_url = ?";
+    params.push(paymentQrUrl);
+  }
+  if (Object.prototype.hasOwnProperty.call(body, "payment_upi")) {
+    paymentUpi = clipInvoiceText(body.payment_upi, 160);
+    langSql += ", payment_upi = ?";
+    params.push(paymentUpi);
+  }
   if (shopLocale != null) {
     langSql += ", locale = ?";
     params.push(shopLocale);
@@ -576,7 +597,7 @@ app.post("/api/settings", requireStaff, requirePerm("settings"), async (req, res
         bid(),
       ],
     );
-    if (invoiceFooter != null || invoiceTerms != null) {
+    if (invoiceFooter != null || invoiceTerms != null || paymentQrUrl !== undefined || paymentUpi !== undefined) {
       const bizSets = [];
       const bizParams = [];
       if (invoiceFooter != null) {
@@ -587,12 +608,20 @@ app.post("/api/settings", requireStaff, requirePerm("settings"), async (req, res
         bizSets.push("invoice_terms = ?");
         bizParams.push(invoiceTerms);
       }
+      if (paymentQrUrl !== undefined) {
+        bizSets.push("payment_qr_url = ?");
+        bizParams.push(paymentQrUrl);
+      }
+      if (paymentUpi !== undefined) {
+        bizSets.push("payment_upi = ?");
+        bizParams.push(paymentUpi);
+      }
       bizParams.push(bid());
       await query(`UPDATE businesses SET ${bizSets.join(", ")} WHERE id = ?`, bizParams);
     }
     const [company] = await query("SELECT * FROM company_settings WHERE business_id = ?", [bid()]);
     const [bizInvoice] = await query(
-      "SELECT invoice_footer, invoice_terms FROM businesses WHERE id = ?",
+      "SELECT invoice_footer, invoice_terms, payment_qr_url, payment_upi FROM businesses WHERE id = ?",
       [bid()],
     );
     await audit("Settings Changed", { module: "settings" }, req);

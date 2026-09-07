@@ -22,6 +22,7 @@ const state = {
   held: [],
   editingOrderId: null,
   logoDraft: null,
+  payQrDraft: null,
   itemImage: "",
   session: null,
   perms: {},
@@ -803,11 +804,17 @@ function showLogo(img, url) {
     img.hidden = true;
   }
   if (img.id === "logo-preview" && $("logo-clear")) $("logo-clear").hidden = !url;
+  if (img.id === "pay-qr-preview" && $("pay-qr-clear")) $("pay-qr-clear").hidden = !url;
 }
 
 function paintLogoFileName(name = "") {
   const el = $("logo-file-name");
   if (el) el.textContent = name || "PNG, JPG, or SVG";
+}
+
+function paintPayQrFileName(name = "") {
+  const el = $("pay-qr-file-name");
+  if (el) el.textContent = name || "PNG or JPG";
 }
 
 function excelHref(sheet) {
@@ -2599,12 +2606,17 @@ function renderSettings() {
   if ($("set-pincode")) $("set-pincode").value = state.company.pincode || state.company.pin_code || "";
   if ($("set-invoice-footer")) $("set-invoice-footer").value = state.company.invoice_footer || "";
   if ($("set-invoice-terms")) $("set-invoice-terms").value = state.company.invoice_terms || "";
+  if ($("set-payment-upi")) $("set-payment-upi").value = state.company.payment_upi || "";
   if ($("set-timezone")) $("set-timezone").value = shopTimezone();
   paintTimezonePreview();
   state.logoDraft = null;
+  state.payQrDraft = null;
   $("set-logo").value = "";
+  if ($("set-pay-qr")) $("set-pay-qr").value = "";
   paintLogoFileName();
+  paintPayQrFileName();
   showLogo($("logo-preview"), state.company.logo_url);
+  showLogo($("pay-qr-preview"), state.company.payment_qr_url);
   if ($("set-shop-id")) $("set-shop-id").value = shopBusinessId();
   const stats = $("settings-hero-stats");
   if (stats) {
@@ -5204,14 +5216,17 @@ $("settings-form").addEventListener("submit", async (e) => {
       timezone: $("set-timezone")?.value || shopTimezone(),
       invoice_footer: $("set-invoice-footer")?.value || "",
       invoice_terms: $("set-invoice-terms")?.value || "",
+      payment_upi: $("set-payment-upi")?.value || "",
     };
     if (state.logoDraft !== null) payload.logo_url = state.logoDraft;
+    if (state.payQrDraft !== null) payload.payment_qr_url = state.payQrDraft;
     const data = await api("/api/settings", {
       method: "POST",
       body: JSON.stringify(payload),
     });
     state.company = data.company ? { ...state.company, ...data.company } : state.company;
     state.logoDraft = null;
+    state.payQrDraft = null;
     paintHeader();
     renderSettings();
     tick();
@@ -5245,6 +5260,31 @@ $("logo-clear").addEventListener("click", () => {
   paintLogoFileName();
   showLogo($("logo-preview"), "");
   $("settings-hint").textContent = "Logo will be removed on Save";
+  $("settings-hint").className = "hint";
+});
+
+$("set-pay-qr").addEventListener("change", async (e) => {
+  const file = e.target.files?.[0];
+  if (!file) return;
+  try {
+    const url = await readPayQrFile(file);
+    state.payQrDraft = url;
+    showLogo($("pay-qr-preview"), url);
+    paintPayQrFileName(file.name);
+    $("settings-hint").textContent = "Payment QR ready — click Save";
+    $("settings-hint").className = "hint";
+  } catch (err) {
+    $("settings-hint").textContent = err.message;
+    $("settings-hint").className = "hint error";
+  }
+});
+
+$("pay-qr-clear").addEventListener("click", () => {
+  state.payQrDraft = "";
+  $("set-pay-qr").value = "";
+  paintPayQrFileName();
+  showLogo($("pay-qr-preview"), "");
+  $("settings-hint").textContent = "Payment QR will be removed on Save";
   $("settings-hint").className = "hint";
 });
 
@@ -5375,6 +5415,41 @@ function readLogoFile(file, max = 480) {
       canvas.getContext("2d").drawImage(img, 0, 0, w, h);
       URL.revokeObjectURL(blobUrl);
       resolve(canvas.toDataURL("image/jpeg", 0.86));
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(blobUrl);
+      reject(new Error("Could not read image"));
+    };
+    img.src = blobUrl;
+  });
+}
+
+function readPayQrFile(file) {
+  return new Promise((resolve, reject) => {
+    if (file.size > 8_000_000) {
+      reject(new Error("Choose a smaller image"));
+      return;
+    }
+    const img = new Image();
+    const blobUrl = URL.createObjectURL(file);
+    img.onload = () => {
+      const max = 360;
+      let w = img.width;
+      let h = img.height;
+      if (w > max || h > max) {
+        const scale = max / Math.max(w, h);
+        w = Math.round(w * scale);
+        h = Math.round(h * scale);
+      }
+      const canvas = document.createElement("canvas");
+      canvas.width = w;
+      canvas.height = h;
+      const g = canvas.getContext("2d");
+      g.fillStyle = "#fff";
+      g.fillRect(0, 0, w, h);
+      g.drawImage(img, 0, 0, w, h);
+      URL.revokeObjectURL(blobUrl);
+      resolve(canvas.toDataURL("image/png"));
     };
     img.onerror = () => {
       URL.revokeObjectURL(blobUrl);
