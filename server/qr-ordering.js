@@ -349,6 +349,18 @@ function qrPayMethod(raw) {
   return ["cash", "upi", "card", "credit"].includes(method) ? method : "cash";
 }
 
+/** QR line amounts are already net of offers; lift discount onto the invoice header so Invoices print gross − discount = total. */
+export function qrInvoiceTotals(order) {
+  const discount = round2(order?.discount);
+  const netSubtotal = round2(order?.subtotal);
+  return {
+    subtotal: round2(netSubtotal + discount),
+    discount,
+    gst: round2(order?.gst),
+    total: round2(order?.total),
+  };
+}
+
 async function findOrCreateQrCustomer(conn, order, businessId) {
   const digits = qrMobileDigits(order.mobile);
   const [all] = await conn.query("SELECT * FROM customers WHERE business_id = ?", [businessId]);
@@ -428,10 +440,7 @@ export async function ensureQrInvoice(qrOrderId, { paymentMethod = "cash" } = {}
     const customer = await findOrCreateQrCustomer(conn, order, businessId);
     const method = qrPayMethod(paymentMethod);
     const payStatus = method === "credit" ? "partial" : "paid";
-    const subtotal = round2(order.subtotal);
-    const discount = round2(order.discount);
-    const gst = round2(order.gst);
-    const total = round2(order.total);
+    const { subtotal, discount, gst, total } = qrInvoiceTotals(order);
     const totalGm = qrLines.reduce((sum, line) => sum + (Number(line.quantity_gm) || 0), 0);
     const next = await nextSeq(conn, "order", 10001);
     const orderNumber = `SO-${next}`;

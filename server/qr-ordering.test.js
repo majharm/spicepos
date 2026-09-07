@@ -10,6 +10,7 @@ import {
   packMenuId,
   parsePackMenuId,
   qrMobileDigits,
+  qrInvoiceTotals,
 } from "./qr-ordering.js";
 import "../js/offers.js";
 
@@ -224,4 +225,17 @@ test("QR mobile digits match customers on the last ten numbers", () => {
   assert.equal(qrMobileDigits("+91 98765-43210"), "9876543210");
   assert.equal(qrMobileDigits("09876543210"), "9876543210");
   assert.equal(qrMobileDigits("9876543210"), "9876543210");
+});
+
+test("QR invoice totals lift offer discount onto the header so Invoices print gross minus discount", () => {
+  const plain = qrInvoiceTotals({ subtotal: 100, discount: 0, gst: 5, total: 105 });
+  assert.equal(plain.subtotal, 100);
+  assert.equal(plain.discount, 0);
+  assert.equal(plain.gst, 5);
+  assert.equal(plain.total, 105);
+  const offered = qrInvoiceTotals({ subtotal: 90, discount: 10, gst: 4.5, total: 94.5 });
+  assert.equal(offered.subtotal, 100);
+  assert.equal(offered.discount, 10);
+  assert.equal(offered.gst, 4.5);
+  assert.equal(offered.total, 94.5);
 });

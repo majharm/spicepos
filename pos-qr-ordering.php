@@ -195,8 +195,8 @@ function pos_qr_ensure_invoice($bid, $branchId, $uid, $qrOrderId, $paymentMethod
     $customer = pos_qr_find_or_create_customer($bid, $order);
     $methodPay = pos_qr_pay_method($paymentMethod);
     $payStatus = $methodPay === "credit" ? "partial" : "paid";
-    $subtotal = pos_round2($order["subtotal"] ?? 0);
     $discount = pos_round2($order["discount"] ?? 0);
+    $subtotal = pos_round2(pos_round2($order["subtotal"] ?? 0) + $discount);
     $gst = pos_round2($order["gst"] ?? 0);
     $total = pos_round2($order["total"] ?? 0);
     $totalGm = 0;
@@ -221,8 +221,16 @@ function pos_qr_ensure_invoice($bid, $branchId, $uid, $qrOrderId, $paymentMethod
       ]
     );
     try {
-      pos_q("UPDATE sales_orders SET qr_order_id = ? WHERE id = ? AND business_id = ?", "sss", [$qrOrderId, $orderId, $bid]);
-    } catch (Exception $e) { /* optional */ }
+      pos_q(
+        "UPDATE sales_orders SET qr_order_id = ?, discount_type = ?, discount_value = ? WHERE id = ? AND business_id = ?",
+        "sssss",
+        [$qrOrderId, "amt", (string) $discount, $orderId, $bid]
+      );
+    } catch (Exception $e) {
+      try {
+        pos_q("UPDATE sales_orders SET qr_order_id = ? WHERE id = ? AND business_id = ?", "sss", [$qrOrderId, $orderId, $bid]);
+      } catch (Exception $e2) { /* optional */ }
+    }
     if (is_file(__DIR__ . "/pos-advanced.php")) require_once __DIR__ . "/pos-advanced.php";
     if (is_file(__DIR__ . "/pos-accounting.php")) require_once __DIR__ . "/pos-accounting.php";
     foreach ($qrLines as $line) {
