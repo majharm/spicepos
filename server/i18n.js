@@ -25,3 +25,15 @@ export function normalizeWhatsappLanguage(raw) {
 export function resolveLocale({ customer, user, shop, platform } = {}) {
   return normalizeLocale(customer) || normalizeLocale(user) || normalizeLocale(shop) || normalizeLocale(platform) || "en";
 }
+
+export function clipInvoiceText(raw, max = 4000) {
+  const s = raw == null ? "" : String(raw);
+  return s.length > max ? s.slice(0, max) : s;
+}
+
+export function attachInvoiceText(company, business) {
+  const row = { ...(company || { name: business?.name || "POS" }) };
+  if (row.invoice_footer == null) row.invoice_footer = business?.invoice_footer || "";
+  if (row.invoice_terms == null) row.invoice_terms = business?.invoice_terms || "";
+  return row;
+}

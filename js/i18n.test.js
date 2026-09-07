@@ -24,6 +24,8 @@ test("i18n falls back to English and never shows the raw key", () => {
   assert.doesNotMatch(I.t("dashboard.does_not_exist_key"), /dashboard\.does_not_exist/);
   assert.notEqual(I.t("pos.total", "gu"), "");
   assert.equal(I.t("pos.pay_amount", "hi", { amount: "₹10" }).includes("₹10"), true);
+  assert.equal(I.t("settings.customer_notes", "en"), "Customer notes");
+  assert.equal(I.t("invoice.terms", "en"), "Terms & conditions");
 });
 
 test("locale hierarchy is customer then user then shop then English", () => {

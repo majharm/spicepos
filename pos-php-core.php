@@ -360,6 +360,22 @@ function pos_normalize_whatsapp_language($raw) {
   return in_array($s, ["customer", "shop", "en"], true) ? $s : "customer";
 }
 
+function pos_clip_invoice_text($raw, $max = 4000) {
+  $s = (string) ($raw ?? "");
+  return strlen($s) > $max ? substr($s, 0, $max) : $s;
+}
+
+function pos_attach_invoice_text($company, $business) {
+  $row = is_array($company) ? $company : ["name" => $business["name"] ?? "POS"];
+  if (!array_key_exists("invoice_footer", $row) || $row["invoice_footer"] === null) {
+    $row["invoice_footer"] = $business["invoice_footer"] ?? "";
+  }
+  if (!array_key_exists("invoice_terms", $row) || $row["invoice_terms"] === null) {
+    $row["invoice_terms"] = $business["invoice_terms"] ?? "";
+  }
+  return $row;
+}
+
 function pos_ensure_i18n_columns() {
   static $done = false;
   if ($done) return;
@@ -370,6 +386,8 @@ function pos_ensure_i18n_columns() {
     "whatsapp_language" => "VARCHAR(16) NULL",
     "email_language" => "VARCHAR(16) NULL",
     "ai_language" => "VARCHAR(16) NULL",
+    "invoice_footer" => "TEXT NULL",
+    "invoice_terms" => "TEXT NULL",
   ]);
   pos_ensure_columns("staff_users", ["locale" => "VARCHAR(16) NULL"]);
   pos_ensure_columns("customers", ["locale" => "VARCHAR(16) NULL"]);

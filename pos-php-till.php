@@ -50,6 +50,7 @@ function pos_php_till_dispatch($path, $method, $body) {
 
   if ($path === "bootstrap" && $method === "GET") {
     pos_ensure_i18n_columns();
+    pos_ensure_business_columns();
     pos_ensure_accounts_schema();
     require_once __DIR__ . "/pos-combos.php";
     require_once __DIR__ . "/pos-offers.php";
@@ -104,6 +105,7 @@ function pos_php_till_dispatch($path, $method, $body) {
       $outPacks[] = $p;
     }
     $coRow = $co[0] ?? ["name" => $business["name"] ?? "POS"];
+    $coRow = pos_attach_invoice_text($coRow, $business);
     $tzMeta = pos_company_timezone($coRow);
     $coRow["timezone"] = $tzMeta["timezone"];
     $coRow["tz_offset"] = $tzMeta["tz_offset"];
@@ -200,6 +202,7 @@ function pos_php_till_dispatch($path, $method, $body) {
   if ($path === "settings" && $method === "POST") {
     $name = trim((string) ($body["name"] ?? ""));
     if ($name === "") pos_send(400, ["error" => "Shop name is required"]);
+    pos_ensure_business_columns();
     $tz = pos_normalize_timezone($body["timezone"] ?? "");
     $tzOff = pos_tz_offset_for($tz);
     $address = $body["address"] ?? null;
@@ -247,6 +250,20 @@ function pos_php_till_dispatch($path, $method, $body) {
       $params[] = pos_normalize_locale($body["ai_language"]) ?: "en";
       $types .= "s";
     }
+    $invoiceFooter = null;
+    $invoiceTerms = null;
+    if (array_key_exists("invoice_footer", $body)) {
+      $invoiceFooter = pos_clip_invoice_text($body["invoice_footer"]);
+      $langSql .= ", invoice_footer = ?";
+      $params[] = $invoiceFooter;
+      $types .= "s";
+    }
+    if (array_key_exists("invoice_terms", $body)) {
+      $invoiceTerms = pos_clip_invoice_text($body["invoice_terms"]);
+      $langSql .= ", invoice_terms = ?";
+      $params[] = $invoiceTerms;
+      $types .= "s";
+    }
     $params[] = $bid;
     $types .= "s";
     pos_q(
@@ -261,8 +278,28 @@ function pos_php_till_dispatch($path, $method, $body) {
       "sssssssss",
       [$name, $address, $phone, $email, $gstin, $city, $state, $pincode, $bid]
     );
+    if ($invoiceFooter !== null || $invoiceTerms !== null) {
+      pos_ensure_business_columns();
+      $bizSql = [];
+      $bizParams = [];
+      $bizTypes = "";
+      if ($invoiceFooter !== null) {
+        $bizSql[] = "invoice_footer = ?";
+        $bizParams[] = $invoiceFooter;
+        $bizTypes .= "s";
+      }
+      if ($invoiceTerms !== null) {
+        $bizSql[] = "invoice_terms = ?";
+        $bizParams[] = $invoiceTerms;
+        $bizTypes .= "s";
+      }
+      $bizParams[] = $bid;
+      $bizTypes .= "s";
+      pos_q("UPDATE businesses SET " . implode(", ", $bizSql) . " WHERE id = ?", $bizTypes, $bizParams);
+    }
     $rows = pos_q("SELECT * FROM company_settings WHERE business_id = ? LIMIT 1", "s", [$bid]);
-    $co = $rows[0] ?? ["name" => $name];
+    $bizInv = pos_q("SELECT invoice_footer, invoice_terms FROM businesses WHERE id = ? LIMIT 1", "s", [$bid]);
+    $co = pos_attach_invoice_text($rows[0] ?? ["name" => $name], $bizInv[0] ?? []);
     $meta = pos_company_timezone($co);
     $co["timezone"] = $meta["timezone"];
     $co["tz_offset"] = $meta["tz_offset"];

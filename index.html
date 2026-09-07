@@ -1220,6 +1220,17 @@
                       </div>
                     </div>
                   </fieldset>
+                  <fieldset class="item-block">
+                    <legend data-i18n="settings.invoice_text">Invoice text</legend>
+                    <label class="full"><span data-i18n="settings.customer_notes">Customer notes</span>
+                      <textarea id="set-invoice-footer" rows="3" maxlength="4000" placeholder="Thank you for your business!"></textarea>
+                    </label>
+                    <p class="item-composer-note full" data-i18n="settings.customer_notes_hint">Printed at the bottom of POS slips and official bills. Leave blank to print the default thank-you line.</p>
+                    <label class="full"><span data-i18n="invoice.terms">Terms &amp; conditions</span>
+                      <textarea id="set-invoice-terms" rows="4" maxlength="4000" placeholder="Goods once sold cannot be returned."></textarea>
+                    </label>
+                    <p class="item-composer-note full" data-i18n="settings.invoice_terms_hint">Printed under the customer notes on tax invoices.</p>
+                  </fieldset>
                   <div class="item-composer-actions">
                     <button class="btn primary" type="submit">Save profile</button>
                     <p class="hint" id="settings-hint"></p>
@@ -1422,7 +1433,7 @@
         </section>
       </div>
     </aside>
-    <script src="./js/i18n-catalog.js?v=20260905deploy145"></script>
+    <script src="./js/i18n-catalog.js?v=20260905deploy148"></script>
     <script src="./js/i18n.js?v=20260905deploy145"></script>
     <script src="./js/gst-supply.js?v=20260905deploy136" defer></script>
     <script src="./js/pos-api.js?v=20260905deploy136" defer></script>
@@ -1434,11 +1445,11 @@
     <script src="./js/barcode.js?v=20260905deploy136" defer></script>
     <script src="./js/camera-scan.js?v=20260904camera1" defer></script>
     <script src="./js/dev-mode.js?v=20260905deploy136" defer></script>
-    <script src="./js/invoice.js?v=20260905deploy137" defer></script>
+    <script src="./js/invoice.js?v=20260905deploy148" defer></script>
     <script src="./js/support.js?v=20260905deploy136" defer></script>
     <script src="./js/qrcode.iife.js?v=20260905qr1"></script>
     <script src="./js/qr-notify.js?v=20260905deploy144" defer></script>
-    <script src="./js/app.js?v=20260905deploy145" defer></script>
+    <script src="./js/app.js?v=20260905deploy148" defer></script>
     <script src="./js/growth.js?v=20260905deploy145" defer></script>
     <script src="./js/offers-ui.js?v=20260905deploy136" defer></script>
   </body>

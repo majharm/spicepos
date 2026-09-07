@@ -56,6 +56,10 @@
     return [...map.values()].sort((a, b) => a.rate - b.rate);
   }
 
+  function noteHtml(text, escapeHtml) {
+    return String(escapeHtml(text) || "").replace(/\r\n|\n|\r/g, "<br>");
+  }
+
   function shopProfile(company) {
     const co = company || {};
     return { gstin: co.gstin, state: co.state };
@@ -443,8 +447,8 @@ ${purchaseBody(purchase, ctx)}
   </table>
   <div class="inv-rule"></div>
   <p class="inv-pay">${escapeHtml(L(ctx, "invoice.payment", "Payment"))}: <strong>${escapeHtml(payLabel(order.payment_method))}</strong> · ${escapeHtml(payStatusLabel(order.payment_status))}</p>
-  ${footer ? `<p class="inv-footer">${escapeHtml(footer)}</p>` : `<p class="inv-footer">${escapeHtml(L(ctx, "invoice.thank_you", "Thank you for your business!"))}</p>`}
-  ${terms ? `<p class="inv-terms">${escapeHtml(terms)}</p>` : ""}
+  ${footer ? `<p class="inv-footer">${noteHtml(footer, escapeHtml)}</p>` : `<p class="inv-footer">${escapeHtml(L(ctx, "invoice.thank_you", "Thank you for your business!"))}</p>`}
+  ${terms ? `<p class="inv-terms"><strong>${escapeHtml(L(ctx, "invoice.terms", "Terms & conditions"))}</strong><br>${noteHtml(terms, escapeHtml)}</p>` : ""}
   <p class="inv-powered">ATAV POS</p>
 </article>`;
   }
@@ -683,8 +687,8 @@ ${invoiceBody(order, ctx)}
         </tbody>
       </table>
       <p class="off-words"><strong>Amount in words:</strong> ${escapeHtml(amountInWords(total))}</p>
-      ${footer ? `<p class="off-note">${escapeHtml(footer)}</p>` : ""}
-      ${terms ? `<p class="off-note"><strong>Terms:</strong> ${escapeHtml(terms)}</p>` : ""}
+      ${footer ? `<p class="off-note">${noteHtml(footer, escapeHtml)}</p>` : ""}
+      ${terms ? `<p class="off-note"><strong>${escapeHtml(L(ctx, "invoice.terms", "Terms & conditions"))}:</strong><br>${noteHtml(terms, escapeHtml)}</p>` : ""}
     </div>
     <table class="off-totals">
       <tbody>

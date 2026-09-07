@@ -16,7 +16,7 @@ import { workbookXml } from "./excel.js";
 import { ensureSchema, seedPlatform } from "./schema.js";
 import { companyTimezone, normalizeTimezone, shopTimezonePayload, tzOffsetFor } from "./timezone.js";
 import { attachAuth, registerAuth, requireStaff, requirePerm } from "./auth.js";
-import { normalizeLocale, normalizeInvoiceLanguage, normalizeWhatsappLanguage } from "./i18n.js";
+import { normalizeLocale, normalizeInvoiceLanguage, normalizeWhatsappLanguage, clipInvoiceText, attachInvoiceText } from "./i18n.js";
 import { registerMaster } from "./master.js";
 import { registerTenant } from "./tenant.js";
 import { registerBackup } from "./backup.js";
@@ -158,7 +158,7 @@ app.get("/api/bootstrap", requireStaff, async (_req, res) => {
     }
     res.json({
       company: {
-        ...(company || { name: business?.name || "POS" }),
+        ...attachInvoiceText(company, business),
         ...companyTimezone(company || {}),
       },
       business,
@@ -539,6 +539,18 @@ app.post("/api/settings", requireStaff, requirePerm("settings"), async (req, res
     langSql += ", ai_language = ?";
     params.push(aiLanguage);
   }
+  let invoiceFooter = null;
+  let invoiceTerms = null;
+  if (Object.prototype.hasOwnProperty.call(body, "invoice_footer")) {
+    invoiceFooter = clipInvoiceText(body.invoice_footer);
+    langSql += ", invoice_footer = ?";
+    params.push(invoiceFooter);
+  }
+  if (Object.prototype.hasOwnProperty.call(body, "invoice_terms")) {
+    invoiceTerms = clipInvoiceText(body.invoice_terms);
+    langSql += ", invoice_terms = ?";
+    params.push(invoiceTerms);
+  }
   params.push(bid());
   try {
     await query(
@@ -564,9 +576,27 @@ app.post("/api/settings", requireStaff, requirePerm("settings"), async (req, res
         bid(),
       ],
     );
+    if (invoiceFooter != null || invoiceTerms != null) {
+      const bizSets = [];
+      const bizParams = [];
+      if (invoiceFooter != null) {
+        bizSets.push("invoice_footer = ?");
+        bizParams.push(invoiceFooter);
+      }
+      if (invoiceTerms != null) {
+        bizSets.push("invoice_terms = ?");
+        bizParams.push(invoiceTerms);
+      }
+      bizParams.push(bid());
+      await query(`UPDATE businesses SET ${bizSets.join(", ")} WHERE id = ?`, bizParams);
+    }
     const [company] = await query("SELECT * FROM company_settings WHERE business_id = ?", [bid()]);
+    const [bizInvoice] = await query(
+      "SELECT invoice_footer, invoice_terms FROM businesses WHERE id = ?",
+      [bid()],
+    );
     await audit("Settings Changed", { module: "settings" }, req);
-    res.json({ ok: true, company });
+    res.json({ ok: true, company: attachInvoiceText(company, bizInvoice) });
   } catch (err) {
     res.status(500).json({ error: String(err.message) });
   }

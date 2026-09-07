@@ -86,6 +86,18 @@ export async function ensureSchema() {
   await addColumn("company_settings", "whatsapp_language", "VARCHAR(16) NULL");
   await addColumn("company_settings", "email_language", "VARCHAR(16) NULL");
   await addColumn("company_settings", "ai_language", "VARCHAR(16) NULL");
+  await addColumn("company_settings", "invoice_footer", "TEXT NULL");
+  await addColumn("company_settings", "invoice_terms", "TEXT NULL");
+  try {
+    await query(
+      `UPDATE company_settings cs
+       INNER JOIN businesses b ON b.id = cs.business_id
+       SET cs.invoice_footer = COALESCE(cs.invoice_footer, b.invoice_footer),
+           cs.invoice_terms = COALESCE(cs.invoice_terms, b.invoice_terms)`,
+    );
+  } catch {
+    /* businesses invoice columns are ensured above */
+  }
 
   await addColumn("staff_users", "mobile", "VARCHAR(32) NULL");
   await addColumn("staff_users", "username", "VARCHAR(64) NULL");
