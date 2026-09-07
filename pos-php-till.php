@@ -64,7 +64,7 @@ function pos_php_till_dispatch($path, $method, $body) {
     $customers = [];
     $packs = [];
     try {
-      $items = pos_q("SELECT * FROM items WHERE business_id = ? ORDER BY category, subcategory, name", "s", [$bid]);
+      $items = pos_catalog_items($bid);
     } catch (Exception $e) { /* optional */ }
     try {
       $customers = pos_q("SELECT * FROM customers WHERE business_id = ? ORDER BY name", "s", [$bid]);
@@ -343,8 +343,14 @@ function pos_php_till_dispatch($path, $method, $body) {
     pos_send(200, pos_q("SELECT * FROM suppliers WHERE business_id = ? ORDER BY name", "s", [$bid]));
   }
 
+  if (preg_match('#^items/([a-zA-Z0-9-]+)$#', $path, $m) && $method === "GET") {
+    $rows = pos_q("SELECT * FROM items WHERE id = ? AND business_id = ? LIMIT 1", "ss", [$m[1], $bid]);
+    if (!$rows) pos_send(404, ["error" => "Item not found"]);
+    pos_send(200, ["item" => $rows[0]]);
+  }
+
   if ($path === "items" && $method === "GET") {
-    pos_send(200, pos_q("SELECT * FROM items WHERE business_id = ? ORDER BY category, subcategory, name", "s", [$bid]));
+    pos_send(200, pos_catalog_items($bid));
   }
 
   if ($path === "customers" && $method === "GET") {
@@ -382,7 +388,11 @@ function pos_php_till_dispatch($path, $method, $body) {
   }
 
   if ($path === "stock" && $method === "GET") {
-    pos_send(200, pos_q("SELECT * FROM items WHERE business_id = ? ORDER BY name", "s", [$bid]));
+    pos_send(200, pos_q(
+      "SELECT id, code, name, unit, base_unit, stock_gm, reorder_level_gm, purchase_rate, retail_rate, barcode, category, subcategory FROM items WHERE business_id = ? ORDER BY name",
+      "s",
+      [$bid]
+    ));
   }
 
   if ($path === "staff" && $method === "GET") {

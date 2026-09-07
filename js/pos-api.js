@@ -81,9 +81,11 @@
     return false;
   }
 
+  const DEFAULT_SPEC = { mode: "prefix", base: "/api" };
+
   function loadSpec() {
     try {
-      const raw = sessionStorage.getItem(STORAGE);
+      const raw = sessionStorage.getItem(STORAGE) || localStorage.getItem(STORAGE);
       if (!raw) return null;
       const spec = JSON.parse(raw);
       if (spec && spec.mode && spec.base) return spec;
@@ -96,8 +98,14 @@
   function saveSpec(spec) {
     window.POS_API_SPEC = spec;
     window.POS_API = spec.mode === "rpc" ? spec.base : spec.base;
+    const raw = JSON.stringify(spec);
     try {
-      sessionStorage.setItem(STORAGE, JSON.stringify(spec));
+      sessionStorage.setItem(STORAGE, raw);
+    } catch {
+      /* ignore */
+    }
+    try {
+      localStorage.setItem(STORAGE, raw);
     } catch {
       /* ignore */
     }
@@ -156,15 +164,19 @@
 
   let ready = null;
   function ensureSpec(force) {
-    if (force) ready = null;
-    if (!ready) ready = probe();
-    return ready;
+    if (force) {
+      ready = probe();
+      return ready;
+    }
+    const spec = loadSpec() || DEFAULT_SPEC;
+    if (!window.POS_API_SPEC) saveSpec(spec);
+    return Promise.resolve(spec);
   }
 
-  window.posApiReady = ensureSpec();
+  window.posApiReady = Promise.resolve(loadSpec() || DEFAULT_SPEC);
 
   window.posUrl = function posUrl(path) {
-    const spec = window.POS_API_SPEC || loadSpec() || { mode: "prefix", base: "/pos-data" };
+    const spec = window.POS_API_SPEC || loadSpec() || DEFAULT_SPEC;
     return applySpec(spec, path);
   };
 

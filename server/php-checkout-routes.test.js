@@ -96,6 +96,9 @@ test("PHP fallback routes checkout, holds, and order updates through core", () =
   const apiJs = read("js/pos-api.js");
   assert.match(apiJs, /isPhpUnimplemented/);
   assert.match(apiJs, /orderedSpecs/);
+  assert.match(apiJs, /localStorage.setItem\(STORAGE/);
+  assert.match(apiJs, /window.posApiReady = Promise.resolve/);
+  assert.doesNotMatch(apiJs, /window.posApiReady = ensureSpec\(\)/);
 });
 
 test("PHP customer insert bind types match placeholders", () => {
@@ -270,4 +273,39 @@ test("Master Admin can set passwords and unlock locked accounts", () => {
   assert.match(read("pos-stock-excel.php"), /function pos_stock_excel_response/);
   assert.match(read("server/tenant.js"), /\/api\/stock\/excel/);
   assert.match(read("pos-crud.php"), /staff\/\(\[\^\/\]\+\)\$#.*PUT/s);
+});
+
+test("POS boot skips API probe and slims catalog photos", () => {
+  const apiJs = read("js/pos-api.js");
+  const appJs = read("js/app.js");
+  const index = read("index.html");
+  const login = read("login.html");
+  const core = read("pos-php-core.php");
+  const till = read("pos-php-till.php");
+  const node = read("server/index.js");
+  const loginJs = read("js/x-pos-20260830e.js");
+  assert.match(apiJs, /pos_api_spec_v2/);
+  assert.match(apiJs, /DEFAULT_SPEC/);
+  assert.match(appJs, /showView\(landing\)/);
+  assert.match(appJs, /function paintDeskState/);
+  assert.match(appJs, /i.has_image/);
+  assert.match(appJs, /requestIdleCallback/);
+  assert.match(index, /i18n-catalog\.js[^>]+defer/);
+  assert.match(index, /i18n\.js[^>]+defer/);
+  assert.match(index, /qrcode\.iife\.js[^>]+defer/);
+  assert.match(index, /preload="none"/);
+  assert.match(index, /pos-api\.js\?v=20260905deploy154/);
+  assert.match(index, /app\.js\?v=20260905deploy154/);
+  assert.match(login, /x-pos-20260830e\.js\?v=20260905deploy154/);
+  assert.match(loginJs, /saveLoginSpec/);
+  assert.match(core, /function pos_catalog_items/);
+  assert.match(core, /function pos_slim_catalog_item/);
+  assert.match(core, /pos_catalog_item_select_sql/);
+  assert.match(till, /pos_catalog_items\(\$bid\)/);
+  assert.match(till, /items\/\(\[a-zA-Z0-9-\]\+\)/);
+  assert.match(node, /function listCatalogItems/);
+  assert.match(node, /function slimCatalogItem/);
+  assert.match(node, /app\.get\("\/api\/items\/:id"/);
+  assert.match(node, /CATALOG_ITEM_SELECT/);
+  assert.match(read("master.html"), /pos-api\.js\?v=20260905deploy154/);
 });

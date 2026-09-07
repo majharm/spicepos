@@ -112,11 +112,21 @@
 
   async function reprobeApi() {
     sessionStorage.removeItem("pos_api_spec_v2");
+    try {
+      localStorage.removeItem("pos_api_spec_v2");
+    } catch {
+      /* ignore */
+    }
     location.reload();
   }
 
   function clearApiCache() {
     sessionStorage.removeItem("pos_api_spec_v2");
+    try {
+      localStorage.removeItem("pos_api_spec_v2");
+    } catch {
+      /* ignore */
+    }
     renderPanel();
   }
 

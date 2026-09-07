@@ -1,4 +1,5 @@
 (function () {
+  const STORAGE = "pos_api_spec_v2";
   const LOGIN_URLS = [
     "/pos-api.php?p=auth/login",
     "/api/auth/login",
@@ -15,17 +16,50 @@
     return { path, extra };
   }
 
+  function saveLoginSpec(url) {
+    let spec = null;
+    if (String(url).includes("pos-api.php")) spec = { mode: "rpc", base: "/pos-api.php" };
+    else if (String(url).includes("atavpos-rpc.json")) spec = { mode: "rpc", base: "/atavpos-rpc.json" };
+    else if (String(url).includes("/pos-data/")) spec = { mode: "prefix", base: "/pos-data" };
+    else if (String(url).includes("/api/")) spec = { mode: "prefix", base: "/api" };
+    if (!spec) return;
+    const raw = JSON.stringify(spec);
+    try {
+      sessionStorage.setItem(STORAGE, raw);
+      localStorage.setItem(STORAGE, raw);
+    } catch {
+      /* ignore */
+    }
+  }
+
+  function specUrl(spec, apiPath) {
+    const { path, extra } = restPath(apiPath);
+    if (!spec || !spec.mode || !spec.base) return "";
+    if (spec.mode === "rpc") {
+      return `${spec.base}?p=${encodeURIComponent(path)}${extra ? `&${extra}` : ""}`;
+    }
+    const base = String(spec.base).replace(/\/$/, "");
+    return extra ? `${base}/${path}?${extra}` : `${base}/${path}`;
+  }
+
   function candidateUrls(apiPath) {
     const { path, extra } = restPath(apiPath);
-    const q = extra ? `?${extra}` : "";
     const p = extra ? `${path}?${extra}` : path;
-    return [
+    const urls = [
       `/pos-api.php?p=${encodeURIComponent(path)}${extra ? `&${extra}` : ""}`,
       `/api/${p}`,
       `/api/${path}/`,
       `/pos-data/${p}`,
       `/atavpos-rpc.json?p=${encodeURIComponent(path)}${extra ? `&${extra}` : ""}`,
     ];
+    try {
+      const spec = JSON.parse(sessionStorage.getItem(STORAGE) || localStorage.getItem(STORAGE) || "null");
+      const preferred = specUrl(spec, apiPath);
+      if (preferred) urls.unshift(preferred);
+    } catch {
+      /* ignore */
+    }
+    return urls;
   }
 
   function looksJson(text) {
@@ -59,6 +93,7 @@
           lastJsonErr = data.error || lastJsonErr;
           continue;
         }
+        saveLoginSpec(url);
         return { res, data, text };
       } catch {
         /* next */
