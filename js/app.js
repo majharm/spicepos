@@ -2595,6 +2595,8 @@ function renderSettings() {
   if ($("set-city")) $("set-city").value = state.company.city || "";
   if ($("set-state")) $("set-state").value = state.company.state || "";
   if ($("set-pincode")) $("set-pincode").value = state.company.pincode || state.company.pin_code || "";
+  if ($("set-invoice-footer")) $("set-invoice-footer").value = state.company.invoice_footer || "";
+  if ($("set-invoice-terms")) $("set-invoice-terms").value = state.company.invoice_terms || "";
   if ($("set-timezone")) $("set-timezone").value = shopTimezone();
   paintTimezonePreview();
   state.logoDraft = null;
@@ -5118,7 +5120,7 @@ $("language-form")?.addEventListener("submit", async (e) => {
         ai_language: $("set-ai-language")?.value || "en",
       };
       const data = await api("/api/settings", { method: "POST", body: JSON.stringify(payload) });
-      state.company = data.company;
+      if (data.company) state.company = { ...state.company, ...data.company };
     }
     applyUiLocale();
     if (hint) {
@@ -5164,13 +5166,15 @@ $("settings-form").addEventListener("submit", async (e) => {
       state: $("set-state")?.value || "",
       pincode: $("set-pincode")?.value || "",
       timezone: $("set-timezone")?.value || shopTimezone(),
+      invoice_footer: $("set-invoice-footer")?.value || "",
+      invoice_terms: $("set-invoice-terms")?.value || "",
     };
     if (state.logoDraft !== null) payload.logo_url = state.logoDraft;
     const data = await api("/api/settings", {
       method: "POST",
       body: JSON.stringify(payload),
     });
-    state.company = data.company;
+    state.company = data.company ? { ...state.company, ...data.company } : state.company;
     state.logoDraft = null;
     paintHeader();
     renderSettings();

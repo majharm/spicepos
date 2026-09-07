@@ -303,3 +303,43 @@ test("invoice HSN uses item hsn ahead of SKU code", () => {
   );
   assert.equal(lines[0].hsn, "0910");
 });
+
+test("POS slip and official bill print customer notes and terms from the shop profile", () => {
+  const InvoicePrint = loadInvoicePrint();
+  const order = {
+    order_number: "SO-2001",
+    customer_name: "Walk-in",
+    subtotal: 100,
+    gst: 5,
+    total: 105,
+    payment_method: "cash",
+    payment_status: "paid",
+    created_at: "2026-09-07T10:00:00.000Z",
+    lines: [{ item_name: "Test", quantity_gm: 500, rate_per_kg: 200, amount: 100, gst_rate: 5 }],
+  };
+  const ctx = {
+    company: {
+      name: "ATAV Spices",
+      invoice_footer: "Thank you.\nVisit again.",
+      invoice_terms: "No returns after 7 days.\nCheck weight on delivery.",
+    },
+    customers: [],
+    items: [],
+    formatDateTime: (v) => String(v),
+    money: (n) => `₹${Number(n).toFixed(2)}`,
+    escapeHtml: (v) => String(v),
+  };
+  const slip = InvoicePrint.invoiceBody(order, ctx);
+  assert.match(slip, /class="inv-footer"/);
+  assert.match(slip, /Thank you\.<br>Visit again\./);
+  assert.match(slip, /class="inv-terms"/);
+  assert.match(slip, /Terms &amp; conditions|Terms & conditions/);
+  assert.match(slip, /No returns after 7 days\.<br>Check weight on delivery\./);
+  const office = InvoicePrint.officeInvoiceBody(order, ctx);
+  assert.match(office, /class="off-note"/);
+  assert.match(office, /Thank you\.<br>Visit again\./);
+  assert.match(office, /No returns after 7 days\.<br>Check weight on delivery\./);
+  const blank = InvoicePrint.invoiceBody(order, { ...ctx, company: { name: "ATAV Spices" } });
+  assert.match(blank, /Thank you for your business/);
+  assert.doesNotMatch(blank, /class="inv-terms"/);
+});
