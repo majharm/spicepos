@@ -42,6 +42,8 @@ const state = {
   stockMode: "simple",
   expiryBatches: [],
   expiryFilter: "all",
+  stockRows: [],
+  stockLowOnly: false,
   activeQrOrderId: "",
 };
 
@@ -230,7 +232,7 @@ const VIEW_META = {
   "qr-orders": { title: "QR Orders", subtitle: "Incoming customer self-orders" },
   purchases: { title: "Purchases", subtitle: "20 pcs = 20 barcodes you type or scan" },
   suppliers: { title: "Suppliers", subtitle: "Vendor contacts, address, and GSTIN" },
-  stock: { title: "Stock", subtitle: "Adjustments, transfers, and low-stock alerts" },
+  stock: { title: "Stock", subtitle: "On-hand qty, low-stock alerts, and adjustments" },
   expiry: { title: "Expiry", subtitle: "Dated batches still on hand — expired first" },
   staff: { title: "Staff & roles", subtitle: "Users, roles, and access" },
   branches: { title: "Branches", subtitle: "Locations, active status, and branch login" },
@@ -2792,15 +2794,232 @@ async function loadDashboard() {
   }
 }
 
-async function loadStock() {
-  fillItemPicker("stk-item-list", "stk-item-search", "stk-item");
-  const rows = await api("/api/stock");
-  $("stock-table").innerHTML = `<table><thead><tr><th>Code</th><th>Item</th><th>Unit</th><th>Stock</th><th>Reorder</th><th>Value</th></tr></thead><tbody>${rows
+function stockIsLow(row) {
+  return Number(row?.stock_gm) <= Number(row?.reorder_level_gm);
+}
+
+function stockIsOut(row) {
+  return Number(row?.stock_gm) <= 0;
+}
+
+function resolvePickerItem(q, pool) {
+  const needle = String(q || "").trim().toLowerCase();
+  if (!needle) return null;
+  const rows = Array.isArray(pool) ? pool : [];
+  const exact = rows.find((i) =>
+    String(i.id || "").toLowerCase() === needle
+    || String(i.barcode || "").toLowerCase() === needle
+    || String(i.mfr_barcode || "").toLowerCase() === needle
+    || String(i.code || "").toLowerCase() === needle
+    || String(i.name || "").toLowerCase() === needle
+  );
+  if (exact) return exact;
+  const starts = rows.filter((i) => String(i.name || "").toLowerCase().startsWith(needle));
+  if (starts.length === 1) return starts[0];
+  const contains = rows.filter((i) => {
+    const hay = [i.name, i.local_name, i.code, i.barcode, i.mfr_barcode]
+      .map((x) => String(x || "").toLowerCase())
+      .join(" ");
+    return hay.includes(needle);
+  });
+  return contains.length === 1 ? contains[0] : null;
+}
+
+function pickerOptionHtml(item) {
+  const label = [item.code, item.barcode].filter(Boolean).join(" · ");
+  const opts = [`<option value="${escapeHtml(item.name)}" data-id="${escapeHtml(item.id)}" label="${escapeHtml(label)}"></option>`];
+  const extras = [item.barcode, item.code].filter((v, idx, all) => v && String(v) !== item.name && all.indexOf(v) === idx);
+  for (const extra of extras) {
+    opts.push(`<option value="${escapeHtml(extra)}" data-id="${escapeHtml(item.id)}" label="${escapeHtml(item.name)}"></option>`);
+  }
+  return opts.join("");
+}
+
+function syncStockQtyField(item) {
+  const qty = $("stk-qty");
+  const unitEl = $("stk-qty-unit");
+  const lab = $("stk-qty-lab");
+  if (!qty) return;
+  if (!item) {
+    qty.placeholder = "Qty";
+    qty.removeAttribute("step");
+    qty.removeAttribute("min");
+    if (unitEl) unitEl.textContent = "";
+    if (lab) lab.textContent = "Qty";
+    return;
+  }
+  const u = itemUnit(item);
+  const t = POSUnits.typeOf(u);
+  const suffix = t.stockSuffix || "";
+  qty.step = t.displayDiv ? "0.001" : String(t.step || 1);
+  qty.placeholder = POSUnits.isCount(u) ? "e.g. 12" : t.displayDiv ? "e.g. 1.5" : "e.g. 500";
+  const kind = $("stk-kind")?.value;
+  if (kind === "adjustment" || kind === "opening") qty.removeAttribute("min");
+  else qty.min = t.displayDiv ? "0.001" : "1";
+  if (unitEl) unitEl.textContent = suffix;
+  if (lab) lab.textContent = suffix ? `Qty (${suffix})` : "Qty";
+}
+
+function paintStockSelected(item) {
+  const el = $("stock-selected");
+  syncStockQtyField(item);
+  if (!el) return;
+  if (!item) {
+    el.hidden = true;
+    el.textContent = "";
+    return;
+  }
+  const low = stockIsLow(item);
+  const out = stockIsOut(item);
+  const pill = out
+    ? `<span class="stock-pill is-out">Out</span>`
+    : low
+      ? `<span class="stock-pill is-low">Low</span>`
+      : `<span class="stock-pill is-ok">OK</span>`;
+  el.hidden = false;
+  el.innerHTML = `<strong>${escapeHtml(item.name)}</strong>
+    <span>${escapeHtml(item.code || "")}</span>
+    <span>On hand ${escapeHtml(fmtQty(item.stock_gm, item))}</span>
+    ${pill}`;
+}
+
+function selectStockItem(id) {
+  const rows = state.stockRows || [];
+  const item = rows.find((r) => r.id === id) || state.items.find((i) => i.id === id);
+  if (!item) return;
+  if ($("stk-item")) $("stk-item").value = item.id;
+  if ($("stk-item-search")) $("stk-item-search").value = item.name;
+  paintStockSelected(item);
+  document.querySelectorAll("#stock-table [data-stock-item]").forEach((el) => {
+    el.classList.toggle("is-editing", el.dataset.stockItem === id);
+  });
+  $("stk-qty")?.focus();
+}
+
+function clearStockForm() {
+  if ($("stk-item")) $("stk-item").value = "";
+  if ($("stk-item-search")) $("stk-item-search").value = "";
+  if ($("stk-qty")) $("stk-qty").value = "";
+  if ($("stk-note")) $("stk-note").value = "";
+  if ($("stk-kind")) $("stk-kind").value = "adjustment";
+  paintStockSelected(null);
+  document.querySelectorAll("#stock-table [data-stock-item].is-editing").forEach((el) => el.classList.remove("is-editing"));
+  if ($("stock-hint")) {
+    $("stock-hint").textContent = "";
+    $("stock-hint").className = "hint";
+  }
+}
+
+function setStockHint(msg, kind) {
+  const hint = $("stock-hint");
+  if (!hint) return;
+  hint.textContent = msg || "";
+  hint.className = kind ? `hint ${kind}` : "hint";
+}
+
+function paintStockHero(rows) {
+  const stats = $("stock-hero-stats");
+  if (!stats) return;
+  const list = Array.isArray(rows) ? rows : [];
+  let value = 0;
+  let low = 0;
+  for (const r of list) {
+    const item = state.items.find((i) => i.id === r.id) || r;
+    value += POSUnits.lineAmount(r.stock_gm, r.purchase_rate, itemUnit(item));
+    if (stockIsLow(r)) low += 1;
+  }
+  stats.innerHTML = `<div class="items-stat"><span>SKUs</span><strong>${list.length}</strong></div>
+    <div class="items-stat"><span>On-hand value</span><strong>${money(value)}</strong></div>
+    <button class="items-stat${low ? " is-warn" : ""}${state.stockLowOnly ? " is-active" : ""}" type="button" data-stock-low>
+      <span>Low / out</span><strong>${low}</strong>
+    </button>`;
+}
+
+function filterStockList() {
+  const q = String($("stock-search")?.value || "").trim().toLowerCase();
+  const lowOnly = Boolean(state.stockLowOnly || $("stock-low-only")?.checked);
+  let shown = 0;
+  document.querySelectorAll("#stock-table [data-stock-item]").forEach((card) => {
+    const hay = card.dataset.stockSearch || "";
+    const low = card.dataset.stockLow === "1";
+    const hide = (Boolean(q) && !hay.includes(q)) || (lowOnly && !low);
+    card.hidden = hide;
+    if (!hide) shown += 1;
+  });
+  const empty = $("stock-filter-empty");
+  if (empty) empty.hidden = shown > 0 || !document.querySelector("#stock-table [data-stock-item]");
+}
+
+function paintStockList(rows) {
+  const el = $("stock-table");
+  if (!el) return;
+  const selected = $("stk-item")?.value || "";
+  const list = Array.isArray(rows) ? rows : [];
+  if (!list.length) {
+    el.innerHTML = `<div class="item-empty-card">
+      <strong>No stock rows</strong>
+      <p>Add items first. Their on-hand quantity shows here.</p>
+    </div>`;
+    return;
+  }
+  el.innerHTML = `${list
     .map((r) => {
       const item = state.items.find((i) => i.id === r.id) || r;
-      return `<tr><td>${escapeHtml(r.code)}</td><td>${escapeHtml(r.name)}</td><td>${escapeHtml(itemUnit(item))}</td><td>${escapeHtml(fmtQty(r.stock_gm, item))}</td><td>${escapeHtml(fmtQty(r.reorder_level_gm, item))}</td><td>${money(POSUnits.lineAmount(r.stock_gm, r.purchase_rate, itemUnit(item)))}</td></tr>`;
+      const low = stockIsLow(r);
+      const out = stockIsOut(r);
+      const value = POSUnits.lineAmount(r.stock_gm, r.purchase_rate, itemUnit(item));
+      const search = itemSearchHay(item);
+      const pill = out
+        ? `<span class="stock-pill is-out">Out</span>`
+        : low
+          ? `<span class="stock-pill is-low">Low</span>`
+          : `<span class="stock-pill is-ok">OK</span>`;
+      return `<article class="report-card item-card stock-card${selected === r.id ? " is-editing" : ""}${out ? " is-out" : low ? " is-low" : ""}" data-stock-item="${escapeHtml(r.id)}" data-stock-search="${escapeHtml(search)}" data-stock-low="${low ? "1" : "0"}">
+        <div class="item-card-head">
+          <div class="item-card-copy">
+            <strong>${escapeHtml(r.name)}</strong>
+            <span>${escapeHtml(r.code || "")}${item.barcode ? ` · ${escapeHtml(item.barcode)}` : ""}</span>
+          </div>
+          ${pill}
+        </div>
+        <div class="item-card-meta">
+          <span class="item-chip">${escapeHtml(itemUnit(item))}</span>
+          <span class="item-chip ${low ? "stock low" : "stock ok"}">On hand ${escapeHtml(fmtQty(r.stock_gm, item))}</span>
+          <span class="item-chip">Reorder ${escapeHtml(fmtQty(r.reorder_level_gm, item))}</span>
+          <span class="item-chip">${money(value)}</span>
+        </div>
+      </article>`;
     })
-    .join("")}</tbody></table>`;
+    .join("")}
+    <div class="item-empty-card" id="stock-filter-empty" hidden>
+      <strong>No matching SKUs</strong>
+      <p>Clear search or turn off Low stock to see the rest of the catalog.</p>
+    </div>`;
+  filterStockList();
+}
+
+async function loadStock() {
+  fillItemPicker("stk-item-list", "stk-item-search", "stk-item");
+  try {
+    const rows = await api("/api/stock");
+    state.stockRows = Array.isArray(rows) ? rows : [];
+    paintStockHero(state.stockRows);
+    paintStockList(state.stockRows);
+    const selectedId = $("stk-item")?.value;
+    if (selectedId) {
+      const next = state.stockRows.find((r) => r.id === selectedId);
+      if (next) paintStockSelected(next);
+    }
+  } catch (err) {
+    setStockHint(err.message, "error");
+    const el = $("stock-table");
+    if (el) {
+      el.innerHTML = `<div class="item-empty-card">
+        <strong>Could not load stock</strong>
+        <p>${escapeHtml(err.message)}</p>
+      </div>`;
+    }
+  }
 }
 
 async function loadStaff() {
@@ -5723,19 +5942,25 @@ function fillItemPicker(datalistId, searchId, hiddenId, filterFn) {
   const list = $(datalistId);
   if (!list) return;
   const items = activeItems().filter((i) => (filterFn ? filterFn(i) : true));
-  list.innerHTML = items
-    .map((i) => `<option value="${escapeHtml(i.name)}" data-id="${escapeHtml(i.id)}" label="${escapeHtml(i.barcode || i.code || "")}"></option>`)
-    .join("");
+  list.innerHTML = items.map((i) => pickerOptionHtml(i)).join("");
   const search = $(searchId);
   const hidden = $(hiddenId);
+  if (search) search._posFilter = filterFn;
   if (search && hidden && !search.dataset.bound) {
     search.dataset.bound = "1";
-    search.addEventListener("change", () => {
-      const q = String(search.value || "").trim().toLowerCase();
-      const pool = activeItems().filter((i) => (filterFn ? filterFn(i) : true));
-      const item = pool.find((i) => i.name.toLowerCase() === q || String(i.barcode || "").toLowerCase() === q || String(i.code || "").toLowerCase() === q);
+    const sync = () => {
+      const pool = activeItems().filter((i) => (search._posFilter ? search._posFilter(i) : true));
+      const item = resolvePickerItem(search.value, pool);
       hidden.value = item?.id || "";
-    });
+      if (hidden.id === "stk-item") paintStockSelected(item);
+    };
+    search.addEventListener("input", sync);
+    search.addEventListener("change", sync);
+  }
+  if (search && hidden && search.value) {
+    const item = resolvePickerItem(search.value, items);
+    if (item) hidden.value = item.id;
+    if (hidden.id === "stk-item") paintStockSelected(item || state.items.find((i) => i.id === hidden.value) || null);
   }
 }
 
@@ -5746,20 +5971,88 @@ function qtyToBaseFromInput(item, raw) {
 
 $("stock-form")?.addEventListener("submit", async (e) => {
   e.preventDefault();
-  const item = state.items.find((i) => i.id === $("stk-item").value);
-  const qty = item ? qtyToBaseFromInput(item, $("stk-qty").value) : Number($("stk-qty").value);
-  await api("/api/stock/adjust", {
-    method: "POST",
-    body: JSON.stringify({
-      item_id: $("stk-item").value,
-      quantity_gm: qty,
-      kind: $("stk-kind").value,
-      reason: $("stk-reason")?.value || "",
-      note: $("stk-note").value,
-    }),
-  });
-  loadStock();
-  loadBootstrap();
+  const pool = activeItems();
+  const picked = pool.find((i) => i.id === $("stk-item")?.value) || resolvePickerItem($("stk-item-search")?.value, pool);
+  if (!picked) {
+    setStockHint("Pick an item — type a name, code, or barcode, or tap a card.", "error");
+    $("stk-item-search")?.focus();
+    return;
+  }
+  if ($("stk-item")) $("stk-item").value = picked.id;
+  if ($("stk-item-search")) $("stk-item-search").value = picked.name;
+  paintStockSelected(picked);
+  let qty = qtyToBaseFromInput(picked, $("stk-qty")?.value);
+  const kind = String($("stk-kind")?.value || "adjustment");
+  if (["damaged", "expired", "returned"].includes(kind)) qty = Math.abs(qty);
+  if (!qty) {
+    setStockHint("Enter a quantity.", "error");
+    $("stk-qty")?.focus();
+    return;
+  }
+  const reason = String($("stk-reason")?.value || "").trim();
+  const noteRaw = String($("stk-note")?.value || "").trim();
+  const note = state.stockMode === "advanced" && reason
+    ? (noteRaw ? `${reason}: ${noteRaw}` : reason)
+    : noteRaw;
+  const postBtn = $("stock-post");
+  if (postBtn) postBtn.disabled = true;
+  try {
+    await api("/api/stock/adjust", {
+      method: "POST",
+      body: JSON.stringify({
+        item_id: picked.id,
+        quantity_gm: qty,
+        kind,
+        reason,
+        note,
+      }),
+    });
+    const taken = ["damaged", "expired", "returned"].includes(kind);
+    setStockHint(
+      taken
+        ? `Took ${fmtQty(Math.abs(qty), picked)} off ${picked.name}`
+        : `Posted ${qty > 0 ? "+" : ""}${fmtQty(qty, picked)} on ${picked.name}`,
+      "ok",
+    );
+    if ($("stk-qty")) $("stk-qty").value = "";
+    if ($("stk-note")) $("stk-note").value = "";
+    await loadStock();
+    loadBootstrap();
+  } catch (err) {
+    setStockHint(err.message, "error");
+  } finally {
+    if (postBtn) postBtn.disabled = false;
+  }
+});
+
+$("stock-clear")?.addEventListener("click", () => {
+  clearStockForm();
+});
+
+$("stk-kind")?.addEventListener("change", () => {
+  const id = $("stk-item")?.value;
+  const item = (state.stockRows || []).find((r) => r.id === id) || state.items.find((i) => i.id === id);
+  syncStockQtyField(item || null);
+});
+
+$("stock-search")?.addEventListener("input", filterStockList);
+$("stock-low-only")?.addEventListener("change", () => {
+  state.stockLowOnly = Boolean($("stock-low-only")?.checked);
+  paintStockHero(state.stockRows);
+  filterStockList();
+});
+$("stock-hero-stats")?.addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-stock-low]");
+  if (!btn) return;
+  state.stockLowOnly = !state.stockLowOnly;
+  if ($("stock-low-only")) $("stock-low-only").checked = state.stockLowOnly;
+  paintStockHero(state.stockRows);
+  filterStockList();
+});
+$("stock-table")?.addEventListener("click", (e) => {
+  const card = e.target.closest("[data-stock-item]");
+  if (!card) return;
+  selectStockItem(card.dataset.stockItem);
 });
 
 document.getElementById("stock-mode")?.addEventListener("click", (e) => {
@@ -5768,6 +6061,7 @@ document.getElementById("stock-mode")?.addEventListener("click", (e) => {
   state.stockMode = btn.dataset.stockMode;
   document.querySelectorAll("[data-stock-mode]").forEach((b) => b.classList.toggle("primary", b === btn));
   document.getElementById("view-stock")?.classList.toggle("is-advanced", state.stockMode === "advanced");
+  if ($("stock-mode-label")) $("stock-mode-label").textContent = state.stockMode === "advanced" ? "Adjust stock — advanced" : "Adjust stock";
 });
 
 ["bill-disc-type", "bill-disc-value", "loyalty-redeem"].forEach((id) => {

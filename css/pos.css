@@ -3343,7 +3343,8 @@ button.items-stat.is-active {
   .branches-desk,
   .customers-desk,
   .settings-desk,
-  .expiry-desk { margin-left: 12px; margin-right: 12px; }
+  .expiry-desk,
+  .stock-desk { margin-left: 12px; margin-right: 12px; }
   .packs-hero,
   .items-hero { flex-direction: column; align-items: stretch; padding: 14px; }
   .expiry-desk .items-hero { padding: 12px 14px; gap: 10px; }
@@ -3891,6 +3892,66 @@ button.items-stat.is-active {
 .toolbar-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 0 0 12px; }
 .mode-toggle { display: flex; gap: 8px; margin-bottom: 12px; }
 #view-stock:not(.is-advanced) .stock-adv { display: none; }
+
+/* stock-desk: on-hand + adjustments */
+.stock-desk .stock-mode-toggle {
+  margin: 0;
+}
+.stock-desk .item-composer .mode-toggle .btn {
+  min-height: 36px;
+}
+.stock-selected {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--bg-tint-soft);
+  border: 1px solid var(--line);
+  font-size: 13px;
+  line-height: 1.45;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  align-items: center;
+  grid-column: 1 / -1;
+}
+.stock-selected[hidden] { display: none; }
+.stock-selected strong { font-weight: 800; }
+.stock-selected span { color: var(--muted); }
+.stock-qty-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.stock-qty-wrap input { flex: 1; min-width: 0; }
+.stock-qty-unit {
+  min-width: 2.2em;
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--muted);
+}
+.stock-card .item-card-head {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+.stock-card.is-low {
+  border-color: #fde68a;
+  background: #fffbeb;
+}
+.stock-card.is-out {
+  border-color: #fecaca;
+  background: #fff7f7;
+}
+.stock-pill {
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+.stock-pill.is-ok { background: #d1fae5; color: #065f46; }
+.stock-pill.is-low { background: #fef3c7; color: #92400e; }
+.stock-pill.is-out { background: #fee2e2; color: #991b1b; }
+.stock-card[hidden] { display: none !important; }
 
 .growth-desk .report-grid { padding: 0; }
 .growth-desk .report-card em {

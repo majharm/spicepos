@@ -261,5 +261,8 @@ test("Master Admin can set passwords and unlock locked accounts", () => {
   assert.match(read("js/app.js"), /data-edit-staff/);
   assert.match(read("js/app.js"), /\/api\/auth\/reset-password/);
   assert.match(read("index.html"), /id="password-form"/);
+  assert.match(read("index.html"), /stock-desk/);
+  assert.match(read("index.html"), /id="stock-hint"/);
+  assert.match(read("js/app.js"), /function resolvePickerItem/);
   assert.match(read("pos-crud.php"), /staff\/\(\[\^\/\]\+\)\$#.*PUT/s);
 });

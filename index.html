@@ -6,7 +6,7 @@
     <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
     <title>ATAV POS</title>
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./css/pos.css?v=20260905deploy145" />
+    <link rel="stylesheet" href="./css/pos.css?v=20260905deploy151" />
     <link rel="stylesheet" href="./css/saas.css?v=20260905deploy136" />
   </head>
   <body>
@@ -628,42 +628,77 @@
           </div>
           <div class="table-wrap" id="barcodes-table"></div>
         </section>
-        <section class="view" id="view-stock" hidden>
+        <section class="view view-stock" id="view-stock" hidden>
           <h2 class="visually-hidden">Stock</h2>
-          <p class="lede">Branch-wise stock, adjustments, transfers, and low-stock alerts.</p>
-          <div class="mode-toggle" id="stock-mode">
-            <button class="btn primary" type="button" data-stock-mode="simple">Simple</button>
-            <button class="btn" type="button" data-stock-mode="advanced">Advanced</button>
+          <div class="items-desk stock-desk">
+            <header class="items-hero">
+              <div class="items-hero-copy">
+                <p class="items-kicker">Inventory</p>
+                <h3>Stock</h3>
+                <p class="lede">Search a SKU, tap it, then post + or − quantity. Low-stock items are highlighted.</p>
+              </div>
+              <div class="items-hero-stats" id="stock-hero-stats"></div>
+            </header>
+            <div class="items-split">
+              <form class="settings item-composer" id="stock-form" autocomplete="off">
+                <div class="item-composer-top">
+                  <p class="item-mode" id="stock-mode-label">Adjust stock</p>
+                  <p class="item-composer-note">Tap a card on the right, or type a name, code, or barcode. Damaged, expired, and returned quantities come off the shelf.</p>
+                </div>
+                <div class="mode-toggle stock-mode-toggle" id="stock-mode">
+                  <button class="btn primary" type="button" data-stock-mode="simple">Simple</button>
+                  <button class="btn" type="button" data-stock-mode="advanced">Advanced</button>
+                </div>
+                <fieldset class="item-block">
+                  <legend>Post</legend>
+                  <label class="full">Item
+                    <input id="stk-item-search" list="stk-item-list" placeholder="Name, code, or barcode" autocomplete="off" />
+                    <input type="hidden" id="stk-item" />
+                    <datalist id="stk-item-list"></datalist>
+                  </label>
+                  <p class="stock-selected" id="stock-selected" hidden></p>
+                  <label><span id="stk-qty-lab">Qty</span>
+                    <span class="stock-qty-wrap">
+                      <input id="stk-qty" type="number" required inputmode="decimal" placeholder="Qty" />
+                      <span class="stock-qty-unit" id="stk-qty-unit"></span>
+                    </span>
+                  </label>
+                  <label>Kind
+                    <select id="stk-kind">
+                      <option value="adjustment">Adjustment (+/−)</option>
+                      <option value="opening">Opening</option>
+                      <option value="damaged">Damaged</option>
+                      <option value="expired">Expired</option>
+                      <option value="returned">Returned</option>
+                    </select>
+                  </label>
+                  <label class="stock-adv">Reason
+                    <select id="stk-reason">
+                      <option value="broken">Broken</option>
+                      <option value="spoilage">Spoilage</option>
+                      <option value="expiry">Expiry</option>
+                      <option value="moisture">Moisture</option>
+                      <option value="other">Other</option>
+                    </select>
+                  </label>
+                  <label class="full">Note <input id="stk-note" maxlength="160" placeholder="Optional" /></label>
+                </fieldset>
+                <div class="item-composer-actions">
+                  <button class="btn primary" type="submit" id="stock-post">Post</button>
+                  <button class="btn" type="button" id="stock-clear">Clear</button>
+                  <p class="hint" id="stock-hint"></p>
+                </div>
+              </form>
+              <aside class="items-library">
+                <div class="items-library-head">
+                  <h4>On hand</h4>
+                  <input id="stock-search" type="search" placeholder="Search name, code, barcode…" autocomplete="off" />
+                  <label class="item-toggle"><input type="checkbox" id="stock-low-only" /> Low stock</label>
+                </div>
+                <div class="table-wrap items-library-list" id="stock-table"></div>
+              </aside>
+            </div>
           </div>
-          <form class="settings wide" id="stock-form">
-            <label>Item
-              <input id="stk-item-search" list="stk-item-list" placeholder="Search item or barcode" />
-              <input type="hidden" id="stk-item" required />
-              <datalist id="stk-item-list"></datalist>
-            </label>
-            <label>Qty <input id="stk-qty" type="number" required /></label>
-            <label>Kind
-              <select id="stk-kind">
-                <option value="adjustment">Adjustment</option>
-                <option value="opening">Opening</option>
-                <option value="damaged">Damaged</option>
-                <option value="expired">Expired</option>
-                <option value="returned">Returned</option>
-              </select>
-            </label>
-            <label class="stock-adv">Reason
-              <select id="stk-reason">
-                <option value="broken">Broken</option>
-                <option value="spoilage">Spoilage</option>
-                <option value="expiry">Expiry</option>
-                <option value="moisture">Moisture</option>
-                <option value="other">Other</option>
-              </select>
-            </label>
-            <label>Note <input id="stk-note" /></label>
-            <button class="btn primary" type="submit">Post</button>
-          </form>
-          <div class="table-wrap" id="stock-table"></div>
         </section>
         <section class="view view-expiry" id="view-expiry" hidden>
           <h2 class="visually-hidden">Expiry</h2>
@@ -1469,7 +1504,7 @@
     <script src="./js/support.js?v=20260905deploy136" defer></script>
     <script src="./js/qrcode.iife.js?v=20260905qr1"></script>
     <script src="./js/qr-notify.js?v=20260905deploy144" defer></script>
-    <script src="./js/app.js?v=20260905deploy150" defer></script>
+    <script src="./js/app.js?v=20260905deploy151" defer></script>
     <script src="./js/growth.js?v=20260905deploy145" defer></script>
     <script src="./js/offers-ui.js?v=20260905deploy136" defer></script>
   </body>
