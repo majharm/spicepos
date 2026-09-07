@@ -441,6 +441,8 @@ test("HTML and CSS cache stickers match deploy136", () => {
   assert.match(pos, /scan-box: compact 2026/);
   assert.match(pos, /counter-row: one line small 2026/);
   assert.match(index, /id="scan-form"[\s\S]*id="pack-choice"[\s\S]*id="pay-method"[\s\S]*id="counter-mobile"[\s\S]*id="customer"/);
+  assert.match(index, /id="bill-due"/);
+  assert.match(appJs, /function paintCounterDue/);
   assert.match(pos, /catalog-empty/);
   assert.match(pos, /bill-slider: hide unhide/);
   assert.match(pos, /minmax\(152px, 1fr\)/);

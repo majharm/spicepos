@@ -6,7 +6,7 @@
     <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
     <title>ATAV POS</title>
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./css/pos.css?v=20260905deploy151" />
+    <link rel="stylesheet" href="./css/pos.css?v=20260905deploy152" />
     <link rel="stylesheet" href="./css/saas.css?v=20260905deploy136" />
   </head>
   <body>
@@ -162,6 +162,7 @@
                   <h2 data-i18n="pos.bill">Bill</h2>
                   <p class="ticket-sub" id="ticket-sub">Tap a product or scan</p>
                   <p class="ticket-cust" id="bill-customer"></p>
+                  <p class="ticket-due" id="bill-due" hidden></p>
                 </div>
                 <button type="button" class="bill-toggle" id="bill-toggle" aria-controls="bill-panel" aria-expanded="true" aria-label="Hide bill" title="Hide bill">›</button>
               </div>
@@ -197,12 +198,14 @@
                   <div id="disc-row"><span data-i18n="pos.discount">Discount</span><span id="disc-total">₹0.00</span></div>
                   <div id="loyalty-row"><span data-i18n="pos.royalty">Royalty</span><span id="loyalty-total">₹0.00</span></div>
                   <div id="profit-row"><span data-i18n="pos.profit">Profit</span><span id="profit-total">₹0.00</span></div>
+                  <div id="due-row" hidden><span>Outstanding</span><span id="due-total">₹0.00</span></div>
                 </div>
                 <div class="grand"><span data-i18n="pos.total">Total</span><span id="total">₹0.00</span></div>
                 <div class="customer-face" id="customer-face" hidden>
                   <p class="customer-face-kicker" data-i18n="pos.customer_display">Customer display</p>
                   <div class="customer-face-row"><span data-i18n="pos.subtotal">Subtotal</span><strong id="face-subtotal">₹0.00</strong></div>
                   <div class="customer-face-row"><span data-i18n="pos.discount">Discount</span><strong id="face-discount">₹0.00</strong></div>
+                  <div class="customer-face-row" id="face-due-row" hidden><span>Outstanding</span><strong id="face-due">₹0.00</strong></div>
                   <div class="customer-face-row"><span data-i18n="pos.total">Total</span><strong id="face-total">₹0.00</strong></div>
                   <p class="customer-face-thanks" data-i18n="pos.thank_you">Thank you</p>
                 </div>
@@ -1504,7 +1507,7 @@
     <script src="./js/support.js?v=20260905deploy136" defer></script>
     <script src="./js/qrcode.iife.js?v=20260905qr1"></script>
     <script src="./js/qr-notify.js?v=20260905deploy144" defer></script>
-    <script src="./js/app.js?v=20260905deploy151" defer></script>
+    <script src="./js/app.js?v=20260905deploy152" defer></script>
     <script src="./js/growth.js?v=20260905deploy145" defer></script>
     <script src="./js/offers-ui.js?v=20260905deploy136" defer></script>
   </body>
