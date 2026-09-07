@@ -39,6 +39,7 @@ const state = {
   loyaltyAccount: null,
   loyaltySettings: null,
   currentView: "dashboard",
+  reportTab: "summary",
   stockMode: "simple",
   expiryBatches: [],
   expiryFilter: "all",
@@ -240,7 +241,7 @@ const VIEW_META = {
   support: { title: "Support", subtitle: "Call, WhatsApp, or email platform support" },
   accounts: { title: "Accounts", subtitle: "Receivables, payables, GL, and books" },
   expenses: { title: "Expenses", subtitle: "Rent, power, wages, and other shop costs" },
-  reports: { title: "Reports", subtitle: "Indian FY 1 Apr–31 Mar — sales, GST, expenses" },
+  reports: { title: "Reports", subtitle: "Sales, GST, payments, and stock for this FY" },
   growth: { title: "AI Growth", subtitle: "What happened, why, what to do next — from this shop's data" },
   settings: { title: "Shop profile", subtitle: "Company profile, timezone, logo, and login password" },
   backup: { title: "Shop backup", subtitle: "Download or restore this shop from Settings → Backup" },
@@ -821,6 +822,8 @@ function printFinance({ title, html, from, to, asOf }) {
   .report-card { border: 1px solid #cbd5e1; padding: 8px 10px; border-radius: 8px; }
   .report-card span { display: block; color: #64748b; font-size: 11px; }
   .report-block { margin-bottom: 22px; page-break-inside: avoid; }
+  .report-block[hidden], tr[hidden], .report-grid[hidden] { display: none; }
+  .report-block-meta { color: #64748b; font-size: 12px; margin: 2px 0 0; }
   .hint { color: #475569; }
   @media print { body { margin: 12px; } }
 </style></head><body>
@@ -900,10 +903,10 @@ function htmlTable(headers, rows) {
   return `<div class="table-wrap"><table><thead><tr>${headers
     .map((h) => `<th>${escapeHtml(h)}</th>`)
     .join("")}</tr></thead><tbody>${rows
-    .map(
-      (row) =>
-        `<tr>${row.map((c) => `<td>${escapeHtml(fmtCell(c))}</td>`).join("")}</tr>`,
-    )
+    .map((row) => {
+      const search = row.map((c) => fmtCell(c)).join(" ").toLowerCase();
+      return `<tr data-report-row="${escapeHtml(search)}">${row.map((c) => `<td>${escapeHtml(fmtCell(c))}</td>`).join("")}</tr>`;
+    })
     .join("")}</tbody></table></div>`;
 }
 
@@ -934,10 +937,14 @@ function gstSummaryRows(summary) {
   ];
 }
 
-function reportBlock(title, sheet, headers, rows) {
-  return `<section class="report-block" data-report-title="${escapeHtml(title)}">
+function reportBlock(title, sheet, headers, rows, group) {
+  const n = Array.isArray(rows) ? rows.length : 0;
+  return `<section class="report-block" data-report-title="${escapeHtml(title)}" data-report-group="${escapeHtml(group || "")}" data-report-sheet="${escapeHtml(sheet || "")}">
     <div class="report-block-head">
-      <h3>${escapeHtml(title)}</h3>
+      <div>
+        <h3>${escapeHtml(title)}</h3>
+        <p class="report-block-meta">${n} ${n === 1 ? "row" : "rows"}</p>
+      </div>
       <div class="print-actions">
         <button class="btn" type="button" data-print-report>Print</button>
         <a class="btn" href="${excelHref(sheet)}">Excel</a>
@@ -945,6 +952,77 @@ function reportBlock(title, sheet, headers, rows) {
     </div>
     ${htmlTable(headers, rows)}
   </section>`;
+}
+
+function setReportTab(tab) {
+  const next = String(tab || "summary");
+  state.reportTab = ["summary", "sales", "gst", "payment", "stock", "books"].includes(next) ? next : "summary";
+  applyReportsFilter();
+}
+
+function reportsPrintHtml() {
+  const sum = $("report-summary")?.cloneNode(true);
+  if (sum) sum.hidden = false;
+  const list = $("reports")?.cloneNode(true);
+  list?.querySelectorAll("[hidden]").forEach((el) => el.removeAttribute("hidden"));
+  return (sum?.outerHTML || "") + (list?.innerHTML || "");
+}
+
+function applyReportsFilter() {
+  const tab = state.reportTab || "summary";
+  const q = String($("rep-search")?.value || "").trim().toLowerCase();
+  document.querySelectorAll("#reports-tabs [data-report-tab]").forEach((btn) => {
+    const on = btn.dataset.reportTab === tab;
+    btn.classList.toggle("is-on", on);
+    btn.setAttribute("aria-selected", on ? "true" : "false");
+  });
+  const summary = $("report-summary");
+  if (summary) summary.hidden = Boolean(q) || tab !== "summary";
+  let shown = 0;
+  document.querySelectorAll("#reports .report-block").forEach((block) => {
+    const group = block.dataset.reportGroup;
+    const sheet = block.dataset.reportSheet;
+    const rows = block.querySelectorAll("tbody tr");
+    let rowHits = 0;
+    rows.forEach((tr) => {
+      const hay = tr.getAttribute("data-report-row") || tr.textContent || "";
+      const hit = !q || hay.toLowerCase().includes(q);
+      tr.hidden = !hit;
+      if (hit) rowHits += 1;
+    });
+    let visible;
+    if (q) {
+      visible = rowHits > 0 || (!rows.length && String(block.dataset.reportTitle || "").toLowerCase().includes(q));
+    } else if (tab === "summary") {
+      visible = sheet === "GST summary";
+    } else {
+      visible = group === tab;
+    }
+    block.hidden = !visible;
+    if (visible) shown += 1;
+  });
+  const hint = $("reports-filter-hint");
+  if (hint) {
+    hint.textContent = q ? (shown ? `${shown} matching section${shown === 1 ? "" : "s"}` : "No matching rows in this range") : "";
+  }
+}
+
+function paintReportsHero(s, data) {
+  const el = $("reports-hero-stats");
+  if (!el) return;
+  const low = (data.low || []).length;
+  el.innerHTML = [
+    ["Takings", money(s.takings), "sales", false],
+    ["Bills", s.bills ?? 0, "sales", false],
+    ["Net GST", money(s.netGst), "gst", false],
+    ["Expenses", money(s.expenses), "books", false],
+    ["Low stock", low, "stock", low > 0],
+  ]
+    .map(
+      ([k, v, tab, warn]) =>
+        `<button type="button" class="items-stat${warn ? " is-warn" : ""}" data-report-tab="${tab}"><span>${k}</span><strong>${escapeHtml(String(v))}</strong></button>`,
+    )
+    .join("");
 }
 
 function isMobileLayout() {
@@ -3225,6 +3303,7 @@ async function loadReports() {
     const gs = s.gstSummary || {};
     const out = gs.output || {};
     const net = gs.net || {};
+    paintReportsHero(s, data);
     $("report-summary").innerHTML = [
       ["Range", `${data.from} → ${data.to}`],
       ["Financial year", indianFinancialYear(data.from).label],
@@ -3246,25 +3325,26 @@ async function loadReports() {
       .map(([k, v]) => `<div class="report-card"><span>${k}</span><strong>${v}</strong></div>`)
       .join("");
     $("reports").innerHTML = [
-      reportBlock("GST summary (India)", "GST summary", ["Type", "CGST", "SGST", "IGST", "Total GST"], gstSummaryRows(s)),
-      reportBlock("Sales bills", "Sales bills", ["Order", "Customer", "Type", "Pack", "Pack count", "Status", "Qty g", "Taxable", "GST", "Total", "Pay", "Pay status", "Date"], (data.sales || []).map((o) => [o.order_number, o.customer_name, o.customer_type, o.pack_name || "Loose items", Number(o.pack_count) || 0, o.status, Number(o.total_quantity_gm) || 0, Number(o.subtotal) || 0, Number(o.gst) || 0, Number(o.total) || 0, o.payment_method, o.payment_status, formatShopDateTime(o.created_at)])),
-      reportBlock("Item sales", "Item sales", ["Item", "Qty g", "Amount", "GST"], (data.byItem || []).map((r) => [r.item_name, Number(r.quantity_gm) || 0, Number(r.amount) || 0, Number(r.gst) || 0])),
-      reportBlock("Customer sales", "Customer sales", ["Customer", "Type", "Bills", "Takings", "GST"], (data.byCustomer || []).map((r) => [r.customer_name, r.customer_type, Number(r.bills) || 0, Number(r.takings) || 0, Number(r.gst) || 0])),
-      reportBlock("Pack sales", "Pack sales", ["Pack type", "Pack count", "Bills", "Takings"], (data.byPack || []).map((r) => [r.pack_type, Number(r.pack_count) || 0, Number(r.bills) || 0, Number(r.takings) || 0])),
-      reportBlock("Payment", "Payment", ["Method", "Bills", "Takings"], (data.byPay || []).map((r) => [r.payment_method, Number(r.bills) || 0, Number(r.takings) || 0])),
-      reportBlock("Payment daywise", "Payment daywise", ["Day", "Cash", "UPI", "Card", "Credit", "Other", "Bills", "Total"], (data.payDaywise || []).map((r) => [reportDay(r.day), Number(r.cash) || 0, Number(r.upi) || 0, Number(r.card) || 0, Number(r.credit) || 0, Number(r.other) || 0, Number(r.bills) || 0, Number(r.total) || 0])),
-      reportBlock("GST daywise", "GST daywise", ["Day", "Taxable", "GST", "Total"], (data.gst || []).map((r) => [reportDay(r.day), Number(r.taxable) || 0, Number(r.gst) || 0, Number(r.total) || 0])),
-      reportBlock("GST output by rate", "GST output by rate", ["GST %", "Taxable", "CGST", "SGST", "IGST", "Total GST", "Bills"], gstRateRows(data.gstByRate)),
-      reportBlock("GST input by rate", "GST input by rate", ["GST %", "Taxable", "CGST", "SGST", "IGST", "Total GST"], gstRateRows(data.gstInputByRate, false)),
-      reportBlock("GST HSN itemwise", "GST HSN itemwise", ["HSN/SKU", "Item", "GST %", "Qty g", "Taxable", "GST"], (data.gstHsn || []).map((r) => [r.hsn, r.item_name, Number(r.gst_rate) || 0, Number(r.quantity_gm) || 0, Number(r.taxable) || 0, Number(r.gst) || 0])),
-      reportBlock("GST B2B sales", "GST B2B sales", ["Bill", "Date", "Customer", "GSTIN", "Taxable", "CGST", "SGST", "IGST", "Total", "Supply"], (data.gstB2B || []).map((r) => [r.order_number, reportDay(r.bill_date), r.customer_name, r.gstin, Number(r.taxable) || 0, Number(r.cgst) || 0, Number(r.sgst) || 0, Number(r.igst) || 0, Number(r.total) || 0, r.interState ? "Inter-state" : "Intra-state"])),
-      reportBlock("GST B2C sales", "GST B2C sales", ["Bill", "Date", "Customer", "Taxable", "CGST", "SGST", "IGST", "Total", "Supply"], (data.gstB2C || []).map((r) => [r.order_number, reportDay(r.bill_date), r.customer_name, Number(r.taxable) || 0, Number(r.cgst) || 0, Number(r.sgst) || 0, Number(r.igst) || 0, Number(r.total) || 0, r.interState ? "Inter-state" : "Intra-state"])),
-      reportBlock("Stock", "Stock", ["Code", "Name", "HSN", "Category", "Subcategory", "Stock g", "Reorder g", "Retail", "B2B", "Purchase", "GST %"], (data.stock || []).map((i) => [i.code, i.name, i.hsn, i.category, i.subcategory, Number(i.stock_gm) || 0, Number(i.reorder_level_gm) || 0, Number(i.retail_rate) || 0, Number(i.b2b_rate) || 0, Number(i.purchase_rate) || 0, Number(i.gst_rate) || 0])),
-      reportBlock("Low stock", "Low stock", ["Code", "Name", "Stock g", "Reorder g"], (data.low || []).map((i) => [i.code, i.name, Number(i.stock_gm) || 0, Number(i.reorder_level_gm) || 0])),
-      reportBlock("Purchases", "Purchases", ["PO", "Supplier", "Invoice", "Date", "Taxable", "GST", "Total", "Pay", "Status"], (data.purchases || []).map((p) => [p.purchase_number, p.supplier_name, p.supplier_invoice_number, p.purchase_date, Number(p.subtotal) || 0, Number(p.gst) || 0, Number(p.total) || 0, p.payment_method, p.payment_status])),
-      reportBlock("Expenses", "Expenses", ["No.", "Date", "Category", "Amount", "GST", "Total", "Pay", "Notes"], (data.expenses || []).map((e) => [e.expense_number, e.expense_date, e.category, Number(e.amount) || 0, Number(e.gst) || 0, Number(e.total) || (Number(e.amount) || 0) + (Number(e.gst) || 0), e.payment_method, e.notes])),
-      reportBlock("Customers", "Customers", ["Code", "Name", "Business", "Mobile", "Type", "State", "GSTIN", "Credit limit", "Outstanding"], (data.customers || []).map((c) => [c.code, c.name, c.business_name, c.mobile, c.type, c.state, c.gstin, Number(c.credit_limit) || 0, Number(c.outstanding) || 0])),
+      reportBlock("GST summary (India)", "GST summary", ["Type", "CGST", "SGST", "IGST", "Total GST"], gstSummaryRows(s), "gst"),
+      reportBlock("Sales bills", "Sales bills", ["Order", "Customer", "Type", "Pack", "Pack count", "Status", "Qty g", "Taxable", "GST", "Total", "Pay", "Pay status", "Date"], (data.sales || []).map((o) => [o.order_number, o.customer_name, o.customer_type, o.pack_name || "Loose items", Number(o.pack_count) || 0, o.status, Number(o.total_quantity_gm) || 0, Number(o.subtotal) || 0, Number(o.gst) || 0, Number(o.total) || 0, o.payment_method, o.payment_status, formatShopDateTime(o.created_at)]), "sales"),
+      reportBlock("Item sales", "Item sales", ["Item", "Qty g", "Amount", "GST"], (data.byItem || []).map((r) => [r.item_name, Number(r.quantity_gm) || 0, Number(r.amount) || 0, Number(r.gst) || 0]), "sales"),
+      reportBlock("Customer sales", "Customer sales", ["Customer", "Type", "Bills", "Takings", "GST"], (data.byCustomer || []).map((r) => [r.customer_name, r.customer_type, Number(r.bills) || 0, Number(r.takings) || 0, Number(r.gst) || 0]), "sales"),
+      reportBlock("Pack sales", "Pack sales", ["Pack type", "Pack count", "Bills", "Takings"], (data.byPack || []).map((r) => [r.pack_type, Number(r.pack_count) || 0, Number(r.bills) || 0, Number(r.takings) || 0]), "sales"),
+      reportBlock("Payment", "Payment", ["Method", "Bills", "Takings"], (data.byPay || []).map((r) => [r.payment_method, Number(r.bills) || 0, Number(r.takings) || 0]), "payment"),
+      reportBlock("Payment daywise", "Payment daywise", ["Day", "Cash", "UPI", "Card", "Credit", "Other", "Bills", "Total"], (data.payDaywise || []).map((r) => [reportDay(r.day), Number(r.cash) || 0, Number(r.upi) || 0, Number(r.card) || 0, Number(r.credit) || 0, Number(r.other) || 0, Number(r.bills) || 0, Number(r.total) || 0]), "payment"),
+      reportBlock("GST daywise", "GST daywise", ["Day", "Taxable", "GST", "Total"], (data.gst || []).map((r) => [reportDay(r.day), Number(r.taxable) || 0, Number(r.gst) || 0, Number(r.total) || 0]), "gst"),
+      reportBlock("GST output by rate", "GST output by rate", ["GST %", "Taxable", "CGST", "SGST", "IGST", "Total GST", "Bills"], gstRateRows(data.gstByRate), "gst"),
+      reportBlock("GST input by rate", "GST input by rate", ["GST %", "Taxable", "CGST", "SGST", "IGST", "Total GST"], gstRateRows(data.gstInputByRate, false), "gst"),
+      reportBlock("GST HSN itemwise", "GST HSN itemwise", ["HSN/SKU", "Item", "GST %", "Qty g", "Taxable", "GST"], (data.gstHsn || []).map((r) => [r.hsn, r.item_name, Number(r.gst_rate) || 0, Number(r.quantity_gm) || 0, Number(r.taxable) || 0, Number(r.gst) || 0]), "gst"),
+      reportBlock("GST B2B sales", "GST B2B sales", ["Bill", "Date", "Customer", "GSTIN", "Taxable", "CGST", "SGST", "IGST", "Total", "Supply"], (data.gstB2B || []).map((r) => [r.order_number, reportDay(r.bill_date), r.customer_name, r.gstin, Number(r.taxable) || 0, Number(r.cgst) || 0, Number(r.sgst) || 0, Number(r.igst) || 0, Number(r.total) || 0, r.interState ? "Inter-state" : "Intra-state"]), "gst"),
+      reportBlock("GST B2C sales", "GST B2C sales", ["Bill", "Date", "Customer", "Taxable", "CGST", "SGST", "IGST", "Total", "Supply"], (data.gstB2C || []).map((r) => [r.order_number, reportDay(r.bill_date), r.customer_name, Number(r.taxable) || 0, Number(r.cgst) || 0, Number(r.sgst) || 0, Number(r.igst) || 0, Number(r.total) || 0, r.interState ? "Inter-state" : "Intra-state"]), "gst"),
+      reportBlock("Stock", "Stock", ["Code", "Name", "HSN", "Category", "Subcategory", "Stock g", "Reorder g", "Retail", "B2B", "Purchase", "GST %"], (data.stock || []).map((i) => [i.code, i.name, i.hsn, i.category, i.subcategory, Number(i.stock_gm) || 0, Number(i.reorder_level_gm) || 0, Number(i.retail_rate) || 0, Number(i.b2b_rate) || 0, Number(i.purchase_rate) || 0, Number(i.gst_rate) || 0]), "stock"),
+      reportBlock("Low stock", "Low stock", ["Code", "Name", "Stock g", "Reorder g"], (data.low || []).map((i) => [i.code, i.name, Number(i.stock_gm) || 0, Number(i.reorder_level_gm) || 0]), "stock"),
+      reportBlock("Purchases", "Purchases", ["PO", "Supplier", "Invoice", "Date", "Taxable", "GST", "Total", "Pay", "Status"], (data.purchases || []).map((p) => [p.purchase_number, p.supplier_name, p.supplier_invoice_number, p.purchase_date, Number(p.subtotal) || 0, Number(p.gst) || 0, Number(p.total) || 0, p.payment_method, p.payment_status]), "books"),
+      reportBlock("Expenses", "Expenses", ["No.", "Date", "Category", "Amount", "GST", "Total", "Pay", "Notes"], (data.expenses || []).map((e) => [e.expense_number, e.expense_date, e.category, Number(e.amount) || 0, Number(e.gst) || 0, Number(e.total) || (Number(e.amount) || 0) + (Number(e.gst) || 0), e.payment_method, e.notes]), "books"),
+      reportBlock("Customers", "Customers", ["Code", "Name", "Business", "Mobile", "Type", "State", "GSTIN", "Credit limit", "Outstanding"], (data.customers || []).map((c) => [c.code, c.name, c.business_name, c.mobile, c.type, c.state, c.gstin, Number(c.credit_limit) || 0, Number(c.outstanding) || 0]), "books"),
     ].join("");
+    applyReportsFilter();
     $("reports-hint").textContent = "";
     $("reports-hint").className = "hint";
   } catch (err) {
@@ -5586,10 +5666,24 @@ $("rep-fy-year")?.addEventListener("change", async () => {
   await loadReports();
 });
 $("rep-from")?.addEventListener("change", () => syncFySelectFromDates("rep-fy-year", "rep-from"));
+$("rep-to")?.addEventListener("change", () => syncFySelectFromDates("rep-fy-year", "rep-from"));
+$("rep-search")?.addEventListener("input", () => applyReportsFilter());
+$("reports-tabs")?.addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-report-tab]");
+  if (!btn) return;
+  if ($("rep-search")) $("rep-search").value = "";
+  setReportTab(btn.dataset.reportTab);
+});
+$("reports-hero-stats")?.addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-report-tab]");
+  if (!btn) return;
+  if ($("rep-search")) $("rep-search").value = "";
+  setReportTab(btn.dataset.reportTab);
+});
 $("rep-print")?.addEventListener("click", () => {
   printFinance({
     title: "Reports",
-    html: ($("report-summary")?.outerHTML || "") + ($("reports")?.innerHTML || ""),
+    html: reportsPrintHtml(),
     from: $("rep-from")?.value,
     to: $("rep-to")?.value,
   });
