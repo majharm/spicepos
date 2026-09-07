@@ -355,6 +355,9 @@ test("HTML and CSS cache stickers match deploy136", () => {
   assert.match(pos, /\.stage\.is-counter \.totals \.grand \{ font-size: 16px; \}/);
   assert.doesNotMatch(pos, /minmax\(0, 240px\)/);
   const appJs = readFileSync(path.join(root, "js/app.js"), "utf8");
+  assert.match(pos, /counter-cats: category chips/);
+  assert.match(index, /id="catalog-cats"/);
+  assert.match(appJs, /function renderCatalogCats/);
   assert.match(appJs, /function startQrOrderWatch/);
   assert.match(appJs, /input\.select/);
   assert.match(pos, /office-preview/);
@@ -440,7 +443,7 @@ test("HTML and CSS cache stickers match deploy136", () => {
   assert.match(appJs, /class="line-ops"/);
   assert.match(appJs, /class="line-amt"/);
   assert.match(pos, /body\.counter-mode \.platform-notices/);
-  assert.match(pos, /counter-ux: product tiles/);
+  assert.match(pos, /counter-cats: category chips/);
   assert.match(pos, /counter-ux: till-desk-2026/);
   assert.match(pos, /scan-box: compact 2026/);
   assert.match(pos, /counter-row: one line small 2026/);

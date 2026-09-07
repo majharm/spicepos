@@ -33,6 +33,7 @@ const state = {
   wearerFilter: "",
   sizeFilter: "",
   colorFilter: "",
+  categoryFilter: "",
   billDiscountType: "amt",
   billDiscountValue: 0,
   loyaltyRedeem: 0,
@@ -1405,12 +1406,25 @@ function activeItems() {
   return state.items.filter((i) => i.status !== "inactive");
 }
 
+function itemCategoryLabel(item) {
+  const c = String(item?.category || "").trim();
+  return c || "Uncategorised";
+}
+
+function catalogCategories() {
+  const names = new Set();
+  for (const i of activeItems()) names.add(itemCategoryLabel(i));
+  return [...names].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+}
+
 function filteredItems() {
   const q = state.query.trim().toLowerCase();
   const wearer = String(state.wearerFilter || "").toLowerCase();
   const size = String(state.sizeFilter || "").trim().toLowerCase();
   const color = String(state.colorFilter || "").trim().toLowerCase();
+  const cat = q ? "" : String(state.categoryFilter || "");
   return activeItems().filter((i) => {
+    if (cat && itemCategoryLabel(i) !== cat) return false;
     if (wearer && globalThis.POSFootwear?.normalizeWearer(i.wearer_type) !== wearer) return false;
     if (size && String(i.size || "").trim().toLowerCase() !== size) return false;
     if (color && String(i.color || "").trim().toLowerCase() !== color) return false;
@@ -1453,19 +1467,9 @@ function resetItemImage() {
   paintItemImage("");
 }
 
-function renderCatalog() {
-  const rows = filteredItems();
-  if (!rows.length) {
-    const q = String(state.query || "").trim();
-    $("catalog").innerHTML = `<div class="catalog-empty">${
-      q ? `No items match “${escapeHtml(q)}”. Try another name, HSN, or SKU.` : "No items in this shop yet."
-    }</div>`;
-    return;
-  }
-  $("catalog").innerHTML = rows
-    .map((i) => {
-      const low = Number(i.stock_gm) <= Number(i.reorder_level_gm);
-      return `<button class="card" type="button" data-add="${escapeHtml(i.id)}">
+function catalogCardHtml(i) {
+  const low = Number(i.stock_gm) <= Number(i.reorder_level_gm);
+  return `<button class="card" type="button" data-add="${escapeHtml(i.id)}">
         ${cardPhotoHtml(i)}
         <div class="card-body">
           <div class="sku">${escapeHtml(itemVariantText(i) || `${i.category} / ${i.subcategory || "—"}`)}</div>
@@ -1474,6 +1478,61 @@ function renderCatalog() {
           <div class="stock ${low ? "low" : "ok"}">${escapeHtml(i.code)} · GST ${escapeHtml(i.gst_rate)}%</div>
         </div>
       </button>`;
+}
+
+function renderCatalogCats() {
+  const el = $("catalog-cats");
+  if (!el) return;
+  const cats = catalogCategories();
+  if (state.categoryFilter && !cats.includes(state.categoryFilter)) state.categoryFilter = "";
+  const current = String(state.categoryFilter || "");
+  if (cats.length < 2) {
+    el.hidden = true;
+    el.innerHTML = "";
+    return;
+  }
+  const counts = new Map();
+  for (const i of activeItems()) {
+    const key = itemCategoryLabel(i);
+    counts.set(key, (counts.get(key) || 0) + 1);
+  }
+  const chips = [
+    `<button type="button" class="catalog-cat${current ? "" : " is-on"}" data-cat="" role="tab" aria-selected="${current ? "false" : "true"}">All <span>${activeItems().length}</span></button>`,
+    ...cats.map(
+      (c) =>
+        `<button type="button" class="catalog-cat${current === c ? " is-on" : ""}" data-cat="${escapeHtml(c)}" role="tab" aria-selected="${current === c ? "true" : "false"}">${escapeHtml(c)} <span>${counts.get(c) || 0}</span></button>`,
+    ),
+  ];
+  el.hidden = false;
+  el.innerHTML = chips.join("");
+}
+
+function renderCatalog() {
+  renderCatalogCats();
+  const root = $("catalog");
+  if (!root) return;
+  const rows = filteredItems();
+  if (!rows.length) {
+    const q = String(state.query || "").trim();
+    root.innerHTML = `<div class="catalog-empty">${
+      q ? `No items match “${escapeHtml(q)}”. Try another name, HSN, or SKU.` : "No items in this shop yet."
+    }</div>`;
+    return;
+  }
+  const grouped = new Map();
+  for (const i of rows) {
+    const key = itemCategoryLabel(i);
+    if (!grouped.has(key)) grouped.set(key, []);
+    grouped.get(key).push(i);
+  }
+  const keys = [...grouped.keys()].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+  root.innerHTML = keys
+    .map((key) => {
+      const items = grouped.get(key);
+      return `<section class="catalog-group">
+      <h3 class="catalog-group-head">${escapeHtml(key)} <span>${items.length}</span></h3>
+      <div class="catalog-group-grid">${items.map(catalogCardHtml).join("")}</div>
+    </section>`;
     })
     .join("");
 }
@@ -4407,6 +4466,13 @@ $("catalog").addEventListener("click", (e) => {
     addItem(btn.dataset.add);
     focusScanLane();
   }
+});
+$("catalog-cats")?.addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-cat]");
+  if (!btn) return;
+  state.categoryFilter = btn.getAttribute("data-cat") || "";
+  renderCatalog();
+  $("catalog")?.scrollTo({ top: 0 });
 });
 $("lines").addEventListener("click", (e) => {
   if (e.target.closest("[data-qty]")) return;

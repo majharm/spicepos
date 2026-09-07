@@ -934,23 +934,104 @@ a.btn { text-decoration: none; display: inline-block; }
   background: #e8eef4;
 }
 
+.catalog-pane {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+.catalog-cats {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 6px;
+  padding: 10px 12px 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+  flex: 0 0 auto;
+  -webkit-overflow-scrolling: touch;
+}
+.catalog-cats[hidden] { display: none; }
+.catalog-cat {
+  flex: 0 0 auto;
+  border: 1px solid var(--line, #dbe4ee);
+  background: #fff;
+  color: var(--vel-slate, #0f172a);
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 750;
+  line-height: 1.2;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.catalog-cat span {
+  margin-left: 4px;
+  color: var(--muted, #64748b);
+  font-weight: 700;
+}
+.catalog-cat.is-on {
+  background: var(--vel-teal, #0d9488);
+  border-color: var(--vel-teal, #0d9488);
+  color: #fff;
+}
+.catalog-cat.is-on span { color: #ccfbf1; }
+.catalog-cat:focus-visible {
+  outline: 2px solid var(--vel-teal, #0d9488);
+  outline-offset: 2px;
+}
+
 .catalog {
-  /* counter-ux: product tiles */
+  /* counter-cats: category chips + grouped tiles */
   padding: 12px;
   margin: 0;
   border-radius: 0;
   background: transparent;
   border: 0;
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(152px, 1fr));
-  gap: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
   align-content: start;
   overflow-y: auto;
   overflow-x: hidden;
   min-height: 0;
   height: 100%;
-  content-visibility: auto;
-  contain-intrinsic-size: 480px;
+  content-visibility: visible;
+}
+
+.catalog-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+.catalog-group-head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  margin: 0;
+  padding: 6px 2px 4px;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--vel-slate, #0f172a);
+  background: #e8eef4;
+}
+.catalog-group-head span {
+  margin-left: 6px;
+  color: var(--muted, #64748b);
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.catalog-group-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(152px, 1fr));
+  gap: 10px;
 }
 
 .card {
@@ -3529,6 +3610,19 @@ button.items-stat.is-active {
   body.has-cart .stage.is-counter .workspace {
     grid-template-rows: minmax(0, 1fr) minmax(200px, 46vh);
   }
+  .stage.is-counter .catalog-pane {
+    min-height: 0;
+    height: 100%;
+    overflow: hidden;
+  }
+  .stage.is-counter .catalog-cats {
+    padding: 8px 10px 0;
+  }
+  .stage.is-counter .catalog-group-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
   .stage.is-counter .catalog {
     display: flex;
     flex-direction: column;
@@ -3846,11 +3940,16 @@ button.items-stat.is-active {
 }
 
 @media (max-width: 640px) {
-  .catalog { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; }
+  .catalog-group-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; }
   .stage.is-counter .catalog {
     display: flex;
     flex-direction: column;
     grid-template-columns: none;
+    gap: 8px;
+  }
+  .stage.is-counter .catalog-group-grid {
+    display: flex;
+    flex-direction: column;
     gap: 8px;
   }
   .stage.is-counter .card { min-height: 64px; padding: 8px 10px; }
