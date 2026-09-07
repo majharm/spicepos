@@ -370,23 +370,29 @@ function customerDue(c) {
   return Number(c?.outstanding) || 0;
 }
 
+function isWalkInCustomer(c) {
+  if (!c) return true;
+  return c.code === "CUS-001" || /^walk-?in$/i.test(String(c.name || "").trim());
+}
+
 function customerOptionLabel(c) {
   const name = c.business_name || c.name || "Customer";
   const type = c.type || "b2c";
-  const due = customerDue(c);
+  const due = isWalkInCustomer(c) ? 0 : customerDue(c);
   return due > 0 ? `${name} (${type}) · Due ${money(due)}` : `${name} (${type})`;
 }
 
 function paintCounterDue(c) {
   const cust = c === undefined ? customer() : c;
-  const due = customerDue(cust);
+  const walkIn = isWalkInCustomer(cust);
+  const due = walkIn ? 0 : customerDue(cust);
   const method = $("pay-method")?.value;
   let bill = 0;
   if (typeof cartTotals === "function") {
     const t = cartTotals();
     bill = Number(t.total != null ? t.total : (t.taxable || 0) + (t.tax || 0)) || 0;
   }
-  const creditAfter = method === "credit" && bill > 0;
+  const creditAfter = !walkIn && method === "credit" && bill > 0;
   const after = due + (creditAfter ? bill : 0);
   let label = "";
   if (creditAfter && due > 0) label = `Due ${money(due)} · after credit ${money(after)}`;
@@ -438,7 +444,7 @@ function selectCounterCustomer(cust, { hint = true } = {}) {
   renderCart();
   void loadCustomerLoyalty();
   if (hint) {
-    const due = customerDue(cust);
+    const due = isWalkInCustomer(cust) ? 0 : customerDue(cust);
     setHint(due > 0 ? `Customer · ${cust.business_name || cust.name} · Due ${money(due)}` : `Customer · ${cust.business_name || cust.name}`, "ok");
   }
   return true;

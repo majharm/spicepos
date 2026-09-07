@@ -99,6 +99,8 @@ test("Counter has a dedicated scan lane and Pay action", () => {
   assert.match(index, /id="due-row"/);
   assert.match(app, /function paintCounterDue/);
   assert.match(app, /function customerOptionLabel/);
+  assert.match(app, /function isWalkInCustomer/);
+  assert.match(app, /const due = walkIn \? 0 : customerDue\(cust\);/);
   assert.match(app, /Due \$\{money\(due\)\}/);
   assert.match(app, /function findCustomerByMobile/);
   assert.match(app, /function applyCounterMobile/);
