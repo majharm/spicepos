@@ -3839,6 +3839,86 @@ function qrOrderQty(line) {
   return fmtQty(Number(line.quantity_gm) || 0, { base_unit: line.unit || "PCS" });
 }
 
+function qrOrderReceiptText(o) {
+  const save = Math.round((Number(o.discount) || 0) * 100) / 100;
+  const items = Math.round(((Number(o.subtotal) || 0) + save) * 100) / 100;
+  const offer = String(o.offer_label || "Offer").trim();
+  const lines = (o.lines || []).map((l) => {
+    const qty = Number(l.quantity_gm);
+    const qtyBit = Number.isFinite(qty) && qty > 0
+      ? `${qty}g @ ${l.rate_per_kg}/kg`
+      : qrOrderQty(l);
+    return `${l.item_name} ${qtyBit} = ${money(l.amount)}`;
+  });
+  return [
+    shopPrintName(),
+    state.company?.address || "",
+    o.order_number,
+    o.customer_name,
+    o.mobile,
+    o.table_no ? `Pickup: ${o.table_no}` : "",
+    o.notes ? `Notes: ${o.notes}` : "",
+    String(o.created_at || ""),
+    "------------------------------",
+    ...lines,
+    "------------------------------",
+    save > 0 || o.offer_label ? `Items ${money(items)}` : "",
+    save > 0 || o.offer_label ? `Discount${offer ? ` · ${offer}` : ""} −${money(save)}` : "",
+    `Subtotal ${money(o.subtotal)}`,
+    `GST ${money(o.gst)}`,
+    `TOTAL ${money(o.total)}`,
+    `Status: ${o.status}`,
+    o.invoice_number ? `Invoice ${o.invoice_number}` : o.sales_order_id ? "Billed to sales order" : "",
+  ]
+    .filter((line) => line !== undefined && line !== "")
+    .join("\n");
+}
+
+function printQrOrder(o) {
+  if (!o) return;
+  const w = window.open("", "qr-order-print", "width=720,height=900");
+  if (!w) {
+    setHint("Allow pop-ups to print the QR order", "error");
+    return;
+  }
+  const logo = state.company?.logo_url
+    ? `<img src="${escapeHtml(state.company.logo_url)}" alt="" style="max-height:80px;max-width:200px;display:block;margin:0 auto 12px">`
+    : "";
+  w.document.write(`<!DOCTYPE html><html><head><title>${escapeHtml(o.order_number || "QR order")}</title>
+    <style>body{font-family:ui-monospace,monospace;padding:24px;text-align:center} h1{font-size:18px} pre{white-space:pre-wrap;text-align:left}</style>
+    </head><body>
+    ${logo}
+    <h1>${escapeHtml(shopPrintName())}</h1>
+    <pre>${escapeHtml(qrOrderReceiptText(o))}</pre>
+    <script>window.onload=()=>{window.print();}</script>
+    </body></html>`);
+  w.document.close();
+}
+
+function printQrPoster() {
+  const url = $("qr-menu-link")?.value || qrMenuUrl();
+  const src = $("qr-menu-code")?.src || "";
+  const w = window.open("", "qr-poster", "width=640,height=860");
+  if (!w) {
+    setHint("Allow pop-ups to print the QR code", "error");
+    return;
+  }
+  const logo = state.company?.logo_url
+    ? `<img src="${escapeHtml(state.company.logo_url)}" alt="" style="max-height:72px;max-width:180px;display:block;margin:0 auto 12px">`
+    : "";
+  w.document.write(`<!DOCTYPE html><html><head><title>QR order poster</title>
+    <style>body{font-family:Georgia,serif;text-align:center;padding:36px;color:#4a1416} img.qr{width:280px;height:280px;background:#fff;padding:12px} p{color:#7a5c48}</style>
+    </head><body>
+    ${logo}
+    <h1>${escapeHtml(shopPrintName())}</h1>
+    <p>Scan to order spices</p>
+    <img class="qr" src="${escapeHtml(src)}" alt="QR">
+    <p>${escapeHtml(url)}</p>
+    <script>window.onload=()=>{window.print();}</script>
+    </body></html>`);
+  w.document.close();
+}
+
 function paintQrOrderBadge() {
   const pending = qrOrderCache.filter((order) => order.status === "pending").length;
   const badge = $("qr-order-badge");
@@ -3975,6 +4055,7 @@ function renderQrOrders() {
           ${order.status === "preparing" ? `<button class="btn" type="button" data-qr-status-next="ready">Ready</button>` : ""}
           ${order.status === "ready" ? `<button class="btn" type="button" data-qr-status-next="completed">Complete</button>` : ""}
           ${order.status === "completed" && !order.sales_order_id ? `<button class="btn primary" type="button" data-qr-status-next="completed">Save invoice</button>` : ""}
+          <button class="btn" type="button" data-qr-print="${escapeHtml(order.id)}">Print</button>
           ${order.sales_order_id ? `<button class="btn" type="button" data-qr-invoice="${escapeHtml(order.sales_order_id)}">View invoice${order.invoice_number ? ` ${escapeHtml(order.invoice_number)}` : ""}</button>` : ""}
           ${!["completed", "cancelled"].includes(order.status) ? `<button class="btn danger" type="button" data-qr-status-next="cancelled">Cancel</button>` : ""}
         </div>
@@ -4008,7 +4089,19 @@ async function updateQrOrder(order, status) {
   const index = qrOrderCache.findIndex((row) => row.id === order.id);
   if (index >= 0 && data.order) qrOrderCache[index] = data.order;
   renderQrOrders();
-  if (status === "completed" && data.invoice) await openInvoiceFromQr(data.invoice);
+  if (status === "completed") {
+    if (data.invoice?.id && !orderCache.some((row) => row.id === data.invoice.id)) {
+      orderCache.unshift(data.invoice);
+    }
+    const hint = $("qr-orders-hint");
+    if (hint) {
+      hint.textContent = data.invoice?.order_number
+        ? `Invoice ${data.invoice.order_number} saved. Printing order.`
+        : "Printing QR order.";
+      hint.className = "hint ok";
+    }
+    printQrOrder(data.order || order);
+  }
   return data.order || order;
 }
 
@@ -4984,7 +5077,9 @@ $("qr-order-list")?.addEventListener("click", async (event) => {
     const counter = event.target.closest("[data-qr-counter]");
     const next = event.target.closest("[data-qr-status-next]");
     const invoiceBtn = event.target.closest("[data-qr-invoice]");
+    const printBtn = event.target.closest("[data-qr-print]");
     if (counter) await openQrOrderInCounter(order);
+    else if (printBtn) printQrOrder(order);
     else if (invoiceBtn) {
       const invoiceId = invoiceBtn.dataset.qrInvoice;
       showView("orders");
@@ -4995,7 +5090,7 @@ $("qr-order-list")?.addEventListener("click", async (event) => {
         renderOrdersList();
         showOrder(found);
       } else {
-        $("qr-orders-hint").textContent = "Invoice saved. Open Invoices to print it.";
+        $("qr-orders-hint").textContent = "Invoice saved. Print this QR order, or open Invoices.";
         $("qr-orders-hint").className = "hint ok";
       }
     } else if (next) await updateQrOrder(order, next.dataset.qrStatusNext);
@@ -5026,15 +5121,7 @@ $("qr-copy-shop-id")?.addEventListener("click", async () => {
   $("qr-orders-hint").textContent = "Shop ID copied.";
   $("qr-orders-hint").className = "hint ok";
 });
-$("qr-print-code")?.addEventListener("click", () => {
-  const image = $("qr-menu-code")?.src || "";
-  const w = window.open("", "qr-menu-print", "width=500,height=680");
-  if (!w) return setHint("Allow pop-ups to print the QR code", "error");
-  w.document.write(`<!doctype html><html><head><title>QR ordering · ${escapeHtml(shopPrintName())}</title>
-    <style>body{font:16px system-ui;text-align:center;padding:28px;color:#0f172a}img{width:280px;height:280px}h1{margin-bottom:4px}p{color:#475569}@media print{button{display:none}}</style></head>
-    <body><h1>${escapeHtml(shopPrintName())}</h1><p>Scan to view the menu and place your order</p><img src="${escapeHtml(image)}" onload="window.focus();window.print()"><p>${escapeHtml(qrMenuUrl())}</p></body></html>`);
-  w.document.close();
-});
+$("qr-print-code")?.addEventListener("click", printQrPoster);
 document.querySelector(".nav").addEventListener("click", (e) => {
   const btn = e.target.closest("[data-view]");
   if (btn) showView(btn.dataset.view);
