@@ -376,6 +376,267 @@ function pos_dispatch_backup($path, $method, $body, $bid, $branchId, $uid, $auth
   return false;
 }
 
+function pos_backup_email_hours() {
+  return [6, 10, 14, 18, 22];
+}
+
+function pos_backup_email_max_bytes() {
+  return 12 * 1024 * 1024;
+}
+
+function pos_backup_email_parts($now = null) {
+  try {
+    $tz = new DateTimeZone("Asia/Kolkata");
+  } catch (Exception $e) {
+    $tz = new DateTimeZone("UTC");
+  }
+  $dt = $now instanceof DateTimeInterface ? clone $now : new DateTime("now", $tz);
+  if ($dt->getTimezone()->getName() !== "Asia/Kolkata") {
+    try { $dt->setTimezone(new DateTimeZone("Asia/Kolkata")); } catch (Exception $e) { /* keep */ }
+  }
+  $hour = (int) $dt->format("G");
+  $day = $dt->format("Y-m-d");
+  $hh = $dt->format("H");
+  $hours = pos_backup_email_hours();
+  return [
+    "day" => $day,
+    "hour" => $hour,
+    "hh" => $hh,
+    "slot" => in_array($hour, $hours, true) ? $day . "T" . $hh : null,
+  ];
+}
+
+function pos_backup_email_filename($parts = null) {
+  $parts = $parts ?: pos_backup_email_parts();
+  return "spicepos-platform-backup-" . str_replace("-", "", $parts["day"]) . "-" . $parts["hh"] . ".json.gz";
+}
+
+function pos_backup_strip_data_images($json) {
+  return preg_replace('#data:image/[a-zA-Z0-9.+-]+;base64,[A-Za-z0-9+/=\\s]+#', "", (string) $json);
+}
+
+function pos_backup_format_bytes($n) {
+  $bytes = (int) $n;
+  if ($bytes < 1024) return $bytes . " B";
+  if ($bytes < 1024 * 1024) return number_format($bytes / 1024, 1) . " KB";
+  return number_format($bytes / (1024 * 1024), 1) . " MB";
+}
+
+function pos_backup_email_map() {
+  try {
+    $rows = pos_q(
+      "SELECT setting_key, setting_value FROM platform_settings
+       WHERE setting_key IN ('alert_backup_email','backup_email_to','backup_email_last_slot','backup_email_last_error','smtp_user','support_email')"
+    );
+  } catch (Exception $e) {
+    return [];
+  }
+  $map = [];
+  foreach ($rows as $r) $map[$r["setting_key"]] = $r["setting_value"] ?? "";
+  return $map;
+}
+
+function pos_backup_email_valid($value) {
+  $to = trim((string) $value);
+  return $to !== "" && preg_match("/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/", $to) ? $to : "";
+}
+
+function pos_backup_email_recipient($map = null) {
+  $map = $map !== null ? $map : pos_backup_email_map();
+  $support = function_exists("pos_platform_settings") ? pos_platform_settings() : [];
+  return pos_backup_email_valid($map["backup_email_to"] ?? "")
+    ?: pos_backup_email_valid($support["support_email"] ?? "")
+    ?: pos_backup_email_valid($map["smtp_user"] ?? "")
+    ?: "pos@atavtelecom.in";
+}
+
+function pos_backup_email_enabled($map = null) {
+  $map = $map !== null ? $map : pos_backup_email_map();
+  $v = strtolower(trim((string) ($map["alert_backup_email"] ?? "1")));
+  return !in_array($v, ["0", "false", "no", "off"], true);
+}
+
+function pos_backup_email_status() {
+  $map = pos_backup_email_map();
+  $parts = pos_backup_email_parts();
+  return [
+    "enabled" => pos_backup_email_enabled($map) ? "1" : "0",
+    "to" => $map["backup_email_to"] ?? "",
+    "fallback_to" => pos_backup_email_recipient($map),
+    "last_slot" => $map["backup_email_last_slot"] ?? "",
+    "last_error" => $map["backup_email_last_error"] ?? "",
+    "hours" => pos_backup_email_hours(),
+    "next_slot" => $parts["slot"],
+    "timezone" => "Asia/Kolkata",
+    "php" => true,
+  ];
+}
+
+function pos_save_backup_email_settings($body) {
+  if (array_key_exists("enabled", $body) || array_key_exists("alert_backup_email", $body)) {
+    $raw = $body["enabled"] ?? $body["alert_backup_email"];
+    $on = !in_array(strtolower(trim((string) $raw)), ["0", "false", "no", "off", ""], true);
+    if ($raw === true || $raw === 1 || $raw === "1" || $raw === "on") $on = true;
+    if ($raw === false || $raw === 0 || $raw === "0") $on = false;
+    pos_set_setting("alert_backup_email", $on ? "1" : "0");
+  }
+  if (array_key_exists("to", $body) || array_key_exists("backup_email_to", $body)) {
+    $to = trim((string) ($body["to"] ?? $body["backup_email_to"] ?? ""));
+    if ($to !== "" && !pos_backup_email_valid($to)) throw new Exception("Enter a valid backup email address");
+    pos_set_setting("backup_email_to", $to);
+  }
+  return pos_backup_email_status();
+}
+
+function pos_backup_prepare_email_attachment($payload) {
+  $json = json_encode($payload, JSON_UNESCAPED_UNICODE);
+  if ($json === false) throw new Exception("Could not encode backup");
+  $gz = gzencode($json, 9);
+  if ($gz === false) throw new Exception("Could not compress backup");
+  $stripped = false;
+  $max = pos_backup_email_max_bytes();
+  if (strlen($gz) > $max) {
+    $json = pos_backup_strip_data_images($json);
+    $gz = gzencode($json, 9);
+    $stripped = true;
+    if ($gz === false) throw new Exception("Could not compress backup");
+  }
+  $parts = pos_backup_email_parts();
+  return [
+    "tooLarge" => strlen($gz) > $max,
+    "stripped" => $stripped,
+    "bytes" => strlen($gz),
+    "filename" => pos_backup_email_filename($parts),
+    "content" => $gz,
+    "mimeType" => "application/gzip",
+  ];
+}
+
+function pos_backup_email_message($att, $parts, $force) {
+  $when = $parts["day"] . " " . $parts["hh"] . ":00 IST";
+  $subject = "ATAV POS platform backup · " . $when;
+  $size = pos_backup_format_bytes($att["bytes"] ?? 0);
+  $name = $att["filename"] ?? pos_backup_email_filename($parts);
+  if (!empty($att["tooLarge"])) {
+    $body = "The gzipped backup was {$size}, which is too large to attach. Download it from Master Admin → Backup.";
+  } else {
+    $body = "Attachment: {$name} ({$size}). Restore from Master Admin → Backup.";
+  }
+  $extra = !empty($att["stripped"]) ? "\nItem photos were omitted so the file would fit in email." : "";
+  $mode = $force ? "Sent manually from Master Admin." : "Automatic backup (five times a day).";
+  $text = "ATAV POS platform backup\n\nTime: {$when}\n{$mode}\n{$body}{$extra}\n\nKeep this file private. It can restore every shop on the platform.\n\n— ATAV Telecom POS";
+  $htmlExtra = !empty($att["stripped"]) ? "<br>Item photos were omitted so the file would fit in email." : "";
+  $htmlBody = !empty($att["tooLarge"])
+    ? "The gzipped backup was {$size}, which is too large to attach. Download it from Master Admin → Backup."
+    : "Attachment: <code>{$name}</code> ({$size}). Restore from Master Admin → Backup.";
+  $html = "<p><strong>ATAV POS platform backup</strong></p><p>Time: {$when}<br>{$mode}</p><p>{$htmlBody}{$htmlExtra}</p><p>Keep this file private. It can restore every shop on the platform.</p><p>— ATAV Telecom POS</p>";
+  return ["subject" => $subject, "text" => $text, "html" => $html];
+}
+
+function pos_log_backup_email($to, $subject, $text, $result) {
+  $ok = !empty($result["ok"]);
+  $skipped = !empty($result["skipped"]);
+  if (function_exists("pos_log_alert_deliveries")) {
+    pos_log_alert_deliveries(
+      ["kind" => "backup", "businessId" => "", "shopName" => "Platform"],
+      $subject,
+      $text,
+      ["ok" => false, "skipped" => true],
+      [["ok" => $ok, "skipped" => $skipped, "to" => $to, "error" => $result["error"] ?? "", "detail" => $result["detail"] ?? ""]]
+    );
+    return;
+  }
+  try {
+    pos_q(
+      "INSERT INTO alert_delivery_logs
+       (id, channel, kind, business_id, shop_name, recipient, subject, preview, status, ok, error, detail)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+      "ssssssssssss",
+      [
+        pos_uuid(),
+        "email",
+        "backup",
+        "",
+        "Platform",
+        (string) $to,
+        substr((string) $subject, 0, 255),
+        substr((string) $text, 0, 400),
+        $ok ? "sent" : ($skipped ? "skipped" : "failed"),
+        $ok ? "1" : "0",
+        substr((string) ($result["error"] ?? ""), 0, 255),
+        substr((string) ($result["detail"] ?? $result["error"] ?? ""), 0, 255),
+      ]
+    );
+  } catch (Throwable $e) {
+    error_log("backup email log failed: " . $e->getMessage());
+  }
+}
+
+function pos_backup_email_lock($acquire) {
+  try {
+    if ($acquire) {
+      $rows = pos_q("SELECT GET_LOCK('pos_backup_email', 0) AS g");
+      return (int) ($rows[0]["g"] ?? 0) === 1;
+    }
+    pos_q("SELECT RELEASE_LOCK('pos_backup_email')");
+  } catch (Exception $e) {
+    return !$acquire;
+  }
+  return true;
+}
+
+function pos_run_backup_email($force = false) {
+  $parts = pos_backup_email_parts();
+  $slot = $parts["slot"];
+  if (!$force && $slot === null) return ["skipped" => true, "reason" => "off-slot"];
+  if (!pos_backup_email_lock(true)) return ["skipped" => true, "reason" => "busy"];
+  try {
+    $map = pos_backup_email_map();
+    if (!$force && !pos_backup_email_enabled($map)) return ["skipped" => true, "reason" => "disabled"];
+    if (!$force && $slot && ($map["backup_email_last_slot"] ?? "") === $slot) {
+      return ["skipped" => true, "reason" => "already"];
+    }
+    $to = pos_backup_email_recipient($map);
+    if ($to === "") return ["ok" => false, "error" => "No backup email recipient"];
+    if ($slot) pos_set_setting("backup_email_last_slot", $slot);
+    pos_backup_prepare();
+    @set_time_limit(180);
+    $payload = pos_backup_build_platform();
+    $att = pos_backup_prepare_email_attachment($payload);
+    $msg = pos_backup_email_message($att, $parts, $force);
+    $attachments = !empty($att["tooLarge"]) ? [] : [[
+      "filename" => $att["filename"],
+      "content" => $att["content"],
+      "mimeType" => $att["mimeType"],
+    ]];
+    $mail = pos_send_mail($to, $msg["subject"], $msg["text"], $msg["html"], "", $attachments, 60);
+    if (!empty($mail["ok"])) pos_set_setting("backup_email_last_error", "");
+    else pos_set_setting("backup_email_last_error", substr((string) ($mail["error"] ?? "send failed"), 0, 255));
+    $mail["detail"] = !empty($att["tooLarge"]) ? "no-attachment" : ($att["filename"] ?? "");
+    pos_log_backup_email($to, $msg["subject"], $msg["text"], $mail);
+    return $mail + [
+      "to" => $to,
+      "slot" => $slot ?: ($parts["day"] . "T" . $parts["hh"]),
+      "bytes" => $att["bytes"],
+      "attached" => empty($att["tooLarge"]) && !empty($mail["ok"]),
+      "php" => true,
+    ];
+  } catch (Throwable $e) {
+    try { pos_set_setting("backup_email_last_error", substr($e->getMessage(), 0, 255)); } catch (Throwable $ignore) { /* ignore */ }
+    return ["ok" => false, "error" => $e->getMessage(), "php" => true];
+  } finally {
+    pos_backup_email_lock(false);
+  }
+}
+
+function pos_tick_backup_email() {
+  return pos_run_backup_email(false);
+}
+
+function pos_send_backup_email_now() {
+  return pos_run_backup_email(true);
+}
+
 function pos_dispatch_master_backup($path, $method, $body, $auth) {
   $shopId = trim((string) ($_GET["business_id"] ?? $body["business_id"] ?? ""));
   $admin = $auth["admin"] ?? ["id" => "master", "email" => "master"];
@@ -394,6 +655,17 @@ function pos_dispatch_master_backup($path, $method, $body, $auth) {
   }
   if (($path === "master/backup/platform/restore" || $path === "master/backup/platform") && $method === "POST") {
     pos_send(200, pos_backup_restore_platform($body, $admin));
+  }
+  if ($path === "master/backup/email/settings" && $method === "POST") {
+    pos_send(200, pos_save_backup_email_settings($body));
+  }
+  if ($path === "master/backup/email" && $method === "GET") {
+    pos_send(200, pos_backup_email_status());
+  }
+  if ($path === "master/backup/email" && $method === "POST") {
+    $out = pos_send_backup_email_now();
+    if (empty($out["ok"]) && empty($out["skipped"])) pos_send(400, $out);
+    pos_send(200, $out);
   }
   return false;
 }

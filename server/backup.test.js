@@ -8,15 +8,23 @@ import {
   BACKUP_SKIP_TABLES,
   PLATFORM_BACKUP_KIND,
   PLATFORM_SKIP_TABLES,
+  BACKUP_EMAIL_HOURS,
+  BACKUP_EMAIL_MAX_BYTES,
   assertPlatformBackup,
   assertShopBackup,
   backupFilename,
+  backupEmailFilename,
+  backupEmailSlot,
   backupTableRank,
+  formatBackupBytes,
+  gzipBackupJson,
   isSafeTableName,
   normalizeBackupRow,
   platformBackupFilename,
+  prepareBackupEmailAttachment,
   SHOP_CLEAN_KEEP_TABLES,
   sortBackupTables,
+  stripBackupDataImages,
   toSqlValue,
 } from "./backup-util.js";
 
@@ -192,6 +200,76 @@ test("PHP and HTML wire master admin backup", () => {
     readFileSync(path.join(root, "api/master/backup/platform/restore/index.php"), "utf8"),
     /master\/backup\/platform\/restore/,
   );
+  assert.match(backupJs, /\/api\/master\/backup\/email/);
+  assert.match(backupJs, /export function tickBackupEmail/);
+  assert.match(backupJs, /export function sendBackupEmailNow/);
+  assert.doesNotMatch(backupJs, /from ["']\.\/alerts\.js["']/);
+  assert.match(backup, /function pos_tick_backup_email/);
+  assert.match(backup, /function pos_send_backup_email_now/);
+  assert.match(backup, /GET_LOCK\('pos_backup_email'/);
+  assert.match(core, /master\/backup\/email/);
+  assert.match(core, /pos_tick_backup_email/);
+  assert.match(masterJs, /Auto backup email/);
+  assert.match(masterJs, /Send backup email now/);
+  assert.match(masterJs, /five times/);
+  assert.match(masterJs, /\/api\/master\/backup\/email\/settings/);
+  assert.match(masterJs, /btn-master-backup-email-now/);
+  const saas = readFileSync(path.join(root, "css/saas.css"), "utf8");
+  assert.match(saas, /#master-pane-backup\[hidden\]/);
+  assert.match(
+    readFileSync(path.join(root, "api/master/backup/email/index.php"), "utf8"),
+    /master\/backup\/email/,
+  );
+  assert.match(
+    readFileSync(path.join(root, "api/master/backup/email/settings/index.php"), "utf8"),
+    /master\/backup\/email\/settings/,
+  );
+});
+
+test("platform backup email slots are 5 times a day in IST", () => {
+  assert.deepEqual(BACKUP_EMAIL_HOURS, [6, 10, 14, 18, 22]);
+  assert.equal(backupEmailSlot(new Date("2026-09-08T00:30:00.000Z")), "2026-09-08T06");
+  assert.equal(backupEmailSlot(new Date("2026-09-08T04:30:00.000Z")), "2026-09-08T10");
+  assert.equal(backupEmailSlot(new Date("2026-09-08T08:30:00.000Z")), "2026-09-08T14");
+  assert.equal(backupEmailSlot(new Date("2026-09-08T12:30:00.000Z")), "2026-09-08T18");
+  assert.equal(backupEmailSlot(new Date("2026-09-08T16:30:00.000Z")), "2026-09-08T22");
+  assert.equal(backupEmailSlot(new Date("2026-09-08T05:30:00.000Z")), null);
+  assert.match(backupEmailFilename(new Date("2026-09-08T04:30:00.000Z")), /spicepos-platform-backup-20260908-10\.json\.gz/);
+  const php = readFileSync(path.join(root, "pos-backup.php"), "utf8");
+  const health = readFileSync(path.join(root, "api/health/index.php"), "utf8");
+  const alertsJs = readFileSync(path.join(root, "server/alerts.js"), "utf8");
+  const alertsPhp = readFileSync(path.join(root, "pos-alerts.php"), "utf8");
+  const mailJs = readFileSync(path.join(root, "server/mail.js"), "utf8");
+  const mailPhp = readFileSync(path.join(root, "pos-mail.php"), "utf8");
+  assert.match(php, /6, 10, 14, 18, 22/);
+  assert.match(php, /Asia\/Kolkata/);
+  assert.match(health, /function health_backup_email_due/);
+  assert.match(health, /pos_tick_backup_email/);
+  assert.match(alertsJs, /alert_backup_email/);
+  assert.match(alertsJs, /backup_email_to/);
+  assert.match(alertsJs, /runBackupEmailTick/);
+  assert.match(alertsPhp, /alert_backup_email/);
+  assert.match(mailJs, /multipart\/mixed/);
+  assert.match(mailPhp, /multipart\/mixed/);
+  assert.equal(BACKUP_EMAIL_MAX_BYTES, 12 * 1024 * 1024);
+});
+
+test("backup email gzip strips embedded photos when the file is too large", () => {
+  const json = JSON.stringify({
+    kind: PLATFORM_BACKUP_KIND,
+    tables: { items: [{ image_url: "data:image/png;base64,aaaa" }] },
+  });
+  assert.match(json, /data:image\/png;base64,aaaa/);
+  assert.equal(stripBackupDataImages(json).includes("data:image"), false);
+  const att = prepareBackupEmailAttachment({ kind: PLATFORM_BACKUP_KIND, tables: { businesses: [] } });
+  assert.equal(att.tooLarge, false);
+  assert.ok(att.content.length > 16);
+  assert.equal(att.content[0], 0x1f);
+  assert.equal(att.content[1], 0x8b);
+  assert.match(att.filename, /\.json\.gz$/);
+  assert.match(formatBackupBytes(2048), /KB/);
+  const round = gzipBackupJson("{}");
+  assert.ok(round.length > 0);
 });
 
 test("HTML and CSS cache stickers match deploy136", () => {
@@ -269,7 +347,7 @@ test("HTML and CSS cache stickers match deploy136", () => {
   assert.doesNotMatch(orderSticker, /20260905deploy139/);
   assert.doesNotMatch(orderSticker, /20260905deploy136/);
   const masterHtml = readFileSync(path.join(root, "master.html"), "utf8");
-  assert.match(masterHtml, /20260905deploy138/);
+  assert.match(masterHtml, /20260905deploy158/);
   assert.doesNotMatch(masterHtml, /20260905deploy137/);
   assert.doesNotMatch(masterHtml, /20260905deploy118/);
   assert.doesNotMatch(masterHtml, /20260905deploy113/);

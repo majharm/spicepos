@@ -1,5 +1,10 @@
+import zlib from "node:zlib";
+
 export const BACKUP_KIND = "spicepos-shop-backup";
 export const PLATFORM_BACKUP_KIND = "spicepos-platform-backup";
+export const BACKUP_EMAIL_HOURS = [6, 10, 14, 18, 22];
+export const BACKUP_EMAIL_MAX_BYTES = 12 * 1024 * 1024;
+export const BACKUP_EMAIL_TZ = "Asia/Kolkata";
 
 export const BACKUP_SKIP_TABLES = new Set([
   "staff_sessions",
@@ -62,6 +67,71 @@ export function backupFilename(business) {
 
 export function platformBackupFilename() {
   return `spicepos-platform-backup-${stamp()}.json`;
+}
+
+export function backupEmailParts(now = new Date()) {
+  const fmt = new Intl.DateTimeFormat("en-GB", {
+    timeZone: BACKUP_EMAIL_TZ,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    hourCycle: "h23",
+  });
+  const parts = Object.fromEntries(fmt.formatToParts(now).map((p) => [p.type, p.value]));
+  const hour = Number(parts.hour);
+  const day = `${parts.year}-${String(parts.month).padStart(2, "0")}-${String(parts.day).padStart(2, "0")}`;
+  const hh = String(hour).padStart(2, "0");
+  return {
+    day,
+    hour,
+    hh,
+    slot: BACKUP_EMAIL_HOURS.includes(hour) ? `${day}T${hh}` : null,
+  };
+}
+
+export function backupEmailSlot(now = new Date()) {
+  return backupEmailParts(now).slot;
+}
+
+export function backupEmailFilename(now = new Date()) {
+  const { day, hh } = backupEmailParts(now);
+  return `spicepos-platform-backup-${day.replaceAll("-", "")}-${hh}.json.gz`;
+}
+
+export function stripBackupDataImages(json) {
+  return String(json || "").replace(/data:image\/[a-zA-Z0-9.+-]+;base64,[A-Za-z0-9+/=\s]+/g, "");
+}
+
+export function gzipBackupJson(json) {
+  return zlib.gzipSync(Buffer.from(String(json || ""), "utf8"));
+}
+
+export function formatBackupBytes(n) {
+  const bytes = Number(n) || 0;
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+export function prepareBackupEmailAttachment(payload) {
+  let json = JSON.stringify(payload);
+  let content = gzipBackupJson(json);
+  let stripped = false;
+  if (content.length > BACKUP_EMAIL_MAX_BYTES) {
+    json = stripBackupDataImages(json);
+    content = gzipBackupJson(json);
+    stripped = true;
+  }
+  const tooLarge = content.length > BACKUP_EMAIL_MAX_BYTES;
+  return {
+    tooLarge,
+    stripped,
+    bytes: content.length,
+    filename: backupEmailFilename(),
+    content,
+    mimeType: "application/gzip",
+  };
 }
 
 export function assertShopBackup(payload, businessId) {

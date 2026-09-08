@@ -271,7 +271,37 @@ export function parseDataImage(image) {
   return { mime: m[1], base64: m[2].replace(/\s/g, "") };
 }
 
-function mimePayload({ from, fromName, to, subject, text, html, image }) {
+function attachmentBytes(att) {
+  if (!att) return Buffer.alloc(0);
+  if (Buffer.isBuffer(att.content)) return att.content;
+  if (att.encoding === "base64") return Buffer.from(String(att.content || ""), "base64");
+  return Buffer.from(String(att.content || ""), "utf8");
+}
+
+function safeAttachName(name) {
+  return String(name || "backup.bin").replace(/[^\w.\-]+/g, "_").slice(0, 120) || "backup.bin";
+}
+
+function attachmentParts(mix, attachments) {
+  const chunks = [];
+  for (const att of attachments || []) {
+    if (!att) continue;
+    const filename = safeAttachName(att.filename);
+    const mime = String(att.mimeType || "application/octet-stream").replace(/[\r\n]+/g, " ");
+    const b64 = wrapBase64(attachmentBytes(att).toString("base64"));
+    chunks.push(
+      `--${mix}`,
+      `Content-Type: ${mime}; name="${filename}"`,
+      "Content-Transfer-Encoding: base64",
+      `Content-Disposition: attachment; filename="${filename}"`,
+      "",
+      b64,
+    );
+  }
+  return chunks;
+}
+
+export function mimePayload({ from, fromName, to, subject, text, html, image, attachments = [] }) {
   const alt = `posalt${Date.now().toString(36)}`;
   const htmlBody = html || `<pre>${escapeHtml(text)}</pre>`;
   const altPart = [
@@ -293,40 +323,59 @@ function mimePayload({ from, fromName, to, subject, text, html, image }) {
     `Subject: ${encodeSubject(subject)}`,
     "MIME-Version: 1.0",
   ];
-  const parsed = parseDataImage(image);
-  if (!parsed) {
-    return [...headers, `Content-Type: multipart/alternative; boundary="${alt}"`, "", altPart, "."].join("\r\n");
+  const files = (attachments || []).filter(Boolean);
+  const parsed = files.length ? null : parseDataImage(image);
+  let body;
+  if (files.length) {
+    const mix = `posmix${Date.now().toString(36)}`;
+    body = [
+      `Content-Type: multipart/mixed; boundary="${mix}"`,
+      "",
+      `--${mix}`,
+      `Content-Type: multipart/alternative; boundary="${alt}"`,
+      "",
+      altPart,
+      ...attachmentParts(mix, files),
+      `--${mix}--`,
+      ".",
+    ].join("\r\n");
+  } else if (parsed) {
+    const rel = `posrel${Date.now().toString(36)}`;
+    const ext = /png/i.test(parsed.mime) ? "png" : "jpg";
+    body = [
+      `Content-Type: multipart/related; boundary="${rel}"`,
+      "",
+      `--${rel}`,
+      `Content-Type: multipart/alternative; boundary="${alt}"`,
+      "",
+      altPart,
+      `--${rel}`,
+      `Content-Type: ${parsed.mime}`,
+      "Content-Transfer-Encoding: base64",
+      "Content-ID: <notice-image>",
+      `Content-Disposition: inline; filename="notice.${ext}"`,
+      "",
+      wrapBase64(parsed.base64),
+      `--${rel}--`,
+      ".",
+    ].join("\r\n");
+  } else {
+    body = [`Content-Type: multipart/alternative; boundary="${alt}"`, "", altPart, "."].join("\r\n");
   }
-  const rel = `posrel${Date.now().toString(36)}`;
-  const ext = /png/i.test(parsed.mime) ? "png" : "jpg";
-  return [
-    ...headers,
-    `Content-Type: multipart/related; boundary="${rel}"`,
-    "",
-    `--${rel}`,
-    `Content-Type: multipart/alternative; boundary="${alt}"`,
-    "",
-    altPart,
-    `--${rel}`,
-    `Content-Type: ${parsed.mime}`,
-    "Content-Transfer-Encoding: base64",
-    "Content-ID: <notice-image>",
-    `Content-Disposition: inline; filename="notice.${ext}"`,
-    "",
-    wrapBase64(parsed.base64),
-    `--${rel}--`,
-    ".",
-  ].join("\r\n");
+  return [...headers, body].join("\r\n");
 }
 
-export async function sendMail({ to, subject, text, html, image }) {
+export async function sendMail({ to, subject, text, html, image, attachments, timeoutMs: timeoutOpt } = {}) {
   const cfg = smtpConfig();
   if (!smtpConfigured(cfg)) return { ok: false, skipped: true, error: "SMTP not configured" };
   const recipient = String(to || "").trim();
   if (!recipient || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipient)) {
     return { ok: false, error: "Invalid recipient" };
   }
-  const timeoutMs = Number(process.env.SMTP_TIMEOUT_MS || 12000) || 12000;
+  const files = (attachments || []).filter(Boolean);
+  const timeoutMs =
+    Number(timeoutOpt) ||
+    (files.length ? 60000 : Number(process.env.SMTP_TIMEOUT_MS || 12000) || 12000);
   let socket;
   let io;
   try {
@@ -371,6 +420,7 @@ export async function sendMail({ to, subject, text, html, image }) {
       text,
       html,
       image,
+      attachments: files,
     });
     await new Promise((resolve, reject) => {
       socket.write(`${payload}\r\n`, "utf8", (err) => (err ? reject(err) : resolve()));

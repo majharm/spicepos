@@ -18,6 +18,7 @@ function pos_alert_defaults() {
     "alert_low_stock" => "1",
     "alert_renewal_before" => "1",
     "alert_renewal_expired" => "1",
+    "alert_backup_email" => "1",
     "alert_closing_hour" => "22",
     "smtp_enabled" => "1",
     "smtp_host" => "smtp.hostinger.com",
@@ -34,6 +35,7 @@ function pos_alert_defaults() {
     "tpl_low_stock" => "",
     "tpl_renewal_before" => "",
     "tpl_renewal_expired" => "",
+    "backup_email_to" => "",
   ];
 }
 
@@ -369,6 +371,7 @@ function pos_alert_settings() {
     "alert_low_stock" => pos_alert_flag($map["alert_low_stock"] ?? "1") ? "1" : "0",
     "alert_renewal_before" => pos_alert_flag($map["alert_renewal_before"] ?? "1") ? "1" : "0",
     "alert_renewal_expired" => pos_alert_flag($map["alert_renewal_expired"] ?? "1") ? "1" : "0",
+    "alert_backup_email" => pos_alert_flag($map["alert_backup_email"] ?? "1") ? "1" : "0",
     "alert_closing_hour" => (string) $hour,
     "smtp_enabled" => pos_alert_flag($map["smtp_enabled"] ?? "1") ? "1" : "0",
     "smtp_host" => $map["smtp_host"] ?: $d["smtp_host"],
@@ -385,6 +388,7 @@ function pos_alert_settings() {
     "tpl_low_stock" => $map["tpl_low_stock"] ?? "",
     "tpl_renewal_before" => $map["tpl_renewal_before"] ?? "",
     "tpl_renewal_expired" => $map["tpl_renewal_expired"] ?? "",
+    "backup_email_to" => trim((string) ($map["backup_email_to"] ?? "")),
   ];
   $stored = pos_persist_smtp_connection($cfg);
   return array_merge($cfg, $stored);
@@ -424,7 +428,7 @@ function pos_save_alert_settings($body) {
     throw new Exception("WhatsApp API URL must be https");
   }
   $cur["wa_enabled"] = pos_alert_flag($cur["wa_enabled"]) ? "1" : "0";
-  foreach (["alert_welcome", "alert_credentials", "alert_updates", "alert_closing", "alert_low_stock", "alert_renewal_before", "alert_renewal_expired"] as $k) {
+  foreach (["alert_welcome", "alert_credentials", "alert_updates", "alert_closing", "alert_low_stock", "alert_renewal_before", "alert_renewal_expired", "alert_backup_email"] as $k) {
     $cur[$k] = pos_alert_flag($cur[$k]) ? "1" : "0";
   }
   $hour = (int) $cur["alert_closing_hour"];

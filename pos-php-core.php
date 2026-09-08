@@ -1717,6 +1717,12 @@ function pos_php_dispatch($path, $method, $rawBody) {
         pos_send(503, pos_setup_payload("Open /setup.html and save MySQL settings (localhost, database name, user, password)."));
       }
       pos_q("SELECT 1");
+      if (is_file(__DIR__ . "/pos-backup.php")) {
+        require_once __DIR__ . "/pos-backup.php";
+        if (function_exists("pos_tick_backup_email")) {
+          try { pos_tick_backup_email(); } catch (Throwable $e) { /* backup email tick is best-effort */ }
+        }
+      }
       pos_send(200, ["ok" => true, "multiTenant" => true, "php" => true, "node" => false]);
     }
     if ($path === "support-contact" && $method === "GET") {
@@ -1946,6 +1952,12 @@ function pos_php_dispatch($path, $method, $rawBody) {
     if ($path === "master/dashboard" && $method === "GET") {
       if (function_exists("pos_tick_shop_alerts")) {
         try { pos_tick_shop_alerts(); } catch (Throwable $e) { /* closing tick is best-effort */ }
+      }
+      if (is_file(__DIR__ . "/pos-backup.php")) {
+        require_once __DIR__ . "/pos-backup.php";
+        if (function_exists("pos_tick_backup_email")) {
+          try { pos_tick_backup_email(); } catch (Throwable $e) { /* backup email tick is best-effort */ }
+        }
       }
       $businesses = pos_q("SELECT * FROM businesses");
       $statuses = array_map("pos_public_status", $businesses);
@@ -2497,7 +2509,9 @@ function pos_php_dispatch($path, $method, $rawBody) {
       $path === "master/backup" ||
       $path === "master/backup/restore" ||
       $path === "master/backup/platform" ||
-      $path === "master/backup/platform/restore"
+      $path === "master/backup/platform/restore" ||
+      $path === "master/backup/email" ||
+      $path === "master/backup/email/settings"
     ) {
       pos_require_backup();
       if (!function_exists("pos_dispatch_master_backup")) {

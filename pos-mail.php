@@ -203,7 +203,13 @@ function pos_send_mail_fallback($to, $subject, $text) {
   return ["ok" => false, "error" => "SMTP not configured and PHP mail() failed"];
 }
 
-function pos_send_mail($to, $subject, $text, $html = "", $image = "") {
+function pos_mail_safe_filename($name) {
+  $n = preg_replace('/[^\w.\-]+/', "_", (string) $name);
+  $n = substr($n, 0, 120);
+  return $n !== "" ? $n : "backup.bin";
+}
+
+function pos_send_mail($to, $subject, $text, $html = "", $image = "", $attachments = [], $timeoutSec = null) {
   if (function_exists("pos_load_dotenv")) pos_load_dotenv();
   $cfg = pos_smtp_config();
   if (!pos_smtp_configured($cfg)) {
@@ -215,8 +221,14 @@ function pos_send_mail($to, $subject, $text, $html = "", $image = "") {
   if ($recipient === "" || !preg_match("/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/", $recipient)) {
     return ["ok" => false, "error" => "Invalid recipient"];
   }
-  $timeout = (int) pos_env("SMTP_TIMEOUT_MS", "12000");
-  $timeoutSec = max(3, (int) ceil($timeout / 1000));
+  $files = is_array($attachments) ? $attachments : [];
+  if ($timeoutSec === null) {
+    $timeout = (int) pos_env("SMTP_TIMEOUT_MS", "12000");
+    $timeoutSec = max(3, (int) ceil($timeout / 1000));
+    if ($files) $timeoutSec = max($timeoutSec, 60);
+  } else {
+    $timeoutSec = max(3, (int) $timeoutSec);
+  }
   $remote = ($cfg["secure"] ? "ssl://" : "") . $cfg["host"] . ":" . $cfg["port"];
   $fp = @stream_socket_client($remote, $errno, $errstr, $timeoutSec, STREAM_CLIENT_CONNECT);
   if (!$fp) return ["ok" => false, "error" => $errstr ?: "SMTP connect failed ({$errno})"];
@@ -261,12 +273,29 @@ function pos_send_mail($to, $subject, $text, $html = "", $image = "") {
       . "--{$alt}\r\nContent-Type: text/html; charset=UTF-8\r\nContent-Transfer-Encoding: 8bit\r\n\r\n"
       . pos_dot_stuff($htmlBody) . "\r\n"
       . "--{$alt}--";
-    $parsed = pos_parse_data_image($image);
+    $parsed = $files ? null : pos_parse_data_image($image);
     $headers = "From: " . pos_mail_from_header($cfg["from"], $cfg["fromName"]) . "\r\n"
       . "To: {$recipient}\r\n"
       . "Subject: " . pos_mail_subject($subject) . "\r\n"
       . "MIME-Version: 1.0\r\n";
-    if ($parsed) {
+    if ($files) {
+      $mix = "posmix" . bin2hex(random_bytes(6));
+      $payload = $headers
+        . "Content-Type: multipart/mixed; boundary=\"{$mix}\"\r\n\r\n"
+        . "--{$mix}\r\nContent-Type: multipart/alternative; boundary=\"{$alt}\"\r\n\r\n"
+        . $altPart . "\r\n";
+      foreach ($files as $att) {
+        if (!is_array($att)) continue;
+        $name = pos_mail_safe_filename($att["filename"] ?? "backup.bin");
+        $mime = pos_mail_header_safe($att["mimeType"] ?? "application/octet-stream") ?: "application/octet-stream";
+        $raw = (string) ($att["content"] ?? "");
+        $payload .= "--{$mix}\r\nContent-Type: {$mime}; name=\"{$name}\"\r\n"
+          . "Content-Transfer-Encoding: base64\r\n"
+          . "Content-Disposition: attachment; filename=\"{$name}\"\r\n\r\n"
+          . pos_wrap_base64(base64_encode($raw)) . "\r\n";
+      }
+      $payload .= "--{$mix}--\r\n.";
+    } elseif ($parsed) {
       $rel = "posrel" . bin2hex(random_bytes(6));
       $ext = stripos($parsed["mime"], "png") !== false ? "png" : "jpg";
       $payload = $headers

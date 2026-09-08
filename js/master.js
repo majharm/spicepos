@@ -239,6 +239,7 @@ const ALERT_LOG_KIND_LABEL = {
   renewal_before: "Renewal",
   renewal_expired: "Expired",
   test: "Test",
+  backup: "Backup",
 };
 
 function alertLogKindLabel(kind) {
@@ -579,7 +580,7 @@ async function readBackupFile(input) {
   return payload;
 }
 
-function bindMasterBackup(root, shops) {
+function bindMasterBackup(root, shops, emailCfg = {}) {
   const shopSel = root.querySelector("#master-backup-shop");
   const shopDl = root.querySelector("#btn-master-shop-download");
   const shopHint = root.querySelector("#master-shop-backup-hint");
@@ -678,6 +679,82 @@ function bindMasterBackup(root, shops) {
     } catch (err) {
       platformHint.textContent = err.message;
       platformHint.className = "hint error";
+    }
+  };
+  bindMasterBackupEmail(root, emailCfg);
+}
+
+function backupEmailStatusHint(cfg = {}) {
+  const hours = Array.isArray(cfg.hours) && cfg.hours.length ? cfg.hours : [6, 10, 14, 18, 22];
+  const times = hours.map((h) => `${String(h).padStart(2, "0")}:00`).join(", ");
+  const slot = String(cfg.last_slot || "");
+  const m = slot.match(/^(\d{4}-\d{2}-\d{2})T(\d{2})/);
+  const last = m ? `Last sent ${m[1]} ${m[2]}:00 IST.` : "No automatic send logged yet.";
+  const err = String(cfg.last_error || "").trim();
+  const dest = cfg.to || cfg.fallback_to || "pos@atavtelecom.in";
+  return `${last} Times: ${times} IST. Recipient falls back to ${dest}.${err ? ` Last error: ${err}` : ""}`;
+}
+
+function bindMasterBackupEmail(root, emailCfg = {}) {
+  const enabled = root.querySelector("#master-backup-email-enabled");
+  const toInput = root.querySelector("#master-backup-email-to");
+  const hint = root.querySelector("#master-backup-email-hint");
+  const meta = root.querySelector("#master-backup-email-meta");
+  const saveBtn = root.querySelector("#btn-master-backup-email-save");
+  const sendBtn = root.querySelector("#btn-master-backup-email-now");
+  if (!enabled || !saveBtn || !sendBtn) return;
+  const paintSwitch = () => {
+    const label = enabled.closest(".alert-switch")?.querySelector(".alert-switch-label");
+    if (label) label.textContent = enabled.checked ? "Active" : "Inactive";
+  };
+  enabled.addEventListener("change", paintSwitch);
+  paintSwitch();
+  saveBtn.onclick = async () => {
+    hint.className = "hint";
+    hint.textContent = "Saving…";
+    try {
+      const saved = await api("/api/master/backup/email/settings", {
+        method: "POST",
+        body: JSON.stringify({ enabled: enabled.checked ? "1" : "0", to: toInput?.value || "" }),
+      });
+      if (meta) meta.textContent = backupEmailStatusHint(saved);
+      if (toInput && saved.to != null) toInput.value = saved.to;
+      hint.textContent = `Saved. Emails go to ${saved.to || saved.fallback_to || "pos@atavtelecom.in"} at 06:00, 10:00, 14:00, 18:00, and 22:00 IST.`;
+      hint.className = "hint ok";
+    } catch (err) {
+      hint.textContent = err.message;
+      hint.className = "hint error";
+    }
+  };
+  sendBtn.onclick = async () => {
+    hint.className = "hint";
+    hint.textContent = "Building and sending the platform backup…";
+    sendBtn.disabled = true;
+    try {
+      const out = await api("/api/master/backup/email", { method: "POST", body: "{}" });
+      if (meta) {
+        meta.textContent = backupEmailStatusHint({
+          ...emailCfg,
+          last_slot: out.slot || emailCfg.last_slot,
+          last_error: out.ok ? "" : out.error || emailCfg.last_error,
+          to: toInput?.value || emailCfg.to,
+        });
+      }
+      if (out.ok) {
+        hint.textContent = `Sent to ${out.to || toInput?.value || "the backup mailbox"}${out.attached === false ? " (no attachment — file too large)" : ""}.`;
+        hint.className = "hint ok";
+      } else if (out.skipped) {
+        hint.textContent = out.error || "Backup email was skipped.";
+        hint.className = "hint";
+      } else {
+        hint.textContent = out.error || "Could not send backup email";
+        hint.className = "hint error";
+      }
+    } catch (err) {
+      hint.textContent = err.message;
+      hint.className = "hint error";
+    } finally {
+      sendBtn.disabled = false;
     }
   };
 }
@@ -2140,6 +2217,14 @@ async function render() {
       if (tab === "alerts") backupPane = "settings";
       const shops = await api("/api/master/businesses");
       let alerts = {};
+      let emailCfg = {
+        enabled: "1",
+        to: "",
+        fallback_to: "pos@atavtelecom.in",
+        hours: [6, 10, 14, 18, 22],
+        last_slot: "",
+        last_error: "",
+      };
       if (backupPane === "settings") {
         try {
           alerts = (await api("/api/master/alerts")) || {};
@@ -2154,6 +2239,12 @@ async function render() {
             mail_from_name: "ATAV POS",
           };
         }
+      } else {
+        try {
+          emailCfg = (await api("/api/master/backup/email")) || emailCfg;
+        } catch {
+          /* keep defaults */
+        }
       }
       const pane = backupPane === "settings" ? "settings" : "backup";
       const activeMsgs = pane === "settings" ? ALERT_DEFS.filter((d) => alerts?.[d.flag] === "1").length : 0;
@@ -2163,9 +2254,12 @@ async function render() {
           pane === "settings" ? "Settings" : "Backup",
           pane === "settings"
             ? "Connect WhatsApp and Hostinger SMTP, then turn each auto-message Active or Inactive. Shops receive WhatsApp on their mobile and email from pos@atavtelecom.in."
-            : "Download or restore one shop, or the full platform. Settings, Backup, and Messages live under Advance.",
+            : "Download or restore one shop, or the full platform. A gzipped backup is emailed five times a day at 06:00, 10:00, 14:00, 18:00, and 22:00 IST.",
           pane === "backup"
-            ? [{ label: "Shops", value: shops.length }]
+            ? [
+                { label: "Shops", value: shops.length },
+                { label: "Email backup", value: emailCfg.enabled === "0" ? "Off" : "5× / day" },
+              ]
             : [
                 { label: "WhatsApp", value: alerts?.wa_enabled === "1" ? "On" : "Off" },
                 { label: "From", value: alerts?.from || alerts?.mail_from || "pos@atavtelecom.in" },
@@ -2210,13 +2304,33 @@ async function render() {
               </div>
             </div>
           </div>
+          <div class="settings">
+            <div class="settings-section backup-panel">
+              <h3>Auto backup email</h3>
+              <p class="section-note">Emails a gzipped platform backup five times every day (06:00, 10:00, 14:00, 18:00, 22:00 IST). Uses the Hostinger mailbox from Settings.</p>
+              <label class="alert-switch">
+                <input id="master-backup-email-enabled" type="checkbox" ${emailCfg.enabled === "0" ? "" : "checked"} />
+                <span class="alert-switch-ui" aria-hidden="true"></span>
+                <span class="alert-switch-label">${emailCfg.enabled === "0" ? "Inactive" : "Active"}</span>
+              </label>
+              <label>Send to
+                <input id="master-backup-email-to" type="email" value="${attr(emailCfg.to || "")}" placeholder="${attr(emailCfg.fallback_to || "pos@atavtelecom.in")}" autocomplete="off" />
+              </label>
+              <p class="hint" id="master-backup-email-meta">${backupEmailStatusHint(emailCfg)}</p>
+              <div class="backup-actions">
+                <button class="btn" type="button" id="btn-master-backup-email-save">Save email backup</button>
+                <button class="btn primary" type="button" id="btn-master-backup-email-now">Send backup email now</button>
+              </div>
+              <p class="hint" id="master-backup-email-hint"></p>
+            </div>
+          </div>
         </div>
         <div class="settings-pane" id="master-pane-settings" ${pane === "settings" ? "" : "hidden"}>
           ${pane === "settings" ? alertsFormHtml(alerts) : ""}
         </div>
       </div>`;
       bindBackupFamilyTabs(body);
-      if (pane === "backup") bindMasterBackup(body, shops);
+      if (pane === "backup") bindMasterBackup(body, shops, emailCfg);
       else {
         bindAlertsForm(alerts);
         if (panelFlash) {

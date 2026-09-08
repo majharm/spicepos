@@ -41,6 +41,7 @@ const ALERT_KEYS = [
   "alert_low_stock",
   "alert_renewal_before",
   "alert_renewal_expired",
+  "alert_backup_email",
   "alert_closing_hour",
   "smtp_enabled",
   "smtp_host",
@@ -57,6 +58,7 @@ const ALERT_KEYS = [
   "tpl_low_stock",
   "tpl_renewal_before",
   "tpl_renewal_expired",
+  "backup_email_to",
 ];
 
 export const SMTP_KEYS = [
@@ -490,6 +492,7 @@ export async function ensureAlertSettings() {
     alert_low_stock: "1",
     alert_renewal_before: "1",
     alert_renewal_expired: "1",
+    alert_backup_email: "1",
     alert_closing_hour: "22",
     smtp_enabled: "1",
     smtp_host: DEFAULT_SMTP_HOST,
@@ -541,6 +544,7 @@ export async function loadAlertSettings() {
     alert_low_stock: flagOn(map.alert_low_stock, true) ? "1" : "0",
     alert_renewal_before: flagOn(map.alert_renewal_before, true) ? "1" : "0",
     alert_renewal_expired: flagOn(map.alert_renewal_expired, true) ? "1" : "0",
+    alert_backup_email: flagOn(map.alert_backup_email, true) ? "1" : "0",
     alert_closing_hour: String(Math.min(23, Math.max(0, Number(map.alert_closing_hour ?? 22) || 22))),
     smtp_enabled: flagOn(map.smtp_enabled, true) ? "1" : "0",
     smtp_host: map.smtp_host || DEFAULT_SMTP_HOST,
@@ -557,6 +561,7 @@ export async function loadAlertSettings() {
     tpl_low_stock: map.tpl_low_stock || "",
     tpl_renewal_before: map.tpl_renewal_before || "",
     tpl_renewal_expired: map.tpl_renewal_expired || "",
+    backup_email_to: String(map.backup_email_to || "").trim(),
   };
   const stored = await persistSmtpConnection(cfg);
   Object.assign(cfg, stored);
@@ -605,6 +610,7 @@ export async function saveAlertSettings(body = {}) {
     "alert_low_stock",
     "alert_renewal_before",
     "alert_renewal_expired",
+    "alert_backup_email",
   ]) {
     next[key] = flagOn(next[key], true) ? "1" : "0";
   }
@@ -1566,6 +1572,16 @@ export async function sendTestAlert({ number, businessId } = {}) {
 
 let ticking = false;
 let schedulerStarted = false;
+
+async function runBackupEmailTick() {
+  try {
+    const { tickBackupEmail } = await import("./backup.js");
+    await tickBackupEmail();
+  } catch (err) {
+    console.error("backup email tick:", err.message);
+  }
+}
+
 export function startAlertScheduler() {
   if (schedulerStarted) return;
   schedulerStarted = true;
@@ -1574,6 +1590,7 @@ export function startAlertScheduler() {
     ticking = true;
     try {
       await tickAllClosingAlerts();
+      await runBackupEmailTick();
     } catch (err) {
       console.error("alert scheduler:", err.message);
     } finally {
@@ -1590,4 +1607,5 @@ export function scheduleAlertTick() {
   if (now - lastHealthTick < 45000) return;
   lastHealthTick = now;
   void tickAllClosingAlerts().catch((err) => console.error("alert tick:", err.message));
+  void runBackupEmailTick();
 }
