@@ -297,6 +297,8 @@ test("HTML and CSS cache stickers match deploy136", () => {
   const qrPoster = readFileSync(path.join(root, "qr.html"), "utf8");
   assert.match(qrPoster, /qrcode\.iife\.js/);
   assert.match(qrPoster, /order\.html\?shop=/);
+  assert.match(qrPoster, /Scan to order spices/);
+  assert.match(qrPoster, /#4a1416/);
   assert.match(qrOrder, /id="order-form"/);
   assert.match(qrOrder, /id="cart-sheet"/);
   assert.match(qrOrder, /id="offer-strip"/);
@@ -325,6 +327,12 @@ test("HTML and CSS cache stickers match deploy136", () => {
   assert.match(qrOrderPhp, /function pos_qr_staff_dispatch/);
   assert.match(qrOrderPhp, /function pos_qr_ensure_invoice/);
   assert.match(readFileSync(path.join(root, "js/app.js"), "utf8"), /openInvoiceFromQr/);
+  assert.match(readFileSync(path.join(root, "js/app.js"), "utf8"), /function printQrPoster/);
+  assert.match(readFileSync(path.join(root, "js/app.js"), "utf8"), /function printQrOrder/);
+  assert.match(readFileSync(path.join(root, "js/app.js"), "utf8"), /function showInvoicePrintModal/);
+  assert.match(readFileSync(path.join(root, "js/app.js"), "utf8"), /printOrder\(bill, "pos"\)/);
+  assert.match(readFileSync(path.join(root, "js/app.js"), "utf8"), /Scan to order spices/);
+  assert.match(readFileSync(path.join(root, "js/app.js"), "utf8"), /data-qr-print/);
   assert.match(saas, /alert-switch-ui/);
   assert.match(saas, /alert-card/);
   assert.match(saas, /max-width: 900px/);
