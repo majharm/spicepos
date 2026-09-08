@@ -329,6 +329,8 @@ test("HTML and CSS cache stickers match deploy136", () => {
   assert.match(readFileSync(path.join(root, "js/app.js"), "utf8"), /openInvoiceFromQr/);
   assert.match(readFileSync(path.join(root, "js/app.js"), "utf8"), /function printQrPoster/);
   assert.match(readFileSync(path.join(root, "js/app.js"), "utf8"), /function printQrOrder/);
+  assert.match(readFileSync(path.join(root, "js/app.js"), "utf8"), /function showInvoicePrintModal/);
+  assert.match(readFileSync(path.join(root, "js/app.js"), "utf8"), /printOrder\(bill, "pos"\)/);
   assert.match(readFileSync(path.join(root, "js/app.js"), "utf8"), /Scan to order spices/);
   assert.match(readFileSync(path.join(root, "js/app.js"), "utf8"), /data-qr-print/);
   assert.match(saas, /alert-switch-ui/);

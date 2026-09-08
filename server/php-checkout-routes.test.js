@@ -156,12 +156,14 @@ test("PHP customer insert bind types match placeholders", () => {
   assert.match(read("js/app.js"), /data-qr-invoice/);
   assert.match(read("js/app.js"), /function printQrPoster/);
   assert.match(read("js/app.js"), /function printQrOrder/);
-  assert.match(read("js/app.js"), /function qrOrderReceiptText/);
+  assert.match(read("js/app.js"), /function qrOrderAsInvoice/);
+  assert.match(read("js/app.js"), /function showInvoicePrintModal/);
+  assert.match(read("js/app.js"), /printOrder\(bill, "pos"\)/);
   assert.match(read("js/app.js"), /Scan to order spices/);
   assert.match(read("js/app.js"), /Georgia,serif/);
   assert.match(read("js/app.js"), /#4a1416/);
   assert.match(read("js/app.js"), /data-qr-print/);
-  assert.match(read("js/app.js"), /printQrOrder\(data\.order \|\| order\)/);
+  assert.match(read("js/app.js"), /printQrOrder\(data\.order \|\| order, data\.invoice\)/);
   assert.match(read("server/index.js"), /registerQrPublic/);
   assert.match(read("server/index.js"), /registerQrStaff/);
   const index = read("index.html");
@@ -314,7 +316,7 @@ test("POS boot skips API probe and slims catalog photos", () => {
   assert.match(index, /qrcode\.iife\.js[^>]+defer/);
   assert.match(index, /preload="none"/);
   assert.match(index, /pos-api\.js\?v=20260905deploy154/);
-  assert.match(index, /app\.js\?v=20260905deploy158/);
+  assert.match(index, /app\.js\?v=20260905deploy159/);
   assert.match(login, /x-pos-20260830e\.js\?v=20260905deploy154/);
   assert.match(loginJs, /saveLoginSpec/);
   assert.match(core, /function pos_catalog_items/);

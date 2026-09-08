@@ -3540,6 +3540,23 @@ function bindInvoiceModalPrint(order) {
   if (dup) dup.onclick = () => printOrder(order, "duplicate");
 }
 
+function showInvoicePrintModal(order, { title, message } = {}) {
+  const note = message || "Bill saved. POS cleared for the next customer.";
+  if (title) $("modal-title").textContent = title;
+  const paint = (look) => {
+    $("modal-body").innerHTML = `<p class="hint ok">${note}</p>
+      ${invoiceLookTabs(look)}
+      ${invoicePreviewHtml(order, look)}
+      ${invoiceModalPrintActions(look)}`;
+    bindInvoiceModalPrint(order);
+    $("modal-body").querySelectorAll("[data-invoice-look]").forEach((btn) => {
+      btn.onclick = () => paint(setInvoiceLook(btn.dataset.invoiceLook));
+    });
+  };
+  paint(getInvoiceLook());
+  $("modal").hidden = false;
+}
+
 function invoiceLookTabs(look) {
   return `<div class="invoice-look-tabs" role="tablist">
       <button class="btn${look === "pos" ? " primary" : ""}" type="button" data-invoice-look="pos" role="tab" aria-selected="${look === "pos"}">POS slip</button>
@@ -3839,60 +3856,37 @@ function qrOrderQty(line) {
   return fmtQty(Number(line.quantity_gm) || 0, { base_unit: line.unit || "PCS" });
 }
 
-function qrOrderReceiptText(o) {
-  const save = Math.round((Number(o.discount) || 0) * 100) / 100;
-  const items = Math.round(((Number(o.subtotal) || 0) + save) * 100) / 100;
-  const offer = String(o.offer_label || "Offer").trim();
-  const lines = (o.lines || []).map((l) => {
-    const qty = Number(l.quantity_gm);
-    const qtyBit = Number.isFinite(qty) && qty > 0
-      ? `${qty}g @ ${l.rate_per_kg}/kg`
-      : qrOrderQty(l);
-    return `${l.item_name} ${qtyBit} = ${money(l.amount)}`;
-  });
-  return [
-    shopPrintName(),
-    state.company?.address || "",
-    o.order_number,
-    o.customer_name,
-    o.mobile,
-    o.table_no ? `Pickup: ${o.table_no}` : "",
-    o.notes ? `Notes: ${o.notes}` : "",
-    String(o.created_at || ""),
-    "------------------------------",
-    ...lines,
-    "------------------------------",
-    save > 0 || o.offer_label ? `Items ${money(items)}` : "",
-    save > 0 || o.offer_label ? `Discount${offer ? ` · ${offer}` : ""} −${money(save)}` : "",
-    `Subtotal ${money(o.subtotal)}`,
-    `GST ${money(o.gst)}`,
-    `TOTAL ${money(o.total)}`,
-    `Status: ${o.status}`,
-    o.invoice_number ? `Invoice ${o.invoice_number}` : o.sales_order_id ? "Billed to sales order" : "",
-  ]
-    .filter((line) => line !== undefined && line !== "")
-    .join("\n");
+function qrOrderAsInvoice(qr, invoice) {
+  if (invoice?.id || invoice?.order_number) return invoice;
+  const found = qr?.sales_order_id && orderCache.find((row) => row.id === qr.sales_order_id);
+  if (found) return found;
+  return {
+    order_number: qr.invoice_number || qr.order_number,
+    customer_name: qr.customer_name,
+    customer_id: qr.customer_id,
+    notes: qr.notes,
+    lines: qr.lines || [],
+    subtotal: qr.subtotal,
+    gst: qr.gst,
+    total: qr.total,
+    discount: qr.discount,
+    offer_label: qr.offer_label,
+    payment_method: qr.payment_method || "cash",
+    payment_status: qr.sales_order_id ? "paid" : "unpaid",
+    created_at: qr.created_at,
+  };
 }
 
-function printQrOrder(o) {
-  if (!o) return;
-  const w = window.open("", "qr-order-print", "width=720,height=900");
-  if (!w) {
-    setHint("Allow pop-ups to print the QR order", "error");
-    return;
-  }
-  const logo = state.company?.logo_url
-    ? `<img src="${escapeHtml(state.company.logo_url)}" alt="" style="max-height:80px;max-width:200px;display:block;margin:0 auto 12px">`
-    : "";
-  w.document.write(`<!DOCTYPE html><html><head><title>${escapeHtml(o.order_number || "QR order")}</title>
-    <style>body{font-family:ui-monospace,monospace;padding:24px;text-align:center} h1{font-size:18px} pre{white-space:pre-wrap;text-align:left}</style>
-    </head><body>
-    ${logo}
-    <h1>${escapeHtml(shopPrintName())}</h1>
-    <pre>${escapeHtml(qrOrderReceiptText(o))}</pre>
-    <script>window.onload=()=>{window.print();}</script>
-    </body></html>`);
-  w.document.close();
+function printQrOrder(qr, invoice) {
+  if (!qr && !invoice) return;
+  const bill = qrOrderAsInvoice(qr || {}, invoice);
+  showInvoicePrintModal(bill, {
+    title: `Invoice ${bill.order_number || qr?.order_number || ""}`,
+    message: invoice?.order_number || qr?.sales_order_id
+      ? `Invoice ${bill.order_number || ""} saved.`
+      : "Print this QR order like a Counter bill.",
+  });
+  printOrder(bill, "pos");
 }
 
 function printQrPoster() {
@@ -4096,11 +4090,11 @@ async function updateQrOrder(order, status) {
     const hint = $("qr-orders-hint");
     if (hint) {
       hint.textContent = data.invoice?.order_number
-        ? `Invoice ${data.invoice.order_number} saved. Printing order.`
-        : "Printing QR order.";
+        ? `Invoice ${data.invoice.order_number} saved.`
+        : "Printing Counter bill.";
       hint.className = "hint ok";
     }
-    printQrOrder(data.order || order);
+    printQrOrder(data.order || order, data.invoice);
   }
   return data.order || order;
 }
@@ -4944,28 +4938,10 @@ $("btn-pay").addEventListener("click", async () => {
       };
     }
     showOrder(receiptOrder);
-    const look = getInvoiceLook();
-    $("modal-title").textContent = `Invoice ${orderLabel(order, result)}`;
-    $("modal-body").innerHTML = `<p class="hint ok">Bill saved. POS cleared for the next customer.</p>
-      ${invoiceLookTabs(look)}
-      ${invoicePreviewHtml(receiptOrder, look)}
-      ${invoiceModalPrintActions(look)}`;
-    $("modal").hidden = false;
-    const bindModalLook = () => {
-      $("modal-body").querySelectorAll("[data-invoice-look]").forEach((btn) => {
-        btn.onclick = () => {
-          const next = setInvoiceLook(btn.dataset.invoiceLook);
-          $("modal-body").innerHTML = `<p class="hint ok">Bill saved. POS cleared for the next customer.</p>
-            ${invoiceLookTabs(next)}
-            ${invoicePreviewHtml(receiptOrder, next)}
-            ${invoiceModalPrintActions(next)}`;
-          bindInvoiceModalPrint(receiptOrder);
-          bindModalLook();
-        };
-      });
-    };
-    bindInvoiceModalPrint(receiptOrder);
-    bindModalLook();
+    showInvoicePrintModal(receiptOrder, {
+      title: `Invoice ${orderLabel(order, result)}`,
+      message: "Bill saved. POS cleared for the next customer.",
+    });
     showView("counter");
     try {
       await Promise.all([loadBootstrap(), loadToday()]);
