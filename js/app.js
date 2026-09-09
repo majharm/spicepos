@@ -140,10 +140,12 @@ function isVariantShop() {
   return Boolean(globalThis.POSFootwear?.isVariantShop(state.businessMeta));
 }
 
+function isSpiceShop() {
+  return Boolean(globalThis.POSFootwear?.isSpiceShop(state.businessMeta));
+}
+
 function emptyTicketHint() {
-  if (isFootwearShop()) return "Scan or tap a pair · girls or boys";
-  if (isApparelShop()) return "Scan or tap a garment · female, male, or kids";
-  return "Tap a product or scan";
+  return globalThis.POSFootwear?.itemFormCopy(state.businessMeta)?.ticket || "Tap a product or scan";
 }
 
 function itemVariantText(item) {
@@ -155,7 +157,7 @@ function itemBillName(item) {
 }
 
 function defaultItemCategory() {
-  return globalThis.POSFootwear?.defaultCategory(state.businessMeta) || "Whole Spices";
+  return globalThis.POSFootwear?.defaultCategory(state.businessMeta) || "General";
 }
 
 function defaultItemUnit() {
@@ -165,59 +167,33 @@ function defaultItemUnit() {
 function applyFootwearMode() {
   const fw = isFootwearShop();
   const ap = isApparelShop();
+  const spice = isSpiceShop();
   const on = fw || ap;
+  const copy = globalThis.POSFootwear?.itemFormCopy(state.businessMeta) || {};
   document.body.classList.toggle("footwear-mode", fw);
   document.body.classList.toggle("apparel-mode", ap);
+  document.body.classList.toggle("spice-mode", spice);
   document.querySelectorAll(".footwear-only").forEach((el) => {
     el.hidden = !on;
   });
   const search = $("search");
-  if (search) {
-    search.placeholder = fw
-      ? "Search shoe, colour, or size…"
-      : ap
-        ? "Search garment, colour, or size…"
-        : "Search name or HSN…";
-  }
+  if (search) search.placeholder = copy.search || "Search name or HSN…";
   const scan = $("scan-code");
-  if (scan) scan.placeholder = fw ? "Scan or search shoe" : ap ? "Scan or search garment" : "Scan or search";
-  if ($("item-category-lab")) $("item-category-lab").textContent = fw ? "Style" : "Category";
-  if ($("item-category")) {
-    $("item-category").placeholder = fw ? "School / Sports / Sandal" : ap ? "Shirt / Kurti / Jeans" : "Whole Spices";
-  }
-  if ($("item-subcategory-lab")) $("item-subcategory-lab").textContent = fw ? "Brand" : "Subcategory";
-  if ($("item-subcategory")) {
-    $("item-subcategory").placeholder = fw ? "Bata / Local" : ap ? "Cotton / Silk / Denim" : "Haldi / Jeera";
-  }
-  if ($("item-name")) $("item-name").placeholder = fw ? "School shoe" : ap ? "Cotton kurti" : "Turmeric powder";
-  if ($("item-local-name")) {
-    $("item-local-name").placeholder = fw
-      ? "जूता / जोडा / Shoe"
-      : ap
-        ? "कुर्ती / कुर्ता / Kurti"
-        : "चावल / तांदूळ / Rice";
-  }
+  if (scan) scan.placeholder = copy.scan || "Scan or search";
+  if ($("item-category-lab")) $("item-category-lab").textContent = copy.categoryLab || "Category";
+  if ($("item-category")) $("item-category").placeholder = copy.category || "Group / Section";
+  if ($("item-subcategory-lab")) $("item-subcategory-lab").textContent = copy.subcategoryLab || "Subcategory";
+  if ($("item-subcategory")) $("item-subcategory").placeholder = copy.subcategory || "Type / Brand";
+  if ($("item-name")) $("item-name").placeholder = copy.name || "Item name";
+  if ($("item-local-name")) $("item-local-name").placeholder = copy.localName || "स्थानीय नाम / Local name";
+  if ($("item-hsn")) $("item-hsn").placeholder = copy.hsn || "e.g. 1234";
   if ($("item-size")) $("item-size").placeholder = fw ? "e.g. 6, 7, 8 or 5" : ap ? "S, M, L, XL or 32, 34" : "e.g. 6, 7, 8 or 5";
-  if ($("items-lede")) {
-    $("items-lede").textContent = fw
-      ? "Name, colour, size, girls/boys type, photo, rates, and stock."
-      : ap
-        ? "Name, colour, size, female/male/kids type, photo, rates, and stock."
-        : "Name, photo, HSN code, unit type, rates, and stock.";
-  }
-  if ($("ticket-sub") && !state.cart?.length) $("ticket-sub").textContent = emptyTicketHint();
-  VIEW_META.items.subtitle = fw
-    ? "Colour, size, girls/boys type, rates, and stock"
-    : ap
-      ? "Colour, size, female/male/kids, rates, and stock"
-      : "Photo, HSN, unit type, rates, and stock";
-  VIEW_META.counter.subtitle = fw
-    ? "Scan or tap a pair — girls, boys, colour, size"
-    : ap
-      ? "Scan or tap a garment — female, male, kids, colour, size"
-      : "Scan, tap, or search — then Pay";
+  if ($("items-lede")) $("items-lede").textContent = copy.lede || "Name, photo, HSN code, unit type, rates, and stock.";
+  if ($("ticket-sub") && !state.cart?.length) $("ticket-sub").textContent = copy.ticket || emptyTicketHint();
+  VIEW_META.items.subtitle = copy.itemsSub || "Photo, HSN, unit type, rates, and stock";
+  VIEW_META.counter.subtitle = copy.counterSub || "Scan, tap, or search — then Pay";
   const pack = $("pack-choice");
-  if (pack) pack.hidden = on;
+  if (pack) pack.hidden = !spice;
   fillWearerSelects();
   const colors = globalThis.POSFootwear?.COLORS || [];
   const sizes = globalThis.POSFootwear?.sizesForShop?.(state.businessMeta) || globalThis.POSFootwear?.SIZES || [];
@@ -1188,7 +1164,7 @@ function applyNav() {
     btn.hidden = map[view] ? !can(map[view]) : false;
     if (view === "growth") btn.hidden = !(can("growth") || can("reports"));
     if (view === "offers") btn.hidden = !(can("discount") || can("items") || can("growth"));
-    if (view === "packs" && isVariantShop()) btn.hidden = true;
+    if (view === "packs" && !isSpiceShop()) btn.hidden = true;
   });
   const growthBtn = $("open-growth");
   if (growthBtn) growthBtn.hidden = !(can("growth") || can("reports"));
@@ -1789,7 +1765,7 @@ function renderPackChoice() {
       .join("");
   if (state.lastPack?.id) sel.value = state.lastPack.id;
   else sel.value = current || "";
-  sel.hidden = isVariantShop() || !state.packs.length;
+  sel.hidden = !isSpiceShop() || !state.packs.length;
   const bar = $("pack-bar");
   if (bar) {
     bar.innerHTML = state.packs

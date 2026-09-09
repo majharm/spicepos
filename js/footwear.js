@@ -21,6 +21,19 @@
   ];
   const SIZES = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13"];
   const APPAREL_SIZES = ["XS", "S", "M", "L", "XL", "XXL", "3XL", "28", "30", "32", "34", "36", "38", "40", "42", "44"];
+  const PREFIX = {
+    footwear: "FW",
+    apparel: "AP",
+    spice: "SP",
+    grocery: "GR",
+    restaurant: "FD",
+    pharmacy: "PH",
+    electronics: "EL",
+    jewellery: "JW",
+    hardware: "HW",
+    services: "SV",
+    general: "IT",
+  };
 
   function shopText(biz) {
     return [biz?.category, biz?.business_type].filter(Boolean).join(" ").toLowerCase();
@@ -35,8 +48,32 @@
     return /(apparel|garment|clothing|boutique|saree|fashion|dress|textile)/.test(shopText(biz));
   }
 
+  function shopKind(biz) {
+    if (isFootwearShop(biz)) return "footwear";
+    if (isApparelShop(biz)) return "apparel";
+    const t = shopText(biz);
+    if (/(spice|masala)/.test(t)) return "spice";
+    if (/(kirana|fmcg|grocery|supermarket|general trade)/.test(t)) return "grocery";
+    if (/(restaurant|cafe|bakery|food)/.test(t)) return "restaurant";
+    if (/(pharmacy|medical)/.test(t)) return "pharmacy";
+    if (/(electronic|mobile)/.test(t)) return "electronics";
+    if (/(jewel)/.test(t)) return "jewellery";
+    if (/(hardware)/.test(t)) return "hardware";
+    if (/(service)/.test(t)) return "services";
+    return "general";
+  }
+
+  function isSpiceShop(biz) {
+    return shopKind(biz) === "spice";
+  }
+
   function isVariantShop(biz) {
     return isFootwearShop(biz) || isApparelShop(biz);
+  }
+
+  function isWeightShop(biz) {
+    const k = shopKind(biz);
+    return k === "spice" || k === "grocery";
   }
 
   function wearersForShop(biz) {
@@ -48,9 +85,7 @@
   }
 
   function itemPrefix(biz) {
-    if (isFootwearShop(biz)) return "FW";
-    if (isApparelShop(biz)) return "AP";
-    return "SP";
+    return PREFIX[shopKind(biz)] || "IT";
   }
 
   function normalizeWearer(raw) {
@@ -95,17 +130,199 @@
   }
 
   function defaultCategory(biz) {
-    if (isFootwearShop(biz)) return "Footwear";
-    if (isApparelShop(biz)) {
-      const cat = String(biz?.category || "").trim();
-      if (cat && !/^other$/i.test(cat)) return cat;
-      return "Garments";
-    }
-    return "Whole Spices";
+    const k = shopKind(biz);
+    if (k === "spice") return "Whole Spices";
+    if (k === "footwear") return "Footwear";
+    const cat = String(biz?.category || "").trim();
+    if (cat && !/^other$/i.test(cat)) return cat;
+    const fallback = {
+      apparel: "Garments",
+      grocery: "Grocery",
+      restaurant: "Menu",
+      pharmacy: "Medicine",
+      electronics: "Electronics",
+      jewellery: "Jewellery",
+      hardware: "Hardware",
+      services: "Service",
+      general: "General",
+    };
+    return fallback[k] || "General";
   }
 
   function defaultUnit(biz) {
-    return isVariantShop(biz) ? "PCS" : "GM";
+    return isWeightShop(biz) ? "GM" : "PCS";
+  }
+
+  function itemFormCopy(biz) {
+    const k = shopKind(biz);
+    const copies = {
+      spice: {
+        name: "Turmeric powder",
+        localName: "चावल / तांदूळ / Rice",
+        category: "Whole Spices",
+        subcategory: "Haldi / Jeera",
+        categoryLab: "Category",
+        subcategoryLab: "Subcategory",
+        search: "Search name or HSN…",
+        scan: "Scan or search",
+        lede: "Name, photo, HSN code, unit type, rates, and stock.",
+        itemsSub: "Photo, HSN, unit type, rates, and stock",
+        counterSub: "Scan, tap, or search — then Pay",
+        ticket: "Tap a product or scan",
+        hsn: "e.g. 0908",
+      },
+      apparel: {
+        name: "Cotton kurti",
+        localName: "कुर्ती / कुर्ता / Kurti",
+        category: "Shirt / Kurti / Jeans",
+        subcategory: "Cotton / Silk / Denim",
+        categoryLab: "Category",
+        subcategoryLab: "Subcategory",
+        search: "Search garment, colour, or size…",
+        scan: "Scan or search garment",
+        lede: "Name, colour, size, female/male/kids type, photo, rates, and stock.",
+        itemsSub: "Colour, size, female/male/kids, rates, and stock",
+        counterSub: "Scan or tap a garment — female, male, kids, colour, size",
+        ticket: "Scan or tap a garment · female, male, or kids",
+        hsn: "e.g. 6109",
+      },
+      footwear: {
+        name: "School shoe",
+        localName: "जूता / जोडा / Shoe",
+        category: "School / Sports / Sandal",
+        subcategory: "Bata / Local",
+        categoryLab: "Style",
+        subcategoryLab: "Brand",
+        search: "Search shoe, colour, or size…",
+        scan: "Scan or search shoe",
+        lede: "Name, colour, size, girls/boys type, photo, rates, and stock.",
+        itemsSub: "Colour, size, girls/boys type, rates, and stock",
+        counterSub: "Scan or tap a pair — girls, boys, colour, size",
+        ticket: "Scan or tap a pair · girls or boys",
+        hsn: "e.g. 6402",
+      },
+      grocery: {
+        name: "Toor dal",
+        localName: "तूर डाळ / तूर दाल / Dal",
+        category: "Staples / Snacks",
+        subcategory: "Dal / Oil / Atta",
+        categoryLab: "Category",
+        subcategoryLab: "Subcategory",
+        search: "Search name or HSN…",
+        scan: "Scan or search",
+        lede: "Name, photo, HSN code, unit type, rates, and stock.",
+        itemsSub: "Photo, HSN, unit type, rates, and stock",
+        counterSub: "Scan, tap, or search — then Pay",
+        ticket: "Tap a product or scan",
+        hsn: "e.g. 0713",
+      },
+      restaurant: {
+        name: "Masala dosa",
+        localName: "डोसा / डोसा / Dosa",
+        category: "South Indian / Chinese",
+        subcategory: "Dosa / Rice / Starter",
+        categoryLab: "Category",
+        subcategoryLab: "Subcategory",
+        search: "Search dish or HSN…",
+        scan: "Scan or search dish",
+        lede: "Name, photo, HSN code, unit type, rates, and stock.",
+        itemsSub: "Photo, HSN, unit type, rates, and stock",
+        counterSub: "Tap a dish — then Pay",
+        ticket: "Tap a dish or scan",
+        hsn: "e.g. 2106",
+      },
+      pharmacy: {
+        name: "Paracetamol 500",
+        localName: "पैरासिटामोल / Paracetamol",
+        category: "Tablet / Syrup",
+        subcategory: "Fever / Cough",
+        categoryLab: "Category",
+        subcategoryLab: "Subcategory",
+        search: "Search medicine or HSN…",
+        scan: "Scan or search medicine",
+        lede: "Name, photo, HSN code, unit type, rates, and stock.",
+        itemsSub: "Photo, HSN, unit type, rates, and stock",
+        counterSub: "Scan, tap, or search — then Pay",
+        ticket: "Tap a medicine or scan",
+        hsn: "e.g. 3004",
+      },
+      electronics: {
+        name: "USB cable",
+        localName: "केबल / केबल / Cable",
+        category: "Mobile / Accessory",
+        subcategory: "Cable / Charger",
+        categoryLab: "Category",
+        subcategoryLab: "Subcategory",
+        search: "Search item or HSN…",
+        scan: "Scan or search",
+        lede: "Name, photo, HSN code, unit type, rates, and stock.",
+        itemsSub: "Photo, HSN, unit type, rates, and stock",
+        counterSub: "Scan, tap, or search — then Pay",
+        ticket: "Tap a product or scan",
+        hsn: "e.g. 8544",
+      },
+      jewellery: {
+        name: "Gold chain",
+        localName: "साखळी / चैन / Chain",
+        category: "Gold / Silver",
+        subcategory: "Chain / Ring",
+        categoryLab: "Category",
+        subcategoryLab: "Subcategory",
+        search: "Search jewellery or HSN…",
+        scan: "Scan or search",
+        lede: "Name, photo, HSN code, unit type, rates, and stock.",
+        itemsSub: "Photo, HSN, unit type, rates, and stock",
+        counterSub: "Scan, tap, or search — then Pay",
+        ticket: "Tap a product or scan",
+        hsn: "e.g. 7113",
+      },
+      hardware: {
+        name: "Screw 2 inch",
+        localName: "स्क्रू / स्क्रू / Screw",
+        category: "Fasteners / Tools",
+        subcategory: "Screw / Bolt",
+        categoryLab: "Category",
+        subcategoryLab: "Subcategory",
+        search: "Search item or HSN…",
+        scan: "Scan or search",
+        lede: "Name, photo, HSN code, unit type, rates, and stock.",
+        itemsSub: "Photo, HSN, unit type, rates, and stock",
+        counterSub: "Scan, tap, or search — then Pay",
+        ticket: "Tap a product or scan",
+        hsn: "e.g. 7318",
+      },
+      services: {
+        name: "Service charge",
+        localName: "सेवा / सेवा / Service",
+        category: "Service / Repair",
+        subcategory: "Labour / Visit",
+        categoryLab: "Category",
+        subcategoryLab: "Subcategory",
+        search: "Search service…",
+        scan: "Scan or search",
+        lede: "Name, photo, HSN code, unit type, rates, and stock.",
+        itemsSub: "Photo, HSN, unit type, rates, and stock",
+        counterSub: "Tap a service — then Pay",
+        ticket: "Tap a service",
+        hsn: "e.g. 9983",
+      },
+      general: {
+        name: "Item name",
+        localName: "स्थानीय नाम / Local name",
+        category: "Group / Section",
+        subcategory: "Type / Brand",
+        categoryLab: "Category",
+        subcategoryLab: "Subcategory",
+        search: "Search name or HSN…",
+        scan: "Scan or search",
+        lede: "Name, photo, HSN code, unit type, rates, and stock.",
+        itemsSub: "Photo, HSN, unit type, rates, and stock",
+        counterSub: "Scan, tap, or search — then Pay",
+        ticket: "Tap a product or scan",
+        hsn: "e.g. 1234",
+      },
+    };
+    return copies[k] || copies.general;
   }
 
   function parseSizes(raw) {
@@ -135,7 +352,10 @@
     APPAREL_SIZES,
     isFootwearShop,
     isApparelShop,
+    isSpiceShop,
     isVariantShop,
+    shopKind,
+    itemFormCopy,
     wearersForShop,
     sizesForShop,
     itemPrefix,

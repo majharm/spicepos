@@ -77,7 +77,7 @@ function pos_crud_dispatch($path, $method, $body, $bid, $auth, $branchId, $uid) 
     $biz = $bizRows[0] ?? [];
     $variant = pos_is_variant_shop($biz);
     $unitRaw = trim((string) ($body["base_unit"] ?? $body["unit"] ?? ""));
-    $unit = pos_item_unit($unitRaw !== "" ? $unitRaw : ($variant ? "PCS" : "GM"));
+    $unit = pos_item_unit($unitRaw !== "" ? $unitRaw : pos_default_item_unit($biz));
     $image = pos_item_image_url($body);
     $color = trim((string) ($body["color"] ?? "")) ?: null;
     $rawSizes = $body["sizes"] ?? $body["size"] ?? "";
@@ -151,9 +151,8 @@ function pos_crud_dispatch($path, $method, $body, $bid, $auth, $branchId, $uid) 
     pos_ensure_item_unit_columns();
     $bizRows = pos_q("SELECT category, business_type FROM businesses WHERE id = ? LIMIT 1", "s", [$bid]);
     $biz = $bizRows[0] ?? [];
-    $variant = pos_is_variant_shop($biz);
     $unitRaw = trim((string) ($body["base_unit"] ?? $body["unit"] ?? ""));
-    $unit = pos_item_unit($unitRaw !== "" ? $unitRaw : ($variant ? "PCS" : "GM"));
+    $unit = pos_item_unit($unitRaw !== "" ? $unitRaw : pos_default_item_unit($biz));
     $image = pos_item_image_url($body);
     $color = trim((string) ($body["color"] ?? "")) ?: null;
     $size = trim((string) ($body["size"] ?? "")) ?: null;

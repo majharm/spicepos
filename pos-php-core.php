@@ -564,28 +564,70 @@ function pos_is_apparel_shop($biz) {
   return (bool) preg_match("/(apparel|garment|clothing|boutique|saree|fashion|dress|textile)/", $text);
 }
 
+function pos_shop_kind($biz) {
+  if (pos_is_footwear_shop($biz)) return "footwear";
+  if (pos_is_apparel_shop($biz)) return "apparel";
+  $text = strtolower(trim((string) (($biz["category"] ?? "") . " " . ($biz["business_type"] ?? ""))));
+  if (preg_match("/(spice|masala)/", $text)) return "spice";
+  if (preg_match("/(kirana|fmcg|grocery|supermarket|general trade)/", $text)) return "grocery";
+  if (preg_match("/(restaurant|cafe|bakery|food)/", $text)) return "restaurant";
+  if (preg_match("/(pharmacy|medical)/", $text)) return "pharmacy";
+  if (preg_match("/(electronic|mobile)/", $text)) return "electronics";
+  if (preg_match("/(jewel)/", $text)) return "jewellery";
+  if (preg_match("/(hardware)/", $text)) return "hardware";
+  if (preg_match("/(service)/", $text)) return "services";
+  return "general";
+}
+
+function pos_is_spice_shop($biz) {
+  return pos_shop_kind($biz) === "spice";
+}
+
 function pos_is_variant_shop($biz) {
   return pos_is_footwear_shop($biz) || pos_is_apparel_shop($biz);
 }
 
 function pos_item_code_prefix($biz) {
-  if (pos_is_footwear_shop($biz)) return "FW-";
-  if (pos_is_apparel_shop($biz)) return "AP-";
-  return "SP-";
+  $map = [
+    "footwear" => "FW-",
+    "apparel" => "AP-",
+    "spice" => "SP-",
+    "grocery" => "GR-",
+    "restaurant" => "FD-",
+    "pharmacy" => "PH-",
+    "electronics" => "EL-",
+    "jewellery" => "JW-",
+    "hardware" => "HW-",
+    "services" => "SV-",
+    "general" => "IT-",
+  ];
+  $kind = pos_shop_kind($biz);
+  return $map[$kind] ?? "IT-";
 }
 
 function pos_default_item_category($biz) {
-  if (pos_is_footwear_shop($biz)) return "Footwear";
-  if (pos_is_apparel_shop($biz)) {
-    $cat = trim((string) ($biz["category"] ?? ""));
-    if ($cat !== "" && strcasecmp($cat, "other") !== 0) return $cat;
-    return "Garments";
-  }
-  return "Whole Spices";
+  $kind = pos_shop_kind($biz);
+  if ($kind === "spice") return "Whole Spices";
+  if ($kind === "footwear") return "Footwear";
+  $cat = trim((string) ($biz["category"] ?? ""));
+  if ($cat !== "" && strcasecmp($cat, "other") !== 0) return $cat;
+  $fallback = [
+    "apparel" => "Garments",
+    "grocery" => "Grocery",
+    "restaurant" => "Menu",
+    "pharmacy" => "Medicine",
+    "electronics" => "Electronics",
+    "jewellery" => "Jewellery",
+    "hardware" => "Hardware",
+    "services" => "Service",
+    "general" => "General",
+  ];
+  return $fallback[$kind] ?? "General";
 }
 
 function pos_default_item_unit($biz) {
-  return pos_is_variant_shop($biz) ? "PCS" : "GM";
+  $kind = pos_shop_kind($biz);
+  return ($kind === "spice" || $kind === "grocery") ? "GM" : "PCS";
 }
 
 function pos_ensure_item_unit_columns() {

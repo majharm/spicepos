@@ -69,12 +69,13 @@ test("Apparel shops get female/male/kids colour and size, not spice copy", () =>
   const php = readFileSync(path.join(root, "pos-php-core.php"), "utf8");
   const crud = readFileSync(path.join(root, "server/crud.js"), "utf8");
   const phpCrud = readFileSync(path.join(root, "pos-crud.php"), "utf8");
+  const fwJs = readFileSync(path.join(root, "js/footwear.js"), "utf8");
   assert.match(app, /function isApparelShop/);
   assert.match(app, /apparel-mode/);
-  assert.match(app, /Shirt \/ Kurti \/ Jeans/);
-  assert.match(app, /Cotton \/ Silk \/ Denim/);
+  assert.match(fwJs, /Shirt \/ Kurti \/ Jeans/);
+  assert.match(fwJs, /Cotton \/ Silk \/ Denim/);
   assert.match(app, /Select female \/ male \/ kids/);
-  assert.match(app, /कुर्ती \/ कुर्ता \/ Kurti/);
+  assert.match(fwJs, /कुर्ती \/ कुर्ता \/ Kurti/);
   assert.match(css, /body:not\(\.footwear-mode\):not\(\.apparel-mode\) \.footwear-only/);
   assert.match(css, /body\.footwear-mode #pack-choice/);
   assert.match(css, /body\.apparel-mode #pack-choice/);
@@ -86,6 +87,86 @@ test("Apparel shops get female/male/kids colour and size, not spice copy", () =>
   assert.match(crud, /itemPrefix/);
   assert.match(phpCrud, /pos_is_variant_shop/);
   assert.match(phpCrud, /pos_item_code_prefix/);
+});
+
+test("Every signup category gets its own item copy, not Whole Spices", () => {
+  const cats = [
+    "Spices & masala",
+    "Kirana / FMCG",
+    "Supermarket",
+    "Apparel",
+    "Garments",
+    "Clothing",
+    "Boutique",
+    "Saree Shop",
+    "Ladies Fashion",
+    "Mens Fashion",
+    "Kids Fashion",
+    "Footwear",
+    "Mobile & electronics",
+    "Food & beverage",
+    "Hardware",
+    "Jewellery",
+    "Medical",
+    "General trade",
+    "Other",
+  ];
+  const kinds = {
+    "Spices & masala": "spice",
+    "Kirana / FMCG": "grocery",
+    Supermarket: "grocery",
+    Apparel: "apparel",
+    Garments: "apparel",
+    Clothing: "apparel",
+    Boutique: "apparel",
+    "Saree Shop": "apparel",
+    "Ladies Fashion": "apparel",
+    "Mens Fashion": "apparel",
+    "Kids Fashion": "apparel",
+    Footwear: "footwear",
+    "Mobile & electronics": "electronics",
+    "Food & beverage": "restaurant",
+    Hardware: "hardware",
+    Jewellery: "jewellery",
+    Medical: "pharmacy",
+    "General trade": "grocery",
+    Other: "general",
+  };
+  for (const cat of cats) {
+    assert.equal(F.shopKind({ category: cat }), kinds[cat], cat);
+  }
+  assert.equal(F.shopKind({ business_type: "Restaurant" }), "restaurant");
+  assert.equal(F.shopKind({ business_type: "Pharmacy" }), "pharmacy");
+  assert.equal(F.shopKind({ business_type: "Electronics" }), "electronics");
+  assert.equal(F.shopKind({ business_type: "Grocery" }), "grocery");
+  assert.equal(F.shopKind({ business_type: "Services" }), "services");
+  assert.equal(F.defaultCategory({ category: "Spices & masala" }), "Whole Spices");
+  assert.equal(F.defaultCategory({ category: "Kirana / FMCG" }), "Kirana / FMCG");
+  assert.equal(F.defaultCategory({ category: "Jewellery" }), "Jewellery");
+  assert.equal(F.defaultCategory({ category: "Medical" }), "Medical");
+  assert.equal(F.defaultCategory({ category: "Other" }), "General");
+  assert.equal(F.defaultUnit({ category: "Spices & masala" }), "GM");
+  assert.equal(F.defaultUnit({ category: "Kirana / FMCG" }), "GM");
+  assert.equal(F.defaultUnit({ category: "Jewellery" }), "PCS");
+  assert.equal(F.defaultUnit({ category: "Medical" }), "PCS");
+  assert.equal(F.defaultUnit({ category: "Food & beverage" }), "PCS");
+  assert.equal(F.itemPrefix({ category: "Kirana / FMCG" }), "GR");
+  assert.equal(F.itemPrefix({ category: "Jewellery" }), "JW");
+  assert.equal(F.itemPrefix({ category: "Medical" }), "PH");
+  assert.equal(F.itemPrefix({ category: "Other" }), "IT");
+  assert.equal(F.itemFormCopy({ category: "Kirana / FMCG" }).category, "Staples / Snacks");
+  assert.equal(F.itemFormCopy({ category: "Jewellery" }).name, "Gold chain");
+  assert.equal(F.itemFormCopy({ category: "Medical" }).name, "Paracetamol 500");
+  assert.equal(F.itemFormCopy({ category: "Spices & masala" }).name, "Turmeric powder");
+  assert.notEqual(F.itemFormCopy({ category: "Kirana / FMCG" }).name, "Turmeric powder");
+  assert.notEqual(F.itemFormCopy({ category: "Hardware" }).localName, "चावल / तांदूळ / Rice");
+  const app = readFileSync(path.join(root, "js/app.js"), "utf8");
+  const php = readFileSync(path.join(root, "pos-php-core.php"), "utf8");
+  assert.match(app, /function isSpiceShop/);
+  assert.match(app, /itemFormCopy/);
+  assert.match(app, /spice-mode/);
+  assert.match(php, /function pos_shop_kind/);
+  assert.match(php, /function pos_is_spice_shop/);
 });
 
 test("Item form and Counter expose colour, size, and girls/boys", () => {

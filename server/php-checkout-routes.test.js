@@ -139,7 +139,10 @@ test("PHP customer insert bind types match placeholders", () => {
   assert.match(crud, /pos_is_variant_shop/);
   assert.match(crud, /pos_item_code_prefix/);
   assert.match(crud, /\$unitRaw = trim\(\(string\) \(\$body\["base_unit"\] \?\? \$body\["unit"\] \?\? ""\)\)/);
-  assert.match(crud, /\$unitRaw !== "" \? \$unitRaw : \(\$variant \? "PCS" : "GM"\)/);
+  assert.match(crud, /pos_default_item_unit\(\$biz\)/);
+  assert.match(core, /function pos_shop_kind/);
+  assert.match(core, /function pos_is_spice_shop/);
+  assert.match(core, /GR-/);
   assert.match(core, /function pos_item_unit/);
   assert.match(read("pos-checkout.php"), /pos_line_amount_for_item/);
   assert.match(crud, /pos_line_amount_for_item/);
@@ -321,7 +324,7 @@ test("POS boot skips API probe and slims catalog photos", () => {
   assert.match(index, /qrcode\.iife\.js[^>]+defer/);
   assert.match(index, /preload="none"/);
   assert.match(index, /pos-api\.js\?v=20260905deploy154/);
-  assert.match(index, /app\.js\?v=20260905deploy162/);
+  assert.match(index, /app\.js\?v=20260905deploy163/);
   assert.match(login, /x-pos-20260830e\.js\?v=20260905deploy154/);
   assert.match(loginJs, /saveLoginSpec/);
   assert.match(core, /function pos_catalog_items/);
