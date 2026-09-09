@@ -294,17 +294,21 @@
 
   function itemOfferInfo(item) {
     const O = globalThis.POSOffers;
-    const offers = activeOffers();
-    const condOf = (offer) => O?.parseConditions?.(offer) || offer.conditions || {};
-    const hit = offers.find((offer) => offerAppliesToItem(offer, item));
-    if (!hit) return { name: "", save: 0, pending: "", wouldSave: 0 };
+    const matching = activeOffers().filter((offer) => offerAppliesToItem(offer, item));
+    if (!matching.length) return { name: "", save: 0, pending: "", wouldSave: 0 };
     const one = offerResult([asCartLine(item, 1)]);
-    const cond = condOf(hit);
+    const best = O?.pickBest?.(one);
+    const appliedId = best?.offer?.id;
+    const hit =
+      matching.find((offer) => appliedId && String(offer.id) === String(appliedId)) ||
+      matching.find((offer) => offer.name && offer.name === (best?.offer?.name || one.applied?.[0]?.name)) ||
+      matching[0];
+    const cond = O?.parseConditions?.(hit) || hit.conditions || {};
     const bogoQty = Math.max(2, (Number(cond.buy_qty) || 1) + (Number(cond.get_qty) || 1));
     const more = (hit.offer_type || hit.type) === "bogo" ? offerResult([asCartLine(item, bogoQty)]) : one;
     const save = Math.round((Number(one.lineDiscounts?.[item.id] || one.lineDiscounts?.[String(item.id)] || 0)) * 100) / 100;
     return {
-      name: hit.name || "",
+      name: hit.name || best?.offer?.name || "",
       save,
       pending: one.pending?.[0]?.message || "",
       wouldSave: Math.round((Number(more.discount || one.pending?.[0]?.wouldSave) || 0) * 100) / 100,

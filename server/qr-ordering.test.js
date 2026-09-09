@@ -326,6 +326,7 @@ test("QR menu page paints a visible offer board from live offers", () => {
   assert.match(html, /qr-order\.js\?v=20260905deploy170/);
   assert.match(js, /function renderOffers/);
   assert.match(js, /function offerAppliesToItem/);
+  assert.match(js, /pickBest/);
   assert.match(css, /\.offer-board/);
   assert.match(css, /\.offer-card/);
 });
