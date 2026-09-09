@@ -190,6 +190,13 @@ function applyFootwearMode() {
     $("item-subcategory").placeholder = fw ? "Bata / Local" : ap ? "Cotton / Silk / Denim" : "Haldi / Jeera";
   }
   if ($("item-name")) $("item-name").placeholder = fw ? "School shoe" : ap ? "Cotton kurti" : "Turmeric powder";
+  if ($("item-local-name")) {
+    $("item-local-name").placeholder = fw
+      ? "जूता / जोडा / Shoe"
+      : ap
+        ? "कुर्ती / कुर्ता / Kurti"
+        : "चावल / तांदूळ / Rice";
+  }
   if ($("item-size")) $("item-size").placeholder = fw ? "e.g. 6, 7, 8 or 5" : ap ? "S, M, L, XL or 32, 34" : "e.g. 6, 7, 8 or 5";
   if ($("items-lede")) {
     $("items-lede").textContent = fw
