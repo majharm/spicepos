@@ -273,6 +273,47 @@ test("pickBest shows the applied combo with the biggest save", () => {
   assert.ok(pending.save > 0);
 });
 
+test("MySQL zero dates stay live so Counter and QR still apply the offer", () => {
+  const offer = {
+    name: "Dosa 10% off",
+    offer_type: "product",
+    status: "active",
+    live_status: "expired",
+    discount_type: "pct",
+    discount_value: "10.00",
+    offer_price: "0.00",
+    start_date: "0000-00-00",
+    end_date: "0000-00-00",
+    conditions: { item_ids: ["dosa"] },
+  };
+  assert.equal(O.liveStatus(offer, new Date("2026-09-09T10:00:00")), "active");
+  const hit = O.evaluateAll([offer], {
+    cart: [line("dosa", 80)],
+    now: new Date("2026-09-09T10:00:00"),
+  });
+  assert.equal(hit.discount, 8);
+  assert.equal(hit.lineDiscounts.dosa, 8);
+});
+
+test("PHP-shaped combo percent ignores leftover offer_price 0", () => {
+  const offer = {
+    name: "Dosa + Tea 8%",
+    offer_type: "combo",
+    status: "active",
+    live_status: "active",
+    discount_type: "pct",
+    discount_value: "8.00",
+    offer_price: "0.00",
+    conditions: { item_ids: ["dosa", "tea"] },
+  };
+  const hit = O.evaluateAll([offer], {
+    cart: [line("dosa", 80), line("tea", 20)],
+    now: new Date("2026-09-09T10:00:00"),
+  });
+  assert.equal(hit.discount, 8);
+  assert.equal(hit.billDiscount, 8);
+});
+
 test("PHP-shaped percent offer ignores leftover offer_price 0 so the discount applies", () => {
   const offer = {
     name: "Vase 10% off",

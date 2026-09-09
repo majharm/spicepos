@@ -30,11 +30,16 @@
   }
   function ymd(d) {
     if (!d) return "";
-    if (typeof d === "string" && /^\d{4}-\d{2}-\d{2}/.test(d)) return d.slice(0, 10);
-    const dt = d instanceof Date ? d : new Date(d);
-    if (Number.isNaN(dt.getTime())) return "";
-    const p = (n) => String(n).padStart(2, "0");
-    return `${dt.getFullYear()}-${p(dt.getMonth() + 1)}-${p(dt.getDate())}`;
+    let day = "";
+    if (typeof d === "string" && /^\d{4}-\d{2}-\d{2}/.test(d.trim())) day = d.trim().slice(0, 10);
+    else {
+      const dt = d instanceof Date ? d : new Date(d);
+      if (Number.isNaN(dt.getTime())) return "";
+      const p = (n) => String(n).padStart(2, "0");
+      day = `${dt.getFullYear()}-${p(dt.getMonth() + 1)}-${p(dt.getDate())}`;
+    }
+    if (!day || day.startsWith("0000-00-00") || Number(day.slice(0, 4)) < 1990) return "";
+    return day;
   }
   function hm(d) {
     const dt = d instanceof Date ? d : new Date(d);
@@ -209,8 +214,10 @@
     const st = String(offer?.status || "draft");
     if (st === "paused" || st === "completed" || st === "draft") return st;
     const day = ymd(now);
-    if (offer?.end_date && day > String(offer.end_date).slice(0, 10)) return "expired";
-    if (offer?.start_date && day < String(offer.start_date).slice(0, 10)) return "scheduled";
+    const end = ymd(offer?.end_date);
+    const start = ymd(offer?.start_date);
+    if (end && day > end) return "expired";
+    if (start && day < start) return "scheduled";
     if (st === "scheduled") return "active";
     if (st === "expired") return "expired";
     return "active";
@@ -382,7 +389,7 @@
       if (!ids.every((id) => have.has(String(id)))) return null;
       const comboLines = cart.filter((l) => ids.includes(String(l.itemId || l.item_id)));
       const total = round2(comboLines.reduce((s, l) => s + lineGrossOf(l), 0));
-      if (offer.discount_type === "combo_price" || offer.offer_price != null) {
+      if (offer.discount_type === "combo_price" || (offer.discount_type === "price" && num(offer.offer_price) > 0)) {
         const price = num(offer.offer_price ?? cond.bundle_price ?? offer.discount_value);
         discount = round2(Math.max(0, total - price));
       } else {

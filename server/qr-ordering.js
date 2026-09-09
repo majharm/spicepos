@@ -257,7 +257,7 @@ export function applyQrOffers(built, { offers = [], stacking = "product_and_bill
     const gst = qrRound2(source.reduce((sum, line) => sum + (Number(line.gstAmount ?? line.gst) || 0), 0));
     return { built: source, subtotal, gst, total: qrRound2(subtotal + gst), discount: 0, applied: [], message: "" };
   }
-  const live = (offers || []).filter((offer) => (offer.live_status || offer.status) === "active");
+  const live = (offers || []).filter((offer) => (O.liveStatus?.(offer) || offer.live_status || offer.status) === "active");
   const result = O.evaluateAll(live, {
     now: now || new Date(),
     cart: qrOfferCart(source),
@@ -601,7 +601,7 @@ export function registerQrPublic(app) {
         },
         items: [...packCards, ...items],
         packs: packCards,
-        offers: (offers || []).filter((offer) => (offer.live_status || offer.status) === "active"),
+        offers: (offers || []).filter((offer) => (POSOffers.liveStatus?.(offer) || offer.live_status || offer.status) === "active"),
         offerSettings: { stacking: settings?.stacking || "product_and_bill" },
       });
     } catch (err) {

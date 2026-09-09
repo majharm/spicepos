@@ -1431,15 +1431,21 @@ function tableHoldPayload() {
   };
 }
 
-function applyHoldToCart(payload, opts = {}) {
-  const keep = Boolean(opts.keepHold);
-  state.cart = (payload?.cart || []).map((line) => ({
+function cartLineFromHold(line) {
+  return {
+    lineId: line.lineId || newCartLineId(),
     itemId: line.itemId,
     qtyGm: Number(line.qtyGm) || 0,
     discountType: line.discountType || "amt",
     discountValue: Number(line.discountValue) || 0,
     barcode: line.barcode || "",
-  })).filter((l) => l.itemId && l.qtyGm > 0);
+    offerId: line.offerId || "",
+  };
+}
+
+function applyHoldToCart(payload, opts = {}) {
+  const keep = Boolean(opts.keepHold);
+  state.cart = (payload?.cart || []).map(cartLineFromHold).filter((l) => l.itemId && l.qtyGm > 0);
   state.billDiscountType = payload.billDiscountType || "amt";
   state.billDiscountValue = Number(payload.billDiscountValue) || 0;
   state.loyaltyRedeem = Number(payload.loyaltyRedeem) || 0;
@@ -1639,13 +1645,7 @@ async function recallHeldBill(id) {
     row = fresh;
   }
   if (!payload?.cart?.length) throw new Error("Held bill is empty");
-  state.cart = payload.cart.map((line) => ({
-    itemId: line.itemId,
-    qtyGm: Number(line.qtyGm) || 0,
-    discountType: line.discountType || "amt",
-    discountValue: Number(line.discountValue) || 0,
-    barcode: line.barcode || "",
-  })).filter((l) => l.itemId && l.qtyGm > 0);
+  state.cart = payload.cart.map(cartLineFromHold).filter((l) => l.itemId && l.qtyGm > 0);
   state.billDiscountType = payload.billDiscountType || "amt";
   state.billDiscountValue = Number(payload.billDiscountValue) || 0;
   state.loyaltyRedeem = Number(payload.loyaltyRedeem) || 0;
@@ -2276,12 +2276,12 @@ function applyOffersToCart() {
     state.appliedOffers = null;
     return;
   }
-  const offers = (state.offers || []).filter((o) => ["active", "scheduled"].includes(o.live_status || o.status));
+  const offers = (state.offers || []).filter((o) => ["active", "scheduled"].includes(O.liveStatus(o)));
   const result = O.evaluateAll(offers, offerCartContext());
   state.appliedOffers = result;
   state.cart.forEach((line) => {
-    const byLine = result.lineDiscounts?.[line.lineId];
-    const byItem = result.lineDiscounts?.[line.itemId];
+    const byLine = result.lineDiscounts?.[line.lineId] ?? result.lineDiscounts?.[String(line.lineId || "")];
+    const byItem = result.lineDiscounts?.[line.itemId] ?? result.lineDiscounts?.[String(line.itemId || "")];
     const d = Number(byLine != null ? byLine : byItem || 0);
     const item = state.items.find((i) => i.id === line.itemId);
     const gross = item ? Number(lineCalc(item, { ...line, discountType: "amt", discountValue: 0 }).gross || 0) : 0;
