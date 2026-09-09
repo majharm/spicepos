@@ -2502,7 +2502,8 @@ function paintComboBanner() {
 }
 
 function fillDatalists() {
-  const cats = [...new Set((state.items || []).map((i) => i.category).filter(Boolean))];
+  const suggested = globalThis.POSFootwear?.suggestedItemCategories?.(state.businessMeta) || [];
+  const cats = [...new Set([...suggested, ...(state.items || []).map((i) => i.category).filter(Boolean)])];
   const subs = [...new Set((state.items || []).map((i) => i.subcategory).filter(Boolean))];
   if ($("category-list")) $("category-list").innerHTML = cats.map((c) => `<option value="${escapeHtml(c)}">`).join("");
   if ($("subcategory-list")) $("subcategory-list").innerHTML = subs.map((c) => `<option value="${escapeHtml(c)}">`).join("");

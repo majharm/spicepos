@@ -287,7 +287,7 @@ test("Master Admin can set passwords and unlock locked accounts", () => {
   assert.match(core, /pos_register_business\(\$body, true\)/);
   assert.match(core, /strtotime\("\+1 year"\)/);
   assert.match(read("server/onboard.js"), /INTERVAL 1 YEAR/);
-  assert.match(read("master.html"), /master\.js\?v=20260905deploy158/);
+  assert.match(read("master.html"), /master\.js\?v=20260905deploy172/);
   assert.match(read("js/app.js"), /Subscription fee \/ year/);
   assert.match(core, /users\/\(\[\^\/\]\+\)\/unlock/);
   assert.match(core, /businesses\/\(\[\^\/\]\+\)\/send-expiry-alert/);
@@ -335,6 +335,11 @@ test("POS boot skips API probe and slims catalog photos", () => {
   assert.match(index, /app\.js\?v=20260905deploy165/);
   assert.match(index, /restaurant\.js\?v=20260905deploy164/);
   assert.match(login, /x-pos-20260830e\.js\?v=20260905deploy154/);
+  assert.match(index, /app\.js\?v=20260905deploy171/);
+  assert.match(index, /offers\.js\?v=20260905deploy170/);
+  assert.match(index, /restaurant\.js\?v=20260905deploy171/);
+  assert.match(index, /footwear\.js\?v=20260905deploy171/);
+  assert.match(login, /x-pos-20260830e\.js\?v=20260905deploy172/);
   assert.match(loginJs, /saveLoginSpec/);
   assert.match(core, /function pos_catalog_items/);
   assert.match(core, /function pos_slim_catalog_item/);

@@ -138,6 +138,8 @@ test("Every signup category gets its own item copy, not Whole Spices", () => {
   assert.equal(F.shopKind({ business_type: "Restaurant" }), "restaurant");
   assert.equal(F.isRestaurantShop({ business_type: "Restaurant" }), true);
   assert.equal(F.isRestaurantShop({ category: "Kirana / FMCG" }), false);
+  assert.equal(F.shopKind({ business_type: "Restaurant", category: "Spices & masala" }), "restaurant");
+  assert.equal(F.isRestaurantShop({ business_type: "Restaurant", category: "Spices & masala" }), true);
   assert.equal(F.shopKind({ business_type: "Pharmacy" }), "pharmacy");
   assert.equal(F.shopKind({ business_type: "Electronics" }), "electronics");
   assert.equal(F.shopKind({ business_type: "Grocery" }), "grocery");
@@ -147,6 +149,9 @@ test("Every signup category gets its own item copy, not Whole Spices", () => {
   assert.equal(F.defaultCategory({ category: "Jewellery" }), "Jewellery");
   assert.equal(F.defaultCategory({ category: "Medical" }), "Medical");
   assert.equal(F.defaultCategory({ category: "Other" }), "General");
+  assert.equal(F.defaultCategory({ category: "Food & beverage" }), "Menu");
+  assert.equal(F.defaultCategory({ business_type: "Restaurant", category: "Spices & masala" }), "Menu");
+  assert.deepEqual(F.suggestedItemCategories({ category: "Food & beverage" }).slice(0, 3), ["South Indian", "North Indian", "Chinese"]);
   assert.equal(F.defaultUnit({ category: "Spices & masala" }), "GM");
   assert.equal(F.defaultUnit({ category: "Kirana / FMCG" }), "GM");
   assert.equal(F.defaultUnit({ category: "Jewellery" }), "PCS");
@@ -169,6 +174,15 @@ test("Every signup category gets its own item copy, not Whole Spices", () => {
   assert.match(app, /spice-mode/);
   assert.match(php, /function pos_shop_kind/);
   assert.match(php, /function pos_is_spice_shop/);
+  assert.match(php, /\$type === "restaurant"/);
+  assert.match(php, /if \(\$kind === "restaurant"\) return "Menu"/);
+  assert.match(app, /suggestedItemCategories/);
+  const master = readFileSync(path.join(root, "js/master.js"), "utf8");
+  const xpos = readFileSync(path.join(root, "js/x-pos-20260830e.js"), "utf8");
+  assert.match(master, /BIZ_CATEGORIES_FOR_TYPE/);
+  assert.match(master, /function fillCategorySelect/);
+  assert.match(xpos, /function fillSignupCategory/);
+  assert.match(xpos, /t === "Restaurant" \|\| t === "Cafe" \|\| t === "Bakery"/);
 });
 
 test("Item form and Counter expose colour, size, and girls/boys", () => {

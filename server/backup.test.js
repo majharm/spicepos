@@ -343,11 +343,11 @@ test("HTML and CSS cache stickers match deploy136", () => {
     assert.doesNotMatch(html, /20260901deploy59/);
   }
   const orderSticker = readFileSync(path.join(root, "order.html"), "utf8");
-  assert.match(orderSticker, /20260905deploy142/);
+  assert.match(orderSticker, /20260905deploy170/);
   assert.doesNotMatch(orderSticker, /20260905deploy139/);
   assert.doesNotMatch(orderSticker, /20260905deploy136/);
   const masterHtml = readFileSync(path.join(root, "master.html"), "utf8");
-  assert.match(masterHtml, /20260905deploy158/);
+  assert.match(masterHtml, /20260905deploy172/);
   assert.doesNotMatch(masterHtml, /20260905deploy137/);
   assert.doesNotMatch(masterHtml, /20260905deploy118/);
   assert.doesNotMatch(masterHtml, /20260905deploy113/);
@@ -379,7 +379,7 @@ test("HTML and CSS cache stickers match deploy136", () => {
   assert.match(qrPoster, /#4a1416/);
   assert.match(qrOrder, /id="order-form"/);
   assert.match(qrOrder, /id="cart-sheet"/);
-  assert.match(qrOrder, /id="offer-strip"/);
+  assert.match(qrOrder, /id="offer-board"/);
   assert.match(qrOrder, /id="success-save"/);
   assert.match(qrOrder, /js\/offers\.js/);
   assert.match(qrOrderJs, /\/api\/qr\/menu/);

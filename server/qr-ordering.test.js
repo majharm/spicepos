@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
+import path from "node:path";
 import {
   normalizeQrOrderPayload,
   qrLineAmount,
@@ -312,4 +315,18 @@ test("QR invoice totals lift offer discount onto the header so Invoices print gr
   assert.equal(offered.discount, 10);
   assert.equal(offered.gst, 4.5);
   assert.equal(offered.total, 94.5);
+});
+
+test("QR menu page paints a visible offer board from live offers", () => {
+  const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
+  const html = readFileSync(path.join(root, "order.html"), "utf8");
+  const js = readFileSync(path.join(root, "js/qr-order.js"), "utf8");
+  const css = readFileSync(path.join(root, "css/qr-order.css"), "utf8");
+  assert.match(html, /id="offer-board"/);
+  assert.match(html, /qr-order\.js\?v=20260905deploy170/);
+  assert.match(js, /function renderOffers/);
+  assert.match(js, /function offerAppliesToItem/);
+  assert.match(js, /pickBest/);
+  assert.match(css, /\.offer-board/);
+  assert.match(css, /\.offer-card/);
 });
