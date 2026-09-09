@@ -1847,6 +1847,12 @@ async function render() {
       form.businessType.addEventListener("change", () => {
         fillCategorySelect(form.businessCategory, form.businessType.value, form.businessCategory.value);
       });
+      form.businessType.addEventListener("input", () => {
+        fillCategorySelect(form.businessCategory, form.businessType.value, form.businessCategory.value);
+      });
+      form.businessCategory.addEventListener("focus", () => {
+        fillCategorySelect(form.businessCategory, form.businessType.value, form.businessCategory.value);
+      });
       form.plan_id.addEventListener("change", () => {
         form.subscription_expires_at.value = yearlyStartYmd();
       });

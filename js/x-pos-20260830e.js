@@ -271,7 +271,13 @@
 
     if (signupForm) {
       fillSignupCategory(signupForm);
-      signupForm.querySelector('[name="businessType"]')?.addEventListener("change", () => fillSignupCategory(signupForm));
+      const typeSel = signupForm.querySelector('[name="businessType"]');
+      const catSel = signupForm.querySelector('[name="businessCategory"]');
+      const syncCats = () => fillSignupCategory(signupForm);
+      typeSel?.addEventListener("change", syncCats);
+      typeSel?.addEventListener("input", syncCats);
+      catSel?.addEventListener("focus", syncCats);
+      catSel?.addEventListener("mousedown", syncCats);
       signupForm.addEventListener("submit", async (e) => {
         e.preventDefault();
         e.stopImmediatePropagation();
