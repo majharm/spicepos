@@ -301,15 +301,14 @@ function pos_find_item_for_import($bid, $row) {
 }
 
 function pos_item_import_insert($bid, $biz, $body) {
-  $footwear = pos_is_footwear_shop($biz);
   $n = pos_next_seq("item", $bid, 7);
-  $code = trim((string) ($body["code"] ?? "")) ?: (($footwear ? "FW-" : "SP-") . str_pad((string) $n, 3, "0", STR_PAD_LEFT));
+  $code = trim((string) ($body["code"] ?? "")) ?: (pos_item_code_prefix($biz) . str_pad((string) $n, 3, "0", STR_PAD_LEFT));
   $id = pos_uuid();
-  $unit = pos_item_unit($body["base_unit"] ?? $body["unit"] ?? ($footwear ? "PCS" : "GM"));
+  $unit = pos_item_unit($body["base_unit"] ?? $body["unit"] ?? pos_default_item_unit($biz));
   $color = trim((string) ($body["color"] ?? "")) ?: null;
   $size = trim((string) ($body["size"] ?? "")) ?: null;
   $wearer = pos_item_wearer($body["wearer_type"] ?? "") ?: null;
-  $category = trim((string) ($body["category"] ?? "")) ?: ($footwear ? "Footwear" : "Whole Spices");
+  $category = trim((string) ($body["category"] ?? "")) ?: pos_default_item_category($biz);
   pos_q(
     "INSERT INTO items (
        id, code, name, local_name, category, subcategory, color, size, wearer_type, base_unit,
@@ -339,12 +338,11 @@ function pos_item_import_insert($bid, $biz, $body) {
 }
 
 function pos_item_import_update($bid, $existing, $biz, $body, $row) {
-  $footwear = pos_is_footwear_shop($biz);
   $unit = trim((string) ($row["unit"] ?? "")) !== ""
     ? pos_item_unit($body["unit"])
     : pos_item_unit($existing);
   $name = trim((string) ($row["name"] ?? "")) !== "" ? $body["name"] : $existing["name"];
-  $category = trim((string) ($row["category"] ?? "")) !== "" ? $body["category"] : ($existing["category"] ?? ($footwear ? "Footwear" : "Whole Spices"));
+  $category = trim((string) ($row["category"] ?? "")) !== "" ? $body["category"] : ($existing["category"] ?? pos_default_item_category($biz));
   $sub = array_key_exists("subcategory", $row) && $row["subcategory"] !== "" ? $body["subcategory"] : ($existing["subcategory"] ?? null);
   $hsn = array_key_exists("hsn", $row) && $row["hsn"] !== "" ? $body["hsn"] : ($existing["hsn"] ?? null);
   $color = array_key_exists("color", $row) && $row["color"] !== "" ? ($body["color"] ?: null) : ($existing["color"] ?? null);
@@ -381,13 +379,12 @@ function pos_item_import_update($bid, $existing, $biz, $body, $row) {
 }
 
 function pos_item_body_from_import_row($row, $biz) {
-  $footwear = pos_is_footwear_shop($biz);
-  $unit = pos_item_unit($row["unit"] ?? ($footwear ? "PCS" : "GM"));
+  $unit = pos_item_unit($row["unit"] ?? pos_default_item_unit($biz));
   $stock = pos_item_import_stock_to_base($row["stock"] ?? "", $unit);
   $body = [
     "name" => trim((string) ($row["name"] ?? "")),
     "hsn" => trim((string) ($row["hsn"] ?? "")),
-    "category" => trim((string) ($row["category"] ?? "")) ?: ($footwear ? "Footwear" : "Whole Spices"),
+    "category" => trim((string) ($row["category"] ?? "")) ?: pos_default_item_category($biz),
     "subcategory" => trim((string) ($row["subcategory"] ?? "")),
     "base_unit" => $unit,
     "unit" => $unit,

@@ -32,6 +32,61 @@ test("Girls and boys type plus colour and size make a bill name", () => {
   assert.equal(F.defaultUnit({ category: "Spices & masala" }), "GM");
 });
 
+test("Apparel shops get female/male/kids colour and size, not spice copy", () => {
+  assert.equal(F.isApparelShop({ category: "Garments" }), true);
+  assert.equal(F.isApparelShop({ category: "Fashion" }), true);
+  assert.equal(F.isApparelShop({ category: "Apparel" }), true);
+  assert.equal(F.isApparelShop({ category: "Kids Fashion" }), true);
+  assert.equal(F.isApparelShop({ category: "Ladies Fashion" }), true);
+  assert.equal(F.isApparelShop({ category: "Footwear" }), false);
+  assert.equal(F.isApparelShop({ category: "Spices & masala" }), false);
+  assert.equal(F.isFootwearShop({ category: "Garments" }), false);
+  assert.equal(F.isVariantShop({ category: "Garments" }), true);
+  assert.equal(F.isVariantShop({ category: "Footwear" }), true);
+  assert.equal(F.isVariantShop({ category: "Spices & masala" }), false);
+  assert.equal(F.normalizeWearer("Female"), "female");
+  assert.equal(F.normalizeWearer("Male"), "male");
+  assert.equal(F.normalizeWearer("Kids"), "kids");
+  assert.equal(F.wearerLabel("kids"), "Kids");
+  assert.equal(F.defaultCategory({ category: "Garments" }), "Garments");
+  assert.equal(F.defaultCategory({ category: "Fashion" }), "Fashion");
+  assert.equal(F.defaultUnit({ category: "Garments" }), "PCS");
+  assert.equal(F.itemPrefix({ category: "Garments" }), "AP");
+  assert.equal(F.itemPrefix({ category: "Footwear" }), "FW");
+  assert.equal(F.itemPrefix({ category: "Spices" }), "SP");
+  assert.deepEqual(
+    F.wearersForShop({ category: "Garments" }).map((w) => w.value),
+    ["female", "male", "kids", "unisex"],
+  );
+  assert.ok(F.sizesForShop({ category: "Garments" }).includes("XL"));
+  assert.ok(F.sizesForShop({ category: "Footwear" }).includes("7"));
+  assert.equal(
+    F.billName({ name: "Kurti", wearer_type: "female", color: "Maroon", size: "M" }),
+    "Kurti (Female · Maroon · Sz M)",
+  );
+  const app = readFileSync(path.join(root, "js/app.js"), "utf8");
+  const css = readFileSync(path.join(root, "css/pos.css"), "utf8");
+  const php = readFileSync(path.join(root, "pos-php-core.php"), "utf8");
+  const crud = readFileSync(path.join(root, "server/crud.js"), "utf8");
+  const phpCrud = readFileSync(path.join(root, "pos-crud.php"), "utf8");
+  assert.match(app, /function isApparelShop/);
+  assert.match(app, /apparel-mode/);
+  assert.match(app, /Shirt \/ Kurti \/ Jeans/);
+  assert.match(app, /Cotton \/ Silk \/ Denim/);
+  assert.match(app, /Select female \/ male \/ kids/);
+  assert.match(css, /body:not\(\.footwear-mode\):not\(\.apparel-mode\) \.footwear-only/);
+  assert.match(css, /body\.footwear-mode #pack-choice/);
+  assert.match(css, /body\.apparel-mode #pack-choice/);
+  assert.match(css, /\.nav-btn\[hidden\]/);
+  assert.match(php, /function pos_is_apparel_shop/);
+  assert.match(php, /function pos_is_variant_shop/);
+  assert.match(php, /kids.*return "kids"/);
+  assert.match(crud, /isVariantShop/);
+  assert.match(crud, /itemPrefix/);
+  assert.match(phpCrud, /pos_is_variant_shop/);
+  assert.match(phpCrud, /pos_item_code_prefix/);
+});
+
 test("Item form and Counter expose colour, size, and girls/boys", () => {
   const index = readFileSync(path.join(root, "index.html"), "utf8");
   const app = readFileSync(path.join(root, "js/app.js"), "utf8");

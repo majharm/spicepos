@@ -74,9 +74,10 @@ function pos_crud_dispatch($path, $method, $body, $bid, $auth, $branchId, $uid) 
     pos_ensure_business_columns();
     pos_ensure_item_unit_columns();
     $bizRows = pos_q("SELECT category, business_type FROM businesses WHERE id = ? LIMIT 1", "s", [$bid]);
-    $footwear = pos_is_footwear_shop($bizRows[0] ?? []);
+    $biz = $bizRows[0] ?? [];
+    $variant = pos_is_variant_shop($biz);
     $unitRaw = trim((string) ($body["base_unit"] ?? $body["unit"] ?? ""));
-    $unit = pos_item_unit($unitRaw !== "" ? $unitRaw : ($footwear ? "PCS" : "GM"));
+    $unit = pos_item_unit($unitRaw !== "" ? $unitRaw : ($variant ? "PCS" : "GM"));
     $image = pos_item_image_url($body);
     $color = trim((string) ($body["color"] ?? "")) ?: null;
     $rawSizes = $body["sizes"] ?? $body["size"] ?? "";
@@ -96,16 +97,16 @@ function pos_crud_dispatch($path, $method, $body, $bid, $auth, $branchId, $uid) 
       }
     }
     $sizesList = array_values(array_unique($sizesList));
-    $sizesToCreate = ($footwear && count($sizesList) > 1) ? $sizesList : [count($sizesList) === 1 ? $sizesList[0] : (trim((string) ($body["size"] ?? "")) ?: null)];
+    $sizesToCreate = ($variant && count($sizesList) > 1) ? $sizesList : [count($sizesList) === 1 ? $sizesList[0] : (trim((string) ($body["size"] ?? "")) ?: null)];
     $wearer = pos_item_wearer($body["wearer_type"] ?? "") ?: null;
-    $category = trim((string) ($body["category"] ?? "")) ?: ($footwear ? "Footwear" : "Whole Spices");
+    $category = trim((string) ($body["category"] ?? "")) ?: pos_default_item_category($biz);
     $createdItems = [];
     foreach ($sizesToCreate as $size) {
       $id = pos_uuid();
       $n = pos_next_seq("item", $bid, 7);
       $code = (count($sizesToCreate) === 1 && !empty($body["code"]))
         ? $body["code"]
-        : (($footwear ? "FW-" : "SP-") . str_pad((string) $n, 3, "0", STR_PAD_LEFT));
+        : (pos_item_code_prefix($biz) . str_pad((string) $n, 3, "0", STR_PAD_LEFT));
       pos_q(
         "INSERT INTO items (
            id, code, name, local_name, category, subcategory, color, size, wearer_type, base_unit,
@@ -149,14 +150,15 @@ function pos_crud_dispatch($path, $method, $body, $bid, $auth, $branchId, $uid) 
     pos_ensure_business_columns();
     pos_ensure_item_unit_columns();
     $bizRows = pos_q("SELECT category, business_type FROM businesses WHERE id = ? LIMIT 1", "s", [$bid]);
-    $footwear = pos_is_footwear_shop($bizRows[0] ?? []);
+    $biz = $bizRows[0] ?? [];
+    $variant = pos_is_variant_shop($biz);
     $unitRaw = trim((string) ($body["base_unit"] ?? $body["unit"] ?? ""));
-    $unit = pos_item_unit($unitRaw !== "" ? $unitRaw : ($footwear ? "PCS" : "GM"));
+    $unit = pos_item_unit($unitRaw !== "" ? $unitRaw : ($variant ? "PCS" : "GM"));
     $image = pos_item_image_url($body);
     $color = trim((string) ($body["color"] ?? "")) ?: null;
     $size = trim((string) ($body["size"] ?? "")) ?: null;
     $wearer = pos_item_wearer($body["wearer_type"] ?? "") ?: null;
-    $category = trim((string) ($body["category"] ?? "")) ?: ($footwear ? "Footwear" : "Whole Spices");
+    $category = trim((string) ($body["category"] ?? "")) ?: pos_default_item_category($biz);
     $imageSql = "";
     $imageType = "";
     $imageVal = [];

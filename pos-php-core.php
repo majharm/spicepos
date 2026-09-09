@@ -558,6 +558,36 @@ function pos_is_footwear_shop($biz) {
   return (bool) preg_match("/(^|[^a-z])(footwear|shoes?)([^a-z]|$)/", $text);
 }
 
+function pos_is_apparel_shop($biz) {
+  if (pos_is_footwear_shop($biz)) return false;
+  $text = strtolower(trim((string) (($biz["category"] ?? "") . " " . ($biz["business_type"] ?? ""))));
+  return (bool) preg_match("/(apparel|garment|clothing|boutique|saree|fashion|dress|textile)/", $text);
+}
+
+function pos_is_variant_shop($biz) {
+  return pos_is_footwear_shop($biz) || pos_is_apparel_shop($biz);
+}
+
+function pos_item_code_prefix($biz) {
+  if (pos_is_footwear_shop($biz)) return "FW-";
+  if (pos_is_apparel_shop($biz)) return "AP-";
+  return "SP-";
+}
+
+function pos_default_item_category($biz) {
+  if (pos_is_footwear_shop($biz)) return "Footwear";
+  if (pos_is_apparel_shop($biz)) {
+    $cat = trim((string) ($biz["category"] ?? ""));
+    if ($cat !== "" && strcasecmp($cat, "other") !== 0) return $cat;
+    return "Garments";
+  }
+  return "Whole Spices";
+}
+
+function pos_default_item_unit($biz) {
+  return pos_is_variant_shop($biz) ? "PCS" : "GM";
+}
+
 function pos_ensure_item_unit_columns() {
   static $done = false;
   if ($done) return;
@@ -629,12 +659,22 @@ function pos_customer_label($customer) {
   return "Walk-in";
 }
 
+function pos_item_wearer_label($raw) {
+  $v = pos_item_wearer($raw);
+  if ($v === "girls") return "Girls";
+  if ($v === "boys") return "Boys";
+  if ($v === "female") return "Female";
+  if ($v === "male") return "Male";
+  if ($v === "kids") return "Kids";
+  if ($v === "unisex") return "Unisex";
+  return "";
+}
+
 function pos_item_bill_name($item) {
   if (!is_array($item)) return "Item";
   $name = trim((string) ($item["name"] ?? "Item"));
   if ($name === "") $name = "Item";
-  $type = strtolower(trim((string) ($item["wearer_type"] ?? "")));
-  $wear = $type === "girls" || $type === "girl" ? "Girls" : ($type === "boys" || $type === "boy" ? "Boys" : ($type === "unisex" ? "Unisex" : ""));
+  $wear = pos_item_wearer_label($item["wearer_type"] ?? "");
   $color = trim((string) ($item["color"] ?? ""));
   $size = trim((string) ($item["size"] ?? ""));
   $bits = [];
@@ -648,7 +688,10 @@ function pos_item_wearer($raw) {
   $v = strtolower(trim((string) $raw));
   if ($v === "girl" || $v === "girls") return "girls";
   if ($v === "boy" || $v === "boys") return "boys";
-  if ($v === "unisex" || $v === "kids" || $v === "kid") return "unisex";
+  if ($v === "female" || $v === "women" || $v === "woman" || $v === "ladies" || $v === "lady") return "female";
+  if ($v === "male" || $v === "men" || $v === "man" || $v === "gents" || $v === "gent") return "male";
+  if ($v === "kids" || $v === "kid" || $v === "children" || $v === "child") return "kids";
+  if ($v === "unisex") return "unisex";
   return "";
 }
 

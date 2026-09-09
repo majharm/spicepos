@@ -134,9 +134,8 @@ async function findItemForImport(conn, businessId, row) {
 
 async function insertImportedItem(conn, biz, body) {
   const n = await nextSeq(conn, "item", 7);
-  const footwear = POSFootwear.isFootwearShop(biz || {});
   const variants = POSFootwear.fieldsFromBody(body);
-  const prefix = footwear ? "FW" : "SP";
+  const prefix = POSFootwear.itemPrefix(biz || {});
   const code = body.code || `${prefix}-${String(n).padStart(3, "0")}`;
   const id = crypto.randomUUID();
   await conn.query(
@@ -348,10 +347,9 @@ export function registerCrud(app) {
     try {
       const items = await withTransaction(async (conn) => {
         const [bizRows] = await conn.query("SELECT category, business_type FROM businesses WHERE id = ?", [bid()]);
-        const footwear = POSFootwear.isFootwearShop(bizRows[0] || {});
         const variants = POSFootwear.fieldsFromBody(b);
-        const prefix = footwear ? "FW" : "SP";
-        const sizesToCreate = footwear && variants.sizes?.length > 1 ? variants.sizes : [variants.size];
+        const prefix = POSFootwear.itemPrefix(bizRows[0] || {});
+        const sizesToCreate = POSFootwear.isVariantShop(bizRows[0] || {}) && variants.sizes?.length > 1 ? variants.sizes : [variants.size];
         const created = [];
         for (const sz of sizesToCreate) {
           const n = await nextSeq(conn, "item", 7);
