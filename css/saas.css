@@ -1243,6 +1243,13 @@ body.dev-mode .session-bar::after {
   gap: 16px;
   align-items: start;
 }
+#master-pane-backup {
+  display: grid;
+  gap: 16px;
+}
+#master-pane-backup[hidden] {
+  display: none;
+}
 .master-advance-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));

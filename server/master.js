@@ -8,7 +8,7 @@ import { defaultPerms } from "./roles.js";
 import { publicStatus } from "./auth.js";
 import { getPlatformSettings, setPlatformSetting } from "./settings.js";
 import { normalizeLocale } from "./i18n.js";
-import { cleanShopData, registerMasterBackup } from "./backup.js";
+import { cleanShopData, registerMasterBackup, tickBackupEmail } from "./backup.js";
 import { sendWelcomeSignup, sendWelcomeStaff, publicLoginUrl } from "./mail.js";
 import {
   sendUpdateAlerts,
@@ -112,6 +112,7 @@ export function registerMaster(app) {
 
   app.get("/api/master/dashboard", (req, res) =>
     send(res, async () => {
+      void tickBackupEmail().catch((err) => console.error("backup email tick:", err.message));
       const businesses = await query("SELECT * FROM businesses");
       const statuses = businesses.map((b) => publicStatus(b));
       const [users] = await query("SELECT COUNT(*) AS n FROM staff_users");

@@ -12,6 +12,7 @@ import {
   welcomeSignupMessage,
   welcomeStaffMessage,
   sendMail,
+  mimePayload,
   DEFAULT_SMTP_HOST,
   DEFAULT_SMTP_USER,
   DEFAULT_SMTP_FROM,
@@ -185,6 +186,24 @@ test("PHP and Node wire welcome mail after signup", () => {
   assert.match(master, /businessEmail/);
   assert.match(tenant, /sendWelcomeStaff/);
   assert.match(crud, /pos_send_welcome_staff/);
+});
+
+test("SMTP can attach a gzip backup as multipart/mixed", () => {
+  const payload = mimePayload({
+    from: "pos@atavtelecom.in",
+    fromName: "ATAV POS",
+    to: "ops@atavtelecom.in",
+    subject: "backup",
+    text: "platform backup",
+    html: "<p>platform backup</p>",
+    attachments: [{ filename: "spicepos-platform-backup.json.gz", content: Buffer.from("gzip"), mimeType: "application/gzip" }],
+  });
+  assert.match(payload, /multipart\/mixed/);
+  assert.match(payload, /Content-Disposition: attachment; filename="spicepos-platform-backup.json.gz"/);
+  assert.match(payload, /application\/gzip/);
+  const phpMail = readFileSync(path.join(root, "pos-mail.php"), "utf8");
+  assert.match(phpMail, /multipart\/mixed/);
+  assert.match(phpMail, /\$attachments/);
 });
 
 test("signup trial is 2 days", () => {
