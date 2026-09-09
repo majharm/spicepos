@@ -236,7 +236,7 @@ function fillWearerSelects() {
   const filterSel = $("wearer-filter");
   if (filterSel) {
     const cur = filterSel.value;
-    const allLabel = fw ? "All (girls & boys)" : ap ? "All (female, male, kids)" : "All";
+    const allLabel = fw || ap ? "All types" : "All";
     filterSel.innerHTML =
       `<option value="">${allLabel}</option>` +
       wearers.map((w) => `<option value="${escapeHtml(w.value)}">${escapeHtml(w.label)}</option>`).join("");

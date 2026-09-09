@@ -361,6 +361,7 @@ select {
   font-weight: 600;
   font-size: 13px;
 }
+.nav-btn[hidden] { display: none !important; }
 .nav-btn:hover {
   background: rgba(255, 255, 255, 0.06);
   color: #f8fafc;

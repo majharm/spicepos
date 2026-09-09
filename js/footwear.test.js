@@ -77,6 +77,7 @@ test("Apparel shops get female/male/kids colour and size, not spice copy", () =>
   assert.match(css, /body:not\(\.footwear-mode\):not\(\.apparel-mode\) \.footwear-only/);
   assert.match(css, /body\.footwear-mode #pack-choice/);
   assert.match(css, /body\.apparel-mode #pack-choice/);
+  assert.match(css, /\.nav-btn\[hidden\]/);
   assert.match(php, /function pos_is_apparel_shop/);
   assert.match(php, /function pos_is_variant_shop/);
   assert.match(php, /kids.*return "kids"/);
