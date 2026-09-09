@@ -444,6 +444,12 @@ function pos_offer_r2($n) {
   return round((float) $n, 2);
 }
 
+function pos_offer_clock($raw) {
+  $s = substr(trim((string) $raw), 0, 5);
+  if ($s === "" || !preg_match('/^\d{2}:\d{2}$/', $s)) return "";
+  return $s;
+}
+
 function pos_offer_in_window($o) {
   if (($o["live_status"] ?? $o["status"] ?? "") !== "active") return false;
   $days = trim((string) ($o["days_of_week"] ?? ""));
@@ -457,14 +463,16 @@ function pos_offer_in_window($o) {
     }
     if ($want && !in_array((int) date("w"), $want, true)) return false;
   }
-  $start = substr((string) ($o["start_time"] ?? ""), 0, 5);
-  $end = substr((string) ($o["end_time"] ?? ""), 0, 5);
+  $start = pos_offer_clock($o["start_time"] ?? "");
+  $end = pos_offer_clock($o["end_time"] ?? "");
   $cur = date("H:i");
-  if ($start !== "" && $end !== "" && $start > $end) {
-    if ($cur < $start && $cur > $end) return false;
-  } else {
-    if ($start !== "" && $cur < $start) return false;
-    if ($end !== "" && $cur > $end) return false;
+  if (!(($start === "" && $end === "") || ($start === "00:00" && $end === "00:00"))) {
+    if ($start !== "" && $end !== "" && $start > $end) {
+      if ($cur < $start && $cur > $end) return false;
+    } else {
+      if ($start !== "" && $cur < $start) return false;
+      if ($end !== "" && $cur > $end) return false;
+    }
   }
   $limit = $o["usage_limit"] ?? null;
   if ($limit !== null && $limit !== "" && (int) $limit > 0 && (int) ($o["used_count"] ?? 0) >= (int) $limit) return false;
