@@ -45,6 +45,78 @@ test("QR order payload normalizes public customer fields and valid lines", () =>
   assert.deepEqual(row.lines[0], { item_id: "i1", quantity: 1.5 });
 });
 
+test("QR based orders apply a PHP-shaped combo percent even when offer_price is 0", () => {
+  const priced = applyQrOffers(
+    [
+      {
+        item: { id: "dosa", name: "Masala dosa", category: "South Indian", base_unit: "PCS" },
+        unit: "PCS",
+        quantityBase: 1,
+        amount: 80,
+        gstRate: 5,
+        gstAmount: 4,
+      },
+      {
+        item: { id: "tea", name: "Tea", category: "Beverage", base_unit: "PCS" },
+        unit: "PCS",
+        quantityBase: 1,
+        amount: 20,
+        gstRate: 5,
+        gstAmount: 1,
+      },
+    ],
+    {
+      offers: [
+        {
+          name: "Dosa + Tea 8%",
+          offer_type: "combo",
+          status: "active",
+          live_status: "active",
+          discount_type: "pct",
+          discount_value: "8.00",
+          offer_price: "0.00",
+          conditions: { item_ids: ["dosa", "tea"] },
+        },
+      ],
+    },
+  );
+  assert.equal(priced.discount, 8);
+  assert.equal(priced.subtotal, 92);
+});
+
+test("QR based orders apply an offer whose MySQL end date is 0000-00-00", () => {
+  const priced = applyQrOffers(
+    [
+      {
+        item: { id: "dosa", name: "Masala dosa", category: "South Indian", base_unit: "PCS" },
+        unit: "PCS",
+        quantityBase: 1,
+        amount: 80,
+        gstRate: 5,
+        gstAmount: 4,
+      },
+    ],
+    {
+      offers: [
+        {
+          name: "Dosa 10% off",
+          offer_type: "product",
+          status: "active",
+          live_status: "expired",
+          discount_type: "pct",
+          discount_value: "10.00",
+          offer_price: "0.00",
+          start_date: "0000-00-00",
+          end_date: "0000-00-00",
+          conditions: { item_ids: ["dosa"] },
+        },
+      ],
+    },
+  );
+  assert.equal(priced.discount, 8);
+  assert.equal(priced.subtotal, 72);
+});
+
 test("QR based orders apply a PHP-shaped percent offer even when offer_price is 0", () => {
   const priced = applyQrOffers(
     [

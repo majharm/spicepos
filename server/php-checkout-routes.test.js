@@ -329,8 +329,8 @@ test("POS boot skips API probe and slims catalog photos", () => {
   assert.match(index, /qrcode\.iife\.js[^>]+defer/);
   assert.match(index, /preload="none"/);
   assert.match(index, /pos-api\.js\?v=20260905deploy154/);
-  assert.match(index, /app\.js\?v=20260905deploy166/);
-  assert.match(index, /app\.js\?v=20260905deploy165/);
+  assert.match(index, /app\.js\?v=20260905deploy167/);
+  assert.match(index, /offers\.js\?v=20260905deploy167/);
   assert.match(index, /restaurant\.js\?v=20260905deploy164/);
   assert.match(login, /x-pos-20260830e\.js\?v=20260905deploy154/);
   assert.match(loginJs, /saveLoginSpec/);

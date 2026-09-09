@@ -140,6 +140,13 @@ function pos_normalize_offer($body, $existing = []) {
   ];
 }
 
+function pos_offer_ymd($raw) {
+  $s = substr(trim((string) $raw), 0, 10);
+  if ($s === "" || str_starts_with($s, "0000-00-00") || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $s)) return "";
+  if ((int) substr($s, 0, 4) < 1990) return "";
+  return $s;
+}
+
 function pos_offer_public($row) {
   if (!$row) return null;
   $cond = [];
@@ -150,9 +157,11 @@ function pos_offer_public($row) {
   $row["conditions"] = $cond;
   $today = date("Y-m-d");
   $st = $row["status"] ?? "draft";
+  $end = pos_offer_ymd($row["end_date"] ?? "");
+  $start = pos_offer_ymd($row["start_date"] ?? "");
   if (!in_array($st, ["paused", "completed", "draft"], true)) {
-    if (!empty($row["end_date"]) && substr($row["end_date"], 0, 10) < $today) $st = "expired";
-    else if (!empty($row["start_date"]) && substr($row["start_date"], 0, 10) > $today) $st = "scheduled";
+    if ($end !== "" && $end < $today) $st = "expired";
+    else if ($start !== "" && $start > $today) $st = "scheduled";
     else if ($st === "scheduled") $st = "active";
   }
   $row["live_status"] = $st;
@@ -544,7 +553,8 @@ function pos_evaluate_offer($o, $cart) {
       if (in_array((string) ($line["itemId"] ?? ""), $ids, true)) $total += (float) ($line["gross"] ?? 0);
     }
     $dtype = (string) ($o["discount_type"] ?? "pct");
-    if ($dtype === "combo_price" || isset($o["offer_price"])) {
+    $special = (float) ($o["offer_price"] ?? 0);
+    if ($dtype === "combo_price" || ($dtype === "price" && $special > 0)) {
       $price = (float) ($o["offer_price"] ?? $cond["bundle_price"] ?? $o["discount_value"] ?? 0);
       $discount = pos_offer_r2(max(0, $total - $price));
     } else {
