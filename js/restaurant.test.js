@@ -1,5 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import "./footwear.js";
 import "./restaurant.js";
 
@@ -75,4 +78,14 @@ test("Kitchen KOT prints new dishes only, then reprint of the full ticket", () =
   assert.match(html, /Less spicy/);
   assert.doesNotMatch(html, /TAX INVOICE/);
   assert.doesNotMatch(html, /Grand total/);
+});
+
+test("Restaurant Counter cards use dish subcategory, not kirana CATEGORY / SUBCATEGORY", () => {
+  const root = path.dirname(fileURLToPath(import.meta.url));
+  const app = readFileSync(path.join(root, "app.js"), "utf8");
+  const css = readFileSync(path.join(root, "../css/pos.css"), "utf8");
+  assert.match(app, /function catalogCardMeta/);
+  assert.match(app, /isRestaurantShop\(\)/);
+  assert.match(app, /String\(item\.subcategory/);
+  assert.match(css, /restaurant-mode\.counter-mode .stage.is-counter .card-qty/);
 });

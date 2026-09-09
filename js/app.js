@@ -1771,15 +1771,33 @@ function resetItemImage() {
   paintItemImage("");
 }
 
+function catalogCardMeta(item) {
+  const variant = itemVariantText(item);
+  if (variant) return { sku: variant, detail: variant };
+  if (isRestaurantShop()) {
+    return { sku: String(item.subcategory || "").trim(), detail: "" };
+  }
+  return {
+    sku: `${item.category} / ${item.subcategory || "—"}`,
+    detail: item.hsn ? `HSN ${item.hsn}` : "",
+  };
+}
+
 function catalogCardHtml(i) {
   const low = Number(i.stock_gm) <= Number(i.reorder_level_gm);
+  const meta = catalogCardMeta(i);
+  const restaurant = isRestaurantShop();
+  const qty = restaurant ? "" : fmtQty(i.stock_gm, i);
+  const stock = restaurant
+    ? (Number(i.gst_rate) ? `GST ${escapeHtml(i.gst_rate)}%` : "")
+    : `${escapeHtml(i.code)} · GST ${escapeHtml(i.gst_rate)}%`;
   return `<button class="card" type="button" data-add="${escapeHtml(i.id)}">
         ${cardPhotoHtml(i)}
         <div class="card-body">
-          <div class="sku">${escapeHtml(itemVariantText(i) || `${i.category} / ${i.subcategory || "—"}`)}</div>
-          <div class="name">${escapeHtml(i.name)} <small>${escapeHtml(itemVariantText(i) || (i.hsn ? `HSN ${i.hsn}` : ""))}</small></div>
-          <div class="meta"><span class="card-price">${money(rateFor(i))}${escapeHtml(POSUnits.rateSuffix(itemUnit(i)))}</span><span class="card-qty">${escapeHtml(fmtQty(i.stock_gm, i))}</span></div>
-          <div class="stock ${low ? "low" : "ok"}">${escapeHtml(i.code)} · GST ${escapeHtml(i.gst_rate)}%</div>
+          ${meta.sku ? `<div class="sku">${escapeHtml(meta.sku)}</div>` : ""}
+          <div class="name">${escapeHtml(i.name)}${meta.detail ? ` <small>${escapeHtml(meta.detail)}</small>` : ""}</div>
+          <div class="meta"><span class="card-price">${money(rateFor(i))}${escapeHtml(POSUnits.rateSuffix(itemUnit(i)))}</span>${qty ? `<span class="card-qty">${escapeHtml(qty)}</span>` : ""}</div>
+          ${stock ? `<div class="stock ${low ? "low" : "ok"}">${stock}</div>` : ""}
         </div>
       </button>`;
 }
@@ -1830,6 +1848,10 @@ function renderCatalog() {
     grouped.get(key).push(i);
   }
   const keys = [...grouped.keys()].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+  if (isRestaurantShop() && String(state.categoryFilter || "")) {
+    root.innerHTML = `<div class="catalog-group-grid">${rows.map(catalogCardHtml).join("")}</div>`;
+    return;
+  }
   root.innerHTML = keys
     .map((key) => {
       const items = grouped.get(key);

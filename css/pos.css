@@ -1869,6 +1869,7 @@ body.apparel-mode #pack-choice { display: none; }
 body:not(.spice-mode) #pack-choice { display: none; }
 body.footwear-mode.counter-mode .stage.is-counter .card .sku { display: block; font-size: 11px; }
 body.apparel-mode.counter-mode .stage.is-counter .card .sku { display: block; font-size: 11px; }
+body.restaurant-mode.counter-mode .stage.is-counter .card-qty { display: none; }
 .wearer-chip {
   display: inline-block;
   margin-left: 6px;
