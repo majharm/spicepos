@@ -14,6 +14,8 @@ test("Restaurant shops include cafe, bakery, and food & beverage", () => {
   assert.equal(R.isRestaurantShop({ category: "Spices & masala" }), false);
   assert.equal(R.isRestaurantShop({ category: "Kirana / FMCG" }), false);
   assert.equal(F.shopKind({ category: "Food & beverage" }), "restaurant");
+  assert.equal(F.shopKind({ business_type: "Restaurant", category: "Spices & masala" }), "restaurant");
+  assert.equal(F.defaultCategory({ category: "Food & beverage" }), "Menu");
 });
 
 test("Table numbers normalize from free text and Parcel", () => {

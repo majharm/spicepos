@@ -36,6 +36,29 @@ const BIZ_CATEGORIES = [
   "General trade",
   "Other",
 ];
+const BIZ_CATEGORIES_FOR_TYPE = {
+  Restaurant: ["Food & beverage"],
+  Cafe: ["Food & beverage"],
+  Bakery: ["Food & beverage"],
+  Grocery: ["Kirana / FMCG", "Supermarket", "General trade"],
+  Pharmacy: ["Medical"],
+  Electronics: ["Mobile & electronics"],
+  Fashion: ["Apparel", "Garments", "Clothing", "Boutique", "Saree Shop", "Ladies Fashion", "Mens Fashion", "Kids Fashion"],
+  Footwear: ["Footwear"],
+};
+
+function categoriesForType(type) {
+  return BIZ_CATEGORIES_FOR_TYPE[String(type || "").trim()] || BIZ_CATEGORIES;
+}
+
+function fillCategorySelect(sel, type, current) {
+  if (!sel) return;
+  const list = categoriesForType(type);
+  const cur = String(current || sel.value || "").trim();
+  const want = list.includes(cur) ? cur : list.length === 1 ? list[0] : "";
+  sel.innerHTML = `<option value="">Select category</option>${list.map((v) => `<option>${v}</option>`).join("")}`;
+  if (want) sel.value = want;
+}
 const IN_STATES = [
   "Andhra Pradesh",
   "Arunachal Pradesh",
@@ -1789,7 +1812,7 @@ async function render() {
         form.business_id.value = b?.id || "";
         form.businessName.value = b?.name || "";
         setSelect(form.businessType, b?.business_type || "");
-        setSelect(form.businessCategory, b?.category || "");
+        fillCategorySelect(form.businessCategory, form.businessType.value, b?.category || "");
         form.ownerName.value = b?.owner_name || "";
         form.mobile.value = b?.mobile || "";
         form.email.value = b?.email || "";
@@ -1821,6 +1844,9 @@ async function render() {
         form.scrollIntoView({ block: "start" });
       }
       $("biz-cancel").onclick = () => fillBusiness(null);
+      form.businessType.addEventListener("change", () => {
+        fillCategorySelect(form.businessCategory, form.businessType.value, form.businessCategory.value);
+      });
       form.plan_id.addEventListener("change", () => {
         form.subscription_expires_at.value = yearlyStartYmd();
       });
