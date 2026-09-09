@@ -74,6 +74,7 @@ test("Apparel shops get female/male/kids colour and size, not spice copy", () =>
   assert.match(app, /Shirt \/ Kurti \/ Jeans/);
   assert.match(app, /Cotton \/ Silk \/ Denim/);
   assert.match(app, /Select female \/ male \/ kids/);
+  assert.match(app, /कुर्ती \/ कुर्ता \/ Kurti/);
   assert.match(css, /body:not\(\.footwear-mode\):not\(\.apparel-mode\) \.footwear-only/);
   assert.match(css, /body\.footwear-mode #pack-choice/);
   assert.match(css, /body\.apparel-mode #pack-choice/);
