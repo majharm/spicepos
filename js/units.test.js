@@ -8,6 +8,14 @@ test("counter qty is any grams from 1 to 1e9, not a 100 g step", () => {
   U.hydrate([]);
   assert.equal(U.step("GM"), 1);
   assert.equal(U.counterStep("GM"), 1);
+  assert.equal(U.counterStep("KG"), 1000);
+  assert.equal(U.counterStep("PCS"), 1);
+  assert.equal(U.formatQty(2, "KG"), "0.002 kg");
+  assert.equal(U.formatQty(2000, "KG"), "2 kg");
+  assert.equal(U.qtySuffix("KG"), "kg");
+  assert.equal(U.qtySuffix("PCS"), "pcs");
+  assert.equal(U.displayQty(2000, "KG"), 2);
+  assert.equal(U.displayQty(2, "GM"), 2);
   assert.equal(U.qtyMin(), 1);
   assert.equal(U.qtyMax(), 1000000000);
   assert.equal(U.clampQty(5), 5);

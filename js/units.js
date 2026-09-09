@@ -107,8 +107,21 @@
     return Math.min(QTY_MAX, Math.round(v));
   }
 
-  function counterStep(_code) {
+  function counterStep(code) {
+    const t = typeOf(code);
+    if (t.displayDiv > 1) return t.displayDiv;
     return 1;
+  }
+
+  function qtySuffix(code) {
+    return typeOf(code).stockSuffix || "g";
+  }
+
+  function displayQty(qty, code) {
+    const n = fromBase(qty, code);
+    if (!Number.isFinite(n)) return 0;
+    if (Math.abs(n - Math.round(n)) < 1e-9) return Math.round(n);
+    return parseFloat(n.toFixed(3));
   }
 
   function step(code) {
@@ -142,15 +155,10 @@
   function formatQty(qty, code) {
     const n = Number(qty) || 0;
     const t = typeOf(code);
-    if (t.family === "count") return `${n} ${t.stockSuffix || "pcs"}`;
-    if (t.code === "KG" || (t.family === "weight" && n >= 1000 && t.code !== "GM")) {
-      return `${(n / 1000).toFixed(n % 1000 === 0 ? 0 : 2)} kg`;
-    }
-    if (t.code === "LTR" || (t.family === "volume" && n >= 1000 && t.code !== "ML")) {
-      return `${(n / 1000).toFixed(n % 1000 === 0 ? 0 : 2)} L`;
-    }
+    if (t.family === "count") return `${displayQty(n, t.code)} ${t.stockSuffix || "pcs"}`;
+    if (t.displayDiv > 1) return `${displayQty(n, t.code)} ${t.stockSuffix}`;
     if (t.family === "volume") return `${n} ml`;
-    if (t.code === "GM" && n >= 1000) return `${(n / 1000).toFixed(2)} kg`;
+    if (t.code === "GM" && n >= 1000) return `${(n / 1000).toFixed(n % 1000 === 0 ? 0 : 2)} kg`;
     return `${n} g`;
   }
 
@@ -199,6 +207,8 @@
     qtyMax,
     clampQty,
     counterStep,
+    qtySuffix,
+    displayQty,
     step,
     receiveQty,
     receiveLabel,
