@@ -1855,8 +1855,11 @@ function renderCart() {
       .map((line) => {
         const item = state.items.find((i) => i.id === line.itemId);
         if (!item) return "";
-        const step = POSUnits.counterStep(itemUnit(item));
-        const unit = POSUnits.isCount(itemUnit(item)) ? "pcs" : POSUnits.typeOf(itemUnit(item)).family === "volume" ? "ml" : "g";
+        const unitCode = itemUnit(item);
+        const step = POSUnits.counterStep(unitCode);
+        const unit = POSUnits.qtySuffix(unitCode);
+        const qtyShow = POSUnits.displayQty(line.qtyGm, unitCode);
+        const qtyStep = POSUnits.displayQty(step, unitCode) || 1;
         const calc = lineCalc(item, line);
         const bc = String(line.barcode || "").trim();
         const key = cartLineKey(line);
@@ -1870,7 +1873,7 @@ function renderCart() {
             <div class="line-ops">
               <div class="qty">
                 <button type="button" data-chg="${escapeHtml(key)}" data-d="${-step}">−</button>
-                <input class="qty-input" type="number" inputmode="numeric" min="${POSUnits.qtyMin()}" max="${POSUnits.qtyMax()}" step="1" value="${escapeHtml(line.qtyGm)}" data-qty="${escapeHtml(key)}" aria-label="Quantity in ${unit}" />
+                <input class="qty-input" type="number" inputmode="decimal" min="${POSUnits.displayQty(POSUnits.qtyMin(), unitCode) || 0.001}" max="${POSUnits.qtyMax()}" step="${escapeHtml(qtyStep)}" value="${escapeHtml(qtyShow)}" data-qty="${escapeHtml(key)}" aria-label="Quantity in ${unit}" />
                 <span class="qty-unit">${escapeHtml(unit)}</span>
                 <button type="button" data-chg="${escapeHtml(key)}" data-d="${step}">+</button>
               </div>
@@ -4864,7 +4867,10 @@ $("lines").addEventListener("focusin", (e) => {
 $("lines").addEventListener("change", (e) => {
   const input = e.target.closest("[data-qty]");
   if (input) {
-    setLineQty(input.dataset.qty, input.value);
+    const line = findCartLine(input.dataset.qty);
+    const item = line ? state.items.find((i) => i.id === line.itemId) : null;
+    const base = item ? POSUnits.toBase(input.value, itemUnit(item)) : Number(input.value);
+    setLineQty(input.dataset.qty, base);
     return;
   }
   const disc = e.target.closest("[data-line-disc]");

@@ -230,6 +230,8 @@ test("Counter has a dedicated scan lane and Pay action", () => {
   assert.match(app, /function itemCategoryLabel/);
   assert.match(css, /counter-cats: category chips/);
   assert.match(app, /Pay \$\{money\(payTotal\)\}/);
+  assert.match(app, /POSUnits\.qtySuffix\(unitCode\)/);
+  assert.match(app, /POSUnits\.displayQty\(line\.qtyGm, unitCode\)/);
   assert.match(css, /\.scan-lane/);
   assert.match(app, /function cartLineKey/);
   assert.match(app, /function isPieceBarcodeLine/);
