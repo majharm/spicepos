@@ -1672,6 +1672,44 @@ function activeItems() {
   return state.items.filter((i) => i.status !== "inactive");
 }
 
+function itemStatusOf(raw) {
+  return String(raw || "active").toLowerCase() === "inactive" ? "inactive" : "active";
+}
+
+function paintItemStatus(status) {
+  const next = itemStatusOf(status);
+  if ($("item-status")) $("item-status").value = next;
+  document.querySelectorAll("#item-form [data-set-item-status]").forEach((btn) => {
+    btn.classList.toggle("is-on", btn.dataset.setItemStatus === next);
+  });
+}
+
+function itemWriteBody(item, extra) {
+  const unit = itemUnit(item);
+  return {
+    name: item.name,
+    local_name: item.local_name || "",
+    hsn: item.hsn || "",
+    category: item.category || defaultItemCategory(),
+    subcategory: item.subcategory || "",
+    color: item.color || "",
+    size: item.size || "",
+    wearer_type: item.wearer_type || "",
+    base_unit: unit,
+    unit,
+    retail_rate: item.retail_rate,
+    b2b_rate: item.b2b_rate,
+    purchase_rate: item.purchase_rate,
+    gst_rate: item.gst_rate,
+    mrp: item.mrp || "",
+    barcode_qty: 0,
+    stock_gm: item.stock_gm,
+    reorder_level_gm: item.reorder_level_gm,
+    status: itemStatusOf(item.status),
+    ...(extra || {}),
+  };
+}
+
 function itemCategoryLabel(item) {
   const c = String(item?.category || "").trim();
   return c || "Uncategorised";
@@ -2468,9 +2506,10 @@ function fillDatalists() {
 }
 
 function itemSearchHay(item) {
-  const raw = `${item.name || ""} ${item.local_name || ""} ${item.code || ""} ${item.hsn || ""} ${item.barcode || ""} ${item.mfr_barcode || ""} ${item.category || ""} ${item.subcategory || ""} ${item.color || ""} ${item.size || ""} ${item.wearer_type || ""}`;
+  const raw = `${item.name || ""} ${item.local_name || ""} ${item.code || ""} ${item.hsn || ""} ${item.barcode || ""} ${item.mfr_barcode || ""} ${item.category || ""} ${item.subcategory || ""} ${item.color || ""} ${item.size || ""} ${item.wearer_type || ""} ${itemStatusOf(item.status)}`;
   const I = window.POSI18n;
-  return I ? I.searchBlob(item) : raw.toLowerCase();
+  const blob = I ? I.searchBlob(item) : raw.toLowerCase();
+  return `${blob} ${itemStatusOf(item.status)}`.trim();
 }
 
 function paintItemsHero() {
@@ -2478,19 +2517,23 @@ function paintItemsHero() {
   if (!stats) return;
   const items = state.items || [];
   const low = items.filter((i) => Number(i.stock_gm) <= Number(i.reorder_level_gm)).length;
+  const inactive = items.filter((i) => itemStatusOf(i.status) === "inactive").length;
   const cats = new Set(items.map((i) => i.category).filter(Boolean)).size;
   stats.innerHTML = `<div class="items-stat"><span>Items</span><strong>${items.length}</strong></div>
     <div class="items-stat${low ? " is-warn" : ""}"><span>Low stock</span><strong>${low}</strong></div>
+    <div class="items-stat${inactive ? " is-warn" : ""}"><span>Inactive</span><strong>${inactive}</strong></div>
     <div class="items-stat"><span>Groups</span><strong>${cats}</strong></div>`;
 }
 
 function filterItemsCatalog() {
   const q = String($("item-catalog-search")?.value || "").trim().toLowerCase();
   const lowOnly = Boolean($("item-low-only")?.checked);
+  const hideInactive = Boolean($("item-hide-inactive")?.checked);
   document.querySelectorAll("#items-table [data-item-card]").forEach((card) => {
     const hay = card.dataset.itemSearch || "";
     const low = card.dataset.itemLow === "1";
-    card.hidden = (Boolean(q) && !hay.includes(q)) || (lowOnly && !low);
+    const inactive = card.dataset.itemInactive === "1";
+    card.hidden = (Boolean(q) && !hay.includes(q)) || (lowOnly && !low) || (hideInactive && inactive);
   });
 }
 
@@ -2561,6 +2604,7 @@ function resetItemForm() {
   if ($("item-mode")) $("item-mode").textContent = "New item";
   $("item-form")?.classList.remove("is-editing");
   document.querySelectorAll("#items-table .item-card.is-editing").forEach((el) => el.classList.remove("is-editing"));
+  paintItemStatus("active");
 }
 
 function fillItemForm(i) {
@@ -2583,6 +2627,7 @@ function fillItemForm(i) {
   fillItemUnitSelect(itemUnit(i));
   $("item-unit").value = itemUnit(i);
   $("item-stock").value = POSUnits.fromBase(i.stock_gm, itemUnit(i));
+  paintItemStatus(i.status);
   refreshItemUnitLabels();
   paintItemImage(itemPhotoUrl(i));
   if ($("item-save")) $("item-save").textContent = "Update item";
@@ -2638,7 +2683,8 @@ function renderItemsTable() {
       const suffix = POSUnits.rateSuffix(itemUnit(i));
       const search = itemSearchHay(i);
       const editing = $("item-id")?.value === i.id;
-      return `<article class="report-card item-card${editing ? " is-editing" : ""}" data-item-card data-edit-item="${escapeHtml(i.id)}" data-item-search="${escapeHtml(search)}" data-item-low="${low ? "1" : "0"}">
+      const inactive = itemStatusOf(i.status) === "inactive";
+      return `<article class="report-card item-card${editing ? " is-editing" : ""}${inactive ? " is-inactive" : ""}" data-item-card data-edit-item="${escapeHtml(i.id)}" data-item-search="${escapeHtml(search)}" data-item-low="${low ? "1" : "0"}" data-item-inactive="${inactive ? "1" : "0"}">
         <div class="item-card-head">
           ${thumb}
           <div class="item-card-copy">
@@ -2650,6 +2696,7 @@ function renderItemsTable() {
           <span class="item-chip">${escapeHtml(itemUnit(i))}</span>
           <span class="item-chip">${group}</span>
           <span class="item-chip ${low ? "stock low" : "stock ok"}">${escapeHtml(fmtQty(i.stock_gm, i))}</span>
+          <span class="item-chip ${inactive ? "stock low" : "stock ok"}">${inactive ? "Inactive" : "Active"}</span>
         </div>
         <div class="item-card-foot">
           <div class="item-card-rates">
@@ -2658,6 +2705,7 @@ function renderItemsTable() {
           </div>
           <div class="item-card-actions">
             <button class="btn" data-edit-item="${escapeHtml(i.id)}" type="button">Edit</button>
+            <button class="btn" data-toggle-item="${escapeHtml(i.id)}" type="button">${inactive ? "Activate" : "Deactivate"}</button>
             <button class="btn" data-recv="${escapeHtml(i.id)}" type="button">${escapeHtml(POSUnits.receiveLabel(itemUnit(i)))}</button>
           </div>
         </div>
@@ -4902,8 +4950,37 @@ $("pack-choice").addEventListener("change", () => {
 });
 
 $("items-table").addEventListener("click", async (e) => {
+  const toggle = e.target.closest("[data-toggle-item]");
   const recv = e.target.closest("[data-recv]");
   const edit = e.target.closest("[data-edit-item]");
+  if (toggle) {
+    e.preventDefault();
+    e.stopPropagation();
+    const item = state.items.find((x) => x.id === toggle.dataset.toggleItem);
+    if (!item) return;
+    const next = itemStatusOf(item.status) === "inactive" ? "active" : "inactive";
+    toggle.disabled = true;
+    try {
+      await api(`/api/items/${item.id}`, {
+        method: "PUT",
+        body: JSON.stringify(itemWriteBody(item, { status: next })),
+      });
+      if ($("item-hint")) {
+        $("item-hint").textContent = next === "active" ? `${item.name} is active on Counter.` : `${item.name} is inactive and hidden on Counter.`;
+        $("item-hint").className = "hint ok";
+      }
+      await loadBootstrap();
+      if ($("item-id")?.value === item.id) paintItemStatus(next);
+    } catch (err) {
+      if ($("item-hint")) {
+        $("item-hint").textContent = err.message;
+        $("item-hint").className = "hint error";
+      }
+    } finally {
+      toggle.disabled = false;
+    }
+    return;
+  }
   if (recv) {
     const item = state.items.find((x) => x.id === recv.dataset.recv);
     const qty = item ? POSUnits.receiveQty(itemUnit(item)) : 1000;
@@ -5401,6 +5478,11 @@ document.querySelector(".nav").addEventListener("click", (e) => {
   if (btn) showView(btn.dataset.view);
 });
 
+$("item-form").addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-set-item-status]");
+  if (!btn) return;
+  paintItemStatus(btn.dataset.setItemStatus);
+});
 $("item-form").addEventListener("submit", async (e) => {
   e.preventDefault();
   const unit = POSUnits.normalize($("item-unit").value);
@@ -5422,6 +5504,7 @@ $("item-form").addEventListener("submit", async (e) => {
     mrp: $("item-mrp")?.value || "",
     barcode_qty: POSUnits.isCount(unit) ? Number($("item-barcode-qty")?.value) || 0 : 0,
     stock_gm: POSUnits.toBase($("item-stock").value, unit),
+    status: itemStatusOf($("item-status")?.value),
     image_url: state.itemImage || "",
   };
   try {
@@ -5447,6 +5530,7 @@ $("item-cancel").addEventListener("click", () => {
 $("item-unit")?.addEventListener("change", refreshItemUnitLabels);
 $("item-catalog-search")?.addEventListener("input", filterItemsCatalog);
 $("item-low-only")?.addEventListener("change", filterItemsCatalog);
+$("item-hide-inactive")?.addEventListener("change", filterItemsCatalog);
 $("item-import-file")?.addEventListener("change", (e) => {
   const file = e.target.files?.[0];
   if (file) uploadItemsExcel(file);

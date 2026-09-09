@@ -737,6 +737,10 @@ function pos_item_wearer($raw) {
   return "";
 }
 
+function pos_item_status($raw) {
+  return strtolower(trim((string) $raw)) === "inactive" ? "inactive" : "active";
+}
+
 function pos_item_unit($item) {
   $raw = is_array($item) ? ($item["base_unit"] ?? $item["unit"] ?? "GM") : $item;
   if (function_exists("pos_unit_code")) return pos_unit_code($raw);

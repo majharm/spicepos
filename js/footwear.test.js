@@ -256,3 +256,17 @@ test("Counter has a dedicated scan lane and Pay action", () => {
   assert.match(app, /function paintPackLive/);
   assert.match(css, /packs-desk: composer \+ library/);
 });
+
+test("Items catalog has Active and Inactive status buttons", () => {
+  const index = readFileSync(path.join(root, "index.html"), "utf8");
+  const app = readFileSync(path.join(root, "js/app.js"), "utf8");
+  const css = readFileSync(path.join(root, "css/pos.css"), "utf8");
+  assert.match(index, /data-set-item-status="active"/);
+  assert.match(index, /data-set-item-status="inactive"/);
+  assert.match(index, /id="item-hide-inactive"/);
+  assert.match(app, /function paintItemStatus/);
+  assert.match(app, /function itemWriteBody/);
+  assert.match(app, /data-toggle-item/);
+  assert.match(app, /status: itemStatusOf\(\$\("item-status"\)\?\.value\)/);
+  assert.match(css, /item-status: active inactive buttons 2026/);
+});

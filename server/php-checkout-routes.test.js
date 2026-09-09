@@ -116,10 +116,11 @@ test("PHP customer insert bind types match placeholders", () => {
   assert.equal(cust[1], "ssssssssds");
 
   assert.match(crud, /color, size, wearer_type, base_unit/);
-  const items = crud.match(/INSERT INTO items[\s\S]{0,500}"(ssssssssssddddssdds)"/);
+  const items = crud.match(/INSERT INTO items[\s\S]{0,500}"(ssssssssssddddssddss)"/);
   assert.ok(items, "item INSERT found");
-  assert.equal(items[1].length, 19);
-  assert.equal(items[1], "ssssssssssddddssdds");
+  assert.equal(items[1].length, 20);
+  assert.equal(items[1], "ssssssssssddddssddss");
+  assert.match(core, /function pos_item_status/);
   assert.match(crud, /image_url/);
   assert.match(core, /function pos_item_image_url/);
   assert.match(core, /image_url.*MEDIUMTEXT/);
@@ -328,7 +329,7 @@ test("POS boot skips API probe and slims catalog photos", () => {
   assert.match(index, /qrcode\.iife\.js[^>]+defer/);
   assert.match(index, /preload="none"/);
   assert.match(index, /pos-api\.js\?v=20260905deploy154/);
-  assert.match(index, /app\.js\?v=20260905deploy164/);
+  assert.match(index, /app\.js\?v=20260905deploy166/);
   assert.match(index, /restaurant\.js\?v=20260905deploy164/);
   assert.match(login, /x-pos-20260830e\.js\?v=20260905deploy154/);
   assert.match(loginJs, /saveLoginSpec/);
