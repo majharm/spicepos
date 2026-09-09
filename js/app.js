@@ -132,6 +132,20 @@ function isFootwearShop() {
   return Boolean(globalThis.POSFootwear?.isFootwearShop(state.businessMeta));
 }
 
+function isApparelShop() {
+  return Boolean(globalThis.POSFootwear?.isApparelShop(state.businessMeta));
+}
+
+function isVariantShop() {
+  return Boolean(globalThis.POSFootwear?.isVariantShop(state.businessMeta));
+}
+
+function emptyTicketHint() {
+  if (isFootwearShop()) return "Scan or tap a pair · girls or boys";
+  if (isApparelShop()) return "Scan or tap a garment · female, male, or kids";
+  return "Tap a product or scan";
+}
+
 function itemVariantText(item) {
   return globalThis.POSFootwear?.variantLabel(item) || "";
 }
@@ -149,43 +163,90 @@ function defaultItemUnit() {
 }
 
 function applyFootwearMode() {
-  const on = isFootwearShop();
-  document.body.classList.toggle("footwear-mode", on);
+  const fw = isFootwearShop();
+  const ap = isApparelShop();
+  const on = fw || ap;
+  document.body.classList.toggle("footwear-mode", fw);
+  document.body.classList.toggle("apparel-mode", ap);
   document.querySelectorAll(".footwear-only").forEach((el) => {
     el.hidden = !on;
   });
   const search = $("search");
-  if (search) search.placeholder = on ? "Search shoe, colour, or size…" : "Search name or HSN…";
+  if (search) {
+    search.placeholder = fw
+      ? "Search shoe, colour, or size…"
+      : ap
+        ? "Search garment, colour, or size…"
+        : "Search name or HSN…";
+  }
   const scan = $("scan-code");
-  if (scan) scan.placeholder = on ? "Scan or search shoe" : "Scan or search";
-  if ($("item-category-lab")) $("item-category-lab").textContent = on ? "Style" : "Category";
-  if ($("item-category")) $("item-category").placeholder = on ? "School / Sports / Sandal" : "Whole Spices";
-  if ($("item-subcategory-lab")) $("item-subcategory-lab").textContent = on ? "Brand" : "Subcategory";
-  if ($("item-subcategory")) $("item-subcategory").placeholder = on ? "Bata / Local" : "Haldi / Jeera";
+  if (scan) scan.placeholder = fw ? "Scan or search shoe" : ap ? "Scan or search garment" : "Scan or search";
+  if ($("item-category-lab")) $("item-category-lab").textContent = fw ? "Style" : "Category";
+  if ($("item-category")) {
+    $("item-category").placeholder = fw ? "School / Sports / Sandal" : ap ? "Shirt / Kurti / Jeans" : "Whole Spices";
+  }
+  if ($("item-subcategory-lab")) $("item-subcategory-lab").textContent = fw ? "Brand" : "Subcategory";
+  if ($("item-subcategory")) {
+    $("item-subcategory").placeholder = fw ? "Bata / Local" : ap ? "Cotton / Silk / Denim" : "Haldi / Jeera";
+  }
+  if ($("item-name")) $("item-name").placeholder = fw ? "School shoe" : ap ? "Cotton kurti" : "Turmeric powder";
+  if ($("item-size")) $("item-size").placeholder = fw ? "e.g. 6, 7, 8 or 5" : ap ? "S, M, L, XL or 32, 34" : "e.g. 6, 7, 8 or 5";
   if ($("items-lede")) {
-    $("items-lede").textContent = on
+    $("items-lede").textContent = fw
       ? "Name, colour, size, girls/boys type, photo, rates, and stock."
-      : "Name, photo, HSN code, unit type, rates, and stock.";
+      : ap
+        ? "Name, colour, size, female/male/kids type, photo, rates, and stock."
+        : "Name, photo, HSN code, unit type, rates, and stock.";
   }
-  if ($("ticket-sub") && !state.cart?.length) {
-    $("ticket-sub").textContent = on ? "Scan or tap a pair · girls or boys" : "Tap a product or scan";
-  }
-  VIEW_META.items.subtitle = on
+  if ($("ticket-sub") && !state.cart?.length) $("ticket-sub").textContent = emptyTicketHint();
+  VIEW_META.items.subtitle = fw
     ? "Colour, size, girls/boys type, rates, and stock"
-    : "Photo, HSN, unit type, rates, and stock";
-  VIEW_META.counter.subtitle = on ? "Scan or tap a pair — girls, boys, colour, size" : "Scan, tap, or search — then Pay";
+    : ap
+      ? "Colour, size, female/male/kids, rates, and stock"
+      : "Photo, HSN, unit type, rates, and stock";
+  VIEW_META.counter.subtitle = fw
+    ? "Scan or tap a pair — girls, boys, colour, size"
+    : ap
+      ? "Scan or tap a garment — female, male, kids, colour, size"
+      : "Scan, tap, or search — then Pay";
   const pack = $("pack-choice");
   if (pack) pack.hidden = on;
+  fillWearerSelects();
   const colors = globalThis.POSFootwear?.COLORS || [];
-  const sizes = globalThis.POSFootwear?.SIZES || [];
+  const sizes = globalThis.POSFootwear?.sizesForShop?.(state.businessMeta) || globalThis.POSFootwear?.SIZES || [];
   if ($("color-list")) $("color-list").innerHTML = colors.map((c) => `<option value="${escapeHtml(c)}">`).join("");
   if ($("size-list")) $("size-list").innerHTML = sizes.map((s) => `<option value="${escapeHtml(s)}">`).join("");
   fillFootwearFilters();
   applyNav();
 }
 
+function fillWearerSelects() {
+  const wearers = globalThis.POSFootwear?.wearersForShop?.(state.businessMeta) || globalThis.POSFootwear?.WEARERS || [];
+  const fw = isFootwearShop();
+  const ap = isApparelShop();
+  const itemSel = $("item-wearer");
+  if (itemSel) {
+    const cur = itemSel.value;
+    const blank = fw ? "Select girls / boys" : ap ? "Select female / male / kids" : "Select type";
+    itemSel.innerHTML =
+      `<option value="">${blank}</option>` +
+      wearers.map((w) => `<option value="${escapeHtml(w.value)}">${escapeHtml(w.label)}</option>`).join("");
+    if (wearers.some((w) => w.value === cur)) itemSel.value = cur;
+  }
+  const filterSel = $("wearer-filter");
+  if (filterSel) {
+    const cur = filterSel.value;
+    const allLabel = fw ? "All (girls & boys)" : ap ? "All (female, male, kids)" : "All";
+    filterSel.innerHTML =
+      `<option value="">${allLabel}</option>` +
+      wearers.map((w) => `<option value="${escapeHtml(w.value)}">${escapeHtml(w.label)}</option>`).join("");
+    if (wearers.some((w) => w.value === cur)) filterSel.value = cur;
+    filterSel.setAttribute("aria-label", fw ? "Girls or boys" : ap ? "Female, male, or kids" : "Type");
+  }
+}
+
 function fillFootwearFilters() {
-  if (!isFootwearShop()) return;
+  if (!isVariantShop()) return;
   const items = activeItems();
   const sizes = [...new Set(items.map((i) => String(i.size || "").trim()).filter(Boolean))].sort((a, b) => Number(a) - Number(b) || a.localeCompare(b));
   const colors = [...new Set(items.map((i) => String(i.color || "").trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b));
@@ -1120,7 +1181,7 @@ function applyNav() {
     btn.hidden = map[view] ? !can(map[view]) : false;
     if (view === "growth") btn.hidden = !(can("growth") || can("reports"));
     if (view === "offers") btn.hidden = !(can("discount") || can("items") || can("growth"));
-    if (view === "packs" && isFootwearShop()) btn.hidden = true;
+    if (view === "packs" && isVariantShop()) btn.hidden = true;
   });
   const growthBtn = $("open-growth");
   if (growthBtn) growthBtn.hidden = !(can("growth") || can("reports"));
@@ -1580,9 +1641,7 @@ function renderCart() {
   if ($("ticket-sub")) {
     $("ticket-sub").textContent = state.cart.length
       ? `${state.cart.length} line${state.cart.length === 1 ? "" : "s"}`
-      : isFootwearShop()
-        ? "Scan or tap a pair · girls or boys"
-        : "Tap a product or scan";
+      : emptyTicketHint();
   }
   if (!state.cart.length) {
     $("lines").innerHTML = `<p class="catalog-empty lines-empty">Tap a product or scan a barcode.</p>`;
@@ -1723,7 +1782,7 @@ function renderPackChoice() {
       .join("");
   if (state.lastPack?.id) sel.value = state.lastPack.id;
   else sel.value = current || "";
-  sel.hidden = isFootwearShop() || !state.packs.length;
+  sel.hidden = isVariantShop() || !state.packs.length;
   const bar = $("pack-bar");
   if (bar) {
     bar.innerHTML = state.packs
@@ -2192,7 +2251,7 @@ function fillDatalists() {
 }
 
 function itemSearchHay(item) {
-  const raw = `${item.name || ""} ${item.local_name || ""} ${item.code || ""} ${item.hsn || ""} ${item.barcode || ""} ${item.mfr_barcode || ""} ${item.category || ""} ${item.subcategory || ""} ${item.color || ""} ${item.size || ""}`;
+  const raw = `${item.name || ""} ${item.local_name || ""} ${item.code || ""} ${item.hsn || ""} ${item.barcode || ""} ${item.mfr_barcode || ""} ${item.category || ""} ${item.subcategory || ""} ${item.color || ""} ${item.size || ""} ${item.wearer_type || ""}`;
   const I = window.POSI18n;
   return I ? I.searchBlob(item) : raw.toLowerCase();
 }
@@ -2335,6 +2394,7 @@ function fillItemForm(i) {
 function renderItemsTable() {
   const el = $("items-table");
   if (!el) return;
+  const variant = isVariantShop();
   const footwear = isFootwearShop();
   paintItemsHero();
   const items = state.items || [];
@@ -2352,7 +2412,7 @@ function renderItemsTable() {
         ? `<img class="item-thumb" src="${escapeHtml(src)}" alt="">`
         : `<span class="item-thumb-empty" aria-hidden="true">${escapeHtml(itemPhotoLetter(i))}</span>`;
       const low = Number(i.stock_gm) <= Number(i.reorder_level_gm);
-      const extra = footwear
+      const extra = variant
         ? `${escapeHtml(globalThis.POSFootwear?.wearerLabel(i.wearer_type) || "—")} · ${escapeHtml(i.color || "—")} · Sz ${escapeHtml(i.size || "—")}`
         : `${escapeHtml(i.code || "")}${i.hsn ? ` · HSN ${escapeHtml(i.hsn)}` : ""}`;
       const group = footwear

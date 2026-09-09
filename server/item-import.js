@@ -329,7 +329,6 @@ export function itemImportStockToBase(stock, unit) {
 }
 
 export function itemBodyFromImportRow(row, biz) {
-  const footwear = POSFootwear.isFootwearShop(biz || {});
   const unit = POSUnits.normalize(row.unit || POSFootwear.defaultUnit(biz || {}));
   const stock = itemImportStockToBase(row.stock, unit);
   const gstRaw = row.gst;
@@ -354,7 +353,6 @@ export function itemBodyFromImportRow(row, biz) {
   if (row.b2b !== "" && row.b2b != null) body.b2b_rate = Number(row.b2b) || 0;
   if (row.purchase !== "" && row.purchase != null) body.purchase_rate = Number(row.purchase) || 0;
   if (stock != null) body.stock_gm = stock;
-  if (footwear && !body.category) body.category = "Footwear";
   return body;
 }
 
