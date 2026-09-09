@@ -1149,6 +1149,7 @@ function pos_ensure_sales_schema() {
     "pack_name" => "VARCHAR(255) NULL",
     "pack_count" => "INT NULL",
     "qr_order_id" => "VARCHAR(255) NULL",
+    "table_no" => "VARCHAR(64) NULL",
   ];
   foreach ($cols as $name => $ddl) {
     $res = $db->query("SHOW COLUMNS FROM sales_orders LIKE '" . $db->real_escape_string($name) . "'");

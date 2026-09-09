@@ -69,6 +69,34 @@ test("thermal invoice HTML includes tax invoice header and invoice number", () =
   assert.match(html, /SGST/);
 });
 
+test("thermal and office invoices print the dining table", () => {
+  const InvoicePrint = loadInvoicePrint();
+  const order = {
+    order_number: "SO-10099",
+    customer_name: "Walk-in",
+    table_no: "4",
+    subtotal: 100,
+    gst: 5,
+    total: 105,
+    payment_method: "cash",
+    payment_status: "paid",
+    created_at: "2026-09-09T10:30:00.000Z",
+    lines: [{ item_name: "Masala dosa", quantity_gm: 1, rate_per_kg: 100, amount: 100, gst_rate: 5 }],
+  };
+  const ctx = {
+    company: { name: "Demo Kitchen" },
+    customers: [],
+    items: [{ id: "i1", unit: "PCS", base_unit: "PCS" }],
+    formatDateTime: (v) => String(v),
+    money: (n) => `₹${Number(n).toFixed(2)}`,
+    escapeHtml: (v) => String(v),
+  };
+  const thermal = InvoicePrint.invoiceBody(order, ctx);
+  const office = InvoicePrint.officeInvoiceBody(order, ctx);
+  assert.match(thermal, /Table 4/);
+  assert.match(office, /Table 4/);
+});
+
 test("purchase bill HTML includes purchase header and input GST", () => {
   const InvoicePrint = loadInvoicePrint();
   const html = InvoicePrint.purchaseBody(

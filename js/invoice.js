@@ -395,6 +395,10 @@ ${purchaseBody(purchase, ctx)}
     const packLine = order.pack_name
       ? `<div class="inv-row"><span>Pack</span><span>${escapeHtml(order.pack_name)} × ${num(order.pack_count) || 1}</span></div>`
       : "";
+    const tableNo = String(order.table_no || "").trim();
+    const tableLine = tableNo
+      ? `<div class="inv-row"><span>Table</span><span>${escapeHtml(/^\d+$/.test(tableNo) ? `Table ${tableNo}` : tableNo)}</span></div>`
+      : "";
 
     const itemRows = lines
       .map(
@@ -432,6 +436,7 @@ ${purchaseBody(purchase, ctx)}
     <div class="inv-row"><span>${escapeHtml(L(ctx, "invoice.customer", "Customer"))}</span><span>${escapeHtml(order.customer_name || cust?.business_name || cust?.name || "Walk-in")}</span></div>
     ${custGstin ? `<div class="inv-row"><span>GSTIN</span><span>${escapeHtml(custGstin)}</span></div>` : ""}
     <div class="inv-row"><span>Type</span><span>${escapeHtml(String(order.customer_type || cust?.type || "b2c").toUpperCase())}</span></div>
+    ${tableLine}
     ${packLine}
   </div>
   <div class="inv-rule"></div>
@@ -642,6 +647,10 @@ ${invoiceBody(order, ctx)}
     const packLine = order.pack_name
       ? `<div class="off-kv"><span>Pack</span><strong>${escapeHtml(order.pack_name)} × ${num(order.pack_count) || 1}</strong></div>`
       : "";
+    const tableNo = String(order.table_no || "").trim();
+    const tableLine = tableNo
+      ? `<div class="off-kv"><span>Table</span><strong>${escapeHtml(/^\d+$/.test(tableNo) ? `Table ${tableNo}` : tableNo)}</strong></div>`
+      : "";
 
     return `<article class="office-invoice">
   <header class="off-head">
@@ -656,6 +665,7 @@ ${invoiceBody(order, ctx)}
       <div class="off-kv"><span>Invoice No.</span><strong>${invNo}</strong></div>
       <div class="off-kv"><span>Date</span><span>${escapeHtml(when)}</span></div>
       <div class="off-kv"><span>Payment</span><span>${escapeHtml(payLabel(order.payment_method))} · ${escapeHtml(payStatusLabel(order.payment_status))}</span></div>
+      ${tableLine}
       ${packLine}
     </div>
   </header>

@@ -147,6 +147,7 @@ export async function ensureSchema() {
   await addColumn("sales_orders", "loyalty_points_earned", "INT NOT NULL DEFAULT 0");
   await addColumn("sales_orders", "loyalty_discount", "DECIMAL(12,2) NOT NULL DEFAULT 0");
   await addColumn("sales_orders", "qr_order_id", "VARCHAR(255) NULL");
+  await addColumn("sales_orders", "table_no", "VARCHAR(64) NULL");
   await addColumn("sales_order_lines", "mrp", "DECIMAL(12,2) NOT NULL DEFAULT 0");
   await addColumn("sales_order_lines", "discount_type", "VARCHAR(16) NOT NULL DEFAULT 'amt'");
   await addColumn("sales_order_lines", "discount_value", "DECIMAL(12,2) NOT NULL DEFAULT 0");

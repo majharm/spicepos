@@ -39,6 +39,23 @@ function pos_dispatch_holds($path, $method, $body, $bid, $branchId, $uid, $auth)
     if (!is_array($cart) || !$cart) {
       pos_send(400, ["error" => "Cart is empty", "php" => true]);
     }
+    $tableNo = trim((string) ($payload["table_no"] ?? $payload["tableNo"] ?? ""));
+    if ($tableNo !== "") {
+      try {
+        $existing = pos_q(
+          "SELECT id, payload_json FROM held_bills WHERE business_id = ?",
+          "s",
+          [$bid]
+        );
+        foreach ($existing as $row) {
+          $parsed = json_decode($row["payload_json"] ?? "{}", true);
+          $have = is_array($parsed) ? trim((string) ($parsed["table_no"] ?? $parsed["tableNo"] ?? "")) : "";
+          if ($have !== "" && $have === $tableNo) {
+            pos_q("DELETE FROM held_bills WHERE id = ? AND business_id = ?", "ss", [$row["id"], $bid]);
+          }
+        }
+      } catch (Exception $e) { /* keep going */ }
+    }
     $id = pos_uuid();
     $label = trim((string) ($body["label"] ?? "Held bill"));
     if ($label === "") $label = "Held bill";

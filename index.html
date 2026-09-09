@@ -6,7 +6,7 @@
     <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
     <title>ATAV POS</title>
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./css/pos.css?v=20260905deploy163" />
+    <link rel="stylesheet" href="./css/pos.css?v=20260905deploy164" />
     <link rel="stylesheet" href="./css/saas.css?v=20260905deploy136" />
   </head>
   <body>
@@ -156,6 +156,7 @@
           </header>
           <div class="workspace">
             <div class="catalog-pane">
+              <div class="table-board" id="table-board" hidden></div>
               <div class="catalog-cats" id="catalog-cats" hidden role="tablist" aria-label="Item categories"></div>
               <div class="catalog" id="catalog"></div>
             </div>
@@ -216,6 +217,7 @@
               <div class="pay">
                 <div class="pay-row">
                   <button class="btn" id="btn-hold" type="button" data-i18n="pos.hold">Hold</button>
+                  <button class="btn" id="btn-kot" type="button">Kitchen KOT</button>
                   <button class="btn danger" id="btn-clear" type="button" data-i18n="pos.clear">Clear</button>
                   <button class="btn primary" id="btn-pay" type="button">Pay</button>
                 </div>
@@ -1526,18 +1528,19 @@
     <script src="./js/gst-supply.js?v=20260905deploy136" defer></script>
     <script src="./js/pos-api.js?v=20260905deploy154" defer></script>
     <script src="./js/units.js?v=20260905deploy136" defer></script>
-    <script src="./js/footwear.js?v=20260905deploy163" defer></script>
+    <script src="./js/footwear.js?v=20260905deploy164" defer></script>
+    <script src="./js/restaurant.js?v=20260905deploy164" defer></script>
     <script src="./js/discount.js?v=20260905deploy136" defer></script>
     <script src="./js/offers.js?v=20260905deploy140" defer></script>
     <script src="./js/loyalty.js?v=20260905deploy136" defer></script>
     <script src="./js/barcode.js?v=20260905deploy136" defer></script>
     <script src="./js/camera-scan.js?v=20260904camera1" defer></script>
     <script src="./js/dev-mode.js?v=20260905deploy136" defer></script>
-    <script src="./js/invoice.js?v=20260905deploy150" defer></script>
+    <script src="./js/invoice.js?v=20260905deploy164" defer></script>
     <script src="./js/support.js?v=20260905deploy136" defer></script>
     <script src="./js/qrcode.iife.js?v=20260905qr1" defer></script>
     <script src="./js/qr-notify.js?v=20260905deploy144" defer></script>
-    <script src="./js/app.js?v=20260905deploy163" defer></script>
+    <script src="./js/app.js?v=20260905deploy164" defer></script>
     <script src="./js/growth.js?v=20260905deploy145" defer></script>
     <script src="./js/offers-ui.js?v=20260905deploy136" defer></script>
   </body>
