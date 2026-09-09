@@ -430,11 +430,28 @@ export function registerTenant(app) {
 
   app.post("/api/holds", requireStaff, requirePerm("counter"), (req, res) =>
     send(res, async () => {
+      const payload = req.body?.payload && typeof req.body.payload === "object" ? req.body.payload : {};
+      const tableNo = String(payload.table_no || payload.tableNo || "").trim();
+      if (tableNo) {
+        const rows = await query("SELECT id, payload_json FROM held_bills WHERE business_id = ?", [bid()]);
+        for (const row of rows) {
+          let have = "";
+          try {
+            const parsed = JSON.parse(row.payload_json || "{}") || {};
+            have = String(parsed.table_no || parsed.tableNo || "").trim();
+          } catch {
+            have = "";
+          }
+          if (have && have === tableNo) {
+            await query("DELETE FROM held_bills WHERE id=? AND business_id=?", [row.id, bid()]);
+          }
+        }
+      }
       const id = crypto.randomUUID();
       await query(
         `INSERT INTO held_bills (id, business_id, branch_id, user_id, label, payload_json)
          VALUES (?,?,?,?,?,?)`,
-        [id, bid(), branchId(), authUser()?.id, req.body?.label || "Held bill", JSON.stringify(req.body?.payload || {})],
+        [id, bid(), branchId(), authUser()?.id, req.body?.label || "Held bill", JSON.stringify(payload)],
       );
       return { ok: true, id };
     }),

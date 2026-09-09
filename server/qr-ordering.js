@@ -489,6 +489,14 @@ export async function ensureQrInvoice(qrOrderId, { paymentMethod = "cash" } = {}
         /* optional */
       }
     }
+    const tableNo = String(order.table_no || "").trim().slice(0, 64);
+    if (tableNo) {
+      try {
+        await conn.query("UPDATE sales_orders SET table_no = ? WHERE id = ? AND business_id = ?", [tableNo, orderId, businessId]);
+      } catch {
+        /* optional */
+      }
+    }
     for (const line of qrLines) {
       const [items] = await conn.query("SELECT * FROM items WHERE id = ? AND business_id = ?", [line.item_id, businessId]);
       const item = items[0];

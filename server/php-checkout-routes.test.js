@@ -51,6 +51,10 @@ test("PHP fallback routes checkout, holds, and order updates through core", () =
   assert.match(checkout, /pos_tick_shop_alerts/);
   assert.match(holds, /function pos_dispatch_holds/);
   assert.match(holds, /INSERT INTO held_bills/);
+  assert.match(holds, /payload\["table_no"\]/);
+  assert.match(checkout, /table_no = \?/);
+  assert.match(read("server/index.js"), /table_no = \?/);
+  assert.match(read("pos-qr-ordering.php"), /table_no = \?/);
   assert.match(orders, /function pos_dispatch_order_route/);
   assert.match(core, /This POS action is not available in PHP fallback yet \(\{\$method\} \{\$path\}\)/);
   assert.match(read("pos-accounting.php"), /\$path === "expenses"/);
@@ -324,7 +328,8 @@ test("POS boot skips API probe and slims catalog photos", () => {
   assert.match(index, /qrcode\.iife\.js[^>]+defer/);
   assert.match(index, /preload="none"/);
   assert.match(index, /pos-api\.js\?v=20260905deploy154/);
-  assert.match(index, /app\.js\?v=20260905deploy163/);
+  assert.match(index, /app\.js\?v=20260905deploy164/);
+  assert.match(index, /restaurant\.js\?v=20260905deploy164/);
   assert.match(login, /x-pos-20260830e\.js\?v=20260905deploy154/);
   assert.match(loginJs, /saveLoginSpec/);
   assert.match(core, /function pos_catalog_items/);

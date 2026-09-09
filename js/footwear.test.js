@@ -136,6 +136,8 @@ test("Every signup category gets its own item copy, not Whole Spices", () => {
     assert.equal(F.shopKind({ category: cat }), kinds[cat], cat);
   }
   assert.equal(F.shopKind({ business_type: "Restaurant" }), "restaurant");
+  assert.equal(F.isRestaurantShop({ business_type: "Restaurant" }), true);
+  assert.equal(F.isRestaurantShop({ category: "Kirana / FMCG" }), false);
   assert.equal(F.shopKind({ business_type: "Pharmacy" }), "pharmacy");
   assert.equal(F.shopKind({ business_type: "Electronics" }), "electronics");
   assert.equal(F.shopKind({ business_type: "Grocery" }), "grocery");

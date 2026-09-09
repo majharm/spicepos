@@ -956,6 +956,69 @@ a.btn { text-decoration: none; display: inline-block; }
   -webkit-overflow-scrolling: touch;
 }
 .catalog-cats[hidden] { display: none; }
+.table-board {
+  flex: 0 0 auto;
+  padding: 10px 12px 0;
+}
+.table-board[hidden] { display: none; }
+.table-board-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.table-board-head strong {
+  font-size: 13px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.table-board-head span {
+  color: var(--muted, #64748b);
+  font-size: 12px;
+}
+.table-seats {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
+  gap: 8px;
+}
+.table-seat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 58px;
+  padding: 8px 6px;
+  border: 1px solid var(--line-strong, #c5d0c8);
+  border-radius: 12px;
+  background: #fff;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+}
+.table-seat strong {
+  font-size: 16px;
+  font-weight: 800;
+}
+.table-seat span {
+  font-size: 11px;
+  color: var(--muted, #64748b);
+}
+.table-seat.is-busy {
+  background: #fff7ed;
+  border-color: #fdba74;
+}
+.table-seat.is-on {
+  background: #0f766e;
+  border-color: #0f766e;
+  color: #fff;
+}
+.table-seat.is-on span { color: rgba(255,255,255,0.86); }
+body:not(.restaurant-mode) #table-board,
+body:not(.restaurant-mode) #btn-kot {
+  display: none !important;
+}
+#btn-kot { white-space: nowrap; }
 .catalog-cat {
   flex: 0 0 auto;
   border: 1px solid var(--line, #dbe4ee);
@@ -1378,6 +1441,7 @@ body.bill-collapsed .bill-toggle[data-count]:not([data-count="0"])::after {
 #profit-row { display: none; }
 .pay { padding: 10px 12px 12px; display: grid; gap: 8px; background: #fff; flex: 0 0 auto; border-top: 1px solid var(--line); }
 .pay-row { display: grid; grid-template-columns: 1fr 1fr 1.7fr; gap: 8px; }
+body.restaurant-mode .pay-row { grid-template-columns: 1fr 1.2fr 1fr 1.6fr; }
 .pay-row .btn { width: 100%; }
 #btn-pay {
   min-height: 46px;
@@ -3889,6 +3953,9 @@ button.items-stat.is-active {
     align-items: stretch;
     box-shadow: 0 -8px 20px rgba(15, 23, 42, 0.08);
     padding: 8px 10px calc(10px + env(safe-area-inset-bottom));
+  }
+  body.restaurant-mode .stage.is-counter .pay {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr) minmax(0, 1fr) minmax(0, 1.5fr);
   }
   .stage.is-counter .pay .btn {
     min-height: 44px;

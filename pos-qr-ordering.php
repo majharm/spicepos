@@ -220,6 +220,13 @@ function pos_qr_ensure_invoice($bid, $branchId, $uid, $qrOrderId, $paymentMethod
         $branchId ? (string) $branchId : null, $uid ? (string) $uid : null,
       ]
     );
+    $tableNo = trim((string) ($order["table_no"] ?? ""));
+    if ($tableNo !== "") {
+      if (strlen($tableNo) > 64) $tableNo = substr($tableNo, 0, 64);
+      try {
+        pos_q("UPDATE sales_orders SET table_no = ? WHERE id = ? AND business_id = ?", "sss", [$tableNo, $orderId, $bid]);
+      } catch (Exception $e) { /* optional */ }
+    }
     try {
       pos_q(
         "UPDATE sales_orders SET qr_order_id = ?, discount_type = ?, discount_value = ? WHERE id = ? AND business_id = ?",

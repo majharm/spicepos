@@ -67,6 +67,10 @@
     return shopKind(biz) === "spice";
   }
 
+  function isRestaurantShop(biz) {
+    return shopKind(biz) === "restaurant";
+  }
+
   function isVariantShop(biz) {
     return isFootwearShop(biz) || isApparelShop(biz);
   }
@@ -227,8 +231,8 @@
         scan: "Scan or search dish",
         lede: "Name, photo, HSN code, unit type, rates, and stock.",
         itemsSub: "Photo, HSN, unit type, rates, and stock",
-        counterSub: "Tap a dish — then Pay",
-        ticket: "Tap a dish or scan",
+        counterSub: "Pick a table, tap dishes, send kitchen KOT, then Pay",
+        ticket: "Pick a table, then tap a dish",
         hsn: "e.g. 2106",
       },
       pharmacy: {
@@ -353,6 +357,7 @@
     isFootwearShop,
     isApparelShop,
     isSpiceShop,
+    isRestaurantShop,
     isVariantShop,
     shopKind,
     itemFormCopy,

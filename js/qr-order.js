@@ -1,5 +1,6 @@
 (function () {
   const shopKey = new URLSearchParams(location.search).get("shop") || "";
+  const tablePrefill = new URLSearchParams(location.search).get("table") || "";
   const state = { shop: null, items: [], offers: [], offerSettings: { stacking: "product_and_bill" }, cart: new Map(), category: "All", query: "" };
   const $ = (id) => document.getElementById(id);
   const money = (n) => new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR" }).format(Number(n) || 0);
@@ -373,6 +374,11 @@
     $("order-success").hidden = true;
     scrollTo({ top: 0, behavior: "smooth" });
   });
+
+  if (tablePrefill) {
+    const input = document.querySelector("#order-form [name=table_no]");
+    if (input && !input.value) input.value = tablePrefill;
+  }
 
   loadMenu().catch((err) => {
     $("shop-name").textContent = "Menu unavailable";

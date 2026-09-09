@@ -47,6 +47,8 @@ const state = {
   stockRows: [],
   stockLowOnly: false,
   activeQrOrderId: "",
+  activeTable: "",
+  kotPrinted: [],
 };
 
 function debounce(fn, wait = 120) {
@@ -59,6 +61,9 @@ function debounce(fn, wait = 120) {
 
 const renderCatalogDebounced = debounce(() => renderCatalog(), 100);
 const renderOrdersListDebounced = debounce(() => renderOrdersList(), 100);
+const saveTableHoldDebounced = debounce(() => {
+  void saveActiveTableHold().catch(() => {});
+}, 700);
 
 function $(id) {
   return document.getElementById(id);
@@ -144,6 +149,14 @@ function isSpiceShop() {
   return Boolean(globalThis.POSFootwear?.isSpiceShop(state.businessMeta));
 }
 
+function isRestaurantShop() {
+  return Boolean(globalThis.POSRestaurant?.isRestaurantShop(state.businessMeta) || globalThis.POSFootwear?.isRestaurantShop(state.businessMeta));
+}
+
+function restaurantApi() {
+  return globalThis.POSRestaurant || null;
+}
+
 function emptyTicketHint() {
   return globalThis.POSFootwear?.itemFormCopy(state.businessMeta)?.ticket || "Tap a product or scan";
 }
@@ -173,6 +186,7 @@ function applyFootwearMode() {
   document.body.classList.toggle("footwear-mode", fw);
   document.body.classList.toggle("apparel-mode", ap);
   document.body.classList.toggle("spice-mode", spice);
+  document.body.classList.toggle("restaurant-mode", isRestaurantShop());
   document.querySelectorAll(".footwear-only").forEach((el) => {
     el.hidden = !on;
   });
@@ -201,6 +215,7 @@ function applyFootwearMode() {
   if ($("size-list")) $("size-list").innerHTML = sizes.map((s) => `<option value="${escapeHtml(s)}">`).join("");
   fillFootwearFilters();
   applyNav();
+  renderTableBoard();
 }
 
 function fillWearerSelects() {
@@ -650,11 +665,14 @@ function orderTotal(order, result) {
 }
 
 function clearCounterAfterSale(order, result) {
+  const table = state.activeTable;
   state.cart = [];
   state.lastPack = null;
   resetOfferPopup();
   state.editingOrderId = null;
   state.activeQrOrderId = "";
+  state.activeTable = "";
+  state.kotPrinted = [];
   state.billDiscountValue = 0;
   state.loyaltyRedeem = 0;
   if ($("bill-disc-value")) $("bill-disc-value").value = 0;
@@ -665,6 +683,7 @@ function clearCounterAfterSale(order, result) {
   if ($("pack-choice")) $("pack-choice").value = "";
   renderCatalog();
   renderCart();
+  if (table) void dropTableHold(table);
   setHint(`Order accepted · ${orderLabel(order, result)} · ${money(orderTotal(order, result))}`, "ok");
 }
 
@@ -1374,7 +1393,9 @@ function holdPayload(row) {
 function renderHeldBills() {
   const el = $("held-bills");
   if (!el) return;
-  const list = Array.isArray(state.held) ? state.held : [];
+  const R = restaurantApi();
+  const all = Array.isArray(state.held) ? state.held : [];
+  const list = isRestaurantShop() && R ? all.filter((h) => !R.isTableHold(h)) : all;
   if (!list.length) {
     el.hidden = true;
     el.innerHTML = "";
@@ -1396,6 +1417,206 @@ function renderHeldBills() {
       .join("");
 }
 
+function tableHoldPayload() {
+  return {
+    table_no: state.activeTable || "",
+    cart: state.cart,
+    customerId: state.customerId,
+    lastPack: state.lastPack,
+    billDiscountType: state.billDiscountType,
+    billDiscountValue: state.billDiscountValue,
+    loyaltyRedeem: state.loyaltyRedeem,
+    kotPrinted: state.kotPrinted || [],
+    qrOrderId: state.activeQrOrderId || "",
+  };
+}
+
+function applyHoldToCart(payload, opts = {}) {
+  const keep = Boolean(opts.keepHold);
+  state.cart = (payload?.cart || []).map((line) => ({
+    itemId: line.itemId,
+    qtyGm: Number(line.qtyGm) || 0,
+    discountType: line.discountType || "amt",
+    discountValue: Number(line.discountValue) || 0,
+    barcode: line.barcode || "",
+  })).filter((l) => l.itemId && l.qtyGm > 0);
+  state.billDiscountType = payload.billDiscountType || "amt";
+  state.billDiscountValue = Number(payload.billDiscountValue) || 0;
+  state.loyaltyRedeem = Number(payload.loyaltyRedeem) || 0;
+  if ($("bill-disc-type")) $("bill-disc-type").value = state.billDiscountType;
+  if ($("bill-disc-value")) $("bill-disc-value").value = state.billDiscountValue;
+  if ($("loyalty-redeem")) $("loyalty-redeem").value = state.loyaltyRedeem;
+  if (payload.customerId) state.customerId = payload.customerId;
+  state.lastPack = payload.lastPack || null;
+  if (payload.customerId) $("customer").value = payload.customerId;
+  if (payload.lastPack?.id) $("pack-choice").value = payload.lastPack.id;
+  else if ($("pack-choice")) $("pack-choice").value = "";
+  state.kotPrinted = Array.isArray(payload.kotPrinted) ? payload.kotPrinted : [];
+  if (payload.qrOrderId && keep) state.activeQrOrderId = payload.qrOrderId;
+}
+
+function renderTableBoard() {
+  const el = $("table-board");
+  if (!el) return;
+  const R = restaurantApi();
+  if (!isRestaurantShop() || !R) {
+    el.hidden = true;
+    el.innerHTML = "";
+    return;
+  }
+  const seats = R.seatIds(R.seatCount(state.company || state.businessMeta, state.held));
+  el.hidden = false;
+  el.innerHTML =
+    `<div class="table-board-head"><strong>Tables</strong><span>Open a table, send kitchen KOT, then Pay</span></div>` +
+    `<div class="table-seats">${seats
+      .map((id) => {
+        const hold = R.findTableHold(state.held, id);
+        const payload = hold ? R.holdPayload(hold) || {} : {};
+        const dishes = (payload.cart || []).length;
+        const on = state.activeTable === id;
+        const busy = Boolean(hold) || (on && state.cart.length);
+        const label = id === R.PARCEL ? "Parcel" : id;
+        const meta = busy ? `${dishes || state.cart.length} ${dishes === 1 || (on && state.cart.length === 1) ? "dish" : "dishes"}` : "Free";
+        return `<button class="table-seat${on ? " is-on" : ""}${busy ? " is-busy" : ""}" type="button" data-table="${escapeHtml(id)}">
+          <strong>${escapeHtml(label)}</strong>
+          <span>${escapeHtml(on && state.cart.length ? `${state.cart.length} dishes` : meta)}</span>
+        </button>`;
+      })
+      .join("")}</div>`;
+}
+
+async function saveActiveTableHold() {
+  const R = restaurantApi();
+  if (!isRestaurantShop() || !R || !state.activeTable || !state.cart.length) return null;
+  const data = await api("/api/holds", {
+    method: "POST",
+    body: JSON.stringify({
+      label: R.holdLabel(state.activeTable),
+      payload: tableHoldPayload(),
+    }),
+  });
+  await loadHolds();
+  return data;
+}
+
+async function dropTableHold(tableNo) {
+  const R = restaurantApi();
+  if (!R || !tableNo) return;
+  const hold = R.findTableHold(state.held, tableNo);
+  if (!hold?.id) return;
+  try {
+    await api(`/api/holds/${encodeURIComponent(hold.id)}`, { method: "DELETE" });
+  } catch {
+    /* already gone */
+  }
+  await loadHolds();
+}
+
+async function selectDiningTable(tableNo) {
+  const R = restaurantApi();
+  if (!R) return;
+  const next = R.normalizeTableNo(tableNo);
+  if (!next) return;
+  if (state.activeTable === next) return;
+  if (state.activeTable && state.cart.length) {
+    try {
+      await saveActiveTableHold();
+    } catch (err) {
+      setHint(err.message, "error");
+      return;
+    }
+  }
+  const hold = R.findTableHold(state.held, next);
+  const payload = hold ? holdPayload(hold) : null;
+  if (payload?.cart?.length) applyHoldToCart(payload, { keepHold: true });
+  else {
+    state.cart = [];
+    state.kotPrinted = [];
+    state.lastPack = null;
+    if ($("pack-choice")) $("pack-choice").value = "";
+  }
+  state.activeTable = next;
+  renderCart();
+  renderTableBoard();
+  setHint(`${R.displayTable(next)} open`, "ok");
+}
+
+function ensureDiningTable() {
+  const R = restaurantApi();
+  if (!isRestaurantShop() || !R) return;
+  if (!state.activeTable) state.activeTable = R.PARCEL;
+}
+
+function kotLinesForPrint(lines) {
+  return (lines || []).map((line) => {
+    const item = state.items.find((row) => row.id === (line.itemId || line.item_id));
+    return {
+      itemId: line.itemId || line.item_id,
+      qtyGm: Number(line.qtyGm || line.quantity_gm) || 0,
+      name: item?.name || line.name || line.item_name || "Item",
+      unit: item?.unit || item?.base_unit || line.unit || "PCS",
+    };
+  });
+}
+
+function printKitchenKot(opts = {}) {
+  const R = restaurantApi();
+  if (!R) throw new Error("Kitchen KOT is not available");
+  const tableNo = R.normalizeTableNo(opts.tableNo || state.activeTable);
+  const source = opts.lines || state.cart;
+  if (!source.length) throw new Error("Nothing to send to kitchen");
+  const pick = opts.full ? { kind: "reprint", lines: R.cartSnapshot(source) } : R.kotKind(source, opts.printed || state.kotPrinted);
+  if (!pick.lines.length) throw new Error("Nothing new for kitchen");
+  const named = kotLinesForPrint(pick.lines.map((line) => {
+    const live = source.find((row) => (row.itemId || row.item_id) === line.itemId) || line;
+    return { ...live, ...line };
+  }));
+  const w = window.open("", "kitchen-kot", "width=400,height=720");
+  if (!w) throw new Error("Allow pop-ups to print kitchen KOT");
+  w.document.write(
+    R.kotDocument({
+      shop: state.company?.name || "Kitchen",
+      tableNo,
+      when: formatShopTime(),
+      notes: opts.notes || "",
+      kind: pick.kind,
+      lines: named,
+    }),
+  );
+  w.document.close();
+  return pick;
+}
+
+async function sendKitchenKot() {
+  ensureDiningTable();
+  const pick = printKitchenKot({ tableNo: state.activeTable, lines: state.cart, printed: state.kotPrinted });
+  state.kotPrinted = restaurantApi().cartSnapshot(state.cart);
+  try {
+    await saveActiveTableHold();
+  } catch {
+    /* print already happened */
+  }
+  setHint(pick.kind === "reprint" ? "Kitchen KOT reprint" : "Kitchen KOT sent", "ok");
+}
+
+function printQrKitchenKot(order) {
+  const R = restaurantApi();
+  if (!R || !order) return;
+  const lines = (order.lines || []).map((line) => ({
+    itemId: line.item_id,
+    qtyGm: Number(line.quantity_gm) || 0,
+    name: line.item_name,
+    unit: line.unit || "PCS",
+  }));
+  printKitchenKot({
+    tableNo: order.table_no,
+    lines,
+    printed: [],
+    notes: order.notes,
+    full: true,
+  });
+}
+
 async function loadHolds() {
   try {
     const rows = await api("/api/holds");
@@ -1404,6 +1625,7 @@ async function loadHolds() {
     state.held = [];
   }
   renderHeldBills();
+  renderTableBoard();
 }
 
 async function recallHeldBill(id) {
@@ -1679,12 +1901,21 @@ function renderCart() {
   if ($("loyalty-total")) $("loyalty-total").textContent = money(t.loyalty || 0);
   if ($("profit-total")) $("profit-total").textContent = money(t.profit || 0);
   $("total").textContent = money(t.total != null ? t.total : t.taxable + t.tax);
+  if ($("ticket-sub")) {
+    const R = restaurantApi();
+    if (isRestaurantShop() && R && state.activeTable) {
+      $("ticket-sub").textContent = `${R.displayTable(state.activeTable)} · tap a dish`;
+    } else if (!state.cart?.length) {
+      $("ticket-sub").textContent = globalThis.POSFootwear?.itemFormCopy(state.businessMeta)?.ticket || emptyTicketHint();
+    }
+  }
   $("btn-pay").disabled = state.cart.length === 0;
   $("btn-clear").disabled = state.cart.length === 0;
   document.body.classList.toggle("has-cart", state.cart.length > 0);
   paintBillToggleCount();
   paintBillCustomer();
   if ($("btn-hold")) $("btn-hold").disabled = state.cart.length === 0 || Boolean(state.editingOrderId);
+  if ($("btn-kot")) $("btn-kot").disabled = !isRestaurantShop() || state.cart.length === 0 || Boolean(state.editingOrderId);
   const payTotal = t.total != null ? t.total : t.taxable + t.tax;
   $("btn-pay").textContent = state.editingOrderId
     ? tt("pos.save_changes", "Save changes")
@@ -1704,6 +1935,8 @@ function renderCart() {
   paintOfferBanner();
   if (!state.cart.length) resetOfferPopup();
   else showBestOfferPopup(pickBestOfferForCart(), false);
+  renderTableBoard();
+  if (isRestaurantShop() && state.activeTable && state.cart.length) saveTableHoldDebounced();
   if (window.DevMode?.isEnabled()) {
     DevMode.updateContext({ cartLines: state.cart.length });
   }
@@ -1886,6 +2119,7 @@ function isPieceBarcodeLine(line, item) {
 function addItem(id, qtyGm, lineBarcode) {
   const item = state.items.find((i) => i.id === id);
   if (!item) return;
+  ensureDiningTable();
   const add = qtyGm == null ? POSUnits.counterStep(itemUnit(item)) : Number(qtyGm);
   const code = String(lineBarcode || "").trim();
   const count = POSUnits.isCount(itemUnit(item));
@@ -3908,6 +4142,7 @@ function qrOrderAsInvoice(qr, invoice) {
     customer_name: qr.customer_name,
     customer_id: qr.customer_id,
     notes: qr.notes,
+    table_no: qr.table_no || invoice?.table_no || "",
     lines: qr.lines || [],
     subtotal: qr.subtotal,
     gst: qr.gst,
@@ -4088,6 +4323,7 @@ function renderQrOrders() {
         <div class="qr-order-actions">
           ${!["completed", "cancelled"].includes(order.status) ? `<button class="btn primary" type="button" data-qr-counter="${escapeHtml(order.id)}">Open in Counter</button>` : ""}
           ${order.status === "pending" ? `<button class="btn" type="button" data-qr-status-next="accepted">Accept</button>` : ""}
+          ${isRestaurantShop() && !["completed", "cancelled"].includes(order.status) ? `<button class="btn" type="button" data-qr-kot="${escapeHtml(order.id)}">Kitchen KOT</button>` : ""}
           ${order.status === "accepted" ? `<button class="btn" type="button" data-qr-status-next="preparing">Preparing</button>` : ""}
           ${order.status === "preparing" ? `<button class="btn" type="button" data-qr-status-next="ready">Ready</button>` : ""}
           ${order.status === "ready" ? `<button class="btn" type="button" data-qr-status-next="completed">Complete</button>` : ""}
@@ -4126,6 +4362,13 @@ async function updateQrOrder(order, status) {
   const index = qrOrderCache.findIndex((row) => row.id === order.id);
   if (index >= 0 && data.order) qrOrderCache[index] = data.order;
   renderQrOrders();
+  if (status === "accepted" && isRestaurantShop()) {
+    try {
+      printQrKitchenKot(data.order || order);
+    } catch (err) {
+      setHint(err.message, "error");
+    }
+  }
   if (status === "completed") {
     if (data.invoice?.id && !orderCache.some((row) => row.id === data.invoice.id)) {
       orderCache.unshift(data.invoice);
@@ -4162,6 +4405,10 @@ async function openQrOrderInCounter(order) {
   if (state.cart.length && !confirm("Replace the current Counter bill with this QR order?")) return;
   if (order.status === "pending") order = await updateQrOrder(order, "accepted");
   state.activeQrOrderId = order.id;
+  const R = restaurantApi();
+  if (isRestaurantShop() && R) {
+    state.activeTable = R.normalizeTableNo(order.table_no) || R.PARCEL;
+  }
   state.cart = liveLines.map((line) => ({ itemId: line.item_id, qtyGm: Number(line.quantity_gm) }));
   const known = state.customers.find((customer) => digitsMobile(customer.mobile) === digitsMobile(order.mobile));
   const walkIn = state.customers.find((customer) => customer.code === "CUS-001") || state.customers[0];
@@ -4888,9 +5135,11 @@ $("btn-clear").addEventListener("click", () => {
     cancelOrderEdit();
     return;
   }
+  const table = state.activeTable;
   state.cart = [];
   state.lastPack = null;
   state.activeQrOrderId = "";
+  state.kotPrinted = [];
   state.billDiscountValue = 0;
   state.loyaltyRedeem = 0;
   state.offerAuto = true;
@@ -4901,6 +5150,7 @@ $("btn-clear").addEventListener("click", () => {
   $("pack-choice").value = "";
   setHint("Cart cleared");
   renderCart();
+  if (isRestaurantShop() && table) void dropTableHold(table);
 });
 
 document.addEventListener("click", (e) => {
@@ -4929,6 +5179,7 @@ $("btn-pay").addEventListener("click", async () => {
       offerIds: (state.appliedOffers?.applied || []).map((o) => o.id).filter(Boolean),
       offerLoyaltyMultiplier: state.appliedOffers?.loyaltyMultiplier || 1,
       qrOrderId: state.activeQrOrderId || undefined,
+      table_no: isRestaurantShop() ? (state.activeTable || undefined) : undefined,
       lines: state.cart.map((l) => ({
         itemId: l.itemId,
         quantity_gm: l.qtyGm,
@@ -4943,6 +5194,7 @@ $("btn-pay").addEventListener("click", async () => {
     const order = orderFromResult(result);
     if (!orderSaved(result)) throw new Error("Checkout did not return an order");
     const wasEdit = Boolean(state.editingOrderId);
+    const tableNo = payload.table_no || state.activeTable || "";
     clearCounterAfterSale(order, result);
     state.editingOrderId = null;
     renderEditOrderBanner();
@@ -4980,6 +5232,7 @@ $("btn-pay").addEventListener("click", async () => {
         }),
       };
     }
+    if (tableNo && !receiptOrder.table_no) receiptOrder.table_no = tableNo;
     showOrder(receiptOrder);
     showInvoicePrintModal(receiptOrder, {
       title: `Invoice ${orderLabel(order, result)}`,
@@ -5097,7 +5350,9 @@ $("qr-order-list")?.addEventListener("click", async (event) => {
     const next = event.target.closest("[data-qr-status-next]");
     const invoiceBtn = event.target.closest("[data-qr-invoice]");
     const printBtn = event.target.closest("[data-qr-print]");
+    const kotBtn = event.target.closest("[data-qr-kot]");
     if (counter) await openQrOrderInCounter(order);
+    else if (kotBtn) printQrKitchenKot(order);
     else if (printBtn) printQrOrder(order);
     else if (invoiceBtn) {
       const invoiceId = invoiceBtn.dataset.qrInvoice;
@@ -6131,6 +6386,19 @@ $("btn-hold")?.addEventListener("click", async () => {
   try {
     if (state.editingOrderId) throw new Error("Finish or cancel the invoice edit first");
     if (!state.cart.length) throw new Error("Cart is empty");
+    if (isRestaurantShop()) {
+      ensureDiningTable();
+      await saveActiveTableHold();
+      setHint(`${restaurantApi().displayTable(state.activeTable)} saved`, "ok");
+      state.cart = [];
+      state.lastPack = null;
+      state.kotPrinted = [];
+      if ($("pack-choice")) $("pack-choice").value = "";
+      state.activeTable = "";
+      renderCart();
+      renderTableBoard();
+      return;
+    }
     await api("/api/holds", {
       method: "POST",
       body: JSON.stringify({
@@ -6151,6 +6419,22 @@ $("btn-hold")?.addEventListener("click", async () => {
     $("pack-choice").value = "";
     renderCart();
     await loadHolds();
+  } catch (err) {
+    setHint(err.message, "error");
+  }
+});
+$("btn-kot")?.addEventListener("click", async () => {
+  try {
+    await sendKitchenKot();
+  } catch (err) {
+    setHint(err.message, "error");
+  }
+});
+$("table-board")?.addEventListener("click", async (e) => {
+  const btn = e.target.closest("[data-table]");
+  if (!btn) return;
+  try {
+    await selectDiningTable(btn.dataset.table);
   } catch (err) {
     setHint(err.message, "error");
   }

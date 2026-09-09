@@ -804,6 +804,18 @@ app.post("/api/checkout", requireStaff, requirePerm("counter"), async (req, res)
       } catch {
         /* optional columns */
       }
+      const tableNo = String(req.body?.table_no || req.body?.tableNo || "").trim().slice(0, 64);
+      if (tableNo) {
+        try {
+          await conn.query("UPDATE sales_orders SET table_no = ? WHERE id = ? AND business_id = ?", [
+            tableNo,
+            orderId,
+            businessId,
+          ]);
+        } catch {
+          /* optional column */
+        }
+      }
 
       for (const line of built) {
         const lineId = crypto.randomUUID();
