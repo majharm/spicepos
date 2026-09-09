@@ -10,7 +10,7 @@ function pos_php_till_dispatch($path, $method, $body) {
   $staff = [
     "bootstrap", "dashboard", "today", "suppliers", "items", "customers", "packs",
     "orders", "purchases", "stock", "staff", "branches", "devices", "holds",
-    "checkout", "settings", "reports", "growth", "audit", "accounts", "backup", "units",
+    "checkout", "settings", "dining-tables", "reports", "growth", "audit", "accounts", "backup", "units",
     "barcodes", "damage", "loyalty", "batches", "qr-orders", "combos", "offers",
   ];
   if (!in_array($head, $staff, true)) return false;
@@ -336,6 +336,14 @@ function pos_php_till_dispatch($path, $method, $body) {
     $co["tz_offset"] = $meta["tz_offset"];
     pos_apply_business_timezone($bid);
     pos_send(200, ["ok" => true, "company" => $co]);
+  }
+
+  if ($path === "dining-tables" && $method === "POST") {
+    pos_ensure_i18n_columns();
+    $json = pos_clip_dining_tables_json($body["dining_tables_json"] ?? $body["tables"] ?? "[]");
+    pos_q("UPDATE company_settings SET dining_tables_json = ? WHERE business_id = ?", "ss", [$json, $bid]);
+    $rows = pos_q("SELECT * FROM company_settings WHERE business_id = ? LIMIT 1", "s", [$bid]);
+    pos_send(200, ["ok" => true, "dining_tables_json" => $json, "company" => $rows[0] ?? ["dining_tables_json" => $json]]);
   }
 
   if ($path === "suppliers" && $method === "GET") {

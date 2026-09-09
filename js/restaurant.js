@@ -28,10 +28,11 @@
   function normalizeTableNo(raw) {
     const t = clipTableNo(raw);
     if (!t) return "";
-    if (/^(parcel|takeaway|take away|pickup|pick up|parcel)$/i.test(t)) return PARCEL;
-    const m = t.match(/(\d{1,3})/);
-    if (m) return String(Number(m[1]));
-    return t;
+    if (/^(parcel|takeaway|take away|pickup|pick up)$/i.test(t)) return PARCEL;
+    const named = t.match(/^table\s*(\d{1,3})$/i);
+    if (named) return String(Number(named[1]));
+    if (/^\d{1,3}$/.test(t)) return String(Number(t));
+    return t.slice(0, 32);
   }
 
   function displayTable(tableNo) {
@@ -65,6 +66,89 @@
     for (let i = 1; i <= n; i += 1) ids.push(String(i));
     ids.push(PARCEL);
     return ids;
+  }
+
+  function parseTableList(raw) {
+    if (Array.isArray(raw)) return raw;
+    if (typeof raw === "string" && raw.trim()) {
+      try {
+        const parsed = JSON.parse(raw);
+        return Array.isArray(parsed) ? parsed : null;
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  }
+
+  function tableRecord(row) {
+    if (row == null) return null;
+    if (typeof row === "string" || typeof row === "number") {
+      const id = normalizeTableNo(row);
+      if (!id || id === PARCEL) return null;
+      return { id, name: displayTable(id) };
+    }
+    const id = normalizeTableNo(row.id || row.name);
+    if (!id || id === PARCEL) return null;
+    const name = clipTableNo(row.name || displayTable(id)) || displayTable(id);
+    return { id, name };
+  }
+
+  function tablesOf(biz, holds) {
+    const parsed = parseTableList(biz?.dining_tables_json || biz?.dining_tables_list);
+    let list;
+    if (parsed) {
+      list = parsed.map(tableRecord).filter(Boolean);
+    } else {
+      list = [];
+      const n = seatCount(biz, holds);
+      for (let i = 1; i <= n; i += 1) list.push({ id: String(i), name: `Table ${i}` });
+    }
+    const have = new Set(list.map((t) => t.id));
+    const extra = Array.isArray(holds) ? holds : [];
+    for (const row of extra) {
+      const id = tableNoFromHold(row);
+      if (id && id !== PARCEL && !have.has(id)) {
+        list.push({ id, name: displayTable(id) });
+        have.add(id);
+      }
+    }
+    return list.slice(0, MAX_SEATS);
+  }
+
+  function nextNumericId(tables) {
+    let max = 0;
+    for (const t of tables || []) {
+      if (/^\d+$/.test(String(t.id))) max = Math.max(max, Number(t.id));
+    }
+    return String(max + 1);
+  }
+
+  function addTable(tables, name) {
+    const current = Array.isArray(tables) ? tables.slice() : [];
+    if (current.length >= MAX_SEATS) return { ok: false, error: "Maximum 40 tables" };
+    const trimmed = clipTableNo(name).slice(0, 32);
+    const id = trimmed ? normalizeTableNo(trimmed) : nextNumericId(current);
+    if (!id || id === PARCEL) return { ok: false, error: "Choose a table name" };
+    if (current.some((t) => t.id === id)) return { ok: false, error: "That table already exists" };
+    const label = trimmed && !/^table\s*\d+$/i.test(trimmed) && !/^\d+$/.test(trimmed) ? trimmed : displayTable(id);
+    const added = { id, name: label.slice(0, 32) };
+    return { ok: true, tables: [...current, added], added };
+  }
+
+  function removeTable(tables, id) {
+    const want = normalizeTableNo(id);
+    if (!want || want === PARCEL) return { ok: false, error: "That table cannot be removed" };
+    return { ok: true, tables: (tables || []).filter((t) => t.id !== want) };
+  }
+
+  function serializeTables(tables) {
+    return JSON.stringify(
+      (tables || [])
+        .map(tableRecord)
+        .filter(Boolean)
+        .map((t) => ({ id: t.id, name: t.name })),
+    );
   }
 
   function holdPayload(row) {
@@ -239,6 +323,11 @@ ${kotBody(opts)}
     holdLabel,
     seatCount,
     seatIds,
+    tablesOf,
+    addTable,
+    removeTable,
+    serializeTables,
+    nextNumericId,
     holdPayload,
     tableNoFromHold,
     isTableHold,

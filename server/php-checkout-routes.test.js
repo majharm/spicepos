@@ -328,8 +328,8 @@ test("POS boot skips API probe and slims catalog photos", () => {
   assert.match(index, /qrcode\.iife\.js[^>]+defer/);
   assert.match(index, /preload="none"/);
   assert.match(index, /pos-api\.js\?v=20260905deploy154/);
-  assert.match(index, /app\.js\?v=20260905deploy165/);
-  assert.match(index, /restaurant\.js\?v=20260905deploy164/);
+  assert.match(index, /app\.js\?v=20260905deploy169/);
+  assert.match(index, /restaurant\.js\?v=20260905deploy169/);
   assert.match(login, /x-pos-20260830e\.js\?v=20260905deploy154/);
   assert.match(loginJs, /saveLoginSpec/);
   assert.match(core, /function pos_catalog_items/);
@@ -342,4 +342,32 @@ test("POS boot skips API probe and slims catalog photos", () => {
   assert.match(node, /app\.get\("\/api\/items\/:id"/);
   assert.match(node, /CATALOG_ITEM_SELECT/);
   assert.match(read("master.html"), /pos-api\.js\?v=20260905deploy154/);
+});
+
+test("Restaurant Counter can create named dining tables", () => {
+  const app = read("js/app.js");
+  const restaurant = read("js/restaurant.js");
+  const css = read("css/pos.css");
+  const index = read("index.html");
+  const till = read("pos-php-till.php");
+  const core = read("pos-php-core.php");
+  const tenant = read("server/tenant.js");
+  const schema = read("server/schema.js");
+  assert.match(index, /id="table-board"/);
+  assert.match(app, /data-add-table/);
+  assert.match(app, /data-create-table/);
+  assert.match(app, /\/api\/dining-tables/);
+  assert.match(app, /function persistDiningTables/);
+  assert.match(restaurant, /function addTable/);
+  assert.match(restaurant, /function tablesOf/);
+  assert.match(restaurant, /dining_tables_json/);
+  assert.match(css, /\.table-create/);
+  assert.match(css, /body\.restaurant-mode \.table-board/);
+  assert.match(tenant, /\/api\/dining-tables/);
+  assert.match(schema, /dining_tables_json/);
+  assert.match(core, /function pos_clip_dining_tables_json/);
+  assert.match(core, /dining_tables_json/);
+  assert.match(till, /dining-tables/);
+  assert.match(index, /pos\.css\?v=20260905deploy169/);
+  assert.match(index, /footwear\.js\?v=20260905deploy169/);
 });

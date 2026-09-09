@@ -231,8 +231,8 @@
         scan: "Scan or search dish",
         lede: "Name, photo, HSN code, unit type, rates, and stock.",
         itemsSub: "Photo, HSN, unit type, rates, and stock",
-        counterSub: "Pick a table, tap dishes, send kitchen KOT, then Pay",
-        ticket: "Pick a table, then tap a dish",
+        counterSub: "Create tables, tap dishes, kitchen KOT, then Pay",
+        ticket: "Open a table, then tap a dish",
         hsn: "e.g. 2106",
       },
       pharmacy: {
