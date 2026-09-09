@@ -6,7 +6,7 @@
     <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
     <title>ATAV POS</title>
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./css/pos.css?v=20260905deploy164" />
+    <link rel="stylesheet" href="./css/pos.css?v=20260905deploy166" />
     <link rel="stylesheet" href="./css/saas.css?v=20260905deploy136" />
   </head>
   <body>
@@ -263,6 +263,12 @@
                   <label>Unit type
                     <select id="item-unit"></select>
                   </label>
+                  <div class="item-status-row full" role="group" aria-label="Item status">
+                    <input type="hidden" id="item-status" value="active" />
+                    <span class="item-status-lab">Status</span>
+                    <button class="btn item-status-btn is-on" type="button" data-set-item-status="active">Active</button>
+                    <button class="btn item-status-btn" type="button" data-set-item-status="inactive">Inactive</button>
+                  </div>
                 </fieldset>
                 <fieldset class="item-block">
                   <legend>Photo</legend>
@@ -332,7 +338,10 @@
                 <div class="items-library-head">
                   <h4>Catalog</h4>
                   <input id="item-catalog-search" type="search" placeholder="Search name, HSN, barcode…" autocomplete="off" />
-                  <label class="item-toggle"><input type="checkbox" id="item-low-only" /> Low stock</label>
+                  <div class="items-library-toggles">
+                    <label class="item-toggle"><input type="checkbox" id="item-low-only" /> Low stock</label>
+                    <label class="item-toggle"><input type="checkbox" id="item-hide-inactive" /> Hide inactive</label>
+                  </div>
                 </div>
                 <div class="table-wrap items-library-list" id="items-table"></div>
               </aside>
@@ -1540,6 +1549,7 @@
     <script src="./js/support.js?v=20260905deploy136" defer></script>
     <script src="./js/qrcode.iife.js?v=20260905qr1" defer></script>
     <script src="./js/qr-notify.js?v=20260905deploy144" defer></script>
+    <script src="./js/app.js?v=20260905deploy166" defer></script>
     <script src="./js/app.js?v=20260905deploy165" defer></script>
     <script src="./js/growth.js?v=20260905deploy145" defer></script>
     <script src="./js/offers-ui.js?v=20260905deploy136" defer></script>

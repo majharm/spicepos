@@ -17,6 +17,10 @@ import {
 const POSUnits = globalThis.POSUnits;
 const POSFootwear = globalThis.POSFootwear;
 
+function itemStatus(raw) {
+  return String(raw || "active").toLowerCase() === "inactive" ? "inactive" : "active";
+}
+
 export function itemBillName(item) {
   return POSFootwear.billName(item);
 }
@@ -143,7 +147,7 @@ async function insertImportedItem(conn, biz, body) {
        id, code, name, local_name, category, subcategory, color, size, wearer_type, base_unit,
        purchase_rate, retail_rate, b2b_rate, gst_rate, hsn, image_url, stock_gm,
        reorder_level_gm, status, business_id
-     ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'active', ?)`,
+     ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     [
       id,
       code,
@@ -163,6 +167,7 @@ async function insertImportedItem(conn, biz, body) {
       null,
       Number(body.stock_gm) || 0,
       Number(body.reorder_level_gm) || 0,
+      itemStatus(body.status),
       bid(),
     ],
   );
@@ -360,7 +365,7 @@ export function registerCrud(app) {
                id, code, name, local_name, category, subcategory, color, size, wearer_type, base_unit,
                purchase_rate, retail_rate, b2b_rate, gst_rate, hsn, image_url, stock_gm,
                reorder_level_gm, status, business_id
-             ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'active', ?)`,
+             ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
             [
               id,
               code,
@@ -380,6 +385,7 @@ export function registerCrud(app) {
               imageUrl === undefined ? null : imageUrl,
               Number(b.stock_gm) || 0,
               Number(b.reorder_level_gm) || 0,
+              itemStatus(b.status),
               bid(),
             ],
           );
@@ -423,7 +429,7 @@ export function registerCrud(app) {
         String(b.hsn || "").trim() || null,
         Number(b.stock_gm) || 0,
         Number(b.reorder_level_gm) || 0,
-        b.status || "active",
+        itemStatus(b.status),
       ];
       let imageSql = "";
       if (imageUrl !== undefined) {
