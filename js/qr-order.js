@@ -72,6 +72,52 @@
     });
   }
 
+  function offerBlurb(offer) {
+    const type = String(offer.offer_type || offer.type || "");
+    const v = Number(offer.discount_value) || 0;
+    const dt = String(offer.discount_type || "pct");
+    if (type === "bogo") return "Buy & get free";
+    if (type === "combo") return "Combo price";
+    if (dt === "pct" && v) return `${v}% off`;
+    if ((dt === "amt" || dt === "flat") && v) return `₹${v} off`;
+    return String(offer.description || "").trim();
+  }
+
+  function offerAppliesToItem(offer, item) {
+    const O = globalThis.POSOffers;
+    const cond = O?.parseConditions?.(offer) || offer.conditions || {};
+    const ids = (cond.item_ids || []).map(String);
+    const cat = String(cond.category || offer.category || "").trim();
+    const type = String(offer.offer_type || offer.type || "");
+    if (ids.length) return ids.includes(String(item.id)) || String(cond.get_item_id || "") === String(item.id);
+    if (cat) return String(item.category || "").toLowerCase() === cat.toLowerCase();
+    if (["product", "clearance", "qty", "bogo", "mix_match", "free_gift", "category"].includes(type)) return true;
+    return ["min_purchase", "spend", "first_purchase", "time", "day", "festival", "combo", "customer", "repeat"].includes(type);
+  }
+
+  function renderOffers() {
+    const board = $("offer-board") || $("offer-strip");
+    if (!board) return;
+    const offers = activeOffers();
+    board.hidden = !offers.length;
+    if (!offers.length) {
+      board.textContent = "";
+      board.innerHTML = "";
+      return;
+    }
+    if (board.id === "offer-strip") {
+      board.textContent = `Offers on this menu: ${offers.map((offer) => offer.name).filter(Boolean).join(" · ")}`;
+      return;
+    }
+    board.innerHTML =
+      `<p class="offer-kicker">Offers today</p><div class="offer-cards">${offers
+        .map((offer) => {
+          const blurb = offerBlurb(offer);
+          return `<article class="offer-card"><strong>${esc(offer.name || "Offer")}</strong>${blurb ? `<span>${esc(blurb)}</span>` : ""}</article>`;
+        })
+        .join("")}</div>`;
+  }
+
   function offerCtx(cart) {
     return {
       now: new Date(),
@@ -248,25 +294,21 @@
 
   function itemOfferInfo(item) {
     const O = globalThis.POSOffers;
-    const offers = activeOffers();
-    const condOf = (offer) => O?.parseConditions?.(offer) || offer.conditions || {};
-    const hit = offers.find((offer) => {
-      const cond = condOf(offer);
-      const ids = (cond.item_ids || []).map(String);
-      const cat = String(cond.category || offer.category || "").trim();
-      const type = offer.offer_type || offer.type;
-      if (ids.length) return ids.includes(String(item.id)) || String(cond.get_item_id || "") === String(item.id);
-      if (cat) return String(item.category || "").toLowerCase() === cat.toLowerCase();
-      return ["min_purchase", "spend", "first_purchase", "time", "day", "festival", "combo"].includes(type);
-    });
-    if (!hit) return { name: "", save: 0, pending: "", wouldSave: 0 };
+    const matching = activeOffers().filter((offer) => offerAppliesToItem(offer, item));
+    if (!matching.length) return { name: "", save: 0, pending: "", wouldSave: 0 };
     const one = offerResult([asCartLine(item, 1)]);
-    const cond = condOf(hit);
+    const best = O?.pickBest?.(one);
+    const appliedId = best?.offer?.id;
+    const hit =
+      matching.find((offer) => appliedId && String(offer.id) === String(appliedId)) ||
+      matching.find((offer) => offer.name && offer.name === (best?.offer?.name || one.applied?.[0]?.name)) ||
+      matching[0];
+    const cond = O?.parseConditions?.(hit) || hit.conditions || {};
     const bogoQty = Math.max(2, (Number(cond.buy_qty) || 1) + (Number(cond.get_qty) || 1));
     const more = (hit.offer_type || hit.type) === "bogo" ? offerResult([asCartLine(item, bogoQty)]) : one;
     const save = Math.round((Number(one.lineDiscounts?.[item.id] || one.lineDiscounts?.[String(item.id)] || 0)) * 100) / 100;
     return {
-      name: hit.name || "",
+      name: hit.name || best?.offer?.name || "",
       save,
       pending: one.pending?.[0]?.message || "",
       wouldSave: Math.round((Number(more.discount || one.pending?.[0]?.wouldSave) || 0) * 100) / 100,
@@ -291,12 +333,7 @@
     }
     renderCategories();
     renderMenu();
-    const strip = $("offer-strip");
-    if (strip) {
-      const names = activeOffers().map((offer) => offer.name).filter(Boolean);
-      strip.hidden = !names.length;
-      strip.textContent = names.length ? `Offers on this menu: ${names.join(" · ")}` : "";
-    }
+    renderOffers();
   }
 
   $("category-pills").addEventListener("click", (event) => {

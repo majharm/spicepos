@@ -116,10 +116,11 @@ test("PHP customer insert bind types match placeholders", () => {
   assert.equal(cust[1], "ssssssssds");
 
   assert.match(crud, /color, size, wearer_type, base_unit/);
-  const items = crud.match(/INSERT INTO items[\s\S]{0,500}"(ssssssssssddddssdds)"/);
+  const items = crud.match(/INSERT INTO items[\s\S]{0,500}"(ssssssssssddddssddss)"/);
   assert.ok(items, "item INSERT found");
-  assert.equal(items[1].length, 19);
-  assert.equal(items[1], "ssssssssssddddssdds");
+  assert.equal(items[1].length, 20);
+  assert.equal(items[1], "ssssssssssddddssddss");
+  assert.match(core, /function pos_item_status/);
   assert.match(crud, /image_url/);
   assert.match(core, /function pos_item_image_url/);
   assert.match(core, /image_url.*MEDIUMTEXT/);
@@ -286,7 +287,7 @@ test("Master Admin can set passwords and unlock locked accounts", () => {
   assert.match(core, /pos_register_business\(\$body, true\)/);
   assert.match(core, /strtotime\("\+1 year"\)/);
   assert.match(read("server/onboard.js"), /INTERVAL 1 YEAR/);
-  assert.match(read("master.html"), /master\.js\?v=20260905deploy158/);
+  assert.match(read("master.html"), /master\.js\?v=20260905deploy172/);
   assert.match(read("js/app.js"), /Subscription fee \/ year/);
   assert.match(core, /users\/\(\[\^\/\]\+\)\/unlock/);
   assert.match(core, /businesses\/\(\[\^\/\]\+\)\/send-expiry-alert/);

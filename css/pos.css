@@ -1944,6 +1944,7 @@ body.apparel-mode #pack-choice { display: none; }
 body:not(.spice-mode) #pack-choice { display: none; }
 body.footwear-mode.counter-mode .stage.is-counter .card .sku { display: block; font-size: 11px; }
 body.apparel-mode.counter-mode .stage.is-counter .card .sku { display: block; font-size: 11px; }
+body.restaurant-mode.counter-mode .stage.is-counter .card-qty { display: none; }
 .wearer-chip {
   display: inline-block;
   margin-left: 6px;
@@ -2452,6 +2453,36 @@ body.apparel-mode.counter-mode .stage.is-counter .card .sku { display: block; fo
   color: var(--vel-teal);
 }
 .item-block .full { grid-column: 1 / -1; }
+/* item-status: active inactive buttons 2026 */
+.item-status-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.item-status-lab {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-right: 4px;
+}
+.item-status-btn {
+  min-height: 36px;
+  min-width: 88px;
+  padding: 8px 12px;
+  font-size: 12px;
+  font-weight: 800;
+}
+.item-status-btn[data-set-item-status="active"] { background: #e8f5ef; color: #0d6b4e; border-color: #b7e4d2; }
+.item-status-btn[data-set-item-status="inactive"] { background: #fdecea; color: #a12822; border-color: #f5c4c0; }
+.item-status-btn.is-on {
+  box-shadow: 0 0 0 2px rgba(13, 148, 136, 0.35);
+}
+.item-status-btn[data-set-item-status="inactive"].is-on {
+  box-shadow: 0 0 0 2px rgba(161, 40, 34, 0.28);
+}
 .item-composer-actions {
   display: flex;
   flex-wrap: wrap;
@@ -2481,6 +2512,12 @@ body.apparel-mode.counter-mode .stage.is-counter .card .sku { display: block; fo
   border: 1px solid var(--line);
   border-radius: 10px;
   background: #fff;
+}
+.items-library-toggles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  justify-content: flex-end;
 }
 .item-toggle {
   display: flex;
@@ -2565,7 +2602,8 @@ body.apparel-mode.counter-mode .stage.is-counter .card .sku { display: block; fo
   font-style: normal;
   color: var(--text);
 }
-.item-card-actions { display: flex; gap: 8px; }
+.item-card-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.item-card.is-inactive,
 .branch-card.is-inactive {
   opacity: 0.72;
   background: linear-gradient(180deg, #fff 0%, #f8fafc 100%);

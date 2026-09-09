@@ -592,6 +592,8 @@ function pos_is_apparel_shop($biz) {
 }
 
 function pos_shop_kind($biz) {
+  $type = strtolower(trim((string) ($biz["business_type"] ?? "")));
+  if ($type === "restaurant" || $type === "cafe" || $type === "bakery") return "restaurant";
   if (pos_is_footwear_shop($biz)) return "footwear";
   if (pos_is_apparel_shop($biz)) return "apparel";
   $text = strtolower(trim((string) (($biz["category"] ?? "") . " " . ($biz["business_type"] ?? ""))));
@@ -636,6 +638,7 @@ function pos_default_item_category($biz) {
   $kind = pos_shop_kind($biz);
   if ($kind === "spice") return "Whole Spices";
   if ($kind === "footwear") return "Footwear";
+  if ($kind === "restaurant") return "Menu";
   $cat = trim((string) ($biz["category"] ?? ""));
   if ($cat !== "" && strcasecmp($cat, "other") !== 0) return $cat;
   $fallback = [
@@ -762,6 +765,10 @@ function pos_item_wearer($raw) {
   if ($v === "kids" || $v === "kid" || $v === "children" || $v === "child") return "kids";
   if ($v === "unisex") return "unisex";
   return "";
+}
+
+function pos_item_status($raw) {
+  return strtolower(trim((string) $raw)) === "inactive" ? "inactive" : "active";
 }
 
 function pos_item_unit($item) {

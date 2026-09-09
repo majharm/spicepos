@@ -112,6 +112,31 @@
     return extra ? `/api/${path}?${extra}` : `/api/${path}`;
   };
 
+  function categoriesForSignupType(type) {
+    const t = String(type || "").trim();
+    if (t === "Restaurant" || t === "Cafe" || t === "Bakery") return ["Food & beverage"];
+    if (t === "Grocery") return ["Kirana / FMCG", "Supermarket", "General trade"];
+    if (t === "Pharmacy") return ["Medical"];
+    if (t === "Electronics") return ["Mobile & electronics"];
+    if (t === "Fashion") return ["Apparel", "Garments", "Clothing", "Boutique", "Saree Shop", "Ladies Fashion", "Mens Fashion", "Kids Fashion"];
+    if (t === "Footwear") return ["Footwear"];
+    return null;
+  }
+
+  function fillSignupCategory(form) {
+    const typeSel = form?.querySelector('[name="businessType"]');
+    const catSel = form?.querySelector('[name="businessCategory"]');
+    if (!typeSel || !catSel) return;
+    const all = [...catSel.options].map((o) => o.value).filter(Boolean);
+    if (!catSel.dataset.allCategories) catSel.dataset.allCategories = all.join("\n");
+    const source = catSel.dataset.allCategories.split("\n").filter(Boolean);
+    const list = categoriesForSignupType(typeSel.value) || source;
+    const cur = catSel.value;
+    const want = list.includes(cur) ? cur : list.length === 1 ? list[0] : "";
+    catSel.innerHTML = `<option value="">Select category</option>${list.map((v) => `<option>${v}</option>`).join("")}`;
+    if (want) catSel.value = want;
+  }
+
   function bindShopLogin() {
     const loginForm = document.getElementById("login-form");
     const signupForm = document.getElementById("signup-form");
@@ -245,6 +270,14 @@
     }, true);
 
     if (signupForm) {
+      fillSignupCategory(signupForm);
+      const typeSel = signupForm.querySelector('[name="businessType"]');
+      const catSel = signupForm.querySelector('[name="businessCategory"]');
+      const syncCats = () => fillSignupCategory(signupForm);
+      typeSel?.addEventListener("change", syncCats);
+      typeSel?.addEventListener("input", syncCats);
+      catSel?.addEventListener("focus", syncCats);
+      catSel?.addEventListener("mousedown", syncCats);
       signupForm.addEventListener("submit", async (e) => {
         e.preventDefault();
         e.stopImmediatePropagation();

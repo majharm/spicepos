@@ -12,6 +12,8 @@
     if (typeof globalThis !== "undefined" && globalThis.POSFootwear?.shopKind) {
       return globalThis.POSFootwear.shopKind(biz);
     }
+    const type = String(biz?.business_type || "").toLowerCase().trim();
+    if (type === "restaurant" || type === "cafe" || type === "bakery") return "restaurant";
     const t = [biz?.category, biz?.business_type].filter(Boolean).join(" ").toLowerCase();
     if (/(restaurant|cafe|bakery|food)/.test(t)) return "restaurant";
     return "";

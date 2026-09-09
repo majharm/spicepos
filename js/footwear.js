@@ -49,6 +49,8 @@
   }
 
   function shopKind(biz) {
+    const type = String(biz?.business_type || "").toLowerCase().trim();
+    if (type === "restaurant" || type === "cafe" || type === "bakery") return "restaurant";
     if (isFootwearShop(biz)) return "footwear";
     if (isApparelShop(biz)) return "apparel";
     const t = shopText(biz);
@@ -133,10 +135,29 @@
     return v ? `${name} (${v})` : name;
   }
 
+  function suggestedItemCategories(biz) {
+    if (shopKind(biz) !== "restaurant") return [];
+    return [
+      "South Indian",
+      "North Indian",
+      "Chinese",
+      "Starters",
+      "Main course",
+      "Rice",
+      "Breads",
+      "Tandoor",
+      "Biryani",
+      "Beverages",
+      "Desserts",
+      "Snacks",
+    ];
+  }
+
   function defaultCategory(biz) {
     const k = shopKind(biz);
     if (k === "spice") return "Whole Spices";
     if (k === "footwear") return "Footwear";
+    if (k === "restaurant") return "Menu";
     const cat = String(biz?.category || "").trim();
     if (cat && !/^other$/i.test(cat)) return cat;
     const fallback = {
@@ -360,6 +381,7 @@
     isRestaurantShop,
     isVariantShop,
     shopKind,
+    suggestedItemCategories,
     itemFormCopy,
     wearersForShop,
     sizesForShop,

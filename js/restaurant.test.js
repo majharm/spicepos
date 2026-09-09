@@ -1,5 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import "./footwear.js";
 import "./restaurant.js";
 
@@ -14,6 +17,8 @@ test("Restaurant shops include cafe, bakery, and food & beverage", () => {
   assert.equal(R.isRestaurantShop({ category: "Spices & masala" }), false);
   assert.equal(R.isRestaurantShop({ category: "Kirana / FMCG" }), false);
   assert.equal(F.shopKind({ category: "Food & beverage" }), "restaurant");
+  assert.equal(F.shopKind({ business_type: "Restaurant", category: "Spices & masala" }), "restaurant");
+  assert.equal(F.defaultCategory({ category: "Food & beverage" }), "Menu");
 });
 
 test("Table numbers normalize from free text and Parcel", () => {

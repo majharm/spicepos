@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
+import path from "node:path";
 import {
   normalizeQrOrderPayload,
   qrLineAmount,
@@ -43,6 +46,80 @@ test("QR order payload normalizes public customer fields and valid lines", () =>
   assert.equal(row.tableNo, "Table 4");
   assert.equal(row.lines.length, 1);
   assert.deepEqual(row.lines[0], { item_id: "i1", quantity: 1.5 });
+});
+
+test("QR based orders apply a PHP-shaped combo percent even when offer_price is 0", () => {
+  const priced = applyQrOffers(
+    [
+      {
+        item: { id: "dosa", name: "Masala dosa", category: "South Indian", base_unit: "PCS" },
+        unit: "PCS",
+        quantityBase: 1,
+        amount: 80,
+        gstRate: 5,
+        gstAmount: 4,
+      },
+      {
+        item: { id: "tea", name: "Tea", category: "Beverage", base_unit: "PCS" },
+        unit: "PCS",
+        quantityBase: 1,
+        amount: 20,
+        gstRate: 5,
+        gstAmount: 1,
+      },
+    ],
+    {
+      offers: [
+        {
+          name: "Dosa + Tea 8%",
+          offer_type: "combo",
+          status: "active",
+          live_status: "active",
+          discount_type: "pct",
+          discount_value: "8.00",
+          offer_price: "0.00",
+          conditions: { item_ids: ["dosa", "tea"] },
+        },
+      ],
+    },
+  );
+  assert.equal(priced.discount, 8);
+  assert.equal(priced.subtotal, 92);
+});
+
+test("QR based orders apply an offer whose MySQL end date is 0000-00-00", () => {
+  const priced = applyQrOffers(
+    [
+      {
+        item: { id: "dosa", name: "Masala dosa", category: "South Indian", base_unit: "PCS" },
+        unit: "PCS",
+        quantityBase: 1,
+        amount: 80,
+        gstRate: 5,
+        gstAmount: 4,
+      },
+    ],
+    {
+      offers: [
+        {
+          name: "Dosa 10% off",
+          offer_type: "product",
+          status: "active",
+          live_status: "expired",
+          discount_type: "pct",
+          discount_value: "10.00",
+          offer_price: "0.00",
+          start_date: "0000-00-00",
+          end_date: "0000-00-00",
+          start_time: "00:00:00",
+          end_time: "00:00:00",
+          conditions: { item_ids: ["dosa"] },
+        },
+      ],
+    },
+  );
+  assert.equal(priced.discount, 8);
+  assert.equal(priced.subtotal, 72);
 });
 
 test("QR based orders apply a PHP-shaped percent offer even when offer_price is 0", () => {
@@ -238,4 +315,18 @@ test("QR invoice totals lift offer discount onto the header so Invoices print gr
   assert.equal(offered.discount, 10);
   assert.equal(offered.gst, 4.5);
   assert.equal(offered.total, 94.5);
+});
+
+test("QR menu page paints a visible offer board from live offers", () => {
+  const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
+  const html = readFileSync(path.join(root, "order.html"), "utf8");
+  const js = readFileSync(path.join(root, "js/qr-order.js"), "utf8");
+  const css = readFileSync(path.join(root, "css/qr-order.css"), "utf8");
+  assert.match(html, /id="offer-board"/);
+  assert.match(html, /qr-order\.js\?v=20260905deploy170/);
+  assert.match(js, /function renderOffers/);
+  assert.match(js, /function offerAppliesToItem/);
+  assert.match(js, /pickBest/);
+  assert.match(css, /\.offer-board/);
+  assert.match(css, /\.offer-card/);
 });

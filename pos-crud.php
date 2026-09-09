@@ -107,13 +107,14 @@ function pos_crud_dispatch($path, $method, $body, $bid, $auth, $branchId, $uid) 
       $code = (count($sizesToCreate) === 1 && !empty($body["code"]))
         ? $body["code"]
         : (pos_item_code_prefix($biz) . str_pad((string) $n, 3, "0", STR_PAD_LEFT));
+      $status = pos_item_status($body["status"] ?? "active");
       pos_q(
         "INSERT INTO items (
            id, code, name, local_name, category, subcategory, color, size, wearer_type, base_unit,
            purchase_rate, retail_rate, b2b_rate, gst_rate, hsn, image_url, stock_gm,
            reorder_level_gm, status, business_id
-         ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'active', ?)",
-        "ssssssssssddddssdds",
+         ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        "ssssssssssddddssddss",
         [
           $id, $code, $name, $body["local_name"] ?? null, $category,
           $body["subcategory"] ?? null, $color, $size, $wearer, $unit,
@@ -121,7 +122,8 @@ function pos_crud_dispatch($path, $method, $body, $bid, $auth, $branchId, $uid) 
           (float) ($body["b2b_rate"] ?? 0), (float) ($body["gst_rate"] ?? 5),
           trim((string) ($body["hsn"] ?? $body["local_name"] ?? "")) ?: null,
           ($image === null || $image === "") ? null : $image,
-          (float) ($body["stock_gm"] ?? 0), (float) ($body["reorder_level_gm"] ?? 0), $bid,
+          (float) ($body["stock_gm"] ?? 0), (float) ($body["reorder_level_gm"] ?? 0),
+          $status, $bid,
         ]
       );
       try {
@@ -179,7 +181,7 @@ function pos_crud_dispatch($path, $method, $body, $bid, $auth, $branchId, $uid) 
           (float) ($body["b2b_rate"] ?? 0), (float) ($body["gst_rate"] ?? 5),
           trim((string) ($body["hsn"] ?? "")) ?: null,
           (float) ($body["stock_gm"] ?? 0), (float) ($body["reorder_level_gm"] ?? 0),
-          $body["status"] ?? "active",
+          pos_item_status($body["status"] ?? "active"),
         ],
         $imageVal,
         [$itemId, $bid]
