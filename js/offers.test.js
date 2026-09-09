@@ -284,6 +284,8 @@ test("MySQL zero dates stay live so Counter and QR still apply the offer", () =>
     offer_price: "0.00",
     start_date: "0000-00-00",
     end_date: "0000-00-00",
+    start_time: "00:00:00",
+    end_time: "00:00:00",
     conditions: { item_ids: ["dosa"] },
   };
   assert.equal(O.liveStatus(offer, new Date("2026-09-09T10:00:00")), "active");

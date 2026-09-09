@@ -236,10 +236,18 @@
     return want.includes(now.getDay());
   }
 
+  function offerClock(raw) {
+    const s = String(raw || "").trim();
+    if (!s) return "";
+    const hm = s.slice(0, 5);
+    if (!/^\d{2}:\d{2}$/.test(hm)) return "";
+    return hm;
+  }
+
   function timeMatches(offer, now) {
-    const start = String(offer?.start_time || "").slice(0, 5);
-    const end = String(offer?.end_time || "").slice(0, 5);
-    if (!start && !end) return true;
+    const start = offerClock(offer?.start_time);
+    const end = offerClock(offer?.end_time);
+    if ((!start && !end) || (start === "00:00" && end === "00:00")) return true;
     const cur = hm(now);
     if (start && end && start > end) return cur >= start || cur <= end;
     if (start && cur < start) return false;

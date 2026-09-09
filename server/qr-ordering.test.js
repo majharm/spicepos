@@ -108,6 +108,8 @@ test("QR based orders apply an offer whose MySQL end date is 0000-00-00", () => 
           offer_price: "0.00",
           start_date: "0000-00-00",
           end_date: "0000-00-00",
+          start_time: "00:00:00",
+          end_time: "00:00:00",
           conditions: { item_ids: ["dosa"] },
         },
       ],
