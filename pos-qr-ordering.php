@@ -119,6 +119,77 @@ function pos_qr_order_number() {
   return "QRO-" . strtoupper(substr(base_convert((string) round(microtime(true) * 1000), 10, 36), -5)) . strtoupper(base_convert((string) random_int(0, 35), 10, 36));
 }
 
+function pos_qr_reprice_open_order($bid, $order) {
+  $status = (string) ($order["status"] ?? "");
+  if (!in_array($status, ["pending", "accepted", "preparing", "ready"], true)) return $order;
+  if (!empty($order["sales_order_id"])) return $order;
+  $lines = $order["lines"] ?? [];
+  if (!$lines) return $order;
+  require_once __DIR__ . "/pos-offers.php";
+  $built = [];
+  foreach ($lines as $line) {
+    $it = pos_q("SELECT * FROM items WHERE id = ? AND business_id = ? LIMIT 1", "ss", [$line["item_id"], $bid]);
+    $item = $it[0] ?? [
+      "id" => $line["item_id"],
+      "name" => $line["item_name"],
+      "category" => "",
+      "retail_rate" => $line["rate_per_kg"],
+      "gst_rate" => $line["gst_rate"],
+      "base_unit" => $line["unit"],
+      "unit" => $line["unit"],
+    ];
+    $unit = pos_item_unit($item);
+    $qty = (float) ($line["quantity_gm"] ?? 0);
+    $amount = pos_round2(pos_line_amount_for_item($qty, (float) ($line["rate_per_kg"] ?? $item["retail_rate"] ?? 0), $item));
+    $gstRate = (float) ($line["gst_rate"] ?? $item["gst_rate"] ?? 0);
+    $built[] = [
+      "item" => $item,
+      "unit" => $unit,
+      "qty" => $qty,
+      "amount" => $amount,
+      "gst_rate" => $gstRate,
+      "gst" => pos_round2($amount * $gstRate / 100),
+    ];
+  }
+  $priced = pos_apply_qr_offers($built, $bid, ["bills" => pos_qr_customer_bills($bid, $order["mobile"] ?? "")]);
+  $next = $priced["built"];
+  $changed = pos_round2($order["subtotal"] ?? 0) !== pos_round2($priced["subtotal"])
+    || pos_round2($order["discount"] ?? 0) !== pos_round2($priced["discount"])
+    || pos_round2($order["total"] ?? 0) !== pos_round2($priced["total"]);
+  if (!$changed) return $order;
+  pos_q(
+    "UPDATE qr_orders SET subtotal = ?, gst = ?, total = ?, discount = ?, offer_label = ? WHERE id = ? AND business_id = ?",
+    "sssssss",
+    [
+      (string) $priced["subtotal"],
+      (string) $priced["gst"],
+      (string) $priced["total"],
+      (string) $priced["discount"],
+      (string) ($priced["message"] ?? ""),
+      $order["id"],
+      $bid,
+    ]
+  );
+  foreach ($next as $i => $row) {
+    $line = $lines[$i] ?? null;
+    if (!$line) continue;
+    pos_q(
+      "UPDATE qr_order_lines SET amount = ?, gst_amount = ? WHERE id = ? AND order_id = ?",
+      "ssss",
+      [(string) $row["amount"], (string) $row["gst"], $line["id"], $order["id"]]
+    );
+    $lines[$i]["amount"] = $row["amount"];
+    $lines[$i]["gst_amount"] = $row["gst"];
+  }
+  $order["subtotal"] = $priced["subtotal"];
+  $order["gst"] = $priced["gst"];
+  $order["total"] = $priced["total"];
+  $order["discount"] = $priced["discount"];
+  $order["offer_label"] = $priced["message"];
+  $order["lines"] = $lines;
+  return $order;
+}
+
 function pos_qr_orders_with_lines($bid, $status = "") {
   pos_qr_ensure_schema();
   $sql = "SELECT q.*, s.order_number AS invoice_number FROM qr_orders q
@@ -136,6 +207,7 @@ function pos_qr_orders_with_lines($bid, $status = "") {
   $orders = pos_q($sql, $types, $params);
   foreach ($orders as &$order) {
     $order["lines"] = pos_q("SELECT * FROM qr_order_lines WHERE order_id = ? ORDER BY created_at", "s", [$order["id"]]);
+    $order = pos_qr_reprice_open_order($bid, $order);
   }
   unset($order);
   return $orders;

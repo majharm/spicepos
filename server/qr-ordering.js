@@ -644,10 +644,24 @@ export function registerQrPublic(app) {
           listOffers(business.id).catch(() => []),
           getPromoSettings(business.id).catch(() => ({ stacking: "product_and_bill" })),
         ]);
+        const customers = await conn.query("SELECT id, mobile FROM customers WHERE business_id = ?", [business.id]).then(([rows]) => rows);
+        const digits = qrMobileDigits(input.mobile);
+        const matchIds = (customers || [])
+          .filter((row) => qrMobileDigits(row.mobile) === digits && digits.length >= 10)
+          .map((row) => row.id);
+        let bills = 0;
+        if (matchIds.length) {
+          const [countRows] = await conn.query(
+            `SELECT COUNT(*) AS n FROM sales_orders WHERE business_id = ? AND customer_id IN (${matchIds.map(() => "?").join(",")}) AND status <> 'cancelled'`,
+            [business.id, ...matchIds],
+          );
+          bills = Number(countRows[0]?.n) || 0;
+        }
         const priced = applyQrOffers(built, {
           offers,
           stacking: settings?.stacking || "product_and_bill",
           items: built.map((line) => line.item),
+          customer: { bills },
         });
         const { subtotal, gst, total, discount, message } = priced;
         const pricedLines = priced.built;

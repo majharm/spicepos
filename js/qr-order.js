@@ -363,10 +363,13 @@
   $("cart-sheet").addEventListener("click", (event) => {
     if (event.target === $("cart-sheet")) $("cart-sheet").hidden = true;
   });
+  let sending = false;
   $("order-form").addEventListener("submit", async (event) => {
     event.preventDefault();
+    if (sending) return;
     const button = event.currentTarget.querySelector("button[type=submit]");
     const hint = $("order-hint");
+    sending = true;
     button.disabled = true;
     hint.textContent = "Sending order…";
     try {
@@ -404,6 +407,7 @@
     } catch (err) {
       hint.textContent = err.message;
     } finally {
+      sending = false;
       button.disabled = false;
     }
   });
