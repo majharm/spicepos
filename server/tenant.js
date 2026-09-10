@@ -15,6 +15,28 @@ function send(res, fn) {
     .catch((err) => res.status(400).json({ error: String(err.message) }));
 }
 
+function clipDiningTablesJson(raw) {
+  let parsed = raw;
+  if (typeof raw === "string") {
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      parsed = [];
+    }
+  }
+  if (!Array.isArray(parsed)) parsed = [];
+  const out = [];
+  const seen = new Set();
+  for (const row of parsed.slice(0, 40)) {
+    const id = String(row?.id ?? row?.name ?? (typeof row === "string" || typeof row === "number" ? row : "")).trim().slice(0, 32);
+    if (!id || /^parcel$/i.test(id) || seen.has(id)) continue;
+    seen.add(id);
+    const name = String(row?.name ?? id).trim().slice(0, 32) || id;
+    out.push({ id, name });
+  }
+  return JSON.stringify(out);
+}
+
 const BRANCH_LIST_SQL = `SELECT b.*,
     (SELECT s.username FROM staff_users s
      WHERE s.branch_id = b.id AND s.business_id = b.business_id AND s.role = 'branch_manager'
@@ -469,6 +491,15 @@ export function registerTenant(app) {
     send(res, async () => {
       await query("DELETE FROM held_bills WHERE id=? AND business_id=?", [req.params.id, bid()]);
       return { ok: true };
+    }),
+  );
+
+  app.post("/api/dining-tables", requireStaff, requirePerm("counter"), (req, res) =>
+    send(res, async () => {
+      const json = clipDiningTablesJson(req.body?.dining_tables_json ?? req.body?.tables);
+      await query("UPDATE company_settings SET dining_tables_json = ? WHERE business_id = ?", [json, bid()]);
+      const [company] = await query("SELECT * FROM company_settings WHERE business_id = ?", [bid()]);
+      return { ok: true, dining_tables_json: json, company };
     }),
   );
 

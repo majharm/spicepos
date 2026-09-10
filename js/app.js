@@ -1461,6 +1461,32 @@ function applyHoldToCart(payload, opts = {}) {
   if (payload.qrOrderId && keep) state.activeQrOrderId = payload.qrOrderId;
 }
 
+function diningCompany() {
+  return { ...(state.company || {}), ...(state.businessMeta || {}) };
+}
+
+function diningTables() {
+  const R = restaurantApi();
+  if (!R?.tablesOf) return [];
+  return R.tablesOf(diningCompany(), state.held);
+}
+
+async function persistDiningTables(tables) {
+  const R = restaurantApi();
+  const json = R?.serializeTables ? R.serializeTables(tables) : JSON.stringify(tables || []);
+  const data = await api("/api/dining-tables", {
+    method: "POST",
+    body: JSON.stringify({ dining_tables_json: json }),
+  });
+  const saved = data.dining_tables_json || json;
+  if (data.company) state.company = { ...state.company, ...data.company };
+  else state.company = { ...(state.company || {}), dining_tables_json: saved };
+  if (state.businessMeta) state.businessMeta = { ...state.businessMeta, dining_tables_json: saved };
+  const wrap = document.querySelector("#table-board [data-create-table]");
+  if (wrap) wrap.hidden = true;
+  renderTableBoard();
+}
+
 function renderTableBoard() {
   const el = $("table-board");
   if (!el) return;
@@ -1470,25 +1496,47 @@ function renderTableBoard() {
     el.innerHTML = "";
     return;
   }
-  const seats = R.seatIds(R.seatCount(state.company || state.businessMeta, state.held));
+  const tables = diningTables();
+  const busyCount = tables.filter((t) => R.findTableHold(state.held, t.id) || (state.activeTable === t.id && state.cart.length)).length;
+  const creating = Boolean(el.querySelector("[data-create-table]:not([hidden])"));
   el.hidden = false;
   el.innerHTML =
-    `<div class="table-board-head"><strong>Tables</strong><span>Open a table, send kitchen KOT, then Pay</span></div>` +
-    `<div class="table-seats">${seats
-      .map((id) => {
-        const hold = R.findTableHold(state.held, id);
-        const payload = hold ? R.holdPayload(hold) || {} : {};
-        const dishes = (payload.cart || []).length;
-        const on = state.activeTable === id;
-        const busy = Boolean(hold) || (on && state.cart.length);
-        const label = id === R.PARCEL ? "Parcel" : id;
-        const meta = busy ? `${dishes || state.cart.length} ${dishes === 1 || (on && state.cart.length === 1) ? "dish" : "dishes"}` : "Free";
-        return `<button class="table-seat${on ? " is-on" : ""}${busy ? " is-busy" : ""}" type="button" data-table="${escapeHtml(id)}">
-          <strong>${escapeHtml(label)}</strong>
-          <span>${escapeHtml(on && state.cart.length ? `${state.cart.length} dishes` : meta)}</span>
-        </button>`;
-      })
-      .join("")}</div>`;
+    `<div class="table-board-head">
+      <div>
+        <strong>Dining floor</strong>
+        <span>${tables.length ? `${tables.length} tables · ${busyCount} occupied` : "Create tables for this restaurant"}</span>
+      </div>
+      <button class="btn dining-add-btn" type="button" data-add-table>+ Table</button>
+    </div>
+    <form class="table-create"${creating ? "" : " hidden"} data-create-table>
+      <input id="table-create-name" name="table-name" maxlength="32" placeholder="Table ${escapeHtml(R.nextNumericId?.(tables) || String(tables.length + 1))} or AC" aria-label="New table name" autocomplete="off" />
+      <button class="btn primary" type="submit">Create table</button>
+      <button class="btn" type="button" data-cancel-table>Cancel</button>
+    </form>
+    <div class="table-seats">${
+      tables
+        .map((t) => {
+          const hold = R.findTableHold(state.held, t.id);
+          const payload = hold ? R.holdPayload(hold) || {} : {};
+          const dishes = (payload.cart || []).length;
+          const on = state.activeTable === t.id;
+          const busy = Boolean(hold) || (on && state.cart.length);
+          const meta = busy ? `${dishes || state.cart.length} ${dishes === 1 || (on && state.cart.length === 1) ? "dish" : "dishes"}` : "Free";
+          return `<div class="table-seat-wrap">
+            <button class="table-seat${on ? " is-on" : ""}${busy ? " is-busy" : ""}" type="button" data-table="${escapeHtml(t.id)}">
+              <strong>${escapeHtml(t.name || R.displayTable(t.id))}</strong>
+              <span>${escapeHtml(on && state.cart.length ? `${state.cart.length} dishes` : meta)}</span>
+            </button>
+            ${busy ? "" : `<button class="table-seat-x" type="button" data-remove-table="${escapeHtml(t.id)}" aria-label="Remove ${escapeHtml(t.name || t.id)}">×</button>`}
+          </div>`;
+        })
+        .join("")
+    }
+      <button class="table-seat table-seat-parcel${state.activeTable === R.PARCEL ? " is-on" : ""}${state.activeTable === R.PARCEL && state.cart.length ? " is-busy" : ""}" type="button" data-table="${escapeHtml(R.PARCEL)}">
+        <strong>Parcel</strong>
+        <span>${state.activeTable === R.PARCEL && state.cart.length ? `${state.cart.length} dishes` : "Takeaway"}</span>
+      </button>
+    </div>`;
 }
 
 async function saveActiveTableHold() {
@@ -1909,7 +1957,7 @@ function renderCart() {
       : emptyTicketHint();
   }
   if (!state.cart.length) {
-    $("lines").innerHTML = `<p class="catalog-empty lines-empty">Tap a product or scan a barcode.</p>`;
+    $("lines").innerHTML = `<p class="catalog-empty lines-empty">${escapeHtml(emptyTicketHint())}</p>`;
   } else {
     $("lines").innerHTML = state.cart
       .map((line) => {
@@ -6544,12 +6592,80 @@ $("btn-kot")?.addEventListener("click", async () => {
   }
 });
 $("table-board")?.addEventListener("click", async (e) => {
+  const add = e.target.closest("[data-add-table]");
+  if (add) {
+    e.preventDefault();
+    const wrap = e.currentTarget.querySelector("[data-create-table]");
+    if (wrap) wrap.hidden = false;
+    const inp = $("table-create-name");
+    if (inp) {
+      inp.value = "";
+      inp.focus();
+    }
+    return;
+  }
+  const cancel = e.target.closest("[data-cancel-table]");
+  if (cancel) {
+    e.preventDefault();
+    const wrap = e.currentTarget.querySelector("[data-create-table]");
+    if (wrap) wrap.hidden = true;
+    return;
+  }
+  const rm = e.target.closest("[data-remove-table]");
+  if (rm) {
+    e.preventDefault();
+    const R = restaurantApi();
+    if (!R) return;
+    const id = rm.getAttribute("data-remove-table") || "";
+    const rec = R.normalizeTableNo(id);
+    if (R.findTableHold(state.held, rec) || (state.activeTable === rec && state.cart.length)) {
+      setHint("Table is occupied — settle or park first", "error");
+      return;
+    }
+    const next = R.removeTable(diningTables(), rec);
+    if (next.error) {
+      setHint(next.error, "error");
+      return;
+    }
+    try {
+      await persistDiningTables(next.tables);
+      if (state.activeTable === rec) state.activeTable = R.PARCEL;
+      renderTableBoard();
+      renderCart();
+      setHint("Table removed", "ok");
+    } catch (err) {
+      setHint(err.message, "error");
+    }
+    return;
+  }
   const btn = e.target.closest("[data-table]");
   if (!btn) return;
   try {
     await selectDiningTable(btn.dataset.table);
   } catch (err) {
     setHint(err.message, "error");
+  }
+});
+$("table-board")?.addEventListener("submit", async (e) => {
+  const form = e.target.closest("[data-create-table]");
+  if (!form) return;
+  e.preventDefault();
+  const R = restaurantApi();
+  if (!R) return;
+  const inp = $("table-create-name");
+  const added = R.addTable(diningTables(), inp?.value);
+  if (added.error) {
+    setHint(added.error, "error");
+    return;
+  }
+  try {
+    await persistDiningTables(added.tables);
+    if (inp) inp.value = "";
+    setHint(`${added.added.name} created`, "ok");
+  } catch (err) {
+    setHint(err.message, "error");
+    form.hidden = false;
+    inp?.focus();
   }
 });
 $("held-bills")?.addEventListener("click", async (e) => {

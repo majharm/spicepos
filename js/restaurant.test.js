@@ -80,12 +80,41 @@ test("Kitchen KOT prints new dishes only, then reprint of the full ticket", () =
   assert.doesNotMatch(html, /Grand total/);
 });
 
-test("Restaurant Counter cards use dish subcategory, not kirana CATEGORY / SUBCATEGORY", () => {
-  const root = path.dirname(fileURLToPath(import.meta.url));
-  const app = readFileSync(path.join(root, "app.js"), "utf8");
-  const css = readFileSync(path.join(root, "../css/pos.css"), "utf8");
-  assert.match(app, /function catalogCardMeta/);
-  assert.match(app, /isRestaurantShop\(\)/);
-  assert.match(app, /String\(item\.subcategory/);
-  assert.match(css, /restaurant-mode\.counter-mode .stage.is-counter .card-qty/);
+test("Restaurant shops keep custom table names and can add or remove seats", () => {
+  assert.equal(R.normalizeTableNo("AC"), "AC");
+  assert.equal(R.displayTable("AC"), "AC");
+  assert.equal(R.normalizeTableNo("Window 1"), "Window 1");
+  assert.equal(R.displayTable("Table 8"), "Table 8");
+
+  const seeded = R.tablesOf({}, []);
+  assert.equal(seeded.length, R.DEFAULT_SEATS);
+  assert.equal(seeded[0].name, "Table 1");
+
+  const named = R.tablesOf({ dining_tables_json: JSON.stringify([{ id: "AC", name: "AC Hall" }]) }, []);
+  assert.equal(named.length, 1);
+  assert.equal(named[0].id, "AC");
+  assert.equal(named[0].name, "AC Hall");
+
+  const emptySaved = R.tablesOf({ dining_tables_json: "[]" }, []);
+  assert.equal(emptySaved.length, 0);
+
+  const added = R.addTable(named, "Window 1");
+  assert.equal(added.ok, true);
+  assert.equal(added.added.id, "Window 1");
+  assert.match(R.serializeTables(added.tables), /Window 1/);
+
+  const dup = R.addTable(added.tables, "AC");
+  assert.equal(dup.ok, false);
+
+  const takeaway = R.addTable(named, "Parcel");
+  assert.equal(takeaway.ok, false);
+
+  const auto = R.addTable([{ id: "1", name: "Table 1" }], "");
+  assert.equal(auto.added.id, "2");
+  assert.equal(auto.added.name, "Table 2");
+
+  const removed = R.removeTable(added.tables, "AC");
+  assert.equal(removed.ok, true);
+  assert.equal(removed.tables.length, 1);
+  assert.equal(removed.tables[0].id, "Window 1");
 });

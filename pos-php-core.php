@@ -396,11 +396,38 @@ function pos_ensure_i18n_columns() {
     "invoice_terms" => "TEXT NULL",
     "payment_qr_url" => "MEDIUMTEXT NULL",
     "payment_upi" => "VARCHAR(160) NULL",
+    "dining_tables_json" => "TEXT NULL",
   ]);
   pos_ensure_columns("staff_users", ["locale" => "VARCHAR(16) NULL"]);
   pos_ensure_columns("customers", ["locale" => "VARCHAR(16) NULL"]);
   pos_ensure_columns("items", ["local_name" => "VARCHAR(255) NULL"]);
   pos_ensure_columns("notifications", ["locale" => "VARCHAR(16) NULL"]);
+}
+
+function pos_clip_dining_tables_json($raw) {
+  if (is_array($raw)) {
+    $parsed = $raw;
+  } else {
+    $parsed = json_decode((string) $raw, true);
+  }
+  if (!is_array($parsed)) return "[]";
+  $out = [];
+  $seen = [];
+  foreach (array_slice($parsed, 0, 40) as $row) {
+    if (is_string($row) || is_numeric($row)) {
+      $id = trim((string) $row);
+      $name = $id;
+    } else {
+      $id = trim((string) ($row["id"] ?? $row["name"] ?? ""));
+      $name = trim((string) ($row["name"] ?? $id));
+    }
+    $id = substr($id, 0, 32);
+    if ($id === "" || strcasecmp($id, "Parcel") === 0 || isset($seen[$id])) continue;
+    $seen[$id] = true;
+    $name = substr($name !== "" ? $name : $id, 0, 32);
+    $out[] = ["id" => $id, "name" => $name];
+  }
+  return json_encode($out, JSON_UNESCAPED_UNICODE);
 }
 
 function pos_ensure_staff_lock_columns() {
