@@ -16,6 +16,41 @@
     return l.cancelled === 1 || l.cancelled === "1" || l.cancelled === true;
   }
 
+  function lineQtyRateAmount(l) {
+    const U = unitsApi();
+    const qty = num(l.quantity_gm);
+    const rate = num(l.rate_per_kg);
+    const unit = l.unit || "PCS";
+    if (U && typeof U.lineAmount === "function") return round2(U.lineAmount(qty, rate, unit));
+    if (U && typeof U.isCount === "function" && U.isCount(unit)) return round2(qty * rate);
+    return round2((qty / 1000) * rate);
+  }
+
+  function invoiceFigures(order, lines) {
+    const rows = Array.isArray(lines) ? lines : [];
+    const discount = round2(order?.discount);
+    const gst = round2(order?.gst);
+    const total = round2(order?.total);
+    const storedSub = round2(order?.subtotal);
+    const netLines = round2(rows.reduce((sum, l) => sum + num(l.amount), 0));
+    const grossLines = round2(rows.reduce((sum, l) => sum + lineQtyRateAmount(l), 0));
+    const lifted = discount > 0 && Math.abs(storedSub - netLines) < 0.051;
+    if (discount > 0 && grossLines > netLines + 0.009) {
+      return {
+        lines: rows.map((l) => ({ ...l, amount: lineQtyRateAmount(l) })),
+        gstLines: rows,
+        subtotal: grossLines,
+        discount,
+        gst,
+        total,
+      };
+    }
+    if (lifted && discount > 0) {
+      return { lines: rows, gstLines: rows, subtotal: round2(storedSub + discount), discount, gst, total };
+    }
+    return { lines: rows, gstLines: rows, subtotal: storedSub, discount, gst, total };
+  }
+
   function enrichLines(order, items) {
     return (order.lines || [])
       .filter((l) => !isCancelled(l))
@@ -30,7 +65,7 @@
           hsn: item?.hsn || l.hsn || item?.code || "—",
           quantity_gm: num(l.quantity_gm),
           rate_per_kg: num(l.rate_per_kg),
-          unit: lineUnit(item),
+          unit: l.unit || lineUnit(item),
           gst_rate: gstRate,
           amount,
           gst_amount: lineGst({ amount, gst_rate: gstRate }),
@@ -370,14 +405,16 @@ ${purchaseBody(purchase, ctx)}
   function invoiceBody(order, ctx) {
     const { company, customers, items, formatDateTime, money, escapeHtml } = ctx;
     const co = company || {};
-    const lines = enrichLines(order, items);
+    const rawLines = enrichLines(order, items);
+    const figures = invoiceFigures(order, rawLines);
+    const lines = figures.lines;
     const cust = findCustomer(customers, order);
     const custGstin = String(cust?.gstin || order.customer_gstin || "").trim();
-    const breakdown = gstBreakdown(lines);
-    const subtotal = round2(order.subtotal);
-    const discount = round2(order.discount);
-    const gst = round2(order.gst);
-    const total = round2(order.total);
+    const breakdown = gstBreakdown(figures.gstLines);
+    const subtotal = figures.subtotal;
+    const discount = figures.discount;
+    const gst = figures.gst;
+    const total = figures.total;
     const invNo = escapeHtml(order.order_number || "—");
     const when = formatDateTime(order.created_at || new Date().toISOString());
     const logo = co.logo_url
@@ -588,14 +625,16 @@ ${invoiceBody(order, ctx)}
   function officeInvoiceBody(order, ctx, opts) {
     const { company, customers, items, formatDateTime, money, escapeHtml } = ctx;
     const co = company || {};
-    const lines = enrichLines(order, items);
+    const rawLines = enrichLines(order, items);
+    const figures = invoiceFigures(order, rawLines);
+    const lines = figures.lines;
     const cust = findCustomer(customers, order);
     const custGstin = String(cust?.gstin || order.customer_gstin || "").trim();
-    const breakdown = gstBreakdown(lines);
-    const subtotal = round2(order.subtotal);
-    const discount = round2(order.discount);
-    const gst = round2(order.gst);
-    const total = round2(order.total);
+    const breakdown = gstBreakdown(figures.gstLines);
+    const subtotal = figures.subtotal;
+    const discount = figures.discount;
+    const gst = figures.gst;
+    const total = figures.total;
     const invNo = escapeHtml(order.order_number || "—");
     const when = formatDateTime(order.created_at || new Date().toISOString());
     const logo = co.logo_url
@@ -884,6 +923,7 @@ ${voucherBody(entry, ctx)}
     voucherBody,
     voucherDocument,
     enrichLines,
+    invoiceFigures,
     enrichPurchaseLines,
     gstBreakdown,
     purchaseGstBreakdown,

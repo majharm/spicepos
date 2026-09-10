@@ -520,12 +520,15 @@ function pos_offer_qualifying_lines($o, $cart) {
   return $out;
 }
 
-function pos_evaluate_offer($o, $cart) {
+function pos_evaluate_offer($o, $cart, $ctx = []) {
   if (!pos_offer_in_window($o)) return null;
   $need = (string) ($o["customer_eligibility"] ?? "all");
   if ($need !== "all" && $need !== "new") return null;
   $cond = is_array($o["conditions"] ?? null) ? $o["conditions"] : [];
   $type = (string) ($o["offer_type"] ?? $o["type"] ?? "product");
+  $bills = (int) (($ctx["customer"] ?? [])["bills"] ?? 0);
+  if ($type === "first_purchase" && $bills > 0) return null;
+  if ($type === "repeat" && $bills < (int) ($cond["repeat_bills"] ?? 0)) return null;
   $lines = pos_offer_qualifying_lines($o, $cart);
   $qty = 0;
   $spend = 0;
@@ -643,10 +646,10 @@ function pos_evaluate_offer($o, $cart) {
   ];
 }
 
-function pos_evaluate_offers($offers, $cart, $stacking = "product_and_bill") {
+function pos_evaluate_offers($offers, $cart, $stacking = "product_and_bill", $ctx = []) {
   $matches = [];
   foreach ($offers as $o) {
-    $hit = pos_evaluate_offer($o, $cart);
+    $hit = pos_evaluate_offer($o, $cart, $ctx);
     if ($hit) $matches[] = $hit;
   }
   usort($matches, function ($a, $b) {
@@ -692,7 +695,7 @@ function pos_evaluate_offers($offers, $cart, $stacking = "product_and_bill") {
   ];
 }
 
-function pos_apply_qr_offers($built, $bid) {
+function pos_apply_qr_offers($built, $bid, $customer = null) {
   $offers = pos_qr_live_offers($bid);
   $settings = pos_get_promo_settings($bid);
   $cart = [];
@@ -708,7 +711,8 @@ function pos_apply_qr_offers($built, $bid) {
       "category" => $item["category"] ?? "",
     ];
   }
-  $result = pos_evaluate_offers($offers, $cart, $settings["stacking"] ?? "product_and_bill");
+  $ctx = ["customer" => ["bills" => (int) (($customer ?? [])["bills"] ?? 0)]];
+  $result = pos_evaluate_offers($offers, $cart, $settings["stacking"] ?? "product_and_bill", $ctx);
   $next = [];
   foreach ($built as $line) {
     $id = (string) $line["item"]["id"];

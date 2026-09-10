@@ -95,6 +95,26 @@ function pos_qr_validate_order($body) {
   return ["customer_name" => $name, "mobile" => $mobile, "table_no" => $table, "notes" => $notes, "lines" => $lines];
 }
 
+function pos_qr_customer_bills($bid, $mobile) {
+  $digits = substr(preg_replace("/\D+/", "", (string) $mobile), -10);
+  if (strlen($digits) < 10) return 0;
+  $customers = pos_q("SELECT id, mobile FROM customers WHERE business_id = ?", "s", [$bid]);
+  $ids = [];
+  foreach ($customers as $row) {
+    $got = substr(preg_replace("/\D+/", "", (string) ($row["mobile"] ?? "")), -10);
+    if ($got === $digits) $ids[] = $row["id"];
+  }
+  if (!$ids) return 0;
+  $ph = implode(",", array_fill(0, count($ids), "?"));
+  $types = str_repeat("s", count($ids) + 1);
+  $rows = pos_q(
+    "SELECT COUNT(*) AS n FROM sales_orders WHERE business_id = ? AND customer_id IN ($ph) AND status <> 'cancelled'",
+    $types,
+    array_merge([$bid], $ids)
+  );
+  return (int) ($rows[0]["n"] ?? 0);
+}
+
 function pos_qr_order_number() {
   return "QRO-" . strtoupper(substr(base_convert((string) round(microtime(true) * 1000), 10, 36), -5)) . strtoupper(base_convert((string) random_int(0, 35), 10, 36));
 }
@@ -516,7 +536,7 @@ function pos_qr_public_dispatch($path, $method, $body) {
     }
     if (!$built || count($built) > 200) throw new Exception("That pack order is too large.");
     require_once __DIR__ . "/pos-offers.php";
-    $priced = pos_apply_qr_offers($built, $business["id"]);
+    $priced = pos_apply_qr_offers($built, $business["id"], ["bills" => pos_qr_customer_bills($business["id"], $input["mobile"])]);
     $built = $priced["built"];
     $subtotal = $priced["subtotal"];
     $gst = $priced["gst"];

@@ -304,6 +304,46 @@ test("QR mobile digits match customers on the last ten numbers", () => {
   assert.equal(qrMobileDigits("9876543210"), "9876543210");
 });
 
+test("QR offers skip a repeat Welcome 10% until the customer has enough bills", () => {
+  const dosa = { id: "dosa", name: "Masala Dosa", category: "South Indian", retail_rate: 100, gst_rate: 0, base_unit: "PCS" };
+  const welcome = {
+    name: "Welcome ₹100 off",
+    offer_type: "repeat",
+    status: "active",
+    live_status: "active",
+    discount_type: "pct",
+    discount_value: 10,
+    min_spend: 199,
+    stacking: "stack",
+    conditions: { item_ids: [], repeat_bills: 5 },
+  };
+  const bogo = {
+    name: "buy1 get 1 free",
+    offer_type: "bogo",
+    status: "active",
+    live_status: "active",
+    discount_type: "pct",
+    discount_value: 50,
+    conditions: {
+      item_ids: ["dosa"],
+      buy_qty: 1,
+      get_qty: 1,
+      get_discount_type: "pct",
+      get_discount_value: 100,
+    },
+  };
+  const built = [{ item: dosa, unit: "PCS", quantityBase: 3, amount: 300, gstRate: 0, gstAmount: 0 }];
+  const first = applyQrOffers(built, { offers: [welcome, bogo], stacking: "stack", now: new Date("2026-09-10T06:17:00"), customer: { bills: 0 } });
+  assert.equal(first.discount, 100);
+  assert.equal(first.subtotal, 200);
+  assert.equal(first.total, 200);
+  assert.match(first.message, /buy1 get 1 free/);
+  assert.doesNotMatch(first.message || "", /Welcome/);
+  const fifth = applyQrOffers(built, { offers: [welcome, bogo], stacking: "stack", now: new Date("2026-09-10T06:17:00"), customer: { bills: 5 } });
+  assert.equal(fifth.discount, 130);
+  assert.equal(fifth.subtotal, 170);
+});
+
 test("QR invoice totals lift offer discount onto the header so Invoices print gross minus discount", () => {
   const plain = qrInvoiceTotals({ subtotal: 100, discount: 0, gst: 5, total: 105 });
   assert.equal(plain.subtotal, 100);

@@ -273,6 +273,39 @@ test("pickBest shows the applied combo with the biggest save", () => {
   assert.ok(pending.save > 0);
 });
 
+test("repeat Welcome 10% does not apply before the required bill count", () => {
+  const welcome = O.normalize({
+    name: "Welcome ₹100 off",
+    type: "repeat",
+    status: "active",
+    discount_type: "pct",
+    discount_value: 10,
+    min_spend: 199,
+    stacking: "stack",
+  });
+  welcome.conditions.repeat_bills = 5;
+  welcome.live_status = "active";
+  const bogo = O.normalize({
+    name: "buy1 get 1 free",
+    type: "bogo",
+    status: "active",
+    item_ids: ["dosa"],
+    buy_qty: 1,
+    get_qty: 1,
+    get_discount_type: "pct",
+    get_discount_value: 100,
+  });
+  bogo.live_status = "active";
+  const cart = [line("dosa", 300, { qty: 3, isCount: true })];
+  const now = new Date("2026-09-10T06:17:00");
+  const tooNew = O.evaluateAll([welcome, bogo], { cart, now, stacking: "stack", customer: { bills: 0 } });
+  assert.equal(tooNew.discount, 100);
+  assert.equal(tooNew.applied.length, 1);
+  assert.equal(tooNew.applied[0].name, "buy1 get 1 free");
+  const repeat = O.evaluateAll([welcome, bogo], { cart, now, stacking: "stack", customer: { bills: 5 } });
+  assert.equal(repeat.discount, 130);
+});
+
 test("MySQL zero dates stay live so Counter and QR still apply the offer", () => {
   const offer = {
     name: "Dosa 10% off",

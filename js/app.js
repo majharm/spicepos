@@ -4266,7 +4266,7 @@ function qrOrderAsInvoice(qr, invoice) {
     notes: qr.notes,
     table_no: qr.table_no || invoice?.table_no || "",
     lines: qr.lines || [],
-    subtotal: qr.subtotal,
+    subtotal: Number(qr.subtotal) + Number(qr.discount || 0),
     gst: qr.gst,
     total: qr.total,
     discount: qr.discount,
