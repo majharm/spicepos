@@ -94,6 +94,8 @@ test("Restaurant shops keep custom table names and can add or remove seats", () 
   assert.equal(named.length, 1);
   assert.equal(named[0].id, "AC");
   assert.equal(named[0].name, "AC Hall");
+  assert.equal(named[0].floor, "ground");
+  assert.equal(R.floorsOf({ dining_tables_json: JSON.stringify([{ id: "AC", name: "AC Hall" }]) }, [])[0].id, "ground");
 
   const emptySaved = R.tablesOf({ dining_tables_json: "[]" }, []);
   assert.equal(emptySaved.length, 0);
@@ -117,4 +119,41 @@ test("Restaurant shops keep custom table names and can add or remove seats", () 
   assert.equal(removed.ok, true);
   assert.equal(removed.tables.length, 1);
   assert.equal(removed.tables[0].id, "Window 1");
+});
+
+test("Restaurant shops can add dining floors and keep old table lists", () => {
+  const oldJson = JSON.stringify([{ id: "1", name: "Table 1" }, { id: "2", name: "Table 2" }]);
+  const layout = R.diningOf({ dining_tables_json: oldJson }, []);
+  assert.equal(layout.floors.length, 1);
+  assert.equal(layout.floors[0].name, "Ground");
+  assert.equal(layout.tables[0].floor, "ground");
+
+  const first = R.addFloor(layout.floors, "First");
+  assert.equal(first.ok, true);
+  assert.equal(first.added.id, "first");
+  assert.equal(first.floors.length, 2);
+
+  const dup = R.addFloor(first.floors, "first");
+  assert.equal(dup.ok, false);
+
+  const onFirst = R.addTable(layout.tables, "AC", "first");
+  assert.equal(onFirst.ok, true);
+  assert.equal(onFirst.added.floor, "first");
+  assert.equal(R.tablesOnFloor(onFirst.tables, "first").length, 1);
+  assert.equal(R.tablesOnFloor(onFirst.tables, "ground").length, 2);
+
+  const saved = JSON.parse(R.serializeTables(onFirst.tables, first.floors));
+  assert.equal(saved.floors.length, 2);
+  assert.equal(saved.tables.find((t) => t.id === "AC").floor, "first");
+
+  const last = R.removeFloor([{ id: "ground", name: "Ground" }], layout.tables, "ground", []);
+  assert.equal(last.ok, false);
+
+  const busy = R.removeFloor(first.floors, onFirst.tables, "first", ["AC"]);
+  assert.equal(busy.ok, false);
+
+  const cleared = R.removeFloor(first.floors, onFirst.tables, "first", []);
+  assert.equal(cleared.ok, true);
+  assert.equal(cleared.floors.length, 1);
+  assert.equal(cleared.tables.some((t) => t.id === "AC"), false);
 });

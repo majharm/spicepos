@@ -404,30 +404,70 @@ function pos_ensure_i18n_columns() {
   pos_ensure_columns("notifications", ["locale" => "VARCHAR(16) NULL"]);
 }
 
+function pos_clip_floor_id($raw) {
+  $id = strtolower(trim((string) $raw));
+  $id = preg_replace("/\s+/", "-", $id);
+  $id = preg_replace("/[^a-z0-9_-]/", "", $id);
+  $id = preg_replace("/-+/", "-", $id);
+  $id = trim($id, "-");
+  return substr($id, 0, 32);
+}
+
 function pos_clip_dining_tables_json($raw) {
   if (is_array($raw)) {
     $parsed = $raw;
   } else {
     $parsed = json_decode((string) $raw, true);
   }
-  if (!is_array($parsed)) return "[]";
-  $out = [];
+  if (!is_array($parsed)) return json_encode(["floors" => [["id" => "ground", "name" => "Ground"]], "tables" => []], JSON_UNESCAPED_UNICODE);
+
+  $isLayout = isset($parsed["floors"]) || isset($parsed["tables"]);
+  $floorRows = $isLayout ? (is_array($parsed["floors"] ?? null) ? $parsed["floors"] : []) : [];
+  $tableRows = $isLayout ? (is_array($parsed["tables"] ?? null) ? $parsed["tables"] : []) : $parsed;
+
+  $floors = [];
+  $seenFloors = [];
+  foreach (array_slice($floorRows, 0, 12) as $row) {
+    if (is_string($row) || is_numeric($row)) {
+      $name = trim((string) $row);
+      $id = pos_clip_floor_id($name);
+    } else {
+      $name = trim((string) ($row["name"] ?? $row["id"] ?? ""));
+      $id = pos_clip_floor_id($row["id"] ?? $name);
+    }
+    $name = substr($name, 0, 32);
+    if ($id === "" || $id === "parcel" || isset($seenFloors[$id]) || $name === "") continue;
+    $seenFloors[$id] = true;
+    $floors[] = ["id" => $id, "name" => $name];
+  }
+
+  $tables = [];
   $seen = [];
-  foreach (array_slice($parsed, 0, 40) as $row) {
+  $fallback = $floors[0]["id"] ?? "ground";
+  foreach (array_slice($tableRows, 0, 40) as $row) {
     if (is_string($row) || is_numeric($row)) {
       $id = trim((string) $row);
       $name = $id;
+      $floor = $fallback;
     } else {
       $id = trim((string) ($row["id"] ?? $row["name"] ?? ""));
       $name = trim((string) ($row["name"] ?? $id));
+      $floor = pos_clip_floor_id($row["floor"] ?? $fallback);
     }
     $id = substr($id, 0, 32);
     if ($id === "" || strcasecmp($id, "Parcel") === 0 || isset($seen[$id])) continue;
+    if ($floor === "" || $floor === "parcel") $floor = $fallback;
     $seen[$id] = true;
     $name = substr($name !== "" ? $name : $id, 0, 32);
-    $out[] = ["id" => $id, "name" => $name];
+    $tables[] = ["id" => $id, "name" => $name, "floor" => $floor];
+    if (!isset($seenFloors[$floor])) {
+      $seenFloors[$floor] = true;
+      $label = $floor === "ground" ? "Ground" : ucwords(str_replace(["-", "_"], " ", $floor));
+      $floors[] = ["id" => $floor, "name" => substr($label, 0, 32)];
+    }
   }
-  return json_encode($out, JSON_UNESCAPED_UNICODE);
+  if (!$floors) $floors[] = ["id" => "ground", "name" => "Ground"];
+  return json_encode(["floors" => $floors, "tables" => $tables], JSON_UNESCAPED_UNICODE);
 }
 
 function pos_ensure_staff_lock_columns() {

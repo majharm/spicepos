@@ -15,6 +15,17 @@ function send(res, fn) {
     .catch((err) => res.status(400).json({ error: String(err.message) }));
 }
 
+function clipFloorId(raw) {
+  return String(raw || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "-")
+    .replace(/[^a-z0-9_-]/g, "")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 32);
+}
+
 function clipDiningTablesJson(raw) {
   let parsed = raw;
   if (typeof raw === "string") {
@@ -24,17 +35,39 @@ function clipDiningTablesJson(raw) {
       parsed = [];
     }
   }
-  if (!Array.isArray(parsed)) parsed = [];
-  const out = [];
+  const isLayout = parsed && typeof parsed === "object" && !Array.isArray(parsed) && (parsed.floors || parsed.tables);
+  const floorRows = isLayout && Array.isArray(parsed.floors) ? parsed.floors : [];
+  const tableRows = isLayout && Array.isArray(parsed.tables) ? parsed.tables : Array.isArray(parsed) ? parsed : [];
+
+  const floors = [];
+  const seenFloors = new Set();
+  for (const row of floorRows.slice(0, 12)) {
+    const name = String(typeof row === "string" || typeof row === "number" ? row : row?.name || row?.id || "").trim().slice(0, 32);
+    const id = clipFloorId(typeof row === "object" && row ? row.id || name : name);
+    if (!id || id === "parcel" || !name || seenFloors.has(id)) continue;
+    seenFloors.add(id);
+    floors.push({ id, name });
+  }
+
+  const tables = [];
   const seen = new Set();
-  for (const row of parsed.slice(0, 40)) {
+  const fallback = floors[0]?.id || "ground";
+  for (const row of tableRows.slice(0, 40)) {
     const id = String(row?.id ?? row?.name ?? (typeof row === "string" || typeof row === "number" ? row : "")).trim().slice(0, 32);
     if (!id || /^parcel$/i.test(id) || seen.has(id)) continue;
     seen.add(id);
     const name = String(row?.name ?? id).trim().slice(0, 32) || id;
-    out.push({ id, name });
+    let floor = clipFloorId(row?.floor) || fallback;
+    if (!floor || floor === "parcel") floor = fallback;
+    tables.push({ id, name, floor });
+    if (!seenFloors.has(floor)) {
+      seenFloors.add(floor);
+      const label = floor === "ground" ? "Ground" : floor.replace(/[-_]+/g, " ").replace(/\b\w/g, (ch) => ch.toUpperCase());
+      floors.push({ id: floor, name: label.slice(0, 32) });
+    }
   }
-  return JSON.stringify(out);
+  if (!floors.length) floors.push({ id: "ground", name: "Ground" });
+  return JSON.stringify({ floors, tables });
 }
 
 const BRANCH_LIST_SQL = `SELECT b.*,

@@ -329,11 +329,11 @@ test("POS boot skips API probe and slims catalog photos", () => {
   assert.match(index, /qrcode\.iife\.js[^>]+defer/);
   assert.match(index, /preload="none"/);
   assert.match(index, /pos-api\.js\?v=20260905deploy154/);
-  assert.match(index, /app\.js\?v=20260905deploy174/);
+  assert.match(index, /app\.js\?v=20260905deploy176/);
   assert.doesNotMatch(index, /app\.js\?v=20260905deploy167/);
   assert.doesNotMatch(index, /app\.js\?v=20260905deploy166/);
   assert.match(index, /offers\.js\?v=20260905deploy170/);
-  assert.match(index, /restaurant\.js\?v=20260905deploy169/);
+  assert.match(index, /restaurant\.js\?v=20260905deploy176/);
   assert.match(login, /x-pos-20260830e\.js\?v=20260905deploy172/);
   assert.match(loginJs, /saveLoginSpec/);
   assert.match(core, /function pos_catalog_items/);
@@ -359,19 +359,41 @@ test("Restaurant Counter can create named dining tables", () => {
   const schema = read("server/schema.js");
   assert.match(index, /id="table-board"/);
   assert.match(app, /data-add-table/);
+  assert.match(app, /data-add-floor/);
   assert.match(app, /data-create-table/);
+  assert.match(app, /data-create-floor/);
   assert.match(app, /\/api\/dining-tables/);
   assert.match(app, /function persistDiningTables/);
+  assert.match(app, /function syncActiveFloor/);
   assert.match(restaurant, /function addTable/);
+  assert.match(restaurant, /function addFloor/);
   assert.match(restaurant, /function tablesOf/);
+  assert.match(restaurant, /function floorsOf/);
   assert.match(restaurant, /dining_tables_json/);
   assert.match(css, /\.table-create/);
+  assert.match(css, /\.floor-chip/);
   assert.match(css, /body\.restaurant-mode \.table-board/);
   assert.match(tenant, /\/api\/dining-tables/);
+  assert.match(tenant, /clipFloorId/);
   assert.match(schema, /dining_tables_json/);
   assert.match(core, /function pos_clip_dining_tables_json/);
+  assert.match(core, /function pos_clip_floor_id/);
   assert.match(core, /dining_tables_json/);
   assert.match(till, /dining-tables/);
-  assert.match(index, /pos\.css\?v=20260905deploy169/);
+  assert.match(index, /pos\.css\?v=20260905deploy176/);
+  assert.match(index, /restaurant\.js\?v=20260905deploy176/);
+  assert.match(index, /app\.js\?v=20260905deploy176/);
   assert.match(index, /footwear\.js\?v=20260905deploy169/);
+});
+
+test("PHP dining layout clip keeps floors and old table lists", { skip: hasPhpCli() ? false : "php CLI not installed" }, () => {
+  const out = execFileSync(
+    "php",
+    [
+      "-r",
+      'require "pos-php-core.php"; $old = pos_clip_dining_tables_json(\'[{"id":"1","name":"Table 1"}]\'); $oldJ = json_decode($old, true); if (($oldJ["floors"][0]["id"] ?? "") !== "ground") exit(2); if (($oldJ["tables"][0]["floor"] ?? "") !== "ground") exit(3); $next = pos_clip_dining_tables_json(["floors"=>[["id"=>"ground","name"=>"Ground"],["id"=>"first","name"=>"First"]],"tables"=>[["id"=>"AC","name"=>"AC","floor"=>"first"]]]); $j = json_decode($next, true); if (count($j["floors"]) !== 2) exit(4); if (($j["tables"][0]["floor"] ?? "") !== "first") exit(5); echo "FLOOR_OK";',
+    ],
+    { encoding: "utf8", cwd: root },
+  );
+  assert.match(out, /FLOOR_OK/);
 });

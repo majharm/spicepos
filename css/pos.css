@@ -982,9 +982,58 @@ a.btn { text-decoration: none; display: inline-block; }
   letter-spacing: 0;
   text-transform: none;
 }
+.table-board-head .dining-add-row {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: flex-end;
+}
 .table-board-head .dining-add-btn {
   flex: 0 0 auto;
   white-space: nowrap;
+}
+.floor-chips {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 6px;
+  margin: 0 0 10px;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+.floor-chips[hidden] { display: none !important; }
+.floor-chip-wrap {
+  position: relative;
+  flex: 0 0 auto;
+}
+.floor-chip {
+  flex: 0 0 auto;
+  border: 1px solid var(--line-strong, #c5d0c8);
+  background: #fff;
+  color: inherit;
+  border-radius: 999px;
+  padding: 6px 12px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 750;
+  line-height: 1.2;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.floor-chip span {
+  margin-left: 4px;
+  color: var(--muted, #64748b);
+  font-weight: 700;
+}
+.floor-chip.is-on {
+  background: #0f766e;
+  border-color: #0f766e;
+  color: #fff;
+}
+.floor-chip.is-on span { color: rgba(255,255,255,0.86); }
+.floor-chip-x {
+  top: -6px;
+  right: -6px;
 }
 .table-create {
   display: flex;
