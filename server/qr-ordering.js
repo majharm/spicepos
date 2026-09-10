@@ -249,7 +249,7 @@ export function qrOfferCart(built) {
   });
 }
 
-export function applyQrOffers(built, { offers = [], stacking = "product_and_bill", items = [], now } = {}) {
+export function applyQrOffers(built, { offers = [], stacking = "product_and_bill", items = [], now, customer } = {}) {
   const O = POSOffers || globalThis.POSOffers;
   const source = Array.isArray(built) ? built.map((line) => ({ ...line })) : [];
   if (!O || !source.length) {
@@ -263,7 +263,7 @@ export function applyQrOffers(built, { offers = [], stacking = "product_and_bill
     cart: qrOfferCart(source),
     items: items.length ? items : source.map((line) => line.item).filter(Boolean),
     stacking,
-    customer: { bills: 0, lifetime_spend: 0 },
+    customer: { bills: Number(customer?.bills) || 0, lifetime_spend: Number(customer?.lifetime_spend) || 0 },
   });
   const next = source.map((line) => {
     const id = String(line.item?.id || "");

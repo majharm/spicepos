@@ -407,3 +407,49 @@ test("POS slip and official bill print the shop payment QR for customers to pay"
   assert.doesNotMatch(none, /inv-pay-qr/);
   assert.doesNotMatch(none, /javascript:/);
 });
+
+test("QR invoice prints 3 pcs × rate as gross, then header discount", () => {
+  const InvoicePrint = loadInvoicePrint();
+  const order = {
+    order_number: "QRO-T4ZVZY",
+    customer_name: "Majhar",
+    table_no: "3",
+    subtotal: 170,
+    discount: 130,
+    gst: 0,
+    total: 170,
+    payment_method: "cash",
+    payment_status: "unpaid",
+    created_at: "2026-09-10T00:47:00.000Z",
+    lines: [
+      {
+        item_name: "Masala Dosa",
+        hsn: "FD-002",
+        quantity_gm: 3,
+        rate_per_kg: 100,
+        unit: "PCS",
+        amount: 170,
+        gst_rate: 0,
+      },
+    ],
+  };
+  const ctx = {
+    company: { name: "ABC cafe" },
+    customers: [],
+    items: [],
+    formatDateTime: (v) => String(v),
+    money: (n) => `₹${Number(n).toFixed(2)}`,
+    escapeHtml: (v) => String(v ?? ""),
+  };
+  const figs = InvoicePrint.invoiceFigures(order, InvoicePrint.enrichLines(order, []));
+  assert.equal(figs.subtotal, 300);
+  assert.equal(figs.discount, 130);
+  assert.equal(figs.total, 170);
+  assert.equal(figs.lines[0].amount, 300);
+  const html = InvoicePrint.invoiceBody(order, ctx);
+  assert.match(html, /₹300\.00/);
+  assert.match(html, /Discount/);
+  assert.match(html, /₹130\.00/);
+  assert.match(html, /₹170\.00/);
+  assert.match(html, /3 pcs/);
+});
