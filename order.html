@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#4a1416" />
-    <title>Order · SWAMI MASALE</title>
+    <title>Order · Pharmacy</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Outfit:wght@400;500;600;700&display=swap" />
@@ -21,8 +21,8 @@
           <p id="shop-address"></p>
         </div>
       </div>
-      <label class="menu-search">Search spices
-        <input id="menu-search" type="search" placeholder="Haldi, jeera, code…" autocomplete="off" />
+      <label class="menu-search">Search medicines
+        <input id="menu-search" type="search" placeholder="Medicine, generic, barcode…" autocomplete="off" />
       </label>
     </header>
 
@@ -52,7 +52,7 @@
           <label>Name * <input name="customer_name" maxlength="160" required autocomplete="name" /></label>
           <label>Mobile * <input name="mobile" maxlength="15" inputmode="tel" required autocomplete="tel" /></label>
           <label>Pickup / table <input name="table_no" maxlength="64" placeholder="Counter or Table 2" /></label>
-          <label>Notes <textarea name="notes" maxlength="1000" rows="2" placeholder="Coarse grind, no chilli…"></textarea></label>
+          <label>Notes <textarea name="notes" maxlength="1000" rows="2" placeholder="Prescription notes…"></textarea></label>
           <button class="place-order" type="submit">Place order</button>
           <p class="form-hint" id="order-hint"></p>
         </form>
@@ -67,7 +67,7 @@
       <button type="button" id="new-order">Order more</button>
     </section>
 
-    <footer>QR ordering · SWAMI MASALE SASWAD</footer>
+    <footer>QR ordering · Medical POS</footer>
     <script src="./js/qr-order.js" defer></script>
   </body>
 </html>

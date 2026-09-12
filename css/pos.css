@@ -579,6 +579,45 @@ tr:hover td { background: #fff7ea; }
   box-shadow: var(--shadow-card);
 }
 
+.settings.wide .form-section {
+  grid-column: 1 / -1;
+  margin: 4px 0 0;
+  font-family: var(--display);
+  color: var(--maroon-deep);
+  font-size: 18px;
+}
+.bill-meta {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  padding: 0 18px 10px;
+}
+.bill-meta label {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 650;
+  display: grid;
+  gap: 4px;
+}
+.bill-meta input {
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: #fff;
+}
+.po-line {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 6px;
+  align-items: center;
+  background: var(--bg);
+  border-radius: 12px;
+  padding: 8px;
+}
+.po-line input, .po-line select { min-width: 0; width: 100%; padding: 8px; border-radius: 8px; border: 1px solid var(--line); background: #fff; }
+tr.exp-expired td { background: #fdecea; }
+tr.exp-near td { background: #fff6e0; }
+
 @media (max-width: 980px) {
   .app { grid-template-columns: 1fr; }
   .nav { flex-direction: row; flex-wrap: wrap; border-right: 0; border-bottom: 1px solid rgba(243, 201, 107, 0.18); }

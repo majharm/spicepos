@@ -6,6 +6,7 @@ const state = {
   customers: [],
   packs: [],
   suppliers: [],
+  batches: [],
   cart: [],
   query: "",
   customerId: "",
@@ -30,28 +31,39 @@ function money(n) {
   return inr.format(Number(n) || 0);
 }
 
-function kg(gm) {
-  return `${(Number(gm) / 1000).toFixed(2)} kg`;
-}
-
 function customer() {
   return state.customers.find((c) => c.id === state.customerId) || state.customers[0];
 }
 
-function rateFor(item) {
-  const type = customer()?.type || "b2c";
-  return Number(type === "b2b" ? item.b2b_rate : item.retail_rate);
+function kg(_gm) {
+  return String(Number(_gm) || 0);
 }
 
-function lineAmt(item, qtyGm) {
-  return (Number(qtyGm) / 1000) * rateFor(item);
+function stockOf(item) {
+  return Number(item?.stock_gm) || 0;
+}
+
+function genericOf(item) {
+  return item.generic_name || item.local_name || "";
+}
+
+function rateFor(item) {
+  const type = customer()?.type || "b2c";
+  if (type === "b2b") return Number(item.b2b_rate || item.selling_price || item.retail_rate);
+  return Number(item.selling_price || item.retail_rate);
+}
+
+function lineAmt(item, qty) {
+  return (Number(qty) || 0) * rateFor(item);
 }
 
 function packLabel() {
-  if (!state.lastPack) return "Pack: Loose items (no pack)";
-  const pack = state.packs.find((p) => p.id === state.lastPack.id);
-  const name = pack?.name || state.lastPack.name || "Pack";
-  return `Pack: ${name} × ${state.lastPack.count || 1}`;
+  const c = customer();
+  return c ? `${c.business_name || c.name} · ${c.mobile || ""}` : "Walk-in retail";
+}
+
+function batchesFor(itemId) {
+  return (state.batches || []).filter((b) => b.item_id === itemId && Number(b.qty) > 0);
 }
 
 async function api(path, options) {
@@ -128,6 +140,8 @@ function showView(name) {
   if (name === "orders") loadOrders();
   if (name === "purchases") loadPurchases();
   if (name === "suppliers") loadSuppliers();
+  if (name === "batches") loadBatches();
+  if (name === "returns") loadReturns();
   if (name === "support") renderSupport();
   if (name === "qr") {
     showQrPoster();
@@ -149,73 +163,96 @@ function filteredItems() {
   const list = activeItems();
   if (!q) return list;
   return list.filter((i) =>
-    [i.name, i.local_name, i.code, i.category, i.subcategory].join(" ").toLowerCase().includes(q),
+    [i.name, i.local_name, i.generic_name, i.code, i.barcode, i.manufacturer, i.category, i.medicine_type].join(" ").toLowerCase().includes(q),
   );
 }
 
 function renderCatalog() {
   $("catalog").innerHTML = filteredItems()
     .map((i) => {
-      const low = Number(i.stock_gm) <= Number(i.reorder_level_gm);
-      return `<button class="card" type="button" data-add="${escapeHtml(i.id)}">
-        <div class="sku">${escapeHtml(i.category)} / ${escapeHtml(i.subcategory || "—")}</div>
-        <div class="name">${escapeHtml(i.name)} <small>${escapeHtml(i.local_name || "")}</small></div>
-        <div class="meta"><span>${escapeHtml(kg(i.stock_gm))}</span><span>${money(rateFor(i))}/kg</span></div>
-        <div class="stock ${low ? "low" : "ok"}">${escapeHtml(i.code)} · GST ${escapeHtml(i.gst_rate)}%</div>
+      const low = stockOf(i) <= Number(i.reorder_level_gm);
+      const out = stockOf(i) <= 0;
+      return `<button class="card" type="button" data-add="${escapeHtml(i.id)}" ${out ? "disabled" : ""}>
+        <div class="sku">${escapeHtml(i.medicine_type || i.category || "Medical")} · ${escapeHtml(i.pack_unit || "Strip")}</div>
+        <div class="name">${escapeHtml(i.name)} <small>${escapeHtml(genericOf(i))}</small></div>
+        <div class="meta"><span>${stockOf(i)} ${escapeHtml(i.pack_unit || "pcs")}</span><span>${money(rateFor(i))}</span></div>
+        <div class="stock ${out ? "out" : low ? "low" : "ok"}">${escapeHtml(i.code)} · GST ${escapeHtml(i.gst_rate)}%</div>
       </button>`;
     })
     .join("");
 }
 
 function cartTotals() {
-  return state.cart.reduce(
-    (acc, line) => {
-      const item = state.items.find((i) => i.id === line.itemId);
-      if (!item) return acc;
-      const amount = lineAmt(item, line.qtyGm);
-      acc.qty += line.qtyGm;
-      acc.taxable += amount;
-      acc.tax += (amount * Number(item.gst_rate)) / 100;
-      return acc;
-    },
-    { qty: 0, taxable: 0, tax: 0 },
-  );
+  const P = window.Pharmacy;
+  const interstate = P ? P.isInterstate(state.company.gstin, customer()?.gstin) : false;
+  const lines = state.cart.map((line) => {
+    const item = state.items.find((i) => i.id === line.itemId);
+    if (!item) return null;
+    if (P) {
+      return P.saleLineTotals({
+        qty: line.qty,
+        rate: rateFor(item),
+        mrp: item.mrp,
+        gstRate: item.gst_rate,
+        interstate,
+      });
+    }
+    const taxable = lineAmt(item, line.qty);
+    const gst = (taxable * Number(item.gst_rate)) / 100;
+    return { taxable, gst, cgst: gst / 2, sgst: gst / 2, igst: 0, qty: line.qty };
+  }).filter(Boolean);
+  const billDiscount = Number($("bill-discount")?.value) || 0;
+  const method = $("pay-method")?.value;
+  const paidRaw = $("bill-paid")?.value;
+  if (P) {
+    const draft = P.billTotals({ lines, billDiscount, amountPaid: 0 });
+    const amountPaid = paidRaw === "" || paidRaw == null ? (method === "credit" ? 0 : draft.grandTotal) : Number(paidRaw) || 0;
+    return { ...P.billTotals({ lines, billDiscount, amountPaid }), qty: lines.reduce((s, l) => s + l.qty, 0) };
+  }
+  const taxable = lines.reduce((s, l) => s + l.taxable, 0);
+  const tax = lines.reduce((s, l) => s + l.gst, 0);
+  return { qty: lines.reduce((s, l) => s + l.qty, 0), subtotal: taxable, gst: tax, grandTotal: taxable + tax, discount: billDiscount, roundOff: 0, due: 0, cgst: tax / 2, sgst: tax / 2, igst: 0 };
 }
 
 function renderCart() {
-  $("chosen-pack").textContent = packLabel();
+  if ($("chosen-pack")) $("chosen-pack").textContent = packLabel();
   if (!state.cart.length) {
-    $("lines").innerHTML = `<p class="hint">Tap a spice (100 g) or add a pack type.</p>`;
+    $("lines").innerHTML = `<p class="hint">Tap a medicine to add 1 pack. Batch is picked FEFO (earliest expiry first).</p>`;
   } else {
     $("lines").innerHTML = state.cart
       .map((line) => {
         const item = state.items.find((i) => i.id === line.itemId);
         if (!item) return "";
+        const batch = batchesFor(item.id)[0];
+        const exp = batch?.expiry_date ? String(batch.expiry_date).slice(0, 10) : "—";
         return `<div class="line">
           <div>
             <div class="who">${escapeHtml(item.name)}</div>
-            <div class="pack">${escapeHtml(item.category)} / ${escapeHtml(item.subcategory || "—")} · ${escapeHtml(kg(line.qtyGm))}</div>
+            <div class="pack">${escapeHtml(genericOf(item))} · ${escapeHtml(item.pack_unit || "Strip")} · Batch ${escapeHtml(batch?.batch_no || "OPEN")} · Exp ${escapeHtml(exp)}</div>
           </div>
           <div>
             <div class="qty">
-              <button type="button" data-chg="${escapeHtml(item.id)}" data-d="-50">−</button>
-              <span>${line.qtyGm} g</span>
-              <button type="button" data-chg="${escapeHtml(item.id)}" data-d="50">+</button>
+              <button type="button" data-chg="${escapeHtml(item.id)}" data-d="-1">−</button>
+              <span>${line.qty}</span>
+              <button type="button" data-chg="${escapeHtml(item.id)}" data-d="1">+</button>
             </div>
-            <div class="pack" style="text-align:right;margin-top:4px">${money(lineAmt(item, line.qtyGm))}</div>
+            <div class="pack" style="text-align:right;margin-top:4px">${money(lineAmt(item, line.qty))}</div>
           </div>
         </div>`;
       })
       .join("");
   }
   const t = cartTotals();
-  $("qty-total").textContent = `${t.qty} g`;
-  $("taxable").textContent = money(t.taxable);
-  $("tax").textContent = money(t.tax);
-  $("total").textContent = money(t.taxable + t.tax);
+  $("qty-total").textContent = String(t.qty);
+  $("taxable").textContent = money(t.subtotal ?? t.taxable);
+  if ($("disc-total")) $("disc-total").textContent = money(t.discount);
+  if ($("cgst-total")) $("cgst-total").textContent = money(t.cgst);
+  if ($("sgst-total")) $("sgst-total").textContent = money(t.igst ? t.igst : t.sgst);
+  if ($("round-total")) $("round-total").textContent = money(t.roundOff);
+  $("total").textContent = money(t.grandTotal ?? (t.taxable + t.tax));
+  if ($("due-total")) $("due-total").textContent = money(t.due);
   $("btn-pay").disabled = state.cart.length === 0;
   $("btn-clear").disabled = state.cart.length === 0;
-  $("btn-pay").textContent = state.editingOrderId ? "Save" : "Save";
 }
 
 function renderCustomersSelect() {
@@ -233,45 +270,24 @@ function renderCustomersSelect() {
   }
 }
 
-function renderPackChoice() {
-  const current = $("pack-choice").value;
-  $("pack-choice").innerHTML =
-    `<option value="">Loose items (no pack)</option>` +
-    state.packs
-      .map((p) => `<option value="${escapeHtml(p.id)}">${escapeHtml(p.name)}</option>`)
-      .join("");
-  if (state.lastPack?.id) $("pack-choice").value = state.lastPack.id;
-  else $("pack-choice").value = current || "";
-  $("pack-bar").innerHTML = state.packs
-    .map((p) => `<button class="btn" type="button" data-pack="${escapeHtml(p.id)}">${escapeHtml(p.name)}</button>`)
-    .join("");
-}
+function renderPackChoice() {}
 
-function addItem(id, qtyGm = 100) {
+function addItem(id, qty = 1) {
   const item = state.items.find((i) => i.id === id);
   if (!item) return;
   const line = state.cart.find((l) => l.itemId === id);
-  if (line) line.qtyGm = Math.max(0, line.qtyGm + qtyGm);
-  else state.cart.push({ itemId: id, qtyGm });
-  state.cart = state.cart.filter((l) => l.qtyGm > 0);
+  const next = (line ? line.qty : 0) + qty;
+  if (next > stockOf(item)) {
+    setHint(`Only ${stockOf(item)} in stock for ${item.name}`, "error");
+    return;
+  }
+  if (line) line.qty = Math.max(0, next);
+  else state.cart.push({ itemId: id, qty });
+  state.cart = state.cart.filter((l) => l.qty > 0);
   renderCart();
 }
 
-function addPack(packId) {
-  const pack = state.packs.find((p) => p.id === packId);
-  if (!pack) return;
-  for (const row of pack.items || []) {
-    addItem(row.item_id, Number(row.quantity_gm));
-  }
-  state.lastPack = {
-    id: pack.id,
-    name: pack.name,
-    count: state.lastPack?.id === pack.id ? (state.lastPack.count || 0) + 1 : 1,
-  };
-  $("pack-choice").value = pack.id;
-  setHint(`Pack type: ${pack.name}`, "ok");
-  renderCart();
-}
+function addPack(_packId) {}
 
 function fillDatalists() {
   const cats = [...new Set(state.items.map((i) => i.category).filter(Boolean))];
@@ -282,19 +298,20 @@ function fillDatalists() {
 
 function renderItemsTable() {
   $("items-table").innerHTML = `<table><thead><tr>
-    <th>Code</th><th>Item</th><th>Category</th><th>Subcategory</th><th>Retail</th><th>B2B</th><th>Stock</th><th></th>
+    <th>Code</th><th>Medicine</th><th>Generic</th><th>Type</th><th>Mfr</th><th>Pack</th><th>MRP</th><th>Sale</th><th>Stock</th><th></th>
   </tr></thead><tbody>${state.items
     .map(
       (i) => `<tr>
       <td>${escapeHtml(i.code)}</td>
       <td>${escapeHtml(i.name)}</td>
-      <td>${escapeHtml(i.category)}</td>
-      <td>${escapeHtml(i.subcategory || "—")}</td>
-      <td>${money(i.retail_rate)}</td>
-      <td>${money(i.b2b_rate)}</td>
-      <td class="${Number(i.stock_gm) <= Number(i.reorder_level_gm) ? "stock low" : "stock ok"}">${escapeHtml(kg(i.stock_gm))}</td>
-      <td><button class="btn" data-edit-item="${escapeHtml(i.id)}" type="button">Edit</button>
-          <button class="btn" data-recv="${escapeHtml(i.id)}" type="button">+1 kg</button></td>
+      <td>${escapeHtml(genericOf(i) || "—")}</td>
+      <td>${escapeHtml(i.medicine_type || "—")}</td>
+      <td>${escapeHtml(i.manufacturer || "—")}</td>
+      <td>${escapeHtml(i.pack_size || i.pack_unit || "—")}</td>
+      <td>${money(i.mrp)}</td>
+      <td>${money(i.selling_price || i.retail_rate)}</td>
+      <td class="${stockOf(i) <= Number(i.reorder_level_gm) ? "stock low" : "stock ok"}">${stockOf(i)}</td>
+      <td><button class="btn" data-edit-item="${escapeHtml(i.id)}" type="button">Edit</button></td>
     </tr>`,
     )
     .join("")}</tbody></table>`;
@@ -317,44 +334,42 @@ function renderCustomersTable() {
     .join("")}</tbody></table>`;
 }
 
-function renderPackCompose() {
-  $("pack-lines").innerHTML = activeItems()
-    .map(
-      (i) => `<label>
-        <input type="checkbox" data-pack-item="${escapeHtml(i.id)}" />
-        ${escapeHtml(i.name)} (${escapeHtml(i.subcategory || i.category)})
-        <input type="number" min="0" step="50" value="500" data-pack-qty="${escapeHtml(i.id)}" /> g
-      </label>`,
-    )
+function renderPackCompose() {}
+
+function poLineHtml(i) {
+  const id = i?.id || "";
+  const options = `<option value="">Select medicine</option>` + activeItems()
+    .map((m) => `<option value="${escapeHtml(m.id)}" ${m.id === id ? "selected" : ""}>${escapeHtml(m.name)}</option>`)
     .join("");
+  return `<div class="po-line" data-po-row>
+    <select data-po-item>${options}</select>
+    <input data-po-generic placeholder="Generic" value="${escapeHtml(i?.generic_name || i?.local_name || "")}" />
+    <input data-po-mfr placeholder="Manufacturer" value="${escapeHtml(i?.manufacturer || "")}" />
+    <input data-po-hsn placeholder="HSN" value="${escapeHtml(i?.hsn || "")}" />
+    <input data-po-batch placeholder="Batch No. *" required />
+    <input data-po-exp type="date" required />
+    <select data-po-pack>
+      ${["Strip", "Box", "Bottle", "Tube", "Packet"].map((p) => `<option ${p === (i?.pack_unit || "Strip") ? "selected" : ""}>${p}</option>`).join("")}
+    </select>
+    <input data-po-qty type="number" min="0" step="1" value="1" placeholder="Pack qty" />
+    <input data-po-upp type="number" min="1" value="${escapeHtml(i?.units_per_pack || 1)}" placeholder="Units/pack" />
+    <input data-po-free type="number" min="0" value="0" placeholder="Free" />
+    <input data-po-rate type="number" step="0.01" value="${escapeHtml(i?.purchase_rate || 0)}" placeholder="Rate" />
+    <input data-po-mrp type="number" step="0.01" value="${escapeHtml(i?.mrp || 0)}" placeholder="MRP" />
+    <input data-po-disc type="number" step="0.01" value="0" placeholder="Disc" />
+    <input data-po-gst type="number" step="0.01" value="${escapeHtml(i?.gst_rate || 12)}" placeholder="GST %" />
+    <button class="btn danger" type="button" data-po-remove>×</button>
+  </div>`;
 }
 
 function renderPoLines() {
-  $("po-lines").innerHTML = activeItems()
-    .map(
-      (i) => `<label>
-        <input type="checkbox" data-po-item="${escapeHtml(i.id)}" />
-        ${escapeHtml(i.name)}
-        <input type="number" min="0" step="50" value="1000" data-po-qty="${escapeHtml(i.id)}" /> g
-        <input type="number" step="0.01" value="${escapeHtml(i.purchase_rate)}" data-po-rate="${escapeHtml(i.id)}" /> ₹/kg
-      </label>`,
-    )
-    .join("");
+  if (!$("po-lines")) return;
+  if (!$("po-lines").children.length) {
+    $("po-lines").innerHTML = poLineHtml(activeItems()[0]);
+  }
 }
 
-function renderPacksTable() {
-  $("packs-table").innerHTML = state.packs
-    .map(
-      (p) => `<div class="report-card" style="margin:0 20px 12px">
-        <strong>${escapeHtml(p.name)}</strong>
-        <span>${escapeHtml(p.code)} · ${escapeHtml(kg(p.total_quantity_gm))}</span>
-        <p class="hint">${(p.items || [])
-          .map((i) => `${escapeHtml(i.spice_name)} ${i.quantity_gm}g`)
-          .join(" · ")}</p>
-      </div>`,
-    )
-    .join("");
-}
+function renderPacksTable() {}
 
 function renderSettings() {
   $("set-name").value = state.company.name || "";
@@ -362,6 +377,14 @@ function renderSettings() {
   $("set-phone").value = state.company.phone || "";
   $("set-email").value = state.company.email || "";
   $("set-gstin").value = state.company.gstin || "";
+  if ($("set-state")) $("set-state").value = state.company.state || "";
+  if ($("set-scode")) $("set-scode").value = state.company.state_code || "";
+  if ($("set-dl")) $("set-dl").value = state.company.drug_licence_no || "";
+  if ($("set-dl-type")) $("set-dl-type").value = state.company.drug_licence_type || "";
+  if ($("set-fssai")) $("set-fssai").value = state.company.fssai_licence_no || "";
+  if ($("set-preg")) $("set-preg").value = state.company.pharmacy_registration_no || "";
+  if ($("set-other")) $("set-other").value = state.company.other_licence_no || "";
+  if ($("set-lexp")) $("set-lexp").value = String(state.company.licence_expiry || "").slice(0, 10);
   state.logoDraft = null;
   $("set-logo").value = "";
   showLogo($("logo-preview"), state.company.logo_url);
@@ -369,18 +392,24 @@ function renderSettings() {
 
 function renderSupport() {
   $("support-cards").innerHTML = [
-    ["Shop", state.company.name],
+    ["Pharmacy", state.company.name],
     ["Address", state.company.address || "—"],
     ["Phone", state.company.phone || "—"],
-    ["Email", state.company.email || "swami@atavtelecom.in"],
+    ["Email", state.company.email || "—"],
     ["GSTIN", state.company.gstin || "—"],
+    ["Drug Licence", state.company.drug_licence_no || "—"],
+    ["Licence type", state.company.drug_licence_type || "—"],
+    ["FSSAI", state.company.fssai_licence_no || "—"],
+    ["Pharmacy registration", state.company.pharmacy_registration_no || "—"],
+    ["Other licence", state.company.other_licence_no || "—"],
+    ["Licence expiry", state.company.licence_expiry || "—"],
   ]
     .map(([k, v]) => `<div class="report-card"><span>${k}</span><strong>${escapeHtml(v)}</strong></div>`)
     .join("");
 }
 
 function paintHeader() {
-  $("shop-name").textContent = state.company.name || "SWAMI MASALE";
+  $("shop-name").textContent = state.company.name || "Medical POS";
   $("shop-place").textContent = state.company.address || "";
   showLogo($("shop-logo"), state.company.logo_url);
   const mark = $("brand-mark");
@@ -393,18 +422,16 @@ async function loadBootstrap() {
   state.items = data.items;
   state.customers = data.customers;
   state.packs = data.packs;
+  state.batches = data.batches || [];
   paintHeader();
   renderCustomersSelect();
   renderCatalog();
   renderCart();
-  renderPackChoice();
   fillDatalists();
   renderItemsTable();
   renderCustomersTable();
-  renderPackCompose();
-  renderPacksTable();
-  renderSettings();
   renderPoLines();
+  renderSettings();
   loadToday();
   loadSuppliers();
   loadQrOrders(true);
@@ -440,15 +467,18 @@ async function loadReports() {
       .map(([k, v]) => `<div class="report-card"><span>${k}</span><strong>${v}</strong></div>`)
       .join("");
     $("reports").innerHTML = [
-      reportBlock("Sales bills", "Sales bills", ["Order", "Customer", "Type", "Pack", "Pack count", "Status", "Qty g", "Taxable", "GST", "Total", "Pay", "Pay status", "Date"], (data.sales || []).map((o) => [o.order_number, o.customer_name, o.customer_type, o.pack_name || "Loose items", Number(o.pack_count) || 0, o.status, Number(o.total_quantity_gm) || 0, Number(o.subtotal) || 0, Number(o.gst) || 0, Number(o.total) || 0, o.payment_method, o.payment_status, String(o.created_at)])),
-      reportBlock("Item sales", "Item sales", ["Item", "Qty g", "Amount", "GST"], (data.byItem || []).map((r) => [r.item_name, Number(r.quantity_gm) || 0, Number(r.amount) || 0, Number(r.gst) || 0])),
+      reportBlock("Sales bills", "Sales bills", ["Order", "Customer", "Type", "Status", "Qty", "Taxable", "GST", "Total", "Pay", "Pay status", "Date"], (data.sales || []).map((o) => [o.order_number, o.customer_name, o.customer_type, o.status, Number(o.total_quantity_gm) || 0, Number(o.subtotal) || 0, Number(o.gst) || 0, Number(o.total) || 0, o.payment_method, o.payment_status, String(o.created_at)])),
+      reportBlock("Item sales", "Item sales", ["Medicine", "Qty", "Amount", "GST"], (data.byItem || []).map((r) => [r.item_name, Number(r.quantity_gm) || 0, Number(r.amount) || 0, Number(r.gst) || 0])),
       reportBlock("Customer sales", "Customer sales", ["Customer", "Type", "Bills", "Takings", "GST"], (data.byCustomer || []).map((r) => [r.customer_name, r.customer_type, Number(r.bills) || 0, Number(r.takings) || 0, Number(r.gst) || 0])),
       reportBlock("Pack sales", "Pack sales", ["Pack type", "Pack count", "Bills", "Takings"], (data.byPack || []).map((r) => [r.pack_type, Number(r.pack_count) || 0, Number(r.bills) || 0, Number(r.takings) || 0])),
       reportBlock("Payment", "Payment", ["Method", "Bills", "Takings"], (data.byPay || []).map((r) => [r.payment_method, Number(r.bills) || 0, Number(r.takings) || 0])),
       reportBlock("GST daywise", "GST daywise", ["Day", "Taxable", "GST", "Total"], (data.gst || []).map((r) => [String(r.day), Number(r.taxable) || 0, Number(r.gst) || 0, Number(r.total) || 0])),
-      reportBlock("Stock", "Stock", ["Code", "Name", "Local", "Category", "Subcategory", "Stock g", "Reorder g", "Retail", "B2B", "Purchase", "GST %"], (data.stock || []).map((i) => [i.code, i.name, i.local_name, i.category, i.subcategory, Number(i.stock_gm) || 0, Number(i.reorder_level_gm) || 0, Number(i.retail_rate) || 0, Number(i.b2b_rate) || 0, Number(i.purchase_rate) || 0, Number(i.gst_rate) || 0])),
-      reportBlock("Low stock", "Low stock", ["Code", "Name", "Stock g", "Reorder g"], (data.low || []).map((i) => [i.code, i.name, Number(i.stock_gm) || 0, Number(i.reorder_level_gm) || 0])),
+      reportBlock("Stock", "Stock", ["Code", "Name", "Generic", "Type", "Mfr", "Pack", "Stock", "Reorder", "MRP", "Sale", "Purchase", "GST %"], (data.stock || []).map((i) => [i.code, i.name, i.generic_name || i.local_name, i.medicine_type, i.manufacturer, i.pack_unit, Number(i.stock_gm) || 0, Number(i.reorder_level_gm) || 0, Number(i.mrp) || 0, Number(i.selling_price || i.retail_rate) || 0, Number(i.purchase_rate) || 0, Number(i.gst_rate) || 0])),
+      reportBlock("Low stock", "Low stock", ["Code", "Name", "Stock", "Reorder"], (data.low || []).map((i) => [i.code, i.name, Number(i.stock_gm) || 0, Number(i.reorder_level_gm) || 0])),
+      reportBlock("Batches", "Batches", ["Code", "Medicine", "Batch", "Expiry", "Qty", "MRP"], (data.batches || []).map((b) => [b.code, b.name, b.batch_no, b.expiry_date, Number(b.qty) || 0, Number(b.mrp) || 0])),
+      reportBlock("Expiry", "Expiry", ["Code", "Medicine", "Batch", "Expiry", "Qty"], (data.expiry || []).map((b) => [b.code, b.name, b.batch_no, b.expiry_date, Number(b.qty) || 0])),
       reportBlock("Purchases", "Purchases", ["PO", "Supplier", "Invoice", "Date", "Taxable", "GST", "Total", "Pay", "Status"], (data.purchases || []).map((p) => [p.purchase_number, p.supplier_name, p.supplier_invoice_number, p.purchase_date, Number(p.subtotal) || 0, Number(p.gst) || 0, Number(p.total) || 0, p.payment_method, p.payment_status])),
+      reportBlock("Returns", "Returns", ["Return", "Bill", "Customer", "Reason", "Total", "Date"], (data.returns || []).map((r) => [r.return_number, r.order_number, r.customer_name, r.reason, Number(r.total) || 0, String(r.created_at)])),
       reportBlock("Customers", "Customers", ["Code", "Name", "Business", "Mobile", "Type", "GSTIN", "Credit limit", "Outstanding"], (data.customers || []).map((c) => [c.code, c.name, c.business_name, c.mobile, c.type, c.gstin, Number(c.credit_limit) || 0, Number(c.outstanding) || 0])),
     ].join("");
     $("reports-hint").textContent = "";
@@ -461,29 +491,47 @@ async function loadReports() {
 
 let orderCache = [];
 
+function licenceBlock() {
+  const c = state.company || {};
+  return [
+    "Licence & Registration Details",
+    c.drug_licence_no ? `Drug Licence No. ${c.drug_licence_no}${c.drug_licence_type ? ` (${c.drug_licence_type})` : ""}` : "",
+    c.gstin ? `GSTIN ${c.gstin}` : "",
+    c.fssai_licence_no ? `FSSAI ${c.fssai_licence_no}` : "",
+    c.pharmacy_registration_no ? `Pharmacy Registration ${c.pharmacy_registration_no}` : "",
+    c.other_licence_no ? `Other licence ${c.other_licence_no}` : "",
+    c.licence_expiry ? `Licence valid until ${String(c.licence_expiry).slice(0, 10)}` : "",
+  ].filter(Boolean);
+}
+
 function receiptText(o) {
-  const pack =
-    o.pack_name
-      ? `Pack type: ${o.pack_name} × ${o.pack_count || 1}`
-      : "Pack type: Loose items (no pack)";
   return [
     state.company.name,
     state.company.address,
+    state.company.phone ? `Mobile ${state.company.phone}` : "",
     o.order_number,
+    String(o.created_at || new Date().toISOString()),
     o.customer_name,
-    pack,
-    String(o.created_at || ""),
+    o.customer_mobile || "",
+    o.customer_address || "",
+    o.doctor_name || o.prescription_no ? `Doctor / Rx ${o.doctor_name || ""} ${o.prescription_no || ""}` : "",
+    "Medicine | Batch | Exp | Pack | Qty | MRP | Rate | GST | Amt",
     "------------------------------",
-    ...(o.lines || []).map(
-      (l) => `${l.item_name} ${l.quantity_gm}g @ ${l.rate_per_kg}/kg = ${money(l.amount)}`,
-    ),
+    ...(o.lines || []).map((l) => {
+      const gst = Number(l.gst_rate) || 0;
+      return `${l.item_name} | ${l.batch_no || "—"} | ${l.expiry_date ? String(l.expiry_date).slice(0, 10) : "—"} | ${l.pack_type || "—"} | ${l.quantity_gm} | ${money(l.mrp)} | ${money(l.rate_per_kg)} | ${gst}% | ${money(l.amount)}`;
+    }),
     "------------------------------",
     `Subtotal ${money(o.subtotal)}`,
-    `GST ${money(o.gst)}`,
-    `TOTAL ${money(o.total)}`,
-    `${o.payment_method} · ${o.payment_status}`,
+    `Discount ${money(o.discount)}`,
+    `CGST ${money(o.cgst)}`,
+    `SGST ${money(o.sgst)} / IGST ${money(o.igst)}`,
+    `Round off ${money(o.round_off)}`,
+    `Grand Total ${money(o.total)}`,
+    `${o.payment_method} paid ${money(o.amount_paid)} due ${money(Math.max(0, Number(o.total) - Number(o.amount_paid || 0)))}`,
+    ...licenceBlock(),
   ]
-    .filter((line) => line !== undefined)
+    .filter((line) => line !== undefined && line !== "")
     .join("\n");
 }
 
@@ -517,7 +565,7 @@ async function loadOrders() {
     .map(
       (o) => `<button class="order-item" type="button" data-oid="${escapeHtml(o.id)}">
         <span>${escapeHtml(o.order_number)} · ${escapeHtml(o.customer_name)}<br>
-        <small>${escapeHtml(o.pack_name ? `Pack: ${o.pack_name} × ${o.pack_count || 1}` : "Loose items")} · ${escapeHtml(o.payment_method)}</small></span>
+        <small>${escapeHtml(o.payment_method)} · ${escapeHtml(String(o.created_at || "").slice(0, 16))}</small></span>
         <span>${money(o.total)}</span>
       </button>`,
     )
@@ -552,7 +600,7 @@ function qrStatusButtons(o) {
 
 function showQrOrder(o) {
   const lines = (o.lines || [])
-    .map((l) => `${l.item_name} ${l.quantity_gm}g @ ${l.rate_per_kg}/kg = ${money(l.amount)}`)
+    .map((l) => `${l.item_name} ${l.quantity_gm} @ ${money(l.rate_per_kg)} = ${money(l.amount)}`)
     .join("\n");
   $("qr-pane").innerHTML = `<pre class="receipt">${escapeHtml(
     [
@@ -666,8 +714,8 @@ function printQrPoster() {
     <style>body{font-family:Georgia,serif;text-align:center;padding:36px;color:#4a1416} img.qr{width:280px;height:280px;background:#fff;padding:12px} p{color:#7a5c48}</style>
     </head><body>
     ${logo}
-    <h1>${escapeHtml(state.company.name || "SWAMI MASALE")}</h1>
-    <p>Scan to order spices</p>
+    <h1>${escapeHtml(state.company.name || "Pharmacy")}</h1>
+    <p>Scan to order medicines</p>
     <img class="qr" src="${escapeHtml(src)}" alt="QR">
     <p>${escapeHtml(url)}</p>
     <script>window.onload=()=>{window.print();}</script>
@@ -678,15 +726,16 @@ function printQrPoster() {
 async function loadPurchases() {
   const rows = await api("/api/purchases");
   $("purchases-table").innerHTML = `<table><thead><tr>
-    <th>PO</th><th>Supplier</th><th>Date</th><th>Invoice</th><th>Lines</th><th>Total</th>
+    <th>PO</th><th>Supplier</th><th>Date</th><th>Invoice</th><th>Pay</th><th>Lines</th><th>Total</th>
   </tr></thead><tbody>${rows
     .map(
       (p) => `<tr>
       <td>${escapeHtml(p.purchase_number)}</td>
       <td>${escapeHtml(p.supplier_name)}</td>
-      <td>${escapeHtml(p.purchase_date)}</td>
+      <td>${escapeHtml(String(p.purchase_date || "").slice(0, 10))}</td>
       <td>${escapeHtml(p.supplier_invoice_number || "—")}</td>
-      <td>${(p.lines || []).map((l) => `${escapeHtml(l.item_name)} ${l.quantity_gm}g`).join(", ") || "—"}</td>
+      <td>${escapeHtml(p.payment_method || "")}</td>
+      <td>${(p.lines || []).map((l) => `${escapeHtml(l.item_name)} ${l.batch_no || ""} × ${l.pack_qty || l.quantity_gm}`).join(", ") || "—"}</td>
       <td>${money(p.total)}</td>
     </tr>`,
     )
@@ -696,71 +745,128 @@ async function loadPurchases() {
 async function loadSuppliers() {
   const rows = await api("/api/suppliers");
   state.suppliers = rows;
-  $("po-supplier").innerHTML = rows
-    .map((s) => `<option value="${escapeHtml(s.id)}">${escapeHtml(s.name)}</option>`)
-    .join("");
+  if ($("po-supplier")) {
+    $("po-supplier").innerHTML = rows
+      .map((s) => `<option value="${escapeHtml(s.id)}">${escapeHtml(s.name)}</option>`)
+      .join("");
+  }
   $("suppliers-table").innerHTML = `<table><thead><tr>
-    <th>Code</th><th>Name</th><th>Contact</th><th>Mobile</th><th>GSTIN</th>
+    <th>Code</th><th>Name</th><th>Firm</th><th>Mobile</th><th>GSTIN</th><th>DL No.</th><th>City</th>
   </tr></thead><tbody>${rows
     .map(
       (s) => `<tr>
       <td>${escapeHtml(s.code)}</td>
       <td>${escapeHtml(s.name)}</td>
-      <td>${escapeHtml(s.contact_name || "—")}</td>
+      <td>${escapeHtml(s.firm_name || "—")}</td>
       <td>${escapeHtml(s.mobile || "—")}</td>
       <td>${escapeHtml(s.gstin || "—")}</td>
+      <td>${escapeHtml(s.drug_licence_no || "—")}</td>
+      <td>${escapeHtml(s.city || "—")}</td>
     </tr>`,
     )
     .join("")}</tbody></table>`;
 }
 
+async function loadBatches() {
+  const rows = await api("/api/batches").catch(() => state.batches || []);
+  state.batches = rows;
+  const P = window.Pharmacy;
+  const expired = rows.filter((b) => P && P.expiryStatus(b.expiry_date) === "expired");
+  const near = rows.filter((b) => P && P.expiryStatus(b.expiry_date) === "near");
+  $("batch-summary").innerHTML = [
+    ["Batches", rows.length],
+    ["Near expiry", near.length],
+    ["Expired", expired.length],
+  ]
+    .map(([k, v]) => `<div class="report-card"><span>${k}</span><strong>${v}</strong></div>`)
+    .join("");
+  $("batches-table").innerHTML = `<table><thead><tr>
+    <th>Medicine</th><th>Generic</th><th>Batch</th><th>Expiry</th><th>Qty</th><th>MRP</th><th>Status</th>
+  </tr></thead><tbody>${rows
+    .map((b) => {
+      const st = P ? P.expiryStatus(b.expiry_date) : "";
+      return `<tr class="exp-${st}">
+      <td>${escapeHtml(b.item_name)}</td>
+      <td>${escapeHtml(b.generic_name || "—")}</td>
+      <td>${escapeHtml(b.batch_no)}</td>
+      <td>${escapeHtml(String(b.expiry_date || "").slice(0, 10))}</td>
+      <td>${Number(b.qty) || 0}</td>
+      <td>${money(b.mrp)}</td>
+      <td class="stock ${st === "expired" ? "out" : st === "near" ? "low" : "ok"}">${st || "—"}</td>
+    </tr>`;
+    })
+    .join("")}</tbody></table>`;
+}
+
+async function loadReturns() {
+  const orders = await api("/api/orders");
+  orderCache = orders;
+  $("ret-order").innerHTML = orders
+    .map((o) => `<option value="${escapeHtml(o.id)}">${escapeHtml(o.order_number)} · ${escapeHtml(o.customer_name)}</option>`)
+    .join("");
+  paintReturnLines();
+  const rows = await api("/api/returns").catch(() => []);
+  $("returns-table").innerHTML = `<table><thead><tr>
+    <th>Return</th><th>Bill</th><th>Customer</th><th>Reason</th><th>Total</th>
+  </tr></thead><tbody>${rows
+    .map(
+      (r) => `<tr>
+      <td>${escapeHtml(r.return_number)}</td>
+      <td>${escapeHtml(r.order_number)}</td>
+      <td>${escapeHtml(r.customer_name || "")}</td>
+      <td>${escapeHtml(r.reason || "—")}</td>
+      <td>${money(r.total)}</td>
+    </tr>`,
+    )
+    .join("")}</tbody></table>`;
+}
+
+function paintReturnLines() {
+  const o = orderCache.find((row) => row.id === $("ret-order")?.value);
+  if (!$("ret-lines")) return;
+  $("ret-lines").innerHTML = (o?.lines || [])
+    .map(
+      (l) => `<label>
+        <input type="checkbox" data-ret-line="${escapeHtml(l.id)}" />
+        ${escapeHtml(l.item_name)} · ${escapeHtml(l.batch_no || "OPEN")} · billed ${l.quantity_gm}
+        <input type="number" min="0" max="${escapeHtml(l.quantity_gm)}" value="${escapeHtml(l.quantity_gm)}" data-ret-qty="${escapeHtml(l.id)}" />
+      </label>`,
+    )
+    .join("") || `<p class="hint">Select a bill.</p>`;
+}
+
 $("catalog").addEventListener("click", (e) => {
   const btn = e.target.closest("[data-add]");
-  if (btn) addItem(btn.dataset.add, 100);
+  if (btn) addItem(btn.dataset.add, 1);
 });
 $("lines").addEventListener("click", (e) => {
   const btn = e.target.closest("[data-chg]");
   if (!btn) return;
   addItem(btn.dataset.chg, Number(btn.dataset.d));
 });
-$("pack-bar").addEventListener("click", (e) => {
-  const btn = e.target.closest("[data-pack]");
-  if (btn) addPack(btn.dataset.pack);
-});
-$("pack-choice").addEventListener("change", () => {
-  if (!$("pack-choice").value) {
-    state.lastPack = null;
-    renderCart();
-    return;
-  }
-  addPack($("pack-choice").value);
-});
 
 $("items-table").addEventListener("click", async (e) => {
-  const recv = e.target.closest("[data-recv]");
   const edit = e.target.closest("[data-edit-item]");
-  if (recv) {
-    await api(`/api/items/${recv.dataset.recv}/receive`, {
-      method: "POST",
-      body: JSON.stringify({ quantity_gm: 1000 }),
-    });
-    await loadBootstrap();
-    return;
-  }
-  if (edit) {
-    const i = state.items.find((x) => x.id === edit.dataset.editItem);
-    if (!i) return;
-    $("item-id").value = i.id;
-    $("item-name").value = i.name;
-    $("item-local").value = i.local_name || "";
-    $("item-category").value = i.category || "";
-    $("item-subcategory").value = i.subcategory || "";
-    $("item-retail").value = i.retail_rate;
-    $("item-b2b").value = i.b2b_rate;
-    $("item-purchase").value = i.purchase_rate;
-    $("item-gst").value = i.gst_rate;
-    $("item-stock").value = i.stock_gm;
-  }
+  if (!edit) return;
+  const i = state.items.find((x) => x.id === edit.dataset.editItem);
+  if (!i) return;
+  $("item-id").value = i.id;
+  $("item-name").value = i.name;
+  $("item-local").value = genericOf(i);
+  if ($("item-type")) $("item-type").value = i.medicine_type || "Tablet";
+  $("item-category").value = i.category || "Medical";
+  if ($("item-mfr")) $("item-mfr").value = i.manufacturer || "";
+  if ($("item-hsn")) $("item-hsn").value = i.hsn || "";
+  if ($("item-pack-size")) $("item-pack-size").value = i.pack_size || "";
+  if ($("item-unit")) $("item-unit").value = i.pack_unit || "Strip";
+  if ($("item-upp")) $("item-upp").value = i.units_per_pack || 1;
+  if ($("item-mrp")) $("item-mrp").value = i.mrp || "";
+  $("item-retail").value = i.selling_price || i.retail_rate;
+  $("item-purchase").value = i.purchase_rate;
+  $("item-gst").value = i.gst_rate;
+  if ($("item-barcode")) $("item-barcode").value = i.barcode || "";
+  if ($("item-expiry")) $("item-expiry").value = String(i.default_expiry || "").slice(0, 10);
+  if ($("item-reorder")) $("item-reorder").value = i.reorder_level_gm || 0;
 });
 
 $("orders").addEventListener("click", (e) => {
@@ -822,11 +928,11 @@ $("order-pane").addEventListener("click", (e) => {
     if (!o) return;
     state.editingOrderId = o.id;
     state.customerId = o.customer_id;
-    state.cart = (o.lines || []).map((l) => ({ itemId: l.item_id, qtyGm: Number(l.quantity_gm) }));
-    state.lastPack = o.pack_id ? { id: o.pack_id, name: o.pack_name, count: o.pack_count || 1 } : null;
+    state.cart = (o.lines || []).map((l) => ({ itemId: l.item_id, qty: Number(l.quantity_gm) }));
+    state.lastPack = null;
     $("customer").value = state.customerId;
     $("pay-method").value = o.payment_method || "cash";
-    $("pack-choice").value = o.pack_id || "";
+    if ($("bill-doctor")) $("bill-doctor").value = [o.doctor_name, o.prescription_no].filter(Boolean).join(" / ");
     showView("counter");
     renderCart();
     setHint(`Editing ${o.order_number}`, "ok");
@@ -847,7 +953,6 @@ $("btn-clear").addEventListener("click", () => {
   state.cart = [];
   state.lastPack = null;
   state.editingOrderId = null;
-  $("pack-choice").value = "";
   setHint("Cart cleared");
   renderCart();
 });
@@ -855,12 +960,15 @@ $("btn-clear").addEventListener("click", () => {
 $("btn-pay").addEventListener("click", async () => {
   try {
     setHint("Saving…");
+    const doctor = ($("bill-doctor")?.value || "").trim();
     const payload = {
       customerId: state.customerId,
       paymentMethod: $("pay-method").value,
-      packId: state.lastPack?.id || null,
-      packCount: state.lastPack?.count || null,
-      lines: state.cart.map((l) => ({ itemId: l.itemId, quantity_gm: l.qtyGm })),
+      doctorName: doctor,
+      prescriptionNo: doctor,
+      discount: Number($("bill-discount")?.value) || 0,
+      amountPaid: $("bill-paid")?.value === "" ? undefined : Number($("bill-paid")?.value),
+      lines: state.cart.map((l) => ({ itemId: l.itemId, quantity: l.qty })),
     };
     const result = state.editingOrderId
       ? await api(`/api/orders/${state.editingOrderId}`, { method: "PUT", body: JSON.stringify(payload) })
@@ -869,7 +977,6 @@ $("btn-pay").addEventListener("click", async () => {
     state.cart = [];
     state.lastPack = null;
     state.editingOrderId = null;
-    $("pack-choice").value = "";
     setHint(`Saved ${order.order_number} · ${money(order.total)}`, "ok");
     showOrder(order);
     $("modal-title").textContent = order.order_number;
@@ -895,14 +1002,23 @@ $("item-form").addEventListener("submit", async (e) => {
   e.preventDefault();
   const body = {
     name: $("item-name").value,
+    generic_name: $("item-local").value,
     local_name: $("item-local").value,
-    category: $("item-category").value || "Whole Spices",
-    subcategory: $("item-subcategory").value,
+    medicine_type: $("item-type")?.value,
+    category: $("item-category").value || "Medical",
+    manufacturer: $("item-mfr")?.value,
+    hsn: $("item-hsn")?.value,
+    pack_size: $("item-pack-size")?.value,
+    pack_unit: $("item-unit")?.value,
+    units_per_pack: $("item-upp")?.value,
+    mrp: $("item-mrp")?.value,
+    selling_price: $("item-retail").value,
     retail_rate: $("item-retail").value,
-    b2b_rate: $("item-b2b").value,
     purchase_rate: $("item-purchase").value,
     gst_rate: $("item-gst").value,
-    stock_gm: $("item-stock").value,
+    barcode: $("item-barcode")?.value,
+    default_expiry: $("item-expiry")?.value,
+    reorder_level: $("item-reorder")?.value,
   };
   try {
     if ($("item-id").value) await api(`/api/items/${$("item-id").value}`, { method: "PUT", body: JSON.stringify(body) });
@@ -933,6 +1049,7 @@ $("customer-form").addEventListener("submit", async (e) => {
         mobile: $("cust-mobile").value,
         type: $("cust-type").value,
         gstin: $("cust-gstin").value,
+        address: $("cust-address")?.value,
       }),
     });
     $("cust-hint").textContent = "Saved";
@@ -945,31 +1062,24 @@ $("customer-form").addEventListener("submit", async (e) => {
   }
 });
 
-$("pack-form").addEventListener("submit", async (e) => {
-  e.preventDefault();
-  const items = [...document.querySelectorAll("[data-pack-item]:checked")].map((box) => ({
-    item_id: box.dataset.packItem,
-    quantity_gm: Number(document.querySelector(`[data-pack-qty="${box.dataset.packItem}"]`).value),
-  }));
-  try {
-    await api("/api/packs", { method: "POST", body: JSON.stringify({ name: $("pack-name").value, items }) });
-    $("pack-hint").textContent = "Saved";
-    $("pack-hint").className = "hint ok";
-    $("pack-form").reset();
-    await loadBootstrap();
-  } catch (err) {
-    $("pack-hint").textContent = err.message;
-    $("pack-hint").className = "hint error";
-  }
-});
-
 $("purchase-form").addEventListener("submit", async (e) => {
   e.preventDefault();
-  const lines = [...document.querySelectorAll("[data-po-item]:checked")].map((box) => ({
-    item_id: box.dataset.poItem,
-    quantity_gm: Number(document.querySelector(`[data-po-qty="${box.dataset.poItem}"]`).value),
-    rate_per_kg: Number(document.querySelector(`[data-po-rate="${box.dataset.poItem}"]`).value),
-  }));
+  const lines = [...document.querySelectorAll("[data-po-row]")].map((row) => ({
+    item_id: row.querySelector("[data-po-item]")?.value,
+    generic_name: row.querySelector("[data-po-generic]")?.value,
+    manufacturer: row.querySelector("[data-po-mfr]")?.value,
+    hsn: row.querySelector("[data-po-hsn]")?.value,
+    batch_no: row.querySelector("[data-po-batch]")?.value,
+    expiry_date: row.querySelector("[data-po-exp]")?.value,
+    pack_type: row.querySelector("[data-po-pack]")?.value,
+    pack_qty: row.querySelector("[data-po-qty]")?.value,
+    units_per_pack: row.querySelector("[data-po-upp]")?.value,
+    free_qty: row.querySelector("[data-po-free]")?.value,
+    purchase_rate: row.querySelector("[data-po-rate]")?.value,
+    mrp: row.querySelector("[data-po-mrp]")?.value,
+    discount: row.querySelector("[data-po-disc]")?.value,
+    gst_rate: row.querySelector("[data-po-gst]")?.value,
+  })).filter((l) => l.item_id);
   try {
     await api("/api/purchases", {
       method: "POST",
@@ -978,6 +1088,9 @@ $("purchase-form").addEventListener("submit", async (e) => {
         supplier_invoice_number: $("po-invoice").value,
         purchase_date: $("po-date").value,
         payment_method: $("po-pay").value,
+        due_date: $("po-due")?.value,
+        purchase_order_no: $("po-pono")?.value,
+        eway_bill_no: $("po-eway")?.value,
         lines,
       }),
     });
@@ -998,9 +1111,21 @@ $("supplier-form").addEventListener("submit", async (e) => {
       method: "POST",
       body: JSON.stringify({
         name: $("sup-name").value,
-        contact_name: $("sup-contact").value,
+        firm_name: $("sup-firm")?.value,
+        company_name: $("sup-firm")?.value,
+        address: $("sup-address")?.value,
+        contact_name: $("sup-name").value,
         mobile: $("sup-mobile").value,
+        email: $("sup-email")?.value,
         gstin: $("sup-gstin").value,
+        drug_licence_no: $("sup-dl")?.value,
+        pan: $("sup-pan")?.value,
+        fssai_licence_no: $("sup-fssai")?.value,
+        licence_expiry: $("sup-lexp")?.value,
+        state: $("sup-state")?.value,
+        state_code: $("sup-scode")?.value,
+        city: $("sup-city")?.value,
+        pincode: $("sup-pin")?.value,
       }),
     });
     $("sup-hint").textContent = "Saved";
@@ -1022,6 +1147,14 @@ $("settings-form").addEventListener("submit", async (e) => {
       phone: $("set-phone").value,
       email: $("set-email").value,
       gstin: $("set-gstin").value,
+      state: $("set-state")?.value,
+      state_code: $("set-scode")?.value,
+      drug_licence_no: $("set-dl")?.value,
+      drug_licence_type: $("set-dl-type")?.value,
+      fssai_licence_no: $("set-fssai")?.value,
+      pharmacy_registration_no: $("set-preg")?.value,
+      other_licence_no: $("set-other")?.value,
+      licence_expiry: $("set-lexp")?.value,
     };
     if (state.logoDraft !== null) payload.logo_url = state.logoDraft;
     const data = await api("/api/settings", {
@@ -1101,6 +1234,56 @@ function readLogoFile(file) {
 }
 
 $("po-date").value = new Date().toISOString().slice(0, 10);
+
+$("po-add-line")?.addEventListener("click", () => {
+  $("po-lines").insertAdjacentHTML("beforeend", poLineHtml());
+});
+$("po-lines")?.addEventListener("click", (e) => {
+  if (e.target.closest("[data-po-remove]")) e.target.closest("[data-po-row]")?.remove();
+});
+$("po-lines")?.addEventListener("change", (e) => {
+  const sel = e.target.closest("[data-po-item]");
+  if (!sel) return;
+  const item = state.items.find((i) => i.id === sel.value);
+  const row = sel.closest("[data-po-row]");
+  if (!item || !row) return;
+  row.querySelector("[data-po-generic]").value = genericOf(item);
+  row.querySelector("[data-po-mfr]").value = item.manufacturer || "";
+  row.querySelector("[data-po-hsn]").value = item.hsn || "";
+  row.querySelector("[data-po-pack]").value = item.pack_unit || "Strip";
+  row.querySelector("[data-po-upp]").value = item.units_per_pack || 1;
+  row.querySelector("[data-po-rate]").value = item.purchase_rate || 0;
+  row.querySelector("[data-po-mrp]").value = item.mrp || item.retail_rate || 0;
+  row.querySelector("[data-po-gst]").value = item.gst_rate || 12;
+});
+$("bill-discount")?.addEventListener("input", renderCart);
+$("bill-paid")?.addEventListener("input", renderCart);
+$("pay-method")?.addEventListener("change", renderCart);
+$("ret-order")?.addEventListener("change", paintReturnLines);
+$("return-form")?.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const lines = [...document.querySelectorAll("[data-ret-line]:checked")].map((box) => ({
+    line_id: box.dataset.retLine,
+    quantity: Number(document.querySelector(`[data-ret-qty="${box.dataset.retLine}"]`)?.value),
+  }));
+  try {
+    await api("/api/returns", {
+      method: "POST",
+      body: JSON.stringify({
+        order_id: $("ret-order").value,
+        reason: $("ret-reason").value,
+        lines,
+      }),
+    });
+    $("ret-hint").textContent = "Returned to batch stock";
+    $("ret-hint").className = "hint ok";
+    await loadBootstrap();
+    await loadReturns();
+  } catch (err) {
+    $("ret-hint").textContent = err.message;
+    $("ret-hint").className = "hint error";
+  }
+});
 
 function tick() {
   $("clock").textContent = new Date().toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });

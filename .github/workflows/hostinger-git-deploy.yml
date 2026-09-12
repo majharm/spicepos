@@ -29,6 +29,9 @@ jobs:
           node --check server/index.js
           node --check js/app.js
           node --check js/qr-order.js
+          node --check js/pharmacy.js
+          node --check server/pharmacy-schema.js
+          node --check server/pharmacy-stock.js
 
       - name: Run unit tests
         run: npm test

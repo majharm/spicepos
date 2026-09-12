@@ -64,19 +64,61 @@ export async function buildReports(from, to) {
      GROUP BY DATE(created_at) ORDER BY day`,
     [bid, start, end],
   );
-  const stock = await query(
-    `SELECT code, name, local_name, category, subcategory, stock_gm, reorder_level_gm,
-            retail_rate, b2b_rate, purchase_rate, gst_rate
-     FROM items WHERE business_id = ? ORDER BY name`,
-    [bid],
-  );
+  let stock;
+  try {
+    stock = await query(
+      `SELECT code, name, local_name, generic_name, medicine_type, manufacturer, category,
+              pack_unit, units_per_pack, stock_gm, reorder_level_gm, mrp, selling_price,
+              retail_rate, purchase_rate, gst_rate, hsn, barcode
+       FROM items WHERE business_id = ? ORDER BY name`,
+      [bid],
+    );
+  } catch {
+    stock = await query(
+      `SELECT code, name, local_name, category, subcategory, stock_gm, reorder_level_gm,
+              retail_rate, b2b_rate, purchase_rate, gst_rate
+       FROM items WHERE business_id = ? ORDER BY name`,
+      [bid],
+    );
+  }
   const low = stock.filter((i) => Number(i.stock_gm) <= Number(i.reorder_level_gm));
-  const purchases = await query(
-    `SELECT purchase_number, supplier_name, supplier_invoice_number, purchase_date,
-            subtotal, gst, total, payment_method, payment_status
-     FROM purchases WHERE ${poWhere} ORDER BY purchase_date`,
+  let purchases;
+  try {
+    purchases = await query(
+      `SELECT purchase_number, supplier_name, supplier_invoice_number, purchase_date,
+              subtotal, gst, cgst, sgst, igst, total, payment_method, payment_status,
+              purchase_order_no, eway_bill_no
+       FROM purchases WHERE ${poWhere} ORDER BY purchase_date`,
+      [bid, start, end],
+    );
+  } catch {
+    purchases = await query(
+      `SELECT purchase_number, supplier_name, supplier_invoice_number, purchase_date,
+              subtotal, gst, total, payment_method, payment_status
+       FROM purchases WHERE ${poWhere} ORDER BY purchase_date`,
+      [bid, start, end],
+    );
+  }
+  const batches = await query(
+    `SELECT b.batch_no, b.expiry_date, b.qty, b.mrp, i.code, i.name, i.generic_name
+     FROM item_batches b JOIN items i ON i.id = b.item_id
+     WHERE b.business_id = ? ORDER BY b.expiry_date`,
+    [bid],
+  ).catch(() => []);
+  const expiry = batches.filter((b) => {
+    if (!b.expiry_date) return false;
+    const d = new Date(b.expiry_date);
+    const now = new Date();
+    const soon = new Date();
+    soon.setDate(soon.getDate() + 90);
+    return d < soon;
+  });
+  const returns = await query(
+    `SELECT return_number, order_number, customer_name, reason, subtotal, gst, total, created_at
+     FROM sales_returns WHERE business_id = ? AND DATE(created_at) BETWEEN ? AND ?
+     ORDER BY created_at`,
     [bid, start, end],
-  );
+  ).catch(() => []);
   const customers = await query(
     `SELECT code, name, business_name, mobile, type, gstin, credit_limit, outstanding
      FROM customers WHERE business_id = ? ORDER BY name`,
@@ -96,6 +138,9 @@ export async function buildReports(from, to) {
     stock,
     low,
     purchases,
+    batches,
+    expiry,
+    returns,
     customers,
   };
 }
@@ -110,13 +155,11 @@ export function reportsToSheets(data) {
     },
     {
       name: "Sales bills",
-      headers: ["Order", "Customer", "Type", "Pack", "Pack count", "Status", "Qty g", "Taxable", "GST", "Total", "Pay", "Pay status", "Date"],
+      headers: ["Order", "Customer", "Type", "Status", "Qty", "Taxable", "GST", "Total", "Pay", "Pay status", "Date"],
       rows: data.sales.map((o) => [
         o.order_number,
         o.customer_name,
         o.customer_type,
-        o.pack_name || "Loose items",
-        num(o.pack_count),
         o.status,
         num(o.total_quantity_gm),
         num(o.subtotal),
@@ -129,7 +172,7 @@ export function reportsToSheets(data) {
     },
     {
       name: "Item sales",
-      headers: ["Item", "Qty g", "Amount", "GST"],
+      headers: ["Medicine", "Qty", "Amount", "GST"],
       rows: data.byItem.map((r) => [r.item_name, num(r.quantity_gm), num(r.amount), num(r.gst)]),
     },
     {
@@ -154,24 +197,42 @@ export function reportsToSheets(data) {
     },
     {
       name: "Stock",
-      headers: ["Code", "Name", "Local", "Category", "Subcategory", "Stock g", "Reorder g", "Retail", "B2B", "Purchase", "GST %"],
+      headers: ["Code", "Name", "Generic", "Type", "Mfr", "Pack", "Stock", "Reorder", "MRP", "Sale", "Purchase", "GST %", "HSN"],
       rows: data.stock.map((i) => [
-        i.code, i.name, i.local_name, i.category, i.subcategory,
-        num(i.stock_gm), num(i.reorder_level_gm), num(i.retail_rate), num(i.b2b_rate),
-        num(i.purchase_rate), num(i.gst_rate),
+        i.code, i.name, i.generic_name || i.local_name, i.medicine_type, i.manufacturer, i.pack_unit,
+        num(i.stock_gm), num(i.reorder_level_gm), num(i.mrp), num(i.selling_price || i.retail_rate),
+        num(i.purchase_rate), num(i.gst_rate), i.hsn,
       ]),
     },
     {
       name: "Low stock",
-      headers: ["Code", "Name", "Stock g", "Reorder g"],
+      headers: ["Code", "Name", "Stock", "Reorder"],
       rows: data.low.map((i) => [i.code, i.name, num(i.stock_gm), num(i.reorder_level_gm)]),
     },
     {
+      name: "Batches",
+      headers: ["Code", "Medicine", "Generic", "Batch", "Expiry", "Qty", "MRP"],
+      rows: (data.batches || []).map((b) => [b.code, b.name, b.generic_name, b.batch_no, String(b.expiry_date || ""), num(b.qty), num(b.mrp)]),
+    },
+    {
+      name: "Expiry",
+      headers: ["Code", "Medicine", "Batch", "Expiry", "Qty"],
+      rows: (data.expiry || []).map((b) => [b.code, b.name, b.batch_no, String(b.expiry_date || ""), num(b.qty)]),
+    },
+    {
       name: "Purchases",
-      headers: ["PO", "Supplier", "Invoice", "Date", "Taxable", "GST", "Total", "Pay", "Status"],
+      headers: ["PO", "Supplier", "Invoice", "Date", "Taxable", "GST", "Total", "Pay", "Status", "E-Way"],
       rows: data.purchases.map((p) => [
         p.purchase_number, p.supplier_name, p.supplier_invoice_number, p.purchase_date,
-        num(p.subtotal), num(p.gst), num(p.total), p.payment_method, p.payment_status,
+        num(p.subtotal), num(p.gst), num(p.total), p.payment_method, p.payment_status, p.eway_bill_no,
+      ]),
+    },
+    {
+      name: "Returns",
+      headers: ["Return", "Bill", "Customer", "Reason", "Taxable", "GST", "Total", "Date"],
+      rows: (data.returns || []).map((r) => [
+        r.return_number, r.order_number, r.customer_name, r.reason,
+        num(r.subtotal), num(r.gst), num(r.total), String(r.created_at),
       ]),
     },
     {
