@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>SWAMI MASALE POS</title>
+    <title>Medical POS</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Outfit:wght@400;500;600;700&display=swap" />
@@ -16,17 +16,18 @@
         <div class="brand">
           <img id="shop-logo" class="brand-logo" alt="Company logo" hidden />
           <div class="brand-mark" id="brand-mark" aria-hidden="true"></div>
-          <strong id="shop-name">SWAMI MASALE</strong>
+          <strong id="shop-name">Medical POS</strong>
           <span id="shop-place">Loading MySQL…</span>
         </div>
-        <button class="nav-btn active" type="button" data-view="counter">Counter</button>
-        <button class="nav-btn" type="button" data-view="items">Items</button>
+        <button class="nav-btn active" type="button" data-view="counter">Pharmacy Bill</button>
+        <button class="nav-btn" type="button" data-view="items">Medicines</button>
         <button class="nav-btn" type="button" data-view="customers">Customers</button>
-        <button class="nav-btn" type="button" data-view="packs">Packs</button>
-        <button class="nav-btn" type="button" data-view="orders">Orders</button>
-        <button class="nav-btn" type="button" data-view="qr">QR code</button>
+        <button class="nav-btn" type="button" data-view="batches">Stock / Expiry</button>
+        <button class="nav-btn" type="button" data-view="orders">Bills</button>
         <button class="nav-btn" type="button" data-view="purchases">Purchases</button>
         <button class="nav-btn" type="button" data-view="suppliers">Suppliers</button>
+        <button class="nav-btn" type="button" data-view="returns">Returns</button>
+        <button class="nav-btn" type="button" data-view="qr">QR code <span id="qr-pending-nav" hidden>0</span></button>
         <button class="nav-btn" type="button" data-view="support">Support</button>
         <button class="nav-btn" type="button" data-view="reports">Reports</button>
         <button class="nav-btn" type="button" data-view="settings">Settings</button>
@@ -41,37 +42,43 @@
         <section class="view" id="view-counter">
           <header class="topbar">
             <form class="search" id="search-form">
-              <input id="search" type="search" placeholder="Search spice, Marathi name, or code" autocomplete="off" />
+              <input id="search" type="search" placeholder="Search medicine, generic, barcode, or code" autocomplete="off" />
             </form>
             <select id="customer" class="select"></select>
-            <select id="pack-choice" class="select">
-              <option value="">Loose items (no pack)</option>
-            </select>
+            <input id="bill-doctor" class="select" placeholder="Doctor / Rx no." />
             <select id="pay-method" class="select">
               <option value="cash">Cash</option>
               <option value="upi">UPI</option>
               <option value="card">Card</option>
               <option value="credit">Credit</option>
+              <option value="bank">Bank</option>
             </select>
             <a class="btn primary" href="./qr.html" target="_blank" rel="noopener">QR code</a>
           </header>
           <div class="workspace">
             <div class="catalog" id="catalog"></div>
             <aside class="ticket">
-              <h2>Current bill</h2>
-              <div class="ticket-pack" id="chosen-pack">Pack: Loose items</div>
-              <div id="pack-bar" class="pack-bar"></div>
+              <h2>Pharmacy bill</h2>
+              <div class="ticket-pack" id="chosen-pack">Walk-in retail</div>
+              <div class="bill-meta">
+                <label>Discount ₹ <input id="bill-discount" type="number" step="0.01" value="0" /></label>
+                <label>Amount paid <input id="bill-paid" type="number" step="0.01" /></label>
+              </div>
               <div class="lines" id="lines"></div>
               <div class="totals">
-                <div><span>Qty</span><span id="qty-total">0 g</span></div>
-                <div><span>Taxable</span><span id="taxable">₹0.00</span></div>
-                <div><span>GST</span><span id="tax">₹0.00</span></div>
-                <div class="grand"><span>Total</span><span id="total">₹0.00</span></div>
+                <div><span>Qty</span><span id="qty-total">0</span></div>
+                <div><span>Subtotal</span><span id="taxable">₹0.00</span></div>
+                <div><span>Discount</span><span id="disc-total">₹0.00</span></div>
+                <div><span>CGST</span><span id="cgst-total">₹0.00</span></div>
+                <div><span>SGST / IGST</span><span id="sgst-total">₹0.00</span></div>
+                <div><span>Round off</span><span id="round-total">₹0.00</span></div>
+                <div class="grand"><span>Grand total</span><span id="total">₹0.00</span></div>
+                <div><span>Balance / due</span><span id="due-total">₹0.00</span></div>
               </div>
               <div class="pay">
                 <button class="btn danger" id="btn-clear" type="button">Clear</button>
                 <div class="pay-row">
-                  <button class="btn primary" id="btn-pay" type="button">Save</button>
+                  <button class="btn primary" id="btn-pay" type="button">Save & print</button>
                 </div>
                 <div class="hint" id="hint"></div>
               </div>
@@ -80,25 +87,52 @@
         </section>
 
         <section class="view" id="view-items" hidden>
-          <h2>Items</h2>
-          <p class="lede">Category and subcategory, rates per kg, stock in grams.</p>
+          <h2>Medicines</h2>
+          <p class="lede">Medicine master used by purchase, batch stock, expiry, and pharmacy bills.</p>
           <form class="settings wide" id="item-form">
             <input type="hidden" id="item-id" />
-            <label>Name <input id="item-name" required /></label>
-            <label>Local name <input id="item-local" /></label>
-            <label>Category
-              <input id="item-category" list="category-list" placeholder="Whole Spices" />
+            <label>Item Name * <input id="item-name" required placeholder="Paracetamol 500mg" /></label>
+            <label>Generic Name <input id="item-local" /></label>
+            <label>Medicine Type
+              <select id="item-type">
+                <option>Tablet</option>
+                <option>Capsule</option>
+                <option>Syrup</option>
+                <option>Injection</option>
+                <option>Cream</option>
+                <option>Ointment</option>
+                <option>Drops</option>
+                <option>Inhaler</option>
+                <option>Powder</option>
+                <option>Gel</option>
+                <option>Other</option>
+              </select>
             </label>
-            <label>Subcategory
-              <input id="item-subcategory" list="subcategory-list" placeholder="Haldi / Jeera" />
-            </label>
+            <label>Category <input id="item-category" list="category-list" value="Medical" /></label>
             <datalist id="category-list"></datalist>
             <datalist id="subcategory-list"></datalist>
-            <label>Retail ₹/kg <input id="item-retail" type="number" step="0.01" /></label>
-            <label>B2B ₹/kg <input id="item-b2b" type="number" step="0.01" /></label>
-            <label>Purchase ₹/kg <input id="item-purchase" type="number" step="0.01" /></label>
-            <label>GST % <input id="item-gst" type="number" step="0.01" value="5" /></label>
-            <label>Stock grams <input id="item-stock" type="number" /></label>
+            <label>Company / Manufacturer <input id="item-mfr" /></label>
+            <label>HSN Code <input id="item-hsn" /></label>
+            <label>Pack Size <input id="item-pack-size" placeholder="10 Tablets" /></label>
+            <label>Unit
+              <select id="item-unit">
+                <option>Strip</option>
+                <option>Bottle</option>
+                <option>Box</option>
+                <option>Tube</option>
+                <option>Packet</option>
+                <option>Vial</option>
+                <option>Ampoule</option>
+              </select>
+            </label>
+            <label>Items per Pack/Strip <input id="item-upp" type="number" min="1" value="10" /></label>
+            <label>MRP <input id="item-mrp" type="number" step="0.01" /></label>
+            <label>Selling Price <input id="item-retail" type="number" step="0.01" /></label>
+            <label>Purchase Price <input id="item-purchase" type="number" step="0.01" /></label>
+            <label>GST % <input id="item-gst" type="number" step="0.01" value="12" /></label>
+            <label>Barcode <input id="item-barcode" /></label>
+            <label>Default Expiry <input id="item-expiry" type="date" /></label>
+            <label>Reorder Level <input id="item-reorder" type="number" /></label>
             <button class="btn primary" type="submit">Save</button>
             <button class="btn" type="button" id="item-cancel">Clear</button>
           </form>
@@ -118,25 +152,21 @@
               </select>
             </label>
             <label>GSTIN <input id="cust-gstin" /></label>
+            <label>Address <input id="cust-address" /></label>
             <button class="btn primary" type="submit">Save</button>
           </form>
           <div class="hint" id="cust-hint"></div>
           <div class="table-wrap" id="customers-table"></div>
         </section>
-        <section class="view" id="view-packs" hidden>
-          <h2>Packs</h2>
-          <p class="lede">Choose spices and grams for a pack type (e.g. Special Masala Pack — 5 KG).</p>
-          <form class="settings wide" id="pack-form">
-            <label>Pack name <input id="pack-name" required placeholder="Special Masala Pack — 5 KG" /></label>
-            <div id="pack-lines" class="pack-compose"></div>
-            <button class="btn primary" type="submit">Save</button>
-          </form>
-          <div class="hint" id="pack-hint"></div>
-          <div class="table-wrap" id="packs-table"></div>
+        <section class="view" id="view-batches" hidden>
+          <h2>Stock / Expiry</h2>
+          <p class="lede">Batches created from purchases. Near-expiry (90 days) and expired stock are highlighted.</p>
+          <div class="report-grid" id="batch-summary"></div>
+          <div class="table-wrap" id="batches-table"></div>
         </section>
         <section class="view" id="view-orders" hidden>
-          <h2>Sales orders</h2>
-          <p class="lede">SO numbers from the live database.</p>
+          <h2>Pharmacy bills</h2>
+          <p class="lede">Sales bills with batch, expiry, GST split, and licence footer.</p>
           <div class="split">
             <div class="table-wrap" id="orders"></div>
             <div class="pane" id="order-pane"><p class="hint">Select an order.</p></div>
@@ -165,19 +195,25 @@
         </section>
         <section class="view" id="view-purchases" hidden>
           <h2>Purchases</h2>
+          <p class="lede">Supplier invoice → medicine batches → stock. Batch No. and Expiry are required on every line.</p>
           <form class="settings wide" id="purchase-form">
-            <label>Supplier <select id="po-supplier"></select></label>
-            <label>Invoice no. <input id="po-invoice" /></label>
-            <label>Date <input id="po-date" type="date" /></label>
-            <label>Pay
+            <label>Purchase Invoice No. * <input id="po-invoice" required /></label>
+            <label>Invoice Date * <input id="po-date" type="date" required /></label>
+            <label>Supplier * <select id="po-supplier" required></select></label>
+            <label>Payment Type
               <select id="po-pay">
                 <option value="cash">Cash</option>
-                <option value="upi">UPI</option>
                 <option value="credit">Credit</option>
+                <option value="upi">UPI</option>
+                <option value="bank">Bank</option>
               </select>
             </label>
-            <div id="po-lines" class="pack-compose"></div>
-            <button class="btn primary" type="submit">Save</button>
+            <label>Due Date <input id="po-due" type="date" /></label>
+            <label>Purchase Order No. <input id="po-pono" /></label>
+            <label>E-Way Bill No. <input id="po-eway" /></label>
+            <div id="po-lines" class="pack-compose po-grid"></div>
+            <button class="btn" type="button" id="po-add-line">Add medicine line</button>
+            <button class="btn primary" type="submit">Save purchase</button>
           </form>
           <div class="hint" id="po-hint"></div>
           <div class="table-wrap" id="purchases-table"></div>
@@ -185,14 +221,39 @@
         <section class="view" id="view-suppliers" hidden>
           <h2>Suppliers</h2>
           <form class="settings wide" id="supplier-form">
-            <label>Name <input id="sup-name" required /></label>
-            <label>Contact <input id="sup-contact" /></label>
-            <label>Mobile <input id="sup-mobile" /></label>
+            <label>Supplier Name * <input id="sup-name" required /></label>
+            <label>Supplier Firm / Company <input id="sup-firm" /></label>
+            <label>Supplier Address <input id="sup-address" /></label>
+            <label>Mobile No. <input id="sup-mobile" /></label>
+            <label>Email <input id="sup-email" type="email" /></label>
+            <label>Drug Licence No. <input id="sup-dl" /></label>
             <label>GSTIN <input id="sup-gstin" /></label>
+            <label>PAN No. <input id="sup-pan" /></label>
+            <label>FSSAI Licence No. <input id="sup-fssai" /></label>
+            <label>Supplier Licence Expiry <input id="sup-lexp" type="date" /></label>
+            <label>State <input id="sup-state" /></label>
+            <label>State Code <input id="sup-scode" placeholder="27" /></label>
+            <label>City <input id="sup-city" /></label>
+            <label>Pincode <input id="sup-pin" /></label>
+            <input type="hidden" id="sup-contact" />
             <button class="btn primary" type="submit">Save</button>
           </form>
           <div class="hint" id="sup-hint"></div>
           <div class="table-wrap" id="suppliers-table"></div>
+        </section>
+        <section class="view" id="view-returns" hidden>
+          <h2>Sales returns</h2>
+          <p class="lede">Return billed medicines to the original batch and restock.</p>
+          <form class="settings wide" id="return-form">
+            <label>Bill
+              <select id="ret-order"></select>
+            </label>
+            <label>Reason <input id="ret-reason" placeholder="Expired / customer return" /></label>
+            <div id="ret-lines" class="pack-compose"></div>
+            <button class="btn primary" type="submit">Save return</button>
+          </form>
+          <div class="hint" id="ret-hint"></div>
+          <div class="table-wrap" id="returns-table"></div>
         </section>
         <section class="view" id="view-support" hidden>
           <h2>Support</h2>
@@ -221,6 +282,15 @@
             <label>Phone <input id="set-phone" /></label>
             <label>Email <input id="set-email" /></label>
             <label>GSTIN <input id="set-gstin" /></label>
+            <label>State <input id="set-state" /></label>
+            <label>State Code <input id="set-scode" placeholder="27" /></label>
+            <h3 class="form-section">Licence &amp; Registration Details</h3>
+            <label>Drug Licence No. <input id="set-dl" /></label>
+            <label>Drug Licence Type <input id="set-dl-type" placeholder="Retail / Wholesale" /></label>
+            <label>FSSAI Licence No. <input id="set-fssai" /></label>
+            <label>Pharmacy Registration No. <input id="set-preg" /></label>
+            <label>Other Government Licence No. <input id="set-other" /></label>
+            <label>Licence validity / expiry <input id="set-lexp" type="date" /></label>
             <label>Logo
               <input id="set-logo" type="file" accept="image/*" />
             </label>
@@ -242,6 +312,10 @@
       </div>
     </div>
     <script src="./js/qrcode.iife.js"></script>
+    <script type="module">
+      import * as Pharmacy from "./js/pharmacy.js";
+      window.Pharmacy = Pharmacy;
+    </script>
     <script src="./js/app.js"></script>
   </body>
 </html>

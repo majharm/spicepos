@@ -19,7 +19,7 @@ test("QR order payload requires customer, mobile, and item lines", () => {
   );
 });
 
-test("QR order payload normalizes public customer fields and grams", () => {
+test("QR order payload normalizes public customer fields and pack quantities", () => {
   const row = normalizeQrOrderPayload({
     customerName: "  Ramesh  ",
     mobile: "+91 98765-43210",
@@ -37,7 +37,7 @@ test("QR order payload normalizes public customer fields and grams", () => {
   assert.equal(row.tableNo, "Counter");
   assert.equal(row.lines.length, 2);
   assert.deepEqual(row.lines[0], { item_id: "i1", quantity_gm: 250 });
-  assert.deepEqual(row.lines[1], { item_id: "i3", quantity_gm: 500 });
+  assert.deepEqual(row.lines[1], { item_id: "i3", quantity_gm: 0.5 });
 });
 
 test("public order URL uses forwarded host when present", () => {

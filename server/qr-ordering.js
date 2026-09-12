@@ -63,12 +63,10 @@ export function normalizeQrOrderPayload(raw = {}) {
   const lines = source
     .slice(0, 50)
     .map((line) => {
-      const qtyGm = Number(line.quantity_gm ?? line.quantityGm);
-      const qtyKg = Number(line.quantity);
-      const quantity_gm = Number.isFinite(qtyGm) && qtyGm > 0 ? qtyGm : Number.isFinite(qtyKg) && qtyKg > 0 ? qtyKg * 1000 : 0;
+      const qty = Number(line.quantity_gm ?? line.quantityGm ?? line.quantity ?? line.qty);
       return {
         item_id: cleanText(line.item_id || line.itemId, 36),
-        quantity_gm,
+        quantity_gm: Number.isFinite(qty) && qty > 0 ? qty : 0,
       };
     })
     .filter((line) => line.item_id && line.quantity_gm > 0);
@@ -132,14 +130,13 @@ export function registerQrOrdering(app) {
         [BUSINESS_ID],
       );
       const items = await query(
-        `SELECT id, code, name, local_name, category, subcategory, retail_rate, gst_rate, stock_gm, status
-         FROM items WHERE business_id = ? AND status <> 'inactive'
-         ORDER BY category, subcategory, name`,
+        `SELECT * FROM items WHERE business_id = ? AND status <> 'inactive'
+         ORDER BY category, name`,
         [BUSINESS_ID],
       );
       res.json({
         shop: {
-          name: company?.name || "SWAMI MASALE SASWAD",
+          name: company?.name || "Pharmacy",
           address: company?.address || "",
           phone: company?.phone || "",
           logo_url: company?.logo_url || "",
@@ -297,7 +294,7 @@ export function registerQrOrdering(app) {
 
   app.post("/api/qr-orders/:id/complete", async (req, res) => {
     const method = String(req.body?.paymentMethod || "cash").toLowerCase();
-    if (!["cash", "upi", "card", "credit"].includes(method)) {
+    if (!["cash", "upi", "card", "credit", "bank"].includes(method)) {
       res.status(400).json({ error: "Invalid payment method" });
       return;
     }
@@ -321,15 +318,22 @@ export function registerQrOrdering(app) {
         const [lineRows] = await conn.query("SELECT * FROM qr_order_lines WHERE order_id = ?", [qr.id]);
         if (!lineRows.length) throw new Error("QR order has no lines");
         const customer = await findOrCreateCustomer(conn, { name: qr.customer_name, mobile: qr.mobile });
+        const [companyRows] = await conn.query(
+          "SELECT gstin FROM company_settings WHERE business_id = ? LIMIT 1",
+          [BUSINESS_ID],
+        );
+        const companyGstin = companyRows[0]?.gstin || "";
         const built = await buildPricedLines(
           conn,
           customer,
-          lineRows.map((l) => ({ itemId: l.item_id, quantity_gm: l.quantity_gm })),
+          lineRows.map((l) => ({ itemId: l.item_id, quantity: l.quantity_gm })),
+          { companyGstin },
         );
         const sale = await insertSalesOrder(conn, {
           customer,
           built,
           paymentMethod: method,
+          companyGstin,
         });
         await conn.query(
           "UPDATE qr_orders SET status = 'completed', sales_order_id = ? WHERE id = ?",

@@ -7,6 +7,8 @@ import { buildPricedLines, insertSalesOrder, registerCrud } from "./crud.js";
 import { buildReports, reportsToSheets } from "./reports.js";
 import { workbookXml } from "./excel.js";
 import { ensureQrOrderSchema, registerQrOrdering } from "./qr-ordering.js";
+import { ensurePharmacySchema } from "./pharmacy-schema.js";
+import { listAllBatches } from "./pharmacy-stock.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.join(__dirname, "..");
@@ -65,10 +67,16 @@ app.get("/api/bootstrap", async (_req, res) => {
           packs.map((p) => p.id),
         )
       : [];
+    const batches = await query(
+      `SELECT * FROM item_batches WHERE business_id = ? AND qty > 0
+       ORDER BY expiry_date IS NULL, expiry_date`,
+      [BUSINESS_ID],
+    ).catch(() => []);
     res.json({
-      company: company || { name: "SWAMI MASALE SASWAD" },
+      company: company || { name: "Medical POS" },
       items,
       customers,
+      batches,
       packs: packs.map((p) => ({
         ...p,
         items: packItems.filter((row) => row.pack_id === p.id),
@@ -135,6 +143,33 @@ app.get("/api/suppliers", async (_req, res) => {
         [BUSINESS_ID],
       ),
     );
+  } catch (err) {
+    res.status(500).json({ error: String(err.message) });
+  }
+});
+
+app.get("/api/batches", async (_req, res) => {
+  try {
+    res.json(await listAllBatches());
+  } catch (err) {
+    res.status(500).json({ error: String(err.message) });
+  }
+});
+
+app.get("/api/returns", async (_req, res) => {
+  try {
+    const returns = await query(
+      "SELECT * FROM sales_returns WHERE business_id = ? ORDER BY created_at DESC LIMIT 80",
+      [BUSINESS_ID],
+    );
+    const ids = returns.map((r) => r.id);
+    const lines = ids.length
+      ? await query(
+          `SELECT * FROM sales_return_lines WHERE return_id IN (${ids.map(() => "?").join(",")})`,
+          ids,
+        )
+      : [];
+    res.json(returns.map((r) => ({ ...r, lines: lines.filter((l) => l.return_id === r.id) })));
   } catch (err) {
     res.status(500).json({ error: String(err.message) });
   }
@@ -213,7 +248,21 @@ app.post("/api/items/:id/receive", async (req, res) => {
 
 app.post("/api/settings", async (req, res) => {
   const body = req.body || {};
-  const { name, address, phone, email, gstin } = body;
+  const {
+    name,
+    address,
+    phone,
+    email,
+    gstin,
+    drug_licence_no,
+    drug_licence_type,
+    fssai_licence_no,
+    pharmacy_registration_no,
+    other_licence_no,
+    licence_expiry,
+    state,
+    state_code,
+  } = body;
   if (!name || !String(name).trim()) {
     res.status(400).json({ error: "Shop name is required" });
     return;
@@ -225,6 +274,14 @@ app.post("/api/settings", async (req, res) => {
     phone || null,
     email || null,
     gstin || null,
+    drug_licence_no || null,
+    drug_licence_type || null,
+    fssai_licence_no || null,
+    pharmacy_registration_no || null,
+    other_licence_no || null,
+    licence_expiry || null,
+    state || null,
+    state_code || null,
   ];
   if (Object.prototype.hasOwnProperty.call(body, "logo_url")) {
     const logo = body.logo_url ? String(body.logo_url) : "";
@@ -242,9 +299,13 @@ app.post("/api/settings", async (req, res) => {
   params.push(BUSINESS_ID);
   try {
     await ensureLogoColumn();
+    await ensurePharmacySchema();
     await query(
       `UPDATE company_settings
-       SET name = ?, address = ?, phone = ?, email = ?, gstin = ?${logoSql}
+       SET name = ?, address = ?, phone = ?, email = ?, gstin = ?,
+           drug_licence_no = ?, drug_licence_type = ?, fssai_licence_no = ?,
+           pharmacy_registration_no = ?, other_licence_no = ?, licence_expiry = ?,
+           state = ?, state_code = ?${logoSql}
        WHERE business_id = ?`,
       params,
     );
@@ -262,13 +323,14 @@ registerCrud(app);
 registerQrOrdering(app);
 
 app.post("/api/checkout", async (req, res) => {
-  const { customerId, paymentMethod, lines, packId, packCount } = req.body || {};
+  const { customerId, paymentMethod, lines, packId, packCount, doctorName, prescriptionNo, discount, amountPaid } =
+    req.body || {};
   if (!Array.isArray(lines) || lines.length === 0) {
     res.status(400).json({ error: "Cart is empty" });
     return;
   }
   const method = String(paymentMethod || "cash").toLowerCase();
-  if (!["cash", "upi", "card", "credit"].includes(method)) {
+  if (!["cash", "upi", "card", "credit", "bank"].includes(method)) {
     res.status(400).json({ error: "Invalid payment method" });
     return;
   }
@@ -280,13 +342,23 @@ app.post("/api/checkout", async (req, res) => {
       );
       const customer = customers[0];
       if (!customer) throw new Error("Customer not found");
-      const built = await buildPricedLines(conn, customer, lines);
+      const [companyRows] = await conn.query(
+        "SELECT gstin FROM company_settings WHERE business_id = ? LIMIT 1",
+        [BUSINESS_ID],
+      );
+      const companyGstin = companyRows[0]?.gstin || "";
+      const built = await buildPricedLines(conn, customer, lines, { companyGstin });
       return insertSalesOrder(conn, {
         customer,
         built,
         packId,
         packCount,
         paymentMethod: method,
+        doctorName,
+        prescriptionNo,
+        discount,
+        amountPaid,
+        companyGstin,
       });
     });
     res.json({ ok: true, order: result });
@@ -301,10 +373,10 @@ app.get(["/qr", "/qr/"], (_req, res) => {
 });
 
 const port = Number(process.env.PORT || 5173);
-Promise.all([ensureLogoColumn(), ensureQrOrderSchema()])
+Promise.all([ensureLogoColumn(), ensureQrOrderSchema(), ensurePharmacySchema()])
   .catch((err) => console.error("schema", err.message))
   .finally(() => {
     app.listen(port, "0.0.0.0", () => {
-      console.log(`SWAMI MASALE POS http://0.0.0.0:${port}`);
+      console.log(`Medical POS http://0.0.0.0:${port}`);
     });
   });

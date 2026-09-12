@@ -1,5 +1,5 @@
 (function () {
-  const STEP_GM = 100;
+  const STEP = 1;
   const state = { shop: null, items: [], cart: new Map(), category: "All", query: "" };
   const $ = (id) => document.getElementById(id);
   const money = (n) =>
@@ -11,18 +11,18 @@
       .replaceAll(">", "&gt;")
       .replaceAll('"', "&quot;");
 
-  function lineAmount(item, qtyGm) {
-    return Math.round(((Number(qtyGm) / 1000) * (Number(item.retail_rate) || 0)) * 100) / 100;
+  function lineAmount(item, qty) {
+    return Math.round((Number(qty) * (Number(item.selling_price || item.retail_rate) || 0)) * 100) / 100;
   }
 
   function totals() {
     let subtotal = 0;
     let gst = 0;
     let count = 0;
-    for (const [id, qtyGm] of state.cart) {
+    for (const [id, qty] of state.cart) {
       const item = state.items.find((row) => row.id === id);
       if (!item) continue;
-      const amount = lineAmount(item, qtyGm);
+      const amount = lineAmount(item, qty);
       subtotal += amount;
       gst += (amount * (Number(item.gst_rate) || 0)) / 100;
       count += 1;
@@ -35,7 +35,7 @@
   function setQty(id, nextGm) {
     const item = state.items.find((row) => row.id === id);
     if (!item) return;
-    const qty = Math.round(Math.max(0, Number(nextGm) || 0) / STEP_GM) * STEP_GM;
+    const qty = Math.max(0, Math.round(Number(nextGm) || 0));
     if (qty > 0) state.cart.set(id, qty);
     else state.cart.delete(id);
     renderMenu();
@@ -58,7 +58,7 @@
       const categoryOk = state.category === "All" || (item.category || "Other") === state.category;
       const searchOk =
         !query ||
-        [item.name, item.local_name, item.code, item.category, item.subcategory]
+        [item.name, item.local_name, item.generic_name, item.code, item.barcode, item.category]
           .join(" ")
           .toLowerCase()
           .includes(query);
@@ -73,20 +73,20 @@
             <div class="item-initial">${esc((item.name || "?").charAt(0).toUpperCase())}</div>
             <div>
               <h3>${esc(item.name)} <small>${esc(item.local_name || "")}</small></h3>
-              <p class="item-meta">${esc(item.category || "Spice")} ${item.subcategory ? `· ${esc(item.subcategory)}` : ""}</p>
-              <p class="item-price">${esc(money(item.retail_rate))} / kg</p>
+              <p class="item-meta">${esc(item.medicine_type || item.category || "Medicine")} ${item.generic_name || item.local_name ? `· ${esc(item.generic_name || item.local_name)}` : ""}</p>
+              <p class="item-price">${esc(money(item.selling_price || item.retail_rate))}</p>
             </div>
             ${
               out
                 ? `<p class="out">Out of stock</p>`
                 : qty
-                  ? `<div class="qty-control"><button type="button" data-minus="${esc(item.id)}" aria-label="Reduce">−</button><span>${qty} g</span><button type="button" data-plus="${esc(item.id)}" aria-label="Add">+</button></div>`
-                  : `<button class="add-btn" type="button" data-add="${esc(item.id)}">Add 100 g</button>`
+                  ? `<div class="qty-control"><button type="button" data-minus="${esc(item.id)}" aria-label="Reduce">−</button><span>${qty}</span><button type="button" data-plus="${esc(item.id)}" aria-label="Add">+</button></div>`
+                  : `<button class="add-btn" type="button" data-add="${esc(item.id)}">Add</button>`
             }
           </article>`;
           })
           .join("")
-      : '<p class="empty">No spices match this search.</p>';
+      : '<p class="empty">No medicines match this search.</p>';
   }
 
   function renderCart() {
@@ -95,11 +95,11 @@
     $("cart-count").textContent = String(summary.count);
     $("cart-total").textContent = money(summary.total);
     const rows = [];
-    for (const [id, qtyGm] of state.cart) {
+    for (const [id, qty] of state.cart) {
       const item = state.items.find((row) => row.id === id);
       if (!item) continue;
       rows.push(
-        `<div class="cart-line"><strong>${esc(item.name)}</strong><span>${qtyGm} g × ${esc(money(item.retail_rate))}/kg</span><strong>${esc(money(lineAmount(item, qtyGm)))}</strong></div>`,
+        `<div class="cart-line"><strong>${esc(item.name)}</strong><span>${qty} × ${esc(money(item.selling_price || item.retail_rate))}</span><strong>${esc(money(lineAmount(item, qty)))}</strong></div>`,
       );
     }
     $("cart-lines").innerHTML = rows.join("") || '<p class="empty">Your order is empty.</p>';
@@ -138,7 +138,7 @@
     const minus = event.target.closest("[data-minus]");
     const id = add?.dataset.add || plus?.dataset.plus || minus?.dataset.minus;
     if (!id) return;
-    setQty(id, (state.cart.get(id) || 0) + (minus ? -STEP_GM : STEP_GM));
+    setQty(id, (state.cart.get(id) || 0) + (minus ? -STEP : STEP));
   });
   $("menu-search").addEventListener("input", (event) => {
     state.query = event.target.value.trim();
@@ -169,7 +169,7 @@
           mobile: form.get("mobile"),
           table_no: form.get("table_no"),
           notes: form.get("notes"),
-          lines: [...state.cart].map(([item_id, quantity_gm]) => ({ item_id, quantity_gm })),
+          lines: [...state.cart].map(([item_id, quantity]) => ({ item_id, quantity })),
         }),
       });
       const data = await res.json().catch(() => ({}));
