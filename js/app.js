@@ -409,8 +409,11 @@ function renderSupport() {
 }
 
 function paintHeader() {
-  $("shop-name").textContent = state.company.name || "Medical POS";
-  $("shop-place").textContent = state.company.address || "";
+  $("shop-name").textContent = state.company.name || "Pharmacy Medical POS";
+  const addr = state.company.address || "";
+  $("shop-place").textContent = addr
+    ? `${addr} · Pharmacy Medical POS`
+    : "Pharmacy · Medicines · Batches · Bills";
   showLogo($("shop-logo"), state.company.logo_url);
   const mark = $("brand-mark");
   if (mark) mark.hidden = Boolean(state.company.logo_url);
@@ -423,6 +426,8 @@ async function loadBootstrap() {
   state.customers = data.customers;
   state.packs = data.packs;
   state.batches = data.batches || [];
+  const ver = $("app-version-chip");
+  if (ver) ver.textContent = data.version || "pharmacy-1";
   paintHeader();
   renderCustomersSelect();
   renderCatalog();
