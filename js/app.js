@@ -207,6 +207,11 @@ function applyFootwearMode() {
   if (search) search.placeholder = copy.search || "Search name or HSN…";
   const scan = $("scan-code");
   if (scan) scan.placeholder = copy.scan || "Scan or search";
+  const mobile = $("counter-mobile");
+  if (mobile) {
+    mobile.placeholder = pharm ? "Mobile No." : "Mobile";
+    mobile.setAttribute("aria-label", pharm ? "Mobile No." : "Customer mobile");
+  }
   if ($("item-category-lab")) $("item-category-lab").textContent = copy.categoryLab || "Category";
   if ($("item-category")) $("item-category").placeholder = copy.category || "Group / Section";
   if ($("item-subcategory-lab")) $("item-subcategory-lab").textContent = copy.subcategoryLab || "Subcategory";
@@ -532,6 +537,7 @@ function selectCounterCustomer(cust, { hint = true } = {}) {
     mob.value = shown;
   }
   paintBillCustomer();
+  fillPharmacyBillCustomerFromCustomer(cust);
   renderCatalog();
   renderCart();
   void loadCustomerLoyalty();
@@ -598,6 +604,35 @@ function lineCalc(item, line) {
     discountType: line.discountType || "amt",
     discountValue: line.discountValue || 0,
   });
+}
+
+function medicinePackLabel(item) {
+  return globalThis.POSFootwear?.medicinePackLabel?.(item) || "";
+}
+
+function formatExpiryShort(raw) {
+  return globalThis.POSFootwear?.formatExpiryShort?.(raw) || String(raw || "").slice(0, 10);
+}
+
+function fillPharmacyBillCustomerFromCustomer(cust) {
+  if (!isPharmacyShop()) return;
+  const c = cust === undefined ? customer() : cust;
+  if ($("bill-cust-name")) {
+    $("bill-cust-name").value = isWalkInCustomer(c) ? "" : String(c?.business_name || c?.name || "");
+  }
+  if ($("bill-cust-address")) {
+    $("bill-cust-address").value = isWalkInCustomer(c) ? "" : String(c?.address || "");
+  }
+  const shown = digitsMobile(c?.mobile);
+  if ($("bill-cust-mobile") && isRealMobile(shown)) $("bill-cust-mobile").value = shown;
+}
+
+function syncPharmacyMobile(fromBill) {
+  const top = $("counter-mobile");
+  const bill = $("bill-cust-mobile");
+  if (!top || !bill) return;
+  if (fromBill) top.value = bill.value;
+  else if (document.activeElement !== bill) bill.value = top.value;
 }
 
 function findItemByBarcode(code) {
@@ -712,6 +747,8 @@ function clearCounterAfterSale(order, result) {
   if ($("search")) $("search").value = "";
   if ($("scan-code")) $("scan-code").value = "";
   if ($("pack-choice")) $("pack-choice").value = "";
+  if ($("bill-doctor-rx")) $("bill-doctor-rx").value = "";
+  fillPharmacyBillCustomerFromCustomer(customer());
   renderCatalog();
   renderCart();
   if (table) void dropTableHold(table);
@@ -2075,6 +2112,55 @@ function renderCart() {
   }
   if (!state.cart.length) {
     $("lines").innerHTML = `<p class="catalog-empty lines-empty">${escapeHtml(emptyTicketHint())}</p>`;
+  } else if (isPharmacyShop()) {
+    $("lines").innerHTML = `<div class="pharm-bill-wrap"><table class="pharm-bill-table">
+      <thead><tr>
+        <th>Medicine</th>
+        <th>Batch No.</th>
+        <th>Expiry</th>
+        <th>Pack</th>
+        <th>Qty</th>
+        <th class="pharm-n">MRP</th>
+        <th class="pharm-n">Rate</th>
+        <th class="pharm-n">GST</th>
+        <th class="pharm-n">Amount</th>
+      </tr></thead>
+      <tbody>${state.cart.map((line) => {
+        const item = state.items.find((i) => i.id === line.itemId);
+        if (!item) return "";
+        const unitCode = itemUnit(item);
+        const step = POSUnits.counterStep(unitCode);
+        const unit = POSUnits.qtySuffix(unitCode);
+        const qtyShow = POSUnits.displayQty(line.qtyGm, unitCode);
+        const qtyStep = POSUnits.displayQty(step, unitCode) || 1;
+        const calc = lineCalc(item, line);
+        const key = cartLineKey(line);
+        const mrp = Number(item.mrp || item.retail_rate) || rateFor(item);
+        return `<tr>
+          <td class="pharm-med">${escapeHtml(item.name)}${canDiscount() ? `<div class="line-disc">
+              <select data-line-disc-type="${escapeHtml(key)}" aria-label="Line discount type">
+                <option value="amt"${(line.discountType || "amt") === "amt" ? " selected" : ""}>₹</option>
+                <option value="pct"${line.discountType === "pct" ? " selected" : ""}>%</option>
+              </select>
+              <input data-line-disc="${escapeHtml(key)}" type="number" min="0" step="0.01" value="${escapeHtml(line.discountValue || 0)}" aria-label="Line discount" />
+            </div>` : ""}</td>
+          <td>${escapeHtml(item.batch_no || "—")}</td>
+          <td>${escapeHtml(formatExpiryShort(item.default_expiry) || "—")}</td>
+          <td>${escapeHtml(medicinePackLabel(item) || "—")}</td>
+          <td>
+            <div class="qty">
+              <button type="button" data-chg="${escapeHtml(key)}" data-d="${-step}">−</button>
+              <input class="qty-input" type="number" inputmode="decimal" min="${POSUnits.displayQty(POSUnits.qtyMin(), unitCode) || 0.001}" max="${POSUnits.qtyMax()}" step="${escapeHtml(qtyStep)}" value="${escapeHtml(qtyShow)}" data-qty="${escapeHtml(key)}" aria-label="Quantity in ${unit}" />
+              <button type="button" data-chg="${escapeHtml(key)}" data-d="${step}">+</button>
+            </div>
+          </td>
+          <td class="pharm-n">${escapeHtml(money(mrp))}</td>
+          <td class="pharm-n">${escapeHtml(money(rateFor(item)))}</td>
+          <td class="pharm-n">${escapeHtml(String(Number(item.gst_rate) || 0))}%</td>
+          <td class="pharm-n">${escapeHtml(money(calc.taxable + calc.gst))}</td>
+        </tr>`;
+      }).join("")}</tbody>
+    </table></div>`;
   } else {
     $("lines").innerHTML = state.cart
       .map((line) => {
@@ -2210,6 +2296,7 @@ async function saveCustomer(fields) {
       dob: fields.dob || "",
       referred_by: fields.referred_by || "",
       locale: fields.locale || "",
+      address: fields.address || "",
     }),
   });
   const customer = data.customer;
@@ -4039,6 +4126,7 @@ function invoiceCtx() {
   const mode = state.company?.invoice_language || "shop";
   return {
     company: state.company,
+    businessMeta: state.businessMeta,
     customers: state.customers,
     suppliers: state.suppliers,
     items: state.items,
@@ -5333,6 +5421,10 @@ $("order-pane").addEventListener("click", async (e) => {
     $("customer").value = state.customerId;
     $("pay-method").value = o.payment_method || "cash";
     $("pack-choice").value = o.pack_id || "";
+    if ($("bill-cust-name")) $("bill-cust-name").value = o.customer_name || "";
+    if ($("bill-cust-address")) $("bill-cust-address").value = o.customer_address || "";
+    if ($("bill-cust-mobile")) $("bill-cust-mobile").value = o.customer_mobile || digitsMobile(customer()?.mobile);
+    if ($("bill-doctor-rx")) $("bill-doctor-rx").value = o.doctor_rx || "";
     showView("counter");
     renderCart();
     setHint(`Changing items for ${o.order_number}`, "ok");
@@ -5486,6 +5578,12 @@ $("btn-pay").addEventListener("click", async () => {
       offerLoyaltyMultiplier: state.appliedOffers?.loyaltyMultiplier || 1,
       qrOrderId: state.activeQrOrderId || undefined,
       table_no: isRestaurantShop() ? (state.activeTable || undefined) : undefined,
+      customer_name: isPharmacyShop() ? ($("bill-cust-name")?.value || "") : undefined,
+      customer_mobile: isPharmacyShop()
+        ? ($("bill-cust-mobile")?.value || $("counter-mobile")?.value || "")
+        : undefined,
+      customer_address: isPharmacyShop() ? ($("bill-cust-address")?.value || "") : undefined,
+      doctor_rx: isPharmacyShop() ? ($("bill-doctor-rx")?.value || "") : undefined,
       lines: state.cart.map((l) => ({
         itemId: l.itemId,
         quantity_gm: l.qtyGm,
@@ -5913,6 +6011,7 @@ $("customer-form").addEventListener("submit", async (e) => {
       dob: $("cust-dob")?.value || "",
       referred_by: $("cust-ref")?.value || "",
       locale: $("cust-locale")?.value || "",
+      address: $("cust-address")?.value || "",
     });
     $("cust-hint").textContent = "Saved";
     $("cust-hint").className = "hint ok";
@@ -5971,9 +6070,11 @@ $("quick-customer-form")?.addEventListener("submit", async (e) => {
     const customer = await saveCustomer({
       name: $("qc-name").value,
       mobile: $("qc-mobile").value,
+      address: $("qc-address")?.value || "",
     });
     $("qc-name").value = "";
     $("qc-mobile").value = "";
+    if ($("qc-address")) $("qc-address").value = "";
     if (hint) {
       hint.textContent = `Added ${customer?.name || "customer"}`;
       hint.className = "hint ok";
@@ -7228,6 +7329,7 @@ const applyCounterMobileDebounced = debounce(() => {
 }, 160);
 
 $("counter-mobile")?.addEventListener("input", () => {
+  syncPharmacyMobile(false);
   applyCounterMobileDebounced();
 });
 $("counter-mobile")?.addEventListener("keydown", (e) => {
@@ -7238,6 +7340,21 @@ $("counter-mobile")?.addEventListener("keydown", (e) => {
 $("counter-mobile")?.addEventListener("blur", () => {
   const d = digitsMobile($("counter-mobile")?.value);
   if (d.length === 10) applyCounterMobile($("counter-mobile").value, { announceMiss: false });
+});
+$("bill-cust-mobile")?.addEventListener("input", () => {
+  syncPharmacyMobile(true);
+  applyCounterMobileDebounced();
+});
+$("bill-cust-mobile")?.addEventListener("keydown", (e) => {
+  if (e.key !== "Enter") return;
+  e.preventDefault();
+  syncPharmacyMobile(true);
+  applyCounterMobile($("bill-cust-mobile").value);
+});
+$("bill-cust-mobile")?.addEventListener("blur", () => {
+  syncPharmacyMobile(true);
+  const d = digitsMobile($("bill-cust-mobile")?.value);
+  if (d.length === 10) applyCounterMobile($("bill-cust-mobile").value, { announceMiss: false });
 });
 
 async function loadCustomerLoyalty() {

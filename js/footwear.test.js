@@ -312,6 +312,15 @@ test("Medical shops show pharmacy medicine fields on the item form", () => {
   assert.match(app, /drug_licence_no/);
   assert.match(app, /fssai_licence_no/);
   assert.match(app, /ndps_licence_no/);
+  assert.match(index, /id="bill-cust-name"/);
+  assert.match(index, /id="bill-cust-mobile"/);
+  assert.match(index, /id="bill-cust-address"/);
+  assert.match(index, /id="bill-doctor-rx"/);
+  assert.match(index, /Doctor Name \/ Prescription No\./);
+  assert.match(app, /pharm-bill-table/);
+  assert.match(app, /doctor_rx/);
+  assert.equal(F.medicinePackLabel({ pack_size: "10", pack_unit: "Tab" }), "10 Tab");
+  assert.equal(F.formatExpiryShort("2027-09-30"), "09/27");
   assert.match(css, /body:not\(\.pharmacy-mode\) \.pharmacy-only/);
   assert.match(adv, /savePharmacyItemFields/);
   const demo = F.demoItems({ category: "Medical" });

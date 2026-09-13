@@ -377,6 +377,22 @@
     };
   }
 
+  function medicinePackLabel(item) {
+    const size = String(item?.pack_size || "").trim();
+    const unit = String(item?.pack_unit || "").trim();
+    const upp = Number(item?.units_per_pack) || 0;
+    if (size && unit) return `${size} ${unit}`.trim();
+    if (size) return size;
+    if (upp > 0) return `${upp}s`;
+    return "";
+  }
+
+  function formatExpiryShort(raw) {
+    const s = String(raw || "").slice(0, 10);
+    const m = s.match(/^(\d{4})-(\d{2})/);
+    return m ? `${m[2]}/${m[1].slice(2)}` : s;
+  }
+
   function demoItems(biz) {
     if (shopKind(biz) !== "pharmacy") return [];
     const expiry = "2027-12-31";
@@ -603,5 +619,7 @@
     parseSizes,
     fieldsFromBody,
     demoItems,
+    medicinePackLabel,
+    formatExpiryShort,
   };
 });

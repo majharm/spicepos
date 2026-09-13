@@ -458,6 +458,25 @@ export async function onPurchaseLineSaved(conn, ctx) {
   return row;
 }
 
+export function medicinePackLabel(item) {
+  const size = String(item?.pack_size || "").trim();
+  const unit = String(item?.pack_unit || "").trim();
+  const upp = Number(item?.units_per_pack) || 0;
+  if (size && unit) return `${size} ${unit}`.trim();
+  if (size) return size;
+  if (upp > 0) return `${upp}s`;
+  return "";
+}
+
+export function pharmacyLineSnapshot(item, batch) {
+  const exp = String(batch?.expiry_date || item?.default_expiry || item?.expiry_date || "").slice(0, 10);
+  return {
+    batch_no: String(batch?.batch_no || item?.batch_no || "").trim().slice(0, 64) || null,
+    expiry_date: /^\d{4}-\d{2}-\d{2}$/.test(exp) ? exp : null,
+    pack_label: medicinePackLabel(item).slice(0, 64) || null,
+  };
+}
+
 export function computeSaleLine(item, customer, lineIn) {
   const qty = Number(lineIn.quantity_gm ?? lineIn.qty);
   const isB2b = customer?.type === "b2b";
