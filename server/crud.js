@@ -381,7 +381,7 @@ export function registerCrud(app) {
               Number(b.retail_rate) || 0,
               Number(b.b2b_rate) || 0,
               Number(b.gst_rate) || 5,
-              String(b.hsn || b.local_name || "").trim() || null,
+              String(b.hsn || "").trim() || null,
               imageUrl === undefined ? null : imageUrl,
               Number(b.stock_gm) || 0,
               Number(b.reorder_level_gm) || 0,
@@ -413,9 +413,13 @@ export function registerCrud(app) {
     try {
       const variants = POSFootwear.fieldsFromBody(b);
       const [bizRows] = await query("SELECT category, business_type FROM businesses WHERE id = ?", [bid()]);
+      const [existing] = await query("SELECT reorder_level_gm FROM items WHERE id=? AND business_id=? LIMIT 1", [req.params.id, bid()]);
+      const reorder = Object.prototype.hasOwnProperty.call(b, "reorder_level_gm")
+        ? Number(b.reorder_level_gm) || 0
+        : Number(existing?.reorder_level_gm) || 0;
       const params = [
         b.name,
-        b.local_name || null,
+        b.local_name || b.generic_name || null,
         b.category || POSFootwear.defaultCategory(bizRows[0] || {}),
         b.subcategory || null,
         variants.color,
@@ -428,7 +432,7 @@ export function registerCrud(app) {
         Number(b.gst_rate) || 5,
         String(b.hsn || "").trim() || null,
         Number(b.stock_gm) || 0,
-        Number(b.reorder_level_gm) || 0,
+        reorder,
         itemStatus(b.status),
       ];
       let imageSql = "";

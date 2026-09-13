@@ -36,7 +36,7 @@
   };
 
   function shopText(biz) {
-    return [biz?.category, biz?.business_type].filter(Boolean).join(" ").toLowerCase();
+    return [biz?.category, biz?.business_type, biz?.name].filter(Boolean).join(" ").toLowerCase();
   }
 
   function isFootwearShop(biz) {
@@ -135,7 +135,14 @@
     return v ? `${name} (${v})` : name;
   }
 
+  function isPharmacyShop(biz) {
+    return shopKind(biz) === "pharmacy";
+  }
+
   function suggestedItemCategories(biz) {
+    if (shopKind(biz) === "pharmacy") {
+      return ["Medical", "OTC", "Ayurvedic", "Surgical", "Baby care", "Personal care"];
+    }
     if (shopKind(biz) !== "restaurant") return [];
     return [
       "South Indian",
@@ -164,7 +171,7 @@
       apparel: "Garments",
       grocery: "Grocery",
       restaurant: "Menu",
-      pharmacy: "Medicine",
+      pharmacy: "Medical",
       electronics: "Electronics",
       jewellery: "Jewellery",
       hardware: "Hardware",
@@ -257,17 +264,18 @@
         hsn: "e.g. 2106",
       },
       pharmacy: {
-        name: "Paracetamol 500",
-        localName: "पैरासिटामोल / Paracetamol",
-        category: "Tablet / Syrup",
+        name: "Paracetamol 500mg",
+        localName: "Paracetamol",
+        localNameLab: "Generic Name",
+        category: "Medical",
         subcategory: "Fever / Cough",
         categoryLab: "Category",
         subcategoryLab: "Subcategory",
-        search: "Search medicine or HSN…",
+        search: "Search medicine, generic, or barcode…",
         scan: "Scan or search medicine",
-        lede: "Name, photo, HSN code, unit type, rates, and stock.",
-        itemsSub: "Photo, HSN, unit type, rates, and stock",
-        counterSub: "Scan, tap, or search — then Pay",
+        lede: "Item name, generic, type, manufacturer, pack, batch, expiry, GST, barcode, and stock.",
+        itemsSub: "Generic, type, pack, batch, expiry, rates, and stock",
+        counterSub: "Scan, tap, or search medicine — then Pay",
         ticket: "Tap a medicine or scan",
         hsn: "e.g. 3004",
       },
@@ -379,6 +387,7 @@
     isApparelShop,
     isSpiceShop,
     isRestaurantShop,
+    isPharmacyShop,
     isVariantShop,
     shopKind,
     suggestedItemCategories,

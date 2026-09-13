@@ -1988,6 +1988,8 @@ tr:last-child td { border-bottom: 0; }
 }
 .settings.wide .full { grid-column: 1 / -1; }
 body:not(.footwear-mode):not(.apparel-mode) .footwear-only { display: none !important; }
+body:not(.pharmacy-mode) .pharmacy-only { display: none !important; }
+body.pharmacy-mode .pharmacy-hide { display: none !important; }
 body.footwear-mode #pack-choice { display: none; }
 body.apparel-mode #pack-choice { display: none; }
 body:not(.spice-mode) #pack-choice { display: none; }

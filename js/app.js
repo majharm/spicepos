@@ -154,6 +154,10 @@ function isRestaurantShop() {
   return Boolean(globalThis.POSRestaurant?.isRestaurantShop(state.businessMeta) || globalThis.POSFootwear?.isRestaurantShop(state.businessMeta));
 }
 
+function isPharmacyShop() {
+  return Boolean(globalThis.POSFootwear?.isPharmacyShop?.(state.businessMeta) || globalThis.POSFootwear?.shopKind?.(state.businessMeta) === "pharmacy");
+}
+
 function restaurantApi() {
   return globalThis.POSRestaurant || null;
 }
@@ -183,13 +187,21 @@ function applyFootwearMode() {
   const ap = isApparelShop();
   const spice = isSpiceShop();
   const on = fw || ap;
+  const pharm = isPharmacyShop();
   const copy = globalThis.POSFootwear?.itemFormCopy(state.businessMeta) || {};
   document.body.classList.toggle("footwear-mode", fw);
   document.body.classList.toggle("apparel-mode", ap);
   document.body.classList.toggle("spice-mode", spice);
   document.body.classList.toggle("restaurant-mode", isRestaurantShop());
+  document.body.classList.toggle("pharmacy-mode", pharm);
   document.querySelectorAll(".footwear-only").forEach((el) => {
     el.hidden = !on;
+  });
+  document.querySelectorAll(".pharmacy-only").forEach((el) => {
+    el.hidden = !pharm;
+  });
+  document.querySelectorAll(".pharmacy-hide").forEach((el) => {
+    el.hidden = pharm;
   });
   const search = $("search");
   if (search) search.placeholder = copy.search || "Search name or HSN…";
@@ -200,6 +212,7 @@ function applyFootwearMode() {
   if ($("item-subcategory-lab")) $("item-subcategory-lab").textContent = copy.subcategoryLab || "Subcategory";
   if ($("item-subcategory")) $("item-subcategory").placeholder = copy.subcategory || "Type / Brand";
   if ($("item-name")) $("item-name").placeholder = copy.name || "Item name";
+  if ($("item-local-lab")) $("item-local-lab").textContent = copy.localNameLab || "Regional name";
   if ($("item-local-name")) $("item-local-name").placeholder = copy.localName || "स्थानीय नाम / Local name";
   if ($("item-hsn")) $("item-hsn").placeholder = copy.hsn || "e.g. 1234";
   if ($("item-size")) $("item-size").placeholder = fw ? "e.g. 6, 7, 8 or 5" : ap ? "S, M, L, XL or 32, 34" : "e.g. 6, 7, 8 or 5";
@@ -265,9 +278,11 @@ function fillFootwearFilters() {
 
 function refreshItemUnitLabels() {
   const u = POSUnits.normalize($("item-unit")?.value);
-  if ($("item-retail-lab")) $("item-retail-lab").textContent = POSUnits.rateLabel("Retail", u);
+  const retailWord = isPharmacyShop() ? "Selling price" : "Retail";
+  const purchaseWord = isPharmacyShop() ? "Purchase price" : "Purchase";
+  if ($("item-retail-lab")) $("item-retail-lab").textContent = POSUnits.rateLabel(retailWord, u);
   if ($("item-b2b-lab")) $("item-b2b-lab").textContent = POSUnits.rateLabel("B2B", u);
-  if ($("item-purchase-lab")) $("item-purchase-lab").textContent = POSUnits.rateLabel("Purchase", u);
+  if ($("item-purchase-lab")) $("item-purchase-lab").textContent = POSUnits.rateLabel(purchaseWord, u);
   if ($("item-stock-lab")) $("item-stock-lab").textContent = POSUnits.stockLabel(u);
   const pcs = POSUnits.isCount(u);
   document.querySelectorAll(".pcs-barcode-only").forEach((el) => {
@@ -1832,6 +1847,15 @@ function itemWriteBody(item, extra) {
     stock_gm: item.stock_gm,
     reorder_level_gm: item.reorder_level_gm,
     status: itemStatusOf(item.status),
+    generic_name: item.generic_name || item.local_name || "",
+    medicine_type: item.medicine_type || "",
+    manufacturer: item.manufacturer || "",
+    pack_size: item.pack_size || "",
+    pack_unit: item.pack_unit || "",
+    units_per_pack: item.units_per_pack || 1,
+    batch_no: item.batch_no || "",
+    default_expiry: item.default_expiry || "",
+    barcode: item.barcode || "",
     ...(extra || {}),
   };
 }
@@ -1860,7 +1884,7 @@ function filteredItems() {
     if (color && String(i.color || "").trim().toLowerCase() !== color) return false;
     if (!q) return true;
     if (window.POSI18n?.matchesQuery) return window.POSI18n.matchesQuery(i, q);
-    return [i.name, i.hsn, i.local_name, i.code, i.barcode, i.category, i.subcategory, i.color, i.size, i.wearer_type]
+    return [i.name, i.hsn, i.local_name, i.generic_name, i.manufacturer, i.medicine_type, i.batch_no, i.code, i.barcode, i.category, i.subcategory, i.color, i.size, i.wearer_type]
       .join(" ")
       .toLowerCase()
       .includes(q);
@@ -2661,7 +2685,7 @@ function fillDatalists() {
 }
 
 function itemSearchHay(item) {
-  const raw = `${item.name || ""} ${item.local_name || ""} ${item.code || ""} ${item.hsn || ""} ${item.barcode || ""} ${item.mfr_barcode || ""} ${item.category || ""} ${item.subcategory || ""} ${item.color || ""} ${item.size || ""} ${item.wearer_type || ""} ${itemStatusOf(item.status)}`;
+  const raw = `${item.name || ""} ${item.local_name || ""} ${item.generic_name || ""} ${item.manufacturer || ""} ${item.medicine_type || ""} ${item.batch_no || ""} ${item.code || ""} ${item.hsn || ""} ${item.barcode || ""} ${item.mfr_barcode || ""} ${item.category || ""} ${item.subcategory || ""} ${item.color || ""} ${item.size || ""} ${item.wearer_type || ""} ${itemStatusOf(item.status)}`;
   const I = window.POSI18n;
   const blob = I ? I.searchBlob(item) : raw.toLowerCase();
   return `${blob} ${itemStatusOf(item.status)}`.trim();
@@ -2760,16 +2784,31 @@ function resetItemForm() {
   $("item-form")?.classList.remove("is-editing");
   document.querySelectorAll("#items-table .item-card.is-editing").forEach((el) => el.classList.remove("is-editing"));
   paintItemStatus("active");
+  if (isPharmacyShop()) {
+    if ($("item-category") && !$("item-category").value) $("item-category").value = defaultItemCategory();
+    if ($("item-type")) $("item-type").value = "Tablet";
+    if ($("item-pack-unit")) $("item-pack-unit").value = "Strip";
+    if ($("item-upp")) $("item-upp").value = "10";
+  }
 }
 
 function fillItemForm(i) {
   if (!i) return;
   $("item-id").value = i.id;
   $("item-name").value = i.name;
-  if ($("item-local-name")) $("item-local-name").value = i.local_name || "";
+  if ($("item-local-name")) $("item-local-name").value = i.generic_name || i.local_name || "";
   $("item-hsn").value = i.hsn || "";
   $("item-category").value = i.category || "";
   $("item-subcategory").value = i.subcategory || "";
+  if ($("item-type")) $("item-type").value = i.medicine_type || "Tablet";
+  if ($("item-mfr")) $("item-mfr").value = i.manufacturer || "";
+  if ($("item-own-barcode")) $("item-own-barcode").value = i.barcode || "";
+  if ($("item-pack-size")) $("item-pack-size").value = i.pack_size || "";
+  if ($("item-pack-unit")) $("item-pack-unit").value = i.pack_unit || "Strip";
+  if ($("item-upp")) $("item-upp").value = i.units_per_pack || 10;
+  if ($("item-batch-no")) $("item-batch-no").value = i.batch_no || "";
+  if ($("item-expiry")) $("item-expiry").value = String(i.default_expiry || "").slice(0, 10);
+  if ($("item-reorder")) $("item-reorder").value = POSUnits.fromBase(i.reorder_level_gm, itemUnit(i));
   if ($("item-wearer")) $("item-wearer").value = globalThis.POSFootwear?.normalizeWearer(i.wearer_type) || "";
   if ($("item-color")) $("item-color").value = i.color || "";
   if ($("item-size")) $("item-size").value = i.size || "";
@@ -2818,7 +2857,9 @@ function renderItemsTable() {
   if (!items.length) {
     el.innerHTML = `<div class="item-empty-card">
       <strong>No items yet</strong>
-      <p>Add a name, unit, and rates on the left. Saved items show here and on Counter.</p>
+      <p>${isPharmacyShop()
+        ? "Add medicine name, generic, type, pack, batch, expiry, and rates on the left."
+        : "Add a name, unit, and rates on the left. Saved items show here and on Counter."}</p>
     </div>`;
     return;
   }
@@ -2831,7 +2872,9 @@ function renderItemsTable() {
       const low = Number(i.stock_gm) <= Number(i.reorder_level_gm);
       const extra = variant
         ? `${escapeHtml(globalThis.POSFootwear?.wearerLabel(i.wearer_type) || "—")} · ${escapeHtml(i.color || "—")} · Sz ${escapeHtml(i.size || "—")}`
-        : `${escapeHtml(i.code || "")}${i.hsn ? ` · HSN ${escapeHtml(i.hsn)}` : ""}`;
+        : isPharmacyShop()
+          ? `${escapeHtml(i.generic_name || i.local_name || i.code || "")}${i.medicine_type ? ` · ${escapeHtml(i.medicine_type)}` : ""}${i.batch_no ? ` · ${escapeHtml(i.batch_no)}` : ""}`
+          : `${escapeHtml(i.code || "")}${i.hsn ? ` · HSN ${escapeHtml(i.hsn)}` : ""}`;
       const group = footwear
         ? `${escapeHtml(i.category || "Style")} / ${escapeHtml(i.subcategory || "—")}`
         : `${escapeHtml(i.category || "—")} / ${escapeHtml(i.subcategory || "—")}`;
@@ -2855,7 +2898,7 @@ function renderItemsTable() {
         </div>
         <div class="item-card-foot">
           <div class="item-card-rates">
-            <span>Retail <em>${money(i.retail_rate)}${escapeHtml(suffix)}</em></span>
+            <span>${isPharmacyShop() ? "Selling" : "Retail"} <em>${money(i.retail_rate)}${escapeHtml(suffix)}</em></span>
             <span>B2B <em>${money(i.b2b_rate)}${escapeHtml(suffix)}</em></span>
           </div>
           <div class="item-card-actions">
@@ -5662,10 +5705,23 @@ $("item-form").addEventListener("submit", async (e) => {
     gst_rate: $("item-gst").value,
     mrp: $("item-mrp")?.value || "",
     barcode_qty: POSUnits.isCount(unit) ? Number($("item-barcode-qty")?.value) || 0 : 0,
+    barcode: $("item-own-barcode")?.value || "",
     stock_gm: POSUnits.toBase($("item-stock").value, unit),
     status: itemStatusOf($("item-status")?.value),
     image_url: state.itemImage || "",
   };
+  if (isPharmacyShop()) {
+    body.generic_name = $("item-local-name")?.value || "";
+    body.medicine_type = $("item-type")?.value || "";
+    body.manufacturer = $("item-mfr")?.value || "";
+    body.pack_size = $("item-pack-size")?.value || "";
+    body.pack_unit = $("item-pack-unit")?.value || "";
+    body.units_per_pack = Number($("item-upp")?.value) || 1;
+    body.batch_no = $("item-batch-no")?.value || "";
+    body.default_expiry = $("item-expiry")?.value || "";
+    body.expiry_date = $("item-expiry")?.value || "";
+    body.reorder_level_gm = POSUnits.toBase($("item-reorder")?.value || 0, unit);
+  }
   try {
     if ($("item-id").value) {
       await api(`/api/items/${$("item-id").value}`, { method: "PUT", body: JSON.stringify(body) });

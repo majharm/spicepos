@@ -34,7 +34,7 @@ test("PHP and Node wire barcode, damage, loyalty, and ledger modules", () => {
   assert.match(crud, /pos_assign_item_barcodes/);
   assert.match(crud, /pos_create_purchase_batch/);
   assert.match(crud, /damaged.*expired.*returned/);
-  assert.match(nodeAdv, /export function registerAdvanced/);
+  assert.match(nodeAdv, /savePharmacyItemFields/);
   assert.match(nodeAdv, /"unit"/);
   assert.match(nodeAdv, /async function sqlAll/);
   assert.match(nodeAdv, /consumePieceBarcode/);
