@@ -225,6 +225,18 @@ function applyFootwearMode() {
   if ($("set-name-lab")) $("set-name-lab").textContent = pharm ? "Pharmacy Name" : "Shop name";
   if ($("set-address-lab")) $("set-address-lab").textContent = pharm ? "Pharmacy Address" : "Address";
   if ($("set-phone-lab")) $("set-phone-lab").textContent = pharm ? "Mobile No." : "Phone";
+  if ($("cust-name-lab")) $("cust-name-lab").textContent = pharm ? "Customer Name" : "Name";
+  if ($("cust-mobile-lab")) $("cust-mobile-lab").textContent = pharm ? "Mobile No." : "Mobile";
+  if ($("cust-form-note")) {
+    $("cust-form-note").textContent = pharm
+      ? "Customer name, mobile, address, and doctor / prescription no. (optional)."
+      : "B2C retail or B2B wholesale. Outstanding grows on credit sales.";
+  }
+  if ($("customers-lede")) {
+    $("customers-lede").textContent = pharm
+      ? "Customer Name, Mobile No., Address, and Doctor / Prescription No."
+      : "Add accounts, collect outstanding dues, and print a receipt.";
+  }
   if ($("set-name")) $("set-name").placeholder = pharm ? "e.g. ABC MEDICAL" : "Your shop name";
   if ($("set-shop-legend")) $("set-shop-legend").textContent = pharm ? "Pharmacy" : "Shop";
   if ($("settings-profile-note")) {
@@ -622,6 +634,9 @@ function fillPharmacyBillCustomerFromCustomer(cust) {
   }
   if ($("bill-cust-address")) {
     $("bill-cust-address").value = isWalkInCustomer(c) ? "" : String(c?.address || "");
+  }
+  if ($("bill-doctor-rx") && document.activeElement !== $("bill-doctor-rx")) {
+    $("bill-doctor-rx").value = isWalkInCustomer(c) ? "" : String(c?.doctor_rx || "");
   }
   const shown = digitsMobile(c?.mobile);
   if ($("bill-cust-mobile") && isRealMobile(shown)) $("bill-cust-mobile").value = shown;
@@ -2297,6 +2312,7 @@ async function saveCustomer(fields) {
       referred_by: fields.referred_by || "",
       locale: fields.locale || "",
       address: fields.address || "",
+      doctor_rx: fields.doctor_rx || "",
     }),
   });
   const customer = data.customer;
@@ -3094,16 +3110,17 @@ function renderCustomersTable() {
   }
   fillDueCustomerSelect();
   $("customers-table").innerHTML = `<table><thead><tr>
-    <th>Code</th><th>Name</th><th>Type</th><th>Mobile</th><th>State</th><th>GSTIN</th><th>Outstanding</th><th></th>
+    <th>Code</th><th>${isPharmacyShop() ? "Customer Name" : "Name"}</th>${isPharmacyShop() ? "<th>Address</th><th>Doctor / Rx</th>" : "<th>Type</th>"}<th>${isPharmacyShop() ? "Mobile No." : "Mobile"}</th>${isPharmacyShop() ? "" : "<th>State</th><th>GSTIN</th>"}<th>Outstanding</th><th></th>
   </tr></thead><tbody>${state.customers
     .map(
       (c) => `<tr>
       <td>${escapeHtml(c.code)}</td>
       <td>${escapeHtml(c.business_name || c.name)}</td>
-      <td>${escapeHtml(c.type)}</td>
+      ${isPharmacyShop()
+        ? `<td>${escapeHtml(c.address || "—")}</td><td>${escapeHtml(c.doctor_rx || "—")}</td>`
+        : `<td>${escapeHtml(c.type)}</td>`}
       <td>${escapeHtml(c.mobile)}</td>
-      <td>${escapeHtml(c.state || "—")}</td>
-      <td>${escapeHtml(c.gstin || "—")}</td>
+      ${isPharmacyShop() ? "" : `<td>${escapeHtml(c.state || "—")}</td><td>${escapeHtml(c.gstin || "—")}</td>`}
       <td>${money(c.outstanding)}</td>
       <td>${Number(c.outstanding) > 0 ? `<button class="btn primary" type="button" data-collect-due="${escapeHtml(c.id)}">Collect</button>` : ""}</td>
     </tr>`,
@@ -6012,6 +6029,7 @@ $("customer-form").addEventListener("submit", async (e) => {
       referred_by: $("cust-ref")?.value || "",
       locale: $("cust-locale")?.value || "",
       address: $("cust-address")?.value || "",
+      doctor_rx: $("cust-doctor-rx")?.value || "",
     });
     $("cust-hint").textContent = "Saved";
     $("cust-hint").className = "hint ok";
@@ -6071,10 +6089,12 @@ $("quick-customer-form")?.addEventListener("submit", async (e) => {
       name: $("qc-name").value,
       mobile: $("qc-mobile").value,
       address: $("qc-address")?.value || "",
+      doctor_rx: $("qc-doctor-rx")?.value || "",
     });
     $("qc-name").value = "";
     $("qc-mobile").value = "";
     if ($("qc-address")) $("qc-address").value = "";
+    if ($("qc-doctor-rx")) $("qc-doctor-rx").value = "";
     if (hint) {
       hint.textContent = `Added ${customer?.name || "customer"}`;
       hint.className = "hint ok";

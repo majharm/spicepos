@@ -402,7 +402,7 @@ function pos_ensure_i18n_columns() {
     "ndps_licence_no" => "VARCHAR(80) NULL",
   ]);
   pos_ensure_columns("staff_users", ["locale" => "VARCHAR(16) NULL"]);
-  pos_ensure_columns("customers", ["locale" => "VARCHAR(16) NULL", "address" => "VARCHAR(500) NULL"]);
+  pos_ensure_columns("customers", ["locale" => "VARCHAR(16) NULL", "address" => "VARCHAR(500) NULL", "doctor_rx" => "VARCHAR(180) NULL"]);
   pos_ensure_columns("items", ["local_name" => "VARCHAR(255) NULL"]);
   pos_ensure_columns("notifications", ["locale" => "VARCHAR(16) NULL"]);
 }
@@ -1243,6 +1243,10 @@ function pos_ensure_sales_schema() {
       "batch_no" => "VARCHAR(64) NULL",
       "expiry_date" => "DATE NULL",
       "pack_label" => "VARCHAR(64) NULL",
+    ]);
+    pos_ensure_columns("customers", [
+      "address" => "VARCHAR(500) NULL",
+      "doctor_rx" => "VARCHAR(180) NULL",
     ]);
   }
 }

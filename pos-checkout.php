@@ -102,10 +102,21 @@ function pos_checkout_sale($bid, $branchId, $uid, $auth, $body) {
       );
     } catch (Exception $e) { /* optional pharmacy bill columns */ }
     $walkIn = (($customer["code"] ?? "") === "CUS-001") || preg_match("/^walk-?in$/i", trim((string) ($customer["name"] ?? "")));
-    if ($custAddr !== "" && !$walkIn) {
+    if (!$walkIn && ($custAddr !== "" || $doctorRx !== "")) {
       try {
-        pos_q("UPDATE customers SET address = ? WHERE id = ? AND business_id = ?", "sss", [$custAddr, $customer["id"], $bid]);
-      } catch (Exception $e) { /* optional */ }
+        pos_q("UPDATE customers SET address = COALESCE(?, address), doctor_rx = COALESCE(?, doctor_rx) WHERE id = ? AND business_id = ?", "ssss", [
+          $custAddr !== "" ? $custAddr : null,
+          $doctorRx !== "" ? $doctorRx : null,
+          $customer["id"],
+          $bid,
+        ]);
+      } catch (Exception $e) {
+        if ($custAddr !== "") {
+          try {
+            pos_q("UPDATE customers SET address = ? WHERE id = ? AND business_id = ?", "sss", [$custAddr, $customer["id"], $bid]);
+          } catch (Exception $e2) { /* optional */ }
+        }
+      }
     }
     foreach ($built as $line) {
       $lineId = pos_uuid();

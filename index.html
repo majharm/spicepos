@@ -134,6 +134,7 @@
                   <input id="qc-name" name="qc-name" placeholder="Customer Name" maxlength="120" />
                   <input id="qc-mobile" name="qc-mobile" placeholder="Mobile No." inputmode="tel" maxlength="15" />
                   <input id="qc-address" name="qc-address" class="pharmacy-only" hidden placeholder="Address" maxlength="500" />
+                  <input id="qc-doctor-rx" name="qc-doctor-rx" class="pharmacy-only" hidden placeholder="Doctor / Rx (optional)" maxlength="180" />
                   <button class="btn primary" type="submit" id="qc-save">Add</button>
                   <span class="hint" id="qc-hint"></span>
                 </form>
@@ -426,22 +427,23 @@
               <div class="items-hero-copy">
                 <p class="items-kicker">Sales</p>
                 <h3>Customers</h3>
-                <p class="lede">Add accounts, collect outstanding dues, and print a receipt.</p>
+                <p class="lede" id="customers-lede">Add accounts, collect outstanding dues, and print a receipt.</p>
               </div>
               <div class="items-hero-stats" id="customers-hero-stats"></div>
             </header>
             <div class="items-split">
               <form class="settings item-composer" id="customer-form" autocomplete="off">
                 <div class="item-composer-top">
-                  <p class="item-mode">Customer</p>
-                  <p class="item-composer-note">B2C retail or B2B wholesale. Outstanding grows on credit sales.</p>
+                  <p class="item-mode" id="cust-form-mode">Customer</p>
+                  <p class="item-composer-note" id="cust-form-note">B2C retail or B2B wholesale. Outstanding grows on credit sales.</p>
                 </div>
                 <fieldset class="item-block">
                   <legend>Details</legend>
-                  <label>Name <input id="cust-name" required /></label>
-                  <label>Business name <input id="cust-biz" /></label>
-                  <label>Mobile <input id="cust-mobile" required /></label>
+                  <label><span id="cust-name-lab">Name</span> <input id="cust-name" required /></label>
+                  <label class="pharmacy-hide">Business name <input id="cust-biz" /></label>
+                  <label><span id="cust-mobile-lab">Mobile</span> <input id="cust-mobile" required type="tel" inputmode="numeric" maxlength="15" /></label>
                   <label class="full">Address <input id="cust-address" maxlength="500" placeholder="House, street, area" /></label>
+                  <label class="full pharmacy-only" id="cust-doctor-wrap" hidden>Doctor Name / Prescription No. <input id="cust-doctor-rx" maxlength="180" placeholder="If required" /></label>
                   <label>Type
                     <select id="cust-type">
                       <option value="b2c">B2C retail</option>
@@ -1605,7 +1607,7 @@
     <script src="./js/support.js?v=20260905deploy136" defer></script>
     <script src="./js/qrcode.iife.js?v=20260905qr1" defer></script>
     <script src="./js/qr-notify.js?v=20260905deploy144" defer></script>
-    <script src="./js/app.js?v=20260913pharmacy4" defer></script>
+    <script src="./js/app.js?v=20260913pharmacy5" defer></script>
     <script src="./js/growth.js?v=20260905deploy145" defer></script>
     <script src="./js/offers-ui.js?v=20260905deploy136" defer></script>
   </body>
