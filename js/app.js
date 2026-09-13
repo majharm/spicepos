@@ -544,6 +544,11 @@ function paintBillCustomer() {
     paintCounterDue(null);
     return;
   }
+  if (isPharmacyShop()) {
+    el.textContent = "";
+    paintCounterDue(c);
+    return;
+  }
   const name = String(c.business_name || c.name || "Walk-in").trim() || "Walk-in";
   const mobile = digitsMobile(c.mobile);
   el.textContent = isRealMobile(mobile) ? `${name} · ${mobile}` : name;

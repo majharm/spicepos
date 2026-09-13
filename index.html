@@ -126,7 +126,7 @@
                     <option value="card" data-i18n="pos.card">Card</option>
                     <option value="credit" data-i18n="pos.credit">Credit</option>
               </select>
-              <input id="counter-mobile" type="tel" inputmode="numeric" maxlength="15" autocomplete="off" placeholder="Mobile No." aria-label="Mobile No." />
+              <input id="counter-mobile" class="pharmacy-hide" type="tel" inputmode="numeric" maxlength="15" autocomplete="off" placeholder="Mobile No." aria-label="Mobile No." />
               <select id="customer" class="select" aria-label="Customer"></select>
               <details class="quick-customer-wrap" id="quick-customer-wrap">
                 <summary title="Add customer">+</summary>
@@ -167,7 +167,7 @@
                 <div class="ticket-head-copy">
                   <h2 data-i18n="pos.bill">Bill</h2>
                   <p class="ticket-sub" id="ticket-sub">Tap a product or scan</p>
-                  <p class="ticket-cust" id="bill-customer"></p>
+                  <p class="ticket-cust pharmacy-hide" id="bill-customer"></p>
                   <p class="ticket-due" id="bill-due" hidden></p>
                   <div class="pharm-bill-cust pharmacy-only" id="pharm-bill-cust" hidden>
                     <label>Customer Name <input id="bill-cust-name" maxlength="180" autocomplete="name" placeholder="Patient / customer name" /></label>
