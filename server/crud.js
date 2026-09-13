@@ -357,10 +357,21 @@ export function registerCrud(app) {
     }
   });
 
-  app.get("/api/items/import/template", (_req, res) => {
-    const xml = itemImportTemplateXml();
+  app.get("/api/items/import/template", async (_req, res) => {
+    let biz = {};
+    try {
+      const [rows] = await query("SELECT name, category, business_type FROM businesses WHERE id=?", [bid()]);
+      biz = rows[0] || {};
+    } catch {
+      biz = {};
+    }
+    const xml = itemImportTemplateXml(biz);
+    const pharm = POSFootwear.isPharmacyShop(biz);
     res.setHeader("Content-Type", "application/vnd.ms-excel; charset=utf-8");
-    res.setHeader("Content-Disposition", 'attachment; filename="pos-items-template.xls"');
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="${pharm ? "pos-pharmacy-items-template.xls" : "pos-items-template.xls"}"`,
+    );
     res.send(xml);
   });
 

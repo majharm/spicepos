@@ -2727,6 +2727,55 @@ body.restaurant-mode.counter-mode .stage.is-counter .card-qty { display: none; }
 }
 .item-empty-card strong { display: block; color: var(--text); margin-bottom: 6px; }
 .item-empty-card p { margin: 0; font-size: 13px; line-height: 1.45; }
+body.pharmacy-mode .items-split {
+  grid-template-columns: minmax(280px, 0.88fr) minmax(380px, 1.32fr);
+}
+body.pharmacy-mode #items-table.table-wrap,
+body.pharmacy-mode .items-library-list {
+  display: block;
+  overflow: auto;
+  max-height: min(72vh, 880px);
+}
+.items-pharm-table {
+  width: 100%;
+  min-width: 860px;
+  border-collapse: collapse;
+  font-size: 12px;
+  background: #fff;
+}
+.items-pharm-table th,
+.items-pharm-table td {
+  padding: 8px;
+  border-bottom: 1px solid var(--line);
+  vertical-align: middle;
+  text-align: left;
+}
+.items-pharm-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--bg-tint-soft, #f8fafc);
+  font-size: 10px;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.items-pharm-table .pharm-n {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.items-pharm-table .pharm-med { font-weight: 800; min-width: 8em; }
+.items-pharm-table tbody tr { cursor: pointer; }
+.items-pharm-table tbody tr:hover { background: #f8fafc; }
+.items-pharm-table tr.is-editing {
+  background: #f0fdfa;
+  box-shadow: inset 3px 0 0 var(--vel-teal, #0d9488);
+}
+.items-pharm-table tr.is-inactive { opacity: 0.72; }
+.items-pharm-table tr[hidden] { display: none !important; }
+.items-pharm-table .item-card-actions { justify-content: flex-end; }
 
 .item-import-bar {
   display: flex;

@@ -222,6 +222,17 @@ function applyFootwearMode() {
   if ($("item-hsn")) $("item-hsn").placeholder = copy.hsn || "e.g. 1234";
   if ($("item-size")) $("item-size").placeholder = fw ? "e.g. 6, 7, 8 or 5" : ap ? "S, M, L, XL or 32, 34" : "e.g. 6, 7, 8 or 5";
   if ($("items-lede")) $("items-lede").textContent = copy.lede || "Name, photo, HSN code, unit type, rates, and stock.";
+  if ($("item-catalog-search")) {
+    $("item-catalog-search").placeholder = copy.catalogSearch || copy.search || "Search name, HSN, barcode…";
+  }
+  if ($("item-import-copy")) {
+    $("item-import-copy").textContent = copy.importCopy
+      || "Bulk add from Excel. Download the template, fill one item per row, then upload .xlsx, Excel XML, or CSV.";
+  }
+  if ($("item-composer-note")) {
+    $("item-composer-note").textContent = copy.composerNote
+      || "Tap a catalog card to edit. Quantity items can take a typed or scanned barcode.";
+  }
   if ($("set-name-lab")) $("set-name-lab").textContent = pharm ? "Pharmacy Name" : "Shop name";
   if ($("set-address-lab")) $("set-address-lab").textContent = pharm ? "Pharmacy Address" : "Address";
   if ($("set-phone-lab")) $("set-phone-lab").textContent = pharm ? "Mobile No." : "Phone";
@@ -2900,7 +2911,7 @@ function resetItemForm() {
   if ($("item-save")) $("item-save").textContent = "Save item";
   if ($("item-mode")) $("item-mode").textContent = "New item";
   $("item-form")?.classList.remove("is-editing");
-  document.querySelectorAll("#items-table .item-card.is-editing").forEach((el) => el.classList.remove("is-editing"));
+  document.querySelectorAll("#items-table .is-editing").forEach((el) => el.classList.remove("is-editing"));
   paintItemStatus("active");
   if (isPharmacyShop()) {
     if ($("item-category") && !$("item-category").value) $("item-category").value = defaultItemCategory();
@@ -2947,7 +2958,7 @@ function fillItemForm(i) {
   $("item-form")?.classList.add("is-editing");
   $("item-hint").textContent = `Editing ${i.code || i.name}`;
   $("item-hint").className = "hint";
-  document.querySelectorAll("#items-table .item-card.is-editing").forEach((el) => el.classList.remove("is-editing"));
+  document.querySelectorAll("#items-table .is-editing").forEach((el) => el.classList.remove("is-editing"));
   document.querySelector(`#items-table [data-edit-item="${CSS.escape(i.id)}"]`)?.classList.add("is-editing");
   $("item-form")?.scrollIntoView({ block: "start" });
   $("item-name")?.focus();
@@ -2976,10 +2987,43 @@ function renderItemsTable() {
     el.innerHTML = `<div class="item-empty-card">
       <strong>No items yet</strong>
       <p>${isPharmacyShop()
-        ? "Add medicine name, generic, type, pack, batch, expiry, and rates on the left, or load a demo catalog."
+        ? "Add generic, type, pack, batch, expiry, rates, and stock on the left — or upload the Excel template."
         : "Add a name, unit, and rates on the left. Saved items show here and on Counter."}</p>
       ${isPharmacyShop() ? `<button class="btn primary" type="button" id="item-demo-seed">Add demo medicines</button>` : ""}
     </div>`;
+    return;
+  }
+  if (isPharmacyShop()) {
+    el.innerHTML = `<table class="items-pharm-table"><thead><tr>
+      <th>Medicine</th><th>Generic</th><th>Type</th><th>Pack</th><th>Batch</th><th>Expiry</th>
+      <th class="pharm-n">MRP</th><th class="pharm-n">Rate</th><th>Stock</th><th></th>
+    </tr></thead><tbody>${items
+      .map((i) => {
+        const low = Number(i.stock_gm) <= Number(i.reorder_level_gm);
+        const inactive = itemStatusOf(i.status) === "inactive";
+        const editing = $("item-id")?.value === i.id;
+        const search = itemSearchHay(i);
+        const pack = medicinePackLabel(i) || i.pack_size || "—";
+        const expiry = formatExpiryShort(i.default_expiry) || "—";
+        return `<tr class="${editing ? "is-editing " : ""}${inactive ? "is-inactive " : ""}" data-item-card data-edit-item="${escapeHtml(i.id)}" data-item-search="${escapeHtml(search)}" data-item-low="${low ? "1" : "0"}" data-item-inactive="${inactive ? "1" : "0"}">
+        <td class="pharm-med">${escapeHtml(i.name)}${inactive ? ` <span class="item-chip stock low">Inactive</span>` : ""}</td>
+        <td>${escapeHtml(i.generic_name || i.local_name || "—")}</td>
+        <td>${escapeHtml(i.medicine_type || "—")}</td>
+        <td>${escapeHtml(pack)}</td>
+        <td>${escapeHtml(i.batch_no || "—")}</td>
+        <td>${escapeHtml(expiry)}</td>
+        <td class="pharm-n">${money(i.mrp || i.retail_rate)}</td>
+        <td class="pharm-n">${money(i.retail_rate)}</td>
+        <td><span class="item-chip ${low ? "stock low" : "stock ok"}">${escapeHtml(fmtQty(i.stock_gm, i))}</span></td>
+        <td><div class="item-card-actions">
+          <button class="btn" data-edit-item="${escapeHtml(i.id)}" type="button">Edit</button>
+          <button class="btn" data-toggle-item="${escapeHtml(i.id)}" type="button">${inactive ? "Activate" : "Deactivate"}</button>
+          <button class="btn" data-recv="${escapeHtml(i.id)}" type="button">${escapeHtml(POSUnits.receiveLabel(itemUnit(i)))}</button>
+        </div></td>
+      </tr>`;
+      })
+      .join("")}</tbody></table>`;
+    filterItemsCatalog();
     return;
   }
   el.innerHTML = items

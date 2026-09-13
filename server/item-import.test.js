@@ -3,6 +3,7 @@ import test from "node:test";
 import zlib from "node:zlib";
 import {
   ITEM_IMPORT_HEADERS,
+  PHARMACY_ITEM_IMPORT_HEADERS,
   itemBodyFromImportRow,
   itemImportStockToBase,
   itemImportTemplateXml,
@@ -74,6 +75,39 @@ test("parseItemImportGrid reads workbook XML from filename .xls", () => {
 
 test("import requires a Name column", () => {
   assert.throws(() => mapItemImportRows([["Nope"], ["x"]]), /Name column/);
+});
+
+test("pharmacy Excel Type is medicine type, not wearer", () => {
+  const grid = parseCsv(
+    `Name,Type,Generic Name,Batch,Expiry,Pack Size,Items per Pack,MRP,Retail,Stock\nDolo 650,Tablet,Paracetamol,B1,2027-09-30,15 Tablets,15,32,30,150\n`,
+  );
+  const rows = mapItemImportRows(grid);
+  assert.equal(rows[0].medicine_type, "Tablet");
+  assert.equal(rows[0].generic_name, "Paracetamol");
+  assert.equal(rows[0].batch_no, "B1");
+  assert.equal(rows[0].units_per_pack, "15");
+  const body = itemBodyFromImportRow(rows[0], { category: "Medical" });
+  assert.equal(body.medicine_type, "Tablet");
+  assert.equal(body.generic_name, "Paracetamol");
+  assert.equal(body.batch_no, "B1");
+  assert.equal(body.default_expiry, "2027-09-30");
+  assert.equal(body.units_per_pack, 15);
+  assert.equal(body.mrp, 32);
+  assert.equal(body.retail_rate, 30);
+  assert.equal(body.stock_gm, 150);
+});
+
+test("pharmacy template uses medicine columns and sample rows", () => {
+  const xml = itemImportTemplateXml({ category: "Medical" });
+  assert.match(xml, /Generic Name/);
+  assert.match(xml, /Paracetamol 500mg/);
+  assert.doesNotMatch(xml, /Turmeric powder/);
+  const grid = parseSpreadsheetMl(xml);
+  assert.deepEqual(grid[0], PHARMACY_ITEM_IMPORT_HEADERS);
+  const rows = mapItemImportRows(grid);
+  assert.equal(rows[0].name, "Paracetamol 500mg");
+  assert.equal(rows[0].medicine_type, "Tablet");
+  assert.equal(itemBodyFromImportRow(rows[0], { category: "Medical" }).pack_unit, "Strip");
 });
 
 function zipStore(files) {

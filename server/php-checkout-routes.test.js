@@ -157,6 +157,9 @@ test("PHP customer insert bind types match placeholders", () => {
   assert.match(read("pos-item-import.php"), /\(string\) \$src, \$blocks/);
   assert.match(read("server/crud.js"), /\/api\/items\/import/);
   assert.match(read("server/item-import.js"), /ITEM_IMPORT_HEADERS/);
+  assert.match(read("server/item-import.js"), /PHARMACY_ITEM_IMPORT_HEADERS/);
+  assert.match(read("pos-item-import.php"), /Generic Name/);
+  assert.match(read("pos-item-import.php"), /medicine_type/);
   assert.match(read("pos-php-core.php"), /pos_qr_public_dispatch/);
   assert.match(read("pos-php-till.php"), /pos_qr_staff_dispatch/);
   assert.match(read("pos-qr-ordering.php"), /CREATE TABLE IF NOT EXISTS qr_orders/);
@@ -329,7 +332,7 @@ test("POS boot skips API probe and slims catalog photos", () => {
   assert.match(index, /qrcode\.iife\.js[^>]+defer/);
   assert.match(index, /preload="none"/);
   assert.match(index, /pos-api\.js\?v=20260905deploy154/);
-  assert.match(index, /app\.js\?v=20260913pharmacy5/);
+  assert.match(index, /app\.js\?v=20260913pharmacy6/);
   assert.doesNotMatch(index, /app\.js\?v=20260905deploy167/);
   assert.doesNotMatch(index, /app\.js\?v=20260905deploy166/);
   assert.match(index, /offers\.js\?v=20260905deploy170/);
@@ -380,10 +383,10 @@ test("Restaurant Counter can create named dining tables", () => {
   assert.match(core, /function pos_clip_floor_id/);
   assert.match(core, /dining_tables_json/);
   assert.match(till, /dining-tables/);
-  assert.match(index, /pos\.css\?v=20260913pharmacy4/);
+  assert.match(index, /pos\.css\?v=20260913pharmacy5/);
   assert.match(index, /restaurant\.js\?v=20260905deploy176/);
-  assert.match(index, /app\.js\?v=20260913pharmacy5/);
-  assert.match(index, /footwear\.js\?v=20260913pharmacy4/);
+  assert.match(index, /app\.js\?v=20260913pharmacy6/);
+  assert.match(index, /footwear\.js\?v=20260913pharmacy5/);
 });
 
 test("PHP dining layout clip keeps floors and old table lists", { skip: hasPhpCli() ? false : "php CLI not installed" }, () => {

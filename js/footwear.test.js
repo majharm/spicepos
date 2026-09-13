@@ -326,6 +326,12 @@ test("Medical shops show pharmacy medicine fields on the item form", () => {
   assert.equal(F.medicinePackLabel({ pack_size: "10", pack_unit: "Tab" }), "10 Tab");
   assert.equal(F.formatExpiryShort("2027-09-30"), "09/27");
   assert.match(css, /body:not\(\.pharmacy-mode\) \.pharmacy-only/);
+  assert.match(css, /items-pharm-table/);
+  assert.match(index, /id="item-import-copy"/);
+  assert.match(index, /id="item-composer-note"/);
+  assert.match(app, /items-pharm-table/);
+  assert.equal(F.itemFormCopy({ category: "Medical" }).lede, "Generic, type, pack, batch, expiry, rates, and stock.");
+  assert.match(F.itemFormCopy({ category: "Medical" }).importCopy, /Excel/);
   assert.match(adv, /savePharmacyItemFields/);
   const demo = F.demoItems({ category: "Medical" });
   assert.equal(demo.length, 8);

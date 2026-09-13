@@ -69,36 +69,99 @@ const HEADER_ALIASES = {
   manufacturerbarcode: "mfr_barcode",
   mfrbarcode: "mfr_barcode",
   factorybarcode: "mfr_barcode",
-    generic: "generic_name",
-    genericname: "generic_name",
-    localname: "local_name",
-    regionalname: "local_name",
-    manufacturer: "manufacturer",
-    company: "manufacturer",
-    packsize: "pack_size",
-    packunit: "pack_unit",
-    itemsperpack: "units_per_pack",
-    itemsperstrip: "units_per_pack",
-    unitspperpack: "units_per_pack",
-    medicinetype: "medicine_type",
-    batch: "batch_no",
-    batchno: "batch_no",
-    expiry: "default_expiry",
-    expirydate: "default_expiry",
-    reorder: "reorder_level",
-    reorderlevel: "reorder_level",
-    code: "code",
+  generic: "generic_name",
+  genericname: "generic_name",
+  localname: "local_name",
+  regionalname: "local_name",
+  manufacturer: "manufacturer",
+  company: "manufacturer",
+  companyname: "manufacturer",
+  mfr: "manufacturer",
+  pack: "pack_size",
+  packsize: "pack_size",
+  packunit: "pack_unit",
+  itemsperpack: "units_per_pack",
+  itemsperstrip: "units_per_pack",
+  unitsperpack: "units_per_pack",
+  unitspperpack: "units_per_pack",
+  type: "medicine_type",
+  form: "medicine_type",
+  medicinetype: "medicine_type",
+  batch: "batch_no",
+  batchno: "batch_no",
+  batchnumber: "batch_no",
+  expiry: "default_expiry",
+  expirydate: "default_expiry",
+  exp: "default_expiry",
+  expdate: "default_expiry",
+  reorder: "reorder_level",
+  reorderlevel: "reorder_level",
+  code: "code",
   sku: "code",
   itemcode: "code",
   colour: "color",
   color: "color",
   size: "size",
   wearer: "wearer_type",
-  type: "wearer_type",
+  wearertype: "wearer_type",
   girlsboys: "wearer_type",
 };
 
-export function itemImportTemplateSheets() {
+export const PHARMACY_ITEM_IMPORT_HEADERS = [
+  "Name",
+  "Generic Name",
+  "Medicine Type",
+  "Manufacturer",
+  "Category",
+  "Unit",
+  "Pack Size",
+  "Pack Unit",
+  "Items per Pack",
+  "Batch",
+  "Expiry",
+  "MRP",
+  "GST %",
+  "Retail",
+  "Purchase",
+  "Stock",
+  "Barcode",
+  "Code",
+  "Reorder",
+];
+
+export function itemImportHeaders(biz) {
+  return POSFootwear.isPharmacyShop(biz || {}) ? PHARMACY_ITEM_IMPORT_HEADERS : ITEM_IMPORT_HEADERS;
+}
+
+function pharmacyItemImportSheets() {
+  return [
+    {
+      name: "Items",
+      headers: PHARMACY_ITEM_IMPORT_HEADERS,
+      rows: [
+        ["Paracetamol 500mg", "Paracetamol", "Tablet", "Cipla", "Medical", "PCS", "10 Tablets", "Strip", 10, "PCM2401", "2027-09-30", 20, 12, 18, 11, 200, "", "", 40],
+        ["Cough syrup 100ml", "Dextromethorphan", "Syrup", "Abbott", "Medical", "PCS", "100 ml", "Bottle", 1, "CSY2408", "2027-03-31", 95, 12, 88, 62, 40, "", "", 10],
+      ],
+    },
+    {
+      name: "Help",
+      headers: ["Field", "Notes"],
+      rows: [
+        ["Name", "Required. Brand / product name on the strip or bottle."],
+        ["Generic Name", "Salt name (maps to Generic Name on the Items form)."],
+        ["Medicine Type", "Tablet, Capsule, Syrup, Injection, Cream, and so on."],
+        ["Pack Size / Pack Unit / Items per Pack", "e.g. 10 Tablets, Strip, 10."],
+        ["Batch / Expiry", "Default batch and expiry (YYYY-MM-DD) for the catalog and Counter."],
+        ["MRP / Retail / Purchase / Stock", "Rates in rupees. Stock is quantity in the Unit (usually PCS)."],
+        ["Code", "Leave blank to create a new SKU. Matching Code or Barcode updates that item."],
+        ["Limit", "Up to 500 rows per upload. .xlsx, Excel XML, or CSV."],
+      ],
+    },
+  ];
+}
+
+export function itemImportTemplateSheets(biz) {
+  if (POSFootwear.isPharmacyShop(biz || {})) return pharmacyItemImportSheets();
   return [
     {
       name: "Items",
@@ -123,8 +186,8 @@ export function itemImportTemplateSheets() {
   ];
 }
 
-export function itemImportTemplateXml() {
-  return workbookXml(itemImportTemplateSheets());
+export function itemImportTemplateXml(biz) {
+  return workbookXml(itemImportTemplateSheets(biz));
 }
 
 function headerKey(raw) {

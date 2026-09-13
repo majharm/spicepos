@@ -4,7 +4,14 @@ function pos_item_import_max_rows() {
   return 500;
 }
 
-function pos_item_import_headers() {
+function pos_item_import_headers($biz = null) {
+  if (function_exists("pos_shop_kind") && pos_shop_kind($biz ?: []) === "pharmacy") {
+    return [
+      "Name", "Generic Name", "Medicine Type", "Manufacturer", "Category", "Unit",
+      "Pack Size", "Pack Unit", "Items per Pack", "Batch", "Expiry",
+      "MRP", "GST %", "Retail", "Purchase", "Stock", "Barcode", "Code", "Reorder",
+    ];
+  }
   return [
     "Name", "HSN", "Category", "Subcategory", "Unit", "MRP", "GST %", "Retail", "B2B", "Purchase",
     "Stock", "Barcode", "Manufacturer barcode", "Code", "Colour", "Size", "Wearer",
@@ -30,22 +37,59 @@ function pos_item_import_header_key($raw) {
     "stock" => "stock", "qty" => "stock", "quantity" => "stock", "stockqty" => "stock",
     "barcode" => "barcode", "ownbarcode" => "barcode", "ean" => "barcode",
     "manufacturerbarcode" => "mfr_barcode", "mfrbarcode" => "mfr_barcode", "factorybarcode" => "mfr_barcode",
+    "generic" => "generic_name", "genericname" => "generic_name",
+    "localname" => "local_name", "regionalname" => "local_name",
+    "manufacturer" => "manufacturer", "company" => "manufacturer", "companyname" => "manufacturer", "mfr" => "manufacturer",
+    "pack" => "pack_size", "packsize" => "pack_size", "packunit" => "pack_unit",
+    "itemsperpack" => "units_per_pack", "itemsperstrip" => "units_per_pack",
+    "unitsperpack" => "units_per_pack", "unitspperpack" => "units_per_pack",
+    "type" => "medicine_type", "form" => "medicine_type", "medicinetype" => "medicine_type",
+    "batch" => "batch_no", "batchno" => "batch_no", "batchnumber" => "batch_no",
+    "expiry" => "default_expiry", "expirydate" => "default_expiry", "exp" => "default_expiry", "expdate" => "default_expiry",
+    "reorder" => "reorder_level", "reorderlevel" => "reorder_level",
     "code" => "code", "sku" => "code", "itemcode" => "code",
     "colour" => "color", "color" => "color",
     "size" => "size",
-    "wearer" => "wearer_type", "type" => "wearer_type", "girlsboys" => "wearer_type",
+    "wearer" => "wearer_type", "wearertype" => "wearer_type", "girlsboys" => "wearer_type",
   ];
   return $aliases[$n] ?? "";
 }
 
-function pos_item_import_template_xml() {
+function pos_item_import_template_xml($biz = null) {
   if (!function_exists("pos_workbook_xml")) {
     require_once __DIR__ . "/pos-reports.php";
+  }
+  $pharmacy = function_exists("pos_shop_kind") && pos_shop_kind($biz ?: []) === "pharmacy";
+  if ($pharmacy) {
+    return pos_workbook_xml([
+      [
+        "name" => "Items",
+        "headers" => pos_item_import_headers($biz),
+        "rows" => [
+          ["Paracetamol 500mg", "Paracetamol", "Tablet", "Cipla", "Medical", "PCS", "10 Tablets", "Strip", 10, "PCM2401", "2027-09-30", 20, 12, 18, 11, 200, "", "", 40],
+          ["Cough syrup 100ml", "Dextromethorphan", "Syrup", "Abbott", "Medical", "PCS", "100 ml", "Bottle", 1, "CSY2408", "2027-03-31", 95, 12, 88, 62, 40, "", "", 10],
+        ],
+      ],
+      [
+        "name" => "Help",
+        "headers" => ["Field", "Notes"],
+        "rows" => [
+          ["Name", "Required. Brand / product name on the strip or bottle."],
+          ["Generic Name", "Salt name (maps to Generic Name on the Items form)."],
+          ["Medicine Type", "Tablet, Capsule, Syrup, Injection, Cream, and so on."],
+          ["Pack Size / Pack Unit / Items per Pack", "e.g. 10 Tablets, Strip, 10."],
+          ["Batch / Expiry", "Default batch and expiry (YYYY-MM-DD) for the catalog and Counter."],
+          ["MRP / Retail / Purchase / Stock", "Rates in rupees. Stock is quantity in the Unit (usually PCS)."],
+          ["Code", "Leave blank to create a new SKU. Matching Code or Barcode updates that item."],
+          ["Limit", "Up to 500 rows per upload. .xlsx, Excel XML, or CSV."],
+        ],
+      ],
+    ]);
   }
   return pos_workbook_xml([
     [
       "name" => "Items",
-      "headers" => pos_item_import_headers(),
+      "headers" => pos_item_import_headers($biz),
       "rows" => [
         ["Turmeric powder", "091030", "Whole Spices", "Powder", "GM", 220, 5, 240, 210, 180, 5000, "", "", "", "", "", ""],
         ["Soap bar", "", "Grocery", "", "PCS", 25, 5, 30, 28, 22, 24, "", "", "", "", "", ""],
@@ -396,6 +440,22 @@ function pos_item_body_from_import_row($row, $biz) {
     "code" => trim((string) ($row["code"] ?? "")),
     "gst_rate" => (trim((string) ($row["gst"] ?? "")) === "" ? 5 : (float) $row["gst"]),
   ];
+  $generic = trim((string) ($row["generic_name"] ?? $row["local_name"] ?? ""));
+  if ($generic !== "") {
+    $body["generic_name"] = $generic;
+    $body["local_name"] = $generic;
+  }
+  if (trim((string) ($row["manufacturer"] ?? "")) !== "") $body["manufacturer"] = trim((string) $row["manufacturer"]);
+  if (trim((string) ($row["medicine_type"] ?? "")) !== "") $body["medicine_type"] = trim((string) $row["medicine_type"]);
+  if (trim((string) ($row["pack_size"] ?? "")) !== "") $body["pack_size"] = trim((string) $row["pack_size"]);
+  if (trim((string) ($row["pack_unit"] ?? "")) !== "") $body["pack_unit"] = trim((string) $row["pack_unit"]);
+  if (trim((string) ($row["units_per_pack"] ?? "")) !== "") $body["units_per_pack"] = max(1, (int) $row["units_per_pack"]);
+  if (trim((string) ($row["batch_no"] ?? "")) !== "") $body["batch_no"] = trim((string) $row["batch_no"]);
+  if (trim((string) ($row["default_expiry"] ?? "")) !== "") $body["default_expiry"] = trim((string) $row["default_expiry"]);
+  if (trim((string) ($row["reorder_level"] ?? "")) !== "") {
+    $reorder = pos_item_import_stock_to_base($row["reorder_level"], $unit);
+    if ($reorder !== null) $body["reorder_level_gm"] = $reorder;
+  }
   if (trim((string) ($row["mrp"] ?? "")) !== "") $body["mrp"] = (float) $row["mrp"];
   if (trim((string) ($row["retail"] ?? "")) !== "") $body["retail_rate"] = (float) $row["retail"];
   if (trim((string) ($row["b2b"] ?? "")) !== "") $body["b2b_rate"] = (float) $row["b2b"];
@@ -414,7 +474,7 @@ function pos_item_import_run($bid, $body) {
   $decoded = pos_item_import_decode_upload($body);
   $grid = isset($decoded["grid"]) ? $decoded["grid"] : pos_parse_item_import_grid($decoded["bin"], $decoded["filename"] ?? "");
   $mapped = pos_map_item_import_rows($grid);
-  $bizRows = pos_q("SELECT category, business_type FROM businesses WHERE id = ? LIMIT 1", "s", [$bid]);
+  $bizRows = pos_q("SELECT name, category, business_type FROM businesses WHERE id = ? LIMIT 1", "s", [$bid]);
   $biz = $bizRows[0] ?? [];
   $created = [];
   $updated = [];
@@ -449,9 +509,15 @@ function pos_item_import_run($bid, $body) {
 
 function pos_item_import_dispatch($path, $method, $body, $bid) {
   if ($path === "items/import/template" && $method === "GET") {
-    $xml = pos_item_import_template_xml();
+    $bizRows = [];
+    try {
+      $bizRows = pos_q("SELECT name, category, business_type FROM businesses WHERE id = ? LIMIT 1", "s", [$bid]);
+    } catch (Exception $e) { $bizRows = []; }
+    $biz = $bizRows[0] ?? [];
+    $xml = pos_item_import_template_xml($biz);
+    $pharm = function_exists("pos_shop_kind") && pos_shop_kind($biz) === "pharmacy";
     header("Content-Type: application/vnd.ms-excel; charset=utf-8");
-    header('Content-Disposition: attachment; filename="pos-items-template.xls"');
+    header('Content-Disposition: attachment; filename="' . ($pharm ? "pos-pharmacy-items-template.xls" : "pos-items-template.xls") . '"');
     echo $xml;
     exit;
   }
