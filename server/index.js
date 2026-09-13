@@ -13,7 +13,7 @@ import { listAllBatches, upsertBatch } from "./pharmacy-stock.js";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.join(__dirname, "..");
 const app = express();
-const APP_VERSION = "pharmacy-1";
+const APP_VERSION = "pharmacy-2";
 const APP_VERTICAL = "pharmacy";
 app.use(express.json({ limit: "8mb" }));
 
@@ -99,6 +99,33 @@ app.get("/api/bootstrap", async (_req, res) => {
         items: packItems.filter((row) => row.pack_id === p.id),
       })),
     });
+  } catch (err) {
+    res.status(500).json({ error: String(err.message) });
+  }
+});
+
+app.get("/api/invoices/:id", async (req, res) => {
+  const id = String(req.params.id || "");
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+    res.status(400).json({ error: "Invalid invoice id" });
+    return;
+  }
+  try {
+    const [order] = await query(
+      "SELECT * FROM sales_orders WHERE id = ? AND business_id = ?",
+      [id, BUSINESS_ID],
+    );
+    if (!order) {
+      res.status(404).json({ error: "Invoice not found" });
+      return;
+    }
+    const lines = await query("SELECT * FROM sales_order_lines WHERE order_id = ? ORDER BY created_at", [id]);
+    const [company] = await query(
+      "SELECT * FROM company_settings WHERE business_id = ? LIMIT 1",
+      [BUSINESS_ID],
+    );
+    res.setHeader("Cache-Control", "no-store");
+    res.json({ order: { ...order, lines }, company: company || { name: "Pharmacy Medical POS" } });
   } catch (err) {
     res.status(500).json({ error: String(err.message) });
   }
@@ -418,6 +445,10 @@ app.use((req, res, next) => {
 app.use(express.static(root, { etag: false, lastModified: false, maxAge: 0 }));
 app.get(["/qr", "/qr/"], (_req, res) => {
   res.redirect("/qr.html");
+});
+app.get(["/invoice", "/invoice/"], (req, res) => {
+  const id = String(req.query.id || "");
+  res.redirect(id ? `/invoice.html?id=${encodeURIComponent(id)}` : "/invoice.html");
 });
 
 const port = Number(process.env.PORT || 5173);
