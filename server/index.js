@@ -847,15 +847,26 @@ app.post("/api/checkout", requireStaff, requirePerm("counter"), async (req, res)
         /* optional pharmacy bill columns */
       }
       const walkIn = customer.code === "CUS-001" || /^walk-?in$/i.test(String(customer.name || "").trim());
-      if (customerAddress && !walkIn) {
+      if ((customerAddress || doctorRx) && !walkIn) {
         try {
-          await conn.query("UPDATE customers SET address=? WHERE id=? AND business_id=?", [
+          await conn.query("UPDATE customers SET address=COALESCE(?, address), doctor_rx=COALESCE(?, doctor_rx) WHERE id=? AND business_id=?", [
             customerAddress,
+            doctorRx,
             customer.id,
             businessId,
           ]);
         } catch {
-          /* optional */
+          try {
+            if (customerAddress) {
+              await conn.query("UPDATE customers SET address=? WHERE id=? AND business_id=?", [
+                customerAddress,
+                customer.id,
+                businessId,
+              ]);
+            }
+          } catch {
+            /* optional */
+          }
         }
       }
 

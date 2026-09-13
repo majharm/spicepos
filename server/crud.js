@@ -292,7 +292,7 @@ export async function importShopItems(payload) {
 
 export function registerCrud(app) {
   app.post("/api/customers", async (req, res) => {
-    const { name, business_name, mobile, type, gstin, state, credit_limit, dob, referred_by, locale, address } = req.body || {};
+    const { name, business_name, mobile, type, gstin, state, credit_limit, dob, referred_by, locale, address, doctor_rx } = req.body || {};
     if (!name || !mobile) {
       res.status(400).json({ error: "Name and mobile are required" });
       return;
@@ -337,6 +337,13 @@ export function registerCrud(app) {
         if (address != null && String(address).trim()) {
           try {
             await conn.query("UPDATE customers SET address=? WHERE id=?", [String(address).trim().slice(0, 500), id]);
+          } catch {
+            /* optional */
+          }
+        }
+        if (doctor_rx != null && String(doctor_rx).trim()) {
+          try {
+            await conn.query("UPDATE customers SET doctor_rx=? WHERE id=?", [String(doctor_rx).trim().slice(0, 180), id]);
           } catch {
             /* optional */
           }

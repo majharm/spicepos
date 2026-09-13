@@ -40,6 +40,7 @@ function pos_ensure_advanced_schema() {
       "dob" => "DATE NULL",
       "referred_by" => "VARCHAR(255) NULL",
       "address" => "VARCHAR(500) NULL",
+      "doctor_rx" => "VARCHAR(180) NULL",
     ]);
     pos_ensure_columns("sales_orders", [
       "discount_type" => "VARCHAR(16) NOT NULL DEFAULT 'amt'",
