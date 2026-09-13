@@ -69,7 +69,25 @@ const HEADER_ALIASES = {
   manufacturerbarcode: "mfr_barcode",
   mfrbarcode: "mfr_barcode",
   factorybarcode: "mfr_barcode",
-  code: "code",
+    generic: "generic_name",
+    genericname: "generic_name",
+    localname: "local_name",
+    regionalname: "local_name",
+    manufacturer: "manufacturer",
+    company: "manufacturer",
+    packsize: "pack_size",
+    packunit: "pack_unit",
+    itemsperpack: "units_per_pack",
+    itemsperstrip: "units_per_pack",
+    unitspperpack: "units_per_pack",
+    medicinetype: "medicine_type",
+    batch: "batch_no",
+    batchno: "batch_no",
+    expiry: "default_expiry",
+    expirydate: "default_expiry",
+    reorder: "reorder_level",
+    reorderlevel: "reorder_level",
+    code: "code",
   sku: "code",
   itemcode: "code",
   colour: "color",
@@ -346,6 +364,22 @@ export function itemBodyFromImportRow(row, biz) {
     wearer_type: POSFootwear.normalizeWearer(row.wearer_type),
     code: String(row.code || "").trim(),
   };
+  const generic = String(row.generic_name || row.local_name || "").trim();
+  if (generic) {
+    body.generic_name = generic;
+    body.local_name = generic;
+  }
+  if (row.manufacturer) body.manufacturer = String(row.manufacturer).trim();
+  if (row.medicine_type) body.medicine_type = String(row.medicine_type).trim();
+  if (row.pack_size) body.pack_size = String(row.pack_size).trim();
+  if (row.pack_unit) body.pack_unit = String(row.pack_unit).trim();
+  if (row.units_per_pack) body.units_per_pack = Number(row.units_per_pack) || 1;
+  if (row.batch_no) body.batch_no = String(row.batch_no).trim();
+  if (row.default_expiry) body.default_expiry = String(row.default_expiry).trim();
+  if (row.reorder_level !== "" && row.reorder_level != null) {
+    const reorder = itemImportStockToBase(row.reorder_level, unit);
+    if (reorder != null) body.reorder_level_gm = reorder;
+  }
   if (row.mrp !== "" && row.mrp != null) body.mrp = Number(row.mrp) || 0;
   if (gstRaw !== "" && gstRaw != null) body.gst_rate = Number(gstRaw);
   else body.gst_rate = 5;

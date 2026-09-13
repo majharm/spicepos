@@ -132,6 +132,23 @@ export async function ensureAdvancedSchema() {
     INDEX (purchase_id),
     INDEX (barcode)
   )`);
+  const pharmacyCols = [
+    ["generic_name", "VARCHAR(255) NULL"],
+    ["medicine_type", "VARCHAR(64) NULL"],
+    ["manufacturer", "VARCHAR(160) NULL"],
+    ["pack_size", "VARCHAR(80) NULL"],
+    ["pack_unit", "VARCHAR(40) NULL"],
+    ["units_per_pack", "INT NOT NULL DEFAULT 1"],
+    ["default_expiry", "DATE NULL"],
+    ["batch_no", "VARCHAR(64) NULL"],
+  ];
+  for (const [col, ddl] of pharmacyCols) {
+    try {
+      await query(`ALTER TABLE items ADD COLUMN ${col} ${ddl}`);
+    } catch {
+      /* exists */
+    }
+  }
   await query(`CREATE TABLE IF NOT EXISTS damage_records (
     id VARCHAR(255) PRIMARY KEY,
     business_id VARCHAR(255) NOT NULL,
@@ -245,8 +262,64 @@ export function resolvePurchaseBarcodes(item, qty, lineIn = {}) {
   return codes;
 }
 
+export async function savePharmacyItemFields(conn, businessId, itemId, body = {}) {
+  await ensureAdvancedSchema();
+  const generic = String(body.generic_name || body.local_name || "").trim() || null;
+  const fields = [
+    ["generic_name", generic],
+    ["medicine_type", String(body.medicine_type || "").trim() || null],
+    ["manufacturer", String(body.manufacturer || "").trim() || null],
+    ["pack_size", String(body.pack_size || "").trim() || null],
+    ["pack_unit", String(body.pack_unit || "").trim() || null],
+    ["units_per_pack", body.units_per_pack != null && body.units_per_pack !== "" ? Math.max(1, parseInt(body.units_per_pack, 10) || 1) : null],
+    ["default_expiry", String(body.default_expiry || body.expiry_date || "").trim() || null],
+    ["batch_no", String(body.batch_no || "").trim() || null],
+  ];
+  for (const [col, val] of fields) {
+    if (val == null && col !== "generic_name" && !Object.prototype.hasOwnProperty.call(body, col) && col !== "default_expiry") continue;
+    try {
+      await sqlExec(conn, `UPDATE items SET \`${col}\` = ? WHERE id = ? AND business_id = ?`, [val, itemId, businessId]);
+    } catch {
+      /* optional */
+    }
+  }
+  const batchNo = String(body.batch_no || "").trim();
+  if (!batchNo) return;
+  const expiry = String(body.default_expiry || body.expiry_date || "").trim() || null;
+  const exist = await sqlOne(
+    conn,
+    "SELECT id FROM stock_batches WHERE business_id = ? AND item_id = ? AND batch_no = ? LIMIT 1",
+    [businessId, itemId, batchNo],
+  );
+  if (exist) {
+    if (expiry) {
+      try {
+        await sqlExec(conn, "UPDATE stock_batches SET expiry_date = ? WHERE id = ?", [expiry, exist.id]);
+      } catch {
+        /* optional */
+      }
+    }
+    return;
+  }
+  const item = await sqlOne(conn, "SELECT stock_gm, purchase_rate, mrp, retail_rate FROM items WHERE id = ? AND business_id = ?", [itemId, businessId]);
+  const qty = Number(item?.stock_gm ?? body.stock_gm) || 0;
+  const mrp = Number(body.mrp ?? item?.mrp ?? item?.retail_rate) || 0;
+  const cost = Number(body.purchase_rate ?? item?.purchase_rate) || 0;
+  try {
+    await sqlExec(
+      conn,
+      `INSERT INTO stock_batches (id, business_id, item_id, batch_no, qty_gm, remaining_gm, unit_cost, mrp, expiry_date)
+       VALUES (?,?,?,?,?,?,?,?,?)`,
+      [crypto.randomUUID(), businessId, itemId, batchNo, qty, qty, cost, mrp, expiry],
+    );
+  } catch {
+    /* optional */
+  }
+}
+
 export async function onItemSaved(conn, businessId, itemId, body = {}) {
   await ensureAdvancedSchema();
+  await savePharmacyItemFields(conn, businessId, itemId, body);
   const item = await sqlOne(conn, "SELECT * FROM items WHERE id = ? AND business_id = ?", [itemId, businessId]);
   if (!isCountItem(item || body)) {
     if (body.mrp != null) {

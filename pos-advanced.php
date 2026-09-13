@@ -27,6 +27,14 @@ function pos_ensure_advanced_schema() {
     pos_ensure_columns("items", [
       "barcode" => "VARCHAR(64) NULL",
       "mrp" => "DECIMAL(12,2) NULL",
+      "generic_name" => "VARCHAR(255) NULL",
+      "medicine_type" => "VARCHAR(64) NULL",
+      "manufacturer" => "VARCHAR(160) NULL",
+      "pack_size" => "VARCHAR(80) NULL",
+      "pack_unit" => "VARCHAR(40) NULL",
+      "units_per_pack" => "INT NOT NULL DEFAULT 1",
+      "default_expiry" => "DATE NULL",
+      "batch_no" => "VARCHAR(64) NULL",
     ]);
     pos_ensure_columns("customers", [
       "dob" => "DATE NULL",
@@ -271,8 +279,53 @@ function pos_resolve_purchase_barcodes($item, $qty, $lineIn = []) {
   return $codes;
 }
 
+function pos_save_pharmacy_item_fields($bid, $itemId, $body = []) {
+  pos_ensure_advanced_schema();
+  $generic = trim((string) ($body["generic_name"] ?? $body["local_name"] ?? ""));
+  $fields = [
+    "generic_name" => $generic !== "" ? $generic : null,
+    "medicine_type" => trim((string) ($body["medicine_type"] ?? "")) ?: null,
+    "manufacturer" => trim((string) ($body["manufacturer"] ?? "")) ?: null,
+    "pack_size" => trim((string) ($body["pack_size"] ?? "")) ?: null,
+    "pack_unit" => trim((string) ($body["pack_unit"] ?? "")) ?: null,
+    "units_per_pack" => isset($body["units_per_pack"]) && $body["units_per_pack"] !== "" ? max(1, (int) $body["units_per_pack"]) : null,
+    "default_expiry" => trim((string) ($body["default_expiry"] ?? $body["expiry_date"] ?? "")) ?: null,
+    "batch_no" => trim((string) ($body["batch_no"] ?? "")) ?: null,
+  ];
+  foreach ($fields as $col => $val) {
+    if ($val === null && !array_key_exists($col, $body) && $col !== "generic_name") continue;
+    try {
+      pos_q("UPDATE items SET `$col` = ? WHERE id = ? AND business_id = ?", "sss", [$val, $itemId, $bid]);
+    } catch (Exception $e) { /* optional until migrate */ }
+  }
+  $batchNo = trim((string) ($body["batch_no"] ?? ""));
+  if ($batchNo === "") return;
+  $expiry = trim((string) ($body["default_expiry"] ?? $body["expiry_date"] ?? ""));
+  $exist = pos_q("SELECT id FROM stock_batches WHERE business_id = ? AND item_id = ? AND batch_no = ? LIMIT 1", "sss", [$bid, $itemId, $batchNo]);
+  if ($exist) {
+    if ($expiry !== "") {
+      try { pos_q("UPDATE stock_batches SET expiry_date = ? WHERE id = ?", "ss", [$expiry, $exist[0]["id"]]); } catch (Exception $e) {}
+    }
+    return;
+  }
+  $item = pos_q("SELECT stock_gm, purchase_rate, mrp, retail_rate FROM items WHERE id = ? AND business_id = ? LIMIT 1", "ss", [$itemId, $bid]);
+  $row = $item[0] ?? [];
+  $qty = (float) ($row["stock_gm"] ?? $body["stock_gm"] ?? 0);
+  $mrp = (float) ($body["mrp"] ?? $row["mrp"] ?? $row["retail_rate"] ?? 0);
+  $cost = (float) ($body["purchase_rate"] ?? $row["purchase_rate"] ?? 0);
+  try {
+    pos_q(
+      "INSERT INTO stock_batches (id, business_id, item_id, batch_no, qty_gm, remaining_gm, unit_cost, mrp, expiry_date)
+       VALUES (?,?,?,?,?,?,?,?,?)",
+      "ssssdddds",
+      [pos_uuid(), $bid, $itemId, $batchNo, $qty, $qty, $cost, $mrp, $expiry !== "" ? $expiry : null]
+    );
+  } catch (Exception $e) { /* optional */ }
+}
+
 function pos_assign_item_barcodes($bid, $itemId, $body = []) {
   pos_ensure_advanced_schema();
+  pos_save_pharmacy_item_fields($bid, $itemId, $body);
   $item = pos_q("SELECT * FROM items WHERE id = ? AND business_id = ? LIMIT 1", "ss", [$itemId, $bid]);
   $row = $item[0] ?? $body;
   if (!pos_item_is_count($row)) return "";

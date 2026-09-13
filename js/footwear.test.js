@@ -163,7 +163,12 @@ test("Every signup category gets its own item copy, not Whole Spices", () => {
   assert.equal(F.itemPrefix({ category: "Other" }), "IT");
   assert.equal(F.itemFormCopy({ category: "Kirana / FMCG" }).category, "Staples / Snacks");
   assert.equal(F.itemFormCopy({ category: "Jewellery" }).name, "Gold chain");
-  assert.equal(F.itemFormCopy({ category: "Medical" }).name, "Paracetamol 500");
+  assert.equal(F.itemFormCopy({ category: "Medical" }).name, "Paracetamol 500mg");
+  assert.equal(F.itemFormCopy({ category: "Medical" }).localNameLab, "Generic Name");
+  assert.equal(F.itemFormCopy({ category: "Medical" }).category, "Medical");
+  assert.equal(F.isPharmacyShop({ category: "Medical" }), true);
+  assert.equal(F.isPharmacyShop({ category: "ABC MEDICAL" }), true);
+  assert.ok(F.suggestedItemCategories({ category: "Medical" }).includes("Medical"));
   assert.equal(F.itemFormCopy({ category: "Spices & masala" }).name, "Turmeric powder");
   assert.notEqual(F.itemFormCopy({ category: "Kirana / FMCG" }).name, "Turmeric powder");
   assert.notEqual(F.itemFormCopy({ category: "Hardware" }).localName, "चावल / तांदूळ / Rice");
@@ -271,6 +276,29 @@ test("Counter has a dedicated scan lane and Pay action", () => {
   assert.match(index, /class="packs-desk"/);
   assert.match(app, /function paintPackLive/);
   assert.match(css, /packs-desk: composer \+ library/);
+});
+
+test("Medical shops show pharmacy medicine fields on the item form", () => {
+  const index = readFileSync(path.join(root, "index.html"), "utf8");
+  const app = readFileSync(path.join(root, "js/app.js"), "utf8");
+  const css = readFileSync(path.join(root, "css/pos.css"), "utf8");
+  const adv = readFileSync(path.join(root, "server/advanced.js"), "utf8");
+  assert.match(index, /id="item-type"/);
+  assert.match(index, /id="item-mfr"/);
+  assert.match(index, /id="item-pack-size"/);
+  assert.match(index, /id="item-pack-unit"/);
+  assert.match(index, /id="item-upp"/);
+  assert.match(index, /id="item-batch-no"/);
+  assert.match(index, /id="item-expiry"/);
+  assert.match(index, /id="item-reorder"/);
+  assert.match(index, /id="item-own-barcode"/);
+  assert.match(index, /Company \/ Manufacturer/);
+  assert.match(index, /Items per Pack\/Strip/);
+  assert.match(app, /function isPharmacyShop/);
+  assert.match(app, /pharmacy-mode/);
+  assert.match(app, /generic_name/);
+  assert.match(css, /body:not\(\.pharmacy-mode\) \.pharmacy-only/);
+  assert.match(adv, /savePharmacyItemFields/);
 });
 
 test("Items catalog has Active and Inactive status buttons", () => {

@@ -636,7 +636,7 @@ function pos_shop_kind($biz) {
   if ($type === "restaurant" || $type === "cafe" || $type === "bakery") return "restaurant";
   if (pos_is_footwear_shop($biz)) return "footwear";
   if (pos_is_apparel_shop($biz)) return "apparel";
-  $text = strtolower(trim((string) (($biz["category"] ?? "") . " " . ($biz["business_type"] ?? ""))));
+  $text = strtolower(trim((string) (($biz["category"] ?? "") . " " . ($biz["business_type"] ?? "") . " " . ($biz["name"] ?? ""))));
   if (preg_match("/(spice|masala)/", $text)) return "spice";
   if (preg_match("/(kirana|fmcg|grocery|supermarket|general trade)/", $text)) return "grocery";
   if (preg_match("/(restaurant|cafe|bakery|food)/", $text)) return "restaurant";

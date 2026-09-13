@@ -6,7 +6,7 @@
     <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
     <title>ATAV POS</title>
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./css/pos.css?v=20260905deploy176" />
+    <link rel="stylesheet" href="./css/pos.css?v=20260913pharmacy1" />
     <link rel="stylesheet" href="./css/saas.css?v=20260905deploy136" />
   </head>
   <body>
@@ -257,11 +257,17 @@
                 </div>
                 <fieldset class="item-block">
                   <legend>Identity</legend>
-                  <label class="full">Name <input id="item-name" required maxlength="180" placeholder="Turmeric powder" /></label>
-                  <label class="full"><span data-i18n="settings.product_local_name">Regional name</span> <input id="item-local-name" maxlength="180" placeholder="चावल / तांदूळ / Rice" /></label>
+                  <label class="full">Item Name * <input id="item-name" required maxlength="180" placeholder="Turmeric powder" /></label>
+                  <label class="full"><span id="item-local-lab" data-i18n="settings.product_local_name">Regional name</span> <input id="item-local-name" maxlength="180" placeholder="चावल / तांदूळ / Rice" /></label>
+                  <label class="pharmacy-only" id="item-mfr-wrap" hidden>Company / Manufacturer
+                    <input id="item-mfr" maxlength="160" placeholder="e.g. Cipla" />
+                  </label>
                   <label>HSN code <input id="item-hsn" maxlength="16" placeholder="e.g. 0908" autocomplete="off" /></label>
                   <label>Unit type
                     <select id="item-unit"></select>
+                  </label>
+                  <label class="pharmacy-only" id="item-own-barcode-wrap" hidden>Barcode
+                    <input id="item-own-barcode" maxlength="64" placeholder="Scan or type barcode" autocomplete="off" />
                   </label>
                   <div class="item-status-row full" role="group" aria-label="Item status">
                     <input type="hidden" id="item-status" value="active" />
@@ -291,7 +297,22 @@
                   <label><span id="item-category-lab">Category</span>
                     <input id="item-category" list="category-list" placeholder="Whole Spices" />
                   </label>
-                  <label><span id="item-subcategory-lab">Subcategory</span>
+                  <label class="pharmacy-only" id="item-type-wrap" hidden>Medicine Type
+                    <select id="item-type">
+                      <option>Tablet</option>
+                      <option>Capsule</option>
+                      <option>Syrup</option>
+                      <option>Injection</option>
+                      <option>Cream</option>
+                      <option>Ointment</option>
+                      <option>Drops</option>
+                      <option>Inhaler</option>
+                      <option>Powder</option>
+                      <option>Gel</option>
+                      <option>Other</option>
+                    </select>
+                  </label>
+                  <label class="pharmacy-hide" id="item-subcategory-wrap"><span id="item-subcategory-lab">Subcategory</span>
                     <input id="item-subcategory" list="subcategory-list" placeholder="Haldi / Jeera" />
                   </label>
                   <label class="footwear-only" id="item-wearer-wrap" hidden>Type
@@ -321,6 +342,27 @@
                   <label><span id="item-b2b-lab">B2B ₹/kg</span> <input id="item-b2b" type="number" step="0.01" /></label>
                   <label><span id="item-purchase-lab">Purchase ₹/kg</span> <input id="item-purchase" type="number" step="0.01" /></label>
                   <label><span id="item-stock-lab">Stock (g)</span> <input id="item-stock" type="number" step="0.001" /></label>
+                  <label class="pharmacy-only" id="item-reorder-wrap" hidden>Reorder Level
+                    <input id="item-reorder" type="number" step="0.001" min="0" />
+                  </label>
+                </fieldset>
+                <fieldset class="item-block pharmacy-only" id="item-pharmacy-pack" hidden>
+                  <legend>Pack, batch &amp; expiry</legend>
+                  <label>Pack Size <input id="item-pack-size" maxlength="80" placeholder="e.g. 10 Tablets" /></label>
+                  <label>Unit
+                    <select id="item-pack-unit">
+                      <option>Strip</option>
+                      <option>Bottle</option>
+                      <option>Box</option>
+                      <option>Tube</option>
+                      <option>Packet</option>
+                      <option>Vial</option>
+                      <option>Ampoule</option>
+                    </select>
+                  </label>
+                  <label>Items per Pack/Strip <input id="item-upp" type="number" min="1" step="1" value="10" /></label>
+                  <label>Batch No. <input id="item-batch-no" maxlength="64" placeholder="e.g. B12345" autocomplete="off" /></label>
+                  <label>Expiry Date <input id="item-expiry" type="date" /></label>
                 </fieldset>
                 <fieldset class="item-block pcs-barcode-only" id="item-barcode-block">
                   <legend>Barcodes</legend>
@@ -1537,7 +1579,7 @@
     <script src="./js/gst-supply.js?v=20260905deploy136" defer></script>
     <script src="./js/pos-api.js?v=20260905deploy154" defer></script>
     <script src="./js/units.js?v=20260905deploy165" defer></script>
-    <script src="./js/footwear.js?v=20260905deploy169" defer></script>
+    <script src="./js/footwear.js?v=20260913pharmacy1" defer></script>
     <script src="./js/restaurant.js?v=20260905deploy176" defer></script>
     <script src="./js/discount.js?v=20260905deploy136" defer></script>
     <script src="./js/offers.js?v=20260905deploy170" defer></script>
@@ -1549,7 +1591,7 @@
     <script src="./js/support.js?v=20260905deploy136" defer></script>
     <script src="./js/qrcode.iife.js?v=20260905qr1" defer></script>
     <script src="./js/qr-notify.js?v=20260905deploy144" defer></script>
-    <script src="./js/app.js?v=20260905deploy176" defer></script>
+    <script src="./js/app.js?v=20260913pharmacy1" defer></script>
     <script src="./js/growth.js?v=20260905deploy145" defer></script>
     <script src="./js/offers-ui.js?v=20260905deploy136" defer></script>
   </body>

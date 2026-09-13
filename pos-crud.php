@@ -120,7 +120,7 @@ function pos_crud_dispatch($path, $method, $body, $bid, $auth, $branchId, $uid) 
           $body["subcategory"] ?? null, $color, $size, $wearer, $unit,
           (float) ($body["purchase_rate"] ?? 0), (float) ($body["retail_rate"] ?? 0),
           (float) ($body["b2b_rate"] ?? 0), (float) ($body["gst_rate"] ?? 5),
-          trim((string) ($body["hsn"] ?? $body["local_name"] ?? "")) ?: null,
+          trim((string) ($body["hsn"] ?? "")) ?: null,
           ($image === null || $image === "") ? null : $image,
           (float) ($body["stock_gm"] ?? 0), (float) ($body["reorder_level_gm"] ?? 0),
           $status, $bid,
