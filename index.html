@@ -5,12 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Pharmacy Medical POS</title>
     <meta http-equiv="Cache-Control" content="no-store" />
-    <meta name="app-version" content="pharmacy-1" />
+    <meta name="app-version" content="pharmacy-2" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Outfit:wght@400;500;600;700&display=swap" />
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./css/pos.css?v=pharmacy-1" />
+    <link rel="stylesheet" href="./css/pos.css?v=pharmacy-2" />
   </head>
   <body>
     <div class="app">
@@ -35,7 +35,7 @@
         <button class="nav-btn" type="button" data-view="settings">Settings</button>
         <div class="nav-foot">
           <div class="chip">Pharmacy</div>
-          <div class="chip" id="app-version-chip">pharmacy-1</div>
+          <div class="chip" id="app-version-chip">pharmacy-2</div>
           <div class="chip">Today <b id="today-total">₹0.00</b></div>
           <div class="chip">Bills <b id="today-count">0</b></div>
           <div class="chip" id="clock">--:--</div>
@@ -64,7 +64,7 @@
             <div class="catalog" id="catalog"></div>
             <aside class="ticket">
               <h2>Pharmacy bill</h2>
-              <div class="ticket-pack" id="chosen-pack">Walk-in retail</div>
+              <div class="ticket-pack" id="chosen-pack">Retail</div>
               <div class="bill-meta">
                 <label>Discount ₹ <input id="bill-discount" type="number" step="0.01" value="0" /></label>
                 <label>Amount paid <input id="bill-paid" type="number" step="0.01" /></label>
@@ -316,7 +316,7 @@
         </div>
       </div>
     </div>
-    <script src="./js/qrcode.iife.js?v=pharmacy-1"></script>
-    <script type="module" src="./js/app.js?v=pharmacy-1"></script>
+    <script src="./js/qrcode.iife.js?v=pharmacy-2"></script>
+    <script type="module" src="./js/app.js?v=pharmacy-2"></script>
   </body>
 </html>

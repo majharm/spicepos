@@ -1,4 +1,9 @@
 import * as Pharmacy from "./pharmacy.js";
+import {
+  buildReceiptText,
+  moneyINR,
+  shareActions,
+} from "./invoice-share.js";
 
 const inr = new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR" });
 
@@ -60,8 +65,13 @@ function lineAmt(item, qty) {
 }
 
 function packLabel() {
-  const c = customer();
-  return c ? `${c.business_name || c.name} · ${c.mobile || ""}` : "Walk-in retail";
+  const doctor = ($("bill-doctor")?.value || "").trim();
+  const rx = ($("bill-rx")?.value || "").trim();
+  if (doctor || rx) {
+    return [doctor && `Dr ${doctor}`, rx && `Rx ${rx}`].filter(Boolean).join(" · ");
+  }
+  const type = customer()?.type === "b2b" ? "Wholesale" : "Retail";
+  return type;
 }
 
 function batchesFor(itemId) {
@@ -495,73 +505,62 @@ async function loadReports() {
 }
 
 let orderCache = [];
-
-function licenceBlock() {
-  const c = state.company || {};
-  return [
-    "Licence & Registration Details",
-    c.drug_licence_no ? `Drug Licence No. ${c.drug_licence_no}${c.drug_licence_type ? ` (${c.drug_licence_type})` : ""}` : "",
-    c.gstin ? `GSTIN ${c.gstin}` : "",
-    c.fssai_licence_no ? `FSSAI ${c.fssai_licence_no}` : "",
-    c.pharmacy_registration_no ? `Pharmacy Registration ${c.pharmacy_registration_no}` : "",
-    c.other_licence_no ? `Other licence ${c.other_licence_no}` : "",
-    c.licence_expiry ? `Licence valid until ${String(c.licence_expiry).slice(0, 10)}` : "",
-  ].filter(Boolean);
-}
+let lastInvoice = null;
 
 function receiptText(o) {
-  return [
-    state.company.name,
-    state.company.address,
-    state.company.phone ? `Mobile ${state.company.phone}` : "",
-    o.order_number,
-    String(o.created_at || new Date().toISOString()),
-    o.customer_name,
-    o.customer_mobile || "",
-    o.customer_address || "",
-    o.doctor_name || o.prescription_no ? `Doctor / Rx ${o.doctor_name || ""} ${o.prescription_no || ""}` : "",
-    "Medicine | Batch | Exp | Pack | Qty | MRP | Rate | GST | Amt",
-    "------------------------------",
-    ...(o.lines || []).map((l) => {
-      const gst = Number(l.gst_rate) || 0;
-      return `${l.item_name} | ${l.batch_no || "—"} | ${l.expiry_date ? String(l.expiry_date).slice(0, 10) : "—"} | ${l.pack_type || "—"} | ${l.quantity_gm} | ${money(l.mrp)} | ${money(l.rate_per_kg)} | ${gst}% | ${money(l.amount)}`;
-    }),
-    "------------------------------",
-    `Subtotal ${money(o.subtotal)}`,
-    `Discount ${money(o.discount)}`,
-    `CGST ${money(o.cgst)}`,
-    `SGST ${money(o.sgst)} / IGST ${money(o.igst)}`,
-    `Round off ${money(o.round_off)}`,
-    `Grand Total ${money(o.total)}`,
-    `${o.payment_method} paid ${money(o.amount_paid)} due ${money(Math.max(0, Number(o.total) - Number(o.amount_paid || 0)))}`,
-    ...licenceBlock(),
-  ]
-    .filter((line) => line !== undefined && line !== "")
-    .join("\n");
+  return buildReceiptText(o, state.company || {}, moneyINR);
+}
+
+function orderShare(o) {
+  return shareActions(o, state.company || {}, location.origin);
+}
+
+function shareButtons(o, { edit = true } = {}) {
+  const share = orderShare(o);
+  return `<div class="print-actions">
+      <a class="btn primary" href="${escapeHtml(share.whatsapp)}" target="_blank" rel="noopener">Share WhatsApp</a>
+      <button class="btn" type="button" data-copy-invoice="${escapeHtml(o.id)}">Copy link</button>
+      <button class="btn" type="button" data-print="${escapeHtml(o.id)}">Print</button>
+      ${edit ? `<button class="btn" type="button" data-edit-order="${escapeHtml(o.id)}">Edit</button>` : ""}
+    </div>`;
 }
 
 function printOrder(o) {
   const w = window.open("", "print", "width=720,height=900");
+  if (!w) {
+    setHint("Popup blocked. Use Share WhatsApp or Copy link.", "error");
+    return;
+  }
   const logo = state.company.logo_url
     ? `<img src="${state.company.logo_url}" alt="" style="max-height:80px;max-width:200px;display:block;margin:0 auto 12px">`
     : "";
   w.document.write(`<!DOCTYPE html><html><head><title>${escapeHtml(o.order_number)}</title>
-    <style>body{font-family:ui-monospace,monospace;padding:24px;text-align:center} h1{font-size:18px} pre{white-space:pre-wrap;text-align:left}</style>
+    <style>body{font-family:ui-monospace,monospace;padding:24px} pre{white-space:pre-wrap;text-align:left}</style>
     </head><body>
     ${logo}
-    <h1>${escapeHtml(state.company.name || "")}</h1>
     <pre>${escapeHtml(receiptText(o))}</pre>
     <script>window.onload=()=>{window.print();}</script>
     </body></html>`);
   w.document.close();
 }
 
+async function copyInvoiceLink(o) {
+  const url = orderShare(o).url;
+  try {
+    await navigator.clipboard.writeText(url);
+    setHint("Invoice link copied", "ok");
+  } catch {
+    setHint(url, "ok");
+  }
+}
+
 function showOrder(o) {
-  $("order-pane").innerHTML = `<pre class="receipt">${escapeHtml(receiptText(o))}</pre>
-    <div class="print-actions">
-      <button class="btn primary" type="button" data-print="${escapeHtml(o.id)}">Print</button>
-      <button class="btn" type="button" data-edit-order="${escapeHtml(o.id)}">Edit</button>
-    </div>`;
+  lastInvoice = o;
+  $("order-pane").innerHTML = `<pre class="receipt">${escapeHtml(receiptText(o))}</pre>${shareButtons(o)}`;
+}
+
+function findInvoice(id) {
+  return orderCache.find((row) => row.id === id) || (lastInvoice?.id === id ? lastInvoice : null);
 }
 
 async function loadOrders() {
@@ -923,13 +922,18 @@ $("qr-refresh").addEventListener("click", () => loadQrOrders());
 
 $("order-pane").addEventListener("click", (e) => {
   const printBtn = e.target.closest("[data-print]");
+  const copyBtn = e.target.closest("[data-copy-invoice]");
   const editBtn = e.target.closest("[data-edit-order]");
   if (printBtn) {
-    const o = orderCache.find((row) => row.id === printBtn.dataset.print);
+    const o = findInvoice(printBtn.dataset.print);
     if (o) printOrder(o);
   }
+  if (copyBtn) {
+    const o = findInvoice(copyBtn.dataset.copyInvoice);
+    if (o) copyInvoiceLink(o);
+  }
   if (editBtn) {
-    const o = orderCache.find((row) => row.id === editBtn.dataset.editOrder);
+    const o = findInvoice(editBtn.dataset.editOrder);
     if (!o) return;
     state.editingOrderId = o.id;
     state.customerId = o.customer_id;
@@ -987,10 +991,8 @@ $("btn-pay").addEventListener("click", async () => {
     setHint(`Saved ${order.order_number} · ${money(order.total)}`, "ok");
     showOrder(order);
     $("modal-title").textContent = order.order_number;
-    $("modal-body").innerHTML = `<pre class="receipt">${escapeHtml(receiptText(order))}</pre>
-      <div class="print-actions"><button class="btn primary" type="button" id="modal-print">Print</button></div>`;
+    $("modal-body").innerHTML = `<pre class="receipt">${escapeHtml(receiptText(order))}</pre>${shareButtons(order, { edit: false })}`;
     $("modal").hidden = false;
-    $("modal-print").onclick = () => printOrder(order);
     await loadBootstrap();
   } catch (err) {
     setHint(err.message, "error");
@@ -1000,6 +1002,20 @@ $("btn-pay").addEventListener("click", async () => {
 $("modal-close").addEventListener("click", () => {
   $("modal").hidden = true;
 });
+$("modal").addEventListener("click", (e) => {
+  const printBtn = e.target.closest("[data-print]");
+  const copyBtn = e.target.closest("[data-copy-invoice]");
+  if (printBtn) {
+    const o = findInvoice(printBtn.dataset.print);
+    if (o) printOrder(o);
+  }
+  if (copyBtn) {
+    const o = findInvoice(copyBtn.dataset.copyInvoice);
+    if (o) copyInvoiceLink(o);
+  }
+});
+$("bill-doctor")?.addEventListener("input", renderCart);
+$("bill-rx")?.addEventListener("input", renderCart);
 document.querySelector(".nav").addEventListener("click", (e) => {
   const btn = e.target.closest("[data-view]");
   if (btn) showView(btn.dataset.view);

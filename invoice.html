@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Invoice</title>
+    <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="./css/pos.css?v=pharmacy-2" />
+    <style>
+      body { margin: 0; background: var(--bg, #f6efe4); }
+      .invoice-page { max-width: 720px; margin: 24px auto; padding: 0 16px 48px; }
+      .invoice-actions { display: flex; gap: 8px; flex-wrap: wrap; margin: 12px 0 16px; }
+      @media print {
+        .invoice-actions { display: none !important; }
+        .invoice-page { margin: 0; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="invoice-page">
+      <p class="hint" id="status">Loading invoice…</p>
+      <div id="bill" hidden></div>
+      <div class="invoice-actions" id="actions" hidden></div>
+    </div>
+    <script type="module" src="./js/invoice-page.js?v=pharmacy-2"></script>
+  </body>
+</html>
