@@ -329,7 +329,7 @@ test("POS boot skips API probe and slims catalog photos", () => {
   assert.match(index, /qrcode\.iife\.js[^>]+defer/);
   assert.match(index, /preload="none"/);
   assert.match(index, /pos-api\.js\?v=20260905deploy154/);
-  assert.match(index, /app\.js\?v=20260913pharmacy3/);
+  assert.match(index, /app\.js\?v=20260913pharmacy4/);
   assert.doesNotMatch(index, /app\.js\?v=20260905deploy167/);
   assert.doesNotMatch(index, /app\.js\?v=20260905deploy166/);
   assert.match(index, /offers\.js\?v=20260905deploy170/);
@@ -380,10 +380,10 @@ test("Restaurant Counter can create named dining tables", () => {
   assert.match(core, /function pos_clip_floor_id/);
   assert.match(core, /dining_tables_json/);
   assert.match(till, /dining-tables/);
-  assert.match(index, /pos\.css\?v=20260913pharmacy1/);
+  assert.match(index, /pos\.css\?v=20260913pharmacy4/);
   assert.match(index, /restaurant\.js\?v=20260905deploy176/);
-  assert.match(index, /app\.js\?v=20260913pharmacy3/);
-  assert.match(index, /footwear\.js\?v=20260913pharmacy2/);
+  assert.match(index, /app\.js\?v=20260913pharmacy4/);
+  assert.match(index, /footwear\.js\?v=20260913pharmacy4/);
 });
 
 test("PHP dining layout clip keeps floors and old table lists", { skip: hasPhpCli() ? false : "php CLI not installed" }, () => {

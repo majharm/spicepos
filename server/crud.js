@@ -5,7 +5,7 @@ import { bid } from "./context.js";
 import { recordCreditPurchase } from "./accounts.js";
 import { postPurchaseJournal } from "./accounting.js";
 import { audit } from "./audit.js";
-import { onItemSaved, onPurchaseLineSaved } from "./advanced.js";
+import { onItemSaved, onPurchaseLineSaved, pharmacyLineSnapshot } from "./advanced.js";
 import {
   decodeImportUpload,
   itemBodyFromImportRow,
@@ -292,7 +292,7 @@ export async function importShopItems(payload) {
 
 export function registerCrud(app) {
   app.post("/api/customers", async (req, res) => {
-    const { name, business_name, mobile, type, gstin, state, credit_limit, dob, referred_by, locale } = req.body || {};
+    const { name, business_name, mobile, type, gstin, state, credit_limit, dob, referred_by, locale, address } = req.body || {};
     if (!name || !mobile) {
       res.status(400).json({ error: "Name and mobile are required" });
       return;
@@ -330,6 +330,13 @@ export function registerCrud(app) {
         } catch {
           try {
             await conn.query("UPDATE customers SET dob=?, referred_by=? WHERE id=?", [dob || null, referred_by || null, id]);
+          } catch {
+            /* optional */
+          }
+        }
+        if (address != null && String(address).trim()) {
+          try {
+            await conn.query("UPDATE customers SET address=? WHERE id=?", [String(address).trim().slice(0, 500), id]);
           } catch {
             /* optional */
           }
@@ -807,15 +814,35 @@ export function registerCrud(app) {
             existing.id,
           ],
         );
+        const doctorRx = String(req.body?.doctor_rx ?? req.body?.doctorRx ?? "").trim().slice(0, 180) || null;
+        const customerAddress = String(req.body?.customer_address ?? req.body?.customerAddress ?? "").trim().slice(0, 500) || null;
+        const customerMobile = String(req.body?.customer_mobile ?? req.body?.customerMobile ?? "").replace(/\D/g, "").slice(0, 15);
+        const billName = String(req.body?.customer_name ?? req.body?.customerName ?? "").trim().slice(0, 180);
+        try {
+          await conn.query(
+            "UPDATE sales_orders SET doctor_rx=?, customer_address=?, customer_mobile=? WHERE id=?",
+            [doctorRx, customerAddress, customerMobile || null, existing.id],
+          );
+        } catch {
+          /* optional */
+        }
+        if (billName) {
+          try {
+            await conn.query("UPDATE sales_orders SET customer_name=? WHERE id=?", [billName, existing.id]);
+          } catch {
+            /* optional */
+          }
+        }
         if (newStatus !== "cancelled") {
           for (const line of built) {
+            const lineId = crypto.randomUUID();
             await conn.query(
               `INSERT INTO sales_order_lines (
                  id, order_id, item_id, item_name, quantity_gm, rate_per_kg,
                  discount, amount, gst_rate, cancelled, business_id
                ) VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
               [
-                crypto.randomUUID(),
+                lineId,
                 existing.id,
                 line.item.id,
                 itemBillName(line.item),
@@ -828,6 +855,15 @@ export function registerCrud(app) {
                 bid(),
               ],
             );
+            const snap = pharmacyLineSnapshot(line.item);
+            try {
+              await conn.query(
+                "UPDATE sales_order_lines SET batch_no=?, expiry_date=?, pack_label=? WHERE id=?",
+                [snap.batch_no, snap.expiry_date, snap.pack_label, lineId],
+              );
+            } catch {
+              /* optional */
+            }
             await conn.query(
               "UPDATE items SET stock_gm = stock_gm - ? WHERE id = ? AND business_id = ?",
               [line.qty, line.item.id, bid()],

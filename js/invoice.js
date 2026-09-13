@@ -14,6 +14,31 @@
     ].filter(Boolean);
   }
 
+  function formatExpiryShort(raw) {
+    const s = String(raw || "").slice(0, 10);
+    const m = s.match(/^(\d{4})-(\d{2})/);
+    return m ? `${m[2]}/${m[1].slice(2)}` : s;
+  }
+
+  function medicinePackLabel(item) {
+    const size = String(item?.pack_size || "").trim();
+    const unit = String(item?.pack_unit || "").trim();
+    const upp = Number(item?.units_per_pack) || 0;
+    if (size && unit) return `${size} ${unit}`.trim();
+    if (size) return size;
+    if (upp > 0) return `${upp}s`;
+    return "";
+  }
+
+  function isPharmacyBill(order, ctx) {
+    if (String(order?.doctor_rx || order?.customer_address || "").trim()) return true;
+    const lines = order?.lines || [];
+    if (lines.some((l) => String(l.batch_no || l.pack_label || l.expiry_date || "").trim())) return true;
+    const biz = ctx?.businessMeta || {};
+    const t = [biz.category, biz.business_type, biz.name, ctx?.company?.name].filter(Boolean).join(" ").toLowerCase();
+    return /(pharmacy|medical)/.test(t);
+  }
+
   function round2(v) {
     return Math.round(num(v) * 100) / 100;
   }
@@ -68,17 +93,24 @@
         const item = (items || []).find((i) => i.id === l.item_id);
         const gstRate = num(l.gst_rate) || num(item?.gst_rate);
         const amount = num(l.amount);
+        const qty = num(l.quantity_gm);
+        const storedMrp = num(l.mrp);
+        const unitMrp = num(item?.mrp) || (storedMrp && qty ? round2(storedMrp / qty) : num(l.rate_per_kg));
         return {
           item_name: l.item_name || item?.name || "Item",
           local_name: l.local_name || item?.local_name || "",
           name: l.item_name || item?.name || "Item",
           hsn: item?.hsn || l.hsn || item?.code || "—",
-          quantity_gm: num(l.quantity_gm),
+          quantity_gm: qty,
           rate_per_kg: num(l.rate_per_kg),
           unit: l.unit || lineUnit(item),
           gst_rate: gstRate,
           amount,
           gst_amount: lineGst({ amount, gst_rate: gstRate }),
+          batch_no: l.batch_no || item?.batch_no || "",
+          expiry_date: l.expiry_date || item?.default_expiry || "",
+          pack_label: l.pack_label || medicinePackLabel(item),
+          mrp: unitMrp,
         };
       });
   }
@@ -449,9 +481,31 @@ ${purchaseBody(purchase, ctx)}
       ? `<div class="inv-row"><span>Table</span><span>${escapeHtml(/^\d+$/.test(tableNo) ? `Table ${tableNo}` : tableNo)}</span></div>`
       : "";
 
-    const itemRows = lines
-      .map(
-        (l, i) => `<tr>
+    const pharmacy = isPharmacyBill(order, ctx);
+    const custMobile = String(order.customer_mobile || cust?.mobile || "").trim();
+    const custAddr = String(order.customer_address || cust?.address || "").trim();
+    const doctorRx = String(order.doctor_rx || "").trim();
+
+    const itemRows = pharmacy
+      ? lines
+          .map((l, i) => {
+            const lineTotal = round2(num(l.amount) + num(l.gst_amount));
+            return `<tr>
+        <td class="inv-item" colspan="4">${i + 1}. ${escapeHtml(lineName(l, ctx))}</td>
+      </tr>
+      <tr class="inv-tax"><td colspan="4">Batch ${escapeHtml(l.batch_no || "—")} · Exp ${escapeHtml(formatExpiryShort(l.expiry_date) || "—")} · Pack ${escapeHtml(l.pack_label || "—")}</td></tr>
+      <tr class="inv-line">
+        <td class="inv-hsn">Qty ${escapeHtml(formatQty(l.quantity_gm, l.unit))}</td>
+        <td class="inv-num">MRP ${escapeHtml(money(l.mrp))}</td>
+        <td class="inv-num">${escapeHtml(money(l.rate_per_kg))}</td>
+        <td class="inv-num">${escapeHtml(money(lineTotal))}</td>
+      </tr>
+      <tr class="inv-tax"><td colspan="4">GST ${l.gst_rate}% · ${escapeHtml(money(l.gst_amount))}${Number(l.discount) > 0 ? ` · Disc ${escapeHtml(money(l.discount))}` : ""}</td></tr>`;
+          })
+          .join("")
+      : lines
+          .map(
+            (l, i) => `<tr>
         <td class="inv-item" colspan="4">${i + 1}. ${escapeHtml(lineName(l, ctx))}</td>
       </tr>
       <tr class="inv-line">
@@ -461,8 +515,8 @@ ${purchaseBody(purchase, ctx)}
         <td class="inv-num">${escapeHtml(money(l.amount))}</td>
       </tr>
       <tr class="inv-tax"><td colspan="4">GST ${l.gst_rate}% · ${escapeHtml(money(l.gst_amount))}${Number(l.discount) > 0 ? ` · Disc ${escapeHtml(money(l.discount))}` : ""}</td></tr>`,
-      )
-      .join("");
+          )
+          .join("");
 
     const interState = saleInterState(order, ctx);
     const gstRows = gstSplitRows(breakdown, interState, money, escapeHtml);
@@ -483,8 +537,11 @@ ${purchaseBody(purchase, ctx)}
     <div class="inv-row"><span>${escapeHtml(L(ctx, "invoice.no", "Invoice No."))}</span><strong>${invNo}</strong></div>
     <div class="inv-row"><span>${escapeHtml(L(ctx, "invoice.date", "Date"))}</span><span>${escapeHtml(when)}</span></div>
     <div class="inv-row"><span>${escapeHtml(L(ctx, "invoice.customer", "Customer"))}</span><span>${escapeHtml(order.customer_name || cust?.business_name || cust?.name || "Walk-in")}</span></div>
+    ${custMobile ? `<div class="inv-row"><span>Mobile No.</span><span>${escapeHtml(custMobile)}</span></div>` : ""}
+    ${custAddr ? `<div class="inv-row"><span>Address</span><span>${escapeHtml(custAddr)}</span></div>` : ""}
+    ${doctorRx ? `<div class="inv-row"><span>Doctor / Rx</span><span>${escapeHtml(doctorRx)}</span></div>` : ""}
     ${custGstin ? `<div class="inv-row"><span>GSTIN</span><span>${escapeHtml(custGstin)}</span></div>` : ""}
-    <div class="inv-row"><span>Type</span><span>${escapeHtml(String(order.customer_type || cust?.type || "b2c").toUpperCase())}</span></div>
+    ${pharmacy ? "" : `<div class="inv-row"><span>Type</span><span>${escapeHtml(String(order.customer_type || cust?.type || "b2c").toUpperCase())}</span></div>`}
     ${tableLine}
     ${packLine}
   </div>
@@ -492,10 +549,10 @@ ${purchaseBody(purchase, ctx)}
   <table class="inv-table">
     <thead>
       <tr>
-        <th>${escapeHtml(L(ctx, "invoice.hsn", "HSN"))} / ${escapeHtml(L(ctx, "invoice.item", "Item"))}</th>
-        <th class="inv-num">${escapeHtml(L(ctx, "invoice.qty", "Qty"))}</th>
-        <th class="inv-num">${escapeHtml(L(ctx, "invoice.rate", "Rate"))}</th>
-        <th class="inv-num">${escapeHtml(L(ctx, "invoice.amount", "Amt"))}</th>
+        <th>${pharmacy ? "Medicine" : `${escapeHtml(L(ctx, "invoice.hsn", "HSN"))} / ${escapeHtml(L(ctx, "invoice.item", "Item"))}`}</th>
+        <th class="inv-num">${pharmacy ? "Qty" : escapeHtml(L(ctx, "invoice.qty", "Qty"))}</th>
+        <th class="inv-num">${pharmacy ? "Rate" : escapeHtml(L(ctx, "invoice.rate", "Rate"))}</th>
+        <th class="inv-num">${pharmacy ? "Amount" : escapeHtml(L(ctx, "invoice.amount", "Amt"))}</th>
       </tr>
     </thead>
     <tbody>
@@ -663,20 +720,44 @@ ${invoiceBody(order, ctx)}
       .map((t) => `<div>${escapeHtml(t)}</div>`)
       .join("");
     const buyerName = order.customer_name || cust?.business_name || cust?.name || "Walk-in";
+    const pharmacy = isPharmacyBill(order, ctx);
+    const custMobile = String(order.customer_mobile || cust?.mobile || "").trim();
+    const custAddr = String(order.customer_address || cust?.address || "").trim();
+    const doctorRx = String(order.doctor_rx || "").trim();
     const buyerBits = [
       cust?.business_name && cust?.name && cust.business_name !== cust.name ? cust.name : "",
-      cust?.mobile || order.customer_mobile || "",
+      custMobile,
+      custAddr,
+      doctorRx ? `Doctor / Rx: ${doctorRx}` : "",
       custGstin ? `GSTIN: ${custGstin}` : "",
-      String(order.customer_type || cust?.type || "b2c").toUpperCase(),
+      pharmacy ? "" : String(order.customer_type || cust?.type || "b2c").toUpperCase(),
     ]
       .filter(Boolean)
       .map((t) => `<div>${escapeHtml(t)}</div>`)
       .join("");
 
-    const itemRows = lines
-      .map((l, i) => {
-        const lineTotal = round2(num(l.amount) + num(l.gst_amount));
-        return `<tr>
+    const itemRows = pharmacy
+      ? lines
+          .map((l, i) => {
+            const lineTotal = round2(num(l.amount) + num(l.gst_amount));
+            return `<tr>
+        <td class="off-c">${i + 1}</td>
+        <td>${escapeHtml(l.item_name)}</td>
+        <td>${escapeHtml(l.batch_no || "—")}</td>
+        <td>${escapeHtml(formatExpiryShort(l.expiry_date) || "—")}</td>
+        <td>${escapeHtml(l.pack_label || "—")}</td>
+        <td class="off-n">${escapeHtml(formatQty(l.quantity_gm, l.unit))}</td>
+        <td class="off-n">${escapeHtml(money(l.mrp))}</td>
+        <td class="off-n">${escapeHtml(money(l.rate_per_kg))}</td>
+        <td class="off-n">${escapeHtml(String(l.gst_rate))}%</td>
+        <td class="off-n">${escapeHtml(money(lineTotal))}</td>
+      </tr>`;
+          })
+          .join("")
+      : lines
+          .map((l, i) => {
+            const lineTotal = round2(num(l.amount) + num(l.gst_amount));
+            return `<tr>
         <td class="off-c">${i + 1}</td>
         <td>${escapeHtml(l.item_name)}</td>
         <td>${escapeHtml(l.hsn)}</td>
@@ -687,8 +768,8 @@ ${invoiceBody(order, ctx)}
         <td class="off-n">${escapeHtml(money(l.gst_amount))}</td>
         <td class="off-n">${escapeHtml(money(lineTotal))}</td>
       </tr>`;
-      })
-      .join("");
+          })
+          .join("");
 
     const interState = saleInterState(order, ctx);
     const gstRows = officeGstSplitRows(breakdown, interState, money, escapeHtml);
@@ -735,18 +816,20 @@ ${invoiceBody(order, ctx)}
     <thead>
       <tr>
         <th class="off-c">#</th>
-        <th>Item</th>
+        ${pharmacy
+          ? `<th>Medicine</th><th>Batch No.</th><th>Expiry</th><th>Pack</th><th class="off-n">Qty</th><th class="off-n">MRP</th><th class="off-n">Rate</th><th class="off-n">GST</th><th class="off-n">Amount</th>`
+          : `<th>Item</th>
         <th>HSN</th>
         <th class="off-n">Qty</th>
         <th class="off-n">Rate</th>
         <th class="off-n">Taxable</th>
         <th class="off-n">GST %</th>
         <th class="off-n">GST</th>
-        <th class="off-n">Amount</th>
+        <th class="off-n">Amount</th>`}
       </tr>
     </thead>
     <tbody>
-      ${itemRows || '<tr><td colspan="9" class="off-empty">No line items</td></tr>'}
+      ${itemRows || `<tr><td colspan="${pharmacy ? 10 : 9}" class="off-empty">No line items</td></tr>`}
     </tbody>
   </table>
   <div class="off-bottom">

@@ -60,6 +60,10 @@ function pos_checkout_sale($bid, $branchId, $uid, $auth, $body) {
       $packName = $pk[0]["name"] ?? null;
     }
     $custName = pos_customer_label($customer);
+    $billName = function_exists("pos_clip_invoice_text")
+      ? pos_clip_invoice_text($body["customer_name"] ?? $body["customerName"] ?? "", 180)
+      : trim((string) ($body["customer_name"] ?? $body["customerName"] ?? ""));
+    if ($billName !== "") $custName = $billName;
     pos_q(
       "INSERT INTO sales_orders (
          id, order_number, customer_id, customer_name, customer_type,
@@ -81,6 +85,27 @@ function pos_checkout_sale($bid, $branchId, $uid, $auth, $body) {
       try {
         pos_q("UPDATE sales_orders SET table_no = ? WHERE id = ? AND business_id = ?", "sss", [$tableNo, $orderId, $bid]);
       } catch (Exception $e) { /* optional column */ }
+    }
+    $doctorRx = function_exists("pos_clip_invoice_text")
+      ? pos_clip_invoice_text($body["doctor_rx"] ?? $body["doctorRx"] ?? "", 180)
+      : trim((string) ($body["doctor_rx"] ?? ""));
+    $custAddr = function_exists("pos_clip_invoice_text")
+      ? pos_clip_invoice_text($body["customer_address"] ?? $body["customerAddress"] ?? "", 500)
+      : trim((string) ($body["customer_address"] ?? ""));
+    $custMobile = preg_replace("/\D+/", "", (string) ($body["customer_mobile"] ?? $body["customerMobile"] ?? ""));
+    if (strlen($custMobile) > 15) $custMobile = substr($custMobile, 0, 15);
+    try {
+      pos_q(
+        "UPDATE sales_orders SET doctor_rx = ?, customer_address = ?, customer_mobile = ? WHERE id = ? AND business_id = ?",
+        "sssss",
+        [$doctorRx !== "" ? $doctorRx : null, $custAddr !== "" ? $custAddr : null, $custMobile !== "" ? $custMobile : null, $orderId, $bid]
+      );
+    } catch (Exception $e) { /* optional pharmacy bill columns */ }
+    $walkIn = (($customer["code"] ?? "") === "CUS-001") || preg_match("/^walk-?in$/i", trim((string) ($customer["name"] ?? "")));
+    if ($custAddr !== "" && !$walkIn) {
+      try {
+        pos_q("UPDATE customers SET address = ? WHERE id = ? AND business_id = ?", "sss", [$custAddr, $customer["id"], $bid]);
+      } catch (Exception $e) { /* optional */ }
     }
     foreach ($built as $line) {
       $lineId = pos_uuid();
@@ -128,6 +153,16 @@ function pos_checkout_sale($bid, $branchId, $uid, $auth, $body) {
         if ($firstBatch) {
           try {
             pos_q("UPDATE sales_order_lines SET batch_id = ?, barcode = COALESCE(NULLIF(barcode,''), ?) WHERE id = ?", "sss", [$firstBatch["id"], $firstBatch["barcode"] ?? null, $lineId]);
+          } catch (Exception $e) { /* optional */ }
+        }
+        if (function_exists("pos_pharmacy_line_snapshot")) {
+          $snap = pos_pharmacy_line_snapshot($line["item"], $firstBatch);
+          try {
+            pos_q(
+              "UPDATE sales_order_lines SET batch_no = ?, expiry_date = ?, pack_label = ? WHERE id = ?",
+              "ssss",
+              [$snap["batch_no"], $snap["expiry_date"], $snap["pack_label"], $lineId]
+            );
           } catch (Exception $e) { /* optional */ }
         }
       }

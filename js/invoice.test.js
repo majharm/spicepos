@@ -451,6 +451,60 @@ test("pharmacy licences print on thermal and office invoices", () => {
   assert.match(office, /NDPS: NDPS-9/);
 });
 
+test("pharmacy bill prints customer, doctor/Rx, and medicine columns", () => {
+  const InvoicePrint = loadInvoicePrint();
+  const order = {
+    order_number: "SO-RX-1",
+    customer_name: "Ramesh Patil",
+    customer_mobile: "9876543210",
+    customer_address: "12 Main Road, Pune",
+    doctor_rx: "Dr. Shah / Rx-441",
+    payment_method: "cash",
+    payment_status: "paid",
+    subtotal: 36,
+    gst: 4.32,
+    total: 40.32,
+    created_at: "2026-09-13",
+    lines: [
+      {
+        item_name: "Paracetamol 500mg",
+        quantity_gm: 2,
+        rate_per_kg: 18,
+        amount: 36,
+        gst_rate: 12,
+        mrp: 40,
+        batch_no: "PCM09",
+        expiry_date: "2027-09-30",
+        pack_label: "10 Tab",
+        unit: "PCS",
+      },
+    ],
+  };
+  const ctx = {
+    company: { name: "ABC MEDICAL" },
+    businessMeta: { category: "Medical", name: "ABC MEDICAL" },
+    customers: [],
+    items: [],
+    formatDateTime: (v) => String(v),
+    money: (n) => `₹${Number(n).toFixed(2)}`,
+    escapeHtml: (v) => String(v ?? ""),
+  };
+  const thermal = InvoicePrint.invoiceBody(order, ctx);
+  assert.match(thermal, /Ramesh Patil/);
+  assert.match(thermal, /Mobile No\./);
+  assert.match(thermal, /9876543210/);
+  assert.match(thermal, /12 Main Road, Pune/);
+  assert.match(thermal, /Dr\. Shah \/ Rx-441/);
+  assert.match(thermal, /Paracetamol 500mg/);
+  assert.match(thermal, /PCM09/);
+  assert.match(thermal, /09\/27/);
+  assert.match(thermal, /10 Tab/);
+  const office = InvoicePrint.officeInvoiceBody(order, ctx);
+  assert.match(office, /Batch No\./);
+  assert.match(office, /Doctor \/ Rx: Dr\. Shah \/ Rx-441/);
+  assert.match(office, /PCM09/);
+});
+
 test("QR invoice prints 3 pcs × rate as gross, then header discount", () => {
   const InvoicePrint = loadInvoicePrint();
   const order = {

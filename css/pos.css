@@ -1990,6 +1990,62 @@ tr:last-child td { border-bottom: 0; }
 body:not(.footwear-mode):not(.apparel-mode) .footwear-only { display: none !important; }
 body:not(.pharmacy-mode) .pharmacy-only { display: none !important; }
 body.pharmacy-mode .pharmacy-hide { display: none !important; }
+.pharm-bill-cust {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin: 8px 0 4px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+}
+.pharm-bill-cust label {
+  display: grid;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--muted);
+}
+.pharm-bill-cust .full { grid-column: 1 / -1; }
+.pharm-bill-cust input {
+  width: 100%;
+  min-height: 34px;
+  padding: 6px 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 650;
+  color: var(--vel-slate);
+}
+.pharm-bill-wrap {
+  overflow-x: auto;
+  margin: 0 -4px;
+}
+.pharm-bill-table {
+  width: 100%;
+  min-width: 640px;
+  border-collapse: collapse;
+  font-size: 11px;
+}
+.pharm-bill-table th,
+.pharm-bill-table td {
+  padding: 6px 4px;
+  border-bottom: 1px solid var(--line);
+  vertical-align: middle;
+  text-align: left;
+}
+.pharm-bill-table th {
+  font-size: 10px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.pharm-bill-table .pharm-n { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.pharm-bill-table .pharm-med { font-weight: 800; min-width: 7em; }
+.pharm-bill-table .qty { justify-content: flex-end; }
+body.pharmacy-mode .ticket .lines { overflow-x: auto; }
 body.footwear-mode #pack-choice { display: none; }
 body.apparel-mode #pack-choice { display: none; }
 body:not(.spice-mode) #pack-choice { display: none; }

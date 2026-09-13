@@ -39,6 +39,7 @@ function pos_ensure_advanced_schema() {
     pos_ensure_columns("customers", [
       "dob" => "DATE NULL",
       "referred_by" => "VARCHAR(255) NULL",
+      "address" => "VARCHAR(500) NULL",
     ]);
     pos_ensure_columns("sales_orders", [
       "discount_type" => "VARCHAR(16) NOT NULL DEFAULT 'amt'",
@@ -46,6 +47,9 @@ function pos_ensure_advanced_schema() {
       "loyalty_points_redeemed" => "INT NOT NULL DEFAULT 0",
       "loyalty_points_earned" => "INT NOT NULL DEFAULT 0",
       "loyalty_discount" => "DECIMAL(12,2) NOT NULL DEFAULT 0",
+      "doctor_rx" => "VARCHAR(180) NULL",
+      "customer_address" => "VARCHAR(500) NULL",
+      "customer_mobile" => "VARCHAR(20) NULL",
     ]);
     pos_ensure_columns("sales_order_lines", [
       "mrp" => "DECIMAL(12,2) NOT NULL DEFAULT 0",
@@ -55,6 +59,9 @@ function pos_ensure_advanced_schema() {
       "batch_id" => "VARCHAR(255) NULL",
       "cost" => "DECIMAL(12,2) NOT NULL DEFAULT 0",
       "profit" => "DECIMAL(12,2) NOT NULL DEFAULT 0",
+      "batch_no" => "VARCHAR(64) NULL",
+      "expiry_date" => "DATE NULL",
+      "pack_label" => "VARCHAR(64) NULL",
     ]);
     pos_ensure_columns("purchase_lines", [
       "batch_no" => "VARCHAR(64) NULL",
@@ -451,6 +458,27 @@ function pos_consume_piece_barcode($bid, $code, $kind = "sold") {
 function pos_item_is_count($item) {
   if (function_exists("pos_unit_is_count")) return pos_unit_is_count(pos_item_unit($item), $item);
   return pos_item_unit($item) === "PCS";
+}
+
+function pos_medicine_pack_label($item) {
+  $size = trim((string) ($item["pack_size"] ?? ""));
+  $unit = trim((string) ($item["pack_unit"] ?? ""));
+  $upp = (int) ($item["units_per_pack"] ?? 0);
+  if ($size !== "" && $unit !== "") return substr($size . " " . $unit, 0, 64);
+  if ($size !== "") return substr($size, 0, 64);
+  if ($upp > 0) return $upp . "s";
+  return "";
+}
+
+function pos_pharmacy_line_snapshot($item, $batch = null) {
+  $batchNo = trim((string) (($batch["batch_no"] ?? "") !== "" ? $batch["batch_no"] : ($item["batch_no"] ?? "")));
+  $exp = substr((string) (($batch["expiry_date"] ?? "") !== "" ? $batch["expiry_date"] : ($item["default_expiry"] ?? $item["expiry_date"] ?? "")), 0, 10);
+  $pack = pos_medicine_pack_label($item);
+  return [
+    "batch_no" => $batchNo !== "" ? substr($batchNo, 0, 64) : null,
+    "expiry_date" => preg_match("/^\d{4}-\d{2}-\d{2}$/", $exp) ? $exp : null,
+    "pack_label" => $pack !== "" ? $pack : null,
+  ];
 }
 
 function pos_compute_sale_line($item, $qty, $customer, $lineIn) {

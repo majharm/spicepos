@@ -27,7 +27,7 @@ import { recordCreditSale } from "./accounts.js";
 import { audit } from "./audit.js";
 import { getPlatformSettings, shopSupportContact } from "./settings.js";
 import { sendLowStockAlerts, tickShopAlerts, startAlertScheduler, scheduleAlertTick } from "./alerts.js";
-import { registerAdvanced, computeSaleLine, applySaleStock, applyLoyaltyOnSale } from "./advanced.js";
+import { registerAdvanced, computeSaleLine, applySaleStock, applyLoyaltyOnSale, pharmacyLineSnapshot } from "./advanced.js";
 import { registerQrPublic, registerQrStaff, linkQrOrderSale, ensureQrOrderSchema } from "./qr-ordering.js";
 import "../js/discount.js";
 import { canonApiUrl, isAliasedApi, isApiUrl, rewriteToApi } from "./http-path.js";
@@ -767,6 +767,10 @@ app.post("/api/checkout", requireStaff, requirePerm("counter"), async (req, res)
       const orderNumber = `SO-${next}`;
       const orderId = crypto.randomUUID();
       const payStatus = method === "credit" ? "partial" : "paid";
+      const billCustomerName =
+        clipInvoiceText(req.body?.customer_name ?? req.body?.customerName ?? "", 180) ||
+        customer.business_name ||
+        customer.name;
 
       let packName = null;
       if (packId) {
@@ -790,7 +794,7 @@ app.post("/api/checkout", requireStaff, requirePerm("counter"), async (req, res)
           orderId,
           orderNumber,
           customer.id,
-          customer.business_name || customer.name,
+          billCustomerName,
           customer.type,
           packId || null,
           packName,
@@ -826,6 +830,32 @@ app.post("/api/checkout", requireStaff, requirePerm("counter"), async (req, res)
           ]);
         } catch {
           /* optional column */
+        }
+      }
+
+      const doctorRx = clipInvoiceText(req.body?.doctor_rx ?? req.body?.doctorRx ?? "", 180) || null;
+      const customerAddress = clipInvoiceText(req.body?.customer_address ?? req.body?.customerAddress ?? "", 500) || null;
+      const customerMobile = String(req.body?.customer_mobile ?? req.body?.customerMobile ?? "")
+        .replace(/\D/g, "")
+        .slice(0, 15);
+      try {
+        await conn.query(
+          "UPDATE sales_orders SET doctor_rx=?, customer_address=?, customer_mobile=? WHERE id=? AND business_id=?",
+          [doctorRx, customerAddress, customerMobile || null, orderId, businessId],
+        );
+      } catch {
+        /* optional pharmacy bill columns */
+      }
+      const walkIn = customer.code === "CUS-001" || /^walk-?in$/i.test(String(customer.name || "").trim());
+      if (customerAddress && !walkIn) {
+        try {
+          await conn.query("UPDATE customers SET address=? WHERE id=? AND business_id=?", [
+            customerAddress,
+            customer.id,
+            businessId,
+          ]);
+        } catch {
+          /* optional */
         }
       }
 
@@ -871,6 +901,15 @@ app.post("/api/checkout", requireStaff, requirePerm("counter"), async (req, res)
           } catch {
             /* optional */
           }
+        }
+        const snap = pharmacyLineSnapshot(line.item, alloc?.batch);
+        try {
+          await conn.query(
+            "UPDATE sales_order_lines SET batch_no=?, expiry_date=?, pack_label=? WHERE id=?",
+            [snap.batch_no, snap.expiry_date, snap.pack_label, lineId],
+          );
+        } catch {
+          /* optional pharmacy line columns */
         }
       }
 

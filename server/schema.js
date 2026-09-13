@@ -145,6 +145,7 @@ export async function ensureSchema() {
   await addColumn("customers", "dob", "DATE NULL");
   await addColumn("customers", "referred_by", "VARCHAR(255) NULL");
   await addColumn("customers", "locale", "VARCHAR(16) NULL");
+  await addColumn("customers", "address", "VARCHAR(500) NULL");
   await addColumn("sales_orders", "discount_type", "VARCHAR(16) NOT NULL DEFAULT 'amt'");
   await addColumn("sales_orders", "discount_value", "DECIMAL(12,2) NOT NULL DEFAULT 0");
   await addColumn("sales_orders", "loyalty_points_redeemed", "INT NOT NULL DEFAULT 0");
@@ -152,6 +153,9 @@ export async function ensureSchema() {
   await addColumn("sales_orders", "loyalty_discount", "DECIMAL(12,2) NOT NULL DEFAULT 0");
   await addColumn("sales_orders", "qr_order_id", "VARCHAR(255) NULL");
   await addColumn("sales_orders", "table_no", "VARCHAR(64) NULL");
+  await addColumn("sales_orders", "doctor_rx", "VARCHAR(180) NULL");
+  await addColumn("sales_orders", "customer_address", "VARCHAR(500) NULL");
+  await addColumn("sales_orders", "customer_mobile", "VARCHAR(20) NULL");
   await addColumn("sales_order_lines", "mrp", "DECIMAL(12,2) NOT NULL DEFAULT 0");
   await addColumn("sales_order_lines", "discount_type", "VARCHAR(16) NOT NULL DEFAULT 'amt'");
   await addColumn("sales_order_lines", "discount_value", "DECIMAL(12,2) NOT NULL DEFAULT 0");
@@ -159,6 +163,9 @@ export async function ensureSchema() {
   await addColumn("sales_order_lines", "batch_id", "VARCHAR(255) NULL");
   await addColumn("sales_order_lines", "cost", "DECIMAL(12,2) NOT NULL DEFAULT 0");
   await addColumn("sales_order_lines", "profit", "DECIMAL(12,2) NOT NULL DEFAULT 0");
+  await addColumn("sales_order_lines", "batch_no", "VARCHAR(64) NULL");
+  await addColumn("sales_order_lines", "expiry_date", "DATE NULL");
+  await addColumn("sales_order_lines", "pack_label", "VARCHAR(64) NULL");
   await addColumn("purchase_lines", "batch_no", "VARCHAR(64) NULL");
   await addColumn("purchase_lines", "barcode", "VARCHAR(64) NULL");
   await addColumn("purchase_lines", "expiry_date", "DATE NULL");

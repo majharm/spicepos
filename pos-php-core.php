@@ -402,7 +402,7 @@ function pos_ensure_i18n_columns() {
     "ndps_licence_no" => "VARCHAR(80) NULL",
   ]);
   pos_ensure_columns("staff_users", ["locale" => "VARCHAR(16) NULL"]);
-  pos_ensure_columns("customers", ["locale" => "VARCHAR(16) NULL"]);
+  pos_ensure_columns("customers", ["locale" => "VARCHAR(16) NULL", "address" => "VARCHAR(500) NULL"]);
   pos_ensure_columns("items", ["local_name" => "VARCHAR(255) NULL"]);
   pos_ensure_columns("notifications", ["locale" => "VARCHAR(16) NULL"]);
 }
@@ -1227,6 +1227,9 @@ function pos_ensure_sales_schema() {
     "pack_count" => "INT NULL",
     "qr_order_id" => "VARCHAR(255) NULL",
     "table_no" => "VARCHAR(64) NULL",
+    "doctor_rx" => "VARCHAR(180) NULL",
+    "customer_address" => "VARCHAR(500) NULL",
+    "customer_mobile" => "VARCHAR(20) NULL",
   ];
   foreach ($cols as $name => $ddl) {
     $res = $db->query("SHOW COLUMNS FROM sales_orders LIKE '" . $db->real_escape_string($name) . "'");
@@ -1234,6 +1237,13 @@ function pos_ensure_sales_schema() {
       @$db->query("ALTER TABLE sales_orders ADD COLUMN {$name} {$ddl}");
     }
     if ($res) $res->free();
+  }
+  if (function_exists("pos_ensure_columns")) {
+    pos_ensure_columns("sales_order_lines", [
+      "batch_no" => "VARCHAR(64) NULL",
+      "expiry_date" => "DATE NULL",
+      "pack_label" => "VARCHAR(64) NULL",
+    ]);
   }
 }
 
