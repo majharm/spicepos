@@ -33,6 +33,10 @@ const BIZ_CATEGORIES = [
   "Hardware",
   "Jewellery",
   "Medical",
+  "Services",
+  "Salon / spa",
+  "Repair",
+  "Consultancy",
   "General trade",
   "Other",
 ];
@@ -45,6 +49,7 @@ const BIZ_CATEGORIES_FOR_TYPE = {
   Electronics: ["Mobile & electronics"],
   Fashion: ["Apparel", "Garments", "Clothing", "Boutique", "Saree Shop", "Ladies Fashion", "Mens Fashion", "Kids Fashion"],
   Footwear: ["Footwear"],
+  Services: ["Services", "Salon / spa", "Repair", "Consultancy"],
 };
 
 function categoriesForType(type) {

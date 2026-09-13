@@ -1,4 +1,7 @@
+import "../js/footwear.js";
+
 const COUNT = new Set(["PCS", "PC", "QTY", "NOS", "NO", "COUNT", "UNIT", "UNITS"]);
+const POSFootwear = globalThis.POSFootwear;
 
 export const STOCK_EXCEL_HEADERS = [
   "Code",
@@ -18,6 +21,11 @@ export const STOCK_EXCEL_HEADERS = [
   "GST %",
   "Item status",
 ];
+
+export function stockExcelHeaders(biz) {
+  const tax = POSFootwear?.taxCodeLabel(biz || {}) || "HSN";
+  return STOCK_EXCEL_HEADERS.map((h) => (h === "HSN" ? tax : h));
+}
 
 export function stockUnit(item) {
   const raw = item && typeof item === "object" ? item.base_unit || item.unit : item;
@@ -74,12 +82,13 @@ export function stockExcelRow(item) {
   ];
 }
 
-export function stockToSheets(rows) {
+export function stockToSheets(rows, biz = {}) {
   const list = Array.isArray(rows) ? rows : [];
   const all = list.map(stockExcelRow);
   const low = list.filter((r) => stockAlert(r) !== "OK").map(stockExcelRow);
+  const headers = stockExcelHeaders(biz);
   return [
-    { name: "Stock", headers: STOCK_EXCEL_HEADERS, rows: all },
-    { name: "Low stock", headers: STOCK_EXCEL_HEADERS, rows: low },
+    { name: "Stock", headers, rows: all },
+    { name: "Low stock", headers, rows: low },
   ];
 }

@@ -474,7 +474,8 @@ app.get("/api/reports/excel", requireStaff, requirePerm("reports"), async (req, 
   const sheet = req.query.sheet ? String(req.query.sheet) : "";
   try {
     const data = await buildReports(from, to);
-    let sheets = reportsToSheets(data);
+    const [biz] = await query("SELECT category, business_type, name FROM businesses WHERE id=?", [bid()]);
+    let sheets = reportsToSheets(data, biz);
     if (sheet) {
       sheets = sheets.filter((s) => s.name === sheet);
       if (!sheets.length) {

@@ -303,7 +303,8 @@ function pos_build_reports($bid, $from, $to) {
   ];
 }
 
-function pos_reports_to_sheets($data) {
+function pos_reports_to_sheets($data, $biz = null) {
+  $tax = function_exists("pos_tax_code_label") ? pos_tax_code_label($biz ?: []) : "HSN";
   $num = function ($v) {
     return pos_report_num($v);
   };
@@ -442,8 +443,8 @@ function pos_reports_to_sheets($data) {
       "rows" => $gstInputRows,
     ],
     [
-      "name" => "GST HSN itemwise",
-      "headers" => ["HSN/SKU", "Item", "GST %", "Qty g", "Taxable", "GST"],
+      "name" => "GST " . $tax . " itemwise",
+      "headers" => [$tax . "/SKU", "Item", "GST %", "Qty g", "Taxable", "GST"],
       "rows" => array_map(function ($r) use ($num) {
         return [$r["hsn"], $r["item_name"], $num($r["gst_rate"]), $num($r["quantity_gm"]), $num($r["taxable"]), $num($r["gst"])];
       }, $data["gstHsn"] ?? []),
@@ -485,7 +486,7 @@ function pos_reports_to_sheets($data) {
     ],
     [
       "name" => "Stock",
-      "headers" => ["Code", "Name", "HSN", "Category", "Subcategory", "Stock g", "Reorder g", "Retail", "B2B", "Purchase", "GST %"],
+      "headers" => ["Code", "Name", $tax, "Category", "Subcategory", "Stock g", "Reorder g", "Retail", "B2B", "Purchase", "GST %"],
       "rows" => array_map(function ($i) use ($num) {
         return [
           $i["code"], $i["name"], $i["hsn"], $i["category"], $i["subcategory"],
@@ -570,7 +571,9 @@ function pos_workbook_xml($sheets) {
 
 function pos_reports_excel_response($bid, $from, $to, $sheetFilter = "") {
   $data = pos_build_reports($bid, $from, $to);
-  $sheets = pos_reports_to_sheets($data);
+  $bizRows = pos_q("SELECT name, category, business_type FROM businesses WHERE id = ? LIMIT 1", "s", [$bid]);
+  $biz = is_array($bizRows) && $bizRows ? $bizRows[0] : [];
+  $sheets = pos_reports_to_sheets($data, $biz);
   if ($sheetFilter !== "") {
     $filtered = [];
     foreach ($sheets as $s) {

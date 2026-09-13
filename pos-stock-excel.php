@@ -15,9 +15,10 @@ function pos_stock_alert($row) {
   return "OK";
 }
 
-function pos_stock_excel_headers() {
+function pos_stock_excel_headers($biz = null) {
+  $tax = function_exists("pos_tax_code_label") ? pos_tax_code_label($biz ?: []) : "HSN";
   return [
-    "Code", "Name", "Barcode", "HSN", "Category", "Subcategory", "Unit",
+    "Code", "Name", "Barcode", $tax, "Category", "Subcategory", "Unit",
     "On hand", "Reorder", "Alert", "Purchase", "Retail", "B2B", "Value", "GST %", "Item status",
   ];
 }
@@ -48,7 +49,7 @@ function pos_stock_excel_row($item) {
   ];
 }
 
-function pos_stock_to_sheets($rows) {
+function pos_stock_to_sheets($rows, $biz = null) {
   $list = is_array($rows) ? $rows : [];
   $all = [];
   $low = [];
@@ -57,7 +58,7 @@ function pos_stock_to_sheets($rows) {
     $all[] = $row;
     if (pos_stock_alert($item) !== "OK") $low[] = $row;
   }
-  $headers = pos_stock_excel_headers();
+  $headers = pos_stock_excel_headers($biz);
   return [
     ["name" => "Stock", "headers" => $headers, "rows" => $all],
     ["name" => "Low stock", "headers" => $headers, "rows" => $low],
@@ -70,7 +71,9 @@ function pos_stock_excel_response($bid) {
   }
   $rows = pos_q("SELECT * FROM items WHERE business_id = ? ORDER BY name", "s", [$bid]);
   if (!is_array($rows)) $rows = [];
-  $xml = pos_workbook_xml(pos_stock_to_sheets($rows));
+  $bizRows = pos_q("SELECT name, category, business_type FROM businesses WHERE id = ? LIMIT 1", "s", [$bid]);
+  $biz = is_array($bizRows) && $bizRows ? $bizRows[0] : [];
+  $xml = pos_workbook_xml(pos_stock_to_sheets($rows, $biz));
   $day = date("Y-m-d");
   http_response_code(200);
   header("Content-Type: application/vnd.ms-excel; charset=utf-8");

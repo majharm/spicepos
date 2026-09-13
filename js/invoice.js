@@ -39,6 +39,13 @@
     return /(pharmacy|medical)/.test(t);
   }
 
+  function taxCode(ctx) {
+    if (ctx?.taxCode) return ctx.taxCode;
+    const F = globalThis.POSFootwear;
+    if (F?.taxCodeLabel) return F.taxCodeLabel(ctx?.businessMeta || {});
+    return "HSN";
+  }
+
   function round2(v) {
     return Math.round(num(v) * 100) / 100;
   }
@@ -333,7 +340,7 @@
         <td class="inv-item" colspan="4">${i + 1}. ${escapeHtml(lineName(l, ctx))}</td>
       </tr>
       <tr class="inv-line">
-        <td class="inv-hsn">HSN ${escapeHtml(l.hsn)}</td>
+        <td class="inv-hsn">${taxCode(ctx)} ${escapeHtml(l.hsn)}</td>
         <td class="inv-num">${escapeHtml(formatQty(l.quantity_gm, l.unit))}</td>
         <td class="inv-num">${escapeHtml(money(l.rate_per_kg))}${escapeHtml(rateSuffix(l.unit))}</td>
         <td class="inv-num">${escapeHtml(money(l.amount))}</td>
@@ -375,7 +382,7 @@
   <table class="inv-table">
     <thead>
       <tr>
-        <th>HSN / Item</th>
+        <th>${taxCode(ctx)} / Item</th>
         <th class="inv-num">Qty</th>
         <th class="inv-num">Rate</th>
         <th class="inv-num">Amt</th>
@@ -509,7 +516,7 @@ ${purchaseBody(purchase, ctx)}
         <td class="inv-item" colspan="4">${i + 1}. ${escapeHtml(lineName(l, ctx))}</td>
       </tr>
       <tr class="inv-line">
-        <td class="inv-hsn">HSN ${escapeHtml(l.hsn)}</td>
+        <td class="inv-hsn">${taxCode(ctx)} ${escapeHtml(l.hsn)}</td>
         <td class="inv-num">${escapeHtml(formatQty(l.quantity_gm, l.unit))}</td>
         <td class="inv-num">${escapeHtml(money(l.rate_per_kg))}${escapeHtml(rateSuffix(l.unit))}</td>
         <td class="inv-num">${escapeHtml(money(l.amount))}</td>
@@ -549,7 +556,7 @@ ${purchaseBody(purchase, ctx)}
   <table class="inv-table">
     <thead>
       <tr>
-        <th>${pharmacy ? "Medicine" : `${escapeHtml(L(ctx, "invoice.hsn", "HSN"))} / ${escapeHtml(L(ctx, "invoice.item", "Item"))}`}</th>
+        <th>${pharmacy ? "Medicine" : `${escapeHtml(taxCode(ctx))} / ${escapeHtml(L(ctx, "invoice.item", "Item"))}`}</th>
         <th class="inv-num">${pharmacy ? "Qty" : escapeHtml(L(ctx, "invoice.qty", "Qty"))}</th>
         <th class="inv-num">${pharmacy ? "Rate" : escapeHtml(L(ctx, "invoice.rate", "Rate"))}</th>
         <th class="inv-num">${pharmacy ? "Amount" : escapeHtml(L(ctx, "invoice.amount", "Amt"))}</th>
@@ -819,7 +826,7 @@ ${invoiceBody(order, ctx)}
         ${pharmacy
           ? `<th>Medicine</th><th>Batch No.</th><th>Expiry</th><th>Pack</th><th class="off-n">Qty</th><th class="off-n">MRP</th><th class="off-n">Rate</th><th class="off-n">GST</th><th class="off-n">Amount</th>`
           : `<th>Item</th>
-        <th>HSN</th>
+        <th>${taxCode(ctx)}</th>
         <th class="off-n">Qty</th>
         <th class="off-n">Rate</th>
         <th class="off-n">Taxable</th>

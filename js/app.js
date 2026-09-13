@@ -158,6 +158,14 @@ function isPharmacyShop() {
   return Boolean(globalThis.POSFootwear?.isPharmacyShop?.(state.businessMeta) || globalThis.POSFootwear?.shopKind?.(state.businessMeta) === "pharmacy");
 }
 
+function taxCodeLabel(biz = state.businessMeta) {
+  return globalThis.POSFootwear?.taxCodeLabel(biz) || "HSN";
+}
+
+function taxCodeFieldLabel(biz = state.businessMeta) {
+  return globalThis.POSFootwear?.taxCodeFieldLabel(biz) || "HSN code (goods)";
+}
+
 function restaurantApi() {
   return globalThis.POSRestaurant || null;
 }
@@ -194,6 +202,7 @@ function applyFootwearMode() {
   document.body.classList.toggle("spice-mode", spice);
   document.body.classList.toggle("restaurant-mode", isRestaurantShop());
   document.body.classList.toggle("pharmacy-mode", pharm);
+  document.body.classList.toggle("services-mode", globalThis.POSFootwear?.isServicesShop?.(state.businessMeta));
   document.querySelectorAll(".footwear-only").forEach((el) => {
     el.hidden = !on;
   });
@@ -204,7 +213,7 @@ function applyFootwearMode() {
     el.hidden = pharm;
   });
   const search = $("search");
-  if (search) search.placeholder = copy.search || "Search name or HSN…";
+  if (search) search.placeholder = copy.search || `Search name or ${taxCodeLabel()}…`;
   const scan = $("scan-code");
   if (scan) scan.placeholder = copy.scan || "Scan or search";
   const mobile = $("counter-mobile");
@@ -219,12 +228,15 @@ function applyFootwearMode() {
   if ($("item-name")) $("item-name").placeholder = copy.name || "Item name";
   if ($("item-local-lab")) $("item-local-lab").textContent = copy.localNameLab || "Regional name";
   if ($("item-local-name")) $("item-local-name").placeholder = copy.localName || "स्थानीय नाम / Local name";
-  if ($("item-hsn")) $("item-hsn").placeholder = copy.hsn || "e.g. 1234";
+  if ($("item-hsn")) $("item-hsn").placeholder = copy.hsn || (taxCodeLabel() === "SAC" ? "e.g. 9983" : "e.g. 1234");
+  if ($("item-hsn-lab")) $("item-hsn-lab").textContent = copy.taxField || taxCodeFieldLabel();
   if ($("item-size")) $("item-size").placeholder = fw ? "e.g. 6, 7, 8 or 5" : ap ? "S, M, L, XL or 32, 34" : "e.g. 6, 7, 8 or 5";
-  if ($("items-lede")) $("items-lede").textContent = copy.lede || "Name, photo, HSN code, unit type, rates, and stock.";
+  if ($("items-lede")) $("items-lede").textContent = copy.lede || `Name, photo, ${taxCodeFieldLabel()}, unit type, rates, and stock.`;
   if ($("item-catalog-search")) {
-    $("item-catalog-search").placeholder = copy.catalogSearch || copy.search || "Search name, HSN, barcode…";
+    $("item-catalog-search").placeholder = copy.catalogSearch || copy.search || `Search name, ${taxCodeLabel()}, barcode…`;
   }
+  if ($("pack-item-search")) $("pack-item-search").placeholder = `Search spice or ${taxCodeLabel()}…`;
+  if ($("po-item-search")) $("po-item-search").placeholder = `Search item or ${taxCodeLabel()}…`;
   if ($("item-import-copy")) {
     $("item-import-copy").textContent = copy.importCopy
       || "Bulk add from Excel. Download the template, fill one item per row, then upload .xlsx, Excel XML, or CSV.";
@@ -261,7 +273,7 @@ function applyFootwearMode() {
       : "Company profile, timezone, shop logo, and your login password. Shop backup is under Settings → Backup.";
   }
   if ($("ticket-sub") && !state.cart?.length) $("ticket-sub").textContent = copy.ticket || emptyTicketHint();
-  VIEW_META.items.subtitle = copy.itemsSub || "Photo, HSN, unit type, rates, and stock";
+  VIEW_META.items.subtitle = copy.itemsSub || `Photo, ${taxCodeLabel()}, unit type, rates, and stock`;
   VIEW_META.counter.subtitle = copy.counterSub || "Scan, tap, or search — then Pay";
   const pack = $("pack-choice");
   if (pack) pack.hidden = !spice;
@@ -2049,7 +2061,7 @@ function catalogCardMeta(item) {
   }
   return {
     sku: `${item.category} / ${item.subcategory || "—"}`,
-    detail: item.hsn ? `HSN ${item.hsn}` : "",
+    detail: item.hsn ? `${taxCodeLabel()} ${item.hsn}` : "",
   };
 }
 
@@ -2107,7 +2119,7 @@ function renderCatalog() {
   if (!rows.length) {
     const q = String(state.query || "").trim();
     root.innerHTML = `<div class="catalog-empty">${
-      q ? `No items match “${escapeHtml(q)}”. Try another name, HSN, or SKU.` : "No items in this shop yet."
+      q ? `No items match “${escapeHtml(q)}”. Try another name, ${taxCodeLabel()}, or SKU.` : "No items in this shop yet."
     }</div>`;
     return;
   }
@@ -3079,7 +3091,7 @@ function renderItemsTable() {
         ? `${escapeHtml(globalThis.POSFootwear?.wearerLabel(i.wearer_type) || "—")} · ${escapeHtml(i.color || "—")} · Sz ${escapeHtml(i.size || "—")}`
         : isPharmacyShop()
           ? `${escapeHtml(i.generic_name || i.local_name || i.code || "")}${i.medicine_type ? ` · ${escapeHtml(i.medicine_type)}` : ""}${i.batch_no ? ` · ${escapeHtml(i.batch_no)}` : ""}`
-          : `${escapeHtml(i.code || "")}${i.hsn ? ` · HSN ${escapeHtml(i.hsn)}` : ""}`;
+          : `${escapeHtml(i.code || "")}${i.hsn ? ` · ${taxCodeLabel()} ${escapeHtml(i.hsn)}` : ""}`;
       const group = footwear
         ? `${escapeHtml(i.category || "Style")} / ${escapeHtml(i.subcategory || "—")}`
         : `${escapeHtml(i.category || "—")} / ${escapeHtml(i.subcategory || "—")}`;
@@ -3481,7 +3493,7 @@ function renderPoLines() {
       </tr>`);
   }
   el.innerHTML = `<div class="po-table-wrap"><table class="po-table"><thead><tr>
-    <th class="po-check"></th><th>Item</th><th>HSN</th><th>Qty</th><th>Unit</th><th>Rate</th><th>Expiry</th><th class="num">Amount</th>
+    <th class="po-check"></th><th>Item</th><th>${taxCodeLabel()}</th><th>Qty</th><th>Unit</th><th>Rate</th><th>Expiry</th><th class="num">Amount</th>
   </tr></thead><tbody>${rows.join("")}</tbody></table></div>
     <div id="po-barcode-panels">${panels.join("")}</div>`;
   filterPoLines();
@@ -4184,10 +4196,10 @@ async function loadReports() {
       reportBlock("GST daywise", "GST daywise", ["Day", "Taxable", "GST", "Total"], (data.gst || []).map((r) => [reportDay(r.day), Number(r.taxable) || 0, Number(r.gst) || 0, Number(r.total) || 0]), "gst"),
       reportBlock("GST output by rate", "GST output by rate", ["GST %", "Taxable", "CGST", "SGST", "IGST", "Total GST", "Bills"], gstRateRows(data.gstByRate), "gst"),
       reportBlock("GST input by rate", "GST input by rate", ["GST %", "Taxable", "CGST", "SGST", "IGST", "Total GST"], gstRateRows(data.gstInputByRate, false), "gst"),
-      reportBlock("GST HSN itemwise", "GST HSN itemwise", ["HSN/SKU", "Item", "GST %", "Qty g", "Taxable", "GST"], (data.gstHsn || []).map((r) => [r.hsn, r.item_name, Number(r.gst_rate) || 0, Number(r.quantity_gm) || 0, Number(r.taxable) || 0, Number(r.gst) || 0]), "gst"),
+      reportBlock(`GST ${taxCodeLabel()} itemwise`, `GST ${taxCodeLabel()} itemwise`, [`${taxCodeLabel()}/SKU`, "Item", "GST %", "Qty g", "Taxable", "GST"], (data.gstHsn || []).map((r) => [r.hsn, r.item_name, Number(r.gst_rate) || 0, Number(r.quantity_gm) || 0, Number(r.taxable) || 0, Number(r.gst) || 0]), "gst"),
       reportBlock("GST B2B sales", "GST B2B sales", ["Bill", "Date", "Customer", "GSTIN", "Taxable", "CGST", "SGST", "IGST", "Total", "Supply"], (data.gstB2B || []).map((r) => [r.order_number, reportDay(r.bill_date), r.customer_name, r.gstin, Number(r.taxable) || 0, Number(r.cgst) || 0, Number(r.sgst) || 0, Number(r.igst) || 0, Number(r.total) || 0, r.interState ? "Inter-state" : "Intra-state"]), "gst"),
       reportBlock("GST B2C sales", "GST B2C sales", ["Bill", "Date", "Customer", "Taxable", "CGST", "SGST", "IGST", "Total", "Supply"], (data.gstB2C || []).map((r) => [r.order_number, reportDay(r.bill_date), r.customer_name, Number(r.taxable) || 0, Number(r.cgst) || 0, Number(r.sgst) || 0, Number(r.igst) || 0, Number(r.total) || 0, r.interState ? "Inter-state" : "Intra-state"]), "gst"),
-      reportBlock("Stock", "Stock", ["Code", "Name", "HSN", "Category", "Subcategory", "Stock g", "Reorder g", "Retail", "B2B", "Purchase", "GST %"], (data.stock || []).map((i) => [i.code, i.name, i.hsn, i.category, i.subcategory, Number(i.stock_gm) || 0, Number(i.reorder_level_gm) || 0, Number(i.retail_rate) || 0, Number(i.b2b_rate) || 0, Number(i.purchase_rate) || 0, Number(i.gst_rate) || 0]), "stock"),
+      reportBlock("Stock", "Stock", ["Code", "Name", taxCodeLabel(), "Category", "Subcategory", "Stock g", "Reorder g", "Retail", "B2B", "Purchase", "GST %"], (data.stock || []).map((i) => [i.code, i.name, i.hsn, i.category, i.subcategory, Number(i.stock_gm) || 0, Number(i.reorder_level_gm) || 0, Number(i.retail_rate) || 0, Number(i.b2b_rate) || 0, Number(i.purchase_rate) || 0, Number(i.gst_rate) || 0]), "stock"),
       reportBlock("Low stock", "Low stock", ["Code", "Name", "Stock g", "Reorder g"], (data.low || []).map((i) => [i.code, i.name, Number(i.stock_gm) || 0, Number(i.reorder_level_gm) || 0]), "stock"),
       reportBlock("Purchases", "Purchases", ["PO", "Supplier", "Invoice", "Date", "Taxable", "GST", "Total", "Pay", "Status"], (data.purchases || []).map((p) => [p.purchase_number, p.supplier_name, p.supplier_invoice_number, p.purchase_date, Number(p.subtotal) || 0, Number(p.gst) || 0, Number(p.total) || 0, p.payment_method, p.payment_status]), "books"),
       reportBlock("Expenses", "Expenses", ["No.", "Date", "Category", "Amount", "GST", "Total", "Pay", "Notes"], (data.expenses || []).map((e) => [e.expense_number, e.expense_date, e.category, Number(e.amount) || 0, Number(e.gst) || 0, Number(e.total) || (Number(e.amount) || 0) + (Number(e.gst) || 0), e.payment_method, e.notes]), "books"),
@@ -4260,6 +4272,7 @@ function invoiceCtx() {
     locale,
     invoiceMode: mode,
     invoiceLabel: (key) => (I ? I.invoiceLabel(key, locale, mode) : key),
+    taxCode: taxCodeLabel(),
     displayItemName: (item) => (I ? I.displayItemName(item, locale, mode) : item?.name || item?.item_name || ""),
   };
 }

@@ -37,6 +37,8 @@ const HEADER_ALIASES = {
   productname: "name",
   hsn: "hsn",
   hsncode: "hsn",
+  sac: "hsn",
+  saccode: "hsn",
   category: "category",
   group: "category",
   subcategory: "subcategory",
@@ -130,7 +132,9 @@ export const PHARMACY_ITEM_IMPORT_HEADERS = [
 ];
 
 export function itemImportHeaders(biz) {
-  return POSFootwear.isPharmacyShop(biz || {}) ? PHARMACY_ITEM_IMPORT_HEADERS : ITEM_IMPORT_HEADERS;
+  if (POSFootwear.isPharmacyShop(biz || {})) return PHARMACY_ITEM_IMPORT_HEADERS;
+  const code = POSFootwear.taxCodeLabel(biz || {});
+  return ITEM_IMPORT_HEADERS.map((h) => (h === "HSN" ? code : h));
 }
 
 function pharmacyItemImportSheets() {
@@ -165,7 +169,7 @@ export function itemImportTemplateSheets(biz) {
   return [
     {
       name: "Items",
-      headers: ITEM_IMPORT_HEADERS,
+      headers: itemImportHeaders(biz),
       rows: [
         ["Turmeric powder", "091030", "Whole Spices", "Powder", "GM", 220, 5, 240, 210, 180, 5000, "", "", "", "", "", ""],
         ["Soap bar", "", "Grocery", "", "PCS", 25, 5, 30, 28, 22, 24, "", "", "", "", "", ""],
@@ -176,6 +180,7 @@ export function itemImportTemplateSheets(biz) {
       headers: ["Field", "Notes"],
       rows: [
         ["Name", "Required. Each row is one item."],
+        [POSFootwear.taxCodeLabel(biz || {}), "HSN for goods. SAC for services. Stored on the item."],
         ["Unit", "GM, KG, PCS, ML, or LTR (or your unit master code)."],
         ["Stock", "Quantity in that unit: grams for GM, kg for KG, pcs for PCS."],
         ["GST %", "Defaults to 5 if blank on a new item."],

@@ -61,7 +61,7 @@
     if (/(electronic|mobile)/.test(t)) return "electronics";
     if (/(jewel)/.test(t)) return "jewellery";
     if (/(hardware)/.test(t)) return "hardware";
-    if (/(service)/.test(t)) return "services";
+    if (/(service|salon|spa|repair|consult)/.test(t)) return "services";
     return "general";
   }
 
@@ -137,6 +137,22 @@
 
   function isPharmacyShop(biz) {
     return shopKind(biz) === "pharmacy";
+  }
+
+  function isServicesShop(biz) {
+    return shopKind(biz) === "services";
+  }
+
+  function taxCodeKind(biz) {
+    return isServicesShop(biz) ? "SAC" : "HSN";
+  }
+
+  function taxCodeLabel(biz) {
+    return taxCodeKind(biz);
+  }
+
+  function taxCodeFieldLabel(biz) {
+    return taxCodeKind(biz) === "SAC" ? "SAC code (service)" : "HSN code (goods)";
   }
 
   function qrOrderingEnabled(biz) {
@@ -338,13 +354,14 @@
         subcategory: "Labour / Visit",
         categoryLab: "Category",
         subcategoryLab: "Subcategory",
-        search: "Search service…",
+        search: "Search service or SAC…",
         scan: "Scan or search",
-        lede: "Name, photo, HSN code, unit type, rates, and stock.",
-        itemsSub: "Photo, HSN, unit type, rates, and stock",
+        lede: "Name, photo, SAC code (service), unit type, rates, and stock.",
+        itemsSub: "Photo, SAC, unit type, rates, and stock",
         counterSub: "Tap a service — then Pay",
         ticket: "Tap a service",
         hsn: "e.g. 9983",
+        catalogSearch: "Search name, SAC, barcode…",
       },
       general: {
         name: "Item name",
@@ -362,7 +379,27 @@
         hsn: "e.g. 1234",
       },
     };
-    return copies[k] || copies.general;
+    return applyTaxCopy(copies[k] || copies.general, biz);
+  }
+
+  function applyTaxCopy(copy, biz) {
+    const code = taxCodeLabel(biz);
+    const field = taxCodeFieldLabel(biz);
+    const out = { ...copy, taxCode: code, taxField: field };
+    if (code === "SAC") {
+      return {
+        ...out,
+        search: /SAC|HSN/.test(copy.search || "") ? String(copy.search).replace(/HSN/g, "SAC") : "Search service or SAC…",
+        catalogSearch: String(copy.catalogSearch || copy.search || "Search name, SAC, barcode…").replace(/HSN/g, "SAC"),
+        lede: String(copy.lede || "").replace(/HSN code \(goods\)/g, field).replace(/HSN code/g, field).replace(/HSN/g, "SAC"),
+        itemsSub: String(copy.itemsSub || "").replace(/HSN/g, "SAC"),
+      };
+    }
+    return {
+      ...out,
+      catalogSearch: copy.catalogSearch || String(copy.search || "Search name or HSN…").replace("…", ", barcode…"),
+      lede: String(copy.lede || "").replace(/HSN code(?! \(goods\))/g, "HSN code (goods)"),
+    };
   }
 
   function parseSizes(raw) {
@@ -610,6 +647,10 @@
     isSpiceShop,
     isRestaurantShop,
     isPharmacyShop,
+    isServicesShop,
+    taxCodeKind,
+    taxCodeLabel,
+    taxCodeFieldLabel,
     qrOrderingEnabled,
     isVariantShop,
     shopKind,

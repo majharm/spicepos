@@ -7,6 +7,13 @@ import {
   splitOrderGst,
   sumSplitGst,
 } from "./gst-supply.js";
+import "../js/footwear.js";
+
+const POSFootwear = globalThis.POSFootwear;
+
+function taxCodeLabel(biz) {
+  return POSFootwear?.taxCodeLabel(biz || {}) || "HSN";
+}
 
 function range(from, to) {
   const end = to || new Date().toISOString().slice(0, 10);
@@ -270,7 +277,8 @@ export function formatReportDay(value) {
   return m ? m[1] : s;
 }
 
-export function reportsToSheets(data) {
+export function reportsToSheets(data, biz = {}) {
+  const tax = taxCodeLabel(biz);
   const num = (v) => Number(v) || 0;
   const gstRateRows = (rows, withBills = true) =>
     (rows || []).map((r) => {
@@ -383,8 +391,8 @@ export function reportsToSheets(data) {
       rows: gstInputRows,
     },
     {
-      name: "GST HSN itemwise",
-      headers: ["HSN/SKU", "Item", "GST %", "Qty g", "Taxable", "GST"],
+      name: `GST ${tax} itemwise`,
+      headers: [`${tax}/SKU`, "Item", "GST %", "Qty g", "Taxable", "GST"],
       rows: (data.gstHsn || []).map((r) => [
         r.hsn, r.item_name, num(r.gst_rate), num(r.quantity_gm), num(r.taxable), num(r.gst),
       ]),
@@ -422,7 +430,7 @@ export function reportsToSheets(data) {
     },
     {
       name: "Stock",
-      headers: ["Code", "Name", "HSN", "Category", "Subcategory", "Stock g", "Reorder g", "Retail", "B2B", "Purchase", "GST %"],
+      headers: ["Code", "Name", tax, "Category", "Subcategory", "Stock g", "Reorder g", "Retail", "B2B", "Purchase", "GST %"],
       rows: data.stock.map((i) => [
         i.code, i.name, i.hsn, i.category, i.subcategory,
         num(i.stock_gm), num(i.reorder_level_gm), num(i.retail_rate), num(i.b2b_rate),

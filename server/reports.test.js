@@ -40,6 +40,9 @@ test("reportsToSheets includes GST summary and IGST columns", () => {
   assert.ok(sheets.some((s) => s.name === "GST B2B sales"));
   assert.equal(sheets.find((s) => s.name === "GST output by rate").headers[4], "IGST");
   assert.equal(sheets.find((s) => s.name === "Stock").headers[2], "HSN");
+  const sac = reportsToSheets(emptyReports("2026-08-01", "2026-08-30"), { business_type: "Services" });
+  assert.equal(sac.find((s) => s.name === "Stock").headers[2], "SAC");
+  assert.ok(sac.some((s) => s.name === "GST SAC itemwise"));
   assert.equal(sheets.find((s) => s.name === "Summary").rows[0][2], 0);
 });
 

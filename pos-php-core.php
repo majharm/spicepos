@@ -647,8 +647,16 @@ function pos_shop_kind($biz) {
   if (preg_match("/(electronic|mobile)/", $text)) return "electronics";
   if (preg_match("/(jewel)/", $text)) return "jewellery";
   if (preg_match("/(hardware)/", $text)) return "hardware";
-  if (preg_match("/(service)/", $text)) return "services";
+  if (preg_match("/(service|salon|spa|repair|consult)/", $text)) return "services";
   return "general";
+}
+
+function pos_is_services_shop($biz) {
+  return pos_shop_kind($biz) === "services";
+}
+
+function pos_tax_code_label($biz) {
+  return pos_is_services_shop($biz) ? "SAC" : "HSN";
 }
 
 function pos_is_spice_shop($biz) {

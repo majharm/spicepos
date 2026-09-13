@@ -12,8 +12,9 @@ function pos_item_import_headers($biz = null) {
       "MRP", "GST %", "Retail", "Purchase", "Stock", "Barcode", "Code", "Reorder",
     ];
   }
+  $tax = function_exists("pos_tax_code_label") ? pos_tax_code_label($biz ?: []) : "HSN";
   return [
-    "Name", "HSN", "Category", "Subcategory", "Unit", "MRP", "GST %", "Retail", "B2B", "Purchase",
+    "Name", $tax, "Category", "Subcategory", "Unit", "MRP", "GST %", "Retail", "B2B", "Purchase",
     "Stock", "Barcode", "Manufacturer barcode", "Code", "Colour", "Size", "Wearer",
   ];
 }
@@ -25,7 +26,7 @@ function pos_item_import_header_key($raw) {
   $n = preg_replace("/\s+/", "", trim((string) $n));
   $aliases = [
     "name" => "name", "item" => "name", "itemname" => "name", "product" => "name", "productname" => "name",
-    "hsn" => "hsn", "hsncode" => "hsn",
+    "hsn" => "hsn", "hsncode" => "hsn", "sac" => "hsn", "saccode" => "hsn",
     "category" => "category", "group" => "category",
     "subcategory" => "subcategory", "subcategoryname" => "subcategory",
     "unit" => "unit", "unittype" => "unit", "uom" => "unit", "baseunit" => "unit",

@@ -393,7 +393,8 @@ export function registerTenant(app) {
   app.get("/api/stock/excel", requireStaff, requirePerm("stock"), async (_req, res) => {
     try {
       const rows = await query("SELECT * FROM items WHERE business_id=? ORDER BY name", [bid()]);
-      const xml = workbookXml(stockToSheets(rows));
+      const [biz] = await query("SELECT category, business_type, name FROM businesses WHERE id=?", [bid()]);
+      const xml = workbookXml(stockToSheets(rows, biz));
       const day = new Date().toISOString().slice(0, 10);
       res.setHeader("Content-Type", "application/vnd.ms-excel; charset=utf-8");
       res.setHeader("Content-Disposition", `attachment; filename="stock-list-${day}.xls"`);

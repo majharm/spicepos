@@ -110,6 +110,10 @@ test("Every signup category gets its own item copy, not Whole Spices", () => {
     "Hardware",
     "Jewellery",
     "Medical",
+    "Services",
+    "Salon / spa",
+    "Repair",
+    "Consultancy",
     "General trade",
     "Other",
   ];
@@ -131,6 +135,10 @@ test("Every signup category gets its own item copy, not Whole Spices", () => {
     Hardware: "hardware",
     Jewellery: "jewellery",
     Medical: "pharmacy",
+    Services: "services",
+    "Salon / spa": "services",
+    Repair: "services",
+    Consultancy: "services",
     "General trade": "grocery",
     Other: "general",
   };
@@ -146,6 +154,15 @@ test("Every signup category gets its own item copy, not Whole Spices", () => {
   assert.equal(F.shopKind({ business_type: "Electronics" }), "electronics");
   assert.equal(F.shopKind({ business_type: "Grocery" }), "grocery");
   assert.equal(F.shopKind({ business_type: "Services" }), "services");
+  assert.equal(F.taxCodeLabel({ category: "Spices & masala" }), "HSN");
+  assert.equal(F.taxCodeLabel({ category: "Medical" }), "HSN");
+  assert.equal(F.taxCodeLabel({ category: "Food & beverage" }), "HSN");
+  assert.equal(F.taxCodeLabel({ business_type: "Services" }), "SAC");
+  assert.equal(F.taxCodeLabel({ category: "Salon / spa" }), "SAC");
+  assert.equal(F.taxCodeFieldLabel({ category: "Kirana / FMCG" }), "HSN code (goods)");
+  assert.equal(F.taxCodeFieldLabel({ category: "Consultancy" }), "SAC code (service)");
+  assert.match(F.itemFormCopy({ category: "Spices & masala" }).lede, /HSN code \(goods\)/);
+  assert.match(F.itemFormCopy({ business_type: "Services" }).lede, /SAC code \(service\)/);
   assert.equal(F.defaultCategory({ category: "Spices & masala" }), "Whole Spices");
   assert.equal(F.defaultCategory({ category: "Kirana / FMCG" }), "Kirana / FMCG");
   assert.equal(F.defaultCategory({ category: "Jewellery" }), "Jewellery");
@@ -189,7 +206,9 @@ test("Every signup category gets its own item copy, not Whole Spices", () => {
   assert.match(master, /BIZ_CATEGORIES_FOR_TYPE/);
   assert.match(master, /function fillCategorySelect/);
   assert.match(xpos, /function fillSignupCategory/);
-  assert.match(xpos, /t === "Restaurant" \|\| t === "Cafe" \|\| t === "Bakery"/);
+  assert.match(xpos, /t === "Footwear"/);
+  assert.match(xpos, /t === "Services"/);
+  assert.match(master, /Services: \["Services"/);
 });
 
 test("Item form and Counter expose colour, size, and girls/boys", () => {
