@@ -14,6 +14,7 @@ import {
   postPaymentJournal,
   postReceiptJournal,
   replaceLedgerJournal,
+  deleteLedgerJournal,
   profitAndLoss,
   trialBalance,
   buildPartyLedger,
@@ -376,6 +377,51 @@ export function registerAccounts(app) {
     }
   });
 
+  app.delete("/api/accounts/receipts/:id", requirePerm("accounts"), async (req, res) => {
+    try {
+      const result = await withTransaction(async (conn) => {
+        const [ledgers] = await conn.query(
+          "SELECT * FROM account_ledger WHERE id = ? AND business_id = ? FOR UPDATE",
+          [req.params.id, bid()],
+        );
+        const entry = ledgers[0];
+        if (!entry || entry.entry_type !== "receipt") throw new Error("Receipt not found");
+        const [custRows] = await conn.query(
+          "SELECT * FROM customers WHERE id = ? AND business_id = ? FOR UPDATE",
+          [entry.party_id, bid()],
+        );
+        const customer = custRows[0];
+        if (!customer) throw new Error("Customer not found");
+        const amt = round2(Number(entry.amount || 0));
+        const next = round2(Number(customer.outstanding || 0) + amt);
+        await conn.query("UPDATE customers SET outstanding = ? WHERE id = ? AND business_id = ?", [
+          next,
+          customer.id,
+          bid(),
+        ]);
+        await deleteLedgerJournal(conn, entry.id);
+        await conn.query("DELETE FROM account_ledger WHERE id = ? AND business_id = ?", [entry.id, bid()]);
+        return {
+          entryNo: entry.entry_no,
+          ledgerId: entry.id,
+          customer: { ...customer, outstanding: next },
+          amount: amt,
+          balance_due: next,
+        };
+      });
+      await audit("Customer Receipt Deleted", {
+        module: "accounts",
+        target_id: result.ledgerId,
+        target_name: result.entryNo,
+        total: result.amount,
+        customer_name: result.customer.business_name || result.customer.name,
+      });
+      res.json({ ok: true, deleted: true, ...result });
+    } catch (err) {
+      res.status(400).json({ error: String(err.message) });
+    }
+  });
+
   app.post("/api/accounts/payments", requirePerm("accounts"), async (req, res) => {
     const { supplier_id, amount, payment_method, notes, purchase_id } = req.body || {};
     const amt = round2(amount);
@@ -497,6 +543,50 @@ export function registerAccounts(app) {
         supplier_name: result.supplier.name,
       });
       res.json({ ok: true, ...result });
+    } catch (err) {
+      res.status(400).json({ error: String(err.message) });
+    }
+  });
+
+  app.delete("/api/accounts/payments/:id", requirePerm("accounts"), async (req, res) => {
+    try {
+      const result = await withTransaction(async (conn) => {
+        const [ledgers] = await conn.query(
+          "SELECT * FROM account_ledger WHERE id = ? AND business_id = ? FOR UPDATE",
+          [req.params.id, bid()],
+        );
+        const entry = ledgers[0];
+        if (!entry || entry.entry_type !== "payment") throw new Error("Payment not found");
+        const [supRows] = await conn.query(
+          "SELECT * FROM suppliers WHERE id = ? AND business_id = ? FOR UPDATE",
+          [entry.party_id, bid()],
+        );
+        const supplier = supRows[0];
+        if (!supplier) throw new Error("Supplier not found");
+        const amt = round2(Number(entry.amount || 0));
+        const next = round2(Number(supplier.payable_balance || 0) + amt);
+        await conn.query("UPDATE suppliers SET payable_balance = ? WHERE id = ? AND business_id = ?", [
+          next,
+          supplier.id,
+          bid(),
+        ]);
+        await deleteLedgerJournal(conn, entry.id);
+        await conn.query("DELETE FROM account_ledger WHERE id = ? AND business_id = ?", [entry.id, bid()]);
+        return {
+          entryNo: entry.entry_no,
+          ledgerId: entry.id,
+          supplier: { ...supplier, payable_balance: next },
+          amount: amt,
+        };
+      });
+      await audit("Supplier Payment Deleted", {
+        module: "accounts",
+        target_id: result.ledgerId,
+        target_name: result.entryNo,
+        total: result.amount,
+        supplier_name: result.supplier.name,
+      });
+      res.json({ ok: true, deleted: true, ...result });
     } catch (err) {
       res.status(400).json({ error: String(err.message) });
     }

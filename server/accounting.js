@@ -298,7 +298,7 @@ export async function postPaymentJournal(conn, { amount, payment_method, entryNo
   });
 }
 
-export async function replaceLedgerJournal(conn, { kind, amount, payment_method, entryNo, ledgerId }) {
+export async function deleteLedgerJournal(conn, ledgerId) {
   const [entries] = await conn.query(
     `SELECT id FROM journal_entries
      WHERE business_id = ? AND reference_type = 'account_ledger' AND reference_id = ?`,
@@ -308,6 +308,10 @@ export async function replaceLedgerJournal(conn, { kind, amount, payment_method,
     await conn.query("DELETE FROM journal_lines WHERE journal_id = ?", [row.id]);
     await conn.query("DELETE FROM journal_entries WHERE id = ? AND business_id = ?", [row.id, bid()]);
   }
+}
+
+export async function replaceLedgerJournal(conn, { kind, amount, payment_method, entryNo, ledgerId }) {
+  await deleteLedgerJournal(conn, ledgerId);
   if (kind === "payment") {
     return postPaymentJournal(conn, { amount, payment_method, entryNo, ledgerId });
   }

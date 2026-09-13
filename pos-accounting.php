@@ -256,7 +256,7 @@ function pos_post_payment_journal($bid, $uid, $amount, $method, $entryNo, $ledge
   ]);
 }
 
-function pos_replace_ledger_journal($bid, $uid, $kind, $amount, $method, $entryNo, $ledgerId) {
+function pos_delete_ledger_journal($bid, $ledgerId) {
   $rows = pos_q(
     "SELECT id FROM journal_entries WHERE business_id = ? AND reference_type = 'account_ledger' AND reference_id = ?",
     "ss",
@@ -266,6 +266,10 @@ function pos_replace_ledger_journal($bid, $uid, $kind, $amount, $method, $entryN
     pos_q("DELETE FROM journal_lines WHERE journal_id = ?", "s", [$row["id"]]);
     pos_q("DELETE FROM journal_entries WHERE id = ? AND business_id = ?", "ss", [$row["id"], $bid]);
   }
+}
+
+function pos_replace_ledger_journal($bid, $uid, $kind, $amount, $method, $entryNo, $ledgerId) {
+  pos_delete_ledger_journal($bid, $ledgerId);
   if ($kind === "payment") {
     return pos_post_payment_journal($bid, $uid, $amount, $method, $entryNo, $ledgerId);
   }
@@ -691,6 +695,30 @@ function pos_accounts_dispatch($path, $method, $body, $bid, $auth, $branchId, $u
     ]);
   }
 
+  if (preg_match("#^accounts/receipts/([^/]+)$#", $path, $m) && $method === "DELETE") {
+    $led = pos_q("SELECT * FROM account_ledger WHERE id = ? AND business_id = ? LIMIT 1", "ss", [$m[1], $bid]);
+    $entry = $led[0] ?? null;
+    if (!$entry || ($entry["entry_type"] ?? "") !== "receipt") pos_send(400, ["error" => "Receipt not found"]);
+    $cust = pos_q("SELECT * FROM customers WHERE id = ? AND business_id = ? LIMIT 1", "ss", [$entry["party_id"], $bid]);
+    $customer = $cust[0] ?? null;
+    if (!$customer) pos_send(400, ["error" => "Customer not found"]);
+    $amt = pos_round2((float) ($entry["amount"] ?? 0));
+    $next = pos_round2((float) ($customer["outstanding"] ?? 0) + $amt);
+    pos_q("UPDATE customers SET outstanding = ? WHERE id = ? AND business_id = ?", "dss", [$next, $customer["id"], $bid]);
+    pos_delete_ledger_journal($bid, $entry["id"]);
+    pos_q("DELETE FROM account_ledger WHERE id = ? AND business_id = ?", "ss", [$entry["id"], $bid]);
+    pos_send(200, [
+      "ok" => true,
+      "deleted" => true,
+      "entryNo" => $entry["entry_no"],
+      "ledgerId" => $entry["id"],
+      "customer" => array_merge($customer, ["outstanding" => $next]),
+      "amount" => $amt,
+      "balance_due" => $next,
+      "php" => true,
+    ]);
+  }
+
   if ($path === "accounts/payments" && $method === "POST") {
     $supplierId = $body["supplier_id"] ?? "";
     $amt = pos_round2((float) ($body["amount"] ?? 0));
@@ -749,6 +777,29 @@ function pos_accounts_dispatch($path, $method, $body, $bid, $auth, $branchId, $u
       "amount" => $amt,
       "method" => $methodPay,
       "notes" => $notes,
+      "php" => true,
+    ]);
+  }
+
+  if (preg_match("#^accounts/payments/([^/]+)$#", $path, $m) && $method === "DELETE") {
+    $led = pos_q("SELECT * FROM account_ledger WHERE id = ? AND business_id = ? LIMIT 1", "ss", [$m[1], $bid]);
+    $entry = $led[0] ?? null;
+    if (!$entry || ($entry["entry_type"] ?? "") !== "payment") pos_send(400, ["error" => "Payment not found"]);
+    $sup = pos_q("SELECT * FROM suppliers WHERE id = ? AND business_id = ? LIMIT 1", "ss", [$entry["party_id"], $bid]);
+    $supplier = $sup[0] ?? null;
+    if (!$supplier) pos_send(400, ["error" => "Supplier not found"]);
+    $amt = pos_round2((float) ($entry["amount"] ?? 0));
+    $next = pos_round2((float) ($supplier["payable_balance"] ?? 0) + $amt);
+    pos_q("UPDATE suppliers SET payable_balance = ? WHERE id = ? AND business_id = ?", "dss", [$next, $supplier["id"], $bid]);
+    pos_delete_ledger_journal($bid, $entry["id"]);
+    pos_q("DELETE FROM account_ledger WHERE id = ? AND business_id = ?", "ss", [$entry["id"], $bid]);
+    pos_send(200, [
+      "ok" => true,
+      "deleted" => true,
+      "entryNo" => $entry["entry_no"],
+      "ledgerId" => $entry["id"],
+      "supplier" => array_merge($supplier, ["payable_balance" => $next]),
+      "amount" => $amt,
       "php" => true,
     ]);
   }

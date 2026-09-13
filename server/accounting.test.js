@@ -141,3 +141,20 @@ test("receipts and payments can be altered after save", () => {
   assert.match(app, /modal-alter-voucher/);
   assert.match(app, /\/api\/accounts\/receipts\/\$\{entry\.id\}/);
 });
+
+test("receipts and payments can be deleted after save", () => {
+  const accounts = readFileSync(path.join(root, "server/accounts.js"), "utf8");
+  const accounting = readFileSync(path.join(root, "server/accounting.js"), "utf8");
+  const php = readFileSync(path.join(root, "pos-accounting.php"), "utf8");
+  const app = readFileSync(path.join(root, "js/app.js"), "utf8");
+  assert.match(accounting, /export async function deleteLedgerJournal/);
+  assert.match(accounts, /app.delete\("\/api\/accounts\/receipts\/:id"/);
+  assert.match(accounts, /app.delete\("\/api\/accounts\/payments\/:id"/);
+  assert.match(accounts, /Customer Receipt Deleted/);
+  assert.match(accounts, /Supplier Payment Deleted/);
+  assert.match(php, /function pos_delete_ledger_journal/);
+  assert.match(php, /\$method === "DELETE"/);
+  assert.match(app, /function deleteVoucherEntry/);
+  assert.match(app, /data-voucher-delete/);
+  assert.match(app, /modal-delete-voucher/);
+});

@@ -4436,12 +4436,15 @@ function showVoucherResult(entry, opts = {}) {
     <div class="print-actions">
       <button class="btn primary" type="button" id="modal-print-voucher">Print ${label.toLowerCase()}</button>
       ${canAlter ? `<button class="btn" type="button" id="modal-alter-voucher">Alter amount</button>` : ""}
+      ${canAlter ? `<button class="btn danger" type="button" id="modal-delete-voucher">Delete</button>` : ""}
     </div>`;
   $("modal").hidden = false;
   const btn = $("modal-print-voucher");
   if (btn) btn.onclick = () => printVoucher(entry);
   const alter = $("modal-alter-voucher");
   if (alter) alter.onclick = () => showAlterVoucherModal(entry);
+  const del = $("modal-delete-voucher");
+  if (del) del.onclick = () => deleteVoucherEntry(entry).catch((err) => setHint(err.message, "error"));
   if (opts.autoPrint) printVoucher(entry);
 }
 
@@ -4462,6 +4465,38 @@ function voucherMaxAmount(entry) {
   }
   const c = (state.customers || []).find((x) => x.id === entry.party_id);
   return (Number(c?.outstanding) || 0) + oldAmt;
+}
+
+function voucherRowActions(i) {
+  return `<button class="btn" type="button" data-voucher-print="${i}">Print</button>
+    <button class="btn" type="button" data-voucher-alter="${i}">Alter</button>
+    <button class="btn danger" type="button" data-voucher-delete="${i}">Delete</button>`;
+}
+
+async function deleteVoucherEntry(entry) {
+  if (!entry?.id) return;
+  const isPay = entry.entry_type === "payment";
+  const label = isPay ? "payment" : "receipt";
+  const restore = isPay ? "supplier payable" : "customer due";
+  if (!window.confirm(`Delete ${entry.entry_no}? This ${label} will be removed and the ${restore} restored.`)) return;
+  const path = isPay ? `/api/accounts/payments/${entry.id}` : `/api/accounts/receipts/${entry.id}`;
+  setHint("Deleting…");
+  await api(path, { method: "DELETE" });
+  $("modal").hidden = true;
+  await loadBootstrap();
+  fillDueCustomerSelect();
+  renderCustomersTable();
+  try {
+    await loadAccounts();
+  } catch {
+    /* optional */
+  }
+  try {
+    await loadSuppliers();
+  } catch {
+    /* optional */
+  }
+  setHint(`Deleted ${entry.entry_no}`, "ok");
 }
 
 function showAlterVoucherModal(entry) {
@@ -5120,7 +5155,7 @@ function renderPartyLedgerTable(targetId, data, kind) {
       <td>${money(r.balance)}</td>
       <td>${escapeHtml(r.payment_method || "—")}</td>
       <td>${escapeHtml(r.notes || "—")}</td>
-      <td>${printable ? `<button class="btn" type="button" data-voucher-print="${i}">Print</button> <button class="btn" type="button" data-voucher-alter="${i}">Alter</button>` : ""}</td>
+      <td>${printable ? voucherRowActions(i) : ""}</td>
     </tr>`;
     })
     .join("")}</tbody></table>`;
@@ -5167,7 +5202,7 @@ async function loadAccountsTab(name) {
       <td>${money(Number(r.amount) || 0)}</td><td>${escapeHtml(r.payment_method || "—")}</td>
       <td>${escapeHtml(r.reference_type || "—")}</td><td>${escapeHtml(r.notes || "—")}</td>
       <td>${escapeHtml(formatShopDateTime(r.created_at))}</td>
-      <td>${printable ? `<button class="btn" type="button" data-voucher-print="${i}">Print</button> <button class="btn" type="button" data-voucher-alter="${i}">Alter</button>` : ""}</td></tr>`;
+      <td>${printable ? voucherRowActions(i) : ""}</td></tr>`;
     }).join("")}</tbody></table>`;
   }
   if (name === "coa") {
@@ -5884,6 +5919,14 @@ $("view-accounts")?.addEventListener("click", (e) => {
   if (alter) {
     const row = (state.ledgerRows || [])[Number(alter.dataset.voucherAlter)];
     if (row) showAlterVoucherModal(row);
+    return;
+  }
+  const del = e.target.closest("[data-voucher-delete]");
+  if (del) {
+    const row = (state.ledgerRows || [])[Number(del.dataset.voucherDelete)];
+    if (row) {
+      deleteVoucherEntry(row).catch((err) => setHint(err.message, "error"));
+    }
   }
 });
 $("qr-orders-refresh")?.addEventListener("click", loadQrOrders);
