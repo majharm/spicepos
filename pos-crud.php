@@ -52,7 +52,7 @@ function pos_crud_dispatch($path, $method, $body, $bid, $auth, $branchId, $uid) 
     $name = trim((string) ($body["name"] ?? ""));
     $mobile = trim((string) ($body["mobile"] ?? ""));
     if ($name === "" || $mobile === "") pos_send(400, ["error" => "Name and mobile are required"]);
-    pos_ensure_columns("customers", ["state" => "VARCHAR(64) NULL", "dob" => "DATE NULL", "referred_by" => "VARCHAR(255) NULL", "locale" => "VARCHAR(16) NULL"]);
+    pos_ensure_columns("customers", ["state" => "VARCHAR(64) NULL", "dob" => "DATE NULL", "referred_by" => "VARCHAR(255) NULL", "locale" => "VARCHAR(16) NULL", "address" => "VARCHAR(500) NULL"]);
     $type = (($body["type"] ?? "") === "b2b") ? "b2b" : "b2c";
     $id = pos_uuid();
     $n = pos_next_seq("customer", $bid, 4);
@@ -72,6 +72,12 @@ function pos_crud_dispatch($path, $method, $body, $bid, $auth, $branchId, $uid) 
           pos_q("UPDATE customers SET dob = ?, referred_by = ? WHERE id = ?", "sss", [$body["dob"] ?? null, $body["referred_by"] ?? null, $id]);
         } catch (Exception $e2) { /* optional */ }
       }
+    }
+    $addr = trim((string) ($body["address"] ?? ""));
+    if ($addr !== "") {
+      try {
+        pos_q("UPDATE customers SET address = ? WHERE id = ?", "ss", [substr($addr, 0, 500), $id]);
+      } catch (Exception $e) { /* optional */ }
     }
     $rows = pos_q("SELECT * FROM customers WHERE id = ? LIMIT 1", "s", [$id]);
     pos_send(200, ["ok" => true, "customer" => $rows[0] ?? null]);

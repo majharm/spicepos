@@ -6,7 +6,7 @@
     <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
     <title>ATAV POS</title>
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./css/pos.css?v=20260913pharmacy1" />
+    <link rel="stylesheet" href="./css/pos.css?v=20260913pharmacy4" />
     <link rel="stylesheet" href="./css/saas.css?v=20260905deploy136" />
   </head>
   <body>
@@ -126,13 +126,14 @@
                     <option value="card" data-i18n="pos.card">Card</option>
                     <option value="credit" data-i18n="pos.credit">Credit</option>
               </select>
-              <input id="counter-mobile" type="tel" inputmode="numeric" maxlength="15" autocomplete="off" placeholder="Mobile" aria-label="Customer mobile" />
+              <input id="counter-mobile" type="tel" inputmode="numeric" maxlength="15" autocomplete="off" placeholder="Mobile No." aria-label="Mobile No." />
               <select id="customer" class="select" aria-label="Customer"></select>
               <details class="quick-customer-wrap" id="quick-customer-wrap">
                 <summary title="Add customer">+</summary>
                 <form class="quick-customer" id="quick-customer-form" autocomplete="off">
-                  <input id="qc-name" name="qc-name" placeholder="Customer name" maxlength="120" />
-                  <input id="qc-mobile" name="qc-mobile" placeholder="Mobile no." inputmode="tel" maxlength="15" />
+                  <input id="qc-name" name="qc-name" placeholder="Customer Name" maxlength="120" />
+                  <input id="qc-mobile" name="qc-mobile" placeholder="Mobile No." inputmode="tel" maxlength="15" />
+                  <input id="qc-address" name="qc-address" class="pharmacy-only" hidden placeholder="Address" maxlength="500" />
                   <button class="btn primary" type="submit" id="qc-save">Add</button>
                   <span class="hint" id="qc-hint"></span>
                 </form>
@@ -167,6 +168,12 @@
                   <p class="ticket-sub" id="ticket-sub">Tap a product or scan</p>
                   <p class="ticket-cust" id="bill-customer"></p>
                   <p class="ticket-due" id="bill-due" hidden></p>
+                  <div class="pharm-bill-cust pharmacy-only" id="pharm-bill-cust" hidden>
+                    <label>Customer Name <input id="bill-cust-name" maxlength="180" autocomplete="name" placeholder="Patient / customer name" /></label>
+                    <label>Mobile No. <input id="bill-cust-mobile" type="tel" inputmode="numeric" maxlength="15" autocomplete="tel" placeholder="10-digit mobile" /></label>
+                    <label class="full">Address <input id="bill-cust-address" maxlength="500" placeholder="House, street, area" /></label>
+                    <label class="full">Doctor Name / Prescription No. <input id="bill-doctor-rx" maxlength="180" placeholder="If required" /></label>
+                  </div>
                 </div>
                 <button type="button" class="bill-toggle" id="bill-toggle" aria-controls="bill-panel" aria-expanded="true" aria-label="Hide bill" title="Hide bill">›</button>
               </div>
@@ -434,6 +441,7 @@
                   <label>Name <input id="cust-name" required /></label>
                   <label>Business name <input id="cust-biz" /></label>
                   <label>Mobile <input id="cust-mobile" required /></label>
+                  <label class="full">Address <input id="cust-address" maxlength="500" placeholder="House, street, area" /></label>
                   <label>Type
                     <select id="cust-type">
                       <option value="b2c">B2C retail</option>
@@ -1585,7 +1593,7 @@
     <script src="./js/gst-supply.js?v=20260905deploy136" defer></script>
     <script src="./js/pos-api.js?v=20260905deploy154" defer></script>
     <script src="./js/units.js?v=20260905deploy165" defer></script>
-    <script src="./js/footwear.js?v=20260913pharmacy2" defer></script>
+    <script src="./js/footwear.js?v=20260913pharmacy4" defer></script>
     <script src="./js/restaurant.js?v=20260905deploy176" defer></script>
     <script src="./js/discount.js?v=20260905deploy136" defer></script>
     <script src="./js/offers.js?v=20260905deploy170" defer></script>
@@ -1593,11 +1601,11 @@
     <script src="./js/barcode.js?v=20260905deploy136" defer></script>
     <script src="./js/camera-scan.js?v=20260904camera1" defer></script>
     <script src="./js/dev-mode.js?v=20260905deploy136" defer></script>
-    <script src="./js/invoice.js?v=20260913pharmacy3" defer></script>
+    <script src="./js/invoice.js?v=20260913pharmacy4" defer></script>
     <script src="./js/support.js?v=20260905deploy136" defer></script>
     <script src="./js/qrcode.iife.js?v=20260905qr1" defer></script>
     <script src="./js/qr-notify.js?v=20260905deploy144" defer></script>
-    <script src="./js/app.js?v=20260913pharmacy3" defer></script>
+    <script src="./js/app.js?v=20260913pharmacy4" defer></script>
     <script src="./js/growth.js?v=20260905deploy145" defer></script>
     <script src="./js/offers-ui.js?v=20260905deploy136" defer></script>
   </body>
