@@ -5,7 +5,7 @@ import { bid } from "./context.js";
 import { recordCreditPurchase } from "./accounts.js";
 import { postPurchaseJournal } from "./accounting.js";
 import { audit } from "./audit.js";
-import { onItemSaved, onPurchaseLineSaved, pharmacyLineSnapshot } from "./advanced.js";
+import { onItemSaved, onPurchaseLineSaved, pharmacyLineSnapshot, computeSaleLine } from "./advanced.js";
 import {
   decodeImportUpload,
   itemBodyFromImportRow,
@@ -742,7 +742,7 @@ export function registerCrud(app) {
   });
 
   app.put("/api/orders/:id", async (req, res) => {
-    const { customerId, paymentMethod, status, packId, packCount, lines } = req.body || {};
+    const { customerId, paymentMethod, status, packId, packCount, lines, discount, discountType, discountValue } = req.body || {};
     if (!Array.isArray(lines) || lines.length === 0) {
       res.status(400).json({ error: "Order must have lines" });
       return;
@@ -786,14 +786,20 @@ export function registerCrud(app) {
           const item = itemRows[0];
           if (!item) throw new Error("Unknown item");
           const qty = Number(line.quantity_gm);
-          const rate =
-            customer.type === "b2b" ? Number(item.b2b_rate) : Number(item.retail_rate);
-          const amount = round2(lineAmount(qty, rate, item));
-          built.push({ item, qty, rate, amount, gstRate: Number(item.gst_rate) || 0 });
+          if (!Number.isFinite(qty) || qty <= 0) throw new Error("Invalid quantity");
+          built.push(computeSaleLine(item, customer, line));
         }
-        const subtotal = round2(built.reduce((s, l) => s + l.amount, 0));
-        const gst = round2(built.reduce((s, l) => s + (l.amount * l.gstRate) / 100, 0));
-        const total = round2(subtotal + gst);
+        const D = globalThis.POSDiscount;
+        const bill = D
+          ? D.computeBill(built, {
+              discountType: discountType || (Number(discount) ? "amt" : "amt"),
+              discountValue: discountValue ?? discount ?? 0,
+            })
+          : null;
+        const subtotal = bill ? bill.subtotal : round2(built.reduce((s, l) => s + l.amount, 0));
+        const gst = bill ? bill.gst : round2(built.reduce((s, l) => s + (l.amount * l.gstRate) / 100, 0));
+        const billDiscount = bill ? bill.billDiscount : 0;
+        const total = bill ? bill.total : round2(subtotal + gst);
         const totalGm = built.reduce((s, l) => s + l.qty, 0);
         const method = String(paymentMethod || existing.payment_method).toLowerCase();
         const payStatus = method === "credit" ? "partial" : "paid";
@@ -812,7 +818,7 @@ export function registerCrud(app) {
           `UPDATE sales_orders SET
              customer_id=?, customer_name=?, customer_type=?,
              pack_id=?, pack_name=?, pack_count=?, status=?,
-             total_quantity_gm=?, subtotal=?, gst=?, total=?,
+             total_quantity_gm=?, subtotal=?, discount=?, gst=?, total=?,
              payment_method=?, payment_status=?
            WHERE id=?`,
           [
@@ -825,6 +831,7 @@ export function registerCrud(app) {
             newStatus,
             totalGm,
             subtotal,
+            billDiscount,
             gst,
             total,
             method,
@@ -832,6 +839,14 @@ export function registerCrud(app) {
             existing.id,
           ],
         );
+        try {
+          await conn.query(
+            `UPDATE sales_orders SET discount_type=?, discount_value=? WHERE id=? AND business_id=?`,
+            [bill?.discountType || "amt", bill?.discountValue || billDiscount, existing.id, bid()],
+          );
+        } catch {
+          /* optional columns */
+        }
         const doctorRx = String(req.body?.doctor_rx ?? req.body?.doctorRx ?? "").trim().slice(0, 180) || null;
         const customerAddress = String(req.body?.customer_address ?? req.body?.customerAddress ?? "").trim().slice(0, 500) || null;
         const customerMobile = String(req.body?.customer_mobile ?? req.body?.customerMobile ?? "").replace(/\D/g, "").slice(0, 15);
@@ -854,25 +869,54 @@ export function registerCrud(app) {
         if (newStatus !== "cancelled") {
           for (const line of built) {
             const lineId = crypto.randomUUID();
-            await conn.query(
-              `INSERT INTO sales_order_lines (
-                 id, order_id, item_id, item_name, quantity_gm, rate_per_kg,
-                 discount, amount, gst_rate, cancelled, business_id
-               ) VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
-              [
-                lineId,
-                existing.id,
-                line.item.id,
-                itemBillName(line.item),
-                line.qty,
-                line.rate,
-                0,
-                line.amount,
-                line.gstRate,
-                0,
-                bid(),
-              ],
-            );
+            try {
+              await conn.query(
+                `INSERT INTO sales_order_lines (
+                   id, order_id, item_id, item_name, quantity_gm, rate_per_kg,
+                   discount, amount, gst_rate, cancelled, business_id,
+                   mrp, discount_type, discount_value, barcode, cost, profit
+                 ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+                [
+                  lineId,
+                  existing.id,
+                  line.item.id,
+                  itemBillName(line.item),
+                  line.qty,
+                  line.rate,
+                  line.discount || 0,
+                  line.amount,
+                  line.gstRate,
+                  0,
+                  bid(),
+                  line.mrp || 0,
+                  line.discountType || "amt",
+                  line.discountValue || 0,
+                  line.barcode || null,
+                  line.cost || 0,
+                  line.profit || 0,
+                ],
+              );
+            } catch {
+              await conn.query(
+                `INSERT INTO sales_order_lines (
+                   id, order_id, item_id, item_name, quantity_gm, rate_per_kg,
+                   discount, amount, gst_rate, cancelled, business_id
+                 ) VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+                [
+                  lineId,
+                  existing.id,
+                  line.item.id,
+                  itemBillName(line.item),
+                  line.qty,
+                  line.rate,
+                  line.discount || 0,
+                  line.amount,
+                  line.gstRate,
+                  0,
+                  bid(),
+                ],
+              );
+            }
             const snap = pharmacyLineSnapshot(line.item);
             try {
               await conn.query(

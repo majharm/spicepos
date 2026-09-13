@@ -334,7 +334,7 @@ test("POS boot skips API probe and slims catalog photos", () => {
   assert.match(index, /qrcode\.iife\.js[^>]+defer/);
   assert.match(index, /preload="none"/);
   assert.match(index, /pos-api\.js\?v=20260905deploy154/);
-  assert.match(index, /app\.js\?v=20260913void1/);
+  assert.match(index, /app\.js\?v=20260913editdisc1/);
   assert.match(index, /invoice\.js\?v=20260913void1/);
   assert.doesNotMatch(index, /app\.js\?v=20260905deploy167/);
   assert.doesNotMatch(index, /app\.js\?v=20260905deploy166/);
@@ -388,7 +388,7 @@ test("Restaurant Counter can create named dining tables", () => {
   assert.match(till, /dining-tables/);
   assert.match(index, /pos\.css\?v=20260913cust2/);
   assert.match(index, /restaurant\.js\?v=20260905deploy176/);
-  assert.match(index, /app\.js\?v=20260913void1/);
+  assert.match(index, /app\.js\?v=20260913editdisc1/);
   assert.match(index, /footwear\.js\?v=20260913hsnsac1/);
 });
 
@@ -422,4 +422,19 @@ test("cancelled sales bills show Void in the shop UI and reports", () => {
   assert.match(phpReports, /=== "cancelled" \? "Void"/);
   assert.match(read("js/invoice.js"), /function isVoidBill/);
   assert.match(read("js/invoice.js"), /return `<p class="\$\{cls\}">VOID<\/p>`/);
+});
+
+test("editing a saved bill keeps line and bill discounts on Save changes", () => {
+  const app = read("js/app.js");
+  const crud = read("server/crud.js");
+  const phpOrders = read("pos-orders.php");
+  assert.match(app, /function applyOrderDiscountsToCounter/);
+  assert.match(app, /function cartLineFromOrderLine/);
+  assert.match(app, /applyOrderDiscountsToCounter\(o\)/);
+  assert.match(crud, /computeSaleLine\(item, customer, line\)/);
+  assert.match(crud, /discount_type=\?, discount_value=\?/);
+  assert.match(crud, /billDiscount/);
+  assert.match(phpOrders, /pos_compute_sale_line/);
+  assert.match(phpOrders, /pos_adv_discount_amount/);
+  assert.match(phpOrders, /discount_type = \?, discount_value = \?/);
 });
