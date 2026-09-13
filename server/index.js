@@ -13,6 +13,8 @@ import { listAllBatches, upsertBatch } from "./pharmacy-stock.js";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.join(__dirname, "..");
 const app = express();
+const APP_VERSION = "pharmacy-1";
+const APP_VERTICAL = "pharmacy";
 app.use(express.json({ limit: "8mb" }));
 
 async function ensureLogoColumn() {
@@ -31,11 +33,23 @@ async function ensureLogoColumn() {
 }
 
 app.get("/api/health", async (_req, res) => {
+  res.setHeader("Cache-Control", "no-store");
   try {
     await query("SELECT 1");
-    res.json({ ok: true, businessId: BUSINESS_ID });
+    const cols = await query(
+      `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
+       WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'items' AND COLUMN_NAME = 'generic_name'`,
+    );
+    res.json({
+      ok: true,
+      vertical: APP_VERTICAL,
+      version: APP_VERSION,
+      pharmacy: true,
+      medicineFields: cols.length > 0,
+      businessId: BUSINESS_ID,
+    });
   } catch (err) {
-    res.status(500).json({ ok: false, error: String(err.message) });
+    res.status(500).json({ ok: false, vertical: APP_VERTICAL, version: APP_VERSION, error: String(err.message) });
   }
 });
 
@@ -73,7 +87,10 @@ app.get("/api/bootstrap", async (_req, res) => {
       [BUSINESS_ID],
     ).catch(() => []);
     res.json({
-      company: company || { name: "Medical POS" },
+      vertical: APP_VERTICAL,
+      version: APP_VERSION,
+      pharmacy: true,
+      company: company || { name: "Pharmacy Medical POS" },
       items,
       customers,
       batches,
@@ -385,7 +402,20 @@ app.post("/api/checkout", async (req, res) => {
   }
 });
 
-app.use(express.static(root));
+app.get(["/app.html", "/app", "/app/"], (_req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  res.redirect(302, "/");
+});
+
+app.use((req, res, next) => {
+  if (req.path === "/" || req.path.endsWith(".html")) {
+    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+    res.setHeader("Pragma", "no-cache");
+  }
+  next();
+});
+
+app.use(express.static(root, { etag: false, lastModified: false, maxAge: 0 }));
 app.get(["/qr", "/qr/"], (_req, res) => {
   res.redirect("/qr.html");
 });
@@ -395,6 +425,6 @@ Promise.all([ensureLogoColumn(), ensureQrOrderSchema(), ensurePharmacySchema()])
   .catch((err) => console.error("schema", err.message))
   .finally(() => {
     app.listen(port, "0.0.0.0", () => {
-      console.log(`Medical POS http://0.0.0.0:${port}`);
+      console.log(`Pharmacy Medical POS ${APP_VERSION} http://0.0.0.0:${port}`);
     });
   });

@@ -3,12 +3,14 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Medical POS</title>
+    <title>Pharmacy Medical POS</title>
+    <meta http-equiv="Cache-Control" content="no-store" />
+    <meta name="app-version" content="pharmacy-1" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Outfit:wght@400;500;600;700&display=swap" />
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./css/pos.css" />
+    <link rel="stylesheet" href="./css/pos.css?v=pharmacy-1" />
   </head>
   <body>
     <div class="app">
@@ -16,8 +18,8 @@
         <div class="brand">
           <img id="shop-logo" class="brand-logo" alt="Company logo" hidden />
           <div class="brand-mark" id="brand-mark" aria-hidden="true"></div>
-          <strong id="shop-name">Medical POS</strong>
-          <span id="shop-place">Loading MySQL…</span>
+          <strong id="shop-name">Pharmacy Medical POS</strong>
+          <span id="shop-place">Pharmacy · Medicines · Batches · Bills</span>
         </div>
         <button class="nav-btn active" type="button" data-view="counter">Pharmacy Bill</button>
         <button class="nav-btn" type="button" data-view="items">Medicines</button>
@@ -32,6 +34,8 @@
         <button class="nav-btn" type="button" data-view="reports">Reports</button>
         <button class="nav-btn" type="button" data-view="settings">Settings</button>
         <div class="nav-foot">
+          <div class="chip">Pharmacy</div>
+          <div class="chip" id="app-version-chip">pharmacy-1</div>
           <div class="chip">Today <b id="today-total">₹0.00</b></div>
           <div class="chip">Bills <b id="today-count">0</b></div>
           <div class="chip" id="clock">--:--</div>
@@ -312,7 +316,7 @@
         </div>
       </div>
     </div>
-    <script src="./js/qrcode.iife.js"></script>
-    <script type="module" src="./js/app.js"></script>
+    <script src="./js/qrcode.iife.js?v=pharmacy-1"></script>
+    <script type="module" src="./js/app.js?v=pharmacy-1"></script>
   </body>
 </html>
