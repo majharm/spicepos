@@ -627,6 +627,9 @@ test("HTML and CSS cache stickers match deploy136", () => {
   assert.match(login, /class="signup-block"/);
   assert.match(login, /class="auth-trial-banner"/);
   assert.match(login, /class="auth-trial-invite"/);
+  assert.match(login, /class="auth-heading"/);
+  assert.match(login, /class="auth-points"/);
+  assert.match(login, /id="login-pass-toggle"/);
   assert.match(login, /Start 2-day trial/);
   assert.match(login, /New shops get a 2-day trial/);
   const xpos = readFileSync(path.join(root, "js/x-pos-20260830e.js"), "utf8");
@@ -634,6 +637,9 @@ test("HTML and CSS cache stickers match deploy136", () => {
   assert.match(xpos, /location\.hash === "#signup"/);
   assert.match(xpos, /2-day free trial, no card/);
   assert.match(saas, /auth-trial-ui: 2-day banner 2026/);
+  assert.match(saas, /auth-login-ux: heading pass toggle 2026/);
+  assert.match(xpos, /login-pass-toggle/);
+  assert.match(xpos, /Create your shop/);
   assert.match(saas, /auth-login-scroll: visible 2026/);
   assert.match(saas, /\.auth-main::-webkit-scrollbar/);
   assert.match(saas, /overflow-y: scroll/);

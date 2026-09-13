@@ -123,6 +123,35 @@
   line-height: 1.45;
   font-weight: 600;
 }
+/* auth-login-ux: heading pass toggle 2026 */
+.auth-points {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  list-style: none;
+  margin: 14px 0 0;
+  padding: 0;
+}
+.auth-points li {
+  flex: 1 1 140px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.38);
+  border: 1px solid rgba(94, 234, 212, 0.28);
+  color: #e2e8f0;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+.auth-points li strong {
+  display: block;
+  margin-bottom: 2px;
+  color: #5eead4;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
 .auth-shell .auth-scene-types {
   position: static;
   justify-content: flex-start;
@@ -413,6 +442,8 @@ body.auth-body::-webkit-scrollbar-thumb {
     gap: 12px;
   }
   .auth-shell .auth-scene-copy { text-align: center; }
+  .auth-points { justify-content: center; }
+  .auth-points li { flex: 1 1 100%; text-align: left; }
   .auth-shell .auth-scene-types { display: none; }
   .auth-scene-shots {
     grid-template-columns: 1fr 1fr 1fr;
@@ -455,8 +486,51 @@ body.auth-body::-webkit-scrollbar-thumb {
   font-size: 22px;
   font-weight: 700;
 }
+.auth-heading {
+  margin: 10px 0 4px;
+  text-align: center;
+  font-size: 26px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1.15;
+}
+.auth-card > #auth-lead {
+  text-align: center;
+  margin: 0 0 4px;
+}
 .auth-card > p { color: var(--muted, #64748b); margin-top: 0; font-size: 14px; }
 .auth-card form { display: grid; gap: 12px; margin-top: 18px; }
+.auth-pass {
+  position: relative;
+  display: block;
+}
+.auth-pass input {
+  width: 100%;
+  box-sizing: border-box;
+  padding-right: 72px;
+}
+.auth-pass-toggle {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  transform: translateY(-50%);
+  border: 0;
+  background: transparent;
+  color: var(--vel-teal, #0d9488);
+  font: 700 12px/1 inherit;
+  cursor: pointer;
+  padding: 8px 10px;
+  border-radius: 8px;
+}
+.auth-pass-toggle:hover,
+.auth-pass-toggle:focus-visible {
+  background: rgba(13, 148, 136, 0.12);
+  outline: none;
+}
+.auth-card button[type="submit"]:disabled {
+  opacity: 0.72;
+  cursor: wait;
+}
 .auth-card form[hidden] { display: none !important; }
 .auth-card label {
   display: grid;
@@ -479,12 +553,24 @@ body.auth-body::-webkit-scrollbar-thumb {
 .auth-card input:not([type="checkbox"]),
 .auth-card select,
 .auth-card textarea {
-  padding: 10px 12px;
-  border-radius: 8px;
+  padding: 11px 12px;
+  min-height: 44px;
+  border-radius: 10px;
   border: 1px solid var(--line-strong, #cbd5e1);
   background: #fff;
   color: var(--text, #0f172a);
   font: inherit;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.auth-card textarea {
+  min-height: 72px;
+}
+.auth-card input:not([type="checkbox"]):focus,
+.auth-card select:focus,
+.auth-card textarea:focus {
+  outline: none;
+  border-color: var(--vel-teal, #0d9488);
+  box-shadow: 0 0 0 3px rgba(13, 148, 136, 0.18);
 }
 .auth-card label.remember input[type="checkbox"] {
   position: absolute;

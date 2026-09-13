@@ -8,7 +8,7 @@
     <title>Sign in · ATAV POS</title>
     <link rel="icon" href="./favicon.svg" />
     <link rel="stylesheet" href="./css/pos.css?v=20260905deploy136" />
-    <link rel="stylesheet" href="./css/saas.css?v=20260905deploy155" />
+    <link rel="stylesheet" href="./css/saas.css?v=20260913login2" />
   </head>
   <body class="auth-body">
     <div class="auth-shell">
@@ -17,6 +17,11 @@
           <p class="auth-scene-kicker">ATAV POS</p>
           <p class="auth-scene-title">All types of businesses use ATAV POS</p>
           <p class="auth-scene-lead">Billing, stock, and GST invoices in one shop login.</p>
+          <ul class="auth-points">
+            <li><strong>Counter</strong> Scan, tap, and take payment</li>
+            <li><strong>Stock</strong> On-hand, expiry, and purchase</li>
+            <li><strong>GST bills</strong> Thermal slip and A4 invoice</li>
+          </ul>
           <p class="auth-scene-trial"><strong>2-day free trial</strong> No payment today. Subscribe later with Cashfree.</p>
         </div>
         <div class="auth-scene-shots">
@@ -60,6 +65,7 @@
             <img class="auth-logo" src="./assets/atav-telecom-logo.png" alt="ATAV Telecom" width="200" height="86" />
             <p class="auth-tagline">For every business</p>
           </div>
+          <h1 class="auth-heading" id="auth-heading">Welcome back</h1>
           <p id="auth-lead">Sign in to continue.</p>
           <div class="auth-tabs" role="tablist">
             <button type="button" class="auth-tab is-active" data-panel="signin" role="tab" aria-selected="true">Sign in</button>
@@ -76,17 +82,20 @@
 
           <form id="login-form">
             <label>Email, username or mobile
-              <input name="identifier" autocomplete="username" required />
+              <input id="login-identifier" name="identifier" autocomplete="username" required autofocus inputmode="email" />
             </label>
-            <label>Password
-              <input name="password" type="password" autocomplete="current-password" required />
+            <label class="auth-pass-lab">Password
+              <span class="auth-pass">
+                <input id="login-password" name="password" type="password" autocomplete="current-password" required />
+                <button class="auth-pass-toggle" id="login-pass-toggle" type="button" aria-controls="login-password" aria-label="Show password">Show</button>
+              </span>
             </label>
             <label class="remember">
               <input type="checkbox" name="remember" />
               <span class="remember-ui" aria-hidden="true"></span>
               Remember me
             </label>
-            <button class="btn primary" type="submit">Sign in</button>
+            <button class="btn primary" type="submit" id="login-submit">Sign in</button>
             <p class="hint" id="hint"></p>
           </form>
 
@@ -243,6 +252,6 @@
       </div>
     </div>
     <script src="./js/support.js?v=20260905deploy136"></script>
-    <script src="./js/x-pos-20260830e.js?v=20260905deploy172"></script>
+    <script src="./js/x-pos-20260830e.js?v=20260913login2"></script>
   </body>
 </html>

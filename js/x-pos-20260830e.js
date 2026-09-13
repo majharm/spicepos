@@ -194,6 +194,8 @@
         if (signupForm) signupForm.hidden = !signup;
         card?.classList.toggle("signup", signup);
         if (lead) lead.textContent = signup ? "Start billing in minutes — 2-day free trial, no card." : "Sign in to continue.";
+        const heading = document.getElementById("auth-heading");
+        if (heading) heading.textContent = signup ? "Create your shop" : "Welcome back";
       });
     });
 
@@ -209,14 +211,30 @@
       if (box) box.checked = true;
     }
 
+    const pass = loginForm.querySelector('[name="password"]');
+    const passToggle = document.getElementById("login-pass-toggle");
+    if (pass && passToggle) {
+      passToggle.addEventListener("click", () => {
+        const show = pass.type === "password";
+        pass.type = show ? "text" : "password";
+        passToggle.textContent = show ? "Hide" : "Show";
+        passToggle.setAttribute("aria-label", show ? "Hide password" : "Show password");
+      });
+    }
+
     loginForm.addEventListener("submit", async (e) => {
       e.preventDefault();
       e.stopImmediatePropagation();
       const hint = document.getElementById("hint");
+      const submit = document.getElementById("login-submit");
       const fd = new FormData(loginForm);
       if (hint) {
         hint.className = "hint";
         hint.textContent = "Signing in…";
+      }
+      if (submit) {
+        submit.disabled = true;
+        submit.textContent = "Signing in…";
       }
       try {
         const payload = {
@@ -265,6 +283,10 @@
         if (hint) {
           hint.textContent = err.message;
           hint.className = "hint error";
+        }
+        if (submit) {
+          submit.disabled = false;
+          submit.textContent = "Sign in";
         }
       }
     }, true);
