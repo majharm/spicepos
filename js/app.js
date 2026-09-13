@@ -217,6 +217,21 @@ function applyFootwearMode() {
   if ($("item-hsn")) $("item-hsn").placeholder = copy.hsn || "e.g. 1234";
   if ($("item-size")) $("item-size").placeholder = fw ? "e.g. 6, 7, 8 or 5" : ap ? "S, M, L, XL or 32, 34" : "e.g. 6, 7, 8 or 5";
   if ($("items-lede")) $("items-lede").textContent = copy.lede || "Name, photo, HSN code, unit type, rates, and stock.";
+  if ($("set-name-lab")) $("set-name-lab").textContent = pharm ? "Pharmacy Name" : "Shop name";
+  if ($("set-address-lab")) $("set-address-lab").textContent = pharm ? "Pharmacy Address" : "Address";
+  if ($("set-phone-lab")) $("set-phone-lab").textContent = pharm ? "Mobile No." : "Phone";
+  if ($("set-name")) $("set-name").placeholder = pharm ? "e.g. ABC MEDICAL" : "Your shop name";
+  if ($("set-shop-legend")) $("set-shop-legend").textContent = pharm ? "Pharmacy" : "Shop";
+  if ($("settings-profile-note")) {
+    $("settings-profile-note").textContent = pharm
+      ? "Pharmacy name, address, GSTIN, and licences print on bills and appear in the left nav."
+      : "This name, address, GSTIN, and logo print on invoices and appear in the left nav.";
+  }
+  if ($("settings-lede")) {
+    $("settings-lede").textContent = pharm
+      ? "Pharmacy name, address, mobile, GSTIN, drug licence, FSSAI, and NDPS licence."
+      : "Company profile, timezone, shop logo, and your login password. Shop backup is under Settings → Backup.";
+  }
   if ($("ticket-sub") && !state.cart?.length) $("ticket-sub").textContent = copy.ticket || emptyTicketHint();
   VIEW_META.items.subtitle = copy.itemsSub || "Photo, HSN, unit type, rates, and stock";
   VIEW_META.counter.subtitle = copy.counterSub || "Scan, tap, or search — then Pay";
@@ -3363,6 +3378,9 @@ function renderSettings() {
   $("set-phone").value = state.company.phone || "";
   $("set-email").value = state.company.email || "";
   $("set-gstin").value = state.company.gstin || "";
+  if ($("set-drug-licence")) $("set-drug-licence").value = state.company.drug_licence_no || "";
+  if ($("set-fssai")) $("set-fssai").value = state.company.fssai_licence_no || "";
+  if ($("set-ndps")) $("set-ndps").value = state.company.ndps_licence_no || "";
   if ($("set-city")) $("set-city").value = state.company.city || "";
   if ($("set-state")) $("set-state").value = state.company.state || "";
   if ($("set-pincode")) $("set-pincode").value = state.company.pincode || state.company.pin_code || "";
@@ -6359,6 +6377,9 @@ $("settings-form").addEventListener("submit", async (e) => {
       phone: $("set-phone").value,
       email: $("set-email").value,
       gstin: $("set-gstin").value,
+      drug_licence_no: $("set-drug-licence")?.value || "",
+      fssai_licence_no: $("set-fssai")?.value || "",
+      ndps_licence_no: $("set-ndps")?.value || "",
       city: $("set-city")?.value || "",
       state: $("set-state")?.value || "",
       pincode: $("set-pincode")?.value || "",

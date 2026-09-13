@@ -93,6 +93,9 @@ export async function ensureSchema() {
   await addColumn("company_settings", "payment_qr_url", "MEDIUMTEXT NULL");
   await addColumn("company_settings", "payment_upi", "VARCHAR(160) NULL");
   await addColumn("company_settings", "dining_tables_json", "TEXT NULL");
+  await addColumn("company_settings", "drug_licence_no", "VARCHAR(80) NULL");
+  await addColumn("company_settings", "fssai_licence_no", "VARCHAR(32) NULL");
+  await addColumn("company_settings", "ndps_licence_no", "VARCHAR(80) NULL");
   try {
     await query(
       `UPDATE company_settings cs

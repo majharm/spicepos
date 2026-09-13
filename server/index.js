@@ -587,6 +587,18 @@ app.post("/api/settings", requireStaff, requirePerm("settings"), async (req, res
     langSql += ", payment_upi = ?";
     params.push(paymentUpi);
   }
+  if (Object.prototype.hasOwnProperty.call(body, "drug_licence_no")) {
+    langSql += ", drug_licence_no = ?";
+    params.push(clipInvoiceText(body.drug_licence_no, 80) || null);
+  }
+  if (Object.prototype.hasOwnProperty.call(body, "fssai_licence_no")) {
+    langSql += ", fssai_licence_no = ?";
+    params.push(clipInvoiceText(body.fssai_licence_no, 32) || null);
+  }
+  if (Object.prototype.hasOwnProperty.call(body, "ndps_licence_no")) {
+    langSql += ", ndps_licence_no = ?";
+    params.push(clipInvoiceText(body.ndps_licence_no, 80) || null);
+  }
   if (shopLocale != null) {
     langSql += ", locale = ?";
     params.push(shopLocale);

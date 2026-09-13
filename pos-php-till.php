@@ -246,6 +246,21 @@ function pos_php_till_dispatch($path, $method, $body) {
       $params[] = $paymentUpi;
       $types .= "s";
     }
+    if (array_key_exists("drug_licence_no", $body)) {
+      $langSql .= ", drug_licence_no = ?";
+      $params[] = pos_clip_invoice_text($body["drug_licence_no"] ?? "", 80) ?: null;
+      $types .= "s";
+    }
+    if (array_key_exists("fssai_licence_no", $body)) {
+      $langSql .= ", fssai_licence_no = ?";
+      $params[] = pos_clip_invoice_text($body["fssai_licence_no"] ?? "", 32) ?: null;
+      $types .= "s";
+    }
+    if (array_key_exists("ndps_licence_no", $body)) {
+      $langSql .= ", ndps_licence_no = ?";
+      $params[] = pos_clip_invoice_text($body["ndps_licence_no"] ?? "", 80) ?: null;
+      $types .= "s";
+    }
     if (array_key_exists("locale", $body)) {
       $langSql .= ", locale = ?";
       $params[] = pos_normalize_locale($body["locale"]) ?: "en";

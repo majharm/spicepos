@@ -300,6 +300,18 @@ test("Medical shops show pharmacy medicine fields on the item form", () => {
   assert.match(app, /pharmacy-mode/);
   assert.match(app, /\/api\/items\/demo-seed/);
   assert.match(app, /Add demo medicines/);
+  assert.match(index, /id="set-drug-licence"/);
+  assert.match(index, /id="set-fssai"/);
+  assert.match(index, /id="set-ndps"/);
+  assert.match(index, /Pharmacy licences/);
+  assert.match(index, /FSSAI License \(Food License\) No\./);
+  assert.match(index, /NDPS \/ Restricted Drug License No\./);
+  assert.match(app, /Pharmacy Name/);
+  assert.match(app, /Pharmacy Address/);
+  assert.match(app, /Mobile No\./);
+  assert.match(app, /drug_licence_no/);
+  assert.match(app, /fssai_licence_no/);
+  assert.match(app, /ndps_licence_no/);
   assert.match(css, /body:not\(\.pharmacy-mode\) \.pharmacy-only/);
   assert.match(adv, /savePharmacyItemFields/);
   const demo = F.demoItems({ category: "Medical" });

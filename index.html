@@ -1277,7 +1277,7 @@
               <div class="items-hero-copy">
                 <p class="items-kicker">Account</p>
                 <h3>Shop profile</h3>
-                <p class="lede">Company profile, timezone, shop logo, and your login password. Shop backup is under Settings → Backup.</p>
+                <p class="lede" id="settings-lede">Company profile, timezone, shop logo, and your login password. Shop backup is under Settings → Backup.</p>
               </div>
               <div class="items-hero-stats" id="settings-hero-stats"></div>
             </header>
@@ -1291,24 +1291,30 @@
                 <form class="settings item-composer" id="settings-form" autocomplete="off">
                   <div class="item-composer-top">
                     <p class="item-mode">Company profile</p>
-                    <p class="item-composer-note">This name, address, GSTIN, and logo print on invoices and appear in the left nav.</p>
+                    <p class="item-composer-note" id="settings-profile-note">This name, address, GSTIN, and logo print on invoices and appear in the left nav.</p>
                   </div>
                   <fieldset class="item-block">
-                    <legend>Shop</legend>
+                    <legend id="set-shop-legend">Shop</legend>
                     <label class="full">Shop ID
                       <span class="shop-id-row">
                         <input id="set-shop-id" readonly autocomplete="off" />
                         <button class="btn" type="button" id="set-copy-shop-id">Copy</button>
                       </span>
                     </label>
-                    <label class="full">Shop name <input id="set-name" maxlength="180" autocomplete="organization" placeholder="Your shop name" /></label>
-                    <label class="full">Address <textarea id="set-address" rows="2" maxlength="500" placeholder="Street, city, PIN"></textarea></label>
-                    <label>Phone <input id="set-phone" type="tel" inputmode="numeric" maxlength="15" placeholder="10-digit mobile" /></label>
+                    <label class="full"><span id="set-name-lab">Shop name</span> <input id="set-name" maxlength="180" autocomplete="organization" placeholder="Your shop name" /></label>
+                    <label class="full"><span id="set-address-lab">Address</span> <textarea id="set-address" rows="2" maxlength="500" placeholder="Street, city, PIN"></textarea></label>
+                    <label><span id="set-phone-lab">Phone</span> <input id="set-phone" type="tel" inputmode="numeric" maxlength="15" placeholder="10-digit mobile" /></label>
                     <label>Email <input id="set-email" type="email" maxlength="160" placeholder="shop@email.com" /></label>
                     <label class="full">GSTIN <input id="set-gstin" maxlength="20" placeholder="Optional" autocomplete="off" /></label>
                     <label>City <input id="set-city" maxlength="128" placeholder="e.g. Pune" autocomplete="address-level2" /></label>
                     <label>State <input id="set-state" maxlength="64" placeholder="e.g. Maharashtra" autocomplete="address-level1" /></label>
                     <label>PIN code <input id="set-pincode" maxlength="12" inputmode="numeric" placeholder="6-digit PIN" autocomplete="postal-code" /></label>
+                  </fieldset>
+                  <fieldset class="item-block pharmacy-only" id="set-licence-block" hidden>
+                    <legend>Pharmacy licences</legend>
+                    <label class="full">Drug Licence No. <input id="set-drug-licence" maxlength="80" placeholder="e.g. 20B/MH/12345" autocomplete="off" /></label>
+                    <label class="full">FSSAI License (Food License) No. <input id="set-fssai" maxlength="20" inputmode="numeric" placeholder="14-digit FSSAI number" autocomplete="off" /></label>
+                    <label class="full">NDPS / Restricted Drug License No. <input id="set-ndps" maxlength="80" placeholder="If applicable" autocomplete="off" /></label>
                   </fieldset>
                   <fieldset class="item-block">
                     <legend>Timezone</legend>
@@ -1587,11 +1593,11 @@
     <script src="./js/barcode.js?v=20260905deploy136" defer></script>
     <script src="./js/camera-scan.js?v=20260904camera1" defer></script>
     <script src="./js/dev-mode.js?v=20260905deploy136" defer></script>
-    <script src="./js/invoice.js?v=20260905deploy174" defer></script>
+    <script src="./js/invoice.js?v=20260913pharmacy3" defer></script>
     <script src="./js/support.js?v=20260905deploy136" defer></script>
     <script src="./js/qrcode.iife.js?v=20260905qr1" defer></script>
     <script src="./js/qr-notify.js?v=20260905deploy144" defer></script>
-    <script src="./js/app.js?v=20260913pharmacy2" defer></script>
+    <script src="./js/app.js?v=20260913pharmacy3" defer></script>
     <script src="./js/growth.js?v=20260905deploy145" defer></script>
     <script src="./js/offers-ui.js?v=20260905deploy136" defer></script>
   </body>

@@ -408,6 +408,49 @@ test("POS slip and official bill print the shop payment QR for customers to pay"
   assert.doesNotMatch(none, /javascript:/);
 });
 
+test("pharmacy licences print on thermal and office invoices", () => {
+  const InvoicePrint = loadInvoicePrint();
+  const order = {
+    order_number: "SO-MED-1",
+    customer_name: "Walk-in",
+    payment_method: "cash",
+    payment_status: "paid",
+    subtotal: 50,
+    gst: 0,
+    total: 50,
+    created_at: "2026-09-13",
+    lines: [{ item_name: "Paracetamol 500mg", quantity_gm: 1, rate_per_kg: 50, amount: 50, gst_rate: 0, unit: "PCS" }],
+  };
+  const ctx = {
+    company: {
+      name: "ABC MEDICAL",
+      address: "Shop 12, Main Road",
+      phone: "9876543210",
+      gstin: "27AAAAA0000A1Z5",
+      drug_licence_no: "20B/MH/12345",
+      fssai_licence_no: "11223344556677",
+      ndps_licence_no: "NDPS-9",
+    },
+    customers: [],
+    items: [],
+    formatDateTime: (v) => String(v),
+    money: (n) => `₹${Number(n).toFixed(2)}`,
+    escapeHtml: (v) => String(v ?? ""),
+  };
+  const thermal = InvoicePrint.invoiceBody(order, ctx);
+  assert.match(thermal, /ABC MEDICAL/);
+  assert.match(thermal, /Shop 12, Main Road/);
+  assert.match(thermal, /Ph: 9876543210/);
+  assert.match(thermal, /GSTIN: 27AAAAA0000A1Z5/);
+  assert.match(thermal, /Drug Lic\.: 20B\/MH\/12345/);
+  assert.match(thermal, /FSSAI: 11223344556677/);
+  assert.match(thermal, /NDPS: NDPS-9/);
+  const office = InvoicePrint.officeInvoiceBody(order, ctx);
+  assert.match(office, /Drug Lic\.: 20B\/MH\/12345/);
+  assert.match(office, /FSSAI: 11223344556677/);
+  assert.match(office, /NDPS: NDPS-9/);
+});
+
 test("QR invoice prints 3 pcs × rate as gross, then header discount", () => {
   const InvoicePrint = loadInvoicePrint();
   const order = {

@@ -4,6 +4,16 @@
     return Number(v) || 0;
   }
 
+  function companyLicenceBits(co, esc) {
+    const e = typeof esc === "function" ? esc : (v) => String(v ?? "");
+    const t = (v) => String(v || "").trim();
+    return [
+      t(co?.drug_licence_no) ? `Drug Lic.: ${e(t(co.drug_licence_no))}` : "",
+      t(co?.fssai_licence_no) ? `FSSAI: ${e(t(co.fssai_licence_no))}` : "",
+      t(co?.ndps_licence_no) ? `NDPS: ${e(t(co.ndps_licence_no))}` : "",
+    ].filter(Boolean);
+  }
+
   function round2(v) {
     return Math.round(num(v) * 100) / 100;
   }
@@ -280,6 +290,7 @@
       co.phone ? `Ph: ${escapeHtml(co.phone)}` : "",
       co.gstin ? `GSTIN: ${escapeHtml(co.gstin)}` : "",
       co.pan ? `PAN: ${escapeHtml(co.pan)}` : "",
+      ...companyLicenceBits(co, escapeHtml),
     ]
       .filter(Boolean)
       .join(" · ");
@@ -425,6 +436,7 @@ ${purchaseBody(purchase, ctx)}
       co.phone ? `Ph: ${escapeHtml(co.phone)}` : "",
       co.gstin ? `GSTIN: ${escapeHtml(co.gstin)}` : "",
       co.pan ? `PAN: ${escapeHtml(co.pan)}` : "",
+      ...companyLicenceBits(co, escapeHtml),
     ]
       .filter(Boolean)
       .join(" · ");
@@ -645,7 +657,7 @@ ${invoiceBody(order, ctx)}
       co.address,
       place,
       [co.phone ? `Ph: ${co.phone}` : "", co.email ? `Email: ${co.email}` : ""].filter(Boolean).join(" · "),
-      [co.gstin ? `GSTIN: ${co.gstin}` : "", co.pan ? `PAN: ${co.pan}` : ""].filter(Boolean).join(" · "),
+      [co.gstin ? `GSTIN: ${co.gstin}` : "", co.pan ? `PAN: ${co.pan}` : "", ...companyLicenceBits(co)].filter(Boolean).join(" · "),
     ]
       .filter(Boolean)
       .map((t) => `<div>${escapeHtml(t)}</div>`)
@@ -858,7 +870,11 @@ ${officeInvoiceBody(order, ctx, { copy })}
     const co = company || {};
     const isPayment = String(entry.entry_type).toLowerCase() === "payment";
     const when = formatDateTime(entry.created_at || new Date().toISOString());
-    const meta = [co.phone ? `Ph: ${escapeHtml(co.phone)}` : "", co.gstin ? `GSTIN: ${escapeHtml(co.gstin)}` : ""]
+    const meta = [
+      co.phone ? `Ph: ${escapeHtml(co.phone)}` : "",
+      co.gstin ? `GSTIN: ${escapeHtml(co.gstin)}` : "",
+      ...companyLicenceBits(co, escapeHtml),
+    ]
       .filter(Boolean)
       .join(" · ");
     const amount = round2(entry.amount);
