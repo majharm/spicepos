@@ -8,7 +8,7 @@ import { buildReports, reportsToSheets } from "./reports.js";
 import { workbookXml } from "./excel.js";
 import { ensureQrOrderSchema, registerQrOrdering } from "./qr-ordering.js";
 import { ensurePharmacySchema } from "./pharmacy-schema.js";
-import { listAllBatches } from "./pharmacy-stock.js";
+import { listAllBatches, upsertBatch } from "./pharmacy-stock.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.join(__dirname, "..");
@@ -229,17 +229,35 @@ app.get("/api/reports/excel", async (req, res) => {
 });
 
 app.post("/api/items/:id/receive", async (req, res) => {
-  const qty = Number(req.body?.quantity_gm);
+  const qty = Number(req.body?.quantity_gm ?? req.body?.quantity ?? req.body?.qty);
+  const batchNo = String(req.body?.batch_no || "").trim();
+  const expiryDate = req.body?.expiry_date;
   if (!Number.isFinite(qty) || qty <= 0) {
-    res.status(400).json({ error: "quantity_gm must be positive" });
+    res.status(400).json({ error: "Quantity must be positive" });
+    return;
+  }
+  if (!batchNo || !expiryDate) {
+    res.status(400).json({ error: "Batch No. and Expiry Date are required to receive stock" });
     return;
   }
   try {
-    await query(
-      "UPDATE items SET stock_gm = stock_gm + ? WHERE id = ? AND business_id = ?",
-      [qty, req.params.id, BUSINESS_ID],
-    );
-    const [item] = await query("SELECT * FROM items WHERE id = ?", [req.params.id]);
+    const item = await withTransaction(async (conn) => {
+      const [rows] = await conn.query("SELECT * FROM items WHERE id = ? AND business_id = ?", [
+        req.params.id,
+        BUSINESS_ID,
+      ]);
+      if (!rows[0]) throw new Error("Medicine not found");
+      await upsertBatch(conn, {
+        itemId: req.params.id,
+        batchNo,
+        expiryDate,
+        qty,
+        mrp: req.body?.mrp ?? rows[0].mrp,
+        purchaseRate: req.body?.purchase_rate ?? rows[0].purchase_rate,
+      });
+      const [item] = await conn.query("SELECT * FROM items WHERE id = ?", [req.params.id]);
+      return item[0];
+    });
     res.json({ ok: true, item });
   } catch (err) {
     res.status(500).json({ error: String(err.message) });

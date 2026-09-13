@@ -45,7 +45,8 @@
               <input id="search" type="search" placeholder="Search medicine, generic, barcode, or code" autocomplete="off" />
             </form>
             <select id="customer" class="select"></select>
-            <input id="bill-doctor" class="select" placeholder="Doctor / Rx no." />
+            <input id="bill-doctor" class="select" placeholder="Doctor name" />
+            <input id="bill-rx" class="select" placeholder="Prescription no." />
             <select id="pay-method" class="select">
               <option value="cash">Cash</option>
               <option value="upi">UPI</option>
@@ -312,10 +313,6 @@
       </div>
     </div>
     <script src="./js/qrcode.iife.js"></script>
-    <script type="module">
-      import * as Pharmacy from "./js/pharmacy.js";
-      window.Pharmacy = Pharmacy;
-    </script>
-    <script src="./js/app.js"></script>
+    <script type="module" src="./js/app.js"></script>
   </body>
 </html>

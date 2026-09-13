@@ -70,12 +70,16 @@ export function saleLineTotals({ qty, rate, mrp = 0, gstRate = 0, discount = 0, 
 
 export function billTotals({ lines = [], billDiscount = 0, amountPaid = 0, roundToRupee = true } = {}) {
   const subtotal = round2(lines.reduce((s, l) => s + Number(l.taxable || 0), 0));
-  const cgst = round2(lines.reduce((s, l) => s + Number(l.cgst || 0), 0));
-  const sgst = round2(lines.reduce((s, l) => s + Number(l.sgst || 0), 0));
-  const igst = round2(lines.reduce((s, l) => s + Number(l.igst || 0), 0));
+  const rawCgst = round2(lines.reduce((s, l) => s + Number(l.cgst || 0), 0));
+  const rawSgst = round2(lines.reduce((s, l) => s + Number(l.sgst || 0), 0));
+  const rawIgst = round2(lines.reduce((s, l) => s + Number(l.igst || 0), 0));
+  const discount = round2(Math.min(Math.max(0, Number(billDiscount) || 0), subtotal));
+  const factor = subtotal > 0 ? (subtotal - discount) / subtotal : 0;
+  const cgst = round2(rawCgst * factor);
+  const sgst = round2(rawSgst * factor);
+  const igst = round2(rawIgst * factor);
   const gst = round2(cgst + sgst + igst);
-  const discount = round2(billDiscount);
-  const beforeRound = round2(Math.max(0, subtotal + gst - discount));
+  const beforeRound = round2(Math.max(0, subtotal - discount + gst));
   const rounded = roundToRupee ? Math.round(beforeRound) : beforeRound;
   const roundOff = round2(rounded - beforeRound);
   const grandTotal = round2(beforeRound + roundOff);
@@ -94,19 +98,28 @@ export function billTotals({ lines = [], billDiscount = 0, amountPaid = 0, round
   };
 }
 
-export function allocateFefo(batches, qtyNeeded) {
+export function allocateFefo(batches, qtyNeeded, { preferredId } = {}) {
   const need = Number(qtyNeeded);
   if (!Number.isFinite(need) || need <= 0) {
     return { ok: false, error: "Quantity must be positive", shortfall: need, allocations: [] };
   }
-  const sorted = [...(batches || [])].sort((a, b) => {
+  const byExpiry = (a, b) => {
     const ae = a.expiry_date ? String(a.expiry_date) : "9999-12-31";
     const be = b.expiry_date ? String(b.expiry_date) : "9999-12-31";
     return ae.localeCompare(be);
-  });
+  };
+  const list = [...(batches || [])];
+  let ordered;
+  if (preferredId) {
+    const preferred = list.find((b) => b.id === preferredId);
+    const rest = list.filter((b) => b.id !== preferredId).sort(byExpiry);
+    ordered = preferred ? [preferred, ...rest] : rest;
+  } else {
+    ordered = list.sort(byExpiry);
+  }
   const allocations = [];
   let left = need;
-  for (const batch of sorted) {
+  for (const batch of ordered) {
     if (left <= 0) break;
     const available = Number(batch.qty) || 0;
     const take = Math.min(available, left);
@@ -124,6 +137,28 @@ export function allocateFefo(batches, qtyNeeded) {
     return { ok: false, error: "Insufficient batch stock", shortfall: left, allocations };
   }
   return { ok: true, shortfall: 0, allocations };
+}
+
+export function mergeSaleLines(lines = []) {
+  const map = new Map();
+  for (const line of lines) {
+    const id = line.itemId || line.item_id;
+    if (!id) continue;
+    const qty = Number(line.quantity ?? line.quantity_gm ?? line.qty) || 0;
+    const prev = map.get(id);
+    if (prev) {
+      prev.quantity = (Number(prev.quantity) || 0) + qty;
+      prev.qty = prev.quantity;
+      prev.quantity_gm = prev.quantity;
+    } else {
+      map.set(id, { ...line, itemId: id, item_id: id, quantity: qty, qty, quantity_gm: qty });
+    }
+  }
+  return [...map.values()];
+}
+
+export function remainingReturnQty(billed, alreadyReturned) {
+  return round2(Math.max(0, Number(billed) - Number(alreadyReturned || 0)));
 }
 
 export function expiryStatus(date, today = new Date()) {

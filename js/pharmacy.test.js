@@ -6,7 +6,9 @@ import {
   expiryStatus,
   gstinStateCode,
   isInterstate,
+  mergeSaleLines,
   purchaseLineTotals,
+  remainingReturnQty,
   saleLineTotals,
   splitGst,
 } from "./pharmacy.js";
@@ -78,6 +80,42 @@ test("expiry status flags expired and near-expiry batches", () => {
   assert.equal(expiryStatus("2020-01-01", new Date("2026-09-12")), "expired");
   assert.equal(expiryStatus("2026-10-01", new Date("2026-09-12")), "near");
   assert.equal(expiryStatus("2028-01-01", new Date("2026-09-12")), "ok");
+});
+
+test("bill discount reduces taxable GST, not only the grand total", () => {
+  const totals = billTotals({
+    lines: [saleLineTotals({ qty: 1, rate: 100, gstRate: 12 })],
+    billDiscount: 10,
+  });
+  assert.equal(totals.subtotal, 100);
+  assert.equal(totals.discount, 10);
+  assert.equal(totals.gst, 10.8);
+  assert.equal(totals.grandTotal, 101);
+});
+
+test("FEFO can honour a preferred in-date batch", () => {
+  const batches = [
+    { id: "b2", batch_no: "B2", expiry_date: "2026-10-01", qty: 5 },
+    { id: "b1", batch_no: "B1", expiry_date: "2027-01-01", qty: 5 },
+  ];
+  const plan = allocateFefo(batches, 3, { preferredId: "b1" });
+  assert.equal(plan.ok, true);
+  assert.deepEqual(plan.allocations.map((a) => [a.batch_no, a.take]), [["B1", 3]]);
+});
+
+test("merged sale lines combine FEFO-split qty for the same medicine", () => {
+  const merged = mergeSaleLines([
+    { itemId: "a", qty: 2 },
+    { item_id: "a", quantity_gm: 3 },
+    { itemId: "b", quantity: 1 },
+  ]);
+  assert.equal(merged.find((l) => l.itemId === "a").qty, 5);
+  assert.equal(merged.length, 2);
+});
+
+test("return qty cannot exceed remaining billed units", () => {
+  assert.equal(remainingReturnQty(10, 4), 6);
+  assert.equal(remainingReturnQty(10, 10), 0);
 });
 
 test("GSTIN state codes detect inter-state purchase/sale", () => {

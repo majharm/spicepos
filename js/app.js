@@ -1,3 +1,5 @@
+import * as Pharmacy from "./pharmacy.js";
+
 const inr = new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR" });
 
 const state = {
@@ -63,7 +65,16 @@ function packLabel() {
 }
 
 function batchesFor(itemId) {
-  return (state.batches || []).filter((b) => b.item_id === itemId && Number(b.qty) > 0);
+  return (state.batches || []).filter((b) => {
+    if (b.item_id !== itemId || Number(b.qty) <= 0) return false;
+    return Pharmacy.expiryStatus(b.expiry_date) !== "expired";
+  });
+}
+
+function sellableOf(item) {
+  const hasBatch = (state.batches || []).some((b) => b.item_id === item.id);
+  if (hasBatch) return batchesFor(item.id).reduce((s, b) => s + (Number(b.qty) || 0), 0);
+  return stockOf(item);
 }
 
 async function api(path, options) {
@@ -170,12 +181,12 @@ function filteredItems() {
 function renderCatalog() {
   $("catalog").innerHTML = filteredItems()
     .map((i) => {
-      const low = stockOf(i) <= Number(i.reorder_level_gm);
-      const out = stockOf(i) <= 0;
+      const low = sellableOf(i) <= Number(i.reorder_level_gm);
+      const out = sellableOf(i) <= 0;
       return `<button class="card" type="button" data-add="${escapeHtml(i.id)}" ${out ? "disabled" : ""}>
         <div class="sku">${escapeHtml(i.medicine_type || i.category || "Medical")} · ${escapeHtml(i.pack_unit || "Strip")}</div>
         <div class="name">${escapeHtml(i.name)} <small>${escapeHtml(genericOf(i))}</small></div>
-        <div class="meta"><span>${stockOf(i)} ${escapeHtml(i.pack_unit || "pcs")}</span><span>${money(rateFor(i))}</span></div>
+        <div class="meta"><span>${sellableOf(i)} ${escapeHtml(i.pack_unit || "pcs")}</span><span>${money(rateFor(i))}</span></div>
         <div class="stock ${out ? "out" : low ? "low" : "ok"}">${escapeHtml(i.code)} · GST ${escapeHtml(i.gst_rate)}%</div>
       </button>`;
     })
@@ -183,35 +194,24 @@ function renderCatalog() {
 }
 
 function cartTotals() {
-  const P = window.Pharmacy;
-  const interstate = P ? P.isInterstate(state.company.gstin, customer()?.gstin) : false;
+  const interstate = Pharmacy.isInterstate(state.company.gstin, customer()?.gstin);
   const lines = state.cart.map((line) => {
     const item = state.items.find((i) => i.id === line.itemId);
     if (!item) return null;
-    if (P) {
-      return P.saleLineTotals({
-        qty: line.qty,
-        rate: rateFor(item),
-        mrp: item.mrp,
-        gstRate: item.gst_rate,
-        interstate,
-      });
-    }
-    const taxable = lineAmt(item, line.qty);
-    const gst = (taxable * Number(item.gst_rate)) / 100;
-    return { taxable, gst, cgst: gst / 2, sgst: gst / 2, igst: 0, qty: line.qty };
+    return Pharmacy.saleLineTotals({
+      qty: line.qty,
+      rate: rateFor(item),
+      mrp: item.mrp,
+      gstRate: item.gst_rate,
+      interstate,
+    });
   }).filter(Boolean);
   const billDiscount = Number($("bill-discount")?.value) || 0;
   const method = $("pay-method")?.value;
   const paidRaw = $("bill-paid")?.value;
-  if (P) {
-    const draft = P.billTotals({ lines, billDiscount, amountPaid: 0 });
-    const amountPaid = paidRaw === "" || paidRaw == null ? (method === "credit" ? 0 : draft.grandTotal) : Number(paidRaw) || 0;
-    return { ...P.billTotals({ lines, billDiscount, amountPaid }), qty: lines.reduce((s, l) => s + l.qty, 0) };
-  }
-  const taxable = lines.reduce((s, l) => s + l.taxable, 0);
-  const tax = lines.reduce((s, l) => s + l.gst, 0);
-  return { qty: lines.reduce((s, l) => s + l.qty, 0), subtotal: taxable, gst: tax, grandTotal: taxable + tax, discount: billDiscount, roundOff: 0, due: 0, cgst: tax / 2, sgst: tax / 2, igst: 0 };
+  const draft = Pharmacy.billTotals({ lines, billDiscount, amountPaid: 0 });
+  const amountPaid = paidRaw === "" || paidRaw == null ? (method === "credit" ? 0 : draft.grandTotal) : Number(paidRaw) || 0;
+  return { ...Pharmacy.billTotals({ lines, billDiscount, amountPaid }), qty: lines.reduce((s, l) => s + l.qty, 0) };
 }
 
 function renderCart() {
@@ -277,8 +277,8 @@ function addItem(id, qty = 1) {
   if (!item) return;
   const line = state.cart.find((l) => l.itemId === id);
   const next = (line ? line.qty : 0) + qty;
-  if (next > stockOf(item)) {
-    setHint(`Only ${stockOf(item)} in stock for ${item.name}`, "error");
+  if (next > sellableOf(item)) {
+    setHint(`Only ${sellableOf(item)} in-date stock for ${item.name}`, "error");
     return;
   }
   if (line) line.qty = Math.max(0, next);
@@ -770,7 +770,7 @@ async function loadSuppliers() {
 async function loadBatches() {
   const rows = await api("/api/batches").catch(() => state.batches || []);
   state.batches = rows;
-  const P = window.Pharmacy;
+  const P = Pharmacy;
   const expired = rows.filter((b) => P && P.expiryStatus(b.expiry_date) === "expired");
   const near = rows.filter((b) => P && P.expiryStatus(b.expiry_date) === "near");
   $("batch-summary").innerHTML = [
@@ -928,11 +928,14 @@ $("order-pane").addEventListener("click", (e) => {
     if (!o) return;
     state.editingOrderId = o.id;
     state.customerId = o.customer_id;
-    state.cart = (o.lines || []).map((l) => ({ itemId: l.item_id, qty: Number(l.quantity_gm) }));
+    state.cart = Pharmacy.mergeSaleLines(
+      (o.lines || []).map((l) => ({ itemId: l.item_id, qty: Number(l.quantity_gm) })),
+    ).map((l) => ({ itemId: l.itemId, qty: l.qty }));
     state.lastPack = null;
     $("customer").value = state.customerId;
     $("pay-method").value = o.payment_method || "cash";
-    if ($("bill-doctor")) $("bill-doctor").value = [o.doctor_name, o.prescription_no].filter(Boolean).join(" / ");
+    if ($("bill-doctor")) $("bill-doctor").value = o.doctor_name || "";
+    if ($("bill-rx")) $("bill-rx").value = o.prescription_no || "";
     showView("counter");
     renderCart();
     setHint(`Editing ${o.order_number}`, "ok");
@@ -960,15 +963,14 @@ $("btn-clear").addEventListener("click", () => {
 $("btn-pay").addEventListener("click", async () => {
   try {
     setHint("Saving…");
-    const doctor = ($("bill-doctor")?.value || "").trim();
     const payload = {
       customerId: state.customerId,
       paymentMethod: $("pay-method").value,
-      doctorName: doctor,
-      prescriptionNo: doctor,
+      doctorName: ($("bill-doctor")?.value || "").trim(),
+      prescriptionNo: ($("bill-rx")?.value || "").trim(),
       discount: Number($("bill-discount")?.value) || 0,
       amountPaid: $("bill-paid")?.value === "" ? undefined : Number($("bill-paid")?.value),
-      lines: state.cart.map((l) => ({ itemId: l.itemId, quantity: l.qty })),
+      lines: Pharmacy.mergeSaleLines(state.cart.map((l) => ({ itemId: l.itemId, quantity: l.qty }))),
     };
     const result = state.editingOrderId
       ? await api(`/api/orders/${state.editingOrderId}`, { method: "PUT", body: JSON.stringify(payload) })

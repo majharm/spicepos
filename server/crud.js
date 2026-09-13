@@ -2,7 +2,9 @@ import { BUSINESS_ID, query, withTransaction } from "./db.js";
 import {
   billTotals,
   isInterstate,
+  mergeSaleLines,
   purchaseLineTotals,
+  remainingReturnQty,
   round2,
   saleLineTotals,
 } from "../js/pharmacy.js";
@@ -24,11 +26,25 @@ function sellingRate(item, customer) {
 
 export { round2 };
 
+function creditDue(order) {
+  if (!order || String(order.payment_method || "").toLowerCase() !== "credit") return 0;
+  return round2(Math.max(0, Number(order.total) - Number(order.amount_paid || 0)));
+}
+
+async function adjustOutstanding(conn, customerId, delta) {
+  const amount = round2(delta);
+  if (!customerId || !amount) return;
+  await conn.query(
+    "UPDATE customers SET outstanding = GREATEST(0, outstanding + ?) WHERE id = ? AND business_id = ?",
+    [amount, customerId, BUSINESS_ID],
+  );
+}
+
 export async function buildPricedLines(conn, customer, lines, { companyGstin = "", interstate } = {}) {
   const useInter =
     interstate ?? isInterstate(companyGstin, customer?.gstin);
   const built = [];
-  for (const line of lines) {
+  for (const line of mergeSaleLines(lines)) {
     const [items] = await conn.query("SELECT * FROM items WHERE id = ? AND business_id = ?", [
       line.itemId || line.item_id,
       BUSINESS_ID,
@@ -38,13 +54,14 @@ export async function buildPricedLines(conn, customer, lines, { companyGstin = "
     const qty = qtyOf(line);
     if (!Number.isFinite(qty) || qty <= 0) throw new Error("Invalid quantity");
     const [sumRows] = await conn.query(
-      `SELECT COALESCE(SUM(qty),0) AS qty FROM item_batches
-       WHERE item_id = ? AND business_id = ? AND qty > 0
-         AND (expiry_date IS NULL OR expiry_date >= CURDATE())`,
+      `SELECT
+         COUNT(*) AS n,
+         COALESCE(SUM(CASE WHEN qty > 0 AND (expiry_date IS NULL OR expiry_date >= CURDATE()) THEN qty ELSE 0 END),0) AS live_qty
+       FROM item_batches WHERE item_id = ? AND business_id = ?`,
       [item.id, BUSINESS_ID],
     );
-    const batchQty = Number(sumRows[0]?.qty) || 0;
-    const available = batchQty > 0 ? batchQty : Number(item.stock_gm || 0);
+    const hasBatches = Number(sumRows[0]?.n) > 0;
+    const available = hasBatches ? Number(sumRows[0]?.live_qty) || 0 : Number(item.stock_gm || 0);
     if (qty > available) throw new Error(`${item.name} does not have enough stock`);
     const rate = Number(line.rate ?? line.rate_per_kg) || sellingRate(item, customer);
     const priced = saleLineTotals({
@@ -196,6 +213,9 @@ export async function insertSalesOrder(
   }
   const [orders] = await conn.query("SELECT * FROM sales_orders WHERE id = ?", [orderId]);
   const [orderLines] = await conn.query("SELECT * FROM sales_order_lines WHERE order_id = ?", [orderId]);
+  if (method === "credit" && withPay.due > 0) {
+    await adjustOutstanding(conn, customer.id, withPay.due);
+  }
   return { ...orders[0], lines: orderLines, interstate };
 }
 
@@ -650,6 +670,7 @@ export function registerCrud(app) {
         );
         const existing = existRows[0];
         if (!existing) throw new Error("Order not found");
+        const oldDue = creditDue(existing);
         const [oldLines] = await conn.query(
           "SELECT * FROM sales_order_lines WHERE order_id = ? AND cancelled = 0",
           [existing.id],
@@ -777,6 +798,9 @@ export function registerCrud(app) {
         }
         const [orders] = await conn.query("SELECT * FROM sales_orders WHERE id = ?", [existing.id]);
         const [orderLines] = await conn.query("SELECT * FROM sales_order_lines WHERE order_id = ?", [existing.id]);
+        await adjustOutstanding(conn, existing.customer_id, -oldDue);
+        const newDue = newStatus === "cancelled" ? 0 : creditDue({ ...orders[0], payment_method: method });
+        await adjustOutstanding(conn, customer.id, newDue);
         return { ...orders[0], lines: orderLines };
       });
       res.json({ ok: true, order });
@@ -809,7 +833,12 @@ export function registerCrud(app) {
           if (!source) throw new Error("Return line is not on this bill");
           const qty = Number(row.quantity ?? row.quantity_gm);
           if (!Number.isFinite(qty) || qty <= 0) throw new Error("Return quantity must be positive");
-          if (qty > Number(source.quantity_gm)) throw new Error(`Cannot return more than billed for ${source.item_name}`);
+          const [prev] = await conn.query(
+            "SELECT COALESCE(SUM(quantity),0) AS qty FROM sales_return_lines WHERE order_line_id = ?",
+            [source.id],
+          );
+          const remaining = remainingReturnQty(source.quantity_gm, prev[0]?.qty);
+          if (qty > remaining) throw new Error(`Cannot return more than billed for ${source.item_name}`);
           const share = Number(source.quantity_gm) ? qty / Number(source.quantity_gm) : 1;
           built.push({
             source,
@@ -873,6 +902,7 @@ export function registerCrud(app) {
         }
         const [rows] = await conn.query("SELECT * FROM sales_returns WHERE id = ?", [id]);
         const [rLines] = await conn.query("SELECT * FROM sales_return_lines WHERE return_id = ?", [id]);
+        if (creditDue(order) > 0) await adjustOutstanding(conn, order.customer_id, -total);
         return { ...rows[0], lines: rLines };
       });
       res.json({ ok: true, return: result });
