@@ -3676,6 +3676,17 @@ button.items-stat.is-active {
 .thermal-preview .inv-shop { font-size: 14px; margin: 0 0 4px; font-weight: 700; }
 .thermal-preview .inv-addr, .thermal-preview .inv-meta { margin: 2px 0; font-size: 10px; }
 .thermal-preview .inv-title { margin: 8px 0 2px; font-size: 12px; font-weight: 800; letter-spacing: 0.08em; }
+.thermal-preview .inv-void,
+.office-preview .off-void {
+  margin: 6px 0 4px;
+  padding: 4px 0;
+  border: 2px solid #a12822;
+  color: #a12822;
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: 0.28em;
+  text-align: center;
+}
 .thermal-preview .inv-rule { border-top: 1px dashed #111; margin: 6px 0; }
 .thermal-preview .inv-details .inv-row {
   display: flex;

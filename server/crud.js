@@ -756,7 +756,7 @@ export function registerCrud(app) {
         const existing = existRows[0];
         if (!existing) throw new Error("Order not found");
         if (String(existing.status || "").toLowerCase() === "cancelled") {
-          throw new Error("Cancelled orders cannot be edited. Change status first.");
+          throw new Error("Void bills cannot be edited. Change status first.");
         }
         const [oldLines] = await conn.query(
           "SELECT * FROM sales_order_lines WHERE order_id = ? AND cancelled = 0",

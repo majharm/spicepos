@@ -67,6 +67,37 @@ test("thermal invoice HTML includes tax invoice header and invoice number", () =
   assert.match(html, /SO-10042/);
   assert.match(html, /CGST/);
   assert.match(html, /SGST/);
+  assert.doesNotMatch(html, />VOID</);
+});
+
+test("cancelled invoices print VOID on thermal and office copies", () => {
+  const InvoicePrint = loadInvoicePrint();
+  const order = {
+    order_number: "SO-10042",
+    status: "cancelled",
+    customer_name: "Walk-in",
+    subtotal: 100,
+    gst: 5,
+    total: 105,
+    payment_method: "cash",
+    payment_status: "paid",
+    created_at: "2026-08-30T10:30:00.000Z",
+    lines: [{ item_name: "Test", quantity_gm: 500, rate_per_kg: 200, amount: 100, gst_rate: 5 }],
+  };
+  const ctx = {
+    company: { name: "ATAV Spices", gstin: "27AABCU9603R1ZX", address: "Pune" },
+    customers: [],
+    items: [],
+    formatDateTime: (v) => String(v),
+    money: (n) => `₹${Number(n).toFixed(2)}`,
+    escapeHtml: (v) => String(v),
+  };
+  const thermal = InvoicePrint.invoiceBody(order, ctx);
+  const office = InvoicePrint.officeInvoiceBody(order, ctx);
+  assert.match(thermal, /class="inv-void">VOID</);
+  assert.match(office, /class="off-void">VOID</);
+  const live = InvoicePrint.invoiceBody({ ...order, status: "confirmed" }, ctx);
+  assert.doesNotMatch(live, />VOID</);
 });
 
 test("thermal and office invoices print the dining table", () => {

@@ -96,7 +96,7 @@ function pos_update_order($bid, $orderId, $body, $auth) {
   $existing = pos_order_with_lines($bid, $orderId);
   if (!$existing) pos_send(404, ["error" => "Order not found", "php" => true]);
   if (strtolower((string) ($existing["status"] ?? "")) === "cancelled") {
-    pos_send(400, ["error" => "Cancelled orders cannot be edited. Change status first.", "php" => true]);
+    pos_send(400, ["error" => "Void bills cannot be edited. Change status first.", "php" => true]);
   }
 
   $oldActive = array_values(array_filter($existing["lines"] ?? [], function ($l) {

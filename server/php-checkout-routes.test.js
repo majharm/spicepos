@@ -334,7 +334,8 @@ test("POS boot skips API probe and slims catalog photos", () => {
   assert.match(index, /qrcode\.iife\.js[^>]+defer/);
   assert.match(index, /preload="none"/);
   assert.match(index, /pos-api\.js\?v=20260905deploy154/);
-  assert.match(index, /app\.js\?v=20260913hsnsac1/);
+  assert.match(index, /app\.js\?v=20260913void1/);
+  assert.match(index, /invoice\.js\?v=20260913void1/);
   assert.doesNotMatch(index, /app\.js\?v=20260905deploy167/);
   assert.doesNotMatch(index, /app\.js\?v=20260905deploy166/);
   assert.match(index, /offers\.js\?v=20260905deploy170/);
@@ -385,9 +386,9 @@ test("Restaurant Counter can create named dining tables", () => {
   assert.match(core, /function pos_clip_floor_id/);
   assert.match(core, /dining_tables_json/);
   assert.match(till, /dining-tables/);
-  assert.match(index, /pos\.css\?v=20260913dash1/);
+  assert.match(index, /pos\.css\?v=20260913void1/);
   assert.match(index, /restaurant\.js\?v=20260905deploy176/);
-  assert.match(index, /app\.js\?v=20260913hsnsac1/);
+  assert.match(index, /app\.js\?v=20260913void1/);
   assert.match(index, /footwear\.js\?v=20260913hsnsac1/);
 });
 
@@ -401,4 +402,24 @@ test("PHP dining layout clip keeps floors and old table lists", { skip: hasPhpCl
     { encoding: "utf8", cwd: root },
   );
   assert.match(out, /FLOOR_OK/);
+});
+
+test("cancelled sales bills show Void in the shop UI and reports", () => {
+  const app = read("js/app.js");
+  const index = read("index.html");
+  const crud = read("server/crud.js");
+  const reports = read("server/reports.js");
+  const phpOrders = read("pos-orders.php");
+  const phpReports = read("pos-reports.php");
+  assert.match(app, /if \(s === "cancelled"\) return "Void"/);
+  assert.match(app, /Void invoice \$\{o\.order_number\}\? Stock will be restored\./);
+  assert.match(app, /Change status from Void before editing items/);
+  assert.match(app, /ORDER_STATUSES = \["confirmed", "delivered", "cancelled"\]/);
+  assert.match(index, /<option value="cancelled">Void<\/option>/);
+  assert.match(crud, /Void bills cannot be edited\. Change status first\./);
+  assert.match(phpOrders, /Void bills cannot be edited\. Change status first\./);
+  assert.match(reports, /=== "cancelled" \? "Void"/);
+  assert.match(phpReports, /=== "cancelled" \? "Void"/);
+  assert.match(read("js/invoice.js"), /function isVoidBill/);
+  assert.match(read("js/invoice.js"), /return `<p class="\$\{cls\}">VOID<\/p>`/);
 });

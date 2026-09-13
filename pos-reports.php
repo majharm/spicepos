@@ -370,7 +370,7 @@ function pos_reports_to_sheets($data, $biz = null) {
           $o["customer_type"],
           $o["pack_name"] ?: "Loose items",
           $num($o["pack_count"]),
-          $o["status"],
+          strtolower((string) ($o["status"] ?? "")) === "cancelled" ? "Void" : $o["status"],
           $num($o["total_quantity_gm"]),
           $num($o["subtotal"]),
           $num($o["gst"]),

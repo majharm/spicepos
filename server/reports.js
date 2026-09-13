@@ -331,7 +331,7 @@ export function reportsToSheets(data, biz = {}) {
         o.customer_type,
         o.pack_name || "Loose items",
         num(o.pack_count),
-        o.status,
+        String(o.status || "").toLowerCase() === "cancelled" ? "Void" : o.status,
         num(o.total_quantity_gm),
         num(o.subtotal),
         num(o.gst),

@@ -54,6 +54,15 @@
     return round2((num(l.amount) * num(l.gst_rate)) / 100);
   }
 
+  function isVoidBill(order) {
+    return String(order?.status || "").toLowerCase() === "cancelled";
+  }
+
+  function voidMark(order, cls) {
+    if (!isVoidBill(order)) return "";
+    return `<p class="${cls}">VOID</p>`;
+  }
+
   function isCancelled(l) {
     return l.cancelled === 1 || l.cancelled === "1" || l.cancelled === true;
   }
@@ -538,6 +547,7 @@ ${purchaseBody(purchase, ctx)}
     ${co.address ? `<p class="inv-addr">${escapeHtml(co.address)}</p>` : ""}
     ${meta ? `<p class="inv-meta">${meta}</p>` : ""}
     <p class="inv-title">${escapeHtml(L(ctx, "invoice.tax_invoice", "TAX INVOICE"))}</p>
+    ${voidMark(order, "inv-void")}
   </header>
   <div class="inv-rule"></div>
   <div class="inv-details">
@@ -605,6 +615,15 @@ body {
 .inv-shop { font-size: 14px; margin: 0 0 4px; font-weight: 700; }
 .inv-addr, .inv-meta { margin: 2px 0; font-size: 10px; }
 .inv-title { margin: 8px 0 2px; font-size: 12px; font-weight: 800; letter-spacing: 0.08em; }
+.inv-void {
+  margin: 6px 0 4px;
+  padding: 4px 0;
+  border: 2px solid #000;
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: 0.28em;
+  text-align: center;
+}
 .inv-rule { border-top: 1px dashed #000; margin: 6px 0; }
 .inv-details .inv-row {
   display: flex;
@@ -800,6 +819,7 @@ ${invoiceBody(order, ctx)}
     </div>
     <div class="off-doc">
       <p class="off-title">TAX INVOICE</p>
+      ${voidMark(order, "off-void")}
       <p class="off-copy">${escapeHtml(officeCopyLabel(opts?.copy))}</p>
       <div class="off-kv"><span>Invoice No.</span><strong>${invNo}</strong></div>
       <div class="off-kv"><span>Date</span><span>${escapeHtml(when)}</span></div>
@@ -897,6 +917,15 @@ body {
 .off-seller-meta { font-size: 11px; color: #333; }
 .off-doc { min-width: 220px; text-align: right; }
 .off-title { margin: 0; font-size: 18px; font-weight: 800; letter-spacing: 0.08em; }
+.off-void {
+  margin: 8px 0 10px;
+  padding: 6px 8px;
+  border: 2px solid #111;
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: 0.28em;
+  text-align: center;
+}
 .off-copy { margin: 2px 0 10px; font-size: 11px; color: #555; }
 .off-kv { display: flex; justify-content: flex-end; gap: 12px; font-size: 12px; }
 .off-kv span:first-child { color: #555; }

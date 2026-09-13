@@ -387,7 +387,7 @@ function orderStatusClass(status) {
 
 function orderStatusBadge(status) {
   const s = String(status || "confirmed").toLowerCase();
-  return `<span class="order-status ${orderStatusClass(s)}">${escapeHtml(s)}</span>`;
+  return `<span class="order-status ${orderStatusClass(s)}">${escapeHtml(orderStatusLabel(s))}</span>`;
 }
 
 function payStatusBadge(status) {
@@ -397,7 +397,7 @@ function payStatusBadge(status) {
 
 function orderStatusLabel(status) {
   const s = String(status || "confirmed").toLowerCase();
-  if (s === "cancelled") return "Cancelled";
+  if (s === "cancelled") return "Void";
   if (s === "delivered") return "Delivered";
   return "Confirmed";
 }
@@ -4187,7 +4187,7 @@ async function loadReports() {
       .join("");
     $("reports").innerHTML = [
       reportBlock("GST summary (India)", "GST summary", ["Type", "CGST", "SGST", "IGST", "Total GST"], gstSummaryRows(s), "gst"),
-      reportBlock("Sales bills", "Sales bills", ["Order", "Customer", "Type", "Pack", "Pack count", "Status", "Qty g", "Taxable", "GST", "Total", "Pay", "Pay status", "Date"], (data.sales || []).map((o) => [o.order_number, o.customer_name, o.customer_type, o.pack_name || "Loose items", Number(o.pack_count) || 0, o.status, Number(o.total_quantity_gm) || 0, Number(o.subtotal) || 0, Number(o.gst) || 0, Number(o.total) || 0, o.payment_method, o.payment_status, formatShopDateTime(o.created_at)]), "sales"),
+      reportBlock("Sales bills", "Sales bills", ["Order", "Customer", "Type", "Pack", "Pack count", "Status", "Qty g", "Taxable", "GST", "Total", "Pay", "Pay status", "Date"], (data.sales || []).map((o) => [o.order_number, o.customer_name, o.customer_type, o.pack_name || "Loose items", Number(o.pack_count) || 0, orderStatusLabel(o.status), Number(o.total_quantity_gm) || 0, Number(o.subtotal) || 0, Number(o.gst) || 0, Number(o.total) || 0, o.payment_method, o.payment_status, formatShopDateTime(o.created_at)]), "sales"),
       reportBlock("Item sales", "Item sales", ["Item", "Qty g", "Amount", "GST"], (data.byItem || []).map((r) => [r.item_name, Number(r.quantity_gm) || 0, Number(r.amount) || 0, Number(r.gst) || 0]), "sales"),
       reportBlock("Customer sales", "Customer sales", ["Customer", "Type", "Bills", "Takings", "GST"], (data.byCustomer || []).map((r) => [r.customer_name, r.customer_type, Number(r.bills) || 0, Number(r.takings) || 0, Number(r.gst) || 0]), "sales"),
       reportBlock("Pack sales", "Pack sales", ["Pack type", "Pack count", "Bills", "Takings"], (data.byPack || []).map((r) => [r.pack_type, Number(r.pack_count) || 0, Number(r.bills) || 0, Number(r.takings) || 0]), "sales"),
@@ -5548,7 +5548,7 @@ $("order-pane").addEventListener("click", async (e) => {
     const o = orderCache.find((row) => row.id === editBtn.dataset.editOrder);
     if (!o) return;
     if (String(o.status || "").toLowerCase() === "cancelled") {
-      setHint("Change order status from cancelled before editing items", "error");
+      setHint("Change status from Void before editing items", "error");
       return;
     }
     state.editingOrderId = o.id;
@@ -5571,7 +5571,7 @@ $("order-pane").addEventListener("click", async (e) => {
     const nextStatus = statusBtn.dataset.setOrderStatus;
     const o = orderCache.find((row) => row.id === orderId);
     if (!o || String(o.status || "").toLowerCase() === nextStatus) return;
-    if (nextStatus === "cancelled" && !window.confirm(`Cancel invoice ${o.order_number}? Stock will be restored.`)) return;
+    if (nextStatus === "cancelled" && !window.confirm(`Void invoice ${o.order_number}? Stock will be restored.`)) return;
     statusBtn.disabled = true;
     try {
       const updated = await updateOrderStatus(o, { status: nextStatus });
