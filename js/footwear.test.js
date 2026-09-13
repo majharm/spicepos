@@ -316,11 +316,13 @@ test("Medical shops show pharmacy medicine fields on the item form", () => {
   assert.match(index, /id="cust-name-lab"/);
   assert.match(index, /id="cust-mobile-lab"/);
   assert.match(app, /Customer Name/);
-  assert.match(index, /ticket-cust pharmacy-hide/);
-  assert.match(index, /id="counter-mobile" class="pharmacy-hide"/);
+  assert.match(index, /id="counter-mobile"/);
+  assert.doesNotMatch(index, /id="counter-mobile" class="pharmacy-hide"/);
   assert.match(index, /id="bill-cust-mobile"/);
   assert.match(index, /id="bill-cust-address"/);
   assert.match(index, /id="bill-doctor-rx"/);
+  assert.match(css, /body\.pharmacy-mode #pharm-bill-cust/);
+  assert.doesNotMatch(index, /pharm-bill-cust pharmacy-only/);
   assert.match(index, /Doctor Name \/ Prescription No\./);
   assert.match(app, /pharm-bill-table/);
   assert.match(app, /doctor_rx/);

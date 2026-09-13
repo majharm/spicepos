@@ -544,11 +544,6 @@ function paintBillCustomer() {
     paintCounterDue(null);
     return;
   }
-  if (isPharmacyShop()) {
-    el.textContent = "";
-    paintCounterDue(c);
-    return;
-  }
   const name = String(c.business_name || c.name || "Walk-in").trim() || "Walk-in";
   const mobile = digitsMobile(c.mobile);
   el.textContent = isRealMobile(mobile) ? `${name} · ${mobile}` : name;
@@ -640,6 +635,32 @@ function medicinePackLabel(item) {
 
 function formatExpiryShort(raw) {
   return globalThis.POSFootwear?.formatExpiryShort?.(raw) || String(raw || "").slice(0, 10);
+}
+
+function pharmacyBillCustomerName() {
+  const typed = String($("bill-cust-name")?.value || "").trim();
+  if (typed) return typed;
+  const c = customer();
+  if (isWalkInCustomer(c)) return "";
+  return String(c?.business_name || c?.name || "").trim();
+}
+
+function pharmacyBillCustomerMobile() {
+  const typed = digitsMobile($("bill-cust-mobile")?.value || $("counter-mobile")?.value || "");
+  if (isRealMobile(typed)) return typed;
+  return digitsMobile(customer()?.mobile);
+}
+
+function pharmacyBillCustomerAddress() {
+  const typed = String($("bill-cust-address")?.value || "").trim();
+  if (typed) return typed;
+  return String(customer()?.address || "").trim();
+}
+
+function pharmacyBillDoctorRx() {
+  const typed = String($("bill-doctor-rx")?.value || "").trim();
+  if (typed) return typed;
+  return String(customer()?.doctor_rx || "").trim();
 }
 
 function fillPharmacyBillCustomerFromCustomer(cust) {
@@ -5647,12 +5668,10 @@ $("btn-pay").addEventListener("click", async () => {
       offerLoyaltyMultiplier: state.appliedOffers?.loyaltyMultiplier || 1,
       qrOrderId: state.activeQrOrderId || undefined,
       table_no: isRestaurantShop() ? (state.activeTable || undefined) : undefined,
-      customer_name: isPharmacyShop() ? ($("bill-cust-name")?.value || "") : undefined,
-      customer_mobile: isPharmacyShop()
-        ? ($("bill-cust-mobile")?.value || $("counter-mobile")?.value || "")
-        : undefined,
-      customer_address: isPharmacyShop() ? ($("bill-cust-address")?.value || "") : undefined,
-      doctor_rx: isPharmacyShop() ? ($("bill-doctor-rx")?.value || "") : undefined,
+      customer_name: isPharmacyShop() ? pharmacyBillCustomerName() : undefined,
+      customer_mobile: isPharmacyShop() ? pharmacyBillCustomerMobile() : undefined,
+      customer_address: isPharmacyShop() ? pharmacyBillCustomerAddress() : undefined,
+      doctor_rx: isPharmacyShop() ? pharmacyBillDoctorRx() : undefined,
       lines: state.cart.map((l) => ({
         itemId: l.itemId,
         quantity_gm: l.qtyGm,

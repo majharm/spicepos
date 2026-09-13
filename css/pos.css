@@ -2046,6 +2046,7 @@ body.pharmacy-mode .pharmacy-hide { display: none !important; }
 .pharm-bill-table .pharm-med { font-weight: 800; min-width: 7em; }
 .pharm-bill-table .qty { justify-content: flex-end; }
 body.pharmacy-mode .ticket .lines { overflow-x: auto; }
+body.pharmacy-mode #pharm-bill-cust { display: none !important; }
 body.footwear-mode #pack-choice { display: none; }
 body.apparel-mode #pack-choice { display: none; }
 body:not(.spice-mode) #pack-choice { display: none; }
