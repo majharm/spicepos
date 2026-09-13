@@ -14,8 +14,11 @@ import {
   parsePackMenuId,
   qrMobileDigits,
   qrInvoiceTotals,
+  qrOrderingBlocked,
 } from "./qr-ordering.js";
 import "../js/offers.js";
+
+const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 
 test("QR order payload requires customer, mobile, and item lines", () => {
   assert.throws(() => normalizeQrOrderPayload({}), /Customer name/);
@@ -357,8 +360,18 @@ test("QR invoice totals lift offer discount onto the header so Invoices print gr
   assert.equal(offered.total, 94.5);
 });
 
+test("QR ordering is blocked for pharmacy shops", () => {
+  assert.equal(qrOrderingBlocked({ category: "Medical" }), true);
+  assert.equal(qrOrderingBlocked({ name: "ABC MEDICAL" }), true);
+  assert.equal(qrOrderingBlocked({ category: "Spices & masala" }), false);
+  const php = readFileSync(path.join(root, "pos-qr-ordering.php"), "utf8");
+  const app = readFileSync(path.join(root, "js/app.js"), "utf8");
+  assert.match(php, /function pos_qr_ordering_blocked/);
+  assert.match(php, /QR ordering is not available for pharmacy shops/);
+  assert.match(app, /isPharmacyShop\(\)\) return/);
+});
+
 test("QR menu page paints a visible offer board from live offers", () => {
-  const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
   const html = readFileSync(path.join(root, "order.html"), "utf8");
   const js = readFileSync(path.join(root, "js/qr-order.js"), "utf8");
   const css = readFileSync(path.join(root, "css/qr-order.css"), "utf8");

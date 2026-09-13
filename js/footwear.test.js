@@ -332,6 +332,11 @@ test("Medical shops show pharmacy medicine fields on the item form", () => {
   assert.match(app, /items-pharm-table/);
   assert.equal(F.itemFormCopy({ category: "Medical" }).lede, "Generic, type, pack, batch, expiry, rates, and stock.");
   assert.match(F.itemFormCopy({ category: "Medical" }).importCopy, /Excel/);
+  assert.equal(F.qrOrderingEnabled({ category: "Medical" }), false);
+  assert.equal(F.qrOrderingEnabled({ category: "Spices & masala" }), true);
+  assert.match(index, /data-view="qr-orders"/);
+  assert.match(index, /nav-btn pharmacy-hide[^>]*data-view="qr-orders"/);
+  assert.match(app, /view === "qr-orders" && isPharmacyShop\(\)/);
   assert.match(adv, /savePharmacyItemFields/);
   const demo = F.demoItems({ category: "Medical" });
   assert.equal(demo.length, 8);

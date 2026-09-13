@@ -56,6 +56,10 @@ function pos_qr_clean($value, $max) {
   return substr(trim((string) $value), 0, $max);
 }
 
+function pos_qr_ordering_blocked($biz) {
+  return function_exists("pos_shop_kind") && pos_shop_kind($biz ?: []) === "pharmacy";
+}
+
 function pos_qr_business($shop) {
   $key = pos_qr_clean($shop, 255);
   if ($key === "") return null;
@@ -531,6 +535,7 @@ function pos_qr_public_dispatch($path, $method, $body) {
     pos_qr_ensure_schema();
     $business = pos_qr_business($_GET["shop"] ?? "");
     if (!$business) pos_send(404, ["error" => "Shop not found", "php" => true]);
+    if (pos_qr_ordering_blocked($business)) pos_send(403, ["error" => "QR ordering is not available for pharmacy shops", "php" => true]);
     $items = pos_q(
       "SELECT id, code, name, category, subcategory, base_unit, unit, retail_rate, gst_rate,
               hsn, image_url, stock_gm
@@ -580,6 +585,7 @@ function pos_qr_public_dispatch($path, $method, $body) {
     $input = pos_qr_validate_order(is_array($body) ? $body : []);
     $business = pos_qr_business($body["shop"] ?? "");
     if (!$business) pos_send(404, ["error" => "Shop not found", "php" => true]);
+    if (pos_qr_ordering_blocked($business)) pos_send(403, ["error" => "QR ordering is not available for pharmacy shops", "php" => true]);
     $catalog = pos_q(
       "SELECT id, name, category, base_unit, unit, retail_rate, gst_rate, stock_gm, status
        FROM items WHERE business_id = ?",
@@ -648,6 +654,13 @@ function pos_qr_public_dispatch($path, $method, $body) {
 
 function pos_qr_staff_dispatch($path, $method, $body, $bid, $branchId, $uid = "") {
   pos_qr_ensure_schema();
+  $bizRows = [];
+  try {
+    $bizRows = pos_q("SELECT name, category, business_type FROM businesses WHERE id = ? LIMIT 1", "s", [$bid]);
+  } catch (Exception $e) { $bizRows = []; }
+  if (pos_qr_ordering_blocked($bizRows[0] ?? [])) {
+    pos_send(403, ["error" => "QR ordering is not available for pharmacy shops", "php" => true]);
+  }
   if ($path === "qr-orders" && $method === "GET") {
     $status = strtolower(pos_qr_clean($_GET["status"] ?? "", 24));
     pos_send(200, pos_qr_orders_with_lines($bid, $status));

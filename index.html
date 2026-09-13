@@ -28,7 +28,7 @@
           <div class="nav-group">
             <p class="nav-group-label" data-i18n="nav.sales">Sales</p>
             <button class="nav-btn" type="button" data-view="orders"><span class="nav-icon" aria-hidden="true">▤</span><span data-i18n="nav.invoices">Invoices</span></button>
-            <button class="nav-btn" type="button" data-view="qr-orders"><span class="nav-icon" aria-hidden="true">▦</span><span data-i18n="nav.qr_orders">QR Orders</span> <span class="nav-badge" id="qr-order-badge" hidden></span></button>
+            <button class="nav-btn pharmacy-hide" type="button" data-view="qr-orders"><span class="nav-icon" aria-hidden="true">▦</span><span data-i18n="nav.qr_orders">QR Orders</span> <span class="nav-badge" id="qr-order-badge" hidden></span></button>
             <button class="nav-btn" type="button" data-view="customers"><span class="nav-icon" aria-hidden="true">◎</span><span data-i18n="nav.customers">Customers</span></button>
             <button class="nav-btn" type="button" data-view="loyalty"><span class="nav-icon" aria-hidden="true">★</span><span data-i18n="nav.loyalty">Royalty</span></button>
             <button class="nav-btn" type="button" data-view="offers"><span class="nav-icon" aria-hidden="true">%</span><span data-i18n="nav.offers">Offers</span></button>
@@ -1520,8 +1520,8 @@
         </section>
       </div>
     </div>
-    <audio id="qr-order-chime" src="./sounds/qr-order.wav?v=20260905deploy144" preload="none" playsinline></audio>
-    <div class="qr-sound-arm" id="qr-sound-arm" hidden>
+    <audio class="pharmacy-hide" id="qr-order-chime" src="./sounds/qr-order.wav?v=20260905deploy144" preload="none" playsinline></audio>
+    <div class="qr-sound-arm pharmacy-hide" id="qr-sound-arm" hidden>
       <div>
         <p class="qr-toast-kicker">QR ORDER SOUND</p>
         <strong>Tap to hear the ding</strong>
@@ -1529,7 +1529,7 @@
       </div>
       <button class="btn primary" type="button" id="qr-sound-arm-btn">Enable sound</button>
     </div>
-    <div class="qr-order-toast" id="qr-order-toast" hidden role="status" aria-live="assertive">
+    <div class="qr-order-toast pharmacy-hide" id="qr-order-toast" hidden role="status" aria-live="assertive">
       <div>
         <p class="qr-toast-kicker">NEW QR ORDER</p>
         <strong id="qr-toast-title">New customer order</strong>
@@ -1607,7 +1607,7 @@
     <script src="./js/support.js?v=20260905deploy136" defer></script>
     <script src="./js/qrcode.iife.js?v=20260905qr1" defer></script>
     <script src="./js/qr-notify.js?v=20260905deploy144" defer></script>
-    <script src="./js/app.js?v=20260913pharmacy6" defer></script>
+    <script src="./js/app.js?v=20260913pharmacy7" defer></script>
     <script src="./js/growth.js?v=20260905deploy145" defer></script>
     <script src="./js/offers-ui.js?v=20260905deploy136" defer></script>
   </body>

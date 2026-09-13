@@ -139,6 +139,10 @@
     return shopKind(biz) === "pharmacy";
   }
 
+  function qrOrderingEnabled(biz) {
+    return !isPharmacyShop(biz);
+  }
+
   function suggestedItemCategories(biz) {
     if (shopKind(biz) === "pharmacy") {
       return ["Medical", "OTC", "Ayurvedic", "Surgical", "Baby care", "Personal care"];
@@ -606,6 +610,7 @@
     isSpiceShop,
     isRestaurantShop,
     isPharmacyShop,
+    qrOrderingEnabled,
     isVariantShop,
     shopKind,
     suggestedItemCategories,

@@ -1278,6 +1278,7 @@ function applyNav() {
     if (view === "growth") btn.hidden = !(can("growth") || can("reports"));
     if (view === "offers") btn.hidden = !(can("discount") || can("items") || can("growth"));
     if (view === "packs" && !isSpiceShop()) btn.hidden = true;
+    if (view === "qr-orders" && isPharmacyShop()) btn.hidden = true;
   });
   const growthBtn = $("open-growth");
   if (growthBtn) growthBtn.hidden = !(can("growth") || can("reports"));
@@ -1380,6 +1381,7 @@ function showSettingsTab(tab) {
 }
 
 function showView(name) {
+  if (name === "qr-orders" && isPharmacyShop()) name = "counter";
   const requested = name;
   state.currentView = name === "backup" || name === "language" ? "settings" : name;
   if (name === "backup") name = "settings";
@@ -4688,7 +4690,7 @@ function applyQrOrderSnapshot(rows, { announce = false } = {}) {
 }
 
 async function pollQrOrders({ announce = true } = {}) {
-  if (!can("orders")) return;
+  if (!can("orders") || isPharmacyShop()) return;
   try {
     const rows = await api("/api/qr-orders");
     applyQrOrderSnapshot(rows, { announce });
@@ -4698,7 +4700,7 @@ async function pollQrOrders({ announce = true } = {}) {
 }
 
 function startQrOrderWatch() {
-  if (qrPollTimer || !can("orders")) return;
+  if (qrPollTimer || !can("orders") || isPharmacyShop()) return;
   paintQrSoundToggle();
   const kick = () => void pollQrOrders({ announce: false });
   if (typeof requestIdleCallback === "function") requestIdleCallback(kick, { timeout: 2500 });
@@ -4759,6 +4761,7 @@ function renderQrOrders() {
 }
 
 async function loadQrOrders() {
+  if (isPharmacyShop()) return;
   paintQrMenuSetup();
   paintQrSoundToggle();
   const hint = $("qr-orders-hint");
