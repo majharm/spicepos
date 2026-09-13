@@ -471,11 +471,51 @@ function cancelOrderEdit() {
   state.editingOrderId = null;
   state.cart = [];
   state.lastPack = null;
+  state.billDiscountType = "amt";
+  state.billDiscountValue = 0;
+  state.loyaltyRedeem = 0;
+  state.offerBillLocked = false;
+  state.offerAuto = true;
   resetOfferPopup();
   $("pack-choice").value = "";
+  if ($("bill-disc-type")) $("bill-disc-type").value = "amt";
+  if ($("bill-disc-value")) $("bill-disc-value").value = 0;
+  if ($("loyalty-redeem")) $("loyalty-redeem").value = 0;
   renderEditOrderBanner();
   renderCart();
   setHint("Edit cancelled");
+}
+
+function cartLineFromOrderLine(l) {
+  const type = String(l.discount_type || "amt").toLowerCase() === "pct" ? "pct" : "amt";
+  let value = Number(l.discount_value);
+  if (!Number.isFinite(value) || value < 0) value = 0;
+  if (value <= 0 && Number(l.discount) > 0) value = Number(l.discount) || 0;
+  return {
+    itemId: l.item_id,
+    qtyGm: Number(l.quantity_gm),
+    discountType: type,
+    discountValue: value,
+    barcode: l.barcode || "",
+  };
+}
+
+function applyOrderDiscountsToCounter(o) {
+  const type = String(o.discount_type || "amt").toLowerCase() === "pct" ? "pct" : "amt";
+  let value = Number(o.discount_value);
+  if (!Number.isFinite(value) || value <= 0) value = Number(o.discount) || 0;
+  state.billDiscountType = type;
+  state.billDiscountValue = value;
+  state.loyaltyRedeem = Number(o.loyalty_points_redeemed) || 0;
+  state.offerBillLocked = value > 0;
+  state.offerAuto = false;
+  if ($("bill-disc-type")) $("bill-disc-type").value = type;
+  if ($("bill-disc-value")) $("bill-disc-value").value = value;
+  if ($("loyalty-redeem")) $("loyalty-redeem").value = state.loyaltyRedeem;
+  if (value > 0 || state.loyaltyRedeem > 0) {
+    const extras = $("bill-extras");
+    if (extras) extras.open = true;
+  }
 }
 
 function customer() {
@@ -805,6 +845,8 @@ function clearCounterAfterSale(order, result) {
   state.kotPrinted = [];
   state.billDiscountValue = 0;
   state.loyaltyRedeem = 0;
+  state.offerBillLocked = false;
+  state.offerAuto = true;
   if ($("bill-disc-value")) $("bill-disc-value").value = 0;
   if ($("loyalty-redeem")) $("loyalty-redeem").value = 0;
   state.query = "";
@@ -5553,7 +5595,7 @@ $("order-pane").addEventListener("click", async (e) => {
     }
     state.editingOrderId = o.id;
     state.customerId = o.customer_id;
-    state.cart = (o.lines || []).map((l) => ({ itemId: l.item_id, qtyGm: Number(l.quantity_gm) }));
+    state.cart = (o.lines || []).map(cartLineFromOrderLine);
     state.lastPack = o.pack_id ? { id: o.pack_id, name: o.pack_name, count: o.pack_count || 1 } : null;
     $("customer").value = state.customerId;
     $("pay-method").value = o.payment_method || "cash";
@@ -5562,6 +5604,7 @@ $("order-pane").addEventListener("click", async (e) => {
     if ($("bill-cust-address")) $("bill-cust-address").value = o.customer_address || "";
     if ($("bill-cust-mobile")) $("bill-cust-mobile").value = o.customer_mobile || digitsMobile(customer()?.mobile);
     if ($("bill-doctor-rx")) $("bill-doctor-rx").value = o.doctor_rx || "";
+    applyOrderDiscountsToCounter(o);
     showView("counter");
     renderCart();
     setHint(`Changing items for ${o.order_number}`, "ok");

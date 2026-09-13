@@ -110,6 +110,7 @@ function pos_update_order($bid, $orderId, $body, $auth) {
   $customer = $cust[0] ?? null;
   if (!$customer) pos_send(400, ["error" => "Customer not found", "php" => true]);
 
+  if (is_file(__DIR__ . "/pos-advanced.php")) require_once __DIR__ . "/pos-advanced.php";
   $built = [];
   foreach ($lines as $line) {
     $it = pos_q("SELECT * FROM items WHERE id = ? AND business_id = ? LIMIT 1", "ss", [$line["itemId"] ?? "", $bid]);
@@ -117,16 +118,25 @@ function pos_update_order($bid, $orderId, $body, $auth) {
     if (!$item) pos_send(400, ["error" => "Unknown item", "php" => true]);
     $qty = (float) ($line["quantity_gm"] ?? 0);
     if ($qty <= 0) pos_send(400, ["error" => "Invalid quantity", "php" => true]);
-    $rate = (($customer["type"] ?? "") === "b2b") ? (float) $item["b2b_rate"] : (float) $item["retail_rate"];
-    $amount = pos_round2(pos_line_amount_for_item($qty, $rate, $item));
-    $built[] = ["item" => $item, "qty" => $qty, "rate" => $rate, "amount" => $amount, "gstRate" => (float) ($item["gst_rate"] ?? 0)];
+    if (function_exists("pos_compute_sale_line")) {
+      $built[] = pos_compute_sale_line($item, $qty, $customer, $line);
+    } else {
+      $rate = (($customer["type"] ?? "") === "b2b") ? (float) $item["b2b_rate"] : (float) $item["retail_rate"];
+      $amount = pos_round2(pos_line_amount_for_item($qty, $rate, $item));
+      $built[] = ["item" => $item, "qty" => $qty, "rate" => $rate, "amount" => $amount, "gstRate" => (float) ($item["gst_rate"] ?? 0), "discount" => 0, "gst" => pos_round2(($amount * (float) ($item["gst_rate"] ?? 0)) / 100)];
+    }
   }
 
   $subtotal = pos_round2(array_sum(array_column($built, "amount")));
-  $gst = pos_round2(array_sum(array_map(function ($l) {
-    return ($l["amount"] * $l["gstRate"]) / 100;
-  }, $built)));
-  $total = pos_round2($subtotal + $gst);
+  $gst = 0;
+  foreach ($built as $l) $gst += isset($l["gst"]) ? (float) $l["gst"] : (($l["amount"] * $l["gstRate"]) / 100);
+  $gst = pos_round2($gst);
+  $billType = $body["discountType"] ?? $body["discount_type"] ?? "amt";
+  $billValue = $body["discountValue"] ?? $body["discount_value"] ?? $body["discount"] ?? 0;
+  $billDiscount = function_exists("pos_adv_discount_amount")
+    ? pos_adv_discount_amount($subtotal + $gst, $billType, $billValue)
+    : pos_round2((float) ($body["discount"] ?? 0));
+  $total = pos_round2(max(0, $subtotal + $gst - $billDiscount));
   $totalGm = array_sum(array_column($built, "qty"));
   $methodPay = strtolower((string) ($body["paymentMethod"] ?? $existing["payment_method"] ?? "cash"));
   if (!in_array($methodPay, ["cash", "upi", "card", "credit"], true)) {
@@ -157,31 +167,57 @@ function pos_update_order($bid, $orderId, $body, $auth) {
     "UPDATE sales_orders SET
        customer_id = ?, customer_name = ?, customer_type = ?,
        pack_id = ?, pack_name = ?, pack_count = ?, status = ?,
-       total_quantity_gm = ?, subtotal = ?, gst = ?, total = ?,
+       total_quantity_gm = ?, subtotal = ?, discount = ?, gst = ?, total = ?,
        payment_method = ?, payment_status = ?
      WHERE id = ? AND business_id = ?",
-    "sssssssssssssss",
+    "ssssssssssssssss",
     [
       $customer["id"], $custName, (string) ($customer["type"] ?? "b2c"),
       $packId ? (string) $packId : null, $packName ? (string) $packName : null, $packCount !== null ? (string) $packCount : null,
-      $newStatus, (string) $totalGm, (string) $subtotal, (string) $gst, (string) $total,
+      $newStatus, (string) $totalGm, (string) $subtotal, (string) $billDiscount, (string) $gst, (string) $total,
       $methodPay, $payStatus, $orderId, $bid,
     ]
   );
+  $dtype = function_exists("pos_adv_is_pct") && pos_adv_is_pct($billType) ? "pct" : "amt";
+  try {
+    pos_q(
+      "UPDATE sales_orders SET discount_type = ?, discount_value = ? WHERE id = ? AND business_id = ?",
+      "ssss",
+      [$dtype, (string) ((float) $billValue), $orderId, $bid]
+    );
+  } catch (Exception $e) { /* optional columns */ }
 
   if ($newStatus !== "cancelled") {
     foreach ($built as $line) {
-      pos_q(
-        "INSERT INTO sales_order_lines (
-           id, order_id, item_id, item_name, quantity_gm, rate_per_kg,
-           discount, amount, gst_rate, cancelled, business_id
-         ) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
-        "sssssssssss",
-        [
-          pos_uuid(), $orderId, $line["item"]["id"], pos_item_bill_name($line["item"]), (string) $line["qty"], (string) $line["rate"],
-          "0", (string) $line["amount"], (string) $line["gstRate"], "0", $bid,
-        ]
-      );
+      $lineDisc = (string) ($line["discount"] ?? 0);
+      try {
+        pos_q(
+          "INSERT INTO sales_order_lines (
+             id, order_id, item_id, item_name, quantity_gm, rate_per_kg,
+             discount, amount, gst_rate, cancelled, business_id,
+             mrp, discount_type, discount_value, barcode, cost, profit
+           ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+          "sssssssssssssssss",
+          [
+            pos_uuid(), $orderId, $line["item"]["id"], pos_item_bill_name($line["item"]), (string) $line["qty"], (string) $line["rate"],
+            $lineDisc, (string) $line["amount"], (string) $line["gstRate"], "0", $bid,
+            (string) ($line["mrp"] ?? 0), $line["discountType"] ?? "amt", (string) ($line["discountValue"] ?? 0),
+            $line["barcode"] ?? null, (string) ($line["cost"] ?? 0), (string) ($line["profit"] ?? 0),
+          ]
+        );
+      } catch (Exception $e) {
+        pos_q(
+          "INSERT INTO sales_order_lines (
+             id, order_id, item_id, item_name, quantity_gm, rate_per_kg,
+             discount, amount, gst_rate, cancelled, business_id
+           ) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+          "sssssssssss",
+          [
+            pos_uuid(), $orderId, $line["item"]["id"], pos_item_bill_name($line["item"]), (string) $line["qty"], (string) $line["rate"],
+            $lineDisc, (string) $line["amount"], (string) $line["gstRate"], "0", $bid,
+          ]
+        );
+      }
       pos_q("UPDATE items SET stock_gm = stock_gm - ? WHERE id = ? AND business_id = ?", "dss", [$line["qty"], $line["item"]["id"], $bid]);
     }
   }
