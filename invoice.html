@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Invoice</title>
+    <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="./css/pos.css?v=20260913cust2" />
+    <style>
+      body { margin: 0; background: var(--bg, #f6efe4); }
+      .invoice-page { max-width: 420px; margin: 24px auto; padding: 0 16px 48px; }
+      .invoice-actions { display: flex; gap: 8px; flex-wrap: wrap; margin: 12px 0 16px; }
+      .invoice-page .thermal-preview { max-height: none; overflow: visible; }
+      @media print {
+        .invoice-actions { display: none !important; }
+        .invoice-page { margin: 0; max-width: none; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="invoice-page">
+      <p class="hint" id="status">Loading invoice…</p>
+      <div class="invoice-actions print-actions" id="actions" hidden></div>
+      <div id="bill" hidden></div>
+    </div>
+    <script src="./js/gst-supply.js?v=20260905deploy136" defer></script>
+    <script src="./js/units.js?v=20260905deploy165" defer></script>
+    <script src="./js/footwear.js?v=20260913hsnsac1" defer></script>
+    <script src="./js/invoice.js?v=20260913void1" defer></script>
+    <script src="./js/invoice-share.js?v=20260913share1" defer></script>
+    <script src="./js/invoice-page.js?v=20260913share1" defer></script>
+  </body>
+</html>

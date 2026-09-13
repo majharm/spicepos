@@ -4257,6 +4257,7 @@ async function loadReports() {
 }
 
 let orderCache = [];
+let lastInvoice = null;
 let selectedOrderId = null;
 const orderFilter = { q: "", status: "", payment: "" };
 
@@ -4339,8 +4340,38 @@ function setInvoiceLook(look) {
   return next;
 }
 
-function invoiceModalPrintActions(look) {
+function orderShare(order) {
+  const S = globalThis.POSInvoiceShare;
+  if (!S || !order?.id) return null;
+  return S.shareActions(order, state.company || {}, location.origin);
+}
+
+function invoiceShareButtons(order, { copyId } = {}) {
+  const share = orderShare(order);
+  if (!share) return "";
+  const idAttr = copyId ? ` id="${escapeHtml(copyId)}"` : "";
+  return `<a class="btn" href="${escapeHtml(share.whatsapp)}" target="_blank" rel="noopener">Share WhatsApp</a>
+      <button class="btn" type="button" data-copy-invoice="${escapeHtml(order.id)}"${idAttr}>Copy link</button>`;
+}
+
+async function copyInvoiceLink(order) {
+  const share = orderShare(order);
+  if (!share) return;
+  try {
+    await navigator.clipboard.writeText(share.url);
+    setHint("Invoice link copied", "ok");
+  } catch {
+    setHint(share.url, "ok");
+  }
+}
+
+function findInvoice(id) {
+  return orderCache.find((row) => row.id === id) || (lastInvoice?.id === id ? lastInvoice : null);
+}
+
+function invoiceModalPrintActions(look, order) {
   return `<div class="print-actions">
+      ${invoiceShareButtons(order, { copyId: "modal-copy-invoice" })}
       <button class="btn${look === "pos" ? " primary" : ""}" type="button" id="modal-print-pos">Print POS slip</button>
       <button class="btn${look === "office" ? " primary" : ""}" type="button" id="modal-print-office">Print official bill</button>
       <button class="btn${look === "duplicate" ? " primary" : ""}" type="button" id="modal-print-duplicate">Print duplicate</button>
@@ -4351,19 +4382,22 @@ function bindInvoiceModalPrint(order) {
   const pos = $("modal-print-pos");
   const office = $("modal-print-office");
   const dup = $("modal-print-duplicate");
+  const copy = $("modal-copy-invoice");
   if (pos) pos.onclick = () => printOrder(order, "pos");
   if (office) office.onclick = () => printOrder(order, "office");
   if (dup) dup.onclick = () => printOrder(order, "duplicate");
+  if (copy) copy.onclick = () => copyInvoiceLink(order);
 }
 
 function showInvoicePrintModal(order, { title, message } = {}) {
+  if (order?.id) lastInvoice = order;
   const note = message || "Bill saved. POS cleared for the next customer.";
   if (title) $("modal-title").textContent = title;
   const paint = (look) => {
     $("modal-body").innerHTML = `<p class="hint ok">${note}</p>
       ${invoiceLookTabs(look)}
       ${invoicePreviewHtml(order, look)}
-      ${invoiceModalPrintActions(look)}`;
+      ${invoiceModalPrintActions(look, order)}`;
     bindInvoiceModalPrint(order);
     $("modal-body").querySelectorAll("[data-invoice-look]").forEach((btn) => {
       btn.onclick = () => paint(setInvoiceLook(btn.dataset.invoiceLook));
@@ -4572,6 +4606,7 @@ function showAlterVoucherModal(entry) {
 
 function showOrder(o) {
   selectedOrderId = o.id;
+  lastInvoice = o;
   document.querySelectorAll("#orders .order-row").forEach((row) => {
     row.classList.toggle("is-selected", row.dataset.oid === o.id);
   });
@@ -4597,6 +4632,7 @@ function showOrder(o) {
     ${invoiceLookTabs(look)}
     ${invoicePreviewHtml(o, look)}
     <div class="print-actions">
+      ${invoiceShareButtons(o)}
       <button class="btn${look === "pos" ? " primary" : ""}" type="button" data-print="${escapeHtml(o.id)}" data-print-look="pos">Print POS slip</button>
       <button class="btn${look === "office" ? " primary" : ""}" type="button" data-print="${escapeHtml(o.id)}" data-print-look="office">Print official bill</button>
       <button class="btn${look === "duplicate" ? " primary" : ""}" type="button" data-print="${escapeHtml(o.id)}" data-print-look="duplicate">Print duplicate</button>
@@ -5615,11 +5651,16 @@ $("order-pane").addEventListener("click", async (e) => {
     return;
   }
   const printBtn = e.target.closest("[data-print]");
+  const copyBtn = e.target.closest("[data-copy-invoice]");
   const editBtn = e.target.closest("[data-edit-order]");
   const statusBtn = e.target.closest("[data-set-order-status]");
   if (printBtn) {
-    const o = orderCache.find((row) => row.id === printBtn.dataset.print);
+    const o = findInvoice(printBtn.dataset.print);
     if (o) printOrder(o, printBtn.dataset.printLook);
+  }
+  if (copyBtn) {
+    const o = findInvoice(copyBtn.dataset.copyInvoice);
+    if (o) copyInvoiceLink(o);
   }
   if (editBtn) {
     const o = orderCache.find((row) => row.id === editBtn.dataset.editOrder);

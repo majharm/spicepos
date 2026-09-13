@@ -1823,6 +1823,44 @@ function pos_n($v, $fallback) {
   return (int) $v;
 }
 
+function pos_public_company_payload($row) {
+  $keys = [
+    "name", "address", "phone", "email", "gstin", "state", "logo_url",
+    "invoice_footer", "invoice_terms", "invoice_language", "locale",
+    "fssai_licence_no", "drug_licence_no", "drug_licence_type", "pharmacy_registration_no",
+    "other_licence_no", "licence_expiry", "ndps_licence_no", "payment_qr_url", "payment_upi",
+  ];
+  $out = [];
+  foreach ($keys as $key) {
+    if (isset($row[$key]) && $row[$key] !== "") $out[$key] = $row[$key];
+  }
+  return $out;
+}
+
+function pos_public_invoice_send($id) {
+  if (!preg_match("/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i", $id)) {
+    pos_send(400, ["error" => "Invalid invoice id", "php" => true]);
+  }
+  $found = pos_q("SELECT * FROM sales_orders WHERE id = ? LIMIT 1", "s", [$id]);
+  $order = $found[0] ?? null;
+  if (!$order) pos_send(404, ["error" => "Invoice not found", "php" => true]);
+  $bid = $order["business_id"];
+  $lines = pos_q("SELECT * FROM sales_order_lines WHERE order_id = ? AND business_id = ? ORDER BY created_at", "ss", [$id, $bid]);
+  $co = pos_q("SELECT * FROM company_settings WHERE business_id = ? LIMIT 1", "s", [$bid]);
+  $biz = pos_q("SELECT id, name, category, business_type FROM businesses WHERE id = ? LIMIT 1", "s", [$bid]);
+  $items = pos_q("SELECT id, name, local_name, hsn, code, gst_rate, mrp, category FROM items WHERE business_id = ?", "s", [$bid]);
+  $company = pos_public_company_payload($co[0] ?? []);
+  if (!$company && !empty($biz[0]["name"])) $company = ["name" => $biz[0]["name"]];
+  header("Cache-Control: no-store");
+  pos_send(200, [
+    "order" => array_merge($order, ["lines" => $lines]),
+    "company" => $company ?: ["name" => "ATAV POS"],
+    "business" => $biz[0] ?? [],
+    "items" => $items,
+    "php" => true,
+  ]);
+}
+
 function pos_php_dispatch($path, $method, $rawBody) {
   $method = strtoupper((string) $method);
   $path = trim((string) $path, "/");
@@ -1831,6 +1869,10 @@ function pos_php_dispatch($path, $method, $rawBody) {
     if ($path === "qr/menu" || $path === "qr/orders") {
       require_once __DIR__ . "/pos-qr-ordering.php";
       if (pos_qr_public_dispatch($path, $method, $body)) return;
+    }
+    if (preg_match("#^invoices/([^/]+)$#", $path, $m) && $method === "GET") {
+      pos_public_invoice_send($m[1]);
+      return;
     }
     if ($path === "install") {
       if ($method === "GET") {

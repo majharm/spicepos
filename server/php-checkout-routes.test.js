@@ -63,6 +63,10 @@ test("PHP fallback routes checkout, holds, and order updates through core", () =
   assert.match(read("pos-accounting.php"), /function pos_delete_ledger_journal/);
   assert.match(read("pos-accounting.php"), /\$method === "DELETE"/);
   assert.match(read("pos-php-core.php"), /function pos_indian_fy/);
+  assert.match(read("pos-php-core.php"), /function pos_public_invoice_send/);
+  assert.match(read("server/index.js"), /app\.get\("\/api\/invoices\/:id"/);
+  assert.match(read("js/app.js"), /function invoiceShareButtons/);
+  assert.match(read("js/app.js"), /Share WhatsApp/);
   assert.match(core, /function pos_ensure_account_managers/);
   assert.match(core, /function pos_shop_support/);
   assert.match(core, /function pos_list_account_managers/);
@@ -336,7 +340,8 @@ test("POS boot skips API probe and slims catalog photos", () => {
   assert.match(index, /qrcode\.iife\.js[^>]+defer/);
   assert.match(index, /preload="none"/);
   assert.match(index, /pos-api\.js\?v=20260905deploy154/);
-  assert.match(index, /app\.js\?v=20260913delpay1/);
+  assert.match(index, /app\.js\?v=20260913share1/);
+  assert.match(index, /invoice-share\.js\?v=20260913share1/);
   assert.match(index, /invoice\.js\?v=20260913void1/);
   assert.doesNotMatch(index, /app\.js\?v=20260905deploy167/);
   assert.doesNotMatch(index, /app\.js\?v=20260905deploy166/);
@@ -390,7 +395,7 @@ test("Restaurant Counter can create named dining tables", () => {
   assert.match(till, /dining-tables/);
   assert.match(index, /pos\.css\?v=20260913cust2/);
   assert.match(index, /restaurant\.js\?v=20260905deploy176/);
-  assert.match(index, /app\.js\?v=20260913delpay1/);
+  assert.match(index, /app\.js\?v=20260913share1/);
   assert.match(index, /footwear\.js\?v=20260913hsnsac1/);
 });
 

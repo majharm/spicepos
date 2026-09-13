@@ -76,12 +76,87 @@ app.use((req, res, next) => {
 app.use(attachAuth);
 registerAuth(app);
 registerQrPublic(app);
+
+const PUBLIC_INVOICE_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function publicCompanyPayload(row = {}) {
+  const keys = [
+    "name",
+    "address",
+    "phone",
+    "email",
+    "gstin",
+    "state",
+    "logo_url",
+    "invoice_footer",
+    "invoice_terms",
+    "invoice_language",
+    "locale",
+    "fssai_licence_no",
+    "drug_licence_no",
+    "drug_licence_type",
+    "pharmacy_registration_no",
+    "other_licence_no",
+    "licence_expiry",
+    "ndps_licence_no",
+    "payment_qr_url",
+    "payment_upi",
+  ];
+  const out = {};
+  for (const key of keys) {
+    if (row[key] != null && row[key] !== "") out[key] = row[key];
+  }
+  return out;
+}
+
+app.get("/api/invoices/:id", async (req, res) => {
+  const id = String(req.params.id || "");
+  if (!PUBLIC_INVOICE_ID.test(id)) {
+    res.status(400).json({ error: "Invalid invoice id" });
+    return;
+  }
+  try {
+    const [order] = await query("SELECT * FROM sales_orders WHERE id = ? LIMIT 1", [id]);
+    if (!order) {
+      res.status(404).json({ error: "Invoice not found" });
+      return;
+    }
+    const lines = await query(
+      "SELECT * FROM sales_order_lines WHERE order_id = ? AND business_id = ? ORDER BY created_at",
+      [id, order.business_id],
+    );
+    const [company] = await query(
+      "SELECT * FROM company_settings WHERE business_id = ? LIMIT 1",
+      [order.business_id],
+    );
+    const [business] = await query(
+      "SELECT id, name, category, business_type FROM businesses WHERE id = ? LIMIT 1",
+      [order.business_id],
+    );
+    const items = await query(
+      `SELECT id, name, local_name, hsn, code, gst_rate, mrp, category
+       FROM items WHERE business_id = ?`,
+      [order.business_id],
+    );
+    res.setHeader("Cache-Control", "no-store");
+    res.json({
+      order: { ...order, lines },
+      company: publicCompanyPayload(company || { name: business?.name || "ATAV POS" }),
+      business: business || {},
+      items,
+    });
+  } catch (err) {
+    res.status(500).json({ error: String(err.message) });
+  }
+});
+
 app.use((req, res, next) => {
   const url = canonApiUrl(req.originalUrl || "", req.headers["x-pos-path"]);
   if (!isApiUrl(url)) return next();
   if (
     url.startsWith("/api/auth") ||
     url.startsWith("/api/qr/") ||
+    url.startsWith("/api/invoices") ||
     url.startsWith("/api/health") ||
     url.startsWith("/api/master") ||
     url.startsWith("/api/support-contact")
@@ -1020,6 +1095,11 @@ app.post("/api/checkout", requireStaff, requirePerm("counter"), async (req, res)
 
 app.get("/", (_req, res) => {
   res.sendFile(path.join(publicDir, "index.html"));
+});
+
+app.get(["/invoice", "/invoice/"], (req, res) => {
+  const id = String(req.query.id || "");
+  res.redirect(id ? `/invoice.html?id=${encodeURIComponent(id)}` : "/invoice.html");
 });
 
 app.use("/api", (req, res) => {
