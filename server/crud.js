@@ -181,6 +181,29 @@ async function insertImportedItem(conn, biz, body) {
   return rows[0];
 }
 
+export async function seedPharmacyDemoItems() {
+  const [biz] = await query("SELECT id, name, category, business_type FROM businesses WHERE id = ? LIMIT 1", [bid()]);
+  const catalog = POSFootwear.demoItems(biz || {});
+  if (!catalog.length) {
+    const err = new Error("Demo medicines are only for Medical / Pharmacy shops");
+    err.status = 400;
+    throw err;
+  }
+  return withTransaction(async (conn) => {
+    const created = [];
+    const skipped = [];
+    for (const body of catalog) {
+      const [rows] = await conn.query("SELECT id FROM items WHERE business_id = ? AND name = ? LIMIT 1", [bid(), body.name]);
+      if (rows[0]) {
+        skipped.push(body.name);
+        continue;
+      }
+      created.push(await insertImportedItem(conn, biz, body));
+    }
+    return { items: created, skipped, created_count: created.length };
+  });
+}
+
 async function updateImportedItem(conn, existing, biz, body, row) {
   const variants = POSFootwear.fieldsFromBody({
     color: row.color !== "" ? body.color : existing.color,
@@ -333,6 +356,15 @@ export function registerCrud(app) {
       res.json({ ok: true, ...result });
     } catch (err) {
       res.status(400).json({ error: String(err.message) });
+    }
+  });
+
+  app.post("/api/items/demo-seed", async (req, res) => {
+    try {
+      const result = await seedPharmacyDemoItems();
+      res.json({ ok: true, ...result });
+    } catch (err) {
+      res.status(err.status || 400).json({ error: String(err.message) });
     }
   });
 

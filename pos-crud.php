@@ -33,6 +33,15 @@ function pos_crud_dispatch($path, $method, $body, $bid, $auth, $branchId, $uid) 
     return (bool) pos_item_import_dispatch($path, $method, $body, $bid);
   }
 
+  if ($path === "items/demo-seed" && $method === "POST") {
+    $bizRows = pos_q("SELECT id, name, category, business_type FROM businesses WHERE id = ? LIMIT 1", "s", [$bid]);
+    $biz = $bizRows[0] ?? [];
+    if (function_exists("pos_shop_kind") && pos_shop_kind($biz) !== "pharmacy") {
+      pos_send(400, ["error" => "Demo medicines are only for Medical / Pharmacy shops"]);
+    }
+    pos_send(200, ["ok" => true, "created_count" => 0, "skipped" => [], "hint" => "Demo seed runs on the Node app"]);
+  }
+
   if ($path === "checkout" && $method === "POST") {
     pos_require_checkout();
     pos_dispatch_checkout($path, $method, $body, $bid, $branchId, $uid, $auth);

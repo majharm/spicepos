@@ -2858,8 +2858,9 @@ function renderItemsTable() {
     el.innerHTML = `<div class="item-empty-card">
       <strong>No items yet</strong>
       <p>${isPharmacyShop()
-        ? "Add medicine name, generic, type, pack, batch, expiry, and rates on the left."
+        ? "Add medicine name, generic, type, pack, batch, expiry, and rates on the left, or load a demo catalog."
         : "Add a name, unit, and rates on the left. Saved items show here and on Counter."}</p>
+      ${isPharmacyShop() ? `<button class="btn primary" type="button" id="item-demo-seed">Add demo medicines</button>` : ""}
     </div>`;
     return;
   }
@@ -3497,7 +3498,15 @@ function paintHeader() {
 }
 
 async function loadBootstrap() {
-  const data = await api("/api/bootstrap");
+  let data = await api("/api/bootstrap");
+  if (isPharmacyShop() && !(data.items || []).length) {
+    try {
+      const seeded = await api("/api/items/demo-seed", { method: "POST", body: "{}" });
+      if (Number(seeded?.created_count) > 0) data = await api("/api/bootstrap");
+    } catch {
+      /* shop can add items by hand */
+    }
+  }
   state.company = data.company;
   state.support = data.support || {};
   state.plan = data.plan || null;
@@ -5746,6 +5755,23 @@ $("item-unit")?.addEventListener("change", refreshItemUnitLabels);
 $("item-catalog-search")?.addEventListener("input", filterItemsCatalog);
 $("item-low-only")?.addEventListener("change", filterItemsCatalog);
 $("item-hide-inactive")?.addEventListener("change", filterItemsCatalog);
+$("items-table")?.addEventListener("click", async (e) => {
+  const btn = e.target.closest("#item-demo-seed");
+  if (!btn) return;
+  btn.disabled = true;
+  try {
+    const seeded = await api("/api/items/demo-seed", { method: "POST", body: "{}" });
+    $("item-hint").textContent = seeded?.created_count
+      ? `Added ${seeded.created_count} demo medicines`
+      : "Demo medicines already in the catalog";
+    $("item-hint").className = "hint ok";
+    await loadBootstrap();
+  } catch (err) {
+    $("item-hint").textContent = err.message;
+    $("item-hint").className = "hint error";
+    btn.disabled = false;
+  }
+});
 $("item-import-file")?.addEventListener("change", (e) => {
   const file = e.target.files?.[0];
   if (file) uploadItemsExcel(file);

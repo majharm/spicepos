@@ -84,6 +84,8 @@ test("Apparel shops get female/male/kids colour and size, not spice copy", () =>
   assert.match(php, /function pos_is_variant_shop/);
   assert.match(php, /kids.*return "kids"/);
   assert.match(crud, /isVariantShop/);
+  assert.match(crud, /seedPharmacyDemoItems/);
+  assert.match(phpCrud, /items\/demo-seed/);
   assert.match(crud, /itemPrefix/);
   assert.match(phpCrud, /pos_is_variant_shop/);
   assert.match(phpCrud, /pos_item_code_prefix/);
@@ -296,9 +298,14 @@ test("Medical shops show pharmacy medicine fields on the item form", () => {
   assert.match(index, /Items per Pack\/Strip/);
   assert.match(app, /function isPharmacyShop/);
   assert.match(app, /pharmacy-mode/);
-  assert.match(app, /generic_name/);
+  assert.match(app, /\/api\/items\/demo-seed/);
+  assert.match(app, /Add demo medicines/);
   assert.match(css, /body:not\(\.pharmacy-mode\) \.pharmacy-only/);
   assert.match(adv, /savePharmacyItemFields/);
+  const demo = F.demoItems({ category: "Medical" });
+  assert.equal(demo.length, 8);
+  assert.equal(demo[0].name, "Paracetamol 500mg");
+  assert.equal(F.demoItems({ category: "Spices & masala" }).length, 0);
 });
 
 test("Items catalog has Active and Inactive status buttons", () => {
