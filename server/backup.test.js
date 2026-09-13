@@ -470,6 +470,8 @@ test("HTML and CSS cache stickers match deploy136", () => {
   assert.match(appJs, /function paintPackLive/);
   assert.match(appJs, /function filterPackCompose/);
   assert.match(index, /class="items-desk"/);
+  assert.match(index, /class="dash-desk"/);
+  assert.match(index, /id="dash-shortcuts"/);
   assert.match(index, /id="item-catalog-search"/);
   assert.match(index, /id="item-mode"/);
   assert.match(index, /id="item-save"/);
@@ -480,6 +482,7 @@ test("HTML and CSS cache stickers match deploy136", () => {
   assert.match(appJs, /function fillItemForm/);
   assert.match(appJs, /function filterItemsCatalog/);
   assert.match(pos, /items-desk: composer \+ library/);
+  assert.match(pos, /dash-desk: home hero \+ kpis/);
   assert.match(index, /id="item-import-file"/);
   assert.match(index, /id="item-import-template"/);
   assert.match(appJs, /function uploadItemsExcel/);

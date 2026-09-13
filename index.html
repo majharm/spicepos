@@ -6,7 +6,7 @@
     <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
     <title>ATAV POS</title>
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./css/pos.css?v=20260913pharmacy6" />
+    <link rel="stylesheet" href="./css/pos.css?v=20260913dash1" />
     <link rel="stylesheet" href="./css/saas.css?v=20260905deploy136" />
   </head>
   <body>
@@ -96,14 +96,59 @@
         <div class="platform-notices" id="platform-notices" hidden aria-live="polite"></div>
         <section class="view" id="view-dashboard">
           <h2 class="visually-hidden">Dashboard</h2>
-          <p class="lede" id="dash-welcome">Your shop today.</p>
-          <div class="platform-notes" id="dash-notes"></div>
-          <div class="report-grid" id="dash-kpis"></div>
-          <p class="lede dash-actions">
-            <button class="btn primary" type="button" data-view-jump="counter" id="open-pos">Open POS</button>
-            <button class="btn" type="button" id="open-growth">AI Growth</button>
-            <button class="btn" type="button" id="open-offers">Offers</button>
-          </p>
+          <div class="dash-desk">
+            <div class="dash-hero">
+              <div class="dash-hero-copy">
+                <p class="dash-kicker">Your shop today</p>
+                <p class="lede" id="dash-welcome">Your shop today.</p>
+                <p class="dash-hero-meta" id="dash-welcome-meta"></p>
+                <p class="dash-hero-lead">Sales, stock, and GST at a glance. Open the counter when a customer is waiting.</p>
+              </div>
+              <p class="lede dash-actions">
+                <button class="btn primary" type="button" data-view-jump="counter" id="open-pos">Open POS</button>
+                <button class="btn" type="button" id="open-growth">AI Growth</button>
+                <button class="btn" type="button" id="open-offers">Offers</button>
+              </p>
+            </div>
+            <div class="platform-notes" id="dash-notes"></div>
+            <p class="dash-section">Today</p>
+            <div class="report-grid" id="dash-kpis"></div>
+            <p class="dash-section">Go to</p>
+            <div class="dash-shortcuts" id="dash-shortcuts">
+              <button type="button" class="dash-tile" data-dash-view="counter">
+                <strong>Counter</strong>
+                <span>Scan, tap, and take payment</span>
+              </button>
+              <button type="button" class="dash-tile" data-dash-view="items">
+                <strong>Items</strong>
+                <span>Catalog, rates, and stock</span>
+              </button>
+              <button type="button" class="dash-tile" data-dash-view="stock">
+                <strong>Stock</strong>
+                <span>On-hand, low, and expiry</span>
+              </button>
+              <button type="button" class="dash-tile" data-dash-view="orders">
+                <strong>Invoices</strong>
+                <span>Bills, prints, and returns</span>
+              </button>
+              <button type="button" class="dash-tile" data-dash-view="customers">
+                <strong>Customers</strong>
+                <span>Accounts and outstanding</span>
+              </button>
+              <button type="button" class="dash-tile" data-dash-view="purchases">
+                <strong>Purchases</strong>
+                <span>Buy stock from suppliers</span>
+              </button>
+              <button type="button" class="dash-tile" data-dash-view="reports">
+                <strong>Reports</strong>
+                <span>GST, daywise, and Excel</span>
+              </button>
+              <button type="button" class="dash-tile" data-dash-view="settings">
+                <strong>Settings</strong>
+                <span>Shop profile and plan</span>
+              </button>
+            </div>
+          </div>
         </section>
         <section class="view view-counter" id="view-counter" hidden>
           <div class="edit-order-banner" id="edit-order-banner" hidden></div>
@@ -1607,7 +1652,7 @@
     <script src="./js/support.js?v=20260905deploy136" defer></script>
     <script src="./js/qrcode.iife.js?v=20260905qr1" defer></script>
     <script src="./js/qr-notify.js?v=20260905deploy144" defer></script>
-    <script src="./js/app.js?v=20260913pharmacy8" defer></script>
+    <script src="./js/app.js?v=20260913dash1" defer></script>
     <script src="./js/growth.js?v=20260905deploy145" defer></script>
     <script src="./js/offers-ui.js?v=20260905deploy136" defer></script>
   </body>

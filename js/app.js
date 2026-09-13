@@ -1310,6 +1310,20 @@ function applyNav() {
   if (growthBtn) growthBtn.hidden = !(can("growth") || can("reports"));
   const offersBtn = $("open-offers");
   if (offersBtn) offersBtn.hidden = !(can("discount") || can("items") || can("growth"));
+  document.querySelectorAll("#dash-shortcuts [data-dash-view]").forEach((btn) => {
+    const view = btn.dataset.dashView;
+    const module = {
+      counter: "counter",
+      items: "items",
+      stock: "stock",
+      orders: "orders",
+      customers: "customers",
+      purchases: "purchases",
+      reports: "reports",
+      settings: "settings",
+    }[view];
+    btn.hidden = module ? !can(module) : false;
+  });
 }
 
 function tt(key, fallback, vars) {
@@ -3719,27 +3733,47 @@ async function loadBootstrap() {
   fillExpenseCategories();
   paintDeskState(state.currentView || "dashboard");
   if ($("dash-welcome") && state.session) {
-    $("dash-welcome").textContent = `${state.session.name || ""} · ${state.session.role || ""} · ${state.company.name || ""}`;
+    paintDashWelcome();
   }
   void loadToday();
   void loadCustomerLoyalty();
 }
 
+function dashRoleLabel(role) {
+  const r = String(role || "").trim();
+  if (r === "business_admin") return "Admin";
+  return r.replace(/_/g, " ");
+}
+
+function paintDashWelcome() {
+  const el = $("dash-welcome");
+  if (!el || !state.session) return;
+  const name = String(state.session.name || "").trim();
+  el.textContent = name ? `Hello, ${name}` : "Your shop today.";
+  const meta = $("dash-welcome-meta");
+  if (meta) {
+    meta.textContent = [dashRoleLabel(state.session.role), state.company?.name].filter(Boolean).join(" · ");
+  }
+}
+
 async function loadDashboard() {
   try {
     const d = await api("/api/dashboard");
-    $("dash-welcome").textContent = `${state.session?.name || ""} · ${state.session?.role || ""} · ${state.company.name || ""}`;
+    paintDashWelcome();
     paintPlatformNotices(d.notes);
     $("dash-kpis").innerHTML = [
-      [tt("dashboard.today_sales", "Today's sales"), money(d.today?.takings)],
-      [tt("dashboard.today_bills", "Today's bills"), d.today?.bills],
-      [tt("dashboard.today_purchase", "Today's purchase"), money(d.purchase)],
-      [tt("dashboard.stock_value", "Stock value"), money(d.stockValue)],
-      [tt("dashboard.outstanding", "Customer outstanding"), money(d.outstanding)],
-      ["Plan", state.plan?.name || state.plan?.code || "—"],
-      ["Subscription fee / year", money(state.plan?.fee_monthly)],
+      [tt("dashboard.today_sales", "Today's sales"), money(d.today?.takings), "orders"],
+      [tt("dashboard.today_bills", "Today's bills"), d.today?.bills, "orders"],
+      [tt("dashboard.today_purchase", "Today's purchase"), money(d.purchase), "purchases"],
+      [tt("dashboard.stock_value", "Stock value"), money(d.stockValue), "stock"],
+      [tt("dashboard.outstanding", "Customer outstanding"), money(d.outstanding), "customers"],
+      ["Plan", state.plan?.name || state.plan?.code || "—", "settings"],
+      ["Subscription fee / year", money(state.plan?.fee_monthly), "settings"],
     ]
-      .map(([k, v]) => `<div class="report-card"><span>${k}</span><strong>${v}</strong></div>`)
+      .map(
+        ([k, v, view]) =>
+          `<button type="button" class="report-card dash-kpi" data-dash-view="${view}"><span>${k}</span><strong>${v}</strong></button>`,
+      )
       .join("");
   } catch (err) {
     $("dash-kpis").innerHTML = `<p class="hint error">${escapeHtml(err.message)}</p>`;
@@ -6874,6 +6908,15 @@ document.addEventListener("click", async (e) => {
   location.href = "/login.html";
 });
 $("open-pos")?.addEventListener("click", () => showView("counter"));
+$("view-dashboard")?.addEventListener("click", (e) => {
+  const jump = e.target.closest("[data-view-jump]");
+  if (jump) {
+    showView(jump.dataset.viewJump);
+    return;
+  }
+  const tile = e.target.closest("[data-dash-view]");
+  if (tile) showView(tile.dataset.dashView);
+});
 document.addEventListener("click", (e) => {
   const btn = e.target.closest("[data-apply-combo]");
   if (!btn) return;
