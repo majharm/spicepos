@@ -226,7 +226,7 @@
   left: 0;
   right: 0;
   top: 0;
-  height: 5px;
+  height: 7px;
   background: linear-gradient(90deg, #ff9933 0 33.33%, #fff 33.33% 66.66%, #138808 66.66%);
 }
 .auth-shell-v2.india-theme .auth-scene {
@@ -254,7 +254,7 @@
 }
 .india-pride img {
   display: block;
-  height: 40px;
+  height: 52px;
   width: auto;
   max-width: calc(50% - 6px);
   border-radius: 8px;
@@ -266,7 +266,7 @@
   gap: 6px;
 }
 .india-pride-nav img {
-  height: 32px;
+  height: 36px;
   max-width: calc(50% - 4px);
   flex: 1 1 0;
 }
