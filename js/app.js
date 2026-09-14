@@ -3799,34 +3799,74 @@ function dashRoleLabel(role) {
   return r.replace(/_/g, " ");
 }
 
-function paintDashWelcome() {
+function ymdDiffDays(fromYmd, toYmd) {
+  const parse = (s) => {
+    const m = String(s || "").slice(0, 10).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!m) return null;
+    return Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  };
+  const a = parse(fromYmd);
+  const b = parse(toYmd);
+  if (a == null || b == null) return null;
+  return Math.round((b - a) / 86400000);
+}
+
+function subscriptionValidity(dashSub) {
+  const raw = dashSub?.expires_at || state.businessMeta?.subscription_expires_at || "";
+  const ymdVal = String(raw).slice(0, 10);
+  let days = dashSub?.days_left;
+  if (!Number.isFinite(Number(days)) && ymdVal) days = ymdDiffDays(shopYmd(), ymdVal);
+  else if (days != null) days = Number(days);
+  else days = null;
+  const until = ymdVal ? formatShopDate(ymdVal) : "—";
+  let daysLabel = "—";
+  let tone = "";
+  if (days != null && Number.isFinite(days)) {
+    if (days > 1) daysLabel = `${days} days`;
+    else if (days === 1) daysLabel = "1 day";
+    else if (days === 0) daysLabel = "Last day";
+    else if (days === -1) daysLabel = "Expired 1 day ago";
+    else daysLabel = `Expired ${Math.abs(days)} days ago`;
+    if (days < 0) tone = "is-warn";
+    else if (days <= 7) tone = "is-soon";
+  }
+  return { ymd: ymdVal, days, until, daysLabel, tone };
+}
+
+function paintDashWelcome(dashSub) {
   const el = $("dash-welcome");
   if (!el || !state.session) return;
   const name = String(state.session.name || "").trim();
   el.textContent = name ? `Hello, ${name}` : "Your shop today.";
   const meta = $("dash-welcome-meta");
   if (meta) {
-    meta.textContent = [dashRoleLabel(state.session.role), state.company?.name].filter(Boolean).join(" · ");
+    const sub = subscriptionValidity(dashSub);
+    const bits = [dashRoleLabel(state.session.role), state.company?.name].filter(Boolean);
+    if (sub.ymd) bits.push(`Valid till ${sub.until}`, sub.daysLabel);
+    meta.textContent = bits.join(" · ");
   }
 }
 
 async function loadDashboard() {
   try {
     const d = await api("/api/dashboard");
-    paintDashWelcome();
+    paintDashWelcome(d.subscription);
     paintPlatformNotices(d.notes);
+    const sub = subscriptionValidity(d.subscription);
     $("dash-kpis").innerHTML = [
-      [tt("dashboard.today_sales", "Today's sales"), money(d.today?.takings), "orders"],
-      [tt("dashboard.today_bills", "Today's bills"), d.today?.bills, "orders"],
-      [tt("dashboard.today_purchase", "Today's purchase"), money(d.purchase), "purchases"],
-      [tt("dashboard.stock_value", "Stock value"), money(d.stockValue), "stock"],
-      [tt("dashboard.outstanding", "Customer outstanding"), money(d.outstanding), "customers"],
-      ["Plan", state.plan?.name || state.plan?.code || "—", "settings"],
-      ["Subscription fee / year", money(state.plan?.fee_monthly), "settings"],
+      [tt("dashboard.today_sales", "Today's sales"), money(d.today?.takings), "orders", ""],
+      [tt("dashboard.today_bills", "Today's bills"), d.today?.bills, "orders", ""],
+      [tt("dashboard.today_purchase", "Today's purchase"), money(d.purchase), "purchases", ""],
+      [tt("dashboard.stock_value", "Stock value"), money(d.stockValue), "stock", ""],
+      [tt("dashboard.outstanding", "Customer outstanding"), money(d.outstanding), "customers", ""],
+      ["Plan", state.plan?.name || state.plan?.code || "—", "settings", ""],
+      ["Valid till", sub.until, "settings", sub.tone],
+      ["Days left", sub.daysLabel, "settings", sub.tone],
+      ["Subscription fee / year", money(state.plan?.fee_monthly), "settings", ""],
     ]
       .map(
-        ([k, v, view]) =>
-          `<button type="button" class="report-card dash-kpi" data-dash-view="${view}"><span>${k}</span><strong>${v}</strong></button>`,
+        ([k, v, view, tone]) =>
+          `<button type="button" class="report-card dash-kpi ${escapeHtml(String(tone || ""))}" data-dash-view="${view}"><span>${escapeHtml(String(k))}</span><strong>${escapeHtml(String(v ?? "—"))}</strong></button>`,
       )
       .join("");
   } catch (err) {

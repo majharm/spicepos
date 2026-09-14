@@ -1,6 +1,6 @@
 import { query } from "./db.js";
 import { bid, branchId, authUser } from "./context.js";
-import { requireStaff, requirePerm, parsePerms, hashPassword } from "./auth.js";
+import { requireStaff, requirePerm, parsePerms, hashPassword, publicStatus } from "./auth.js";
 import { defaultPerms, ROLES, MODULES } from "./roles.js";
 import { audit } from "./audit.js";
 import { sendWelcomeStaff, publicLoginUrl } from "./mail.js";
@@ -181,6 +181,16 @@ export function registerTenant(app) {
         `SELECT * FROM notifications WHERE business_id IS NULL OR business_id = '' OR business_id = ? ORDER BY created_at DESC LIMIT 8`,
         [businessId],
       );
+      const [biz] = await query(
+        `SELECT subscription_expires_at, status,
+                DATEDIFF(subscription_expires_at, CURDATE()) AS days_left
+         FROM businesses WHERE id = ? LIMIT 1`,
+        [businessId],
+      );
+      const expiresAt = biz?.subscription_expires_at
+        ? String(biz.subscription_expires_at).slice(0, 10)
+        : null;
+      const daysLeft = expiresAt && biz?.days_left != null ? Number(biz.days_left) : null;
       return {
         today: sales,
         purchase: purchase.total,
@@ -188,6 +198,14 @@ export function registerTenant(app) {
         outstanding: out.outstanding,
         branches,
         notes,
+        subscription: {
+          expires_at: expiresAt,
+          days_left: Number.isFinite(daysLeft) ? daysLeft : null,
+          status: publicStatus({
+            status: biz?.status,
+            subscription_expires_at: expiresAt,
+          }),
+        },
         user: {
           name: req.auth.user.email,
           role: req.auth.user.role,

@@ -298,6 +298,14 @@ test("Master Admin can set passwords and unlock locked accounts", () => {
   assert.match(read("server/onboard.js"), /INTERVAL 1 YEAR/);
   assert.match(read("master.html"), /master\.js\?v=20260905deploy172/);
   assert.match(read("js/app.js"), /Subscription fee \/ year/);
+  assert.match(read("js/app.js"), /\["Valid till"/);
+  assert.match(read("js/app.js"), /\["Days left"/);
+  assert.match(read("js/app.js"), /function subscriptionValidity/);
+  assert.match(read("pos-php-core.php"), /function pos_subscription_snapshot/);
+  assert.match(read("pos-php-till.php"), /"subscription" => function_exists\("pos_subscription_snapshot"\)/);
+  assert.match(read("server/tenant.js"), /DATEDIFF\(subscription_expires_at, CURDATE\(\)\)/);
+  assert.match(read("server/tenant.js"), /subscription: \{/);
+  assert.match(read("css/pos.css"), /\.dash-kpi\.is-warn/);
   assert.match(core, /users\/\(\[\^\/\]\+\)\/unlock/);
   assert.match(core, /businesses\/\(\[\^\/\]\+\)\/send-expiry-alert/);
   assert.match(core, /activated_at/);
@@ -340,7 +348,7 @@ test("POS boot skips API probe and slims catalog photos", () => {
   assert.match(index, /qrcode\.iife\.js[^>]+defer/);
   assert.match(index, /preload="none"/);
   assert.match(index, /pos-api\.js\?v=20260905deploy154/);
-  assert.match(index, /app\.js\?v=20260913share1/);
+  assert.match(index, /app\.js\?v=20260914valid1/);
   assert.match(index, /invoice-share\.js\?v=20260913share1/);
   assert.match(index, /invoice\.js\?v=20260913void1/);
   assert.doesNotMatch(index, /app\.js\?v=20260905deploy167/);
@@ -393,9 +401,9 @@ test("Restaurant Counter can create named dining tables", () => {
   assert.match(core, /function pos_clip_floor_id/);
   assert.match(core, /dining_tables_json/);
   assert.match(till, /dining-tables/);
-  assert.match(index, /pos\.css\?v=20260913cust2/);
+  assert.match(index, /pos\.css\?v=20260914valid1/);
   assert.match(index, /restaurant\.js\?v=20260905deploy176/);
-  assert.match(index, /app\.js\?v=20260913share1/);
+  assert.match(index, /app\.js\?v=20260914valid1/);
   assert.match(index, /footwear\.js\?v=20260913hsnsac1/);
 });
 

@@ -185,6 +185,7 @@ function pos_php_till_dispatch($path, $method, $body) {
       "outstanding" => $out[0]["outstanding"] ?? 0,
       "branches" => $branches,
       "notes" => $notes,
+      "subscription" => function_exists("pos_subscription_snapshot") ? pos_subscription_snapshot($bid) : null,
       "user" => ["name" => $auth["user"]["email"], "role" => $auth["user"]["role"], "permissions" => pos_parse_perms($auth["user"])],
     ]);
   }

@@ -632,6 +632,16 @@ body:has(#view-expiry:not([hidden])) .platform-notices { display: none !importan
   outline: 2px solid var(--vel-teal);
   outline-offset: 2px;
 }
+.dash-kpi.is-soon {
+  border-color: #f59e0b;
+  background: #fffbeb;
+}
+.dash-kpi.is-soon strong { color: #b45309; }
+.dash-kpi.is-warn {
+  border-color: var(--danger);
+  background: #fef2f2;
+}
+.dash-kpi.is-warn strong { color: var(--danger); }
 .dash-shortcuts {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(188px, 1fr));
