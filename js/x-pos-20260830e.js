@@ -194,7 +194,7 @@
         loginForm.hidden = signup;
         if (signupForm) signupForm.hidden = !signup;
         card?.classList.toggle("signup", signup);
-        if (lead) lead.textContent = signup ? "Start billing in minutes — 2-day free trial, no card." : "Sign in to continue.";
+        if (lead) lead.textContent = signup ? "Start billing in minutes — 2-day free trial, no card." : "Sign in to open your shop.";
         const heading = document.getElementById("auth-heading");
         if (heading) heading.textContent = signup ? "Create your shop" : "Welcome back";
       });
