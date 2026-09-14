@@ -157,3 +157,19 @@ test("Restaurant shops can add dining floors and keep old table lists", () => {
   assert.equal(cleared.floors.length, 1);
   assert.equal(cleared.tables.some((t) => t.id === "AC"), false);
 });
+
+test("Business admin can rename cafe tables and floors", () => {
+  const tables = [{ id: "1", name: "Table 1", floor: "ground" }, { id: "AC", name: "AC", floor: "ground" }];
+  const named = R.renameTable(tables, "AC", "Window");
+  assert.equal(named.ok, true);
+  assert.equal(named.renamed.id, "Window");
+  assert.equal(named.renamed.name, "Window");
+  const busy = R.renameTable(tables, "AC", "Window", { busy: true });
+  assert.equal(busy.ok, true);
+  assert.equal(busy.renamed.id, "AC");
+  assert.equal(busy.renamed.name, "Window");
+  const floors = [{ id: "ground", name: "Ground" }, { id: "first", name: "First" }];
+  const hall = R.renameFloor(floors, "first", "AC hall");
+  assert.equal(hall.ok, true);
+  assert.equal(hall.floors.find((f) => f.id === "first").name, "AC hall");
+});

@@ -361,6 +361,20 @@ export async function ensureSchema() {
     INDEX (item_id)
   )`);
 
+  await create(`CREATE TABLE IF NOT EXISTS kitchen_tickets (
+    id VARCHAR(255) PRIMARY KEY,
+    business_id VARCHAR(255) NOT NULL,
+    table_no VARCHAR(64) NULL,
+    kind VARCHAR(16) NULL,
+    status VARCHAR(16) NOT NULL DEFAULT 'new',
+    notes VARCHAR(250) NULL,
+    lines_json MEDIUMTEXT NULL,
+    created_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    updated_at TIMESTAMP(3) NULL,
+    INDEX (business_id),
+    INDEX (business_id, status)
+  )`);
+
   await create(`CREATE TABLE IF NOT EXISTS held_bills (
     id VARCHAR(255) PRIMARY KEY,
     business_id VARCHAR(255) NOT NULL,

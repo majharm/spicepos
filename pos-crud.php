@@ -484,6 +484,7 @@ function pos_crud_dispatch($path, $method, $body, $bid, $auth, $branchId, $uid) 
     $password = (string) ($body["password"] ?? "");
     if ($email === "" || $password === "") pos_send(400, ["error" => "Email and password are required"]);
     $role = $body["role"] ?? "staff";
+    if (!in_array($role, pos_known_roles(), true)) $role = "staff";
     $perms = is_array($body["permissions"] ?? null) ? $body["permissions"] : pos_default_perms($role);
     $id = pos_uuid();
     $username = $body["username"] ?? explode("@", $email)[0];
@@ -528,6 +529,7 @@ function pos_crud_dispatch($path, $method, $body, $bid, $auth, $branchId, $uid) 
     $id = $m[1];
     $b = $body ?: [];
     $role = $b["role"] ?? "staff";
+    if (!in_array($role, pos_known_roles(), true)) $role = "staff";
     $perms = is_array($b["permissions"] ?? null) ? $b["permissions"] : pos_default_perms($role);
     pos_q(
       "UPDATE staff_users SET first_name=?, last_name=?, role=?, status=?, branch_id=?, permissions_json=?, mobile=?, username=?

@@ -1,6 +1,6 @@
 import { query } from "./db.js";
 import { bid, branchId, authUser } from "./context.js";
-import { requireStaff, requirePerm, parsePerms, hashPassword, publicStatus } from "./auth.js";
+import { requireStaff, requirePerm, requirePermAny, requireBusinessAdmin, parsePerms, hashPassword, publicStatus } from "./auth.js";
 import { defaultPerms, ROLES, MODULES } from "./roles.js";
 import { audit } from "./audit.js";
 import { sendWelcomeStaff, publicLoginUrl } from "./mail.js";
@@ -68,6 +68,42 @@ function clipDiningTablesJson(raw) {
   }
   if (!floors.length) floors.push({ id: "ground", name: "Ground" });
   return JSON.stringify({ floors, tables });
+}
+
+const KOT_STATUSES = new Set(["new", "preparing", "ready", "done"]);
+
+function clipKotLines(raw) {
+  const list = Array.isArray(raw) ? raw : [];
+  return list
+    .slice(0, 80)
+    .map((line) => ({
+      itemId: String(line?.itemId || line?.item_id || "").slice(0, 64),
+      name: String(line?.name || line?.item_name || "Item").trim().slice(0, 120) || "Item",
+      qtyGm: Number(line?.qtyGm || line?.quantity_gm) || 0,
+      unit: String(line?.unit || "PCS").slice(0, 16),
+    }))
+    .filter((line) => line.qtyGm > 0);
+}
+
+function kotRow(row) {
+  if (!row) return null;
+  let lines = [];
+  try {
+    const parsed = JSON.parse(row.lines_json || "[]");
+    lines = Array.isArray(parsed) ? parsed : [];
+  } catch {
+    lines = [];
+  }
+  return {
+    id: row.id,
+    table_no: row.table_no || "",
+    kind: row.kind || "new",
+    status: row.status || "new",
+    notes: row.notes || "",
+    lines,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  };
 }
 
 const BRANCH_LIST_SQL = `SELECT b.*,
@@ -546,12 +582,79 @@ export function registerTenant(app) {
     }),
   );
 
-  app.post("/api/dining-tables", requireStaff, requirePerm("counter"), (req, res) =>
+  app.post("/api/dining-tables", requireStaff, requireBusinessAdmin, (req, res) =>
     send(res, async () => {
       const json = clipDiningTablesJson(req.body?.dining_tables_json ?? req.body?.tables);
       await query("UPDATE company_settings SET dining_tables_json = ? WHERE business_id = ?", [json, bid()]);
       const [company] = await query("SELECT * FROM company_settings WHERE business_id = ?", [bid()]);
       return { ok: true, dining_tables_json: json, company };
+    }),
+  );
+
+  app.get("/api/kots", requireStaff, requirePermAny("kot", "counter"), (_req, res) =>
+    send(res, async () => {
+      const rows = await query(
+        `SELECT * FROM kitchen_tickets
+         WHERE business_id = ?
+           AND (status <> 'done' OR updated_at >= DATE_SUB(NOW(), INTERVAL 12 HOUR) OR created_at >= DATE_SUB(NOW(), INTERVAL 12 HOUR))
+         ORDER BY created_at DESC
+         LIMIT 80`,
+        [bid()],
+      );
+      return rows.map(kotRow);
+    }),
+  );
+
+  app.post("/api/kots", requireStaff, requirePerm("counter"), (req, res) =>
+    send(res, async () => {
+      const b = req.body || {};
+      const lines = clipKotLines(b.lines);
+      if (!lines.length) throw new Error("Nothing to send to kitchen");
+      const id = crypto.randomUUID();
+      const tableNo = String(b.table_no || b.tableNo || "").trim().slice(0, 64);
+      const kind = b.kind === "reprint" ? "reprint" : "new";
+      const notes = String(b.notes || "").trim().slice(0, 250);
+      await query(
+        `INSERT INTO kitchen_tickets (id, business_id, table_no, kind, status, notes, lines_json, created_at, updated_at)
+         VALUES (?,?,?,?, 'new', ?, ?, NOW(3), NOW(3))`,
+        [id, bid(), tableNo || null, kind, notes || null, JSON.stringify(lines)],
+      );
+      const [row] = await query("SELECT * FROM kitchen_tickets WHERE id = ? AND business_id = ? LIMIT 1", [id, bid()]);
+      return { ok: true, ticket: kotRow(row) };
+    }),
+  );
+
+  app.post("/api/kots/:id", requireStaff, requirePermAny("kot", "counter"), (req, res) =>
+    send(res, async () => {
+      const id = String(req.params.id || "").trim();
+      const status = String(req.body?.status || "").trim();
+      if (!KOT_STATUSES.has(status)) throw new Error("Invalid KOT status");
+      const [row] = await query("SELECT * FROM kitchen_tickets WHERE id = ? AND business_id = ? LIMIT 1", [id, bid()]);
+      if (!row) throw new Error("KOT not found");
+      await query("UPDATE kitchen_tickets SET status = ?, updated_at = NOW(3) WHERE id = ? AND business_id = ?", [
+        status,
+        id,
+        bid(),
+      ]);
+      const [next] = await query("SELECT * FROM kitchen_tickets WHERE id = ? AND business_id = ? LIMIT 1", [id, bid()]);
+      return { ok: true, ticket: kotRow(next) };
+    }),
+  );
+
+  app.patch("/api/kots/:id", requireStaff, requirePermAny("kot", "counter"), (req, res) =>
+    send(res, async () => {
+      const id = String(req.params.id || "").trim();
+      const status = String(req.body?.status || "").trim();
+      if (!KOT_STATUSES.has(status)) throw new Error("Invalid KOT status");
+      const [row] = await query("SELECT * FROM kitchen_tickets WHERE id = ? AND business_id = ? LIMIT 1", [id, bid()]);
+      if (!row) throw new Error("KOT not found");
+      await query("UPDATE kitchen_tickets SET status = ?, updated_at = NOW(3) WHERE id = ? AND business_id = ?", [
+        status,
+        id,
+        bid(),
+      ]);
+      const [next] = await query("SELECT * FROM kitchen_tickets WHERE id = ? AND business_id = ? LIMIT 1", [id, bid()]);
+      return { ok: true, ticket: kotRow(next) };
     }),
   );
 

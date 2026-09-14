@@ -6,7 +6,7 @@
     <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
     <title>ATAV POS</title>
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./css/pos.css?v=20260914valid1" />
+    <link rel="stylesheet" href="./css/pos.css?v=20260914cafe1" />
     <link rel="stylesheet" href="./css/saas.css?v=20260905deploy136" />
   </head>
   <body>
@@ -24,6 +24,7 @@
             <button class="nav-btn active" type="button" data-view="dashboard"><span class="nav-icon" aria-hidden="true">⌂</span><span data-i18n="nav.dashboard">Dashboard</span></button>
             <button class="nav-btn" type="button" data-view="growth"><span class="nav-icon" aria-hidden="true">◈</span><span data-i18n="nav.growth">AI Growth</span></button>
             <button class="nav-btn" type="button" data-view="counter"><span class="nav-icon" aria-hidden="true">⊞</span><span data-i18n="nav.counter">Counter</span></button>
+            <button class="nav-btn" type="button" data-view="kot"><span class="nav-icon" aria-hidden="true">▣</span>Kitchen KOT</button>
           </div>
           <div class="nav-group">
             <p class="nav-group-label" data-i18n="nav.sales">Sales</p>
@@ -589,6 +590,31 @@
             </div>
           </div>
         </section>
+        <section class="view" id="view-kot" hidden>
+          <div class="kot-desk">
+            <header class="qr-orders-hero">
+              <div>
+                <p class="items-kicker">Kitchen</p>
+                <h2>KOT board</h2>
+                <p>Captain and cashier send tickets from Counter. Kitchen marks Start, Ready, then Done. Open tickets stay on this board.</p>
+              </div>
+              <div class="qr-orders-hero-actions">
+                <button class="btn" type="button" id="kot-refresh">Refresh</button>
+              </div>
+            </header>
+            <div class="qr-orders-toolbar">
+              <div class="qr-status-tabs" id="kot-status-tabs">
+                <button type="button" class="active" data-kot-status-filter="">All</button>
+                <button type="button" data-kot-status-filter="new">New</button>
+                <button type="button" data-kot-status-filter="preparing">Preparing</button>
+                <button type="button" data-kot-status-filter="ready">Ready</button>
+                <button type="button" data-kot-status-filter="done">Done</button>
+              </div>
+            </div>
+            <p class="hint" id="kot-hint"></p>
+            <div class="kot-list" id="kot-list"></div>
+          </div>
+        </section>
         <section class="view" id="view-qr-orders" hidden>
           <div class="qr-orders-page">
             <header class="qr-orders-hero">
@@ -1017,6 +1043,8 @@
             <label>Role
               <select id="st-role">
                 <option value="cashier">Cashier</option>
+                <option value="captain">Captain</option>
+                <option value="kitchen">Kitchen</option>
                 <option value="manager">Manager</option>
                 <option value="branch_manager">Branch Manager</option>
                 <option value="stock_manager">Stock Manager</option>
@@ -1641,7 +1669,7 @@
     <script src="./js/pos-api.js?v=20260905deploy154" defer></script>
     <script src="./js/units.js?v=20260905deploy165" defer></script>
     <script src="./js/footwear.js?v=20260913hsnsac1" defer></script>
-    <script src="./js/restaurant.js?v=20260905deploy176" defer></script>
+    <script src="./js/restaurant.js?v=20260914cafe1" defer></script>
     <script src="./js/discount.js?v=20260905deploy136" defer></script>
     <script src="./js/offers.js?v=20260905deploy170" defer></script>
     <script src="./js/loyalty.js?v=20260905deploy136" defer></script>
@@ -1653,7 +1681,7 @@
     <script src="./js/support.js?v=20260905deploy136" defer></script>
     <script src="./js/qrcode.iife.js?v=20260905qr1" defer></script>
     <script src="./js/qr-notify.js?v=20260905deploy144" defer></script>
-    <script src="./js/app.js?v=20260914valid1" defer></script>
+    <script src="./js/app.js?v=20260914cafe1" defer></script>
     <script src="./js/growth.js?v=20260905deploy145" defer></script>
     <script src="./js/offers-ui.js?v=20260905deploy136" defer></script>
   </body>
