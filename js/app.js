@@ -1329,6 +1329,21 @@ function canManageDiningLayout() {
   return isRestaurantShop() && state.session?.role === "business_admin";
 }
 
+function paintStaffRoleOptions() {
+  const sel = $("st-role");
+  if (!sel) return;
+  const cafe = isRestaurantShop();
+  const current = sel.value;
+  sel.querySelectorAll('option[value="captain"], option[value="kitchen"]').forEach((opt) => {
+    const keep = cafe || current === opt.value;
+    opt.hidden = !keep;
+    opt.disabled = !keep;
+  });
+  if (!cafe && (sel.value === "captain" || sel.value === "kitchen") && sel.querySelector(`option[value="${sel.value}"]`)?.hidden) {
+    sel.value = "cashier";
+  }
+}
+
 function landingView() {
   const role = state.session?.role;
   if (isRestaurantShop() && role === "kitchen" && can("kot")) return "kot";
@@ -1379,6 +1394,7 @@ function applyNav() {
     if (view === "qr-orders" && isPharmacyShop()) btn.hidden = true;
     if (view === "kot") btn.hidden = !isRestaurantShop() || !can("kot");
   });
+  paintStaffRoleOptions();
   const growthBtn = $("open-growth");
   if (growthBtn) growthBtn.hidden = !(can("growth") || can("reports"));
   const offersBtn = $("open-offers");
@@ -1764,6 +1780,12 @@ function renderTableBoard() {
   const creatingFloor = Boolean(el.querySelector("[data-create-floor]:not([hidden])"));
   const editingTableId = el.querySelector("[data-edit-table]:not([hidden]) #table-edit-id")?.value || "";
   const editingFloorId = el.querySelector("[data-edit-floor]:not([hidden]) #floor-edit-id")?.value || "";
+  const editingTableName = editingTableId
+    ? ($("table-edit-name")?.value || tables.find((t) => t.id === editingTableId)?.name || "")
+    : "";
+  const editingFloorName = editingFloorId
+    ? ($("floor-edit-name")?.value || floors.find((f) => f.id === editingFloorId)?.name || "")
+    : "";
   const manage = canManageDiningLayout();
   const meta = tables.length
     ? `${onFloor.length} tables · ${busyCount} occupied${floors.length > 1 ? ` · ${floors.length} floors` : ""}`
@@ -1794,7 +1816,7 @@ function renderTableBoard() {
             <button class="floor-chip${f.id === floorId ? " is-on" : ""}" type="button" data-floor="${escapeHtml(f.id)}">
               ${escapeHtml(f.name)}${count ? `<span>${count}</span>` : ""}
             </button>
-            ${manage ? `<button class="table-seat-edit floor-chip-edit" type="button" data-edit-floor-btn="${escapeHtml(f.id)}" aria-label="Rename ${escapeHtml(f.name)}">✎</button>` : ""}
+            ${manage ? `<button class="table-seat-edit floor-chip-edit" type="button" data-edit-floor-btn="${escapeHtml(f.id)}" title="Rename floor" aria-label="Rename ${escapeHtml(f.name)}">✎</button>` : ""}
             ${canRemove ? `<button class="table-seat-x floor-chip-x" type="button" data-remove-floor="${escapeHtml(f.id)}" aria-label="Remove ${escapeHtml(f.name)}">×</button>` : ""}
           </div>`;
         })
@@ -1807,7 +1829,7 @@ function renderTableBoard() {
     </form>
     <form class="table-create"${editingFloorId ? "" : " hidden"} data-edit-floor>
       <input type="hidden" id="floor-edit-id" value="${escapeHtml(editingFloorId)}" />
-      <input id="floor-edit-name" name="floor-name" maxlength="32" placeholder="Floor name" aria-label="Floor name" autocomplete="off" />
+      <input id="floor-edit-name" name="floor-name" maxlength="32" placeholder="Floor name" aria-label="Floor name" autocomplete="off" value="${escapeHtml(editingFloorName)}" />
       <button class="btn primary" type="submit">Save floor</button>
       <button class="btn" type="button" data-cancel-edit-floor>Cancel</button>
     </form>
@@ -1818,7 +1840,7 @@ function renderTableBoard() {
     </form>
     <form class="table-create"${editingTableId ? "" : " hidden"} data-edit-table>
       <input type="hidden" id="table-edit-id" value="${escapeHtml(editingTableId)}" />
-      <input id="table-edit-name" name="table-name" maxlength="32" placeholder="Table name" aria-label="Table name" autocomplete="off" />
+      <input id="table-edit-name" name="table-name" maxlength="32" placeholder="Table name" aria-label="Table name" autocomplete="off" value="${escapeHtml(editingTableName)}" />
       <button class="btn primary" type="submit">Save table</button>
       <button class="btn" type="button" data-cancel-edit-table>Cancel</button>
     </form>
@@ -1836,7 +1858,7 @@ function renderTableBoard() {
               <strong>${escapeHtml(t.name || R.displayTable(t.id))}</strong>
               <span>${escapeHtml(on && state.cart.length ? `${state.cart.length} dishes` : metaLine)}</span>
             </button>
-            ${manage ? `<button class="table-seat-edit" type="button" data-edit-table-btn="${escapeHtml(t.id)}" aria-label="Rename ${escapeHtml(t.name || t.id)}">✎</button>` : ""}
+            ${manage ? `<button class="table-seat-edit" type="button" data-edit-table-btn="${escapeHtml(t.id)}" title="Rename table" aria-label="Rename ${escapeHtml(t.name || t.id)}">✎</button>` : ""}
             ${manage && !busy ? `<button class="table-seat-x" type="button" data-remove-table="${escapeHtml(t.id)}" aria-label="Remove ${escapeHtml(t.name || t.id)}">×</button>` : ""}
           </div>`;
         })
@@ -1924,7 +1946,7 @@ function kotLinesForPrint(lines) {
   });
 }
 
-function printKitchenKot(opts = {}) {
+function resolveKitchenKot(opts = {}) {
   const R = restaurantApi();
   if (!R) throw new Error("Kitchen KOT is not available");
   const tableNo = R.normalizeTableNo(opts.tableNo || state.activeTable);
@@ -1936,48 +1958,62 @@ function printKitchenKot(opts = {}) {
     const live = source.find((row) => (row.itemId || row.item_id) === line.itemId) || line;
     return { ...live, ...line };
   }));
+  return { R, tableNo, pick, named, notes: opts.notes || "" };
+}
+
+function writeKitchenKotWindow(resolved) {
   const w = window.open("", "kitchen-kot", "width=400,height=720");
   if (!w) throw new Error("Allow pop-ups to print kitchen KOT");
   w.document.write(
-    R.kotDocument({
+    resolved.R.kotDocument({
       shop: state.company?.name || "Kitchen",
-      tableNo,
+      tableNo: resolved.tableNo,
       when: formatShopTime(),
-      notes: opts.notes || "",
-      kind: pick.kind,
-      lines: named,
+      notes: resolved.notes,
+      kind: resolved.pick.kind,
+      lines: resolved.named,
     }),
   );
   w.document.close();
-  return pick;
+}
+
+function printKitchenKot(opts = {}) {
+  const resolved = resolveKitchenKot(opts);
+  writeKitchenKotWindow(resolved);
+  return resolved.pick;
 }
 
 async function sendKitchenKot() {
   ensureDiningTable();
-  const pick = printKitchenKot({ tableNo: state.activeTable, lines: state.cart, printed: state.kotPrinted });
+  const resolved = resolveKitchenKot({ tableNo: state.activeTable, lines: state.cart, printed: state.kotPrinted });
+  await api("/api/kots", {
+    method: "POST",
+    body: JSON.stringify({
+      table_no: state.activeTable,
+      kind: resolved.pick.kind,
+      lines: resolved.named,
+    }),
+  });
   state.kotPrinted = restaurantApi().cartSnapshot(state.cart);
-  const named = kotLinesForPrint(pick.lines.map((line) => {
-    const live = state.cart.find((row) => (row.itemId || row.item_id) === line.itemId) || line;
-    return { ...live, ...line };
-  }));
+  let printed = true;
   try {
-    await api("/api/kots", {
-      method: "POST",
-      body: JSON.stringify({
-        table_no: state.activeTable,
-        kind: pick.kind,
-        lines: named,
-      }),
-    });
+    writeKitchenKotWindow(resolved);
   } catch {
-    /* print already happened */
+    printed = false;
   }
   try {
     await saveActiveTableHold();
   } catch {
-    /* print already happened */
+    /* ticket already saved */
   }
-  setHint(pick.kind === "reprint" ? "Kitchen KOT reprint" : "Kitchen KOT sent", "ok");
+  setHint(
+    printed
+      ? resolved.pick.kind === "reprint"
+        ? "Kitchen KOT reprint"
+        : "Kitchen KOT sent"
+      : "Kitchen ticket saved. Allow pop-ups to print the slip.",
+    "ok",
+  );
 }
 
 function kotStatusLabel(status) {
@@ -4300,6 +4336,7 @@ function fillStaffForm(u) {
   $("st-pass").required = !u;
   $("st-pass").placeholder = u ? "Leave blank to keep current password" : "";
   $("st-role").value = u?.role || "cashier";
+  paintStaffRoleOptions();
   $("staff-save").textContent = u ? "Update staff" : "Save";
   if ($("staff-cancel")) $("staff-cancel").hidden = !u;
 }
