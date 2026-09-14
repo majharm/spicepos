@@ -957,6 +957,22 @@ function pos_public_status($b) {
   return $st !== "" ? $st : "active";
 }
 
+function pos_subscription_snapshot($bid) {
+  $rows = pos_q("SELECT subscription_expires_at, status, plan_id FROM businesses WHERE id = ? LIMIT 1", "s", [$bid]);
+  $b = $rows[0] ?? [];
+  $exp = pos_normalize_date_only($b["subscription_expires_at"] ?? null);
+  $days = null;
+  if ($exp) {
+    $today = date("Y-m-d");
+    $days = (int) round((strtotime($exp . " 00:00:00") - strtotime($today . " 00:00:00")) / 86400);
+  }
+  return [
+    "expires_at" => $exp,
+    "days_left" => $days,
+    "status" => pos_public_status($b),
+  ];
+}
+
 function pos_display_name($u) {
   $joined = trim(($u["first_name"] ?? "") . " " . ($u["last_name"] ?? ""));
   return $joined !== "" ? $joined : ($u["email"] ?? "User");
