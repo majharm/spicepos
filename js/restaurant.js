@@ -388,6 +388,23 @@
     return { kind: "reprint", lines: all };
   }
 
+  function newKots(seen, rows) {
+    if (seen == null) return [];
+    const known = seen instanceof Set ? seen : new Set(seen);
+    return (rows || []).filter((row) => {
+      const id = String(row?.id || "");
+      return id && String(row.status || "new") === "new" && !known.has(id);
+    });
+  }
+
+  function kotToastCopy(ticket, extra = 0) {
+    const table = displayTable(ticket?.table_no) || "Kitchen";
+    const n = Array.isArray(ticket?.lines) ? ticket.lines.length : 0;
+    const items = n === 1 ? "1 item" : `${n} items`;
+    const more = extra > 0 ? ` · +${extra} more` : "";
+    return `${table} · ${items}${more}`;
+  }
+
   function escapeHtml(value) {
     return String(value ?? "")
       .replaceAll("&", "&amp;")
@@ -515,6 +532,8 @@ ${kotBody(opts)}
     cartSnapshot,
     kotDelta,
     kotKind,
+    newKots,
+    kotToastCopy,
     kotBody,
     kotDocument,
   };

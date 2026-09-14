@@ -216,10 +216,12 @@
   }
 
   function pulse() {
-    const btn = root.document?.getElementById("qr-sound-toggle");
-    if (!btn) return;
-    btn.classList.add("is-sounding");
-    root.setTimeout?.(() => btn.classList.remove("is-sounding"), 900);
+    ["qr-sound-toggle", "kot-sound-toggle"].forEach((id) => {
+      const btn = root.document?.getElementById(id);
+      if (!btn) return;
+      btn.classList.add("is-sounding");
+      root.setTimeout?.(() => btn.classList.remove("is-sounding"), 900);
+    });
   }
 
   function playTone(opts = {}) {
@@ -236,12 +238,12 @@
     return wavOk || Boolean(ctx);
   }
 
-  function desktopNotify(order, extra = 0) {
+  function desktopNotify(order, extra = 0, opts = {}) {
     if (typeof root.Notification !== "function" || root.Notification.permission !== "granted") return false;
     try {
-      const note = new root.Notification("New QR order", {
-        body: `${toastCopy(order, extra)} · ${Number(order?.total) ? `₹${Number(order.total).toFixed(2)}` : "Open till"}`,
-        tag: `qr-order-${order?.id || "new"}`,
+      const note = new root.Notification(opts.title || "New QR order", {
+        body: opts.body || `${toastCopy(order, extra)} · ${Number(order?.total) ? `₹${Number(order.total).toFixed(2)}` : "Open till"}`,
+        tag: opts.tag || `qr-order-${order?.id || "new"}`,
       });
       setTimeout(() => note.close?.(), 12000);
       return true;

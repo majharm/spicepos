@@ -173,3 +173,17 @@ test("Business admin can rename cafe tables and floors", () => {
   assert.equal(hall.ok, true);
   assert.equal(hall.floors.find((f) => f.id === "first").name, "AC hall");
 });
+
+test("Kitchen notify finds only new KOT tickets", () => {
+  const seen = new Set(["old"]);
+  const rows = [
+    { id: "old", status: "new", table_no: "1" },
+    { id: "prep", status: "preparing", table_no: "2" },
+    { id: "fresh", status: "new", table_no: "5", lines: [{ name: "Dosa" }, { name: "Tea" }] },
+  ];
+  assert.deepEqual(R.newKots(null, rows), []);
+  const fresh = R.newKots(seen, rows);
+  assert.equal(fresh.length, 1);
+  assert.equal(fresh[0].id, "fresh");
+  assert.match(R.kotToastCopy(fresh[0], 1), /Table 5 · 2 items · \+1 more/);
+});

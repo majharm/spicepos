@@ -3038,7 +3038,8 @@ body.pharmacy-mode .items-library-list {
 .qr-sound-arm p { margin: 4px 0 0; font-size: 13px; }
 .qr-sound-arm .qr-toast-kicker { color: #b45309; }
 .qr-sound-arm[hidden],
-.qr-order-toast[hidden] { display: none !important; }
+.qr-order-toast[hidden],
+#kot-toast[hidden] { display: none !important; }
 .qr-order-toast {
   position: fixed;
   z-index: 42;
@@ -3065,7 +3066,8 @@ body.pharmacy-mode .items-library-list {
   background: linear-gradient(135deg, #0f172a, #134e4a 68%, #0d9488);
 }
 .qr-orders-hero .btn { color: #042f2e; background: #ecfdf5; border-color: transparent; }
-#qr-sound-toggle.is-sounding { outline: 3px solid #fbbf24; box-shadow: 0 0 0 4px rgba(251, 191, 36, .35); }
+#qr-sound-toggle.is-sounding,
+#kot-sound-toggle.is-sounding { outline: 3px solid #fbbf24; box-shadow: 0 0 0 4px rgba(251, 191, 36, .35); }
 .qr-orders-hero h2 { margin: 0; font-size: 23px; }
 .qr-orders-hero p:not(.items-kicker) { max-width: 66ch; margin: 6px 0 0; color: #cbd5e1; font-size: 13px; line-height: 1.5; }
 .qr-setup-card {

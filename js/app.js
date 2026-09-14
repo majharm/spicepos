@@ -1986,7 +1986,7 @@ function printKitchenKot(opts = {}) {
 async function sendKitchenKot() {
   ensureDiningTable();
   const resolved = resolveKitchenKot({ tableNo: state.activeTable, lines: state.cart, printed: state.kotPrinted });
-  await api("/api/kots", {
+  const data = await api("/api/kots", {
     method: "POST",
     body: JSON.stringify({
       table_no: state.activeTable,
@@ -1994,6 +1994,11 @@ async function sendKitchenKot() {
       lines: resolved.named,
     }),
   });
+  const ticketId = data?.ticket?.id;
+  if (ticketId) {
+    if (!kotSeenIds) kotSeenIds = new Set();
+    kotSeenIds.add(String(ticketId));
+  }
   state.kotPrinted = restaurantApi().cartSnapshot(state.cart);
   let printed = true;
   try {
@@ -2082,13 +2087,12 @@ function renderKotBoard() {
     : `<div class="item-empty-card"><strong>No kitchen tickets</strong><p>Captain or cashier sends Kitchen KOT from Counter. Tickets show here for the kitchen to cook.</p></div>`;
 }
 
-async function loadKots() {
+async function loadKots({ announce } = {}) {
   const hint = $("kot-hint");
   if (!can("kot") && !can("counter")) return;
   try {
     const rows = await api("/api/kots");
-    state.kotTickets = Array.isArray(rows) ? rows : [];
-    renderKotBoard();
+    applyKotSnapshot(rows, { announce: announce ?? kotSeenIds != null });
   } catch (err) {
     if (hint) {
       hint.textContent = err.message;
@@ -2098,11 +2102,88 @@ async function loadKots() {
 }
 
 let kotPollTimer = null;
+let kotSeenIds = null;
+let kotToastId = "";
+let kotToastTimer = 0;
+
+function paintKotBadge() {
+  const n = (state.kotTickets || []).filter((row) => String(row.status || "new") === "new").length;
+  const badge = $("kot-badge");
+  if (badge) {
+    badge.textContent = String(n);
+    badge.hidden = n === 0;
+  }
+}
+
+function paintKotSoundToggle() {
+  const btn = $("kot-sound-toggle");
+  if (!btn) return;
+  const on = globalThis.POSQrNotify?.soundOn() !== false;
+  btn.textContent = on ? "Sound on" : "Sound off";
+  btn.setAttribute("aria-pressed", on ? "true" : "false");
+}
+
+function hideKotToast() {
+  const toast = $("kot-toast");
+  if (toast) toast.hidden = true;
+  kotToastId = "";
+  if (kotToastTimer) clearTimeout(kotToastTimer);
+  kotToastTimer = 0;
+}
+
+function showKotToast(ticket, extra = 0) {
+  const toast = $("kot-toast");
+  if (!toast || !ticket) return;
+  const R = restaurantApi();
+  kotToastId = ticket.id || "";
+  const title = $("kot-toast-title");
+  const copy = $("kot-toast-copy");
+  if (title) title.textContent = extra > 0 ? `${extra + 1} new kitchen tickets` : "New kitchen KOT";
+  if (copy) copy.textContent = R?.kotToastCopy?.(ticket, extra) || R?.displayTable?.(ticket.table_no) || "New ticket";
+  toast.hidden = false;
+  if (kotToastTimer) clearTimeout(kotToastTimer);
+  kotToastTimer = setTimeout(hideKotToast, 14000);
+}
+
+function applyKotSnapshot(rows, { announce = false } = {}) {
+  const list = Array.isArray(rows) ? rows : [];
+  const R = restaurantApi();
+  const incoming = R?.newKots?.(kotSeenIds, list) || [];
+  state.kotTickets = list;
+  if (kotSeenIds == null) kotSeenIds = new Set(list.map((row) => String(row.id)).filter(Boolean));
+  else {
+    list.forEach((row) => {
+      if (row?.id) kotSeenIds.add(String(row.id));
+    });
+  }
+  paintKotBadge();
+  renderKotBoard();
+  if (!announce || !incoming.length) return incoming;
+  incoming.forEach((row) => kotSeenIds.add(String(row.id)));
+  globalThis.POSQrNotify?.playTone?.({ force: true });
+  setTimeout(() => globalThis.POSQrNotify?.playTone?.({ force: true }), 450);
+  globalThis.POSQrNotify?.desktopNotify?.(incoming[0], incoming.length - 1, {
+    title: "New kitchen KOT",
+    body: R?.kotToastCopy?.(incoming[0], incoming.length - 1) || "New ticket",
+    tag: `kot-${incoming[0].id || "new"}`,
+  });
+  showKotToast(incoming[0], incoming.length - 1);
+  paintQrSoundArm();
+  return incoming;
+}
+
 function startKotWatch() {
   if (kotPollTimer || !isRestaurantShop() || !(can("kot") || can("counter"))) return;
-  kotPollTimer = setInterval(() => {
-    if (state.currentView === "kot") void loadKots();
-  }, 8000);
+  paintKotSoundToggle();
+  paintQrSoundArm();
+  const kick = () => void loadKots({ announce: false });
+  if (typeof requestIdleCallback === "function") requestIdleCallback(kick, { timeout: 2500 });
+  else setTimeout(kick, 1200);
+  kotPollTimer = setInterval(() => void loadKots({ announce: true }), 4000);
+  document.addEventListener("pos-qr-sound", () => {
+    paintKotSoundToggle();
+    paintQrSoundArm();
+  });
 }
 
 async function setKotStatus(id, status) {
@@ -5071,7 +5152,21 @@ function paintQrSoundToggle() {
 function paintQrSoundArm() {
   const arm = $("qr-sound-arm");
   if (!arm) return;
-  arm.hidden = globalThis.POSQrNotify?.needsUnlock?.() !== true;
+  const cafe = isRestaurantShop() && (can("kot") || can("counter"));
+  const qr = can("orders") && !isPharmacyShop();
+  arm.hidden = globalThis.POSQrNotify?.needsUnlock?.() !== true || (!cafe && !qr);
+  const kicker = arm.querySelector(".qr-toast-kicker");
+  const strong = arm.querySelector("strong");
+  const note = arm.querySelector("p");
+  if (cafe && qr) {
+    if (kicker) kicker.textContent = "KOT & QR SOUND";
+    if (strong) strong.textContent = "Tap to hear new tickets";
+    if (note) note.textContent = "Tap once and listen. New kitchen KOTs and QR orders ding on this till. If you do not hear a ding, tap again with the speaker on.";
+  } else if (cafe) {
+    if (kicker) kicker.textContent = "KITCHEN KOT SOUND";
+    if (strong) strong.textContent = "Tap to hear new tickets";
+    if (note) note.textContent = "Tap once and listen. New KOTs ding on this till. If you do not hear a ding, tap again with the speaker on.";
+  }
 }
 
 function armQrOrderSound() {
@@ -5079,6 +5174,7 @@ function armQrOrderSound() {
   const played = globalThis.POSQrNotify?.playTone?.({ force: true });
   globalThis.POSQrNotify?.askNotifyPermission?.();
   paintQrSoundToggle();
+  paintKotSoundToggle();
   paintQrSoundArm();
   return played !== false;
 }
@@ -6265,6 +6361,7 @@ if (qrSoundToggle) {
     }
     globalThis.POSQrNotify?.setSoundOn?.(false);
     paintQrSoundToggle();
+    paintKotSoundToggle();
     paintQrSoundArm();
     setHint("QR order sound off.", "ok");
   });
@@ -6273,7 +6370,15 @@ const qrSoundArmBtn = $("qr-sound-arm-btn");
 if (qrSoundArmBtn) {
   qrSoundArmBtn.addEventListener("click", () => {
     const ok = armQrOrderSound();
-    setHint(ok ? "QR order sound on. You should hear a ding now." : "Tap Enable sound again if you did not hear a ding.", ok ? "ok" : "error");
+    const cafe = isRestaurantShop() && (can("kot") || can("counter"));
+    setHint(
+      ok
+        ? cafe
+          ? "Kitchen KOT sound on. You should hear a ding now."
+          : "QR order sound on. You should hear a ding now."
+        : "Tap Enable sound again if you did not hear a ding.",
+      ok ? "ok" : "error",
+    );
   });
 }
 $("qr-toast-open")?.addEventListener("click", () => {
@@ -6281,6 +6386,25 @@ $("qr-toast-open")?.addEventListener("click", () => {
   showView("qr-orders");
 });
 $("qr-toast-dismiss")?.addEventListener("click", hideQrOrderToast);
+$("kot-sound-toggle")?.addEventListener("click", () => {
+  const on = globalThis.POSQrNotify?.soundOn() !== false;
+  const needs = globalThis.POSQrNotify?.needsUnlock?.() === true;
+  if (!on || needs) {
+    const ok = armQrOrderSound();
+    setHint(ok ? "Kitchen KOT sound on. You should hear a ding now." : "Tap Enable sound again if you did not hear a ding.", ok ? "ok" : "error");
+    return;
+  }
+  globalThis.POSQrNotify?.setSoundOn?.(false);
+  paintQrSoundToggle();
+  paintKotSoundToggle();
+  paintQrSoundArm();
+  setHint("Kitchen KOT sound off.", "ok");
+});
+$("kot-toast-open")?.addEventListener("click", () => {
+  hideKotToast();
+  showView("kot");
+});
+$("kot-toast-dismiss")?.addEventListener("click", hideKotToast);
 $("qr-order-search")?.addEventListener("input", renderQrOrders);
 $("qr-status-tabs")?.addEventListener("click", (event) => {
   const button = event.target.closest("[data-qr-status]");

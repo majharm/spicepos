@@ -6,7 +6,7 @@
     <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
     <title>ATAV POS</title>
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./css/pos.css?v=20260914cafe2" />
+    <link rel="stylesheet" href="./css/pos.css?v=20260914kot1" />
     <link rel="stylesheet" href="./css/saas.css?v=20260905deploy136" />
   </head>
   <body>
@@ -24,7 +24,7 @@
             <button class="nav-btn active" type="button" data-view="dashboard"><span class="nav-icon" aria-hidden="true">⌂</span><span data-i18n="nav.dashboard">Dashboard</span></button>
             <button class="nav-btn" type="button" data-view="growth"><span class="nav-icon" aria-hidden="true">◈</span><span data-i18n="nav.growth">AI Growth</span></button>
             <button class="nav-btn" type="button" data-view="counter"><span class="nav-icon" aria-hidden="true">⊞</span><span data-i18n="nav.counter">Counter</span></button>
-            <button class="nav-btn" type="button" data-view="kot"><span class="nav-icon" aria-hidden="true">▣</span>Kitchen KOT</button>
+            <button class="nav-btn" type="button" data-view="kot"><span class="nav-icon" aria-hidden="true">▣</span>Kitchen KOT <span class="nav-badge" id="kot-badge" hidden></span></button>
           </div>
           <div class="nav-group">
             <p class="nav-group-label" data-i18n="nav.sales">Sales</p>
@@ -599,6 +599,7 @@
                 <p>Captain and cashier send tickets from Counter. Kitchen marks Start, Ready, then Done. Open tickets stay on this board.</p>
               </div>
               <div class="qr-orders-hero-actions">
+                <button class="btn" type="button" id="kot-sound-toggle" aria-pressed="true">Sound on</button>
                 <button class="btn" type="button" id="kot-refresh">Refresh</button>
               </div>
             </header>
@@ -1602,7 +1603,16 @@
       </div>
       <button class="btn primary" type="button" id="qr-sound-arm-btn">Enable sound</button>
     </div>
-    <div class="qr-order-toast pharmacy-hide" id="qr-order-toast" hidden role="status" aria-live="assertive">
+    <div class="qr-order-toast" id="kot-toast" hidden role="status" aria-live="assertive">
+      <div>
+        <p class="qr-toast-kicker">NEW KOT</p>
+        <strong id="kot-toast-title">New kitchen ticket</strong>
+        <p id="kot-toast-copy"></p>
+      </div>
+      <button class="btn primary" type="button" id="kot-toast-open">Open</button>
+      <button class="icon-btn qr-toast-x" type="button" id="kot-toast-dismiss" aria-label="Dismiss">×</button>
+    </div>
+    <div class="qr-order-toast" id="qr-order-toast" hidden role="status" aria-live="assertive">
       <div>
         <p class="qr-toast-kicker">NEW QR ORDER</p>
         <strong id="qr-toast-title">New customer order</strong>
@@ -1669,7 +1679,7 @@
     <script src="./js/pos-api.js?v=20260905deploy154" defer></script>
     <script src="./js/units.js?v=20260905deploy165" defer></script>
     <script src="./js/footwear.js?v=20260913hsnsac1" defer></script>
-    <script src="./js/restaurant.js?v=20260914cafe2" defer></script>
+    <script src="./js/restaurant.js?v=20260914kot1" defer></script>
     <script src="./js/discount.js?v=20260905deploy136" defer></script>
     <script src="./js/offers.js?v=20260905deploy170" defer></script>
     <script src="./js/loyalty.js?v=20260905deploy136" defer></script>
@@ -1680,8 +1690,8 @@
     <script src="./js/invoice-share.js?v=20260913share1" defer></script>
     <script src="./js/support.js?v=20260905deploy136" defer></script>
     <script src="./js/qrcode.iife.js?v=20260905qr1" defer></script>
-    <script src="./js/qr-notify.js?v=20260905deploy144" defer></script>
-    <script src="./js/app.js?v=20260914cafe2" defer></script>
+    <script src="./js/qr-notify.js?v=20260914kot1" defer></script>
+    <script src="./js/app.js?v=20260914kot1" defer></script>
     <script src="./js/growth.js?v=20260905deploy145" defer></script>
     <script src="./js/offers-ui.js?v=20260905deploy136" defer></script>
   </body>
