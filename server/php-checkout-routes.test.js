@@ -348,13 +348,13 @@ test("POS boot skips API probe and slims catalog photos", () => {
   assert.match(index, /qrcode\.iife\.js[^>]+defer/);
   assert.match(index, /preload="none"/);
   assert.match(index, /pos-api\.js\?v=20260905deploy154/);
-  assert.match(index, /app\.js\?v=20260914valid1/);
+  assert.match(index, /app\.js\?v=20260914cafe1/);
   assert.match(index, /invoice-share\.js\?v=20260913share1/);
   assert.match(index, /invoice\.js\?v=20260913void1/);
   assert.doesNotMatch(index, /app\.js\?v=20260905deploy167/);
   assert.doesNotMatch(index, /app\.js\?v=20260905deploy166/);
   assert.match(index, /offers\.js\?v=20260905deploy170/);
-  assert.match(index, /restaurant\.js\?v=20260905deploy176/);
+  assert.match(index, /restaurant\.js\?v=20260914cafe1/);
   assert.match(login, /x-pos-20260830e\.js\?v=20260914login1/);
   assert.match(loginJs, /saveLoginSpec/);
   assert.match(core, /function pos_catalog_items/);
@@ -401,10 +401,24 @@ test("Restaurant Counter can create named dining tables", () => {
   assert.match(core, /function pos_clip_floor_id/);
   assert.match(core, /dining_tables_json/);
   assert.match(till, /dining-tables/);
-  assert.match(index, /pos\.css\?v=20260914valid1/);
-  assert.match(index, /restaurant\.js\?v=20260905deploy176/);
-  assert.match(index, /app\.js\?v=20260914valid1/);
+  assert.match(index, /pos\.css\?v=20260914cafe1/);
+  assert.match(index, /restaurant\.js\?v=20260914cafe1/);
+  assert.match(index, /app\.js\?v=20260914cafe1/);
   assert.match(index, /footwear\.js\?v=20260913hsnsac1/);
+  assert.match(app, /function canManageDiningLayout/);
+  assert.match(app, /function landingView/);
+  assert.match(app, /\/api\/kots/);
+  assert.match(index, /id="kot-list"/);
+  assert.match(index, /option value="captain"/);
+  assert.match(index, /option value="kitchen"/);
+  assert.match(tenant, /requireBusinessAdmin/);
+  assert.match(tenant, /\/api\/kots/);
+  assert.match(till, /Only the business admin can manage tables and floors/);
+  assert.match(core, /function pos_known_roles/);
+  assert.match(schema, /kitchen_tickets/);
+  assert.match(read("server/roles.js"), /"captain"/);
+  assert.match(read("server/roles.js"), /"kitchen"/);
+  assert.match(read("pos-kots.php"), /function pos_dispatch_kots/);
 });
 
 test("PHP dining layout clip keeps floors and old table lists", { skip: hasPhpCli() ? false : "php CLI not installed" }, () => {

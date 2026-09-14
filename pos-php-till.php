@@ -10,7 +10,7 @@ function pos_php_till_dispatch($path, $method, $body) {
   $staff = [
     "bootstrap", "dashboard", "today", "suppliers", "items", "customers", "packs",
     "orders", "purchases", "stock", "staff", "branches", "devices", "holds",
-    "checkout", "settings", "dining-tables", "reports", "growth", "audit", "accounts", "backup", "units",
+    "checkout", "settings", "dining-tables", "kots", "reports", "growth", "audit", "accounts", "backup", "units",
     "barcodes", "damage", "loyalty", "batches", "qr-orders", "combos", "offers",
   ];
   if (!in_array($head, $staff, true)) return false;
@@ -355,11 +355,20 @@ function pos_php_till_dispatch($path, $method, $body) {
   }
 
   if ($path === "dining-tables" && $method === "POST") {
+    if (($auth["user"]["role"] ?? "") !== "business_admin") {
+      pos_send(403, ["error" => "Only the business admin can manage tables and floors"]);
+    }
     pos_ensure_i18n_columns();
     $json = pos_clip_dining_tables_json($body["dining_tables_json"] ?? $body["tables"] ?? "[]");
     pos_q("UPDATE company_settings SET dining_tables_json = ? WHERE business_id = ?", "ss", [$json, $bid]);
     $rows = pos_q("SELECT * FROM company_settings WHERE business_id = ? LIMIT 1", "s", [$bid]);
     pos_send(200, ["ok" => true, "dining_tables_json" => $json, "company" => $rows[0] ?? ["dining_tables_json" => $json]]);
+  }
+
+  if ($path === "kots" || strpos($path, "kots/") === 0) {
+    pos_require_kots();
+    pos_dispatch_kots($path, $method, $body, $bid, $auth);
+    return true;
   }
 
   if ($path === "suppliers" && $method === "GET") {

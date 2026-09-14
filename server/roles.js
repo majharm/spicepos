@@ -20,6 +20,7 @@ export const MODULES = [
   "loyalty",
   "offers",
   "damage",
+  "kot",
 ];
 
 export const ROLES = [
@@ -27,6 +28,8 @@ export const ROLES = [
   "branch_manager",
   "manager",
   "cashier",
+  "captain",
+  "kitchen",
   "stock_manager",
   "accountant",
   "staff",
@@ -57,6 +60,24 @@ export function defaultPerms(role) {
       discount: true,
       loyalty: true,
       offers: true,
+      kot: true,
+    };
+  }
+  if (role === "captain") {
+    return {
+      dashboard: true,
+      counter: true,
+      kot: true,
+      customers: true,
+      orders: true,
+      support: true,
+    };
+  }
+  if (role === "kitchen") {
+    return {
+      dashboard: true,
+      kot: true,
+      support: true,
     };
   }
   if (role === "stock_manager") {

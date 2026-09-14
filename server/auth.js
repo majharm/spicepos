@@ -202,18 +202,35 @@ export function requireMaster(req, res, next) {
 }
 
 export function requirePerm(module) {
+  return requirePermAny(module);
+}
+
+export function requirePermAny(...modules) {
+  const list = modules.flat().filter(Boolean);
   return (req, res, next) => {
     if (req.auth?.type !== "staff") {
       res.status(401).json({ error: "Sign in required" });
       return;
     }
     const perms = parsePerms(req.auth.user);
-    if (req.auth.user.role === "business_admin" || can(perms, module)) {
+    if (req.auth.user.role === "business_admin" || list.some((module) => can(perms, module))) {
       next();
       return;
     }
     res.status(403).json({ error: "You do not have permission for this module" });
   };
+}
+
+export function requireBusinessAdmin(req, res, next) {
+  if (req.auth?.type !== "staff") {
+    res.status(401).json({ error: "Sign in required" });
+    return;
+  }
+  if (req.auth.user.role !== "business_admin") {
+    res.status(403).json({ error: "Only the business admin can manage tables and floors" });
+    return;
+  }
+  next();
 }
 
 async function findStaff(identifier) {

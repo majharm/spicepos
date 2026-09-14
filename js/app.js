@@ -50,6 +50,8 @@ const state = {
   activeTable: "",
   activeFloor: "",
   kotPrinted: [],
+  kotTickets: [],
+  kotFilter: "",
 };
 
 function debounce(fn, wait = 120) {
@@ -362,6 +364,7 @@ const VIEW_META = {
   packs: { title: "Packs", subtitle: "Named spice mixes for the Counter" },
   orders: { title: "Invoices", subtitle: "POS slip, official A4, or duplicate copy" },
   "qr-orders": { title: "QR Orders", subtitle: "Incoming customer self-orders" },
+  kot: { title: "Kitchen KOT", subtitle: "Captain fires tickets; kitchen marks preparing and ready" },
   purchases: { title: "Purchases", subtitle: "20 pcs = 20 barcodes you type or scan" },
   suppliers: { title: "Suppliers", subtitle: "Vendor contacts, address, and GSTIN" },
   stock: { title: "Stock", subtitle: "On-hand qty, low-stock alerts, and adjustments" },
@@ -1322,6 +1325,20 @@ function can(module) {
   return state.perms?.[module] === true;
 }
 
+function canManageDiningLayout() {
+  return isRestaurantShop() && state.session?.role === "business_admin";
+}
+
+function landingView() {
+  const role = state.session?.role;
+  if (isRestaurantShop() && role === "kitchen" && can("kot")) return "kot";
+  if (isRestaurantShop() && role === "captain" && can("counter")) return "counter";
+  if (can("dashboard")) return "dashboard";
+  if (can("counter")) return "counter";
+  if (can("kot")) return "kot";
+  return "support";
+}
+
 function applyNav() {
   document.querySelectorAll(".nav-btn").forEach((btn) => {
     const view = btn.dataset.view;
@@ -1334,6 +1351,7 @@ function applyNav() {
       packs: "items",
       orders: "orders",
       "qr-orders": "orders",
+      kot: "kot",
       purchases: "purchases",
       suppliers: "suppliers",
       stock: "stock",
@@ -1359,6 +1377,7 @@ function applyNav() {
     if (view === "offers") btn.hidden = !(can("discount") || can("items") || can("growth"));
     if (view === "packs" && !isSpiceShop()) btn.hidden = true;
     if (view === "qr-orders" && isPharmacyShop()) btn.hidden = true;
+    if (view === "kot") btn.hidden = !isRestaurantShop() || !can("kot");
   });
   const growthBtn = $("open-growth");
   if (growthBtn) growthBtn.hidden = !(can("growth") || can("reports"));
@@ -1437,6 +1456,7 @@ function paintViewHeader(name) {
     customers: "nav.customers",
     orders: "nav.invoices",
     "qr-orders": "nav.qr_orders",
+    kot: "nav.kot",
     purchases: "nav.purchases",
     suppliers: "nav.suppliers",
     stock: "nav.stock",
@@ -1476,6 +1496,7 @@ function showSettingsTab(tab) {
 
 function showView(name) {
   if (name === "qr-orders" && isPharmacyShop()) name = "counter";
+  if (name === "kot" && (!isRestaurantShop() || !can("kot"))) name = can("counter") ? "counter" : landingView();
   const requested = name;
   state.currentView = name === "backup" || name === "language" ? "settings" : name;
   if (name === "backup") name = "settings";
@@ -1499,6 +1520,10 @@ function showView(name) {
   if (name === "expenses") loadExpenses();
   if (name === "orders") loadOrders();
   if (name === "qr-orders") loadQrOrders();
+  if (name === "kot") {
+    loadKots();
+    startKotWatch();
+  }
   if (name === "purchases") loadPurchases();
   if (name === "suppliers") loadSuppliers();
   if (name === "support") renderSupport();
@@ -1701,6 +1726,7 @@ function syncActiveFloor(tableNo) {
 }
 
 async function persistDiningTables(tables, floors) {
+  if (!canManageDiningLayout()) throw new Error("Only the business admin can manage tables and floors");
   const R = restaurantApi();
   const json = R?.serializeTables ? R.serializeTables(tables, floors || diningFloors()) : JSON.stringify({ floors: floors || [], tables: tables || [] });
   const data = await api("/api/dining-tables", {
@@ -1714,6 +1740,8 @@ async function persistDiningTables(tables, floors) {
   const board = $("table-board");
   board?.querySelector("[data-create-table]")?.setAttribute("hidden", "");
   board?.querySelector("[data-create-floor]")?.setAttribute("hidden", "");
+  board?.querySelector("[data-edit-table]")?.setAttribute("hidden", "");
+  board?.querySelector("[data-edit-floor]")?.setAttribute("hidden", "");
   renderTableBoard();
 }
 
@@ -1734,9 +1762,20 @@ function renderTableBoard() {
   const busyCount = onFloor.filter((t) => tableIsBusy(t.id)).length;
   const creatingTable = Boolean(el.querySelector("[data-create-table]:not([hidden])"));
   const creatingFloor = Boolean(el.querySelector("[data-create-floor]:not([hidden])"));
+  const editingTableId = el.querySelector("[data-edit-table]:not([hidden]) #table-edit-id")?.value || "";
+  const editingFloorId = el.querySelector("[data-edit-floor]:not([hidden]) #floor-edit-id")?.value || "";
+  const manage = canManageDiningLayout();
   const meta = tables.length
     ? `${onFloor.length} tables · ${busyCount} occupied${floors.length > 1 ? ` · ${floors.length} floors` : ""}`
-    : "Create tables for this restaurant";
+    : manage
+      ? "Create tables for this restaurant"
+      : "Ask the business admin to add tables";
+  const addRow = manage
+    ? `<div class="dining-add-row">
+        <button class="btn dining-add-btn" type="button" data-add-floor>+ Floor</button>
+        <button class="btn dining-add-btn" type="button" data-add-table>+ Table</button>
+      </div>`
+    : "";
   el.hidden = false;
   el.innerHTML =
     `<div class="table-board-head">
@@ -1744,20 +1783,18 @@ function renderTableBoard() {
         <strong>${escapeHtml(floorName)}</strong>
         <span>${escapeHtml(meta)}</span>
       </div>
-      <div class="dining-add-row">
-        <button class="btn dining-add-btn" type="button" data-add-floor>+ Floor</button>
-        <button class="btn dining-add-btn" type="button" data-add-table>+ Table</button>
-      </div>
+      ${addRow}
     </div>
-    <div class="floor-chips"${floors.length > 1 || creatingFloor ? "" : " hidden"}>
+    <div class="floor-chips"${floors.length > 1 || creatingFloor || editingFloorId ? "" : " hidden"}>
       ${floors
         .map((f) => {
           const count = (R.tablesOnFloor ? R.tablesOnFloor(tables, f.id) : tables.filter((t) => (t.floor || "ground") === f.id)).filter((t) => tableIsBusy(t.id)).length;
-          const canRemove = floors.length > 1 && !tables.some((t) => (t.floor || "ground") === f.id && tableIsBusy(t.id));
+          const canRemove = manage && floors.length > 1 && !tables.some((t) => (t.floor || "ground") === f.id && tableIsBusy(t.id));
           return `<div class="floor-chip-wrap">
             <button class="floor-chip${f.id === floorId ? " is-on" : ""}" type="button" data-floor="${escapeHtml(f.id)}">
               ${escapeHtml(f.name)}${count ? `<span>${count}</span>` : ""}
             </button>
+            ${manage ? `<button class="table-seat-edit floor-chip-edit" type="button" data-edit-floor-btn="${escapeHtml(f.id)}" aria-label="Rename ${escapeHtml(f.name)}">✎</button>` : ""}
             ${canRemove ? `<button class="table-seat-x floor-chip-x" type="button" data-remove-floor="${escapeHtml(f.id)}" aria-label="Remove ${escapeHtml(f.name)}">×</button>` : ""}
           </div>`;
         })
@@ -1768,10 +1805,22 @@ function renderTableBoard() {
       <button class="btn primary" type="submit">Create floor</button>
       <button class="btn" type="button" data-cancel-floor>Cancel</button>
     </form>
+    <form class="table-create"${editingFloorId ? "" : " hidden"} data-edit-floor>
+      <input type="hidden" id="floor-edit-id" value="${escapeHtml(editingFloorId)}" />
+      <input id="floor-edit-name" name="floor-name" maxlength="32" placeholder="Floor name" aria-label="Floor name" autocomplete="off" />
+      <button class="btn primary" type="submit">Save floor</button>
+      <button class="btn" type="button" data-cancel-edit-floor>Cancel</button>
+    </form>
     <form class="table-create"${creatingTable ? "" : " hidden"} data-create-table>
       <input id="table-create-name" name="table-name" maxlength="32" placeholder="Table ${escapeHtml(R.nextNumericId?.(tables) || String(tables.length + 1))} or AC" aria-label="New table name" autocomplete="off" />
       <button class="btn primary" type="submit">Create table</button>
       <button class="btn" type="button" data-cancel-table>Cancel</button>
+    </form>
+    <form class="table-create"${editingTableId ? "" : " hidden"} data-edit-table>
+      <input type="hidden" id="table-edit-id" value="${escapeHtml(editingTableId)}" />
+      <input id="table-edit-name" name="table-name" maxlength="32" placeholder="Table name" aria-label="Table name" autocomplete="off" />
+      <button class="btn primary" type="submit">Save table</button>
+      <button class="btn" type="button" data-cancel-edit-table>Cancel</button>
     </form>
     <div class="table-seats">${
       onFloor
@@ -1787,7 +1836,8 @@ function renderTableBoard() {
               <strong>${escapeHtml(t.name || R.displayTable(t.id))}</strong>
               <span>${escapeHtml(on && state.cart.length ? `${state.cart.length} dishes` : metaLine)}</span>
             </button>
-            ${busy ? "" : `<button class="table-seat-x" type="button" data-remove-table="${escapeHtml(t.id)}" aria-label="Remove ${escapeHtml(t.name || t.id)}">×</button>`}
+            ${manage ? `<button class="table-seat-edit" type="button" data-edit-table-btn="${escapeHtml(t.id)}" aria-label="Rename ${escapeHtml(t.name || t.id)}">✎</button>` : ""}
+            ${manage && !busy ? `<button class="table-seat-x" type="button" data-remove-table="${escapeHtml(t.id)}" aria-label="Remove ${escapeHtml(t.name || t.id)}">×</button>` : ""}
           </div>`;
         })
         .join("")
@@ -1906,12 +1956,135 @@ async function sendKitchenKot() {
   ensureDiningTable();
   const pick = printKitchenKot({ tableNo: state.activeTable, lines: state.cart, printed: state.kotPrinted });
   state.kotPrinted = restaurantApi().cartSnapshot(state.cart);
+  const named = kotLinesForPrint(pick.lines.map((line) => {
+    const live = state.cart.find((row) => (row.itemId || row.item_id) === line.itemId) || line;
+    return { ...live, ...line };
+  }));
+  try {
+    await api("/api/kots", {
+      method: "POST",
+      body: JSON.stringify({
+        table_no: state.activeTable,
+        kind: pick.kind,
+        lines: named,
+      }),
+    });
+  } catch {
+    /* print already happened */
+  }
   try {
     await saveActiveTableHold();
   } catch {
     /* print already happened */
   }
   setHint(pick.kind === "reprint" ? "Kitchen KOT reprint" : "Kitchen KOT sent", "ok");
+}
+
+function kotStatusLabel(status) {
+  const s = String(status || "new");
+  if (s === "preparing") return "Preparing";
+  if (s === "ready") return "Ready";
+  if (s === "done") return "Done";
+  if (s === "reprint") return "Reprint";
+  return "New";
+}
+
+function nextKotStatus(status) {
+  const s = String(status || "new");
+  if (s === "new") return "preparing";
+  if (s === "preparing") return "ready";
+  if (s === "ready") return "done";
+  return "";
+}
+
+function nextKotStatusLabel(status) {
+  const next = nextKotStatus(status);
+  if (next === "preparing") return "Start";
+  if (next === "ready") return "Ready";
+  if (next === "done") return "Done";
+  return "";
+}
+
+function kotQtyLine(line) {
+  const item = state.items.find((row) => row.id === (line.itemId || line.item_id));
+  return fmtQty(line.qtyGm || line.quantity_gm, item || { unit: line.unit, base_unit: line.unit });
+}
+
+function renderKotBoard() {
+  const el = $("kot-list");
+  if (!el) return;
+  const filter = state.kotFilter || "";
+  const rows = (state.kotTickets || []).filter((row) => !filter || row.status === filter);
+  el.innerHTML = rows.length
+    ? rows
+        .map((ticket) => {
+          const next = nextKotStatus(ticket.status);
+          const nextLab = nextKotStatusLabel(ticket.status);
+          const R = restaurantApi();
+          const table = R?.displayTable?.(ticket.table_no) || ticket.table_no || "—";
+          const when = ticket.created_at ? formatShopDateTime(ticket.created_at) : "";
+          const kind = ticket.kind === "reprint" ? "Reprint" : "KOT";
+          return `<article class="kot-card is-${escapeHtml(ticket.status || "new")}" data-kot="${escapeHtml(ticket.id)}">
+            <header class="kot-card-head">
+              <div>
+                <h3>${escapeHtml(table)}</h3>
+                <p class="kot-meta">${escapeHtml(kind)}${when ? ` · ${escapeHtml(when)}` : ""}</p>
+              </div>
+              <span class="kot-status">${escapeHtml(kotStatusLabel(ticket.status))}</span>
+            </header>
+            <div class="kot-lines">${(ticket.lines || [])
+              .map((line) => `<div class="kot-line"><span>${escapeHtml(line.name || "Item")}</span><strong>${escapeHtml(kotQtyLine(line))}</strong></div>`)
+              .join("")}</div>
+            ${ticket.notes ? `<p class="kot-note">Note: ${escapeHtml(ticket.notes)}</p>` : ""}
+            <div class="kot-actions">
+              ${next ? `<button class="btn primary" type="button" data-kot-status="${escapeHtml(next)}">${escapeHtml(nextLab)}</button>` : ""}
+              <button class="btn" type="button" data-kot-reprint>Reprint</button>
+            </div>
+          </article>`;
+        })
+        .join("")
+    : `<div class="item-empty-card"><strong>No kitchen tickets</strong><p>Captain or cashier sends Kitchen KOT from Counter. Tickets show here for the kitchen to cook.</p></div>`;
+}
+
+async function loadKots() {
+  const hint = $("kot-hint");
+  if (!can("kot") && !can("counter")) return;
+  try {
+    const rows = await api("/api/kots");
+    state.kotTickets = Array.isArray(rows) ? rows : [];
+    renderKotBoard();
+  } catch (err) {
+    if (hint) {
+      hint.textContent = err.message;
+      hint.className = "hint error";
+    }
+  }
+}
+
+let kotPollTimer = null;
+function startKotWatch() {
+  if (kotPollTimer || !isRestaurantShop() || !(can("kot") || can("counter"))) return;
+  kotPollTimer = setInterval(() => {
+    if (state.currentView === "kot") void loadKots();
+  }, 8000);
+}
+
+async function setKotStatus(id, status) {
+  await api(`/api/kots/${encodeURIComponent(id)}`, {
+    method: "POST",
+    body: JSON.stringify({ status }),
+  });
+  await loadKots();
+}
+
+function reprintSavedKot(ticket) {
+  printKitchenKot({
+    tableNo: ticket.table_no,
+    lines: ticket.lines || [],
+    printed: [],
+    notes: ticket.notes,
+    full: true,
+  });
 }
 
 function printQrKitchenKot(order) {
@@ -6011,6 +6184,38 @@ $("view-accounts")?.addEventListener("click", (e) => {
   }
 });
 $("qr-orders-refresh")?.addEventListener("click", loadQrOrders);
+$("kot-refresh")?.addEventListener("click", loadKots);
+$("kot-status-tabs")?.addEventListener("click", (event) => {
+  const btn = event.target.closest("[data-kot-status-filter]");
+  if (!btn) return;
+  state.kotFilter = btn.getAttribute("data-kot-status-filter") || "";
+  $("kot-status-tabs")?.querySelectorAll("button").forEach((el) => {
+    el.classList.toggle("active", el === btn);
+  });
+  renderKotBoard();
+});
+$("kot-list")?.addEventListener("click", async (event) => {
+  const card = event.target.closest("[data-kot]");
+  if (!card) return;
+  const id = card.getAttribute("data-kot") || "";
+  const ticket = (state.kotTickets || []).find((row) => row.id === id);
+  try {
+    if (event.target.closest("[data-kot-reprint]")) {
+      reprintSavedKot(ticket || { table_no: "", lines: [] });
+      return;
+    }
+    const statusBtn = event.target.closest("[data-kot-status]");
+    if (statusBtn) {
+      await setKotStatus(id, statusBtn.getAttribute("data-kot-status") || "");
+    }
+  } catch (err) {
+    const hint = $("kot-hint");
+    if (hint) {
+      hint.textContent = err.message;
+      hint.className = "hint error";
+    }
+  }
+});
 const qrSoundToggle = $("qr-sound-toggle");
 if (qrSoundToggle) {
   qrSoundToggle.addEventListener("click", () => {
@@ -7195,6 +7400,7 @@ $("table-board")?.addEventListener("click", async (e) => {
   const addFloor = e.target.closest("[data-add-floor]");
   if (addFloor) {
     e.preventDefault();
+    if (!canManageDiningLayout()) return;
     const wrap = e.currentTarget.querySelector("[data-create-floor]");
     const chips = e.currentTarget.querySelector(".floor-chips");
     if (chips) chips.hidden = false;
@@ -7217,9 +7423,34 @@ $("table-board")?.addEventListener("click", async (e) => {
     }
     return;
   }
+  const editFloorBtn = e.target.closest("[data-edit-floor-btn]");
+  if (editFloorBtn) {
+    e.preventDefault();
+    if (!canManageDiningLayout()) return;
+    const id = editFloorBtn.getAttribute("data-edit-floor-btn") || "";
+    const floor = diningFloors().find((f) => f.id === id);
+    const wrap = e.currentTarget.querySelector("[data-edit-floor]");
+    const chips = e.currentTarget.querySelector(".floor-chips");
+    if (chips) chips.hidden = false;
+    if (wrap) wrap.hidden = false;
+    if ($("floor-edit-id")) $("floor-edit-id").value = id;
+    if ($("floor-edit-name")) {
+      $("floor-edit-name").value = floor?.name || "";
+      $("floor-edit-name").focus();
+    }
+    return;
+  }
+  const cancelEditFloor = e.target.closest("[data-cancel-edit-floor]");
+  if (cancelEditFloor) {
+    e.preventDefault();
+    const wrap = e.currentTarget.querySelector("[data-edit-floor]");
+    if (wrap) wrap.hidden = true;
+    return;
+  }
   const rmFloor = e.target.closest("[data-remove-floor]");
   if (rmFloor) {
     e.preventDefault();
+    if (!canManageDiningLayout()) return;
     const R = restaurantApi();
     if (!R?.removeFloor) return;
     const id = rmFloor.getAttribute("data-remove-floor") || "";
@@ -7250,6 +7481,7 @@ $("table-board")?.addEventListener("click", async (e) => {
   const add = e.target.closest("[data-add-table]");
   if (add) {
     e.preventDefault();
+    if (!canManageDiningLayout()) return;
     const wrap = e.currentTarget.querySelector("[data-create-table]");
     if (wrap) wrap.hidden = false;
     const inp = $("table-create-name");
@@ -7266,9 +7498,32 @@ $("table-board")?.addEventListener("click", async (e) => {
     if (wrap) wrap.hidden = true;
     return;
   }
+  const editTableBtn = e.target.closest("[data-edit-table-btn]");
+  if (editTableBtn) {
+    e.preventDefault();
+    if (!canManageDiningLayout()) return;
+    const id = editTableBtn.getAttribute("data-edit-table-btn") || "";
+    const rec = diningTables().find((t) => t.id === id);
+    const wrap = e.currentTarget.querySelector("[data-edit-table]");
+    if (wrap) wrap.hidden = false;
+    if ($("table-edit-id")) $("table-edit-id").value = id;
+    if ($("table-edit-name")) {
+      $("table-edit-name").value = rec?.name || id;
+      $("table-edit-name").focus();
+    }
+    return;
+  }
+  const cancelEditTable = e.target.closest("[data-cancel-edit-table]");
+  if (cancelEditTable) {
+    e.preventDefault();
+    const wrap = e.currentTarget.querySelector("[data-edit-table]");
+    if (wrap) wrap.hidden = true;
+    return;
+  }
   const rm = e.target.closest("[data-remove-table]");
   if (rm) {
     e.preventDefault();
+    if (!canManageDiningLayout()) return;
     const R = restaurantApi();
     if (!R) return;
     const id = rm.getAttribute("data-remove-table") || "";
@@ -7305,6 +7560,7 @@ $("table-board")?.addEventListener("submit", async (e) => {
   const floorForm = e.target.closest("[data-create-floor]");
   if (floorForm) {
     e.preventDefault();
+    if (!canManageDiningLayout()) return;
     const R = restaurantApi();
     if (!R?.addFloor) return;
     const inp = $("floor-create-name");
@@ -7325,9 +7581,53 @@ $("table-board")?.addEventListener("submit", async (e) => {
     }
     return;
   }
+  const editFloorForm = e.target.closest("[data-edit-floor]");
+  if (editFloorForm) {
+    e.preventDefault();
+    if (!canManageDiningLayout()) return;
+    const R = restaurantApi();
+    if (!R?.renameFloor) return;
+    const id = $("floor-edit-id")?.value || "";
+    const next = R.renameFloor(diningFloors(), id, $("floor-edit-name")?.value);
+    if (next.error) {
+      setHint(next.error, "error");
+      return;
+    }
+    try {
+      await persistDiningTables(diningTables(), next.floors);
+      setHint("Floor updated", "ok");
+    } catch (err) {
+      setHint(err.message, "error");
+      editFloorForm.hidden = false;
+    }
+    return;
+  }
+  const editTableForm = e.target.closest("[data-edit-table]");
+  if (editTableForm) {
+    e.preventDefault();
+    if (!canManageDiningLayout()) return;
+    const R = restaurantApi();
+    if (!R?.renameTable) return;
+    const id = $("table-edit-id")?.value || "";
+    const next = R.renameTable(diningTables(), id, $("table-edit-name")?.value, { busy: tableIsBusy(id) });
+    if (next.error) {
+      setHint(next.error, "error");
+      return;
+    }
+    try {
+      await persistDiningTables(next.tables, diningFloors());
+      if (state.activeTable === next.fromId) state.activeTable = next.renamed?.id || state.activeTable;
+      setHint("Table updated", "ok");
+    } catch (err) {
+      setHint(err.message, "error");
+      editTableForm.hidden = false;
+    }
+    return;
+  }
   const form = e.target.closest("[data-create-table]");
   if (!form) return;
   e.preventDefault();
+  if (!canManageDiningLayout()) return;
   const R = restaurantApi();
   if (!R) return;
   const inp = $("table-create-name");
@@ -8293,7 +8593,7 @@ async function boot() {
     applyUiLocale();
     applyNav();
     if (isMobileLayout()) setNavCollapsed(true);
-    const landing = can("dashboard") ? "dashboard" : "counter";
+    const landing = landingView();
     if (me.business?.status && me.business.status !== "active" && !me.impersonating) {
       $("expired-banner").hidden = false;
       $("shop-name").textContent = me.business.name || "POS";
@@ -8316,6 +8616,7 @@ async function boot() {
       });
     }
     startQrOrderWatch();
+    startKotWatch();
     refreshItemUnitLabels();
   } catch {
     location.href = "/login.html";

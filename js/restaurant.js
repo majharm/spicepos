@@ -271,6 +271,38 @@
     };
   }
 
+  function renameFloor(floors, floorId, name) {
+    const want = clipFloorId(floorId);
+    const trimmed = clipTableNo(name).slice(0, 32);
+    if (!want) return { ok: false, error: "That floor cannot be renamed" };
+    if (!trimmed) return { ok: false, error: "Choose a floor name" };
+    if (/^(parcel|takeaway|take away)$/i.test(trimmed)) return { ok: false, error: "Choose a floor name" };
+    const current = uniqFloors(floors);
+    if (!current.some((f) => f.id === want)) return { ok: false, error: "Floor not found" };
+    return {
+      ok: true,
+      floors: current.map((f) => (f.id === want ? { id: f.id, name: trimmed } : f)),
+    };
+  }
+
+  function renameTable(tables, id, name, opts = {}) {
+    const want = normalizeTableNo(id);
+    if (!want || want === PARCEL) return { ok: false, error: "That table cannot be renamed" };
+    const trimmed = clipTableNo(name).slice(0, 32);
+    if (!trimmed) return { ok: false, error: "Choose a table name" };
+    const nextId = normalizeTableNo(trimmed);
+    if (!nextId || nextId === PARCEL) return { ok: false, error: "Choose a table name" };
+    const current = Array.isArray(tables) ? tables.slice() : [];
+    const idx = current.findIndex((t) => t.id === want);
+    if (idx < 0) return { ok: false, error: "Table not found" };
+    const busy = Boolean(opts.busy);
+    const keepId = busy || nextId === want;
+    const label = trimmed && !/^table\s*\d+$/i.test(trimmed) && !/^\d+$/.test(trimmed) ? trimmed : displayTable(keepId ? want : nextId);
+    if (!keepId && current.some((t) => t.id === nextId)) return { ok: false, error: "That table already exists" };
+    current[idx] = { ...current[idx], id: keepId ? want : nextId, name: label.slice(0, 32) };
+    return { ok: true, tables: current, renamed: current[idx], fromId: want };
+  }
+
   function serializeTables(tables, floors) {
     const list = (tables || []).map((row) => tableRecord(row, row?.floor)).filter(Boolean);
     let floorList = uniqFloors(floors);
@@ -470,8 +502,10 @@ ${kotBody(opts)}
     tablesOnFloor,
     addTable,
     removeTable,
+    renameTable,
     addFloor,
     removeFloor,
+    renameFloor,
     serializeTables,
     nextNumericId,
     holdPayload,

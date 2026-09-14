@@ -1027,12 +1027,16 @@ function pos_staff_me_payload($staff) {
   ];
 }
 
+function pos_known_roles() {
+  return ["business_admin", "branch_manager", "manager", "cashier", "captain", "kitchen", "stock_manager", "accountant", "staff"];
+}
+
 function pos_default_perms($role) {
   $all = [
     "dashboard" => true, "counter" => true, "items" => true, "customers" => true, "packs" => true,
     "orders" => true, "purchases" => true, "suppliers" => true, "stock" => true, "staff" => true,
     "branches" => true, "devices" => true, "reports" => true, "growth" => true, "accounts" => true, "settings" => true,
-    "support" => true, "discount" => true, "loyalty" => true, "offers" => true, "damage" => true,
+    "support" => true, "discount" => true, "loyalty" => true, "offers" => true, "damage" => true, "kot" => true,
   ];
   if ($role === "business_admin") return $all;
   if ($role === "branch_manager" || $role === "manager") {
@@ -1044,7 +1048,13 @@ function pos_default_perms($role) {
     ]);
   }
   if ($role === "cashier") {
-    return ["dashboard" => true, "counter" => true, "customers" => true, "orders" => true, "accounts" => true, "support" => true, "discount" => true, "loyalty" => true, "offers" => true];
+    return ["dashboard" => true, "counter" => true, "customers" => true, "orders" => true, "accounts" => true, "support" => true, "discount" => true, "loyalty" => true, "offers" => true, "kot" => true];
+  }
+  if ($role === "captain") {
+    return ["dashboard" => true, "counter" => true, "kot" => true, "customers" => true, "orders" => true, "support" => true];
+  }
+  if ($role === "kitchen") {
+    return ["dashboard" => true, "kot" => true, "support" => true];
   }
   if ($role === "stock_manager") {
     return ["dashboard" => true, "items" => true, "stock" => true, "purchases" => true, "suppliers" => true, "reports" => true, "growth" => true, "support" => true, "damage" => true];
@@ -1165,6 +1175,18 @@ function pos_require_holds() {
       "error" => "pos-holds.php is missing on the server.",
       "php" => true,
       "hint" => "Upload pos-holds.php from the latest deploy bundle to public_html, then hard-refresh.",
+    ]);
+  }
+  require_once $file;
+}
+
+function pos_require_kots() {
+  $file = __DIR__ . "/pos-kots.php";
+  if (!is_file($file)) {
+    pos_send(503, [
+      "error" => "pos-kots.php is missing on the server.",
+      "php" => true,
+      "hint" => "Upload pos-kots.php from the latest deploy bundle to public_html, then hard-refresh.",
     ]);
   }
   require_once $file;
