@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 280 80" role="img" aria-label="Make in India">
+  <rect width="280" height="80" rx="10" fill="#1a237e"/>
+  <g fill="#ff9933">
+    <path d="M28 56c0-8 6-14 14-16 2-8 9-14 18-14 4 0 8 1 11 4 2-3 6-5 10-4 4 1 6 5 6 9 0 3-1 5-3 7 5 4 8 10 8 16v2H28v-4z"/>
+    <path d="M76 28c3-5 8-8 14-8 2 0 3 2 2 4-2 3-6 5-10 6-3 1-5 0-6-2z"/>
+    <circle cx="86" cy="22" r="3"/>
+    <path d="M32 58h52c1 3-2 6-8 6H40c-6 0-9-3-8-6z"/>
+    <path d="M24 44c-4 2-8 8-8 12 6-2 10-6 12-10-1-1-2-2-4-2z"/>
+  </g>
+  <text x="118" y="36" fill="#ffffff" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="800" letter-spacing="2.4">MAKE IN</text>
+  <text x="118" y="58" fill="#ff9933" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="800" letter-spacing="1.6">INDIA</text>
+</svg>

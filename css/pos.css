@@ -375,6 +375,23 @@ select {
 .nav-btn.active .nav-icon { opacity: 1; }
 .nav-btn:active { transform: scale(0.98); }
 .nav-foot { margin-top: auto; display: grid; gap: 8px; padding-top: 18px; }
+.nav .india-pride-nav {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: stretch;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 4px;
+}
+.nav .india-pride-nav img {
+  display: block;
+  height: 32px;
+  width: auto;
+  max-width: calc(50% - 4px);
+  flex: 1 1 0;
+  border-radius: 8px;
+  background: #fff;
+}
 
 .btn-logout {
   width: 100%;
@@ -3980,6 +3997,7 @@ button.items-stat.is-active {
     overscroll-behavior: contain;
   }
   .nav-foot { flex-direction: row; margin-top: 0; display: flex; flex-wrap: wrap; width: 100%; }
+  .nav-foot .india-pride-nav { flex: 1 1 100%; }
   .nav-foot .btn-logout { width: auto; flex: 1; min-height: 44px; }
   .session-bar .btn-logout { min-height: 44px; }
   .workspace, .split, .orders-split, .purchases-split { grid-template-columns: 1fr; height: auto; max-height: none; min-height: 0; }

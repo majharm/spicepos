@@ -215,6 +215,61 @@
     radial-gradient(700px 380px at 100% 100%, rgba(14, 165, 233, 0.2), transparent 50%),
     linear-gradient(165deg, #042f2e 0%, #0b1220 48%, #0f172a 100%);
 }
+/* india-pride: Make in India + Startup India 2026 */
+.auth-shell.india-theme {
+  box-shadow: 0 28px 64px rgba(26, 35, 126, 0.35);
+}
+.auth-shell.india-theme::before {
+  content: "";
+  position: absolute;
+  z-index: 3;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 5px;
+  background: linear-gradient(90deg, #ff9933 0 33.33%, #fff 33.33% 66.66%, #138808 66.66%);
+}
+.auth-shell-v2.india-theme .auth-scene {
+  background:
+    radial-gradient(900px 420px at 0% 0%, rgba(255, 153, 51, 0.32), transparent 55%),
+    radial-gradient(700px 380px at 100% 100%, rgba(19, 136, 8, 0.24), transparent 50%),
+    linear-gradient(165deg, #1a237e 0%, #0b1220 48%, #14532d 100%);
+}
+.auth-shell-v2.india-theme .auth-scene-kicker { color: #ffcc80; }
+.auth-shell-v2.india-theme .auth-scene-lead { color: #d1fae5; }
+.auth-shell-v2.india-theme .auth-points li {
+  border-color: rgba(255, 153, 51, 0.45);
+}
+.auth-shell-v2.india-theme .auth-points li strong { color: #ffcc80; }
+.auth-shell-v2.india-theme .auth-scene-trial {
+  border-color: rgba(19, 136, 8, 0.55);
+}
+.india-pride {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  margin: 10px 0 4px;
+}
+.india-pride img {
+  display: block;
+  height: 40px;
+  width: auto;
+  max-width: calc(50% - 6px);
+  border-radius: 8px;
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.12);
+}
+.india-pride-nav {
+  margin: 0 0 8px;
+  justify-content: stretch;
+  gap: 6px;
+}
+.india-pride-nav img {
+  height: 32px;
+  max-width: calc(50% - 4px);
+  flex: 1 1 0;
+}
 .auth-shell-v2 .auth-scene-copy {
   max-width: 28rem;
 }
