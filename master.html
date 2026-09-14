@@ -7,10 +7,68 @@
     <title>Master Admin · ATAV POS</title>
     <link rel="icon" href="./favicon.svg" />
     <link rel="stylesheet" href="./css/pos.css?v=20260905deploy145" />
-    <link rel="stylesheet" href="./css/saas.css?v=20260905deploy158" />
+    <link rel="stylesheet" href="./css/saas.css?v=20260914mlux1" />
   </head>
-  <body class="master-locked">
-    <div class="master-shell">
+  <body class="auth-body master-locked">
+    <div class="auth-shell auth-shell-v2" id="master-gate">
+      <aside class="auth-scene" aria-hidden="true">
+        <div class="auth-scene-copy">
+          <p class="auth-scene-kicker">Master Admin</p>
+          <p class="auth-scene-title">Run every shop from one desk</p>
+          <p class="auth-scene-lead">Businesses, plans, users, and alerts — not a shop till.</p>
+        </div>
+        <div class="auth-scene-shots">
+          <figure class="is-hero">
+            <img src="./assets/login-pos-stock.jpg?v=20260914mlux1" alt="ATAV POS stock and shops" width="960" height="640" />
+            <figcaption>Platform control</figcaption>
+          </figure>
+        </div>
+        <ul class="auth-points">
+          <li><strong>Shops</strong> Open any till as Master Admin</li>
+          <li><strong>Plans</strong> Trial, yearly fee, and validity</li>
+          <li><strong>Alerts</strong> WhatsApp and email to owners</li>
+        </ul>
+        <ul class="auth-scene-types">
+          <li>Businesses</li>
+          <li>Users</li>
+          <li>Plans</li>
+          <li>Send alerts</li>
+          <li>Backup</li>
+          <li>Account managers</li>
+        </ul>
+      </aside>
+      <div class="auth-main">
+        <main class="auth-card" id="auth-card">
+          <div class="auth-brand">
+            <img class="auth-logo" src="./assets/atav-telecom-logo.png" alt="ATAV Telecom" width="200" height="86" />
+            <p class="auth-tagline">Master Admin</p>
+          </div>
+          <h1 class="auth-heading">Master sign in</h1>
+          <p id="auth-lead">Sign in to manage every shop on this POS.</p>
+          <form id="master-login">
+            <label>Email
+              <input name="email" type="email" required autocomplete="username" autofocus inputmode="email" />
+            </label>
+            <label class="auth-pass-lab">Password
+              <span class="auth-pass">
+                <input id="master-password" name="password" type="password" autocomplete="current-password" required />
+                <button class="auth-pass-toggle" id="master-pass-toggle" type="button" aria-controls="master-password" aria-label="Show password">Show</button>
+              </span>
+            </label>
+            <label class="remember">
+              <input type="checkbox" name="remember" />
+              <span class="remember-ui" aria-hidden="true"></span>
+              Remember me
+            </label>
+            <button class="btn primary" type="submit" id="master-login-submit">Sign in</button>
+            <p class="hint" id="login-hint"></p>
+          </form>
+          <p class="auth-note">Shop staff use the <a href="./login.html">shop login</a>.</p>
+          <p class="auth-note"><a href="./setup.html">MySQL setup</a> — required once on this PHP host.</p>
+        </main>
+      </div>
+    </div>
+    <div class="master-shell" id="master-app" hidden>
       <nav class="master-nav">
         <div class="master-brand">
           <img src="./assets/atav-telecom-logo.png" alt="ATAV Telecom" width="140" height="60" />
@@ -51,19 +109,6 @@
         </div>
       </nav>
       <main class="master-main">
-        <form id="master-login" class="auth-card" hidden>
-          <h2>Master sign in</h2>
-          <label>Email <input name="email" type="email" required /></label>
-          <label>Password <input name="password" type="password" required /></label>
-          <label class="remember">
-            <input type="checkbox" name="remember" />
-            <span class="remember-ui" aria-hidden="true"></span>
-            Remember me
-          </label>
-          <button class="btn primary" type="submit">Enter</button>
-          <p class="hint" id="login-hint"></p>
-          <p class="hint"><a href="./setup.html">MySQL setup</a> (required once on this PHP host)</p>
-        </form>
         <div id="panel" hidden>
           <h2 id="panel-title">Dashboard</h2>
           <div id="panel-body"></div>
@@ -74,6 +119,6 @@
     <script src="./js/i18n.js?v=20260905deploy145" defer></script>
     <script src="./js/pos-api.js?v=20260905deploy154" defer></script>
     <script src="./js/support.js?v=20260905deploy138" defer></script>
-    <script src="./js/master.js?v=20260905deploy172" defer></script>
+    <script src="./js/master.js?v=20260914mlux1" defer></script>
   </body>
 </html>

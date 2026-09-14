@@ -161,9 +161,14 @@ function setSelect(sel, value) {
 }
 
 function showLogin(on) {
-  $("master-login").hidden = !on;
-  $("panel").hidden = on;
+  const gate = $("master-gate");
+  const app = $("master-app");
+  if (gate) gate.hidden = !on;
+  if (app) app.hidden = on;
+  const panel = $("panel");
+  if (panel) panel.hidden = on;
   document.body.classList.toggle("master-locked", on);
+  document.body.classList.toggle("auth-body", on);
 }
 
 (() => {
@@ -191,9 +196,31 @@ async function boot() {
   }
 }
 
+(() => {
+  const pass = document.querySelector("#master-login [name='password']");
+  const toggle = $("master-pass-toggle");
+  if (!pass || !toggle) return;
+  toggle.addEventListener("click", () => {
+    const show = pass.type === "password";
+    pass.type = show ? "text" : "password";
+    toggle.textContent = show ? "Hide" : "Show";
+    toggle.setAttribute("aria-label", show ? "Hide password" : "Show password");
+  });
+})();
+
 $("master-login").addEventListener("submit", async (e) => {
   e.preventDefault();
   const fd = new FormData(e.target);
+  const hint = $("login-hint");
+  const submit = $("master-login-submit");
+  if (hint) {
+    hint.className = "hint";
+    hint.textContent = "Signing in…";
+  }
+  if (submit) {
+    submit.disabled = true;
+    submit.textContent = "Signing in…";
+  }
   try {
     await api("/api/auth/master-login", {
       method: "POST",
@@ -208,8 +235,15 @@ $("master-login").addEventListener("submit", async (e) => {
     showLogin(false);
     await render();
   } catch (err) {
-    $("login-hint").textContent = err.message;
-    $("login-hint").className = "hint error";
+    if (hint) {
+      hint.textContent = err.message;
+      hint.className = "hint error";
+    }
+  } finally {
+    if (submit) {
+      submit.disabled = false;
+      submit.textContent = "Sign in";
+    }
   }
 });
 

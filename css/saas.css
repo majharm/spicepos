@@ -971,6 +971,18 @@ body.master-locked .master-main {
   place-items: start center;
   padding: 28px 16px 40px;
 }
+/* master-login-ux: shop-matching gate 2026 */
+#master-gate[hidden],
+#master-app[hidden] { display: none !important; }
+#master-gate .auth-note {
+  margin-top: 12px;
+  text-align: center;
+}
+#master-gate .auth-note + .auth-note { margin-top: 6px; }
+#master-gate .auth-note a {
+  color: var(--vel-teal, #0d9488);
+  font-weight: 700;
+}
 
 .dev-settings-card { margin-top: 0; }
 .dev-toggle {
