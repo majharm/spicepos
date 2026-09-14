@@ -5157,7 +5157,7 @@ function paintQrSoundArm() {
   arm.hidden = globalThis.POSQrNotify?.needsUnlock?.() !== true || (!cafe && !qr);
   const kicker = arm.querySelector(".qr-toast-kicker");
   const strong = arm.querySelector("strong");
-  const note = arm.querySelector("p");
+  const note = arm.querySelector("p:not(.qr-toast-kicker)");
   if (cafe && qr) {
     if (kicker) kicker.textContent = "KOT & QR SOUND";
     if (strong) strong.textContent = "Tap to hear new tickets";
