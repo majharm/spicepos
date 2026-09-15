@@ -26,12 +26,11 @@ button { cursor: pointer; }
   color: #fff8ea;
   background: linear-gradient(135deg, #5c1a1c, #4a1416 55%, #c46a14);
 }
-.menu-brand { display: flex; align-items: center; flex-wrap: wrap; gap: 14px; max-width: 1180px; margin: auto; }
+.menu-brand { display: flex; align-items: center; gap: 14px; max-width: 1180px; margin: auto; }
 .menu-brand img { width: 66px; height: 66px; border-radius: 16px; object-fit: contain; background: white; }
-.india-pride { display: flex; gap: 8px; align-items: center; flex-shrink: 0; }
+.india-pride { display: flex; gap: 8px; align-items: center; }
 .india-pride img { width: auto; height: 44px; max-width: 110px; background: #000; }
 .india-pride img[alt="Startup India"] { background: #fff; padding: 3px; }
-.menu-brand #shop-logo { width: 56px; height: 56px; }
 footer .india-pride { justify-content: center; margin-bottom: 8px; }
 footer .india-pride img { height: 36px; }
 .eyebrow { margin: 0 0 4px; font-size: 11px; font-weight: 800; letter-spacing: .14em; color: var(--gold); }
@@ -41,7 +40,7 @@ h1, h2 { margin: 0; font-family: var(--display); letter-spacing: -.025em; }
 .menu-search input { display: block; width: 100%; margin-top: 6px; padding: 13px 14px; border: 0; border-radius: 12px; outline: none; color: var(--ink); }
 main { max-width: 1180px; margin: auto; padding: 18px clamp(14px, 4vw, 44px) 30px; }
 .category-pills { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 12px; scrollbar-width: none; }
-.category-pills button { flex: 0 0 auto; min-height: 40px; padding: 8px 13px; border: 1px solid var(--line); border-radius: 999px; color: var(--ink); background: white; }
+.category-pills button { flex: 0 0 auto; padding: 8px 13px; border: 1px solid var(--line); border-radius: 999px; color: var(--ink); background: white; }
 .category-pills button.active { color: #2a1506; border-color: var(--saffron); background: linear-gradient(180deg, #f0b145, var(--saffron)); font-weight: 700; }
 .menu-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 13px; }
 .menu-card {
@@ -60,7 +59,7 @@ main { max-width: 1180px; margin: auto; padding: 18px clamp(14px, 4vw, 44px) 30p
 .menu-card h3 small { color: var(--muted); font-weight: 500; }
 .item-meta { margin: 0; color: var(--muted); font-size: 11px; text-transform: uppercase; }
 .item-price { margin: 8px 0 0; font-weight: 800; }
-.add-btn, .qty-control, .out { grid-column: 1 / -1; min-height: 44px; height: 44px; border: 0; border-radius: 10px; }
+.add-btn, .qty-control, .out { grid-column: 1 / -1; height: 38px; border: 0; border-radius: 10px; }
 .add-btn { color: #2a1506; background: linear-gradient(180deg, #f0b145, var(--saffron)); font-weight: 800; }
 .qty-control { display: grid; grid-template-columns: 42px 1fr 42px; align-items: center; background: var(--mint); text-align: center; font-weight: 800; }
 .qty-control button { height: 100%; border: 0; color: var(--maroon); background: transparent; font-size: 20px; }
@@ -104,7 +103,5 @@ footer { padding: 24px; color: var(--muted); text-align: center; font-size: 12px
   .menu-grid { grid-template-columns: 1fr; }
   #order-form { grid-template-columns: 1fr; }
   #order-form label, .place-order, .form-hint { grid-column: 1; }
-  .cart-dock { gap: 10px; font-size: 13px; grid-template-columns: 1fr auto; }
-  .menu-head { padding-top: 18px; }
-  .india-pride img { height: 36px; }
+  .cart-dock { gap: 10px; font-size: 13px; }
 }
