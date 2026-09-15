@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Order QR · SWAMI MASALE</title>
+    <title>Order QR · Pharmacy</title>
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
     <style>
       body {
@@ -16,6 +16,26 @@
         color: #4a1416;
         text-align: center;
         padding: 24px;
+      }
+      .india-pride {
+        display: flex;
+        gap: 12px;
+        justify-content: center;
+        align-items: center;
+        flex-wrap: wrap;
+        margin-bottom: 16px;
+      }
+      .india-pride img {
+        height: 48px;
+        width: auto;
+        max-width: 160px;
+        object-fit: contain;
+        background: #000;
+        border-radius: 8px;
+      }
+      .india-pride img[alt="Startup India"] {
+        background: #fff;
+        padding: 4px;
       }
       img.qr {
         width: min(320px, 80vw);
@@ -47,8 +67,12 @@
   </head>
   <body>
     <div>
+      <div class="india-pride" aria-label="Make in India and Startup India">
+        <img src="./assets/make-in-india.png" alt="Make in India" />
+        <img src="./assets/startup-india.png" alt="Startup India" />
+      </div>
       <p style="letter-spacing:0.14em;font-size:12px;font-weight:700;font-family:sans-serif">SCAN TO ORDER</p>
-      <h1 id="shop-name">SWAMI MASALE</h1>
+      <h1 id="shop-name">Pharmacy</h1>
       <img class="qr" id="qr-code-img" width="320" height="320" alt="QR code for customer ordering" />
       <p id="qr-link"></p>
       <div class="actions">

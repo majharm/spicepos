@@ -13,7 +13,7 @@ import { listAllBatches, upsertBatch } from "./pharmacy-stock.js";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.join(__dirname, "..");
 const app = express();
-const APP_VERSION = "pharmacy-2";
+const APP_VERSION = "pharmacy-3";
 const APP_VERTICAL = "pharmacy";
 app.use(express.json({ limit: "8mb" }));
 
@@ -264,7 +264,7 @@ app.get("/api/reports/excel", async (req, res) => {
     res.setHeader("Content-Type", "application/vnd.ms-excel; charset=utf-8");
     res.setHeader(
       "Content-Disposition",
-      `attachment; filename="swami-reports-${slug}-${from}-to-${to}.xls"`,
+      `attachment; filename="pharmacy-reports-${slug}-${from}-to-${to}.xls"`,
     );
     res.send(xml);
   } catch (err) {

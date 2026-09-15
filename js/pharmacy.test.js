@@ -6,7 +6,9 @@ import {
   expiryStatus,
   gstinStateCode,
   isInterstate,
+  MEDICINE_TYPES,
   mergeSaleLines,
+  PACK_TYPES,
   purchaseLineTotals,
   remainingReturnQty,
   saleLineTotals,
@@ -116,6 +118,11 @@ test("merged sale lines combine FEFO-split qty for the same medicine", () => {
 test("return qty cannot exceed remaining billed units", () => {
   assert.equal(remainingReturnQty(10, 4), 6);
   assert.equal(remainingReturnQty(10, 10), 0);
+});
+
+test("medicine and pack type lists include lotion and vial units", () => {
+  assert.equal(MEDICINE_TYPES.includes("Lotion"), true);
+  assert.equal(PACK_TYPES.includes("Vial"), true);
 });
 
 test("GSTIN state codes detect inter-state purchase/sale", () => {

@@ -74,23 +74,24 @@ select { appearance: none; background-image: linear-gradient(45deg, transparent 
   padding: 6px;
   box-shadow: 0 8px 20px rgba(0, 0, 0, 0.22);
 }
-.brand-mark {
-  width: 52px;
-  height: 52px;
-  margin-bottom: 12px;
-  border-radius: 16px;
-  background:
-    radial-gradient(circle at 35% 30%, #ffe7a8, var(--saffron) 42%, var(--saffron-deep));
-  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.5);
-  position: relative;
+.india-pride {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0 0 12px;
+  max-width: 168px;
 }
-.brand-mark::after {
-  content: "";
-  position: absolute;
-  inset: 14px;
-  border-radius: 50%;
-  border: 2px solid rgba(74, 20, 22, 0.28);
-  box-shadow: inset 0 0 0 4px rgba(255, 236, 180, 0.35);
+.india-pride img {
+  width: 100%;
+  height: auto;
+  max-height: 64px;
+  object-fit: contain;
+  border-radius: 10px;
+  background: #0a0a0a;
+}
+.india-pride img[alt="Startup India"] {
+  background: #fff;
+  padding: 4px;
 }
 .logo-preview {
   max-width: 180px;
@@ -626,5 +627,7 @@ tr.exp-near td { background: #fff6e0; }
   .ticket { border-left: 0; border-top: 1px solid var(--line); }
   .view { min-height: 0; }
   .brand { width: 100%; border-bottom: 0; }
+  .india-pride { flex-direction: row; max-width: none; align-items: center; }
+  .india-pride img { width: auto; height: 40px; max-width: 140px; }
   .qr-poster { grid-template-columns: 1fr; }
 }

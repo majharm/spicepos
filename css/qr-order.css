@@ -28,6 +28,11 @@ button { cursor: pointer; }
 }
 .menu-brand { display: flex; align-items: center; gap: 14px; max-width: 1180px; margin: auto; }
 .menu-brand img { width: 66px; height: 66px; border-radius: 16px; object-fit: contain; background: white; }
+.india-pride { display: flex; gap: 8px; align-items: center; }
+.india-pride img { width: auto; height: 44px; max-width: 110px; background: #000; }
+.india-pride img[alt="Startup India"] { background: #fff; padding: 3px; }
+footer .india-pride { justify-content: center; margin-bottom: 8px; }
+footer .india-pride img { height: 36px; }
 .eyebrow { margin: 0 0 4px; font-size: 11px; font-weight: 800; letter-spacing: .14em; color: var(--gold); }
 h1, h2 { margin: 0; font-family: var(--display); letter-spacing: -.025em; }
 #shop-address { margin: 6px 0 0; color: #e8c9a0; font-size: 13px; }

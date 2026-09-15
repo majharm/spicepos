@@ -702,7 +702,7 @@ export function registerCrud(app) {
         const totals = billTotals({
           lines: built.map((l) => ({ taxable: l.amount, cgst: l.cgst, sgst: l.sgst, igst: l.igst })),
           billDiscount: discount ?? existing.discount,
-          amountPaid: amountPaid == null ? (method === "credit" ? 0 : 0) : amountPaid,
+          amountPaid: amountPaid == null ? 0 : amountPaid,
         });
         const paid = amountPaid == null ? (method === "credit" ? 0 : totals.grandTotal) : Number(amountPaid) || 0;
         const withPay = billTotals({

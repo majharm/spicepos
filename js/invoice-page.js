@@ -28,7 +28,11 @@ if (!id) {
     const logo = company.logo_url
       ? `<img src="${escapeHtml(company.logo_url)}" alt="" style="max-height:72px;max-width:180px;display:block;margin:0 auto 12px">`
       : "";
-    bill.innerHTML = `${logo}<pre class="receipt">${escapeHtml(buildReceiptText(order, company, moneyINR))}</pre>`;
+    const india = `<div style="display:flex;gap:10px;justify-content:center;align-items:center;flex-wrap:wrap;margin:0 auto 12px">
+      <img src="./assets/make-in-india.png" alt="Make in India" style="height:40px;width:auto;max-width:150px;object-fit:contain;background:#000;border-radius:8px">
+      <img src="./assets/startup-india.png" alt="Startup India" style="height:40px;width:auto;max-width:150px;object-fit:contain;background:#fff;border-radius:8px;padding:3px">
+    </div>`;
+    bill.innerHTML = `${logo}${india}<pre class="receipt">${escapeHtml(buildReceiptText(order, company, moneyINR))}</pre>`;
     const share = shareActions(order, company, location.origin);
     actions.hidden = false;
     actions.innerHTML = `

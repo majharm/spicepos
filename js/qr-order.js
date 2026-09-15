@@ -35,7 +35,8 @@
   function setQty(id, nextGm) {
     const item = state.items.find((row) => row.id === id);
     if (!item) return;
-    const qty = Math.max(0, Math.round(Number(nextGm) || 0));
+    const max = Math.max(0, Math.floor(Number(item.stock_gm) || 0));
+    const qty = Math.min(max, Math.max(0, Math.round(Number(nextGm) || 0)));
     if (qty > 0) state.cart.set(id, qty);
     else state.cart.delete(id);
     renderMenu();
