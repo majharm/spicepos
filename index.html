@@ -5,12 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Pharmacy Medical POS</title>
     <meta http-equiv="Cache-Control" content="no-store" />
-    <meta name="app-version" content="pharmacy-3" />
+    <meta name="app-version" content="pharmacy-4" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Outfit:wght@400;500;600;700&display=swap" />
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./css/pos.css?v=pharmacy-3" />
+    <link rel="stylesheet" href="./css/pos.css?v=pharmacy-4" />
   </head>
   <body>
     <div class="app">
@@ -21,27 +21,31 @@
             <img src="./assets/make-in-india.png" alt="Make in India" />
             <img src="./assets/startup-india.png" alt="Startup India" />
           </div>
-          <strong id="shop-name">Pharmacy Medical POS</strong>
-          <span id="shop-place">Pharmacy · Medicines · Batches · Bills</span>
+          <div class="brand-copy">
+            <strong id="shop-name">Pharmacy Medical POS</strong>
+            <span id="shop-place">Pharmacy · Medicines · Batches · Bills</span>
+          </div>
         </div>
-        <button class="nav-btn active" type="button" data-view="counter">Pharmacy Bill</button>
-        <button class="nav-btn" type="button" data-view="items">Medicines</button>
-        <button class="nav-btn" type="button" data-view="customers">Customers</button>
-        <button class="nav-btn" type="button" data-view="batches">Stock / Expiry</button>
-        <button class="nav-btn" type="button" data-view="orders">Bills</button>
-        <button class="nav-btn" type="button" data-view="purchases">Purchases</button>
-        <button class="nav-btn" type="button" data-view="suppliers">Suppliers</button>
-        <button class="nav-btn" type="button" data-view="returns">Returns</button>
-        <button class="nav-btn" type="button" data-view="qr">QR code <span id="qr-pending-nav" hidden>0</span></button>
-        <button class="nav-btn" type="button" data-view="support">Support</button>
-        <button class="nav-btn" type="button" data-view="reports">Reports</button>
-        <button class="nav-btn" type="button" data-view="settings">Settings</button>
+        <div class="nav-scroll">
+          <button class="nav-btn active" type="button" data-view="counter" aria-current="page">Pharmacy Bill</button>
+          <button class="nav-btn" type="button" data-view="items">Medicines</button>
+          <button class="nav-btn" type="button" data-view="customers">Customers</button>
+          <button class="nav-btn" type="button" data-view="batches">Stock / Expiry</button>
+          <button class="nav-btn" type="button" data-view="orders">Bills</button>
+          <button class="nav-btn" type="button" data-view="purchases">Purchases</button>
+          <button class="nav-btn" type="button" data-view="suppliers">Suppliers</button>
+          <button class="nav-btn" type="button" data-view="returns">Returns</button>
+          <button class="nav-btn" type="button" data-view="qr">QR code <span id="qr-pending-nav" hidden>0</span></button>
+          <button class="nav-btn" type="button" data-view="support">Support</button>
+          <button class="nav-btn" type="button" data-view="reports">Reports</button>
+          <button class="nav-btn" type="button" data-view="settings">Settings</button>
+        </div>
         <div class="nav-foot">
-          <div class="chip">Pharmacy</div>
-          <div class="chip" id="app-version-chip">pharmacy-3</div>
-          <div class="chip">Today <b id="today-total">₹0.00</b></div>
-          <div class="chip">Bills <b id="today-count">0</b></div>
-          <div class="chip" id="clock">--:--</div>
+          <div class="chip chip-kicker">Pharmacy</div>
+          <div class="chip chip-ver" id="app-version-chip">pharmacy-4</div>
+          <div class="chip chip-today">Today <b id="today-total">₹0.00</b></div>
+          <div class="chip chip-bills">Bills <b id="today-count">0</b></div>
+          <div class="chip chip-clock" id="clock">--:--</div>
         </div>
       </nav>
 
@@ -49,12 +53,15 @@
         <section class="view" id="view-counter">
           <header class="topbar">
             <form class="search" id="search-form">
-              <input id="search" type="search" placeholder="Search medicine, generic, barcode, or code" autocomplete="off" />
+              <label class="sr-only" for="search">Search medicines</label>
+              <input id="search" type="search" placeholder="Search medicines" title="Search medicine, generic, barcode, or code" autocomplete="off" enterkeyhint="search" />
             </form>
-            <select id="customer" class="select"></select>
-            <input id="bill-doctor" class="select" placeholder="Doctor name" />
-            <input id="bill-rx" class="select" placeholder="Prescription no." />
-            <select id="pay-method" class="select">
+            <select id="customer" class="select" aria-label="Customer">
+              <option value="">Customer</option>
+            </select>
+            <input id="bill-doctor" class="select" placeholder="Doctor" aria-label="Doctor name" />
+            <input id="bill-rx" class="select" placeholder="Rx no." aria-label="Prescription number" />
+            <select id="pay-method" class="select" aria-label="Payment method">
               <option value="cash">Cash</option>
               <option value="upi">UPI</option>
               <option value="card">Card</option>
@@ -320,7 +327,7 @@
         </div>
       </div>
     </div>
-    <script src="./js/qrcode.iife.js?v=pharmacy-3"></script>
-    <script type="module" src="./js/app.js?v=pharmacy-3"></script>
+    <script src="./js/qrcode.iife.js?v=pharmacy-4"></script>
+    <script type="module" src="./js/app.js?v=pharmacy-4"></script>
   </body>
 </html>

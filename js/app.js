@@ -93,7 +93,12 @@ async function api(path, options) {
     ...options,
   });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || res.statusText);
+  if (!res.ok) {
+    const fallback = res.status === 404 || /file not found/i.test(res.statusText)
+      ? "Cannot reach the till API. Start the Node server with MySQL."
+      : res.statusText;
+    throw new Error(data.error || fallback);
+  }
   return data;
 }
 
@@ -171,7 +176,10 @@ function showView(name) {
     el.hidden = el.id !== `view-${name}`;
   });
   document.querySelectorAll(".nav-btn").forEach((btn) => {
-    btn.classList.toggle("active", btn.dataset.view === name);
+    const on = btn.dataset.view === name;
+    btn.classList.toggle("active", on);
+    if (on) btn.setAttribute("aria-current", "page");
+    else btn.removeAttribute("aria-current");
   });
   if (name === "reports") loadReports();
   if (name === "orders") loadOrders();
@@ -205,7 +213,16 @@ function filteredItems() {
 }
 
 function renderCatalog() {
-  $("catalog").innerHTML = filteredItems()
+  const items = filteredItems();
+  if (!items.length) {
+    $("catalog").innerHTML = `<p class="empty-state">${
+      state.query.trim()
+        ? "No medicines match that search."
+        : "No medicines yet. Add them under Medicines."
+    }</p>`;
+    return;
+  }
+  $("catalog").innerHTML = items
     .map((i) => {
       const low = sellableOf(i) <= Number(i.reorder_level_gm);
       const out = sellableOf(i) <= 0;
@@ -289,6 +306,10 @@ function renderCart() {
 }
 
 function renderCustomersSelect() {
+  if (!state.customers.length) {
+    $("customer").innerHTML = `<option value="">No customers</option>`;
+    return;
+  }
   $("customer").innerHTML = state.customers
     .map(
       (c) =>
@@ -339,6 +360,10 @@ function fillChoice(sel, options, value) {
 }
 
 function renderItemsTable() {
+  if (!state.items.length) {
+    $("items-table").innerHTML = `<p class="empty-state">No medicines saved yet.</p>`;
+    return;
+  }
   $("items-table").innerHTML = `<table><thead><tr>
     <th>Code</th><th>Medicine</th><th>Generic</th><th>Type</th><th>Mfr</th><th>Pack</th><th>MRP</th><th>Sale</th><th>Stock</th><th></th>
   </tr></thead><tbody>${state.items
@@ -360,6 +385,10 @@ function renderItemsTable() {
 }
 
 function renderCustomersTable() {
+  if (!state.customers.length) {
+    $("customers-table").innerHTML = `<p class="empty-state">No customers yet.</p>`;
+    return;
+  }
   $("customers-table").innerHTML = `<table><thead><tr>
     <th>Code</th><th>Name</th><th>Type</th><th>Mobile</th><th>GSTIN</th><th>Outstanding</th>
   </tr></thead><tbody>${state.customers
@@ -595,15 +624,17 @@ function findInvoice(id) {
 
 async function loadOrders() {
   orderCache = await api("/api/orders");
-  $("orders").innerHTML = orderCache
-    .map(
-      (o) => `<button class="order-item" type="button" data-oid="${escapeHtml(o.id)}">
+  $("orders").innerHTML = orderCache.length
+    ? orderCache
+        .map(
+          (o) => `<button class="order-item" type="button" data-oid="${escapeHtml(o.id)}">
         <span>${escapeHtml(o.order_number)} · ${escapeHtml(o.customer_name)}<br>
         <small>${escapeHtml(o.payment_method)} · ${escapeHtml(String(o.created_at || "").slice(0, 16))}</small></span>
         <span>${money(o.total)}</span>
       </button>`,
-    )
-    .join("");
+        )
+        .join("")
+    : `<p class="empty-state">No pharmacy bills yet.</p>`;
 }
 
 let qrCache = [];
@@ -1374,7 +1405,10 @@ showQrPoster().catch(() => {});
 setInterval(() => loadQrOrders(true), 12000);
 
 loadBootstrap().catch((err) => {
-  $("shop-place").textContent = err.message;
-  setHint(err.message, "error");
+  const msg = /failed to fetch|networkerror|load failed/i.test(String(err.message || err))
+    ? "Cannot reach the till server. Refresh the page, then check that Node and MySQL are running."
+    : err.message;
+  setHint(msg, "error");
+  renderCatalog();
   showQrPoster().catch(() => {});
 });
