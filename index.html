@@ -5,12 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Pharmacy Medical POS</title>
     <meta http-equiv="Cache-Control" content="no-store" />
-    <meta name="app-version" content="pharmacy-2" />
+    <meta name="app-version" content="pharmacy-6" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Outfit:wght@400;500;600;700&display=swap" />
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./css/pos.css?v=pharmacy-2" />
+    <link rel="stylesheet" href="./css/pos.css?v=pharmacy-6" />
   </head>
   <body>
     <div class="app">
@@ -35,7 +35,7 @@
         <button class="nav-btn" type="button" data-view="settings">Settings</button>
         <div class="nav-foot">
           <div class="chip">Pharmacy</div>
-          <div class="chip" id="app-version-chip">pharmacy-2</div>
+          <div class="chip" id="app-version-chip">pharmacy-6</div>
           <div class="chip">Today <b id="today-total">₹0.00</b></div>
           <div class="chip">Bills <b id="today-count">0</b></div>
           <div class="chip" id="clock">--:--</div>
@@ -110,6 +110,7 @@
                 <option>Inhaler</option>
                 <option>Powder</option>
                 <option>Gel</option>
+                <option>Lotion</option>
                 <option>Other</option>
               </select>
             </label>
@@ -148,7 +149,7 @@
           <h2>Customers</h2>
           <form class="settings wide" id="customer-form">
             <label>Name <input id="cust-name" required /></label>
-            <label>Business name <input id="cust-biz" /></label>
+            <label>Business name <input id="cust-biz" placeholder="Clinic / hospital / shop" /></label>
             <label>Mobile <input id="cust-mobile" required /></label>
             <label>Type
               <select id="cust-type">
@@ -156,7 +157,7 @@
                 <option value="b2b">B2B wholesale</option>
               </select>
             </label>
-            <label>GSTIN <input id="cust-gstin" /></label>
+            <label>GSTIN <input id="cust-gstin" maxlength="15" placeholder="15-character GSTIN" /></label>
             <label>Address <input id="cust-address" /></label>
             <button class="btn primary" type="submit">Save</button>
           </form>
@@ -232,7 +233,7 @@
             <label>Mobile No. <input id="sup-mobile" /></label>
             <label>Email <input id="sup-email" type="email" /></label>
             <label>Drug Licence No. <input id="sup-dl" /></label>
-            <label>GSTIN <input id="sup-gstin" /></label>
+            <label>GSTIN <input id="sup-gstin" maxlength="15" placeholder="15-character GSTIN" /></label>
             <label>PAN No. <input id="sup-pan" /></label>
             <label>FSSAI Licence No. <input id="sup-fssai" /></label>
             <label>Supplier Licence Expiry <input id="sup-lexp" type="date" /></label>
@@ -280,15 +281,21 @@
         </section>
         <section class="view" id="view-settings" hidden>
           <h2>Company profile</h2>
-          <p class="lede">Shop details and logo saved on this business in MySQL.</p>
-          <form class="settings" id="settings-form">
-            <label>Name <input id="set-name" /></label>
-            <label>Address <input id="set-address" /></label>
-            <label>Phone <input id="set-phone" /></label>
-            <label>Email <input id="set-email" /></label>
-            <label>GSTIN <input id="set-gstin" /></label>
+          <p class="lede">Shop details, GSTIN, licences, and logo used on bills, Support, and the QR menu.</p>
+          <form class="settings wide" id="settings-form">
+            <label>Shop / pharmacy name *
+              <input id="set-name" required autocomplete="organization" />
+            </label>
+            <label class="span-2">Address
+              <textarea id="set-address" rows="2" autocomplete="street-address"></textarea>
+            </label>
+            <label>Phone <input id="set-phone" type="tel" autocomplete="tel" /></label>
+            <label>Email <input id="set-email" type="email" autocomplete="email" /></label>
+            <label>GSTIN
+              <input id="set-gstin" maxlength="15" placeholder="27AABCU9603R1ZX" autocomplete="off" />
+            </label>
             <label>State <input id="set-state" /></label>
-            <label>State Code <input id="set-scode" placeholder="27" /></label>
+            <label>State Code <input id="set-scode" maxlength="2" placeholder="27" /></label>
             <h3 class="form-section">Licence &amp; Registration Details</h3>
             <label>Drug Licence No. <input id="set-dl" /></label>
             <label>Drug Licence Type <input id="set-dl-type" placeholder="Retail / Wholesale" /></label>
@@ -296,7 +303,7 @@
             <label>Pharmacy Registration No. <input id="set-preg" /></label>
             <label>Other Government Licence No. <input id="set-other" /></label>
             <label>Licence validity / expiry <input id="set-lexp" type="date" /></label>
-            <label>Logo
+            <label class="span-2">Logo
               <input id="set-logo" type="file" accept="image/*" />
             </label>
             <img id="logo-preview" class="logo-preview" alt="Logo preview" hidden />
@@ -316,7 +323,7 @@
         </div>
       </div>
     </div>
-    <script src="./js/qrcode.iife.js?v=pharmacy-2"></script>
-    <script type="module" src="./js/app.js?v=pharmacy-2"></script>
+    <script src="./js/qrcode.iife.js?v=pharmacy-6"></script>
+    <script type="module" src="./js/app.js?v=pharmacy-6"></script>
   </body>
 </html>

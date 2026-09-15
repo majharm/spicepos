@@ -1,8 +1,13 @@
 import { BUSINESS_ID, query, withTransaction } from "./db.js";
 import {
   billTotals,
+  formatGstin,
+  gstinStateCode,
+  gstinStateName,
   isInterstate,
+  isValidGstin,
   mergeSaleLines,
+  normalizeStateCode,
   purchaseLineTotals,
   remainingReturnQty,
   round2,
@@ -26,6 +31,12 @@ function sellingRate(item, customer) {
 
 export { round2 };
 
+function readGstin(value) {
+  const gstin = formatGstin(value);
+  if (!isValidGstin(gstin)) return { error: "Enter a valid 15-character GSTIN" };
+  return { gstin: gstin || null };
+}
+
 function creditDue(order) {
   if (!order || String(order.payment_method || "").toLowerCase() !== "credit") return 0;
   return round2(Math.max(0, Number(order.total) - Number(order.amount_paid || 0)));
@@ -40,9 +51,9 @@ async function adjustOutstanding(conn, customerId, delta) {
   );
 }
 
-export async function buildPricedLines(conn, customer, lines, { companyGstin = "", interstate } = {}) {
-  const useInter =
-    interstate ?? isInterstate(companyGstin, customer?.gstin);
+export async function buildPricedLines(conn, customer, lines, opts = {}) {
+  const company = opts.company || { gstin: opts.companyGstin, state_code: opts.companyStateCode };
+  const useInter = opts.interstate ?? isInterstate(company, customer);
   const built = [];
   for (const line of mergeSaleLines(lines)) {
     const [items] = await conn.query("SELECT * FROM items WHERE id = ? AND business_id = ?", [
@@ -104,10 +115,11 @@ export async function insertSalesOrder(
     discount = 0,
     amountPaid,
     companyGstin = "",
+    company,
   },
 ) {
   const method = String(paymentMethod || "cash").toLowerCase();
-  const interstate = isInterstate(companyGstin, customer?.gstin);
+  const interstate = isInterstate(company || companyGstin, customer);
   const totals = billTotals({
     lines: built.map((l) => ({
       taxable: l.amount,
@@ -277,6 +289,11 @@ export function registerCrud(app) {
       return;
     }
     const custType = type === "b2b" ? "b2b" : "b2c";
+    const parsed = readGstin(gstin);
+    if (parsed.error) {
+      res.status(400).json({ error: parsed.error });
+      return;
+    }
     try {
       const customer = await withTransaction(async (conn) => {
         const n = await nextSeq(conn, "customer", 4);
@@ -293,7 +310,7 @@ export function registerCrud(app) {
             business_name || null,
             String(mobile).trim(),
             custType,
-            gstin || null,
+            parsed.gstin,
             Number(credit_limit) || 0,
             BUSINESS_ID,
             address || null,
@@ -465,6 +482,13 @@ export function registerCrud(app) {
       res.status(400).json({ error: "Supplier name is required" });
       return;
     }
+    const parsed = readGstin(b.gstin);
+    if (parsed.error) {
+      res.status(400).json({ error: parsed.error });
+      return;
+    }
+    const stateCode = normalizeStateCode(b.state_code) || gstinStateCode(parsed.gstin) || null;
+    const state = (b.state && String(b.state).trim()) || gstinStateName(stateCode) || null;
     try {
       const id = crypto.randomUUID();
       const code = `SUP-${Date.now().toString(36).toUpperCase()}`;
@@ -481,15 +505,15 @@ export function registerCrud(app) {
           b.mobile || null,
           b.email || null,
           b.address || null,
-          b.gstin || null,
+          parsed.gstin,
           BUSINESS_ID,
           b.firm_name || b.company_name || null,
           b.drug_licence_no || null,
           b.pan || b.pan_no || null,
           b.fssai_licence_no || null,
           b.licence_expiry || null,
-          b.state || null,
-          b.state_code || null,
+          state,
+          stateCode,
           b.city || null,
           b.pincode || null,
         ],
@@ -517,10 +541,10 @@ export function registerCrud(app) {
         const supplier = supRows[0];
         if (!supplier) throw new Error("Supplier not found");
         const [companyRows] = await conn.query(
-          "SELECT gstin FROM company_settings WHERE business_id = ? LIMIT 1",
+          "SELECT gstin, state_code FROM company_settings WHERE business_id = ? LIMIT 1",
           [BUSINESS_ID],
         );
-        const interstate = isInterstate(companyRows[0]?.gstin, supplier.gstin);
+        const interstate = isInterstate(companyRows[0], supplier);
         const built = [];
         for (const line of lines) {
           const [itemRows] = await conn.query("SELECT * FROM items WHERE id = ? AND business_id = ?", [
@@ -694,15 +718,15 @@ export function registerCrud(app) {
         const customer = custRows[0];
         if (!customer) throw new Error("Customer not found");
         const [companyRows] = await conn.query(
-          "SELECT gstin FROM company_settings WHERE business_id = ? LIMIT 1",
+          "SELECT gstin, state_code FROM company_settings WHERE business_id = ? LIMIT 1",
           [BUSINESS_ID],
         );
-        const built = await buildPricedLines(conn, customer, lines, { companyGstin: companyRows[0]?.gstin });
+        const built = await buildPricedLines(conn, customer, lines, { company: companyRows[0] });
         const method = String(paymentMethod || existing.payment_method).toLowerCase();
         const totals = billTotals({
           lines: built.map((l) => ({ taxable: l.amount, cgst: l.cgst, sgst: l.sgst, igst: l.igst })),
           billDiscount: discount ?? existing.discount,
-          amountPaid: amountPaid == null ? (method === "credit" ? 0 : 0) : amountPaid,
+          amountPaid: amountPaid == null ? 0 : amountPaid,
         });
         const paid = amountPaid == null ? (method === "credit" ? 0 : totals.grandTotal) : Number(amountPaid) || 0;
         const withPay = billTotals({

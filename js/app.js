@@ -88,12 +88,27 @@ function sellableOf(item) {
 }
 
 async function api(path, options) {
-  const res = await fetch(path, {
-    headers: { "Content-Type": "application/json" },
-    ...options,
-  });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || res.statusText);
+  let res;
+  try {
+    res = await fetch(path, {
+      headers: { "Content-Type": "application/json" },
+      ...options,
+    });
+  } catch {
+    throw new Error("Cannot reach the pharmacy API. Start the Node server and check MySQL.");
+  }
+  const text = await res.text();
+  let data = {};
+  try {
+    data = text ? JSON.parse(text) : {};
+  } catch {
+    throw new Error(
+      res.ok
+        ? "The server returned an invalid response."
+        : `Cannot reach the pharmacy API (${res.status}). Use the Node app, not a static file host.`,
+    );
+  }
+  if (!res.ok) throw new Error(data.error || res.statusText || "Request failed");
   return data;
 }
 
@@ -113,6 +128,13 @@ function showLogo(img, url) {
     img.removeAttribute("src");
     img.hidden = true;
   }
+}
+
+function clearBillFields() {
+  if ($("bill-discount")) $("bill-discount").value = "0";
+  if ($("bill-paid")) $("bill-paid").value = "";
+  if ($("bill-doctor")) $("bill-doctor").value = "";
+  if ($("bill-rx")) $("bill-rx").value = "";
 }
 
 function excelHref(sheet) {
@@ -189,22 +211,25 @@ function filteredItems() {
 }
 
 function renderCatalog() {
-  $("catalog").innerHTML = filteredItems()
-    .map((i) => {
-      const low = sellableOf(i) <= Number(i.reorder_level_gm);
-      const out = sellableOf(i) <= 0;
-      return `<button class="card" type="button" data-add="${escapeHtml(i.id)}" ${out ? "disabled" : ""}>
+  const items = filteredItems();
+  $("catalog").innerHTML = items.length
+    ? items
+        .map((i) => {
+          const low = sellableOf(i) <= Number(i.reorder_level_gm);
+          const out = sellableOf(i) <= 0;
+          return `<button class="card" type="button" data-add="${escapeHtml(i.id)}" ${out ? "disabled" : ""}>
         <div class="sku">${escapeHtml(i.medicine_type || i.category || "Medical")} · ${escapeHtml(i.pack_unit || "Strip")}</div>
         <div class="name">${escapeHtml(i.name)} <small>${escapeHtml(genericOf(i))}</small></div>
         <div class="meta"><span>${sellableOf(i)} ${escapeHtml(i.pack_unit || "pcs")}</span><span>${money(rateFor(i))}</span></div>
         <div class="stock ${out ? "out" : low ? "low" : "ok"}">${escapeHtml(i.code)} · GST ${escapeHtml(i.gst_rate)}%</div>
       </button>`;
-    })
-    .join("");
+        })
+        .join("")
+    : `<p class="hint">${state.query ? "No medicines match this search." : "No medicines yet. Add them in Medicines, then receive stock in Purchases."}</p>`;
 }
 
 function cartTotals() {
-  const interstate = Pharmacy.isInterstate(state.company.gstin, customer()?.gstin);
+  const interstate = Pharmacy.isInterstate(state.company, customer());
   const lines = state.cart.map((line) => {
     const item = state.items.find((i) => i.id === line.itemId);
     if (!item) return null;
@@ -233,12 +258,19 @@ function renderCart() {
       .map((line) => {
         const item = state.items.find((i) => i.id === line.itemId);
         if (!item) return "";
-        const batch = batchesFor(item.id)[0];
-        const exp = batch?.expiry_date ? String(batch.expiry_date).slice(0, 10) : "—";
+        const live = batchesFor(item.id);
+        const plan = live.length ? Pharmacy.allocateFefo(live, line.qty) : { ok: false, allocations: [] };
+        const batchNote = plan.ok && plan.allocations.length
+          ? plan.allocations
+              .map((a) => `${a.batch_no} Exp ${a.expiry_date ? String(a.expiry_date).slice(0, 10) : "—"}`)
+              .join(" · ")
+          : live[0]
+            ? `${live[0].batch_no} Exp ${live[0].expiry_date ? String(live[0].expiry_date).slice(0, 10) : "—"}`
+            : "OPEN";
         return `<div class="line">
           <div>
             <div class="who">${escapeHtml(item.name)}</div>
-            <div class="pack">${escapeHtml(genericOf(item))} · ${escapeHtml(item.pack_unit || "Strip")} · Batch ${escapeHtml(batch?.batch_no || "OPEN")} · Exp ${escapeHtml(exp)}</div>
+            <div class="pack">${escapeHtml(genericOf(item))} · ${escapeHtml(item.pack_unit || "Strip")} · ${escapeHtml(batchNote)}</div>
           </div>
           <div>
             <div class="qty">
@@ -304,6 +336,15 @@ function fillDatalists() {
   const subs = [...new Set(state.items.map((i) => i.subcategory).filter(Boolean))];
   $("category-list").innerHTML = cats.map((c) => `<option value="${escapeHtml(c)}">`).join("");
   $("subcategory-list").innerHTML = subs.map((c) => `<option value="${escapeHtml(c)}">`).join("");
+  fillChoice($("item-type"), Pharmacy.MEDICINE_TYPES, $("item-type")?.value || "Tablet");
+  fillChoice($("item-unit"), Pharmacy.PACK_TYPES, $("item-unit")?.value || "Strip");
+}
+
+function fillChoice(sel, options, value) {
+  if (!sel) return;
+  const list = [...options];
+  if (value && !list.includes(value)) list.push(value);
+  sel.innerHTML = list.map((t) => `<option ${t === value ? "selected" : ""}>${escapeHtml(t)}</option>`).join("");
 }
 
 function renderItemsTable() {
@@ -359,7 +400,7 @@ function poLineHtml(i) {
     <input data-po-batch placeholder="Batch No. *" required />
     <input data-po-exp type="date" required />
     <select data-po-pack>
-      ${["Strip", "Box", "Bottle", "Tube", "Packet"].map((p) => `<option ${p === (i?.pack_unit || "Strip") ? "selected" : ""}>${p}</option>`).join("")}
+      ${Pharmacy.PACK_TYPES.map((p) => `<option ${p === (i?.pack_unit || "Strip") ? "selected" : ""}>${p}</option>`).join("")}
     </select>
     <input data-po-qty type="number" min="0" step="1" value="1" placeholder="Pack qty" />
     <input data-po-upp type="number" min="1" value="${escapeHtml(i?.units_per_pack || 1)}" placeholder="Units/pack" />
@@ -401,9 +442,11 @@ function renderSettings() {
 }
 
 function renderSupport() {
+  const expiry = String(state.company.licence_expiry || "").slice(0, 10);
   $("support-cards").innerHTML = [
     ["Pharmacy", state.company.name],
     ["Address", state.company.address || "—"],
+    ["State", [state.company.state, state.company.state_code].filter(Boolean).join(" · ") || "—"],
     ["Phone", state.company.phone || "—"],
     ["Email", state.company.email || "—"],
     ["GSTIN", state.company.gstin || "—"],
@@ -412,18 +455,18 @@ function renderSupport() {
     ["FSSAI", state.company.fssai_licence_no || "—"],
     ["Pharmacy registration", state.company.pharmacy_registration_no || "—"],
     ["Other licence", state.company.other_licence_no || "—"],
-    ["Licence expiry", state.company.licence_expiry || "—"],
+    ["Licence expiry", expiry || "—"],
   ]
     .map(([k, v]) => `<div class="report-card"><span>${k}</span><strong>${escapeHtml(v)}</strong></div>`)
     .join("");
 }
 
 function paintHeader() {
-  $("shop-name").textContent = state.company.name || "Pharmacy Medical POS";
-  const addr = state.company.address || "";
-  $("shop-place").textContent = addr
-    ? `${addr} · Pharmacy Medical POS`
-    : "Pharmacy · Medicines · Batches · Bills";
+  const name = state.company.name || "Pharmacy Medical POS";
+  $("shop-name").textContent = name;
+  document.title = name;
+  const place = [state.company.address, state.company.phone].filter(Boolean).join(" · ");
+  $("shop-place").textContent = place || "Pharmacy · Medicines · Batches · Bills";
   showLogo($("shop-logo"), state.company.logo_url);
   const mark = $("brand-mark");
   if (mark) mark.hidden = Boolean(state.company.logo_url);
@@ -447,6 +490,7 @@ async function loadBootstrap() {
   renderCustomersTable();
   renderPoLines();
   renderSettings();
+  renderSupport();
   loadToday();
   loadSuppliers();
   loadQrOrders(true);
@@ -488,12 +532,12 @@ async function loadReports() {
       reportBlock("Pack sales", "Pack sales", ["Pack type", "Pack count", "Bills", "Takings"], (data.byPack || []).map((r) => [r.pack_type, Number(r.pack_count) || 0, Number(r.bills) || 0, Number(r.takings) || 0])),
       reportBlock("Payment", "Payment", ["Method", "Bills", "Takings"], (data.byPay || []).map((r) => [r.payment_method, Number(r.bills) || 0, Number(r.takings) || 0])),
       reportBlock("GST daywise", "GST daywise", ["Day", "Taxable", "GST", "Total"], (data.gst || []).map((r) => [String(r.day), Number(r.taxable) || 0, Number(r.gst) || 0, Number(r.total) || 0])),
-      reportBlock("Stock", "Stock", ["Code", "Name", "Generic", "Type", "Mfr", "Pack", "Stock", "Reorder", "MRP", "Sale", "Purchase", "GST %"], (data.stock || []).map((i) => [i.code, i.name, i.generic_name || i.local_name, i.medicine_type, i.manufacturer, i.pack_unit, Number(i.stock_gm) || 0, Number(i.reorder_level_gm) || 0, Number(i.mrp) || 0, Number(i.selling_price || i.retail_rate) || 0, Number(i.purchase_rate) || 0, Number(i.gst_rate) || 0])),
+      reportBlock("Stock", "Stock", ["Code", "Name", "Generic", "Type", "Mfr", "Pack", "Stock", "Reorder", "MRP", "Sale", "Purchase", "GST %", "HSN"], (data.stock || []).map((i) => [i.code, i.name, i.generic_name || i.local_name, i.medicine_type, i.manufacturer, i.pack_unit, Number(i.stock_gm) || 0, Number(i.reorder_level_gm) || 0, Number(i.mrp) || 0, Number(i.selling_price || i.retail_rate) || 0, Number(i.purchase_rate) || 0, Number(i.gst_rate) || 0, i.hsn])),
       reportBlock("Low stock", "Low stock", ["Code", "Name", "Stock", "Reorder"], (data.low || []).map((i) => [i.code, i.name, Number(i.stock_gm) || 0, Number(i.reorder_level_gm) || 0])),
       reportBlock("Batches", "Batches", ["Code", "Medicine", "Batch", "Expiry", "Qty", "MRP"], (data.batches || []).map((b) => [b.code, b.name, b.batch_no, b.expiry_date, Number(b.qty) || 0, Number(b.mrp) || 0])),
       reportBlock("Expiry", "Expiry", ["Code", "Medicine", "Batch", "Expiry", "Qty"], (data.expiry || []).map((b) => [b.code, b.name, b.batch_no, b.expiry_date, Number(b.qty) || 0])),
-      reportBlock("Purchases", "Purchases", ["PO", "Supplier", "Invoice", "Date", "Taxable", "GST", "Total", "Pay", "Status"], (data.purchases || []).map((p) => [p.purchase_number, p.supplier_name, p.supplier_invoice_number, p.purchase_date, Number(p.subtotal) || 0, Number(p.gst) || 0, Number(p.total) || 0, p.payment_method, p.payment_status])),
-      reportBlock("Returns", "Returns", ["Return", "Bill", "Customer", "Reason", "Total", "Date"], (data.returns || []).map((r) => [r.return_number, r.order_number, r.customer_name, r.reason, Number(r.total) || 0, String(r.created_at)])),
+      reportBlock("Purchases", "Purchases", ["PO", "Supplier", "Invoice", "Date", "Taxable", "GST", "Total", "Pay", "Status", "E-Way"], (data.purchases || []).map((p) => [p.purchase_number, p.supplier_name, p.supplier_invoice_number, p.purchase_date, Number(p.subtotal) || 0, Number(p.gst) || 0, Number(p.total) || 0, p.payment_method, p.payment_status, p.eway_bill_no])),
+      reportBlock("Returns", "Returns", ["Return", "Bill", "Customer", "Reason", "Taxable", "GST", "Total", "Date"], (data.returns || []).map((r) => [r.return_number, r.order_number, r.customer_name, r.reason, Number(r.subtotal) || 0, Number(r.gst) || 0, Number(r.total) || 0, String(r.created_at)])),
       reportBlock("Customers", "Customers", ["Code", "Name", "Business", "Mobile", "Type", "GSTIN", "Credit limit", "Outstanding"], (data.customers || []).map((c) => [c.code, c.name, c.business_name, c.mobile, c.type, c.gstin, Number(c.credit_limit) || 0, Number(c.outstanding) || 0])),
     ].join("");
     $("reports-hint").textContent = "";
@@ -532,7 +576,7 @@ function printOrder(o) {
     return;
   }
   const logo = state.company.logo_url
-    ? `<img src="${state.company.logo_url}" alt="" style="max-height:80px;max-width:200px;display:block;margin:0 auto 12px">`
+    ? `<img src="${escapeHtml(state.company.logo_url)}" alt="" style="max-height:80px;max-width:200px;display:block;margin:0 auto 12px">`
     : "";
   w.document.write(`<!DOCTYPE html><html><head><title>${escapeHtml(o.order_number)}</title>
     <style>body{font-family:ui-monospace,monospace;padding:24px} pre{white-space:pre-wrap;text-align:left}</style>
@@ -712,10 +756,10 @@ function printQrPoster() {
   const src = $("qr-code-img")?.src || `/api/qr/code`;
   const w = window.open("", "qr-poster", "width=640,height=860");
   const logo = state.company.logo_url
-    ? `<img src="${state.company.logo_url}" alt="" style="max-height:72px;max-width:180px;display:block;margin:0 auto 12px">`
+    ? `<img src="${escapeHtml(state.company.logo_url)}" alt="" style="max-height:72px;max-width:180px;display:block;margin:0 auto 12px">`
     : "";
   w.document.write(`<!DOCTYPE html><html><head><title>QR order poster</title>
-    <style>body{font-family:Georgia,serif;text-align:center;padding:36px;color:#4a1416} img.qr{width:280px;height:280px;background:#fff;padding:12px} p{color:#7a5c48}</style>
+    <style>body{font-family:ui-sans-serif,system-ui,sans-serif;text-align:center;padding:36px;color:#0b2545} img.qr{width:280px;height:280px;background:#fff;padding:12px} p{color:#5b6e86}</style>
     </head><body>
     ${logo}
     <h1>${escapeHtml(state.company.name || "Pharmacy")}</h1>
@@ -802,14 +846,26 @@ async function loadBatches() {
     .join("")}</tbody></table>`;
 }
 
+let returnCache = [];
+
+function alreadyReturnedQty(lineId) {
+  return returnCache.reduce((sum, ret) => {
+    const extra = (ret.lines || [])
+      .filter((l) => l.order_line_id === lineId)
+      .reduce((s, l) => s + (Number(l.quantity) || 0), 0);
+    return sum + extra;
+  }, 0);
+}
+
 async function loadReturns() {
   const orders = await api("/api/orders");
   orderCache = orders;
   $("ret-order").innerHTML = orders
     .map((o) => `<option value="${escapeHtml(o.id)}">${escapeHtml(o.order_number)} · ${escapeHtml(o.customer_name)}</option>`)
     .join("");
-  paintReturnLines();
   const rows = await api("/api/returns").catch(() => []);
+  returnCache = rows;
+  paintReturnLines();
   $("returns-table").innerHTML = `<table><thead><tr>
     <th>Return</th><th>Bill</th><th>Customer</th><th>Reason</th><th>Total</th>
   </tr></thead><tbody>${rows
@@ -829,13 +885,19 @@ function paintReturnLines() {
   const o = orderCache.find((row) => row.id === $("ret-order")?.value);
   if (!$("ret-lines")) return;
   $("ret-lines").innerHTML = (o?.lines || [])
-    .map(
-      (l) => `<label>
+    .map((l) => {
+      const remaining = Pharmacy.remainingReturnQty(l.quantity_gm, alreadyReturnedQty(l.id));
+      if (remaining <= 0) {
+        return `<label>
+          ${escapeHtml(l.item_name)} · ${escapeHtml(l.batch_no || "OPEN")} · already returned
+        </label>`;
+      }
+      return `<label>
         <input type="checkbox" data-ret-line="${escapeHtml(l.id)}" />
-        ${escapeHtml(l.item_name)} · ${escapeHtml(l.batch_no || "OPEN")} · billed ${l.quantity_gm}
-        <input type="number" min="0" max="${escapeHtml(l.quantity_gm)}" value="${escapeHtml(l.quantity_gm)}" data-ret-qty="${escapeHtml(l.id)}" />
-      </label>`,
-    )
+        ${escapeHtml(l.item_name)} · ${escapeHtml(l.batch_no || "OPEN")} · remaining ${remaining}
+        <input type="number" min="0" max="${escapeHtml(remaining)}" value="${escapeHtml(remaining)}" data-ret-qty="${escapeHtml(l.id)}" />
+      </label>`;
+    })
     .join("") || `<p class="hint">Select a bill.</p>`;
 }
 
@@ -857,12 +919,12 @@ $("items-table").addEventListener("click", async (e) => {
   $("item-id").value = i.id;
   $("item-name").value = i.name;
   $("item-local").value = genericOf(i);
-  if ($("item-type")) $("item-type").value = i.medicine_type || "Tablet";
+  if ($("item-type")) fillChoice($("item-type"), Pharmacy.MEDICINE_TYPES, i.medicine_type || "Tablet");
   $("item-category").value = i.category || "Medical";
   if ($("item-mfr")) $("item-mfr").value = i.manufacturer || "";
   if ($("item-hsn")) $("item-hsn").value = i.hsn || "";
   if ($("item-pack-size")) $("item-pack-size").value = i.pack_size || "";
-  if ($("item-unit")) $("item-unit").value = i.pack_unit || "Strip";
+  if ($("item-unit")) fillChoice($("item-unit"), Pharmacy.PACK_TYPES, i.pack_unit || "Strip");
   if ($("item-upp")) $("item-upp").value = i.units_per_pack || 1;
   if ($("item-mrp")) $("item-mrp").value = i.mrp || "";
   $("item-retail").value = i.selling_price || i.retail_rate;
@@ -945,6 +1007,8 @@ $("order-pane").addEventListener("click", (e) => {
     $("pay-method").value = o.payment_method || "cash";
     if ($("bill-doctor")) $("bill-doctor").value = o.doctor_name || "";
     if ($("bill-rx")) $("bill-rx").value = o.prescription_no || "";
+    if ($("bill-discount")) $("bill-discount").value = o.discount ?? 0;
+    if ($("bill-paid")) $("bill-paid").value = o.amount_paid ?? "";
     showView("counter");
     renderCart();
     setHint(`Editing ${o.order_number}`, "ok");
@@ -961,10 +1025,11 @@ $("customer").addEventListener("change", () => {
   renderCatalog();
   renderCart();
 });
-$("btn-clear").addEventListener("click", () => {
+  $("btn-clear").addEventListener("click", () => {
   state.cart = [];
   state.lastPack = null;
   state.editingOrderId = null;
+  clearBillFields();
   setHint("Cart cleared");
   renderCart();
 });
@@ -988,6 +1053,7 @@ $("btn-pay").addEventListener("click", async () => {
     state.cart = [];
     state.lastPack = null;
     state.editingOrderId = null;
+    clearBillFields();
     setHint(`Saved ${order.order_number} · ${money(order.total)}`, "ok");
     showOrder(order);
     $("modal-title").textContent = order.order_number;
@@ -1120,6 +1186,10 @@ $("purchase-form").addEventListener("submit", async (e) => {
     $("po-hint").textContent = "Saved";
     $("po-hint").className = "hint ok";
     await loadBootstrap();
+    $("purchase-form").reset();
+    $("po-date").value = ymd();
+    $("po-lines").innerHTML = poLineHtml(activeItems()[0]);
+    await loadSuppliers();
     await loadPurchases();
   } catch (err) {
     $("po-hint").textContent = err.message;
@@ -1164,14 +1234,18 @@ $("supplier-form").addEventListener("submit", async (e) => {
 $("settings-form").addEventListener("submit", async (e) => {
   e.preventDefault();
   try {
+    const gstin = Pharmacy.formatGstin($("set-gstin").value);
+    if (!Pharmacy.isValidGstin(gstin)) {
+      throw new Error("Enter a valid 15-character GSTIN");
+    }
     const payload = {
       name: $("set-name").value,
       address: $("set-address").value,
       phone: $("set-phone").value,
       email: $("set-email").value,
-      gstin: $("set-gstin").value,
+      gstin,
       state: $("set-state")?.value,
-      state_code: $("set-scode")?.value,
+      state_code: $("set-scode")?.value || Pharmacy.gstinStateCode(gstin),
       drug_licence_no: $("set-dl")?.value,
       drug_licence_type: $("set-dl-type")?.value,
       fssai_licence_no: $("set-fssai")?.value,
@@ -1188,6 +1262,7 @@ $("settings-form").addEventListener("submit", async (e) => {
     state.logoDraft = null;
     paintHeader();
     renderSettings();
+    renderSupport();
     $("settings-hint").textContent = "Saved";
     $("settings-hint").className = "hint ok";
   } catch (err) {
@@ -1244,9 +1319,15 @@ function readLogoFile(file) {
       const canvas = document.createElement("canvas");
       canvas.width = w;
       canvas.height = h;
-      canvas.getContext("2d").drawImage(img, 0, 0, w, h);
+      const ctx = canvas.getContext("2d");
+      const png = file.type === "image/png" || file.type === "image/webp";
+      if (!png) {
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(0, 0, w, h);
+      }
+      ctx.drawImage(img, 0, 0, w, h);
       URL.revokeObjectURL(blobUrl);
-      resolve(canvas.toDataURL("image/jpeg", 0.86));
+      resolve(png ? canvas.toDataURL("image/png") : canvas.toDataURL("image/jpeg", 0.86));
     };
     img.onerror = () => {
       URL.revokeObjectURL(blobUrl);
@@ -1255,6 +1336,31 @@ function readLogoFile(file) {
     img.src = blobUrl;
   });
 }
+
+function fillGstinDerived(gstinEl, stateEl, codeEl) {
+  const gstin = Pharmacy.formatGstin(gstinEl?.value);
+  if (gstinEl) gstinEl.value = gstin;
+  const code = Pharmacy.gstinStateCode(gstin);
+  if (code && codeEl) codeEl.value = code;
+  const name = Pharmacy.gstinStateName(code);
+  if (name && stateEl) stateEl.value = name;
+}
+
+function bindGstinField(gstinId, stateId, codeId) {
+  const gstinEl = $(gstinId);
+  if (!gstinEl) return;
+  gstinEl.addEventListener("input", () => fillGstinDerived(gstinEl, $(stateId), $(codeId)));
+  gstinEl.addEventListener("blur", () => fillGstinDerived(gstinEl, $(stateId), $(codeId)));
+}
+
+bindGstinField("set-gstin", "set-state", "set-scode");
+bindGstinField("sup-gstin", "sup-state", "sup-scode");
+$("cust-gstin")?.addEventListener("input", (e) => {
+  e.target.value = Pharmacy.formatGstin(e.target.value);
+});
+$("cust-gstin")?.addEventListener("blur", (e) => {
+  e.target.value = Pharmacy.formatGstin(e.target.value);
+});
 
 $("po-date").value = new Date().toISOString().slice(0, 10);
 
@@ -1317,7 +1423,8 @@ showQrPoster().catch(() => {});
 setInterval(() => loadQrOrders(true), 12000);
 
 loadBootstrap().catch((err) => {
-  $("shop-place").textContent = err.message;
-  setHint(err.message, "error");
+  const msg = err.message || "Cannot load shop data";
+  if ($("shop-place")) $("shop-place").textContent = msg;
+  setHint(msg, "error");
   showQrPoster().catch(() => {});
 });

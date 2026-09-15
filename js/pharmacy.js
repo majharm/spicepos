@@ -4,17 +4,84 @@ export function round2(n) {
   return Math.round((Number(n) + Number.EPSILON) * 100) / 100;
 }
 
+export const GSTIN_PATTERN = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/;
+
+export const GST_STATE_NAMES = {
+  "01": "Jammu and Kashmir",
+  "02": "Himachal Pradesh",
+  "03": "Punjab",
+  "04": "Chandigarh",
+  "05": "Uttarakhand",
+  "06": "Haryana",
+  "07": "Delhi",
+  "08": "Rajasthan",
+  "09": "Uttar Pradesh",
+  "10": "Bihar",
+  "11": "Sikkim",
+  "12": "Arunachal Pradesh",
+  "13": "Nagaland",
+  "14": "Manipur",
+  "15": "Mizoram",
+  "16": "Tripura",
+  "17": "Meghalaya",
+  "18": "Assam",
+  "19": "West Bengal",
+  "20": "Jharkhand",
+  "21": "Odisha",
+  "22": "Chhattisgarh",
+  "23": "Madhya Pradesh",
+  "24": "Gujarat",
+  "26": "Dadra and Nagar Haveli and Daman and Diu",
+  "27": "Maharashtra",
+  "29": "Karnataka",
+  "30": "Goa",
+  "31": "Lakshadweep",
+  "32": "Kerala",
+  "33": "Tamil Nadu",
+  "34": "Puducherry",
+  "35": "Andaman and Nicobar Islands",
+  "36": "Telangana",
+  "37": "Andhra Pradesh",
+  "38": "Ladakh",
+  "97": "Other Territory",
+};
+
+export function formatGstin(gstin) {
+  return String(gstin || "")
+    .toUpperCase()
+    .replace(/[^0-9A-Z]/g, "");
+}
+
+export function isValidGstin(gstin) {
+  const value = formatGstin(gstin);
+  return !value || GSTIN_PATTERN.test(value);
+}
+
 export function gstinStateCode(gstin) {
-  const digits = String(gstin || "")
-    .trim()
-    .toUpperCase();
+  const digits = formatGstin(gstin);
   if (digits.length < 2 || !/^\d{2}/.test(digits)) return "";
   return digits.slice(0, 2);
 }
 
-export function isInterstate(fromGstin, toGstin) {
-  const a = gstinStateCode(fromGstin);
-  const b = gstinStateCode(toGstin);
+export function normalizeStateCode(stateCode) {
+  const digits = String(stateCode || "").replace(/\D/g, "");
+  if (!digits) return "";
+  return digits.length === 1 ? digits.padStart(2, "0") : digits.slice(0, 2);
+}
+
+export function partyStateCode(party) {
+  if (party == null || party === "") return "";
+  if (typeof party === "string") return gstinStateCode(party) || normalizeStateCode(party);
+  return gstinStateCode(party.gstin) || normalizeStateCode(party.state_code);
+}
+
+export function gstinStateName(code) {
+  return GST_STATE_NAMES[normalizeStateCode(code) || gstinStateCode(code)] || "";
+}
+
+export function isInterstate(fromParty, toParty) {
+  const a = partyStateCode(fromParty);
+  const b = partyStateCode(toParty);
   return Boolean(a && b && a !== b);
 }
 

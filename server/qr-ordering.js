@@ -319,21 +319,20 @@ export function registerQrOrdering(app) {
         if (!lineRows.length) throw new Error("QR order has no lines");
         const customer = await findOrCreateCustomer(conn, { name: qr.customer_name, mobile: qr.mobile });
         const [companyRows] = await conn.query(
-          "SELECT gstin FROM company_settings WHERE business_id = ? LIMIT 1",
+          "SELECT gstin, state_code FROM company_settings WHERE business_id = ? LIMIT 1",
           [BUSINESS_ID],
         );
-        const companyGstin = companyRows[0]?.gstin || "";
         const built = await buildPricedLines(
           conn,
           customer,
           lineRows.map((l) => ({ itemId: l.item_id, quantity: l.quantity_gm })),
-          { companyGstin },
+          { company: companyRows[0] },
         );
         const sale = await insertSalesOrder(conn, {
           customer,
           built,
           paymentMethod: method,
-          companyGstin,
+          company: companyRows[0],
         });
         await conn.query(
           "UPDATE qr_orders SET status = 'completed', sales_order_id = ? WHERE id = ?",

@@ -9,11 +9,18 @@ import { workbookXml } from "./excel.js";
 import { ensureQrOrderSchema, registerQrOrdering } from "./qr-ordering.js";
 import { ensurePharmacySchema } from "./pharmacy-schema.js";
 import { listAllBatches, upsertBatch } from "./pharmacy-stock.js";
+import {
+  formatGstin,
+  gstinStateCode,
+  gstinStateName,
+  isValidGstin,
+  normalizeStateCode,
+} from "../js/pharmacy.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.join(__dirname, "..");
 const app = express();
-const APP_VERSION = "pharmacy-2";
+const APP_VERSION = "pharmacy-6";
 const APP_VERTICAL = "pharmacy";
 app.use(express.json({ limit: "8mb" }));
 
@@ -264,7 +271,7 @@ app.get("/api/reports/excel", async (req, res) => {
     res.setHeader("Content-Type", "application/vnd.ms-excel; charset=utf-8");
     res.setHeader(
       "Content-Disposition",
-      `attachment; filename="swami-reports-${slug}-${from}-to-${to}.xls"`,
+      `attachment; filename="pharmacy-reports-${slug}-${from}-to-${to}.xls"`,
     );
     res.send(xml);
   } catch (err) {
@@ -308,43 +315,75 @@ app.post("/api/items/:id/receive", async (req, res) => {
   }
 });
 
+function blank(value) {
+  const text = value == null ? "" : String(value).trim();
+  return text || null;
+}
+
+async function upsertCompanySettings(fields) {
+  const cols = await query(
+    `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
+     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'company_settings'`,
+  );
+  const allowed = new Set(cols.map((row) => row.COLUMN_NAME));
+  const payload = Object.fromEntries(
+    Object.entries(fields).filter(([key, value]) => allowed.has(key) && value !== undefined),
+  );
+  const [existing] = await query("SELECT business_id FROM company_settings WHERE business_id = ? LIMIT 1", [
+    BUSINESS_ID,
+  ]);
+  if (existing) {
+    const keys = Object.keys(payload);
+    if (!keys.length) return;
+    await query(
+      `UPDATE company_settings SET ${keys.map((key) => `\`${key}\` = ?`).join(", ")} WHERE business_id = ?`,
+      [...keys.map((key) => payload[key]), BUSINESS_ID],
+    );
+    return;
+  }
+  payload.business_id = BUSINESS_ID;
+  if (allowed.has("id") && !payload.id) payload.id = crypto.randomUUID();
+  const keys = Object.keys(payload);
+  await query(
+    `INSERT INTO company_settings (${keys.map((key) => `\`${key}\``).join(", ")}) VALUES (${keys.map(() => "?").join(", ")})`,
+    keys.map((key) => payload[key]),
+  );
+}
+
 app.post("/api/settings", async (req, res) => {
   const body = req.body || {};
-  const {
-    name,
-    address,
-    phone,
-    email,
-    gstin,
-    drug_licence_no,
-    drug_licence_type,
-    fssai_licence_no,
-    pharmacy_registration_no,
-    other_licence_no,
-    licence_expiry,
-    state,
-    state_code,
-  } = body;
-  if (!name || !String(name).trim()) {
+  const name = blank(body.name);
+  if (!name) {
     res.status(400).json({ error: "Shop name is required" });
     return;
   }
-  let logoSql = "";
-  const params = [
-    String(name).trim(),
-    address || null,
-    phone || null,
-    email || null,
-    gstin || null,
-    drug_licence_no || null,
-    drug_licence_type || null,
-    fssai_licence_no || null,
-    pharmacy_registration_no || null,
-    other_licence_no || null,
-    licence_expiry || null,
-    state || null,
-    state_code || null,
-  ];
+  const gstin = formatGstin(body.gstin);
+  if (!isValidGstin(gstin)) {
+    res.status(400).json({ error: "Enter a valid 15-character GSTIN" });
+    return;
+  }
+  const stateCode = normalizeStateCode(body.state_code) || gstinStateCode(gstin) || null;
+  const state = blank(body.state) || gstinStateName(stateCode) || null;
+  const email = blank(body.email);
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    res.status(400).json({ error: "Enter a valid email address" });
+    return;
+  }
+  const fields = {
+    name,
+    address: blank(body.address),
+    phone: blank(body.phone),
+    email,
+    gstin: gstin || null,
+    drug_licence_no: blank(body.drug_licence_no),
+    drug_licence_type: blank(body.drug_licence_type),
+    fssai_licence_no: blank(body.fssai_licence_no),
+    pharmacy_registration_no: blank(body.pharmacy_registration_no),
+    other_licence_no: blank(body.other_licence_no),
+    licence_expiry: blank(body.licence_expiry),
+    state,
+    state_code: stateCode,
+  };
   if (Object.prototype.hasOwnProperty.call(body, "logo_url")) {
     const logo = body.logo_url ? String(body.logo_url) : "";
     if (logo && !logo.startsWith("data:image/")) {
@@ -355,27 +394,14 @@ app.post("/api/settings", async (req, res) => {
       res.status(400).json({ error: "Logo is too large" });
       return;
     }
-    logoSql = ", logo_url = ?";
-    params.push(logo || null);
+    fields.logo_url = logo || null;
   }
-  params.push(BUSINESS_ID);
   try {
     await ensureLogoColumn();
     await ensurePharmacySchema();
-    await query(
-      `UPDATE company_settings
-       SET name = ?, address = ?, phone = ?, email = ?, gstin = ?,
-           drug_licence_no = ?, drug_licence_type = ?, fssai_licence_no = ?,
-           pharmacy_registration_no = ?, other_licence_no = ?, licence_expiry = ?,
-           state = ?, state_code = ?${logoSql}
-       WHERE business_id = ?`,
-      params,
-    );
-    const [company] = await query(
-      "SELECT * FROM company_settings WHERE business_id = ?",
-      [BUSINESS_ID],
-    );
-    res.json({ ok: true, company });
+    await upsertCompanySettings(fields);
+    const [company] = await query("SELECT * FROM company_settings WHERE business_id = ?", [BUSINESS_ID]);
+    res.json({ ok: true, company: company || { ...fields, business_id: BUSINESS_ID } });
   } catch (err) {
     res.status(500).json({ error: String(err.message) });
   }
@@ -405,11 +431,10 @@ app.post("/api/checkout", async (req, res) => {
       const customer = customers[0];
       if (!customer) throw new Error("Customer not found");
       const [companyRows] = await conn.query(
-        "SELECT gstin FROM company_settings WHERE business_id = ? LIMIT 1",
+        "SELECT gstin, state_code FROM company_settings WHERE business_id = ? LIMIT 1",
         [BUSINESS_ID],
       );
-      const companyGstin = companyRows[0]?.gstin || "";
-      const built = await buildPricedLines(conn, customer, lines, { companyGstin });
+      const built = await buildPricedLines(conn, customer, lines, { company: companyRows[0] });
       return insertSalesOrder(conn, {
         customer,
         built,
@@ -420,7 +445,7 @@ app.post("/api/checkout", async (req, res) => {
         prescriptionNo,
         discount,
         amountPaid,
-        companyGstin,
+        company: companyRows[0],
       });
     });
     res.json({ ok: true, order: result });

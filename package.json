@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "SWAMI MASALE SASWAD POS — MySQL backend matching the old Replit app.",
+  "description": "Pharmacy Medical POS — MySQL backend for medicines, batches, and bills.",
   "scripts": {
     "start": "node server.js",
     "test": "node --test js/money.test.js js/store.test.js js/pharmacy.test.js js/invoice-share.test.js server/qr-ordering.test.js"
