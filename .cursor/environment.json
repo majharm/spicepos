@@ -1,0 +1,21 @@
+{
+  "name": "SpicePOS Pharmacy",
+  "build": {
+    "dockerfile": "Dockerfile"
+  },
+  "user": "ubuntu",
+  "install": "./scripts/cloud-agent-install.sh",
+  "start": "./scripts/cloud-agent-start.sh",
+  "terminals": [
+    {
+      "name": "pos-server",
+      "command": "npm start"
+    }
+  ],
+  "ports": [
+    {
+      "name": "pos",
+      "port": 5173
+    }
+  ]
+}

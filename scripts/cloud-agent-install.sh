@@ -22,12 +22,8 @@ else
   npm install
 fi
 
-if [[ ! -f .env && -f .env.example ]]; then
-  cp .env.example .env
-  if ! grep -q '^DB_NAME=spicepos$' .env 2>/dev/null; then
-    cat >> .env <<'EOF'
-
-# Cloud Agent local defaults (override with dashboard secrets)
+if [[ ! -f .env ]]; then
+  cat > .env <<'EOF'
 NODE_ENV=development
 PORT=5173
 DB_HOST=localhost
@@ -35,13 +31,13 @@ DB_PORT=3306
 DB_NAME=spicepos
 DB_USER=spicepos
 DB_PASSWORD=spicepos_test
+BUSINESS_ID=00000000-0000-4000-8000-000000000001
 MASTER_ADMIN_EMAIL=master@atavpos.local
 MASTER_ADMIN_PASSWORD=Master@12345
 DEMO_TENANT_PASSWORD=Demo@12345
 CASHIER_PASSWORD=Cashier@12345
 COOKIE_SECURE=0
 EOF
-  fi
 fi
 
 echo "Install complete."
