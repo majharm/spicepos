@@ -4,7 +4,10 @@ import {
   allocateFefo,
   billTotals,
   cartBatchPreview,
+  expiryDateToMonth,
+  expiryMonthToDate,
   expiryStatus,
+  primaryBatch,
   formatGstin,
   gstinStateCode,
   gstinStateName,
@@ -75,6 +78,22 @@ test("cart batch preview falls back to OPEN stock without batches", () => {
   const preview = cartBatchPreview([], item, 1);
   assert.equal(preview.batchNo, "OPEN");
   assert.equal(preview.expiry, "2027-12-31");
+});
+
+test("expiry month helpers round-trip YYYY-MM for item master", () => {
+  assert.equal(expiryMonthToDate("2027-06"), "2027-06-01");
+  assert.equal(expiryDateToMonth("2027-06-15"), "2027-06");
+  assert.equal(expiryMonthToDate(""), null);
+});
+
+test("primary batch picks earliest expiry for item master edit", () => {
+  const batches = [
+    { item_id: "x", batch_no: "B2", expiry_date: "2027-06-01", qty: 5 },
+    { item_id: "x", batch_no: "B1", expiry_date: "2026-08-01", qty: 3 },
+    { item_id: "y", batch_no: "Z1", expiry_date: "2026-01-01", qty: 1 },
+  ];
+  assert.equal(primaryBatch(batches, "x").batch_no, "B1");
+  assert.equal(primaryBatch(batches, "missing"), null);
 });
 
 test("loose tablet billing divides strip price by units per pack", () => {

@@ -376,6 +376,69 @@ function fillChoice(sel, options, value) {
   sel.innerHTML = list.map((t) => `<option ${t === value ? "selected" : ""}>${escapeHtml(t)}</option>`).join("");
 }
 
+function itemDraftFromForm() {
+  return {
+    name: $("item-name")?.value,
+    medicine_type: $("item-type")?.value,
+    pack_size: $("item-pack-size")?.value,
+    pack_unit: $("item-unit")?.value,
+    units_per_pack: Number($("item-upp")?.value) || 1,
+    selling_price: Number($("item-retail")?.value) || 0,
+    retail_rate: Number($("item-retail")?.value) || 0,
+    mrp: Number($("item-mrp")?.value) || 0,
+  };
+}
+
+function updateLooseRatePreview() {
+  const draft = itemDraftFromForm();
+  const unitEl = $("item-loose-unit");
+  const rateEl = $("item-loose-rate");
+  if (!unitEl || !rateEl) return;
+  unitEl.textContent = Pharmacy.looseUnitLabel(draft);
+  const loose = Pharmacy.looseSaleRate(draft);
+  rateEl.textContent = loose > 0 ? `${money(loose)} / ${Pharmacy.looseUnitLabel(draft)}` : "—";
+}
+
+function clearItemForm() {
+  $("item-form").reset();
+  $("item-id").value = "";
+  if ($("item-upp")) $("item-upp").value = 10;
+  if ($("item-gst")) $("item-gst").value = 12;
+  if ($("item-category")) $("item-category").value = "Medical";
+  if ($("item-opening-qty")) $("item-opening-qty").value = "";
+  updateLooseRatePreview();
+}
+
+function fillItemForm(item) {
+  if (!item) {
+    clearItemForm();
+    return;
+  }
+  $("item-id").value = item.id;
+  $("item-name").value = item.name || "";
+  $("item-local").value = genericOf(item);
+  if ($("item-type")) fillChoice($("item-type"), Pharmacy.MEDICINE_TYPES, item.medicine_type || "Tablet");
+  $("item-category").value = item.category || "Medical";
+  if ($("item-mfr")) $("item-mfr").value = item.manufacturer || "";
+  if ($("item-hsn")) $("item-hsn").value = item.hsn || "";
+  if ($("item-pack-size")) $("item-pack-size").value = item.pack_size || "";
+  if ($("item-unit")) fillChoice($("item-unit"), Pharmacy.PACK_TYPES, item.pack_unit || "Strip");
+  if ($("item-upp")) $("item-upp").value = item.units_per_pack || 1;
+  if ($("item-mrp")) $("item-mrp").value = item.mrp || "";
+  $("item-retail").value = item.selling_price || item.retail_rate || "";
+  $("item-purchase").value = item.purchase_rate ?? "";
+  $("item-gst").value = item.gst_rate ?? 12;
+  if ($("item-barcode")) $("item-barcode").value = item.barcode || "";
+  if ($("item-reorder")) $("item-reorder").value = item.reorder_level_gm || 0;
+  const batch = Pharmacy.primaryBatch(state.batches, item.id);
+  if ($("item-batch-no")) $("item-batch-no").value = batch?.batch_no || "";
+  if ($("item-expiry")) {
+    $("item-expiry").value = Pharmacy.expiryDateToMonth(batch?.expiry_date || item.default_expiry);
+  }
+  if ($("item-opening-qty")) $("item-opening-qty").value = "";
+  updateLooseRatePreview();
+}
+
 function renderItemsTable() {
   $("items-table").innerHTML = `<table><thead><tr>
     <th>Code</th><th>Medicine</th><th>Generic</th><th>Type</th><th>Mfr</th><th>Pack</th><th>MRP</th><th>Sale</th><th>Stock</th><th></th>
@@ -945,23 +1008,9 @@ $("items-table").addEventListener("click", async (e) => {
   if (!edit) return;
   const i = state.items.find((x) => x.id === edit.dataset.editItem);
   if (!i) return;
-  $("item-id").value = i.id;
-  $("item-name").value = i.name;
-  $("item-local").value = genericOf(i);
-  if ($("item-type")) fillChoice($("item-type"), Pharmacy.MEDICINE_TYPES, i.medicine_type || "Tablet");
-  $("item-category").value = i.category || "Medical";
-  if ($("item-mfr")) $("item-mfr").value = i.manufacturer || "";
-  if ($("item-hsn")) $("item-hsn").value = i.hsn || "";
-  if ($("item-pack-size")) $("item-pack-size").value = i.pack_size || "";
-  if ($("item-unit")) fillChoice($("item-unit"), Pharmacy.PACK_TYPES, i.pack_unit || "Strip");
-  if ($("item-upp")) $("item-upp").value = i.units_per_pack || 1;
-  if ($("item-mrp")) $("item-mrp").value = i.mrp || "";
-  $("item-retail").value = i.selling_price || i.retail_rate;
-  $("item-purchase").value = i.purchase_rate;
-  $("item-gst").value = i.gst_rate;
-  if ($("item-barcode")) $("item-barcode").value = i.barcode || "";
-  if ($("item-expiry")) $("item-expiry").value = String(i.default_expiry || "").slice(0, 10);
-  if ($("item-reorder")) $("item-reorder").value = i.reorder_level_gm || 0;
+  fillItemForm(i);
+  $("item-hint").textContent = `Editing ${i.name}`;
+  $("item-hint").className = "hint";
 });
 
 $("orders").addEventListener("click", (e) => {
@@ -1118,6 +1167,7 @@ document.querySelector(".nav").addEventListener("click", (e) => {
 
 $("item-form").addEventListener("submit", async (e) => {
   e.preventDefault();
+  const itemId = $("item-id").value;
   const body = {
     name: $("item-name").value,
     generic_name: $("item-local").value,
@@ -1129,31 +1179,40 @@ $("item-form").addEventListener("submit", async (e) => {
     pack_size: $("item-pack-size")?.value,
     pack_unit: $("item-unit")?.value,
     units_per_pack: $("item-upp")?.value,
+    batch_no: ($("item-batch-no")?.value || "").trim(),
+    expiry_date: $("item-expiry")?.value,
+    opening_qty: $("item-opening-qty")?.value,
     mrp: $("item-mrp")?.value,
     selling_price: $("item-retail").value,
     retail_rate: $("item-retail").value,
     purchase_rate: $("item-purchase").value,
     gst_rate: $("item-gst").value,
     barcode: $("item-barcode")?.value,
-    default_expiry: $("item-expiry")?.value,
     reorder_level: $("item-reorder")?.value,
   };
   try {
-    if ($("item-id").value) await api(`/api/items/${$("item-id").value}`, { method: "PUT", body: JSON.stringify(body) });
-    else await api("/api/items", { method: "POST", body: JSON.stringify(body) });
-    $("item-hint").textContent = "Saved";
-    $("item-hint").className = "hint ok";
-    $("item-form").reset();
-    $("item-id").value = "";
+    const result = itemId
+      ? await api(`/api/items/${itemId}`, { method: "PUT", body: JSON.stringify(body) })
+      : await api("/api/items", { method: "POST", body: JSON.stringify(body) });
+    const savedId = itemId || result.item?.id;
     await loadBootstrap();
+    const saved = state.items.find((x) => x.id === savedId) || result.item;
+    fillItemForm(saved);
+    $("item-hint").textContent = saved ? `Saved ${saved.name}` : "Saved";
+    $("item-hint").className = "hint ok";
   } catch (err) {
     $("item-hint").textContent = err.message;
     $("item-hint").className = "hint error";
   }
 });
 $("item-cancel").addEventListener("click", () => {
-  $("item-form").reset();
-  $("item-id").value = "";
+  clearItemForm();
+  $("item-hint").textContent = "";
+  $("item-hint").className = "hint";
+});
+["item-type", "item-upp", "item-retail", "item-mrp", "item-pack-size", "item-unit"].forEach((id) => {
+  $(id)?.addEventListener("input", updateLooseRatePreview);
+  $(id)?.addEventListener("change", updateLooseRatePreview);
 });
 
 $("customer-form").addEventListener("submit", async (e) => {

@@ -120,7 +120,7 @@
             <label>Company / Manufacturer <input id="item-mfr" /></label>
             <label>HSN Code <input id="item-hsn" /></label>
             <label>Pack Size <input id="item-pack-size" placeholder="10 Tablets" /></label>
-            <label>Unit
+            <label>Pack Size Unit
               <select id="item-unit">
                 <option>Strip</option>
                 <option>Bottle</option>
@@ -132,12 +132,16 @@
               </select>
             </label>
             <label>Items per Pack/Strip <input id="item-upp" type="number" min="1" value="10" /></label>
-            <label>MRP <input id="item-mrp" type="number" step="0.01" /></label>
+            <label>Batch No. <input id="item-batch-no" placeholder="e.g. DOL2026A" /></label>
+            <label>Expiry Date (MM/YYYY) <input id="item-expiry" type="month" /></label>
+            <label>Opening Stock (loose units) <input id="item-opening-qty" type="number" min="0" step="1" placeholder="Optional — add stock on save" /></label>
+            <label>MRP (per pack/strip) <input id="item-mrp" type="number" step="0.01" /></label>
             <label>Selling Price (per pack/strip) <input id="item-retail" type="number" step="0.01" /></label>
-            <label>Purchase Price <input id="item-purchase" type="number" step="0.01" /></label>
+            <label>Purchase Price (per pack/strip) <input id="item-purchase" type="number" step="0.01" /></label>
+            <label>Loose Unit <output id="item-loose-unit" class="computed">Tablet</output></label>
+            <label>Loose Rate <output id="item-loose-rate" class="computed">—</output></label>
             <label>GST % <input id="item-gst" type="number" step="0.01" value="12" /></label>
             <label>Barcode <input id="item-barcode" /></label>
-            <label>Default Expiry <input id="item-expiry" type="date" /></label>
             <label>Reorder Level <input id="item-reorder" type="number" /></label>
             <button class="btn primary" type="submit">Save</button>
             <button class="btn" type="button" id="item-cancel">Clear</button>

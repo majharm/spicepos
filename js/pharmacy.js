@@ -158,6 +158,32 @@ export function looseMrp(item = {}) {
   return upp > 1 && mrp > 0 ? round2(mrp / upp) : mrp;
 }
 
+/** Earliest-expiry batch row for an item (item master edit form). */
+export function primaryBatch(batches, itemId) {
+  const list = (batches || []).filter((b) => b.item_id === itemId);
+  if (!list.length) return null;
+  return [...list].sort((a, b) => {
+    const ae = a.expiry_date ? String(a.expiry_date) : "9999-12-31";
+    const be = b.expiry_date ? String(b.expiry_date) : "9999-12-31";
+    return ae.localeCompare(be);
+  })[0];
+}
+
+/** Convert HTML month input (YYYY-MM) to a DATE string for MySQL. */
+export function expiryMonthToDate(monthValue) {
+  const raw = String(monthValue || "").trim();
+  if (!raw) return null;
+  if (/^\d{4}-\d{2}$/.test(raw)) return `${raw}-01`;
+  if (/^\d{4}-\d{2}-\d{2}/.test(raw)) return raw.slice(0, 10);
+  return null;
+}
+
+/** Convert stored DATE to HTML month input value (YYYY-MM). */
+export function expiryDateToMonth(dateValue) {
+  if (!dateValue) return "";
+  return String(dateValue).slice(0, 7);
+}
+
 /** FEFO batch preview for the pharmacy bill cart (earliest expiry first). */
 export function cartBatchPreview(liveBatches, item, qty) {
   const pack = item?.pack_unit || "Strip";

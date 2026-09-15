@@ -6,6 +6,7 @@ import {
   gstinStateName,
   isInterstate,
   isValidGstin,
+  expiryMonthToDate,
   looseMrp,
   looseSaleRate,
   mergeSaleLines,
@@ -15,7 +16,7 @@ import {
   round2,
   saleLineTotals,
 } from "../js/pharmacy.js";
-import { deductBatches, restoreBatchQty, syncItemStock, upsertBatch } from "./pharmacy-stock.js";
+import { deductBatches, restoreBatchQty, saveItemBatch, syncItemStock, upsertBatch } from "./pharmacy-stock.js";
 
 export function lineAmount(quantity, ratePerUnit) {
   return Number(quantity) * Number(ratePerUnit);
@@ -277,9 +278,25 @@ function itemPayload(b) {
     units_per_pack: Number(b.units_per_pack) || 1,
     mrp: Number(b.mrp) || selling,
     barcode: b.barcode || null,
-    default_expiry: b.default_expiry || b.expiry_date || null,
+    default_expiry: expiryMonthToDate(b.expiry_date) || b.default_expiry || null,
     status: b.status || "active",
   };
+}
+
+async function persistItemBatch(conn, itemId, body, itemFields) {
+  const batchNo = String(body.batch_no || "").trim();
+  const expiryDate =
+    expiryMonthToDate(body.expiry_date) || itemFields.default_expiry || body.default_expiry || null;
+  if (!batchNo || !expiryDate) return;
+  const openingQty = Number(body.opening_qty ?? body.batch_qty);
+  await saveItemBatch(conn, {
+    itemId,
+    batchNo,
+    expiryDate,
+    qty: Number.isFinite(openingQty) && openingQty > 0 ? openingQty : 0,
+    mrp: itemFields.mrp,
+    purchaseRate: itemFields.purchase_rate,
+  });
 }
 
 export function registerCrud(app) {
@@ -374,6 +391,7 @@ export function registerCrud(app) {
             p.default_expiry,
           ],
         );
+        await persistItemBatch(conn, id, b, p);
         const [rows] = await conn.query("SELECT * FROM items WHERE id = ?", [id]);
         return rows[0];
       });
@@ -384,44 +402,49 @@ export function registerCrud(app) {
   });
 
   app.put("/api/items/:id", async (req, res) => {
-    const p = itemPayload(req.body || {});
+    const b = req.body || {};
+    const p = itemPayload(b);
     try {
-      await query(
-        `UPDATE items SET
-           name=?, local_name=?, category=?, subcategory=?, base_unit=?,
-           purchase_rate=?, retail_rate=?, b2b_rate=?, gst_rate=?, hsn=?,
-           reorder_level_gm=?, status=?,
-           generic_name=?, medicine_type=?, manufacturer=?, pack_size=?, pack_unit=?,
-           units_per_pack=?, mrp=?, selling_price=?, barcode=?, default_expiry=?
-         WHERE id=? AND business_id=?`,
-        [
-          p.name,
-          p.local_name,
-          p.category,
-          p.subcategory,
-          p.base_unit,
-          p.purchase_rate,
-          p.retail_rate,
-          p.b2b_rate,
-          p.gst_rate,
-          p.hsn,
-          p.reorder_level_gm,
-          p.status,
-          p.generic_name,
-          p.medicine_type,
-          p.manufacturer,
-          p.pack_size,
-          p.pack_unit,
-          p.units_per_pack,
-          p.mrp,
-          p.selling_price,
-          p.barcode,
-          p.default_expiry,
-          req.params.id,
-          BUSINESS_ID,
-        ],
-      );
-      const [item] = await query("SELECT * FROM items WHERE id = ?", [req.params.id]);
+      const item = await withTransaction(async (conn) => {
+        await conn.query(
+          `UPDATE items SET
+             name=?, local_name=?, category=?, subcategory=?, base_unit=?,
+             purchase_rate=?, retail_rate=?, b2b_rate=?, gst_rate=?, hsn=?,
+             reorder_level_gm=?, status=?,
+             generic_name=?, medicine_type=?, manufacturer=?, pack_size=?, pack_unit=?,
+             units_per_pack=?, mrp=?, selling_price=?, barcode=?, default_expiry=?
+           WHERE id=? AND business_id=?`,
+          [
+            p.name,
+            p.local_name,
+            p.category,
+            p.subcategory,
+            p.base_unit,
+            p.purchase_rate,
+            p.retail_rate,
+            p.b2b_rate,
+            p.gst_rate,
+            p.hsn,
+            p.reorder_level_gm,
+            p.status,
+            p.generic_name,
+            p.medicine_type,
+            p.manufacturer,
+            p.pack_size,
+            p.pack_unit,
+            p.units_per_pack,
+            p.mrp,
+            p.selling_price,
+            p.barcode,
+            p.default_expiry,
+            req.params.id,
+            BUSINESS_ID,
+          ],
+        );
+        await persistItemBatch(conn, req.params.id, b, p);
+        const [rows] = await conn.query("SELECT * FROM items WHERE id = ?", [req.params.id]);
+        return rows[0];
+      });
       res.json({ ok: true, item });
     } catch (err) {
       res.status(500).json({ error: String(err.message) });

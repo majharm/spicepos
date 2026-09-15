@@ -33,6 +33,54 @@ export async function syncItemStock(conn, itemId) {
   return qty;
 }
 
+/** Save batch metadata from item master; optionally add opening stock. */
+export async function saveItemBatch(
+  conn,
+  { itemId, batchNo, expiryDate, qty, mrp, purchaseRate, purchaseId, allowExpired = false },
+) {
+  const no = String(batchNo || "").trim();
+  if (!no || no.toUpperCase() === "OPEN") return null;
+  if (!expiryDate) return null;
+  if (!allowExpired && expiryStatus(expiryDate) === "expired") {
+    throw new Error(`Batch ${no} is already expired`);
+  }
+  const addQty = Number(qty);
+  const [rows] = await conn.query(
+    `SELECT * FROM item_batches
+     WHERE business_id = ? AND item_id = ? AND batch_no = ? FOR UPDATE`,
+    [BUSINESS_ID, itemId, no],
+  );
+  if (rows[0]) {
+    if (Number.isFinite(addQty) && addQty > 0) {
+      await conn.query(
+        `UPDATE item_batches
+         SET qty = qty + ?, expiry_date = ?, mrp = ?, purchase_rate = ?, purchase_id = COALESCE(?, purchase_id)
+         WHERE id = ?`,
+        [addQty, expiryDate, Number(mrp) || 0, Number(purchaseRate) || 0, purchaseId || null, rows[0].id],
+      );
+    } else {
+      await conn.query(
+        `UPDATE item_batches
+         SET expiry_date = ?, mrp = ?, purchase_rate = ?, purchase_id = COALESCE(?, purchase_id)
+         WHERE id = ?`,
+        [expiryDate, Number(mrp) || 0, Number(purchaseRate) || 0, purchaseId || null, rows[0].id],
+      );
+    }
+    await syncItemStock(conn, itemId);
+    return rows[0].id;
+  }
+  const id = crypto.randomUUID();
+  const initialQty = Number.isFinite(addQty) && addQty > 0 ? addQty : 0;
+  await conn.query(
+    `INSERT INTO item_batches (
+       id, business_id, item_id, batch_no, expiry_date, qty, mrp, purchase_rate, purchase_id
+     ) VALUES (?,?,?,?,?,?,?,?,?)`,
+    [id, BUSINESS_ID, itemId, no, expiryDate, initialQty, Number(mrp) || 0, Number(purchaseRate) || 0, purchaseId || null],
+  );
+  await syncItemStock(conn, itemId);
+  return id;
+}
+
 export async function upsertBatch(conn, { itemId, batchNo, expiryDate, qty, mrp, purchaseRate, purchaseId, allowExpired = false }) {
   const no = String(batchNo || "").trim();
   if (!no || no.toUpperCase() === "OPEN") throw new Error("Batch No. is required");

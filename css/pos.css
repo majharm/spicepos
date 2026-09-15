@@ -385,6 +385,16 @@ a.btn { text-decoration: none; display: inline-block; }
 .pay-row .btn { width: 100%; }
 .tender { display: flex; gap: 8px; }
 .hint { color: var(--muted); font-size: 12px; min-height: 16px; }
+output.computed {
+  display: block;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text);
+  font-size: 14px;
+  min-height: 38px;
+}
 .hint.error { color: var(--danger); }
 .hint.ok { color: var(--mint); }
 
