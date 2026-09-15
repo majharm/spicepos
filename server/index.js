@@ -15,12 +15,14 @@ import {
   gstinStateName,
   isValidGstin,
   normalizeStateCode,
+  primaryBatch,
+  unitsPerPack,
 } from "../js/pharmacy.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.join(__dirname, "..");
 const app = express();
-const APP_VERSION = "pharmacy-7";
+const APP_VERSION = "pharmacy-8";
 const APP_VERTICAL = "pharmacy";
 app.use(express.json({ limit: "8mb" }));
 
@@ -93,12 +95,21 @@ app.get("/api/bootstrap", async (_req, res) => {
        ORDER BY expiry_date IS NULL, expiry_date`,
       [BUSINESS_ID],
     ).catch(() => []);
+    const enrichedItems = items.map((item) => {
+      const primary = primaryBatch(batches, item.id);
+      return {
+        ...item,
+        effective_units_per_pack: unitsPerPack(item),
+        primary_batch_no: primary?.batch_no || null,
+        primary_expiry: primary?.expiry_date || item.default_expiry || null,
+      };
+    });
     res.json({
       vertical: APP_VERTICAL,
       version: APP_VERSION,
       pharmacy: true,
       company: company || { name: "Pharmacy Medical POS" },
-      items,
+      items: enrichedItems,
       customers,
       batches,
       packs: packs.map((p) => ({

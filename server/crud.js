@@ -11,6 +11,8 @@ import {
   looseSaleRate,
   mergeSaleLines,
   normalizeStateCode,
+  DEFAULT_STRIP_TABLET_COUNT,
+  isStripLooseItem,
   parseUnitsFromPackSize,
   purchaseLineTotals,
   remainingReturnQty,
@@ -289,6 +291,7 @@ function resolveUnitsPerPack(b) {
   if (Number.isFinite(explicit) && explicit > 1) return Math.floor(explicit);
   const parsed = parseUnitsFromPackSize(b.pack_size);
   if (parsed > 1) return parsed;
+  if (isStripLooseItem(b)) return DEFAULT_STRIP_TABLET_COUNT;
   return Number.isFinite(explicit) && explicit > 0 ? Math.floor(explicit) : 1;
 }
 

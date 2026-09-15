@@ -120,6 +120,9 @@ export function purchaseLineTotals(line = {}) {
   };
 }
 
+/** Default tablets/capsules per strip when item master was not completed. */
+export const DEFAULT_STRIP_TABLET_COUNT = 10;
+
 /** Parse count from pack size text, e.g. "10 Tablets" → 10. */
 export function parseUnitsFromPackSize(packSize) {
   const text = String(packSize || "").trim();
@@ -131,16 +134,38 @@ export function parseUnitsFromPackSize(packSize) {
   return 0;
 }
 
+const NON_LOOSE_STRIP_TYPES = new Set([
+  "syrup",
+  "injection",
+  "cream",
+  "ointment",
+  "drops",
+  "inhaler",
+  "powder",
+  "gel",
+  "lotion",
+]);
+
+export function isStripLooseItem(item = {}) {
+  const med = String(item.medicine_type || "").trim().toLowerCase();
+  const pack = String(item.pack_unit || item.base_unit || "").trim();
+  if (pack !== "Strip") return false;
+  if (!med || med === "tablet" || med === "capsule" || med === "other") return true;
+  return !NON_LOOSE_STRIP_TYPES.has(med);
+}
+
 export function unitsPerPack(item = {}) {
   const explicit = Number(item.units_per_pack);
   if (Number.isFinite(explicit) && explicit > 1) return Math.floor(explicit);
   const parsed = parseUnitsFromPackSize(item.pack_size);
   if (parsed > 1) return parsed;
+  if (isStripLooseItem(item)) return DEFAULT_STRIP_TABLET_COUNT;
   return Number.isFinite(explicit) && explicit > 0 ? Math.floor(explicit) : 1;
 }
 
 export function looseUnitLabel(item = {}) {
   const type = String(item.medicine_type || "").trim();
+  if (!type && isStripLooseItem(item)) return "Tablet";
   if (type === "Tablet") return "Tablet";
   if (type === "Capsule") return "Capsule";
   if (type === "Vial") return "Vial";
@@ -241,6 +266,13 @@ export function cartBatchPreview(liveBatches, item, qty, allBatches = []) {
     return {
       batchNo: saved.batch_no || "—",
       expiry: formatExpiry(saved.expiry_date),
+      pack,
+    };
+  }
+  if (item?.primary_batch_no) {
+    return {
+      batchNo: item.primary_batch_no,
+      expiry: formatExpiry(item.primary_expiry || item.default_expiry),
       pack,
     };
   }

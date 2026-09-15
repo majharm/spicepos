@@ -427,7 +427,7 @@ function fillItemForm(item) {
   if ($("item-hsn")) $("item-hsn").value = item.hsn || "";
   if ($("item-pack-size")) $("item-pack-size").value = item.pack_size || "";
   if ($("item-unit")) fillChoice($("item-unit"), Pharmacy.PACK_TYPES, item.pack_unit || "Strip");
-  if ($("item-upp")) $("item-upp").value = item.units_per_pack || 1;
+  if ($("item-upp")) $("item-upp").value = Pharmacy.unitsPerPack(item);
   if ($("item-mrp")) $("item-mrp").value = item.mrp || "";
   $("item-retail").value = item.selling_price || item.retail_rate || "";
   $("item-purchase").value = item.purchase_rate ?? "";

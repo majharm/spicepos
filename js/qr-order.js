@@ -11,9 +11,28 @@
       .replaceAll(">", "&gt;")
       .replaceAll('"', "&quot;");
 
+  function parseUnitsFromPackSize(packSize) {
+    const text = String(packSize || "").trim();
+    if (!text) return 0;
+    const lead = text.match(/^(\d+)/);
+    if (lead) return Math.max(1, parseInt(lead[1], 10));
+    const embedded = text.match(/(\d+)\s*(tablet|capsule|tab|cap|unit)s?\b/i);
+    if (embedded) return Math.max(1, parseInt(embedded[1], 10));
+    return 0;
+  }
+
   function unitsPerPack(item) {
-    const n = Number(item.units_per_pack);
-    return Number.isFinite(n) && n > 0 ? Math.floor(n) : 1;
+    const explicit = Number(item.units_per_pack);
+    if (Number.isFinite(explicit) && explicit > 1) return Math.floor(explicit);
+    const parsed = parseUnitsFromPackSize(item.pack_size);
+    if (parsed > 1) return parsed;
+    const med = String(item.medicine_type || "").trim().toLowerCase();
+    const pack = String(item.pack_unit || item.base_unit || "").trim();
+    const nonLoose = new Set(["syrup", "injection", "cream", "ointment", "drops", "inhaler", "powder", "gel", "lotion"]);
+    if (pack === "Strip" && (!med || med === "tablet" || med === "capsule" || med === "other" || !nonLoose.has(med))) {
+      return 10;
+    }
+    return Number.isFinite(explicit) && explicit > 0 ? Math.floor(explicit) : 1;
   }
 
   function looseSaleRate(item) {

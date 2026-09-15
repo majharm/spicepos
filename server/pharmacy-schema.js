@@ -1,4 +1,9 @@
-import { query } from "./db.js";
+import { BUSINESS_ID, query } from "./db.js";
+import {
+  DEFAULT_STRIP_TABLET_COUNT,
+  isStripLooseItem,
+  parseUnitsFromPackSize,
+} from "../js/pharmacy.js";
 
 async function columnExists(table, column) {
   const rows = await query(
@@ -128,6 +133,29 @@ export async function ensurePharmacySchema() {
     INDEX idx_returns_order (order_id)
   )`);
 
+  await ensureSalesReturnLinesTable();
+  await normalizeStripUnitsPerPack();
+}
+
+async function normalizeStripUnitsPerPack() {
+  const items = await query(
+    `SELECT id, pack_size, medicine_type, pack_unit, base_unit, units_per_pack
+     FROM items WHERE business_id = ? AND units_per_pack <= 1`,
+    [BUSINESS_ID],
+  );
+  for (const item of items) {
+    if (!isStripLooseItem(item)) continue;
+    const parsed = parseUnitsFromPackSize(item.pack_size);
+    const next = parsed > 1 ? parsed : DEFAULT_STRIP_TABLET_COUNT;
+    await query("UPDATE items SET units_per_pack = ? WHERE id = ? AND business_id = ?", [
+      next,
+      item.id,
+      BUSINESS_ID,
+    ]);
+  }
+}
+
+async function ensureSalesReturnLinesTable() {
   await query(`CREATE TABLE IF NOT EXISTS sales_return_lines (
     id VARCHAR(36) PRIMARY KEY,
     return_id VARCHAR(36) NOT NULL,
@@ -144,3 +172,4 @@ export async function ensurePharmacySchema() {
     INDEX idx_return_lines_return (return_id)
   )`);
 }
+

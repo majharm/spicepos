@@ -71,7 +71,7 @@ test("cart batch preview picks earliest expiry batch (FEFO)", () => {
   const preview = cartBatchPreview(batches, item, 2);
   assert.equal(preview.batchNo, "B1");
   assert.equal(preview.expiry, "2026-08");
-  assert.equal(preview.pack, "Strip");
+  assert.equal(preview.pack, "Strip · 10 Tablet");
 });
 
 test("cart batch preview falls back to OPEN stock without batches", () => {
@@ -109,6 +109,28 @@ test("primary batch picks earliest expiry for item master edit", () => {
 test("units per pack can be inferred from pack size text", () => {
   assert.equal(parseUnitsFromPackSize("10 Tablets"), 10);
   assert.equal(unitsPerPack({ pack_size: "10 Tablets", units_per_pack: 1 }), 10);
+});
+
+test("strip tablet items default to 10 per pack when unset", () => {
+  const dolo = {
+    name: "dolo650",
+    selling_price: 20,
+    units_per_pack: 1,
+    medicine_type: "Tablet",
+    pack_unit: "Strip",
+  };
+  assert.equal(unitsPerPack(dolo), 10);
+  assert.equal(looseSaleRate(dolo), 2);
+  const line = saleLineTotals({ qty: 2, rate: looseSaleRate(dolo), gstRate: 0 });
+  assert.equal(line.taxable, 4);
+});
+
+test("strip medicines without medicine type still default to 10 per pack", () => {
+  const dolo = { name: "dolo650", selling_price: 60, units_per_pack: 1, pack_unit: "Strip" };
+  assert.equal(unitsPerPack(dolo), 10);
+  assert.equal(looseSaleRate(dolo), 6);
+  const line = saleLineTotals({ qty: 2, rate: looseSaleRate(dolo), gstRate: 0 });
+  assert.equal(line.taxable, 12);
 });
 
 test("loose tablet billing uses pack size when units_per_pack is unset", () => {
