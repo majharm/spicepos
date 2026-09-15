@@ -120,9 +120,23 @@ export function purchaseLineTotals(line = {}) {
   };
 }
 
+/** Parse count from pack size text, e.g. "10 Tablets" → 10. */
+export function parseUnitsFromPackSize(packSize) {
+  const text = String(packSize || "").trim();
+  if (!text) return 0;
+  const lead = text.match(/^(\d+)/);
+  if (lead) return Math.max(1, parseInt(lead[1], 10));
+  const embedded = text.match(/(\d+)\s*(tablet|capsule|tab|cap|unit)s?\b/i);
+  if (embedded) return Math.max(1, parseInt(embedded[1], 10));
+  return 0;
+}
+
 export function unitsPerPack(item = {}) {
-  const n = Number(item.units_per_pack);
-  return Number.isFinite(n) && n > 0 ? Math.floor(n) : 1;
+  const explicit = Number(item.units_per_pack);
+  if (Number.isFinite(explicit) && explicit > 1) return Math.floor(explicit);
+  const parsed = parseUnitsFromPackSize(item.pack_size);
+  if (parsed > 1) return parsed;
+  return Number.isFinite(explicit) && explicit > 0 ? Math.floor(explicit) : 1;
 }
 
 export function looseUnitLabel(item = {}) {
@@ -184,9 +198,24 @@ export function expiryDateToMonth(dateValue) {
   return String(dateValue).slice(0, 7);
 }
 
+function packLabelFor(item = {}) {
+  const pack = item.pack_unit || item.base_unit || "Strip";
+  const upp = unitsPerPack(item);
+  const loose = looseUnitLabel(item);
+  if (upp > 1) return `${pack} · ${upp} ${loose}`;
+  return pack;
+}
+
+function formatExpiry(dateValue) {
+  if (!dateValue) return "—";
+  const text = String(dateValue).slice(0, 10);
+  if (text.length >= 7) return text.slice(0, 7);
+  return text;
+}
+
 /** FEFO batch preview for the pharmacy bill cart (earliest expiry first). */
-export function cartBatchPreview(liveBatches, item, qty) {
-  const pack = item?.pack_unit || "Strip";
+export function cartBatchPreview(liveBatches, item, qty, allBatches = []) {
+  const pack = packLabelFor(item);
   const need = Number(qty) || 0;
   if (Array.isArray(liveBatches) && liveBatches.length) {
     if (need > 0) {
@@ -195,7 +224,7 @@ export function cartBatchPreview(liveBatches, item, qty) {
         const batch = plan.allocations[0];
         return {
           batchNo: batch.batch_no || "—",
-          expiry: batch.expiry_date ? String(batch.expiry_date).slice(0, 10) : "—",
+          expiry: formatExpiry(batch.expiry_date),
           pack,
         };
       }
@@ -203,14 +232,22 @@ export function cartBatchPreview(liveBatches, item, qty) {
     const first = liveBatches[0];
     return {
       batchNo: first.batch_no || "—",
-      expiry: first.expiry_date ? String(first.expiry_date).slice(0, 10) : "—",
+      expiry: formatExpiry(first.expiry_date),
       pack,
     };
   }
-  if (Number(item?.stock_gm) > 0) {
+  const saved = primaryBatch(allBatches, item?.id);
+  if (saved) {
+    return {
+      batchNo: saved.batch_no || "—",
+      expiry: formatExpiry(saved.expiry_date),
+      pack,
+    };
+  }
+  if (Number(item?.stock_gm) > 0 || item?.default_expiry) {
     return {
       batchNo: "OPEN",
-      expiry: item.default_expiry ? String(item.default_expiry).slice(0, 10) : "—",
+      expiry: formatExpiry(item.default_expiry),
       pack,
     };
   }

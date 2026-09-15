@@ -11,6 +11,7 @@ import {
   looseSaleRate,
   mergeSaleLines,
   normalizeStateCode,
+  parseUnitsFromPackSize,
   purchaseLineTotals,
   remainingReturnQty,
   round2,
@@ -275,12 +276,20 @@ function itemPayload(b) {
     reorder_level_gm: Number(b.reorder_level_gm ?? b.reorder_level) || 0,
     pack_size: b.pack_size || null,
     pack_unit: b.pack_unit || b.unit || "Strip",
-    units_per_pack: Number(b.units_per_pack) || 1,
+    units_per_pack: resolveUnitsPerPack(b),
     mrp: Number(b.mrp) || selling,
     barcode: b.barcode || null,
     default_expiry: expiryMonthToDate(b.expiry_date) || b.default_expiry || null,
     status: b.status || "active",
   };
+}
+
+function resolveUnitsPerPack(b) {
+  const explicit = Number(b.units_per_pack);
+  if (Number.isFinite(explicit) && explicit > 1) return Math.floor(explicit);
+  const parsed = parseUnitsFromPackSize(b.pack_size);
+  if (parsed > 1) return parsed;
+  return Number.isFinite(explicit) && explicit > 0 ? Math.floor(explicit) : 1;
 }
 
 async function persistItemBatch(conn, itemId, body, itemFields) {

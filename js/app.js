@@ -83,6 +83,10 @@ function batchesFor(itemId) {
   });
 }
 
+function allBatchesFor(itemId) {
+  return (state.batches || []).filter((b) => b.item_id === itemId && Number(b.qty) > 0);
+}
+
 function sellableOf(item) {
   const hasBatch = (state.batches || []).some((b) => b.item_id === item.id);
   if (hasBatch) return batchesFor(item.id).reduce((s, b) => s + (Number(b.qty) || 0), 0);
@@ -288,7 +292,7 @@ function renderCart() {
           const item = state.items.find((i) => i.id === line.itemId);
           if (!item) return "";
           const live = batchesFor(item.id);
-          const batch = Pharmacy.cartBatchPreview(live, item, line.qty);
+          const batch = Pharmacy.cartBatchPreview(live, item, line.qty, allBatchesFor(item.id));
           const calc = lineCalc(item, line);
           const unit = Pharmacy.looseUnitLabel(item);
           return `<tr>

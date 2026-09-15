@@ -20,6 +20,7 @@ import {
   mergeSaleLines,
   packSaleRate,
   PACK_TYPES,
+  parseUnitsFromPackSize,
   unitsPerPack,
   partyStateCode,
   purchaseLineTotals,
@@ -69,7 +70,7 @@ test("cart batch preview picks earliest expiry batch (FEFO)", () => {
   ];
   const preview = cartBatchPreview(batches, item, 2);
   assert.equal(preview.batchNo, "B1");
-  assert.equal(preview.expiry, "2026-08-01");
+  assert.equal(preview.expiry, "2026-08");
   assert.equal(preview.pack, "Strip");
 });
 
@@ -77,13 +78,22 @@ test("cart batch preview falls back to OPEN stock without batches", () => {
   const item = { pack_unit: "Strip", stock_gm: 50, default_expiry: "2027-12-31" };
   const preview = cartBatchPreview([], item, 1);
   assert.equal(preview.batchNo, "OPEN");
-  assert.equal(preview.expiry, "2027-12-31");
+  assert.equal(preview.expiry, "2027-12");
 });
 
 test("expiry month helpers round-trip YYYY-MM for item master", () => {
   assert.equal(expiryMonthToDate("2027-06"), "2027-06-01");
   assert.equal(expiryDateToMonth("2027-06-15"), "2027-06");
   assert.equal(expiryMonthToDate(""), null);
+});
+
+test("cart batch preview falls back to saved batch metadata without live FEFO stock", () => {
+  const item = { id: "x", pack_unit: "Strip", units_per_pack: 10, medicine_type: "Tablet" };
+  const all = [{ item_id: "x", batch_no: "DOL2026A", expiry_date: "2027-06-01", qty: 0 }];
+  const preview = cartBatchPreview([], item, 1, all);
+  assert.equal(preview.batchNo, "DOL2026A");
+  assert.equal(preview.expiry, "2027-06");
+  assert.equal(preview.pack, "Strip · 10 Tablet");
 });
 
 test("primary batch picks earliest expiry for item master edit", () => {
@@ -94,6 +104,25 @@ test("primary batch picks earliest expiry for item master edit", () => {
   ];
   assert.equal(primaryBatch(batches, "x").batch_no, "B1");
   assert.equal(primaryBatch(batches, "missing"), null);
+});
+
+test("units per pack can be inferred from pack size text", () => {
+  assert.equal(parseUnitsFromPackSize("10 Tablets"), 10);
+  assert.equal(unitsPerPack({ pack_size: "10 Tablets", units_per_pack: 1 }), 10);
+});
+
+test("loose tablet billing uses pack size when units_per_pack is unset", () => {
+  const dolo = {
+    selling_price: 20,
+    retail_rate: 20,
+    pack_size: "10 Tablets",
+    units_per_pack: 1,
+    medicine_type: "Tablet",
+    pack_unit: "Strip",
+  };
+  assert.equal(looseSaleRate(dolo), 2);
+  const line = saleLineTotals({ qty: 2, rate: looseSaleRate(dolo), gstRate: 0 });
+  assert.equal(line.taxable, 4);
 });
 
 test("loose tablet billing divides strip price by units per pack", () => {
