@@ -55,9 +55,11 @@ function genericOf(item) {
 }
 
 function rateFor(item) {
-  const type = customer()?.type || "b2c";
-  if (type === "b2b") return Number(item.b2b_rate || item.selling_price || item.retail_rate);
-  return Number(item.selling_price || item.retail_rate);
+  return Pharmacy.looseSaleRate(item, customer()?.type);
+}
+
+function packRateFor(item) {
+  return Pharmacy.packSaleRate(item, customer()?.type);
 }
 
 function lineAmt(item, qty) {
@@ -225,7 +227,7 @@ function renderCatalog() {
           return `<button class="card" type="button" data-add="${escapeHtml(i.id)}" ${out ? "disabled" : ""}>
         <div class="sku">${escapeHtml(i.medicine_type || i.category || "Medical")} · ${escapeHtml(i.pack_unit || "Strip")}</div>
         <div class="name">${escapeHtml(i.name)} <small>${escapeHtml(genericOf(i))}</small></div>
-        <div class="meta"><span>${sellableOf(i)} ${escapeHtml(i.pack_unit || "pcs")}</span><span>${money(rateFor(i))}</span></div>
+        <div class="meta"><span>${sellableOf(i)} ${escapeHtml(Pharmacy.looseUnitLabel(i))}</span><span>${money(rateFor(i))}/${escapeHtml(Pharmacy.looseUnitLabel(i))}${Pharmacy.unitsPerPack(i) > 1 ? ` · ${money(packRateFor(i))}/${escapeHtml(i.pack_unit || "Pack")}` : ""}</span></div>
         <div class="stock ${out ? "out" : low ? "low" : "ok"}">${escapeHtml(i.code)} · GST ${escapeHtml(i.gst_rate)}%</div>
       </button>`;
         })
@@ -241,7 +243,7 @@ function cartTotals() {
     return Pharmacy.saleLineTotals({
       qty: line.qty,
       rate: rateFor(item),
-      mrp: item.mrp,
+      mrp: Pharmacy.looseMrp(item),
       gstRate: item.gst_rate,
       interstate,
     });
@@ -257,7 +259,7 @@ function cartTotals() {
 function renderCart() {
   if ($("chosen-pack")) $("chosen-pack").textContent = packLabel();
   if (!state.cart.length) {
-    $("lines").innerHTML = `<p class="hint">Tap a medicine to add 1 pack. Batch is picked FEFO (earliest expiry first).</p>`;
+    $("lines").innerHTML = `<p class="hint">Tap a medicine to add 1 loose unit. Use +/− for qty. Batch is picked FEFO (earliest expiry first).</p>`;
   } else {
     $("lines").innerHTML = state.cart
       .map((line) => {
@@ -275,15 +277,15 @@ function renderCart() {
         return `<div class="line">
           <div>
             <div class="who">${escapeHtml(item.name)}</div>
-            <div class="pack">${escapeHtml(genericOf(item))} · ${escapeHtml(item.pack_unit || "Strip")} · ${escapeHtml(batchNote)}</div>
+            <div class="pack">${escapeHtml(genericOf(item))} · ${escapeHtml(Pharmacy.looseUnitLabel(item))} · ${escapeHtml(batchNote)}</div>
           </div>
           <div>
             <div class="qty">
               <button type="button" data-chg="${escapeHtml(item.id)}" data-d="-1">−</button>
-              <span>${line.qty}</span>
+              <span>${line.qty} ${escapeHtml(Pharmacy.looseUnitLabel(item))}</span>
               <button type="button" data-chg="${escapeHtml(item.id)}" data-d="1">+</button>
             </div>
-            <div class="pack" style="text-align:right;margin-top:4px">${money(lineAmt(item, line.qty))}</div>
+            <div class="pack" style="text-align:right;margin-top:4px">${money(rateFor(item))} × ${line.qty} = ${money(lineAmt(item, line.qty))}</div>
           </div>
         </div>`;
       })

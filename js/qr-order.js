@@ -11,8 +11,29 @@
       .replaceAll(">", "&gt;")
       .replaceAll('"', "&quot;");
 
+  function unitsPerPack(item) {
+    const n = Number(item.units_per_pack);
+    return Number.isFinite(n) && n > 0 ? Math.floor(n) : 1;
+  }
+
+  function looseSaleRate(item) {
+    const packRate = Number(item.selling_price || item.retail_rate) || 0;
+    const upp = unitsPerPack(item);
+    return upp > 1 ? Math.round((packRate / upp) * 100) / 100 : packRate;
+  }
+
+  function looseUnitLabel(item) {
+    const type = String(item.medicine_type || "").trim();
+    if (type === "Tablet") return "Tablet";
+    if (type === "Capsule") return "Capsule";
+    const packSize = String(item.pack_size || "").trim();
+    const match = packSize.match(/\d+\s*([A-Za-z]+)/);
+    if (match) return match[1];
+    return item.pack_unit || "Unit";
+  }
+
   function lineAmount(item, qty) {
-    return Math.round((Number(qty) * (Number(item.selling_price || item.retail_rate) || 0)) * 100) / 100;
+    return Math.round(Number(qty) * looseSaleRate(item) * 100) / 100;
   }
 
   function totals() {
@@ -75,7 +96,7 @@
             <div>
               <h3>${esc(item.name)} <small>${esc(item.local_name || "")}</small></h3>
               <p class="item-meta">${esc(item.medicine_type || item.category || "Medicine")} ${item.generic_name || item.local_name ? `· ${esc(item.generic_name || item.local_name)}` : ""}</p>
-              <p class="item-price">${esc(money(item.selling_price || item.retail_rate))}</p>
+              <p class="item-price">${esc(money(looseSaleRate(item)))}/${esc(looseUnitLabel(item))}${unitsPerPack(item) > 1 ? ` · ${esc(money(item.selling_price || item.retail_rate))}/${esc(item.pack_unit || "Pack")}` : ""}</p>
             </div>
             ${
               out
@@ -100,7 +121,7 @@
       const item = state.items.find((row) => row.id === id);
       if (!item) continue;
       rows.push(
-        `<div class="cart-line"><strong>${esc(item.name)}</strong><span>${qty} × ${esc(money(item.selling_price || item.retail_rate))}</span><strong>${esc(money(lineAmount(item, qty)))}</strong></div>`,
+        `<div class="cart-line"><strong>${esc(item.name)}</strong><span>${qty} ${esc(looseUnitLabel(item))} × ${esc(money(looseSaleRate(item)))}</span><strong>${esc(money(lineAmount(item, qty)))}</strong></div>`,
       );
     }
     $("cart-lines").innerHTML = rows.join("") || '<p class="empty">Your order is empty.</p>';

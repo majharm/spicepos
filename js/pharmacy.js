@@ -120,6 +120,44 @@ export function purchaseLineTotals(line = {}) {
   };
 }
 
+export function unitsPerPack(item = {}) {
+  const n = Number(item.units_per_pack);
+  return Number.isFinite(n) && n > 0 ? Math.floor(n) : 1;
+}
+
+export function looseUnitLabel(item = {}) {
+  const type = String(item.medicine_type || "").trim();
+  if (type === "Tablet") return "Tablet";
+  if (type === "Capsule") return "Capsule";
+  if (type === "Vial") return "Vial";
+  if (type === "Ampoule") return "Ampoule";
+  const packSize = String(item.pack_size || "").trim();
+  const match = packSize.match(/\d+\s*([A-Za-z]+)/);
+  if (match) return match[1];
+  if (unitsPerPack(item) > 1) return "Unit";
+  return item.pack_unit || item.base_unit || "Unit";
+}
+
+export function packSaleRate(item = {}, customerType = "b2c") {
+  if (customerType === "b2b") {
+    return Number(item.b2b_rate || item.selling_price || item.retail_rate) || 0;
+  }
+  return Number(item.selling_price || item.retail_rate) || 0;
+}
+
+/** Selling rate per loose unit (e.g. ₹2/tablet when strip is ₹20 with 10 tablets). */
+export function looseSaleRate(item = {}, customerType = "b2c") {
+  const packRate = packSaleRate(item, customerType);
+  const upp = unitsPerPack(item);
+  return upp > 1 ? round2(packRate / upp) : packRate;
+}
+
+export function looseMrp(item = {}) {
+  const mrp = Number(item.mrp) || 0;
+  const upp = unitsPerPack(item);
+  return upp > 1 && mrp > 0 ? round2(mrp / upp) : mrp;
+}
+
 export function saleLineTotals({ qty, rate, mrp = 0, gstRate = 0, discount = 0, interstate = false } = {}) {
   const quantity = Number(qty) || 0;
   const unitRate = Number(rate) || 0;

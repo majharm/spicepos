@@ -9,9 +9,14 @@ import {
   gstinStateName,
   isInterstate,
   isValidGstin,
+  looseMrp,
+  looseSaleRate,
+  looseUnitLabel,
   MEDICINE_TYPES,
   mergeSaleLines,
+  packSaleRate,
   PACK_TYPES,
+  unitsPerPack,
   partyStateCode,
   purchaseLineTotals,
   remainingReturnQty,
@@ -50,6 +55,24 @@ test("sale line is qty × rate, not grams per kg", () => {
   const line = saleLineTotals({ qty: 2, rate: 35, gstRate: 12, mrp: 40 });
   assert.equal(line.taxable, 70);
   assert.equal(line.amount, 78.4);
+});
+
+test("loose tablet billing divides strip price by units per pack", () => {
+  const dolo = {
+    selling_price: 20,
+    retail_rate: 20,
+    units_per_pack: 10,
+    medicine_type: "Tablet",
+    pack_unit: "Strip",
+    mrp: 25,
+  };
+  assert.equal(unitsPerPack(dolo), 10);
+  assert.equal(looseUnitLabel(dolo), "Tablet");
+  assert.equal(packSaleRate(dolo), 20);
+  assert.equal(looseSaleRate(dolo), 2);
+  assert.equal(looseMrp(dolo), 2.5);
+  const line = saleLineTotals({ qty: 2, rate: looseSaleRate(dolo), gstRate: 0 });
+  assert.equal(line.taxable, 4);
 });
 
 test("pharmacy bill rounds off and tracks due", () => {
