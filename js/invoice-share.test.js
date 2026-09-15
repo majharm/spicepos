@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   buildReceiptText,
+  companyHeaderLines,
   invoicePageUrl,
+  licenceLines,
   shareActions,
   shareMessage,
   uniqueCustomerLines,
@@ -85,6 +87,30 @@ test("receipt text lists the customer once and includes GST totals", () => {
   assert.equal(text.split("Ravi").length - 1, 1);
   assert.match(text, /Grand Total/);
   assert.match(text, /City Medical/);
+});
+
+test("company profile prints GSTIN, email, and licences on the receipt", () => {
+  const header = companyHeaderLines({
+    name: "City Medical",
+    address: "Pune",
+    state: "Maharashtra",
+    state_code: "27",
+    phone: "020000",
+    email: "shop@example.com",
+    gstin: "27AABCU9603R1ZX",
+  });
+  assert.equal(header[0], "City Medical");
+  assert.equal(header.includes("GSTIN 27AABCU9603R1ZX"), true);
+  assert.equal(header.includes("Email shop@example.com"), true);
+  const licence = licenceLines({
+    drug_licence_no: "MH-123",
+    drug_licence_type: "Retail",
+    gstin: "27AABCU9603R1ZX",
+  });
+  assert.equal(licence[0], "Licence & Registration Details");
+  assert.match(licence.join("\n"), /MH-123/);
+  assert.equal(licence.join("\n").includes("GSTIN"), false);
+  assert.deepEqual(licenceLines({}), []);
 });
 
 test("share actions point WhatsApp at the customer and the public invoice URL", () => {

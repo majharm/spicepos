@@ -4,11 +4,15 @@ import {
   allocateFefo,
   billTotals,
   expiryStatus,
+  formatGstin,
   gstinStateCode,
+  gstinStateName,
   isInterstate,
+  isValidGstin,
   MEDICINE_TYPES,
   mergeSaleLines,
   PACK_TYPES,
+  partyStateCode,
   purchaseLineTotals,
   remainingReturnQty,
   saleLineTotals,
@@ -127,7 +131,14 @@ test("medicine and pack type lists include lotion and vial units", () => {
 
 test("GSTIN state codes detect inter-state purchase/sale", () => {
   assert.equal(gstinStateCode("27AABCU9603R1ZX"), "27");
+  assert.equal(formatGstin("27aabcu9603r1zx"), "27AABCU9603R1ZX");
+  assert.equal(isValidGstin("27AABCU9603R1ZX"), true);
+  assert.equal(isValidGstin(""), true);
+  assert.equal(isValidGstin("27-bad"), false);
+  assert.equal(gstinStateName("27"), "Maharashtra");
   assert.equal(isInterstate("27AABCU9603R1ZX", "24AAAAA0000A1Z5"), true);
   assert.equal(isInterstate("27AABCU9603R1ZX", "27AAAAA0000A1Z5"), false);
   assert.equal(isInterstate("27AABCU9603R1ZX", ""), false);
+  assert.equal(partyStateCode({ state_code: "27" }), "27");
+  assert.equal(isInterstate({ gstin: "27AABCU9603R1ZX" }, { state_code: "24" }), true);
 });

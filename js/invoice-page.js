@@ -22,7 +22,7 @@ if (!id) {
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.error || res.statusText);
     const { order, company } = data;
-    document.title = order.order_number || "Invoice";
+    document.title = [order.order_number, company?.name].filter(Boolean).join(" · ") || "Invoice";
     status.hidden = true;
     bill.hidden = false;
     const logo = company.logo_url

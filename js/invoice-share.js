@@ -41,26 +41,35 @@ export function uniqueCustomerLines(order) {
   return lines;
 }
 
-export function licenceLines(company = {}) {
+export function companyHeaderLines(company = {}) {
+  const place = [company.state, company.state_code ? `(${company.state_code})` : ""].filter(Boolean).join(" ");
   return [
-    "Licence & Registration Details",
+    company.name,
+    company.address,
+    place,
+    company.phone ? `Mobile ${company.phone}` : "",
+    company.email ? `Email ${company.email}` : "",
+    company.gstin ? `GSTIN ${company.gstin}` : "",
+  ].filter(Boolean);
+}
+
+export function licenceLines(company = {}) {
+  const lines = [
     company.drug_licence_no
       ? `Drug Licence No. ${company.drug_licence_no}${company.drug_licence_type ? ` (${company.drug_licence_type})` : ""}`
       : "",
-    company.gstin ? `GSTIN ${company.gstin}` : "",
     company.fssai_licence_no ? `FSSAI ${company.fssai_licence_no}` : "",
     company.pharmacy_registration_no ? `Pharmacy Registration ${company.pharmacy_registration_no}` : "",
     company.other_licence_no ? `Other licence ${company.other_licence_no}` : "",
     company.licence_expiry ? `Licence valid until ${String(company.licence_expiry).slice(0, 10)}` : "",
   ].filter(Boolean);
+  return lines.length ? ["Licence & Registration Details", ...lines] : [];
 }
 
 export function buildReceiptText(order, company = {}, money = moneyINR) {
   const due = Math.max(0, Number(order.total) - Number(order.amount_paid || 0));
   return [
-    company.name,
-    company.address,
-    company.phone ? `Mobile ${company.phone}` : "",
+    ...companyHeaderLines(company),
     order.order_number,
     String(order.created_at || new Date().toISOString()),
     ...uniqueCustomerLines(order),

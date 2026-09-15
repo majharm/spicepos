@@ -88,12 +88,27 @@ function sellableOf(item) {
 }
 
 async function api(path, options) {
-  const res = await fetch(path, {
-    headers: { "Content-Type": "application/json" },
-    ...options,
-  });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || res.statusText);
+  let res;
+  try {
+    res = await fetch(path, {
+      headers: { "Content-Type": "application/json" },
+      ...options,
+    });
+  } catch {
+    throw new Error("Cannot reach the pharmacy API. Start the Node server and check MySQL.");
+  }
+  const text = await res.text();
+  let data = {};
+  try {
+    data = text ? JSON.parse(text) : {};
+  } catch {
+    throw new Error(
+      res.ok
+        ? "The server returned an invalid response."
+        : `Cannot reach the pharmacy API (${res.status}). Use the Node app, not a static file host.`,
+    );
+  }
+  if (!res.ok) throw new Error(data.error || res.statusText || "Request failed");
   return data;
 }
 
@@ -196,22 +211,25 @@ function filteredItems() {
 }
 
 function renderCatalog() {
-  $("catalog").innerHTML = filteredItems()
-    .map((i) => {
-      const low = sellableOf(i) <= Number(i.reorder_level_gm);
-      const out = sellableOf(i) <= 0;
-      return `<button class="card" type="button" data-add="${escapeHtml(i.id)}" ${out ? "disabled" : ""}>
+  const items = filteredItems();
+  $("catalog").innerHTML = items.length
+    ? items
+        .map((i) => {
+          const low = sellableOf(i) <= Number(i.reorder_level_gm);
+          const out = sellableOf(i) <= 0;
+          return `<button class="card" type="button" data-add="${escapeHtml(i.id)}" ${out ? "disabled" : ""}>
         <div class="sku">${escapeHtml(i.medicine_type || i.category || "Medical")} · ${escapeHtml(i.pack_unit || "Strip")}</div>
         <div class="name">${escapeHtml(i.name)} <small>${escapeHtml(genericOf(i))}</small></div>
         <div class="meta"><span>${sellableOf(i)} ${escapeHtml(i.pack_unit || "pcs")}</span><span>${money(rateFor(i))}</span></div>
         <div class="stock ${out ? "out" : low ? "low" : "ok"}">${escapeHtml(i.code)} · GST ${escapeHtml(i.gst_rate)}%</div>
       </button>`;
-    })
-    .join("");
+        })
+        .join("")
+    : `<p class="hint">${state.query ? "No medicines match this search." : "No medicines yet. Add them in Medicines, then receive stock in Purchases."}</p>`;
 }
 
 function cartTotals() {
-  const interstate = Pharmacy.isInterstate(state.company.gstin, customer()?.gstin);
+  const interstate = Pharmacy.isInterstate(state.company, customer());
   const lines = state.cart.map((line) => {
     const item = state.items.find((i) => i.id === line.itemId);
     if (!item) return null;
@@ -424,9 +442,11 @@ function renderSettings() {
 }
 
 function renderSupport() {
+  const expiry = String(state.company.licence_expiry || "").slice(0, 10);
   $("support-cards").innerHTML = [
     ["Pharmacy", state.company.name],
     ["Address", state.company.address || "—"],
+    ["State", [state.company.state, state.company.state_code].filter(Boolean).join(" · ") || "—"],
     ["Phone", state.company.phone || "—"],
     ["Email", state.company.email || "—"],
     ["GSTIN", state.company.gstin || "—"],
@@ -435,18 +455,18 @@ function renderSupport() {
     ["FSSAI", state.company.fssai_licence_no || "—"],
     ["Pharmacy registration", state.company.pharmacy_registration_no || "—"],
     ["Other licence", state.company.other_licence_no || "—"],
-    ["Licence expiry", state.company.licence_expiry || "—"],
+    ["Licence expiry", expiry || "—"],
   ]
     .map(([k, v]) => `<div class="report-card"><span>${k}</span><strong>${escapeHtml(v)}</strong></div>`)
     .join("");
 }
 
 function paintHeader() {
-  $("shop-name").textContent = state.company.name || "Pharmacy Medical POS";
-  const addr = state.company.address || "";
-  $("shop-place").textContent = addr
-    ? `${addr} · Pharmacy Medical POS`
-    : "Pharmacy · Medicines · Batches · Bills";
+  const name = state.company.name || "Pharmacy Medical POS";
+  $("shop-name").textContent = name;
+  document.title = name;
+  const place = [state.company.address, state.company.phone].filter(Boolean).join(" · ");
+  $("shop-place").textContent = place || "Pharmacy · Medicines · Batches · Bills";
   showLogo($("shop-logo"), state.company.logo_url);
   const mark = $("brand-mark");
   if (mark) mark.hidden = Boolean(state.company.logo_url);
@@ -470,6 +490,7 @@ async function loadBootstrap() {
   renderCustomersTable();
   renderPoLines();
   renderSettings();
+  renderSupport();
   loadToday();
   loadSuppliers();
   loadQrOrders(true);
@@ -1213,14 +1234,18 @@ $("supplier-form").addEventListener("submit", async (e) => {
 $("settings-form").addEventListener("submit", async (e) => {
   e.preventDefault();
   try {
+    const gstin = Pharmacy.formatGstin($("set-gstin").value);
+    if (!Pharmacy.isValidGstin(gstin)) {
+      throw new Error("Enter a valid 15-character GSTIN");
+    }
     const payload = {
       name: $("set-name").value,
       address: $("set-address").value,
       phone: $("set-phone").value,
       email: $("set-email").value,
-      gstin: $("set-gstin").value,
+      gstin,
       state: $("set-state")?.value,
-      state_code: $("set-scode")?.value,
+      state_code: $("set-scode")?.value || Pharmacy.gstinStateCode(gstin),
       drug_licence_no: $("set-dl")?.value,
       drug_licence_type: $("set-dl-type")?.value,
       fssai_licence_no: $("set-fssai")?.value,
@@ -1237,6 +1262,7 @@ $("settings-form").addEventListener("submit", async (e) => {
     state.logoDraft = null;
     paintHeader();
     renderSettings();
+    renderSupport();
     $("settings-hint").textContent = "Saved";
     $("settings-hint").className = "hint ok";
   } catch (err) {
@@ -1293,9 +1319,14 @@ function readLogoFile(file) {
       const canvas = document.createElement("canvas");
       canvas.width = w;
       canvas.height = h;
-      canvas.getContext("2d").drawImage(img, 0, 0, w, h);
+      const ctx = canvas.getContext("2d");
+      const png = file.type === "image/png" || file.type === "image/webp";
+      if (!png) {
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(0, 0, w, h);
+      }
+      ctx.drawImage(img, 0, 0, w, h);
       URL.revokeObjectURL(blobUrl);
-      const png = file.type === "image/png";
       resolve(png ? canvas.toDataURL("image/png") : canvas.toDataURL("image/jpeg", 0.86));
     };
     img.onerror = () => {
@@ -1305,6 +1336,31 @@ function readLogoFile(file) {
     img.src = blobUrl;
   });
 }
+
+function fillGstinDerived(gstinEl, stateEl, codeEl) {
+  const gstin = Pharmacy.formatGstin(gstinEl?.value);
+  if (gstinEl) gstinEl.value = gstin;
+  const code = Pharmacy.gstinStateCode(gstin);
+  if (code && codeEl) codeEl.value = code;
+  const name = Pharmacy.gstinStateName(code);
+  if (name && stateEl) stateEl.value = name;
+}
+
+function bindGstinField(gstinId, stateId, codeId) {
+  const gstinEl = $(gstinId);
+  if (!gstinEl) return;
+  gstinEl.addEventListener("input", () => fillGstinDerived(gstinEl, $(stateId), $(codeId)));
+  gstinEl.addEventListener("blur", () => fillGstinDerived(gstinEl, $(stateId), $(codeId)));
+}
+
+bindGstinField("set-gstin", "set-state", "set-scode");
+bindGstinField("sup-gstin", "sup-state", "sup-scode");
+$("cust-gstin")?.addEventListener("input", (e) => {
+  e.target.value = Pharmacy.formatGstin(e.target.value);
+});
+$("cust-gstin")?.addEventListener("blur", (e) => {
+  e.target.value = Pharmacy.formatGstin(e.target.value);
+});
 
 $("po-date").value = new Date().toISOString().slice(0, 10);
 
@@ -1367,7 +1423,8 @@ showQrPoster().catch(() => {});
 setInterval(() => loadQrOrders(true), 12000);
 
 loadBootstrap().catch((err) => {
-  $("shop-place").textContent = err.message;
-  setHint(err.message, "error");
+  const msg = err.message || "Cannot load shop data";
+  if ($("shop-place")) $("shop-place").textContent = msg;
+  setHint(msg, "error");
   showQrPoster().catch(() => {});
 });
