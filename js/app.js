@@ -256,40 +256,61 @@ function cartTotals() {
   return { ...Pharmacy.billTotals({ lines, billDiscount, amountPaid }), qty: lines.reduce((s, l) => s + l.qty, 0) };
 }
 
+function lineCalc(item, line) {
+  return Pharmacy.saleLineTotals({
+    qty: line.qty,
+    rate: rateFor(item),
+    mrp: Pharmacy.looseMrp(item),
+    gstRate: item.gst_rate,
+    interstate: Pharmacy.isInterstate(state.company, customer()),
+  });
+}
+
 function renderCart() {
   if ($("chosen-pack")) $("chosen-pack").textContent = packLabel();
   if (!state.cart.length) {
     $("lines").innerHTML = `<p class="hint">Tap a medicine to add 1 loose unit. Use +/− for qty. Batch is picked FEFO (earliest expiry first).</p>`;
   } else {
-    $("lines").innerHTML = state.cart
-      .map((line) => {
-        const item = state.items.find((i) => i.id === line.itemId);
-        if (!item) return "";
-        const live = batchesFor(item.id);
-        const plan = live.length ? Pharmacy.allocateFefo(live, line.qty) : { ok: false, allocations: [] };
-        const batchNote = plan.ok && plan.allocations.length
-          ? plan.allocations
-              .map((a) => `${a.batch_no} Exp ${a.expiry_date ? String(a.expiry_date).slice(0, 10) : "—"}`)
-              .join(" · ")
-          : live[0]
-            ? `${live[0].batch_no} Exp ${live[0].expiry_date ? String(live[0].expiry_date).slice(0, 10) : "—"}`
-            : "OPEN";
-        return `<div class="line">
-          <div>
-            <div class="who">${escapeHtml(item.name)}</div>
-            <div class="pack">${escapeHtml(genericOf(item))} · ${escapeHtml(Pharmacy.looseUnitLabel(item))} · ${escapeHtml(batchNote)}</div>
-          </div>
-          <div>
-            <div class="qty">
-              <button type="button" data-chg="${escapeHtml(item.id)}" data-d="-1">−</button>
-              <span>${line.qty} ${escapeHtml(Pharmacy.looseUnitLabel(item))}</span>
-              <button type="button" data-chg="${escapeHtml(item.id)}" data-d="1">+</button>
-            </div>
-            <div class="pack" style="text-align:right;margin-top:4px">${money(rateFor(item))} × ${line.qty} = ${money(lineAmt(item, line.qty))}</div>
-          </div>
-        </div>`;
-      })
-      .join("");
+    $("lines").innerHTML = `<div class="pharm-bill-wrap"><table class="pharm-bill-table">
+      <thead><tr>
+        <th>Medicine</th>
+        <th>Batch No.</th>
+        <th>Expiry</th>
+        <th>Pack</th>
+        <th>Qty</th>
+        <th class="pharm-n">MRP</th>
+        <th class="pharm-n">Rate</th>
+        <th class="pharm-n">GST</th>
+        <th class="pharm-n">Amount</th>
+      </tr></thead>
+      <tbody>${state.cart
+        .map((line) => {
+          const item = state.items.find((i) => i.id === line.itemId);
+          if (!item) return "";
+          const live = batchesFor(item.id);
+          const batch = Pharmacy.cartBatchPreview(live, item, line.qty);
+          const calc = lineCalc(item, line);
+          const unit = Pharmacy.looseUnitLabel(item);
+          return `<tr>
+            <td class="pharm-med">${escapeHtml(item.name)}</td>
+            <td>${escapeHtml(batch.batchNo)}</td>
+            <td>${escapeHtml(batch.expiry)}</td>
+            <td>${escapeHtml(batch.pack)}</td>
+            <td>
+              <div class="qty">
+                <button type="button" data-chg="${escapeHtml(item.id)}" data-d="-1">−</button>
+                <span>${line.qty} ${escapeHtml(unit)}</span>
+                <button type="button" data-chg="${escapeHtml(item.id)}" data-d="1">+</button>
+              </div>
+            </td>
+            <td class="pharm-n">${money(Pharmacy.looseMrp(item))}</td>
+            <td class="pharm-n">${money(rateFor(item))}</td>
+            <td class="pharm-n">${escapeHtml(String(Number(item.gst_rate) || 0))}%</td>
+            <td class="pharm-n">${money(calc.taxable + calc.gst)}</td>
+          </tr>`;
+        })
+        .join("")}</tbody>
+    </table></div>`;
   }
   const t = cartTotals();
   $("qty-total").textContent = String(t.qty);

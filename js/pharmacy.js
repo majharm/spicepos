@@ -158,6 +158,39 @@ export function looseMrp(item = {}) {
   return upp > 1 && mrp > 0 ? round2(mrp / upp) : mrp;
 }
 
+/** FEFO batch preview for the pharmacy bill cart (earliest expiry first). */
+export function cartBatchPreview(liveBatches, item, qty) {
+  const pack = item?.pack_unit || "Strip";
+  const need = Number(qty) || 0;
+  if (Array.isArray(liveBatches) && liveBatches.length) {
+    if (need > 0) {
+      const plan = allocateFefo(liveBatches, need);
+      if (plan.ok && plan.allocations.length) {
+        const batch = plan.allocations[0];
+        return {
+          batchNo: batch.batch_no || "—",
+          expiry: batch.expiry_date ? String(batch.expiry_date).slice(0, 10) : "—",
+          pack,
+        };
+      }
+    }
+    const first = liveBatches[0];
+    return {
+      batchNo: first.batch_no || "—",
+      expiry: first.expiry_date ? String(first.expiry_date).slice(0, 10) : "—",
+      pack,
+    };
+  }
+  if (Number(item?.stock_gm) > 0) {
+    return {
+      batchNo: "OPEN",
+      expiry: item.default_expiry ? String(item.default_expiry).slice(0, 10) : "—",
+      pack,
+    };
+  }
+  return { batchNo: "—", expiry: "—", pack };
+}
+
 export function saleLineTotals({ qty, rate, mrp = 0, gstRate = 0, discount = 0, interstate = false } = {}) {
   const quantity = Number(qty) || 0;
   const unitRate = Number(rate) || 0;

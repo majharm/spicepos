@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   allocateFefo,
   billTotals,
+  cartBatchPreview,
   expiryStatus,
   formatGstin,
   gstinStateCode,
@@ -55,6 +56,25 @@ test("sale line is qty × rate, not grams per kg", () => {
   const line = saleLineTotals({ qty: 2, rate: 35, gstRate: 12, mrp: 40 });
   assert.equal(line.taxable, 70);
   assert.equal(line.amount, 78.4);
+});
+
+test("cart batch preview picks earliest expiry batch (FEFO)", () => {
+  const item = { pack_unit: "Strip", stock_gm: 0 };
+  const batches = [
+    { id: "b2", batch_no: "B2", expiry_date: "2027-06-01", qty: 20 },
+    { id: "b1", batch_no: "B1", expiry_date: "2026-08-01", qty: 15 },
+  ];
+  const preview = cartBatchPreview(batches, item, 2);
+  assert.equal(preview.batchNo, "B1");
+  assert.equal(preview.expiry, "2026-08-01");
+  assert.equal(preview.pack, "Strip");
+});
+
+test("cart batch preview falls back to OPEN stock without batches", () => {
+  const item = { pack_unit: "Strip", stock_gm: 50, default_expiry: "2027-12-31" };
+  const preview = cartBatchPreview([], item, 1);
+  assert.equal(preview.batchNo, "OPEN");
+  assert.equal(preview.expiry, "2027-12-31");
 });
 
 test("loose tablet billing divides strip price by units per pack", () => {

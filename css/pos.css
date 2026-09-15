@@ -319,6 +319,37 @@ a.btn { text-decoration: none; display: inline-block; }
   color: var(--maroon-deep);
 }
 .lines { overflow: auto; padding: 0 10px 8px; max-height: 50vh; }
+.pharm-bill-wrap {
+  overflow-x: auto;
+  margin: 0 -4px;
+}
+.pharm-bill-table {
+  width: 100%;
+  min-width: 640px;
+  border-collapse: collapse;
+  font-size: 11px;
+}
+.pharm-bill-table th,
+.pharm-bill-table td {
+  padding: 6px 4px;
+  border-bottom: 1px solid var(--line);
+  vertical-align: middle;
+  text-align: left;
+}
+.pharm-bill-table th {
+  font-size: 10px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.pharm-bill-table .pharm-n {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.pharm-bill-table .pharm-med { font-weight: 700; min-width: 7em; }
+.pharm-bill-table .qty { justify-content: flex-end; }
 .line {
   display: grid;
   grid-template-columns: 1fr auto;
