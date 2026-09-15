@@ -87,6 +87,11 @@ function sellableOf(item) {
   return stockOf(item);
 }
 
+function availableForSale(item) {
+  const inCart = state.cart.find((l) => l.itemId === item.id)?.qty || 0;
+  return sellableOf(item) + (state.editingOrderId ? inCart : 0);
+}
+
 async function api(path, options) {
   let res;
   try {
@@ -319,8 +324,9 @@ function addItem(id, qty = 1) {
   if (!item) return;
   const line = state.cart.find((l) => l.itemId === id);
   const next = (line ? line.qty : 0) + qty;
-  if (next > sellableOf(item)) {
-    setHint(`Only ${sellableOf(item)} in-date stock for ${item.name}`, "error");
+  const available = availableForSale(item);
+  if (next > available) {
+    setHint(`Only ${available} in-date stock for ${item.name}`, "error");
     return;
   }
   if (line) line.qty = Math.max(0, next);

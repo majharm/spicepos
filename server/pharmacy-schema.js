@@ -81,6 +81,11 @@ export async function ensurePharmacySchema() {
   await addColumn("sales_order_lines", "sgst", "sgst DECIMAL(12,2) NOT NULL DEFAULT 0");
   await addColumn("sales_order_lines", "igst", "igst DECIMAL(12,2) NOT NULL DEFAULT 0");
   await addColumn("sales_order_lines", "hsn", "hsn VARCHAR(32) NULL");
+  await addColumn(
+    "sales_order_lines",
+    "created_at",
+    "created_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3)",
+  );
 
   await addColumn("company_settings", "drug_licence_no", "drug_licence_no VARCHAR(80) NULL");
   await addColumn("company_settings", "drug_licence_type", "drug_licence_type VARCHAR(80) NULL");
