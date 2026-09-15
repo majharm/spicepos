@@ -1,6 +1,23 @@
 import { BUSINESS_ID, query } from "./db.js";
 import { allocateFefo, expiryStatus } from "../js/pharmacy.js";
 
+export async function sellableQty(conn, itemId) {
+  const [sumRows] = await conn.query(
+    `SELECT
+       COUNT(*) AS n,
+       COALESCE(SUM(CASE WHEN qty > 0 AND (expiry_date IS NULL OR expiry_date >= CURDATE()) THEN qty ELSE 0 END),0) AS live_qty
+     FROM item_batches WHERE item_id = ? AND business_id = ?`,
+    [itemId, BUSINESS_ID],
+  );
+  const hasBatches = Number(sumRows[0]?.n) > 0;
+  if (hasBatches) return Number(sumRows[0]?.live_qty) || 0;
+  const [items] = await conn.query(
+    "SELECT stock_gm FROM items WHERE id = ? AND business_id = ? LIMIT 1",
+    [itemId, BUSINESS_ID],
+  );
+  return Number(items[0]?.stock_gm) || 0;
+}
+
 export async function syncItemStock(conn, itemId) {
   const [sumRows] = await conn.query(
     "SELECT COUNT(*) AS n, COALESCE(SUM(qty),0) AS qty FROM item_batches WHERE item_id = ? AND business_id = ?",

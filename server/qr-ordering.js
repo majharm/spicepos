@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import QRCode from "qrcode";
 import { BUSINESS_ID, query, withTransaction } from "./db.js";
 import { buildPricedLines, insertSalesOrder, lineAmount, nextSeq, round2 } from "./crud.js";
+import { sellableQty } from "./pharmacy-stock.js";
 
 export const QR_STATUSES = ["pending", "accepted", "preparing", "ready", "completed", "cancelled"];
 
@@ -196,7 +197,8 @@ export function registerQrOrdering(app) {
           const item = rows[0];
           if (!item || item.status === "inactive") throw new Error("One selected item is no longer available");
           const qty = Number(line.quantity_gm);
-          if (qty > Number(item.stock_gm || 0)) throw new Error(`${item.name} does not have enough stock`);
+          const available = await sellableQty(conn, item.id);
+          if (qty > available) throw new Error(`${item.name} does not have enough stock`);
           const amount = round2(lineAmount(qty, item.retail_rate));
           const gstRate = Number(item.gst_rate) || 0;
           built.push({
