@@ -115,15 +115,6 @@ function showLogo(img, url) {
   }
 }
 
-function indiaPrideHtml() {
-  const mii = new URL("./assets/make-in-india.png", location.href).href;
-  const sui = new URL("./assets/startup-india.png", location.href).href;
-  return `<div style="display:flex;gap:10px;justify-content:center;align-items:center;flex-wrap:wrap;margin:0 auto 12px">
-    <img src="${escapeHtml(mii)}" alt="Make in India" style="height:40px;width:auto;max-width:150px;object-fit:contain;background:#000;border-radius:8px">
-    <img src="${escapeHtml(sui)}" alt="Startup India" style="height:40px;width:auto;max-width:150px;object-fit:contain;background:#fff;border-radius:8px;padding:3px">
-  </div>`;
-}
-
 function clearBillFields() {
   if ($("bill-discount")) $("bill-discount").value = "0";
   if ($("bill-paid")) $("bill-paid").value = "";
@@ -457,6 +448,8 @@ function paintHeader() {
     ? `${addr} · Pharmacy Medical POS`
     : "Pharmacy · Medicines · Batches · Bills";
   showLogo($("shop-logo"), state.company.logo_url);
+  const mark = $("brand-mark");
+  if (mark) mark.hidden = Boolean(state.company.logo_url);
 }
 
 async function loadBootstrap() {
@@ -567,7 +560,7 @@ function printOrder(o) {
   w.document.write(`<!DOCTYPE html><html><head><title>${escapeHtml(o.order_number)}</title>
     <style>body{font-family:ui-monospace,monospace;padding:24px} pre{white-space:pre-wrap;text-align:left}</style>
     </head><body>
-    ${logo}${indiaPrideHtml()}
+    ${logo}
     <pre>${escapeHtml(receiptText(o))}</pre>
     <script>window.onload=()=>{window.print();}</script>
     </body></html>`);
@@ -745,9 +738,9 @@ function printQrPoster() {
     ? `<img src="${escapeHtml(state.company.logo_url)}" alt="" style="max-height:72px;max-width:180px;display:block;margin:0 auto 12px">`
     : "";
   w.document.write(`<!DOCTYPE html><html><head><title>QR order poster</title>
-    <style>body{font-family:Georgia,serif;text-align:center;padding:36px;color:#4a1416} img.qr{width:280px;height:280px;background:#fff;padding:12px} p{color:#7a5c48}</style>
+    <style>body{font-family:ui-sans-serif,system-ui,sans-serif;text-align:center;padding:36px;color:#0b2545} img.qr{width:280px;height:280px;background:#fff;padding:12px} p{color:#5b6e86}</style>
     </head><body>
-    ${logo}${indiaPrideHtml()}
+    ${logo}
     <h1>${escapeHtml(state.company.name || "Pharmacy")}</h1>
     <p>Scan to order medicines</p>
     <img class="qr" src="${escapeHtml(src)}" alt="QR">
