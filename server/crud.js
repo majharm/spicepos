@@ -6,6 +6,8 @@ import {
   gstinStateName,
   isInterstate,
   isValidGstin,
+  looseMrp,
+  looseSaleRate,
   mergeSaleLines,
   normalizeStateCode,
   purchaseLineTotals,
@@ -25,8 +27,7 @@ function qtyOf(line) {
 }
 
 function sellingRate(item, customer) {
-  if (customer?.type === "b2b") return Number(item.b2b_rate || item.selling_price || item.retail_rate) || 0;
-  return Number(item.selling_price || item.retail_rate) || 0;
+  return looseSaleRate(item, customer?.type);
 }
 
 export { round2 };
@@ -78,7 +79,7 @@ export async function buildPricedLines(conn, customer, lines, opts = {}) {
     const priced = saleLineTotals({
       qty,
       rate,
-      mrp: Number(line.mrp ?? item.mrp) || rate,
+      mrp: Number(line.mrp) || looseMrp(item) || rate,
       gstRate: Number(item.gst_rate) || 0,
       discount: Number(line.discount) || 0,
       interstate: useInter,
