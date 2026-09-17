@@ -364,6 +364,7 @@ const VIEW_META = {
   packs: { title: "Packs", subtitle: "Named spice mixes for the Counter" },
   orders: { title: "Invoices", subtitle: "POS slip, official A4, or duplicate copy" },
   "qr-orders": { title: "QR Orders", subtitle: "Incoming customer self-orders" },
+  prescriptions: { title: "Prescription Orders", subtitle: "Customer QR uploads for this pharmacy" },
   kot: { title: "Kitchen KOT", subtitle: "Captain fires tickets; kitchen marks preparing and ready" },
   purchases: { title: "Purchases", subtitle: "20 pcs = 20 barcodes you type or scan" },
   suppliers: { title: "Suppliers", subtitle: "Vendor contacts, address, and GSTIN" },
@@ -1370,6 +1371,7 @@ function applyNav() {
       packs: "items",
       orders: "orders",
       "qr-orders": "orders",
+      prescriptions: "orders",
       kot: "kot",
       purchases: "purchases",
       suppliers: "suppliers",
@@ -1396,6 +1398,7 @@ function applyNav() {
     if (view === "offers") btn.hidden = !(can("discount") || can("items") || can("growth"));
     if (view === "packs" && !isSpiceShop()) btn.hidden = true;
     if (view === "qr-orders" && isPharmacyShop()) btn.hidden = true;
+    if (view === "prescriptions") btn.hidden = !isPharmacyShop() || !can("orders");
     if (view === "kot") btn.hidden = !isRestaurantShop() || !can("kot");
   });
   paintStaffRoleOptions();
@@ -1476,6 +1479,7 @@ function paintViewHeader(name) {
     customers: "nav.customers",
     orders: "nav.invoices",
     "qr-orders": "nav.qr_orders",
+    prescriptions: "nav.prescriptions",
     kot: "nav.kot",
     purchases: "nav.purchases",
     suppliers: "nav.suppliers",
@@ -1515,7 +1519,8 @@ function showSettingsTab(tab) {
 }
 
 function showView(name) {
-  if (name === "qr-orders" && isPharmacyShop()) name = "counter";
+  if (name === "qr-orders" && isPharmacyShop()) name = "prescriptions";
+  if (name === "prescriptions" && !isPharmacyShop()) name = can("counter") ? "counter" : landingView();
   if (name === "kot" && (!isRestaurantShop() || !can("kot"))) name = can("counter") ? "counter" : landingView();
   const requested = name;
   state.currentView = name === "backup" || name === "language" ? "settings" : name;
@@ -1540,6 +1545,7 @@ function showView(name) {
   if (name === "expenses") loadExpenses();
   if (name === "orders") loadOrders();
   if (name === "qr-orders") loadQrOrders();
+  if (name === "prescriptions") loadPrescriptions();
   if (name === "kot") {
     loadKots();
     startKotWatch();
@@ -5108,6 +5114,188 @@ function qrPosterUrl() {
   return `${location.origin}/qr.html?shop=${encodeURIComponent(shop)}`;
 }
 
+function rxUploadUrl() {
+  const shop = shopBusinessId();
+  return `${location.origin}/rx.html?shop=${encodeURIComponent(shop)}`;
+}
+
+function paintRxQrSetup() {
+  const url = rxUploadUrl();
+  const shopId = shopBusinessId();
+  const input = $("rx-menu-link");
+  const open = $("rx-open-page");
+  const code = $("rx-menu-code");
+  const idEl = $("rx-shop-id");
+  if (idEl) idEl.textContent = shopId || "—";
+  if (input) input.value = url;
+  if (open) open.href = url;
+  if (!code) return;
+  const remote = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&margin=8&data=${encodeURIComponent(url)}`;
+  if (typeof QRCodeLib !== "undefined" && typeof QRCodeLib.toDataURL === "function") {
+    QRCodeLib.toDataURL(url, { width: 220, margin: 1, errorCorrectionLevel: "M" })
+      .then((dataUrl) => {
+        code.src = dataUrl;
+      })
+      .catch(() => {
+        code.src = remote;
+      });
+    return;
+  }
+  code.src = remote;
+}
+
+function printRxPoster() {
+  const url = $("rx-menu-link")?.value || rxUploadUrl();
+  const src = $("rx-menu-code")?.src || "";
+  const w = window.open("", "rx-poster", "width=640,height=860");
+  if (!w) {
+    setHint("Allow pop-ups to print the QR code", "error");
+    return;
+  }
+  const name = escapeHtml(state.company?.name || "Pharmacy");
+  w.document.write(`<!doctype html><html><head><title>Prescription QR</title>
+    <style>
+      body { font-family: Georgia, serif; text-align: center; color: #0f172a; padding: 32px; }
+      h1 { margin: 0 0 8px; }
+      p { color: #475569; word-break: break-all; }
+      img { width: 280px; height: 280px; background: #fff; padding: 12px; }
+      .kicker { letter-spacing: .12em; font-size: 12px; font-weight: 800; color: #0f766e; }
+    </style></head><body>
+    <p class="kicker">PHARMACY → QR CODE → CUSTOMER PRESCRIPTION UPLOAD</p>
+    <h1>${name}</h1>
+    ${src ? `<img src="${escapeHtml(src)}" alt="Prescription QR" />` : ""}
+    <p>${escapeHtml(url)}</p>
+    <script>window.onload=function(){window.focus();window.print();};<\/script>
+    </body></html>`);
+  w.document.close();
+}
+
+const RX_STATUS_LABELS = {
+  pending: "Pending",
+  under_review: "Under Review",
+  approved: "Approved",
+  order_created: "Order Created",
+  completed: "Dispensed",
+};
+const RX_NEXT = {
+  pending: "under_review",
+  under_review: "approved",
+  approved: "order_created",
+  order_created: "completed",
+};
+const RX_NEXT_LABEL = {
+  pending: "Under Review",
+  under_review: "Approve",
+  approved: "Order Created",
+  order_created: "Dispensed",
+};
+
+let rxCache = [];
+let rxStatusFilter = "";
+let rxPollTimer = null;
+
+function paintRxBadge() {
+  const n = rxCache.filter((row) => String(row.status || "pending") === "pending").length;
+  const badge = $("rx-badge");
+  if (badge) {
+    badge.textContent = String(n);
+    badge.hidden = n === 0;
+  }
+}
+
+function renderPrescriptions() {
+  const body = $("rx-table-body");
+  if (!body) return;
+  const query = String($("rx-search")?.value || "").trim().toLowerCase();
+  const rows = rxCache.filter((row) => {
+    if (rxStatusFilter && row.status !== rxStatusFilter) return false;
+    const hay = [row.prescription_number, row.customer_name, row.mobile, row.notes].join(" ").toLowerCase();
+    return !query || hay.includes(query);
+  });
+  paintRxBadge();
+  body.innerHTML = rows.length
+    ? rows
+        .map((row) => {
+          const next = RX_NEXT[row.status] || "";
+          const nextLab = RX_NEXT_LABEL[row.status] || "";
+          const when = row.created_at ? formatShopDateTime(row.created_at) : "—";
+          return `<tr data-rx="${escapeHtml(row.id)}">
+            <td><strong>${escapeHtml(row.prescription_number || "—")}</strong></td>
+            <td>${escapeHtml(row.customer_name || "Customer")}</td>
+            <td>${escapeHtml(row.mobile || "—")}</td>
+            <td>${row.has_file ? `<button class="btn" type="button" data-rx-file="${escapeHtml(row.id)}">View</button>` : "—"}</td>
+            <td>${escapeHtml(when)}</td>
+            <td><span class="rx-status is-${escapeHtml(row.status || "pending")}">${escapeHtml(row.status_label || RX_STATUS_LABELS[row.status] || "Pending")}</span></td>
+            <td class="rx-actions">
+              ${next ? `<button class="btn primary" type="button" data-rx-status="${escapeHtml(next)}">${escapeHtml(nextLab)}</button>` : ""}
+              ${row.status === "approved" || row.status === "order_created" ? `<button class="btn" type="button" data-rx-counter="${escapeHtml(row.id)}">Open in Counter</button>` : ""}
+            </td>
+          </tr>`;
+        })
+        .join("")
+    : `<tr><td colspan="7"><p class="item-empty-card"><strong>No prescriptions here</strong><span>Customers scan this pharmacy QR and upload a photo or PDF. New files appear in this list.</span></p></td></tr>`;
+}
+
+async function loadPrescriptions() {
+  if (!isPharmacyShop() || !can("orders")) return;
+  paintRxQrSetup();
+  const hint = $("rx-hint");
+  if (hint) hint.textContent = "Checking prescriptions…";
+  try {
+    const rows = await api("/api/prescriptions");
+    rxCache = Array.isArray(rows) ? rows : [];
+    renderPrescriptions();
+    if (hint) hint.textContent = rxCache.length ? `${rxCache.length} prescription${rxCache.length === 1 ? "" : "s"}` : "";
+  } catch (err) {
+    if (hint) {
+      hint.textContent = err.message;
+      hint.className = "hint error";
+    }
+  }
+}
+
+function startRxWatch() {
+  if (rxPollTimer || !isPharmacyShop() || !can("orders")) return;
+  const kick = () => void loadPrescriptions();
+  if (typeof requestIdleCallback === "function") requestIdleCallback(kick, { timeout: 2500 });
+  else setTimeout(kick, 1200);
+  rxPollTimer = setInterval(() => {
+    if (state.currentView === "prescriptions") void loadPrescriptions();
+    else {
+      api("/api/prescriptions")
+        .then((rows) => {
+          rxCache = Array.isArray(rows) ? rows : [];
+          paintRxBadge();
+        })
+        .catch(() => {});
+    }
+  }, 8000);
+}
+
+async function setPrescriptionStatus(row, status) {
+  const data = await api(`/api/prescriptions/${encodeURIComponent(row.id)}`, {
+    method: "PATCH",
+    body: JSON.stringify({ status }),
+  });
+  const updated = data.prescription || { ...row, status };
+  const idx = rxCache.findIndex((item) => item.id === row.id);
+  if (idx >= 0) rxCache[idx] = { ...rxCache[idx], ...updated };
+  renderPrescriptions();
+}
+
+function openPrescriptionInCounter(row) {
+  if ($("bill-cust-name")) $("bill-cust-name").value = row.customer_name || "";
+  if ($("bill-cust-mobile")) $("bill-cust-mobile").value = row.mobile || "";
+  if ($("counter-mobile")) $("counter-mobile").value = row.mobile || "";
+  applyCounterMobile?.(row.mobile || "", { announceMiss: false });
+  if ($("bill-doctor-rx") && row.prescription_number) $("bill-doctor-rx").value = row.prescription_number;
+  setHint(`Prescription ${row.prescription_number} loaded. Review the file, then bill.`, "ok");
+  showView("counter");
+  if (row.status === "approved") {
+    setPrescriptionStatus(row, "order_created").catch(() => {});
+  }
+}
+
 function paintQrMenuSetup() {
   const url = qrMenuUrl();
   const poster = qrPosterUrl();
@@ -6412,6 +6600,45 @@ $("view-accounts")?.addEventListener("click", (e) => {
   }
 });
 $("qr-orders-refresh")?.addEventListener("click", loadQrOrders);
+$("rx-refresh")?.addEventListener("click", loadPrescriptions);
+$("rx-copy-link")?.addEventListener("click", async () => {
+  const url = $("rx-menu-link")?.value || rxUploadUrl();
+  try {
+    await navigator.clipboard.writeText(url);
+    setHint("Prescription upload link copied.", "ok");
+  } catch {
+    setHint("Copy the link from the field.", "error");
+  }
+});
+$("rx-print-code")?.addEventListener("click", printRxPoster);
+$("rx-search")?.addEventListener("input", renderPrescriptions);
+$("rx-status-tabs")?.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-rx-status]");
+  if (!button) return;
+  rxStatusFilter = button.dataset.rxStatus || "";
+  $("rx-status-tabs").querySelectorAll("[data-rx-status]").forEach((row) => row.classList.toggle("active", row === button));
+  renderPrescriptions();
+});
+$("rx-table-body")?.addEventListener("click", async (event) => {
+  const tr = event.target.closest("[data-rx]");
+  const row = rxCache.find((item) => item.id === tr?.dataset.rx);
+  if (!row) return;
+  try {
+    const fileBtn = event.target.closest("[data-rx-file]");
+    const next = event.target.closest("[data-rx-status]");
+    const counter = event.target.closest("[data-rx-counter]");
+    if (fileBtn) {
+      window.open(`/api/prescriptions/${encodeURIComponent(row.id)}/file`, "_blank", "noopener");
+    } else if (counter) openPrescriptionInCounter(row);
+    else if (next) await setPrescriptionStatus(row, next.dataset.rxStatus);
+  } catch (err) {
+    const hint = $("rx-hint");
+    if (hint) {
+      hint.textContent = err.message;
+      hint.className = "hint error";
+    }
+  }
+});
 $("kot-refresh")?.addEventListener("click", loadKots);
 $("kot-status-tabs")?.addEventListener("click", (event) => {
   const btn = event.target.closest("[data-kot-status-filter]");
@@ -8873,6 +9100,7 @@ async function boot() {
     }
     startQrOrderWatch();
     startKotWatch();
+    startRxWatch();
     refreshItemUnitLabels();
   } catch {
     location.href = "/login.html";

@@ -1934,6 +1934,11 @@ function pos_php_dispatch($path, $method, $rawBody) {
       require_once __DIR__ . "/pos-qr-ordering.php";
       if (pos_qr_public_dispatch($path, $method, $body)) return;
     }
+    if ($path === "rx/shop" || $path === "rx/prescriptions") {
+      require_once __DIR__ . "/pos-qr-ordering.php";
+      require_once __DIR__ . "/pos-prescriptions.php";
+      if (pos_rx_public_dispatch($path, $method, $body)) return;
+    }
     if (preg_match("#^invoices/([^/]+)$#", $path, $m) && $method === "GET") {
       pos_public_invoice_send($m[1]);
       return;

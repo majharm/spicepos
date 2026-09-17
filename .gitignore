@@ -8,3 +8,7 @@ pos-node.log
 pos-node.startlock
 pos-node.json
 /.htaccess
+uploads/prescriptions/*
+!uploads/prescriptions/.gitkeep
+!uploads/prescriptions/.htaccess
+

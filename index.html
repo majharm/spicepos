@@ -6,7 +6,7 @@
     <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
     <title>ATAV POS</title>
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./css/pos.css?v=20260917kot2" />
+    <link rel="stylesheet" href="./css/pos.css?v=20260917rx1" />
     <link rel="stylesheet" href="./css/saas.css?v=20260905deploy136" />
   </head>
   <body>
@@ -30,6 +30,7 @@
             <p class="nav-group-label" data-i18n="nav.sales">Sales</p>
             <button class="nav-btn" type="button" data-view="orders"><span class="nav-icon" aria-hidden="true">▤</span><span data-i18n="nav.invoices">Invoices</span></button>
             <button class="nav-btn pharmacy-hide" type="button" data-view="qr-orders"><span class="nav-icon" aria-hidden="true">▦</span><span data-i18n="nav.qr_orders">QR Orders</span> <span class="nav-badge" id="qr-order-badge" hidden></span></button>
+            <button class="nav-btn pharmacy-only" type="button" data-view="prescriptions"><span class="nav-icon" aria-hidden="true">▦</span>Prescriptions <span class="nav-badge" id="rx-badge" hidden></span></button>
             <button class="nav-btn" type="button" data-view="customers"><span class="nav-icon" aria-hidden="true">◎</span><span data-i18n="nav.customers">Customers</span></button>
             <button class="nav-btn" type="button" data-view="loyalty"><span class="nav-icon" aria-hidden="true">★</span><span data-i18n="nav.loyalty">Royalty</span></button>
             <button class="nav-btn" type="button" data-view="offers"><span class="nav-icon" aria-hidden="true">%</span><span data-i18n="nav.offers">Offers</span></button>
@@ -660,6 +661,63 @@
             </div>
             <p class="hint" id="qr-orders-hint"></p>
             <div class="qr-order-list" id="qr-order-list"></div>
+          </div>
+        </section>
+        <section class="view" id="view-prescriptions" hidden>
+          <div class="qr-orders-page">
+            <header class="qr-orders-hero">
+              <div>
+                <p class="items-kicker">Pharmacy</p>
+                <h2>Prescription Orders</h2>
+                <p>Customers scan this pharmacy’s QR, upload a prescription, and it lands here for review. Status moves Pending → Under Review → Approved → Order Created → Dispensed.</p>
+              </div>
+              <div class="qr-orders-hero-actions">
+                <button class="btn" type="button" id="rx-refresh">Refresh</button>
+              </div>
+            </header>
+            <section class="qr-setup-card">
+              <div>
+                <p class="items-kicker">PHARMACY QR CODE</p>
+                <h3>Customer Prescription Upload</h3>
+                <p>Pharmacy → QR Code → Customer Prescription Upload. This code identifies this pharmacy, so new prescriptions appear here automatically.</p>
+                <p class="field-hint">Shop ID: <code id="rx-shop-id">—</code></p>
+                <div class="qr-link-row">
+                  <input id="rx-menu-link" readonly aria-label="Public prescription upload link" />
+                  <button class="btn" type="button" id="rx-copy-link">Copy link</button>
+                  <a class="btn primary" id="rx-open-page" target="_blank" rel="noopener">Open upload page</a>
+                  <button class="btn" type="button" id="rx-print-code">Print QR</button>
+                </div>
+              </div>
+              <img id="rx-menu-code" alt="QR code for customer prescription upload" />
+            </section>
+            <div class="qr-orders-toolbar">
+              <div class="qr-status-tabs" id="rx-status-tabs">
+                <button type="button" class="active" data-rx-status="">All</button>
+                <button type="button" data-rx-status="pending">Pending</button>
+                <button type="button" data-rx-status="under_review">Under Review</button>
+                <button type="button" data-rx-status="approved">Approved</button>
+                <button type="button" data-rx-status="order_created">Order Created</button>
+                <button type="button" data-rx-status="completed">Dispensed</button>
+              </div>
+              <input id="rx-search" type="search" placeholder="PR no, name, mobile…" autocomplete="off" />
+            </div>
+            <p class="hint" id="rx-hint"></p>
+            <div class="rx-table-wrap">
+              <table class="rx-table">
+                <thead>
+                  <tr>
+                    <th>Prescription ID</th>
+                    <th>Customer</th>
+                    <th>Mobile</th>
+                    <th>Uploaded File</th>
+                    <th>Date/Time</th>
+                    <th>Status</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="rx-table-body"></tbody>
+              </table>
+            </div>
           </div>
         </section>
         <section class="view" id="view-orders" hidden>
@@ -1691,7 +1749,7 @@
     <script src="./js/support.js?v=20260905deploy136" defer></script>
     <script src="./js/qrcode.iife.js?v=20260905qr1" defer></script>
     <script src="./js/qr-notify.js?v=20260914kot1" defer></script>
-    <script src="./js/app.js?v=20260917kot2" defer></script>
+    <script src="./js/app.js?v=20260917rx1" defer></script>
     <script src="./js/growth.js?v=20260905deploy145" defer></script>
     <script src="./js/offers-ui.js?v=20260905deploy136" defer></script>
   </body>

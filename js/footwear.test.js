@@ -384,7 +384,9 @@ test("Medical shops show pharmacy medicine fields on the item form", () => {
   assert.equal(F.qrOrderingEnabled({ category: "Spices & masala" }), true);
   assert.match(index, /data-view="qr-orders"/);
   assert.match(index, /nav-btn pharmacy-hide[^>]*data-view="qr-orders"/);
+  assert.match(index, /data-view="prescriptions"/);
   assert.match(app, /view === "qr-orders" && isPharmacyShop\(\)/);
+  assert.match(app, /function loadPrescriptions/);
   assert.match(adv, /savePharmacyItemFields/);
   const demo = F.demoItems({ category: "Medical" });
   assert.equal(demo.length, 8);

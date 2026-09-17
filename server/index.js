@@ -29,6 +29,7 @@ import { getPlatformSettings, shopSupportContact } from "./settings.js";
 import { sendLowStockAlerts, tickShopAlerts, startAlertScheduler, scheduleAlertTick } from "./alerts.js";
 import { registerAdvanced, computeSaleLine, applySaleStock, applyLoyaltyOnSale, pharmacyLineSnapshot, enrichCatalogPharmacy, saleStockQty, persistSaleLineNote } from "./advanced.js";
 import { registerQrPublic, registerQrStaff, linkQrOrderSale, ensureQrOrderSchema } from "./qr-ordering.js";
+import { registerRxPublic, registerRxStaff } from "./prescriptions.js";
 import "../js/discount.js";
 import { canonApiUrl, isAliasedApi, isApiUrl, rewriteToApi } from "./http-path.js";
 
@@ -61,6 +62,7 @@ app.use((req, res, next) => {
     req.path.startsWith("/server/") ||
     req.path.startsWith("/node_modules/") ||
     req.path.startsWith("/scripts/") ||
+    req.path.startsWith("/uploads/") ||
     req.path === "/server.js" ||
     req.path === "/app.js" ||
     req.path === "/index.js" ||
@@ -76,6 +78,7 @@ app.use((req, res, next) => {
 app.use(attachAuth);
 registerAuth(app);
 registerQrPublic(app);
+registerRxPublic(app);
 
 const PUBLIC_INVOICE_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -156,6 +159,7 @@ app.use((req, res, next) => {
   if (
     url.startsWith("/api/auth") ||
     url.startsWith("/api/qr/") ||
+    url.startsWith("/api/rx/") ||
     url.startsWith("/api/invoices") ||
     url.startsWith("/api/health") ||
     url.startsWith("/api/master") ||
@@ -171,6 +175,7 @@ registerAdvanced(app);
 registerBackup(app);
 registerUnits(app);
 registerQrStaff(app);
+registerRxStaff(app);
 
 app.get("/api/support-contact", async (_req, res) => {
   try {
