@@ -21,6 +21,7 @@
   }
 
   function medicinePackLabel(item) {
+    if (globalThis.POSFootwear?.medicinePackLabel) return globalThis.POSFootwear.medicinePackLabel(item);
     const size = String(item?.pack_size || "").trim();
     const unit = String(item?.pack_unit || "").trim();
     const upp = Number(item?.units_per_pack) || 0;

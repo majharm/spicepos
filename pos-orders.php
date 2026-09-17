@@ -16,13 +16,24 @@ function pos_order_with_lines($bid, $orderId) {
   return $row;
 }
 
+function pos_order_line_stock_qty($bid, $l) {
+  $qty = (float) ($l["quantity_gm"] ?? 0);
+  if (!function_exists("pos_pack_stock_qty")) return $qty;
+  $item = $l["item"] ?? null;
+  if (!$item && !empty($l["item_id"])) {
+    $found = pos_q("SELECT * FROM items WHERE id = ? AND business_id = ? LIMIT 1", "ss", [$l["item_id"], $bid]);
+    $item = $found[0] ?? [];
+  }
+  return pos_pack_stock_qty($item ?: [], $qty);
+}
+
 function pos_restore_order_stock($bid, $lines) {
   foreach ($lines as $l) {
     if (($l["cancelled"] ?? 0) == 1 || ($l["cancelled"] ?? "0") === "1") continue;
     pos_q(
       "UPDATE items SET stock_gm = stock_gm + ? WHERE id = ? AND business_id = ?",
       "dss",
-      [(float) $l["quantity_gm"], $l["item_id"], $bid]
+      [pos_order_line_stock_qty($bid, $l), $l["item_id"], $bid]
     );
   }
 }
@@ -32,7 +43,7 @@ function pos_deduct_order_stock($bid, $lines) {
     pos_q(
       "UPDATE items SET stock_gm = stock_gm - ? WHERE id = ? AND business_id = ?",
       "dss",
-      [(float) $l["quantity_gm"], $l["item_id"], $bid]
+      [pos_order_line_stock_qty($bid, $l), $l["item_id"], $bid]
     );
   }
 }

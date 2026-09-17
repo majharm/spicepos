@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import "../js/discount.js";
 import "../js/loyalty.js";
 import "../js/units.js";
+import "../js/footwear.js";
 import { query, withTransaction } from "./db.js";
 import { bid, branchId, authUser } from "./context.js";
 import { requireStaff, requirePerm } from "./auth.js";
@@ -9,6 +10,7 @@ import { requireStaff, requirePerm } from "./auth.js";
 const POSDiscount = globalThis.POSDiscount;
 const POSLoyalty = globalThis.POSLoyalty;
 const POSUnits = globalThis.POSUnits;
+const POSFootwear = globalThis.POSFootwear;
 
 /** pool.query() already returns rows; conn.query() returns [rows, fields]. */
 async function sqlAll(conn, sql, params = []) {
@@ -458,14 +460,43 @@ export async function onPurchaseLineSaved(conn, ctx) {
   return row;
 }
 
+export async function enrichCatalogPharmacy(businessId, items) {
+  const list = Array.isArray(items) ? items : [];
+  if (!list.length) return list;
+  try {
+    const rows = await query(
+      `SELECT item_id, batch_no, DATE_FORMAT(expiry_date, '%Y-%m-%d') AS expiry_date
+       FROM stock_batches
+       WHERE business_id = ? AND remaining_gm > 0
+       ORDER BY (expiry_date IS NULL), expiry_date ASC, created_at ASC`,
+      [businessId],
+    );
+    const first = new Map();
+    for (const row of rows || []) {
+      if (!first.has(row.item_id)) first.set(row.item_id, row);
+    }
+    return list.map((item) => {
+      const batch = first.get(item.id);
+      if (!batch) return item;
+      return {
+        ...item,
+        batch_no: item.batch_no || batch.batch_no || "",
+        default_expiry: item.default_expiry || batch.expiry_date || "",
+        primary_batch_no: batch.batch_no || "",
+        primary_expiry: batch.expiry_date || "",
+      };
+    });
+  } catch {
+    return list;
+  }
+}
+
+export function saleStockQty(item, looseQty) {
+  return Number(POSFootwear?.packStockQty?.(item, looseQty) ?? looseQty) || 0;
+}
+
 export function medicinePackLabel(item) {
-  const size = String(item?.pack_size || "").trim();
-  const unit = String(item?.pack_unit || "").trim();
-  const upp = Number(item?.units_per_pack) || 0;
-  if (size && unit) return `${size} ${unit}`.trim();
-  if (size) return size;
-  if (upp > 0) return `${upp}s`;
-  return "";
+  return POSFootwear?.medicinePackLabel?.(item) || "";
 }
 
 export function pharmacyLineSnapshot(item, batch) {
@@ -480,13 +511,18 @@ export function pharmacyLineSnapshot(item, batch) {
 export function computeSaleLine(item, customer, lineIn) {
   const qty = Number(lineIn.quantity_gm ?? lineIn.qty);
   const isB2b = customer?.type === "b2b";
-  const rate = lineIn.rate != null && lineIn.rate !== "" ? Number(lineIn.rate) : Number(isB2b ? item.b2b_rate : item.retail_rate);
+  const customerType = isB2b ? "b2b" : "b2c";
+  const rate = lineIn.rate != null && lineIn.rate !== ""
+    ? Number(lineIn.rate)
+    : Number(POSFootwear?.looseSaleRate?.(item, customerType) ?? (isB2b ? item.b2b_rate : item.retail_rate));
+  const mrpRate = Number(POSFootwear?.looseMrp?.(item) ?? item.mrp ?? item.retail_rate) || rate;
+  const costRate = Number(POSFootwear?.looseCostRate?.(item) ?? item.purchase_rate) || 0;
   const calc = POSDiscount.computeLine({
     qty,
     rate,
     gstRate: Number(item.gst_rate) || 0,
-    mrp: Number(item.mrp || item.retail_rate) || rate,
-    purchase_rate: Number(item.purchase_rate) || 0,
+    mrp: mrpRate,
+    purchase_rate: costRate,
     isCount: isCountItem(item),
     discountType: lineIn.discountType || lineIn.discount_type || "amt",
     discountValue: lineIn.discountValue ?? lineIn.discount_value ?? 0,
@@ -543,7 +579,8 @@ export async function allocateBatches(conn, businessId, itemId, qty, preferBarco
 export async function restoreBatchesForLines(conn, businessId, lines) {
   for (const line of lines || []) {
     const batchId = line.batch_id;
-    const qty = Number(line.quantity_gm) || 0;
+    const item = line.item || (await sqlOne(conn, "SELECT * FROM items WHERE id=? AND business_id=?", [line.item_id, businessId])) || {};
+    const qty = Number(POSFootwear?.packStockQty?.(item, line.quantity_gm) ?? line.quantity_gm) || 0;
     if (batchId && qty > 0) {
       try {
         await conn.query("UPDATE stock_batches SET remaining_gm = remaining_gm + ? WHERE id=? AND business_id=?", [qty, batchId, businessId]);
@@ -555,9 +592,10 @@ export async function restoreBatchesForLines(conn, businessId, lines) {
 }
 
 export async function applySaleStock(conn, ctx) {
-  const allocations = await allocateBatches(conn, ctx.businessId, ctx.item.id, ctx.qty, ctx.barcode, ctx.batchId);
+  const qty = Number(POSFootwear?.packStockQty?.(ctx.item, ctx.qty) ?? ctx.qty) || 0;
+  const allocations = await allocateBatches(conn, ctx.businessId, ctx.item.id, qty, ctx.barcode, ctx.batchId);
   let first = allocations[0] || null;
-  await conn.query("UPDATE items SET stock_gm = stock_gm - ? WHERE id=? AND business_id=?", [ctx.qty, ctx.item.id, ctx.businessId]);
+  await conn.query("UPDATE items SET stock_gm = stock_gm - ? WHERE id=? AND business_id=?", [qty, ctx.item.id, ctx.businessId]);
   if (!allocations.length) {
     await writeMovement(conn, {
       businessId: ctx.businessId,
@@ -565,7 +603,7 @@ export async function applySaleStock(conn, ctx) {
       userId: ctx.userId,
       itemId: ctx.item.id,
       kind: "sale",
-      qty: -ctx.qty,
+      qty: -qty,
       note: ctx.orderNumber,
       barcode: ctx.barcode,
       unitCost: ctx.costRate,

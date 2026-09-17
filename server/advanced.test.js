@@ -119,10 +119,20 @@ test("resolvePurchaseBarcodes requires one typed code per piece", async () => {
 test("item save and checkout persist barcode and line discount fields", () => {
   const nodeCrud = read("server/crud.js");
   const nodeIndex = read("server/index.js");
+  const nodeAdv = read("server/advanced.js");
+  const adv = read("pos-advanced.php");
   assert.match(nodeCrud, /onItemSaved/);
   assert.match(nodeCrud, /onPurchaseLineSaved/);
   assert.match(nodeCrud, /barcode_count/);
   assert.match(nodeIndex, /computeSaleLine/);
   assert.match(nodeIndex, /applyLoyaltyOnSale/);
   assert.match(nodeIndex, /discount_type/);
+  assert.match(nodeAdv, /enrichCatalogPharmacy/);
+  assert.match(nodeAdv, /saleStockQty/);
+  assert.match(nodeAdv, /looseSaleRate/);
+  assert.match(adv, /function pos_pack_stock_qty/);
+  assert.match(adv, /function pos_loose_sale_rate/);
+  assert.match(nodeIndex, /units_per_pack, batch_no, default_expiry/);
+  assert.match(read("pos-php-core.php"), /units_per_pack, batch_no, default_expiry/);
+  assert.match(read("pos-checkout.php"), /pos_pack_stock_qty/);
 });

@@ -421,12 +421,102 @@
     };
   }
 
+  function round2(n) {
+    return Math.round((Number(n) || 0) * 100) / 100;
+  }
+
+  function round3(n) {
+    return Math.round((Number(n) || 0) * 1000) / 1000;
+  }
+
+  const DEFAULT_STRIP_TABLET_COUNT = 10;
+  const NON_LOOSE_STRIP_TYPES = new Set([
+    "syrup", "injection", "cream", "ointment", "drops", "inhaler", "powder", "gel", "lotion",
+  ]);
+
+  function parseUnitsFromPackSize(packSize) {
+    const text = String(packSize || "").trim();
+    if (!text) return 0;
+    const lead = text.match(/^(\d+)/);
+    if (lead) return Math.max(1, parseInt(lead[1], 10));
+    const embedded = text.match(/(\d+)\s*(tablet|capsule|tab|cap|unit)s?\b/i);
+    if (embedded) return Math.max(1, parseInt(embedded[1], 10));
+    return 0;
+  }
+
+  function isStripLooseItem(item) {
+    const med = String(item?.medicine_type || "").trim().toLowerCase();
+    const pack = String(item?.pack_unit || "").trim();
+    if (pack.toLowerCase() !== "strip") return false;
+    if (!med || med === "tablet" || med === "capsule" || med === "other") return true;
+    return !NON_LOOSE_STRIP_TYPES.has(med);
+  }
+
+  function unitsPerPack(item) {
+    const explicit = Number(item?.units_per_pack);
+    if (Number.isFinite(explicit) && explicit > 1) return Math.floor(explicit);
+    const parsed = parseUnitsFromPackSize(item?.pack_size);
+    if (parsed > 1) return parsed;
+    if (isStripLooseItem(item)) return DEFAULT_STRIP_TABLET_COUNT;
+    return Number.isFinite(explicit) && explicit > 0 ? Math.floor(explicit) : 1;
+  }
+
+  function looseUnitLabel(item) {
+    const type = String(item?.medicine_type || "").trim();
+    if (type === "Tablet" || (!type && isStripLooseItem(item))) return "Tablet";
+    if (type === "Capsule") return "Capsule";
+    const packSize = String(item?.pack_size || "").trim();
+    const match = packSize.match(/\d+\s*([A-Za-z]+)/);
+    if (match) return match[1];
+    if (unitsPerPack(item) > 1) return "Unit";
+    return item?.pack_unit || "Unit";
+  }
+
+  function packSaleRate(item, customerType) {
+    if (customerType === "b2b") {
+      return Number(item?.b2b_rate || item?.retail_rate) || 0;
+    }
+    return Number(item?.retail_rate) || 0;
+  }
+
+  function looseSaleRate(item, customerType) {
+    const packRate = packSaleRate(item, customerType);
+    const upp = unitsPerPack(item);
+    return upp > 1 ? round2(packRate / upp) : packRate;
+  }
+
+  function looseMrp(item) {
+    const mrp = Number(item?.mrp || item?.retail_rate) || 0;
+    const upp = unitsPerPack(item);
+    return upp > 1 && mrp > 0 ? round2(mrp / upp) : mrp;
+  }
+
+  function looseCostRate(item) {
+    const cost = Number(item?.purchase_rate) || 0;
+    const upp = unitsPerPack(item);
+    return upp > 1 && cost > 0 ? round2(cost / upp) : cost;
+  }
+
+  /** Convert loose tablet qty into pack/strip stock units (2 tablets of a 10-strip → 0.2). */
+  function packStockQty(item, looseQty) {
+    const qty = Number(looseQty) || 0;
+    const upp = unitsPerPack(item);
+    if (upp <= 1) return qty;
+    return round3(qty / upp);
+  }
+
+  function scanPackQty(item) {
+    return isStripLooseItem(item) ? unitsPerPack(item) : 1;
+  }
+
   function medicinePackLabel(item) {
+    const upp = unitsPerPack(item);
+    const pack = String(item?.pack_unit || "").trim();
     const size = String(item?.pack_size || "").trim();
-    const unit = String(item?.pack_unit || "").trim();
-    const upp = Number(item?.units_per_pack) || 0;
-    if (size && unit) return `${size} ${unit}`.trim();
+    if (isStripLooseItem(item) && upp > 1) return `${pack} · ${upp} ${looseUnitLabel(item)}`;
+    if (size && pack) return `${size} ${pack}`.trim();
     if (size) return size;
+    if (pack && upp > 1) return `${pack} · ${upp} ${looseUnitLabel(item)}`;
     if (upp > 0) return `${upp}s`;
     return "";
   }
@@ -435,6 +525,17 @@
     const s = String(raw || "").slice(0, 10);
     const m = s.match(/^(\d{4})-(\d{2})/);
     return m ? `${m[2]}/${m[1].slice(2)}` : s;
+  }
+
+  function cartBatchPreview(item) {
+    const pack = medicinePackLabel(item) || "—";
+    const batchNo = String(item?.primary_batch_no || item?.batch_no || "").trim();
+    const exp = item?.primary_expiry || item?.default_expiry || item?.expiry_date || "";
+    return {
+      batchNo: batchNo || "—",
+      expiry: formatExpiryShort(exp) || "—",
+      pack,
+    };
   }
 
   function demoItems(biz) {
@@ -670,5 +771,17 @@
     demoItems,
     medicinePackLabel,
     formatExpiryShort,
+    parseUnitsFromPackSize,
+    isStripLooseItem,
+    unitsPerPack,
+    looseUnitLabel,
+    packSaleRate,
+    looseSaleRate,
+    looseMrp,
+    looseCostRate,
+    packStockQty,
+    scanPackQty,
+    cartBatchPreview,
+    DEFAULT_STRIP_TABLET_COUNT,
   };
 });

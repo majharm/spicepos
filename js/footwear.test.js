@@ -347,6 +347,32 @@ test("Medical shops show pharmacy medicine fields on the item form", () => {
   assert.match(app, /doctor_rx/);
   assert.equal(F.medicinePackLabel({ pack_size: "10", pack_unit: "Tab" }), "10 Tab");
   assert.equal(F.formatExpiryShort("2027-09-30"), "09/27");
+  const dolo = {
+    name: "Dolo 650",
+    medicine_type: "Tablet",
+    pack_unit: "Strip",
+    pack_size: "10 Tablets",
+    units_per_pack: 10,
+    retail_rate: 20,
+    mrp: 20,
+    purchase_rate: 10,
+    unit: "PCS",
+  };
+  assert.equal(F.isStripLooseItem(dolo), true);
+  assert.equal(F.unitsPerPack(dolo), 10);
+  assert.equal(F.looseSaleRate(dolo), 2);
+  assert.equal(F.looseMrp(dolo), 2);
+  assert.equal(F.packStockQty(dolo, 2), 0.2);
+  assert.equal(F.scanPackQty(dolo), 10);
+  assert.equal(F.medicinePackLabel(dolo), "Strip · 10 Tablet");
+  assert.equal(F.unitsPerPack({ pack_unit: "Strip", medicine_type: "Tablet", units_per_pack: 1 }), 10);
+  const preview = F.cartBatchPreview({ ...dolo, batch_no: "DLO01", default_expiry: "2027-09-30" });
+  assert.equal(preview.batchNo, "DLO01");
+  assert.equal(preview.expiry, "09/27");
+  assert.match(app, /function rateFor/);
+  assert.match(app, /looseSaleRate/);
+  assert.match(app, /cartBatchPreview/);
+  assert.match(app, /pieceBarcodeQty/);
   assert.match(css, /body:not\(\.pharmacy-mode\) \.pharmacy-only/);
   assert.match(css, /items-pharm-table/);
   assert.match(index, /id="item-import-copy"/);

@@ -758,19 +758,44 @@ function pos_slim_catalog_items($rows) {
 }
 
 function pos_catalog_item_select_sql() {
-  return "id, code, name, local_name, category, subcategory, color, size, wearer_type, base_unit, unit, purchase_rate, retail_rate, b2b_rate, gst_rate, hsn, barcode, mrp, brand, stock_gm, reorder_level_gm, status, business_id, (image_url IS NOT NULL AND image_url <> '') AS has_image";
+  return "id, code, name, local_name, category, subcategory, color, size, wearer_type, base_unit, unit, purchase_rate, retail_rate, b2b_rate, gst_rate, hsn, barcode, mrp, brand, stock_gm, reorder_level_gm, status, business_id, generic_name, medicine_type, manufacturer, pack_size, pack_unit, units_per_pack, batch_no, default_expiry, (image_url IS NOT NULL AND image_url <> '') AS has_image";
 }
 
 function pos_catalog_items($bid) {
   try {
-    return pos_slim_catalog_items(pos_q(
+    $items = pos_slim_catalog_items(pos_q(
       "SELECT " . pos_catalog_item_select_sql() . " FROM items WHERE business_id = ? ORDER BY category, subcategory, name",
       "s",
       [$bid]
     ));
   } catch (Exception $e) {
-    return pos_slim_catalog_items(pos_q("SELECT * FROM items WHERE business_id = ? ORDER BY category, subcategory, name", "s", [$bid]));
+    $items = pos_slim_catalog_items(pos_q("SELECT * FROM items WHERE business_id = ? ORDER BY category, subcategory, name", "s", [$bid]));
   }
+  try {
+    $batches = pos_q(
+      "SELECT item_id, batch_no, DATE_FORMAT(expiry_date, '%Y-%m-%d') AS expiry_date
+       FROM stock_batches
+       WHERE business_id = ? AND remaining_gm > 0
+       ORDER BY (expiry_date IS NULL), expiry_date ASC, created_at ASC",
+      "s",
+      [$bid]
+    );
+    $first = [];
+    foreach ($batches as $row) {
+      $id = $row["item_id"] ?? "";
+      if ($id !== "" && !isset($first[$id])) $first[$id] = $row;
+    }
+    foreach ($items as &$item) {
+      $batch = $first[$item["id"] ?? ""] ?? null;
+      if (!$batch) continue;
+      if (trim((string) ($item["batch_no"] ?? "")) === "") $item["batch_no"] = $batch["batch_no"] ?? "";
+      if (trim((string) ($item["default_expiry"] ?? "")) === "") $item["default_expiry"] = $batch["expiry_date"] ?? "";
+      $item["primary_batch_no"] = $batch["batch_no"] ?? "";
+      $item["primary_expiry"] = $batch["expiry_date"] ?? "";
+    }
+    unset($item);
+  } catch (Exception $e) { /* optional */ }
+  return $items;
 }
 
 function pos_customer_label($customer) {

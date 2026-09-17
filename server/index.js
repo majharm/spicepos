@@ -27,7 +27,7 @@ import { recordCreditSale } from "./accounts.js";
 import { audit } from "./audit.js";
 import { getPlatformSettings, shopSupportContact } from "./settings.js";
 import { sendLowStockAlerts, tickShopAlerts, startAlertScheduler, scheduleAlertTick } from "./alerts.js";
-import { registerAdvanced, computeSaleLine, applySaleStock, applyLoyaltyOnSale, pharmacyLineSnapshot } from "./advanced.js";
+import { registerAdvanced, computeSaleLine, applySaleStock, applyLoyaltyOnSale, pharmacyLineSnapshot, enrichCatalogPharmacy, saleStockQty } from "./advanced.js";
 import { registerQrPublic, registerQrStaff, linkQrOrderSale, ensureQrOrderSchema } from "./qr-ordering.js";
 import "../js/discount.js";
 import { canonApiUrl, isAliasedApi, isApiUrl, rewriteToApi } from "./http-path.js";
@@ -193,6 +193,7 @@ app.get("/api/health", async (_req, res) => {
 const CATALOG_ITEM_SELECT = `id, code, name, local_name, category, subcategory, color, size, wearer_type,
   base_unit, unit, purchase_rate, retail_rate, b2b_rate, gst_rate, hsn, barcode, mrp, brand,
   stock_gm, reorder_level_gm, status, business_id,
+  generic_name, medicine_type, manufacturer, pack_size, pack_unit, units_per_pack, batch_no, default_expiry,
   (image_url IS NOT NULL AND image_url <> '') AS has_image`;
 
 function slimCatalogItem(row) {
@@ -214,13 +215,13 @@ async function listCatalogItems(businessId) {
       `SELECT ${CATALOG_ITEM_SELECT} FROM items WHERE business_id = ? ORDER BY category, subcategory, name`,
       [businessId],
     );
-    return (rows || []).map(slimCatalogItem);
+    return enrichCatalogPharmacy(businessId, (rows || []).map(slimCatalogItem));
   } catch {
     const rows = await query(
       "SELECT * FROM items WHERE business_id = ? ORDER BY category, subcategory, name",
       [businessId],
     );
-    return (rows || []).map(slimCatalogItem);
+    return enrichCatalogPharmacy(businessId, (rows || []).map(slimCatalogItem));
   }
 }
 

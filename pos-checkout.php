@@ -150,8 +150,9 @@ function pos_checkout_sale($bid, $branchId, $uid, $auth, $body) {
         );
       }
       $firstBatch = null;
+      $stockQty = function_exists("pos_pack_stock_qty") ? pos_pack_stock_qty($line["item"], $line["qty"]) : $line["qty"];
       if (function_exists("pos_allocate_batches")) {
-        $allocs = pos_allocate_batches($bid, $line["item"]["id"], $line["qty"], $line["barcode"] ?? "", $line["batchId"] ?? "");
+        $allocs = pos_allocate_batches($bid, $line["item"]["id"], $stockQty, $line["barcode"] ?? "", $line["batchId"] ?? "");
         $firstBatch = $allocs[0]["batch"] ?? null;
         foreach ($allocs as $al) {
           if (function_exists("pos_write_stock_movement")) {
@@ -177,7 +178,7 @@ function pos_checkout_sale($bid, $branchId, $uid, $auth, $body) {
           } catch (Exception $e) { /* optional */ }
         }
       }
-      pos_q("UPDATE items SET stock_gm = stock_gm - ? WHERE id = ? AND business_id = ?", "dss", [$line["qty"], $line["item"]["id"], $bid]);
+      pos_q("UPDATE items SET stock_gm = stock_gm - ? WHERE id = ? AND business_id = ?", "dss", [$stockQty, $line["item"]["id"], $bid]);
       if (function_exists("pos_consume_piece_barcode")) {
         pos_consume_piece_barcode($bid, $line["barcode"] ?? ($firstBatch["barcode"] ?? ""), "sold");
       }

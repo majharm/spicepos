@@ -335,8 +335,8 @@ function fillFootwearFilters() {
 
 function refreshItemUnitLabels() {
   const u = POSUnits.normalize($("item-unit")?.value);
-  const retailWord = isPharmacyShop() ? "Selling price" : "Retail";
-  const purchaseWord = isPharmacyShop() ? "Purchase price" : "Purchase";
+  const retailWord = isPharmacyShop() ? "Strip / pack price" : "Retail";
+  const purchaseWord = isPharmacyShop() ? "Purchase / strip" : "Purchase";
   if ($("item-retail-lab")) $("item-retail-lab").textContent = POSUnits.rateLabel(retailWord, u);
   if ($("item-b2b-lab")) $("item-b2b-lab").textContent = POSUnits.rateLabel("B2B", u);
   if ($("item-purchase-lab")) $("item-purchase-lab").textContent = POSUnits.rateLabel(purchaseWord, u);
@@ -655,6 +655,8 @@ function applyCounterMobile(raw, { announceMiss = true } = {}) {
 
 function rateFor(item) {
   const type = customer()?.type || "b2c";
+  const F = globalThis.POSFootwear;
+  if (F?.looseSaleRate) return F.looseSaleRate(item, type);
   return Number(type === "b2b" ? item.b2b_rate : item.retail_rate);
 }
 
@@ -668,6 +670,7 @@ function canDiscount() {
 
 function lineCalc(item, line) {
   const D = globalThis.POSDiscount;
+  const F = globalThis.POSFootwear;
   if (!D) {
     const amount = lineAmt(item, line.qtyGm);
     return { taxable: amount, gst: (amount * Number(item.gst_rate)) / 100, discount: 0, profit: 0, mrp: amount, total: amount, gross: amount };
@@ -676,8 +679,8 @@ function lineCalc(item, line) {
     qty: line.qtyGm,
     rate: rateFor(item),
     gstRate: Number(item.gst_rate) || 0,
-    mrp: Number(item.mrp || item.retail_rate) || rateFor(item),
-    purchase_rate: Number(item.purchase_rate) || 0,
+    mrp: Number(F?.looseMrp?.(item) ?? item.mrp ?? item.retail_rate) || rateFor(item),
+    purchase_rate: Number(F?.looseCostRate?.(item) ?? item.purchase_rate) || 0,
     isCount: POSUnits.isCount(itemUnit(item)),
     discountType: line.discountType || "amt",
     discountValue: line.discountValue || 0,
@@ -2542,12 +2545,14 @@ function renderCart() {
         if (!item) return "";
         const unitCode = itemUnit(item);
         const step = POSUnits.counterStep(unitCode);
-        const unit = POSUnits.qtySuffix(unitCode);
+        const F = globalThis.POSFootwear;
+        const unit = F?.isStripLooseItem?.(item) ? F.looseUnitLabel(item) : POSUnits.qtySuffix(unitCode);
         const qtyShow = POSUnits.displayQty(line.qtyGm, unitCode);
         const qtyStep = POSUnits.displayQty(step, unitCode) || 1;
         const calc = lineCalc(item, line);
         const key = cartLineKey(line);
-        const mrp = Number(item.mrp || item.retail_rate) || rateFor(item);
+        const preview = F?.cartBatchPreview?.(item) || { batchNo: item.batch_no || "—", expiry: formatExpiryShort(item.default_expiry) || "—", pack: medicinePackLabel(item) || "—" };
+        const mrp = Number(F?.looseMrp?.(item) ?? item.mrp ?? item.retail_rate) || rateFor(item);
         return `<tr>
           <td class="pharm-med">${escapeHtml(item.name)}${canDiscount() ? `<div class="line-disc">
               <select data-line-disc-type="${escapeHtml(key)}" aria-label="Line discount type">
@@ -2556,9 +2561,9 @@ function renderCart() {
               </select>
               <input data-line-disc="${escapeHtml(key)}" type="number" min="0" step="0.01" value="${escapeHtml(line.discountValue || 0)}" aria-label="Line discount" />
             </div>` : ""}</td>
-          <td>${escapeHtml(item.batch_no || "—")}</td>
-          <td>${escapeHtml(formatExpiryShort(item.default_expiry) || "—")}</td>
-          <td>${escapeHtml(medicinePackLabel(item) || "—")}</td>
+          <td>${escapeHtml(preview.batchNo)}</td>
+          <td>${escapeHtml(preview.expiry)}</td>
+          <td>${escapeHtml(preview.pack)}</td>
           <td>
             <div class="qty">
               <button type="button" data-chg="${escapeHtml(key)}" data-d="${-step}">−</button>
@@ -2847,6 +2852,12 @@ function isPieceBarcodeLine(line, item) {
   return Boolean(String(line?.barcode || "").trim()) && POSUnits.isCount(itemUnit(item || {}));
 }
 
+function pieceBarcodeQty(item) {
+  const F = globalThis.POSFootwear;
+  if (F?.isStripLooseItem?.(item)) return F.unitsPerPack(item);
+  return 1;
+}
+
 function addItem(id, qtyGm, lineBarcode) {
   const item = state.items.find((i) => i.id === id);
   if (!item) return;
@@ -2868,7 +2879,7 @@ function addItem(id, qtyGm, lineBarcode) {
     state.cart.push({
       lineId: newCartLineId(),
       itemId: id,
-      qtyGm: POSUnits.clampQty(count ? 1 : add),
+      qtyGm: POSUnits.clampQty(count ? pieceBarcodeQty(item) : add),
       discountType: "amt",
       discountValue: 0,
       barcode: code,
@@ -2898,7 +2909,7 @@ function setLineQty(key, qtyGm) {
   const item = state.items.find((i) => i.id === line.itemId);
   const next = POSUnits.clampQty(qtyGm);
   if (next <= 0) state.cart = state.cart.filter((l) => cartLineKey(l) !== String(key));
-  else if (isPieceBarcodeLine(line, item)) line.qtyGm = 1;
+  else if (isPieceBarcodeLine(line, item)) line.qtyGm = pieceBarcodeQty(item);
   else line.qtyGm = next;
   renderCart();
 }
@@ -3320,9 +3331,9 @@ function fillItemForm(i) {
   if ($("item-own-barcode")) $("item-own-barcode").value = i.barcode || "";
   if ($("item-pack-size")) $("item-pack-size").value = i.pack_size || "";
   if ($("item-pack-unit")) $("item-pack-unit").value = i.pack_unit || "Strip";
-  if ($("item-upp")) $("item-upp").value = i.units_per_pack || 10;
-  if ($("item-batch-no")) $("item-batch-no").value = i.batch_no || "";
-  if ($("item-expiry")) $("item-expiry").value = String(i.default_expiry || "").slice(0, 10);
+  if ($("item-upp")) $("item-upp").value = globalThis.POSFootwear?.unitsPerPack?.(i) || i.units_per_pack || 10;
+  if ($("item-batch-no")) $("item-batch-no").value = i.primary_batch_no || i.batch_no || "";
+  if ($("item-expiry")) $("item-expiry").value = String(i.primary_expiry || i.default_expiry || "").slice(0, 10);
   if ($("item-reorder")) $("item-reorder").value = POSUnits.fromBase(i.reorder_level_gm, itemUnit(i));
   if ($("item-wearer")) $("item-wearer").value = globalThis.POSFootwear?.normalizeWearer(i.wearer_type) || "";
   if ($("item-color")) $("item-color").value = i.color || "";

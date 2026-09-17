@@ -461,11 +461,66 @@ function pos_item_is_count($item) {
   return pos_item_unit($item) === "PCS";
 }
 
+function pos_parse_units_from_pack_size($packSize) {
+  $text = trim((string) $packSize);
+  if ($text === "") return 0;
+  if (preg_match("/^(\\d+)/", $text, $m)) return max(1, (int) $m[1]);
+  if (preg_match("/(\\d+)\\s*(tablet|capsule|tab|cap|unit)s?\\b/i", $text, $m)) return max(1, (int) $m[1]);
+  return 0;
+}
+
+function pos_is_strip_loose_item($item) {
+  $med = strtolower(trim((string) ($item["medicine_type"] ?? "")));
+  $pack = strtolower(trim((string) ($item["pack_unit"] ?? "")));
+  if ($pack !== "strip") return false;
+  if ($med === "" || $med === "tablet" || $med === "capsule" || $med === "other") return true;
+  return !in_array($med, ["syrup", "injection", "cream", "ointment", "drops", "inhaler", "powder", "gel", "lotion"], true);
+}
+
+function pos_units_per_pack($item) {
+  $explicit = (int) ($item["units_per_pack"] ?? 0);
+  if ($explicit > 1) return $explicit;
+  $parsed = pos_parse_units_from_pack_size($item["pack_size"] ?? "");
+  if ($parsed > 1) return $parsed;
+  if (pos_is_strip_loose_item($item)) return 10;
+  return $explicit > 0 ? $explicit : 1;
+}
+
+function pos_loose_sale_rate($item, $customerType = "b2c") {
+  $pack = ($customerType === "b2b")
+    ? (float) ($item["b2b_rate"] ?? $item["retail_rate"] ?? 0)
+    : (float) ($item["retail_rate"] ?? 0);
+  $upp = pos_units_per_pack($item);
+  return $upp > 1 ? pos_adv_round2($pack / $upp) : $pack;
+}
+
+function pos_loose_mrp($item) {
+  $mrp = (float) ($item["mrp"] ?? $item["retail_rate"] ?? 0);
+  $upp = pos_units_per_pack($item);
+  return ($upp > 1 && $mrp > 0) ? pos_adv_round2($mrp / $upp) : $mrp;
+}
+
+function pos_loose_cost_rate($item) {
+  $cost = (float) ($item["purchase_rate"] ?? 0);
+  $upp = pos_units_per_pack($item);
+  return ($upp > 1 && $cost > 0) ? pos_adv_round2($cost / $upp) : $cost;
+}
+
+function pos_pack_stock_qty($item, $looseQty) {
+  $qty = (float) $looseQty;
+  $upp = pos_units_per_pack($item);
+  if ($upp <= 1) return $qty;
+  return round($qty / $upp, 3);
+}
+
 function pos_medicine_pack_label($item) {
+  $upp = pos_units_per_pack($item);
+  $pack = trim((string) ($item["pack_unit"] ?? ""));
+  $type = trim((string) ($item["medicine_type"] ?? ""));
+  $loose = $type !== "" ? $type : ($pack !== "" ? "Tablet" : "Unit");
+  if ($pack !== "" && $upp > 1) return substr($pack . " · " . $upp . " " . $loose, 0, 64);
   $size = trim((string) ($item["pack_size"] ?? ""));
-  $unit = trim((string) ($item["pack_unit"] ?? ""));
-  $upp = (int) ($item["units_per_pack"] ?? 0);
-  if ($size !== "" && $unit !== "") return substr($size . " " . $unit, 0, 64);
+  if ($size !== "" && $pack !== "") return substr($size . " " . $pack, 0, 64);
   if ($size !== "") return substr($size, 0, 64);
   if ($upp > 0) return $upp . "s";
   return "";
@@ -484,16 +539,16 @@ function pos_pharmacy_line_snapshot($item, $batch = null) {
 
 function pos_compute_sale_line($item, $qty, $customer, $lineIn) {
   $isB2b = (($customer["type"] ?? "") === "b2b");
-  $rate = $isB2b ? (float) $item["b2b_rate"] : (float) $item["retail_rate"];
+  $rate = pos_loose_sale_rate($item, $isB2b ? "b2b" : "b2c");
   if (isset($lineIn["rate"]) && $lineIn["rate"] !== "" && $lineIn["rate"] !== null) {
     $rate = (float) $lineIn["rate"];
   }
   $isCount = pos_item_is_count($item);
   $gross = pos_adv_round2($isCount ? $qty * $rate : ($qty / 1000) * $rate);
-  $mrpRate = (float) ($item["mrp"] ?? 0);
-  if ($mrpRate <= 0) $mrpRate = (float) $item["retail_rate"];
+  $mrpRate = pos_loose_mrp($item);
+  if ($mrpRate <= 0) $mrpRate = $rate;
   $mrp = pos_adv_round2($isCount ? $qty * $mrpRate : ($qty / 1000) * $mrpRate);
-  $costRate = (float) ($item["purchase_rate"] ?? 0);
+  $costRate = pos_loose_cost_rate($item);
   $cost = pos_adv_round2($isCount ? $qty * $costRate : ($qty / 1000) * $costRate);
   $dtype = pos_adv_is_pct($lineIn["discountType"] ?? $lineIn["discount_type"] ?? "amt") ? "pct" : "amt";
   $dval = (float) ($lineIn["discountValue"] ?? $lineIn["discount_value"] ?? 0);
@@ -578,7 +633,12 @@ function pos_allocate_batches($bid, $itemId, $qty, $preferBarcode = "", $preferB
 function pos_restore_batches_for_lines($bid, $lines) {
   foreach ($lines as $l) {
     $batchId = $l["batch_id"] ?? "";
-    $qty = (float) ($l["quantity_gm"] ?? 0);
+    $item = $l["item"] ?? null;
+    if (!$item && !empty($l["item_id"])) {
+      $found = pos_q("SELECT * FROM items WHERE id = ? AND business_id = ? LIMIT 1", "ss", [$l["item_id"], $bid]);
+      $item = $found[0] ?? [];
+    }
+    $qty = pos_pack_stock_qty($item ?: [], $l["quantity_gm"] ?? 0);
     if ($batchId && $qty > 0) {
       try {
         pos_q("UPDATE stock_batches SET remaining_gm = remaining_gm + ? WHERE id = ? AND business_id = ?", "dss", [$qty, $batchId, $bid]);

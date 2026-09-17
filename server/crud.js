@@ -5,7 +5,7 @@ import { bid } from "./context.js";
 import { recordCreditPurchase } from "./accounts.js";
 import { postPurchaseJournal } from "./accounting.js";
 import { audit } from "./audit.js";
-import { onItemSaved, onPurchaseLineSaved, pharmacyLineSnapshot, computeSaleLine } from "./advanced.js";
+import { onItemSaved, onPurchaseLineSaved, pharmacyLineSnapshot, computeSaleLine, saleStockQty } from "./advanced.js";
 import {
   decodeImportUpload,
   itemBodyFromImportRow,
@@ -763,9 +763,10 @@ export function registerCrud(app) {
           [existing.id],
         );
         for (const line of oldLines) {
+          const [itemRows] = await conn.query("SELECT * FROM items WHERE id = ? AND business_id = ?", [line.item_id, bid()]);
           await conn.query(
             "UPDATE items SET stock_gm = stock_gm + ? WHERE id = ? AND business_id = ?",
-            [line.quantity_gm, line.item_id, bid()],
+            [saleStockQty(itemRows[0], line.quantity_gm), line.item_id, bid()],
           );
         }
         await conn.query("DELETE FROM sales_order_lines WHERE order_id = ?", [existing.id]);
@@ -928,7 +929,7 @@ export function registerCrud(app) {
             }
             await conn.query(
               "UPDATE items SET stock_gm = stock_gm - ? WHERE id = ? AND business_id = ?",
-              [line.qty, line.item.id, bid()],
+              [saleStockQty(line.item, line.qty), line.item.id, bid()],
             );
           }
         }
@@ -984,9 +985,10 @@ export function registerCrud(app) {
 
         if (newStatus === "cancelled" && oldStatus !== "cancelled") {
           for (const line of lines) {
+            const [itemRows] = await conn.query("SELECT * FROM items WHERE id = ? AND business_id = ?", [line.item_id, bid()]);
             await conn.query(
               "UPDATE items SET stock_gm = stock_gm + ? WHERE id = ? AND business_id = ?",
-              [line.quantity_gm, line.item_id, bid()],
+              [saleStockQty(itemRows[0], line.quantity_gm), line.item_id, bid()],
             );
             await conn.query("UPDATE sales_order_lines SET cancelled = 1 WHERE id = ?", [line.id]);
           }
@@ -996,9 +998,10 @@ export function registerCrud(app) {
             [existing.id],
           );
           for (const line of allLines) {
+            const [itemRows] = await conn.query("SELECT * FROM items WHERE id = ? AND business_id = ?", [line.item_id, bid()]);
             await conn.query(
               "UPDATE items SET stock_gm = stock_gm - ? WHERE id = ? AND business_id = ?",
-              [line.quantity_gm, line.item_id, bid()],
+              [saleStockQty(itemRows[0], line.quantity_gm), line.item_id, bid()],
             );
             await conn.query("UPDATE sales_order_lines SET cancelled = 0 WHERE id = ?", [line.id]);
           }
