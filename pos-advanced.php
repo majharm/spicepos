@@ -63,6 +63,7 @@ function pos_ensure_advanced_schema() {
       "batch_no" => "VARCHAR(64) NULL",
       "expiry_date" => "DATE NULL",
       "pack_label" => "VARCHAR(64) NULL",
+      "notes" => "TEXT NULL",
     ]);
     pos_ensure_columns("purchase_lines", [
       "batch_no" => "VARCHAR(64) NULL",
@@ -572,7 +573,16 @@ function pos_compute_sale_line($item, $qty, $customer, $lineIn) {
     "profit" => pos_adv_round2($taxable - $cost),
     "barcode" => trim((string) ($lineIn["barcode"] ?? "")),
     "batchId" => trim((string) ($lineIn["batchId"] ?? $lineIn["batch_id"] ?? "")),
+    "notes" => substr(trim((string) ($lineIn["notes"] ?? $lineIn["special_instruction"] ?? $lineIn["specialInstruction"] ?? "")), 0, 240),
   ];
+}
+
+function pos_persist_sale_line_note($lineId, $raw) {
+  $notes = substr(trim((string) $raw), 0, 240);
+  if ($notes === "" || !$lineId) return;
+  try {
+    pos_q("UPDATE sales_order_lines SET notes = ? WHERE id = ?", "ss", [$notes, $lineId]);
+  } catch (Exception $e) { /* optional column */ }
 }
 
 function pos_write_stock_movement($bid, $branchId, $uid, $itemId, $kind, $qty, $note, $extra = []) {

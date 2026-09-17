@@ -1,7 +1,7 @@
 (function () {
   const shopKey = new URLSearchParams(location.search).get("shop") || "";
   const tablePrefill = new URLSearchParams(location.search).get("table") || "";
-  const state = { shop: null, items: [], offers: [], offerSettings: { stacking: "product_and_bill" }, cart: new Map(), category: "All", query: "" };
+  const state = { shop: null, items: [], offers: [], offerSettings: { stacking: "product_and_bill" }, cart: new Map(), notes: new Map(), noteOpen: new Set(), category: "All", query: "" };
   const $ = (id) => document.getElementById(id);
   const money = (n) => new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR" }).format(Number(n) || 0);
   const esc = (value) =>
@@ -208,6 +208,24 @@
     };
   }
 
+  function clipNote(raw) {
+    return String(raw ?? "")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 240);
+  }
+
+  function cartNote(id) {
+    return String(state.notes.get(String(id)) || "");
+  }
+
+  function setCartNote(id, value) {
+    const key = String(id);
+    const note = String(value ?? "").slice(0, 240);
+    if (note.trim()) state.notes.set(key, note);
+    else state.notes.delete(key);
+  }
+
   function setQty(id, next) {
     const item = findItem(id);
     if (!item) return;
@@ -215,7 +233,11 @@
     let qty = Math.round(Math.max(0, Number(next) || 0) / step) * step;
     if (isPack(item) && Number(item.stock_gm) > 0) qty = Math.min(qty, Number(item.stock_gm));
     if (qty > 0) state.cart.set(id, Math.round(qty * 1000) / 1000);
-    else state.cart.delete(id);
+    else {
+      state.cart.delete(id);
+      state.notes.delete(String(id));
+      state.noteOpen.delete(String(id));
+    }
     renderMenu();
     renderCart();
   }
@@ -274,9 +296,15 @@
     $("cart-total").textContent = summary.discount > 0
       ? `${money(summary.total)} · save ${money(summary.discount)}`
       : money(summary.total);
-    const rows = (summary.lines || []).map((line) =>
-      `<div class="cart-line"><strong>${esc(line.item.name)}</strong><span>${line.qty} ${esc(orderUnit(line.item).label)} × ${esc(money(line.item.retail_rate))}${line.lineOff > 0 ? ` · save ${esc(money(line.lineOff))}` : ""}</span><strong>${esc(money(line.amount))}</strong></div>`,
-    );
+    const rows = (summary.lines || []).map((line) => {
+      const id = String(line.id);
+      const note = cartNote(id);
+      const open = state.noteOpen.has(id) || Boolean(note.trim());
+      const field = open
+        ? `<label class="cart-si"><span>Special Instruction</span><textarea data-note="${esc(id)}" maxlength="240" rows="2" placeholder="No onion, extra cheese">${esc(note)}</textarea></label>`
+        : `<button class="cart-si-btn" type="button" data-note-open="${esc(id)}">Add Special Instruction</button>`;
+      return `<div class="cart-line"><strong>${esc(line.item.name)}</strong><span>${line.qty} ${esc(orderUnit(line.item).label)} × ${esc(money(line.item.retail_rate))}${line.lineOff > 0 ? ` · save ${esc(money(line.lineOff))}` : ""}</span><strong>${esc(money(line.amount))}</strong>${field}</div>`;
+    });
     $("cart-lines").innerHTML = rows.join("") || '<p class="empty">Your order is empty.</p>';
     const pending = summary.pending
       ? `<div class="offer-wait">${esc(summary.pending)}${summary.wouldSave > 0 ? ` · save ${esc(money(summary.wouldSave))}` : ""}</div>`
@@ -362,6 +390,16 @@
   $("cart-close").addEventListener("click", () => { $("cart-sheet").hidden = true; });
   $("cart-sheet").addEventListener("click", (event) => {
     if (event.target === $("cart-sheet")) $("cart-sheet").hidden = true;
+    const open = event.target.closest("[data-note-open]");
+    if (open) {
+      state.noteOpen.add(String(open.dataset.noteOpen));
+      renderCart();
+    }
+  });
+  $("cart-lines").addEventListener("input", (event) => {
+    const ta = event.target.closest("[data-note]");
+    if (!ta) return;
+    setCartNote(ta.dataset.note, ta.value);
   });
   let sending = false;
   $("order-form").addEventListener("submit", async (event) => {
@@ -382,8 +420,11 @@
           customer_name: form.get("customer_name"),
           mobile: form.get("mobile"),
           table_no: form.get("table_no"),
-          notes: form.get("notes"),
-          lines: [...state.cart].map(([item_id, quantity]) => ({ item_id, quantity })),
+          lines: [...state.cart].map(([item_id, quantity]) => ({
+            item_id,
+            quantity,
+            notes: clipNote(cartNote(item_id)),
+          })),
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -401,6 +442,8 @@
       if (totalEl) totalEl.textContent = `Total ${money(data.order?.total)}`;
       $("order-success").hidden = false;
       state.cart.clear();
+      state.notes.clear();
+      state.noteOpen.clear();
       renderCart();
       event.currentTarget.reset();
       hint.textContent = "";

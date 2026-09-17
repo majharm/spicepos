@@ -229,6 +229,7 @@ function pos_update_order($bid, $orderId, $body, $auth) {
           ]
         );
       }
+      if (function_exists("pos_persist_sale_line_note")) pos_persist_sale_line_note($lineId, $line["notes"] ?? "");
       pos_q("UPDATE items SET stock_gm = stock_gm - ? WHERE id = ? AND business_id = ?", "dss", [$line["qty"], $line["item"]["id"], $bid]);
     }
   }

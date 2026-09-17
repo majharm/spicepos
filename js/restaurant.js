@@ -352,12 +352,26 @@
     return list.find((row) => tableNoFromHold(row) === want) || null;
   }
 
+  function specialInstruction(raw) {
+    return String(raw ?? "")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 240);
+  }
+
+  function lineSpecialInstruction(line) {
+    return specialInstruction(
+      line?.notes ?? line?.special_instruction ?? line?.specialInstruction ?? "",
+    );
+  }
+
   function cartSnapshot(cart) {
     return (Array.isArray(cart) ? cart : [])
       .map((line) => ({
         itemId: line.itemId || line.item_id || "",
         qtyGm: Number(line.qtyGm || line.quantity_gm) || 0,
         name: line.name || line.item_name || "",
+        notes: lineSpecialInstruction(line),
       }))
       .filter((line) => line.itemId && line.qtyGm > 0);
   }
@@ -433,7 +447,9 @@
       .map((line, i) => {
         const name = escapeHtml(line.name || line.item_name || "Item");
         const qty = escapeHtml(formatKotQty(line.qtyGm || line.quantity_gm, line.unit));
-        return `<tr><td class="kot-n">${i + 1}</td><td>${name}</td><td class="kot-q">${qty}</td></tr>`;
+        const si = lineSpecialInstruction(line);
+        const noteHtml = si ? `<div class="kot-si">${escapeHtml(si)}</div>` : "";
+        return `<tr><td class="kot-n">${i + 1}</td><td>${name}${noteHtml}</td><td class="kot-q">${qty}</td></tr>`;
       })
       .join("");
     return `<article class="thermal-invoice kot-ticket">
@@ -477,6 +493,7 @@ body {
 .inv-rule { border-top: 1px dashed #000; margin: 6px 0; }
 .inv-details .inv-row { display: flex; justify-content: space-between; gap: 6px; margin: 2px 0; }
 .inv-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.kot-si { margin-top: 2px; font-size: 11px; font-weight: 700; }
 .inv-table th, .inv-table td { padding: 4px 0; vertical-align: top; }
 .inv-num, .kot-q { text-align: right; font-weight: 800; }
 .kot-n { width: 1.4em; }
@@ -529,6 +546,8 @@ ${kotBody(opts)}
     tableNoFromHold,
     isTableHold,
     findTableHold,
+    specialInstruction,
+    lineSpecialInstruction,
     cartSnapshot,
     kotDelta,
     kotKind,

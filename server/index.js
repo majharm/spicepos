@@ -27,7 +27,7 @@ import { recordCreditSale } from "./accounts.js";
 import { audit } from "./audit.js";
 import { getPlatformSettings, shopSupportContact } from "./settings.js";
 import { sendLowStockAlerts, tickShopAlerts, startAlertScheduler, scheduleAlertTick } from "./alerts.js";
-import { registerAdvanced, computeSaleLine, applySaleStock, applyLoyaltyOnSale, pharmacyLineSnapshot, enrichCatalogPharmacy, saleStockQty } from "./advanced.js";
+import { registerAdvanced, computeSaleLine, applySaleStock, applyLoyaltyOnSale, pharmacyLineSnapshot, enrichCatalogPharmacy, saleStockQty, persistSaleLineNote } from "./advanced.js";
 import { registerQrPublic, registerQrStaff, linkQrOrderSale, ensureQrOrderSchema } from "./qr-ordering.js";
 import "../js/discount.js";
 import { canonApiUrl, isAliasedApi, isApiUrl, rewriteToApi } from "./http-path.js";
@@ -999,6 +999,7 @@ app.post("/api/checkout", requireStaff, requirePerm("counter"), async (req, res)
         } catch {
           /* optional pharmacy line columns */
         }
+        await persistSaleLineNote(conn, lineId, line.notes);
       }
 
       try {

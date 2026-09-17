@@ -500,6 +500,7 @@ function cartLineFromOrderLine(l) {
     discountType: type,
     discountValue: value,
     barcode: l.barcode || "",
+    notes: String(l.notes || l.special_instruction || "").trim(),
   };
 }
 
@@ -1674,6 +1675,7 @@ function cartLineFromHold(line) {
     discountValue: Number(line.discountValue) || 0,
     barcode: line.barcode || "",
     offerId: line.offerId || "",
+    notes: String(line.notes || "").trim(),
   };
 }
 
@@ -1945,6 +1947,7 @@ function kotLinesForPrint(lines) {
       qtyGm: Number(line.qtyGm || line.quantity_gm) || 0,
       name: item?.name || line.name || line.item_name || "Item",
       unit: item?.unit || item?.base_unit || line.unit || "PCS",
+      notes: String(line.notes || line.special_instruction || line.specialInstruction || "").trim(),
     };
   });
 }
@@ -2077,7 +2080,10 @@ function renderKotBoard() {
               <span class="kot-status">${escapeHtml(kotStatusLabel(ticket.status))}</span>
             </header>
             <div class="kot-lines">${(ticket.lines || [])
-              .map((line) => `<div class="kot-line"><span>${escapeHtml(line.name || "Item")}</span><strong>${escapeHtml(kotQtyLine(line))}</strong></div>`)
+              .map((line) => {
+                const si = String(line.notes || line.special_instruction || "").trim();
+                return `<div class="kot-line"><span>${escapeHtml(line.name || "Item")}${si ? `<small class="kot-si">${escapeHtml(si)}</small>` : ""}</span><strong>${escapeHtml(kotQtyLine(line))}</strong></div>`;
+              })
               .join("")}</div>
             ${ticket.notes ? `<p class="kot-note">Note: ${escapeHtml(ticket.notes)}</p>` : ""}
             <div class="kot-actions">
@@ -2215,6 +2221,7 @@ function printQrKitchenKot(order) {
     qtyGm: Number(line.quantity_gm) || 0,
     name: line.item_name,
     unit: line.unit || "PCS",
+    notes: String(line.notes || "").trim(),
   }));
   printKitchenKot({
     tableNo: order.table_no,
@@ -2512,6 +2519,16 @@ function cartTotals() {
   };
 }
 
+function restaurantLineNoteHtml(line, key) {
+  if (!isRestaurantShop()) return "";
+  const note = String(line.notes || "");
+  const open = Boolean(line.noteOpen) || Boolean(note.trim());
+  if (open) {
+    return `<label class="line-si"><span>Special Instruction</span><textarea data-line-note="${escapeHtml(key)}" maxlength="240" rows="2" placeholder="No onion, extra cheese">${escapeHtml(note)}</textarea></label>`;
+  }
+  return `<button class="line-si-btn" type="button" data-note-open="${escapeHtml(key)}">Add Special Instruction</button>`;
+}
+
 function renderCart() {
   applyOffersToCart();
   const packEl = $("chosen-pack");
@@ -2615,6 +2632,7 @@ function renderCart() {
               </select>
               <input data-line-disc="${escapeHtml(key)}" type="number" min="0" step="0.01" value="${escapeHtml(line.discountValue || 0)}" aria-label="Line discount" />
             </div>` : ""}
+          ${restaurantLineNoteHtml(line, key)}
         </div>`;
       })
       .join("");
@@ -2883,6 +2901,7 @@ function addItem(id, qtyGm, lineBarcode) {
       discountType: "amt",
       discountValue: 0,
       barcode: code,
+      notes: "",
     });
     renderCart();
     return;
@@ -2897,6 +2916,7 @@ function addItem(id, qtyGm, lineBarcode) {
       discountType: "amt",
       discountValue: 0,
       barcode: "",
+      notes: "",
     });
   }
   state.cart = state.cart.filter((l) => l.qtyGm > 0);
@@ -5271,7 +5291,14 @@ function renderQrOrders() {
   const query = String($("qr-order-search")?.value || "").trim().toLowerCase();
   const rows = qrOrderCache.filter((order) => {
     if (qrOrderStatus && order.status !== qrOrderStatus) return false;
-    const hay = [order.order_number, order.customer_name, order.mobile, order.table_no, order.notes].join(" ").toLowerCase();
+        const hay = [
+          order.order_number,
+          order.customer_name,
+          order.mobile,
+          order.table_no,
+          order.notes,
+          ...(order.lines || []).map((line) => line.notes || line.item_name),
+        ].join(" ").toLowerCase();
     return !query || hay.includes(query);
   });
   paintQrOrderBadge();
@@ -5282,9 +5309,10 @@ function renderQrOrders() {
           <span class="qr-order-status">${escapeHtml(order.status)}</span>
         </header>
         <p class="qr-order-meta"><strong>${escapeHtml(order.customer_name)}</strong> · ${escapeHtml(order.mobile)}${order.table_no ? ` · ${escapeHtml(order.table_no)}` : ""}</p>
-        <div class="qr-order-lines">${(order.lines || []).map((line) =>
-          `<div class="qr-order-line"><span>${escapeHtml(line.item_name)} · ${escapeHtml(qrOrderQty(line))}</span><strong>${money(line.amount)}</strong></div>`,
-        ).join("")}</div>
+        <div class="qr-order-lines">${(order.lines || []).map((line) => {
+          const si = String(line.notes || "").trim();
+          return `<div class="qr-order-line"><span>${escapeHtml(line.item_name)} · ${escapeHtml(qrOrderQty(line))}${si ? `<small class="qr-line-si">${escapeHtml(si)}</small>` : ""}</span><strong>${money(line.amount)}</strong></div>`;
+        }).join("")}</div>
         ${qrOrderTotalsHtml(order)}
         ${order.notes ? `<p class="qr-order-note">Note: ${escapeHtml(order.notes)}</p>` : ""}
         <div class="qr-order-actions">
@@ -5378,7 +5406,12 @@ async function openQrOrderInCounter(order) {
     state.activeTable = R.normalizeTableNo(order.table_no) || R.PARCEL;
     syncActiveFloor(state.activeTable);
   }
-  state.cart = liveLines.map((line) => ({ itemId: line.item_id, qtyGm: Number(line.quantity_gm) }));
+  state.cart = liveLines.map((line) => ({
+    lineId: newCartLineId(),
+    itemId: line.item_id,
+    qtyGm: Number(line.quantity_gm),
+    notes: String(line.notes || "").trim(),
+  }));
   const known = state.customers.find((customer) => digitsMobile(customer.mobile) === digitsMobile(order.mobile));
   const walkIn = state.customers.find((customer) => customer.code === "CUS-001") || state.customers[0];
   state.customerId = known?.id || walkIn?.id || "";
@@ -5821,10 +5854,25 @@ $("catalog-cats")?.addEventListener("click", (e) => {
   $("catalog")?.scrollTo({ top: 0 });
 });
 $("lines").addEventListener("click", (e) => {
-  if (e.target.closest("[data-qty]")) return;
+  const openNote = e.target.closest("[data-note-open]");
+  if (openNote) {
+    const line = findCartLine(openNote.dataset.noteOpen);
+    if (line) {
+      line.noteOpen = true;
+      renderCart();
+    }
+    return;
+  }
+  if (e.target.closest("[data-qty]") || e.target.closest("[data-line-note]")) return;
   const btn = e.target.closest("[data-chg]");
   if (!btn) return;
   changeLineQty(btn.dataset.chg, Number(btn.dataset.d));
+});
+$("lines").addEventListener("input", (e) => {
+  const ta = e.target.closest("[data-line-note]");
+  if (!ta) return;
+  const line = findCartLine(ta.dataset.lineNote);
+  if (line) line.notes = String(ta.value || "").slice(0, 240);
 });
 $("lines").addEventListener("focusin", (e) => {
   const input = e.target.closest("[data-qty]");
@@ -6201,6 +6249,7 @@ $("btn-pay").addEventListener("click", async () => {
         discountType: l.discountType || "amt",
         discountValue: l.discountValue || 0,
         barcode: l.barcode || "",
+        notes: String(l.notes || "").trim(),
       })),
     };
     const result = state.editingOrderId

@@ -1314,6 +1314,7 @@ function pos_ensure_sales_schema() {
       "batch_no" => "VARCHAR(64) NULL",
       "expiry_date" => "DATE NULL",
       "pack_label" => "VARCHAR(64) NULL",
+      "notes" => "TEXT NULL",
     ]);
     pos_ensure_columns("customers", [
       "address" => "VARCHAR(500) NULL",

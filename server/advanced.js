@@ -543,7 +543,18 @@ export function computeSaleLine(item, customer, lineIn) {
     profit: calc.profit,
     barcode: String(lineIn.barcode || "").trim(),
     batchId: String(lineIn.batchId || lineIn.batch_id || "").trim(),
+    notes: String(lineIn.notes || lineIn.special_instruction || lineIn.specialInstruction || "").trim().slice(0, 240),
   };
+}
+
+export async function persistSaleLineNote(conn, lineId, raw) {
+  const notes = String(raw || "").trim().slice(0, 240);
+  if (!notes || !lineId) return;
+  try {
+    await conn.query("UPDATE sales_order_lines SET notes=? WHERE id=?", [notes, lineId]);
+  } catch {
+    /* optional column */
+  }
 }
 
 export async function allocateBatches(conn, businessId, itemId, qty, preferBarcode = "", preferBatch = "") {

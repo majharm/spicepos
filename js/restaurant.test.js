@@ -68,7 +68,7 @@ test("Kitchen KOT prints new dishes only, then reprint of the full ticket", () =
     kind: "new",
     notes: "Less spicy",
     lines: [
-      { name: "Masala dosa", qtyGm: 1, unit: "PCS" },
+      { name: "Masala dosa", qtyGm: 1, unit: "PCS", notes: "Less spicy" },
       { name: "Tea", qtyGm: 1, unit: "PCS" },
     ],
   });
@@ -76,6 +76,7 @@ test("Kitchen KOT prints new dishes only, then reprint of the full ticket", () =
   assert.match(html, /Table 4/);
   assert.match(html, /Masala dosa/);
   assert.match(html, /Less spicy/);
+  assert.match(html, /kot-si/);
   assert.doesNotMatch(html, /TAX INVOICE/);
   assert.doesNotMatch(html, /Grand total/);
 });
@@ -186,4 +187,23 @@ test("Kitchen notify finds only new KOT tickets", () => {
   assert.equal(fresh.length, 1);
   assert.equal(fresh[0].id, "fresh");
   assert.match(R.kotToastCopy(fresh[0], 1), /Table 5 · 2 items · \+1 more/);
+});
+
+test("Food order special instructions stay on each item", () => {
+  assert.equal(R.lineSpecialInstruction({ notes: "  No onion, extra cheese  " }), "No onion, extra cheese");
+  assert.equal(R.lineSpecialInstruction({ special_instruction: "Less spicy, no coriander" }), "Less spicy, no coriander");
+  const html = R.kotBody({
+    shop: "Cafe",
+    tableNo: "1",
+    kind: "new",
+    lines: [
+      { name: "Pizza", qtyGm: 1, unit: "PCS", notes: "No onion, extra cheese" },
+      { name: "Biryani", qtyGm: 2, unit: "PCS", notes: "Less spicy, no coriander" },
+      { name: "Cold Coffee", qtyGm: 1, unit: "PCS", notes: "Less sugar" },
+    ],
+  });
+  assert.match(html, /No onion, extra cheese/);
+  assert.match(html, /Less spicy, no coriander/);
+  assert.match(html, /Less sugar/);
+  assert.doesNotMatch(html, /Note: Less spicy/);
 });

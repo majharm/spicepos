@@ -5,7 +5,7 @@ import { bid } from "./context.js";
 import { recordCreditPurchase } from "./accounts.js";
 import { postPurchaseJournal } from "./accounting.js";
 import { audit } from "./audit.js";
-import { onItemSaved, onPurchaseLineSaved, pharmacyLineSnapshot, computeSaleLine, saleStockQty } from "./advanced.js";
+import { onItemSaved, onPurchaseLineSaved, pharmacyLineSnapshot, computeSaleLine, saleStockQty, persistSaleLineNote } from "./advanced.js";
 import {
   decodeImportUpload,
   itemBodyFromImportRow,
@@ -927,6 +927,7 @@ export function registerCrud(app) {
             } catch {
               /* optional */
             }
+            await persistSaleLineNote(conn, lineId, line.notes);
             await conn.query(
               "UPDATE items SET stock_gm = stock_gm - ? WHERE id = ? AND business_id = ?",
               [saleStockQty(line.item, line.qty), line.item.id, bid()],

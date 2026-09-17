@@ -81,6 +81,7 @@ function clipKotLines(raw) {
       name: String(line?.name || line?.item_name || "Item").trim().slice(0, 120) || "Item",
       qtyGm: Number(line?.qtyGm || line?.quantity_gm) || 0,
       unit: String(line?.unit || "PCS").slice(0, 16),
+      notes: String(line?.notes || line?.special_instruction || line?.specialInstruction || "").trim().slice(0, 240),
     }))
     .filter((line) => line.qtyGm > 0);
 }

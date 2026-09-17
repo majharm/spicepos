@@ -39,7 +39,7 @@ test("QR order payload normalizes public customer fields and valid lines", () =>
     tableNo: " Table 4 ",
     notes: " less spicy ",
     lines: [
-      { itemId: "i1", quantity: "1.5" },
+      { itemId: "i1", quantity: "1.5", notes: " No onion, extra cheese " },
       { itemId: "", quantity: 2 },
       { itemId: "i2", quantity: 0 },
     ],
@@ -48,7 +48,7 @@ test("QR order payload normalizes public customer fields and valid lines", () =>
   assert.equal(row.mobile, "+919876543210");
   assert.equal(row.tableNo, "Table 4");
   assert.equal(row.lines.length, 1);
-  assert.deepEqual(row.lines[0], { item_id: "i1", quantity: 1.5 });
+  assert.deepEqual(row.lines[0], { item_id: "i1", quantity: 1.5, notes: "No onion, extra cheese" });
 });
 
 test("QR based orders apply a PHP-shaped combo percent even when offer_price is 0", () => {
@@ -376,8 +376,8 @@ test("QR menu page paints a visible offer board from live offers", () => {
   const js = readFileSync(path.join(root, "js/qr-order.js"), "utf8");
   const css = readFileSync(path.join(root, "css/qr-order.css"), "utf8");
   assert.match(html, /id="offer-board"/);
-  assert.match(html, /qr-order\.js\?v=20260905deploy175/);
-  assert.doesNotMatch(html, /qr-order\.js\?v=20260905deploy164/);
+  assert.match(html, /qr-order\.js\?v=20260917food1/);
+  assert.doesNotMatch(html, /qr-order\.js\?v=20260905deploy175/);
   assert.doesNotMatch(html, /offers\.js\?v=20260905deploy168/);
   assert.equal([...html.matchAll(/qr-order\.js\?v=/g)].length, 1);
   assert.equal([...html.matchAll(/offers\.js\?v=/g)].length, 1);

@@ -1353,6 +1353,8 @@ body:not(.restaurant-mode) [data-view="kot"] {
   gap: 8px;
   font-size: 14px;
 }
+.kot-line span { display: grid; gap: 2px; }
+.kot-si { color: #9a3412; font-size: 12px; font-weight: 700; }
 .kot-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .catalog-cat {
   flex: 0 0 auto;
@@ -3096,6 +3098,8 @@ body.pharmacy-mode .items-library-list {
 .qr-order-meta { margin: 5px 0 10px; color: var(--muted); font-size: 12px; }
 .qr-order-lines { display: grid; gap: 5px; margin: 0 0 10px; padding: 10px; border-radius: 10px; background: #f8fafc; }
 .qr-order-line { display: flex; justify-content: space-between; gap: 10px; font-size: 12px; }
+.qr-order-line span { display: grid; gap: 2px; }
+.qr-line-si { color: #9a3412; font-weight: 700; }
 .qr-order-total { display: flex; justify-content: space-between; padding-top: 8px; border-top: 1px solid var(--line); font-size: 15px; }
 .qr-order-discount { color: #0f766e; font-weight: 800; border-top: 0; padding-top: 4px; }
 .qr-order-note { margin: 9px 0 0; color: var(--muted); font-size: 12px; }
@@ -4576,6 +4580,18 @@ button.items-stat.is-active {
 }
 .line-disc select { width: 52px; min-height: 28px; }
 .line-disc input { width: 72px; min-height: 28px; }
+.line-si { display: grid; gap: 4px; color: var(--muted); font-size: 11px; font-weight: 700; }
+.line-si textarea { width: 100%; min-height: 52px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; resize: vertical; font: inherit; font-weight: 600; color: var(--ink); }
+.line-si-btn {
+  justify-self: start;
+  padding: 5px 10px;
+  border: 1px dashed #0f766e;
+  border-radius: 999px;
+  color: #115e59;
+  background: #ecfdf5;
+  font-size: 12px;
+  font-weight: 800;
+}
 .line-meta { flex: 1 1 100%; }
 .barcode-field { display: flex; gap: 8px; align-items: center; }
 .barcode-field input { flex: 1; }

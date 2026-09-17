@@ -50,6 +50,7 @@ function pos_qr_ensure_schema() {
     )"
   );
   if ($db->errno) throw new Exception($db->error ?: "Could not prepare QR order lines");
+  @$db->query("ALTER TABLE qr_order_lines ADD COLUMN notes TEXT NULL");
 }
 
 function pos_qr_clean($value, $max) {
@@ -93,7 +94,8 @@ function pos_qr_validate_order($body) {
   foreach (array_slice(is_array($body["lines"] ?? null) ? $body["lines"] : [], 0, 50) as $line) {
     $itemId = pos_qr_clean($line["item_id"] ?? $line["itemId"] ?? "", 255);
     $quantity = (float) ($line["quantity"] ?? 0);
-    if ($itemId !== "" && $quantity > 0) $lines[] = ["item_id" => $itemId, "quantity" => $quantity];
+    $note = pos_qr_clean($line["notes"] ?? $line["special_instruction"] ?? $line["specialInstruction"] ?? "", 240);
+    if ($itemId !== "" && $quantity > 0) $lines[] = ["item_id" => $itemId, "quantity" => $quantity, "notes" => $note];
   }
   if (!$lines) throw new Exception("Add at least one item");
   return ["customer_name" => $name, "mobile" => $mobile, "table_no" => $table, "notes" => $notes, "lines" => $lines];
@@ -356,6 +358,7 @@ function pos_qr_ensure_invoice($bid, $branchId, $uid, $qrOrderId, $paymentMethod
           $lineDisc, (string) ($line["amount"] ?? 0), (string) ($line["gst_rate"] ?? 0), "0", $bid,
         ]
       );
+      if (function_exists("pos_persist_sale_line_note")) pos_persist_sale_line_note($lineId, $line["notes"] ?? "");
       if (function_exists("pos_allocate_batches")) {
         $allocs = pos_allocate_batches($bid, $item["id"], $qty, "", "");
         foreach ($allocs as $al) {
@@ -525,6 +528,7 @@ function pos_qr_expand_pack_line($line, $pack, $byId) {
       "amount" => $amount,
       "gst_rate" => $gstRate,
       "gst" => pos_round2($amount * $gstRate / 100),
+      "notes" => pos_qr_clean($line["notes"] ?? $line["special_instruction"] ?? $line["specialInstruction"] ?? "", 240),
     ];
   }
   return $out;
@@ -610,7 +614,15 @@ function pos_qr_public_dispatch($path, $method, $body) {
       if ($qty > (float) ($item["stock_gm"] ?? 0)) throw new Exception($item["name"] . " does not have enough stock");
       $amount = pos_round2(pos_line_amount_for_item($qty, (float) $item["retail_rate"], $item));
       $gstRate = (float) ($item["gst_rate"] ?? 0);
-      $built[] = ["item" => $item, "unit" => $unit, "qty" => $qty, "amount" => $amount, "gst_rate" => $gstRate, "gst" => pos_round2($amount * $gstRate / 100)];
+      $built[] = [
+        "item" => $item,
+        "unit" => $unit,
+        "qty" => $qty,
+        "amount" => $amount,
+        "gst_rate" => $gstRate,
+        "gst" => pos_round2($amount * $gstRate / 100),
+        "notes" => $line["notes"] ?? "",
+      ];
     }
     if (!$built || count($built) > 200) throw new Exception("That pack order is too large.");
     require_once __DIR__ . "/pos-offers.php";
@@ -634,13 +646,24 @@ function pos_qr_public_dispatch($path, $method, $body) {
         [$id, $number, $business["id"], $input["customer_name"], $input["mobile"], $input["table_no"], $input["notes"], $subtotal, $gst, $total, $discount, $offerLabel]
       );
       foreach ($built as $line) {
-        pos_q(
-          "INSERT INTO qr_order_lines
-           (id, order_id, business_id, item_id, item_name, unit, quantity_gm, rate_per_kg, gst_rate, amount, gst_amount)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?)",
-          "ssssssddddd",
-          [pos_uuid(), $id, $business["id"], $line["item"]["id"], $line["item"]["name"], $line["unit"], $line["qty"], (float) $line["item"]["retail_rate"], $line["gst_rate"], $line["amount"], $line["gst"]]
-        );
+        $lid = pos_uuid();
+        try {
+          pos_q(
+            "INSERT INTO qr_order_lines
+             (id, order_id, business_id, item_id, item_name, unit, quantity_gm, rate_per_kg, gst_rate, amount, gst_amount, notes)
+             VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+            "ssssssddddds",
+            [$lid, $id, $business["id"], $line["item"]["id"], $line["item"]["name"], $line["unit"], $line["qty"], (float) $line["item"]["retail_rate"], $line["gst_rate"], $line["amount"], $line["gst"], $line["notes"] ?? null]
+          );
+        } catch (Exception $e) {
+          pos_q(
+            "INSERT INTO qr_order_lines
+             (id, order_id, business_id, item_id, item_name, unit, quantity_gm, rate_per_kg, gst_rate, amount, gst_amount)
+             VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+            "ssssssddddd",
+            [$lid, $id, $business["id"], $line["item"]["id"], $line["item"]["name"], $line["unit"], $line["qty"], (float) $line["item"]["retail_rate"], $line["gst_rate"], $line["amount"], $line["gst"]]
+          );
+        }
       }
       $db->commit();
     } catch (Throwable $e) {

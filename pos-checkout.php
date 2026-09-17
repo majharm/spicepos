@@ -149,6 +149,7 @@ function pos_checkout_sale($bid, $branchId, $uid, $auth, $body) {
           ]
         );
       }
+      if (function_exists("pos_persist_sale_line_note")) pos_persist_sale_line_note($lineId, $line["notes"] ?? "");
       $firstBatch = null;
       $stockQty = function_exists("pos_pack_stock_qty") ? pos_pack_stock_qty($line["item"], $line["qty"]) : $line["qty"];
       if (function_exists("pos_allocate_batches")) {
