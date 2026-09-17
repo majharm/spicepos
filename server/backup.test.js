@@ -356,8 +356,9 @@ test("HTML and CSS cache stickers match deploy136", () => {
   assert.match(masterHtml, /id="master-app"/);
   assert.match(masterHtml, /auth-shell-v2/);
   assert.match(masterHtml, /india-theme/);
-  assert.match(masterHtml, /make-in-india\.svg/);
-  assert.match(masterHtml, /startup-india\.svg/);
+  assert.doesNotMatch(masterHtml, /make-in-india\.svg/);
+  assert.doesNotMatch(masterHtml, /startup-india\.svg/);
+  assert.doesNotMatch(masterHtml, /india-pride/);
   assert.match(masterHtml, /id="master-pass-toggle"/);
   assert.match(masterHtml, /Master sign in/);
   assert.match(masterHtml, /id="master-login-submit"/);
@@ -635,11 +636,11 @@ test("HTML and CSS cache stickers match deploy136", () => {
   assert.doesNotMatch(login, /assets\/login-pos-stock\.jpg/);
   assert.match(login, /auth-shell-v2/);
   assert.match(login, /india-theme/);
-  assert.match(login, /class="india-pride"/);
-  assert.match(login, /assets\/make-in-india\.svg/);
-  assert.match(login, /assets\/startup-india\.svg/);
-  assert.ok(existsSync(path.join(root, "assets/make-in-india.svg")));
-  assert.ok(existsSync(path.join(root, "assets/startup-india.svg")));
+  assert.doesNotMatch(login, /india-pride/);
+  assert.doesNotMatch(login, /assets\/make-in-india\.svg/);
+  assert.doesNotMatch(login, /assets\/startup-india\.svg/);
+  assert.equal(existsSync(path.join(root, "assets/make-in-india.svg")), false);
+  assert.equal(existsSync(path.join(root, "assets/startup-india.svg")), false);
   assert.match(login, /Bakery \/ cake shop/);
   assert.match(login, />Bakery</);
   assert.match(login, /class="login-legal"/);
@@ -670,7 +671,7 @@ test("HTML and CSS cache stickers match deploy136", () => {
   assert.match(saas, /overflow-y: scroll/);
   assert.match(saas, /auth-card > p\.auth-trial-invite/);
   assert.match(saas, /auth-scene-types/);
-  assert.match(saas, /india-pride: Make in India \+ Startup India 2026/);
+  assert.doesNotMatch(saas, /india-pride/);
   assert.match(saas, /auth-body:has\(\.auth-scene\)/);
   assert.match(saas, /\.auth-shell /);
   assert.match(saas, /\.login-legal /);
