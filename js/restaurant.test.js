@@ -68,7 +68,7 @@ test("Kitchen KOT prints new dishes only, then reprint of the full ticket", () =
     kind: "new",
     notes: "Less spicy",
     lines: [
-      { name: "Masala dosa", qtyGm: 1, unit: "PCS" },
+      { name: "Masala dosa", qtyGm: 1, unit: "PCS", notes: "Less spicy" },
       { name: "Tea", qtyGm: 1, unit: "PCS" },
     ],
   });
@@ -76,6 +76,7 @@ test("Kitchen KOT prints new dishes only, then reprint of the full ticket", () =
   assert.match(html, /Table 4/);
   assert.match(html, /Masala dosa/);
   assert.match(html, /Less spicy/);
+  assert.match(html, /kot-item-note/);
   assert.doesNotMatch(html, /TAX INVOICE/);
   assert.doesNotMatch(html, /Grand total/);
 });

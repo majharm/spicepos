@@ -75,10 +75,32 @@ export async function ensureQrOrderSchema(conn = null) {
     INDEX idx_qr_order_lines_order (order_id),
     INDEX idx_qr_order_lines_business (business_id)
   )`);
+  try {
+    await exec("ALTER TABLE qr_order_lines ADD COLUMN notes VARCHAR(250) NULL");
+  } catch {
+    /* already present */
+  }
 }
 
 function cleanText(value, max) {
   return String(value || "").trim().slice(0, max);
+}
+
+export function clipLineNote(value) {
+  return cleanText(value, 250);
+}
+
+export function composeQrOrderNotes(lines = []) {
+  return (Array.isArray(lines) ? lines : [])
+    .map((line) => {
+      const note = clipLineNote(line.notes || line.special_instruction || line.specialInstruction);
+      if (!note) return "";
+      const name = cleanText(line.item_name || line.item?.name || line.item_id, 80);
+      return name ? `${name}: ${note}` : note;
+    })
+    .filter(Boolean)
+    .join("\n")
+    .slice(0, 1000);
 }
 
 export function normalizeQrOrderPayload(raw = {}) {
@@ -92,6 +114,7 @@ export function normalizeQrOrderPayload(raw = {}) {
     .map((line) => ({
       item_id: cleanText(line.item_id || line.itemId, 255),
       quantity: Number(line.quantity),
+      notes: clipLineNote(line.notes || line.special_instruction || line.specialInstruction || line.note),
     }))
     .filter((line) => line.item_id && Number.isFinite(line.quantity) && line.quantity > 0);
   if (!customerName) throw new Error("Customer name is required");
@@ -203,7 +226,15 @@ export function expandQrPackLine(line, pack, itemById) {
     const unit = POSUnits.normalize(item.base_unit || item.unit);
     const amount = qrLineAmount(quantityBase, item.retail_rate, unit);
     const gstRate = Number(item.gst_rate) || 0;
-    return { item, unit, quantityBase, amount, gstRate, gstAmount: qrRound2((amount * gstRate) / 100) };
+    return {
+      item,
+      unit,
+      quantityBase,
+      amount,
+      gstRate,
+      gstAmount: qrRound2((amount * gstRate) / 100),
+      notes: clipLineNote(line.notes),
+    };
   });
 }
 
@@ -647,7 +678,15 @@ export function registerQrPublic(app) {
           if (quantityBase > Number(item.stock_gm || 0)) throw new Error(`${item.name} does not have enough stock`);
           const amount = qrLineAmount(quantityBase, item.retail_rate, unit);
           const gstRate = Number(item.gst_rate) || 0;
-          built.push({ item, unit, quantityBase, amount, gstRate, gstAmount: Math.round(amount * gstRate) / 100 });
+          built.push({
+            item,
+            unit,
+            quantityBase,
+            amount,
+            gstRate,
+            gstAmount: Math.round(amount * gstRate) / 100,
+            notes: clipLineNote(line.notes),
+          });
         }
         const [offers, settings] = await Promise.all([
           listOffers(business.id).catch(() => []),
@@ -676,20 +715,22 @@ export function registerQrPublic(app) {
         const pricedLines = priced.built;
         const id = crypto.randomUUID();
         const number = orderNumber();
+        const orderNotes = composeQrOrderNotes(pricedLines) || input.notes || null;
         await conn.query(
           `INSERT INTO qr_orders
            (id, order_number, business_id, customer_name, mobile, table_no, notes, status, subtotal, gst, total, discount, offer_label)
            VALUES (?,?,?,?,?,?,?,'pending',?,?,?,?,?)`,
-          [id, number, business.id, input.customerName, input.mobile, input.tableNo || null, input.notes || null, subtotal, gst, total, discount, message || null],
+          [id, number, business.id, input.customerName, input.mobile, input.tableNo || null, orderNotes, subtotal, gst, total, discount, message || null],
         );
         for (const line of pricedLines) {
           await conn.query(
             `INSERT INTO qr_order_lines
-             (id, order_id, business_id, item_id, item_name, unit, quantity_gm, rate_per_kg, gst_rate, amount, gst_amount)
-             VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+             (id, order_id, business_id, item_id, item_name, unit, quantity_gm, rate_per_kg, gst_rate, amount, gst_amount, notes)
+             VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
             [
               crypto.randomUUID(), id, business.id, line.item.id, line.item.name, line.unit,
               line.quantityBase, Number(line.item.retail_rate) || 0, line.gstRate, line.amount, line.gstAmount,
+              clipLineNote(line.notes) || null,
             ],
           );
         }

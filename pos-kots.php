@@ -34,6 +34,7 @@ function pos_clip_kot_lines($raw) {
       "name" => substr(trim((string) ($line["name"] ?? $line["item_name"] ?? "Item")) ?: "Item", 0, 120),
       "qtyGm" => $qty,
       "unit" => substr((string) ($line["unit"] ?? "PCS"), 0, 16),
+      "notes" => substr(trim((string) ($line["notes"] ?? $line["note"] ?? $line["special_instruction"] ?? "")), 0, 250),
     ];
   }
   return $out;

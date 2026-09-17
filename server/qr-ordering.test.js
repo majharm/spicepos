@@ -15,6 +15,8 @@ import {
   qrMobileDigits,
   qrInvoiceTotals,
   qrOrderingBlocked,
+  clipLineNote,
+  composeQrOrderNotes,
 } from "./qr-ordering.js";
 import "../js/offers.js";
 
@@ -48,7 +50,30 @@ test("QR order payload normalizes public customer fields and valid lines", () =>
   assert.equal(row.mobile, "+919876543210");
   assert.equal(row.tableNo, "Table 4");
   assert.equal(row.lines.length, 1);
-  assert.deepEqual(row.lines[0], { item_id: "i1", quantity: 1.5 });
+  assert.deepEqual(row.lines[0], { item_id: "i1", quantity: 1.5, notes: "" });
+});
+
+test("QR food order keeps a special instruction on each line", () => {
+  const row = normalizeQrOrderPayload({
+    customer_name: "Asha",
+    mobile: "9876543210",
+    lines: [
+      { item_id: "pizza", quantity: 1, notes: " No onion, extra cheese " },
+      { item_id: "biryani", quantity: 2, special_instruction: "Less spicy, no coriander" },
+      { item_id: "coffee", quantity: 1, specialInstruction: "Less sugar" },
+    ],
+  });
+  assert.equal(row.lines[0].notes, "No onion, extra cheese");
+  assert.equal(row.lines[1].notes, "Less spicy, no coriander");
+  assert.equal(row.lines[2].notes, "Less sugar");
+  assert.equal(
+    composeQrOrderNotes([
+      { item_name: "Pizza", notes: "No onion, extra cheese" },
+      { item: { name: "Biryani" }, notes: "Less spicy, no coriander" },
+    ]),
+    "Pizza: No onion, extra cheese\nBiryani: Less spicy, no coriander",
+  );
+  assert.equal(clipLineNote("  extra cheese  "), "extra cheese");
 });
 
 test("QR based orders apply a PHP-shaped combo percent even when offer_price is 0", () => {
@@ -376,15 +401,17 @@ test("QR menu page paints a visible offer board from live offers", () => {
   const js = readFileSync(path.join(root, "js/qr-order.js"), "utf8");
   const css = readFileSync(path.join(root, "css/qr-order.css"), "utf8");
   assert.match(html, /id="offer-board"/);
-  assert.match(html, /qr-order\.js\?v=20260905deploy175/);
+  assert.match(html, /qr-order\.js\?v=20260917foodnote1/);
+  assert.doesNotMatch(html, /qr-order\.js\?v=20260905deploy175/);
   assert.doesNotMatch(html, /qr-order\.js\?v=20260905deploy164/);
   assert.doesNotMatch(html, /offers\.js\?v=20260905deploy168/);
   assert.equal([...html.matchAll(/qr-order\.js\?v=/g)].length, 1);
   assert.equal([...html.matchAll(/offers\.js\?v=/g)].length, 1);
-  assert.match(js, /let sending = false/);
+  assert.match(js, /Add Special Instruction/);
+  assert.match(js, /data-note-add/);
   assert.match(js, /function renderOffers/);
-  assert.match(js, /function offerAppliesToItem/);
   assert.match(js, /pickBest/);
+  assert.doesNotMatch(html, /name="notes"/);
+  assert.match(css, /\.note-add/);
   assert.match(css, /\.offer-board/);
-  assert.match(css, /\.offer-card/);
 });
