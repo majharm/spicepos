@@ -401,7 +401,7 @@ test("Restaurant Counter can create named dining tables", () => {
   assert.match(core, /function pos_clip_floor_id/);
   assert.match(core, /dining_tables_json/);
   assert.match(till, /dining-tables/);
-  assert.match(index, /pos\.css\?v=20260914india2/);
+  assert.match(index, /pos\.css\?v=20260917nologo1/);
   assert.match(index, /restaurant\.js\?v=20260914kot1/);
   assert.match(index, /app\.js\?v=20260914kot2/);
   assert.match(index, /footwear\.js\?v=20260913hsnsac1/);
@@ -414,7 +414,7 @@ test("Restaurant Counter can create named dining tables", () => {
   assert.match(index, /id="kot-toast"/);
   assert.match(index, /id="kot-sound-toggle"/);
   assert.match(index, /id="kot-badge"/);
-  assert.match(index, /class="india-pride india-pride-nav"/);
+  assert.doesNotMatch(index, /india-pride/);
   assert.match(restaurant, /function newKots/);
   assert.match(app, /function applyKotSnapshot/);
   assert.match(app, /function showKotToast/);
