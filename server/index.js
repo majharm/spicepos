@@ -22,7 +22,7 @@ import {
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.join(__dirname, "..");
 const app = express();
-const APP_VERSION = "pharmacy-8";
+const APP_VERSION = "pharmacy-9";
 const APP_VERTICAL = "pharmacy";
 app.use(express.json({ limit: "8mb" }));
 

@@ -564,8 +564,6 @@ function paintHeader() {
   const place = [state.company.address, state.company.phone].filter(Boolean).join(" · ");
   $("shop-place").textContent = place || "Pharmacy · Medicines · Batches · Bills";
   showLogo($("shop-logo"), state.company.logo_url);
-  const mark = $("brand-mark");
-  if (mark) mark.hidden = Boolean(state.company.logo_url);
 }
 
 async function loadBootstrap() {
