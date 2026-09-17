@@ -358,6 +358,7 @@
         itemId: line.itemId || line.item_id || "",
         qtyGm: Number(line.qtyGm || line.quantity_gm) || 0,
         name: line.name || line.item_name || "",
+        notes: String(line.notes || line.note || line.special_instruction || "").trim().slice(0, 250),
       }))
       .filter((line) => line.itemId && line.qtyGm > 0);
   }
@@ -433,7 +434,8 @@
       .map((line, i) => {
         const name = escapeHtml(line.name || line.item_name || "Item");
         const qty = escapeHtml(formatKotQty(line.qtyGm || line.quantity_gm, line.unit));
-        return `<tr><td class="kot-n">${i + 1}</td><td>${name}</td><td class="kot-q">${qty}</td></tr>`;
+        const note = escapeHtml(String(line.notes || line.note || line.special_instruction || "").trim());
+        return `<tr><td class="kot-n">${i + 1}</td><td>${name}${note ? `<div class="kot-item-note">${note}</div>` : ""}</td><td class="kot-q">${qty}</td></tr>`;
       })
       .join("");
     return `<article class="thermal-invoice kot-ticket">
@@ -480,6 +482,7 @@ body {
 .inv-table th, .inv-table td { padding: 4px 0; vertical-align: top; }
 .inv-num, .kot-q { text-align: right; font-weight: 800; }
 .kot-n { width: 1.4em; }
+.kot-item-note { margin-top: 2px; font-size: 11px; font-weight: 700; }
 .inv-footer { margin: 6px 0; font-size: 12px; }
 .inv-powered { text-align: center; margin: 8px 0 0; font-size: 10px; }
 `;

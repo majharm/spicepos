@@ -1942,6 +1942,7 @@ function kotLinesForPrint(lines) {
       qtyGm: Number(line.qtyGm || line.quantity_gm) || 0,
       name: item?.name || line.name || line.item_name || "Item",
       unit: item?.unit || item?.base_unit || line.unit || "PCS",
+      notes: String(line.notes || line.note || line.special_instruction || "").trim().slice(0, 250),
     };
   });
 }
@@ -2074,7 +2075,10 @@ function renderKotBoard() {
               <span class="kot-status">${escapeHtml(kotStatusLabel(ticket.status))}</span>
             </header>
             <div class="kot-lines">${(ticket.lines || [])
-              .map((line) => `<div class="kot-line"><span>${escapeHtml(line.name || "Item")}</span><strong>${escapeHtml(kotQtyLine(line))}</strong></div>`)
+              .map((line) => {
+                const note = String(line.notes || line.note || "").trim();
+                return `<div class="kot-line"><span>${escapeHtml(line.name || "Item")}</span><strong>${escapeHtml(kotQtyLine(line))}</strong>${note ? `<p class="kot-line-note">${escapeHtml(note)}</p>` : ""}</div>`;
+              })
               .join("")}</div>
             ${ticket.notes ? `<p class="kot-note">Note: ${escapeHtml(ticket.notes)}</p>` : ""}
             <div class="kot-actions">
@@ -2212,12 +2216,13 @@ function printQrKitchenKot(order) {
     qtyGm: Number(line.quantity_gm) || 0,
     name: line.item_name,
     unit: line.unit || "PCS",
+    notes: String(line.notes || "").trim(),
   }));
   printKitchenKot({
     tableNo: order.table_no,
     lines,
     printed: [],
-    notes: order.notes,
+    notes: "",
     full: true,
   });
 }
@@ -2603,6 +2608,11 @@ function renderCart() {
               <div class="line-amt">${money(calc.taxable + calc.gst)}</div>
             </div>
           </div>
+          ${isRestaurantShop() ? (String(line.notes || "").trim() || line.noteOpen
+            ? `<label class="line-note">Special Instruction
+                <textarea data-line-note="${escapeHtml(key)}" maxlength="250" rows="2" placeholder="e.g. No onion, extra cheese">${escapeHtml(line.notes || "")}</textarea>
+              </label>`
+            : `<button class="line-note-add" type="button" data-line-note-add="${escapeHtml(key)}">Add Special Instruction</button>`) : ""}
           ${canDiscount() ? `<div class="line-disc">
               <select data-line-disc-type="${escapeHtml(key)}" aria-label="Line discount type">
                 <option value="amt"${(line.discountType || "amt") === "amt" ? " selected" : ""}>₹</option>
@@ -5260,7 +5270,14 @@ function renderQrOrders() {
   const query = String($("qr-order-search")?.value || "").trim().toLowerCase();
   const rows = qrOrderCache.filter((order) => {
     if (qrOrderStatus && order.status !== qrOrderStatus) return false;
-    const hay = [order.order_number, order.customer_name, order.mobile, order.table_no, order.notes].join(" ").toLowerCase();
+    const hay = [
+      order.order_number,
+      order.customer_name,
+      order.mobile,
+      order.table_no,
+      order.notes,
+      ...(order.lines || []).map((line) => `${line.item_name || ""} ${line.notes || ""}`),
+    ].join(" ").toLowerCase();
     return !query || hay.includes(query);
   });
   paintQrOrderBadge();
@@ -5271,11 +5288,11 @@ function renderQrOrders() {
           <span class="qr-order-status">${escapeHtml(order.status)}</span>
         </header>
         <p class="qr-order-meta"><strong>${escapeHtml(order.customer_name)}</strong> · ${escapeHtml(order.mobile)}${order.table_no ? ` · ${escapeHtml(order.table_no)}` : ""}</p>
-        <div class="qr-order-lines">${(order.lines || []).map((line) =>
-          `<div class="qr-order-line"><span>${escapeHtml(line.item_name)} · ${escapeHtml(qrOrderQty(line))}</span><strong>${money(line.amount)}</strong></div>`,
-        ).join("")}</div>
+        <div class="qr-order-lines">${(order.lines || []).map((line) => {
+          const note = String(line.notes || "").trim();
+          return `<div class="qr-order-line"><span>${escapeHtml(line.item_name)} · ${escapeHtml(qrOrderQty(line))}</span><strong>${money(line.amount)}</strong>${note ? `<p class="qr-order-line-note">${escapeHtml(note)}</p>` : ""}</div>`;
+        }).join("")}</div>
         ${qrOrderTotalsHtml(order)}
-        ${order.notes ? `<p class="qr-order-note">Note: ${escapeHtml(order.notes)}</p>` : ""}
         <div class="qr-order-actions">
           ${!["completed", "cancelled"].includes(order.status) ? `<button class="btn primary" type="button" data-qr-counter="${escapeHtml(order.id)}">Open in Counter</button>` : ""}
           ${order.status === "pending" ? `<button class="btn" type="button" data-qr-status-next="accepted">Accept</button>` : ""}
@@ -5367,7 +5384,16 @@ async function openQrOrderInCounter(order) {
     state.activeTable = R.normalizeTableNo(order.table_no) || R.PARCEL;
     syncActiveFloor(state.activeTable);
   }
-  state.cart = liveLines.map((line) => ({ itemId: line.item_id, qtyGm: Number(line.quantity_gm) }));
+  state.cart = liveLines.map((line) => ({
+    lineId: newCartLineId(),
+    itemId: line.item_id,
+    qtyGm: Number(line.quantity_gm),
+    notes: String(line.notes || "").trim(),
+    noteOpen: Boolean(String(line.notes || "").trim()),
+    discountType: "amt",
+    discountValue: 0,
+    barcode: "",
+  }));
   const known = state.customers.find((customer) => digitsMobile(customer.mobile) === digitsMobile(order.mobile));
   const walkIn = state.customers.find((customer) => customer.code === "CUS-001") || state.customers[0];
   state.customerId = known?.id || walkIn?.id || "";
@@ -5810,7 +5836,18 @@ $("catalog-cats")?.addEventListener("click", (e) => {
   $("catalog")?.scrollTo({ top: 0 });
 });
 $("lines").addEventListener("click", (e) => {
-  if (e.target.closest("[data-qty]")) return;
+  const addNote = e.target.closest("[data-line-note-add]");
+  if (addNote) {
+    const line = findCartLine(addNote.dataset.lineNoteAdd);
+    if (line) {
+      line.noteOpen = true;
+      renderCart();
+      const field = $("lines").querySelector(`[data-line-note="${addNote.dataset.lineNoteAdd}"]`);
+      if (field) field.focus();
+    }
+    return;
+  }
+  if (e.target.closest("[data-qty]") || e.target.closest("[data-line-note]")) return;
   const btn = e.target.closest("[data-chg]");
   if (!btn) return;
   changeLineQty(btn.dataset.chg, Number(btn.dataset.d));
@@ -5818,6 +5855,12 @@ $("lines").addEventListener("click", (e) => {
 $("lines").addEventListener("focusin", (e) => {
   const input = e.target.closest("[data-qty]");
   if (input && typeof input.select === "function") input.select();
+});
+$("lines").addEventListener("input", (e) => {
+  const note = e.target.closest("[data-line-note]");
+  if (!note) return;
+  const line = findCartLine(note.dataset.lineNote);
+  if (line) line.notes = String(note.value || "").slice(0, 250);
 });
 $("lines").addEventListener("change", (e) => {
   const input = e.target.closest("[data-qty]");
