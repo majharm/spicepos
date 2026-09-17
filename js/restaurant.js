@@ -419,6 +419,55 @@
     return `${table} · ${items}${more}`;
   }
 
+  function kotTimeMs(raw) {
+    if (raw == null || raw === "") return 0;
+    if (typeof raw === "number" && Number.isFinite(raw)) return raw > 1e12 ? raw : raw * 1000;
+    const t = new Date(raw).getTime();
+    return Number.isFinite(t) ? t : 0;
+  }
+
+  function kotElapsedMs(ticket, now = Date.now()) {
+    const start = kotTimeMs(ticket?.created_at ?? ticket?.createdAt);
+    if (!start) return 0;
+    const status = String(ticket?.status || "new").toLowerCase();
+    const stopRaw = ticket?.stopped_at ?? ticket?.stoppedAt;
+    const doneAt = status === "done" ? kotTimeMs(ticket?.updated_at ?? ticket?.updatedAt) : 0;
+    const stop = kotTimeMs(stopRaw) || (doneAt >= start ? doneAt : 0);
+    const end = stop || now;
+    return Math.max(0, end - start);
+  }
+
+  function formatKotTimer(ms) {
+    const total = Math.floor(Math.max(0, Number(ms) || 0) / 1000);
+    const h = Math.floor(total / 3600);
+    const m = Math.floor((total % 3600) / 60);
+    const s = total % 60;
+    if (h > 0) return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+    return `${m}:${String(s).padStart(2, "0")}`;
+  }
+
+  function kotTimerTone(ms, status) {
+    if (String(status || "").toLowerCase() === "done") return "done";
+    const min = (Number(ms) || 0) / 60000;
+    if (min >= 15) return "late";
+    if (min >= 8) return "warn";
+    return "ok";
+  }
+
+  function kotTimerState(ticket, now = Date.now()) {
+    const ms = kotElapsedMs(ticket, now);
+    const status = String(ticket?.status || "new").toLowerCase();
+    const frozen = status === "done";
+    return {
+      ms,
+      label: formatKotTimer(ms),
+      tone: kotTimerTone(ms, status),
+      frozen,
+      started: ticket?.created_at || ticket?.createdAt || "",
+      stopped: frozen ? ticket?.updated_at || ticket?.updatedAt || "" : "",
+    };
+  }
+
   function escapeHtml(value) {
     return String(value ?? "")
       .replaceAll("&", "&amp;")
@@ -553,6 +602,10 @@ ${kotBody(opts)}
     kotKind,
     newKots,
     kotToastCopy,
+    kotElapsedMs,
+    formatKotTimer,
+    kotTimerTone,
+    kotTimerState,
     kotBody,
     kotDocument,
   };

@@ -189,6 +189,28 @@ test("Kitchen notify finds only new KOT tickets", () => {
   assert.match(R.kotToastCopy(fresh[0], 1), /Table 5 · 2 items · \+1 more/);
 });
 
+test("KOT board timer counts elapsed time per ticket and freezes when done", () => {
+  const start = "2026-09-17T12:00:00.000Z";
+  const now = Date.parse("2026-09-17T12:08:05.000Z");
+  const open = R.kotTimerState({ created_at: start, status: "preparing" }, now);
+  assert.equal(open.label, "8:05");
+  assert.equal(open.tone, "warn");
+  assert.equal(open.frozen, false);
+
+  const late = R.kotTimerState({ created_at: start, status: "new" }, Date.parse("2026-09-17T12:16:00.000Z"));
+  assert.equal(late.label, "16:00");
+  assert.equal(late.tone, "late");
+
+  const done = R.kotTimerState(
+    { created_at: start, status: "done", updated_at: "2026-09-17T12:04:30.000Z" },
+    Date.parse("2026-09-17T12:40:00.000Z"),
+  );
+  assert.equal(done.label, "4:30");
+  assert.equal(done.tone, "done");
+  assert.equal(done.frozen, true);
+  assert.equal(R.formatKotTimer(75 * 60 * 1000), "1:15:00");
+});
+
 test("Food order special instructions stay on each item", () => {
   assert.equal(R.lineSpecialInstruction({ notes: "  No onion, extra cheese  " }), "No onion, extra cheese");
   assert.equal(R.lineSpecialInstruction({ special_instruction: "Less spicy, no coriander" }), "Less spicy, no coriander");

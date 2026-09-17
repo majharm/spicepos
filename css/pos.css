@@ -1329,6 +1329,28 @@ body:not(.restaurant-mode) [data-view="kot"] {
 .kot-card.is-preparing { border-color: #0d9488; }
 .kot-card.is-ready { border-color: #059669; background: #ecfdf5; }
 .kot-card.is-done { opacity: 0.72; }
+.kot-card.is-warn { box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.35); }
+.kot-card.is-late { border-color: #dc2626; background: #fef2f2; box-shadow: 0 0 0 2px rgba(220, 38, 38, 0.28); }
+.kot-head-right {
+  display: grid;
+  justify-items: end;
+  gap: 6px;
+}
+.kot-timer {
+  min-width: 4.4em;
+  padding: 4px 8px;
+  border-radius: 999px;
+  font-size: 18px;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+  line-height: 1.1;
+  color: #115e59;
+  background: #ccfbf1;
+}
+.kot-timer.is-warn { color: #9a3412; background: #ffedd5; }
+.kot-timer.is-late { color: #991b1b; background: #fecaca; }
+.kot-timer.is-done { color: #334155; background: #e2e8f0; font-size: 15px; }
 .kot-card-head {
   display: flex;
   justify-content: space-between;

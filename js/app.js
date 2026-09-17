@@ -2057,6 +2057,35 @@ function kotQtyLine(line) {
   return fmtQty(line.qtyGm || line.quantity_gm, item || { unit: line.unit, base_unit: line.unit });
 }
 
+function kotTimerHtml(ticket) {
+  const R = restaurantApi();
+  const clock = R?.kotTimerState?.(ticket) || { label: "0:00", tone: "ok", frozen: false, started: ticket?.created_at || "", stopped: "" };
+  const started = String(clock.started || ticket?.created_at || "");
+  const stopped = clock.frozen ? String(clock.stopped || ticket?.updated_at || "") : "";
+  return `<time class="kot-timer is-${escapeHtml(clock.tone)}" data-kot-timer datetime="${escapeHtml(started)}" data-started="${escapeHtml(started)}" data-stopped="${escapeHtml(stopped)}" data-status="${escapeHtml(ticket.status || "new")}" aria-label="Order time ${escapeHtml(clock.label)}">${escapeHtml(clock.label)}</time>`;
+}
+
+function paintKotTimers(now = Date.now()) {
+  const R = restaurantApi();
+  if (!R?.formatKotTimer) return;
+  document.querySelectorAll("[data-kot-timer]").forEach((el) => {
+    const ticket = {
+      created_at: el.getAttribute("data-started") || el.getAttribute("datetime"),
+      updated_at: el.getAttribute("data-stopped") || "",
+      status: el.getAttribute("data-status") || "new",
+    };
+    const clock = R.kotTimerState(ticket, now);
+    el.textContent = clock.label;
+    el.setAttribute("aria-label", `Order time ${clock.label}`);
+    el.className = `kot-timer is-${clock.tone}`;
+    const card = el.closest(".kot-card");
+    if (card) {
+      card.classList.toggle("is-late", clock.tone === "late");
+      card.classList.toggle("is-warn", clock.tone === "warn");
+    }
+  });
+}
+
 function renderKotBoard() {
   const el = $("kot-list");
   if (!el) return;
@@ -2077,7 +2106,10 @@ function renderKotBoard() {
                 <h3>${escapeHtml(table)}</h3>
                 <p class="kot-meta">${escapeHtml(kind)}${when ? ` · ${escapeHtml(when)}` : ""}</p>
               </div>
-              <span class="kot-status">${escapeHtml(kotStatusLabel(ticket.status))}</span>
+              <div class="kot-head-right">
+                ${kotTimerHtml(ticket)}
+                <span class="kot-status">${escapeHtml(kotStatusLabel(ticket.status))}</span>
+              </div>
             </header>
             <div class="kot-lines">${(ticket.lines || [])
               .map((line) => {
@@ -2094,6 +2126,7 @@ function renderKotBoard() {
         })
         .join("")
     : `<div class="item-empty-card"><strong>No kitchen tickets</strong><p>Captain or cashier sends Kitchen KOT from Counter. Tickets show here for the kitchen to cook.</p></div>`;
+  paintKotTimers();
 }
 
 async function loadKots({ announce } = {}) {
@@ -2111,6 +2144,7 @@ async function loadKots({ announce } = {}) {
 }
 
 let kotPollTimer = null;
+let kotClockTimer = null;
 let kotSeenIds = null;
 let kotToastId = "";
 let kotToastTimer = 0;
@@ -2189,6 +2223,7 @@ function startKotWatch() {
   if (typeof requestIdleCallback === "function") requestIdleCallback(kick, { timeout: 2500 });
   else setTimeout(kick, 1200);
   kotPollTimer = setInterval(() => void loadKots({ announce: true }), 4000);
+  if (!kotClockTimer) kotClockTimer = setInterval(() => paintKotTimers(), 1000);
   document.addEventListener("pos-qr-sound", () => {
     paintKotSoundToggle();
     paintQrSoundArm();
