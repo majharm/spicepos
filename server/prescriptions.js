@@ -48,6 +48,9 @@ export function rxNextStatus(status) {
 export function normalizeRxPayload(raw = {}) {
   const customerName = cleanText(raw.customer_name || raw.customerName, 160);
   const mobile = cleanText(raw.mobile, 32).replace(/[^\d+]/g, "");
+  const customerAddress = cleanText(raw.customer_address || raw.customerAddress || raw.address, 500);
+  const doctorName = cleanText(raw.doctor_name || raw.doctorName, 160);
+  const clinicName = cleanText(raw.clinic_name || raw.clinicName || raw.hospital_name || raw.hospitalName, 180);
   const notes = cleanText(raw.notes || raw.message, 1000);
   const fileName = cleanText(raw.file_name || raw.fileName || "prescription", 180);
   let mime = cleanText(raw.mime || raw.mime_type || raw.mimeType, 80).toLowerCase();
@@ -55,9 +58,11 @@ export function normalizeRxPayload(raw = {}) {
   const data = String(raw.file_base64 || raw.fileBase64 || raw.file || "").replace(/^data:[^;]+;base64,/, "");
   if (!customerName) throw new Error("Customer name is required");
   if (mobile.replace(/\D/g, "").length < 10) throw new Error("Valid mobile number is required");
+  if (!customerAddress) throw new Error("Customer address is required");
+  if (!doctorName) throw new Error("Doctor name is required");
   if (!MIME_EXT[mime]) throw new Error("Upload a camera photo, gallery image, or PDF");
   if (!data) throw new Error("Upload a prescription photo or PDF");
-  return { customerName, mobile, notes, fileName, mime, data };
+  return { customerName, mobile, customerAddress, doctorName, clinicName, notes, fileName, mime, data };
 }
 
 export function decodeRxFile(data, mime) {
@@ -113,6 +118,9 @@ export async function ensureRxSchema(conn = null) {
     branch_id VARCHAR(255) NULL,
     customer_name VARCHAR(160) NOT NULL,
     mobile VARCHAR(32) NOT NULL,
+    customer_address VARCHAR(500) NULL,
+    doctor_name VARCHAR(160) NULL,
+    clinic_name VARCHAR(180) NULL,
     notes TEXT NULL,
     file_name VARCHAR(180) NULL,
     mime_type VARCHAR(80) NULL,
@@ -123,6 +131,17 @@ export async function ensureRxSchema(conn = null) {
     UNIQUE KEY uq_rx_number (business_id, prescription_number),
     INDEX idx_rx_business_status (business_id, status, created_at)
   )`);
+  for (const col of [
+    "ALTER TABLE prescription_orders ADD COLUMN customer_address VARCHAR(500) NULL",
+    "ALTER TABLE prescription_orders ADD COLUMN doctor_name VARCHAR(160) NULL",
+    "ALTER TABLE prescription_orders ADD COLUMN clinic_name VARCHAR(180) NULL",
+  ]) {
+    try {
+      await exec(col);
+    } catch {
+      /* already present */
+    }
+  }
 }
 
 async function nextRxNumber(conn, businessId) {
@@ -207,14 +226,17 @@ export function registerRxPublic(app) {
         const filePath = writeRxFile(business.id, id, input.mime, buf);
         await conn.query(
           `INSERT INTO prescription_orders
-           (id, prescription_number, business_id, customer_name, mobile, notes, file_name, mime_type, file_path, status)
-           VALUES (?,?,?,?,?,?,?,?,?,'pending')`,
+           (id, prescription_number, business_id, customer_name, mobile, customer_address, doctor_name, clinic_name, notes, file_name, mime_type, file_path, status)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,'pending')`,
           [
             id,
             number,
             business.id,
             input.customerName,
             input.mobile,
+            input.customerAddress || null,
+            input.doctorName || null,
+            input.clinicName || null,
             input.notes || null,
             input.fileName,
             input.mime,

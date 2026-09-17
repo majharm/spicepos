@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#0f766e" />
     <title>Upload prescription · ATAV POS</title>
-    <link rel="stylesheet" href="./css/rx.css?v=20260917rx1" />
+    <link rel="stylesheet" href="./css/rx.css?v=20260917rx2" />
   </head>
   <body>
     <header class="rx-head">
@@ -20,6 +20,16 @@
       <form id="rx-form" hidden>
         <label>Customer Name * <input name="customer_name" maxlength="160" required autocomplete="name" /></label>
         <label>Mobile Number * <input name="mobile" maxlength="15" inputmode="tel" required autocomplete="tel" /></label>
+        <label>Customer Address *
+          <textarea name="customer_address" maxlength="500" rows="3" required autocomplete="street-address" placeholder="House / street, area, city, PIN code"></textarea>
+          <span class="field-hint">Full delivery or residential address, including area, city, and PIN code.</span>
+        </label>
+        <label>Doctor Name *
+          <input name="doctor_name" maxlength="160" required autocomplete="off" placeholder="Doctor's full name" />
+        </label>
+        <label>Clinic / Hospital (optional)
+          <input name="clinic_name" maxlength="180" autocomplete="organization" placeholder="Clinic or hospital name" />
+        </label>
         <fieldset class="upload-box">
           <legend>Upload Prescription 📷</legend>
           <input id="rx-camera" type="file" accept="image/*" capture="environment" hidden />
@@ -47,6 +57,6 @@
       <p class="empty" id="rx-error" hidden></p>
     </main>
     <footer>Prescription upload powered by <strong>ATAV POS</strong></footer>
-    <script src="./js/rx.js?v=20260917rx1" defer></script>
+    <script src="./js/rx.js?v=20260917rx2" defer></script>
   </body>
 </html>

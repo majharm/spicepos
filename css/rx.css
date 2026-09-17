@@ -63,6 +63,7 @@ input, textarea {
   background: var(--teal-dark);
   font-weight: 800;
 }
+.field-hint { display: block; margin-top: 6px; color: var(--muted); font-size: 12px; font-weight: 500; }
 .form-hint { min-height: 18px; margin: 0; color: #b91c1c; font-size: 12px; }
 .success-card {
   padding: 28px 8px;

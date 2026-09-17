@@ -12,5 +12,10 @@ test("Customer prescription page uses camera, gallery, and PDF pickers", () => {
   assert.match(html, /capture="environment"/);
   assert.match(html, /accept="application\/pdf"/);
   assert.match(html, /Add Note \/ Message/);
+  assert.match(html, /name="customer_address"/);
+  assert.match(html, /name="doctor_name"/);
+  assert.match(html, /name="clinic_name"/);
+  assert.match(html, /Customer Address/);
+  assert.match(html, /Doctor Name/);
   assert.doesNotMatch(html, /textarea name="notes".*Less spicy/);
 });

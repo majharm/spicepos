@@ -147,6 +147,9 @@ export async function ensureSchema() {
   await addColumn("customers", "locale", "VARCHAR(16) NULL");
   await addColumn("customers", "address", "VARCHAR(500) NULL");
   await addColumn("customers", "doctor_rx", "VARCHAR(180) NULL");
+  await addColumn("prescription_orders", "customer_address", "VARCHAR(500) NULL");
+  await addColumn("prescription_orders", "doctor_name", "VARCHAR(160) NULL");
+  await addColumn("prescription_orders", "clinic_name", "VARCHAR(180) NULL");
   await addColumn("sales_orders", "discount_type", "VARCHAR(16) NOT NULL DEFAULT 'amt'");
   await addColumn("sales_orders", "discount_value", "DECIMAL(12,2) NOT NULL DEFAULT 0");
   await addColumn("sales_orders", "loyalty_points_redeemed", "INT NOT NULL DEFAULT 0");

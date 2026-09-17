@@ -28,6 +28,9 @@ function pos_rx_ensure_schema() {
       branch_id VARCHAR(255) NULL,
       customer_name VARCHAR(160) NOT NULL,
       mobile VARCHAR(32) NOT NULL,
+      customer_address VARCHAR(500) NULL,
+      doctor_name VARCHAR(160) NULL,
+      clinic_name VARCHAR(180) NULL,
       notes TEXT NULL,
       file_name VARCHAR(180) NULL,
       mime_type VARCHAR(80) NULL,
@@ -40,6 +43,9 @@ function pos_rx_ensure_schema() {
     )"
   );
   if ($db->errno) throw new Exception($db->error ?: "Could not prepare prescriptions");
+  @$db->query("ALTER TABLE prescription_orders ADD COLUMN customer_address VARCHAR(500) NULL");
+  @$db->query("ALTER TABLE prescription_orders ADD COLUMN doctor_name VARCHAR(160) NULL");
+  @$db->query("ALTER TABLE prescription_orders ADD COLUMN clinic_name VARCHAR(180) NULL");
 }
 
 function pos_rx_dir($bid) {
@@ -61,6 +67,9 @@ function pos_rx_ext($mime) {
 function pos_rx_validate($body) {
   $name = pos_qr_clean($body["customer_name"] ?? $body["customerName"] ?? "", 160);
   $mobile = preg_replace('/[^\d+]/', '', pos_qr_clean($body["mobile"] ?? "", 32));
+  $address = pos_qr_clean($body["customer_address"] ?? $body["customerAddress"] ?? $body["address"] ?? "", 500);
+  $doctor = pos_qr_clean($body["doctor_name"] ?? $body["doctorName"] ?? "", 160);
+  $clinic = pos_qr_clean($body["clinic_name"] ?? $body["clinicName"] ?? $body["hospital_name"] ?? $body["hospitalName"] ?? "", 180);
   $notes = pos_qr_clean($body["notes"] ?? $body["message"] ?? "", 1000);
   $fileName = pos_qr_clean($body["file_name"] ?? $body["fileName"] ?? "prescription", 180);
   $mime = strtolower(pos_qr_clean($body["mime"] ?? $body["mime_type"] ?? $body["mimeType"] ?? "", 80));
@@ -69,12 +78,24 @@ function pos_rx_validate($body) {
   $data = preg_replace("#^data:[^;]+;base64,#", "", $data);
   if ($name === "") throw new Exception("Customer name is required");
   if (strlen(preg_replace("/\D/", "", $mobile)) < 10) throw new Exception("Valid mobile number is required");
+  if ($address === "") throw new Exception("Customer address is required");
+  if ($doctor === "") throw new Exception("Doctor name is required");
   if (pos_rx_ext($mime) === "") throw new Exception("Upload a camera photo, gallery image, or PDF");
   if ($data === "") throw new Exception("Upload a prescription photo or PDF");
   $bin = base64_decode($data, true);
   if ($bin === false || $bin === "") throw new Exception("Could not read the uploaded file");
   if (strlen($bin) > 8 * 1024 * 1024) throw new Exception("File is too large (max 8 MB)");
-  return ["customer_name" => $name, "mobile" => $mobile, "notes" => $notes, "file_name" => $fileName, "mime" => $mime, "bin" => $bin];
+  return [
+    "customer_name" => $name,
+    "mobile" => $mobile,
+    "customer_address" => $address,
+    "doctor_name" => $doctor,
+    "clinic_name" => $clinic,
+    "notes" => $notes,
+    "file_name" => $fileName,
+    "mime" => $mime,
+    "bin" => $bin,
+  ];
 }
 
 function pos_rx_public_row($row) {
@@ -142,10 +163,10 @@ function pos_rx_public_dispatch($path, $method, $body) {
     }
     pos_q(
       "INSERT INTO prescription_orders
-       (id, prescription_number, business_id, customer_name, mobile, notes, file_name, mime_type, file_path, status)
-       VALUES (?,?,?,?,?,?,?,?,?,'pending')",
-      "sssssssss",
-      [$id, $number, $business["id"], $input["customer_name"], $input["mobile"], $input["notes"], $input["file_name"], $input["mime"], $rel]
+       (id, prescription_number, business_id, customer_name, mobile, customer_address, doctor_name, clinic_name, notes, file_name, mime_type, file_path, status)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,'pending')",
+      "ssssssssssss",
+      [$id, $number, $business["id"], $input["customer_name"], $input["mobile"], $input["customer_address"], $input["doctor_name"], $input["clinic_name"], $input["notes"], $input["file_name"], $input["mime"], $rel]
     );
     pos_send(201, [
       "ok" => true,

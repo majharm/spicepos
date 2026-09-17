@@ -5209,7 +5209,7 @@ function renderPrescriptions() {
   const query = String($("rx-search")?.value || "").trim().toLowerCase();
   const rows = rxCache.filter((row) => {
     if (rxStatusFilter && row.status !== rxStatusFilter) return false;
-    const hay = [row.prescription_number, row.customer_name, row.mobile, row.notes].join(" ").toLowerCase();
+    const hay = [row.prescription_number, row.customer_name, row.mobile, row.customer_address, row.doctor_name, row.clinic_name, row.notes].join(" ").toLowerCase();
     return !query || hay.includes(query);
   });
   paintRxBadge();
@@ -5219,10 +5219,13 @@ function renderPrescriptions() {
           const next = RX_NEXT[row.status] || "";
           const nextLab = RX_NEXT_LABEL[row.status] || "";
           const when = row.created_at ? formatShopDateTime(row.created_at) : "—";
+          const doctor = [row.doctor_name, row.clinic_name].filter(Boolean).join(" · ");
           return `<tr data-rx="${escapeHtml(row.id)}">
             <td><strong>${escapeHtml(row.prescription_number || "—")}</strong></td>
             <td>${escapeHtml(row.customer_name || "Customer")}</td>
             <td>${escapeHtml(row.mobile || "—")}</td>
+            <td>${escapeHtml(row.customer_address || "—")}</td>
+            <td>${escapeHtml(doctor || "—")}</td>
             <td>${row.has_file ? `<button class="btn" type="button" data-rx-file="${escapeHtml(row.id)}">View</button>` : "—"}</td>
             <td>${escapeHtml(when)}</td>
             <td><span class="rx-status is-${escapeHtml(row.status || "pending")}">${escapeHtml(row.status_label || RX_STATUS_LABELS[row.status] || "Pending")}</span></td>
@@ -5233,7 +5236,7 @@ function renderPrescriptions() {
           </tr>`;
         })
         .join("")
-    : `<tr><td colspan="7"><p class="item-empty-card"><strong>No prescriptions here</strong><span>Customers scan this pharmacy QR and upload a photo or PDF. New files appear in this list.</span></p></td></tr>`;
+    : `<tr><td colspan="9"><p class="item-empty-card"><strong>No prescriptions here</strong><span>Customers scan this pharmacy QR and upload a photo or PDF. New files appear in this list.</span></p></td></tr>`;
 }
 
 async function loadPrescriptions() {
@@ -5286,9 +5289,13 @@ async function setPrescriptionStatus(row, status) {
 function openPrescriptionInCounter(row) {
   if ($("bill-cust-name")) $("bill-cust-name").value = row.customer_name || "";
   if ($("bill-cust-mobile")) $("bill-cust-mobile").value = row.mobile || "";
+  if ($("bill-cust-address")) $("bill-cust-address").value = row.customer_address || "";
   if ($("counter-mobile")) $("counter-mobile").value = row.mobile || "";
   applyCounterMobile?.(row.mobile || "", { announceMiss: false });
-  if ($("bill-doctor-rx") && row.prescription_number) $("bill-doctor-rx").value = row.prescription_number;
+  if ($("bill-doctor-rx")) {
+    const doctorBits = [row.doctor_name, row.clinic_name, row.prescription_number].filter(Boolean);
+    $("bill-doctor-rx").value = doctorBits.join(" / ");
+  }
   setHint(`Prescription ${row.prescription_number} loaded. Review the file, then bill.`, "ok");
   showView("counter");
   if (row.status === "approved") {

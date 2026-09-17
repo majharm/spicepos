@@ -8,15 +8,39 @@ import { normalizeRxPayload, rxNextStatus, rxStatusLabel, decodeRxFile } from ".
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const read = (rel) => readFileSync(path.join(root, rel), "utf8");
 
-test("Prescription payload requires name, mobile, and a photo or PDF", () => {
+test("Prescription payload requires name, mobile, address, doctor, and a photo or PDF", () => {
   assert.throws(() => normalizeRxPayload({}), /Customer name/);
   assert.throws(
     () => normalizeRxPayload({ customer_name: "A", mobile: "123", file_base64: "aaa", mime: "image/jpeg" }),
     /Valid mobile/,
   );
+  assert.throws(
+    () =>
+      normalizeRxPayload({
+        customer_name: "A",
+        mobile: "9876543210",
+        file_base64: "aaaa",
+        mime: "image/jpeg",
+      }),
+    /Customer address/,
+  );
+  assert.throws(
+    () =>
+      normalizeRxPayload({
+        customer_name: "A",
+        mobile: "9876543210",
+        customer_address: "Pune 411001",
+        file_base64: "aaaa",
+        mime: "image/jpeg",
+      }),
+    /Doctor name/,
+  );
   const row = normalizeRxPayload({
     customerName: " Ravi ",
     mobile: "+91 98765-43210",
+    customer_address: " 12 Main Road, Kothrud, Pune 411038 ",
+    doctorName: " Dr. Shah ",
+    clinic_name: " City Clinic ",
     notes: "  urgent  ",
     fileName: "rx.jpg",
     mime: "image/jpg",
@@ -24,6 +48,9 @@ test("Prescription payload requires name, mobile, and a photo or PDF", () => {
   });
   assert.equal(row.customerName, "Ravi");
   assert.equal(row.mobile, "+919876543210");
+  assert.equal(row.customerAddress, "12 Main Road, Kothrud, Pune 411038");
+  assert.equal(row.doctorName, "Dr. Shah");
+  assert.equal(row.clinicName, "City Clinic");
   assert.equal(row.mime, "image/jpeg");
   assert.equal(row.data, "aaaa");
 });
@@ -57,7 +84,12 @@ test("Pharmacy QR upload page and Prescription Orders desk are wired", () => {
   assert.match(html, /data-pick="rx-gallery"/);
   assert.match(html, /data-pick="rx-pdf"/);
   assert.match(html, /Submit Prescription/);
+  assert.match(html, /name="customer_address"/);
+  assert.match(html, /name="doctor_name"/);
   assert.match(js, /Prescription submitted successfully/);
+  assert.match(js, /customer_address/);
+  assert.match(js, /doctor_name/);
+  assert.match(js, /clinic_name/);
   assert.match(js, /\/api\/rx\/prescriptions/);
   assert.match(index, /data-view="prescriptions"/);
   assert.match(index, /Prescription Orders/);
