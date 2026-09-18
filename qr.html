@@ -26,6 +26,7 @@
         box-shadow: none;
       }
       h1 { margin: 0 0 8px; font-size: 28px; }
+      h2 { margin: 0 0 12px; font-size: 34px; letter-spacing: -0.03em; }
       p { color: #7a5c48; word-break: break-all; max-width: 32em; margin: 10px auto; }
       .actions { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-top: 16px; }
       a, button {
@@ -48,8 +49,9 @@
   </head>
   <body>
     <div>
-      <p style="letter-spacing:0.14em;font-size:12px;font-weight:800;font-family:Georgia,serif">Scan to order spices</p>
+      <p id="qr-kicker" style="letter-spacing:0.14em;font-size:12px;font-weight:800;font-family:Georgia,serif">Scan to order spices</p>
       <h1 id="shop-name">ATAV POS</h1>
+      <h2 id="table-name" hidden></h2>
       <img class="qr" id="qr-code-img" width="320" height="320" alt="QR code for customer ordering" hidden />
       <p id="qr-link">Preparing QR…</p>
       <div class="actions">
@@ -65,8 +67,22 @@
       const img = document.getElementById("qr-code-img");
       const open = document.getElementById("open-menu");
 
+      const table = (params.get("table") || "").trim();
+
+      function tableLabel(raw) {
+        const t = String(raw || "").trim();
+        if (!t) return "";
+        if (/^(parcel|takeaway|take away|pickup|pick up)$/i.test(t)) return "Parcel";
+        const named = t.match(/^table\s*(\d{1,3})$/i);
+        if (named) return "Table " + Number(named[1]);
+        if (/^\d{1,3}$/.test(t)) return "Table " + Number(t);
+        return t;
+      }
+
       function menuUrl(shop) {
-        return new URL("order.html?shop=" + encodeURIComponent(shop), location.href).href;
+        const url = new URL("order.html?shop=" + encodeURIComponent(shop), location.href);
+        if (table) url.searchParams.set("table", table);
+        return url.href;
       }
 
       function paint(url) {
@@ -110,6 +126,16 @@
           return;
         }
         const url = menuUrl(shop);
+        const label = tableLabel(table);
+        const kicker = document.getElementById("qr-kicker");
+        const tableEl = document.getElementById("table-name");
+        if (label) {
+          if (kicker) kicker.textContent = "Scan to order from this table";
+          if (tableEl) {
+            tableEl.hidden = false;
+            tableEl.textContent = label;
+          }
+        }
         paint(url);
         try {
           const res = await fetch("/api/qr/menu?shop=" + encodeURIComponent(shop), { headers: { Accept: "application/json" } });

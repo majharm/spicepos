@@ -11,6 +11,41 @@
       .replaceAll(">", "&gt;")
       .replaceAll('"', "&quot;");
 
+  function displayTableLabel(raw) {
+    const t = String(raw || "").trim();
+    if (!t) return "";
+    if (/^(parcel|takeaway|take away|pickup|pick up)$/i.test(t)) return "Parcel";
+    const named = t.match(/^table\s*(\d{1,3})$/i);
+    if (named) return `Table ${Number(named[1])}`;
+    if (/^\d{1,3}$/.test(t)) return `Table ${Number(t)}`;
+    return t;
+  }
+
+  function lockTableField() {
+    if (!tablePrefill) return;
+    const label = displayTableLabel(tablePrefill);
+    const badge = $("table-badge");
+    if (badge) {
+      badge.hidden = false;
+      badge.textContent = label;
+    }
+    const wrap = $("table-field-wrap");
+    const input = document.querySelector("#order-form [name=table_no]");
+    if (input) {
+      input.value = tablePrefill;
+      input.readOnly = true;
+    }
+    if (wrap) wrap.hidden = true;
+    const locked = $("table-locked");
+    if (locked) {
+      locked.hidden = false;
+      locked.textContent = `Ordering for ${label}`;
+    }
+    const title = $("cart-title");
+    if (title) title.textContent = `Order for ${label}`;
+    document.title = label ? `Order from ${label}` : document.title;
+  }
+
   function isPack(item) {
     return String(item?.kind || "") === "pack" || String(item?.id || "").startsWith("pack:");
   }
@@ -352,7 +387,9 @@
     state.items = mergeMenuItems(data);
     state.offers = Array.isArray(data.offers) ? data.offers : [];
     state.offerSettings = data.offerSettings || { stacking: "product_and_bill" };
-    document.title = `Order from ${data.shop.name}`;
+    document.title = tablePrefill
+      ? `Order from ${displayTableLabel(tablePrefill)} · ${data.shop.name}`
+      : `Order from ${data.shop.name}`;
     $("shop-name").textContent = data.shop.name;
     $("shop-address").textContent = [data.shop.address, data.shop.phone].filter(Boolean).join(" · ");
     if (data.shop.logo_url) {
@@ -420,7 +457,7 @@
           shop: shopKey,
           customer_name: form.get("customer_name"),
           mobile: form.get("mobile"),
-          table_no: form.get("table_no"),
+          table_no: tablePrefill || form.get("table_no"),
           lines: [...state.cart].map(([item_id, quantity]) => ({
             item_id,
             quantity,
@@ -460,10 +497,7 @@
     scrollTo({ top: 0, behavior: "smooth" });
   });
 
-  if (tablePrefill) {
-    const input = document.querySelector("#order-form [name=table_no]");
-    if (input && !input.value) input.value = tablePrefill;
-  }
+  if (tablePrefill) lockTableField();
 
   loadMenu().catch((err) => {
     $("shop-name").textContent = "Menu unavailable";

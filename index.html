@@ -6,7 +6,7 @@
     <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
     <title>ATAV POS</title>
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./css/pos.css?v=20260917rx1" />
+    <link rel="stylesheet" href="./css/pos.css?v=20260918table1" />
     <link rel="stylesheet" href="./css/saas.css?v=20260905deploy136" />
   </head>
   <body>
@@ -623,7 +623,7 @@
               <div>
                 <p class="items-kicker">Customer self-ordering</p>
                 <h2>QR Orders</h2>
-                <p>Customers scan, choose available items, and send an order. Complete a ready order to save it as a tax invoice, or open it in Counter to take payment. Stock is deducted when the invoice is saved.</p>
+                <p>Customers scan the QR on their table, choose available items, and send an order tagged to that table. Complete a ready order to save it as a tax invoice, or open it in Counter to take payment. Stock is deducted when the invoice is saved.</p>
               </div>
               <div class="qr-orders-hero-actions">
                 <button class="btn" type="button" id="qr-sound-toggle" aria-pressed="true">Sound on</button>
@@ -633,8 +633,8 @@
             <section class="qr-setup-card">
               <div>
                 <p class="items-kicker">YOUR SHOP QR</p>
-                <h3>Print or share this code</h3>
-                <p>Place it at the counter, table, or storefront. The link opens a public mobile menu—no customer login required.</p>
+                <h3>Counter / pickup code</h3>
+                <p id="qr-shop-copy">Place it at the counter, table, or storefront. The link opens a public mobile menu—no customer login required.</p>
                 <p class="field-hint">Shop ID for <code>/qr.html?shop=</code>: <code id="qr-shop-id">—</code>
                   <button class="btn" type="button" id="qr-copy-shop-id">Copy ID</button>
                 </p>
@@ -647,6 +647,17 @@
                 </div>
               </div>
               <img id="qr-menu-code" alt="QR code for customer ordering menu" />
+            </section>
+            <section class="qr-setup-card qr-table-setup restaurant-only" id="qr-table-codes" hidden>
+              <div class="qr-table-setup-copy">
+                <p class="items-kicker">TABLE QR CODES</p>
+                <h3>One code on each table</h3>
+                <p>Print these stickers and place each QR on its physical table. Guests scan that code; the order is tagged to that table automatically.</p>
+                <div class="qr-link-row">
+                  <button class="btn primary" type="button" id="qr-print-all-tables">Print all table QRs</button>
+                </div>
+              </div>
+              <div class="qr-table-grid" id="qr-table-grid"></div>
             </section>
             <div class="qr-orders-toolbar">
               <div class="qr-status-tabs" id="qr-status-tabs">
@@ -1739,7 +1750,7 @@
     <script src="./js/pos-api.js?v=20260905deploy154" defer></script>
     <script src="./js/units.js?v=20260905deploy165" defer></script>
     <script src="./js/footwear.js?v=20260917pharm1" defer></script>
-    <script src="./js/restaurant.js?v=20260917kot2" defer></script>
+    <script src="./js/restaurant.js?v=20260918table1" defer></script>
     <script src="./js/discount.js?v=20260905deploy136" defer></script>
     <script src="./js/offers.js?v=20260905deploy170" defer></script>
     <script src="./js/loyalty.js?v=20260905deploy136" defer></script>
@@ -1751,7 +1762,7 @@
     <script src="./js/support.js?v=20260905deploy136" defer></script>
     <script src="./js/qrcode.iife.js?v=20260905qr1" defer></script>
     <script src="./js/qr-notify.js?v=20260914kot1" defer></script>
-    <script src="./js/app.js?v=20260917rx2" defer></script>
+    <script src="./js/app.js?v=20260918table1" defer></script>
     <script src="./js/growth.js?v=20260905deploy145" defer></script>
     <script src="./js/offers-ui.js?v=20260905deploy136" defer></script>
   </body>
