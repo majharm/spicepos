@@ -125,6 +125,7 @@ function pos_ensure_advanced_schema() {
       INDEX (barcode)
     )"
   );
+  @$db->query("ALTER TABLE stock_batches ADD COLUMN quarantine_gm DECIMAL(14,3) NOT NULL DEFAULT 0");
   @$db->query(
     "CREATE TABLE IF NOT EXISTS damage_records (
       id VARCHAR(255) PRIMARY KEY,

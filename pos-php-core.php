@@ -1229,6 +1229,23 @@ function pos_require_backup() {
   require_once $file;
 }
 
+function pos_is_returns_path($path) {
+  $p = (string) $path;
+  return $p === "returns" || strpos($p, "returns/") === 0;
+}
+
+function pos_require_returns() {
+  $file = __DIR__ . "/pos-returns.php";
+  if (!is_file($file)) {
+    pos_send(503, [
+      "error" => "pos-returns.php is missing on the server.",
+      "php" => true,
+      "hint" => "Upload pos-returns.php from the latest deploy bundle to public_html, then hard-refresh.",
+    ]);
+  }
+  require_once $file;
+}
+
 function pos_is_advanced_path($path) {
   $p = (string) $path;
   return $p === "barcodes" || strpos($p, "barcodes/") === 0
@@ -2892,6 +2909,27 @@ function pos_php_dispatch($path, $method, $rawBody) {
         }
         pos_dispatch_backup($path, $method, $body, $bid, $branchId, $uid, $auth);
         return;
+      }
+      if (pos_is_returns_path($path)) {
+        $auth = pos_staff_session();
+        if (!$auth || ($auth["type"] ?? "") !== "staff") pos_send(401, ["error" => "Sign in required"]);
+        $bid = $auth["user"]["business_id"];
+        $branchId = $auth["branchId"] ?? $auth["user"]["branch_id"] ?? null;
+        $uid = $auth["user"]["id"];
+        pos_apply_business_timezone($bid);
+        pos_require_advanced();
+        pos_require_returns();
+        if (!function_exists("pos_dispatch_returns")) {
+          pos_send(503, [
+            "error" => "pos-returns.php on the server is broken or outdated.",
+            "php" => true,
+            "hint" => "Re-upload pos-returns.php from the latest deploy bundle.",
+          ]);
+        }
+        if (pos_dispatch_returns($path, $method, $body, $bid, $branchId, $uid, $auth)) {
+          return;
+        }
+        pos_send(404, ["error" => "Unknown returns path", "path" => $path, "php" => true]);
       }
       if (pos_is_advanced_path($path)) {
         $auth = pos_staff_session();

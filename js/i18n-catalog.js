@@ -166,6 +166,11 @@
     hi: "\u0907\u0928\u0935\u0949\u0907\u0938",
     mr: "\u0907\u0928\u094d\u0939\u094d\u0935\u0949\u0907\u0938",
   };
+  S["nav.returns"] = {
+    en: "Manage Returns",
+    hi: "\u0930\u093f\u091f\u0930\u094d\u0928",
+    mr: "\u0930\u093f\u091f\u0930\u094d\u0928",
+  };
   S["nav.loyalty"] = {
     en: "Royalty",
     hi: "\u0930\u0949\u092f\u0932\u094d\u091f\u0940",

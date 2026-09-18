@@ -223,6 +223,10 @@ function applyFootwearMode() {
   document.querySelectorAll(".restaurant-only").forEach((el) => {
     el.hidden = !isRestaurantShop();
   });
+  document.querySelectorAll(".classic-bill-only").forEach((el) => {
+    if (el.classList.contains("nav-btn")) return;
+    el.hidden = !isClassicBillShop();
+  });
   const classicHead = $("classic-bill-head");
   if (classicHead) classicHead.hidden = !isClassicBillShop();
   const classicEntry = $("classic-bill-entry");
@@ -393,6 +397,7 @@ const VIEW_META = {
   offers: { title: "Offers & promotions", subtitle: "Combos, discounts, happy hours, and AI suggestions" },
   packs: { title: "Packs", subtitle: "Named spice mixes for the Counter" },
   orders: { title: "Invoices", subtitle: "POS slip, official A4, or duplicate copy" },
+  returns: { title: "Manage Returns", subtitle: "Pharmacy and garment returns against a sales invoice" },
   "qr-orders": { title: "QR Orders", subtitle: "Incoming customer self-orders" },
   prescriptions: { title: "Prescription Orders", subtitle: "Customer QR uploads for this pharmacy" },
   kot: { title: "Kitchen KOT", subtitle: "Captain fires tickets; kitchen marks preparing and ready" },
@@ -1682,6 +1687,7 @@ function applyNav() {
       customers: "customers",
       packs: "items",
       orders: "orders",
+      returns: "orders",
       "qr-orders": "orders",
       prescriptions: "orders",
       kot: "kot",
@@ -1711,6 +1717,7 @@ function applyNav() {
     if (view === "packs" && !isSpiceShop()) btn.hidden = true;
     if (view === "qr-orders" && isPharmacyShop()) btn.hidden = true;
     if (view === "prescriptions") btn.hidden = !isPharmacyShop() || !can("orders");
+    if (view === "returns") btn.hidden = !isClassicBillShop() || !can("orders");
     if (view === "kot") btn.hidden = !isRestaurantShop() || !can("kot");
   });
   paintStaffRoleOptions();
@@ -1790,6 +1797,7 @@ function paintViewHeader(name) {
     items: "pos.items",
     customers: "nav.customers",
     orders: "nav.invoices",
+    returns: "nav.returns",
     "qr-orders": "nav.qr_orders",
     prescriptions: "nav.prescriptions",
     kot: "nav.kot",
@@ -1856,6 +1864,7 @@ function showView(name) {
   if (name === "accounts") loadAccounts();
   if (name === "expenses") loadExpenses();
   if (name === "orders") loadOrders();
+  if (name === "returns") loadReturnsView();
   if (name === "qr-orders") loadQrOrders();
   if (name === "prescriptions") loadPrescriptions();
   if (name === "kot") {
@@ -9789,6 +9798,274 @@ $("damage-table")?.addEventListener("click", async (e) => {
     $("dmg-hint").textContent = err.message;
   }
 });
+
+let returnInvoice = null;
+
+function pharmacyReturnReasons() {
+  return [
+    ["unused", "Unused / unopened"],
+    ["wrong-medicine", "Wrong medicine"],
+    ["expired", "Expired / near expiry"],
+    ["damaged", "Damaged"],
+    ["customer-request", "Customer request"],
+    ["other", "Other"],
+  ];
+}
+
+function garmentReturnReasons() {
+  return [
+    ["size", "Wrong size"],
+    ["color", "Wrong colour"],
+    ["unused", "Unused with tags"],
+    ["damaged", "Damaged"],
+    ["used", "Used"],
+    ["other", "Other"],
+  ];
+}
+
+function fillReturnReasons() {
+  const sel = $("returns-reason");
+  if (!sel) return;
+  const rows = isPharmacyShop() ? pharmacyReturnReasons() : garmentReturnReasons();
+  sel.innerHTML = rows.map(([v, l]) => `<option value="${escapeHtml(v)}">${escapeHtml(l)}</option>`).join("");
+}
+
+function returnLineRefund(line, qty) {
+  const sold = Number(line.quantity_gm || line.sold_qty) || 0;
+  if (sold <= 0 || qty <= 0) return 0;
+  const gst = Number(line.gst_rate) || 0;
+  const taxable = Number(line.amount) || 0;
+  return Math.round((qty / sold) * taxable * (1 + gst / 100) * 100) / 100;
+}
+
+function currentReturnQty(line) {
+  const el = document.querySelector(`[data-return-qty="${CSS.escape(line.id)}"]`);
+  const n = Number(el?.value);
+  if (!Number.isFinite(n) || n <= 0) return 0;
+  const max = Number(line.returnable_qty) || 0;
+  return Math.min(n, max);
+}
+
+function paintReturnTotals() {
+  if (!returnInvoice) return;
+  let refund = 0;
+  let any = false;
+  let leftover = false;
+  for (const line of returnInvoice.lines || []) {
+    const qty = currentReturnQty(line);
+    if (qty > 0) any = true;
+    refund += returnLineRefund(line, qty);
+    const left = Math.max(0, Number(line.returnable_qty) - qty);
+    if (left > 0.0005) leftover = true;
+  }
+  if ($("returns-refund")) $("returns-refund").value = money(refund);
+  if ($("returns-type")) $("returns-type").value = any && !leftover ? "full" : "partial";
+}
+
+function paintReturnInvoice() {
+  const box = $("returns-lines");
+  const cust = $("returns-customer");
+  const form = $("returns-form");
+  if (!returnInvoice) {
+    if (cust) cust.textContent = "Search an invoice to load customer and sold items.";
+    if (box) box.innerHTML = "";
+    if (form) form.hidden = true;
+    return;
+  }
+  const o = returnInvoice;
+  const staff = state.session?.name || state.session?.username || "";
+  const bits = [
+    o.order_number,
+    o.customer_name,
+    o.customer_mobile,
+    o.customer_address,
+    o.created_at ? `Billed ${formatShopDateTime(o.created_at)}` : "",
+    staff ? `Staff ${staff}` : "",
+  ].filter(Boolean);
+  if (cust) cust.textContent = bits.join(" · ");
+  if (form) form.hidden = false;
+  const pharm = isPharmacyShop();
+  const head = pharm
+    ? `<th>Medicine</th><th>Batch No.</th><th>Expiry</th><th>Sold Qty</th><th>Return Qty</th><th>Refund</th>`
+    : `<th>Product</th><th>SKU</th><th>Size</th><th>Colour</th><th>Sold Qty</th><th>Return Qty</th><th>Condition</th><th>Refund</th>`;
+  const rows = (o.lines || []).map((line) => {
+    const item = state.items.find((i) => i.id === line.item_id) || {};
+    const max = Number(line.returnable_qty) || 0;
+    const sold = Number(line.sold_qty || line.quantity_gm) || 0;
+    const disabled = max <= 0;
+    const cond = `<select data-return-cond="${escapeHtml(line.id)}" ${disabled ? "disabled" : ""}>
+      <option value="new">New</option>
+      <option value="damaged">Damaged</option>
+      <option value="used">Used</option>
+    </select>`;
+    const qty = `<input data-return-qty="${escapeHtml(line.id)}" type="number" min="0" max="${escapeHtml(max)}" step="any" value="0" ${disabled ? "disabled" : ""} aria-label="Return quantity" />`;
+    const refund = `<span data-return-amt="${escapeHtml(line.id)}">${money(0)}</span>`;
+    if (pharm) {
+      return `<tr>
+        <td>${escapeHtml(line.item_name)}</td>
+        <td>${escapeHtml(line.batch_no || "—")}</td>
+        <td>${escapeHtml(String(line.expiry_date || "").slice(0, 10) || "—")}</td>
+        <td>${escapeHtml(fmtQty(sold, item))}${max < sold ? ` <small>left ${escapeHtml(fmtQty(max, item))}</small>` : ""}</td>
+        <td>${qty}</td>
+        <td>${refund}</td>
+      </tr>`;
+    }
+    return `<tr>
+      <td>${escapeHtml(line.item_name)}</td>
+      <td>${escapeHtml(line.sku || line.item_code || item.code || "—")}</td>
+      <td>${escapeHtml(line.size || item.size || "—")}</td>
+      <td>${escapeHtml(line.color || item.color || "—")}</td>
+      <td>${escapeHtml(fmtQty(sold, item))}${max < sold ? ` <small>left ${escapeHtml(fmtQty(max, item))}</small>` : ""}</td>
+      <td>${qty}</td>
+      <td>${cond}</td>
+      <td>${refund}</td>
+    </tr>`;
+  }).join("");
+  if (box) box.innerHTML = `<table class="returns-lines-table"><thead><tr>${head}</tr></thead><tbody>${rows || `<tr><td colspan="8">No returnable lines.</td></tr>`}</tbody></table>`;
+  paintReturnTotals();
+}
+
+function syncReturnLineAmounts() {
+  if (!returnInvoice) return;
+  for (const line of returnInvoice.lines || []) {
+    const qty = currentReturnQty(line);
+    const cell = document.querySelector(`[data-return-amt="${CSS.escape(line.id)}"]`);
+    if (cell) cell.textContent = money(returnLineRefund(line, qty));
+  }
+  paintReturnTotals();
+}
+
+async function loadReturnsHistory() {
+  const table = $("returns-table");
+  if (!table) return;
+  try {
+    const rows = await api("/api/returns");
+    const list = Array.isArray(rows) ? rows : [];
+    table.innerHTML = `<table><thead><tr>
+      <th>Return No.</th><th>Invoice</th><th>Customer</th><th>Type</th><th>Reason</th><th>Refund</th><th>Mode</th><th>Status</th><th>Staff</th><th>Date &amp; Time</th>
+    </tr></thead><tbody>${list.map((r) => `<tr>
+      <td>${escapeHtml(r.return_number)}</td>
+      <td>${escapeHtml(r.order_number || "")}</td>
+      <td>${escapeHtml(r.customer_name || "")}${r.customer_mobile ? `<small>${escapeHtml(r.customer_mobile)}</small>` : ""}</td>
+      <td>${escapeHtml(r.return_type || "")}</td>
+      <td>${escapeHtml(r.reason || "")}</td>
+      <td>${money(r.refund_amount)}</td>
+      <td>${escapeHtml(r.refund_mode || "")}</td>
+      <td>${escapeHtml(r.status || "")}</td>
+      <td>${escapeHtml(r.staff_name || "—")}</td>
+      <td>${escapeHtml(formatShopDateTime(r.created_at))}</td>
+    </tr>`).join("") || `<tr><td colspan="10">No returns yet.</td></tr>`}</tbody></table>`;
+  } catch (err) {
+    table.innerHTML = `<p class="hint error">${escapeHtml(err.message)}</p>`;
+  }
+}
+
+async function loadReturnsView() {
+  fillReturnReasons();
+  if ($("returns-lede")) {
+    $("returns-lede").textContent = isPharmacyShop()
+      ? "Pharmacy returns keep Batch No. and Expiry. Returned medicines go to quarantine (not sellable) unless a manager ticks sellable stock."
+      : "Garment returns record product, SKU, size, and colour. New items restock; damaged or used items go to quarantine.";
+  }
+  if ($("returns-sellable-wrap")) $("returns-sellable-wrap").hidden = !isPharmacyShop();
+  paintReturnInvoice();
+  await loadReturnsHistory();
+}
+
+async function saveReturn(e) {
+  e.preventDefault();
+  const hint = $("returns-hint");
+  if (!returnInvoice) {
+    if (hint) {
+      hint.textContent = "Search an invoice first.";
+      hint.className = "hint error";
+    }
+    return;
+  }
+  const lines = [];
+  for (const line of returnInvoice.lines || []) {
+    const qty = currentReturnQty(line);
+    if (qty <= 0) continue;
+    const max = Number(line.returnable_qty) || 0;
+    if (qty - max > 0.0005) {
+      if (hint) {
+        hint.textContent = `Return qty exceeds sold qty for ${line.item_name}`;
+        hint.className = "hint error";
+      }
+      return;
+    }
+    const cond = document.querySelector(`[data-return-cond="${CSS.escape(line.id)}"]`)?.value || "";
+    lines.push({ orderLineId: line.id, qty, condition: cond });
+  }
+  if (!lines.length) {
+    if (hint) {
+      hint.textContent = "Enter a return quantity on at least one item.";
+      hint.className = "hint error";
+    }
+    return;
+  }
+  try {
+    const saved = await api("/api/returns", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        orderId: returnInvoice.id,
+        reason: $("returns-reason")?.value || "other",
+        refundMode: $("returns-mode")?.value || "cash",
+        notes: $("returns-notes")?.value || "",
+        sellableStock: Boolean($("returns-sellable")?.checked),
+        lines,
+      }),
+    });
+    const rec = saved.return || saved;
+    if (hint) {
+      hint.textContent = `Saved ${rec.return_number || "return"} · ${money(rec.refund_amount)} · ${rec.return_type || ""} · ${rec.status || "completed"}`;
+      hint.className = "hint ok";
+    }
+    if ($("returns-notes")) $("returns-notes").value = "";
+    if ($("returns-sellable")) $("returns-sellable").checked = false;
+    await searchReturnInvoice(returnInvoice.order_number || "");
+    await loadReturnsHistory();
+  } catch (err) {
+    if (hint) {
+      hint.textContent = err.message;
+      hint.className = "hint error";
+    }
+  }
+}
+
+$("returns-search-form")?.addEventListener("submit", (e) => {
+  e.preventDefault();
+  searchReturnInvoice($("returns-invoice-q")?.value || "");
+});
+$("returns-refresh")?.addEventListener("click", () => loadReturnsView());
+$("returns-lines")?.addEventListener("input", (e) => {
+  if (e.target.closest("[data-return-qty]")) syncReturnLineAmounts();
+});
+$("returns-form")?.addEventListener("submit", saveReturn);
+
+async function searchReturnInvoice(q) {
+  const hint = $("returns-hint");
+  try {
+    const data = await api(`/api/returns/invoice?q=${encodeURIComponent(q)}`);
+    const rows = data.orders || [];
+    returnInvoice = rows[0] || null;
+    if (hint) {
+      hint.textContent = returnInvoice
+        ? (rows.length > 1 ? `Loaded ${returnInvoice.order_number} (${rows.length} matches — showing the latest).` : `Loaded ${returnInvoice.order_number}.`)
+        : "";
+      hint.className = "hint ok";
+    }
+    paintReturnInvoice();
+  } catch (err) {
+    returnInvoice = null;
+    paintReturnInvoice();
+    if (hint) {
+      hint.textContent = err.message;
+      hint.className = "hint error";
+    }
+  }
+}
 
 async function loadLedgerView() {
   const kind = $("ledger-kind")?.value || "";

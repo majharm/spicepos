@@ -6,7 +6,7 @@
     <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
     <title>ATAV POS</title>
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./css/pos.css?v=20260918bill13" />
+    <link rel="stylesheet" href="./css/pos.css?v=20260918bill14" />
     <link rel="stylesheet" href="./css/saas.css?v=20260905deploy136" />
   </head>
   <body>
@@ -29,6 +29,7 @@
           <div class="nav-group">
             <p class="nav-group-label" data-i18n="nav.sales">Sales</p>
             <button class="nav-btn" type="button" data-view="orders"><span class="nav-icon" aria-hidden="true">▤</span><span data-i18n="nav.invoices">Invoices</span></button>
+            <button class="nav-btn classic-bill-only" type="button" data-view="returns"><span class="nav-icon" aria-hidden="true">↺</span><span data-i18n="nav.returns">Manage Returns</span></button>
             <button class="nav-btn pharmacy-hide" type="button" data-view="qr-orders"><span class="nav-icon" aria-hidden="true">▦</span><span data-i18n="nav.qr_orders">QR Orders</span> <span class="nav-badge" id="qr-order-badge" hidden></span></button>
             <button class="nav-btn pharmacy-only" type="button" data-view="prescriptions"><span class="nav-icon" aria-hidden="true">▦</span>Prescriptions <span class="nav-badge" id="rx-badge" hidden></span></button>
             <button class="nav-btn" type="button" data-view="customers"><span class="nav-icon" aria-hidden="true">◎</span><span data-i18n="nav.customers">Customers</span></button>
@@ -798,6 +799,55 @@
           <div class="split orders-split">
             <div class="orders-list-wrap" id="orders"></div>
             <div class="pane order-pane" id="order-pane"><p class="hint">Select an invoice.</p></div>
+          </div>
+        </section>
+        <section class="view" id="view-returns" hidden>
+          <h2 class="visually-hidden">Manage Returns</h2>
+          <p class="lede" id="returns-lede">Search a sales invoice, then return pharmacy medicines (batch + expiry, quarantine by default) or garments (size, colour, condition).</p>
+          <form class="report-toolbar orders-toolbar" id="returns-search-form">
+            <label class="returns-search-wide">Search Invoice / Order No.
+              <input type="search" id="returns-invoice-q" placeholder="SO number, customer, or mobile" autocomplete="off" />
+            </label>
+            <button class="btn primary" type="submit" id="returns-find">Find invoice</button>
+            <button class="btn" type="button" id="returns-refresh">Refresh list</button>
+          </form>
+          <p class="hint" id="returns-hint"></p>
+          <div class="returns-desk">
+            <div class="returns-invoice card-panel" id="returns-invoice-box">
+              <h3>Return against invoice</h3>
+              <p class="returns-cust" id="returns-customer">Search an invoice to load customer and sold items.</p>
+              <div class="table-wrap" id="returns-lines"></div>
+              <form class="settings returns-meta" id="returns-form" hidden>
+                <label>Return Reason
+                  <select id="returns-reason"></select>
+                </label>
+                <label>Return Type
+                  <select id="returns-type" disabled>
+                    <option value="partial">Partial</option>
+                    <option value="full">Full</option>
+                  </select>
+                </label>
+                <label>Refund Mode
+                  <select id="returns-mode">
+                    <option value="cash">Cash</option>
+                    <option value="upi">UPI</option>
+                    <option value="card">Card</option>
+                    <option value="credit-note">Credit note</option>
+                    <option value="store-credit">Store credit</option>
+                  </select>
+                </label>
+                <label>Refund Amount <input id="returns-refund" type="text" readonly /></label>
+                <label class="pharmacy-only" id="returns-sellable-wrap" hidden>
+                  <input type="checkbox" id="returns-sellable" /> Return medicines to sellable stock (manager)
+                </label>
+                <label class="full">Notes <input id="returns-notes" maxlength="255" placeholder="Optional" /></label>
+                <button class="btn primary" type="submit">Save return</button>
+              </form>
+            </div>
+            <div class="returns-history card-panel">
+              <h3>Recent returns</h3>
+              <div class="table-wrap" id="returns-table"></div>
+            </div>
           </div>
         </section>
         <section class="view" id="view-purchases" hidden>
@@ -1798,7 +1848,7 @@
     <script src="./js/support.js?v=20260905deploy136" defer></script>
     <script src="./js/qrcode.iife.js?v=20260905qr1" defer></script>
     <script src="./js/qr-notify.js?v=20260914kot1" defer></script>
-    <script src="./js/app.js?v=20260918bill13" defer></script>
+    <script src="./js/app.js?v=20260918bill14" defer></script>
     <script src="./js/growth.js?v=20260905deploy145" defer></script>
     <script src="./js/offers-ui.js?v=20260905deploy136" defer></script>
   </body>

@@ -134,6 +134,59 @@ export async function ensureAdvancedSchema() {
     INDEX (purchase_id),
     INDEX (barcode)
   )`);
+  try {
+    await query("ALTER TABLE stock_batches ADD COLUMN quarantine_gm DECIMAL(14,3) NOT NULL DEFAULT 0");
+  } catch {
+    /* exists */
+  }
+  await query(`CREATE TABLE IF NOT EXISTS sales_returns (
+    id VARCHAR(255) PRIMARY KEY,
+    business_id VARCHAR(255) NOT NULL,
+    branch_id VARCHAR(255) NULL,
+    return_number VARCHAR(32) NOT NULL,
+    order_id VARCHAR(255) NOT NULL,
+    order_number VARCHAR(32) NULL,
+    customer_id VARCHAR(255) NULL,
+    customer_name VARCHAR(255) NULL,
+    customer_mobile VARCHAR(32) NULL,
+    shop_kind VARCHAR(16) NOT NULL DEFAULT 'general',
+    return_type VARCHAR(16) NOT NULL DEFAULT 'partial',
+    reason VARCHAR(64) NOT NULL DEFAULT 'other',
+    notes VARCHAR(255) NULL,
+    refund_amount DECIMAL(12,2) NOT NULL DEFAULT 0,
+    refund_mode VARCHAR(32) NOT NULL DEFAULT 'cash',
+    status VARCHAR(16) NOT NULL DEFAULT 'completed',
+    created_by VARCHAR(255) NULL,
+    created_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    UNIQUE KEY uniq_return_no (business_id, return_number),
+    INDEX (business_id),
+    INDEX (order_id)
+  )`);
+  await query(`CREATE TABLE IF NOT EXISTS sales_return_lines (
+    id VARCHAR(255) PRIMARY KEY,
+    return_id VARCHAR(255) NOT NULL,
+    business_id VARCHAR(255) NOT NULL,
+    order_line_id VARCHAR(255) NOT NULL,
+    item_id VARCHAR(255) NOT NULL,
+    item_name VARCHAR(255) NULL,
+    item_code VARCHAR(64) NULL,
+    size VARCHAR(32) NULL,
+    color VARCHAR(64) NULL,
+    quantity_gm DECIMAL(14,3) NOT NULL,
+    sold_qty_gm DECIMAL(14,3) NOT NULL DEFAULT 0,
+    rate_per_kg DECIMAL(12,2) NOT NULL DEFAULT 0,
+    amount DECIMAL(12,2) NOT NULL DEFAULT 0,
+    gst_rate DECIMAL(8,2) NOT NULL DEFAULT 0,
+    batch_id VARCHAR(255) NULL,
+    batch_no VARCHAR(64) NULL,
+    expiry_date DATE NULL,
+    barcode VARCHAR(64) NULL,
+    condition_label VARCHAR(16) NULL,
+    stock_disposition VARCHAR(16) NOT NULL DEFAULT 'quarantine',
+    INDEX (return_id),
+    INDEX (order_line_id),
+    INDEX (business_id)
+  )`);
   const pharmacyCols = [
     ["generic_name", "VARCHAR(255) NULL"],
     ["medicine_type", "VARCHAR(64) NULL"],
@@ -804,6 +857,17 @@ export async function consumePieceBarcode(conn, businessId, code, kind = "sold")
       );
     }
   }
+}
+
+export async function restorePieceBarcode(conn, businessId, code) {
+  const raw = String(code || "").trim();
+  if (!raw) return;
+  await sqlExec(
+    conn,
+    `UPDATE item_barcodes SET status='active', used_kind=NULL, used_at=NULL
+     WHERE business_id=? AND barcode=?`,
+    [businessId, raw],
+  );
 }
 
 async function lookupBarcode(businessId, code) {

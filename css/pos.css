@@ -3846,6 +3846,65 @@ button.items-stat.is-active {
   margin: 0 24px 8px;
   align-items: end;
 }
+.returns-desk {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(280px, 0.85fr);
+  gap: 16px;
+  padding: 0 24px 28px;
+  align-items: start;
+}
+.returns-desk .card-panel {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 16px 18px 20px;
+  min-width: 0;
+}
+.returns-desk h3 {
+  margin: 0 0 10px;
+  font-size: 15px;
+}
+.returns-cust {
+  margin: 0 0 12px;
+  font-size: 13px;
+  font-weight: 650;
+  color: var(--muted);
+  line-height: 1.45;
+}
+.returns-search-wide {
+  flex: 1 1 280px;
+  min-width: 220px;
+}
+.returns-lines-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.returns-lines-table th,
+.returns-lines-table td {
+  padding: 8px 6px;
+  border-bottom: 1px solid var(--line);
+  font-size: 13px;
+  text-align: left;
+  vertical-align: middle;
+}
+.returns-lines-table input[type="number"],
+.returns-lines-table select {
+  width: 100%;
+  max-width: 110px;
+  padding: 6px 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+}
+.returns-meta {
+  margin-top: 14px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 10px 14px;
+  align-items: end;
+}
+.returns-meta .full { grid-column: 1 / -1; }
+.returns-meta button { justify-self: start; }
+.returns-history small { display: block; color: var(--muted); font-weight: 600; }
 .orders-toolbar select {
   min-width: 120px;
   padding: 8px 10px;
@@ -4590,7 +4649,8 @@ button.items-stat.is-active {
   .nav-foot { flex-direction: row; margin-top: 0; display: flex; flex-wrap: wrap; width: 100%; }
   .nav-foot .btn-logout { width: auto; flex: 1; min-height: 44px; }
   .session-bar .btn-logout { min-height: 44px; }
-  .workspace, .split, .orders-split, .purchases-split { grid-template-columns: 1fr; height: auto; max-height: none; min-height: 0; }
+  .workspace, .split, .orders-split, .purchases-split, .returns-desk { grid-template-columns: 1fr; height: auto; max-height: none; min-height: 0; }
+  .returns-desk { padding: 0 12px 24px; }
   .split, .orders-split, .purchases-split { padding: 0 12px 24px; }
   .lede, .view > .hint, .orders-toolbar, .orders-summary, .purchase-new, .accounts-toolbar { margin-left: 12px; margin-right: 12px; }
   .support-page { margin-left: 12px; margin-right: 12px; }

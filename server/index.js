@@ -28,6 +28,7 @@ import { audit } from "./audit.js";
 import { getPlatformSettings, shopSupportContact } from "./settings.js";
 import { sendLowStockAlerts, tickShopAlerts, startAlertScheduler, scheduleAlertTick } from "./alerts.js";
 import { registerAdvanced, computeSaleLine, applySaleStock, applyLoyaltyOnSale, pharmacyLineSnapshot, enrichCatalogPharmacy, saleStockQty, persistSaleLineNote } from "./advanced.js";
+import { registerReturns } from "./returns.js";
 import { registerQrPublic, registerQrStaff, linkQrOrderSale, ensureQrOrderSchema } from "./qr-ordering.js";
 import { registerRxPublic, registerRxStaff } from "./prescriptions.js";
 import "../js/discount.js";
@@ -172,6 +173,7 @@ app.use((req, res, next) => {
 registerMaster(app);
 registerTenant(app);
 registerAdvanced(app);
+registerReturns(app);
 registerBackup(app);
 registerUnits(app);
 registerQrStaff(app);
