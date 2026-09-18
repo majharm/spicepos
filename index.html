@@ -6,7 +6,7 @@
     <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
     <title>ATAV POS</title>
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./css/pos.css?v=20260918bill3" />
+    <link rel="stylesheet" href="./css/pos.css?v=20260918bill4" />
     <link rel="stylesheet" href="./css/saas.css?v=20260905deploy136" />
   </head>
   <body>
@@ -239,6 +239,9 @@
                       </button>
                     </span>
                   </label>
+                  <label class="classic-item-search">Item Search
+                    <input id="bill-item-search" type="search" enterkeyhint="search" autocomplete="off" maxlength="120" placeholder="Name, generic, or brand" />
+                  </label>
                   <label class="classic-qty">Qty
                     <input id="bill-scan-qty" type="number" min="0.001" step="any" value="1" aria-label="Quantity to add" />
                   </label>
@@ -256,6 +259,7 @@
               <details class="bill-extras" id="bill-extras">
                 <summary>Discount &amp; royalty</summary>
                 <div class="bill-disc" id="bill-disc-wrap">
+                  <p class="classic-loyalty-balance" id="classic-loyalty-balance" hidden></p>
                   <label>Bill discount
                     <span class="disc-pair">
                       <select id="bill-disc-type" aria-label="Bill discount type">
@@ -265,7 +269,7 @@
                       <input id="bill-disc-value" type="number" min="0" step="0.01" value="0" aria-label="Bill discount value" />
                     </span>
                   </label>
-                  <label class="loyalty-redeem" id="loyalty-redeem-wrap">Royalty redeem
+                  <label class="loyalty-redeem" id="loyalty-redeem-wrap">Royalty points
                     <input id="loyalty-redeem" type="number" min="0" step="1" value="0" aria-label="Points to redeem" />
                     <span class="hint" id="loyalty-hint"></span>
                   </label>
@@ -1784,7 +1788,7 @@
     <script src="./js/support.js?v=20260905deploy136" defer></script>
     <script src="./js/qrcode.iife.js?v=20260905qr1" defer></script>
     <script src="./js/qr-notify.js?v=20260914kot1" defer></script>
-    <script src="./js/app.js?v=20260918bill3" defer></script>
+    <script src="./js/app.js?v=20260918bill4" defer></script>
     <script src="./js/growth.js?v=20260905deploy145" defer></script>
     <script src="./js/offers-ui.js?v=20260905deploy136" defer></script>
   </body>
