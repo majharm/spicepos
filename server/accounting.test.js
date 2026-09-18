@@ -162,3 +162,20 @@ test("receipts and payments can be deleted after save", () => {
   assert.match(accounts, /app.delete\("\/api\/expenses\/:id"/);
   assert.match(php, /pos_require_business_admin_delete/);
 });
+
+test("business admin can delete invoices and reverse credit sale", () => {
+  const accounts = readFileSync(path.join(root, "server/accounts.js"), "utf8");
+  const crud = readFileSync(path.join(root, "server/crud.js"), "utf8");
+  const orders = readFileSync(path.join(root, "pos-orders.php"), "utf8");
+  const core = readFileSync(path.join(root, "pos-php-core.php"), "utf8");
+  const app = readFileSync(path.join(root, "js/app.js"), "utf8");
+  assert.match(accounts, /export async function reverseCreditSale/);
+  assert.match(accounts, /Cannot delete invoice with customer receipts/);
+  assert.match(crud, /app.delete\("\/api\/orders\/:id"/);
+  assert.match(crud, /reverseLoyaltyOnSale/);
+  assert.match(crud, /deleteJournalRef\(conn, "sales_order"/);
+  assert.match(orders, /function pos_delete_order/);
+  assert.match(core, /function pos_reverse_credit_sale/);
+  assert.match(app, /data-delete-order/);
+  assert.match(app, /Delete invoice/);
+});

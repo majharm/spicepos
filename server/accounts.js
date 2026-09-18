@@ -94,6 +94,30 @@ export async function recordCreditSale(conn, { customer, total, orderId, orderNu
   });
 }
 
+export async function reverseCreditSale(conn, orderId) {
+  const [rows] = await conn.query(
+    `SELECT * FROM account_ledger
+     WHERE business_id = ? AND reference_type = 'sales_order' AND reference_id = ?`,
+    [bid(), orderId],
+  );
+  if (rows.some((row) => String(row.entry_type || "") === "receipt")) {
+    const err = new Error("Cannot delete invoice with customer receipts. Delete those receipts first.");
+    err.status = 400;
+    throw err;
+  }
+  for (const row of rows) {
+    if (String(row.entry_type || "") === "sale_credit") {
+      const amt = round2(row.amount);
+      await conn.query(
+        "UPDATE customers SET outstanding = GREATEST(0, outstanding - ?) WHERE id = ? AND business_id = ?",
+        [amt, row.party_id, bid()],
+      );
+    }
+    await deleteLedgerJournal(conn, row.id);
+    await conn.query("DELETE FROM account_ledger WHERE id = ? AND business_id = ?", [row.id, bid()]);
+  }
+}
+
 export async function recordCreditPurchase(conn, { supplier, total, purchaseId, purchaseNumber, method }) {
   if (method !== "credit") return;
   const amt = round2(total);

@@ -862,6 +862,32 @@ function pos_loyalty_apply_sale($bid, $customer, $orderId, $total, $wantRedeem, 
   return ["points" => $redeemPts, "rupees" => $redeemRs, "earned" => $earn];
 }
 
+function pos_loyalty_reverse_sale($bid, $orderId) {
+  if (!$orderId) return;
+  $rows = [];
+  try {
+    $rows = pos_q("SELECT * FROM loyalty_ledger WHERE business_id = ? AND order_id = ?", "ss", [$bid, $orderId]);
+  } catch (Exception $e) {
+    return;
+  }
+  $customers = [];
+  foreach ($rows as $row) {
+    $cid = $row["customer_id"] ?? "";
+    if ($cid !== "") $customers[$cid] = true;
+    if (($row["kind"] ?? "") === "earn") {
+      pos_q(
+        "UPDATE loyalty_accounts SET lifetime_spend = GREATEST(0, lifetime_spend - ?) WHERE customer_id = ?",
+        "ds",
+        [(float) ($row["rupees"] ?? 0), $cid]
+      );
+    }
+  }
+  pos_q("DELETE FROM loyalty_ledger WHERE business_id = ? AND order_id = ?", "ss", [$bid, $orderId]);
+  foreach (array_keys($customers) as $cid) {
+    pos_loyalty_recompute($bid, $cid);
+  }
+}
+
 function pos_apply_damage_stock($bid, $branchId, $uid, $row) {
   $qty = abs((float) $row["quantity_gm"]);
   $itemId = $row["item_id"];

@@ -521,6 +521,10 @@ function canDeletePaymentEntry() {
   return state.session?.role === "business_admin";
 }
 
+function canDeleteInvoice() {
+  return state.session?.role === "business_admin";
+}
+
 function renderEditOrderBanner() {
   const el = $("edit-order-banner");
   if (!el) return;
@@ -5685,6 +5689,7 @@ function showOrder(o) {
       <button class="btn${look === "office" ? " primary" : ""}" type="button" data-print="${escapeHtml(o.id)}" data-print-look="office">Print official bill</button>
       <button class="btn${look === "duplicate" ? " primary" : ""}" type="button" data-print="${escapeHtml(o.id)}" data-print-look="duplicate">Print duplicate</button>
       <button class="btn" type="button" data-edit-order="${escapeHtml(o.id)}"${cancelled ? " disabled title=\"Restore order status before editing items\"" : ""}>Change items</button>
+      ${canDeleteInvoice() ? `<button class="btn danger" type="button" data-delete-order="${escapeHtml(o.id)}">Delete invoice</button>` : ""}
     </div>`;
 }
 
@@ -7104,6 +7109,7 @@ $("order-pane").addEventListener("click", async (e) => {
   const printBtn = e.target.closest("[data-print]");
   const copyBtn = e.target.closest("[data-copy-invoice]");
   const editBtn = e.target.closest("[data-edit-order]");
+  const deleteBtn = e.target.closest("[data-delete-order]");
   const statusBtn = e.target.closest("[data-set-order-status]");
   if (printBtn) {
     const o = findInvoice(printBtn.dataset.print);
@@ -7140,6 +7146,27 @@ $("order-pane").addEventListener("click", async (e) => {
     showView("counter");
     renderCart();
     setHint(`Changing items for ${o.order_number}`, "ok");
+  }
+  if (deleteBtn) {
+    if (!canDeleteInvoice()) {
+      setHint("Only the business admin can delete invoices", "error");
+      return;
+    }
+    const o = orderCache.find((row) => row.id === deleteBtn.dataset.deleteOrder);
+    if (!o) return;
+    if (!window.confirm(`Delete invoice ${o.order_number}? This cannot be undone. Stock will be restored.`)) return;
+    deleteBtn.disabled = true;
+    try {
+      await api(`/api/orders/${encodeURIComponent(o.id)}`, { method: "DELETE" });
+      selectedOrderId = null;
+      await loadOrders();
+      setHint(`Deleted ${o.order_number}`, "ok");
+    } catch (err) {
+      setHint(err.message, "error");
+    } finally {
+      deleteBtn.disabled = false;
+    }
+    return;
   }
   if (statusBtn) {
     const orderId = statusBtn.dataset.orderId;

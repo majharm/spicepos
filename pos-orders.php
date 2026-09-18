@@ -246,11 +246,66 @@ function pos_update_order($bid, $orderId, $body, $auth) {
   pos_send(200, ["ok" => true, "order" => $row, "php" => true]);
 }
 
+function pos_delete_order($bid, $orderId, $auth) {
+  pos_require_business_admin_delete($auth["user"] ?? [], "invoices");
+  if (is_file(__DIR__ . "/pos-accounting.php")) require_once __DIR__ . "/pos-accounting.php";
+  if (is_file(__DIR__ . "/pos-advanced.php")) require_once __DIR__ . "/pos-advanced.php";
+
+  $existing = pos_order_with_lines($bid, $orderId);
+  if (!$existing) pos_send(404, ["error" => "Order not found", "php" => true]);
+
+  try {
+    $returns = pos_q(
+      "SELECT id FROM sales_returns WHERE order_id = ? AND business_id = ? AND status <> 'cancelled' LIMIT 1",
+      "ss",
+      [$orderId, $bid]
+    );
+    if ($returns) pos_send(400, ["error" => "Cannot delete invoice with returns. Remove those returns first.", "php" => true]);
+  } catch (Exception $e) {
+    if (stripos($e->getMessage(), "sales_returns") === false && stripos($e->getMessage(), "Unknown table") === false) {
+      pos_send(400, ["error" => $e->getMessage(), "php" => true]);
+    }
+  }
+
+  try {
+    pos_with_transaction(function () use ($bid, $orderId, $existing) {
+      $oldStatus = strtolower((string) ($existing["status"] ?? "confirmed"));
+      $lines = $existing["lines"] ?? [];
+      if ($oldStatus !== "cancelled") {
+        pos_restore_order_stock($bid, $lines);
+      }
+      pos_reverse_credit_sale($bid, $orderId);
+      if (function_exists("pos_delete_journal_ref")) {
+        pos_delete_journal_ref($bid, "sales_order", $orderId);
+      }
+      if (function_exists("pos_loyalty_reverse_sale")) {
+        pos_loyalty_reverse_sale($bid, $orderId);
+      }
+      try {
+        pos_q("UPDATE qr_orders SET sales_order_id = NULL WHERE sales_order_id = ? AND business_id = ?", "ss", [$orderId, $bid]);
+      } catch (Exception $e) { /* optional */ }
+      pos_q("DELETE FROM sales_order_lines WHERE order_id = ?", "s", [$orderId]);
+      pos_q("DELETE FROM sales_orders WHERE id = ? AND business_id = ?", "ss", [$orderId, $bid]);
+    });
+  } catch (Exception $e) {
+    pos_send(400, ["error" => $e->getMessage(), "php" => true]);
+  }
+
+  pos_staff_audit($auth["user"], "Sale Deleted", [
+    "module" => "sales",
+    "target_id" => $orderId,
+    "target_name" => $existing["order_number"] ?? $orderId,
+    "total" => $existing["total"] ?? 0,
+  ], $bid, $auth["branchId"] ?? $auth["user"]["branch_id"] ?? null);
+  pos_send(200, ["ok" => true, "deleted" => true, "order" => $existing, "php" => true]);
+}
+
 function pos_dispatch_order_route($path, $method, $body, $bid, $auth) {
   if (!preg_match('#^orders/([^/]+)$#', $path, $m)) return false;
   $orderId = $m[1];
   if ($method === "PUT") pos_update_order($bid, $orderId, $body, $auth);
   if ($method === "PATCH") pos_patch_order($bid, $orderId, $body, $auth);
+  if ($method === "DELETE") pos_delete_order($bid, $orderId, $auth);
   pos_send(405, ["error" => "Method not allowed", "path" => $path, "method" => $method, "php" => true]);
   return true;
 }

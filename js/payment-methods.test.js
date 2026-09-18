@@ -37,10 +37,12 @@ test("payment modes cover till, collections, and purchases", () => {
   assert.match(index, /value="neft"/);
   assert.match(index, /value="bank-transfer"/);
   assert.match(app, /function canDeletePaymentEntry/);
+  assert.match(app, /function canDeleteInvoice/);
+  assert.match(app, /data-delete-order/);
   assert.match(app, /POSPay/);
   assert.match(accounts, /Only the business admin can delete payment entries/);
   assert.match(accounts, /app.delete\("\/api\/expenses\/:id"/);
   assert.match(phpAcc, /pos_require_business_admin_delete/);
   assert.match(core, /function pos_pay_normalize/);
-  assert.match(core, /Only the business admin can delete payment entries/);
+  assert.match(core, /Only the business admin can delete \{\$label\}/);
 });

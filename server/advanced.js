@@ -811,6 +811,28 @@ export async function applyLoyaltyOnSale(conn, ctx) {
   return { points: redeemPts, rupees: redeemRs, earned };
 }
 
+export async function reverseLoyaltyOnSale(conn, businessId, orderId) {
+  if (!orderId) return;
+  await ensureAdvancedSchema();
+  const rows = await sqlAll(conn, "SELECT * FROM loyalty_ledger WHERE business_id=? AND order_id=?", [businessId, orderId]);
+  const customers = new Set();
+  for (const row of rows || []) {
+    if (row.customer_id) customers.add(row.customer_id);
+    if (String(row.kind || "") === "earn") {
+      const spent = Number(row.rupees) || 0;
+      await sqlExec(
+        conn,
+        "UPDATE loyalty_accounts SET lifetime_spend = GREATEST(0, lifetime_spend - ?) WHERE customer_id=?",
+        [spent, row.customer_id],
+      );
+    }
+  }
+  await sqlExec(conn, "DELETE FROM loyalty_ledger WHERE business_id=? AND order_id=?", [businessId, orderId]);
+  for (const customerId of customers) {
+    await recomputeLoyalty(businessId, customerId, conn);
+  }
+}
+
 export async function consumePieceBarcode(conn, businessId, code, kind = "sold") {
   const raw = String(code || "").trim();
   if (!raw) return;

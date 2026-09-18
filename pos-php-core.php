@@ -943,9 +943,9 @@ function pos_is_business_admin($user) {
   return ($user["role"] ?? "") === "business_admin";
 }
 
-function pos_require_business_admin_delete($user) {
+function pos_require_business_admin_delete($user, $label = "payment entries") {
   if (!pos_is_business_admin($user)) {
-    pos_send(403, ["error" => "Only the business admin can delete payment entries", "php" => true]);
+    pos_send(403, ["error" => "Only the business admin can delete {$label}", "php" => true]);
   }
 }
 
@@ -1540,6 +1540,30 @@ function pos_record_credit_sale($customer, $total, $orderId, $orderNumber, $meth
     "reference_id" => $orderId,
     "notes" => $orderNumber,
   ], $businessId, $uid);
+}
+
+function pos_reverse_credit_sale($businessId, $orderId) {
+  $rows = pos_q(
+    "SELECT * FROM account_ledger WHERE business_id = ? AND reference_type = 'sales_order' AND reference_id = ?",
+    "ss",
+    [$businessId, $orderId]
+  );
+  foreach ($rows as $row) {
+    if (($row["entry_type"] ?? "") === "receipt") {
+      throw new Exception("Cannot delete invoice with customer receipts. Delete those receipts first.");
+    }
+  }
+  foreach ($rows as $row) {
+    if (($row["entry_type"] ?? "") === "sale_credit") {
+      pos_q(
+        "UPDATE customers SET outstanding = GREATEST(0, outstanding - ?) WHERE id = ? AND business_id = ?",
+        "dss",
+        [(float) ($row["amount"] ?? 0), $row["party_id"], $businessId]
+      );
+    }
+    if (function_exists("pos_delete_ledger_journal")) pos_delete_ledger_journal($businessId, $row["id"]);
+    pos_q("DELETE FROM account_ledger WHERE id = ? AND business_id = ?", "ss", [$row["id"], $businessId]);
+  }
 }
 
 function pos_record_credit_purchase($supplier, $total, $purchaseId, $purchaseNumber, $method, $businessId, $uid = null) {

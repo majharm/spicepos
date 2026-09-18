@@ -56,6 +56,15 @@ test("PHP fallback routes checkout, holds, and order updates through core", () =
   assert.match(read("server/index.js"), /table_no = \?/);
   assert.match(read("pos-qr-ordering.php"), /table_no = \?/);
   assert.match(orders, /function pos_dispatch_order_route/);
+  assert.match(orders, /function pos_delete_order/);
+  assert.match(orders, /\$method === "DELETE"/);
+  assert.match(orders, /pos_require_business_admin_delete/);
+  assert.match(read("server/crud.js"), /app.delete\("\/api\/orders\/:id"/);
+  assert.match(read("server/crud.js"), /Only the business admin can delete invoices/);
+  assert.match(read("server/accounts.js"), /export async function reverseCreditSale/);
+  assert.match(read("pos-php-core.php"), /function pos_reverse_credit_sale/);
+  assert.match(read("js/app.js"), /function canDeleteInvoice/);
+  assert.match(read("js/app.js"), /data-delete-order/);
   assert.match(core, /This POS action is not available in PHP fallback yet \(\{\$method\} \{\$path\}\)/);
   assert.match(read("pos-accounting.php"), /\$path === "expenses"/);
   assert.match(read("pos-accounting.php"), /accounts\/receipts\/\(\[\^\/\]\+\)/);
@@ -350,7 +359,7 @@ test("POS boot skips API probe and slims catalog photos", () => {
   assert.match(index, /qrcode\.iife\.js[^>]+defer/);
   assert.match(index, /preload="none"/);
   assert.match(index, /pos-api\.js\?v=20260905deploy154/);
-  assert.match(index, /app\.js\?v=20260918bill15/);
+  assert.match(index, /app\.js\?v=20260918bill16/);
   assert.match(index, /invoice-share\.js\?v=20260913share1/);
   assert.match(index, /invoice\.js\?v=20260918pay1/);
   assert.doesNotMatch(index, /app\.js\?v=20260905deploy167/);
@@ -409,9 +418,9 @@ test("Restaurant Counter can create named dining tables", () => {
   assert.match(core, /function pos_clip_floor_id/);
   assert.match(core, /dining_tables_json/);
   assert.match(till, /dining-tables/);
-  assert.match(index, /pos\.css\?v=20260918bill15/);
+  assert.match(index, /pos\.css\?v=20260918bill16/);
   assert.match(index, /restaurant\.js\?v=20260918table1/);
-  assert.match(index, /app\.js\?v=20260918bill15/);
+  assert.match(index, /app\.js\?v=20260918bill16/);
   assert.match(index, /footwear\.js\?v=20260917pharm1/);
   assert.match(app, /function resolveKitchenKot/);
   assert.match(app, /function paintKotTimers/);

@@ -2,11 +2,11 @@ import "../js/payment-methods.js";
 import "../js/units.js";
 import "../js/footwear.js";
 import { query, withTransaction } from "./db.js";
-import { bid } from "./context.js";
-import { recordCreditPurchase } from "./accounts.js";
-import { postPurchaseJournal } from "./accounting.js";
+import { bid, authUser } from "./context.js";
+import { recordCreditPurchase, reverseCreditSale } from "./accounts.js";
+import { postPurchaseJournal, deleteJournalRef } from "./accounting.js";
 import { audit } from "./audit.js";
-import { onItemSaved, onPurchaseLineSaved, pharmacyLineSnapshot, computeSaleLine, saleStockQty, persistSaleLineNote } from "./advanced.js";
+import { onItemSaved, onPurchaseLineSaved, pharmacyLineSnapshot, computeSaleLine, saleStockQty, persistSaleLineNote, reverseLoyaltyOnSale } from "./advanced.js";
 import {
   decodeImportUpload,
   itemBodyFromImportRow,
@@ -1037,6 +1037,78 @@ export function registerCrud(app) {
       res.json({ ok: true, order });
     } catch (err) {
       res.status(500).json({ error: String(err.message) });
+    }
+  });
+
+  app.delete("/api/orders/:id", async (req, res) => {
+    try {
+      if (authUser()?.role !== "business_admin") {
+        res.status(403).json({ error: "Only the business admin can delete invoices" });
+        return;
+      }
+      const order = await withTransaction(async (conn) => {
+        const [existRows] = await conn.query(
+          "SELECT * FROM sales_orders WHERE id = ? AND business_id = ? FOR UPDATE",
+          [req.params.id, bid()],
+        );
+        const existing = existRows[0];
+        if (!existing) {
+          const err = new Error("Order not found");
+          err.status = 404;
+          throw err;
+        }
+        try {
+          const [returns] = await conn.query(
+            "SELECT id FROM sales_returns WHERE order_id = ? AND business_id = ? AND status <> 'cancelled' LIMIT 1",
+            [existing.id, bid()],
+          );
+          if (returns[0]) {
+            const err = new Error("Cannot delete invoice with returns. Remove those returns first.");
+            err.status = 400;
+            throw err;
+          }
+        } catch (err) {
+          if (err.status) throw err;
+          if (!/sales_returns|Unknown table/i.test(String(err.message))) throw err;
+        }
+        const [lines] = await conn.query("SELECT * FROM sales_order_lines WHERE order_id = ?", [existing.id]);
+        if (String(existing.status || "").toLowerCase() !== "cancelled") {
+          for (const line of lines) {
+            if (Number(line.cancelled) === 1) continue;
+            const [itemRows] = await conn.query("SELECT * FROM items WHERE id = ? AND business_id = ?", [
+              line.item_id,
+              bid(),
+            ]);
+            await conn.query(
+              "UPDATE items SET stock_gm = stock_gm + ? WHERE id = ? AND business_id = ?",
+              [saleStockQty(itemRows[0], line.quantity_gm), line.item_id, bid()],
+            );
+          }
+        }
+        await reverseCreditSale(conn, existing.id);
+        await deleteJournalRef(conn, "sales_order", existing.id);
+        await reverseLoyaltyOnSale(conn, bid(), existing.id);
+        try {
+          await conn.query(
+            "UPDATE qr_orders SET sales_order_id = NULL WHERE sales_order_id = ? AND business_id = ?",
+            [existing.id, bid()],
+          );
+        } catch {
+          /* optional */
+        }
+        await conn.query("DELETE FROM sales_order_lines WHERE order_id = ?", [existing.id]);
+        await conn.query("DELETE FROM sales_orders WHERE id = ? AND business_id = ?", [existing.id, bid()]);
+        return existing;
+      });
+      await audit("Sale Deleted", {
+        module: "sales",
+        target_id: order.id,
+        target_name: order.order_number,
+        total: order.total,
+      }, req);
+      res.json({ ok: true, deleted: true, order });
+    } catch (err) {
+      res.status(err.status || 400).json({ error: String(err.message) });
     }
   });
 }
