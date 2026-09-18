@@ -1577,12 +1577,13 @@ body.classic-bill-mode .ticket-head {
   background: linear-gradient(180deg, #4d7ec4, #2b5aa0);
   color: #fff;
   border-bottom-color: #1e3f7a;
+  padding: 8px 12px;
 }
 body.classic-bill-mode .ticket-head h2,
 body.classic-bill-mode .ticket-sub {
   color: #fff;
 }
-body.classic-bill-mode .ticket-sub { opacity: 0.88; }
+body.classic-bill-mode .ticket-sub { display: none; }
 body.classic-bill-mode #bill-customer { display: none !important; }
 body.classic-bill-mode #customer-face { display: none !important; }
 body.classic-bill-mode .bill-toggle {
@@ -1593,8 +1594,8 @@ body.classic-bill-mode .bill-toggle {
 .classic-bill-head {
   display: none;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 6px 10px;
-  padding: 10px 12px 12px;
+  gap: 6px 8px;
+  padding: 8px 12px;
   background: #e8eef8;
   border-bottom: 1px solid #9bb3d4;
   flex: 0 0 auto;
@@ -1608,6 +1609,7 @@ body.classic-bill-mode .classic-bill-head:not([hidden]) { display: grid; }
   color: #1e3a5f;
 }
 .classic-bill-head .classic-span-2 { grid-column: span 2; }
+.classic-bill-head .classic-span-3 { grid-column: span 3; }
 .classic-bill-head .classic-span-4 { grid-column: 1 / -1; }
 .classic-bill-head input {
   width: 100%;
@@ -1721,9 +1723,19 @@ body.classic-bill-mode .totals {
   background: #f4f7fb;
   border-top: 1px solid #9bb3d4;
 }
-body.classic-bill-mode .lines-empty {
-  padding: 28px 16px;
-  color: #3d5a80;
+body.classic-bill-mode .lines-empty,
+body.classic-bill-mode .lines.is-empty {
+  display: none;
+}
+body.classic-bill-mode .lines {
+  flex: 1 1 auto;
+  padding: 0 10px;
+}
+body.classic-bill-mode .lines:not(:has(*)) {
+  flex: 0 0 auto;
+  min-height: 0;
+  padding: 0;
+  overflow: hidden;
 }
 body.classic-bill-mode.counter-mode .counter-lane .scan-lane {
   display: none;
@@ -1738,8 +1750,8 @@ body.classic-bill-mode.counter-mode .counter-lane .scan-lane {
 body.classic-bill-mode .classic-bill-entry:not([hidden]) { display: block; }
 .classic-bill-scan {
   display: grid;
-  grid-template-columns: minmax(180px, 1.1fr) minmax(180px, 1.3fr) 88px auto minmax(80px, 1fr);
-  gap: 8px 10px;
+  grid-template-columns: minmax(160px, 1.2fr) minmax(160px, 1.4fr) 72px auto;
+  gap: 6px 10px;
   align-items: end;
 }
 .classic-bill-scan label {
@@ -1791,13 +1803,7 @@ body.classic-bill-mode .classic-bill-entry:not([hidden]) { display: block; }
   min-height: 32px;
   border-radius: 2px;
 }
-.classic-scan-status {
-  align-self: center;
-  font-size: 12px;
-  font-weight: 700;
-  color: #1e3a5f;
-  min-height: 1.2em;
-}
+.classic-scan-status:empty { display: none; }
 .classic-bill-scan.is-hit .classic-scan-status { color: #0d6b4e; }
 .classic-bill-scan.is-miss .classic-scan-status { color: #a12822; }
 .classic-bill-scan.is-hit .classic-scan-field input { border-color: #0d6b4e; }
@@ -1879,7 +1885,7 @@ body.classic-bill-mode .pharm-bill-table tr.tone-out {
 .classic-stock-alert[hidden] { display: none; }
 body.classic-bill-mode #bill-extras {
   display: block;
-  padding: 8px 12px 10px;
+  padding: 6px 12px 8px;
   background: #eef6ee;
   border-top: 1px solid #9bb3d4;
   border-bottom: 1px solid #9bb3d4;
@@ -4445,6 +4451,7 @@ button.items-stat.is-active {
     grid-template-columns: 1fr 1fr;
   }
   .classic-bill-head .classic-span-2 { grid-column: span 2; }
+  .classic-bill-head .classic-span-3 { grid-column: 1 / -1; }
   .classic-cust-toolbar {
     grid-template-columns: 1fr 1fr;
   }
@@ -5331,6 +5338,13 @@ button.items-stat.is-active {
   gap: 8px;
   align-items: center;
   justify-content: space-between;
+}
+.combo-banner[hidden],
+.offer-banner[hidden] {
+  display: none !important;
+  margin: 0;
+  padding: 0;
+  border: 0;
 }
 .combo-bar { margin-top: 6px; display: none; }
 .offer-banner {
