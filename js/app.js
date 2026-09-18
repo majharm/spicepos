@@ -156,8 +156,8 @@ function isRestaurantShop() {
   return Boolean(globalThis.POSRestaurant?.isRestaurantShop(state.businessMeta) || globalThis.POSFootwear?.isRestaurantShop(state.businessMeta));
 }
 
-function isPharmacyShop() {
-  return Boolean(globalThis.POSFootwear?.isPharmacyShop?.(state.businessMeta) || globalThis.POSFootwear?.shopKind?.(state.businessMeta) === "pharmacy");
+function isClassicBillShop() {
+  return isPharmacyShop() || isApparelShop();
 }
 
 function taxCodeLabel(biz = state.businessMeta) {
@@ -204,6 +204,7 @@ function applyFootwearMode() {
   document.body.classList.toggle("spice-mode", spice);
   document.body.classList.toggle("restaurant-mode", isRestaurantShop());
   document.body.classList.toggle("pharmacy-mode", pharm);
+  document.body.classList.toggle("classic-bill-mode", isClassicBillShop());
   document.body.classList.toggle("services-mode", globalThis.POSFootwear?.isServicesShop?.(state.businessMeta));
   document.querySelectorAll(".footwear-only").forEach((el) => {
     el.hidden = !on;
@@ -217,8 +218,12 @@ function applyFootwearMode() {
   document.querySelectorAll(".restaurant-only").forEach((el) => {
     el.hidden = !isRestaurantShop();
   });
+  const classicHead = $("classic-bill-head");
+  if (classicHead) classicHead.hidden = !isClassicBillShop();
   const pharmCust = $("pharm-bill-cust");
   if (pharmCust) pharmCust.hidden = true;
+  const billTitle = document.querySelector("#bill-panel .ticket-head h2");
+  if (billTitle) billTitle.textContent = isClassicBillShop() ? "Sales Bill" : tt("pos.bill", "Bill");
   const search = $("search");
   if (search) search.placeholder = copy.search || `Search name or ${taxCodeLabel()}…`;
   const scan = $("scan-code");
@@ -608,14 +613,12 @@ function paintBillCustomer() {
   }
   const name = String(c.business_name || c.name || "Walk-in").trim() || "Walk-in";
   const mobile = digitsMobile(c.mobile);
-  const bits = [isRealMobile(mobile) ? `${name} · ${mobile}` : name];
-  if (isPharmacyShop()) {
-    const addr = String($("bill-cust-address")?.value || c.address || "").trim();
-    const doctor = String($("bill-doctor-rx")?.value || c.doctor_rx || "").trim();
-    if (addr) bits.push(addr);
-    if (doctor) bits.push(doctor);
+  if (isClassicBillShop()) {
+    el.textContent = "";
+    paintCounterDue(c);
+    return;
   }
-  el.textContent = bits.join(" · ");
+  el.textContent = isRealMobile(mobile) ? `${name} · ${mobile}` : name;
   paintCounterDue(c);
 }
 
@@ -724,8 +727,15 @@ function pharmacyBillCustomerMobile() {
 }
 
 function pharmacyBillCustomerAddress() {
-  const typed = String($("bill-cust-address")?.value || "").trim();
-  if (typed) return typed;
+  const parts = [
+    $("bill-cust-address")?.value,
+    $("bill-cust-area")?.value,
+    $("bill-cust-city")?.value,
+    $("bill-cust-pin")?.value,
+  ]
+    .map((v) => String(v || "").trim())
+    .filter(Boolean);
+  if (parts.length) return parts.join(", ").slice(0, 500);
   return String(customer()?.address || "").trim();
 }
 
@@ -736,19 +746,25 @@ function pharmacyBillDoctorRx() {
 }
 
 function fillPharmacyBillCustomerFromCustomer(cust) {
-  if (!isPharmacyShop()) return;
+  if (!isClassicBillShop()) return;
   const c = cust === undefined ? customer() : cust;
+  const walk = isWalkInCustomer(c);
   if ($("bill-cust-name")) {
-    $("bill-cust-name").value = isWalkInCustomer(c) ? "" : String(c?.business_name || c?.name || "");
+    $("bill-cust-name").value = walk ? "" : String(c?.business_name || c?.name || "");
   }
   if ($("bill-cust-address")) {
-    $("bill-cust-address").value = isWalkInCustomer(c) ? "" : String(c?.address || "");
+    $("bill-cust-address").value = walk ? "" : String(c?.address || "");
   }
+  ["bill-cust-area", "bill-cust-city", "bill-cust-pin"].forEach((id) => {
+    if ($(id)) $(id).value = "";
+  });
   if ($("bill-doctor-rx") && document.activeElement !== $("bill-doctor-rx")) {
-    $("bill-doctor-rx").value = isWalkInCustomer(c) ? "" : String(c?.doctor_rx || "");
+    $("bill-doctor-rx").value = walk ? "" : String(c?.doctor_rx || "");
   }
   const shown = digitsMobile(c?.mobile);
-  if ($("bill-cust-mobile") && isRealMobile(shown)) $("bill-cust-mobile").value = shown;
+  if ($("bill-cust-mobile")) {
+    $("bill-cust-mobile").value = isRealMobile(shown) ? shown : "";
+  }
 }
 
 function syncPharmacyMobile(fromBill) {
@@ -2600,8 +2616,9 @@ function renderCart() {
   if (!state.cart.length) {
     $("lines").innerHTML = `<p class="catalog-empty lines-empty">${escapeHtml(emptyTicketHint())}</p>`;
   } else if (isPharmacyShop()) {
-    $("lines").innerHTML = `<div class="pharm-bill-wrap"><table class="pharm-bill-table">
+    $("lines").innerHTML = `<div class="pharm-bill-wrap"><table class="pharm-bill-table classic-bill-table">
       <thead><tr>
+        <th>S.No.</th>
         <th>Medicine</th>
         <th>Batch No.</th>
         <th>Expiry</th>
@@ -2612,7 +2629,7 @@ function renderCart() {
         <th class="pharm-n">GST</th>
         <th class="pharm-n">Amount</th>
       </tr></thead>
-      <tbody>${state.cart.map((line) => {
+      <tbody>${state.cart.map((line, idx) => {
         const item = state.items.find((i) => i.id === line.itemId);
         if (!item) return "";
         const unitCode = itemUnit(item);
@@ -2626,6 +2643,7 @@ function renderCart() {
         const preview = F?.cartBatchPreview?.(item) || { batchNo: item.batch_no || "—", expiry: formatExpiryShort(item.default_expiry) || "—", pack: medicinePackLabel(item) || "—" };
         const mrp = Number(F?.looseMrp?.(item) ?? item.mrp ?? item.retail_rate) || rateFor(item);
         return `<tr>
+          <td class="pharm-n">${idx + 1}</td>
           <td class="pharm-med">${escapeHtml(item.name)}${canDiscount() ? `<div class="line-disc">
               <select data-line-disc-type="${escapeHtml(key)}" aria-label="Line discount type">
                 <option value="amt"${(line.discountType || "amt") === "amt" ? " selected" : ""}>₹</option>
@@ -2645,6 +2663,53 @@ function renderCart() {
           </td>
           <td class="pharm-n">${escapeHtml(money(mrp))}</td>
           <td class="pharm-n">${escapeHtml(money(rateFor(item)))}</td>
+          <td class="pharm-n">${escapeHtml(String(Number(item.gst_rate) || 0))}%</td>
+          <td class="pharm-n">${escapeHtml(money(calc.taxable + calc.gst))}</td>
+        </tr>`;
+      }).join("")}</tbody>
+    </table></div>`;
+  } else if (isApparelShop()) {
+    $("lines").innerHTML = `<div class="pharm-bill-wrap"><table class="pharm-bill-table classic-bill-table">
+      <thead><tr>
+        <th>S.No.</th>
+        <th>Code</th>
+        <th>Item Name</th>
+        <th>Colour / Size</th>
+        <th class="pharm-n">Rate</th>
+        <th>Qty</th>
+        <th class="pharm-n">GST</th>
+        <th class="pharm-n">Total</th>
+      </tr></thead>
+      <tbody>${state.cart.map((line, idx) => {
+        const item = state.items.find((i) => i.id === line.itemId);
+        if (!item) return "";
+        const unitCode = itemUnit(item);
+        const step = POSUnits.counterStep(unitCode);
+        const unit = POSUnits.qtySuffix(unitCode);
+        const qtyShow = POSUnits.displayQty(line.qtyGm, unitCode);
+        const qtyStep = POSUnits.displayQty(step, unitCode) || 1;
+        const calc = lineCalc(item, line);
+        const key = cartLineKey(line);
+        const variant = itemVariantText(item);
+        return `<tr>
+          <td class="pharm-n">${idx + 1}</td>
+          <td>${escapeHtml(item.code || item.hsn || "—")}</td>
+          <td class="pharm-med">${escapeHtml(item.name)}${canDiscount() ? `<div class="line-disc">
+              <select data-line-disc-type="${escapeHtml(key)}" aria-label="Line discount type">
+                <option value="amt"${(line.discountType || "amt") === "amt" ? " selected" : ""}>₹</option>
+                <option value="pct"${line.discountType === "pct" ? " selected" : ""}>%</option>
+              </select>
+              <input data-line-disc="${escapeHtml(key)}" type="number" min="0" step="0.01" value="${escapeHtml(line.discountValue || 0)}" aria-label="Line discount" />
+            </div>` : ""}</td>
+          <td>${escapeHtml(variant || "—")}</td>
+          <td class="pharm-n">${escapeHtml(money(rateFor(item)))}</td>
+          <td>
+            <div class="qty">
+              <button type="button" data-chg="${escapeHtml(key)}" data-d="${-step}">−</button>
+              <input class="qty-input" type="number" inputmode="decimal" min="${POSUnits.displayQty(POSUnits.qtyMin(), unitCode) || 0.001}" max="${POSUnits.qtyMax()}" step="${escapeHtml(qtyStep)}" value="${escapeHtml(qtyShow)}" data-qty="${escapeHtml(key)}" aria-label="Quantity in ${unit}" />
+              <button type="button" data-chg="${escapeHtml(key)}" data-d="${step}">+</button>
+            </div>
+          </td>
           <td class="pharm-n">${escapeHtml(String(Number(item.gst_rate) || 0))}%</td>
           <td class="pharm-n">${escapeHtml(money(calc.taxable + calc.gst))}</td>
         </tr>`;
@@ -2716,6 +2781,11 @@ function renderCart() {
       $("ticket-sub").textContent = globalThis.POSFootwear?.itemFormCopy(state.businessMeta)?.ticket || emptyTicketHint();
     }
   }
+  if ($("classic-bill-date")) {
+    const now = new Date();
+    const pad = (n) => String(n).padStart(2, "0");
+    $("classic-bill-date").value = `${pad(now.getDate())}/${pad(now.getMonth() + 1)}/${now.getFullYear()} ${pad(now.getHours())}:${pad(now.getMinutes())}`;
+  }
   $("btn-pay").disabled = state.cart.length === 0;
   $("btn-clear").disabled = state.cart.length === 0;
   document.body.classList.toggle("has-cart", state.cart.length > 0);
@@ -2727,8 +2797,12 @@ function renderCart() {
   $("btn-pay").textContent = state.editingOrderId
     ? tt("pos.save_changes", "Save changes")
     : state.cart.length
-      ? tt("pos.pay_amount", `Pay ${money(payTotal)}`, { amount: money(payTotal) })
-      : tt("pos.pay", "Pay");
+      ? isClassicBillShop()
+        ? `Save Bill ${money(payTotal)}`
+        : tt("pos.pay_amount", `Pay ${money(payTotal)}`, { amount: money(payTotal) })
+      : isClassicBillShop()
+        ? "Save Bill"
+        : tt("pos.pay", "Pay");
   const face = $("customer-face");
   if (face) {
     face.hidden = state.cart.length === 0;
@@ -6630,9 +6704,9 @@ $("btn-pay").addEventListener("click", async () => {
       offerLoyaltyMultiplier: state.appliedOffers?.loyaltyMultiplier || 1,
       qrOrderId: state.activeQrOrderId || undefined,
       table_no: isRestaurantShop() ? (state.activeTable || undefined) : undefined,
-      customer_name: isPharmacyShop() ? pharmacyBillCustomerName() : undefined,
-      customer_mobile: isPharmacyShop() ? pharmacyBillCustomerMobile() : undefined,
-      customer_address: isPharmacyShop() ? pharmacyBillCustomerAddress() : undefined,
+      customer_name: isClassicBillShop() ? pharmacyBillCustomerName() : undefined,
+      customer_mobile: isClassicBillShop() ? pharmacyBillCustomerMobile() : undefined,
+      customer_address: isClassicBillShop() ? pharmacyBillCustomerAddress() : undefined,
       doctor_rx: isPharmacyShop() ? pharmacyBillDoctorRx() : undefined,
       lines: state.cart.map((l) => ({
         itemId: l.itemId,

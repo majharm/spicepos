@@ -339,8 +339,18 @@ test("Medical shops show pharmacy medicine fields on the item form", () => {
   assert.doesNotMatch(index, /id="counter-mobile" class="pharmacy-hide"/);
   assert.match(index, /id="bill-cust-mobile"/);
   assert.match(index, /id="bill-cust-address"/);
+  assert.match(index, /id="bill-cust-area"/);
+  assert.match(index, /id="bill-cust-city"/);
+  assert.match(index, /id="bill-cust-pin"/);
+  assert.match(index, /id="classic-bill-head"/);
+  assert.match(index, /id="classic-bill-date"/);
   assert.match(index, /id="bill-doctor-rx"/);
   assert.match(css, /#pharm-bill-cust,\s*\.pharm-bill-cust \{\s*display: none !important;/);
+  assert.match(css, /body\.classic-bill-mode/);
+  assert.match(app, /function isClassicBillShop/);
+  assert.match(app, /classic-bill-mode/);
+  assert.match(app, /isApparelShop\(\)/);
+  assert.match(app, /Save Bill/);
   assert.match(app, /pharmCust\.hidden = true/);
   assert.match(app, /rx-cust-line/);
   assert.doesNotMatch(index, /pharm-bill-cust pharmacy-only/);
