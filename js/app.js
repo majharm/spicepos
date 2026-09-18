@@ -156,6 +156,10 @@ function isRestaurantShop() {
   return Boolean(globalThis.POSRestaurant?.isRestaurantShop(state.businessMeta) || globalThis.POSFootwear?.isRestaurantShop(state.businessMeta));
 }
 
+function isPharmacyShop() {
+  return Boolean(globalThis.POSFootwear?.isPharmacyShop?.(state.businessMeta) || globalThis.POSFootwear?.shopKind?.(state.businessMeta) === "pharmacy");
+}
+
 function isClassicBillShop() {
   return isPharmacyShop() || isApparelShop();
 }
