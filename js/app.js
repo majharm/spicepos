@@ -218,7 +218,7 @@ function applyFootwearMode() {
     el.hidden = !isRestaurantShop();
   });
   const pharmCust = $("pharm-bill-cust");
-  if (pharmCust) pharmCust.hidden = !pharm;
+  if (pharmCust) pharmCust.hidden = true;
   const search = $("search");
   if (search) search.placeholder = copy.search || `Search name or ${taxCodeLabel()}…`;
   const scan = $("scan-code");

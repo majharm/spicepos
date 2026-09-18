@@ -2246,16 +2246,11 @@ body:not(.footwear-mode):not(.apparel-mode) .footwear-only { display: none !impo
 body:not(.restaurant-mode) .restaurant-only { display: none !important; }
 body:not(.pharmacy-mode) .pharmacy-only { display: none !important; }
 body.pharmacy-mode .pharmacy-hide { display: none !important; }
-/* Spice/other shops must not see the pharmacy patient block. Pharmacy Counter shows it. */
-body:not(.pharmacy-mode) #pharm-bill-cust,
-body:not(.pharmacy-mode) .pharm-bill-cust {
+/* Keep this block out of the Bill panel. Customer name, mobile, address,
+   and doctor already show once on #bill-customer (and on Prescriptions). */
+#pharm-bill-cust,
+.pharm-bill-cust {
   display: none !important;
-}
-body.pharmacy-mode #pharm-bill-cust {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px 10px;
-  margin: 8px 0 4px;
 }
 .pharm-bill-cust label {
   display: grid;
