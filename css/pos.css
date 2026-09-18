@@ -2246,12 +2246,16 @@ body:not(.footwear-mode):not(.apparel-mode) .footwear-only { display: none !impo
 body:not(.restaurant-mode) .restaurant-only { display: none !important; }
 body:not(.pharmacy-mode) .pharmacy-only { display: none !important; }
 body.pharmacy-mode .pharmacy-hide { display: none !important; }
-/* display:grid used to override the HTML hidden attribute, so spice
-   shops showed a second Customer Name / Mobile / Address / Doctor form
-   next to the Counter topbar. Keep the block out of the Bill panel. */
-#pharm-bill-cust,
-.pharm-bill-cust {
+/* Spice/other shops must not see the pharmacy patient block. Pharmacy Counter shows it. */
+body:not(.pharmacy-mode) #pharm-bill-cust,
+body:not(.pharmacy-mode) .pharm-bill-cust {
   display: none !important;
+}
+body.pharmacy-mode #pharm-bill-cust {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 10px;
+  margin: 8px 0 4px;
 }
 .pharm-bill-cust label {
   display: grid;
@@ -3171,8 +3175,10 @@ body.pharmacy-mode .items-library-list {
 .qr-order-actions { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 12px; }
 .rx-table-wrap { overflow-x: auto; background: #fff; border: 1px solid var(--line); border-radius: 14px; }
 .rx-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-.rx-table th, .rx-table td { padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--line); vertical-align: middle; }
+.rx-table th, .rx-table td { padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--line); vertical-align: top; }
 .rx-table th { font-size: 11px; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+.rx-table .rx-detail { max-width: 220px; white-space: normal; word-break: break-word; }
+.rx-cust-line { margin-top: 4px; color: var(--muted); font-size: 12px; font-weight: 600; line-height: 1.35; }
 .rx-actions { display: flex; flex-wrap: wrap; gap: 6px; }
 .rx-status {
   display: inline-block;

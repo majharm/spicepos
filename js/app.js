@@ -217,6 +217,8 @@ function applyFootwearMode() {
   document.querySelectorAll(".restaurant-only").forEach((el) => {
     el.hidden = !isRestaurantShop();
   });
+  const pharmCust = $("pharm-bill-cust");
+  if (pharmCust) pharmCust.hidden = !pharm;
   const search = $("search");
   if (search) search.placeholder = copy.search || `Search name or ${taxCodeLabel()}…`;
   const scan = $("scan-code");
@@ -606,7 +608,14 @@ function paintBillCustomer() {
   }
   const name = String(c.business_name || c.name || "Walk-in").trim() || "Walk-in";
   const mobile = digitsMobile(c.mobile);
-  el.textContent = isRealMobile(mobile) ? `${name} · ${mobile}` : name;
+  const bits = [isRealMobile(mobile) ? `${name} · ${mobile}` : name];
+  if (isPharmacyShop()) {
+    const addr = String($("bill-cust-address")?.value || c.address || "").trim();
+    const doctor = String($("bill-doctor-rx")?.value || c.doctor_rx || "").trim();
+    if (addr) bits.push(addr);
+    if (doctor) bits.push(doctor);
+  }
+  el.textContent = bits.join(" · ");
   paintCounterDue(c);
 }
 
@@ -5261,12 +5270,21 @@ function renderPrescriptions() {
           const nextLab = RX_NEXT_LABEL[row.status] || "";
           const when = row.created_at ? formatShopDateTime(row.created_at) : "—";
           const doctor = [row.doctor_name, row.clinic_name].filter(Boolean).join(" · ");
+          const name = escapeHtml(row.customer_name || "Customer");
+          const mobile = escapeHtml(row.mobile || "—");
+          const address = escapeHtml(row.customer_address || "—");
+          const doctorHtml = escapeHtml(doctor || "—");
           return `<tr data-rx="${escapeHtml(row.id)}">
             <td><strong>${escapeHtml(row.prescription_number || "—")}</strong></td>
-            <td>${escapeHtml(row.customer_name || "Customer")}</td>
-            <td>${escapeHtml(row.mobile || "—")}</td>
-            <td>${escapeHtml(row.customer_address || "—")}</td>
-            <td>${escapeHtml(doctor || "—")}</td>
+            <td>
+              <strong>${name}</strong>
+              <div class="rx-cust-line">Mobile: ${mobile}</div>
+              <div class="rx-cust-line">Address: ${address}</div>
+              <div class="rx-cust-line">Doctor: ${doctorHtml}</div>
+            </td>
+            <td class="rx-detail">${mobile}</td>
+            <td class="rx-detail">${address}</td>
+            <td class="rx-detail">${doctorHtml}</td>
             <td>${row.has_file ? `<button class="btn" type="button" data-rx-file="${escapeHtml(row.id)}">View</button>` : "—"}</td>
             <td>${escapeHtml(when)}</td>
             <td><span class="rx-status is-${escapeHtml(row.status || "pending")}">${escapeHtml(row.status_label || RX_STATUS_LABELS[row.status] || "Pending")}</span></td>
