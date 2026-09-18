@@ -1545,7 +1545,29 @@ body:not(.restaurant-mode) [data-view="kot"] {
   box-shadow: none;
 }
 body.classic-bill-mode.counter-mode .workspace {
-  grid-template-columns: minmax(220px, 0.75fr) minmax(520px, 1.55fr);
+  grid-template-columns: 1fr;
+}
+body.classic-bill-mode.counter-mode .catalog-pane,
+body.classic-bill-mode .bill-toggle,
+body.classic-bill-mode.counter-mode .scan-lane,
+body.classic-bill-mode.counter-mode #pack-choice,
+body.classic-bill-mode.counter-mode #counter-mobile,
+body.classic-bill-mode.counter-mode #customer,
+body.classic-bill-mode.counter-mode .quick-customer-wrap,
+body.classic-bill-mode.counter-mode .footwear-only {
+  display: none !important;
+}
+body.classic-bill-mode.counter-mode .counter-topbar {
+  background: #2b5aa0;
+  border-bottom: 1px solid #1e3f7a;
+}
+body.classic-bill-mode.counter-mode .counter-lane {
+  justify-content: flex-end;
+}
+body.classic-bill-mode.counter-mode #pay-method {
+  background: #fff;
+  color: #1e3a5f;
+  border-color: #9bb3d4;
 }
 body.classic-bill-mode .bill-panel {
   border-left: 3px solid #2455a5;
@@ -1699,6 +1721,38 @@ body.classic-bill-mode .classic-bill-entry:not([hidden]) { display: block; }
 .classic-bill-scan.is-miss .classic-scan-status { color: #a12822; }
 .classic-bill-scan.is-hit .classic-scan-field input { border-color: #0d6b4e; }
 .classic-bill-scan.is-miss .classic-scan-field input { border-color: #a12822; }
+.classic-item-hits {
+  display: grid;
+  gap: 2px;
+  margin-top: 6px;
+  max-height: 220px;
+  overflow: auto;
+  background: #fff;
+  border: 1px solid #9bb3d4;
+}
+.classic-item-hits[hidden] { display: none; }
+.classic-hit {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  text-align: left;
+  padding: 7px 10px;
+  border: 0;
+  border-bottom: 1px solid #e4ecf7;
+  background: #fff;
+  cursor: pointer;
+  font-size: 13px;
+  color: #1e3a5f;
+}
+.classic-hit:last-child { border-bottom: 0; }
+.classic-hit:hover,
+.classic-hit:focus-visible {
+  background: #e8eef8;
+  outline: none;
+}
+.classic-hit strong { font-weight: 800; }
+.classic-hit span { color: #4d6480; font-weight: 650; }
 .bill-toggle {
   position: relative;
   flex: 0 0 auto;
