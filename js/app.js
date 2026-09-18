@@ -7160,6 +7160,18 @@ $("order-pane").addEventListener("click", async (e) => {
       await api(`/api/orders/${encodeURIComponent(o.id)}`, { method: "DELETE" });
       selectedOrderId = null;
       await loadOrders();
+      try {
+        await loadBootstrap();
+        renderCustomersTable();
+        fillDueCustomerSelect();
+      } catch {
+        /* customers list optional */
+      }
+      try {
+        await loadAccounts();
+      } catch {
+        /* accounts view optional */
+      }
       setHint(`Deleted ${o.order_number}`, "ok");
     } catch (err) {
       setHint(err.message, "error");

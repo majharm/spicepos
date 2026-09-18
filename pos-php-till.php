@@ -159,6 +159,9 @@ function pos_php_till_dispatch($path, $method, $body) {
   }
 
   if ($path === "dashboard" && $method === "GET") {
+    if (function_exists("pos_recompute_business_outstanding")) {
+      try { pos_recompute_business_outstanding($bid); } catch (Exception $e) { /* best-effort */ }
+    }
     $sales = pos_q(
       "SELECT COUNT(*) AS bills, COALESCE(SUM(total),0) AS takings, COALESCE(SUM(gst),0) AS gst
        FROM sales_orders WHERE business_id = ? AND DATE(created_at)=CURDATE()",

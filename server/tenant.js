@@ -7,6 +7,7 @@ import { sendWelcomeStaff, publicLoginUrl } from "./mail.js";
 import { sendCredentialAlerts } from "./alerts.js";
 import { workbookXml } from "./excel.js";
 import { stockToSheets } from "./stock-excel.js";
+import { recomputeBusinessOutstanding } from "./accounts.js";
 
 function send(res, fn) {
   return Promise.resolve()
@@ -195,6 +196,11 @@ export function registerTenant(app) {
   app.get("/api/dashboard", requireStaff, (req, res) =>
     send(res, async () => {
       const businessId = bid();
+      try {
+        await recomputeBusinessOutstanding();
+      } catch {
+        /* outstanding rebuild is best-effort */
+      }
       const [sales] = await query(
         `SELECT COUNT(*) AS bills, COALESCE(SUM(total),0) AS takings, COALESCE(SUM(gst),0) AS gst
          FROM sales_orders WHERE business_id = ? AND DATE(created_at)=CURDATE()`,

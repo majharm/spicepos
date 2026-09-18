@@ -31,6 +31,12 @@ function payMoney(raw) {
   return ok ? method : null;
 }
 
+async function execSql(conn, sql, params = []) {
+  if (conn?.query) return conn.query(sql, params);
+  const rows = await query(sql, params);
+  return [rows];
+}
+
 function requirePaymentDeleteAdmin() {
   if (authUser()?.role !== "business_admin") {
     const err = new Error("Only the business admin can delete payment entries");
@@ -94,11 +100,17 @@ export async function recordCreditSale(conn, { customer, total, orderId, orderNu
   });
 }
 
-export async function reverseCreditSale(conn, orderId) {
-  const [rows] = await conn.query(
+export async function reverseCreditSale(conn, orderOrId) {
+  const order = orderOrId && typeof orderOrId === "object" ? orderOrId : { id: orderOrId };
+  const orderId = order.id;
+  const [rows] = await execSql(
+    conn,
     `SELECT * FROM account_ledger
-     WHERE business_id = ? AND reference_type = 'sales_order' AND reference_id = ?`,
-    [bid(), orderId],
+     WHERE business_id = ? AND (
+       (reference_type = 'sales_order' AND reference_id = ?)
+       OR (entry_type = 'sale_credit' AND notes <> '' AND notes = ?)
+     )`,
+    [bid(), orderId, String(order.order_number || "")],
   );
   if (rows.some((row) => String(row.entry_type || "") === "receipt")) {
     const err = new Error("Cannot delete invoice with customer receipts. Delete those receipts first.");
@@ -106,15 +118,69 @@ export async function reverseCreditSale(conn, orderId) {
     throw err;
   }
   for (const row of rows) {
-    if (String(row.entry_type || "") === "sale_credit") {
-      const amt = round2(row.amount);
-      await conn.query(
-        "UPDATE customers SET outstanding = GREATEST(0, outstanding - ?) WHERE id = ? AND business_id = ?",
-        [amt, row.party_id, bid()],
-      );
-    }
     await deleteLedgerJournal(conn, row.id);
-    await conn.query("DELETE FROM account_ledger WHERE id = ? AND business_id = ?", [row.id, bid()]);
+    await execSql(conn, "DELETE FROM account_ledger WHERE id = ? AND business_id = ?", [row.id, bid()]);
+  }
+}
+
+export async function recomputeCustomerOutstanding(conn, customerId) {
+  if (!customerId) return 0;
+  const [[sale]] = await execSql(
+    conn,
+    `SELECT COALESCE(SUM(total),0) AS credit FROM sales_orders
+     WHERE business_id = ? AND customer_id = ?
+       AND LOWER(TRIM(payment_method)) = 'credit'
+       AND LOWER(TRIM(COALESCE(status,'confirmed'))) <> 'cancelled'`,
+    [bid(), customerId],
+  );
+  let received = 0;
+  try {
+    const [[rcp]] = await execSql(
+      conn,
+      `SELECT COALESCE(SUM(amount),0) AS received FROM account_ledger
+       WHERE business_id = ? AND party_type = 'customer' AND party_id = ? AND entry_type = 'receipt'`,
+      [bid(), customerId],
+    );
+    received = Number(rcp?.received || 0);
+  } catch {
+    received = 0;
+  }
+  const next = round2(Math.max(0, Number(sale?.credit || 0) - received));
+  await execSql(conn, "UPDATE customers SET outstanding = ? WHERE id = ? AND business_id = ?", [
+    next,
+    customerId,
+    bid(),
+  ]);
+  return next;
+}
+
+export async function recomputeBusinessOutstanding(conn) {
+  const businessId = bid();
+  try {
+    await execSql(
+      conn,
+      `UPDATE customers c
+       LEFT JOIN (
+         SELECT customer_id, SUM(total) AS credit
+         FROM sales_orders
+         WHERE business_id = ?
+           AND LOWER(TRIM(payment_method)) = 'credit'
+           AND LOWER(TRIM(COALESCE(status,'confirmed'))) <> 'cancelled'
+         GROUP BY customer_id
+       ) s ON s.customer_id = c.id
+       LEFT JOIN (
+         SELECT party_id, SUM(amount) AS received
+         FROM account_ledger
+         WHERE business_id = ? AND party_type = 'customer' AND entry_type = 'receipt'
+         GROUP BY party_id
+       ) r ON r.party_id = c.id
+       SET c.outstanding = GREATEST(0, COALESCE(s.credit, 0) - COALESCE(r.received, 0))
+       WHERE c.business_id = ?`,
+      [businessId, businessId, businessId],
+    );
+  } catch {
+    const [rows] = await execSql(conn, "SELECT id FROM customers WHERE business_id = ?", [businessId]);
+    for (const row of rows) await recomputeCustomerOutstanding(conn, row.id);
   }
 }
 
@@ -143,6 +209,11 @@ export async function recordCreditPurchase(conn, { supplier, total, purchaseId, 
 export function registerAccounts(app) {
   app.get("/api/accounts/summary", requirePerm("accounts"), async (_req, res) => {
     try {
+      try {
+        await recomputeBusinessOutstanding();
+      } catch {
+        /* outstanding rebuild is best-effort */
+      }
       const businessId = bid();
       const [[recv], [pay], [custs], [sups]] = await Promise.all([
         query(

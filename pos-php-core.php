@@ -1542,27 +1542,89 @@ function pos_record_credit_sale($customer, $total, $orderId, $orderNumber, $meth
   ], $businessId, $uid);
 }
 
-function pos_reverse_credit_sale($businessId, $orderId) {
-  $rows = pos_q(
-    "SELECT * FROM account_ledger WHERE business_id = ? AND reference_type = 'sales_order' AND reference_id = ?",
-    "ss",
-    [$businessId, $orderId]
-  );
+function pos_reverse_credit_sale($businessId, $order) {
+  $orderId = is_array($order) ? ($order["id"] ?? "") : $order;
+  $orderNumber = is_array($order) ? (string) ($order["order_number"] ?? "") : "";
+  $rows = [];
+  try {
+    $rows = pos_q(
+      "SELECT * FROM account_ledger
+       WHERE business_id = ? AND (
+         (reference_type = 'sales_order' AND reference_id = ?)
+         OR (entry_type = 'sale_credit' AND notes <> '' AND notes = ?)
+       )",
+      "sss",
+      [$businessId, $orderId, $orderNumber]
+    );
+  } catch (Exception $e) {
+    $msg = $e->getMessage();
+    if (stripos($msg, "account_ledger") === false && stripos($msg, "Unknown table") === false) throw $e;
+    return;
+  }
   foreach ($rows as $row) {
     if (($row["entry_type"] ?? "") === "receipt") {
       throw new Exception("Cannot delete invoice with customer receipts. Delete those receipts first.");
     }
   }
   foreach ($rows as $row) {
-    if (($row["entry_type"] ?? "") === "sale_credit") {
-      pos_q(
-        "UPDATE customers SET outstanding = GREATEST(0, outstanding - ?) WHERE id = ? AND business_id = ?",
-        "dss",
-        [(float) ($row["amount"] ?? 0), $row["party_id"], $businessId]
-      );
-    }
     if (function_exists("pos_delete_ledger_journal")) pos_delete_ledger_journal($businessId, $row["id"]);
     pos_q("DELETE FROM account_ledger WHERE id = ? AND business_id = ?", "ss", [$row["id"], $businessId]);
+  }
+}
+
+function pos_recompute_customer_outstanding($businessId, $customerId) {
+  if (!$customerId) return 0;
+  $sale = pos_q(
+    "SELECT COALESCE(SUM(total),0) AS credit FROM sales_orders
+     WHERE business_id = ? AND customer_id = ?
+       AND LOWER(TRIM(payment_method)) = 'credit'
+       AND LOWER(TRIM(COALESCE(status,'confirmed'))) <> 'cancelled'",
+    "ss",
+    [$businessId, $customerId]
+  );
+  $received = 0;
+  try {
+    $rcp = pos_q(
+      "SELECT COALESCE(SUM(amount),0) AS received FROM account_ledger
+       WHERE business_id = ? AND party_type = 'customer' AND party_id = ? AND entry_type = 'receipt'",
+      "ss",
+      [$businessId, $customerId]
+    );
+    $received = (float) ($rcp[0]["received"] ?? 0);
+  } catch (Exception $e) {
+    $received = 0;
+  }
+  $next = pos_round2(max(0, (float) ($sale[0]["credit"] ?? 0) - $received));
+  pos_q("UPDATE customers SET outstanding = ? WHERE id = ? AND business_id = ?", "dss", [$next, $customerId, $businessId]);
+  return $next;
+}
+
+function pos_recompute_business_outstanding($businessId) {
+  try {
+    pos_q(
+      "UPDATE customers c
+       LEFT JOIN (
+         SELECT customer_id, SUM(total) AS credit
+         FROM sales_orders
+         WHERE business_id = ?
+           AND LOWER(TRIM(payment_method)) = 'credit'
+           AND LOWER(TRIM(COALESCE(status,'confirmed'))) <> 'cancelled'
+         GROUP BY customer_id
+       ) s ON s.customer_id = c.id
+       LEFT JOIN (
+         SELECT party_id, SUM(amount) AS received
+         FROM account_ledger
+         WHERE business_id = ? AND party_type = 'customer' AND entry_type = 'receipt'
+         GROUP BY party_id
+       ) r ON r.party_id = c.id
+       SET c.outstanding = GREATEST(0, COALESCE(s.credit, 0) - COALESCE(r.received, 0))
+       WHERE c.business_id = ?",
+      "sss",
+      [$businessId, $businessId, $businessId]
+    );
+  } catch (Exception $e) {
+    $custs = pos_q("SELECT id FROM customers WHERE business_id = ?", "s", [$businessId]);
+    foreach ($custs as $row) pos_recompute_customer_outstanding($businessId, $row["id"]);
   }
 }
 

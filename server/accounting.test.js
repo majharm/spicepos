@@ -173,9 +173,13 @@ test("business admin can delete invoices and reverse credit sale", () => {
   assert.match(accounts, /Cannot delete invoice with customer receipts/);
   assert.match(crud, /app.delete\("\/api\/orders\/:id"/);
   assert.match(crud, /reverseLoyaltyOnSale/);
-  assert.match(crud, /deleteJournalRef\(conn, "sales_order"/);
+  assert.match(crud, /recomputeCustomerOutstanding/);
   assert.match(orders, /function pos_delete_order/);
+  assert.match(orders, /pos_recompute_customer_outstanding/);
   assert.match(core, /function pos_reverse_credit_sale/);
+  assert.match(core, /function pos_recompute_customer_outstanding/);
+  assert.match(core, /function pos_recompute_business_outstanding/);
   assert.match(app, /data-delete-order/);
   assert.match(app, /Delete invoice/);
+  assert.match(app, /await loadBootstrap\(\)/);
 });

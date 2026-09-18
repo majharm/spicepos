@@ -274,7 +274,7 @@ function pos_delete_order($bid, $orderId, $auth) {
       if ($oldStatus !== "cancelled") {
         pos_restore_order_stock($bid, $lines);
       }
-      pos_reverse_credit_sale($bid, $orderId);
+      pos_reverse_credit_sale($bid, $existing);
       if (function_exists("pos_delete_journal_ref")) {
         pos_delete_journal_ref($bid, "sales_order", $orderId);
       }
@@ -286,6 +286,7 @@ function pos_delete_order($bid, $orderId, $auth) {
       } catch (Exception $e) { /* optional */ }
       pos_q("DELETE FROM sales_order_lines WHERE order_id = ?", "s", [$orderId]);
       pos_q("DELETE FROM sales_orders WHERE id = ? AND business_id = ?", "ss", [$orderId, $bid]);
+      pos_recompute_customer_outstanding($bid, $existing["customer_id"] ?? "");
     });
   } catch (Exception $e) {
     pos_send(400, ["error" => $e->getMessage(), "php" => true]);

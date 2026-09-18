@@ -3,7 +3,7 @@ import "../js/units.js";
 import "../js/footwear.js";
 import { query, withTransaction } from "./db.js";
 import { bid, authUser } from "./context.js";
-import { recordCreditPurchase, reverseCreditSale } from "./accounts.js";
+import { recordCreditPurchase, reverseCreditSale, recomputeCustomerOutstanding } from "./accounts.js";
 import { postPurchaseJournal, deleteJournalRef } from "./accounting.js";
 import { audit } from "./audit.js";
 import { onItemSaved, onPurchaseLineSaved, pharmacyLineSnapshot, computeSaleLine, saleStockQty, persistSaleLineNote, reverseLoyaltyOnSale } from "./advanced.js";
@@ -1085,7 +1085,7 @@ export function registerCrud(app) {
             );
           }
         }
-        await reverseCreditSale(conn, existing.id);
+        await reverseCreditSale(conn, existing);
         await deleteJournalRef(conn, "sales_order", existing.id);
         await reverseLoyaltyOnSale(conn, bid(), existing.id);
         try {
@@ -1098,6 +1098,7 @@ export function registerCrud(app) {
         }
         await conn.query("DELETE FROM sales_order_lines WHERE order_id = ?", [existing.id]);
         await conn.query("DELETE FROM sales_orders WHERE id = ? AND business_id = ?", [existing.id, bid()]);
+        await recomputeCustomerOutstanding(conn, existing.customer_id);
         return existing;
       });
       await audit("Sale Deleted", {

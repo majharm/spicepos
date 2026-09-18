@@ -398,6 +398,9 @@ function pos_accounts_dispatch($path, $method, $body, $bid, $auth, $branchId, $u
   }
 
   if ($path === "accounts/summary" && $method === "GET") {
+    if (function_exists("pos_recompute_business_outstanding")) {
+      try { pos_recompute_business_outstanding($bid); } catch (Exception $e) { /* best-effort */ }
+    }
     $recv = pos_q("SELECT COALESCE(SUM(outstanding),0) AS total FROM customers WHERE business_id = ?", "s", [$bid]);
     $pay = pos_q("SELECT COALESCE(SUM(payable_balance),0) AS total FROM suppliers WHERE business_id = ?", "s", [$bid]);
     $custs = pos_q("SELECT COUNT(*) AS n FROM customers WHERE business_id = ? AND outstanding > 0", "s", [$bid]);
