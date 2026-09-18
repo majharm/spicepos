@@ -2918,6 +2918,7 @@ function renderCart() {
       ? `${state.cart.length} line${state.cart.length === 1 ? "" : "s"}`
       : emptyTicketHint();
   }
+  $("lines")?.classList.toggle("is-empty", !state.cart.length);
   if (!state.cart.length) {
     $("lines").innerHTML = `<p class="catalog-empty lines-empty">${escapeHtml(emptyTicketHint())}</p>`;
   } else if (isPharmacyShop()) {

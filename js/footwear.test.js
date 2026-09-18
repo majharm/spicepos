@@ -374,6 +374,10 @@ test("Medical shops show pharmacy medicine fields on the item form", () => {
   assert.match(index, /id="bill-scan-camera-btn"/);
   assert.match(index, /id="bill-scan-qty"/);
   assert.match(index, /id="bill-doctor-rx"/);
+  assert.match(index, /classic-span-3/);
+  assert.match(css, /\.combo-banner\[hidden\]/);
+  assert.match(app, /classList\.toggle\("is-empty"/);
+  assert.match(css, /body\.classic-bill-mode \.lines\.is-empty/);
   assert.match(css, /#pharm-bill-cust,\s*\.pharm-bill-cust \{\s*display: none !important;/);
   assert.match(app, /function classicScanAddQty/);
   assert.match(app, /bill-scan-camera-btn/);
