@@ -1544,9 +1544,84 @@ body:not(.restaurant-mode) [data-view="kot"] {
   border-bottom: 1px solid var(--line);
   box-shadow: none;
 }
-.ticket-head-copy {
-  min-width: 0;
-  flex: 1 1 auto;
+body.classic-bill-mode.counter-mode .workspace {
+  grid-template-columns: minmax(220px, 0.75fr) minmax(520px, 1.55fr);
+}
+body.classic-bill-mode .bill-panel {
+  border-left: 3px solid #2455a5;
+  box-shadow: -4px 0 18px rgba(36, 85, 165, 0.12);
+}
+body.classic-bill-mode .ticket-head {
+  background: linear-gradient(180deg, #4d7ec4, #2b5aa0);
+  color: #fff;
+  border-bottom-color: #1e3f7a;
+}
+body.classic-bill-mode .ticket-head h2,
+body.classic-bill-mode .ticket-sub {
+  color: #fff;
+}
+body.classic-bill-mode .ticket-sub { opacity: 0.88; }
+body.classic-bill-mode #bill-customer { display: none !important; }
+body.classic-bill-mode #customer-face { display: none !important; }
+body.classic-bill-mode .bill-toggle {
+  background: rgba(255,255,255,.15);
+  border-color: rgba(255,255,255,.35);
+  color: #fff;
+}
+.classic-bill-head {
+  display: none;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px 10px;
+  padding: 8px 12px 10px;
+  background: #e8eef8;
+  border-bottom: 1px solid #9bb3d4;
+  flex: 0 0 auto;
+}
+body.classic-bill-mode .classic-bill-head:not([hidden]) { display: grid; }
+.classic-bill-head label {
+  display: grid;
+  gap: 2px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #1e3a5f;
+}
+.classic-bill-head .classic-span-2 { grid-column: span 2; }
+.classic-bill-head input {
+  width: 100%;
+  min-height: 28px;
+  padding: 4px 7px;
+  border: 1px solid #7a9cc6;
+  border-radius: 2px;
+  background: #fff;
+  font-size: 13px;
+  font-weight: 650;
+}
+body.classic-bill-mode .pharm-bill-table {
+  min-width: 560px;
+  background: #fff;
+}
+body.classic-bill-mode .pharm-bill-table thead th {
+  background: #f4c430;
+  color: #1e3a5f;
+  border-bottom: 1px solid #d4a017;
+}
+body.classic-bill-mode .pay-row { grid-template-columns: 1fr 1fr 1.8fr; }
+body.classic-bill-mode .pharm-bill-wrap {
+  border: 1px solid #9bb3d4;
+  border-radius: 0;
+  background: #fff;
+}
+body.classic-bill-mode .pharm-bill-table th,
+body.classic-bill-mode .pharm-bill-table td {
+  border-color: #c5d4ea;
+}
+body.classic-bill-mode .totals {
+  background: #f4f7fb;
+  border-top: 1px solid #9bb3d4;
+}
+body.classic-bill-mode .lines-empty {
+  padding: 28px 16px;
+  color: #3d5a80;
 }
 .bill-toggle {
   position: relative;
@@ -4028,6 +4103,13 @@ button.items-stat.is-active {
 }
 
 @media (max-width: 980px) {
+  body.classic-bill-mode.counter-mode .workspace {
+    grid-template-columns: 1fr;
+  }
+  .classic-bill-head {
+    grid-template-columns: 1fr 1fr;
+  }
+  .classic-bill-head .classic-span-2 { grid-column: span 2; }
   .app { grid-template-columns: 1fr; height: 100dvh; max-height: 100dvh; overflow: hidden; }
   .app.nav-collapsed { grid-template-columns: 1fr; }
   body.counter-mode { overflow: hidden; }
