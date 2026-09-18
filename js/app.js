@@ -515,6 +515,8 @@ function cancelOrderEdit() {
   if ($("bill-disc-type")) $("bill-disc-type").value = "amt";
   if ($("bill-disc-value")) $("bill-disc-value").value = 0;
   if ($("loyalty-redeem")) $("loyalty-redeem").value = 0;
+  resetClassicBillEntry();
+  resetClassicCustomerRecord({ focus: true });
   renderEditOrderBanner();
   renderCart();
   setHint("Edit cancelled");
@@ -617,6 +619,76 @@ function customerDue(c) {
 function isWalkInCustomer(c) {
   if (!c) return true;
   return c.code === "CUS-001" || /^walk-?in$/i.test(String(c.name || "").trim());
+}
+
+function walkInCustomer() {
+  return (state.customers || []).find((c) => isWalkInCustomer(c)) || null;
+}
+
+function classicCustomerRecordDirty() {
+  if (!isClassicBillShop()) return false;
+  if (!isWalkInCustomer(customer())) return true;
+  return [
+    "bill-cust-name",
+    "bill-cust-mobile",
+    "bill-cust-address",
+    "bill-cust-area",
+    "bill-cust-city",
+    "bill-cust-pin",
+    "bill-doctor-rx",
+    "counter-mobile",
+  ].some((id) => String($(id)?.value || "").trim());
+}
+
+function resetClassicCustomerRecord({ focus = false } = {}) {
+  if (!isClassicBillShop()) return;
+  const walk = walkInCustomer();
+  state.customerId = walk?.id || "";
+  if ($("customer")) $("customer").value = state.customerId;
+  if ($("counter-mobile")) $("counter-mobile").value = "";
+  [
+    "bill-cust-name",
+    "bill-cust-mobile",
+    "bill-cust-address",
+    "bill-cust-area",
+    "bill-cust-city",
+    "bill-cust-pin",
+    "bill-doctor-rx",
+    "qc-name",
+    "qc-mobile",
+    "qc-address",
+    "qc-doctor-rx",
+  ].forEach((id) => {
+    if ($(id)) $(id).value = "";
+  });
+  const wrap = $("quick-customer-wrap");
+  if (wrap) wrap.open = false;
+  hideClassicCustHits();
+  state.loyaltyAccount = null;
+  state.loyaltyRedeem = 0;
+  if ($("loyalty-redeem")) $("loyalty-redeem").value = 0;
+  paintBillCustomer();
+  paintClassicCustomerStatus();
+  paintClassicLoyalty();
+  if (focus) $("bill-cust-mobile")?.focus();
+}
+
+function resetClassicBillEntry() {
+  if ($("bill-scan-code")) $("bill-scan-code").value = "";
+  if ($("bill-item-search")) $("bill-item-search").value = "";
+  if ($("bill-scan-qty")) $("bill-scan-qty").value = "1";
+  if ($("bill-scan-status")) $("bill-scan-status").textContent = "";
+  $("bill-scan-form")?.classList.remove("is-hit", "is-miss");
+  const hits = $("classic-item-hits");
+  if (hits) {
+    hits.hidden = true;
+    hits.innerHTML = "";
+  }
+  const alert = $("classic-stock-alert");
+  if (alert) {
+    alert.hidden = true;
+    alert.textContent = "";
+  }
 }
 
 function customerOptionLabel(c) {
@@ -1067,8 +1139,8 @@ function clearCounterAfterSale(order, result) {
   if ($("search")) $("search").value = "";
   if ($("scan-code")) $("scan-code").value = "";
   if ($("pack-choice")) $("pack-choice").value = "";
-  if ($("bill-doctor-rx")) $("bill-doctor-rx").value = "";
-  fillPharmacyBillCustomerFromCustomer(customer(), { force: true });
+  resetClassicBillEntry();
+  resetClassicCustomerRecord();
   renderCatalog();
   renderCart();
   if (table) void dropTableHold(table);
@@ -3086,7 +3158,7 @@ function renderCart() {
     $("classic-bill-date").value = `${pad(now.getDate())}/${pad(now.getMonth() + 1)}/${now.getFullYear()} ${pad(now.getHours())}:${pad(now.getMinutes())}`;
   }
   $("btn-pay").disabled = state.cart.length === 0;
-  $("btn-clear").disabled = state.cart.length === 0;
+  $("btn-clear").disabled = state.cart.length === 0 && !classicCustomerRecordDirty();
   document.body.classList.toggle("has-cart", state.cart.length > 0);
   paintBillToggleCount();
   paintBillCustomer();
@@ -7099,7 +7171,10 @@ $("btn-clear").addEventListener("click", () => {
   if ($("bill-disc-value")) $("bill-disc-value").value = 0;
   if ($("loyalty-redeem")) $("loyalty-redeem").value = 0;
   $("pack-choice").value = "";
-  setHint("Cart cleared");
+  resetClassicBillEntry();
+  resetClassicCustomerRecord({ focus: true });
+  setHint(isClassicBillShop() ? "Bill and customer record cleared" : "Cart cleared");
+  renderCatalog();
   renderCart();
   if (isRestaurantShop() && table) void dropTableHold(table);
 });
@@ -7155,7 +7230,10 @@ $("btn-pay").addEventListener("click", async () => {
     if (!orderSaved(result)) throw new Error("Checkout did not return an order");
     const wasEdit = Boolean(state.editingOrderId);
     const tableNo = payload.table_no || state.activeTable || "";
-    clearCounterAfterSale(order, result);
+    const billedName = isClassicBillShop()
+      ? (pharmacyBillCustomerName() || customer()?.business_name || customer()?.name || "Walk-in")
+      : (customer()?.business_name || customer()?.name || "Walk-in");
+    const billedCustomerId = state.customerId;
     state.editingOrderId = null;
     renderEditOrderBanner();
     if (wasEdit) {
@@ -7166,8 +7244,8 @@ $("btn-pay").addEventListener("click", async () => {
       receiptOrder = {
         order_number: orderLabel(order, result),
         total: orderTotal(order, result),
-        customer_name: customer()?.name || "Walk-in",
-        customer_id: state.customerId,
+        customer_name: billedName,
+        customer_id: billedCustomerId,
         payment_method: $("pay-method").value,
         payment_status: "paid",
         lines: [],
@@ -7206,12 +7284,15 @@ $("btn-pay").addEventListener("click", async () => {
       title: `Invoice ${orderLabel(order, result)}`,
       message: "Bill saved. POS cleared for the next customer.",
     });
+    clearCounterAfterSale(order, result);
     showView("counter");
     try {
       await Promise.all([loadBootstrap(), loadToday()]);
     } catch {
       /* order is already saved; keep the success message and cleared cart */
     }
+    resetClassicCustomerRecord();
+    renderCart();
   } catch (err) {
     setHint(userHintMessage(err), "error");
   }
