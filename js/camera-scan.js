@@ -173,9 +173,10 @@
 
   function bindButton(btn, opts) {
     if (!btn) return;
-    const show = isSupported();
+    const show = Boolean(opts?.alwaysShow) || isSupported();
     btn.hidden = !show;
-    if (!show) return;
+    if (btn.dataset.cameraBound === "1") return;
+    btn.dataset.cameraBound = "1";
     btn.addEventListener("click", (e) => {
       e.preventDefault();
       void open(opts);

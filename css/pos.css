@@ -1623,6 +1623,82 @@ body.classic-bill-mode .lines-empty {
   padding: 28px 16px;
   color: #3d5a80;
 }
+body.classic-bill-mode.counter-mode .counter-lane .scan-lane {
+  display: none;
+}
+.classic-bill-entry {
+  display: none;
+  padding: 6px 10px 8px;
+  background: #f7f3e1;
+  border-bottom: 1px solid #d4a017;
+  flex: 0 0 auto;
+}
+body.classic-bill-mode .classic-bill-entry:not([hidden]) { display: block; }
+.classic-bill-scan {
+  display: grid;
+  grid-template-columns: minmax(220px, 1.6fr) 88px auto minmax(80px, 1fr);
+  gap: 8px 10px;
+  align-items: end;
+}
+.classic-bill-scan label {
+  display: grid;
+  gap: 2px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #1e3a5f;
+}
+.classic-scan-field {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  min-width: 0;
+}
+.classic-scan-field input {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 32px;
+  padding: 4px 8px;
+  border: 1px solid #7a9cc6;
+  border-right: 0;
+  border-radius: 2px 0 0 2px;
+  font-size: 14px;
+  font-weight: 700;
+}
+.classic-scan-field .scan-camera-btn {
+  flex: 0 0 40px;
+  width: 40px;
+  min-width: 40px;
+  height: auto;
+  min-height: 32px;
+  border-radius: 0 2px 2px 0;
+  border: 1px solid #2455a5;
+  background: #2b5aa0;
+  color: #fff;
+}
+.classic-qty input {
+  width: 100%;
+  min-height: 32px;
+  padding: 4px 7px;
+  border: 1px solid #7a9cc6;
+  border-radius: 2px;
+  font-size: 14px;
+  font-weight: 700;
+}
+.classic-bill-scan .btn {
+  min-height: 32px;
+  border-radius: 2px;
+}
+.classic-scan-status {
+  align-self: center;
+  font-size: 12px;
+  font-weight: 700;
+  color: #1e3a5f;
+  min-height: 1.2em;
+}
+.classic-bill-scan.is-hit .classic-scan-status { color: #0d6b4e; }
+.classic-bill-scan.is-miss .classic-scan-status { color: #a12822; }
+.classic-bill-scan.is-hit .classic-scan-field input { border-color: #0d6b4e; }
+.classic-bill-scan.is-miss .classic-scan-field input { border-color: #a12822; }
 .bill-toggle {
   position: relative;
   flex: 0 0 auto;
@@ -4110,6 +4186,10 @@ button.items-stat.is-active {
     grid-template-columns: 1fr 1fr;
   }
   .classic-bill-head .classic-span-2 { grid-column: span 2; }
+  .classic-bill-scan {
+    grid-template-columns: 1fr 88px auto;
+  }
+  .classic-scan-status { grid-column: 1 / -1; }
   .app { grid-template-columns: 1fr; height: 100dvh; max-height: 100dvh; overflow: hidden; }
   .app.nav-collapsed { grid-template-columns: 1fr; }
   body.counter-mode { overflow: hidden; }
