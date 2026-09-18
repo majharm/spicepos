@@ -1572,6 +1572,7 @@ body.classic-bill-mode.counter-mode #pay-method {
 body.classic-bill-mode .bill-panel {
   border-left: 3px solid #2455a5;
   box-shadow: -4px 0 18px rgba(36, 85, 165, 0.12);
+  overflow-y: auto;
 }
 body.classic-bill-mode .ticket-head {
   background: linear-gradient(180deg, #4d7ec4, #2b5aa0);
@@ -1701,23 +1702,29 @@ body.classic-bill-mode .classic-bill-head:not([hidden]) { display: grid; }
   border-color: #1e3f7a;
 }
 body.classic-bill-mode .pharm-bill-table {
-  min-width: 560px;
+  min-width: 100%;
   background: #fff;
 }
 body.classic-bill-mode .pharm-bill-table thead th {
   background: #f4c430;
   color: #1e3a5f;
   border-bottom: 1px solid #d4a017;
+  position: sticky;
+  top: 0;
+  z-index: 1;
 }
 body.classic-bill-mode .pay-row { grid-template-columns: 1fr 1fr 1.8fr; }
 body.classic-bill-mode .pharm-bill-wrap {
   border: 1px solid #9bb3d4;
   border-radius: 0;
   background: #fff;
+  overflow: visible;
+  margin: 0;
 }
 body.classic-bill-mode .pharm-bill-table th,
 body.classic-bill-mode .pharm-bill-table td {
   border-color: #c5d4ea;
+  padding: 7px 6px;
 }
 body.classic-bill-mode .totals {
   background: #f4f7fb;
@@ -1729,13 +1736,9 @@ body.classic-bill-mode .lines.is-empty {
 }
 body.classic-bill-mode .lines {
   flex: 1 1 auto;
-  padding: 0 10px;
-}
-body.classic-bill-mode .lines:not(:has(*)) {
-  flex: 0 0 auto;
-  min-height: 0;
-  padding: 0;
-  overflow: hidden;
+  min-height: 220px;
+  overflow: auto;
+  padding: 0 10px 8px;
 }
 body.classic-bill-mode.counter-mode .counter-lane .scan-lane {
   display: none;
@@ -1885,6 +1888,7 @@ body.classic-bill-mode .pharm-bill-table tr.tone-out {
 .classic-stock-alert[hidden] { display: none; }
 body.classic-bill-mode #bill-extras {
   display: block;
+  flex: 0 0 auto;
   padding: 6px 12px 8px;
   background: #eef6ee;
   border-top: 1px solid #9bb3d4;
