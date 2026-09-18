@@ -19,6 +19,17 @@ button { cursor: pointer; }
 .eyebrow { margin: 0 0 4px; font-size: 11px; font-weight: 800; letter-spacing: .14em; color: #99f6e4; }
 h1, h2 { margin: 0; letter-spacing: -.025em; }
 #shop-address { margin: 6px 0 0; color: #cbd5e1; font-size: 13px; }
+.table-badge {
+  display: inline-block;
+  margin: 10px 0 0;
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: #ccfbf1;
+  color: #115e59;
+  font-size: 13px;
+  font-weight: 800;
+}
+.table-locked { margin: 0 0 8px; color: var(--teal-dark); font-size: 13px; font-weight: 800; }
 .menu-search { display: block; max-width: 1180px; margin: 18px auto 0; font-size: 12px; font-weight: 700; }
 .menu-search input { display: block; width: 100%; margin-top: 6px; padding: 13px 14px; border: 0; border-radius: 12px; outline: none; }
 main { max-width: 1180px; margin: auto; padding: 18px clamp(14px, 4vw, 44px) 30px; }

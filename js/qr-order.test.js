@@ -16,6 +16,19 @@ test("QR food order collects a special instruction on each cart line", () => {
   assert.match(js, /notes: clipNote\(cartNote\(item_id\)\)/);
 });
 
+test("Table QR prefill locks the table on the public menu", () => {
+  const html = read("order.html");
+  const js = read("js/qr-order.js");
+  const poster = read("qr.html");
+  assert.match(html, /id="table-badge"/);
+  assert.match(html, /id="table-locked"/);
+  assert.match(js, /location\.search\)\.get\("table"\)/);
+  assert.match(js, /function lockTableField/);
+  assert.match(js, /table_no: tablePrefill \|\| form\.get\("table_no"\)/);
+  assert.match(poster, /searchParams\.set\("table"/);
+  assert.match(poster, /Scan to order from this table/);
+});
+
 test("Counter restaurant cart and QR desk show item-wise instructions", () => {
   const app = read("js/app.js");
   assert.match(app, /function restaurantLineNoteHtml/);

@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#0f766e" />
     <title>Order online · ATAV POS</title>
-    <link rel="stylesheet" href="./css/qr-order.css?v=20260917food1" />
+    <link rel="stylesheet" href="./css/qr-order.css?v=20260918table1" />
   </head>
   <body>
     <header class="menu-head">
@@ -15,6 +15,7 @@
           <p class="eyebrow">SCAN · CHOOSE · ORDER</p>
           <h1 id="shop-name">Opening menu…</h1>
           <p id="shop-address"></p>
+          <p class="table-badge" id="table-badge" hidden></p>
         </div>
       </div>
       <label class="menu-search">Search menu <input id="menu-search" type="search" placeholder="Item or category…" autocomplete="off" /></label>
@@ -40,7 +41,8 @@
         <form id="order-form">
           <label>Name * <input name="customer_name" maxlength="160" required autocomplete="name" /></label>
           <label>Mobile * <input name="mobile" maxlength="15" inputmode="tel" required autocomplete="tel" /></label>
-          <label>Table / pickup reference <input name="table_no" maxlength="64" placeholder="Table 4 or Pickup" /></label>
+          <label id="table-field-wrap">Table / pickup reference <input name="table_no" maxlength="64" placeholder="Table 4 or Pickup" /></label>
+          <p class="table-locked" id="table-locked" hidden></p>
           <button class="place-order" type="submit">Place order</button>
           <p class="form-hint" id="order-hint"></p>
         </form>
@@ -59,6 +61,6 @@
 
     <footer>Ordering powered by <strong>ATAV POS</strong></footer>
     <script src="./js/offers.js?v=20260917food1" defer></script>
-    <script src="./js/qr-order.js?v=20260917food2" defer></script>
+    <script src="./js/qr-order.js?v=20260918table1" defer></script>
   </body>
 </html>

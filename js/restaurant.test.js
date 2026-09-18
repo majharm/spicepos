@@ -29,6 +29,10 @@ test("Table numbers normalize from free text and Parcel", () => {
   assert.equal(R.displayTable("7"), "Table 7");
   assert.equal(R.displayTable("Parcel"), "Parcel");
   assert.equal(R.holdLabel("3"), "Table 3");
+  assert.equal(R.tableQrKey("Table 4"), "4");
+  assert.equal(R.tableQrKey("AC"), "AC");
+  assert.equal(R.tableQrKey("Parcel"), "");
+  assert.equal(R.tableQrKey("pickup"), "");
 });
 
 test("Occupied table holds are found by table_no on the payload", () => {

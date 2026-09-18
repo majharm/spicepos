@@ -1267,6 +1267,26 @@ a.btn { text-decoration: none; display: inline-block; }
   border-color: #fecdd3;
   color: #be123c;
 }
+.table-seat-qr {
+  position: absolute;
+  bottom: -7px;
+  right: -7px;
+  z-index: 2;
+  min-width: 28px;
+  height: 22px;
+  padding: 0 6px;
+  border: 1px solid #99f6e4;
+  border-radius: 999px;
+  background: #0f766e;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .04em;
+  line-height: 20px;
+  cursor: pointer;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.12);
+}
+.table-seat-qr:hover { background: #115e59; }
 .table-seat-edit {
   position: absolute;
   top: -7px;
@@ -2223,6 +2243,7 @@ tr:last-child td { border-bottom: 0; }
 }
 .settings.wide .full { grid-column: 1 / -1; }
 body:not(.footwear-mode):not(.apparel-mode) .footwear-only { display: none !important; }
+body:not(.restaurant-mode) .restaurant-only { display: none !important; }
 body:not(.pharmacy-mode) .pharmacy-only { display: none !important; }
 body.pharmacy-mode .pharmacy-hide { display: none !important; }
 /* display:grid used to override the HTML hidden attribute, so spice
@@ -3101,6 +3122,28 @@ body.pharmacy-mode .items-library-list {
 .qr-setup-card h3 { margin: 0; }
 .qr-setup-card p:not(.items-kicker) { margin: 6px 0 12px; color: var(--muted); font-size: 13px; }
 .qr-setup-card > img { width: 170px; height: 170px; padding: 8px; border: 1px solid var(--line); border-radius: 14px; background: white; }
+.qr-table-setup { grid-template-columns: 1fr; align-items: start; }
+.qr-table-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 12px;
+}
+.qr-table-card {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  padding: 12px 10px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: #f8fafc;
+  text-align: center;
+}
+.qr-table-card img { width: 120px; height: 120px; background: #fff; padding: 6px; border-radius: 10px; }
+.qr-table-card strong { font-size: 14px; }
+.qr-table-card span { color: var(--muted); font-size: 11px; }
+.qr-table-card-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; }
+.qr-table-card-actions .btn { padding: 6px 8px; font-size: 11px; }
+.qr-table-empty { margin: 0; color: var(--muted); font-size: 13px; }
 .qr-link-row { display: flex; flex-wrap: wrap; gap: 8px; }
 .qr-link-row input { flex: 1 1 280px; min-width: 0; padding: 9px 10px; border: 1px solid var(--line); border-radius: 9px; color: var(--muted); background: #f8fafc; }
 .qr-orders-toolbar { display: flex; justify-content: space-between; gap: 12px; align-items: center; }

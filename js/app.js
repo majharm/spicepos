@@ -214,6 +214,9 @@ function applyFootwearMode() {
   document.querySelectorAll(".pharmacy-hide").forEach((el) => {
     el.hidden = pharm;
   });
+  document.querySelectorAll(".restaurant-only").forEach((el) => {
+    el.hidden = !isRestaurantShop();
+  });
   const search = $("search");
   if (search) search.placeholder = copy.search || `Search name or ${taxCodeLabel()}…`;
   const scan = $("scan-code");
@@ -1770,6 +1773,7 @@ async function persistDiningTables(tables, floors) {
   board?.querySelector("[data-edit-table]")?.setAttribute("hidden", "");
   board?.querySelector("[data-edit-floor]")?.setAttribute("hidden", "");
   renderTableBoard();
+  paintQrTableCodes();
 }
 
 function renderTableBoard() {
@@ -1870,6 +1874,7 @@ function renderTableBoard() {
               <span>${escapeHtml(on && state.cart.length ? `${state.cart.length} dishes` : metaLine)}</span>
             </button>
             ${manage ? `<button class="table-seat-edit" type="button" data-edit-table-btn="${escapeHtml(t.id)}" title="Rename table" aria-label="Rename ${escapeHtml(t.name || t.id)}">✎</button>` : ""}
+            <button class="table-seat-qr" type="button" data-table-qr="${escapeHtml(t.id)}" title="Print table QR" aria-label="Print QR for ${escapeHtml(t.name || t.id)}">QR</button>
             ${manage && !busy ? `<button class="table-seat-x" type="button" data-remove-table="${escapeHtml(t.id)}" aria-label="Remove ${escapeHtml(t.name || t.id)}">×</button>` : ""}
           </div>`;
         })
@@ -5104,14 +5109,50 @@ function shopBusinessId() {
   return state.businessMeta?.id || state.company?.business_id || state.session?.business_id || "";
 }
 
-function qrMenuUrl() {
-  const shop = shopBusinessId();
-  return `${location.origin}/order.html?shop=${encodeURIComponent(shop)}`;
+function qrTableKey(tableId) {
+  const R = restaurantApi();
+  const t = R?.tableQrKey?.(tableId) || R?.normalizeTableNo?.(tableId) || String(tableId || "").trim();
+  if (!t || t === "Parcel") return "";
+  return t;
 }
 
-function qrPosterUrl() {
+function qrMenuUrl(tableId) {
   const shop = shopBusinessId();
-  return `${location.origin}/qr.html?shop=${encodeURIComponent(shop)}`;
+  let url = `${location.origin}/order.html?shop=${encodeURIComponent(shop)}`;
+  const t = qrTableKey(tableId);
+  if (t) url += `&table=${encodeURIComponent(t)}`;
+  return url;
+}
+
+function qrPosterUrl(tableId) {
+  const shop = shopBusinessId();
+  let url = `${location.origin}/qr.html?shop=${encodeURIComponent(shop)}`;
+  const t = qrTableKey(tableId);
+  if (t) url += `&table=${encodeURIComponent(t)}`;
+  return url;
+}
+
+function qrTableLabel(tableId) {
+  const key = qrTableKey(tableId);
+  if (!key) return "";
+  const row = diningTables().find((t) => t.id === key);
+  const R = restaurantApi();
+  return row?.name || R?.displayTable?.(key) || key;
+}
+
+function qrPosterKicker(tableLabel) {
+  if (tableLabel) return "Scan to order from this table";
+  if (isRestaurantShop()) return "Counter / pickup · scan to order";
+  return "Scan to order spices";
+}
+
+function qrCodeDataUrl(url, size) {
+  const px = Number(size) || 280;
+  const remote = `https://api.qrserver.com/v1/create-qr-code/?size=${px}x${px}&margin=8&data=${encodeURIComponent(url)}`;
+  if (typeof QRCodeLib !== "undefined" && typeof QRCodeLib.toDataURL === "function") {
+    return QRCodeLib.toDataURL(url, { width: px, margin: 1, errorCorrectionLevel: "M" }).catch(() => remote);
+  }
+  return Promise.resolve(remote);
 }
 
 function rxUploadUrl() {
@@ -5312,23 +5353,121 @@ function paintQrMenuSetup() {
   const posterLink = $("qr-poster-page");
   const code = $("qr-menu-code");
   const idEl = $("qr-shop-id");
+  const shopCopy = $("qr-shop-copy");
   if (idEl) idEl.textContent = shopId || "—";
   if (input) input.value = url;
   if (open) open.href = url;
   if (posterLink) posterLink.href = poster;
+  if (shopCopy) {
+    shopCopy.textContent = isRestaurantShop()
+      ? "Use this shop QR at the counter for pickup. For dine-in, print a unique QR for each table below and stick it on that table."
+      : "Place it at the counter, table, or storefront. The link opens a public mobile menu—no customer login required.";
+  }
+  paintQrTableCodes();
   if (!code) return;
-  const remote = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&margin=8&data=${encodeURIComponent(url)}`;
-  if (typeof QRCodeLib !== "undefined" && typeof QRCodeLib.toDataURL === "function") {
-    QRCodeLib.toDataURL(url, { width: 220, margin: 1, errorCorrectionLevel: "M" })
-      .then((dataUrl) => {
-        code.src = dataUrl;
-      })
-      .catch(() => {
-        code.src = remote;
-      });
+  qrCodeDataUrl(url, 220).then((dataUrl) => {
+    code.src = dataUrl;
+  });
+}
+
+function paintQrTableCodes() {
+  const wrap = $("qr-table-codes");
+  const grid = $("qr-table-grid");
+  if (!wrap || !grid) return;
+  const restaurant = isRestaurantShop();
+  wrap.hidden = !restaurant;
+  if (!restaurant) {
+    grid.innerHTML = "";
     return;
   }
-  code.src = remote;
+  const tables = diningTables();
+  if (!tables.length) {
+    grid.innerHTML = `<p class="qr-table-empty">Add tables on Counter first. Each table then gets its own QR to place on that table.</p>`;
+    return;
+  }
+  const { floors } = diningLayout();
+  const R = restaurantApi();
+  grid.innerHTML = tables
+    .map((t) => {
+      const url = qrMenuUrl(t.id);
+      const label = escapeHtml(t.name || R?.displayTable?.(t.id) || t.id);
+      const floor = floors.length > 1 ? escapeHtml(R?.displayFloor?.(t.floor, floors) || "") : "";
+      return `<article class="qr-table-card" data-table-id="${escapeHtml(t.id)}">
+        <img alt="QR for ${label}" />
+        <strong>${label}</strong>
+        ${floor ? `<span>${floor}</span>` : ""}
+        <div class="qr-table-card-actions">
+          <button class="btn" type="button" data-qr-copy-table="${escapeHtml(t.id)}">Copy link</button>
+          <button class="btn" type="button" data-qr-print-table="${escapeHtml(t.id)}">Print</button>
+          <a class="btn" href="${escapeHtml(url)}" target="_blank" rel="noopener">Open</a>
+        </div>
+      </article>`;
+    })
+    .join("");
+  tables.forEach((t) => {
+    const card = [...grid.querySelectorAll("[data-table-id]")].find((el) => el.dataset.tableId === t.id);
+    const img = card?.querySelector("img");
+    if (!img) return;
+    qrCodeDataUrl(qrMenuUrl(t.id), 180).then((src) => {
+      img.src = src;
+    });
+  });
+}
+
+function qrTableStickerHtml(row) {
+  const logo = state.company?.logo_url
+    ? `<img class="logo" src="${escapeHtml(state.company.logo_url)}" alt="">`
+    : "";
+  return `<article class="sticker">
+    ${logo}
+    <p class="kicker">${escapeHtml(qrPosterKicker(row.label))}</p>
+    <h1>${escapeHtml(shopPrintName())}</h1>
+    ${row.label ? `<h2>${escapeHtml(row.label)}</h2>` : ""}
+    <img class="qr" src="${escapeHtml(row.src)}" alt="${escapeHtml(row.label || "QR")}">
+    <p class="hint">Place this code on ${escapeHtml(row.label || "the counter")}. Orders go to the kitchen with this table.</p>
+  </article>`;
+}
+
+async function printQrTableStickers(tableIds) {
+  const ids = (tableIds || []).map((id) => qrTableKey(id)).filter(Boolean);
+  const list = ids.length ? ids : diningTables().map((t) => t.id);
+  if (!list.length) {
+    setHint("Create dining tables on Counter, then print a QR for each table.", "error");
+    return;
+  }
+  const rows = [];
+  for (const id of list) {
+    const url = qrMenuUrl(id);
+    rows.push({
+      id,
+      label: qrTableLabel(id),
+      url,
+      src: await qrCodeDataUrl(url, 280),
+    });
+  }
+  const w = window.open("", "qr-table-stickers", "width=900,height=1100");
+  if (!w) {
+    setHint("Allow pop-ups to print table QR codes", "error");
+    return;
+  }
+  w.document.write(`<!DOCTYPE html><html><head><title>Table QR codes</title>
+    <style>
+      body { font-family: Georgia, serif; color: #4a1416; margin: 0; background: #fff; }
+      .sheet { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 16px; }
+      .sticker { break-inside: avoid; page-break-inside: avoid; text-align: center; border: 1px dashed #d6c4b0; padding: 18px 12px 22px; }
+      h1 { margin: 0 0 4px; font-size: 22px; }
+      h2 { margin: 0 0 10px; font-size: 28px; letter-spacing: -.03em; }
+      .kicker { letter-spacing: .12em; font-size: 11px; font-weight: 800; text-transform: uppercase; color: #0f766e; margin: 0 0 6px; }
+      img.qr { width: 220px; height: 220px; background: #fff; padding: 8px; }
+      img.logo { max-height: 52px; max-width: 140px; display: block; margin: 0 auto 8px; }
+      .hint { color: #7a5c48; font-size: 13px; margin: 8px 12px 0; }
+      @media print { .sheet { grid-template-columns: 1fr 1fr; } }
+      @media (max-width: 700px) { .sheet { grid-template-columns: 1fr; } }
+    </style></head><body>
+    <div class="sheet">${rows.map(qrTableStickerHtml).join("")}</div>
+    <script>window.onload=()=>{window.focus();window.print();}</script>
+    </body></html>`);
+  w.document.close();
 }
 
 function qrOrderQty(line) {
@@ -5369,28 +5508,32 @@ function printQrOrder(qr, invoice) {
   printOrder(bill, "pos");
 }
 
-function printQrPoster() {
-  const url = $("qr-menu-link")?.value || qrMenuUrl();
-  const src = $("qr-menu-code")?.src || "";
+function printQrPoster(tableId) {
+  const key = qrTableKey(tableId);
+  const url = key ? qrMenuUrl(key) : $("qr-menu-link")?.value || qrMenuUrl();
+  const label = key ? qrTableLabel(key) : "";
   const w = window.open("", "qr-poster", "width=640,height=860");
   if (!w) {
     setHint("Allow pop-ups to print the QR code", "error");
     return;
   }
-  const logo = state.company?.logo_url
-    ? `<img src="${escapeHtml(state.company.logo_url)}" alt="" style="max-height:72px;max-width:180px;display:block;margin:0 auto 12px">`
-    : "";
-  w.document.write(`<!DOCTYPE html><html><head><title>QR order poster</title>
-    <style>body{font-family:Georgia,serif;text-align:center;padding:36px;color:#4a1416} img.qr{width:280px;height:280px;background:#fff;padding:12px} p{color:#7a5c48}</style>
-    </head><body>
-    ${logo}
-    <h1>${escapeHtml(shopPrintName())}</h1>
-    <p>Scan to order spices</p>
-    <img class="qr" src="${escapeHtml(src)}" alt="QR">
-    <p>${escapeHtml(url)}</p>
-    <script>window.onload=()=>{window.print();}</script>
-    </body></html>`);
-  w.document.close();
+  qrCodeDataUrl(url, 280).then((src) => {
+    const logo = state.company?.logo_url
+      ? `<img src="${escapeHtml(state.company.logo_url)}" alt="" style="max-height:72px;max-width:180px;display:block;margin:0 auto 12px">`
+      : "";
+    w.document.write(`<!DOCTYPE html><html><head><title>${escapeHtml(label || "QR order poster")}</title>
+      <style>body{font-family:Georgia,serif;text-align:center;padding:36px;color:#4a1416} img.qr{width:280px;height:280px;background:#fff;padding:12px} p{color:#7a5c48} h2{margin:8px 0 16px;font-size:32px}</style>
+      </head><body>
+      ${logo}
+      <p>${escapeHtml(qrPosterKicker(label))}</p>
+      <h1>${escapeHtml(shopPrintName())}</h1>
+      ${label ? `<h2>${escapeHtml(label)}</h2>` : ""}
+      <img class="qr" src="${escapeHtml(src)}" alt="QR">
+      <p>${escapeHtml(url)}</p>
+      <script>window.onload=()=>{window.print();}</script>
+      </body></html>`);
+    w.document.close();
+  });
 }
 
 function paintQrOrderBadge() {
@@ -6796,7 +6939,28 @@ $("qr-copy-shop-id")?.addEventListener("click", async () => {
   $("qr-orders-hint").textContent = "Shop ID copied.";
   $("qr-orders-hint").className = "hint ok";
 });
-$("qr-print-code")?.addEventListener("click", printQrPoster);
+$("qr-print-code")?.addEventListener("click", () => printQrPoster());
+$("qr-print-all-tables")?.addEventListener("click", () => {
+  printQrTableStickers();
+});
+$("qr-table-grid")?.addEventListener("click", async (event) => {
+  const printBtn = event.target.closest("[data-qr-print-table]");
+  if (printBtn) {
+    event.preventDefault();
+    await printQrTableStickers([printBtn.getAttribute("data-qr-print-table")]);
+    return;
+  }
+  const copyBtn = event.target.closest("[data-qr-copy-table]");
+  if (!copyBtn) return;
+  const text = qrMenuUrl(copyBtn.getAttribute("data-qr-copy-table"));
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch {
+    /* ignore */
+  }
+  $("qr-orders-hint").textContent = `${qrTableLabel(copyBtn.getAttribute("data-qr-copy-table"))} link copied.`;
+  $("qr-orders-hint").className = "hint ok";
+});
 document.querySelector(".nav").addEventListener("click", (e) => {
   const btn = e.target.closest("[data-view]");
   if (btn) showView(btn.dataset.view);
@@ -7887,6 +8051,13 @@ $("btn-kot")?.addEventListener("click", async () => {
   }
 });
 $("table-board")?.addEventListener("click", async (e) => {
+  const printTableQr = e.target.closest("[data-table-qr]");
+  if (printTableQr) {
+    e.preventDefault();
+    e.stopPropagation();
+    await printQrTableStickers([printTableQr.getAttribute("data-table-qr")]);
+    return;
+  }
   const addFloor = e.target.closest("[data-add-floor]");
   if (addFloor) {
     e.preventDefault();

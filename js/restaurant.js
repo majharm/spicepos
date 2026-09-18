@@ -48,6 +48,12 @@
     return t;
   }
 
+  function tableQrKey(raw) {
+    const t = normalizeTableNo(raw);
+    if (!t || t === PARCEL) return "";
+    return t;
+  }
+
   function holdLabel(tableNo) {
     return displayTable(tableNo) || "Table";
   }
@@ -574,6 +580,7 @@ ${kotBody(opts)}
     isRestaurantShop,
     normalizeTableNo,
     displayTable,
+    tableQrKey,
     displayFloor,
     holdLabel,
     seatCount,
