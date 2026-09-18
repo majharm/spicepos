@@ -360,6 +360,11 @@ test("Medical shops show pharmacy medicine fields on the item form", () => {
   assert.match(css, /body\.classic-bill-mode\.counter-mode \.catalog-pane/);
   assert.match(app, /function paintClassicItemHits/);
   assert.match(app, /function paintClassicLoyalty/);
+  assert.match(app, /function resolveClassicBillCustomerId/);
+  assert.match(app, /pts available/);
+  assert.match(index, /class="classic-disc-row"/);
+  assert.match(index, /class="classic-loyalty-bar"/);
+  assert.match(css, /\.classic-disc-row/);
   assert.match(app, /function itemStockInfo/);
   assert.match(app, /function itemExpiryInfo/);
   assert.match(app, /function paintClassicStockAlert/);

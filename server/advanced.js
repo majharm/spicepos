@@ -707,6 +707,9 @@ async function postLoyalty(businessId, customerId, kind, points, rupees, note, o
 
 export async function applyLoyaltyOnSale(conn, ctx) {
   await ensureAdvancedSchema();
+  const cust = ctx.customer || {};
+  const walk = cust.code === "CUS-001" || /^walk-?in$/i.test(String(cust.name || "").trim());
+  if (!cust.id || walk) return { points: 0, rupees: 0, earned: 0 };
   const settings = await loyaltySettings(ctx.businessId, conn);
   const acc = await loyaltyAccount(ctx.businessId, ctx.customer.id, conn);
   let redeemPts = 0;

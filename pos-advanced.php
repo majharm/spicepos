@@ -798,8 +798,13 @@ function pos_loyalty_post($bid, $customerId, $kind, $points, $rupees, $note, $or
 }
 
 function pos_loyalty_apply_sale($bid, $customer, $orderId, $total, $wantRedeem, $uid) {
+  $customerId = $customer["id"] ?? "";
+  $name = (string) ($customer["name"] ?? "");
+  $code = (string) ($customer["code"] ?? "");
+  if ($customerId === "" || $code === "CUS-001" || preg_match('/^walk-?in$/i', $name)) {
+    return ["points" => 0, "rupees" => 0, "earned" => 0];
+  }
   $settings = pos_loyalty_settings($bid);
-  $customerId = $customer["id"];
   $acc = pos_loyalty_account($bid, $customerId);
   $redeemPts = 0;
   $redeemRs = 0.0;
