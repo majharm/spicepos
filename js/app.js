@@ -762,9 +762,9 @@ function selectCounterCustomer(cust, { hint = true } = {}) {
   }
   paintBillCustomer();
   fillPharmacyBillCustomerFromCustomer(cust, { force: true });
+  clearClassicLoyalty();
   renderCatalog();
   renderCart();
-  state.loyaltyAccount = null;
   paintClassicLoyalty();
   void loadCustomerLoyalty();
   if (hint) {
@@ -789,8 +789,10 @@ function applyCounterMobile(raw, { announceMiss = true } = {}) {
     if (walk) {
       state.customerId = walk.id;
       if ($("customer")) $("customer").value = walk.id;
+      clearClassicLoyalty();
       paintBillCustomer();
       paintClassicCustomerStatus();
+      paintClassicLoyalty();
       renderCatalog();
       renderCart();
     }
@@ -805,7 +807,7 @@ function applyCounterMobile(raw, { announceMiss = true } = {}) {
     if (wrap) wrap.open = true;
     $("qc-name")?.focus();
   } else if (isClassicBillShop()) {
-    paintClassicCustomerStatus();
+    detachClassicUnknownCustomer();
   }
   return false;
 }
@@ -823,6 +825,26 @@ function lineAmt(item, qtyGm) {
 
 function canDiscount() {
   return can("discount") || state.session?.role === "business_admin";
+}
+
+function canClassicLineDiscount() {
+  return canDiscount() || (isClassicBillShop() && (can("counter") || can("orders")));
+}
+
+function clearClassicLoyalty() {
+  state.loyaltyAccount = null;
+  state.loyaltyRedeem = 0;
+  if ($("loyalty-redeem")) $("loyalty-redeem").value = 0;
+}
+
+function detachClassicUnknownCustomer() {
+  const walk = walkInCustomer();
+  state.customerId = walk?.id || "";
+  if ($("customer")) $("customer").value = state.customerId;
+  clearClassicLoyalty();
+  paintBillCustomer();
+  paintClassicLoyalty();
+  paintClassicCustomerStatus();
 }
 
 function lineCalc(item, line) {
@@ -857,6 +879,8 @@ function pharmacyBillCustomerName() {
   if (typed) return typed;
   const c = customer();
   if (isWalkInCustomer(c)) return "";
+  const mob = pharmacyBillCustomerMobile();
+  if (isRealMobile(mob) && digitsMobile(c?.mobile) !== mob) return "";
   return String(c?.business_name || c?.name || "").trim();
 }
 
@@ -882,19 +906,29 @@ function pharmacyBillCustomerAddress() {
 function pharmacyBillDoctorRx() {
   const typed = String($("bill-doctor-rx")?.value || "").trim();
   if (typed) return typed;
-  return String(customer()?.doctor_rx || "").trim();
+  const c = customer();
+  if (isWalkInCustomer(c)) return "";
+  const mob = pharmacyBillCustomerMobile();
+  if (isRealMobile(mob) && digitsMobile(c?.mobile) !== mob) return "";
+  return String(c?.doctor_rx || "").trim();
 }
 
 function resolveClassicBillCustomerId() {
-  const byMob = findCustomerByMobile(pharmacyBillCustomerMobile());
+  const typedMob = pharmacyBillCustomerMobile();
+  const byMob = findCustomerByMobile(typedMob);
   if (byMob?.id && !isWalkInCustomer(byMob)) return byMob.id;
+  if (isRealMobile(typedMob) && !byMob) return "";
   const name = pharmacyBillCustomerName();
   if (name) {
     const exact = findCustomersByName(name).filter((c) => String(c.business_name || c.name || "").trim().toLowerCase() === name.toLowerCase());
-    if (exact.length === 1) return exact[0].id;
+    if (exact.length === 1) {
+      if (!typedMob || digitsMobile(exact[0].mobile) === typedMob) return exact[0].id;
+    }
   }
   const current = customer();
-  if (current?.id && !isWalkInCustomer(current)) return current.id;
+  if (current?.id && !isWalkInCustomer(current)) {
+    if (!typedMob || digitsMobile(current.mobile) === typedMob) return current.id;
+  }
   return "";
 }
 
@@ -2979,7 +3013,7 @@ function restaurantLineNoteHtml(line, key) {
 }
 
 function classicLineDiscHtml(line, key) {
-  if (!canDiscount()) return `<span class="line-disc-none">—</span>`;
+  if (!canClassicLineDiscount()) return `<span class="line-disc-none">—</span>`;
   const item = state.items.find((i) => i.id === line.itemId);
   const calc = item ? lineCalc(item, line) : null;
   const saved = Number(line.discountValue) || 0;
@@ -3067,6 +3101,7 @@ function renderCart() {
         <th class="pharm-n">Stock</th>
         <th class="pharm-n">GST</th>
         <th class="pharm-n">Total</th>
+        <th></th>
       </tr></thead>
       <tbody>${state.cart.map((line, idx) => {
         const item = state.items.find((i) => i.id === line.itemId);
@@ -3097,6 +3132,7 @@ function renderCart() {
           <td class="pharm-n stock-cell">${escapeHtml(alert.stock.label)}</td>
           <td class="pharm-n">${escapeHtml(String(Number(item.gst_rate) || 0))}%</td>
           <td class="pharm-n">${escapeHtml(money(calc.taxable + calc.gst))}</td>
+          <td><button type="button" class="classic-del" data-del-line="${escapeHtml(key)}" aria-label="Remove ${escapeHtml(item.name)}">×</button></td>
         </tr>`;
       }).join("")}</tbody>
     </table></div>`;
@@ -3468,14 +3504,18 @@ function addItem(id, qtyGm, lineBarcode) {
   const add = qtyGm == null ? POSUnits.counterStep(itemUnit(item)) : Number(qtyGm);
   const code = String(lineBarcode || "").trim();
   const count = POSUnits.isCount(itemUnit(item));
+  const pharmacyCount = isPharmacyShop() && count;
+  const barcodeAdd = pharmacyCount
+    ? POSUnits.clampQty((Number.isFinite(add) && add > 0 ? add : 1) * pieceBarcodeQty(item))
+    : POSUnits.clampQty(count ? pieceBarcodeQty(item) : add);
   if (code) {
     const existing = state.cart.find((l) => String(l.barcode || "").trim() === code);
     if (existing) {
-      if (count) {
+      if (count && !pharmacyCount) {
         setHint("This piece is already on the bill", "error");
         return;
       }
-      existing.qtyGm = POSUnits.clampQty(Number(existing.qtyGm) + add);
+      existing.qtyGm = POSUnits.clampQty(Number(existing.qtyGm) + (pharmacyCount ? barcodeAdd : add));
       renderCart();
       warnClassicItem(item);
       return;
@@ -3483,7 +3523,7 @@ function addItem(id, qtyGm, lineBarcode) {
     state.cart.push({
       lineId: newCartLineId(),
       itemId: id,
-      qtyGm: POSUnits.clampQty(count ? pieceBarcodeQty(item) : add),
+      qtyGm: barcodeAdd,
       discountType: "amt",
       discountValue: 0,
       barcode: code,
@@ -3635,7 +3675,7 @@ function applyOffersToCart() {
   const result = O.evaluateAll(offers, offerCartContext());
   state.appliedOffers = result;
   state.cart.forEach((line) => {
-    if (isClassicBillShop() && !line.offerId && (Number(line.discountValue) || 0) > 0) return;
+    if (isClassicBillShop()) return;
     const byLine = result.lineDiscounts?.[line.lineId] ?? result.lineDiscounts?.[String(line.lineId || "")];
     const byItem = result.lineDiscounts?.[line.itemId] ?? result.lineDiscounts?.[String(line.itemId || "")];
     const d = Number(byLine != null ? byLine : byItem || 0);
@@ -7169,7 +7209,9 @@ $("customer").addEventListener("change", () => {
   const shown = digitsMobile(c?.mobile);
   if (mob && isRealMobile(shown)) mob.value = shown;
   else if (mob && document.activeElement !== mob) mob.value = "";
+  clearClassicLoyalty();
   paintBillCustomer();
+  fillPharmacyBillCustomerFromCustomer(c, { force: true });
   renderCatalog();
   renderCart();
   void loadCustomerLoyalty();
@@ -9318,9 +9360,12 @@ async function loadCustomerLoyalty() {
   const cust = (state.customers || []).find((c) => c.id === id) || customer();
   if (!id || isWalkInCustomer(cust)) {
     state.loyaltyAccount = null;
+    state.loyaltyRedeem = 0;
+    if ($("loyalty-redeem")) $("loyalty-redeem").value = 0;
     if ($("loyalty-hint")) $("loyalty-hint").textContent = "";
     paintClassicLoyalty();
     paintClassicCustomerStatus();
+    renderCart();
     return;
   }
   if (!can("loyalty") && !can("customers") && !can("counter") && state.session?.role !== "business_admin") {
@@ -9350,6 +9395,7 @@ async function loadCustomerLoyalty() {
     state.loyaltyAccount = null;
     paintClassicLoyalty();
     paintClassicCustomerStatus();
+    renderCart();
   }
 }
 
