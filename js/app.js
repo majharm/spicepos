@@ -177,6 +177,7 @@ function restaurantApi() {
 }
 
 function emptyTicketHint() {
+  if (isClassicBillShop()) return "Scan barcode, type item code, or search name";
   return globalThis.POSFootwear?.itemFormCopy(state.businessMeta)?.ticket || "Tap a product or scan";
 }
 
@@ -2534,7 +2535,51 @@ function renderCatalogCats() {
   el.innerHTML = chips.join("");
 }
 
+function paintClassicItemHits() {
+  const box = $("classic-item-hits");
+  if (!box) return;
+  if (!isClassicBillShop()) {
+    box.hidden = true;
+    box.innerHTML = "";
+    return;
+  }
+  const q = String($("bill-scan-code")?.value || state.query || "").trim();
+  if (q.length < 1) {
+    box.hidden = true;
+    box.innerHTML = "";
+    return;
+  }
+  const rows = filteredItems().slice(0, 12);
+  if (!rows.length) {
+    box.hidden = true;
+    box.innerHTML = "";
+    return;
+  }
+  box.hidden = false;
+  box.innerHTML = rows.map((i) => {
+    const extra = isPharmacyShop()
+      ? [i.batch_no, formatExpiryShort(i.default_expiry)].filter(Boolean).join(" · ")
+      : itemVariantText(i);
+    const bits = [i.code || i.barcode, extra, money(rateFor(i))].filter(Boolean);
+    return `<button type="button" class="classic-hit" data-add="${escapeHtml(i.id)}">
+      <strong>${escapeHtml(i.name)}</strong>
+      <span>${escapeHtml(bits.join(" · "))}</span>
+    </button>`;
+  }).join("");
+}
+
 function renderCatalog() {
+  if (isClassicBillShop()) {
+    const root = $("catalog");
+    if (root) root.innerHTML = "";
+    const cats = $("catalog-cats");
+    if (cats) {
+      cats.hidden = true;
+      cats.innerHTML = "";
+    }
+    paintClassicItemHits();
+    return;
+  }
   renderCatalogCats();
   const root = $("catalog");
   if (!root) return;
@@ -6336,6 +6381,15 @@ $("catalog").addEventListener("click", (e) => {
     addItem(btn.dataset.add);
     focusScanLane();
   }
+});
+$("classic-item-hits")?.addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-add]");
+  if (!btn) return;
+  const item = state.items.find((i) => i.id === btn.dataset.add);
+  addItem(btn.dataset.add, classicScanAddQty(item));
+  clearCounterQuery($("bill-scan-code"));
+  paintClassicItemHits();
+  focusScanLane();
 });
 $("catalog-cats")?.addEventListener("click", (e) => {
   const btn = e.target.closest("[data-cat]");

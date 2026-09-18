@@ -345,6 +345,9 @@ test("Medical shops show pharmacy medicine fields on the item form", () => {
   assert.match(index, /id="classic-bill-head"/);
   assert.match(index, /id="classic-bill-date"/);
   assert.match(index, /id="classic-bill-entry"/);
+  assert.match(index, /id="classic-item-hits"/);
+  assert.match(css, /body\.classic-bill-mode\.counter-mode \.catalog-pane/);
+  assert.match(app, /function paintClassicItemHits/);
   assert.match(index, /id="bill-scan-code"/);
   assert.match(index, /id="bill-scan-camera-btn"/);
   assert.match(index, /id="bill-scan-qty"/);
