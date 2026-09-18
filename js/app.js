@@ -515,6 +515,8 @@ function cancelOrderEdit() {
   if ($("bill-disc-type")) $("bill-disc-type").value = "amt";
   if ($("bill-disc-value")) $("bill-disc-value").value = 0;
   if ($("loyalty-redeem")) $("loyalty-redeem").value = 0;
+  resetClassicBillEntry();
+  resetClassicCustomerRecord({ focus: true });
   renderEditOrderBanner();
   renderCart();
   setHint("Edit cancelled");
@@ -617,6 +619,76 @@ function customerDue(c) {
 function isWalkInCustomer(c) {
   if (!c) return true;
   return c.code === "CUS-001" || /^walk-?in$/i.test(String(c.name || "").trim());
+}
+
+function walkInCustomer() {
+  return (state.customers || []).find((c) => isWalkInCustomer(c)) || null;
+}
+
+function classicCustomerRecordDirty() {
+  if (!isClassicBillShop()) return false;
+  if (!isWalkInCustomer(customer())) return true;
+  return [
+    "bill-cust-name",
+    "bill-cust-mobile",
+    "bill-cust-address",
+    "bill-cust-area",
+    "bill-cust-city",
+    "bill-cust-pin",
+    "bill-doctor-rx",
+    "counter-mobile",
+  ].some((id) => String($(id)?.value || "").trim());
+}
+
+function resetClassicCustomerRecord({ focus = false } = {}) {
+  if (!isClassicBillShop()) return;
+  const walk = walkInCustomer();
+  state.customerId = walk?.id || "";
+  if ($("customer")) $("customer").value = state.customerId;
+  if ($("counter-mobile")) $("counter-mobile").value = "";
+  [
+    "bill-cust-name",
+    "bill-cust-mobile",
+    "bill-cust-address",
+    "bill-cust-area",
+    "bill-cust-city",
+    "bill-cust-pin",
+    "bill-doctor-rx",
+    "qc-name",
+    "qc-mobile",
+    "qc-address",
+    "qc-doctor-rx",
+  ].forEach((id) => {
+    if ($(id)) $(id).value = "";
+  });
+  const wrap = $("quick-customer-wrap");
+  if (wrap) wrap.open = false;
+  hideClassicCustHits();
+  state.loyaltyAccount = null;
+  state.loyaltyRedeem = 0;
+  if ($("loyalty-redeem")) $("loyalty-redeem").value = 0;
+  paintBillCustomer();
+  paintClassicCustomerStatus();
+  paintClassicLoyalty();
+  if (focus) $("bill-cust-mobile")?.focus();
+}
+
+function resetClassicBillEntry() {
+  if ($("bill-scan-code")) $("bill-scan-code").value = "";
+  if ($("bill-item-search")) $("bill-item-search").value = "";
+  if ($("bill-scan-qty")) $("bill-scan-qty").value = "1";
+  if ($("bill-scan-status")) $("bill-scan-status").textContent = "";
+  $("bill-scan-form")?.classList.remove("is-hit", "is-miss");
+  const hits = $("classic-item-hits");
+  if (hits) {
+    hits.hidden = true;
+    hits.innerHTML = "";
+  }
+  const alert = $("classic-stock-alert");
+  if (alert) {
+    alert.hidden = true;
+    alert.textContent = "";
+  }
 }
 
 function customerOptionLabel(c) {
@@ -1067,8 +1139,8 @@ function clearCounterAfterSale(order, result) {
   if ($("search")) $("search").value = "";
   if ($("scan-code")) $("scan-code").value = "";
   if ($("pack-choice")) $("pack-choice").value = "";
-  if ($("bill-doctor-rx")) $("bill-doctor-rx").value = "";
-  fillPharmacyBillCustomerFromCustomer(customer(), { force: true });
+  resetClassicBillEntry();
+  resetClassicCustomerRecord();
   renderCatalog();
   renderCart();
   if (table) void dropTableHold(table);
@@ -2873,8 +2945,8 @@ function cartTotals() {
   const L = globalThis.POSLoyalty;
   const bill = D
     ? D.computeBill(lines, {
-        discountType: state.billDiscountType,
-        discountValue: state.billDiscountValue,
+        discountType: isClassicBillShop() ? "amt" : state.billDiscountType,
+        discountValue: isClassicBillShop() ? 0 : state.billDiscountValue,
       })
     : { subtotal: lines.reduce((s, l) => s + l.taxable, 0), gst: lines.reduce((s, l) => s + l.gst, 0), billDiscount: 0, total: 0, profit: 0 };
   let loyaltyDiscount = 0;
@@ -2906,6 +2978,22 @@ function restaurantLineNoteHtml(line, key) {
   return `<button class="line-si-btn" type="button" data-note-open="${escapeHtml(key)}">Add Special Instruction</button>`;
 }
 
+function classicLineDiscHtml(line, key) {
+  if (!canDiscount()) return `<span class="line-disc-none">—</span>`;
+  const item = state.items.find((i) => i.id === line.itemId);
+  const calc = item ? lineCalc(item, line) : null;
+  const saved = Number(line.discountValue) || 0;
+  const off = Number(calc?.discount) || 0;
+  return `<div class="line-disc">
+    <select data-line-disc-type="${escapeHtml(key)}" aria-label="Item discount type">
+      <option value="amt"${(line.discountType || "amt") === "amt" ? " selected" : ""}>₹</option>
+      <option value="pct"${line.discountType === "pct" ? " selected" : ""}>%</option>
+    </select>
+    <input data-line-disc="${escapeHtml(key)}" type="number" min="0" step="0.01" value="${escapeHtml(saved)}" aria-label="Item discount" />
+    ${off > 0 ? `<small>−${escapeHtml(money(off))}</small>` : ""}
+  </div>`;
+}
+
 function renderCart() {
   applyOffersToCart();
   const packEl = $("chosen-pack");
@@ -2930,6 +3018,7 @@ function renderCart() {
         <th>Batch / Exp</th>
         <th>Qty</th>
         <th class="pharm-n">Rate</th>
+        <th>Disc</th>
         <th class="pharm-n">Amount</th>
         <th></th>
       </tr></thead>
@@ -2959,6 +3048,7 @@ function renderCart() {
             </div>
           </td>
           <td class="pharm-n">${escapeHtml(money(rateFor(item)))}<small>${escapeHtml(String(Number(item.gst_rate) || 0))}% GST</small></td>
+          <td class="line-disc-cell">${classicLineDiscHtml(line, key)}</td>
           <td class="pharm-n">${escapeHtml(money(calc.taxable + calc.gst))}</td>
           <td><button type="button" class="classic-del" data-del-line="${escapeHtml(key)}" aria-label="Remove ${escapeHtml(item.name)}">×</button></td>
         </tr>`;
@@ -2973,6 +3063,7 @@ function renderCart() {
         <th>Colour / Size</th>
         <th class="pharm-n">Rate</th>
         <th>Qty</th>
+        <th>Disc</th>
         <th class="pharm-n">Stock</th>
         <th class="pharm-n">GST</th>
         <th class="pharm-n">Total</th>
@@ -2992,13 +3083,7 @@ function renderCart() {
         return `<tr class="tone-${alert.stock.tone} exp-${alert.exp.tone}">
           <td class="pharm-n">${idx + 1}</td>
           <td>${escapeHtml(item.code || item.hsn || "—")}</td>
-          <td class="pharm-med">${escapeHtml(item.name)}${canDiscount() ? `<div class="line-disc">
-              <select data-line-disc-type="${escapeHtml(key)}" aria-label="Line discount type">
-                <option value="amt"${(line.discountType || "amt") === "amt" ? " selected" : ""}>₹</option>
-                <option value="pct"${line.discountType === "pct" ? " selected" : ""}>%</option>
-              </select>
-              <input data-line-disc="${escapeHtml(key)}" type="number" min="0" step="0.01" value="${escapeHtml(line.discountValue || 0)}" aria-label="Line discount" />
-            </div>` : ""}</td>
+          <td class="pharm-med">${escapeHtml(item.name)}</td>
           <td>${escapeHtml(variant || "—")}${alert.exp.expired ? ` · EXPIRED ${escapeHtml(alert.exp.short)}` : ""}</td>
           <td class="pharm-n">${escapeHtml(money(rateFor(item)))}</td>
           <td>
@@ -3008,6 +3093,7 @@ function renderCart() {
               <button type="button" data-chg="${escapeHtml(key)}" data-d="${step}">+</button>
             </div>
           </td>
+          <td class="line-disc-cell">${classicLineDiscHtml(line, key)}</td>
           <td class="pharm-n stock-cell">${escapeHtml(alert.stock.label)}</td>
           <td class="pharm-n">${escapeHtml(String(Number(item.gst_rate) || 0))}%</td>
           <td class="pharm-n">${escapeHtml(money(calc.taxable + calc.gst))}</td>
@@ -3086,7 +3172,7 @@ function renderCart() {
     $("classic-bill-date").value = `${pad(now.getDate())}/${pad(now.getMonth() + 1)}/${now.getFullYear()} ${pad(now.getHours())}:${pad(now.getMinutes())}`;
   }
   $("btn-pay").disabled = state.cart.length === 0;
-  $("btn-clear").disabled = state.cart.length === 0;
+  $("btn-clear").disabled = state.cart.length === 0 && !classicCustomerRecordDirty();
   document.body.classList.toggle("has-cart", state.cart.length > 0);
   paintBillToggleCount();
   paintBillCustomer();
@@ -3491,6 +3577,11 @@ function applyComboOffer(id) {
   const ids = state.cart.map((l) => l.itemId);
   if (!ids.includes(combo.item_a_id)) addItem(combo.item_a_id);
   if (!ids.includes(combo.item_b_id)) addItem(combo.item_b_id);
+  if (isClassicBillShop()) {
+    setHint(`Combo ${combo.name}: use Disc on each item (no whole-bill discount)`, "ok");
+    renderCart();
+    return;
+  }
   state.billDiscountType = String(combo.discount_type || "pct") === "amt" ? "amt" : "pct";
   state.billDiscountValue = Number(combo.discount_value) || 0;
   if ($("bill-disc-type")) $("bill-disc-type").value = state.billDiscountType;
@@ -3544,6 +3635,7 @@ function applyOffersToCart() {
   const result = O.evaluateAll(offers, offerCartContext());
   state.appliedOffers = result;
   state.cart.forEach((line) => {
+    if (isClassicBillShop() && !line.offerId && (Number(line.discountValue) || 0) > 0) return;
     const byLine = result.lineDiscounts?.[line.lineId] ?? result.lineDiscounts?.[String(line.lineId || "")];
     const byItem = result.lineDiscounts?.[line.itemId] ?? result.lineDiscounts?.[String(line.itemId || "")];
     const d = Number(byLine != null ? byLine : byItem || 0);
@@ -3561,7 +3653,11 @@ function applyOffersToCart() {
     }
   });
   if (!state.offerBillLocked) {
-    if (result.billDiscount > 0) {
+    if (isClassicBillShop()) {
+      state.billDiscountType = "amt";
+      state.billDiscountValue = 0;
+      state.offerDroveBill = false;
+    } else if (result.billDiscount > 0) {
       state.billDiscountType = "amt";
       state.billDiscountValue = result.billDiscount;
       state.offerDroveBill = true;
@@ -6761,7 +6857,7 @@ $("lines").addEventListener("change", (e) => {
 });
 $("lines").addEventListener("keydown", (e) => {
   if (e.key !== "Enter") return;
-  const input = e.target.closest("[data-qty]");
+  const input = e.target.closest("[data-qty], [data-line-disc]");
   if (!input) return;
   e.preventDefault();
   input.blur();
@@ -7099,7 +7195,10 @@ $("btn-clear").addEventListener("click", () => {
   if ($("bill-disc-value")) $("bill-disc-value").value = 0;
   if ($("loyalty-redeem")) $("loyalty-redeem").value = 0;
   $("pack-choice").value = "";
-  setHint("Cart cleared");
+  resetClassicBillEntry();
+  resetClassicCustomerRecord({ focus: true });
+  setHint(isClassicBillShop() ? "Bill and customer record cleared" : "Cart cleared");
+  renderCatalog();
   renderCart();
   if (isRestaurantShop() && table) void dropTableHold(table);
 });
@@ -7127,9 +7226,9 @@ $("btn-pay").addEventListener("click", async () => {
       paymentMethod: $("pay-method").value,
       packId: state.lastPack?.id || null,
       packCount: state.lastPack?.count || null,
-      discountType: state.billDiscountType,
-      discountValue: state.billDiscountValue,
-      discount: cartTotals().discount,
+      discountType: isClassicBillShop() ? "amt" : state.billDiscountType,
+      discountValue: isClassicBillShop() ? 0 : state.billDiscountValue,
+      discount: isClassicBillShop() ? 0 : cartTotals().discount,
       loyaltyPoints: state.loyaltyRedeem,
       offerIds: (state.appliedOffers?.applied || []).map((o) => o.id).filter(Boolean),
       offerLoyaltyMultiplier: state.appliedOffers?.loyaltyMultiplier || 1,
@@ -7155,7 +7254,10 @@ $("btn-pay").addEventListener("click", async () => {
     if (!orderSaved(result)) throw new Error("Checkout did not return an order");
     const wasEdit = Boolean(state.editingOrderId);
     const tableNo = payload.table_no || state.activeTable || "";
-    clearCounterAfterSale(order, result);
+    const billedName = isClassicBillShop()
+      ? (pharmacyBillCustomerName() || customer()?.business_name || customer()?.name || "Walk-in")
+      : (customer()?.business_name || customer()?.name || "Walk-in");
+    const billedCustomerId = state.customerId;
     state.editingOrderId = null;
     renderEditOrderBanner();
     if (wasEdit) {
@@ -7166,8 +7268,8 @@ $("btn-pay").addEventListener("click", async () => {
       receiptOrder = {
         order_number: orderLabel(order, result),
         total: orderTotal(order, result),
-        customer_name: customer()?.name || "Walk-in",
-        customer_id: state.customerId,
+        customer_name: billedName,
+        customer_id: billedCustomerId,
         payment_method: $("pay-method").value,
         payment_status: "paid",
         lines: [],
@@ -7206,12 +7308,15 @@ $("btn-pay").addEventListener("click", async () => {
       title: `Invoice ${orderLabel(order, result)}`,
       message: "Bill saved. POS cleared for the next customer.",
     });
+    clearCounterAfterSale(order, result);
     showView("counter");
     try {
       await Promise.all([loadBootstrap(), loadToday()]);
     } catch {
       /* order is already saved; keep the success message and cleared cart */
     }
+    resetClassicCustomerRecord();
+    renderCart();
   } catch (err) {
     setHint(userHintMessage(err), "error");
   }

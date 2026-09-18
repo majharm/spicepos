@@ -1763,6 +1763,36 @@ body.classic-bill-mode .pharm-bill-table .qty-input {
   max-width: 4.5em;
   min-height: 28px;
 }
+body.classic-bill-mode .line-disc-cell .line-disc,
+body.classic-bill-mode .view-counter .line-disc,
+body.classic-bill-mode.counter-mode .stage.is-counter .line-disc {
+  display: flex !important;
+  flex-wrap: nowrap;
+  gap: 4px;
+  align-items: center;
+}
+body.classic-bill-mode .line-disc select {
+  width: 42px;
+  min-height: 28px;
+  padding: 2px;
+  font-size: 12px;
+}
+body.classic-bill-mode .line-disc input {
+  width: 4.2em;
+  min-width: 3.2em;
+  min-height: 28px;
+  padding: 2px 4px;
+}
+body.classic-bill-mode .line-disc small {
+  display: block;
+  font-size: 10px;
+  font-weight: 700;
+  color: #0f766e;
+  white-space: nowrap;
+}
+body.classic-bill-mode .classic-bill-whole-disc {
+  display: none !important;
+}
 body.classic-bill-mode .totals {
   background: #f4f7fb;
   border-top: 1px solid #9bb3d4;
@@ -1944,7 +1974,7 @@ body.classic-bill-mode #bill-disc-wrap {
 }
 body.classic-bill-mode .classic-disc-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-columns: 1fr;
   gap: 8px 16px;
   align-items: start;
 }
