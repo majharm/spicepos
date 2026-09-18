@@ -1889,25 +1889,74 @@ body.classic-bill-mode #bill-extras[open] > summary {
 }
 body.classic-bill-mode #bill-disc-wrap {
   display: grid;
-  grid-template-columns: minmax(160px, 1fr) minmax(180px, 1fr) minmax(220px, 1.2fr);
-  gap: 8px 12px;
-  align-items: end;
+  grid-template-columns: 1fr;
+  gap: 8px;
   padding: 0;
 }
-body.classic-bill-mode .classic-loyalty-balance:not([hidden]) {
+body.classic-bill-mode .classic-disc-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 8px 16px;
+  align-items: start;
+}
+body.classic-bill-mode .classic-disc-row > label {
+  display: grid;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #1e3a5f;
+}
+body.classic-bill-mode .classic-loyalty-bar:not([hidden]) {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
+  gap: 6px;
   margin: 0;
-  min-height: 32px;
-  font-size: 13px;
-  font-weight: 800;
-  color: #146c43;
-  grid-column: 1 / -1;
+  padding: 7px 10px;
+  border: 1px solid #8fd4ab;
+  border-radius: 6px;
+  background: #fff;
+  color: #0f5132;
+  font-size: 12px;
+  font-weight: 750;
+}
+body.classic-bill-mode .classic-loy-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: #d7f4e3;
+  border: 1px solid #8fd4ab;
+  line-height: 1.3;
+}
+body.classic-bill-mode .classic-loy-pill.is-earn {
+  background: #e7eef8;
+  border-color: #9bb3d4;
+  color: #1e3a5f;
+}
+body.classic-bill-mode .classic-loy-pill.is-wait,
+body.classic-bill-mode .classic-loy-pill.is-miss {
+  background: #fff3cd;
+  border-color: #ffecb5;
+  color: #664d03;
+}
+body.classic-bill-mode .classic-loyalty-bar.is-wait {
+  border-color: #ffecb5;
+  background: #fffdf5;
+  color: #664d03;
 }
 body.classic-bill-mode .loyalty-redeem input {
-  min-height: 32px;
-  border-radius: 2px;
+  min-height: 34px;
+  width: 100%;
+  border-radius: 3px;
   border: 1px solid #7a9cc6;
+}
+body.classic-bill-mode .disc-pair select,
+body.classic-bill-mode .disc-pair input {
+  min-height: 34px;
+}
+body.classic-bill-mode #loyalty-hint {
+  display: none;
 }
 .bill-toggle {
   position: relative;
@@ -4405,6 +4454,9 @@ button.items-stat.is-active {
   .classic-bill-scan .classic-code,
   .classic-bill-scan .classic-item-search { grid-column: 1 / -1; }
   body.classic-bill-mode #bill-disc-wrap {
+    grid-template-columns: 1fr;
+  }
+  body.classic-bill-mode .classic-disc-row {
     grid-template-columns: 1fr;
   }
   .classic-scan-status { grid-column: 1 / -1; }

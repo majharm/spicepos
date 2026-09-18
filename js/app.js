@@ -692,6 +692,8 @@ function selectCounterCustomer(cust, { hint = true } = {}) {
   fillPharmacyBillCustomerFromCustomer(cust, { force: true });
   renderCatalog();
   renderCart();
+  state.loyaltyAccount = null;
+  paintClassicLoyalty();
   void loadCustomerLoyalty();
   if (hint) {
     const due = isWalkInCustomer(cust) ? 0 : customerDue(cust);
@@ -809,6 +811,19 @@ function pharmacyBillDoctorRx() {
   const typed = String($("bill-doctor-rx")?.value || "").trim();
   if (typed) return typed;
   return String(customer()?.doctor_rx || "").trim();
+}
+
+function resolveClassicBillCustomerId() {
+  const byMob = findCustomerByMobile(pharmacyBillCustomerMobile());
+  if (byMob?.id && !isWalkInCustomer(byMob)) return byMob.id;
+  const name = pharmacyBillCustomerName();
+  if (name) {
+    const exact = findCustomersByName(name).filter((c) => String(c.business_name || c.name || "").trim().toLowerCase() === name.toLowerCase());
+    if (exact.length === 1) return exact[0].id;
+  }
+  const current = customer();
+  if (current?.id && !isWalkInCustomer(current)) return current.id;
+  return "";
 }
 
 function fillPharmacyBillCustomerFromCustomer(cust, { force = false } = {}) {
@@ -3173,25 +3188,50 @@ function paintClassicLoyalty() {
   const extras = $("bill-extras");
   const bal = $("classic-loyalty-balance");
   if (!isClassicBillShop()) {
-    if (bal) bal.hidden = true;
+    if (bal) {
+      bal.hidden = true;
+      bal.innerHTML = "";
+    }
     return;
   }
   if (extras) extras.open = true;
   if (!bal) return;
-  const pts = Number(state.loyaltyAccount?.points_balance) || 0;
-  const tier = globalThis.POSLoyalty?.tierLabel?.(state.loyaltyAccount?.tier) || String(state.loyaltyAccount?.tier || "").trim();
-  const total = cartTotals().total;
-  const earn = globalThis.POSLoyalty?.earnPoints?.(total, state.loyaltySettings) || 0;
   const walk = isWalkInCustomer(customer());
-  if (walk || !state.loyaltyAccount) {
-    bal.hidden = false;
-    bal.textContent = walk
-      ? "Royalty: enter customer mobile to load points"
-      : "Royalty: 0 pts";
-    return;
+  const acc = state.loyaltyAccount;
+  const pts = Math.max(0, Number(acc?.points_balance) || 0);
+  const earnedLife = Math.max(0, Number(acc?.lifetime_earned) || 0);
+  const tier = globalThis.POSLoyalty?.tierLabel?.(acc?.tier) || "";
+  const settings = state.loyaltySettings || globalThis.POSLoyalty?.DEFAULTS;
+  const total = cartTotals().total;
+  const earn = walk || !settings ? 0 : (globalThis.POSLoyalty?.earnPoints?.(total, settings) || 0);
+  const redeem = $("loyalty-redeem");
+  if (redeem) {
+    redeem.max = String(pts);
+    if (Number(redeem.value) > pts) {
+      redeem.value = String(pts);
+      state.loyaltyRedeem = pts;
+    }
+    redeem.disabled = walk || pts <= 0;
+    redeem.placeholder = pts > 0 ? `Max ${pts}` : "0";
   }
   bal.hidden = false;
-  bal.textContent = `Royalty: ${pts} pts${tier ? ` · ${tier}` : ""}${earn ? ` · this bill +${earn}` : ""}`;
+  if (walk) {
+    bal.className = "classic-loyalty-bar is-wait";
+    bal.innerHTML = `<span class="classic-loy-pill is-wait">Load customer mobile to use royalty</span>`;
+    return;
+  }
+  if (!acc) {
+    bal.className = "classic-loyalty-bar is-wait";
+    bal.innerHTML = `<span class="classic-loy-pill is-wait">Loading royalty…</span>`;
+    return;
+  }
+  bal.className = "classic-loyalty-bar";
+  const pills = [`<span class="classic-loy-pill">${escapeHtml(`${pts} pts available`)}</span>`];
+  if (tier) pills.push(`<span class="classic-loy-pill">${escapeHtml(tier)}</span>`);
+  if (earn > 0) pills.push(`<span class="classic-loy-pill is-earn">This bill +${earn}</span>`);
+  else if (pts === 0 && earnedLife > 0) pills.push(`<span class="classic-loy-pill">Lifetime ${earnedLife}</span>`);
+  else if (pts === 0) pills.push(`<span class="classic-loy-pill is-earn">Earns on this bill</span>`);
+  bal.innerHTML = pills.join("");
 }
 
 function renderPackChoice() {
@@ -7076,6 +7116,10 @@ document.addEventListener("click", (e) => {
 
 $("btn-pay").addEventListener("click", async () => {
   try {
+    if (isClassicBillShop()) {
+      const billed = resolveClassicBillCustomerId();
+      if (billed) state.customerId = billed;
+    }
     if (!state.customerId) {
       const walk = state.customers.find((c) => /walk-in/i.test(c.name));
       state.customerId = walk?.id || state.customers[0]?.id || "";
@@ -9159,22 +9203,45 @@ $("classic-cust-add")?.addEventListener("click", () => {
   $(id)?.addEventListener("input", () => paintClassicCustomerStatus());
 });
 
+let loyaltyLoadSeq = 0;
+
 async function loadCustomerLoyalty() {
-  if (!state.customerId) return;
-  if (!can("loyalty") && state.session?.role !== "business_admin") return;
+  const id = isClassicBillShop() ? (resolveClassicBillCustomerId() || state.customerId) : state.customerId;
+  if (id && id !== state.customerId) state.customerId = id;
+  const cust = (state.customers || []).find((c) => c.id === id) || customer();
+  if (!id || isWalkInCustomer(cust)) {
+    state.loyaltyAccount = null;
+    if ($("loyalty-hint")) $("loyalty-hint").textContent = "";
+    paintClassicLoyalty();
+    paintClassicCustomerStatus();
+    return;
+  }
+  if (!can("loyalty") && !can("customers") && !can("counter") && state.session?.role !== "business_admin") {
+    paintClassicLoyalty();
+    return;
+  }
+  const seq = ++loyaltyLoadSeq;
   try {
-    const data = await api(`/api/loyalty/customer/${encodeURIComponent(state.customerId)}`);
-    state.loyaltyAccount = data.account;
-    state.loyaltySettings = data.settings || state.loyaltySettings;
+    const data = await api(`/api/loyalty/customer/${encodeURIComponent(id)}`);
+    if (seq !== loyaltyLoadSeq) return;
+    state.loyaltyAccount = data.account || null;
+    state.loyaltySettings = data.settings || state.loyaltySettings || globalThis.POSLoyalty?.DEFAULTS || null;
+    const pts = Math.max(0, Number(state.loyaltyAccount?.points_balance) || 0);
+    const tier = globalThis.POSLoyalty?.tierLabel?.(state.loyaltyAccount?.tier) || state.loyaltyAccount?.tier || "";
     if ($("loyalty-hint")) {
-      $("loyalty-hint").textContent = data.account
-        ? `${data.account.points_balance || 0} pts · ${globalThis.POSLoyalty?.tierLabel(data.account.tier) || data.account.tier}`
-        : "";
+      $("loyalty-hint").textContent = state.loyaltyAccount ? `${pts} pts · ${tier}` : "";
     }
+    if ($("loyalty-redeem") && Number($("loyalty-redeem").value) > pts) {
+      $("loyalty-redeem").value = String(pts);
+      state.loyaltyRedeem = pts;
+    }
+    paintClassicLoyalty();
     renderCart();
     paintClassicCustomerStatus();
   } catch {
+    if (seq !== loyaltyLoadSeq) return;
     state.loyaltyAccount = null;
+    paintClassicLoyalty();
     paintClassicCustomerStatus();
   }
 }
