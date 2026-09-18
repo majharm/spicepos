@@ -378,7 +378,9 @@ test("Medical shops show pharmacy medicine fields on the item form", () => {
   assert.match(css, /\.combo-banner\[hidden\]/);
   assert.match(app, /classList\.toggle\("is-empty"/);
   assert.match(css, /body\.classic-bill-mode \.lines\.is-empty/);
-  assert.match(css, /body\.classic-bill-mode \.lines \{[^}]*min-height: 220px/);
+  assert.match(css, /min-height: 280px/);
+  assert.match(app, /data-del-line/);
+  assert.match(app, /isClassicBillShop\(\)/);
   assert.match(css, /#pharm-bill-cust,\s*\.pharm-bill-cust \{\s*display: none !important;/);
   assert.match(app, /function classicScanAddQty/);
   assert.match(app, /bill-scan-camera-btn/);

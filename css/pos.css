@@ -1702,8 +1702,10 @@ body.classic-bill-mode .classic-bill-head:not([hidden]) { display: grid; }
   border-color: #1e3f7a;
 }
 body.classic-bill-mode .pharm-bill-table {
-  min-width: 100%;
+  min-width: 0;
+  width: 100%;
   background: #fff;
+  table-layout: auto;
 }
 body.classic-bill-mode .pharm-bill-table thead th {
   background: #f4c430;
@@ -1712,31 +1714,68 @@ body.classic-bill-mode .pharm-bill-table thead th {
   position: sticky;
   top: 0;
   z-index: 1;
+  white-space: nowrap;
 }
 body.classic-bill-mode .pay-row { grid-template-columns: 1fr 1fr 1.8fr; }
 body.classic-bill-mode .pharm-bill-wrap {
   border: 1px solid #9bb3d4;
   border-radius: 0;
   background: #fff;
-  overflow: visible;
+  overflow-x: auto;
   margin: 0;
 }
 body.classic-bill-mode .pharm-bill-table th,
 body.classic-bill-mode .pharm-bill-table td {
   border-color: #c5d4ea;
-  padding: 7px 6px;
+  padding: 8px 7px;
+  vertical-align: top;
+}
+body.classic-bill-mode .pharm-bill-table .pharm-med small,
+body.classic-bill-mode .pharm-bill-table .exp-cell small,
+body.classic-bill-mode .pharm-bill-table .pharm-n small {
+  display: block;
+  font-size: 11px;
+  font-weight: 650;
+  color: #3d5a80;
+  margin-top: 2px;
+}
+body.classic-bill-mode .classic-del {
+  width: 28px;
+  height: 28px;
+  border: 0;
+  background: transparent;
+  color: #a12822;
+  font-size: 20px;
+  font-weight: 800;
+  line-height: 1;
+  cursor: pointer;
+}
+body.classic-bill-mode .pharm-bill-table .qty button {
+  width: 26px;
+  height: 26px;
+  min-width: 26px;
+  border-radius: 4px;
+  box-shadow: none;
+}
+body.classic-bill-mode .pharm-bill-table .qty-input {
+  width: 3.4em;
+  min-width: 3em;
+  max-width: 4.5em;
+  min-height: 28px;
 }
 body.classic-bill-mode .totals {
   background: #f4f7fb;
   border-top: 1px solid #9bb3d4;
 }
 body.classic-bill-mode .lines-empty,
-body.classic-bill-mode .lines.is-empty {
-  display: none;
+body.classic-bill-mode .lines.is-empty,
+body.classic-bill-mode #lines.is-empty {
+  display: none !important;
 }
-body.classic-bill-mode .lines {
+body.classic-bill-mode .lines,
+body.classic-bill-mode #lines {
   flex: 1 1 auto;
-  min-height: 220px;
+  min-height: 280px;
   overflow: auto;
   padding: 0 10px 8px;
 }
@@ -2699,6 +2738,9 @@ body.pharmacy-mode .pharmacy-hide { display: none !important; }
   min-width: 640px;
   border-collapse: collapse;
   font-size: 11px;
+}
+body.classic-bill-mode .pharm-bill-table {
+  min-width: 0;
 }
 .pharm-bill-table th,
 .pharm-bill-table td {
