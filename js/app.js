@@ -2596,10 +2596,11 @@ function catalogCategories() {
 
 function filteredItems() {
   const q = state.query.trim().toLowerCase();
-  const wearer = String(state.wearerFilter || "").toLowerCase();
-  const size = String(state.sizeFilter || "").trim().toLowerCase();
-  const color = String(state.colorFilter || "").trim().toLowerCase();
-  const cat = q ? "" : String(state.categoryFilter || "");
+  const classic = isClassicBillShop();
+  const wearer = classic ? "" : String(state.wearerFilter || "").toLowerCase();
+  const size = classic ? "" : String(state.sizeFilter || "").trim().toLowerCase();
+  const color = classic ? "" : String(state.colorFilter || "").trim().toLowerCase();
+  const cat = classic || q ? "" : String(state.categoryFilter || "");
   return activeItems().filter((i) => {
     if (cat && itemCategoryLabel(i) !== cat) return false;
     if (wearer && globalThis.POSFootwear?.normalizeWearer(i.wearer_type) !== wearer) return false;
@@ -2924,17 +2925,13 @@ function renderCart() {
   } else if (isPharmacyShop()) {
     $("lines").innerHTML = `<div class="pharm-bill-wrap"><table class="pharm-bill-table classic-bill-table">
       <thead><tr>
-        <th>S.No.</th>
+        <th>#</th>
         <th>Medicine</th>
-        <th>Batch No.</th>
-        <th>Expiry</th>
-        <th>Pack</th>
+        <th>Batch / Exp</th>
         <th>Qty</th>
-        <th class="pharm-n">Stock</th>
-        <th class="pharm-n">MRP</th>
         <th class="pharm-n">Rate</th>
-        <th class="pharm-n">GST</th>
         <th class="pharm-n">Amount</th>
+        <th></th>
       </tr></thead>
       <tbody>${state.cart.map((line, idx) => {
         const item = state.items.find((i) => i.id === line.itemId);
@@ -2948,20 +2945,12 @@ function renderCart() {
         const calc = lineCalc(item, line);
         const key = cartLineKey(line);
         const preview = F?.cartBatchPreview?.(item) || { batchNo: item.batch_no || "—", expiry: formatExpiryShort(item.default_expiry) || "—", pack: medicinePackLabel(item) || "—" };
-        const mrp = Number(F?.looseMrp?.(item) ?? item.mrp ?? item.retail_rate) || rateFor(item);
         const alert = classicItemAlerts(item);
+        const packBit = preview.pack && preview.pack !== "—" ? preview.pack : "";
         return `<tr class="tone-${alert.stock.tone} exp-${alert.exp.tone}">
           <td class="pharm-n">${idx + 1}</td>
-          <td class="pharm-med">${escapeHtml(item.name)}${canDiscount() ? `<div class="line-disc">
-              <select data-line-disc-type="${escapeHtml(key)}" aria-label="Line discount type">
-                <option value="amt"${(line.discountType || "amt") === "amt" ? " selected" : ""}>₹</option>
-                <option value="pct"${line.discountType === "pct" ? " selected" : ""}>%</option>
-              </select>
-              <input data-line-disc="${escapeHtml(key)}" type="number" min="0" step="0.01" value="${escapeHtml(line.discountValue || 0)}" aria-label="Line discount" />
-            </div>` : ""}</td>
-          <td>${escapeHtml(preview.batchNo)}</td>
-          <td class="exp-cell">${escapeHtml(preview.expiry)}${alert.exp.expired ? " · EXP" : alert.exp.soon ? ` · ${escapeHtml(alert.exp.label)}` : ""}</td>
-          <td>${escapeHtml(preview.pack)}</td>
+          <td class="pharm-med">${escapeHtml(item.name)}${packBit ? `<small>${escapeHtml(packBit)} · ${escapeHtml(alert.stock.label)}</small>` : `<small>${escapeHtml(alert.stock.label)}</small>`}</td>
+          <td class="exp-cell">${escapeHtml(preview.batchNo || "—")}<small>${escapeHtml(preview.expiry || "—")}${alert.exp.expired ? " · EXP" : alert.exp.soon ? ` · ${escapeHtml(alert.exp.label)}` : ""}</small></td>
           <td>
             <div class="qty">
               <button type="button" data-chg="${escapeHtml(key)}" data-d="${-step}">−</button>
@@ -2969,11 +2958,9 @@ function renderCart() {
               <button type="button" data-chg="${escapeHtml(key)}" data-d="${step}">+</button>
             </div>
           </td>
-          <td class="pharm-n stock-cell">${escapeHtml(alert.stock.label)}</td>
-          <td class="pharm-n">${escapeHtml(money(mrp))}</td>
-          <td class="pharm-n">${escapeHtml(money(rateFor(item)))}</td>
-          <td class="pharm-n">${escapeHtml(String(Number(item.gst_rate) || 0))}%</td>
+          <td class="pharm-n">${escapeHtml(money(rateFor(item)))}<small>${escapeHtml(String(Number(item.gst_rate) || 0))}% GST</small></td>
           <td class="pharm-n">${escapeHtml(money(calc.taxable + calc.gst))}</td>
+          <td><button type="button" class="classic-del" data-del-line="${escapeHtml(key)}" aria-label="Remove ${escapeHtml(item.name)}">×</button></td>
         </tr>`;
       }).join("")}</tbody>
     </table></div>`;
@@ -6719,6 +6706,12 @@ $("catalog-cats")?.addEventListener("click", (e) => {
   $("catalog")?.scrollTo({ top: 0 });
 });
 $("lines").addEventListener("click", (e) => {
+  const del = e.target.closest("[data-del-line]");
+  if (del) {
+    state.cart = state.cart.filter((l) => cartLineKey(l) !== del.dataset.delLine);
+    renderCart();
+    return;
+  }
   const openNote = e.target.closest("[data-note-open]");
   if (openNote) {
     const line = findCartLine(openNote.dataset.noteOpen);
@@ -7188,13 +7181,21 @@ $("btn-pay").addEventListener("click", async () => {
         ...receiptOrder,
         lines: cartSnapshot.map((l) => {
           const item = state.items.find((i) => i.id === l.itemId);
+          const calc = item ? lineCalc(item, l) : null;
+          const preview = globalThis.POSFootwear?.cartBatchPreview?.(item) || {};
           return {
             item_id: l.itemId,
             item_name: itemBillName(item),
             quantity_gm: l.qtyGm,
+            unit: item ? itemUnit(item) : "PCS",
             rate_per_kg: item ? rateFor(item) : 0,
-            amount: item ? lineAmt(item, l.qtyGm) : 0,
+            amount: calc ? calc.taxable : (item ? lineAmt(item, l.qtyGm) : 0),
+            gst_amount: calc ? calc.gst : 0,
             gst_rate: item?.gst_rate || 0,
+            mrp: item ? Number(globalThis.POSFootwear?.looseMrp?.(item) ?? item.mrp ?? item.retail_rate) || 0 : 0,
+            batch_no: preview.batchNo || item?.batch_no || "",
+            expiry_date: item?.default_expiry || "",
+            pack_label: preview.pack || medicinePackLabel(item) || "",
           };
         }),
       };
