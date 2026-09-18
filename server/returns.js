@@ -194,7 +194,12 @@ export function registerReturns(app) {
   app.get("/api/returns", requireStaff, requirePerm("orders"), (req, res) =>
     send(res, async () => {
       const rows = await query(
-        `SELECT r.*, COALESCE(s.name, s.username, '') AS staff_name
+        `SELECT r.*, COALESCE(
+            NULLIF(TRIM(CONCAT(IFNULL(s.first_name,''), ' ', IFNULL(s.last_name,''))), ''),
+            NULLIF(TRIM(s.username), ''),
+            NULLIF(TRIM(s.email), ''),
+            ''
+          ) AS staff_name
          FROM sales_returns r
          LEFT JOIN staff_users s ON s.id = r.created_by
          WHERE r.business_id=?

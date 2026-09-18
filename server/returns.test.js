@@ -30,6 +30,10 @@ test("Manage Returns is wired for pharmacy quarantine and garment condition", ()
   assert.match(node, /condition === "damaged" \|\| condition === "used" \? "quarantine" : "sellable"/);
   assert.match(node, /quarantine_gm/);
   assert.match(node, /kind: "sale_return"/);
+  assert.match(node, /s\.first_name/);
+  assert.match(php, /s\.first_name/);
+  assert.doesNotMatch(node, /COALESCE\(s\.name/);
+  assert.doesNotMatch(php, /COALESCE\(s\.name/);
   assert.match(php, /function pos_dispatch_returns/);
   assert.match(php, /quarantine_gm/);
   assert.match(php, /pos_pack_stock_qty/);

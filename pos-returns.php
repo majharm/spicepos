@@ -202,7 +202,12 @@ function pos_dispatch_returns($path, $method, $body, $bid, $branchId, $uid, $aut
 
   if ($path === "returns" && $method === "GET") {
     $rows = pos_q(
-      "SELECT r.*, COALESCE(s.name, s.username, '') AS staff_name
+      "SELECT r.*, COALESCE(
+          NULLIF(TRIM(CONCAT(IFNULL(s.first_name,''), ' ', IFNULL(s.last_name,''))), ''),
+          NULLIF(TRIM(s.username), ''),
+          NULLIF(TRIM(s.email), ''),
+          ''
+        ) AS staff_name
        FROM sales_returns r LEFT JOIN staff_users s ON s.id = r.created_by
        WHERE r.business_id = ? ORDER BY r.created_at DESC LIMIT 80",
       "s",
