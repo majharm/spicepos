@@ -227,6 +227,8 @@ function applyFootwearMode() {
   if (classicHead) classicHead.hidden = !isClassicBillShop();
   const classicEntry = $("classic-bill-entry");
   if (classicEntry) classicEntry.hidden = !isClassicBillShop();
+  const extras = $("bill-extras");
+  if (extras && isClassicBillShop()) extras.open = true;
   const pharmCust = $("pharm-bill-cust");
   if (pharmCust) pharmCust.hidden = true;
   const billTitle = document.querySelector("#bill-panel .ticket-head h2");
@@ -807,8 +809,8 @@ function syncCounterQuery(raw, sourceEl) {
   const q = String(raw || "");
   state.query = q;
   if ($("search") && sourceEl !== $("search")) $("search").value = q;
-  if ($("scan-code") && sourceEl !== $("scan-code")) $("scan-code").value = q;
-  if ($("bill-scan-code") && sourceEl !== $("bill-scan-code")) $("bill-scan-code").value = q;
+  if ($("scan-code") && sourceEl !== $("scan-code") && sourceEl !== $("bill-item-search")) $("scan-code").value = q;
+  if ($("bill-scan-code") && sourceEl !== $("bill-scan-code") && sourceEl !== $("bill-item-search")) $("bill-scan-code").value = q;
   renderCatalogDebounced();
 }
 
@@ -817,6 +819,7 @@ function clearCounterQuery(sourceEl) {
   if ($("search")) $("search").value = "";
   if ($("scan-code") && sourceEl !== $("scan-code")) $("scan-code").value = "";
   if ($("bill-scan-code") && sourceEl !== $("bill-scan-code")) $("bill-scan-code").value = "";
+  if ($("bill-item-search") && sourceEl !== $("bill-item-search")) $("bill-item-search").value = "";
   if (sourceEl) sourceEl.value = "";
   renderCatalog();
 }
@@ -2543,7 +2546,7 @@ function paintClassicItemHits() {
     box.innerHTML = "";
     return;
   }
-  const q = String($("bill-scan-code")?.value || state.query || "").trim();
+  const q = String($("bill-item-search")?.value || $("bill-scan-code")?.value || state.query || "").trim();
   if (q.length < 1) {
     box.hidden = true;
     box.innerHTML = "";
@@ -2871,6 +2874,7 @@ function renderCart() {
   paintOfferBanner();
   if (!state.cart.length) resetOfferPopup();
   else showBestOfferPopup(pickBestOfferForCart(), false);
+  paintClassicLoyalty();
   renderTableBoard();
   if (isRestaurantShop() && state.activeTable && state.cart.length) saveTableHoldDebounced();
   if (window.DevMode?.isEnabled()) {
@@ -2925,6 +2929,31 @@ async function saveCustomer(fields) {
   return customer;
 }
 
+function paintClassicLoyalty() {
+  const extras = $("bill-extras");
+  const bal = $("classic-loyalty-balance");
+  if (!isClassicBillShop()) {
+    if (bal) bal.hidden = true;
+    return;
+  }
+  if (extras) extras.open = true;
+  if (!bal) return;
+  const pts = Number(state.loyaltyAccount?.points_balance) || 0;
+  const tier = globalThis.POSLoyalty?.tierLabel?.(state.loyaltyAccount?.tier) || String(state.loyaltyAccount?.tier || "").trim();
+  const total = cartTotals().total;
+  const earn = globalThis.POSLoyalty?.earnPoints?.(total, state.loyaltySettings) || 0;
+  const walk = isWalkInCustomer(customer());
+  if (walk || !state.loyaltyAccount) {
+    bal.hidden = false;
+    bal.textContent = walk
+      ? "Royalty: enter customer mobile to load points"
+      : "Royalty: 0 pts";
+    return;
+  }
+  bal.hidden = false;
+  bal.textContent = `Royalty: ${pts} pts${tier ? ` · ${tier}` : ""}${earn ? ` · this bill +${earn}` : ""}`;
+}
+
 function renderPackChoice() {
   const sel = $("pack-choice");
   if (!sel) return;
@@ -2960,7 +2989,7 @@ function focusScanLane() {
   const el = classic || $("scan-code");
   if (!el || !document.body.classList.contains("counter-mode")) return;
   const active = document.activeElement;
-  if (active && active !== el && active !== $("search") && active !== $("bill-scan-code") && (active.tagName === "INPUT" || active.tagName === "SELECT" || active.tagName === "TEXTAREA")) {
+  if (active && active !== el && active !== $("search") && active !== $("bill-scan-code") && active !== $("bill-item-search") && (active.tagName === "INPUT" || active.tagName === "SELECT" || active.tagName === "TEXTAREA")) {
     return;
   }
   try {
@@ -3049,7 +3078,7 @@ async function applyBarcodeScan(raw, sourceEl) {
   }
   paintScanLane(false, "No match");
   setHint(`No item matches “${code}”`, "error");
-  if (sourceEl === $("scan-code") || sourceEl === $("search") || sourceEl === $("bill-scan-code")) sourceEl.select();
+  if (sourceEl === $("scan-code") || sourceEl === $("search") || sourceEl === $("bill-scan-code") || sourceEl === $("bill-item-search")) sourceEl.select();
   return false;
 }
 
@@ -6701,15 +6730,26 @@ $("scan-form")?.addEventListener("submit", async (e) => {
 $("bill-scan-code")?.addEventListener("input", () => {
   syncCounterQuery($("bill-scan-code").value, $("bill-scan-code"));
 });
+$("bill-item-search")?.addEventListener("input", () => {
+  syncCounterQuery($("bill-item-search").value, $("bill-item-search"));
+});
 $("bill-scan-form")?.addEventListener("submit", async (e) => {
   e.preventDefault();
-  await applyBarcodeScan($("bill-scan-code")?.value, $("bill-scan-code"));
+  const code = String($("bill-scan-code")?.value || "").trim();
+  const name = String($("bill-item-search")?.value || "").trim();
+  const raw = code || name;
+  const source = code ? $("bill-scan-code") : $("bill-item-search");
+  await applyBarcodeScan(raw, source);
 });
 document.addEventListener("keydown", (e) => {
   if (!isClassicBillShop() || !document.body.classList.contains("counter-mode")) return;
   if (e.altKey && !e.ctrlKey && !e.metaKey && String(e.key || "").toLowerCase() === "s") {
     e.preventDefault();
     $("bill-scan-code")?.focus();
+  }
+  if (e.altKey && !e.ctrlKey && !e.metaKey && String(e.key || "").toLowerCase() === "i") {
+    e.preventDefault();
+    $("bill-item-search")?.focus();
   }
   if (e.altKey && !e.ctrlKey && !e.metaKey && String(e.key || "").toLowerCase() === "m") {
     e.preventDefault();
