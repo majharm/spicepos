@@ -19,3 +19,13 @@ test("Customer prescription page uses camera, gallery, and PDF pickers", () => {
   assert.match(html, /Doctor Name/);
   assert.doesNotMatch(html, /textarea name="notes".*Less spicy/);
 });
+
+test("Prescription submit keeps the form element across await so reset cannot be null", () => {
+  const js = read("js/rx.js");
+  assert.match(js, /const formEl = event\.currentTarget/);
+  assert.match(js, /formEl\.reset\(\)/);
+  assert.doesNotMatch(js, /event\.currentTarget\.reset\(\)/);
+  const qr = read("js/qr-order.js");
+  assert.match(qr, /formEl\.reset\(\)/);
+  assert.doesNotMatch(qr, /event\.currentTarget\.reset\(\)/);
+});

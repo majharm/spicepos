@@ -405,13 +405,14 @@
   $("order-form").addEventListener("submit", async (event) => {
     event.preventDefault();
     if (sending) return;
-    const button = event.currentTarget.querySelector("button[type=submit]");
+    const formEl = event.currentTarget;
+    const button = formEl.querySelector("button[type=submit]");
     const hint = $("order-hint");
     sending = true;
-    button.disabled = true;
+    if (button) button.disabled = true;
     hint.textContent = "Sending order…";
     try {
-      const form = new FormData(event.currentTarget);
+      const form = new FormData(formEl);
       const res = await fetch("/api/qr/orders", {
         method: "POST",
         headers: { "Content-Type": "application/json", Accept: "application/json" },
@@ -445,13 +446,13 @@
       state.notes.clear();
       state.noteOpen.clear();
       renderCart();
-      event.currentTarget.reset();
+      formEl.reset();
       hint.textContent = "";
     } catch (err) {
       hint.textContent = err.message;
     } finally {
       sending = false;
-      button.disabled = false;
+      if (button) button.disabled = false;
     }
   });
   $("new-order").addEventListener("click", () => {

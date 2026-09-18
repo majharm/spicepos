@@ -69,17 +69,18 @@
   $("rx-form").addEventListener("submit", async (event) => {
     event.preventDefault();
     if (sending) return;
+    const formEl = event.currentTarget;
     const hint = $("rx-hint");
-    const button = event.currentTarget.querySelector("button[type=submit]");
+    const button = formEl.querySelector("button[type=submit]");
     if (!state.file) {
       hint.textContent = "Upload a camera photo, gallery image, or PDF";
       return;
     }
     sending = true;
-    button.disabled = true;
+    if (button) button.disabled = true;
     hint.textContent = "Sending prescription…";
     try {
-      const form = new FormData(event.currentTarget);
+      const form = new FormData(formEl);
       const file = await fileToPayload(state.file);
       const res = await fetch("/api/rx/prescriptions", {
         method: "POST",
@@ -102,14 +103,14 @@
       $("success-copy").textContent =
         data.message || "Prescription submitted successfully. Pharmacy will review it and contact you.";
       $("rx-success").hidden = false;
-      event.currentTarget.reset();
+      formEl.reset();
       showFile(null);
       hint.textContent = "";
     } catch (err) {
       hint.textContent = err.message;
     } finally {
       sending = false;
-      button.disabled = false;
+      if (button) button.disabled = false;
     }
   });
 
