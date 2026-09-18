@@ -372,6 +372,10 @@ test("Medical shops show pharmacy medicine fields on the item form", () => {
   assert.match(css, /\.classic-disc-row/);
   assert.match(css, /classic-bill-whole-disc/);
   assert.match(app, /function classicLineDiscHtml/);
+  assert.match(app, /function canClassicLineDiscount/);
+  assert.match(app, /function detachClassicUnknownCustomer/);
+  assert.match(app, /pharmacyCount/);
+  assert.match(app, /isRealMobile\(typedMob\) && !byMob/);
   assert.match(app, /<th>Disc<\/th>/);
   assert.match(app, /isClassicBillShop\(\) \? 0 : state\.billDiscountValue/);
   assert.match(app, /function itemStockInfo/);
