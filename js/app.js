@@ -241,6 +241,7 @@ function applyFootwearMode() {
   if (pharmCust) pharmCust.hidden = true;
   const billTitle = document.querySelector("#bill-panel .ticket-head h2");
   if (billTitle) billTitle.textContent = isClassicBillShop() ? "Sales Bill" : tt("pos.bill", "Bill");
+  if (isClassicBillShop()) fillPharmacyBillCustomerFromCustomer(customer());
   const search = $("search");
   if (search) search.placeholder = copy.search || `Search name or ${taxCodeLabel()}…`;
   const scan = $("scan-code");
@@ -572,6 +573,43 @@ function findCustomerByMobile(raw) {
   return (state.customers || []).find((c) => digitsMobile(c.mobile) === d) || null;
 }
 
+function findCustomersByName(raw) {
+  const q = String(raw || "").trim().toLowerCase();
+  if (q.length < 2) return [];
+  return (state.customers || []).filter((c) => {
+    if (isWalkInCustomer(c)) return false;
+    const name = String(c.business_name || c.name || "").trim().toLowerCase();
+    return name.includes(q);
+  }).slice(0, 8);
+}
+
+function parseClassicAddress(raw) {
+  const text = String(raw || "").trim();
+  if (!text) return { address: "", area: "", city: "", pin: "" };
+  const parts = text.split(",").map((p) => p.trim()).filter(Boolean);
+  let pin = "";
+  if (parts.length && /^\d{6}$/.test(parts[parts.length - 1])) pin = parts.pop();
+  let city = "";
+  let area = "";
+  if (parts.length >= 3) {
+    city = parts.pop();
+    area = parts.pop();
+  } else if (parts.length === 2 && pin) {
+    city = parts.pop();
+    area = parts.pop();
+  } else if (parts.length === 1 && pin) {
+    city = parts.pop();
+  }
+  return { address: parts.join(", "), area, city, pin };
+}
+
+function setClassicField(id, value, { force = false } = {}) {
+  const el = $(id);
+  if (!el) return;
+  if (!force && document.activeElement === el) return;
+  el.value = value == null ? "" : String(value);
+}
+
 function customerDue(c) {
   return Number(c?.outstanding) || 0;
 }
@@ -651,7 +689,7 @@ function selectCounterCustomer(cust, { hint = true } = {}) {
     mob.value = shown;
   }
   paintBillCustomer();
-  fillPharmacyBillCustomerFromCustomer(cust);
+  fillPharmacyBillCustomerFromCustomer(cust, { force: true });
   renderCatalog();
   renderCart();
   void loadCustomerLoyalty();
@@ -669,6 +707,7 @@ function applyCounterMobile(raw, { announceMiss = true } = {}) {
   if (cust) {
     const wrap = $("quick-customer-wrap");
     if (wrap) wrap.open = false;
+    hideClassicCustHits();
     return selectCounterCustomer(cust);
   }
   if (announceMiss) {
@@ -677,14 +716,22 @@ function applyCounterMobile(raw, { announceMiss = true } = {}) {
       state.customerId = walk.id;
       if ($("customer")) $("customer").value = walk.id;
       paintBillCustomer();
+      paintClassicCustomerStatus();
       renderCatalog();
       renderCart();
+    }
+    if (isClassicBillShop()) {
+      setHint("No customer for this mobile — enter name and tap + Add customer", "error");
+      paintClassicCustomerStatus();
+      return false;
     }
     setHint("No customer for this mobile — add with + Customer", "error");
     if ($("qc-mobile")) $("qc-mobile").value = d;
     const wrap = $("quick-customer-wrap");
     if (wrap) wrap.open = true;
     $("qc-name")?.focus();
+  } else if (isClassicBillShop()) {
+    paintClassicCustomerStatus();
   }
   return false;
 }
@@ -764,25 +811,119 @@ function pharmacyBillDoctorRx() {
   return String(customer()?.doctor_rx || "").trim();
 }
 
-function fillPharmacyBillCustomerFromCustomer(cust) {
+function fillPharmacyBillCustomerFromCustomer(cust, { force = false } = {}) {
   if (!isClassicBillShop()) return;
   const c = cust === undefined ? customer() : cust;
   const walk = isWalkInCustomer(c);
-  if ($("bill-cust-name")) {
-    $("bill-cust-name").value = walk ? "" : String(c?.business_name || c?.name || "");
+  if (walk && !force) {
+    paintClassicCustomerStatus();
+    return;
   }
-  if ($("bill-cust-address")) {
-    $("bill-cust-address").value = walk ? "" : String(c?.address || "");
-  }
-  ["bill-cust-area", "bill-cust-city", "bill-cust-pin"].forEach((id) => {
-    if ($(id)) $(id).value = "";
-  });
-  if ($("bill-doctor-rx") && document.activeElement !== $("bill-doctor-rx")) {
-    $("bill-doctor-rx").value = walk ? "" : String(c?.doctor_rx || "");
-  }
+  const parsed = walk ? { address: "", area: "", city: "", pin: "" } : parseClassicAddress(c?.address);
+  setClassicField("bill-cust-name", walk ? "" : String(c?.business_name || c?.name || ""), { force });
+  setClassicField("bill-cust-address", parsed.address, { force });
+  setClassicField("bill-cust-area", parsed.area, { force });
+  setClassicField("bill-cust-city", parsed.city, { force });
+  setClassicField("bill-cust-pin", parsed.pin, { force });
+  setClassicField("bill-doctor-rx", walk ? "" : String(c?.doctor_rx || ""), { force });
   const shown = digitsMobile(c?.mobile);
-  if ($("bill-cust-mobile")) {
-    $("bill-cust-mobile").value = isRealMobile(shown) ? shown : "";
+  setClassicField("bill-cust-mobile", isRealMobile(shown) ? shown : "", { force });
+  paintClassicCustomerStatus();
+}
+
+function hideClassicCustHits() {
+  const box = $("classic-cust-hits");
+  if (box) {
+    box.hidden = true;
+    box.innerHTML = "";
+  }
+}
+
+function paintClassicCustHits(hits) {
+  const box = $("classic-cust-hits");
+  if (!box) return;
+  if (!hits?.length) {
+    hideClassicCustHits();
+    return;
+  }
+  box.hidden = false;
+  box.innerHTML = hits
+    .map((c) => {
+      const name = escapeHtml(c.business_name || c.name || "Customer");
+      const mob = digitsMobile(c.mobile);
+      const due = isWalkInCustomer(c) ? 0 : customerDue(c);
+      const extra = due > 0 ? ` · Due ${escapeHtml(money(due))}` : "";
+      return `<button type="button" class="classic-cust-hit" data-classic-cust="${escapeHtml(c.id)}">${name}${mob ? ` · ${escapeHtml(mob)}` : ""}${extra}</button>`;
+    })
+    .join("");
+}
+
+function paintClassicCustomerStatus() {
+  if (!isClassicBillShop()) return;
+  const chip = $("classic-cust-chip");
+  const addBtn = $("classic-cust-add");
+  const typedMobile = digitsMobile($("bill-cust-mobile")?.value || "");
+  const c = customer();
+  const walk = isWalkInCustomer(c);
+  const matched = !walk && typedMobile.length === 10 && digitsMobile(c?.mobile) === typedMobile ? c : findCustomerByMobile(typedMobile);
+  const pts = Number(state.loyaltyAccount?.points_balance) || 0;
+  if (matched) {
+    const due = customerDue(matched);
+    const name = String(matched.business_name || matched.name || "Customer").trim();
+    const bits = [name];
+    if (due > 0) bits.push(`Due ${money(due)}`);
+    if (pts > 0 && matched.id === state.customerId) bits.push(`${pts} pts`);
+    if (chip) {
+      chip.hidden = false;
+      chip.className = `classic-cust-chip ${due > 0 ? "is-due" : "is-found"}`;
+      chip.textContent = bits.join(" · ");
+    }
+    if (addBtn) addBtn.hidden = true;
+    return;
+  }
+  if (typedMobile.length === 10) {
+    if (chip) {
+      chip.hidden = false;
+      chip.className = "classic-cust-chip is-miss";
+      chip.textContent = "New mobile — add customer";
+    }
+    if (addBtn) addBtn.hidden = false;
+    return;
+  }
+  if (chip) {
+    chip.hidden = false;
+    chip.className = "classic-cust-chip is-wait";
+    chip.textContent = walk ? "Type mobile to load customer" : String(c?.business_name || c?.name || "Customer");
+  }
+  if (addBtn) addBtn.hidden = true;
+}
+
+async function addClassicBillCustomer() {
+  if (!isClassicBillShop()) return;
+  const name = pharmacyBillCustomerName();
+  const mobile = pharmacyBillCustomerMobile();
+  if (!isRealMobile(mobile) && digitsMobile($("bill-cust-mobile")?.value || "").length !== 10) {
+    $("bill-cust-mobile")?.focus();
+    setHint("Enter a 10-digit mobile first", "error");
+    paintClassicCustomerStatus();
+    return;
+  }
+  if (!name) {
+    $("bill-cust-name")?.focus();
+    setHint("Enter customer name to add", "error");
+    return;
+  }
+  try {
+    const created = await saveCustomer({
+      name,
+      mobile: digitsMobile($("bill-cust-mobile")?.value || mobile),
+      address: pharmacyBillCustomerAddress(),
+      doctor_rx: pharmacyBillDoctorRx(),
+    });
+    if (created) selectCounterCustomer(created);
+    setHint(`Customer added · ${created?.name || name}`, "ok");
+  } catch (err) {
+    setHint(err.message || "Could not add customer", "error");
   }
 }
 
@@ -912,7 +1053,7 @@ function clearCounterAfterSale(order, result) {
   if ($("scan-code")) $("scan-code").value = "";
   if ($("pack-choice")) $("pack-choice").value = "";
   if ($("bill-doctor-rx")) $("bill-doctor-rx").value = "";
-  fillPharmacyBillCustomerFromCustomer(customer());
+  fillPharmacyBillCustomerFromCustomer(customer(), { force: true });
   renderCatalog();
   renderCart();
   if (table) void dropTableHold(table);
@@ -3000,6 +3141,7 @@ function renderCustomersSelect() {
       mob.value = shown;
     }
   }
+  fillPharmacyBillCustomerFromCustomer(customer());
 }
 
 async function saveCustomer(fields) {
@@ -5625,9 +5767,14 @@ async function setPrescriptionStatus(row, status) {
 function openPrescriptionInCounter(row) {
   if ($("bill-cust-name")) $("bill-cust-name").value = row.customer_name || "";
   if ($("bill-cust-mobile")) $("bill-cust-mobile").value = row.mobile || "";
-  if ($("bill-cust-address")) $("bill-cust-address").value = row.customer_address || "";
+  const parsedRx = parseClassicAddress(row.customer_address);
+  if ($("bill-cust-address")) $("bill-cust-address").value = parsedRx.address || row.customer_address || "";
+  if ($("bill-cust-area")) $("bill-cust-area").value = parsedRx.area;
+  if ($("bill-cust-city")) $("bill-cust-city").value = parsedRx.city;
+  if ($("bill-cust-pin")) $("bill-cust-pin").value = parsedRx.pin;
   if ($("counter-mobile")) $("counter-mobile").value = row.mobile || "";
   applyCounterMobile?.(row.mobile || "", { announceMiss: false });
+  paintClassicCustomerStatus();
   if ($("bill-doctor-rx")) {
     const doctorBits = [row.doctor_name, row.clinic_name, row.prescription_number].filter(Boolean);
     $("bill-doctor-rx").value = doctorBits.join(" / ");
@@ -6759,9 +6906,14 @@ $("order-pane").addEventListener("click", async (e) => {
     $("pay-method").value = o.payment_method || "cash";
     $("pack-choice").value = o.pack_id || "";
     if ($("bill-cust-name")) $("bill-cust-name").value = o.customer_name || "";
-    if ($("bill-cust-address")) $("bill-cust-address").value = o.customer_address || "";
     if ($("bill-cust-mobile")) $("bill-cust-mobile").value = o.customer_mobile || digitsMobile(customer()?.mobile);
+    const parsedBill = parseClassicAddress(o.customer_address);
+    if ($("bill-cust-address")) $("bill-cust-address").value = parsedBill.address || o.customer_address || "";
+    if ($("bill-cust-area")) $("bill-cust-area").value = parsedBill.area;
+    if ($("bill-cust-city")) $("bill-cust-city").value = parsedBill.city;
+    if ($("bill-cust-pin")) $("bill-cust-pin").value = parsedBill.pin;
     if ($("bill-doctor-rx")) $("bill-doctor-rx").value = o.doctor_rx || "";
+    paintClassicCustomerStatus();
     applyOrderDiscountsToCounter(o);
     showView("counter");
     renderCart();
@@ -8931,10 +9083,27 @@ document.getElementById("stock-mode")?.addEventListener("click", (e) => {
 });
 
 const applyCounterMobileDebounced = debounce(() => {
-  const el = $("counter-mobile");
-  if (!el) return;
-  if (digitsMobile(el.value).length === 10) applyCounterMobile(el.value);
+  const raw = $("bill-cust-mobile")?.value || $("counter-mobile")?.value || "";
+  if (digitsMobile(raw).length === 10) applyCounterMobile(raw);
+  else paintClassicCustomerStatus();
 }, 160);
+
+const applyClassicCustNameDebounced = debounce(() => {
+  if (!isClassicBillShop()) return;
+  const q = String($("bill-cust-name")?.value || "").trim();
+  if (q.length < 2) {
+    hideClassicCustHits();
+    paintClassicCustomerStatus();
+    return;
+  }
+  const hits = findCustomersByName(q);
+  paintClassicCustHits(hits);
+  const exact = hits.filter((c) => String(c.business_name || c.name || "").trim().toLowerCase() === q.toLowerCase());
+  if (exact.length === 1) {
+    hideClassicCustHits();
+    selectCounterCustomer(exact[0]);
+  }
+}, 180);
 
 $("counter-mobile")?.addEventListener("input", () => {
   syncPharmacyMobile(false);
@@ -8963,6 +9132,31 @@ $("bill-cust-mobile")?.addEventListener("blur", () => {
   syncPharmacyMobile(true);
   const d = digitsMobile($("bill-cust-mobile")?.value);
   if (d.length === 10) applyCounterMobile($("bill-cust-mobile").value, { announceMiss: false });
+  else paintClassicCustomerStatus();
+});
+$("bill-cust-name")?.addEventListener("input", applyClassicCustNameDebounced);
+$("bill-cust-name")?.addEventListener("keydown", (e) => {
+  if (e.key !== "Enter") return;
+  e.preventDefault();
+  const hits = findCustomersByName($("bill-cust-name")?.value);
+  if (hits.length === 1) {
+    hideClassicCustHits();
+    selectCounterCustomer(hits[0]);
+  }
+});
+$("classic-cust-hits")?.addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-classic-cust]");
+  if (!btn) return;
+  const cust = (state.customers || []).find((c) => c.id === btn.dataset.classicCust);
+  if (!cust) return;
+  hideClassicCustHits();
+  selectCounterCustomer(cust);
+});
+$("classic-cust-add")?.addEventListener("click", () => {
+  void addClassicBillCustomer();
+});
+["bill-cust-address", "bill-cust-area", "bill-cust-city", "bill-cust-pin", "bill-doctor-rx"].forEach((id) => {
+  $(id)?.addEventListener("input", () => paintClassicCustomerStatus());
 });
 
 async function loadCustomerLoyalty() {
@@ -8978,8 +9172,10 @@ async function loadCustomerLoyalty() {
         : "";
     }
     renderCart();
+    paintClassicCustomerStatus();
   } catch {
     state.loyaltyAccount = null;
+    paintClassicCustomerStatus();
   }
 }
 

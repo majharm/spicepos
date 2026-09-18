@@ -6,7 +6,7 @@
     <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
     <title>ATAV POS</title>
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./css/pos.css?v=20260918bill5" />
+    <link rel="stylesheet" href="./css/pos.css?v=20260918bill6" />
     <link rel="stylesheet" href="./css/saas.css?v=20260905deploy136" />
   </head>
   <body>
@@ -220,13 +220,20 @@
                 <button type="button" class="bill-toggle" id="bill-toggle" aria-controls="bill-panel" aria-expanded="true" aria-label="Hide bill" title="Hide bill">›</button>
               </div>
               <div class="classic-bill-head" id="classic-bill-head" hidden>
-                <label>Customer <input id="bill-cust-name" maxlength="180" autocomplete="name" placeholder="Customer name" /></label>
-                <label>Mobile No. <input id="bill-cust-mobile" type="tel" inputmode="numeric" maxlength="15" autocomplete="tel" placeholder="10-digit mobile" /></label>
-                <label>Bill Date <input id="classic-bill-date" readonly tabindex="-1" /></label>
-                <label>PIN Code <input id="bill-cust-pin" maxlength="12" inputmode="numeric" placeholder="PIN" /></label>
+                <div class="classic-cust-toolbar classic-span-4">
+                  <label class="classic-cust-mobile">Mobile No. <input id="bill-cust-mobile" type="tel" inputmode="numeric" maxlength="15" autocomplete="tel" placeholder="10-digit mobile — auto-fills customer" /></label>
+                  <label class="classic-cust-name">Customer <input id="bill-cust-name" maxlength="180" autocomplete="name" placeholder="Name — type to find" /></label>
+                  <label>Bill Date <input id="classic-bill-date" readonly tabindex="-1" /></label>
+                  <div class="classic-cust-meta">
+                    <p class="classic-cust-chip" id="classic-cust-chip" hidden></p>
+                    <button type="button" class="btn classic-cust-add" id="classic-cust-add" hidden>+ Add customer</button>
+                  </div>
+                </div>
+                <div class="classic-cust-hits classic-span-4" id="classic-cust-hits" hidden></div>
                 <label class="classic-span-2">Address <input id="bill-cust-address" maxlength="500" placeholder="House, street" /></label>
                 <label>Area <input id="bill-cust-area" maxlength="80" placeholder="Area" /></label>
                 <label>City <input id="bill-cust-city" maxlength="80" placeholder="City" /></label>
+                <label>PIN Code <input id="bill-cust-pin" maxlength="12" inputmode="numeric" placeholder="PIN" /></label>
                 <label class="pharmacy-only classic-span-2" id="bill-doctor-wrap" hidden>Doctor Name <input id="bill-doctor-rx" maxlength="180" placeholder="Doctor's full name" /></label>
               </div>
               <div class="classic-bill-entry" id="classic-bill-entry" hidden>
@@ -1789,7 +1796,7 @@
     <script src="./js/support.js?v=20260905deploy136" defer></script>
     <script src="./js/qrcode.iife.js?v=20260905qr1" defer></script>
     <script src="./js/qr-notify.js?v=20260914kot1" defer></script>
-    <script src="./js/app.js?v=20260918bill5" defer></script>
+    <script src="./js/app.js?v=20260918bill6" defer></script>
     <script src="./js/growth.js?v=20260905deploy145" defer></script>
     <script src="./js/offers-ui.js?v=20260905deploy136" defer></script>
   </body>
