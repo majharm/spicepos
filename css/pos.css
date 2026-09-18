@@ -1733,9 +1733,9 @@ body.classic-bill-mode .classic-bill-entry:not([hidden]) { display: block; }
 }
 .classic-item-hits[hidden] { display: none; }
 .classic-hit {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) 88px minmax(90px, 1fr) 88px;
+  gap: 8px;
   width: 100%;
   text-align: left;
   padding: 7px 10px;
@@ -1745,6 +1745,7 @@ body.classic-bill-mode .classic-bill-entry:not([hidden]) { display: block; }
   cursor: pointer;
   font-size: 13px;
   color: #1e3a5f;
+  align-items: center;
 }
 .classic-hit:last-child { border-bottom: 0; }
 .classic-hit:hover,
@@ -1752,8 +1753,50 @@ body.classic-bill-mode .classic-bill-entry:not([hidden]) { display: block; }
   background: #e8eef8;
   outline: none;
 }
-.classic-hit strong { font-weight: 800; }
-.classic-hit span { color: #4d6480; font-weight: 650; }
+.classic-hit-main { display: grid; gap: 1px; min-width: 0; }
+.classic-hit-main strong { font-weight: 800; }
+.classic-hit-main em { font-style: normal; color: #4d6480; font-size: 11px; font-weight: 650; }
+.classic-hit-stock,
+.classic-hit-exp,
+.classic-hit-rate { font-weight: 800; font-size: 12px; }
+.classic-hit.tone-out .classic-hit-stock,
+.classic-hit.exp-expired .classic-hit-exp,
+body.classic-bill-mode .pharm-bill-table tr.exp-expired .exp-cell,
+body.classic-bill-mode .pharm-bill-table tr.tone-out .stock-cell {
+  color: #a12822;
+}
+.classic-hit.tone-low .classic-hit-stock,
+.classic-hit.exp-soon .classic-hit-exp,
+body.classic-bill-mode .pharm-bill-table tr.tone-low .stock-cell,
+body.classic-bill-mode .pharm-bill-table tr.exp-soon .exp-cell {
+  color: #8a5a00;
+}
+.classic-hit.exp-watch .classic-hit-exp { color: #1d4f91; }
+body.classic-bill-mode .pharm-bill-table tr.exp-expired {
+  background: #fff1f0;
+}
+body.classic-bill-mode .pharm-bill-table tr.exp-soon,
+body.classic-bill-mode .pharm-bill-table tr.tone-low {
+  background: #fff9e8;
+}
+body.classic-bill-mode .pharm-bill-table tr.tone-out {
+  background: #fdecea;
+}
+.classic-stock-alert {
+  margin-top: 6px;
+  padding: 8px 10px;
+  border: 1px solid #d4a017;
+  background: #fff6e5;
+  color: #6b4f00;
+  font-size: 12px;
+  font-weight: 800;
+}
+.classic-stock-alert.is-expired {
+  border-color: #e39b96;
+  background: #fdecea;
+  color: #a12822;
+}
+.classic-stock-alert[hidden] { display: none; }
 body.classic-bill-mode #bill-extras {
   display: block;
   padding: 8px 12px 10px;

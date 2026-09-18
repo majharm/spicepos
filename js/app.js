@@ -229,6 +229,14 @@ function applyFootwearMode() {
   if (classicEntry) classicEntry.hidden = !isClassicBillShop();
   const extras = $("bill-extras");
   if (extras && isClassicBillShop()) extras.open = true;
+  if (isClassicBillShop()) {
+    state.stockMode = "advanced";
+    document.getElementById("view-stock")?.classList.add("is-advanced");
+    document.querySelectorAll("[data-stock-mode]").forEach((b) => {
+      b.classList.toggle("primary", b.dataset.stockMode === "advanced");
+    });
+    if ($("stock-mode-label")) $("stock-mode-label").textContent = "Adjust stock — advanced";
+  }
   const pharmCust = $("pharm-bill-cust");
   if (pharmCust) pharmCust.hidden = true;
   const billTitle = document.querySelector("#bill-panel .ticket-head h2");
@@ -2538,6 +2546,86 @@ function renderCatalogCats() {
   el.innerHTML = chips.join("");
 }
 
+function itemStockInfo(item) {
+  const stock = Number(item?.stock_gm) || 0;
+  const reorder = Number(item?.reorder_level_gm) || 0;
+  const out = stock <= 0;
+  const low = !out && reorder > 0 && stock <= reorder;
+  return {
+    stock,
+    label: fmtQty(stock, item),
+    out,
+    low,
+    tone: out ? "out" : low ? "low" : "ok",
+  };
+}
+
+function itemExpiryInfo(item) {
+  const date = String(item?.default_expiry || item?.primary_expiry || item?.expiry_date || "").slice(0, 10);
+  const days = date ? expiryDaysLeft({ expiry_date: date }) : null;
+  const expired = Number.isFinite(days) && days < 0;
+  const soon = Number.isFinite(days) && days >= 0 && days <= 30;
+  return {
+    date,
+    days,
+    expired,
+    soon,
+    tone: expired ? "expired" : soon ? (days <= 7 ? "soon" : "watch") : "none",
+    label: Number.isFinite(days) ? expiryDaysLabel(days) : "",
+    short: formatExpiryShort(date) || "",
+  };
+}
+
+function classicItemAlerts(item) {
+  const stock = itemStockInfo(item);
+  const exp = itemExpiryInfo(item);
+  const alerts = [];
+  if (exp.expired) alerts.push(`EXPIRED ${exp.short || exp.label}`.trim());
+  else if (exp.soon) alerts.push(exp.label);
+  if (stock.out) alerts.push("Out of stock");
+  else if (stock.low) alerts.push(`Low stock ${stock.label}`);
+  return { stock, exp, alerts };
+}
+
+function warnClassicItem(item) {
+  if (!isClassicBillShop() || !item) return;
+  const { alerts } = classicItemAlerts(item);
+  if (!alerts.length) return;
+  setHint(`${item.name}: ${alerts.join(" · ")}`, "error");
+  paintScanLane(false, alerts[0]);
+}
+
+function paintClassicStockAlert() {
+  const el = $("classic-stock-alert");
+  if (!el) return;
+  if (!isClassicBillShop() || !state.cart.length) {
+    el.hidden = true;
+    el.textContent = "";
+    return;
+  }
+  const expired = [];
+  const soon = [];
+  const out = [];
+  const low = [];
+  for (const line of state.cart) {
+    const item = state.items.find((i) => i.id === line.itemId);
+    if (!item) continue;
+    const { stock, exp } = classicItemAlerts(item);
+    if (exp.expired) expired.push(item.name);
+    else if (exp.soon) soon.push(item.name);
+    if (stock.out) out.push(item.name);
+    else if (stock.low) low.push(item.name);
+  }
+  const bits = [];
+  if (expired.length) bits.push(`Expired: ${expired.join(", ")}`);
+  if (soon.length) bits.push(`Near expiry: ${soon.join(", ")}`);
+  if (out.length) bits.push(`Out of stock: ${out.join(", ")}`);
+  if (low.length) bits.push(`Low stock: ${low.join(", ")}`);
+  el.hidden = !bits.length;
+  el.textContent = bits.join(" · ");
+  el.classList.toggle("is-expired", expired.length > 0 || out.length > 0);
+}
+
 function paintClassicItemHits() {
   const box = $("classic-item-hits");
   if (!box) return;
@@ -2560,13 +2648,16 @@ function paintClassicItemHits() {
   }
   box.hidden = false;
   box.innerHTML = rows.map((i) => {
+    const { stock, exp } = classicItemAlerts(i);
     const extra = isPharmacyShop()
-      ? [i.batch_no, formatExpiryShort(i.default_expiry)].filter(Boolean).join(" · ")
+      ? [i.batch_no, exp.short].filter(Boolean).join(" · ")
       : itemVariantText(i);
-    const bits = [i.code || i.barcode, extra, money(rateFor(i))].filter(Boolean);
-    return `<button type="button" class="classic-hit" data-add="${escapeHtml(i.id)}">
-      <strong>${escapeHtml(i.name)}</strong>
-      <span>${escapeHtml(bits.join(" · "))}</span>
+    const expText = exp.expired ? `EXPIRED ${exp.short}` : exp.soon ? exp.label : (exp.short || "");
+    return `<button type="button" class="classic-hit tone-${stock.tone} exp-${exp.tone}" data-add="${escapeHtml(i.id)}">
+      <span class="classic-hit-main"><strong>${escapeHtml(i.name)}</strong><em>${escapeHtml([i.code || i.barcode, extra].filter(Boolean).join(" · "))}</em></span>
+      <span class="classic-hit-stock">${escapeHtml(stock.label)}</span>
+      <span class="classic-hit-exp">${escapeHtml(expText)}</span>
+      <span class="classic-hit-rate">${escapeHtml(money(rateFor(i)))}</span>
     </button>`;
   }).join("");
 }
@@ -2682,6 +2773,7 @@ function renderCart() {
         <th>Expiry</th>
         <th>Pack</th>
         <th>Qty</th>
+        <th class="pharm-n">Stock</th>
         <th class="pharm-n">MRP</th>
         <th class="pharm-n">Rate</th>
         <th class="pharm-n">GST</th>
@@ -2700,7 +2792,8 @@ function renderCart() {
         const key = cartLineKey(line);
         const preview = F?.cartBatchPreview?.(item) || { batchNo: item.batch_no || "—", expiry: formatExpiryShort(item.default_expiry) || "—", pack: medicinePackLabel(item) || "—" };
         const mrp = Number(F?.looseMrp?.(item) ?? item.mrp ?? item.retail_rate) || rateFor(item);
-        return `<tr>
+        const alert = classicItemAlerts(item);
+        return `<tr class="tone-${alert.stock.tone} exp-${alert.exp.tone}">
           <td class="pharm-n">${idx + 1}</td>
           <td class="pharm-med">${escapeHtml(item.name)}${canDiscount() ? `<div class="line-disc">
               <select data-line-disc-type="${escapeHtml(key)}" aria-label="Line discount type">
@@ -2710,7 +2803,7 @@ function renderCart() {
               <input data-line-disc="${escapeHtml(key)}" type="number" min="0" step="0.01" value="${escapeHtml(line.discountValue || 0)}" aria-label="Line discount" />
             </div>` : ""}</td>
           <td>${escapeHtml(preview.batchNo)}</td>
-          <td>${escapeHtml(preview.expiry)}</td>
+          <td class="exp-cell">${escapeHtml(preview.expiry)}${alert.exp.expired ? " · EXP" : alert.exp.soon ? ` · ${escapeHtml(alert.exp.label)}` : ""}</td>
           <td>${escapeHtml(preview.pack)}</td>
           <td>
             <div class="qty">
@@ -2719,6 +2812,7 @@ function renderCart() {
               <button type="button" data-chg="${escapeHtml(key)}" data-d="${step}">+</button>
             </div>
           </td>
+          <td class="pharm-n stock-cell">${escapeHtml(alert.stock.label)}</td>
           <td class="pharm-n">${escapeHtml(money(mrp))}</td>
           <td class="pharm-n">${escapeHtml(money(rateFor(item)))}</td>
           <td class="pharm-n">${escapeHtml(String(Number(item.gst_rate) || 0))}%</td>
@@ -2735,6 +2829,7 @@ function renderCart() {
         <th>Colour / Size</th>
         <th class="pharm-n">Rate</th>
         <th>Qty</th>
+        <th class="pharm-n">Stock</th>
         <th class="pharm-n">GST</th>
         <th class="pharm-n">Total</th>
       </tr></thead>
@@ -2749,7 +2844,8 @@ function renderCart() {
         const calc = lineCalc(item, line);
         const key = cartLineKey(line);
         const variant = itemVariantText(item);
-        return `<tr>
+        const alert = classicItemAlerts(item);
+        return `<tr class="tone-${alert.stock.tone} exp-${alert.exp.tone}">
           <td class="pharm-n">${idx + 1}</td>
           <td>${escapeHtml(item.code || item.hsn || "—")}</td>
           <td class="pharm-med">${escapeHtml(item.name)}${canDiscount() ? `<div class="line-disc">
@@ -2759,7 +2855,7 @@ function renderCart() {
               </select>
               <input data-line-disc="${escapeHtml(key)}" type="number" min="0" step="0.01" value="${escapeHtml(line.discountValue || 0)}" aria-label="Line discount" />
             </div>` : ""}</td>
-          <td>${escapeHtml(variant || "—")}</td>
+          <td>${escapeHtml(variant || "—")}${alert.exp.expired ? ` · EXPIRED ${escapeHtml(alert.exp.short)}` : ""}</td>
           <td class="pharm-n">${escapeHtml(money(rateFor(item)))}</td>
           <td>
             <div class="qty">
@@ -2768,6 +2864,7 @@ function renderCart() {
               <button type="button" data-chg="${escapeHtml(key)}" data-d="${step}">+</button>
             </div>
           </td>
+          <td class="pharm-n stock-cell">${escapeHtml(alert.stock.label)}</td>
           <td class="pharm-n">${escapeHtml(String(Number(item.gst_rate) || 0))}%</td>
           <td class="pharm-n">${escapeHtml(money(calc.taxable + calc.gst))}</td>
         </tr>`;
@@ -2875,6 +2972,7 @@ function renderCart() {
   if (!state.cart.length) resetOfferPopup();
   else showBestOfferPopup(pickBestOfferForCart(), false);
   paintClassicLoyalty();
+  paintClassicStockAlert();
   renderTableBoard();
   if (isRestaurantShop() && state.activeTable && state.cart.length) saveTableHoldDebounced();
   if (window.DevMode?.isEnabled()) {
@@ -3050,8 +3148,9 @@ async function applyBarcodeScan(raw, sourceEl) {
   if (item) {
     addItem(item.id, classicScanAddQty(item), findItemByBarcode(code) ? code : "");
     clearCounterQuery(sourceEl);
-    paintScanLane(true, item.name);
-    setHint(`Added ${item.name}`, "ok");
+    const alerts = classicItemAlerts(item).alerts;
+    paintScanLane(!alerts.some((a) => /EXPIRED|Out of stock/i.test(a)), item.name);
+    setHint(alerts.length ? `Added ${item.name} · ${alerts.join(" · ")}` : `Added ${item.name}`, alerts.length ? "error" : "ok");
     focusScanLane();
     return true;
   }
@@ -3066,8 +3165,9 @@ async function applyBarcodeScan(raw, sourceEl) {
   if (hits.length === 1) {
     addItem(hits[0].id, classicScanAddQty(hits[0]));
     clearCounterQuery(sourceEl);
-    paintScanLane(true, hits[0].name);
-    setHint(`Added ${hits[0].name}`, "ok");
+    const alerts = classicItemAlerts(hits[0]).alerts;
+    paintScanLane(!alerts.some((a) => /EXPIRED|Out of stock/i.test(a)), hits[0].name);
+    setHint(alerts.length ? `Added ${hits[0].name} · ${alerts.join(" · ")}` : `Added ${hits[0].name}`, alerts.length ? "error" : "ok");
     focusScanLane();
     return true;
   }
@@ -3121,6 +3221,7 @@ function addItem(id, qtyGm, lineBarcode) {
       }
       existing.qtyGm = POSUnits.clampQty(Number(existing.qtyGm) + add);
       renderCart();
+      warnClassicItem(item);
       return;
     }
     state.cart.push({
@@ -3133,6 +3234,7 @@ function addItem(id, qtyGm, lineBarcode) {
       notes: "",
     });
     renderCart();
+    warnClassicItem(item);
     return;
   }
   const line = state.cart.find((l) => l.itemId === id && !String(l.barcode || "").trim());
@@ -3150,6 +3252,7 @@ function addItem(id, qtyGm, lineBarcode) {
   }
   state.cart = state.cart.filter((l) => l.qtyGm > 0);
   renderCart();
+  warnClassicItem(item);
 }
 
 function setLineQty(key, qtyGm) {
