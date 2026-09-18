@@ -1594,7 +1594,7 @@ body.classic-bill-mode .bill-toggle {
   display: none;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 6px 10px;
-  padding: 8px 12px 10px;
+  padding: 10px 12px 12px;
   background: #e8eef8;
   border-bottom: 1px solid #9bb3d4;
   flex: 0 0 auto;
@@ -1608,15 +1608,95 @@ body.classic-bill-mode .classic-bill-head:not([hidden]) { display: grid; }
   color: #1e3a5f;
 }
 .classic-bill-head .classic-span-2 { grid-column: span 2; }
+.classic-bill-head .classic-span-4 { grid-column: 1 / -1; }
 .classic-bill-head input {
   width: 100%;
-  min-height: 28px;
-  padding: 4px 7px;
+  min-height: 32px;
+  padding: 5px 8px;
   border: 1px solid #7a9cc6;
-  border-radius: 2px;
+  border-radius: 3px;
   background: #fff;
   font-size: 13px;
   font-weight: 650;
+}
+.classic-bill-head input:focus {
+  outline: 2px solid #2455a5;
+  outline-offset: 1px;
+  border-color: #2455a5;
+}
+.classic-cust-toolbar {
+  display: grid;
+  grid-template-columns: minmax(140px, 1.1fr) minmax(160px, 1.4fr) minmax(120px, 0.9fr) minmax(160px, 1.2fr);
+  gap: 6px 10px;
+  align-items: end;
+}
+.classic-cust-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding-bottom: 1px;
+}
+.classic-cust-chip {
+  margin: 0;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 750;
+  line-height: 1.25;
+  max-width: 100%;
+}
+.classic-cust-chip.is-found {
+  background: #d7f4e3;
+  color: #0f5132;
+  border: 1px solid #8fd4ab;
+}
+.classic-cust-chip.is-due {
+  background: #fde8e8;
+  color: #842029;
+  border: 1px solid #f1aeb5;
+}
+.classic-cust-chip.is-miss {
+  background: #fff3cd;
+  color: #664d03;
+  border: 1px solid #ffecb5;
+}
+.classic-cust-chip.is-wait {
+  background: #e7eef8;
+  color: #1e3a5f;
+  border: 1px solid #9bb3d4;
+}
+.classic-cust-add {
+  min-height: 32px;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 750;
+  background: #2455a5;
+  color: #fff;
+  border-color: #1e3f7a;
+}
+.classic-cust-hits {
+  display: none;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.classic-cust-hits:not([hidden]) { display: flex; }
+.classic-cust-hit {
+  border: 1px solid #7a9cc6;
+  background: #fff;
+  color: #1e3a5f;
+  border-radius: 999px;
+  padding: 5px 10px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.classic-cust-hit:hover,
+.classic-cust-hit:focus {
+  background: #2455a5;
+  color: #fff;
+  border-color: #1e3f7a;
 }
 body.classic-bill-mode .pharm-bill-table {
   min-width: 560px;
@@ -4316,6 +4396,9 @@ button.items-stat.is-active {
     grid-template-columns: 1fr 1fr;
   }
   .classic-bill-head .classic-span-2 { grid-column: span 2; }
+  .classic-cust-toolbar {
+    grid-template-columns: 1fr 1fr;
+  }
   .classic-bill-scan {
     grid-template-columns: 1fr 1fr;
   }
@@ -4902,6 +4985,7 @@ button.items-stat.is-active {
 }
 
 @media (max-width: 640px) {
+  .classic-cust-toolbar { grid-template-columns: 1fr; }
   .catalog-group-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; }
   .stage.is-counter .catalog {
     display: flex;

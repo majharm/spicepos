@@ -342,7 +342,16 @@ test("Medical shops show pharmacy medicine fields on the item form", () => {
   assert.match(index, /id="bill-cust-area"/);
   assert.match(index, /id="bill-cust-city"/);
   assert.match(index, /id="bill-cust-pin"/);
-  assert.match(index, /id="classic-bill-head"/);
+  assert.match(index, /id="classic-cust-chip"/);
+  assert.match(index, /id="classic-cust-add"/);
+  assert.match(index, /id="classic-cust-hits"/);
+  assert.match(app, /function parseClassicAddress/);
+  assert.match(app, /function findCustomersByName/);
+  assert.match(app, /function paintClassicCustomerStatus/);
+  assert.match(app, /function addClassicBillCustomer/);
+  assert.match(app, /\$\("bill-cust-mobile"\)\?\.value \|\| \$\("counter-mobile"\)/);
+  assert.match(css, /\.classic-cust-toolbar/);
+  assert.match(css, /\.classic-cust-chip/);
   assert.match(index, /id="classic-bill-date"/);
   assert.match(index, /id="classic-bill-entry"/);
   assert.match(index, /id="classic-item-hits"/);
