@@ -903,6 +903,52 @@ function pos_round2($n) {
   return round((float) $n, 2);
 }
 
+function pos_pay_modes() {
+  return [
+    "cash" => "Cash",
+    "upi" => "UPI",
+    "bank-transfer" => "Bank Transfer",
+    "neft" => "NEFT",
+    "rtgs" => "RTGS",
+    "imps" => "IMPS",
+    "cheque" => "Cheque",
+    "card" => "Card",
+    "wallet" => "Wallet",
+    "other" => "Other",
+  ];
+}
+
+function pos_pay_normalize($raw) {
+  $m = strtolower(trim((string) $raw));
+  $m = preg_replace("/[\s_]+/", "-", $m);
+  if ($m === "bank" || $m === "banktransfer" || $m === "net-banking" || $m === "netbanking") return "bank-transfer";
+  if ($m === "check") return "cheque";
+  if ($m === "credit-card" || $m === "debit-card") return "card";
+  if ($m === "creditnote") return "credit-note";
+  if ($m === "storecredit") return "store-credit";
+  return $m !== "" ? $m : "cash";
+}
+
+function pos_pay_is_money($raw) {
+  $modes = pos_pay_modes();
+  return isset($modes[pos_pay_normalize($raw)]);
+}
+
+function pos_pay_is_sale($raw) {
+  $m = pos_pay_normalize($raw);
+  return $m === "credit" || pos_pay_is_money($m);
+}
+
+function pos_is_business_admin($user) {
+  return ($user["role"] ?? "") === "business_admin";
+}
+
+function pos_require_business_admin_delete($user) {
+  if (!pos_is_business_admin($user)) {
+    pos_send(403, ["error" => "Only the business admin can delete payment entries", "php" => true]);
+  }
+}
+
 function pos_uuid() {
   $d = random_bytes(16);
   $d[6] = chr((ord($d[6]) & 0x0f) | 0x40);

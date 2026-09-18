@@ -1,3 +1,4 @@
+import "../js/payment-methods.js";
 import "../js/units.js";
 import "../js/footwear.js";
 import { query, withTransaction } from "./db.js";
@@ -648,7 +649,10 @@ export function registerCrud(app) {
         const n = await nextSeq(conn, "purchase", 10002);
         const id = crypto.randomUUID();
         const purchaseNumber = `PO-${n}`;
-        const method = String(payment_method || "cash").toLowerCase();
+        const method = globalThis.POSPay?.normalize?.(payment_method || "cash") || String(payment_method || "cash").toLowerCase();
+        if (globalThis.POSPay?.isPurchaseMode && !globalThis.POSPay.isPurchaseMode(method)) {
+          throw new Error("Invalid payment method");
+        }
         const payStatus = method === "credit" ? "unpaid" : "paid";
         await conn.query(
           `INSERT INTO purchases (
@@ -802,7 +806,10 @@ export function registerCrud(app) {
         const billDiscount = bill ? bill.billDiscount : 0;
         const total = bill ? bill.total : round2(subtotal + gst);
         const totalGm = built.reduce((s, l) => s + l.qty, 0);
-        const method = String(paymentMethod || existing.payment_method).toLowerCase();
+        const method = globalThis.POSPay?.normalize?.(paymentMethod || existing.payment_method) || String(paymentMethod || existing.payment_method).toLowerCase();
+        if (globalThis.POSPay?.isSaleMode && !globalThis.POSPay.isSaleMode(method)) {
+          throw new Error("Invalid payment method");
+        }
         const payStatus = method === "credit" ? "partial" : "paid";
         let packName = existing.pack_name;
         let usePackId = packId === undefined ? existing.pack_id : packId;

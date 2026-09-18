@@ -32,6 +32,7 @@ import { registerReturns } from "./returns.js";
 import { registerQrPublic, registerQrStaff, linkQrOrderSale, ensureQrOrderSchema } from "./qr-ordering.js";
 import { registerRxPublic, registerRxStaff } from "./prescriptions.js";
 import "../js/discount.js";
+import "../js/payment-methods.js";
 import { canonApiUrl, isAliasedApi, isApiUrl, rewriteToApi } from "./http-path.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -784,8 +785,8 @@ app.post("/api/checkout", requireStaff, requirePerm("counter"), async (req, res)
     res.status(400).json({ error: "Cart is empty" });
     return;
   }
-  const method = String(paymentMethod || "cash").toLowerCase();
-  if (!["cash", "upi", "card", "credit"].includes(method)) {
+  const method = globalThis.POSPay?.normalize?.(paymentMethod || "cash") || String(paymentMethod || "cash").toLowerCase();
+  if (globalThis.POSPay?.isSaleMode ? !globalThis.POSPay.isSaleMode(method) : !["cash", "upi", "card", "credit"].includes(method)) {
     res.status(400).json({ error: "Invalid payment method" });
     return;
   }

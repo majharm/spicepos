@@ -224,7 +224,8 @@ function pos_qr_mobile_digits($raw) {
 }
 
 function pos_qr_pay_method($raw) {
-  $method = strtolower((string) $raw);
+  $method = function_exists("pos_pay_normalize") ? pos_pay_normalize($raw) : strtolower((string) $raw);
+  if (function_exists("pos_pay_is_sale") && pos_pay_is_sale($method)) return $method;
   return in_array($method, ["cash", "upi", "card", "credit"], true) ? $method : "cash";
 }
 

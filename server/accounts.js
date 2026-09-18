@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import "../js/payment-methods.js";
 import { query, withTransaction } from "./db.js";
 import { bid, branchId, authUser } from "./context.js";
 import { nextSeq, round2 } from "./crud.js";
@@ -15,12 +16,28 @@ import {
   postReceiptJournal,
   replaceLedgerJournal,
   deleteLedgerJournal,
+  deleteJournalRef,
   profitAndLoss,
   trialBalance,
   buildPartyLedger,
   partyLedgerSignedAmount,
 } from "./accounting.js";
 import { fyRangeForToday } from "./fy.js";
+
+function payMoney(raw) {
+  const method = globalThis.POSPay?.normalize?.(raw) || String(raw || "cash").toLowerCase();
+  if (globalThis.POSPay?.isMoneyMode) return globalThis.POSPay.isMoneyMode(method) ? method : null;
+  const ok = ["cash", "upi", "card", "bank", "bank-transfer", "neft", "rtgs", "imps", "cheque", "wallet", "other"].includes(method);
+  return ok ? method : null;
+}
+
+function requirePaymentDeleteAdmin() {
+  if (authUser()?.role !== "business_admin") {
+    const err = new Error("Only the business admin can delete payment entries");
+    err.status = 403;
+    throw err;
+  }
+}
 
 async function insertLedger(conn, row) {
   const id = crypto.randomUUID();
@@ -243,8 +260,8 @@ export function registerAccounts(app) {
       res.status(400).json({ error: "Customer and amount are required" });
       return;
     }
-    const method = String(payment_method || "cash").toLowerCase();
-    if (!["cash", "upi", "card", "bank"].includes(method)) {
+    const method = payMoney(payment_method || "cash");
+    if (!method) {
       res.status(400).json({ error: "Invalid payment method" });
       return;
     }
@@ -309,8 +326,8 @@ export function registerAccounts(app) {
       res.status(400).json({ error: "Amount is required" });
       return;
     }
-    const method = String(req.body?.payment_method || "cash").toLowerCase();
-    if (!["cash", "upi", "card", "bank"].includes(method)) {
+    const method = payMoney(req.body?.payment_method || "cash");
+    if (!method) {
       res.status(400).json({ error: "Invalid payment method" });
       return;
     }
@@ -379,6 +396,7 @@ export function registerAccounts(app) {
 
   app.delete("/api/accounts/receipts/:id", requirePerm("accounts"), async (req, res) => {
     try {
+      requirePaymentDeleteAdmin();
       const result = await withTransaction(async (conn) => {
         const [ledgers] = await conn.query(
           "SELECT * FROM account_ledger WHERE id = ? AND business_id = ? FOR UPDATE",
@@ -418,7 +436,7 @@ export function registerAccounts(app) {
       });
       res.json({ ok: true, deleted: true, ...result });
     } catch (err) {
-      res.status(400).json({ error: String(err.message) });
+      res.status(err.status || 400).json({ error: String(err.message) });
     }
   });
 
@@ -429,8 +447,8 @@ export function registerAccounts(app) {
       res.status(400).json({ error: "Supplier and amount are required" });
       return;
     }
-    const method = String(payment_method || "cash").toLowerCase();
-    if (!["cash", "upi", "card", "bank"].includes(method)) {
+    const method = payMoney(payment_method || "cash");
+    if (!method) {
       res.status(400).json({ error: "Invalid payment method" });
       return;
     }
@@ -486,8 +504,8 @@ export function registerAccounts(app) {
       res.status(400).json({ error: "Amount is required" });
       return;
     }
-    const method = String(req.body?.payment_method || "cash").toLowerCase();
-    if (!["cash", "upi", "card", "bank"].includes(method)) {
+    const method = payMoney(req.body?.payment_method || "cash");
+    if (!method) {
       res.status(400).json({ error: "Invalid payment method" });
       return;
     }
@@ -550,6 +568,7 @@ export function registerAccounts(app) {
 
   app.delete("/api/accounts/payments/:id", requirePerm("accounts"), async (req, res) => {
     try {
+      requirePaymentDeleteAdmin();
       const result = await withTransaction(async (conn) => {
         const [ledgers] = await conn.query(
           "SELECT * FROM account_ledger WHERE id = ? AND business_id = ? FOR UPDATE",
@@ -588,7 +607,7 @@ export function registerAccounts(app) {
       });
       res.json({ ok: true, deleted: true, ...result });
     } catch (err) {
-      res.status(400).json({ error: String(err.message) });
+      res.status(err.status || 400).json({ error: String(err.message) });
     }
   });
 
@@ -691,8 +710,8 @@ export function registerAccounts(app) {
       return;
     }
     const gstAmt = round2(gst);
-    const method = String(payment_method || "cash").toLowerCase();
-    if (!["cash", "upi", "card", "bank"].includes(method)) {
+    const method = payMoney(payment_method || "cash");
+    if (!method) {
       res.status(400).json({ error: "Invalid payment method" });
       return;
     }
@@ -729,6 +748,32 @@ export function registerAccounts(app) {
       res.json({ ok: true, expense });
     } catch (err) {
       res.status(400).json({ error: String(err.message) });
+    }
+  });
+
+  app.delete("/api/expenses/:id", requirePerm("accounts"), async (req, res) => {
+    try {
+      requirePaymentDeleteAdmin();
+      const result = await withTransaction(async (conn) => {
+        const [rows] = await conn.query("SELECT * FROM expenses WHERE id = ? AND business_id = ? FOR UPDATE", [
+          req.params.id,
+          bid(),
+        ]);
+        const expense = rows[0];
+        if (!expense) throw Object.assign(new Error("Expense not found"), { status: 404 });
+        await deleteJournalRef(conn, "expense", expense.id);
+        await conn.query("DELETE FROM expenses WHERE id = ? AND business_id = ?", [expense.id, bid()]);
+        return expense;
+      });
+      await audit("Expense Deleted", {
+        module: "accounts",
+        target_id: result.id,
+        target_name: result.expense_number,
+        total: round2(Number(result.amount || 0) + Number(result.gst || 0)),
+      });
+      res.json({ ok: true, deleted: true, expense: result });
+    } catch (err) {
+      res.status(err.status || 400).json({ error: String(err.message) });
     }
   });
 }

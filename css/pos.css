@@ -733,9 +733,9 @@ body:has(#view-dashboard:not([hidden])) .platform-notices { display: none !impor
   font-size: 12px;
 }
 .counter-lane #pay-method {
-  width: 5.8em;
-  min-width: 5.2em;
-  max-width: 6.6em;
+  width: 9.2em;
+  min-width: 8em;
+  max-width: 12em;
 }
 .counter-lane #customer {
   flex: 1 1 9em;
@@ -4797,9 +4797,9 @@ button.items-stat.is-active {
     font-size: 11px;
   }
   .counter-lane #pay-method {
-    width: 5em;
-    min-width: 4.6em;
-    max-width: 5.6em;
+    width: 8em;
+    min-width: 7em;
+    max-width: 10em;
   }
   .counter-lane #customer {
     flex: 0 1 7em;

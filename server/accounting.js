@@ -1,3 +1,4 @@
+import "../js/payment-methods.js";
 import crypto from "node:crypto";
 import { query } from "./db.js";
 import { bid, authUser } from "./context.js";
@@ -48,11 +49,13 @@ function isoDate(value) {
 }
 
 function assetCodeForMethod(method) {
+  if (globalThis.POSPay?.assetCode) return globalThis.POSPay.assetCode(method);
   const m = String(method || "cash").toLowerCase();
   if (m === "credit") return "1101";
-  if (m === "upi") return "1003";
-  if (m === "card" || m === "bank") return "1002";
-  return "1001";
+  if (m === "upi" || m === "wallet") return "1003";
+  if (m === "cash") return "1001";
+  if (m === "card" || m === "bank" || m === "bank-transfer") return "1002";
+  return "1002";
 }
 
 export async function ensureCoa(conn, businessId = bid()) {
@@ -264,7 +267,7 @@ export function expenseJournalLines({ amount, gst, payment_method, account_code 
   const total = round2(amt + gstAmt);
   const lines = [{ accountCode: account_code, debit: amt, credit: 0 }];
   pushGstInputLines(lines, split);
-  const method = String(payment_method || "cash").toLowerCase();
+  const method = globalThis.POSPay?.normalize?.(payment_method) || String(payment_method || "cash").toLowerCase();
   lines.push({
     accountCode: method === "credit" ? "2101" : assetCodeForMethod(method),
     debit: 0,
@@ -299,10 +302,14 @@ export async function postPaymentJournal(conn, { amount, payment_method, entryNo
 }
 
 export async function deleteLedgerJournal(conn, ledgerId) {
+  await deleteJournalRef(conn, "account_ledger", ledgerId);
+}
+
+export async function deleteJournalRef(conn, refType, refId) {
   const [entries] = await conn.query(
     `SELECT id FROM journal_entries
-     WHERE business_id = ? AND reference_type = 'account_ledger' AND reference_id = ?`,
-    [bid(), ledgerId],
+     WHERE business_id = ? AND reference_type = ? AND reference_id = ?`,
+    [bid(), refType, refId],
   );
   for (const row of entries) {
     await conn.query("DELETE FROM journal_lines WHERE journal_id = ?", [row.id]);

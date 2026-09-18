@@ -273,6 +273,7 @@
   }
 
   function payLabel(method) {
+    if (globalThis.POSPay?.label) return globalThis.POSPay.label(method);
     return String(method || "cash").toUpperCase();
   }
 

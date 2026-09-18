@@ -1,0 +1,46 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import vm from "node:vm";
+import { fileURLToPath } from "node:url";
+import path from "node:path";
+
+const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
+
+test("payment modes cover till, collections, and purchases", () => {
+  const src = readFileSync(path.join(root, "js/payment-methods.js"), "utf8");
+  const context = { window: {}, globalThis: {} };
+  context.globalThis = context;
+  context.window = context;
+  vm.createContext(context);
+  vm.runInContext(src, context);
+  const P = context.POSPay;
+  assert.equal(P.normalize("Bank Transfer"), "bank-transfer");
+  assert.equal(P.normalize("bank"), "bank-transfer");
+  assert.equal(P.normalize("NEFT"), "neft");
+  assert.ok(P.isMoneyMode("imps"));
+  assert.ok(P.isSaleMode("credit"));
+  assert.equal(P.isMoneyMode("credit"), false);
+  assert.ok(P.isRefundMode("credit-note"));
+  assert.equal(P.label("upi"), "UPI");
+  assert.equal(P.label("bank-transfer"), "Bank Transfer");
+  assert.equal(P.assetCode("cash"), "1001");
+  assert.equal(P.assetCode("neft"), "1002");
+  assert.equal(P.assetCode("wallet"), "1003");
+  assert.match(P.optionsHtml({ includeCredit: true }), /value="credit"/);
+  const index = readFileSync(path.join(root, "index.html"), "utf8");
+  const app = readFileSync(path.join(root, "js/app.js"), "utf8");
+  const accounts = readFileSync(path.join(root, "server/accounts.js"), "utf8");
+  const phpAcc = readFileSync(path.join(root, "pos-accounting.php"), "utf8");
+  const core = readFileSync(path.join(root, "pos-php-core.php"), "utf8");
+  assert.match(index, /js\/payment-methods\.js/);
+  assert.match(index, /value="neft"/);
+  assert.match(index, /value="bank-transfer"/);
+  assert.match(app, /function canDeletePaymentEntry/);
+  assert.match(app, /POSPay/);
+  assert.match(accounts, /Only the business admin can delete payment entries/);
+  assert.match(accounts, /app.delete\("\/api\/expenses\/:id"/);
+  assert.match(phpAcc, /pos_require_business_admin_delete/);
+  assert.match(core, /function pos_pay_normalize/);
+  assert.match(core, /Only the business admin can delete payment entries/);
+});

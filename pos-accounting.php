@@ -40,11 +40,12 @@ function pos_expense_categories() {
 }
 
 function pos_asset_code_for_method($method) {
-  $m = strtolower((string) $method);
+  $m = function_exists("pos_pay_normalize") ? pos_pay_normalize($method) : strtolower((string) $method);
   if ($m === "credit") return "1101";
-  if ($m === "upi") return "1003";
+  if ($m === "upi" || $m === "wallet") return "1003";
+  if ($m === "cash") return "1001";
   if ($m === "card" || $m === "bank") return "1002";
-  return "1001";
+  return "1002";
 }
 
 function pos_ensure_coa($bid) {
@@ -256,16 +257,20 @@ function pos_post_payment_journal($bid, $uid, $amount, $method, $entryNo, $ledge
   ]);
 }
 
-function pos_delete_ledger_journal($bid, $ledgerId) {
+function pos_delete_journal_ref($bid, $refType, $refId) {
   $rows = pos_q(
-    "SELECT id FROM journal_entries WHERE business_id = ? AND reference_type = 'account_ledger' AND reference_id = ?",
-    "ss",
-    [$bid, $ledgerId]
+    "SELECT id FROM journal_entries WHERE business_id = ? AND reference_type = ? AND reference_id = ?",
+    "sss",
+    [$bid, $refType, $refId]
   );
   foreach ($rows as $row) {
     pos_q("DELETE FROM journal_lines WHERE journal_id = ?", "s", [$row["id"]]);
     pos_q("DELETE FROM journal_entries WHERE id = ? AND business_id = ?", "ss", [$row["id"], $bid]);
   }
+}
+
+function pos_delete_ledger_journal($bid, $ledgerId) {
+  pos_delete_journal_ref($bid, "account_ledger", $ledgerId);
 }
 
 function pos_replace_ledger_journal($bid, $uid, $kind, $amount, $method, $entryNo, $ledgerId) {
@@ -325,7 +330,7 @@ function pos_build_party_ledger($opening, $rows) {
 }
 
 function pos_accounts_dispatch($path, $method, $body, $bid, $auth, $branchId, $uid) {
-  if (strpos($path, "accounts/") !== 0 && $path !== "expenses") return false;
+  if (strpos($path, "accounts/") !== 0 && $path !== "expenses" && strpos($path, "expenses/") !== 0) return false;
   if (!pos_can($auth["user"], "accounts")) pos_send(403, ["error" => "Not allowed"]);
   pos_ensure_accounts_schema();
   pos_ensure_coa($bid);
@@ -352,8 +357,8 @@ function pos_accounts_dispatch($path, $method, $body, $bid, $auth, $branchId, $u
     $amt = pos_round2($body["amount"] ?? 0);
     if ($amt <= 0) pos_send(400, ["error" => "Amount is required"]);
     $gstAmt = pos_round2($body["gst"] ?? 0);
-    $methodPay = strtolower((string) ($body["payment_method"] ?? "cash"));
-    if (!in_array($methodPay, ["cash", "upi", "card", "bank"], true)) pos_send(400, ["error" => "Invalid payment method"]);
+    $methodPay = pos_pay_normalize($body["payment_method"] ?? "cash");
+    if (!pos_pay_is_money($methodPay)) pos_send(400, ["error" => "Invalid payment method"]);
     try {
       $expense = pos_with_transaction(function () use ($body, $bid, $uid, $cat, $amt, $gstAmt, $methodPay) {
         $n = pos_next_seq("expense", $bid, 1001);
@@ -380,6 +385,16 @@ function pos_accounts_dispatch($path, $method, $body, $bid, $auth, $branchId, $u
     } catch (Exception $e) {
       pos_send(400, ["error" => $e->getMessage(), "php" => true]);
     }
+  }
+
+  if (preg_match("#^expenses/([^/]+)$#", $path, $m) && $method === "DELETE") {
+    pos_require_business_admin_delete($auth["user"] ?? []);
+    $rows = pos_q("SELECT * FROM expenses WHERE id = ? AND business_id = ? LIMIT 1", "ss", [$m[1], $bid]);
+    $expense = $rows[0] ?? null;
+    if (!$expense) pos_send(404, ["error" => "Expense not found", "php" => true]);
+    pos_delete_journal_ref($bid, "expense", $expense["id"]);
+    pos_q("DELETE FROM expenses WHERE id = ? AND business_id = ?", "ss", [$expense["id"], $bid]);
+    pos_send(200, ["ok" => true, "deleted" => true, "expense" => $expense, "php" => true]);
   }
 
   if ($path === "accounts/summary" && $method === "GET") {
@@ -621,8 +636,8 @@ function pos_accounts_dispatch($path, $method, $body, $bid, $auth, $branchId, $u
     $customerId = $body["customer_id"] ?? "";
     $amt = pos_round2((float) ($body["amount"] ?? 0));
     if (!$customerId || $amt <= 0) pos_send(400, ["error" => "Customer and amount are required"]);
-    $methodPay = strtolower((string) ($body["payment_method"] ?? "cash"));
-    if (!in_array($methodPay, ["cash", "upi", "card", "bank"], true)) pos_send(400, ["error" => "Invalid payment method"]);
+    $methodPay = pos_pay_normalize($body["payment_method"] ?? "cash");
+    if (!pos_pay_is_money($methodPay)) pos_send(400, ["error" => "Invalid payment method"]);
     $cust = pos_q("SELECT * FROM customers WHERE id = ? AND business_id = ? LIMIT 1", "ss", [$customerId, $bid]);
     $customer = $cust[0] ?? null;
     if (!$customer) pos_send(400, ["error" => "Customer not found"]);
@@ -657,8 +672,8 @@ function pos_accounts_dispatch($path, $method, $body, $bid, $auth, $branchId, $u
   if (preg_match("#^accounts/receipts/([^/]+)$#", $path, $m) && ($method === "PUT" || $method === "PATCH")) {
     $amt = pos_round2((float) ($body["amount"] ?? 0));
     if ($amt <= 0) pos_send(400, ["error" => "Amount is required"]);
-    $methodPay = strtolower((string) ($body["payment_method"] ?? "cash"));
-    if (!in_array($methodPay, ["cash", "upi", "card", "bank"], true)) pos_send(400, ["error" => "Invalid payment method"]);
+    $methodPay = pos_pay_normalize($body["payment_method"] ?? "cash");
+    if (!pos_pay_is_money($methodPay)) pos_send(400, ["error" => "Invalid payment method"]);
     $led = pos_q("SELECT * FROM account_ledger WHERE id = ? AND business_id = ? LIMIT 1", "ss", [$m[1], $bid]);
     $entry = $led[0] ?? null;
     if (!$entry || ($entry["entry_type"] ?? "") !== "receipt") pos_send(400, ["error" => "Receipt not found"]);
@@ -696,6 +711,7 @@ function pos_accounts_dispatch($path, $method, $body, $bid, $auth, $branchId, $u
   }
 
   if (preg_match("#^accounts/receipts/([^/]+)$#", $path, $m) && $method === "DELETE") {
+    pos_require_business_admin_delete($auth["user"] ?? []);
     $led = pos_q("SELECT * FROM account_ledger WHERE id = ? AND business_id = ? LIMIT 1", "ss", [$m[1], $bid]);
     $entry = $led[0] ?? null;
     if (!$entry || ($entry["entry_type"] ?? "") !== "receipt") pos_send(400, ["error" => "Receipt not found"]);
@@ -723,8 +739,8 @@ function pos_accounts_dispatch($path, $method, $body, $bid, $auth, $branchId, $u
     $supplierId = $body["supplier_id"] ?? "";
     $amt = pos_round2((float) ($body["amount"] ?? 0));
     if (!$supplierId || $amt <= 0) pos_send(400, ["error" => "Supplier and amount are required"]);
-    $methodPay = strtolower((string) ($body["payment_method"] ?? "cash"));
-    if (!in_array($methodPay, ["cash", "upi", "card", "bank"], true)) pos_send(400, ["error" => "Invalid payment method"]);
+    $methodPay = pos_pay_normalize($body["payment_method"] ?? "cash");
+    if (!pos_pay_is_money($methodPay)) pos_send(400, ["error" => "Invalid payment method"]);
     $sup = pos_q("SELECT * FROM suppliers WHERE id = ? AND business_id = ? LIMIT 1", "ss", [$supplierId, $bid]);
     $supplier = $sup[0] ?? null;
     if (!$supplier) pos_send(400, ["error" => "Supplier not found"]);
@@ -749,8 +765,8 @@ function pos_accounts_dispatch($path, $method, $body, $bid, $auth, $branchId, $u
   if (preg_match("#^accounts/payments/([^/]+)$#", $path, $m) && ($method === "PUT" || $method === "PATCH")) {
     $amt = pos_round2((float) ($body["amount"] ?? 0));
     if ($amt <= 0) pos_send(400, ["error" => "Amount is required"]);
-    $methodPay = strtolower((string) ($body["payment_method"] ?? "cash"));
-    if (!in_array($methodPay, ["cash", "upi", "card", "bank"], true)) pos_send(400, ["error" => "Invalid payment method"]);
+    $methodPay = pos_pay_normalize($body["payment_method"] ?? "cash");
+    if (!pos_pay_is_money($methodPay)) pos_send(400, ["error" => "Invalid payment method"]);
     $led = pos_q("SELECT * FROM account_ledger WHERE id = ? AND business_id = ? LIMIT 1", "ss", [$m[1], $bid]);
     $entry = $led[0] ?? null;
     if (!$entry || ($entry["entry_type"] ?? "") !== "payment") pos_send(400, ["error" => "Payment not found"]);
@@ -782,6 +798,7 @@ function pos_accounts_dispatch($path, $method, $body, $bid, $auth, $branchId, $u
   }
 
   if (preg_match("#^accounts/payments/([^/]+)$#", $path, $m) && $method === "DELETE") {
+    pos_require_business_admin_delete($auth["user"] ?? []);
     $led = pos_q("SELECT * FROM account_ledger WHERE id = ? AND business_id = ? LIMIT 1", "ss", [$m[1], $bid]);
     $entry = $led[0] ?? null;
     if (!$entry || ($entry["entry_type"] ?? "") !== "payment") pos_send(400, ["error" => "Payment not found"]);

@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import "../js/payment-methods.js";
 import "../js/units.js";
 import "../js/footwear.js";
 import { query, withTransaction } from "./db.js";
@@ -366,7 +367,8 @@ export function qrMobileDigits(raw) {
 }
 
 function qrPayMethod(raw) {
-  const method = String(raw || "cash").toLowerCase();
+  const method = globalThis.POSPay?.normalize?.(raw) || String(raw || "cash").toLowerCase();
+  if (globalThis.POSPay?.isSaleMode?.(method)) return method;
   return ["cash", "upi", "card", "credit"].includes(method) ? method : "cash";
 }
 

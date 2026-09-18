@@ -223,6 +223,7 @@ function applyFootwearMode() {
   document.querySelectorAll(".restaurant-only").forEach((el) => {
     el.hidden = !isRestaurantShop();
   });
+  fillPaySelects();
   document.querySelectorAll(".classic-bill-only").forEach((el) => {
     if (el.classList.contains("nav-btn")) return;
     el.hidden = !isClassicBillShop();
@@ -484,11 +485,40 @@ function renderOrderStatusControls(o) {
 }
 
 function paymentMethodLabel(method) {
+  if (globalThis.POSPay?.label) return globalThis.POSPay.label(method);
   const m = String(method || "cash").toLowerCase();
   if (m === "upi") return "UPI";
   if (m === "credit") return "Credit";
   if (m === "cash") return "Cash";
+  if (m === "bank-transfer" || m === "bank") return "Bank Transfer";
   return method || "—";
+}
+
+function fillPaySelect(el, opts = {}) {
+  if (!el || !globalThis.POSPay?.optionsHtml) return;
+  const cur = opts.selected != null ? opts.selected : el.value;
+  el.innerHTML = globalThis.POSPay.optionsHtml({
+    selected: cur,
+    includeCredit: Boolean(opts.includeCredit),
+    extra: opts.extra || [],
+  });
+}
+
+function fillPaySelects() {
+  fillPaySelect($("pay-method"), { includeCredit: true });
+  fillPaySelect($("due-method"));
+  fillPaySelect($("po-pay"), { includeCredit: true });
+  fillPaySelect($("exp-pay"));
+  fillPaySelect($("returns-mode"), {
+    extra: [
+      ["credit-note", "Credit note"],
+      ["store-credit", "Store credit"],
+    ],
+  });
+}
+
+function canDeletePaymentEntry() {
+  return state.session?.role === "business_admin";
 }
 
 function renderEditOrderBanner() {
@@ -5473,13 +5503,14 @@ function showVoucherResult(entry, opts = {}) {
   const isPayment = entry.entry_type === "payment";
   const label = isPayment ? "Payment" : "Receipt";
   const canAlter = Boolean(entry.id);
+  const canDelete = canAlter && canDeletePaymentEntry();
   $("modal-title").textContent = `${label} · ${entry.entry_no}`;
   $("modal-body").innerHTML = `<p class="hint ok">${label} saved · ${escapeHtml(entry.entry_no)}</p>
     <div class="thermal-preview">${InvoicePrint.voucherBody(entry, invoiceCtx())}</div>
     <div class="print-actions">
       <button class="btn primary" type="button" id="modal-print-voucher">Print ${label.toLowerCase()}</button>
       ${canAlter ? `<button class="btn" type="button" id="modal-alter-voucher">Alter amount</button>` : ""}
-      ${canAlter ? `<button class="btn danger" type="button" id="modal-delete-voucher">Delete</button>` : ""}
+      ${canDelete ? `<button class="btn danger" type="button" id="modal-delete-voucher">Delete</button>` : ""}
     </div>`;
   $("modal").hidden = false;
   const btn = $("modal-print-voucher");
@@ -5492,8 +5523,9 @@ function showVoucherResult(entry, opts = {}) {
 }
 
 function voucherMethodOptions(selected) {
+  if (globalThis.POSPay?.optionsHtml) return globalThis.POSPay.optionsHtml({ selected });
   const cur = String(selected || "cash").toLowerCase();
-  return ["cash", "upi", "card", "bank"]
+  return ["cash", "upi", "card", "bank-transfer"]
     .map((m) => `<option value="${m}"${m === cur ? " selected" : ""}>${m.toUpperCase()}</option>`)
     .join("");
 }
@@ -5511,13 +5543,20 @@ function voucherMaxAmount(entry) {
 }
 
 function voucherRowActions(i) {
+  const del = canDeletePaymentEntry()
+    ? `<button class="btn danger" type="button" data-voucher-delete="${i}">Delete</button>`
+    : "";
   return `<button class="btn" type="button" data-voucher-print="${i}">Print</button>
     <button class="btn" type="button" data-voucher-alter="${i}">Alter</button>
-    <button class="btn danger" type="button" data-voucher-delete="${i}">Delete</button>`;
+    ${del}`;
 }
 
 async function deleteVoucherEntry(entry) {
   if (!entry?.id) return;
+  if (!canDeletePaymentEntry()) {
+    setHint("Only the business admin can delete payment entries", "error");
+    return;
+  }
   const isPay = entry.entry_type === "payment";
   const label = isPay ? "payment" : "receipt";
   const restore = isPay ? "supplier payable" : "customer due";
@@ -6703,10 +6742,13 @@ async function loadExpenses() {
       return;
     }
     el.innerHTML = `<table><thead><tr>
-      <th>No.</th><th>Date</th><th>Category</th><th>Amount</th><th>GST</th><th>Total</th><th>Pay</th><th>Notes</th>
+      <th>No.</th><th>Date</th><th>Category</th><th>Amount</th><th>GST</th><th>Total</th><th>Pay</th><th>Notes</th>${canDeletePaymentEntry() ? "<th></th>" : ""}
     </tr></thead><tbody>${rows
       .map((r) => {
         const total = (Number(r.amount) || 0) + (Number(r.gst) || 0);
+        const del = canDeletePaymentEntry()
+          ? `<td><button class="btn danger" type="button" data-exp-delete="${escapeHtml(r.id)}">Delete</button></td>`
+          : "";
         return `<tr>
         <td>${escapeHtml(r.expense_number)}</td>
         <td>${escapeHtml(formatShopDate(r.expense_date))}</td>
@@ -6714,8 +6756,9 @@ async function loadExpenses() {
         <td>${money(r.amount)}</td>
         <td>${money(r.gst)}</td>
         <td>${money(total)}</td>
-        <td>${escapeHtml(r.payment_method)}</td>
+        <td>${escapeHtml(paymentMethodLabel(r.payment_method))}</td>
         <td>${escapeHtml(r.notes || "—")}</td>
+        ${del}
       </tr>`;
       })
       .join("")}</tbody></table>`;
@@ -6730,7 +6773,7 @@ function showReceiptModal(customer) {
   $("modal-body").innerHTML = `<form class="settings" id="receipt-modal-form">
     <p class="section-note">Outstanding: <strong>${money(due)}</strong>${customer.mobile ? ` · ${escapeHtml(customer.mobile)}` : ""}</p>
     <label>Amount <input id="rcp-amount" type="number" min="0.01" step="0.01" max="${due}" required value="${due}" /></label>
-    <label>Method <select id="rcp-method"><option value="cash">Cash</option><option value="upi">UPI</option><option value="card">Card</option><option value="bank">Bank</option></select></label>
+    <label>Method <select id="rcp-method">${globalThis.POSPay?.optionsHtml?.({ selected: "cash" }) || `<option value="cash">Cash</option><option value="upi">UPI</option>`}</select></label>
     <label>Reference / UPI ID <input id="rcp-ref" maxlength="80" placeholder="Optional" /></label>
     <label>Notes <input id="rcp-notes" placeholder="Optional" /></label>
     <button class="btn primary" type="submit">Collect &amp; print receipt</button>
@@ -6756,7 +6799,7 @@ function showPaymentModal(supplier) {
   $("modal-body").innerHTML = `<form class="settings" id="payment-modal-form">
     <p class="section-note">Payable: <strong>${money(Number(supplier.payable_balance) || 0)}</strong></p>
     <label>Amount <input id="pay-acc-amount" type="number" min="0.01" step="0.01" max="${Number(supplier.payable_balance) || 0}" required value="${Number(supplier.payable_balance) || 0}" /></label>
-    <label>Method <select id="pay-acc-method"><option value="cash">Cash</option><option value="upi">UPI</option><option value="card">Card</option><option value="bank">Bank</option></select></label>
+    <label>Method <select id="pay-acc-method">${globalThis.POSPay?.optionsHtml?.({ selected: "cash" }) || `<option value="cash">Cash</option><option value="upi">UPI</option>`}</select></label>
     <label>Notes <input id="pay-acc-notes" placeholder="Optional" /></label>
     <button class="btn primary" type="submit">Save payment</button>
   </form><div class="hint" id="pay-acc-hint"></div>`;
@@ -8493,6 +8536,27 @@ $("exp-print")?.addEventListener("click", () => {
     from: $("exp-from")?.value,
     to: $("exp-to")?.value,
   });
+});
+$("expenses-table")?.addEventListener("click", async (e) => {
+  const btn = e.target.closest("[data-exp-delete]");
+  if (!btn) return;
+  if (!canDeletePaymentEntry()) {
+    setHint("Only the business admin can delete payment entries", "error");
+    return;
+  }
+  if (!window.confirm("Delete this expense payment entry?")) return;
+  try {
+    await api(`/api/expenses/${encodeURIComponent(btn.dataset.expDelete)}`, { method: "DELETE" });
+    setHint("Expense deleted", "ok");
+    await loadExpenses();
+    try {
+      await loadAccounts();
+    } catch {
+      /* optional */
+    }
+  } catch (err) {
+    setHint(err.message, "error");
+  }
 });
 $("exp-filter")?.addEventListener("submit", async (e) => {
   e.preventDefault();

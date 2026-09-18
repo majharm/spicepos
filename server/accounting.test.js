@@ -155,6 +155,10 @@ test("receipts and payments can be deleted after save", () => {
   assert.match(php, /function pos_delete_ledger_journal/);
   assert.match(php, /\$method === "DELETE"/);
   assert.match(app, /function deleteVoucherEntry/);
+  assert.match(app, /canDeletePaymentEntry/);
   assert.match(app, /data-voucher-delete/);
   assert.match(app, /modal-delete-voucher/);
+  assert.match(app, /data-exp-delete/);
+  assert.match(accounts, /app.delete\("\/api\/expenses\/:id"/);
+  assert.match(php, /pos_require_business_admin_delete/);
 });

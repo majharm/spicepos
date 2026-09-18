@@ -149,8 +149,8 @@ function pos_update_order($bid, $orderId, $body, $auth) {
     : pos_round2((float) ($body["discount"] ?? 0));
   $total = pos_round2(max(0, $subtotal + $gst - $billDiscount));
   $totalGm = array_sum(array_column($built, "qty"));
-  $methodPay = strtolower((string) ($body["paymentMethod"] ?? $existing["payment_method"] ?? "cash"));
-  if (!in_array($methodPay, ["cash", "upi", "card", "credit"], true)) {
+  $methodPay = pos_pay_normalize($body["paymentMethod"] ?? $existing["payment_method"] ?? "cash");
+  if (!pos_pay_is_sale($methodPay)) {
     pos_send(400, ["error" => "Invalid payment method", "php" => true]);
   }
   $payStatus = $methodPay === "credit" ? "partial" : "paid";

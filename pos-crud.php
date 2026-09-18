@@ -314,7 +314,8 @@ function pos_crud_dispatch($path, $method, $body, $bid, $auth, $branchId, $uid) 
         $n = pos_next_seq("purchase", $bid, 10002);
         $id = pos_uuid();
         $purchaseNumber = "PO-{$n}";
-        $method = strtolower((string) ($body["payment_method"] ?? "cash"));
+        $method = pos_pay_normalize($body["payment_method"] ?? "cash");
+        if (!pos_pay_is_sale($method)) throw new Exception("Invalid payment method");
         $payStatus = $method === "credit" ? "unpaid" : "paid";
         pos_q(
           "INSERT INTO purchases (

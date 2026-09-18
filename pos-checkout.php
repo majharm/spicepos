@@ -11,8 +11,8 @@ function pos_checkout_sale($bid, $branchId, $uid, $auth, $body) {
   return pos_with_transaction(function () use ($body, $bid, $branchId, $uid, $auth, $qrOrderId) {
     $lines = $body["lines"] ?? [];
     if (!is_array($lines) || !$lines) throw new Exception("Cart is empty");
-    $methodPay = strtolower((string) ($body["paymentMethod"] ?? "cash"));
-    if (!in_array($methodPay, ["cash", "upi", "card", "credit"], true)) throw new Exception("Invalid payment method");
+    $methodPay = pos_pay_normalize($body["paymentMethod"] ?? "cash");
+    if (!pos_pay_is_sale($methodPay)) throw new Exception("Invalid payment method");
     $customerId = $body["customerId"] ?? "";
     $cust = pos_q("SELECT * FROM customers WHERE id = ? AND business_id = ? LIMIT 1", "ss", [$customerId, $bid]);
     $customer = $cust[0] ?? null;

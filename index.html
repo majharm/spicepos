@@ -6,7 +6,7 @@
     <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
     <title>ATAV POS</title>
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./css/pos.css?v=20260918bill14" />
+    <link rel="stylesheet" href="./css/pos.css?v=20260918bill15" />
     <link rel="stylesheet" href="./css/saas.css?v=20260905deploy136" />
   </head>
   <body>
@@ -171,7 +171,14 @@
               <select id="pay-method" class="select" aria-label="Payment method">
                     <option value="cash" data-i18n="pos.cash">Cash</option>
                     <option value="upi" data-i18n="pos.upi">UPI</option>
+                    <option value="bank-transfer">Bank Transfer</option>
+                    <option value="neft">NEFT</option>
+                    <option value="rtgs">RTGS</option>
+                    <option value="imps">IMPS</option>
+                    <option value="cheque">Cheque</option>
                     <option value="card" data-i18n="pos.card">Card</option>
+                    <option value="wallet">Wallet</option>
+                    <option value="other">Other</option>
                     <option value="credit" data-i18n="pos.credit">Credit</option>
               </select>
               <input id="counter-mobile" type="tel" inputmode="numeric" maxlength="15" autocomplete="off" placeholder="Mobile No." aria-label="Mobile No." />
@@ -552,7 +559,7 @@
               <form class="settings item-composer" id="due-collect-form" autocomplete="off">
                 <div class="item-composer-top">
                   <p class="item-mode">Collect due</p>
-                  <p class="item-composer-note">Receive cash, UPI, card, or bank against a customer’s outstanding. A receipt prints after save.</p>
+                  <p class="item-composer-note">Receive cash, UPI, card, bank transfer, cheque, or wallet against a customer’s outstanding. A receipt prints after save.</p>
                 </div>
                 <fieldset class="item-block">
                   <legend>Payment</legend>
@@ -567,8 +574,14 @@
                     <select id="due-method">
                       <option value="cash">Cash</option>
                       <option value="upi">UPI</option>
+                      <option value="bank-transfer">Bank Transfer</option>
+                      <option value="neft">NEFT</option>
+                      <option value="rtgs">RTGS</option>
+                      <option value="imps">IMPS</option>
+                      <option value="cheque">Cheque</option>
                       <option value="card">Card</option>
-                      <option value="bank">Bank</option>
+                      <option value="wallet">Wallet</option>
+                      <option value="other">Other</option>
                     </select>
                   </label>
                   <label class="full">Reference / UPI ID <input id="due-ref" maxlength="80" placeholder="Optional txn id" /></label>
@@ -831,7 +844,14 @@
                   <select id="returns-mode">
                     <option value="cash">Cash</option>
                     <option value="upi">UPI</option>
+                    <option value="bank-transfer">Bank Transfer</option>
+                    <option value="neft">NEFT</option>
+                    <option value="rtgs">RTGS</option>
+                    <option value="imps">IMPS</option>
+                    <option value="cheque">Cheque</option>
                     <option value="card">Card</option>
+                    <option value="wallet">Wallet</option>
+                    <option value="other">Other</option>
                     <option value="credit-note">Credit note</option>
                     <option value="store-credit">Store credit</option>
                   </select>
@@ -864,6 +884,14 @@
                   <select id="po-pay">
                     <option value="cash">Cash</option>
                     <option value="upi">UPI</option>
+                    <option value="bank-transfer">Bank Transfer</option>
+                    <option value="neft">NEFT</option>
+                    <option value="rtgs">RTGS</option>
+                    <option value="imps">IMPS</option>
+                    <option value="cheque">Cheque</option>
+                    <option value="card">Card</option>
+                    <option value="wallet">Wallet</option>
+                    <option value="other">Other</option>
                     <option value="credit">Credit</option>
                   </select>
                 </label>
@@ -1351,8 +1379,14 @@
                 <select id="exp-pay">
                   <option value="cash">Cash</option>
                   <option value="upi">UPI</option>
+                  <option value="bank-transfer">Bank Transfer</option>
+                  <option value="neft">NEFT</option>
+                  <option value="rtgs">RTGS</option>
+                  <option value="imps">IMPS</option>
+                  <option value="cheque">Cheque</option>
                   <option value="card">Card</option>
-                  <option value="bank">Bank</option>
+                  <option value="wallet">Wallet</option>
+                  <option value="other">Other</option>
                 </select>
               </label>
               <label class="full">Notes <input id="exp-notes" maxlength="240" placeholder="Optional" /></label>
@@ -1843,12 +1877,13 @@
     <script src="./js/barcode.js?v=20260905deploy136" defer></script>
     <script src="./js/camera-scan.js?v=20260918bill2" defer></script>
     <script src="./js/dev-mode.js?v=20260905deploy136" defer></script>
-    <script src="./js/invoice.js?v=20260917pharm1" defer></script>
+    <script src="./js/invoice.js?v=20260918pay1" defer></script>
     <script src="./js/invoice-share.js?v=20260913share1" defer></script>
     <script src="./js/support.js?v=20260905deploy136" defer></script>
     <script src="./js/qrcode.iife.js?v=20260905qr1" defer></script>
     <script src="./js/qr-notify.js?v=20260914kot1" defer></script>
-    <script src="./js/app.js?v=20260918bill14" defer></script>
+    <script src="./js/payment-methods.js?v=20260918pay1" defer></script>
+    <script src="./js/app.js?v=20260918bill15" defer></script>
     <script src="./js/growth.js?v=20260905deploy145" defer></script>
     <script src="./js/offers-ui.js?v=20260905deploy136" defer></script>
   </body>
