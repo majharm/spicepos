@@ -224,6 +224,8 @@ function applyFootwearMode() {
   });
   const classicHead = $("classic-bill-head");
   if (classicHead) classicHead.hidden = !isClassicBillShop();
+  const classicEntry = $("classic-bill-entry");
+  if (classicEntry) classicEntry.hidden = !isClassicBillShop();
   const pharmCust = $("pharm-bill-cust");
   if (pharmCust) pharmCust.hidden = true;
   const billTitle = document.querySelector("#bill-panel .ticket-head h2");
@@ -232,6 +234,8 @@ function applyFootwearMode() {
   if (search) search.placeholder = copy.search || `Search name or ${taxCodeLabel()}…`;
   const scan = $("scan-code");
   if (scan) scan.placeholder = copy.scan || "Scan or search";
+  const billScan = $("bill-scan-code");
+  if (billScan) billScan.placeholder = copy.scan || "Scan barcode, item code, or name";
   const mobile = $("counter-mobile");
   if (mobile) {
     mobile.placeholder = pharm ? "Mobile No." : "Mobile";
@@ -803,6 +807,7 @@ function syncCounterQuery(raw, sourceEl) {
   state.query = q;
   if ($("search") && sourceEl !== $("search")) $("search").value = q;
   if ($("scan-code") && sourceEl !== $("scan-code")) $("scan-code").value = q;
+  if ($("bill-scan-code") && sourceEl !== $("bill-scan-code")) $("bill-scan-code").value = q;
   renderCatalogDebounced();
 }
 
@@ -810,6 +815,7 @@ function clearCounterQuery(sourceEl) {
   state.query = "";
   if ($("search")) $("search").value = "";
   if ($("scan-code") && sourceEl !== $("scan-code")) $("scan-code").value = "";
+  if ($("bill-scan-code") && sourceEl !== $("bill-scan-code")) $("bill-scan-code").value = "";
   if (sourceEl) sourceEl.value = "";
   renderCatalog();
 }
@@ -2895,11 +2901,21 @@ function renderPackChoice() {
   }
 }
 
+function classicScanAddQty(item) {
+  if (!isClassicBillShop()) return null;
+  const n = Number($("bill-scan-qty")?.value);
+  if (!(n > 0)) return null;
+  const unit = itemUnit(item);
+  const base = POSUnits.toBase?.(n, unit);
+  return Number.isFinite(base) && base > 0 ? base : n;
+}
+
 function focusScanLane() {
-  const el = $("scan-code");
+  const classic = isClassicBillShop() ? $("bill-scan-code") : null;
+  const el = classic || $("scan-code");
   if (!el || !document.body.classList.contains("counter-mode")) return;
   const active = document.activeElement;
-  if (active && active !== el && active !== $("search") && (active.tagName === "INPUT" || active.tagName === "SELECT" || active.tagName === "TEXTAREA")) {
+  if (active && active !== el && active !== $("search") && active !== $("bill-scan-code") && (active.tagName === "INPUT" || active.tagName === "SELECT" || active.tagName === "TEXTAREA")) {
     return;
   }
   try {
@@ -2912,13 +2928,19 @@ function focusScanLane() {
 function paintScanLane(ok, label) {
   const lane = $("scan-form");
   const status = $("scan-status");
+  const billLane = $("bill-scan-form");
+  const billStatus = $("bill-scan-status");
   if (status) status.textContent = label || "";
-  if (!lane) return;
-  lane.classList.toggle("is-hit", Boolean(ok));
-  lane.classList.toggle("is-miss", ok === false);
+  if (billStatus) billStatus.textContent = label || "";
+  [lane, billLane].forEach((el) => {
+    if (!el) return;
+    el.classList.toggle("is-hit", Boolean(ok));
+    el.classList.toggle("is-miss", ok === false);
+  });
   clearTimeout(paintScanLane._t);
   paintScanLane._t = setTimeout(() => {
-    lane.classList.remove("is-hit", "is-miss");
+    lane?.classList.remove("is-hit", "is-miss");
+    billLane?.classList.remove("is-hit", "is-miss");
   }, ok ? 600 : 900);
 }
 
@@ -2952,7 +2974,7 @@ async function applyBarcodeScan(raw, sourceEl) {
   }
   if (!item) item = findItemBySkuOrHsn(code);
   if (item) {
-    addItem(item.id, null, findItemByBarcode(code) ? code : "");
+    addItem(item.id, classicScanAddQty(item), findItemByBarcode(code) ? code : "");
     clearCounterQuery(sourceEl);
     paintScanLane(true, item.name);
     setHint(`Added ${item.name}`, "ok");
@@ -2968,7 +2990,7 @@ async function applyBarcodeScan(raw, sourceEl) {
   syncCounterQuery(code, sourceEl);
   const hits = filteredItems();
   if (hits.length === 1) {
-    addItem(hits[0].id);
+    addItem(hits[0].id, classicScanAddQty(hits[0]));
     clearCounterQuery(sourceEl);
     paintScanLane(true, hits[0].name);
     setHint(`Added ${hits[0].name}`, "ok");
@@ -2982,7 +3004,7 @@ async function applyBarcodeScan(raw, sourceEl) {
   }
   paintScanLane(false, "No match");
   setHint(`No item matches “${code}”`, "error");
-  if (sourceEl === $("scan-code") || sourceEl === $("search")) sourceEl.select();
+  if (sourceEl === $("scan-code") || sourceEl === $("search") || sourceEl === $("bill-scan-code")) sourceEl.select();
   return false;
 }
 
@@ -6622,18 +6644,36 @@ $("scan-form")?.addEventListener("submit", async (e) => {
   e.preventDefault();
   await applyBarcodeScan($("scan-code")?.value, $("scan-code"));
 });
+$("bill-scan-code")?.addEventListener("input", () => {
+  syncCounterQuery($("bill-scan-code").value, $("bill-scan-code"));
+});
+$("bill-scan-form")?.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  await applyBarcodeScan($("bill-scan-code")?.value, $("bill-scan-code"));
+});
+document.addEventListener("keydown", (e) => {
+  if (!isClassicBillShop() || !document.body.classList.contains("counter-mode")) return;
+  if (e.altKey && !e.ctrlKey && !e.metaKey && String(e.key || "").toLowerCase() === "s") {
+    e.preventDefault();
+    $("bill-scan-code")?.focus();
+  }
+  if (e.altKey && !e.ctrlKey && !e.metaKey && String(e.key || "").toLowerCase() === "m") {
+    e.preventDefault();
+    $("bill-cust-mobile")?.focus();
+  }
+});
 function initCameraScan() {
   const scan = globalThis.POSCameraScan;
   if (!scan?.bindButton) return;
-  scan.bindButton($("scan-camera-btn"), {
-    onScan: async (code) => {
-      const el = $("scan-code");
-      if (el) el.value = code;
-      await applyBarcodeScan(code, el);
-      focusScanLane();
-    },
-    onError: (err) => setHint(err?.message || "Camera scan failed", "error"),
-  });
+  const onScan = async (code) => {
+    const el = isClassicBillShop() ? ($("bill-scan-code") || $("scan-code")) : $("scan-code");
+    if (el) el.value = code;
+    await applyBarcodeScan(code, el);
+    focusScanLane();
+  };
+  const onError = (err) => setHint(err?.message || "Camera scan failed", "error");
+  scan.bindButton($("scan-camera-btn"), { onScan, onError });
+  scan.bindButton($("bill-scan-camera-btn"), { onScan, onError, alwaysShow: true });
 }
 initCameraScan();
 $("search-form").addEventListener("submit", async (e) => {
