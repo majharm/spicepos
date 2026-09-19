@@ -29,15 +29,15 @@
     { id: "receipt", group: "sales", title: "Payment Receipt", view: "payments", perm: "accounts" },
     { id: "customer-due", group: "sales", title: "Customer Due", view: "customers", perm: "customers" },
     { id: "customer-ledger", group: "sales", title: "Customer Ledger", view: "accounts", perm: "accounts", acc: "customer-ledger" },
-    { id: "purchase-request", group: "purchases", title: "Purchase Request", view: "hub-purchases", perm: "purchases", desk: "pr" },
-    { id: "purchase-order", group: "purchases", title: "Purchase Order", view: "hub-purchases", perm: "purchases", desk: "po" },
-    { id: "grn", group: "purchases", title: "Goods Receipt", view: "hub-purchases", perm: "purchases", desk: "grn" },
-    { id: "purchase-invoice", group: "purchases", title: "Purchase Invoice", view: "purchases", perm: "purchases" },
-    { id: "debit-note", group: "purchases", title: "Debit Note", view: "hub-purchases", perm: "purchases", desk: "debit" },
-    { id: "purchase-return", group: "purchases", title: "Purchase Return", view: "hub-purchases", perm: "purchases", desk: "preturn" },
-    { id: "supplier-pay", group: "purchases", title: "Supplier Payment", view: "payments", perm: "accounts" },
-    { id: "supplier-due", group: "purchases", title: "Supplier Due", view: "accounts", perm: "accounts", acc: "payables" },
-    { id: "supplier-ledger", group: "purchases", title: "Supplier Ledger", view: "accounts", perm: "accounts", acc: "supplier-ledger" },
+    { id: "purchase-request", group: "purchases", title: "Purchase Request", view: "hub-purchases", perm: "purchases", desk: "pr", blurb: "Ask for stock before you order" },
+    { id: "purchase-order", group: "purchases", title: "Purchase Order", view: "hub-purchases", perm: "purchases", desk: "po", blurb: "Confirm what to buy from a supplier" },
+    { id: "grn", group: "purchases", title: "Goods Receipt", view: "hub-purchases", perm: "purchases", desk: "grn", blurb: "Record goods received at the shop" },
+    { id: "purchase-invoice", group: "purchases", title: "Purchase Invoice", view: "purchases", perm: "purchases", open: "purchase-new", blurb: "Supplier bill — this posts stock" },
+    { id: "debit-note", group: "purchases", title: "Debit Note", view: "hub-purchases", perm: "purchases", desk: "debit", blurb: "Claim against a supplier bill" },
+    { id: "purchase-return", group: "purchases", title: "Purchase Return", view: "hub-purchases", perm: "purchases", desk: "preturn", blurb: "Send goods back to the supplier" },
+    { id: "supplier-pay", group: "purchases", title: "Supplier Payment", view: "payments", perm: "accounts", highlight: "supplier-pay", blurb: "Pay a supplier from payables" },
+    { id: "supplier-due", group: "purchases", title: "Supplier Due", view: "accounts", perm: "accounts", acc: "payables", blurb: "What we still owe suppliers" },
+    { id: "supplier-ledger", group: "purchases", title: "Supplier Ledger", view: "accounts", perm: "accounts", acc: "supplier-ledger", blurb: "Supplier account history" },
     { id: "customers", group: "customers", title: "Customer Master", view: "customers", perm: "customers" },
     { id: "customer-groups", group: "customers", title: "Customer Groups", view: "customers", perm: "customers" },
     { id: "opening-balance", group: "customers", title: "Opening Balance", view: "customers", perm: "customers" },
@@ -249,6 +249,44 @@
     { id: "audit", title: "Audit Log" },
   ];
 
+  const PURCHASE_DOC_KINDS = {
+    pr: {
+      title: "Purchase Request",
+      prefix: "PR",
+      save: "Save request",
+      hint: "Internal ask for stock. Convert to a purchase order when approved. Stock is not posted here.",
+      statuses: ["Draft", "Sent", "Approved"],
+    },
+    po: {
+      title: "Purchase Order",
+      prefix: "PO",
+      save: "Save order",
+      hint: "Confirm what to buy. Receive with a goods receipt, then post stock on Purchase Invoice.",
+      statuses: ["Draft", "Sent", "Confirmed"],
+    },
+    grn: {
+      title: "Goods Receipt",
+      prefix: "GRN",
+      save: "Save receipt",
+      hint: "Record what arrived. On-hand stock still posts through Purchase Invoice.",
+      statuses: ["Draft", "Received"],
+    },
+    debit: {
+      title: "Debit Note",
+      prefix: "DN",
+      save: "Save debit note",
+      hint: "Claim shortage, rate difference, or return value against a supplier bill.",
+      statuses: ["Draft", "Issued"],
+    },
+    preturn: {
+      title: "Purchase Return",
+      prefix: "PRT",
+      save: "Save return",
+      hint: "Send goods back. Reverse stock on Purchases if the original bill already posted.",
+      statuses: ["Draft", "Returned"],
+    },
+  };
+
   const PAY_MODES = ["cash", "upi", "card", "bank-transfer", "neft", "rtgs", "imps", "cheque", "wallet", "other"];
 
   const DASH_KPIS = [
@@ -291,6 +329,7 @@
     ALL,
     MODULES,
     GROUPS,
+    PURCHASE_DOC_KINDS,
     REPORTS,
     CENTERS,
     PAY_MODES,

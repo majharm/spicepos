@@ -502,6 +502,9 @@ test("HTML and CSS cache stickers match deploy136", () => {
   assert.match(pos, /items-desk: composer \+ library/);
   assert.match(pos, /dash-desk: home hero \+ kpis/);
   assert.match(pos, /desk-pages-2026/);
+  assert.match(pos, /purchases-desk: document types/);
+  assert.match(index, /purchases-desk/);
+  assert.match(index, /id="hub-purchases-work"/);
   assert.match(index, /id="item-import-file"/);
   assert.match(index, /id="item-import-template"/);
   assert.match(appJs, /function uploadItemsExcel/);

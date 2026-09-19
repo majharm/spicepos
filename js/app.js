@@ -1920,6 +1920,7 @@ function applyNav() {
       orders: "orders",
       customers: "customers",
       purchases: "purchases",
+      "hub-purchases": "purchases",
       reports: "reports",
       settings: "settings",
       payments: "accounts",
@@ -9413,6 +9414,7 @@ document.addEventListener("click", (e) => {
   if (!jump) return;
   if (jump.closest("#view-dashboard")) return;
   showView(jump.dataset.viewJump);
+  if (jump.dataset.accJump) setTimeout(() => setAccTab(jump.dataset.accJump), 0);
 });
 $("view-dashboard")?.addEventListener("click", (e) => {
   const jump = e.target.closest("[data-view-jump]");

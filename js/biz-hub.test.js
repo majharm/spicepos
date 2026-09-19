@@ -46,7 +46,7 @@ test("POS shell wires Reports Center, payments, audit, and hub scripts", () => {
   assert.match(index, /id="view-audit"/);
   assert.match(index, /id="view-hub-sales"/);
   assert.match(index, /id="dash-sales-graph"/);
-  assert.match(index, /biz-hub\.js\?v=20260919hub1/);
+  assert.match(index, /biz-hub\.js\?v=20260919purch1/);
   assert.match(index, /id="rep-pdf"/);
   assert.match(index, /id="rep-pay-mode"/);
   assert.match(app, /POSBizHubUi\?\.paintDashboard/);
@@ -55,4 +55,40 @@ test("POS shell wires Reports Center, payments, audit, and hub scripts", () => {
   assert.match(app, /name === "audit"/);
   assert.match(tenant, /buildHubDashboard/);
   assert.match(till, /"hub"/);
+});
+
+test("Purchase desk lists all nine documents and opens desks instead of looping", () => {
+  const grocery = H.modulesFor({ category: "Grocery" });
+  const ids = grocery.filter((m) => m.group === "purchases").map((m) => m.id);
+  assert.deepEqual(ids, [
+    "purchase-request",
+    "purchase-order",
+    "grn",
+    "purchase-invoice",
+    "debit-note",
+    "purchase-return",
+    "supplier-pay",
+    "supplier-due",
+    "supplier-ledger",
+  ]);
+  assert.equal(grocery.find((m) => m.id === "purchase-request").desk, "pr");
+  assert.equal(grocery.find((m) => m.id === "purchase-invoice").view, "purchases");
+  assert.equal(grocery.find((m) => m.id === "supplier-pay").view, "payments");
+  assert.equal(grocery.find((m) => m.id === "supplier-due").acc, "payables");
+  assert.equal(grocery.find((m) => m.id === "supplier-ledger").acc, "supplier-ledger");
+  assert.ok(H.PURCHASE_DOC_KINDS.pr && H.PURCHASE_DOC_KINDS.po && H.PURCHASE_DOC_KINDS.grn);
+  assert.ok(H.PURCHASE_DOC_KINDS.debit && H.PURCHASE_DOC_KINDS.preturn);
+  const index = read("index.html");
+  const ui = read("js/biz-hub-ui.js");
+  const css = read("css/pos.css");
+  assert.match(index, /id="hub-purchases-search"/);
+  assert.match(index, /id="hub-purchases-work"/);
+  assert.match(index, /purchases-desk/);
+  assert.match(index, /data-hub-open="purchase-request"/);
+  assert.match(index, /data-hub-open="purchase-invoice"/);
+  assert.match(index, /data-dash-view="hub-purchases"/);
+  assert.match(ui, /function paintPurchaseWork/);
+  assert.match(ui, /paintPurchaseWork\(m\.desk\)/);
+  assert.match(ui, /PURCHASE_FALLBACK/);
+  assert.match(css, /purchases-desk: document types/);
 });
