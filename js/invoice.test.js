@@ -236,7 +236,9 @@ test("official invoice is an A4 list view not a POS slip", () => {
   assert.match(html, /SO-10042/);
   assert.match(html, /Ramesh Traders/);
   assert.match(html, /Item &amp; Description/);
-  assert.match(html, /Payment Made/);
+  assert.match(html, /Invoice total/);
+  assert.match(html, /Payments till date/);
+  assert.match(html, /Total due/);
   assert.match(html, /Cardamom/);
   assert.match(html, /Clove/);
   assert.match(html, /Amount in words/);
@@ -355,7 +357,7 @@ test("invoice due rows use previous due + invoice − payment", () => {
     (v) => String(v),
   );
   assert.match(html, /Previous due/);
-  assert.match(html, /Current due/);
+  assert.match(html, /Total due/);
   assert.match(html, /UTR123456/);
 
   const cashPaid = InvoicePrint.invoiceDueFigures({
@@ -395,8 +397,61 @@ test("invoice due rows use previous due + invoice − payment", () => {
     },
   );
   assert.match(office, /class="off-paid"/);
-  assert.match(office, /Payment Made/);
+  assert.match(office, /Payments till date/);
   assert.match(office, /\(\-\) ₹840\.00/);
+});
+
+test("office invoice lists ledger receipts till date then total due", () => {
+  const InvoicePrint = loadInvoicePrint();
+  const html = InvoicePrint.officeInvoiceBody(
+    {
+      order_number: "SO-10003",
+      customer_name: "Swami Masale",
+      total: 40000,
+      payment_method: "credit",
+      payment_status: "partial",
+      amount_paid: 0,
+      previous_due: 0,
+      customer_outstanding: 14000,
+      payments: [
+        {
+          entry_no: "RCP-1002",
+          entry_type: "receipt",
+          party_name: "Swami Masale",
+          amount: 26000,
+          payment_method: "cash",
+          reference_type: "manual",
+          notes: "cash payment recived M.Mulani sir",
+          created_at: "2026-09-19T06:42:00.000Z",
+        },
+      ],
+      lines: [],
+    },
+    {
+      company: { name: "ATAV TELECOM" },
+      customers: [],
+      items: [],
+      formatDateTime: (v) => String(v),
+      money: (n) => `₹${Number(n).toFixed(2)}`,
+      escapeHtml: (v) => String(v ?? ""),
+    },
+  );
+  assert.match(html, /Invoice total/);
+  assert.match(html, /Payments till date/);
+  assert.match(html, /RCP-1002/);
+  assert.match(html, /receipt/);
+  assert.match(html, /Swami Masale/);
+  assert.match(html, /₹26000\.00|₹26,000\.00/);
+  assert.match(html, /cash payment recived M\.Mulani sir/);
+  assert.match(html, /Total due/);
+  assert.match(html, /₹14000\.00|₹14,000\.00/);
+  const due = InvoicePrint.invoiceDueFigures({
+    total: 40000,
+    payments: [{ entry_no: "RCP-1002", entry_type: "receipt", amount: 26000 }],
+    customer_outstanding: 14000,
+  });
+  assert.equal(due.paid, 26000);
+  assert.equal(due.current, 14000);
 });
 
 test("thermal invoice HTML shows IGST for inter-state supply", () => {

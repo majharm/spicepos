@@ -238,6 +238,10 @@ function pos_checkout_sale($bid, $branchId, $uid, $auth, $body) {
         $orderRow["payment_reference"] = $snap["paymentReference"] ?? null;
         $orderRow["payment_date"] = $snap["paymentDate"] ?? null;
         $orderRow["receipt"] = $snap["receipt"] ?? null;
+        $orderRow["customer_outstanding"] = $customer["outstanding"] ?? $snap["currentDue"] ?? 0;
+        $orderRow["payments"] = function_exists("pos_list_customer_receipts")
+          ? pos_list_customer_receipts($bid, [$customer["id"] ?? ""])
+          : [];
       }
     } catch (Throwable $e) {
       if (stripos($e->getMessage(), "Credit limit") !== false) throw $e;

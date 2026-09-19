@@ -59,6 +59,40 @@ export function invoicePaidAmount(method, total, raw) {
   return credit ? 0 : round2(total);
 }
 
+export async function listCustomerReceipts(customerIds, conn) {
+  const ids = [...new Set((customerIds || []).map((id) => String(id || "").trim()).filter(Boolean))];
+  if (!ids.length) return [];
+  const sql = `SELECT * FROM account_ledger
+       WHERE business_id = ? AND party_type = 'customer' AND LOWER(entry_type) = 'receipt'
+         AND party_id IN (${ids.map(() => "?").join(",")})
+       ORDER BY created_at ASC, entry_no ASC
+       LIMIT 1000`;
+  const params = [bid(), ...ids];
+  try {
+    if (conn?.query) {
+      const [rows] = await conn.query(sql, params);
+      return rows || [];
+    }
+    return await query(sql, params);
+  } catch {
+    return [];
+  }
+}
+
+export function attachPaymentsToOrders(orders, receipts) {
+  const byParty = new Map();
+  for (const row of receipts || []) {
+    const id = String(row.party_id || "");
+    if (!id) continue;
+    if (!byParty.has(id)) byParty.set(id, []);
+    byParty.get(id).push(row);
+  }
+  return (orders || []).map((order) => ({
+    ...order,
+    payments: byParty.get(String(order.customer_id || "")) || [],
+  }));
+}
+
 async function insertLedger(conn, row) {
   const id = crypto.randomUUID();
   await conn.query(

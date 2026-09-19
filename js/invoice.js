@@ -477,18 +477,57 @@ ${purchaseBody(purchase, ctx)}
     return 0;
   }
 
+  function invoicePaymentRows(order) {
+    const list = Array.isArray(order?.payments)
+      ? order.payments
+      : Array.isArray(order?.receipts)
+        ? order.receipts
+        : [];
+    return list
+      .map((r) => ({
+        entry_no: r.entry_no || r.entryNo || "",
+        entry_type: String(r.entry_type || r.entryType || "receipt"),
+        party_name: r.party_name || r.partyName || "",
+        amount: round2(r.amount),
+        payment_method: r.payment_method || r.paymentMethod || r.method || "",
+        reference: r.payment_reference || r.paymentReference || r.reference_type || r.referenceType || "",
+        notes: r.notes || "",
+        created_at: r.created_at || r.createdAt || r.payment_date || r.paymentDate || "",
+      }))
+      .filter((r) => String(r.entry_type).toLowerCase() === "receipt" && r.amount > 0);
+  }
+
   function invoiceDueFigures(order) {
     const total = round2(order.total);
     const previous = round2(order.previous_due ?? order.previousDue);
-    const paid = invoicePaidFromOrder(order);
+    const rows = invoicePaymentRows(order);
+    const paidFromRows = round2(rows.reduce((sum, r) => sum + r.amount, 0));
+    const paid = rows.length ? paidFromRows : invoicePaidFromOrder(order);
     const storedPaid = round2(order.amount_paid ?? order.amountPaid);
     const storedCurrent = order.current_due != null || order.currentDue != null
       ? round2(order.current_due ?? order.currentDue)
       : null;
-    const current = storedPaid > 0 && storedCurrent != null
-      ? storedCurrent
-      : round2(Math.max(0, previous + total - paid));
-    return { previous, paid, current, total, invoiceAmount: round2(order.subtotal), discount: round2(order.discount), gst: round2(order.gst) };
+    const outstandingRaw = order.customer_outstanding ?? order.customerOutstanding;
+    let current;
+    if (outstandingRaw != null && outstandingRaw !== "") {
+      current = round2(Math.max(0, outstandingRaw));
+    } else if (rows.length) {
+      current = round2(Math.max(0, previous + total - paid));
+    } else if (storedPaid > 0 && storedCurrent != null) {
+      current = storedCurrent;
+    } else {
+      current = round2(Math.max(0, previous + total - paid));
+    }
+    return {
+      previous,
+      paid,
+      current,
+      total,
+      payments: rows,
+      invoiceAmount: round2(order.subtotal),
+      discount: round2(order.discount),
+      gst: round2(order.gst),
+    };
   }
 
   function invoiceDueRowsHtml(order, money, escapeHtml) {
@@ -498,8 +537,8 @@ ${purchaseBody(purchase, ctx)}
     return `
       <tr><td colspan="3">Previous due</td><td class="inv-num">${escapeHtml(money(due.previous))}</td></tr>
       <tr><td colspan="3">Current invoice</td><td class="inv-num">${escapeHtml(money(due.total))}</td></tr>
-      <tr><td colspan="3">Amount paid</td><td class="inv-num">${escapeHtml(money(due.paid))}</td></tr>
-      <tr class="inv-grand"><td colspan="3"><strong>Current due</strong></td><td class="inv-num"><strong>${escapeHtml(money(due.current))}</strong></td></tr>
+      <tr><td colspan="3">Payments till date</td><td class="inv-num">${escapeHtml(money(due.paid))}</td></tr>
+      <tr class="inv-grand"><td colspan="3"><strong>Total due</strong></td><td class="inv-num"><strong>${escapeHtml(money(due.current))}</strong></td></tr>
       ${ref ? `<tr><td colspan="3">Payment reference</td><td class="inv-num">${escapeHtml(ref)}</td></tr>` : ""}
       ${payDate ? `<tr><td colspan="3">Payment date</td><td class="inv-num">${escapeHtml(payDate)}</td></tr>` : ""}`;
   }
@@ -789,7 +828,10 @@ ${invoiceBody(order, ctx)}
     const discount = figures.discount;
     const gst = figures.gst;
     const total = figures.total;
-    const due = invoiceDueFigures(order);
+    const due = invoiceDueFigures({
+      ...order,
+      customer_outstanding: order.customer_outstanding ?? order.customerOutstanding ?? cust?.outstanding,
+    });
     const invNo = escapeHtml(order.order_number || "—");
     const when = formatDateTime(order.created_at || new Date().toISOString());
     const dueDate = officeDateOnly(order.due_date || order.dueDate || order.created_at);
@@ -859,8 +901,34 @@ ${invoiceBody(order, ctx)}
     const tableLine = tableNo
       ? `<tr><td>Table</td><td>${escapeHtml(/^\d+$/.test(tableNo) ? `Table ${tableNo}` : tableNo)}</td></tr>`
       : "";
-    const ref = String(order.payment_reference || "").trim();
-    const payDate = String(order.payment_date || "").slice(0, 10);
+    const payRows = due.payments || [];
+    const payTable = payRows.length
+      ? `<section class="off-pays-wrap">
+      <h3>Payments till date</h3>
+      <table class="off-pays">
+        <thead>
+          <tr>
+            <th>Entry</th><th>Type</th><th>Party</th><th class="off-n">Amount</th>
+            <th>Method</th><th>Reference</th><th>Notes</th><th>Date</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${payRows
+            .map((r) => `<tr>
+            <td>${escapeHtml(r.entry_no || "—")}</td>
+            <td>${escapeHtml(r.entry_type || "receipt")}</td>
+            <td>${escapeHtml(r.party_name || buyerName)}</td>
+            <td class="off-n">${escapeHtml(money(r.amount))}</td>
+            <td>${escapeHtml(r.payment_method || "—")}</td>
+            <td>${escapeHtml(r.reference || "—")}</td>
+            <td>${escapeHtml(r.notes || "—")}</td>
+            <td>${escapeHtml(r.created_at ? formatDateTime(r.created_at) : "—")}</td>
+          </tr>`)
+            .join("")}
+        </tbody>
+      </table>
+    </section>`
+      : "";
 
     return `<article class="office-invoice">
   <header class="off-head">
@@ -941,15 +1009,13 @@ ${invoiceBody(order, ctx)}
         ${discount > 0 ? `<tr><td>Discount</td><td class="off-n">(-) ${escapeHtml(money(discount))}</td></tr>` : ""}
         ${round2(order.loyalty_discount) > 0 ? `<tr><td>Royalty</td><td class="off-n">(-) ${escapeHtml(money(order.loyalty_discount))}</td></tr>` : ""}
         <tr><td>Tax</td><td class="off-n">${escapeHtml(money(gst))}</td></tr>
-        <tr class="off-grand"><td>Total</td><td class="off-n">${escapeHtml(money(total))}</td></tr>
-        <tr><td>Previous due</td><td class="off-n">${escapeHtml(money(due.previous))}</td></tr>
-        <tr class="off-paid"><td>Payment Made</td><td class="off-n">(-) ${escapeHtml(money(due.paid))}</td></tr>
-        <tr class="off-due"><td>Balance Due</td><td class="off-n">${escapeHtml(money(due.current))}</td></tr>
-        ${ref ? `<tr><td>Payment reference</td><td class="off-n">${escapeHtml(ref)}</td></tr>` : ""}
-        ${payDate ? `<tr><td>Payment date</td><td class="off-n">${escapeHtml(payDate)}</td></tr>` : ""}
+        <tr class="off-grand"><td>Invoice total</td><td class="off-n">${escapeHtml(money(total))}</td></tr>
+        <tr class="off-paid"><td>Payments till date</td><td class="off-n">(-) ${escapeHtml(money(due.paid))}</td></tr>
+        <tr class="off-due"><td>Total due</td><td class="off-n">${escapeHtml(money(due.current))}</td></tr>
       </tbody>
     </table>
   </div>
+  ${payTable}
   ${paymentQrHtml(co, ctx, "office")}
   <p class="off-thanks">Thanks for your business.</p>
   <footer class="off-sign">
@@ -1043,6 +1109,11 @@ body {
 .off-grand td { font-weight: 800; font-size: 14px; border-top: 1px solid #ddd; }
 .off-paid td { font-weight: 700; }
 .off-due td { font-weight: 800; font-size: 14px; color: #1a7a6d; border-top: 2px solid #1a7a6d; }
+.off-pays-wrap { margin-top: 16px; }
+.off-pays-wrap h3 { margin: 0 0 8px; font-size: 12px; color: #1a7a6d; }
+.off-pays { width: 100%; border-collapse: collapse; font-size: 11px; }
+.off-pays th { background: #1a7a6d; color: #fff; text-align: left; padding: 6px 8px; font-weight: 700; }
+.off-pays td { border-bottom: 1px solid #e6e6e6; padding: 6px 8px; vertical-align: top; }
 .off-thanks { margin: 18px 0 0; font-size: 13px; color: #1a7a6d; }
 .off-pay-qr { text-align: center; margin: 16px 0 0; }
 .off-pay-qr-title { margin: 0 0 6px; font-size: 11px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: #333; }
@@ -1163,6 +1234,7 @@ ${voucherBody(entry, ctx)}
     thermalPurchaseDocument,
     invoiceDueFigures,
     invoiceDueRowsHtml,
+    invoicePaymentRows,
     voucherBody,
     voucherDocument,
     enrichLines,

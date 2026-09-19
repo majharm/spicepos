@@ -21,9 +21,8 @@ import { registerMaster } from "./master.js";
 import { registerTenant } from "./tenant.js";
 import { registerBackup } from "./backup.js";
 import { registerUnits, ensureInventoryUnits } from "./units.js";
-import { registerAccounts } from "./accounts.js";
+import { registerAccounts, recordCreditSale, settleCustomerInvoice, listCustomerReceipts, attachPaymentsToOrders } from "./accounts.js";
 import { postSaleJournal } from "./accounting.js";
-import { recordCreditSale, settleCustomerInvoice } from "./accounts.js";
 import { audit } from "./audit.js";
 import { getPlatformSettings, shopSupportContact } from "./settings.js";
 import { sendLowStockAlerts, tickShopAlerts, startAlertScheduler, scheduleAlertTick } from "./alerts.js";
@@ -323,7 +322,7 @@ app.get("/api/items/:id", requireStaff, async (req, res) => {
 app.get("/api/orders", requireStaff, requirePerm("orders"), async (_req, res) => {
   try {
     const orders = await query(
-      `SELECT o.*, COALESCE(
+      `SELECT o.*, c.outstanding AS customer_outstanding, COALESCE(
          NULLIF(TRIM(o.customer_name), ''),
          NULLIF(TRIM(c.business_name), ''),
          NULLIF(TRIM(c.name), ''),
@@ -343,11 +342,15 @@ app.get("/api/orders", requireStaff, requirePerm("orders"), async (_req, res) =>
           ids,
         )
       : [];
+    const receipts = await listCustomerReceipts(orders.map((o) => o.customer_id));
     res.json(
-      orders.map((o) => ({
-        ...o,
-        lines: lines.filter((l) => l.order_id === o.id),
-      })),
+      attachPaymentsToOrders(
+        orders.map((o) => ({
+          ...o,
+          lines: lines.filter((l) => l.order_id === o.id),
+        })),
+        receipts,
+      ),
     );
   } catch (err) {
     res.status(500).json({ error: String(err.message) });
@@ -1093,6 +1096,8 @@ app.post("/api/checkout", requireStaff, requirePerm("counter"), async (req, res)
       orderRow.payment_reference = dueSnap.paymentReference;
       orderRow.payment_date = dueSnap.paymentDate;
       orderRow.receipt = dueSnap.receipt;
+      orderRow.customer_outstanding = customer.outstanding;
+      orderRow.payments = await listCustomerReceipts([customer.id], conn);
       await postSaleJournal(conn, orderRow);
       return orderRow;
     });

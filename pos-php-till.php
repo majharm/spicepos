@@ -463,7 +463,7 @@ function pos_php_till_dispatch($path, $method, $body) {
 
   if ($path === "orders" && $method === "GET") {
     $orders = pos_q(
-      "SELECT o.*, COALESCE(
+      "SELECT o.*, c.outstanding AS customer_outstanding, COALESCE(
          NULLIF(TRIM(o.customer_name), ''),
          NULLIF(TRIM(c.business_name), ''),
          NULLIF(TRIM(c.name), ''),
@@ -488,6 +488,10 @@ function pos_php_till_dispatch($path, $method, $body) {
       foreach ($lines as $l) {
         if ($l["order_id"] === $o["id"]) $o["lines"][] = $l;
       }
+    }
+    unset($o);
+    if (function_exists("pos_attach_order_payments")) {
+      $orders = pos_attach_order_payments($bid, $orders);
     }
     pos_send(200, $orders);
   }

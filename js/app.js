@@ -552,7 +552,7 @@ function invoiceSettlementHtml(o) {
   const payDate = String(o.payment_date || "").slice(0, 10);
   const receiptNo = o.receipt?.entryNo || o.receipt?.entry_no || o.receipt_entry_no || "";
   return `<details class="invoice-settle" open>
-    <summary>Current due ${money(current)} · Paid ${money(paid)}</summary>
+    <summary>Total due ${money(current)} · Paid till date ${money(paid)}</summary>
     <p class="hint">Previous due + invoice − payment = outstanding</p>
     <div class="invoice-settle-grid">
       <div><span>Invoice No.</span><strong>${escapeHtml(o.order_number || "—")}</strong></div>
@@ -564,11 +564,11 @@ function invoiceSettlementHtml(o) {
       <div><span>Discount</span><strong>${money(Number(o.discount) || 0)}</strong></div>
       <div><span>Tax/GST</span><strong>${money(Number(o.gst) || 0)}</strong></div>
       <div><span>Total Invoice Amount</span><strong>${money(total)}</strong></div>
-      <div><span>Amount Paid</span><strong>${money(paid)}</strong></div>
+      <div><span>Payments till date</span><strong>${money(paid)}</strong></div>
       <div><span>Payment Mode</span><strong>${escapeHtml(paymentMethodLabel(o.payment_method))}</strong></div>
       <div><span>Payment Reference</span><strong>${escapeHtml(ref || "—")}</strong></div>
       <div><span>Payment Date</span><strong>${escapeHtml(payDate || "—")}</strong></div>
-      <div><span>Current Due</span><strong>${money(current)}</strong></div>
+      <div><span>Total due</span><strong>${money(current)}</strong></div>
     </div>
     ${Number(paid) > 0 && receiptNo ? `<p class="hint">Payment receipt ${escapeHtml(receiptNo)} is linked to this invoice.</p>` : ""}
   </details>`;

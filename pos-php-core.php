@@ -1715,6 +1715,46 @@ function pos_reverse_credit_sale($businessId, $order) {
   }
 }
 
+function pos_list_customer_receipts($bid, $ids) {
+  $ids = array_values(array_unique(array_filter(array_map("strval", $ids ?: []))));
+  if (!$ids) return [];
+  try {
+    $ph = implode(",", array_fill(0, count($ids), "?"));
+    return pos_q(
+      "SELECT * FROM account_ledger
+       WHERE business_id = ? AND party_type = 'customer' AND LOWER(entry_type) = 'receipt'
+         AND party_id IN ($ph)
+       ORDER BY created_at ASC, entry_no ASC
+       LIMIT 1000",
+      "s" . str_repeat("s", count($ids)),
+      array_merge([$bid], $ids)
+    );
+  } catch (Throwable $e) {
+    return [];
+  }
+}
+
+function pos_attach_order_payments($bid, $orders) {
+  $custIds = [];
+  foreach ($orders as $o) {
+    if (!empty($o["customer_id"])) $custIds[] = $o["customer_id"];
+  }
+  $receipts = pos_list_customer_receipts($bid, $custIds);
+  $by = [];
+  foreach ($receipts as $row) {
+    $pid = (string) ($row["party_id"] ?? "");
+    if ($pid === "") continue;
+    if (!isset($by[$pid])) $by[$pid] = [];
+    $by[$pid][] = $row;
+  }
+  foreach ($orders as &$o) {
+    $cid = (string) ($o["customer_id"] ?? "");
+    $o["payments"] = $by[$cid] ?? [];
+  }
+  unset($o);
+  return $orders;
+}
+
 function pos_recompute_customer_outstanding($businessId, $customerId) {
   if (!$customerId) return 0;
   $billed = 0;
