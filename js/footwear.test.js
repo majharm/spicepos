@@ -455,9 +455,12 @@ test("Medical shops show pharmacy medicine fields on the item form", () => {
   assert.match(app, /view === "qr-orders" && isPharmacyShop\(\)/);
   assert.match(app, /function loadPrescriptions/);
   assert.match(app, /function pharmacyStockCards/);
+  assert.match(app, /function stockExpiryYmd/);
+  assert.match(app, /function paintStockExpiryCell/);
   assert.match(app, /\/api\/batches\?on_hand=1/);
-  assert.match(app, /stock-batch-card/);
-  assert.match(index, /On-hand quantity by batch number/);
+  assert.match(app, /stock-batch-table/);
+  assert.match(app, /<th>Expiry Date<\/th>/);
+  assert.match(index, /On-hand by batch number and expiry date/);
   assert.match(adv, /savePharmacyItemFields/);
   assert.match(adv, /req.query.on_hand/);
   const demo = F.demoItems({ category: "Medical" });

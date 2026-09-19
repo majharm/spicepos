@@ -440,7 +440,8 @@ export function registerTenant(app) {
     send(res, () =>
       query(
         `SELECT i.id, i.code, i.name, i.unit, i.base_unit, i.stock_gm AS master_stock,
-                i.reorder_level_gm, i.purchase_rate, i.retail_rate,
+                i.reorder_level_gm, i.purchase_rate, i.retail_rate, i.barcode, i.batch_no,
+                DATE_FORMAT(i.default_expiry, '%Y-%m-%d') AS default_expiry,
                 COALESCE(bs.stock_gm, i.stock_gm) AS stock_gm, bs.branch_id
          FROM items i
          LEFT JOIN branch_stocks bs ON bs.item_id = i.id AND bs.branch_id = ?

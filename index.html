@@ -6,7 +6,7 @@
     <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
     <title>ATAV POS</title>
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./css/pos.css?v=20260919a4p1" />
+    <link rel="stylesheet" href="./css/pos.css?v=20260919exp1" />
     <link rel="stylesheet" href="./css/saas.css?v=20260905deploy136" />
   </head>
   <body>
@@ -973,7 +973,7 @@
                 <p class="items-kicker">Inventory</p>
                 <h3>Stock</h3>
                 <p class="lede pharmacy-hide">Search a SKU, tap it, then post + or − quantity. Low-stock items are highlighted.</p>
-                <p class="lede pharmacy-only" hidden>On-hand quantity by batch number. Tap a medicine, then post + or − quantity.</p>
+                <p class="lede pharmacy-only" hidden>On-hand by batch number and expiry date. Tap a row, then post + or − quantity.</p>
               </div>
               <div class="items-hero-stats" id="stock-hero-stats"></div>
             </header>
@@ -1037,7 +1037,7 @@
               <aside class="items-library">
                 <div class="items-library-head">
                   <h4>On hand</h4>
-                  <input id="stock-search" type="search" placeholder="Search name, code, barcode…" autocomplete="off" />
+                  <input id="stock-search" type="search" placeholder="Search name, batch no, expiry…" autocomplete="off" />
                   <label class="item-toggle"><input type="checkbox" id="stock-low-only" /> Low stock</label>
                 </div>
                 <div class="table-wrap items-library-list" id="stock-table"></div>
@@ -1896,7 +1896,7 @@
     <script src="./js/qrcode.iife.js?v=20260905qr1" defer></script>
     <script src="./js/qr-notify.js?v=20260914kot1" defer></script>
     <script src="./js/payment-methods.js?v=20260918pay1" defer></script>
-    <script src="./js/app.js?v=20260919stk1" defer></script>
+    <script src="./js/app.js?v=20260919exp1" defer></script>
     <script src="./js/growth.js?v=20260905deploy145" defer></script>
     <script src="./js/offers-ui.js?v=20260905deploy136" defer></script>
   </body>

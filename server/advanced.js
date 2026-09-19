@@ -1082,6 +1082,8 @@ export function registerAdvanced(app) {
                         b.created_at,
                         i.name AS item_name, i.code AS item_code, i.base_unit, i.unit, i.hsn, i.category,
                         i.barcode AS item_barcode, i.reorder_level_gm, i.purchase_rate, i.retail_rate, i.stock_gm,
+                        i.batch_no AS item_batch_no,
+                        DATE_FORMAT(i.default_expiry, '%Y-%m-%d') AS item_default_expiry,
                         s.name AS supplier_name
                  FROM stock_batches b JOIN items i ON i.id=b.item_id
                  LEFT JOIN suppliers s ON s.id=b.supplier_id WHERE b.business_id=?`;
