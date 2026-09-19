@@ -357,6 +357,11 @@ test("POS boot skips API probe and slims catalog photos", () => {
   assert.match(appJs, /showView\(landing\)/);
   assert.match(appJs, /function paintDeskState/);
   assert.match(appJs, /function paintDashWelcome/);
+  assert.match(appJs, /el\.textContent = "Dashboard"/);
+  assert.match(index, /zoho-dash-desk/);
+  assert.match(index, /Quick Create/);
+  assert.match(index, /id="open-pos">New</);
+  assert.match(read("css/pos.css"), /zoho-dash: books home 2026/);
   assert.match(appJs, /data-dash-view/);
   assert.match(appJs, /i.has_image/);
   assert.match(appJs, /requestIdleCallback/);
@@ -365,7 +370,7 @@ test("POS boot skips API probe and slims catalog photos", () => {
   assert.match(index, /qrcode\.iife\.js[^>]+defer/);
   assert.match(index, /preload="none"/);
   assert.match(index, /pos-api\.js\?v=20260905deploy154/);
-  assert.match(index, /app\.js\?v=20260919close1/);
+  assert.match(index, /app\.js\?v=20260919zohod1/);
   assert.match(index, /class="dialog-head"/);
   assert.match(index, /id="modal-close"/);
   assert.match(read("css/pos.css"), /#modal-close \{/);
@@ -427,9 +432,9 @@ test("Restaurant Counter can create named dining tables", () => {
   assert.match(core, /function pos_clip_floor_id/);
   assert.match(core, /dining_tables_json/);
   assert.match(till, /dining-tables/);
-  assert.match(index, /pos\.css\?v=20260919close1/);
+  assert.match(index, /pos\.css\?v=20260919zohod1/);
   assert.match(index, /restaurant\.js\?v=20260918table1/);
-  assert.match(index, /app\.js\?v=20260919close1/);
+  assert.match(index, /app\.js\?v=20260919zohod1/);
   assert.match(index, /footwear\.js\?v=20260917pharm1/);
   assert.match(app, /function resolveKitchenKot/);
   assert.match(app, /function paintKotTimers/);

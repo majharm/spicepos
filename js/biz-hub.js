@@ -290,14 +290,14 @@
   const PAY_MODES = ["cash", "upi", "card", "bank-transfer", "neft", "rtgs", "imps", "cheque", "wallet", "other"];
 
   const DASH_KPIS = [
+    { key: "receivable", label: "Total Receivables", view: "customers", money: true, featured: true },
+    { key: "payable", label: "Total Payables", view: "accounts", money: true, featured: true },
+    { key: "cashBalance", label: "Cash in Hand", view: "accounts", money: true, featured: true },
+    { key: "bankBalance", label: "Cash in Bank", view: "accounts", money: true, featured: true },
     { key: "todaySales", label: "Today's Sales", view: "orders", money: true },
     { key: "todayPurchases", label: "Today's Purchases", view: "purchases", money: true },
     { key: "todayReceipts", label: "Today's Receipts", view: "payments", money: true },
     { key: "todayPayments", label: "Today's Payments", view: "payments", money: true },
-    { key: "receivable", label: "Total Receivable", view: "customers", money: true },
-    { key: "payable", label: "Total Payable", view: "accounts", money: true },
-    { key: "cashBalance", label: "Cash Balance", view: "accounts", money: true },
-    { key: "bankBalance", label: "Bank/UPI Balance", view: "accounts", money: true },
     { key: "grossProfit", label: "Gross Profit", view: "reports", money: true },
     { key: "netProfit", label: "Net Profit", view: "reports", money: true },
     { key: "expenses", label: "Expenses", view: "expenses", money: true },

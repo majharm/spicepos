@@ -5145,12 +5145,12 @@ function subscriptionValidity(dashSub) {
 function paintDashWelcome(dashSub) {
   const el = $("dash-welcome");
   if (!el || !state.session) return;
-  const name = String(state.session.name || "").trim();
-  el.textContent = name ? `Hello, ${name}` : "Your shop today.";
+  el.textContent = "Dashboard";
   const meta = $("dash-welcome-meta");
   if (meta) {
+    const name = String(state.session.name || "").trim();
     const sub = subscriptionValidity(dashSub);
-    const bits = [dashRoleLabel(state.session.role), state.company?.name].filter(Boolean);
+    const bits = [name ? `Hello, ${name}` : "", dashRoleLabel(state.session.role), state.company?.name].filter(Boolean);
     if (sub.ymd) bits.push(`Valid till ${sub.until}`, sub.daysLabel);
     meta.textContent = bits.join(" · ");
   }
@@ -5175,7 +5175,7 @@ async function loadDashboard() {
     ]
       .map(
         ([k, v, view, tone]) =>
-          `<button type="button" class="report-card dash-kpi ${escapeHtml(String(tone || ""))}" data-dash-view="${view}"><span>${escapeHtml(String(k))}</span><strong>${escapeHtml(String(v ?? "—"))}</strong></button>`,
+          `<button type="button" class="report-card dash-kpi dash-kpi-plan ${escapeHtml(String(tone || ""))}" data-dash-view="${view}"><span>${escapeHtml(String(k))}</span><strong>${escapeHtml(String(v ?? "—"))}</strong></button>`,
       )
       .join("");
     if ($("dash-kpis") && extra) $("dash-kpis").insertAdjacentHTML("beforeend", extra);

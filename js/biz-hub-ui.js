@@ -25,9 +25,9 @@
     if (!vals.length) return `<p class="hint">No data in the last 14 days.</p>`;
     return `<div class="hub-spark">${vals
       .map((v, i) => {
-        const h = Math.max(4, Math.round((v / max) * 72));
+        const h = Math.max(6, Math.round((v / max) * 88));
         const label = String(rows[i].day || rows[i].label || "").slice(5);
-        return `<span class="hub-bar" title="${escapeHtml(label)} · ${escapeHtml(String(v))}" style="height:${h}px"></span>`;
+        return `<span class="hub-bar" title="${escapeHtml(label)} · ${escapeHtml(money(v))}" style="height:${h}px"><em>${escapeHtml(label)}</em></span>`;
       })
       .join("")}</div>`;
   }
@@ -56,7 +56,8 @@
     $("dash-kpis").innerHTML = H.DASH_KPIS.map((k) => {
       const raw = map[k.key];
       const val = k.money ? money(raw) : raw == null ? "—" : String(raw);
-      return `<button type="button" class="report-card dash-kpi" data-dash-view="${escapeHtml(k.view)}"><span>${escapeHtml(k.label)}</span><strong>${escapeHtml(val)}</strong></button>`;
+      const feat = k.featured ? " is-featured" : "";
+      return `<button type="button" class="report-card dash-kpi${feat}" data-dash-view="${escapeHtml(k.view)}"><span>${escapeHtml(k.label)}</span><strong>${escapeHtml(val)}</strong></button>`;
     }).join("");
     if ($("dash-sales-graph")) $("dash-sales-graph").innerHTML = spark(h.salesGraph, "sales");
     if ($("dash-pay-graph")) $("dash-pay-graph").innerHTML = spark(h.payGraph, "collected");

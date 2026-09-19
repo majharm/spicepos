@@ -35,6 +35,25 @@ test("Industry modules stay off grocery shops", () => {
   assert.ok(H.PAY_MODES.includes("upi") && H.PAY_MODES.includes("neft"));
   assert.ok(H.DASH_KPIS.some((k) => k.key === "todaySales"));
   assert.ok(H.DASH_KPIS.some((k) => k.key === "cashBalance"));
+  assert.equal(H.DASH_KPIS[0].key, "receivable");
+  assert.equal(H.DASH_KPIS[1].key, "payable");
+  assert.equal(H.DASH_KPIS[0].featured, true);
+});
+
+test("Dashboard uses a Zoho Books-style home shell", () => {
+  const index = read("index.html");
+  const ui = read("js/biz-hub-ui.js");
+  const app = read("js/app.js");
+  const css = read("css/pos.css");
+  assert.match(index, /zoho-dash-desk/);
+  assert.match(index, /Quick Create/);
+  assert.match(index, /zoho-widget-link/);
+  assert.match(index, /id="open-pos">New</);
+  assert.match(index, /biz-hub-ui\.js\?v=20260919zohod1/);
+  assert.match(ui, /is-featured/);
+  assert.match(app, /el\.textContent = "Dashboard"/);
+  assert.match(css, /zoho-dash: books home 2026/);
+  assert.match(css, /#1a7a6d/);
 });
 
 test("POS shell wires Reports Center, payments, audit, and hub scripts", () => {
@@ -47,7 +66,7 @@ test("POS shell wires Reports Center, payments, audit, and hub scripts", () => {
   assert.match(index, /id="view-audit"/);
   assert.match(index, /id="view-hub-sales"/);
   assert.match(index, /id="dash-sales-graph"/);
-  assert.match(index, /biz-hub\.js\?v=20260919purch1/);
+  assert.match(index, /biz-hub\.js\?v=20260919zohod1/);
   assert.match(index, /id="rep-pdf"/);
   assert.match(index, /id="rep-pay-mode"/);
   assert.match(app, /POSBizHubUi\?\.paintDashboard/);
