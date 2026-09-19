@@ -4087,23 +4087,6 @@ button.items-stat.is-active {
 body.classic-bill-mode .bill-settle {
   grid-template-columns: minmax(0, 1fr);
 }
-.bill-pay-more {
-  margin: 0;
-}
-.bill-pay-more > summary {
-  cursor: pointer;
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--muted);
-  list-style: none;
-}
-.bill-pay-more > summary::-webkit-details-marker { display: none; }
-.bill-pay-more-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.9fr);
-  gap: 8px;
-  padding-top: 8px;
-}
 .view-counter .customer-face { display: none !important; }
 .bill-settle label {
   display: grid;
@@ -5341,7 +5324,6 @@ body.classic-bill-mode .bill-settle {
 }
 
 @media (max-width: 640px) {
-  .bill-pay-more-grid { grid-template-columns: 1fr; }
   .bill-settle,
   .invoice-settle-grid { grid-template-columns: 1fr; }
   .classic-cust-toolbar { grid-template-columns: 1fr; }

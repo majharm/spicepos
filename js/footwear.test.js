@@ -248,7 +248,9 @@ test("Counter has a dedicated scan lane and Pay action", () => {
   assert.match(index, /id="scan-form"/);
   assert.match(index, /id="scan-code"/);
   assert.match(index, /id="bill-extras"/);
-  assert.match(index, /id="bill-pay-more"/);
+  assert.doesNotMatch(index, /id="bill-pay-more"/);
+  assert.doesNotMatch(index, /id="pay-ref"/);
+  assert.doesNotMatch(index, /Reference \/ UTR/);
   assert.match(index, />Pay</);
   assert.match(app, /Due \$\{money\(due\)\}/);
   assert.match(app, /async function applyBarcodeScan/);
