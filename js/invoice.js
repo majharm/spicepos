@@ -478,23 +478,59 @@ ${purchaseBody(purchase, ctx)}
   }
 
   function invoicePaymentRows(order) {
-    const list = Array.isArray(order?.payments)
-      ? order.payments
-      : Array.isArray(order?.receipts)
-        ? order.receipts
-        : [];
-    return list
+    const list = [];
+    if (Array.isArray(order?.payments)) list.push(...order.payments);
+    if (Array.isArray(order?.receipts)) list.push(...order.receipts);
+    const receipt = order?.receipt;
+    if (receipt && typeof receipt === "object") {
+      list.push({
+        entry_no: receipt.entry_no || receipt.entryNo || "",
+        entry_type: receipt.entry_type || receipt.entryType || "receipt",
+        party_name: receipt.party_name || receipt.partyName || order.customer_name || "",
+        amount: receipt.amount,
+        payment_method: receipt.payment_method || receipt.paymentMethod || receipt.method || order.payment_method,
+        payment_reference: receipt.payment_reference || receipt.paymentReference,
+        reference_type: receipt.reference_type || receipt.referenceType,
+        notes: receipt.notes || "",
+        created_at: receipt.created_at || receipt.createdAt || receipt.payment_date || order.payment_date || order.created_at,
+      });
+    }
+    const mapped = list
       .map((r) => ({
         entry_no: r.entry_no || r.entryNo || "",
         entry_type: String(r.entry_type || r.entryType || "receipt"),
         party_name: r.party_name || r.partyName || "",
         amount: round2(r.amount),
         payment_method: r.payment_method || r.paymentMethod || r.method || "",
-        reference: r.payment_reference || r.paymentReference || r.reference_type || r.referenceType || "",
+        reference: r.payment_reference || r.paymentReference || r.reference || r.reference_type || r.referenceType || "",
         notes: r.notes || "",
         created_at: r.created_at || r.createdAt || r.payment_date || r.paymentDate || "",
       }))
       .filter((r) => String(r.entry_type).toLowerCase() === "receipt" && r.amount > 0);
+    const unique = [];
+    const seen = new Set();
+    for (const row of mapped) {
+      const key = row.entry_no || `${row.amount}|${row.created_at}|${row.notes}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      unique.push(row);
+    }
+    if (!unique.length) {
+      const paid = invoicePaidFromOrder(order);
+      if (paid > 0) {
+        unique.push({
+          entry_no: order.receipt?.entryNo || order.receipt?.entry_no || order.order_number || "—",
+          entry_type: "receipt",
+          party_name: order.customer_name || "",
+          amount: paid,
+          payment_method: order.payment_method || "cash",
+          reference: order.payment_reference || order.paymentReference || "",
+          notes: order.notes || "",
+          created_at: order.payment_date || order.paymentDate || order.created_at || "",
+        });
+      }
+    }
+    return unique;
   }
 
   function invoiceDueFigures(order) {
@@ -502,7 +538,8 @@ ${purchaseBody(purchase, ctx)}
     const previous = round2(order.previous_due ?? order.previousDue);
     const rows = invoicePaymentRows(order);
     const paidFromRows = round2(rows.reduce((sum, r) => sum + r.amount, 0));
-    const paid = rows.length ? paidFromRows : invoicePaidFromOrder(order);
+    const inferred = invoicePaidFromOrder(order);
+    const paid = rows.length ? paidFromRows : inferred;
     const storedPaid = round2(order.amount_paid ?? order.amountPaid);
     const storedCurrent = order.current_due != null || order.currentDue != null
       ? round2(order.current_due ?? order.currentDue)
@@ -537,7 +574,7 @@ ${purchaseBody(purchase, ctx)}
     return `
       <tr><td colspan="3">Previous due</td><td class="inv-num">${escapeHtml(money(due.previous))}</td></tr>
       <tr><td colspan="3">Current invoice</td><td class="inv-num">${escapeHtml(money(due.total))}</td></tr>
-      <tr><td colspan="3">Payments till date</td><td class="inv-num">${escapeHtml(money(due.paid))}</td></tr>
+      <tr><td colspan="3">Payment Made</td><td class="inv-num">${escapeHtml(money(due.paid))}</td></tr>
       <tr class="inv-grand"><td colspan="3"><strong>Total due</strong></td><td class="inv-num"><strong>${escapeHtml(money(due.current))}</strong></td></tr>
       ${ref ? `<tr><td colspan="3">Payment reference</td><td class="inv-num">${escapeHtml(ref)}</td></tr>` : ""}
       ${payDate ? `<tr><td colspan="3">Payment date</td><td class="inv-num">${escapeHtml(payDate)}</td></tr>` : ""}`;
@@ -905,6 +942,7 @@ ${invoiceBody(order, ctx)}
     const payTable = payRows.length
       ? `<section class="off-pays-wrap">
       <h3>Payments till date</h3>
+      <p class="off-pays-note">Invoice total ${escapeHtml(money(total))} · Payment Made ${escapeHtml(money(due.paid))}</p>
       <table class="off-pays">
         <thead>
           <tr>
@@ -1010,7 +1048,7 @@ ${invoiceBody(order, ctx)}
         ${round2(order.loyalty_discount) > 0 ? `<tr><td>Royalty</td><td class="off-n">(-) ${escapeHtml(money(order.loyalty_discount))}</td></tr>` : ""}
         <tr><td>Tax</td><td class="off-n">${escapeHtml(money(gst))}</td></tr>
         <tr class="off-grand"><td>Invoice total</td><td class="off-n">${escapeHtml(money(total))}</td></tr>
-        <tr class="off-paid"><td>Payments till date</td><td class="off-n">(-) ${escapeHtml(money(due.paid))}</td></tr>
+        <tr class="off-paid"><td>Payment Made</td><td class="off-n">(-) ${escapeHtml(money(due.paid))}</td></tr>
         <tr class="off-due"><td>Total due</td><td class="off-n">${escapeHtml(money(due.current))}</td></tr>
       </tbody>
     </table>
@@ -1110,7 +1148,8 @@ body {
 .off-paid td { font-weight: 700; }
 .off-due td { font-weight: 800; font-size: 14px; color: #1a7a6d; border-top: 2px solid #1a7a6d; }
 .off-pays-wrap { margin-top: 16px; }
-.off-pays-wrap h3 { margin: 0 0 8px; font-size: 12px; color: #1a7a6d; }
+.off-pays-wrap h3 { margin: 0 0 4px; font-size: 12px; color: #1a7a6d; }
+.off-pays-note { margin: 0 0 8px; font-size: 11px; color: #555; }
 .off-pays { width: 100%; border-collapse: collapse; font-size: 11px; }
 .off-pays th { background: #1a7a6d; color: #fff; text-align: left; padding: 6px 8px; font-weight: 700; }
 .off-pays td { border-bottom: 1px solid #e6e6e6; padding: 6px 8px; vertical-align: top; }

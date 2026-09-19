@@ -143,8 +143,23 @@ app.get("/api/invoices/:id", async (req, res) => {
       [order.business_id],
     );
     res.setHeader("Cache-Control", "no-store");
+    let payments = [];
+    if (order.customer_id) {
+      try {
+        payments = await query(
+          `SELECT * FROM account_ledger
+           WHERE business_id = ? AND party_type = 'customer' AND LOWER(entry_type) = 'receipt'
+             AND party_id = ?
+           ORDER BY created_at ASC, entry_no ASC
+           LIMIT 1000`,
+          [order.business_id, order.customer_id],
+        );
+      } catch {
+        payments = [];
+      }
+    }
     res.json({
-      order: { ...order, lines },
+      order: { ...order, lines, payments },
       company: publicCompanyPayload(company || { name: business?.name || "ATAV POS" }),
       business: business || {},
       items,

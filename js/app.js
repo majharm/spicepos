@@ -564,7 +564,7 @@ function invoiceSettlementHtml(o) {
       <div><span>Discount</span><strong>${money(Number(o.discount) || 0)}</strong></div>
       <div><span>Tax/GST</span><strong>${money(Number(o.gst) || 0)}</strong></div>
       <div><span>Total Invoice Amount</span><strong>${money(total)}</strong></div>
-      <div><span>Payments till date</span><strong>${money(paid)}</strong></div>
+      <div><span>Payment Made</span><strong>${money(paid)}</strong></div>
       <div><span>Payment Mode</span><strong>${escapeHtml(paymentMethodLabel(o.payment_method))}</strong></div>
       <div><span>Payment Reference</span><strong>${escapeHtml(ref || "—")}</strong></div>
       <div><span>Payment Date</span><strong>${escapeHtml(payDate || "—")}</strong></div>
@@ -5614,18 +5614,74 @@ function invoiceLookTabs(look) {
     </div>`;
 }
 
+function withOrderPayments(order) {
+  if (!order) return order;
+  if (Array.isArray(order.payments) && order.payments.length) return order;
+  const cid = String(order.customer_id || "");
+  const bundled = [];
+  const seen = new Set();
+  const take = (row) => {
+    if (!row) return;
+    const key = String(row.id || row.ledgerId || row.entry_no || row.entryNo || "");
+    if (key && seen.has(key)) return;
+    if (key) seen.add(key);
+    bundled.push(row);
+  };
+  if (cid) {
+    for (const o of orderCache || []) {
+      if (String(o.customer_id || "") !== cid) continue;
+      (o.payments || []).forEach(take);
+    }
+    (state.ledgerRows || [])
+      .filter((r) => String(r.entry_type || "").toLowerCase() === "receipt" && String(r.party_id || "") === cid)
+      .forEach(take);
+  }
+  if (order.receipt) take(order.receipt);
+  return bundled.length ? { ...order, payments: bundled } : order;
+}
+
+async function attachMissingOrderPayments(orders) {
+  const list = orders || [];
+  const missing = list.filter((o) => o.customer_id && !(Array.isArray(o.payments) && o.payments.length));
+  if (!missing.length) return list;
+  try {
+    const to = shopDateInputValue();
+    const rows = await api(`/api/accounts/ledger?from=2015-01-01&to=${encodeURIComponent(to)}`);
+    const receipts = (Array.isArray(rows) ? rows : []).filter(
+      (r) => String(r.entry_type || "").toLowerCase() === "receipt",
+    );
+    const by = new Map();
+    for (const r of receipts) {
+      const id = String(r.party_id || "");
+      if (!id) continue;
+      if (!by.has(id)) by.set(id, []);
+      by.get(id).push(r);
+    }
+    for (const o of list) {
+      if (Array.isArray(o.payments) && o.payments.length) continue;
+      const found = by.get(String(o.customer_id || ""));
+      if (found?.length) o.payments = found;
+    }
+  } catch {
+    /* ledger optional */
+  }
+  return list;
+}
+
 function invoicePreviewHtml(o, look) {
   try {
+    const order = withOrderPayments(o);
     if (look === "office" || look === "duplicate") {
-      return `<div class="office-preview">${InvoicePrint.officeInvoiceBody(o, invoiceCtx(), { copy: look === "duplicate" ? "duplicate" : "original" })}</div>`;
+      return `<div class="office-preview">${InvoicePrint.officeInvoiceBody(order, invoiceCtx(), { copy: look === "duplicate" ? "duplicate" : "original" })}</div>`;
     }
-    return `<div class="thermal-preview">${InvoicePrint.invoiceBody(o, invoiceCtx())}</div>`;
+    return `<div class="thermal-preview">${InvoicePrint.invoiceBody(order, invoiceCtx())}</div>`;
   } catch (err) {
     return `<p class="hint error">Invoice preview failed: ${escapeHtml(err.message || err)}</p>`;
   }
 }
 
 function printOrder(o, look) {
+  const order = withOrderPayments(o);
   const kind = look || getInvoiceLook();
   const office = kind === "office" || kind === "duplicate";
   const copy = kind === "duplicate" ? "duplicate" : "original";
@@ -5637,8 +5693,8 @@ function printOrder(o, look) {
   }
   w.document.write(
     office
-      ? InvoicePrint.officeInvoiceDocument(o, invoiceCtx(), { copy })
-      : InvoicePrint.thermalInvoiceDocument(o, invoiceCtx()),
+      ? InvoicePrint.officeInvoiceDocument(order, invoiceCtx(), { copy })
+      : InvoicePrint.thermalInvoiceDocument(order, invoiceCtx()),
   );
   w.document.close();
 }
@@ -5895,7 +5951,7 @@ function showOrder(o) {
           <span class="pay-method-chip">${escapeHtml(paymentMethodLabel(o.payment_method))}</span>
         </div>
       </div>
-      ${invoiceSettlementHtml(o)}
+      ${invoiceSettlementHtml(withOrderPayments(o))}
       ${renderOrderStatusControls(o)}
       ${lineCount ? "" : '<p class="hint error">Line items missing — refresh or re-upload pos-php-till.php</p>'}
     </div>
@@ -5964,6 +6020,7 @@ function renderOrdersList() {
 async function loadOrders() {
   try {
     orderCache = sortOrders(await api("/api/orders"));
+    await attachMissingOrderPayments(orderCache);
     renderOrdersList();
   } catch (err) {
     orderCache = [];
@@ -7724,6 +7781,7 @@ $("btn-pay").addEventListener("click", async () => {
       payment_date: src.payment_date ?? receiptOrder.payment_date,
       payment_status: src.payment_status || receiptOrder.payment_status,
       receipt: src.receipt || receiptOrder.receipt,
+      payments: src.payments || receiptOrder.payments,
     };
     showOrder(receiptOrder);
     showInvoicePrintModal(receiptOrder, {

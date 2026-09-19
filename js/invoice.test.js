@@ -237,6 +237,7 @@ test("official invoice is an A4 list view not a POS slip", () => {
   assert.match(html, /Ramesh Traders/);
   assert.match(html, /Item &amp; Description/);
   assert.match(html, /Invoice total/);
+  assert.match(html, /Payment Made/);
   assert.match(html, /Payments till date/);
   assert.match(html, /Total due/);
   assert.match(html, /Cardamom/);
@@ -406,7 +407,15 @@ test("invoice due rows use previous due + invoice − payment", () => {
     },
   );
   assert.match(office, /class="off-paid"/);
+  assert.match(office, /Payment Made/);
   assert.match(office, /Payments till date/);
+  assert.match(office, /<th>Entry<\/th>/);
+  assert.match(office, /<th>Type<\/th>/);
+  assert.match(office, /<th>Party<\/th>/);
+  assert.match(office, /<th>Method<\/th>/);
+  assert.match(office, /<th>Reference<\/th>/);
+  assert.match(office, /<th>Notes<\/th>/);
+  assert.match(office, /<th>Date<\/th>/);
   assert.match(office, /\(\-\) ₹840\.00/);
 });
 
@@ -446,6 +455,7 @@ test("office invoice lists ledger receipts till date then total due", () => {
     },
   );
   assert.match(html, /Invoice total/);
+  assert.match(html, /Payment Made/);
   assert.match(html, /Payments till date/);
   assert.match(html, /RCP-1002/);
   assert.match(html, /receipt/);

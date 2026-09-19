@@ -2265,9 +2265,14 @@ function pos_public_invoice_send($id) {
   $items = pos_q("SELECT id, name, local_name, hsn, code, gst_rate, mrp, category FROM items WHERE business_id = ?", "s", [$bid]);
   $company = pos_public_company_payload($co[0] ?? []);
   if (!$company && !empty($biz[0]["name"])) $company = ["name" => $biz[0]["name"]];
+  $order["lines"] = $lines;
+  if (!empty($order["customer_id"]) && function_exists("pos_attach_order_payments")) {
+    $attached = pos_attach_order_payments($bid, [$order]);
+    $order = $attached[0] ?? $order;
+  }
   header("Cache-Control: no-store");
   pos_send(200, [
-    "order" => array_merge($order, ["lines" => $lines]),
+    "order" => $order,
     "company" => $company ?: ["name" => "ATAV POS"],
     "business" => $biz[0] ?? [],
     "items" => $items,
