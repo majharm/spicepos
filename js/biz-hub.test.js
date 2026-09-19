@@ -50,6 +50,7 @@ test("POS shell wires Reports Center, payments, audit, and hub scripts", () => {
   assert.match(index, /id="rep-pdf"/);
   assert.match(index, /id="rep-pay-mode"/);
   assert.match(app, /POSBizHubUi\?\.paintDashboard/);
+  assert.match(app, /globalThis\.state = state/);
   assert.match(app, /Cancelled sales/);
   assert.match(app, /name === "audit"/);
   assert.match(tenant, /buildHubDashboard/);

@@ -53,6 +53,7 @@ const state = {
   kotTickets: [],
   kotFilter: "",
 };
+globalThis.state = state;
 
 function debounce(fn, wait = 120) {
   let timer;
@@ -5726,6 +5727,7 @@ async function loadReports() {
   } catch (err) {
     $("reports-hint").textContent = err.message;
     $("reports-hint").className = "hint error";
+    globalThis.POSBizHubUi?.paintReportsCenter?.();
   }
 }
 
