@@ -3861,6 +3861,14 @@ button.items-stat.is-active {
 #modal:has(.thermal-preview) .dialog {
   width: min(920px, calc(100% - 16px));
 }
+#modal-body .print-actions {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  margin-top: 0;
+  padding: 4px 0 10px;
+  background: linear-gradient(180deg, #fff 70%, rgba(255,255,255,0.92) 100%);
+}
 .dialog p { color: var(--muted); }
 .pin { display: flex; gap: 8px; margin: 16px 0; }
 #btn-demo-pin { width: 100%; }
