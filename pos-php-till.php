@@ -179,6 +179,50 @@ function pos_php_till_dispatch($path, $method, $body) {
       [$bid]
     );
     $out = pos_q("SELECT COALESCE(SUM(outstanding),0) AS outstanding FROM customers WHERE business_id = ?", "s", [$bid]);
+    $hub = [
+      "todayReceipts" => 0,
+      "todayPayments" => 0,
+      "payable" => 0,
+      "expenses" => 0,
+      "cashBalance" => 0,
+      "bankBalance" => 0,
+      "grossProfit" => 0,
+      "netProfit" => 0,
+      "lowStock" => 0,
+      "outstandingCustomers" => 0,
+      "outstandingSuppliers" => 0,
+      "salesGraph" => [],
+      "payGraph" => [],
+      "topItems" => [],
+      "recent" => [],
+    ];
+    try {
+      $r = pos_q("SELECT COALESCE(SUM(amount),0) AS total FROM account_ledger WHERE business_id = ? AND LOWER(entry_type) = 'receipt' AND DATE(COALESCE(payment_date, created_at)) = CURDATE()", "s", [$bid]);
+      $hub["todayReceipts"] = (float) ($r[0]["total"] ?? 0);
+      $p = pos_q("SELECT COALESCE(SUM(amount),0) AS total FROM account_ledger WHERE business_id = ? AND LOWER(entry_type) = 'payment' AND DATE(COALESCE(payment_date, created_at)) = CURDATE()", "s", [$bid]);
+      $hub["todayPayments"] = (float) ($p[0]["total"] ?? 0);
+      $pay = pos_q("SELECT COALESCE(SUM(payable_balance),0) AS total FROM suppliers WHERE business_id = ?", "s", [$bid]);
+      $hub["payable"] = (float) ($pay[0]["total"] ?? 0);
+      $ex = pos_q("SELECT COALESCE(SUM(amount + gst),0) AS total FROM expenses WHERE business_id = ? AND expense_date = CURDATE()", "s", [$bid]);
+      $hub["expenses"] = (float) ($ex[0]["total"] ?? 0);
+      $low = pos_q("SELECT COUNT(*) AS n FROM items WHERE business_id = ? AND stock_gm <= reorder_level_gm", "s", [$bid]);
+      $hub["lowStock"] = (int) ($low[0]["n"] ?? 0);
+      $oc = pos_q("SELECT COUNT(*) AS n FROM customers WHERE business_id = ? AND outstanding > 0.009", "s", [$bid]);
+      $hub["outstandingCustomers"] = (int) ($oc[0]["n"] ?? 0);
+      $os = pos_q("SELECT COUNT(*) AS n FROM suppliers WHERE business_id = ? AND payable_balance > 0.009", "s", [$bid]);
+      $hub["outstandingSuppliers"] = (int) ($os[0]["n"] ?? 0);
+      $cashIn = pos_q("SELECT COALESCE(SUM(amount),0) AS total FROM account_ledger WHERE business_id = ? AND LOWER(entry_type) = 'receipt' AND LOWER(COALESCE(payment_method,'')) = 'cash'", "s", [$bid]);
+      $cashOut = pos_q("SELECT COALESCE(SUM(amount),0) AS total FROM account_ledger WHERE business_id = ? AND LOWER(entry_type) = 'payment' AND LOWER(COALESCE(payment_method,'')) = 'cash'", "s", [$bid]);
+      $hub["cashBalance"] = (float) ($cashIn[0]["total"] ?? 0) - (float) ($cashOut[0]["total"] ?? 0);
+      $bankIn = pos_q("SELECT COALESCE(SUM(amount),0) AS total FROM account_ledger WHERE business_id = ? AND LOWER(entry_type) = 'receipt' AND LOWER(COALESCE(payment_method,'')) IN ('upi','card','bank-transfer','neft','rtgs','imps','cheque','wallet')", "s", [$bid]);
+      $bankOut = pos_q("SELECT COALESCE(SUM(amount),0) AS total FROM account_ledger WHERE business_id = ? AND LOWER(entry_type) = 'payment' AND LOWER(COALESCE(payment_method,'')) IN ('upi','card','bank-transfer','neft','rtgs','imps','cheque','wallet')", "s", [$bid]);
+      $hub["bankBalance"] = (float) ($bankIn[0]["total"] ?? 0) - (float) ($bankOut[0]["total"] ?? 0);
+      $hub["salesGraph"] = pos_q("SELECT DATE(created_at) AS day, COALESCE(SUM(total),0) AS sales, COUNT(*) AS bills FROM sales_orders WHERE business_id = ? AND DATE(created_at) >= DATE_SUB(CURDATE(), INTERVAL 13 DAY) GROUP BY DATE(created_at) ORDER BY day", "s", [$bid]);
+      $hub["topItems"] = pos_q("SELECT l.item_name AS name, SUM(l.amount) AS amount FROM sales_order_lines l JOIN sales_orders o ON o.id = l.order_id WHERE o.business_id = ? AND DATE(o.created_at) = CURDATE() AND COALESCE(l.cancelled,0) = 0 GROUP BY l.item_name ORDER BY amount DESC LIMIT 8", "s", [$bid]);
+      $hub["recent"] = pos_q("SELECT order_number, customer_name, total, payment_method, payment_status, status, created_at FROM sales_orders WHERE business_id = ? ORDER BY created_at DESC LIMIT 10", "s", [$bid]);
+    } catch (Exception $e) {
+      /* hub extras are best-effort on older shops */
+    }
     $branches = function_exists("pos_list_branches")
       ? pos_list_branches($bid)
       : pos_q("SELECT * FROM branches WHERE business_id = ? ORDER BY name", "s", [$bid]);
@@ -192,6 +236,7 @@ function pos_php_till_dispatch($path, $method, $body) {
       "purchase" => $purchase[0]["total"] ?? 0,
       "stockValue" => $stock[0]["value"] ?? 0,
       "outstanding" => $out[0]["outstanding"] ?? 0,
+      "hub" => $hub,
       "branches" => $branches,
       "notes" => $notes,
       "subscription" => function_exists("pos_subscription_snapshot") ? pos_subscription_snapshot($bid) : null,

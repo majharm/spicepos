@@ -27,6 +27,9 @@ function pos_default_coa() {
     ["5106", "Packaging", "expense"],
     ["5107", "Telephone & internet", "expense"],
     ["5108", "Repairs & maintenance", "expense"],
+    ["5109", "Travel", "expense"],
+    ["5110", "Marketing", "expense"],
+    ["5111", "Delivery", "expense"],
     ["5199", "Miscellaneous expenses", "expense"],
   ];
 }

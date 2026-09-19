@@ -38,7 +38,7 @@ test("DEFAULT_COA seeds core ledger, GST, and expense accounts", () => {
   assert.ok(DEFAULT_COA.some((a) => a.code === "2203" && a.account_group === "liability"));
   assert.ok(DEFAULT_COA.some((a) => a.code === "2303" && a.account_group === "asset"));
   assert.ok(DEFAULT_COA.some((a) => a.code === "5102" && a.account_group === "expense"));
-  assert.equal(DEFAULT_COA.filter((a) => a.account_group === "expense").length, 9);
+  assert.equal(DEFAULT_COA.filter((a) => a.account_group === "expense").length, 12);
 });
 
 test("sale journal lines are balanced", () => {

@@ -6,7 +6,7 @@
     <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
     <title>ATAV POS</title>
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./css/pos.css?v=20260919item1" />
+    <link rel="stylesheet" href="./css/pos.css?v=20260919hub1" />
     <link rel="stylesheet" href="./css/saas.css?v=20260905deploy136" />
   </head>
   <body>
@@ -20,7 +20,7 @@
         </div>
         <div class="nav-scroll">
           <div class="nav-group">
-            <p class="nav-group-label" data-i18n="nav.main">Main</p>
+            <p class="nav-group-label" data-i18n="nav.main">Home</p>
             <button class="nav-btn active" type="button" data-view="dashboard"><span class="nav-icon" aria-hidden="true">⌂</span><span data-i18n="nav.dashboard">Dashboard</span></button>
             <button class="nav-btn" type="button" data-view="growth"><span class="nav-icon" aria-hidden="true">◈</span><span data-i18n="nav.growth">AI Growth</span></button>
             <button class="nav-btn" type="button" data-view="counter"><span class="nav-icon" aria-hidden="true">⊞</span><span data-i18n="nav.counter">Counter</span></button>
@@ -28,38 +28,59 @@
           </div>
           <div class="nav-group">
             <p class="nav-group-label" data-i18n="nav.sales">Sales</p>
+            <button class="nav-btn" type="button" data-view="hub-sales"><span class="nav-icon" aria-hidden="true">▤</span>Sales desk</button>
             <button class="nav-btn" type="button" data-view="orders"><span class="nav-icon" aria-hidden="true">▤</span><span data-i18n="nav.invoices">Invoices</span></button>
             <button class="nav-btn classic-bill-only" type="button" data-view="returns"><span class="nav-icon" aria-hidden="true">↺</span><span data-i18n="nav.returns">Manage Returns</span></button>
             <button class="nav-btn pharmacy-hide" type="button" data-view="qr-orders"><span class="nav-icon" aria-hidden="true">▦</span><span data-i18n="nav.qr_orders">QR Orders</span> <span class="nav-badge" id="qr-order-badge" hidden></span></button>
             <button class="nav-btn pharmacy-only" type="button" data-view="prescriptions"><span class="nav-icon" aria-hidden="true">▦</span>Prescriptions <span class="nav-badge" id="rx-badge" hidden></span></button>
-            <button class="nav-btn" type="button" data-view="customers"><span class="nav-icon" aria-hidden="true">◎</span><span data-i18n="nav.customers">Customers</span></button>
-            <button class="nav-btn" type="button" data-view="loyalty"><span class="nav-icon" aria-hidden="true">★</span><span data-i18n="nav.loyalty">Royalty</span></button>
             <button class="nav-btn" type="button" data-view="offers"><span class="nav-icon" aria-hidden="true">%</span><span data-i18n="nav.offers">Offers</span></button>
-            <button class="nav-btn" type="button" data-view="purchases"><span class="nav-icon" aria-hidden="true">↘</span><span data-i18n="nav.purchases">Purchases</span></button>
           </div>
           <div class="nav-group">
-            <p class="nav-group-label" data-i18n="nav.inventory">Inventory</p>
+            <p class="nav-group-label">Purchases</p>
+            <button class="nav-btn" type="button" data-view="hub-purchases"><span class="nav-icon" aria-hidden="true">↘</span>Purchase desk</button>
+            <button class="nav-btn" type="button" data-view="purchases"><span class="nav-icon" aria-hidden="true">↘</span><span data-i18n="nav.purchases">Purchases</span></button>
+            <button class="nav-btn" type="button" data-view="suppliers"><span class="nav-icon" aria-hidden="true">◇</span><span data-i18n="nav.suppliers">Suppliers</span></button>
+          </div>
+          <div class="nav-group">
+            <p class="nav-group-label">Customers</p>
+            <button class="nav-btn" type="button" data-view="customers"><span class="nav-icon" aria-hidden="true">◎</span><span data-i18n="nav.customers">Customers</span></button>
+            <button class="nav-btn" type="button" data-view="loyalty"><span class="nav-icon" aria-hidden="true">★</span><span data-i18n="nav.loyalty">Royalty</span></button>
+          </div>
+          <div class="nav-group">
+            <p class="nav-group-label" data-i18n="nav.inventory">Products</p>
             <button class="nav-btn" type="button" data-view="items"><span class="nav-icon" aria-hidden="true">◫</span><span data-i18n="pos.items">Items</span></button>
             <button class="nav-btn" type="button" data-view="units"><span class="nav-icon" aria-hidden="true">⚖</span>Units</button>
             <button class="nav-btn" type="button" data-view="packs"><span class="nav-icon" aria-hidden="true">▦</span>Packs</button>
             <button class="nav-btn" type="button" data-view="barcodes"><span class="nav-icon" aria-hidden="true">▦</span>Barcodes</button>
             <button class="nav-btn" type="button" data-view="stock"><span class="nav-icon" aria-hidden="true">▥</span><span data-i18n="nav.stock">Stock</span></button>
-            <button class="nav-btn" type="button" data-view="expiry"><span class="nav-icon" aria-hidden="true">◷</span>Expiry</button>
+            <button class="nav-btn" type="button" data-view="expiry"><span class="nav-icon" aria-hidden="true">⏳</span>Expiry</button>
             <button class="nav-btn" type="button" data-view="damage"><span class="nav-icon" aria-hidden="true">⚠</span>Damage</button>
             <button class="nav-btn" type="button" data-view="ledger"><span class="nav-icon" aria-hidden="true">☰</span>Ledger</button>
-            <button class="nav-btn" type="button" data-view="suppliers"><span class="nav-icon" aria-hidden="true">◇</span><span data-i18n="nav.suppliers">Suppliers</span></button>
           </div>
           <div class="nav-group">
             <p class="nav-group-label" data-i18n="nav.finance">Finance</p>
+            <button class="nav-btn" type="button" data-view="payments"><span class="nav-icon" aria-hidden="true">₹</span>Payments</button>
             <button class="nav-btn" type="button" data-view="accounts"><span class="nav-icon" aria-hidden="true">₹</span><span data-i18n="nav.accounts">Accounts</span></button>
             <button class="nav-btn" type="button" data-view="expenses"><span class="nav-icon" aria-hidden="true">−</span><span data-i18n="nav.expenses">Expenses</span></button>
             <button class="nav-btn" type="button" data-view="reports"><span class="nav-icon" aria-hidden="true">▣</span><span data-i18n="nav.reports">Reports</span></button>
+          </div>
+          <div class="nav-group" id="nav-industry-group">
+            <p class="nav-group-label" id="nav-industry-label">Business type</p>
+            <button class="nav-btn" type="button" data-view="prescriptions" data-hub-kind="pharmacy"><span class="nav-icon" aria-hidden="true">▦</span>Prescription</button>
+            <button class="nav-btn" type="button" data-view="expiry" data-hub-kind="pharmacy,grocery"><span class="nav-icon" aria-hidden="true">⏳</span>Batch / Expiry</button>
+            <button class="nav-btn classic-bill-only" type="button" data-view="returns" data-hub-kind="pharmacy,apparel,footwear"><span class="nav-icon" aria-hidden="true">↺</span>Returns</button>
+            <button class="nav-btn" type="button" data-view="kot" data-hub-kind="restaurant"><span class="nav-icon" aria-hidden="true">▣</span>KOT / Kitchen</button>
+            <button class="nav-btn" type="button" data-view="qr-orders" data-hub-kind="restaurant"><span class="nav-icon" aria-hidden="true">▦</span>QR Ordering</button>
+            <button class="nav-btn" type="button" data-view="items" data-hub-kind="apparel,footwear"><span class="nav-icon" aria-hidden="true">◫</span>Size / Colour</button>
+            <button class="nav-btn" type="button" data-view="barcodes" data-hub-kind="electronics"><span class="nav-icon" aria-hidden="true">▦</span>Serial / IMEI</button>
+            <button class="nav-btn" type="button" data-view="items" data-hub-kind="services"><span class="nav-icon" aria-hidden="true">◫</span>Services</button>
           </div>
           <div class="nav-group">
             <p class="nav-group-label" data-i18n="nav.admin">Admin</p>
             <button class="nav-btn" type="button" data-view="staff"><span class="nav-icon" aria-hidden="true">◉</span><span data-i18n="nav.staff">Staff</span></button>
             <button class="nav-btn" type="button" data-view="branches"><span class="nav-icon" aria-hidden="true">⬡</span>Branches</button>
             <button class="nav-btn" type="button" data-view="devices"><span class="nav-icon" aria-hidden="true">⌁</span>Devices</button>
+            <button class="nav-btn" type="button" data-view="audit"><span class="nav-icon" aria-hidden="true">☰</span>Audit log</button>
             <button class="nav-btn" type="button" data-view="support"><span class="nav-icon" aria-hidden="true">?</span>Support</button>
             <button class="nav-btn" type="button" data-view="settings"><span class="nav-icon" aria-hidden="true">⚙</span><span data-i18n="nav.settings">Settings</span></button>
           </div>
@@ -105,7 +126,7 @@
                 <p class="dash-kicker">Your shop today</p>
                 <p class="lede" id="dash-welcome">Your shop today.</p>
                 <p class="dash-hero-meta" id="dash-welcome-meta"></p>
-                <p class="dash-hero-lead">Sales, stock, and GST at a glance. Open the counter when a customer is waiting.</p>
+                <p class="dash-hero-lead">Business books and POS from one admin panel. Open the counter when a customer is waiting — industry fields stay off the till unless this shop needs them.</p>
               </div>
               <p class="lede dash-actions">
                 <button class="btn primary" type="button" data-view-jump="counter" id="open-pos">Open POS</button>
@@ -116,6 +137,24 @@
             <div class="platform-notes" id="dash-notes"></div>
             <p class="dash-section">Today</p>
             <div class="report-grid" id="dash-kpis"></div>
+            <div class="hub-dash-panels">
+              <section class="hub-panel">
+                <h3>Sales / Purchase</h3>
+                <div id="dash-sales-graph"></div>
+              </section>
+              <section class="hub-panel">
+                <h3>Payment collection</h3>
+                <div id="dash-pay-graph"></div>
+              </section>
+              <section class="hub-panel">
+                <h3>Top-selling items</h3>
+                <div class="table-wrap" id="dash-top-items"></div>
+              </section>
+              <section class="hub-panel">
+                <h3>Recent transactions</h3>
+                <div class="table-wrap" id="dash-recent"></div>
+              </section>
+            </div>
             <p class="dash-section">Go to</p>
             <div class="dash-shortcuts" id="dash-shortcuts">
               <button type="button" class="dash-tile" data-dash-view="counter">
@@ -143,8 +182,16 @@
                 <span>Buy stock from suppliers</span>
               </button>
               <button type="button" class="dash-tile" data-dash-view="reports">
-                <strong>Reports</strong>
-                <span>GST, daywise, and Excel</span>
+                <strong>Reports Center</strong>
+                <span>Sales, GST, stock, Excel, PDF</span>
+              </button>
+              <button type="button" class="dash-tile" data-dash-view="payments">
+                <strong>Payments</strong>
+                <span>Cash, UPI, bank, receipts</span>
+              </button>
+              <button type="button" class="dash-tile" data-dash-view="audit">
+                <strong>Audit log</strong>
+                <span>Who created, edited, or deleted</span>
               </button>
               <button type="button" class="dash-tile" data-dash-view="settings">
                 <strong>Settings</strong>
@@ -1568,9 +1615,9 @@
           <div class="items-desk reports-desk">
             <header class="items-hero">
               <div class="items-hero-copy">
-                <p class="items-kicker">Finance</p>
+                <p class="items-kicker">Reports Center</p>
                 <h3>Reports</h3>
-                <p class="lede">Sales, GST, payments, stock, and expenses for the Indian financial year (1 April–31 March). Pick a range, then open the section you need.</p>
+                <p class="lede">Common reports for every business, plus extra reports for this shop type. Filter, then Excel, PDF, or Print.</p>
               </div>
               <div class="items-hero-stats" id="reports-hero-stats"></div>
             </header>
@@ -1580,14 +1627,73 @@
               </label>
               <label>From <input id="rep-from" type="date" required /></label>
               <label>To <input id="rep-to" type="date" required /></label>
+              <label>Customer
+                <input id="rep-customer" list="rep-customer-list" placeholder="All" autocomplete="off" />
+                <datalist id="rep-customer-list"></datalist>
+              </label>
+              <label>Supplier
+                <input id="rep-supplier" placeholder="All" autocomplete="off" />
+              </label>
+              <label>Product
+                <input id="rep-product" placeholder="All" autocomplete="off" />
+              </label>
+              <label>Category
+                <input id="rep-category" placeholder="All" autocomplete="off" />
+              </label>
+              <label>User
+                <input id="rep-user" placeholder="All" autocomplete="off" />
+              </label>
+              <label>Payment
+                <select id="rep-pay-mode">
+                  <option value="">All modes</option>
+                  <option value="cash">Cash</option>
+                  <option value="upi">UPI</option>
+                  <option value="card">Card</option>
+                  <option value="bank-transfer">Bank Transfer</option>
+                  <option value="neft">NEFT</option>
+                  <option value="rtgs">RTGS</option>
+                  <option value="imps">IMPS</option>
+                  <option value="cheque">Cheque</option>
+                  <option value="wallet">Wallet</option>
+                  <option value="other">Other</option>
+                </select>
+              </label>
+              <label>Branch
+                <select id="rep-branch"><option value="">All branches</option></select>
+              </label>
               <button class="btn" type="button" id="rep-this-fy">This FY</button>
               <button class="btn primary" type="submit">Show</button>
               <button class="btn" type="button" id="rep-print">Print</button>
-              <a class="btn" id="rep-excel-all" href="#">Download all Excel</a>
+              <a class="btn" id="rep-excel-all" href="#">Excel</a>
+              <button class="btn" type="button" id="rep-pdf">PDF</button>
               <label class="reports-search-label">Find
                 <input id="rep-search" type="search" placeholder="Bill, item, customer…" autocomplete="off" />
               </label>
             </form>
+            <div class="reports-center-bar">
+              <label>Report group
+                <select id="rep-center-cat">
+                  <option value="">All groups</option>
+                  <option value="sales">Sales</option>
+                  <option value="purchase">Purchase</option>
+                  <option value="inventory">Inventory</option>
+                  <option value="customers">Customers</option>
+                  <option value="suppliers">Suppliers</option>
+                  <option value="payments">Payments</option>
+                  <option value="expenses">Expenses</option>
+                  <option value="accounting">Accounting</option>
+                  <option value="tax">Tax/GST</option>
+                  <option value="profitability">Profitability</option>
+                  <option value="employees">Employees</option>
+                  <option value="analytics">Business Analytics</option>
+                  <option value="audit">Audit Log</option>
+                </select>
+              </label>
+              <label>Find report
+                <input id="rep-center-search" type="search" placeholder="Daily sales, GST, aging…" autocomplete="off" />
+              </label>
+            </div>
+            <div id="reports-center" class="reports-center"></div>
             <div class="reports-tabs" id="reports-tabs" role="tablist" aria-label="Report sections">
               <button class="reports-tab is-on" type="button" role="tab" aria-selected="true" data-report-tab="summary">Summary</button>
               <button class="reports-tab" type="button" role="tab" aria-selected="false" data-report-tab="sales">Sales</button>
@@ -1600,6 +1706,67 @@
             <p class="hint" id="reports-filter-hint"></p>
             <div class="report-grid" id="report-summary"></div>
             <div id="reports"></div>
+          </div>
+        </section>
+        <section class="view view-finance" id="view-hub-sales" hidden>
+          <h2 class="visually-hidden">Sales desk</h2>
+          <div class="items-desk">
+            <header class="items-hero">
+              <div class="items-hero-copy">
+                <p class="items-kicker">Sales</p>
+                <h3>Sales desk</h3>
+                <p class="lede">Counter POS bills invoices. Quotations, orders, and challans sit here as document types — billed sales stay on Invoices. Returns stay off the till unless this is a pharmacy or garment shop.</p>
+              </div>
+            </header>
+            <div id="hub-sales-tiles"></div>
+          </div>
+        </section>
+        <section class="view view-finance" id="view-hub-purchases" hidden>
+          <h2 class="visually-hidden">Purchase desk</h2>
+          <div class="items-desk">
+            <header class="items-hero">
+              <div class="items-hero-copy">
+                <p class="items-kicker">Purchases</p>
+                <h3>Purchase desk</h3>
+                <p class="lede">Record supplier invoices to receive stock. Request, PO, GRN, and debit notes open from this desk; stock still posts through Purchases.</p>
+              </div>
+            </header>
+            <div id="hub-purchases-tiles"></div>
+          </div>
+        </section>
+        <section class="view view-finance" id="view-payments" hidden>
+          <h2 class="visually-hidden">Payments</h2>
+          <div class="items-desk">
+            <header class="items-hero">
+              <div class="items-hero-copy">
+                <p class="items-kicker">Payments</p>
+                <h3>Payments</h3>
+                <p class="lede">Cash, UPI, card, bank transfer, NEFT, RTGS, IMPS, cheque, wallet, and other. Collect customer dues or pay suppliers, then open a payment report.</p>
+              </div>
+            </header>
+            <p class="dash-section">Modes</p>
+            <div id="pay-modes-list" class="hub-chip-row"></div>
+            <p class="dash-section">Actions</p>
+            <div class="hub-tile-grid">
+              <button type="button" class="dash-tile" data-view-jump="customers"><strong>Payment receipt</strong><span>Collect customer due</span></button>
+              <button type="button" class="dash-tile" data-view-jump="accounts"><strong>Supplier payment</strong><span>Payables and vouchers</span></button>
+              <button type="button" class="dash-tile" data-view-jump="audit"><strong>Deleted payments</strong><span>Activity log</span></button>
+            </div>
+            <p class="dash-section">Reports</p>
+            <div id="payments-report-tiles"></div>
+          </div>
+        </section>
+        <section class="view view-finance" id="view-audit" hidden>
+          <h2 class="visually-hidden">Audit log</h2>
+          <div class="items-desk">
+            <header class="items-hero">
+              <div class="items-hero-copy">
+                <p class="items-kicker">Admin</p>
+                <h3>Activity log</h3>
+                <p class="lede">Created by, edited by, deleted by, and change details for invoices, purchases, payments, receipts, returns, and ledger entries.</p>
+              </div>
+            </header>
+            <div id="audit-table"></div>
           </div>
         </section>
         <section class="view view-settings" id="view-settings" hidden>
@@ -1974,7 +2141,9 @@
     <script src="./js/qrcode.iife.js?v=20260905qr1" defer></script>
     <script src="./js/qr-notify.js?v=20260914kot1" defer></script>
     <script src="./js/payment-methods.js?v=20260918pay1" defer></script>
-    <script src="./js/app.js?v=20260919item1" defer></script>
+    <script src="./js/biz-hub.js?v=20260919hub1" defer></script>
+    <script src="./js/biz-hub-ui.js?v=20260919hub1" defer></script>
+    <script src="./js/app.js?v=20260919hub1" defer></script>
     <script src="./js/growth.js?v=20260905deploy145" defer></script>
     <script src="./js/offers-ui.js?v=20260919off1" defer></script>
   </body>
