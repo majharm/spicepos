@@ -3374,6 +3374,7 @@ function renderCart() {
                 <input class="qty-input" type="number" inputmode="decimal" min="${POSUnits.displayQty(POSUnits.qtyMin(), unitCode) || 0.001}" max="${POSUnits.qtyMax()}" step="${escapeHtml(qtyStep)}" value="${escapeHtml(qtyShow)}" data-qty="${escapeHtml(key)}" aria-label="Quantity in ${unit}" />
                 <span class="qty-unit">${escapeHtml(unit)}</span>
                 <button type="button" data-chg="${escapeHtml(key)}" data-d="${step}">+</button>
+                ${POSUnits.isCount(unitCode) ? "" : `<button type="button" class="scale-line-btn" data-scale-line="${escapeHtml(key)}" title="Read scale">⚖</button>`}
               </div>
               <div class="line-amt">${money(calc.taxable + calc.gst)}</div>
             </div>
@@ -3656,7 +3657,7 @@ async function applyBarcodeScan(raw, sourceEl) {
   }
   if (!item) item = findItemBySkuOrHsn(code);
   if (item) {
-    addItem(item.id, classicScanAddQty(item), findItemByBarcode(code) ? code : "");
+    addWeighableItem(item.id, classicScanAddQty(item), findItemByBarcode(code) ? code : "");
     clearCounterQuery(sourceEl);
     const alerts = classicItemAlerts(item).alerts;
     paintScanLane(!alerts.some((a) => /EXPIRED|Out of stock/i.test(a)), item.name);
@@ -3673,7 +3674,7 @@ async function applyBarcodeScan(raw, sourceEl) {
   syncCounterQuery(code, sourceEl);
   const hits = filteredItems();
   if (hits.length === 1) {
-    addItem(hits[0].id, classicScanAddQty(hits[0]));
+    addWeighableItem(hits[0].id, classicScanAddQty(hits[0]));
     clearCounterQuery(sourceEl);
     const alerts = classicItemAlerts(hits[0]).alerts;
     paintScanLane(!alerts.some((a) => /EXPIRED|Out of stock/i.test(a)), hits[0].name);
@@ -5661,6 +5662,7 @@ async function loadDevices() {
   $("device-table").innerHTML = `<table><thead><tr><th>Name</th><th>Code</th><th>Branch</th><th>Status</th></tr></thead><tbody>${rows
     .map((d) => `<tr><td>${escapeHtml(d.name)}</td><td>${escapeHtml(d.code)}</td><td>${escapeHtml(d.branch_name)}</td><td>${escapeHtml(d.status)}</td></tr>`)
     .join("")}</tbody></table>`;
+  paintScaleSetup();
 }
 
 async function loadToday() {
@@ -7483,7 +7485,7 @@ $("catalog").addEventListener("click", (e) => {
   }
   const btn = e.target.closest("[data-add]");
   if (btn) {
-    addItem(btn.dataset.add);
+    addWeighableItem(btn.dataset.add);
     focusScanLane();
   }
 });
@@ -7498,7 +7500,7 @@ $("classic-item-hits")?.addEventListener("click", (e) => {
   const btn = e.target.closest("[data-add]");
   if (!btn) return;
   const item = state.items.find((i) => i.id === btn.dataset.add);
-  addItem(btn.dataset.add, classicScanAddQty(item));
+  addWeighableItem(btn.dataset.add, classicScanAddQty(item));
   clearCounterQuery($("bill-scan-code"));
   paintClassicItemHits();
   focusScanLane();
@@ -7511,6 +7513,11 @@ $("catalog-cats")?.addEventListener("click", (e) => {
   $("catalog")?.scrollTo({ top: 0 });
 });
 $("lines").addEventListener("click", (e) => {
+  const scaleLine = e.target.closest("[data-scale-line]");
+  if (scaleLine) {
+    applyScaleWeight(scaleLine.dataset.scaleLine);
+    return;
+  }
   const del = e.target.closest("[data-del-line]");
   if (del) {
     state.cart = state.cart.filter((l) => cartLineKey(l) !== del.dataset.delLine);
@@ -7863,7 +7870,9 @@ $("color-filter")?.addEventListener("change", () => {
 });
 $("scan-form")?.addEventListener("submit", async (e) => {
   e.preventDefault();
-  await applyBarcodeScan($("scan-code")?.value, $("scan-code"));
+  const raw = $("scan-code")?.value;
+  if (applyTypedScale(raw, $("scan-code"))) return;
+  await applyBarcodeScan(raw, $("scan-code"));
 });
 $("counter-add-item")?.addEventListener("click", () => {
   const q = String($("scan-code")?.value || $("search")?.value || "").trim();
@@ -7892,6 +7901,7 @@ $("bill-scan-form")?.addEventListener("submit", async (e) => {
   const name = String($("bill-item-search")?.value || "").trim();
   const raw = code || name;
   const source = code ? $("bill-scan-code") : $("bill-item-search");
+  if (applyTypedScale(raw, source)) return;
   await applyBarcodeScan(raw, source);
 });
 document.addEventListener("keydown", (e) => {
@@ -7915,6 +7925,10 @@ function initCameraScan() {
   const onScan = async (code) => {
     const el = isClassicBillShop() ? ($("bill-scan-code") || $("scan-code")) : $("scan-code");
     if (el) el.value = code;
+    if (applyTypedScale(code, el)) {
+      focusScanLane();
+      return;
+    }
     await applyBarcodeScan(code, el);
     focusScanLane();
   };
@@ -7923,6 +7937,174 @@ function initCameraScan() {
   scan.bindButton($("bill-scan-camera-btn"), { onScan, onError, alwaysShow: true });
 }
 initCameraScan();
+function scaleBizKey() {
+  return String(state.session?.business_id || state.businessMeta?.id || state.company?.id || "local");
+}
+function scaleSettings() {
+  return globalThis.POSScale?.loadSettings?.(scaleBizKey()) || { baud: 9600, unit: "kg", autoApply: true };
+}
+function isWeightItem(item) {
+  return Boolean(item) && !POSUnits.isCount(itemUnit(item));
+}
+function lastWeightLine() {
+  for (let i = state.cart.length - 1; i >= 0; i--) {
+    const line = state.cart[i];
+    const item = state.items.find((x) => x.id === line.itemId);
+    if (isWeightItem(item) && !isPieceBarcodeLine(line, item)) return line;
+  }
+  return null;
+}
+function paintScaleDock(hit) {
+  const S = globalThis.POSScale;
+  const reading = hit || S?.current?.();
+  const kgEl = $("scale-weight");
+  const amtEl = $("scale-live-amt");
+  const connect = $("scale-connect");
+  if (kgEl) {
+    const g = Number(reading?.grams) || 0;
+    kgEl.textContent = g > 0 ? `${(g / 1000).toFixed(3)} kg` : "— kg";
+  }
+  if (amtEl) {
+    const line = lastWeightLine();
+    const item = line ? state.items.find((i) => i.id === line.itemId) : null;
+    const g = Number(reading?.grams) || 0;
+    amtEl.textContent = item && g > 0 ? money(POSUnits.lineAmount(g, rateFor(item), itemUnit(item))) : "";
+  }
+  if (connect) connect.textContent = S?.connected?.() ? "Disconnect" : "USB";
+  const qty = $("bill-scan-qty");
+  const g = Number(reading?.grams) || 0;
+  if (qty && g > 0 && document.activeElement !== qty) {
+    const item = lastWeightLine() ? state.items.find((i) => i.id === lastWeightLine().itemId) : null;
+    const unit = item ? itemUnit(item) : "KG";
+    qty.value = String(POSUnits.displayQty(g, unit) || g / 1000);
+  }
+}
+function applyScaleWeight(lineKey) {
+  const S = globalThis.POSScale;
+  const prefer = scaleSettings().unit;
+  const typed = String($("scale-manual")?.value || "").trim();
+  const hit = (typed && S?.parseWeight?.(typed, prefer)) || S?.current?.() || null;
+  const grams = Number(hit?.grams) || 0;
+  if (grams <= 0) {
+    setHint("No scale weight yet. Connect the scale or type kg in the Scale box.", "error");
+    $("scale-manual")?.focus();
+    return false;
+  }
+  const line = lineKey ? findCartLine(lineKey) : lastWeightLine();
+  if (line) {
+    const item = state.items.find((i) => i.id === line.itemId);
+    if (!isWeightItem(item)) {
+      setHint("Pick a kg / g item, then use the scale", "error");
+      return false;
+    }
+    setLineQty(cartLineKey(line), grams);
+    const amt = POSUnits.lineAmount(grams, rateFor(item), itemUnit(item));
+    setHint(`${item.name} · ${(grams / 1000).toFixed(3)} kg · ${money(amt)}`, "ok");
+    paintScaleDock(hit);
+    if ($("scale-manual")) $("scale-manual").value = "";
+    return true;
+  }
+  if ($("bill-scan-qty")) {
+    $("bill-scan-qty").value = String((grams / 1000).toFixed(3));
+    setHint(`Scale ${(grams / 1000).toFixed(3)} kg — add the item`, "ok");
+    paintScaleDock(hit);
+    return true;
+  }
+  setHint("Add a weight item, then tap Use weight", "error");
+  return false;
+}
+function applyTypedScale(raw, sourceEl) {
+  const S = globalThis.POSScale;
+  if (!S?.looksLikeWeight?.(raw)) return false;
+  const hit = S.ingest?.(raw, scaleSettings().unit) || S.parseWeight?.(raw, scaleSettings().unit);
+  if (!hit?.grams) return false;
+  if (sourceEl) sourceEl.value = "";
+  paintScaleDock(hit);
+  applyScaleWeight();
+  return true;
+}
+function addWeighableItem(id, qtyGm, barcode) {
+  const item = state.items.find((i) => i.id === id);
+  const live = isWeightItem(item) ? Number(globalThis.POSScale?.currentGrams?.() || 0) : 0;
+  if (live > 0) {
+    const existing = state.cart.find((l) => l.itemId === id && !String(l.barcode || "").trim());
+    if (existing && !barcode) setLineQty(cartLineKey(existing), live);
+    else addItem(id, live, barcode);
+    return;
+  }
+  addItem(id, qtyGm, barcode);
+}
+async function connectWeighingScale(kind) {
+  const S = globalThis.POSScale;
+  if (!S) return;
+  if (S.connected()) {
+    await S.disconnect();
+    paintScaleDock();
+    setHint("Scale disconnected", "ok");
+    return;
+  }
+  const cfg = scaleSettings();
+  try {
+    if (kind === "bluetooth") await S.connectBluetooth({ unit: cfg.unit });
+    else if (S.hasSerial?.()) await S.connectSerial({ baud: cfg.baud, unit: cfg.unit });
+    else if (S.hasBluetooth?.()) await S.connectBluetooth({ unit: cfg.unit });
+    else {
+      setHint("Type kg in the Scale box, or use a USB scale that sends the weight into Scan.", "ok");
+      $("scale-manual")?.focus();
+      paintScaleDock();
+      return;
+    }
+    paintScaleDock();
+    setHint("Scale connected. Weigh the item, then tap Use weight.", "ok");
+  } catch (err) {
+    setHint(err.message || "Could not open the scale", "error");
+  }
+}
+function paintScaleSetup() {
+  const cfg = scaleSettings();
+  if ($("scale-baud")) $("scale-baud").value = String(cfg.baud || 9600);
+  if ($("scale-unit")) $("scale-unit").value = cfg.unit === "g" ? "g" : "kg";
+  if ($("scale-auto")) $("scale-auto").checked = cfg.autoApply !== false;
+}
+function saveScaleSetup() {
+  globalThis.POSScale?.saveSettings?.(scaleBizKey(), {
+    baud: Number($("scale-baud")?.value) || 9600,
+    unit: $("scale-unit")?.value === "g" ? "g" : "kg",
+    autoApply: Boolean($("scale-auto")?.checked),
+  });
+}
+function initWeighingScale() {
+  const S = globalThis.POSScale;
+  if (!S) return;
+  paintScaleSetup();
+  paintScaleDock();
+  let applyT = 0;
+  S.onWeight?.((hit) => {
+    paintScaleDock(hit);
+    if (scaleSettings().autoApply === false || !(Number(hit?.grams) > 0) || !lastWeightLine()) return;
+    clearTimeout(applyT);
+    applyT = setTimeout(() => applyScaleWeight(), 180);
+  });
+  $("scale-connect")?.addEventListener("click", () => void connectWeighingScale("serial"));
+  $("scale-ble")?.addEventListener("click", () => void connectWeighingScale("bluetooth"));
+  $("scale-capture")?.addEventListener("click", () => applyScaleWeight());
+  $("classic-scale-capture")?.addEventListener("click", () => applyScaleWeight());
+  $("scale-manual")?.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      applyTypedScale($("scale-manual").value, $("scale-manual"));
+    }
+  });
+  ["scale-baud", "scale-unit", "scale-auto"].forEach((id) => {
+    $(id)?.addEventListener("change", saveScaleSetup);
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.target && (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA" || e.target.tagName === "SELECT" || e.target.isContentEditable)) return;
+    if (!document.body.classList.contains("counter-mode")) return;
+    S.ingestWedgeKey?.(e, scaleSettings().unit);
+  });
+}
+initWeighingScale();
 $("search-form").addEventListener("submit", async (e) => {
   e.preventDefault();
   const code = String($("search").value || "").trim();
