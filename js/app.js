@@ -5259,7 +5259,8 @@ async function loadDashboard() {
           `<button type="button" class="report-card dash-kpi dash-kpi-plan ${escapeHtml(String(tone || ""))}" data-dash-view="${view}"><span>${escapeHtml(String(k))}</span><strong>${escapeHtml(String(v ?? "—"))}</strong></button>`,
       )
       .join("");
-    if ($("dash-kpis") && extra) $("dash-kpis").insertAdjacentHTML("beforeend", extra);
+    if ($("dash-plan-kpis") && extra) $("dash-plan-kpis").innerHTML = extra;
+    if ($("dash-kpis") && extra && !$("dash-plan-kpis")) $("dash-kpis").insertAdjacentHTML("beforeend", extra);
     if (isServicesShop()) globalThis.POSSalonUi?.loadSalonBoard?.();
   } catch (err) {
     $("dash-kpis").innerHTML = `<p class="hint error">${escapeHtml(err.message)}</p>`;

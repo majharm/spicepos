@@ -6,7 +6,7 @@
     <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
     <title>ATAV POS</title>
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./css/pos.css?v=20260919invux1" />
+    <link rel="stylesheet" href="./css/pos.css?v=20260919an1" />
     <link rel="stylesheet" href="./css/saas.css?v=20260905deploy136" />
   </head>
   <body>
@@ -121,68 +121,42 @@
           Subscription expired. Data is kept. Ask the platform owner to renew this business.
         </div>
         <div class="platform-notices" id="platform-notices" hidden aria-live="polite"></div>
-        <section class="view zoho-dash" id="view-dashboard">
+        <section class="view analytics-dash" id="view-dashboard">
           <h2 class="visually-hidden">Dashboard</h2>
-          <div class="items-desk dash-desk zoho-dash-desk">
-            <header class="zoho-dash-head">
-              <div class="zoho-dash-copy">
+          <div class="items-desk dash-desk analytics-dash-desk">
+            <header class="analytics-dash-head">
+              <div class="analytics-dash-copy">
+                <p class="analytics-kicker">Retail POS Analytics</p>
                 <h3 id="dash-welcome">Dashboard</h3>
                 <p class="lede dash-hero-meta" id="dash-welcome-meta"></p>
               </div>
               <p class="dash-actions">
-                <button class="btn primary" type="button" data-view-jump="counter" id="open-pos">New</button>
+                <button class="btn primary" type="button" data-view-jump="counter" id="open-pos">New bill</button>
                 <button class="btn" type="button" data-view-jump="reports">Reports</button>
                 <button class="btn" type="button" id="open-growth">AI Growth</button>
-                <button class="btn" type="button" id="open-offers">Offers</button>
               </p>
             </header>
-            <div class="zoho-quick" aria-label="Quick Create">
-              <span class="zoho-quick-label">Quick Create</span>
-              <button type="button" data-dash-view="counter">Invoice</button>
-              <button type="button" data-dash-view="payments">Payment</button>
-              <button type="button" data-dash-view="expenses">Expense</button>
-              <button type="button" data-dash-view="items">Item</button>
-              <button type="button" data-dash-view="customers">Customer</button>
+            <nav class="analytics-quick" aria-label="Quick links">
+              <button type="button" data-dash-view="items">Masters</button>
+              <button type="button" data-dash-view="stock">Inventory</button>
+              <button type="button" data-dash-view="offers">Merchandising</button>
               <button type="button" data-dash-view="hub-purchases">Purchase</button>
-              <button type="button" class="services-only" data-dash-view="bookings">Booking</button>
-            </div>
+              <button type="button" data-dash-view="orders">Sales</button>
+              <button type="button" data-dash-view="stock">Stock</button>
+              <button type="button" data-dash-view="reports">Reports</button>
+              <button type="button" data-dash-view="settings">Management</button>
+            </nav>
             <div class="platform-notes" id="dash-notes"></div>
-            <div class="report-grid dash-kpi-grid zoho-kpi-grid" id="dash-kpis"></div>
+            <div class="an-grid" id="dash-kpis"></div>
             <div class="report-grid dash-kpi-grid services-only" id="salon-dash-kpis" hidden></div>
-            <div class="hub-dash-panels zoho-dash-widgets">
-              <section class="hub-panel zoho-widget">
-                <header class="zoho-widget-head">
-                  <h3>Sales</h3>
-                  <button type="button" class="zoho-widget-link" data-dash-view="orders">View all</button>
-                </header>
-                <p class="zoho-widget-meta">Last 14 days</p>
-                <div id="dash-sales-graph"></div>
-              </section>
-              <section class="hub-panel zoho-widget">
-                <header class="zoho-widget-head">
-                  <h3>Payment collection</h3>
-                  <button type="button" class="zoho-widget-link" data-dash-view="payments">View all</button>
-                </header>
-                <p class="zoho-widget-meta">Receipts · last 14 days</p>
-                <div id="dash-pay-graph"></div>
-              </section>
-              <section class="hub-panel zoho-widget">
-                <header class="zoho-widget-head">
-                  <h3>Top-selling items</h3>
-                  <button type="button" class="zoho-widget-link" data-dash-view="stock">View all</button>
-                </header>
-                <p class="zoho-widget-meta">Today</p>
-                <div class="table-wrap" id="dash-top-items"></div>
-              </section>
-              <section class="hub-panel zoho-widget">
-                <header class="zoho-widget-head">
-                  <h3>Recent transactions</h3>
-                  <button type="button" class="zoho-widget-link" data-dash-view="orders">View all</button>
-                </header>
-                <p class="zoho-widget-meta">Latest bills</p>
-                <div class="table-wrap" id="dash-recent"></div>
-              </section>
-            </div>
+            <div class="an-plan" id="dash-plan-kpis"></div>
+            <section class="an-card an-recent">
+              <header class="an-card-head">
+                <h3>Recent transactions</h3>
+                <button type="button" class="zoho-widget-link" data-dash-view="orders">View all</button>
+              </header>
+              <div class="table-wrap" id="dash-recent"></div>
+            </section>
             <p class="dash-section">Go to</p>
             <div class="dash-shortcuts zoho-goto" id="dash-shortcuts">
               <button type="button" class="dash-tile" data-dash-view="counter">
@@ -2404,10 +2378,10 @@
     <script src="./js/qr-notify.js?v=20260914kot1" defer></script>
     <script src="./js/payment-methods.js?v=20260918pay1" defer></script>
     <script src="./js/biz-hub.js?v=20260919salon1" defer></script>
-    <script src="./js/biz-hub-ui.js?v=20260919salon1" defer></script>
+    <script src="./js/biz-hub-ui.js?v=20260919an1" defer></script>
     <script src="./js/salon.js?v=20260919salon1" defer></script>
     <script src="./js/salon-ui.js?v=20260919salon1" defer></script>
-    <script src="./js/app.js?v=20260919invux1" defer></script>
+    <script src="./js/app.js?v=20260919an1" defer></script>
     <script src="./js/growth.js?v=20260905deploy145" defer></script>
     <script src="./js/offers-ui.js?v=20260919off1" defer></script>
   </body>

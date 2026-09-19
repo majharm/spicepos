@@ -32,43 +32,140 @@
       .join("")}</div>`;
   }
 
+  function inr(n) {
+    return `₹ ${Math.round(Number(n) || 0).toLocaleString("en-IN")}`;
+  }
+
+  function pctDelta(now, prev) {
+    const a = Number(now) || 0;
+    const b = Number(prev) || 0;
+    if (!(b > 0)) return a > 0 ? "100%" : "0%";
+    return `${Math.round(((a - b) / b) * 100)}%`;
+  }
+
+  function payLabel(method) {
+    const m = String(method || "other").toLowerCase();
+    if (m === "upi") return "Upi";
+    if (m === "card") return "Credit card";
+    if (m === "credit") return "Credit";
+    if (m === "cash") return "Cash";
+    if (m === "wallet") return "Wallet";
+    if (m === "bank-transfer") return "Bank";
+    return m.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+  }
+
+  const CHART_COLORS = ["#2563eb", "#7c3aed", "#22c55e", "#f97316", "#ec4899", "#06b6d4", "#eab308", "#64748b"];
+
+  function donutHtml(rows, title) {
+    const list = (rows || []).map((r) => ({
+      name: payLabel(r.method || r.name),
+      amount: Number(r.amount) || 0,
+    })).filter((r) => r.amount > 0);
+    const total = list.reduce((s, r) => s + r.amount, 0);
+    if (!total) return `<h3>${escapeHtml(title)}</h3><p class="hint">No sales yet today.</p>`;
+    let acc = 0;
+    const stops = list.map((r, i) => {
+      const start = (acc / total) * 360;
+      acc += r.amount;
+      const end = (acc / total) * 360;
+      return `${CHART_COLORS[i % CHART_COLORS.length]} ${start}deg ${end}deg`;
+    });
+    const top = list[0];
+    const topPct = Math.round((top.amount / total) * 100);
+    return `<h3>${escapeHtml(title)}</h3>
+      <div class="an-donut-wrap">
+        <div class="an-donut" style="background: conic-gradient(${stops.join(", ")})"><span>${topPct}%</span></div>
+        <ul class="an-legend">${list
+          .map(
+            (r, i) =>
+              `<li><i style="background:${CHART_COLORS[i % CHART_COLORS.length]}"></i>${escapeHtml(r.name)}</li>`,
+          )
+          .join("")}</ul>
+      </div>`;
+  }
+
+  function bubblesHtml(rows) {
+    const list = (rows || []).map((r) => ({ name: r.name || "Other", amount: Number(r.amount) || 0 })).filter((r) => r.amount > 0);
+    const total = list.reduce((s, r) => s + r.amount, 0);
+    if (!total) return `<h3>Category</h3><p class="hint">No category sales today.</p>`;
+    const sized = list.slice(0, 6).map((r, i) => {
+      const pct = Math.round((r.amount / total) * 100);
+      const px = Math.max(72, Math.min(150, 56 + pct * 2.2));
+      return `<span class="an-bubble" style="width:${px}px;height:${px}px;background:${CHART_COLORS[i % CHART_COLORS.length]}"><b>${pct}%</b><em>${escapeHtml(r.name)}</em></span>`;
+    });
+    return `<h3>Category</h3>
+      <div class="an-bubbles">${sized.join("")}</div>
+      <ul class="an-legend">${list
+        .slice(0, 8)
+        .map(
+          (r, i) =>
+            `<li><i style="background:${CHART_COLORS[i % CHART_COLORS.length]}"></i>${escapeHtml(r.name)} · ${inr(r.amount)}</li>`,
+        )
+        .join("")}</ul>`;
+  }
+
+  function monthBarsHtml(rows) {
+    const map = new Map((rows || []).map((r) => [String(r.month || "").slice(0, 7), Number(r.sales) || 0]));
+    const now = new Date();
+    const months = [];
+    for (let i = 11; i >= 0; i -= 1) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+      months.push({ key, label: d.toLocaleString("en-IN", { month: "short" }), sales: map.get(key) || 0 });
+    }
+    const max = Math.max(1, ...months.map((m) => m.sales));
+    return `<header class="an-card-head"><h3>12-Month</h3></header>
+      <div class="an-month-bars">${months
+        .map((m) => {
+          const h = Math.max(8, Math.round((m.sales / max) * 140));
+          return `<span class="an-mbar" title="${escapeHtml(m.key)} · ${escapeHtml(inr(m.sales))}"><i style="height:${h}px"></i><em>${escapeHtml(m.label)}</em></span>`;
+        })
+        .join("")}</div>`;
+  }
+
+  function brandBarsHtml(rows) {
+    const list = (rows || []).slice(0, 8);
+    if (!list.length) return `<h3>Brand</h3><p class="hint">No sales yet today.</p>`;
+    const max = Math.max(1, ...list.map((r) => Number(r.amount) || 0));
+    return `<h3>Brand</h3><div class="an-brand-bars">${list
+      .map((r, i) => {
+        const amt = Number(r.amount) || 0;
+        const w = Math.max(8, Math.round((amt / max) * 100));
+        return `<div class="an-brand-row"><span>${escapeHtml(r.name)}</span><div class="an-brand-track"><i style="width:${w}%;background:${CHART_COLORS[i % CHART_COLORS.length]}"></i></div><strong>${inr(amt)}</strong></div>`;
+      })
+      .join("")}</div>`;
+  }
+
   function paintDashboard(d) {
     const H = hub();
     if (!H || !$("dash-kpis")) return;
     const h = d.hub || {};
-    const map = {
-      todaySales: d.today?.takings,
-      todayPurchases: d.purchase,
-      todayReceipts: h.todayReceipts,
-      todayPayments: h.todayPayments,
-      receivable: d.outstanding,
-      payable: h.payable,
-      cashBalance: h.cashBalance,
-      bankBalance: h.bankBalance,
-      grossProfit: h.grossProfit,
-      netProfit: h.netProfit,
-      expenses: h.expenses,
-      stockValue: d.stockValue,
-      lowStock: h.lowStock,
-      outstandingCustomers: h.outstandingCustomers,
-      outstandingSuppliers: h.outstandingSuppliers,
-    };
-    $("dash-kpis").innerHTML = H.DASH_KPIS.map((k) => {
-      const raw = map[k.key];
-      const val = k.money ? money(raw) : raw == null ? "—" : String(raw);
-      const feat = k.featured ? " is-featured" : "";
-      return `<button type="button" class="report-card dash-kpi${feat}" data-dash-view="${escapeHtml(k.view)}"><span>${escapeHtml(k.label)}</span><strong>${escapeHtml(val)}</strong></button>`;
-    }).join("");
-    if ($("dash-sales-graph")) $("dash-sales-graph").innerHTML = spark(h.salesGraph, "sales");
-    if ($("dash-pay-graph")) $("dash-pay-graph").innerHTML = spark(h.payGraph, "collected");
-    if ($("dash-top-items")) {
-      const rows = h.topItems || [];
-      $("dash-top-items").innerHTML = rows.length
-        ? `<table><thead><tr><th>Item</th><th>Amount</th></tr></thead><tbody>${rows
-            .map((r) => `<tr><td>${escapeHtml(r.name)}</td><td>${money(r.amount)}</td></tr>`)
-            .join("")}</tbody></table>`
-        : `<p class="hint">No sales yet today.</p>`;
-    }
+    const today = Number(d.today?.takings) || 0;
+    const yest = Number(h.yesterdaySales) || 0;
+    const profit = Number(h.grossProfit) || 0;
+    const profitPct = today > 0 ? Math.round((profit / today) * 100) : 0;
+    const cash = Number(h.todayCash) || 0;
+    const nonCash = Math.max(0, today - cash);
+    const month = Number(h.monthSales) || 0;
+    const prevM = Number(h.prevMonthSales) || 0;
+    const mCash = Number(h.monthCash) || 0;
+    const mNon = Math.max(0, month - mCash);
+    const tPurch = Number(d.purchase) || 0;
+    const mPurch = Number(h.monthPurchase) || 0;
+    const stock = Number(d.stockValue) || 0;
+    $("dash-kpis").innerHTML = `
+      <button type="button" class="an-kpi an-sales" data-dash-view="orders"><span class="an-pct">${escapeHtml(pctDelta(today, yest))}</span><span class="an-ico" aria-hidden="true">🛒</span><strong>${escapeHtml(inr(today))}</strong><em>Today Sales</em></button>
+      <button type="button" class="an-kpi an-profit" data-dash-view="reports"><span class="an-split"><b>${profitPct}%</b><small>Profit (%)</small></span><span class="an-split"><b>${escapeHtml(inr(profit))}</b><small>Profit Amount</small></span></button>
+      <button type="button" class="an-kpi an-cash" data-dash-view="payments"><span class="an-split"><b>${escapeHtml(inr(cash))}</b><small>Cash</small></span><span class="an-split"><b>${escapeHtml(inr(nonCash))}</b><small>Non Cash</small></span></button>
+      <button type="button" class="an-kpi an-msales" data-dash-view="orders"><span class="an-pct">${escapeHtml(pctDelta(month, prevM))}</span><span class="an-ico" aria-hidden="true">▣</span><strong>${escapeHtml(inr(month))}</strong><em>Monthly Sales</em></button>
+      <button type="button" class="an-kpi an-mcash" data-dash-view="payments"><span class="an-split"><b>${escapeHtml(inr(mCash))}</b><small>Cash</small></span><span class="an-split"><b>${escapeHtml(inr(mNon))}</b><small>Non Cash</small></span></button>
+      <button type="button" class="an-kpi an-tpurch" data-dash-view="purchases"><span class="an-ico" aria-hidden="true">🚚</span><strong>${escapeHtml(inr(tPurch))}</strong><em>Today Purchase</em></button>
+      <button type="button" class="an-kpi an-mpurch" data-dash-view="purchases"><span class="an-ico" aria-hidden="true">📅</span><strong>${escapeHtml(inr(mPurch))}</strong><em>Monthly Purchase</em></button>
+      <div class="an-card an-paymode" id="dash-pay-graph">${donutHtml(h.payModes, "Today Sales Paymode wise")}</div>
+      <div class="an-card an-category" id="dash-category">${bubblesHtml(h.categories)}</div>
+      <button type="button" class="an-kpi an-stock" data-dash-view="stock"><span class="an-ico" aria-hidden="true">📦</span><strong>${escapeHtml(inr(stock))}</strong><em>Stock Value</em></button>
+      <div class="an-card an-month" id="dash-sales-graph">${monthBarsHtml(h.monthGraph)}</div>
+      <div class="an-card an-brand" id="dash-top-items">${brandBarsHtml(h.topItems)}</div>`;
     if ($("dash-recent")) {
       const rows = h.recent || [];
       $("dash-recent").innerHTML = rows.length

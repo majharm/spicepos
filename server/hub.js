@@ -136,6 +136,65 @@ export async function buildHubDashboard() {
      FROM sales_orders WHERE business_id = ? ORDER BY created_at DESC LIMIT 10`,
     [businessId],
   );
+  const yesterday = await one(
+    `SELECT COALESCE(SUM(total),0) AS takings FROM sales_orders
+     WHERE business_id = ? AND DATE(created_at) = DATE_SUB(CURDATE(), INTERVAL 1 DAY)
+       AND LOWER(COALESCE(status,'')) <> 'cancelled'`,
+    [businessId],
+  );
+  const monthSales = await one(
+    `SELECT COALESCE(SUM(total),0) AS takings FROM sales_orders
+     WHERE business_id = ? AND DATE_FORMAT(created_at, '%Y-%m') = DATE_FORMAT(CURDATE(), '%Y-%m')
+       AND LOWER(COALESCE(status,'')) <> 'cancelled'`,
+    [businessId],
+  );
+  const prevMonthSales = await one(
+    `SELECT COALESCE(SUM(total),0) AS takings FROM sales_orders
+     WHERE business_id = ? AND DATE_FORMAT(created_at, '%Y-%m') = DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 1 MONTH), '%Y-%m')
+       AND LOWER(COALESCE(status,'')) <> 'cancelled'`,
+    [businessId],
+  );
+  const monthPurchase = await one(
+    `SELECT COALESCE(SUM(total),0) AS total FROM purchases
+     WHERE business_id = ? AND DATE_FORMAT(purchase_date, '%Y-%m') = DATE_FORMAT(CURDATE(), '%Y-%m')`,
+    [businessId],
+  );
+  const todayCash = await one(
+    `SELECT COALESCE(SUM(total),0) AS takings FROM sales_orders
+     WHERE business_id = ? AND DATE(created_at) = CURDATE()
+       AND LOWER(COALESCE(status,'')) <> 'cancelled' AND LOWER(COALESCE(payment_method,'')) = 'cash'`,
+    [businessId],
+  );
+  const monthCash = await one(
+    `SELECT COALESCE(SUM(total),0) AS takings FROM sales_orders
+     WHERE business_id = ? AND DATE_FORMAT(created_at, '%Y-%m') = DATE_FORMAT(CURDATE(), '%Y-%m')
+       AND LOWER(COALESCE(status,'')) <> 'cancelled' AND LOWER(COALESCE(payment_method,'')) = 'cash'`,
+    [businessId],
+  );
+  const payModes = await many(
+    `SELECT LOWER(COALESCE(NULLIF(payment_method,''),'other')) AS method, COALESCE(SUM(total),0) AS amount
+     FROM sales_orders WHERE business_id = ? AND DATE(created_at) = CURDATE()
+       AND LOWER(COALESCE(status,'')) <> 'cancelled'
+     GROUP BY LOWER(COALESCE(NULLIF(payment_method,''),'other')) ORDER BY amount DESC`,
+    [businessId],
+  );
+  const categories = await many(
+    `SELECT COALESCE(NULLIF(i.category,''),'Other') AS name, SUM(l.amount) AS amount
+     FROM sales_order_lines l
+     JOIN sales_orders o ON o.id = l.order_id
+     LEFT JOIN items i ON i.id = l.item_id
+     WHERE o.business_id = ? AND DATE(o.created_at) = CURDATE() AND COALESCE(l.cancelled,0) = 0
+       AND LOWER(COALESCE(o.status,'')) <> 'cancelled'
+     GROUP BY COALESCE(NULLIF(i.category,''),'Other') ORDER BY amount DESC LIMIT 8`,
+    [businessId],
+  );
+  const monthGraph = await many(
+    `SELECT DATE_FORMAT(created_at, '%Y-%m') AS month, COALESCE(SUM(total),0) AS sales
+     FROM sales_orders WHERE business_id = ? AND created_at >= DATE_SUB(CURDATE(), INTERVAL 11 MONTH)
+       AND LOWER(COALESCE(status,'')) <> 'cancelled'
+     GROUP BY DATE_FORMAT(created_at, '%Y-%m') ORDER BY month`,
+    [businessId],
+  );
   const gross = round2(profit.gross);
   const net = round2(gross - num(monthExp.total));
   return {
@@ -155,6 +214,15 @@ export async function buildHubDashboard() {
     payGraph,
     topItems,
     recent,
+    yesterdaySales: round2(yesterday.takings),
+    monthSales: round2(monthSales.takings),
+    prevMonthSales: round2(prevMonthSales.takings),
+    monthPurchase: round2(monthPurchase.total),
+    todayCash: round2(todayCash.takings),
+    monthCash: round2(monthCash.takings),
+    payModes,
+    categories,
+    monthGraph,
   };
 }
 

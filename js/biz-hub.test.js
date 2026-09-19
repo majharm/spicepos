@@ -40,32 +40,36 @@ test("Industry modules stay off grocery shops", () => {
   assert.equal(H.DASH_KPIS[0].featured, true);
 });
 
-test("Dashboard uses a Zoho Books-style home shell", () => {
+test("Dashboard uses a colorful retail analytics home", () => {
   const index = read("index.html");
   const ui = read("js/biz-hub-ui.js");
   const app = read("js/app.js");
   const css = read("css/pos.css");
-  assert.match(index, /zoho-dash-desk/);
-  assert.match(index, /Quick Create/);
-  assert.match(index, /zoho-widget-link/);
-  assert.match(index, /id="open-pos">New</);
-  assert.match(index, /biz-hub-ui\.js\?v=20260919salon1/);
-  assert.match(ui, /is-featured/);
+  assert.match(index, /analytics-dash-desk/);
+  assert.match(index, /Retail POS Analytics/);
+  assert.match(index, /id="open-pos">New bill</);
+  assert.match(index, /id="dash-plan-kpis"/);
+  assert.match(index, /biz-hub-ui\.js\?v=20260919an1/);
+  assert.match(ui, /an-kpi an-sales/);
+  assert.match(ui, /Today Sales Paymode wise/);
+  assert.match(ui, /function donutHtml/);
   assert.match(app, /el\.textContent = "Dashboard"/);
-  assert.match(css, /zoho-dash: books home 2026/);
-  assert.match(css, /#1a7a6d/);
+  assert.match(css, /retail-analytics: colorful POS home 2026/);
+  assert.match(css, /\.an-sales/);
 });
 
 test("POS shell wires Reports Center, payments, audit, and hub scripts", () => {
   const index = read("index.html");
   const app = read("js/app.js");
+  const ui = read("js/biz-hub-ui.js");
   const till = read("pos-php-till.php");
   const tenant = read("server/tenant.js");
   assert.match(index, /id="reports-center"/);
   assert.match(index, /id="view-payments"/);
   assert.match(index, /id="view-audit"/);
   assert.match(index, /id="view-hub-sales"/);
-  assert.match(index, /id="dash-sales-graph"/);
+  assert.match(index, /id="dash-kpis"/);
+  assert.match(ui, /id="dash-sales-graph"/);
   assert.match(index, /biz-hub\.js\?v=20260919salon1/);
   assert.match(index, /id="rep-pdf"/);
   assert.match(index, /id="rep-pay-mode"/);
@@ -75,6 +79,8 @@ test("POS shell wires Reports Center, payments, audit, and hub scripts", () => {
   assert.match(app, /name === "audit"/);
   assert.match(tenant, /buildHubDashboard/);
   assert.match(till, /"hub"/);
+  assert.match(till, /monthSales/);
+  assert.match(read("server/hub.js"), /monthSales/);
 });
 
 test("Purchase desk lists all nine documents and opens desks instead of looping", () => {
