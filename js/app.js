@@ -97,9 +97,11 @@ function fmtQty(qty, item) {
 }
 
 function fillItemUnitSelect(selected) {
-  const el = $("item-unit");
-  if (!el) return;
-  el.innerHTML = POSUnits.optionsHtml(selected || el.value || defaultItemUnit());
+  ["item-unit", "ci-unit"].forEach((id) => {
+    const el = $(id);
+    if (!el) return;
+    el.innerHTML = POSUnits.optionsHtml(selected || el.value || defaultItemUnit());
+  });
 }
 
 function applyUnitMaster(rows) {
@@ -3075,8 +3077,10 @@ function paintClassicItemHits() {
   }
   const rows = filteredItems().slice(0, 12);
   if (!rows.length) {
-    box.hidden = true;
-    box.innerHTML = "";
+    box.hidden = false;
+    box.innerHTML = `<button type="button" class="classic-hit classic-hit-add" data-counter-add-item="${escapeHtml(q)}">
+      <span class="classic-hit-main"><strong>Add “${escapeHtml(q)}” as a new item</strong><em>Save to catalog and put it on this bill</em></span>
+    </button>`;
     return;
   }
   box.hidden = false;
@@ -3114,8 +3118,8 @@ function renderCatalog() {
   if (!rows.length) {
     const q = String(state.query || "").trim();
     root.innerHTML = `<div class="catalog-empty">${
-      q ? `No items match “${escapeHtml(q)}”. Try another name, ${taxCodeLabel()}, or SKU.` : "No items in this shop yet."
-    }</div>`;
+      q ? `No items match “${escapeHtml(q)}”.` : "No items in this shop yet."
+    } <button class="btn primary" type="button" data-counter-add-item="${escapeHtml(q)}">Add item</button></div>`;
     return;
   }
   const grouped = new Map();
@@ -3645,9 +3649,104 @@ async function applyBarcodeScan(raw, sourceEl) {
     return false;
   }
   paintScanLane(false, "No match");
-  setHint(`No item matches “${code}”`, "error");
+  setHint(`No item matches “${code}”. Use + Item to add it.`, "error");
   if (sourceEl === $("scan-code") || sourceEl === $("search") || sourceEl === $("bill-scan-code") || sourceEl === $("bill-item-search")) sourceEl.select();
   return false;
+}
+
+function looksLikeItemCode(q) {
+  const s = String(q || "").trim();
+  return s.length >= 4 && !/\s/.test(s) && /^[A-Za-z0-9._/-]+$/.test(s);
+}
+
+function closeCounterAddItem() {
+  const modal = $("counter-item-modal");
+  if (modal) modal.hidden = true;
+}
+
+function openCounterAddItem(prefill = {}) {
+  const modal = $("counter-item-modal");
+  if (!modal) return;
+  const raw = String(prefill.name || prefill.barcode || prefill.q || "").trim();
+  const asCode = Boolean(prefill.barcode) || (!prefill.name && looksLikeItemCode(raw));
+  if ($("ci-name")) $("ci-name").value = asCode ? String(prefill.name || "").trim() : raw;
+  if ($("ci-barcode")) $("ci-barcode").value = asCode ? (prefill.barcode || raw) : String(prefill.barcode || "").trim();
+  if ($("ci-retail")) $("ci-retail").value = prefill.retail || "";
+  if ($("ci-gst")) $("ci-gst").value = prefill.gst != null ? prefill.gst : "5";
+  if ($("ci-qty")) $("ci-qty").value = prefill.qty || "1";
+  if ($("ci-mfr")) $("ci-mfr").value = prefill.mfr || "";
+  if ($("ci-hint")) {
+    $("ci-hint").textContent = "";
+    $("ci-hint").className = "hint";
+  }
+  fillItemUnitSelect(defaultItemUnit());
+  modal.hidden = false;
+  ($("ci-name")?.value ? $("ci-retail") : $("ci-name"))?.focus();
+}
+
+async function saveCounterAddItem(e) {
+  e?.preventDefault?.();
+  const hint = $("ci-hint");
+  const name = String($("ci-name")?.value || "").trim();
+  const retail = Number($("ci-retail")?.value);
+  if (!name) {
+    if (hint) {
+      hint.textContent = "Name is required.";
+      hint.className = "hint error";
+    }
+    return;
+  }
+  if (!Number.isFinite(retail) || retail < 0) {
+    if (hint) {
+      hint.textContent = "Enter a retail rate.";
+      hint.className = "hint error";
+    }
+    return;
+  }
+  const unit = POSUnits.normalize($("ci-unit")?.value || defaultItemUnit());
+  const qty = Number($("ci-qty")?.value) || 1;
+  const body = {
+    name,
+    category: defaultItemCategory(),
+    unit,
+    base_unit: unit,
+    retail_rate: retail,
+    b2b_rate: retail,
+    purchase_rate: 0,
+    gst_rate: Number($("ci-gst")?.value) || 5,
+    barcode: String($("ci-barcode")?.value || "").trim(),
+    status: "active",
+    stock_gm: 0,
+  };
+  if (isPharmacyShop()) {
+    body.manufacturer = String($("ci-mfr")?.value || "").trim();
+    body.generic_name = name;
+  }
+  const saveBtn = $("ci-save");
+  if (saveBtn) saveBtn.disabled = true;
+  if (hint) {
+    hint.textContent = "Saving…";
+    hint.className = "hint";
+  }
+  try {
+    const res = await api("/api/items", { method: "POST", body: JSON.stringify(body) });
+    await loadBootstrap();
+    const item = res.item || res.items?.[0] || state.items.find((i) => i.id === res.item?.id);
+    const id = item?.id || res.item?.id;
+    if (id) addItem(id, POSUnits.toBase(qty, unit), body.barcode || "");
+    closeCounterAddItem();
+    setHint(`Added ${name} to catalog and bill`, "ok");
+    clearCounterQuery($("bill-item-search") || $("scan-code"));
+    paintClassicItemHits();
+    focusScanLane();
+  } catch (err) {
+    if (hint) {
+      hint.textContent = err.message || "Could not save item";
+      hint.className = "hint error";
+    }
+  } finally {
+    if (saveBtn) saveBtn.disabled = false;
+  }
 }
 
 function newCartLineId() {
@@ -7333,6 +7432,11 @@ async function loadAccounts() {
 }
 
 $("catalog").addEventListener("click", (e) => {
+  const create = e.target.closest("[data-counter-add-item]");
+  if (create) {
+    openCounterAddItem({ q: create.dataset.counterAddItem });
+    return;
+  }
   const btn = e.target.closest("[data-add]");
   if (btn) {
     addItem(btn.dataset.add);
@@ -7340,6 +7444,13 @@ $("catalog").addEventListener("click", (e) => {
   }
 });
 $("classic-item-hits")?.addEventListener("click", (e) => {
+  const create = e.target.closest("[data-counter-add-item]");
+  if (create) {
+    const q = create.dataset.counterAddItem || "";
+    const fromCode = $("bill-scan-code")?.value?.trim() === q;
+    openCounterAddItem(fromCode ? { barcode: q } : { name: q });
+    return;
+  }
   const btn = e.target.closest("[data-add]");
   if (!btn) return;
   const item = state.items.find((i) => i.id === btn.dataset.add);
@@ -7711,6 +7822,21 @@ $("color-filter")?.addEventListener("change", () => {
 $("scan-form")?.addEventListener("submit", async (e) => {
   e.preventDefault();
   await applyBarcodeScan($("scan-code")?.value, $("scan-code"));
+});
+$("counter-add-item")?.addEventListener("click", () => {
+  const q = String($("scan-code")?.value || $("search")?.value || "").trim();
+  openCounterAddItem(looksLikeItemCode(q) ? { barcode: q } : { name: q });
+});
+$("classic-add-item")?.addEventListener("click", () => {
+  const code = String($("bill-scan-code")?.value || "").trim();
+  const name = String($("bill-item-search")?.value || "").trim();
+  const qty = String($("bill-scan-qty")?.value || "").trim();
+  openCounterAddItem(code && !name ? { barcode: code, qty } : { name: name || code, barcode: code, qty });
+});
+$("counter-item-form")?.addEventListener("submit", (e) => void saveCounterAddItem(e));
+$("ci-cancel")?.addEventListener("click", () => closeCounterAddItem());
+$("counter-item-modal")?.addEventListener("click", (e) => {
+  if (e.target === $("counter-item-modal")) closeCounterAddItem();
 });
 $("bill-scan-code")?.addEventListener("input", () => {
   syncCounterQuery($("bill-scan-code").value, $("bill-scan-code"));

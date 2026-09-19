@@ -256,6 +256,12 @@ test("Counter has a dedicated scan lane and Pay action", () => {
   assert.match(app, /No item matches/);
   assert.match(app, /function focusScanLane/);
   assert.match(index, /class="counter-lane"/);
+  assert.match(index, /id="counter-add-item"/);
+  assert.match(index, /id="classic-add-item"/);
+  assert.match(index, /id="counter-item-modal"/);
+  assert.match(index, /Save &amp; add to bill/);
+  assert.match(app, /function openCounterAddItem/);
+  assert.match(app, /function saveCounterAddItem/);
   assert.match(index, /id="pack-choice"/);
   assert.match(index, /id="pay-method"/);
   assert.match(index, /id="scan-form"[\s\S]*id="pack-choice"[\s\S]*id="pay-method"[\s\S]*id="counter-mobile"[\s\S]*id="customer"/);
