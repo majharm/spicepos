@@ -811,7 +811,7 @@ export function registerCrud(app) {
         if (globalThis.POSPay?.isSaleMode && !globalThis.POSPay.isSaleMode(method)) {
           throw new Error("Invalid payment method");
         }
-        const payStatus = method === "credit" ? "partial" : "paid";
+        const payStatus = method === "credit" ? "unpaid" : "paid";
         let packName = existing.pack_name;
         let usePackId = packId === undefined ? existing.pack_id : packId;
         if (packId) {

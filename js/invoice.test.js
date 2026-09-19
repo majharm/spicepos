@@ -612,3 +612,51 @@ test("QR invoice prints 3 pcs × rate as gross, then header discount", () => {
   assert.match(html, /₹170\.00/);
   assert.match(html, /3 pcs/);
 });
+
+test("bill discount on already-net lines does not inflate taxable value", () => {
+  const InvoicePrint = loadInvoicePrint();
+  const order = {
+    order_number: "SO-10003",
+    customer_name: "Swami Masale",
+    subtotal: 40000,
+    discount: 10000,
+    gst: 0,
+    total: 30000,
+    payment_method: "credit",
+    payment_status: "partial",
+    amount_paid: 0,
+    previous_due: 0,
+    current_due: 30000,
+    created_at: "2026-09-19T01:11:00.000Z",
+    lines: [
+      {
+        item_name: "POS SPICE",
+        quantity_gm: 1,
+        rate_per_kg: 40000,
+        unit: "PCS",
+        amount: 40000,
+        gst_rate: 0,
+        gst_amount: 0,
+      },
+    ],
+  };
+  const ctx = {
+    company: { name: "ATAV TELECOM" },
+    customers: [],
+    items: [{ id: "i1", unit: "PCS", base_unit: "PCS" }],
+    formatDateTime: () => "19 Sept 2026, 06:41 am",
+    money: (n) => `₹${Number(n).toFixed(2)}`,
+    escapeHtml: (v) => String(v ?? ""),
+  };
+  const figs = InvoicePrint.invoiceFigures(order, InvoicePrint.enrichLines(order, ctx.items));
+  assert.equal(figs.subtotal, 40000);
+  assert.equal(figs.discount, 10000);
+  assert.equal(figs.total, 30000);
+  const html = InvoicePrint.invoiceBody(order, ctx);
+  assert.match(html, /₹40000\.00/);
+  assert.match(html, /₹10000\.00/);
+  assert.match(html, /₹30000\.00/);
+  assert.doesNotMatch(html, /₹50000\.00/);
+  assert.match(html, /UNPAID/);
+  assert.doesNotMatch(html, /PARTIAL/);
+});

@@ -170,7 +170,7 @@ function pos_update_order($bid, $orderId, $body, $auth) {
   if (!pos_pay_is_sale($methodPay)) {
     pos_send(400, ["error" => "Invalid payment method", "php" => true]);
   }
-  $payStatus = $methodPay === "credit" ? "partial" : "paid";
+  $payStatus = $methodPay === "credit" ? "unpaid" : "paid";
   if (!empty($body["payment_status"])) {
     $maybe = strtolower(trim((string) $body["payment_status"]));
     if (in_array($maybe, pos_payment_statuses(), true)) $payStatus = $maybe;

@@ -86,7 +86,6 @@
     const storedSub = round2(order?.subtotal);
     const netLines = round2(rows.reduce((sum, l) => sum + num(l.amount), 0));
     const grossLines = round2(rows.reduce((sum, l) => sum + lineQtyRateAmount(l), 0));
-    const lifted = discount > 0 && Math.abs(storedSub - netLines) < 0.051;
     if (discount > 0 && grossLines > netLines + 0.009) {
       return {
         lines: rows.map((l) => ({ ...l, amount: lineQtyRateAmount(l) })),
@@ -97,10 +96,7 @@
         total,
       };
     }
-    if (lifted && discount > 0) {
-      return { lines: rows, gstLines: rows, subtotal: round2(storedSub + discount), discount, gst, total };
-    }
-    return { lines: rows, gstLines: rows, subtotal: storedSub, discount, gst, total };
+    return { lines: rows, gstLines: rows, subtotal: storedSub || netLines, discount, gst, total };
   }
 
   function enrichLines(order, items) {
@@ -277,7 +273,10 @@
     return String(method || "cash").toUpperCase();
   }
 
-  function payStatusLabel(status) {
+  function payStatusLabel(status, order) {
+    const paid = round2(order?.amount_paid ?? order?.amountPaid);
+    const method = String(order?.payment_method || "").toLowerCase();
+    if (method === "credit" && !(paid > 0)) return "UNPAID";
     const s = String(status || "paid").toLowerCase();
     if (s === "partial") return "PARTIAL";
     if (s === "unpaid") return "UNPAID";
@@ -413,7 +412,7 @@
     </tbody>
   </table>
   <div class="inv-rule"></div>
-  <p class="inv-pay">Payment: <strong>${escapeHtml(payLabel(purchase.payment_method))}</strong> · ${escapeHtml(payStatusLabel(purchase.payment_status))}</p>
+  <p class="inv-pay">Payment: <strong>${escapeHtml(payLabel(purchase.payment_method))}</strong> · ${escapeHtml(payStatusLabel(purchase.payment_status, purchase))}</p>
   ${notes ? `<p class="inv-terms">${escapeHtml(notes)}</p>` : ""}
   <p class="inv-footer">Goods received — stock updated</p>
   <p class="inv-powered">ATAV POS</p>
@@ -614,7 +613,7 @@ ${purchaseBody(purchase, ctx)}
     </tbody>
   </table>
   <div class="inv-rule"></div>
-  <p class="inv-pay">${escapeHtml(L(ctx, "invoice.payment", "Payment"))}: <strong>${escapeHtml(payLabel(order.payment_method))}</strong> · ${escapeHtml(payStatusLabel(order.payment_status))}${String(order.payment_reference || "").trim() ? ` · ${escapeHtml(order.payment_reference)}` : ""}</p>
+  <p class="inv-pay">${escapeHtml(L(ctx, "invoice.payment", "Payment"))}: <strong>${escapeHtml(payLabel(order.payment_method))}</strong> · ${escapeHtml(payStatusLabel(order.payment_status, order))}${String(order.payment_reference || "").trim() ? ` · ${escapeHtml(order.payment_reference)}` : ""}</p>
   ${paymentQrHtml(co, ctx, "pos")}
   ${footer ? `<p class="inv-footer">${noteHtml(footer, escapeHtml)}</p>` : `<p class="inv-footer">${escapeHtml(L(ctx, "invoice.thank_you", "Thank you for your business!"))}</p>`}
   ${terms ? `<p class="inv-terms"><strong>${escapeHtml(L(ctx, "invoice.terms", "Terms & conditions"))}</strong><br>${noteHtml(terms, escapeHtml)}</p>` : ""}
@@ -849,7 +848,7 @@ ${invoiceBody(order, ctx)}
       <p class="off-copy">${escapeHtml(officeCopyLabel(opts?.copy))}</p>
       <div class="off-kv"><span>Invoice No.</span><strong>${invNo}</strong></div>
       <div class="off-kv"><span>Date</span><span>${escapeHtml(when)}</span></div>
-      <div class="off-kv"><span>Payment</span><span>${escapeHtml(payLabel(order.payment_method))} · ${escapeHtml(payStatusLabel(order.payment_status))}</span></div>
+      <div class="off-kv"><span>Payment</span><span>${escapeHtml(payLabel(order.payment_method))} · ${escapeHtml(payStatusLabel(order.payment_status, order))}</span></div>
       ${tableLine}
       ${packLine}
     </div>

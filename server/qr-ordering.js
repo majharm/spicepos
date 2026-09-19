@@ -462,7 +462,7 @@ export async function ensureQrInvoice(qrOrderId, { paymentMethod = "cash" } = {}
     if (!qrLines.length) throw new Error("This QR order has no items");
     const customer = await findOrCreateQrCustomer(conn, order, businessId);
     const method = qrPayMethod(paymentMethod);
-    const payStatus = method === "credit" ? "partial" : "paid";
+    const payStatus = method === "credit" ? "unpaid" : "paid";
     const { subtotal, discount, gst, total } = qrInvoiceTotals(order);
     const totalGm = qrLines.reduce((sum, line) => sum + (Number(line.quantity_gm) || 0), 0);
     const next = await nextSeq(conn, "order", 10001);

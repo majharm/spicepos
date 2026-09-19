@@ -52,7 +52,7 @@ function pos_checkout_sale($bid, $branchId, $uid, $auth, $body) {
     $next = pos_next_seq("order", $bid, 10001);
     $orderNumber = "SO-" . $next;
     $orderId = pos_uuid();
-    $payStatus = $methodPay === "credit" ? "partial" : "paid";
+    $payStatus = $methodPay === "credit" ? "unpaid" : "paid";
     $packId = $body["packId"] ?? null;
     $packName = null;
     if ($packId) {

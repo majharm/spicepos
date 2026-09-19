@@ -851,7 +851,7 @@ app.post("/api/checkout", requireStaff, requirePerm("counter"), async (req, res)
       }
       const orderNumber = `SO-${next}`;
       const orderId = crypto.randomUUID();
-      const payStatus = method === "credit" ? "partial" : "paid";
+      const payStatus = method === "credit" ? "unpaid" : "paid";
       const billCustomerName =
         clipInvoiceText(req.body?.customer_name ?? req.body?.customerName ?? "", 180) ||
         customer.business_name ||

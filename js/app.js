@@ -430,8 +430,11 @@ function orderStatusBadge(status) {
   return `<span class="order-status ${orderStatusClass(s)}">${escapeHtml(orderStatusLabel(s))}</span>`;
 }
 
-function payStatusBadge(status) {
-  const s = String(status || "paid").toLowerCase();
+function payStatusBadge(statusOrOrder) {
+  const order = statusOrOrder && typeof statusOrOrder === "object" ? statusOrOrder : null;
+  let s = String((order ? order.payment_status : statusOrOrder) || "paid").toLowerCase();
+  const paid = Number(order?.amount_paid) || 0;
+  if (String(order?.payment_method || "").toLowerCase() === "credit" && paid <= 0) s = "unpaid";
   return `<span class="pay-status ${escapeHtml(s)}">${escapeHtml(s)}</span>`;
 }
 
@@ -5865,7 +5868,7 @@ function showOrder(o) {
         </div>
         <div class="invoice-detail-meta">
           <div class="invoice-total">${money(o.total)}</div>
-          <div class="order-badges">${orderStatusBadge(o.status)} ${payStatusBadge(o.payment_status)}</div>
+          <div class="order-badges">${orderStatusBadge(o.status)} ${payStatusBadge(o)}</div>
           <span class="pay-method-chip">${escapeHtml(paymentMethodLabel(o.payment_method))}</span>
         </div>
       </div>
@@ -5920,7 +5923,7 @@ function renderOrdersList() {
         <td>${escapeHtml(formatShopDateTime(o.created_at))}</td>
         <td>${escapeHtml(orderCustomerName(o))}</td>
         <td>${orderStatusBadge(o.status)}</td>
-        <td>${payStatusBadge(o.payment_status)}</td>
+        <td>${payStatusBadge(o)}</td>
         <td>${escapeHtml(paymentMethodLabel(o.payment_method))}</td>
         <td class="num">${money(o.total)}</td>
       </tr>`,
