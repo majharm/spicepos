@@ -6,7 +6,7 @@
     <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
     <title>ATAV POS</title>
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./css/pos.css?v=20260919desk1" />
+    <link rel="stylesheet" href="./css/pos.css?v=20260919purch1" />
     <link rel="stylesheet" href="./css/saas.css?v=20260905deploy136" />
   </head>
   <body>
@@ -177,9 +177,13 @@
                 <strong>Customers</strong>
                 <span>Accounts and outstanding</span>
               </button>
+              <button type="button" class="dash-tile" data-dash-view="hub-purchases">
+                <strong>Purchase desk</strong>
+                <span>Request, PO, GRN, bills, payments</span>
+              </button>
               <button type="button" class="dash-tile" data-dash-view="purchases">
-                <strong>Purchases</strong>
-                <span>Buy stock from suppliers</span>
+                <strong>Purchase Invoice</strong>
+                <span>Supplier bills that post stock</span>
               </button>
               <button type="button" class="dash-tile" data-dash-view="reports">
                 <strong>Reports Center</strong>
@@ -1793,15 +1797,32 @@
         </section>
         <section class="view view-finance" id="view-hub-purchases" hidden>
           <h2 class="visually-hidden">Purchase desk</h2>
-          <div class="items-desk">
+          <div class="items-desk purchases-desk">
             <header class="items-hero">
               <div class="items-hero-copy">
                 <p class="items-kicker">Purchases</p>
                 <h3>Purchase desk</h3>
-                <p class="lede">Record supplier invoices to receive stock. Request, PO, GRN, and debit notes open from this desk; stock still posts through Purchases.</p>
+                <p class="lede">Find every purchase document here. Document desk types open a list and form on this page. Open types jump to the live bill, payment, or ledger screen. Stock still posts through Purchase Invoice.</p>
+                <label class="purchases-desk-search purchases-desk-search-hero">Find
+                  <input id="hub-purchases-search" type="search" placeholder="Purchase Request, PO, GRN, invoice…" autocomplete="off" />
+                </label>
               </div>
+              <div class="items-hero-stats" id="hub-purchases-stats"></div>
             </header>
-            <div id="hub-purchases-tiles"></div>
+            <div id="hub-purchases-work" class="purchase-doc-work" hidden></div>
+            <div id="hub-purchases-tiles" class="hub-purchases-tiles">
+              <div class="hub-tile-grid">
+                <button type="button" class="dash-tile hub-mod-tile" data-hub-open="purchase-request"><em class="hub-mod-kind">Document desk</em><strong>Purchase Request</strong><span>Ask for stock before you order</span></button>
+                <button type="button" class="dash-tile hub-mod-tile" data-hub-open="purchase-order"><em class="hub-mod-kind">Document desk</em><strong>Purchase Order</strong><span>Confirm what to buy from a supplier</span></button>
+                <button type="button" class="dash-tile hub-mod-tile" data-hub-open="grn"><em class="hub-mod-kind">Document desk</em><strong>Goods Receipt</strong><span>Record goods received at the shop</span></button>
+                <button type="button" class="dash-tile hub-mod-tile" data-hub-open="purchase-invoice"><em class="hub-mod-kind">Open</em><strong>Purchase Invoice</strong><span>Supplier bill — this posts stock</span></button>
+                <button type="button" class="dash-tile hub-mod-tile" data-hub-open="debit-note"><em class="hub-mod-kind">Document desk</em><strong>Debit Note</strong><span>Claim against a supplier bill</span></button>
+                <button type="button" class="dash-tile hub-mod-tile" data-hub-open="purchase-return"><em class="hub-mod-kind">Document desk</em><strong>Purchase Return</strong><span>Send goods back to the supplier</span></button>
+                <button type="button" class="dash-tile hub-mod-tile" data-hub-open="supplier-pay"><em class="hub-mod-kind">Open</em><strong>Supplier Payment</strong><span>Pay a supplier from payables</span></button>
+                <button type="button" class="dash-tile hub-mod-tile" data-hub-open="supplier-due"><em class="hub-mod-kind">Open</em><strong>Supplier Due</strong><span>What we still owe suppliers</span></button>
+                <button type="button" class="dash-tile hub-mod-tile" data-hub-open="supplier-ledger"><em class="hub-mod-kind">Open</em><strong>Supplier Ledger</strong><span>Supplier account history</span></button>
+              </div>
+            </div>
           </div>
         </section>
         <section class="view view-finance" id="view-payments" hidden>
@@ -1819,7 +1840,7 @@
             <p class="dash-section">Actions</p>
             <div class="hub-tile-grid">
               <button type="button" class="dash-tile" data-view-jump="customers"><strong>Payment receipt</strong><span>Collect customer due</span></button>
-              <button type="button" class="dash-tile" data-view-jump="accounts"><strong>Supplier payment</strong><span>Payables and vouchers</span></button>
+              <button type="button" class="dash-tile" data-view-jump="accounts" data-acc-jump="payables"><strong>Supplier payment</strong><span>Payables and vouchers</span></button>
               <button type="button" class="dash-tile" data-view-jump="audit"><strong>Deleted payments</strong><span>Activity log</span></button>
             </div>
             <p class="dash-section">Reports</p>
@@ -2211,9 +2232,9 @@
     <script src="./js/qrcode.iife.js?v=20260905qr1" defer></script>
     <script src="./js/qr-notify.js?v=20260914kot1" defer></script>
     <script src="./js/payment-methods.js?v=20260918pay1" defer></script>
-    <script src="./js/biz-hub.js?v=20260919hub1" defer></script>
-    <script src="./js/biz-hub-ui.js?v=20260919desk1" defer></script>
-    <script src="./js/app.js?v=20260919desk1" defer></script>
+    <script src="./js/biz-hub.js?v=20260919purch1" defer></script>
+    <script src="./js/biz-hub-ui.js?v=20260919purch1" defer></script>
+    <script src="./js/app.js?v=20260919purch1" defer></script>
     <script src="./js/growth.js?v=20260905deploy145" defer></script>
     <script src="./js/offers-ui.js?v=20260919off1" defer></script>
   </body>
