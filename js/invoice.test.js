@@ -230,10 +230,13 @@ test("official invoice is an A4 list view not a POS slip", () => {
   assert.match(html, /class="office-invoice"/);
   assert.match(html, /TAX INVOICE/);
   assert.match(html, /Original for Recipient/);
-  assert.match(html, /Bill to/);
+  assert.match(html, /Bill To/);
+  assert.match(html, /Invoice#/);
+  assert.match(html, /Balance Due/);
   assert.match(html, /SO-10042/);
   assert.match(html, /Ramesh Traders/);
-  assert.match(html, /<th>Item<\/th>/);
+  assert.match(html, /Item &amp; Description/);
+  assert.match(html, /Payment Made/);
   assert.match(html, /Cardamom/);
   assert.match(html, /Clove/);
   assert.match(html, /Amount in words/);

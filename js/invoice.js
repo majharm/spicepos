@@ -742,6 +742,21 @@ ${invoiceBody(order, ctx)}
     return copy === "duplicate" ? "Duplicate for Supplier" : "Original for Recipient";
   }
 
+  function officeTermsLabel(order) {
+    const method = String(order?.payment_method || "").toLowerCase();
+    const status = String(order?.payment_status || "").toLowerCase();
+    if (method === "credit") return "Net due";
+    if (status === "unpaid" || status === "due") return "Due on Receipt";
+    if (status === "partial") return "Partial payment";
+    return "Due on Receipt";
+  }
+
+  function officeDateOnly(raw) {
+    const s = String(raw || "").trim();
+    if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+    return s;
+  }
+
   function officeInvoiceBody(order, ctx, opts) {
     const { company, customers, items, formatDateTime, money, escapeHtml } = ctx;
     const co = company || {};
@@ -755,8 +770,10 @@ ${invoiceBody(order, ctx)}
     const discount = figures.discount;
     const gst = figures.gst;
     const total = figures.total;
+    const due = invoiceDueFigures(order);
     const invNo = escapeHtml(order.order_number || "—");
     const when = formatDateTime(order.created_at || new Date().toISOString());
+    const dueDate = officeDateOnly(order.due_date || order.dueDate || order.created_at);
     const logo = co.logo_url
       ? `<img class="off-logo" src="${escapeHtml(co.logo_url)}" alt="">`
       : "";
@@ -787,40 +804,29 @@ ${invoiceBody(order, ctx)}
       .map((t) => `<div>${escapeHtml(t)}</div>`)
       .join("");
 
-    const itemRows = pharmacy
-      ? lines
-          .map((l, i) => {
-            const lineTotal = round2(num(l.amount) + num(l.gst_amount));
-            return `<tr>
+    const itemRows = lines
+      .map((l, i) => {
+        const descBits = pharmacy
+          ? [
+              `Batch No.: ${l.batch_no || "—"}`,
+              `Expiry: ${formatExpiryShort(l.expiry_date) || "—"}`,
+              `Pack: ${l.pack_label || "—"}`,
+              `MRP ${money(l.mrp)}`,
+              `GST ${l.gst_rate}%`,
+            ]
+          : [`${taxCode(ctx)}: ${l.hsn}`, `GST ${l.gst_rate}%`];
+        return `<tr>
         <td class="off-c">${i + 1}</td>
-        <td>${escapeHtml(l.item_name)}</td>
-        <td>${escapeHtml(l.batch_no || "—")}</td>
-        <td>${escapeHtml(formatExpiryShort(l.expiry_date) || "—")}</td>
-        <td>${escapeHtml(l.pack_label || "—")}</td>
-        <td class="off-n">${escapeHtml(formatQty(l.quantity_gm, l.unit))}</td>
-        <td class="off-n">${escapeHtml(money(l.mrp))}</td>
-        <td class="off-n">${escapeHtml(money(l.rate_per_kg))}</td>
-        <td class="off-n">${escapeHtml(String(l.gst_rate))}%</td>
-        <td class="off-n">${escapeHtml(money(lineTotal))}</td>
-      </tr>`;
-          })
-          .join("")
-      : lines
-          .map((l, i) => {
-            const lineTotal = round2(num(l.amount) + num(l.gst_amount));
-            return `<tr>
-        <td class="off-c">${i + 1}</td>
-        <td>${escapeHtml(l.item_name)}</td>
-        <td>${escapeHtml(l.hsn)}</td>
+        <td>
+          <div class="off-item-name">${escapeHtml(l.item_name)}</div>
+          <div class="off-item-desc">${escapeHtml(descBits.join(" · "))}</div>
+        </td>
         <td class="off-n">${escapeHtml(formatQty(l.quantity_gm, l.unit))}</td>
         <td class="off-n">${escapeHtml(money(l.rate_per_kg))}${escapeHtml(rateSuffix(l.unit))}</td>
         <td class="off-n">${escapeHtml(money(l.amount))}</td>
-        <td class="off-n">${escapeHtml(String(l.gst_rate))}%</td>
-        <td class="off-n">${escapeHtml(money(l.gst_amount))}</td>
-        <td class="off-n">${escapeHtml(money(lineTotal))}</td>
       </tr>`;
-          })
-          .join("");
+      })
+      .join("");
 
     const interState = saleInterState(order, ctx);
     const gstRows = officeGstSplitRows(breakdown, interState, money, escapeHtml);
@@ -828,12 +834,14 @@ ${invoiceBody(order, ctx)}
     const footer = String(co.invoice_footer || co.footer || "").trim();
     const terms = String(co.invoice_terms || co.terms || "").trim();
     const packLine = order.pack_name
-      ? `<div class="off-kv"><span>Pack</span><strong>${escapeHtml(order.pack_name)} × ${num(order.pack_count) || 1}</strong></div>`
+      ? `<tr><td>Pack</td><td>${escapeHtml(order.pack_name)} × ${num(order.pack_count) || 1}</td></tr>`
       : "";
     const tableNo = String(order.table_no || "").trim();
     const tableLine = tableNo
-      ? `<div class="off-kv"><span>Table</span><strong>${escapeHtml(/^\d+$/.test(tableNo) ? `Table ${tableNo}` : tableNo)}</strong></div>`
+      ? `<tr><td>Table</td><td>${escapeHtml(/^\d+$/.test(tableNo) ? `Table ${tableNo}` : tableNo)}</td></tr>`
       : "";
+    const ref = String(order.payment_reference || "").trim();
+    const payDate = String(order.payment_date || "").slice(0, 10);
 
     return `<article class="office-invoice">
   <header class="off-head">
@@ -846,16 +854,25 @@ ${invoiceBody(order, ctx)}
       <p class="off-title">TAX INVOICE</p>
       ${voidMark(order, "off-void")}
       <p class="off-copy">${escapeHtml(officeCopyLabel(opts?.copy))}</p>
-      <div class="off-kv"><span>Invoice No.</span><strong>${invNo}</strong></div>
-      <div class="off-kv"><span>Date</span><span>${escapeHtml(when)}</span></div>
-      <div class="off-kv"><span>Payment</span><span>${escapeHtml(payLabel(order.payment_method))} · ${escapeHtml(payStatusLabel(order.payment_status, order))}</span></div>
-      ${tableLine}
-      ${packLine}
+      <table class="off-meta">
+        <tbody>
+          <tr><td>Invoice#</td><td>${invNo}</td></tr>
+          <tr><td>Invoice Date</td><td>${escapeHtml(when)}</td></tr>
+          <tr><td>Terms</td><td>${escapeHtml(officeTermsLabel(order))} · ${escapeHtml(payLabel(order.payment_method))}</td></tr>
+          <tr><td>Due Date</td><td>${escapeHtml(dueDate)}</td></tr>
+          ${tableLine}
+          ${packLine}
+        </tbody>
+      </table>
+      <div class="off-balance">
+        <span>Balance Due</span>
+        <strong>${escapeHtml(money(due.current))}</strong>
+      </div>
     </div>
   </header>
   <section class="off-parties">
     <div>
-      <h2>Bill to</h2>
+      <h2>Bill To</h2>
       <strong>${escapeHtml(buyerName)}</strong>
       ${buyerBits}
     </div>
@@ -868,20 +885,14 @@ ${invoiceBody(order, ctx)}
     <thead>
       <tr>
         <th class="off-c">#</th>
-        ${pharmacy
-          ? `<th>Medicine</th><th>Batch No.</th><th>Expiry</th><th>Pack</th><th class="off-n">Qty</th><th class="off-n">MRP</th><th class="off-n">Rate</th><th class="off-n">GST</th><th class="off-n">Amount</th>`
-          : `<th>Item</th>
-        <th>${taxCode(ctx)}</th>
+        <th>Item &amp; Description</th>
         <th class="off-n">Qty</th>
         <th class="off-n">Rate</th>
-        <th class="off-n">Taxable</th>
-        <th class="off-n">GST %</th>
-        <th class="off-n">GST</th>
-        <th class="off-n">Amount</th>`}
+        <th class="off-n">Amount</th>
       </tr>
     </thead>
     <tbody>
-      ${itemRows || `<tr><td colspan="${pharmacy ? 10 : 9}" class="off-empty">No line items</td></tr>`}
+      ${itemRows || `<tr><td colspan="5" class="off-empty">No line items</td></tr>`}
     </tbody>
   </table>
   <div class="off-bottom">
@@ -902,30 +913,26 @@ ${invoiceBody(order, ctx)}
         </tbody>
       </table>
       <p class="off-words"><strong>Amount in words:</strong> ${escapeHtml(amountInWords(total))}</p>
-      ${footer ? `<p class="off-note">${noteHtml(footer, escapeHtml)}</p>` : ""}
-      ${terms ? `<p class="off-note"><strong>${escapeHtml(L(ctx, "invoice.terms", "Terms & conditions"))}:</strong><br>${noteHtml(terms, escapeHtml)}</p>` : ""}
+      ${footer ? `<div class="off-notes"><h3>Notes</h3><p class="off-note">${noteHtml(footer, escapeHtml)}</p></div>` : ""}
+      ${terms ? `<div class="off-tnc"><h3>${escapeHtml(L(ctx, "invoice.terms", "Terms & conditions"))}</h3><p class="off-note">${noteHtml(terms, escapeHtml)}</p></div>` : ""}
     </div>
     <table class="off-totals">
       <tbody>
-        <tr><td>Taxable value</td><td class="off-n">${escapeHtml(money(subtotal))}</td></tr>
-        ${discount > 0 ? `<tr><td>Discount</td><td class="off-n">-${escapeHtml(money(discount))}</td></tr>` : ""}
-        ${round2(order.loyalty_discount) > 0 ? `<tr><td>Royalty</td><td class="off-n">-${escapeHtml(money(order.loyalty_discount))}</td></tr>` : ""}
-        <tr><td>Total GST</td><td class="off-n">${escapeHtml(money(gst))}</td></tr>
-        <tr class="off-grand"><td>Grand total</td><td class="off-n">${escapeHtml(money(total))}</td></tr>
-        ${(() => {
-          const due = invoiceDueFigures(order);
-          const ref = String(order.payment_reference || "").trim();
-          const payDate = String(order.payment_date || "").slice(0, 10);
-          return `<tr><td>Previous due</td><td class="off-n">${escapeHtml(money(due.previous))}</td></tr>
-        <tr><td>Amount paid</td><td class="off-n">${escapeHtml(money(due.paid))}</td></tr>
-        <tr class="off-grand"><td>Current due</td><td class="off-n">${escapeHtml(money(due.current))}</td></tr>
+        <tr><td>Sub Total</td><td class="off-n">${escapeHtml(money(subtotal))}</td></tr>
+        ${discount > 0 ? `<tr><td>Discount</td><td class="off-n">(-) ${escapeHtml(money(discount))}</td></tr>` : ""}
+        ${round2(order.loyalty_discount) > 0 ? `<tr><td>Royalty</td><td class="off-n">(-) ${escapeHtml(money(order.loyalty_discount))}</td></tr>` : ""}
+        <tr><td>Tax</td><td class="off-n">${escapeHtml(money(gst))}</td></tr>
+        <tr class="off-grand"><td>Total</td><td class="off-n">${escapeHtml(money(total))}</td></tr>
+        <tr><td>Previous due</td><td class="off-n">${escapeHtml(money(due.previous))}</td></tr>
+        <tr><td>Payment Made</td><td class="off-n">(-) ${escapeHtml(money(due.paid))}</td></tr>
+        <tr class="off-due"><td>Balance Due</td><td class="off-n">${escapeHtml(money(due.current))}</td></tr>
         ${ref ? `<tr><td>Payment reference</td><td class="off-n">${escapeHtml(ref)}</td></tr>` : ""}
-        ${payDate ? `<tr><td>Payment date</td><td class="off-n">${escapeHtml(payDate)}</td></tr>` : ""}`;
-        })()}
+        ${payDate ? `<tr><td>Payment date</td><td class="off-n">${escapeHtml(payDate)}</td></tr>` : ""}
       </tbody>
     </table>
   </div>
   ${paymentQrHtml(co, ctx, "office")}
+  <p class="off-thanks">Thanks for your business.</p>
   <footer class="off-sign">
     <div>Customer signature</div>
     <div>For ${escapeHtml(co.name || "Shop")}<br><span>Authorised signatory</span></div>
@@ -939,53 +946,90 @@ ${invoiceBody(order, ctx)}
 body {
   margin: 0;
   padding: 0;
-  color: #111;
+  color: #212121;
   background: #fff;
   font-family: "Segoe UI", Calibri, Arial, sans-serif;
   font-size: 12px;
-  line-height: 1.4;
+  line-height: 1.45;
 }
-.office-invoice { width: 100%; color: #111; }
-.off-head { display: flex; justify-content: space-between; gap: 24px; border-bottom: 2px solid #111; padding-bottom: 12px; }
+.office-invoice { width: 100%; color: #212121; }
+.off-head { display: flex; justify-content: space-between; gap: 28px; align-items: flex-start; padding-bottom: 16px; }
 .off-logo { max-height: 56px; max-width: 180px; display: block; margin-bottom: 8px; }
-.off-shop { margin: 0 0 6px; font-size: 20px; letter-spacing: -0.02em; }
-.off-seller-meta { font-size: 11px; color: #333; }
-.off-doc { min-width: 220px; text-align: right; }
-.off-title { margin: 0; font-size: 18px; font-weight: 800; letter-spacing: 0.08em; }
+.off-shop { margin: 0 0 6px; font-size: 22px; font-weight: 700; color: #1a7a6d; letter-spacing: -0.02em; }
+.off-seller-meta { font-size: 11px; color: #555; }
+.off-doc { min-width: 260px; max-width: 320px; }
+.off-title { margin: 0; font-size: 22px; font-weight: 700; color: #1a7a6d; letter-spacing: 0.04em; text-align: right; }
 .off-void {
   margin: 8px 0 10px;
   padding: 6px 8px;
-  border: 2px solid #111;
+  border: 2px solid #c0392b;
+  color: #c0392b;
   font-size: 18px;
   font-weight: 800;
   letter-spacing: 0.28em;
   text-align: center;
 }
-.off-copy { margin: 2px 0 10px; font-size: 11px; color: #555; }
-.off-kv { display: flex; justify-content: flex-end; gap: 12px; font-size: 12px; }
-.off-kv span:first-child { color: #555; }
-.off-parties { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; padding: 12px 0; border-bottom: 1px solid #bbb; }
-.off-parties h2 { margin: 0 0 4px; font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: #555; }
+.off-copy { margin: 2px 0 10px; font-size: 11px; color: #777; text-align: right; }
+.off-meta { width: 100%; border-collapse: collapse; font-size: 12px; }
+.off-meta td { padding: 3px 0; }
+.off-meta td:first-child { color: #666; width: 42%; }
+.off-meta td:last-child { text-align: right; font-weight: 600; }
+.off-balance {
+  margin-top: 10px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  background: #edf7f5;
+  border-left: 4px solid #1a7a6d;
+  font-size: 13px;
+}
+.off-balance span { color: #1a7a6d; font-weight: 700; }
+.off-balance strong { font-size: 18px; color: #1a7a6d; }
+.off-parties { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; padding: 8px 0 16px; }
+.off-parties h2 { margin: 0 0 6px; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: #888; font-weight: 700; }
+.off-parties strong { font-size: 13px; }
 .off-items, .off-gst, .off-totals { width: 100%; border-collapse: collapse; }
-.off-items th, .off-items td, .off-gst th, .off-gst td, .off-totals td {
-  border: 1px solid #222;
-  padding: 6px 7px;
+.off-items thead th {
+  background: #1a7a6d;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: none;
+  letter-spacing: 0.02em;
+  padding: 8px 10px;
+  border: 0;
+}
+.off-items tbody td {
+  border: 0;
+  border-bottom: 1px solid #e6e6e6;
+  padding: 10px;
   vertical-align: top;
 }
-.off-items thead th, .off-gst thead th { background: #f3f3f3; font-size: 10px; text-transform: uppercase; letter-spacing: 0.03em; }
-.off-c { text-align: center; width: 28px; }
+.off-item-name { font-weight: 600; }
+.off-item-desc { margin-top: 3px; font-size: 11px; color: #666; }
+.off-gst th, .off-gst td { border: 0; border-bottom: 1px solid #eee; padding: 5px 6px; }
+.off-gst thead th { background: #f4f8f7; color: #555; font-size: 10px; text-transform: uppercase; }
+.off-totals { margin-left: auto; }
+.off-totals td { border: 0; padding: 6px 0 6px 12px; }
+.off-totals td:first-child { color: #555; }
+.off-c { text-align: center; width: 36px; }
 .off-n { text-align: right; white-space: nowrap; }
 .off-empty { text-align: center; color: #666; }
-.off-bottom { display: grid; grid-template-columns: 1.4fr 0.8fr; gap: 16px; margin-top: 12px; align-items: start; }
-.off-words { margin: 12px 0 6px; font-size: 12px; }
-.off-note { margin: 4px 0; font-size: 11px; color: #333; }
-.off-grand td { font-weight: 800; font-size: 14px; background: #f3f3f3; }
+.off-bottom { display: grid; grid-template-columns: 1.3fr 0.7fr; gap: 28px; margin-top: 8px; align-items: start; }
+.off-words { margin: 14px 0 8px; font-size: 12px; }
+.off-notes h3, .off-tnc h3 { margin: 12px 0 4px; font-size: 12px; color: #1a7a6d; }
+.off-note { margin: 0; font-size: 11px; color: #444; }
+.off-grand td { font-weight: 800; font-size: 14px; border-top: 1px solid #ddd; }
+.off-due td { font-weight: 800; font-size: 14px; color: #1a7a6d; border-top: 2px solid #1a7a6d; }
+.off-thanks { margin: 18px 0 0; font-size: 13px; color: #1a7a6d; }
 .off-pay-qr { text-align: center; margin: 16px 0 0; }
 .off-pay-qr-title { margin: 0 0 6px; font-size: 11px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: #333; }
 .off-pay-qr-img { display: block; width: 110px; height: 110px; object-fit: contain; margin: 0 auto; background: #fff; }
 .off-pay-qr-upi { margin: 6px 0 0; font-size: 12px; font-weight: 700; }
-.off-sign { display: flex; justify-content: space-between; gap: 24px; margin-top: 28px; }
-.off-sign > div { min-width: 180px; border-top: 1px solid #111; padding-top: 6px; font-size: 11px; }
+.off-sign { display: flex; justify-content: space-between; gap: 24px; margin-top: 36px; }
+.off-sign > div { min-width: 180px; border-top: 1px solid #ccc; padding-top: 6px; font-size: 11px; color: #555; }
 @media print { body { print-color-adjust: exact; -webkit-print-color-adjust: exact; } }
 `;
 
