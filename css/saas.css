@@ -681,6 +681,226 @@ body.auth-body::-webkit-scrollbar-thumb {
   background: rgba(37, 211, 102, 0.14);
   color: #15803d;
 }
+/* auth-zoho-login: books-style split 2026 */
+.auth-body.auth-zoho {
+  padding: 0;
+  background: #fff;
+  align-items: stretch;
+  justify-content: stretch;
+}
+.auth-shell-zoho {
+  width: 100%;
+  max-width: none;
+  height: 100dvh;
+  max-height: 100dvh;
+  margin: 0;
+  border-radius: 0;
+  box-shadow: none;
+  grid-template-columns: minmax(0, 1.2fr) minmax(400px, 520px);
+}
+.auth-shell-zoho.auth-shell:has(.auth-card.signup) {
+  grid-template-columns: minmax(0, 0.95fr) minmax(440px, 720px);
+  width: 100%;
+}
+.auth-shell-zoho .auth-scene {
+  padding: 40px 44px 32px;
+  background:
+    radial-gradient(900px 420px at 0% 0%, rgba(56, 189, 248, 0.28), transparent 55%),
+    linear-gradient(165deg, #0b1f4d 0%, #123a8a 52%, #1a56c8 130%);
+}
+.auth-shell-zoho .auth-scene-kicker {
+  color: #93c5fd;
+  letter-spacing: 0.16em;
+}
+.auth-shell-zoho .auth-scene-lead {
+  color: #dbeafe;
+}
+.auth-shell-zoho .auth-points li {
+  background: rgba(15, 23, 42, 0.22);
+  border-color: rgba(147, 197, 253, 0.35);
+}
+.auth-shell-zoho .auth-points li strong {
+  color: #bfdbfe;
+}
+.auth-shell-zoho .auth-scene-trial {
+  background: rgba(15, 23, 42, 0.28);
+  border-color: rgba(147, 197, 253, 0.4);
+}
+.auth-shell-zoho .auth-scene-trial strong {
+  color: #bfdbfe;
+}
+.auth-shell-zoho .auth-main {
+  background: #fff;
+  padding: 36px 48px 20px;
+  scrollbar-color: #cbd5e1 #fff;
+}
+.auth-shell-zoho .auth-card {
+  display: flex;
+  flex-direction: column;
+  max-width: 400px;
+  margin: auto 0;
+}
+.auth-shell-zoho .auth-card.signup {
+  max-width: none;
+}
+.auth-zoho-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 8px;
+}
+.auth-shell-zoho .auth-brand {
+  justify-items: start;
+  text-align: left;
+  margin: 0;
+}
+.auth-shell-zoho .auth-logo {
+  width: min(148px, 70%);
+}
+.auth-shell-zoho .auth-tagline {
+  letter-spacing: 0.04em;
+  text-transform: none;
+  font-weight: 600;
+  color: #6b7280;
+  font-size: 12px;
+}
+.auth-shell-zoho .auth-tabs {
+  background: transparent;
+  margin: 0;
+  padding: 0;
+  gap: 18px;
+  flex: 0 0 auto;
+}
+.auth-shell-zoho .auth-tab {
+  padding: 8px 0;
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  border-radius: 0;
+  color: #6b7280;
+}
+.auth-shell-zoho .auth-tab.is-active {
+  background: transparent;
+  box-shadow: inset 0 -2px 0 #0b5fff;
+  color: #0b5fff;
+}
+.auth-shell-zoho .auth-heading {
+  text-align: left;
+  margin: 18px 0 4px;
+  font-size: 28px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: #111827;
+}
+.auth-shell-zoho .auth-card > #auth-lead {
+  text-align: left;
+  color: #6b7280;
+  font-size: 14px;
+  margin: 0 0 8px;
+}
+.auth-shell-zoho .auth-card:not(.signup) .auth-trial-invite {
+  order: 8;
+  text-align: left;
+  margin: 22px 0 0;
+  color: #374151;
+}
+.auth-shell-zoho #login-form,
+.auth-shell-zoho #signup-form { order: 4; }
+.auth-shell-zoho .login-support { order: 5; }
+.auth-shell-zoho .auth-trial-banner { order: 3; }
+.auth-shell-zoho .auth-card form {
+  margin-top: 14px;
+  gap: 14px;
+}
+.auth-forgot-row {
+  margin: -6px 0 0;
+  text-align: right;
+}
+.auth-forgot {
+  color: #0b5fff;
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+}
+.auth-forgot:hover { text-decoration: underline; }
+.auth-shell-zoho .auth-card label {
+  color: #374151;
+  font-weight: 600;
+  font-size: 13px;
+}
+.auth-shell-zoho .auth-card input:not([type="checkbox"]),
+.auth-shell-zoho .auth-card select,
+.auth-shell-zoho .auth-card textarea {
+  border-radius: 4px;
+  border-color: #c5c5c5;
+  min-height: 42px;
+  padding: 10px 12px;
+}
+.auth-shell-zoho .auth-card input:not([type="checkbox"]):focus,
+.auth-shell-zoho .auth-card select:focus,
+.auth-shell-zoho .auth-card textarea:focus {
+  border-color: #0b5fff;
+  box-shadow: 0 0 0 1px #0b5fff;
+}
+.auth-shell-zoho .auth-pass-toggle {
+  color: #0b5fff;
+}
+.auth-shell-zoho .auth-pass-toggle:hover,
+.auth-shell-zoho .auth-pass-toggle:focus-visible {
+  background: rgba(11, 95, 255, 0.08);
+}
+.auth-shell-zoho .auth-card .btn.primary {
+  border-radius: 4px;
+  background: #0b5fff;
+  border-color: #0b5fff;
+  color: #fff;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  min-height: 42px;
+}
+.auth-shell-zoho .auth-card .btn.primary:hover {
+  background: #094edb;
+  border-color: #094edb;
+}
+.auth-shell-zoho .auth-card label.remember input[type="checkbox"]:checked + .remember-ui {
+  border-color: #0b5fff;
+  background-color: #0b5fff;
+}
+.auth-shell-zoho .auth-card label.remember input[type="checkbox"]:focus-visible + .remember-ui {
+  outline-color: #0b5fff;
+}
+.auth-shell-zoho .login-support-link {
+  background: rgba(11, 95, 255, 0.08);
+  color: #0b5fff;
+  border-radius: 4px;
+}
+.auth-shell-zoho .login-legal a:hover {
+  color: #0b5fff;
+}
+@media (max-width: 860px) {
+  .auth-body.auth-zoho { padding: 0; }
+  .auth-shell-zoho,
+  .auth-shell-zoho.auth-shell:has(.auth-card.signup) {
+    width: 100%;
+    display: flex;
+    flex-direction: column-reverse;
+    height: auto;
+    max-height: none;
+  }
+  .auth-shell-zoho .auth-scene {
+    padding: 20px 18px 16px;
+  }
+  .auth-shell-zoho .auth-main {
+    padding: 24px 20px 16px;
+  }
+  .auth-shell-zoho .auth-card {
+    max-width: none;
+  }
+  .auth-zoho-top {
+    flex-wrap: wrap;
+  }
+}
 .master-shell {
   display: grid;
   grid-template-columns: 228px minmax(0, 1fr);
