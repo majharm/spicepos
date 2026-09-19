@@ -3962,7 +3962,8 @@ button.items-stat.is-active {
   height: auto;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
   min-height: 280px;
   align-self: start;
 }
@@ -3979,13 +3980,18 @@ button.items-stat.is-active {
 }
 .order-pane > .invoice-detail-card,
 .purchase-pane > .order-detail-head {
+  flex: 0 1 auto;
+  min-height: 0;
+  overflow: visible;
+}
+.order-pane > .invoice-look-tabs {
   flex: 0 0 auto;
 }
 .order-pane > .thermal-preview,
 .order-pane > .office-preview,
 .purchase-pane > .thermal-preview {
   flex: 1 1 auto;
-  min-height: 0;
+  min-height: min(52vh, 420px);
   max-height: none;
   width: 100%;
   margin: 0 0 10px;
@@ -4067,14 +4073,22 @@ button.items-stat.is-active {
   font-weight: 700;
 }
 .invoice-settle {
-  margin-top: 12px;
-  padding-top: 12px;
+  margin-top: 10px;
+  padding-top: 8px;
   border-top: 1px solid var(--line);
+}
+.invoice-settle > summary {
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--ink);
+  list-style-position: outside;
 }
 .invoice-settle-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px 14px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px 12px;
+  margin-top: 8px;
 }
 .invoice-settle-grid div {
   display: grid;

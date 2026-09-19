@@ -192,6 +192,7 @@ test("invoice settlement posts sale credit, payment receipt, and customer due", 
   const accounts = readFileSync(path.join(root, "server/accounts.js"), "utf8");
   const core = readFileSync(path.join(root, "pos-php-core.php"), "utf8");
   const app = readFileSync(path.join(root, "js/app.js"), "utf8");
+  const css = readFileSync(path.join(root, "css/pos.css"), "utf8");
   const index = readFileSync(path.join(root, "index.html"), "utf8");
   const invoice = readFileSync(path.join(root, "js/invoice.js"), "utf8");
   assert.match(accounts, /PR-\$\{String\(Number\(n\) \|\| 0\)\.padStart\(5, "0"\)\}/);
@@ -201,6 +202,8 @@ test("invoice settlement posts sale credit, payment receipt, and customer due", 
   assert.match(app, /\$\("pay-amount"\)/);
   assert.match(app, /function invoiceSettlementHtml/);
   assert.match(app, /function receiptEntryFromInvoice/);
+  assert.match(app, /details class="invoice-settle"/);
+  assert.match(css, /min-height: min\(52vh, 420px\)/);
   assert.match(index, /id="pay-amount"/);
   assert.match(index, /id="pay-ref"/);
   assert.match(index, /id="pay-date"/);

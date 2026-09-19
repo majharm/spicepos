@@ -533,7 +533,9 @@ function invoiceSettlementHtml(o) {
   const mobile = o.customer_mobile || "";
   const ref = String(o.payment_reference || "").trim();
   const payDate = String(o.payment_date || "").slice(0, 10);
-  return `<div class="invoice-settle">
+  const receiptNo = o.receipt?.entryNo || o.receipt?.entry_no || o.receipt_entry_no || "";
+  return `<details class="invoice-settle" open>
+    <summary>Current due ${money(current)} · Paid ${money(paid)}</summary>
     <p class="hint">Previous due + invoice − payment = outstanding</p>
     <div class="invoice-settle-grid">
       <div><span>Invoice No.</span><strong>${escapeHtml(o.order_number || "—")}</strong></div>
@@ -551,8 +553,8 @@ function invoiceSettlementHtml(o) {
       <div><span>Payment Date</span><strong>${escapeHtml(payDate || "—")}</strong></div>
       <div><span>Current Due</span><strong>${money(current)}</strong></div>
     </div>
-    ${Number(paid) > 0 && (o.receipt || o.receipt_entry_no) ? `<p class="hint">Payment receipt ${escapeHtml(o.receipt?.entryNo || o.receipt?.entry_no || o.receipt_entry_no)} is linked to this invoice.</p>` : ""}
-  </div>`;
+    ${Number(paid) > 0 && receiptNo ? `<p class="hint">Payment receipt ${escapeHtml(receiptNo)} is linked to this invoice.</p>` : ""}
+  </details>`;
 }
 
 function renderEditOrderBanner() {
@@ -5590,10 +5592,14 @@ function invoiceLookTabs(look) {
 }
 
 function invoicePreviewHtml(o, look) {
-  if (look === "office" || look === "duplicate") {
-    return `<div class="office-preview">${InvoicePrint.officeInvoiceBody(o, invoiceCtx(), { copy: look === "duplicate" ? "duplicate" : "original" })}</div>`;
+  try {
+    if (look === "office" || look === "duplicate") {
+      return `<div class="office-preview">${InvoicePrint.officeInvoiceBody(o, invoiceCtx(), { copy: look === "duplicate" ? "duplicate" : "original" })}</div>`;
+    }
+    return `<div class="thermal-preview">${InvoicePrint.invoiceBody(o, invoiceCtx())}</div>`;
+  } catch (err) {
+    return `<p class="hint error">Invoice preview failed: ${escapeHtml(err.message || err)}</p>`;
   }
-  return `<div class="thermal-preview">${InvoicePrint.invoiceBody(o, invoiceCtx())}</div>`;
 }
 
 function printOrder(o, look) {
@@ -5922,12 +5928,22 @@ function renderOrdersList() {
       .join("")}</tbody>
   </table>`;
   const current = filtered.find((o) => o.id === selectedOrderId) || filtered[0];
-  showOrder(current);
+  try {
+    showOrder(current);
+  } catch (err) {
+    $("order-pane").innerHTML = `<p class="hint error">${escapeHtml(err.message || "Could not open invoice")}</p>`;
+  }
 }
 
 async function loadOrders() {
-  orderCache = sortOrders(await api("/api/orders"));
-  renderOrdersList();
+  try {
+    orderCache = sortOrders(await api("/api/orders"));
+    renderOrdersList();
+  } catch (err) {
+    orderCache = [];
+    $("orders").innerHTML = `<p class="hint error">${escapeHtml(err.message || "Could not load invoices")}</p>`;
+    $("order-pane").innerHTML = '<p class="hint">Select an invoice.</p>';
+  }
 }
 
 let qrOrderCache = [];
