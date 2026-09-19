@@ -942,7 +942,6 @@ ${invoiceBody(order, ctx)}
     const payTable = payRows.length
       ? `<section class="off-pays-wrap">
       <h3>Payments till date</h3>
-      <p class="off-pays-note">Invoice total ${escapeHtml(money(total))} · Payment Made ${escapeHtml(money(due.paid))}</p>
       <table class="off-pays">
         <thead>
           <tr>
@@ -1054,113 +1053,122 @@ ${invoiceBody(order, ctx)}
     </table>
   </div>
   ${payTable}
-  ${paymentQrHtml(co, ctx, "office")}
-  <p class="off-thanks">Thanks for your business.</p>
-  <footer class="off-sign">
-    <div>Customer signature</div>
-    <div>For ${escapeHtml(co.name || "Shop")}<br><span>Authorised signatory</span></div>
-  </footer>
+  <div class="off-end">
+    ${paymentQrHtml(co, ctx, "office")}
+    <div class="off-end-copy">
+      <p class="off-thanks">Thanks for your business.</p>
+      <footer class="off-sign">
+        <div>Customer signature</div>
+        <div>For ${escapeHtml(co.name || "Shop")}<br><span>Authorised signatory</span></div>
+      </footer>
+    </div>
+  </div>
 </article>`;
   }
 
   const OFFICE_CSS = `
-@page { size: A4; margin: 12mm; }
+@page { size: A4 portrait; margin: 7mm; }
 * { box-sizing: border-box; }
-body {
+html, body {
   margin: 0;
   padding: 0;
   color: #212121;
   background: #fff;
   font-family: "Segoe UI", Calibri, Arial, sans-serif;
-  font-size: 12px;
-  line-height: 1.45;
+  font-size: 10.5px;
+  line-height: 1.28;
 }
-.office-invoice { width: 100%; color: #212121; }
-.off-head { display: flex; justify-content: space-between; gap: 28px; align-items: flex-start; padding-bottom: 16px; }
-.off-logo { max-height: 56px; max-width: 180px; display: block; margin-bottom: 8px; }
-.off-shop { margin: 0 0 6px; font-size: 22px; font-weight: 700; color: #1a7a6d; letter-spacing: -0.02em; }
-.off-seller-meta { font-size: 11px; color: #555; }
-.off-doc { min-width: 260px; max-width: 320px; }
-.off-title { margin: 0; font-size: 22px; font-weight: 700; color: #1a7a6d; letter-spacing: 0.04em; text-align: right; }
+.office-invoice { width: 100%; color: #212121; page-break-inside: avoid; break-inside: avoid-page; }
+.off-head { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; padding-bottom: 8px; }
+.off-logo { max-height: 40px; max-width: 140px; display: block; margin-bottom: 4px; }
+.off-shop { margin: 0 0 3px; font-size: 18px; font-weight: 700; color: #1a7a6d; letter-spacing: -0.02em; }
+.off-seller-meta { font-size: 10px; color: #555; }
+.off-doc { min-width: 230px; max-width: 280px; }
+.off-title { margin: 0; font-size: 18px; font-weight: 700; color: #1a7a6d; letter-spacing: 0.04em; text-align: right; }
 .off-void {
-  margin: 8px 0 10px;
-  padding: 6px 8px;
+  margin: 4px 0 6px;
+  padding: 4px 6px;
   border: 2px solid #c0392b;
   color: #c0392b;
-  font-size: 18px;
+  font-size: 14px;
   font-weight: 800;
   letter-spacing: 0.28em;
   text-align: center;
 }
-.off-copy { margin: 2px 0 10px; font-size: 11px; color: #777; text-align: right; }
-.off-meta { width: 100%; border-collapse: collapse; font-size: 12px; }
-.off-meta td { padding: 3px 0; }
+.off-copy { margin: 1px 0 6px; font-size: 10px; color: #777; text-align: right; }
+.off-meta { width: 100%; border-collapse: collapse; font-size: 10.5px; }
+.off-meta td { padding: 1px 0; }
 .off-meta td:first-child { color: #666; width: 42%; }
 .off-meta td:last-child { text-align: right; font-weight: 600; }
 .off-balance {
-  margin-top: 10px;
+  margin-top: 6px;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 12px;
-  padding: 10px 12px;
+  gap: 8px;
+  padding: 6px 8px;
   background: #edf7f5;
   border-left: 4px solid #1a7a6d;
-  font-size: 13px;
+  font-size: 12px;
 }
 .off-balance span { color: #1a7a6d; font-weight: 700; }
-.off-balance strong { font-size: 18px; color: #1a7a6d; }
-.off-parties { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; padding: 8px 0 16px; }
-.off-parties h2 { margin: 0 0 6px; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: #888; font-weight: 700; }
-.off-parties strong { font-size: 13px; }
+.off-balance strong { font-size: 15px; color: #1a7a6d; }
+.off-parties { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 4px 0 8px; }
+.off-parties h2 { margin: 0 0 3px; font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; color: #888; font-weight: 700; }
+.off-parties strong { font-size: 12px; }
 .off-items, .off-gst, .off-totals { width: 100%; border-collapse: collapse; }
 .off-items thead th {
   background: #1a7a6d;
   color: #fff;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
   text-transform: none;
   letter-spacing: 0.02em;
-  padding: 8px 10px;
+  padding: 5px 7px;
   border: 0;
 }
 .off-items tbody td {
   border: 0;
   border-bottom: 1px solid #e6e6e6;
-  padding: 10px;
+  padding: 5px 7px;
   vertical-align: top;
 }
 .off-item-name { font-weight: 600; }
-.off-item-desc { margin-top: 3px; font-size: 11px; color: #666; }
-.off-gst th, .off-gst td { border: 0; border-bottom: 1px solid #eee; padding: 5px 6px; }
-.off-gst thead th { background: #f4f8f7; color: #555; font-size: 10px; text-transform: uppercase; }
+.off-item-desc { margin-top: 1px; font-size: 9.5px; color: #666; }
+.off-gst th, .off-gst td { border: 0; border-bottom: 1px solid #eee; padding: 3px 5px; }
+.off-gst thead th { background: #f4f8f7; color: #555; font-size: 9px; text-transform: uppercase; }
 .off-totals { margin-left: auto; }
-.off-totals td { border: 0; padding: 6px 0 6px 12px; }
+.off-totals td { border: 0; padding: 3px 0 3px 10px; }
 .off-totals td:first-child { color: #555; }
-.off-c { text-align: center; width: 36px; }
+.off-c { text-align: center; width: 28px; }
 .off-n { text-align: right; white-space: nowrap; }
 .off-empty { text-align: center; color: #666; }
-.off-bottom { display: grid; grid-template-columns: 1.3fr 0.7fr; gap: 28px; margin-top: 8px; align-items: start; }
-.off-words { margin: 14px 0 8px; font-size: 12px; }
-.off-notes h3, .off-tnc h3 { margin: 12px 0 4px; font-size: 12px; color: #1a7a6d; }
-.off-note { margin: 0; font-size: 11px; color: #444; }
-.off-grand td { font-weight: 800; font-size: 14px; border-top: 1px solid #ddd; }
+.off-bottom { display: grid; grid-template-columns: 1.3fr 0.7fr; gap: 16px; margin-top: 6px; align-items: start; }
+.off-words { margin: 8px 0 4px; font-size: 10.5px; }
+.off-notes h3, .off-tnc h3 { margin: 6px 0 2px; font-size: 11px; color: #1a7a6d; }
+.off-note { margin: 0; font-size: 10px; color: #444; }
+.off-grand td { font-weight: 800; font-size: 12px; border-top: 1px solid #ddd; }
 .off-paid td { font-weight: 700; }
-.off-due td { font-weight: 800; font-size: 14px; color: #1a7a6d; border-top: 2px solid #1a7a6d; }
-.off-pays-wrap { margin-top: 16px; }
-.off-pays-wrap h3 { margin: 0 0 4px; font-size: 12px; color: #1a7a6d; }
-.off-pays-note { margin: 0 0 8px; font-size: 11px; color: #555; }
-.off-pays { width: 100%; border-collapse: collapse; font-size: 11px; }
-.off-pays th { background: #1a7a6d; color: #fff; text-align: left; padding: 6px 8px; font-weight: 700; }
-.off-pays td { border-bottom: 1px solid #e6e6e6; padding: 6px 8px; vertical-align: top; }
-.off-thanks { margin: 18px 0 0; font-size: 13px; color: #1a7a6d; }
-.off-pay-qr { text-align: center; margin: 16px 0 0; }
-.off-pay-qr-title { margin: 0 0 6px; font-size: 11px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: #333; }
-.off-pay-qr-img { display: block; width: 110px; height: 110px; object-fit: contain; margin: 0 auto; background: #fff; }
-.off-pay-qr-upi { margin: 6px 0 0; font-size: 12px; font-weight: 700; }
-.off-sign { display: flex; justify-content: space-between; gap: 24px; margin-top: 36px; }
-.off-sign > div { min-width: 180px; border-top: 1px solid #ccc; padding-top: 6px; font-size: 11px; color: #555; }
-@media print { body { print-color-adjust: exact; -webkit-print-color-adjust: exact; } }
+.off-due td { font-weight: 800; font-size: 12px; color: #1a7a6d; border-top: 2px solid #1a7a6d; }
+.off-pays-wrap { margin-top: 8px; }
+.off-pays-wrap h3 { margin: 0 0 4px; font-size: 11px; color: #1a7a6d; }
+.off-pays { width: 100%; border-collapse: collapse; font-size: 9.5px; }
+.off-pays th { background: #1a7a6d; color: #fff; text-align: left; padding: 3px 5px; font-weight: 700; }
+.off-pays td { border-bottom: 1px solid #e6e6e6; padding: 3px 5px; vertical-align: top; }
+.off-end { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; margin-top: 8px; }
+.off-end-copy { flex: 1; }
+.off-thanks { margin: 0 0 8px; font-size: 12px; color: #1a7a6d; }
+.off-pay-qr { text-align: center; margin: 0; flex: 0 0 auto; }
+.off-pay-qr-title { margin: 0 0 3px; font-size: 9px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: #333; }
+.off-pay-qr-img { display: block; width: 72px; height: 72px; object-fit: contain; margin: 0 auto; background: #fff; }
+.off-pay-qr-upi { margin: 3px 0 0; font-size: 10px; font-weight: 700; }
+.off-sign { display: flex; justify-content: space-between; gap: 16px; margin-top: 0; }
+.off-sign > div { min-width: 140px; border-top: 1px solid #ccc; padding-top: 4px; font-size: 10px; color: #555; }
+@media print {
+  html, body { width: 210mm; height: auto; }
+  body { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+  .office-invoice { page-break-after: avoid; page-break-inside: avoid; break-inside: avoid-page; }
+}
 `;
 
   function officeInvoiceDocument(order, ctx, opts) {

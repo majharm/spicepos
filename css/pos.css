@@ -4501,7 +4501,7 @@ button.items-stat.is-active {
 .office-preview {
   width: 100%;
   margin: 0 0 10px;
-  padding: 16px 18px;
+  padding: 12px 14px;
   background: #fff;
   border: 1px solid var(--line-strong);
   border-radius: 10px;
@@ -4510,57 +4510,59 @@ button.items-stat.is-active {
   box-shadow: var(--elev-inset);
   color: #212121;
   font-family: "Segoe UI", Calibri, Arial, sans-serif;
-  font-size: 12px;
-  line-height: 1.45;
+  font-size: 11px;
+  line-height: 1.3;
 }
-.office-preview .off-head { display: flex; justify-content: space-between; gap: 20px; align-items: flex-start; padding-bottom: 12px; }
-.office-preview .off-logo { max-height: 48px; max-width: 140px; display: block; margin-bottom: 6px; }
-.office-preview .off-shop { margin: 0 0 4px; font-size: 18px; font-weight: 700; color: #1a7a6d; }
-.office-preview .off-seller-meta { font-size: 11px; color: #555; }
-.office-preview .off-doc { min-width: 220px; max-width: 280px; }
-.office-preview .off-title { margin: 0; font-size: 18px; font-weight: 700; color: #1a7a6d; text-align: right; }
-.office-preview .off-copy { margin: 2px 0 8px; font-size: 11px; color: #777; text-align: right; }
-.office-preview .off-meta { width: 100%; border-collapse: collapse; font-size: 12px; }
-.office-preview .off-meta td { padding: 2px 0; }
+.office-preview .off-head { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; padding-bottom: 8px; }
+.office-preview .off-logo { max-height: 40px; max-width: 140px; display: block; margin-bottom: 4px; }
+.office-preview .off-shop { margin: 0 0 3px; font-size: 16px; font-weight: 700; color: #1a7a6d; }
+.office-preview .off-seller-meta { font-size: 10px; color: #555; }
+.office-preview .off-doc { min-width: 200px; max-width: 260px; }
+.office-preview .off-title { margin: 0; font-size: 16px; font-weight: 700; color: #1a7a6d; text-align: right; }
+.office-preview .off-copy { margin: 1px 0 6px; font-size: 10px; color: #777; text-align: right; }
+.office-preview .off-meta { width: 100%; border-collapse: collapse; font-size: 11px; }
+.office-preview .off-meta td { padding: 1px 0; }
 .office-preview .off-meta td:first-child { color: #666; }
 .office-preview .off-meta td:last-child { text-align: right; font-weight: 600; }
 .office-preview .off-balance {
-  margin-top: 8px;
+  margin-top: 6px;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 8px 10px;
+  padding: 6px 8px;
   background: #edf7f5;
   border-left: 4px solid #1a7a6d;
 }
 .office-preview .off-balance span { color: #1a7a6d; font-weight: 700; }
-.office-preview .off-balance strong { font-size: 16px; color: #1a7a6d; }
-.office-preview .off-parties { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 8px 0 12px; }
-.office-preview .off-parties h2 { margin: 0 0 4px; font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; color: #888; }
+.office-preview .off-balance strong { font-size: 15px; color: #1a7a6d; }
+.office-preview .off-parties { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 4px 0 8px; }
+.office-preview .off-parties h2 { margin: 0 0 3px; font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; color: #888; }
 .office-preview .off-items, .office-preview .off-gst, .office-preview .off-totals { width: 100%; border-collapse: collapse; }
-.office-preview .off-items thead th { background: #1a7a6d; color: #fff; font-size: 11px; padding: 7px 8px; border: 0; }
-.office-preview .off-items tbody td { border: 0; border-bottom: 1px solid #e6e6e6; padding: 8px; }
+.office-preview .off-items thead th { background: #1a7a6d; color: #fff; font-size: 10px; padding: 5px 7px; border: 0; }
+.office-preview .off-items tbody td { border: 0; border-bottom: 1px solid #e6e6e6; padding: 5px 7px; }
 .office-preview .off-item-name { font-weight: 600; }
-.office-preview .off-item-desc { margin-top: 2px; font-size: 11px; color: #666; }
-.office-preview .off-gst th, .office-preview .off-gst td { border: 0; border-bottom: 1px solid #eee; padding: 4px 6px; }
-.office-preview .off-gst thead th { background: #f4f8f7; color: #555; font-size: 10px; }
-.office-preview .off-totals td { border: 0; padding: 5px 0 5px 10px; }
+.office-preview .off-item-desc { margin-top: 1px; font-size: 10px; color: #666; }
+.office-preview .off-gst th, .office-preview .off-gst td { border: 0; border-bottom: 1px solid #eee; padding: 3px 5px; }
+.office-preview .off-gst thead th { background: #f4f8f7; color: #555; font-size: 9px; }
+.office-preview .off-totals td { border: 0; padding: 3px 0 3px 8px; }
 .office-preview .off-c { text-align: center; }
 .office-preview .off-n { text-align: right; white-space: nowrap; }
-.office-preview .off-bottom { display: grid; grid-template-columns: 1.3fr 0.7fr; gap: 16px; margin-top: 8px; }
+.office-preview .off-bottom { display: grid; grid-template-columns: 1.3fr 0.7fr; gap: 12px; margin-top: 6px; }
 .office-preview .off-grand td { font-weight: 800; border-top: 1px solid #ddd; }
 .office-preview .off-paid td { font-weight: 700; }
 .office-preview .off-due td { font-weight: 800; color: #1a7a6d; border-top: 2px solid #1a7a6d; }
-.office-preview .off-pays-wrap { margin-top: 12px; }
-.office-preview .off-pays-wrap h3 { margin: 0 0 4px; font-size: 12px; color: #1a7a6d; }
-.office-preview .off-pays-note { margin: 0 0 6px; font-size: 11px; color: #555; }
-.office-preview .off-pays { width: 100%; border-collapse: collapse; font-size: 11px; }
-.office-preview .off-pays th { background: #1a7a6d; color: #fff; text-align: left; padding: 5px 6px; }
-.office-preview .off-pays td { border-bottom: 1px solid #e6e6e6; padding: 5px 6px; }
-.office-preview .off-notes h3, .office-preview .off-tnc h3 { margin: 10px 0 4px; font-size: 12px; color: #1a7a6d; }
-.office-preview .off-thanks { margin: 14px 0 0; font-size: 13px; color: #1a7a6d; }
-.office-preview .off-sign { display: flex; justify-content: space-between; margin-top: 24px; }
-.office-preview .off-sign > div { min-width: 140px; border-top: 1px solid #ccc; padding-top: 6px; font-size: 11px; }
+.office-preview .off-pays-wrap { margin-top: 8px; }
+.office-preview .off-pays-wrap h3 { margin: 0 0 4px; font-size: 11px; color: #1a7a6d; }
+.office-preview .off-pays { width: 100%; border-collapse: collapse; font-size: 10px; }
+.office-preview .off-pays th { background: #1a7a6d; color: #fff; text-align: left; padding: 3px 5px; }
+.office-preview .off-pays td { border-bottom: 1px solid #e6e6e6; padding: 3px 5px; }
+.office-preview .off-notes h3, .office-preview .off-tnc h3 { margin: 6px 0 2px; font-size: 11px; color: #1a7a6d; }
+.office-preview .off-end { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; margin-top: 8px; }
+.office-preview .off-thanks { margin: 0 0 6px; font-size: 12px; color: #1a7a6d; }
+.office-preview .off-pay-qr { margin: 0; }
+.office-preview .off-pay-qr-img { width: 72px; height: 72px; }
+.office-preview .off-sign { display: flex; justify-content: space-between; margin-top: 0; }
+.office-preview .off-sign > div { min-width: 140px; border-top: 1px solid #ccc; padding-top: 4px; font-size: 10px; }
 @media (max-width: 900px) {
   .office-preview .off-head, .office-preview .off-bottom, .office-preview .off-parties { display: block; }
   .office-preview .off-doc { max-width: none; margin-top: 10px; }

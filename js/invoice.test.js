@@ -254,7 +254,8 @@ test("official invoice is an A4 list view not a POS slip", () => {
       escapeHtml: (v) => String(v),
     },
   );
-  assert.match(doc, /size: A4/);
+  assert.match(doc, /size: A4 portrait/);
+  assert.match(doc, /page-break-inside: avoid/);
   assert.doesNotMatch(doc, /size: 80mm/);
 });
 
