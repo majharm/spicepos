@@ -4334,7 +4334,10 @@ async function fillDueInvoiceSelect(customerId, due) {
   }
 }
 
-async function collectCustomerDue(customer, amount, method, notes) {
+async function collectCustomerDue(customer, amount, method, notes, extras = {}) {
+  const paymentDate = extras.payment_date != null ? extras.payment_date : ($("due-date")?.value || undefined);
+  const paymentReference = extras.payment_reference != null ? extras.payment_reference : ($("due-ref")?.value || undefined);
+  const orderId = extras.order_id != null ? extras.order_id : ($("due-invoice")?.value || undefined);
   const data = await api("/api/accounts/receipts", {
     method: "POST",
     body: JSON.stringify({
@@ -4342,9 +4345,9 @@ async function collectCustomerDue(customer, amount, method, notes) {
       amount: Number(amount),
       payment_method: method,
       notes,
-      order_id: $("due-invoice")?.value || undefined,
-      payment_reference: $("due-ref")?.value || undefined,
-      payment_date: $("due-date")?.value || undefined,
+      order_id: orderId || undefined,
+      payment_reference: paymentReference || undefined,
+      payment_date: paymentDate || undefined,
     }),
   });
   await loadBootstrap();
@@ -4369,8 +4372,8 @@ async function collectCustomerDue(customer, amount, method, notes) {
     balance_due: data.balance_due ?? data.customer?.outstanding,
     invoice_no: data.invoice_no,
     invoice_amount: data.invoice_amount,
-    payment_reference: data.payment_reference || $("due-ref")?.value,
-    payment_date: data.payment_date || $("due-date")?.value,
+    payment_reference: data.payment_reference || paymentReference,
+    payment_date: data.payment_date || paymentDate,
     id: data.ledgerId,
     party_id: customer.id,
   };
@@ -7019,6 +7022,7 @@ function showReceiptModal(customer) {
   $("modal-body").innerHTML = `<form class="settings" id="receipt-modal-form">
     <p class="section-note">Outstanding: <strong>${money(due)}</strong>${customer.mobile ? ` · ${escapeHtml(customer.mobile)}` : ""}</p>
     <label>Amount <input id="rcp-amount" type="number" min="0.01" step="0.01" max="${due}" required value="${due}" /></label>
+    <label>Payment date <input id="rcp-date" type="date" required value="${escapeHtml(shopDateInputValue())}" /></label>
     <label>Method <select id="rcp-method">${globalThis.POSPay?.optionsHtml?.({ selected: "cash" }) || `<option value="cash">Cash</option><option value="upi">UPI</option>`}</select></label>
     <label>Reference / UPI ID <input id="rcp-ref" maxlength="80" placeholder="Optional" /></label>
     <label>Notes <input id="rcp-notes" placeholder="Optional" /></label>
@@ -7029,10 +7033,13 @@ function showReceiptModal(customer) {
     e.preventDefault();
     const ref = String($("rcp-ref")?.value || "").trim();
     const note = String($("rcp-notes").value || "").trim();
-    const notes = [ref, note].filter(Boolean).join(" · ");
     const method = $("rcp-method").value;
     try {
-      await collectCustomerDue(customer, $("rcp-amount").value, method, notes);
+      await collectCustomerDue(customer, $("rcp-amount").value, method, note, {
+        payment_date: $("rcp-date")?.value || shopDateInputValue(),
+        payment_reference: ref,
+        order_id: "",
+      });
     } catch (err) {
       $("rcp-hint").textContent = err.message;
       $("rcp-hint").className = "hint error";

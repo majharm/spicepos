@@ -322,6 +322,8 @@ test("receipt voucher prints party, amount, and mode; payment voucher labels dif
   assert.match(html, /Invoice Amount/);
   assert.match(html, /Payment Received/);
   assert.match(html, /Remaining Due/);
+  assert.match(html, /Payment Date/);
+  assert.match(html, /2026-09-19/);
   assert.match(html, /UTR123456/);
   assert.match(html, /UPI/);
   assert.doesNotMatch(html, /Paid to/);

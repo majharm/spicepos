@@ -214,6 +214,9 @@ test("invoice settlement posts sale credit, payment receipt, and customer due", 
   assert.match(index, /id="pay-date"/);
   assert.match(index, /id="due-invoice"/);
   assert.match(index, /id="due-date"/);
+  assert.match(app, /function showReceiptModal/);
+  assert.match(app, /id="rcp-date"/);
+  assert.match(app, /Collect due ·/);
   assert.match(invoice, /PAYMENT RECEIPT/);
   assert.match(invoice, /Against Invoice/);
   assert.match(invoice, /function invoiceDueRowsHtml/);

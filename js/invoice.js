@@ -1158,7 +1158,6 @@ ${officeInvoiceBody(order, ctx, { copy })}
     const { company, formatDateTime, money, escapeHtml } = ctx;
     const co = company || {};
     const isPayment = String(entry.entry_type).toLowerCase() === "payment";
-    const when = formatDateTime(entry.created_at || new Date().toISOString());
     const meta = [
       co.phone ? `Ph: ${escapeHtml(co.phone)}` : "",
       co.gstin ? `GSTIN: ${escapeHtml(co.gstin)}` : "",
@@ -1170,7 +1169,11 @@ ${officeInvoiceBody(order, ctx, { copy })}
     const reference = String(entry.payment_reference || entry.referenceNo || "").trim();
     const invoiceNo = String(entry.invoice_no || entry.invoiceNo || entry.against_invoice || "").trim();
     const invoiceAmt = entry.invoice_amount ?? entry.invoiceAmount;
-    const payDate = String(entry.payment_date || entry.paymentDate || entry.created_at || "").slice(0, 10);
+    const dateFmt = typeof ctx.formatDate === "function" ? ctx.formatDate : (v) => String(v || "").slice(0, 10);
+    const payRaw = String(entry.payment_date || entry.paymentDate || "").trim();
+    const payDate = payRaw
+      ? (/^\d{4}-\d{2}-\d{2}/.test(payRaw) ? dateFmt(payRaw.slice(0, 10)) : formatDateTime(payRaw))
+      : formatDateTime(entry.created_at || new Date().toISOString());
     const previousDue = entry.previous_due ?? entry.previousDue;
     const remaining = entry.remaining_due ?? entry.remainingDue ?? entry.balance_due ?? entry.balanceDue;
     return `<article class="thermal-invoice">
@@ -1183,7 +1186,7 @@ ${officeInvoiceBody(order, ctx, { copy })}
   <div class="inv-rule"></div>
   <div class="inv-details">
     <div class="inv-row"><span>${isPayment ? "Voucher No." : "Payment Receipt No."}</span><strong>${escapeHtml(entry.entry_no || "—")}</strong></div>
-    <div class="inv-row"><span>Payment Date</span><span>${escapeHtml(payDate || formatDateTime(entry.created_at || new Date().toISOString()))}</span></div>
+    <div class="inv-row"><span>Payment Date</span><span>${escapeHtml(payDate)}</span></div>
     ${entry.party_mobile ? `<div class="inv-row"><span>Mobile</span><span>${escapeHtml(entry.party_mobile)}</span></div>` : ""}
     <div class="inv-row"><span>${isPayment ? "Paid to" : "Customer"}</span><span>${escapeHtml(entry.party_name || "—")}</span></div>
     ${!isPayment && invoiceNo ? `<div class="inv-row"><span>Against Invoice</span><span>${escapeHtml(invoiceNo)}</span></div>` : ""}
