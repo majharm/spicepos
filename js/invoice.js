@@ -14,10 +14,27 @@
     ].filter(Boolean);
   }
 
+  function isPlaceholderDate(raw) {
+    const s = String(raw ?? "").trim();
+    if (!s) return true;
+    if (/^0{4}-0{2}-0{2}/.test(s)) return true;
+    const y = Number(s.slice(0, 4));
+    return /^\d{4}/.test(s) && Number.isFinite(y) && y < 1990;
+  }
+
+  function meaningfulField(raw) {
+    const s = String(raw ?? "").trim();
+    return Boolean(s) && s !== "—" && s !== "-" && !/^n\/?a$/i.test(s);
+  }
+
   function formatExpiryShort(raw) {
+    if (isPlaceholderDate(raw)) return "";
     const s = String(raw || "").slice(0, 10);
     const m = s.match(/^(\d{4})-(\d{2})/);
-    return m ? `${m[2]}/${m[1].slice(2)}` : s;
+    if (!m) return s;
+    const month = Number(m[2]);
+    if (month < 1 || month > 12) return "";
+    return `${m[2]}/${m[1].slice(2)}`;
   }
 
   function medicinePackLabel(item) {
@@ -32,12 +49,26 @@
   }
 
   function isPharmacyBill(order, ctx) {
-    if (String(order?.doctor_rx || order?.customer_address || "").trim()) return true;
-    const lines = order?.lines || [];
-    if (lines.some((l) => String(l.batch_no || l.pack_label || l.expiry_date || "").trim())) return true;
     const biz = ctx?.businessMeta || {};
+    if (globalThis.POSFootwear?.isPharmacyShop?.(biz) || globalThis.POSFootwear?.shopKind?.(biz) === "pharmacy") {
+      return true;
+    }
     const t = [biz.category, biz.business_type, biz.name, ctx?.company?.name].filter(Boolean).join(" ").toLowerCase();
-    return /(pharmacy|medical)/.test(t);
+    if (/(pharmacy|chemist|medical)/.test(t) && !/(spice|kirana|grocery|masala|restaurant|cafe)/.test(t)) return true;
+    if (String(order?.doctor_rx || "").trim()) return true;
+    return (order?.lines || []).some((l) => {
+      const batch = meaningfulField(l.batch_no);
+      const exp = meaningfulField(l.expiry_date) && !isPlaceholderDate(l.expiry_date);
+      const pack = meaningfulField(l.pack_label) && !/^\d+s$/i.test(String(l.pack_label).trim());
+      return batch && (exp || pack);
+    });
+  }
+
+  function invoicePartyMobile(order, cust) {
+    const raw = String(order?.customer_mobile || cust?.mobile || "").trim();
+    const digits = raw.replace(/\D/g, "");
+    if (!digits || /^0+$/.test(digits) || digits.length < 8) return "";
+    return raw;
   }
 
   function taxCode(ctx) {
@@ -473,6 +504,7 @@ ${purchaseBody(purchase, ctx)}
       return `${y}-${m}-${d}`;
     }
     const s = String(raw).trim();
+    if (isPlaceholderDate(s)) return "";
     if (/^\d{4}-\d{2}-\d{2}T/.test(s)) {
       const parsed = new Date(s);
       if (!Number.isNaN(parsed.getTime())) {
@@ -490,7 +522,13 @@ ${purchaseBody(purchase, ctx)}
         if (y && m && d) return `${y}-${m}-${d}`;
       }
     }
-    if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+    if (/^\d{4}-\d{2}-\d{2}/.test(s)) {
+      const ymd = s.slice(0, 10);
+      const month = Number(ymd.slice(5, 7));
+      const day = Number(ymd.slice(8, 10));
+      if (isPlaceholderDate(ymd) || month < 1 || month > 12 || day < 1 || day > 31) return "";
+      return ymd;
+    }
     const dmy = s.match(/^(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{4})$/);
     if (dmy) {
       const first = Number(dmy[1]);
@@ -630,13 +668,15 @@ ${purchaseBody(purchase, ctx)}
   function invoiceDueRowsHtml(order, money, escapeHtml, ctx) {
     const due = invoiceDueFigures(order);
     const ref = String(order.payment_reference || order.paymentReference || "").trim();
-    const payRaw =
+    let payDate = formatInvoiceDate(
       order.payment_date ||
-      order.paymentDate ||
-      due.payments?.[0]?.payment_date ||
-      due.payments?.[0]?.created_at ||
-      "";
-    const payDate = formatInvoiceDate(payRaw, ctx);
+        order.paymentDate ||
+        due.payments?.[0]?.payment_date ||
+        due.payments?.[0]?.created_at ||
+        "",
+      ctx,
+    );
+    if (!payDate && due.paid > 0) payDate = formatInvoiceDate(order.created_at, ctx);
     return `
       <tr><td colspan="3">Previous due</td><td class="inv-num">${escapeHtml(money(due.previous))}</td></tr>
       <tr><td colspan="3">Current invoice</td><td class="inv-num">${escapeHtml(money(due.total))}</td></tr>
@@ -683,7 +723,7 @@ ${purchaseBody(purchase, ctx)}
       : "";
 
     const pharmacy = isPharmacyBill(order, ctx);
-    const custMobile = String(order.customer_mobile || cust?.mobile || "").trim();
+    const custMobile = invoicePartyMobile(order, cust);
     const custAddr = String(order.customer_address || cust?.address || "").trim();
     const doctorRx = String(order.doctor_rx || "").trim();
 
@@ -913,9 +953,8 @@ ${invoiceBody(order, ctx)}
   }
 
   function officeDateOnly(raw) {
-    const s = String(raw || "").trim();
-    if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
-    return s;
+    const ymd = ymdFromValue(raw);
+    return ymd || "";
   }
 
   function officeInvoiceBody(order, ctx, opts) {
@@ -953,7 +992,7 @@ ${invoiceBody(order, ctx)}
       .join("");
     const buyerName = order.customer_name || cust?.business_name || cust?.name || "Walk-in";
     const pharmacy = isPharmacyBill(order, ctx);
-    const custMobile = String(order.customer_mobile || cust?.mobile || "").trim();
+    const custMobile = invoicePartyMobile(order, cust);
     const custAddr = String(order.customer_address || cust?.address || "").trim();
     const doctorRx = String(order.doctor_rx || "").trim();
     const buyerBits = [
@@ -1025,7 +1064,7 @@ ${invoiceBody(order, ctx)}
             <td>${escapeHtml(r.payment_method || "—")}</td>
             <td>${escapeHtml(r.reference || "—")}</td>
             <td>${escapeHtml(r.notes || "—")}</td>
-            <td>${escapeHtml(formatInvoiceDate(r.payment_date || r.created_at, ctx) || "—")}</td>
+            <td>${escapeHtml(formatInvoiceDate(r.payment_date, ctx) || formatInvoiceDate(r.created_at, ctx) || "—")}</td>
           </tr>`)
             .join("")}
         </tbody>
@@ -1283,7 +1322,8 @@ ${officeInvoiceBody(order, ctx, { copy })}
     const invoiceNo = String(entry.invoice_no || entry.invoiceNo || entry.against_invoice || "").trim();
     const invoiceAmt = entry.invoice_amount ?? entry.invoiceAmount;
     const payDate =
-      formatInvoiceDate(entry.payment_date || entry.paymentDate || entry.created_at, ctx) ||
+      formatInvoiceDate(entry.payment_date || entry.paymentDate, ctx) ||
+      formatInvoiceDate(entry.created_at, ctx) ||
       formatDateTime(entry.created_at || new Date().toISOString());
     const previousDue = entry.previous_due ?? entry.previousDue;
     const remaining = entry.remaining_due ?? entry.remainingDue ?? entry.balance_due ?? entry.balanceDue;

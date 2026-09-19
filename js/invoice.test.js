@@ -799,3 +799,59 @@ test("bill discount on already-net lines does not inflate taxable value", () => 
   assert.match(html, /UNPAID/);
   assert.doesNotMatch(html, /PARTIAL/);
 });
+
+test("spice grocery bills keep weight rows, not medicine layout or zero dates", () => {
+  const InvoicePrint = loadInvoicePrint();
+  const order = {
+    order_number: "SO-10001",
+    customer_name: "Walk-in",
+    customer_mobile: "0000000000",
+    payment_method: "cash",
+    payment_status: "paid",
+    payment_date: "0000-00-00",
+    amount_paid: 119.56,
+    subtotal: 119.56,
+    gst: 0,
+    total: 119.56,
+    created_at: "2026-09-19T19:12:00.000Z",
+    lines: [
+      {
+        item_name: "Toor Dal",
+        quantity_gm: 854,
+        rate_per_kg: 140,
+        amount: 119.56,
+        gst_rate: 0,
+        unit: "GM",
+        batch_no: "—",
+        expiry_date: "0000-00-00",
+        pack_label: "1s",
+        mrp: 140,
+      },
+    ],
+  };
+  const ctx = {
+    company: { name: "SWAMI MASALE SASWAD" },
+    businessMeta: { category: "Spices & masala", name: "SWAMI MASALE SASWAD" },
+    customers: [],
+    items: [],
+    formatDate: (v) => String(v),
+    formatDateTime: (v) => String(v),
+    money: (n) => `₹${Number(n).toFixed(2)}`,
+    escapeHtml: (v) => String(v ?? ""),
+  };
+  const html = InvoicePrint.invoiceBody(order, ctx);
+  assert.doesNotMatch(html, />Medicine</);
+  assert.doesNotMatch(html, /Batch —/);
+  assert.doesNotMatch(html, /Exp 00\/00/);
+  assert.doesNotMatch(html, /Pack 1s/);
+  assert.doesNotMatch(html, /0000-00-00/);
+  assert.doesNotMatch(html, /0000000000/);
+  assert.match(html, /Toor Dal/);
+  assert.match(html, /854 g/);
+  assert.match(html, /₹140\.00\/kg/);
+  assert.match(html, /₹119\.56/);
+  assert.match(html, /Payment date/);
+  assert.equal(InvoicePrint.ymdFromValue("0000-00-00"), "");
+  const due = InvoicePrint.invoiceDueRowsHtml(order, ctx.money, ctx.escapeHtml, ctx);
+  assert.match(due, /2026-09-20/);
+});

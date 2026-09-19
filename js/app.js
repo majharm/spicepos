@@ -584,10 +584,11 @@ function invoiceSettlementHtml(o) {
   const mobile = o.customer_mobile || "";
   const ref = String(o.payment_reference || "").trim();
   const payRaw =
-    o.payment_date ||
-    due?.payments?.[0]?.payment_date ||
-    due?.payments?.[0]?.created_at ||
-    "";
+    o.payment_date && !String(o.payment_date).startsWith("0000-00-00")
+      ? o.payment_date
+      : due?.payments?.[0]?.payment_date && !String(due.payments[0].payment_date).startsWith("0000-00-00")
+        ? due.payments[0].payment_date
+        : due?.payments?.[0]?.created_at || o.created_at || "";
   const payDate = formatShopDate(payRaw);
   const receiptNo = o.receipt?.entryNo || o.receipt?.entry_no || o.receipt_entry_no || "";
   return `<details class="invoice-settle" open>
@@ -1426,6 +1427,7 @@ function formatShopDateTime(value) {
 function formatShopDate(value) {
   if (!value) return "";
   const s = String(value).trim();
+  if (!s || s.startsWith("0000-00-00") || (/^\d{4}/.test(s) && Number(s.slice(0, 4)) < 1990)) return "";
   if (/^\d{4}-\d{2}-\d{2}/.test(s)) {
     const d = new Date(`${s.slice(0, 10)}T12:00:00`);
     if (!Number.isNaN(d.getTime())) {
@@ -8346,6 +8348,11 @@ $("btn-pay").addEventListener("click", async () => {
           const item = state.items.find((i) => i.id === l.itemId);
           const calc = item ? lineCalc(item, l) : null;
           const preview = globalThis.POSFootwear?.cartBatchPreview?.(item) || {};
+          const batch = String(preview.batchNo || item?.batch_no || "").trim();
+          const expRaw = String(item?.primary_expiry || item?.default_expiry || "").slice(0, 10);
+          const expiry =
+            expRaw && !expRaw.startsWith("0000-00-00") && Number(expRaw.slice(0, 4)) >= 1990 ? expRaw : "";
+          const pack = isPharmacyShop() ? String(preview.pack || medicinePackLabel(item) || "").trim() : "";
           return {
             item_id: l.itemId,
             item_name: itemBillName(item),
@@ -8356,9 +8363,9 @@ $("btn-pay").addEventListener("click", async () => {
             gst_amount: calc ? calc.gst : 0,
             gst_rate: item?.gst_rate || 0,
             mrp: item ? Number(globalThis.POSFootwear?.looseMrp?.(item) ?? item.mrp ?? item.retail_rate) || 0 : 0,
-            batch_no: preview.batchNo || item?.batch_no || "",
-            expiry_date: item?.default_expiry || "",
-            pack_label: preview.pack || medicinePackLabel(item) || "",
+            batch_no: batch && batch !== "—" ? batch : "",
+            expiry_date: expiry,
+            pack_label: pack && pack !== "—" ? pack : "",
           };
         }),
       };

@@ -542,17 +542,20 @@
 
   function formatExpiryShort(raw) {
     const s = String(raw || "").slice(0, 10);
+    if (!s || s.startsWith("0000-00-00") || Number(s.slice(0, 4)) < 1990) return "";
     const m = s.match(/^(\d{4})-(\d{2})/);
-    return m ? `${m[2]}/${m[1].slice(2)}` : s;
+    if (!m) return s;
+    if (Number(m[2]) < 1 || Number(m[2]) > 12) return "";
+    return `${m[2]}/${m[1].slice(2)}`;
   }
 
   function cartBatchPreview(item) {
-    const pack = medicinePackLabel(item) || "—";
+    const pack = medicinePackLabel(item) || "";
     const batchNo = String(item?.primary_batch_no || item?.batch_no || "").trim();
     const exp = item?.primary_expiry || item?.default_expiry || item?.expiry_date || "";
     return {
-      batchNo: batchNo || "—",
-      expiry: formatExpiryShort(exp) || "—",
+      batchNo,
+      expiry: formatExpiryShort(exp),
       pack,
     };
   }
