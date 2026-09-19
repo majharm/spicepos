@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { workbookXml } from "./excel.js";
-import { stockAlert, stockDisplayQty, stockToSheets, stockValue } from "./stock-excel.js";
+import { stockAlert, stockBatchExcelRow, stockDisplayQty, stockToSheets, stockValue } from "./stock-excel.js";
 
 const items = [
   {
@@ -70,4 +70,39 @@ test("stockToSheets writes a full list and a Low stock sheet", () => {
   assert.match(xml, /ss:Name="Stock"/);
   assert.match(xml, /ss:Name="Low stock"/);
   assert.match(xml, /Turmeric powder/);
+});
+
+test("pharmacy stock Excel adds a Batches sheet by batch number", () => {
+  const batches = [
+    {
+      item_code: "MED-01",
+      item_name: "Dolo 650",
+      batch_no: "DL650A",
+      expiry_date: "2027-09-30",
+      remaining_gm: 20,
+      base_unit: "PCS",
+      unit_cost: 10,
+      mrp: 20,
+    },
+    {
+      item_code: "MED-01",
+      item_name: "Dolo 650",
+      batch_no: "EMPTY",
+      remaining_gm: 0,
+      base_unit: "PCS",
+    },
+  ];
+  const spice = stockToSheets(items, { category: "Spices & masala" }, batches);
+  assert.equal(spice.length, 2);
+  const pharm = stockToSheets(items, { category: "Medical" }, batches);
+  assert.equal(pharm.length, 3);
+  assert.equal(pharm[2].name, "Batches");
+  assert.equal(pharm[2].rows.length, 1);
+  assert.equal(pharm[2].rows[0][2], "DL650A");
+  assert.equal(pharm[2].rows[0][3], "2027-09-30");
+  assert.equal(pharm[2].rows[0][4], 20);
+  assert.deepEqual(stockBatchExcelRow(batches[0]).slice(0, 3), ["MED-01", "Dolo 650", "DL650A"]);
+  const xml = workbookXml(pharm);
+  assert.match(xml, /ss:Name="Batches"/);
+  assert.match(xml, /DL650A/);
 });

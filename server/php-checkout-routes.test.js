@@ -335,6 +335,8 @@ test("Master Admin can set passwords and unlock locked accounts", () => {
   assert.match(read("js/app.js"), /\/api\/stock\/excel/);
   assert.match(read("pos-php-till.php"), /stock\/excel/);
   assert.match(read("pos-stock-excel.php"), /function pos_stock_excel_response/);
+  assert.match(read("pos-stock-excel.php"), /ss:Name="Batches"|name" => "Batches"/);
+  assert.match(read("pos-advanced.php"), /on_hand/);
   assert.match(read("server/tenant.js"), /\/api\/stock\/excel/);
   assert.match(read("pos-crud.php"), /staff\/\(\[\^\/\]\+\)\$#.*PUT/s);
 });
@@ -361,7 +363,7 @@ test("POS boot skips API probe and slims catalog photos", () => {
   assert.match(index, /qrcode\.iife\.js[^>]+defer/);
   assert.match(index, /preload="none"/);
   assert.match(index, /pos-api\.js\?v=20260905deploy154/);
-  assert.match(index, /app\.js\?v=20260919pdt1/);
+  assert.match(index, /app\.js\?v=20260919stk1/);
   assert.match(index, /invoice-share\.js\?v=20260913share1/);
   assert.match(index, /invoice\.js\?v=20260919pdt1/);
   assert.doesNotMatch(index, /app\.js\?v=20260905deploy167/);
@@ -422,7 +424,7 @@ test("Restaurant Counter can create named dining tables", () => {
   assert.match(till, /dining-tables/);
   assert.match(index, /pos\.css\?v=20260919a4p1/);
   assert.match(index, /restaurant\.js\?v=20260918table1/);
-  assert.match(index, /app\.js\?v=20260919pdt1/);
+  assert.match(index, /app\.js\?v=20260919stk1/);
   assert.match(index, /footwear\.js\?v=20260917pharm1/);
   assert.match(app, /function resolveKitchenKot/);
   assert.match(app, /function paintKotTimers/);

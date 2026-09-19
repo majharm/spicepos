@@ -82,13 +82,53 @@ export function stockExcelRow(item) {
   ];
 }
 
-export function stockToSheets(rows, biz = {}) {
+export const STOCK_BATCH_EXCEL_HEADERS = [
+  "Code",
+  "Name",
+  "Batch no",
+  "Expiry",
+  "On hand",
+  "Unit",
+  "Purchase",
+  "MRP",
+  "Value",
+];
+
+export function stockBatchExcelRow(batch) {
+  const row = batch && typeof batch === "object" ? batch : {};
+  const unit = stockUnit(row);
+  const remaining = Number(row.remaining_gm) || 0;
+  const rate = Number(row.unit_cost ?? row.purchase_rate) || 0;
+  const valueRow = { stock_gm: remaining, purchase_rate: rate, base_unit: unit, unit };
+  return [
+    row.item_code || row.code || "",
+    row.item_name || row.name || "",
+    row.batch_no || "",
+    row.expiry_date || "",
+    stockDisplayQty(remaining, unit),
+    unit,
+    rate,
+    Number(row.mrp) || 0,
+    stockValue(valueRow),
+  ];
+}
+
+export function stockToSheets(rows, biz = {}, batches = []) {
   const list = Array.isArray(rows) ? rows : [];
   const all = list.map(stockExcelRow);
   const low = list.filter((r) => stockAlert(r) !== "OK").map(stockExcelRow);
   const headers = stockExcelHeaders(biz);
-  return [
+  const sheets = [
     { name: "Stock", headers, rows: all },
     { name: "Low stock", headers, rows: low },
   ];
+  if (POSFootwear?.isPharmacyShop?.(biz)) {
+    const onHand = (Array.isArray(batches) ? batches : []).filter((b) => (Number(b?.remaining_gm) || 0) > 0);
+    sheets.push({
+      name: "Batches",
+      headers: STOCK_BATCH_EXCEL_HEADERS,
+      rows: onHand.map(stockBatchExcelRow),
+    });
+  }
+  return sheets;
 }

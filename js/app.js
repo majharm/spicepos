@@ -272,6 +272,11 @@ function applyFootwearMode() {
   if ($("item-catalog-search")) {
     $("item-catalog-search").placeholder = copy.catalogSearch || copy.search || `Search name, ${taxCodeLabel()}, barcode…`;
   }
+  if ($("stock-search")) {
+    $("stock-search").placeholder = pharm
+      ? "Search name, batch no, barcode…"
+      : "Search name, code, barcode…";
+  }
   if ($("pack-item-search")) $("pack-item-search").placeholder = `Search spice or ${taxCodeLabel()}…`;
   if ($("po-item-search")) $("po-item-search").placeholder = `Search item or ${taxCodeLabel()}…`;
   if ($("item-import-copy")) {
@@ -5165,7 +5170,12 @@ function paintStockHero(rows) {
     value += POSUnits.lineAmount(r.stock_gm, r.purchase_rate, itemUnit(item));
     if (stockIsLow(r)) low += 1;
   }
-  stats.innerHTML = `<div class="items-stat"><span>SKUs</span><strong>${list.length}</strong></div>
+  const batchCount = isPharmacyShop()
+    ? (Array.isArray(state.stockBatches) ? state.stockBatches : []).filter((b) => (Number(b.remaining_gm) || 0) > 0).length
+    : 0;
+  const skuLabel = isPharmacyShop() ? "Medicines" : "SKUs";
+  stats.innerHTML = `<div class="items-stat"><span>${skuLabel}</span><strong>${list.length}</strong></div>
+    ${isPharmacyShop() ? `<div class="items-stat"><span>Batches</span><strong>${batchCount}</strong></div>` : ""}
     <div class="items-stat"><span>On-hand value</span><strong>${money(value)}</strong></div>
     <button class="items-stat${low ? " is-warn" : ""}${state.stockLowOnly ? " is-active" : ""}" type="button" data-stock-low>
       <span>Low / out</span><strong>${low}</strong>
@@ -5187,6 +5197,45 @@ function filterStockList() {
   if (empty) empty.hidden = shown > 0 || !document.querySelector("#stock-table [data-stock-item]");
 }
 
+function pharmacyStockCards(skuRows, batchRows) {
+  const skus = Array.isArray(skuRows) ? skuRows : [];
+  const byId = new Map(skus.map((r) => [r.id, r]));
+  const batches = (Array.isArray(batchRows) ? batchRows : [])
+    .filter((b) => (Number(b.remaining_gm) || 0) > 0)
+    .slice()
+    .sort((a, b) => {
+      const na = String(a.item_name || byId.get(a.item_id)?.name || "").toLowerCase();
+      const nb = String(b.item_name || byId.get(b.item_id)?.name || "").toLowerCase();
+      if (na !== nb) return na.localeCompare(nb);
+      const ea = String(a.expiry_date || "9999-99-99");
+      const eb = String(b.expiry_date || "9999-99-99");
+      if (ea !== eb) return ea.localeCompare(eb);
+      return String(a.batch_no || "").localeCompare(String(b.batch_no || ""));
+    });
+  const covered = new Set();
+  const out = [];
+  for (const batch of batches) {
+    covered.add(batch.item_id);
+    const sku = byId.get(batch.item_id) || {
+      id: batch.item_id,
+      name: batch.item_name,
+      code: batch.item_code,
+      stock_gm: batch.stock_gm,
+      purchase_rate: batch.purchase_rate,
+      reorder_level_gm: batch.reorder_level_gm,
+      barcode: batch.item_barcode,
+      base_unit: batch.base_unit,
+      unit: batch.unit,
+    };
+    out.push({ sku, batch });
+  }
+  for (const sku of skus) {
+    if (covered.has(sku.id)) continue;
+    out.push({ sku, batch: null });
+  }
+  return out;
+}
+
 function paintStockList(rows) {
   const el = $("stock-table");
   if (!el) return;
@@ -5197,6 +5246,49 @@ function paintStockList(rows) {
       <strong>No stock rows</strong>
       <p>Add items first. Their on-hand quantity shows here.</p>
     </div>`;
+    return;
+  }
+  if (isPharmacyShop()) {
+    const cards = pharmacyStockCards(list, state.stockBatches);
+    el.innerHTML = `${cards
+      .map(({ sku, batch }) => {
+        const item = state.items.find((i) => i.id === sku.id) || sku;
+        const low = stockIsLow(sku);
+        const out = stockIsOut(sku);
+        const qtySrc = batch ? batch.remaining_gm : sku.stock_gm;
+        const rate = Number(batch?.unit_cost ?? sku.purchase_rate) || 0;
+        const value = POSUnits.lineAmount(qtySrc, rate, itemUnit(item));
+        const batchNo = batch ? batch.batch_no || batch.barcode || "—" : "—";
+        const expiry = batch?.expiry_date ? formatShopDate(batch.expiry_date) : "—";
+        const search = `${itemSearchHay(item)} ${batchNo} ${batch?.expiry_date || ""} ${batch?.barcode || ""}`.toLowerCase();
+        const pill = out
+          ? `<span class="stock-pill is-out">Out</span>`
+          : low
+            ? `<span class="stock-pill is-low">Low</span>`
+            : `<span class="stock-pill is-ok">OK</span>`;
+        return `<article class="report-card item-card stock-card stock-batch-card${selected === sku.id ? " is-editing" : ""}${out ? " is-out" : low ? " is-low" : ""}" data-stock-item="${escapeHtml(sku.id)}" data-stock-batch="${escapeHtml(batch?.id || "")}" data-stock-search="${escapeHtml(search)}" data-stock-low="${low ? "1" : "0"}">
+          <div class="item-card-head">
+            <div class="item-card-copy">
+              <strong>${escapeHtml(sku.name || item.name || "Medicine")}</strong>
+              <span>${escapeHtml(sku.code || item.code || "")}${item.barcode ? ` · ${escapeHtml(item.barcode)}` : ""}</span>
+            </div>
+            ${pill}
+          </div>
+          <div class="item-card-meta">
+            <span class="item-chip">Batch ${escapeHtml(batchNo)}</span>
+            <span class="item-chip">Exp ${escapeHtml(expiry)}</span>
+            <span class="item-chip ${low ? "stock low" : "stock ok"}">On hand ${escapeHtml(fmtQty(qtySrc, item))}</span>
+            <span class="item-chip">${escapeHtml(itemUnit(item))}</span>
+            <span class="item-chip">${money(value)}</span>
+          </div>
+        </article>`;
+      })
+      .join("")}
+      <div class="item-empty-card" id="stock-filter-empty" hidden>
+        <strong>No matching batches</strong>
+        <p>Clear search or turn off Low stock to see the rest of the catalog.</p>
+      </div>`;
+    filterStockList();
     return;
   }
   el.innerHTML = `${list
@@ -5241,6 +5333,15 @@ async function loadStock() {
   try {
     const rows = await api("/api/stock");
     state.stockRows = Array.isArray(rows) ? rows : [];
+    state.stockBatches = [];
+    if (isPharmacyShop()) {
+      try {
+        const batches = await api("/api/batches?on_hand=1");
+        state.stockBatches = Array.isArray(batches) ? batches : [];
+      } catch (batchErr) {
+        setStockHint(batchErr.message, "error");
+      }
+    }
     paintStockHero(state.stockRows);
     paintStockList(state.stockRows);
     const selectedId = $("stk-item")?.value;

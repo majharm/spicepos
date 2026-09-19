@@ -972,12 +972,14 @@
               <div class="items-hero-copy">
                 <p class="items-kicker">Inventory</p>
                 <h3>Stock</h3>
-                <p class="lede">Search a SKU, tap it, then post + or − quantity. Low-stock items are highlighted.</p>
+                <p class="lede pharmacy-hide">Search a SKU, tap it, then post + or − quantity. Low-stock items are highlighted.</p>
+                <p class="lede pharmacy-only" hidden>On-hand quantity by batch number. Tap a medicine, then post + or − quantity.</p>
               </div>
               <div class="items-hero-stats" id="stock-hero-stats"></div>
             </header>
             <div class="item-import-bar stock-export-bar">
-              <p class="item-import-copy">Download the on-hand list. Excel has every SKU plus a Low stock sheet.</p>
+              <p class="item-import-copy pharmacy-hide">Download the on-hand list. Excel has every SKU plus a Low stock sheet.</p>
+              <p class="item-import-copy pharmacy-only" hidden>Download on-hand stock. Excel has SKUs, low stock, and a Batches sheet with batch numbers.</p>
               <div class="item-import-actions">
                 <a class="btn" id="stock-excel" href="#">Download Excel</a>
               </div>
@@ -1894,7 +1896,7 @@
     <script src="./js/qrcode.iife.js?v=20260905qr1" defer></script>
     <script src="./js/qr-notify.js?v=20260914kot1" defer></script>
     <script src="./js/payment-methods.js?v=20260918pay1" defer></script>
-    <script src="./js/app.js?v=20260919pdt1" defer></script>
+    <script src="./js/app.js?v=20260919stk1" defer></script>
     <script src="./js/growth.js?v=20260905deploy145" defer></script>
     <script src="./js/offers-ui.js?v=20260905deploy136" defer></script>
   </body>
