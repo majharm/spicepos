@@ -528,11 +528,25 @@ function canDeleteInvoice() {
   return state.session?.role === "business_admin";
 }
 
+function checkoutAmountPaid() {
+  const el = $("pay-amount");
+  if (!el) return undefined;
+  const raw = String(el.value ?? "").trim();
+  if (raw === "") return undefined;
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : undefined;
+}
+
 function invoiceSettlementHtml(o) {
-  const previous = Number(o.previous_due) || 0;
-  const paid = Number(o.amount_paid) || 0;
-  const total = Number(o.total) || 0;
-  const current = o.current_due != null ? Number(o.current_due) : Math.max(0, previous + total - paid);
+  const due = globalThis.InvoicePrint?.invoiceDueFigures
+    ? globalThis.InvoicePrint.invoiceDueFigures(o)
+    : null;
+  const previous = due ? due.previous : Number(o.previous_due) || 0;
+  const paid = due ? due.paid : Number(o.amount_paid) || 0;
+  const total = due ? due.total : Number(o.total) || 0;
+  const current = due
+    ? due.current
+    : o.current_due != null ? Number(o.current_due) : Math.max(0, previous + total - paid);
   const mobile = o.customer_mobile || "";
   const ref = String(o.payment_reference || "").trim();
   const payDate = String(o.payment_date || "").slice(0, 10);
@@ -833,7 +847,10 @@ function syncPayAmountDefault() {
 
 function receiptEntryFromInvoice(order) {
   const r = order?.receipt;
-  if (!r && !(Number(order?.amount_paid) > 0)) return null;
+  const paid = globalThis.InvoicePrint?.invoiceDueFigures
+    ? Number(globalThis.InvoicePrint.invoiceDueFigures(order).paid) || 0
+    : Number(order?.amount_paid) || 0;
+  if (!r && !(paid > 0)) return null;
   return {
     id: r?.ledgerId || r?.ledger_id || r?.id || "",
     entry_no: r?.entryNo || r?.entry_no || "PR",
@@ -841,7 +858,7 @@ function receiptEntryFromInvoice(order) {
     party_name: orderCustomerName(order),
     party_mobile: order.customer_mobile,
     party_id: order.customer_id,
-    amount: r?.amount ?? order.amount_paid,
+    amount: r?.amount ?? paid,
     payment_method: r?.method || order.payment_method,
     invoice_no: r?.invoice_no || order.order_number,
     invoice_amount: r?.invoice_amount ?? order.total,
@@ -7615,7 +7632,7 @@ $("btn-pay").addEventListener("click", async () => {
       offerLoyaltyMultiplier: state.appliedOffers?.loyaltyMultiplier || 1,
       qrOrderId: state.activeQrOrderId || undefined,
       table_no: isRestaurantShop() ? (state.activeTable || undefined) : undefined,
-      amountPaid: $("pay-amount") ? Number($("pay-amount").value) : undefined,
+      amountPaid: checkoutAmountPaid(),
       paymentReference: $("pay-ref")?.value || undefined,
       paymentDate: $("pay-date")?.value || undefined,
       customer_name: isClassicBillShop() ? pharmacyBillCustomerName() : undefined,

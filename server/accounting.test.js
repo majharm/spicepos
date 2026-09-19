@@ -196,10 +196,13 @@ test("invoice settlement posts sale credit, payment receipt, and customer due", 
   const index = readFileSync(path.join(root, "index.html"), "utf8");
   const invoice = readFileSync(path.join(root, "js/invoice.js"), "utf8");
   assert.match(accounts, /PR-\$\{String\(Number\(n\) \|\| 0\)\.padStart\(5, "0"\)\}/);
-  assert.match(accounts, /previousDue \+ invoiceTotal - paid/);
+  assert.match(accounts, /function invoicePaidAmount/);
+  assert.match(accounts, /if \(credit\) return 0/);
+  assert.match(core, /function pos_invoice_paid_amount/);
+  assert.match(core, /if \(\$credit\) return 0/);
   assert.match(core, /PR-%05d/);
   assert.match(core, /\$previousDue \+ \$invoiceTotal - \$paid/);
-  assert.match(app, /\$\("pay-amount"\)/);
+  assert.match(app, /function checkoutAmountPaid/);
   assert.match(app, /function invoiceSettlementHtml/);
   assert.match(app, /function receiptEntryFromInvoice/);
   assert.match(app, /details class="invoice-settle"/);

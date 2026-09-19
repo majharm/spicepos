@@ -4549,6 +4549,7 @@ button.items-stat.is-active {
 .office-preview .off-n { text-align: right; white-space: nowrap; }
 .office-preview .off-bottom { display: grid; grid-template-columns: 1.3fr 0.7fr; gap: 16px; margin-top: 8px; }
 .office-preview .off-grand td { font-weight: 800; border-top: 1px solid #ddd; }
+.office-preview .off-paid td { font-weight: 700; }
 .office-preview .off-due td { font-weight: 800; color: #1a7a6d; border-top: 2px solid #1a7a6d; }
 .office-preview .off-notes h3, .office-preview .off-tnc h3 { margin: 10px 0 4px; font-size: 12px; color: #1a7a6d; }
 .office-preview .off-thanks { margin: 14px 0 0; font-size: 13px; color: #1a7a6d; }

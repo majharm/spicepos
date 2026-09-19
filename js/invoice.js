@@ -462,12 +462,31 @@ ${purchaseBody(purchase, ctx)}
     return l.item_name || l.name || "Item";
   }
 
+  function invoicePaidFromOrder(order) {
+    const total = round2(order?.total);
+    const method = String(order?.payment_method || "").toLowerCase();
+    const status = String(order?.payment_status || "").toLowerCase();
+    const raw = order?.amount_paid ?? order?.amountPaid;
+    const stored = raw == null || raw === "" ? null : round2(raw);
+    if (stored != null && stored > 0) return stored;
+    if (status === "unpaid" || status === "due") return 0;
+    if (status === "partial") return stored || 0;
+    if (method === "credit" && status !== "paid") return 0;
+    if (status === "paid" || (method && method !== "credit")) return total;
+    if (!method && status !== "unpaid") return total;
+    return 0;
+  }
+
   function invoiceDueFigures(order) {
     const total = round2(order.total);
     const previous = round2(order.previous_due ?? order.previousDue);
-    const paid = round2(order.amount_paid ?? order.amountPaid);
-    const current = order.current_due != null || order.currentDue != null
+    const paid = invoicePaidFromOrder(order);
+    const storedPaid = round2(order.amount_paid ?? order.amountPaid);
+    const storedCurrent = order.current_due != null || order.currentDue != null
       ? round2(order.current_due ?? order.currentDue)
+      : null;
+    const current = storedPaid > 0 && storedCurrent != null
+      ? storedCurrent
       : round2(Math.max(0, previous + total - paid));
     return { previous, paid, current, total, invoiceAmount: round2(order.subtotal), discount: round2(order.discount), gst: round2(order.gst) };
   }
@@ -924,7 +943,7 @@ ${invoiceBody(order, ctx)}
         <tr><td>Tax</td><td class="off-n">${escapeHtml(money(gst))}</td></tr>
         <tr class="off-grand"><td>Total</td><td class="off-n">${escapeHtml(money(total))}</td></tr>
         <tr><td>Previous due</td><td class="off-n">${escapeHtml(money(due.previous))}</td></tr>
-        <tr><td>Payment Made</td><td class="off-n">(-) ${escapeHtml(money(due.paid))}</td></tr>
+        <tr class="off-paid"><td>Payment Made</td><td class="off-n">(-) ${escapeHtml(money(due.paid))}</td></tr>
         <tr class="off-due"><td>Balance Due</td><td class="off-n">${escapeHtml(money(due.current))}</td></tr>
         ${ref ? `<tr><td>Payment reference</td><td class="off-n">${escapeHtml(ref)}</td></tr>` : ""}
         ${payDate ? `<tr><td>Payment date</td><td class="off-n">${escapeHtml(payDate)}</td></tr>` : ""}
@@ -1022,6 +1041,7 @@ body {
 .off-notes h3, .off-tnc h3 { margin: 12px 0 4px; font-size: 12px; color: #1a7a6d; }
 .off-note { margin: 0; font-size: 11px; color: #444; }
 .off-grand td { font-weight: 800; font-size: 14px; border-top: 1px solid #ddd; }
+.off-paid td { font-weight: 700; }
 .off-due td { font-weight: 800; font-size: 14px; color: #1a7a6d; border-top: 2px solid #1a7a6d; }
 .off-thanks { margin: 18px 0 0; font-size: 13px; color: #1a7a6d; }
 .off-pay-qr { text-align: center; margin: 16px 0 0; }

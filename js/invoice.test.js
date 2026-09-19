@@ -357,6 +357,46 @@ test("invoice due rows use previous due + invoice − payment", () => {
   assert.match(html, /Previous due/);
   assert.match(html, /Current due/);
   assert.match(html, /UTR123456/);
+
+  const cashPaid = InvoicePrint.invoiceDueFigures({
+    total: 840,
+    payment_method: "upi",
+    payment_status: "paid",
+    amount_paid: 0,
+  });
+  assert.equal(cashPaid.paid, 840);
+  assert.equal(cashPaid.current, 0);
+
+  const creditOpen = InvoicePrint.invoiceDueFigures({
+    total: 840,
+    payment_method: "credit",
+    payment_status: "unpaid",
+    amount_paid: 0,
+  });
+  assert.equal(creditOpen.paid, 0);
+  assert.equal(creditOpen.current, 840);
+
+  const office = InvoicePrint.officeInvoiceBody(
+    {
+      order_number: "SO-10042",
+      total: 840,
+      payment_method: "upi",
+      payment_status: "paid",
+      amount_paid: 0,
+      lines: [],
+    },
+    {
+      company: { name: "ATAV Spices" },
+      customers: [],
+      items: [],
+      formatDateTime: (v) => String(v),
+      money: (n) => `₹${Number(n).toFixed(2)}`,
+      escapeHtml: (v) => String(v),
+    },
+  );
+  assert.match(office, /class="off-paid"/);
+  assert.match(office, /Payment Made/);
+  assert.match(office, /\(\-\) ₹840\.00/);
 });
 
 test("thermal invoice HTML shows IGST for inter-state supply", () => {

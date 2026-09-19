@@ -1598,11 +1598,13 @@ function pos_apply_invoice_paid_delta($orderId, $delta, $businessId) {
 }
 
 function pos_invoice_paid_amount($method, $total, $raw) {
+  $credit = pos_pay_normalize($method) === "credit";
   if ($raw !== null && $raw !== "") {
     $n = pos_round2($raw);
-    return $n > 0 ? $n : 0;
+    if ($n > 0) return $n;
+    if ($credit) return 0;
   }
-  return pos_pay_normalize($method) === "credit" ? 0 : pos_round2($total);
+  return $credit ? 0 : pos_round2($total);
 }
 
 function pos_settle_customer_invoice($customer, $total, $method, $orderId, $orderNumber, $businessId, $uid = null, $amountPaid = null, $paymentReference = null, $paymentDate = null) {

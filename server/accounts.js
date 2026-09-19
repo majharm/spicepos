@@ -50,11 +50,13 @@ export function formatPaymentReceiptNo(n) {
 }
 
 export function invoicePaidAmount(method, total, raw) {
+  const credit = String(method || "").toLowerCase() === "credit";
   if (raw != null && raw !== "") {
     const n = round2(raw);
-    return n > 0 ? n : 0;
+    if (n > 0) return n;
+    if (credit) return 0;
   }
-  return String(method || "").toLowerCase() === "credit" ? 0 : round2(total);
+  return credit ? 0 : round2(total);
 }
 
 async function insertLedger(conn, row) {
