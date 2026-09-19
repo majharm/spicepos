@@ -4755,7 +4755,8 @@ button.items-stat.is-active {
   .customers-desk,
   .settings-desk,
   .expiry-desk,
-  .stock-desk { margin-left: 12px; margin-right: 12px; }
+  .stock-desk,
+  .offers-desk { margin-left: 12px; margin-right: 12px; }
   .packs-hero,
   .items-hero,
   .dash-hero { flex-direction: column; align-items: stretch; padding: 14px; }
@@ -4769,6 +4770,9 @@ button.items-stat.is-active {
   .expiry-desk .items-stat strong { font-size: 18px; }
   .expiry-toolbar { flex-direction: column; align-items: stretch; }
   .expiry-toolbar input[type="search"] { min-width: 0; }
+  .offer-toolbar { align-items: stretch; flex-direction: column; }
+  .offer-toolbar .offer-stack-label { max-width: none; }
+  .offer-toolbar .offer-stack-label select { width: 100%; min-width: 0; }
   .item-import-bar { align-items: stretch; }
   .qr-orders-page { margin-left: 12px; margin-right: 12px; }
   .qr-orders-hero { align-items: stretch; flex-direction: column; }
@@ -5727,28 +5731,83 @@ body.pharmacy-mode .stock-desk .items-library-list {
   justify-content: center;
 }
 .offer-popup-actions .btn { min-width: 7.5em; }
-.offer-dash {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+.offers-desk .offer-dash {
+  margin: 0;
+  display: flex;
   gap: 10px;
-  margin: 12px 0;
+  flex-wrap: wrap;
+  grid-template-columns: unset;
 }
-.offer-kpi {
-  padding: 12px 14px;
+.offer-toolbar {
+  align-items: center;
+}
+.offer-toolbar .offer-filters { margin: 0; }
+.offer-toolbar .offer-stack-label {
+  margin: 0;
+  max-width: 240px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+}
+.offer-toolbar .offer-stack-label select {
+  display: block;
+  min-width: 180px;
+  margin-top: 4px;
+}
+.offers-desk .offer-templates {
+  margin: 0;
+  gap: 6px;
+}
+.offers-desk .offer-templates .btn {
+  min-height: 34px;
+  font-size: 12px;
+}
+.offer-ai-panel {
+  border: 1px solid var(--line);
   border-radius: 12px;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
+  padding: 8px 12px;
+  background: #fff;
 }
-.offer-kpi strong { display: block; font-size: 20px; }
-.offer-kpi span { color: #64748b; font-size: 12px; }
-.offer-filters, .offer-templates, .offer-ai, .offer-list { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 16px; }
+.offer-ai-panel summary {
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--vel-teal);
+}
+.offers-desk .offer-ai,
+.offers-desk .offer-list {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+  margin: 0;
+  flex-wrap: unset;
+}
+.offer-filters { display: flex; flex-wrap: wrap; gap: 8px; }
 .offer-idea, .offer-card {
-  flex: 1 1 240px;
   padding: 12px 14px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--line-strong);
   border-radius: 12px;
   background: #fff;
 }
+.offers-desk .offer-idea,
+.offers-desk .offer-card {
+  flex: none;
+}
+.offers-desk .item-composer.offer-form {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 1fr;
+}
+.offers-desk .disc-pair { grid-template-columns: minmax(128px, 0.85fr) 1fr; }
+.offers-desk .items-library-head { grid-template-columns: auto minmax(0, 1fr); }
+.offer-form select[multiple] { min-height: 120px; }
+.offer-profit {
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: #f8fafc;
+}
+.offer-profit-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 6px; padding: 0; list-style: none; margin: 0; }
 .offer-card header { display: flex; justify-content: space-between; gap: 8px; align-items: start; }
 .offer-status {
   font-size: 11px;
@@ -5758,14 +5817,12 @@ body.pharmacy-mode .stock-desk .items-library-list {
   color: #047857;
   border-radius: 999px;
   padding: 2px 8px;
+  white-space: nowrap;
 }
 .offer-card.is-paused .offer-status, .offer-card.is-draft .offer-status { background: #f1f5f9; color: #475569; }
 .offer-card.is-expired .offer-status, .offer-card.is-completed .offer-status { background: #fef2f2; color: #b91c1c; }
 .offer-card.is-scheduled .offer-status { background: #eff6ff; color: #1d4ed8; }
-.offer-stack-label { display: block; max-width: 320px; margin: 8px 0 16px; }
-.offer-form select[multiple] { min-height: 120px; }
-.offer-profit-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 6px; padding: 0; list-style: none; }
-.offer-form-wrap { margin-top: 18px; }
+.offer-card.is-active { box-shadow: 0 0 0 1px rgba(4, 120, 87, 0.08); }
 .growth-ask-form { display: flex; gap: 8px; }
 .growth-ask-form input { flex: 1; min-height: 40px; }
 .growth-ask-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
