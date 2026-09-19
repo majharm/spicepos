@@ -347,6 +347,27 @@ test("receipt voucher prints party, amount, and mode; payment voucher labels dif
   );
   assert.match(edited, /2026-09-09/);
   assert.doesNotMatch(edited, /2026-09-19/);
+  assert.equal(InvoicePrint.ymdFromValue("09/09/2026"), "2026-09-09");
+  assert.equal(InvoicePrint.ymdFromValue("2026-09-08T18:30:00.000Z"), "2026-09-09");
+  const officeDate = InvoicePrint.officeInvoiceBody(
+    {
+      order_number: "SO-1",
+      total: 100,
+      payments: [
+        {
+          entry_no: "RCP-1002",
+          entry_type: "receipt",
+          amount: 100,
+          payment_date: "2026-09-09",
+          created_at: "2026-09-19T10:00:00.000Z",
+        },
+      ],
+      lines: [],
+    },
+    ctx,
+  );
+  assert.match(officeDate, /2026-09-09/);
+  assert.doesNotMatch(officeDate, /2026-09-19T10:00:00/);
 });
 
 test("invoice due rows use previous due + invoice − payment", () => {

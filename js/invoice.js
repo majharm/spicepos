@@ -462,6 +462,63 @@ ${purchaseBody(purchase, ctx)}
     return l.item_name || l.name || "Item";
   }
 
+  function ymdFromValue(raw) {
+    if (raw == null || raw === "") return "";
+    if (raw instanceof Date && !Number.isNaN(raw.getTime())) {
+      const iso = raw.toISOString();
+      if (iso.slice(11, 19) === "00:00:00") return iso.slice(0, 10);
+      const y = raw.getFullYear();
+      const m = String(raw.getMonth() + 1).padStart(2, "0");
+      const d = String(raw.getDate()).padStart(2, "0");
+      return `${y}-${m}-${d}`;
+    }
+    const s = String(raw).trim();
+    if (/^\d{4}-\d{2}-\d{2}T/.test(s)) {
+      const parsed = new Date(s);
+      if (!Number.isNaN(parsed.getTime())) {
+        const iso = parsed.toISOString();
+        if (iso.slice(11, 19) === "00:00:00") return iso.slice(0, 10);
+        const parts = new Intl.DateTimeFormat("en-CA", {
+          timeZone: "Asia/Kolkata",
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit",
+        }).formatToParts(parsed);
+        const y = parts.find((p) => p.type === "year")?.value;
+        const m = parts.find((p) => p.type === "month")?.value;
+        const d = parts.find((p) => p.type === "day")?.value;
+        if (y && m && d) return `${y}-${m}-${d}`;
+      }
+    }
+    if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+    const dmy = s.match(/^(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{4})$/);
+    if (dmy) {
+      const first = Number(dmy[1]);
+      const second = Number(dmy[2]);
+      const year = dmy[3];
+      let day = first;
+      let month = second;
+      if (first <= 12 && second > 12) {
+        month = first;
+        day = second;
+      }
+      if (month >= 1 && month <= 12 && day >= 1 && day <= 31) {
+        return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+      }
+    }
+    const parsed = new Date(s);
+    if (!Number.isNaN(parsed.getTime())) return ymdFromValue(parsed);
+    return "";
+  }
+
+  function formatInvoiceDate(raw, ctx) {
+    const ymd = ymdFromValue(raw);
+    if (!ymd) return "";
+    if (ctx && typeof ctx.formatDate === "function") return ctx.formatDate(ymd);
+    if (ctx && typeof ctx.formatDateTime === "function") return ctx.formatDateTime(ymd);
+    return ymd;
+  }
+
   function invoicePaidFromOrder(order) {
     const total = round2(order?.total);
     const method = String(order?.payment_method || "").toLowerCase();
@@ -492,6 +549,7 @@ ${purchaseBody(purchase, ctx)}
         payment_reference: receipt.payment_reference || receipt.paymentReference,
         reference_type: receipt.reference_type || receipt.referenceType,
         notes: receipt.notes || "",
+        payment_date: receipt.payment_date || receipt.paymentDate || order.payment_date || "",
         created_at: receipt.created_at || receipt.createdAt || receipt.payment_date || order.payment_date || order.created_at,
       });
     }
@@ -504,7 +562,8 @@ ${purchaseBody(purchase, ctx)}
         payment_method: r.payment_method || r.paymentMethod || r.method || "",
         reference: r.payment_reference || r.paymentReference || r.reference || r.reference_type || r.referenceType || "",
         notes: r.notes || "",
-        created_at: r.created_at || r.createdAt || r.payment_date || r.paymentDate || "",
+        payment_date: r.payment_date || r.paymentDate || "",
+        created_at: r.created_at || r.createdAt || "",
       }))
       .filter((r) => String(r.entry_type).toLowerCase() === "receipt" && r.amount > 0);
     const unique = [];
@@ -526,7 +585,8 @@ ${purchaseBody(purchase, ctx)}
           payment_method: order.payment_method || "cash",
           reference: order.payment_reference || order.paymentReference || "",
           notes: order.notes || "",
-          created_at: order.payment_date || order.paymentDate || order.created_at || "",
+          payment_date: order.payment_date || order.paymentDate || "",
+          created_at: order.created_at || "",
         });
       }
     }
@@ -567,10 +627,16 @@ ${purchaseBody(purchase, ctx)}
     };
   }
 
-  function invoiceDueRowsHtml(order, money, escapeHtml) {
+  function invoiceDueRowsHtml(order, money, escapeHtml, ctx) {
     const due = invoiceDueFigures(order);
     const ref = String(order.payment_reference || order.paymentReference || "").trim();
-    const payDate = String(order.payment_date || order.paymentDate || "").slice(0, 10);
+    const payRaw =
+      order.payment_date ||
+      order.paymentDate ||
+      due.payments?.[0]?.payment_date ||
+      due.payments?.[0]?.created_at ||
+      "";
+    const payDate = formatInvoiceDate(payRaw, ctx);
     return `
       <tr><td colspan="3">Previous due</td><td class="inv-num">${escapeHtml(money(due.previous))}</td></tr>
       <tr><td colspan="3">Current invoice</td><td class="inv-num">${escapeHtml(money(due.total))}</td></tr>
@@ -704,7 +770,7 @@ ${purchaseBody(purchase, ctx)}
       ${gstRows}
       <tr class="inv-gst-total"><td colspan="3">${escapeHtml(L(ctx, "invoice.total_gst", "Total GST"))}</td><td class="inv-num">${escapeHtml(money(gst))}</td></tr>
       <tr class="inv-grand"><td colspan="3"><strong>${escapeHtml(L(ctx, "invoice.grand_total", "Grand total"))}</strong></td><td class="inv-num"><strong>${escapeHtml(money(total))}</strong></td></tr>
-      ${invoiceDueRowsHtml(order, money, escapeHtml)}
+      ${invoiceDueRowsHtml(order, money, escapeHtml, ctx)}
     </tbody>
   </table>
   <div class="inv-rule"></div>
@@ -959,7 +1025,7 @@ ${invoiceBody(order, ctx)}
             <td>${escapeHtml(r.payment_method || "—")}</td>
             <td>${escapeHtml(r.reference || "—")}</td>
             <td>${escapeHtml(r.notes || "—")}</td>
-            <td>${escapeHtml(r.created_at ? formatDateTime(r.created_at) : "—")}</td>
+            <td>${escapeHtml(formatInvoiceDate(r.payment_date || r.created_at, ctx) || "—")}</td>
           </tr>`)
             .join("")}
         </tbody>
@@ -1216,11 +1282,9 @@ ${officeInvoiceBody(order, ctx, { copy })}
     const reference = String(entry.payment_reference || entry.referenceNo || "").trim();
     const invoiceNo = String(entry.invoice_no || entry.invoiceNo || entry.against_invoice || "").trim();
     const invoiceAmt = entry.invoice_amount ?? entry.invoiceAmount;
-    const dateFmt = typeof ctx.formatDate === "function" ? ctx.formatDate : (v) => String(v || "").slice(0, 10);
-    const payRaw = String(entry.payment_date || entry.paymentDate || "").trim();
-    const payDate = payRaw
-      ? (/^\d{4}-\d{2}-\d{2}/.test(payRaw) ? dateFmt(payRaw.slice(0, 10)) : formatDateTime(payRaw))
-      : formatDateTime(entry.created_at || new Date().toISOString());
+    const payDate =
+      formatInvoiceDate(entry.payment_date || entry.paymentDate || entry.created_at, ctx) ||
+      formatDateTime(entry.created_at || new Date().toISOString());
     const previousDue = entry.previous_due ?? entry.previousDue;
     const remaining = entry.remaining_due ?? entry.remainingDue ?? entry.balance_due ?? entry.balanceDue;
     return `<article class="thermal-invoice">
@@ -1287,6 +1351,8 @@ ${voucherBody(entry, ctx)}
     invoicePaymentRows,
     voucherBody,
     voucherDocument,
+    ymdFromValue,
+    formatInvoiceDate,
     enrichLines,
     invoiceFigures,
     enrichPurchaseLines,

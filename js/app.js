@@ -549,7 +549,12 @@ function invoiceSettlementHtml(o) {
     : o.current_due != null ? Number(o.current_due) : Math.max(0, previous + total - paid);
   const mobile = o.customer_mobile || "";
   const ref = String(o.payment_reference || "").trim();
-  const payDate = String(o.payment_date || "").slice(0, 10);
+  const payRaw =
+    o.payment_date ||
+    due?.payments?.[0]?.payment_date ||
+    due?.payments?.[0]?.created_at ||
+    "";
+  const payDate = formatShopDate(payRaw);
   const receiptNo = o.receipt?.entryNo || o.receipt?.entry_no || o.receipt_entry_no || "";
   return `<details class="invoice-settle" open>
     <summary>Total due ${money(current)} · Paid till date ${money(paid)}</summary>
@@ -824,6 +829,8 @@ function paintCounterDue(c) {
 }
 
 function shopDateInputValue(value) {
+  const ymd = globalThis.InvoicePrint?.ymdFromValue?.(value);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(ymd || "")) return ymd;
   const raw = String(value || "").slice(0, 10);
   if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
   const now = new Date();
@@ -6911,7 +6918,7 @@ function renderPartyLedgerTable(targetId, data, kind) {
     .map((r, i) => {
       const printable = r.entry_type === "receipt" || r.entry_type === "payment";
       return `<tr>
-      <td>${escapeHtml(formatShopDateTime(r.created_at))}</td>
+      <td>${escapeHtml(formatShopDate(r.payment_date || r.created_at))}</td>
       <td>${escapeHtml(typeLabel(r.entry_type))}</td>
       <td>${escapeHtml(invoiceOf(r))}</td>
       <td>${r.debit ? money(r.debit) : "—"}</td>
@@ -6963,7 +6970,7 @@ async function loadAccountsTab(name) {
       <td>${escapeHtml(r.entry_no)}</td><td>${escapeHtml(r.entry_type)}</td><td>${escapeHtml(r.party_name || "—")}</td>
       <td>${money(Number(r.amount) || 0)}</td><td>${escapeHtml(r.payment_method || "—")}</td>
       <td>${escapeHtml(r.reference_type || "—")}</td><td>${escapeHtml(r.notes || "—")}</td>
-      <td>${escapeHtml(formatShopDateTime(r.created_at))}</td>
+      <td>${escapeHtml(formatShopDate(r.payment_date || r.created_at))}</td>
       <td>${printable ? voucherRowActions(i) : ""}</td></tr>`;
     }).join("")}</tbody></table>`;
   }
