@@ -365,6 +365,10 @@ test("Medical shops show pharmacy medicine fields on the item form", () => {
   assert.match(css, /\.classic-cust-toolbar/);
   assert.match(css, /\.classic-cust-chip/);
   assert.match(index, /id="classic-bill-date"/);
+  assert.match(index, /classic-bill-date-lab/);
+  assert.match(app, /function classicDateOnly/);
+  assert.match(css, /garment-counter-2026/);
+  assert.doesNotMatch(app, /getFullYear\(\)} \$\{pad\(now\.getHours/);
   assert.match(index, /id="classic-bill-entry"/);
   assert.match(index, /id="classic-item-hits"/);
   assert.match(index, /id="bill-item-search"/);

@@ -1645,7 +1645,7 @@ body.classic-bill-mode .classic-bill-head:not([hidden]) { display: grid; }
 }
 .classic-cust-toolbar {
   display: grid;
-  grid-template-columns: minmax(140px, 1.1fr) minmax(160px, 1.4fr) minmax(120px, 0.9fr) minmax(160px, 1.2fr);
+  grid-template-columns: minmax(140px, 1.1fr) minmax(160px, 1.4fr) minmax(88px, 0.7fr) minmax(160px, 1.2fr);
   gap: 6px 10px;
   align-items: end;
 }
@@ -6260,5 +6260,83 @@ html[dir="rtl"] select {
 @media (max-width: 980px) {
   .purchase-doc-split { grid-template-columns: 1fr; }
   .purchase-doc-head { flex-direction: column; }
+}
+
+/* garment-counter-2026: compact bill type + date-only */
+body.apparel-mode.classic-bill-mode.counter-mode .bill-panel,
+body.apparel-mode.classic-bill-mode.counter-mode .classic-bill-head,
+body.apparel-mode.classic-bill-mode.counter-mode .classic-bill-entry {
+  font-size: 12px;
+}
+body.apparel-mode.classic-bill-mode .classic-bill-head label,
+body.apparel-mode.classic-bill-mode .classic-bill-scan label {
+  font-size: 10px;
+  letter-spacing: 0.01em;
+}
+body.apparel-mode.classic-bill-mode .classic-bill-head input,
+body.apparel-mode.classic-bill-mode .classic-bill-scan input,
+body.apparel-mode.classic-bill-mode .classic-scan-field input {
+  min-height: 26px;
+  padding: 3px 6px;
+  font-size: 12px;
+  font-weight: 650;
+}
+body.apparel-mode.classic-bill-mode .classic-scan-field .scan-camera-btn {
+  flex-basis: 32px;
+  width: 32px;
+  min-width: 32px;
+  min-height: 26px;
+}
+body.apparel-mode.classic-bill-mode .classic-bill-scan .btn,
+body.apparel-mode.classic-bill-mode .classic-cust-add,
+body.apparel-mode.classic-bill-mode .classic-del {
+  min-height: 26px;
+  font-size: 12px;
+}
+body.apparel-mode.classic-bill-mode .classic-cust-chip,
+body.apparel-mode.classic-bill-mode .classic-cust-hit,
+body.apparel-mode.classic-bill-mode .classic-hit-main em,
+body.apparel-mode.classic-bill-mode .classic-hit-stock,
+body.apparel-mode.classic-bill-mode .classic-hit-exp,
+body.apparel-mode.classic-bill-mode .classic-hit-rate {
+  font-size: 11px;
+}
+body.apparel-mode.classic-bill-mode .classic-hit-main strong {
+  font-size: 12px;
+}
+body.apparel-mode.classic-bill-mode .pharm-bill-table {
+  font-size: 11px;
+}
+body.apparel-mode.classic-bill-mode .pharm-bill-table th {
+  font-size: 9px;
+  padding: 4px 5px;
+}
+body.apparel-mode.classic-bill-mode .pharm-bill-table td {
+  padding: 4px 5px;
+  font-size: 11px;
+}
+body.apparel-mode.classic-bill-mode .pharm-bill-table .qty button {
+  width: 22px;
+  height: 22px;
+  min-width: 22px;
+  font-size: 12px;
+}
+body.apparel-mode.classic-bill-mode .pharm-bill-table .qty-input,
+body.apparel-mode.classic-bill-mode .line-disc input,
+body.apparel-mode.classic-bill-mode .line-disc select {
+  min-height: 24px;
+  font-size: 11px;
+}
+body.apparel-mode.classic-bill-mode .totals,
+body.apparel-mode.classic-bill-mode .pay-row .btn {
+  font-size: 12px;
+}
+body.apparel-mode.classic-bill-mode .grand {
+  font-size: 14px;
+}
+.classic-bill-date-lab #classic-bill-date {
+  font-variant-numeric: tabular-nums;
+  max-width: 11.5ch;
+  letter-spacing: 0;
 }
 

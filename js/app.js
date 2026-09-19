@@ -1046,6 +1046,16 @@ function formatExpiryShort(raw) {
   return globalThis.POSFootwear?.formatExpiryShort?.(raw) || String(raw || "").slice(0, 10);
 }
 
+function classicDateOnly(raw) {
+  const s = String(raw || "").trim();
+  if (!s || s === "—") return "";
+  const iso = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (iso) return `${iso[3]}/${iso[2]}/${iso[1]}`;
+  const dmy = s.match(/^(\d{1,2})[./-](\d{1,2})[./-](\d{4})/);
+  if (dmy) return `${String(dmy[1]).padStart(2, "0")}/${String(dmy[2]).padStart(2, "0")}/${dmy[3]}`;
+  return s.slice(0, 10);
+}
+
 function pharmacyBillCustomerName() {
   const typed = String($("bill-cust-name")?.value || "").trim();
   if (typed) return typed;
@@ -3120,9 +3130,9 @@ function paintClassicItemHits() {
   box.innerHTML = rows.map((i) => {
     const { stock, exp } = classicItemAlerts(i);
     const extra = isPharmacyShop()
-      ? [i.batch_no, exp.short].filter(Boolean).join(" · ")
+      ? [i.batch_no, classicDateOnly(exp.date) || exp.short].filter(Boolean).join(" · ")
       : itemVariantText(i);
-    const expText = exp.expired ? `EXPIRED ${exp.short}` : exp.soon ? exp.label : (exp.short || "");
+    const expText = classicDateOnly(exp.date) || "";
     return `<button type="button" class="classic-hit tone-${stock.tone} exp-${exp.tone}" data-add="${escapeHtml(i.id)}">
       <span class="classic-hit-main"><strong>${escapeHtml(i.name)}</strong><em>${escapeHtml([i.code || i.barcode, extra].filter(Boolean).join(" · "))}</em></span>
       <span class="classic-hit-stock">${escapeHtml(stock.label)}</span>
@@ -3326,7 +3336,7 @@ function renderCart() {
           <td class="pharm-n">${idx + 1}</td>
           <td>${escapeHtml(item.code || item.hsn || "—")}</td>
           <td class="pharm-med">${escapeHtml(item.name)}</td>
-          <td>${escapeHtml(variant || "—")}${alert.exp.expired ? ` · EXPIRED ${escapeHtml(alert.exp.short)}` : ""}</td>
+          <td>${escapeHtml(variant || "—")}${alert.exp.expired ? ` · EXPIRED ${escapeHtml(classicDateOnly(alert.exp.date) || alert.exp.short)}` : ""}</td>
           <td class="pharm-n">${escapeHtml(money(rateFor(item)))}</td>
           <td>
             <div class="qty">
@@ -3416,7 +3426,7 @@ function renderCart() {
   if ($("classic-bill-date")) {
     const now = new Date();
     const pad = (n) => String(n).padStart(2, "0");
-    $("classic-bill-date").value = `${pad(now.getDate())}/${pad(now.getMonth() + 1)}/${now.getFullYear()} ${pad(now.getHours())}:${pad(now.getMinutes())}`;
+    $("classic-bill-date").value = `${pad(now.getDate())}/${pad(now.getMonth() + 1)}/${now.getFullYear()}`;
   }
   $("btn-pay").disabled = state.cart.length === 0;
   $("btn-clear").disabled = state.cart.length === 0 && !classicCustomerRecordDirty();
