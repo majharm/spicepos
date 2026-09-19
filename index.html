@@ -6,7 +6,7 @@
     <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
     <title>ATAV POS</title>
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./css/pos.css?v=20260919exp1" />
+    <link rel="stylesheet" href="./css/pos.css?v=20260919off1" />
     <link rel="stylesheet" href="./css/saas.css?v=20260905deploy136" />
   </head>
   <body>
@@ -1144,92 +1144,126 @@
         </section>
         <section class="view view-offers" id="view-offers" hidden>
           <h2 class="visually-hidden">Offers &amp; promotions</h2>
-          <p class="lede">Create, schedule, and track product, combo, and bill offers. Counter applies matching offers automatically.</p>
-          <p class="dash-actions">
-            <button class="btn primary" type="button" id="offer-create">Create new offer</button>
-            <button class="btn" type="button" id="offer-ai-btn">AI suggest best offer</button>
-          </p>
-          <div class="offer-dash" id="offer-dash"></div>
-          <p class="hint" id="offers-hint">Offers use this shop's own bills and catalog.</p>
-          <div class="offer-filters">
-            <button class="btn primary" type="button" data-offer-filter="active">Active</button>
-            <button class="btn" type="button" data-offer-filter="scheduled">Scheduled</button>
-            <button class="btn" type="button" data-offer-filter="expiring">Expiring soon</button>
-            <button class="btn" type="button" data-offer-filter="draft">Draft</button>
-            <button class="btn" type="button" data-offer-filter="paused">Inactive</button>
-            <button class="btn" type="button" data-offer-filter="all">All</button>
-          </div>
-          <label class="offer-stack-label">Stacking rule
-            <select id="off-shop-stack"></select>
-          </label>
-          <h3 class="growth-subhead">Templates</h3>
-          <div class="offer-templates" id="offer-templates"></div>
-          <h3 class="growth-subhead">AI recommendations</h3>
-          <div class="offer-ai" id="offer-ai"></div>
-          <h3 class="growth-subhead">Offers</h3>
-          <div class="offer-list" id="offer-list"></div>
-          <div class="growth-combo-form offer-form-wrap" id="offer-form-wrap" hidden>
-            <h4 id="off-form-title">Create new offer</h4>
-            <p class="hint" id="off-form-hint">Fill the offer, check profit, then save and activate.</p>
-            <form class="settings wide offer-form" id="offer-form">
-              <input type="hidden" id="off-id" />
-              <label>Offer name <input id="off-name" maxlength="180" required /></label>
-              <label>Offer type <select id="off-type"></select></label>
-              <label class="full">Description <input id="off-desc" maxlength="240" /></label>
-              <label>Products
-                <select id="off-items" multiple size="6"></select>
-              </label>
-              <label>Category <select id="off-category"></select></label>
-              <label>Start date <input id="off-start" type="date" /></label>
-              <label>End date <input id="off-end" type="date" /></label>
-              <label>Start time <input id="off-start-time" type="time" /></label>
-              <label>End time <input id="off-end-time" type="time" /></label>
-              <label>Days (0=Sun, 6=Sat) <input id="off-days" placeholder="0,6" /></label>
-              <label>Min qty <input id="off-min-qty" type="number" min="0" step="1" /></label>
-              <label>Max qty <input id="off-max-qty" type="number" min="0" step="1" /></label>
-              <label>Min purchase ₹ <input id="off-min-spend" type="number" min="0" step="1" /></label>
-              <label>Discount
-                <span class="disc-pair">
-                  <select id="off-disc-type">
-                    <option value="pct">%</option>
-                    <option value="amt">₹</option>
-                    <option value="price">Special price</option>
-                    <option value="combo_price">Combo price</option>
-                  </select>
-                  <input id="off-disc-value" type="number" min="0" step="0.01" />
-                </span>
-              </label>
-              <label>Offer / combo price <input id="off-price" type="number" min="0" step="0.01" /></label>
-              <label>Customer eligibility <select id="off-elig"></select></label>
-              <label>Branch <select id="off-branch"></select></label>
-              <label>Status
-                <select id="off-status">
-                  <option value="draft">Draft</option>
-                  <option value="scheduled">Scheduled</option>
-                  <option value="active">Active</option>
-                  <option value="paused">Inactive</option>
-                  <option value="expired">Expired</option>
-                  <option value="completed">Completed</option>
-                </select>
-              </label>
-              <label>Usage limit <input id="off-limit" type="number" min="0" step="1" /></label>
-              <label>Priority (1 first) <input id="off-priority" type="number" min="1" max="100" value="50" /></label>
-              <label>Stacking <select id="off-stack"></select></label>
-              <label>Loyalty points × <input id="off-loyalty" type="number" min="1" step="0.5" value="1" /></label>
-              <label>Buy qty (X) <input id="off-buy-qty" type="number" min="1" step="1" value="1" /></label>
-              <label>Get qty (Y) <input id="off-get-qty" type="number" min="1" step="1" value="1" /></label>
-              <label>Get product <select id="off-get-item"></select></label>
-              <label>Mix &amp; match pick <input id="off-pick" type="number" min="1" step="1" value="3" /></label>
-              <label>Bundle price <input id="off-bundle" type="number" min="0" step="0.01" /></label>
-              <label>Free / gift item <select id="off-free-item"></select></label>
-              <label class="full">Qty tiers (qty type value) <textarea id="off-qty-tiers" rows="3" placeholder="2 pct 5&#10;3 pct 10&#10;5 pct 15"></textarea></label>
-              <label class="full">Spend tiers (spend type value) <textarea id="off-spend-tiers" rows="3" placeholder="500 pct 5&#10;1000 pct 10"></textarea></label>
-              <div class="full offer-profit" id="off-profit"></div>
-              <div class="dash-actions full">
-                <button class="btn primary" type="submit">Save offer</button>
-                <button class="btn" type="button" id="off-cancel">Close</button>
+          <div class="items-desk offers-desk">
+            <header class="items-hero">
+              <div class="items-hero-copy">
+                <p class="items-kicker">Promotions</p>
+                <h3>Offers</h3>
+                <p class="lede">Create, schedule, and track product, combo, and bill offers. Counter applies matching offers automatically.</p>
               </div>
-            </form>
+              <div class="items-hero-stats offer-dash" id="offer-dash"></div>
+            </header>
+            <div class="item-import-bar offer-toolbar">
+              <div class="offer-filters expiry-filters">
+                <button class="btn primary" type="button" data-offer-filter="active">Active</button>
+                <button class="btn" type="button" data-offer-filter="scheduled">Scheduled</button>
+                <button class="btn" type="button" data-offer-filter="expiring">Expiring soon</button>
+                <button class="btn" type="button" data-offer-filter="draft">Draft</button>
+                <button class="btn" type="button" data-offer-filter="paused">Inactive</button>
+                <button class="btn" type="button" data-offer-filter="all">All</button>
+              </div>
+              <label class="offer-stack-label">Stacking
+                <select id="off-shop-stack"></select>
+              </label>
+              <div class="item-import-actions">
+                <button class="btn primary" type="button" id="offer-create">Create new offer</button>
+                <button class="btn" type="button" id="offer-ai-btn">AI suggest best offer</button>
+              </div>
+              <p class="hint" id="offers-hint">Offers use this shop's own bills and catalog.</p>
+            </div>
+            <div class="items-split">
+              <form class="settings item-composer offer-form" id="offer-form" autocomplete="off">
+                <input type="hidden" id="off-id" />
+                <div class="item-composer-top">
+                  <p class="item-mode" id="off-form-title">Create new offer</p>
+                  <p class="item-composer-note" id="off-form-hint">Fill the offer, check profit, then save and activate.</p>
+                </div>
+                <fieldset class="item-block">
+                  <legend>Basics</legend>
+                  <label class="full">Offer name <input id="off-name" maxlength="180" required placeholder="Weekend 10% off" /></label>
+                  <label>Offer type <select id="off-type"></select></label>
+                  <label>Status
+                    <select id="off-status">
+                      <option value="draft">Draft</option>
+                      <option value="scheduled">Scheduled</option>
+                      <option value="active">Active</option>
+                      <option value="paused">Inactive</option>
+                      <option value="expired">Expired</option>
+                      <option value="completed">Completed</option>
+                    </select>
+                  </label>
+                  <label class="full">Description <input id="off-desc" maxlength="240" placeholder="Shown on Counter when this offer matches" /></label>
+                </fieldset>
+                <fieldset class="item-block">
+                  <legend>Schedule</legend>
+                  <label>Start date <input id="off-start" type="date" /></label>
+                  <label>End date <input id="off-end" type="date" /></label>
+                  <label data-offer-when="time,festival">Start time <input id="off-start-time" type="time" /></label>
+                  <label data-offer-when="time,festival">End time <input id="off-end-time" type="time" /></label>
+                  <label class="full" data-offer-when="day,festival">Days (0=Sun, 6=Sat) <input id="off-days" placeholder="0,6" /></label>
+                </fieldset>
+                <fieldset class="item-block">
+                  <legend>Discount</legend>
+                  <label>Discount
+                    <span class="disc-pair">
+                      <select id="off-disc-type">
+                        <option value="pct">%</option>
+                        <option value="amt">₹</option>
+                        <option value="price">Special price</option>
+                        <option value="combo_price">Combo price</option>
+                      </select>
+                      <input id="off-disc-value" type="number" min="0" step="0.01" />
+                    </span>
+                  </label>
+                  <label data-offer-when="combo,mix_match,product,clearance">Offer / combo price <input id="off-price" type="number" min="0" step="0.01" /></label>
+                  <label data-offer-when="qty,product,combo,clearance,mix_match">Min qty <input id="off-min-qty" type="number" min="0" step="1" /></label>
+                  <label data-offer-when="qty,product,combo,clearance,mix_match">Max qty <input id="off-max-qty" type="number" min="0" step="1" /></label>
+                  <label data-offer-when="spend,min_purchase,first_purchase,customer,repeat,festival">Min purchase ₹ <input id="off-min-spend" type="number" min="0" step="1" /></label>
+                  <label class="full" data-offer-when="qty">Qty tiers (qty type value) <textarea id="off-qty-tiers" rows="3" placeholder="2 pct 5&#10;3 pct 10&#10;5 pct 15"></textarea></label>
+                  <label class="full" data-offer-when="spend">Spend tiers (spend type value) <textarea id="off-spend-tiers" rows="3" placeholder="500 pct 5&#10;1000 pct 10"></textarea></label>
+                </fieldset>
+                <fieldset class="item-block" data-offer-when="combo,product,bogo,mix_match,qty,free_gift,clearance,category">
+                  <legend>Products</legend>
+                  <label class="full" data-offer-when="combo,product,bogo,mix_match,qty,free_gift,clearance">Products
+                    <select id="off-items" multiple size="6"></select>
+                  </label>
+                  <label data-offer-when="category">Category <select id="off-category"></select></label>
+                  <label data-offer-when="bogo">Buy qty (X) <input id="off-buy-qty" type="number" min="1" step="1" value="1" /></label>
+                  <label data-offer-when="bogo">Get qty (Y) <input id="off-get-qty" type="number" min="1" step="1" value="1" /></label>
+                  <label class="full" data-offer-when="bogo">Get product <select id="off-get-item"></select></label>
+                  <label data-offer-when="mix_match">Mix &amp; match pick <input id="off-pick" type="number" min="1" step="1" value="3" /></label>
+                  <label data-offer-when="mix_match">Bundle price <input id="off-bundle" type="number" min="0" step="0.01" /></label>
+                  <label class="full" data-offer-when="free_gift">Free / gift item <select id="off-free-item"></select></label>
+                </fieldset>
+                <fieldset class="item-block">
+                  <legend>Rules</legend>
+                  <label>Customer eligibility <select id="off-elig"></select></label>
+                  <label>Branch <select id="off-branch"></select></label>
+                  <label>Usage limit <input id="off-limit" type="number" min="0" step="1" /></label>
+                  <label>Priority (1 first) <input id="off-priority" type="number" min="1" max="100" value="50" /></label>
+                  <label>Stacking <select id="off-stack"></select></label>
+                  <label>Loyalty points × <input id="off-loyalty" type="number" min="1" step="0.5" value="1" /></label>
+                </fieldset>
+                <div class="full offer-profit" id="off-profit"></div>
+                <div class="item-composer-actions">
+                  <button class="btn primary" type="submit">Save offer</button>
+                  <button class="btn" type="button" id="off-cancel">Clear</button>
+                  <p class="hint" id="off-form-status"></p>
+                </div>
+              </form>
+              <aside class="items-library">
+                <div class="items-library-head">
+                  <h4>All offers</h4>
+                  <input id="offer-search" type="search" placeholder="Search name, type, product…" autocomplete="off" />
+                </div>
+                <div class="offer-templates" id="offer-templates"></div>
+                <details class="offer-ai-panel">
+                  <summary>AI recommendations</summary>
+                  <div class="offer-ai" id="offer-ai"></div>
+                </details>
+                <div class="offer-list items-library-list" id="offer-list"></div>
+              </aside>
+            </div>
           </div>
         </section>
         <section class="view" id="view-staff" hidden>
@@ -1898,6 +1932,6 @@
     <script src="./js/payment-methods.js?v=20260918pay1" defer></script>
     <script src="./js/app.js?v=20260919xls2" defer></script>
     <script src="./js/growth.js?v=20260905deploy145" defer></script>
-    <script src="./js/offers-ui.js?v=20260905deploy136" defer></script>
+    <script src="./js/offers-ui.js?v=20260919off1" defer></script>
   </body>
 </html>

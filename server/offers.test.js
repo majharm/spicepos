@@ -16,6 +16,9 @@ test("shop UI wires the Offers desk and Counter auto-apply", () => {
   const till = readFileSync(path.join(root, "pos-php-till.php"), "utf8");
   assert.match(html, /data-view="offers"/);
   assert.match(html, /Create new offer/);
+  assert.match(html, /offers-desk/);
+  assert.match(html, /id="offer-search"/);
+  assert.match(html, /data-offer-when/);
   assert.match(html, /js\/offers\.js/);
   assert.match(html, /offer-banner/);
   assert.match(html, /id="offer-popup"/);
@@ -32,6 +35,8 @@ test("shop UI wires the Offers desk and Counter auto-apply", () => {
   assert.match(engine, /Add \$\{needQty\} more/);
   assert.match(ui, /deleteOfferById/);
   assert.match(ui, /data-offer-del/);
+  assert.match(ui, /syncOfferFormFields/);
+  assert.match(ui, /offerSearch/);
   assert.match(ui, /Inactive/);
   assert.match(html, /data-offer-filter="paused"/);
   assert.match(php, /pos_duplicate_offer/);

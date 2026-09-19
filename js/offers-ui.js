@@ -3,6 +3,7 @@ let offerDraft = null;
 let offerList = [];
 let offerStats = null;
 let offerFilter = "active";
+let offerSearch = "";
 
 function offerEngine() {
   return globalThis.POSOffers;
@@ -159,27 +160,59 @@ function applyOfferDraft(draft, id) {
       o.selected = (cond.item_ids || []).includes(o.value);
     });
   }
-  $("offer-form-wrap").hidden = false;
-  $("off-form-title").textContent = offerDraft.id ? "Edit offer" : "Create new offer";
+  const form = $("offer-form");
+  if (form) {
+    form.hidden = false;
+    form.classList.toggle("is-editing", Boolean(offerDraft.id));
+  }
+  if ($("off-form-title")) $("off-form-title").textContent = offerDraft.id ? "Edit offer" : "Create new offer";
+  if ($("off-form-hint")) {
+    $("off-form-hint").textContent = offerDraft.id
+      ? "Change the fields that apply to this offer type, then save."
+      : "Fill the offer, check profit, then save and activate.";
+    $("off-form-hint").className = "item-composer-note";
+  }
+  if ($("off-form-status")) {
+    $("off-form-status").textContent = "";
+    $("off-form-status").className = "hint";
+  }
+  syncOfferFormFields(offerDraft.offer_type || $("off-type")?.value || "product");
   paintOfferProfit();
   $("off-name")?.focus();
+}
+
+function offerWhenList(raw) {
+  return String(raw || "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+function syncOfferFormFields(type) {
+  const t = type || $("off-type")?.value || "product";
+  document.querySelectorAll("#offer-form [data-offer-when]").forEach((el) => {
+    const show = offerWhenList(el.dataset.offerWhen).includes(t);
+    el.hidden = !show;
+  });
 }
 
 function resetOfferForm() {
   applyOfferDraft(offerEngine()?.normalize({ name: "New offer", type: "product", status: "draft", discount_type: "pct", discount_value: 10 }) || { name: "New offer" });
   if ($("off-id")) $("off-id").value = "";
   offerDraft = { ...offerDraft, id: "" };
+  $("offer-form")?.classList.remove("is-editing");
+  if ($("off-form-title")) $("off-form-title").textContent = "Create new offer";
 }
 
 function paintOfferDash(stats) {
   const c = stats?.counts || {};
-  $("offer-dash").innerHTML = `
-    <article class="offer-kpi"><strong>${c.active || 0}</strong><span>Active</span></article>
-    <article class="offer-kpi"><strong>${c.scheduled || 0}</strong><span>Scheduled</span></article>
-    <article class="offer-kpi"><strong>${(stats?.expiring || []).length}</strong><span>Expiring soon</span></article>
-    <article class="offer-kpi"><strong>${money(stats?.totals?.revenue || 0)}</strong><span>Offer sales</span></article>
-    <article class="offer-kpi"><strong>${money(stats?.totals?.discount || 0)}</strong><span>Discount given</span></article>
-    <article class="offer-kpi"><strong>${stats?.totals?.customers || 0}</strong><span>Customers</span></article>`;
+  const el = $("offer-dash");
+  if (!el) return;
+  el.innerHTML = `
+    <div class="items-stat"><span>Active</span><strong>${c.active || 0}</strong></div>
+    <div class="items-stat"><span>Scheduled</span><strong>${c.scheduled || 0}</strong></div>
+    <div class="items-stat${(stats?.expiring || []).length ? " is-warn" : ""}"><span>Expiring</span><strong>${(stats?.expiring || []).length}</strong></div>
+    <div class="items-stat"><span>Offer sales</span><strong>${money(stats?.totals?.revenue || 0)}</strong></div>`;
 }
 
 function paintOfferIdeas(ideas) {
@@ -193,7 +226,7 @@ function paintOfferIdeas(ideas) {
         <button class="btn primary" type="button" data-offer-idea="${idx}">Create offer</button>
       </article>`,
     )
-    .join("") || `<p class="hint">AI ideas appear after a few billed days.</p>`;
+    .join("") || `<div class="item-empty-card"><strong>No AI ideas yet</strong><p>AI ideas appear after a few billed days.</p></div>`;
   root._ideas = ideas || [];
 }
 
@@ -202,41 +235,62 @@ function offerStatusLabel(st) {
   return st || "draft";
 }
 
-function paintOfferList() {
-  const rows = offerList.filter((o) => {
+function filteredOfferRows() {
+  const q = String(offerSearch || "")
+    .trim()
+    .toLowerCase();
+  return offerList.filter((o) => {
     const st = o.live_status || o.status;
-    if (offerFilter === "all") return true;
-    if (offerFilter === "expiring") return (offerStats?.expiring || []).some((x) => x.id === o.id);
-    if (offerFilter === "paused") return st === "paused" || st === "completed";
-    return st === offerFilter;
+    if (offerFilter === "expiring") {
+      if (!(offerStats?.expiring || []).some((x) => x.id === o.id)) return false;
+    } else if (offerFilter === "paused") {
+      if (st !== "paused" && st !== "completed") return false;
+    } else if (offerFilter !== "all" && st !== offerFilter) {
+      return false;
+    }
+    if (!q) return true;
+    const cond = o.conditions || {};
+    const items = (cond.item_ids || []).map((id) => state.items.find((i) => i.id === id)?.name || id).join(" ");
+    const hay = [o.name, o.description, o.offer_type, o.status, o.live_status, items, cond.category].join(" ").toLowerCase();
+    return hay.includes(q);
   });
-  $("offer-list").innerHTML = rows
-    .map((o) => {
-      const st = o.live_status || o.status;
-      const cond = o.conditions || {};
-      const items = (cond.item_ids || []).map((id) => state.items.find((i) => i.id === id)?.name || id).filter(Boolean);
-      const label = offerStatusLabel(st);
-      return `<article class="offer-card is-${escapeHtml(st)}">
+}
+
+function paintOfferList() {
+  const rows = filteredOfferRows();
+  const emptyCopy =
+    offerSearch || offerFilter !== "all"
+      ? `<div class="item-empty-card"><strong>No offers match</strong><p>Clear search or pick All to see every promotion.</p></div>`
+      : `<div class="item-empty-card"><strong>No offers yet</strong><p>Create one on the left, or tap a template above.</p></div>`;
+  $("offer-list").innerHTML =
+    rows
+      .map((o) => {
+        const st = o.live_status || o.status;
+        const cond = o.conditions || {};
+        const items = (cond.item_ids || []).map((id) => state.items.find((i) => i.id === id)?.name || id).filter(Boolean);
+        const label = offerStatusLabel(st);
+        return `<article class="offer-card is-${escapeHtml(st)}">
         <header>
           <strong>${escapeHtml(o.name)}</strong>
           <span class="offer-status">${escapeHtml(label)}</span>
         </header>
         <p>${escapeHtml(o.description || o.offer_type)} ${items.length ? `· ${escapeHtml(items.slice(0, 3).join(" + "))}` : ""}</p>
         <p class="hint">${escapeHtml(o.offer_type)} · ${o.discount_type === "pct" ? `${o.discount_value}%` : money(o.offer_price || o.discount_value)} off · used ${o.used_count || 0}${o.usage_limit ? `/${o.usage_limit}` : ""}</p>
-        <div class="dash-actions">
+        <div class="item-card-actions dash-actions">
           <button class="btn" type="button" data-offer-edit="${escapeHtml(o.id)}">Edit</button>
           <button class="btn" type="button" data-offer-status="${escapeHtml(o.id)}" data-status="${st === "active" ? "paused" : "active"}">${st === "active" ? "Inactive" : "Activate"}</button>
           <button class="btn" type="button" data-offer-dup="${escapeHtml(o.id)}">Duplicate</button>
           <button class="btn danger" type="button" data-offer-del="${escapeHtml(o.id)}">Delete</button>
         </div>
       </article>`;
-    })
-    .join("") || `<p class="hint">No offers in this list yet. Use Create new offer or an AI suggestion.</p>`;
+      })
+      .join("") || emptyCopy;
 }
 
 async function loadOffersDesk(force) {
   if (!force && offerList.length && $("view-offers")?.hidden) return;
   fillOfferSelects();
+  syncOfferFormFields($("off-type")?.value || "product");
   try {
     const [list, stats, ideas, settings] = await Promise.all([
       api("/api/offers"),
@@ -289,7 +343,7 @@ async function duplicateOfferById(id) {
         ? `${offer?.name || "Copy"} created and is Active. Counter will apply it when the cart matches.`
         : `${offer?.name || "Copy"} created as ${live}. Activate it when you want it on the Counter.`;
     $("offers-hint").className = "hint ok";
-    $("offer-form-wrap")?.scrollIntoView({ block: "nearest" });
+        $("offer-form")?.scrollIntoView({ block: "nearest" });
   } catch (err) {
     $("offers-hint").textContent = err.message || "Could not duplicate this offer";
     $("offers-hint").className = "hint error";
@@ -329,10 +383,7 @@ async function deleteOfferById(id) {
     $("offers-hint").textContent = "Deleting offer…";
     $("offers-hint").className = "hint";
     await api(`/api/offers/${encodeURIComponent(id)}`, { method: "DELETE" });
-    if ($("off-id")?.value === id) {
-      $("offer-form-wrap").hidden = true;
-      if ($("off-id")) $("off-id").value = "";
-    }
+    if ($("off-id")?.value === id) resetOfferForm();
     await loadOffersDesk(true);
     $("offers-hint").textContent = `${name} deleted.`;
     $("offers-hint").className = "hint ok";
@@ -345,25 +396,34 @@ async function deleteOfferById(id) {
 async function saveOfferForm(e) {
   e?.preventDefault?.();
   const draft = readOfferForm();
+  const hint = $("off-form-status") || $("off-form-hint");
   if (!draft) {
-    $("off-form-hint").textContent = "Give the offer a name.";
-    $("off-form-hint").className = "hint error";
+    if (hint) {
+      hint.textContent = "Give the offer a name.";
+      hint.className = "hint error";
+    }
     return;
   }
   const id = $("off-id")?.value;
   try {
-    $("off-form-hint").textContent = "Saving…";
-    $("off-form-hint").className = "hint";
+    if (hint) {
+      hint.textContent = "Saving…";
+      hint.className = "hint";
+    }
     const data = id
       ? await api(`/api/offers/${encodeURIComponent(id)}`, { method: "PUT", body: JSON.stringify(draft) })
       : await api("/api/offers", { method: "POST", body: JSON.stringify(draft) });
     const offer = data.offer || data;
-    $("off-form-hint").textContent = `${offer.name} saved. Counter will apply it when the cart matches.`;
-    $("off-form-hint").className = "hint ok";
+    if (hint) {
+      hint.textContent = `${offer.name} saved. Counter will apply it when the cart matches.`;
+      hint.className = "hint ok";
+    }
     await loadOffersDesk(true);
   } catch (err) {
-    $("off-form-hint").textContent = err.message;
-    $("off-form-hint").className = "hint error";
+    if (hint) {
+      hint.textContent = err.message;
+      hint.className = "hint error";
+    }
   }
 }
 
@@ -377,9 +437,11 @@ function bindOffersUi() {
   if ($("off-elig") && O) $("off-elig").innerHTML = O.ELIGIBILITY.map((t) => `<option value="${t.id}">${t.label}</option>`).join("");
   if ($("off-stack") && O) $("off-stack").innerHTML = O.STACKING.map((t) => `<option value="${t.id}">${t.label}</option>`).join("");
   if ($("off-shop-stack") && O) $("off-shop-stack").innerHTML = O.STACKING.map((t) => `<option value="${t.id}">${t.label}</option>`).join("");
-  $("offer-templates").innerHTML = (O?.TEMPLATES || [])
-    .map((t) => `<button class="btn" type="button" data-offer-tpl="${escapeHtml(t.id)}">${escapeHtml(t.name)}</button>`)
-    .join("");
+  if ($("offer-templates")) {
+    $("offer-templates").innerHTML = (O?.TEMPLATES || [])
+      .map((t) => `<button class="btn" type="button" data-offer-tpl="${escapeHtml(t.id)}">${escapeHtml(t.name)}</button>`)
+      .join("");
+  }
   $("view-offers")?.addEventListener("click", (e) => {
     const tpl = e.target.closest("[data-offer-tpl]");
     if (tpl) {
@@ -416,14 +478,22 @@ function bindOffersUi() {
   });
   $("offer-create")?.addEventListener("click", () => resetOfferForm());
   $("offer-ai-btn")?.addEventListener("click", async () => {
+    const panel = document.querySelector(".offer-ai-panel");
+    if (panel) panel.open = true;
     const data = await api("/api/offers/suggest");
     paintOfferIdeas(data.ideas || []);
     $("offer-ai")?.scrollIntoView({ block: "nearest" });
   });
   $("offer-form")?.addEventListener("submit", (e) => void saveOfferForm(e));
   $("offer-form")?.addEventListener("input", () => paintOfferProfit());
-  $("off-cancel")?.addEventListener("click", () => {
-    $("offer-form-wrap").hidden = true;
+  $("off-type")?.addEventListener("change", () => {
+    syncOfferFormFields($("off-type").value);
+    paintOfferProfit();
+  });
+  $("off-cancel")?.addEventListener("click", () => resetOfferForm());
+  $("offer-search")?.addEventListener("input", () => {
+    offerSearch = $("offer-search").value || "";
+    paintOfferList();
   });
   document.querySelectorAll("[data-offer-filter]").forEach((btn) => {
     btn.addEventListener("click", () => {
@@ -434,6 +504,7 @@ function bindOffersUi() {
   $("off-shop-stack")?.addEventListener("change", async () => {
     await api("/api/offers/settings", { method: "PUT", body: JSON.stringify({ stacking: $("off-shop-stack").value, allow_loyalty: true }) });
   });
+  syncOfferFormFields($("off-type")?.value || "product");
 }
 
 function openOffersCreate(draft) {
