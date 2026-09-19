@@ -234,6 +234,8 @@ function applyFootwearMode() {
   if (classicEntry) classicEntry.hidden = !isClassicBillShop();
   const extras = $("bill-extras");
   if (extras && isClassicBillShop()) extras.open = true;
+  const payMore = $("bill-pay-more");
+  if (payMore && isClassicBillShop()) payMore.open = true;
   if (isClassicBillShop()) {
     state.stockMode = "advanced";
     document.getElementById("view-stock")?.classList.add("is-advanced");
@@ -815,14 +817,18 @@ function paintCounterDue(c) {
       ? 0
       : bill;
   const after = Math.max(0, due + bill - paid);
+  const formula = `Previous due ${money(due)} + invoice ${money(bill)} − paid ${money(paid)} = ${money(after)}`;
   let label = "";
-  if (bill > 0 || due > 0) {
-    label = `Previous due ${money(due)} + invoice ${money(bill)} − paid ${money(paid)} = ${money(after)}`;
+  if (due > 0) {
+    label = after === due ? `Due ${money(due)}` : `Due ${money(due)} → ${money(after)}`;
+  } else if (bill > 0 && paid + 0.009 < bill) {
+    label = `Balance ${money(after)}`;
   }
   const chip = $("bill-due");
   if (chip) {
     chip.hidden = !label;
     chip.textContent = label;
+    chip.title = formula;
   }
   const row = $("due-row");
   if (row) row.hidden = !(due > 0);
@@ -3354,6 +3360,10 @@ function renderCart() {
   if ($("disc-total")) $("disc-total").textContent = money((t.discount || 0) + (t.lineDiscount || 0));
   if ($("loyalty-total")) $("loyalty-total").textContent = money(t.loyalty || 0);
   if ($("profit-total")) $("profit-total").textContent = money(t.profit || 0);
+  if ($("disc-row")) $("disc-row").hidden = !(((t.discount || 0) + (t.lineDiscount || 0)) > 0);
+  if ($("loyalty-row")) $("loyalty-row").hidden = !(Number(t.loyalty) > 0);
+  if ($("taxable-row")) $("taxable-row").hidden = !(Number(t.taxable) > 0);
+  if ($("gst-row")) $("gst-row").hidden = !(Number(t.tax) > 0);
   $("total").textContent = money(t.total != null ? t.total : t.taxable + t.tax);
   if ($("ticket-sub")) {
     const R = restaurantApi();
@@ -3390,7 +3400,7 @@ function renderCart() {
         : tt("pos.pay", "Pay");
   const face = $("customer-face");
   if (face) {
-    face.hidden = state.cart.length === 0;
+    face.hidden = true;
     if ($("face-subtotal")) $("face-subtotal").textContent = money(t.taxable);
     if ($("face-discount")) $("face-discount").textContent = money((t.discount || 0) + (t.lineDiscount || 0));
     if ($("face-total")) $("face-total").textContent = money(t.total != null ? t.total : t.taxable + t.tax);

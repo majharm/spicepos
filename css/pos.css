@@ -2142,6 +2142,10 @@ body.bill-collapsed .bill-toggle[data-count]:not([data-count="0"])::after {
 }
 .ticket-due[hidden],
 #due-row[hidden],
+#taxable-row[hidden],
+#gst-row[hidden],
+#disc-row[hidden],
+#loyalty-row[hidden],
 #face-due-row[hidden] { display: none; }
 #due-row span:last-child,
 #face-due { color: #b45309; }
@@ -4054,10 +4058,31 @@ button.items-stat.is-active {
 }
 .bill-settle {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr) minmax(0, 0.9fr);
+  grid-template-columns: minmax(0, 1fr);
   gap: 8px;
   padding: 8px 0 4px;
 }
+body.classic-bill-mode .bill-settle {
+  grid-template-columns: minmax(0, 1fr);
+}
+.bill-pay-more {
+  margin: 0;
+}
+.bill-pay-more > summary {
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+  list-style: none;
+}
+.bill-pay-more > summary::-webkit-details-marker { display: none; }
+.bill-pay-more-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.9fr);
+  gap: 8px;
+  padding-top: 8px;
+}
+.view-counter .customer-face { display: none !important; }
 .bill-settle label {
   display: grid;
   gap: 3px;
@@ -5129,9 +5154,11 @@ button.items-stat.is-active {
     grid-template-columns: 1fr;
     margin: 0;
   }
-  .stage.is-counter .totals div:not(.grand) { display: none; }
+  .stage.is-counter .totals-meta,
+  .stage.is-counter .customer-face { display: none; }
   .stage.is-counter .totals { padding: 4px 12px 0; }
   .stage.is-counter .totals .grand { font-size: 16px; }
+  .stage.is-counter .bill-settle { display: grid; padding-top: 4px; }
   body:not(.has-cart) .stage.is-counter .lines { display: none; }
   body.classic-bill-mode .stage.is-counter .lines,
   body.classic-bill-mode .stage.is-counter #lines,
@@ -5291,6 +5318,7 @@ button.items-stat.is-active {
 }
 
 @media (max-width: 640px) {
+  .bill-pay-more-grid { grid-template-columns: 1fr; }
   .bill-settle,
   .invoice-settle-grid { grid-template-columns: 1fr; }
   .classic-cust-toolbar { grid-template-columns: 1fr; }

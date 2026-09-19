@@ -6,7 +6,7 @@
     <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
     <title>ATAV POS</title>
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./css/pos.css?v=20260919off1" />
+    <link rel="stylesheet" href="./css/pos.css?v=20260919bill1" />
     <link rel="stylesheet" href="./css/saas.css?v=20260905deploy136" />
   </head>
   <body>
@@ -273,7 +273,7 @@
               <div id="offer-banner" class="combo-banner offer-banner" hidden></div>
               <div class="lines" id="lines"></div>
               <details class="bill-extras" id="bill-extras">
-                <summary>Discount &amp; royalty</summary>
+                <summary>Discount</summary>
                 <div class="bill-disc" id="bill-disc-wrap">
                   <div class="classic-loyalty-bar" id="classic-loyalty-balance" hidden></div>
                   <div class="classic-disc-row">
@@ -286,7 +286,7 @@
                         <input id="bill-disc-value" type="number" min="0" step="0.01" value="0" aria-label="Bill discount value" />
                       </span>
                     </label>
-                    <label class="loyalty-redeem" id="loyalty-redeem-wrap">Redeem royalty
+                    <label class="loyalty-redeem" id="loyalty-redeem-wrap">Royalty points
                       <input id="loyalty-redeem" type="number" min="0" step="1" value="0" aria-label="Points to redeem" placeholder="0" />
                       <span class="hint" id="loyalty-hint"></span>
                     </label>
@@ -296,18 +296,23 @@
               <div class="totals">
                 <div class="totals-meta">
                   <div><span data-i18n="pos.quantity">Qty</span><span id="qty-total">0</span></div>
-                  <div><span data-i18n="pos.taxable">Taxable</span><span id="taxable">₹0.00</span></div>
-                  <div><span data-i18n="pos.gst">GST</span><span id="tax">₹0.00</span></div>
-                  <div id="disc-row"><span data-i18n="pos.discount">Discount</span><span id="disc-total">₹0.00</span></div>
-                  <div id="loyalty-row"><span data-i18n="pos.royalty">Royalty</span><span id="loyalty-total">₹0.00</span></div>
+                  <div id="taxable-row"><span data-i18n="pos.taxable">Taxable</span><span id="taxable">₹0.00</span></div>
+                  <div id="gst-row"><span data-i18n="pos.gst">GST</span><span id="tax">₹0.00</span></div>
+                  <div id="disc-row" hidden><span data-i18n="pos.discount">Discount</span><span id="disc-total">₹0.00</span></div>
+                  <div id="loyalty-row" hidden><span data-i18n="pos.royalty">Royalty</span><span id="loyalty-total">₹0.00</span></div>
                   <div id="profit-row"><span data-i18n="pos.profit">Profit</span><span id="profit-total">₹0.00</span></div>
                   <div id="due-row" hidden><span>Outstanding</span><span id="due-total">₹0.00</span></div>
                 </div>
                 <div class="grand"><span data-i18n="pos.total">Total</span><span id="total">₹0.00</span></div>
                 <div class="bill-settle" id="bill-settle">
-                  <label>Amount paid <input id="pay-amount" type="number" min="0" step="0.01" inputmode="decimal" aria-label="Amount paid" /></label>
-                  <label>Reference / UTR <input id="pay-ref" maxlength="80" placeholder="UTR / cheque no." aria-label="Payment reference" /></label>
-                  <label>Payment date <input id="pay-date" type="date" aria-label="Payment date" /></label>
+                  <label>Paid now <input id="pay-amount" type="number" min="0" step="0.01" inputmode="decimal" aria-label="Amount paid" /></label>
+                  <details class="bill-pay-more" id="bill-pay-more">
+                    <summary>UTR &amp; date</summary>
+                    <div class="bill-pay-more-grid">
+                      <label>Reference / UTR <input id="pay-ref" maxlength="80" placeholder="UTR / cheque no." aria-label="Payment reference" /></label>
+                      <label>Payment date <input id="pay-date" type="date" aria-label="Payment date" /></label>
+                    </div>
+                  </details>
                 </div>
                 <div class="customer-face" id="customer-face" hidden>
                   <p class="customer-face-kicker" data-i18n="pos.customer_display">Customer display</p>
@@ -1930,7 +1935,7 @@
     <script src="./js/qrcode.iife.js?v=20260905qr1" defer></script>
     <script src="./js/qr-notify.js?v=20260914kot1" defer></script>
     <script src="./js/payment-methods.js?v=20260918pay1" defer></script>
-    <script src="./js/app.js?v=20260919xls2" defer></script>
+    <script src="./js/app.js?v=20260919bill1" defer></script>
     <script src="./js/growth.js?v=20260905deploy145" defer></script>
     <script src="./js/offers-ui.js?v=20260919off1" defer></script>
   </body>
