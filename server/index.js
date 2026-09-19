@@ -19,6 +19,7 @@ import { attachAuth, registerAuth, requireStaff, requirePerm } from "./auth.js";
 import { normalizeLocale, normalizeInvoiceLanguage, normalizeWhatsappLanguage, clipInvoiceText, attachInvoiceText } from "./i18n.js";
 import { registerMaster } from "./master.js";
 import { registerTenant } from "./tenant.js";
+import { registerHub } from "./hub.js";
 import { registerBackup } from "./backup.js";
 import { registerUnits, ensureInventoryUnits } from "./units.js";
 import { registerAccounts, recordCreditSale, settleCustomerInvoice, listCustomerReceipts, attachPaymentsToOrders } from "./accounts.js";
@@ -187,6 +188,7 @@ app.use((req, res, next) => {
 });
 registerMaster(app);
 registerTenant(app);
+registerHub(app);
 registerAdvanced(app);
 registerReturns(app);
 registerBackup(app);

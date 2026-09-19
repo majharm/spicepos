@@ -13,6 +13,9 @@ export const EXPENSE_COA = [
   { code: "5106", name: "Packaging", account_group: "expense" },
   { code: "5107", name: "Telephone & internet", account_group: "expense" },
   { code: "5108", name: "Repairs & maintenance", account_group: "expense" },
+  { code: "5109", name: "Travel", account_group: "expense" },
+  { code: "5110", name: "Marketing", account_group: "expense" },
+  { code: "5111", name: "Delivery", account_group: "expense" },
   { code: "5199", name: "Miscellaneous expenses", account_group: "expense" },
 ];
 

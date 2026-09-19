@@ -421,10 +421,14 @@ const VIEW_META = {
   support: { title: "Support", subtitle: "Call, WhatsApp, or email platform support" },
   accounts: { title: "Accounts", subtitle: "Receivables, payables, GL, and books" },
   expenses: { title: "Expenses", subtitle: "Rent, power, wages, and other shop costs" },
-  reports: { title: "Reports", subtitle: "Sales, GST, payments, and stock for this FY" },
+  reports: { title: "Reports Center", subtitle: "Common reports for every shop, plus extras for this business type" },
   growth: { title: "AI Growth", subtitle: "What happened, why, what to do next — from this shop's data" },
   settings: { title: "Shop profile", subtitle: "Company profile, timezone, logo, and login password" },
   backup: { title: "Shop backup", subtitle: "Download or restore this shop from Settings → Backup" },
+  "hub-sales": { title: "Sales desk", subtitle: "Invoices, receipts, returns, and sales documents" },
+  "hub-purchases": { title: "Purchase desk", subtitle: "Supplier bills, payments, and purchase documents" },
+  payments: { title: "Payments", subtitle: "Cash, UPI, card, bank, receipts, and payment reports" },
+  audit: { title: "Activity log", subtitle: "Created, edited, and deleted — invoices, payments, stock, and books" },
 };
 
 function orderStatusClass(status) {
@@ -1429,6 +1433,9 @@ const EXPENSE_CATEGORIES = [
   { code: "5106", name: "Packaging" },
   { code: "5107", name: "Telephone & internet" },
   { code: "5108", name: "Repairs & maintenance" },
+  { code: "5109", name: "Travel" },
+  { code: "5110", name: "Marketing" },
+  { code: "5111", name: "Delivery" },
   { code: "5199", name: "Miscellaneous" },
 ];
 
@@ -1697,6 +1704,10 @@ function reportsPrintHtml() {
 function applyReportsFilter() {
   const tab = state.reportTab || "summary";
   const q = String($("rep-search")?.value || "").trim().toLowerCase();
+  const pay = String($("rep-pay-mode")?.value || "").trim().toLowerCase();
+  const extra = ["rep-customer", "rep-supplier", "rep-product", "rep-category", "rep-user"]
+    .map((id) => String($(id)?.value || "").trim().toLowerCase())
+    .filter(Boolean);
   document.querySelectorAll("#reports-tabs [data-report-tab]").forEach((btn) => {
     const on = btn.dataset.reportTab === tab;
     btn.classList.toggle("is-on", on);
@@ -1711,13 +1722,14 @@ function applyReportsFilter() {
     const rows = block.querySelectorAll("tbody tr");
     let rowHits = 0;
     rows.forEach((tr) => {
-      const hay = tr.getAttribute("data-report-row") || tr.textContent || "";
-      const hit = !q || hay.toLowerCase().includes(q);
+      const hay = (tr.getAttribute("data-report-row") || tr.textContent || "").toLowerCase();
+      const hit = (!q || hay.includes(q)) && extra.every((bit) => hay.includes(bit)) && (!pay || hay.includes(pay));
       tr.hidden = !hit;
       if (hit) rowHits += 1;
     });
     let visible;
-    if (q) {
+    const narrowed = Boolean(q || extra.length || pay);
+    if (narrowed) {
       visible = rowHits > 0 || (!rows.length && String(block.dataset.reportTitle || "").toLowerCase().includes(q));
     } else if (tab === "summary") {
       visible = sheet === "GST summary";
@@ -1873,6 +1885,10 @@ function applyNav() {
       ledger: "stock",
       loyalty: "customers",
       offers: "discount",
+      "hub-sales": "orders",
+      "hub-purchases": "purchases",
+      payments: "accounts",
+      audit: "settings",
     };
     btn.hidden = map[view] ? !can(map[view]) : false;
     if (view === "growth") btn.hidden = !(can("growth") || can("reports"));
@@ -1883,6 +1899,7 @@ function applyNav() {
     if (view === "returns") btn.hidden = !isClassicBillShop() || !can("orders");
     if (view === "kot") btn.hidden = !isRestaurantShop() || !can("kot");
   });
+  globalThis.POSBizHubUi?.paintIndustryNav?.();
   paintStaffRoleOptions();
   const growthBtn = $("open-growth");
   if (growthBtn) growthBtn.hidden = !(can("growth") || can("reports"));
@@ -1899,6 +1916,8 @@ function applyNav() {
       purchases: "purchases",
       reports: "reports",
       settings: "settings",
+      payments: "accounts",
+      audit: "settings",
     }[view];
     btn.hidden = module ? !can(module) : false;
   });
@@ -2022,7 +2041,10 @@ function showView(name) {
   if (page) page.scrollTop = 0;
   paintViewHeader(name);
   if (name === "settings") showSettingsTab(requested === "backup" || requested === "language" ? requested : "profile");
-  if (name === "reports") loadReports();
+  if (name === "reports") {
+    loadReports();
+    globalThis.POSBizHubUi?.paintReportsCenter?.();
+  }
   if (name === "growth") loadGrowthDashboard();
   if (name === "accounts") loadAccounts();
   if (name === "expenses") loadExpenses();
@@ -2038,6 +2060,10 @@ function showView(name) {
   if (name === "suppliers") loadSuppliers();
   if (name === "support") renderSupport();
   if (name === "dashboard") loadDashboard();
+  if (name === "hub-sales") globalThis.POSBizHubUi?.paintModuleDesk?.("hub-sales-tiles", "sales");
+  if (name === "hub-purchases") globalThis.POSBizHubUi?.paintModuleDesk?.("hub-purchases-tiles", "purchases");
+  if (name === "payments") globalThis.POSBizHubUi?.paintPaymentsDesk?.();
+  if (name === "audit") globalThis.POSBizHubUi?.loadAudit?.();
   paintDeskState(name);
   if (name === "stock") loadStock();
   if (name === "counter") {
@@ -5124,12 +5150,12 @@ async function loadDashboard() {
     paintDashWelcome(d.subscription);
     paintPlatformNotices(d.notes);
     const sub = subscriptionValidity(d.subscription);
-    $("dash-kpis").innerHTML = [
-      [tt("dashboard.today_sales", "Today's sales"), money(d.today?.takings), "orders", ""],
-      [tt("dashboard.today_bills", "Today's bills"), d.today?.bills, "orders", ""],
-      [tt("dashboard.today_purchase", "Today's purchase"), money(d.purchase), "purchases", ""],
-      [tt("dashboard.stock_value", "Stock value"), money(d.stockValue), "stock", ""],
-      [tt("dashboard.outstanding", "Customer outstanding"), money(d.outstanding), "customers", ""],
+    if (globalThis.POSBizHubUi?.paintDashboard) {
+      globalThis.POSBizHubUi.paintDashboard(d);
+    } else {
+      $("dash-kpis").innerHTML = "";
+    }
+    const extra = [
       ["Plan", state.plan?.name || state.plan?.code || "—", "settings", ""],
       ["Valid till", sub.until, "settings", sub.tone],
       ["Days left", sub.daysLabel, "settings", sub.tone],
@@ -5140,6 +5166,7 @@ async function loadDashboard() {
           `<button type="button" class="report-card dash-kpi ${escapeHtml(String(tone || ""))}" data-dash-view="${view}"><span>${escapeHtml(String(k))}</span><strong>${escapeHtml(String(v ?? "—"))}</strong></button>`,
       )
       .join("");
+    if ($("dash-kpis") && extra) $("dash-kpis").insertAdjacentHTML("beforeend", extra);
   } catch (err) {
     $("dash-kpis").innerHTML = `<p class="hint error">${escapeHtml(err.message)}</p>`;
   }
@@ -5685,8 +5712,10 @@ async function loadReports() {
       reportBlock("Purchases", "Purchases", ["PO", "Supplier", "Invoice", "Date", "Taxable", "GST", "Total", "Pay", "Status"], (data.purchases || []).map((p) => [p.purchase_number, p.supplier_name, p.supplier_invoice_number, p.purchase_date, Number(p.subtotal) || 0, Number(p.gst) || 0, Number(p.total) || 0, p.payment_method, p.payment_status]), "books"),
       reportBlock("Expenses", "Expenses", ["No.", "Date", "Category", "Amount", "GST", "Total", "Pay", "Notes"], (data.expenses || []).map((e) => [e.expense_number, e.expense_date, e.category, Number(e.amount) || 0, Number(e.gst) || 0, Number(e.total) || (Number(e.amount) || 0) + (Number(e.gst) || 0), e.payment_method, e.notes]), "books"),
       reportBlock("Customers", "Customers", ["Code", "Name", "Business", "Mobile", "Type", "State", "GSTIN", "Credit limit", "Outstanding"], (data.customers || []).map((c) => [c.code, c.name, c.business_name, c.mobile, c.type, c.state, c.gstin, Number(c.credit_limit) || 0, Number(c.outstanding) || 0]), "books"),
+      reportBlock("Cancelled sales", "Cancelled sales", ["Order", "Customer", "Total", "Pay", "Date"], (data.sales || []).filter((o) => String(o.status || "").toLowerCase() === "cancelled").map((o) => [o.order_number, o.customer_name, Number(o.total) || 0, o.payment_method, formatShopDateTime(o.created_at)]), "sales"),
     ].join("");
     applyReportsFilter();
+    globalThis.POSBizHubUi?.paintReportsCenter?.();
     $("reports-hint").textContent = "";
     $("reports-hint").className = "hint";
   } catch (err) {
@@ -7092,6 +7121,8 @@ function setAccTab(name) {
   });
   loadAccountsTab(name);
 }
+globalThis.setAccountsTab = setAccTab;
+globalThis.setReportTab = setReportTab;
 
 function fillAccPartySelect(selectId, parties, labelFn) {
   const el = $(selectId);
@@ -9129,6 +9160,10 @@ $("rep-fy-year")?.addEventListener("change", async () => {
 $("rep-from")?.addEventListener("change", () => syncFySelectFromDates("rep-fy-year", "rep-from"));
 $("rep-to")?.addEventListener("change", () => syncFySelectFromDates("rep-fy-year", "rep-from"));
 $("rep-search")?.addEventListener("input", () => applyReportsFilter());
+["rep-customer", "rep-supplier", "rep-product", "rep-category", "rep-user", "rep-pay-mode", "rep-branch"].forEach((id) => {
+  $(id)?.addEventListener("input", () => applyReportsFilter());
+  $(id)?.addEventListener("change", () => applyReportsFilter());
+});
 $("reports-tabs")?.addEventListener("click", (e) => {
   const btn = e.target.closest("[data-report-tab]");
   if (!btn) return;
@@ -9142,6 +9177,14 @@ $("reports-hero-stats")?.addEventListener("click", (e) => {
   setReportTab(btn.dataset.reportTab);
 });
 $("rep-print")?.addEventListener("click", () => {
+  printFinance({
+    title: "Reports",
+    html: reportsPrintHtml(),
+    from: $("rep-from")?.value,
+    to: $("rep-to")?.value,
+  });
+});
+$("rep-pdf")?.addEventListener("click", () => {
   printFinance({
     title: "Reports",
     html: reportsPrintHtml(),
@@ -9358,7 +9401,12 @@ document.addEventListener("click", async (e) => {
   await posRequest("/api/auth/logout", { method: "POST" });
   location.href = "/login.html";
 });
-$("open-pos")?.addEventListener("click", () => showView("counter"));
+document.addEventListener("click", (e) => {
+  const jump = e.target.closest("[data-view-jump]");
+  if (!jump) return;
+  if (jump.closest("#view-dashboard")) return;
+  showView(jump.dataset.viewJump);
+});
 $("view-dashboard")?.addEventListener("click", (e) => {
   const jump = e.target.closest("[data-view-jump]");
   if (jump) {

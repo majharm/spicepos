@@ -8,6 +8,7 @@ import { sendCredentialAlerts } from "./alerts.js";
 import { workbookXml } from "./excel.js";
 import { stockToSheets } from "./stock-excel.js";
 import { recomputeBusinessOutstanding } from "./accounts.js";
+import { buildHubDashboard } from "./hub.js";
 
 function send(res, fn) {
   return Promise.resolve()
@@ -234,11 +235,18 @@ export function registerTenant(app) {
         ? String(biz.subscription_expires_at).slice(0, 10)
         : null;
       const daysLeft = expiresAt && biz?.days_left != null ? Number(biz.days_left) : null;
+      let hub = {};
+      try {
+        hub = await buildHubDashboard();
+      } catch {
+        hub = {};
+      }
       return {
         today: sales,
         purchase: purchase.total,
         stockValue: stock.value,
         outstanding: out.outstanding,
+        hub,
         branches,
         notes,
         subscription: {
@@ -690,7 +698,7 @@ export function registerTenant(app) {
 
   app.get("/api/audit", requireStaff, requirePerm("settings"), (_req, res) =>
     send(res, () =>
-      query("SELECT * FROM staff_audit_logs WHERE business_id = ? ORDER BY created_at DESC LIMIT 120", [bid()]),
+      query("SELECT * FROM staff_audit_logs WHERE business_id = ? ORDER BY created_at DESC LIMIT 400", [bid()]),
     ),
   );
 }
