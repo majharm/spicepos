@@ -49,6 +49,25 @@ export function formatPaymentReceiptNo(n) {
   return `PR-${String(Number(n) || 0).padStart(5, "0")}`;
 }
 
+export function clipPaymentDate(raw) {
+  const s = String(raw || "").trim();
+  if (!s) return null;
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+  const m = s.match(/^(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{4})$/);
+  if (!m) return null;
+  const first = Number(m[1]);
+  const second = Number(m[2]);
+  const year = m[3];
+  let day = first;
+  let month = second;
+  if (first <= 12 && second > 12) {
+    month = first;
+    day = second;
+  }
+  if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+  return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
 export function invoicePaidAmount(method, total, raw) {
   const credit = String(method || "").toLowerCase() === "credit";
   if (raw != null && raw !== "") {
@@ -701,16 +720,29 @@ export function registerAccounts(app) {
           bid(),
         ]);
         const notes = req.body?.notes != null ? String(req.body.notes) : entry.notes;
-        await conn.query(
-          "UPDATE account_ledger SET amount = ?, payment_method = ?, notes = ? WHERE id = ? AND business_id = ?",
-          [amt, method, notes || null, entry.id, bid()],
+        const paymentReference = req.body?.payment_reference != null
+          ? String(req.body.payment_reference).trim() || null
+          : entry.payment_reference || null;
+        const paymentDate = clipPaymentDate(
+          req.body?.payment_date != null ? req.body.payment_date : entry.payment_date,
         );
-        await stampLedgerExtras(conn, entry.id, {
-          payment_reference: req.body?.payment_reference != null ? req.body.payment_reference : entry.payment_reference,
-          payment_date: req.body?.payment_date != null ? req.body.payment_date : entry.payment_date,
-          previous_due: round2(outstanding + oldAmt),
-          remaining_due: next,
-        });
+        try {
+          await conn.query(
+            "UPDATE account_ledger SET amount = ?, payment_method = ?, notes = ?, payment_reference = ?, payment_date = ? WHERE id = ? AND business_id = ?",
+            [amt, method, notes || null, paymentReference, paymentDate, entry.id, bid()],
+          );
+        } catch {
+          await conn.query(
+            "UPDATE account_ledger SET amount = ?, payment_method = ?, notes = ? WHERE id = ? AND business_id = ?",
+            [amt, method, notes || null, entry.id, bid()],
+          );
+          await stampLedgerExtras(conn, entry.id, {
+            payment_reference: paymentReference,
+            payment_date: paymentDate,
+            previous_due: round2(outstanding + oldAmt),
+            remaining_due: next,
+          });
+        }
         if (entry.reference_type === "sales_order" && entry.reference_id) {
           await applyInvoicePaidDelta(conn, entry.reference_id, round2(amt - oldAmt));
         }
@@ -730,6 +762,8 @@ export function registerAccounts(app) {
           previous_due: round2(outstanding + oldAmt),
           balance_due: next,
           notes: notes || null,
+          payment_reference: paymentReference,
+          payment_date: paymentDate,
         };
       });
       await audit("Customer Receipt Altered", {
@@ -892,10 +926,23 @@ export function registerAccounts(app) {
           bid(),
         ]);
         const notes = req.body?.notes != null ? String(req.body.notes) : entry.notes;
-        await conn.query(
-          "UPDATE account_ledger SET amount = ?, payment_method = ?, notes = ? WHERE id = ? AND business_id = ?",
-          [amt, method, notes || null, entry.id, bid()],
+        const paymentReference = req.body?.payment_reference != null
+          ? String(req.body.payment_reference).trim() || null
+          : entry.payment_reference || null;
+        const paymentDate = clipPaymentDate(
+          req.body?.payment_date != null ? req.body.payment_date : entry.payment_date,
         );
+        try {
+          await conn.query(
+            "UPDATE account_ledger SET amount = ?, payment_method = ?, notes = ?, payment_reference = ?, payment_date = ? WHERE id = ? AND business_id = ?",
+            [amt, method, notes || null, paymentReference, paymentDate, entry.id, bid()],
+          );
+        } catch {
+          await conn.query(
+            "UPDATE account_ledger SET amount = ?, payment_method = ?, notes = ? WHERE id = ? AND business_id = ?",
+            [amt, method, notes || null, entry.id, bid()],
+          );
+        }
         await replaceLedgerJournal(conn, {
           kind: "payment",
           amount: amt,
@@ -910,6 +957,8 @@ export function registerAccounts(app) {
           amount: amt,
           method,
           notes: notes || null,
+          payment_reference: paymentReference,
+          payment_date: paymentDate,
         };
       });
       await audit("Supplier Payment Altered", {

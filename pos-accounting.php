@@ -750,12 +750,32 @@ function pos_accounts_dispatch($path, $method, $body, $bid, $auth, $branchId, $u
       throw new Exception("Credit limit exceeded (limit ₹" . number_format($limit, 2) . ", outstanding would be ₹" . number_format($next, 2) . ")");
     }
     $notes = array_key_exists("notes", $body) ? ($body["notes"] ?? null) : ($entry["notes"] ?? null);
+    $payRef = array_key_exists("payment_reference", $body) ? (trim((string) ($body["payment_reference"] ?? "")) ?: null) : ($entry["payment_reference"] ?? null);
+    $payDate = function_exists("pos_clip_payment_date")
+      ? pos_clip_payment_date(array_key_exists("payment_date", $body) ? $body["payment_date"] : ($entry["payment_date"] ?? null))
+      : ($body["payment_date"] ?? ($entry["payment_date"] ?? null));
     pos_q("UPDATE customers SET outstanding = ? WHERE id = ? AND business_id = ?", "dss", [$next, $customer["id"], $bid]);
-    pos_q(
-      "UPDATE account_ledger SET amount = ?, payment_method = ?, notes = ? WHERE id = ? AND business_id = ?",
-      "dssss",
-      [$amt, $methodPay, $notes, $entry["id"], $bid]
-    );
+    try {
+      pos_q(
+        "UPDATE account_ledger SET amount = ?, payment_method = ?, notes = ?, payment_reference = ?, payment_date = ? WHERE id = ? AND business_id = ?",
+        "dssssss",
+        [$amt, $methodPay, $notes, $payRef, $payDate, $entry["id"], $bid]
+      );
+    } catch (Throwable $e) {
+      pos_q(
+        "UPDATE account_ledger SET amount = ?, payment_method = ?, notes = ? WHERE id = ? AND business_id = ?",
+        "dssss",
+        [$amt, $methodPay, $notes, $entry["id"], $bid]
+      );
+      if (function_exists("pos_stamp_ledger_due")) {
+        pos_stamp_ledger_due($entry["id"], [
+          "payment_reference" => $payRef,
+          "payment_date" => $payDate,
+          "previous_due" => pos_round2($outstanding + $oldAmt),
+          "remaining_due" => $next,
+        ], $bid);
+      }
+    }
     pos_replace_ledger_journal($bid, $uid, "receipt", $amt, $methodPay, $entry["entry_no"], $entry["id"]);
     pos_send(200, [
       "ok" => true,
@@ -767,6 +787,8 @@ function pos_accounts_dispatch($path, $method, $body, $bid, $auth, $branchId, $u
       "previous_due" => pos_round2($outstanding + $oldAmt),
       "balance_due" => $next,
       "notes" => $notes,
+      "payment_reference" => $payRef,
+      "payment_date" => $payDate,
       "php" => true,
     ]);
   }
@@ -839,12 +861,24 @@ function pos_accounts_dispatch($path, $method, $body, $bid, $auth, $branchId, $u
     $next = pos_round2($payable + $oldAmt - $amt);
     if ($next < 0) pos_send(400, ["error" => "Amount exceeds payable"]);
     $notes = array_key_exists("notes", $body) ? ($body["notes"] ?? null) : ($entry["notes"] ?? null);
+    $payRef = array_key_exists("payment_reference", $body) ? (trim((string) ($body["payment_reference"] ?? "")) ?: null) : ($entry["payment_reference"] ?? null);
+    $payDate = function_exists("pos_clip_payment_date")
+      ? pos_clip_payment_date(array_key_exists("payment_date", $body) ? $body["payment_date"] : ($entry["payment_date"] ?? null))
+      : ($body["payment_date"] ?? ($entry["payment_date"] ?? null));
     pos_q("UPDATE suppliers SET payable_balance = ? WHERE id = ? AND business_id = ?", "dss", [$next, $supplier["id"], $bid]);
-    pos_q(
-      "UPDATE account_ledger SET amount = ?, payment_method = ?, notes = ? WHERE id = ? AND business_id = ?",
-      "dssss",
-      [$amt, $methodPay, $notes, $entry["id"], $bid]
-    );
+    try {
+      pos_q(
+        "UPDATE account_ledger SET amount = ?, payment_method = ?, notes = ?, payment_reference = ?, payment_date = ? WHERE id = ? AND business_id = ?",
+        "dssssss",
+        [$amt, $methodPay, $notes, $payRef, $payDate, $entry["id"], $bid]
+      );
+    } catch (Throwable $e) {
+      pos_q(
+        "UPDATE account_ledger SET amount = ?, payment_method = ?, notes = ? WHERE id = ? AND business_id = ?",
+        "dssss",
+        [$amt, $methodPay, $notes, $entry["id"], $bid]
+      );
+    }
     pos_replace_ledger_journal($bid, $uid, "payment", $amt, $methodPay, $entry["entry_no"], $entry["id"]);
     pos_send(200, [
       "ok" => true,
@@ -854,6 +888,8 @@ function pos_accounts_dispatch($path, $method, $body, $bid, $auth, $branchId, $u
       "amount" => $amt,
       "method" => $methodPay,
       "notes" => $notes,
+      "payment_reference" => $payRef,
+      "payment_date" => $payDate,
       "php" => true,
     ]);
   }

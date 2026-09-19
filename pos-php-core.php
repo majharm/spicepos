@@ -1540,6 +1540,26 @@ function pos_format_payment_receipt_no($n) {
   return sprintf("PR-%05d", (int) $n);
 }
 
+function pos_clip_payment_date($raw) {
+  $s = trim((string) ($raw ?? ""));
+  if ($s === "") return null;
+  if (preg_match('/^(\d{4})-(\d{2})-(\d{2})/', $s, $m)) return $m[1] . "-" . $m[2] . "-" . $m[3];
+  if (preg_match('/^(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{4})$/', $s, $m)) {
+    $first = (int) $m[1];
+    $second = (int) $m[2];
+    $year = $m[3];
+    $day = $first;
+    $month = $second;
+    if ($first <= 12 && $second > 12) {
+      $month = $first;
+      $day = $second;
+    }
+    if ($month < 1 || $month > 12 || $day < 1 || $day > 31) return null;
+    return sprintf("%s-%02d-%02d", $year, $month, $day);
+  }
+  return null;
+}
+
 function pos_stamp_ledger_due($id, $row, $businessId) {
   try {
     pos_q(

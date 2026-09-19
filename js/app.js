@@ -5792,14 +5792,15 @@ function showAlterVoucherModal(entry) {
   const isPayment = entry.entry_type === "payment";
   const label = isPayment ? "Payment" : "Receipt";
   const max = voucherMaxAmount(entry);
+  const currentDate = shopDateInputValue(entry.payment_date || entry.created_at);
   $("modal-title").textContent = `Alter ${label.toLowerCase()} · ${entry.entry_no}`;
   $("modal-body").innerHTML = `<form class="settings" id="alter-voucher-form">
-    <p class="section-note">Correct a wrong amount or method. The customer due / supplier payable is updated. Reprint after save.</p>
+    <p class="section-note">Correct a wrong amount, method, or payment date. The customer due / supplier payable is updated. Reprint after save.</p>
     <label>Amount <input id="alter-amount" type="number" min="0.01" step="0.01"${max > 0 ? ` max="${max}"` : ""} required value="${Number(entry.amount) || ""}" /></label>
     <label>Method <select id="alter-method">${voucherMethodOptions(entry.payment_method)}</select></label>
     <label>Notes <input id="alter-notes" maxlength="200" value="${escapeHtml(entry.notes || "")}" /></label>
     <label>Reference / UTR <input id="alter-ref" maxlength="80" value="${escapeHtml(entry.payment_reference || "")}" /></label>
-    <label>Payment date <input id="alter-date" type="date" value="${escapeHtml(String(entry.payment_date || "").slice(0, 10))}" /></label>
+    <label>Payment date <input id="alter-date" type="date" required value="${escapeHtml(currentDate)}" /></label>
     <button class="btn primary" type="submit">Save changes</button>
     <button class="btn" type="button" id="alter-cancel">Cancel</button>
   </form><p class="hint" id="alter-hint"></p>`;
@@ -5819,14 +5820,16 @@ function showAlterVoucherModal(entry) {
       const path = isPay ? `/api/accounts/payments/${entry.id}` : `/api/accounts/receipts/${entry.id}`;
       const notes = $("alter-notes").value;
       const method = $("alter-method").value;
+      const paymentDate = shopDateInputValue($("alter-date")?.value || entry.payment_date || entry.created_at);
+      const paymentReference = String($("alter-ref")?.value || "").trim();
       const data = await api(path, {
         method: "PUT",
         body: JSON.stringify({
           amount: Number($("alter-amount").value),
           payment_method: method,
           notes,
-          payment_reference: $("alter-ref")?.value || "",
-          payment_date: $("alter-date")?.value || "",
+          payment_reference: paymentReference,
+          payment_date: paymentDate,
         }),
       });
       await loadBootstrap();
@@ -5856,8 +5859,8 @@ function showAlterVoucherModal(entry) {
         previous_due: data.previous_due,
         remaining_due: data.remaining_due ?? data.balance_due,
         balance_due: data.balance_due,
-        payment_reference: data.payment_reference ?? $("alter-ref")?.value,
-        payment_date: data.payment_date ?? $("alter-date")?.value,
+        payment_reference: data.payment_reference || paymentReference,
+        payment_date: data.payment_date || paymentDate,
         party_name:
           data.customer?.business_name || data.customer?.name || data.supplier?.name || entry.party_name,
       });

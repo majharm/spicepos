@@ -338,6 +338,13 @@ test("receipt voucher prints party, amount, and mode; payment voucher labels dif
   const doc = InvoicePrint.voucherDocument(receipt, ctx);
   assert.match(doc, /PR-00001/);
   assert.match(doc, /window\.print\(\)/);
+
+  const edited = InvoicePrint.voucherBody(
+    { ...receipt, payment_date: "2026-09-09", created_at: "2026-09-19T10:00:00.000Z" },
+    ctx,
+  );
+  assert.match(edited, /2026-09-09/);
+  assert.doesNotMatch(edited, /2026-09-19/);
 });
 
 test("invoice due rows use previous due + invoice − payment", () => {

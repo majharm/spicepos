@@ -128,6 +128,7 @@ test("receipts and payments can be altered after save", () => {
   const accounts = readFileSync(path.join(root, "server/accounts.js"), "utf8");
   const accounting = readFileSync(path.join(root, "server/accounting.js"), "utf8");
   const php = readFileSync(path.join(root, "pos-accounting.php"), "utf8");
+  const core = readFileSync(path.join(root, "pos-php-core.php"), "utf8");
   const app = readFileSync(path.join(root, "js/app.js"), "utf8");
   assert.match(accounting, /export async function replaceLedgerJournal/);
   assert.match(accounts, /\/api\/accounts\/receipts\/:id/);
@@ -140,6 +141,18 @@ test("receipts and payments can be altered after save", () => {
   assert.match(app, /data-voucher-alter/);
   assert.match(app, /modal-alter-voucher/);
   assert.match(app, /\/api\/accounts\/receipts\/\$\{entry\.id\}/);
+  assert.match(app, /payment_date: paymentDate/);
+  assert.match(accounts, /function clipPaymentDate/);
+  assert.match(accounts, /payment_date: paymentDate/);
+  assert.match(core, /function pos_clip_payment_date/);
+  assert.match(php, /pos_clip_payment_date/);
+  assert.match(php, /payment_date = \? WHERE id = \? AND business_id = \?/);
+  const fn = accounts.match(/export function clipPaymentDate\(raw\) \{[\s\S]*?\n\}/);
+  assert.ok(fn);
+  const clipPaymentDate = Function(`${fn[0].replace("export ", "")}; return clipPaymentDate;`)();
+  assert.equal(clipPaymentDate("2026-09-09"), "2026-09-09");
+  assert.equal(clipPaymentDate("09/09/2026"), "2026-09-09");
+  assert.equal(clipPaymentDate("19-09-2026"), "2026-09-19");
 });
 
 test("receipts and payments can be deleted after save", () => {
