@@ -464,6 +464,7 @@ test("Medical shops show pharmacy medicine fields on the item form", () => {
   assert.match(index, /Excel with every field: SKU, batch no, expiry/);
   assert.match(adv, /savePharmacyItemFields/);
   assert.match(adv, /req.query.on_hand/);
+  assert.match(adv, /LIMIT 10000/);
   const demo = F.demoItems({ category: "Medical" });
   assert.equal(demo.length, 8);
   assert.equal(demo[0].name, "Paracetamol 500mg");

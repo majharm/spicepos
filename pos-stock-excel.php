@@ -104,35 +104,108 @@ function pos_stock_batch_excel_row($batch) {
   ];
 }
 
+function pos_on_hand_batches($batches) {
+  $out = [];
+  foreach (is_array($batches) ? $batches : [] as $batch) {
+    if ((float) ($batch["remaining_gm"] ?? 0) > 0) $out[] = $batch;
+  }
+  return $out;
+}
+
+function pos_stock_excel_row_from_batch($batch) {
+  return pos_stock_excel_row([
+    "code" => $batch["item_code"] ?? $batch["code"] ?? "",
+    "name" => $batch["item_name"] ?? $batch["name"] ?? "",
+    "generic_name" => $batch["generic_name"] ?? "",
+    "local_name" => $batch["local_name"] ?? "",
+    "medicine_type" => $batch["medicine_type"] ?? "",
+    "manufacturer" => $batch["manufacturer"] ?? "",
+    "pack_size" => $batch["pack_size"] ?? "",
+    "pack_unit" => $batch["pack_unit"] ?? "",
+    "units_per_pack" => $batch["units_per_pack"] ?? "",
+    "batch_no" => $batch["batch_no"] ?? "",
+    "default_expiry" => $batch["expiry_date"] ?? $batch["item_default_expiry"] ?? "",
+    "barcode" => $batch["barcode"] ?? $batch["item_barcode"] ?? "",
+    "hsn" => $batch["hsn"] ?? "",
+    "category" => $batch["category"] ?? "",
+    "subcategory" => $batch["subcategory"] ?? "",
+    "base_unit" => $batch["base_unit"] ?? "",
+    "unit" => $batch["unit"] ?? "",
+    "stock_gm" => $batch["remaining_gm"] ?? 0,
+    "reorder_level_gm" => $batch["reorder_level_gm"] ?? 0,
+    "purchase_rate" => $batch["unit_cost"] ?? $batch["purchase_rate"] ?? 0,
+    "retail_rate" => $batch["retail_rate"] ?? 0,
+    "mrp" => $batch["mrp"] ?? 0,
+    "b2b_rate" => $batch["b2b_rate"] ?? 0,
+    "gst_rate" => $batch["gst_rate"] ?? 0,
+    "color" => $batch["color"] ?? "",
+    "size" => $batch["size"] ?? "",
+    "wearer_type" => $batch["wearer_type"] ?? "",
+    "status" => $batch["item_status"] ?? $batch["status"] ?? "",
+  ]);
+}
+
 function pos_stock_to_sheets($rows, $biz = null, $batches = []) {
   $list = is_array($rows) ? $rows : [];
-  $all = [];
+  $skuRows = [];
   $low = [];
   foreach ($list as $item) {
     $row = pos_stock_excel_row($item);
-    $all[] = $row;
+    $skuRows[] = $row;
     if (pos_stock_alert($item) !== "OK") $low[] = $row;
   }
   $headers = pos_stock_excel_headers($biz);
-  $sheets = [
-    ["name" => "Stock", "headers" => $headers, "rows" => $all],
+  $live = pos_on_hand_batches($batches);
+  $pharmacy = function_exists("pos_shop_kind") && pos_shop_kind($biz ?: []) === "pharmacy";
+  if ($pharmacy || count($live) > 0) {
+    $covered = [];
+    foreach ($live as $batch) {
+      $id = (string) ($batch["item_id"] ?? "");
+      if ($id !== "") $covered[$id] = true;
+    }
+    $stockRows = [];
+    foreach ($live as $batch) $stockRows[] = pos_stock_excel_row_from_batch($batch);
+    foreach ($list as $item) {
+      $id = (string) ($item["id"] ?? "");
+      if ($id === "" || isset($covered[$id])) continue;
+      $stockRows[] = pos_stock_excel_row($item);
+    }
+    return [
+      ["name" => "Stock", "headers" => $headers, "rows" => $stockRows],
+      ["name" => "SKUs", "headers" => $headers, "rows" => $skuRows],
+      ["name" => "Low stock", "headers" => $headers, "rows" => $low],
+    ];
+  }
+  return [
+    ["name" => "Stock", "headers" => $headers, "rows" => $skuRows],
     ["name" => "Low stock", "headers" => $headers, "rows" => $low],
   ];
-  $pharmacy = function_exists("pos_shop_kind") && pos_shop_kind($biz ?: []) === "pharmacy";
-  if ($pharmacy) {
-    $batchHeaders = [
-      "Code", "Name", "Generic / local", "Type", "Manufacturer", "Batch no", "Batch barcode",
-      "Expiry", "Mfg date", "On hand", "Received qty", "Unit", "Purchase", "MRP", "Retail",
-      "Value", "HSN", "Category", "Supplier", "Item status",
-    ];
-    $batchRows = [];
-    foreach (is_array($batches) ? $batches : [] as $batch) {
-      if ((float) ($batch["remaining_gm"] ?? 0) <= 0) continue;
-      $batchRows[] = pos_stock_batch_excel_row($batch);
-    }
-    $sheets[] = ["name" => "Batches", "headers" => $batchHeaders, "rows" => $batchRows];
+}
+
+function pos_stock_excel_batches($bid) {
+  try {
+    $found = pos_q(
+      "SELECT b.id, b.item_id, b.batch_no, b.barcode, b.qty_gm, b.remaining_gm, b.unit_cost, b.mrp,
+              DATE_FORMAT(b.expiry_date, '%Y-%m-%d') AS expiry_date,
+              DATE_FORMAT(b.manufactured_date, '%Y-%m-%d') AS manufactured_date,
+              i.name AS item_name, i.code AS item_code, i.base_unit, i.unit, i.purchase_rate, i.retail_rate, i.b2b_rate, i.gst_rate, i.mrp AS item_mrp,
+              i.generic_name, i.local_name, i.medicine_type, i.manufacturer, i.pack_size, i.pack_unit, i.units_per_pack,
+              i.hsn, i.category, i.subcategory, i.barcode AS item_barcode, i.reorder_level_gm, i.status AS item_status,
+              DATE_FORMAT(i.default_expiry, '%Y-%m-%d') AS item_default_expiry,
+              s.name AS supplier_name
+       FROM stock_batches b
+       JOIN items i ON i.id = b.item_id
+       LEFT JOIN suppliers s ON s.id = b.supplier_id
+       WHERE b.business_id = ?
+       ORDER BY i.name ASC, (b.expiry_date IS NULL) ASC, b.expiry_date ASC, b.batch_no ASC, b.id ASC
+       LIMIT 10000",
+      "s",
+      [$bid]
+    );
+    return is_array($found) ? $found : [];
+  } catch (Exception $e) {
+    return [];
   }
-  return $sheets;
 }
 
 function pos_stock_excel_response($bid) {
@@ -143,27 +216,7 @@ function pos_stock_excel_response($bid) {
   if (!is_array($rows)) $rows = [];
   $bizRows = pos_q("SELECT name, category, business_type FROM businesses WHERE id = ? LIMIT 1", "s", [$bid]);
   $biz = is_array($bizRows) && $bizRows ? $bizRows[0] : [];
-  $batches = [];
-  if (function_exists("pos_shop_kind") && pos_shop_kind($biz) === "pharmacy") {
-    $found = pos_q(
-      "SELECT b.batch_no, b.barcode, b.qty_gm, b.remaining_gm, b.unit_cost, b.mrp,
-              DATE_FORMAT(b.expiry_date, '%Y-%m-%d') AS expiry_date,
-              DATE_FORMAT(b.manufactured_date, '%Y-%m-%d') AS manufactured_date,
-              i.name AS item_name, i.code AS item_code, i.base_unit, i.unit, i.purchase_rate, i.retail_rate,
-              i.generic_name, i.local_name, i.medicine_type, i.manufacturer, i.hsn, i.category, i.status AS item_status,
-              DATE_FORMAT(i.default_expiry, '%Y-%m-%d') AS item_default_expiry,
-              s.name AS supplier_name
-       FROM stock_batches b
-       JOIN items i ON i.id = b.item_id
-       LEFT JOIN suppliers s ON s.id = b.supplier_id
-       WHERE b.business_id = ? AND b.remaining_gm > 0
-       ORDER BY i.name ASC, (b.expiry_date IS NULL) ASC, b.expiry_date ASC, b.batch_no ASC
-       LIMIT 800",
-      "s",
-      [$bid]
-    );
-    $batches = is_array($found) ? $found : [];
-  }
+  $batches = pos_stock_excel_batches($bid);
   $xml = pos_workbook_xml(pos_stock_to_sheets($rows, $biz, $batches));
   $day = date("Y-m-d");
   http_response_code(200);

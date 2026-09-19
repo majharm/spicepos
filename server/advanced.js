@@ -1092,7 +1092,7 @@ export function registerAdvanced(app) {
         args.push(itemId);
       }
       if (onHand) sql += " AND b.remaining_gm > 0";
-      sql += " ORDER BY i.name ASC, (b.expiry_date IS NULL) ASC, b.expiry_date ASC, b.batch_no ASC LIMIT 800";
+      sql += " ORDER BY i.name ASC, (b.expiry_date IS NULL) ASC, b.expiry_date ASC, b.batch_no ASC, b.id ASC LIMIT 10000";
       return query(sql, args);
     }),
   );

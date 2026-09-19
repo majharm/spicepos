@@ -169,22 +169,63 @@ export function stockBatchExcelRow(batch) {
   ];
 }
 
+export function onHandBatches(batches) {
+  return (Array.isArray(batches) ? batches : []).filter((b) => (Number(b?.remaining_gm) || 0) > 0);
+}
+
+export function stockExcelRowFromBatch(batch) {
+  const row = batch && typeof batch === "object" ? batch : {};
+  return stockExcelRow({
+    code: row.item_code || row.code,
+    name: row.item_name || row.name,
+    generic_name: row.generic_name,
+    local_name: row.local_name,
+    medicine_type: row.medicine_type,
+    manufacturer: row.manufacturer,
+    pack_size: row.pack_size,
+    pack_unit: row.pack_unit,
+    units_per_pack: row.units_per_pack,
+    batch_no: row.batch_no,
+    default_expiry: row.expiry_date || row.item_default_expiry,
+    barcode: row.barcode || row.item_barcode,
+    hsn: row.hsn,
+    category: row.category,
+    subcategory: row.subcategory,
+    base_unit: row.base_unit,
+    unit: row.unit,
+    stock_gm: row.remaining_gm,
+    reorder_level_gm: row.reorder_level_gm,
+    purchase_rate: row.unit_cost ?? row.purchase_rate,
+    retail_rate: row.retail_rate,
+    mrp: row.mrp,
+    b2b_rate: row.b2b_rate,
+    gst_rate: row.gst_rate,
+    color: row.color,
+    size: row.size,
+    wearer_type: row.wearer_type,
+    status: row.item_status || row.status,
+  });
+}
+
 export function stockToSheets(rows, biz = {}, batches = []) {
   const list = Array.isArray(rows) ? rows : [];
-  const all = list.map(stockExcelRow);
+  const skuRows = list.map(stockExcelRow);
   const low = list.filter((r) => stockAlert(r) !== "OK").map(stockExcelRow);
   const headers = stockExcelHeaders(biz);
-  const sheets = [
-    { name: "Stock", headers, rows: all },
+  const live = onHandBatches(batches);
+  const pharmacy = Boolean(POSFootwear?.isPharmacyShop?.(biz));
+  if (pharmacy || live.length) {
+    const covered = new Set(live.map((b) => String(b.item_id || "")).filter(Boolean));
+    const extras = list.filter((item) => item?.id && !covered.has(String(item.id))).map(stockExcelRow);
+    const stockRows = live.map(stockExcelRowFromBatch).concat(extras);
+    return [
+      { name: "Stock", headers, rows: stockRows },
+      { name: "SKUs", headers, rows: skuRows },
+      { name: "Low stock", headers, rows: low },
+    ];
+  }
+  return [
+    { name: "Stock", headers, rows: skuRows },
     { name: "Low stock", headers, rows: low },
   ];
-  if (POSFootwear?.isPharmacyShop?.(biz)) {
-    const onHand = (Array.isArray(batches) ? batches : []).filter((b) => (Number(b?.remaining_gm) || 0) > 0);
-    sheets.push({
-      name: "Batches",
-      headers: STOCK_BATCH_EXCEL_HEADERS,
-      rows: onHand.map(stockBatchExcelRow),
-    });
-  }
-  return sheets;
 }

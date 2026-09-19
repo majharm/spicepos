@@ -94,9 +94,10 @@ test("stockToSheets writes a full list and a Low stock sheet", () => {
   assert.match(xml, /Turmeric powder/);
 });
 
-test("pharmacy stock Excel adds a Batches sheet by batch number", () => {
+test("pharmacy stock Excel lists one row per batch of the same item", () => {
   const batches = [
     {
+      item_id: "i1",
       item_code: "MED-01",
       item_name: "Dolo 650",
       generic_name: "Paracetamol",
@@ -117,6 +118,18 @@ test("pharmacy stock Excel adds a Batches sheet by batch number", () => {
       supplier_name: "Cipla Dist",
     },
     {
+      item_id: "i1",
+      item_code: "MED-01",
+      item_name: "Dolo 650",
+      batch_no: "DL650B",
+      expiry_date: "2028-03-31",
+      remaining_gm: 12,
+      base_unit: "PCS",
+      unit_cost: 11,
+      mrp: 20,
+    },
+    {
+      item_id: "i1",
       item_code: "MED-01",
       item_name: "Dolo 650",
       batch_no: "EMPTY",
@@ -124,28 +137,33 @@ test("pharmacy stock Excel adds a Batches sheet by batch number", () => {
       base_unit: "PCS",
     },
   ];
-  const spice = stockToSheets(items, { category: "Spices & masala" }, batches);
+  const spice = stockToSheets(items, { category: "Spices & masala" }, []);
   assert.equal(spice.length, 2);
   const pharm = stockToSheets(items, { category: "Medical" }, batches);
   assert.equal(pharm.length, 3);
-  assert.equal(pharm[2].name, "Batches");
-  assert.equal(pharm[2].rows.length, 1);
-  const headers = pharm[2].headers;
+  assert.equal(pharm[0].name, "Stock");
+  assert.equal(pharm[1].name, "SKUs");
+  assert.equal(pharm[2].name, "Low stock");
+  assert.equal(pharm[0].rows.length, 2);
+  const headers = pharm[0].headers;
+  const batchNo = col(pharm[0], "Batch no");
+  const expiry = col(pharm[0], "Expiry");
+  const onHand = col(pharm[0], "On hand");
+  const name = col(pharm[0], "Name");
+  assert.equal(name(pharm[0].rows[0]), "Dolo 650");
+  assert.equal(name(pharm[0].rows[1]), "Dolo 650");
+  assert.equal(batchNo(pharm[0].rows[0]), "DL650A");
+  assert.equal(batchNo(pharm[0].rows[1]), "DL650B");
+  assert.equal(expiry(pharm[0].rows[0]), "2027-09-30");
+  assert.equal(expiry(pharm[0].rows[1]), "2028-03-31");
+  assert.equal(onHand(pharm[0].rows[0]), 20);
+  assert.equal(onHand(pharm[0].rows[1]), 12);
   assert.ok(headers.includes("Expiry"));
-  assert.ok(headers.includes("Mfg date"));
-  assert.ok(headers.includes("Supplier"));
-  assert.ok(headers.includes("Generic / local"));
-  const batchNo = headers.indexOf("Batch no");
-  const expiry = headers.indexOf("Expiry");
-  const onHand = headers.indexOf("On hand");
-  const generic = headers.indexOf("Generic / local");
-  assert.equal(pharm[2].rows[0][batchNo], "DL650A");
-  assert.equal(pharm[2].rows[0][expiry], "2027-09-30");
-  assert.equal(pharm[2].rows[0][onHand], 20);
-  assert.equal(pharm[2].rows[0][generic], "Paracetamol");
   assert.deepEqual(stockBatchExcelRow(batches[0]).slice(0, 3), ["MED-01", "Dolo 650", "Paracetamol"]);
   const xml = workbookXml(pharm);
-  assert.match(xml, /ss:Name="Batches"/);
+  assert.match(xml, /ss:Name="Stock"/);
   assert.match(xml, /DL650A/);
+  assert.match(xml, /DL650B/);
   assert.match(xml, /2027-09-30/);
+  assert.match(xml, /2028-03-31/);
 });
