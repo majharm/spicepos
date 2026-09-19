@@ -226,8 +226,22 @@ function pos_checkout_sale($bid, $branchId, $uid, $auth, $body) {
       pos_qr_link_sale($bid, $qrOrderId, $orderId, $branchId);
     }
     try {
-      pos_record_credit_sale($customer, $total, $orderId, $orderNumber, $methodPay, $bid, $uid);
-    } catch (Throwable $e) { /* credit ledger optional */ }
+      $paidRaw = $body["amountPaid"] ?? $body["amount_paid"] ?? null;
+      $payRef = $body["paymentReference"] ?? $body["payment_reference"] ?? null;
+      $payDate = $body["paymentDate"] ?? $body["payment_date"] ?? null;
+      $snap = pos_settle_customer_invoice($customer, $total, $methodPay, $orderId, $orderNumber, $bid, $uid, $paidRaw, $payRef, $payDate);
+      if (is_array($snap)) {
+        $orderRow["previous_due"] = $snap["previousDue"] ?? 0;
+        $orderRow["amount_paid"] = $snap["amountPaid"] ?? 0;
+        $orderRow["current_due"] = $snap["currentDue"] ?? 0;
+        $orderRow["payment_status"] = $snap["paymentStatus"] ?? $orderRow["payment_status"];
+        $orderRow["payment_reference"] = $snap["paymentReference"] ?? null;
+        $orderRow["payment_date"] = $snap["paymentDate"] ?? null;
+        $orderRow["receipt"] = $snap["receipt"] ?? null;
+      }
+    } catch (Throwable $e) {
+      if (stripos($e->getMessage(), "Credit limit") !== false) throw $e;
+    }
     try {
       pos_post_sale_journal($bid, $uid, $orderRow);
     } catch (Throwable $e) { /* GL journal optional on PHP-only shops */ }

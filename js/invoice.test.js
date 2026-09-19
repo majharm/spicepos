@@ -293,24 +293,32 @@ test("receipt voucher prints party, amount, and mode; payment voucher labels dif
     escapeHtml: (v) => String(v),
   };
   const receipt = {
-    entry_no: "RCP-1001",
+    entry_no: "PR-00001",
     entry_type: "receipt",
     party_name: "Ramesh Traders",
-    amount: 1500,
-    payment_method: "cash",
-    notes: "Part payment",
-    created_at: "2026-09-04T10:00:00.000Z",
+    amount: 3000,
+    payment_method: "upi",
+    invoice_no: "INV-00001",
+    invoice_amount: 5000,
+    previous_due: 10000,
+    remaining_due: 12000,
+    payment_reference: "UTR123456",
+    payment_date: "2026-09-19",
+    created_at: "2026-09-19T10:00:00.000Z",
   };
   const html = InvoicePrint.voucherBody(receipt, ctx);
-  assert.match(html, /RECEIPT VOUCHER/);
-  assert.match(html, /RCP-1001/);
-  assert.match(html, /Received from/);
+  assert.match(html, /PAYMENT RECEIPT/);
+  assert.match(html, /PR-00001/);
+  assert.match(html, /Customer/);
   assert.match(html, /Ramesh Traders/);
-  assert.match(html, /CASH/);
-  assert.match(html, /Part payment/);
-  assert.match(html, /Amount received/);
-  assert.match(html, /₹1500\.00/);
-  assert.match(html, /One Thousand Five Hundred/);
+  assert.match(html, /Against Invoice/);
+  assert.match(html, /INV-00001/);
+  assert.match(html, /Previous Due/);
+  assert.match(html, /Invoice Amount/);
+  assert.match(html, /Payment Received/);
+  assert.match(html, /Remaining Due/);
+  assert.match(html, /UTR123456/);
+  assert.match(html, /UPI/);
   assert.doesNotMatch(html, /Paid to/);
 
   const payment = { ...receipt, entry_no: "PAY-2001", entry_type: "payment", party_name: "Spice Traders" };
@@ -321,8 +329,31 @@ test("receipt voucher prints party, amount, and mode; payment voucher labels dif
   assert.doesNotMatch(payHtml, /Received from/);
 
   const doc = InvoicePrint.voucherDocument(receipt, ctx);
-  assert.match(doc, /RCP-1001/);
+  assert.match(doc, /PR-00001/);
   assert.match(doc, /window\.print\(\)/);
+});
+
+test("invoice due rows use previous due + invoice − payment", () => {
+  const InvoicePrint = loadInvoicePrint();
+  const due = InvoicePrint.invoiceDueFigures({
+    total: 5000,
+    previous_due: 10000,
+    amount_paid: 3000,
+    subtotal: 4800,
+    discount: 100,
+    gst: 300,
+  });
+  assert.equal(due.previous, 10000);
+  assert.equal(due.paid, 3000);
+  assert.equal(due.current, 12000);
+  const html = InvoicePrint.invoiceDueRowsHtml(
+    { total: 5000, previous_due: 10000, amount_paid: 3000, payment_reference: "UTR123456", payment_date: "2026-09-19" },
+    (n) => `₹${Number(n).toFixed(2)}`,
+    (v) => String(v),
+  );
+  assert.match(html, /Previous due/);
+  assert.match(html, /Current due/);
+  assert.match(html, /UTR123456/);
 });
 
 test("thermal invoice HTML shows IGST for inter-state supply", () => {

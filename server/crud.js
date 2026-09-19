@@ -3,7 +3,7 @@ import "../js/units.js";
 import "../js/footwear.js";
 import { query, withTransaction } from "./db.js";
 import { bid, authUser } from "./context.js";
-import { recordCreditPurchase, reverseCreditSale, recomputeCustomerOutstanding } from "./accounts.js";
+import { recordCreditPurchase, reverseCreditSale, recomputeCustomerOutstanding, settleCustomerInvoice } from "./accounts.js";
 import { postPurchaseJournal, deleteJournalRef } from "./accounting.js";
 import { audit } from "./audit.js";
 import { onItemSaved, onPurchaseLineSaved, pharmacyLineSnapshot, computeSaleLine, saleStockQty, persistSaleLineNote, reverseLoyaltyOnSale } from "./advanced.js";
@@ -774,6 +774,7 @@ export function registerCrud(app) {
           );
         }
         await conn.query("DELETE FROM sales_order_lines WHERE order_id = ?", [existing.id]);
+        await reverseCreditSale(conn, existing);
 
         const [custRows] = await conn.query(
           "SELECT * FROM customers WHERE id = ? AND business_id = ?",
@@ -941,6 +942,21 @@ export function registerCrud(app) {
             );
           }
         }
+        await recomputeCustomerOutstanding(conn, customer.id);
+        const [freshCust] = await conn.query("SELECT * FROM customers WHERE id = ? AND business_id = ?", [
+          customer.id,
+          bid(),
+        ]);
+        await settleCustomerInvoice(conn, {
+          customer: freshCust[0] || customer,
+          total,
+          method,
+          orderId: existing.id,
+          orderNumber: existing.order_number,
+          amountPaid: req.body?.amountPaid ?? req.body?.amount_paid,
+          paymentReference: req.body?.paymentReference ?? req.body?.payment_reference,
+          paymentDate: req.body?.paymentDate ?? req.body?.payment_date,
+        });
         const [orders] = await conn.query("SELECT * FROM sales_orders WHERE id = ?", [existing.id]);
         const [orderLines] = await conn.query(
           "SELECT * FROM sales_order_lines WHERE order_id = ?",
@@ -1000,6 +1016,8 @@ export function registerCrud(app) {
             );
             await conn.query("UPDATE sales_order_lines SET cancelled = 1 WHERE id = ?", [line.id]);
           }
+          await reverseCreditSale(conn, existing);
+          await recomputeCustomerOutstanding(conn, existing.customer_id);
         } else if (oldStatus === "cancelled" && newStatus !== "cancelled") {
           const [allLines] = await conn.query(
             "SELECT * FROM sales_order_lines WHERE order_id = ?",
@@ -1012,6 +1030,22 @@ export function registerCrud(app) {
               [saleStockQty(itemRows[0], line.quantity_gm), line.item_id, bid()],
             );
             await conn.query("UPDATE sales_order_lines SET cancelled = 0 WHERE id = ?", [line.id]);
+          }
+          const [custRows] = await conn.query("SELECT * FROM customers WHERE id = ? AND business_id = ?", [
+            existing.customer_id,
+            bid(),
+          ]);
+          if (custRows[0]) {
+            await settleCustomerInvoice(conn, {
+              customer: custRows[0],
+              total: existing.total,
+              method: existing.payment_method,
+              orderId: existing.id,
+              orderNumber: existing.order_number,
+              amountPaid: existing.amount_paid,
+              paymentReference: existing.payment_reference,
+              paymentDate: existing.payment_date,
+            });
           }
         }
 

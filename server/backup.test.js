@@ -621,7 +621,7 @@ test("HTML and CSS cache stickers match deploy136", () => {
   assert.match(appJs, /data-voucher-print/);
   assert.match(appJs, /data-voucher-alter/);
   assert.match(appJs, /function showAlterVoucherModal/);
-  assert.match(appJs, /Print \$\{label\.toLowerCase\(\)\}/);
+  assert.match(appJs, /Print Receipt/);
   const invoiceJs = readFileSync(path.join(root, "js/invoice.js"), "utf8");
   assert.match(invoiceJs, /function voucherBody/);
   assert.match(invoiceJs, /function voucherDocument/);

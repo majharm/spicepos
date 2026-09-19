@@ -170,7 +170,10 @@ test("business admin can delete invoices and reverse credit sale", () => {
   const core = readFileSync(path.join(root, "pos-php-core.php"), "utf8");
   const app = readFileSync(path.join(root, "js/app.js"), "utf8");
   assert.match(accounts, /export async function reverseCreditSale/);
-  assert.match(accounts, /Cannot delete invoice with customer receipts/);
+  assert.match(accounts, /export async function settleCustomerInvoice/);
+  assert.match(accounts, /formatPaymentReceiptNo/);
+  assert.match(accounts, /\/api\/accounts\/open-invoices/);
+  assert.doesNotMatch(accounts, /Cannot delete invoice with customer receipts/);
   assert.match(crud, /app.delete\("\/api\/orders\/:id"/);
   assert.match(crud, /reverseLoyaltyOnSale/);
   assert.match(crud, /recomputeCustomerOutstanding/);
@@ -179,7 +182,31 @@ test("business admin can delete invoices and reverse credit sale", () => {
   assert.match(core, /function pos_reverse_credit_sale/);
   assert.match(core, /function pos_recompute_customer_outstanding/);
   assert.match(core, /function pos_recompute_business_outstanding/);
+  assert.match(core, /function pos_settle_customer_invoice/);
   assert.match(app, /data-delete-order/);
   assert.match(app, /Delete invoice/);
   assert.match(app, /await loadBootstrap\(\)/);
+});
+
+test("invoice settlement posts sale credit, payment receipt, and customer due", () => {
+  const accounts = readFileSync(path.join(root, "server/accounts.js"), "utf8");
+  const core = readFileSync(path.join(root, "pos-php-core.php"), "utf8");
+  const app = readFileSync(path.join(root, "js/app.js"), "utf8");
+  const index = readFileSync(path.join(root, "index.html"), "utf8");
+  const invoice = readFileSync(path.join(root, "js/invoice.js"), "utf8");
+  assert.match(accounts, /PR-\$\{String\(Number\(n\) \|\| 0\)\.padStart\(5, "0"\)\}/);
+  assert.match(accounts, /previousDue \+ invoiceTotal - paid/);
+  assert.match(core, /PR-%05d/);
+  assert.match(core, /\$previousDue \+ \$invoiceTotal - \$paid/);
+  assert.match(app, /\$\("pay-amount"\)/);
+  assert.match(app, /function invoiceSettlementHtml/);
+  assert.match(app, /function receiptEntryFromInvoice/);
+  assert.match(index, /id="pay-amount"/);
+  assert.match(index, /id="pay-ref"/);
+  assert.match(index, /id="pay-date"/);
+  assert.match(index, /id="due-invoice"/);
+  assert.match(index, /id="due-date"/);
+  assert.match(invoice, /PAYMENT RECEIPT/);
+  assert.match(invoice, /Against Invoice/);
+  assert.match(invoice, /function invoiceDueRowsHtml/);
 });

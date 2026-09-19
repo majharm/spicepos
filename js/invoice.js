@@ -463,6 +463,29 @@ ${purchaseBody(purchase, ctx)}
     return l.item_name || l.name || "Item";
   }
 
+  function invoiceDueFigures(order) {
+    const total = round2(order.total);
+    const previous = round2(order.previous_due ?? order.previousDue);
+    const paid = round2(order.amount_paid ?? order.amountPaid);
+    const current = order.current_due != null || order.currentDue != null
+      ? round2(order.current_due ?? order.currentDue)
+      : round2(Math.max(0, previous + total - paid));
+    return { previous, paid, current, total, invoiceAmount: round2(order.subtotal), discount: round2(order.discount), gst: round2(order.gst) };
+  }
+
+  function invoiceDueRowsHtml(order, money, escapeHtml) {
+    const due = invoiceDueFigures(order);
+    const ref = String(order.payment_reference || order.paymentReference || "").trim();
+    const payDate = String(order.payment_date || order.paymentDate || "").slice(0, 10);
+    return `
+      <tr><td colspan="3">Previous due</td><td class="inv-num">${escapeHtml(money(due.previous))}</td></tr>
+      <tr><td colspan="3">Current invoice</td><td class="inv-num">${escapeHtml(money(due.total))}</td></tr>
+      <tr><td colspan="3">Amount paid</td><td class="inv-num">${escapeHtml(money(due.paid))}</td></tr>
+      <tr class="inv-grand"><td colspan="3"><strong>Current due</strong></td><td class="inv-num"><strong>${escapeHtml(money(due.current))}</strong></td></tr>
+      ${ref ? `<tr><td colspan="3">Payment reference</td><td class="inv-num">${escapeHtml(ref)}</td></tr>` : ""}
+      ${payDate ? `<tr><td colspan="3">Payment date</td><td class="inv-num">${escapeHtml(payDate)}</td></tr>` : ""}`;
+  }
+
   function invoiceBody(order, ctx) {
     const { company, customers, items, formatDateTime, money, escapeHtml } = ctx;
     const co = company || {};
@@ -587,10 +610,11 @@ ${purchaseBody(purchase, ctx)}
       ${gstRows}
       <tr class="inv-gst-total"><td colspan="3">${escapeHtml(L(ctx, "invoice.total_gst", "Total GST"))}</td><td class="inv-num">${escapeHtml(money(gst))}</td></tr>
       <tr class="inv-grand"><td colspan="3"><strong>${escapeHtml(L(ctx, "invoice.grand_total", "Grand total"))}</strong></td><td class="inv-num"><strong>${escapeHtml(money(total))}</strong></td></tr>
+      ${invoiceDueRowsHtml(order, money, escapeHtml)}
     </tbody>
   </table>
   <div class="inv-rule"></div>
-  <p class="inv-pay">${escapeHtml(L(ctx, "invoice.payment", "Payment"))}: <strong>${escapeHtml(payLabel(order.payment_method))}</strong> · ${escapeHtml(payStatusLabel(order.payment_status))}</p>
+  <p class="inv-pay">${escapeHtml(L(ctx, "invoice.payment", "Payment"))}: <strong>${escapeHtml(payLabel(order.payment_method))}</strong> · ${escapeHtml(payStatusLabel(order.payment_status))}${String(order.payment_reference || "").trim() ? ` · ${escapeHtml(order.payment_reference)}` : ""}</p>
   ${paymentQrHtml(co, ctx, "pos")}
   ${footer ? `<p class="inv-footer">${noteHtml(footer, escapeHtml)}</p>` : `<p class="inv-footer">${escapeHtml(L(ctx, "invoice.thank_you", "Thank you for your business!"))}</p>`}
   ${terms ? `<p class="inv-terms"><strong>${escapeHtml(L(ctx, "invoice.terms", "Terms & conditions"))}</strong><br>${noteHtml(terms, escapeHtml)}</p>` : ""}
@@ -889,6 +913,16 @@ ${invoiceBody(order, ctx)}
         ${round2(order.loyalty_discount) > 0 ? `<tr><td>Royalty</td><td class="off-n">-${escapeHtml(money(order.loyalty_discount))}</td></tr>` : ""}
         <tr><td>Total GST</td><td class="off-n">${escapeHtml(money(gst))}</td></tr>
         <tr class="off-grand"><td>Grand total</td><td class="off-n">${escapeHtml(money(total))}</td></tr>
+        ${(() => {
+          const due = invoiceDueFigures(order);
+          const ref = String(order.payment_reference || "").trim();
+          const payDate = String(order.payment_date || "").slice(0, 10);
+          return `<tr><td>Previous due</td><td class="off-n">${escapeHtml(money(due.previous))}</td></tr>
+        <tr><td>Amount paid</td><td class="off-n">${escapeHtml(money(due.paid))}</td></tr>
+        <tr class="off-grand"><td>Current due</td><td class="off-n">${escapeHtml(money(due.current))}</td></tr>
+        ${ref ? `<tr><td>Payment reference</td><td class="off-n">${escapeHtml(ref)}</td></tr>` : ""}
+        ${payDate ? `<tr><td>Payment date</td><td class="off-n">${escapeHtml(payDate)}</td></tr>` : ""}`;
+        })()}
       </tbody>
     </table>
   </div>
@@ -999,30 +1033,37 @@ ${officeInvoiceBody(order, ctx, { copy })}
       .filter(Boolean)
       .join(" · ");
     const amount = round2(entry.amount);
-    const reference = String(entry.reference_type || "").trim();
+    const reference = String(entry.payment_reference || entry.referenceNo || "").trim();
+    const invoiceNo = String(entry.invoice_no || entry.invoiceNo || entry.against_invoice || "").trim();
+    const invoiceAmt = entry.invoice_amount ?? entry.invoiceAmount;
+    const payDate = String(entry.payment_date || entry.paymentDate || entry.created_at || "").slice(0, 10);
+    const previousDue = entry.previous_due ?? entry.previousDue;
+    const remaining = entry.remaining_due ?? entry.remainingDue ?? entry.balance_due ?? entry.balanceDue;
     return `<article class="thermal-invoice">
   <header class="inv-head">
     <h1 class="inv-shop">${escapeHtml(co.name || "Shop")}</h1>
     ${co.address ? `<p class="inv-addr">${escapeHtml(co.address)}</p>` : ""}
     ${meta ? `<p class="inv-meta">${meta}</p>` : ""}
-    <p class="inv-title">${voucherTitle(entry.entry_type)}</p>
+    <p class="inv-title">${isPayment ? "PAYMENT VOUCHER" : "PAYMENT RECEIPT"}</p>
   </header>
   <div class="inv-rule"></div>
   <div class="inv-details">
-    <div class="inv-row"><span>Voucher No.</span><strong>${escapeHtml(entry.entry_no || "—")}</strong></div>
-    <div class="inv-row"><span>Date</span><span>${escapeHtml(when)}</span></div>
+    <div class="inv-row"><span>${isPayment ? "Voucher No." : "Payment Receipt No."}</span><strong>${escapeHtml(entry.entry_no || "—")}</strong></div>
+    <div class="inv-row"><span>Payment Date</span><span>${escapeHtml(payDate || formatDateTime(entry.created_at || new Date().toISOString()))}</span></div>
     ${entry.party_mobile ? `<div class="inv-row"><span>Mobile</span><span>${escapeHtml(entry.party_mobile)}</span></div>` : ""}
-    <div class="inv-row"><span>${isPayment ? "Paid to" : "Received from"}</span><span>${escapeHtml(entry.party_name || "—")}</span></div>
-    <div class="inv-row"><span>Mode</span><span>${escapeHtml(String(entry.payment_method || "cash").toUpperCase())}</span></div>
-    ${reference && reference !== "manual" ? `<div class="inv-row"><span>Reference</span><span>${escapeHtml(reference.replace(/_/g, " "))}</span></div>` : ""}
-    ${entry.notes ? `<div class="inv-row"><span>Notes</span><span>${escapeHtml(entry.notes)}</span></div>` : ""}
+    <div class="inv-row"><span>${isPayment ? "Paid to" : "Customer"}</span><span>${escapeHtml(entry.party_name || "—")}</span></div>
+    ${!isPayment && invoiceNo ? `<div class="inv-row"><span>Against Invoice</span><span>${escapeHtml(invoiceNo)}</span></div>` : ""}
+    <div class="inv-row"><span>Payment Mode</span><span>${escapeHtml(String(entry.payment_method || "cash").toUpperCase())}</span></div>
+    ${reference ? `<div class="inv-row"><span>Reference No.</span><span>${escapeHtml(reference)}</span></div>` : ""}
+    ${entry.notes && entry.notes !== invoiceNo ? `<div class="inv-row"><span>Notes</span><span>${escapeHtml(entry.notes)}</span></div>` : ""}
   </div>
   <div class="inv-rule"></div>
   <table class="inv-totals">
     <tbody>
-      ${!isPayment && (entry.previous_due != null || entry.previousDue != null) ? `<tr><td>Previous due</td><td class="inv-num">${escapeHtml(money(entry.previous_due ?? entry.previousDue))}</td></tr>` : ""}
-      <tr class="inv-grand"><td><strong>${isPayment ? "Amount paid" : "Amount received"}</strong></td><td class="inv-num"><strong>${escapeHtml(money(amount))}</strong></td></tr>
-      ${!isPayment && (entry.balance_due != null || entry.balanceDue != null) ? `<tr><td>Balance due</td><td class="inv-num">${escapeHtml(money(entry.balance_due ?? entry.balanceDue))}</td></tr>` : ""}
+      ${!isPayment && previousDue != null ? `<tr><td>Previous Due</td><td class="inv-num">${escapeHtml(money(previousDue))}</td></tr>` : ""}
+      ${!isPayment && invoiceAmt != null ? `<tr><td>Invoice Amount</td><td class="inv-num">${escapeHtml(money(invoiceAmt))}</td></tr>` : ""}
+      <tr class="inv-grand"><td><strong>${isPayment ? "Amount paid" : "Payment Received"}</strong></td><td class="inv-num"><strong>${escapeHtml(money(amount))}</strong></td></tr>
+      ${!isPayment && remaining != null ? `<tr><td>Remaining Due</td><td class="inv-num">${escapeHtml(money(remaining))}</td></tr>` : ""}
     </tbody>
   </table>
   <p class="inv-pay">In words: ${escapeHtml(amountInWords(amount))}</p>
@@ -1057,6 +1098,8 @@ ${voucherBody(entry, ctx)}
     amountInWords,
     purchaseBody,
     thermalPurchaseDocument,
+    invoiceDueFigures,
+    invoiceDueRowsHtml,
     voucherBody,
     voucherDocument,
     enrichLines,

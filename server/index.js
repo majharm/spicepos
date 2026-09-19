@@ -23,7 +23,7 @@ import { registerBackup } from "./backup.js";
 import { registerUnits, ensureInventoryUnits } from "./units.js";
 import { registerAccounts } from "./accounts.js";
 import { postSaleJournal } from "./accounting.js";
-import { recordCreditSale } from "./accounts.js";
+import { recordCreditSale, settleCustomerInvoice } from "./accounts.js";
 import { audit } from "./audit.js";
 import { getPlatformSettings, shopSupportContact } from "./settings.js";
 import { sendLowStockAlerts, tickShopAlerts, startAlertScheduler, scheduleAlertTick } from "./alerts.js";
@@ -1076,13 +1076,23 @@ app.post("/api/checkout", requireStaff, requirePerm("counter"), async (req, res)
       if (!orders[0]) orderRow.lines = orderLines;
       else orderRow.lines = orderLines;
       if (qrOrderId) await linkQrOrderSale(conn, { businessId, qrOrderId, saleId: orderId });
-      await recordCreditSale(conn, {
+      const dueSnap = await settleCustomerInvoice(conn, {
         customer,
         total,
         orderId: orderRow.id,
         orderNumber: orderRow.order_number,
         method,
+        amountPaid: req.body?.amountPaid ?? req.body?.amount_paid,
+        paymentReference: req.body?.paymentReference ?? req.body?.payment_reference,
+        paymentDate: req.body?.paymentDate ?? req.body?.payment_date,
       });
+      orderRow.previous_due = dueSnap.previousDue;
+      orderRow.amount_paid = dueSnap.amountPaid;
+      orderRow.current_due = dueSnap.currentDue;
+      orderRow.payment_status = dueSnap.paymentStatus;
+      orderRow.payment_reference = dueSnap.paymentReference;
+      orderRow.payment_date = dueSnap.paymentDate;
+      orderRow.receipt = dueSnap.receipt;
       await postSaleJournal(conn, orderRow);
       return orderRow;
     });

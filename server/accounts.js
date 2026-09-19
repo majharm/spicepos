@@ -45,6 +45,18 @@ function requirePaymentDeleteAdmin() {
   }
 }
 
+export function formatPaymentReceiptNo(n) {
+  return `PR-${String(Number(n) || 0).padStart(5, "0")}`;
+}
+
+export function invoicePaidAmount(method, total, raw) {
+  if (raw != null && raw !== "") {
+    const n = round2(raw);
+    return n > 0 ? n : 0;
+  }
+  return String(method || "").toLowerCase() === "credit" ? 0 : round2(total);
+}
+
 async function insertLedger(conn, row) {
   const id = crypto.randomUUID();
   await conn.query(
@@ -68,23 +80,144 @@ async function insertLedger(conn, row) {
       authUser()?.id || null,
     ],
   );
+  await stampLedgerExtras(conn, id, row);
   return id;
 }
 
-export async function recordCreditSale(conn, { customer, total, orderId, orderNumber, method }) {
-  if (method !== "credit") return;
-  const amt = round2(total);
-  const current = round2(Number(customer.outstanding || 0));
-  const next = round2(current + amt);
-  const limit = Number(customer.credit_limit || 0);
-  if (limit > 0 && next > limit) {
-    throw new Error(`Credit limit exceeded (limit ₹${limit.toFixed(2)}, outstanding would be ₹${next.toFixed(2)})`);
+async function stampLedgerExtras(conn, id, extra = {}) {
+  if (!id) return;
+  try {
+    await execSql(
+      conn,
+      `UPDATE account_ledger SET
+         payment_reference = ?, invoice_no = ?, invoice_amount = ?,
+         previous_due = ?, remaining_due = ?, payment_date = ?
+       WHERE id = ? AND business_id = ?`,
+      [
+        extra.payment_reference || extra.paymentReference || null,
+        extra.invoice_no || extra.invoiceNo || extra.orderNumber || extra.order_number || null,
+        extra.invoice_amount != null ? extra.invoice_amount : extra.invoiceAmount != null ? extra.invoiceAmount : null,
+        extra.previous_due != null ? extra.previous_due : extra.previousDue != null ? extra.previousDue : null,
+        extra.remaining_due != null ? extra.remaining_due : extra.remainingDue != null ? extra.remainingDue : extra.currentDue != null ? extra.currentDue : null,
+        extra.payment_date || extra.paymentDate || null,
+        id,
+        bid(),
+      ],
+    );
+  } catch {
+    /* optional due columns */
   }
-  await conn.query("UPDATE customers SET outstanding = ? WHERE id = ? AND business_id = ?", [
-    next,
+}
+
+async function applyInvoicePaidDelta(conn, orderId, delta) {
+  if (!orderId || !delta) return;
+  try {
+    await execSql(
+      conn,
+      `UPDATE sales_orders SET
+         amount_paid = GREATEST(0, COALESCE(amount_paid, 0) + ?),
+         current_due = GREATEST(0, COALESCE(previous_due, 0) + COALESCE(total, 0) - GREATEST(0, COALESCE(amount_paid, 0) + ?)),
+         payment_status = CASE
+           WHEN GREATEST(0, COALESCE(amount_paid, 0) + ?) >= total THEN 'paid'
+           WHEN GREATEST(0, COALESCE(amount_paid, 0) + ?) > 0 THEN 'partial'
+           ELSE 'unpaid'
+         END
+       WHERE id = ? AND business_id = ? AND LOWER(COALESCE(status,'confirmed')) <> 'cancelled'`,
+      [delta, delta, delta, delta, orderId, bid()],
+    );
+  } catch {
+    /* optional amount_paid */
+  }
+}
+
+export async function persistInvoiceSettlement(conn, orderId, snap = {}) {
+  if (!orderId) return;
+  try {
+    await execSql(
+      conn,
+      `UPDATE sales_orders SET
+         previous_due = ?, amount_paid = ?, current_due = ?,
+         payment_reference = ?, payment_date = ?, payment_status = ?
+       WHERE id = ? AND business_id = ?`,
+      [
+        snap.previousDue || 0,
+        snap.amountPaid || 0,
+        snap.currentDue || 0,
+        snap.paymentReference || null,
+        snap.paymentDate || null,
+        snap.paymentStatus || "paid",
+        orderId,
+        bid(),
+      ],
+    );
+  } catch {
+    /* optional settlement columns */
+  }
+}
+
+export async function postCustomerReceipt(conn, opts) {
+  const customer = opts.customer;
+  const amt = round2(opts.amount);
+  const method = payMoney(opts.method || opts.payment_method || "cash") || "cash";
+  const n = await nextSeq(conn, "receipt", 1);
+  const entryNo = formatPaymentReceiptNo(n);
+  const previousDue = round2(opts.previousDue ?? Number(customer.outstanding || 0) + amt);
+  const remainingDue = round2(opts.remainingDue ?? Number(customer.outstanding || 0));
+  const ledgerId = await insertLedger(conn, {
+    entry_no: entryNo,
+    entry_type: "receipt",
+    party_type: "customer",
+    party_id: customer.id,
+    party_name: customer.business_name || customer.name,
+    amount: amt,
+    payment_method: method,
+    reference_type: opts.orderId ? "sales_order" : "manual",
+    reference_id: opts.orderId || null,
+    notes: opts.notes || opts.orderNumber || null,
+    payment_reference: opts.paymentReference || opts.payment_reference || null,
+    invoice_no: opts.orderNumber || opts.invoice_no || null,
+    invoice_amount: opts.invoiceAmount != null ? opts.invoiceAmount : opts.invoice_amount,
+    previous_due: previousDue,
+    remaining_due: remainingDue,
+    payment_date: opts.paymentDate || opts.payment_date || null,
+  });
+  await postReceiptJournal(conn, { amount: amt, payment_method: method, entryNo, ledgerId });
+  if (opts.orderId) await applyInvoicePaidDelta(conn, opts.orderId, amt);
+  return {
+    entryNo,
+    ledgerId,
+    amount: amt,
+    method,
+    previous_due: previousDue,
+    balance_due: remainingDue,
+    remaining_due: remainingDue,
+    invoice_no: opts.orderNumber || opts.invoice_no || null,
+    invoice_amount: opts.invoiceAmount != null ? opts.invoiceAmount : null,
+    payment_reference: opts.paymentReference || opts.payment_reference || null,
+    payment_date: opts.paymentDate || opts.payment_date || null,
+    order_id: opts.orderId || null,
+  };
+}
+
+export async function settleCustomerInvoice(conn, {
+  customer, total, method, orderId, orderNumber, amountPaid, paymentReference, paymentDate,
+}) {
+  const invoiceTotal = round2(total);
+  const previousDue = round2(Number(customer.outstanding || 0));
+  let paid = invoicePaidAmount(method, invoiceTotal, amountPaid);
+  const maxPaid = round2(previousDue + invoiceTotal);
+  if (paid > maxPaid) paid = maxPaid;
+  const currentDue = round2(Math.max(0, previousDue + invoiceTotal - paid));
+  const limit = Number(customer.credit_limit || 0);
+  if (limit > 0 && currentDue > limit) {
+    throw new Error(`Credit limit exceeded (limit ₹${limit.toFixed(2)}, outstanding would be ₹${currentDue.toFixed(2)})`);
+  }
+  await execSql(conn, "UPDATE customers SET outstanding = ? WHERE id = ? AND business_id = ?", [
+    currentDue,
     customer.id,
     bid(),
   ]);
+  customer.outstanding = currentDue;
   const n = await nextSeq(conn, "account", 1001);
   await insertLedger(conn, {
     entry_no: `JV-${n}`,
@@ -92,11 +225,52 @@ export async function recordCreditSale(conn, { customer, total, orderId, orderNu
     party_type: "customer",
     party_id: customer.id,
     party_name: customer.business_name || customer.name,
-    amount: amt,
-    payment_method: "credit",
+    amount: invoiceTotal,
+    payment_method: method || "credit",
     reference_type: "sales_order",
     reference_id: orderId,
     notes: orderNumber,
+    invoice_no: orderNumber,
+    invoice_amount: invoiceTotal,
+    previous_due: previousDue,
+    remaining_due: currentDue,
+    payment_date: paymentDate || null,
+  });
+  let receipt = null;
+  if (paid > 0) {
+    const receiptMethod = String(method || "cash").toLowerCase() === "credit" ? "cash" : method;
+    receipt = await postCustomerReceipt(conn, {
+      customer,
+      amount: paid,
+      method: receiptMethod,
+      orderId,
+      orderNumber,
+      notes: orderNumber,
+      paymentReference,
+      paymentDate,
+      invoiceAmount: invoiceTotal,
+      previousDue,
+      remainingDue: currentDue,
+    });
+  }
+  const paymentStatus = paid <= 0 ? "unpaid" : paid + 0.0001 < invoiceTotal ? "partial" : "paid";
+  const snap = {
+    previousDue,
+    amountPaid: paid,
+    currentDue,
+    paymentStatus,
+    paymentReference: paymentReference || null,
+    paymentDate: paymentDate || null,
+    receipt,
+  };
+  await persistInvoiceSettlement(conn, orderId, snap);
+  return snap;
+}
+
+export async function recordCreditSale(conn, opts) {
+  return settleCustomerInvoice(conn, {
+    ...opts,
+    amountPaid: opts.amountPaid != null ? opts.amountPaid : opts.method === "credit" ? 0 : opts.total,
   });
 }
 
@@ -112,11 +286,6 @@ export async function reverseCreditSale(conn, orderOrId) {
      )`,
     [bid(), orderId, String(order.order_number || "")],
   );
-  if (rows.some((row) => String(row.entry_type || "") === "receipt")) {
-    const err = new Error("Cannot delete invoice with customer receipts. Delete those receipts first.");
-    err.status = 400;
-    throw err;
-  }
   for (const row of rows) {
     await deleteLedgerJournal(conn, row.id);
     await execSql(conn, "DELETE FROM account_ledger WHERE id = ? AND business_id = ?", [row.id, bid()]);
@@ -125,27 +294,49 @@ export async function reverseCreditSale(conn, orderOrId) {
 
 export async function recomputeCustomerOutstanding(conn, customerId) {
   if (!customerId) return 0;
-  const [[sale]] = await execSql(
-    conn,
-    `SELECT COALESCE(SUM(total),0) AS credit FROM sales_orders
-     WHERE business_id = ? AND customer_id = ?
-       AND LOWER(TRIM(payment_method)) = 'credit'
-       AND LOWER(TRIM(COALESCE(status,'confirmed'))) <> 'cancelled'`,
-    [bid(), customerId],
-  );
+  let billed = 0;
+  try {
+    const [[sale]] = await execSql(
+      conn,
+      `SELECT COALESCE(SUM(l.amount),0) AS credit
+       FROM account_ledger l
+       JOIN sales_orders o ON o.id = l.reference_id AND o.business_id = l.business_id
+       WHERE l.business_id = ? AND l.party_type = 'customer' AND l.party_id = ?
+         AND l.entry_type = 'sale_credit'
+         AND LOWER(TRIM(COALESCE(o.status,'confirmed'))) <> 'cancelled'`,
+      [bid(), customerId],
+    );
+    billed = Number(sale?.credit || 0);
+  } catch {
+    const [[sale]] = await execSql(
+      conn,
+      `SELECT COALESCE(SUM(total),0) AS credit FROM sales_orders
+       WHERE business_id = ? AND customer_id = ?
+         AND LOWER(TRIM(COALESCE(status,'confirmed'))) <> 'cancelled'
+         AND LOWER(TRIM(payment_method)) = 'credit'`,
+      [bid(), customerId],
+    );
+    billed = Number(sale?.credit || 0);
+  }
   let received = 0;
   try {
     const [[rcp]] = await execSql(
       conn,
-      `SELECT COALESCE(SUM(amount),0) AS received FROM account_ledger
-       WHERE business_id = ? AND party_type = 'customer' AND party_id = ? AND entry_type = 'receipt'`,
+      `SELECT COALESCE(SUM(l.amount),0) AS received
+       FROM account_ledger l
+       LEFT JOIN sales_orders o ON o.id = l.reference_id AND o.business_id = l.business_id
+       WHERE l.business_id = ? AND l.party_type = 'customer' AND l.party_id = ? AND l.entry_type = 'receipt'
+         AND (
+           l.reference_id IS NULL OR l.reference_type <> 'sales_order'
+           OR LOWER(TRIM(COALESCE(o.status,'confirmed'))) <> 'cancelled'
+         )`,
       [bid(), customerId],
     );
     received = Number(rcp?.received || 0);
   } catch {
     received = 0;
   }
-  const next = round2(Math.max(0, Number(sale?.credit || 0) - received));
+  const next = round2(Math.max(0, billed - received));
   await execSql(conn, "UPDATE customers SET outstanding = ? WHERE id = ? AND business_id = ?", [
     next,
     customerId,
@@ -155,33 +346,8 @@ export async function recomputeCustomerOutstanding(conn, customerId) {
 }
 
 export async function recomputeBusinessOutstanding(conn) {
-  const businessId = bid();
-  try {
-    await execSql(
-      conn,
-      `UPDATE customers c
-       LEFT JOIN (
-         SELECT customer_id, SUM(total) AS credit
-         FROM sales_orders
-         WHERE business_id = ?
-           AND LOWER(TRIM(payment_method)) = 'credit'
-           AND LOWER(TRIM(COALESCE(status,'confirmed'))) <> 'cancelled'
-         GROUP BY customer_id
-       ) s ON s.customer_id = c.id
-       LEFT JOIN (
-         SELECT party_id, SUM(amount) AS received
-         FROM account_ledger
-         WHERE business_id = ? AND party_type = 'customer' AND entry_type = 'receipt'
-         GROUP BY party_id
-       ) r ON r.party_id = c.id
-       SET c.outstanding = GREATEST(0, COALESCE(s.credit, 0) - COALESCE(r.received, 0))
-       WHERE c.business_id = ?`,
-      [businessId, businessId, businessId],
-    );
-  } catch {
-    const [rows] = await execSql(conn, "SELECT id FROM customers WHERE business_id = ?", [businessId]);
-    for (const row of rows) await recomputeCustomerOutstanding(conn, row.id);
-  }
+  const [rows] = await execSql(conn, "SELECT id FROM customers WHERE business_id = ?", [bid()]);
+  for (const row of rows) await recomputeCustomerOutstanding(conn, row.id);
 }
 
 export async function recordCreditPurchase(conn, { supplier, total, purchaseId, purchaseNumber, method }) {
@@ -348,8 +514,46 @@ export function registerAccounts(app) {
     }
   });
 
+  app.get("/api/accounts/open-invoices", requirePerm("accounts"), async (req, res) => {
+    try {
+      const customerId = String(req.query.customer_id || "").trim();
+      if (!customerId) {
+        res.status(400).json({ error: "customer_id is required" });
+        return;
+      }
+      let rows = [];
+      try {
+        rows = await query(
+          `SELECT id, order_number, created_at, total, COALESCE(amount_paid,0) AS amount_paid,
+                  COALESCE(previous_due,0) AS previous_due, COALESCE(current_due,0) AS current_due,
+                  payment_method, payment_status
+           FROM sales_orders
+           WHERE business_id = ? AND customer_id = ?
+             AND LOWER(TRIM(COALESCE(status,'confirmed'))) <> 'cancelled'
+             AND (COALESCE(total,0) - COALESCE(amount_paid,0)) > 0.004
+           ORDER BY created_at ASC`,
+          [bid(), customerId],
+        );
+      } catch {
+        rows = await query(
+          `SELECT id, order_number, created_at, total, payment_method, payment_status
+           FROM sales_orders
+           WHERE business_id = ? AND customer_id = ?
+             AND LOWER(TRIM(COALESCE(status,'confirmed'))) <> 'cancelled'
+             AND LOWER(TRIM(payment_method)) = 'credit'
+             AND LOWER(TRIM(COALESCE(payment_status,'paid'))) <> 'paid'
+           ORDER BY created_at ASC`,
+          [bid(), customerId],
+        );
+      }
+      res.json(rows);
+    } catch (err) {
+      res.status(500).json({ error: String(err.message) });
+    }
+  });
+
   app.post("/api/accounts/receipts", requirePerm("accounts"), async (req, res) => {
-    const { customer_id, amount, payment_method, notes, order_id } = req.body || {};
+    const { customer_id, amount, payment_method, notes, order_id, payment_reference, payment_date } = req.body || {};
     const amt = round2(amount);
     if (!customer_id || amt <= 0) {
       res.status(400).json({ error: "Customer and amount are required" });
@@ -377,29 +581,36 @@ export function registerAccounts(app) {
           customer.id,
           bid(),
         ]);
-        const n = await nextSeq(conn, "receipt", 1001);
-        const entryNo = `RCP-${n}`;
-        const ledgerId = await insertLedger(conn, {
-          entry_no: entryNo,
-          entry_type: "receipt",
-          party_type: "customer",
-          party_id: customer.id,
-          party_name: customer.business_name || customer.name,
-          amount: amt,
-          payment_method: method,
-          reference_type: order_id ? "sales_order" : "manual",
-          reference_id: order_id || null,
-          notes: notes || null,
-        });
-        await postReceiptJournal(conn, { amount: amt, payment_method: method, entryNo, ledgerId });
-        return {
-          entryNo,
-          ledgerId,
-          customer: { ...customer, outstanding: next },
+        customer.outstanding = next;
+        let orderNumber = null;
+        let invoiceAmount = null;
+        if (order_id) {
+          const [orders] = await conn.query(
+            "SELECT order_number, total FROM sales_orders WHERE id = ? AND business_id = ? LIMIT 1",
+            [order_id, bid()],
+          );
+          orderNumber = orders[0]?.order_number || null;
+          invoiceAmount = orders[0] ? round2(orders[0].total) : null;
+        }
+        const receipt = await postCustomerReceipt(conn, {
+          customer,
           amount: amt,
           method,
-          previous_due: outstanding,
-          balance_due: next,
+          orderId: order_id || null,
+          orderNumber,
+          notes: notes || orderNumber,
+          paymentReference: payment_reference,
+          paymentDate: payment_date,
+          invoiceAmount,
+          previousDue: outstanding,
+          remainingDue: next,
+        });
+        return {
+          ...receipt,
+          customer: { ...customer, outstanding: next },
+          party_name: customer.business_name || customer.name,
+          party_mobile: customer.mobile,
+          entry_type: "receipt",
         };
       });
       await audit("Customer Receipt", {
@@ -458,6 +669,15 @@ export function registerAccounts(app) {
           "UPDATE account_ledger SET amount = ?, payment_method = ?, notes = ? WHERE id = ? AND business_id = ?",
           [amt, method, notes || null, entry.id, bid()],
         );
+        await stampLedgerExtras(conn, entry.id, {
+          payment_reference: req.body?.payment_reference != null ? req.body.payment_reference : entry.payment_reference,
+          payment_date: req.body?.payment_date != null ? req.body.payment_date : entry.payment_date,
+          previous_due: round2(outstanding + oldAmt),
+          remaining_due: next,
+        });
+        if (entry.reference_type === "sales_order" && entry.reference_id) {
+          await applyInvoicePaidDelta(conn, entry.reference_id, round2(amt - oldAmt));
+        }
         await replaceLedgerJournal(conn, {
           kind: "receipt",
           amount: amt,
@@ -514,12 +734,20 @@ export function registerAccounts(app) {
         ]);
         await deleteLedgerJournal(conn, entry.id);
         await conn.query("DELETE FROM account_ledger WHERE id = ? AND business_id = ?", [entry.id, bid()]);
+        if (entry.reference_type === "sales_order" && entry.reference_id) {
+          await applyInvoicePaidDelta(conn, entry.reference_id, -amt);
+        }
+        await recomputeCustomerOutstanding(conn, customer.id);
+        const [[fresh]] = await execSql(conn, "SELECT outstanding FROM customers WHERE id = ? AND business_id = ?", [
+          customer.id,
+          bid(),
+        ]);
         return {
           entryNo: entry.entry_no,
           ledgerId: entry.id,
-          customer: { ...customer, outstanding: next },
+          customer: { ...customer, outstanding: fresh?.outstanding ?? next },
           amount: amt,
-          balance_due: next,
+          balance_due: fresh?.outstanding ?? next,
         };
       });
       await audit("Customer Receipt Deleted", {

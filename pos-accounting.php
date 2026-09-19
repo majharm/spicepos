@@ -635,6 +635,37 @@ function pos_accounts_dispatch($path, $method, $body, $bid, $auth, $branchId, $u
     ));
   }
 
+  if ($path === "accounts/open-invoices" && $method === "GET") {
+    $customerId = trim((string) ($_GET["customer_id"] ?? ""));
+    if ($customerId === "") pos_send(400, ["error" => "customer_id is required", "php" => true]);
+    try {
+      pos_send(200, pos_q(
+        "SELECT id, order_number, created_at, total, COALESCE(amount_paid,0) AS amount_paid,
+                COALESCE(previous_due,0) AS previous_due, COALESCE(current_due,0) AS current_due,
+                payment_method, payment_status
+         FROM sales_orders
+         WHERE business_id = ? AND customer_id = ?
+           AND LOWER(TRIM(COALESCE(status,'confirmed'))) <> 'cancelled'
+           AND (COALESCE(total,0) - COALESCE(amount_paid,0)) > 0.004
+         ORDER BY created_at ASC",
+        "ss",
+        [$bid, $customerId]
+      ));
+    } catch (Exception $e) {
+      pos_send(200, pos_q(
+        "SELECT id, order_number, created_at, total, payment_method, payment_status
+         FROM sales_orders
+         WHERE business_id = ? AND customer_id = ?
+           AND LOWER(TRIM(COALESCE(status,'confirmed'))) <> 'cancelled'
+           AND LOWER(TRIM(payment_method)) = 'credit'
+           AND LOWER(TRIM(COALESCE(payment_status,'paid'))) <> 'paid'
+         ORDER BY created_at ASC",
+        "ss",
+        [$bid, $customerId]
+      ));
+    }
+  }
+
   if ($path === "accounts/receipts" && $method === "POST") {
     $customerId = $body["customer_id"] ?? "";
     $amt = pos_round2((float) ($body["amount"] ?? 0));
@@ -649,8 +680,8 @@ function pos_accounts_dispatch($path, $method, $body, $bid, $auth, $branchId, $u
     if ($amt > $outstanding) pos_send(400, ["error" => "Amount exceeds outstanding"]);
     $next = pos_round2($outstanding - $amt);
     pos_q("UPDATE customers SET outstanding = ? WHERE id = ? AND business_id = ?", "dss", [$next, $customer["id"], $bid]);
-    $n = pos_next_seq("receipt", $bid, 1001);
-    $entryNo = "RCP-{$n}";
+    $n = pos_next_seq("receipt", $bid, 1);
+    $entryNo = function_exists("pos_format_payment_receipt_no") ? pos_format_payment_receipt_no($n) : "PR-" . str_pad((string) $n, 5, "0", STR_PAD_LEFT);
     $ledgerId = pos_insert_ledger([
       "entry_no" => $entryNo, "entry_type" => "receipt", "party_type" => "customer",
       "party_id" => $customer["id"], "party_name" => $customer["business_name"] ?? $customer["name"],
@@ -659,6 +690,24 @@ function pos_accounts_dispatch($path, $method, $body, $bid, $auth, $branchId, $u
       "reference_id" => $body["order_id"] ?? null, "notes" => $body["notes"] ?? null,
     ], $bid, $uid);
     pos_post_receipt_journal($bid, $uid, $amt, $methodPay, $entryNo, $ledgerId);
+    $orderNumber = null;
+    $invoiceAmount = null;
+    if (!empty($body["order_id"])) {
+      $ord = pos_q("SELECT order_number, total FROM sales_orders WHERE id = ? AND business_id = ? LIMIT 1", "ss", [$body["order_id"], $bid]);
+      $orderNumber = $ord[0]["order_number"] ?? null;
+      $invoiceAmount = isset($ord[0]["total"]) ? pos_round2($ord[0]["total"]) : null;
+      if (function_exists("pos_apply_invoice_paid_delta")) pos_apply_invoice_paid_delta($body["order_id"], $amt, $bid);
+    }
+    if (function_exists("pos_stamp_ledger_due")) {
+      pos_stamp_ledger_due($ledgerId, [
+        "payment_reference" => $body["payment_reference"] ?? null,
+        "invoice_no" => $orderNumber,
+        "invoice_amount" => $invoiceAmount,
+        "previous_due" => $outstanding,
+        "remaining_due" => $next,
+        "payment_date" => $body["payment_date"] ?? null,
+      ], $bid);
+    }
     pos_send(200, [
       "ok" => true,
       "entryNo" => $entryNo,
@@ -668,6 +717,15 @@ function pos_accounts_dispatch($path, $method, $body, $bid, $auth, $branchId, $u
       "method" => $methodPay,
       "previous_due" => $outstanding,
       "balance_due" => $next,
+      "remaining_due" => $next,
+      "invoice_no" => $orderNumber,
+      "invoice_amount" => $invoiceAmount,
+      "payment_reference" => $body["payment_reference"] ?? null,
+      "payment_date" => $body["payment_date"] ?? null,
+      "order_id" => $body["order_id"] ?? null,
+      "party_name" => $customer["business_name"] ?? $customer["name"],
+      "party_mobile" => $customer["mobile"] ?? null,
+      "entry_type" => "receipt",
       "php" => true,
     ]);
   }

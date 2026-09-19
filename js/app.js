@@ -525,6 +525,36 @@ function canDeleteInvoice() {
   return state.session?.role === "business_admin";
 }
 
+function invoiceSettlementHtml(o) {
+  const previous = Number(o.previous_due) || 0;
+  const paid = Number(o.amount_paid) || 0;
+  const total = Number(o.total) || 0;
+  const current = o.current_due != null ? Number(o.current_due) : Math.max(0, previous + total - paid);
+  const mobile = o.customer_mobile || "";
+  const ref = String(o.payment_reference || "").trim();
+  const payDate = String(o.payment_date || "").slice(0, 10);
+  return `<div class="invoice-settle">
+    <p class="hint">Previous due + invoice − payment = outstanding</p>
+    <div class="invoice-settle-grid">
+      <div><span>Invoice No.</span><strong>${escapeHtml(o.order_number || "—")}</strong></div>
+      <div><span>Invoice Date</span><strong>${escapeHtml(formatShopDateTime(o.created_at))}</strong></div>
+      <div><span>Customer Name</span><strong>${escapeHtml(orderCustomerName(o))}</strong></div>
+      <div><span>Mobile No.</span><strong>${escapeHtml(mobile || "—")}</strong></div>
+      <div><span>Previous Due</span><strong>${money(previous)}</strong></div>
+      <div><span>Current Invoice Amount</span><strong>${money(Number(o.subtotal) || 0)}</strong></div>
+      <div><span>Discount</span><strong>${money(Number(o.discount) || 0)}</strong></div>
+      <div><span>Tax/GST</span><strong>${money(Number(o.gst) || 0)}</strong></div>
+      <div><span>Total Invoice Amount</span><strong>${money(total)}</strong></div>
+      <div><span>Amount Paid</span><strong>${money(paid)}</strong></div>
+      <div><span>Payment Mode</span><strong>${escapeHtml(paymentMethodLabel(o.payment_method))}</strong></div>
+      <div><span>Payment Reference</span><strong>${escapeHtml(ref || "—")}</strong></div>
+      <div><span>Payment Date</span><strong>${escapeHtml(payDate || "—")}</strong></div>
+      <div><span>Current Due</span><strong>${money(current)}</strong></div>
+    </div>
+    ${Number(paid) > 0 && (o.receipt || o.receipt_entry_no) ? `<p class="hint">Payment receipt ${escapeHtml(o.receipt?.entryNo || o.receipt?.entry_no || o.receipt_entry_no)} is linked to this invoice.</p>` : ""}
+  </div>`;
+}
+
 function renderEditOrderBanner() {
   const el = $("edit-order-banner");
   if (!el) return;
@@ -748,11 +778,18 @@ function paintCounterDue(c) {
     bill = Number(t.total != null ? t.total : (t.taxable || 0) + (t.tax || 0)) || 0;
   }
   const creditAfter = !walkIn && method === "credit" && bill > 0;
-  const after = due + (creditAfter ? bill : 0);
+  const paidEl = $("pay-amount");
+  const typedPaid = paidEl && paidEl.value !== "" ? Number(paidEl.value) : NaN;
+  const paid = Number.isFinite(typedPaid)
+    ? Math.max(0, typedPaid)
+    : method === "credit"
+      ? 0
+      : bill;
+  const after = Math.max(0, due + bill - paid);
   let label = "";
-  if (creditAfter && due > 0) label = `Due ${money(due)} · after credit ${money(after)}`;
-  else if (creditAfter) label = `After credit ${money(after)}`;
-  else if (due > 0) label = `Due ${money(due)}`;
+  if (bill > 0 || due > 0) {
+    label = `Previous due ${money(due)} + invoice ${money(bill)} − paid ${money(paid)} = ${money(after)}`;
+  }
   const chip = $("bill-due");
   if (chip) {
     chip.hidden = !label;
@@ -765,6 +802,50 @@ function paintCounterDue(c) {
   if (faceRow) faceRow.hidden = !(due > 0);
   if ($("face-due")) $("face-due").textContent = money(due);
   $("customer")?.classList.toggle("has-due", due > 0);
+}
+
+function shopDateInputValue(value) {
+  const raw = String(value || "").slice(0, 10);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, "0");
+  const d = String(now.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+function syncPayAmountDefault() {
+  const el = $("pay-amount");
+  if (!el) return;
+  if (!el.dataset.dirty) {
+    const t = typeof cartTotals === "function" ? cartTotals() : { total: 0 };
+    const total = Number(t.total != null ? t.total : (t.taxable || 0) + (t.tax || 0)) || 0;
+    const method = $("pay-method")?.value;
+    el.value = method === "credit" ? "0" : total.toFixed(2);
+  }
+  if ($("pay-date") && !$("pay-date").value) $("pay-date").value = shopDateInputValue();
+}
+
+function receiptEntryFromInvoice(order) {
+  const r = order?.receipt;
+  if (!r && !(Number(order?.amount_paid) > 0)) return null;
+  return {
+    id: r?.ledgerId || r?.ledger_id || r?.id || "",
+    entry_no: r?.entryNo || r?.entry_no || "PR",
+    entry_type: "receipt",
+    party_name: orderCustomerName(order),
+    party_mobile: order.customer_mobile,
+    party_id: order.customer_id,
+    amount: r?.amount ?? order.amount_paid,
+    payment_method: r?.method || order.payment_method,
+    invoice_no: r?.invoice_no || order.order_number,
+    invoice_amount: r?.invoice_amount ?? order.total,
+    previous_due: r?.previous_due ?? order.previous_due,
+    remaining_due: r?.remaining_due ?? r?.balance_due ?? order.current_due,
+    payment_reference: r?.payment_reference || order.payment_reference,
+    payment_date: r?.payment_date || order.payment_date,
+    created_at: order.created_at,
+  };
 }
 
 function paintBillCustomer() {
@@ -1212,6 +1293,12 @@ function clearCounterAfterSale(order, result) {
   if ($("search")) $("search").value = "";
   if ($("scan-code")) $("scan-code").value = "";
   if ($("pack-choice")) $("pack-choice").value = "";
+  if ($("pay-amount")) {
+    delete $("pay-amount").dataset.dirty;
+    $("pay-amount").value = "";
+  }
+  if ($("pay-ref")) $("pay-ref").value = "";
+  if ($("pay-date")) $("pay-date").value = shopDateInputValue();
   resetClassicBillEntry();
   resetClassicCustomerRecord();
   renderCatalog();
@@ -3283,6 +3370,8 @@ function renderCart() {
   paintClassicLoyalty();
   paintClassicStockAlert();
   renderTableBoard();
+  syncPayAmountDefault();
+  paintCounterDue();
   if (isRestaurantShop() && state.activeTable && state.cart.length) saveTableHoldDebounced();
   if (window.DevMode?.isEnabled()) {
     DevMode.updateContext({ cartLines: state.cart.length });
@@ -4200,6 +4289,27 @@ function paintDueOutstanding() {
     $("due-amount").max = String(due);
     if (!$("due-amount").value) $("due-amount").value = String(due);
   }
+  void fillDueInvoiceSelect(id, due);
+  if ($("due-date") && !$("due-date").value) $("due-date").value = shopDateInputValue();
+}
+
+async function fillDueInvoiceSelect(customerId, due) {
+  const sel = $("due-invoice");
+  if (!sel) return;
+  sel.innerHTML = `<option value="">Unallocated (customer due)</option>`;
+  if (!customerId || !(Number(due) > 0)) return;
+  try {
+    const rows = await api(`/api/accounts/open-invoices?customer_id=${encodeURIComponent(customerId)}`);
+    (Array.isArray(rows) ? rows : []).forEach((o) => {
+      const left = Math.max(0, Number(o.total || 0) - Number(o.amount_paid || 0));
+      sel.insertAdjacentHTML(
+        "beforeend",
+        `<option value="${escapeHtml(o.id)}">${escapeHtml(o.order_number || o.id)} · due ${money(left || o.current_due || 0)}</option>`,
+      );
+    });
+  } catch {
+    /* optional */
+  }
 }
 
 async function collectCustomerDue(customer, amount, method, notes) {
@@ -4210,6 +4320,9 @@ async function collectCustomerDue(customer, amount, method, notes) {
       amount: Number(amount),
       payment_method: method,
       notes,
+      order_id: $("due-invoice")?.value || undefined,
+      payment_reference: $("due-ref")?.value || undefined,
+      payment_date: $("due-date")?.value || undefined,
     }),
   });
   await loadBootstrap();
@@ -4220,7 +4333,7 @@ async function collectCustomerDue(customer, amount, method, notes) {
   } catch {
     /* accounts view optional */
   }
-  const entry = {
+    const entry = {
     entry_no: data.entryNo,
     entry_type: "receipt",
     party_name: data.customer?.business_name || data.customer?.name || customer.business_name || customer.name,
@@ -4230,11 +4343,21 @@ async function collectCustomerDue(customer, amount, method, notes) {
     notes,
     created_at: new Date().toISOString(),
     previous_due: data.previous_due,
+    remaining_due: data.remaining_due ?? data.balance_due ?? data.customer?.outstanding,
     balance_due: data.balance_due ?? data.customer?.outstanding,
+    invoice_no: data.invoice_no,
+    invoice_amount: data.invoice_amount,
+    payment_reference: data.payment_reference || $("due-ref")?.value,
+    payment_date: data.payment_date || $("due-date")?.value,
     id: data.ledgerId,
     party_id: customer.id,
   };
   showVoucherResult(entry, { autoPrint: true });
+  try {
+    await loadOrders();
+  } catch {
+    /* invoices optional */
+  }
   return data;
 }
 
@@ -5418,6 +5541,7 @@ function invoiceModalPrintActions(look, order) {
       <button class="btn${look === "pos" ? " primary" : ""}" type="button" id="modal-print-pos">Print POS slip</button>
       <button class="btn${look === "office" ? " primary" : ""}" type="button" id="modal-print-office">Print official bill</button>
       <button class="btn${look === "duplicate" ? " primary" : ""}" type="button" id="modal-print-duplicate">Print duplicate</button>
+      ${Number(order?.amount_paid) > 0 || order?.receipt ? `<button class="btn" type="button" id="modal-print-receipt">Print Receipt</button>` : ""}
     </div>`;
 }
 
@@ -5430,6 +5554,13 @@ function bindInvoiceModalPrint(order) {
   if (office) office.onclick = () => printOrder(order, "office");
   if (dup) dup.onclick = () => printOrder(order, "duplicate");
   if (copy) copy.onclick = () => copyInvoiceLink(order);
+  const rcp = $("modal-print-receipt");
+  if (rcp) {
+    rcp.onclick = () => {
+      const entry = receiptEntryFromInvoice(order);
+      if (entry) showVoucherResult(entry);
+    };
+  }
 }
 
 function showInvoicePrintModal(order, { title, message } = {}) {
@@ -5503,6 +5634,37 @@ function printVoucher(entry) {
   w.document.close();
 }
 
+function downloadVoucher(entry) {
+  const html = InvoicePrint.voucherDocument(entry, invoiceCtx());
+  const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `${entry.entry_no || "payment-receipt"}.html`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1500);
+}
+
+function whatsappVoucher(entry) {
+  const Share = globalThis.POSInvoiceShare;
+  const text = [
+    state.company?.name || "Shop",
+    `Payment Receipt ${entry.entry_no || ""}`.trim(),
+    entry.invoice_no ? `Against Invoice: ${entry.invoice_no}` : "",
+    entry.previous_due != null ? `Previous Due: ${money(entry.previous_due)}` : "",
+    entry.invoice_amount != null ? `Invoice Amount: ${money(entry.invoice_amount)}` : "",
+    `Payment Received: ${money(entry.amount)}`,
+    `Payment Mode: ${paymentMethodLabel(entry.payment_method)}`,
+    entry.payment_reference ? `Reference No.: ${entry.payment_reference}` : "",
+    `Remaining Due: ${money(entry.remaining_due ?? entry.balance_due ?? 0)}`,
+  ]
+    .filter(Boolean)
+    .join("\n");
+  const url = Share?.whatsappShareUrl
+    ? Share.whatsappShareUrl(entry.party_mobile, text)
+    : `https://wa.me/?text=${encodeURIComponent(text)}`;
+  window.open(url, "_blank", "noopener");
+}
+
 function showVoucherResult(entry, opts = {}) {
   const isPayment = entry.entry_type === "payment";
   const label = isPayment ? "Payment" : "Receipt";
@@ -5512,13 +5674,19 @@ function showVoucherResult(entry, opts = {}) {
   $("modal-body").innerHTML = `<p class="hint ok">${label} saved · ${escapeHtml(entry.entry_no)}</p>
     <div class="thermal-preview">${InvoicePrint.voucherBody(entry, invoiceCtx())}</div>
     <div class="print-actions">
-      <button class="btn primary" type="button" id="modal-print-voucher">Print ${label.toLowerCase()}</button>
-      ${canAlter ? `<button class="btn" type="button" id="modal-alter-voucher">Alter amount</button>` : ""}
-      ${canDelete ? `<button class="btn danger" type="button" id="modal-delete-voucher">Delete</button>` : ""}
+      <button class="btn primary" type="button" id="modal-print-voucher">Print Receipt</button>
+      <button class="btn" type="button" id="modal-download-voucher">Download PDF</button>
+      <button class="btn" type="button" id="modal-whatsapp-voucher">WhatsApp</button>
+      ${canAlter ? `<button class="btn" type="button" id="modal-alter-voucher">Edit Payment</button>` : ""}
+      ${canDelete ? `<button class="btn danger" type="button" id="modal-delete-voucher">Delete Payment</button>` : ""}
     </div>`;
   $("modal").hidden = false;
   const btn = $("modal-print-voucher");
   if (btn) btn.onclick = () => printVoucher(entry);
+  const dl = $("modal-download-voucher");
+  if (dl) dl.onclick = () => downloadVoucher(entry);
+  const wa = $("modal-whatsapp-voucher");
+  if (wa) wa.onclick = () => whatsappVoucher(entry);
   const alter = $("modal-alter-voucher");
   if (alter) alter.onclick = () => showAlterVoucherModal(entry);
   const del = $("modal-delete-voucher");
@@ -5550,8 +5718,8 @@ function voucherRowActions(i) {
   const del = canDeletePaymentEntry()
     ? `<button class="btn danger" type="button" data-voucher-delete="${i}">Delete</button>`
     : "";
-  return `<button class="btn" type="button" data-voucher-print="${i}">Print</button>
-    <button class="btn" type="button" data-voucher-alter="${i}">Alter</button>
+  return `<button class="btn" type="button" data-voucher-print="${i}">Print Receipt</button>
+    <button class="btn" type="button" data-voucher-alter="${i}">Edit Payment</button>
     ${del}`;
 }
 
@@ -5578,6 +5746,11 @@ async function deleteVoucherEntry(entry) {
     /* optional */
   }
   try {
+    await loadOrders();
+  } catch {
+    /* optional */
+  }
+  try {
     await loadSuppliers();
   } catch {
     /* optional */
@@ -5596,6 +5769,8 @@ function showAlterVoucherModal(entry) {
     <label>Amount <input id="alter-amount" type="number" min="0.01" step="0.01"${max > 0 ? ` max="${max}"` : ""} required value="${Number(entry.amount) || ""}" /></label>
     <label>Method <select id="alter-method">${voucherMethodOptions(entry.payment_method)}</select></label>
     <label>Notes <input id="alter-notes" maxlength="200" value="${escapeHtml(entry.notes || "")}" /></label>
+    <label>Reference / UTR <input id="alter-ref" maxlength="80" value="${escapeHtml(entry.payment_reference || "")}" /></label>
+    <label>Payment date <input id="alter-date" type="date" value="${escapeHtml(String(entry.payment_date || "").slice(0, 10))}" /></label>
     <button class="btn primary" type="submit">Save changes</button>
     <button class="btn" type="button" id="alter-cancel">Cancel</button>
   </form><p class="hint" id="alter-hint"></p>`;
@@ -5621,6 +5796,8 @@ function showAlterVoucherModal(entry) {
           amount: Number($("alter-amount").value),
           payment_method: method,
           notes,
+          payment_reference: $("alter-ref")?.value || "",
+          payment_date: $("alter-date")?.value || "",
         }),
       });
       await loadBootstrap();
@@ -5636,6 +5813,11 @@ function showAlterVoucherModal(entry) {
       } catch {
         /* optional */
       }
+      try {
+        await loadOrders();
+      } catch {
+        /* optional */
+      }
       showVoucherResult({
         ...entry,
         id: data.ledgerId || entry.id,
@@ -5643,7 +5825,10 @@ function showAlterVoucherModal(entry) {
         payment_method: data.method || method,
         notes: data.notes != null ? data.notes : notes,
         previous_due: data.previous_due,
+        remaining_due: data.remaining_due ?? data.balance_due,
         balance_due: data.balance_due,
+        payment_reference: data.payment_reference ?? $("alter-ref")?.value,
+        payment_date: data.payment_date ?? $("alter-date")?.value,
         party_name:
           data.customer?.business_name || data.customer?.name || data.supplier?.name || entry.party_name,
       });
@@ -5678,6 +5863,7 @@ function showOrder(o) {
           <span class="pay-method-chip">${escapeHtml(paymentMethodLabel(o.payment_method))}</span>
         </div>
       </div>
+      ${invoiceSettlementHtml(o)}
       ${renderOrderStatusControls(o)}
       ${lineCount ? "" : '<p class="hint error">Line items missing — refresh or re-upload pos-php-till.php</p>'}
     </div>
@@ -5688,6 +5874,7 @@ function showOrder(o) {
       <button class="btn${look === "pos" ? " primary" : ""}" type="button" data-print="${escapeHtml(o.id)}" data-print-look="pos">Print POS slip</button>
       <button class="btn${look === "office" ? " primary" : ""}" type="button" data-print="${escapeHtml(o.id)}" data-print-look="office">Print official bill</button>
       <button class="btn${look === "duplicate" ? " primary" : ""}" type="button" data-print="${escapeHtml(o.id)}" data-print-look="duplicate">Print duplicate</button>
+      ${Number(o.amount_paid) > 0 ? `<button class="btn" type="button" data-print-receipt="${escapeHtml(o.id)}">Print Receipt</button>` : ""}
       <button class="btn" type="button" data-edit-order="${escapeHtml(o.id)}"${cancelled ? " disabled title=\"Restore order status before editing items\"" : ""}>Change items</button>
       ${canDeleteInvoice() ? `<button class="btn danger" type="button" data-delete-order="${escapeHtml(o.id)}">Delete invoice</button>` : ""}
     </div>`;
@@ -6595,24 +6782,42 @@ function renderPartyLedgerTable(targetId, data, kind) {
     <div class="report-card"><span>Closing</span><strong>${money(data?.closing || 0)}</strong></div>
     <div class="report-card"><span>${kind === "customer" ? "Outstanding" : "Payable"}</span><strong>${money(due)}</strong></div>
   </div>${action ? `<p class="hint">${action}</p>` : ""}`;
+  const opening = Number(data?.opening || 0);
+  const typeLabel = (t) => {
+    const s = String(t || "").toLowerCase();
+    if (s === "sale_credit") return "Sale";
+    if (s === "receipt") return "Payment";
+    if (s === "payment") return "Payment";
+    if (s === "purchase_credit") return "Purchase";
+    return t || "—";
+  };
+  const invoiceOf = (r) => r.invoice_no || (r.entry_type === "sale_credit" ? r.notes : "") || "—";
   if (!rows.length) {
     el.innerHTML = `${head}<p class="hint">No ${kind} ledger entries in this period.</p>`;
     return;
   }
   el.innerHTML = `${head}<table><thead><tr>
-    <th>Date</th><th>Entry</th><th>Type</th><th>Debit</th><th>Credit</th><th>Balance</th><th>Method</th><th>Notes</th><th></th>
-  </tr></thead><tbody>${rows
+    <th>Date</th><th>Type</th><th>Invoice</th><th>Debit</th><th>Credit</th><th>Balance</th><th></th>
+  </tr></thead><tbody>
+    <tr>
+      <td>${escapeHtml(data?.from || "")}</td>
+      <td>Opening Due</td>
+      <td>—</td>
+      <td>${opening > 0 ? money(opening) : "—"}</td>
+      <td>${opening < 0 ? money(Math.abs(opening)) : "—"}</td>
+      <td>${money(opening)}</td>
+      <td></td>
+    </tr>
+    ${rows
     .map((r, i) => {
       const printable = r.entry_type === "receipt" || r.entry_type === "payment";
       return `<tr>
       <td>${escapeHtml(formatShopDateTime(r.created_at))}</td>
-      <td>${escapeHtml(r.entry_no)}</td>
-      <td>${escapeHtml(r.entry_type)}</td>
+      <td>${escapeHtml(typeLabel(r.entry_type))}</td>
+      <td>${escapeHtml(invoiceOf(r))}</td>
       <td>${r.debit ? money(r.debit) : "—"}</td>
       <td>${r.credit ? money(r.credit) : "—"}</td>
       <td>${money(r.balance)}</td>
-      <td>${escapeHtml(r.payment_method || "—")}</td>
-      <td>${escapeHtml(r.notes || "—")}</td>
       <td>${printable ? voucherRowActions(i) : ""}</td>
     </tr>`;
     })
@@ -7115,6 +7320,12 @@ $("order-pane").addEventListener("click", async (e) => {
     const o = findInvoice(printBtn.dataset.print);
     if (o) printOrder(o, printBtn.dataset.printLook);
   }
+  const printReceiptBtn = e.target.closest("[data-print-receipt]");
+  if (printReceiptBtn) {
+    const o = findInvoice(printReceiptBtn.dataset.printReceipt);
+    const entry = o ? receiptEntryFromInvoice(o) : null;
+    if (entry) showVoucherResult(entry);
+  }
   if (copyBtn) {
     const o = findInvoice(copyBtn.dataset.copyInvoice);
     if (o) copyInvoiceLink(o);
@@ -7132,6 +7343,12 @@ $("order-pane").addEventListener("click", async (e) => {
     state.lastPack = o.pack_id ? { id: o.pack_id, name: o.pack_name, count: o.pack_count || 1 } : null;
     $("customer").value = state.customerId;
     $("pay-method").value = o.payment_method || "cash";
+    if ($("pay-amount")) {
+      $("pay-amount").value = String(Number(o.amount_paid) || 0);
+      $("pay-amount").dataset.dirty = "1";
+    }
+    if ($("pay-ref")) $("pay-ref").value = o.payment_reference || "";
+    if ($("pay-date")) $("pay-date").value = shopDateInputValue(o.payment_date);
     $("pack-choice").value = o.pack_id || "";
     if ($("bill-cust-name")) $("bill-cust-name").value = o.customer_name || "";
     if ($("bill-cust-mobile")) $("bill-cust-mobile").value = o.customer_mobile || digitsMobile(customer()?.mobile);
@@ -7308,6 +7525,12 @@ $("customer").addEventListener("change", () => {
   void loadCustomerLoyalty();
 });
 $("pay-method")?.addEventListener("change", () => {
+  if ($("pay-amount")) delete $("pay-amount").dataset.dirty;
+  syncPayAmountDefault();
+  paintCounterDue();
+});
+$("pay-amount")?.addEventListener("input", () => {
+  if ($("pay-amount")) $("pay-amount").dataset.dirty = "1";
   paintCounterDue();
 });
 $("btn-clear").addEventListener("click", () => {
@@ -7328,6 +7551,12 @@ $("btn-clear").addEventListener("click", () => {
   if ($("bill-disc-value")) $("bill-disc-value").value = 0;
   if ($("loyalty-redeem")) $("loyalty-redeem").value = 0;
   $("pack-choice").value = "";
+  if ($("pay-amount")) {
+    delete $("pay-amount").dataset.dirty;
+    $("pay-amount").value = "";
+  }
+  if ($("pay-ref")) $("pay-ref").value = "";
+  if ($("pay-date")) $("pay-date").value = shopDateInputValue();
   resetClassicBillEntry();
   resetClassicCustomerRecord({ focus: true });
   setHint(isClassicBillShop() ? "Bill and customer record cleared" : "Cart cleared");
@@ -7367,6 +7596,9 @@ $("btn-pay").addEventListener("click", async () => {
       offerLoyaltyMultiplier: state.appliedOffers?.loyaltyMultiplier || 1,
       qrOrderId: state.activeQrOrderId || undefined,
       table_no: isRestaurantShop() ? (state.activeTable || undefined) : undefined,
+      amountPaid: $("pay-amount") ? Number($("pay-amount").value) : undefined,
+      paymentReference: $("pay-ref")?.value || undefined,
+      paymentDate: $("pay-date")?.value || undefined,
       customer_name: isClassicBillShop() ? pharmacyBillCustomerName() : undefined,
       customer_mobile: isClassicBillShop() ? pharmacyBillCustomerMobile() : undefined,
       customer_address: isClassicBillShop() ? pharmacyBillCustomerAddress() : undefined,
@@ -7436,6 +7668,17 @@ $("btn-pay").addEventListener("click", async () => {
       };
     }
     if (tableNo && !receiptOrder.table_no) receiptOrder.table_no = tableNo;
+    const src = result?.order || result || {};
+    receiptOrder = {
+      ...receiptOrder,
+      previous_due: src.previous_due ?? receiptOrder.previous_due,
+      amount_paid: src.amount_paid ?? receiptOrder.amount_paid,
+      current_due: src.current_due ?? receiptOrder.current_due,
+      payment_reference: src.payment_reference ?? receiptOrder.payment_reference,
+      payment_date: src.payment_date ?? receiptOrder.payment_date,
+      payment_status: src.payment_status || receiptOrder.payment_status,
+      receipt: src.receipt || receiptOrder.receipt,
+    };
     showOrder(receiptOrder);
     showInvoicePrintModal(receiptOrder, {
       title: `Invoice ${orderLabel(order, result)}`,
@@ -7501,7 +7744,7 @@ $("view-accounts")?.addEventListener("click", (e) => {
   const voucher = e.target.closest("[data-voucher-print]");
   if (voucher) {
     const row = (state.ledgerRows || [])[Number(voucher.dataset.voucherPrint)];
-    if (row) printVoucher(row);
+    if (row) showVoucherResult(row);
     return;
   }
   const alter = e.target.closest("[data-voucher-alter]");

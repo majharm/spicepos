@@ -160,6 +160,11 @@ export async function ensureSchema() {
   await addColumn("sales_orders", "doctor_rx", "VARCHAR(180) NULL");
   await addColumn("sales_orders", "customer_address", "VARCHAR(500) NULL");
   await addColumn("sales_orders", "customer_mobile", "VARCHAR(20) NULL");
+  await addColumn("sales_orders", "previous_due", "DECIMAL(12,2) NOT NULL DEFAULT 0");
+  await addColumn("sales_orders", "amount_paid", "DECIMAL(12,2) NOT NULL DEFAULT 0");
+  await addColumn("sales_orders", "current_due", "DECIMAL(12,2) NOT NULL DEFAULT 0");
+  await addColumn("sales_orders", "payment_reference", "VARCHAR(80) NULL");
+  await addColumn("sales_orders", "payment_date", "DATE NULL");
   await addColumn("sales_order_lines", "mrp", "DECIMAL(12,2) NOT NULL DEFAULT 0");
   await addColumn("sales_order_lines", "discount_type", "VARCHAR(16) NOT NULL DEFAULT 'amt'");
   await addColumn("sales_order_lines", "discount_value", "DECIMAL(12,2) NOT NULL DEFAULT 0");
@@ -221,6 +226,12 @@ export async function ensureSchema() {
     INDEX idx_account_ledger_biz_date (business_id, created_at),
     INDEX idx_account_ledger_party (business_id, party_type, party_id)
   )`);
+  await addColumn("account_ledger", "payment_reference", "VARCHAR(80) NULL");
+  await addColumn("account_ledger", "invoice_no", "VARCHAR(32) NULL");
+  await addColumn("account_ledger", "invoice_amount", "DECIMAL(12,2) NULL");
+  await addColumn("account_ledger", "previous_due", "DECIMAL(12,2) NULL");
+  await addColumn("account_ledger", "remaining_due", "DECIMAL(12,2) NULL");
+  await addColumn("account_ledger", "payment_date", "DATE NULL");
 
   await create(`CREATE TABLE IF NOT EXISTS chart_of_accounts (
     id VARCHAR(255) PRIMARY KEY,

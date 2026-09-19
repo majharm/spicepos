@@ -75,11 +75,28 @@ function pos_patch_order($bid, $orderId, $body, $auth) {
     foreach ($activeLines as $l) {
       pos_q("UPDATE sales_order_lines SET cancelled = 1 WHERE id = ?", "s", [$l["id"]]);
     }
+    pos_reverse_credit_sale($bid, $existing);
+    pos_recompute_customer_outstanding($bid, $existing["customer_id"] ?? "");
   } elseif ($oldStatus === "cancelled" && $newStatus !== "cancelled") {
     $allLines = $existing["lines"] ?? [];
     pos_deduct_order_stock($bid, $allLines);
     foreach ($allLines as $l) {
       pos_q("UPDATE sales_order_lines SET cancelled = 0 WHERE id = ?", "s", [$l["id"]]);
+    }
+    $cust = pos_q("SELECT * FROM customers WHERE id = ? AND business_id = ? LIMIT 1", "ss", [$existing["customer_id"] ?? "", $bid]);
+    if ($cust && function_exists("pos_settle_customer_invoice")) {
+      pos_settle_customer_invoice(
+        $cust[0],
+        $existing["total"] ?? 0,
+        $existing["payment_method"] ?? "cash",
+        $orderId,
+        $existing["order_number"] ?? "",
+        $bid,
+        $auth["user"]["id"] ?? null,
+        $existing["amount_paid"] ?? null,
+        $existing["payment_reference"] ?? null,
+        $existing["payment_date"] ?? null
+      );
     }
   }
 

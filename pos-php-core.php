@@ -1364,6 +1364,11 @@ function pos_ensure_sales_schema() {
     "doctor_rx" => "VARCHAR(180) NULL",
     "customer_address" => "VARCHAR(500) NULL",
     "customer_mobile" => "VARCHAR(20) NULL",
+    "previous_due" => "DECIMAL(12,2) NOT NULL DEFAULT 0",
+    "amount_paid" => "DECIMAL(12,2) NOT NULL DEFAULT 0",
+    "current_due" => "DECIMAL(12,2) NOT NULL DEFAULT 0",
+    "payment_reference" => "VARCHAR(80) NULL",
+    "payment_date" => "DATE NULL",
   ];
   foreach ($cols as $name => $ddl) {
     $res = $db->query("SHOW COLUMNS FROM sales_orders LIKE '" . $db->real_escape_string($name) . "'");
@@ -1423,6 +1428,20 @@ function pos_ensure_accounts_schema() {
       INDEX idx_account_ledger_party (business_id, party_type, party_id)
     )"
   );
+  foreach ([
+    "payment_reference" => "VARCHAR(80) NULL",
+    "invoice_no" => "VARCHAR(32) NULL",
+    "invoice_amount" => "DECIMAL(12,2) NULL",
+    "previous_due" => "DECIMAL(12,2) NULL",
+    "remaining_due" => "DECIMAL(12,2) NULL",
+    "payment_date" => "DATE NULL",
+  ] as $name => $ddl) {
+    $res = $db->query("SHOW COLUMNS FROM account_ledger LIKE '" . $db->real_escape_string($name) . "'");
+    if ($res && $res->num_rows === 0) {
+      @$db->query("ALTER TABLE account_ledger ADD COLUMN {$name} {$ddl}");
+    }
+    if ($res) $res->free();
+  }
   @$db->query(
     "CREATE TABLE IF NOT EXISTS chart_of_accounts (
       id VARCHAR(255) PRIMARY KEY,
@@ -1517,29 +1536,156 @@ function pos_insert_ledger($row, $businessId, $createdBy = null) {
   return $id;
 }
 
-function pos_record_credit_sale($customer, $total, $orderId, $orderNumber, $method, $businessId, $uid = null) {
-  if ($method !== "credit") return;
-  $amt = pos_round2($total);
-  $current = pos_round2((float) ($customer["outstanding"] ?? 0));
-  $next = pos_round2($current + $amt);
-  $limit = (float) ($customer["credit_limit"] ?? 0);
-  if ($limit > 0 && $next > $limit) {
-    throw new Exception("Credit limit exceeded (limit ₹" . number_format($limit, 2) . ", outstanding would be ₹" . number_format($next, 2) . ")");
+function pos_format_payment_receipt_no($n) {
+  return sprintf("PR-%05d", (int) $n);
+}
+
+function pos_stamp_ledger_due($id, $row, $businessId) {
+  try {
+    pos_q(
+      "UPDATE account_ledger SET payment_reference = ?, invoice_no = ?, invoice_amount = ?, previous_due = ?, remaining_due = ?, payment_date = ? WHERE id = ? AND business_id = ?",
+      "ssdddsss",
+      [
+        $row["payment_reference"] ?? null,
+        $row["invoice_no"] ?? ($row["order_number"] ?? null),
+        $row["invoice_amount"] ?? null,
+        $row["previous_due"] ?? null,
+        $row["remaining_due"] ?? null,
+        $row["payment_date"] ?? null,
+        $id,
+        $businessId,
+      ]
+    );
+  } catch (Exception $e) { /* optional */ }
+}
+
+function pos_persist_invoice_settlement($orderId, $snap, $businessId) {
+  try {
+    pos_q(
+      "UPDATE sales_orders SET previous_due = ?, amount_paid = ?, current_due = ?, payment_reference = ?, payment_date = ?, payment_status = ? WHERE id = ? AND business_id = ?",
+      "dddsssss",
+      [
+        (string) ($snap["previousDue"] ?? 0),
+        (string) ($snap["amountPaid"] ?? 0),
+        (string) ($snap["currentDue"] ?? 0),
+        $snap["paymentReference"] ?? null,
+        $snap["paymentDate"] ?? null,
+        $snap["paymentStatus"] ?? "paid",
+        $orderId,
+        $businessId,
+      ]
+    );
+  } catch (Exception $e) { /* optional */ }
+}
+
+function pos_apply_invoice_paid_delta($orderId, $delta, $businessId) {
+  if (!$orderId || abs((float) $delta) < 0.0001) return;
+  try {
+    pos_q(
+      "UPDATE sales_orders SET
+         amount_paid = GREATEST(0, COALESCE(amount_paid, 0) + ?),
+         current_due = GREATEST(0, COALESCE(previous_due, 0) + COALESCE(total, 0) - GREATEST(0, COALESCE(amount_paid, 0) + ?)),
+         payment_status = CASE
+           WHEN GREATEST(0, COALESCE(amount_paid, 0) + ?) >= total THEN 'paid'
+           WHEN GREATEST(0, COALESCE(amount_paid, 0) + ?) > 0 THEN 'partial'
+           ELSE 'unpaid'
+         END
+       WHERE id = ? AND business_id = ? AND LOWER(COALESCE(status,'confirmed')) <> 'cancelled'",
+      "ddddss",
+      [(float) $delta, (float) $delta, (float) $delta, (float) $delta, $orderId, $businessId]
+    );
+  } catch (Exception $e) { /* optional */ }
+}
+
+function pos_invoice_paid_amount($method, $total, $raw) {
+  if ($raw !== null && $raw !== "") {
+    $n = pos_round2($raw);
+    return $n > 0 ? $n : 0;
   }
-  pos_q("UPDATE customers SET outstanding = ? WHERE id = ? AND business_id = ?", "dss", [$next, $customer["id"], $businessId]);
+  return pos_pay_normalize($method) === "credit" ? 0 : pos_round2($total);
+}
+
+function pos_settle_customer_invoice($customer, $total, $method, $orderId, $orderNumber, $businessId, $uid = null, $amountPaid = null, $paymentReference = null, $paymentDate = null) {
+  $invoiceTotal = pos_round2($total);
+  $previousDue = pos_round2((float) ($customer["outstanding"] ?? 0));
+  $paid = pos_invoice_paid_amount($method, $invoiceTotal, $amountPaid);
+  $maxPaid = pos_round2($previousDue + $invoiceTotal);
+  if ($paid > $maxPaid) $paid = $maxPaid;
+  $currentDue = pos_round2(max(0, $previousDue + $invoiceTotal - $paid));
+  $limit = (float) ($customer["credit_limit"] ?? 0);
+  if ($limit > 0 && $currentDue > $limit) {
+    throw new Exception("Credit limit exceeded (limit ₹" . number_format($limit, 2) . ", outstanding would be ₹" . number_format($currentDue, 2) . ")");
+  }
+  pos_q("UPDATE customers SET outstanding = ? WHERE id = ? AND business_id = ?", "dss", [$currentDue, $customer["id"], $businessId]);
+  $customer["outstanding"] = $currentDue;
   $n = pos_next_seq("account", $businessId, 1001);
-  pos_insert_ledger([
+  $saleId = pos_insert_ledger([
     "entry_no" => "JV-{$n}",
     "entry_type" => "sale_credit",
     "party_type" => "customer",
     "party_id" => $customer["id"],
     "party_name" => $customer["business_name"] ?? $customer["name"],
-    "amount" => $amt,
-    "payment_method" => "credit",
+    "amount" => $invoiceTotal,
+    "payment_method" => $method ?: "credit",
     "reference_type" => "sales_order",
     "reference_id" => $orderId,
     "notes" => $orderNumber,
   ], $businessId, $uid);
+  pos_stamp_ledger_due($saleId, [
+    "invoice_no" => $orderNumber,
+    "invoice_amount" => $invoiceTotal,
+    "previous_due" => $previousDue,
+    "remaining_due" => $currentDue,
+    "payment_date" => $paymentDate,
+  ], $businessId);
+  $receipt = null;
+  if ($paid > 0) {
+    $receiptMethod = pos_pay_normalize($method) === "credit" ? "cash" : $method;
+    if (!pos_pay_is_money($receiptMethod)) $receiptMethod = "cash";
+    $rn = pos_next_seq("receipt", $businessId, 1);
+    $entryNo = pos_format_payment_receipt_no($rn);
+    $ledgerId = pos_insert_ledger([
+      "entry_no" => $entryNo,
+      "entry_type" => "receipt",
+      "party_type" => "customer",
+      "party_id" => $customer["id"],
+      "party_name" => $customer["business_name"] ?? $customer["name"],
+      "amount" => $paid,
+      "payment_method" => $receiptMethod,
+      "reference_type" => "sales_order",
+      "reference_id" => $orderId,
+      "notes" => $orderNumber,
+    ], $businessId, $uid);
+    pos_stamp_ledger_due($ledgerId, [
+      "payment_reference" => $paymentReference,
+      "invoice_no" => $orderNumber,
+      "invoice_amount" => $invoiceTotal,
+      "previous_due" => $previousDue,
+      "remaining_due" => $currentDue,
+      "payment_date" => $paymentDate,
+    ], $businessId);
+    if (function_exists("pos_post_receipt_journal")) {
+      try { pos_post_receipt_journal($businessId, $uid, $paid, $receiptMethod, $entryNo, $ledgerId); } catch (Exception $e) { /* optional */ }
+    }
+    pos_apply_invoice_paid_delta($orderId, $paid, $businessId);
+    $receipt = ["entryNo" => $entryNo, "ledgerId" => $ledgerId, "amount" => $paid];
+  }
+  $payStatus = $paid <= 0 ? "unpaid" : ($paid + 0.0001 < $invoiceTotal ? "partial" : "paid");
+  $snap = [
+    "previousDue" => $previousDue,
+    "amountPaid" => $paid,
+    "currentDue" => $currentDue,
+    "paymentStatus" => $payStatus,
+    "paymentReference" => $paymentReference,
+    "paymentDate" => $paymentDate,
+    "receipt" => $receipt,
+  ];
+  pos_persist_invoice_settlement($orderId, $snap, $businessId);
+  return $snap;
+}
+
+function pos_record_credit_sale($customer, $total, $orderId, $orderNumber, $method, $businessId, $uid = null) {
+  return pos_settle_customer_invoice($customer, $total, $method, $orderId, $orderNumber, $businessId, $uid, $method === "credit" ? 0 : $total);
 }
 
 function pos_reverse_credit_sale($businessId, $order) {
@@ -1562,11 +1708,6 @@ function pos_reverse_credit_sale($businessId, $order) {
     return;
   }
   foreach ($rows as $row) {
-    if (($row["entry_type"] ?? "") === "receipt") {
-      throw new Exception("Cannot delete invoice with customer receipts. Delete those receipts first.");
-    }
-  }
-  foreach ($rows as $row) {
     if (function_exists("pos_delete_ledger_journal")) pos_delete_ledger_journal($businessId, $row["id"]);
     pos_q("DELETE FROM account_ledger WHERE id = ? AND business_id = ?", "ss", [$row["id"], $businessId]);
   }
@@ -1574,19 +1715,41 @@ function pos_reverse_credit_sale($businessId, $order) {
 
 function pos_recompute_customer_outstanding($businessId, $customerId) {
   if (!$customerId) return 0;
-  $sale = pos_q(
-    "SELECT COALESCE(SUM(total),0) AS credit FROM sales_orders
-     WHERE business_id = ? AND customer_id = ?
-       AND LOWER(TRIM(payment_method)) = 'credit'
-       AND LOWER(TRIM(COALESCE(status,'confirmed'))) <> 'cancelled'",
-    "ss",
-    [$businessId, $customerId]
-  );
+  $billed = 0;
+  try {
+    $sale = pos_q(
+      "SELECT COALESCE(SUM(l.amount),0) AS credit
+       FROM account_ledger l
+       JOIN sales_orders o ON o.id = l.reference_id AND o.business_id = l.business_id
+       WHERE l.business_id = ? AND l.party_type = 'customer' AND l.party_id = ?
+         AND l.entry_type = 'sale_credit'
+         AND LOWER(TRIM(COALESCE(o.status,'confirmed'))) <> 'cancelled'",
+      "ss",
+      [$businessId, $customerId]
+    );
+    $billed = (float) ($sale[0]["credit"] ?? 0);
+  } catch (Exception $e) {
+    $sale = pos_q(
+      "SELECT COALESCE(SUM(total),0) AS credit FROM sales_orders
+       WHERE business_id = ? AND customer_id = ?
+         AND LOWER(TRIM(payment_method)) = 'credit'
+         AND LOWER(TRIM(COALESCE(status,'confirmed'))) <> 'cancelled'",
+      "ss",
+      [$businessId, $customerId]
+    );
+    $billed = (float) ($sale[0]["credit"] ?? 0);
+  }
   $received = 0;
   try {
     $rcp = pos_q(
-      "SELECT COALESCE(SUM(amount),0) AS received FROM account_ledger
-       WHERE business_id = ? AND party_type = 'customer' AND party_id = ? AND entry_type = 'receipt'",
+      "SELECT COALESCE(SUM(l.amount),0) AS received
+       FROM account_ledger l
+       LEFT JOIN sales_orders o ON o.id = l.reference_id AND o.business_id = l.business_id
+       WHERE l.business_id = ? AND l.party_type = 'customer' AND l.party_id = ? AND l.entry_type = 'receipt'
+         AND (
+           l.reference_id IS NULL OR l.reference_type <> 'sales_order'
+           OR LOWER(TRIM(COALESCE(o.status,'confirmed'))) <> 'cancelled'
+         )",
       "ss",
       [$businessId, $customerId]
     );
@@ -1594,38 +1757,14 @@ function pos_recompute_customer_outstanding($businessId, $customerId) {
   } catch (Exception $e) {
     $received = 0;
   }
-  $next = pos_round2(max(0, (float) ($sale[0]["credit"] ?? 0) - $received));
+  $next = pos_round2(max(0, $billed - $received));
   pos_q("UPDATE customers SET outstanding = ? WHERE id = ? AND business_id = ?", "dss", [$next, $customerId, $businessId]);
   return $next;
 }
 
 function pos_recompute_business_outstanding($businessId) {
-  try {
-    pos_q(
-      "UPDATE customers c
-       LEFT JOIN (
-         SELECT customer_id, SUM(total) AS credit
-         FROM sales_orders
-         WHERE business_id = ?
-           AND LOWER(TRIM(payment_method)) = 'credit'
-           AND LOWER(TRIM(COALESCE(status,'confirmed'))) <> 'cancelled'
-         GROUP BY customer_id
-       ) s ON s.customer_id = c.id
-       LEFT JOIN (
-         SELECT party_id, SUM(amount) AS received
-         FROM account_ledger
-         WHERE business_id = ? AND party_type = 'customer' AND entry_type = 'receipt'
-         GROUP BY party_id
-       ) r ON r.party_id = c.id
-       SET c.outstanding = GREATEST(0, COALESCE(s.credit, 0) - COALESCE(r.received, 0))
-       WHERE c.business_id = ?",
-      "sss",
-      [$businessId, $businessId, $businessId]
-    );
-  } catch (Exception $e) {
-    $custs = pos_q("SELECT id FROM customers WHERE business_id = ?", "s", [$businessId]);
-    foreach ($custs as $row) pos_recompute_customer_outstanding($businessId, $row["id"]);
-  }
+  $custs = pos_q("SELECT id FROM customers WHERE business_id = ?", "s", [$businessId]);
+  foreach ($custs as $row) pos_recompute_customer_outstanding($businessId, $row["id"]);
 }
 
 function pos_record_credit_purchase($supplier, $total, $purchaseId, $purchaseNumber, $method, $businessId, $uid = null) {
