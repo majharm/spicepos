@@ -8,10 +8,10 @@
     <title>Sign in · ATAV POS</title>
     <link rel="icon" href="./favicon.svg" />
     <link rel="stylesheet" href="./css/pos.css?v=20260905deploy136" />
-    <link rel="stylesheet" href="./css/saas.css?v=20260917nologo1" />
+    <link rel="stylesheet" href="./css/saas.css?v=20260919loginz1" />
   </head>
-  <body class="auth-body">
-    <div class="auth-shell auth-shell-v2">
+  <body class="auth-body auth-zoho">
+    <div class="auth-shell auth-shell-v2 auth-shell-zoho">
       <aside class="auth-scene" aria-hidden="true">
         <div class="auth-scene-copy">
           <p class="auth-scene-kicker">ATAV POS</p>
@@ -45,17 +45,19 @@
       </aside>
       <div class="auth-main">
         <main class="auth-card" id="auth-card">
-          <div class="auth-brand">
-            <img class="auth-logo" src="./assets/atav-telecom-logo.png" alt="ATAV Telecom" width="200" height="86" />
-            <p class="auth-tagline">For every business</p>
+          <div class="auth-zoho-top">
+            <div class="auth-brand">
+              <img class="auth-logo" src="./assets/atav-telecom-logo.png" alt="ATAV Telecom" width="200" height="86" />
+              <p class="auth-tagline">For every business</p>
+            </div>
+            <div class="auth-tabs" role="tablist">
+              <button type="button" class="auth-tab is-active" data-panel="signin" role="tab" aria-selected="true">Sign in</button>
+              <button type="button" class="auth-tab" data-panel="signup" role="tab" aria-selected="false">Sign Up Now</button>
+            </div>
           </div>
-          <h1 class="auth-heading" id="auth-heading">Welcome back</h1>
-          <p id="auth-lead">Sign in to open your shop.</p>
-          <div class="auth-tabs" role="tablist">
-            <button type="button" class="auth-tab is-active" data-panel="signin" role="tab" aria-selected="true">Sign in</button>
-            <button type="button" class="auth-tab" data-panel="signup" role="tab" aria-selected="false">Create business</button>
-          </div>
-          <p class="auth-trial-invite">New shop? Start a <strong>2-day free trial</strong> — tap Create business. No card needed.</p>
+          <h1 class="auth-heading" id="auth-heading">Sign in</h1>
+          <p id="auth-lead">to access ATAV POS</p>
+          <p class="auth-trial-invite">Don't have an account? Start a <strong>2-day free trial</strong> — tap Sign Up Now. No card needed.</p>
           <aside class="auth-trial-banner" aria-label="2-day free trial">
             <span class="auth-trial-badge">2 days free</span>
             <div>
@@ -65,8 +67,8 @@
           </aside>
 
           <form id="login-form">
-            <label>Email, username or mobile
-              <input id="login-identifier" name="identifier" autocomplete="username" required autofocus inputmode="email" />
+            <label>Email Address or Mobile Number
+              <input id="login-identifier" name="identifier" autocomplete="username" required autofocus inputmode="email" placeholder="Email, username or mobile" />
             </label>
             <label class="auth-pass-lab">Password
               <span class="auth-pass">
@@ -74,12 +76,13 @@
                 <button class="auth-pass-toggle" id="login-pass-toggle" type="button" aria-controls="login-password" aria-label="Show password">Show</button>
               </span>
             </label>
+            <p class="auth-forgot-row"><a class="auth-forgot" href="#login-support">Forgot Password?</a></p>
+            <button class="btn primary" type="submit" id="login-submit">Sign In</button>
             <label class="remember">
               <input type="checkbox" name="remember" />
               <span class="remember-ui" aria-hidden="true"></span>
-              Remember me
+              Keep me signed in
             </label>
-            <button class="btn primary" type="submit" id="login-submit">Sign in</button>
             <p class="hint" id="hint"></p>
           </form>
 
@@ -240,6 +243,6 @@
       </div>
     </div>
     <script src="./js/support.js?v=20260905deploy136"></script>
-    <script src="./js/x-pos-20260830e.js?v=20260914login1"></script>
+    <script src="./js/x-pos-20260830e.js?v=20260919loginz1"></script>
   </body>
 </html>

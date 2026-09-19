@@ -194,9 +194,9 @@
         loginForm.hidden = signup;
         if (signupForm) signupForm.hidden = !signup;
         card?.classList.toggle("signup", signup);
-        if (lead) lead.textContent = signup ? "Start billing in minutes — 2-day free trial, no card." : "Sign in to open your shop.";
+        if (lead) lead.textContent = signup ? "Start billing in minutes — 2-day free trial, no card." : "to access ATAV POS";
         const heading = document.getElementById("auth-heading");
-        if (heading) heading.textContent = signup ? "Create your shop" : "Welcome back";
+        if (heading) heading.textContent = signup ? "Create your shop" : "Sign in";
       });
     });
 
@@ -357,6 +357,18 @@
         }
       });
     }
+
+    document.querySelector(".auth-forgot")?.addEventListener("click", (e) => {
+      const el = document.getElementById("login-support");
+      const hint = document.getElementById("hint");
+      if (el && !el.hidden) return;
+      e.preventDefault();
+      if (hint) {
+        hint.className = "hint";
+        hint.textContent = "Ask your business admin or ATAV support to reset the password.";
+      }
+      el?.scrollIntoView({ block: "nearest" });
+    });
 
     window.posRequest("/api/support-contact")
       .then(({ data: s }) => {

@@ -361,7 +361,8 @@ test("HTML and CSS cache stickers match deploy136", () => {
   assert.doesNotMatch(masterHtml, /startup-india\.svg/);
   assert.doesNotMatch(masterHtml, /india-pride/);
   assert.match(masterHtml, /id="master-pass-toggle"/);
-  assert.match(masterHtml, /Master sign in/);
+  assert.match(masterHtml, /auth-shell-zoho/);
+  assert.match(masterHtml, /to access Master Admin/);
   assert.match(masterHtml, /id="master-login-submit"/);
   assert.match(masterHtml, /nav-group-label">Advance</);
   assert.match(masterHtml, /data-tab="advance"/);
@@ -638,6 +639,9 @@ test("HTML and CSS cache stickers match deploy136", () => {
   assert.doesNotMatch(login, /assets\/login-pos-invoice\.jpg/);
   assert.doesNotMatch(login, /assets\/login-pos-stock\.jpg/);
   assert.match(login, /auth-shell-v2/);
+  assert.match(login, /auth-shell-zoho/);
+  assert.match(login, /Forgot Password\?/);
+  assert.match(login, /Keep me signed in/);
   assert.doesNotMatch(login, /india-theme/);
   assert.doesNotMatch(login, /india-pride/);
   assert.doesNotMatch(login, /assets\/make-in-india\.svg/);
@@ -669,6 +673,7 @@ test("HTML and CSS cache stickers match deploy136", () => {
   assert.match(saas, /auth-login-ux: heading pass toggle 2026/);
   assert.match(xpos, /login-pass-toggle/);
   assert.match(xpos, /Create your shop/);
+  assert.match(saas, /auth-zoho-login: books-style split 2026/);
   assert.match(saas, /auth-login-scroll: visible 2026/);
   assert.match(saas, /\.auth-main::-webkit-scrollbar/);
   assert.match(saas, /overflow-y: scroll/);

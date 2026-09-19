@@ -7,10 +7,10 @@
     <title>Master Admin · ATAV POS</title>
     <link rel="icon" href="./favicon.svg" />
     <link rel="stylesheet" href="./css/pos.css?v=20260905deploy145" />
-    <link rel="stylesheet" href="./css/saas.css?v=20260917nologo1" />
+    <link rel="stylesheet" href="./css/saas.css?v=20260919loginz1" />
   </head>
-  <body class="auth-body master-locked">
-    <div class="auth-shell auth-shell-v2" id="master-gate">
+  <body class="auth-body auth-zoho master-locked">
+    <div class="auth-shell auth-shell-v2 auth-shell-zoho" id="master-gate">
       <aside class="auth-scene" aria-hidden="true">
         <div class="auth-scene-copy">
           <p class="auth-scene-kicker">Master Admin</p>
@@ -43,11 +43,11 @@
             <img class="auth-logo" src="./assets/atav-telecom-logo.png" alt="ATAV Telecom" width="200" height="86" />
             <p class="auth-tagline">Master Admin</p>
           </div>
-          <h1 class="auth-heading">Master sign in</h1>
-          <p id="auth-lead">Sign in to manage every shop on this POS.</p>
+          <h1 class="auth-heading">Sign in</h1>
+          <p id="auth-lead">to access Master Admin</p>
           <form id="master-login">
-            <label>Email
-              <input name="email" type="email" required autocomplete="username" autofocus inputmode="email" />
+            <label>Email Address
+              <input name="email" type="email" required autocomplete="username" autofocus inputmode="email" placeholder="Email" />
             </label>
             <label class="auth-pass-lab">Password
               <span class="auth-pass">
@@ -55,12 +55,12 @@
                 <button class="auth-pass-toggle" id="master-pass-toggle" type="button" aria-controls="master-password" aria-label="Show password">Show</button>
               </span>
             </label>
+            <button class="btn primary" type="submit" id="master-login-submit">Sign In</button>
             <label class="remember">
               <input type="checkbox" name="remember" />
               <span class="remember-ui" aria-hidden="true"></span>
-              Remember me
+              Keep me signed in
             </label>
-            <button class="btn primary" type="submit" id="master-login-submit">Sign in</button>
             <p class="hint" id="login-hint"></p>
           </form>
           <p class="auth-note">Shop staff use the <a href="./login.html">shop login</a>.</p>
