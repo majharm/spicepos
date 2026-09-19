@@ -1068,7 +1068,7 @@ function pos_dispatch_advanced($path, $method, $body, $bid, $branchId, $uid, $au
     if ($onHand === "1" || strtolower($onHand) === "true") {
       $sql .= " AND b.remaining_gm > 0";
     }
-    $sql .= " ORDER BY i.name ASC, (b.expiry_date IS NULL) ASC, b.expiry_date ASC, b.batch_no ASC LIMIT 800";
+    $sql .= " ORDER BY i.name ASC, (b.expiry_date IS NULL) ASC, b.expiry_date ASC, b.batch_no ASC, b.id ASC LIMIT 10000";
     pos_send(200, pos_q($sql, $types, $args));
   }
 
