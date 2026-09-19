@@ -160,6 +160,10 @@ function isSpiceShop() {
   return Boolean(globalThis.POSFootwear?.isSpiceShop(state.businessMeta));
 }
 
+function isWeightShop() {
+  return Boolean(globalThis.POSFootwear?.isWeightShop?.(state.businessMeta));
+}
+
 function isRestaurantShop() {
   return Boolean(globalThis.POSRestaurant?.isRestaurantShop(state.businessMeta) || globalThis.POSFootwear?.isRestaurantShop(state.businessMeta));
 }
@@ -219,6 +223,7 @@ function applyFootwearMode() {
   document.body.classList.toggle("footwear-mode", fw);
   document.body.classList.toggle("apparel-mode", ap);
   document.body.classList.toggle("spice-mode", spice);
+  document.body.classList.toggle("weight-scale-mode", isWeightShop());
   document.body.classList.toggle("restaurant-mode", isRestaurantShop());
   document.body.classList.toggle("pharmacy-mode", pharm);
   document.body.classList.toggle("classic-bill-mode", isClassicBillShop());
@@ -341,6 +346,7 @@ function applyFootwearMode() {
   if ($("color-list")) $("color-list").innerHTML = colors.map((c) => `<option value="${escapeHtml(c)}">`).join("");
   if ($("size-list")) $("size-list").innerHTML = sizes.map((s) => `<option value="${escapeHtml(s)}">`).join("");
   fillFootwearFilters();
+  paintScaleDock();
   applyNav();
   renderTableBoard();
 }
@@ -8029,23 +8035,42 @@ function lastWeightLine() {
 }
 function paintScaleDock(hit) {
   const S = globalThis.POSScale;
+  const dock = $("scale-dock");
   const reading = hit || S?.current?.();
   const kgEl = $("scale-weight");
   const amtEl = $("scale-live-amt");
+  const statusEl = $("scale-status");
   const connect = $("scale-connect");
-  if (kgEl) {
-    const g = Number(reading?.grams) || 0;
-    kgEl.textContent = g > 0 ? `${(g / 1000).toFixed(3)} kg` : "— kg";
+  const ble = $("scale-ble");
+  const on = Boolean(S?.connected?.());
+  const kind = S?.connectionKind?.() || "";
+  const g = Number(reading?.grams) || 0;
+  const live = g > 0 && Date.now() - Number(reading?.at || 0) < 8000;
+  if (dock) {
+    dock.hidden = !isWeightShop();
+    dock.classList.toggle("is-live", live);
+    dock.classList.toggle("is-on", on);
   }
+  if (kgEl) kgEl.textContent = g > 0 ? (g / 1000).toFixed(3) : "0.000";
   if (amtEl) {
     const line = lastWeightLine();
     const item = line ? state.items.find((i) => i.id === line.itemId) : null;
-    const g = Number(reading?.grams) || 0;
-    amtEl.textContent = item && g > 0 ? money(POSUnits.lineAmount(g, rateFor(item), itemUnit(item))) : "";
+    amtEl.textContent = item && g > 0 ? `${item.name} · ${money(POSUnits.lineAmount(g, rateFor(item), itemUnit(item)))}` : "";
   }
-  if (connect) connect.textContent = S?.connected?.() ? "Disconnect" : "USB";
+  if (statusEl) {
+    if (on && live) statusEl.textContent = kind === "bluetooth" ? "Bluetooth · live kg" : "USB scale · live kg";
+    else if (on) statusEl.textContent = "Connected — place item on the pan";
+    else statusEl.textContent = "Not connected — type kg or plug in the scale";
+  }
+  if (connect) {
+    connect.hidden = Boolean(S && !S.hasSerial?.() && !on);
+    connect.textContent = on && kind !== "bluetooth" ? "Disconnect" : "USB scale";
+  }
+  if (ble) {
+    ble.hidden = Boolean(S && !S.hasBluetooth?.() && kind !== "bluetooth");
+    ble.textContent = on && kind === "bluetooth" ? "Disconnect" : "Bluetooth";
+  }
   const qty = $("bill-scan-qty");
-  const g = Number(reading?.grams) || 0;
   if (qty && g > 0 && document.activeElement !== qty) {
     const item = lastWeightLine() ? state.items.find((i) => i.id === lastWeightLine().itemId) : null;
     const unit = item ? itemUnit(item) : "KG";
@@ -8059,7 +8084,7 @@ function applyScaleWeight(lineKey) {
   const hit = (typed && S?.parseWeight?.(typed, prefer)) || S?.current?.() || null;
   const grams = Number(hit?.grams) || 0;
   if (grams <= 0) {
-    setHint("No scale weight yet. Connect the scale or type kg in the Scale box.", "error");
+    setHint("No scale weight yet. Connect the scale or type kg.", "error");
     $("scale-manual")?.focus();
     return false;
   }
@@ -8083,7 +8108,7 @@ function applyScaleWeight(lineKey) {
     paintScaleDock(hit);
     return true;
   }
-  setHint("Add a weight item, then tap Use weight", "error");
+  setHint("Add a kg item, then tap Use kg", "error");
   return false;
 }
 function applyTypedScale(raw, sourceEl) {
@@ -8122,13 +8147,13 @@ async function connectWeighingScale(kind) {
     else if (S.hasSerial?.()) await S.connectSerial({ baud: cfg.baud, unit: cfg.unit });
     else if (S.hasBluetooth?.()) await S.connectBluetooth({ unit: cfg.unit });
     else {
-      setHint("Type kg in the Scale box, or use a USB scale that sends the weight into Scan.", "ok");
+    setHint("Type kg, or connect a USB / Bluetooth scale.", "ok");
       $("scale-manual")?.focus();
       paintScaleDock();
       return;
     }
     paintScaleDock();
-    setHint("Scale connected. Weigh the item, then tap Use weight.", "ok");
+    setHint("Scale connected. Weigh the item, then tap Use kg.", "ok");
   } catch (err) {
     setHint(err.message || "Could not open the scale", "error");
   }

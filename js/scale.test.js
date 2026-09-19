@@ -35,11 +35,17 @@ test("POS shell wires a Counter scale dock and USB / Bluetooth helpers", () => {
   const css = readFileSync(path.join(root, "css/pos.css"), "utf8");
   assert.match(index, /id="scale-dock"/);
   assert.match(index, /id="scale-ble"/);
+  assert.match(index, /id="scale-status"/);
+  assert.match(index, /Use kg/);
   assert.match(index, /js\/scale\.js\?v=/);
   assert.match(app, /function initWeighingScale/);
+  assert.match(app, /function isWeightShop/);
+  assert.match(app, /weight-scale-mode/);
   assert.match(app, /POSScale/);
   assert.match(app, /applyScaleWeight/);
   assert.match(css, /scale-dock: live kg 2026/);
+  assert.match(css, /body:not\(\.weight-scale-mode\) \.scale-dock/);
   assert.match(S.hasSerial.toString() + S.connectSerial.toString(), /serial/);
   assert.match(S.connectBluetooth.toString(), /bluetooth/);
+  assert.equal(typeof S.connectionKind, "function");
 });

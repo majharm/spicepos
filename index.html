@@ -6,7 +6,7 @@
     <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
     <title>ATAV POS</title>
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./css/pos.css?v=20260919salon1" />
+    <link rel="stylesheet" href="./css/pos.css?v=20260919scale2" />
     <link rel="stylesheet" href="./css/saas.css?v=20260905deploy136" />
   </head>
   <body>
@@ -304,19 +304,24 @@
                   <p class="ticket-sub" id="ticket-sub">Tap a product or scan</p>
                   <p class="ticket-cust" id="bill-customer"></p>
                   <p class="ticket-due" id="bill-due" hidden></p>
-                  <div class="scale-dock" id="scale-dock">
-                    <div class="scale-readout">
-                      <span class="scale-kicker">Scale</span>
-                      <strong id="scale-weight">— kg</strong>
-                      <em id="scale-live-amt"></em>
-                    </div>
-                    <button type="button" class="btn" id="scale-connect" title="USB or RS-232 scale (Chrome / Edge)">USB</button>
-                    <button type="button" class="btn" id="scale-ble" title="Bluetooth scale">Bluetooth</button>
-                    <button type="button" class="btn primary" id="scale-capture">Use weight</button>
-                    <input id="scale-manual" type="text" inputmode="decimal" autocomplete="off" placeholder="1.250 kg" aria-label="Type or receive scale weight" />
-                  </div>
                 </div>
                 <button type="button" class="bill-toggle" id="bill-toggle" aria-controls="bill-panel" aria-expanded="true" aria-label="Hide bill" title="Hide bill">›</button>
+              </div>
+              <div class="scale-dock" id="scale-dock" hidden>
+                <div class="scale-readout">
+                  <span class="scale-kicker">Weighing scale</span>
+                  <p class="scale-kg-row"><strong id="scale-weight">0.000</strong><span class="scale-unit-lab">kg</span></p>
+                  <em id="scale-live-amt"></em>
+                  <span class="scale-status" id="scale-status">Not connected — type kg or plug in the scale</span>
+                </div>
+                <div class="scale-actions">
+                  <label class="scale-kg-field">Type kg
+                    <input id="scale-manual" type="text" inputmode="decimal" autocomplete="off" placeholder="1.250" aria-label="Type scale weight in kg" />
+                  </label>
+                  <button type="button" class="btn primary" id="scale-capture">Use kg</button>
+                  <button type="button" class="btn" id="scale-connect" title="USB or RS-232 scale (Chrome / Edge)">USB scale</button>
+                  <button type="button" class="btn" id="scale-ble" title="Bluetooth scale">Bluetooth</button>
+                </div>
               </div>
               <div class="classic-bill-head" id="classic-bill-head" hidden>
                 <div class="classic-cust-toolbar classic-span-4">
@@ -351,7 +356,7 @@
                   <label class="classic-qty">Qty
                     <input id="bill-scan-qty" type="number" min="0.001" step="any" value="1" aria-label="Quantity to add" />
                   </label>
-                  <button class="btn" type="button" id="classic-scale-capture" title="Read weight from the scale">Scale</button>
+                  <button class="btn" type="button" id="classic-scale-capture" title="Read weight from the scale">Use kg</button>
                   <button class="btn primary" type="submit" id="bill-scan-add">Add</button>
                   <button class="btn" type="button" id="classic-add-item" title="Add item to catalog and bill">+ Item</button>
                   <span class="classic-scan-status" id="bill-scan-status"></span>
@@ -1595,9 +1600,9 @@
           <div class="table-wrap" id="device-table"></div>
           <div class="scale-setup" id="scale-setup">
             <h3>Weighing scale</h3>
-            <p class="lede" style="margin:0">Connect a USB / RS-232, Bluetooth, or keyboard-wedge scale. Counter then fills kg and amount: 1.250 kg × ₹40/kg = ₹50.</p>
+            <p class="lede scale-setup-copy">USB, Bluetooth, or a scale that types kg into the till. Counter uses live kg on the bill — e.g. tomato ₹40/kg × 1.250 kg = ₹50.</p>
             <div class="scale-setup-row">
-              <label>Baud
+              <label>USB baud
                 <select id="scale-baud" aria-label="Scale baud rate">
                   <option value="2400">2400</option>
                   <option value="4800">4800</option>
@@ -1613,9 +1618,9 @@
                   <option value="g">Grams</option>
                 </select>
               </label>
-              <label class="scale-auto-lab"><input type="checkbox" id="scale-auto" checked /> Auto-fill the last weight item</label>
+              <label class="scale-auto-lab"><input type="checkbox" id="scale-auto" checked /> Auto-fill the last kg item on the bill</label>
             </div>
-            <p class="hint" id="scale-setup-hint">Chrome or Edge is required for USB serial. USB scales that type the weight can send it into Scan or the Scale box.</p>
+            <p class="hint" id="scale-setup-hint">Use Chrome or Edge on this computer for USB serial. Keyboard-wedge scales can type kg into Scan or the Type kg box.</p>
           </div>
         </section>
         <section class="view" id="view-support" hidden>
@@ -2367,7 +2372,7 @@
     <script src="./js/loyalty.js?v=20260905deploy136" defer></script>
     <script src="./js/barcode.js?v=20260905deploy136" defer></script>
     <script src="./js/camera-scan.js?v=20260918bill2" defer></script>
-    <script src="./js/scale.js?v=20260919scale1" defer></script>
+    <script src="./js/scale.js?v=20260919scale2" defer></script>
     <script src="./js/dev-mode.js?v=20260905deploy136" defer></script>
     <script src="./js/invoice.js?v=20260919pdt1" defer></script>
     <script src="./js/invoice-share.js?v=20260913share1" defer></script>
@@ -2379,7 +2384,7 @@
     <script src="./js/biz-hub-ui.js?v=20260919salon1" defer></script>
     <script src="./js/salon.js?v=20260919salon1" defer></script>
     <script src="./js/salon-ui.js?v=20260919salon1" defer></script>
-    <script src="./js/app.js?v=20260919salon1" defer></script>
+    <script src="./js/app.js?v=20260919scale2" defer></script>
     <script src="./js/growth.js?v=20260905deploy145" defer></script>
     <script src="./js/offers-ui.js?v=20260919off1" defer></script>
   </body>

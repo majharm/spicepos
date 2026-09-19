@@ -765,6 +765,7 @@
     isFootwearShop,
     isApparelShop,
     isSpiceShop,
+    isWeightShop,
     isRestaurantShop,
     isPharmacyShop,
     isServicesShop,

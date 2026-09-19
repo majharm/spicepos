@@ -134,6 +134,12 @@
     return Boolean((port && reading) || bleDevice);
   }
 
+  function connectionKind() {
+    if (port && reading) return "usb";
+    if (bleDevice) return "bluetooth";
+    return "";
+  }
+
   function current() {
     return last;
   }
@@ -295,6 +301,7 @@
     hasSerial,
     hasBluetooth,
     connected,
+    connectionKind,
     current,
     currentGrams,
     onWeight,

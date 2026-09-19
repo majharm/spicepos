@@ -6632,21 +6632,26 @@ body.apparel-mode.classic-bill-mode .grand {
 }
 
 /* scale-dock: live kg 2026 */
+body:not(.weight-scale-mode) .scale-dock,
+.scale-dock[hidden],
+body.bill-collapsed .scale-dock { display: none !important; }
 .scale-dock {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: minmax(8.5rem, 1fr) minmax(0, 1.4fr);
+  gap: 10px 12px;
   align-items: center;
-  gap: 6px;
-  margin-top: 8px;
-  padding: 8px;
-  border: 1px solid #cde8e3;
-  border-radius: 10px;
-  background: #f3fbf9;
+  flex: 0 0 auto;
+  margin: 0;
+  padding: 10px 12px;
+  border: 0;
+  border-bottom: 1px solid #cde8e3;
+  border-radius: 0;
+  background: linear-gradient(180deg, #f0fdfa 0%, #ecfdf5 100%);
 }
 .scale-readout {
   display: grid;
-  min-width: 7.5em;
-  gap: 0;
+  gap: 2px;
+  min-width: 0;
 }
 .scale-kicker {
   font-size: 10px;
@@ -6655,32 +6660,74 @@ body.apparel-mode.classic-bill-mode .grand {
   text-transform: uppercase;
   color: #0f766e;
 }
+.scale-kg-row {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin: 0;
+}
 .scale-dock #scale-weight {
-  font-size: 18px;
+  font-size: 28px;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
   color: #134e4a;
-  line-height: 1.15;
+  line-height: 1;
+  letter-spacing: -0.03em;
+}
+.scale-unit-lab {
+  font-size: 13px;
+  font-weight: 800;
+  color: #0f766e;
+  text-transform: lowercase;
 }
 .scale-dock #scale-live-amt {
   font-style: normal;
   font-size: 12px;
   font-weight: 700;
   color: #1a7a6d;
+  min-height: 1.1em;
+}
+.scale-status {
+  font-size: 11px;
+  font-weight: 650;
+  color: #64748b;
+}
+.scale-dock.is-on .scale-status { color: #0f766e; }
+.scale-dock.is-live #scale-weight { color: #0f766e; }
+.scale-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 6px;
+  justify-content: flex-end;
+}
+.scale-kg-field {
+  display: grid;
+  gap: 3px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #64748b;
 }
 .scale-dock .btn {
-  min-height: 30px;
-  padding: 0 10px;
+  min-height: 36px;
+  padding: 0 12px;
   font-size: 12px;
+  font-weight: 800;
 }
 .scale-dock #scale-manual {
-  width: 7.2em;
-  min-height: 30px;
-  padding: 4px 8px;
+  width: 6.4em;
+  min-height: 36px;
+  padding: 4px 10px;
   border: 1px solid #99f6e4;
   border-radius: 8px;
+  background: #fff;
   font: inherit;
-  font-weight: 700;
+  font-size: 16px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: #134e4a;
 }
 .scale-line-btn {
   min-width: 28px;
@@ -6701,6 +6748,7 @@ body.apparel-mode.classic-bill-mode .grand {
   box-shadow: var(--shadow-card);
 }
 .scale-setup h3 { margin: 0 0 6px; font-size: 16px; }
+.scale-setup-copy { margin: 0; }
 .scale-setup-row {
   display: flex;
   flex-wrap: wrap;
@@ -6717,6 +6765,15 @@ body.apparel-mode.classic-bill-mode .grand {
 }
 .classic-bill-scan #classic-scale-capture {
   min-height: 36px;
+}
+@media (max-width: 980px) {
+  .scale-dock {
+    grid-template-columns: 1fr;
+    padding: 10px 12px 12px;
+  }
+  .scale-actions { justify-content: stretch; }
+  .scale-actions .btn { flex: 1 1 auto; }
+  .scale-dock #scale-weight { font-size: 26px; }
 }
 
 
