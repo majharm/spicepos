@@ -6,7 +6,7 @@
     <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
     <title>ATAV POS</title>
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./css/pos.css?v=20260919an2" />
+    <link rel="stylesheet" href="./css/pos.css?v=20260919an3" />
     <link rel="stylesheet" href="./css/saas.css?v=20260905deploy136" />
   </head>
   <body>
@@ -124,41 +124,42 @@
         <section class="view analytics-dash" id="view-dashboard">
           <h2 class="visually-hidden">Dashboard</h2>
           <div class="items-desk dash-desk analytics-dash-desk">
-            <header class="analytics-dash-head">
-              <div class="analytics-dash-copy">
-                <p class="analytics-kicker">Retail POS Analytics</p>
-                <h3 id="dash-welcome">Dashboard</h3>
-                <p class="lede dash-hero-meta" id="dash-welcome-meta"></p>
+            <header class="an-chrome">
+              <div class="an-logo">
+                <span class="an-logo-mark" aria-hidden="true"></span>
+                <span class="an-logo-copy">
+                  <b>RetailPOS</b>
+                  <small>Analytics</small>
+                </span>
               </div>
-              <p class="dash-actions">
+              <h3 class="visually-hidden" id="dash-welcome">Dashboard</h3>
+              <p class="visually-hidden" id="dash-welcome-meta"></p>
+              <nav class="an-chrome-nav" aria-label="Modules">
+                <button type="button" data-dash-view="items">Masters</button>
+                <button type="button" data-dash-view="stock">Inventory</button>
+                <button type="button" data-dash-view="offers">Merchandising</button>
+                <button type="button" data-dash-view="hub-purchases">Purchase</button>
+                <button type="button" data-dash-view="orders">Sales</button>
+                <button type="button" data-dash-view="stock">Stock</button>
+                <button type="button" data-dash-view="settings">Management</button>
+                <button type="button" data-dash-view="reports">Reports</button>
+                <button type="button" data-dash-view="branches">Transfers</button>
+                <button type="button" data-dash-view="staff">Security</button>
+                <button type="button" data-dash-view="growth" id="open-growth">Add-ons</button>
+              </nav>
+              <p class="an-chrome-actions">
                 <button class="btn primary" type="button" data-view-jump="counter" id="open-pos">New bill</button>
-                <button class="btn" type="button" data-view-jump="reports">Reports</button>
-                <button class="btn" type="button" id="open-growth">AI Growth</button>
+                <button class="btn ghost" type="button" data-logout>Logout</button>
               </p>
             </header>
-            <nav class="analytics-quick" aria-label="Quick links">
-              <button type="button" data-dash-view="items">Masters</button>
-              <button type="button" data-dash-view="stock">Inventory</button>
-              <button type="button" data-dash-view="offers">Merchandising</button>
-              <button type="button" data-dash-view="hub-purchases">Purchase</button>
-              <button type="button" data-dash-view="orders">Sales</button>
-              <button type="button" data-dash-view="stock">Stock</button>
-              <button type="button" data-dash-view="reports">Reports</button>
-              <button type="button" data-dash-view="settings">Management</button>
-            </nav>
             <div class="platform-notes" id="dash-notes"></div>
             <div class="an-grid" id="dash-kpis"></div>
             <div class="report-grid dash-kpi-grid services-only" id="salon-dash-kpis" hidden></div>
-            <div class="an-plan" id="dash-plan-kpis"></div>
-            <section class="an-card an-recent">
-              <header class="an-card-head">
-                <h3>Recent transactions</h3>
-                <button type="button" class="zoho-widget-link" data-dash-view="orders">View all</button>
-              </header>
-              <div class="table-wrap" id="dash-recent"></div>
-            </section>
-            <p class="dash-section">Go to</p>
-            <div class="dash-shortcuts zoho-goto" id="dash-shortcuts">
+            <footer class="an-foot">
+              <span>This Retail POS Product is best viewed in Google chrome</span>
+              <div class="an-plan" id="dash-plan-kpis"></div>
+            </footer>
+            <div class="dash-shortcuts visually-hidden" id="dash-shortcuts" aria-hidden="true">
               <button type="button" class="dash-tile" data-dash-view="counter">
                 <strong>Counter</strong>
                 <span>New bill</span>
@@ -2378,10 +2379,10 @@
     <script src="./js/qr-notify.js?v=20260914kot1" defer></script>
     <script src="./js/payment-methods.js?v=20260918pay1" defer></script>
     <script src="./js/biz-hub.js?v=20260919salon1" defer></script>
-    <script src="./js/biz-hub-ui.js?v=20260919an2" defer></script>
+    <script src="./js/biz-hub-ui.js?v=20260919an3" defer></script>
     <script src="./js/salon.js?v=20260919salon1" defer></script>
     <script src="./js/salon-ui.js?v=20260919salon1" defer></script>
-    <script src="./js/app.js?v=20260919an2" defer></script>
+    <script src="./js/app.js?v=20260919an3" defer></script>
     <script src="./js/growth.js?v=20260905deploy145" defer></script>
     <script src="./js/offers-ui.js?v=20260919off1" defer></script>
   </body>

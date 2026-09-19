@@ -1939,7 +1939,7 @@ function applyNav() {
   if (growthBtn) growthBtn.hidden = !(can("growth") || can("reports"));
   const offersBtn = $("open-offers");
   if (offersBtn) offersBtn.hidden = !(can("discount") || can("items") || can("growth"));
-  document.querySelectorAll("#dash-shortcuts [data-dash-view]").forEach((btn) => {
+  document.querySelectorAll("#dash-shortcuts [data-dash-view], .an-chrome-nav [data-dash-view]").forEach((btn) => {
     const view = btn.dataset.dashView;
     const module = {
       counter: "counter",
@@ -1955,6 +1955,9 @@ function applyNav() {
       audit: "settings",
       bookings: "orders",
       "salon-board": "dashboard",
+      growth: "growth",
+      staff: "staff",
+      branches: "settings",
     }[view];
     btn.hidden = module ? !can(module) : false;
   });
@@ -2071,6 +2074,7 @@ function showView(name) {
     btn.classList.toggle("active", btn.dataset.view === name);
   });
   document.body.classList.toggle("counter-mode", name === "counter");
+  document.body.classList.toggle("analytics-home", name === "dashboard");
   document.querySelector(".stage")?.classList.toggle("is-counter", name === "counter");
   const qcWrap = $("quick-customer-wrap");
   if (qcWrap && name === "counter") qcWrap.open = false;

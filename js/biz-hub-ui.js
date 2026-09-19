@@ -84,6 +84,10 @@
       </div>`;
   }
 
+  function ico(d) {
+    return `<span class="an-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="${d}"/></svg></span>`;
+  }
+
   function bubblesHtml(rows) {
     const list = (rows || []).map((r) => ({ name: r.name || "Other", amount: Number(r.amount) || 0 })).filter((r) => r.amount > 0);
     const total = list.reduce((s, r) => s + r.amount, 0);
@@ -94,14 +98,16 @@
       return `<span class="an-bubble" style="width:${px}px;height:${px}px;background:${CHART_COLORS[i % CHART_COLORS.length]}"><b>${pct}%</b><em>${escapeHtml(r.name)}</em></span>`;
     });
     return `<h3>Category</h3>
-      <div class="an-bubbles">${sized.join("")}</div>
-      <ul class="an-legend">${list
-        .slice(0, 8)
-        .map(
-          (r, i) =>
-            `<li><i style="background:${CHART_COLORS[i % CHART_COLORS.length]}"></i>${escapeHtml(r.name)} · ${inr(r.amount)}</li>`,
-        )
-        .join("")}</ul>`;
+      <div class="an-cat-split">
+        <div class="an-bubbles">${sized.join("")}</div>
+        <ul class="an-legend">${list
+          .slice(0, 8)
+          .map(
+            (r, i) =>
+              `<li><i style="background:${CHART_COLORS[i % CHART_COLORS.length]}"></i>${escapeHtml(r.name)} · ${inr(r.amount)}</li>`,
+          )
+          .join("")}</ul>
+      </div>`;
   }
 
   function monthBarsHtml(rows) {
@@ -153,30 +159,26 @@
     const tPurch = Number(d.purchase) || 0;
     const mPurch = Number(h.monthPurchase) || 0;
     const stock = Number(d.stockValue) || 0;
+    const cart = "M7 18c-1.1 0-1.99.9-1.99 2S5.9 22 7 22s2-.9 2-2-.9-2-2-2zM1 2v2h2l3.6 7.59-1.35 2.45c-.16.28-.25.61-.25.96 0 1.1.9 2 2 2h12v-2H7.42c-.14 0-.25-.11-.25-.25l.03-.12.9-1.63h7.45c.75 0 1.41-.41 1.75-1.03l3.58-6.49A1 1 0 0 0 20 4H5.21l-.94-2H1zm16 16c-1.1 0-1.99.9-1.99 2s.89 2 1.99 2 2-.9 2-2-.9-2-2-2z";
+    const bag = "M16 6V4c0-1.11-.89-2-2-2h-4c-1.11 0-2 .89-2 2v2H2v13c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V6h-6zm-6-2h4v2h-4V4z";
+    const card = "M20 4H4c-1.11 0-1.99.89-1.99 2L2 18c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V6c0-1.11-.89-2-2-2zm0 14H4v-6h16v6zm0-10H4V6h16v2z";
+    const screen = "M21 3H3c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h7v2H8v2h8v-2h-2v-2h7c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 14H3V5h18v12z";
+    const truck = "M20 8h-3V4H3c-1.1 0-2 .9-2 2v11h2c0 1.66 1.34 3 3 3s3-1.34 3-3h6c0 1.66 1.34 3 3 3s3-1.34 3-3h2v-5l-3-4zM6 18.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zm13.5-9l1.96 2.5H17V9.5h2.5zm-1.5 9c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z";
+    const cal = "M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11z";
+    const box = "M20 2H4c-1 0-2 .9-2 2v3.01c0 .72.43 1.34 1 1.69V20c0 1.1 1.1 2 2 2h14c.9 0 2-.9 2-2V8.7c.57-.35 1-.97 1-1.69V4c0-1.1-1-2-2-2zm-5 12H9v-2h6v2zm5-7H4V4h16v3z";
     $("dash-kpis").innerHTML = `
-      <button type="button" class="an-kpi an-sales" data-dash-view="orders"><span class="an-pct">${escapeHtml(pctDelta(today, yest))}</span><span class="an-ico" aria-hidden="true">🛒</span><strong>${escapeHtml(inr(today))}</strong><em>Today Sales</em></button>
-      <button type="button" class="an-kpi an-profit" data-dash-view="reports"><span class="an-split"><b>${profitPct}%</b><small>Profit (%)</small></span><span class="an-split"><b>${escapeHtml(inr(profit))}</b><small>Profit Amount</small></span></button>
-      <button type="button" class="an-kpi an-cash" data-dash-view="payments"><span class="an-split"><b>${escapeHtml(inr(cash))}</b><small>Cash</small></span><span class="an-split"><b>${escapeHtml(inr(nonCash))}</b><small>Non Cash</small></span></button>
-      <button type="button" class="an-kpi an-msales" data-dash-view="orders"><span class="an-pct">${escapeHtml(pctDelta(month, prevM))}</span><span class="an-ico" aria-hidden="true">▣</span><strong>${escapeHtml(inr(month))}</strong><em>Monthly Sales</em></button>
-      <button type="button" class="an-kpi an-mcash" data-dash-view="payments"><span class="an-split"><b>${escapeHtml(inr(mCash))}</b><small>Cash</small></span><span class="an-split"><b>${escapeHtml(inr(mNon))}</b><small>Non Cash</small></span></button>
-      <button type="button" class="an-kpi an-tpurch" data-dash-view="purchases"><span class="an-ico" aria-hidden="true">🚚</span><strong>${escapeHtml(inr(tPurch))}</strong><em>Today Purchase</em></button>
-      <button type="button" class="an-kpi an-mpurch" data-dash-view="purchases"><span class="an-ico" aria-hidden="true">📅</span><strong>${escapeHtml(inr(mPurch))}</strong><em>Monthly Purchase</em></button>
+      <button type="button" class="an-kpi an-sales" data-dash-view="orders"><span class="an-pct">${escapeHtml(pctDelta(today, yest))}</span>${ico(cart)}<strong>${escapeHtml(inr(today))}</strong><em>Today Sales</em></button>
+      <button type="button" class="an-kpi an-profit" data-dash-view="reports">${ico(bag)}<span class="an-split"><b>${profitPct}%</b><small>Profit (%)</small></span><span class="an-split"><b>${escapeHtml(inr(profit))}</b><small>Profit Amount</small></span></button>
+      <button type="button" class="an-kpi an-cash" data-dash-view="payments">${ico(card)}<span class="an-split"><b>${escapeHtml(inr(cash))}</b><small>Cash</small></span><span class="an-split"><b>${escapeHtml(inr(nonCash))}</b><small>Non Cash</small></span></button>
+      <button type="button" class="an-kpi an-msales" data-dash-view="orders"><span class="an-pct">${escapeHtml(pctDelta(month, prevM))}</span>${ico(screen)}<strong>${escapeHtml(inr(month))}</strong><em>Monthly Sales</em></button>
+      <button type="button" class="an-kpi an-mcash" data-dash-view="payments">${ico(card)}<span class="an-split"><b>${escapeHtml(inr(mCash))}</b><small>Cash</small></span><span class="an-split"><b>${escapeHtml(inr(mNon))}</b><small>Non Cash</small></span></button>
+      <button type="button" class="an-kpi an-tpurch" data-dash-view="purchases">${ico(truck)}<strong>${escapeHtml(inr(tPurch))}</strong><em>Today Purchase</em></button>
+      <button type="button" class="an-kpi an-mpurch" data-dash-view="purchases">${ico(cal)}<strong>${escapeHtml(inr(mPurch))}</strong><em>Monthly Purchase</em></button>
       <div class="an-card an-paymode" id="dash-pay-graph">${donutHtml(h.payModes, "Today Sales Paymode wise")}</div>
       <div class="an-card an-category" id="dash-category">${bubblesHtml(h.categories)}</div>
-      <button type="button" class="an-kpi an-stock" data-dash-view="stock"><span class="an-ico" aria-hidden="true">📦</span><strong>${escapeHtml(inr(stock))}</strong><em>Stock Value</em></button>
+      <button type="button" class="an-kpi an-stock" data-dash-view="stock">${ico(box)}<strong>${escapeHtml(inr(stock))}</strong><em>Stock Value</em></button>
       <div class="an-card an-month" id="dash-sales-graph">${monthBarsHtml(h.monthGraph)}</div>
       <div class="an-card an-brand" id="dash-top-items">${brandBarsHtml(h.topItems)}</div>`;
-    if ($("dash-recent")) {
-      const rows = h.recent || [];
-      $("dash-recent").innerHTML = rows.length
-        ? `<table><thead><tr><th>Bill</th><th>Customer</th><th>Total</th><th>Pay</th></tr></thead><tbody>${rows
-            .map(
-              (r) =>
-                `<tr><td>${escapeHtml(r.order_number)}</td><td>${escapeHtml(r.customer_name || "Walk-in")}</td><td>${money(r.total)}</td><td>${escapeHtml(r.payment_method || "")}</td></tr>`,
-            )
-            .join("")}</tbody></table>`
-        : `<p class="hint">No recent bills.</p>`;
-    }
   }
 
   function paintReportsCenter() {
