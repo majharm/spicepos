@@ -223,8 +223,8 @@ test("invoice settlement posts sale credit, payment receipt, and customer due", 
   assert.match(app, /details class="invoice-settle"/);
   assert.match(css, /min-height: min\(52vh, 420px\)/);
   assert.match(index, /id="pay-amount"/);
-  assert.match(index, /id="pay-ref"/);
-  assert.match(index, /id="pay-date"/);
+  assert.doesNotMatch(index, /id="pay-ref"/);
+  assert.doesNotMatch(index, /id="pay-date"/);
   assert.match(index, /id="due-invoice"/);
   assert.match(index, /id="due-date"/);
   assert.match(app, /function showReceiptModal/);

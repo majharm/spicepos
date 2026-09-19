@@ -242,8 +242,6 @@ function applyFootwearMode() {
   if (classicEntry) classicEntry.hidden = !isClassicBillShop();
   const extras = $("bill-extras");
   if (extras && isClassicBillShop()) extras.open = true;
-  const payMore = $("bill-pay-more");
-  if (payMore && isClassicBillShop()) payMore.open = true;
   if (isClassicBillShop()) {
     state.stockMode = "advanced";
     document.getElementById("view-stock")?.classList.add("is-advanced");
@@ -872,7 +870,6 @@ function syncPayAmountDefault() {
     const method = $("pay-method")?.value;
     el.value = method === "credit" ? "0" : total.toFixed(2);
   }
-  if ($("pay-date") && !$("pay-date").value) $("pay-date").value = shopDateInputValue();
 }
 
 function receiptEntryFromInvoice(order) {
@@ -1359,8 +1356,6 @@ function clearCounterAfterSale(order, result) {
     delete $("pay-amount").dataset.dirty;
     $("pay-amount").value = "";
   }
-  if ($("pay-ref")) $("pay-ref").value = "";
-  if ($("pay-date")) $("pay-date").value = shopDateInputValue();
   resetClassicBillEntry();
   resetClassicCustomerRecord();
   renderCatalog();
@@ -7759,8 +7754,6 @@ $("order-pane").addEventListener("click", async (e) => {
       $("pay-amount").value = String(Number(o.amount_paid) || 0);
       $("pay-amount").dataset.dirty = "1";
     }
-    if ($("pay-ref")) $("pay-ref").value = o.payment_reference || "";
-    if ($("pay-date")) $("pay-date").value = shopDateInputValue(o.payment_date);
     $("pack-choice").value = o.pack_id || "";
     if ($("bill-cust-name")) $("bill-cust-name").value = o.customer_name || "";
     if ($("bill-cust-mobile")) $("bill-cust-mobile").value = o.customer_mobile || digitsMobile(customer()?.mobile);
@@ -7982,8 +7975,6 @@ $("btn-clear").addEventListener("click", () => {
     delete $("pay-amount").dataset.dirty;
     $("pay-amount").value = "";
   }
-  if ($("pay-ref")) $("pay-ref").value = "";
-  if ($("pay-date")) $("pay-date").value = shopDateInputValue();
   resetClassicBillEntry();
   resetClassicCustomerRecord({ focus: true });
   setHint(isClassicBillShop() ? "Bill and customer record cleared" : "Cart cleared");
@@ -8024,8 +8015,6 @@ $("btn-pay").addEventListener("click", async () => {
       qrOrderId: state.activeQrOrderId || undefined,
       table_no: isRestaurantShop() ? (state.activeTable || undefined) : undefined,
       amountPaid: checkoutAmountPaid(),
-      paymentReference: $("pay-ref")?.value || undefined,
-      paymentDate: $("pay-date")?.value || undefined,
       customer_name: isClassicBillShop() ? pharmacyBillCustomerName() : undefined,
       customer_mobile: isClassicBillShop() ? pharmacyBillCustomerMobile() : undefined,
       customer_address: isClassicBillShop() ? pharmacyBillCustomerAddress() : undefined,
