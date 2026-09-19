@@ -5885,8 +5885,8 @@ function showInvoicePrintModal(order, { title, message } = {}) {
   const paint = (look) => {
     $("modal-body").innerHTML = `<p class="hint ok">${note}</p>
       ${invoiceLookTabs(look)}
-      ${invoicePreviewHtml(order, look)}
-      ${invoiceModalPrintActions(look, order)}`;
+      ${invoiceModalPrintActions(look, order)}
+      ${invoicePreviewHtml(order, look)}`;
     bindInvoiceModalPrint(order);
     $("modal-body").querySelectorAll("[data-invoice-look]").forEach((btn) => {
       btn.onclick = () => paint(setInvoiceLook(btn.dataset.invoiceLook));
