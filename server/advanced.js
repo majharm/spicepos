@@ -1073,15 +1073,24 @@ export function registerAdvanced(app) {
   app.get("/api/batches", requireStaff, requirePerm("stock"), (req, res) =>
     send(res, async () => {
       const itemId = String(req.query.item_id || "");
+      const onHand = String(req.query.on_hand || "") === "1" || String(req.query.on_hand || "") === "true";
       const args = [bid()];
-      let sql = `SELECT b.*, i.name AS item_name, i.code AS item_code, s.name AS supplier_name
+      let sql = `SELECT b.id, b.business_id, b.branch_id, b.item_id, b.purchase_id, b.purchase_line_id,
+                        b.supplier_id, b.batch_no, b.barcode, b.qty_gm, b.remaining_gm, b.unit_cost, b.mrp,
+                        DATE_FORMAT(b.expiry_date, '%Y-%m-%d') AS expiry_date,
+                        DATE_FORMAT(b.manufactured_date, '%Y-%m-%d') AS manufactured_date,
+                        b.created_at,
+                        i.name AS item_name, i.code AS item_code, i.base_unit, i.unit, i.hsn, i.category,
+                        i.barcode AS item_barcode, i.reorder_level_gm, i.purchase_rate, i.retail_rate, i.stock_gm,
+                        s.name AS supplier_name
                  FROM stock_batches b JOIN items i ON i.id=b.item_id
                  LEFT JOIN suppliers s ON s.id=b.supplier_id WHERE b.business_id=?`;
       if (itemId) {
         sql += " AND b.item_id=?";
         args.push(itemId);
       }
-      sql += " ORDER BY b.created_at DESC LIMIT 300";
+      if (onHand) sql += " AND b.remaining_gm > 0";
+      sql += " ORDER BY i.name ASC, (b.expiry_date IS NULL) ASC, b.expiry_date ASC, b.batch_no ASC LIMIT 800";
       return query(sql, args);
     }),
   );

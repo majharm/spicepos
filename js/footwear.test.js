@@ -454,7 +454,12 @@ test("Medical shops show pharmacy medicine fields on the item form", () => {
   assert.match(index, /data-view="prescriptions"/);
   assert.match(app, /view === "qr-orders" && isPharmacyShop\(\)/);
   assert.match(app, /function loadPrescriptions/);
+  assert.match(app, /function pharmacyStockCards/);
+  assert.match(app, /\/api\/batches\?on_hand=1/);
+  assert.match(app, /stock-batch-card/);
+  assert.match(index, /On-hand quantity by batch number/);
   assert.match(adv, /savePharmacyItemFields/);
+  assert.match(adv, /req.query.on_hand/);
   const demo = F.demoItems({ category: "Medical" });
   assert.equal(demo.length, 8);
   assert.equal(demo[0].name, "Paracetamol 500mg");

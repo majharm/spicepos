@@ -455,7 +455,20 @@ export function registerTenant(app) {
     try {
       const rows = await query("SELECT * FROM items WHERE business_id=? ORDER BY name", [bid()]);
       const [biz] = await query("SELECT category, business_type, name FROM businesses WHERE id=?", [bid()]);
-      const xml = workbookXml(stockToSheets(rows, biz));
+      let batches = [];
+      if (globalThis.POSFootwear?.isPharmacyShop?.(biz)) {
+        batches = await query(
+          `SELECT b.batch_no, b.remaining_gm, b.unit_cost, b.mrp,
+                  DATE_FORMAT(b.expiry_date, '%Y-%m-%d') AS expiry_date,
+                  i.name AS item_name, i.code AS item_code, i.base_unit, i.unit, i.purchase_rate
+           FROM stock_batches b JOIN items i ON i.id = b.item_id
+           WHERE b.business_id = ? AND b.remaining_gm > 0
+           ORDER BY i.name ASC, (b.expiry_date IS NULL) ASC, b.expiry_date ASC, b.batch_no ASC
+           LIMIT 800`,
+          [bid()],
+        );
+      }
+      const xml = workbookXml(stockToSheets(rows, biz, batches));
       const day = new Date().toISOString().slice(0, 10);
       res.setHeader("Content-Type", "application/vnd.ms-excel; charset=utf-8");
       res.setHeader("Content-Disposition", `attachment; filename="stock-list-${day}.xls"`);

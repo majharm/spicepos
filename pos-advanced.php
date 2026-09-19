@@ -1043,7 +1043,15 @@ function pos_dispatch_advanced($path, $method, $body, $bid, $branchId, $uid, $au
 
   if ($path === "batches" && $method === "GET") {
     $itemId = trim((string) ($_GET["item_id"] ?? ""));
-    $sql = "SELECT b.*, i.name AS item_name, i.code AS item_code, s.name AS supplier_name
+    $onHand = trim((string) ($_GET["on_hand"] ?? ""));
+    $sql = "SELECT b.id, b.business_id, b.branch_id, b.item_id, b.purchase_id, b.purchase_line_id,
+                   b.supplier_id, b.batch_no, b.barcode, b.qty_gm, b.remaining_gm, b.unit_cost, b.mrp,
+                   DATE_FORMAT(b.expiry_date, '%Y-%m-%d') AS expiry_date,
+                   DATE_FORMAT(b.manufactured_date, '%Y-%m-%d') AS manufactured_date,
+                   b.created_at,
+                   i.name AS item_name, i.code AS item_code, i.base_unit, i.unit, i.hsn, i.category,
+                   i.barcode AS item_barcode, i.reorder_level_gm, i.purchase_rate, i.retail_rate, i.stock_gm,
+                   s.name AS supplier_name
             FROM stock_batches b
             JOIN items i ON i.id = b.item_id
             LEFT JOIN suppliers s ON s.id = b.supplier_id
@@ -1055,7 +1063,10 @@ function pos_dispatch_advanced($path, $method, $body, $bid, $branchId, $uid, $au
       $types .= "s";
       $args[] = $itemId;
     }
-    $sql .= " ORDER BY b.created_at DESC LIMIT 300";
+    if ($onHand === "1" || strtolower($onHand) === "true") {
+      $sql .= " AND b.remaining_gm > 0";
+    }
+    $sql .= " ORDER BY i.name ASC, (b.expiry_date IS NULL) ASC, b.expiry_date ASC, b.batch_no ASC LIMIT 800";
     pos_send(200, pos_q($sql, $types, $args));
   }
 
