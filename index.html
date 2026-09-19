@@ -6,7 +6,7 @@
     <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
     <title>ATAV POS</title>
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./css/pos.css?v=20260919bill1" />
+    <link rel="stylesheet" href="./css/pos.css?v=20260919item1" />
     <link rel="stylesheet" href="./css/saas.css?v=20260905deploy136" />
   </head>
   <body>
@@ -165,6 +165,7 @@
                 </button>
                 <span class="scan-status" id="scan-status"></span>
               </form>
+              <button class="btn" type="button" id="counter-add-item" title="Add item to catalog and bill">+ Item</button>
               <select id="pack-choice" class="select" aria-label="Pack type">
                 <option value="">Loose items</option>
               </select>
@@ -261,6 +262,7 @@
                     <input id="bill-scan-qty" type="number" min="0.001" step="any" value="1" aria-label="Quantity to add" />
                   </label>
                   <button class="btn primary" type="submit" id="bill-scan-add">Add</button>
+                  <button class="btn" type="button" id="classic-add-item" title="Add item to catalog and bill">+ Item</button>
                   <span class="classic-scan-status" id="bill-scan-status"></span>
                 </form>
                 <div class="classic-item-hits" id="classic-item-hits" hidden></div>
@@ -1876,6 +1878,40 @@
         </div>
       </div>
     </div>
+    <div class="modal" id="counter-item-modal" hidden>
+      <div class="dialog counter-item-dialog" role="dialog" aria-labelledby="counter-item-title">
+        <h3 id="counter-item-title">Add item</h3>
+        <p class="hint">Saves to the catalog and adds it to this bill.</p>
+        <form class="settings counter-item-form" id="counter-item-form" autocomplete="off">
+          <label class="full">Item name *
+            <input id="ci-name" required maxlength="180" placeholder="Item name" />
+          </label>
+          <label>Retail ₹
+            <input id="ci-retail" type="number" min="0" step="0.01" required inputmode="decimal" placeholder="0.00" />
+          </label>
+          <label>GST %
+            <input id="ci-gst" type="number" min="0" step="0.01" value="5" />
+          </label>
+          <label>Unit
+            <select id="ci-unit"></select>
+          </label>
+          <label>Qty
+            <input id="ci-qty" type="number" min="0.001" step="any" value="1" />
+          </label>
+          <label class="full">Barcode / code
+            <input id="ci-barcode" maxlength="64" placeholder="Optional" autocomplete="off" />
+          </label>
+          <label class="pharmacy-only full" id="ci-mfr-wrap" hidden>Company
+            <input id="ci-mfr" maxlength="160" placeholder="Optional" />
+          </label>
+          <p class="hint full" id="ci-hint"></p>
+          <div class="item-composer-actions full">
+            <button class="btn primary" type="submit" id="ci-save">Save &amp; add to bill</button>
+            <button class="btn" type="button" id="ci-cancel">Cancel</button>
+          </div>
+        </form>
+      </div>
+    </div>
     <div class="modal" id="modal" hidden>
       <div class="dialog">
         <h3 id="modal-title">Receipt</h3>
@@ -1935,7 +1971,7 @@
     <script src="./js/qrcode.iife.js?v=20260905qr1" defer></script>
     <script src="./js/qr-notify.js?v=20260914kot1" defer></script>
     <script src="./js/payment-methods.js?v=20260918pay1" defer></script>
-    <script src="./js/app.js?v=20260919bill1" defer></script>
+    <script src="./js/app.js?v=20260919item1" defer></script>
     <script src="./js/growth.js?v=20260905deploy145" defer></script>
     <script src="./js/offers-ui.js?v=20260919off1" defer></script>
   </body>
