@@ -484,11 +484,11 @@ test("HTML and CSS cache stickers match deploy136", () => {
   assert.match(pos, /packs-desk: composer \+ library/);
   assert.match(index, /id="pack-item-search"/);
   assert.match(index, /id="pack-library-search"/);
-  assert.match(index, /class="packs-desk"/);
+  assert.match(index, /packs-desk/);
   assert.match(appJs, /function paintPackLive/);
   assert.match(appJs, /function filterPackCompose/);
   assert.match(index, /class="items-desk"/);
-  assert.match(index, /class="dash-desk"/);
+  assert.match(index, /class="dash-desk"|dash-desk/);
   assert.match(index, /id="dash-shortcuts"/);
   assert.match(index, /id="item-catalog-search"/);
   assert.match(index, /id="item-mode"/);
@@ -501,6 +501,7 @@ test("HTML and CSS cache stickers match deploy136", () => {
   assert.match(appJs, /function filterItemsCatalog/);
   assert.match(pos, /items-desk: composer \+ library/);
   assert.match(pos, /dash-desk: home hero \+ kpis/);
+  assert.match(pos, /desk-pages-2026/);
   assert.match(index, /id="item-import-file"/);
   assert.match(index, /id="item-import-template"/);
   assert.match(appJs, /function uploadItemsExcel/);

@@ -406,12 +406,12 @@ const VIEW_META = {
   items: { title: "Items", subtitle: "Photo, HSN, unit type, rates, and stock" },
   units: { title: "Unit master", subtitle: "Quantity, weight, length, area, volume, packaging, pharmacy, food, and service units" },
   customers: { title: "Customers", subtitle: "Accounts, due collection, and receipts" },
-  barcodes: { title: "Barcodes", subtitle: "Quantity (pcs) items only — one code per piece" },
+  barcodes: { title: "Barcodes", subtitle: "Generate unique piece codes and print labels" },
   damage: { title: "Damage stock", subtitle: "Wastage, approval, and estimated loss" },
   ledger: { title: "Stock ledger", subtitle: "Purchase, sale, return, and damage history" },
-  loyalty: { title: "Royalty points", subtitle: "Earn, redeem, tiers, birthday and referral" },
+  loyalty: { title: "Royalty", subtitle: "Earn, redeem, tiers, birthday and referral" },
   offers: { title: "Offers & promotions", subtitle: "Combos, discounts, happy hours, and AI suggestions" },
-  packs: { title: "Packs", subtitle: "Named spice mixes for the Counter" },
+  packs: { title: "Packs", subtitle: "Named mixes for the Counter" },
   orders: { title: "Invoices", subtitle: "POS slip, official A4, or duplicate copy" },
   returns: { title: "Manage Returns", subtitle: "Pharmacy and garment returns against a sales invoice" },
   "qr-orders": { title: "QR Orders", subtitle: "Incoming customer self-orders" },
@@ -424,10 +424,10 @@ const VIEW_META = {
   staff: { title: "Staff & roles", subtitle: "Users, roles, and access" },
   branches: { title: "Branches", subtitle: "Locations, active status, and branch login" },
   devices: { title: "POS devices", subtitle: "Registers and terminal codes" },
-  support: { title: "Support", subtitle: "Call, WhatsApp, or email platform support" },
+  support: { title: "Support", subtitle: "Call, WhatsApp, or email your ATAV POS helpline" },
   accounts: { title: "Accounts", subtitle: "Receivables, payables, GL, and books" },
   expenses: { title: "Expenses", subtitle: "Rent, power, wages, and other shop costs" },
-  reports: { title: "Reports Center", subtitle: "Common reports for every shop, plus extras for this business type" },
+  reports: { title: "Reports", subtitle: "Pick a report, then Show, Excel, or Print" },
   growth: { title: "AI Growth", subtitle: "What happened, why, what to do next — from this shop's data" },
   settings: { title: "Shop profile", subtitle: "Company profile, timezone, logo, and login password" },
   backup: { title: "Shop backup", subtitle: "Download or restore this shop from Settings → Backup" },
@@ -4753,8 +4753,8 @@ function renderPacksTable() {
   const n = state.packs.length;
   const lines = state.packs.reduce((s, p) => s + (p.items || []).length, 0);
   if (stats) {
-    stats.innerHTML = `<div class="packs-stat"><span>Pack types</span><strong>${n}</strong></div>
-      <div class="packs-stat"><span>Recipe lines</span><strong>${lines}</strong></div>`;
+    stats.innerHTML = `<div class="items-stat packs-stat"><span>Pack types</span><strong>${n}</strong></div>
+      <div class="items-stat packs-stat"><span>Recipe lines</span><strong>${lines}</strong></div>`;
   }
   if (!n) {
     el.innerHTML = `<div class="pack-empty-card">
@@ -10218,10 +10218,24 @@ async function loadBarcodesView() {
         },
       )
       .join("")}</tbody></table>`;
+    const active = (rows || []).filter((r) => String(r.status || "active").toLowerCase() === "active").length;
+    const stats = $("barcodes-hero-stats");
+    if (stats) {
+      stats.innerHTML = `<button type="button" class="items-stat"><span>Codes</span><strong>${rows.length}</strong></button>
+        <button type="button" class="items-stat"><span>Active</span><strong>${active}</strong></button>`;
+    }
     if (hint) hint.textContent = `${(rows || []).length} barcodes`;
+    filterBarcodesTable();
   } catch (err) {
     if (hint) hint.textContent = err.message;
   }
+}
+
+function filterBarcodesTable() {
+  const q = String($("bc-search")?.value || "").trim().toLowerCase();
+  $("barcodes-table")?.querySelectorAll("tbody tr").forEach((tr) => {
+    tr.hidden = Boolean(q) && !String(tr.textContent || "").toLowerCase().includes(q);
+  });
 }
 
 $("bc-qty-form")?.addEventListener("submit", async (e) => {
@@ -10291,6 +10305,7 @@ $("barcodes-table")?.addEventListener("click", (e) => {
   if (!btn) return;
   globalThis.POSBarcode?.printLabels([{ name: btn.dataset.bcName, barcode: btn.dataset.bcPrint, mrp: btn.dataset.bcMrp, rate: btn.dataset.bcRate }], Number($("bc-copies")?.value) || 1);
 });
+$("bc-search")?.addEventListener("input", filterBarcodesTable);
 
 function expiryDaysLeft(row) {
   if (row?.days_left != null && row.days_left !== "") {
@@ -10910,11 +10925,27 @@ async function loadLoyaltyView() {
         </tr>`,
       )
       .join("")}</tbody></table>`;
+    const withPts = rows.filter((r) => Number(r.account?.points_balance) > 0).length;
+    const stats = $("loyalty-hero-stats");
+    if (stats) {
+      stats.innerHTML = `<button type="button" class="items-stat"><span>Customers</span><strong>${rows.length}</strong></button>
+        <button type="button" class="items-stat"><span>With points</span><strong>${withPts}</strong></button>
+        <button type="button" class="items-stat"><span>Program</span><strong>${settings.enabled === false || settings.enabled === 0 ? "Off" : "On"}</strong></button>`;
+    }
+    filterLoyaltyTable();
   } catch (err) {
     if ($("loy-hint")) $("loy-hint").textContent = err.message;
   }
 }
 
+function filterLoyaltyTable() {
+  const q = String($("loy-search")?.value || "").trim().toLowerCase();
+  $("loyalty-table")?.querySelectorAll("tbody tr").forEach((tr) => {
+    tr.hidden = Boolean(q) && !String(tr.textContent || "").toLowerCase().includes(q);
+  });
+}
+
+$("loy-search")?.addEventListener("input", filterLoyaltyTable);
 $("loyalty-settings-form")?.addEventListener("submit", async (e) => {
   e.preventDefault();
   try {

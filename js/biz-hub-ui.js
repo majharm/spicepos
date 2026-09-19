@@ -98,7 +98,7 @@
           <div class="hub-tile-grid">${rows
             .map(
               (r) =>
-                `<button type="button" class="dash-tile hub-report-tile" data-hub-report="${escapeHtml(r.id)}"><strong>${escapeHtml(r.title)}</strong><span>${r.kinds ? "This business type" : "All businesses"}</span></button>`,
+                `<button type="button" class="dash-tile hub-report-tile" data-hub-report="${escapeHtml(r.id)}"><strong>${escapeHtml(r.title)}</strong><span>${r.kinds ? "This business type" : "Every shop"}</span></button>`,
             )
             .join("")}</div>
         </section>`;

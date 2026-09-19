@@ -50,8 +50,8 @@
     const { phone, email, tel, wa, mail } = contactBits(support);
     const manager = String(support?.account_manager_name || "").trim();
     if (!phone && !email) {
-      return `<article class="support-hero is-empty">
-        <p class="support-kicker">${manager ? escapeHtml(manager) : "ATAV POS helpline"}</p>
+      return `<article class="items-hero support-hero is-empty">
+        <p class="items-kicker support-kicker">${manager ? escapeHtml(manager) : "ATAV POS helpline"}</p>
         <h3>Helpline not set yet</h3>
         <p class="support-lead">Master Admin can assign an account manager or add a support mobile under Support helpline.</p>
       </article>`;
@@ -65,8 +65,8 @@
     ]
       .filter(Boolean)
       .join("");
-    return `<article class="support-hero">
-      <p class="support-kicker">${manager ? "Your account manager" : "ATAV POS helpline"}</p>
+    return `<article class="items-hero support-hero">
+      <p class="items-kicker support-kicker">${manager ? "Your account manager" : "ATAV POS helpline"}</p>
       <h3>${manager ? escapeHtml(manager) : "Need help with billing or setup?"}</h3>
       <p class="support-number">${headline}</p>
       <p class="support-lead">${manager ? "Call, WhatsApp, or email your assigned ATAV POS account manager. Have your shop name ready." : "Call, WhatsApp, or email platform support. Have your shop name ready."}</p>
