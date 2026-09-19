@@ -180,6 +180,10 @@ function isClassicBillShop() {
   return isPharmacyShop() || isApparelShop();
 }
 
+function isCafeCounterShop() {
+  return !isClassicBillShop();
+}
+
 function taxCodeLabel(biz = state.businessMeta) {
   return globalThis.POSFootwear?.taxCodeLabel(biz) || "HSN";
 }
@@ -227,6 +231,7 @@ function applyFootwearMode() {
   document.body.classList.toggle("restaurant-mode", isRestaurantShop());
   document.body.classList.toggle("pharmacy-mode", pharm);
   document.body.classList.toggle("classic-bill-mode", isClassicBillShop());
+  document.body.classList.toggle("cafe-counter-mode", isCafeCounterShop());
   document.body.classList.toggle("services-mode", isServicesShop());
   document.querySelectorAll(".footwear-only").forEach((el) => {
     el.hidden = !on;
@@ -266,12 +271,12 @@ function applyFootwearMode() {
   const pharmCust = $("pharm-bill-cust");
   if (pharmCust) pharmCust.hidden = true;
   const billTitle = document.querySelector("#bill-panel .ticket-head h2");
-  if (billTitle) billTitle.textContent = isClassicBillShop() ? "Sales Bill" : tt("pos.bill", "Bill");
+  if (billTitle) billTitle.textContent = isClassicBillShop() ? "Sales Bill" : isCafeCounterShop() ? "Bills" : tt("pos.bill", "Bill");
   if (isClassicBillShop()) fillPharmacyBillCustomerFromCustomer(customer());
   const search = $("search");
   if (search) search.placeholder = copy.search || `Search name or ${taxCodeLabel()}…`;
   const scan = $("scan-code");
-  if (scan) scan.placeholder = copy.scan || "Scan or search";
+  if (scan) scan.placeholder = isCafeCounterShop() ? "Search menu…" : copy.scan || "Scan or search";
   const billScan = $("bill-scan-code");
   if (billScan) billScan.placeholder = copy.scan || "Scan barcode, item code, or name";
   const mobile = $("counter-mobile");
@@ -347,6 +352,7 @@ function applyFootwearMode() {
   if ($("size-list")) $("size-list").innerHTML = sizes.map((s) => `<option value="${escapeHtml(s)}">`).join("");
   fillFootwearFilters();
   paintScaleDock();
+  paintCafePayMethods();
   applyNav();
   renderTableBoard();
 }
@@ -552,6 +558,31 @@ function fillPaySelects() {
       ["store-credit", "Store credit"],
     ],
   });
+  paintCafePayMethods();
+}
+
+function paintCafePayMethods() {
+  const el = $("cafe-pay-methods");
+  if (!el) return;
+  if (!isCafeCounterShop()) {
+    el.hidden = true;
+    el.innerHTML = "";
+    return;
+  }
+  const cur = String($("pay-method")?.value || "cash");
+  const tiles = [
+    { id: "cash", label: "Cash" },
+    { id: "upi", label: "UPI / QR" },
+    { id: "card", label: "Card" },
+    { id: "credit", label: "Credit" },
+  ];
+  el.hidden = false;
+  el.innerHTML = `<p class="cafe-pay-kicker">Payment Method</p><div class="cafe-pay-grid">${tiles
+    .map(
+      (t) =>
+        `<button type="button" class="cafe-pay-tile${cur === t.id ? " is-on" : ""}" data-cafe-pay="${escapeHtml(t.id)}"><strong>${escapeHtml(t.label)}</strong></button>`,
+    )
+    .join("")}</div>`;
 }
 
 function canDeletePaymentEntry() {
@@ -3007,6 +3038,24 @@ function catalogCardMeta(item) {
   };
 }
 
+function catalogCategoryGlyph(name) {
+  const t = String(name || "").toLowerCase();
+  if (!t || t === "all") return "★";
+  if (/(ice|cream|dessert|sweet|cake)/.test(t)) return "🍨";
+  if (/(rice|bowl|biryani|meal)/.test(t)) return "🍚";
+  if (/(coffee|tea|cafe|drink|beverage)/.test(t)) return "☕";
+  if (/(snack|chip|namkeen|popcorn)/.test(t)) return "🍿";
+  if (/(salad|veg|green)/.test(t)) return "🥗";
+  if (/(spice|masala|chilli)/.test(t)) return "🌶";
+  if (/(grocery|kirana|staple)/.test(t)) return "🛒";
+  if (/(hair|salon|spa|beauty|nail|makeup)/.test(t)) return "✂";
+  if (/(repair|service)/.test(t)) return "🔧";
+  if (/(phone|mobile|electronic)/.test(t)) return "📱";
+  if (/(gold|jewel)/.test(t)) return "💍";
+  if (/(shoe|foot)/.test(t)) return "👟";
+  return String(name).trim().charAt(0).toUpperCase() || "•";
+}
+
 function catalogCardHtml(i) {
   const low = Number(i.stock_gm) <= Number(i.reorder_level_gm);
   const meta = catalogCardMeta(i);
@@ -3022,6 +3071,7 @@ function catalogCardHtml(i) {
           <div class="name">${escapeHtml(i.name)}${meta.detail ? ` <small>${escapeHtml(meta.detail)}</small>` : ""}</div>
           <div class="meta"><span class="card-price">${money(rateFor(i))}${escapeHtml(POSUnits.rateSuffix(itemUnit(i)))}</span>${qty ? `<span class="card-qty">${escapeHtml(qty)}</span>` : ""}</div>
           ${stock ? `<div class="stock ${low ? "low" : "ok"}">${stock}</div>` : ""}
+          ${isCafeCounterShop() ? `<span class="card-add">Add to Billing</span>` : ""}
         </div>
       </button>`;
 }
@@ -3032,7 +3082,8 @@ function renderCatalogCats() {
   const cats = catalogCategories();
   if (state.categoryFilter && !cats.includes(state.categoryFilter)) state.categoryFilter = "";
   const current = String(state.categoryFilter || "");
-  if (cats.length < 2) {
+  const cafe = isCafeCounterShop();
+  if (cats.length < 2 && !cafe) {
     el.hidden = true;
     el.innerHTML = "";
     return;
@@ -3042,15 +3093,21 @@ function renderCatalogCats() {
     const key = itemCategoryLabel(i);
     counts.set(key, (counts.get(key) || 0) + 1);
   }
-  const chips = [
-    `<button type="button" class="catalog-cat${current ? "" : " is-on"}" data-cat="" role="tab" aria-selected="${current ? "false" : "true"}">All <span>${activeItems().length}</span></button>`,
-    ...cats.map(
-      (c) =>
-        `<button type="button" class="catalog-cat${current === c ? " is-on" : ""}" data-cat="${escapeHtml(c)}" role="tab" aria-selected="${current === c ? "true" : "false"}">${escapeHtml(c)} <span>${counts.get(c) || 0}</span></button>`,
-    ),
-  ];
+  const chip = (value, label, count, on) =>
+    `<button type="button" class="catalog-cat${on ? " is-on" : ""}" data-cat="${escapeHtml(value)}" role="tab" aria-selected="${on ? "true" : "false"}">
+      <span class="catalog-cat-ico" aria-hidden="true">${escapeHtml(catalogCategoryGlyph(label))}</span>
+      <strong>${escapeHtml(label)}</strong>
+      <span>${count}</span>
+    </button>`;
+  const chips = [chip("", "All", activeItems().length, !current), ...cats.map((c) => chip(c, c, counts.get(c) || 0, current === c))];
   el.hidden = false;
   el.innerHTML = chips.join("");
+  const bar = $("cafe-menu-bar");
+  const title = $("cafe-menu-title");
+  if (bar && title) {
+    bar.hidden = !cafe;
+    title.textContent = current ? `${current} Menu` : "Menu";
+  }
 }
 
 function itemStockInfo(item) {
@@ -3201,7 +3258,7 @@ function renderCatalog() {
     grouped.get(key).push(i);
   }
   const keys = [...grouped.keys()].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
-  if (isRestaurantShop() && String(state.categoryFilter || "")) {
+  if ((isRestaurantShop() || isCafeCounterShop()) && String(state.categoryFilter || "")) {
     root.innerHTML = `<div class="catalog-group-grid">${rows.map(catalogCardHtml).join("")}</div>`;
     return;
   }
@@ -3398,6 +3455,7 @@ function renderCart() {
         const wait = (state.appliedOffers?.pending || []).find((o) => !o.itemIds?.length || o.itemIds.includes(String(line.itemId)));
         return `<div class="line">
           <div class="line-main">
+            ${isCafeCounterShop() ? cardPhotoHtml(item) : ""}
             <div class="line-info">
               <div class="who">${escapeHtml(itemVariantText(item) ? `${item.name} · ${itemVariantText(item)}` : item.name)}</div>
               <div class="pack">${escapeHtml(wait?.message || bc || itemVariantText(item) || item.hsn || "")}</div>
@@ -3471,10 +3529,14 @@ function renderCart() {
     : state.cart.length
       ? isClassicBillShop()
         ? `Save Bill ${money(payTotal)}`
-        : tt("pos.pay_amount", `Pay ${money(payTotal)}`, { amount: money(payTotal) })
+        : isCafeCounterShop()
+          ? `Add to Billing ${money(payTotal)}`
+          : tt("pos.pay_amount", `Pay ${money(payTotal)}`, { amount: money(payTotal) })
       : isClassicBillShop()
         ? "Save Bill"
-        : tt("pos.pay", "Pay");
+        : isCafeCounterShop()
+          ? "Add to Billing"
+          : tt("pos.pay", "Pay");
   const face = $("customer-face");
   if (face) {
     face.hidden = true;
@@ -8225,9 +8287,16 @@ $("customer").addEventListener("change", () => {
   void loadCustomerLoyalty();
 });
 $("pay-method")?.addEventListener("change", () => {
+  paintCafePayMethods();
   if ($("pay-amount")) delete $("pay-amount").dataset.dirty;
   syncPayAmountDefault();
   paintCounterDue();
+});
+$("cafe-pay-methods")?.addEventListener("click", (e) => {
+  const tile = e.target.closest("[data-cafe-pay]");
+  if (!tile) return;
+  if ($("pay-method")) $("pay-method").value = tile.dataset.cafePay;
+  $("pay-method")?.dispatchEvent(new Event("change"));
 });
 $("pay-amount")?.addEventListener("input", () => {
   if ($("pay-amount")) $("pay-amount").dataset.dirty = "1";
