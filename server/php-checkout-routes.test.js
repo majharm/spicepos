@@ -335,7 +335,7 @@ test("Master Admin can set passwords and unlock locked accounts", () => {
   assert.match(read("js/app.js"), /\/api\/stock\/excel/);
   assert.match(read("pos-php-till.php"), /stock\/excel/);
   assert.match(read("pos-stock-excel.php"), /function pos_stock_excel_response/);
-  assert.match(read("pos-stock-excel.php"), /ss:Name="Batches"|name" => "Batches"/);
+  assert.match(read("pos-stock-excel.php"), /"name" => "Batches"/);
   assert.match(read("pos-advanced.php"), /on_hand/);
   assert.match(read("server/tenant.js"), /\/api\/stock\/excel/);
   assert.match(read("pos-crud.php"), /staff\/\(\[\^\/\]\+\)\$#.*PUT/s);
