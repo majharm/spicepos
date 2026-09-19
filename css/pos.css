@@ -7019,9 +7019,12 @@ body.bill-collapsed .scale-dock { display: none !important; }
   background: rgba(255,255,255,0.2);
   font-size: 16px;
 }
-.an-sales { grid-column: span 3; background: linear-gradient(135deg, #16a34a, #22c55e); }
+.an-sales { grid-column: 1 / span 3; grid-row: 1; background: linear-gradient(135deg, #16a34a, #22c55e); }
+.an-profit { grid-column: 4 / span 2; grid-row: 1; }
+.an-cash { grid-column: 6 / span 2; grid-row: 1; }
+.an-msales { grid-column: 8 / span 3; grid-row: 1; background: linear-gradient(135deg, #6d28d9, #8b5cf6); }
+.an-mcash { grid-column: 11 / span 2; grid-row: 1; }
 .an-profit, .an-cash, .an-mcash {
-  grid-column: span 2;
   background: #fff;
   color: #111827;
   cursor: pointer;
@@ -7033,14 +7036,13 @@ body.bill-collapsed .scale-dock { display: none !important; }
 .an-profit { gap: 10px; justify-content: center; }
 .an-split b { font-size: 20px; font-weight: 800; }
 .an-split small { color: #6b7280; font-weight: 700; }
-.an-msales { grid-column: span 3; background: linear-gradient(135deg, #6d28d9, #8b5cf6); }
-.an-tpurch { grid-column: span 3; background: linear-gradient(135deg, #2563eb, #3b82f6); }
-.an-mpurch { grid-column: span 3; background: linear-gradient(135deg, #e11d48, #f43f5e); }
-.an-stock { grid-column: span 3; background: linear-gradient(135deg, #0284c7, #38bdf8); }
-.an-paymode { grid-column: span 6; }
-.an-category { grid-column: span 6; }
-.an-month { grid-column: span 7; }
-.an-brand { grid-column: span 5; }
+.an-tpurch { grid-column: 1 / span 3; grid-row: 2; background: linear-gradient(135deg, #2563eb, #3b82f6); }
+.an-mpurch { grid-column: 1 / span 3; grid-row: 3; background: linear-gradient(135deg, #e11d48, #f43f5e); }
+.an-stock { grid-column: 1 / span 3; grid-row: 4; background: linear-gradient(135deg, #0284c7, #38bdf8); }
+.an-paymode { grid-column: 4 / span 5; grid-row: 2; }
+.an-month { grid-column: 4 / span 5; grid-row: 3 / span 2; }
+.an-category { grid-column: 9 / span 4; grid-row: 2; }
+.an-brand { grid-column: 9 / span 4; grid-row: 3 / span 2; }
 .an-card {
   background: #fff;
   color: #111827;
@@ -7115,12 +7117,11 @@ body.bill-collapsed .scale-dock { display: none !important; }
   box-shadow: none;
 }
 @media (max-width: 1100px) {
-  .an-sales, .an-msales, .an-tpurch, .an-mpurch, .an-stock, .an-profit, .an-cash, .an-mcash { grid-column: span 6; }
-  .an-paymode, .an-category, .an-month, .an-brand { grid-column: span 12; }
+  .an-sales, .an-msales, .an-tpurch, .an-mpurch, .an-stock, .an-profit, .an-cash, .an-mcash,
+  .an-paymode, .an-category, .an-month, .an-brand { grid-column: 1 / -1; grid-row: auto; }
 }
 @media (max-width: 980px) {
   .analytics-dash-head { flex-direction: column; align-items: stretch; }
-  .an-sales, .an-msales, .an-tpurch, .an-mpurch, .an-stock, .an-profit, .an-cash, .an-mcash { grid-column: span 12; }
 }
 
 

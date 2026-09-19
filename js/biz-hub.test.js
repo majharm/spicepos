@@ -49,7 +49,8 @@ test("Dashboard uses a colorful retail analytics home", () => {
   assert.match(index, /Retail POS Analytics/);
   assert.match(index, /id="open-pos">New bill</);
   assert.match(index, /id="dash-plan-kpis"/);
-  assert.match(index, /biz-hub-ui\.js\?v=20260919an1/);
+  assert.match(index, /biz-hub-ui\.js\?v=20260919an2/);
+  assert.match(css, /grid-row: 3 \/ span 2/);
   assert.match(ui, /an-kpi an-sales/);
   assert.match(ui, /Today Sales Paymode wise/);
   assert.match(ui, /function donutHtml/);
