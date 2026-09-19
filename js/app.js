@@ -424,7 +424,7 @@ const VIEW_META = {
   loyalty: { title: "Royalty", subtitle: "Earn, redeem, tiers, birthday and referral" },
   offers: { title: "Offers & promotions", subtitle: "Combos, discounts, happy hours, and AI suggestions" },
   packs: { title: "Packs", subtitle: "Named mixes for the Counter" },
-  orders: { title: "Invoices", subtitle: "POS slip, official A4, or duplicate copy" },
+  orders: { title: "Invoices", subtitle: "Search, print POS or A4, and update payment" },
   returns: { title: "Manage Returns", subtitle: "Pharmacy and garment returns against a sales invoice" },
   "qr-orders": { title: "QR Orders", subtitle: "Incoming customer self-orders" },
   prescriptions: { title: "Prescription Orders", subtitle: "Customer QR uploads for this pharmacy" },
@@ -469,7 +469,7 @@ function payStatusBadge(statusOrOrder) {
   let s = String((order ? order.payment_status : statusOrOrder) || "paid").toLowerCase();
   const paid = Number(order?.amount_paid) || 0;
   if (String(order?.payment_method || "").toLowerCase() === "credit" && paid <= 0) s = "unpaid";
-  return `<span class="pay-status ${escapeHtml(s)}">${escapeHtml(s)}</span>`;
+  return `<span class="pay-status ${escapeHtml(s)}">${escapeHtml(paymentStatusLabel(s))}</span>`;
 }
 
 function orderStatusLabel(status) {
@@ -5834,18 +5834,74 @@ function orderCustomerName(o) {
 }
 
 function filterOrders(rows) {
-  const q = orderFilter.q.trim().toLowerCase();
-  return rows.filter((o) => {
+  const q = String(orderFilter.q || "").trim().toLowerCase();
+  return (rows || []).filter((o) => {
     if (orderFilter.status && String(o.status || "").toLowerCase() !== orderFilter.status) return false;
     if (orderFilter.payment && String(o.payment_status || "").toLowerCase() !== orderFilter.payment) return false;
     if (!q) return true;
-    const hay = [o.order_number, orderCustomerName(o), o.payment_method].join(" ").toLowerCase();
+    const hay = [o.order_number, orderCustomerName(o), o.payment_method, o.customer_mobile].join(" ").toLowerCase();
     return hay.includes(q);
   });
 }
 
+function invoicesHeroFigures(rows) {
+  const list = rows || [];
+  let paid = 0;
+  let due = 0;
+  let billed = 0;
+  for (const o of list) {
+    billed += Number(o.total) || 0;
+    const st = String(o.payment_status || "paid").toLowerCase();
+    const creditUnpaid = String(o.payment_method || "").toLowerCase() === "credit" && !(Number(o.amount_paid) > 0);
+    if (st === "unpaid" || st === "partial" || creditUnpaid) due += 1;
+    else paid += 1;
+  }
+  return { n: list.length, paid, due, billed };
+}
+
+function paintInvoicesHero(rows) {
+  const el = $("invoices-hero-stats");
+  if (!el) return;
+  const fig = invoicesHeroFigures(rows);
+  el.innerHTML = `<div class="items-stat"><span>Invoices</span><strong>${fig.n}</strong></div>
+    <div class="items-stat"><span>Paid</span><strong>${fig.paid}</strong></div>
+    <div class="items-stat${fig.due ? " is-warn" : ""}"><span>Due</span><strong>${fig.due}</strong></div>
+    <div class="items-stat"><span>Billed</span><strong>${escapeHtml(money(fig.billed))}</strong></div>`;
+}
+
+function paintInvoicePayChips() {
+  const cur = String($("orders-pay-filter")?.value || orderFilter.payment || "");
+  document.querySelectorAll("#invoices-pay-chips [data-orders-pay]").forEach((btn) => {
+    const on = String(btn.dataset.ordersPay || "") === cur;
+    btn.classList.toggle("is-on", on);
+    btn.setAttribute("aria-selected", on ? "true" : "false");
+  });
+}
+
+function invoicesEmptyHtml(kind) {
+  if (kind === "none") {
+    return `<div class="invoices-empty">
+      <p class="invoices-empty-title">No invoices yet</p>
+      <p>Save a bill from the Counter and it will show here with its SO number.</p>
+      <button class="btn primary" type="button" data-view-jump="counter">New bill</button>
+    </div>`;
+  }
+  if (kind === "filter") {
+    return `<div class="invoices-empty">
+      <p class="invoices-empty-title">No matching invoices</p>
+      <p>Clear search or change the order and payment filters.</p>
+    </div>`;
+  }
+  return `<div class="invoices-empty">
+    <p class="invoices-empty-title">Select an invoice</p>
+    <p>Choose a bill from the list to preview, print, or edit.</p>
+  </div>`;
+}
+
 function renderOrdersSummary(filteredCount, totalCount) {
   const el = $("orders-summary");
+  paintInvoicesHero(orderCache);
+  paintInvoicePayChips();
   if (!el) return;
   if (!totalCount) {
     el.hidden = true;
@@ -5856,7 +5912,7 @@ function renderOrdersSummary(filteredCount, totalCount) {
   el.textContent =
     filteredCount === totalCount
       ? `${totalCount} invoice${totalCount === 1 ? "" : "s"}`
-      : `${filteredCount} of ${totalCount} invoice${totalCount === 1 ? "" : "s"}`;
+      : `Showing ${filteredCount} of ${totalCount} invoice${totalCount === 1 ? "" : "s"}`;
 }
 
 function invoiceCtx() {
@@ -6345,21 +6401,21 @@ function renderOrdersList() {
   const filtered = filterOrders(orderCache);
   renderOrdersSummary(filtered.length, orderCache.length);
   if (!orderCache.length) {
-    $("orders").innerHTML = '<p class="hint">No invoices yet. Save a bill from the Counter.</p>';
+    $("orders").innerHTML = invoicesEmptyHtml("none");
     selectedOrderId = null;
-    $("order-pane").innerHTML = '<p class="hint">Select an invoice.</p>';
+    $("order-pane").innerHTML = invoicesEmptyHtml("pick");
     return;
   }
   if (!filtered.length) {
-    $("orders").innerHTML = '<p class="hint">No invoices match your filters. Clear search or change filters.</p>';
-    $("order-pane").innerHTML = '<p class="hint">Select an invoice.</p>';
+    $("orders").innerHTML = invoicesEmptyHtml("filter");
+    $("order-pane").innerHTML = invoicesEmptyHtml("pick");
     return;
   }
   if (!filtered.some((o) => o.id === selectedOrderId)) selectedOrderId = filtered[0].id;
-  $("orders").innerHTML = `<table class="orders-table">
+  $("orders").innerHTML = `<div class="table-wrap invoices-table-wrap"><table class="orders-table">
     <thead>
       <tr>
-        <th>SO No</th>
+        <th>Invoice</th>
         <th>Date</th>
         <th>Customer</th>
         <th>Status</th>
@@ -6381,7 +6437,7 @@ function renderOrdersList() {
       </tr>`,
       )
       .join("")}</tbody>
-  </table>`;
+  </table></div>`;
   const current = filtered.find((o) => o.id === selectedOrderId) || filtered[0];
   try {
     showOrder(current);
@@ -6398,7 +6454,7 @@ async function loadOrders() {
   } catch (err) {
     orderCache = [];
     $("orders").innerHTML = `<p class="hint error">${escapeHtml(err.message || "Could not load invoices")}</p>`;
-    $("order-pane").innerHTML = '<p class="hint">Select an invoice.</p>';
+    $("order-pane").innerHTML = invoicesEmptyHtml("pick");
   }
 }
 
@@ -7738,6 +7794,16 @@ $("orders-status-filter")?.addEventListener("change", () => {
 });
 $("orders-pay-filter")?.addEventListener("change", () => {
   orderFilter.payment = $("orders-pay-filter").value;
+  paintInvoicePayChips();
+  renderOrdersList();
+});
+$("invoices-pay-chips")?.addEventListener("click", (e) => {
+  const chip = e.target.closest("[data-orders-pay]");
+  if (!chip) return;
+  const val = chip.dataset.ordersPay || "";
+  if ($("orders-pay-filter")) $("orders-pay-filter").value = val;
+  orderFilter.payment = val;
+  paintInvoicePayChips();
   renderOrdersList();
 });
 $("orders-refresh")?.addEventListener("click", () => {

@@ -537,7 +537,7 @@ test("HTML and CSS cache stickers match deploy136", () => {
   assert.match(pos, /\.stock-card\[hidden\]/);
   assert.doesNotMatch(index, /100 g each/);
   assert.match(pos, /\.qty-input/);
-  assert.match(index, /duplicate copy/);
+  assert.match(index, /invoices-desk/);
   assert.match(index, /id="support-page"/);
   assert.match(index, /js\/support\.js/);
   assert.match(pos, /support-page: helpline-first shop Support/);

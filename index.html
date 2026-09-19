@@ -6,7 +6,7 @@
     <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
     <title>ATAV POS</title>
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./css/pos.css?v=20260919oldc1" />
+    <link rel="stylesheet" href="./css/pos.css?v=20260919invux1" />
     <link rel="stylesheet" href="./css/saas.css?v=20260905deploy136" />
   </head>
   <body>
@@ -980,33 +980,56 @@
         </section>
         <section class="view" id="view-orders" hidden>
           <h2 class="visually-hidden">Invoices</h2>
-          <p class="lede">Tax invoices with live SO numbers. Search, filter, print a POS slip, official A4 bill, or duplicate copy, or update order and payment status.</p>
-          <form class="report-toolbar orders-toolbar" id="orders-toolbar">
-            <label>Search
-              <input type="search" id="orders-search" placeholder="SO no, customer…" autocomplete="off" />
-            </label>
-            <label>Order status
-              <select id="orders-status-filter">
-                <option value="">All</option>
-                <option value="confirmed">Confirmed</option>
-                <option value="delivered">Delivered</option>
-                <option value="cancelled">Void</option>
-              </select>
-            </label>
-            <label>Payment
-              <select id="orders-pay-filter">
-                <option value="">All</option>
-                <option value="paid">Paid</option>
-                <option value="partial">Partial</option>
-                <option value="unpaid">Unpaid</option>
-              </select>
-            </label>
-            <button class="btn" type="button" id="orders-refresh">Refresh</button>
-          </form>
-          <p class="hint orders-summary" id="orders-summary" hidden></p>
-          <div class="split orders-split">
-            <div class="orders-list-wrap" id="orders"></div>
-            <div class="pane order-pane" id="order-pane"><p class="hint">Select an invoice.</p></div>
+          <div class="items-desk invoices-desk">
+            <header class="items-hero invoices-hero">
+              <div class="items-hero-copy">
+                <p class="items-kicker">Sales</p>
+                <h3>Invoices</h3>
+                <p class="lede">Find a bill by SO number or customer. Print a POS slip or official A4, collect due, or change items.</p>
+              </div>
+              <div class="items-hero-stats" id="invoices-hero-stats"></div>
+            </header>
+            <form class="invoices-toolbar" id="orders-toolbar">
+              <label class="invoices-search">Search
+                <input type="search" id="orders-search" placeholder="SO no, customer, payment…" autocomplete="off" />
+              </label>
+              <label>Order
+                <select id="orders-status-filter">
+                  <option value="">All</option>
+                  <option value="confirmed">Confirmed</option>
+                  <option value="delivered">Delivered</option>
+                  <option value="cancelled">Void</option>
+                </select>
+              </label>
+              <label>Payment
+                <select id="orders-pay-filter">
+                  <option value="">All</option>
+                  <option value="paid">Paid</option>
+                  <option value="partial">Partial</option>
+                  <option value="unpaid">Unpaid</option>
+                </select>
+              </label>
+              <div class="invoices-toolbar-actions">
+                <button class="btn" type="button" id="orders-refresh">Refresh</button>
+                <button class="btn primary" type="button" data-view-jump="counter">New bill</button>
+              </div>
+            </form>
+            <div class="invoices-pay-chips" id="invoices-pay-chips" role="tablist" aria-label="Payment filter">
+              <button type="button" class="invoices-chip is-on" data-orders-pay="" role="tab" aria-selected="true">All</button>
+              <button type="button" class="invoices-chip" data-orders-pay="paid" role="tab" aria-selected="false">Paid</button>
+              <button type="button" class="invoices-chip" data-orders-pay="partial" role="tab" aria-selected="false">Partial</button>
+              <button type="button" class="invoices-chip" data-orders-pay="unpaid" role="tab" aria-selected="false">Unpaid</button>
+            </div>
+            <p class="hint orders-summary" id="orders-summary" hidden></p>
+            <div class="split orders-split invoices-split">
+              <div class="orders-list-wrap invoices-list-card" id="orders"></div>
+              <div class="pane order-pane" id="order-pane">
+                <div class="invoices-empty">
+                  <p class="invoices-empty-title">Select an invoice</p>
+                  <p>Choose a bill from the list to preview, print, or edit.</p>
+                </div>
+              </div>
+            </div>
           </div>
         </section>
         <section class="view" id="view-returns" hidden>
@@ -2384,7 +2407,7 @@
     <script src="./js/biz-hub-ui.js?v=20260919salon1" defer></script>
     <script src="./js/salon.js?v=20260919salon1" defer></script>
     <script src="./js/salon-ui.js?v=20260919salon1" defer></script>
-    <script src="./js/app.js?v=20260919inv2" defer></script>
+    <script src="./js/app.js?v=20260919invux1" defer></script>
     <script src="./js/growth.js?v=20260905deploy145" defer></script>
     <script src="./js/offers-ui.js?v=20260919off1" defer></script>
   </body>
