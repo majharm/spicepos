@@ -639,7 +639,9 @@ test("HTML and CSS cache stickers match deploy136", () => {
   assert.match(login, /class="auth-scene"/);
   assert.match(login, /All types of businesses use ATAV POS/);
   assert.match(login, /class="auth-scene-shots"/);
-  assert.match(login, /assets\/login-pos-counter\.jpg/);
+  assert.match(login, /assets\/login-atav-smart-pos\.jpg/);
+  assert.match(login, /auth-shell-poster/);
+  assert.doesNotMatch(login, /assets\/login-pos-counter\.jpg/);
   assert.doesNotMatch(login, /assets\/login-pos-invoice\.jpg/);
   assert.doesNotMatch(login, /assets\/login-pos-stock\.jpg/);
   assert.match(login, /auth-shell-v2/);
@@ -677,7 +679,7 @@ test("HTML and CSS cache stickers match deploy136", () => {
   assert.match(saas, /auth-login-ux: heading pass toggle 2026/);
   assert.match(xpos, /login-pass-toggle/);
   assert.match(xpos, /Create your shop/);
-  assert.match(saas, /auth-zoho-login: books-style split 2026/);
+  assert.match(saas, /login-poster: Smart POS artwork 2026/);
   assert.match(saas, /auth-login-scroll: visible 2026/);
   assert.match(saas, /\.auth-main::-webkit-scrollbar/);
   assert.match(saas, /overflow-y: scroll/);
