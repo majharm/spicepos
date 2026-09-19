@@ -1803,14 +1803,13 @@
                 <p class="items-kicker">Purchases</p>
                 <h3>Purchase desk</h3>
                 <p class="lede">Find every purchase document here. Document desk types open a list and form on this page. Open types jump to the live bill, payment, or ledger screen. Stock still posts through Purchase Invoice.</p>
+                <label class="purchases-desk-search purchases-desk-search-hero">Find
+                  <input id="hub-purchases-search" type="search" placeholder="Purchase Request, PO, GRN, invoice…" autocomplete="off" />
+                </label>
               </div>
               <div class="items-hero-stats" id="hub-purchases-stats"></div>
             </header>
-            <div class="purchases-desk-toolbar">
-              <label class="purchases-desk-search">Find
-                <input id="hub-purchases-search" type="search" placeholder="Purchase Request, PO, GRN, invoice…" autocomplete="off" />
-              </label>
-            </div>
+            <div id="hub-purchases-work" class="purchase-doc-work" hidden></div>
             <div id="hub-purchases-tiles" class="hub-purchases-tiles">
               <div class="hub-tile-grid">
                 <button type="button" class="dash-tile hub-mod-tile" data-hub-open="purchase-request"><em class="hub-mod-kind">Document desk</em><strong>Purchase Request</strong><span>Ask for stock before you order</span></button>
@@ -1824,7 +1823,6 @@
                 <button type="button" class="dash-tile hub-mod-tile" data-hub-open="supplier-ledger"><em class="hub-mod-kind">Open</em><strong>Supplier Ledger</strong><span>Supplier account history</span></button>
               </div>
             </div>
-            <div id="hub-purchases-work" class="purchase-doc-work" hidden></div>
           </div>
         </section>
         <section class="view view-finance" id="view-payments" hidden>

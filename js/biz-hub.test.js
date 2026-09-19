@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import vm from "node:vm";
 import "./footwear.js";
 import "./biz-hub.js";
 
@@ -91,4 +92,42 @@ test("Purchase desk lists all nine documents and opens desks instead of looping"
   assert.match(ui, /paintPurchaseWork\(m\.desk\)/);
   assert.match(ui, /PURCHASE_FALLBACK/);
   assert.match(css, /purchases-desk: document types/);
+});
+
+test("Purchase Request opens an in-page document form", () => {
+  const mem = {};
+  const els = {};
+  const el = (id, extra = {}) => {
+    els[id] = { id, hidden: false, innerHTML: "", value: "", scrollIntoView() {}, ...extra };
+    return els[id];
+  };
+  el("hub-purchases-tiles");
+  el("hub-purchases-work", { hidden: true });
+  el("hub-purchases-stats");
+  el("hub-purchases-search", { value: "" });
+  const sandbox = {
+    document: {
+      getElementById: (id) => els[id] || null,
+      addEventListener() {},
+      querySelectorAll: () => [],
+      querySelector: () => null,
+    },
+    localStorage: {
+      getItem: (k) => mem[k] || null,
+      setItem: (k, v) => {
+        mem[k] = v;
+      },
+    },
+    state: { session: { business_id: "b1", role: "business_admin" }, suppliers: [] },
+    POSBizHub: H,
+    console,
+    setTimeout,
+  };
+  sandbox.globalThis = sandbox;
+  vm.runInNewContext(read("js/biz-hub-ui.js"), sandbox);
+  sandbox.POSBizHubUi.openModule("purchase-request");
+  assert.equal(els["hub-purchases-work"].hidden, false);
+  assert.match(els["hub-purchases-work"].innerHTML, /Purchase Request/);
+  assert.match(els["hub-purchases-work"].innerHTML, /id="purchase-doc-form"/);
+  assert.match(els["hub-purchases-tiles"].innerHTML, /hub-mod-tile is-active/);
 });

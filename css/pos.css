@@ -6188,6 +6188,16 @@ html[dir="rtl"] select {
   font-weight: 700;
   color: var(--muted);
 }
+.purchases-desk-search-hero {
+  margin-top: 12px;
+  color: #99f6e4;
+  max-width: 36ch;
+}
+.purchases-desk-search-hero input {
+  background: rgba(15, 23, 42, 0.35);
+  border-color: rgba(255, 255, 255, 0.18);
+  color: #f8fafc;
+}
 .purchases-desk-search input {
   min-height: 42px;
   border-radius: 12px;
