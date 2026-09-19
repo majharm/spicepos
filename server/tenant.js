@@ -459,10 +459,16 @@ export function registerTenant(app) {
       let batches = [];
       if (globalThis.POSFootwear?.isPharmacyShop?.(biz)) {
         batches = await query(
-          `SELECT b.batch_no, b.remaining_gm, b.unit_cost, b.mrp,
+          `SELECT b.batch_no, b.barcode, b.qty_gm, b.remaining_gm, b.unit_cost, b.mrp,
                   DATE_FORMAT(b.expiry_date, '%Y-%m-%d') AS expiry_date,
-                  i.name AS item_name, i.code AS item_code, i.base_unit, i.unit, i.purchase_rate
-           FROM stock_batches b JOIN items i ON i.id = b.item_id
+                  DATE_FORMAT(b.manufactured_date, '%Y-%m-%d') AS manufactured_date,
+                  i.name AS item_name, i.code AS item_code, i.base_unit, i.unit, i.purchase_rate, i.retail_rate,
+                  i.generic_name, i.local_name, i.medicine_type, i.manufacturer, i.hsn, i.category, i.status AS item_status,
+                  DATE_FORMAT(i.default_expiry, '%Y-%m-%d') AS item_default_expiry,
+                  s.name AS supplier_name
+           FROM stock_batches b
+           JOIN items i ON i.id = b.item_id
+           LEFT JOIN suppliers s ON s.id = b.supplier_id
            WHERE b.business_id = ? AND b.remaining_gm > 0
            ORDER BY i.name ASC, (b.expiry_date IS NULL) ASC, b.expiry_date ASC, b.batch_no ASC
            LIMIT 800`,

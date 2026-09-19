@@ -461,6 +461,7 @@ test("Medical shops show pharmacy medicine fields on the item form", () => {
   assert.match(app, /stock-batch-table/);
   assert.match(app, /<th>Expiry Date<\/th>/);
   assert.match(index, /On-hand by batch number and expiry date/);
+  assert.match(index, /Excel with every field: SKU, batch no, expiry/);
   assert.match(adv, /savePharmacyItemFields/);
   assert.match(adv, /req.query.on_hand/);
   const demo = F.demoItems({ category: "Medical" });
