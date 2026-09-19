@@ -31,6 +31,7 @@ import { registerAdvanced, computeSaleLine, applySaleStock, applyLoyaltyOnSale, 
 import { registerReturns } from "./returns.js";
 import { registerQrPublic, registerQrStaff, linkQrOrderSale, ensureQrOrderSchema } from "./qr-ordering.js";
 import { registerRxPublic, registerRxStaff } from "./prescriptions.js";
+import { registerSalonPublic, registerSalonStaff, ensureSalonSchema } from "./salon.js";
 import "../js/discount.js";
 import "../js/payment-methods.js";
 import { canonApiUrl, isAliasedApi, isApiUrl, rewriteToApi } from "./http-path.js";
@@ -81,6 +82,7 @@ app.use(attachAuth);
 registerAuth(app);
 registerQrPublic(app);
 registerRxPublic(app);
+registerSalonPublic(app);
 
 const PUBLIC_INVOICE_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -177,6 +179,7 @@ app.use((req, res, next) => {
     url.startsWith("/api/auth") ||
     url.startsWith("/api/qr/") ||
     url.startsWith("/api/rx/") ||
+    url.startsWith("/api/salon/public") ||
     url.startsWith("/api/invoices") ||
     url.startsWith("/api/health") ||
     url.startsWith("/api/master") ||
@@ -195,6 +198,7 @@ registerBackup(app);
 registerUnits(app);
 registerQrStaff(app);
 registerRxStaff(app);
+registerSalonStaff(app);
 
 app.get("/api/support-contact", async (_req, res) => {
   try {
@@ -1231,6 +1235,7 @@ startHttp()
   });
 ensureSchema()
   .then(() => seedPlatform())
+  .then(() => ensureSalonSchema())
   .catch((err) => {
     console.error("Schema/seed error (API is still up; check DB env vars)", err);
   });

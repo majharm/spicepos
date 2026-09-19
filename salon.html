@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Book salon · ATAV POS</title>
+    <link rel="stylesheet" href="./css/salon.css?v=20260919salon1" />
+  </head>
+  <body class="salon-portal">
+    <header class="sp-top">
+      <div>
+        <p class="sp-kicker">Customer portal</p>
+        <h1 id="sp-shop">Salon</h1>
+        <p id="sp-cat"></p>
+      </div>
+      <nav class="sp-nav">
+        <button type="button" data-sp="home">Home</button>
+        <button type="button" data-sp="book">Book</button>
+        <button type="button" data-sp="packages">Packages</button>
+        <button type="button" data-sp="account">Account</button>
+      </nav>
+    </header>
+    <main>
+      <section class="sp-auth" id="sp-auth">
+        <div class="sp-card">
+          <h2>Sign in</h2>
+          <form id="sp-login">
+            <label>Email <input name="email" type="email" required autocomplete="email" /></label>
+            <label>Password <input name="password" type="password" autocomplete="current-password" /></label>
+            <button class="btn primary" type="submit">Email + password</button>
+          </form>
+          <form id="sp-otp-send">
+            <label>Email for OTP <input name="email" type="email" required /></label>
+            <button class="btn" type="submit">Send OTP</button>
+          </form>
+          <form id="sp-otp-verify" hidden>
+            <label>OTP <input name="otp" inputmode="numeric" maxlength="6" required /></label>
+            <label>New password (forgot) <input name="password" type="password" /></label>
+            <button class="btn primary" type="submit">Verify OTP</button>
+          </form>
+          <form id="sp-register">
+            <h3>Create account</h3>
+            <label>Name <input name="name" required /></label>
+            <label>Email <input name="email" type="email" required /></label>
+            <label>Mobile <input name="mobile" inputmode="tel" /></label>
+            <label>Password <input name="password" type="password" required minlength="6" /></label>
+            <button class="btn" type="submit">Register</button>
+          </form>
+          <p class="hint" id="sp-auth-hint"></p>
+        </div>
+      </section>
+
+      <section class="sp-app" id="sp-app" hidden>
+        <div class="sp-kpis" id="sp-kpis"></div>
+        <div class="sp-pane" data-pane="home">
+          <h2>Upcoming</h2>
+          <div id="sp-upcoming"></div>
+          <h2>Active packages</h2>
+          <div id="sp-active-pkg"></div>
+        </div>
+        <div class="sp-pane" data-pane="book" hidden>
+          <ol class="sp-flow">
+            <li>Category</li><li>Service</li><li>Staff</li><li>Date</li><li>Slot</li><li>Coupon</li><li>Pay</li>
+          </ol>
+          <form id="sp-book">
+            <label>Category
+              <select id="sp-cat-sel"></select>
+            </label>
+            <label>Service
+              <select id="sp-service" required></select>
+            </label>
+            <button type="button" class="btn" id="sp-fav">Favourite</button>
+            <label>Add another service
+              <select id="sp-service-2"><option value="">None</option></select>
+            </label>
+            <label>Staff / beautician
+              <select id="sp-staff"><option value="">Any</option></select>
+            </label>
+            <label>Date <input id="sp-date" type="date" required /></label>
+            <div id="sp-slots" class="sp-slots"></div>
+            <input type="hidden" id="sp-slot" />
+            <label>Coupon % <input id="sp-coupon" type="number" min="0" max="100" value="0" /></label>
+            <label>Advance
+              <select id="sp-adv">
+                <option value="none">No advance</option>
+                <option value="fixed">Fixed ₹300</option>
+                <option value="percent">30%</option>
+                <option value="full">Full payment</option>
+              </select>
+            </label>
+            <label>Pay with
+              <select id="sp-pay">
+                <option value="upi">UPI</option>
+                <option value="card">Card</option>
+                <option value="online">Online</option>
+                <option value="wallet">Wallet</option>
+                <option value="cash">Pay at salon</option>
+              </select>
+            </label>
+            <label>Use package
+              <select id="sp-use-pkg"><option value="">No</option></select>
+            </label>
+            <label class="check"><input type="checkbox" id="sp-recurring" /> Recurring weekly</label>
+            <label class="check"><input type="checkbox" id="sp-wait" /> Join waiting list if full</label>
+            <p id="sp-quote"></p>
+            <button class="btn primary" type="submit">Confirm booking</button>
+          </form>
+          <p class="hint" id="sp-book-hint"></p>
+        </div>
+        <div class="sp-pane" data-pane="packages" hidden>
+          <div id="sp-pkgs"></div>
+        </div>
+        <div class="sp-pane" data-pane="account" hidden>
+          <form id="sp-profile">
+            <label>Name <input name="name" /></label>
+            <label>Mobile <input name="mobile" /></label>
+            <button class="btn" type="submit">Save profile</button>
+          </form>
+          <h3>Booking history</h3>
+          <div id="sp-hist"></div>
+          <h3>Payment history</h3>
+          <div id="sp-pays"></div>
+          <h3>Favourites</h3>
+          <div id="sp-favs"></div>
+          <button class="btn" type="button" id="sp-logout">Log out</button>
+        </div>
+      </section>
+    </main>
+    <script src="./js/salon.js?v=20260919salon1"></script>
+    <script src="./js/salon-portal.js?v=20260919salon1"></script>
+  </body>
+</html>

@@ -163,6 +163,25 @@
     if (shopKind(biz) === "pharmacy") {
       return ["Medical", "OTC", "Ayurvedic", "Surgical", "Baby care", "Personal care"];
     }
+    if (shopKind(biz) === "services") {
+      return [
+        "Salon",
+        "Unisex Salon",
+        "Ladies Salon",
+        "Gents Salon",
+        "Beauty Parlour",
+        "Spa",
+        "Massage",
+        "Hair Studio",
+        "Nail Studio",
+        "Makeup Studio",
+        "Facial",
+        "Haircut",
+        "Colour",
+        "Manicure",
+        "Pedicure",
+      ];
+    }
     if (shopKind(biz) !== "restaurant") return [];
     return [
       "South Indian",
@@ -348,20 +367,20 @@
         hsn: "e.g. 7318",
       },
       services: {
-        name: "Service charge",
-        localName: "सेवा / सेवा / Service",
-        category: "Service / Repair",
-        subcategory: "Labour / Visit",
+        name: "Hair spa",
+        localName: "हेयर स्पा / Hair spa",
+        category: "Salon",
+        subcategory: "Hair",
         categoryLab: "Category",
-        subcategoryLab: "Subcategory",
+        subcategoryLab: "Service type",
         search: "Search service or SAC…",
-        scan: "Scan or search",
-        lede: "Name, photo, SAC code (service), unit type, rates, and stock.",
-        itemsSub: "Photo, SAC, unit type, rates, and stock",
-        counterSub: "Tap a service — then Pay",
+        scan: "Search service",
+        lede: "Service name, photo, SAC code (service), duration, beautician, GST, and online booking.",
+        itemsSub: "Photo, SAC, duration, price, GST, and booking",
+        counterSub: "Tap a service — then Pay or book",
         ticket: "Tap a service",
-        hsn: "e.g. 9983",
-        catalogSearch: "Search name, SAC, barcode…",
+        hsn: "e.g. 9997",
+        catalogSearch: "Search name, SAC…",
       },
       general: {
         name: "Item name",

@@ -125,8 +125,11 @@
     { id: "el-imei", group: "industry", title: "IMEI", view: "barcodes", perm: "items", kinds: ["electronics"] },
     { id: "el-warranty", group: "industry", title: "Warranty", view: "items", perm: "items", kinds: ["electronics"] },
     { id: "el-service", group: "industry", title: "Service / Repair", view: "items", perm: "items", kinds: ["electronics"] },
-    { id: "salon-svc", group: "industry", title: "Services", view: "items", perm: "items", kinds: ["services"] },
-    { id: "salon-staff", group: "industry", title: "Staff / Commission", view: "staff", perm: "staff", kinds: ["services"] },
+    { id: "salon-svc", group: "industry", title: "Service Master", view: "items", perm: "items", kinds: ["services"] },
+    { id: "salon-board", group: "industry", title: "Salon desk", view: "salon-board", perm: "dashboard", kinds: ["services"] },
+    { id: "salon-book", group: "industry", title: "Bookings", view: "bookings", perm: "orders", kinds: ["services"] },
+    { id: "salon-pkg", group: "industry", title: "Packages", view: "packages", perm: "items", kinds: ["services"] },
+    { id: "salon-staff", group: "industry", title: "Staff / Beautician", view: "staff", perm: "staff", kinds: ["services"] },
     { id: "svc-job", group: "industry", title: "Job Card / Service Order", view: "orders", perm: "orders", kinds: ["services"] },
   ];
 
@@ -231,6 +234,24 @@
     { id: "audit-log", center: "audit", title: "Audit Log", view: "audit" },
     { id: "analytics", center: "analytics", title: "Business Analytics", view: "growth" },
     { id: "employees", center: "employees", title: "Employees", view: "staff" },
+    { id: "salon-bookings", center: "salon", title: "Booking Report", kinds: ["services"] },
+    { id: "salon-advance-bookings", center: "salon", title: "Advance Booking Report", kinds: ["services"] },
+    { id: "salon-advance-pay", center: "salon", title: "Advance Payment Report", kinds: ["services"] },
+    { id: "salon-service-sales", center: "salon", title: "Service Sales Report", kinds: ["services"] },
+    { id: "salon-package-sales", center: "salon", title: "Package Sales Report", kinds: ["services"] },
+    { id: "salon-package-usage", center: "salon", title: "Package Usage Report", kinds: ["services"] },
+    { id: "salon-package-expiry", center: "salon", title: "Package Expiry Report", kinds: ["services"] },
+    { id: "salon-customer-sales", center: "salon", title: "Customer-wise Sales", kinds: ["services"] },
+    { id: "salon-customer-bookings", center: "salon", title: "Customer-wise Booking", kinds: ["services"] },
+    { id: "salon-staff-bookings", center: "salon", title: "Staff-wise Booking", kinds: ["services"] },
+    { id: "salon-staff-revenue", center: "salon", title: "Staff-wise Revenue", kinds: ["services"] },
+    { id: "salon-service-revenue", center: "salon", title: "Service-wise Revenue", kinds: ["services"] },
+    { id: "salon-pay-mode", center: "salon", title: "Payment Mode Report", kinds: ["services"] },
+    { id: "salon-outstanding", center: "salon", title: "Outstanding Report", kinds: ["services"] },
+    { id: "salon-cancel", center: "salon", title: "Cancellation Report", kinds: ["services"] },
+    { id: "salon-noshow", center: "salon", title: "No-show Report", kinds: ["services"] },
+    { id: "salon-revenue", center: "salon", title: "Daily/Monthly/Yearly Revenue", kinds: ["services"] },
+    { id: "salon-clv", center: "salon", title: "Customer Lifetime Value", kinds: ["services"] },
   ];
 
   const CENTERS = [
@@ -247,6 +268,7 @@
     { id: "employees", title: "Employees" },
     { id: "analytics", title: "Business Analytics" },
     { id: "audit", title: "Audit Log" },
+    { id: "salon", title: "Salon / Spa" },
   ];
 
   const PURCHASE_DOC_KINDS = {

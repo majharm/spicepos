@@ -168,6 +168,10 @@ function isPharmacyShop() {
   return Boolean(globalThis.POSFootwear?.isPharmacyShop?.(state.businessMeta) || globalThis.POSFootwear?.shopKind?.(state.businessMeta) === "pharmacy");
 }
 
+function isServicesShop() {
+  return Boolean(globalThis.POSSalon?.isSalonShop?.(state.businessMeta) || globalThis.POSFootwear?.isServicesShop?.(state.businessMeta));
+}
+
 function isClassicBillShop() {
   return isPharmacyShop() || isApparelShop();
 }
@@ -218,7 +222,7 @@ function applyFootwearMode() {
   document.body.classList.toggle("restaurant-mode", isRestaurantShop());
   document.body.classList.toggle("pharmacy-mode", pharm);
   document.body.classList.toggle("classic-bill-mode", isClassicBillShop());
-  document.body.classList.toggle("services-mode", globalThis.POSFootwear?.isServicesShop?.(state.businessMeta));
+  document.body.classList.toggle("services-mode", isServicesShop());
   document.querySelectorAll(".footwear-only").forEach((el) => {
     el.hidden = !on;
   });
@@ -230,6 +234,10 @@ function applyFootwearMode() {
   });
   document.querySelectorAll(".restaurant-only").forEach((el) => {
     el.hidden = !isRestaurantShop();
+  });
+  document.querySelectorAll(".services-only").forEach((el) => {
+    if (el.classList.contains("nav-btn")) return;
+    el.hidden = !isServicesShop();
   });
   fillPaySelects();
   document.querySelectorAll(".classic-bill-only").forEach((el) => {
@@ -433,6 +441,9 @@ const VIEW_META = {
   "hub-purchases": { title: "Purchase desk", subtitle: "Supplier bills, payments, and purchase documents" },
   payments: { title: "Payments", subtitle: "Cash, UPI, card, bank, receipts, and payment reports" },
   audit: { title: "Activity log", subtitle: "Created, edited, and deleted — invoices, payments, stock, and books" },
+  "salon-board": { title: "Salon desk", subtitle: "Bookings, advance collection, packages, and staff performance" },
+  bookings: { title: "Bookings", subtitle: "Advance appointments, waitlist, reschedule, and no-shows" },
+  packages: { title: "Packages", subtitle: "Bridal and beauty packages with sessions and validity" },
 };
 
 function orderStatusClass(status) {
@@ -1900,6 +1911,9 @@ function applyNav() {
       "hub-purchases": "purchases",
       payments: "accounts",
       audit: "settings",
+      "salon-board": "dashboard",
+      bookings: "orders",
+      packages: "items",
     };
     btn.hidden = map[view] ? !can(map[view]) : false;
     if (view === "growth") btn.hidden = !(can("growth") || can("reports"));
@@ -1909,6 +1923,7 @@ function applyNav() {
     if (view === "prescriptions") btn.hidden = !isPharmacyShop() || !can("orders");
     if (view === "returns") btn.hidden = !isClassicBillShop() || !can("orders");
     if (view === "kot") btn.hidden = !isRestaurantShop() || !can("kot");
+    if ((view === "salon-board" || view === "bookings" || view === "packages") && !isServicesShop()) btn.hidden = true;
   });
   globalThis.POSBizHubUi?.paintIndustryNav?.();
   paintStaffRoleOptions();
@@ -1930,6 +1945,8 @@ function applyNav() {
       settings: "settings",
       payments: "accounts",
       audit: "settings",
+      bookings: "orders",
+      "salon-board": "dashboard",
     }[view];
     btn.hidden = module ? !can(module) : false;
   });
@@ -2076,6 +2093,17 @@ function showView(name) {
   if (name === "hub-purchases") globalThis.POSBizHubUi?.paintModuleDesk?.("hub-purchases-tiles", "purchases");
   if (name === "payments") globalThis.POSBizHubUi?.paintPaymentsDesk?.();
   if (name === "audit") globalThis.POSBizHubUi?.loadAudit?.();
+  if (name === "salon-board") {
+    const portal = $("salon-portal-link");
+    if (portal && state.businessMeta?.id) portal.href = `./salon.html?shop=${encodeURIComponent(state.businessMeta.id)}`;
+    globalThis.POSSalonUi?.loadSalonBoard?.();
+    const list = $("salon-report-list");
+    if (list && globalThis.POSSalon?.REPORTS) {
+      list.innerHTML = POSSalon.REPORTS.map((r) => `<button type="button" class="dash-tile" data-salon-report="${escapeHtml(r.id)}"><strong>${escapeHtml(r.title)}</strong></button>`).join("");
+    }
+  }
+  if (name === "bookings") globalThis.POSSalonUi?.loadSalonBookings?.();
+  if (name === "packages") globalThis.POSSalonUi?.loadSalonPackages?.();
   paintDeskState(name);
   if (name === "stock") loadStock();
   if (name === "counter") {
@@ -4271,6 +4299,25 @@ async function uploadItemsExcel(file) {
   }
 }
 
+function fillSalonServiceSelects() {
+  const staffEl = $("item-staff");
+  if (staffEl) {
+    const cur = staffEl.value;
+    staffEl.innerHTML = `<option value="">Any</option>${(state.staff || [])
+      .map((s) => `<option value="${escapeHtml(s.id)}">${escapeHtml(s.name || s.email || s.username || "")}</option>`)
+      .join("")}`;
+    if (cur) staffEl.value = cur;
+  }
+  const br = $("item-branch");
+  if (br) {
+    const cur = br.value;
+    br.innerHTML = `<option value="">All branches</option>${(state.branches || [])
+      .map((b) => `<option value="${escapeHtml(b.id)}">${escapeHtml(b.name || "")}</option>`)
+      .join("")}`;
+    if (cur) br.value = cur;
+  }
+}
+
 function resetItemForm() {
   $("item-form").reset();
   $("item-id").value = "";
@@ -4282,6 +4329,11 @@ function resetItemForm() {
   $("item-form")?.classList.remove("is-editing");
   document.querySelectorAll("#items-table .is-editing").forEach((el) => el.classList.remove("is-editing"));
   paintItemStatus("active");
+  fillSalonServiceSelects();
+  if ($("item-duration")) $("item-duration").value = "30";
+  if ($("item-svc-disc")) $("item-svc-disc").value = "0";
+  if ($("item-gender")) $("item-gender").value = "unisex";
+  if ($("item-online")) $("item-online").checked = true;
   if (isPharmacyShop()) {
     if ($("item-category") && !$("item-category").value) $("item-category").value = defaultItemCategory();
     if ($("item-type")) $("item-type").value = "Tablet";
@@ -4327,6 +4379,26 @@ function fillItemForm(i) {
   $("item-form")?.classList.add("is-editing");
   $("item-hint").textContent = `Editing ${i.code || i.name}`;
   $("item-hint").className = "hint";
+  fillSalonServiceSelects();
+  if (isServicesShop() && i.id) {
+    api(`/api/salon/services/${i.id}`)
+      .then((m) => {
+        if ($("item-duration")) $("item-duration").value = m.duration_min || 30;
+        if ($("item-svc-disc")) $("item-svc-disc").value = m.discount_pct || 0;
+        if ($("item-gender")) $("item-gender").value = m.gender || "unisex";
+        if ($("item-online")) $("item-online").checked = Number(m.online_booking) !== 0;
+        if ($("item-staff") && m.staff_ids) {
+          try {
+            const ids = JSON.parse(m.staff_ids);
+            if (Array.isArray(ids) && ids[0]) $("item-staff").value = ids[0];
+          } catch {
+            $("item-staff").value = m.staff_ids;
+          }
+        }
+        if ($("item-branch")) $("item-branch").value = m.branch_id || "";
+      })
+      .catch(() => {});
+  }
   document.querySelectorAll("#items-table .is-editing").forEach((el) => el.classList.remove("is-editing"));
   document.querySelector(`#items-table [data-edit-item="${CSS.escape(i.id)}"]`)?.classList.add("is-editing");
   $("item-form")?.scrollIntoView({ block: "start" });
@@ -5180,6 +5252,7 @@ async function loadDashboard() {
       )
       .join("");
     if ($("dash-kpis") && extra) $("dash-kpis").insertAdjacentHTML("beforeend", extra);
+    if (isServicesShop()) globalThis.POSSalonUi?.loadSalonBoard?.();
   } catch (err) {
     $("dash-kpis").innerHTML = `<p class="hint error">${escapeHtml(err.message)}</p>`;
   }
@@ -8620,13 +8693,28 @@ $("item-form").addEventListener("submit", async (e) => {
     body.reorder_level_gm = POSUnits.toBase($("item-reorder")?.value || 0, unit);
   }
   try {
-    if ($("item-id").value) {
-      await api(`/api/items/${$("item-id").value}`, { method: "PUT", body: JSON.stringify(body) });
+    let savedId = $("item-id").value;
+    if (savedId) {
+      await api(`/api/items/${savedId}`, { method: "PUT", body: JSON.stringify(body) });
       $("item-hint").textContent = "Saved";
     } else {
       const res = await api("/api/items", { method: "POST", body: JSON.stringify(body) });
       const count = res?.created_count || (res?.items ? res.items.length : 1);
+      savedId = res?.item?.id || res?.items?.[0]?.id || "";
       $("item-hint").textContent = count > 1 ? `Created ${count} sizes` : "Saved";
+    }
+    if (isServicesShop() && savedId) {
+      await api(`/api/salon/services/${savedId}`, {
+        method: "POST",
+        body: JSON.stringify({
+          duration_min: Number($("item-duration")?.value) || 30,
+          discount_pct: Number($("item-svc-disc")?.value) || 0,
+          gender: $("item-gender")?.value || "unisex",
+          online_booking: $("item-online")?.checked !== false,
+          staff_ids: $("item-staff")?.value ? [$("item-staff").value] : [],
+          branch_id: $("item-branch")?.value || "",
+        }),
+      });
     }
     $("item-hint").className = "hint ok";
     resetItemForm();
@@ -8704,6 +8792,26 @@ $("item-image-clear")?.addEventListener("click", () => {
   paintItemImage("");
   $("item-hint").textContent = "Photo will be removed on Save";
   $("item-hint").className = "hint";
+  fillSalonServiceSelects();
+  if (isServicesShop() && i.id) {
+    api(`/api/salon/services/${i.id}`)
+      .then((m) => {
+        if ($("item-duration")) $("item-duration").value = m.duration_min || 30;
+        if ($("item-svc-disc")) $("item-svc-disc").value = m.discount_pct || 0;
+        if ($("item-gender")) $("item-gender").value = m.gender || "unisex";
+        if ($("item-online")) $("item-online").checked = Number(m.online_booking) !== 0;
+        if ($("item-staff") && m.staff_ids) {
+          try {
+            const ids = JSON.parse(m.staff_ids);
+            if (Array.isArray(ids) && ids[0]) $("item-staff").value = ids[0];
+          } catch {
+            $("item-staff").value = m.staff_ids;
+          }
+        }
+        if ($("item-branch")) $("item-branch").value = m.branch_id || "";
+      })
+      .catch(() => {});
+  }
 });
 
 $("unit-family")?.addEventListener("change", () => {

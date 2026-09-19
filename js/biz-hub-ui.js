@@ -381,6 +381,11 @@
   }
 
   function openReport(id) {
+    if (String(id || "").startsWith("salon-")) {
+      if (typeof root.showView === "function") root.showView("salon-board");
+      setTimeout(() => root.POSSalonUi?.loadSalonReport?.(id), 200);
+      return;
+    }
     const H = hub();
     const r = H?.REPORTS.find((x) => x.id === id);
     if (!r) return;

@@ -21,6 +21,7 @@ export const MODULES = [
   "offers",
   "damage",
   "kot",
+  "bookings",
 ];
 
 export const ROLES = [
@@ -61,6 +62,7 @@ export function defaultPerms(role) {
       loyalty: true,
       offers: true,
       kot: true,
+      bookings: true,
     };
   }
   if (role === "captain") {

@@ -2765,6 +2765,12 @@ body:not(.footwear-mode):not(.apparel-mode) .footwear-only { display: none !impo
 body:not(.restaurant-mode) .restaurant-only { display: none !important; }
 body:not(.pharmacy-mode) .pharmacy-only { display: none !important; }
 body.pharmacy-mode .pharmacy-hide { display: none !important; }
+body:not(.services-mode) .services-only { display: none !important; }
+.salon-badge { display: inline-block; padding: 2px 8px; border-radius: 999px; background: #ecfdf5; color: #0f766e; font-size: 11px; font-weight: 800; }
+.salon-badge.status-cancelled, .salon-badge.status-no_show { background: #fef2f2; color: #b91c1c; }
+.salon-badge.status-completed { background: #ecfeff; color: #0e7490; }
+.salon-pkg-line { display: grid; grid-template-columns: 2fr 80px 110px; gap: 8px; margin-bottom: 8px; }
+/* salon-engine: 20260919salon1 */
 /* Keep this block out of the Bill panel. Customer name, mobile, address,
    and doctor already show once on #bill-customer (and on Prescriptions). */
 #pharm-bill-cust,

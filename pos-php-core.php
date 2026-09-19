@@ -2294,6 +2294,10 @@ function pos_php_dispatch($path, $method, $rawBody) {
       require_once __DIR__ . "/pos-prescriptions.php";
       if (pos_rx_public_dispatch($path, $method, $body)) return;
     }
+    if (strpos($path, "salon/public/") === 0) {
+      require_once __DIR__ . "/pos-salon.php";
+      if (function_exists("pos_salon_public_dispatch") && pos_salon_public_dispatch($path, $method, $body)) return;
+    }
     if (preg_match("#^invoices/([^/]+)$#", $path, $m) && $method === "GET") {
       pos_public_invoice_send($m[1]);
       return;
@@ -3331,6 +3335,12 @@ function pos_php_dispatch($path, $method, $rawBody) {
           if (is_file(__DIR__ . "/pos-crud.php")) {
             require_once __DIR__ . "/pos-crud.php";
             if (function_exists("pos_crud_dispatch") && pos_crud_dispatch($path, $method, $body, $bid, $auth, $branchId, $uid)) {
+              return;
+            }
+          }
+          if (is_file(__DIR__ . "/pos-salon.php")) {
+            require_once __DIR__ . "/pos-salon.php";
+            if (function_exists("pos_salon_staff_dispatch") && pos_salon_staff_dispatch($path, $method, $body, $bid, $auth)) {
               return;
             }
           }

@@ -1,0 +1,43 @@
+.salon-portal {
+  margin: 0;
+  font-family: system-ui, sans-serif;
+  background: #f3f4f6;
+  color: #21263c;
+}
+.sp-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 20px;
+  background: #fff;
+  border-bottom: 1px solid #e5e7eb;
+}
+.sp-kicker { margin: 0; font-size: 11px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: #1a7a6d; }
+.sp-top h1 { margin: 4px 0 0; font-size: 22px; }
+.sp-nav { display: flex; gap: 8px; align-items: center; }
+.sp-nav button, .btn {
+  min-height: 36px; padding: 0 14px; border-radius: 6px; border: 1px solid #d1d5db; background: #fff; cursor: pointer; font: inherit; font-weight: 700;
+}
+.btn.primary, .sp-nav button.is-on { background: #1a7a6d; color: #fff; border-color: #1a7a6d; }
+main { max-width: 960px; margin: 0 auto; padding: 16px; }
+.sp-card, .sp-pane, .sp-kpis .kpi {
+  background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; padding: 16px; margin-bottom: 12px;
+}
+.sp-card form, #sp-book, #sp-profile { display: grid; gap: 10px; }
+label { display: grid; gap: 4px; font-size: 12px; font-weight: 700; color: #6b7280; }
+input, select { min-height: 36px; padding: 6px 10px; border: 1px solid #d1d5db; border-radius: 6px; font: inherit; }
+.sp-kpis { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; }
+.kpi span { display: block; font-size: 11px; color: #6b7280; }
+.kpi strong { font-size: 20px; }
+.sp-flow { display: flex; flex-wrap: wrap; gap: 8px; padding: 0; list-style: none; font-size: 12px; font-weight: 700; color: #1a7a6d; }
+.sp-slots { display: flex; flex-wrap: wrap; gap: 6px; }
+.sp-slots button { min-height: 32px; }
+.sp-slots button.is-on { background: #1a7a6d; color: #fff; border-color: #1a7a6d; }
+.hint { color: #6b7280; font-size: 13px; }
+.hint.error { color: #b91c1c; }
+.salon-badge { display: inline-block; padding: 2px 8px; border-radius: 999px; background: #ecfdf5; color: #0f766e; font-size: 11px; font-weight: 800; }
+.status-cancelled, .status-no_show { background: #fef2f2; color: #b91c1c; }
+.check { display: flex; gap: 8px; align-items: center; }
+@media (max-width: 720px) {
+  .sp-top { flex-direction: column; }
+}

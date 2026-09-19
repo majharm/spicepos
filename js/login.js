@@ -92,7 +92,7 @@ function categoriesForSignupType(type) {
     return ["Apparel", "Garments", "Clothing", "Boutique", "Saree Shop", "Ladies Fashion", "Mens Fashion", "Kids Fashion"];
   }
   if (t === "Footwear") return ["Footwear"];
-  if (t === "Services") return ["Services", "Salon / spa", "Repair", "Consultancy"];
+  if (t === "Services") return ["Services", "Salon", "Unisex Salon", "Ladies Salon", "Gents Salon", "Beauty Parlour", "Spa", "Massage", "Hair Studio", "Nail Studio", "Makeup Studio", "Repair", "Consultancy"];
   return null;
 }
 

@@ -49,7 +49,7 @@ test("Dashboard uses a Zoho Books-style home shell", () => {
   assert.match(index, /Quick Create/);
   assert.match(index, /zoho-widget-link/);
   assert.match(index, /id="open-pos">New</);
-  assert.match(index, /biz-hub-ui\.js\?v=20260919zohod1/);
+  assert.match(index, /biz-hub-ui\.js\?v=20260919salon1/);
   assert.match(ui, /is-featured/);
   assert.match(app, /el\.textContent = "Dashboard"/);
   assert.match(css, /zoho-dash: books home 2026/);
@@ -66,7 +66,7 @@ test("POS shell wires Reports Center, payments, audit, and hub scripts", () => {
   assert.match(index, /id="view-audit"/);
   assert.match(index, /id="view-hub-sales"/);
   assert.match(index, /id="dash-sales-graph"/);
-  assert.match(index, /biz-hub\.js\?v=20260919zohod1/);
+  assert.match(index, /biz-hub\.js\?v=20260919salon1/);
   assert.match(index, /id="rep-pdf"/);
   assert.match(index, /id="rep-pay-mode"/);
   assert.match(app, /POSBizHubUi\?\.paintDashboard/);
