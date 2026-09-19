@@ -431,7 +431,9 @@ function pos_php_till_dispatch($path, $method, $body) {
 
   if ($path === "stock" && $method === "GET") {
     pos_send(200, pos_q(
-      "SELECT id, code, name, unit, base_unit, stock_gm, reorder_level_gm, purchase_rate, retail_rate, barcode, category, subcategory FROM items WHERE business_id = ? ORDER BY name",
+      "SELECT id, code, name, unit, base_unit, stock_gm, reorder_level_gm, purchase_rate, retail_rate, barcode, category, subcategory, batch_no,
+              DATE_FORMAT(default_expiry, '%Y-%m-%d') AS default_expiry
+       FROM items WHERE business_id = ? ORDER BY name",
       "s",
       [$bid]
     ));

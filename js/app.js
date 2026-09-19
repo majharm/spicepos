@@ -274,7 +274,7 @@ function applyFootwearMode() {
   }
   if ($("stock-search")) {
     $("stock-search").placeholder = pharm
-      ? "Search name, batch no, barcode…"
+      ? "Search name, batch no, expiry…"
       : "Search name, code, barcode…";
   }
   if ($("pack-item-search")) $("pack-item-search").placeholder = `Search spice or ${taxCodeLabel()}…`;
@@ -5173,9 +5173,18 @@ function paintStockHero(rows) {
   const batchCount = isPharmacyShop()
     ? (Array.isArray(state.stockBatches) ? state.stockBatches : []).filter((b) => (Number(b.remaining_gm) || 0) > 0).length
     : 0;
+  let expired = 0;
+  if (isPharmacyShop()) {
+    for (const b of Array.isArray(state.stockBatches) ? state.stockBatches : []) {
+      if ((Number(b.remaining_gm) || 0) <= 0) continue;
+      const days = expiryDaysLeft({ expiry_date: stockExpiryYmd(b, list.find((r) => r.id === b.item_id)) });
+      if (Number.isFinite(days) && days < 0) expired += 1;
+    }
+  }
   const skuLabel = isPharmacyShop() ? "Medicines" : "SKUs";
   stats.innerHTML = `<div class="items-stat"><span>${skuLabel}</span><strong>${list.length}</strong></div>
     ${isPharmacyShop() ? `<div class="items-stat"><span>Batches</span><strong>${batchCount}</strong></div>` : ""}
+    ${isPharmacyShop() ? `<div class="items-stat${expired ? " is-warn" : ""}"><span>Expired</span><strong>${expired}</strong></div>` : ""}
     <div class="items-stat"><span>On-hand value</span><strong>${money(value)}</strong></div>
     <button class="items-stat${low ? " is-warn" : ""}${state.stockLowOnly ? " is-active" : ""}" type="button" data-stock-low>
       <span>Low / out</span><strong>${low}</strong>
@@ -5195,6 +5204,31 @@ function filterStockList() {
   });
   const empty = $("stock-filter-empty");
   if (empty) empty.hidden = shown > 0 || !document.querySelector("#stock-table [data-stock-item]");
+}
+
+function stockExpiryYmd(batch, sku) {
+  const raw = batch?.expiry_date || sku?.primary_expiry || sku?.default_expiry || sku?.item_default_expiry || batch?.item_default_expiry || "";
+  const s = String(raw || "").trim();
+  const iso = s.match(/^(\d{4}-\d{2}-\d{2})/);
+  if (iso) return iso[1];
+  const dmy = s.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+  if (dmy) return `${dmy[3]}-${dmy[2]}-${dmy[1]}`;
+  return "";
+}
+
+function paintStockExpiryCell(ymdStr) {
+  if (!ymdStr) {
+    return `<span class="stock-exp is-none"><strong>—</strong><small>No expiry date</small></span>`;
+  }
+  const days = expiryDaysLeft({ expiry_date: ymdStr });
+  const tone = Number.isFinite(days) ? expiryTone(days) : "ok";
+  const long = formatShopDate(ymdStr) || ymdStr;
+  const short = formatExpiryShort(ymdStr);
+  const label = Number.isFinite(days) ? expiryDaysLabel(days) : "";
+  return `<span class="stock-exp is-${tone}">
+    <strong>${escapeHtml(long)}</strong>
+    <small>${escapeHtml([short, label].filter(Boolean).join(" · "))}</small>
+  </span>`;
 }
 
 function pharmacyStockCards(skuRows, batchRows) {
@@ -5250,7 +5284,10 @@ function paintStockList(rows) {
   }
   if (isPharmacyShop()) {
     const cards = pharmacyStockCards(list, state.stockBatches);
-    el.innerHTML = `${cards
+    el.innerHTML = `<table class="stock-batch-table"><thead><tr>
+      <th>Medicine</th><th>Batch No.</th><th>Expiry Date</th>
+      <th class="pharm-n">On hand</th><th class="pharm-n">Value</th><th>Status</th>
+    </tr></thead><tbody>${cards
       .map(({ sku, batch }) => {
         const item = state.items.find((i) => i.id === sku.id) || sku;
         const low = stockIsLow(sku);
@@ -5258,32 +5295,26 @@ function paintStockList(rows) {
         const qtySrc = batch ? batch.remaining_gm : sku.stock_gm;
         const rate = Number(batch?.unit_cost ?? sku.purchase_rate) || 0;
         const value = POSUnits.lineAmount(qtySrc, rate, itemUnit(item));
-        const batchNo = batch ? batch.batch_no || batch.barcode || "—" : "—";
-        const expiry = batch?.expiry_date ? formatShopDate(batch.expiry_date) : "—";
-        const search = `${itemSearchHay(item)} ${batchNo} ${batch?.expiry_date || ""} ${batch?.barcode || ""}`.toLowerCase();
+        const batchNo = batch ? batch.batch_no || batch.barcode || "—" : sku.batch_no || "—";
+        const expYmd = stockExpiryYmd(batch, { ...item, ...sku, item_default_expiry: batch?.item_default_expiry });
+        const days = expYmd ? expiryDaysLeft({ expiry_date: expYmd }) : null;
+        const expTone = Number.isFinite(days) ? expiryTone(days) : "";
+        const search = `${itemSearchHay(item)} ${batchNo} ${expYmd} ${batch?.barcode || ""} ${formatShopDate(expYmd)}`.toLowerCase();
         const pill = out
           ? `<span class="stock-pill is-out">Out</span>`
           : low
             ? `<span class="stock-pill is-low">Low</span>`
             : `<span class="stock-pill is-ok">OK</span>`;
-        return `<article class="report-card item-card stock-card stock-batch-card${selected === sku.id ? " is-editing" : ""}${out ? " is-out" : low ? " is-low" : ""}" data-stock-item="${escapeHtml(sku.id)}" data-stock-batch="${escapeHtml(batch?.id || "")}" data-stock-search="${escapeHtml(search)}" data-stock-low="${low ? "1" : "0"}">
-          <div class="item-card-head">
-            <div class="item-card-copy">
-              <strong>${escapeHtml(sku.name || item.name || "Medicine")}</strong>
-              <span>${escapeHtml(sku.code || item.code || "")}${item.barcode ? ` · ${escapeHtml(item.barcode)}` : ""}</span>
-            </div>
-            ${pill}
-          </div>
-          <div class="item-card-meta">
-            <span class="item-chip">Batch ${escapeHtml(batchNo)}</span>
-            <span class="item-chip">Exp ${escapeHtml(expiry)}</span>
-            <span class="item-chip ${low ? "stock low" : "stock ok"}">On hand ${escapeHtml(fmtQty(qtySrc, item))}</span>
-            <span class="item-chip">${escapeHtml(itemUnit(item))}</span>
-            <span class="item-chip">${money(value)}</span>
-          </div>
-        </article>`;
+        return `<tr class="stock-batch-row${selected === sku.id ? " is-editing" : ""}${out ? " is-out" : low ? " is-low" : ""}${expTone ? ` is-exp-${expTone}` : ""}" data-stock-item="${escapeHtml(sku.id)}" data-stock-batch="${escapeHtml(batch?.id || "")}" data-stock-search="${escapeHtml(search)}" data-stock-low="${low ? "1" : "0"}">
+          <td class="pharm-med">${escapeHtml(sku.name || item.name || "Medicine")}<small>${escapeHtml(sku.code || item.code || "")}${item.barcode ? ` · ${escapeHtml(item.barcode)}` : ""}</small></td>
+          <td class="stock-batch-no">${escapeHtml(batchNo)}</td>
+          <td class="stock-exp-cell">${paintStockExpiryCell(expYmd)}</td>
+          <td class="pharm-n"><span class="item-chip ${low ? "stock low" : "stock ok"}">${escapeHtml(fmtQty(qtySrc, item))}</span></td>
+          <td class="pharm-n">${money(value)}</td>
+          <td>${pill}</td>
+        </tr>`;
       })
-      .join("")}
+      .join("")}</tbody></table>
       <div class="item-empty-card" id="stock-filter-empty" hidden>
         <strong>No matching batches</strong>
         <p>Clear search or turn off Low stock to see the rest of the catalog.</p>
