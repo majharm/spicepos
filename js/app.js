@@ -223,7 +223,7 @@ function applyFootwearMode() {
   document.body.classList.toggle("footwear-mode", fw);
   document.body.classList.toggle("apparel-mode", ap);
   document.body.classList.toggle("spice-mode", spice);
-  document.body.classList.toggle("weight-scale-mode", isWeightShop());
+  document.body.classList.toggle("weight-scale-mode", true);
   document.body.classList.toggle("restaurant-mode", isRestaurantShop());
   document.body.classList.toggle("pharmacy-mode", pharm);
   document.body.classList.toggle("classic-bill-mode", isClassicBillShop());
@@ -8047,7 +8047,7 @@ function paintScaleDock(hit) {
   const g = Number(reading?.grams) || 0;
   const live = g > 0 && Date.now() - Number(reading?.at || 0) < 8000;
   if (dock) {
-    dock.hidden = !isWeightShop();
+    dock.hidden = false;
     dock.classList.toggle("is-live", live);
     dock.classList.toggle("is-on", on);
   }

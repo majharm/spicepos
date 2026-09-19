@@ -6632,7 +6632,6 @@ body.apparel-mode.classic-bill-mode .grand {
 }
 
 /* scale-dock: live kg 2026 */
-body:not(.weight-scale-mode) .scale-dock,
 .scale-dock[hidden],
 body.bill-collapsed .scale-dock { display: none !important; }
 .scale-dock {

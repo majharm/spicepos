@@ -44,7 +44,8 @@ test("POS shell wires a Counter scale dock and USB / Bluetooth helpers", () => {
   assert.match(app, /POSScale/);
   assert.match(app, /applyScaleWeight/);
   assert.match(css, /scale-dock: live kg 2026/);
-  assert.match(css, /body:not\(\.weight-scale-mode\) \.scale-dock/);
+  assert.doesNotMatch(index, /id="scale-dock" hidden/);
+  assert.match(css, /body\.bill-collapsed \.scale-dock/);
   assert.match(S.hasSerial.toString() + S.connectSerial.toString(), /serial/);
   assert.match(S.connectBluetooth.toString(), /bluetooth/);
   assert.equal(typeof S.connectionKind, "function");
