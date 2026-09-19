@@ -361,7 +361,9 @@ test("HTML and CSS cache stickers match deploy136", () => {
   assert.doesNotMatch(masterHtml, /startup-india\.svg/);
   assert.doesNotMatch(masterHtml, /india-pride/);
   assert.match(masterHtml, /id="master-pass-toggle"/);
-  assert.match(masterHtml, /auth-shell-zoho/);
+  assert.match(masterHtml, /auth-shell-poster/);
+  assert.match(masterHtml, /assets\/login-atav-master-pos\.jpg/);
+  assert.doesNotMatch(masterHtml, /assets\/login-pos-stock\.jpg/);
   assert.match(masterHtml, /to access Master Admin/);
   assert.match(masterHtml, /id="master-login-submit"/);
   assert.match(masterHtml, /nav-group-label">Advance</);

@@ -6,6 +6,7 @@ Upload ALL files below to Hostinger public_html (overwrite):
 Assets
   assets/atav-telecom-logo.png
   assets/login-atav-smart-pos.jpg
+  assets/login-atav-master-pos.jpg
 
 HTML
   index.html
