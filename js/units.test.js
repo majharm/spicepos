@@ -30,13 +30,17 @@ test("counter qty is any grams from 1 to 1e9, not a 100 g step", () => {
 test("unit aliases and count pricing", () => {
   assert.equal(U.normalize("qty"), "PCS");
   assert.equal(U.normalize("ltr"), "LTR");
+  assert.equal(U.normalize("litre"), "L");
   assert.equal(U.normalize("kg"), "KG");
+  assert.equal(U.normalize("nos"), "NOS");
+  assert.notEqual(U.normalize("nos"), "PCS");
   assert.equal(U.lineAmount(1200, 280, "GM"), 336);
   assert.equal(U.lineAmount(3, 40, "PCS"), 120);
   assert.equal(U.lineAmount(500, 200, "ML"), 100);
   assert.equal(U.formatQty(3, "PCS"), "3 pcs");
   assert.equal(U.toBase(2, "KG"), 2000);
   assert.equal(U.fromBase(2000, "LTR"), 2);
+  assert.equal(U.fromBase(2000, "L"), 2);
   assert.equal(U.itemUnit({ base_unit: "qty" }), "PCS");
   assert.equal(U.receiveLabel("PCS"), "+1 pc");
 });
@@ -51,5 +55,21 @@ test("unit master hydrate adds custom count units", () => {
   U.hydrate([]);
   assert.equal(U.isCount("BOX"), true);
   assert.equal(U.lineAmount(4, 25, "BOX"), 100);
-  assert.doesNotMatch(U.optionsHtml("GM"), /value="BOX"/);
+  assert.match(U.optionsHtml("GM"), /value="BOX"/);
+  assert.match(U.optionsHtml("PCS"), /optgroup label="Quantity \/ General"/);
+});
+
+test("unit master catalog covers quantity through service units", () => {
+  U.hydrate([]);
+  const codes = U.CATALOG.map((r) => r.code);
+  for (const code of ["PCS", "NOS", "UNT", "G", "KG", "MM", "SQFT", "ML", "L", "BOX", "STRIP", "TAB", "PLT", "HR", "APPT", "SQM", "CBM", "PKT"]) {
+    assert.ok(codes.includes(code), code);
+  }
+  assert.equal(new Set(codes).size, codes.length);
+  assert.ok(codes.length >= 80);
+  assert.equal(U.normalize("strip"), "STRIP");
+  assert.equal(U.isCount("HR"), true);
+  assert.equal(U.isCount("SQFT"), true);
+  assert.equal(U.isCount("G"), false);
+  assert.equal(U.lineAmount(2, 50, "STRIP"), 100);
 });

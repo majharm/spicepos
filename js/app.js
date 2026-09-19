@@ -113,21 +113,26 @@ function applyUnitMaster(rows) {
 function renderUnitsTable() {
   const el = $("units-table");
   if (!el) return;
-  const rows = state.units || [];
+  const rows = [...(state.units || [])].sort((a, b) => (Number(a.sort_order) || 0) - (Number(b.sort_order) || 0) || String(a.code).localeCompare(String(b.code)));
+  let last = "";
   el.innerHTML = `<table><thead><tr>
-    <th>Code</th><th>Name</th><th>Kind</th><th>Rate</th><th>Stock</th><th></th>
+    <th>Group</th><th>Unit</th><th>Code</th><th>Kind</th><th>Rate</th><th>Stock</th><th></th>
   </tr></thead><tbody>${rows
-    .map(
-      (u) => `<tr>
-      <td>${escapeHtml(u.code)}</td>
+    .map((u) => {
+      const group = globalThis.POSUnits?.groupOf?.(u.code) || u.family || "";
+      const show = group !== last;
+      last = group;
+      return `<tr>
+      <td>${show ? escapeHtml(group) : ""}</td>
       <td>${escapeHtml(u.name)}</td>
+      <td>${escapeHtml(u.code)}</td>
       <td>${escapeHtml(u.family)}</td>
       <td>₹${escapeHtml(u.rate_suffix)}</td>
       <td>${escapeHtml(u.stock_suffix)}</td>
       <td><button class="btn" data-edit-unit="${escapeHtml(u.id)}" type="button">Edit</button>
           <button class="btn" data-del-unit="${escapeHtml(u.id)}" type="button">Delete</button></td>
-    </tr>`,
-    )
+    </tr>`;
+    })
     .join("")}</tbody></table>`;
 }
 
@@ -398,7 +403,7 @@ const VIEW_META = {
   dashboard: { title: "Dashboard", subtitle: "Your shop today" },
   counter: { title: "Counter", subtitle: "Scan, tap, or search — then Pay" },
   items: { title: "Items", subtitle: "Photo, HSN, unit type, rates, and stock" },
-  units: { title: "Unit master", subtitle: "Units used on items — qty, kg, litre, and custom" },
+  units: { title: "Unit master", subtitle: "Quantity, weight, length, area, volume, packaging, pharmacy, food, and service units" },
   customers: { title: "Customers", subtitle: "Accounts, due collection, and receipts" },
   barcodes: { title: "Barcodes", subtitle: "Quantity (pcs) items only — one code per piece" },
   damage: { title: "Damage stock", subtitle: "Wastage, approval, and estimated loss" },

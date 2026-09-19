@@ -503,16 +503,19 @@
         </section>
         <section class="view" id="view-units" hidden>
           <h2 class="visually-hidden">Unit master</h2>
-          <p class="lede">Inventory unit master — the same units used when adding items (qty, kg, litre, and your own).</p>
+          <p class="lede">Unit master for every business type — quantity, weight, length, area, volume, packaging, pharmacy, food, and service units. Existing GM / LTR / PCS codes stay valid.</p>
           <form class="settings wide" id="unit-form">
             <input type="hidden" id="unit-id" />
             <label>Code <input id="unit-code" required placeholder="BOX" maxlength="12" /></label>
             <label>Name <input id="unit-name" required placeholder="Box" /></label>
             <label>Kind
               <select id="unit-family">
-                <option value="count">Quantity (pcs / box / qty)</option>
+                <option value="count">Quantity / packaging</option>
                 <option value="weight">Weight (g / kg)</option>
-                <option value="volume">Volume (ml / litre)</option>
+                <option value="length">Length</option>
+                <option value="area">Area</option>
+                <option value="volume">Volume / liquid</option>
+                <option value="time">Time / service</option>
               </select>
             </label>
             <label>Rate shown as <input id="unit-rate-suffix" placeholder="/pc" /></label>
@@ -1956,7 +1959,7 @@
     <script src="./js/i18n.js?v=20260905deploy145" defer></script>
     <script src="./js/gst-supply.js?v=20260905deploy136" defer></script>
     <script src="./js/pos-api.js?v=20260905deploy154" defer></script>
-    <script src="./js/units.js?v=20260905deploy165" defer></script>
+    <script src="./js/units.js?v=20260919unit1" defer></script>
     <script src="./js/footwear.js?v=20260917pharm1" defer></script>
     <script src="./js/restaurant.js?v=20260918table1" defer></script>
     <script src="./js/discount.js?v=20260905deploy136" defer></script>

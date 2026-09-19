@@ -4,26 +4,22 @@ import { requireStaff, requirePerm } from "./auth.js";
 import crypto from "node:crypto";
 import "../js/units.js";
 
-export const DEFAULT_UNIT_MASTERS = [
-  { code: "GM", name: "Grams (g)", family: "weight", rate_suffix: "/kg", stock_suffix: "g", step: 1, receive_qty: 1000, display_div: 1, sort_order: 1 },
-  { code: "KG", name: "Kilogram (kg)", family: "weight", rate_suffix: "/kg", stock_suffix: "kg", step: 1, receive_qty: 1000, display_div: 1000, sort_order: 2 },
-  { code: "ML", name: "Millilitre (ml)", family: "volume", rate_suffix: "/ltr", stock_suffix: "ml", step: 1, receive_qty: 1000, display_div: 1, sort_order: 3 },
-  { code: "LTR", name: "Litre (L)", family: "volume", rate_suffix: "/ltr", stock_suffix: "L", step: 1, receive_qty: 1000, display_div: 1000, sort_order: 4 },
-  { code: "PCS", name: "Quantity (pcs)", family: "count", rate_suffix: "/pc", stock_suffix: "pcs", step: 1, receive_qty: 1, display_div: 1, sort_order: 5 },
-];
+const POSUnits = globalThis.POSUnits;
+
+export const DEFAULT_UNIT_MASTERS = (POSUnits?.CATALOG || []).map((row) => ({
+  code: row.code,
+  name: row.name,
+  family: row.family,
+  rate_suffix: row.rate_suffix,
+  stock_suffix: row.stock_suffix,
+  step: 1,
+  receive_qty: row.receive_qty,
+  display_div: row.display_div || 1,
+  sort_order: row.sort_order || 0,
+}));
 
 export function normalizeUnitCode(raw) {
-  const key = String(raw || "").trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
-  const alias = {
-    G: "GM", GRAM: "GM", GRAMS: "GM", GM: "GM",
-    KG: "KG", KILO: "KG", KILOGRAM: "KG",
-    ML: "ML", MILLILITRE: "ML", MILLILITER: "ML",
-    L: "LTR", LTR: "LTR", LITRE: "LTR", LITER: "LTR",
-    PCS: "PCS", PC: "PCS", QTY: "PCS", NOS: "PCS", NO: "PCS",
-    COUNT: "PCS", UNIT: "PCS", UNITS: "PCS",
-  };
-  if (alias[key]) return alias[key];
-  return key || "GM";
+  return POSUnits?.normalize(raw) || String(raw || "PCS").trim().toUpperCase();
 }
 
 export async function ensureInventoryUnits(businessId) {
@@ -47,15 +43,9 @@ export async function ensureInventoryUnits(businessId) {
     "UPDATE inventory_units SET step = 1 WHERE family IN ('weight', 'volume') AND step > 1",
   );
   if (!businessId) return [];
-  const existing = await query("SELECT COUNT(*) AS c FROM inventory_units WHERE business_id = ?", [businessId]);
-  if (Number(existing[0]?.c) > 0) {
-    const rows = await query("SELECT * FROM inventory_units WHERE business_id = ? ORDER BY sort_order, code", [businessId]);
-    globalThis.POSUnits?.hydrate(rows.filter((u) => u.status !== "inactive"));
-    return rows;
-  }
   for (const row of DEFAULT_UNIT_MASTERS) {
     await query(
-      `INSERT INTO inventory_units (
+      `INSERT IGNORE INTO inventory_units (
          id, business_id, code, name, family, rate_suffix, stock_suffix, step, receive_qty, display_div, sort_order, status
        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,'active')`,
       [
@@ -81,15 +71,16 @@ export async function ensureInventoryUnits(businessId) {
 function unitFields(body) {
   const code = normalizeUnitCode(body.code);
   if (!code) throw new Error("Unit code is required");
-  const family = ["weight", "volume", "count"].includes(String(body.family || "").toLowerCase())
+  const family = ["weight", "volume", "count", "length", "area", "time"].includes(String(body.family || "").toLowerCase())
     ? String(body.family).toLowerCase()
     : "count";
   const name = String(body.name || code).trim() || code;
-  const rate_suffix = String(body.rate_suffix || (family === "volume" ? "/ltr" : family === "weight" ? "/kg" : "/pc"));
-  const stock_suffix = String(body.stock_suffix || (family === "volume" ? "ml" : family === "weight" ? "g" : "pcs"));
+  const defaults = POSUnits?.familyDefaults(family) || {};
+  const rate_suffix = String(body.rate_suffix || defaults.rateSuffix || "/pc");
+  const stock_suffix = String(body.stock_suffix || defaults.stockSuffix || "pcs");
   const step = Number(body.step) > 0 ? Number(body.step) : 1;
-  const receive_qty = Number(body.receive_qty) > 0 ? Number(body.receive_qty) : family === "count" ? 1 : 1000;
-  const display_div = Number(body.display_div) > 0 ? Number(body.display_div) : code === "KG" || code === "LTR" ? 1000 : 1;
+  const receive_qty = Number(body.receive_qty) > 0 ? Number(body.receive_qty) : family === "weight" || family === "volume" ? 1000 : 1;
+  const display_div = Number(body.display_div) > 0 ? Number(body.display_div) : code === "KG" || code === "LTR" || code === "L" ? 1000 : 1;
   const status = body.status === "inactive" ? "inactive" : "active";
   return { code, name, family, rate_suffix, stock_suffix, step, receive_qty, display_div, status };
 }

@@ -1,6 +1,6 @@
 import "../js/footwear.js";
 
-const COUNT = new Set(["PCS", "PC", "QTY", "NOS", "NO", "COUNT", "UNIT", "UNITS"]);
+const WEIGHT_VOL = new Set(["GM", "G", "KG", "ML", "L", "LTR"]);
 const POSFootwear = globalThis.POSFootwear;
 
 export const STOCK_EXCEL_HEADERS = [
@@ -74,17 +74,17 @@ export function stockExcelHeaders(biz) {
 export function stockUnit(item) {
   const raw = item && typeof item === "object" ? item.base_unit || item.unit : item;
   const key = String(raw || "GM").toUpperCase().replace(/[^A-Z0-9]/g, "");
-  if (key === "G" || key === "GRAM" || key === "GRAMS") return "GM";
+  if (key === "GRAM" || key === "GRAMS") return "G";
   if (key === "KILO" || key === "KILOGRAM") return "KG";
-  if (key === "L" || key === "LITRE" || key === "LITER") return "LTR";
-  if (COUNT.has(key)) return "PCS";
-  return key || "GM";
+  if (key === "LITRE" || key === "LITER") return "L";
+  if (key === "PC" || key === "QTY") return "PCS";
+  return key || "PCS";
 }
 
 export function stockDisplayQty(qtyGm, unit) {
   const n = Number(qtyGm) || 0;
   const u = stockUnit(unit);
-  if (u === "KG" || u === "LTR") return Math.round((n / 1000) * 1000) / 1000;
+  if (u === "KG" || u === "LTR" || u === "L") return Math.round((n / 1000) * 1000) / 1000;
   return n;
 }
 
@@ -100,7 +100,7 @@ export function stockValue(row) {
   const qty = Number(row?.stock_gm) || 0;
   const rate = Number(row?.purchase_rate) || 0;
   const unit = stockUnit(row);
-  const value = COUNT.has(unit) || unit === "PCS" ? qty * rate : (qty / 1000) * rate;
+  const value = WEIGHT_VOL.has(unit) ? (qty / 1000) * rate : qty * rate;
   return Math.round(value * 100) / 100;
 }
 
