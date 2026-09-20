@@ -9,6 +9,48 @@
   });
   $$(".m-menu a, .m-cta a").forEach((a) => a.addEventListener("click", () => nav.classList.remove("open")));
 
+  const slider = $("[data-hero-slider]");
+  if (slider) {
+    const track = $("[data-hero-track]", slider);
+    const slides = $$("[data-hero-slide]", slider);
+    const dotsWrap = $("[data-hero-dots]", slider);
+    let i = 0;
+    let timer = 0;
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    slides.forEach((_, n) => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.setAttribute("aria-label", `Show slide ${n + 1}`);
+      b.addEventListener("click", () => go(n, true));
+      dotsWrap.appendChild(b);
+    });
+    function go(n, user) {
+      i = (n + slides.length) % slides.length;
+      track.style.transform = `translateX(-${i * 100}%)`;
+      $$("[data-hero-dots] button", slider).forEach((d, di) => d.classList.toggle("is-on", di === i));
+      slides.forEach((s, si) => s.classList.toggle("is-on", si === i));
+      if (user) restart();
+    }
+    function next() { go(i + 1); }
+    function restart() {
+      if (reduce) return;
+      clearInterval(timer);
+      timer = setInterval(next, 5200);
+    }
+    $("[data-hero-prev]", slider)?.addEventListener("click", () => go(i - 1, true));
+    $("[data-hero-next]", slider)?.addEventListener("click", () => go(i + 1, true));
+    slider.addEventListener("mouseenter", () => clearInterval(timer));
+    slider.addEventListener("mouseleave", restart);
+    slider.addEventListener("focusin", () => clearInterval(timer));
+    slider.addEventListener("focusout", restart);
+    slider.addEventListener("keydown", (e) => {
+      if (e.key === "ArrowLeft") go(i - 1, true);
+      if (e.key === "ArrowRight") go(i + 1, true);
+    });
+    go(0);
+    restart();
+  }
+
   const copy = {
     retail: { title: "Retail", hero: "Retail counter", body: "Fast billing, barcodes, stock, offers, and multi-counter sales for shops of every size.", bits: ["Billing", "Barcode", "Stock", "Offers", "Customers", "Reports"], widgets: "Today’s sales · Fast movers · GST bills · Offers applied", flow: "Scan → Bill → Pay → Stock ↓ → Loyalty" },
     pharmacy: { title: "Pharmacy", hero: "Pharmacy Rx desk", body: "Bill medicines with batch, expiry, prescriptions, suppliers, and regulated stock alerts.", bits: ["Billing", "Batch", "Expiry", "Prescription", "Supplier", "Stock", "Customer", "Reports"], widgets: "Near-expiry · Batch pick · Rx queue · Low stock", flow: "Scan medicine → Batch/expiry → Rx → Bill → Stock" },

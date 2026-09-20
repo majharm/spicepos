@@ -38,17 +38,22 @@ test("public landing is a premium SaaS home independent of the POS shell", () =>
   assert.match(home, /See How Much Time Your Business Can Save/);
   assert.match(home, /Ready to Run Your Business Smarter\?/);
   assert.match(home, /svginfo@atavtelecom\.in/);
-  assert.match(home, /\+91 7757090344/);
+  assert.match(home, /\+919765040588/);
+  assert.doesNotMatch(home, /7757090344/);
+  assert.match(home, /data-hero-slider/);
+  assert.match(home, /data-hero-next/);
+  assert.match(home, /login-pos-counter\.jpg/);
   assert.match(home, /Space 31, Khadi Machine Chowk/);
   assert.match(home, /© 2026 ATAV TELECOM/);
   assert.match(home, /application\/ld\+json/);
   assert.match(home, /og:title/);
   assert.match(home, /login\.html\?tab=signup/);
   assert.doesNotMatch(home, /id="view-orders"/);
-  assert.match(home, /marketing\.css\?v=20260920deploy191/);
-  assert.match(home, /marketing\.js\?v=20260920deploy191/);
+  assert.match(home, /marketing\.css\?v=20260920slide1/);
+  assert.match(home, /marketing\.js\?v=20260920slide1/);
 
-  assert.match(css, /\.m-nav \{[\s\S]*position: sticky/);
+  assert.match(css, /\.hero-slider-track/);
+  assert.match(js, /data-hero-slider/);
   assert.match(css, /@media \(prefers-reduced-motion: reduce\)/);
 
   assert.match(js, /data-sol-tab/);
