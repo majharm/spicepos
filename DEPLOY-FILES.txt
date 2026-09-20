@@ -18,6 +18,8 @@ Assets
 HTML
   home.html
   about.html
+  robots.txt
+  sitemap.xml
   home.htaccess
   .htaccess (DirectoryIndex home.html — force-included in git; do not add /api RewriteRules)
   index.html
@@ -57,6 +59,7 @@ CSS
   css/qr-order.css
   css/marketing.css
   css/analytics.css
+  css/seo.css
 
 JavaScript
   js/app.js
@@ -79,6 +82,7 @@ JavaScript
   js/marketing.js
   js/ga4.js
   js/master-analytics.js
+  js/master-seo.js
 
 PHP
   pos-php-core.php
@@ -100,6 +104,7 @@ PHP
   pos-smtp.php
   pos-alerts.php
   pos-analytics.php
+  pos-seo.php
   pos-advanced.php
   pos-item-import.php
   pos-qr-ordering.php
@@ -163,6 +168,7 @@ Node (if using hPanel Node.js web app — upload OR git pull then Restart)
   server/mail.js
   server/alerts.js
   server/analytics.js
+  server/seo.js
   server/load-env.js
   server/mail.js
   server/advanced.js

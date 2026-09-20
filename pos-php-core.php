@@ -2612,6 +2612,10 @@ function pos_php_dispatch($path, $method, $rawBody) {
       require_once __DIR__ . "/pos-analytics.php";
       if (function_exists("pos_analytics_master_dispatch") && pos_analytics_master_dispatch($path, $method, $body)) return;
     }
+    if (strpos($path, "master/seo") === 0) {
+      require_once __DIR__ . "/pos-seo.php";
+      if (function_exists("pos_seo_master_dispatch") && pos_seo_master_dispatch($path, $method, $body)) return;
+    }
 
     if ($path === "master/dashboard" && $method === "GET") {
       if (function_exists("pos_tick_shop_alerts")) {

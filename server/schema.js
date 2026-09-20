@@ -543,6 +543,12 @@ export async function ensureSchema() {
     /* analytics tables optional during early setup */
   }
   try {
+    const { ensureSeoSchema } = await import("./seo.js");
+    await ensureSeoSchema();
+  } catch {
+    /* seo tables optional during early setup */
+  }
+  try {
     const { ensureAdvancedSchema } = await import("./advanced.js");
     await ensureAdvancedSchema();
   } catch {

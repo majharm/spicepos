@@ -30,6 +30,7 @@ import { sendLowStockAlerts, tickShopAlerts, startAlertScheduler, scheduleAlertT
 import { registerAdvanced, computeSaleLine, applySaleStock, applyLoyaltyOnSale, pharmacyLineSnapshot, enrichCatalogPharmacy, saleStockQty, persistSaleLineNote } from "./advanced.js";
 import { registerReturns } from "./returns.js";
 import { registerAnalyticsPublic, registerAnalyticsMaster } from "./analytics.js";
+import { registerSeoPublic, registerSeoMaster } from "./seo.js";
 import { registerRxPublic, registerRxStaff } from "./prescriptions.js";
 import { registerSalonPublic, registerSalonStaff, ensureSalonSchema } from "./salon.js";
 import "../js/discount.js";
@@ -84,6 +85,7 @@ registerQrPublic(app);
 registerRxPublic(app);
 registerSalonPublic(app);
 registerAnalyticsPublic(app);
+registerSeoPublic(app);
 
 const PUBLIC_INVOICE_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -193,6 +195,7 @@ app.use((req, res, next) => {
 });
 registerMaster(app);
 registerAnalyticsMaster(app);
+registerSeoMaster(app);
 registerTenant(app);
 registerHub(app);
 registerAdvanced(app);

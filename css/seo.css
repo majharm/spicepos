@@ -1,0 +1,16 @@
+.seo-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 16px; }
+.seo-kpi { text-align: left; cursor: pointer; }
+.seo-toolbar { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; align-items: center; }
+.seo-badge { display: inline-block; border-radius: 999px; padding: 2px 8px; font-size: 12px; background: #e2e8f0; }
+.seo-active { background: #dcfce7; }
+.seo-draft, .seo-opportunity { background: #fef9c3; }
+.seo-inactive, .seo-unpublished { background: #fee2e2; }
+.seo-published { background: #dbeafe; }
+.seo-preview { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 12px 16px; margin: 12px 0; max-width: 48rem; }
+.seo-g-url { color: #188038; font-size: 13px; margin: 0; }
+.seo-g-title { color: #1a0dab; font-size: 18px; margin: 4px 0; }
+.seo-g-desc { color: #4d5156; margin: 0; }
+.seo-pre { white-space: pre-wrap; background: #0f172a; color: #e2e8f0; padding: 12px; border-radius: 8px; max-height: 320px; overflow: auto; }
+.seo-editor textarea { min-height: 72px; }
+[data-theme="dark"] .seo-preview { background: #111827; border-color: #334155; }
+[data-theme="dark"] .seo-g-title { color: #8ab4f8; }

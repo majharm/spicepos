@@ -2,6 +2,7 @@ const $ = (id) => document.getElementById(id);
 let tab = "dash";
 let backupPane = "backup";
 let analyticsPane = "overview";
+let seoPane = "overview";
 let panelFlash = "";
 let alertLogFocus = "";
 
@@ -260,6 +261,8 @@ function syncMasterNav() {
     let on = b.dataset.tab === tab;
     if (backup != null) on = tab === "backup" && backup === backupPane;
     if (analytics != null) on = tab === "analytics" && analytics === analyticsPane;
+    const seo = b.dataset.seoPane;
+    if (seo != null) on = tab === "seo" && seo === seoPane;
     b.classList.toggle("active", on);
   });
 }
@@ -288,13 +291,14 @@ function setMasterTab(next, pane) {
   tab = next;
   if (next === "backup") backupPane = pane || "settings";
   if (next === "analytics") analyticsPane = pane || "overview";
+  if (next === "seo") seoPane = pane || "overview";
   syncMasterNav();
   document.querySelector(".master-main")?.scrollTo({ top: 0 });
   render();
 }
 
 document.querySelectorAll(".master-nav [data-tab]").forEach((btn) => {
-  btn.onclick = () => setMasterTab(btn.dataset.tab, btn.dataset.backupPane || btn.dataset.analyticsPane);
+  btn.onclick = () => setMasterTab(btn.dataset.tab, btn.dataset.backupPane || btn.dataset.analyticsPane || btn.dataset.seoPane);
 });
 
 const ALERT_LOG_KIND_LABEL = {
@@ -1582,6 +1586,7 @@ async function render() {
     "alert-log": "WA Master & Email log",
     backup: backupPane === "settings" ? "Settings" : "Backup",
     analytics: "Google Analytics",
+    seo: "SEO Management",
     notes: "Messages",
     languages: "Languages",
     alerts: "Settings",
@@ -2193,6 +2198,14 @@ async function render() {
       } else {
         await window.POSMasterAnalytics.render(body, analyticsPane, api, {
           setPane: (p) => setMasterTab("analytics", p),
+        });
+      }
+    } else if (tab === "seo") {
+      if (!window.POSMasterSeo?.render) {
+        body.innerHTML = `<p class="hint error">SEO UI did not load. Upload js/master-seo.js.</p>`;
+      } else {
+        await window.POSMasterSeo.render(body, seoPane, api, {
+          setPane: (p) => setMasterTab("seo", p),
         });
       }
     } else if (tab === "advance") {
