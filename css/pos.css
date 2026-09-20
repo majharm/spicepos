@@ -6632,6 +6632,8 @@ body.apparel-mode.classic-bill-mode .grand {
 }
 
 /* scale-dock: live kg 2026 */
+body:not(.weight-scale-mode) .scale-dock,
+body:not(.weight-scale-mode) #classic-scale-capture { display: none !important; }
 .scale-dock[hidden],
 body.bill-collapsed .scale-dock { display: none !important; }
 .scale-dock {
@@ -6692,6 +6694,7 @@ body.bill-collapsed .scale-dock { display: none !important; }
   color: #64748b;
 }
 .scale-dock.is-on .scale-status { color: #0f766e; }
+.scale-dock.is-off .scale-status { color: #b45309; }
 .scale-dock.is-live #scale-weight { color: #0f766e; }
 .scale-actions {
   display: flex;
@@ -6747,6 +6750,16 @@ body.bill-collapsed .scale-dock { display: none !important; }
   box-shadow: var(--shadow-card);
 }
 .scale-setup h3 { margin: 0 0 6px; font-size: 16px; }
+.scale-setup-head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: center;
+}
+.scale-hw-status { margin: 4px 0 0; font-size: 13px; font-weight: 800; color: #b45309; }
+.scale-hw-status.is-on { color: #0f766e; }
+.scale-enable-lab { display: flex; gap: 8px; align-items: center; font-weight: 800; }
 .scale-setup-copy { margin: 0; }
 .scale-setup-row {
   display: flex;
@@ -6755,6 +6768,9 @@ body.bill-collapsed .scale-dock { display: none !important; }
   align-items: end;
   margin-top: 10px;
 }
+.scale-setup-row label { display: grid; gap: 4px; font-size: 12px; font-weight: 700; }
+.scale-setup-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0 0; }
+.scale-log-title { margin: 12px 0 6px; font-size: 14px; }
 .scale-auto-lab {
   display: flex;
   gap: 8px;

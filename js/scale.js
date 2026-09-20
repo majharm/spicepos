@@ -102,7 +102,18 @@
   }
 
   function defaultSettings() {
-    return { baud: 9600, unit: "kg", autoApply: true, source: "serial" };
+    return {
+      enabled: true,
+      name: "Weighing scale",
+      baud: 9600,
+      unit: "kg",
+      autoApply: true,
+      source: "serial",
+      port: "",
+      host: "",
+      precision: 3,
+      allowManual: true,
+    };
   }
 
   function loadSettings(bizId) {
@@ -114,6 +125,31 @@
     } catch {
       return defaultSettings();
     }
+  }
+
+  function logKey(bizId) {
+    return `${STORAGE}-log:${bizId || "local"}`;
+  }
+
+  function loadLog(bizId) {
+    try {
+      const raw = typeof localStorage !== "undefined" ? localStorage.getItem(logKey(bizId)) : null;
+      const rows = raw ? JSON.parse(raw) : [];
+      return Array.isArray(rows) ? rows.slice(0, 40) : [];
+    } catch {
+      return [];
+    }
+  }
+
+  function appendLog(bizId, row) {
+    const next = [{ at: new Date().toISOString(), ...(row || {}) }, ...loadLog(bizId)].slice(0, 40);
+    if (typeof localStorage !== "undefined") localStorage.setItem(logKey(bizId), JSON.stringify(next));
+    return next;
+  }
+
+  function clearLog(bizId) {
+    if (typeof localStorage !== "undefined") localStorage.removeItem(logKey(bizId));
+    return [];
   }
 
   function saveSettings(bizId, next) {
@@ -267,6 +303,17 @@
     }
   }
 
+  async function connectNetwork({ url, unit } = {}) {
+    const u = String(url || "").trim();
+    if (!/^https?:\/\//i.test(u)) throw new Error("Enter an http(s) address for a network scale");
+    const ctrl = typeof AbortSignal !== "undefined" && AbortSignal.timeout ? AbortSignal.timeout(4000) : undefined;
+    const res = await fetch(u, { signal: ctrl, cache: "no-store" });
+    const text = await res.text();
+    const hit = ingest(text, unit);
+    if (!hit) throw new Error("Network scale did not return a readable weight");
+    return hit;
+  }
+
   async function disconnect() {
     reading = false;
     try {
@@ -298,6 +345,9 @@
     gramsToKg,
     loadSettings,
     saveSettings,
+    loadLog,
+    appendLog,
+    clearLog,
     hasSerial,
     hasBluetooth,
     connected,
@@ -309,6 +359,7 @@
     ingestWedgeKey,
     connectSerial,
     connectBluetooth,
+    connectNetwork,
     disconnect,
   };
 });

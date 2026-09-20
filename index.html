@@ -6,7 +6,7 @@
     <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
     <title>ATAV POS</title>
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./css/pos.css?v=20260920saas3" />
+    <link rel="stylesheet" href="./css/pos.css?v=20260920scale4" />
     <link rel="stylesheet" href="./css/saas.css?v=20260905deploy136" />
   </head>
   <body>
@@ -82,7 +82,7 @@
             <p class="nav-group-label" data-i18n="nav.admin">Admin</p>
             <button class="nav-btn" type="button" data-view="staff"><span class="nav-icon" aria-hidden="true">◉</span><span data-i18n="nav.staff">Staff</span></button>
             <button class="nav-btn" type="button" data-view="branches"><span class="nav-icon" aria-hidden="true">⬡</span>Branches</button>
-            <button class="nav-btn" type="button" data-view="devices"><span class="nav-icon" aria-hidden="true">⌁</span>Devices</button>
+            <button class="nav-btn" type="button" data-view="devices"><span class="nav-icon" aria-hidden="true">⌁</span>Hardware</button>
             <button class="nav-btn" type="button" data-view="audit"><span class="nav-icon" aria-hidden="true">☰</span>Audit log</button>
             <button class="nav-btn" type="button" data-view="support"><span class="nav-icon" aria-hidden="true">?</span>Support</button>
             <button class="nav-btn" type="button" data-view="settings"><span class="nav-icon" aria-hidden="true">⚙</span><span data-i18n="nav.settings">Settings</span></button>
@@ -1596,7 +1596,15 @@
           </div>
         </section>
         <section class="view" id="view-devices" hidden>
-          <h2 class="visually-hidden">POS devices</h2>
+          <h2 class="visually-hidden">Hardware &amp; devices</h2>
+          <div class="items-desk">
+            <header class="items-hero">
+              <div class="items-hero-copy">
+                <p class="items-kicker">Hardware</p>
+                <h3>Hardware &amp; devices</h3>
+                <p class="lede">Till registers plus a weighing scale you can turn on for any shop type — pharmacy, garment, grocery, dairy, scrap, and others.</p>
+              </div>
+            </header>
           <form class="settings wide" id="device-form">
             <label>Name <input id="dev-name" required /></label>
             <label>Code <input id="dev-code" placeholder="POS-02" /></label>
@@ -1604,9 +1612,24 @@
           </form>
           <div class="table-wrap" id="device-table"></div>
           <div class="scale-setup" id="scale-setup">
-            <h3>Weighing scale</h3>
-            <p class="lede scale-setup-copy">USB, Bluetooth, or a scale that types kg into the till. Counter uses live kg on the bill — e.g. tomato ₹40/kg × 1.250 kg = ₹50.</p>
+            <header class="scale-setup-head">
+              <div>
+                <h3>Weighing Scale</h3>
+                <p class="scale-hw-status is-off" id="scale-hw-status">● Disconnected</p>
+              </div>
+              <label class="scale-enable-lab"><input type="checkbox" id="scale-enabled" checked /> Enable weighing scale</label>
+            </header>
+            <p class="lede scale-setup-copy">Hardware capability, not a grocery-only module. Loose pharmacy medicines, fabric by kg, produce, dairy, and scrap all use the same Counter kg dock when this is on.</p>
             <div class="scale-setup-row">
+              <label>Scale name <input id="scale-name" maxlength="80" placeholder="Counter scale" /></label>
+              <label>Connection type
+                <select id="scale-source" aria-label="Scale connection type">
+                  <option value="serial">USB / Serial (COM)</option>
+                  <option value="bluetooth">Bluetooth</option>
+                  <option value="network">Network (http)</option>
+                  <option value="wedge">Keyboard wedge</option>
+                </select>
+              </label>
               <label>USB baud
                 <select id="scale-baud" aria-label="Scale baud rate">
                   <option value="2400">2400</option>
@@ -1617,15 +1640,33 @@
                   <option value="115200">115200</option>
                 </select>
               </label>
+              <label>Port / COM <input id="scale-port" maxlength="40" placeholder="COM3 or leave blank" /></label>
+              <label>Network URL <input id="scale-host" maxlength="200" placeholder="http://192.168.1.50/weight" /></label>
               <label>Scale sends
                 <select id="scale-unit" aria-label="Scale unit">
                   <option value="kg">Kilograms</option>
                   <option value="g">Grams</option>
                 </select>
               </label>
+              <label>Decimal precision
+                <select id="scale-precision" aria-label="Weight decimals">
+                  <option value="2">2</option>
+                  <option value="3" selected>3</option>
+                  <option value="4">4</option>
+                </select>
+              </label>
               <label class="scale-auto-lab"><input type="checkbox" id="scale-auto" checked /> Auto-fill the last kg item on the bill</label>
+              <label class="scale-auto-lab"><input type="checkbox" id="scale-allow-manual" checked /> Allow typed kg (cashiers). Off = managers only</label>
             </div>
+            <p class="scale-setup-actions">
+              <button type="button" class="btn" id="scale-test">Test connection</button>
+              <button type="button" class="btn" id="scale-reconnect">Reconnect</button>
+              <button type="button" class="btn primary" id="scale-save">Save configuration</button>
+            </p>
             <p class="hint" id="scale-setup-hint">Use Chrome or Edge on this computer for USB serial. Keyboard-wedge scales can type kg into Scan or the Type kg box.</p>
+            <h4 class="scale-log-title">Weight history</h4>
+            <div class="table-wrap" id="scale-log"></div>
+          </div>
           </div>
         </section>
         <section class="view" id="view-support" hidden>
@@ -2027,6 +2068,7 @@
               <button class="btn active" type="button" role="tab" aria-selected="true" data-settings-tab="profile" data-i18n="settings.profile">Profile</button>
               <button class="btn" type="button" role="tab" aria-selected="false" data-settings-tab="language" data-i18n="settings.language_region">Language &amp; Region</button>
               <button class="btn" type="button" role="tab" aria-selected="false" data-settings-tab="backup" data-view="backup" data-i18n="settings.backup">Backup</button>
+              <button class="btn" type="button" data-view-jump="devices">Hardware &amp; devices</button>
             </div>
             <div class="settings-pane" id="settings-pane-profile">
               <div class="items-split settings-profile-split">
@@ -2388,7 +2430,7 @@
     <script src="./js/loyalty.js?v=20260905deploy136" defer></script>
     <script src="./js/barcode.js?v=20260905deploy136" defer></script>
     <script src="./js/camera-scan.js?v=20260918bill2" defer></script>
-    <script src="./js/scale.js?v=20260919scale3" defer></script>
+    <script src="./js/scale.js?v=20260920scale4" defer></script>
     <script src="./js/dev-mode.js?v=20260905deploy136" defer></script>
     <script src="./js/invoice.js?v=20260919inv2" defer></script>
     <script src="./js/invoice-share.js?v=20260913share1" defer></script>
@@ -2400,7 +2442,7 @@
     <script src="./js/biz-hub-ui.js?v=20260920saas3" defer></script>
     <script src="./js/salon.js?v=20260919salon1" defer></script>
     <script src="./js/salon-ui.js?v=20260919salon1" defer></script>
-    <script src="./js/app.js?v=20260920saas3" defer></script>
+    <script src="./js/app.js?v=20260920scale4" defer></script>
     <script src="./js/growth.js?v=20260905deploy145" defer></script>
     <script src="./js/offers-ui.js?v=20260919off1" defer></script>
   </body>

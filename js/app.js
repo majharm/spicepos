@@ -223,7 +223,7 @@ function applyFootwearMode() {
   document.body.classList.toggle("footwear-mode", fw);
   document.body.classList.toggle("apparel-mode", ap);
   document.body.classList.toggle("spice-mode", spice);
-  document.body.classList.toggle("weight-scale-mode", true);
+  document.body.classList.toggle("weight-scale-mode", isScaleEnabled());
   document.body.classList.toggle("restaurant-mode", isRestaurantShop());
   document.body.classList.toggle("pharmacy-mode", pharm);
   document.body.classList.toggle("classic-bill-mode", isClassicBillShop());
@@ -435,7 +435,7 @@ const VIEW_META = {
   expiry: { title: "Expiry", subtitle: "Dated batches still on hand — expired first" },
   staff: { title: "Staff & roles", subtitle: "Users, roles, and access" },
   branches: { title: "Branches", subtitle: "Locations, active status, and branch login" },
-  devices: { title: "POS devices", subtitle: "Registers and terminal codes" },
+  devices: { title: "Hardware & devices", subtitle: "Registers, terminals, and weighing scale" },
   support: { title: "Support", subtitle: "Call, WhatsApp, or email your ATAV POS helpline" },
   accounts: { title: "Accounts", subtitle: "Receivables, payables, GL, and books" },
   expenses: { title: "Expenses", subtitle: "Rent, power, wages, and other shop costs" },
@@ -3331,9 +3331,7 @@ function renderCart() {
               <button type="button" data-chg="${escapeHtml(key)}" data-d="${-step}">−</button>
               <input class="qty-input" type="number" inputmode="decimal" min="${POSUnits.displayQty(POSUnits.qtyMin(), unitCode) || 0.001}" max="${POSUnits.qtyMax()}" step="${escapeHtml(qtyStep)}" value="${escapeHtml(qtyShow)}" data-qty="${escapeHtml(key)}" aria-label="Quantity in ${unit}" />
               <button type="button" data-chg="${escapeHtml(key)}" data-d="${step}">+</button>
-            </div>
-          </td>
-          <td class="pharm-n">${escapeHtml(money(rateFor(item)))}<small>${escapeHtml(String(Number(item.gst_rate) || 0))}% GST</small></td>
+              ${isScaleEnabled() && isWeightItem(item) ? `<button type="button" class="scale-line-btn" data-scale-line="${escapeHtml(key)}" title="Read scale">⚖</button>` : ""}
           <td class="line-disc-cell">${classicLineDiscHtml(line, key)}</td>
           <td class="pharm-n">${escapeHtml(money(calc.taxable + calc.gst))}</td>
           <td><button type="button" class="classic-del" data-del-line="${escapeHtml(key)}" aria-label="Remove ${escapeHtml(item.name)}">×</button></td>
@@ -3378,10 +3376,7 @@ function renderCart() {
               <button type="button" data-chg="${escapeHtml(key)}" data-d="${-step}">−</button>
               <input class="qty-input" type="number" inputmode="decimal" min="${POSUnits.displayQty(POSUnits.qtyMin(), unitCode) || 0.001}" max="${POSUnits.qtyMax()}" step="${escapeHtml(qtyStep)}" value="${escapeHtml(qtyShow)}" data-qty="${escapeHtml(key)}" aria-label="Quantity in ${unit}" />
               <button type="button" data-chg="${escapeHtml(key)}" data-d="${step}">+</button>
-            </div>
-          </td>
-          <td class="line-disc-cell">${classicLineDiscHtml(line, key)}</td>
-          <td class="pharm-n stock-cell">${escapeHtml(alert.stock.label)}</td>
+              ${isScaleEnabled() && isWeightItem(item) ? `<button type="button" class="scale-line-btn" data-scale-line="${escapeHtml(key)}" title="Read scale">⚖</button>` : ""}
           <td class="pharm-n">${escapeHtml(String(Number(item.gst_rate) || 0))}%</td>
           <td class="pharm-n">${escapeHtml(money(calc.taxable + calc.gst))}</td>
           <td><button type="button" class="classic-del" data-del-line="${escapeHtml(key)}" aria-label="Remove ${escapeHtml(item.name)}">×</button></td>
@@ -3414,7 +3409,7 @@ function renderCart() {
                 <input class="qty-input" type="number" inputmode="decimal" min="${POSUnits.displayQty(POSUnits.qtyMin(), unitCode) || 0.001}" max="${POSUnits.qtyMax()}" step="${escapeHtml(qtyStep)}" value="${escapeHtml(qtyShow)}" data-qty="${escapeHtml(key)}" aria-label="Quantity in ${unit}" />
                 <span class="qty-unit">${escapeHtml(unit)}</span>
                 <button type="button" data-chg="${escapeHtml(key)}" data-d="${step}">+</button>
-                ${POSUnits.isCount(unitCode) ? "" : `<button type="button" class="scale-line-btn" data-scale-line="${escapeHtml(key)}" title="Read scale">⚖</button>`}
+                ${POSUnits.isCount(unitCode) || !isScaleEnabled() ? "" : `<button type="button" class="scale-line-btn" data-scale-line="${escapeHtml(key)}" title="Read scale">⚖</button>`}
               </div>
               <div class="line-amt">${money(calc.taxable + calc.gst)}</div>
             </div>
@@ -3910,9 +3905,21 @@ function setLineQty(key, qtyGm) {
   if (!line) return;
   const item = state.items.find((i) => i.id === line.itemId);
   const next = POSUnits.clampQty(qtyGm);
+  const prev = Number(line.qtyGm) || 0;
   if (next <= 0) state.cart = state.cart.filter((l) => cartLineKey(l) !== String(key));
   else if (isPieceBarcodeLine(line, item)) line.qtyGm = pieceBarcodeQty(item);
-  else line.qtyGm = next;
+  else {
+    if (!state._scaleApply && Number(line.scaleGrams) > 0 && next !== prev) {
+      line.weightSource = "manual";
+      logScaleWeight({
+        kind: "manual-override",
+        item: item?.name,
+        from_g: line.scaleGrams,
+        to_g: next,
+      });
+    }
+    line.qtyGm = next;
+  }
   renderCart();
 }
 
@@ -8127,7 +8134,34 @@ function scaleBizKey() {
   return String(state.session?.business_id || state.businessMeta?.id || state.company?.id || "local");
 }
 function scaleSettings() {
-  return globalThis.POSScale?.loadSettings?.(scaleBizKey()) || { baud: 9600, unit: "kg", autoApply: true };
+  return globalThis.POSScale?.loadSettings?.(scaleBizKey()) || { baud: 9600, unit: "kg", autoApply: true, enabled: true, precision: 3, allowManual: true };
+}
+function isScaleEnabled() {
+  return scaleSettings().enabled !== false;
+}
+function canOverrideScaleWeight() {
+  if (state.session?.role === "business_admin") return true;
+  if (scaleSettings().allowManual === false) return can("settings");
+  return can("counter") || can("settings");
+}
+function scalePrecision() {
+  const n = Number(scaleSettings().precision);
+  return Number.isFinite(n) && n >= 0 && n <= 4 ? n : 3;
+}
+function formatScaleKg(grams) {
+  const g = Number(grams) || 0;
+  return (g / 1000).toFixed(scalePrecision());
+}
+function logScaleWeight(row) {
+  globalThis.POSScale?.appendLog?.(scaleBizKey(), row);
+  paintScaleLog();
+}
+function scaleLineNote(line) {
+  const g = Number(line?.scaleGrams) || 0;
+  const rest = String(line?.notes || "").replace(/Scale [\d.]+ kg \([^)]+\)\.?\s*/gi, "").trim();
+  if (!(g > 0)) return rest;
+  const bit = `Scale ${formatScaleKg(g)} kg (${line.weightSource || "scale"})`;
+  return rest ? `${bit}. ${rest}` : bit;
 }
 function isWeightItem(item) {
   return Boolean(item) && !POSUnits.isCount(itemUnit(item));
@@ -8153,21 +8187,25 @@ function paintScaleDock(hit) {
   const kind = S?.connectionKind?.() || "";
   const g = Number(reading?.grams) || 0;
   const live = g > 0 && Date.now() - Number(reading?.at || 0) < 8000;
+  const enabled = isScaleEnabled();
   if (dock) {
-    dock.hidden = false;
+    dock.hidden = !enabled;
     dock.classList.toggle("is-live", live);
     dock.classList.toggle("is-on", on);
+    dock.classList.toggle("is-off", enabled && !on);
   }
-  if (kgEl) kgEl.textContent = g > 0 ? (g / 1000).toFixed(3) : "0.000";
+  document.body.classList.toggle("weight-scale-mode", enabled);
+  if (kgEl) kgEl.textContent = g > 0 ? formatScaleKg(g) : (0).toFixed(scalePrecision());
   if (amtEl) {
     const line = lastWeightLine();
     const item = line ? state.items.find((i) => i.id === line.itemId) : null;
     amtEl.textContent = item && g > 0 ? `${item.name} · ${money(POSUnits.lineAmount(g, rateFor(item), itemUnit(item)))}` : "";
   }
   if (statusEl) {
-    if (on && live) statusEl.textContent = kind === "bluetooth" ? "Bluetooth · live kg" : "USB scale · live kg";
+    if (!enabled) statusEl.textContent = "Weighing scale is off — enable it under Hardware";
+    else if (on && live) statusEl.textContent = kind === "bluetooth" ? "Bluetooth · live kg" : "USB scale · live kg";
     else if (on) statusEl.textContent = "Connected — place item on the pan";
-    else statusEl.textContent = "Not connected — type kg or plug in the scale";
+    else statusEl.textContent = "Disconnected — USB, Bluetooth, network, or type kg";
   }
   if (connect) {
     connect.hidden = Boolean(S && !S.hasSerial?.() && !on);
@@ -8183,35 +8221,50 @@ function paintScaleDock(hit) {
     const unit = item ? itemUnit(item) : "KG";
     qty.value = String(POSUnits.displayQty(g, unit) || g / 1000);
   }
+  paintScaleSetupStatus();
 }
 function applyScaleWeight(lineKey) {
+  if (!isScaleEnabled()) {
+    setHint("Turn on Weighing Scale under Hardware & devices", "error");
+    return false;
+  }
   const S = globalThis.POSScale;
   const prefer = scaleSettings().unit;
   const typed = String($("scale-manual")?.value || "").trim();
+  if (typed && !canOverrideScaleWeight()) {
+    setHint("Manual kg needs a manager login", "error");
+    return false;
+  }
   const hit = (typed && S?.parseWeight?.(typed, prefer)) || S?.current?.() || null;
   const grams = Number(hit?.grams) || 0;
   if (grams <= 0) {
-    setHint("No scale weight yet. Connect the scale or type kg.", "error");
+    setHint("Scale disconnected or no weight. Connect the scale or type kg.", "error");
     $("scale-manual")?.focus();
     return false;
   }
   const line = lineKey ? findCartLine(lineKey) : lastWeightLine();
+  const source = typed ? "manual" : "scale";
   if (line) {
     const item = state.items.find((i) => i.id === line.itemId);
     if (!isWeightItem(item)) {
-      setHint("Pick a kg / g item, then use the scale", "error");
+      setHint("Pick a kg / g / litre item, then use the scale", "error");
       return false;
     }
+    state._scaleApply = true;
     setLineQty(cartLineKey(line), grams);
+    state._scaleApply = false;
+    line.scaleGrams = grams;
+    line.weightSource = source;
     const amt = POSUnits.lineAmount(grams, rateFor(item), itemUnit(item));
-    setHint(`${item.name} · ${(grams / 1000).toFixed(3)} kg · ${money(amt)}`, "ok");
+    logScaleWeight({ kind: source, item: item.name, grams, amount: amt });
+    setHint(`${item.name} · ${formatScaleKg(grams)} kg · ${money(amt)}`, "ok");
     paintScaleDock(hit);
     if ($("scale-manual")) $("scale-manual").value = "";
     return true;
   }
   if ($("bill-scan-qty")) {
-    $("bill-scan-qty").value = String((grams / 1000).toFixed(3));
-    setHint(`Scale ${(grams / 1000).toFixed(3)} kg — add the item`, "ok");
+    $("bill-scan-qty").value = String(formatScaleKg(grams));
+    setHint(`Scale ${formatScaleKg(grams)} kg — add the item`, "ok");
     paintScaleDock(hit);
     return true;
   }
@@ -8221,6 +8274,11 @@ function applyScaleWeight(lineKey) {
 function applyTypedScale(raw, sourceEl) {
   const S = globalThis.POSScale;
   if (!S?.looksLikeWeight?.(raw)) return false;
+  if (!isScaleEnabled()) return false;
+  if (!canOverrideScaleWeight()) {
+    setHint("Manual kg needs a manager login", "error");
+    return false;
+  }
   const hit = S.ingest?.(raw, scaleSettings().unit) || S.parseWeight?.(raw, scaleSettings().unit);
   if (!hit?.grams) return false;
   if (sourceEl) sourceEl.value = "";
@@ -8230,11 +8288,23 @@ function applyTypedScale(raw, sourceEl) {
 }
 function addWeighableItem(id, qtyGm, barcode) {
   const item = state.items.find((i) => i.id === id);
-  const live = isWeightItem(item) ? Number(globalThis.POSScale?.currentGrams?.() || 0) : 0;
+  const live = isScaleEnabled() && isWeightItem(item) ? Number(globalThis.POSScale?.currentGrams?.() || 0) : 0;
   if (live > 0) {
     const existing = state.cart.find((l) => l.itemId === id && !String(l.barcode || "").trim());
-    if (existing && !barcode) setLineQty(cartLineKey(existing), live);
-    else addItem(id, live, barcode);
+    if (existing && !barcode) {
+      state._scaleApply = true;
+      setLineQty(cartLineKey(existing), live);
+      state._scaleApply = false;
+      existing.scaleGrams = live;
+      existing.weightSource = "scale";
+    } else {
+      addItem(id, live, barcode);
+      const added = lastWeightLine();
+      if (added) {
+        added.scaleGrams = live;
+        added.weightSource = "scale";
+      }
+    }
     return;
   }
   addItem(id, qtyGm, barcode);
@@ -8250,7 +8320,10 @@ async function connectWeighingScale(kind) {
   }
   const cfg = scaleSettings();
   try {
-    if (kind === "bluetooth") await S.connectBluetooth({ unit: cfg.unit });
+    if (kind === "network") {
+      await S.connectNetwork?.({ url: cfg.host, unit: cfg.unit });
+      setHint("Network scale weight received", "ok");
+    } else if (kind === "bluetooth") await S.connectBluetooth({ unit: cfg.unit });
     else if (S.hasSerial?.()) await S.connectSerial({ baud: cfg.baud, unit: cfg.unit });
     else if (S.hasBluetooth?.()) await S.connectBluetooth({ unit: cfg.unit });
     else {
@@ -8260,23 +8333,78 @@ async function connectWeighingScale(kind) {
       return;
     }
     paintScaleDock();
-    setHint("Scale connected. Weigh the item, then tap Use kg.", "ok");
+    if (kind !== "network") setHint("Scale connected. Weigh the item, then tap Use kg.", "ok");
   } catch (err) {
     setHint(err.message || "Could not open the scale", "error");
+    paintScaleDock();
   }
+}
+function paintScaleSetupStatus() {
+  const el = $("scale-hw-status");
+  if (!el) return;
+  const S = globalThis.POSScale;
+  const on = Boolean(S?.connected?.());
+  const kind = S?.connectionKind?.() || "";
+  el.className = `scale-hw-status ${on ? "is-on" : "is-off"}`;
+  el.textContent = !isScaleEnabled()
+    ? "● Off"
+    : on
+      ? `● Connected${kind ? ` · ${kind}` : ""}`
+      : "● Disconnected";
+}
+function paintScaleLog() {
+  const el = $("scale-log");
+  if (!el) return;
+  const rows = globalThis.POSScale?.loadLog?.(scaleBizKey()) || [];
+  if (!rows.length) {
+    el.innerHTML = `<p class="hint">No weighings yet on this till.</p>`;
+    return;
+  }
+  el.innerHTML = `<table><thead><tr><th>When</th><th>Item</th><th>Weight</th><th>How</th></tr></thead><tbody>${rows
+    .slice(0, 16)
+    .map((r) => {
+      const when = String(r.at || "").replace("T", " ").slice(0, 19);
+      const g = Number(r.grams || r.to_g) || 0;
+      return `<tr><td>${escapeHtml(when)}</td><td>${escapeHtml(r.item || "—")}</td><td>${g ? `${formatScaleKg(g)} kg` : "—"}</td><td>${escapeHtml(r.kind || "")}</td></tr>`;
+    })
+    .join("")}</tbody></table>`;
 }
 function paintScaleSetup() {
   const cfg = scaleSettings();
+  if ($("scale-enabled")) $("scale-enabled").checked = cfg.enabled !== false;
+  if ($("scale-name")) $("scale-name").value = cfg.name || "Weighing scale";
+  if ($("scale-source")) $("scale-source").value = cfg.source || "serial";
   if ($("scale-baud")) $("scale-baud").value = String(cfg.baud || 9600);
+  if ($("scale-port")) $("scale-port").value = cfg.port || "";
+  if ($("scale-host")) $("scale-host").value = cfg.host || "";
   if ($("scale-unit")) $("scale-unit").value = cfg.unit === "g" ? "g" : "kg";
+  if ($("scale-precision")) $("scale-precision").value = String(scalePrecision());
   if ($("scale-auto")) $("scale-auto").checked = cfg.autoApply !== false;
+  if ($("scale-allow-manual")) $("scale-allow-manual").checked = cfg.allowManual !== false;
+  paintScaleSetupStatus();
+  paintScaleLog();
 }
 function saveScaleSetup() {
   globalThis.POSScale?.saveSettings?.(scaleBizKey(), {
+    enabled: Boolean($("scale-enabled")?.checked),
+    name: String($("scale-name")?.value || "Weighing scale").trim() || "Weighing scale",
+    source: String($("scale-source")?.value || "serial"),
     baud: Number($("scale-baud")?.value) || 9600,
+    port: String($("scale-port")?.value || "").trim(),
+    host: String($("scale-host")?.value || "").trim(),
     unit: $("scale-unit")?.value === "g" ? "g" : "kg",
+    precision: Number($("scale-precision")?.value) || 3,
     autoApply: Boolean($("scale-auto")?.checked),
+    allowManual: Boolean($("scale-allow-manual")?.checked),
   });
+  paintScaleDock();
+  paintScaleSetup();
+  if ($("scale-setup-hint")) {
+    $("scale-setup-hint").textContent = isScaleEnabled()
+      ? "Saved. Pharmacy, garment, grocery, dairy, and other shops use this same hardware switch."
+      : "Weighing scale is off for this shop. Counter will hide the kg dock.";
+    $("scale-setup-hint").className = "hint ok";
+  }
 }
 function initWeighingScale() {
   const S = globalThis.POSScale;
@@ -8286,7 +8414,7 @@ function initWeighingScale() {
   let applyT = 0;
   S.onWeight?.((hit) => {
     paintScaleDock(hit);
-    if (scaleSettings().autoApply === false || !(Number(hit?.grams) > 0) || !lastWeightLine()) return;
+    if (!isScaleEnabled() || scaleSettings().autoApply === false || !(Number(hit?.grams) > 0) || !lastWeightLine()) return;
     clearTimeout(applyT);
     applyT = setTimeout(() => applyScaleWeight(), 180);
   });
@@ -8300,14 +8428,50 @@ function initWeighingScale() {
       applyTypedScale($("scale-manual").value, $("scale-manual"));
     }
   });
-  ["scale-baud", "scale-unit", "scale-auto"].forEach((id) => {
+  $("scale-save")?.addEventListener("click", () => saveScaleSetup());
+  $("scale-test")?.addEventListener("click", () => void testWeighingScale());
+  $("scale-reconnect")?.addEventListener("click", () => void reconnectWeighingScale());
+  ["scale-enabled", "scale-name", "scale-source", "scale-baud", "scale-port", "scale-host", "scale-unit", "scale-precision", "scale-auto", "scale-allow-manual"].forEach((id) => {
     $(id)?.addEventListener("change", saveScaleSetup);
   });
   document.addEventListener("keydown", (e) => {
     if (e.target && (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA" || e.target.tagName === "SELECT" || e.target.isContentEditable)) return;
-    if (!document.body.classList.contains("counter-mode")) return;
+    if (!document.body.classList.contains("counter-mode") || !isScaleEnabled()) return;
     S.ingestWedgeKey?.(e, scaleSettings().unit);
   });
+}
+async function testWeighingScale() {
+  saveScaleSetup();
+  const S = globalThis.POSScale;
+  const cfg = scaleSettings();
+  const hint = $("scale-setup-hint");
+  try {
+    if (cfg.source === "network") await S.connectNetwork?.({ url: cfg.host, unit: cfg.unit });
+    else if (!S.connected()) {
+      if (cfg.source === "bluetooth") await S.connectBluetooth({ unit: cfg.unit });
+      else if (S.hasSerial?.()) await S.connectSerial({ baud: cfg.baud, unit: cfg.unit });
+      else throw new Error("Connect USB or Bluetooth, or set a network URL");
+    }
+    const hit = S.current?.();
+    const g = Number(hit?.grams) || 0;
+    if (hint) {
+      hint.textContent = g > 0 ? `Test ok — ${formatScaleKg(g)} kg` : "Connected. Place an item on the pan.";
+      hint.className = "hint ok";
+    }
+    paintScaleDock(hit);
+  } catch (err) {
+    if (hint) {
+      hint.textContent = err.message || "Scale test failed";
+      hint.className = "hint error";
+    }
+    paintScaleDock();
+  }
+}
+async function reconnectWeighingScale() {
+  const S = globalThis.POSScale;
+  if (S?.connected?.()) await S.disconnect();
+  const src = scaleSettings().source || "serial";
+  await connectWeighingScale(src === "bluetooth" ? "bluetooth" : src === "network" ? "network" : "serial");
 }
 initWeighingScale();
 $("search-form").addEventListener("submit", async (e) => {
@@ -8412,7 +8576,9 @@ $("btn-pay").addEventListener("click", async () => {
         discountType: l.discountType || "amt",
         discountValue: l.discountValue || 0,
         barcode: l.barcode || "",
-        notes: String(l.notes || "").trim(),
+        notes: scaleLineNote(l),
+        scale_grams: Number(l.scaleGrams) || undefined,
+        weight_source: l.weightSource || undefined,
       })),
     };
     const result = state.editingOrderId

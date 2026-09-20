@@ -357,7 +357,7 @@ test("POS boot skips API probe and slims catalog photos", () => {
   assert.match(appJs, /showView\(landing\)/);
   assert.match(appJs, /function paintDeskState/);
   assert.match(index, /id="scale-dock"/);
-  assert.match(index, /js\/scale\.js\?v=20260919scale3/);
+  assert.match(index, /js\/scale\.js\?v=20260920scale4/);
   assert.match(appJs, /el\.textContent = "Dashboard"/);
   assert.match(index, /saas-dash-desk/);
   assert.match(index, /Business control center/);
@@ -371,7 +371,7 @@ test("POS boot skips API probe and slims catalog photos", () => {
   assert.match(index, /qrcode\.iife\.js[^>]+defer/);
   assert.match(index, /preload="none"/);
   assert.match(index, /pos-api\.js\?v=20260905deploy154/);
-  assert.match(index, /app\.js\?v=20260920saas3/);
+  assert.match(index, /app\.js\?v=20260920scale4/);
   assert.match(index, /class="dialog-head"/);
   assert.match(index, /id="modal-close"/);
   assert.match(read("css/pos.css"), /#modal-close \{/);
@@ -433,9 +433,9 @@ test("Restaurant Counter can create named dining tables", () => {
   assert.match(core, /function pos_clip_floor_id/);
   assert.match(core, /dining_tables_json/);
   assert.match(till, /dining-tables/);
-  assert.match(index, /pos\.css\?v=20260920saas3/);
+  assert.match(index, /pos\.css\?v=20260920scale4/);
   assert.match(index, /restaurant\.js\?v=20260918table1/);
-  assert.match(index, /app\.js\?v=20260920saas3/);
+  assert.match(index, /app\.js\?v=20260920scale4/);
   assert.match(index, /footwear\.js\?v=20260919inv2/);
   assert.match(app, /function resolveKitchenKot/);
   assert.match(app, /function paintKotTimers/);
