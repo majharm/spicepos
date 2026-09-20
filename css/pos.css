@@ -7346,8 +7346,9 @@ body:has(#view-dashboard:not([hidden])) .session-bar { display: none !important;
 }
 .saas-seg button.is-on { background: #fff; box-shadow: var(--shadow-card); }
 .saas-hours { display: flex; align-items: flex-end; gap: 3px; height: 84px; }
-.saas-hour { flex: 1; display: flex; align-items: flex-end; height: 100%; }
+.saas-hour { flex: 1; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; height: 100%; min-width: 0; }
 .saas-hour i { display: block; width: 100%; border-radius: 3px 3px 0 0; background: #6366f1; }
+.saas-day-bars .saas-hour em { font-size: 9px; color: var(--muted); font-style: normal; margin-top: 4px; white-space: nowrap; }
 .saas-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
 .saas-list li { display: grid; gap: 2px; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
 .saas-list strong { font-size: 13px; }
@@ -7457,6 +7458,18 @@ html[data-scheme="dark"] {
 html[data-scheme="dark"] .saas-kpi,
 html[data-scheme="dark"] .saas-card { background: #111827; }
 html[data-scheme="dark"] .saas-seg button.is-on { background: #1e293b; color: #fff; }
+html[data-scheme="dark"] .hint { color: #94a3b8; }
+html[data-scheme="dark"] .saas-list strong { color: #f3f4f6; }
+html[data-scheme="dark"] .saas-list span,
+html[data-scheme="dark"] .saas-list em { color: #94a3b8; }
+html[data-scheme="dark"] .saas-alert { background: #1e293b; color: #e5e7eb; }
+html[data-scheme="dark"] .saas-alert.warn { background: #431407; color: #fdba74; }
+html[data-scheme="dark"] .saas-alert.soon { background: #422006; color: #fde68a; }
+html[data-scheme="dark"] .saas-alert.danger { background: #450a0a; color: #fecaca; }
+html[data-scheme="dark"] .saas-chip { background: #1e293b; color: #e5e7eb; }
+html[data-scheme="dark"] .saas-chip.is-warn { background: #431407; color: #fdba74; }
+html[data-scheme="dark"] .saas-chip.is-soon { background: #422006; color: #facc15; }
+html[data-scheme="dark"] .saas-chip.is-stat { background: #1e3a8a; color: #bfdbfe; }
 @media (max-width: 1200px) {
   .saas-kpi-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }

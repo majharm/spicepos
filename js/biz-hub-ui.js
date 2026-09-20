@@ -142,6 +142,19 @@
       .join("")}</div>`;
   }
 
+  function dayBarsHtml(rows) {
+    const list = (rows || []).slice(-14);
+    if (!list.length) return `<p class="hint">No daily sales yet.</p>`;
+    const max = Math.max(1, ...list.map((r) => Number(r.sales) || 0));
+    return `<div class="saas-hours saas-day-bars">${list
+      .map((r) => {
+        const v = Number(r.sales) || 0;
+        const label = String(r.day || r.label || "").slice(-5);
+        return `<span class="saas-hour" title="${escapeHtml(label)} · ${escapeHtml(inr(v))}"><i style="height:${Math.max(6, Math.round((v / max) * 72))}px"></i><em>${escapeHtml(label)}</em></span>`;
+      })
+      .join("")}</div>`;
+  }
+
   function sparkSvg(vals) {
     const nums = (vals || []).map((v) => Number(v) || 0);
     if (nums.length < 2) return "";
@@ -379,7 +392,7 @@
             </div>
           </header>
           <p class="saas-overview-meta">This week ${escapeHtml(inr(h.weekSales))} · Month ${escapeHtml(inr(month))} vs last month ${escapeHtml(pctDelta(month, prevM))}</p>
-          <div id="dash-sales-graph">${range === "day" ? spark(h.salesGraph, "sales") : monthBarsHtml(h.monthGraph)}</div>
+          <div id="dash-sales-graph">${range === "day" || range === "week" ? dayBarsHtml((h.salesGraph || []).slice(range === "week" ? -7 : -14)) : monthBarsHtml(h.monthGraph)}</div>
         </section>
         <section class="saas-card" id="dash-pay-graph" data-widget="paymix">${donutHtml(h.payModes, "Payment mix")}</section>
         <section class="saas-card" id="dash-category" data-widget="cat">${bubblesHtml(h.categories)}</section>
