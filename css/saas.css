@@ -1061,7 +1061,10 @@ body.auth-body::-webkit-scrollbar-thumb {
   max-width: 980px;
 }
 .support-admin .settings { max-width: none; }
-.support-admin .support-page { margin: 0; max-width: none; }
+.support-admin .support-page { margin: 0; max-width: none; display: grid; gap: 12px; }
+.support-admin .support-cta { grid-template-columns: 1fr; }
+.support-admin .support-tile { min-height: 72px; padding: 12px 14px; }
+.support-admin .items-hero { flex-wrap: wrap; }
 .support-preview-label {
   margin: 0 0 8px;
   font-size: 11px;

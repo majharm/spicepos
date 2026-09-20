@@ -5126,19 +5126,24 @@ function copyTextFallback(text) {
 }
 
 function bindSupportCopy(root) {
-  root.querySelectorAll("[data-copy-phone]").forEach((btn) => {
+  root.querySelectorAll("[data-copy-phone], [data-copy]").forEach((btn) => {
     btn.addEventListener("click", async () => {
-      const phone = btn.getAttribute("data-copy-phone") || "";
-      const label = btn.getAttribute("data-idle-label") || btn.textContent;
-      btn.setAttribute("data-idle-label", label);
+      const value = btn.getAttribute("data-copy-phone") || btn.getAttribute("data-copy") || "";
+      if (!btn.getAttribute("data-idle-html")) btn.setAttribute("data-idle-html", btn.innerHTML);
+      const idle = btn.getAttribute("data-idle-html");
+      const mark = (text) => {
+        const strong = btn.querySelector("strong");
+        if (strong) strong.textContent = text;
+        else btn.textContent = text;
+      };
       try {
-        await copyText(phone);
-        btn.textContent = "Copied";
+        await copyText(value);
+        mark("Copied");
       } catch {
-        btn.textContent = "Copy failed";
+        mark("Copy failed");
       }
       setTimeout(() => {
-        btn.textContent = label;
+        btn.innerHTML = idle;
       }, 1400);
     });
   });

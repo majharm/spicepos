@@ -10,9 +10,12 @@ test("support tel WhatsApp and mail hrefs", () => {
   assert.equal(S.waHref("9876543210"), "https://wa.me/919876543210");
   assert.equal(S.waHref("09876543210"), "https://wa.me/919876543210");
   assert.equal(S.waHref("+91 98765 43210"), "https://wa.me/919876543210");
+  assert.equal(S.waHref("9876543210", "Hello"), "https://wa.me/919876543210?text=Hello");
   assert.equal(S.mailHref("help@atavtelecom.in"), "mailto:help@atavtelecom.in");
   assert.equal(S.mailHref("not-an-email"), "");
   assert.equal(S.telHref(""), "");
+  assert.equal(S.formatPhone("9876543210"), "+91 98765 43210");
+  assert.equal(S.formatPhone("+91 98765 43210"), "+91 98765 43210");
 });
 
 test("support page names the assigned account manager", () => {
@@ -32,10 +35,12 @@ test("support page html has call actions and shop details", () => {
     { name: "SWAMI MASALE", address: "Pune", phone: "020111", email: "shop@local", gstin: "27ABCDE1234F1Z5" },
   );
   assert.match(html, /support-hero/);
+  assert.match(html, /items-hero-copy/);
+  assert.match(html, /support-cta/);
   assert.match(html, /Call now/);
   assert.match(html, /WhatsApp/);
   assert.match(html, /href="tel:9876543210"/);
-  assert.match(html, /href="https:\/\/wa\.me\/919876543210"/);
+  assert.match(html, /href="https:\/\/wa\.me\/919876543210/);
   assert.match(html, /mailto:help@atavtelecom\.in/);
   assert.match(html, /Copy number/);
   assert.match(html, /SWAMI MASALE/);
