@@ -52,12 +52,14 @@ test("Dashboard uses a SaaS business control center", () => {
   assert.match(app, /function paintDashChrome/);
   assert.match(app, /applyColorScheme/);
   assert.match(index, /id="dash-plan-kpis"/);
-  assert.match(index, /biz-hub-ui\.js\?v=20260920saas1/);
+  assert.match(index, /biz-hub-ui\.js\?v=20260920saas2/);
   assert.match(css, /saas-kpi-grid/);
   assert.match(ui, /function kpiCard/);
   assert.match(ui, /Today's Sales/);
   assert.match(ui, /function donutHtml/);
   assert.match(ui, /industryHtml/);
+  assert.match(ui, /WIDGET_LABELS/);
+  assert.match(index, /id="dash-customize"/);
   assert.match(app, /el\.textContent = "Dashboard"/);
   assert.match(read("server/hub.js"), /expirySoon/);
 });

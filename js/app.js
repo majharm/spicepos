@@ -9868,6 +9868,19 @@ $("dash-quick-add")?.addEventListener("click", () => {
   const menu = $("saas-fab-menu");
   if (menu) menu.hidden = !menu.hidden;
 });
+function toggleDashWidgets(forceHidden) {
+  const drawer = $("dash-widget-drawer");
+  if (!drawer) return;
+  if (forceHidden === true) drawer.hidden = true;
+  else if (forceHidden === false) drawer.hidden = false;
+  else drawer.hidden = !drawer.hidden;
+}
+$("dash-customize")?.addEventListener("click", () => toggleDashWidgets());
+$("dash-customize-close")?.addEventListener("click", () => toggleDashWidgets(true));
+$("dash-range")?.addEventListener("change", () => {
+  localStorage.setItem("pos_dash_range", $("dash-range").value);
+  void loadDashboard();
+});
 $("dash-theme")?.addEventListener("click", () => {
   applyColorScheme(document.documentElement.dataset.scheme === "dark" ? "light" : "dark");
 });

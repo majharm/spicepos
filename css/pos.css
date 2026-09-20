@@ -7281,7 +7281,14 @@ body:has(#view-dashboard:not([hidden])) .session-bar { display: none !important;
 }
 .saas-kpi:hover { transform: translateY(-1px); box-shadow: var(--elev-float); }
 .saas-kpi-top { display: flex; justify-content: space-between; gap: 8px; align-items: start; }
-.saas-kpi em { font-style: normal; font-size: 12px; font-weight: 700; color: var(--muted); }
+.saas-kpi-ico {
+  width: 22px;
+  height: 22px;
+  flex: 0 0 22px;
+  color: var(--vel-teal);
+}
+.saas-kpi-ico svg { width: 22px; height: 22px; fill: currentColor; }
+.saas-kpi em { font-style: normal; font-size: 12px; font-weight: 700; color: var(--muted); flex: 1; }
 .saas-kpi strong { font-size: 22px; font-weight: 800; letter-spacing: -0.03em; }
 .saas-delta { font-size: 11px; font-weight: 800; }
 .saas-delta.is-up { color: #059669; }
@@ -7363,6 +7370,40 @@ body:has(#view-dashboard:not([hidden])) .session-bar { display: none !important;
 .saas-alert.danger { background: #fef2f2; }
 .saas-alert b { font-size: 18px; }
 .saas-split-lists { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.saas-skel {
+  min-height: 108px;
+  border-radius: 16px;
+  background: linear-gradient(90deg, var(--bg-tint) 25%, var(--panel) 50%, var(--bg-tint) 75%);
+  background-size: 200% 100%;
+  animation: saas-shimmer 1.2s linear infinite;
+}
+@keyframes saas-shimmer {
+  0% { background-position: 100% 0; }
+  100% { background-position: -100% 0; }
+}
+.saas-drawer {
+  position: sticky;
+  top: 8px;
+  z-index: 4;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 14px 16px;
+  box-shadow: var(--elev-float);
+}
+.saas-widget-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 8px;
+  margin-top: 10px;
+}
+.saas-widget-opt {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  font-size: 13px;
+  font-weight: 600;
+}
 .saas-fab-wrap {
   position: fixed;
   right: 22px;

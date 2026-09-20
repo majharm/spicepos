@@ -158,13 +158,63 @@
     return `<svg class="saas-spark" viewBox="0 0 ${w} ${h}" aria-hidden="true"><polyline fill="none" stroke="currentColor" stroke-width="2" points="${pts}"/></svg>`;
   }
 
+  const KPI_ICON = {
+    "today-sales": "M3 17h4v4H3zm7-8h4v12h-4zm7-6h4v18h-4z",
+    "today-orders": "M7 4h10l1 4H6l1-4zm-1 6h12l-1 10H7L6 10z",
+    "month-rev": "M4 18V6h2v12H4zm5-8v8h2v-8H9zm5-4v12h2V6h-2zm5 6v6h2v-6h-2z",
+    gross: "M12 2l3 7h7l-5.5 4.2L18.5 21 12 16.6 5.5 21l1.9-7.8L2 9h7z",
+    net: "M4 12l5 5 11-11",
+    exp: "M12 2v20M7 7h8a3 3 0 010 6H9a3 3 0 000 6h8",
+    recv: "M12 8v8m-4-4h8M5 4h14v16H5z",
+    pay: "M4 7h16v10H4zM8 11h8",
+    stock: "M4 7l8-4 8 4v10l-8 4-8-4z",
+    low: "M12 3l9 16H3L12 3zm0 6v5m0 3h.01",
+  };
+
   function kpiCard({ id, label, value, delta, spark, view, tone }) {
     const up = String(delta || "0%").startsWith("-") ? "is-down" : "is-up";
+    const icon = KPI_ICON[id] ? `<span class="saas-kpi-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="${KPI_ICON[id]}"/></svg></span>` : "";
     return `<button type="button" class="saas-kpi ${tone || ""}" data-dash-view="${escapeHtml(view || "reports")}" data-widget="${escapeHtml(id)}" title="${escapeHtml(label)}">
-      <span class="saas-kpi-top"><em>${escapeHtml(label)}</em><span class="saas-delta ${up}">${escapeHtml(delta || "0%")}</span></span>
+      <span class="saas-kpi-top">${icon}<em>${escapeHtml(label)}</em><span class="saas-delta ${up}">${escapeHtml(delta || "0%")}</span></span>
       <strong>${escapeHtml(value)}</strong>
       ${spark || ""}
     </button>`;
+  }
+
+  const WIDGET_LABELS = [
+    ["today-sales", "Today's Sales"],
+    ["today-orders", "Today's Orders"],
+    ["month-rev", "Monthly Revenue"],
+    ["gross", "Gross Profit"],
+    ["net", "Net Profit"],
+    ["exp", "Expenses"],
+    ["recv", "Pending Receivables"],
+    ["pay", "Supplier Payables"],
+    ["stock", "Inventory Value"],
+    ["low", "Low Stock Items"],
+    ["overview", "Revenue overview"],
+    ["paymix", "Payment mix"],
+    ["cat", "Category sales"],
+    ["hourly", "Hourly sales"],
+    ["top", "Top products"],
+    ["customers", "Top customers"],
+    ["alerts", "Alert center"],
+    ["activity", "Recent activity"],
+    ["industry", "Business widgets"],
+  ];
+
+  let lastDash = null;
+
+  function saveHidden(set) {
+    localStorage.setItem("pos_dash_hidden", JSON.stringify([...set]));
+  }
+
+  function roleHidden() {
+    const role = String(root.state?.session?.role || "").toLowerCase();
+    if (role === "cashier" || role === "waiter" || role === "kitchen") {
+      return new Set(["pay", "exp", "recv"]);
+    }
+    return new Set();
   }
 
   function listRows(rows, empty) {
@@ -239,9 +289,20 @@
     </section>`;
   }
 
+  function paintWidgetDrawer() {
+    const box = $("dash-widget-list");
+    if (!box) return;
+    const hide = hiddenSet();
+    box.innerHTML = WIDGET_LABELS.map(
+      ([id, label]) =>
+        `<label class="saas-widget-opt"><input type="checkbox" data-widget-toggle="${escapeHtml(id)}" ${hide.has(id) ? "" : "checked"} /> ${escapeHtml(label)}</label>`,
+    ).join("");
+  }
+
   function paintDashboard(d) {
     const H = hub();
     if (!H || !$("dash-kpis")) return;
+    lastDash = d;
     const h = d.hub || {};
     const today = Number(d.today?.takings) || 0;
     const yest = Number(h.yesterdaySales) || 0;
@@ -259,7 +320,8 @@
     const sparkPay = sparkSvg((h.payGraph || []).map((r) => r.collected));
     const sparkMonth = sparkSvg((h.monthGraph || []).map((r) => r.sales));
     const kind = H.shopKind?.(biz()) || "general";
-    const hide = hiddenSet();
+    const hide = new Set([...hiddenSet(), ...roleHidden()]);
+    const range = String($("dash-range")?.value || localStorage.getItem("pos_dash_range") || "month");
     const kpis = [
       kpiCard({ id: "today-sales", label: "Today's Sales", value: inr(today), delta: pctDelta(today, yest), spark: sparkSales, view: "orders", tone: "tone-sales" }),
       kpiCard({ id: "today-orders", label: "Today's Orders", value: String(orders), delta: pctDelta(orders, yOrders), spark: sparkSales, view: "orders" }),
@@ -310,16 +372,16 @@
           <header class="saas-card-head">
             <h3>Revenue overview</h3>
             <div class="saas-seg" id="dash-range-seg">
-              <button type="button" class="is-on" data-range="day">Day</button>
-              <button type="button" data-range="week">Week</button>
-              <button type="button" data-range="month">Month</button>
-              <button type="button" data-range="year">Year</button>
+              <button type="button" data-range="day"${range === "day" ? " class=\"is-on\"" : ""}>Day</button>
+              <button type="button" data-range="week"${range === "week" ? " class=\"is-on\"" : ""}>Week</button>
+              <button type="button" data-range="month"${range === "month" ? " class=\"is-on\"" : ""}>Month</button>
+              <button type="button" data-range="year"${range === "year" ? " class=\"is-on\"" : ""}>Year</button>
             </div>
           </header>
           <p class="saas-overview-meta">This week ${escapeHtml(inr(h.weekSales))} · Month ${escapeHtml(inr(month))} vs last month ${escapeHtml(pctDelta(month, prevM))}</p>
-          <div id="dash-sales-graph">${monthBarsHtml(h.monthGraph)}</div>
+          <div id="dash-sales-graph">${range === "day" ? spark(h.salesGraph, "sales") : monthBarsHtml(h.monthGraph)}</div>
         </section>
-        <section class="saas-card" id="dash-pay-graph" data-widget="pay">${donutHtml(h.payModes, "Payment mix")}</section>
+        <section class="saas-card" id="dash-pay-graph" data-widget="paymix">${donutHtml(h.payModes, "Payment mix")}</section>
         <section class="saas-card" id="dash-category" data-widget="cat">${bubblesHtml(h.categories)}</section>
         <section class="saas-card" data-widget="hourly">
           <header class="saas-card-head"><h3>Hourly sales</h3></header>
@@ -345,6 +407,7 @@
     document.querySelectorAll("#dash-kpis [data-widget]").forEach((el) => {
       if (hide.has(el.dataset.widget)) el.hidden = true;
     });
+    paintWidgetDrawer();
   }
 
   function paintReportsCenter() {
@@ -801,6 +864,24 @@
   });
   document.addEventListener("change", (e) => {
     if (e.target?.id === "rep-center-cat") paintReportsCenter();
+    const tog = e.target?.closest?.("[data-widget-toggle]");
+    if (tog) {
+      const hide = hiddenSet();
+      if (tog.checked) hide.delete(tog.dataset.widgetToggle);
+      else hide.add(tog.dataset.widgetToggle);
+      saveHidden(hide);
+      if (lastDash) paintDashboard(lastDash);
+    }
+  });
+  document.addEventListener("click", (e) => {
+    const rangeBtn = e.target.closest?.("#dash-range-seg [data-range]");
+    if (rangeBtn) {
+      const val = rangeBtn.dataset.range;
+      localStorage.setItem("pos_dash_range", val);
+      const sel = $("dash-range");
+      if (sel) sel.value = val;
+      if (lastDash) paintDashboard(lastDash);
+    }
   });
 
   root.POSBizHubUi = {

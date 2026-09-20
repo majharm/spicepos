@@ -6,7 +6,7 @@
     <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
     <title>ATAV POS</title>
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./css/pos.css?v=20260920saas1" />
+    <link rel="stylesheet" href="./css/pos.css?v=20260920saas2" />
     <link rel="stylesheet" href="./css/saas.css?v=20260905deploy136" />
   </head>
   <body>
@@ -146,13 +146,24 @@
                 <p class="lede dash-hero-meta" id="dash-welcome-meta"></p>
               </div>
               <p class="dash-actions">
+                <button class="btn" type="button" id="dash-customize" title="Show or hide widgets">Widgets</button>
                 <button class="btn primary" type="button" data-view-jump="counter" id="open-pos">New bill</button>
                 <button class="btn" type="button" data-view-jump="reports">Reports</button>
                 <button class="btn" type="button" id="open-growth">AI Growth</button>
               </p>
             </header>
             <div class="platform-notes" id="dash-notes"></div>
-            <div class="saas-board" id="dash-kpis"></div>
+            <aside class="saas-drawer" id="dash-widget-drawer" hidden>
+              <header class="saas-card-head"><h3>Dashboard widgets</h3><button type="button" class="saas-link" id="dash-customize-close">Done</button></header>
+              <p class="hint">Saved on this browser for your login. Pharmacy, restaurant, salon, and garment shops still get their own operations card.</p>
+              <div class="saas-widget-list" id="dash-widget-list"></div>
+            </aside>
+            <div class="saas-board" id="dash-kpis">
+              <div class="saas-kpi-grid" aria-hidden="true">
+                <div class="saas-skel"></div><div class="saas-skel"></div><div class="saas-skel"></div>
+                <div class="saas-skel"></div><div class="saas-skel"></div><div class="saas-skel"></div>
+              </div>
+            </div>
             <div class="report-grid dash-kpi-grid services-only" id="salon-dash-kpis" hidden></div>
             <div class="an-plan" id="dash-plan-kpis"></div>
             <div class="dash-shortcuts visually-hidden" id="dash-shortcuts" aria-hidden="true">
@@ -2386,10 +2397,10 @@
     <script src="./js/qr-notify.js?v=20260914kot1" defer></script>
     <script src="./js/payment-methods.js?v=20260918pay1" defer></script>
     <script src="./js/biz-hub.js?v=20260919salon1" defer></script>
-    <script src="./js/biz-hub-ui.js?v=20260920saas1" defer></script>
+    <script src="./js/biz-hub-ui.js?v=20260920saas2" defer></script>
     <script src="./js/salon.js?v=20260919salon1" defer></script>
     <script src="./js/salon-ui.js?v=20260919salon1" defer></script>
-    <script src="./js/app.js?v=20260920saas1" defer></script>
+    <script src="./js/app.js?v=20260920saas2" defer></script>
     <script src="./js/growth.js?v=20260905deploy145" defer></script>
     <script src="./js/offers-ui.js?v=20260919off1" defer></script>
   </body>
