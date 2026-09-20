@@ -8158,7 +8158,7 @@ function logScaleWeight(row) {
 }
 function scaleLineNote(line) {
   const g = Number(line?.scaleGrams) || 0;
-  const rest = String(line?.notes || "").replace(/Scale [\d.]+ kg \([^)]+\)\.?\s*/gi, "").trim();
+  const rest = String(line?.notes || line?.special_instruction || "").replace(/Scale [\d.]+ kg \([^)]+\)\.?\s*/gi, "").trim();
   if (!(g > 0)) return rest;
   const bit = `Scale ${formatScaleKg(g)} kg (${line.weightSource || "scale"})`;
   return rest ? `${bit}. ${rest}` : bit;
