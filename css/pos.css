@@ -4835,7 +4835,8 @@ body.classic-bill-mode .bill-settle {
   .expiry-desk,
   .stock-desk,
   .offers-desk,
-  .purchases-desk { margin-left: 12px; margin-right: 12px; }
+  .purchases-desk,
+  .sales-desk { margin-left: 12px; margin-right: 12px; }
   .packs-hero,
   .items-hero,
   .dash-hero { flex-direction: column; align-items: stretch; padding: 14px; }
@@ -6289,6 +6290,18 @@ html[dir="rtl"] select {
   .purchase-doc-split { grid-template-columns: 1fr; }
   .purchase-doc-head { flex-direction: column; }
 }
+
+/* sales-desk: invoice types + workspace */
+.sales-desk .hub-sales-tiles { display: grid; gap: 18px; }
+.sales-desk-group h4 {
+  margin: 0 0 10px;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.sales-doc-work { border-color: rgba(13, 148, 136, 0.22); }
 
 /* garment-counter-2026: compact bill type + date-only */
 body.apparel-mode.classic-bill-mode.counter-mode .bill-panel,

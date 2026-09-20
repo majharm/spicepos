@@ -16,19 +16,19 @@
 
   const MODULES = [
     { id: "dashboard", group: "home", title: "Dashboard", view: "dashboard", perm: "dashboard" },
-    { id: "counter", group: "sales", title: "Counter POS", view: "counter", perm: "counter" },
-    { id: "invoices", group: "sales", title: "Sales Invoice", view: "orders", perm: "orders" },
-    { id: "new-invoice", group: "sales", title: "New Invoice", view: "counter", perm: "counter" },
-    { id: "quotation", group: "sales", title: "Quotation", view: "hub-sales", perm: "orders", desk: "quotation" },
-    { id: "sales-order", group: "sales", title: "Sales Order", view: "hub-sales", perm: "orders", desk: "sales-order" },
-    { id: "challan", group: "sales", title: "Delivery Challan", view: "hub-sales", perm: "orders", desk: "challan" },
-    { id: "recurring", group: "sales", title: "Recurring Invoice", view: "hub-sales", perm: "orders", desk: "recurring" },
-    { id: "credit-note", group: "sales", title: "Credit Note", view: "returns", perm: "orders", kinds: ["pharmacy", "apparel", "footwear"] },
-    { id: "sales-return", group: "sales", title: "Sales Return", view: "returns", perm: "orders", kinds: ["pharmacy", "apparel", "footwear"] },
-    { id: "cancelled", group: "sales", title: "Cancelled Invoice", view: "orders", perm: "orders", query: "cancelled" },
-    { id: "receipt", group: "sales", title: "Payment Receipt", view: "payments", perm: "accounts" },
-    { id: "customer-due", group: "sales", title: "Customer Due", view: "customers", perm: "customers" },
-    { id: "customer-ledger", group: "sales", title: "Customer Ledger", view: "accounts", perm: "accounts", acc: "customer-ledger" },
+    { id: "counter", group: "sales", title: "Counter POS", view: "counter", perm: "counter", blurb: "Till for a new tax invoice" },
+    { id: "invoices", group: "sales", title: "Sales Invoice", view: "orders", perm: "orders", blurb: "Tax invoices billed on Counter" },
+    { id: "new-invoice", group: "sales", title: "New Invoice", view: "counter", perm: "counter", blurb: "Open Counter and bill now" },
+    { id: "quotation", group: "sales", title: "Quotation", view: "hub-sales", perm: "orders", desk: "quotation", blurb: "Price offer — no stock, no GST invoice" },
+    { id: "sales-order", group: "sales", title: "Sales Order", view: "hub-sales", perm: "orders", desk: "sales-order", blurb: "Confirmed order before challan or invoice" },
+    { id: "challan", group: "sales", title: "Delivery Challan", view: "hub-sales", perm: "orders", desk: "challan", blurb: "Send goods without a tax invoice" },
+    { id: "recurring", group: "sales", title: "Recurring Invoice", view: "hub-sales", perm: "orders", desk: "recurring", blurb: "Repeat schedule — does not auto-bill" },
+    { id: "credit-note", group: "sales", title: "Credit Note", view: "returns", perm: "orders", kinds: ["pharmacy", "apparel", "footwear"], blurb: "Reduce a billed tax invoice" },
+    { id: "sales-return", group: "sales", title: "Sales Return", view: "returns", perm: "orders", kinds: ["pharmacy", "apparel", "footwear"], blurb: "Take goods back against an invoice" },
+    { id: "cancelled", group: "sales", title: "Cancelled Invoice", view: "orders", perm: "orders", query: "cancelled", blurb: "Voided tax invoices" },
+    { id: "receipt", group: "sales", title: "Payment Receipt", view: "payments", perm: "accounts", blurb: "Collect customer due" },
+    { id: "customer-due", group: "sales", title: "Customer Due", view: "customers", perm: "customers", blurb: "Outstanding on customer accounts" },
+    { id: "customer-ledger", group: "sales", title: "Customer Ledger", view: "accounts", perm: "accounts", acc: "customer-ledger", blurb: "Customer account history" },
     { id: "purchase-request", group: "purchases", title: "Purchase Request", view: "hub-purchases", perm: "purchases", desk: "pr", blurb: "Ask for stock before you order" },
     { id: "purchase-order", group: "purchases", title: "Purchase Order", view: "hub-purchases", perm: "purchases", desk: "po", blurb: "Confirm what to buy from a supplier" },
     { id: "grn", group: "purchases", title: "Goods Receipt", view: "hub-purchases", perm: "purchases", desk: "grn", blurb: "Record goods received at the shop" },
@@ -309,6 +309,52 @@
     },
   };
 
+  const SALES_DOC_KINDS = {
+    quotation: {
+      title: "Quotation",
+      prefix: "QT",
+      save: "Save quotation",
+      hint: "Price offer for a customer. Does not post stock or GST. Convert to a sales order or bill a tax invoice on Counter when they accept.",
+      statuses: ["Draft", "Sent", "Accepted", "Expired"],
+      party: "Customer",
+      extra: "valid",
+    },
+    "sales-order": {
+      title: "Sales Order",
+      prefix: "SO",
+      save: "Save sales order",
+      hint: "Confirmed order before delivery. Convert to a delivery challan, or bill a tax invoice on Counter.",
+      statuses: ["Draft", "Confirmed", "Packed", "Closed"],
+      party: "Customer",
+      extra: "deliver",
+    },
+    challan: {
+      title: "Delivery Challan",
+      prefix: "DC",
+      save: "Save challan",
+      hint: "Send goods without a tax invoice. Bill the tax invoice on Counter when GST is due.",
+      statuses: ["Draft", "Dispatched", "Delivered"],
+      party: "Customer",
+      extra: "vehicle",
+    },
+    recurring: {
+      title: "Recurring Invoice",
+      prefix: "RI",
+      save: "Save schedule",
+      hint: "Reminder to bill this customer on a cycle. ATAV POS does not auto-create tax invoices — open Counter on the next bill date.",
+      statuses: ["Draft", "Active", "Paused", "Ended"],
+      party: "Customer",
+      extra: "repeat",
+    },
+  };
+
+  const SALES_SECTIONS = [
+    { id: "billing", title: "Tax invoices", ids: ["counter", "invoices", "new-invoice", "cancelled"] },
+    { id: "docs", title: "Other invoice types", ids: ["quotation", "sales-order", "challan", "recurring"] },
+    { id: "returns", title: "Returns", ids: ["credit-note", "sales-return"] },
+    { id: "money", title: "Collections", ids: ["receipt", "customer-due", "customer-ledger"] },
+  ];
+
   const PAY_MODES = ["cash", "upi", "card", "bank-transfer", "neft", "rtgs", "imps", "cheque", "wallet", "other"];
 
   const DASH_KPIS = [
@@ -352,6 +398,8 @@
     MODULES,
     GROUPS,
     PURCHASE_DOC_KINDS,
+    SALES_DOC_KINDS,
+    SALES_SECTIONS,
     REPORTS,
     CENTERS,
     PAY_MODES,

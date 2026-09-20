@@ -470,7 +470,7 @@
 
   function findModule(id) {
     const H = hub();
-    return H?.MODULES?.find((x) => x.id === id) || PURCHASE_FALLBACK.find((x) => x.id === id);
+    return H?.MODULES?.find((x) => x.id === id) || PURCHASE_FALLBACK.find((x) => x.id === id) || SALES_FALLBACK.find((x) => x.id === id);
   }
 
   function docMeta(kind) {
@@ -528,9 +528,9 @@
     return new Date().toISOString().slice(0, 10);
   }
 
-  function tileHtml(m) {
+  function tileHtml(m, activeKind) {
     const kind = m.desk ? "Document desk" : "Open";
-    const on = m.desk && m.desk === purchaseDeskKind ? " is-active" : "";
+    const on = m.desk && m.desk === activeKind ? " is-active" : "";
     return `<button type="button" class="dash-tile hub-mod-tile${on}" data-hub-open="${escapeHtml(m.id)}">
       <em class="hub-mod-kind">${escapeHtml(kind)}</em>
       <strong>${escapeHtml(m.title)}</strong>
@@ -539,6 +539,10 @@
   }
 
   function paintModuleDesk(viewId, group) {
+    if (viewId === "hub-sales-tiles" || group === "sales") {
+      paintSalesDesk();
+      return;
+    }
     const el = $(viewId);
     if (!el) return;
     const H = hub();
@@ -558,7 +562,7 @@
               (m.desk ? "document desk" : "open").includes(q),
           )
         : mods;
-    el.innerHTML = `<div class="hub-tile-grid">${filtered.map((m) => tileHtml(m)).join("")}</div>`;
+    el.innerHTML = `<div class="hub-tile-grid">${filtered.map((m) => tileHtml(m, purchaseDeskKind)).join("")}</div>`;
     if (viewId === "hub-purchases-tiles") paintPurchaseStats(mods);
   }
 
@@ -672,6 +676,259 @@
     paintPurchaseWork(kind);
   }
 
+  let salesDeskKind = "";
+
+  const SALES_FALLBACK = [
+    { id: "counter", title: "Counter POS", view: "counter", blurb: "Till for a new tax invoice" },
+    { id: "invoices", title: "Sales Invoice", view: "orders", blurb: "Tax invoices billed on Counter" },
+    { id: "new-invoice", title: "New Invoice", view: "counter", blurb: "Open Counter and bill now" },
+    { id: "quotation", title: "Quotation", desk: "quotation", blurb: "Price offer — no stock, no GST invoice" },
+    { id: "sales-order", title: "Sales Order", desk: "sales-order", blurb: "Confirmed order before challan or invoice" },
+    { id: "challan", title: "Delivery Challan", desk: "challan", blurb: "Send goods without a tax invoice" },
+    { id: "recurring", title: "Recurring Invoice", desk: "recurring", blurb: "Repeat schedule — does not auto-bill" },
+    { id: "cancelled", title: "Cancelled Invoice", view: "orders", query: "cancelled", blurb: "Voided tax invoices" },
+    { id: "receipt", title: "Payment Receipt", view: "payments", blurb: "Collect customer due" },
+    { id: "customer-due", title: "Customer Due", view: "customers", blurb: "Outstanding on customer accounts" },
+    { id: "customer-ledger", title: "Customer Ledger", view: "accounts", acc: "customer-ledger", blurb: "Customer account history" },
+  ];
+
+  function salesModules() {
+    const H = hub();
+    if (H?.modulesFor) return H.modulesFor(biz()).filter((m) => m.group === "sales");
+    return SALES_FALLBACK;
+  }
+
+  function salesMeta(kind) {
+    return hub()?.SALES_DOC_KINDS?.[kind] || {
+      title: kind,
+      prefix: String(kind || "DOC").toUpperCase().slice(0, 4),
+      save: "Save",
+      hint: "",
+      statuses: ["Draft"],
+      party: "Customer",
+    };
+  }
+
+  function salesStore() {
+    const key = `pos-sales-docs:${bizKey()}`;
+    let all = {};
+    try {
+      all = JSON.parse(root.localStorage?.getItem(key) || "{}") || {};
+    } catch {
+      all = {};
+    }
+    return {
+      key,
+      all,
+      list(kind) {
+        return Array.isArray(all[kind]) ? all[kind] : [];
+      },
+      save(kind, rows) {
+        all[kind] = rows;
+        try {
+          root.localStorage?.setItem(key, JSON.stringify(all));
+        } catch {
+          /* ignore quota */
+        }
+      },
+    };
+  }
+
+  function nextSalesNumber(kind, rows) {
+    const prefix = salesMeta(kind).prefix;
+    let max = 0;
+    rows.forEach((r) => {
+      const m = String(r.number || "").match(/(\d+)\s*$/);
+      if (m) max = Math.max(max, Number(m[1]) || 0);
+    });
+    return `${prefix}-${String(max + 1).padStart(4, "0")}`;
+  }
+
+  function customerNames() {
+    return (root.state?.customers || [])
+      .map((c) => c.business_name || c.name)
+      .filter(Boolean);
+  }
+
+  function matchSalesMod(m, q) {
+    if (!q) return true;
+    return (
+      m.title.toLowerCase().includes(q) ||
+      m.id.includes(q) ||
+      String(m.blurb || "").toLowerCase().includes(q) ||
+      (m.desk ? "document desk quotation challan order" : "open tax invoice").includes(q)
+    );
+  }
+
+  function paintSalesStats(mods) {
+    const el = $("hub-sales-stats");
+    if (!el) return;
+    const store = salesStore();
+    const deskMods = (mods || salesModules()).filter((m) => m.desk);
+    const n = deskMods.reduce((sum, m) => sum + store.list(m.desk).length, 0);
+    el.innerHTML = `<div class="items-stat"><span>Documents</span><strong>${n}</strong></div>
+      <div class="items-stat"><span>Invoice types</span><strong>${(mods || salesModules()).length}</strong></div>`;
+  }
+
+  function paintSalesDesk() {
+    const el = $("hub-sales-tiles");
+    if (!el) return;
+    const H = hub();
+    const mods = salesModules();
+    const q = String($("hub-sales-search")?.value || "").trim().toLowerCase();
+    const sections = H?.SALES_SECTIONS || [
+      { id: "all", title: "Sales", ids: mods.map((m) => m.id) },
+    ];
+    const html = sections
+      .map((sec) => {
+        const rows = mods.filter((m) => sec.ids.includes(m.id) && matchSalesMod(m, q));
+        if (!rows.length) return "";
+        return `<section class="hub-center-group sales-desk-group" data-sales-section="${escapeHtml(sec.id)}">
+          <h4>${escapeHtml(sec.title)}</h4>
+          <div class="hub-tile-grid">${rows.map((m) => tileHtml(m, salesDeskKind)).join("")}</div>
+        </section>`;
+      })
+      .join("");
+    el.innerHTML = html || `<p class="hint">No sales types match.</p>`;
+    paintSalesStats(mods);
+  }
+
+  function salesExtraFields(kind, meta) {
+    if (meta.extra === "valid") {
+      return `<label>Valid until <input name="extra_date" type="date" /></label>`;
+    }
+    if (meta.extra === "deliver") {
+      return `<label>Deliver by <input name="extra_date" type="date" /></label>`;
+    }
+    if (meta.extra === "vehicle") {
+      return `<label>Vehicle / transporter <input name="extra_text" maxlength="80" placeholder="Optional" /></label>`;
+    }
+    if (meta.extra === "repeat") {
+      return `<label>Repeat
+        <select name="interval">
+          <option value="monthly">Monthly</option>
+          <option value="weekly">Weekly</option>
+          <option value="quarterly">Quarterly</option>
+        </select>
+      </label>
+      <label>Next bill date <input name="extra_date" type="date" value="${escapeHtml(todayYmd())}" /></label>`;
+    }
+    return "";
+  }
+
+  function extraColLabel(kind) {
+    if (kind === "quotation") return "Valid until";
+    if (kind === "sales-order") return "Deliver by";
+    if (kind === "challan") return "Vehicle";
+    if (kind === "recurring") return "Next bill";
+    return "Detail";
+  }
+
+  function extraCell(r) {
+    if (r.interval) return `${r.interval}${r.extra_date ? ` · ${r.extra_date}` : ""}`;
+    return r.extra_date || r.extra_text || "—";
+  }
+
+  function paintSalesWork(kind) {
+    const wrap = $("hub-sales-work");
+    if (!wrap) return;
+    salesDeskKind = kind || "";
+    if (!kind) {
+      wrap.hidden = true;
+      wrap.innerHTML = "";
+      paintSalesDesk();
+      return;
+    }
+    const meta = salesMeta(kind);
+    const store = salesStore();
+    const rows = store.list(kind).slice().reverse();
+    const names = customerNames();
+    wrap.hidden = false;
+    wrap.innerHTML = `
+      <div class="purchase-doc-head">
+        <div>
+          <p class="items-kicker">${escapeHtml(meta.prefix)}</p>
+          <h3>${escapeHtml(meta.title)}</h3>
+          <p class="lede">${escapeHtml(meta.hint)}</p>
+        </div>
+        <button type="button" class="btn" data-sales-close>Back to all types</button>
+      </div>
+      <div class="purchase-doc-split">
+        <form class="settings item-composer" id="sales-doc-form" autocomplete="off">
+          <p class="item-mode">New ${escapeHtml(meta.title.toLowerCase())}</p>
+          <label>Number <input name="number" required maxlength="40" value="${escapeHtml(nextSalesNumber(kind, store.list(kind)))}" /></label>
+          <label>Date <input name="date" type="date" required value="${escapeHtml(todayYmd())}" /></label>
+          <label>${escapeHtml(meta.party || "Customer")}
+            <input name="customer" list="sales-doc-customers" maxlength="180" placeholder="Customer name" />
+          </label>
+          <datalist id="sales-doc-customers">${names.map((n) => `<option value="${escapeHtml(n)}"></option>`).join("")}</datalist>
+          <label>Amount ₹ <input name="amount" type="number" min="0" step="0.01" value="0" /></label>
+          <label>Status
+            <select name="status">${meta.statuses.map((s) => `<option>${escapeHtml(s)}</option>`).join("")}</select>
+          </label>
+          ${salesExtraFields(kind, meta)}
+          <label class="full">Notes <textarea name="notes" rows="2" maxlength="400" placeholder="Items, qty, or terms"></textarea></label>
+          <div class="purchase-doc-actions">
+            <button class="btn primary" type="submit">${escapeHtml(meta.save)}</button>
+            ${kind === "quotation" ? `<button class="btn" type="button" data-sales-convert="sales-order">Save as sales order</button>` : ""}
+            ${kind === "sales-order" ? `<button class="btn" type="button" data-sales-convert="challan">Save as delivery challan</button>` : ""}
+            <button class="btn" type="button" data-sales-bill>Bill as tax invoice</button>
+          </div>
+        </form>
+        <div class="items-library">
+          <div class="items-library-head">
+            <h4>Saved ${escapeHtml(meta.title.toLowerCase())}s</h4>
+            <span class="hint">${rows.length} on this shop</span>
+          </div>
+          ${
+            rows.length
+              ? `<div class="table-wrap"><table><thead><tr><th>No.</th><th>Date</th><th>Customer</th><th>Amount</th><th>${escapeHtml(extraColLabel(kind))}</th><th>Status</th><th></th></tr></thead><tbody>${rows
+                  .map(
+                    (r) => `<tr>
+                    <td>${escapeHtml(r.number)}</td>
+                    <td>${escapeHtml(r.date || "")}</td>
+                    <td>${escapeHtml(r.customer || "—")}</td>
+                    <td>${money(r.amount)}</td>
+                    <td>${escapeHtml(extraCell(r))}</td>
+                    <td>${escapeHtml(r.status || "")}</td>
+                    <td><button class="btn" type="button" data-sales-del="${escapeHtml(r.id)}">Remove</button></td>
+                  </tr>`,
+                  )
+                  .join("")}</tbody></table></div>`
+              : `<p class="hint">None yet. Save the first ${escapeHtml(meta.title.toLowerCase())} on the left.</p>`
+          }
+        </div>
+      </div>`;
+    paintSalesDesk();
+    wrap.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }
+
+  function readSalesForm() {
+    const form = $("sales-doc-form");
+    if (!form) return null;
+    const fd = new FormData(form);
+    return {
+      id: `s${Date.now()}`,
+      number: String(fd.get("number") || "").trim(),
+      date: String(fd.get("date") || todayYmd()),
+      customer: String(fd.get("customer") || "").trim(),
+      amount: Number(fd.get("amount")) || 0,
+      status: String(fd.get("status") || "Draft"),
+      notes: String(fd.get("notes") || "").trim(),
+      extra_date: String(fd.get("extra_date") || "").trim(),
+      extra_text: String(fd.get("extra_text") || "").trim(),
+      interval: String(fd.get("interval") || "").trim(),
+    };
+  }
+
+  function saveSalesDoc(kind, extra = {}) {
+    const row = readSalesForm();
+    if (!row || !row.number) return;
+    const store = salesStore();
+    store.save(kind, store.list(kind).concat([{ ...row, ...extra, kind }]));
+    paintSalesWork(kind);
+  }
+
   function paintPaymentsDesk() {
     const H = hub();
     const modes = $("pay-modes-list");
@@ -758,11 +1015,17 @@
     if (!m) return;
     if (m.report) return openReport(m.report);
     if (m.desk) {
+      const isSales = Boolean(hub()?.SALES_DOC_KINDS?.[m.desk] || SALES_FALLBACK.some((x) => x.desk === m.desk));
+      if (isSales) {
+        if (typeof root.showView === "function") root.showView("hub-sales");
+        paintSalesWork(m.desk);
+        return;
+      }
       if (typeof root.showView === "function") root.showView("hub-purchases");
       paintPurchaseWork(m.desk);
       return;
     }
-    if (typeof root.showView === "function") root.showView(m.view || "hub-purchases");
+    if (typeof root.showView === "function") root.showView(m.view || "dashboard");
     if (m.open === "purchase-new") {
       const details = $("purchase-new");
       if (details) details.open = true;
@@ -834,6 +1097,54 @@
       paintPurchaseWork("");
       return;
     }
+    if (e.target.closest("[data-sales-close]")) {
+      paintSalesWork("");
+      return;
+    }
+    if (e.target.closest("[data-sales-bill]")) {
+      e.preventDefault();
+      if (salesDeskKind) {
+        const row = readSalesForm();
+        if (row?.number) saveSalesDoc(salesDeskKind);
+      }
+      if (typeof root.showView === "function") root.showView("counter");
+      return;
+    }
+    const salesConvert = e.target.closest("[data-sales-convert]");
+    if (salesConvert && salesDeskKind) {
+      e.preventDefault();
+      const row = readSalesForm();
+      if (row?.number) {
+        const store = salesStore();
+        store.save(salesDeskKind, store.list(salesDeskKind).concat([{ ...row, kind: salesDeskKind }]));
+        const to = salesConvert.dataset.salesConvert;
+        const meta = salesMeta(to);
+        store.save(
+          to,
+          store.list(to).concat([
+            {
+              ...row,
+              id: `s${Date.now()}`,
+              kind: to,
+              number: nextSalesNumber(to, store.list(to)),
+              status: meta.statuses[0],
+            },
+          ]),
+        );
+        paintSalesWork(to);
+      }
+      return;
+    }
+    const salesDel = e.target.closest("[data-sales-del]");
+    if (salesDel && salesDeskKind) {
+      const store = salesStore();
+      store.save(
+        salesDeskKind,
+        store.list(salesDeskKind).filter((r) => r.id !== salesDel.dataset.salesDel),
+      );
+      paintSalesWork(salesDeskKind);
+      return;
+    }
     const convert = e.target.closest("[data-doc-convert]");
     if (convert && purchaseDeskKind) {
       e.preventDefault();
@@ -867,13 +1178,20 @@
     if (mod) openModule(mod.dataset.hubOpen);
   });
   document.addEventListener("submit", (e) => {
-    if (e.target?.id !== "purchase-doc-form") return;
-    e.preventDefault();
-    if (purchaseDeskKind) saveDoc(purchaseDeskKind);
+    if (e.target?.id === "purchase-doc-form") {
+      e.preventDefault();
+      if (purchaseDeskKind) saveDoc(purchaseDeskKind);
+      return;
+    }
+    if (e.target?.id === "sales-doc-form") {
+      e.preventDefault();
+      if (salesDeskKind) saveSalesDoc(salesDeskKind);
+    }
   });
   document.addEventListener("input", (e) => {
     if (e.target?.id === "rep-center-search") paintReportsCenter();
     if (e.target?.id === "hub-purchases-search") paintModuleDesk("hub-purchases-tiles", "purchases");
+    if (e.target?.id === "hub-sales-search") paintSalesDesk();
   });
   document.addEventListener("change", (e) => {
     if (e.target?.id === "rep-center-cat") paintReportsCenter();
@@ -902,6 +1220,8 @@
     paintReportsCenter,
     paintModuleDesk,
     paintPurchaseWork,
+    paintSalesDesk,
+    paintSalesWork,
     paintPaymentsDesk,
     paintIndustryNav,
     openReport,

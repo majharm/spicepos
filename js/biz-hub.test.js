@@ -52,7 +52,7 @@ test("Dashboard uses a SaaS business control center", () => {
   assert.match(app, /function paintDashChrome/);
   assert.match(app, /applyColorScheme/);
   assert.match(index, /id="dash-plan-kpis"/);
-  assert.match(index, /biz-hub-ui\.js\?v=20260920saas3/);
+  assert.match(index, /biz-hub-ui\.js\?v=20260920deploy200/);
   assert.match(css, /saas-kpi-grid/);
   assert.match(ui, /function kpiCard/);
   assert.match(ui, /Today's Sales/);
@@ -76,7 +76,7 @@ test("POS shell wires Reports Center, payments, audit, and hub scripts", () => {
   assert.match(index, /id="view-hub-sales"/);
   assert.match(index, /id="dash-kpis"/);
   assert.match(ui, /id="dash-sales-graph"/);
-  assert.match(index, /biz-hub\.js\?v=20260919salon1/);
+  assert.match(index, /biz-hub\.js\?v=20260920deploy200/);
   assert.match(index, /id="rep-pdf"/);
   assert.match(index, /id="rep-pay-mode"/);
   assert.match(app, /POSBizHubUi\?\.paintDashboard/);
@@ -161,4 +161,83 @@ test("Purchase Request opens an in-page document form", () => {
   assert.match(els["hub-purchases-work"].innerHTML, /Purchase Request/);
   assert.match(els["hub-purchases-work"].innerHTML, /id="purchase-doc-form"/);
   assert.match(els["hub-purchases-tiles"].innerHTML, /hub-mod-tile is-active/);
+});
+
+test("Sales desk lists invoice types and opens quotation on this page", () => {
+  const grocery = H.modulesFor({ category: "Grocery" });
+  const sales = grocery.filter((m) => m.group === "sales");
+  assert.ok(sales.find((m) => m.id === "quotation").desk === "quotation");
+  assert.ok(sales.find((m) => m.id === "sales-order").desk === "sales-order");
+  assert.ok(sales.find((m) => m.id === "challan").desk === "challan");
+  assert.ok(sales.find((m) => m.id === "recurring").desk === "recurring");
+  assert.equal(sales.find((m) => m.id === "invoices").view, "orders");
+  assert.equal(sales.find((m) => m.id === "new-invoice").view, "counter");
+  assert.ok(H.SALES_DOC_KINDS.quotation && H.SALES_DOC_KINDS.challan);
+  assert.ok(H.SALES_SECTIONS.some((s) => s.id === "docs"));
+  const index = read("index.html");
+  const ui = read("js/biz-hub-ui.js");
+  const css = read("css/pos.css");
+  assert.match(index, /sales-desk/);
+  assert.match(index, /id="hub-sales-search"/);
+  assert.match(index, /id="hub-sales-work"/);
+  assert.match(index, /id="hub-sales-stats"/);
+  assert.match(ui, /function paintSalesWork/);
+  assert.match(ui, /showView\("hub-sales"\)/);
+  assert.match(ui, /data-sales-bill/);
+  assert.match(css, /sales-desk: invoice types/);
+  assert.ok(!grocery.some((m) => m.id === "credit-note"));
+  const pharm = H.modulesFor({ category: "Medical / Pharmacy" });
+  assert.equal(pharm.find((m) => m.id === "credit-note").view, "returns");
+});
+
+test("Quotation opens Sales desk work instead of Purchase desk", () => {
+  const mem = {};
+  const els = {};
+  const views = [];
+  const el = (id, extra = {}) => {
+    els[id] = { id, hidden: false, innerHTML: "", value: "", scrollIntoView() {}, ...extra };
+    return els[id];
+  };
+  el("hub-sales-tiles");
+  el("hub-sales-work", { hidden: true });
+  el("hub-sales-stats");
+  el("hub-sales-search", { value: "" });
+  el("hub-purchases-work", { hidden: true, innerHTML: "" });
+  const sandbox = {
+    document: {
+      getElementById: (id) => els[id] || null,
+      addEventListener() {},
+      querySelectorAll: () => [],
+      querySelector: () => null,
+    },
+    localStorage: {
+      getItem: (k) => mem[k] || null,
+      setItem: (k, v) => {
+        mem[k] = v;
+      },
+    },
+    state: { session: { business_id: "b1", role: "business_admin" }, customers: [{ name: "Walk-in" }] },
+    POSBizHub: H,
+    showView: (name) => views.push(name),
+    console,
+    setTimeout,
+  };
+  sandbox.globalThis = sandbox;
+  vm.runInNewContext(read("js/biz-hub-ui.js"), sandbox);
+  sandbox.POSBizHubUi.openModule("quotation");
+  assert.deepEqual(views, ["hub-sales"]);
+  assert.equal(els["hub-sales-work"].hidden, false);
+  assert.match(els["hub-sales-work"].innerHTML, /Quotation/);
+  assert.match(els["hub-sales-work"].innerHTML, /id="sales-doc-form"/);
+  assert.match(els["hub-sales-work"].innerHTML, /Valid until/);
+  assert.match(els["hub-sales-work"].innerHTML, /Save as sales order/);
+  assert.match(els["hub-sales-work"].innerHTML, /Bill as tax invoice/);
+  assert.equal(els["hub-purchases-work"].innerHTML, "");
+  sandbox.POSBizHubUi.openModule("challan");
+  assert.match(els["hub-sales-work"].innerHTML, /Delivery Challan/);
+  assert.match(els["hub-sales-work"].innerHTML, /Vehicle/);
+  sandbox.POSBizHubUi.openModule("recurring");
+  assert.match(els["hub-sales-work"].innerHTML, /Next bill date/);
+  sandbox.POSBizHubUi.openModule("invoices");
+  assert.equal(views.at(-1), "orders");
 });

@@ -6,7 +6,7 @@
     <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
     <title>ATAV POS</title>
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./css/pos.css?v=20260920deploy199" />
+    <link rel="stylesheet" href="./css/pos.css?v=20260920deploy200" />
     <link rel="stylesheet" href="./css/saas.css?v=20260905deploy136" />
   </head>
   <body>
@@ -1973,15 +1973,20 @@
         </section>
         <section class="view view-finance" id="view-hub-sales" hidden>
           <h2 class="visually-hidden">Sales desk</h2>
-          <div class="items-desk">
+          <div class="items-desk sales-desk">
             <header class="items-hero">
               <div class="items-hero-copy">
                 <p class="items-kicker">Sales</p>
                 <h3>Sales desk</h3>
-                <p class="lede">Counter POS bills invoices. Quotations, orders, and challans sit here as document types — billed sales stay on Invoices. Returns stay off the till unless this is a pharmacy or garment shop.</p>
+                <p class="lede">Tax invoices bill on Counter and list under Sales Invoice. Quotations, sales orders, challans, and recurring schedules open on this page — they do not post GST or stock until you bill a tax invoice.</p>
+                <label class="purchases-desk-search purchases-desk-search-hero">Find
+                  <input id="hub-sales-search" type="search" placeholder="Quotation, challan, invoice, receipt…" autocomplete="off" />
+                </label>
               </div>
+              <div class="items-hero-stats" id="hub-sales-stats"></div>
             </header>
-            <div id="hub-sales-tiles"></div>
+            <div id="hub-sales-work" class="purchase-doc-work sales-doc-work" hidden></div>
+            <div id="hub-sales-tiles" class="hub-sales-tiles"></div>
           </div>
         </section>
         <section class="view view-finance" id="view-hub-purchases" hidden>
@@ -2379,8 +2384,8 @@
     <script src="./js/qrcode.iife.js?v=20260905qr1" defer></script>
     <script src="./js/qr-notify.js?v=20260914kot1" defer></script>
     <script src="./js/payment-methods.js?v=20260918pay1" defer></script>
-    <script src="./js/biz-hub.js?v=20260919salon1" defer></script>
-    <script src="./js/biz-hub-ui.js?v=20260920saas3" defer></script>
+    <script src="./js/biz-hub.js?v=20260920deploy200" defer></script>
+    <script src="./js/biz-hub-ui.js?v=20260920deploy200" defer></script>
     <script src="./js/salon.js?v=20260919salon1" defer></script>
     <script src="./js/salon-ui.js?v=20260919salon1" defer></script>
     <script src="./js/app.js?v=20260920deploy199" defer></script>
