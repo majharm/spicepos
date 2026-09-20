@@ -29,7 +29,7 @@ import { getPlatformSettings, shopSupportContact } from "./settings.js";
 import { sendLowStockAlerts, tickShopAlerts, startAlertScheduler, scheduleAlertTick } from "./alerts.js";
 import { registerAdvanced, computeSaleLine, applySaleStock, applyLoyaltyOnSale, pharmacyLineSnapshot, enrichCatalogPharmacy, saleStockQty, persistSaleLineNote } from "./advanced.js";
 import { registerReturns } from "./returns.js";
-import { registerQrPublic, registerQrStaff, linkQrOrderSale, ensureQrOrderSchema } from "./qr-ordering.js";
+import { registerAnalyticsPublic, registerAnalyticsMaster } from "./analytics.js";
 import { registerRxPublic, registerRxStaff } from "./prescriptions.js";
 import { registerSalonPublic, registerSalonStaff, ensureSalonSchema } from "./salon.js";
 import "../js/discount.js";
@@ -83,6 +83,7 @@ registerAuth(app);
 registerQrPublic(app);
 registerRxPublic(app);
 registerSalonPublic(app);
+registerAnalyticsPublic(app);
 
 const PUBLIC_INVOICE_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -183,6 +184,7 @@ app.use((req, res, next) => {
     url.startsWith("/api/invoices") ||
     url.startsWith("/api/health") ||
     url.startsWith("/api/master") ||
+    url.startsWith("/api/analytics") ||
     url.startsWith("/api/support-contact")
   ) {
     return next();
@@ -190,6 +192,7 @@ app.use((req, res, next) => {
   return requireStaff(req, res, next);
 });
 registerMaster(app);
+registerAnalyticsMaster(app);
 registerTenant(app);
 registerHub(app);
 registerAdvanced(app);

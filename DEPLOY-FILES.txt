@@ -56,6 +56,7 @@ CSS
   css/saas.css
   css/qr-order.css
   css/marketing.css
+  css/analytics.css
 
 JavaScript
   js/app.js
@@ -76,6 +77,8 @@ JavaScript
   js/qr-order.js
   js/qrcode.iife.js
   js/marketing.js
+  js/ga4.js
+  js/master-analytics.js
 
 PHP
   pos-php-core.php
@@ -96,6 +99,7 @@ PHP
   pos-mail.php
   pos-smtp.php
   pos-alerts.php
+  pos-analytics.php
   pos-advanced.php
   pos-item-import.php
   pos-qr-ordering.php
@@ -158,6 +162,7 @@ Node (if using hPanel Node.js web app — upload OR git pull then Restart)
   server/units.js
   server/mail.js
   server/alerts.js
+  server/analytics.js
   server/load-env.js
   server/mail.js
   server/advanced.js

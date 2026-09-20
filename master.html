@@ -8,6 +8,7 @@
     <link rel="icon" href="./favicon.svg" />
     <link rel="stylesheet" href="./css/pos.css?v=20260905deploy145" />
     <link rel="stylesheet" href="./css/saas.css?v=20260919loginp1" />
+    <link rel="stylesheet" href="./css/analytics.css?v=20260920ga4a" />
   </head>
   <body class="auth-body auth-zoho master-locked">
     <div class="auth-shell auth-shell-v2 auth-shell-zoho auth-shell-poster" id="master-gate">
@@ -103,6 +104,25 @@
             <button type="button" class="nav-sub" data-tab="devices">POS devices</button>
             <button type="button" class="nav-sub" data-tab="audit">Audit log</button>
           </div>
+          <div class="master-nav-group">
+            <p class="nav-group-label">Analytics</p>
+            <button type="button" data-tab="analytics" data-analytics-pane="overview"><span class="nav-icon" aria-hidden="true">▣</span>Google Analytics</button>
+            <button type="button" class="nav-sub" data-tab="analytics" data-analytics-pane="overview">Overview</button>
+            <button type="button" class="nav-sub" data-tab="analytics" data-analytics-pane="realtime">Realtime</button>
+            <button type="button" class="nav-sub" data-tab="analytics" data-analytics-pane="acquisition">Acquisition</button>
+            <button type="button" class="nav-sub" data-tab="analytics" data-analytics-pane="engagement">Engagement</button>
+            <button type="button" class="nav-sub" data-tab="analytics" data-analytics-pane="landing">Landing Pages</button>
+            <button type="button" class="nav-sub" data-tab="analytics" data-analytics-pane="conversions">Conversions</button>
+            <button type="button" class="nav-sub" data-tab="analytics" data-analytics-pane="events">Events</button>
+            <button type="button" class="nav-sub" data-tab="analytics" data-analytics-pane="campaigns">Campaigns</button>
+            <button type="button" class="nav-sub" data-tab="analytics" data-analytics-pane="devices">Devices</button>
+            <button type="button" class="nav-sub" data-tab="analytics" data-analytics-pane="geo">Geography</button>
+            <button type="button" class="nav-sub" data-tab="analytics" data-analytics-pane="seo">SEO Traffic</button>
+            <button type="button" class="nav-sub" data-tab="analytics" data-analytics-pane="reports">Reports</button>
+            <button type="button" class="nav-sub" data-tab="analytics" data-analytics-pane="journey">User Journey</button>
+            <button type="button" class="nav-sub" data-tab="analytics" data-analytics-pane="alerts">Alerts</button>
+            <button type="button" class="nav-sub" data-tab="analytics" data-analytics-pane="settings">Settings</button>
+          </div>
         </div>
         <div class="nav-foot">
           <button class="btn-logout" type="button" id="logout" data-logout>Logout</button>
@@ -119,6 +139,7 @@
     <script src="./js/i18n.js?v=20260905deploy145" defer></script>
     <script src="./js/pos-api.js?v=20260905deploy154" defer></script>
     <script src="./js/support.js?v=20260905deploy138" defer></script>
-    <script src="./js/master.js?v=20260914mlux1" defer></script>
+    <script src="./js/master.js?v=20260920ga4a" defer></script>
+    <script src="./js/master-analytics.js?v=20260920ga4a" defer></script>
   </body>
 </html>

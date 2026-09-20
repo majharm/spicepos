@@ -1,6 +1,7 @@
 const $ = (id) => document.getElementById(id);
 let tab = "dash";
 let backupPane = "backup";
+let analyticsPane = "overview";
 let panelFlash = "";
 let alertLogFocus = "";
 
@@ -254,8 +255,11 @@ $("logout").onclick = async () => {
 
 function syncMasterNav() {
   document.querySelectorAll(".master-nav [data-tab]").forEach((b) => {
-    const pane = b.dataset.backupPane;
-    const on = b.dataset.tab === tab && (pane == null || pane === backupPane);
+    const backup = b.dataset.backupPane;
+    const analytics = b.dataset.analyticsPane;
+    let on = b.dataset.tab === tab;
+    if (backup != null) on = tab === "backup" && backup === backupPane;
+    if (analytics != null) on = tab === "analytics" && analytics === analyticsPane;
     b.classList.toggle("active", on);
   });
 }
@@ -283,13 +287,14 @@ function bindBackupFamilyTabs(root) {
 function setMasterTab(next, pane) {
   tab = next;
   if (next === "backup") backupPane = pane || "settings";
+  if (next === "analytics") analyticsPane = pane || "overview";
   syncMasterNav();
   document.querySelector(".master-main")?.scrollTo({ top: 0 });
   render();
 }
 
 document.querySelectorAll(".master-nav [data-tab]").forEach((btn) => {
-  btn.onclick = () => setMasterTab(btn.dataset.tab, btn.dataset.backupPane);
+  btn.onclick = () => setMasterTab(btn.dataset.tab, btn.dataset.backupPane || btn.dataset.analyticsPane);
 });
 
 const ALERT_LOG_KIND_LABEL = {
@@ -1576,6 +1581,7 @@ async function render() {
     expiry: "Send alerts",
     "alert-log": "WA Master & Email log",
     backup: backupPane === "settings" ? "Settings" : "Backup",
+    analytics: "Google Analytics",
     notes: "Messages",
     languages: "Languages",
     alerts: "Settings",
@@ -2181,6 +2187,14 @@ async function render() {
           hint.className = "hint error";
         }
       };
+    } else if (tab === "analytics") {
+      if (!window.POSMasterAnalytics?.render) {
+        body.innerHTML = `<p class="hint error">Analytics UI did not load. Upload js/master-analytics.js.</p>`;
+      } else {
+        await window.POSMasterAnalytics.render(body, analyticsPane, api, {
+          setPane: (p) => setMasterTab("analytics", p),
+        });
+      }
     } else if (tab === "advance") {
       body.innerHTML = advanceHubHtml();
       bindAdvanceCards(body);

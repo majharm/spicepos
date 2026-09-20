@@ -2298,6 +2298,10 @@ function pos_php_dispatch($path, $method, $rawBody) {
       require_once __DIR__ . "/pos-salon.php";
       if (function_exists("pos_salon_public_dispatch") && pos_salon_public_dispatch($path, $method, $body)) return;
     }
+    if (strpos($path, "analytics/") === 0) {
+      require_once __DIR__ . "/pos-analytics.php";
+      if (function_exists("pos_analytics_public_dispatch") && pos_analytics_public_dispatch($path, $method, $body)) return;
+    }
     if (preg_match("#^invoices/([^/]+)$#", $path, $m) && $method === "GET") {
       pos_public_invoice_send($m[1]);
       return;
@@ -2603,6 +2607,11 @@ function pos_php_dispatch($path, $method, $rawBody) {
     }
 
     $auth = pos_require_master($path);
+
+    if (strpos($path, "master/analytics") === 0) {
+      require_once __DIR__ . "/pos-analytics.php";
+      if (function_exists("pos_analytics_master_dispatch") && pos_analytics_master_dispatch($path, $method, $body)) return;
+    }
 
     if ($path === "master/dashboard" && $method === "GET") {
       if (function_exists("pos_tick_shop_alerts")) {

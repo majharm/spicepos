@@ -537,6 +537,12 @@ export async function ensureSchema() {
   const { ensureAlertSettings } = await import("./alerts.js");
   await ensureAlertSettings();
   try {
+    const { ensureAnalyticsSchema } = await import("./analytics.js");
+    await ensureAnalyticsSchema();
+  } catch {
+    /* analytics tables optional during early setup */
+  }
+  try {
     const { ensureAdvancedSchema } = await import("./advanced.js");
     await ensureAdvancedSchema();
   } catch {

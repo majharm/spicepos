@@ -1,0 +1,12 @@
+/* Master Admin website analytics */
+.ga-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 16px; }
+.ga-kpi em { display: block; font-size: 12px; color: #64748b; }
+.ga-kpi em.up { color: #15803d; }
+.ga-kpi em.down { color: #b91c1c; }
+.ga-note { max-width: 72ch; }
+.ga-ai { background: #f8fafc; border-radius: 12px; padding: 12px 16px; margin-top: 12px; }
+.ga-flow { display: grid; gap: 6px; }
+.ga-range-row { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; margin-bottom: 16px; }
+.ga-arch { background: #eff6ff; border-radius: 12px; padding: 12px 16px; margin-bottom: 12px; }
+#ga-consent button[data-ga="yes"] { background: #f58220; color: #fff; }
+#ga-consent button[data-ga="no"] { background: #fff; color: #073b82; }

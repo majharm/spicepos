@@ -46,6 +46,7 @@ test("public homepage matches ATAV TELECOM reference layout", () => {
   assert.match(home, /href="\.\/about\.html"/);
   assert.match(home, /marketing\.css\?v=20260920deploy195/);
   assert.match(home, /marketing\.js\?v=20260920deploy195/);
+  assert.match(home, /ga4\.js\?v=20260920ga4a/);
   assert.match(css, /--orange: #f58220/);
   assert.match(css, /--blue: #073b82/);
   assert.match(js, /data-hero-slider/);

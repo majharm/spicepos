@@ -309,7 +309,7 @@ test("Master Admin can set passwords and unlock locked accounts", () => {
   assert.match(core, /pos_register_business\(\$body, true\)/);
   assert.match(core, /strtotime\("\+1 year"\)/);
   assert.match(read("server/onboard.js"), /INTERVAL 1 YEAR/);
-  assert.match(read("master.html"), /master\.js\?v=20260914mlux1/);
+  assert.match(read("master.html"), /master\.js\?v=20260920ga4a/);
   assert.match(read("js/app.js"), /Subscription fee \/ year/);
   assert.match(read("js/app.js"), /\["Valid till"/);
   assert.match(read("js/app.js"), /\["Days left"/);
@@ -520,4 +520,15 @@ test("editing a saved bill keeps line and bill discounts on Save changes", () =>
   assert.match(phpOrders, /pos_compute_sale_line/);
   assert.match(phpOrders, /pos_adv_discount_amount/);
   assert.match(phpOrders, /discount_type = \?, discount_value = \?/);
+});
+
+test("PHP website analytics public and master routes are wired", () => {
+  const core = read("pos-php-core.php");
+  const php = read("pos-analytics.php");
+  const index = read("server/index.js");
+  assert.match(core, /strpos\(\$path, "analytics\/"\) === 0/);
+  assert.match(core, /strpos\(\$path, "master\/analytics"\) === 0/);
+  assert.match(php, /website_analytics_settings/);
+  assert.match(php, /pos_analytics_summarize/);
+  assert.match(index, /registerAnalyticsPublic\(app\)/);
 });
