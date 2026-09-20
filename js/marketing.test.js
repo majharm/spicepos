@@ -43,8 +43,9 @@ test("public homepage matches ATAV TELECOM reference layout", () => {
   assert.match(home, /data-hero-slider/);
   assert.match(home, /Smart Billing for Restaurants/);
   assert.doesNotMatch(home, /id="view-orders"/);
-  assert.match(home, /marketing\.css\?v=20260920deploy194/);
-  assert.match(home, /marketing\.js\?v=20260920deploy194/);
+  assert.match(home, /href="\.\/about\.html"/);
+  assert.match(home, /marketing\.css\?v=20260920deploy195/);
+  assert.match(home, /marketing\.js\?v=20260920deploy195/);
   assert.match(css, /--orange: #f58220/);
   assert.match(css, /--blue: #073b82/);
   assert.match(js, /data-hero-slider/);
@@ -52,6 +53,13 @@ test("public homepage matches ATAV TELECOM reference layout", () => {
   assert.match(js, /mailto:info@atavtelecom\.in/);
   assert.match(server, /sendFile\(path\.join\(publicDir, "home\.html"\)\)/);
   assert.match(loginJs, /location\.href = "\/index\.html"/);
-  assert.match(deploy, /home\.html/);
+  assert.match(deploy, /about\.html/);
+  const about = read("about.html");
+  assert.match(about, /Building the software backbone of modern business/);
+  assert.match(about, /Founded in 2018/);
+  assert.match(about, /over 100 businesses/);
+  assert.match(about, /IT services, software development, SaaS, cloud communication and digital marketing/);
+  assert.match(about, /Space 31, Khadi Machine Chowk/);
+  assert.doesNotMatch(about, /id="view-orders"/);
   assert.match(ht, /DirectoryIndex home\.html index\.html/);
 });

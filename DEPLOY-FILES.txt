@@ -17,6 +17,7 @@ Assets
 
 HTML
   home.html
+  about.html
   home.htaccess
   .htaccess (DirectoryIndex home.html — force-included in git; do not add /api RewriteRules)
   index.html
