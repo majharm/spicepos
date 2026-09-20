@@ -99,15 +99,33 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .drop-menu a:hover { background: var(--ice); color: var(--blue); }
 .nav-login { margin-left: auto; display: none; }
 
-.hero-slider { position: relative; overflow: hidden; height: 480px; background: #eaf4ff; }
-.hero-track { display: flex; height: 100%; transition: transform .55s ease; }
+.hero-slider { position: relative; overflow: hidden; background: #eaf4ff; }
+.hero-track { display: flex; transition: transform .55s ease; }
 .hero-slide {
-  flex: 0 0 100%; min-width: 100%; height: 100%;
-  display: grid; grid-template-columns: 1.05fr .95fr; align-items: center; gap: 12px;
-  padding: 24px 0;
-  background:
-    radial-gradient(800px 280px at 80% 20%, rgba(245,130,32,.18), transparent 50%),
-    linear-gradient(180deg, #f4fbff, #e7f3ff);
+  flex: 0 0 100%; min-width: 100%;
+  margin: 0;
+  position: relative;
+  background: #e8f4ff;
+}
+.hero-slide img.banner {
+  width: 100%;
+  height: 480px;
+  object-fit: cover;
+  object-position: center;
+  display: block;
+}
+.hero-hit {
+  position: absolute;
+  left: 5%;
+  bottom: 11%;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+.sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0,0,0,0); border: 0;
 }
 .hero-copy { padding-left: max(56px, calc((100% - var(--max)) / 2 + 8px)); padding-right: 12px; }
 .hero-kicker { margin: 0; color: var(--orange); font-weight: 800; letter-spacing: .14em; font-size: 13px; }
@@ -288,13 +306,12 @@ body.nav-open .scrim { display: block; }
   .strip, .stats-grid { grid-template-columns: repeat(3, 1fr); }
 }
 @media (max-width: 860px) {
-  .hero-slider { height: auto; min-height: 0; }
-  .hero-slide, .feat-block, .cloud-grid, .quotes, .foot-grid, .form-grid, .strip, .stats-grid {
+  .hero-slider { height: auto; }
+  .hero-slide img.banner { height: 220px; }
+  .hero-hit { left: 12px; bottom: 12px; transform: scale(0.92); transform-origin: left bottom; }
+  .feat-block, .cloud-grid, .quotes, .foot-grid, .form-grid, .strip, .stats-grid {
     grid-template-columns: 1fr;
   }
-  .hero-copy { padding: 20px 16px 8px; }
-  .hero-art { padding: 0 16px 28px; min-height: 240px; }
-  .hero-art img.hardware { height: 240px; }
   .types { grid-template-columns: repeat(2, minmax(0,1fr)); }
   .nav-links, .nav-login, .mast-actions .wa-chip { display: none; }
   .nav-burger, .mast-toggle { display: inline-flex; }

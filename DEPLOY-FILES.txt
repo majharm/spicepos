@@ -8,9 +8,10 @@ Assets
   assets/login-atav-smart-pos.jpg
   assets/login-atav-master-pos.jpg
   assets/atav-pos-hardware.webp
-  assets/atav-pos-hero-slide2.webp
-  assets/atav-pos-hero-slide3.webp
-  assets/atav-pos-hero-slide4.webp
+  assets/atav-hero-slide-1.webp
+  assets/atav-hero-slide-2.webp
+  assets/atav-hero-slide-3.webp
+  assets/atav-hero-slide-4.webp
   assets/atav-pos-features-devices.webp
   assets/atav-pos-mobile-hand.webp
 
