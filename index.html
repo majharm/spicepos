@@ -125,10 +125,6 @@
         </header>
         <div class="session-bar">
           <span id="session-who">Signed in</span>
-          <label class="session-lang">
-            <span class="visually-hidden" data-i18n="app.language">Language</span>
-            <select id="topbar-locale" aria-label="Interface language"></select>
-          </label>
           <span id="session-support" class="session-support" hidden></span>
           <button class="btn-logout" type="button" data-logout data-i18n="app.logout">Logout</button>
         </div>
@@ -2066,7 +2062,6 @@
             </header>
             <div class="settings-tabs" role="tablist" aria-label="Settings sections">
               <button class="btn active" type="button" role="tab" aria-selected="true" data-settings-tab="profile" data-i18n="settings.profile">Profile</button>
-              <button class="btn" type="button" role="tab" aria-selected="false" data-settings-tab="language" data-i18n="settings.language_region">Language &amp; Region</button>
               <button class="btn" type="button" role="tab" aria-selected="false" data-settings-tab="backup" data-view="backup" data-i18n="settings.backup">Backup</button>
               <button class="btn" type="button" data-view-jump="devices">Hardware &amp; devices</button>
             </div>
@@ -2204,60 +2199,6 @@
                   </div>
                 </div>
               </div>
-            </div>
-            <div class="settings-pane" id="settings-pane-language" hidden>
-              <form class="settings item-composer" id="language-form" autocomplete="off">
-                <div class="item-composer-top">
-                  <p class="item-mode" data-i18n="settings.language_region">Language &amp; Region</p>
-                  <p class="item-composer-note" data-i18n="settings.hint">Your language applies to this login. Shop language is the default for staff who have not chosen one.</p>
-                </div>
-                <fieldset class="item-block">
-                  <legend data-i18n="app.language">Language</legend>
-                  <label class="full"><span data-i18n="settings.user_language">Your language</span>
-                    <select id="set-user-locale"></select>
-                  </label>
-                  <label class="full shop-lang-only"><span data-i18n="settings.shop_language">Shop language</span>
-                    <select id="set-shop-locale"></select>
-                  </label>
-                  <label class="full shop-lang-only"><span data-i18n="settings.invoice_language">Invoice language</span>
-                    <select id="set-invoice-language">
-                      <option value="en" data-i18n="settings.invoice_en">English</option>
-                      <option value="shop" data-i18n="settings.invoice_shop">Shop language</option>
-                      <option value="bilingual" data-i18n="settings.invoice_bilingual">English + regional</option>
-                    </select>
-                  </label>
-                  <label class="full shop-lang-only"><span data-i18n="settings.whatsapp_language">WhatsApp language</span>
-                    <select id="set-wa-language">
-                      <option value="customer" data-i18n="settings.wa_customer">Customer preferred</option>
-                      <option value="shop" data-i18n="settings.wa_shop">Shop language</option>
-                      <option value="en" data-i18n="settings.wa_en">English</option>
-                    </select>
-                  </label>
-                  <label class="full shop-lang-only"><span data-i18n="settings.email_language">Email language</span>
-                    <select id="set-email-language"></select>
-                  </label>
-                  <label class="full shop-lang-only"><span data-i18n="settings.ai_language">AI assistant language</span>
-                    <select id="set-ai-language"></select>
-                  </label>
-                </fieldset>
-                <fieldset class="item-block">
-                  <legend data-i18n="app.region">Region</legend>
-                  <label><span data-i18n="settings.number_format">Number format</span>
-                    <input value="Indian (12,50,000)" readonly />
-                  </label>
-                  <label><span data-i18n="settings.currency">Currency</span>
-                    <input value="INR ₹" readonly />
-                  </label>
-                  <label><span data-i18n="settings.date_format">Date format</span>
-                    <input value="DD/MM/YYYY" readonly />
-                  </label>
-                </fieldset>
-                <p class="item-composer-note full" data-i18n="settings.voice_note">Voice POS for Indian languages is planned.</p>
-                <div class="item-composer-actions">
-                  <button class="btn primary" type="submit" data-i18n="app.save">Save</button>
-                  <p class="hint" id="language-hint"></p>
-                </div>
-              </form>
             </div>
             <div class="settings-pane" id="settings-pane-backup" hidden>
               <div class="settings" id="view-backup">
@@ -2442,7 +2383,7 @@
     <script src="./js/biz-hub-ui.js?v=20260920saas3" defer></script>
     <script src="./js/salon.js?v=20260919salon1" defer></script>
     <script src="./js/salon-ui.js?v=20260919salon1" defer></script>
-    <script src="./js/app.js?v=20260920scale5" defer></script>
+    <script src="./js/app.js?v=20260920lang1" defer></script>
     <script src="./js/growth.js?v=20260905deploy145" defer></script>
     <script src="./js/offers-ui.js?v=20260919off1" defer></script>
   </body>

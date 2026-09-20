@@ -2044,9 +2044,8 @@ function paintViewHeader(name) {
 }
 
 function showSettingsTab(tab) {
-  const name = tab === "backup" || tab === "language" ? tab : "profile";
+  const name = tab === "backup" ? tab : "profile";
   if ($("settings-pane-profile")) $("settings-pane-profile").hidden = name !== "profile";
-  if ($("settings-pane-language")) $("settings-pane-language").hidden = name !== "language";
   if ($("settings-pane-backup")) $("settings-pane-backup").hidden = name !== "backup";
   document.querySelectorAll("[data-settings-tab]").forEach((btn) => {
     const on = btn.dataset.settingsTab === name;
@@ -2065,7 +2064,7 @@ function showView(name) {
   if (name === "prescriptions" && !isPharmacyShop()) name = can("counter") ? "counter" : landingView();
   if (name === "kot" && (!isRestaurantShop() || !can("kot"))) name = can("counter") ? "counter" : landingView();
   const requested = name;
-  state.currentView = name === "backup" || name === "language" ? "settings" : name;
+  state.currentView = name === "backup" ? "settings" : name;
   if (name === "backup") name = "settings";
   document.querySelectorAll(".view").forEach((el) => {
     el.hidden = el.id !== `view-${name}`;
@@ -2081,7 +2080,7 @@ function showView(name) {
   const page = document.getElementById(`view-${name}`);
   if (page) page.scrollTop = 0;
   paintViewHeader(name);
-  if (name === "settings") showSettingsTab(requested === "backup" || requested === "language" ? requested : "profile");
+  if (name === "settings") showSettingsTab(requested === "backup" ? "backup" : "profile");
   if (name === "reports") {
     loadReports();
     globalThis.POSBizHubUi?.paintReportsCenter?.();
@@ -9596,64 +9595,6 @@ $("password-form")?.addEventListener("submit", async (e) => {
     hint.className = "hint error";
   }
 });
-
-$("language-form")?.addEventListener("submit", async (e) => {
-  e.preventDefault();
-  const hint = $("language-hint");
-  try {
-    const userLocale = $("set-user-locale")?.value || "";
-    await api("/api/me/locale", { method: "POST", body: JSON.stringify({ locale: userLocale }) });
-    if (state.session) state.session.locale = userLocale;
-    if (can("settings")) {
-      const payload = {
-        name: state.company.name || $("set-name")?.value || "",
-        address: state.company.address || "",
-        phone: state.company.phone || "",
-        email: state.company.email || "",
-        gstin: state.company.gstin || "",
-        city: state.company.city || "",
-        state: state.company.state || "",
-        pincode: state.company.pincode || state.company.pin_code || "",
-        timezone: state.company.timezone || shopTimezone(),
-        locale: $("set-shop-locale")?.value || "en",
-        invoice_language: $("set-invoice-language")?.value || "shop",
-        whatsapp_language: $("set-wa-language")?.value || "customer",
-        email_language: $("set-email-language")?.value || "en",
-        ai_language: $("set-ai-language")?.value || "en",
-      };
-      const data = await api("/api/settings", { method: "POST", body: JSON.stringify(payload) });
-      if (data.company) state.company = { ...state.company, ...data.company };
-    }
-    applyUiLocale();
-    if (hint) {
-      hint.textContent = tt("settings.saved", "Language settings saved");
-      hint.className = "hint ok";
-    }
-  } catch (err) {
-    if (hint) {
-      hint.textContent = err.message;
-      hint.className = "hint error";
-    }
-  }
-});
-
-if ($("topbar-locale")) {
-  $("topbar-locale").addEventListener("change", async () => {
-    const locale = $("topbar-locale").value || "";
-    try {
-      await api("/api/me/locale", { method: "POST", body: JSON.stringify({ locale }) });
-      if (state.session) state.session.locale = locale;
-      applyUiLocale();
-      renderCart();
-    } catch (err) {
-      const hint = $("language-hint");
-      if (hint) {
-        hint.textContent = err.message;
-        hint.className = "hint error";
-      }
-    }
-  });
-}
 
 $("settings-form").addEventListener("submit", async (e) => {
   e.preventDefault();

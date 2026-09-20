@@ -104,7 +104,8 @@ test("PHP fallback routes checkout, holds, and order updates through core", () =
   assert.match(till, /payment_upi/);
   assert.match(core, /function pos_clip_invoice_text/);
   assert.match(core, /function pos_attach_invoice_text/);
-  assert.match(read("index.html"), /settings-pane-language/);
+  assert.doesNotMatch(read("index.html"), /settings-pane-language/);
+  assert.doesNotMatch(read("index.html"), /Language &amp; Region/);
   assert.match(read("index.html"), /id="set-invoice-footer"/);
   assert.match(read("index.html"), /id="set-invoice-terms"/);
   assert.match(read("index.html"), /id="set-pay-qr"/);
@@ -371,7 +372,7 @@ test("POS boot skips API probe and slims catalog photos", () => {
   assert.match(index, /qrcode\.iife\.js[^>]+defer/);
   assert.match(index, /preload="none"/);
   assert.match(index, /pos-api\.js\?v=20260905deploy154/);
-  assert.match(index, /app\.js\?v=20260920scale5/);
+  assert.match(index, /app\.js\?v=20260920lang1/);
   assert.match(index, /class="dialog-head"/);
   assert.match(index, /id="modal-close"/);
   assert.match(read("css/pos.css"), /#modal-close \{/);
@@ -435,7 +436,7 @@ test("Restaurant Counter can create named dining tables", () => {
   assert.match(till, /dining-tables/);
   assert.match(index, /pos\.css\?v=20260920scale5/);
   assert.match(index, /restaurant\.js\?v=20260918table1/);
-  assert.match(index, /app\.js\?v=20260920scale5/);
+  assert.match(index, /app\.js\?v=20260920lang1/);
   assert.match(index, /footwear\.js\?v=20260919inv2/);
   assert.match(app, /function resolveKitchenKot/);
   assert.match(app, /function paintKotTimers/);
