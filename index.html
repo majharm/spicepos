@@ -6,7 +6,7 @@
     <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
     <title>ATAV POS</title>
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./css/pos.css?v=20260919an3" />
+    <link rel="stylesheet" href="./css/pos.css?v=20260920saas1" />
     <link rel="stylesheet" href="./css/saas.css?v=20260905deploy136" />
   </head>
   <body>
@@ -102,6 +102,21 @@
             <h1 id="view-title">Dashboard</h1>
             <p id="view-subtitle">Your shop today</p>
           </div>
+          <div class="saas-top-tools" id="saas-top-tools">
+            <select id="dash-branch" class="select" aria-label="Branch" title="Branch"></select>
+            <select id="dash-range" class="select" aria-label="Date range" title="Date range">
+              <option value="day">Today</option>
+              <option value="week">This week</option>
+              <option value="month" selected>This month</option>
+              <option value="year">This year</option>
+            </select>
+            <span class="saas-fy" id="dash-fy" title="Financial year">FY</span>
+            <input id="dash-search" type="search" placeholder="Search items, bills, customers…" aria-label="Global search" />
+            <button type="button" class="btn icon-btn" id="dash-quick-add" title="Quick add" aria-label="Quick add">+</button>
+            <button type="button" class="btn icon-btn" id="dash-notify" title="Notifications" aria-label="Notifications">🔔<span class="nav-badge" id="dash-notify-count" hidden></span></button>
+            <button type="button" class="btn icon-btn" id="dash-help" title="Help" data-view-jump="support">?</button>
+            <button type="button" class="btn icon-btn" id="dash-theme" title="Light / Dark">◐</button>
+          </div>
           <div class="view-topbar-stats" id="view-topbar-stats">
             <span class="mini-stat">Today <b id="topbar-total">₹0.00</b></span>
             <span class="mini-stat">Bills <b id="topbar-count">0</b></span>
@@ -121,44 +136,25 @@
           Subscription expired. Data is kept. Ask the platform owner to renew this business.
         </div>
         <div class="platform-notices" id="platform-notices" hidden aria-live="polite"></div>
-        <section class="view analytics-dash" id="view-dashboard">
+        <section class="view saas-dash" id="view-dashboard">
           <h2 class="visually-hidden">Dashboard</h2>
-          <div class="items-desk dash-desk analytics-dash-desk">
-            <header class="an-chrome">
-              <div class="an-logo">
-                <span class="an-logo-mark" aria-hidden="true"></span>
-                <span class="an-logo-copy">
-                  <b>RetailPOS</b>
-                  <small>Analytics</small>
-                </span>
+          <div class="items-desk dash-desk saas-dash-desk">
+            <header class="saas-dash-head">
+              <div>
+                <p class="saas-kicker">Business control center</p>
+                <h3 id="dash-welcome">Dashboard</h3>
+                <p class="lede dash-hero-meta" id="dash-welcome-meta"></p>
               </div>
-              <h3 class="visually-hidden" id="dash-welcome">Dashboard</h3>
-              <p class="visually-hidden" id="dash-welcome-meta"></p>
-              <nav class="an-chrome-nav" aria-label="Modules">
-                <button type="button" data-dash-view="items">Masters</button>
-                <button type="button" data-dash-view="stock">Inventory</button>
-                <button type="button" data-dash-view="offers">Merchandising</button>
-                <button type="button" data-dash-view="hub-purchases">Purchase</button>
-                <button type="button" data-dash-view="orders">Sales</button>
-                <button type="button" data-dash-view="stock">Stock</button>
-                <button type="button" data-dash-view="settings">Management</button>
-                <button type="button" data-dash-view="reports">Reports</button>
-                <button type="button" data-dash-view="branches">Transfers</button>
-                <button type="button" data-dash-view="staff">Security</button>
-                <button type="button" data-dash-view="growth" id="open-growth">Add-ons</button>
-              </nav>
-              <p class="an-chrome-actions">
+              <p class="dash-actions">
                 <button class="btn primary" type="button" data-view-jump="counter" id="open-pos">New bill</button>
-                <button class="btn ghost" type="button" data-logout>Logout</button>
+                <button class="btn" type="button" data-view-jump="reports">Reports</button>
+                <button class="btn" type="button" id="open-growth">AI Growth</button>
               </p>
             </header>
             <div class="platform-notes" id="dash-notes"></div>
-            <div class="an-grid" id="dash-kpis"></div>
+            <div class="saas-board" id="dash-kpis"></div>
             <div class="report-grid dash-kpi-grid services-only" id="salon-dash-kpis" hidden></div>
-            <footer class="an-foot">
-              <span>This Retail POS Product is best viewed in Google chrome</span>
-              <div class="an-plan" id="dash-plan-kpis"></div>
-            </footer>
+            <div class="an-plan" id="dash-plan-kpis"></div>
             <div class="dash-shortcuts visually-hidden" id="dash-shortcuts" aria-hidden="true">
               <button type="button" class="dash-tile" data-dash-view="counter">
                 <strong>Counter</strong>
@@ -2358,6 +2354,17 @@
         </section>
       </div>
     </aside>
+    <div class="saas-fab-wrap" id="saas-fab-wrap">
+      <div class="saas-fab-menu" id="saas-fab-menu" hidden>
+        <button type="button" data-dash-view="counter">New sale</button>
+        <button type="button" data-dash-view="purchases">Purchase</button>
+        <button type="button" data-dash-view="customers">Customer</button>
+        <button type="button" data-dash-view="items">Product</button>
+        <button type="button" data-dash-view="expenses">Expense</button>
+        <button type="button" class="services-only" data-dash-view="bookings">Appointment</button>
+      </div>
+      <button type="button" class="saas-fab" id="saas-fab" title="Quick add">+</button>
+    </div>
     <script src="./js/i18n-catalog.js?v=20260905deploy150" defer></script>
     <script src="./js/i18n.js?v=20260905deploy145" defer></script>
     <script src="./js/gst-supply.js?v=20260905deploy136" defer></script>
@@ -2379,10 +2386,10 @@
     <script src="./js/qr-notify.js?v=20260914kot1" defer></script>
     <script src="./js/payment-methods.js?v=20260918pay1" defer></script>
     <script src="./js/biz-hub.js?v=20260919salon1" defer></script>
-    <script src="./js/biz-hub-ui.js?v=20260919an3" defer></script>
+    <script src="./js/biz-hub-ui.js?v=20260920saas1" defer></script>
     <script src="./js/salon.js?v=20260919salon1" defer></script>
     <script src="./js/salon-ui.js?v=20260919salon1" defer></script>
-    <script src="./js/app.js?v=20260919an3" defer></script>
+    <script src="./js/app.js?v=20260920saas1" defer></script>
     <script src="./js/growth.js?v=20260905deploy145" defer></script>
     <script src="./js/offers-ui.js?v=20260919off1" defer></script>
   </body>

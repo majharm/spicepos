@@ -40,27 +40,26 @@ test("Industry modules stay off grocery shops", () => {
   assert.equal(H.DASH_KPIS[0].featured, true);
 });
 
-test("Dashboard uses a colorful retail analytics home", () => {
+test("Dashboard uses a SaaS business control center", () => {
   const index = read("index.html");
   const ui = read("js/biz-hub-ui.js");
   const app = read("js/app.js");
   const css = read("css/pos.css");
-  assert.match(index, /analytics-dash-desk/);
-  assert.match(index, /RetailPOS/);
-  assert.match(index, />Analytics</);
-  assert.match(index, /class="an-chrome"/);
+  assert.match(index, /saas-dash-desk/);
+  assert.match(index, /id="saas-top-tools"/);
   assert.match(index, /id="open-pos">New bill</);
-  assert.match(css, /body\.analytics-home/);
-  assert.match(app, /analytics-home/);
+  assert.match(css, /saas-control-dash: enterprise home 2026/);
+  assert.match(app, /function paintDashChrome/);
+  assert.match(app, /applyColorScheme/);
   assert.match(index, /id="dash-plan-kpis"/);
-  assert.match(index, /biz-hub-ui\.js\?v=20260919an3/);
-  assert.match(css, /grid-row: 3 \/ span 2/);
-  assert.match(ui, /an-kpi an-sales/);
-  assert.match(ui, /Today Sales Paymode wise/);
+  assert.match(index, /biz-hub-ui\.js\?v=20260920saas1/);
+  assert.match(css, /saas-kpi-grid/);
+  assert.match(ui, /function kpiCard/);
+  assert.match(ui, /Today's Sales/);
   assert.match(ui, /function donutHtml/);
+  assert.match(ui, /industryHtml/);
   assert.match(app, /el\.textContent = "Dashboard"/);
-  assert.match(css, /retail-analytics: colorful POS home 2026/);
-  assert.match(css, /\.an-sales/);
+  assert.match(read("server/hub.js"), /expirySoon/);
 });
 
 test("POS shell wires Reports Center, payments, audit, and hub scripts", () => {

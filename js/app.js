@@ -5151,7 +5151,40 @@ function paintHeader() {
   showLogo($("shop-logo"), state.company.logo_url);
   const mark = $("brand-mark");
   if (mark) mark.hidden = Boolean(state.company.logo_url);
+  const fy = $("dash-fy");
+  if (fy) {
+    const d = new Date();
+    const y = d.getMonth() >= 3 ? d.getFullYear() : d.getFullYear() - 1;
+    fy.textContent = `FY ${y}–${String(y + 1).slice(-2)}`;
+  }
 }
+
+function applyColorScheme(next) {
+  const scheme = next || localStorage.getItem("pos_color_scheme") || "light";
+  document.documentElement.dataset.scheme = scheme === "dark" ? "dark" : "light";
+  localStorage.setItem("pos_color_scheme", document.documentElement.dataset.scheme);
+}
+
+function paintDashChrome(d) {
+  const sel = $("dash-branch");
+  if (sel) {
+    const rows = Array.isArray(d?.branches) ? d.branches : [];
+    const cur = sel.value;
+    sel.innerHTML = `<option value="">All branches</option>${rows
+      .map((b) => `<option value="${escapeHtml(b.id || b.name)}">${escapeHtml(b.name || "Branch")}</option>`)
+      .join("")}`;
+    if ([...sel.options].some((o) => o.value === cur)) sel.value = cur;
+    sel.hidden = rows.length < 1;
+  }
+  const n = Number((d?.notes || []).length) || 0;
+  const badge = $("dash-notify-count");
+  if (badge) {
+    badge.hidden = n < 1;
+    badge.textContent = n > 9 ? "9+" : String(n);
+  }
+}
+
+applyColorScheme();
 
 async function loadBootstrap() {
   let data = await api("/api/bootstrap");
@@ -5246,6 +5279,7 @@ async function loadDashboard() {
     const d = await api("/api/dashboard");
     paintDashWelcome(d.subscription);
     paintPlatformNotices(d.notes);
+    paintDashChrome(d);
     const sub = subscriptionValidity(d.subscription);
     if (globalThis.POSBizHubUi?.paintDashboard) {
       globalThis.POSBizHubUi.paintDashboard(d);
@@ -9816,6 +9850,49 @@ $("view-dashboard")?.addEventListener("click", (e) => {
   }
   const tile = e.target.closest("[data-dash-view]");
   if (tile) showView(tile.dataset.dashView);
+});
+$("saas-fab-wrap")?.addEventListener("click", (e) => {
+  const jump = e.target.closest("[data-dash-view]");
+  if (jump) {
+    showView(jump.dataset.dashView);
+    const menu = $("saas-fab-menu");
+    if (menu) menu.hidden = true;
+    return;
+  }
+  if (e.target.closest("#saas-fab")) {
+    const menu = $("saas-fab-menu");
+    if (menu) menu.hidden = !menu.hidden;
+  }
+});
+$("dash-quick-add")?.addEventListener("click", () => {
+  const menu = $("saas-fab-menu");
+  if (menu) menu.hidden = !menu.hidden;
+});
+$("dash-theme")?.addEventListener("click", () => {
+  applyColorScheme(document.documentElement.dataset.scheme === "dark" ? "light" : "dark");
+});
+$("dash-notify")?.addEventListener("click", () => {
+  const notes = document.getElementById("dash-notes") || document.getElementById("platform-notices");
+  notes?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+});
+$("dash-search")?.addEventListener("keydown", (e) => {
+  if (e.key !== "Enter") return;
+  const q = String($("dash-search").value || "").trim();
+  if (!q) return;
+  if (/^so-|^inv|#/i.test(q)) {
+    showView("orders");
+    if ($("orders-search")) $("orders-search").value = q;
+    return;
+  }
+  showView("items");
+  if ($("item-catalog-search")) $("item-catalog-search").value = q;
+});
+$("view-dashboard")?.addEventListener("click", (e) => {
+  const seg = e.target.closest("#dash-range-seg button");
+  if (!seg) return;
+  document.querySelectorAll("#dash-range-seg button").forEach((b) => b.classList.toggle("is-on", b === seg));
+  const range = $("dash-range");
+  if (range) range.value = seg.dataset.range || range.value;
 });
 document.addEventListener("click", (e) => {
   const btn = e.target.closest("[data-apply-combo]");

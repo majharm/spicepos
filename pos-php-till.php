@@ -204,6 +204,15 @@ function pos_php_till_dispatch($path, $method, $body) {
       "payModes" => [],
       "categories" => [],
       "monthGraph" => [],
+      "todayOrders" => 0,
+      "yesterdayOrders" => 0,
+      "weekSales" => 0,
+      "customersCount" => 0,
+      "outStock" => 0,
+      "hourly" => [],
+      "topCustomers" => [],
+      "expirySoon" => 0,
+      "expired" => 0,
     ];
     try {
       $r = pos_q("SELECT COALESCE(SUM(amount),0) AS total FROM account_ledger WHERE business_id = ? AND LOWER(entry_type) = 'receipt' AND DATE(COALESCE(payment_date, created_at)) = CURDATE()", "s", [$bid]);
@@ -244,6 +253,22 @@ function pos_php_till_dispatch($path, $method, $body) {
       $hub["payModes"] = pos_q("SELECT LOWER(COALESCE(NULLIF(payment_method,''),'other')) AS method, COALESCE(SUM(total),0) AS amount FROM sales_orders WHERE business_id = ? AND DATE(created_at) = CURDATE() AND LOWER(COALESCE(status,'')) <> 'cancelled' GROUP BY LOWER(COALESCE(NULLIF(payment_method,''),'other')) ORDER BY amount DESC", "s", [$bid]);
       $hub["categories"] = pos_q("SELECT COALESCE(NULLIF(i.category,''),'Other') AS name, SUM(l.amount) AS amount FROM sales_order_lines l JOIN sales_orders o ON o.id = l.order_id LEFT JOIN items i ON i.id = l.item_id WHERE o.business_id = ? AND DATE(o.created_at) = CURDATE() AND COALESCE(l.cancelled,0) = 0 AND LOWER(COALESCE(o.status,'')) <> 'cancelled' GROUP BY COALESCE(NULLIF(i.category,''),'Other') ORDER BY amount DESC LIMIT 8", "s", [$bid]);
       $hub["monthGraph"] = pos_q("SELECT DATE_FORMAT(created_at, '%Y-%m') AS month, COALESCE(SUM(total),0) AS sales FROM sales_orders WHERE business_id = ? AND created_at >= DATE_SUB(CURDATE(), INTERVAL 11 MONTH) AND LOWER(COALESCE(status,'')) <> 'cancelled' GROUP BY DATE_FORMAT(created_at, '%Y-%m') ORDER BY month", "s", [$bid]);
+      $to = pos_q("SELECT COUNT(*) AS n FROM sales_orders WHERE business_id = ? AND DATE(created_at) = CURDATE() AND LOWER(COALESCE(status,'')) <> 'cancelled'", "s", [$bid]);
+      $hub["todayOrders"] = (int) ($to[0]["n"] ?? 0);
+      $yo = pos_q("SELECT COUNT(*) AS n FROM sales_orders WHERE business_id = ? AND DATE(created_at) = DATE_SUB(CURDATE(), INTERVAL 1 DAY) AND LOWER(COALESCE(status,'')) <> 'cancelled'", "s", [$bid]);
+      $hub["yesterdayOrders"] = (int) ($yo[0]["n"] ?? 0);
+      $ws = pos_q("SELECT COALESCE(SUM(total),0) AS takings FROM sales_orders WHERE business_id = ? AND DATE(created_at) >= DATE_SUB(CURDATE(), INTERVAL 6 DAY) AND LOWER(COALESCE(status,'')) <> 'cancelled'", "s", [$bid]);
+      $hub["weekSales"] = (float) ($ws[0]["takings"] ?? 0);
+      $cc = pos_q("SELECT COUNT(*) AS n FROM customers WHERE business_id = ?", "s", [$bid]);
+      $hub["customersCount"] = (int) ($cc[0]["n"] ?? 0);
+      $osx = pos_q("SELECT COUNT(*) AS n FROM items WHERE business_id = ? AND stock_gm <= 0", "s", [$bid]);
+      $hub["outStock"] = (int) ($osx[0]["n"] ?? 0);
+      $hub["hourly"] = pos_q("SELECT HOUR(created_at) AS hr, COALESCE(SUM(total),0) AS sales, COUNT(*) AS bills FROM sales_orders WHERE business_id = ? AND DATE(created_at) = CURDATE() AND LOWER(COALESCE(status,'')) <> 'cancelled' GROUP BY HOUR(created_at) ORDER BY hr", "s", [$bid]);
+      $hub["topCustomers"] = pos_q("SELECT COALESCE(NULLIF(customer_name,''),'Walk-in') AS name, COALESCE(SUM(total),0) AS amount, COUNT(*) AS bills FROM sales_orders WHERE business_id = ? AND DATE(created_at) = CURDATE() AND LOWER(COALESCE(status,'')) <> 'cancelled' GROUP BY COALESCE(NULLIF(customer_name,''),'Walk-in') ORDER BY amount DESC LIMIT 5", "s", [$bid]);
+      $es = pos_q("SELECT COUNT(*) AS n FROM stock_batches WHERE business_id = ? AND remaining_gm > 0 AND expiry_date IS NOT NULL AND expiry_date BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 30 DAY)", "s", [$bid]);
+      $hub["expirySoon"] = (int) ($es[0]["n"] ?? 0);
+      $exb = pos_q("SELECT COUNT(*) AS n FROM stock_batches WHERE business_id = ? AND remaining_gm > 0 AND expiry_date IS NOT NULL AND expiry_date < CURDATE()", "s", [$bid]);
+      $hub["expired"] = (int) ($exb[0]["n"] ?? 0);
     } catch (Exception $e) {
       /* hub extras are best-effort on older shops */
     }

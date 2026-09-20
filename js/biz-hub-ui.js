@@ -142,6 +142,103 @@
       .join("")}</div>`;
   }
 
+  function sparkSvg(vals) {
+    const nums = (vals || []).map((v) => Number(v) || 0);
+    if (nums.length < 2) return "";
+    const max = Math.max(1, ...nums);
+    const w = 88;
+    const h = 28;
+    const pts = nums
+      .map((v, i) => {
+        const x = (i / (nums.length - 1)) * w;
+        const y = h - (v / max) * (h - 4) - 2;
+        return `${x.toFixed(1)},${y.toFixed(1)}`;
+      })
+      .join(" ");
+    return `<svg class="saas-spark" viewBox="0 0 ${w} ${h}" aria-hidden="true"><polyline fill="none" stroke="currentColor" stroke-width="2" points="${pts}"/></svg>`;
+  }
+
+  function kpiCard({ id, label, value, delta, spark, view, tone }) {
+    const up = String(delta || "0%").startsWith("-") ? "is-down" : "is-up";
+    return `<button type="button" class="saas-kpi ${tone || ""}" data-dash-view="${escapeHtml(view || "reports")}" data-widget="${escapeHtml(id)}" title="${escapeHtml(label)}">
+      <span class="saas-kpi-top"><em>${escapeHtml(label)}</em><span class="saas-delta ${up}">${escapeHtml(delta || "0%")}</span></span>
+      <strong>${escapeHtml(value)}</strong>
+      ${spark || ""}
+    </button>`;
+  }
+
+  function listRows(rows, empty) {
+    if (!rows?.length) return `<p class="hint">${escapeHtml(empty || "No data yet.")}</p>`;
+    return `<ul class="saas-list">${rows.join("")}</ul>`;
+  }
+
+  function hiddenSet() {
+    try {
+      return new Set(JSON.parse(localStorage.getItem("pos_dash_hidden") || "[]"));
+    } catch {
+      return new Set();
+    }
+  }
+
+  function industryHtml(kind, h, d) {
+    if (kind === "restaurant") {
+      return `<section class="saas-card" data-widget="industry">
+        <header class="saas-card-head"><h3>Restaurant floor</h3><button type="button" class="saas-link" data-dash-view="kot">Kitchen</button></header>
+        <div class="saas-chip-row">
+          <button type="button" class="saas-chip" data-dash-view="counter">Dine-in / Counter</button>
+          <button type="button" class="saas-chip" data-dash-view="kot">Running KOT</button>
+          <button type="button" class="saas-chip" data-dash-view="qr-orders">QR orders</button>
+          <span class="saas-chip is-stat">AOV ${escapeHtml(inr((Number(d.today?.takings) || 0) / Math.max(1, Number(h.todayOrders) || Number(d.today?.bills) || 1)))}</span>
+        </div>
+        <p class="hint">Open Counter for tables. Kitchen KOT and QR orders stay on this shop type.</p>
+      </section>`;
+    }
+    if (kind === "pharmacy") {
+      return `<section class="saas-card" data-widget="industry">
+        <header class="saas-card-head"><h3>Pharmacy stock</h3><button type="button" class="saas-link" data-dash-view="expiry">Expiry</button></header>
+        <div class="saas-chip-row">
+          <button type="button" class="saas-chip is-warn" data-dash-view="expiry">Expired ${Number(h.expired) || 0}</button>
+          <button type="button" class="saas-chip is-soon" data-dash-view="expiry">Near expiry ${Number(h.expirySoon) || 0}</button>
+          <button type="button" class="saas-chip" data-dash-view="prescriptions">Prescriptions</button>
+          <button type="button" class="saas-chip" data-dash-view="stock">Medicine stock</button>
+        </div>
+      </section>`;
+    }
+    if (kind === "services") {
+      return `<section class="saas-card" data-widget="industry">
+        <header class="saas-card-head"><h3>Salon / Spa today</h3><button type="button" class="saas-link" data-dash-view="bookings">Bookings</button></header>
+        <div class="saas-chip-row">
+          <button type="button" class="saas-chip" data-dash-view="bookings">Appointments</button>
+          <button type="button" class="saas-chip" data-dash-view="packages">Packages</button>
+          <button type="button" class="saas-chip" data-dash-view="salon-board">Salon desk</button>
+          <button type="button" class="saas-chip" data-dash-view="staff">Staff</button>
+        </div>
+      </section>`;
+    }
+    if (kind === "apparel" || kind === "footwear") {
+      return `<section class="saas-card" data-widget="industry">
+        <header class="saas-card-head"><h3>Garment / retail</h3><button type="button" class="saas-link" data-dash-view="returns">Returns</button></header>
+        <div class="saas-chip-row">
+          <button type="button" class="saas-chip" data-dash-view="stock">Inventory</button>
+          <button type="button" class="saas-chip" data-dash-view="items">Size / colour</button>
+          <button type="button" class="saas-chip" data-dash-view="returns">Returns / exchange</button>
+        </div>
+        <div class="saas-split-lists">
+          <div><h4>Fast moving</h4>${brandBarsHtml((h.topItems || []).slice(0, 4))}</div>
+          <div><h4>Watch stock</h4><p class="hint">${Number(h.lowStock) || 0} low · ${Number(h.outStock) || 0} out</p></div>
+        </div>
+      </section>`;
+    }
+    return `<section class="saas-card" data-widget="industry">
+      <header class="saas-card-head"><h3>Operations</h3></header>
+      <div class="saas-chip-row">
+        <button type="button" class="saas-chip" data-dash-view="counter">New sale</button>
+        <button type="button" class="saas-chip" data-dash-view="stock">Stock</button>
+        <button type="button" class="saas-chip" data-dash-view="customers">Customers</button>
+      </div>
+    </section>`;
+  }
+
   function paintDashboard(d) {
     const H = hub();
     if (!H || !$("dash-kpis")) return;
@@ -149,36 +246,105 @@
     const today = Number(d.today?.takings) || 0;
     const yest = Number(h.yesterdaySales) || 0;
     const profit = Number(h.grossProfit) || 0;
-    const profitPct = today > 0 ? Math.round((profit / today) * 100) : 0;
-    const cash = Number(h.todayCash) || 0;
-    const nonCash = Math.max(0, today - cash);
+    const net = Number(h.netProfit) || 0;
     const month = Number(h.monthSales) || 0;
     const prevM = Number(h.prevMonthSales) || 0;
-    const mCash = Number(h.monthCash) || 0;
-    const mNon = Math.max(0, month - mCash);
-    const tPurch = Number(d.purchase) || 0;
-    const mPurch = Number(h.monthPurchase) || 0;
     const stock = Number(d.stockValue) || 0;
-    const cart = "M7 18c-1.1 0-1.99.9-1.99 2S5.9 22 7 22s2-.9 2-2-.9-2-2-2zM1 2v2h2l3.6 7.59-1.35 2.45c-.16.28-.25.61-.25.96 0 1.1.9 2 2 2h12v-2H7.42c-.14 0-.25-.11-.25-.25l.03-.12.9-1.63h7.45c.75 0 1.41-.41 1.75-1.03l3.58-6.49A1 1 0 0 0 20 4H5.21l-.94-2H1zm16 16c-1.1 0-1.99.9-1.99 2s.89 2 1.99 2 2-.9 2-2-.9-2-2-2z";
-    const bag = "M16 6V4c0-1.11-.89-2-2-2h-4c-1.11 0-2 .89-2 2v2H2v13c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V6h-6zm-6-2h4v2h-4V4z";
-    const card = "M20 4H4c-1.11 0-1.99.89-1.99 2L2 18c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V6c0-1.11-.89-2-2-2zm0 14H4v-6h16v6zm0-10H4V6h16v2z";
-    const screen = "M21 3H3c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h7v2H8v2h8v-2h-2v-2h7c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 14H3V5h18v12z";
-    const truck = "M20 8h-3V4H3c-1.1 0-2 .9-2 2v11h2c0 1.66 1.34 3 3 3s3-1.34 3-3h6c0 1.66 1.34 3 3 3s3-1.34 3-3h2v-5l-3-4zM6 18.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zm13.5-9l1.96 2.5H17V9.5h2.5zm-1.5 9c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z";
-    const cal = "M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11z";
-    const box = "M20 2H4c-1 0-2 .9-2 2v3.01c0 .72.43 1.34 1 1.69V20c0 1.1 1.1 2 2 2h14c.9 0 2-.9 2-2V8.7c.57-.35 1-.97 1-1.69V4c0-1.1-1-2-2-2zm-5 12H9v-2h6v2zm5-7H4V4h16v3z";
+    const orders = Number(h.todayOrders) || Number(d.today?.bills) || 0;
+    const yOrders = Number(h.yesterdayOrders) || 0;
+    const expenses = Number(h.expenses) || 0;
+    const recv = Number(d.outstanding) || 0;
+    const pay = Number(h.payable) || 0;
+    const sparkSales = sparkSvg((h.salesGraph || []).map((r) => r.sales));
+    const sparkPay = sparkSvg((h.payGraph || []).map((r) => r.collected));
+    const sparkMonth = sparkSvg((h.monthGraph || []).map((r) => r.sales));
+    const kind = H.shopKind?.(biz()) || "general";
+    const hide = hiddenSet();
+    const kpis = [
+      kpiCard({ id: "today-sales", label: "Today's Sales", value: inr(today), delta: pctDelta(today, yest), spark: sparkSales, view: "orders", tone: "tone-sales" }),
+      kpiCard({ id: "today-orders", label: "Today's Orders", value: String(orders), delta: pctDelta(orders, yOrders), spark: sparkSales, view: "orders" }),
+      kpiCard({ id: "month-rev", label: "Monthly Revenue", value: inr(month), delta: pctDelta(month, prevM), spark: sparkMonth, view: "orders", tone: "tone-month" }),
+      kpiCard({ id: "gross", label: "Gross Profit", value: inr(profit), delta: today > 0 ? `${Math.round((profit / today) * 100)}%` : "0%", spark: sparkSales, view: "reports", tone: "tone-profit" }),
+      kpiCard({ id: "net", label: "Net Profit", value: inr(net), delta: pctDelta(net, Number(h.monthExpenses) || 0), spark: sparkMonth, view: "reports" }),
+      kpiCard({ id: "exp", label: "Expenses", value: inr(expenses), delta: "today", spark: sparkPay, view: "expenses", tone: "tone-exp" }),
+      kpiCard({ id: "recv", label: "Pending Receivables", value: inr(recv), delta: `${Number(h.outstandingCustomers) || 0} accts`, spark: sparkPay, view: "customers", tone: "tone-due" }),
+      kpiCard({ id: "pay", label: "Supplier Payables", value: inr(pay), delta: `${Number(h.outstandingSuppliers) || 0} accts`, spark: sparkPay, view: "accounts" }),
+      kpiCard({ id: "stock", label: "Inventory Value", value: inr(stock), spark: sparkMonth, view: "stock", tone: "tone-stock" }),
+      kpiCard({ id: "low", label: "Low Stock Items", value: String(Number(h.lowStock) || 0), delta: `${Number(h.outStock) || 0} out`, view: "stock", tone: "tone-warn" }),
+    ].filter((html) => {
+      const m = html.match(/data-widget="([^"]+)"/);
+      return m ? !hide.has(m[1]) : true;
+    });
+    const hours = Array.from({ length: 24 }, (_, i) => {
+      const row = (h.hourly || []).find((r) => Number(r.hr) === i);
+      return Number(row?.sales) || 0;
+    });
+    const hourMax = Math.max(1, ...hours);
+    const hourBars = hours
+      .map((v, i) => `<span class="saas-hour" title="${i}:00 · ${inr(v)}"><i style="height:${Math.max(4, Math.round((v / hourMax) * 72))}px"></i></span>`)
+      .join("");
+    const alerts = [
+      Number(h.lowStock) ? ["Low stock", h.lowStock, "stock", "warn"] : null,
+      Number(h.outStock) ? ["Out of stock", h.outStock, "stock", "danger"] : null,
+      Number(h.expirySoon) ? ["Expiring soon", h.expirySoon, "expiry", "soon"] : null,
+      Number(h.expired) ? ["Expired", h.expired, "expiry", "danger"] : null,
+      Number(h.outstandingCustomers) ? ["Customer credit due", h.outstandingCustomers, "customers", "warn"] : null,
+      Number(h.outstandingSuppliers) ? ["Supplier payment due", h.outstandingSuppliers, "accounts", "warn"] : null,
+    ]
+      .filter(Boolean)
+      .map(
+        ([label, n, view, tone]) =>
+          `<button type="button" class="saas-alert ${tone}" data-dash-view="${view}"><b>${escapeHtml(String(n))}</b><span>${escapeHtml(label)}</span></button>`,
+      );
+    const recent = (h.recent || []).slice(0, 8).map(
+      (r) =>
+        `<li><strong>${escapeHtml(r.order_number || "Sale")}</strong><span>${escapeHtml(r.customer_name || "Walk-in")} · ${money(r.total)}</span><em>${escapeHtml(r.status || r.payment_method || "")}</em></li>`,
+    );
+    const tops = (h.topCustomers || []).map(
+      (r) => `<li><strong>${escapeHtml(r.name)}</strong><span>${inr(r.amount)} · ${Number(r.bills) || 0} bills</span></li>`,
+    );
     $("dash-kpis").innerHTML = `
-      <button type="button" class="an-kpi an-sales" data-dash-view="orders"><span class="an-pct">${escapeHtml(pctDelta(today, yest))}</span>${ico(cart)}<strong>${escapeHtml(inr(today))}</strong><em>Today Sales</em></button>
-      <button type="button" class="an-kpi an-profit" data-dash-view="reports">${ico(bag)}<span class="an-split"><b>${profitPct}%</b><small>Profit (%)</small></span><span class="an-split"><b>${escapeHtml(inr(profit))}</b><small>Profit Amount</small></span></button>
-      <button type="button" class="an-kpi an-cash" data-dash-view="payments">${ico(card)}<span class="an-split"><b>${escapeHtml(inr(cash))}</b><small>Cash</small></span><span class="an-split"><b>${escapeHtml(inr(nonCash))}</b><small>Non Cash</small></span></button>
-      <button type="button" class="an-kpi an-msales" data-dash-view="orders"><span class="an-pct">${escapeHtml(pctDelta(month, prevM))}</span>${ico(screen)}<strong>${escapeHtml(inr(month))}</strong><em>Monthly Sales</em></button>
-      <button type="button" class="an-kpi an-mcash" data-dash-view="payments">${ico(card)}<span class="an-split"><b>${escapeHtml(inr(mCash))}</b><small>Cash</small></span><span class="an-split"><b>${escapeHtml(inr(mNon))}</b><small>Non Cash</small></span></button>
-      <button type="button" class="an-kpi an-tpurch" data-dash-view="purchases">${ico(truck)}<strong>${escapeHtml(inr(tPurch))}</strong><em>Today Purchase</em></button>
-      <button type="button" class="an-kpi an-mpurch" data-dash-view="purchases">${ico(cal)}<strong>${escapeHtml(inr(mPurch))}</strong><em>Monthly Purchase</em></button>
-      <div class="an-card an-paymode" id="dash-pay-graph">${donutHtml(h.payModes, "Today Sales Paymode wise")}</div>
-      <div class="an-card an-category" id="dash-category">${bubblesHtml(h.categories)}</div>
-      <button type="button" class="an-kpi an-stock" data-dash-view="stock">${ico(box)}<strong>${escapeHtml(inr(stock))}</strong><em>Stock Value</em></button>
-      <div class="an-card an-month" id="dash-sales-graph">${monthBarsHtml(h.monthGraph)}</div>
-      <div class="an-card an-brand" id="dash-top-items">${brandBarsHtml(h.topItems)}</div>`;
+      <div class="saas-kpi-grid">${kpis.join("")}</div>
+      <div class="saas-analytics">
+        <section class="saas-card saas-wide" data-widget="overview">
+          <header class="saas-card-head">
+            <h3>Revenue overview</h3>
+            <div class="saas-seg" id="dash-range-seg">
+              <button type="button" class="is-on" data-range="day">Day</button>
+              <button type="button" data-range="week">Week</button>
+              <button type="button" data-range="month">Month</button>
+              <button type="button" data-range="year">Year</button>
+            </div>
+          </header>
+          <p class="saas-overview-meta">This week ${escapeHtml(inr(h.weekSales))} · Month ${escapeHtml(inr(month))} vs last month ${escapeHtml(pctDelta(month, prevM))}</p>
+          <div id="dash-sales-graph">${monthBarsHtml(h.monthGraph)}</div>
+        </section>
+        <section class="saas-card" id="dash-pay-graph" data-widget="pay">${donutHtml(h.payModes, "Payment mix")}</section>
+        <section class="saas-card" id="dash-category" data-widget="cat">${bubblesHtml(h.categories)}</section>
+        <section class="saas-card" data-widget="hourly">
+          <header class="saas-card-head"><h3>Hourly sales</h3></header>
+          <div class="saas-hours">${hourBars}</div>
+        </section>
+        <section class="saas-card" id="dash-top-items" data-widget="top">${brandBarsHtml(h.topItems)}</section>
+        <section class="saas-card" data-widget="customers">
+          <header class="saas-card-head"><h3>Top customers</h3><button type="button" class="saas-link" data-dash-view="customers">Ledger</button></header>
+          ${listRows(tops, "No billed customers today.")}
+        </section>
+      </div>
+      <div class="saas-ops">
+        <section class="saas-card" data-widget="alerts">
+          <header class="saas-card-head"><h3>Alert center</h3></header>
+          <div class="saas-alerts">${alerts.length ? alerts.join("") : `<p class="hint">No stock or payment alerts.</p>`}</div>
+        </section>
+        <section class="saas-card" data-widget="activity">
+          <header class="saas-card-head"><h3>Recent activity</h3><button type="button" class="saas-link" data-dash-view="orders">View all</button></header>
+          ${listRows(recent, "No recent bills.")}
+        </section>
+        ${industryHtml(kind, h, d)}
+      </div>`;
+    document.querySelectorAll("#dash-kpis [data-widget]").forEach((el) => {
+      if (hide.has(el.dataset.widget)) el.hidden = true;
+    });
   }
 
   function paintReportsCenter() {
