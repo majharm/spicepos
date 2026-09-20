@@ -1,0 +1,3 @@
+# Public marketing page at /. Logged-in POS stays at /index.html.
+# Do not add API rewrites in this file — Hostinger/Passenger must own /api.
+DirectoryIndex home.html index.html

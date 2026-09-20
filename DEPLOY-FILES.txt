@@ -11,6 +11,7 @@ Assets
 HTML
   home.html
   home.htaccess
+  .htaccess (DirectoryIndex home.html — force-included in git; do not add /api RewriteRules)
   index.html
   qr.html
   order.html

@@ -14,7 +14,7 @@ test("public landing is a premium SaaS home independent of the POS shell", () =>
   const server = read("server/index.js");
   const loginJs = read("js/x-pos-20260830e.js");
   const deploy = read("DEPLOY-FILES.txt");
-  const ht = read("home.htaccess");
+  const ht = read(".htaccess");
 
   assert.match(home, /Run Your Business\. Sell More\. Grow Smarter\./);
   assert.match(home, /All-in-one POS software for Billing, Inventory, Customers, Payments, Staff, Reports and AI-powered Business Growth/);
@@ -63,6 +63,6 @@ test("public landing is a premium SaaS home independent of the POS shell", () =>
   assert.match(deploy, /home\.html/);
   assert.match(deploy, /css\/marketing\.css/);
   assert.match(deploy, /js\/marketing\.js/);
-  assert.match(deploy, /home\.htaccess/);
   assert.match(ht, /DirectoryIndex home\.html index\.html/);
+  assert.doesNotMatch(ht, /^RewriteRule/m);
 });
