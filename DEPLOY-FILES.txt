@@ -7,6 +7,12 @@ Assets
   assets/atav-telecom-logo.png
   assets/login-atav-smart-pos.jpg
   assets/login-atav-master-pos.jpg
+  assets/atav-pos-hardware.webp
+  assets/atav-pos-hero-slide2.webp
+  assets/atav-pos-hero-slide3.webp
+  assets/atav-pos-hero-slide4.webp
+  assets/atav-pos-features-devices.webp
+  assets/atav-pos-mobile-hand.webp
 
 HTML
   home.html
