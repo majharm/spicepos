@@ -40,8 +40,8 @@ test("public homepage matches ATAV TELECOM reference layout", () => {
   assert.match(home, /data-hero-slider/);
   assert.match(home, /Smart Billing/);
   assert.doesNotMatch(home, /id="view-orders"/);
-  assert.match(home, /marketing\.css\?v=20260920atav1/);
-  assert.match(home, /marketing\.js\?v=20260920atav1/);
+  assert.match(home, /marketing\.css\?v=20260920atav2/);
+  assert.match(home, /marketing\.js\?v=20260920atav2/);
   assert.match(css, /--orange: #f58220/);
   assert.match(css, /--blue: #073b82/);
   assert.match(js, /data-hero-slider/);
