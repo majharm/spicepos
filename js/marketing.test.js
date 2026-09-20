@@ -49,8 +49,8 @@ test("public landing is a premium SaaS home independent of the POS shell", () =>
   assert.match(home, /og:title/);
   assert.match(home, /login\.html\?tab=signup/);
   assert.doesNotMatch(home, /id="view-orders"/);
-  assert.match(home, /marketing\.css\?v=20260920slide1/);
-  assert.match(home, /marketing\.js\?v=20260920slide1/);
+  assert.match(home, /marketing\.css\?v=20260920deploy193/);
+  assert.match(home, /marketing\.js\?v=20260920deploy193/);
 
   assert.match(css, /\.hero-slider-track/);
   assert.match(js, /data-hero-slider/);
