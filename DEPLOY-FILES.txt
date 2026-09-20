@@ -9,6 +9,8 @@ Assets
   assets/login-atav-master-pos.jpg
 
 HTML
+  home.html
+  home.htaccess
   index.html
   qr.html
   order.html
@@ -44,6 +46,7 @@ CSS
   css/pos.css
   css/saas.css
   css/qr-order.css
+  css/marketing.css
 
 JavaScript
   js/app.js
@@ -63,6 +66,7 @@ JavaScript
   js/x-pos-20260830e.js
   js/qr-order.js
   js/qrcode.iife.js
+  js/marketing.js
 
 PHP
   pos-php-core.php

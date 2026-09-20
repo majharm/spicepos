@@ -52,7 +52,7 @@ loginForm.addEventListener("submit", async (e) => {
     }
     if (fd.get("remember")) localStorage.setItem("pos_remember_login", String(fd.get("identifier") || ""));
     else localStorage.removeItem("pos_remember_login");
-    location.href = "/";
+    location.href = "/index.html";
   } catch (err) {
     hint.textContent = err.message;
     hint.className = "hint error";
@@ -139,7 +139,7 @@ signupForm.addEventListener("submit", async (e) => {
       body: JSON.stringify(payload),
     });
     if (!res.ok) throw new Error(data.error || "Could not create business");
-    location.href = "/";
+    location.href = "/index.html";
   } catch (err) {
     hint.textContent = err.message;
     hint.className = "hint error";

@@ -1140,7 +1140,7 @@ app.post("/api/checkout", requireStaff, requirePerm("counter"), async (req, res)
 });
 
 app.get("/", (_req, res) => {
-  res.sendFile(path.join(publicDir, "index.html"));
+  res.sendFile(path.join(publicDir, "home.html"));
 });
 
 app.get(["/invoice", "/invoice/"], (req, res) => {

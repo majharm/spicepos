@@ -1,0 +1,3 @@
+# Optional: merge into the existing public_html .htaccess only if Apache
+# (not Node) serves the site. Do not replace Hostinger Node rewrites.
+DirectoryIndex home.html index.html
