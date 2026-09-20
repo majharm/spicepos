@@ -25,9 +25,9 @@ test("public pages load GA4 tagging and consent, Master Admin has Analytics", ()
   assert.match(ga, /book_demo/);
   assert.match(ga, /contact_submit/);
   assert.doesNotMatch(ga, /body\.params\.phone/);
-  assert.match(home, /js\/ga4\.js\?v=20260920ga4a/);
-  assert.match(about, /js\/ga4\.js\?v=20260920ga4a/);
-  assert.match(login, /js\/ga4\.js\?v=20260920ga4a/);
+  assert.match(home, /js\/ga4\.js\?v=20260920deploy196/);
+  assert.match(about, /js\/ga4\.js\?v=20260920deploy196/);
+  assert.match(login, /js\/ga4\.js\?v=20260920deploy196/);
   assert.match(master, /data-analytics-pane="settings"/);
   assert.match(master, /Google Analytics/);
   assert.match(master, /js\/master-analytics\.js/);
