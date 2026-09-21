@@ -20,6 +20,9 @@ function pos_ensure_kitchen_tickets_schema() {
       INDEX (business_id, status)
     )"
   );
+  @$db->query("ALTER TABLE kitchen_tickets ADD COLUMN notes VARCHAR(250) NULL");
+  @$db->query("ALTER TABLE kitchen_tickets ADD COLUMN lines_json MEDIUMTEXT NULL");
+  @$db->query("ALTER TABLE kitchen_tickets ADD COLUMN qr_order_id VARCHAR(255) NULL");
 }
 
 function pos_clip_kot_lines($raw) {
@@ -49,9 +52,23 @@ function pos_kot_row($row) {
     "status" => $row["status"] ?? "new",
     "notes" => $row["notes"] ?? "",
     "lines" => is_array($parsed) ? $parsed : [],
+    "qr_order_id" => $row["qr_order_id"] ?? "",
     "created_at" => $row["created_at"] ?? null,
     "updated_at" => $row["updated_at"] ?? null,
   ];
+}
+
+function pos_sync_qr_from_kot($qrOrderId, $kotStatus, $bid) {
+  $qrOrderId = trim((string) $qrOrderId);
+  if ($qrOrderId === "") return;
+  $map = ["preparing" => "preparing", "ready" => "ready", "done" => "completed"];
+  $next = $map[$kotStatus] ?? "kot_sent";
+  $rows = pos_q("SELECT status FROM qr_orders WHERE id = ? AND business_id = ? LIMIT 1", "ss", [$qrOrderId, $bid]);
+  $cur = (string) ($rows[0]["status"] ?? "pending");
+  if ($cur === "cancelled" || $cur === "completed") return;
+  $rank = ["pending" => 0, "kot_sent" => 1, "accepted" => 2, "preparing" => 3, "ready" => 4, "completed" => 5];
+  if (($rank[$cur] ?? 0) >= ($rank[$next] ?? 0) && $next !== "completed") return;
+  pos_q("UPDATE qr_orders SET status = ? WHERE id = ? AND business_id = ?", "sss", [$next, $qrOrderId, $bid]);
 }
 
 function pos_can_kot_board($user) {
@@ -79,19 +96,39 @@ function pos_dispatch_kots($path, $method, $body, $bid, $auth) {
   }
 
   if ($path === "kots" && $method === "POST") {
-    if (!pos_can($user, "counter")) pos_send(403, ["error" => "You do not have permission for this module"]);
+    if (!pos_can_kot_board($user)) pos_send(403, ["error" => "You do not have permission for this module"]);
     $lines = pos_clip_kot_lines($body["lines"] ?? []);
     if (!$lines) pos_send(400, ["error" => "Nothing to send to kitchen"]);
+    $qrOrderId = substr(trim((string) ($body["qr_order_id"] ?? $body["qrOrderId"] ?? "")), 0, 255);
     $id = pos_uuid();
     $tableNo = substr(trim((string) ($body["table_no"] ?? $body["tableNo"] ?? "")), 0, 64);
     $kind = (($body["kind"] ?? "") === "reprint") ? "reprint" : "new";
     $notes = substr(trim((string) ($body["notes"] ?? "")), 0, 250);
-    pos_q(
-      "INSERT INTO kitchen_tickets (id, business_id, table_no, kind, status, notes, lines_json, created_at, updated_at)
-       VALUES (?,?,?,?, 'new', ?, ?, NOW(3), NOW(3))",
-      "ssssss",
-      [$id, $bid, $tableNo !== "" ? $tableNo : null, $kind, $notes !== "" ? $notes : null, json_encode($lines, JSON_UNESCAPED_UNICODE)]
-    );
+    if ($qrOrderId !== "") {
+      $have = pos_q("SELECT * FROM kitchen_tickets WHERE qr_order_id = ? AND business_id = ? ORDER BY created_at DESC LIMIT 1", "ss", [$qrOrderId, $bid]);
+      if ($have) {
+        pos_q("UPDATE qr_orders SET status = CASE WHEN status IN ('pending','') OR status IS NULL THEN 'kot_sent' ELSE status END WHERE id = ? AND business_id = ?", "ss", [$qrOrderId, $bid]);
+        pos_send(200, ["ok" => true, "ticket" => pos_kot_row($have[0])]);
+      }
+    }
+    try {
+      pos_q(
+        "INSERT INTO kitchen_tickets (id, business_id, table_no, kind, status, notes, lines_json, qr_order_id, created_at, updated_at)
+         VALUES (?,?,?,?, 'new', ?, ?, ?, NOW(3), NOW(3))",
+        "sssssss",
+        [$id, $bid, $tableNo !== "" ? $tableNo : null, $kind, $notes !== "" ? $notes : null, json_encode($lines, JSON_UNESCAPED_UNICODE), $qrOrderId !== "" ? $qrOrderId : null]
+      );
+    } catch (Exception $e) {
+      pos_q(
+        "INSERT INTO kitchen_tickets (id, business_id, table_no, kind, status, notes, lines_json, created_at, updated_at)
+         VALUES (?,?,?,?, 'new', ?, ?, NOW(3), NOW(3))",
+        "ssssss",
+        [$id, $bid, $tableNo !== "" ? $tableNo : null, $kind, $notes !== "" ? $notes : null, json_encode($lines, JSON_UNESCAPED_UNICODE)]
+      );
+    }
+    if ($qrOrderId !== "") {
+      pos_q("UPDATE qr_orders SET status = CASE WHEN status IN ('pending','') OR status IS NULL THEN 'kot_sent' ELSE status END WHERE id = ? AND business_id = ?", "ss", [$qrOrderId, $bid]);
+    }
     $rows = pos_q("SELECT * FROM kitchen_tickets WHERE id = ? AND business_id = ? LIMIT 1", "ss", [$id, $bid]);
     pos_send(200, ["ok" => true, "ticket" => pos_kot_row($rows[0] ?? ["id" => $id, "lines_json" => json_encode($lines)])]);
   }
@@ -106,6 +143,7 @@ function pos_dispatch_kots($path, $method, $body, $bid, $auth) {
     $rows = pos_q("SELECT * FROM kitchen_tickets WHERE id = ? AND business_id = ? LIMIT 1", "ss", [$id, $bid]);
     if (!$rows) pos_send(404, ["error" => "KOT not found"]);
     pos_q("UPDATE kitchen_tickets SET status = ?, updated_at = NOW(3) WHERE id = ? AND business_id = ?", "sss", [$status, $id, $bid]);
+    pos_sync_qr_from_kot($rows[0]["qr_order_id"] ?? "", $status, $bid);
     $next = pos_q("SELECT * FROM kitchen_tickets WHERE id = ? AND business_id = ? LIMIT 1", "ss", [$id, $bid]);
     pos_send(200, ["ok" => true, "ticket" => pos_kot_row($next[0])]);
   }

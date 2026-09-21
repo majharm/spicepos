@@ -8,7 +8,7 @@ import { sendCredentialAlerts } from "./alerts.js";
 import { workbookXml } from "./excel.js";
 import { stockToSheets } from "./stock-excel.js";
 import { recomputeBusinessOutstanding } from "./accounts.js";
-import { buildHubDashboard } from "./hub.js";
+import { attachQrKitchenTicket, ensureKitchenTicketTable, syncQrFromKot } from "./qr-ordering.js";
 
 function send(res, fn) {
   return Promise.resolve()
@@ -104,6 +104,7 @@ function kotRow(row) {
     status: row.status || "new",
     notes: row.notes || "",
     lines,
+    qr_order_id: row.qr_order_id || "",
     created_at: row.created_at,
     updated_at: row.updated_at,
   };
@@ -631,6 +632,7 @@ export function registerTenant(app) {
 
   app.get("/api/kots", requireStaff, requirePermAny("kot", "counter"), (_req, res) =>
     send(res, async () => {
+      await ensureKitchenTicketTable(query);
       const rows = await query(
         `SELECT * FROM kitchen_tickets
          WHERE business_id = ?
@@ -643,20 +645,37 @@ export function registerTenant(app) {
     }),
   );
 
-  app.post("/api/kots", requireStaff, requirePerm("counter"), (req, res) =>
+  app.post("/api/kots", requireStaff, requirePermAny("kot", "counter"), (req, res) =>
     send(res, async () => {
+      await ensureKitchenTicketTable(query);
       const b = req.body || {};
       const lines = clipKotLines(b.lines);
       if (!lines.length) throw new Error("Nothing to send to kitchen");
+      const qrOrderId = String(b.qr_order_id || b.qrOrderId || "").trim();
+      if (qrOrderId) {
+        const ticketId = await attachQrKitchenTicket(query, {
+          businessId: bid(),
+          qrOrderId,
+          tableNo: String(b.table_no || b.tableNo || "").trim().slice(0, 64),
+          notes: String(b.notes || "").trim().slice(0, 250),
+          lines,
+        });
+        const [row] = await query("SELECT * FROM kitchen_tickets WHERE id = ? AND business_id = ? LIMIT 1", [ticketId, bid()]);
+        return { ok: true, ticket: kotRow(row) };
+      }
       const id = crypto.randomUUID();
       const tableNo = String(b.table_no || b.tableNo || "").trim().slice(0, 64);
       const kind = b.kind === "reprint" ? "reprint" : "new";
       const notes = String(b.notes || "").trim().slice(0, 250);
-      await query(
-        `INSERT INTO kitchen_tickets (id, business_id, table_no, kind, status, notes, lines_json, created_at, updated_at)
-         VALUES (?,?,?,?, 'new', ?, ?, NOW(3), NOW(3))`,
-        [id, bid(), tableNo || null, kind, notes || null, JSON.stringify(lines)],
-      );
+      try {
+        await query(
+          `INSERT INTO kitchen_tickets (id, business_id, table_no, kind, status, notes, lines_json, created_at, updated_at)
+           VALUES (?,?,?,?, 'new', ?, ?, NOW(3), NOW(3))`,
+          [id, bid(), tableNo || null, kind, notes || null, JSON.stringify(lines)],
+        );
+      } catch (err) {
+        throw err;
+      }
       const [row] = await query("SELECT * FROM kitchen_tickets WHERE id = ? AND business_id = ? LIMIT 1", [id, bid()]);
       return { ok: true, ticket: kotRow(row) };
     }),
@@ -674,6 +693,7 @@ export function registerTenant(app) {
         id,
         bid(),
       ]);
+      await syncQrFromKot(row.qr_order_id, status, bid());
       const [next] = await query("SELECT * FROM kitchen_tickets WHERE id = ? AND business_id = ? LIMIT 1", [id, bid()]);
       return { ok: true, ticket: kotRow(next) };
     }),
@@ -691,6 +711,7 @@ export function registerTenant(app) {
         id,
         bid(),
       ]);
+      await syncQrFromKot(row.qr_order_id, status, bid());
       const [next] = await query("SELECT * FROM kitchen_tickets WHERE id = ? AND business_id = ? LIMIT 1", [id, bid()]);
       return { ok: true, ticket: kotRow(next) };
     }),

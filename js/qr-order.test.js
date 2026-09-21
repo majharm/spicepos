@@ -29,6 +29,23 @@ test("Table QR prefill locks the table on the public menu", () => {
   assert.match(poster, /Scan to order from this table/);
 });
 
+test("Customer QR page tracks live kitchen status without a refresh", () => {
+  const html = read("order.html");
+  const js = read("js/qr-order.js");
+  const app = read("js/app.js");
+  const php = read("pos-qr-ordering.php");
+  const node = read("server/qr-ordering.js");
+  assert.match(html, /id="track-steps"/);
+  assert.match(js, /\/api\/qr\/order\?/);
+  assert.match(js, /function startTrack/);
+  assert.match(app, /async function sendQrKitchenKot/);
+  assert.match(app, /qr_order_id: order\.id/);
+  assert.match(php, /function pos_qr_send_kitchen_ticket/);
+  assert.match(php, /qr\/order/);
+  assert.match(node, /app.get\("\/api\/qr\/order"/);
+  assert.match(node, /kot_sent/);
+});
+
 test("Counter restaurant cart and QR desk show item-wise instructions", () => {
   const app = read("js/app.js");
   assert.match(app, /function restaurantLineNoteHtml/);

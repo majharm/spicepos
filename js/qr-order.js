@@ -439,6 +439,84 @@
     setCartNote(ta.dataset.note, ta.value);
   });
   let sending = false;
+  let trackTimer = 0;
+  let trackKey = null;
+
+  function moneyQty(item) {
+    const q = Number(item.quantity) || 0;
+    const unit = String(item.unit || "PCS").toUpperCase();
+    if (unit === "GM" || unit === "KG") return `${q} ${unit === "KG" ? "kg" : "g"}`;
+    return `${q} ${unit === "PCS" ? "pc" : unit.toLowerCase()}`;
+  }
+
+  function paintTrack(track) {
+    if (!track) return;
+    $("order-success").hidden = false;
+    $("success-number").textContent = track.order_number || "";
+    const tableEl = $("track-table");
+    if (tableEl) {
+      const t = String(track.table_no || "").trim();
+      tableEl.textContent = !t ? "" : /^(table|parcel|takeaway|pickup)/i.test(t) ? t : `Table ${t}`;
+    }
+    const totalEl = $("success-total");
+    if (totalEl) totalEl.textContent = `Total ${money(track.total)}`;
+    const timeEl = $("track-time");
+    if (timeEl && track.created_at) timeEl.textContent = `Ordered ${new Date(track.created_at).toLocaleString()}`;
+    const eta = $("track-eta");
+    if (eta) {
+      eta.hidden = !(track.eta_minutes && track.status !== "completed" && track.status !== "cancelled" && track.status !== "ready");
+      eta.textContent = track.eta_minutes ? `Estimated prep · about ${track.eta_minutes} min` : "";
+    }
+    const msg = $("track-message");
+    if (msg) msg.textContent = track.message || "";
+    const steps = $("track-steps");
+    if (steps) {
+      steps.innerHTML = (track.steps || [])
+        .map((s) => `<li class="${s.current ? "is-current" : ""} ${s.done ? "is-done" : ""}">${esc(s.label)}</li>`)
+        .join("");
+    }
+    const items = $("track-items");
+    if (items) {
+      items.innerHTML = (track.items || [])
+        .map((row) => `<div class="track-item"><span>${esc(row.name)} · ${esc(moneyQty(row))}</span><strong>${money(row.amount)}</strong></div>`)
+        .join("");
+    }
+    const kicker = $("track-kicker");
+    if (kicker) kicker.textContent = track.cancelled ? "ORDER CANCELLED" : "LIVE ORDER";
+  }
+
+  async function pollTrack() {
+    if (!trackKey) return;
+    try {
+      const res = await fetch(
+        `/api/qr/order?shop=${encodeURIComponent(trackKey.shop)}&id=${encodeURIComponent(trackKey.id)}&token=${encodeURIComponent(trackKey.token)}`,
+        { cache: "no-store" },
+      );
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.track) paintTrack(data.track);
+    } catch {
+      /* keep last status */
+    }
+  }
+
+  function startTrack(order) {
+    const token = order.public_token || order.token || "";
+    if (!order?.id || !token) return;
+    trackKey = { shop: shopKey, id: order.id, token };
+    try {
+      sessionStorage.setItem("atav.qrTrack", JSON.stringify(trackKey));
+    } catch {
+      /* private mode */
+    }
+    const url = new URL(location.href);
+    url.searchParams.set("oid", order.id);
+    url.searchParams.set("token", token);
+    history.replaceState({}, "", url);
+    if (trackTimer) clearInterval(trackTimer);
+    trackTimer = setInterval(pollTrack, 2500);
+    pollTrack();
+  }
+
   $("order-form").addEventListener("submit", async (event) => {
     event.preventDefault();
     if (sending) return;
@@ -476,9 +554,30 @@
         saveEl.hidden = disc <= 0 && !label;
         saveEl.textContent = disc > 0 ? `Discount · ${label || "Offer"} · you saved ${money(disc)}` : label;
       }
-      const totalEl = $("success-total");
-      if (totalEl) totalEl.textContent = `Total ${money(data.order?.total)}`;
-      $("order-success").hidden = false;
+      paintTrack({
+        order_number: data.order.order_number,
+        table_no: data.order.table_no || tablePrefill,
+        total: data.order.total,
+        created_at: new Date().toISOString(),
+        status: data.order.status || "pending",
+        message:
+          data.order.status === "kot_sent"
+            ? "Your order has been sent to the kitchen."
+            : "Your order has been successfully placed.",
+        items: [...state.cart].map(([id, qty]) => {
+          const item = findItem(id);
+          return { name: item?.name || "Item", quantity: qty, unit: item?.unit || "PCS", amount: lineAmount(item || {}, qty) };
+        }),
+        steps: [
+          { id: "pending", label: "Order Placed", done: true, current: data.order.status === "pending" },
+          { id: "kot_sent", label: "KOT Sent to Kitchen", done: data.order.status !== "pending", current: data.order.status === "kot_sent" },
+          { id: "accepted", label: "Order Accepted", done: false, current: false },
+          { id: "preparing", label: "Preparing", done: false, current: false },
+          { id: "ready", label: "Ready", done: false, current: false },
+          { id: "completed", label: "Served", done: false, current: false },
+        ],
+      });
+      startTrack(data.order);
       state.cart.clear();
       state.notes.clear();
       state.noteOpen.clear();
@@ -494,10 +593,26 @@
   });
   $("new-order").addEventListener("click", () => {
     $("order-success").hidden = true;
+    if (trackTimer) clearInterval(trackTimer);
+    trackTimer = 0;
     scrollTo({ top: 0, behavior: "smooth" });
   });
 
   if (tablePrefill) lockTableField();
+
+  (function resumeTrack() {
+    const params = new URLSearchParams(location.search);
+    const oid = params.get("oid");
+    const token = params.get("token");
+    let saved = null;
+    try {
+      saved = JSON.parse(sessionStorage.getItem("atav.qrTrack") || "null");
+    } catch {
+      saved = null;
+    }
+    if (oid && token) startTrack({ id: oid, public_token: token });
+    else if (saved?.id && saved?.token && saved.shop === shopKey) startTrack({ id: saved.id, public_token: saved.token });
+  })();
 
   loadMenu().catch((err) => {
     $("shop-name").textContent = "Menu unavailable";

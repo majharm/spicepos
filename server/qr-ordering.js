@@ -13,7 +13,17 @@ import { postSaleJournal } from "./accounting.js";
 
 const POSUnits = globalThis.POSUnits;
 const POSFootwear = globalThis.POSFootwear;
-const QR_STATUSES = ["pending", "accepted", "preparing", "ready", "completed", "cancelled"];
+const QR_STATUSES = ["pending", "kot_sent", "accepted", "preparing", "ready", "completed", "cancelled"];
+const QR_STAGE_RANK = { pending: 0, kot_sent: 1, accepted: 2, preparing: 3, ready: 4, completed: 5, cancelled: -1 };
+const QR_STAGE_COPY = {
+  pending: { label: "Order Placed", message: "Your order has been successfully placed." },
+  kot_sent: { label: "KOT Sent to Kitchen", message: "Your order has been sent to the kitchen." },
+  accepted: { label: "Order Accepted", message: "Your order has been accepted by the kitchen." },
+  preparing: { label: "Preparing 👨‍🍳", message: "Your order is being prepared." },
+  ready: { label: "Ready ✅", message: "Your order is ready." },
+  completed: { label: "Served 🍽️", message: "Your order has been served." },
+  cancelled: { label: "Cancelled", message: "Your order has been cancelled." },
+};
 const QR_PHARMACY_OFF = "QR ordering is not available for pharmacy shops";
 
 export function qrOrderingBlocked(biz) {
@@ -76,6 +86,21 @@ export async function ensureQrOrderSchema(conn = null) {
     INDEX idx_qr_order_lines_order (order_id),
     INDEX idx_qr_order_lines_business (business_id)
   )`);
+  try {
+    await exec("ALTER TABLE qr_orders ADD COLUMN public_token VARCHAR(64) NULL");
+  } catch {
+    /* already present */
+  }
+  try {
+    await exec("ALTER TABLE qr_orders ADD COLUMN eta_minutes INT NULL");
+  } catch {
+    /* already present */
+  }
+  try {
+    await exec("ALTER TABLE kitchen_tickets ADD COLUMN qr_order_id VARCHAR(255) NULL");
+  } catch {
+    /* kitchen table may not exist yet */
+  }
   try {
     await exec("ALTER TABLE qr_order_lines ADD COLUMN notes TEXT NULL");
   } catch {
@@ -337,6 +362,140 @@ async function businessForPublic(shop) {
   return rows[0] || null;
 }
 
+function cafeKitchenShop(biz) {
+  return POSFootwear?.shopKind?.(biz) === "restaurant";
+}
+
+function kotStatusToQr(status) {
+  const s = String(status || "new").toLowerCase();
+  if (s === "preparing") return "preparing";
+  if (s === "ready") return "ready";
+  if (s === "done") return "completed";
+  return "kot_sent";
+}
+
+export function qrCustomerTrack(order, lines = []) {
+  const status = String(order?.status || "pending").toLowerCase();
+  const rank = QR_STAGE_RANK[status] ?? 0;
+  const steps = ["pending", "kot_sent", "accepted", "preparing", "ready", "completed"].map((id) => {
+    const copy = QR_STAGE_COPY[id];
+    return {
+      id,
+      label: copy.label,
+      message: copy.message,
+      done: status === "cancelled" ? false : rank >= QR_STAGE_RANK[id],
+      current: status === id || (status === "completed" && id === "completed"),
+    };
+  });
+  if (status === "cancelled") {
+    steps.forEach((s) => {
+      s.done = false;
+      s.current = false;
+    });
+  }
+  const copy = QR_STAGE_COPY[status] || QR_STAGE_COPY.pending;
+  return {
+    id: order.id,
+    order_number: order.order_number,
+    table_no: order.table_no || "",
+    status,
+    stage: copy.label,
+    message: copy.message,
+    total: Number(order.total) || 0,
+    created_at: order.created_at,
+    eta_minutes: order.eta_minutes != null ? Number(order.eta_minutes) : cafeKitchenShop(order) ? 15 : null,
+    items: (lines || order.lines || []).map((line) => ({
+      name: line.item_name || line.name,
+      quantity: Number(line.quantity_gm || line.qtyGm) || 0,
+      unit: line.unit || "PCS",
+      amount: Number(line.amount) || 0,
+    })),
+    steps,
+    cancelled: status === "cancelled",
+  };
+}
+
+export async function ensureKitchenTicketTable(exec) {
+  await exec(`CREATE TABLE IF NOT EXISTS kitchen_tickets (
+    id VARCHAR(255) PRIMARY KEY,
+    business_id VARCHAR(255) NOT NULL,
+    table_no VARCHAR(64) NULL,
+    kind VARCHAR(16) NULL,
+    status VARCHAR(16) NOT NULL DEFAULT 'new',
+    notes VARCHAR(250) NULL,
+    lines_json MEDIUMTEXT NULL,
+    qr_order_id VARCHAR(255) NULL,
+    created_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    updated_at TIMESTAMP(3) NULL,
+    INDEX (business_id),
+    INDEX (business_id, status)
+  )`);
+  try {
+    await exec("ALTER TABLE kitchen_tickets ADD COLUMN notes VARCHAR(250) NULL");
+  } catch {
+    /* present */
+  }
+  try {
+    await exec("ALTER TABLE kitchen_tickets ADD COLUMN lines_json MEDIUMTEXT NULL");
+  } catch {
+    /* present */
+  }
+  try {
+    await exec("ALTER TABLE kitchen_tickets ADD COLUMN qr_order_id VARCHAR(255) NULL");
+  } catch {
+    /* present */
+  }
+}
+
+async function sqlRows(exec, sql, params = []) {
+  const out = exec && typeof exec.query === "function" ? await exec.query(sql, params) : await exec(sql, params);
+  return Array.isArray(out) && Array.isArray(out[0]) ? out[0] : out || [];
+}
+
+export async function attachQrKitchenTicket(exec, { businessId, qrOrderId, tableNo, notes, lines }) {
+  await ensureKitchenTicketTable((sql, params) => sqlRows(exec, sql, params));
+  const existing = await sqlRows(
+    exec,
+    "SELECT id FROM kitchen_tickets WHERE qr_order_id = ? AND business_id = ? ORDER BY created_at DESC LIMIT 1",
+    [qrOrderId, businessId],
+  );
+  if (existing[0]?.id) return existing[0].id;
+  const id = crypto.randomUUID();
+  const kotLines = (lines || [])
+    .map((line) => ({
+      itemId: String(line.item_id || line.item?.id || "").slice(0, 64),
+      name: String(line.item_name || line.item?.name || "Item").slice(0, 120),
+      qtyGm: Number(line.quantity_gm || line.quantityBase || line.qty) || 0,
+      unit: String(line.unit || "PCS").slice(0, 16),
+      notes: String(line.notes || "").slice(0, 240),
+    }))
+    .filter((line) => line.qtyGm > 0);
+  if (!kotLines.length) return "";
+  await sqlRows(
+    exec,
+    `INSERT INTO kitchen_tickets (id, business_id, table_no, kind, status, notes, lines_json, qr_order_id, created_at, updated_at)
+     VALUES (?,?,?,?, 'new', ?, ?, ?, NOW(3), NOW(3))`,
+    [id, businessId, tableNo || null, "new", notes || null, JSON.stringify(kotLines), qrOrderId],
+  );
+  await sqlRows(
+    exec,
+    "UPDATE qr_orders SET status = CASE WHEN status IN ('pending','') OR status IS NULL THEN 'kot_sent' ELSE status END WHERE id = ? AND business_id = ?",
+    [qrOrderId, businessId],
+  );
+  return id;
+}
+
+export async function syncQrFromKot(qrOrderId, kotStatus, businessId) {
+  if (!qrOrderId || !businessId) return;
+  const next = kotStatusToQr(kotStatus);
+  const rank = QR_STAGE_RANK[next] ?? 0;
+  const rows = await query("SELECT status FROM qr_orders WHERE id = ? AND business_id = ? LIMIT 1", [qrOrderId, businessId]);
+  const cur = String(rows[0]?.status || "pending");
+  if (cur === "cancelled" || cur === "completed") return;
+  if ((QR_STAGE_RANK[cur] ?? 0) >= rank && next !== "completed") return;
+  await query("UPDATE qr_orders SET status = ? WHERE id = ? AND business_id = ?", [next, qrOrderId, businessId]);
+}
+
 async function qrOrdersWithLines(businessId, status = "") {
   const params = [businessId];
   let statusSql = "";
@@ -349,8 +508,8 @@ async function qrOrdersWithLines(businessId, status = "") {
      FROM qr_orders q
      LEFT JOIN sales_orders s ON s.id = q.sales_order_id AND s.business_id = q.business_id
      WHERE q.business_id = ?${statusSql}
-     ORDER BY CASE q.status WHEN 'pending' THEN 0 WHEN 'accepted' THEN 1 WHEN 'preparing' THEN 2
-       WHEN 'ready' THEN 3 ELSE 4 END, q.created_at DESC LIMIT 100`,
+     ORDER BY CASE q.status WHEN 'pending' THEN 0 WHEN 'kot_sent' THEN 1 WHEN 'accepted' THEN 2 WHEN 'preparing' THEN 3
+       WHEN 'ready' THEN 4 ELSE 5 END, q.created_at DESC LIMIT 100`,
     params,
   );
   if (!orders.length) return [];
@@ -634,6 +793,28 @@ export function registerQrPublic(app) {
     }
   });
 
+  app.get("/api/qr/order", async (req, res) => {
+    try {
+      await ensureQrOrderSchema();
+      const business = await businessForPublic(req.query.shop);
+      if (!business) return res.status(404).json({ error: "Shop not found" });
+      const id = String(req.query.id || "").trim();
+      const token = String(req.query.token || "").trim();
+      if (!id || !token) return res.status(400).json({ error: "Order id and token required" });
+      const rows = await query(
+        "SELECT * FROM qr_orders WHERE id = ? AND business_id = ? AND public_token = ? LIMIT 1",
+        [id, business.id, token],
+      );
+      const order = rows[0];
+      if (!order) return res.status(404).json({ error: "Order not found" });
+      const lines = await query("SELECT * FROM qr_order_lines WHERE order_id = ? ORDER BY created_at", [id]);
+      res.setHeader("Cache-Control", "no-store");
+      res.json({ ok: true, track: qrCustomerTrack({ ...order, ...business }, lines) });
+    } catch (err) {
+      res.status(400).json({ error: String(err.message) });
+    }
+  });
+
   app.post("/api/qr/orders", async (req, res) => {
     try {
       const input = normalizeQrOrderPayload(req.body || {});
@@ -701,12 +882,23 @@ export function registerQrPublic(app) {
         const pricedLines = priced.built;
         const id = crypto.randomUUID();
         const number = orderNumber();
-        await conn.query(
-          `INSERT INTO qr_orders
-           (id, order_number, business_id, customer_name, mobile, table_no, notes, status, subtotal, gst, total, discount, offer_label)
-           VALUES (?,?,?,?,?,?,?,'pending',?,?,?,?,?)`,
-          [id, number, business.id, input.customerName, input.mobile, input.tableNo || null, input.notes || null, subtotal, gst, total, discount, message || null],
-        );
+        const token = crypto.randomBytes(16).toString("hex");
+        const eta = cafeKitchenShop(business) ? 15 : null;
+        try {
+          await conn.query(
+            `INSERT INTO qr_orders
+             (id, order_number, business_id, customer_name, mobile, table_no, notes, status, subtotal, gst, total, discount, offer_label, public_token, eta_minutes)
+             VALUES (?,?,?,?,?,?,?,'pending',?,?,?,?,?,?,?)`,
+            [id, number, business.id, input.customerName, input.mobile, input.tableNo || null, input.notes || null, subtotal, gst, total, discount, message || null, token, eta],
+          );
+        } catch {
+          await conn.query(
+            `INSERT INTO qr_orders
+             (id, order_number, business_id, customer_name, mobile, table_no, notes, status, subtotal, gst, total, discount, offer_label)
+             VALUES (?,?,?,?,?,?,?,'pending',?,?,?,?,?)`,
+            [id, number, business.id, input.customerName, input.mobile, input.tableNo || null, input.notes || null, subtotal, gst, total, discount, message || null],
+          );
+        }
         for (const line of pricedLines) {
           const lineId = crypto.randomUUID();
           try {
@@ -732,8 +924,37 @@ export function registerQrPublic(app) {
             );
           }
         }
-        return { id, order_number: number, status: "pending", subtotal, gst, total, discount, offer_label: message || "" };
+        return {
+          id,
+          order_number: number,
+          status: "pending",
+          subtotal,
+          gst,
+          total,
+          discount,
+          offer_label: message || "",
+          public_token: token,
+          table_no: input.tableNo || "",
+          _pricedLines: pricedLines,
+          _notes: input.notes,
+        };
       });
+      if (cafeKitchenShop(business)) {
+        try {
+          await attachQrKitchenTicket(query, {
+            businessId: business.id,
+            qrOrderId: result.id,
+            tableNo: result.table_no,
+            notes: result._notes,
+            lines: result._pricedLines,
+          });
+          result.status = "kot_sent";
+        } catch {
+          result.status = "pending";
+        }
+      }
+      delete result._pricedLines;
+      delete result._notes;
       res.status(201).json({ ok: true, order: result });
     } catch (err) {
       res.status(400).json({ error: String(err.message) });

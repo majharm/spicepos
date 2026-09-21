@@ -2573,6 +2573,11 @@ async function sendKitchenKot() {
   if (ticketId) {
     if (!kotSeenIds) kotSeenIds = new Set();
     kotSeenIds.add(String(ticketId));
+    try {
+      kotChannel()?.postMessage({ type: "kot-new", ticket: data.ticket });
+    } catch {
+      /* ignore */
+    }
   }
   state.kotPrinted = restaurantApi().cartSnapshot(state.cart);
   let printed = true;
@@ -2694,7 +2699,7 @@ function renderKotBoard() {
           </article>`;
         })
         .join("")
-    : `<div class="item-empty-card"><strong>No kitchen tickets</strong><p>Captain or cashier sends Kitchen KOT from Counter. Tickets show here for the kitchen to cook.</p></div>`;
+    : `<div class="item-empty-card"><strong>No kitchen tickets</strong><p>QR table orders and Counter Kitchen KOT land here. Keep this page open on kitchen terminals for the ding.</p></div>`;
   paintKotTimers();
 }
 
@@ -2760,7 +2765,11 @@ function showKotToast(ticket, extra = 0) {
 function applyKotSnapshot(rows, { announce = false } = {}) {
   const list = Array.isArray(rows) ? rows : [];
   const R = restaurantApi();
-  const incoming = R?.newKots?.(kotSeenIds, list) || [];
+  const incoming = (R?.newKots?.(kotSeenIds, list) || []).length
+    ? R.newKots(kotSeenIds, list)
+    : kotSeenIds
+      ? list.filter((row) => row?.id && String(row.status || "new") === "new" && !kotSeenIds.has(String(row.id)))
+      : [];
   state.kotTickets = list;
   if (kotSeenIds == null) kotSeenIds = new Set(list.map((row) => String(row.id)).filter(Boolean));
   else {
@@ -2791,7 +2800,20 @@ function startKotWatch() {
   const kick = () => void loadKots({ announce: false });
   if (typeof requestIdleCallback === "function") requestIdleCallback(kick, { timeout: 2500 });
   else setTimeout(kick, 1200);
-  kotPollTimer = setInterval(() => void loadKots({ announce: true }), 4000);
+  kotPollTimer = setInterval(() => void loadKots({ announce: true }), 2500);
+  $("view-kot")?.addEventListener("pointerdown", () => {
+    if (globalThis.POSQrNotify?.needsUnlock?.()) armQrOrderSound();
+  });
+  try {
+    kotChannel()?.addEventListener("message", (ev) => {
+      if (ev.data?.type === "kot-new" && ev.data.ticket) {
+        const list = [ev.data.ticket, ...(state.kotTickets || []).filter((row) => row.id !== ev.data.ticket.id)];
+        applyKotSnapshot(list, { announce: true });
+      }
+    });
+  } catch {
+    /* BroadcastChannel optional */
+  }
   if (!kotClockTimer) kotClockTimer = setInterval(() => paintKotTimers(), 1000);
   document.addEventListener("pos-qr-sound", () => {
     paintKotSoundToggle();
@@ -2818,6 +2840,10 @@ function reprintSavedKot(ticket) {
 }
 
 function printQrKitchenKot(order) {
+  return sendQrKitchenKot(order);
+}
+
+async function sendQrKitchenKot(order) {
   const R = restaurantApi();
   if (!R || !order) return;
   const lines = (order.lines || []).map((line) => ({
@@ -2827,13 +2853,51 @@ function printQrKitchenKot(order) {
     unit: line.unit || "PCS",
     notes: String(line.notes || "").trim(),
   }));
-  printKitchenKot({
-    tableNo: order.table_no,
-    lines,
-    printed: [],
-    notes: order.notes,
-    full: true,
+  if (!lines.length) throw new Error("Nothing to send to kitchen");
+  const data = await api("/api/kots", {
+    method: "POST",
+    body: JSON.stringify({
+      table_no: order.table_no,
+      kind: "new",
+      lines,
+      notes: order.notes || "",
+      qr_order_id: order.id,
+    }),
   });
+  const ticketId = data?.ticket?.id;
+  if (ticketId) {
+    if (!kotSeenIds) kotSeenIds = new Set();
+    kotSeenIds.add(String(ticketId));
+    try {
+      kotChannel()?.postMessage({ type: "kot-new", ticket: data.ticket });
+    } catch {
+      /* ignore */
+    }
+  }
+  if (order.status === "pending") order.status = "kot_sent";
+  try {
+    printKitchenKot({
+      tableNo: order.table_no,
+      lines,
+      printed: [],
+      notes: order.notes,
+      full: true,
+    });
+  } catch {
+    /* ticket is already on the kitchen board */
+  }
+  setHint("Kitchen KOT sent. Kitchen board and ding update on kitchen terminals.", "ok");
+  return data?.ticket;
+}
+
+function kotChannel() {
+  try {
+    if (!globalThis.BroadcastChannel) return null;
+    if (!globalThis.__atavKotCh) globalThis.__atavKotCh = new BroadcastChannel("atav-kot");
+    return globalThis.__atavKotCh;
+  } catch {
+    return null;
+  }
 }
 
 async function loadHolds() {
@@ -7065,7 +7129,7 @@ function startQrOrderWatch() {
   const kick = () => void pollQrOrders({ announce: false });
   if (typeof requestIdleCallback === "function") requestIdleCallback(kick, { timeout: 2500 });
   else setTimeout(kick, 1200);
-  qrPollTimer = setInterval(() => void pollQrOrders({ announce: true }), 4000);
+  qrPollTimer = setInterval(() => void pollQrOrders({ announce: true }), 2500);
   paintQrSoundArm();
   document.addEventListener("pos-qr-sound", () => {
     paintQrSoundToggle();
@@ -7103,7 +7167,7 @@ function renderQrOrders() {
     ? rows.map((order) => `<article class="qr-order-card${order.status === "pending" ? " is-pending" : ""}" data-qr-order="${escapeHtml(order.id)}">
         <header class="qr-order-head">
           <div><h3>${escapeHtml(order.order_number)}</h3><p class="qr-order-meta">${escapeHtml(formatShopDateTime(order.created_at))}</p></div>
-          <span class="qr-order-status">${escapeHtml(order.status)}</span>
+          <span class="qr-order-status">${escapeHtml(order.status === "kot_sent" ? "KOT sent" : order.status === "completed" ? "served" : order.status)}</span>
         </header>
         <p class="qr-order-meta"><strong>${escapeHtml(order.customer_name)}</strong> · ${escapeHtml(order.mobile)}${order.table_no ? ` · ${escapeHtml(order.table_no)}` : ""}</p>
         <div class="qr-order-lines">${(order.lines || []).map((line) => {
@@ -7114,7 +7178,7 @@ function renderQrOrders() {
         ${order.notes ? `<p class="qr-order-note">Note: ${escapeHtml(order.notes)}</p>` : ""}
         <div class="qr-order-actions">
           ${!["completed", "cancelled"].includes(order.status) ? `<button class="btn primary" type="button" data-qr-counter="${escapeHtml(order.id)}">Open in Counter</button>` : ""}
-          ${order.status === "pending" ? `<button class="btn" type="button" data-qr-status-next="accepted">Accept</button>` : ""}
+          ${order.status === "pending" || order.status === "kot_sent" ? `<button class="btn" type="button" data-qr-status-next="accepted">Accept</button>` : ""}
           ${isRestaurantShop() && !["completed", "cancelled"].includes(order.status) ? `<button class="btn" type="button" data-qr-kot="${escapeHtml(order.id)}">Kitchen KOT</button>` : ""}
           ${order.status === "accepted" ? `<button class="btn" type="button" data-qr-status-next="preparing">Preparing</button>` : ""}
           ${order.status === "preparing" ? `<button class="btn" type="button" data-qr-status-next="ready">Ready</button>` : ""}
@@ -7157,7 +7221,7 @@ async function updateQrOrder(order, status) {
   renderQrOrders();
   if (status === "accepted" && isRestaurantShop()) {
     try {
-      printQrKitchenKot(data.order || order);
+      await sendQrKitchenKot(data.order || order);
     } catch (err) {
       setHint(err.message, "error");
     }
@@ -8887,7 +8951,7 @@ $("qr-order-list")?.addEventListener("click", async (event) => {
     const printBtn = event.target.closest("[data-qr-print]");
     const kotBtn = event.target.closest("[data-qr-kot]");
     if (counter) await openQrOrderInCounter(order);
-    else if (kotBtn) printQrKitchenKot(order);
+    else if (kotBtn) await sendQrKitchenKot(order);
     else if (printBtn) printQrOrder(order);
     else if (invoiceBtn) {
       const invoiceId = invoiceBtn.dataset.qrInvoice;

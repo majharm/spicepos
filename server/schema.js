@@ -384,11 +384,15 @@ export async function ensureSchema() {
     status VARCHAR(16) NOT NULL DEFAULT 'new',
     notes VARCHAR(250) NULL,
     lines_json MEDIUMTEXT NULL,
+    qr_order_id VARCHAR(255) NULL,
     created_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     updated_at TIMESTAMP(3) NULL,
     INDEX (business_id),
     INDEX (business_id, status)
   )`);
+  await addColumn("kitchen_tickets", "notes", "VARCHAR(250) NULL");
+  await addColumn("kitchen_tickets", "lines_json", "MEDIUMTEXT NULL");
+  await addColumn("kitchen_tickets", "qr_order_id", "VARCHAR(255) NULL");
 
   await create(`CREATE TABLE IF NOT EXISTS held_bills (
     id VARCHAR(255) PRIMARY KEY,
