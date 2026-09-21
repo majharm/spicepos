@@ -60,6 +60,7 @@ CSS
   css/marketing.css
   css/analytics.css
   css/seo.css
+  css/login-page.css
 
 JavaScript
   js/app.js
@@ -83,6 +84,8 @@ JavaScript
   js/ga4.js
   js/master-analytics.js
   js/master-seo.js
+  js/login-page.js
+  js/master-login-page.js
 
 PHP
   pos-php-core.php
@@ -105,6 +108,7 @@ PHP
   pos-alerts.php
   pos-analytics.php
   pos-seo.php
+  pos-login-page.php
   pos-advanced.php
   pos-item-import.php
   pos-qr-ordering.php
@@ -140,6 +144,12 @@ PHP
   api/master/backup/restore/index.php
   api/master/backup/platform/index.php
   api/master/backup/platform/restore/index.php
+  api/login-page/index.php
+  api/master/login-page/index.php
+  api/master/login-page/publish/index.php
+  api/master/login-page/unpublish/index.php
+  api/master/login-page/images/index.php
+  api/master/login-page/campaigns/index.php
   pos-data/.htaccess
   health.json
 
@@ -169,6 +179,7 @@ Node (if using hPanel Node.js web app — upload OR git pull then Restart)
   server/alerts.js
   server/analytics.js
   server/seo.js
+  server/login-page.js
   server/load-env.js
   server/mail.js
   server/advanced.js

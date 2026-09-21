@@ -3,6 +3,7 @@ let tab = "dash";
 let backupPane = "backup";
 let analyticsPane = "overview";
 let seoPane = "overview";
+let websitePane = "images";
 let panelFlash = "";
 let alertLogFocus = "";
 
@@ -263,6 +264,8 @@ function syncMasterNav() {
     if (analytics != null) on = tab === "analytics" && analytics === analyticsPane;
     const seo = b.dataset.seoPane;
     if (seo != null) on = tab === "seo" && seo === seoPane;
+    const website = b.dataset.websitePane;
+    if (website != null) on = tab === "website" && website === websitePane;
     b.classList.toggle("active", on);
   });
 }
@@ -292,13 +295,18 @@ function setMasterTab(next, pane) {
   if (next === "backup") backupPane = pane || "settings";
   if (next === "analytics") analyticsPane = pane || "overview";
   if (next === "seo") seoPane = pane || "overview";
+  if (next === "website") websitePane = pane || "images";
   syncMasterNav();
   document.querySelector(".master-main")?.scrollTo({ top: 0 });
   render();
 }
 
 document.querySelectorAll(".master-nav [data-tab]").forEach((btn) => {
-  btn.onclick = () => setMasterTab(btn.dataset.tab, btn.dataset.backupPane || btn.dataset.analyticsPane || btn.dataset.seoPane);
+  btn.onclick = () =>
+    setMasterTab(
+      btn.dataset.tab,
+      btn.dataset.backupPane || btn.dataset.analyticsPane || btn.dataset.seoPane || btn.dataset.websitePane,
+    );
 });
 
 const ALERT_LOG_KIND_LABEL = {
@@ -1587,6 +1595,7 @@ async function render() {
     backup: backupPane === "settings" ? "Settings" : "Backup",
     analytics: "Google Analytics",
     seo: "SEO Management",
+    website: "Website Management",
     notes: "Messages",
     languages: "Languages",
     alerts: "Settings",
@@ -2206,6 +2215,14 @@ async function render() {
       } else {
         await window.POSMasterSeo.render(body, seoPane, api, {
           setPane: (p) => setMasterTab("seo", p),
+        });
+      }
+    } else if (tab === "website") {
+      if (!window.POSMasterLoginPage?.render) {
+        body.innerHTML = `<p class="hint error">Login Page UI did not load. Upload js/master-login-page.js and js/login-page.js.</p>`;
+      } else {
+        await window.POSMasterLoginPage.render(body, websitePane, api, {
+          setPane: (p) => setMasterTab("website", p),
         });
       }
     } else if (tab === "advance") {

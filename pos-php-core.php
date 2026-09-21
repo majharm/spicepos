@@ -2302,6 +2302,10 @@ function pos_php_dispatch($path, $method, $rawBody) {
       require_once __DIR__ . "/pos-analytics.php";
       if (function_exists("pos_analytics_public_dispatch") && pos_analytics_public_dispatch($path, $method, $body)) return;
     }
+    if ($path === "login-page") {
+      require_once __DIR__ . "/pos-login-page.php";
+      if (function_exists("pos_login_page_public_dispatch") && pos_login_page_public_dispatch($path, $method, $body)) return;
+    }
     if (preg_match("#^invoices/([^/]+)$#", $path, $m) && $method === "GET") {
       pos_public_invoice_send($m[1]);
       return;
@@ -2615,6 +2619,10 @@ function pos_php_dispatch($path, $method, $rawBody) {
     if (strpos($path, "master/seo") === 0) {
       require_once __DIR__ . "/pos-seo.php";
       if (function_exists("pos_seo_master_dispatch") && pos_seo_master_dispatch($path, $method, $body)) return;
+    }
+    if (strpos($path, "master/login-page") === 0) {
+      require_once __DIR__ . "/pos-login-page.php";
+      if (function_exists("pos_login_page_master_dispatch") && pos_login_page_master_dispatch($path, $method, $body, $auth)) return;
     }
 
     if ($path === "master/dashboard" && $method === "GET") {

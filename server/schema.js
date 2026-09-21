@@ -549,6 +549,12 @@ export async function ensureSchema() {
     /* seo tables optional during early setup */
   }
   try {
+    const { ensureLoginPageSchema } = await import("./login-page.js");
+    await ensureLoginPageSchema();
+  } catch {
+    /* login page tables optional during early setup */
+  }
+  try {
     const { ensureAdvancedSchema } = await import("./advanced.js");
     await ensureAdvancedSchema();
   } catch {

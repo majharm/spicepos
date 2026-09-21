@@ -31,6 +31,7 @@ import { registerAdvanced, computeSaleLine, applySaleStock, applyLoyaltyOnSale, 
 import { registerReturns } from "./returns.js";
 import { registerAnalyticsPublic, registerAnalyticsMaster } from "./analytics.js";
 import { registerSeoPublic, registerSeoMaster } from "./seo.js";
+import { registerLoginPagePublic, registerLoginPageMaster, ensureLoginPageSchema } from "./login-page.js";
 import { registerRxPublic, registerRxStaff } from "./prescriptions.js";
 import { registerSalonPublic, registerSalonStaff, ensureSalonSchema } from "./salon.js";
 import "../js/discount.js";
@@ -86,6 +87,7 @@ registerRxPublic(app);
 registerSalonPublic(app);
 registerAnalyticsPublic(app);
 registerSeoPublic(app);
+registerLoginPagePublic(app);
 
 const PUBLIC_INVOICE_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -187,6 +189,7 @@ app.use((req, res, next) => {
     url.startsWith("/api/health") ||
     url.startsWith("/api/master") ||
     url.startsWith("/api/analytics") ||
+    url.startsWith("/api/login-page") ||
     url.startsWith("/api/support-contact")
   ) {
     return next();
@@ -196,6 +199,7 @@ app.use((req, res, next) => {
 registerMaster(app);
 registerAnalyticsMaster(app);
 registerSeoMaster(app);
+registerLoginPageMaster(app);
 registerTenant(app);
 registerHub(app);
 registerAdvanced(app);
@@ -1242,6 +1246,7 @@ startHttp()
 ensureSchema()
   .then(() => seedPlatform())
   .then(() => ensureSalonSchema())
+  .then(() => ensureLoginPageSchema())
   .catch((err) => {
     console.error("Schema/seed error (API is still up; check DB env vars)", err);
   });
