@@ -64,7 +64,7 @@
         { url: DEFAULT_DESKTOP, caption: "Manage Multiple Branches", order: 4 },
       ],
       promo: {
-        on: true,
+        on: false,
         title: "Grow Your Business With ATAV POS",
         points: [
           "Fast Billing",
@@ -310,7 +310,7 @@
     const scene = document.querySelector(".auth-scene");
     if (cfg.backgroundUrl && scene) scene.style.backgroundImage = `url(${cfg.backgroundUrl})`;
     let promo = document.getElementById("login-promo-panel");
-    if (cfg.promo?.on && cfg.promo?.visible !== false) {
+    if (cfg.promo?.on === true && cfg.promo?.visible !== false) {
       if (!promo) {
         promo = document.createElement("aside");
         promo.id = "login-promo-panel";
@@ -323,7 +323,7 @@
         cfg.promo.cta ? `<a class="btn" href="${cfg.promo.ctaUrl || "./home.html"}"${target}>${cfg.promo.cta}</a>` : ""
       }`;
       promo.hidden = false;
-    } else if (promo) promo.hidden = true;
+    } else if (promo) promo.remove();
     const demo = document.getElementById("login-demo-cta");
     if (cfg.ctas?.demo?.visible) {
       let a = demo;

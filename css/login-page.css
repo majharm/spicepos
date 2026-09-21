@@ -91,6 +91,7 @@
 .auth-scene-shots[data-transition="zoom"] figure.is-on { transform: none; opacity: 1; }
 .auth-scene-shots figure.is-hero:not(.is-on) { position: absolute; inset: 0; pointer-events: none; }
 
+.login-promo-panel[hidden] { display: none !important; }
 .login-promo-panel {
   background: rgba(15, 23, 42, 0.55);
   border: 1px solid rgba(255, 255, 255, 0.16);

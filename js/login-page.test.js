@@ -49,6 +49,7 @@ test("login appearance priority is campaign then business then custom then defau
   const def = L.resolveAppearance({ settings: {}, images: [], campaigns: [] }, new Date());
   assert.equal(def.resolvedSource, "default");
   assert.match(def.resolvedHero, /login-atav-smart-pos\.jpg/);
+  assert.equal(def.promo.on, false);
 });
 
 test("card customization is clamped so the login form stays usable", () => {
@@ -71,10 +72,10 @@ test("Master Admin Login Page manager is wired without touching auth", () => {
   const xpos = read("js/x-pos-20260830e.js");
   assert.match(master, /Website Management/);
   assert.match(master, /data-website-pane="images"/);
-  assert.match(master, /js\/master-login-page\.js\?v=20260920deploy202/);
-  assert.match(master, /css\/login-page\.css\?v=20260920deploy202/);
-  assert.match(login, /js\/login-page\.js\?v=20260920deploy202/);
-  assert.match(login, /css\/login-page\.css\?v=20260920deploy202/);
+  assert.match(master, /js\/master-login-page\.js\?v=20260920deploy203/);
+  assert.match(master, /css\/login-page\.css\?v=20260920deploy203/);
+  assert.match(login, /js\/login-page\.js\?v=20260920deploy203/);
+  assert.match(login, /css\/login-page\.css\?v=20260920deploy203/);
   assert.match(login, /x-pos-20260830e\.js\?v=20260920deploy191/);
   assert.match(index, /registerLoginPagePublic/);
   assert.match(index, /registerLoginPageMaster/);
