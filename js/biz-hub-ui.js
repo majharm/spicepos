@@ -449,6 +449,8 @@
   }
 
   let purchaseDeskKind = "";
+  let purchaseDraftLines = [];
+  let salesDraftLines = [];
 
   const PURCHASE_FALLBACK = [
     { id: "purchase-request", title: "Purchase Request", desk: "pr", blurb: "Ask for stock before you order" },
@@ -580,10 +582,147 @@
     return (root.state?.suppliers || []).map((s) => s.name).filter(Boolean);
   }
 
+  function catalogItems() {
+    return (root.state?.items || []).filter((i) => i && String(i.status || "active") !== "inactive");
+  }
+
+  function resolveCatalogItem(q) {
+    const needle = String(q || "").trim().toLowerCase();
+    if (!needle) return null;
+    if (typeof root.resolvePickerItem === "function") return root.resolvePickerItem(q, catalogItems());
+    const rows = catalogItems();
+    return (
+      rows.find((i) => String(i.name || "").toLowerCase() === needle || String(i.code || "").toLowerCase() === needle || String(i.barcode || "").toLowerCase() === needle) ||
+      rows.find((i) => String(i.name || "").toLowerCase().includes(needle)) ||
+      null
+    );
+  }
+
+  function catalogDatalistHtml() {
+    return catalogItems()
+      .slice(0, 400)
+      .map((i) => {
+        const label = [i.code, i.barcode].filter(Boolean).join(" · ");
+        return `<option value="${escapeHtml(i.name)}" label="${escapeHtml(label)}"></option>`;
+      })
+      .join("");
+  }
+
+  function itemSellRate(item) {
+    return Number(item?.retail_rate ?? item?.b2b_rate ?? item?.rate) || 0;
+  }
+
+  function itemBuyRate(item) {
+    return Number(item?.purchase_rate) || 0;
+  }
+
+  function linesTotal(lines) {
+    return (lines || []).reduce((sum, l) => sum + (Number(l.qty) || 0) * (Number(l.rate) || 0), 0);
+  }
+
+  function snapshotLines(lines) {
+    return (lines || []).map((l) => ({
+      id: l.id,
+      item_id: l.item_id || "",
+      name: l.name,
+      qty: Number(l.qty) || 0,
+      rate: Number(l.rate) || 0,
+      amount: (Number(l.qty) || 0) * (Number(l.rate) || 0),
+    }));
+  }
+
+  function linesTableHtml(which, lines) {
+    if (!lines.length) {
+      return `<p class="hint doc-lines-empty">No items yet. Search the catalog or type a name, then Add.</p>`;
+    }
+    return `<div class="table-wrap"><table class="doc-lines-table"><thead><tr><th>Item</th><th>Qty</th><th>Rate</th><th>Amount</th><th></th></tr></thead><tbody>${lines
+      .map(
+        (l) => `<tr>
+          <td>${escapeHtml(l.name)}</td>
+          <td>${escapeHtml(String(l.qty))}</td>
+          <td>${money(l.rate)}</td>
+          <td>${money((Number(l.qty) || 0) * (Number(l.rate) || 0))}</td>
+          <td><button class="btn" type="button" data-doc-line-del="${escapeHtml(l.id)}" data-doc-line-which="${escapeHtml(which)}">Remove</button></td>
+        </tr>`,
+      )
+      .join("")}</tbody></table></div>`;
+  }
+
+  function itemsSummary(row) {
+    const items = Array.isArray(row?.items) ? row.items : [];
+    if (!items.length) return "No items";
+    const names = items.map((i) => i.name).filter(Boolean);
+    const head = names.slice(0, 2).join(", ");
+    return names.length > 2 ? `${items.length}: ${head}…` : `${items.length}: ${head}`;
+  }
+
+  function itemPickerHtml(which) {
+    const listId = `${which}-doc-item-list`;
+    const searchId = `${which}-doc-item-search`;
+    return `<div class="doc-item-picker">
+      <p class="item-mode">Items</p>
+      <p class="item-composer-note">Select from this shop’s catalog, or type a name that is not listed.</p>
+      <div class="doc-item-add">
+        <label class="full">Item
+          <input id="${searchId}" list="${listId}" maxlength="180" placeholder="Search name, code, or barcode" autocomplete="off" />
+          <datalist id="${listId}">${catalogDatalistHtml()}</datalist>
+        </label>
+        <label>Qty <input id="${which}-doc-item-qty" type="number" min="0.001" step="0.001" value="1" /></label>
+        <label>Rate ₹ <input id="${which}-doc-item-rate" type="number" min="0" step="0.01" value="0" /></label>
+        <button class="btn" type="button" data-doc-add-line="${escapeHtml(which)}">Add item</button>
+      </div>
+      <div id="${which}-doc-lines">${linesTableHtml(which, which === "purchase" ? purchaseDraftLines : salesDraftLines)}</div>
+    </div>`;
+  }
+
+  function paintDocLines(which) {
+    const lines = which === "purchase" ? purchaseDraftLines : salesDraftLines;
+    const box = $(`${which}-doc-lines`);
+    if (box) box.innerHTML = linesTableHtml(which, lines);
+    const formId = which === "purchase" ? "purchase-doc-form" : "sales-doc-form";
+    const amt = document.querySelector(`#${formId} [name="amount"]`);
+    if (amt) amt.value = linesTotal(lines).toFixed(2);
+  }
+
+  function addDocLine(which) {
+    const search = $(`${which}-doc-item-search`);
+    const qtyEl = $(`${which}-doc-item-qty`);
+    const rateEl = $(`${which}-doc-item-rate`);
+    const typed = String(search?.value || "").trim();
+    if (!typed) return;
+    const found = resolveCatalogItem(typed);
+    const qty = Number(qtyEl?.value) || 1;
+    const fallbackRate = which === "sales" ? itemSellRate(found) : itemBuyRate(found);
+    const rate = Number(rateEl?.value) || fallbackRate;
+    const line = {
+      id: `l${Date.now()}`,
+      item_id: found?.id || "",
+      name: found?.name || typed,
+      qty,
+      rate,
+    };
+    if (which === "purchase") purchaseDraftLines = purchaseDraftLines.concat([line]);
+    else salesDraftLines = salesDraftLines.concat([line]);
+    if (search) search.value = "";
+    if (qtyEl) qtyEl.value = "1";
+    if (rateEl) rateEl.value = "0";
+    paintDocLines(which);
+  }
+
+  function fillDocLineRate(which) {
+    const search = $(`${which}-doc-item-search`);
+    const rateEl = $(`${which}-doc-item-rate`);
+    if (!search || !rateEl) return;
+    const found = resolveCatalogItem(search.value);
+    if (!found) return;
+    rateEl.value = String(which === "sales" ? itemSellRate(found) : itemBuyRate(found));
+  }
+
   function paintPurchaseWork(kind) {
     const wrap = $("hub-purchases-work");
     if (!wrap) return;
     purchaseDeskKind = kind || "";
+    purchaseDraftLines = [];
     if (!kind) {
       wrap.hidden = true;
       wrap.innerHTML = "";
@@ -618,6 +757,7 @@
             <select name="status">${meta.statuses.map((s) => `<option>${escapeHtml(s)}</option>`).join("")}</select>
           </label>
           <label class="full">Notes <textarea name="notes" rows="2" maxlength="400" placeholder="Items, qty, or reason"></textarea></label>
+          ${kind === "po" ? itemPickerHtml("purchase") : ""}
           <div class="purchase-doc-actions">
             <button class="btn primary" type="submit">${escapeHtml(meta.save)}</button>
             ${kind === "pr" ? `<button class="btn" type="button" data-doc-convert="po">Save as purchase order</button>` : ""}
@@ -632,13 +772,14 @@
           </div>
           ${
             rows.length
-              ? `<div class="table-wrap"><table><thead><tr><th>No.</th><th>Date</th><th>Supplier</th><th>Amount</th><th>Status</th><th></th></tr></thead><tbody>${rows
+              ? `<div class="table-wrap"><table><thead><tr><th>No.</th><th>Date</th><th>Supplier</th><th>Amount</th><th>Items</th><th>Status</th><th></th></tr></thead><tbody>${rows
                   .map(
                     (r) => `<tr>
                     <td>${escapeHtml(r.number)}</td>
                     <td>${escapeHtml(r.date || "")}</td>
                     <td>${escapeHtml(r.supplier || "—")}</td>
                     <td>${money(r.amount)}</td>
+                    <td>${escapeHtml(itemsSummary(r))}</td>
                     <td>${escapeHtml(r.status || "")}</td>
                     <td><button class="btn" type="button" data-doc-del="${escapeHtml(r.id)}">Remove</button></td>
                   </tr>`,
@@ -664,6 +805,7 @@
       amount: Number(fd.get("amount")) || 0,
       status: String(fd.get("status") || "Draft"),
       notes: String(fd.get("notes") || "").trim(),
+      items: purchaseDeskKind === "po" ? snapshotLines(purchaseDraftLines) : [],
     };
   }
 
@@ -833,6 +975,7 @@
     const wrap = $("hub-sales-work");
     if (!wrap) return;
     salesDeskKind = kind || "";
+    salesDraftLines = [];
     if (!kind) {
       wrap.hidden = true;
       wrap.innerHTML = "";
@@ -868,6 +1011,7 @@
           </label>
           ${salesExtraFields(kind, meta)}
           <label class="full">Notes <textarea name="notes" rows="2" maxlength="400" placeholder="Items, qty, or terms"></textarea></label>
+          ${kind === "sales-order" ? itemPickerHtml("sales") : ""}
           <div class="purchase-doc-actions">
             <button class="btn primary" type="submit">${escapeHtml(meta.save)}</button>
             ${kind === "quotation" ? `<button class="btn" type="button" data-sales-convert="sales-order">Save as sales order</button>` : ""}
@@ -882,13 +1026,14 @@
           </div>
           ${
             rows.length
-              ? `<div class="table-wrap"><table><thead><tr><th>No.</th><th>Date</th><th>Customer</th><th>Amount</th><th>${escapeHtml(extraColLabel(kind))}</th><th>Status</th><th></th></tr></thead><tbody>${rows
+              ? `<div class="table-wrap"><table><thead><tr><th>No.</th><th>Date</th><th>Customer</th><th>Amount</th><th>Items</th><th>${escapeHtml(extraColLabel(kind))}</th><th>Status</th><th></th></tr></thead><tbody>${rows
                   .map(
                     (r) => `<tr>
                     <td>${escapeHtml(r.number)}</td>
                     <td>${escapeHtml(r.date || "")}</td>
                     <td>${escapeHtml(r.customer || "—")}</td>
                     <td>${money(r.amount)}</td>
+                    <td>${escapeHtml(itemsSummary(r))}</td>
                     <td>${escapeHtml(extraCell(r))}</td>
                     <td>${escapeHtml(r.status || "")}</td>
                     <td><button class="btn" type="button" data-sales-del="${escapeHtml(r.id)}">Remove</button></td>
@@ -918,6 +1063,7 @@
       extra_date: String(fd.get("extra_date") || "").trim(),
       extra_text: String(fd.get("extra_text") || "").trim(),
       interval: String(fd.get("interval") || "").trim(),
+      items: salesDeskKind === "sales-order" ? snapshotLines(salesDraftLines) : [],
     };
   }
 
@@ -1101,6 +1247,22 @@
       paintSalesWork("");
       return;
     }
+    const addLine = e.target.closest("[data-doc-add-line]");
+    if (addLine) {
+      e.preventDefault();
+      addDocLine(addLine.dataset.docAddLine);
+      return;
+    }
+    const lineDel = e.target.closest("[data-doc-line-del]");
+    if (lineDel) {
+      e.preventDefault();
+      const which = lineDel.dataset.docLineWhich;
+      const id = lineDel.dataset.docLineDel;
+      if (which === "purchase") purchaseDraftLines = purchaseDraftLines.filter((l) => l.id !== id);
+      else salesDraftLines = salesDraftLines.filter((l) => l.id !== id);
+      paintDocLines(which);
+      return;
+    }
     if (e.target.closest("[data-sales-bill]")) {
       e.preventDefault();
       if (salesDeskKind) {
@@ -1192,6 +1354,19 @@
     if (e.target?.id === "rep-center-search") paintReportsCenter();
     if (e.target?.id === "hub-purchases-search") paintModuleDesk("hub-purchases-tiles", "purchases");
     if (e.target?.id === "hub-sales-search") paintSalesDesk();
+    if (e.target?.id === "purchase-doc-item-search") fillDocLineRate("purchase");
+    if (e.target?.id === "sales-doc-item-search") fillDocLineRate("sales");
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "Enter") return;
+    if (e.target?.id === "purchase-doc-item-search") {
+      e.preventDefault();
+      addDocLine("purchase");
+    }
+    if (e.target?.id === "sales-doc-item-search") {
+      e.preventDefault();
+      addDocLine("sales");
+    }
   });
   document.addEventListener("change", (e) => {
     if (e.target?.id === "rep-center-cat") paintReportsCenter();

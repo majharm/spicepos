@@ -52,7 +52,7 @@ test("Dashboard uses a SaaS business control center", () => {
   assert.match(app, /function paintDashChrome/);
   assert.match(app, /applyColorScheme/);
   assert.match(index, /id="dash-plan-kpis"/);
-  assert.match(index, /biz-hub-ui\.js\?v=20260920deploy200/);
+  assert.match(index, /biz-hub-ui\.js\?v=20260920deploy201/);
   assert.match(css, /saas-kpi-grid/);
   assert.match(ui, /function kpiCard/);
   assert.match(ui, /Today's Sales/);
@@ -240,4 +240,65 @@ test("Quotation opens Sales desk work instead of Purchase desk", () => {
   assert.match(els["hub-sales-work"].innerHTML, /Next bill date/);
   sandbox.POSBizHubUi.openModule("invoices");
   assert.equal(views.at(-1), "orders");
+});
+
+test("Purchase Order and Sales Order can add or select catalog items", () => {
+  const ui = read("js/biz-hub-ui.js");
+  const css = read("css/pos.css");
+  assert.match(ui, /function itemPickerHtml/);
+  assert.match(ui, /function addDocLine/);
+  assert.match(ui, /data-doc-add-line/);
+  assert.match(css, /\.doc-item-picker/);
+  const mem = {};
+  const els = {};
+  const el = (id, extra = {}) => {
+    els[id] = { id, hidden: false, innerHTML: "", value: "", scrollIntoView() {}, ...extra };
+    return els[id];
+  };
+  el("hub-purchases-tiles");
+  el("hub-purchases-work", { hidden: true });
+  el("hub-purchases-stats");
+  el("hub-purchases-search", { value: "" });
+  el("hub-sales-tiles");
+  el("hub-sales-work", { hidden: true });
+  el("hub-sales-stats");
+  el("hub-sales-search", { value: "" });
+  const sandbox = {
+    document: {
+      getElementById: (id) => els[id] || null,
+      addEventListener() {},
+      querySelectorAll: () => [],
+      querySelector: () => null,
+    },
+    localStorage: {
+      getItem: (k) => mem[k] || null,
+      setItem: (k, v) => {
+        mem[k] = v;
+      },
+    },
+    state: {
+      session: { business_id: "b1", role: "business_admin" },
+      suppliers: [{ name: "Acme" }],
+      customers: [{ name: "Walk-in" }],
+      items: [{ id: "i1", name: "Turmeric", code: "TUR", purchase_rate: 10, retail_rate: 18 }],
+    },
+    POSBizHub: H,
+    showView() {},
+    console,
+    setTimeout,
+  };
+  sandbox.globalThis = sandbox;
+  vm.runInNewContext(read("js/biz-hub-ui.js"), sandbox);
+  sandbox.POSBizHubUi.openModule("purchase-request");
+  assert.doesNotMatch(els["hub-purchases-work"].innerHTML, /id="purchase-doc-item-search"/);
+  sandbox.POSBizHubUi.openModule("purchase-order");
+  assert.match(els["hub-purchases-work"].innerHTML, /id="purchase-doc-item-search"/);
+  assert.match(els["hub-purchases-work"].innerHTML, /Add item/);
+  assert.match(els["hub-purchases-work"].innerHTML, /Turmeric/);
+  sandbox.POSBizHubUi.openModule("quotation");
+  assert.doesNotMatch(els["hub-sales-work"].innerHTML, /id="sales-doc-item-search"/);
+  sandbox.POSBizHubUi.openModule("sales-order");
+  assert.match(els["hub-sales-work"].innerHTML, /id="sales-doc-item-search"/);
+  assert.match(els["hub-sales-work"].innerHTML, /Add item/);
+  assert.match(els["hub-sales-work"].innerHTML, /Turmeric/);
 });

@@ -6302,6 +6302,29 @@ html[dir="rtl"] select {
   color: var(--muted);
 }
 .sales-doc-work { border-color: rgba(13, 148, 136, 0.22); }
+.doc-item-picker {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 10px;
+  margin: 8px 0 4px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+}
+.doc-item-add {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) 90px 110px auto;
+  gap: 8px;
+  align-items: end;
+}
+.doc-item-add .full { grid-column: auto; }
+.doc-item-add .btn { min-height: 42px; }
+.doc-lines-table { width: 100%; }
+.doc-lines-empty { margin: 0; }
+@media (max-width: 980px) {
+  .doc-item-add { grid-template-columns: 1fr 1fr; }
+  .doc-item-add .full { grid-column: 1 / -1; }
+  .doc-item-add .btn { grid-column: 1 / -1; }
+}
 
 /* garment-counter-2026: compact bill type + date-only */
 body.apparel-mode.classic-bill-mode.counter-mode .bill-panel,
