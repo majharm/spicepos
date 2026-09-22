@@ -20,6 +20,8 @@ test("public homepage matches ATAV TELECOM reference layout", () => {
   assert.match(home, /Talk to Our Expert/);
   assert.match(home, /Request Demo/);
   assert.match(home, /href="\.\/login\.html"/);
+  assert.equal((home.match(/class="btn btn-login"/g) || []).length, 1);
+  assert.doesNotMatch(home, /nav-inner[\s\S]*btn-login/);
   assert.match(home, /<h1 class="sr-only">ATAV POS<\/h1>/);
   assert.match(home, /atav-hero-slide-1\.webp/);
   assert.match(home, /atav-hero-slide-2\.webp/);
