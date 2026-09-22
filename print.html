@@ -5,14 +5,38 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="robots" content="noindex,nofollow" />
     <title>Print portal · ATAV POS</title>
-    <link rel="stylesheet" href="./css/print.css?v=20260922deploy207" />
+    <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="./css/print.css?v=20260922printlogin1" />
   </head>
-  <body class="print-portal">
+  <body class="print-portal pp-locked">
     <header class="pp-top">
-      <div>
-        <p class="pp-kicker">Customer portal</p>
-        <h1 id="pp-shop">Flex &amp; Printing</h1>
-        <p id="pp-cat"></p>
+      <div class="pp-brand">
+        <img class="pp-logo" src="./assets/atav-telecom-logo.png" width="46" height="46" alt="ATAV TELECOM" />
+        <div>
+          <p class="pp-kicker">Flex &amp; Printing · Customer portal</p>
+          <h1 id="pp-shop">Flex &amp; Printing</h1>
+          <p id="pp-cat">Banners, vinyl, hoardings and print jobs</p>
+        </div>
+      </div>
+      <div class="pp-gate-copy">
+        <p class="pp-gate-lead">Order prints, send artwork, approve quotes and track production — without the shop counter login.</p>
+        <ul class="pp-gate-points">
+          <li><strong>New print order</strong> Size, material and sq-ft estimate</li>
+          <li><strong>Upload artwork</strong> PDF, JPG, PNG, AI, CDR, EPS</li>
+          <li><strong>Quotes &amp; pay</strong> Approve the shop quote, then pay</li>
+          <li><strong>Track the job</strong> Printing → finishing → ready</li>
+        </ul>
+        <ul class="pp-gate-chips" aria-label="Print products">
+          <li>Flex</li>
+          <li>Vinyl</li>
+          <li>Hoarding</li>
+          <li>Glow sign</li>
+          <li>Visiting card</li>
+          <li>Sticker</li>
+        </ul>
       </div>
       <nav class="pp-nav" id="pp-nav" hidden>
         <button type="button" data-pp="home" class="is-on">Dashboard</button>
@@ -30,31 +54,66 @@
     </header>
     <main>
       <section class="pp-auth" id="pp-auth">
-        <div class="pp-card">
-          <h2>Sign in</h2>
-          <p class="hint">Customers only — this is not the business admin panel.</p>
-          <form id="pp-login">
-            <label>Email / mobile <input name="identifier" required autocomplete="username" /></label>
-            <label>Password <input name="password" type="password" autocomplete="current-password" /></label>
-            <button class="btn primary" type="submit">Sign in</button>
-          </form>
-          <form id="pp-otp-send">
-            <label>Email for OTP <input name="email" type="email" required /></label>
-            <button class="btn" type="submit">Send OTP</button>
-          </form>
-          <form id="pp-otp-verify" hidden>
-            <label>OTP <input name="otp" inputmode="numeric" maxlength="6" required /></label>
-            <label>New password (optional) <input name="password" type="password" /></label>
-            <button class="btn primary" type="submit">Verify OTP</button>
-          </form>
-          <form id="pp-register">
-            <h3>Create account</h3>
-            <label>Name <input name="name" required /></label>
-            <label>Email <input name="email" type="email" required /></label>
-            <label>Mobile <input name="mobile" inputmode="tel" /></label>
-            <label>Password <input name="password" type="password" required minlength="6" /></label>
-            <button class="btn" type="submit">Register</button>
-          </form>
+        <div class="pp-card pp-auth-card">
+          <p class="pp-auth-kicker">Customers only</p>
+          <div class="pp-auth-tabs" role="tablist" aria-label="Customer access">
+            <button type="button" class="is-on" role="tab" aria-selected="true" data-auth-tab="signin">Sign in</button>
+            <button type="button" role="tab" aria-selected="false" data-auth-tab="register">Create account</button>
+          </div>
+          <div data-auth-panel="signin">
+            <h2>Sign in</h2>
+            <p class="hint">This is your print-job login, not the shop admin panel.</p>
+            <form id="pp-login">
+              <label>Email or mobile
+                <input name="identifier" required autocomplete="username" inputmode="email" placeholder="name@shop.com or 98xxxxxxxx" />
+              </label>
+              <label class="pp-pass-lab">Password
+                <span class="pp-pass">
+                  <input name="password" type="password" autocomplete="current-password" placeholder="Your password" />
+                  <button class="pp-pass-toggle" type="button" data-toggle-pass="pp-login">Show</button>
+                </span>
+              </label>
+              <button class="btn primary" type="submit">Sign in</button>
+            </form>
+            <p class="pp-auth-switch"><button type="button" class="pp-link" data-auth-tab="otp">Sign in with email OTP</button></p>
+          </div>
+          <div data-auth-panel="otp" hidden>
+            <h2>Email OTP</h2>
+            <p class="hint">We send a 6-digit code to your email. You can set a password after it verifies.</p>
+            <form id="pp-otp-send">
+              <label>Email
+                <input name="email" type="email" required autocomplete="email" placeholder="you@email.com" />
+              </label>
+              <button class="btn primary" type="submit">Send OTP</button>
+            </form>
+            <form id="pp-otp-verify" hidden>
+              <label>6-digit OTP
+                <input name="otp" inputmode="numeric" maxlength="6" required autocomplete="one-time-code" placeholder="••••••" />
+              </label>
+              <label>New password (optional)
+                <input name="password" type="password" autocomplete="new-password" />
+              </label>
+              <button class="btn primary" type="submit">Verify OTP</button>
+            </form>
+            <p class="pp-auth-switch"><button type="button" class="pp-link" data-auth-tab="signin">Back to password sign in</button></p>
+          </div>
+          <div data-auth-panel="register" hidden>
+            <h2>Create account</h2>
+            <p class="hint">New customer? Register to place flex, vinyl and other print orders.</p>
+            <form id="pp-register">
+              <label>Your name <input name="name" required autocomplete="name" placeholder="Full name" /></label>
+              <label>Email <input name="email" type="email" required autocomplete="email" placeholder="you@email.com" /></label>
+              <label>Mobile <input name="mobile" inputmode="tel" autocomplete="tel" placeholder="10-digit mobile" /></label>
+              <label class="pp-pass-lab">Password
+                <span class="pp-pass">
+                  <input name="password" type="password" required minlength="6" autocomplete="new-password" placeholder="At least 6 characters" />
+                  <button class="pp-pass-toggle" type="button" data-toggle-pass="pp-register">Show</button>
+                </span>
+              </label>
+              <button class="btn primary" type="submit">Create account</button>
+            </form>
+            <p class="pp-auth-switch">Already registered? <button type="button" class="pp-link" data-auth-tab="signin">Sign in</button></p>
+          </div>
           <p class="hint" id="pp-auth-hint"></p>
         </div>
       </section>
@@ -122,8 +181,8 @@
         </div>
       </section>
     </main>
-    <footer>Print shop portal · ATAV POS</footer>
-    <script src="./js/print.js?v=20260922deploy207" defer></script>
-    <script src="./js/print-portal.js?v=20260922deploy207" defer></script>
+    <footer>Flex &amp; Printing customer portal · ATAV POS</footer>
+    <script src="./js/print.js?v=20260922printlogin1" defer></script>
+    <script src="./js/print-portal.js?v=20260922printlogin1" defer></script>
   </body>
 </html>
