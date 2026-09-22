@@ -148,8 +148,8 @@ test("PHP Hostinger can open a print order, download files, quote, bill, and mov
   assert.match(php, /pos_send_file/);
   assert.match(ui, /View \/ Download/);
   assert.match(ui, /\/api\/print\/files\//);
-  assert.match(read("index.html"), /print-ui\.js\?v=20260922deploy215/);
-  assert.match(read("index.html"), /app\.js\?v=20260922deploy215/);
+  assert.match(read("index.html"), /print-ui\.js\?v=20260922deploy216/);
+  assert.match(read("index.html"), /app\.js\?v=20260922deploy216/);
 });
 
 test("Print orders page opens the shop modal and paints list or wrapped API rows", () => {
@@ -165,4 +165,18 @@ test("Print orders page opens the shop modal and paints list or wrapped API rows
   assert.match(ui, /print-order-toolbar[\s\S]*preventDefault/);
   assert.match(ui, /d\.order \|\| d/);
   assert.match(php, /pos_send\(200, array_values\(\$rows\)\)/);
+});
+
+test("Print order review modal is a stepped desk with quote grid and production chips", () => {
+  const ui = read("js/print-ui.js");
+  const css = read("css/pos.css");
+  const index = read("index.html");
+  assert.match(ui, /print-order-desk/);
+  assert.match(ui, /pod-quote/);
+  assert.match(ui, /pod-flow/);
+  assert.match(ui, /pod-step/);
+  assert.match(ui, /Approve file/);
+  assert.match(css, /#modal:has\(\.print-order-desk\)/);
+  assert.match(css, /\.pod-step\.is-on/);
+  assert.match(index, /pos\.css\?v=20260922deploy216/);
 });

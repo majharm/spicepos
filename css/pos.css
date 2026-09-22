@@ -7540,5 +7540,163 @@ html[data-scheme="dark"] .saas-chip.is-stat { background: #1e3a8a; color: #bfdbf
   .saas-dash-head { flex-direction: column; align-items: stretch; }
 }
 
+#modal:has(.print-order-desk) .dialog {
+  width: min(720px, calc(100% - 16px));
+}
+.print-order-desk {
+  display: grid;
+  gap: 12px;
+  color: var(--text);
+}
+.print-order-desk .hint { margin: 0 0 10px; }
+.pod-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.pod-kicker {
+  margin: 0 0 2px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--vel-teal);
+}
+.pod-head h4 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+.pod-job {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+.pod-status {
+  flex: 0 0 auto;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: #ccfbf1;
+  color: #0f766e;
+  font-size: 12px;
+  font-weight: 800;
+}
+.pod-kpis {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+.pod-kpis div {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--vel-muted-surface);
+}
+.pod-kpis dt {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.pod-kpis dd {
+  margin: 4px 0 0;
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--vel-slate);
+}
+.pod-notes {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: #fffbeb;
+  color: #92400e;
+  font-size: 13px;
+}
+.pod-card {
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: #fff;
+}
+.pod-card h5 {
+  margin: 0 0 8px;
+  font-size: 14px;
+  font-weight: 800;
+}
+.pod-file {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 0;
+  border-top: 1px solid var(--line);
+}
+.pod-file:first-of-type { border-top: 0; padding-top: 0; }
+.pod-file-meta { min-width: 0; display: grid; gap: 2px; }
+.pod-file-meta strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pod-file-meta span { color: var(--muted); font-size: 12px; }
+.pod-actions, .pod-flow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.pod-quote {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 12px;
+  align-items: end;
+}
+.pod-quote label {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+}
+.pod-quote input {
+  min-height: 40px;
+  width: 100%;
+}
+.pod-quote .btn { grid-column: 1 / -1; justify-self: start; }
+.pod-bill {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.pod-bill h5, .pod-bill .hint { margin: 0; }
+.pod-bill .hint { margin-top: 4px; }
+.pod-step {
+  min-height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: #fff;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text);
+  cursor: pointer;
+}
+.pod-step.is-on,
+.pod-step:disabled {
+  background: var(--vel-teal);
+  border-color: var(--vel-teal);
+  color: #fff;
+  cursor: default;
+}
+@media (max-width: 640px) {
+  .pod-head, .pod-file, .pod-bill { flex-direction: column; align-items: stretch; }
+  .pod-kpis, .pod-quote { grid-template-columns: 1fr 1fr; }
+  .pod-quote .btn, .pod-bill .btn, .pod-file .btn { width: 100%; }
+}
+
 
 

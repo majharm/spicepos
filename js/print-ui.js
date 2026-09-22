@@ -11,6 +11,19 @@
       .replace(/</g, "&lt;")
       .replace(/"/g, "&quot;");
   }
+  function niceNum(n) {
+    const x = Number(n);
+    if (!Number.isFinite(x)) return String(n ?? "—");
+    return String(parseFloat(x.toFixed(4)));
+  }
+  function fileStatusLabel(s) {
+    const id = String(s || "").toLowerCase();
+    if (id === "uploaded") return "Uploaded";
+    if (id === "approved") return "Approved";
+    if (id === "rejected") return "Rejected";
+    if (id === "replaced") return "Replaced";
+    return s || "File";
+  }
   function api(path, opts) {
     return root.api(path, opts);
   }
@@ -93,44 +106,89 @@
     const d = await api(`/api/print/orders/${encodeURIComponent(id)}`);
     const o = d.order || d;
     if (!o?.id) throw new Error("Order not found");
+    const Print = P();
+    const statusId = String(o.status || "");
+    const statusLabel = (Print?.statusMeta?.(statusId) || { label: statusId || "—" }).label;
     const files = (o.files || [])
       .map((f) => {
         const href = f.download || `/api/print/files/${encodeURIComponent(f.id)}`;
-        return `<p>v${escapeHtml(f.version)} · ${escapeHtml(f.file_name)} · ${escapeHtml(f.status)} · ${escapeHtml(f.uploaded_by)}
-          <a class="btn" href="${escapeHtml(href)}" target="_blank" rel="noopener">View / Download</a></p>`;
+        return `<article class="pod-file">
+          <div class="pod-file-meta">
+            <strong>${escapeHtml(f.file_name || "Artwork")}</strong>
+            <span>v${escapeHtml(f.version || "1")} · ${escapeHtml(fileStatusLabel(f.status))} · ${escapeHtml(f.uploaded_by || "customer")}</span>
+          </div>
+          <a class="btn" href="${escapeHtml(href)}" target="_blank" rel="noopener">View / Download</a>
+        </article>`;
       })
       .join("");
-    const html = `<div class="print-order-detail">
-      <p>${escapeHtml(o.customer_name)} · ${escapeHtml(o.order_number)}</p>
-      <p>${escapeHtml(o.product)} · ${escapeHtml(o.material_name)} · ${escapeHtml(o.width)} × ${escapeHtml(o.height)} ${escapeHtml(o.unit)} · Qty ${escapeHtml(o.quantity)}</p>
-      <p>Notes: ${escapeHtml(o.notes || "—")}</p>
-      <div>${files || "<p>No files</p>"}</div>
-      <p>Estimate ${money(o.estimate_total)} · Quote ${money(o.quote_total)} · Paid ${money(o.paid_amount)}</p>
-      <div class="dash-actions">
-        <button class="btn" data-print-review="approve" data-id="${escapeHtml(o.id)}">Approve File</button>
-        <button class="btn" data-print-review="reject" data-id="${escapeHtml(o.id)}">Reject File</button>
-        <button class="btn" data-print-review="request_file" data-id="${escapeHtml(o.id)}">Request New File</button>
-        <button class="btn" data-print-review="request_changes" data-id="${escapeHtml(o.id)}">Request Changes</button>
-      </div>
-      <form id="print-quote-form">
-        <input type="hidden" name="id" value="${escapeHtml(o.id)}" />
-        <label>Rate <input name="rate" type="number" step="0.01" value="${escapeHtml(o.rate)}" /></label>
-        <label>Discount <input name="discount" type="number" step="0.01" value="${escapeHtml(o.discount)}" /></label>
-        <label>Delivery <input name="delivery_amount" type="number" step="0.01" value="${escapeHtml(o.delivery_amount)}" /></label>
-        <label>GST % <input name="gst_rate" type="number" step="0.01" value="${escapeHtml(o.gst_rate)}" /></label>
-        <button class="btn primary" type="submit">Send final quote</button>
-      </form>
-      <button class="btn primary" data-print-bill="${escapeHtml(o.id)}">Create Bill</button>
-      ${(P().PRODUCTION_FLOW || []).map((s) => `<button class="btn" data-print-status="${escapeHtml(s)}" data-id="${escapeHtml(o.id)}">${escapeHtml(P().statusMeta(s).label)}</button>`).join("")}
+    const flow = (Print?.PRODUCTION_FLOW || []).map((s) => {
+      const on = s === statusId;
+      const label = (Print?.statusMeta?.(s) || { label: s }).label;
+      return `<button type="button" class="pod-step${on ? " is-on" : ""}" data-print-status="${escapeHtml(s)}" data-id="${escapeHtml(o.id)}" ${on ? "disabled aria-current=\"step\"" : ""}>${escapeHtml(label)}</button>`;
+    }).join("");
+    const notes = String(o.notes || "").trim();
+    const html = `<div class="print-order-desk">
+      <header class="pod-head">
+        <div>
+          <p class="pod-kicker">File review &amp; production</p>
+          <h4>${escapeHtml(o.customer_name || "Customer")}</h4>
+          <p class="pod-job">${escapeHtml(o.product || "Print")} · ${escapeHtml(o.material_name || "—")} · ${escapeHtml(niceNum(o.width))} × ${escapeHtml(niceNum(o.height))} ${escapeHtml(o.unit || "ft")} · Qty ${escapeHtml(o.quantity || 1)}${o.area_sqft ? ` · ${escapeHtml(niceNum(o.area_sqft))} sq ft` : ""}</p>
+        </div>
+        <span class="pod-status">${escapeHtml(statusLabel)}</span>
+      </header>
+      <dl class="pod-kpis">
+        <div><dt>Estimate</dt><dd>${money(o.estimate_total)}</dd></div>
+        <div><dt>Quote</dt><dd>${money(o.quote_total)}</dd></div>
+        <div><dt>Paid</dt><dd>${money(o.paid_amount)}</dd></div>
+      </dl>
+      ${notes ? `<p class="pod-notes"><strong>Notes</strong> ${escapeHtml(notes)}</p>` : ""}
+      <section class="pod-card">
+        <h5>Artwork</h5>
+        ${files || `<p class="hint">No files uploaded yet.</p>`}
+      </section>
+      <section class="pod-card">
+        <h5>1. File review</h5>
+        <p class="hint">Approve the customer file before you send a quote.</p>
+        <div class="pod-actions">
+          <button type="button" class="btn primary" data-print-review="approve" data-id="${escapeHtml(o.id)}">Approve file</button>
+          <button type="button" class="btn" data-print-review="request_changes" data-id="${escapeHtml(o.id)}">Request changes</button>
+          <button type="button" class="btn" data-print-review="request_file" data-id="${escapeHtml(o.id)}">Request new file</button>
+          <button type="button" class="btn danger" data-print-review="reject" data-id="${escapeHtml(o.id)}">Reject file</button>
+        </div>
+      </section>
+      <section class="pod-card">
+        <h5>2. Final quote</h5>
+        <form id="print-quote-form" class="pod-quote">
+          <input type="hidden" name="id" value="${escapeHtml(o.id)}" />
+          <label>Rate / sq ft<input name="rate" type="number" step="0.01" min="0" value="${escapeHtml(o.rate ?? "")}" /></label>
+          <label>Discount<input name="discount" type="number" step="0.01" min="0" value="${escapeHtml(o.discount ?? "0")}" /></label>
+          <label>Delivery<input name="delivery_amount" type="number" step="0.01" min="0" value="${escapeHtml(o.delivery_amount ?? "0")}" /></label>
+          <label>GST %<input name="gst_rate" type="number" step="0.01" min="0" value="${escapeHtml(o.gst_rate ?? "18")}" /></label>
+          <button class="btn primary" type="submit">Send final quote</button>
+        </form>
+      </section>
+      <section class="pod-card pod-bill">
+        <div>
+          <h5>3. Bill</h5>
+          <p class="hint">Creates a sales invoice after the customer has approved the quote.</p>
+        </div>
+        <button type="button" class="btn primary" data-print-bill="${escapeHtml(o.id)}">Create bill</button>
+      </section>
+      <section class="pod-card">
+        <h5>4. Production</h5>
+        <p class="hint">Tap the next stage. The current step stays highlighted.</p>
+        <div class="pod-flow">${flow}</div>
+      </section>
     </div>`;
-    revealOrder(`${o.order_number} · file review`, html);
+    revealOrder(o.order_number || "Print order", html);
     $("print-quote-form")?.addEventListener("submit", saveQuote);
   }
 
   async function saveQuote(e) {
     e.preventDefault();
     const fd = new FormData(e.target);
-    await api(`/api/print/orders/${fd.get("id")}/quote`, {
+    const id = fd.get("id");
+    await api(`/api/print/orders/${id}/quote`, {
       method: "POST",
       body: JSON.stringify({
         rate: fd.get("rate"),
@@ -141,6 +199,7 @@
     });
     loadPrintOrders();
     loadPrintBoard();
+    if (id) await openOrder(id);
   }
 
   async function loadPrintSettings() {
@@ -239,15 +298,23 @@
       if (review) {
         await api(`/api/print/orders/${review.dataset.id}/review`, { method: "POST", body: JSON.stringify({ action: review.dataset.printReview }) });
         loadPrintOrders();
+        await openOrder(review.dataset.id);
       }
       if (bill) {
         const d = await api(`/api/print/orders/${bill.dataset.printBill}/bill`, { method: "POST", body: JSON.stringify({}) });
-        if (d.invoice_id) location.hash = "";
+        if (d.invoice_id) {
+          const modal = $("modal");
+          if (modal) modal.hidden = true;
+          location.hash = "";
+        } else {
+          await openOrder(bill.dataset.printBill);
+        }
         loadPrintOrders();
       }
       if (st) {
         await api(`/api/print/orders/${st.dataset.id}/status`, { method: "POST", body: JSON.stringify({ status: st.dataset.printStatus }) });
         loadPrintOrders();
+        await openOrder(st.dataset.id);
       }
       if (rep) {
         const d = await api(`/api/print/reports/${rep.dataset.printReport}`);
