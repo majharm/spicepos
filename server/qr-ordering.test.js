@@ -377,7 +377,7 @@ test("QR menu page paints a visible offer board from live offers", () => {
   const js = readFileSync(path.join(root, "js/qr-order.js"), "utf8");
   const css = readFileSync(path.join(root, "css/qr-order.css"), "utf8");
   assert.match(html, /id="offer-board"/);
-  assert.match(html, /qr-order\.js\?v=20260920deploy204/);
+  assert.match(html, /qr-order\.js\?v=20260922deploy205/);
   assert.doesNotMatch(html, /qr-order\.js\?v=20260905deploy175/);
   assert.doesNotMatch(html, /offers\.js\?v=20260905deploy168/);
   assert.equal([...html.matchAll(/qr-order\.js\?v=/g)].length, 1);
@@ -394,12 +394,16 @@ test("QR customer track maps kitchen statuses to friendly steps", () => {
   const placed = qrCustomerTrack({ id: "1", order_number: "QRO-1", status: "pending", total: 120, created_at: "2026-09-21" }, []);
   assert.equal(placed.message, "Your order has been successfully placed.");
   assert.equal(placed.steps[0].current, true);
+  const accepted = qrCustomerTrack({ id: "1", order_number: "QRO-1", status: "accepted", total: 120 }, []);
+  assert.equal(accepted.message, "Your order has been accepted.");
   const kot = qrCustomerTrack({ id: "1", order_number: "QRO-1", status: "kot_sent", total: 120 }, []);
   assert.equal(kot.message, "Your order has been sent to the kitchen.");
   assert.equal(kot.steps[1].done, true);
+  assert.equal(kot.steps[2].current, true);
   const ready = qrCustomerTrack({ id: "1", order_number: "QRO-1", status: "ready", total: 120 }, [{ item_name: "Tea", quantity_gm: 1, unit: "PCS", amount: 20 }]);
-  assert.equal(ready.message, "Your order is ready.");
+  assert.equal(ready.message, "Your order is ready!");
   assert.equal(ready.items[0].name, "Tea");
   const served = qrCustomerTrack({ id: "1", order_number: "QRO-1", status: "completed", total: 120 }, []);
   assert.match(served.stage, /Served/);
+  assert.equal(served.message, "Enjoy your meal!");
 });

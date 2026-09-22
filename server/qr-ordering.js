@@ -9,21 +9,32 @@ import { listOffers, getPromoSettings, POSOffers } from "./offers.js";
 import { nextSeq, itemBillName, round2 } from "./crud.js";
 import { applySaleStock, persistSaleLineNote } from "./advanced.js";
 import { recordCreditSale } from "./accounts.js";
-import { postSaleJournal } from "./accounting.js";
+import { audit } from "./audit.js";
 
 const POSUnits = globalThis.POSUnits;
 const POSFootwear = globalThis.POSFootwear;
-const QR_STATUSES = ["pending", "kot_sent", "accepted", "preparing", "ready", "completed", "cancelled"];
-const QR_STAGE_RANK = { pending: 0, kot_sent: 1, accepted: 2, preparing: 3, ready: 4, completed: 5, cancelled: -1 };
+const QR_STATUSES = ["pending", "accepted", "kot_sent", "preparing", "ready", "completed", "cancelled", "rejected"];
+const QR_STAGE_RANK = { pending: 0, accepted: 1, kot_sent: 2, preparing: 3, ready: 4, completed: 5, cancelled: -1, rejected: -1 };
 const QR_STAGE_COPY = {
   pending: { label: "Order Placed", message: "Your order has been successfully placed." },
-  kot_sent: { label: "KOT Sent to Kitchen", message: "Your order has been sent to the kitchen." },
-  accepted: { label: "Order Accepted", message: "Your order has been accepted by the kitchen." },
-  preparing: { label: "Preparing 👨‍🍳", message: "Your order is being prepared." },
-  ready: { label: "Ready ✅", message: "Your order is ready." },
-  completed: { label: "Served 🍽️", message: "Your order has been served." },
+  accepted: { label: "Order Accepted", message: "Your order has been accepted." },
+  kot_sent: { label: "KOT Sent", message: "Your order has been sent to the kitchen." },
+  preparing: { label: "Preparing", message: "Your food is being prepared by our kitchen." },
+  ready: { label: "Ready", message: "Your order is ready!" },
+  completed: { label: "Served", message: "Enjoy your meal!" },
   cancelled: { label: "Cancelled", message: "Your order has been cancelled." },
+  rejected: { label: "Rejected", message: "Your order could not be accepted." },
 };
+const QR_TIME_COLS = {
+  accepted: "accepted_at",
+  kot_sent: "kot_created_at",
+  preparing: "preparing_at",
+  ready: "ready_at",
+  completed: "served_at",
+  cancelled: "cancelled_at",
+  rejected: "rejected_at",
+};
+const QR_TIME_FIELDS = ["accepted_at", "kot_created_at", "preparing_at", "ready_at", "served_at", "completed_at", "cancelled_at", "rejected_at"];
 const QR_PHARMACY_OFF = "QR ordering is not available for pharmacy shops";
 
 export function qrOrderingBlocked(biz) {
@@ -105,6 +116,13 @@ export async function ensureQrOrderSchema(conn = null) {
     await exec("ALTER TABLE qr_order_lines ADD COLUMN notes TEXT NULL");
   } catch {
     /* already present */
+  }
+  for (const col of QR_TIME_FIELDS) {
+    try {
+      await exec(`ALTER TABLE qr_orders ADD COLUMN ${col} TIMESTAMP(3) NULL`);
+    } catch {
+      /* already present */
+    }
   }
 }
 
@@ -374,20 +392,28 @@ function kotStatusToQr(status) {
   return "kot_sent";
 }
 
+export function qrStatusStampSql(status) {
+  const col = QR_TIME_COLS[status];
+  if (!col) return "";
+  if (status === "completed") return ", served_at = COALESCE(served_at, NOW(3)), completed_at = COALESCE(completed_at, NOW(3))";
+  return `, ${col} = COALESCE(${col}, NOW(3))`;
+}
+
 export function qrCustomerTrack(order, lines = []) {
   const status = String(order?.status || "pending").toLowerCase();
   const rank = QR_STAGE_RANK[status] ?? 0;
-  const steps = ["pending", "kot_sent", "accepted", "preparing", "ready", "completed"].map((id) => {
+  const closed = status === "cancelled" || status === "rejected";
+  const steps = ["pending", "accepted", "kot_sent", "preparing", "ready", "completed"].map((id) => {
     const copy = QR_STAGE_COPY[id];
     return {
       id,
       label: copy.label,
       message: copy.message,
-      done: status === "cancelled" ? false : rank >= QR_STAGE_RANK[id],
+      done: closed ? false : rank >= QR_STAGE_RANK[id],
       current: status === id || (status === "completed" && id === "completed"),
     };
   });
-  if (status === "cancelled") {
+  if (closed) {
     steps.forEach((s) => {
       s.done = false;
       s.current = false;
@@ -412,6 +438,9 @@ export function qrCustomerTrack(order, lines = []) {
     })),
     steps,
     cancelled: status === "cancelled",
+    rejected: status === "rejected",
+    kot_number: order.kot_number || "",
+    payment_status: order.payment_status || (order.sales_order_id ? "paid" : "unpaid"),
   };
 }
 
@@ -425,6 +454,7 @@ export async function ensureKitchenTicketTable(exec) {
     notes VARCHAR(250) NULL,
     lines_json MEDIUMTEXT NULL,
     qr_order_id VARCHAR(255) NULL,
+    kot_number VARCHAR(32) NULL,
     created_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     updated_at TIMESTAMP(3) NULL,
     INDEX (business_id),
@@ -445,6 +475,11 @@ export async function ensureKitchenTicketTable(exec) {
   } catch {
     /* present */
   }
+  try {
+    await exec("ALTER TABLE kitchen_tickets ADD COLUMN kot_number VARCHAR(32) NULL");
+  } catch {
+    /* present */
+  }
 }
 
 async function sqlRows(exec, sql, params = []) {
@@ -452,15 +487,41 @@ async function sqlRows(exec, sql, params = []) {
   return Array.isArray(out) && Array.isArray(out[0]) ? out[0] : out || [];
 }
 
+async function nextKotNumber(exec, businessId) {
+  const rows = await sqlRows(
+    exec,
+    "SELECT kot_number FROM kitchen_tickets WHERE business_id = ? AND kot_number LIKE 'KOT-%' ORDER BY created_at DESC LIMIT 1",
+    [businessId],
+  );
+  const last = Number(String(rows[0]?.kot_number || "").replace(/\D/g, "")) || 1024;
+  return `KOT-${last + 1}`;
+}
+
 export async function attachQrKitchenTicket(exec, { businessId, qrOrderId, tableNo, notes, lines }) {
   await ensureKitchenTicketTable((sql, params) => sqlRows(exec, sql, params));
   const existing = await sqlRows(
     exec,
-    "SELECT id FROM kitchen_tickets WHERE qr_order_id = ? AND business_id = ? ORDER BY created_at DESC LIMIT 1",
+    "SELECT id, kot_number FROM kitchen_tickets WHERE qr_order_id = ? AND business_id = ? ORDER BY created_at DESC LIMIT 1",
     [qrOrderId, businessId],
   );
-  if (existing[0]?.id) return existing[0].id;
+  const orderRows = await sqlRows(exec, "SELECT status FROM qr_orders WHERE id = ? AND business_id = ? LIMIT 1", [qrOrderId, businessId]);
+  const st = String(orderRows[0]?.status || "");
+  if (st === "pending" || st === "rejected" || st === "cancelled") {
+    if (existing[0]?.id) return existing[0].id;
+    return "";
+  }
+  if (existing[0]?.id) {
+    await sqlRows(
+      exec,
+      `UPDATE qr_orders SET status = CASE WHEN status IN ('pending','accepted','') OR status IS NULL THEN 'kot_sent' ELSE status END,
+        kot_created_at = COALESCE(kot_created_at, NOW(3))
+       WHERE id = ? AND business_id = ?`,
+      [qrOrderId, businessId],
+    );
+    return existing[0].id;
+  }
   const id = crypto.randomUUID();
+  const kotNumber = await nextKotNumber(exec, businessId);
   const kotLines = (lines || [])
     .map((line) => ({
       itemId: String(line.item_id || line.item?.id || "").slice(0, 64),
@@ -471,15 +532,25 @@ export async function attachQrKitchenTicket(exec, { businessId, qrOrderId, table
     }))
     .filter((line) => line.qtyGm > 0);
   if (!kotLines.length) return "";
+  try {
+    await sqlRows(
+      exec,
+      `INSERT INTO kitchen_tickets (id, business_id, table_no, kind, status, notes, lines_json, qr_order_id, kot_number, created_at, updated_at)
+       VALUES (?,?,?,?, 'new', ?, ?, ?, ?, NOW(3), NOW(3))`,
+      [id, businessId, tableNo || null, "new", notes || null, JSON.stringify(kotLines), qrOrderId, kotNumber],
+    );
+  } catch {
+    await sqlRows(
+      exec,
+      `INSERT INTO kitchen_tickets (id, business_id, table_no, kind, status, notes, lines_json, qr_order_id, created_at, updated_at)
+       VALUES (?,?,?,?, 'new', ?, ?, ?, NOW(3), NOW(3))`,
+      [id, businessId, tableNo || null, "new", notes || null, JSON.stringify(kotLines), qrOrderId],
+    );
+  }
   await sqlRows(
     exec,
-    `INSERT INTO kitchen_tickets (id, business_id, table_no, kind, status, notes, lines_json, qr_order_id, created_at, updated_at)
-     VALUES (?,?,?,?, 'new', ?, ?, ?, NOW(3), NOW(3))`,
-    [id, businessId, tableNo || null, "new", notes || null, JSON.stringify(kotLines), qrOrderId],
-  );
-  await sqlRows(
-    exec,
-    "UPDATE qr_orders SET status = CASE WHEN status IN ('pending','') OR status IS NULL THEN 'kot_sent' ELSE status END WHERE id = ? AND business_id = ?",
+    `UPDATE qr_orders SET status = 'kot_sent', kot_created_at = COALESCE(kot_created_at, NOW(3))
+     WHERE id = ? AND business_id = ? AND status IN ('pending','accepted')`,
     [qrOrderId, businessId],
   );
   return id;
@@ -491,24 +562,26 @@ export async function syncQrFromKot(qrOrderId, kotStatus, businessId) {
   const rank = QR_STAGE_RANK[next] ?? 0;
   const rows = await query("SELECT status FROM qr_orders WHERE id = ? AND business_id = ? LIMIT 1", [qrOrderId, businessId]);
   const cur = String(rows[0]?.status || "pending");
-  if (cur === "cancelled" || cur === "completed") return;
+  if (cur === "cancelled" || cur === "rejected" || cur === "completed") return;
   if ((QR_STAGE_RANK[cur] ?? 0) >= rank && next !== "completed") return;
-  await query("UPDATE qr_orders SET status = ? WHERE id = ? AND business_id = ?", [next, qrOrderId, businessId]);
+  const stamp = qrStatusStampSql(next);
+  await query(`UPDATE qr_orders SET status = ?${stamp} WHERE id = ? AND business_id = ?`, [next, qrOrderId, businessId]);
 }
 
 async function qrOrdersWithLines(businessId, status = "") {
   const params = [businessId];
   let statusSql = "";
   if (status && QR_STATUSES.includes(status)) {
-    statusSql = " AND status = ?";
+    statusSql = " AND q.status = ?";
     params.push(status);
   }
   const orders = await query(
-    `SELECT q.*, s.order_number AS invoice_number
+    `SELECT q.*, s.order_number AS invoice_number, s.payment_status AS invoice_payment_status, k.kot_number
      FROM qr_orders q
      LEFT JOIN sales_orders s ON s.id = q.sales_order_id AND s.business_id = q.business_id
+     LEFT JOIN kitchen_tickets k ON k.qr_order_id = q.id AND k.business_id = q.business_id
      WHERE q.business_id = ?${statusSql}
-     ORDER BY CASE q.status WHEN 'pending' THEN 0 WHEN 'kot_sent' THEN 1 WHEN 'accepted' THEN 2 WHEN 'preparing' THEN 3
+     ORDER BY CASE q.status WHEN 'pending' THEN 0 WHEN 'accepted' THEN 1 WHEN 'kot_sent' THEN 2 WHEN 'preparing' THEN 3
        WHEN 'ready' THEN 4 ELSE 5 END, q.created_at DESC LIMIT 100`,
     params,
   );
@@ -518,7 +591,11 @@ async function qrOrdersWithLines(businessId, status = "") {
     `SELECT * FROM qr_order_lines WHERE order_id IN (${ids.map(() => "?").join(",")}) ORDER BY created_at`,
     ids,
   );
-  return orders.map((order) => ({ ...order, lines: lines.filter((line) => line.order_id === order.id) }));
+  return orders.map((order) => ({
+    ...order,
+    lines: lines.filter((line) => line.order_id === order.id),
+    payment_status: order.invoice_payment_status || (order.sales_order_id ? "paid" : "unpaid"),
+  }));
 }
 
 export function qrMobileDigits(raw) {
@@ -808,8 +885,50 @@ export function registerQrPublic(app) {
       const order = rows[0];
       if (!order) return res.status(404).json({ error: "Order not found" });
       const lines = await query("SELECT * FROM qr_order_lines WHERE order_id = ? ORDER BY created_at", [id]);
+      const kotRows = await query(
+        "SELECT kot_number FROM kitchen_tickets WHERE qr_order_id = ? AND business_id = ? ORDER BY created_at DESC LIMIT 1",
+        [id, business.id],
+      );
       res.setHeader("Cache-Control", "no-store");
-      res.json({ ok: true, track: qrCustomerTrack({ ...order, ...business }, lines) });
+      res.json({ ok: true, track: qrCustomerTrack({ ...order, ...business, kot_number: kotRows[0]?.kot_number || "" }, lines) });
+    } catch (err) {
+      res.status(400).json({ error: String(err.message) });
+    }
+  });
+
+  app.get("/api/qr/table", async (req, res) => {
+    try {
+      await ensureQrOrderSchema();
+      const business = await businessForPublic(req.query.shop);
+      if (!business) return res.status(404).json({ error: "Shop not found" });
+      const tableNo = cleanText(req.query.table || req.query.table_no, 64);
+      if (!tableNo) return res.status(400).json({ error: "Table required" });
+      const orders = await query(
+        `SELECT q.*, k.kot_number
+         FROM qr_orders q
+         LEFT JOIN kitchen_tickets k ON k.qr_order_id = q.id AND k.business_id = q.business_id
+         WHERE q.business_id = ? AND q.table_no <> '' AND q.status NOT IN ('cancelled','rejected')
+           AND (q.status NOT IN ('completed') OR q.updated_at >= DATE_SUB(NOW(), INTERVAL 4 HOUR))
+         ORDER BY q.created_at DESC LIMIT 20`,
+        [business.id],
+      );
+      const want = tableNo.replace(/^table\s+/i, "").trim().toLowerCase();
+      const matched = orders.filter((row) => {
+        const have = String(row.table_no || "").replace(/^table\s+/i, "").trim().toLowerCase();
+        return have === want || have === tableNo.toLowerCase() || String(row.table_no || "").toLowerCase() === tableNo.toLowerCase();
+      });
+      const ids = matched.map((row) => row.id);
+      const lines = ids.length
+        ? await query(`SELECT * FROM qr_order_lines WHERE order_id IN (${ids.map(() => "?").join(",")}) ORDER BY created_at`, ids)
+        : [];
+      res.setHeader("Cache-Control", "no-store");
+      res.json({
+        ok: true,
+        table_no: tableNo,
+        tracks: matched.map((order) =>
+          qrCustomerTrack({ ...order, ...business }, lines.filter((line) => line.order_id === order.id)),
+        ),
+      });
     } catch (err) {
       res.status(400).json({ error: String(err.message) });
     }
@@ -935,26 +1054,8 @@ export function registerQrPublic(app) {
           offer_label: message || "",
           public_token: token,
           table_no: input.tableNo || "",
-          _pricedLines: pricedLines,
-          _notes: input.notes,
         };
       });
-      if (cafeKitchenShop(business)) {
-        try {
-          await attachQrKitchenTicket(query, {
-            businessId: business.id,
-            qrOrderId: result.id,
-            tableNo: result.table_no,
-            notes: result._notes,
-            lines: result._pricedLines,
-          });
-          result.status = "kot_sent";
-        } catch {
-          result.status = "pending";
-        }
-      }
-      delete result._pricedLines;
-      delete result._notes;
       res.status(201).json({ ok: true, order: result });
     } catch (err) {
       res.status(400).json({ error: String(err.message) });
@@ -982,19 +1083,49 @@ export function registerQrStaff(app) {
       if (!QR_STATUSES.includes(status)) return res.status(400).json({ error: "Invalid QR order status" });
       await ensureQrOrderSchema();
       let invoice = null;
+      let ticket = null;
       if (status === "completed") {
         invoice = await ensureQrInvoice(req.params.id, { paymentMethod: req.body?.payment_method || req.body?.paymentMethod });
       } else {
+        const stamp = qrStatusStampSql(status);
         const result = await query(
-          "UPDATE qr_orders SET status = ?, branch_id = COALESCE(branch_id, ?) WHERE id = ? AND business_id = ?",
+          `UPDATE qr_orders SET status = ?, branch_id = COALESCE(branch_id, ?)${stamp} WHERE id = ? AND business_id = ?`,
           [status, branchId(), req.params.id, bid()],
         );
         if (!result.affectedRows) return res.status(404).json({ error: "QR order not found" });
       }
+      if (status === "accepted") {
+        const rows = await qrOrdersWithLines(bid());
+        const live = rows.find((row) => row.id === req.params.id);
+        if (live && cafeKitchenShop(bizRows[0] || {})) {
+          const ticketId = await attachQrKitchenTicket(query, {
+            businessId: bid(),
+            qrOrderId: live.id,
+            tableNo: live.table_no,
+            notes: live.notes,
+            lines: live.lines,
+          });
+          const [kot] = await query("SELECT * FROM kitchen_tickets WHERE id = ? AND business_id = ? LIMIT 1", [ticketId, bid()]);
+          ticket = kot
+            ? {
+                id: kot.id,
+                kot_number: kot.kot_number || "",
+                status: kot.status,
+                table_no: kot.table_no,
+              }
+            : null;
+        }
+      }
+      await audit(`qr_order_${status}`, {
+        module: "qr-orders",
+        target_id: req.params.id,
+        target_name: req.params.id,
+        status,
+      }, req);
       const rows = await qrOrdersWithLines(bid());
       const order = rows.find((row) => row.id === req.params.id);
       if (!order) return res.status(404).json({ error: "QR order not found" });
-      res.json({ ok: true, order, invoice });
+      res.json({ ok: true, order, invoice, ticket });
     } catch (err) {
       res.status(400).json({ error: String(err.message) });
     }

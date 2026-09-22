@@ -441,59 +441,110 @@
   let sending = false;
   let trackTimer = 0;
   let trackKey = null;
+  let lastTracks = [];
+  let showBill = false;
 
   function moneyQty(item) {
     const q = Number(item.quantity) || 0;
     const unit = String(item.unit || "PCS").toUpperCase();
-    if (unit === "GM" || unit === "KG") return `${q} ${unit === "KG" ? "kg" : "g"}`;
-    return `${q} ${unit === "PCS" ? "pc" : unit.toLowerCase()}`;
+    if (unit === "GM" || unit === "KG") return `× ${q}${unit === "KG" ? " kg" : " g"}`;
+    return `× ${q % 1 ? q : q}`;
   }
 
-  function paintTrack(track) {
-    if (!track) return;
-    $("order-success").hidden = false;
-    $("success-number").textContent = track.order_number || "";
+  function tableLabel(raw) {
+    const t = String(raw || tablePrefill || "").trim();
+    if (!t) return "";
+    if (/^(table|parcel|takeaway|pickup)/i.test(t)) return t;
+    return `Table ${t}`;
+  }
+
+  function statusTone(status) {
+    const s = String(status || "pending");
+    if (s === "accepted") return "blue";
+    if (s === "kot_sent") return "purple";
+    if (s === "preparing") return "orange";
+    if (s === "ready") return "green";
+    if (s === "completed") return "done";
+    if (s === "cancelled" || s === "rejected") return "red";
+    return "neutral";
+  }
+
+  function paintTracks(tracks) {
+    lastTracks = Array.isArray(tracks) ? tracks.filter(Boolean) : [];
+    if (!lastTracks.length) return;
+    const board = $("order-success");
+    board.hidden = false;
+    const logo = $("live-logo");
+    if (logo && state.shop?.logo_url) {
+      logo.src = state.shop.logo_url;
+      logo.hidden = false;
+    }
     const tableEl = $("track-table");
-    if (tableEl) {
-      const t = String(track.table_no || "").trim();
-      tableEl.textContent = !t ? "" : /^(table|parcel|takeaway|pickup)/i.test(t) ? t : `Table ${t}`;
-    }
-    const totalEl = $("success-total");
-    if (totalEl) totalEl.textContent = `Total ${money(track.total)}`;
-    const timeEl = $("track-time");
-    if (timeEl && track.created_at) timeEl.textContent = `Ordered ${new Date(track.created_at).toLocaleString()}`;
-    const eta = $("track-eta");
-    if (eta) {
-      eta.hidden = !(track.eta_minutes && track.status !== "completed" && track.status !== "cancelled" && track.status !== "ready");
-      eta.textContent = track.eta_minutes ? `Estimated prep · about ${track.eta_minutes} min` : "";
-    }
-    const msg = $("track-message");
-    if (msg) msg.textContent = track.message || "";
-    const steps = $("track-steps");
-    if (steps) {
-      steps.innerHTML = (track.steps || [])
-        .map((s) => `<li class="${s.current ? "is-current" : ""} ${s.done ? "is-done" : ""}">${esc(s.label)}</li>`)
-        .join("");
-    }
-    const items = $("track-items");
-    if (items) {
-      items.innerHTML = (track.items || [])
-        .map((row) => `<div class="track-item"><span>${esc(row.name)} · ${esc(moneyQty(row))}</span><strong>${money(row.amount)}</strong></div>`)
-        .join("");
-    }
+    if (tableEl) tableEl.textContent = tableLabel(lastTracks[0].table_no);
     const kicker = $("track-kicker");
-    if (kicker) kicker.textContent = track.cancelled ? "ORDER CANCELLED" : "LIVE ORDER";
+    if (kicker) kicker.textContent = lastTracks.length > 1 ? "ACTIVE ORDERS" : "YOUR ORDER";
+    const list = $("active-orders");
+    if (list) {
+      list.innerHTML = lastTracks
+        .map((track) => {
+          const tone = statusTone(track.status);
+          const bill = showBill
+            ? `<p class="success-total">Total ${money(track.total)}</p>`
+            : "";
+          const steps = (track.steps || [])
+            .map((s) => `<li class="${s.current ? "is-current" : ""} ${s.done ? "is-done" : ""}">${esc(s.label)}</li>`)
+            .join("");
+          const items = (track.items || [])
+            .map((row) => `<div class="track-item"><span>${esc(row.name)} ${esc(moneyQty(row))}</span><strong>${money(row.amount)}</strong></div>`)
+            .join("");
+          return `<article class="live-card is-${esc(track.status || "pending")}" data-oid="${esc(track.id || "")}">
+            <h2>${esc(track.order_number || "")}</h2>
+            <p class="live-status is-${tone}">${esc(track.stage || track.status || "")}</p>
+            <p class="track-message">${esc(track.message || "")}</p>
+            ${track.eta_minutes && track.status !== "completed" && track.status !== "ready" && track.status !== "cancelled" ? `<p class="track-eta">Estimated prep · about ${esc(track.eta_minutes)} min</p>` : ""}
+            <ol class="track-steps">${steps}</ol>
+            <div class="track-items">${items}</div>
+            ${bill}
+          </article>`;
+        })
+        .join("");
+    }
+    const call = $("call-staff");
+    const phone = String(state.shop?.phone || "").replace(/\D/g, "");
+    if (call) {
+      call.hidden = phone.length < 8;
+      if (phone.length >= 8) call.href = `tel:${phone}`;
+    }
+  }
+
+  function mergeTracks(incoming) {
+    const map = new Map(lastTracks.map((row) => [row.id, row]));
+    (incoming || []).forEach((row) => {
+      if (row?.id) map.set(row.id, row);
+    });
+    return [...map.values()].sort((a, b) => String(b.created_at || "").localeCompare(String(a.created_at || "")));
   }
 
   async function pollTrack() {
-    if (!trackKey) return;
     try {
+      if (tablePrefill) {
+        const res = await fetch(
+          `/api/qr/table?shop=${encodeURIComponent(shopKey)}&table=${encodeURIComponent(tablePrefill)}`,
+          { cache: "no-store" },
+        );
+        const data = await res.json().catch(() => ({}));
+        if (res.ok && Array.isArray(data.tracks) && data.tracks.length) {
+          paintTracks(mergeTracks(data.tracks));
+          return;
+        }
+      }
+      if (!trackKey) return;
       const res = await fetch(
         `/api/qr/order?shop=${encodeURIComponent(trackKey.shop)}&id=${encodeURIComponent(trackKey.id)}&token=${encodeURIComponent(trackKey.token)}`,
         { cache: "no-store" },
       );
       const data = await res.json().catch(() => ({}));
-      if (res.ok && data.track) paintTrack(data.track);
+      if (res.ok && data.track) paintTracks(mergeTracks([data.track]));
     } catch {
       /* keep last status */
     }
@@ -501,19 +552,20 @@
 
   function startTrack(order) {
     const token = order.public_token || order.token || "";
-    if (!order?.id || !token) return;
-    trackKey = { shop: shopKey, id: order.id, token };
-    try {
-      sessionStorage.setItem("atav.qrTrack", JSON.stringify(trackKey));
-    } catch {
-      /* private mode */
+    if (order?.id && token) {
+      trackKey = { shop: shopKey, id: order.id, token };
+      try {
+        sessionStorage.setItem("atav.qrTrack", JSON.stringify(trackKey));
+      } catch {
+        /* private mode */
+      }
+      const url = new URL(location.href);
+      url.searchParams.set("oid", order.id);
+      url.searchParams.set("token", token);
+      history.replaceState({}, "", url);
     }
-    const url = new URL(location.href);
-    url.searchParams.set("oid", order.id);
-    url.searchParams.set("token", token);
-    history.replaceState({}, "", url);
     if (trackTimer) clearInterval(trackTimer);
-    trackTimer = setInterval(pollTrack, 2500);
+    trackTimer = setInterval(pollTrack, 2000);
     pollTrack();
   }
 
@@ -546,37 +598,32 @@
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || "Could not place the order");
       $("cart-sheet").hidden = true;
-      $("success-number").textContent = data.order.order_number;
-      const disc = Math.round((Number(data.order?.discount) || 0) * 100) / 100;
-      const label = String(data.order?.offer_label || "");
-      const saveEl = $("success-save");
-      if (saveEl) {
-        saveEl.hidden = disc <= 0 && !label;
-        saveEl.textContent = disc > 0 ? `Discount · ${label || "Offer"} · you saved ${money(disc)}` : label;
-      }
-      paintTrack({
-        order_number: data.order.order_number,
-        table_no: data.order.table_no || tablePrefill,
-        total: data.order.total,
-        created_at: new Date().toISOString(),
-        status: data.order.status || "pending",
-        message:
-          data.order.status === "kot_sent"
-            ? "Your order has been sent to the kitchen."
-            : "Your order has been successfully placed.",
-        items: [...state.cart].map(([id, qty]) => {
-          const item = findItem(id);
-          return { name: item?.name || "Item", quantity: qty, unit: item?.unit || "PCS", amount: lineAmount(item || {}, qty) };
-        }),
-        steps: [
-          { id: "pending", label: "Order Placed", done: true, current: data.order.status === "pending" },
-          { id: "kot_sent", label: "KOT Sent to Kitchen", done: data.order.status !== "pending", current: data.order.status === "kot_sent" },
-          { id: "accepted", label: "Order Accepted", done: false, current: false },
-          { id: "preparing", label: "Preparing", done: false, current: false },
-          { id: "ready", label: "Ready", done: false, current: false },
-          { id: "completed", label: "Served", done: false, current: false },
-        ],
-      });
+      paintTracks(
+        mergeTracks([
+          {
+            id: data.order.id,
+            order_number: data.order.order_number,
+            table_no: data.order.table_no || tablePrefill,
+            total: data.order.total,
+            created_at: new Date().toISOString(),
+            status: data.order.status || "pending",
+            stage: "Order Placed",
+            message: "Your order has been successfully placed.",
+            items: [...state.cart].map(([id, qty]) => {
+              const item = findItem(id);
+              return { name: item?.name || "Item", quantity: qty, unit: item?.unit || "PCS", amount: lineAmount(item || {}, qty) };
+            }),
+            steps: [
+              { id: "pending", label: "Order Placed", done: true, current: true },
+              { id: "accepted", label: "Order Accepted", done: false, current: false },
+              { id: "kot_sent", label: "KOT Sent", done: false, current: false },
+              { id: "preparing", label: "Preparing", done: false, current: false },
+              { id: "ready", label: "Ready", done: false, current: false },
+              { id: "completed", label: "Served", done: false, current: false },
+            ],
+          },
+        ]),
+      );
       startTrack(data.order);
       state.cart.clear();
       state.notes.clear();
@@ -593,9 +640,11 @@
   });
   $("new-order").addEventListener("click", () => {
     $("order-success").hidden = true;
-    if (trackTimer) clearInterval(trackTimer);
-    trackTimer = 0;
     scrollTo({ top: 0, behavior: "smooth" });
+  });
+  $("view-bill")?.addEventListener("click", () => {
+    showBill = !showBill;
+    paintTracks(lastTracks);
   });
 
   if (tablePrefill) lockTableField();
@@ -612,6 +661,7 @@
     }
     if (oid && token) startTrack({ id: oid, public_token: token });
     else if (saved?.id && saved?.token && saved.shop === shopKey) startTrack({ id: saved.id, public_token: saved.token });
+    else if (tablePrefill) startTrack({});
   })();
 
   loadMenu().catch((err) => {

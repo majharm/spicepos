@@ -393,6 +393,10 @@ export async function ensureSchema() {
   await addColumn("kitchen_tickets", "notes", "VARCHAR(250) NULL");
   await addColumn("kitchen_tickets", "lines_json", "MEDIUMTEXT NULL");
   await addColumn("kitchen_tickets", "qr_order_id", "VARCHAR(255) NULL");
+  await addColumn("kitchen_tickets", "kot_number", "VARCHAR(32) NULL");
+  for (const col of ["accepted_at", "kot_created_at", "preparing_at", "ready_at", "served_at", "completed_at", "cancelled_at", "rejected_at"]) {
+    await addColumn("qr_orders", col, "TIMESTAMP(3) NULL");
+  }
 
   await create(`CREATE TABLE IF NOT EXISTS held_bills (
     id VARCHAR(255) PRIMARY KEY,

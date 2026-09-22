@@ -6,7 +6,7 @@
     <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
     <title>ATAV POS</title>
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./css/pos.css?v=20260920deploy201" />
+    <link rel="stylesheet" href="./css/pos.css?v=20260922deploy205" />
     <link rel="stylesheet" href="./css/saas.css?v=20260905deploy136" />
   </head>
   <body>
@@ -756,10 +756,11 @@
               <div>
                 <p class="items-kicker">Kitchen</p>
                 <h2>KOT board</h2>
-                <p>Captain and cashier send tickets from Counter. Kitchen marks Start, Ready, then Done. Open tickets stay on this board.</p>
+                <p>Captain and cashier send tickets after a QR order is accepted. Kitchen marks Start Preparing, Mark Ready, then Served. Open tickets stay on this board.</p>
               </div>
               <div class="qr-orders-hero-actions">
                 <button class="btn" type="button" id="kot-sound-toggle" aria-pressed="true">Sound on</button>
+                <button class="btn" type="button" id="kot-test-sound">Test Kitchen Sound</button>
                 <button class="btn" type="button" id="kot-refresh">Refresh</button>
               </div>
             </header>
@@ -769,7 +770,7 @@
                 <button type="button" data-kot-status-filter="new">New</button>
                 <button type="button" data-kot-status-filter="preparing">Preparing</button>
                 <button type="button" data-kot-status-filter="ready">Ready</button>
-                <button type="button" data-kot-status-filter="done">Done</button>
+                <button type="button" data-kot-status-filter="done">Served</button>
               </div>
             </div>
             <p class="hint" id="kot-hint"></p>
@@ -823,11 +824,13 @@
                 <button type="button" class="active" data-qr-status="">All</button>
                 <button type="button" data-qr-status="pending">New</button>
                 <button type="button" data-qr-status="accepted">Accepted</button>
+                <button type="button" data-qr-status="kot_sent">KOT</button>
                 <button type="button" data-qr-status="preparing">Preparing</button>
                 <button type="button" data-qr-status="ready">Ready</button>
-                <button type="button" data-qr-status="completed">Completed</button>
+                <button type="button" data-qr-status="completed">Served</button>
+                <button type="button" data-qr-status="cancelled">Cancelled</button>
               </div>
-              <input id="qr-order-search" type="search" placeholder="Order no, name, mobile, table…" autocomplete="off" />
+              <input id="qr-order-search" type="search" placeholder="Search order, table, or number…" autocomplete="off" />
             </div>
             <p class="hint" id="qr-orders-hint"></p>
             <div class="qr-order-list" id="qr-order-list"></div>
@@ -2382,13 +2385,13 @@
     <script src="./js/invoice-share.js?v=20260913share1" defer></script>
     <script src="./js/support.js?v=20260920deploy199" defer></script>
     <script src="./js/qrcode.iife.js?v=20260905qr1" defer></script>
-    <script src="./js/qr-notify.js?v=20260920deploy204" defer></script>
+    <script src="./js/qr-notify.js?v=20260922deploy205" defer></script>
     <script src="./js/payment-methods.js?v=20260918pay1" defer></script>
     <script src="./js/biz-hub.js?v=20260920deploy200" defer></script>
     <script src="./js/biz-hub-ui.js?v=20260920deploy201" defer></script>
     <script src="./js/salon.js?v=20260919salon1" defer></script>
     <script src="./js/salon-ui.js?v=20260919salon1" defer></script>
-    <script src="./js/app.js?v=20260920deploy204" defer></script>
+    <script src="./js/app.js?v=20260922deploy205" defer></script>
     <script src="./js/growth.js?v=20260905deploy145" defer></script>
     <script src="./js/offers-ui.js?v=20260919off1" defer></script>
   </body>

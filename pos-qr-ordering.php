@@ -1,7 +1,7 @@
 <?php
 
 function pos_qr_statuses() {
-  return ["pending", "kot_sent", "accepted", "preparing", "ready", "completed", "cancelled"];
+  return ["pending", "accepted", "kot_sent", "preparing", "ready", "completed", "cancelled", "rejected"];
 }
 
 function pos_qr_ensure_schema() {
@@ -53,6 +53,9 @@ function pos_qr_ensure_schema() {
   );
   if ($db->errno) throw new Exception($db->error ?: "Could not prepare QR order lines");
   @$db->query("ALTER TABLE qr_order_lines ADD COLUMN notes TEXT NULL");
+  foreach (["accepted_at", "kot_created_at", "preparing_at", "ready_at", "served_at", "completed_at", "cancelled_at", "rejected_at"] as $col) {
+    @$db->query("ALTER TABLE qr_orders ADD COLUMN $col TIMESTAMP(3) NULL");
+  }
 }
 
 function pos_qr_clean($value, $max) {
@@ -129,7 +132,7 @@ function pos_qr_order_number() {
 
 function pos_qr_reprice_open_order($bid, $order) {
   $status = (string) ($order["status"] ?? "");
-  if (!in_array($status, ["pending", "accepted", "preparing", "ready"], true)) return $order;
+  if (!in_array($status, ["pending", "accepted", "kot_sent", "preparing", "ready"], true)) return $order;
   if (!empty($order["sales_order_id"])) return $order;
   $lines = $order["lines"] ?? [];
   if (!$lines) return $order;
@@ -210,8 +213,8 @@ function pos_qr_orders_with_lines($bid, $status = "") {
     $types .= "s";
     $params[] = $status;
   }
-  $sql .= " ORDER BY CASE q.status WHEN 'pending' THEN 0 WHEN 'accepted' THEN 1 WHEN 'preparing' THEN 2
-            WHEN 'ready' THEN 3 ELSE 4 END, q.created_at DESC LIMIT 100";
+  $sql .= " ORDER BY CASE q.status WHEN 'pending' THEN 0 WHEN 'accepted' THEN 1 WHEN 'kot_sent' THEN 2 WHEN 'preparing' THEN 3
+            WHEN 'ready' THEN 4 ELSE 5 END, q.created_at DESC LIMIT 100";
   $orders = pos_q($sql, $types, $params);
   foreach ($orders as &$order) {
     $order["lines"] = pos_q("SELECT * FROM qr_order_lines WHERE order_id = ? ORDER BY created_at", "s", [$order["id"]]);
@@ -537,26 +540,43 @@ function pos_qr_expand_pack_line($line, $pack, $byId) {
   return $out;
 }
 
+function pos_qr_stamp_sql($status) {
+  $map = [
+    "accepted" => "accepted_at",
+    "kot_sent" => "kot_created_at",
+    "preparing" => "preparing_at",
+    "ready" => "ready_at",
+    "cancelled" => "cancelled_at",
+    "rejected" => "rejected_at",
+  ];
+  if ($status === "completed") return ", served_at = COALESCE(served_at, NOW(3)), completed_at = COALESCE(completed_at, NOW(3))";
+  $col = $map[$status] ?? "";
+  if ($col === "") return "";
+  return ", $col = COALESCE($col, NOW(3))";
+}
+
 function pos_qr_track_payload($order, $lines) {
   $status = strtolower((string) ($order["status"] ?? "pending"));
-  $rankMap = ["pending" => 0, "kot_sent" => 1, "accepted" => 2, "preparing" => 3, "ready" => 4, "completed" => 5, "cancelled" => -1];
+  $rankMap = ["pending" => 0, "accepted" => 1, "kot_sent" => 2, "preparing" => 3, "ready" => 4, "completed" => 5, "cancelled" => -1, "rejected" => -1];
   $copy = [
     "pending" => ["label" => "Order Placed", "message" => "Your order has been successfully placed."],
-    "kot_sent" => ["label" => "KOT Sent to Kitchen", "message" => "Your order has been sent to the kitchen."],
-    "accepted" => ["label" => "Order Accepted", "message" => "Your order has been accepted by the kitchen."],
-    "preparing" => ["label" => "Preparing 👨‍🍳", "message" => "Your order is being prepared."],
-    "ready" => ["label" => "Ready ✅", "message" => "Your order is ready."],
-    "completed" => ["label" => "Served 🍽️", "message" => "Your order has been served."],
+    "accepted" => ["label" => "Order Accepted", "message" => "Your order has been accepted."],
+    "kot_sent" => ["label" => "KOT Sent", "message" => "Your order has been sent to the kitchen."],
+    "preparing" => ["label" => "Preparing", "message" => "Your food is being prepared by our kitchen."],
+    "ready" => ["label" => "Ready", "message" => "Your order is ready!"],
+    "completed" => ["label" => "Served", "message" => "Enjoy your meal!"],
     "cancelled" => ["label" => "Cancelled", "message" => "Your order has been cancelled."],
+    "rejected" => ["label" => "Rejected", "message" => "Your order could not be accepted."],
   ];
   $rank = $rankMap[$status] ?? 0;
+  $closed = $status === "cancelled" || $status === "rejected";
   $steps = [];
-  foreach (["pending", "kot_sent", "accepted", "preparing", "ready", "completed"] as $id) {
+  foreach (["pending", "accepted", "kot_sent", "preparing", "ready", "completed"] as $id) {
     $steps[] = [
       "id" => $id,
       "label" => $copy[$id]["label"],
       "message" => $copy[$id]["message"],
-      "done" => $status === "cancelled" ? false : $rank >= $rankMap[$id],
+      "done" => $closed ? false : $rank >= $rankMap[$id],
       "current" => $status === $id || ($status === "completed" && $id === "completed"),
     ];
   }
@@ -585,21 +605,31 @@ function pos_qr_track_payload($order, $lines) {
     "items" => $items,
     "steps" => $steps,
     "cancelled" => $status === "cancelled",
+    "rejected" => $status === "rejected",
+    "kot_number" => $order["kot_number"] ?? "",
+    "payment_status" => $order["payment_status"] ?? (!empty($order["sales_order_id"]) ? "paid" : "unpaid"),
   ];
 }
 
+function pos_qr_next_kot_number($bid) {
+  $rows = pos_q("SELECT kot_number FROM kitchen_tickets WHERE business_id = ? AND kot_number LIKE 'KOT-%' ORDER BY created_at DESC LIMIT 1", "s", [$bid]);
+  $last = (int) preg_replace("/\D/", "", (string) ($rows[0]["kot_number"] ?? ""));
+  if ($last < 1024) $last = 1024;
+  return "KOT-" . ($last + 1);
+}
+
 function pos_qr_send_kitchen_ticket($business, $orderId, $tableNo, $notes, $built) {
-  if (function_exists("pos_shop_kind") && pos_shop_kind($business) !== "restaurant") return;
+  if (function_exists("pos_shop_kind") && pos_shop_kind($business) !== "restaurant") return null;
   if (!function_exists("pos_ensure_kitchen_tickets_schema")) {
     $file = __DIR__ . "/pos-kots.php";
     if (is_file($file)) require_once $file;
   }
-  if (!function_exists("pos_ensure_kitchen_tickets_schema")) return;
+  if (!function_exists("pos_ensure_kitchen_tickets_schema")) return null;
   pos_ensure_kitchen_tickets_schema();
-  $have = pos_q("SELECT id FROM kitchen_tickets WHERE qr_order_id = ? AND business_id = ? LIMIT 1", "ss", [$orderId, $business["id"]]);
+  $have = pos_q("SELECT id, kot_number FROM kitchen_tickets WHERE qr_order_id = ? AND business_id = ? LIMIT 1", "ss", [$orderId, $business["id"]]);
   if ($have) {
-    pos_q("UPDATE qr_orders SET status = CASE WHEN status IN ('pending','') OR status IS NULL THEN 'kot_sent' ELSE status END WHERE id = ? AND business_id = ?", "ss", [$orderId, $business["id"]]);
-    return;
+    pos_q("UPDATE qr_orders SET status = CASE WHEN status IN ('pending','accepted','') OR status IS NULL THEN 'kot_sent' ELSE status END, kot_created_at = COALESCE(kot_created_at, NOW(3)) WHERE id = ? AND business_id = ?", "ss", [$orderId, $business["id"]]);
+    return $have[0];
   }
   $lines = [];
   foreach ($built as $line) {
@@ -613,15 +643,26 @@ function pos_qr_send_kitchen_ticket($business, $orderId, $tableNo, $notes, $buil
       "notes" => (string) ($line["notes"] ?? ""),
     ];
   }
-  if (!$lines) return;
+  if (!$lines) return null;
   $id = pos_uuid();
-  pos_q(
-    "INSERT INTO kitchen_tickets (id, business_id, table_no, kind, status, notes, lines_json, qr_order_id, created_at, updated_at)
-     VALUES (?,?,?, 'new', 'new', ?, ?, ?, NOW(3), NOW(3))",
-    "ssssss",
-    [$id, $business["id"], $tableNo !== "" ? $tableNo : null, $notes !== "" ? $notes : null, json_encode($lines, JSON_UNESCAPED_UNICODE), $orderId]
-  );
-  pos_q("UPDATE qr_orders SET status = 'kot_sent' WHERE id = ? AND business_id = ? AND status = 'pending'", "ss", [$orderId, $business["id"]]);
+  $kotNumber = pos_qr_next_kot_number($business["id"]);
+  try {
+    pos_q(
+      "INSERT INTO kitchen_tickets (id, business_id, table_no, kind, status, notes, lines_json, qr_order_id, kot_number, created_at, updated_at)
+       VALUES (?,?,?, 'new', 'new', ?, ?, ?, ?, NOW(3), NOW(3))",
+      "sssssss",
+      [$id, $business["id"], $tableNo !== "" ? $tableNo : null, $notes !== "" ? $notes : null, json_encode($lines, JSON_UNESCAPED_UNICODE), $orderId, $kotNumber]
+    );
+  } catch (Exception $e) {
+    pos_q(
+      "INSERT INTO kitchen_tickets (id, business_id, table_no, kind, status, notes, lines_json, qr_order_id, created_at, updated_at)
+       VALUES (?,?,?, 'new', 'new', ?, ?, ?, NOW(3), NOW(3))",
+      "ssssss",
+      [$id, $business["id"], $tableNo !== "" ? $tableNo : null, $notes !== "" ? $notes : null, json_encode($lines, JSON_UNESCAPED_UNICODE), $orderId]
+    );
+  }
+  pos_q("UPDATE qr_orders SET status = 'kot_sent', kot_created_at = COALESCE(kot_created_at, NOW(3)) WHERE id = ? AND business_id = ? AND status IN ('pending','accepted')", "ss", [$orderId, $business["id"]]);
+  return ["id" => $id, "kot_number" => $kotNumber];
 }
 
 function pos_qr_public_dispatch($path, $method, $body) {
@@ -635,8 +676,37 @@ function pos_qr_public_dispatch($path, $method, $body) {
     $rows = pos_q("SELECT * FROM qr_orders WHERE id = ? AND business_id = ? AND public_token = ? LIMIT 1", "sss", [$id, $business["id"], $token]);
     if (!$rows) pos_send(404, ["error" => "Order not found", "php" => true]);
     $lines = pos_q("SELECT * FROM qr_order_lines WHERE order_id = ? ORDER BY created_at", "s", [$id]);
+    $kot = pos_q("SELECT kot_number FROM kitchen_tickets WHERE qr_order_id = ? AND business_id = ? ORDER BY created_at DESC LIMIT 1", "ss", [$id, $business["id"]]);
+    if ($kot) $rows[0]["kot_number"] = $kot[0]["kot_number"] ?? "";
     header("Cache-Control: no-store");
     pos_send(200, ["ok" => true, "track" => pos_qr_track_payload($rows[0], $lines), "php" => true]);
+  }
+  if ($path === "qr/table" && $method === "GET") {
+    pos_qr_ensure_schema();
+    $business = pos_qr_business($_GET["shop"] ?? "");
+    if (!$business) pos_send(404, ["error" => "Shop not found", "php" => true]);
+    $tableNo = pos_qr_clean($_GET["table"] ?? $_GET["table_no"] ?? "", 64);
+    if ($tableNo === "") pos_send(400, ["error" => "Table required", "php" => true]);
+    $orders = pos_q(
+      "SELECT q.* FROM qr_orders q
+       WHERE q.business_id = ? AND q.table_no <> '' AND q.status NOT IN ('cancelled','rejected')
+         AND (q.status <> 'completed' OR q.updated_at >= DATE_SUB(NOW(), INTERVAL 4 HOUR))
+       ORDER BY q.created_at DESC LIMIT 20",
+      "s",
+      [$business["id"]]
+    );
+    $want = strtolower(preg_replace("/^table\s+/i", "", $tableNo));
+    $tracks = [];
+    foreach ($orders as $order) {
+      $have = strtolower(preg_replace("/^table\s+/i", "", (string) ($order["table_no"] ?? "")));
+      if ($have !== $want && strtolower((string) $order["table_no"]) !== strtolower($tableNo)) continue;
+      $kot = pos_q("SELECT kot_number FROM kitchen_tickets WHERE qr_order_id = ? AND business_id = ? ORDER BY created_at DESC LIMIT 1", "ss", [$order["id"], $business["id"]]);
+      if ($kot) $order["kot_number"] = $kot[0]["kot_number"] ?? "";
+      $lines = pos_q("SELECT * FROM qr_order_lines WHERE order_id = ? ORDER BY created_at", "s", [$order["id"]]);
+      $tracks[] = pos_qr_track_payload($order, $lines);
+    }
+    header("Cache-Control: no-store");
+    pos_send(200, ["ok" => true, "table_no" => $tableNo, "tracks" => $tracks, "php" => true]);
   }
   if ($path === "qr/menu" && $method === "GET") {
     pos_qr_ensure_schema();
@@ -785,14 +855,7 @@ function pos_qr_public_dispatch($path, $method, $body) {
       $db->rollback();
       throw $e;
     }
-    $status = "pending";
-    try {
-      pos_qr_send_kitchen_ticket($business, $id, (string) ($input["table_no"] ?? ""), (string) ($input["notes"] ?? ""), $built);
-      if (function_exists("pos_shop_kind") && pos_shop_kind($business) === "restaurant") $status = "kot_sent";
-    } catch (Throwable $e) {
-      $status = "pending";
-    }
-    pos_send(201, ["ok" => true, "order" => ["id" => $id, "order_number" => $number, "status" => $status, "subtotal" => $subtotal, "gst" => $gst, "total" => $total, "discount" => $discount, "offer_label" => $offerLabel, "public_token" => $token, "table_no" => $input["table_no"] ?? ""], "php" => true]);
+    pos_send(201, ["ok" => true, "order" => ["id" => $id, "order_number" => $number, "status" => "pending", "subtotal" => $subtotal, "gst" => $gst, "total" => $total, "discount" => $discount, "offer_label" => $offerLabel, "public_token" => $token, "table_no" => $input["table_no"] ?? ""], "php" => true]);
   }
   return false;
 }
@@ -814,16 +877,29 @@ function pos_qr_staff_dispatch($path, $method, $body, $bid, $branchId, $uid = ""
     $status = strtolower(pos_qr_clean($body["status"] ?? "", 24));
     if (!in_array($status, pos_qr_statuses(), true)) pos_send(400, ["error" => "Invalid QR order status", "php" => true]);
     $invoice = null;
+    $ticket = null;
     if ($status === "completed") {
       $invoice = pos_qr_ensure_invoice($bid, $branchId, $uid, $m[1], $body["payment_method"] ?? $body["paymentMethod"] ?? "cash");
     } else {
-      pos_q("UPDATE qr_orders SET status = ?, branch_id = COALESCE(branch_id, ?) WHERE id = ? AND business_id = ?", "ssss", [$status, $branchId, $m[1], $bid]);
+      $stamp = pos_qr_stamp_sql($status);
+      pos_q("UPDATE qr_orders SET status = ?, branch_id = COALESCE(branch_id, ?)$stamp WHERE id = ? AND business_id = ?", "ssss", [$status, $branchId, $m[1], $bid]);
+    }
+    if ($status === "accepted") {
+      $foundRows = pos_qr_orders_with_lines($bid);
+      $live = null;
+      foreach ($foundRows as $row) if ($row["id"] === $m[1]) $live = $row;
+      if ($live && function_exists("pos_shop_kind") && pos_shop_kind($bizRows[0] ?? []) === "restaurant") {
+        $ticket = pos_qr_send_kitchen_ticket($bizRows[0], $live["id"], (string) ($live["table_no"] ?? ""), (string) ($live["notes"] ?? ""), $live["lines"] ?? []);
+      }
+    }
+    if (function_exists("pos_staff_audit")) {
+      pos_staff_audit(["id" => $uid], "qr_order_$status", ["module" => "qr-orders", "target_id" => $m[1], "status" => $status], $bid, $branchId);
     }
     $rows = pos_qr_orders_with_lines($bid);
     $found = null;
     foreach ($rows as $row) if ($row["id"] === $m[1]) $found = $row;
     if (!$found) pos_send(404, ["error" => "QR order not found", "php" => true]);
-    pos_send(200, ["ok" => true, "order" => $found, "invoice" => $invoice, "php" => true]);
+    pos_send(200, ["ok" => true, "order" => $found, "invoice" => $invoice, "ticket" => $ticket, "php" => true]);
   }
   return false;
 }

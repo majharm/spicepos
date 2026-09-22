@@ -35,15 +35,19 @@ test("Customer QR page tracks live kitchen status without a refresh", () => {
   const app = read("js/app.js");
   const php = read("pos-qr-ordering.php");
   const node = read("server/qr-ordering.js");
-  assert.match(html, /id="track-steps"/);
+  assert.match(html, /id="active-orders"/);
   assert.match(js, /\/api\/qr\/order\?/);
+  assert.match(js, /\/api\/qr\/table\?/);
   assert.match(js, /function startTrack/);
   assert.match(app, /async function sendQrKitchenKot/);
   assert.match(app, /qr_order_id: order\.id/);
   assert.match(php, /function pos_qr_send_kitchen_ticket/);
   assert.match(php, /qr\/order/);
+  assert.match(php, /qr\/table/);
   assert.match(node, /app.get\("\/api\/qr\/order"/);
+  assert.match(node, /app.get\("\/api\/qr\/table"/);
   assert.match(node, /kot_sent/);
+  assert.doesNotMatch(node, /result.status = "kot_sent"/);
 });
 
 test("Counter restaurant cart and QR desk show item-wise instructions", () => {

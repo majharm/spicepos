@@ -2286,7 +2286,31 @@ function diningFloors() {
 function tableIsBusy(tableId) {
   const R = restaurantApi();
   if (!R || !tableId) return false;
-  return Boolean(R.findTableHold(state.held, tableId) || (state.activeTable === tableId && state.cart.length));
+  const want = R.normalizeTableNo(tableId);
+  const qrBusy = (qrOrderCache || []).some((order) => {
+    if (["cancelled", "rejected", "completed"].includes(order.status)) return false;
+    return R.normalizeTableNo(order.table_no) === want;
+  });
+  return Boolean(R.findTableHold(state.held, tableId) || (state.activeTable === tableId && state.cart.length) || qrBusy);
+}
+
+function tableLiveLabel(tableId) {
+  const R = restaurantApi();
+  const want = R?.normalizeTableNo?.(tableId) || String(tableId || "");
+  const orders = (qrOrderCache || []).filter((order) => R?.normalizeTableNo?.(order.table_no) === want);
+  const open = orders.filter((order) => !["cancelled", "rejected"].includes(order.status));
+  const hold = R?.findTableHold?.(state.held, tableId);
+  const paid = open.some((order) => order.sales_order_id || order.payment_status === "paid");
+  if (open.some((o) => o.status === "ready")) return "Ready";
+  if (open.some((o) => o.status === "preparing")) return "Preparing";
+  if (open.some((o) => o.status === "kot_sent")) return "Occupied";
+  if (open.some((o) => o.status === "accepted")) return "Order Accepted";
+  if (open.some((o) => o.status === "pending")) return "Order Received";
+  if (open.some((o) => o.status === "completed") && !paid) return "Bill Pending";
+  if (open.some((o) => o.status === "completed") && paid) return "Payment Completed";
+  if (hold) return "Occupied";
+  if (state.activeTable === tableId && state.cart.length) return `${state.cart.length} dishes`;
+  return "Available";
 }
 
 function busyTableIds(tables) {
@@ -2424,8 +2448,8 @@ function renderTableBoard() {
           const payload = hold ? R.holdPayload(hold) || {} : {};
           const dishes = (payload.cart || []).length;
           const on = state.activeTable === t.id;
-          const busy = Boolean(hold) || (on && state.cart.length);
-          const metaLine = busy ? `${dishes || state.cart.length} ${dishes === 1 || (on && state.cart.length === 1) ? "dish" : "dishes"}` : "Free";
+          const busy = Boolean(hold) || (on && state.cart.length) || tableIsBusy(t.id);
+          const metaLine = tableLiveLabel(t.id);
           return `<div class="table-seat-wrap">
             <button class="table-seat${on ? " is-on" : ""}${busy ? " is-busy" : ""}" type="button" data-table="${escapeHtml(t.id)}">
               <strong>${escapeHtml(t.name || R.displayTable(t.id))}</strong>
@@ -2605,7 +2629,7 @@ function kotStatusLabel(status) {
   const s = String(status || "new");
   if (s === "preparing") return "Preparing";
   if (s === "ready") return "Ready";
-  if (s === "done") return "Done";
+  if (s === "done") return "Served";
   if (s === "reprint") return "Reprint";
   return "New";
 }
@@ -2620,10 +2644,17 @@ function nextKotStatus(status) {
 
 function nextKotStatusLabel(status) {
   const next = nextKotStatus(status);
-  if (next === "preparing") return "Start";
-  if (next === "ready") return "Ready";
-  if (next === "done") return "Done";
+  if (next === "preparing") return "Start Preparing";
+  if (next === "ready") return "Mark Ready";
+  if (next === "done") return "Served";
   return "";
+}
+
+function kotQtyTimes(line) {
+  const q = Number(line.qtyGm || line.quantity_gm) || 0;
+  const unit = String(line.unit || "PCS").toUpperCase();
+  if (unit === "PCS" || unit === "PC") return `× ${q % 1 ? q : q}`;
+  return kotQtyLine(line);
 }
 
 function kotQtyLine(line) {
@@ -2674,21 +2705,22 @@ function renderKotBoard() {
           const table = R?.displayTable?.(ticket.table_no) || ticket.table_no || "—";
           const when = ticket.created_at ? formatShopDateTime(ticket.created_at) : "";
           const kind = ticket.kind === "reprint" ? "Reprint" : "KOT";
-          return `<article class="kot-card is-${escapeHtml(ticket.status || "new")}" data-kot="${escapeHtml(ticket.id)}">
+          const kotNo = ticket.kot_number || "";
+          return `<article class="kot-card is-${escapeHtml(ticket.status || "new")}${String(ticket.status || "new") === "new" && kotAckIds && !kotAckIds.has(String(ticket.id)) ? " is-flash" : ""}" data-kot="${escapeHtml(ticket.id)}">
             <header class="kot-card-head">
               <div>
-                <h3>${escapeHtml(table)}</h3>
-                <p class="kot-meta">${escapeHtml(kind)}${when ? ` · ${escapeHtml(when)}` : ""}</p>
+                <h3>${escapeHtml(kotNo || table)}</h3>
+                <p class="kot-meta">${escapeHtml(kotNo ? table : kind)}${when ? ` · ${escapeHtml(when)}` : ""}</p>
               </div>
               <div class="kot-head-right">
                 ${kotTimerHtml(ticket)}
-                <span class="kot-status">${escapeHtml(kotStatusLabel(ticket.status))}</span>
+                <span class="kot-status is-${escapeHtml(ticket.status || "new")}">${escapeHtml(kotStatusLabel(ticket.status))}</span>
               </div>
             </header>
             <div class="kot-lines">${(ticket.lines || [])
               .map((line) => {
                 const si = String(line.notes || line.special_instruction || "").trim();
-                return `<div class="kot-line"><span>${escapeHtml(line.name || "Item")}${si ? `<small class="kot-si">${escapeHtml(si)}</small>` : ""}</span><strong>${escapeHtml(kotQtyLine(line))}</strong></div>`;
+                return `<div class="kot-line"><span>${escapeHtml(line.name || "Item")}${si ? `<small class="kot-si">${escapeHtml(si)}</small>` : ""}</span><strong>${escapeHtml(kotQtyTimes(line))}</strong></div>`;
               })
               .join("")}</div>
             ${ticket.notes ? `<p class="kot-note">Note: ${escapeHtml(ticket.notes)}</p>` : ""}
@@ -2720,6 +2752,7 @@ async function loadKots({ announce } = {}) {
 let kotPollTimer = null;
 let kotClockTimer = null;
 let kotSeenIds = null;
+let kotAckIds = null;
 let kotToastId = "";
 let kotToastTimer = 0;
 
@@ -2764,12 +2797,12 @@ function showKotToast(ticket, extra = 0) {
 
 function applyKotSnapshot(rows, { announce = false } = {}) {
   const list = Array.isArray(rows) ? rows : [];
-  const R = restaurantApi();
-  const incoming = (R?.newKots?.(kotSeenIds, list) || []).length
-    ? R.newKots(kotSeenIds, list)
-    : kotSeenIds
-      ? list.filter((row) => row?.id && String(row.status || "new") === "new" && !kotSeenIds.has(String(row.id)))
-      : [];
+  if (kotAckIds == null) {
+    kotAckIds = new Set(list.filter((row) => String(row.status || "new") === "new").map((row) => String(row.id)).filter(Boolean));
+  }
+  const incoming = list.filter(
+    (row) => row?.id && String(row.status || "new") === "new" && !kotAckIds.has(String(row.id)),
+  );
   state.kotTickets = list;
   if (kotSeenIds == null) kotSeenIds = new Set(list.map((row) => String(row.id)).filter(Boolean));
   else {
@@ -2780,9 +2813,9 @@ function applyKotSnapshot(rows, { announce = false } = {}) {
   paintKotBadge();
   renderKotBoard();
   if (!announce || !incoming.length) return incoming;
-  incoming.forEach((row) => kotSeenIds.add(String(row.id)));
   globalThis.POSQrNotify?.playTone?.({ force: true });
   setTimeout(() => globalThis.POSQrNotify?.playTone?.({ force: true }), 450);
+  const R = restaurantApi();
   globalThis.POSQrNotify?.desktopNotify?.(incoming[0], incoming.length - 1, {
     title: "New kitchen KOT",
     body: R?.kotToastCopy?.(incoming[0], incoming.length - 1) || "New ticket",
@@ -2874,7 +2907,7 @@ async function sendQrKitchenKot(order) {
       /* ignore */
     }
   }
-  if (order.status === "pending") order.status = "kot_sent";
+  if (order.status === "accepted") order.status = "kot_sent";
   try {
     printKitchenKot({
       tableNo: order.table_no,
@@ -7092,17 +7125,32 @@ function showQrOrderToast(order, extra = 0) {
   qrToastTimer = setTimeout(hideQrOrderToast, 14000);
 }
 
+let qrReadySeen = null;
+
 function applyQrOrderSnapshot(rows, { announce = false } = {}) {
   const list = Array.isArray(rows) ? rows : [];
   const incoming = globalThis.POSQrNotify?.newPending?.(qrSeenOrderIds, list) || [];
+  const readyIncoming = qrReadySeen
+    ? list.filter((order) => order?.id && order.status === "ready" && !qrReadySeen.has(String(order.id)))
+    : [];
   qrOrderCache = list;
   if (qrSeenOrderIds == null) qrSeenOrderIds = new Set(list.map((order) => String(order.id)).filter(Boolean));
   else list.forEach((order) => {
     if (order?.id) qrSeenOrderIds.add(String(order.id));
   });
+  if (qrReadySeen == null) qrReadySeen = new Set(list.filter((o) => o.status === "ready").map((o) => String(o.id)));
+  else list.filter((o) => o.status === "ready").forEach((o) => qrReadySeen.add(String(o.id)));
   paintQrOrderBadge();
   const page = $("view-qr-orders");
   if (page && !page.hidden) renderQrOrders();
+  if ($("table-board") && !$("table-board").hidden) renderTableBoard();
+  if (announce && readyIncoming.length) {
+    const order = readyIncoming[0];
+    const table = restaurantApi()?.displayTable?.(order.table_no) || order.table_no || "Table";
+    setHint(`${table} – Order ${order.order_number} Ready`, "ok");
+    globalThis.POSQrNotify?.playTone?.({ force: true });
+    showQrOrderToast(order, readyIncoming.length - 1);
+  }
   if (!announce || !incoming.length) return incoming;
   incoming.forEach((order) => qrSeenOrderIds.add(String(order.id)));
   globalThis.POSQrNotify?.playTone?.({ force: true });
@@ -7137,6 +7185,24 @@ function startQrOrderWatch() {
   });
 }
 
+function qrStatusLabel(status) {
+  const s = String(status || "pending");
+  if (s === "pending") return "New";
+  if (s === "accepted") return "Accepted";
+  if (s === "kot_sent") return "KOT sent";
+  if (s === "preparing") return "Preparing";
+  if (s === "ready") return "Ready";
+  if (s === "completed") return "Served";
+  if (s === "rejected") return "Rejected";
+  if (s === "cancelled") return "Cancelled";
+  return s;
+}
+
+function qrPayLabel(order) {
+  const paid = String(order.payment_status || order.invoice_payment_status || "").toLowerCase() === "paid" || Boolean(order.sales_order_id);
+  return paid ? "Paid" : "Unpaid";
+}
+
 function qrOrderTotalsHtml(order) {
   const save = Math.round((Number(order.discount) || 0) * 100) / 100;
   const items = Math.round(((Number(order.subtotal) || 0) + save) * 100) / 100;
@@ -7164,12 +7230,12 @@ function renderQrOrders() {
   });
   paintQrOrderBadge();
   $("qr-order-list").innerHTML = rows.length
-    ? rows.map((order) => `<article class="qr-order-card${order.status === "pending" ? " is-pending" : ""}" data-qr-order="${escapeHtml(order.id)}">
+    ? rows.map((order) => `<article class="qr-order-card is-${escapeHtml(order.status || "pending")}${order.status === "pending" ? " is-pending" : ""}" data-qr-order="${escapeHtml(order.id)}">
         <header class="qr-order-head">
-          <div><h3>${escapeHtml(order.order_number)}</h3><p class="qr-order-meta">${escapeHtml(formatShopDateTime(order.created_at))}</p></div>
-          <span class="qr-order-status">${escapeHtml(order.status === "kot_sent" ? "KOT sent" : order.status === "completed" ? "served" : order.status)}</span>
+          <div><h3>${escapeHtml(order.order_number)}</h3><p class="qr-order-meta">${escapeHtml(formatShopDateTime(order.created_at))}${order.kot_number ? ` · ${escapeHtml(order.kot_number)}` : ""}</p></div>
+          <span class="qr-order-status is-${escapeHtml(order.status || "pending")}">${escapeHtml(qrStatusLabel(order.status))}</span>
         </header>
-        <p class="qr-order-meta"><strong>${escapeHtml(order.customer_name)}</strong> · ${escapeHtml(order.mobile)}${order.table_no ? ` · ${escapeHtml(order.table_no)}` : ""}</p>
+        <p class="qr-order-meta"><strong>${escapeHtml(order.customer_name)}</strong> · ${escapeHtml(order.mobile)}${order.table_no ? ` · ${escapeHtml(order.table_no)}` : ""} · ${escapeHtml(qrPayLabel(order))}</p>
         <div class="qr-order-lines">${(order.lines || []).map((line) => {
           const si = String(line.notes || "").trim();
           return `<div class="qr-order-line"><span>${escapeHtml(line.item_name)} · ${escapeHtml(qrOrderQty(line))}${si ? `<small class="qr-line-si">${escapeHtml(si)}</small>` : ""}</span><strong>${money(line.amount)}</strong></div>`;
@@ -7177,16 +7243,15 @@ function renderQrOrders() {
         ${qrOrderTotalsHtml(order)}
         ${order.notes ? `<p class="qr-order-note">Note: ${escapeHtml(order.notes)}</p>` : ""}
         <div class="qr-order-actions">
-          ${!["completed", "cancelled"].includes(order.status) ? `<button class="btn primary" type="button" data-qr-counter="${escapeHtml(order.id)}">Open in Counter</button>` : ""}
-          ${order.status === "pending" || order.status === "kot_sent" ? `<button class="btn" type="button" data-qr-status-next="accepted">Accept</button>` : ""}
-          ${isRestaurantShop() && !["completed", "cancelled"].includes(order.status) ? `<button class="btn" type="button" data-qr-kot="${escapeHtml(order.id)}">Kitchen KOT</button>` : ""}
-          ${order.status === "accepted" ? `<button class="btn" type="button" data-qr-status-next="preparing">Preparing</button>` : ""}
-          ${order.status === "preparing" ? `<button class="btn" type="button" data-qr-status-next="ready">Ready</button>` : ""}
-          ${order.status === "ready" ? `<button class="btn" type="button" data-qr-status-next="completed">Complete</button>` : ""}
+          ${!["completed", "cancelled", "rejected"].includes(order.status) ? `<button class="btn primary" type="button" data-qr-counter="${escapeHtml(order.id)}">Open in Counter</button>` : ""}
+          ${order.status === "pending" ? `<button class="btn primary" type="button" data-qr-status-next="accepted">Accept Order</button>` : ""}
+          ${order.status === "pending" ? `<button class="btn danger" type="button" data-qr-status-next="rejected">Reject Order</button>` : ""}
+          ${isRestaurantShop() && !["pending", "completed", "cancelled", "rejected"].includes(order.status) ? `<button class="btn" type="button" data-qr-kot="${escapeHtml(order.id)}">Kitchen KOT</button>` : ""}
+          ${order.status === "ready" ? `<button class="btn" type="button" data-qr-status-next="completed">Served</button>` : ""}
           ${order.status === "completed" && !order.sales_order_id ? `<button class="btn primary" type="button" data-qr-status-next="completed">Save invoice</button>` : ""}
           <button class="btn" type="button" data-qr-print="${escapeHtml(order.id)}">Print</button>
           ${order.sales_order_id ? `<button class="btn" type="button" data-qr-invoice="${escapeHtml(order.sales_order_id)}">View invoice${order.invoice_number ? ` ${escapeHtml(order.invoice_number)}` : ""}</button>` : ""}
-          ${!["completed", "cancelled"].includes(order.status) ? `<button class="btn danger" type="button" data-qr-status-next="cancelled">Cancel</button>` : ""}
+          ${!["completed", "cancelled", "rejected"].includes(order.status) ? `<button class="btn danger" type="button" data-qr-status-next="cancelled">Cancel</button>` : ""}
         </div>
       </article>`).join("")
     : '<p class="item-empty-card"><strong>No QR orders here</strong><span>New customer orders ding and appear here after they scan your code.</span></p>';
@@ -7220,12 +7285,19 @@ async function updateQrOrder(order, status) {
   if (index >= 0 && data.order) qrOrderCache[index] = data.order;
   renderQrOrders();
   if (status === "accepted" && isRestaurantShop()) {
+    const ticket = data.ticket;
+    setHint(
+      ticket?.kot_number ? `Order Accepted ✓ · ${ticket.kot_number} Generated` : "Order Accepted ✓",
+      "ok",
+    );
     try {
       await sendQrKitchenKot(data.order || order);
     } catch (err) {
       setHint(err.message, "error");
     }
+    void loadKots({ announce: true });
   }
+  if (status === "rejected") setHint("Order rejected", "ok");
   if (status === "completed") {
     if (data.invoice?.id && !orderCache.some((row) => row.id === data.invoice.id)) {
       orderCache.unshift(data.invoice);
@@ -8858,6 +8930,8 @@ $("kot-list")?.addEventListener("click", async (event) => {
   const card = event.target.closest("[data-kot]");
   if (!card) return;
   const id = card.getAttribute("data-kot") || "";
+  if (kotAckIds) kotAckIds.add(id);
+  card.classList.remove("is-flash");
   const ticket = (state.kotTickets || []).find((row) => row.id === id);
   try {
     if (event.target.closest("[data-kot-reprint]")) {
@@ -8913,6 +8987,10 @@ $("qr-toast-open")?.addEventListener("click", () => {
   showView("qr-orders");
 });
 $("qr-toast-dismiss")?.addEventListener("click", hideQrOrderToast);
+$("kot-test-sound")?.addEventListener("click", () => {
+  const ok = armQrOrderSound();
+  setHint(ok ? "Test kitchen sound played." : "Tap Test Kitchen Sound again with the speaker on.", ok ? "ok" : "error");
+});
 $("kot-sound-toggle")?.addEventListener("click", () => {
   const on = globalThis.POSQrNotify?.soundOn() !== false;
   const needs = globalThis.POSQrNotify?.needsUnlock?.() === true;

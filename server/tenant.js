@@ -105,6 +105,7 @@ function kotRow(row) {
     notes: row.notes || "",
     lines,
     qr_order_id: row.qr_order_id || "",
+    kot_number: row.kot_number || "",
     created_at: row.created_at,
     updated_at: row.updated_at,
   };

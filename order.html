@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#0f766e" />
     <title>Order online · ATAV POS</title>
-    <link rel="stylesheet" href="./css/qr-order.css?v=20260920deploy204" />
+    <link rel="stylesheet" href="./css/qr-order.css?v=20260922deploy205" />
   </head>
   <body>
     <header class="menu-head">
@@ -49,24 +49,26 @@
       </section>
     </div>
 
-    <section class="success-card" id="order-success" hidden>
-      <div class="success-check">✓</div>
-      <p class="eyebrow" id="track-kicker">LIVE ORDER</p>
-      <h2 id="success-number"></h2>
-      <p class="track-table" id="track-table"></p>
+    <section class="live-board" id="order-success" hidden>
+      <header class="live-board-head">
+        <img id="live-logo" alt="" hidden />
+        <div>
+          <p class="eyebrow" id="track-kicker">YOUR ORDER</p>
+          <p class="track-table" id="track-table"></p>
+        </div>
+      </header>
       <p class="success-save" id="success-save" hidden></p>
-      <p class="success-total" id="success-total"></p>
-      <p class="track-time" id="track-time"></p>
-      <p class="track-eta" id="track-eta" hidden></p>
-      <p class="track-message" id="track-message">Your order has been successfully placed.</p>
-      <ol class="track-steps" id="track-steps"></ol>
-      <div class="track-items" id="track-items"></div>
+      <div id="active-orders"></div>
+      <div class="live-board-actions">
+        <button type="button" id="new-order">Order More</button>
+        <a class="ghost-btn" id="call-staff" hidden>Call Staff</a>
+        <button type="button" class="ghost-btn" id="view-bill">View Bill</button>
+      </div>
       <p class="track-live">Status updates automatically. Keep this page open.</p>
-      <button type="button" id="new-order">Order more</button>
     </section>
 
     <footer>Ordering powered by <strong>ATAV POS</strong></footer>
     <script src="./js/offers.js?v=20260917food1" defer></script>
-    <script src="./js/qr-order.js?v=20260920deploy204" defer></script>
+    <script src="./js/qr-order.js?v=20260922deploy205" defer></script>
   </body>
 </html>

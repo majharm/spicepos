@@ -23,6 +23,7 @@ function pos_ensure_kitchen_tickets_schema() {
   @$db->query("ALTER TABLE kitchen_tickets ADD COLUMN notes VARCHAR(250) NULL");
   @$db->query("ALTER TABLE kitchen_tickets ADD COLUMN lines_json MEDIUMTEXT NULL");
   @$db->query("ALTER TABLE kitchen_tickets ADD COLUMN qr_order_id VARCHAR(255) NULL");
+  @$db->query("ALTER TABLE kitchen_tickets ADD COLUMN kot_number VARCHAR(32) NULL");
 }
 
 function pos_clip_kot_lines($raw) {
@@ -53,6 +54,7 @@ function pos_kot_row($row) {
     "notes" => $row["notes"] ?? "",
     "lines" => is_array($parsed) ? $parsed : [],
     "qr_order_id" => $row["qr_order_id"] ?? "",
+    "kot_number" => $row["kot_number"] ?? "",
     "created_at" => $row["created_at"] ?? null,
     "updated_at" => $row["updated_at"] ?? null,
   ];
@@ -65,10 +67,11 @@ function pos_sync_qr_from_kot($qrOrderId, $kotStatus, $bid) {
   $next = $map[$kotStatus] ?? "kot_sent";
   $rows = pos_q("SELECT status FROM qr_orders WHERE id = ? AND business_id = ? LIMIT 1", "ss", [$qrOrderId, $bid]);
   $cur = (string) ($rows[0]["status"] ?? "pending");
-  if ($cur === "cancelled" || $cur === "completed") return;
-  $rank = ["pending" => 0, "kot_sent" => 1, "accepted" => 2, "preparing" => 3, "ready" => 4, "completed" => 5];
+  if ($cur === "cancelled" || $cur === "rejected" || $cur === "completed") return;
   if (($rank[$cur] ?? 0) >= ($rank[$next] ?? 0) && $next !== "completed") return;
-  pos_q("UPDATE qr_orders SET status = ? WHERE id = ? AND business_id = ?", "sss", [$next, $qrOrderId, $bid]);
+  $stamp = "";
+  if (function_exists("pos_qr_stamp_sql")) $stamp = pos_qr_stamp_sql($next);
+  pos_q("UPDATE qr_orders SET status = ?$stamp WHERE id = ? AND business_id = ?", "sss", [$next, $qrOrderId, $bid]);
 }
 
 function pos_can_kot_board($user) {
