@@ -94,17 +94,435 @@ function pos_print_catalog_payload($shop) {
   ];
 }
 
+function pos_print_clip($v, $n) {
+  return substr(trim((string) $v), 0, (int) $n);
+}
+
+function pos_print_digits($v) {
+  return preg_replace("/\D/", "", (string) $v);
+}
+
+function pos_print_round2($n) {
+  return round((float) $n, 2);
+}
+
+function pos_print_bearer() {
+  $h = (string) ($_SERVER["HTTP_AUTHORIZATION"] ?? $_SERVER["REDIRECT_HTTP_AUTHORIZATION"] ?? "");
+  if ($h === "" && function_exists("apache_request_headers")) {
+    $headers = apache_request_headers();
+    foreach ($headers as $k => $v) {
+      if (strcasecmp((string) $k, "Authorization") === 0) {
+        $h = (string) $v;
+        break;
+      }
+    }
+  }
+  if (stripos($h, "Bearer ") === 0) return trim(substr($h, 7));
+  return trim((string) ($_SERVER["HTTP_X_PRINT_TOKEN"] ?? $_GET["token"] ?? ""));
+}
+
+function pos_print_issue_session($customerId, $shop) {
+  $token = bin2hex(random_bytes(24));
+  pos_q(
+    "INSERT INTO print_sessions (id, token_hash, customer_id, business_id, expires_at) VALUES (?,?,?,?, DATE_ADD(NOW(), INTERVAL 30 DAY))",
+    "ssss",
+    [pos_uuid(), hash("sha256", $token), $customerId, $shop]
+  );
+  return $token;
+}
+
+function pos_print_customer($shop) {
+  $token = pos_print_bearer();
+  if ($token === "") return null;
+  $rows = pos_q(
+    "SELECT s.customer_id FROM print_sessions s WHERE s.token_hash=? AND s.business_id=? AND s.expires_at > NOW() LIMIT 1",
+    "ss",
+    [hash("sha256", $token), $shop]
+  );
+  if (!$rows) return null;
+  $cust = pos_q("SELECT * FROM customers WHERE id=? AND business_id=?", "ss", [$rows[0]["customer_id"], $shop]);
+  return $cust[0] ?? null;
+}
+
+function pos_print_require_customer($shop) {
+  $c = pos_print_customer($shop);
+  if (!$c) pos_send(401, ["error" => "Sign in required", "php" => true]);
+  return $c;
+}
+
+function pos_print_customer_code($shop) {
+  $n = function_exists("pos_next_seq") ? pos_next_seq("customer", $shop, 4) : random_int(100, 9999);
+  return "CUS-" . str_pad((string) $n, 3, "0", STR_PAD_LEFT);
+}
+
+function pos_print_create_customer($shop, $name, $email, $mobile, $password = "") {
+  $id = pos_uuid();
+  $code = pos_print_customer_code($shop);
+  $hash = $password !== "" ? pos_hash_password($password) : null;
+  try {
+    pos_q(
+      "INSERT INTO customers (id, code, name, mobile, email, password_hash, type, outstanding, business_id) VALUES (?,?,?,?,?,?,'b2c',0,?)",
+      "sssssss",
+      [$id, $code, $name, $mobile, $email, $hash ?: "", $shop]
+    );
+  } catch (Exception $e) {
+    pos_q(
+      "INSERT INTO customers (id, name, mobile, email, password_hash, type, business_id) VALUES (?,?,?,?,?,'b2c',?)",
+      "ssssss",
+      [$id, $name, $mobile, $email, $hash ?: "", $shop]
+    );
+  }
+  $rows = pos_q("SELECT * FROM customers WHERE id=? LIMIT 1", "s", [$id]);
+  return $rows[0] ?? ["id" => $id, "name" => $name, "email" => $email, "mobile" => $mobile];
+}
+
+function pos_print_area($width, $height, $unit, $dpi = 150) {
+  $u = strtolower(trim((string) $unit));
+  $w = (float) $width;
+  $h = (float) $height;
+  if ($u === "sqft") return pos_print_round2($w);
+  if ($u === "ft" || $u === "feet" || $u === "foot") return pos_print_round2($w * $h);
+  if ($u === "in" || $u === "inch" || $u === "inches") return pos_print_round2(($w * $h) / 144);
+  if ($u === "cm") return pos_print_round2(($w * $h) / 929.0304);
+  if ($u === "mm") return pos_print_round2(($w * $h) / 92903.04);
+  if ($u === "px") {
+    $d = (float) $dpi ?: 150;
+    return pos_print_round2((($w / $d) * ($h / $d)) / 144);
+  }
+  return pos_print_round2($w * $h);
+}
+
+function pos_print_finish_amount($f, $area, $qty) {
+  $rate = (float) ($f["rate"] ?? 0);
+  $unit = strtolower((string) ($f["unit"] ?? "job"));
+  $q = max(1, (int) $qty);
+  if ($unit === "sqft") return pos_print_round2($rate * (float) $area * $q);
+  return pos_print_round2($rate * $q);
+}
+
+function pos_print_quote($material, $body, $finishing, $settings) {
+  $area = pos_print_area($body["width"] ?? 0, $body["height"] ?? 0, $body["unit"] ?? "ft", $body["dpi"] ?? 150);
+  $qty = max(1, (int) ($body["quantity"] ?? 1));
+  $minSq = (float) ($material["min_sqft"] ?? 0);
+  $billed = max($area, $minSq);
+  $rate = (float) ($material["rate"] ?? 0);
+  $model = strtolower((string) ($material["price_model"] ?? "sqft"));
+  if ($model === "piece" || $model === "size") $printing = pos_print_round2($rate * $qty);
+  else $printing = pos_print_round2($billed * $rate * $qty);
+  if (strtolower((string) ($body["print_type"] ?? "single")) === "double" && $model === "sqft") {
+    $printing = pos_print_round2($printing * 2);
+  }
+  $finAmt = 0;
+  foreach ($finishing as $f) $finAmt += pos_print_finish_amount($f, $area, $qty);
+  $finAmt = pos_print_round2($finAmt);
+  $delivery = 0;
+  foreach ($finishing as $f) {
+    if (preg_match("/delivery/i", (string) ($f["name"] ?? ""))) $delivery = 0;
+  }
+  if ($delivery === 0 && empty($finishing)) $delivery = pos_print_round2($body["delivery"] ?? 0);
+  $gstRate = (float) ($settings["gst_rate"] ?? 18);
+  $subtotal = pos_print_round2($printing + $finAmt + $delivery);
+  $gst = pos_print_round2($subtotal * ($gstRate / 100));
+  $total = pos_print_round2($subtotal + $gst);
+  return [
+    "area" => $area,
+    "qty" => $qty,
+    "printing" => $printing,
+    "finishing" => $finAmt,
+    "delivery" => $delivery,
+    "gst" => $gst,
+    "gst_rate" => $gstRate,
+    "total" => $total,
+  ];
+}
+
+function pos_print_history($orderId, $status, $shop, $note = "") {
+  pos_q(
+    "INSERT INTO print_status_history (id, order_id, status, staff_id, staff_name, note, business_id) VALUES (?,?,?,?,?,?,?)",
+    "sssssss",
+    [pos_uuid(), $orderId, $status, "", "", pos_print_clip($note, 500), $shop]
+  );
+}
+
+function pos_print_public_order($row) {
+  $row["status_label"] = $row["status"] ?? "";
+  $row["timeline"] = [];
+  return $row;
+}
+
+function pos_print_order_bundle($id, $shop) {
+  $rows = pos_q("SELECT * FROM print_orders WHERE id=? AND business_id=?", "ss", [$id, $shop]);
+  if (!$rows) return null;
+  $order = pos_print_public_order($rows[0]);
+  $order["files"] = pos_q(
+    "SELECT id, order_id, version, file_name, file_type, file_size, mime, width_px, height_px, status, uploaded_by, created_at FROM print_files WHERE order_id=? ORDER BY version DESC",
+    "s",
+    [$id]
+  );
+  $order["finishing"] = pos_q("SELECT * FROM print_order_finishing WHERE order_id=?", "s", [$id]);
+  $order["history"] = pos_q("SELECT * FROM print_status_history WHERE order_id=? ORDER BY created_at", "s", [$id]);
+  $order["payments"] = pos_q("SELECT * FROM print_payments WHERE order_id=? ORDER BY created_at", "s", [$id]);
+  return $order;
+}
+
 function pos_print_public_dispatch($path, $method, $body) {
   if (!preg_match("#^print/public/([^/]+)(/.*)?$#", $path, $m)) return false;
   pos_print_ensure();
   $shop = $m[1];
   $rest = trim($m[2] ?? "", "/");
   pos_print_seed($shop);
-  if ($method === "GET" && $rest === "") {
-    $biz = pos_q("SELECT id, name, category, address, mobile FROM businesses WHERE id=?", "s", [$shop]);
-    $cat = pos_print_catalog_payload($shop);
-    $cat["shop"] = $biz[0] ?? ["id" => $shop];
-    pos_send(200, $cat);
+  $body = is_array($body) ? $body : [];
+  try {
+    if ($method === "GET" && $rest === "") {
+      $biz = pos_q("SELECT id, name, category, address, mobile FROM businesses WHERE id=?", "s", [$shop]);
+      $cat = pos_print_catalog_payload($shop);
+      $cat["shop"] = $biz[0] ?? ["id" => $shop];
+      pos_send(200, $cat);
+    }
+    if ($method === "POST" && $rest === "register") {
+      $email = strtolower(pos_print_clip($body["email"] ?? "", 160));
+      $name = pos_print_clip($body["name"] ?? "", 180);
+      $mobile = substr(pos_print_digits($body["mobile"] ?? ""), 0, 15);
+      $password = (string) ($body["password"] ?? "");
+      if ($email === "" || $name === "" || strlen($password) < 6) {
+        pos_send(400, ["error" => "Name, email, and a 6+ character password are required", "php" => true]);
+      }
+      $dup = pos_q("SELECT id FROM customers WHERE business_id=? AND email=? LIMIT 1", "ss", [$shop, $email]);
+      if ($dup) pos_send(400, ["error" => "This email is already registered", "php" => true]);
+      $c = pos_print_create_customer($shop, $name, $email, $mobile, $password);
+      $token = pos_print_issue_session($c["id"], $shop);
+      pos_send(200, ["token" => $token, "customer" => ["id" => $c["id"], "name" => $c["name"], "email" => $email, "mobile" => $mobile]]);
+    }
+    if ($method === "POST" && $rest === "login") {
+      $ident = strtolower(pos_print_clip($body["email"] ?? $body["mobile"] ?? $body["identifier"] ?? "", 160));
+      $password = (string) ($body["password"] ?? "");
+      if ($ident === "" || $password === "") pos_send(400, ["error" => "Email/mobile and password required", "php" => true]);
+      $rows = pos_q(
+        "SELECT * FROM customers WHERE business_id=? AND (LOWER(email)=? OR mobile=?) LIMIT 1",
+        "sss",
+        [$shop, $ident, pos_print_digits($ident)]
+      );
+      $c = $rows[0] ?? null;
+      if (!$c || empty($c["password_hash"]) || !pos_verify_password($password, $c["password_hash"])) {
+        pos_send(400, ["error" => "Invalid login", "php" => true]);
+      }
+      $token = pos_print_issue_session($c["id"], $shop);
+      pos_send(200, ["token" => $token, "customer" => ["id" => $c["id"], "name" => $c["name"], "email" => $c["email"] ?? "", "mobile" => $c["mobile"] ?? ""]]);
+    }
+    if ($method === "POST" && $rest === "otp/send") {
+      $email = strtolower(pos_print_clip($body["email"] ?? "", 160));
+      $mobile = substr(pos_print_digits($body["mobile"] ?? ""), 0, 15);
+      if ($email === "" && $mobile === "") pos_send(400, ["error" => "Email or mobile required", "php" => true]);
+      $code = (string) random_int(100000, 999999);
+      pos_q(
+        "INSERT INTO print_otps (id, email, mobile, code_hash, purpose, business_id, expires_at) VALUES (?,?,?,?, 'login', ?, DATE_ADD(NOW(), INTERVAL 10 MINUTE))",
+        "sssss",
+        [pos_uuid(), $email !== "" ? $email : ($mobile . "@otp.local"), $mobile, pos_hash_password($code), $shop]
+      );
+      pos_send(200, ["ok" => true]);
+    }
+    if ($method === "POST" && $rest === "otp/verify") {
+      $email = strtolower(pos_print_clip($body["email"] ?? "", 160));
+      $code = (string) ($body["otp"] ?? "");
+      $rows = pos_q(
+        "SELECT * FROM print_otps WHERE business_id=? AND email=? AND expires_at > NOW() ORDER BY created_at DESC LIMIT 1",
+        "ss",
+        [$shop, $email]
+      );
+      $otp = $rows[0] ?? null;
+      if (!$otp || !pos_verify_password($code, $otp["code_hash"])) pos_send(400, ["error" => "Invalid OTP", "php" => true]);
+      $found = pos_q("SELECT * FROM customers WHERE business_id=? AND email=? LIMIT 1", "ss", [$shop, $email]);
+      $c = $found[0] ?? pos_print_create_customer($shop, explode("@", $email)[0], $email, "", "");
+      if (!empty($body["password"])) {
+        pos_q("UPDATE customers SET password_hash=? WHERE id=?", "ss", [pos_hash_password((string) $body["password"]), $c["id"]]);
+      }
+      $token = pos_print_issue_session($c["id"], $shop);
+      pos_send(200, ["token" => $token, "customer" => ["id" => $c["id"], "name" => $c["name"], "email" => $c["email"] ?? $email, "mobile" => $c["mobile"] ?? ""]]);
+    }
+    if ($method === "GET" && $rest === "me") {
+      $c = pos_print_require_customer($shop);
+      $orders = pos_q("SELECT * FROM print_orders WHERE customer_id=? AND business_id=? ORDER BY created_at DESC LIMIT 200", "ss", [$c["id"], $shop]);
+      $payments = pos_q("SELECT * FROM print_payments WHERE customer_id=? AND business_id=? ORDER BY created_at DESC LIMIT 200", "ss", [$c["id"], $shop]);
+      $files = pos_q(
+        "SELECT id, order_id, version, file_name, file_type, file_size, mime, width_px, height_px, status, uploaded_by, created_at FROM print_files WHERE customer_id=? AND business_id=? ORDER BY created_at DESC LIMIT 200",
+        "ss",
+        [$c["id"], $shop]
+      );
+      $inbox = pos_q(
+        "SELECT id, kind, body, created_at FROM print_notifications WHERE customer_id=? AND channel='in_app' ORDER BY created_at DESC LIMIT 40",
+        "s",
+        [$c["id"]]
+      );
+      pos_send(200, [
+        "customer" => ["id" => $c["id"], "name" => $c["name"], "email" => $c["email"] ?? "", "mobile" => $c["mobile"] ?? ""],
+        "orders" => array_map("pos_print_public_order", $orders ?: []),
+        "payments" => $payments,
+        "files" => $files,
+        "inbox" => $inbox,
+      ]);
+    }
+    if ($method === "POST" && $rest === "profile") {
+      $c = pos_print_require_customer($shop);
+      $name = pos_print_clip($body["name"] ?? "", 180) ?: $c["name"];
+      $mobile = substr(pos_print_digits($body["mobile"] ?? ""), 0, 15);
+      pos_q("UPDATE customers SET name=?, mobile=? WHERE id=?", "sss", [$name, $mobile, $c["id"]]);
+      pos_send(200, ["ok" => true]);
+    }
+    if ($method === "POST" && $rest === "orders") {
+      $c = pos_print_require_customer($shop);
+      $cat = pos_print_catalog_payload($shop);
+      $material = null;
+      foreach ($cat["materials"] as $mrow) {
+        if (($mrow["id"] ?? "") === ($body["material_id"] ?? "")) {
+          $material = $mrow;
+          break;
+        }
+      }
+      if (!$material) $material = $cat["materials"][0] ?? null;
+      if (!$material) pos_send(400, ["error" => "Select a material", "php" => true]);
+      $finishIds = is_array($body["finishing_ids"] ?? null) ? $body["finishing_ids"] : [];
+      $finishing = [];
+      foreach ($cat["finishing"] as $f) {
+        if (in_array($f["id"], $finishIds, true) && (int) ($f["active"] ?? 1) !== 0) $finishing[] = $f;
+      }
+      $q = pos_print_quote($material, $body, $finishing, $cat["settings"]);
+      $id = pos_uuid();
+      $year = (int) date("Y");
+      $cnt = pos_q("SELECT COUNT(*) n FROM print_orders WHERE business_id=? AND order_number LIKE ?", "ss", [$shop, "FP-{$year}-%"]);
+      $number = "FP-" . $year . "-" . str_pad((string) (((int) ($cnt[0]["n"] ?? 0)) + 1), 5, "0", STR_PAD_LEFT);
+      pos_q(
+        "INSERT INTO print_orders (
+           id, order_number, business_id, customer_id, customer_name, customer_mobile, customer_email,
+           product, print_type, material_id, material_name, width, height, unit, dpi, area_sqft, quantity,
+           rate, price_model, printing_amount, finishing_amount, delivery_amount, gst, gst_rate,
+           estimate_total, quote_total, paid_amount, balance_due, pay_status, status, notes, urgent
+         ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        "sssssssssssddsididsdddddddddsssi",
+        [
+          $id, $number, $shop, $c["id"], $c["name"], $c["mobile"] ?? "", $c["email"] ?? "",
+          pos_print_clip($body["product"] ?? "Flex", 80) ?: "Flex",
+          pos_print_clip($body["print_type"] ?? "single", 16) ?: "single",
+          $material["id"], $material["name"],
+          (float) ($body["width"] ?? 0), (float) ($body["height"] ?? 0),
+          pos_print_clip($body["unit"] ?? "ft", 16) ?: "ft",
+          !empty($body["dpi"]) ? (int) $body["dpi"] : 0,
+          $q["area"], $q["qty"], $material["rate"], $material["price_model"],
+          $q["printing"], $q["finishing"], $q["delivery"], $q["gst"], $q["gst_rate"],
+          $q["total"], $q["total"], 0, $q["total"], "pending", "pending_review",
+          pos_print_clip($body["notes"] ?? "", 2000), !empty($body["urgent"]) ? 1 : 0,
+        ]
+      );
+      foreach ($finishing as $f) {
+        pos_q(
+          "INSERT INTO print_order_finishing (id, order_id, finishing_id, name, rate, unit, amount, business_id) VALUES (?,?,?,?,?,?,?,?)",
+          "ssssdsds",
+          [pos_uuid(), $id, $f["id"], $f["name"], $f["rate"], $f["unit"] ?? "job", pos_print_finish_amount($f, $q["area"], $q["qty"]), $shop]
+        );
+      }
+      pos_print_history($id, "pending_review", $shop, "Submitted by customer");
+      pos_send(200, [
+        "order" => pos_print_order_bundle($id, $shop),
+        "message" => "Your print order has been submitted. Our team will review your file and confirm the final price.",
+      ]);
+    }
+    if (preg_match("#^orders/([^/]+)$#", $rest, $om) && $method === "GET") {
+      $c = pos_print_require_customer($shop);
+      $row = pos_q("SELECT id FROM print_orders WHERE id=? AND customer_id=?", "ss", [$om[1], $c["id"]]);
+      if (!$row) pos_send(404, ["error" => "Order not found", "php" => true]);
+      pos_send(200, ["order" => pos_print_order_bundle($om[1], $shop)]);
+    }
+    if (preg_match("#^orders/([^/]+)/files$#", $rest, $om) && $method === "POST") {
+      $c = pos_print_require_customer($shop);
+      $orders = pos_q("SELECT * FROM print_orders WHERE id=? AND customer_id=?", "ss", [$om[1], $c["id"]]);
+      $order = $orders[0] ?? null;
+      if (!$order) pos_send(400, ["error" => "Order not found", "php" => true]);
+      if (in_array($order["status"], ["printing", "finishing", "quality_check", "ready", "dispatched", "delivered"], true)) {
+        pos_send(400, ["error" => "Files are locked after production starts", "php" => true]);
+      }
+      $raw = (string) ($body["content"] ?? "");
+      if ($raw === "") pos_send(400, ["error" => "Upload a print file", "php" => true]);
+      $mime = "application/octet-stream";
+      $bin = $raw;
+      if (preg_match("#^data:([^;]+);base64,(.+)$#s", $raw, $dm)) {
+        $mime = $dm[1];
+        $bin = base64_decode($dm[2], true);
+        if ($bin === false) pos_send(400, ["error" => "Upload a print file", "php" => true]);
+      }
+      $name = pos_print_clip($body["file_name"] ?? "design.bin", 255) ?: "design.bin";
+      $settings = pos_print_settings($shop);
+      $max = ((int) ($settings["max_file_mb"] ?? 25)) * 1024 * 1024;
+      if (strlen($bin) > $max) pos_send(400, ["error" => "File exceeds " . ($settings["max_file_mb"] ?? 25) . " MB", "php" => true]);
+      $ver = pos_q("SELECT COALESCE(MAX(version),0) v FROM print_files WHERE order_id=?", "s", [$order["id"]]);
+      $version = ((int) ($ver[0]["v"] ?? 0)) + 1;
+      $fid = pos_uuid();
+      $ext = strtolower(pathinfo($name, PATHINFO_EXTENSION));
+      pos_q(
+        "INSERT INTO print_files (id, order_id, business_id, customer_id, version, file_name, file_type, file_size, mime, width_px, height_px, status, uploaded_by, content)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?, 'customer', ?)",
+        "ssssisssissss",
+        [
+          $fid, $order["id"], $shop, $c["id"], $version, $name, $ext, strlen($bin), $mime,
+          (int) ($body["width_px"] ?? 0), (int) ($body["height_px"] ?? 0), "uploaded", $bin,
+        ]
+      );
+      pos_send(200, ["file" => [
+        "id" => $fid, "order_id" => $order["id"], "version" => $version, "file_name" => $name,
+        "file_size" => strlen($bin), "mime" => $mime, "status" => "uploaded", "uploaded_by" => "customer",
+      ]]);
+    }
+    if (preg_match("#^orders/([^/]+)/approve$#", $rest, $om) && $method === "POST") {
+      $c = pos_print_require_customer($shop);
+      $orders = pos_q("SELECT * FROM print_orders WHERE id=? AND customer_id=?", "ss", [$om[1], $c["id"]]);
+      $order = $orders[0] ?? null;
+      if (!$order) pos_send(400, ["error" => "Order not found", "php" => true]);
+      if ($order["status"] !== "quote_sent") pos_send(400, ["error" => "Quote is not waiting for approval", "php" => true]);
+      pos_q("UPDATE print_orders SET status='customer_approved' WHERE id=?", "s", [$order["id"]]);
+      pos_print_history($order["id"], "customer_approved", $shop, "Customer approved quote");
+      pos_send(200, ["order" => pos_print_order_bundle($order["id"], $shop)]);
+    }
+    if (preg_match("#^orders/([^/]+)/changes$#", $rest, $om) && $method === "POST") {
+      $c = pos_print_require_customer($shop);
+      $note = pos_print_clip($body["notes"] ?? "", 1000);
+      pos_q("UPDATE print_orders SET status='changes_requested' WHERE id=? AND customer_id=?", "ss", [$om[1], $c["id"]]);
+      pos_print_history($om[1], "changes_requested", $shop, $note);
+      pos_send(200, ["ok" => true]);
+    }
+    if (preg_match("#^orders/([^/]+)/reject$#", $rest, $om) && $method === "POST") {
+      $c = pos_print_require_customer($shop);
+      pos_q("UPDATE print_orders SET status='cancelled' WHERE id=? AND customer_id=?", "ss", [$om[1], $c["id"]]);
+      pos_print_history($om[1], "cancelled", $shop, "Rejected by customer");
+      pos_send(200, ["ok" => true]);
+    }
+    if (preg_match("#^orders/([^/]+)/pay$#", $rest, $om) && $method === "POST") {
+      $c = pos_print_require_customer($shop);
+      $orders = pos_q("SELECT * FROM print_orders WHERE id=? AND customer_id=?", "ss", [$om[1], $c["id"]]);
+      $order = $orders[0] ?? null;
+      if (!$order) pos_send(400, ["error" => "Order not found", "php" => true]);
+      $amt = pos_print_round2($body["amount"] ?? ($order["balance_due"] ?? $order["quote_total"]));
+      if ($amt <= 0) pos_send(400, ["error" => "Enter an amount", "php" => true]);
+      $paid = pos_print_round2((float) $order["paid_amount"] + $amt);
+      $total = (float) ($order["quote_total"] ?? 0);
+      $payStatus = $paid <= 0 ? "pending" : ($paid + 0.009 >= $total ? "paid" : "partial");
+      $status = $payStatus === "paid" ? "paid" : "payment_pending";
+      pos_q(
+        "INSERT INTO print_payments (id, order_id, customer_id, amount, method, kind, status, reference, receipt_no, business_id) VALUES (?,?,?,?,?,?,'paid',?,?,?)",
+        "sssdsssss",
+        [
+          pos_uuid(), $order["id"], $c["id"], $amt, pos_print_clip($body["method"] ?? "upi", 32) ?: "upi",
+          $paid >= $total ? "full" : "advance", pos_print_clip($body["reference"] ?? "", 80),
+          "FPAY-" . substr((string) time(), -8), $shop,
+        ]
+      );
+      pos_q(
+        "UPDATE print_orders SET paid_amount=?, balance_due=?, pay_status=?, status=? WHERE id=?",
+        "ddsss",
+        [$paid, pos_print_round2(max(0, $total - $paid)), $payStatus, $status, $order["id"]]
+      );
+      pos_print_history($order["id"], $status, $shop, "Payment " . $amt);
+      pos_send(200, ["order" => pos_print_order_bundle($order["id"], $shop)]);
+    }
+  } catch (Exception $e) {
+    pos_send(400, ["error" => $e->getMessage(), "php" => true]);
   }
   pos_send(404, ["error" => "Print route not found", "php" => true]);
   return true;

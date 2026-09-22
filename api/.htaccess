@@ -1,4 +1,6 @@
 DirectorySlash Off
 RewriteEngine On
+RewriteCond %{HTTP:Authorization} .
+RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
 RewriteCond %{REQUEST_FILENAME} !-f
 RewriteRule ^(.*)$ /pos-api.php?p=$1 [QSA,L]

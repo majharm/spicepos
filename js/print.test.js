@@ -121,3 +121,16 @@ test("Shop admin can change the Flex & Printing customer portal login image", ()
   assert.match(php, /\$path === "print\/catalog" && \$method === "POST"/);
   assert.match(php, /ALTER TABLE print_settings MODIFY settings_json MEDIUMTEXT/);
 });
+
+test("PHP Hostinger print portal can register and sign in customers", () => {
+  const php = read("pos-print.php");
+  assert.match(php, /function pos_print_issue_session/);
+  assert.match(php, /function pos_print_create_customer/);
+  assert.match(php, /\$rest === "register"/);
+  assert.match(php, /\$rest === "login"/);
+  assert.match(php, /\$rest === "otp\/send"/);
+  assert.match(php, /\$rest === "me"/);
+  assert.match(php, /\$rest === "orders"/);
+  assert.match(read("js/print-portal.js"), /api\("\/register"/);
+  assert.match(read("api/.htaccess"), /HTTP_AUTHORIZATION/);
+});
