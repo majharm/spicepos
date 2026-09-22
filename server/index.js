@@ -34,7 +34,7 @@ import { registerSeoPublic, registerSeoMaster } from "./seo.js";
 import { registerLoginPagePublic, registerLoginPageMaster, ensureLoginPageSchema } from "./login-page.js";
 import { registerRxPublic, registerRxStaff } from "./prescriptions.js";
 import { registerSalonPublic, registerSalonStaff, ensureSalonSchema } from "./salon.js";
-import { registerPrintPublic, registerPrintStaff, ensurePrintSchema } from "./print.js";
+import { registerPrintPublic, registerPrintStaff, ensurePrintSchema, attachPrintInvoiceLines } from "./print.js";
 import "../js/discount.js";
 import "../js/payment-methods.js";
 import { canonApiUrl, isAliasedApi, isApiUrl, rewriteToApi } from "./http-path.js";
@@ -138,7 +138,13 @@ app.get("/api/invoices/:id", async (req, res) => {
     const lines = await query(
       "SELECT * FROM sales_order_lines WHERE order_id = ? AND business_id = ? ORDER BY created_at",
       [id, order.business_id],
+    ).catch(() =>
+      query("SELECT * FROM sales_order_lines WHERE order_id = ? AND business_id = ?", [id, order.business_id]),
     );
+    order.lines = lines;
+    if (!lines.length) {
+      await attachPrintInvoiceLines([order], order.business_id);
+    }
     const [company] = await query(
       "SELECT * FROM company_settings WHERE business_id = ? LIMIT 1",
       [order.business_id],
@@ -169,7 +175,7 @@ app.get("/api/invoices/:id", async (req, res) => {
       }
     }
     res.json({
-      order: { ...order, lines, payments },
+      order: { ...order, lines: order.lines || [], payments },
       company: publicCompanyPayload(company || { name: business?.name || "ATAV POS" }),
       business: business || {},
       items,
@@ -377,18 +383,17 @@ app.get("/api/orders", requireStaff, requirePerm("orders"), async (_req, res) =>
       ? await query(
           `SELECT * FROM sales_order_lines WHERE order_id IN (${ids.map(() => "?").join(",")}) ORDER BY created_at`,
           ids,
+        ).catch(() =>
+          query(`SELECT * FROM sales_order_lines WHERE order_id IN (${ids.map(() => "?").join(",")})`, ids),
         )
       : [];
     const receipts = await listCustomerReceipts(orders.map((o) => o.customer_id));
-    res.json(
-      attachPaymentsToOrders(
-        orders.map((o) => ({
-          ...o,
-          lines: lines.filter((l) => l.order_id === o.id),
-        })),
-        receipts,
-      ),
-    );
+    const bundled = orders.map((o) => ({
+      ...o,
+      lines: lines.filter((l) => l.order_id === o.id),
+    }));
+    await attachPrintInvoiceLines(bundled, bid());
+    res.json(attachPaymentsToOrders(bundled, receipts));
   } catch (err) {
     res.status(500).json({ error: String(err.message) });
   }

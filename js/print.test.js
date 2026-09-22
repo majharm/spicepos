@@ -198,16 +198,20 @@ test("PHP print quote, artwork MIME, approve, bill settle, and OTP mail are wire
   assert.match(engine, /delivery_amount/);
 });
 
-test("Print Create Bill stores SQFT so invoices do not show grocery g/kg", () => {
+test("Print Create Bill stores a Flex line and backfills empty FP invoices", () => {
   const php = read("pos-print.php");
   const node = read("server/print.js");
-  const index = read("index.html");
-  assert.match(php, /business_id, unit/);
-  assert.match(php, /\$bid, "SQFT"/);
-  assert.match(node, /business_id, unit/);
-  assert.match(node, /"SQFT"/);
+  const till = read("pos-php-till.php");
+  const core = read("pos-php-core.php");
+  const indexJs = read("server/index.js");
+  assert.match(php, /function pos_print_insert_sale_line/);
+  assert.match(php, /function pos_print_attach_sale_lines/);
+  assert.match(php, /pos_print_insert_sale_line\(\$invoiceId, \$order, \$q, \$bid\)/);
+  assert.match(php, /UPDATE sales_order_lines SET `unit`/);
+  assert.match(node, /insertPrintSaleLine/);
+  assert.match(node, /attachPrintInvoiceLines/);
+  assert.match(till, /pos_print_attach_sale_lines/);
+  assert.match(core, /pos_print_attach_sale_lines/);
+  assert.match(indexJs, /attachPrintInvoiceLines/);
   assert.equal(F.isPrintShop({ name: "OM Printing Press" }), true);
-  assert.equal(F.defaultUnit({ name: "OM Printing Press" }), "SQFT");
-  assert.match(index, /invoice\.js\?v=20260922deploy219/);
-  assert.match(index, /print\.js\?v=20260922deploy219/);
 });

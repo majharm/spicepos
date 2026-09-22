@@ -584,7 +584,11 @@ function pos_php_till_dispatch($path, $method, $body) {
     $lines = [];
     if ($ids) {
       $ph = implode(",", array_fill(0, count($ids), "?"));
-      $lines = pos_q("SELECT * FROM sales_order_lines WHERE order_id IN ($ph) ORDER BY created_at", str_repeat("s", count($ids)), $ids);
+      try {
+        $lines = pos_q("SELECT * FROM sales_order_lines WHERE order_id IN ($ph) ORDER BY created_at", str_repeat("s", count($ids)), $ids);
+      } catch (Throwable $e) {
+        $lines = pos_q("SELECT * FROM sales_order_lines WHERE order_id IN ($ph)", str_repeat("s", count($ids)), $ids);
+      }
     }
     foreach ($orders as &$o) {
       $o["lines"] = [];
@@ -593,6 +597,10 @@ function pos_php_till_dispatch($path, $method, $body) {
       }
     }
     unset($o);
+    if (is_file(__DIR__ . "/pos-print.php")) {
+      require_once __DIR__ . "/pos-print.php";
+      if (function_exists("pos_print_attach_sale_lines")) $orders = pos_print_attach_sale_lines($orders, $bid);
+    }
     if (function_exists("pos_attach_order_payments")) {
       $orders = pos_attach_order_payments($bid, $orders);
     }

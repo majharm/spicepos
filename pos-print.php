@@ -299,6 +299,132 @@ function pos_print_order_bundle($id, $shop) {
   return $order;
 }
 
+function pos_print_line_name($order) {
+  return trim(($order["product"] ?? "") . " " . ($order["width"] ?? "") . "×" . ($order["height"] ?? "") . " " . ($order["unit"] ?? "") . " · " . ($order["material_name"] ?? ""));
+}
+
+function pos_print_ensure_sale_line_unit() {
+  if (function_exists("pos_ensure_sales_schema")) {
+    try { pos_ensure_sales_schema(); } catch (Throwable $e) { /* optional */ }
+  }
+  if (function_exists("pos_ensure_columns")) {
+    pos_ensure_columns("sales_order_lines", ["unit" => "VARCHAR(32) NULL"]);
+    return;
+  }
+  $db = pos_db();
+  @$db->query("ALTER TABLE `sales_order_lines` ADD COLUMN `unit` VARCHAR(32) NULL");
+}
+
+function pos_print_insert_sale_line($invoiceId, $order, $q, $bid) {
+  pos_print_ensure_sale_line_unit();
+  $name = pos_print_line_name($order);
+  if ($name === "" || $name === "× ·") $name = "Flex print";
+  $qty = (string) ($q["totalArea"] ?? $order["area_sqft"] ?? 0);
+  $rate = (string) ($q["rate"] ?? $order["rate"] ?? 0);
+  $disc = (string) ($q["discount"] ?? $order["discount"] ?? 0);
+  $amt = (string) ($q["printing"] ?? $order["printing_amount"] ?? 0);
+  $gst = (string) ($q["gst_rate"] ?? $order["gst_rate"] ?? 18);
+  $itemId = (string) ($order["id"] ?? $invoiceId);
+  $lineId = function_exists("pos_uuid") ? pos_uuid() : bin2hex(random_bytes(16));
+  $attempts = [
+    [
+      "sql" => "INSERT INTO sales_order_lines (
+           id, order_id, item_id, item_name, quantity_gm, rate_per_kg,
+           discount, amount, gst_rate, cancelled, business_id
+         ) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+      "types" => "sssssssssss",
+      "vals" => [$lineId, $invoiceId, "", $name, $qty, $rate, $disc, $amt, $gst, "0", $bid],
+    ],
+    [
+      "sql" => "INSERT INTO sales_order_lines (
+           id, order_id, item_id, item_name, quantity_gm, rate_per_kg,
+           discount, amount, gst_rate, cancelled, business_id
+         ) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+      "types" => "sssssssssss",
+      "vals" => [$lineId, $invoiceId, $itemId, $name, $qty, $rate, $disc, $amt, $gst, "0", $bid],
+    ],
+    [
+      "sql" => "INSERT INTO sales_order_lines (
+           id, order_id, item_id, item_name, quantity_gm, rate_per_kg,
+           discount, amount, gst_rate, cancelled, business_id, `unit`
+         ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+      "types" => "ssssssssssss",
+      "vals" => [$lineId, $invoiceId, $itemId, $name, $qty, $rate, $disc, $amt, $gst, "0", $bid, "SQFT"],
+    ],
+  ];
+  $ok = false;
+  foreach ($attempts as $a) {
+    try {
+      pos_q($a["sql"], $a["types"], $a["vals"]);
+      $ok = true;
+      break;
+    } catch (Throwable $e) { /* line shape varies */ }
+  }
+  if ($ok) {
+    try {
+      pos_q("UPDATE sales_order_lines SET `unit`=? WHERE id=?", "ss", ["SQFT", $lineId]);
+    } catch (Throwable $e) { /* unit column optional */ }
+  }
+  return $ok;
+}
+
+function pos_print_synthetic_sale_line($job, $invoiceId, $bid) {
+  $name = pos_print_line_name($job);
+  if ($name === "" || $name === "× ·") $name = "Flex print";
+  return [
+    "id" => $invoiceId . ":print",
+    "order_id" => $invoiceId,
+    "item_id" => $job["id"] ?? "",
+    "item_name" => $name,
+    "quantity_gm" => $job["area_sqft"] ?? 0,
+    "rate_per_kg" => $job["rate"] ?? 0,
+    "discount" => $job["discount"] ?? 0,
+    "amount" => $job["printing_amount"] ?? $job["quote_total"] ?? 0,
+    "gst_rate" => $job["gst_rate"] ?? 0,
+    "cancelled" => 0,
+    "business_id" => $bid,
+    "unit" => "SQFT",
+  ];
+}
+
+function pos_print_attach_sale_lines($orders, $bid) {
+  if (!$orders) return $orders;
+  $need = [];
+  foreach ($orders as $o) {
+    if (!empty($o["lines"])) continue;
+    $no = (string) ($o["order_number"] ?? "");
+    if ($no === "" || preg_match("/^FP-/i", $no)) $need[] = $o["id"];
+  }
+  if (!$need) return $orders;
+  try {
+    $ph = implode(",", array_fill(0, count($need), "?"));
+    $jobs = pos_q(
+      "SELECT * FROM print_orders WHERE business_id=? AND sales_order_id IN ($ph)",
+      "s" . str_repeat("s", count($need)),
+      array_merge([$bid], $need)
+    );
+  } catch (Throwable $e) {
+    return $orders;
+  }
+  $byInv = [];
+  foreach ($jobs as $j) $byInv[$j["sales_order_id"]] = $j;
+  foreach ($orders as &$o) {
+    if (!empty($o["lines"])) continue;
+    $job = $byInv[$o["id"]] ?? null;
+    if (!$job) continue;
+    pos_print_insert_sale_line($o["id"], $job, [
+      "totalArea" => $job["area_sqft"] ?? 0,
+      "rate" => $job["rate"] ?? 0,
+      "discount" => $job["discount"] ?? 0,
+      "printing" => $job["printing_amount"] ?? 0,
+      "gst_rate" => $job["gst_rate"] ?? 0,
+    ], $bid);
+    $o["lines"] = [pos_print_synthetic_sale_line($job, $o["id"], $bid)];
+  }
+  unset($o);
+  return $orders;
+}
+
 function pos_print_apply_totals($orderId, $shop, $extra = []) {
   $rows = pos_q("SELECT * FROM print_orders WHERE id=? AND business_id=?", "ss", [$orderId, $shop]);
   if (!$rows) return null;
@@ -744,45 +870,7 @@ function pos_print_staff_dispatch($path, $method, $body, $bid, $auth) {
           "upi", $payStatus, $bid, null, $uid !== "" ? $uid : null,
         ]
       );
-      try {
-        pos_q(
-          "INSERT INTO sales_order_lines (
-             id, order_id, item_id, item_name, quantity_gm, rate_per_kg,
-             discount, amount, gst_rate, cancelled, business_id, unit
-           ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
-          "ssssssssssss",
-          [
-            pos_uuid(), $invoiceId, "",
-            trim(($order["product"] ?? "") . " " . ($order["width"] ?? "") . "×" . ($order["height"] ?? "") . " " . ($order["unit"] ?? "") . " · " . ($order["material_name"] ?? "")),
-            (string) ($q["totalArea"] ?? $order["area_sqft"] ?? 0),
-            (string) ($q["rate"] ?? $order["rate"] ?? 0),
-            (string) ($q["discount"] ?? 0),
-            (string) ($q["printing"] ?? $order["printing_amount"] ?? 0),
-            (string) ($q["gst_rate"] ?? $order["gst_rate"] ?? 18),
-            "0", $bid, "SQFT",
-          ]
-        );
-      } catch (Exception $e) {
-        try {
-          pos_q(
-            "INSERT INTO sales_order_lines (
-               id, order_id, item_id, item_name, quantity_gm, rate_per_kg,
-               discount, amount, gst_rate, cancelled, business_id
-             ) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
-            "sssssssssss",
-            [
-              pos_uuid(), $invoiceId, "",
-              trim(($order["product"] ?? "") . " " . ($order["width"] ?? "") . "×" . ($order["height"] ?? "") . " " . ($order["unit"] ?? "") . " · " . ($order["material_name"] ?? "")),
-              (string) ($q["totalArea"] ?? $order["area_sqft"] ?? 0),
-              (string) ($q["rate"] ?? $order["rate"] ?? 0),
-              (string) ($q["discount"] ?? 0),
-              (string) ($q["printing"] ?? $order["printing_amount"] ?? 0),
-              (string) ($q["gst_rate"] ?? $order["gst_rate"] ?? 18),
-              "0", $bid,
-            ]
-          );
-        } catch (Exception $e2) { /* line shape varies */ }
-      }
+      pos_print_insert_sale_line($invoiceId, $order, $q, $bid);
       pos_q("UPDATE print_orders SET sales_order_id=? WHERE id=?", "ss", [$invoiceId, $order["id"]]);
       $custRows = pos_q("SELECT * FROM customers WHERE id=? AND business_id=?", "ss", [$order["customer_id"] ?? "", $bid]);
       $customer = $custRows[0] ?? null;

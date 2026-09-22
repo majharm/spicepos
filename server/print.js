@@ -858,6 +858,109 @@ export function registerPrintPublic(app) {
   });
 }
 
+function printJobLineName(order) {
+  return `${order.product || ""} ${order.width ?? ""}×${order.height ?? ""} ${order.unit || ""} · ${order.material_name || ""}`.trim();
+}
+
+export async function insertPrintSaleLine(invoiceId, order, q, businessId) {
+  const name = printJobLineName(order) || "Flex print";
+  const qty = q?.totalArea ?? order.area_sqft ?? 0;
+  const rate = q?.rate ?? order.rate ?? 0;
+  const disc = q?.discount ?? order.discount ?? 0;
+  const amt = q?.printing ?? order.printing_amount ?? 0;
+  const gst = q?.gst_rate ?? order.gst_rate ?? 18;
+  const itemId = order.id || invoiceId;
+  const lineId = uuid();
+  const attempts = [
+    {
+      sql: `INSERT INTO sales_order_lines (
+               id, order_id, item_id, item_name, quantity_gm, rate_per_kg,
+               discount, amount, gst_rate, cancelled, business_id
+             ) VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+      vals: [lineId, invoiceId, "", name, qty, rate, disc, amt, gst, 0, businessId],
+    },
+    {
+      sql: `INSERT INTO sales_order_lines (
+               id, order_id, item_id, item_name, quantity_gm, rate_per_kg,
+               discount, amount, gst_rate, cancelled, business_id
+             ) VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+      vals: [lineId, invoiceId, itemId, name, qty, rate, disc, amt, gst, 0, businessId],
+    },
+    {
+      sql: `INSERT INTO sales_order_lines (
+               id, order_id, item_id, item_name, quantity_gm, rate_per_kg,
+               discount, amount, gst_rate, cancelled, business_id, \`unit\`
+             ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
+      vals: [lineId, invoiceId, itemId, name, qty, rate, disc, amt, gst, 0, businessId, "SQFT"],
+    },
+  ];
+  let ok = false;
+  for (const a of attempts) {
+    try {
+      await query(a.sql, a.vals);
+      ok = true;
+      break;
+    } catch {
+      /* line shape varies */
+    }
+  }
+  if (ok) {
+    try {
+      await query("UPDATE sales_order_lines SET `unit` = ? WHERE id = ?", ["SQFT", lineId]);
+    } catch {
+      /* unit column optional */
+    }
+  }
+  return ok;
+}
+
+function syntheticPrintSaleLine(job, invoiceId, businessId) {
+  return {
+    id: `${invoiceId}:print`,
+    order_id: invoiceId,
+    item_id: job.id || "",
+    item_name: printJobLineName(job) || "Flex print",
+    quantity_gm: job.area_sqft ?? 0,
+    rate_per_kg: job.rate ?? 0,
+    discount: job.discount ?? 0,
+    amount: job.printing_amount ?? job.quote_total ?? 0,
+    gst_rate: job.gst_rate ?? 0,
+    cancelled: 0,
+    business_id: businessId,
+    unit: "SQFT",
+  };
+}
+
+export async function attachPrintInvoiceLines(orders, businessId) {
+  if (!orders?.length) return orders;
+  const need = orders.filter((o) => !(o.lines || []).length && (!o.order_number || /^FP-/i.test(String(o.order_number)))).map((o) => o.id);
+  if (!need.length) return orders;
+  let jobs = [];
+  try {
+    jobs = await query(
+      `SELECT * FROM print_orders WHERE business_id = ? AND sales_order_id IN (${need.map(() => "?").join(",")})`,
+      [businessId, ...need],
+    );
+  } catch {
+    return orders;
+  }
+  const byInv = new Map(jobs.map((j) => [j.sales_order_id, j]));
+  for (const o of orders) {
+    if ((o.lines || []).length) continue;
+    const job = byInv.get(o.id);
+    if (!job) continue;
+    await insertPrintSaleLine(o.id, job, {
+      totalArea: job.area_sqft,
+      rate: job.rate,
+      discount: job.discount,
+      printing: job.printing_amount,
+      gst_rate: job.gst_rate,
+    }, businessId);
+    o.lines = [syntheticPrintSaleLine(job, o.id, businessId)];
+  }
+  return orders;
+}
+
 export function registerPrintStaff(app) {
   app.get("/api/print/board", requirePerm("dashboard"), async (_req, res) => {
     try {
@@ -1034,52 +1137,7 @@ export function registerPrintStaff(app) {
           authUser()?.id || null,
         ],
       );
-        try {
-          await query(
-            `INSERT INTO sales_order_lines (
-               id, order_id, item_id, item_name, quantity_gm, rate_per_kg,
-               discount, amount, gst_rate, cancelled, business_id, unit
-             ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
-            [
-              uuid(),
-              invoiceId,
-              null,
-              `${order.product} ${order.width}×${order.height} ${order.unit} · ${order.material_name}`,
-              q.totalArea,
-              q.rate,
-              q.discount,
-              q.printing,
-              q.gst_rate,
-              0,
-              bid(),
-              "SQFT",
-            ],
-          );
-        } catch {
-          try {
-            await query(
-              `INSERT INTO sales_order_lines (
-                 id, order_id, item_id, item_name, quantity_gm, rate_per_kg,
-                 discount, amount, gst_rate, cancelled, business_id
-               ) VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
-              [
-                uuid(),
-                invoiceId,
-                null,
-                `${order.product} ${order.width}×${order.height} ${order.unit} · ${order.material_name}`,
-                q.totalArea,
-                q.rate,
-                q.discount,
-                q.printing,
-                q.gst_rate,
-                0,
-                bid(),
-              ],
-            );
-          } catch {
-            /* line shape varies by schema */
-          }
-        }
+      await insertPrintSaleLine(invoiceId, order, q, bid());
       await query("UPDATE print_orders SET sales_order_id = ? WHERE id = ?", [invoiceId, order.id]);
       try {
         const paid = round(Number(order.paid_amount) || 0);

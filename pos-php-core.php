@@ -2352,13 +2352,24 @@ function pos_public_invoice_send($id) {
   $order = $found[0] ?? null;
   if (!$order) pos_send(404, ["error" => "Invoice not found", "php" => true]);
   $bid = $order["business_id"];
-  $lines = pos_q("SELECT * FROM sales_order_lines WHERE order_id = ? AND business_id = ? ORDER BY created_at", "ss", [$id, $bid]);
+  try {
+    $lines = pos_q("SELECT * FROM sales_order_lines WHERE order_id = ? AND business_id = ? ORDER BY created_at", "ss", [$id, $bid]);
+  } catch (Throwable $e) {
+    $lines = pos_q("SELECT * FROM sales_order_lines WHERE order_id = ? AND business_id = ?", "ss", [$id, $bid]);
+  }
+  $order["lines"] = $lines;
+  if (empty($order["lines"]) && is_file(__DIR__ . "/pos-print.php")) {
+    require_once __DIR__ . "/pos-print.php";
+    if (function_exists("pos_print_attach_sale_lines")) {
+      $fixed = pos_print_attach_sale_lines([$order], $bid);
+      $order = $fixed[0] ?? $order;
+    }
+  }
   $co = pos_q("SELECT * FROM company_settings WHERE business_id = ? LIMIT 1", "s", [$bid]);
   $biz = pos_q("SELECT id, name, category, business_type FROM businesses WHERE id = ? LIMIT 1", "s", [$bid]);
   $items = pos_q("SELECT id, name, local_name, hsn, code, gst_rate, mrp, category FROM items WHERE business_id = ?", "s", [$bid]);
   $company = pos_public_company_payload($co[0] ?? []);
   if (!$company && !empty($biz[0]["name"])) $company = ["name" => $biz[0]["name"]];
-  $order["lines"] = $lines;
   if (!empty($order["customer_id"]) && function_exists("pos_attach_order_payments")) {
     $attached = pos_attach_order_payments($bid, [$order]);
     $order = $attached[0] ?? $order;

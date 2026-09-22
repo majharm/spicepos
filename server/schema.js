@@ -28,7 +28,7 @@ async function hasColumn(table, column) {
 async function addColumn(table, column, def) {
   if (!(await hasTable(table))) return;
   if (!(await hasColumn(table, column))) {
-    await query(`ALTER TABLE \`${table}\` ADD COLUMN ${column} ${def}`);
+    await query(`ALTER TABLE \`${table}\` ADD COLUMN \`${column}\` ${def}`);
   }
 }
 
