@@ -39,7 +39,7 @@
 
   function fillCatalog() {
     $("pp-shop").textContent = catalog.shop?.name || "Flex & Printing";
-    $("pp-cat").textContent = catalog.shop?.category || "Print shop";
+    $("pp-cat").textContent = catalog.shop?.category || "Banners, vinyl, hoardings and print jobs";
     $("pp-product").innerHTML = (P.PRODUCTS || []).map((p) => `<option>${p}</option>`).join("");
     $("pp-side").innerHTML = (catalog.sides || P.PRINT_SIDES).map((s) => `<option value="${s.id}">${s.label}</option>`).join("");
     $("pp-material").innerHTML = (catalog.materials || [])
@@ -111,8 +111,23 @@
     </article>`;
   }
 
+  function showAuthPanel(name) {
+    const tab = name === "otp" ? "signin" : name;
+    document.querySelectorAll("[data-auth-tab]").forEach((b) => {
+      if (b.closest(".pp-auth-tabs")) {
+        const on = b.dataset.authTab === tab;
+        b.classList.toggle("is-on", on);
+        b.setAttribute("aria-selected", on ? "true" : "false");
+      }
+    });
+    document.querySelectorAll("[data-auth-panel]").forEach((p) => {
+      p.hidden = p.getAttribute("data-auth-panel") !== name;
+    });
+  }
+
   async function refreshMe() {
     me = await api("/me");
+    document.body.classList.remove("pp-locked");
     $("pp-auth").hidden = true;
     $("pp-app").hidden = false;
     $("pp-nav").hidden = false;
@@ -188,6 +203,20 @@
     pendingFile = await fileToPayload(file);
     $("pp-file-meta").textContent = `${file.name} · ${(file.size / 1024).toFixed(1)} KB · ${file.type || "file"} · ${new Date().toLocaleString()}`;
     estimate();
+  });
+
+  document.querySelectorAll("[data-auth-tab]").forEach((b) => {
+    b.addEventListener("click", () => showAuthPanel(b.dataset.authTab));
+  });
+  document.querySelectorAll("[data-toggle-pass]").forEach((b) => {
+    b.addEventListener("click", () => {
+      const form = $(b.dataset.togglePass);
+      const input = form?.querySelector('input[name="password"]');
+      if (!input) return;
+      const show = input.type === "password";
+      input.type = show ? "text" : "password";
+      b.textContent = show ? "Hide" : "Show";
+    });
   });
 
   $("pp-login")?.addEventListener("submit", async (e) => {
@@ -287,14 +316,20 @@
   });
 
   fetch(`/api/print/public/${encodeURIComponent(shopId)}`)
-    .then((r) => r.json())
+    .then(async (r) => {
+      const data = await r.json().catch(() => null);
+      if (!data || typeof data !== "object") throw new Error("Could not load this print shop. Check the link.");
+      if (!r.ok) throw new Error(data.error || "Print shop not found");
+      return data;
+    })
     .then((d) => {
       catalog = d;
       fillCatalog();
       if (token) refreshMe().catch(() => localStorage.removeItem(storeKey));
     })
     .catch((err) => {
-      $("pp-shop").textContent = "Print portal unavailable";
-      hint("pp-auth-hint", err.message, true);
+      const msg = String(err.message || "");
+      hint("pp-auth-hint", /JSON|DOCTYPE|Unexpected token/i.test(msg) ? "Could not load this print shop. Check the link." : msg, true);
     });
+  if (!shopId) hint("pp-auth-hint", "Open this page from your print shop link.", true);
 })();
