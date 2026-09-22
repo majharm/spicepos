@@ -201,6 +201,28 @@ test("business admin can delete invoices and reverse credit sale", () => {
   assert.match(app, /await loadBootstrap\(\)/);
 });
 
+test("customer outstanding hydrates from open invoice remainders on the Customers page", () => {
+  const accounts = readFileSync(path.join(root, "server/accounts.js"), "utf8");
+  const core = readFileSync(path.join(root, "pos-php-core.php"), "utf8");
+  const till = readFileSync(path.join(root, "pos-php-till.php"), "utf8");
+  const app = readFileSync(path.join(root, "js/app.js"), "utf8");
+  const index = readFileSync(path.join(root, "index.html"), "utf8");
+  const css = readFileSync(path.join(root, "css/pos.css"), "utf8");
+  assert.match(accounts, /export async function invoiceOpenDueByCustomer/);
+  assert.match(accounts, /export function hydrateCustomerOutstandingRows/);
+  assert.match(accounts, /LEFT JOIN sales_orders o ON o.id = l.reference_id/);
+  assert.match(accounts, /GREATEST\(0, COALESCE\(total,0\) - COALESCE\(amount_paid,0\)\)/);
+  assert.match(core, /function pos_hydrate_customer_outstanding_rows/);
+  assert.match(core, /function pos_invoice_open_dues/);
+  assert.match(till, /pos_hydrate_customer_outstanding_rows/);
+  assert.match(app, /function applyInvoiceDuesToCustomers/);
+  assert.match(app, /function refreshCustomersOutstanding/);
+  assert.match(app, /td class="cust-due"/);
+  assert.match(css, /#customers-table td\.cust-due/);
+  assert.match(index, /id="customers-hero-stats"/);
+  assert.match(index, /id="customers-table"/);
+});
+
 test("invoice settlement posts sale credit, payment receipt, and customer due", () => {
   const accounts = readFileSync(path.join(root, "server/accounts.js"), "utf8");
   const core = readFileSync(path.join(root, "pos-php-core.php"), "utf8");

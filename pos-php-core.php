@@ -1396,6 +1396,7 @@ function pos_ensure_sales_schema() {
       "notes" => "TEXT NULL",
     ]);
     pos_ensure_columns("customers", [
+      "outstanding" => "DECIMAL(12,2) NOT NULL DEFAULT 0",
       "address" => "VARCHAR(500) NULL",
       "doctor_rx" => "VARCHAR(180) NULL",
     ]);
@@ -1407,6 +1408,9 @@ function pos_ensure_accounts_schema() {
   if ($done) return;
   $done = true;
   $db = pos_db();
+  if (function_exists("pos_ensure_columns")) {
+    pos_ensure_columns("customers", ["outstanding" => "DECIMAL(12,2) NOT NULL DEFAULT 0"]);
+  }
   $res = $db->query("SHOW COLUMNS FROM suppliers LIKE 'payable_balance'");
   if ($res && $res->num_rows === 0) {
     @$db->query("ALTER TABLE suppliers ADD COLUMN payable_balance DECIMAL(12,2) NOT NULL DEFAULT 0");
@@ -1786,6 +1790,46 @@ function pos_attach_order_payments($bid, $orders) {
   return $orders;
 }
 
+function pos_invoice_open_dues($businessId) {
+  try {
+    $rows = pos_q(
+      "SELECT customer_id AS id,
+              COALESCE(SUM(GREATEST(0, COALESCE(total,0) - COALESCE(amount_paid,0))), 0) AS open_due
+       FROM sales_orders
+       WHERE business_id = ?
+         AND LOWER(TRIM(COALESCE(status,'confirmed'))) <> 'cancelled'
+       GROUP BY customer_id",
+      "s",
+      [$businessId]
+    );
+    $map = [];
+    foreach ($rows as $r) {
+      $map[(string) ($r["id"] ?? "")] = pos_round2((float) ($r["open_due"] ?? 0));
+    }
+    return $map;
+  } catch (Exception $e) {
+    return [];
+  }
+}
+
+function pos_hydrate_customer_outstanding_rows($businessId, $customers) {
+  if (!is_array($customers) || !$customers) return is_array($customers) ? $customers : [];
+  $dues = pos_invoice_open_dues($businessId);
+  foreach ($customers as &$c) {
+    $have = (float) ($c["outstanding"] ?? 0);
+    $inv = (float) ($dues[(string) ($c["id"] ?? "")] ?? 0);
+    $next = pos_round2(max($have, $inv));
+    if ($next > $have + 0.009) {
+      $c["outstanding"] = $next;
+      try {
+        pos_q("UPDATE customers SET outstanding = ? WHERE id = ? AND business_id = ?", "dss", [$next, $c["id"], $businessId]);
+      } catch (Exception $e) { /* optional */ }
+    }
+  }
+  unset($c);
+  return $customers;
+}
+
 function pos_recompute_customer_outstanding($businessId, $customerId) {
   if (!$customerId) return 0;
   $billed = 0;
@@ -1793,10 +1837,10 @@ function pos_recompute_customer_outstanding($businessId, $customerId) {
     $sale = pos_q(
       "SELECT COALESCE(SUM(l.amount),0) AS credit
        FROM account_ledger l
-       JOIN sales_orders o ON o.id = l.reference_id AND o.business_id = l.business_id
+       LEFT JOIN sales_orders o ON o.id = l.reference_id AND o.business_id = l.business_id
        WHERE l.business_id = ? AND l.party_type = 'customer' AND l.party_id = ?
          AND l.entry_type = 'sale_credit'
-         AND LOWER(TRIM(COALESCE(o.status,'confirmed'))) <> 'cancelled'",
+         AND (o.id IS NULL OR LOWER(TRIM(COALESCE(o.status,'confirmed'))) <> 'cancelled')",
       "ss",
       [$businessId, $customerId]
     );
@@ -1831,6 +1875,17 @@ function pos_recompute_customer_outstanding($businessId, $customerId) {
     $received = 0;
   }
   $next = pos_round2(max(0, $billed - $received));
+  try {
+    $inv = pos_q(
+      "SELECT COALESCE(SUM(GREATEST(0, COALESCE(total,0) - COALESCE(amount_paid,0))), 0) AS open_due
+       FROM sales_orders
+       WHERE business_id = ? AND customer_id = ?
+         AND LOWER(TRIM(COALESCE(status,'confirmed'))) <> 'cancelled'",
+      "ss",
+      [$businessId, $customerId]
+    );
+    $next = pos_round2(max($next, (float) ($inv[0]["open_due"] ?? 0)));
+  } catch (Exception $e) { /* amount_paid optional */ }
   pos_q("UPDATE customers SET outstanding = ? WHERE id = ? AND business_id = ?", "dss", [$next, $customerId, $businessId]);
   return $next;
 }

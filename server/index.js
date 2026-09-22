@@ -22,7 +22,7 @@ import { registerTenant } from "./tenant.js";
 import { registerHub } from "./hub.js";
 import { registerBackup } from "./backup.js";
 import { registerUnits, ensureInventoryUnits } from "./units.js";
-import { registerAccounts, recordCreditSale, settleCustomerInvoice, listCustomerReceipts, attachPaymentsToOrders } from "./accounts.js";
+import { registerAccounts, recordCreditSale, settleCustomerInvoice, listCustomerReceipts, attachPaymentsToOrders, invoiceOpenDueByCustomer, hydrateCustomerOutstandingRows } from "./accounts.js";
 import { postSaleJournal } from "./accounting.js";
 import { audit } from "./audit.js";
 import { getPlatformSettings, shopSupportContact } from "./settings.js";
@@ -276,10 +276,12 @@ app.get("/api/bootstrap", requireStaff, async (_req, res) => {
     );
     const [business] = await query("SELECT * FROM businesses WHERE id = ?", [businessId]);
     const items = await listCatalogItems(businessId);
-    const customers = await query(
+    const customerRows = await query(
       "SELECT * FROM customers WHERE business_id = ? ORDER BY name",
       [businessId],
     );
+    const dues = await invoiceOpenDueByCustomer(businessId);
+    const customers = hydrateCustomerOutstandingRows(customerRows, dues);
     const packs = await query(
       "SELECT * FROM packs WHERE business_id = ? ORDER BY name",
       [businessId],

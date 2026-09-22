@@ -3,7 +3,7 @@ import "../js/units.js";
 import "../js/footwear.js";
 import { query, withTransaction } from "./db.js";
 import { bid, authUser } from "./context.js";
-import { recordCreditPurchase, reverseCreditSale, recomputeCustomerOutstanding, settleCustomerInvoice } from "./accounts.js";
+import { recordCreditPurchase, reverseCreditSale, recomputeCustomerOutstanding, settleCustomerInvoice, invoiceOpenDueByCustomer, hydrateCustomerOutstandingRows } from "./accounts.js";
 import { postPurchaseJournal, deleteJournalRef } from "./accounting.js";
 import { audit } from "./audit.js";
 import { onItemSaved, onPurchaseLineSaved, pharmacyLineSnapshot, computeSaleLine, saleStockQty, persistSaleLineNote, reverseLoyaltyOnSale } from "./advanced.js";
@@ -292,6 +292,15 @@ export async function importShopItems(payload) {
 }
 
 export function registerCrud(app) {
+  app.get("/api/customers", async (_req, res) => {
+    try {
+      const rows = await query("SELECT * FROM customers WHERE business_id = ? ORDER BY name", [bid()]);
+      const dues = await invoiceOpenDueByCustomer(bid());
+      res.json(hydrateCustomerOutstandingRows(rows, dues));
+    } catch (err) {
+      res.status(500).json({ error: String(err.message) });
+    }
+  });
   app.post("/api/customers", async (req, res) => {
     const { name, business_name, mobile, type, gstin, state, credit_limit, dob, referred_by, locale, address, doctor_rx } = req.body || {};
     if (!name || !mobile) {

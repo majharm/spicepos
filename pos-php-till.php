@@ -74,6 +74,9 @@ function pos_php_till_dispatch($path, $method, $body) {
     } catch (Exception $e) { /* optional */ }
     try {
       $customers = pos_q("SELECT * FROM customers WHERE business_id = ? ORDER BY name", "s", [$bid]);
+      if (function_exists("pos_hydrate_customer_outstanding_rows")) {
+        $customers = pos_hydrate_customer_outstanding_rows($bid, $customers);
+      }
     } catch (Exception $e) { /* optional */ }
     try {
       $packs = pos_q("SELECT * FROM packs WHERE business_id = ? ORDER BY name", "s", [$bid]);
@@ -490,7 +493,11 @@ function pos_php_till_dispatch($path, $method, $body) {
   }
 
   if ($path === "customers" && $method === "GET") {
-    pos_send(200, pos_q("SELECT * FROM customers WHERE business_id = ? ORDER BY name", "s", [$bid]));
+    $rows = pos_q("SELECT * FROM customers WHERE business_id = ? ORDER BY name", "s", [$bid]);
+    if (function_exists("pos_hydrate_customer_outstanding_rows")) {
+      $rows = pos_hydrate_customer_outstanding_rows($bid, $rows);
+    }
+    pos_send(200, $rows);
   }
 
   if ($path === "packs" && $method === "GET") {

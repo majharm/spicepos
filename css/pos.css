@@ -7698,5 +7698,15 @@ html[data-scheme="dark"] .saas-chip.is-stat { background: #1e3a8a; color: #bfdbf
   .pod-quote .btn, .pod-bill .btn, .pod-file .btn { width: 100%; }
 }
 
+#customers-table table { width: 100%; min-width: 640px; }
+#customers-table th:nth-last-child(2),
+#customers-table td.cust-due {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+  color: var(--vel-slate);
+}
+#customers-hero-stats { justify-content: flex-end; }
+
 
 

@@ -347,6 +347,34 @@ export async function reverseCreditSale(conn, orderOrId) {
   }
 }
 
+export async function invoiceOpenDueByCustomer(businessId) {
+  try {
+    const rows = await query(
+      `SELECT customer_id AS id,
+              COALESCE(SUM(GREATEST(0, COALESCE(total,0) - COALESCE(amount_paid,0))), 0) AS open_due
+       FROM sales_orders
+       WHERE business_id = ?
+         AND LOWER(TRIM(COALESCE(status,'confirmed'))) <> 'cancelled'
+       GROUP BY customer_id`,
+      [businessId],
+    );
+    const map = {};
+    for (const r of rows || []) map[r.id] = round2(Number(r.open_due) || 0);
+    return map;
+  } catch {
+    return {};
+  }
+}
+
+export function hydrateCustomerOutstandingRows(customers, dues) {
+  return (Array.isArray(customers) ? customers : []).map((c) => {
+    const have = Number(c?.outstanding) || 0;
+    const inv = Number(dues?.[c?.id]) || 0;
+    const next = round2(Math.max(have, inv));
+    return next > have ? { ...c, outstanding: next } : c;
+  });
+}
+
 export async function recomputeCustomerOutstanding(conn, customerId) {
   if (!customerId) return 0;
   let billed = 0;
@@ -355,10 +383,10 @@ export async function recomputeCustomerOutstanding(conn, customerId) {
       conn,
       `SELECT COALESCE(SUM(l.amount),0) AS credit
        FROM account_ledger l
-       JOIN sales_orders o ON o.id = l.reference_id AND o.business_id = l.business_id
+       LEFT JOIN sales_orders o ON o.id = l.reference_id AND o.business_id = l.business_id
        WHERE l.business_id = ? AND l.party_type = 'customer' AND l.party_id = ?
          AND l.entry_type = 'sale_credit'
-         AND LOWER(TRIM(COALESCE(o.status,'confirmed'))) <> 'cancelled'`,
+         AND (o.id IS NULL OR LOWER(TRIM(COALESCE(o.status,'confirmed'))) <> 'cancelled')`,
       [bid(), customerId],
     );
     billed = Number(sale?.credit || 0);
@@ -391,7 +419,20 @@ export async function recomputeCustomerOutstanding(conn, customerId) {
   } catch {
     received = 0;
   }
-  const next = round2(Math.max(0, billed - received));
+  let next = round2(Math.max(0, billed - received));
+  try {
+    const [[inv]] = await execSql(
+      conn,
+      `SELECT COALESCE(SUM(GREATEST(0, COALESCE(total,0) - COALESCE(amount_paid,0))), 0) AS open_due
+       FROM sales_orders
+       WHERE business_id = ? AND customer_id = ?
+         AND LOWER(TRIM(COALESCE(status,'confirmed'))) <> 'cancelled'`,
+      [bid(), customerId],
+    );
+    next = round2(Math.max(next, Number(inv?.open_due) || 0));
+  } catch {
+    /* amount_paid column optional on old shops */
+  }
   await execSql(conn, "UPDATE customers SET outstanding = ? WHERE id = ? AND business_id = ?", [
     next,
     customerId,

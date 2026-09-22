@@ -754,7 +754,47 @@ function setClassicField(id, value, { force = false } = {}) {
 }
 
 function customerDue(c) {
-  return Number(c?.outstanding) || 0;
+  const n = Number(c?.outstanding ?? c?.current_due ?? c?.due ?? c?.balance_due);
+  return Number.isFinite(n) && n > 0 ? n : 0;
+}
+
+function applyInvoiceDuesToCustomers() {
+  const extra = {};
+  for (const o of orderCache || []) {
+    if (!o?.customer_id) continue;
+    if (String(o.status || "confirmed").toLowerCase() === "cancelled") continue;
+    const left = Math.max(0, Number(o.total || 0) - Number(o.amount_paid || 0));
+    if (left > 0.009) extra[o.customer_id] = (extra[o.customer_id] || 0) + left;
+  }
+  if (!Object.keys(extra).length) return;
+  state.customers = (state.customers || []).map((c) => {
+    const have = customerDue(c);
+    const inv = extra[c.id] || 0;
+    return inv > have + 0.009 ? { ...c, outstanding: inv } : c;
+  });
+}
+
+async function refreshCustomersOutstanding() {
+  try {
+    const rows = await api("/api/customers");
+    if (Array.isArray(rows) && rows.length) {
+      const byId = Object.fromEntries(rows.map((c) => [c.id, c]));
+      const seen = new Set();
+      state.customers = (state.customers || []).map((c) => {
+        seen.add(c.id);
+        const fresh = byId[c.id];
+        if (!fresh) return c;
+        const due = Math.max(customerDue(c), customerDue(fresh));
+        return { ...c, ...fresh, outstanding: due };
+      });
+      for (const c of rows) {
+        if (!seen.has(c.id)) state.customers.push(c);
+      }
+    }
+  } catch {
+    /* keep bootstrap customers */
+  }
+  renderCustomersTable();
 }
 
 function isWalkInCustomer(c) {
@@ -2182,6 +2222,7 @@ function showView(name) {
   if (name === "customers") {
     renderCustomersTable();
     fillDueCustomerSelect();
+    void refreshCustomersOutstanding();
   }
   if (name === "branches") loadBranches();
   if (name === "devices") loadDevices();
@@ -4681,7 +4722,7 @@ function renderItemsTable() {
 }
 
 function dueCustomers() {
-  return (state.customers || []).filter((c) => Number(c.outstanding) > 0);
+  return (state.customers || []).filter((c) => customerDue(c) > 0);
 }
 
 function fillDueCustomerSelect(selectedId) {
@@ -4690,7 +4731,7 @@ function fillDueCustomerSelect(selectedId) {
   const due = dueCustomers();
   const cur = selectedId || el.value;
   el.innerHTML = `<option value="">Select customer with due…</option>${due
-    .map((c) => `<option value="${escapeHtml(c.id)}">${escapeHtml(c.business_name || c.name)} · ${money(c.outstanding)}</option>`)
+    .map((c) => `<option value="${escapeHtml(c.id)}">${escapeHtml(c.business_name || c.name)} · ${money(customerDue(c))}</option>`)
     .join("")}`;
   if (cur && due.some((c) => c.id === cur)) el.value = cur;
   paintDueOutstanding();
@@ -4700,7 +4741,7 @@ function paintDueOutstanding() {
   const el = $("due-outstanding");
   const id = $("due-customer")?.value;
   const c = (state.customers || []).find((row) => row.id === id);
-  const due = Number(c?.outstanding) || 0;
+  const due = customerDue(c);
   if (el) el.textContent = c ? `Outstanding: ${money(due)}` : "Outstanding: —";
   if ($("due-amount") && c) {
     $("due-amount").max = String(due);
@@ -4782,21 +4823,25 @@ async function collectCustomerDue(customer, amount, method, notes, extras = {}) 
 }
 
 function renderCustomersTable() {
-  const dueTotal = dueCustomers().reduce((s, c) => s + (Number(c.outstanding) || 0), 0);
+  applyInvoiceDuesToCustomers();
+  const list = Array.isArray(state.customers) ? state.customers : [];
+  const dueTotal = dueCustomers().reduce((s, c) => s + customerDue(c), 0);
   const stats = $("customers-hero-stats");
   if (stats) {
     stats.innerHTML = [
-      ["Customers", (state.customers || []).length],
+      ["Customers", list.length],
       ["With due", dueCustomers().length],
       ["Outstanding", money(dueTotal)],
     ]
-      .map(([k, v]) => `<div class="items-stat"><span>${k}</span><strong>${typeof v === "number" ? v : escapeHtml(String(v))}</strong></div>`)
+      .map(([k, v]) => `<div class="items-stat${k === "Outstanding" && dueTotal > 0 ? " is-warn" : ""}"><span>${escapeHtml(k)}</span><strong>${typeof v === "number" ? v : escapeHtml(String(v))}</strong></div>`)
       .join("");
   }
   fillDueCustomerSelect();
-  $("customers-table").innerHTML = `<table><thead><tr>
+  const el = $("customers-table");
+  if (!el) return;
+  el.innerHTML = `<table><thead><tr>
     <th>Code</th><th>${isPharmacyShop() ? "Customer Name" : "Name"}</th>${isPharmacyShop() ? "<th>Address</th><th>Doctor / Rx</th>" : "<th>Type</th>"}<th>${isPharmacyShop() ? "Mobile No." : "Mobile"}</th>${isPharmacyShop() ? "" : "<th>State</th><th>GSTIN</th>"}<th>Outstanding</th><th></th>
-  </tr></thead><tbody>${state.customers
+  </tr></thead><tbody>${list
     .map(
       (c) => `<tr>
       <td>${escapeHtml(c.code)}</td>
@@ -4806,8 +4851,8 @@ function renderCustomersTable() {
         : `<td>${escapeHtml(c.type)}</td>`}
       <td>${escapeHtml(c.mobile)}</td>
       ${isPharmacyShop() ? "" : `<td>${escapeHtml(c.state || "—")}</td><td>${escapeHtml(c.gstin || "—")}</td>`}
-      <td>${money(c.outstanding)}</td>
-      <td>${Number(c.outstanding) > 0 ? `<button class="btn primary" type="button" data-collect-due="${escapeHtml(c.id)}">Collect</button>` : ""}</td>
+      <td class="cust-due">${money(customerDue(c))}</td>
+      <td>${customerDue(c) > 0 ? `<button class="btn primary" type="button" data-collect-due="${escapeHtml(c.id)}">Collect</button>` : ""}</td>
     </tr>`,
     )
     .join("")}</tbody></table>`;
@@ -9404,7 +9449,7 @@ $("customer-form").addEventListener("submit", async (e) => {
 $("due-customer")?.addEventListener("change", () => {
   const c = (state.customers || []).find((row) => row.id === $("due-customer").value);
   paintDueOutstanding();
-  if (c) $("due-amount").value = String(Number(c.outstanding) || 0);
+  if (c) $("due-amount").value = String(customerDue(c));
 });
 
 $("due-collect-form")?.addEventListener("submit", async (e) => {
@@ -9436,7 +9481,7 @@ $("customers-table")?.addEventListener("click", (e) => {
   const c = (state.customers || []).find((row) => row.id === btn.dataset.collectDue);
   if (!c) return;
   fillDueCustomerSelect(c.id);
-  $("due-amount").value = String(Number(c.outstanding) || 0);
+  $("due-amount").value = String(customerDue(c));
   paintDueOutstanding();
   $("due-collect-form")?.scrollIntoView({ block: "nearest" });
   $("due-amount")?.focus();
