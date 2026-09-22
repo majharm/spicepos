@@ -76,7 +76,7 @@ test("Master Admin Login Page manager is wired without touching auth", () => {
   assert.match(master, /css\/login-page\.css\?v=20260920deploy203/);
   assert.match(login, /js\/login-page\.js\?v=20260920deploy203/);
   assert.match(login, /css\/login-page\.css\?v=20260920deploy203/);
-  assert.match(login, /x-pos-20260830e\.js\?v=20260920deploy191/);
+  assert.match(login, /x-pos-20260830e\.js\?v=20260922deploy207/);
   assert.match(index, /registerLoginPagePublic/);
   assert.match(index, /registerLoginPageMaster/);
   assert.match(index, /\/api\/login-page/);
