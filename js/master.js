@@ -174,6 +174,46 @@ function showLogin(on) {
   if (panel) panel.hidden = on;
   document.body.classList.toggle("master-locked", on);
   document.body.classList.toggle("auth-body", on);
+  setMasterNavOpen(false);
+}
+
+const NAV_FAMILIES = {
+  main: ["dash", "biz", "users", "plans"],
+  alerts: ["expiry", "alert-log"],
+  people: ["managers", "support"],
+  advance: ["advance", "backup", "languages", "notes", "branches", "devices", "audit"],
+  analytics: ["analytics"],
+  seo: ["seo"],
+  website: ["website"],
+};
+
+function setMasterNavOpen(on) {
+  const app = $("master-app");
+  const toggle = $("master-nav-toggle");
+  const scrim = $("master-nav-scrim");
+  document.body.classList.toggle("master-nav-open", Boolean(on) && !document.body.classList.contains("master-locked"));
+  if (toggle) toggle.setAttribute("aria-expanded", on ? "true" : "false");
+  if (scrim) scrim.hidden = !on;
+  if (app) app.classList.toggle("nav-open", Boolean(on));
+}
+
+function syncMasterNav() {
+  document.querySelectorAll(".master-nav [data-tab]").forEach((b) => {
+    const backup = b.dataset.backupPane;
+    const analytics = b.dataset.analyticsPane;
+    let on = b.dataset.tab === tab;
+    if (backup != null) on = tab === "backup" && backup === backupPane;
+    if (analytics != null) on = tab === "analytics" && analytics === analyticsPane;
+    const seo = b.dataset.seoPane;
+    if (seo != null) on = tab === "seo" && seo === seoPane;
+    const website = b.dataset.websitePane;
+    if (website != null) on = tab === "website" && website === websitePane;
+    b.classList.toggle("active", on);
+  });
+  document.querySelectorAll(".master-nav-group[data-nav-family]").forEach((g) => {
+    const tabs = NAV_FAMILIES[g.dataset.navFamily] || [];
+    g.classList.toggle("is-open", tabs.includes(tab));
+  });
 }
 
 (() => {
@@ -257,21 +297,6 @@ $("logout").onclick = async () => {
   location.href = "/login.html";
 };
 
-function syncMasterNav() {
-  document.querySelectorAll(".master-nav [data-tab]").forEach((b) => {
-    const backup = b.dataset.backupPane;
-    const analytics = b.dataset.analyticsPane;
-    let on = b.dataset.tab === tab;
-    if (backup != null) on = tab === "backup" && backup === backupPane;
-    if (analytics != null) on = tab === "analytics" && analytics === analyticsPane;
-    const seo = b.dataset.seoPane;
-    if (seo != null) on = tab === "seo" && seo === seoPane;
-    const website = b.dataset.websitePane;
-    if (website != null) on = tab === "website" && website === websitePane;
-    b.classList.toggle("active", on);
-  });
-}
-
 function backupFamilyTabs(active) {
   const tabBtn = (id, label) =>
     `<button class="btn${active === id ? " active" : ""}" type="button" role="tab" aria-selected="${active === id}" data-master-pane="${id}">${label}</button>`;
@@ -300,6 +325,7 @@ function setMasterTab(next, pane) {
   if (next === "website") websitePane = pane || "images";
   syncMasterNav();
   document.querySelector(".master-main")?.scrollTo({ top: 0 });
+  if (window.matchMedia("(max-width: 900px)").matches) setMasterNavOpen(false);
   render();
 }
 
@@ -310,6 +336,11 @@ document.querySelectorAll(".master-nav [data-tab]").forEach((btn) => {
       btn.dataset.backupPane || btn.dataset.analyticsPane || btn.dataset.seoPane || btn.dataset.websitePane,
     );
 });
+
+$("master-nav-toggle")?.addEventListener("click", () => {
+  setMasterNavOpen(!document.body.classList.contains("master-nav-open"));
+});
+$("master-nav-scrim")?.addEventListener("click", () => setMasterNavOpen(false));
 
 const ALERT_LOG_KIND_LABEL = {
   welcome: "Welcome",
@@ -877,8 +908,8 @@ function bindAdvanceCards(root) {
 function advanceHubHtml() {
   return masterDesk(
     "Platform",
-    "Advance",
-    "Platform tools: WhatsApp and SMTP, backups, shop notices, and the full branch, device, and audit lists.",
+    "Advanced",
+    "Advanced tools: WhatsApp and SMTP, backups, shop notices, and the full branch, device, and audit lists.",
     [],
     `<div class="master-advance-grid">
       ${advanceCard("backup", "settings", "Settings", "WhatsApp, Hostinger SMTP, and Active or Inactive auto-messages.")}
@@ -1602,9 +1633,23 @@ async function render() {
     languages: "Languages",
     alerts: "Settings",
     support: "Support helpline",
-    advance: "Advance",
+    advance: "Advanced",
   };
+  syncMasterNav();
   $("panel-title").textContent = titles[tab] || "Dashboard";
+  if ($("master-top-title")) $("master-top-title").textContent = titles[tab] || "Dashboard";
+  if ($("master-top-hint")) {
+    $("master-top-hint").textContent =
+      tab === "dash"
+        ? "Shops and subscriptions"
+        : tab === "biz"
+          ? "Create and open shops"
+          : tab === "analytics"
+            ? "Website traffic"
+            : tab === "seo"
+              ? "Search and pages"
+              : "Platform control";
+  }
   $("panel")?.classList.toggle("has-desk", true);
   const body = $("panel-body");
   body.innerHTML = "<p class='hint'>Loading…</p>";
@@ -1620,37 +1665,43 @@ async function render() {
           { label: "Shops", value: t.businesses },
           { label: "Active", value: t.active },
           { label: "Expired", value: t.expired, warn: Number(t.expired) > 0 },
+          { label: "Trial", value: t.trial },
           { label: "Users", value: t.users },
+          { label: "Fees / year", value: money(t.subscriptionRevenue) },
         ],
-        `<div class="kpi-grid">
-        ${[
-          ["Total businesses", t.businesses],
-          ["Active", t.active],
-          ["Expired", t.expired],
-          ["Trial", t.trial],
-          ["Users", t.users],
-          ["Branches", t.branches],
-          ["POS devices", t.devices],
-          ["Transactions", t.transactions],
-          ["Yearly subscription fees", money(t.subscriptionRevenue)],
-        ]
-          .map(([k, v]) => `<div class="report-card"><span>${k}</span><strong>${v}</strong></div>`)
-          .join("")}
+        `<div class="master-shop-toolbar">
+        <label class="master-shop-search">Search shops
+          <input id="master-shop-q" type="search" placeholder="Name, plan, or status" autocomplete="off" />
+        </label>
+        <p class="hint">${t.branches || 0} branches · ${t.devices || 0} POS devices · ${t.transactions || 0} bills</p>
       </div>
-      <div class="table-wrap" style="padding:20px 0">${table(
-        ["Business", "Status", "Plan", "Fee / year", "Users", "Branches", "POS"],
-        d.businesses.map((b) => [
-          b.name,
-          b.computed_status,
-          b.plan_name || b.plan_id || "—",
-          money(b.fee_monthly),
-          b.users,
-          b.branches,
-          `<button class="btn primary" type="button" data-enter="${b.id}">Open POS</button>`,
-        ]),
-      )}</div>`,
+      <div class="master-shop-board">${
+        (d.businesses || []).length
+          ? d.businesses
+              .map(
+                (b) => `<article class="master-shop-card" data-shop-card data-shop-search="${attr(
+                  `${b.name} ${b.computed_status} ${b.plan_name || b.plan_id || ""}`.toLowerCase(),
+                )}">
+            <div class="master-shop-mark" aria-hidden="true">${letterMark(b.name)}</div>
+            <div class="master-shop-copy">
+              <strong>${attr(b.name)}</strong>
+              <span class="master-shop-meta">${statusChip(b.computed_status)} ${attr(b.plan_name || b.plan_id || "—")} · ${money(b.fee_monthly)}/yr</span>
+              <span class="master-shop-meta">${Number(b.users) || 0} users · ${Number(b.branches) || 0} branches</span>
+            </div>
+            <button class="btn primary" type="button" data-enter="${attr(b.id)}">Open POS</button>
+          </article>`,
+              )
+              .join("")
+          : `<div class="item-empty-card"><strong>No shops yet</strong><p>Add a business to open its POS from here.</p></div>`
+      }</div>`,
       );
       bindEnterPosButtons(body);
+      $("master-shop-q")?.addEventListener("input", () => {
+        const q = String($("master-shop-q").value || "").trim().toLowerCase();
+        body.querySelectorAll("[data-shop-card]").forEach((el) => {
+          el.hidden = Boolean(q) && !String(el.dataset.shopSearch || "").includes(q);
+        });
+      });
     } else if (tab === "biz") {
       const [rows, plans, managers] = await Promise.all([
         api("/api/master/businesses"),
