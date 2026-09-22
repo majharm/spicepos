@@ -42,6 +42,11 @@
     $("pp-shop").textContent = shopName;
     if ($("pp-scene-shop")) $("pp-scene-shop").textContent = shopName;
     $("pp-cat").textContent = catalog.shop?.category || "Banners, vinyl, hoardings and print jobs";
+    const hero = document.getElementById("pp-portal-hero");
+    if (hero) {
+      const custom = String(catalog.settings?.portal_login_image || "").trim();
+      hero.src = custom || "./assets/login-atav-smart-pos.jpg?v=20260919loginp1";
+    }
     $("pp-product").innerHTML = (P.PRODUCTS || []).map((p) => `<option>${p}</option>`).join("");
     $("pp-side").innerHTML = (catalog.sides || P.PRINT_SIDES).map((s) => `<option value="${s.id}">${s.label}</option>`).join("");
     $("pp-material").innerHTML = (catalog.materials || [])

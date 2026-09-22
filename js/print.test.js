@@ -97,3 +97,27 @@ test("Flex & Printing is its own shop kind with portal wiring", () => {
   assert.ok(P.PRODUCTS.includes("Flex") && P.PRODUCTS.includes("Hoarding"));
   assert.equal(P.nextOrderNumber(125, 2026), "FP-2026-00125");
 });
+
+test("Shop admin can change the Flex & Printing customer portal login image", () => {
+  assert.equal(P.DEFAULT_SETTINGS.portal_login_image, "");
+  const ui = read("js/print-ui.js");
+  const portal = read("js/print-portal.js");
+  const php = read("pos-print.php");
+  const node = read("server/print.js");
+  assert.match(ui, /print-portal-art/);
+  assert.match(ui, /Customer portal login image/);
+  assert.match(ui, /print-portal-hero-file/);
+  assert.match(ui, /portal_login_image: fd\.get\("portal_login_image"\)/);
+  assert.match(portal, /pp-portal-hero/);
+  assert.match(portal, /catalog\.settings\?\.portal_login_image/);
+  assert.match(read("print.html"), /id="pp-portal-hero"/);
+  assert.match(read("index.html"), /customer portal login image/);
+  assert.match(read("js/app.js"), /portal image/);
+  assert.match(node, /function clipPortalImage/);
+  assert.match(node, /settings_json MEDIUMTEXT/);
+  assert.match(php, /function pos_print_portal_image/);
+  assert.match(php, /function pos_print_save_settings/);
+  assert.match(php, /function pos_print_catalog_payload/);
+  assert.match(php, /\$path === "print\/catalog" && \$method === "POST"/);
+  assert.match(php, /ALTER TABLE print_settings MODIFY settings_json MEDIUMTEXT/);
+});

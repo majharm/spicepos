@@ -85,6 +85,7 @@
     min_billing_sqft: 0,
     urgent_charge: 0,
     round: "near",
+    portal_login_image: "",
   };
 
   const ORDER_TABS = [

@@ -130,6 +130,16 @@
       <label>Min DPI <input name="min_dpi" type="number" value="${escapeHtml(cat.settings?.min_dpi || 72)}" /></label>
       <label>Customer approval required <select name="customer_approval_required"><option value="true" ${cat.settings?.customer_approval_required !== false ? "selected" : ""}>Yes</option><option value="false">No</option></select></label>
       <label>GST % <input name="gst_rate" type="number" value="${escapeHtml(cat.settings?.gst_rate || 18)}" /></label>
+      <fieldset class="print-portal-art">
+        <legend>Customer portal login image</legend>
+        <p class="hint">This is the one side image on the customer print login (same layout as shop admin login). JPG, PNG or WebP, under 900 KB.</p>
+        <img id="print-portal-hero-preview" alt="Customer portal preview" src="${escapeHtml(cat.settings?.portal_login_image || "./assets/login-atav-smart-pos.jpg?v=20260919loginp1")}" style="display:block;max-width:min(420px,100%);max-height:180px;object-fit:cover;border-radius:12px;margin:8px 0;border:1px solid #dbe7f3" />
+        <input name="portal_login_image" id="print-portal-hero-url" type="hidden" value="${escapeHtml(cat.settings?.portal_login_image || "")}" />
+        <label>Upload image
+          <input id="print-portal-hero-file" type="file" accept="image/jpeg,image/png,image/webp,image/gif" />
+        </label>
+        <button class="btn" type="button" id="print-portal-hero-reset">Use default ATAV image</button>
+      </fieldset>
       <button class="btn primary" type="submit">Save print settings</button>
     </form>`;
     $("print-settings-form")?.addEventListener("submit", async (ev) => {
@@ -154,10 +164,36 @@
             min_dpi: Number(fd.get("min_dpi")),
             customer_approval_required: fd.get("customer_approval_required") === "true",
             gst_rate: Number(fd.get("gst_rate")),
+            portal_login_image: fd.get("portal_login_image") || "",
           },
         }),
       });
       loadPrintSettings();
+    });
+    const preview = $("print-portal-hero-preview");
+    const hidden = $("print-portal-hero-url");
+    $("print-portal-hero-file")?.addEventListener("change", (ev) => {
+      const file = ev.target.files?.[0];
+      if (!file) return;
+      if (file.size > 900 * 1024) {
+        if (root.toast) root.toast("Image must be under 900 KB");
+        else alert("Image must be under 900 KB");
+        ev.target.value = "";
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = () => {
+        const url = String(reader.result || "");
+        if (hidden) hidden.value = url;
+        if (preview) preview.src = url;
+      };
+      reader.readAsDataURL(file);
+    });
+    $("print-portal-hero-reset")?.addEventListener("click", () => {
+      if (hidden) hidden.value = "";
+      if (preview) preview.src = "./assets/login-atav-smart-pos.jpg?v=20260919loginp1";
+      const file = $("print-portal-hero-file");
+      if (file) file.value = "";
     });
   }
 

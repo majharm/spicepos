@@ -38,9 +38,14 @@ async function hasTable(table) {
 export async function ensurePrintSchema() {
   await query(`CREATE TABLE IF NOT EXISTS print_settings (
     business_id VARCHAR(255) PRIMARY KEY,
-    settings_json TEXT NULL,
+    settings_json MEDIUMTEXT NULL,
     updated_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3)
   )`);
+  try {
+    await query("ALTER TABLE print_settings MODIFY settings_json MEDIUMTEXT NULL");
+  } catch {
+    /* already wide enough */
+  }
   await query(`CREATE TABLE IF NOT EXISTS print_materials (
     id VARCHAR(255) PRIMARY KEY,
     business_id VARCHAR(255) NOT NULL,
@@ -224,6 +229,14 @@ async function loadShop(id) {
 
 export function printShopAllowed(biz) {
   return POSPrint?.isPrintShop?.(biz) || globalThis.POSFootwear?.shopKind?.(biz) === "printing";
+}
+
+function clipPortalImage(raw) {
+  const s = String(raw ?? "").trim();
+  if (!s) return "";
+  if (/^data:image\/(jpeg|jpg|png|webp|gif);base64,/i.test(s) && s.length <= 1_200_000) return s;
+  if (/^(\.\/assets\/|https?:\/\/)/i.test(s)) return s.slice(0, 500);
+  throw new Error("Use a JPG, PNG or WebP under 900 KB for the customer portal image");
 }
 
 async function settingsOf(shopId) {
@@ -1099,10 +1112,14 @@ export function registerPrintStaff(app) {
         }
       }
       if (body.settings && typeof body.settings === "object") {
+        const next = { ...(await settingsOf(bid())), ...body.settings };
+        if (Object.prototype.hasOwnProperty.call(body.settings, "portal_login_image")) {
+          next.portal_login_image = clipPortalImage(body.settings.portal_login_image);
+        }
         await query(
           `INSERT INTO print_settings (business_id, settings_json) VALUES (?,?)
            ON DUPLICATE KEY UPDATE settings_json = VALUES(settings_json)`,
-          [bid(), JSON.stringify({ ...(await settingsOf(bid())), ...body.settings })],
+          [bid(), JSON.stringify(next)],
         );
       }
       res.json(await catalog(bid()));

@@ -462,7 +462,7 @@ const VIEW_META = {
   "print-board": { title: "Flex & Printing", subtitle: "Print orders, quotes, production, and sq ft" },
   "print-orders": { title: "Print orders", subtitle: "File review, quotes, and customer approval" },
   "print-production": { title: "Production", subtitle: "Printing, finishing, QC, ready, and delivery" },
-  "print-settings": { title: "Print rates", subtitle: "Materials, finishing, GST, and file rules" },
+  "print-settings": { title: "Print rates", subtitle: "Materials, finishing, GST, file rules, and portal image" },
 };
 
 function orderStatusClass(status) {

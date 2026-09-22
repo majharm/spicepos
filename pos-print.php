@@ -3,7 +3,8 @@ function pos_print_ensure() {
   $db = pos_db();
   @$db->query("ALTER TABLE customers ADD COLUMN email VARCHAR(160) NULL");
   @$db->query("ALTER TABLE customers ADD COLUMN password_hash VARCHAR(255) NULL");
-  $db->query("CREATE TABLE IF NOT EXISTS print_settings (business_id VARCHAR(255) PRIMARY KEY, settings_json TEXT NULL, updated_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3))");
+  $db->query("CREATE TABLE IF NOT EXISTS print_settings (business_id VARCHAR(255) PRIMARY KEY, settings_json MEDIUMTEXT NULL, updated_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3))");
+  @$db->query("ALTER TABLE print_settings MODIFY settings_json MEDIUMTEXT NULL");
   $db->query("CREATE TABLE IF NOT EXISTS print_materials (id VARCHAR(255) PRIMARY KEY, business_id VARCHAR(255) NOT NULL, name VARCHAR(180) NOT NULL, price_model VARCHAR(16) NOT NULL DEFAULT 'sqft', rate DECIMAL(12,2) NOT NULL DEFAULT 0, pack_qty INT NOT NULL DEFAULT 1, gst_rate DECIMAL(8,2) NOT NULL DEFAULT 18, min_sqft DECIMAL(12,2) NOT NULL DEFAULT 0, active TINYINT NOT NULL DEFAULT 1, sort_order INT NOT NULL DEFAULT 0, INDEX (business_id))");
   $db->query("CREATE TABLE IF NOT EXISTS print_finishing (id VARCHAR(255) PRIMARY KEY, business_id VARCHAR(255) NOT NULL, name VARCHAR(180) NOT NULL, rate DECIMAL(12,2) NOT NULL DEFAULT 0, unit VARCHAR(16) NOT NULL DEFAULT 'job', gst_rate DECIMAL(8,2) NOT NULL DEFAULT 18, active TINYINT NOT NULL DEFAULT 1, INDEX (business_id))");
   $db->query("CREATE TABLE IF NOT EXISTS print_orders (id VARCHAR(255) PRIMARY KEY, order_number VARCHAR(32) NOT NULL, business_id VARCHAR(255) NOT NULL, branch_id VARCHAR(255) NULL, customer_id VARCHAR(255) NOT NULL, customer_name VARCHAR(180) NULL, customer_mobile VARCHAR(32) NULL, customer_email VARCHAR(160) NULL, product VARCHAR(80) NOT NULL, print_type VARCHAR(16) NOT NULL DEFAULT 'single', material_id VARCHAR(255) NULL, material_name VARCHAR(180) NULL, width DECIMAL(12,4) NOT NULL DEFAULT 0, height DECIMAL(12,4) NOT NULL DEFAULT 0, unit VARCHAR(16) NOT NULL DEFAULT 'ft', dpi INT NULL, area_sqft DECIMAL(14,4) NOT NULL DEFAULT 0, quantity INT NOT NULL DEFAULT 1, rate DECIMAL(12,2) NOT NULL DEFAULT 0, price_model VARCHAR(16) NOT NULL DEFAULT 'sqft', printing_amount DECIMAL(12,2) NOT NULL DEFAULT 0, finishing_amount DECIMAL(12,2) NOT NULL DEFAULT 0, delivery_amount DECIMAL(12,2) NOT NULL DEFAULT 0, other_charges DECIMAL(12,2) NOT NULL DEFAULT 0, discount DECIMAL(12,2) NOT NULL DEFAULT 0, gst DECIMAL(12,2) NOT NULL DEFAULT 0, gst_rate DECIMAL(8,2) NOT NULL DEFAULT 18, estimate_total DECIMAL(12,2) NOT NULL DEFAULT 0, quote_total DECIMAL(12,2) NOT NULL DEFAULT 0, paid_amount DECIMAL(12,2) NOT NULL DEFAULT 0, balance_due DECIMAL(12,2) NOT NULL DEFAULT 0, pay_status VARCHAR(16) NOT NULL DEFAULT 'pending', status VARCHAR(32) NOT NULL DEFAULT 'pending_review', notes TEXT NULL, admin_notes TEXT NULL, approved_file_id VARCHAR(255) NULL, sales_order_id VARCHAR(255) NULL, staff_id VARCHAR(255) NULL, staff_name VARCHAR(180) NULL, urgent TINYINT NOT NULL DEFAULT 0, created_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3), updated_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3), INDEX (business_id), INDEX (customer_id), INDEX (status))");
@@ -36,6 +37,63 @@ function pos_print_seed($shop) {
   }
 }
 
+function pos_print_portal_image($raw) {
+  $s = trim((string) $raw);
+  if ($s === "") return "";
+  if (preg_match('#^data:image/(jpeg|jpg|png|webp|gif);base64,#i', $s) && strlen($s) <= 1200000) return $s;
+  if (preg_match('#^(\./assets/|https?://)#i', $s)) return substr($s, 0, 500);
+  throw new Exception("Use a JPG, PNG or WebP under 900 KB for the customer portal image");
+}
+
+function pos_print_settings($shop) {
+  $rows = pos_q("SELECT settings_json FROM print_settings WHERE business_id=?", "s", [$shop]);
+  $extra = [];
+  if (!empty($rows[0]["settings_json"])) {
+    $decoded = json_decode($rows[0]["settings_json"], true);
+    if (is_array($decoded)) $extra = $decoded;
+  }
+  return array_merge([
+    "max_file_mb" => 25,
+    "allowed_types" => ["pdf", "jpg", "jpeg", "png", "svg", "ai", "eps", "cdr"],
+    "min_dpi" => 72,
+    "warn_dpi" => 150,
+    "block_low_res" => false,
+    "customer_approval_required" => true,
+    "gst_rate" => 18,
+    "min_order_amount" => 0,
+    "min_billing_sqft" => 0,
+    "urgent_charge" => 0,
+    "round" => "near",
+    "portal_login_image" => "",
+  ], $extra);
+}
+
+function pos_print_save_settings($shop, $incoming) {
+  if (!is_array($incoming)) return pos_print_settings($shop);
+  $next = array_merge(pos_print_settings($shop), $incoming);
+  if (array_key_exists("portal_login_image", $incoming)) {
+    $next["portal_login_image"] = pos_print_portal_image($incoming["portal_login_image"]);
+  }
+  pos_q(
+    "INSERT INTO print_settings (business_id, settings_json) VALUES (?,?) ON DUPLICATE KEY UPDATE settings_json = VALUES(settings_json)",
+    "ss",
+    [$shop, json_encode($next, JSON_UNESCAPED_UNICODE)]
+  );
+  return pos_print_settings($shop);
+}
+
+function pos_print_catalog_payload($shop) {
+  return [
+    "materials" => pos_q("SELECT * FROM print_materials WHERE business_id=?", "s", [$shop]),
+    "finishing" => pos_q("SELECT * FROM print_finishing WHERE business_id=?", "s", [$shop]),
+    "settings" => pos_print_settings($shop),
+    "products" => ["Flex", "Banner", "Vinyl", "Sunboard", "Poster", "Sticker", "Canvas", "Hoarding", "Photo", "ACP", "One-Way Vision", "Visiting Card", "Brochure", "Other Custom Print"],
+    "units" => [["id" => "ft", "label" => "Feet"], ["id" => "in", "label" => "Inches"], ["id" => "cm", "label" => "Centimeters"], ["id" => "mm", "label" => "Millimeters"], ["id" => "px", "label" => "Pixels"]],
+    "sides" => [["id" => "single", "label" => "Single Side"], ["id" => "double", "label" => "Double Side"]],
+    "dpis" => [72, 96, 150, 200, 300],
+  ];
+}
+
 function pos_print_public_dispatch($path, $method, $body) {
   if (!preg_match("#^print/public/([^/]+)(/.*)?$#", $path, $m)) return false;
   pos_print_ensure();
@@ -44,16 +102,9 @@ function pos_print_public_dispatch($path, $method, $body) {
   pos_print_seed($shop);
   if ($method === "GET" && $rest === "") {
     $biz = pos_q("SELECT id, name, category, address, mobile FROM businesses WHERE id=?", "s", [$shop]);
-    pos_send(200, [
-      "shop" => $biz[0] ?? ["id" => $shop],
-      "materials" => pos_q("SELECT * FROM print_materials WHERE business_id=?", "s", [$shop]),
-      "finishing" => pos_q("SELECT * FROM print_finishing WHERE business_id=?", "s", [$shop]),
-      "settings" => ["max_file_mb" => 25, "gst_rate" => 18, "customer_approval_required" => true, "allowed_types" => ["pdf", "jpg", "jpeg", "png", "svg", "ai", "eps", "cdr"]],
-      "products" => ["Flex", "Banner", "Vinyl", "Sunboard", "Poster", "Sticker", "Canvas", "Hoarding", "Photo", "ACP", "One-Way Vision", "Visiting Card", "Brochure", "Other Custom Print"],
-      "units" => [["id" => "ft", "label" => "Feet"], ["id" => "in", "label" => "Inches"], ["id" => "cm", "label" => "Centimeters"], ["id" => "mm", "label" => "Millimeters"], ["id" => "px", "label" => "Pixels"]],
-      "sides" => [["id" => "single", "label" => "Single Side"], ["id" => "double", "label" => "Double Side"]],
-      "dpis" => [72, 96, 150, 200, 300],
-    ]);
+    $cat = pos_print_catalog_payload($shop);
+    $cat["shop"] = $biz[0] ?? ["id" => $shop];
+    pos_send(200, $cat);
   }
   pos_send(404, ["error" => "Print route not found", "php" => true]);
   return true;
@@ -71,11 +122,60 @@ function pos_print_staff_dispatch($path, $method, $body, $bid, $auth) {
     pos_send(200, pos_q("SELECT * FROM print_orders WHERE business_id=? ORDER BY created_at DESC LIMIT 400", "s", [$bid]));
   }
   if ($path === "print/catalog" && $method === "GET") {
-    pos_send(200, [
-      "materials" => pos_q("SELECT * FROM print_materials WHERE business_id=?", "s", [$bid]),
-      "finishing" => pos_q("SELECT * FROM print_finishing WHERE business_id=?", "s", [$bid]),
-      "settings" => ["max_file_mb" => 25, "gst_rate" => 18],
-    ]);
+    pos_send(200, pos_print_catalog_payload($bid));
+  }
+  if ($path === "print/catalog" && $method === "POST") {
+    $payload = is_array($body) ? $body : [];
+    if (!empty($payload["materials"]) && is_array($payload["materials"])) {
+      foreach ($payload["materials"] as $m) {
+        if (!is_array($m)) continue;
+        $id = trim((string) ($m["id"] ?? ""));
+        if ($id === "") $id = $bid . ":" . bin2hex(random_bytes(6));
+        $name = substr(trim((string) ($m["name"] ?? "")), 0, 180);
+        $model = substr(trim((string) ($m["price_model"] ?? "sqft")), 0, 16);
+        if ($model === "") $model = "sqft";
+        $rate = (float) ($m["rate"] ?? 0);
+        $pack = (int) ($m["pack_qty"] ?? 1);
+        if ($pack < 1) $pack = 1;
+        $gst = isset($m["gst_rate"]) ? (float) $m["gst_rate"] : 18;
+        $min = (float) ($m["min_sqft"] ?? 0);
+        $active = (isset($m["active"]) && (int) $m["active"] === 0) ? 0 : 1;
+        $sort = (int) ($m["sort_order"] ?? 0);
+        pos_q(
+          "INSERT INTO print_materials (id, business_id, name, price_model, rate, pack_qty, gst_rate, min_sqft, active, sort_order) VALUES (?,?,?,?,?,?,?,?,?,?)
+           ON DUPLICATE KEY UPDATE name=VALUES(name), price_model=VALUES(price_model), rate=VALUES(rate), pack_qty=VALUES(pack_qty), gst_rate=VALUES(gst_rate), min_sqft=VALUES(min_sqft), active=VALUES(active)",
+          "ssssdiddii",
+          [$id, $bid, $name, $model, $rate, $pack, $gst, $min, $active, $sort]
+        );
+      }
+    }
+    if (!empty($payload["finishing"]) && is_array($payload["finishing"])) {
+      foreach ($payload["finishing"] as $f) {
+        if (!is_array($f)) continue;
+        $id = trim((string) ($f["id"] ?? ""));
+        if ($id === "") $id = $bid . ":" . bin2hex(random_bytes(6));
+        $name = substr(trim((string) ($f["name"] ?? "")), 0, 180);
+        $rate = (float) ($f["rate"] ?? 0);
+        $unit = substr(trim((string) ($f["unit"] ?? "job")), 0, 16);
+        if ($unit === "") $unit = "job";
+        $gst = isset($f["gst_rate"]) ? (float) $f["gst_rate"] : 18;
+        $active = (isset($f["active"]) && (int) $f["active"] === 0) ? 0 : 1;
+        pos_q(
+          "INSERT INTO print_finishing (id, business_id, name, rate, unit, gst_rate, active) VALUES (?,?,?,?,?,?,?)
+           ON DUPLICATE KEY UPDATE name=VALUES(name), rate=VALUES(rate), unit=VALUES(unit), gst_rate=VALUES(gst_rate), active=VALUES(active)",
+          "sssdsdi",
+          [$id, $bid, $name, $rate, $unit, $gst, $active]
+        );
+      }
+    }
+    if (!empty($payload["settings"]) && is_array($payload["settings"])) {
+      try {
+        pos_print_save_settings($bid, $payload["settings"]);
+      } catch (Exception $e) {
+        pos_send(400, ["error" => $e->getMessage(), "php" => true]);
+      }
+    }
+    pos_send(200, pos_print_catalog_payload($bid));
   }
   return false;
 }
