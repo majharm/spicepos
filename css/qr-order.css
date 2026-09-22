@@ -41,9 +41,9 @@ h1, h2 { margin: 0; letter-spacing: -.025em; }
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 6px;
-  max-width: 1180px;
+  width: min(560px, 100%);
   margin: 0 auto;
-  padding: 10px clamp(14px, 4vw, 44px) 8px;
+  padding: 10px 14px 8px;
   background: #f4f7f6ee;
   backdrop-filter: blur(10px);
 }
