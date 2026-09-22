@@ -770,7 +770,7 @@ function applyInvoiceDuesToCustomers() {
   state.customers = (state.customers || []).map((c) => {
     const have = customerDue(c);
     const inv = extra[c.id] || 0;
-    return inv > have + 0.009 ? { ...c, outstanding: inv } : c;
+    return have > 0.009 ? c : inv > 0.009 ? { ...c, outstanding: inv } : c;
   });
 }
 
@@ -784,8 +784,7 @@ async function refreshCustomersOutstanding() {
         seen.add(c.id);
         const fresh = byId[c.id];
         if (!fresh) return c;
-        const due = Math.max(customerDue(c), customerDue(fresh));
-        return { ...c, ...fresh, outstanding: due };
+        return { ...c, ...fresh, outstanding: customerDue(fresh) };
       });
       for (const c of rows) {
         if (!seen.has(c.id)) state.customers.push(c);

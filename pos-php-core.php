@@ -1632,6 +1632,32 @@ function pos_apply_invoice_paid_delta($orderId, $delta, $businessId) {
   } catch (Exception $e) { /* optional */ }
 }
 
+function pos_apply_invoice_paid_fifo($customerId, $amount, $businessId) {
+  $left = pos_round2($amount);
+  if ($left <= 0 || !$customerId) return;
+  try {
+    $rows = pos_q(
+      "SELECT id, total, COALESCE(amount_paid,0) AS amount_paid FROM sales_orders
+       WHERE business_id = ? AND customer_id = ?
+         AND LOWER(TRIM(COALESCE(status,'confirmed'))) <> 'cancelled'
+         AND (COALESCE(total,0) - COALESCE(amount_paid,0)) > 0.004
+       ORDER BY created_at ASC",
+      "ss",
+      [$businessId, $customerId]
+    );
+  } catch (Exception $e) {
+    return;
+  }
+  foreach ($rows as $o) {
+    if ($left <= 0) break;
+    $need = pos_round2(max(0, (float) ($o["total"] ?? 0) - (float) ($o["amount_paid"] ?? 0)));
+    if ($need <= 0) continue;
+    $chunk = min($need, $left);
+    pos_apply_invoice_paid_delta($o["id"], $chunk, $businessId);
+    $left = pos_round2($left - $chunk);
+  }
+}
+
 function pos_invoice_paid_amount($method, $total, $raw) {
   $credit = pos_pay_normalize($method) === "credit";
   if ($raw !== null && $raw !== "") {

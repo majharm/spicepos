@@ -5,7 +5,7 @@ import { requirePerm } from "./auth.js";
 import { hashPassword, verifyPassword } from "./password.js";
 import { sendMail } from "./mail.js";
 import { sendWhatsApp } from "./alerts.js";
-import { getPlatformSettings } from "./settings.js";
+import { settleCustomerInvoice } from "./accounts.js";
 import "../js/print.js";
 import "../js/footwear.js";
 
@@ -931,9 +931,16 @@ export function registerPrintStaff(app) {
       if (!status) throw new Error("Unknown review action");
       const [order] = await query("SELECT * FROM print_orders WHERE id = ? AND business_id = ?", [req.params.id, bid()]);
       if (!order) throw new Error("Order not found");
-      if (action === "approve" && req.body.file_id) {
-        await query("UPDATE print_files SET status = 'approved' WHERE id = ? AND order_id = ?", [req.body.file_id, order.id]);
-        await query("UPDATE print_orders SET approved_file_id = ? WHERE id = ?", [req.body.file_id, order.id]);
+      if (action === "approve") {
+        let fileId = String(req.body.file_id || "");
+        if (!fileId) {
+          const latest = await query("SELECT id FROM print_files WHERE order_id = ? ORDER BY version DESC LIMIT 1", [order.id]);
+          fileId = latest[0]?.id || "";
+        }
+        if (fileId) {
+          await query("UPDATE print_files SET status = 'approved' WHERE id = ? AND order_id = ?", [fileId, order.id]);
+          await query("UPDATE print_orders SET approved_file_id = ? WHERE id = ?", [fileId, order.id]);
+        }
       }
       await query("UPDATE print_orders SET status = ?, admin_notes = ? WHERE id = ?", [status, clip(req.body.notes, 2000), order.id]);
       await saveHistory(order.id, status, bid(), authUser(), clip(req.body.notes, 500));
@@ -1051,6 +1058,27 @@ export function registerPrintStaff(app) {
           /* line shape varies by schema */
         }
       await query("UPDATE print_orders SET sales_order_id = ? WHERE id = ?", [invoiceId, order.id]);
+      try {
+        const paid = round(Number(order.paid_amount) || 0);
+        await withTransaction(async (conn) => {
+          const [custRows] = await conn.query("SELECT * FROM customers WHERE id = ? AND business_id = ?", [
+            order.customer_id,
+            bid(),
+          ]);
+          const customer = custRows[0];
+          if (!customer) return;
+          await settleCustomerInvoice(conn, {
+            customer,
+            total: q.total,
+            method: paid > 0.009 ? "upi" : "credit",
+            orderId: invoiceId,
+            orderNumber: order.order_number,
+            amountPaid: paid,
+          });
+        });
+      } catch {
+        /* settlement optional */
+      }
       if (!["paid", "production_pending", "printing"].includes(order.status)) {
         await query("UPDATE print_orders SET status = 'payment_pending' WHERE id = ?", [order.id]);
       }

@@ -700,6 +700,8 @@ function pos_accounts_dispatch($path, $method, $body, $bid, $auth, $branchId, $u
       $orderNumber = $ord[0]["order_number"] ?? null;
       $invoiceAmount = isset($ord[0]["total"]) ? pos_round2($ord[0]["total"]) : null;
       if (function_exists("pos_apply_invoice_paid_delta")) pos_apply_invoice_paid_delta($body["order_id"], $amt, $bid);
+    } else if (function_exists("pos_apply_invoice_paid_fifo")) {
+      pos_apply_invoice_paid_fifo($customerId, $amt, $bid);
     }
     if (function_exists("pos_stamp_ledger_due")) {
       pos_stamp_ledger_due($ledgerId, [

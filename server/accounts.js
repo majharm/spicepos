@@ -185,6 +185,35 @@ async function applyInvoicePaidDelta(conn, orderId, delta) {
   }
 }
 
+async function applyInvoicePaidFifo(conn, customerId, amount) {
+  let left = round2(amount);
+  if (!customerId || left <= 0) return;
+  let rows = [];
+  try {
+    const [found] = await execSql(
+      conn,
+      `SELECT id, total, COALESCE(amount_paid,0) AS amount_paid
+       FROM sales_orders
+       WHERE business_id = ? AND customer_id = ?
+         AND LOWER(TRIM(COALESCE(status,'confirmed'))) <> 'cancelled'
+         AND (COALESCE(total,0) - COALESCE(amount_paid,0)) > 0.004
+       ORDER BY created_at ASC`,
+      [bid(), customerId],
+    );
+    rows = found || [];
+  } catch {
+    return;
+  }
+  for (const o of rows) {
+    if (left <= 0) break;
+    const need = round2(Math.max(0, Number(o.total || 0) - Number(o.amount_paid || 0)));
+    if (need <= 0) continue;
+    const chunk = Math.min(need, left);
+    await applyInvoicePaidDelta(conn, o.id, chunk);
+    left = round2(left - chunk);
+  }
+}
+
 export async function persistInvoiceSettlement(conn, orderId, snap = {}) {
   if (!orderId) return;
   try {
@@ -701,6 +730,7 @@ export function registerAccounts(app) {
           previousDue: outstanding,
           remainingDue: next,
         });
+        if (!order_id) await applyInvoicePaidFifo(conn, customer.id, amt);
         return {
           ...receipt,
           customer: { ...customer, outstanding: next },

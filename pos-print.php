@@ -30,7 +30,7 @@ function pos_print_seed($shop) {
     ["acp", "ACP", "sqft", 120],
   ];
   foreach ($mats as $i => $m) {
-    pos_q("INSERT INTO print_materials (id, business_id, name, price_model, rate, gst_rate, active, sort_order) VALUES (?,?,?,?,?,18,1,?)", "sssddi", [$shop . ":" . $m[0], $shop, $m[1], $m[2], $m[3], $i]);
+    pos_q("INSERT INTO print_materials (id, business_id, name, price_model, rate, gst_rate, active, sort_order) VALUES (?,?,?,?,?,18,1,?)", "ssssdi", [$shop . ":" . $m[0], $shop, $m[1], $m[2], $m[3], $i]);
   }
   foreach ([["eyelets", "Eyelets", 100], ["delivery", "Delivery", 50], ["lamination", "Lamination", 15]] as $f) {
     pos_q("INSERT INTO print_finishing (id, business_id, name, rate, unit, gst_rate, active) VALUES (?,?,?,?, 'job', 18, 1)", "sssd", [$shop . ":" . $f[0], $shop, $f[1], $f[2]]);
@@ -215,14 +215,14 @@ function pos_print_quote($material, $body, $finishing, $settings) {
   $finAmt = 0;
   foreach ($finishing as $f) $finAmt += pos_print_finish_amount($f, $area, $qty);
   $finAmt = pos_print_round2($finAmt);
-  $delivery = 0;
+  $delivery = pos_print_round2($body["delivery_amount"] ?? $body["delivery"] ?? 0);
   foreach ($finishing as $f) {
     if (preg_match("/delivery/i", (string) ($f["name"] ?? ""))) $delivery = 0;
   }
-  if ($delivery === 0 && empty($finishing)) $delivery = pos_print_round2($body["delivery"] ?? 0);
+  $other = pos_print_round2($body["other_charges"] ?? $body["other"] ?? 0);
   $gstRate = (float) ($settings["gst_rate"] ?? $body["gst_rate"] ?? 18);
   $discount = pos_print_round2($body["discount"] ?? 0);
-  $subtotal = pos_print_round2($printing + $finAmt + $delivery);
+  $subtotal = pos_print_round2($printing + $finAmt + $delivery + $other);
   $taxable = pos_print_round2(max(0, $subtotal - $discount));
   $gst = pos_print_round2($taxable * ($gstRate / 100));
   $total = pos_print_round2($taxable + $gst);
@@ -234,6 +234,7 @@ function pos_print_quote($material, $body, $finishing, $settings) {
     "printing" => $printing,
     "finishing" => $finAmt,
     "delivery" => $delivery,
+    "other" => $other,
     "discount" => $discount,
     "taxable" => $taxable,
     "gst" => $gst,
@@ -310,9 +311,9 @@ function pos_print_apply_totals($orderId, $shop, $extra = []) {
     ["gst_rate" => $row["gst_rate"]]
   );
   pos_q(
-    "UPDATE print_orders SET area_sqft=?, printing_amount=?, finishing_amount=?, estimate_total=?, quote_total=?, gst=?, paid_amount=?, balance_due=?, pay_status=? WHERE id=?",
-    "ddddddddss",
-    [$q["area"], $q["printing"], $q["finishing"], $q["total"], $q["total"], $q["gst"], $q["paid"], $q["balance"], $q["pay_status"], $orderId]
+    "UPDATE print_orders SET area_sqft=?, printing_amount=?, finishing_amount=?, delivery_amount=?, other_charges=?, estimate_total=?, quote_total=?, gst=?, paid_amount=?, balance_due=?, pay_status=? WHERE id=?",
+    "ddddddddddss",
+    [$q["area"], $q["printing"], $q["finishing"], $q["delivery"], $q["other"] ?? 0, $q["total"], $q["total"], $q["gst"], $q["paid"], $q["balance"], $q["pay_status"], $orderId]
   );
   return $q;
 }
@@ -379,6 +380,9 @@ function pos_print_public_dispatch($path, $method, $body) {
         "sssss",
         [pos_uuid(), $email !== "" ? $email : ($mobile . "@otp.local"), $mobile, pos_hash_password($code), $shop]
       );
+      if ($email !== "" && function_exists("pos_send_mail")) {
+        try { pos_send_mail($email, "Print portal OTP", "Your OTP is $code"); } catch (Exception $e) { /* mail optional */ }
+      }
       pos_send(200, ["ok" => true]);
     }
     if ($method === "POST" && $rest === "otp/verify") {
@@ -519,7 +523,7 @@ function pos_print_public_dispatch($path, $method, $body) {
       pos_q(
         "INSERT INTO print_files (id, order_id, business_id, customer_id, version, file_name, file_type, file_size, mime, width_px, height_px, status, uploaded_by, content)
          VALUES (?,?,?,?,?,?,?,?,?,?,?,?, 'customer', ?)",
-        "ssssisssissss",
+        "ssssissisiiss",
         [
           $fid, $order["id"], $shop, $c["id"], $version, $name, $ext, strlen($bin), $mime,
           (int) ($body["width_px"] ?? 0), (int) ($body["height_px"] ?? 0), "uploaded", $bin,
@@ -579,6 +583,12 @@ function pos_print_public_dispatch($path, $method, $body) {
         [$paid, pos_print_round2(max(0, $total - $paid)), $payStatus, $status, $order["id"]]
       );
       pos_print_history($order["id"], $status, $shop, "Payment " . $amt);
+      if (!empty($order["sales_order_id"]) && function_exists("pos_apply_invoice_paid_delta")) {
+        pos_apply_invoice_paid_delta($order["sales_order_id"], $amt, $shop);
+      }
+      if (!empty($order["customer_id"]) && function_exists("pos_recompute_customer_outstanding")) {
+        try { pos_recompute_customer_outstanding($shop, $order["customer_id"]); } catch (Exception $e) { /* optional */ }
+      }
       pos_send(200, ["order" => pos_print_order_bundle($order["id"], $shop)]);
     }
   } catch (Exception $e) {
@@ -658,9 +668,16 @@ function pos_print_staff_dispatch($path, $method, $body, $bid, $auth) {
       $rows = pos_q("SELECT * FROM print_orders WHERE id=? AND business_id=?", "ss", [$m[1], $bid]);
       $order = $rows[0] ?? null;
       if (!$order) pos_send(400, ["error" => "Order not found", "php" => true]);
-      if ($action === "approve" && !empty($body["file_id"])) {
-        pos_q("UPDATE print_files SET status='approved' WHERE id=? AND order_id=?", "ss", [$body["file_id"], $order["id"]]);
-        pos_q("UPDATE print_orders SET approved_file_id=? WHERE id=?", "ss", [$body["file_id"], $order["id"]]);
+      if ($action === "approve") {
+        $fileId = (string) ($body["file_id"] ?? "");
+        if ($fileId === "") {
+          $latest = pos_q("SELECT id FROM print_files WHERE order_id=? ORDER BY version DESC LIMIT 1", "s", [$order["id"]]);
+          $fileId = (string) ($latest[0]["id"] ?? "");
+        }
+        if ($fileId !== "") {
+          pos_q("UPDATE print_files SET status='approved' WHERE id=? AND order_id=?", "ss", [$fileId, $order["id"]]);
+          pos_q("UPDATE print_orders SET approved_file_id=? WHERE id=?", "ss", [$fileId, $order["id"]]);
+        }
       }
       pos_q("UPDATE print_orders SET status=?, admin_notes=? WHERE id=?", "sss", [$status, pos_print_clip($body["notes"] ?? "", 2000), $order["id"]]);
       pos_print_history($order["id"], $status, $bid, $body["notes"] ?? "", $auth);
@@ -747,6 +764,24 @@ function pos_print_staff_dispatch($path, $method, $body, $bid, $auth) {
         );
       } catch (Exception $e) { /* line shape varies */ }
       pos_q("UPDATE print_orders SET sales_order_id=? WHERE id=?", "ss", [$invoiceId, $order["id"]]);
+      $custRows = pos_q("SELECT * FROM customers WHERE id=? AND business_id=?", "ss", [$order["customer_id"] ?? "", $bid]);
+      $customer = $custRows[0] ?? null;
+      $billTotal = (float) ($q["total"] ?? $order["quote_total"] ?? 0);
+      $billPaid = (float) ($order["paid_amount"] ?? 0);
+      if ($customer && function_exists("pos_settle_customer_invoice")) {
+        try {
+          pos_settle_customer_invoice(
+            $customer,
+            $billTotal,
+            $billPaid > 0.009 ? "upi" : "credit",
+            $invoiceId,
+            $order["order_number"],
+            $bid,
+            $uid !== "" ? $uid : null,
+            $billPaid
+          );
+        } catch (Exception $e) { /* settlement optional */ }
+      }
       if (!in_array($order["status"], ["paid", "production_pending", "printing"], true)) {
         pos_q("UPDATE print_orders SET status='payment_pending' WHERE id=?", "s", [$order["id"]]);
       }
@@ -845,6 +880,6 @@ function pos_print_staff_dispatch($path, $method, $body, $bid, $auth) {
   } catch (Exception $e) {
     pos_send(400, ["error" => $e->getMessage(), "php" => true]);
   }
-  return false;
+  pos_send(404, ["error" => "Print route not found", "php" => true]);
 }
 

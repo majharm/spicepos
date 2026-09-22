@@ -148,8 +148,8 @@ test("PHP Hostinger can open a print order, download files, quote, bill, and mov
   assert.match(php, /pos_send_file/);
   assert.match(ui, /View \/ Download/);
   assert.match(ui, /\/api\/print\/files\//);
-  assert.match(read("index.html"), /print-ui\.js\?v=20260922deploy216/);
-  assert.match(read("index.html"), /app\.js\?v=20260922deploy217/);
+  assert.match(read("index.html"), /print-ui\.js\?v=20260922deploy218/);
+  assert.match(read("index.html"), /app\.js\?v=20260922deploy218/);
 });
 
 test("Print orders page opens the shop modal and paints list or wrapped API rows", () => {
@@ -179,4 +179,21 @@ test("Print order review modal is a stepped desk with quote grid and production 
   assert.match(css, /#modal:has\(\.print-order-desk\)/);
   assert.match(css, /\.pod-step\.is-on/);
   assert.match(index, /pos\.css\?v=20260922deploy217/);
+});
+
+test("PHP print quote, artwork MIME, approve, bill settle, and OTP mail are wired", () => {
+  const php = read("pos-print.php");
+  const ui = read("js/print-ui.js");
+  const node = read("server/print.js");
+  const engine = read("js/print.js");
+  assert.match(php, /\$body\["delivery_amount"\] \?\? \$body\["delivery"\]/);
+  assert.match(php, /ssssissisiiss/);
+  assert.match(php, /ssssdi/);
+  assert.match(php, /pos_send_mail\(\$email, "Print portal OTP"/);
+  assert.match(php, /pos_settle_customer_invoice/);
+  assert.match(php, /ORDER BY version DESC LIMIT 1/);
+  assert.match(php, /Print route not found/);
+  assert.match(ui, /data-file-id/);
+  assert.match(node, /settleCustomerInvoice/);
+  assert.match(engine, /delivery_amount/);
 });

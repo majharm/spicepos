@@ -221,6 +221,8 @@ test("customer outstanding hydrates from open invoice remainders on the Customer
   assert.match(css, /#customers-table td\.cust-due/);
   assert.match(index, /id="customers-hero-stats"/);
   assert.match(index, /id="customers-table"/);
+  assert.match(accounts, /async function applyInvoicePaidFifo/);
+  assert.match(core, /function pos_apply_invoice_paid_fifo/);
 });
 
 test("invoice settlement posts sale credit, payment receipt, and customer due", () => {

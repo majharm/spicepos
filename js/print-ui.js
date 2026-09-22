@@ -150,7 +150,7 @@
         <h5>1. File review</h5>
         <p class="hint">Approve the customer file before you send a quote.</p>
         <div class="pod-actions">
-          <button type="button" class="btn primary" data-print-review="approve" data-id="${escapeHtml(o.id)}">Approve file</button>
+          <button type="button" class="btn primary" data-print-review="approve" data-id="${escapeHtml(o.id)}" data-file-id="${escapeHtml((o.files || [])[0]?.id || "")}">Approve file</button>
           <button type="button" class="btn" data-print-review="request_changes" data-id="${escapeHtml(o.id)}">Request changes</button>
           <button type="button" class="btn" data-print-review="request_file" data-id="${escapeHtml(o.id)}">Request new file</button>
           <button type="button" class="btn danger" data-print-review="reject" data-id="${escapeHtml(o.id)}">Reject file</button>
@@ -296,7 +296,10 @@
     try {
       if (open) await openOrder(open.dataset.printOpen);
       if (review) {
-        await api(`/api/print/orders/${review.dataset.id}/review`, { method: "POST", body: JSON.stringify({ action: review.dataset.printReview }) });
+        await api(`/api/print/orders/${review.dataset.id}/review`, {
+          method: "POST",
+          body: JSON.stringify({ action: review.dataset.printReview, file_id: review.dataset.fileId || undefined }),
+        });
         loadPrintOrders();
         await openOrder(review.dataset.id);
       }

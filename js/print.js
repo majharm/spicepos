@@ -345,7 +345,7 @@
       return { ...f, amount };
     });
     const finishing = round2(finishRows.reduce((s, r) => s + r.amount, 0));
-    const delivery = round2(Number(input.delivery) || 0);
+    const delivery = round2(Number(input.delivery ?? input.delivery_amount) || 0);
     const urgent = round2(Number(input.urgent) || 0);
     const other = round2(Number(input.other_charges) || 0);
     const subtotal = round2(print.printing + finishing + delivery + urgent + other);
