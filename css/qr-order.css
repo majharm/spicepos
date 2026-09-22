@@ -112,16 +112,32 @@ main { max-width: 1180px; margin: auto; padding: 18px clamp(14px, 4vw, 44px) 30p
 .place-order, .success-card button { padding: 13px; border: 0; border-radius: 11px; color: white; background: var(--teal); font-weight: 800; }
 .form-hint { min-height: 18px; margin: 0; color: #b91c1c; font-size: 12px; }
 .success-card { position: fixed; z-index: 30; inset: 50% auto auto 50%; transform: translate(-50%, -50%); width: min(440px, calc(100% - 28px)); max-height: calc(100vh - 24px); overflow-y: auto; padding: 28px; border-radius: 22px; background: white; box-shadow: 0 22px 60px rgba(15, 23, 42, .35); text-align: center; }
-.live-board {
-  position: fixed;
-  z-index: 30;
-  inset: 0;
-  overflow-y: auto;
-  padding: 18px 16px 32px;
-  background: #f4f7f6;
+.order-list {
+  margin: 0 0 20px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: white;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, .06);
 }
-.live-board-head { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
-.live-board-head img { width: 52px; height: 52px; border-radius: 14px; object-fit: contain; background: white; }
+.order-list-head { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+.order-list-head img { width: 48px; height: 48px; border-radius: 12px; object-fit: contain; background: #ecfdf5; }
+.order-list-head h2 { margin: 0; font-size: 20px; }
+.order-list-rows { display: grid; gap: 12px; }
+.order-row {
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: #f8faf9;
+  text-align: left;
+}
+.order-row h3 { margin: 0; font-size: 18px; }
+.order-row-top { display: flex; justify-content: space-between; align-items: start; gap: 8px; }
+.order-row-items { margin: 8px 0 0; color: #334155; font-size: 14px; font-weight: 600; }
+.order-row-meta { margin: 4px 0 0; color: var(--muted); font-size: 13px; }
+.live-board {
+  margin: 0 0 18px;
+}
 .live-card {
   margin: 0 0 14px;
   padding: 18px 16px;

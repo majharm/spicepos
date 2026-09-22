@@ -22,6 +22,24 @@
     </header>
 
     <main>
+      <section class="order-list" id="order-success" hidden>
+        <header class="order-list-head">
+          <img id="live-logo" alt="" hidden />
+          <div>
+            <p class="eyebrow" id="track-kicker">YOUR ORDERS</p>
+            <h2 id="order-list-title">Order list</h2>
+            <p class="track-table" id="track-table"></p>
+          </div>
+        </header>
+        <p class="success-save" id="success-save" hidden></p>
+        <div class="order-list-rows" id="active-orders"></div>
+        <div class="live-board-actions">
+          <button type="button" id="new-order">Order More</button>
+          <a class="ghost-btn" id="call-staff" hidden>Call Staff</a>
+          <button type="button" class="ghost-btn" id="view-bill">View Bill</button>
+        </div>
+        <p class="track-live">Status updates automatically. Keep this page open.</p>
+      </section>
       <section class="offer-board" id="offer-board" hidden></section>
       <div class="category-pills" id="category-pills"></div>
       <section class="menu-grid" id="menu-grid"><p class="empty">Loading available items…</p></section>
@@ -48,24 +66,6 @@
         </form>
       </section>
     </div>
-
-    <section class="live-board" id="order-success" hidden>
-      <header class="live-board-head">
-        <img id="live-logo" alt="" hidden />
-        <div>
-          <p class="eyebrow" id="track-kicker">YOUR ORDER</p>
-          <p class="track-table" id="track-table"></p>
-        </div>
-      </header>
-      <p class="success-save" id="success-save" hidden></p>
-      <div id="active-orders"></div>
-      <div class="live-board-actions">
-        <button type="button" id="new-order">Order More</button>
-        <a class="ghost-btn" id="call-staff" hidden>Call Staff</a>
-        <button type="button" class="ghost-btn" id="view-bill">View Bill</button>
-      </div>
-      <p class="track-live">Status updates automatically. Keep this page open.</p>
-    </section>
 
     <footer>Ordering powered by <strong>ATAV POS</strong></footer>
     <script src="./js/offers.js?v=20260917food1" defer></script>

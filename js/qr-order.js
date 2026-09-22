@@ -471,8 +471,12 @@
 
   function paintTracks(tracks) {
     lastTracks = Array.isArray(tracks) ? tracks.filter(Boolean) : [];
-    if (!lastTracks.length) return;
     const board = $("order-success");
+    if (!board) return;
+    if (!lastTracks.length) {
+      board.hidden = true;
+      return;
+    }
     board.hidden = false;
     const logo = $("live-logo");
     if (logo && state.shop?.logo_url) {
@@ -482,29 +486,35 @@
     const tableEl = $("track-table");
     if (tableEl) tableEl.textContent = tableLabel(lastTracks[0].table_no);
     const kicker = $("track-kicker");
-    if (kicker) kicker.textContent = lastTracks.length > 1 ? "ACTIVE ORDERS" : "YOUR ORDER";
+    if (kicker) kicker.textContent = "YOUR ORDERS";
+    const title = $("order-list-title");
+    if (title) title.textContent = lastTracks.length === 1 ? "1 order" : `${lastTracks.length} orders`;
     const list = $("active-orders");
     if (list) {
       list.innerHTML = lastTracks
         .map((track) => {
           const tone = statusTone(track.status);
-          const bill = showBill
-            ? `<p class="success-total">Total ${money(track.total)}</p>`
-            : "";
+          const itemLine = (track.items || [])
+            .map((row) => `${row.name || "Item"} ${moneyQty(row)}`)
+            .join(" · ");
           const steps = (track.steps || [])
             .map((s) => `<li class="${s.current ? "is-current" : ""} ${s.done ? "is-done" : ""}">${esc(s.label)}</li>`)
             .join("");
           const items = (track.items || [])
             .map((row) => `<div class="track-item"><span>${esc(row.name)} ${esc(moneyQty(row))}</span><strong>${money(row.amount)}</strong></div>`)
             .join("");
-          return `<article class="live-card is-${esc(track.status || "pending")}" data-oid="${esc(track.id || "")}">
-            <h2>${esc(track.order_number || "")}</h2>
-            <p class="live-status is-${tone}">${esc(track.stage || track.status || "")}</p>
+          const when = track.created_at ? new Date(track.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "";
+          return `<article class="order-row live-card is-${esc(track.status || "pending")}" data-oid="${esc(track.id || "")}">
+            <div class="order-row-top">
+              <h3>${esc(track.order_number || "")}</h3>
+              <p class="live-status is-${tone}">${esc(track.stage || track.status || "")}</p>
+            </div>
+            <p class="order-row-items">${esc(itemLine)}</p>
+            <p class="order-row-meta">${esc(tableLabel(track.table_no))}${when ? ` · ${esc(when)}` : ""} · ${money(track.total)}</p>
             <p class="track-message">${esc(track.message || "")}</p>
-            ${track.eta_minutes && track.status !== "completed" && track.status !== "ready" && track.status !== "cancelled" ? `<p class="track-eta">Estimated prep · about ${esc(track.eta_minutes)} min</p>` : ""}
+            ${track.eta_minutes && track.status !== "completed" && track.status !== "ready" && track.status !== "cancelled" && track.status !== "rejected" ? `<p class="track-eta">Estimated prep · about ${esc(track.eta_minutes)} min</p>` : ""}
             <ol class="track-steps">${steps}</ol>
-            <div class="track-items">${items}</div>
-            ${bill}
+            ${showBill ? `<div class="track-items">${items}</div><p class="success-total">Total ${money(track.total)}</p>` : ""}
           </article>`;
         })
         .join("");
@@ -533,8 +543,9 @@
           { cache: "no-store" },
         );
         const data = await res.json().catch(() => ({}));
-        if (res.ok && Array.isArray(data.tracks) && data.tracks.length) {
-          paintTracks(mergeTracks(data.tracks));
+        if (res.ok && Array.isArray(data.tracks)) {
+          if (data.tracks.length) paintTracks(data.tracks);
+          else if (lastTracks.length) paintTracks(lastTracks);
           return;
         }
       }
@@ -625,6 +636,7 @@
         ]),
       );
       startTrack(data.order);
+      $("order-success")?.scrollIntoView({ behavior: "smooth", block: "start" });
       state.cart.clear();
       state.notes.clear();
       state.noteOpen.clear();
@@ -639,8 +651,8 @@
     }
   });
   $("new-order").addEventListener("click", () => {
-    $("order-success").hidden = true;
-    scrollTo({ top: 0, behavior: "smooth" });
+    $("menu-search")?.focus();
+    $("menu-grid")?.scrollIntoView({ behavior: "smooth", block: "start" });
   });
   $("view-bill")?.addEventListener("click", () => {
     showBill = !showBill;

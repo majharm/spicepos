@@ -36,6 +36,8 @@ test("Customer QR page tracks live kitchen status without a refresh", () => {
   const php = read("pos-qr-ordering.php");
   const node = read("server/qr-ordering.js");
   assert.match(html, /id="active-orders"/);
+  assert.match(html, /id="order-list-title"/);
+  assert.match(html, /class="order-list"/);
   assert.match(js, /\/api\/qr\/order\?/);
   assert.match(js, /\/api\/qr\/table\?/);
   assert.match(js, /function startTrack/);
