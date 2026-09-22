@@ -1320,6 +1320,18 @@ async function api(path, options) {
   return data;
 }
 
+function showModal(title, html) {
+  const modal = $("modal");
+  const body = $("modal-body");
+  if (!modal || !body) return false;
+  if ($("modal-title")) $("modal-title").textContent = title || "";
+  body.innerHTML = html || "";
+  modal.hidden = false;
+  return true;
+}
+
+globalThis.showModal = showModal;
+
 function orderFromResult(result) {
   if (!result || typeof result !== "object") return null;
   if (result.order && typeof result.order === "object") return result.order;
@@ -2149,9 +2161,6 @@ function showView(name) {
   if (name === "print-production") {
     if ($("print-order-tab")) $("print-order-tab").value = "production";
     globalThis.POSPrintUi?.loadPrintOrders?.();
-    const dest = $("print-production-table");
-    const src = $("print-orders-table");
-    if (dest && src) dest.innerHTML = src.innerHTML;
   }
   if (name === "print-settings") globalThis.POSPrintUi?.loadPrintSettings?.();
   paintDeskState(name);

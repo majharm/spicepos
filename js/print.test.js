@@ -148,5 +148,21 @@ test("PHP Hostinger can open a print order, download files, quote, bill, and mov
   assert.match(php, /pos_send_file/);
   assert.match(ui, /View \/ Download/);
   assert.match(ui, /\/api\/print\/files\//);
-  assert.match(read("index.html"), /print-ui\.js\?v=20260922deploy214/);
+  assert.match(read("index.html"), /print-ui\.js\?v=20260922deploy215/);
+  assert.match(read("index.html"), /app\.js\?v=20260922deploy215/);
+});
+
+test("Print orders page opens the shop modal and paints list or wrapped API rows", () => {
+  const app = read("js/app.js");
+  const ui = read("js/print-ui.js");
+  const php = read("pos-print.php");
+  assert.match(app, /function showModal\(title, html\)/);
+  assert.match(app, /globalThis\.showModal = showModal/);
+  assert.match(ui, /function revealOrder/);
+  assert.match(ui, /root\.showModal/);
+  assert.match(ui, /rows\?\.orders/);
+  assert.match(ui, /Could not load print orders/);
+  assert.match(ui, /print-order-toolbar[\s\S]*preventDefault/);
+  assert.match(ui, /d\.order \|\| d/);
+  assert.match(php, /pos_send\(200, array_values\(\$rows\)\)/);
 });

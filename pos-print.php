@@ -643,7 +643,7 @@ function pos_print_staff_dispatch($path, $method, $body, $bid, $auth) {
           return strpos($hay, $q) !== false;
         }));
       }
-      pos_send(200, $rows);
+      pos_send(200, array_values($rows));
     }
     if (preg_match("#^print/orders/([^/]+)$#", $path, $m) && $method === "GET") {
       $order = pos_print_order_bundle($m[1], $bid);

@@ -37,11 +37,15 @@
   function paintOrders(rows) {
     const el = $("print-orders-table");
     if (!el) return;
-    if (!rows.length) {
+    const list = Array.isArray(rows) ? rows : Array.isArray(rows?.orders) ? rows.orders : [];
+    if (!list.length) {
       el.innerHTML = `<p class="hint">No print orders yet. Customers submit from the print portal.</p>`;
+      const emptyDest = $("print-production-table");
+      if (emptyDest && emptyDest !== el) emptyDest.innerHTML = el.innerHTML;
       return;
     }
-    el.innerHTML = `<table><thead><tr><th>Order</th><th>Customer</th><th>Job</th><th>Size</th><th>Sq Ft</th><th>Total</th><th>Status</th><th></th></tr></thead><tbody>${rows
+    const meta = (status) => (P()?.statusMeta?.(status) || { label: status || "—" }).label;
+    el.innerHTML = `<table><thead><tr><th>Order</th><th>Customer</th><th>Job</th><th>Size</th><th>Sq Ft</th><th>Total</th><th>Status</th><th></th></tr></thead><tbody>${list
       .map((o) => `<tr>
         <td>${escapeHtml(o.order_number)}</td>
         <td>${escapeHtml(o.customer_name || "")}</td>
@@ -49,23 +53,46 @@
         <td>${escapeHtml(o.width)} × ${escapeHtml(o.height)} ${escapeHtml(o.unit)}</td>
         <td>${escapeHtml(String(o.area_sqft))}</td>
         <td>${money(o.quote_total || o.estimate_total)}</td>
-        <td>${escapeHtml(P().statusMeta(o.status).label)}</td>
+        <td>${escapeHtml(meta(o.status))}</td>
         <td><button type="button" class="btn" data-print-open="${escapeHtml(o.id)}">Open</button></td>
       </tr>`)
       .join("")}</tbody></table>`;
+    const dest = $("print-production-table");
+    if (dest && dest !== el) dest.innerHTML = el.innerHTML;
   }
 
   async function loadPrintOrders() {
-    if (!$("print-orders-table")) return;
+    const el = $("print-orders-table");
+    if (!el) return;
     const tab = $("print-order-tab")?.value || "";
     const q = $("print-order-q")?.value || "";
-    const rows = await api(`/api/print/orders?tab=${encodeURIComponent(tab)}&q=${encodeURIComponent(q)}`);
-    paintOrders(rows);
+    try {
+      const rows = await api(`/api/print/orders?tab=${encodeURIComponent(tab)}&q=${encodeURIComponent(q)}`);
+      paintOrders(rows);
+    } catch (err) {
+      el.innerHTML = `<p class="hint error">${escapeHtml(err.message || "Could not load print orders")}</p>`;
+    }
+  }
+
+  function revealOrder(title, html) {
+    if (typeof root.showModal === "function" && root.showModal(title, html)) return true;
+    const modal = $("modal");
+    const body = $("modal-body");
+    if (modal && body) {
+      if ($("modal-title")) $("modal-title").textContent = title;
+      body.innerHTML = html;
+      modal.hidden = false;
+      return true;
+    }
+    const el = $("print-orders-table");
+    if (el) el.insertAdjacentHTML("afterbegin", `<div class="print-order-detail">${html}</div>`);
+    return false;
   }
 
   async function openOrder(id) {
     const d = await api(`/api/print/orders/${encodeURIComponent(id)}`);
-    const o = d.order;
+    const o = d.order || d;
+    if (!o?.id) throw new Error("Order not found");
     const files = (o.files || [])
       .map((f) => {
         const href = f.download || `/api/print/files/${encodeURIComponent(f.id)}`;
@@ -96,7 +123,7 @@
       <button class="btn primary" data-print-bill="${escapeHtml(o.id)}">Create Bill</button>
       ${(P().PRODUCTION_FLOW || []).map((s) => `<button class="btn" data-print-status="${escapeHtml(s)}" data-id="${escapeHtml(o.id)}">${escapeHtml(P().statusMeta(s).label)}</button>`).join("")}
     </div>`;
-    if (root.showModal) root.showModal(`${o.order_number} · file review`, html);
+    revealOrder(`${o.order_number} · file review`, html);
     $("print-quote-form")?.addEventListener("submit", saveQuote);
   }
 
@@ -232,6 +259,7 @@
       else alert(err.message);
     }
   });
+  $("print-order-toolbar")?.addEventListener("submit", (e) => e.preventDefault());
   $("print-order-tab")?.addEventListener("change", loadPrintOrders);
   $("print-order-q")?.addEventListener("input", loadPrintOrders);
 
