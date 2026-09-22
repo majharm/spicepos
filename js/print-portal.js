@@ -38,8 +38,10 @@
   }
 
   function fillCatalog() {
-    $("pp-shop").textContent = catalog.shop?.name || "Flex & Printing";
-    $("pp-cat").textContent = catalog.shop?.category || "Print shop";
+    const shopName = catalog.shop?.name || "Flex & Printing";
+    $("pp-shop").textContent = shopName;
+    if ($("pp-scene-shop")) $("pp-scene-shop").textContent = shopName;
+    $("pp-cat").textContent = catalog.shop?.category || "Banners, vinyl, hoardings and print jobs";
     $("pp-product").innerHTML = (P.PRODUCTS || []).map((p) => `<option>${p}</option>`).join("");
     $("pp-side").innerHTML = (catalog.sides || P.PRINT_SIDES).map((s) => `<option value="${s.id}">${s.label}</option>`).join("");
     $("pp-material").innerHTML = (catalog.materials || [])
@@ -100,22 +102,41 @@
     const steps = (o.timeline || P.customerTimeline(o.status))
       .map((s) => `<li class="${s.done ? "is-done" : ""} ${s.current ? "is-current" : ""}">${s.label}</li>`)
       .join("");
-    return `<article class="pp-card" data-oid="${o.id}">
-      <h3>${o.order_number}</h3>
-      <p>${o.product} · ${o.material_name || ""} · ${o.width} × ${o.height} ${o.unit} · Qty ${o.quantity}</p>
-      <p>${o.status_label || o.status} · ${money(o.quote_total || o.estimate_total)}</p>
+    const actions = [
+      o.status === "quote_sent" ? `<button class="btn primary" data-approve="${o.id}">Approve &amp; Pay</button><button class="btn" data-changes="${o.id}">Request Changes</button><button class="btn" data-reject="${o.id}">Reject</button>` : "",
+      Number(o.balance_due) > 0 && ["customer_approved", "payment_pending", "paid"].includes(o.status) ? `<button class="btn primary" data-pay="${o.id}" data-amt="${o.balance_due}">Pay ${money(o.balance_due)}</button>` : "",
+      o.sales_order_id ? `<a class="btn" href="./invoice.html?id=${encodeURIComponent(o.sales_order_id)}" target="_blank" rel="noopener">Invoice</a>` : "",
+    ].join("");
+    return `<article class="pp-card pp-order" data-oid="${o.id}">
+      <h3>${o.order_number} <span class="pp-status">${o.status_label || o.status}</span></h3>
+      <p class="pp-order-meta">${o.product} · ${o.material_name || ""} · ${o.width} × ${o.height} ${o.unit} · Qty ${o.quantity}</p>
+      <p class="pp-order-meta">${money(o.quote_total || o.estimate_total)}</p>
       <ol class="pp-steps">${steps}</ol>
-      ${o.status === "quote_sent" ? `<button class="btn primary" data-approve="${o.id}">Approve & Pay</button><button class="btn" data-changes="${o.id}">Request Changes</button><button class="btn" data-reject="${o.id}">Reject</button>` : ""}
-      ${Number(o.balance_due) > 0 && ["customer_approved", "payment_pending", "paid"].includes(o.status) ? `<button class="btn primary" data-pay="${o.id}" data-amt="${o.balance_due}">Pay ${money(o.balance_due)}</button>` : ""}
-      ${o.sales_order_id ? `<a class="btn" href="./invoice.html?id=${encodeURIComponent(o.sales_order_id)}" target="_blank" rel="noopener">Invoice</a>` : ""}
+      ${actions ? `<div class="pp-actions">${actions}</div>` : ""}
     </article>`;
+  }
+
+  function showAuthPanel(name) {
+    const tab = name === "otp" ? "signin" : name;
+    document.querySelectorAll("[data-auth-tab]").forEach((b) => {
+      if (b.closest(".pp-auth-tabs")) {
+        const on = b.dataset.authTab === tab;
+        b.classList.toggle("is-on", on);
+        b.setAttribute("aria-selected", on ? "true" : "false");
+      }
+    });
+    document.querySelectorAll("[data-auth-panel]").forEach((p) => {
+      p.hidden = p.getAttribute("data-auth-panel") !== name;
+    });
   }
 
   async function refreshMe() {
     me = await api("/me");
+    document.body.classList.remove("pp-locked");
     $("pp-auth").hidden = true;
     $("pp-app").hidden = false;
     $("pp-nav").hidden = false;
+    if ($("pp-signout")) $("pp-signout").hidden = false;
     const orders = me.orders || [];
     $("pp-kpis").innerHTML = [
       ["My Orders", orders.length],
@@ -125,7 +146,7 @@
     ]
       .map(([k, v]) => `<div class="kpi"><span>${k}</span><strong>${v}</strong></div>`)
       .join("");
-    document.querySelector('[data-pane="home"]').innerHTML = `<h2>Dashboard</h2>${orders.slice(0, 5).map(orderCard).join("") || "<p class='hint'>No orders yet. Start a new print order.</p>"}`;
+    document.querySelector('[data-pane="home"]').innerHTML = `<div class="pp-card"><h2>Dashboard</h2><p class="hint">Recent print jobs for this shop.</p><p><button class="btn primary" type="button" data-pp="new">+ New Print Order</button></p></div>${orders.slice(0, 5).map(orderCard).join("") || "<p class='hint'>No orders yet. Start a new print order.</p>"}`;
     $("pp-orders").innerHTML = orders.map(orderCard).join("") || "<p class='hint'>No orders yet.</p>";
     $("pp-quotes").innerHTML = orders.filter((o) => ["quote_sent", "customer_approved"].includes(o.status)).map(orderCard).join("") || "<p class='hint'>No quotes.</p>";
     $("pp-approvals").innerHTML = orders.filter((o) => o.status === "quote_sent").map(orderCard).join("") || "<p class='hint'>Nothing waiting for your approval.</p>";
@@ -176,6 +197,28 @@
   $("pp-nav")?.addEventListener("click", (e) => {
     const b = e.target.closest("[data-pp]");
     if (b) showPane(b.dataset.pp);
+  });
+  document.querySelector("[data-pane=home]")?.addEventListener("click", (e) => {
+    const b = e.target.closest("[data-pp]");
+    if (b) showPane(b.dataset.pp);
+  });
+  document.querySelectorAll("[data-auth-tab]").forEach((b) => {
+    b.addEventListener("click", () => showAuthPanel(b.dataset.authTab));
+  });
+  document.querySelectorAll("[data-toggle-pass]").forEach((b) => {
+    b.addEventListener("click", () => {
+      const form = $(b.dataset.togglePass);
+      const input = form?.querySelector('input[name="password"]');
+      if (!input) return;
+      const show = input.type === "password";
+      input.type = show ? "text" : "password";
+      b.textContent = show ? "Hide" : "Show";
+    });
+  });
+  $("pp-signout")?.addEventListener("click", () => {
+    token = "";
+    localStorage.removeItem(storeKey);
+    location.reload();
   });
   ["pp-width", "pp-height", "pp-unit", "pp-qty", "pp-dpi", "pp-material", "pp-side"].forEach((id) => {
     $(id)?.addEventListener("input", estimate);
@@ -287,14 +330,20 @@
   });
 
   fetch(`/api/print/public/${encodeURIComponent(shopId)}`)
-    .then((r) => r.json())
+    .then(async (r) => {
+      const data = await r.json().catch(() => null);
+      if (!data || typeof data !== "object") throw new Error("Could not load this print shop. Check the link.");
+      if (!r.ok) throw new Error(data.error || "Print shop not found");
+      return data;
+    })
     .then((d) => {
       catalog = d;
       fillCatalog();
       if (token) refreshMe().catch(() => localStorage.removeItem(storeKey));
     })
     .catch((err) => {
-      $("pp-shop").textContent = "Print portal unavailable";
-      hint("pp-auth-hint", err.message, true);
+      const msg = String(err.message || "");
+      hint("pp-auth-hint", /JSON|DOCTYPE|Unexpected token/i.test(msg) ? "Could not load this print shop. Check the link." : msg, true);
     });
+  if (!shopId) hint("pp-auth-hint", "Open this page from your print shop link.", true);
 })();

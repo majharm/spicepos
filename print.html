@@ -5,14 +5,112 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="robots" content="noindex,nofollow" />
     <title>Print portal · ATAV POS</title>
-    <link rel="stylesheet" href="./css/print.css?v=20260922deploy207" />
+    <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="./css/print.css?v=20260922printux1" />
   </head>
-  <body class="print-portal">
+  <body class="print-portal pp-locked">
+    <section class="pp-auth" id="pp-auth">
+      <div class="pp-shell">
+        <aside class="pp-scene" aria-hidden="true">
+          <div class="pp-scene-copy">
+            <p class="pp-scene-kicker">ATAV POS · Flex &amp; Printing</p>
+            <p class="pp-scene-title" id="pp-scene-shop">Customer print portal</p>
+            <p class="pp-scene-lead">Order flex, vinyl and hoardings. Upload artwork, approve quotes, pay and track production.</p>
+          </div>
+          <div class="pp-scene-shots">
+            <figure class="is-hero">
+              <img src="./assets/login-atav-smart-pos.jpg?v=20260919loginp1" alt="ATAV Telecom Smart POS" width="1536" height="1024" />
+              <figcaption>Same ATAV POS your shop uses — customer jobs only</figcaption>
+            </figure>
+          </div>
+          <ul class="pp-scene-points">
+            <li><strong>New order</strong> Size, material, sq-ft estimate</li>
+            <li><strong>Artwork</strong> PDF, JPG, PNG, AI, CDR</li>
+            <li><strong>Track</strong> Quote → print → ready</li>
+          </ul>
+        </aside>
+        <div class="pp-main">
+          <div class="pp-auth-card">
+            <div class="pp-auth-brand">
+              <img class="pp-auth-logo" src="./assets/atav-telecom-logo.png" alt="ATAV Telecom" width="180" height="78" />
+              <p class="pp-auth-tag">Customer login — not the shop admin</p>
+            </div>
+            <div class="pp-auth-tabs" role="tablist" aria-label="Customer access">
+              <button type="button" class="is-on" role="tab" aria-selected="true" data-auth-tab="signin">Sign in</button>
+              <button type="button" role="tab" aria-selected="false" data-auth-tab="register">Create account</button>
+            </div>
+            <div data-auth-panel="signin">
+              <h1>Sign in</h1>
+              <p class="hint">Email or mobile and password for this print shop.</p>
+              <form id="pp-login">
+                <label>Email or mobile
+                  <input name="identifier" required autocomplete="username" inputmode="email" placeholder="name@email.com or 98xxxxxxxx" />
+                </label>
+                <label>Password
+                  <span class="pp-pass">
+                    <input name="password" type="password" autocomplete="current-password" placeholder="Password" />
+                    <button class="pp-pass-toggle" type="button" data-toggle-pass="pp-login">Show</button>
+                  </span>
+                </label>
+                <button class="btn primary" type="submit">Sign in</button>
+              </form>
+              <p class="pp-auth-switch"><button type="button" class="pp-link" data-auth-tab="otp">Sign in with email OTP</button></p>
+            </div>
+            <div data-auth-panel="otp" hidden>
+              <h1>Email OTP</h1>
+              <p class="hint">We send a 6-digit code. You can set a password after it verifies.</p>
+              <form id="pp-otp-send">
+                <label>Email
+                  <input name="email" type="email" required autocomplete="email" placeholder="you@email.com" />
+                </label>
+                <button class="btn primary" type="submit">Send OTP</button>
+              </form>
+              <form id="pp-otp-verify" hidden>
+                <label>6-digit OTP
+                  <input name="otp" inputmode="numeric" maxlength="6" required autocomplete="one-time-code" placeholder="••••••" />
+                </label>
+                <label>New password (optional)
+                  <input name="password" type="password" autocomplete="new-password" />
+                </label>
+                <button class="btn primary" type="submit">Verify OTP</button>
+              </form>
+              <p class="pp-auth-switch"><button type="button" class="pp-link" data-auth-tab="signin">Back to password sign in</button></p>
+            </div>
+            <div data-auth-panel="register" hidden>
+              <h1>Create account</h1>
+              <p class="hint">New customer for this print shop.</p>
+              <form id="pp-register">
+                <label>Your name <input name="name" required autocomplete="name" placeholder="Full name" /></label>
+                <label>Email <input name="email" type="email" required autocomplete="email" placeholder="you@email.com" /></label>
+                <label>Mobile <input name="mobile" inputmode="tel" autocomplete="tel" placeholder="10-digit mobile" /></label>
+                <label>Password
+                  <span class="pp-pass">
+                    <input name="password" type="password" required minlength="6" autocomplete="new-password" placeholder="At least 6 characters" />
+                    <button class="pp-pass-toggle" type="button" data-toggle-pass="pp-register">Show</button>
+                  </span>
+                </label>
+                <button class="btn primary" type="submit">Create account</button>
+              </form>
+              <p class="pp-auth-switch">Already registered? <button type="button" class="pp-link" data-auth-tab="signin">Sign in</button></p>
+            </div>
+            <p class="hint" id="pp-auth-hint"></p>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <header class="pp-top">
-      <div>
-        <p class="pp-kicker">Customer portal</p>
-        <h1 id="pp-shop">Flex &amp; Printing</h1>
-        <p id="pp-cat"></p>
+      <div class="pp-brand">
+        <img class="pp-logo" src="./assets/atav-telecom-logo.png" width="40" height="40" alt="" />
+        <div>
+          <p class="pp-kicker">Flex &amp; Printing · Customer portal</p>
+          <h1 id="pp-shop">Flex &amp; Printing</h1>
+          <p id="pp-cat">Banners, vinyl, hoardings and print jobs</p>
+        </div>
+        <button class="btn" type="button" id="pp-signout" hidden>Sign out</button>
       </div>
       <nav class="pp-nav" id="pp-nav" hidden>
         <button type="button" data-pp="home" class="is-on">Dashboard</button>
@@ -28,52 +126,25 @@
         <button type="button" data-pp="profile">Profile</button>
       </nav>
     </header>
-    <main>
-      <section class="pp-auth" id="pp-auth">
-        <div class="pp-card">
-          <h2>Sign in</h2>
-          <p class="hint">Customers only — this is not the business admin panel.</p>
-          <form id="pp-login">
-            <label>Email / mobile <input name="identifier" required autocomplete="username" /></label>
-            <label>Password <input name="password" type="password" autocomplete="current-password" /></label>
-            <button class="btn primary" type="submit">Sign in</button>
-          </form>
-          <form id="pp-otp-send">
-            <label>Email for OTP <input name="email" type="email" required /></label>
-            <button class="btn" type="submit">Send OTP</button>
-          </form>
-          <form id="pp-otp-verify" hidden>
-            <label>OTP <input name="otp" inputmode="numeric" maxlength="6" required /></label>
-            <label>New password (optional) <input name="password" type="password" /></label>
-            <button class="btn primary" type="submit">Verify OTP</button>
-          </form>
-          <form id="pp-register">
-            <h3>Create account</h3>
-            <label>Name <input name="name" required /></label>
-            <label>Email <input name="email" type="email" required /></label>
-            <label>Mobile <input name="mobile" inputmode="tel" /></label>
-            <label>Password <input name="password" type="password" required minlength="6" /></label>
-            <button class="btn" type="submit">Register</button>
-          </form>
-          <p class="hint" id="pp-auth-hint"></p>
-        </div>
-      </section>
 
+    <main>
       <section class="pp-app" id="pp-app" hidden>
         <div class="pp-kpis" id="pp-kpis"></div>
         <div class="pp-pane" data-pane="home"></div>
         <div class="pp-pane" data-pane="new" hidden>
           <form id="pp-order">
             <h2>+ New Print Order</h2>
-            <label>Print product
-              <select name="product" id="pp-product" required></select>
-            </label>
-            <label>Printing type
-              <select name="print_type" id="pp-side"></select>
-            </label>
-            <label>Material
-              <select name="material_id" id="pp-material" required></select>
-            </label>
+            <div class="pp-grid">
+              <label>Print product
+                <select name="product" id="pp-product" required></select>
+              </label>
+              <label>Printing type
+                <select name="print_type" id="pp-side"></select>
+              </label>
+              <label>Material
+                <select name="material_id" id="pp-material" required></select>
+              </label>
+            </div>
             <fieldset class="pp-size">
               <legend>Print size</legend>
               <label>Width <input name="width" id="pp-width" type="number" min="0" step="0.01" value="10" required /></label>
@@ -88,7 +159,7 @@
               <p class="pp-conv" id="pp-conv"></p>
             </fieldset>
             <label>Quantity <input name="quantity" id="pp-qty" type="number" min="1" value="1" required /></label>
-            <div id="pp-finish"></div>
+            <div id="pp-finish" class="pp-finish"></div>
             <label>Special instructions
               <textarea name="notes" rows="3" placeholder="Eyelets every 2 feet. Please keep 2-inch border."></textarea>
             </label>
@@ -122,8 +193,8 @@
         </div>
       </section>
     </main>
-    <footer>Print shop portal · ATAV POS</footer>
-    <script src="./js/print.js?v=20260922deploy207" defer></script>
-    <script src="./js/print-portal.js?v=20260922deploy207" defer></script>
+    <footer>Flex &amp; Printing customer portal · ATAV POS</footer>
+    <script src="./js/print.js?v=20260922printux1" defer></script>
+    <script src="./js/print-portal.js?v=20260922printux1" defer></script>
   </body>
 </html>
