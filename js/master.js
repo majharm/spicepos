@@ -2048,24 +2048,6 @@ async function render() {
         hint.className = "hint ok";
         panelFlash = "";
       }
-    } else if (tab === "printcat") {
-      const P = globalThis.POSPrint;
-      const mats = (P?.DEFAULT_MATERIALS || []).map((m) => [m.name, m.price_model, money(m.rate)]);
-      const fin = (P?.DEFAULT_FINISHING || []).map((f) => [f.name, f.unit, money(f.rate)]);
-      body.innerHTML = masterDesk(
-        "Business categories",
-        "Flex & Printing",
-        "Platform defaults for materials, finishing, file types, and production. Each shop can override rates in Flex & Printing → Print rates.",
-        [
-          { label: "Products", value: (P?.PRODUCTS || []).length },
-          { label: "Materials", value: mats.length },
-          { label: "Finishing", value: fin.length },
-        ],
-        `<h3>Default materials</h3>${table(["Material", "Model", "Rate"], mats)}
-         <h3>Default finishing</h3>${table(["Option", "Unit", "Rate"], fin)}
-         <h3>File rules</h3><p>Types: ${(P?.ALLOWED_TYPES || []).join(", ")}. Max ${P?.DEFAULT_SETTINGS?.max_file_mb || 25} MB. Warn below ${P?.DEFAULT_SETTINGS?.warn_dpi || 150} DPI.</p>
-         <h3>Workflow</h3><p>Customer portal → file review → quote → optional customer approval → POS invoice → payment → production → delivery.</p>`,
-      );
     } else if (tab === "expiry") {
       const shops = await api("/api/master/businesses");
       body.innerHTML = expiryAlertsPageHtml(shops);

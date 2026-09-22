@@ -83,6 +83,8 @@ test("Flex & Printing is its own shop kind with portal wiring", () => {
   assert.match(read("js/login.js"), /Printing Business/);
   assert.match(read("js/biz-hub.js"), /print-board/);
   assert.match(read("js/master.js"), /Flex & Printing/);
+  assert.doesNotMatch(read("master.html"), /data-tab="printcat"/);
+  assert.doesNotMatch(read("js/master.js"), /Platform defaults for materials/);
   assert.ok(P.PRODUCTS.includes("Flex") && P.PRODUCTS.includes("Hoarding"));
   assert.equal(P.nextOrderNumber(125, 2026), "FP-2026-00125");
 });
