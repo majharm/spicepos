@@ -89,6 +89,7 @@ test("Flex & Printing is its own shop kind with portal wiring", () => {
   assert.match(read("css/print.css"), /\.pp-auth-tabs/);
   assert.match(read("js/print-portal.js"), /showAuthPanel/);
   assert.match(read("js/print-portal.js"), /classList\.remove\("pp-locked"\)/);
+  assert.doesNotMatch(read("js/print-portal.js"), /Print portal unavailable/);
   assert.match(read("js/login.js"), /Printing Business/);
   assert.match(read("js/biz-hub.js"), /print-board/);
   assert.match(read("js/master.js"), /Flex & Printing/);
