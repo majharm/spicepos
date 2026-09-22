@@ -34,6 +34,7 @@ import { registerSeoPublic, registerSeoMaster } from "./seo.js";
 import { registerLoginPagePublic, registerLoginPageMaster, ensureLoginPageSchema } from "./login-page.js";
 import { registerRxPublic, registerRxStaff } from "./prescriptions.js";
 import { registerSalonPublic, registerSalonStaff, ensureSalonSchema } from "./salon.js";
+import { registerPrintPublic, registerPrintStaff, ensurePrintSchema } from "./print.js";
 import "../js/discount.js";
 import "../js/payment-methods.js";
 import { canonApiUrl, isAliasedApi, isApiUrl, rewriteToApi } from "./http-path.js";
@@ -85,6 +86,7 @@ registerAuth(app);
 registerQrPublic(app);
 registerRxPublic(app);
 registerSalonPublic(app);
+registerPrintPublic(app);
 registerAnalyticsPublic(app);
 registerSeoPublic(app);
 registerLoginPagePublic(app);
@@ -185,6 +187,7 @@ app.use((req, res, next) => {
     url.startsWith("/api/qr/") ||
     url.startsWith("/api/rx/") ||
     url.startsWith("/api/salon/public") ||
+    url.startsWith("/api/print/public") ||
     url.startsWith("/api/invoices") ||
     url.startsWith("/api/health") ||
     url.startsWith("/api/master") ||
@@ -209,6 +212,7 @@ registerUnits(app);
 registerQrStaff(app);
 registerRxStaff(app);
 registerSalonStaff(app);
+registerPrintStaff(app);
 
 app.get("/api/support-contact", async (_req, res) => {
   try {
@@ -1245,8 +1249,9 @@ startHttp()
   });
 ensureSchema()
   .then(() => seedPlatform())
-  .then(() => ensureSalonSchema())
-  .then(() => ensureLoginPageSchema())
+    .then(() => ensureSalonSchema())
+    .then(() => ensurePrintSchema())
+    .then(() => ensureLoginPageSchema())
   .catch((err) => {
     console.error("Schema/seed error (API is still up; check DB env vars)", err);
   });

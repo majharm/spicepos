@@ -32,6 +32,7 @@
     jewellery: "JW",
     hardware: "HW",
     services: "SV",
+    printing: "FP",
     general: "IT",
   };
 
@@ -51,9 +52,11 @@
   function shopKind(biz) {
     const type = String(biz?.business_type || "").toLowerCase().trim();
     if (type === "restaurant" || type === "cafe" || type === "bakery") return "restaurant";
+    if (type === "printing business" || type === "printing") return "printing";
     if (isFootwearShop(biz)) return "footwear";
     if (isApparelShop(biz)) return "apparel";
     const t = shopText(biz);
+    if (/(flex\s*&\s*printing|flex printing|banner printing|large format printing)/.test(t)) return "printing";
     if (/(spice|masala)/.test(t)) return "spice";
     if (/(kirana|fmcg|grocery|supermarket|general trade)/.test(t)) return "grocery";
     if (/(restaurant|cafe|bakery|food)/.test(t)) return "restaurant";
@@ -143,6 +146,10 @@
     return shopKind(biz) === "services";
   }
 
+  function isPrintShop(biz) {
+    return shopKind(biz) === "printing";
+  }
+
   function taxCodeKind(biz) {
     return isServicesShop(biz) ? "SAC" : "HSN";
   }
@@ -156,7 +163,7 @@
   }
 
   function qrOrderingEnabled(biz) {
-    return !isPharmacyShop(biz);
+    return !isPharmacyShop(biz) && !isPrintShop(biz);
   }
 
   function suggestedItemCategories(biz) {
@@ -180,6 +187,24 @@
         "Colour",
         "Manicure",
         "Pedicure",
+      ];
+    }
+    if (shopKind(biz) === "printing") {
+      return [
+        "Flex",
+        "Banner",
+        "Vinyl",
+        "Sunboard",
+        "Poster",
+        "Sticker",
+        "Canvas",
+        "Hoarding",
+        "Photo",
+        "ACP",
+        "One-Way Vision",
+        "Visiting Card",
+        "Brochure",
+        "Custom Print",
       ];
     }
     if (shopKind(biz) !== "restaurant") return [];
@@ -215,6 +240,7 @@
       jewellery: "Jewellery",
       hardware: "Hardware",
       services: "Service",
+      printing: "Flex & Printing",
       general: "General",
     };
     return fallback[k] || "General";
@@ -381,6 +407,21 @@
         ticket: "Tap a service",
         hsn: "e.g. 9997",
         catalogSearch: "Search name, SAC…",
+      },
+      printing: {
+        name: "Frontlit flex",
+        localName: "फ्लेक्स / Flex",
+        category: "Flex",
+        subcategory: "Frontlit",
+        categoryLab: "Print product",
+        subcategoryLab: "Material",
+        search: "Search print product or HSN…",
+        scan: "Search print job",
+        lede: "Retail accessory items only. Print jobs use the Flex & Printing desk, not Counter.",
+        itemsSub: "Optional retail items — print orders stay on the print desk",
+        counterSub: "Print jobs: open Flex & Printing desk",
+        ticket: "Use Flex & Printing for jobs",
+        hsn: "e.g. 4911",
       },
       general: {
         name: "Item name",
@@ -772,6 +813,7 @@
     isRestaurantShop,
     isPharmacyShop,
     isServicesShop,
+    isPrintShop,
     taxCodeKind,
     taxCodeLabel,
     taxCodeFieldLabel,

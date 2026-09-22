@@ -637,9 +637,11 @@ function pos_is_apparel_shop($biz) {
 function pos_shop_kind($biz) {
   $type = strtolower(trim((string) ($biz["business_type"] ?? "")));
   if ($type === "restaurant" || $type === "cafe" || $type === "bakery") return "restaurant";
+  if ($type === "printing business" || $type === "printing") return "printing";
   if (pos_is_footwear_shop($biz)) return "footwear";
   if (pos_is_apparel_shop($biz)) return "apparel";
   $text = strtolower(trim((string) (($biz["category"] ?? "") . " " . ($biz["business_type"] ?? "") . " " . ($biz["name"] ?? ""))));
+  if (preg_match("/(flex\\s*&\\s*printing|flex printing|banner printing|large format printing)/", $text)) return "printing";
   if (preg_match("/(spice|masala)/", $text)) return "spice";
   if (preg_match("/(kirana|fmcg|grocery|supermarket|general trade)/", $text)) return "grocery";
   if (preg_match("/(restaurant|cafe|bakery|food)/", $text)) return "restaurant";
@@ -653,6 +655,10 @@ function pos_shop_kind($biz) {
 
 function pos_is_services_shop($biz) {
   return pos_shop_kind($biz) === "services";
+}
+
+function pos_is_print_shop($biz) {
+  return pos_shop_kind($biz) === "printing";
 }
 
 function pos_tax_code_label($biz) {
@@ -679,6 +685,7 @@ function pos_item_code_prefix($biz) {
     "jewellery" => "JW-",
     "hardware" => "HW-",
     "services" => "SV-",
+    "printing" => "FP-",
     "general" => "IT-",
   ];
   $kind = pos_shop_kind($biz);
@@ -701,6 +708,7 @@ function pos_default_item_category($biz) {
     "jewellery" => "Jewellery",
     "hardware" => "Hardware",
     "services" => "Service",
+    "printing" => "Flex & Printing",
     "general" => "General",
   ];
   return $fallback[$kind] ?? "General";
@@ -2298,6 +2306,10 @@ function pos_php_dispatch($path, $method, $rawBody) {
       require_once __DIR__ . "/pos-salon.php";
       if (function_exists("pos_salon_public_dispatch") && pos_salon_public_dispatch($path, $method, $body)) return;
     }
+    if (strpos($path, "print/public/") === 0 || strpos($path, "print/public") === 0) {
+      require_once __DIR__ . "/pos-print.php";
+      if (function_exists("pos_print_public_dispatch") && pos_print_public_dispatch($path, $method, $body)) return;
+    }
     if (strpos($path, "analytics/") === 0) {
       require_once __DIR__ . "/pos-analytics.php";
       if (function_exists("pos_analytics_public_dispatch") && pos_analytics_public_dispatch($path, $method, $body)) return;
@@ -3362,6 +3374,12 @@ function pos_php_dispatch($path, $method, $rawBody) {
           if (is_file(__DIR__ . "/pos-salon.php")) {
             require_once __DIR__ . "/pos-salon.php";
             if (function_exists("pos_salon_staff_dispatch") && pos_salon_staff_dispatch($path, $method, $body, $bid, $auth)) {
+              return;
+            }
+          }
+          if (is_file(__DIR__ . "/pos-print.php")) {
+            require_once __DIR__ . "/pos-print.php";
+            if (function_exists("pos_print_staff_dispatch") && pos_print_staff_dispatch($path, $method, $body, $bid, $auth)) {
               return;
             }
           }

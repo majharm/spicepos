@@ -176,6 +176,10 @@ function isServicesShop() {
   return Boolean(globalThis.POSSalon?.isSalonShop?.(state.businessMeta) || globalThis.POSFootwear?.isServicesShop?.(state.businessMeta));
 }
 
+function isPrintShop() {
+  return Boolean(globalThis.POSPrint?.isPrintShop?.(state.businessMeta) || globalThis.POSFootwear?.isPrintShop?.(state.businessMeta) || globalThis.POSFootwear?.shopKind?.(state.businessMeta) === "printing");
+}
+
 function isClassicBillShop() {
   return isPharmacyShop() || isApparelShop();
 }
@@ -228,6 +232,7 @@ function applyFootwearMode() {
   document.body.classList.toggle("pharmacy-mode", pharm);
   document.body.classList.toggle("classic-bill-mode", isClassicBillShop());
   document.body.classList.toggle("services-mode", isServicesShop());
+  document.body.classList.toggle("printing-mode", isPrintShop());
   document.querySelectorAll(".footwear-only").forEach((el) => {
     el.hidden = !on;
   });
@@ -243,6 +248,10 @@ function applyFootwearMode() {
   document.querySelectorAll(".services-only").forEach((el) => {
     if (el.classList.contains("nav-btn")) return;
     el.hidden = !isServicesShop();
+  });
+  document.querySelectorAll(".printing-only").forEach((el) => {
+    if (el.classList.contains("nav-btn")) return;
+    el.hidden = !isPrintShop();
   });
   fillPaySelects();
   document.querySelectorAll(".classic-bill-only").forEach((el) => {
@@ -450,6 +459,10 @@ const VIEW_META = {
   "salon-board": { title: "Salon desk", subtitle: "Bookings, advance collection, packages, and staff performance" },
   bookings: { title: "Bookings", subtitle: "Advance appointments, waitlist, reschedule, and no-shows" },
   packages: { title: "Packages", subtitle: "Bridal and beauty packages with sessions and validity" },
+  "print-board": { title: "Flex & Printing", subtitle: "Print orders, quotes, production, and sq ft" },
+  "print-orders": { title: "Print orders", subtitle: "File review, quotes, and customer approval" },
+  "print-production": { title: "Production", subtitle: "Printing, finishing, QC, ready, and delivery" },
+  "print-settings": { title: "Print rates", subtitle: "Materials, finishing, GST, and file rules" },
 };
 
 function orderStatusClass(status) {
@@ -1922,16 +1935,22 @@ function applyNav() {
       "salon-board": "dashboard",
       bookings: "orders",
       packages: "items",
+      "print-board": "dashboard",
+      "print-orders": "orders",
+      "print-production": "orders",
+      "print-settings": "settings",
     };
     btn.hidden = map[view] ? !can(map[view]) : false;
     if (view === "growth") btn.hidden = !(can("growth") || can("reports"));
     if (view === "offers") btn.hidden = !(can("discount") || can("items") || can("growth"));
     if (view === "packs" && !isSpiceShop()) btn.hidden = true;
     if (view === "qr-orders" && isPharmacyShop()) btn.hidden = true;
+    if (view === "qr-orders" && isPrintShop()) btn.hidden = true;
     if (view === "prescriptions") btn.hidden = !isPharmacyShop() || !can("orders");
     if (view === "returns") btn.hidden = !isClassicBillShop() || !can("orders");
     if (view === "kot") btn.hidden = !isRestaurantShop() || !can("kot");
     if ((view === "salon-board" || view === "bookings" || view === "packages") && !isServicesShop()) btn.hidden = true;
+    if ((view === "print-board" || view === "print-orders" || view === "print-production" || view === "print-settings") && !isPrintShop()) btn.hidden = true;
   });
   globalThis.POSBizHubUi?.paintIndustryNav?.();
   paintStaffRoleOptions();
@@ -1955,6 +1974,8 @@ function applyNav() {
       audit: "settings",
       bookings: "orders",
       "salon-board": "dashboard",
+      "print-board": "dashboard",
+      "print-orders": "orders",
       growth: "growth",
       staff: "staff",
       branches: "settings",
@@ -2115,6 +2136,24 @@ function showView(name) {
   }
   if (name === "bookings") globalThis.POSSalonUi?.loadSalonBookings?.();
   if (name === "packages") globalThis.POSSalonUi?.loadSalonPackages?.();
+  if (name === "print-board") {
+    const portal = $("print-portal-link");
+    if (portal && state.businessMeta?.id) portal.href = `./print.html?shop=${encodeURIComponent(state.businessMeta.id)}`;
+    globalThis.POSPrintUi?.loadPrintBoard?.();
+    const list = $("print-report-list");
+    if (list && globalThis.POSPrint?.REPORTS) {
+      list.innerHTML = POSPrint.REPORTS.map((r) => `<button type="button" class="dash-tile" data-print-report="${escapeHtml(r.id)}"><strong>${escapeHtml(r.title)}</strong></button>`).join("");
+    }
+  }
+  if (name === "print-orders") globalThis.POSPrintUi?.loadPrintOrders?.();
+  if (name === "print-production") {
+    if ($("print-order-tab")) $("print-order-tab").value = "production";
+    globalThis.POSPrintUi?.loadPrintOrders?.();
+    const dest = $("print-production-table");
+    const src = $("print-orders-table");
+    if (dest && src) dest.innerHTML = src.innerHTML;
+  }
+  if (name === "print-settings") globalThis.POSPrintUi?.loadPrintSettings?.();
   paintDeskState(name);
   if (name === "stock") loadStock();
   if (name === "counter") {
@@ -5408,6 +5447,7 @@ async function loadDashboard() {
     if ($("dash-plan-kpis") && extra) $("dash-plan-kpis").innerHTML = extra;
     if ($("dash-kpis") && extra && !$("dash-plan-kpis")) $("dash-kpis").insertAdjacentHTML("beforeend", extra);
     if (isServicesShop()) globalThis.POSSalonUi?.loadSalonBoard?.();
+    if (isPrintShop()) globalThis.POSPrintUi?.loadPrintBoard?.();
   } catch (err) {
     $("dash-kpis").innerHTML = `<p class="hint error">${escapeHtml(err.message)}</p>`;
   }

@@ -121,6 +121,7 @@
     if (t === "Fashion") return ["Apparel", "Garments", "Clothing", "Boutique", "Saree Shop", "Ladies Fashion", "Mens Fashion", "Kids Fashion"];
     if (t === "Footwear") return ["Footwear"];
     if (t === "Services") return ["Services", "Salon / spa", "Repair", "Consultancy"];
+    if (t === "Printing Business") return ["Flex & Printing"];
     return null;
   }
 

@@ -131,6 +131,11 @@
     { id: "salon-pkg", group: "industry", title: "Packages", view: "packages", perm: "items", kinds: ["services"] },
     { id: "salon-staff", group: "industry", title: "Staff / Beautician", view: "staff", perm: "staff", kinds: ["services"] },
     { id: "svc-job", group: "industry", title: "Job Card / Service Order", view: "orders", perm: "orders", kinds: ["services"] },
+    { id: "print-board", group: "industry", title: "Flex & Printing", view: "print-board", perm: "dashboard", kinds: ["printing"] },
+    { id: "print-orders", group: "industry", title: "Print Orders", view: "print-orders", perm: "orders", kinds: ["printing"] },
+    { id: "print-prod", group: "industry", title: "Production", view: "print-production", perm: "orders", kinds: ["printing"] },
+    { id: "print-rates", group: "industry", title: "Print rates", view: "print-settings", perm: "settings", kinds: ["printing"] },
+    { id: "print-portal", group: "industry", title: "Customer portal", view: "print-board", perm: "dashboard", kinds: ["printing"] },
   ];
 
   const GROUPS = [
@@ -252,6 +257,11 @@
     { id: "salon-noshow", center: "salon", title: "No-show Report", kinds: ["services"] },
     { id: "salon-revenue", center: "salon", title: "Daily/Monthly/Yearly Revenue", kinds: ["services"] },
     { id: "salon-clv", center: "salon", title: "Customer Lifetime Value", kinds: ["services"] },
+    { id: "print-sales", center: "print", title: "Print Sales", kinds: ["printing"] },
+    { id: "print-sqft", center: "print", title: "Total Sq Ft Printed", kinds: ["printing"] },
+    { id: "print-material-sales", center: "print", title: "Material-wise Sales", kinds: ["printing"] },
+    { id: "print-production", center: "print", title: "Production Status", kinds: ["printing"] },
+    { id: "print-delivery", center: "print", title: "Print Delivery", kinds: ["printing"] },
   ];
 
   const CENTERS = [
@@ -269,6 +279,7 @@
     { id: "analytics", title: "Business Analytics" },
     { id: "audit", title: "Audit Log" },
     { id: "salon", title: "Salon / Spa" },
+    { id: "print", title: "Flex & Printing" },
   ];
 
   const PURCHASE_DOC_KINDS = {

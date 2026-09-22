@@ -93,6 +93,7 @@ function categoriesForSignupType(type) {
   }
   if (t === "Footwear") return ["Footwear"];
   if (t === "Services") return ["Services", "Salon", "Unisex Salon", "Ladies Salon", "Gents Salon", "Beauty Parlour", "Spa", "Massage", "Hair Studio", "Nail Studio", "Makeup Studio", "Repair", "Consultancy"];
+  if (t === "Printing Business") return ["Flex & Printing"];
   return null;
 }
 

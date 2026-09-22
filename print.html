@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex,nofollow" />
+    <title>Print portal · ATAV POS</title>
+    <link rel="stylesheet" href="./css/print.css?v=20260922print1" />
+  </head>
+  <body class="print-portal">
+    <header class="pp-top">
+      <div>
+        <p class="pp-kicker">Customer portal</p>
+        <h1 id="pp-shop">Flex &amp; Printing</h1>
+        <p id="pp-cat"></p>
+      </div>
+      <nav class="pp-nav" id="pp-nav" hidden>
+        <button type="button" data-pp="home" class="is-on">Dashboard</button>
+        <button type="button" data-pp="new">New Print Order</button>
+        <button type="button" data-pp="orders">My Orders</button>
+        <button type="button" data-pp="files">Upload Files</button>
+        <button type="button" data-pp="quotes">Quotes</button>
+        <button type="button" data-pp="approvals">Approvals</button>
+        <button type="button" data-pp="invoices">Invoices</button>
+        <button type="button" data-pp="payments">Payments</button>
+        <button type="button" data-pp="track">Order Tracking</button>
+        <button type="button" data-pp="downloads">Downloads</button>
+        <button type="button" data-pp="profile">Profile</button>
+      </nav>
+    </header>
+    <main>
+      <section class="pp-auth" id="pp-auth">
+        <div class="pp-card">
+          <h2>Sign in</h2>
+          <p class="hint">Customers only — this is not the business admin panel.</p>
+          <form id="pp-login">
+            <label>Email / mobile <input name="identifier" required autocomplete="username" /></label>
+            <label>Password <input name="password" type="password" autocomplete="current-password" /></label>
+            <button class="btn primary" type="submit">Sign in</button>
+          </form>
+          <form id="pp-otp-send">
+            <label>Email for OTP <input name="email" type="email" required /></label>
+            <button class="btn" type="submit">Send OTP</button>
+          </form>
+          <form id="pp-otp-verify" hidden>
+            <label>OTP <input name="otp" inputmode="numeric" maxlength="6" required /></label>
+            <label>New password (optional) <input name="password" type="password" /></label>
+            <button class="btn primary" type="submit">Verify OTP</button>
+          </form>
+          <form id="pp-register">
+            <h3>Create account</h3>
+            <label>Name <input name="name" required /></label>
+            <label>Email <input name="email" type="email" required /></label>
+            <label>Mobile <input name="mobile" inputmode="tel" /></label>
+            <label>Password <input name="password" type="password" required minlength="6" /></label>
+            <button class="btn" type="submit">Register</button>
+          </form>
+          <p class="hint" id="pp-auth-hint"></p>
+        </div>
+      </section>
+
+      <section class="pp-app" id="pp-app" hidden>
+        <div class="pp-kpis" id="pp-kpis"></div>
+        <div class="pp-pane" data-pane="home"></div>
+        <div class="pp-pane" data-pane="new" hidden>
+          <form id="pp-order">
+            <h2>+ New Print Order</h2>
+            <label>Print product
+              <select name="product" id="pp-product" required></select>
+            </label>
+            <label>Printing type
+              <select name="print_type" id="pp-side"></select>
+            </label>
+            <label>Material
+              <select name="material_id" id="pp-material" required></select>
+            </label>
+            <fieldset class="pp-size">
+              <legend>Print size</legend>
+              <label>Width <input name="width" id="pp-width" type="number" min="0" step="0.01" value="10" required /></label>
+              <label>Height <input name="height" id="pp-height" type="number" min="0" step="0.01" value="5" required /></label>
+              <label>Unit
+                <select name="unit" id="pp-unit"></select>
+              </label>
+              <label>DPI (for pixels)
+                <select name="dpi" id="pp-dpi"></select>
+              </label>
+              <p class="pp-area" id="pp-area"></p>
+              <p class="pp-conv" id="pp-conv"></p>
+            </fieldset>
+            <label>Quantity <input name="quantity" id="pp-qty" type="number" min="1" value="1" required /></label>
+            <div id="pp-finish"></div>
+            <label>Special instructions
+              <textarea name="notes" rows="3" placeholder="Eyelets every 2 feet. Please keep 2-inch border."></textarea>
+            </label>
+            <label class="pp-drop">Upload Print File
+              <input id="pp-file" type="file" accept=".pdf,.jpg,.jpeg,.png,.svg,.ai,.eps,.cdr,image/*,application/pdf" />
+              <span>Drag &amp; drop or choose file</span>
+            </label>
+            <div id="pp-file-meta" class="hint"></div>
+            <p class="pp-warn" id="pp-warn" hidden></p>
+            <div class="pp-estimate" id="pp-estimate"></div>
+            <button class="btn primary" type="submit">Submit Print Order</button>
+            <p class="hint" id="pp-order-hint"></p>
+          </form>
+        </div>
+        <div class="pp-pane" data-pane="orders" hidden><div id="pp-orders"></div></div>
+        <div class="pp-pane" data-pane="files" hidden><div id="pp-files"></div></div>
+        <div class="pp-pane" data-pane="quotes" hidden><div id="pp-quotes"></div></div>
+        <div class="pp-pane" data-pane="approvals" hidden><div id="pp-approvals"></div></div>
+        <div class="pp-pane" data-pane="invoices" hidden><div id="pp-invoices"></div></div>
+        <div class="pp-pane" data-pane="payments" hidden><div id="pp-pays"></div></div>
+        <div class="pp-pane" data-pane="track" hidden><div id="pp-track"></div></div>
+        <div class="pp-pane" data-pane="downloads" hidden><div id="pp-downloads"></div></div>
+        <div class="pp-pane" data-pane="profile" hidden>
+          <form id="pp-profile" class="pp-card">
+            <h2>Profile</h2>
+            <label>Name <input name="name" required /></label>
+            <label>Mobile <input name="mobile" /></label>
+            <button class="btn primary" type="submit">Save</button>
+            <p class="hint" id="pp-profile-hint"></p>
+          </form>
+        </div>
+      </section>
+    </main>
+    <footer>Print shop portal · ATAV POS</footer>
+    <script src="./js/print.js?v=20260922print1" defer></script>
+    <script src="./js/print-portal.js?v=20260922print1" defer></script>
+  </body>
+</html>
