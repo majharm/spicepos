@@ -39,7 +39,7 @@
 
   function fillCatalog() {
     $("pp-shop").textContent = catalog.shop?.name || "Flex & Printing";
-    $("pp-cat").textContent = catalog.shop?.category || "Print shop";
+    $("pp-cat").textContent = catalog.shop?.category || "Banners, vinyl, hoardings and print jobs";
     $("pp-product").innerHTML = (P.PRODUCTS || []).map((p) => `<option>${p}</option>`).join("");
     $("pp-side").innerHTML = (catalog.sides || P.PRINT_SIDES).map((s) => `<option value="${s.id}">${s.label}</option>`).join("");
     $("pp-material").innerHTML = (catalog.materials || [])
@@ -316,15 +316,20 @@
   });
 
   fetch(`/api/print/public/${encodeURIComponent(shopId)}`)
-    .then((r) => r.json())
+    .then(async (r) => {
+      const data = await r.json().catch(() => null);
+      if (!data || typeof data !== "object") throw new Error("Could not load this print shop. Check the link.");
+      if (!r.ok) throw new Error(data.error || "Print shop not found");
+      return data;
+    })
     .then((d) => {
       catalog = d;
       fillCatalog();
       if (token) refreshMe().catch(() => localStorage.removeItem(storeKey));
     })
     .catch((err) => {
-      $("pp-shop").textContent = "Print portal unavailable";
-      hint("pp-auth-hint", err.message, true);
+      const msg = String(err.message || "");
+      hint("pp-auth-hint", /JSON|DOCTYPE|Unexpected token/i.test(msg) ? "Could not load this print shop. Check the link." : msg, true);
     });
   if (!shopId) hint("pp-auth-hint", "Open this page from your print shop link.", true);
 })();
