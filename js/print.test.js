@@ -134,3 +134,19 @@ test("PHP Hostinger print portal can register and sign in customers", () => {
   assert.match(read("js/print-portal.js"), /api\("\/register"/);
   assert.match(read("api/.htaccess"), /HTTP_AUTHORIZATION/);
 });
+
+test("PHP Hostinger can open a print order, download files, quote, bill, and move production", () => {
+  const php = read("pos-print.php");
+  const ui = read("js/print-ui.js");
+  assert.match(php, /print\/orders\/\(\[\^\/\]\+\)\$/);
+  assert.match(php, /print\/files\/\(\[\^\/\]\+\)/);
+  assert.match(php, /print\/orders\/\(\[\^\/\]\+\)\/review/);
+  assert.match(php, /print\/orders\/\(\[\^\/\]\+\)\/quote/);
+  assert.match(php, /print\/orders\/\(\[\^\/\]\+\)\/bill/);
+  assert.match(php, /print\/orders\/\(\[\^\/\]\+\)\/status/);
+  assert.match(php, /function pos_print_apply_totals/);
+  assert.match(php, /pos_send_file/);
+  assert.match(ui, /View \/ Download/);
+  assert.match(ui, /\/api\/print\/files\//);
+  assert.match(read("index.html"), /print-ui\.js\?v=20260922deploy214/);
+});

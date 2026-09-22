@@ -67,7 +67,11 @@
     const d = await api(`/api/print/orders/${encodeURIComponent(id)}`);
     const o = d.order;
     const files = (o.files || [])
-      .map((f) => `<p>v${f.version} · ${escapeHtml(f.file_name)} · ${escapeHtml(f.status)} · ${escapeHtml(f.uploaded_by)}</p>`)
+      .map((f) => {
+        const href = f.download || `/api/print/files/${encodeURIComponent(f.id)}`;
+        return `<p>v${escapeHtml(f.version)} · ${escapeHtml(f.file_name)} · ${escapeHtml(f.status)} · ${escapeHtml(f.uploaded_by)}
+          <a class="btn" href="${escapeHtml(href)}" target="_blank" rel="noopener">View / Download</a></p>`;
+      })
       .join("");
     const html = `<div class="print-order-detail">
       <p>${escapeHtml(o.customer_name)} · ${escapeHtml(o.order_number)}</p>
