@@ -469,15 +469,41 @@
     return "neutral";
   }
 
+  function showTab(name) {
+    const tab = name === "orders" ? "orders" : "menu";
+    document.body.classList.toggle("page-orders", tab === "orders");
+    document.body.classList.toggle("page-menu", tab === "menu");
+    const menuPanel = $("tab-menu");
+    const ordersPanel = $("tab-orders");
+    if (menuPanel) menuPanel.hidden = tab !== "menu";
+    if (ordersPanel) ordersPanel.hidden = tab !== "orders";
+    document.querySelectorAll("[data-page-tab]").forEach((btn) => {
+      btn.setAttribute("aria-selected", btn.dataset.pageTab === tab ? "true" : "false");
+    });
+    if (tab === "orders") window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function updateOrdersBadge(count) {
+    const badge = $("orders-tab-count");
+    if (!badge) return;
+    const n = Number(count) || 0;
+    badge.hidden = n < 1;
+    badge.textContent = String(n);
+  }
+
   function paintTracks(tracks) {
     lastTracks = Array.isArray(tracks) ? tracks.filter(Boolean) : [];
+    updateOrdersBadge(lastTracks.length);
     const board = $("order-success");
+    const empty = $("orders-empty");
     if (!board) return;
     if (!lastTracks.length) {
       board.hidden = true;
+      if (empty) empty.hidden = false;
       return;
     }
     board.hidden = false;
+    if (empty) empty.hidden = true;
     const logo = $("live-logo");
     if (logo && state.shop?.logo_url) {
       logo.src = state.shop.logo_url;
@@ -636,7 +662,7 @@
         ]),
       );
       startTrack(data.order);
-      $("order-success")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      showTab("orders");
       state.cart.clear();
       state.notes.clear();
       state.noteOpen.clear();
@@ -650,10 +676,16 @@
       if (button) button.disabled = false;
     }
   });
-  $("new-order").addEventListener("click", () => {
+  function goMenu() {
+    showTab("menu");
     $("menu-search")?.focus();
-    $("menu-grid")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+  $("page-tabs")?.addEventListener("click", (event) => {
+    const btn = event.target.closest("[data-page-tab]");
+    if (btn) showTab(btn.dataset.pageTab);
   });
+  $("new-order").addEventListener("click", goMenu);
+  $("empty-order-more")?.addEventListener("click", goMenu);
   $("view-bill")?.addEventListener("click", () => {
     showBill = !showBill;
     paintTracks(lastTracks);
@@ -671,9 +703,14 @@
     } catch {
       saved = null;
     }
-    if (oid && token) startTrack({ id: oid, public_token: token });
-    else if (saved?.id && saved?.token && saved.shop === shopKey) startTrack({ id: saved.id, public_token: saved.token });
-    else if (tablePrefill) startTrack({});
+    if (oid && token) {
+      startTrack({ id: oid, public_token: token });
+      showTab("orders");
+    } else if (saved?.id && saved?.token && saved.shop === shopKey) {
+      startTrack({ id: saved.id, public_token: saved.token });
+    } else if (tablePrefill) {
+      startTrack({});
+    }
   })();
 
   loadMenu().catch((err) => {

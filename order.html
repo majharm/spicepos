@@ -2,12 +2,12 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#0f766e" />
     <title>Order online · ATAV POS</title>
-    <link rel="stylesheet" href="./css/qr-order.css?v=20260922deploy205" />
+    <link rel="stylesheet" href="./css/qr-order.css?v=20260922deploy206" />
   </head>
-  <body>
+  <body class="page-menu">
     <header class="menu-head">
       <div class="menu-brand">
         <img id="shop-logo" alt="" hidden />
@@ -18,31 +18,50 @@
           <p class="table-badge" id="table-badge" hidden></p>
         </div>
       </div>
-      <label class="menu-search">Search menu <input id="menu-search" type="search" placeholder="Item or category…" autocomplete="off" /></label>
     </header>
 
+    <nav class="page-tabs" id="page-tabs" role="tablist" aria-label="Menu and orders">
+      <button type="button" role="tab" id="tab-btn-menu" data-page-tab="menu" aria-selected="true" aria-controls="tab-menu">Menu</button>
+      <button type="button" role="tab" id="tab-btn-orders" data-page-tab="orders" aria-selected="false" aria-controls="tab-orders">
+        Orders
+        <span class="tab-count" id="orders-tab-count" hidden>0</span>
+      </button>
+    </nav>
+
     <main>
-      <section class="order-list" id="order-success" hidden>
-        <header class="order-list-head">
-          <img id="live-logo" alt="" hidden />
-          <div>
-            <p class="eyebrow" id="track-kicker">YOUR ORDERS</p>
-            <h2 id="order-list-title">Order list</h2>
-            <p class="track-table" id="track-table"></p>
+      <div class="page-panel" id="tab-menu" role="tabpanel" aria-labelledby="tab-btn-menu">
+        <label class="menu-search">Search menu <input id="menu-search" type="search" placeholder="Item or category…" autocomplete="off" /></label>
+        <section class="offer-board" id="offer-board" hidden></section>
+        <div class="category-pills" id="category-pills"></div>
+        <section class="menu-grid" id="menu-grid"><p class="empty">Loading available items…</p></section>
+      </div>
+
+      <div class="page-panel" id="tab-orders" role="tabpanel" aria-labelledby="tab-btn-orders" hidden>
+        <section class="orders-empty" id="orders-empty">
+          <p class="eyebrow">YOUR ORDERS</p>
+          <h2>No orders yet</h2>
+          <p>Choose items from the menu, then place an order. Live status will show here.</p>
+          <button type="button" id="empty-order-more">Browse menu</button>
+        </section>
+        <section class="order-list" id="order-success" hidden>
+          <header class="order-list-head">
+            <img id="live-logo" alt="" hidden />
+            <div>
+              <p class="eyebrow" id="track-kicker">YOUR ORDERS</p>
+              <h2 id="order-list-title">Order list</h2>
+              <p class="track-table" id="track-table"></p>
+            </div>
+          </header>
+          <p class="success-save" id="success-save" hidden></p>
+          <div class="order-list-rows" id="active-orders"></div>
+          <div class="live-board-actions">
+            <button type="button" id="new-order">Order More</button>
+            <a class="ghost-btn" id="call-staff" hidden>Call Staff</a>
+            <button type="button" class="ghost-btn" id="view-bill">View Bill</button>
           </div>
-        </header>
-        <p class="success-save" id="success-save" hidden></p>
-        <div class="order-list-rows" id="active-orders"></div>
-        <div class="live-board-actions">
-          <button type="button" id="new-order">Order More</button>
-          <a class="ghost-btn" id="call-staff" hidden>Call Staff</a>
-          <button type="button" class="ghost-btn" id="view-bill">View Bill</button>
-        </div>
-        <p class="track-live">Status updates automatically. Keep this page open.</p>
-      </section>
-      <section class="offer-board" id="offer-board" hidden></section>
-      <div class="category-pills" id="category-pills"></div>
-      <section class="menu-grid" id="menu-grid"><p class="empty">Loading available items…</p></section>
+          <p class="track-live">Status updates automatically. Keep this page open.</p>
+        </section>
+      </div>
     </main>
 
     <button class="cart-dock" id="cart-open" type="button" hidden>
@@ -69,6 +88,6 @@
 
     <footer>Ordering powered by <strong>ATAV POS</strong></footer>
     <script src="./js/offers.js?v=20260917food1" defer></script>
-    <script src="./js/qr-order.js?v=20260922deploy205" defer></script>
+    <script src="./js/qr-order.js?v=20260922deploy206" defer></script>
   </body>
 </html>

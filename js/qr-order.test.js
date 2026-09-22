@@ -38,6 +38,12 @@ test("Customer QR page tracks live kitchen status without a refresh", () => {
   assert.match(html, /id="active-orders"/);
   assert.match(html, /id="order-list-title"/);
   assert.match(html, /class="order-list"/);
+  assert.match(html, /data-page-tab="menu"/);
+  assert.match(html, /data-page-tab="orders"/);
+  assert.match(html, /id="tab-orders"/);
+  assert.match(html, /id="orders-empty"/);
+  assert.match(js, /function showTab/);
+  assert.match(js, /showTab\("orders"\)/);
   assert.match(js, /\/api\/qr\/order\?/);
   assert.match(js, /\/api\/qr\/table\?/);
   assert.match(js, /function startTrack/);
