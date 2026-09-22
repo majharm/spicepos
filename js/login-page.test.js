@@ -70,10 +70,18 @@ test("Master Admin Login Page manager is wired without touching auth", () => {
   const node = read("server/login-page.js");
   const auth = read("server/auth.js");
   const xpos = read("js/x-pos-20260830e.js");
+  const masterJs = read("js/master.js");
+  const manager = read("js/master-login-page.js");
   assert.match(master, /Website Management/);
-  assert.match(master, /data-website-pane="images"/);
-  assert.match(master, /js\/master-login-page\.js\?v=20260920deploy203/);
+  assert.match(master, /data-tab="website" data-website-pane="images"/);
+  assert.match(master, />Login Page</);
+  assert.match(master, /js\/master-login-page\.js\?v=20260922deploy222/);
+  assert.match(master, /js\/login-page\.js\?v=20260922deploy222/);
   assert.match(master, /css\/login-page\.css\?v=20260920deploy203/);
+  assert.match(masterJs, /function resolveWebsitePane/);
+  assert.match(masterJs, /Login Page Management/);
+  assert.match(manager, /function resolvePane/);
+  assert.doesNotMatch(master, /data-tab="website" data-website-pane="homepage"><span class="nav-icon"/);
   assert.match(login, /js\/login-page\.js\?v=20260920deploy203/);
   assert.match(login, /css\/login-page\.css\?v=20260920deploy203/);
   assert.match(login, /x-pos-20260830e\.js\?v=20260922deploy207/);
@@ -91,4 +99,14 @@ test("Master Admin Login Page manager is wired without touching auth", () => {
   assert.match(auth, /\/api\/auth\/login/);
   assert.match(xpos, /\/api\/auth\/login/);
   assert.doesNotMatch(read("js/login-page.js"), /\/api\/auth\/login/);
+});
+
+test("Website Homepage pane opens Login Page Management", () => {
+  vm.runInThisContext(read("js/master-login-page.js"), { filename: "js/master-login-page.js" });
+  const M = globalThis.POSMasterLoginPage;
+  assert.equal(M.resolvePane("homepage"), "images");
+  assert.equal(M.resolvePane(""), "images");
+  assert.equal(M.resolvePane("unknown"), "images");
+  assert.equal(M.resolvePane("media"), "media");
+  assert.equal(M.resolvePane("register"), "register");
 });

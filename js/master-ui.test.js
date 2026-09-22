@@ -17,7 +17,7 @@ test("Master Admin desk collapses nested nav and uses a shop board", () => {
   assert.match(html, /data-nav-family="analytics"/);
   assert.match(html, /data-nav-family="seo"/);
   assert.match(html, /nav-group-label">Advanced</);
-  assert.match(html, /master\.js\?v=20260922deploy221/);
+  assert.match(html, /master\.js\?v=20260922deploy222/);
   assert.match(html, /saas\.css\?v=20260922deploy221/);
   assert.match(js, /function setMasterNavOpen/);
   assert.match(js, /NAV_FAMILIES/);

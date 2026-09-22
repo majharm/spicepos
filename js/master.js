@@ -317,12 +317,30 @@ function bindBackupFamilyTabs(root) {
   });
 }
 
+function resolveWebsitePane(pane) {
+  const p = String(pane || "").trim();
+  if (p === "register" || p === "contact") return p;
+  if (!p || p === "homepage") return "images";
+  return p;
+}
+
+function waitMasterUi(name, tries = 40) {
+  return new Promise((resolve) => {
+    const tick = () => {
+      if (window[name]?.render) return resolve(true);
+      if (tries-- <= 0) return resolve(false);
+      setTimeout(tick, 50);
+    };
+    tick();
+  });
+}
+
 function setMasterTab(next, pane) {
   tab = next;
   if (next === "backup") backupPane = pane || "settings";
   if (next === "analytics") analyticsPane = pane || "overview";
   if (next === "seo") seoPane = pane || "overview";
-  if (next === "website") websitePane = pane || "images";
+  if (next === "website") websitePane = resolveWebsitePane(pane);
   syncMasterNav();
   document.querySelector(".master-main")?.scrollTo({ top: 0 });
   if (window.matchMedia("(max-width: 900px)").matches) setMasterNavOpen(false);
@@ -1648,7 +1666,9 @@ async function render() {
             ? "Website traffic"
             : tab === "seo"
               ? "Search and pages"
-              : "Platform control";
+              : tab === "website"
+                ? "Login Page Management"
+                : "Platform control";
   }
   $("panel")?.classList.toggle("has-desk", true);
   const body = $("panel-body");
@@ -2271,6 +2291,8 @@ async function render() {
         });
       }
     } else if (tab === "website") {
+      websitePane = resolveWebsitePane(websitePane);
+      if (!window.POSMasterLoginPage?.render) await waitMasterUi("POSMasterLoginPage");
       if (!window.POSMasterLoginPage?.render) {
         body.innerHTML = `<p class="hint error">Login Page UI did not load. Upload js/master-login-page.js and js/login-page.js.</p>`;
       } else {

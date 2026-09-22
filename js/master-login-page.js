@@ -16,8 +16,16 @@
     ["campaigns", "Campaigns"],
   ];
   const KINDS = ["desktop", "mobile", "tablet", "background", "banner", "side", "ad", "logo", "favicon", "library"];
+  const STUB_PANES = { register: "Registration Page", contact: "Contact Page" };
   let bundle = { draft: {}, images: [], campaigns: [], versions: [], audit: [], published_version: 0, published: null };
   let previewMode = "desktop";
+
+  function resolvePane(pane) {
+    const on = String(pane || "images");
+    if (STUB_PANES[on]) return on;
+    if (on === "homepage") return "images";
+    return PANES.some(([id]) => id === on) ? on : "images";
+  }
 
   function esc(s) {
     return String(s ?? "")
@@ -32,7 +40,8 @@
     ).join("")}</div>`;
   }
   function mergeDraft() {
-    return { ...L().defaults(), ...(bundle.draft || {}) };
+    const base = L()?.defaults ? L().defaults() : { promo: { on: false, title: "", points: [], cta: "", ctaUrl: "" }, card: {}, colors: {}, ctas: { register: {}, demo: {}, support: {} } };
+    return { ...base, ...(bundle.draft || {}) };
   }
   function resolved() {
     return L().resolveAppearance({ settings: mergeDraft(), images: bundle.images, campaigns: bundle.campaigns }, new Date(), mergeDraft().previewBizType || "");
@@ -367,20 +376,36 @@
   }
 
   async function render(body, pane, api, opts) {
-    const on = pane || "images";
+    const on = resolvePane(pane);
+    if (!L()?.defaults) {
+      body.innerHTML = `<p class="hint error">Login Page UI did not load. Upload js/login-page.js.</p>`;
+      return;
+    }
     try {
       bundle = await api("/api/master/login-page");
     } catch (err) {
       body.innerHTML = `<p class="hint error">${esc(err.message)}</p>`;
       return;
     }
-    const coming = ["homepage", "register", "contact"].includes(on);
-    if (coming) {
-      body.innerHTML = `<div class="items-desk"><header class="items-hero"><div class="items-hero-copy"><p class="items-kicker">Website</p><h3>${esc(on)}</h3><p class="lede">This website page still uses its current HTML. Login Page is managed here.</p></div></header>${tabs("images")}</div>`;
+    if (STUB_PANES[on]) {
+      body.innerHTML = `<div class="items-desk master-desk login-page-desk">
+        <header class="items-hero"><div class="items-hero-copy">
+          <p class="items-kicker">Website / UI</p>
+          <h3>${esc(STUB_PANES[on])}</h3>
+          <p class="lede">This public page still uses its current HTML. Login Page Management is ready now.</p>
+        </div></header>
+        <p><button class="btn primary" type="button" data-website-pane="images">Open Login Page Management</button></p>
+        ${tabs("images")}
+      </div>`;
       body.querySelectorAll("[data-website-pane]").forEach((b) => (b.onclick = () => opts.setPane(b.dataset.websitePane)));
       return;
     }
-    body.innerHTML = shell(on, paneHtml(on));
+    try {
+      body.innerHTML = shell(on, paneHtml(on));
+    } catch (err) {
+      body.innerHTML = `<p class="hint error">${esc(err.message || err)}</p>`;
+      return;
+    }
     const hint = () => document.getElementById("login-page-hint");
     const refresh = () => opts.setPane(on);
     body.querySelectorAll("[data-website-pane]").forEach((b) => (b.onclick = () => opts.setPane(b.dataset.websitePane)));
@@ -496,5 +521,5 @@
     });
   }
 
-  g.POSMasterLoginPage = { render, PANES };
+  g.POSMasterLoginPage = { render, PANES, resolvePane };
 })(typeof window !== "undefined" ? window : globalThis);
