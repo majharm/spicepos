@@ -716,6 +716,7 @@ function pos_default_item_category($biz) {
 
 function pos_default_item_unit($biz) {
   $kind = pos_shop_kind($biz);
+  if ($kind === "printing") return "SQFT";
   return ($kind === "spice" || $kind === "grocery") ? "GM" : "PCS";
 }
 
@@ -874,7 +875,9 @@ function pos_item_unit($item) {
 function pos_line_amount($quantityGm, $ratePerKg, $unit = "GM") {
   $q = (float) $quantityGm;
   $r = (float) $ratePerKg;
-  if (pos_item_unit($unit) === "PCS") return $q * $r;
+  $code = pos_item_unit($unit);
+  if (function_exists("pos_unit_is_count") && pos_unit_is_count($code)) return $q * $r;
+  if ($code === "PCS") return $q * $r;
   return ($q / 1000) * $r;
 }
 

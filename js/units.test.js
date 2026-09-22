@@ -70,6 +70,8 @@ test("unit master catalog covers quantity through service units", () => {
   assert.equal(U.normalize("strip"), "STRIP");
   assert.equal(U.isCount("HR"), true);
   assert.equal(U.isCount("SQFT"), true);
+  assert.equal(U.lineAmount(150, 10, "SQFT"), 1500);
+  assert.equal(U.lineAmount(150, 15, "SQFT"), 2250);
   assert.equal(U.isCount("G"), false);
   assert.equal(U.lineAmount(2, 50, "STRIP"), 100);
 });

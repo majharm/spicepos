@@ -180,6 +180,7 @@ test("Every signup category gets its own item copy, not Whole Spices", () => {
   assert.equal(F.defaultUnit({ category: "Jewellery" }), "PCS");
   assert.equal(F.defaultUnit({ category: "Medical" }), "PCS");
   assert.equal(F.defaultUnit({ category: "Food & beverage" }), "PCS");
+  assert.equal(F.defaultUnit({ category: "Flex & Printing" }), "SQFT");
   assert.equal(F.itemPrefix({ category: "Kirana / FMCG" }), "GR");
   assert.equal(F.itemPrefix({ category: "Jewellery" }), "JW");
   assert.equal(F.itemPrefix({ category: "Medical" }), "PH");

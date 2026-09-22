@@ -247,6 +247,7 @@
   }
 
   function defaultUnit(biz) {
+    if (isPrintShop(biz)) return "SQFT";
     return isWeightShop(biz) ? "GM" : "PCS";
   }
 

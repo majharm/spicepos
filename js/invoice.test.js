@@ -855,3 +855,53 @@ test("spice grocery bills keep weight rows, not medicine layout or zero dates", 
   const due = InvoicePrint.invoiceDueRowsHtml(order, ctx.money, ctx.escapeHtml, ctx);
   assert.match(due, /2026-09-20/);
 });
+
+test("flex print sqft is qty × rate, not grams-per-kg", () => {
+  const InvoicePrint = loadInvoicePrint();
+  const order = {
+    order_number: "SO-10001",
+    customer_name: "Majhar",
+    customer_mobile: "9112090347",
+    subtotal: 1.5,
+    gst: 0,
+    total: 1.5,
+    payment_method: "credit",
+    payment_status: "unpaid",
+    amount_paid: 0,
+    previous_due: 0,
+    lines: [
+      {
+        item_name: "Flex Print",
+        quantity_gm: 150,
+        rate_per_kg: 10,
+        amount: 1.5,
+        gst_rate: 0,
+        unit: "SQFT",
+        mrp: 15,
+      },
+    ],
+  };
+  const ctx = {
+    company: { name: "Print Shop" },
+    businessMeta: { category: "Flex & Printing", business_type: "Printing Business" },
+    customers: [],
+    items: [{ id: "fp", name: "Flex Print", base_unit: "SQFT", gst_rate: 0, mrp: 15 }],
+    formatDateTime: (v) => String(v),
+    money: (n) => `₹${Number(n).toFixed(2)}`,
+    escapeHtml: (v) => String(v ?? ""),
+  };
+  const html = InvoicePrint.invoiceBody(order, ctx);
+  assert.equal(InvoicePrint.isPrintBill(order, ctx), true);
+  const repaired = InvoicePrint.repairCountLineAmount({
+    quantity_gm: 150,
+    rate_per_kg: 10,
+    amount: 1.5,
+    gst_rate: 0,
+    unit: "SQFT",
+  });
+  assert.equal(repaired.amount, 1500);
+  assert.doesNotMatch(html, />Medicine</);
+  assert.match(html, /150 sqft/);
+  assert.match(html, /₹1500\.00/);
+  assert.doesNotMatch(html, /₹1\.50/);
+});

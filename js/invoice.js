@@ -48,7 +48,22 @@
     return "";
   }
 
+  function isPrintBill(order, ctx) {
+    const biz = ctx?.businessMeta || {};
+    if (globalThis.POSPrint?.isPrintShop?.(biz) || globalThis.POSFootwear?.isPrintShop?.(biz) || globalThis.POSFootwear?.shopKind?.(biz) === "printing") {
+      return true;
+    }
+    const t = [biz.category, biz.business_type, biz.name, ctx?.company?.name].filter(Boolean).join(" ").toLowerCase();
+    if (/(flex\s*&\s*printing|flex printing|printing business)/.test(t)) return true;
+    return (order?.lines || []).some((l) => {
+      const unit = String(l.unit || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+      if (["SQFT", "SQM", "SQYD", "SQIN", "SQCM", "SQMM"].includes(unit)) return true;
+      return /flex\s*print|hoarding|sunboard|vinyl banner/i.test(String(l.item_name || l.name || ""));
+    });
+  }
+
   function isPharmacyBill(order, ctx) {
+    if (isPrintBill(order, ctx)) return false;
     const biz = ctx?.businessMeta || {};
     if (globalThis.POSFootwear?.isPharmacyShop?.(biz) || globalThis.POSFootwear?.shopKind?.(biz) === "pharmacy") {
       return true;
@@ -109,14 +124,41 @@
     return round2((qty / 1000) * rate);
   }
 
+  function repairCountLineAmount(l) {
+    const qty = num(l.quantity_gm);
+    const rate = num(l.rate_per_kg);
+    const stored = num(l.amount);
+    const unit = l.unit || "PCS";
+    const U = unitsApi();
+    const countLike = U?.isCount?.(unit);
+    if (!countLike || !(qty > 0) || !(rate > 0)) return l;
+    const kgAmt = round2((qty / 1000) * rate);
+    const countAmt = round2(qty * rate);
+    if (Math.abs(stored - kgAmt) > 0.051 || Math.abs(countAmt - stored) <= 0.05) return l;
+    const gstRate = num(l.gst_rate);
+    const amount = countAmt;
+    return { ...l, amount, gst_amount: round2((amount * gstRate) / 100) };
+  }
+
   function invoiceFigures(order, lines) {
-    const rows = Array.isArray(lines) ? lines : [];
+    const rows = (Array.isArray(lines) ? lines : []).map(repairCountLineAmount);
     const discount = round2(order?.discount);
     const gst = round2(order?.gst);
     const total = round2(order?.total);
     const storedSub = round2(order?.subtotal);
     const netLines = round2(rows.reduce((sum, l) => sum + num(l.amount), 0));
     const grossLines = round2(rows.reduce((sum, l) => sum + lineQtyRateAmount(l), 0));
+    const lineGst = round2(rows.reduce((sum, l) => sum + num(l.gst_amount), 0));
+    if (Math.abs(netLines - storedSub) > 0.05 && netLines > storedSub) {
+      return {
+        lines: rows,
+        gstLines: rows,
+        subtotal: netLines,
+        discount,
+        gst: lineGst || gst,
+        total: round2(Math.max(0, netLines - discount + (lineGst || gst))),
+      };
+    }
     if (discount > 0 && grossLines > netLines + 0.009) {
       return {
         lines: rows.map((l) => ({ ...l, amount: lineQtyRateAmount(l) })),
@@ -810,7 +852,7 @@ ${purchaseBody(purchase, ctx)}
       ${gstRows}
       <tr class="inv-gst-total"><td colspan="3">${escapeHtml(L(ctx, "invoice.total_gst", "Total GST"))}</td><td class="inv-num">${escapeHtml(money(gst))}</td></tr>
       <tr class="inv-grand"><td colspan="3"><strong>${escapeHtml(L(ctx, "invoice.grand_total", "Grand total"))}</strong></td><td class="inv-num"><strong>${escapeHtml(money(total))}</strong></td></tr>
-      ${invoiceDueRowsHtml(order, money, escapeHtml, ctx)}
+      ${invoiceDueRowsHtml({ ...order, total: figures.total, gst: figures.gst, subtotal: figures.subtotal }, money, escapeHtml, ctx)}
     </tbody>
   </table>
   <div class="inv-rule"></div>
@@ -972,6 +1014,9 @@ ${invoiceBody(order, ctx)}
     const total = figures.total;
     const due = invoiceDueFigures({
       ...order,
+      total: figures.total,
+      gst: figures.gst,
+      subtotal: figures.subtotal,
       customer_outstanding: order.customer_outstanding ?? order.customerOutstanding ?? cust?.outstanding,
     });
     const invNo = escapeHtml(order.order_number || "—");
@@ -1393,6 +1438,8 @@ ${voucherBody(entry, ctx)}
     voucherDocument,
     ymdFromValue,
     formatInvoiceDate,
+    repairCountLineAmount,
+    isPrintBill,
     enrichLines,
     invoiceFigures,
     enrichPurchaseLines,

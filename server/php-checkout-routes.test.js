@@ -209,7 +209,8 @@ test("PHP customer insert bind types match placeholders", () => {
   assert.match(index, /id="item-unit"/);
   assert.match(index, /id="view-units"/);
   assert.match(index, /data-view="units"/);
-  assert.match(read("pos-units.php"), /function pos_dispatch_units/);
+  assert.match(read("pos-units.php"), /\$fam !== "weight" && \$fam !== "volume"/);
+  assert.match(read("pos-php-core.php"), /pos_unit_is_count\(\$code\)/);
   assert.match(read("pos-units.php"), /CREATE TABLE IF NOT EXISTS inventory_units/);
   assert.match(read("pos-php-till.php"), /pos_dispatch_units/);
   assert.match(read("api/units/index.php"), /p.*=.*units/);
@@ -377,7 +378,7 @@ test("POS boot skips API probe and slims catalog photos", () => {
   assert.match(index, /id="modal-close"/);
   assert.match(read("css/pos.css"), /#modal-close \{/);
   assert.match(index, /invoice-share\.js\?v=20260913share1/);
-  assert.match(index, /invoice\.js\?v=20260919inv2/);
+  assert.match(index, /invoice\.js\?v=20260922deploy210/);
   assert.doesNotMatch(index, /app\.js\?v=20260905deploy167/);
   assert.doesNotMatch(index, /app\.js\?v=20260905deploy166/);
   assert.match(index, /offers\.js\?v=20260905deploy170/);

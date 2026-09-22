@@ -166,7 +166,10 @@ function pos_unit_is_count($code, $item = null) {
   $bid = is_array($item) ? ($item["business_id"] ?? null) : null;
   if ($bid) {
     $map = pos_unit_family_map($bid);
-    if (isset($map[$c])) return $map[$c] === "count";
+    if (isset($map[$c])) {
+      $fam = $map[$c];
+      return $fam !== "weight" && $fam !== "volume";
+    }
   }
   return true;
 }
