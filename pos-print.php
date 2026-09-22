@@ -748,9 +748,9 @@ function pos_print_staff_dispatch($path, $method, $body, $bid, $auth) {
         pos_q(
           "INSERT INTO sales_order_lines (
              id, order_id, item_id, item_name, quantity_gm, rate_per_kg,
-             discount, amount, gst_rate, cancelled, business_id
-           ) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
-          "sssssssssss",
+             discount, amount, gst_rate, cancelled, business_id, unit
+           ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+          "ssssssssssss",
           [
             pos_uuid(), $invoiceId, "",
             trim(($order["product"] ?? "") . " " . ($order["width"] ?? "") . "×" . ($order["height"] ?? "") . " " . ($order["unit"] ?? "") . " · " . ($order["material_name"] ?? "")),
@@ -759,10 +759,30 @@ function pos_print_staff_dispatch($path, $method, $body, $bid, $auth) {
             (string) ($q["discount"] ?? 0),
             (string) ($q["printing"] ?? $order["printing_amount"] ?? 0),
             (string) ($q["gst_rate"] ?? $order["gst_rate"] ?? 18),
-            "0", $bid,
+            "0", $bid, "SQFT",
           ]
         );
-      } catch (Exception $e) { /* line shape varies */ }
+      } catch (Exception $e) {
+        try {
+          pos_q(
+            "INSERT INTO sales_order_lines (
+               id, order_id, item_id, item_name, quantity_gm, rate_per_kg,
+               discount, amount, gst_rate, cancelled, business_id
+             ) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+            "sssssssssss",
+            [
+              pos_uuid(), $invoiceId, "",
+              trim(($order["product"] ?? "") . " " . ($order["width"] ?? "") . "×" . ($order["height"] ?? "") . " " . ($order["unit"] ?? "") . " · " . ($order["material_name"] ?? "")),
+              (string) ($q["totalArea"] ?? $order["area_sqft"] ?? 0),
+              (string) ($q["rate"] ?? $order["rate"] ?? 0),
+              (string) ($q["discount"] ?? 0),
+              (string) ($q["printing"] ?? $order["printing_amount"] ?? 0),
+              (string) ($q["gst_rate"] ?? $order["gst_rate"] ?? 18),
+              "0", $bid,
+            ]
+          );
+        } catch (Exception $e2) { /* line shape varies */ }
+      }
       pos_q("UPDATE print_orders SET sales_order_id=? WHERE id=?", "ss", [$invoiceId, $order["id"]]);
       $custRows = pos_q("SELECT * FROM customers WHERE id=? AND business_id=?", "ss", [$order["customer_id"] ?? "", $bid]);
       $customer = $custRows[0] ?? null;

@@ -56,7 +56,7 @@
     if (isFootwearShop(biz)) return "footwear";
     if (isApparelShop(biz)) return "apparel";
     const t = shopText(biz);
-    if (/(flex\s*&\s*printing|flex printing|banner printing|large format printing)/.test(t)) return "printing";
+    if (/(flex\s*&\s*printing|flex printing|banner printing|vinyl printing|large format printing|printing press|\bprinting\b)/.test(t)) return "printing";
     if (/(spice|masala)/.test(t)) return "spice";
     if (/(kirana|fmcg|grocery|supermarket|general trade)/.test(t)) return "grocery";
     if (/(restaurant|cafe|bakery|food)/.test(t)) return "restaurant";

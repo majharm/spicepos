@@ -176,6 +176,7 @@ export async function ensureSchema() {
   await addColumn("sales_order_lines", "expiry_date", "DATE NULL");
   await addColumn("sales_order_lines", "pack_label", "VARCHAR(64) NULL");
   await addColumn("sales_order_lines", "notes", "TEXT NULL");
+  await addColumn("sales_order_lines", "unit", "VARCHAR(32) NULL");
   await addColumn("purchase_lines", "batch_no", "VARCHAR(64) NULL");
   await addColumn("purchase_lines", "barcode", "VARCHAR(64) NULL");
   await addColumn("purchase_lines", "expiry_date", "DATE NULL");

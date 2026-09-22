@@ -48,18 +48,43 @@
     return "";
   }
 
+  function printUnitCode(raw) {
+    return String(raw || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+  }
+
+  function isAreaUnit(raw) {
+    return ["SQFT", "SQM", "SQYD", "SQIN", "SQCM", "SQMM"].includes(printUnitCode(raw));
+  }
+
+  function isWeightishUnit(raw) {
+    const u = printUnitCode(raw);
+    return !u || u === "GM" || u === "G" || u === "KG" || u === "GRAM" || u === "GRAMS";
+  }
+
+  function looksLikePrintAreaLine(line) {
+    if (isAreaUnit(line?.unit)) return true;
+    const name = String(line?.item_name || line?.name || "");
+    if (/\b(sqft|sq\s*ft|sqm|sq\s*m|square\s+feet|square\s+foot)\b/i.test(name)) return true;
+    if (/\b(flex|hoarding|sunboard|vinyl|banner|acp|foam\s*board|backlit)\b/i.test(name)) return true;
+    if (/\d+(?:\.\d+)?\s*[x×]\s*\d+(?:\.\d+)?\s*(ft|in|cm|mm|m)\b/i.test(name)) return true;
+    return false;
+  }
+
+  function printAreaUnit(line) {
+    if (isAreaUnit(line?.unit)) return printUnitCode(line.unit);
+    const name = String(line?.item_name || line?.name || "");
+    if (/\b(sqm|sq\s*m|m²)\b/i.test(name)) return "SQM";
+    return "SQFT";
+  }
+
   function isPrintBill(order, ctx) {
     const biz = ctx?.businessMeta || {};
     if (globalThis.POSPrint?.isPrintShop?.(biz) || globalThis.POSFootwear?.isPrintShop?.(biz) || globalThis.POSFootwear?.shopKind?.(biz) === "printing") {
       return true;
     }
-    const t = [biz.category, biz.business_type, biz.name, ctx?.company?.name].filter(Boolean).join(" ").toLowerCase();
-    if (/(flex\s*&\s*printing|flex printing|printing business)/.test(t)) return true;
-    return (order?.lines || []).some((l) => {
-      const unit = String(l.unit || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
-      if (["SQFT", "SQM", "SQYD", "SQIN", "SQCM", "SQMM"].includes(unit)) return true;
-      return /flex\s*print|hoarding|sunboard|vinyl banner/i.test(String(l.item_name || l.name || ""));
-    });
+    const t = [biz.category, biz.business_type, biz.name, ctx?.company?.name, order?.order_number].filter(Boolean).join(" ").toLowerCase();
+    if (/(flex\s*&\s*printing|flex printing|banner printing|vinyl printing|printing press|printing business|\bprinting\b|^fp-)/.test(t)) return true;
+    return (order?.lines || []).some((l) => looksLikePrintAreaLine(l));
   }
 
   function isPharmacyBill(order, ctx) {
@@ -172,7 +197,8 @@
     return { lines: rows, gstLines: rows, subtotal: storedSub || netLines, discount, gst, total };
   }
 
-  function enrichLines(order, items) {
+  function enrichLines(order, items, ctx) {
+    const printBill = isPrintBill(order, ctx);
     return (order.lines || [])
       .filter((l) => !isCancelled(l))
       .map((l) => {
@@ -182,6 +208,11 @@
         const qty = num(l.quantity_gm);
         const storedMrp = num(l.mrp);
         const unitMrp = num(item?.mrp) || (storedMrp && qty ? round2(storedMrp / qty) : num(l.rate_per_kg));
+        let unit = l.unit || (item ? lineUnit(item) : "");
+        if (isWeightishUnit(unit) && (looksLikePrintAreaLine(l) || (printBill && !item))) {
+          unit = printAreaUnit({ ...l, unit });
+        }
+        if (!unit) unit = item ? lineUnit(item) : "GM";
         return {
           item_name: l.item_name || item?.name || "Item",
           local_name: l.local_name || item?.local_name || "",
@@ -189,7 +220,7 @@
           hsn: item?.hsn || l.hsn || item?.code || "—",
           quantity_gm: qty,
           rate_per_kg: num(l.rate_per_kg),
-          unit: l.unit || lineUnit(item),
+          unit,
           gst_rate: gstRate,
           amount,
           gst_amount: lineGst({ amount, gst_rate: gstRate }),
@@ -511,9 +542,11 @@ ${purchaseBody(purchase, ctx)}
   }
 
   function L(ctx, key, fallback) {
-    if (ctx && typeof ctx.invoiceLabel === "function") return ctx.invoiceLabel(key);
-    if (typeof window !== "undefined" && window.POSI18n) return window.POSI18n.invoiceLabel(key, ctx?.locale, ctx?.invoiceMode);
-    return fallback || key;
+    let out = "";
+    if (ctx && typeof ctx.invoiceLabel === "function") out = ctx.invoiceLabel(key);
+    else if (typeof window !== "undefined" && window.POSI18n) out = window.POSI18n.invoiceLabel(key, ctx?.locale, ctx?.invoiceMode);
+    if (!out || out === key) return fallback || key;
+    return out;
   }
 
   function paymentQrHtml(co, ctx, kind) {
@@ -731,7 +764,7 @@ ${purchaseBody(purchase, ctx)}
   function invoiceBody(order, ctx) {
     const { company, customers, items, formatDateTime, money, escapeHtml } = ctx;
     const co = company || {};
-    const rawLines = enrichLines(order, items);
+    const rawLines = enrichLines(order, items, ctx);
     const figures = invoiceFigures(order, rawLines);
     const lines = figures.lines;
     const cust = findCustomer(customers, order);
@@ -1002,7 +1035,7 @@ ${invoiceBody(order, ctx)}
   function officeInvoiceBody(order, ctx, opts) {
     const { company, customers, items, formatDateTime, money, escapeHtml } = ctx;
     const co = company || {};
-    const rawLines = enrichLines(order, items);
+    const rawLines = enrichLines(order, items, ctx);
     const figures = invoiceFigures(order, rawLines);
     const lines = figures.lines;
     const cust = findCustomer(customers, order);
@@ -1440,6 +1473,7 @@ ${voucherBody(entry, ctx)}
     formatInvoiceDate,
     repairCountLineAmount,
     isPrintBill,
+    looksLikePrintAreaLine,
     enrichLines,
     invoiceFigures,
     enrichPurchaseLines,

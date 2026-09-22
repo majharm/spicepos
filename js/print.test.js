@@ -197,3 +197,17 @@ test("PHP print quote, artwork MIME, approve, bill settle, and OTP mail are wire
   assert.match(node, /settleCustomerInvoice/);
   assert.match(engine, /delivery_amount/);
 });
+
+test("Print Create Bill stores SQFT so invoices do not show grocery g/kg", () => {
+  const php = read("pos-print.php");
+  const node = read("server/print.js");
+  const index = read("index.html");
+  assert.match(php, /business_id, unit/);
+  assert.match(php, /\$bid, "SQFT"/);
+  assert.match(node, /business_id, unit/);
+  assert.match(node, /"SQFT"/);
+  assert.equal(F.isPrintShop({ name: "OM Printing Press" }), true);
+  assert.equal(F.defaultUnit({ name: "OM Printing Press" }), "SQFT");
+  assert.match(index, /invoice\.js\?v=20260922deploy219/);
+  assert.match(index, /print\.js\?v=20260922deploy219/);
+});

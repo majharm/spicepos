@@ -1394,6 +1394,7 @@ function pos_ensure_sales_schema() {
       "expiry_date" => "DATE NULL",
       "pack_label" => "VARCHAR(64) NULL",
       "notes" => "TEXT NULL",
+      "unit" => "VARCHAR(32) NULL",
     ]);
     pos_ensure_columns("customers", [
       "outstanding" => "DECIMAL(12,2) NOT NULL DEFAULT 0",

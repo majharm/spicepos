@@ -64,6 +64,7 @@ function pos_ensure_advanced_schema() {
       "expiry_date" => "DATE NULL",
       "pack_label" => "VARCHAR(64) NULL",
       "notes" => "TEXT NULL",
+      "unit" => "VARCHAR(32) NULL",
     ]);
     pos_ensure_columns("purchase_lines", [
       "batch_no" => "VARCHAR(64) NULL",

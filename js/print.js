@@ -186,7 +186,7 @@
     if (type === "printing business" || type === "printing") return true;
     if (globalThis.POSFootwear?.shopKind?.(biz) === "printing") return true;
     const t = [biz?.category, biz?.business_type, biz?.name].filter(Boolean).join(" ").toLowerCase();
-    return /(flex\s*&\s*printing|flex printing|banner printing|vinyl printing|large format|hoarding|sunboard)/.test(t);
+    return /(flex\s*&\s*printing|flex printing|banner printing|vinyl printing|large format|hoarding|sunboard|printing press|\bprinting\b)/.test(t);
   }
 
   function statusMeta(id) {

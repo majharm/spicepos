@@ -905,3 +905,50 @@ test("flex print sqft is qty × rate, not grams-per-kg", () => {
   assert.match(html, /₹1500\.00/);
   assert.doesNotMatch(html, /₹1\.50/);
 });
+
+test("print flex invoice without stored unit shows sqft not g/kg", () => {
+  const InvoicePrint = loadInvoicePrint();
+  const order = {
+    order_number: "FP-2026-00001",
+    customer_name: "majhar mulani",
+    customer_type: "b2c",
+    subtotal: 500,
+    gst: 0,
+    total: 500,
+    payment_method: "upi",
+    payment_status: "unpaid",
+    amount_paid: 0,
+    previous_due: 0,
+    lines: [
+      {
+        item_name: "Flex 10.0000×5.0000 ft · ACP",
+        quantity_gm: 50,
+        rate_per_kg: 10,
+        amount: 500,
+        gst_rate: 0,
+      },
+    ],
+  };
+  const ctx = {
+    company: { name: "OM Printing Press", address: "saswad, pune, Maharashtra 412301", phone: "8600909129" },
+    businessMeta: {},
+    customers: [],
+    items: [],
+    formatDateTime: () => "22/9/2026, 10:08:37 pm",
+    money: (n) => `₹${Number(n).toFixed(2)}`,
+    escapeHtml: (v) => String(v ?? ""),
+    invoiceLabel: (key) => key,
+  };
+  assert.equal(InvoicePrint.isPrintBill(order, ctx), true);
+  const lines = InvoicePrint.enrichLines(order, [], ctx);
+  assert.equal(lines[0].unit, "SQFT");
+  const html = InvoicePrint.invoiceBody(order, ctx);
+  assert.match(html, /TAX INVOICE/);
+  assert.doesNotMatch(html, /invoice\.tax_invoice/);
+  assert.match(html, /50 sqft/);
+  assert.match(html, /₹10\.00\/sqft/);
+  assert.match(html, /₹500\.00/);
+  assert.doesNotMatch(html, />50 g</);
+  assert.doesNotMatch(html, /50 g/);
+  assert.doesNotMatch(html, /\/kg/);
+});

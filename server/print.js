@@ -1038,8 +1038,8 @@ export function registerPrintStaff(app) {
           await query(
             `INSERT INTO sales_order_lines (
                id, order_id, item_id, item_name, quantity_gm, rate_per_kg,
-               discount, amount, gst_rate, cancelled, business_id
-             ) VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+               discount, amount, gst_rate, cancelled, business_id, unit
+             ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
             [
               uuid(),
               invoiceId,
@@ -1052,10 +1052,33 @@ export function registerPrintStaff(app) {
               q.gst_rate,
               0,
               bid(),
+              "SQFT",
             ],
           );
         } catch {
-          /* line shape varies by schema */
+          try {
+            await query(
+              `INSERT INTO sales_order_lines (
+                 id, order_id, item_id, item_name, quantity_gm, rate_per_kg,
+                 discount, amount, gst_rate, cancelled, business_id
+               ) VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+              [
+                uuid(),
+                invoiceId,
+                null,
+                `${order.product} ${order.width}×${order.height} ${order.unit} · ${order.material_name}`,
+                q.totalArea,
+                q.rate,
+                q.discount,
+                q.printing,
+                q.gst_rate,
+                0,
+                bid(),
+              ],
+            );
+          } catch {
+            /* line shape varies by schema */
+          }
         }
       await query("UPDATE print_orders SET sales_order_id = ? WHERE id = ?", [invoiceId, order.id]);
       try {

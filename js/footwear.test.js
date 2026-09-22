@@ -158,6 +158,7 @@ test("Every signup category gets its own item copy, not Whole Spices", () => {
   assert.equal(F.shopKind({ business_type: "Services" }), "services");
   assert.equal(F.shopKind({ business_type: "Printing Business" }), "printing");
   assert.equal(F.shopKind({ category: "Flex & Printing" }), "printing");
+  assert.equal(F.shopKind({ name: "OM Printing Press" }), "printing");
   assert.equal(F.taxCodeLabel({ category: "Spices & masala" }), "HSN");
   assert.equal(F.taxCodeLabel({ category: "Medical" }), "HSN");
   assert.equal(F.taxCodeLabel({ category: "Food & beverage" }), "HSN");
