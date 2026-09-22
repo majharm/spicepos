@@ -100,7 +100,7 @@ test("Master Admin Settings lives under Backup with Active/Inactive templates", 
   const nodeAlerts = readFileSync(path.join(root, "server/alerts.js"), "utf8");
   const index = readFileSync(path.join(root, "server/index.js"), "utf8");
   assert.doesNotMatch(masterHtml, /data-tab="alerts"/);
-  assert.match(masterHtml, /nav-group-label">Advance</);
+  assert.match(masterHtml, /nav-group-label">Advanced</);
   assert.match(masterHtml, /data-tab="advance"/);
   assert.match(masterHtml, /data-backup-pane="settings">Settings</);
   assert.match(masterHtml, /nav-sub" data-tab="backup" data-backup-pane="backup">Backup</);
