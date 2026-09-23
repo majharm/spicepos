@@ -93,6 +93,17 @@ export async function ensureSchema() {
   await addColumn("company_settings", "payment_qr_url", "MEDIUMTEXT NULL");
   await addColumn("company_settings", "payment_upi", "VARCHAR(160) NULL");
   await addColumn("company_settings", "dining_tables_json", "TEXT NULL");
+  await addColumn("company_settings", "table_shifting_enabled", "TINYINT(1) NOT NULL DEFAULT 0");
+  await query(`CREATE TABLE IF NOT EXISTS table_shift_history (
+    id VARCHAR(36) PRIMARY KEY,
+    business_id VARCHAR(36) NOT NULL,
+    order_number VARCHAR(180) NULL,
+    old_table VARCHAR(64) NOT NULL,
+    new_table VARCHAR(64) NOT NULL,
+    shifted_by VARCHAR(180) NULL,
+    created_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    INDEX (business_id), INDEX (created_at)
+  )`);
   await addColumn("company_settings", "drug_licence_no", "VARCHAR(80) NULL");
   await addColumn("company_settings", "fssai_licence_no", "VARCHAR(32) NULL");
   await addColumn("company_settings", "ndps_licence_no", "VARCHAR(80) NULL");

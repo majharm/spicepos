@@ -49,6 +49,7 @@ const state = {
   activeQrOrderId: "",
   activeTable: "",
   activeFloor: "",
+  shiftFromTable: "",
   kotPrinted: [],
   kotTickets: [],
   kotFilter: "",
@@ -1920,6 +1921,18 @@ function canManageDiningLayout() {
   return isRestaurantShop() && state.session?.role === "business_admin";
 }
 
+function tableShiftingEnabled() {
+  return isRestaurantShop() && Boolean(restaurantApi()?.tableShiftingOn?.(diningCompany()));
+}
+
+function tableShiftOpts() {
+  return {
+    tableIds: diningTables().map((t) => t.id),
+    activeTable: state.activeTable,
+    cartCount: state.cart.length,
+  };
+}
+
 function paintStaffRoleOptions() {
   const sel = $("st-role");
   if (!sel) return;
@@ -2529,6 +2542,7 @@ function renderTableBoard() {
       <button class="btn primary" type="submit">Save table</button>
       <button class="btn" type="button" data-cancel-edit-table>Cancel</button>
     </form>
+    ${tableShiftingEnabled() && state.shiftFromTable ? paintTableShiftPicker(state.shiftFromTable, tables, R) : ""}
     <div class="table-seats">${
       onFloor
         .map((t) => {
@@ -2544,6 +2558,7 @@ function renderTableBoard() {
               <span>${escapeHtml(on && state.cart.length ? `${state.cart.length} dishes` : metaLine)}</span>
             </button>
             ${manage ? `<button class="table-seat-edit" type="button" data-edit-table-btn="${escapeHtml(t.id)}" title="Rename table" aria-label="Rename ${escapeHtml(t.name || t.id)}">✎</button>` : ""}
+            ${tableShiftingEnabled() && busy && t.id !== R.PARCEL ? `<button class="table-seat-shift" type="button" data-shift-table="${escapeHtml(t.id)}" title="Shift table">Shift</button>` : ""}
             <button class="table-seat-qr" type="button" data-table-qr="${escapeHtml(t.id)}" title="Print table QR" aria-label="Print QR for ${escapeHtml(t.name || t.id)}">QR</button>
             ${manage && !busy ? `<button class="table-seat-x" type="button" data-remove-table="${escapeHtml(t.id)}" aria-label="Remove ${escapeHtml(t.name || t.id)}">×</button>` : ""}
           </div>`;
@@ -2582,6 +2597,54 @@ async function dropTableHold(tableNo) {
     /* already gone */
   }
   await loadHolds();
+}
+
+function paintTableShiftPicker(fromId, tables, R) {
+  const src = R.normalizeTableNo(fromId);
+  const fromName = R.displayTable(src);
+  const choices = tables
+    .map((t) => {
+      const id = t.id;
+      const busy = tableIsBusy(id);
+      const isFrom = id === src;
+      const occupied = busy && !isFrom;
+      const label = occupied ? "Occupied" : isFrom ? "Current" : "Available";
+      return `<button class="table-shift-choice${occupied ? " is-busy" : ""}${isFrom ? " is-from" : ""}" type="button" data-shift-to="${escapeHtml(id)}" ${occupied || isFrom ? "disabled" : ""}>
+        <strong>${escapeHtml(t.name || R.displayTable(id))}</strong>
+        <span>${escapeHtml(label)}</span>
+      </button>`;
+    })
+    .join("");
+  return `<form class="table-shift-picker" data-shift-picker>
+    <p><strong>Shift Table</strong> — ${escapeHtml(fromName)} to a free table</p>
+    <div class="table-shift-choices">${choices || "<p class='hint'>No other tables on this floor plan.</p>"}</div>
+    <button class="btn" type="button" data-cancel-shift>Cancel</button>
+  </form>`;
+}
+
+async function confirmAndShiftTable(fromId, toId) {
+  const R = restaurantApi();
+  if (!R) return;
+  const check = R.canShiftTable(state.held, qrOrderCache, fromId, toId, tableShiftOpts());
+  if (!check.ok) throw new Error(check.error);
+  const fromName = R.displayTable(check.from);
+  const toName = R.displayTable(check.to);
+  if (!window.confirm(`Move the active order from ${fromName} to ${toName}?`)) return;
+  if (state.activeTable === check.from && state.cart.length) await saveActiveTableHold();
+  const data = await api("/api/tables/shift", {
+    method: "POST",
+    body: JSON.stringify({ from_table: check.from, to_table: check.to }),
+  });
+  state.shiftFromTable = "";
+  if (state.activeTable === check.from) {
+    state.activeTable = check.to;
+    syncActiveFloor(check.to);
+  }
+  await Promise.all([loadHolds(), loadKots().catch(() => {}), loadQrOrders().catch(() => {})]);
+  renderCart();
+  renderTableBoard();
+  setHint(`Order moved from ${fromName} to ${toName}`, "ok");
+  return data;
 }
 
 async function selectDiningTable(tableNo) {
@@ -3650,6 +3713,15 @@ function renderCart() {
   paintBillCustomer();
   if ($("btn-hold")) $("btn-hold").disabled = state.cart.length === 0 || Boolean(state.editingOrderId);
   if ($("btn-kot")) $("btn-kot").disabled = !isRestaurantShop() || state.cart.length === 0 || Boolean(state.editingOrderId);
+  if ($("btn-shift-table")) {
+    const R = restaurantApi();
+    const show =
+      tableShiftingEnabled() &&
+      state.activeTable &&
+      state.activeTable !== R?.PARCEL &&
+      (tableIsBusy(state.activeTable) || state.cart.length > 0);
+    $("btn-shift-table").hidden = !show;
+  }
   const payTotal = t.total != null ? t.total : t.taxable + t.tax;
   $("btn-pay").textContent = state.editingOrderId
     ? tt("pos.save_changes", "Save changes")
@@ -5214,6 +5286,8 @@ function renderSettings() {
   if ($("set-drug-licence")) $("set-drug-licence").value = state.company.drug_licence_no || "";
   if ($("set-fssai")) $("set-fssai").value = state.company.fssai_licence_no || "";
   if ($("set-ndps")) $("set-ndps").value = state.company.ndps_licence_no || "";
+  if ($("set-table-shifting")) $("set-table-shifting").checked = tableShiftingEnabled();
+  paintTableShiftHistory();
   if ($("set-city")) $("set-city").value = state.company.city || "";
   if ($("set-state")) $("set-state").value = state.company.state || "";
   if ($("set-pincode")) $("set-pincode").value = state.company.pincode || state.company.pin_code || "";
@@ -5256,6 +5330,43 @@ function renderSettings() {
       timezone: shopTimezone(),
       cartLines: state.cart.length,
     });
+  }
+}
+
+async function paintTableShiftHistory() {
+  const el = $("table-shift-history");
+  if (!el) return;
+  if (!isRestaurantShop()) {
+    el.innerHTML = "";
+    return;
+  }
+  if (!tableShiftingEnabled()) {
+    el.innerHTML = "<p class='hint'>Turn on Enable Table Shifting to move active orders between tables.</p>";
+    return;
+  }
+  try {
+    const data = await api("/api/tables/shifts");
+    const rows = data.shifts || [];
+    const list = Array.isArray(rows) ? rows : [];
+    if (!list.length) {
+      el.innerHTML = "<p class='hint'>No table shifts yet.</p>";
+      return;
+    }
+    const R = restaurantApi();
+    el.innerHTML = `<table><thead><tr><th>Order</th><th>From</th><th>To</th><th>By</th><th>When</th></tr></thead><tbody>${list
+      .map((row) => {
+        const when = row.created_at ? String(row.created_at).replace("T", " ").slice(0, 19) : "";
+        return `<tr>
+          <td>${escapeHtml(row.order_number || "—")}</td>
+          <td>${escapeHtml(R?.displayTable?.(row.old_table) || row.old_table || "")}</td>
+          <td>${escapeHtml(R?.displayTable?.(row.new_table) || row.new_table || "")}</td>
+          <td>${escapeHtml(row.shifted_by || "")}</td>
+          <td>${escapeHtml(when)}</td>
+        </tr>`;
+      })
+      .join("")}</tbody></table>`;
+  } catch {
+    el.innerHTML = "<p class='hint'>Shift history unavailable.</p>";
   }
 }
 
@@ -9856,6 +9967,9 @@ $("settings-form").addEventListener("submit", async (e) => {
       invoice_terms: $("set-invoice-terms")?.value || "",
       payment_upi: $("set-payment-upi")?.value || "",
     };
+    if (isRestaurantShop() && $("set-table-shifting")) {
+      payload.table_shifting_enabled = $("set-table-shifting").checked ? 1 : 0;
+    }
     if (state.logoDraft !== null) payload.logo_url = state.logoDraft;
     if (state.payQrDraft !== null) payload.payment_qr_url = state.payQrDraft;
     const data = await api("/api/settings", {
@@ -9868,6 +9982,7 @@ $("settings-form").addEventListener("submit", async (e) => {
     paintHeader();
     renderSettings();
     tick();
+    renderTableBoard();
     $("settings-hint").textContent = "Saved";
     $("settings-hint").className = "hint ok";
   } catch (err) {
@@ -10348,12 +10463,51 @@ $("btn-kot")?.addEventListener("click", async () => {
     setHint(err.message, "error");
   }
 });
+$("btn-shift-table")?.addEventListener("click", async () => {
+  try {
+    if (!tableShiftingEnabled()) throw new Error("Table shifting is turned off in Settings");
+    const from = restaurantApi()?.normalizeTableNo?.(state.activeTable) || "";
+    if (!from || from === restaurantApi()?.PARCEL) throw new Error("Open a dining table first");
+    state.shiftFromTable = from;
+    renderTableBoard();
+    $("table-board")?.scrollIntoView({ block: "nearest" });
+  } catch (err) {
+    setHint(err.message, "error");
+  }
+});
 $("table-board")?.addEventListener("click", async (e) => {
   const printTableQr = e.target.closest("[data-table-qr]");
   if (printTableQr) {
     e.preventDefault();
     e.stopPropagation();
     await printQrTableStickers([printTableQr.getAttribute("data-table-qr")]);
+    return;
+  }
+  const shiftBtn = e.target.closest("[data-shift-table]");
+  if (shiftBtn) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!tableShiftingEnabled()) return;
+    state.shiftFromTable = restaurantApi()?.normalizeTableNo?.(shiftBtn.getAttribute("data-shift-table")) || "";
+    renderTableBoard();
+    return;
+  }
+  const cancelShift = e.target.closest("[data-cancel-shift]");
+  if (cancelShift) {
+    e.preventDefault();
+    state.shiftFromTable = "";
+    renderTableBoard();
+    return;
+  }
+  const shiftTo = e.target.closest("[data-shift-to]");
+  if (shiftTo) {
+    e.preventDefault();
+    e.stopPropagation();
+    try {
+      await confirmAndShiftTable(state.shiftFromTable, shiftTo.getAttribute("data-shift-to"));
+    } catch (err) {
+      setHint(err.message, "error");
+    }
     return;
   }
   const addFloor = e.target.closest("[data-add-floor]");

@@ -729,6 +729,10 @@ app.post("/api/settings", requireStaff, requirePerm("settings"), async (req, res
     langSql += ", ndps_licence_no = ?";
     params.push(clipInvoiceText(body.ndps_licence_no, 80) || null);
   }
+  if (Object.prototype.hasOwnProperty.call(body, "table_shifting_enabled")) {
+    langSql += ", table_shifting_enabled = ?";
+    params.push(body.table_shifting_enabled ? 1 : 0);
+  }
   if (shopLocale != null) {
     langSql += ", locale = ?";
     params.push(shopLocale);

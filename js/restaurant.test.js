@@ -233,3 +233,23 @@ test("Food order special instructions stay on each item", () => {
   assert.match(html, /Less sugar/);
   assert.doesNotMatch(html, /Note: Less spicy/);
 });
+
+test("Table shifting is optional and only allows a free destination", () => {
+  assert.equal(R.tableShiftingOn({ table_shifting_enabled: 0 }), false);
+  assert.equal(R.tableShiftingOn({ table_shifting_enabled: 1 }), true);
+  assert.equal(R.tableShiftingOn({ table_shifting_enabled: "1" }), true);
+  const holds = [{ id: "h1", label: "Table 5", payload: { table_no: "5", cart: [{ itemId: "dosa", qtyGm: 1 }] } }];
+  const qrs = [{ table_no: "3", status: "preparing", order_number: "QRO-1" }];
+  const opts = { tableIds: ["5", "8", "3"] };
+  assert.equal(R.tableOccupied(holds, qrs, "5"), true);
+  assert.equal(R.tableOccupied(holds, qrs, "8"), false);
+  assert.equal(R.tableOccupied(holds, qrs, "3"), true);
+  const ok = R.canShiftTable(holds, qrs, "5", "8", opts);
+  assert.equal(ok.ok, true);
+  assert.equal(ok.from, "5");
+  assert.equal(ok.to, "8");
+  assert.equal(R.canShiftTable(holds, qrs, "5", "3", opts).ok, false);
+  assert.equal(R.canShiftTable(holds, qrs, "5", "5", opts).ok, false);
+  assert.equal(R.canShiftTable(holds, qrs, "5", "Parcel", opts).ok, false);
+  assert.match(R.canShiftTable(holds, qrs, "5", "9", opts).error, /floor plan/);
+});

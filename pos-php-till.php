@@ -10,7 +10,7 @@ function pos_php_till_dispatch($path, $method, $body) {
   $staff = [
     "bootstrap", "dashboard", "today", "suppliers", "items", "customers", "packs",
     "orders", "purchases", "stock", "staff", "branches", "devices", "holds",
-    "checkout", "settings", "dining-tables", "kots", "reports", "growth", "audit", "accounts", "backup", "units",
+    "checkout", "settings", "dining-tables", "tables", "kots", "reports", "growth", "audit", "accounts", "backup", "units",
     "barcodes", "damage", "loyalty", "batches", "qr-orders", "prescriptions", "combos", "offers",
   ];
   if (!in_array($head, $staff, true)) return false;
@@ -368,6 +368,11 @@ function pos_php_till_dispatch($path, $method, $body) {
       $params[] = pos_clip_invoice_text($body["ndps_licence_no"] ?? "", 80) ?: null;
       $types .= "s";
     }
+    if (array_key_exists("table_shifting_enabled", $body)) {
+      $langSql .= ", table_shifting_enabled = ?";
+      $params[] = !empty($body["table_shifting_enabled"]) ? "1" : "0";
+      $types .= "s";
+    }
     if (array_key_exists("locale", $body)) {
       $langSql .= ", locale = ?";
       $params[] = pos_normalize_locale($body["locale"]) ?: "en";
@@ -458,6 +463,13 @@ function pos_php_till_dispatch($path, $method, $body) {
     $co["tz_offset"] = $meta["tz_offset"];
     pos_apply_business_timezone($bid);
     pos_send(200, ["ok" => true, "company" => $co]);
+  }
+
+  if ($path === "tables/shift" || $path === "tables/shifts") {
+    require_once __DIR__ . "/pos-table-shift.php";
+    pos_require_holds();
+    pos_dispatch_table_shift($path, $method, $body, $bid, $auth);
+    pos_send(404, ["error" => "Not found", "php" => true]);
   }
 
   if ($path === "dining-tables" && $method === "POST") {

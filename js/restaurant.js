@@ -358,6 +358,40 @@
     return list.find((row) => tableNoFromHold(row) === want) || null;
   }
 
+  function tableShiftingOn(biz) {
+    const v = biz?.table_shifting_enabled;
+    if (v === true || v === 1 || v === "1") return true;
+    return Number(v) === 1;
+  }
+
+  function qrOrderOpen(order) {
+    return !["cancelled", "rejected"].includes(String(order?.status || "").toLowerCase());
+  }
+
+  function tableOccupied(holds, qrOrders, tableNo, opts = {}) {
+    const want = normalizeTableNo(tableNo);
+    if (!want || want === PARCEL) return false;
+    if (findTableHold(holds, want)) return true;
+    const qrs = Array.isArray(qrOrders) ? qrOrders : [];
+    if (qrs.some((order) => qrOrderOpen(order) && normalizeTableNo(order.table_no) === want)) return true;
+    if (opts.activeTable && normalizeTableNo(opts.activeTable) === want && Number(opts.cartCount || 0) > 0) return true;
+    return false;
+  }
+
+  function canShiftTable(holds, qrOrders, from, to, opts = {}) {
+    const src = normalizeTableNo(from);
+    const dest = normalizeTableNo(to);
+    if (!src || !dest) return { ok: false, error: "Choose the current table and the new table" };
+    if (src === dest) return { ok: false, error: "Pick a different table" };
+    if (src === PARCEL || dest === PARCEL) return { ok: false, error: "Parcel / takeaway cannot be shifted" };
+    const ids = Array.isArray(opts.tableIds) ? opts.tableIds.map(normalizeTableNo) : null;
+    if (ids && !ids.includes(dest)) return { ok: false, error: "New table is not on the floor plan" };
+    if (ids && !ids.includes(src)) return { ok: false, error: "Current table is not on the floor plan" };
+    if (!tableOccupied(holds, qrOrders, src, opts)) return { ok: false, error: "No active order on that table" };
+    if (tableOccupied(holds, qrOrders, dest, opts)) return { ok: false, error: "Destination table is occupied" };
+    return { ok: true, from: src, to: dest };
+  }
+
   function specialInstruction(raw) {
     return String(raw ?? "")
       .replace(/\s+/g, " ")
@@ -602,6 +636,9 @@ ${kotBody(opts)}
     tableNoFromHold,
     isTableHold,
     findTableHold,
+    tableShiftingOn,
+    tableOccupied,
+    canShiftTable,
     specialInstruction,
     lineSpecialInstruction,
     cartSnapshot,

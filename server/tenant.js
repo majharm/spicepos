@@ -111,6 +111,85 @@ function kotRow(row) {
   };
 }
 
+function normalizeShiftTableNo(raw) {
+  const t = String(raw || "").trim().slice(0, 64);
+  if (!t) return "";
+  if (/^(parcel|takeaway|take away|pickup|pick up)$/i.test(t)) return "Parcel";
+  const named = t.match(/^table\s*(\d{1,3})$/i);
+  if (named) return String(Number(named[1]));
+  if (/^\d{1,3}$/.test(t)) return String(Number(t));
+  return t.slice(0, 32);
+}
+
+function holdLabelForTable(tableNo) {
+  const t = normalizeShiftTableNo(tableNo);
+  if (!t || t === "Parcel") return t === "Parcel" ? "Parcel" : "";
+  if (/^\d+$/.test(t)) return `Table ${t}`;
+  return t;
+}
+
+async function ensureTableShiftSchema() {
+  try {
+    await query("ALTER TABLE company_settings ADD COLUMN table_shifting_enabled TINYINT(1) NOT NULL DEFAULT 0");
+  } catch {
+    /* exists */
+  }
+  await query(`CREATE TABLE IF NOT EXISTS table_shift_history (
+    id VARCHAR(36) PRIMARY KEY,
+    business_id VARCHAR(36) NOT NULL,
+    order_number VARCHAR(180) NULL,
+    old_table VARCHAR(64) NOT NULL,
+    new_table VARCHAR(64) NOT NULL,
+    shifted_by VARCHAR(180) NULL,
+    created_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    INDEX (business_id), INDEX (created_at)
+  )`);
+}
+
+function holdPayloadTable(row) {
+  let parsed = {};
+  try {
+    parsed = JSON.parse(row.payload_json || "{}") || {};
+  } catch {
+    parsed = {};
+  }
+  const fromPayload = normalizeShiftTableNo(parsed.table_no || parsed.tableNo);
+  if (fromPayload) return { have: fromPayload, payload: parsed };
+  return { have: normalizeShiftTableNo(row.label), payload: parsed };
+}
+
+async function tableLayoutIds(businessId) {
+  const [co] = await query("SELECT dining_tables_json FROM company_settings WHERE business_id = ? LIMIT 1", [businessId]);
+  const json = clipDiningTablesJson(co?.dining_tables_json || "[]");
+  let parsed = {};
+  try {
+    parsed = JSON.parse(json) || {};
+  } catch {
+    parsed = {};
+  }
+  const ids = new Set();
+  for (const t of parsed.tables || []) {
+    const id = normalizeShiftTableNo(t.id);
+    if (id && id !== "Parcel") ids.add(id);
+  }
+  return ids;
+}
+
+async function tableIsOccupied(businessId, tableNo) {
+  const want = normalizeShiftTableNo(tableNo);
+  if (!want || want === "Parcel") return false;
+  const holds = await query("SELECT id, label, payload_json FROM held_bills WHERE business_id = ?", [businessId]).catch(() => []);
+  for (const row of holds) {
+    if (holdPayloadTable(row).have === want) return true;
+  }
+  const qrs = await query("SELECT table_no, status FROM qr_orders WHERE business_id = ?", [businessId]).catch(() => []);
+  for (const row of qrs) {
+    if (["cancelled", "rejected"].includes(String(row.status || "").toLowerCase())) continue;
+    if (normalizeShiftTableNo(row.table_no) === want) return true;
+  }
+  return false;
+}
+
 const BRANCH_LIST_SQL = `SELECT b.*,
     (SELECT s.username FROM staff_users s
      WHERE s.branch_id = b.id AND s.business_id = b.business_id AND s.role = 'branch_manager'
@@ -628,6 +707,85 @@ export function registerTenant(app) {
       await query("UPDATE company_settings SET dining_tables_json = ? WHERE business_id = ?", [json, bid()]);
       const [company] = await query("SELECT * FROM company_settings WHERE business_id = ?", [bid()]);
       return { ok: true, dining_tables_json: json, company };
+    }),
+  );
+
+  app.get("/api/tables/shifts", requireStaff, requirePermAny("kot", "counter"), (_req, res) =>
+    send(res, async () => {
+      await ensureTableShiftSchema();
+      const shifts = await query(
+        `SELECT id, order_number, old_table, new_table, shifted_by, created_at
+         FROM table_shift_history WHERE business_id = ? ORDER BY created_at DESC LIMIT 80`,
+        [bid()],
+      ).catch(() => []);
+      return { ok: true, shifts };
+    }),
+  );
+
+  app.post("/api/tables/shift", requireStaff, requirePermAny("kot", "counter"), (req, res) =>
+    send(res, async () => {
+      await ensureTableShiftSchema();
+      const [biz] = await query("SELECT * FROM businesses WHERE id = ? LIMIT 1", [bid()]);
+      const type = String(biz?.business_type || "").toLowerCase();
+      const text = `${biz?.category || ""} ${biz?.business_type || ""}`.toLowerCase();
+      const restaurant = type === "restaurant" || type === "cafe" || type === "bakery" || /(restaurant|cafe|bakery|food)/.test(text);
+      if (!restaurant) throw new Error("Table shifting is for restaurant and cafe shops");
+      const [co] = await query("SELECT table_shifting_enabled FROM company_settings WHERE business_id = ? LIMIT 1", [bid()]);
+      const on = co?.table_shifting_enabled === 1 || co?.table_shifting_enabled === "1";
+      if (!on) throw new Error("Table shifting is turned off in Settings");
+      const from = normalizeShiftTableNo(req.body?.from_table || req.body?.fromTable || req.body?.from);
+      const to = normalizeShiftTableNo(req.body?.to_table || req.body?.toTable || req.body?.to);
+      if (!from || !to) throw new Error("Choose the current table and the new table");
+      if (from === to) throw new Error("Pick a different table");
+      if (from === "Parcel" || to === "Parcel") throw new Error("Parcel / takeaway cannot be shifted");
+      const ids = await tableLayoutIds(bid());
+      if (!ids.has(to)) throw new Error("New table is not on the floor plan");
+      if (!ids.has(from)) throw new Error("Current table is not on the floor plan");
+      if (!(await tableIsOccupied(bid(), from))) throw new Error("No active order on that table");
+      if (await tableIsOccupied(bid(), to)) throw new Error("Destination table is occupied");
+      let movedHold = false;
+      const movedQr = [];
+      const orderNumbers = [];
+      let movedKots = 0;
+      const holds = await query("SELECT id, label, payload_json FROM held_bills WHERE business_id = ?", [bid()]).catch(() => []);
+      for (const row of holds) {
+        const { have, payload } = holdPayloadTable(row);
+        if (have !== from) continue;
+        payload.table_no = to;
+        await query("UPDATE held_bills SET label = ?, payload_json = ? WHERE id = ? AND business_id = ?", [
+          holdLabelForTable(to),
+          JSON.stringify(payload),
+          row.id,
+          bid(),
+        ]);
+        movedHold = true;
+      }
+      const kots = await query("SELECT id, table_no, status FROM kitchen_tickets WHERE business_id = ?", [bid()]).catch(() => []);
+      for (const row of kots) {
+        if (normalizeShiftTableNo(row.table_no) !== from) continue;
+        if (["cancelled", "void"].includes(String(row.status || "").toLowerCase())) continue;
+        await query("UPDATE kitchen_tickets SET table_no = ?, updated_at = CURRENT_TIMESTAMP(3) WHERE id = ? AND business_id = ?", [
+          to,
+          row.id,
+          bid(),
+        ]);
+        movedKots += 1;
+      }
+      const qrs = await query("SELECT id, order_number, table_no, status FROM qr_orders WHERE business_id = ?", [bid()]).catch(() => []);
+      for (const row of qrs) {
+        if (["cancelled", "rejected"].includes(String(row.status || "").toLowerCase())) continue;
+        if (normalizeShiftTableNo(row.table_no) !== from) continue;
+        await query("UPDATE qr_orders SET table_no = ? WHERE id = ? AND business_id = ?", [to, row.id, bid()]);
+        movedQr.push(row.id);
+        if (row.order_number) orderNumbers.push(row.order_number);
+      }
+      const who = authUser()?.name || authUser()?.email || authUser()?.username || "staff";
+      const orderNumber = [...new Set(orderNumbers)].join(", ") || (movedHold ? holdLabelForTable(from) : "");
+      await query(
+        "INSERT INTO table_shift_history (id, business_id, order_number, old_table, new_table, shifted_by) VALUES (?,?,?,?,?,?)",
+        [crypto.randomUUID(), bid(), orderNumber, from, to, who],
+      );
+      return { ok: true, from, to, hold: movedHold, kots: movedKots, qr_orders: movedQr, order_number: orderNumber };
     }),
   );
 

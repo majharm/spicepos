@@ -1328,6 +1328,60 @@ a.btn { text-decoration: none; display: inline-block; }
   background: #ccfbf1;
   border-color: #5eead4;
 }
+.table-seat-shift {
+  position: absolute;
+  bottom: -7px;
+  left: -7px;
+  z-index: 2;
+  min-width: 44px;
+  height: 22px;
+  padding: 0 6px;
+  border: 1px solid #fdba74;
+  border-radius: 999px;
+  background: #fff7ed;
+  color: #9a3412;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .02em;
+  line-height: 20px;
+  cursor: pointer;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.12);
+}
+.table-seat-shift:hover { background: #ffedd5; }
+.table-shift-picker {
+  display: grid;
+  gap: 8px;
+  margin: 8px 0 12px;
+  padding: 12px;
+  border: 1px solid #fdba74;
+  border-radius: 14px;
+  background: #fffbeb;
+}
+.table-shift-picker[hidden] { display: none; }
+.table-shift-choices {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: 8px;
+}
+.table-shift-choice {
+  min-height: 56px;
+  border: 1px solid var(--line-strong, #c5d0c8);
+  border-radius: 12px;
+  background: #fff;
+  cursor: pointer;
+  font: inherit;
+}
+.table-shift-choice strong { display: block; font-size: 13px; }
+.table-shift-choice span { font-size: 11px; color: var(--muted, #64748b); }
+.table-shift-choice.is-busy {
+  background: #fff7ed;
+  border-color: #fdba74;
+  cursor: not-allowed;
+  opacity: 0.85;
+}
+.table-shift-choice.is-from {
+  outline: 2px solid #0f766e;
+}
 body.restaurant-mode .workspace {
   background: #f3eee6;
 }
