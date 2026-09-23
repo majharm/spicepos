@@ -103,7 +103,7 @@ test("Restaurant shops keep custom table names and can add or remove seats", () 
   assert.equal(R.floorsOf({ dining_tables_json: JSON.stringify([{ id: "AC", name: "AC Hall" }]) }, [])[0].id, "ground");
 
   const emptySaved = R.tablesOf({ dining_tables_json: "[]" }, []);
-  assert.equal(emptySaved.length, 0);
+  assert.equal(emptySaved.length, R.DEFAULT_SEATS);
 
   const added = R.addTable(named, "Window 1");
   assert.equal(added.ok, true);
