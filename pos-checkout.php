@@ -7,6 +7,13 @@ function pos_checkout_sale($bid, $branchId, $uid, $auth, $body) {
   if ($qrOrderId !== "") {
     require_once __DIR__ . "/pos-qr-ordering.php";
     pos_qr_ensure_schema();
+    try {
+      $qrRows = pos_q("SELECT sales_order_id, status FROM qr_orders WHERE id = ? AND business_id = ? LIMIT 1", "ss", [$qrOrderId, $bid]);
+      $st = strtolower((string) ($qrRows[0]["status"] ?? ""));
+      if (!empty($qrRows[0]["sales_order_id"]) || in_array($st, ["cancelled", "rejected"], true)) {
+        $qrOrderId = "";
+      }
+    } catch (Exception $e) { /* optional */ }
   }
   return pos_with_transaction(function () use ($body, $bid, $branchId, $uid, $auth, $qrOrderId) {
     $lines = $body["lines"] ?? [];

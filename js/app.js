@@ -2362,7 +2362,7 @@ function applyHoldToCart(payload, opts = {}) {
   if (payload.lastPack?.id) $("pack-choice").value = payload.lastPack.id;
   else if ($("pack-choice")) $("pack-choice").value = "";
   state.kotPrinted = Array.isArray(payload.kotPrinted) ? payload.kotPrinted : [];
-  if (payload.qrOrderId && keep) state.activeQrOrderId = payload.qrOrderId;
+  state.activeQrOrderId = payload.qrOrderId || "";
 }
 
 function diningCompany() {
@@ -2389,8 +2389,8 @@ function tableIsBusy(tableId) {
   if (!R || !tableId) return false;
   const want = R.normalizeTableNo(tableId);
   const qrBusy = (qrOrderCache || []).some((order) => {
-    if (["cancelled", "rejected", "completed"].includes(order.status)) return false;
-    return R.normalizeTableNo(order.table_no) === want;
+    const open = R.qrOrderOpen ? R.qrOrderOpen(order) : !["cancelled", "rejected", "completed"].includes(String(order.status || "").toLowerCase()) && !order.sales_order_id;
+    return open && R.normalizeTableNo(order.table_no) === want;
   });
   return Boolean(R.findTableHold(state.held, tableId) || (state.activeTable === tableId && state.cart.length) || qrBusy);
 }
@@ -2629,6 +2629,31 @@ function paintTableShiftPicker(fromId, tables, R) {
   </form>`;
 }
 
+function liveQrOrderIdForTable(tableNo) {
+  const R = restaurantApi();
+  const want = R?.normalizeTableNo?.(tableNo) || "";
+  if (!want || want === R?.PARCEL) return "";
+  const open = (qrOrderCache || []).find((order) => {
+    if (R?.qrOrderOpen) return R.qrOrderOpen(order) && R.normalizeTableNo(order.table_no) === want;
+    return !order.sales_order_id && !["cancelled", "rejected", "completed"].includes(String(order.status || "").toLowerCase()) && R.normalizeTableNo(order.table_no) === want;
+  });
+  return open?.id || "";
+}
+
+function bindQrOrderAfterTableShift(tableNo) {
+  const R = restaurantApi();
+  const hold = R?.findTableHold?.(state.held, tableNo);
+  const payload = hold ? holdPayload(hold) : null;
+  const fromHold = payload?.qrOrderId || "";
+  const live = liveQrOrderIdForTable(tableNo);
+  const cached = fromHold && (qrOrderCache || []).find((row) => row.id === fromHold);
+  if (cached && !R?.qrOrderOpen?.(cached)) {
+    state.activeQrOrderId = live;
+    return;
+  }
+  state.activeQrOrderId = live || (cached ? fromHold : "") || "";
+}
+
 async function confirmAndShiftTable(fromId, toId) {
   const R = restaurantApi();
   if (!R) return;
@@ -2648,6 +2673,7 @@ async function confirmAndShiftTable(fromId, toId) {
     syncActiveFloor(check.to);
   }
   await Promise.all([loadHolds(), loadKots().catch(() => {}), loadQrOrders().catch(() => {})]);
+  bindQrOrderAfterTableShift(check.to);
   renderCart();
   renderTableBoard();
   setHint(`Order moved from ${fromName} to ${toName}`, "ok");
@@ -2675,10 +2701,12 @@ async function selectDiningTable(tableNo) {
     state.cart = [];
     state.kotPrinted = [];
     state.lastPack = null;
+    state.activeQrOrderId = "";
     if ($("pack-choice")) $("pack-choice").value = "";
   }
   state.activeTable = next;
   syncActiveFloor(next);
+  bindQrOrderAfterTableShift(next);
   renderCart();
   renderTableBoard();
   setHint(`${R.displayTable(next)} open`, "ok");
@@ -8916,7 +8944,14 @@ $("btn-pay").addEventListener("click", async () => {
       loyaltyPoints: state.loyaltyRedeem,
       offerIds: (state.appliedOffers?.applied || []).map((o) => o.id).filter(Boolean),
       offerLoyaltyMultiplier: state.appliedOffers?.loyaltyMultiplier || 1,
-      qrOrderId: state.activeQrOrderId || undefined,
+      qrOrderId: (() => {
+        const id = state.activeQrOrderId || "";
+        if (!id) return undefined;
+        const qr = (qrOrderCache || []).find((row) => row.id === id);
+        if (qr?.sales_order_id) return undefined;
+        if (qr && ["cancelled", "rejected"].includes(String(qr.status || "").toLowerCase())) return undefined;
+        return id;
+      })(),
       table_no: isRestaurantShop() ? (state.activeTable || undefined) : undefined,
       amountPaid: checkoutAmountPaid(),
       customer_name: isClassicBillShop() ? pharmacyBillCustomerName() : undefined,

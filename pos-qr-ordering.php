@@ -263,7 +263,7 @@ function pos_qr_link_sale($bid, $qrOrderId, $saleId, $branchId = "") {
   $rows = pos_q("SELECT id, sales_order_id FROM qr_orders WHERE id = ? AND business_id = ? LIMIT 1", "ss", [$qrOrderId, $bid]);
   $qr = $rows[0] ?? null;
   if (!$qr) throw new Exception("QR order not found");
-  if (!empty($qr["sales_order_id"]) && $qr["sales_order_id"] !== $saleId) throw new Exception("This QR order is already invoiced");
+  if (!empty($qr["sales_order_id"]) && $qr["sales_order_id"] !== $saleId) return;
   pos_q(
     "UPDATE qr_orders SET status = 'completed', sales_order_id = ?, branch_id = COALESCE(branch_id, ?) WHERE id = ? AND business_id = ?",
     "ssss",

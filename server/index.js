@@ -37,7 +37,7 @@ import { registerSalonPublic, registerSalonStaff, ensureSalonSchema } from "./sa
 import { registerPrintPublic, registerPrintStaff, ensurePrintSchema, attachPrintInvoiceLines } from "./print.js";
 import "../js/discount.js";
 import "../js/payment-methods.js";
-import { canonApiUrl, isAliasedApi, isApiUrl, rewriteToApi } from "./http-path.js";
+import { registerQrPublic, registerQrStaff, ensureQrOrderSchema, linkQrOrderSale } from "./qr-ordering.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.join(__dirname, "..");
@@ -829,7 +829,7 @@ registerAccounts(app);
 
 app.post("/api/checkout", requireStaff, requirePerm("counter"), async (req, res) => {
   const { customerId, paymentMethod, lines, packId, packCount, discount, discountType, discountValue, loyaltyPoints, offerIds } = req.body || {};
-  const qrOrderId = String(req.body?.qrOrderId || req.body?.qr_order_id || "").trim();
+  let qrOrderId = String(req.body?.qrOrderId || req.body?.qr_order_id || "").trim();
   if (!Array.isArray(lines) || lines.length === 0) {
     res.status(400).json({ error: "Cart is empty" });
     return;
@@ -846,7 +846,19 @@ app.post("/api/checkout", requireStaff, requirePerm("counter"), async (req, res)
     } catch {
       /* unit master optional */
     }
-    if (qrOrderId) await ensureQrOrderSchema();
+    if (qrOrderId) {
+      await ensureQrOrderSchema();
+      try {
+        const [qrs] = await query("SELECT sales_order_id, status FROM qr_orders WHERE id = ? AND business_id = ? LIMIT 1", [
+          qrOrderId,
+          businessId,
+        ]);
+        const st = String(qrs[0]?.status || "").toLowerCase();
+        if (qrs[0]?.sales_order_id || ["cancelled", "rejected"].includes(st)) qrOrderId = "";
+      } catch {
+        /* optional */
+      }
+    }
     const result = await withTransaction(async (conn) => {
       const [customers] = await conn.query(
         "SELECT * FROM customers WHERE id = ? AND business_id = ?",

@@ -251,6 +251,10 @@ test("Table shifting is on by default and only allows a free destination", () =>
   assert.equal(R.tableOccupied(holds, qrs, "5"), true);
   assert.equal(R.tableOccupied(holds, qrs, "8"), false);
   assert.equal(R.tableOccupied(holds, qrs, "3"), true);
+  assert.equal(R.qrOrderOpen({ table_no: "5", status: "preparing" }), true);
+  assert.equal(R.qrOrderOpen({ table_no: "5", status: "completed" }), false);
+  assert.equal(R.qrOrderOpen({ table_no: "5", status: "preparing", sales_order_id: "so-1" }), false);
+  assert.equal(R.tableOccupied(holds, [{ table_no: "9", status: "completed", sales_order_id: "so-1" }], "9"), false);
   const ok = R.canShiftTable(holds, qrs, "5", "8", opts);
   assert.equal(ok.ok, true);
   assert.equal(ok.from, "5");

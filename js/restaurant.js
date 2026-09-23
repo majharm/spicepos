@@ -370,7 +370,10 @@
   }
 
   function qrOrderOpen(order) {
-    return !["cancelled", "rejected"].includes(String(order?.status || "").toLowerCase());
+    const st = String(order?.status || "").toLowerCase();
+    if (["cancelled", "rejected", "completed"].includes(st)) return false;
+    if (order?.sales_order_id) return false;
+    return true;
   }
 
   function tableOccupied(holds, qrOrders, tableNo, opts = {}) {
@@ -641,6 +644,7 @@ ${kotBody(opts)}
     isTableHold,
     findTableHold,
     tableShiftingOn,
+    qrOrderOpen,
     tableOccupied,
     canShiftTable,
     specialInstruction,

@@ -664,7 +664,7 @@ export async function linkQrOrderSale(conn, { businessId, qrOrderId, saleId }) {
   );
   const qr = rows[0];
   if (!qr) throw new Error("QR order not found");
-  if (qr.sales_order_id && qr.sales_order_id !== saleId) throw new Error("This QR order is already invoiced");
+  if (qr.sales_order_id && qr.sales_order_id !== saleId) return;
   await conn.query(
     "UPDATE qr_orders SET status = 'completed', sales_order_id = ?, branch_id = COALESCE(branch_id, ?) WHERE id = ? AND business_id = ?",
     [saleId, branchId(), id, businessId],

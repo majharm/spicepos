@@ -70,7 +70,9 @@ function pos_hold_payload_table($row) {
 
 function pos_table_qr_open($order) {
   $st = strtolower((string) ($order["status"] ?? ""));
-  return !in_array($st, ["cancelled", "rejected"], true);
+  if (in_array($st, ["cancelled", "rejected", "completed"], true)) return false;
+  if (!empty($order["sales_order_id"])) return false;
+  return true;
 }
 
 function pos_table_occupied($bid, $tableNo) {
@@ -84,7 +86,7 @@ function pos_table_occupied($bid, $tableNo) {
     }
   } catch (Exception $e) { /* optional */ }
   try {
-    $qrs = pos_q("SELECT table_no, status FROM qr_orders WHERE business_id = ?", "s", [$bid]);
+    $qrs = pos_q("SELECT table_no, status, sales_order_id FROM qr_orders WHERE business_id = ?", "s", [$bid]);
     foreach ($qrs as $row) {
       if (!pos_table_qr_open($row)) continue;
       if (pos_normalize_table_no($row["table_no"] ?? "") === $want) return true;
@@ -168,7 +170,7 @@ function pos_dispatch_table_shift($path, $method, $body, $bid, $auth) {
     } catch (Exception $e) { /* optional */ }
 
     try {
-      $qrs = pos_q("SELECT id, order_number, table_no, status FROM qr_orders WHERE business_id = ?", "s", [$bid]);
+      $qrs = pos_q("SELECT id, order_number, table_no, status, sales_order_id FROM qr_orders WHERE business_id = ?", "s", [$bid]);
       foreach ($qrs as $row) {
         if (!pos_table_qr_open($row)) continue;
         if (pos_normalize_table_no($row["table_no"] ?? "") !== $from) continue;

@@ -185,9 +185,10 @@ async function tableIsOccupied(businessId, tableNo) {
   for (const row of holds) {
     if (holdPayloadTable(row).have === want) return true;
   }
-  const qrs = await query("SELECT table_no, status FROM qr_orders WHERE business_id = ?", [businessId]).catch(() => []);
+  const qrs = await query("SELECT table_no, status, sales_order_id FROM qr_orders WHERE business_id = ?", [businessId]).catch(() => []);
   for (const row of qrs) {
-    if (["cancelled", "rejected"].includes(String(row.status || "").toLowerCase())) continue;
+    const st = String(row.status || "").toLowerCase();
+    if (["cancelled", "rejected", "completed"].includes(st) || row.sales_order_id) continue;
     if (normalizeShiftTableNo(row.table_no) === want) return true;
   }
   return false;
@@ -773,9 +774,10 @@ export function registerTenant(app) {
         ]);
         movedKots += 1;
       }
-      const qrs = await query("SELECT id, order_number, table_no, status FROM qr_orders WHERE business_id = ?", [bid()]).catch(() => []);
+      const qrs = await query("SELECT id, order_number, table_no, status, sales_order_id FROM qr_orders WHERE business_id = ?", [bid()]).catch(() => []);
       for (const row of qrs) {
-        if (["cancelled", "rejected"].includes(String(row.status || "").toLowerCase())) continue;
+        const st = String(row.status || "").toLowerCase();
+        if (["cancelled", "rejected", "completed"].includes(st) || row.sales_order_id) continue;
         if (normalizeShiftTableNo(row.table_no) !== from) continue;
         await query("UPDATE qr_orders SET table_no = ? WHERE id = ? AND business_id = ?", [to, row.id, bid()]);
         movedQr.push(row.id);
