@@ -196,6 +196,8 @@ test("business admin can delete invoices and reverse credit sale", () => {
   assert.match(core, /function pos_recompute_customer_outstanding/);
   assert.match(core, /function pos_recompute_business_outstanding/);
   assert.match(core, /function pos_settle_customer_invoice/);
+  assert.match(core, /function pos_is_walk_in_customer/);
+  assert.match(accounts, /function isWalkInParty/);
   assert.match(app, /data-delete-order/);
   assert.match(app, /Delete invoice/);
   assert.match(app, /await loadBootstrap\(\)/);

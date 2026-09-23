@@ -378,7 +378,7 @@ test("POS boot skips API probe and slims catalog photos", () => {
   assert.match(index, /id="modal-close"/);
   assert.match(read("css/pos.css"), /#modal-close \{/);
   assert.match(index, /invoice-share\.js\?v=20260913share1/);
-  assert.match(index, /invoice\.js\?v=20260922deploy219/);
+  assert.match(index, /invoice\.js\?v=20260923deploy227/);
   assert.doesNotMatch(index, /app\.js\?v=20260905deploy167/);
   assert.doesNotMatch(index, /app\.js\?v=20260905deploy166/);
   assert.match(index, /offers\.js\?v=20260905deploy170/);

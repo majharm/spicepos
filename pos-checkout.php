@@ -245,9 +245,19 @@ function pos_checkout_sale($bid, $branchId, $uid, $auth, $body) {
         $orderRow["payment_reference"] = $snap["paymentReference"] ?? null;
         $orderRow["payment_date"] = $snap["paymentDate"] ?? null;
         $orderRow["receipt"] = $snap["receipt"] ?? null;
-        $orderRow["customer_outstanding"] = $customer["outstanding"] ?? $snap["currentDue"] ?? 0;
-        $orderRow["payments"] = function_exists("pos_list_customer_receipts")
-          ? pos_list_customer_receipts($bid, [$customer["id"] ?? ""])
+        $orderRow["customer_outstanding"] = !empty($walkIn) ? 0 : ($customer["outstanding"] ?? $snap["currentDue"] ?? 0);
+        $rcp = $snap["receipt"] ?? null;
+        $orderRow["payments"] = $rcp
+          ? [[
+              "entry_no" => $rcp["entryNo"] ?? $rcp["entry_no"] ?? "",
+              "entry_type" => "receipt",
+              "amount" => $snap["amountPaid"] ?? 0,
+              "payment_method" => $methodPay,
+              "reference_id" => $orderId,
+              "invoice_no" => $orderNumber,
+              "notes" => $orderNumber,
+              "payment_date" => $snap["paymentDate"] ?? null,
+            ]]
           : [];
       }
     } catch (Throwable $e) {

@@ -1660,6 +1660,23 @@ function pos_apply_invoice_paid_fifo($customerId, $amount, $businessId) {
   }
 }
 
+function pos_is_walk_in_customer($customer) {
+  $code = (string) ($customer["code"] ?? "");
+  $name = trim((string) ($customer["name"] ?? ""));
+  return $code === "CUS-001" || (bool) preg_match("/^walk-?in$/i", $name);
+}
+
+function pos_receipt_matches_order($row, $order) {
+  $oid = (string) ($order["id"] ?? "");
+  $num = (string) ($order["order_number"] ?? "");
+  $rid = (string) ($row["reference_id"] ?? "");
+  $inv = (string) ($row["invoice_no"] ?? "");
+  $notes = (string) ($row["notes"] ?? "");
+  if ($oid !== "" && $rid !== "" && $rid === $oid) return true;
+  if ($num !== "" && ($inv === $num || $notes === $num)) return true;
+  return false;
+}
+
 function pos_invoice_paid_amount($method, $total, $raw) {
   $credit = pos_pay_normalize($method) === "credit";
   if ($raw !== null && $raw !== "") {
@@ -1672,37 +1689,46 @@ function pos_invoice_paid_amount($method, $total, $raw) {
 
 function pos_settle_customer_invoice($customer, $total, $method, $orderId, $orderNumber, $businessId, $uid = null, $amountPaid = null, $paymentReference = null, $paymentDate = null) {
   $invoiceTotal = pos_round2($total);
-  $previousDue = pos_round2((float) ($customer["outstanding"] ?? 0));
+  $walkIn = pos_is_walk_in_customer($customer);
+  $previousDue = $walkIn ? 0 : pos_round2((float) ($customer["outstanding"] ?? 0));
   $paid = pos_invoice_paid_amount($method, $invoiceTotal, $amountPaid);
+  if ($walkIn && $paid > $invoiceTotal) $paid = $invoiceTotal;
   $maxPaid = pos_round2($previousDue + $invoiceTotal);
   if ($paid > $maxPaid) $paid = $maxPaid;
   $currentDue = pos_round2(max(0, $previousDue + $invoiceTotal - $paid));
   $limit = (float) ($customer["credit_limit"] ?? 0);
-  if ($limit > 0 && $currentDue > $limit) {
+  if (!$walkIn && $limit > 0 && $currentDue > $limit) {
     throw new Exception("Credit limit exceeded (limit ₹" . number_format($limit, 2) . ", outstanding would be ₹" . number_format($currentDue, 2) . ")");
   }
-  pos_q("UPDATE customers SET outstanding = ? WHERE id = ? AND business_id = ?", "dss", [$currentDue, $customer["id"], $businessId]);
-  $customer["outstanding"] = $currentDue;
-  $n = pos_next_seq("account", $businessId, 1001);
-  $saleId = pos_insert_ledger([
-    "entry_no" => "JV-{$n}",
-    "entry_type" => "sale_credit",
-    "party_type" => "customer",
-    "party_id" => $customer["id"],
-    "party_name" => $customer["business_name"] ?? $customer["name"],
-    "amount" => $invoiceTotal,
-    "payment_method" => $method ?: "credit",
-    "reference_type" => "sales_order",
-    "reference_id" => $orderId,
-    "notes" => $orderNumber,
-  ], $businessId, $uid);
-  pos_stamp_ledger_due($saleId, [
-    "invoice_no" => $orderNumber,
-    "invoice_amount" => $invoiceTotal,
-    "previous_due" => $previousDue,
-    "remaining_due" => $currentDue,
-    "payment_date" => $paymentDate,
-  ], $businessId);
+  if ($walkIn) {
+    try {
+      pos_q("UPDATE customers SET outstanding = 0 WHERE id = ? AND business_id = ?", "ss", [$customer["id"], $businessId]);
+    } catch (Exception $e) { /* optional */ }
+    $customer["outstanding"] = 0;
+  } else {
+    pos_q("UPDATE customers SET outstanding = ? WHERE id = ? AND business_id = ?", "dss", [$currentDue, $customer["id"], $businessId]);
+    $customer["outstanding"] = $currentDue;
+    $n = pos_next_seq("account", $businessId, 1001);
+    $saleId = pos_insert_ledger([
+      "entry_no" => "JV-{$n}",
+      "entry_type" => "sale_credit",
+      "party_type" => "customer",
+      "party_id" => $customer["id"],
+      "party_name" => $customer["business_name"] ?? $customer["name"],
+      "amount" => $invoiceTotal,
+      "payment_method" => $method ?: "credit",
+      "reference_type" => "sales_order",
+      "reference_id" => $orderId,
+      "notes" => $orderNumber,
+    ], $businessId, $uid);
+    pos_stamp_ledger_due($saleId, [
+      "invoice_no" => $orderNumber,
+      "invoice_amount" => $invoiceTotal,
+      "previous_due" => $previousDue,
+      "remaining_due" => $currentDue,
+      "payment_date" => $paymentDate,
+    ], $businessId);
+  }
   $receipt = null;
   if ($paid > 0) {
     $receiptMethod = pos_pay_normalize($method) === "credit" ? "cash" : $method;
@@ -1803,16 +1829,28 @@ function pos_attach_order_payments($bid, $orders) {
     if (!empty($o["customer_id"])) $custIds[] = $o["customer_id"];
   }
   $receipts = pos_list_customer_receipts($bid, $custIds);
-  $by = [];
-  foreach ($receipts as $row) {
-    $pid = (string) ($row["party_id"] ?? "");
-    if ($pid === "") continue;
-    if (!isset($by[$pid])) $by[$pid] = [];
-    $by[$pid][] = $row;
-  }
   foreach ($orders as &$o) {
+    $linked = [];
+    foreach ($receipts as $row) {
+      if (pos_receipt_matches_order($row, $o)) $linked[] = $row;
+    }
+    if ($linked) {
+      $o["payments"] = $linked;
+      continue;
+    }
+    $walkIn = (bool) preg_match("/^walk-?in$/i", trim((string) ($o["customer_name"] ?? "")));
+    if ($walkIn) {
+      $o["payments"] = [];
+      continue;
+    }
     $cid = (string) ($o["customer_id"] ?? "");
-    $o["payments"] = $by[$cid] ?? [];
+    $party = [];
+    if ($cid !== "") {
+      foreach ($receipts as $row) {
+        if ((string) ($row["party_id"] ?? "") === $cid) $party[] = $row;
+      }
+    }
+    $o["payments"] = $party;
   }
   unset($o);
   return $orders;
@@ -1844,6 +1882,10 @@ function pos_hydrate_customer_outstanding_rows($businessId, $customers) {
   if (!is_array($customers) || !$customers) return is_array($customers) ? $customers : [];
   $dues = pos_invoice_open_dues($businessId);
   foreach ($customers as &$c) {
+    if (pos_is_walk_in_customer($c)) {
+      $c["outstanding"] = 0;
+      continue;
+    }
     $have = (float) ($c["outstanding"] ?? 0);
     $inv = (float) ($dues[(string) ($c["id"] ?? "")] ?? 0);
     $next = pos_round2(max($have, $inv));
@@ -1860,6 +1902,13 @@ function pos_hydrate_customer_outstanding_rows($businessId, $customers) {
 
 function pos_recompute_customer_outstanding($businessId, $customerId) {
   if (!$customerId) return 0;
+  try {
+    $cust = pos_q("SELECT code, name FROM customers WHERE id = ? AND business_id = ? LIMIT 1", "ss", [$customerId, $businessId]);
+    if ($cust && pos_is_walk_in_customer($cust[0] ?? [])) {
+      pos_q("UPDATE customers SET outstanding = 0 WHERE id = ? AND business_id = ?", "ss", [$customerId, $businessId]);
+      return 0;
+    }
+  } catch (Exception $e) { /* continue */ }
   $billed = 0;
   try {
     $sale = pos_q(

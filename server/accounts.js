@@ -78,6 +78,22 @@ export function invoicePaidAmount(method, total, raw) {
   return credit ? 0 : round2(total);
 }
 
+function isWalkInParty(customer) {
+  if (!customer) return false;
+  return String(customer.code || "") === "CUS-001" || /^walk-?in$/i.test(String(customer.name || "").trim());
+}
+
+export function receiptMatchesOrder(row, order) {
+  const oid = String(order?.id || "");
+  const num = String(order?.order_number || "");
+  const rid = String(row?.reference_id || "");
+  const inv = String(row?.invoice_no || "");
+  const notes = String(row?.notes || "");
+  if (oid && rid && rid === oid) return true;
+  if (num && (inv === num || notes === num)) return true;
+  return false;
+}
+
 export async function listCustomerReceipts(customerIds, conn) {
   const ids = [...new Set((customerIds || []).map((id) => String(id || "").trim()).filter(Boolean))];
   if (!ids.length) return [];
@@ -99,17 +115,17 @@ export async function listCustomerReceipts(customerIds, conn) {
 }
 
 export function attachPaymentsToOrders(orders, receipts) {
-  const byParty = new Map();
-  for (const row of receipts || []) {
-    const id = String(row.party_id || "");
-    if (!id) continue;
-    if (!byParty.has(id)) byParty.set(id, []);
-    byParty.get(id).push(row);
-  }
-  return (orders || []).map((order) => ({
-    ...order,
-    payments: byParty.get(String(order.customer_id || "")) || [],
-  }));
+  return (orders || []).map((order) => {
+    const linked = (receipts || []).filter((row) => receiptMatchesOrder(row, order));
+    if (linked.length) return { ...order, payments: linked };
+    const walkIn = /^walk-?in$/i.test(String(order.customer_name || "").trim());
+    if (walkIn) return { ...order, payments: [] };
+    const cid = String(order.customer_id || "");
+    return {
+      ...order,
+      payments: cid ? (receipts || []).filter((row) => String(row.party_id || "") === cid) : [],
+    };
+  });
 }
 
 async function insertLedger(conn, row) {
@@ -287,39 +303,55 @@ export async function settleCustomerInvoice(conn, {
   customer, total, method, orderId, orderNumber, amountPaid, paymentReference, paymentDate,
 }) {
   const invoiceTotal = round2(total);
-  const previousDue = round2(Number(customer.outstanding || 0));
+  const walkIn = isWalkInParty(customer);
+  const previousDue = walkIn ? 0 : round2(Number(customer.outstanding || 0));
   let paid = invoicePaidAmount(method, invoiceTotal, amountPaid);
+  if (walkIn && paid > invoiceTotal) paid = invoiceTotal;
   const maxPaid = round2(previousDue + invoiceTotal);
   if (paid > maxPaid) paid = maxPaid;
   const currentDue = round2(Math.max(0, previousDue + invoiceTotal - paid));
   const limit = Number(customer.credit_limit || 0);
-  if (limit > 0 && currentDue > limit) {
+  if (!walkIn && limit > 0 && currentDue > limit) {
     throw new Error(`Credit limit exceeded (limit ₹${limit.toFixed(2)}, outstanding would be ₹${currentDue.toFixed(2)})`);
   }
-  await execSql(conn, "UPDATE customers SET outstanding = ? WHERE id = ? AND business_id = ?", [
-    currentDue,
-    customer.id,
-    bid(),
-  ]);
-  customer.outstanding = currentDue;
-  const n = await nextSeq(conn, "account", 1001);
-  await insertLedger(conn, {
-    entry_no: `JV-${n}`,
-    entry_type: "sale_credit",
-    party_type: "customer",
-    party_id: customer.id,
-    party_name: customer.business_name || customer.name,
-    amount: invoiceTotal,
-    payment_method: method || "credit",
-    reference_type: "sales_order",
-    reference_id: orderId,
-    notes: orderNumber,
-    invoice_no: orderNumber,
-    invoice_amount: invoiceTotal,
-    previous_due: previousDue,
-    remaining_due: currentDue,
-    payment_date: paymentDate || null,
-  });
+  if (!walkIn) {
+    await execSql(conn, "UPDATE customers SET outstanding = ? WHERE id = ? AND business_id = ?", [
+      currentDue,
+      customer.id,
+      bid(),
+    ]);
+    customer.outstanding = currentDue;
+  } else {
+    try {
+      await execSql(conn, "UPDATE customers SET outstanding = 0 WHERE id = ? AND business_id = ?", [
+        customer.id,
+        bid(),
+      ]);
+    } catch {
+      /* optional */
+    }
+    customer.outstanding = 0;
+  }
+  if (!walkIn) {
+    const n = await nextSeq(conn, "account", 1001);
+    await insertLedger(conn, {
+      entry_no: `JV-${n}`,
+      entry_type: "sale_credit",
+      party_type: "customer",
+      party_id: customer.id,
+      party_name: customer.business_name || customer.name,
+      amount: invoiceTotal,
+      payment_method: method || "credit",
+      reference_type: "sales_order",
+      reference_id: orderId,
+      notes: orderNumber,
+      invoice_no: orderNumber,
+      invoice_amount: invoiceTotal,
+      previous_due: previousDue,
+      remaining_due: currentDue,
+      payment_date: paymentDate || null,
+    });
+  }
   let receipt = null;
   if (paid > 0) {
     const receiptMethod = String(method || "cash").toLowerCase() === "credit" ? "cash" : method;
@@ -397,6 +429,7 @@ export async function invoiceOpenDueByCustomer(businessId) {
 
 export function hydrateCustomerOutstandingRows(customers, dues) {
   return (Array.isArray(customers) ? customers : []).map((c) => {
+    if (isWalkInParty(c)) return { ...c, outstanding: 0 };
     const have = Number(c?.outstanding) || 0;
     const inv = Number(dues?.[c?.id]) || 0;
     const next = round2(Math.max(have, inv));
@@ -406,6 +439,18 @@ export function hydrateCustomerOutstandingRows(customers, dues) {
 
 export async function recomputeCustomerOutstanding(conn, customerId) {
   if (!customerId) return 0;
+  try {
+    const [[cust]] = await execSql(conn, "SELECT code, name FROM customers WHERE id = ? AND business_id = ? LIMIT 1", [
+      customerId,
+      bid(),
+    ]);
+    if (isWalkInParty(cust)) {
+      await execSql(conn, "UPDATE customers SET outstanding = 0 WHERE id = ? AND business_id = ?", [customerId, bid()]);
+      return 0;
+    }
+  } catch {
+    /* continue with ledger recompute */
+  }
   let billed = 0;
   try {
     const [[sale]] = await execSql(

@@ -495,6 +495,44 @@ test("office invoice lists ledger receipts till date then total due", () => {
   assert.equal(due.current, 14000);
 });
 
+test("Walk-in cafe bill does not carry house outstanding onto Total due", () => {
+  const InvoicePrint = loadInvoicePrint();
+  const due = InvoicePrint.invoiceDueFigures({
+    customer_name: "Walk-in",
+    total: 100,
+    previous_due: 5994.95,
+    amount_paid: 594.5,
+    customer_outstanding: 5994.95,
+    payment_method: "cash",
+    payment_status: "paid",
+    payments: [
+      { entry_no: "RCP-OLD", entry_type: "receipt", amount: 494.5, notes: "old walk-in" },
+    ],
+  });
+  assert.equal(due.previous, 0);
+  assert.equal(due.paid, 100);
+  assert.equal(due.current, 0);
+  const html = InvoicePrint.invoiceDueRowsHtml(
+    {
+      customer_name: "Walk-in",
+      total: 100,
+      previous_due: 5994.95,
+      amount_paid: 100,
+      customer_outstanding: 5994.95,
+      payment_method: "cash",
+      payment_status: "paid",
+    },
+    (n) => `₹${Number(n).toFixed(2)}`,
+    (v) => String(v),
+  );
+  assert.match(html, /Previous due/);
+  assert.match(html, /₹0\.00/);
+  assert.match(html, /Current invoice/);
+  assert.match(html, /₹100\.00/);
+  assert.match(html, /Payment Made/);
+  assert.match(html, /Total due/);
+});
+
 test("thermal invoice HTML shows IGST for inter-state supply", () => {
   const InvoicePrint = loadInvoicePrint();
   const html = InvoicePrint.invoiceBody(

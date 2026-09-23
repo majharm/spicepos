@@ -1154,8 +1154,21 @@ app.post("/api/checkout", requireStaff, requirePerm("counter"), async (req, res)
       orderRow.payment_reference = dueSnap.paymentReference;
       orderRow.payment_date = dueSnap.paymentDate;
       orderRow.receipt = dueSnap.receipt;
-      orderRow.customer_outstanding = customer.outstanding;
-      orderRow.payments = await listCustomerReceipts([customer.id], conn);
+      orderRow.customer_outstanding = walkIn ? 0 : customer.outstanding;
+      orderRow.payments = dueSnap.receipt
+        ? [
+            {
+              entry_no: dueSnap.receipt.entryNo || dueSnap.receipt.entry_no,
+              entry_type: "receipt",
+              amount: dueSnap.amountPaid,
+              payment_method: method,
+              reference_id: orderRow.id,
+              invoice_no: orderRow.order_number,
+              notes: orderRow.order_number,
+              payment_date: dueSnap.paymentDate,
+            },
+          ]
+        : [];
       await postSaleJournal(conn, orderRow);
       return orderRow;
     });

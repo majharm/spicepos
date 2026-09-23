@@ -706,28 +706,43 @@ ${purchaseBody(purchase, ctx)}
     return unique;
   }
 
+  function isWalkInOrder(order) {
+    const name = String(order?.customer_name || order?.customerName || "").trim();
+    if (/^walk-?in$/i.test(name)) return true;
+    return String(order?.customer_code || order?.customerCode || "").trim() === "CUS-001";
+  }
+
+  function paymentMatchesOrder(row, order) {
+    const oid = String(order?.id || "");
+    const num = String(order?.order_number || order?.orderNumber || "");
+    const rid = String(row?.reference_id || row?.referenceId || "");
+    const inv = String(row?.invoice_no || row?.invoiceNo || "");
+    const notes = String(row?.notes || "");
+    if (oid && rid && rid === oid) return true;
+    if (num && (inv === num || notes === num)) return true;
+    return false;
+  }
+
+  function invoicePaymentsForDue(order) {
+    const all = invoicePaymentRows(order);
+    const linked = all.filter((row) => paymentMatchesOrder(row, order));
+    if (linked.length) return linked;
+    if (isWalkInOrder(order)) return [];
+    return all;
+  }
+
   function invoiceDueFigures(order) {
     const total = round2(order.total);
-    const previous = round2(order.previous_due ?? order.previousDue);
-    const rows = invoicePaymentRows(order);
-    const paidFromRows = round2(rows.reduce((sum, r) => sum + r.amount, 0));
+    const walkIn = isWalkInOrder(order);
+    const previous = walkIn ? 0 : round2(order.previous_due ?? order.previousDue);
+    const rows = invoicePaymentsForDue(order);
     const inferred = invoicePaidFromOrder(order);
-    const paid = rows.length ? paidFromRows : inferred;
-    const storedPaid = round2(order.amount_paid ?? order.amountPaid);
-    const storedCurrent = order.current_due != null || order.currentDue != null
-      ? round2(order.current_due ?? order.currentDue)
-      : null;
-    const outstandingRaw = order.customer_outstanding ?? order.customerOutstanding;
-    let current;
-    if (outstandingRaw != null && outstandingRaw !== "") {
-      current = round2(Math.max(0, outstandingRaw));
-    } else if (rows.length) {
-      current = round2(Math.max(0, previous + total - paid));
-    } else if (storedPaid > 0 && storedCurrent != null) {
-      current = storedCurrent;
-    } else {
-      current = round2(Math.max(0, previous + total - paid));
-    }
+    const storedPaid = order.amount_paid ?? order.amountPaid;
+    const storedN = storedPaid == null || storedPaid === "" ? null : round2(storedPaid);
+    let paid = rows.length ? round2(rows.reduce((sum, r) => sum + r.amount, 0)) : storedN != null && storedN > 0 ? storedN : inferred;
+    const maxApply = round2(Math.max(0, previous + total));
+    if (paid > maxApply) paid = maxApply;
+    const current = round2(Math.max(0, previous + total - paid));
     return {
       previous,
       paid,
