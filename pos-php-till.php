@@ -58,6 +58,10 @@ function pos_php_till_dispatch($path, $method, $body) {
     pos_ensure_i18n_columns();
     pos_ensure_business_columns();
     pos_ensure_accounts_schema();
+    if (is_file(__DIR__ . "/pos-table-shift.php")) {
+      require_once __DIR__ . "/pos-table-shift.php";
+      if (function_exists("pos_ensure_table_shift_schema")) pos_ensure_table_shift_schema();
+    }
     require_once __DIR__ . "/pos-combos.php";
     require_once __DIR__ . "/pos-offers.php";
     $co = [];
