@@ -731,7 +731,7 @@ app.post("/api/settings", requireStaff, requirePerm("settings"), async (req, res
   }
   if (Object.prototype.hasOwnProperty.call(body, "table_shifting_enabled")) {
     langSql += ", table_shifting_enabled = ?";
-    params.push(body.table_shifting_enabled ? 1 : 0);
+    params.push(Number(body.table_shifting_enabled) === 2 ? 2 : 1);
   }
   if (shopLocale != null) {
     langSql += ", locale = ?";

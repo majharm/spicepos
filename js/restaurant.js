@@ -186,6 +186,11 @@
       }
     }
     if (!floors.length) floors.push(groundFloor());
+    if (!list.length) {
+      const floor = floors[0]?.id || GROUND_ID;
+      const n = seatCount(biz, holds);
+      for (let i = 1; i <= n; i += 1) list.push({ id: String(i), name: `Table ${i}`, floor });
+    }
     const have = new Set(list.map((t) => t.id));
     const extra = Array.isArray(holds) ? holds : [];
     for (const row of extra) {
@@ -360,8 +365,8 @@
 
   function tableShiftingOn(biz) {
     const v = biz?.table_shifting_enabled;
-    if (v === true || v === 1 || v === "1") return true;
-    return Number(v) === 1;
+    if (v === 2 || v === "2" || v === "off" || v === false) return false;
+    return true;
   }
 
   function qrOrderOpen(order) {
@@ -384,9 +389,8 @@
     if (!src || !dest) return { ok: false, error: "Choose the current table and the new table" };
     if (src === dest) return { ok: false, error: "Pick a different table" };
     if (src === PARCEL || dest === PARCEL) return { ok: false, error: "Parcel / takeaway cannot be shifted" };
-    const ids = Array.isArray(opts.tableIds) ? opts.tableIds.map(normalizeTableNo) : null;
-    if (ids && !ids.includes(dest)) return { ok: false, error: "New table is not on the floor plan" };
-    if (ids && !ids.includes(src)) return { ok: false, error: "Current table is not on the floor plan" };
+    const ids = Array.isArray(opts.tableIds) ? opts.tableIds.map(normalizeTableNo).filter(Boolean) : [];
+    if (ids.length && !ids.includes(dest)) return { ok: false, error: "New table is not on the floor plan" };
     if (!tableOccupied(holds, qrOrders, src, opts)) return { ok: false, error: "No active order on that table" };
     if (tableOccupied(holds, qrOrders, dest, opts)) return { ok: false, error: "Destination table is occupied" };
     return { ok: true, from: src, to: dest };

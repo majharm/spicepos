@@ -13,6 +13,7 @@ if (($_SERVER["REQUEST_METHOD"] ?? "") === "OPTIONS") {
 $path = $_GET["p"] ?? $_GET["path"] ?? ($_SERVER["HTTP_X_POS_PATH"] ?? "health");
 $path = preg_replace("#^/+#", "", (string) $path);
 $path = preg_replace("#^api/#", "", $path);
+$path = rtrim($path, "/");
 if ($path === "" || !preg_match("#^[A-Za-z0-9][A-Za-z0-9/_-]*$#", $path)) {
   http_response_code(400);
   header("Content-Type: application/json; charset=utf-8");

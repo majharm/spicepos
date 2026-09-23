@@ -10,7 +10,7 @@ function pos_php_till_dispatch($path, $method, $body) {
   $staff = [
     "bootstrap", "dashboard", "today", "suppliers", "items", "customers", "packs",
     "orders", "purchases", "stock", "staff", "branches", "devices", "holds",
-    "checkout", "settings", "dining-tables", "tables", "kots", "reports", "growth", "audit", "accounts", "backup", "units",
+    "checkout", "settings", "dining-tables", "tables", "table-shift", "table-shifts", "kots", "reports", "growth", "audit", "accounts", "backup", "units",
     "barcodes", "damage", "loyalty", "batches", "qr-orders", "prescriptions", "combos", "offers",
   ];
   if (!in_array($head, $staff, true)) return false;
@@ -374,7 +374,7 @@ function pos_php_till_dispatch($path, $method, $body) {
     }
     if (array_key_exists("table_shifting_enabled", $body)) {
       $langSql .= ", table_shifting_enabled = ?";
-      $params[] = !empty($body["table_shifting_enabled"]) ? "1" : "0";
+      $params[] = ((int) ($body["table_shifting_enabled"] ?? 1) === 2) ? "2" : "1";
       $types .= "s";
     }
     if (array_key_exists("locale", $body)) {
@@ -469,7 +469,7 @@ function pos_php_till_dispatch($path, $method, $body) {
     pos_send(200, ["ok" => true, "company" => $co]);
   }
 
-  if ($path === "tables/shift" || $path === "tables/shifts") {
+  if ($path === "tables/shift" || $path === "tables/shifts" || $path === "table-shift" || $path === "table-shifts") {
     require_once __DIR__ . "/pos-table-shift.php";
     pos_require_holds();
     pos_dispatch_table_shift($path, $method, $body, $bid, $auth);

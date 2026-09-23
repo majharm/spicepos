@@ -6,7 +6,7 @@
     <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
     <title>ATAV POS</title>
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./css/pos.css?v=20260923deploy224" />
+    <link rel="stylesheet" href="./css/pos.css?v=20260923deploy225" />
     <link rel="stylesheet" href="./css/saas.css?v=20260905deploy136" />
   </head>
   <body>
@@ -401,7 +401,7 @@
                 <div class="pay-row">
                   <button class="btn" id="btn-hold" type="button" data-i18n="pos.hold">Hold</button>
                   <button class="btn" id="btn-kot" type="button">Kitchen KOT</button>
-                  <button class="btn restaurant-only" id="btn-shift-table" type="button" hidden>Shift Table</button>
+                  <button class="btn" id="btn-shift-table" type="button" hidden>Shift Table</button>
                   <button class="btn danger" id="btn-clear" type="button" data-i18n="pos.clear">Clear</button>
                   <button class="btn primary" id="btn-pay" type="button">Pay</button>
                 </div>
@@ -2189,7 +2189,7 @@
                   <fieldset class="item-block restaurant-only" id="set-table-mgmt" hidden>
                     <legend>Table Management</legend>
                     <label class="full"><input id="set-table-shifting" type="checkbox" /> Enable Table Shifting</label>
-                    <p class="item-composer-note full">When on, staff can move an active order to another free table. Order number, dishes, KOT, and amount stay the same. Off hides Shift Table.</p>
+                    <p class="item-composer-note full">On by default. Staff can move an active order to another free table. Order number, dishes, KOT, and amount stay the same. Uncheck to hide Shift Table.</p>
                     <div id="table-shift-history" class="table-wrap"></div>
                   </fieldset>
                   <fieldset class="item-block">
@@ -2462,7 +2462,7 @@
     <script src="./js/pos-api.js?v=20260905deploy154" defer></script>
     <script src="./js/units.js?v=20260919unit1" defer></script>
     <script src="./js/footwear.js?v=20260922deploy219" defer></script>
-    <script src="./js/restaurant.js?v=20260923deploy224" defer></script>
+    <script src="./js/restaurant.js?v=20260923deploy225" defer></script>
     <script src="./js/discount.js?v=20260905deploy136" defer></script>
     <script src="./js/offers.js?v=20260905deploy170" defer></script>
     <script src="./js/loyalty.js?v=20260905deploy136" defer></script>
@@ -2482,7 +2482,7 @@
     <script src="./js/salon-ui.js?v=20260919salon1" defer></script>
     <script src="./js/print.js?v=20260922deploy219" defer></script>
     <script src="./js/print-ui.js?v=20260922deploy218" defer></script>
-    <script src="./js/app.js?v=20260923deploy224" defer></script>
+    <script src="./js/app.js?v=20260923deploy225" defer></script>
     <script src="./js/growth.js?v=20260905deploy145" defer></script>
     <script src="./js/offers-ui.js?v=20260919off1" defer></script>
   </body>

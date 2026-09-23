@@ -234,10 +234,17 @@ test("Food order special instructions stay on each item", () => {
   assert.doesNotMatch(html, /Note: Less spicy/);
 });
 
-test("Table shifting is optional and only allows a free destination", () => {
-  assert.equal(R.tableShiftingOn({ table_shifting_enabled: 0 }), false);
+test("Table shifting is on by default and only allows a free destination", () => {
+  assert.equal(R.tableShiftingOn({}), true);
+  assert.equal(R.tableShiftingOn({ table_shifting_enabled: 0 }), true);
   assert.equal(R.tableShiftingOn({ table_shifting_enabled: 1 }), true);
   assert.equal(R.tableShiftingOn({ table_shifting_enabled: "1" }), true);
+  assert.equal(R.tableShiftingOn({ table_shifting_enabled: 2 }), false);
+  assert.equal(R.tableShiftingOn({ table_shifting_enabled: "2" }), false);
+  assert.equal(R.tableShiftingOn({ table_shifting_enabled: "off" }), false);
+  const emptyLayout = R.diningOf({ dining_tables_json: JSON.stringify({ floors: [], tables: [] }) }, []);
+  assert.equal(emptyLayout.tables.length >= 12, true);
+  assert.equal(emptyLayout.tables[0].id, "1");
   const holds = [{ id: "h1", label: "Table 5", payload: { table_no: "5", cart: [{ itemId: "dosa", qtyGm: 1 }] } }];
   const qrs = [{ table_no: "3", status: "preparing", order_number: "QRO-1" }];
   const opts = { tableIds: ["5", "8", "3"] };
@@ -252,4 +259,6 @@ test("Table shifting is optional and only allows a free destination", () => {
   assert.equal(R.canShiftTable(holds, qrs, "5", "5", opts).ok, false);
   assert.equal(R.canShiftTable(holds, qrs, "5", "Parcel", opts).ok, false);
   assert.match(R.canShiftTable(holds, qrs, "5", "9", opts).error, /floor plan/);
+  const occupiedOffPlan = R.canShiftTable(holds, qrs, "5", "8", { tableIds: ["8", "3"] });
+  assert.equal(occupiedOffPlan.ok, true);
 });

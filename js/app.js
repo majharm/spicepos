@@ -2490,12 +2490,19 @@ function renderTableBoard() {
     : manage
       ? "Create tables for this restaurant"
       : "Ask the business admin to add tables";
-  const addRow = manage
-    ? `<div class="dining-add-row">
-        <button class="btn dining-add-btn" type="button" data-add-floor>+ Floor</button>
-        <button class="btn dining-add-btn" type="button" data-add-table>+ Table</button>
+  const canShiftActive =
+    tableShiftingEnabled() &&
+    state.activeTable &&
+    state.activeTable !== R.PARCEL &&
+    (tableIsBusy(state.activeTable) || state.cart.length > 0);
+  const addRow =
+    manage || tableShiftingEnabled()
+      ? `<div class="dining-add-row">
+        ${tableShiftingEnabled() ? `<button class="btn dining-add-btn" type="button" data-shift-active ${canShiftActive ? "" : "disabled"}>Shift Table</button>` : ""}
+        ${manage ? `<button class="btn dining-add-btn" type="button" data-add-floor>+ Floor</button>
+        <button class="btn dining-add-btn" type="button" data-add-table>+ Table</button>` : ""}
       </div>`
-    : "";
+      : "";
   el.hidden = false;
   el.innerHTML =
     `<div class="table-board-head">
@@ -2631,7 +2638,7 @@ async function confirmAndShiftTable(fromId, toId) {
   const toName = R.displayTable(check.to);
   if (!window.confirm(`Move the active order from ${fromName} to ${toName}?`)) return;
   if (state.activeTable === check.from && state.cart.length) await saveActiveTableHold();
-  const data = await api("/api/tables/shift", {
+  const data = await api("/api/table-shift/", {
     method: "POST",
     body: JSON.stringify({ from_table: check.from, to_table: check.to }),
   });
@@ -3715,12 +3722,14 @@ function renderCart() {
   if ($("btn-kot")) $("btn-kot").disabled = !isRestaurantShop() || state.cart.length === 0 || Boolean(state.editingOrderId);
   if ($("btn-shift-table")) {
     const R = restaurantApi();
-    const show =
-      tableShiftingEnabled() &&
+    const show = tableShiftingEnabled();
+    const can =
+      show &&
       state.activeTable &&
       state.activeTable !== R?.PARCEL &&
       (tableIsBusy(state.activeTable) || state.cart.length > 0);
     $("btn-shift-table").hidden = !show;
+    $("btn-shift-table").disabled = !can;
   }
   const payTotal = t.total != null ? t.total : t.taxable + t.tax;
   $("btn-pay").textContent = state.editingOrderId
@@ -5345,7 +5354,7 @@ async function paintTableShiftHistory() {
     return;
   }
   try {
-    const data = await api("/api/tables/shifts");
+    const data = await api("/api/table-shifts/");
     const rows = data.shifts || [];
     const list = Array.isArray(rows) ? rows : [];
     if (!list.length) {
@@ -9968,7 +9977,7 @@ $("settings-form").addEventListener("submit", async (e) => {
       payment_upi: $("set-payment-upi")?.value || "",
     };
     if (isRestaurantShop() && $("set-table-shifting")) {
-      payload.table_shifting_enabled = $("set-table-shifting").checked ? 1 : 0;
+      payload.table_shifting_enabled = $("set-table-shifting").checked ? 1 : 2;
     }
     if (state.logoDraft !== null) payload.logo_url = state.logoDraft;
     if (state.payQrDraft !== null) payload.payment_qr_url = state.payQrDraft;
@@ -10476,6 +10485,22 @@ $("btn-shift-table")?.addEventListener("click", async () => {
   }
 });
 $("table-board")?.addEventListener("click", async (e) => {
+  const shiftActive = e.target.closest("[data-shift-active]");
+  if (shiftActive) {
+    e.preventDefault();
+    e.stopPropagation();
+    try {
+      if (!tableShiftingEnabled()) throw new Error("Table shifting is turned off in Settings");
+      const from = restaurantApi()?.normalizeTableNo?.(state.activeTable) || "";
+      if (!from || from === restaurantApi()?.PARCEL) throw new Error("Open a dining table first");
+      if (!tableIsBusy(from) && !state.cart.length) throw new Error("No active order on that table");
+      state.shiftFromTable = from;
+      renderTableBoard();
+    } catch (err) {
+      setHint(err.message, "error");
+    }
+    return;
+  }
   const printTableQr = e.target.closest("[data-table-qr]");
   if (printTableQr) {
     e.preventDefault();

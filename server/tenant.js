@@ -172,6 +172,9 @@ async function tableLayoutIds(businessId) {
     const id = normalizeShiftTableNo(t.id);
     if (id && id !== "Parcel") ids.add(id);
   }
+  if (!ids.size) {
+    for (let i = 1; i <= 12; i += 1) ids.add(String(i));
+  }
   return ids;
 }
 
@@ -710,7 +713,7 @@ export function registerTenant(app) {
     }),
   );
 
-  app.get("/api/tables/shifts", requireStaff, requirePermAny("kot", "counter"), (_req, res) =>
+  app.get(["/api/tables/shifts", "/api/tables/shifts/", "/api/table-shifts", "/api/table-shifts/"], requireStaff, requirePermAny("kot", "counter"), (_req, res) =>
     send(res, async () => {
       await ensureTableShiftSchema();
       const shifts = await query(
@@ -722,7 +725,7 @@ export function registerTenant(app) {
     }),
   );
 
-  app.post("/api/tables/shift", requireStaff, requirePermAny("kot", "counter"), (req, res) =>
+  app.post(["/api/tables/shift", "/api/tables/shift/", "/api/table-shift", "/api/table-shift/"], requireStaff, requirePermAny("kot", "counter"), (req, res) =>
     send(res, async () => {
       await ensureTableShiftSchema();
       const [biz] = await query("SELECT * FROM businesses WHERE id = ? LIMIT 1", [bid()]);
@@ -731,7 +734,7 @@ export function registerTenant(app) {
       const restaurant = type === "restaurant" || type === "cafe" || type === "bakery" || /(restaurant|cafe|bakery|food)/.test(text);
       if (!restaurant) throw new Error("Table shifting is for restaurant and cafe shops");
       const [co] = await query("SELECT table_shifting_enabled FROM company_settings WHERE business_id = ? LIMIT 1", [bid()]);
-      const on = co?.table_shifting_enabled === 1 || co?.table_shifting_enabled === "1";
+      const on = Number(co?.table_shifting_enabled) !== 2;
       if (!on) throw new Error("Table shifting is turned off in Settings");
       const from = normalizeShiftTableNo(req.body?.from_table || req.body?.fromTable || req.body?.from);
       const to = normalizeShiftTableNo(req.body?.to_table || req.body?.toTable || req.body?.to);
@@ -739,8 +742,7 @@ export function registerTenant(app) {
       if (from === to) throw new Error("Pick a different table");
       if (from === "Parcel" || to === "Parcel") throw new Error("Parcel / takeaway cannot be shifted");
       const ids = await tableLayoutIds(bid());
-      if (!ids.has(to)) throw new Error("New table is not on the floor plan");
-      if (!ids.has(from)) throw new Error("Current table is not on the floor plan");
+      if (ids.size && !ids.has(to)) throw new Error("New table is not on the floor plan");
       if (!(await tableIsOccupied(bid(), from))) throw new Error("No active order on that table");
       if (await tableIsOccupied(bid(), to)) throw new Error("Destination table is occupied");
       let movedHold = false;

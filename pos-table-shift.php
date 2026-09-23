@@ -36,7 +36,8 @@ function pos_table_shifting_on($bid) {
   pos_ensure_table_shift_schema();
   $rows = pos_q("SELECT table_shifting_enabled FROM company_settings WHERE business_id = ? LIMIT 1", "s", [$bid]);
   $v = $rows[0]["table_shifting_enabled"] ?? 0;
-  return $v === 1 || $v === "1" || $v === true;
+  if ($v === 2 || $v === "2") return false;
+  return true;
 }
 
 function pos_table_layout_ids($bid) {
@@ -50,6 +51,9 @@ function pos_table_layout_ids($bid) {
   foreach ($tables as $t) {
     $id = pos_normalize_table_no($t["id"] ?? "");
     if ($id !== "" && $id !== "Parcel") $ids[$id] = true;
+  }
+  if (!$ids) {
+    for ($i = 1; $i <= 12; $i++) $ids[(string) $i] = true;
   }
   return $ids;
 }
@@ -90,9 +94,11 @@ function pos_table_occupied($bid, $tableNo) {
 }
 
 function pos_dispatch_table_shift($path, $method, $body, $bid, $auth) {
-    pos_ensure_table_shift_schema();
-    pos_ensure_held_bills_schema();
-    if ($path === "tables/shifts" && $method === "GET") {
+  pos_ensure_table_shift_schema();
+  pos_ensure_held_bills_schema();
+  $hist = $path === "tables/shifts" || $path === "table-shifts";
+  $move = $path === "tables/shift" || $path === "table-shift";
+  if ($hist && $method === "GET") {
     $rows = [];
     try {
       $rows = pos_q(
@@ -107,7 +113,7 @@ function pos_dispatch_table_shift($path, $method, $body, $bid, $auth) {
     pos_send(200, ["ok" => true, "shifts" => $rows, "php" => true]);
   }
 
-  if ($path === "tables/shift" && $method === "POST") {
+  if ($move && $method === "POST") {
     $biz = pos_q("SELECT * FROM businesses WHERE id = ? LIMIT 1", "s", [$bid]);
     if (function_exists("pos_shop_kind") && pos_shop_kind($biz[0] ?? []) !== "restaurant") {
       pos_send(400, ["error" => "Table shifting is for restaurant and cafe shops", "php" => true]);
@@ -121,8 +127,7 @@ function pos_dispatch_table_shift($path, $method, $body, $bid, $auth) {
     if ($from === $to) pos_send(400, ["error" => "Pick a different table", "php" => true]);
     if ($from === "Parcel" || $to === "Parcel") pos_send(400, ["error" => "Parcel / takeaway cannot be shifted", "php" => true]);
     $ids = pos_table_layout_ids($bid);
-    if (!isset($ids[$to])) pos_send(400, ["error" => "New table is not on the floor plan", "php" => true]);
-    if (!isset($ids[$from])) pos_send(400, ["error" => "Current table is not on the floor plan", "php" => true]);
+    if ($ids && !isset($ids[$to])) pos_send(400, ["error" => "New table is not on the floor plan", "php" => true]);
     if (!pos_table_occupied($bid, $from)) pos_send(400, ["error" => "No active order on that table", "php" => true]);
     if (pos_table_occupied($bid, $to)) pos_send(400, ["error" => "Destination table is occupied", "php" => true]);
 
