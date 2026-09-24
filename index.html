@@ -6,7 +6,7 @@
     <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
     <title>ATAV POS</title>
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./css/pos.css?v=20260924deploy228" />
+    <link rel="stylesheet" href="./css/pos.css?v=20260924qa2" />
     <link rel="stylesheet" href="./css/saas.css?v=20260905deploy136" />
   </head>
   <body>
@@ -2209,6 +2209,12 @@
                     </label>
                     <p class="item-composer-note full" id="timezone-preview">Used for reports, invoices, and order timestamps.</p>
                   </fieldset>
+                  <fieldset class="item-block" id="set-quick-add-block">
+                    <legend data-i18n="settings.quick_add">Quick Add button</legend>
+                    <label class="full"><input type="radio" name="set-quick-add" id="set-quick-add-show" value="1" checked /> <span data-i18n="settings.quick_add_show">Show Quick Add</span></label>
+                    <label class="full"><input type="radio" name="set-quick-add" id="set-quick-add-hide" value="2" /> <span data-i18n="settings.quick_add_hide">Hide Quick Add</span></label>
+                    <p class="item-composer-note full" data-i18n="settings.quick_add_hint">Show or hide the Quick Add / + Item button on Counter Billing, POS Billing, and item search for this shop only. Turning it off does not delete the feature — staff can still add products from Inventory → Items.</p>
+                  </fieldset>
                   <fieldset class="item-block">
                     <legend>Shop logo</legend>
                     <div class="logo-row full">
@@ -2459,7 +2465,7 @@
       </div>
       <button type="button" class="saas-fab" id="saas-fab" title="Quick add">+</button>
     </div>
-    <script src="./js/i18n-catalog.js?v=20260905deploy150" defer></script>
+    <script src="./js/i18n-catalog.js?v=20260924qa2" defer></script>
     <script src="./js/i18n.js?v=20260924bc1" defer></script>
     <script src="./js/gst-supply.js?v=20260905deploy136" defer></script>
     <script src="./js/pos-api.js?v=20260905deploy154" defer></script>
@@ -2485,7 +2491,7 @@
     <script src="./js/salon-ui.js?v=20260919salon1" defer></script>
     <script src="./js/print.js?v=20260922deploy219" defer></script>
     <script src="./js/print-ui.js?v=20260922deploy218" defer></script>
-    <script src="./js/app.js?v=20260924bc2" defer></script>
+    <script src="./js/app.js?v=20260924qa2" defer></script>
     <script src="./js/growth.js?v=20260905deploy145" defer></script>
     <script src="./js/offers-ui.js?v=20260919off1" defer></script>
   </body>

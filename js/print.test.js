@@ -149,7 +149,7 @@ test("PHP Hostinger can open a print order, download files, quote, bill, and mov
   assert.match(ui, /View \/ Download/);
   assert.match(ui, /\/api\/print\/files\//);
   assert.match(read("index.html"), /print-ui\.js\?v=20260922deploy218/);
-  assert.match(read("index.html"), /app\.js\?v=20260924bc2/);
+  assert.match(read("index.html"), /app\.js\?v=20260924qa2/);
 });
 
 test("Print orders page opens the shop modal and paints list or wrapped API rows", () => {
@@ -178,7 +178,7 @@ test("Print order review modal is a stepped desk with quote grid and production 
   assert.match(ui, /Approve file/);
   assert.match(css, /#modal:has\(\.print-order-desk\)/);
   assert.match(css, /\.pod-step\.is-on/);
-  assert.match(index, /pos\.css\?v=20260924deploy228/);
+  assert.match(index, /pos\.css\?v=20260924qa2/);
 });
 
 test("PHP print quote, artwork MIME, approve, bill settle, and OTP mail are wired", () => {

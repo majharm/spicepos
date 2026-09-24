@@ -266,6 +266,9 @@ test("Counter has a dedicated scan lane and Pay action", () => {
   assert.match(index, /class="counter-lane"/);
   assert.match(index, /id="counter-add-item"/);
   assert.match(index, /id="classic-add-item"/);
+  assert.match(index, /id="set-quick-add-show"/);
+  assert.match(app, /function quickAddVisible/);
+  assert.match(css, /body\.quick-add-hidden #classic-add-item/);
   assert.match(index, /id="counter-item-modal"/);
   assert.match(index, /Save &amp; add to bill/);
   assert.match(app, /function openCounterAddItem/);

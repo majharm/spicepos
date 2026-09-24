@@ -734,6 +734,10 @@ app.post("/api/settings", requireStaff, requirePerm("settings"), async (req, res
     langSql += ", table_shifting_enabled = ?";
     params.push(Number(body.table_shifting_enabled) === 2 ? 2 : 1);
   }
+  if (Object.prototype.hasOwnProperty.call(body, "quick_add_enabled")) {
+    langSql += ", quick_add_enabled = ?";
+    params.push(Number(body.quick_add_enabled) === 0 || Number(body.quick_add_enabled) === 2 ? 0 : 1);
+  }
   if (shopLocale != null) {
     langSql += ", locale = ?";
     params.push(shopLocale);

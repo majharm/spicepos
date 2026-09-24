@@ -377,6 +377,12 @@ function pos_php_till_dispatch($path, $method, $body) {
       $params[] = ((int) ($body["table_shifting_enabled"] ?? 1) === 2) ? "2" : "1";
       $types .= "s";
     }
+    if (array_key_exists("quick_add_enabled", $body)) {
+      $langSql .= ", quick_add_enabled = ?";
+      $hide = (int) ($body["quick_add_enabled"] ?? 1);
+      $params[] = ($hide === 0 || $hide === 2) ? "0" : "1";
+      $types .= "s";
+    }
     if (array_key_exists("locale", $body)) {
       $langSql .= ", locale = ?";
       $params[] = pos_normalize_locale($body["locale"]) ?: "en";

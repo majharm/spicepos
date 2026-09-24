@@ -26,6 +26,9 @@ test("i18n falls back to English and never shows the raw key", () => {
   assert.equal(I.t("pos.pay_amount", "hi", { amount: "₹10" }).includes("₹10"), true);
   assert.equal(I.t("settings.customer_notes", "en"), "Customer notes");
   assert.equal(I.t("settings.collect_payment", "en"), "Collect payment");
+  assert.equal(I.t("settings.quick_add", "en"), "Quick Add button");
+  assert.equal(I.t("settings.quick_add_show", "en"), "Show Quick Add");
+  assert.equal(I.t("settings.quick_add_hide", "en"), "Hide Quick Add");
   assert.equal(I.t("invoice.scan_to_pay", "en"), "Scan to pay");
   assert.equal(I.t("invoice.terms", "en"), "Terms & conditions");
 });

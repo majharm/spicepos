@@ -977,6 +977,14 @@ body.camera-scan-open { overflow: hidden; }
   font-weight: 800;
 }
 body.classic-bill-mode.counter-mode #counter-add-item { display: none !important; }
+body.quick-add-hidden #dash-quick-add,
+body.quick-add-hidden #saas-fab-wrap,
+body.quick-add-hidden #counter-add-item,
+body.quick-add-hidden #classic-add-item,
+body.quick-add-hidden [data-counter-add-item],
+body.quick-add-hidden .classic-hit-add {
+  display: none !important;
+}
 .counter-item-form {
   display: grid;
   grid-template-columns: 1fr 1fr;

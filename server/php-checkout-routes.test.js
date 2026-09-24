@@ -373,7 +373,7 @@ test("POS boot skips API probe and slims catalog photos", () => {
   assert.match(index, /qrcode\.iife\.js[^>]+defer/);
   assert.match(index, /preload="auto"/);
   assert.match(index, /pos-api\.js\?v=20260905deploy154/);
-  assert.match(index, /app\.js\?v=20260924bc2/);
+  assert.match(index, /app\.js\?v=20260924qa2/);
   assert.match(index, /class="dialog-head"/);
   assert.match(index, /id="modal-close"/);
   assert.match(read("css/pos.css"), /#modal-close \{/);
@@ -445,8 +445,16 @@ test("Restaurant Counter can create named dining tables", () => {
   assert.match(read("api/table-shift/index.php"), /table-shift/);
   assert.match(read("api/table-shifts/index.php"), /table-shifts/);
   assert.match(schema, /table_shifting_enabled/);
+  assert.match(schema, /quick_add_enabled/);
   assert.match(schema, /table_shift_history/);
   assert.match(core, /table_shifting_enabled/);
+  assert.match(core, /quick_add_enabled/);
+  assert.match(read("pos-php-till.php"), /quick_add_enabled/);
+  assert.match(index, /id="set-quick-add-show"/);
+  assert.match(index, /id="set-quick-add-hide"/);
+  assert.match(app, /function quickAddVisible/);
+  assert.match(app, /function applyQuickAddVisibility/);
+  assert.match(css, /body\.quick-add-hidden #classic-add-item/);
   assert.match(read("pos-table-shift.php"), /function pos_dispatch_table_shift/);
   assert.match(app, /function confirmAndShiftTable/);
   assert.match(app, /function bindQrOrderAfterTableShift/);
@@ -456,9 +464,9 @@ test("Restaurant Counter can create named dining tables", () => {
   assert.match(index, /id="btn-shift-table"/);
   assert.match(index, /id="set-table-shifting"/);
   assert.match(restaurant, /function canShiftTable/);
-  assert.match(index, /pos\.css\?v=20260924deploy228/);
+  assert.match(index, /pos\.css\?v=20260924qa2/);
   assert.match(index, /restaurant\.js\?v=20260923deploy226/);
-  assert.match(index, /app\.js\?v=20260924bc2/);
+  assert.match(index, /app\.js\?v=20260924qa2/);
   assert.match(index, /footwear\.js\?v=20260922deploy219/);
   assert.match(app, /function resolveKitchenKot/);
   assert.match(app, /function paintKotTimers/);

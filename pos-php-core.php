@@ -418,6 +418,7 @@ function pos_ensure_i18n_columns() {
     "payment_upi" => "VARCHAR(160) NULL",
     "dining_tables_json" => "TEXT NULL",
     "table_shifting_enabled" => "TINYINT(1) NOT NULL DEFAULT 0",
+    "quick_add_enabled" => "TINYINT(1) NOT NULL DEFAULT 1",
     "drug_licence_no" => "VARCHAR(80) NULL",
     "fssai_licence_no" => "VARCHAR(32) NULL",
     "ndps_licence_no" => "VARCHAR(80) NULL",

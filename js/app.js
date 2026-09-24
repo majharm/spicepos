@@ -462,6 +462,7 @@ function applyFootwearMode() {
   paintScaleDock();
   applyNav();
   renderTableBoard();
+  applyQuickAddVisibility();
 }
 
 function fillWearerSelects() {
@@ -2031,6 +2032,27 @@ function tableShiftingEnabled() {
   return isRestaurantShop() && Boolean(restaurantApi()?.tableShiftingOn?.(diningCompany()));
 }
 
+function quickAddVisible(company = state.company) {
+  const v = company?.quick_add_enabled;
+  if (v === 0 || v === "0" || v === 2 || v === "2" || v === false || v === "off" || v === "hide") return false;
+  return true;
+}
+
+function applyQuickAddVisibility() {
+  const show = quickAddVisible();
+  document.body.classList.toggle("quick-add-hidden", !show);
+  for (const id of ["dash-quick-add", "saas-fab-wrap", "counter-add-item", "classic-add-item"]) {
+    const el = $(id);
+    if (!el) continue;
+    el.hidden = !show;
+    el.setAttribute("aria-hidden", show ? "false" : "true");
+  }
+  if (!show) {
+    const menu = $("saas-fab-menu");
+    if (menu) menu.hidden = true;
+  }
+}
+
 function tableShiftOpts() {
   return {
     tableIds: diningTables().map((t) => t.id),
@@ -3545,6 +3567,11 @@ function paintClassicItemHits() {
   }
   const rows = filteredItems().slice(0, 12);
   if (!rows.length) {
+    if (!quickAddVisible()) {
+      box.hidden = true;
+      box.innerHTML = "";
+      return;
+    }
     box.hidden = false;
     box.innerHTML = `<button type="button" class="classic-hit classic-hit-add" data-counter-add-item="${escapeHtml(q)}">
       <span class="classic-hit-main"><strong>Add “${escapeHtml(q)}” as a new item</strong><em>Save to catalog and put it on this bill</em></span>
@@ -3585,9 +3612,12 @@ function renderCatalog() {
   const rows = filteredItems();
   if (!rows.length) {
     const q = String(state.query || "").trim();
+    const addBtn = quickAddVisible()
+      ? ` <button class="btn primary" type="button" data-counter-add-item="${escapeHtml(q)}">Add item</button>`
+      : "";
     root.innerHTML = `<div class="catalog-empty">${
       q ? `No items match “${escapeHtml(q)}”.` : "No items in this shop yet."
-    } <button class="btn primary" type="button" data-counter-add-item="${escapeHtml(q)}">Add item</button></div>`;
+    }${addBtn}</div>`;
     return;
   }
   const grouped = new Map();
@@ -4168,7 +4198,12 @@ async function applyBarcodeScan(raw, sourceEl) {
   }
   applyBarcodeScan._pending = "";
   paintScanLane(false, "No match");
-  setHint(`No item matches “${code}”. Use + Item to add it.`, "error");
+  setHint(
+    quickAddVisible()
+      ? `No item matches “${code}”. Use + Item to add it.`
+      : `No item matches “${code}”.`,
+    "error",
+  );
   if (sourceEl === $("scan-code") || sourceEl === $("search") || sourceEl === $("bill-scan-code") || sourceEl === $("bill-item-search")) sourceEl.select();
   return false;
 }
@@ -5476,6 +5511,10 @@ function renderSettings() {
   if ($("set-fssai")) $("set-fssai").value = state.company.fssai_licence_no || "";
   if ($("set-ndps")) $("set-ndps").value = state.company.ndps_licence_no || "";
   if ($("set-table-shifting")) $("set-table-shifting").checked = tableShiftingEnabled();
+  const showQuickAdd = quickAddVisible();
+  if ($("set-quick-add-show")) $("set-quick-add-show").checked = showQuickAdd;
+  if ($("set-quick-add-hide")) $("set-quick-add-hide").checked = !showQuickAdd;
+  applyQuickAddVisibility();
   paintTableShiftHistory();
   if ($("set-city")) $("set-city").value = state.company.city || "";
   if ($("set-state")) $("set-state").value = state.company.state || "";
@@ -5708,6 +5747,7 @@ async function loadBootstrap() {
   state.offerSettings = data.offerSettings || { stacking: "product_and_bill" };
   paintPlatformNotices(data.notes);
   paintHeader();
+  applyQuickAddVisibility();
   paintPlatformSupport();
   renderCustomersSelect();
   applyUiLocale();
@@ -10188,6 +10228,9 @@ $("settings-form").addEventListener("submit", async (e) => {
     if (isRestaurantShop() && $("set-table-shifting")) {
       payload.table_shifting_enabled = $("set-table-shifting").checked ? 1 : 2;
     }
+    if ($("set-quick-add-hide") || $("set-quick-add-show")) {
+      payload.quick_add_enabled = $("set-quick-add-hide")?.checked ? 0 : 1;
+    }
     if (state.logoDraft !== null) payload.logo_url = state.logoDraft;
     if (state.payQrDraft !== null) payload.payment_qr_url = state.payQrDraft;
     const data = await api("/api/settings", {
@@ -10198,6 +10241,8 @@ $("settings-form").addEventListener("submit", async (e) => {
     state.logoDraft = null;
     state.payQrDraft = null;
     paintHeader();
+    applyQuickAddVisibility();
+    renderCatalog();
     renderSettings();
     tick();
     renderTableBoard();
@@ -10223,6 +10268,13 @@ $("set-logo").addEventListener("change", async (e) => {
     $("settings-hint").textContent = err.message;
     $("settings-hint").className = "hint error";
   }
+});
+
+$("set-quick-add-block")?.addEventListener("change", () => {
+  if (!state.company) state.company = {};
+  state.company.quick_add_enabled = $("set-quick-add-hide")?.checked ? 0 : 1;
+  applyQuickAddVisibility();
+  renderCatalog();
 });
 
 $("logo-clear").addEventListener("click", () => {
