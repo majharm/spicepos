@@ -503,6 +503,102 @@ body.classic-bill-mode.counter-mode #counter-nav-toggle:hover {
   background: rgba(255, 255, 255, 0.24);
   border-color: rgba(255, 255, 255, 0.62);
 }
+#counter-low-stock-btn {
+  display: none;
+  position: relative;
+  flex: 0 0 auto;
+  width: 34px;
+  min-width: 34px;
+  min-height: 34px;
+  height: 34px;
+  padding: 0;
+  line-height: 1;
+}
+body.apparel-mode.counter-mode #counter-low-stock-btn:not([hidden]) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+body.classic-bill-mode.counter-mode #counter-low-stock-btn {
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.42);
+  background: rgba(255, 255, 255, 0.14);
+  box-shadow: none;
+}
+body.classic-bill-mode.counter-mode #counter-low-stock-btn:hover {
+  background: rgba(255, 255, 255, 0.24);
+  border-color: rgba(255, 255, 255, 0.62);
+}
+#counter-low-stock-btn.is-alert {
+  box-shadow: 0 0 0 2px rgba(180, 70, 20, 0.35);
+}
+.low-stock-count {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: #c2410c;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 16px;
+}
+.low-stock-modal {
+  z-index: 70;
+}
+.low-stock-dialog {
+  width: min(640px, calc(100% - 16px));
+}
+.low-stock-body {
+  min-height: 0;
+  overflow: auto;
+}
+.low-stock-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.low-stock-table th,
+.low-stock-table td {
+  padding: 7px 8px;
+  text-align: left;
+  border-bottom: 1px solid var(--line);
+  vertical-align: top;
+}
+.low-stock-table th {
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.low-stock-table .low-stock-qty {
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+  white-space: nowrap;
+}
+.low-stock-table tr.is-out .low-stock-qty { color: #b42318; }
+.low-stock-table tr.is-low .low-stock-qty { color: #b45309; }
+.low-stock-section {
+  margin: 0 0 12px;
+}
+.low-stock-section h4 {
+  margin: 0 0 6px;
+  font-size: 13px;
+}
+.low-stock-empty {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+.low-stock-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 12px;
+}
 html[dir="rtl"] body.counter-mode .app,
 html[dir="rtl"] body.counter-mode .app.nav-collapsed {
   grid-template-columns: minmax(0, 1fr);

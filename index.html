@@ -6,7 +6,7 @@
     <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
     <title>ATAV POS</title>
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./css/pos.css?v=20260924ah2" />
+    <link rel="stylesheet" href="./css/pos.css?v=20260924ls1" />
     <link rel="stylesheet" href="./css/saas.css?v=20260905deploy136" />
   </head>
   <body>
@@ -219,6 +219,7 @@
           <div class="edit-order-banner" id="edit-order-banner" hidden></div>
           <header class="topbar counter-topbar">
             <button type="button" class="btn icon-btn nav-toggle" id="counter-nav-toggle" aria-label="Open menu" aria-expanded="false" title="Menu">☰</button>
+            <button type="button" class="btn icon-btn apparel-only" id="counter-low-stock-btn" hidden title="Low stock" aria-label="Low stock">🔔<span class="low-stock-count" id="counter-low-stock-count" hidden></span></button>
             <div class="counter-lane">
               <form class="scan-lane" id="scan-form" autocomplete="off">
                 <span class="scan-lane-ico" aria-hidden="true"></span>
@@ -2216,6 +2217,13 @@
                     <label class="full"><input type="radio" name="set-quick-add" id="set-quick-add-hide" value="2" /> <span data-i18n="settings.quick_add_hide">Hide Quick Add</span></label>
                     <p class="item-composer-note full" data-i18n="settings.quick_add_hint">On Counter, the sidebar and Quick Add hide automatically so the bill is full width. Use the menu button to open the sidebar. This Show/Hide control still applies on Dashboard and other pages. Turning it off does not delete the feature — staff can still add products from Inventory → Items.</p>
                   </fieldset>
+                  <fieldset class="item-block apparel-only" id="set-low-stock-block" hidden>
+                    <legend>Low Stock Alert</legend>
+                    <label class="full">Low Stock Threshold (pcs)
+                      <input id="set-low-stock-threshold" type="number" min="1" max="9999" step="1" value="5" inputmode="numeric" />
+                    </label>
+                    <p class="item-composer-note full">On Counter, active garments at or below this stock show in the Low Stock popup. Stock 0 is Out of Stock and cannot be billed. Default is 5 pcs.</p>
+                  </fieldset>
                   <fieldset class="item-block">
                     <legend>Shop logo</legend>
                     <div class="logo-row full">
@@ -2415,6 +2423,18 @@
         </form>
       </div>
     </div>
+    <div class="modal low-stock-modal" id="low-stock-modal" hidden>
+      <div class="dialog low-stock-dialog" role="dialog" aria-modal="true" aria-labelledby="low-stock-title">
+        <div class="dialog-head">
+          <h3 id="low-stock-title">⚠️ Low Stock Alert</h3>
+        </div>
+        <div class="low-stock-body" id="low-stock-body"></div>
+        <div class="low-stock-actions">
+          <button class="btn primary" type="button" id="low-stock-view">View Stock</button>
+          <button class="btn" type="button" id="low-stock-close">Close</button>
+        </div>
+      </div>
+    </div>
     <div class="modal" id="modal" hidden>
       <div class="dialog">
         <div class="dialog-head">
@@ -2492,7 +2512,7 @@
     <script src="./js/salon-ui.js?v=20260919salon1" defer></script>
     <script src="./js/print.js?v=20260922deploy219" defer></script>
     <script src="./js/print-ui.js?v=20260922deploy218" defer></script>
-    <script src="./js/app.js?v=20260924ah1" defer></script>
+    <script src="./js/app.js?v=20260924ls1" defer></script>
     <script src="./js/growth.js?v=20260905deploy145" defer></script>
     <script src="./js/offers-ui.js?v=20260919off1" defer></script>
   </body>

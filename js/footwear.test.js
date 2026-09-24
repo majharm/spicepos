@@ -422,7 +422,7 @@ test("Medical shops show pharmacy medicine fields on the item form", () => {
   assert.match(app, /if \(added !== false\)/);
   assert.match(app, /function assertCartWithinStock/);
   assert.match(app, /function clampCartToAvailableStock/);
-  assert.match(app, /only \$\{have\} \$\{unit\} in stock/);
+  assert.match(app, /Only \$\{have\} \$\{unit\} available\. Maximum quantity is \$\{have\}\./);
   assert.match(app, /assertCartWithinStock\(\)/);
   assert.match(app, /function itemExpiryInfo/);
   assert.match(app, /function paintClassicStockAlert/);

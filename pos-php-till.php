@@ -383,6 +383,14 @@ function pos_php_till_dispatch($path, $method, $body) {
       $params[] = ($hide === 0 || $hide === 2) ? "0" : "1";
       $types .= "s";
     }
+    if (array_key_exists("low_stock_threshold", $body)) {
+      $langSql .= ", low_stock_threshold = ?";
+      $n = (int) ($body["low_stock_threshold"] ?? 5);
+      if ($n < 1) $n = 1;
+      if ($n > 9999) $n = 9999;
+      $params[] = (string) $n;
+      $types .= "s";
+    }
     if (array_key_exists("locale", $body)) {
       $langSql .= ", locale = ?";
       $params[] = pos_normalize_locale($body["locale"]) ?: "en";

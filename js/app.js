@@ -376,6 +376,10 @@ function applyFootwearMode() {
   document.querySelectorAll(".footwear-only").forEach((el) => {
     el.hidden = !on;
   });
+  document.querySelectorAll(".apparel-only").forEach((el) => {
+    if (el.id === "counter-low-stock-btn") return;
+    el.hidden = !ap;
+  });
   document.querySelectorAll(".pharmacy-only").forEach((el) => {
     el.hidden = !pharm;
   });
@@ -398,6 +402,7 @@ function applyFootwearMode() {
     if (el.classList.contains("nav-btn")) return;
     el.hidden = !isClassicBillShop();
   });
+  paintLowStockBell();
   const classicHead = $("classic-bill-head");
   if (classicHead) classicHead.hidden = !isClassicBillShop();
   const classicEntry = $("classic-bill-entry");
@@ -2401,6 +2406,10 @@ function showView(name) {
   if (name === "counter") {
     loadHolds();
     queueMicrotask(focusScanLane);
+    maybeShowCounterLowStockAlert();
+  } else {
+    counterLowStockPrompted = false;
+    closeLowStockModal();
   }
   if (name === "barcodes") loadBarcodesView();
   if (name === "expiry") loadExpiryView();
@@ -3526,11 +3535,26 @@ function renderCatalogCats() {
   el.innerHTML = chips.join("");
 }
 
+function lowStockThreshold(company = state.company) {
+  const raw = company?.low_stock_threshold;
+  if (raw == null || raw === "") return 5;
+  const n = Number(raw);
+  if (!Number.isFinite(n)) return 5;
+  return Math.max(1, Math.min(9999, Math.round(n)));
+}
+
 function itemStockInfo(item) {
   const stock = Number(item?.stock_gm) || 0;
-  const reorder = Number(item?.reorder_level_gm) || 0;
   const out = stock <= 0;
-  const low = !out && reorder > 0 && stock <= reorder;
+  let low = false;
+  if (!out) {
+    if (isApparelShop()) {
+      low = stock <= lowStockThreshold();
+    } else {
+      const reorder = Number(item?.reorder_level_gm) || 0;
+      low = reorder > 0 && stock <= reorder;
+    }
+  }
   return {
     stock,
     label: fmtQty(stock, item),
@@ -3565,7 +3589,121 @@ function maxBillQtyForItem(item, exceptKey) {
 function stockCapHint(item) {
   const unit = POSUnits.qtySuffix(itemUnit(item));
   const have = POSUnits.displayQty(itemOnHandBase(item), itemUnit(item));
-  return `${item?.name || "Item"}: only ${have} ${unit} in stock`;
+  if (itemOnHandBase(item) <= 0) return `${item?.name || "Item"}: out of stock`;
+  return `Only ${have} ${unit} available. Maximum quantity is ${have}.`;
+}
+
+function lowStockScanHint(item) {
+  const unit = POSUnits.qtySuffix(itemUnit(item));
+  const have = POSUnits.displayQty(itemOnHandBase(item), itemUnit(item));
+  if (itemOnHandBase(item) <= 0) return `${item?.name || "Item"}: out of stock`;
+  return `⚠️ Only ${have} ${unit} remaining.`;
+}
+
+function garmentStockAlertRows() {
+  const items = (state.items || []).filter((i) => i && i.status !== "inactive");
+  const low = [];
+  const out = [];
+  for (const item of items) {
+    const info = itemStockInfo(item);
+    const row = {
+      id: item.id,
+      name: item.name || "Item",
+      barcode: barcodeText(item.barcode) || barcodeText(item.item_barcode) || "",
+      variant: itemVariantText(item),
+      stock: info.stock,
+      label: info.label,
+      out: info.out,
+      low: info.low,
+    };
+    if (info.out) out.push(row);
+    else if (info.low) low.push(row);
+  }
+  const byName = (a, b) => String(a.name).localeCompare(String(b.name), undefined, { sensitivity: "base" });
+  low.sort(byName);
+  out.sort(byName);
+  return { low, out, total: low.length + out.length };
+}
+
+function lowStockTableHtml(rows, kind) {
+  if (!rows.length) return "";
+  const body = rows.map((r) => `<tr class="is-${kind}">
+    <td>${escapeHtml(r.name)}</td>
+    <td class="classic-barcode">${escapeHtml(r.barcode || "—")}</td>
+    <td>${escapeHtml(r.variant || "—")}</td>
+    <td class="low-stock-qty">${escapeHtml(kind === "out" ? "Out of Stock" : r.label)}</td>
+  </tr>`).join("");
+  return `<table class="low-stock-table">
+    <thead><tr><th>Item</th><th>Barcode</th><th>Colour / Size</th><th>Stock</th></tr></thead>
+    <tbody>${body}</tbody>
+  </table>`;
+}
+
+function paintLowStockBell() {
+  const btn = $("counter-low-stock-btn");
+  const countEl = $("counter-low-stock-count");
+  if (!btn) return;
+  if (!isApparelShop() || !document.body.classList.contains("counter-mode")) {
+    btn.hidden = true;
+    return;
+  }
+  const { total, out } = garmentStockAlertRows();
+  btn.hidden = false;
+  btn.classList.toggle("is-alert", total > 0);
+  btn.title = total ? `Low stock (${total})` : "Low stock";
+  btn.setAttribute("aria-label", btn.title);
+  if (countEl) {
+    countEl.hidden = total <= 0;
+    countEl.textContent = total > 99 ? "99+" : String(total);
+  }
+  btn.classList.toggle("is-out", out.length > 0);
+}
+
+function closeLowStockModal() {
+  const modal = $("low-stock-modal");
+  if (modal) modal.hidden = true;
+}
+
+function openLowStockModal() {
+  if (!isApparelShop()) return;
+  const body = $("low-stock-body");
+  const modal = $("low-stock-modal");
+  if (!body || !modal) return;
+  const { low, out } = garmentStockAlertRows();
+  if (!low.length && !out.length) {
+    body.innerHTML = `<p class="low-stock-empty">All active garments are above the low-stock threshold.</p>`;
+  } else {
+    const parts = [];
+    if (low.length) parts.push(`<section class="low-stock-section"><h4>Low Stock</h4>${lowStockTableHtml(low, "low")}</section>`);
+    if (out.length) parts.push(`<section class="low-stock-section"><h4>Out of Stock</h4>${lowStockTableHtml(out, "out")}</section>`);
+    body.innerHTML = parts.join("");
+  }
+  modal.hidden = false;
+  paintLowStockBell();
+}
+
+let counterLowStockPrompted = false;
+
+function maybeShowCounterLowStockAlert({ force = false } = {}) {
+  if (!isApparelShop()) {
+    paintLowStockBell();
+    return;
+  }
+  paintLowStockBell();
+  const { total } = garmentStockAlertRows();
+  if (!total) {
+    if (force) openLowStockModal();
+    return;
+  }
+  if (!force && counterLowStockPrompted) return;
+  counterLowStockPrompted = true;
+  openLowStockModal();
+}
+
+async function refreshCatalogStock() {
+  const data = await api("/api/bootstrap");
+  if (Array.isArray(data?.items)) state.items = data.items;
+  if (data?.company) state.company = { ...state.company, ...data.company };
 }
 
 function clampBillQty(item, want, exceptKey) {
@@ -4300,7 +4438,8 @@ async function applyBarcodeScan(raw, sourceEl) {
     const alerts = classicItemAlerts(item).alerts;
     paintScanLane(!alerts.some((a) => /EXPIRED|Out of stock/i.test(a)), item.name);
     if (added !== false) {
-      setHint(alerts.length ? `Added ${item.name} · ${alerts.join(" · ")}` : `Added ${item.name}`, alerts.length ? "error" : "ok");
+      if (shouldCapBillStock(item) && itemStockInfo(item).low) setHint(lowStockScanHint(item), "error");
+      else setHint(alerts.length ? `Added ${item.name} · ${alerts.join(" · ")}` : `Added ${item.name}`, alerts.length ? "error" : "ok");
     }
     focusScanLane();
     return true;
@@ -4324,7 +4463,8 @@ async function applyBarcodeScan(raw, sourceEl) {
     clearCounterQuery(sourceEl);
     const alerts = classicItemAlerts(hits[0]).alerts;
     paintScanLane(!alerts.some((a) => /EXPIRED|Out of stock/i.test(a)), hits[0].name);
-    setHint(alerts.length ? `Added ${hits[0].name} · ${alerts.join(" · ")}` : `Added ${hits[0].name}`, alerts.length ? "error" : "ok");
+    if (shouldCapBillStock(hits[0]) && itemStockInfo(hits[0]).low) setHint(lowStockScanHint(hits[0]), "error");
+    else setHint(alerts.length ? `Added ${hits[0].name} · ${alerts.join(" · ")}` : `Added ${hits[0].name}`, alerts.length ? "error" : "ok");
     focusScanLane();
     return true;
   }
@@ -4490,19 +4630,20 @@ function addItem(id, qtyGm, lineBarcode) {
       if (shouldCapBillStock(item) && next < POSUnits.clampQty(want)) setHint(stockCapHint(item), "error");
       if (next <= 0) {
         if (shouldCapBillStock(item)) setHint(stockCapHint(item), "error");
-        return;
+        return false;
       }
       existing.qtyGm = next;
       renderCart();
       if (shouldCapBillStock(item) && next < POSUnits.clampQty(want)) return false;
-      warnClassicItem(item);
+      if (shouldCapBillStock(item) && itemStockInfo(item).low) setHint(lowStockScanHint(item), "error");
+      else warnClassicItem(item);
       return true;
     }
     const first = clampBillQty(item, barcodeAdd);
     if (shouldCapBillStock(item) && first < POSUnits.clampQty(barcodeAdd)) setHint(stockCapHint(item), "error");
     if (first <= 0) {
       if (shouldCapBillStock(item)) setHint(itemOnHandBase(item) <= 0 ? `${item.name}: out of stock` : stockCapHint(item), "error");
-      return;
+      return false;
     }
     state.cart.push({
       lineId: newCartLineId(),
@@ -4515,7 +4656,8 @@ function addItem(id, qtyGm, lineBarcode) {
     });
     renderCart();
     if (shouldCapBillStock(item) && first < POSUnits.clampQty(barcodeAdd)) return false;
-    warnClassicItem(item);
+    if (shouldCapBillStock(item) && itemStockInfo(item).low) setHint(lowStockScanHint(item), "error");
+    else warnClassicItem(item);
     return true;
   }
   const line = state.cart.find((l) => l.itemId === id && !String(l.barcode || "").trim());
@@ -4524,12 +4666,17 @@ function addItem(id, qtyGm, lineBarcode) {
     const next = clampBillQty(item, want, cartLineKey(line));
     if (shouldCapBillStock(item) && next < POSUnits.clampQty(want)) setHint(stockCapHint(item), "error");
     line.qtyGm = next;
+    if (next <= 0) {
+      state.cart = state.cart.filter((l) => l !== line);
+      renderCart();
+      return false;
+    }
   } else {
     const first = clampBillQty(item, add);
     if (shouldCapBillStock(item) && first < POSUnits.clampQty(add)) setHint(stockCapHint(item), "error");
     if (first <= 0) {
       if (shouldCapBillStock(item)) setHint(itemOnHandBase(item) <= 0 ? `${item.name}: out of stock` : stockCapHint(item), "error");
-      return;
+      return false;
     }
     state.cart.push({
       lineId: newCartLineId(),
@@ -4543,7 +4690,8 @@ function addItem(id, qtyGm, lineBarcode) {
   }
   state.cart = state.cart.filter((l) => l.qtyGm > 0);
   renderCart();
-  warnClassicItem(item);
+  if (shouldCapBillStock(item) && itemStockInfo(item).low) setHint(lowStockScanHint(item), "error");
+  else warnClassicItem(item);
 }
 
 function setLineQty(key, qtyGm) {
@@ -5682,6 +5830,7 @@ function renderSettings() {
   const showQuickAdd = quickAddVisible();
   if ($("set-quick-add-show")) $("set-quick-add-show").checked = showQuickAdd;
   if ($("set-quick-add-hide")) $("set-quick-add-hide").checked = !showQuickAdd;
+  if ($("set-low-stock-threshold")) $("set-low-stock-threshold").value = String(lowStockThreshold());
   applyQuickAddVisibility();
   paintTableShiftHistory();
   if ($("set-city")) $("set-city").value = state.company.city || "";
@@ -5926,6 +6075,7 @@ async function loadBootstrap() {
   }
   void loadToday();
   void loadCustomerLoyalty();
+  if (state.currentView === "counter") maybeShowCounterLowStockAlert();
 }
 
 function dashRoleLabel(role) {
@@ -8604,6 +8754,15 @@ function toggleAppNav() {
 }
 $("nav-toggle")?.addEventListener("click", toggleAppNav);
 $("counter-nav-toggle")?.addEventListener("click", toggleAppNav);
+$("counter-low-stock-btn")?.addEventListener("click", () => maybeShowCounterLowStockAlert({ force: true }));
+$("low-stock-close")?.addEventListener("click", closeLowStockModal);
+$("low-stock-view")?.addEventListener("click", () => {
+  closeLowStockModal();
+  showView("stock");
+});
+$("low-stock-modal")?.addEventListener("click", (e) => {
+  if (e.target === $("low-stock-modal")) closeLowStockModal();
+});
 $("nav-scrim")?.addEventListener("click", () => setNavCollapsed(true));
 $("bill-toggle")?.addEventListener("click", () => {
   setBillCollapsed(!document.body.classList.contains("bill-collapsed"));
@@ -9315,6 +9474,11 @@ $("btn-pay").addEventListener("click", async () => {
     }
     if (!state.customerId) throw new Error("Add a customer before saving the bill");
     if (!state.cart.length) throw new Error("Cart is empty");
+    if (isApparelShop()) {
+      await refreshCatalogStock();
+      clampCartToAvailableStock();
+      renderCart();
+    }
     assertCartWithinStock();
     setHint("Saving…");
     const cartSnapshot = state.cart.map((l) => ({ ...l }));
@@ -10401,6 +10565,9 @@ $("settings-form").addEventListener("submit", async (e) => {
     }
     if ($("set-quick-add-hide") || $("set-quick-add-show")) {
       payload.quick_add_enabled = $("set-quick-add-hide")?.checked ? 0 : 1;
+    }
+    if ($("set-low-stock-threshold")) {
+      payload.low_stock_threshold = lowStockThreshold({ low_stock_threshold: $("set-low-stock-threshold").value });
     }
     if (state.logoDraft !== null) payload.logo_url = state.logoDraft;
     if (state.payQrDraft !== null) payload.payment_qr_url = state.payQrDraft;

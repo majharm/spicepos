@@ -95,6 +95,7 @@ export async function ensureSchema() {
   await addColumn("company_settings", "dining_tables_json", "TEXT NULL");
   await addColumn("company_settings", "table_shifting_enabled", "TINYINT(1) NOT NULL DEFAULT 0");
   await addColumn("company_settings", "quick_add_enabled", "TINYINT(1) NOT NULL DEFAULT 1");
+  await addColumn("company_settings", "low_stock_threshold", "INT NOT NULL DEFAULT 5");
   await query(`CREATE TABLE IF NOT EXISTS table_shift_history (
     id VARCHAR(36) PRIMARY KEY,
     business_id VARCHAR(36) NOT NULL,
