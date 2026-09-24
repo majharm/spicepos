@@ -48,20 +48,46 @@ test("Quick Add visibility is a per-business settings control, not a removed fea
   assert.match(index, /id="classic-add-item"/);
   assert.match(index, /id="saas-fab"/);
   assert.match(index, /id="counter-item-modal"/);
+  assert.match(index, /id="counter-nav-toggle"/);
+  assert.match(index, /sidebar and Quick Add hide automatically/);
 
   assert.match(app, /function quickAddVisible/);
   assert.match(app, /function applyQuickAddVisibility/);
+  assert.match(app, /function applyCounterWorkspaceChrome/);
+  assert.match(app, /function toggleAppNav/);
   assert.match(app, /function openCounterAddItem/);
   assert.match(app, /payload\.quick_add_enabled/);
   assert.match(app, /state\.company\.quick_add_enabled/);
+  assert.match(app, /quickAddVisible\(\) && !document\.body\.classList\.contains\("counter-mode"\)/);
   assert.match(css, /body\.quick-add-hidden #dash-quick-add/);
   assert.match(css, /body\.quick-add-hidden #counter-add-item/);
   assert.match(css, /body\.quick-add-hidden #classic-add-item/);
   assert.match(css, /body\.quick-add-hidden #saas-fab-wrap/);
   assert.match(css, /body\.quick-add-hidden \[data-counter-add-item\]/);
+  assert.match(css, /body\.counter-mode #counter-nav-toggle/);
+  assert.match(css, /body\.counter-mode \.app\.nav-collapsed/);
 
   assert.match(schema, /quick_add_enabled/);
   assert.match(server, /quick_add_enabled/);
   assert.match(core, /quick_add_enabled/);
   assert.match(till, /quick_add_enabled/);
+});
+
+test("Counter auto-hides the sidebar and Quick Add, with a menu button to reopen the nav", () => {
+  const index = read("index.html");
+  const app = read("js/app.js");
+  const css = read("css/pos.css");
+  const catalog = read("js/i18n-catalog.js");
+
+  assert.match(index, /id="counter-nav-toggle"/);
+  assert.match(index, /aria-label="Open menu"/);
+  assert.match(app, /function applyCounterWorkspaceChrome/);
+  assert.match(app, /\$\("counter-nav-toggle"\)\?\.addEventListener\("click", toggleAppNav\)/);
+  assert.match(app, /if \(document\.body\.classList\.contains\("counter-mode"\)\) setNavCollapsed\(true\)/);
+  assert.match(app, /quickAddVisible\(\) && !document\.body\.classList\.contains\("counter-mode"\)/);
+  assert.match(css, /body\.counter-mode \.app,\s*body\.counter-mode \.app\.nav-collapsed/);
+  assert.match(css, /body\.counter-mode #counter-nav-toggle/);
+  assert.match(css, /body\.classic-bill-mode\.counter-mode #counter-nav-toggle/);
+  assert.match(css, /body\.counter-mode \.counter-topbar/);
+  assert.match(catalog, /sidebar and Quick Add hide automatically/);
 });

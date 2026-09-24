@@ -2012,8 +2012,24 @@ function setNavCollapsed(collapsed) {
   if (!app) return;
   app.classList.toggle("nav-collapsed", collapsed);
   btn?.setAttribute("aria-expanded", collapsed ? "false" : "true");
+  const counterBtn = $("counter-nav-toggle");
+  if (counterBtn) {
+    counterBtn.setAttribute("aria-expanded", collapsed ? "false" : "true");
+    counterBtn.setAttribute("aria-label", collapsed ? "Open menu" : "Close menu");
+    counterBtn.title = collapsed ? "Menu" : "Close menu";
+  }
   const scrim = $("nav-scrim");
-  if (scrim) scrim.hidden = collapsed || !isMobileLayout();
+  if (scrim) {
+    const overlay = isMobileLayout() || document.body.classList.contains("counter-mode");
+    scrim.hidden = collapsed || !overlay;
+  }
+}
+
+function applyCounterWorkspaceChrome() {
+  if (document.body.classList.contains("counter-mode")) setNavCollapsed(true);
+  else if (isMobileLayout()) setNavCollapsed(true);
+  else setNavCollapsed(false);
+  applyQuickAddVisibility();
 }
 
 const BILL_COLLAPSED_KEY = "spicepos-bill-collapsed";
@@ -2076,7 +2092,7 @@ function quickAddVisible(company = state.company) {
 }
 
 function applyQuickAddVisibility() {
-  const show = quickAddVisible();
+  const show = quickAddVisible() && !document.body.classList.contains("counter-mode");
   document.body.classList.toggle("quick-add-hidden", !show);
   for (const id of ["dash-quick-add", "saas-fab-wrap", "counter-add-item", "classic-add-item"]) {
     const el = $(id);
@@ -2404,7 +2420,7 @@ function showView(name) {
   if (name === "branches") loadBranches();
   if (name === "devices") loadDevices();
   paintImpersonationControls();
-  if (isMobileLayout()) setNavCollapsed(true);
+  applyCounterWorkspaceChrome();
 }
 
 function paintDeskState(name) {
@@ -8581,11 +8597,13 @@ $("orders-refresh")?.addEventListener("click", () => {
   loadOrders().catch((err) => setHint(err.message, "error"));
 });
 
-$("nav-toggle")?.addEventListener("click", () => {
+function toggleAppNav() {
   const app = document.getElementById("app");
   if (!app) return;
   setNavCollapsed(!app.classList.contains("nav-collapsed"));
-});
+}
+$("nav-toggle")?.addEventListener("click", toggleAppNav);
+$("counter-nav-toggle")?.addEventListener("click", toggleAppNav);
 $("nav-scrim")?.addEventListener("click", () => setNavCollapsed(true));
 $("bill-toggle")?.addEventListener("click", () => {
   setBillCollapsed(!document.body.classList.contains("bill-collapsed"));
@@ -10703,12 +10721,16 @@ function tick() {
 tick();
 setInterval(tick, 1000);
 window.addEventListener("resize", () => {
-  if (!isMobileLayout()) {
+  if (document.body.classList.contains("counter-mode")) {
+    const app = document.getElementById("app");
+    setNavCollapsed(app ? app.classList.contains("nav-collapsed") : true);
+    applyQuickAddVisibility();
+  } else if (isMobileLayout()) {
+    applyCounterWorkspaceChrome();
+  } else {
     setNavCollapsed(false);
     const wrap = $("quick-customer-wrap");
-    if (wrap && !isMobileLayout()) wrap.open = false;
-  } else if (!$("nav-scrim")?.hidden && document.getElementById("app")?.classList.contains("nav-collapsed")) {
-    setNavCollapsed(true);
+    if (wrap) wrap.open = false;
   }
   if ($("bill-toggle")) setBillCollapsed(document.body.classList.contains("bill-collapsed"));
 });
