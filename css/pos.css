@@ -1387,6 +1387,13 @@ body.restaurant-mode .workspace {
 }
 body.restaurant-mode.counter-mode .workspace {
   grid-template-columns: minmax(0, 1fr) minmax(360px, 428px);
+  grid-template-rows: minmax(0, 1fr);
+}
+body.restaurant-mode.counter-mode .workspace > .catalog-pane,
+body.restaurant-mode.counter-mode .workspace > .bill-panel,
+body.restaurant-mode.counter-mode .workspace > .ticket {
+  min-height: 0;
+  max-height: 100%;
 }
 body.restaurant-mode .table-board {
   background: #fffaf4;
@@ -1522,13 +1529,23 @@ body.restaurant-mode .cafe-bill-empty-row td {
   border-bottom: 0;
   border-top: 0;
 }
-body.restaurant-mode .lines.is-empty .cafe-bill-wrap,
+body.restaurant-mode .lines.is-empty {
+  display: flex;
+  flex-direction: column;
+}
+body.restaurant-mode .lines.is-empty .cafe-bill-wrap {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
 body.restaurant-mode .lines.is-empty .cafe-bill-table {
-  height: 100%;
+  flex: 1 1 auto;
+  height: auto;
 }
 body.restaurant-mode .lines.is-empty .cafe-bill-empty-row td {
-  height: 100%;
   vertical-align: middle;
+  padding: 28px 14px;
 }
 body.restaurant-mode .cafe-note-row td {
   padding: 0 8px 10px;
@@ -1538,9 +1555,16 @@ body.restaurant-mode .cafe-note-row td {
 body.restaurant-mode .lines {
   padding: 0 0 8px;
 }
+body.restaurant-mode .totals {
+  padding: 6px 12px 4px;
+  gap: 4px;
+}
 body.restaurant-mode .totals-meta {
   grid-template-columns: 1fr;
-  gap: 4px;
+  gap: 2px;
+}
+body.restaurant-mode .bill-settle {
+  padding: 2px 0 0;
 }
 body.restaurant-mode .totals-meta > div {
   flex-direction: row;
@@ -1548,8 +1572,10 @@ body.restaurant-mode .totals-meta > div {
   align-items: baseline;
   font-size: 12px;
 }
-body.restaurant-mode .pay-row #btn-pay {
-  min-height: 48px;
+body.restaurant-mode .pay-row #btn-pay,
+body.restaurant-mode .pay-row .btn:nth-child(5) {
+  min-height: 96px;
+  height: 100%;
   font-size: 16px;
 }
 body:not(.restaurant-mode) #table-board,
@@ -2577,9 +2603,46 @@ body.bill-collapsed .bill-toggle[data-count]:not([data-count="0"])::after {
 #profit-row { display: none; }
 .pay { padding: 10px 12px 12px; display: grid; gap: 8px; background: #fff; flex: 0 0 auto; border-top: 1px solid var(--line); }
 .pay-row { display: grid; grid-template-columns: 1fr 1fr 1.7fr; gap: 8px; }
-body.restaurant-mode .pay-row { grid-template-columns: 0.9fr 1.15fr 1fr 0.9fr; }
-body.restaurant-mode:has(#btn-shift-table[hidden]) .pay-row { grid-template-columns: 1fr 1.2fr 1fr; }
-body.restaurant-mode .pay-row #btn-pay { grid-column: 1 / -1; }
+body.restaurant-mode .bill-panel {
+  min-height: 0;
+}
+body.restaurant-mode .ticket-head,
+body.restaurant-mode .bill-extras,
+body.restaurant-mode .totals,
+body.restaurant-mode .pay {
+  flex-shrink: 0;
+}
+body.restaurant-mode .lines {
+  flex: 1 1 0;
+  min-height: 72px;
+}
+body.restaurant-mode .pay {
+  flex: 0 0 128px;
+  min-height: 128px;
+}
+body.restaurant-mode .pay-row {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.45fr);
+  grid-template-areas:
+    "hold kot pay"
+    "shift clear pay";
+  min-height: 96px;
+}
+body.restaurant-mode .pay-row #btn-hold,
+body.restaurant-mode .pay-row .btn:nth-child(1) { grid-area: hold; }
+body.restaurant-mode .pay-row #btn-kot,
+body.restaurant-mode .pay-row .btn:nth-child(2) { grid-area: kot; }
+body.restaurant-mode .pay-row #btn-shift-table,
+body.restaurant-mode .pay-row .btn:nth-child(3) { grid-area: shift; }
+body.restaurant-mode .pay-row #btn-clear,
+body.restaurant-mode .pay-row .btn:nth-child(4) { grid-area: clear; }
+body.restaurant-mode .pay-row #btn-pay,
+body.restaurant-mode .pay-row .btn:nth-child(5) { grid-area: pay; }
+body.restaurant-mode:has(#btn-shift-table[hidden]) .pay-row {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.45fr);
+  grid-template-areas:
+    "hold kot pay"
+    "clear clear pay";
+}
 .pay-row .btn { width: 100%; }
 #btn-pay {
   min-height: 46px;
@@ -5569,14 +5632,22 @@ body.classic-bill-mode .bill-settle {
     padding: 8px 10px calc(10px + env(safe-area-inset-bottom));
   }
   body.restaurant-mode .stage.is-counter .pay {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr) minmax(0, 1fr) minmax(0, 0.9fr);
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.45fr);
+    grid-template-areas:
+      "hold kot pay"
+      "shift clear pay";
   }
   body.restaurant-mode:has(#btn-shift-table[hidden]) .stage.is-counter .pay {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr) minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.45fr);
+    grid-template-areas:
+      "hold kot pay"
+      "clear clear pay";
   }
-  body.restaurant-mode .stage.is-counter #btn-pay {
-    grid-column: 1 / -1;
-  }
+  body.restaurant-mode .stage.is-counter #btn-hold { grid-area: hold; }
+  body.restaurant-mode .stage.is-counter #btn-kot { grid-area: kot; }
+  body.restaurant-mode .stage.is-counter #btn-shift-table { grid-area: shift; }
+  body.restaurant-mode .stage.is-counter #btn-clear { grid-area: clear; }
+  body.restaurant-mode .stage.is-counter #btn-pay { grid-area: pay; }
   body.restaurant-mode:not(.has-cart) .stage.is-counter .lines {
     display: block !important;
     min-height: 120px;

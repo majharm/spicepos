@@ -3831,8 +3831,8 @@ function renderCart() {
   if ($("profit-total")) $("profit-total").textContent = money(t.profit || 0);
   if ($("disc-row")) $("disc-row").hidden = !(((t.discount || 0) + (t.lineDiscount || 0)) > 0);
   if ($("loyalty-row")) $("loyalty-row").hidden = !(Number(t.loyalty) > 0);
-  if ($("taxable-row")) $("taxable-row").hidden = isRestaurantShop() ? false : !(Number(t.taxable) > 0);
-  if ($("gst-row")) $("gst-row").hidden = isRestaurantShop() ? false : !(Number(t.tax) > 0);
+  if ($("taxable-row")) $("taxable-row").hidden = !(Number(t.taxable) > 0);
+  if ($("gst-row")) $("gst-row").hidden = !(Number(t.tax) > 0);
   $("total").textContent = money(t.total != null ? t.total : t.taxable + t.tax);
   if ($("ticket-sub")) {
     if (isRestaurantShop() && !state.cart?.length) {

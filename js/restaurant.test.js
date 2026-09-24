@@ -281,7 +281,10 @@ test("Cafe counter bill window is a ticket table with full-width Pay", () => {
   assert.match(app, /cafe-bill-table/);
   assert.match(app, /Select a table/);
   assert.match(css, /body\.restaurant-mode \.cafe-bill-table/);
-  assert.match(css, /body\.restaurant-mode \.pay-row #btn-pay \{ grid-column: 1 \/ -1; \}/);
+  assert.match(css, /body\.restaurant-mode \.pay-row #btn-pay,/);
+  assert.match(css, /\.pay-row \.btn:nth-child\(5\) \{ grid-area: pay; \}/);
+  assert.match(css, /"hold kot pay"/);
+  assert.match(css, /"shift clear pay"/);
   assert.match(css, /body\.restaurant-mode\.counter-mode \.workspace/);
   assert.match(css, /minmax\(360px, 428px\)/);
 });
