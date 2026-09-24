@@ -6938,6 +6938,7 @@ function showInvoicePrintModal(order, { title, message } = {}) {
   paint(getInvoiceLook());
   $("modal").hidden = false;
 }
+globalThis.showInvoicePrintModal = showInvoicePrintModal;
 
 function invoiceLookTabs(look) {
   return `<div class="invoice-look-tabs" role="tablist">
