@@ -4279,11 +4279,13 @@ async function applyBarcodeScan(raw, sourceEl) {
     applyBarcodeScan._at = Date.now();
     applyBarcodeScan._pending = "";
     const piece = findItemByBarcode(code) || (globalThis.POSBarcode?.itemHasBarcode?.(item, code) ? item : null);
-    addWeighableItem(item.id, classicScanAddQty(item), (piece || isClassicBillShop()) ? code : "");
+    const added = addWeighableItem(item.id, classicScanAddQty(item), (piece || isClassicBillShop()) ? code : "");
     clearCounterQuery(sourceEl);
     const alerts = classicItemAlerts(item).alerts;
     paintScanLane(!alerts.some((a) => /EXPIRED|Out of stock/i.test(a)), item.name);
-    setHint(alerts.length ? `Added ${item.name} · ${alerts.join(" · ")}` : `Added ${item.name}`, alerts.length ? "error" : "ok");
+    if (added !== false) {
+      setHint(alerts.length ? `Added ${item.name} · ${alerts.join(" · ")}` : `Added ${item.name}`, alerts.length ? "error" : "ok");
+    }
     focusScanLane();
     return true;
   }
@@ -4476,8 +4478,9 @@ function addItem(id, qtyGm, lineBarcode) {
       }
       existing.qtyGm = next;
       renderCart();
+      if (shouldCapBillStock(item) && next < POSUnits.clampQty(want)) return false;
       warnClassicItem(item);
-      return;
+      return true;
     }
     const first = clampBillQty(item, barcodeAdd);
     if (shouldCapBillStock(item) && first < POSUnits.clampQty(barcodeAdd)) setHint(stockCapHint(item), "error");
@@ -4495,8 +4498,9 @@ function addItem(id, qtyGm, lineBarcode) {
       notes: "",
     });
     renderCart();
+    if (shouldCapBillStock(item) && first < POSUnits.clampQty(barcodeAdd)) return false;
     warnClassicItem(item);
-    return;
+    return true;
   }
   const line = state.cart.find((l) => l.itemId === id && !String(l.barcode || "").trim());
   if (line) {
@@ -9050,7 +9054,7 @@ function addWeighableItem(id, qtyGm, barcode) {
     }
     return;
   }
-  addItem(id, qtyGm, barcode);
+  return addItem(id, qtyGm, barcode);
 }
 async function connectWeighingScale(kind) {
   const S = globalThis.POSScale;
