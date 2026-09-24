@@ -2079,7 +2079,10 @@ body.classic-bill-mode .line-disc small {
   white-space: nowrap;
 }
 body.classic-bill-mode .classic-bill-whole-disc {
-  display: none !important;
+  display: flex !important;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
 }
 body.classic-bill-mode .totals {
   background: #f4f7fb;
@@ -2270,10 +2273,10 @@ body.classic-bill-mode #bill-disc-wrap {
   padding: 0;
 }
 body.classic-bill-mode .classic-disc-row {
-  display: grid;
-  grid-template-columns: minmax(150px, 1fr) minmax(120px, 0.8fr);
-  gap: 6px 12px;
-  align-items: end;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 16px;
 }
 body.classic-bill-mode .classic-disc-row > label {
   display: flex;
@@ -5114,7 +5117,8 @@ body.classic-bill-mode .bill-settle {
     grid-template-columns: 1fr;
   }
   body.classic-bill-mode .classic-disc-row {
-    grid-template-columns: 1fr 1fr;
+    display: flex;
+    flex-wrap: wrap;
   }
   .classic-scan-status { grid-column: 1 / -1; }
   .app { grid-template-columns: 1fr; height: 100dvh; max-height: 100dvh; overflow: hidden; }

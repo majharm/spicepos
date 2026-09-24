@@ -4198,6 +4198,7 @@ async function applyBarcodeScan(raw, sourceEl) {
     }
     item = findItemByBarcode(code);
   }
+  if (!item) item = findItemByBarcode(code);
   if (!item) item = findItemBySkuOrHsn(code);
   if (item) {
     applyBarcodeScan._last = code;
@@ -4223,7 +4224,11 @@ async function applyBarcodeScan(raw, sourceEl) {
   const hits = filteredItems();
   if (hits.length === 1) {
     applyBarcodeScan._pending = "";
-    addWeighableItem(hits[0].id, classicScanAddQty(hits[0]));
+    addWeighableItem(
+      hits[0].id,
+      classicScanAddQty(hits[0]),
+      (globalThis.POSBarcode?.itemHasBarcode?.(hits[0], code) || isClassicBillShop()) ? code : "",
+    );
     clearCounterQuery(sourceEl);
     const alerts = classicItemAlerts(hits[0]).alerts;
     paintScanLane(!alerts.some((a) => /EXPIRED|Out of stock/i.test(a)), hits[0].name);
