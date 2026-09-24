@@ -2079,7 +2079,10 @@ body.classic-bill-mode .line-disc small {
   white-space: nowrap;
 }
 body.classic-bill-mode .classic-bill-whole-disc {
-  display: none !important;
+  display: flex !important;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
 }
 body.classic-bill-mode .totals {
   background: #f4f7fb;
@@ -2266,21 +2269,35 @@ body.classic-bill-mode #bill-extras[open] > summary {
 body.classic-bill-mode #bill-disc-wrap {
   display: grid;
   grid-template-columns: 1fr;
-  gap: 8px;
+  gap: 6px;
   padding: 0;
 }
 body.classic-bill-mode .classic-disc-row {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 8px 16px;
-  align-items: start;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 16px;
 }
 body.classic-bill-mode .classic-disc-row > label {
-  display: grid;
-  gap: 4px;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
   font-size: 11px;
   font-weight: 700;
   color: #1e3a5f;
+  white-space: nowrap;
+}
+body.classic-bill-mode .classic-barcode {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-variant-numeric: tabular-nums;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0;
+  white-space: nowrap;
+  overflow: visible;
+  max-width: none;
+  word-break: keep-all;
 }
 body.classic-bill-mode .classic-loyalty-bar:not([hidden]) {
   display: flex;
@@ -2322,15 +2339,23 @@ body.classic-bill-mode .classic-loyalty-bar.is-wait {
   color: #664d03;
 }
 body.classic-bill-mode .loyalty-redeem input {
-  min-height: 34px;
-  width: 100%;
+  min-height: 28px;
+  width: 88px;
+  max-width: 100%;
   border-radius: 3px;
   border: 1px solid #7a9cc6;
 }
+body.classic-bill-mode .disc-pair {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
 body.classic-bill-mode .disc-pair select,
 body.classic-bill-mode .disc-pair input {
-  min-height: 34px;
+  min-height: 28px;
 }
+body.classic-bill-mode .disc-pair select { width: 52px; }
+body.classic-bill-mode .disc-pair input { width: 88px; }
 body.classic-bill-mode #loyalty-hint {
   display: none;
 }
@@ -5092,7 +5117,8 @@ body.classic-bill-mode .bill-settle {
     grid-template-columns: 1fr;
   }
   body.classic-bill-mode .classic-disc-row {
-    grid-template-columns: 1fr;
+    display: flex;
+    flex-wrap: wrap;
   }
   .classic-scan-status { grid-column: 1 / -1; }
   .app { grid-template-columns: 1fr; height: 100dvh; max-height: 100dvh; overflow: hidden; }
@@ -6746,6 +6772,10 @@ body.apparel-mode.classic-bill-mode .pharm-bill-table th {
 body.apparel-mode.classic-bill-mode .pharm-bill-table td {
   padding: 4px 5px;
   font-size: 11px;
+}
+body.apparel-mode.classic-bill-mode .classic-barcode {
+  font-size: 11px;
+  white-space: nowrap;
 }
 body.apparel-mode.classic-bill-mode .pharm-bill-table .qty button {
   width: 22px;

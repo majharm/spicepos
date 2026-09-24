@@ -312,6 +312,43 @@ function itemBillName(item) {
   return globalThis.POSFootwear?.billName(item) || item?.name || "Item";
 }
 
+function barcodeText(raw) {
+  if (globalThis.POSBarcode?.asBarcodeString) return POSBarcode.asBarcodeString(raw);
+  return String(raw == null ? "" : raw).trim();
+}
+
+function lineBarcodeText(line, item) {
+  return barcodeText(line?.barcode) || barcodeText(item?.barcode) || barcodeText(item?.item_barcode) || "";
+}
+
+function isReusableCartBarcode(item, code) {
+  const B = globalThis.POSBarcode;
+  const q = barcodeText(code);
+  if (!q || !item) return false;
+  if (B?.barcodesEqual) {
+    if (B.barcodesEqual(item.barcode, q) || B.barcodesEqual(item.mfr_barcode, q) || B.barcodesEqual(item.item_barcode, q)) {
+      return true;
+    }
+    const extra = Array.isArray(item.barcodes) ? item.barcodes : [];
+    return extra.some((row) => {
+      const kind = row && typeof row === "object" ? row.kind : "own";
+      return B.isReusableProductKind?.(kind) !== false && B.barcodesEqual(B.extraBarcodeValue?.(row) || row?.barcode || row, q);
+    });
+  }
+  return barcodeText(item.barcode) === q || barcodeText(item.mfr_barcode) === q;
+}
+
+function clampLoyaltyRedeem() {
+  const pts = Math.max(0, Number(state.loyaltyAccount?.points_balance) || 0);
+  const walk = isWalkInCustomer(customer());
+  let want = Math.max(0, Math.floor(Number($("loyalty-redeem")?.value) || 0));
+  if (walk || pts <= 0) want = 0;
+  else if (want > pts) want = pts;
+  if ($("loyalty-redeem")) $("loyalty-redeem").value = String(want);
+  state.loyaltyRedeem = want;
+  return want;
+}
+
 function defaultItemCategory() {
   return globalThis.POSFootwear?.defaultCategory(state.businessMeta) || "General";
 }
@@ -3651,8 +3688,8 @@ function cartTotals() {
   const L = globalThis.POSLoyalty;
   const bill = D
     ? D.computeBill(lines, {
-        discountType: isClassicBillShop() ? "amt" : state.billDiscountType,
-        discountValue: isClassicBillShop() ? 0 : state.billDiscountValue,
+        discountType: state.billDiscountType || "amt",
+        discountValue: state.billDiscountValue,
       })
     : { subtotal: lines.reduce((s, l) => s + l.taxable, 0), gst: lines.reduce((s, l) => s + l.gst, 0), billDiscount: 0, total: 0, profit: 0 };
   let loyaltyDiscount = 0;
@@ -3768,6 +3805,7 @@ function renderCart() {
         <th>S.No.</th>
         <th>Code</th>
         <th>Item Name</th>
+        <th>Barcode</th>
         <th>Colour / Size</th>
         <th class="pharm-n">Rate</th>
         <th>Qty</th>
@@ -3789,10 +3827,12 @@ function renderCart() {
         const key = cartLineKey(line);
         const variant = itemVariantText(item);
         const alert = classicItemAlerts(item);
+        const barcode = lineBarcodeText(line, item);
         return `<tr class="tone-${alert.stock.tone} exp-${alert.exp.tone}">
           <td class="pharm-n">${idx + 1}</td>
           <td>${escapeHtml(item.code || item.hsn || "—")}</td>
           <td class="pharm-med">${escapeHtml(item.name)}</td>
+          <td class="classic-barcode">${barcode ? escapeHtml(barcode) : "—"}</td>
           <td>${escapeHtml(variant || "—")}${alert.exp.expired ? ` · EXPIRED ${escapeHtml(classicDateOnly(alert.exp.date) || alert.exp.short)}` : ""}</td>
           <td class="pharm-n">${escapeHtml(money(rateFor(item)))}</td>
           <td>
@@ -3801,6 +3841,10 @@ function renderCart() {
               <input class="qty-input" type="number" inputmode="decimal" min="${POSUnits.displayQty(POSUnits.qtyMin(), unitCode) || 0.001}" max="${POSUnits.qtyMax()}" step="${escapeHtml(qtyStep)}" value="${escapeHtml(qtyShow)}" data-qty="${escapeHtml(key)}" aria-label="Quantity in ${unit}" />
               <button type="button" data-chg="${escapeHtml(key)}" data-d="${step}">+</button>
               ${isScaleEnabled() && isWeightItem(item) ? `<button type="button" class="scale-line-btn" data-scale-line="${escapeHtml(key)}" title="Read scale">⚖</button>` : ""}
+            </div>
+          </td>
+          <td class="line-disc-cell">${classicLineDiscHtml(line, key)}</td>
+          <td class="pharm-n stock-cell">${escapeHtml(alert.stock.label)}</td>
           <td class="pharm-n">${escapeHtml(String(Number(item.gst_rate) || 0))}%</td>
           <td class="pharm-n">${escapeHtml(money(calc.taxable + calc.gst))}</td>
           <td><button type="button" class="classic-del" data-del-line="${escapeHtml(key)}" aria-label="Remove ${escapeHtml(item.name)}">×</button></td>
@@ -4005,12 +4049,9 @@ function paintClassicLoyalty() {
   const redeem = $("loyalty-redeem");
   if (redeem) {
     redeem.max = String(pts);
-    if (Number(redeem.value) > pts) {
-      redeem.value = String(pts);
-      state.loyaltyRedeem = pts;
-    }
     redeem.disabled = walk || pts <= 0;
     redeem.placeholder = pts > 0 ? `Max ${pts}` : "0";
+    clampLoyaltyRedeem();
   }
   bal.hidden = false;
   if (walk) {
@@ -4157,13 +4198,14 @@ async function applyBarcodeScan(raw, sourceEl) {
     }
     item = findItemByBarcode(code);
   }
+  if (!item) item = findItemByBarcode(code);
   if (!item) item = findItemBySkuOrHsn(code);
   if (item) {
     applyBarcodeScan._last = code;
     applyBarcodeScan._at = Date.now();
     applyBarcodeScan._pending = "";
     const piece = findItemByBarcode(code) || (globalThis.POSBarcode?.itemHasBarcode?.(item, code) ? item : null);
-    addWeighableItem(item.id, classicScanAddQty(item), piece ? code : "");
+    addWeighableItem(item.id, classicScanAddQty(item), (piece || isClassicBillShop()) ? code : "");
     clearCounterQuery(sourceEl);
     const alerts = classicItemAlerts(item).alerts;
     paintScanLane(!alerts.some((a) => /EXPIRED|Out of stock/i.test(a)), item.name);
@@ -4182,7 +4224,11 @@ async function applyBarcodeScan(raw, sourceEl) {
   const hits = filteredItems();
   if (hits.length === 1) {
     applyBarcodeScan._pending = "";
-    addWeighableItem(hits[0].id, classicScanAddQty(hits[0]));
+    addWeighableItem(
+      hits[0].id,
+      classicScanAddQty(hits[0]),
+      (globalThis.POSBarcode?.itemHasBarcode?.(hits[0], code) || isClassicBillShop()) ? code : "",
+    );
     clearCounterQuery(sourceEl);
     const alerts = classicItemAlerts(hits[0]).alerts;
     paintScanLane(!alerts.some((a) => /EXPIRED|Out of stock/i.test(a)), hits[0].name);
@@ -4331,16 +4377,19 @@ function addItem(id, qtyGm, lineBarcode) {
   if (!item) return;
   ensureDiningTable();
   const add = qtyGm == null ? POSUnits.counterStep(itemUnit(item)) : Number(qtyGm);
-  const code = String(lineBarcode || "").trim();
+  const code = barcodeText(lineBarcode);
   const count = POSUnits.isCount(itemUnit(item));
   const pharmacyCount = isPharmacyShop() && count;
   const barcodeAdd = pharmacyCount
     ? POSUnits.clampQty((Number.isFinite(add) && add > 0 ? add : 1) * pieceBarcodeQty(item))
     : POSUnits.clampQty(count ? pieceBarcodeQty(item) : add);
   if (code) {
-    const existing = state.cart.find((l) => String(l.barcode || "").trim() === code);
+    const existing = state.cart.find((l) => {
+      const B = globalThis.POSBarcode;
+      return B?.barcodesEqual ? B.barcodesEqual(l.barcode, code) : barcodeText(l.barcode) === code;
+    });
     if (existing) {
-      if (count && !pharmacyCount) {
+      if (count && !pharmacyCount && !isReusableCartBarcode(item, code)) {
         setHint("This piece is already on the bill", "error");
         return;
       }
@@ -9152,9 +9201,9 @@ $("btn-pay").addEventListener("click", async () => {
       paymentMethod: $("pay-method").value,
       packId: state.lastPack?.id || null,
       packCount: state.lastPack?.count || null,
-      discountType: isClassicBillShop() ? "amt" : state.billDiscountType,
-      discountValue: isClassicBillShop() ? 0 : state.billDiscountValue,
-      discount: isClassicBillShop() ? 0 : cartTotals().discount,
+      discountType: state.billDiscountType || "amt",
+      discountValue: state.billDiscountValue,
+      discount: cartTotals().discount,
       loyaltyPoints: state.loyaltyRedeem,
       offerIds: (state.appliedOffers?.applied || []).map((o) => o.id).filter(Boolean),
       offerLoyaltyMultiplier: state.appliedOffers?.loyaltyMultiplier || 1,
@@ -11322,14 +11371,14 @@ document.getElementById("stock-mode")?.addEventListener("click", (e) => {
   $(id)?.addEventListener("input", () => {
     state.billDiscountType = $("bill-disc-type")?.value || "amt";
     state.billDiscountValue = Number($("bill-disc-value")?.value) || 0;
-    state.loyaltyRedeem = Number($("loyalty-redeem")?.value) || 0;
+    clampLoyaltyRedeem();
     if (id !== "loyalty-redeem") state.offerBillLocked = true;
     renderCart();
   });
   $(id)?.addEventListener("change", () => {
     state.billDiscountType = $("bill-disc-type")?.value || "amt";
     state.billDiscountValue = Number($("bill-disc-value")?.value) || 0;
-    state.loyaltyRedeem = Number($("loyalty-redeem")?.value) || 0;
+    clampLoyaltyRedeem();
     if (id !== "loyalty-redeem") state.offerBillLocked = true;
     renderCart();
   });
