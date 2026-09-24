@@ -178,7 +178,7 @@ test("Print order review modal is a stepped desk with quote grid and production 
   assert.match(ui, /Approve file/);
   assert.match(css, /#modal:has\(\.print-order-desk\)/);
   assert.match(css, /\.pod-step\.is-on/);
-  assert.match(index, /pos\.css\?v=20260924ah1/);
+  assert.match(index, /pos\.css\?v=20260924ah2/);
 });
 
 test("PHP print quote, artwork MIME, approve, bill settle, and OTP mail are wired", () => {

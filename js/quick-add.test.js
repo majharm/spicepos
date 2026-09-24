@@ -88,5 +88,6 @@ test("Counter auto-hides the sidebar and Quick Add, with a menu button to reopen
   assert.match(css, /body\.counter-mode \.app,\s*body\.counter-mode \.app\.nav-collapsed/);
   assert.match(css, /body\.counter-mode #counter-nav-toggle/);
   assert.match(css, /body\.classic-bill-mode\.counter-mode #counter-nav-toggle/);
+  assert.match(css, /body\.counter-mode \.counter-topbar/);
   assert.match(catalog, /sidebar and Quick Add hide automatically/);
 });

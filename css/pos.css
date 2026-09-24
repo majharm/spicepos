@@ -489,6 +489,10 @@ body.counter-mode #counter-nav-toggle {
   align-items: center;
   justify-content: center;
 }
+body.counter-mode .counter-topbar {
+  position: relative;
+  z-index: 45;
+}
 body.classic-bill-mode.counter-mode #counter-nav-toggle {
   color: #fff;
   border-color: rgba(255, 255, 255, 0.42);
