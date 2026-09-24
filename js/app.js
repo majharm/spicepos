@@ -4535,7 +4535,7 @@ function setLineQty(key, qtyGm) {
   if (shouldCapBillStock(item) && next < want) setHint(stockCapHint(item), "error");
   const prev = Number(line.qtyGm) || 0;
   if (next <= 0) state.cart = state.cart.filter((l) => cartLineKey(l) !== String(key));
-  else if (isPieceBarcodeLine(line, item)) line.qtyGm = pieceBarcodeQty(item);
+  else if (isPieceBarcodeLine(line, item) && !isReusableCartBarcode(item, line.barcode)) line.qtyGm = pieceBarcodeQty(item);
   else {
     if (!state._scaleApply && Number(line.scaleGrams) > 0 && next !== prev) {
       line.weightSource = "manual";
@@ -4555,7 +4555,7 @@ function changeLineQty(key, delta) {
   const line = findCartLine(key);
   if (!line) return;
   const item = state.items.find((i) => i.id === line.itemId);
-  if (isPieceBarcodeLine(line, item)) {
+  if (isPieceBarcodeLine(line, item) && !isReusableCartBarcode(item, line.barcode)) {
     if (Number(delta) < 0) setLineQty(key, 0);
     else setHint("Scan the next piece barcode", "ok");
     return;
