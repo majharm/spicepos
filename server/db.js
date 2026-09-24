@@ -28,6 +28,8 @@ const pool = mysql.createPool({
   connectionLimit: Number(process.env.DB_POOL || 8),
   charset: "utf8mb4",
   timezone: "Z",
+  supportBigNumbers: true,
+  bigNumberStrings: true,
   ssl: process.env.DB_SSL === "1" ? { rejectUnauthorized: false } : undefined,
 });
 

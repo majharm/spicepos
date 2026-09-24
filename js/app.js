@@ -1410,8 +1410,11 @@ function syncPharmacyMobile(fromBill) {
 }
 
 function findItemByBarcode(code) {
-  const q = String(code || "").trim();
+  const q = globalThis.POSBarcode?.cleanCode ? POSBarcode.cleanCode(code) : String(code || "").trim();
   if (!q) return null;
+  if (globalThis.POSBarcode?.itemHasBarcode) {
+    return activeItems().find((i) => POSBarcode.itemHasBarcode(i, q)) || null;
+  }
   return activeItems().find((i) => {
     if (String(i.barcode || "").trim() === q) return i;
     const extra = Array.isArray(i.barcodes) ? i.barcodes : [];
@@ -3342,6 +3345,8 @@ function filteredItems() {
   const size = classic ? "" : String(state.sizeFilter || "").trim().toLowerCase();
   const color = classic ? "" : String(state.colorFilter || "").trim().toLowerCase();
   const cat = classic || q ? "" : String(state.categoryFilter || "");
+  const exact = q ? findItemByBarcode(state.query) : null;
+  if (exact) return [exact];
   return activeItems().filter((i) => {
     if (cat && itemCategoryLabel(i) !== cat) return false;
     if (wearer && globalThis.POSFootwear?.normalizeWearer(i.wearer_type) !== wearer) return false;
@@ -4061,9 +4066,40 @@ function paintScanLane(ok, label) {
   }, ok ? 600 : 900);
 }
 
+function hydrateItemFromBarcodeMatch(match, code) {
+  if (!match || typeof match !== "object") return null;
+  const id = match.item_id || (match.source === "item" && match.id) || "";
+  if (!id) return null;
+  const existing = (state.items || []).find((i) => i.id === id);
+  if (existing) return existing;
+  const row = {
+    id,
+    name: match.item_name || match.name || "Item",
+    code: match.item_code || match.code || "",
+    barcode: String(match.barcode || match.catalog_barcode || code || ""),
+    retail_rate: match.retail_rate,
+    b2b_rate: match.b2b_rate || match.retail_rate,
+    purchase_rate: match.purchase_rate,
+    mrp: match.item_mrp ?? match.mrp,
+    gst_rate: match.gst_rate,
+    stock_gm: match.stock_gm,
+    base_unit: match.base_unit || match.unit,
+    unit: match.unit || match.base_unit,
+    size: match.size || "",
+    color: match.color || "",
+    wearer_type: match.wearer_type || "",
+    status: match.item_status || "active",
+  };
+  state.items = [...(state.items || []), row];
+  return row;
+}
+
 async function applyBarcodeScan(raw, sourceEl) {
   const code = globalThis.POSBarcode?.cleanCode ? POSBarcode.cleanCode(raw) : String(raw || "").trim();
   if (!code) return false;
+  if (applyBarcodeScan._pending === code) return true;
+  if (applyBarcodeScan._last === code && Date.now() - (applyBarcodeScan._at || 0) < 350) return true;
+  applyBarcodeScan._pending = code;
   let item = null;
   try {
     const data = await api(`/api/barcodes/lookup?code=${encodeURIComponent(code)}`);
@@ -4078,9 +4114,11 @@ async function applyBarcodeScan(raw, sourceEl) {
       }
       item = state.items.find((i) => i.id === id);
     }
+    if (!item) item = hydrateItemFromBarcodeMatch(match, code);
   } catch (err) {
     const msg = String(err.message || "");
     if (/inactive|already sold|already damaged/i.test(msg)) {
+      applyBarcodeScan._pending = "";
       if (sourceEl) sourceEl.value = "";
       paintScanLane(false, "Inactive");
       setHint(msg, "error");
@@ -4091,7 +4129,11 @@ async function applyBarcodeScan(raw, sourceEl) {
   }
   if (!item) item = findItemBySkuOrHsn(code);
   if (item) {
-    addWeighableItem(item.id, classicScanAddQty(item), findItemByBarcode(code) ? code : "");
+    applyBarcodeScan._last = code;
+    applyBarcodeScan._at = Date.now();
+    applyBarcodeScan._pending = "";
+    const piece = findItemByBarcode(code) || (globalThis.POSBarcode?.itemHasBarcode?.(item, code) ? item : null);
+    addWeighableItem(item.id, classicScanAddQty(item), piece ? code : "");
     clearCounterQuery(sourceEl);
     const alerts = classicItemAlerts(item).alerts;
     paintScanLane(!alerts.some((a) => /EXPIRED|Out of stock/i.test(a)), item.name);
@@ -4100,6 +4142,7 @@ async function applyBarcodeScan(raw, sourceEl) {
     return true;
   }
   if (digitsMobile(code).length === 10 && applyCounterMobile(code, { announceMiss: false })) {
+    applyBarcodeScan._pending = "";
     clearCounterQuery(sourceEl);
     paintScanLane(true, customer()?.name || "Customer");
     focusScanLane();
@@ -4108,6 +4151,7 @@ async function applyBarcodeScan(raw, sourceEl) {
   syncCounterQuery(code, sourceEl);
   const hits = filteredItems();
   if (hits.length === 1) {
+    applyBarcodeScan._pending = "";
     addWeighableItem(hits[0].id, classicScanAddQty(hits[0]));
     clearCounterQuery(sourceEl);
     const alerts = classicItemAlerts(hits[0]).alerts;
@@ -4117,10 +4161,12 @@ async function applyBarcodeScan(raw, sourceEl) {
     return true;
   }
   if (hits.length > 1) {
+    applyBarcodeScan._pending = "";
     paintScanLane(true, `${hits.length} matches`);
     setHint(`Pick one of ${hits.length} matches`, "ok");
     return false;
   }
+  applyBarcodeScan._pending = "";
   paintScanLane(false, "No match");
   setHint(`No item matches “${code}”. Use + Item to add it.`, "error");
   if (sourceEl === $("scan-code") || sourceEl === $("search") || sourceEl === $("bill-scan-code") || sourceEl === $("bill-item-search")) sourceEl.select();
@@ -4187,7 +4233,7 @@ async function saveCounterAddItem(e) {
     b2b_rate: retail,
     purchase_rate: 0,
     gst_rate: Number($("ci-gst")?.value) || 5,
-    barcode: String($("ci-barcode")?.value || "").trim(),
+    barcode: globalThis.POSBarcode?.cleanCode ? POSBarcode.cleanCode($("ci-barcode")?.value) : String($("ci-barcode")?.value || "").trim(),
     status: "active",
     stock_gm: 0,
   };
@@ -4770,7 +4816,7 @@ function fillItemForm(i) {
   $("item-subcategory").value = i.subcategory || "";
   if ($("item-type")) $("item-type").value = i.medicine_type || "Tablet";
   if ($("item-mfr")) $("item-mfr").value = i.manufacturer || "";
-  if ($("item-own-barcode")) $("item-own-barcode").value = i.barcode || "";
+  if ($("item-own-barcode")) $("item-own-barcode").value = i.barcode != null ? String(i.barcode) : "";
   if ($("item-pack-size")) $("item-pack-size").value = i.pack_size || "";
   if ($("item-pack-unit")) $("item-pack-unit").value = i.pack_unit || "Strip";
   if ($("item-upp")) $("item-upp").value = globalThis.POSFootwear?.unitsPerPack?.(i) || i.units_per_pack || 10;
@@ -8533,8 +8579,25 @@ $("order-pane").addEventListener("change", async (e) => {
 $("search").addEventListener("input", () => {
   syncCounterQuery($("search").value, $("search"));
 });
+function scheduleBarcodeAutoSearch(el) {
+  clearTimeout(scheduleBarcodeAutoSearch._t);
+  if (!el) return;
+  const code = globalThis.POSBarcode?.cleanCode ? POSBarcode.cleanCode(el.value) : String(el.value || "").trim();
+  const like = globalThis.POSBarcode?.isBarcodeLike ? POSBarcode.isBarcodeLike(code) : (code.length >= 8 && !/\s/.test(code));
+  if (!like || code.length < 8) return;
+  scheduleBarcodeAutoSearch._t = setTimeout(() => {
+    const live = globalThis.POSBarcode?.cleanCode ? POSBarcode.cleanCode(el.value) : String(el.value || "").trim();
+    if (live === code) void applyBarcodeScan(code, el);
+  }, 140);
+}
+
 $("scan-code")?.addEventListener("input", () => {
   syncCounterQuery($("scan-code").value, $("scan-code"));
+  scheduleBarcodeAutoSearch($("scan-code"));
+});
+$("scan-code")?.addEventListener("search", () => {
+  const raw = $("scan-code")?.value;
+  if (raw) void applyBarcodeScan(raw, $("scan-code"));
 });
 $("wearer-filter")?.addEventListener("change", () => {
   state.wearerFilter = $("wearer-filter").value;
@@ -8571,6 +8634,11 @@ $("counter-item-modal")?.addEventListener("click", (e) => {
 });
 $("bill-scan-code")?.addEventListener("input", () => {
   syncCounterQuery($("bill-scan-code").value, $("bill-scan-code"));
+  scheduleBarcodeAutoSearch($("bill-scan-code"));
+});
+$("bill-scan-code")?.addEventListener("search", () => {
+  const raw = $("bill-scan-code")?.value;
+  if (raw) void applyBarcodeScan(raw, $("bill-scan-code"));
 });
 $("bill-item-search")?.addEventListener("input", () => {
   syncCounterQuery($("bill-item-search").value, $("bill-item-search"));
@@ -9478,7 +9546,7 @@ $("item-form").addEventListener("submit", async (e) => {
     gst_rate: $("item-gst").value,
     mrp: $("item-mrp")?.value || "",
     barcode_qty: POSUnits.isCount(unit) ? Number($("item-barcode-qty")?.value) || 0 : 0,
-    barcode: $("item-own-barcode")?.value || "",
+    barcode: globalThis.POSBarcode?.cleanCode ? POSBarcode.cleanCode($("item-own-barcode")?.value) : String($("item-own-barcode")?.value || "").trim(),
     stock_gm: POSUnits.toBase($("item-stock").value, unit),
     status: itemStatusOf($("item-status")?.value),
     image_url: state.itemImage || "",

@@ -1,5 +1,20 @@
 <?php
 
+function pos_barcode_text($raw) {
+  $s = trim((string) $raw);
+  if ($s === "") return "";
+  $clean = preg_replace('/[\x00-\x1F\x7F]/', "", $s);
+  if (is_string($clean)) $s = $clean;
+  $s = preg_replace("/\s+/", "", (string) $s);
+  $s = preg_replace("/^\\][A-Za-z][0-9]/", "", (string) $s);
+  return (string) $s;
+}
+
+function pos_is_reusable_barcode_kind($kind) {
+  $k = strtolower(trim((string) $kind));
+  return $k === "own" || $k === "manufacturer";
+}
+
 function pos_adv_round2($n) {
   return round((float) $n, 2);
 }
@@ -80,6 +95,14 @@ function pos_ensure_advanced_schema() {
       "ref_type" => "VARCHAR(32) NULL",
       "ref_id" => "VARCHAR(255) NULL",
     ]);
+    if (function_exists("pos_ensure_barcode_varchar")) {
+      pos_ensure_barcode_varchar("items");
+      pos_ensure_barcode_varchar("item_barcodes", true);
+      pos_ensure_barcode_varchar("stock_batches");
+      pos_ensure_barcode_varchar("sales_order_lines");
+      pos_ensure_barcode_varchar("purchase_lines");
+      pos_ensure_barcode_varchar("stock_movements");
+    }
   }
   @$db->query(
     "CREATE TABLE IF NOT EXISTS item_barcodes (
@@ -102,6 +125,7 @@ function pos_ensure_advanced_schema() {
       "used_at" => "TIMESTAMP(3) NULL",
     ]);
   }
+  @$db->query("UPDATE item_barcodes SET status='active', used_kind=NULL, used_at=NULL WHERE LOWER(kind) IN ('own','manufacturer') AND LOWER(COALESCE(status,'active')) <> 'active'");
   @$db->query(
     "CREATE TABLE IF NOT EXISTS stock_batches (
       id VARCHAR(255) PRIMARY KEY,
@@ -236,8 +260,9 @@ function pos_unique_ean13($bid) {
 }
 
 function pos_attach_item_barcode($bid, $itemId, $code, $kind = "own", $primary = false) {
-  $code = trim((string) $code);
+  $code = pos_barcode_text($code);
   if ($code === "") return null;
+  if (strlen($code) > 64) throw new Exception("Barcode is too long (max 64 characters)");
   $existing = pos_q(
     "SELECT * FROM item_barcodes WHERE business_id = ? AND barcode = ? LIMIT 1",
     "ss",
@@ -245,6 +270,11 @@ function pos_attach_item_barcode($bid, $itemId, $code, $kind = "own", $primary =
   );
   if ($existing) {
     if (($existing[0]["item_id"] ?? "") !== $itemId) throw new Exception("Barcode already used on another item");
+    if ($primary || $kind === "own") {
+      try {
+        pos_q("UPDATE items SET barcode = ? WHERE id = ? AND business_id = ?", "sss", [$code, $itemId, $bid]);
+      } catch (Exception $e) { /* optional */ }
+    }
     return $existing[0];
   }
   $id = pos_uuid();
@@ -267,7 +297,7 @@ function pos_parse_manual_barcodes($raw) {
   $out = [];
   $seen = [];
   foreach ($parts as $part) {
-    $code = preg_replace('/\s+/', '', trim((string) $part));
+    $code = pos_barcode_text($part);
     if ($code === "") continue;
     if (isset($seen[$code])) throw new Exception("Duplicate barcode {$code}");
     $seen[$code] = true;
@@ -339,11 +369,11 @@ function pos_assign_item_barcodes($bid, $itemId, $body = []) {
   pos_save_pharmacy_item_fields($bid, $itemId, $body);
   $item = pos_q("SELECT * FROM items WHERE id = ? AND business_id = ? LIMIT 1", "ss", [$itemId, $bid]);
   $row = $item[0] ?? $body;
-  if (!pos_item_is_count($row)) return "";
-  $own = trim((string) ($body["barcode"] ?? ""));
-  $mfr = trim((string) ($body["mfr_barcode"] ?? $body["manufacturer_barcode"] ?? ""));
+  $own = pos_barcode_text($body["barcode"] ?? "");
+  $mfr = pos_barcode_text($body["mfr_barcode"] ?? $body["manufacturer_barcode"] ?? "");
   if ($own !== "") pos_attach_item_barcode($bid, $itemId, $own, "own", true);
   if ($mfr !== "" && $mfr !== $own) pos_attach_item_barcode($bid, $itemId, $mfr, "manufacturer", false);
+  if (!pos_item_is_count($row)) return $own;
   $extras = pos_parse_manual_barcodes($body["barcodes"] ?? $body["barcode_list"] ?? []);
   foreach ($extras as $code) {
     if ($code !== $own && $code !== $mfr) pos_attach_item_barcode($bid, $itemId, $code, "unit", false);
@@ -374,69 +404,80 @@ function pos_generate_qty_barcodes($bid, $itemId, $qty) {
   return $out;
 }
 
+function pos_present_barcode_match($row, $source, $raw) {
+  $row["source"] = $source;
+  $row["item_id"] = $row["item_id"] ?? $row["id"] ?? "";
+  $row["item_name"] = $row["item_name"] ?? $row["name"] ?? "";
+  $row["item_code"] = $row["item_code"] ?? $row["code"] ?? "";
+  if (isset($row["barcode"]) && $row["barcode"] !== null && $row["barcode"] !== "") $row["barcode"] = (string) $row["barcode"];
+  else $row["barcode"] = (string) ($row["catalog_barcode"] ?? $raw);
+  $row["size"] = $row["size"] ?? "";
+  $row["color"] = $row["color"] ?? "";
+  $row["wearer_type"] = $row["wearer_type"] ?? "";
+  if (!isset($row["item_mrp"])) $row["item_mrp"] = $row["mrp"] ?? $row["retail_rate"] ?? null;
+  return $row;
+}
+
 function pos_lookup_barcode($bid, $code) {
   pos_ensure_advanced_schema();
-  $code = trim((string) $code);
+  $code = pos_barcode_text($code);
   if ($code === "") return null;
+  $itemFields = "i.name AS item_name, i.code AS item_code, i.retail_rate, i.mrp AS item_mrp, i.gst_rate, i.base_unit, i.unit, i.purchase_rate, i.stock_gm, i.size, i.color, i.wearer_type, i.barcode AS catalog_barcode, i.status AS item_status";
   $batch = pos_q(
-    "SELECT b.*, i.name AS item_name, i.code AS item_code, i.retail_rate, i.mrp AS item_mrp, i.gst_rate, i.base_unit, i.unit, i.purchase_rate, i.stock_gm
+    "SELECT b.*, $itemFields
      FROM stock_batches b JOIN items i ON i.id = b.item_id
-     WHERE b.business_id = ? AND b.barcode = ? AND b.remaining_gm > 0 LIMIT 1",
-    "ss",
-    [$bid, $code]
+     WHERE b.business_id = ? AND (b.barcode = ? OR TRIM(CAST(b.barcode AS CHAR)) = ?) AND b.remaining_gm > 0 LIMIT 1",
+    "sss",
+    [$bid, $code, $code]
   );
-  if ($batch) {
-    $row = $batch[0];
-    $row["source"] = "batch";
-    $row["item_id"] = $row["item_id"];
-    return $row;
-  }
+  if ($batch) return pos_present_barcode_match($batch[0], "batch", $code);
   $bc = pos_q(
-    "SELECT ib.*, i.name AS item_name, i.code AS item_code, i.retail_rate, i.mrp AS item_mrp, i.gst_rate, i.base_unit, i.unit, i.purchase_rate, i.stock_gm, i.barcode AS item_barcode
+    "SELECT ib.*, $itemFields
      FROM item_barcodes ib JOIN items i ON i.id = ib.item_id
-     WHERE ib.business_id = ? AND ib.barcode = ? LIMIT 1",
-    "ss",
-    [$bid, $code]
+     WHERE ib.business_id = ? AND (ib.barcode = ? OR TRIM(CAST(ib.barcode AS CHAR)) = ?) LIMIT 1",
+    "sss",
+    [$bid, $code, $code]
   );
   if ($bc) {
     $row = $bc[0];
     $st = strtolower((string) ($row["status"] ?? "active"));
     if ($st === "") $st = "active";
-    if ($st !== "active") throw new Exception("This barcode is inactive ({$st})");
-    $row["source"] = "item";
-    return $row;
+    if ($st !== "active" && !pos_is_reusable_barcode_kind($row["kind"] ?? "")) {
+      throw new Exception("This barcode is inactive ({$st})");
+    }
+    return pos_present_barcode_match($row, "item", $code);
   }
-  $item = pos_q("SELECT * FROM items WHERE business_id = ? AND barcode = ? LIMIT 1", "ss", [$bid, $code]);
+  $item = pos_q(
+    "SELECT * FROM items WHERE business_id = ? AND (barcode = ? OR TRIM(CAST(barcode AS CHAR)) = ?) LIMIT 1",
+    "sss",
+    [$bid, $code, $code]
+  );
   if ($item) {
     $row = $item[0];
-    $row["source"] = "item";
     $row["item_id"] = $row["id"];
-    $row["item_name"] = $row["name"];
-    $row["item_code"] = $row["code"];
-    $row["item_mrp"] = $row["mrp"] ?? $row["retail_rate"];
-    return $row;
+    return pos_present_barcode_match($row, "item", $code);
   }
   return null;
 }
 
 function pos_consume_piece_barcode($bid, $code, $kind = "sold") {
-  $raw = trim((string) $code);
+  $raw = pos_barcode_text($code);
   if ($raw === "") return;
   pos_ensure_advanced_schema();
   $status = $kind === "damaged" ? "damaged" : "sold";
   $rows = pos_q(
     "SELECT ib.*, i.base_unit, i.unit FROM item_barcodes ib JOIN items i ON i.id = ib.item_id
-     WHERE ib.business_id = ? AND ib.barcode = ? LIMIT 1",
-    "ss",
-    [$bid, $raw]
+     WHERE ib.business_id = ? AND (ib.barcode = ? OR TRIM(ib.barcode) = ?) LIMIT 1",
+    "sss",
+    [$bid, $raw, $raw]
   );
   $row = $rows[0] ?? null;
+  if ($row && pos_is_reusable_barcode_kind($row["kind"] ?? "")) return;
   if ($row) {
     $st = strtolower((string) ($row["status"] ?? "active"));
     if ($st === "") $st = "active";
     if ($st !== "active") throw new Exception("This barcode is inactive ({$st})");
-    $manufacturer = (($row["kind"] ?? "") === "manufacturer");
-    if (pos_item_is_count($row) && !$manufacturer) {
+    if (pos_item_is_count($row) && !pos_is_reusable_barcode_kind($row["kind"] ?? "")) {
       pos_q(
         "UPDATE item_barcodes SET status=?, used_kind=?, used_at=CURRENT_TIMESTAMP(3) WHERE id=? AND business_id=?",
         "ssss",

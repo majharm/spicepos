@@ -21,6 +21,26 @@ test("manual barcode list keeps typed codes and rejects duplicates", () => {
   assert.throws(() => B.parseManualCodes("A1\nA1"), /Duplicate barcode A1/);
 });
 
+test("19-digit garment barcodes stay exact strings after trim and scanner junk", () => {
+  const code = "1777178973885357718";
+  assert.equal(code.length, 19);
+  assert.ok(Number(code) !== Number(code) || String(Number(code)) !== code, "JS Number cannot hold this barcode");
+  assert.equal(B.asBarcodeString(code), code);
+  assert.equal(B.cleanCode(`  ${code} \r\n`), code);
+  assert.equal(B.cleanCode(`]C1${code}`), code);
+  assert.equal(B.cleanCode(`${code}\u001d`), code);
+  assert.equal(B.barcodesEqual(` ${code} `, code), true);
+  assert.equal(B.barcodesEqual(code, "1777178973885357800"), false);
+  assert.equal(B.isBarcodeLike(code), true);
+  assert.equal(B.itemHasBarcode({ barcode: code, size: "M", color: "Black" }, ` ${code} `), true);
+  assert.equal(B.itemHasBarcode({ barcode: "8901", barcodes: [{ barcode: code }] }, code), true);
+  assert.equal(B.itemHasBarcode({ barcode: "8901" }, code), false);
+  assert.equal(B.isReusableProductKind("own"), true);
+  assert.equal(B.isReusableProductKind("manufacturer"), true);
+  assert.equal(B.shouldConsumePieceBarcode({ kind: "own" }), false);
+  assert.equal(B.shouldConsumePieceBarcode({ kind: "unit" }), true);
+});
+
 test("CODE128 encodes digits and prints label copies", () => {
   const bits = B.encodeCode128("8901234567893");
   assert.ok(bits.startsWith("0000000000"));

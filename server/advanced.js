@@ -3,6 +3,7 @@ import "../js/discount.js";
 import "../js/loyalty.js";
 import "../js/units.js";
 import "../js/footwear.js";
+import "../js/barcode.js";
 import { query, withTransaction } from "./db.js";
 import { bid, branchId, authUser } from "./context.js";
 import { requireStaff, requirePerm } from "./auth.js";
@@ -11,6 +12,46 @@ const POSDiscount = globalThis.POSDiscount;
 const POSLoyalty = globalThis.POSLoyalty;
 const POSUnits = globalThis.POSUnits;
 const POSFootwear = globalThis.POSFootwear;
+const POSBarcode = globalThis.POSBarcode;
+
+function barcodeText(raw) {
+  return POSBarcode?.cleanCode ? POSBarcode.cleanCode(raw) : String(raw || "").trim().replace(/\s+/g, "");
+}
+
+function isReusableProductKind(kind) {
+  return POSBarcode?.isReusableProductKind
+    ? POSBarcode.isReusableProductKind(kind)
+    : ["own", "manufacturer"].includes(String(kind || "").toLowerCase());
+}
+
+function stringifyBarcodeRow(row) {
+  if (!row || typeof row !== "object") return row;
+  const out = { ...row };
+  for (const key of ["barcode", "item_barcode", "mfr_barcode", "catalog_barcode"]) {
+    if (out[key] != null && out[key] !== "") out[key] = String(out[key]);
+  }
+  return out;
+}
+
+async function ensureBarcodeVarchar(table, notNull = false) {
+  try {
+    const rows = await query(
+      `SELECT CHARACTER_MAXIMUM_LENGTH AS len, DATA_TYPE AS typ
+       FROM INFORMATION_SCHEMA.COLUMNS
+       WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = 'barcode'`,
+      [table],
+    );
+    const row = rows[0];
+    if (!row) return;
+    const typ = String(row.typ || "").toLowerCase();
+    const len = Number(row.len) || 0;
+    if (typ === "varchar" && len >= 64) return;
+    const nullSql = notNull ? "NOT NULL" : "NULL";
+    await query(`ALTER TABLE \`${table}\` MODIFY COLUMN barcode VARCHAR(64) ${nullSql}`);
+  } catch {
+    /* optional */
+  }
+}
 
 /** pool.query() already returns rows; conn.query() returns [rows, fields]. */
 async function sqlAll(conn, sql, params = []) {
@@ -111,6 +152,21 @@ export async function ensureAdvancedSchema() {
     await query(`ALTER TABLE item_barcodes ADD COLUMN used_at TIMESTAMP(3) NULL`);
   } catch {
     /* exists */
+  }
+  await ensureBarcodeVarchar("items");
+  await ensureBarcodeVarchar("item_barcodes", true);
+  await ensureBarcodeVarchar("stock_batches");
+  await ensureBarcodeVarchar("sales_order_lines");
+  await ensureBarcodeVarchar("purchase_lines");
+  await ensureBarcodeVarchar("stock_movements");
+  try {
+    await query(
+      `UPDATE item_barcodes
+       SET status='active', used_kind=NULL, used_at=NULL
+       WHERE LOWER(kind) IN ('own','manufacturer') AND LOWER(COALESCE(status,'active')) <> 'active'`,
+    );
+  } catch {
+    /* optional */
   }
   await query(`CREATE TABLE IF NOT EXISTS stock_batches (
     id VARCHAR(255) PRIMARY KEY,
@@ -268,9 +324,19 @@ export async function ensureAdvancedSchema() {
 }
 
 export async function attachItemBarcode(conn, businessId, itemId, code, kind = "own", primary = false) {
+  code = barcodeText(code);
+  if (!code) return null;
+  if (code.length > 64) throw new Error("Barcode is too long (max 64 characters)");
   const exist = await sqlOne(conn, "SELECT * FROM item_barcodes WHERE business_id = ? AND barcode = ? LIMIT 1", [businessId, code]);
   if (exist) {
     if (exist.item_id !== itemId) throw new Error("Barcode already used on another item");
+    if (primary || kind === "own") {
+      try {
+        await sqlExec(conn, "UPDATE items SET barcode = ? WHERE id = ? AND business_id = ?", [code, itemId, businessId]);
+      } catch {
+        /* optional */
+      }
+    }
     return exist;
   }
   const id = crypto.randomUUID();
@@ -294,7 +360,7 @@ export function parseManualBarcodes(raw) {
   const out = [];
   const seen = new Set();
   for (const part of parts) {
-    const code = String(part || "").trim().replace(/\s+/g, "");
+    const code = barcodeText(part);
     if (!code) continue;
     if (seen.has(code)) throw new Error(`Duplicate barcode ${code}`);
     seen.add(code);
@@ -376,19 +442,16 @@ export async function onItemSaved(conn, businessId, itemId, body = {}) {
   await ensureAdvancedSchema();
   await savePharmacyItemFields(conn, businessId, itemId, body);
   const item = await sqlOne(conn, "SELECT * FROM items WHERE id = ? AND business_id = ?", [itemId, businessId]);
-  if (!isCountItem(item || body)) {
-    if (body.mrp != null) {
-      try {
-        await sqlExec(conn, "UPDATE items SET mrp = ? WHERE id = ? AND business_id = ?", [Number(body.mrp) || 0, itemId, businessId]);
-      } catch {
-        /* optional */
-      }
-    }
-    return "";
-  }
-  const own = String(body.barcode || "").trim();
-  const mfr = String(body.mfr_barcode || body.manufacturer_barcode || "").trim();
+  const own = barcodeText(body.barcode || "");
+  const mfr = barcodeText(body.mfr_barcode || body.manufacturer_barcode || "");
   if (own) await attachItemBarcode(conn, businessId, itemId, own, "own", true);
+  else if (own === "" && Object.prototype.hasOwnProperty.call(body, "barcode")) {
+    try {
+      await sqlExec(conn, "UPDATE items SET barcode = NULL WHERE id = ? AND business_id = ?", [itemId, businessId]);
+    } catch {
+      /* optional */
+    }
+  }
   if (mfr && mfr !== own) await attachItemBarcode(conn, businessId, itemId, mfr, "manufacturer", false);
   if (body.mrp != null) {
     try {
@@ -397,6 +460,7 @@ export async function onItemSaved(conn, businessId, itemId, body = {}) {
       /* optional */
     }
   }
+  if (!isCountItem(item || body)) return own;
   const extras = parseManualBarcodes(body.barcodes ?? body.barcode_list ?? []);
   for (const code of extras) {
     if (code !== own && code !== mfr) await attachItemBarcode(conn, businessId, itemId, code, "unit", false);
@@ -541,6 +605,41 @@ export async function enrichCatalogPharmacy(businessId, items) {
     });
   } catch {
     return list;
+  }
+}
+
+export async function enrichCatalogBarcodes(businessId, items) {
+  const list = Array.isArray(items) ? items : [];
+  if (!list.length) return list;
+  try {
+    const rows = await query(
+      "SELECT item_id, barcode, kind, status FROM item_barcodes WHERE business_id=?",
+      [businessId],
+    );
+    const byItem = new Map();
+    for (const row of rows || []) {
+      const id = row.item_id;
+      if (!id) continue;
+      if (!byItem.has(id)) byItem.set(id, []);
+      byItem.get(id).push({
+        barcode: String(row.barcode || ""),
+        kind: row.kind || "own",
+        status: row.status || "active",
+      });
+    }
+    return list.map((item) => {
+      const extra = byItem.get(item.id) || [];
+      const own = extra.find((b) => String(b.kind || "").toLowerCase() === "own" && b.barcode) || extra[0];
+      const barcode = item.barcode != null && String(item.barcode).trim() !== ""
+        ? String(item.barcode)
+        : (own ? own.barcode : item.barcode != null ? String(item.barcode) : "");
+      return { ...item, barcode, barcodes: extra };
+    });
+  } catch {
+    return list.map((item) => ({
+      ...item,
+      barcode: item.barcode != null ? String(item.barcode) : item.barcode,
+    }));
   }
 }
 
@@ -834,7 +933,7 @@ export async function reverseLoyaltyOnSale(conn, businessId, orderId) {
 }
 
 export async function consumePieceBarcode(conn, businessId, code, kind = "sold") {
-  const raw = String(code || "").trim();
+  const raw = barcodeText(code);
   if (!raw) return;
   await ensureAdvancedSchema();
   const status = kind === "damaged" ? "damaged" : "sold";
@@ -842,14 +941,14 @@ export async function consumePieceBarcode(conn, businessId, code, kind = "sold")
     conn,
     `SELECT ib.*, i.base_unit, i.unit, i.barcode AS item_barcode
      FROM item_barcodes ib JOIN items i ON i.id = ib.item_id
-     WHERE ib.business_id=? AND ib.barcode=? LIMIT 1`,
-    [businessId, raw],
+     WHERE ib.business_id=? AND (ib.barcode=? OR TRIM(ib.barcode)=?) LIMIT 1`,
+    [businessId, raw, raw],
   );
+  if (row && isReusableProductKind(row.kind)) return;
   if (row) {
     const st = String(row.status || "active").toLowerCase() || "active";
     if (st !== "active") throw new Error(`This barcode is inactive (${st})`);
-    const manufacturer = String(row.kind || "") === "manufacturer";
-    if (isCountItem(row) && !manufacturer) {
+    if (isCountItem(row) && (POSBarcode?.shouldConsumePieceBarcode ? POSBarcode.shouldConsumePieceBarcode(row) : true)) {
       await sqlExec(
         conn,
         `UPDATE item_barcodes SET status=?, used_kind=?, used_at=CURRENT_TIMESTAMP(3)
@@ -882,7 +981,7 @@ export async function consumePieceBarcode(conn, businessId, code, kind = "sold")
 }
 
 export async function restorePieceBarcode(conn, businessId, code) {
-  const raw = String(code || "").trim();
+  const raw = barcodeText(code);
   if (!raw) return;
   await sqlExec(
     conn,
@@ -892,35 +991,54 @@ export async function restorePieceBarcode(conn, businessId, code) {
   );
 }
 
+function presentBarcodeMatch(row, source, raw) {
+  const out = stringifyBarcodeRow({ ...row, source });
+  out.item_id = out.item_id || out.id;
+  out.item_name = out.item_name || out.name || "";
+  out.item_code = out.item_code || out.code || "";
+  out.barcode = String(out.barcode || out.catalog_barcode || raw || "");
+  out.size = out.size || "";
+  out.color = out.color || "";
+  out.wearer_type = out.wearer_type || "";
+  out.mrp = out.item_mrp ?? out.mrp;
+  return out;
+}
+
 async function lookupBarcode(businessId, code) {
-  const raw = String(code || "").trim();
+  const raw = barcodeText(code);
   if (!raw) return null;
+  const itemFields = `i.name AS item_name, i.code AS item_code, i.retail_rate, i.mrp AS item_mrp, i.gst_rate,
+     i.base_unit, i.unit, i.purchase_rate, i.stock_gm, i.size, i.color, i.wearer_type, i.barcode AS catalog_barcode, i.status AS item_status`;
   const batch = await sqlOne(
     null,
-    `SELECT b.*, i.name AS item_name, i.code AS item_code, i.retail_rate, i.mrp AS item_mrp, i.gst_rate, i.base_unit, i.unit, i.purchase_rate, i.stock_gm
+    `SELECT b.*, ${itemFields}
      FROM stock_batches b JOIN items i ON i.id = b.item_id
-     WHERE b.business_id=? AND b.barcode=? AND b.remaining_gm > 0 LIMIT 1`,
-    [businessId, raw],
+     WHERE b.business_id=? AND (b.barcode=? OR TRIM(CAST(b.barcode AS CHAR)) = ?) AND b.remaining_gm > 0 LIMIT 1`,
+    [businessId, raw, raw],
   );
-  if (batch) return { ...batch, source: "batch" };
+  if (batch) return presentBarcodeMatch(batch, "batch", raw);
   const bc = await sqlOne(
     null,
-    `SELECT ib.*, i.name AS item_name, i.code AS item_code, i.retail_rate, i.mrp AS item_mrp, i.gst_rate, i.base_unit, i.unit, i.purchase_rate, i.stock_gm
+    `SELECT ib.*, ${itemFields}
      FROM item_barcodes ib JOIN items i ON i.id = ib.item_id
-     WHERE ib.business_id=? AND ib.barcode=? LIMIT 1`,
-    [businessId, raw],
+     WHERE ib.business_id=? AND (ib.barcode=? OR TRIM(CAST(ib.barcode AS CHAR)) = ?) LIMIT 1`,
+    [businessId, raw, raw],
   );
   if (bc) {
     const st = String(bc.status || "active").toLowerCase() || "active";
-    if (st !== "active") {
+    if (st !== "active" && !isReusableProductKind(bc.kind)) {
       const err = new Error(`This barcode is inactive (${st})`);
       err.status = 409;
       throw err;
     }
-    return { ...bc, source: "item" };
+    return presentBarcodeMatch(bc, "item", raw);
   }
-  const item = await sqlOne(null, "SELECT * FROM items WHERE business_id=? AND barcode=? LIMIT 1", [businessId, raw]);
-  if (item) return { ...item, source: "item", item_id: item.id, item_name: item.name, item_code: item.code };
+  const item = await sqlOne(
+    null,
+    "SELECT * FROM items WHERE business_id=? AND (barcode=? OR TRIM(CAST(barcode AS CHAR)) = ?) LIMIT 1",
+    [businessId, raw, raw],
+  );
+  if (item) return presentBarcodeMatch({ ...item, item_id: item.id }, "item", raw);
   return null;
 }
 

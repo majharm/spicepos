@@ -27,7 +27,7 @@ import { postSaleJournal } from "./accounting.js";
 import { audit } from "./audit.js";
 import { getPlatformSettings, shopSupportContact } from "./settings.js";
 import { sendLowStockAlerts, tickShopAlerts, startAlertScheduler, scheduleAlertTick } from "./alerts.js";
-import { registerAdvanced, computeSaleLine, applySaleStock, applyLoyaltyOnSale, pharmacyLineSnapshot, enrichCatalogPharmacy, saleStockQty, persistSaleLineNote } from "./advanced.js";
+import { registerAdvanced, computeSaleLine, applySaleStock, applyLoyaltyOnSale, pharmacyLineSnapshot, enrichCatalogPharmacy, enrichCatalogBarcodes, saleStockQty, persistSaleLineNote } from "./advanced.js";
 import { registerReturns } from "./returns.js";
 import { registerAnalyticsPublic, registerAnalyticsMaster } from "./analytics.js";
 import { registerSeoPublic, registerSeoMaster } from "./seo.js";
@@ -250,10 +250,11 @@ function slimCatalogItem(row) {
   const has = Boolean(row.has_image) || url !== "";
   if (url.startsWith("data:")) {
     const { image_url, ...rest } = row;
-    return { ...rest, has_image: true };
+    return { ...rest, has_image: true, barcode: rest.barcode != null ? String(rest.barcode) : rest.barcode };
   }
   const out = { ...row, has_image: has };
   if (!url) delete out.image_url;
+  if (out.barcode != null && out.barcode !== "") out.barcode = String(out.barcode);
   return out;
 }
 
@@ -263,13 +264,13 @@ async function listCatalogItems(businessId) {
       `SELECT ${CATALOG_ITEM_SELECT} FROM items WHERE business_id = ? ORDER BY category, subcategory, name`,
       [businessId],
     );
-    return enrichCatalogPharmacy(businessId, (rows || []).map(slimCatalogItem));
+    return enrichCatalogBarcodes(businessId, await enrichCatalogPharmacy(businessId, (rows || []).map(slimCatalogItem)));
   } catch {
     const rows = await query(
       "SELECT * FROM items WHERE business_id = ? ORDER BY category, subcategory, name",
       [businessId],
     );
-    return enrichCatalogPharmacy(businessId, (rows || []).map(slimCatalogItem));
+    return enrichCatalogBarcodes(businessId, await enrichCatalogPharmacy(businessId, (rows || []).map(slimCatalogItem)));
   }
 }
 

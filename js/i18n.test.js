@@ -72,3 +72,12 @@ test("regional search matches local names and Latin folds", () => {
   assert.equal(I.matchesQuery(item, "rice"), true);
   assert.equal(I.matchesQuery(item, "xyzzy"), false);
 });
+
+test("catalog search keeps long numeric barcodes exact", () => {
+  const I = loadI18n();
+  const code = "1777178973885357718";
+  const item = { name: "Kurta", barcode: code, size: "M", color: "Blue" };
+  assert.equal(I.matchesQuery(item, code), true);
+  assert.equal(I.matchesQuery(item, `  ${code}  `), true);
+  assert.equal(I.matchesQuery(item, "1777178973885357800"), false);
+});
