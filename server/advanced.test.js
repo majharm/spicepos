@@ -139,6 +139,17 @@ test("item save and checkout persist barcode and line discount fields", () => {
   assert.match(adv, /CUS-001/);
   assert.match(nodeIndex, /discount_type/);
   assert.match(nodeAdv, /enrichCatalogPharmacy/);
+  assert.match(nodeIndex, /enrichCatalogBarcodes/);
+  assert.match(nodeAdv, /enrichCatalogBarcodes/);
+  assert.match(nodeAdv, /isReusableProductKind/);
+  assert.match(nodeAdv, /barcodeText/);
+  assert.match(adv, /function pos_barcode_text/);
+  assert.match(adv, /function pos_is_reusable_barcode_kind/);
+  assert.match(adv, /TRIM\(CAST\(ib.barcode AS CHAR\)\)/);
+  assert.match(read("js/app.js"), /scheduleBarcodeAutoSearch/);
+  assert.match(read("js/app.js"), /hydrateItemFromBarcodeMatch/);
+  assert.match(read("index.html"), /id="item-own-barcode-wrap"/);
+  assert.doesNotMatch(read("index.html"), /pharmacy-only" id="item-own-barcode-wrap"/);
   assert.match(nodeAdv, /saleStockQty/);
   assert.match(nodeAdv, /looseSaleRate/);
   assert.match(adv, /function pos_pack_stock_qty/);

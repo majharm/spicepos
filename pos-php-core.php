@@ -340,6 +340,26 @@ function pos_ensure_columns($table, $cols) {
   }
 }
 
+function pos_ensure_barcode_varchar($table, $notNull = false) {
+  $db = pos_db();
+  $safe = preg_replace("/[^a-z0-9_]/i", "", (string) $table);
+  if ($safe === "") return;
+  $res = @$db->query(
+    "SELECT CHARACTER_MAXIMUM_LENGTH AS len, DATA_TYPE AS typ
+     FROM INFORMATION_SCHEMA.COLUMNS
+     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = '" . $db->real_escape_string($safe) . "' AND COLUMN_NAME = 'barcode'"
+  );
+  if (!$res) return;
+  $row = $res->fetch_assoc();
+  $res->free();
+  if (!$row) return;
+  $typ = strtolower((string) ($row["typ"] ?? ""));
+  $len = (int) ($row["len"] ?? 0);
+  if ($typ === "varchar" && $len >= 64) return;
+  $nullSql = $notNull ? "NOT NULL" : "NULL";
+  @$db->query("ALTER TABLE `{$safe}` MODIFY COLUMN barcode VARCHAR(64) {$nullSql}");
+}
+
 function pos_normalize_locale($raw) {
   $s = strtolower(trim(str_replace("_", "-", (string) $raw)));
   if ($s === "" || $s === "shop" || $s === "default") return "";
@@ -757,6 +777,9 @@ function pos_slim_catalog_item($row) {
     $has = true;
   }
   $row["has_image"] = $has;
+  if (array_key_exists("barcode", $row) && $row["barcode"] !== null && $row["barcode"] !== "") {
+    $row["barcode"] = (string) $row["barcode"];
+  }
   return $row;
 }
 
@@ -802,6 +825,35 @@ function pos_catalog_items($bid) {
       if (trim((string) ($item["default_expiry"] ?? "")) === "") $item["default_expiry"] = $batch["expiry_date"] ?? "";
       $item["primary_batch_no"] = $batch["batch_no"] ?? "";
       $item["primary_expiry"] = $batch["expiry_date"] ?? "";
+    }
+    unset($item);
+  } catch (Exception $e) { /* optional */ }
+  try {
+    $codes = pos_q("SELECT item_id, barcode, kind, status FROM item_barcodes WHERE business_id = ?", "s", [$bid]);
+    $byItem = [];
+    foreach ($codes as $row) {
+      $id = $row["item_id"] ?? "";
+      if ($id === "") continue;
+      if (!isset($byItem[$id])) $byItem[$id] = [];
+      $byItem[$id][] = [
+        "barcode" => (string) ($row["barcode"] ?? ""),
+        "kind" => $row["kind"] ?? "own",
+        "status" => $row["status"] ?? "active",
+      ];
+    }
+    foreach ($items as &$item) {
+      $extra = $byItem[$item["id"] ?? ""] ?? [];
+      $item["barcodes"] = $extra;
+      $own = "";
+      foreach ($extra as $bc) {
+        if (strtolower((string) ($bc["kind"] ?? "")) === "own" && ($bc["barcode"] ?? "") !== "") {
+          $own = $bc["barcode"];
+          break;
+        }
+      }
+      if ($own === "" && $extra) $own = $extra[0]["barcode"] ?? "";
+      $cur = trim((string) ($item["barcode"] ?? ""));
+      $item["barcode"] = $cur !== "" ? $cur : $own;
     }
     unset($item);
   } catch (Exception $e) { /* optional */ }

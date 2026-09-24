@@ -167,13 +167,20 @@
   }
 
   function searchBlob(item) {
+    const extra = item && Array.isArray(item.barcodes)
+      ? item.barcodes.map((b) => (b && b.barcode != null ? b.barcode : b)).filter(Boolean)
+      : [];
     const parts = [
       item && item.name,
       item && item.local_name,
       item && item.hsn,
       item && item.code,
-      item && item.barcode,
+      item && item.barcode != null ? String(item.barcode) : "",
+      item && item.mfr_barcode != null ? String(item.mfr_barcode) : "",
+      extra.join(" "),
       item && item.category,
+      item && item.size,
+      item && item.color,
       foldIndic(item && item.name),
       foldIndic(item && item.local_name),
     ];
@@ -181,8 +188,10 @@
   }
 
   function matchesQuery(item, query) {
-    const q = String(query || "").trim().toLowerCase();
-    if (!q) return true;
+    const raw = String(query || "").trim();
+    if (!raw) return true;
+    if (globalThis.POSBarcode?.itemHasBarcode?.(item, raw)) return true;
+    const q = raw.toLowerCase();
     const blob = searchBlob(item);
     if (blob.includes(q)) return true;
     const folded = foldIndic(q);

@@ -60,5 +60,5 @@ test("Manage Returns is wired for pharmacy quarantine and garment condition", ()
   assert.match(css, /\.returns-lines-table/);
   assert.match(invoiceApi, /returns\/invoice/);
   assert.match(listApi, /"returns"/);
-  assert.match(index, /app\.js\?v=20260924deploy228/);
+  assert.match(index, /app\.js\?v=20260924bc2/);
 });

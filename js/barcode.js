@@ -37,8 +37,60 @@
     return body + String(ean13Checksum(body));
   }
 
+  function asBarcodeString(raw) {
+    if (raw == null || raw === false) return "";
+    if (typeof raw === "number") {
+      if (!Number.isFinite(raw)) return "";
+      if (Number.isSafeInteger(raw)) return String(raw);
+      return raw.toLocaleString("en-US", { useGrouping: false, maximumFractionDigits: 0 });
+    }
+    let s = String(raw).trim();
+    if (!s) return "";
+    s = s.replace(/[\u0000-\u001F\u007F\u200B-\u200D\uFEFF]/g, "");
+    s = s.replace(/\s+/g, "");
+    s = s.replace(/^\][A-Za-z][0-9]/, "");
+    return s;
+  }
+
   function cleanCode(raw) {
-    return String(raw || "").trim().replace(/\s+/g, "");
+    return asBarcodeString(raw);
+  }
+
+  function barcodesEqual(a, b) {
+    const x = asBarcodeString(a);
+    const y = asBarcodeString(b);
+    return Boolean(x) && x === y;
+  }
+
+  function isBarcodeLike(raw) {
+    const s = asBarcodeString(raw);
+    return s.length >= 4 && s.length <= 64 && /^[A-Za-z0-9._/-]+$/.test(s);
+  }
+
+  function isReusableProductKind(kind) {
+    const k = String(kind || "").toLowerCase();
+    return k === "own" || k === "manufacturer";
+  }
+
+  function extraBarcodeValue(row) {
+    if (row == null) return "";
+    if (typeof row === "string" || typeof row === "number") return asBarcodeString(row);
+    return asBarcodeString(row.barcode);
+  }
+
+  function itemHasBarcode(item, code) {
+    const q = asBarcodeString(code);
+    if (!q || !item) return false;
+    if (barcodesEqual(item.barcode, q) || barcodesEqual(item.mfr_barcode, q) || barcodesEqual(item.item_barcode, q)) {
+      return true;
+    }
+    const extra = Array.isArray(item.barcodes) ? item.barcodes : [];
+    return extra.some((b) => barcodesEqual(extraBarcodeValue(b), q));
+  }
+
+  function shouldConsumePieceBarcode(row) {
+    if (!row) return false;
+    return !isReusableProductKind(row.kind);
   }
 
   function parseManualCodes(raw) {
@@ -182,7 +234,13 @@ body { margin: 0; font-family: "Segoe UI", sans-serif; color: #111; }
     ean13Checksum,
     isValidEan13,
     generateEan13,
+    asBarcodeString,
     cleanCode,
+    barcodesEqual,
+    isBarcodeLike,
+    isReusableProductKind,
+    itemHasBarcode,
+    shouldConsumePieceBarcode,
     parseManualCodes,
     encodeCode128,
     code128Svg,
