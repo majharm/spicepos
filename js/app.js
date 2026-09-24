@@ -202,6 +202,108 @@ function emptyTicketHint() {
   return globalThis.POSFootwear?.itemFormCopy(state.businessMeta)?.ticket || "Tap a product or scan";
 }
 
+function restaurantTicketHint() {
+  const R = restaurantApi();
+  if (isRestaurantShop() && R && state.activeTable) {
+    const floors = diningFloors();
+    const seat = diningTables().find((t) => t.id === state.activeTable);
+    const floorBit = floors.length > 1 && seat?.floor ? ` · ${R.displayFloor?.(seat.floor, floors) || seat.floor}` : "";
+    return `${R.displayTable(state.activeTable)}${floorBit} · tap a dish`;
+  }
+  return emptyTicketHint();
+}
+
+function paintBillTable() {
+  const el = $("bill-table");
+  if (!el) return;
+  if (!isRestaurantShop()) {
+    el.hidden = true;
+    el.textContent = "";
+    el.classList.remove("is-open", "is-idle");
+    return;
+  }
+  const R = restaurantApi();
+  el.hidden = false;
+  if (state.activeTable && R) {
+    const floors = diningFloors();
+    const seat = diningTables().find((t) => t.id === state.activeTable);
+    const floorBit = floors.length > 1 && seat?.floor ? ` · ${R.displayFloor?.(seat.floor, floors) || seat.floor}` : "";
+    el.textContent = `${R.displayTable(state.activeTable)}${floorBit}`;
+    el.classList.add("is-open");
+    el.classList.remove("is-idle");
+    return;
+  }
+  el.textContent = "Select a table";
+  el.classList.add("is-idle");
+  el.classList.remove("is-open");
+}
+
+function cafeBillHeadHtml() {
+  return `<thead><tr>
+        <th>Item</th>
+        <th class="cafe-n">Qty</th>
+        <th class="cafe-n">Rate</th>
+        <th class="cafe-n">Amt</th>
+        <th></th>
+      </tr></thead>`;
+}
+
+function cafeBillEmptyHtml() {
+  return `<div class="cafe-bill-wrap"><table class="cafe-bill-table">
+      ${cafeBillHeadHtml()}
+      <tbody>
+        <tr class="cafe-bill-empty-row"><td colspan="5">${escapeHtml(restaurantTicketHint())}</td></tr>
+      </tbody>
+    </table></div>`;
+}
+
+function cafeBillLinesHtml() {
+  const rows = state.cart
+    .map((line) => {
+      const item = state.items.find((i) => i.id === line.itemId);
+      if (!item) return "";
+      const unitCode = itemUnit(item);
+      const step = POSUnits.counterStep(unitCode);
+      const unit = POSUnits.qtySuffix(unitCode);
+      const qtyShow = POSUnits.displayQty(line.qtyGm, unitCode);
+      const qtyStep = POSUnits.displayQty(step, unitCode) || 1;
+      const calc = lineCalc(item, line);
+      const key = cartLineKey(line);
+      const disc = canDiscount()
+        ? `<div class="line-disc">
+              <select data-line-disc-type="${escapeHtml(key)}" aria-label="Line discount type">
+                <option value="amt"${(line.discountType || "amt") === "amt" ? " selected" : ""}>₹</option>
+                <option value="pct"${line.discountType === "pct" ? " selected" : ""}>%</option>
+              </select>
+              <input data-line-disc="${escapeHtml(key)}" type="number" min="0" step="0.01" value="${escapeHtml(line.discountValue || 0)}" aria-label="Line discount" />
+            </div>`
+        : "";
+      const note = restaurantLineNoteHtml(line, key);
+      return `<tr>
+          <td class="cafe-item">
+            <div class="who">${escapeHtml(itemVariantText(item) ? `${item.name} · ${itemVariantText(item)}` : item.name)}</div>
+            ${disc}
+          </td>
+          <td class="cafe-qty">
+            <div class="qty">
+              <button type="button" data-chg="${escapeHtml(key)}" data-d="${-step}">−</button>
+              <input class="qty-input" type="number" inputmode="decimal" min="${POSUnits.displayQty(POSUnits.qtyMin(), unitCode) || 0.001}" max="${POSUnits.qtyMax()}" step="${escapeHtml(qtyStep)}" value="${escapeHtml(qtyShow)}" data-qty="${escapeHtml(key)}" aria-label="Quantity in ${unit}" />
+              <button type="button" data-chg="${escapeHtml(key)}" data-d="${step}">+</button>
+            </div>
+          </td>
+          <td class="cafe-n">${escapeHtml(money(rateFor(item)))}</td>
+          <td class="cafe-n cafe-amt">${escapeHtml(money(calc.taxable + calc.gst))}</td>
+          <td class="cafe-del"><button type="button" class="classic-del cafe-del-btn" data-del-line="${escapeHtml(key)}" aria-label="Remove ${escapeHtml(item.name)}">×</button></td>
+        </tr>
+        ${note ? `<tr class="cafe-note-row"><td colspan="5">${note}</td></tr>` : ""}`;
+    })
+    .join("");
+  return `<div class="cafe-bill-wrap"><table class="cafe-bill-table">
+      ${cafeBillHeadHtml()}
+      <tbody>${rows}</tbody>
+    </table></div>`;
+}
+
 function itemVariantText(item) {
   return globalThis.POSFootwear?.variantLabel(item) || "";
 }
@@ -346,6 +448,7 @@ function applyFootwearMode() {
       : "Company profile, timezone, shop logo, and your login password. Shop backup is under Settings → Backup.";
   }
   if ($("ticket-sub") && !state.cart?.length) $("ticket-sub").textContent = copy.ticket || emptyTicketHint();
+  paintBillTable();
   VIEW_META.items.subtitle = copy.itemsSub || `Photo, ${taxCodeLabel()}, unit type, rates, and stock`;
   VIEW_META.counter.subtitle = copy.counterSub || "Scan, tap, or search — then Pay";
   const pack = $("pack-choice");
@@ -3573,11 +3676,15 @@ function renderCart() {
   if ($("ticket-sub")) {
     $("ticket-sub").textContent = state.cart.length
       ? `${state.cart.length} line${state.cart.length === 1 ? "" : "s"}`
-      : emptyTicketHint();
+      : isRestaurantShop()
+        ? restaurantTicketHint()
+        : emptyTicketHint();
   }
   $("lines")?.classList.toggle("is-empty", !state.cart.length);
   if (!state.cart.length) {
-    $("lines").innerHTML = `<p class="catalog-empty lines-empty">${escapeHtml(emptyTicketHint())}</p>`;
+    $("lines").innerHTML = isRestaurantShop()
+      ? cafeBillEmptyHtml()
+      : `<p class="catalog-empty lines-empty">${escapeHtml(emptyTicketHint())}</p>`;
   } else if (isPharmacyShop()) {
     $("lines").innerHTML = `<div class="pharm-bill-wrap"><table class="pharm-bill-table classic-bill-table">
       <thead><tr>
@@ -3665,6 +3772,8 @@ function renderCart() {
         </tr>`;
       }).join("")}</tbody>
     </table></div>`;
+  } else if (isRestaurantShop()) {
+    $("lines").innerHTML = cafeBillLinesHtml();
   } else {
     $("lines").innerHTML = state.cart
       .map((line) => {
@@ -3722,20 +3831,17 @@ function renderCart() {
   if ($("profit-total")) $("profit-total").textContent = money(t.profit || 0);
   if ($("disc-row")) $("disc-row").hidden = !(((t.discount || 0) + (t.lineDiscount || 0)) > 0);
   if ($("loyalty-row")) $("loyalty-row").hidden = !(Number(t.loyalty) > 0);
-  if ($("taxable-row")) $("taxable-row").hidden = !(Number(t.taxable) > 0);
-  if ($("gst-row")) $("gst-row").hidden = !(Number(t.tax) > 0);
+  if ($("taxable-row")) $("taxable-row").hidden = isRestaurantShop() ? false : !(Number(t.taxable) > 0);
+  if ($("gst-row")) $("gst-row").hidden = isRestaurantShop() ? false : !(Number(t.tax) > 0);
   $("total").textContent = money(t.total != null ? t.total : t.taxable + t.tax);
   if ($("ticket-sub")) {
-    const R = restaurantApi();
-    if (isRestaurantShop() && R && state.activeTable) {
-      const floors = diningFloors();
-      const seat = diningTables().find((t) => t.id === state.activeTable);
-      const floorBit = floors.length > 1 && seat?.floor ? ` · ${R.displayFloor?.(seat.floor, floors) || seat.floor}` : "";
-      $("ticket-sub").textContent = `${R.displayTable(state.activeTable)}${floorBit} · tap a dish`;
+    if (isRestaurantShop() && !state.cart?.length) {
+      $("ticket-sub").textContent = restaurantTicketHint();
     } else if (!state.cart?.length) {
       $("ticket-sub").textContent = globalThis.POSFootwear?.itemFormCopy(state.businessMeta)?.ticket || emptyTicketHint();
     }
   }
+  paintBillTable();
   if ($("classic-bill-date")) {
     const now = new Date();
     const pad = (n) => String(n).padStart(2, "0");

@@ -6,7 +6,7 @@
     <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
     <title>ATAV POS</title>
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./css/pos.css?v=20260923deploy226" />
+    <link rel="stylesheet" href="./css/pos.css?v=20260924deploy228" />
     <link rel="stylesheet" href="./css/saas.css?v=20260905deploy136" />
   </head>
   <body>
@@ -283,7 +283,10 @@
             <aside class="ticket bill-panel" id="bill-panel">
               <div class="ticket-head">
                 <div class="ticket-head-copy">
-                  <h2 data-i18n="pos.bill">Bill</h2>
+                  <div class="ticket-head-title">
+                    <h2 data-i18n="pos.bill">Bill</h2>
+                    <p class="ticket-table" id="bill-table" hidden></p>
+                  </div>
                   <p class="ticket-sub" id="ticket-sub">Tap a product or scan</p>
                   <p class="ticket-cust" id="bill-customer"></p>
                   <p class="ticket-due" id="bill-due" hidden></p>
@@ -2482,7 +2485,7 @@
     <script src="./js/salon-ui.js?v=20260919salon1" defer></script>
     <script src="./js/print.js?v=20260922deploy219" defer></script>
     <script src="./js/print-ui.js?v=20260922deploy218" defer></script>
-    <script src="./js/app.js?v=20260923deploy226" defer></script>
+    <script src="./js/app.js?v=20260924deploy228" defer></script>
     <script src="./js/growth.js?v=20260905deploy145" defer></script>
     <script src="./js/offers-ui.js?v=20260919off1" defer></script>
   </body>

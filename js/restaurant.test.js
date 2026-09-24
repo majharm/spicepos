@@ -266,3 +266,22 @@ test("Table shifting is on by default and only allows a free destination", () =>
   const occupiedOffPlan = R.canShiftTable(holds, qrs, "5", "8", { tableIds: ["8", "3"] });
   assert.equal(occupiedOffPlan.ok, true);
 });
+
+test("Cafe counter bill window is a ticket table with full-width Pay", () => {
+  const here = path.dirname(fileURLToPath(import.meta.url));
+  const read = (rel) => readFileSync(path.join(here, "..", rel), "utf8");
+  const app = read("js/app.js");
+  const css = read("css/pos.css");
+  const index = read("index.html");
+  assert.match(index, /id="bill-table"/);
+  assert.match(app, /function restaurantTicketHint/);
+  assert.match(app, /function paintBillTable/);
+  assert.match(app, /function cafeBillLinesHtml/);
+  assert.match(app, /function cafeBillEmptyHtml/);
+  assert.match(app, /cafe-bill-table/);
+  assert.match(app, /Select a table/);
+  assert.match(css, /body\.restaurant-mode \.cafe-bill-table/);
+  assert.match(css, /body\.restaurant-mode \.pay-row #btn-pay \{ grid-column: 1 \/ -1; \}/);
+  assert.match(css, /body\.restaurant-mode\.counter-mode \.workspace/);
+  assert.match(css, /minmax\(360px, 428px\)/);
+});
