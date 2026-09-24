@@ -2528,6 +2528,7 @@ function applyHoldToCart(payload, opts = {}) {
   else if ($("pack-choice")) $("pack-choice").value = "";
   state.kotPrinted = Array.isArray(payload.kotPrinted) ? payload.kotPrinted : [];
   state.activeQrOrderId = payload.qrOrderId || "";
+  clampCartToAvailableStock();
 }
 
 function diningCompany() {
@@ -3318,6 +3319,7 @@ async function recallHeldBill(id) {
   if (payload.customerId) $("customer").value = payload.customerId;
   if (payload.lastPack?.id) $("pack-choice").value = payload.lastPack.id;
   else $("pack-choice").value = "";
+  clampCartToAvailableStock();
   try {
     await api(`/api/holds/${encodeURIComponent(id)}`, { method: "DELETE" });
   } catch {
@@ -3522,6 +3524,74 @@ function itemStockInfo(item) {
   };
 }
 
+function shouldCapBillStock(item) {
+  return isApparelShop() && Boolean(item);
+}
+
+function itemOnHandBase(item) {
+  return Math.max(0, Number(item?.stock_gm) || 0);
+}
+
+function cartQtyForItem(itemId, exceptKey) {
+  const skip = exceptKey == null ? "" : String(exceptKey);
+  return (state.cart || []).reduce((sum, line) => {
+    if (String(line.itemId) !== String(itemId)) return sum;
+    if (skip && cartLineKey(line) === skip) return sum;
+    return sum + (Number(line.qtyGm) || 0);
+  }, 0);
+}
+
+function maxBillQtyForItem(item, exceptKey) {
+  if (!item || !shouldCapBillStock(item)) return POSUnits.qtyMax();
+  return Math.max(0, itemOnHandBase(item) - cartQtyForItem(item.id, exceptKey));
+}
+
+function stockCapHint(item) {
+  const unit = POSUnits.qtySuffix(itemUnit(item));
+  const have = POSUnits.displayQty(itemOnHandBase(item), itemUnit(item));
+  return `${item?.name || "Item"}: only ${have} ${unit} in stock`;
+}
+
+function clampBillQty(item, want, exceptKey) {
+  const next = POSUnits.clampQty(want);
+  if (!shouldCapBillStock(item)) return next;
+  return Math.min(next, POSUnits.clampQty(maxBillQtyForItem(item, exceptKey)));
+}
+
+function assertCartWithinStock() {
+  if (!isApparelShop()) return;
+  const want = new Map();
+  for (const line of state.cart || []) {
+    const id = String(line.itemId || "");
+    if (!id) continue;
+    want.set(id, (want.get(id) || 0) + (Number(line.qtyGm) || 0));
+  }
+  for (const [id, qty] of want) {
+    const item = (state.items || []).find((i) => String(i.id) === id);
+    if (!item) continue;
+    const stock = itemOnHandBase(item);
+    if (qty > stock + 1e-9) throw new Error(stockCapHint(item));
+  }
+}
+
+function clampCartToAvailableStock() {
+  if (!isApparelShop()) return false;
+  let changed = false;
+  for (const line of state.cart || []) {
+    const item = (state.items || []).find((i) => i.id === line.itemId);
+    if (!item) continue;
+    const next = clampBillQty(item, line.qtyGm, cartLineKey(line));
+    if (next < Number(line.qtyGm)) {
+      line.qtyGm = next;
+      changed = true;
+      setHint(stockCapHint(item), "error");
+    }
+  }
+  const before = (state.cart || []).length;
+  state.cart = (state.cart || []).filter((l) => Number(l.qtyGm) > 0);
+  return changed || state.cart.length !== before;
+}
+
 function itemExpiryInfo(item) {
   const date = String(item?.default_expiry || item?.primary_expiry || item?.expiry_date || "").slice(0, 10);
   const days = date ? expiryDaysLeft({ expiry_date: date }) : null;
@@ -3575,7 +3645,8 @@ function paintClassicStockAlert() {
     const { stock, exp } = classicItemAlerts(item);
     if (exp.expired) expired.push(item.name);
     else if (exp.soon) soon.push(item.name);
-    if (stock.out) out.push(item.name);
+    if (shouldCapBillStock(item) && cartQtyForItem(item.id) > itemOnHandBase(item) + 1e-9) out.push(item.name);
+    else if (stock.out) out.push(item.name);
     else if (stock.low) low.push(item.name);
   }
   const bits = [];
@@ -3828,6 +3899,9 @@ function renderCart() {
         const variant = itemVariantText(item);
         const alert = classicItemAlerts(item);
         const barcode = lineBarcodeText(line, item);
+        const stockMax = maxBillQtyForItem(item, key);
+        const qtyMaxShow = POSUnits.displayQty(stockMax, unitCode);
+        const atStockMax = shouldCapBillStock(item) && Number(line.qtyGm) >= stockMax;
         return `<tr class="tone-${alert.stock.tone} exp-${alert.exp.tone}">
           <td class="pharm-n">${idx + 1}</td>
           <td>${escapeHtml(item.code || item.hsn || "—")}</td>
@@ -3838,8 +3912,8 @@ function renderCart() {
           <td>
             <div class="qty">
               <button type="button" data-chg="${escapeHtml(key)}" data-d="${-step}">−</button>
-              <input class="qty-input" type="number" inputmode="decimal" min="${POSUnits.displayQty(POSUnits.qtyMin(), unitCode) || 0.001}" max="${POSUnits.qtyMax()}" step="${escapeHtml(qtyStep)}" value="${escapeHtml(qtyShow)}" data-qty="${escapeHtml(key)}" aria-label="Quantity in ${unit}" />
-              <button type="button" data-chg="${escapeHtml(key)}" data-d="${step}">+</button>
+              <input class="qty-input" type="number" inputmode="decimal" min="${POSUnits.displayQty(POSUnits.qtyMin(), unitCode) || 0.001}" max="${escapeHtml(qtyMaxShow)}" step="${escapeHtml(qtyStep)}" value="${escapeHtml(qtyShow)}" data-qty="${escapeHtml(key)}" aria-label="Quantity in ${unit}" />
+              <button type="button" data-chg="${escapeHtml(key)}" data-d="${step}"${atStockMax ? " disabled" : ""}>+</button>
               ${isScaleEnabled() && isWeightItem(item) ? `<button type="button" class="scale-line-btn" data-scale-line="${escapeHtml(key)}" title="Read scale">⚖</button>` : ""}
             </div>
           </td>
@@ -4393,15 +4467,28 @@ function addItem(id, qtyGm, lineBarcode) {
         setHint("This piece is already on the bill", "error");
         return;
       }
-      existing.qtyGm = POSUnits.clampQty(Number(existing.qtyGm) + (pharmacyCount ? barcodeAdd : add));
+      const want = Number(existing.qtyGm) + (pharmacyCount ? barcodeAdd : add);
+      const next = clampBillQty(item, want, cartLineKey(existing));
+      if (shouldCapBillStock(item) && next < POSUnits.clampQty(want)) setHint(stockCapHint(item), "error");
+      if (next <= 0) {
+        if (shouldCapBillStock(item)) setHint(stockCapHint(item), "error");
+        return;
+      }
+      existing.qtyGm = next;
       renderCart();
       warnClassicItem(item);
+      return;
+    }
+    const first = clampBillQty(item, barcodeAdd);
+    if (shouldCapBillStock(item) && first < POSUnits.clampQty(barcodeAdd)) setHint(stockCapHint(item), "error");
+    if (first <= 0) {
+      if (shouldCapBillStock(item)) setHint(itemOnHandBase(item) <= 0 ? `${item.name}: out of stock` : stockCapHint(item), "error");
       return;
     }
     state.cart.push({
       lineId: newCartLineId(),
       itemId: id,
-      qtyGm: barcodeAdd,
+      qtyGm: first,
       discountType: "amt",
       discountValue: 0,
       barcode: code,
@@ -4412,12 +4499,22 @@ function addItem(id, qtyGm, lineBarcode) {
     return;
   }
   const line = state.cart.find((l) => l.itemId === id && !String(l.barcode || "").trim());
-  if (line) line.qtyGm = POSUnits.clampQty(Number(line.qtyGm) + add);
-  else {
+  if (line) {
+    const want = Number(line.qtyGm) + add;
+    const next = clampBillQty(item, want, cartLineKey(line));
+    if (shouldCapBillStock(item) && next < POSUnits.clampQty(want)) setHint(stockCapHint(item), "error");
+    line.qtyGm = next;
+  } else {
+    const first = clampBillQty(item, add);
+    if (shouldCapBillStock(item) && first < POSUnits.clampQty(add)) setHint(stockCapHint(item), "error");
+    if (first <= 0) {
+      if (shouldCapBillStock(item)) setHint(itemOnHandBase(item) <= 0 ? `${item.name}: out of stock` : stockCapHint(item), "error");
+      return;
+    }
     state.cart.push({
       lineId: newCartLineId(),
       itemId: id,
-      qtyGm: POSUnits.clampQty(add),
+      qtyGm: first,
       discountType: "amt",
       discountValue: 0,
       barcode: "",
@@ -4433,7 +4530,9 @@ function setLineQty(key, qtyGm) {
   const line = findCartLine(key);
   if (!line) return;
   const item = state.items.find((i) => i.id === line.itemId);
-  const next = POSUnits.clampQty(qtyGm);
+  const want = POSUnits.clampQty(qtyGm);
+  const next = clampBillQty(item, want, key);
+  if (shouldCapBillStock(item) && next < want) setHint(stockCapHint(item), "error");
   const prev = Number(line.qtyGm) || 0;
   if (next <= 0) state.cart = state.cart.filter((l) => cartLineKey(l) !== String(key));
   else if (isPieceBarcodeLine(line, item)) line.qtyGm = pieceBarcodeQty(item);
@@ -9194,6 +9293,7 @@ $("btn-pay").addEventListener("click", async () => {
     }
     if (!state.customerId) throw new Error("Add a customer before saving the bill");
     if (!state.cart.length) throw new Error("Cart is empty");
+    assertCartWithinStock();
     setHint("Saving…");
     const cartSnapshot = state.cart.map((l) => ({ ...l }));
     const payload = {

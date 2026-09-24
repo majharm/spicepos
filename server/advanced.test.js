@@ -102,6 +102,8 @@ test("PHP and Node wire barcode, damage, loyalty, and ledger modules", () => {
   assert.match(index, /id="item-barcode-qty"/);
   assert.match(index, /js\/barcode\.js/);
   assert.match(app, /POSDiscount/);
+  assert.match(nodeAdv, /export async function assertApparelSaleStock/);
+  assert.match(read("server/index.js"), /await assertApparelSaleStock\(conn, businessId, built\)/);
   assert.match(app, /barcodes\/lookup/);
   assert.match(app, /loyaltyPoints/);
   assert.match(app, /data-print-po-barcodes/);

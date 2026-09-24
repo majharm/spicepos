@@ -1,5 +1,29 @@
 <?php
 
+function pos_assert_apparel_sale_stock($bid, $built) {
+  $bizRows = pos_q("SELECT category, business_type, name FROM businesses WHERE id = ? LIMIT 1", "s", [$bid]);
+  $biz = $bizRows[0] ?? [];
+  if (!function_exists("pos_is_apparel_shop") || !pos_is_apparel_shop($biz)) return;
+  $want = [];
+  foreach ($built as $line) {
+    $item = $line["item"] ?? null;
+    $id = $item["id"] ?? "";
+    if ($id === "") continue;
+    $qty = function_exists("pos_pack_stock_qty")
+      ? (float) pos_pack_stock_qty($item, $line["qty"] ?? 0)
+      : (float) ($line["qty"] ?? 0);
+    $want[$id] = ($want[$id] ?? 0) + $qty;
+  }
+  foreach ($want as $id => $qty) {
+    $rows = pos_q("SELECT name, stock_gm FROM items WHERE id = ? AND business_id = ? LIMIT 1", "ss", [$id, $bid]);
+    $stock = max(0, (float) ($rows[0]["stock_gm"] ?? 0));
+    if ($qty > $stock + 0.0001) {
+      $name = trim((string) ($rows[0]["name"] ?? "Item"));
+      throw new Exception(($name !== "" ? $name : "Item") . ": only " . rtrim(rtrim(number_format($stock, 3, ".", ""), "0"), ".") . " in stock");
+    }
+  }
+}
+
 function pos_checkout_sale($bid, $branchId, $uid, $auth, $body) {
   require_once __DIR__ . "/pos-accounting.php";
   pos_ensure_sales_schema();
@@ -41,6 +65,7 @@ function pos_checkout_sale($bid, $branchId, $uid, $auth, $body) {
         $built[] = ["item" => $item, "qty" => $qty, "rate" => $rate, "amount" => $amount, "gstRate" => (float) ($item["gst_rate"] ?? 0), "discount" => 0, "gst" => pos_round2(($amount * (float) ($item["gst_rate"] ?? 0)) / 100)];
       }
     }
+    pos_assert_apparel_sale_stock($bid, $built);
     $subtotal = pos_round2(array_sum(array_column($built, "amount")));
     $gst = 0;
     foreach ($built as $l) $gst += isset($l["gst"]) ? (float) $l["gst"] : (($l["amount"] * $l["gstRate"]) / 100);

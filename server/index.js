@@ -27,7 +27,7 @@ import { postSaleJournal } from "./accounting.js";
 import { audit } from "./audit.js";
 import { getPlatformSettings, shopSupportContact } from "./settings.js";
 import { sendLowStockAlerts, tickShopAlerts, startAlertScheduler, scheduleAlertTick } from "./alerts.js";
-import { registerAdvanced, computeSaleLine, applySaleStock, applyLoyaltyOnSale, pharmacyLineSnapshot, enrichCatalogPharmacy, enrichCatalogBarcodes, saleStockQty, persistSaleLineNote } from "./advanced.js";
+import { registerAdvanced, computeSaleLine, applySaleStock, applyLoyaltyOnSale, pharmacyLineSnapshot, enrichCatalogPharmacy, enrichCatalogBarcodes, saleStockQty, persistSaleLineNote, assertApparelSaleStock } from "./advanced.js";
 import { registerReturns } from "./returns.js";
 import { registerAnalyticsPublic, registerAnalyticsMaster } from "./analytics.js";
 import { registerSeoPublic, registerSeoMaster } from "./seo.js";
@@ -884,6 +884,7 @@ app.post("/api/checkout", requireStaff, requirePerm("counter"), async (req, res)
         if (!Number.isFinite(qty) || qty <= 0) throw new Error("Invalid quantity");
         built.push(computeSaleLine(item, customer, line));
       }
+      await assertApparelSaleStock(conn, businessId, built);
 
       const D = globalThis.POSDiscount;
       const bill = D.computeBill(built, {

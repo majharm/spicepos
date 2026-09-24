@@ -647,6 +647,24 @@ export function saleStockQty(item, looseQty) {
   return Number(POSFootwear?.packStockQty?.(item, looseQty) ?? looseQty) || 0;
 }
 
+export async function assertApparelSaleStock(conn, businessId, built) {
+  const biz = await sqlOne(conn, "SELECT category, business_type, name FROM businesses WHERE id=? LIMIT 1", [businessId]);
+  if (!POSFootwear?.isApparelShop?.(biz)) return;
+  const want = new Map();
+  for (const line of built || []) {
+    const id = line?.item?.id;
+    if (!id) continue;
+    want.set(id, (want.get(id) || 0) + saleStockQty(line.item, line.qty));
+  }
+  for (const [id, qty] of want) {
+    const row = await sqlOne(conn, "SELECT name, stock_gm FROM items WHERE id=? AND business_id=? FOR UPDATE", [id, businessId]);
+    const stock = Math.max(0, Number(row?.stock_gm) || 0);
+    if (qty > stock + 1e-6) {
+      throw new Error(`${row?.name || "Item"}: only ${stock} in stock`);
+    }
+  }
+}
+
 export function medicinePackLabel(item) {
   return POSFootwear?.medicinePackLabel?.(item) || "";
 }

@@ -416,6 +416,12 @@ test("Medical shops show pharmacy medicine fields on the item form", () => {
   assert.match(app, /discountType: state\.billDiscountType \|\| "amt"/);
   assert.match(app, /discountValue: state\.billDiscountValue/);
   assert.match(app, /function itemStockInfo/);
+  assert.match(app, /function shouldCapBillStock/);
+  assert.match(app, /function clampBillQty/);
+  assert.match(app, /function assertCartWithinStock/);
+  assert.match(app, /function clampCartToAvailableStock/);
+  assert.match(app, /only \$\{have\} \$\{unit\} in stock/);
+  assert.match(app, /assertCartWithinStock\(\)/);
   assert.match(app, /function itemExpiryInfo/);
   assert.match(app, /function paintClassicStockAlert/);
   assert.match(index, /id="classic-stock-alert"/);
