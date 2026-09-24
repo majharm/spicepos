@@ -448,6 +448,64 @@ select {
 }
 body.counter-mode .session-bar { display: none; }
 body.counter-mode .view-topbar { display: none; }
+body.counter-mode .app,
+body.counter-mode .app.nav-collapsed {
+  grid-template-columns: minmax(0, 1fr);
+}
+body.counter-mode .nav {
+  position: fixed;
+  inset: 0 auto 0 0;
+  width: min(280px, 88vw);
+  z-index: 40;
+  box-shadow: 16px 0 48px rgba(0, 0, 0, 0.35);
+}
+body.counter-mode .app.nav-collapsed .nav {
+  transform: translateX(-100%);
+  opacity: 0;
+  pointer-events: none;
+}
+body.counter-mode .nav-scrim {
+  display: block;
+  position: fixed;
+  inset: 0;
+  background: rgba(11, 18, 32, 0.46);
+  z-index: 35;
+}
+body.counter-mode .app.nav-collapsed .nav-scrim,
+body.counter-mode .nav-scrim[hidden] {
+  display: none;
+}
+#counter-nav-toggle {
+  display: none;
+  flex: 0 0 auto;
+  width: 34px;
+  min-width: 34px;
+  min-height: 34px;
+  height: 34px;
+  padding: 0;
+}
+body.counter-mode #counter-nav-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+body.classic-bill-mode.counter-mode #counter-nav-toggle {
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.42);
+  background: rgba(255, 255, 255, 0.14);
+  box-shadow: none;
+}
+body.classic-bill-mode.counter-mode #counter-nav-toggle:hover {
+  background: rgba(255, 255, 255, 0.24);
+  border-color: rgba(255, 255, 255, 0.62);
+}
+html[dir="rtl"] body.counter-mode .app,
+html[dir="rtl"] body.counter-mode .app.nav-collapsed {
+  grid-template-columns: minmax(0, 1fr);
+}
+html[dir="rtl"] body.counter-mode .nav {
+  inset: 0 0 0 auto;
+}
 body.counter-mode .platform-notices,
 body.counter-mode .expired-banner { display: none !important; }
 body:has(#view-packs:not([hidden])) .platform-notices,
@@ -5124,7 +5182,7 @@ body.classic-bill-mode .bill-settle {
   .app { grid-template-columns: 1fr; height: 100dvh; max-height: 100dvh; overflow: hidden; }
   .app.nav-collapsed { grid-template-columns: 1fr; }
   body.counter-mode { overflow: hidden; }
-  body.counter-mode .view-topbar { display: flex; }
+  body.counter-mode .view-topbar { display: none; }
   body.counter-mode .session-bar { display: none; }
   .nav {
     position: fixed;
