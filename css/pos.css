@@ -547,7 +547,7 @@ body.classic-bill-mode.counter-mode #counter-low-stock-btn:hover {
   line-height: 16px;
 }
 .low-stock-modal {
-  z-index: 70;
+  z-index: 92;
 }
 .low-stock-dialog {
   width: min(640px, calc(100% - 16px));
@@ -4324,7 +4324,7 @@ button.items-stat.is-active {
   background: rgba(15, 31, 28, 0.48);
   display: grid;
   place-items: center;
-  z-index: 20;
+  z-index: 90;
   backdrop-filter: blur(4px);
   padding: 12px;
   overflow: auto;
@@ -4356,7 +4356,18 @@ button.items-stat.is-active {
   font-weight: 800;
   min-width: 0;
 }
-#modal-close {
+#modal .dialog-head {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  background: linear-gradient(180deg, #fff 0%, var(--bg-tint-soft) 100%);
+}
+#modal-close,
+#modal-print-close {
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  visibility: visible !important;
   flex: 0 0 auto;
   min-width: 4.8em;
   min-height: 36px;

@@ -6894,6 +6894,7 @@ function invoiceModalPrintActions(look, order) {
       <button class="btn${look === "office" ? " primary" : ""}" type="button" id="modal-print-office">Print official bill</button>
       <button class="btn${look === "duplicate" ? " primary" : ""}" type="button" id="modal-print-duplicate">Print duplicate</button>
       ${Number(order?.amount_paid) > 0 || order?.receipt ? `<button class="btn" type="button" id="modal-print-receipt">Print Receipt</button>` : ""}
+      <button class="btn primary" type="button" id="modal-print-close">Close</button>
     </div>`;
 }
 
@@ -6913,6 +6914,11 @@ function bindInvoiceModalPrint(order) {
       if (entry) showVoucherResult(entry);
     };
   }
+  const closeBtn = $("modal-print-close");
+  if (closeBtn) closeBtn.onclick = () => {
+    const modal = $("modal");
+    if (modal) modal.hidden = true;
+  };
 }
 
 function showInvoicePrintModal(order, { title, message } = {}) {
