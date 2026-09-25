@@ -6405,7 +6405,39 @@ body.classic-bill-mode .bill-settle {
   body.restaurant-mode.counter-mode .stage.is-counter .catalog-group-head {
     font-size: 12px;
     letter-spacing: 0.02em;
+    text-transform: none;
     padding: 8px 2px 4px;
+  }
+  body.restaurant-mode.counter-mode .stage.is-counter .pay-row,
+  body.restaurant-mode.counter-mode.bill-collapsed .stage.is-counter .pay-row,
+  body.restaurant-mode.bill-collapsed .stage.is-counter .pay-row {
+    display: contents !important;
+  }
+  body.restaurant-mode.counter-mode:not(.has-cart) .stage.is-counter .totals {
+    display: none !important;
+  }
+  body.restaurant-mode.counter-mode:not(.has-cart) .stage.is-counter .pay,
+  body.restaurant-mode.counter-mode.bill-collapsed:not(.has-cart) .stage.is-counter .pay {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    grid-template-areas: "kot pay" !important;
+    justify-items: stretch;
+    width: 100%;
+    gap: 8px;
+  }
+  body.restaurant-mode.counter-mode:not(.has-cart) .stage.is-counter .pay #btn-hold,
+  body.restaurant-mode.counter-mode:not(.has-cart) .stage.is-counter .pay #btn-clear,
+  body.restaurant-mode.counter-mode:not(.has-cart) .stage.is-counter .pay #btn-shift-table {
+    display: none !important;
+  }
+  body.restaurant-mode.counter-mode:not(.has-cart) .stage.is-counter .pay #btn-kot,
+  body.restaurant-mode.counter-mode:not(.has-cart) .stage.is-counter .pay #btn-pay {
+    width: 100% !important;
+    max-width: none !important;
+    justify-self: stretch;
+    min-height: 46px;
+    height: 46px;
+    font-size: 14px;
   }
   body.restaurant-mode.counter-mode .stage.is-counter .card {
     min-height: 56px;

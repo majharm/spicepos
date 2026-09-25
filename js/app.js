@@ -208,6 +208,7 @@ function restaurantTicketHint() {
     const floors = diningFloors();
     const seat = diningTables().find((t) => t.id === state.activeTable);
     const floorBit = floors.length > 1 && seat?.floor ? ` · ${R.displayFloor?.(seat.floor, floors) || seat.floor}` : "";
+    if (isRestaurantMobileLayout()) return "Tap a dish";
     return `${R.displayTable(state.activeTable)}${floorBit} · tap a dish`;
   }
   return emptyTicketHint();
@@ -3604,7 +3605,7 @@ function catalogCardHtml(i) {
         <div class="card-body">
           ${meta.sku ? `<div class="sku">${escapeHtml(meta.sku)}</div>` : ""}
           <div class="name">${escapeHtml(i.name)}${meta.detail ? ` <small>${escapeHtml(meta.detail)}</small>` : ""}</div>
-          <div class="meta"><span class="card-price">${money(rateFor(i))}${escapeHtml(POSUnits.rateSuffix(itemUnit(i)))}</span>${qty ? `<span class="card-qty">${escapeHtml(qty)}</span>` : ""}</div>
+          <div class="meta"><span class="card-price">${money(rateFor(i))}${restaurant && isRestaurantMobileLayout() ? "" : escapeHtml(POSUnits.rateSuffix(itemUnit(i)))}</span>${qty ? `<span class="card-qty">${escapeHtml(qty)}</span>` : ""}</div>
           ${stock ? `<div class="stock ${low ? "low" : "ok"}">${stock}</div>` : ""}
         </div>
       </button>`;
