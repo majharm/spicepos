@@ -369,6 +369,7 @@ function applyFootwearMode() {
   document.body.classList.toggle("spice-mode", spice);
   document.body.classList.toggle("weight-scale-mode", isScaleEnabled());
   document.body.classList.toggle("restaurant-mode", isRestaurantShop());
+  applyRestaurantMobileChrome();
   document.body.classList.toggle("pharmacy-mode", pharm);
   document.body.classList.toggle("classic-bill-mode", isClassicBillShop());
   document.body.classList.toggle("services-mode", isServicesShop());
@@ -2011,6 +2012,47 @@ function isMobileLayout() {
   return window.matchMedia("(max-width: 980px)").matches;
 }
 
+function isRestaurantMobileLayout() {
+  return isRestaurantShop() && isMobileLayout();
+}
+
+function restaurantTablesCompactPreferred() {
+  return isRestaurantMobileLayout() && Boolean(state.activeTable) && !state.shiftFromTable;
+}
+
+function scrollActiveTableIntoView() {
+  const board = $("table-board");
+  if (!board || board.hidden || !isRestaurantMobileLayout() || board.classList.contains("is-compact")) return;
+  const on = board.querySelector(".table-seat.is-on");
+  on?.scrollIntoView({ inline: "center", block: "nearest", behavior: "smooth" });
+}
+
+function applyRestaurantMobileChrome() {
+  const cafe = isRestaurantShop();
+  document.body.classList.toggle("has-active-table", cafe && Boolean(state.activeTable));
+  const board = $("table-board");
+  if (!board) return;
+  if (!isRestaurantMobileLayout()) {
+    board.classList.remove("is-compact");
+    return;
+  }
+  if (state.shiftFromTable) {
+    board.classList.remove("is-compact");
+    return;
+  }
+  const user = board.dataset.tablesUser || "";
+  if (user === "open") board.classList.remove("is-compact");
+  else if (user === "shut" || restaurantTablesCompactPreferred()) board.classList.add("is-compact");
+  else board.classList.remove("is-compact");
+  const toggle = board.querySelector("[data-tables-toggle]");
+  if (toggle) {
+    const compact = board.classList.contains("is-compact");
+    toggle.setAttribute("aria-expanded", compact ? "false" : "true");
+    toggle.setAttribute("aria-label", compact ? "Show tables" : "Hide tables");
+  }
+  scrollActiveTableIntoView();
+}
+
 function setNavCollapsed(collapsed) {
   const app = document.getElementById("app");
   const btn = $("nav-toggle");
@@ -2035,6 +2077,7 @@ function applyCounterWorkspaceChrome() {
   else if (isMobileLayout()) setNavCollapsed(true);
   else setNavCollapsed(false);
   applyQuickAddVisibility();
+  applyRestaurantMobileChrome();
 }
 
 const BILL_COLLAPSED_KEY = "spicepos-bill-collapsed";
@@ -2063,13 +2106,16 @@ function setBillCollapsed(collapsed) {
 }
 
 function restoreBillCollapsed() {
-  let collapsed = false;
+  let collapsed;
   try {
-    collapsed = localStorage.getItem(BILL_COLLAPSED_KEY) === "1";
+    const saved = localStorage.getItem(BILL_COLLAPSED_KEY);
+    if (saved === "1") collapsed = true;
+    else if (saved === "0") collapsed = false;
   } catch {
-    collapsed = false;
+    collapsed = undefined;
   }
-  setBillCollapsed(collapsed);
+  if (collapsed == null && isRestaurantMobileLayout()) collapsed = true;
+  setBillCollapsed(Boolean(collapsed));
 }
 
 function paintBillToggleCount() {
@@ -2694,6 +2740,8 @@ function renderTableBoard() {
         <button class="btn dining-add-btn" type="button" data-add-table>+ Table</button>` : ""}
       </div>`
       : "";
+  const selectedLabel = state.activeTable && R ? R.displayTable(state.activeTable) : "Select a table";
+  const tablesUser = el.dataset.tablesUser || "";
   el.hidden = false;
   el.innerHTML =
     `<div class="table-board-head">
@@ -2701,6 +2749,12 @@ function renderTableBoard() {
         <strong>${escapeHtml(floorName)}</strong>
         <span>${escapeHtml(meta)}</span>
       </div>
+      <button class="table-board-toggle" type="button" data-tables-toggle aria-expanded="true">
+        <span>
+          <strong>${escapeHtml(selectedLabel)}</strong>
+          <span>${state.activeTable ? "Tap to change table" : escapeHtml(meta)}</span>
+        </span>
+      </button>
       ${addRow}
     </div>
     <div class="floor-chips"${floors.length > 1 || creatingFloor || editingFloorId ? "" : " hidden"}>
@@ -2768,6 +2822,8 @@ function renderTableBoard() {
         <span>${state.activeTable === R.PARCEL && state.cart.length ? `${state.cart.length} dishes` : "Takeaway"}</span>
       </button>
     </div>`;
+  if (tablesUser) el.dataset.tablesUser = tablesUser;
+  applyRestaurantMobileChrome();
 }
 
 async function saveActiveTableHold() {
@@ -2898,6 +2954,9 @@ async function selectDiningTable(tableNo) {
   state.activeTable = next;
   syncActiveFloor(next);
   bindQrOrderAfterTableShift(next);
+  const board = $("table-board");
+  if (board && isRestaurantMobileLayout()) board.dataset.tablesUser = "shut";
+  if (isRestaurantMobileLayout()) setBillCollapsed(true);
   renderCart();
   renderTableBoard();
   setHint(`${R.displayTable(next)} open`, "ok");
@@ -3963,6 +4022,7 @@ function classicLineDiscHtml(line, key) {
 }
 
 function renderCart() {
+  const hadCart = document.body.classList.contains("has-cart");
   applyOffersToCart();
   const packEl = $("chosen-pack");
   const packText = packLabel();
@@ -4157,6 +4217,11 @@ function renderCart() {
   $("btn-pay").disabled = state.cart.length === 0;
   $("btn-clear").disabled = state.cart.length === 0 && !classicCustomerRecordDirty();
   document.body.classList.toggle("has-cart", state.cart.length > 0);
+  if (isRestaurantMobileLayout()) {
+    if (!hadCart && state.cart.length) setBillCollapsed(false);
+    else if (hadCart && !state.cart.length) setBillCollapsed(true);
+  }
+  applyRestaurantMobileChrome();
   paintBillToggleCount();
   paintBillCustomer();
   if ($("btn-hold")) $("btn-hold").disabled = state.cart.length === 0 || Boolean(state.editingOrderId);
@@ -10907,6 +10972,7 @@ window.addEventListener("resize", () => {
     if (wrap) wrap.open = false;
   }
   if ($("bill-toggle")) setBillCollapsed(document.body.classList.contains("bill-collapsed"));
+  applyRestaurantMobileChrome();
 });
 
 document.addEventListener("click", async (e) => {
@@ -11095,6 +11161,16 @@ $("btn-shift-table")?.addEventListener("click", async () => {
   }
 });
 $("table-board")?.addEventListener("click", async (e) => {
+  const tablesToggle = e.target.closest("[data-tables-toggle]");
+  if (tablesToggle) {
+    e.preventDefault();
+    e.stopPropagation();
+    const board = $("table-board");
+    if (!board) return;
+    board.dataset.tablesUser = board.classList.contains("is-compact") ? "open" : "shut";
+    applyRestaurantMobileChrome();
+    return;
+  }
   const shiftActive = e.target.closest("[data-shift-active]");
   if (shiftActive) {
     e.preventDefault();

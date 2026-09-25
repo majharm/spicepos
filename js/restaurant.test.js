@@ -288,3 +288,26 @@ test("Cafe counter bill window is a ticket table with full-width Pay", () => {
   assert.match(css, /body\.restaurant-mode\.counter-mode \.workspace/);
   assert.match(css, /minmax\(360px, 428px\)/);
 });
+
+test("Restaurant mobile counter uses a compact POS sheet, not a squeezed desktop", () => {
+  const here = path.dirname(fileURLToPath(import.meta.url));
+  const read = (rel) => readFileSync(path.join(here, "..", rel), "utf8");
+  const app = read("js/app.js");
+  const css = read("css/pos.css");
+  assert.match(css, /restaurant-mobile-pos/);
+  assert.match(css, /body\.restaurant-mode\.counter-mode \.workspace,\n  body\.restaurant-mode\.counter-mode \.stage\.is-counter \.workspace/);
+  assert.match(css, /grid-template-columns: 1fr;/);
+  assert.match(css, /env\(safe-area-inset-bottom, 0px\)/);
+  assert.match(css, /min-height: 48px;/);
+  assert.match(css, /\.table-board-toggle/);
+  assert.match(css, /\.table-board\.is-compact \.table-seats/);
+  assert.match(app, /function isRestaurantMobileLayout/);
+  assert.match(app, /function applyRestaurantMobileChrome/);
+  assert.match(app, /data-tables-toggle/);
+  assert.match(app, /dataset\.tablesUser = "shut"/);
+  assert.match(app, /if \(isRestaurantMobileLayout\(\)\) setBillCollapsed\(true\)/);
+  assert.doesNotMatch(
+    css.split("@media (max-width: 980px)")[1] || "",
+    /minmax\(360px, 428px\)/,
+  );
+});

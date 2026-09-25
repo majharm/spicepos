@@ -1282,6 +1282,7 @@ a.btn { text-decoration: none; display: inline-block; }
   padding: 10px 12px 12px;
 }
 .table-board[hidden] { display: none; }
+.table-board-toggle { display: none; }
 .table-board-head {
   display: flex;
   align-items: center;
@@ -5851,15 +5852,11 @@ body.classic-bill-mode .bill-settle {
   body.restaurant-mode .stage.is-counter #btn-shift-table { grid-area: shift; }
   body.restaurant-mode .stage.is-counter #btn-clear { grid-area: clear; }
   body.restaurant-mode .stage.is-counter #btn-pay { grid-area: pay; }
-  body.restaurant-mode:not(.has-cart) .stage.is-counter .lines {
-    display: block !important;
-    min-height: 120px;
-  }
   body.restaurant-mode .stage.is-counter .cafe-bill-table .qty button {
-    width: 36px;
-    height: 36px;
-    min-width: 36px;
-    min-height: 36px;
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+    min-height: 44px;
   }
   body.restaurant-mode .stage.is-counter .ticket-head-copy {
     display: block;
@@ -5873,14 +5870,255 @@ body.classic-bill-mode .bill-settle {
   body.restaurant-mode .stage.is-counter .bill-toggle {
     background: rgba(255, 255, 255, 0.18);
     color: #fff;
-    width: 32px;
-    min-width: 32px;
-    height: 32px;
-    min-height: 32px;
+    width: 44px;
+    min-width: 44px;
+    height: 44px;
+    min-height: 44px;
     border-radius: 8px;
   }
   body.restaurant-mode .stage.is-counter .ticket-sub {
     display: none;
+  }
+
+  /* restaurant-mobile-pos: phone/tablet sheet — do not squeeze the desktop two-pane */
+  body.restaurant-mode.counter-mode .workspace,
+  body.restaurant-mode.counter-mode .stage.is-counter .workspace {
+    display: grid;
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(0, 1fr) auto;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    overflow-x: hidden;
+  }
+  body.restaurant-mode.counter-mode.has-cart:not(.bill-collapsed) .stage.is-counter .workspace {
+    grid-template-rows: minmax(0, 1fr) minmax(220px, 42vh);
+  }
+  body.restaurant-mode.counter-mode.bill-collapsed .stage.is-counter .workspace,
+  body.restaurant-mode.counter-mode:not(.has-cart) .stage.is-counter .workspace {
+    grid-template-rows: minmax(0, 1fr) auto;
+  }
+  body.restaurant-mode.counter-mode .stage.is-counter .catalog-pane,
+  body.restaurant-mode.counter-mode .stage.is-counter .bill-panel,
+  body.restaurant-mode.counter-mode .stage.is-counter .ticket {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    max-height: none;
+  }
+  body.restaurant-mode.counter-mode .stage.is-counter .catalog-pane {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+  }
+  body.restaurant-mode.counter-mode .stage.is-counter .table-board {
+    flex: 0 0 auto;
+    padding: 6px 10px 8px;
+    width: 100%;
+    max-width: 100%;
+  }
+  body.restaurant-mode.counter-mode .stage.is-counter .table-board-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 6px;
+  }
+  body.restaurant-mode.counter-mode .stage.is-counter .table-board-head > div:first-child {
+    min-width: 0;
+    flex: 1 1 auto;
+  }
+  body.restaurant-mode.counter-mode .stage.is-counter .table-board-toggle {
+    display: flex;
+    flex: 1 1 auto;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    min-width: 0;
+    min-height: 44px;
+    padding: 8px 12px;
+    border: 1px solid #99f6e4;
+    border-radius: 12px;
+    background: #ecfdf5;
+    color: #115e59;
+    font: inherit;
+    text-align: left;
+  }
+  body.restaurant-mode.counter-mode .stage.is-counter .table-board-toggle strong {
+    display: block;
+    font-size: 14px;
+    font-weight: 800;
+    text-transform: none;
+    letter-spacing: 0;
+  }
+  body.restaurant-mode.counter-mode .stage.is-counter .table-board-toggle span {
+    display: block;
+    color: #0f766e;
+    font-size: 12px;
+    font-weight: 700;
+  }
+  body.restaurant-mode.counter-mode.has-active-table .stage.is-counter .table-board-head > div:first-child {
+    display: none;
+  }
+  body.restaurant-mode.counter-mode:not(.has-active-table) .stage.is-counter .table-board-toggle {
+    display: none;
+  }
+  body.restaurant-mode.counter-mode .stage.is-counter .table-board.is-compact .table-seats,
+  body.restaurant-mode.counter-mode .stage.is-counter .table-board.is-compact .floor-chips,
+  body.restaurant-mode.counter-mode .stage.is-counter .table-board.is-compact .dining-add-row,
+  body.restaurant-mode.counter-mode .stage.is-counter .table-board.is-compact .table-create {
+    display: none;
+  }
+  body.restaurant-mode.counter-mode .stage.is-counter .table-seats {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 8px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    scroll-snap-type: x proximity;
+    padding: 4px 2px 10px;
+    width: 100%;
+  }
+  body.restaurant-mode.counter-mode .stage.is-counter .table-seat-wrap,
+  body.restaurant-mode.counter-mode .stage.is-counter .table-seat-parcel {
+    flex: 0 0 auto;
+    width: 92px;
+    min-width: 92px;
+    scroll-snap-align: start;
+  }
+  body.restaurant-mode.counter-mode .stage.is-counter .table-seat {
+    min-height: 56px;
+    min-width: 92px;
+    padding: 8px 6px;
+    border-radius: 12px;
+  }
+  body.restaurant-mode.counter-mode .stage.is-counter .table-seat-qr,
+  body.restaurant-mode.counter-mode .stage.is-counter .table-seat-edit,
+  body.restaurant-mode.counter-mode .stage.is-counter .table-seat-x {
+    display: none;
+  }
+  body.restaurant-mode.counter-mode .stage.is-counter .table-seat-shift {
+    min-width: 44px;
+    min-height: 28px;
+    height: 28px;
+    bottom: -4px;
+    left: 50%;
+    transform: translateX(-50%);
+  }
+  body.restaurant-mode.counter-mode .stage.is-counter .dining-add-btn {
+    min-height: 44px;
+  }
+  body.restaurant-mode.counter-mode .stage.is-counter .catalog {
+    flex: 1 1 auto;
+    padding-bottom: 16px;
+  }
+  body.restaurant-mode:not(.has-cart) .stage.is-counter .lines,
+  body.restaurant-mode.counter-mode:not(.has-cart) .stage.is-counter .lines {
+    display: none !important;
+    min-height: 0;
+  }
+  body.restaurant-mode.counter-mode .stage.is-counter .bill-panel,
+  body.restaurant-mode.counter-mode.has-cart .stage.is-counter .bill-panel {
+    flex: 0 0 auto;
+    height: auto;
+    max-height: 100%;
+  }
+  body.restaurant-mode.counter-mode.has-cart:not(.bill-collapsed) .stage.is-counter .bill-panel {
+    height: 100%;
+    max-height: 42vh;
+  }
+  body.restaurant-mode.bill-collapsed .stage.is-counter .ticket-head-copy,
+  body.restaurant-mode.bill-collapsed .stage.is-counter .totals,
+  body.restaurant-mode.bill-collapsed .stage.is-counter .pay {
+    display: grid;
+  }
+  body.restaurant-mode.bill-collapsed .stage.is-counter .ticket-head-copy {
+    display: block;
+  }
+  body.restaurant-mode.bill-collapsed .stage.is-counter .bill-extras,
+  body.restaurant-mode.bill-collapsed .stage.is-counter .bill-settle,
+  body.restaurant-mode.bill-collapsed .stage.is-counter #btn-shift-table,
+  body.restaurant-mode.bill-collapsed .stage.is-counter .held-bills {
+    display: none;
+  }
+  body.restaurant-mode.bill-collapsed .stage.is-counter .pay {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr);
+    grid-template-areas: "kot pay";
+    padding: 8px 10px calc(10px + env(safe-area-inset-bottom, 0px));
+  }
+  body.restaurant-mode.counter-mode .stage.is-counter .pay {
+    position: sticky;
+    bottom: 0;
+    z-index: 12;
+    padding: 8px 10px calc(10px + env(safe-area-inset-bottom, 0px));
+  }
+  body.restaurant-mode.counter-mode .stage.is-counter .pay .btn,
+  body.restaurant-mode.counter-mode .stage.is-counter .pay-row #btn-pay,
+  body.restaurant-mode.counter-mode .stage.is-counter .pay-row .btn:nth-child(5),
+  body.restaurant-mode.counter-mode .stage.is-counter #btn-pay {
+    min-height: 48px;
+    height: auto;
+    font-size: 15px;
+  }
+  body.restaurant-mode.counter-mode .stage.is-counter .cafe-bill-table {
+    min-width: 0;
+    width: 100%;
+  }
+  body.restaurant-mode.counter-mode .stage.is-counter .cafe-bill-table thead {
+    display: none;
+  }
+  body.restaurant-mode.counter-mode .stage.is-counter .cafe-bill-table,
+  body.restaurant-mode.counter-mode .stage.is-counter .cafe-bill-table tbody {
+    display: block;
+    width: 100%;
+  }
+  body.restaurant-mode.counter-mode .stage.is-counter .cafe-bill-table tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    align-items: center;
+    gap: 6px 8px;
+    padding: 10px 4px;
+    border-bottom: 1px solid var(--line);
+    max-width: 100%;
+  }
+  body.restaurant-mode.counter-mode .stage.is-counter .cafe-bill-table td {
+    border: 0;
+    padding: 0;
+    background: transparent;
+  }
+  body.restaurant-mode.counter-mode .stage.is-counter .cafe-bill-table .cafe-item {
+    grid-column: 1 / -1;
+    min-width: 0;
+  }
+  body.restaurant-mode.counter-mode .stage.is-counter .cafe-bill-table .cafe-qty {
+    grid-column: 1;
+  }
+  body.restaurant-mode.counter-mode .stage.is-counter .cafe-bill-table td.cafe-n:not(.cafe-amt) {
+    display: none;
+  }
+  body.restaurant-mode.counter-mode .stage.is-counter .cafe-bill-table .cafe-amt {
+    grid-column: 2;
+    font-size: 15px;
+  }
+  body.restaurant-mode.counter-mode .stage.is-counter .cafe-bill-table .cafe-del {
+    grid-column: 3;
+  }
+  body.restaurant-mode.counter-mode .stage.is-counter .cafe-bill-table .cafe-note-row {
+    display: block;
+    padding: 0 4px 10px;
+  }
+  body.restaurant-mode.counter-mode .stage.is-counter .cafe-bill-table .qty-input {
+    width: 3.2em;
+    min-width: 3em;
+    min-height: 44px;
+    font-size: 16px;
+  }
+  body.restaurant-mode.counter-mode .stage.is-counter .cafe-del-btn {
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+    min-height: 44px;
   }
   .stage.is-counter .pay .btn {
     min-height: 44px;
