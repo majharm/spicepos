@@ -328,10 +328,11 @@ test("Restaurant mobile billing box keeps dish cards visible", () => {
   assert.match(css, /minmax\(320px, 56vh\)/);
   assert.match(css, /body\.restaurant-mode\.counter-mode\.has-cart\.bill-collapsed \.stage\.is-counter \.lines/);
   assert.match(css, /min-height: 140px/);
+  assert.match(css, /body\.restaurant-mode\.counter-mode \.qr-sound-arm \{\n    display: none !important;/);
   const mobile = css.split("@media (max-width: 980px)")[1] || "";
   assert.match(mobile, /display: block !important;/);
   assert.doesNotMatch(mobile, /max-height: 42vh/);
   assert.doesNotMatch(index, /20260925rm1/);
-  assert.match(index, /pos\.css\?v=20260925rm2/);
-  assert.match(index, /app\.js\?v=20260925rm2/);
+  assert.match(index, /pos\.css\?v=20260925rm3/);
+  assert.match(index, /app\.js\?v=20260925rm3/);
 });

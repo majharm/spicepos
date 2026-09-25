@@ -6126,11 +6126,7 @@ body.classic-bill-mode .bill-settle {
     display: none !important;
   }
   body.restaurant-mode.counter-mode .qr-sound-arm {
-    left: 10px;
-    right: 10px;
-    width: auto;
-    bottom: calc(96px + env(safe-area-inset-bottom, 0px));
-    z-index: 19;
+    display: none !important;
   }
   body.restaurant-mode.counter-mode .stage.is-counter .pay .btn,
   body.restaurant-mode.counter-mode .stage.is-counter .pay-row #btn-pay,
