@@ -257,6 +257,10 @@ function cafeBillEmptyHtml() {
     </table></div>`;
 }
 
+function cafeBillLineName(item) {
+  return itemVariantText(item) ? `${item.name} · ${itemVariantText(item)}` : item.name;
+}
+
 function cafeBillLinesHtml() {
   const rows = state.cart
     .map((line) => {
@@ -281,7 +285,7 @@ function cafeBillLinesHtml() {
       const note = restaurantLineNoteHtml(line, key);
       return `<tr>
           <td class="cafe-item">
-            <div class="who">${escapeHtml(itemVariantText(item) ? `${item.name} · ${itemVariantText(item)}` : item.name)}</div>
+            <div class="who">${escapeHtml(cafeBillLineName(item))}</div>
             ${disc}
           </td>
           <td class="cafe-qty">
@@ -302,6 +306,41 @@ function cafeBillLinesHtml() {
       ${cafeBillHeadHtml()}
       <tbody>${rows}</tbody>
     </table></div>`;
+}
+
+function cafeMobileEmptyHtml() {
+  return `<div class="cafe-order-empty">${escapeHtml(restaurantTicketHint())}</div>`;
+}
+
+function cafeMobileOrderHtml() {
+  const cards = state.cart
+    .map((line) => {
+      const item = state.items.find((i) => i.id === line.itemId);
+      if (!item) return "";
+      const unitCode = itemUnit(item);
+      const step = POSUnits.counterStep(unitCode);
+      const unit = POSUnits.qtySuffix(unitCode);
+      const qtyShow = POSUnits.displayQty(line.qtyGm, unitCode);
+      const qtyStep = POSUnits.displayQty(step, unitCode) || 1;
+      const calc = lineCalc(item, line);
+      const key = cartLineKey(line);
+      return `<article class="cafe-order-card">
+        <div class="cafe-order-top">
+          <div class="who">${escapeHtml(cafeBillLineName(item))}</div>
+          <button type="button" class="classic-del cafe-del-btn" data-del-line="${escapeHtml(key)}" aria-label="Remove ${escapeHtml(item.name)}">×</button>
+        </div>
+        <div class="cafe-order-ops">
+          <div class="qty">
+            <button type="button" data-chg="${escapeHtml(key)}" data-d="${-step}">−</button>
+            <input class="qty-input" type="number" inputmode="decimal" min="${POSUnits.displayQty(POSUnits.qtyMin(), unitCode) || 0.001}" max="${POSUnits.qtyMax()}" step="${escapeHtml(qtyStep)}" value="${escapeHtml(qtyShow)}" data-qty="${escapeHtml(key)}" aria-label="Quantity in ${unit}" />
+            <button type="button" data-chg="${escapeHtml(key)}" data-d="${step}">+</button>
+          </div>
+          <div class="cafe-amt">${escapeHtml(money(calc.taxable + calc.gst))}</div>
+        </div>
+      </article>`;
+    })
+    .join("");
+  return `<div class="cafe-order-list">${cards}</div>`;
 }
 
 function itemVariantText(item) {
@@ -4042,7 +4081,9 @@ function renderCart() {
   $("lines")?.classList.toggle("is-empty", !state.cart.length);
   if (!state.cart.length) {
     $("lines").innerHTML = isRestaurantShop()
-      ? cafeBillEmptyHtml()
+      ? isRestaurantMobileLayout()
+        ? cafeMobileEmptyHtml()
+        : cafeBillEmptyHtml()
       : `<p class="catalog-empty lines-empty">${escapeHtml(emptyTicketHint())}</p>`;
   } else if (isPharmacyShop()) {
     $("lines").innerHTML = `<div class="pharm-bill-wrap"><table class="pharm-bill-table classic-bill-table">
@@ -4142,7 +4183,7 @@ function renderCart() {
       }).join("")}</tbody>
     </table></div>`;
   } else if (isRestaurantShop()) {
-    $("lines").innerHTML = cafeBillLinesHtml();
+    $("lines").innerHTML = isRestaurantMobileLayout() ? cafeMobileOrderHtml() : cafeBillLinesHtml();
   } else {
     $("lines").innerHTML = state.cart
       .map((line) => {
