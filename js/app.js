@@ -2070,6 +2070,8 @@ function scrollActiveTableIntoView() {
 function applyRestaurantMobileChrome() {
   const cafe = isRestaurantShop();
   document.body.classList.toggle("has-active-table", cafe && Boolean(state.activeTable));
+  const kot = $("btn-kot");
+  if (kot) kot.textContent = isRestaurantMobileLayout() ? "KOT" : "Kitchen KOT";
   const board = $("table-board");
   if (!board) return;
   if (!isRestaurantMobileLayout()) {
@@ -4073,7 +4075,9 @@ function renderCart() {
   }
   if ($("ticket-sub")) {
     $("ticket-sub").textContent = state.cart.length
-      ? `${state.cart.length} line${state.cart.length === 1 ? "" : "s"}`
+      ? isRestaurantMobileLayout()
+        ? `${state.cart.length} item${state.cart.length === 1 ? "" : "s"}`
+        : `${state.cart.length} line${state.cart.length === 1 ? "" : "s"}`
       : isRestaurantShop()
         ? restaurantTicketHint()
         : emptyTicketHint();

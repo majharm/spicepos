@@ -6212,10 +6212,222 @@ body.classic-bill-mode .bill-settle {
     padding: 16px 8px;
   }
   body.restaurant-mode.counter-mode .stage.is-counter .cafe-del-btn {
-    width: 44px;
-    height: 44px;
-    min-width: 44px;
-    min-height: 44px;
+    width: 36px;
+    height: 36px;
+    min-width: 36px;
+    min-height: 36px;
+    font-size: 22px;
+  }
+
+  /* restaurant-mobile-type: readable phone POS type and a tight bill sheet */
+  body.restaurant-mode.counter-mode.has-cart .stage.is-counter .workspace,
+  body.restaurant-mode.counter-mode.has-cart.bill-collapsed .stage.is-counter .workspace,
+  body.restaurant-mode.counter-mode.has-cart:not(.bill-collapsed) .stage.is-counter .workspace {
+    grid-template-rows: minmax(0, 1fr) auto;
+  }
+  body.restaurant-mode.counter-mode.has-cart .stage.is-counter .bill-panel,
+  body.restaurant-mode.counter-mode.has-cart.bill-collapsed .stage.is-counter .bill-panel,
+  body.restaurant-mode.counter-mode.has-cart:not(.bill-collapsed) .stage.is-counter .bill-panel {
+    height: auto;
+    max-height: 56vh;
+  }
+  body.restaurant-mode.counter-mode.has-cart .stage.is-counter .lines,
+  body.restaurant-mode.counter-mode.has-cart.bill-collapsed .stage.is-counter .lines,
+  body.restaurant-mode.bill-collapsed.has-cart .stage.is-counter .lines {
+    min-height: 0;
+    padding: 6px 10px 4px;
+  }
+  body.restaurant-mode.counter-mode .stage.is-counter .ticket-head {
+    padding: 8px 12px;
+    min-height: 48px;
+  }
+  body.restaurant-mode.counter-mode .stage.is-counter .ticket-head h2,
+  body.restaurant-mode.counter-mode .stage.is-counter .ticket-cust,
+  body.restaurant-mode.counter-mode .stage.is-counter .ticket-due {
+    display: none !important;
+  }
+  body.restaurant-mode.counter-mode .stage.is-counter .ticket-head-copy,
+  body.restaurant-mode.counter-mode .stage.is-counter .ticket-sub {
+    display: block;
+  }
+  body.restaurant-mode.counter-mode .stage.is-counter .ticket-head-title {
+    align-items: baseline;
+    gap: 6px;
+  }
+  body.restaurant-mode.counter-mode .stage.is-counter .ticket-table,
+  body.restaurant-mode.counter-mode .stage.is-counter .ticket-table.is-open,
+  body.restaurant-mode.counter-mode .stage.is-counter .ticket-table.is-idle {
+    padding: 0;
+    background: transparent;
+    color: #fff;
+    font-size: 15px;
+    font-weight: 800;
+    letter-spacing: 0;
+    line-height: 1.2;
+  }
+  body.restaurant-mode.counter-mode .stage.is-counter .ticket-sub {
+    margin: 2px 0 0;
+    color: #ccfbf1;
+    font-size: 12px;
+    font-weight: 650;
+    line-height: 1.25;
+  }
+  body.restaurant-mode.counter-mode .stage.is-counter .bill-toggle {
+    width: 36px;
+    min-width: 36px;
+    height: 36px;
+    min-height: 36px;
+    border-radius: 10px;
+    font-size: 16px;
+  }
+  body.restaurant-mode.counter-mode .stage.is-counter .cafe-order-list {
+    gap: 6px;
+    min-height: 0;
+  }
+  body.restaurant-mode.counter-mode .stage.is-counter .cafe-order-card {
+    gap: 6px;
+    padding: 8px 10px;
+    border-radius: 12px;
+  }
+  body.restaurant-mode.counter-mode .stage.is-counter .cafe-order-card .who {
+    font-size: 14px;
+    font-weight: 750;
+    line-height: 1.25;
+    letter-spacing: 0;
+  }
+  body.restaurant-mode.counter-mode .stage.is-counter .cafe-order-card .qty {
+    gap: 4px;
+  }
+  body.restaurant-mode.counter-mode .stage.is-counter .cafe-order-card .qty button {
+    width: 40px;
+    height: 40px;
+    min-width: 40px;
+    min-height: 40px;
+    border-radius: 10px;
+    font-size: 18px;
+  }
+  body.restaurant-mode.counter-mode .stage.is-counter .cafe-order-card .qty-input {
+    width: 2.8em;
+    min-width: 2.6em;
+    min-height: 40px;
+    font-size: 15px;
+    font-weight: 750;
+  }
+  body.restaurant-mode.counter-mode .stage.is-counter .cafe-order-card .cafe-amt {
+    min-width: 4em;
+    font-size: 15px;
+    font-weight: 800;
+  }
+  body.restaurant-mode.counter-mode .stage.is-counter .totals {
+    padding: 6px 12px 2px;
+    gap: 0;
+  }
+  body.restaurant-mode.counter-mode .stage.is-counter .totals .grand {
+    font-size: 13px;
+    font-weight: 700;
+    padding-top: 6px;
+    border-top: 1px solid #e2e8f0;
+  }
+  body.restaurant-mode.counter-mode .stage.is-counter .totals .grand span:last-child {
+    font-size: 18px;
+    font-weight: 800;
+    color: #0f766e;
+  }
+  body.restaurant-mode.counter-mode.has-cart .stage.is-counter .pay {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-areas:
+      "hold clear"
+      "kot pay";
+    gap: 6px;
+    padding: 6px 10px calc(8px + env(safe-area-inset-bottom, 0px));
+  }
+  body.restaurant-mode.counter-mode.has-cart .stage.is-counter .pay #btn-hold,
+  body.restaurant-mode.counter-mode.has-cart .stage.is-counter .pay #btn-clear {
+    min-height: 34px;
+    height: 34px;
+    font-size: 12px;
+    font-weight: 700;
+  }
+  body.restaurant-mode.counter-mode.has-cart .stage.is-counter .pay #btn-kot,
+  body.restaurant-mode.counter-mode.has-cart .stage.is-counter .pay #btn-pay,
+  body.restaurant-mode.counter-mode .stage.is-counter #btn-pay {
+    min-height: 46px;
+    height: 46px;
+    font-size: 14px;
+    font-weight: 800;
+    letter-spacing: 0;
+  }
+  body.restaurant-mode.counter-mode .stage.is-counter .hint {
+    font-size: 11px;
+    min-height: 0;
+    line-height: 1.3;
+  }
+  body.restaurant-mode.counter-mode .stage.is-counter .table-board-toggle {
+    min-height: 40px;
+    padding: 6px 10px;
+  }
+  body.restaurant-mode.counter-mode .stage.is-counter .table-board-toggle strong {
+    font-size: 15px;
+    font-weight: 800;
+    line-height: 1.2;
+  }
+  body.restaurant-mode.counter-mode .stage.is-counter .table-board-toggle span {
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1.25;
+  }
+  body.restaurant-mode.counter-mode .stage.is-counter .table-seat {
+    min-height: 52px;
+    padding: 6px 4px;
+  }
+  body.restaurant-mode.counter-mode .stage.is-counter .table-seat strong {
+    font-size: 13px;
+    font-weight: 800;
+    line-height: 1.2;
+  }
+  body.restaurant-mode.counter-mode .stage.is-counter .table-seat span {
+    font-size: 10px;
+    font-weight: 650;
+  }
+  body.restaurant-mode.counter-mode .stage.is-counter .catalog-cats {
+    padding: 6px 10px 0;
+    gap: 6px;
+  }
+  body.restaurant-mode.counter-mode .stage.is-counter .catalog-cat {
+    padding: 7px 11px;
+    font-size: 13px;
+    font-weight: 750;
+  }
+  body.restaurant-mode.counter-mode .stage.is-counter .catalog-cat span {
+    font-size: 12px;
+  }
+  body.restaurant-mode.counter-mode .stage.is-counter .catalog-group-head {
+    font-size: 12px;
+    letter-spacing: 0.02em;
+    padding: 8px 2px 4px;
+  }
+  body.restaurant-mode.counter-mode .stage.is-counter .card {
+    min-height: 56px;
+    padding: 8px 12px;
+    gap: 0;
+  }
+  body.restaurant-mode.counter-mode .stage.is-counter .card-photo {
+    display: none;
+  }
+  body.restaurant-mode.counter-mode .stage.is-counter .card .name {
+    font-size: 14px;
+    font-weight: 750;
+    line-height: 1.25;
+    letter-spacing: 0;
+  }
+  body.restaurant-mode.counter-mode .stage.is-counter .card-price {
+    font-size: 14px;
+    font-weight: 800;
+    color: #0f766e;
+  }
+  body.restaurant-mode.counter-mode .stage.is-counter .card .meta {
+    font-size: 12px;
   }
   .stage.is-counter .pay .btn {
     min-height: 44px;
