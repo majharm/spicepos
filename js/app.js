@@ -208,6 +208,7 @@ function restaurantTicketHint() {
     const floors = diningFloors();
     const seat = diningTables().find((t) => t.id === state.activeTable);
     const floorBit = floors.length > 1 && seat?.floor ? ` · ${R.displayFloor?.(seat.floor, floors) || seat.floor}` : "";
+    if (isRestaurantMobileLayout()) return "Tap a dish";
     return `${R.displayTable(state.activeTable)}${floorBit} · tap a dish`;
   }
   return emptyTicketHint();
@@ -2070,6 +2071,8 @@ function scrollActiveTableIntoView() {
 function applyRestaurantMobileChrome() {
   const cafe = isRestaurantShop();
   document.body.classList.toggle("has-active-table", cafe && Boolean(state.activeTable));
+  const kot = $("btn-kot");
+  if (kot) kot.textContent = isRestaurantMobileLayout() ? "KOT" : "Kitchen KOT";
   const board = $("table-board");
   if (!board) return;
   if (!isRestaurantMobileLayout()) {
@@ -3602,7 +3605,7 @@ function catalogCardHtml(i) {
         <div class="card-body">
           ${meta.sku ? `<div class="sku">${escapeHtml(meta.sku)}</div>` : ""}
           <div class="name">${escapeHtml(i.name)}${meta.detail ? ` <small>${escapeHtml(meta.detail)}</small>` : ""}</div>
-          <div class="meta"><span class="card-price">${money(rateFor(i))}${escapeHtml(POSUnits.rateSuffix(itemUnit(i)))}</span>${qty ? `<span class="card-qty">${escapeHtml(qty)}</span>` : ""}</div>
+          <div class="meta"><span class="card-price">${money(rateFor(i))}${restaurant && isRestaurantMobileLayout() ? "" : escapeHtml(POSUnits.rateSuffix(itemUnit(i)))}</span>${qty ? `<span class="card-qty">${escapeHtml(qty)}</span>` : ""}</div>
           ${stock ? `<div class="stock ${low ? "low" : "ok"}">${stock}</div>` : ""}
         </div>
       </button>`;
@@ -4073,7 +4076,9 @@ function renderCart() {
   }
   if ($("ticket-sub")) {
     $("ticket-sub").textContent = state.cart.length
-      ? `${state.cart.length} line${state.cart.length === 1 ? "" : "s"}`
+      ? isRestaurantMobileLayout()
+        ? `${state.cart.length} item${state.cart.length === 1 ? "" : "s"}`
+        : `${state.cart.length} line${state.cart.length === 1 ? "" : "s"}`
       : isRestaurantShop()
         ? restaurantTicketHint()
         : emptyTicketHint();
