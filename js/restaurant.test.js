@@ -333,8 +333,8 @@ test("Restaurant mobile billing box keeps dish cards visible", () => {
   assert.match(mobile, /display: block !important;/);
   assert.doesNotMatch(mobile, /max-height: 42vh/);
   assert.doesNotMatch(index, /20260925rm1/);
-  assert.match(index, /pos\.css\?v=20260925rm4/);
-  assert.match(index, /app\.js\?v=20260925rm4/);
+  assert.match(index, /pos\.css\?v=20260925rm5/);
+  assert.match(index, /app\.js\?v=20260925rm5/);
 });
 
 test("Restaurant mobile Counter uses readable type and a tight bill sheet", () => {
@@ -344,8 +344,8 @@ test("Restaurant mobile Counter uses readable type and a tight bill sheet", () =
   const css = read("css/pos.css");
   assert.match(css, /restaurant-mobile-type/);
   assert.match(css, /body\.restaurant-mode\.counter-mode \.stage\.is-counter \.ticket-head h2/);
-  assert.match(css, /body\.restaurant-mode\.counter-mode \.stage\.is-counter \.cafe-order-card \.who \{\n    font-size: 14px;/);
-  assert.match(css, /body\.restaurant-mode\.counter-mode \.stage\.is-counter \.card \.name \{\n    font-size: 14px;/);
+  assert.match(css, /body\.restaurant-mode\.counter-mode \.stage\.is-counter \.cafe-order-card \.who \{\n    font-size: 12px;/);
+  assert.match(css, /body\.restaurant-mode\.counter-mode \.stage\.is-counter \.card \.name \{\n    font-size: 12px;/);
   assert.match(css, /body\.restaurant-mode\.counter-mode\.has-cart \.stage\.is-counter \.pay #btn-kot/);
   assert.match(app, /isRestaurantMobileLayout\(\) \? "KOT" : "Kitchen KOT"/);
   assert.match(app, /\$\{state\.cart\.length\} item/);

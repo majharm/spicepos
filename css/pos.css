@@ -6216,7 +6216,7 @@ body.classic-bill-mode .bill-settle {
     height: 36px;
     min-width: 36px;
     min-height: 36px;
-    font-size: 22px;
+    font-size: 18px;
   }
 
   /* restaurant-mobile-type: readable phone POS type and a tight bill sheet */
@@ -6260,7 +6260,7 @@ body.classic-bill-mode .bill-settle {
     padding: 0;
     background: transparent;
     color: #fff;
-    font-size: 15px;
+    font-size: 13px;
     font-weight: 800;
     letter-spacing: 0;
     line-height: 1.2;
@@ -6268,7 +6268,7 @@ body.classic-bill-mode .bill-settle {
   body.restaurant-mode.counter-mode .stage.is-counter .ticket-sub {
     margin: 2px 0 0;
     color: #ccfbf1;
-    font-size: 12px;
+    font-size: 11px;
     font-weight: 650;
     line-height: 1.25;
   }
@@ -6278,7 +6278,7 @@ body.classic-bill-mode .bill-settle {
     height: 36px;
     min-height: 36px;
     border-radius: 10px;
-    font-size: 16px;
+    font-size: 14px;
   }
   body.restaurant-mode.counter-mode .stage.is-counter .cafe-order-list {
     gap: 6px;
@@ -6290,7 +6290,7 @@ body.classic-bill-mode .bill-settle {
     border-radius: 12px;
   }
   body.restaurant-mode.counter-mode .stage.is-counter .cafe-order-card .who {
-    font-size: 14px;
+    font-size: 12px;
     font-weight: 750;
     line-height: 1.25;
     letter-spacing: 0;
@@ -6304,18 +6304,18 @@ body.classic-bill-mode .bill-settle {
     min-width: 40px;
     min-height: 40px;
     border-radius: 10px;
-    font-size: 18px;
+    font-size: 16px;
   }
   body.restaurant-mode.counter-mode .stage.is-counter .cafe-order-card .qty-input {
     width: 2.8em;
     min-width: 2.6em;
     min-height: 40px;
-    font-size: 15px;
+    font-size: 13px;
     font-weight: 750;
   }
   body.restaurant-mode.counter-mode .stage.is-counter .cafe-order-card .cafe-amt {
     min-width: 4em;
-    font-size: 15px;
+    font-size: 13px;
     font-weight: 800;
   }
   body.restaurant-mode.counter-mode .stage.is-counter .totals {
@@ -6323,13 +6323,13 @@ body.classic-bill-mode .bill-settle {
     gap: 0;
   }
   body.restaurant-mode.counter-mode .stage.is-counter .totals .grand {
-    font-size: 13px;
+    font-size: 12px;
     font-weight: 700;
     padding-top: 6px;
     border-top: 1px solid #e2e8f0;
   }
   body.restaurant-mode.counter-mode .stage.is-counter .totals .grand span:last-child {
-    font-size: 18px;
+    font-size: 15px;
     font-weight: 800;
     color: #0f766e;
   }
@@ -6346,7 +6346,7 @@ body.classic-bill-mode .bill-settle {
   body.restaurant-mode.counter-mode.has-cart .stage.is-counter .pay #btn-clear {
     min-height: 34px;
     height: 34px;
-    font-size: 12px;
+    font-size: 11px;
     font-weight: 700;
   }
   body.restaurant-mode.counter-mode.has-cart .stage.is-counter .pay #btn-kot,
@@ -6354,12 +6354,12 @@ body.classic-bill-mode .bill-settle {
   body.restaurant-mode.counter-mode .stage.is-counter #btn-pay {
     min-height: 46px;
     height: 46px;
-    font-size: 14px;
+    font-size: 13px;
     font-weight: 800;
     letter-spacing: 0;
   }
   body.restaurant-mode.counter-mode .stage.is-counter .hint {
-    font-size: 11px;
+    font-size: 10px;
     min-height: 0;
     line-height: 1.3;
   }
@@ -6368,12 +6368,12 @@ body.classic-bill-mode .bill-settle {
     padding: 6px 10px;
   }
   body.restaurant-mode.counter-mode .stage.is-counter .table-board-toggle strong {
-    font-size: 15px;
+    font-size: 13px;
     font-weight: 800;
     line-height: 1.2;
   }
   body.restaurant-mode.counter-mode .stage.is-counter .table-board-toggle span {
-    font-size: 11px;
+    font-size: 10px;
     font-weight: 600;
     line-height: 1.25;
   }
@@ -6382,7 +6382,7 @@ body.classic-bill-mode .bill-settle {
     padding: 6px 4px;
   }
   body.restaurant-mode.counter-mode .stage.is-counter .table-seat strong {
-    font-size: 13px;
+    font-size: 12px;
     font-weight: 800;
     line-height: 1.2;
   }
@@ -6396,14 +6396,14 @@ body.classic-bill-mode .bill-settle {
   }
   body.restaurant-mode.counter-mode .stage.is-counter .catalog-cat {
     padding: 7px 11px;
-    font-size: 13px;
+    font-size: 12px;
     font-weight: 750;
   }
   body.restaurant-mode.counter-mode .stage.is-counter .catalog-cat span {
-    font-size: 12px;
+    font-size: 11px;
   }
   body.restaurant-mode.counter-mode .stage.is-counter .catalog-group-head {
-    font-size: 12px;
+    font-size: 11px;
     letter-spacing: 0.02em;
     text-transform: none;
     padding: 8px 2px 4px;
@@ -6437,7 +6437,7 @@ body.classic-bill-mode .bill-settle {
     justify-self: stretch;
     min-height: 46px;
     height: 46px;
-    font-size: 14px;
+    font-size: 13px;
   }
   body.restaurant-mode.counter-mode .stage.is-counter .card {
     min-height: 56px;
@@ -6448,18 +6448,18 @@ body.classic-bill-mode .bill-settle {
     display: none;
   }
   body.restaurant-mode.counter-mode .stage.is-counter .card .name {
-    font-size: 14px;
+    font-size: 12px;
     font-weight: 750;
     line-height: 1.25;
     letter-spacing: 0;
   }
   body.restaurant-mode.counter-mode .stage.is-counter .card-price {
-    font-size: 14px;
+    font-size: 12px;
     font-weight: 800;
     color: #0f766e;
   }
   body.restaurant-mode.counter-mode .stage.is-counter .card .meta {
-    font-size: 12px;
+    font-size: 11px;
   }
   .stage.is-counter .pay .btn {
     min-height: 44px;
