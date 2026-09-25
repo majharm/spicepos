@@ -306,6 +306,7 @@ test("Restaurant mobile counter uses a compact POS sheet, not a squeezed desktop
   assert.match(app, /data-tables-toggle/);
   assert.match(app, /dataset\.tablesUser = "shut"/);
   assert.match(app, /if \(isRestaurantMobileLayout\(\)\) setBillCollapsed\(true\)/);
+  assert.match(app, /setBillCollapsed\(Boolean\(collapsed\), \{ persist: false \}\)/);
   assert.doesNotMatch(
     css.split("@media (max-width: 980px)")[1] || "",
     /minmax\(360px, 428px\)/,

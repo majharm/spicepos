@@ -5836,16 +5836,16 @@ body.classic-bill-mode .bill-settle {
     padding: 8px 10px calc(10px + env(safe-area-inset-bottom));
   }
   body.restaurant-mode .stage.is-counter .pay {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.45fr);
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     grid-template-areas:
-      "hold kot pay"
-      "shift clear pay";
+      "hold clear"
+      "kot pay";
   }
   body.restaurant-mode:has(#btn-shift-table[hidden]) .stage.is-counter .pay {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.45fr);
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     grid-template-areas:
-      "hold kot pay"
-      "clear clear pay";
+      "hold clear"
+      "kot pay";
   }
   body.restaurant-mode .stage.is-counter #btn-hold { grid-area: hold; }
   body.restaurant-mode .stage.is-counter #btn-kot { grid-area: kot; }
@@ -6042,16 +6042,51 @@ body.classic-bill-mode .bill-settle {
   body.restaurant-mode.bill-collapsed .stage.is-counter .held-bills {
     display: none;
   }
-  body.restaurant-mode.bill-collapsed .stage.is-counter .pay {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr);
+  body.restaurant-mode.bill-collapsed .stage.is-counter .pay,
+  body.restaurant-mode.counter-mode:not(.has-cart) .stage.is-counter .pay {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     grid-template-areas: "kot pay";
-    padding: 8px 10px calc(10px + env(safe-area-inset-bottom, 0px));
+    grid-auto-rows: 48px;
+    align-items: stretch;
+  }
+  body.restaurant-mode.bill-collapsed .stage.is-counter .pay #btn-kot,
+  body.restaurant-mode.bill-collapsed .stage.is-counter .pay #btn-pay,
+  body.restaurant-mode.counter-mode:not(.has-cart) .stage.is-counter .pay #btn-kot,
+  body.restaurant-mode.counter-mode:not(.has-cart) .stage.is-counter .pay #btn-pay {
+    min-height: 48px;
+    height: 48px;
+    width: 100%;
+  }
+  body.restaurant-mode.counter-mode .stage.is-counter #btn-shift-table {
+    display: none;
   }
   body.restaurant-mode.counter-mode .stage.is-counter .pay {
-    position: sticky;
+    position: fixed;
+    left: 0;
+    right: 0;
     bottom: 0;
-    z-index: 12;
+    width: 100%;
+    max-width: 100%;
+    z-index: 20;
+    background: #fff;
     padding: 8px 10px calc(10px + env(safe-area-inset-bottom, 0px));
+  }
+  body.restaurant-mode.counter-mode .stage.is-counter .bill-panel {
+    padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px));
+  }
+  body.restaurant-mode.counter-mode.has-cart:not(.bill-collapsed) .stage.is-counter .bill-panel {
+    padding-bottom: calc(128px + env(safe-area-inset-bottom, 0px));
+  }
+  body.restaurant-mode.counter-mode .stage.is-counter .scale-dock {
+    display: none !important;
+  }
+  body.restaurant-mode.counter-mode .qr-sound-arm {
+    left: 10px;
+    right: 10px;
+    width: auto;
+    bottom: calc(96px + env(safe-area-inset-bottom, 0px));
+    z-index: 19;
   }
   body.restaurant-mode.counter-mode .stage.is-counter .pay .btn,
   body.restaurant-mode.counter-mode .stage.is-counter .pay-row #btn-pay,

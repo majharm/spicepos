@@ -370,6 +370,7 @@ function applyFootwearMode() {
   document.body.classList.toggle("weight-scale-mode", isScaleEnabled());
   document.body.classList.toggle("restaurant-mode", isRestaurantShop());
   applyRestaurantMobileChrome();
+  restoreBillCollapsed();
   document.body.classList.toggle("pharmacy-mode", pharm);
   document.body.classList.toggle("classic-bill-mode", isClassicBillShop());
   document.body.classList.toggle("services-mode", isServicesShop());
@@ -2087,7 +2088,7 @@ function billToggleGlyph(hide) {
   return hide ? "‹" : "›";
 }
 
-function setBillCollapsed(collapsed) {
+function setBillCollapsed(collapsed, { persist = true } = {}) {
   const hide = Boolean(collapsed);
   document.body.classList.toggle("bill-collapsed", hide);
   document.querySelector(".workspace")?.classList.toggle("bill-collapsed", hide);
@@ -2098,6 +2099,7 @@ function setBillCollapsed(collapsed) {
     btn.title = hide ? "Show bill" : "Hide bill";
     btn.textContent = billToggleGlyph(hide);
   }
+  if (!persist) return;
   try {
     localStorage.setItem(BILL_COLLAPSED_KEY, hide ? "1" : "0");
   } catch {
@@ -2115,7 +2117,7 @@ function restoreBillCollapsed() {
     collapsed = undefined;
   }
   if (collapsed == null && isRestaurantMobileLayout()) collapsed = true;
-  setBillCollapsed(Boolean(collapsed));
+  setBillCollapsed(Boolean(collapsed), { persist: false });
 }
 
 function paintBillToggleCount() {
