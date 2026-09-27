@@ -6,7 +6,7 @@
     <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
     <title>ATAV POS</title>
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./css/pos.css?v=20260925rm5" />
+    <link rel="stylesheet" href="./css/pos.css?v=20260925cd1" />
     <link rel="stylesheet" href="./css/saas.css?v=20260905deploy136" />
   </head>
   <body>
@@ -276,6 +276,13 @@
               </form>
             </div>
           </header>
+          <div class="counter-desk-bar shared-counter-only" id="counter-desk-bar" hidden>
+            <div class="counter-layout-switch" role="group" aria-label="Counter view">
+              <button type="button" class="btn counter-layout-btn" data-counter-layout="desktop" id="counter-layout-desktop">🖥 Windows/Desktop</button>
+              <button type="button" class="btn counter-layout-btn" data-counter-layout="mobile" id="counter-layout-mobile">📱 Mobile</button>
+            </div>
+            <div class="counter-chips" id="counter-chips" role="tablist" aria-label="Counters"></div>
+          </div>
           <div class="workspace">
             <div class="catalog-pane">
               <div class="table-board" id="table-board" hidden></div>
@@ -2197,6 +2204,12 @@
                     <p class="item-composer-note full">On by default. Staff can move an active order to another free table. Order number, dishes, KOT, and amount stay the same. Uncheck to hide Shift Table.</p>
                     <div id="table-shift-history" class="table-wrap"></div>
                   </fieldset>
+                  <fieldset class="item-block shared-counter-only" id="set-pos-counters" hidden>
+                    <legend>POS Counters</legend>
+                    <p class="item-composer-note full">Windows/Desktop and Mobile Counter use the same billing engine. Each counter has its own cart. Restaurant &amp; Cafe keep their dedicated table/KOT Counter and are not listed here.</p>
+                    <div id="pos-counters-editor"></div>
+                    <button type="button" class="btn" id="pos-counter-add">+ Add counter</button>
+                  </fieldset>
                   <fieldset class="item-block">
                     <legend>Timezone</legend>
                     <label class="full">Shop timezone
@@ -2493,6 +2506,7 @@
     <script src="./js/units.js?v=20260919unit1" defer></script>
     <script src="./js/footwear.js?v=20260922deploy219" defer></script>
     <script src="./js/restaurant.js?v=20260923deploy226" defer></script>
+    <script src="./js/counter-desk.js?v=20260925cd1" defer></script>
     <script src="./js/discount.js?v=20260905deploy136" defer></script>
     <script src="./js/offers.js?v=20260905deploy170" defer></script>
     <script src="./js/loyalty.js?v=20260905deploy136" defer></script>
@@ -2512,7 +2526,7 @@
     <script src="./js/salon-ui.js?v=20260919salon1" defer></script>
     <script src="./js/print.js?v=20260922deploy219" defer></script>
     <script src="./js/print-ui.js?v=20260922deploy218" defer></script>
-    <script src="./js/app.js?v=20260925rm5" defer></script>
+    <script src="./js/app.js?v=20260925cd1" defer></script>
     <script src="./js/growth.js?v=20260905deploy145" defer></script>
     <script src="./js/offers-ui.js?v=20260919off1" defer></script>
   </body>
