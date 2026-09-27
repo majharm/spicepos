@@ -8908,30 +8908,15 @@ body.restaurant-mode #set-pos-counters {
 }
 .pos-counter-row {
   display: grid;
-  grid-template-columns: 1fr;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) auto auto;
   gap: 8px;
   align-items: end;
-  margin-bottom: 12px;
-  padding: 12px;
-  border: 1px solid var(--line-strong);
-  border-radius: 12px;
-  background: #fff;
+  margin-bottom: 10px;
 }
 .pos-counter-row input,
 .pos-counter-row select {
-  min-height: 40px;
+  min-height: 36px;
   width: 100%;
-}
-.pos-counter-row .pos-counter-status {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 40px;
-}
-@media (min-width: 1100px) {
-  .pos-counter-row {
-    grid-template-columns: minmax(160px, 1.4fr) minmax(140px, 1fr) auto auto;
-  }
 }
 
 body.counter-desktop:not(.restaurant-mode).counter-mode .workspace,
