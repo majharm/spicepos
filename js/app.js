@@ -169,10 +169,6 @@ function isRestaurantShop() {
   return Boolean(globalThis.POSRestaurant?.isRestaurantShop(state.businessMeta) || globalThis.POSFootwear?.isRestaurantShop(state.businessMeta));
 }
 
-function isSharedCounterShop() {
-  return Boolean(globalThis.POSCounterDesk?.isSharedCounterShop(state.businessMeta));
-}
-
 function isPharmacyShop() {
   return Boolean(globalThis.POSFootwear?.isPharmacyShop?.(state.businessMeta) || globalThis.POSFootwear?.shopKind?.(state.businessMeta) === "pharmacy");
 }
@@ -414,7 +410,6 @@ function applyFootwearMode() {
   document.body.classList.toggle("weight-scale-mode", isScaleEnabled());
   document.body.classList.toggle("restaurant-mode", isRestaurantShop());
   applyRestaurantMobileChrome();
-  applyCounterDeskChrome();
   restoreBillCollapsed();
   document.body.classList.toggle("pharmacy-mode", pharm);
   document.body.classList.toggle("classic-bill-mode", isClassicBillShop());
@@ -435,9 +430,6 @@ function applyFootwearMode() {
   });
   document.querySelectorAll(".restaurant-only").forEach((el) => {
     el.hidden = !isRestaurantShop();
-  });
-  document.querySelectorAll(".shared-counter-only").forEach((el) => {
-    el.hidden = !isSharedCounterShop();
   });
   document.querySelectorAll(".services-only").forEach((el) => {
     if (el.classList.contains("nav-btn")) return;
@@ -555,7 +547,6 @@ function applyFootwearMode() {
   applyNav();
   renderTableBoard();
   applyQuickAddVisibility();
-  applyCounterDeskChrome();
 }
 
 function fillWearerSelects() {
@@ -1641,10 +1632,6 @@ function clearCounterAfterSale(order, result) {
   }
   resetClassicBillEntry();
   resetClassicCustomerRecord();
-  if (isSharedCounterShop()) {
-    const Desk = counterDeskApi();
-    Desk?.clearSession(activeSharedCounterId());
-  }
   renderCatalog();
   renderCart();
   if (table) void dropTableHold(table);
@@ -2109,191 +2096,6 @@ function applyRestaurantMobileChrome() {
   scrollActiveTableIntoView();
 }
 
-function counterDeskApi() {
-  return globalThis.POSCounterDesk || null;
-}
-
-function sharedCounterList() {
-  const Desk = counterDeskApi();
-  if (!Desk) return [];
-  return Desk.normalizeCounters(state.company?.pos_counters_json || state.businessMeta?.pos_counters_json);
-}
-
-function activeSharedCounterId() {
-  const Desk = counterDeskApi();
-  if (!Desk) return "";
-  return Desk.pickActiveId(sharedCounterList(), Desk.readActiveId());
-}
-
-function sharedCounterExtras() {
-  const ids = [
-    "counter-mobile",
-    "bill-cust-name",
-    "bill-cust-mobile",
-    "bill-cust-address",
-    "bill-cust-area",
-    "bill-cust-city",
-    "bill-cust-pin",
-    "bill-doctor-rx",
-    "bill-disc-type",
-    "bill-disc-value",
-    "loyalty-redeem",
-    "pack-choice",
-    "pay-method",
-    "pay-amount",
-    "scan-code",
-    "search",
-  ];
-  const extras = {};
-  ids.forEach((id) => {
-    extras[id] = $(id)?.value || "";
-  });
-  extras.payAmountDirty = $("pay-amount")?.dataset.dirty || "";
-  return extras;
-}
-
-function applySharedCounterExtras(extras) {
-  const row = extras && typeof extras === "object" ? extras : {};
-  Object.entries(row).forEach(([id, value]) => {
-    if (id === "payAmountDirty") return;
-    if ($(id)) $(id).value = value ?? "";
-  });
-  if ($("pay-amount")) {
-    if (row.payAmountDirty) $("pay-amount").dataset.dirty = row.payAmountDirty;
-    else delete $("pay-amount").dataset.dirty;
-  }
-  if ($("customer") && state.customerId) $("customer").value = state.customerId;
-  if ($("bill-disc-type")) $("bill-disc-type").value = state.billDiscountType || "amt";
-  if ($("bill-disc-value")) $("bill-disc-value").value = String(state.billDiscountValue || 0);
-  if ($("loyalty-redeem")) $("loyalty-redeem").value = String(state.loyaltyRedeem || 0);
-  if ($("pack-choice")) $("pack-choice").value = state.lastPack?.id || "";
-  if ($("search")) $("search").value = state.query || "";
-}
-
-function persistActiveCounterSession() {
-  const Desk = counterDeskApi();
-  if (!Desk || !isSharedCounterShop()) return;
-  Desk.saveSession(activeSharedCounterId(), Desk.snapshotSession(state, sharedCounterExtras()));
-}
-
-function restoreSharedCounterSession(id) {
-  const Desk = counterDeskApi();
-  if (!Desk || !isSharedCounterShop()) return;
-  const session = Desk.sessionOf(id || activeSharedCounterId());
-  Desk.applySession(state, session);
-  applySharedCounterExtras(session.extras);
-}
-
-function switchSharedCounter(nextId) {
-  const Desk = counterDeskApi();
-  if (!Desk || !isSharedCounterShop()) return;
-  const to = Desk.clipCounterId(nextId);
-  const from = activeSharedCounterId();
-  if (!to || to === from) return;
-  Desk.switchCounter(from, to, state, sharedCounterExtras());
-  Desk.saveActiveId(to);
-  applySharedCounterExtras(Desk.sessionOf(to).extras);
-  renderCustomersSelect();
-  renderCatalog();
-  renderCart();
-  paintCounterDeskBar();
-}
-
-function setSharedCounterLayout(layout) {
-  const Desk = counterDeskApi();
-  if (!Desk || !isSharedCounterShop()) return;
-  persistActiveCounterSession();
-  Desk.saveLayoutPref(layout);
-  applyCounterDeskChrome();
-}
-
-function paintCounterDeskBar() {
-  const Desk = counterDeskApi();
-  const bar = $("counter-desk-bar");
-  if (!bar) return;
-  const shared = isSharedCounterShop();
-  bar.hidden = !shared;
-  if (!shared || !Desk) return;
-  const layout = Desk.resolveLayout();
-  document.querySelectorAll("[data-counter-layout]").forEach((btn) => {
-    btn.classList.toggle("is-on", btn.dataset.counterLayout === layout);
-  });
-  const chips = $("counter-chips");
-  if (!chips) return;
-  const list = Desk.activeCounters(sharedCounterList());
-  const active = activeSharedCounterId();
-  const staff = state.staff || [];
-  chips.innerHTML = list
-    .map((row) => {
-      const who = staff.find((s) => s.id === row.operator_id);
-      const op = who?.name ? `<span class="counter-chip-op">${escapeHtml(who.name)}</span>` : "";
-      return `<button type="button" class="counter-chip${row.id === active ? " is-on" : ""}" role="tab" aria-selected="${row.id === active ? "true" : "false"}" data-counter-id="${escapeHtml(row.id)}">${escapeHtml(row.name)}${op}</button>`;
-    })
-    .join("");
-}
-
-function paintPosCountersEditor() {
-  const Desk = counterDeskApi();
-  const el = $("pos-counters-editor");
-  if (!el) return;
-  if (!isSharedCounterShop() || !Desk) {
-    el.innerHTML = "";
-    return;
-  }
-  const list = sharedCounterList();
-  const staff = state.staff || [];
-  const staffOpts = `<option value="">Unassigned</option>${staff
-    .map((s) => `<option value="${escapeHtml(s.id)}">${escapeHtml(s.name || s.email || s.id)}</option>`)
-    .join("")}`;
-  el.innerHTML = list
-    .map(
-      (row) => `<div class="pos-counter-row" data-counter-edit="${escapeHtml(row.id)}">
-        <label>Counter name <input data-counter-name="${escapeHtml(row.id)}" maxlength="48" value="${escapeHtml(row.name)}" /></label>
-        <label>Operator <select data-counter-operator="${escapeHtml(row.id)}">${staffOpts}</select></label>
-        <label class="pos-counter-status"><input type="checkbox" data-counter-status="${escapeHtml(row.id)}" ${row.status === "active" ? "checked" : ""} /> Active</label>
-        <button type="button" class="btn" data-counter-del="${escapeHtml(row.id)}" ${list.length <= 1 ? "disabled" : ""}>Remove</button>
-      </div>`,
-    )
-    .join("");
-  list.forEach((row) => {
-    const sel = document.querySelector(`[data-counter-operator="${CSS.escape(row.id)}"]`);
-    if (sel) sel.value = row.operator_id || "";
-  });
-}
-
-async function persistPosCounters(list) {
-  const Desk = counterDeskApi();
-  if (!Desk || !isSharedCounterShop()) return;
-  const json = Desk.serializeCounters(list);
-  const data = await api("/api/pos-counters", {
-    method: "POST",
-    body: JSON.stringify({ pos_counters_json: json }),
-  });
-  const saved = data.pos_counters_json || json;
-  if (data.company) state.company = { ...state.company, ...data.company };
-  else state.company = { ...(state.company || {}), pos_counters_json: saved };
-  if (state.businessMeta) state.businessMeta = { ...state.businessMeta, pos_counters_json: saved };
-  paintPosCountersEditor();
-  paintCounterDeskBar();
-}
-
-function applyCounterDeskChrome() {
-  const Desk = counterDeskApi();
-  const shared = Boolean(Desk?.isSharedCounterShop(state.businessMeta));
-  document.querySelectorAll(".shared-counter-only").forEach((el) => {
-    el.hidden = !shared;
-  });
-  if (!isSharedCounterShop()) {
-    document.body.classList.remove("counter-desktop", "counter-mobile");
-    return;
-  }
-  const layout = Desk.resolveLayout();
-  document.body.classList.toggle("counter-desktop", layout === "desktop");
-  document.body.classList.toggle("counter-mobile", layout === "mobile");
-  paintCounterDeskBar();
-  if ($("pos-counters-editor") && !$("pos-counters-editor").childElementCount) paintPosCountersEditor();
-}
-
 function setNavCollapsed(collapsed) {
   const app = document.getElementById("app");
   const btn = $("nav-toggle");
@@ -2319,7 +2121,6 @@ function applyCounterWorkspaceChrome() {
   else setNavCollapsed(false);
   applyQuickAddVisibility();
   applyRestaurantMobileChrome();
-  applyCounterDeskChrome();
 }
 
 const BILL_COLLAPSED_KEY = "spicepos-bill-collapsed";
@@ -2693,11 +2494,6 @@ function showView(name) {
   paintDeskState(name);
   if (name === "stock") loadStock();
   if (name === "counter") {
-    applyCounterDeskChrome();
-    if (isSharedCounterShop()) {
-      restoreSharedCounterSession();
-      renderCart();
-    }
     loadHolds();
     queueMicrotask(focusScanLane);
     maybeShowCounterLowStockAlert();
@@ -4518,7 +4314,6 @@ function renderCart() {
   syncPayAmountDefault();
   paintCounterDue();
   if (isRestaurantShop() && state.activeTable && state.cart.length) saveTableHoldDebounced();
-  if (isSharedCounterShop()) persistActiveCounterSession();
   if (window.DevMode?.isEnabled()) {
     DevMode.updateContext({ cartLines: state.cart.length });
   }
@@ -6151,7 +5946,6 @@ function renderSettings() {
   if ($("set-low-stock-threshold")) $("set-low-stock-threshold").value = String(lowStockThreshold());
   applyQuickAddVisibility();
   paintTableShiftHistory();
-  paintPosCountersEditor();
   if ($("set-city")) $("set-city").value = state.company.city || "";
   if ($("set-state")) $("set-state").value = state.company.state || "";
   if ($("set-pincode")) $("set-pincode").value = state.company.pincode || state.company.pin_code || "";
@@ -6394,15 +6188,7 @@ async function loadBootstrap() {
   }
   void loadToday();
   void loadCustomerLoyalty();
-  applyCounterDeskChrome();
-  paintPosCountersEditor();
-  if (state.currentView === "counter") {
-    if (isSharedCounterShop()) {
-      restoreSharedCounterSession();
-      renderCart();
-    }
-    maybeShowCounterLowStockAlert();
-  }
+  if (state.currentView === "counter") maybeShowCounterLowStockAlert();
 }
 
 function dashRoleLabel(role) {
@@ -6850,8 +6636,6 @@ async function loadStock() {
 async function loadStaff() {
   const rows = await api("/api/staff");
   state.staff = rows;
-  paintPosCountersEditor();
-  paintCounterDeskBar();
   $("staff-table").innerHTML = `<table><thead><tr><th>Email</th><th>Name</th><th>Role</th><th>Status</th><th></th></tr></thead><tbody>${rows
     .map(
       (u) => `<tr>
@@ -9788,10 +9572,6 @@ $("btn-clear").addEventListener("click", () => {
   }
   resetClassicBillEntry();
   resetClassicCustomerRecord({ focus: true });
-  if (isSharedCounterShop()) {
-    const Desk = counterDeskApi();
-    Desk?.clearSession(activeSharedCounterId());
-  }
   setHint(isClassicBillShop() ? "Bill and customer record cleared" : "Cart cleared");
   renderCatalog();
   renderCart();
@@ -9842,7 +9622,6 @@ $("btn-pay").addEventListener("click", async () => {
         return id;
       })(),
       table_no: isRestaurantShop() ? (state.activeTable || undefined) : undefined,
-      counter_id: isSharedCounterShop() ? activeSharedCounterId() : undefined,
       amountPaid: checkoutAmountPaid(),
       customer_name: isClassicBillShop() ? pharmacyBillCustomerName() : undefined,
       customer_mobile: isClassicBillShop() ? pharmacyBillCustomerMobile() : undefined,
@@ -11242,53 +11021,6 @@ window.addEventListener("resize", () => {
   }
   if ($("bill-toggle")) setBillCollapsed(document.body.classList.contains("bill-collapsed"));
   applyRestaurantMobileChrome();
-  applyCounterDeskChrome();
-});
-
-document.addEventListener("click", (e) => {
-  const layoutBtn = e.target.closest("[data-counter-layout]");
-  if (layoutBtn) {
-    e.preventDefault();
-    setSharedCounterLayout(layoutBtn.dataset.counterLayout);
-    return;
-  }
-  const chip = e.target.closest("[data-counter-id]");
-  if (chip) {
-    e.preventDefault();
-    switchSharedCounter(chip.dataset.counterId);
-    return;
-  }
-  if (e.target.closest("#pos-counter-add")) {
-    e.preventDefault();
-    if (!isSharedCounterShop()) return;
-    const Desk = counterDeskApi();
-    if (!Desk) return;
-    void persistPosCounters(Desk.addCounter(sharedCounterList())).catch((err) => setHint(err.message, "error"));
-    return;
-  }
-  const del = e.target.closest("[data-counter-del]");
-  if (del) {
-    e.preventDefault();
-    if (!isSharedCounterShop()) return;
-    const Desk = counterDeskApi();
-    if (!Desk) return;
-    void persistPosCounters(Desk.removeCounter(sharedCounterList(), del.dataset.counterDel)).catch((err) => setHint(err.message, "error"));
-  }
-});
-
-document.addEventListener("change", (e) => {
-  if (!isSharedCounterShop()) return;
-  const Desk = counterDeskApi();
-  if (!Desk) return;
-  const status = e.target.closest("[data-counter-status]");
-  const operator = e.target.closest("[data-counter-operator]");
-  const name = e.target.closest("[data-counter-name]");
-  if (!status && !operator && !name) return;
-  let list = sharedCounterList();
-  if (status) list = Desk.updateCounter(list, status.dataset.counterStatus, { status: status.checked ? "active" : "inactive" });
-  if (operator) list = Desk.updateCounter(list, operator.dataset.counterOperator, { operator_id: operator.value });
-  if (name) list = Desk.updateCounter(list, name.dataset.counterName, { name: name.value });
-  void persistPosCounters(list).catch((err) => setHint(err.message, "error"));
 });
 
 document.addEventListener("click", async (e) => {

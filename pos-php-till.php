@@ -10,7 +10,7 @@ function pos_php_till_dispatch($path, $method, $body) {
   $staff = [
     "bootstrap", "dashboard", "today", "suppliers", "items", "customers", "packs",
     "orders", "purchases", "stock", "staff", "branches", "devices", "holds",
-    "checkout", "settings", "dining-tables", "pos-counters", "tables", "table-shift", "table-shifts", "kots", "reports", "growth", "audit", "accounts", "backup", "units",
+    "checkout", "settings", "dining-tables", "tables", "table-shift", "table-shifts", "kots", "reports", "growth", "audit", "accounts", "backup", "units",
     "barcodes", "damage", "loyalty", "batches", "qr-orders", "prescriptions", "combos", "offers",
   ];
   if (!in_array($head, $staff, true)) return false;
@@ -499,23 +499,6 @@ function pos_php_till_dispatch($path, $method, $body) {
     pos_q("UPDATE company_settings SET dining_tables_json = ? WHERE business_id = ?", "ss", [$json, $bid]);
     $rows = pos_q("SELECT * FROM company_settings WHERE business_id = ? LIMIT 1", "s", [$bid]);
     pos_send(200, ["ok" => true, "dining_tables_json" => $json, "company" => $rows[0] ?? ["dining_tables_json" => $json]]);
-  }
-
-  if ($path === "pos-counters" && $method === "POST") {
-    if (($auth["user"]["role"] ?? "") !== "business_admin") {
-      pos_send(403, ["error" => "Only the business admin can manage counters"]);
-    }
-    $bizRows = pos_q("SELECT * FROM businesses WHERE id = ? LIMIT 1", "s", [$bid]);
-    $biz = $bizRows[0] ?? [];
-    $type = strtolower(trim((string) ($biz["business_type"] ?? "")));
-    $text = strtolower(trim(($biz["category"] ?? "") . " " . ($biz["business_type"] ?? "")));
-    $restaurant = in_array($type, ["restaurant", "cafe", "bakery"], true) || preg_match("/restaurant|cafe|bakery|food/", $text);
-    if ($restaurant) pos_send(400, ["error" => "POS counters are not used for restaurant and cafe shops"]);
-    pos_ensure_i18n_columns();
-    $json = pos_clip_pos_counters_json($body["pos_counters_json"] ?? $body["counters"] ?? "[]");
-    pos_q("UPDATE company_settings SET pos_counters_json = ? WHERE business_id = ?", "ss", [$json, $bid]);
-    $rows = pos_q("SELECT * FROM company_settings WHERE business_id = ? LIMIT 1", "s", [$bid]);
-    pos_send(200, ["ok" => true, "pos_counters_json" => $json, "company" => $rows[0] ?? ["pos_counters_json" => $json]]);
   }
 
   if ($path === "kots" || strpos($path, "kots/") === 0) {

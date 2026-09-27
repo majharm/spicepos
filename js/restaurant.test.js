@@ -333,8 +333,8 @@ test("Restaurant mobile billing box keeps dish cards visible", () => {
   assert.match(mobile, /display: block !important;/);
   assert.doesNotMatch(mobile, /max-height: 42vh/);
   assert.doesNotMatch(index, /20260925rm1/);
-  assert.match(index, /pos\.css\?v=20260925cd1/);
-  assert.match(index, /app\.js\?v=20260925cd1/);
+  assert.match(index, /pos\.css\?v=20260925rm5/);
+  assert.match(index, /app\.js\?v=20260925rm5/);
 });
 
 test("Restaurant mobile Counter uses readable type and a tight bill sheet", () => {
@@ -349,23 +349,4 @@ test("Restaurant mobile Counter uses readable type and a tight bill sheet", () =
   assert.match(css, /body\.restaurant-mode\.counter-mode\.has-cart \.stage\.is-counter \.pay #btn-kot/);
   assert.match(app, /isRestaurantMobileLayout\(\) \? "KOT" : "Kitchen KOT"/);
   assert.match(app, /\$\{state\.cart\.length\} item/);
-});
-
-test("Restaurant Counter stays on table/KOT and ignores the shared Desktop/Mobile Counter", () => {
-  const here = path.dirname(fileURLToPath(import.meta.url));
-  const read = (rel) => readFileSync(path.join(here, "..", rel), "utf8");
-  const app = read("js/app.js");
-  const css = read("css/pos.css");
-  const index = read("index.html");
-  assert.match(index, /shared-counter-only/);
-  assert.match(index, /id="set-table-mgmt"/);
-  assert.match(index, /id="table-board"/);
-  assert.match(app, /function isRestaurantMobileLayout/);
-  assert.match(app, /function applyCounterDeskChrome/);
-  assert.match(app, /if \(!isSharedCounterShop\(\)\) \{\s*document\.body\.classList\.remove\("counter-desktop", "counter-mobile"\)/);
-  assert.match(css, /body\.restaurant-mode \.shared-counter-only/);
-  assert.match(css, /body\.counter-desktop:not\(\.restaurant-mode\)/);
-  assert.match(css, /body\.counter-mobile:not\(\.restaurant-mode\)/);
-  assert.doesNotMatch(css, /body\.restaurant-mode\.counter-desktop/);
-  assert.doesNotMatch(css, /body\.restaurant-mode\.counter-mobile/);
 });

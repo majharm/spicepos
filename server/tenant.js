@@ -72,67 +72,6 @@ function clipDiningTablesJson(raw) {
   return JSON.stringify({ floors, tables });
 }
 
-function clipPosCounterId(raw) {
-  return String(raw || "")
-    .trim()
-    .toLowerCase()
-    .replace(/\s+/g, "-")
-    .replace(/[^a-z0-9_-]/g, "")
-    .replace(/-+/g, "-")
-    .replace(/^-|-$/g, "")
-    .slice(0, 32);
-}
-
-function clipPosCountersJson(raw) {
-  let parsed = raw;
-  if (typeof raw === "string") {
-    try {
-      parsed = JSON.parse(raw);
-    } catch {
-      parsed = [];
-    }
-  }
-  const rows = parsed && typeof parsed === "object" && !Array.isArray(parsed) && Array.isArray(parsed.counters)
-    ? parsed.counters
-    : Array.isArray(parsed)
-      ? parsed
-      : [];
-  const counters = [];
-  const seen = new Set();
-  for (const row of rows.slice(0, 16)) {
-    const name = String(typeof row === "string" || typeof row === "number" ? row : row?.name || row?.id || "").trim().slice(0, 48);
-    let id = clipPosCounterId(typeof row === "object" && row ? row.id || name : name);
-    if (!id) continue;
-    if (seen.has(id)) {
-      let n = 2;
-      while (seen.has(`${id}-${n}`)) n += 1;
-      id = `${id}-${n}`.slice(0, 32);
-    }
-    seen.add(id);
-    counters.push({
-      id,
-      name: name || id,
-      status: String(row?.status || "").toLowerCase() === "inactive" ? "inactive" : "active",
-      operator_id: String(row?.operator_id || row?.operatorId || "").trim().slice(0, 64),
-    });
-  }
-  if (!counters.length) {
-    counters.push(
-      { id: "c1", name: "Counter 1", status: "active", operator_id: "" },
-      { id: "c2", name: "Counter 2", status: "active", operator_id: "" },
-      { id: "c3", name: "Counter 3", status: "active", operator_id: "" },
-    );
-  }
-  return JSON.stringify({ counters });
-}
-
-function isRestaurantBusiness(biz) {
-  const type = String(biz?.business_type || "").toLowerCase().trim();
-  if (type === "restaurant" || type === "cafe" || type === "bakery") return true;
-  const text = `${biz?.category || ""} ${biz?.business_type || ""}`.toLowerCase();
-  return /(restaurant|cafe|bakery|food)/.test(text);
-}
-
 const KOT_STATUSES = new Set(["new", "preparing", "ready", "done"]);
 
 function clipKotLines(raw) {
@@ -772,17 +711,6 @@ export function registerTenant(app) {
       await query("UPDATE company_settings SET dining_tables_json = ? WHERE business_id = ?", [json, bid()]);
       const [company] = await query("SELECT * FROM company_settings WHERE business_id = ?", [bid()]);
       return { ok: true, dining_tables_json: json, company };
-    }),
-  );
-
-  app.post("/api/pos-counters", requireStaff, requireBusinessAdmin, (req, res) =>
-    send(res, async () => {
-      const [biz] = await query("SELECT * FROM businesses WHERE id = ? LIMIT 1", [bid()]);
-      if (isRestaurantBusiness(biz)) throw new Error("POS counters are not used for restaurant and cafe shops");
-      const json = clipPosCountersJson(req.body?.pos_counters_json ?? req.body?.counters);
-      await query("UPDATE company_settings SET pos_counters_json = ? WHERE business_id = ?", [json, bid()]);
-      const [company] = await query("SELECT * FROM company_settings WHERE business_id = ?", [bid()]);
-      return { ok: true, pos_counters_json: json, company };
     }),
   );
 
