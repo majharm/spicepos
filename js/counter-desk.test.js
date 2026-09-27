@@ -139,7 +139,7 @@ test("Shared Counter markup and restaurant isolation stay wired", () => {
   assert.match(index, /id="set-pos-counters"/);
   assert.match(index, /shared-counter-only/);
   assert.match(index, /counter-desk\.js\?v=20260925cd1/);
-  assert.match(index, /pos\.css\?v=20260925cd1/);
+  assert.match(index, /pos\.css\?v=20260925cd2/);
   assert.match(index, /app\.js\?v=20260925cd1/);
 
   assert.match(app, /function isSharedCounterShop/);
