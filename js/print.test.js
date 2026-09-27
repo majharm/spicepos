@@ -178,7 +178,7 @@ test("Print order review modal is a stepped desk with quote grid and production 
   assert.match(ui, /Approve file/);
   assert.match(css, /#modal:has\(\.print-order-desk\)/);
   assert.match(css, /\.pod-step\.is-on/);
-  assert.match(index, /pos\.css\?v=20260925cd2/);
+  assert.match(index, /pos\.css\?v=20260925cd1/);
   assert.match(css, /\.lock, \.modal \{[\s\S]*z-index: 90;/);
   assert.match(read("js/app.js"), /id="modal-print-close"/);
 });
