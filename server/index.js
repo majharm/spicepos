@@ -198,6 +198,7 @@ app.use((req, res, next) => {
     url.startsWith("/api/health") ||
     url.startsWith("/api/master") ||
     url.startsWith("/api/analytics") ||
+    url.startsWith("/api/seo") ||
     url.startsWith("/api/login-page") ||
     url.startsWith("/api/support-contact")
   ) {

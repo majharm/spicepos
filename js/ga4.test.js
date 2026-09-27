@@ -21,13 +21,17 @@ test("public pages load GA4 tagging and consent, Master Admin has Analytics", ()
 
   assert.match(ga, /atav_ga_consent/);
   assert.match(ga, /googletagmanager\.com\/gtag\/js/);
+  assert.match(ga, /consent["']\s*,\s*["']default["']/);
+  assert.match(ga, /analytics_storage/);
+  assert.match(ga, /\/api\/seo\/public/);
+  assert.match(ga, /loadGtag\(id, !cfg\.consent_required \|\| consent\(\)\)/);
   assert.match(ga, /get_started/);
   assert.match(ga, /book_demo/);
   assert.match(ga, /contact_submit/);
   assert.doesNotMatch(ga, /body\.params\.phone/);
-  assert.match(home, /js\/ga4\.js\?v=20260920deploy196/);
-  assert.match(about, /js\/ga4\.js\?v=20260920deploy196/);
-  assert.match(login, /js\/ga4\.js\?v=20260920deploy196/);
+  assert.match(home, /js\/ga4\.js\?v=20260927seo241/);
+  assert.match(about, /js\/ga4\.js\?v=20260927seo241/);
+  assert.match(login, /js\/ga4\.js\?v=20260927seo241/);
   assert.match(master, /data-analytics-pane="settings"/);
   assert.match(master, /Google Analytics/);
   assert.match(master, /js\/master-analytics\.js/);

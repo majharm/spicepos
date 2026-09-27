@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { suggestKeywords, applyTemplate, scoreSeoPage, RESERVED_SLUGS, DEFAULT_ROBOTS } from "./seo.js";
+import { suggestKeywords, applyTemplate, scoreSeoPage, RESERVED_SLUGS, DEFAULT_ROBOTS, withSitemapLine } from "./seo.js";
 
 test("keyword generator does not persist and uses inputs only", () => {
   const rows = suggestKeywords({ businessType: "Pharmacy", service: "POS software", location: "Pune" });
@@ -31,4 +31,6 @@ test("templates expand variables and reserved slugs protect the POS", () => {
   assert.ok(RESERVED_SLUGS.has("login"));
   assert.ok(RESERVED_SLUGS.has("api"));
   assert.match(DEFAULT_ROBOTS, /Disallow: \/api\//);
+  assert.match(DEFAULT_ROBOTS, /Sitemap: https:\/\/pos\.atavtelecom\.in\/sitemap\.xml/);
+  assert.match(withSitemapLine("User-agent: *\nDisallow: /api/\n"), /Sitemap:/);
 });

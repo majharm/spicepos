@@ -26,11 +26,39 @@
   function consent() {
     return localStorage.getItem(CONSENT) === "granted";
   }
+  function denied() {
+    return localStorage.getItem(CONSENT) === "denied";
+  }
+  function applyMeta(name, content) {
+    const value = String(content || "").trim();
+    if (!name || !value) return;
+    if (document.querySelector(`meta[name="${name}"]`)) return;
+    const m = document.createElement("meta");
+    m.setAttribute("name", name);
+    m.setAttribute("content", value);
+    document.head.appendChild(m);
+  }
+  function safeRedirect(url) {
+    const next = String(url || "").trim();
+    if (!next) return false;
+    try {
+      if (next.startsWith("/") && !next.startsWith("//")) {
+        if (next.split("?")[0] === location.pathname) return false;
+        location.replace(next);
+        return true;
+      }
+      const u = new URL(next, location.origin);
+      if (u.origin !== location.origin) return false;
+      if (u.pathname === location.pathname && u.search === location.search) return false;
+      location.replace(u.pathname + u.search + u.hash);
+      return true;
+    } catch {
+      return false;
+    }
+  }
   function postEvent(name, params) {
     if (!ALLOWED.includes(name)) return;
-    const cfg = window.ATAVGa4?.cfg;
-    if (cfg?.consent_required && !consent()) return;
-    if (localStorage.getItem(CONSENT) === "denied") return;
+    if (denied()) return;
     const body = {
       event_name: name,
       page_path: location.pathname,
@@ -57,27 +85,38 @@
       window.gtag("event", name, safe);
     }
   }
-  function loadGtag(id) {
-    if (!id || window.gtag) return;
+  function loadGtag(id, granted) {
+    if (!id) return;
     window.dataLayer = window.dataLayer || [];
-    window.gtag = function () { window.dataLayer.push(arguments); };
-    window.gtag("js", new Date());
-    window.gtag("config", id, { anonymize_ip: true });
-    const s = document.createElement("script");
-    s.async = true;
-    s.src = "https://www.googletagmanager.com/gtag/js?id=" + encodeURIComponent(id);
-    document.head.appendChild(s);
+    if (!window.gtag) {
+      window.gtag = function () { window.dataLayer.push(arguments); };
+      window.gtag("consent", "default", {
+        analytics_storage: granted ? "granted" : "denied",
+        ad_storage: "denied",
+        ad_user_data: "denied",
+        ad_personalization: "denied",
+        wait_for_update: 500,
+      });
+      window.gtag("js", new Date());
+      window.gtag("config", id, { anonymize_ip: true, send_page_view: true });
+      const s = document.createElement("script");
+      s.async = true;
+      s.src = "https://www.googletagmanager.com/gtag/js?id=" + encodeURIComponent(id);
+      document.head.appendChild(s);
+      return;
+    }
+    if (granted) {
+      window.gtag("consent", "update", { analytics_storage: "granted" });
+    }
   }
   function banner(cfg) {
+    const id = cfg.measurement_id;
+    if (id) loadGtag(id, !cfg.consent_required || consent());
     if (!cfg.consent_required) {
       localStorage.setItem(CONSENT, "granted");
-      if (cfg.measurement_id) loadGtag(cfg.measurement_id);
       return;
     }
-    if (consent()) {
-      if (cfg.measurement_id) loadGtag(cfg.measurement_id);
-      return;
-    }
+    if (consent() || denied()) return;
     if (document.getElementById("ga-consent")) return;
     const el = document.createElement("div");
     el.id = "ga-consent";
@@ -95,7 +134,7 @@
       localStorage.setItem(CONSENT, a === "yes" ? "granted" : "denied");
       el.remove();
       if (a === "yes") {
-        if (cfg.measurement_id) loadGtag(cfg.measurement_id);
+        if (id) loadGtag(id, true);
         postEvent("page_view", { page_type: "landing_page" });
       }
     };
@@ -142,6 +181,28 @@
       }
     }, { passive: true });
   }
+  async function applySeo() {
+    try {
+      const res = await fetch("/api/seo/public");
+      if (res.ok) {
+        const seo = await res.json();
+        applyMeta("google-site-verification", seo.google_site_verification);
+        applyMeta("msvalidate.01", seo.bing_verification);
+      }
+    } catch {
+      /* offline */
+    }
+    try {
+      const res = await fetch("/api/seo/redirects?url=" + encodeURIComponent(location.pathname + location.search));
+      if (res.ok) {
+        const row = await res.json();
+        if (row && safeRedirect(row.new_url)) return true;
+      }
+    } catch {
+      /* offline */
+    }
+    return false;
+  }
   async function boot() {
     let cfg = { measurement_id: "", consent_required: true, connected: false };
     try {
@@ -152,8 +213,9 @@
     }
     banner(cfg);
     window.ATAVGa4.cfg = cfg;
+    if (await applySeo()) return;
     bindCtas();
-    if (!(cfg.consent_required && !consent())) {
+    if (!denied()) {
       postEvent("page_view", { page_type: "landing_page" });
       if (location.hash === "#pricing" || location.pathname.includes("pricing")) postEvent("pricing_view", {});
       if (location.hash === "#features") postEvent("feature_view", {});

@@ -144,6 +144,10 @@ PHP
   api/master/backup/restore/index.php
   api/master/backup/platform/index.php
   api/master/backup/platform/restore/index.php
+  api/analytics/config/index.php
+  api/analytics/event/index.php
+  api/seo/public/index.php
+  api/seo/redirects/index.php
   api/login-page/index.php
   api/master/login-page/index.php
   api/master/login-page/publish/index.php

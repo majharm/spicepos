@@ -2514,6 +2514,10 @@ function pos_php_dispatch($path, $method, $rawBody) {
       require_once __DIR__ . "/pos-analytics.php";
       if (function_exists("pos_analytics_public_dispatch") && pos_analytics_public_dispatch($path, $method, $body)) return;
     }
+    if (strpos($path, "seo/") === 0) {
+      require_once __DIR__ . "/pos-seo.php";
+      if (function_exists("pos_seo_public_dispatch") && pos_seo_public_dispatch($path, $method, $body)) return;
+    }
     if ($path === "login-page") {
       require_once __DIR__ . "/pos-login-page.php";
       if (function_exists("pos_login_page_public_dispatch") && pos_login_page_public_dispatch($path, $method, $body)) return;

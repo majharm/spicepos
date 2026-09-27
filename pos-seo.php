@@ -4,7 +4,70 @@ function pos_seo_categories() {
 }
 
 function pos_default_robots() {
-  return "User-agent: *\nAllow: /\nAllow: /about.html\nAllow: /home.html\nDisallow: /index.html\nDisallow: /login.html\nDisallow: /master.html\nDisallow: /setup.html\nDisallow: /api/\nDisallow: /server/\nDisallow: /pos-data/\n";
+  return "User-agent: *\nAllow: /\nAllow: /about.html\nDisallow: /home.html\nDisallow: /index.html\nDisallow: /login.html\nDisallow: /master.html\nDisallow: /setup.html\nDisallow: /api/\nDisallow: /server/\nDisallow: /pos-data/\n\nSitemap: https://pos.atavtelecom.in/sitemap.xml\n";
+}
+
+function pos_seo_with_sitemap($txt) {
+  $txt = trim((string) $txt);
+  if ($txt === "") $txt = pos_default_robots();
+  if (!preg_match("/sitemap:\\s*https?:\\/\\//i", $txt)) {
+    $txt = rtrim($txt) . "\n\nSitemap: https://pos.atavtelecom.in/sitemap.xml\n";
+  }
+  return $txt;
+}
+
+function pos_seo_write_verification($google, $bing) {
+  $google = preg_replace("/[^A-Za-z0-9_-]/", "", (string) $google);
+  $bing = preg_replace("/[^A-Za-z0-9_-]/", "", (string) $bing);
+  foreach (["home.html", "about.html"] as $file) {
+    $path = __DIR__ . "/" . $file;
+    if (!is_file($path) || !is_writable($path)) continue;
+    $html = (string) file_get_contents($path);
+    $html = preg_replace('/\\s*<meta name="google-site-verification" content="[^"]*"\\s*\\/?>/i', "", $html);
+    $html = preg_replace('/\\s*<meta name="msvalidate\\.01" content="[^"]*"\\s*\\/?>/i', "", $html);
+    $inject = "";
+    if ($google !== "") $inject .= "\n    <meta name=\"google-site-verification\" content=\"" . $google . "\" />";
+    if ($bing !== "") $inject .= "\n    <meta name=\"msvalidate.01\" content=\"" . $bing . "\" />";
+    if ($inject !== "") {
+      $html = preg_replace('/<meta name="viewport"[^>]*>/i', "$0" . $inject, $html, 1);
+    }
+    @file_put_contents($path, $html);
+  }
+}
+
+function pos_seo_public_payload() {
+  pos_ensure_seo_schema();
+  $rows = pos_q("SELECT site_title, default_description, default_keywords, default_og_image, default_canonical, default_schema, google_site_verification, bing_verification FROM seo_settings WHERE id='platform' LIMIT 1");
+  $row = $rows[0] ?? [];
+  return [
+    "site_title" => (string) ($row["site_title"] ?? "ATAV POS"),
+    "default_description" => (string) ($row["default_description"] ?? ""),
+    "default_keywords" => (string) ($row["default_keywords"] ?? ""),
+    "default_og_image" => (string) ($row["default_og_image"] ?? ""),
+    "default_canonical" => (string) ($row["default_canonical"] ?? "https://pos.atavtelecom.in/"),
+    "default_schema" => (string) ($row["default_schema"] ?? "SoftwareApplication"),
+    "google_site_verification" => (string) ($row["google_site_verification"] ?? ""),
+    "bing_verification" => (string) ($row["bing_verification"] ?? ""),
+    "php" => true,
+  ];
+}
+
+function pos_seo_public_dispatch($path, $method, $body) {
+  pos_ensure_seo_schema();
+  if ($path === "seo/public" && $method === "GET") {
+    pos_send(200, pos_seo_public_payload());
+    return true;
+  }
+  if ($path === "seo/redirects" && $method === "GET") {
+    $url = substr((string) ($_GET["url"] ?? ""), 0, 255);
+    $rows = $url !== "" ? pos_q("SELECT id, old_url, new_url, redirect_type, status FROM seo_redirects WHERE old_url = ? AND status='active' LIMIT 1", "s", [$url]) : [];
+    if ($rows && !empty($rows[0]["id"])) {
+      pos_q("UPDATE seo_redirects SET hit_count = hit_count + 1 WHERE id = ?", "s", [$rows[0]["id"]]);
+    }
+    pos_send(200, $rows[0] ?? null);
+    return true;
+  }
+  return false;
 }
 
 function pos_ensure_seo_schema() {
@@ -295,22 +358,32 @@ function pos_seo_master_dispatch($path, $method, $body) {
     return true;
   }
   if ($path === "master/seo/settings" && $method === "POST") {
+    $google = (string) ($body["google_site_verification"] ?? "");
+    $bing = (string) ($body["bing_verification"] ?? "");
     pos_q(
       "UPDATE seo_settings SET site_title=?, default_description=?, default_keywords=?, default_og_image=?, default_canonical=?, default_schema=?, google_site_verification=?, bing_verification=?, updated_at=CURRENT_TIMESTAMP(3) WHERE id='platform'",
       "ssssssss",
       [
         (string) ($body["site_title"] ?? ""), (string) ($body["default_description"] ?? ""), (string) ($body["default_keywords"] ?? ""),
         (string) ($body["default_og_image"] ?? ""), (string) ($body["default_canonical"] ?? ""), (string) ($body["default_schema"] ?? ""),
-        (string) ($body["google_site_verification"] ?? ""), (string) ($body["bing_verification"] ?? ""),
+        $google, $bing,
       ]
     );
+    pos_seo_write_verification($google, $bing);
     pos_send(200, ["ok" => true, "php" => true]);
     return true;
   }
   if ($path === "master/seo/sitemap/generate" && $method === "POST") {
-    $pages = pos_q("SELECT url FROM seo_pages WHERE publish_status='published' AND index_status <> 'noindex'");
-    $xml = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n  <url><loc>https://pos.atavtelecom.in/</loc></url>\n  <url><loc>https://pos.atavtelecom.in/about.html</loc></url>\n";
-    foreach ($pages as $p) $xml .= "  <url><loc>https://pos.atavtelecom.in" . htmlspecialchars($p["url"]) . "</loc></url>\n";
+    $pages = pos_q("SELECT url, updated_at FROM seo_pages WHERE publish_status='published' AND index_status <> 'noindex'");
+    $today = gmdate("Y-m-d");
+    $xml = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n";
+    $xml .= "  <url><loc>https://pos.atavtelecom.in/</loc><lastmod>{$today}</lastmod><changefreq>weekly</changefreq><priority>1.0</priority></url>\n";
+    $xml .= "  <url><loc>https://pos.atavtelecom.in/about.html</loc><lastmod>{$today}</lastmod><changefreq>monthly</changefreq><priority>0.8</priority></url>\n";
+    foreach ($pages as $p) {
+      $loc = htmlspecialchars((string) $p["url"], ENT_XML1);
+      $mod = substr((string) ($p["updated_at"] ?? $today), 0, 10) ?: $today;
+      $xml .= "  <url><loc>https://pos.atavtelecom.in{$loc}</loc><lastmod>{$mod}</lastmod></url>\n";
+    }
     $xml .= "</urlset>\n";
     @file_put_contents(__DIR__ . "/sitemap.xml", $xml);
     pos_q("UPDATE seo_settings SET sitemap_xml=?, updated_at=CURRENT_TIMESTAMP(3) WHERE id='platform'", "s", [$xml]);
@@ -318,7 +391,7 @@ function pos_seo_master_dispatch($path, $method, $body) {
     return true;
   }
   if ($path === "master/seo/robots" && $method === "POST") {
-    $txt = (string) ($body["robots_txt"] ?? pos_default_robots());
+    $txt = pos_seo_with_sitemap((string) ($body["robots_txt"] ?? pos_default_robots()));
     if (!preg_match("/disallow:\\s*\\/api/i", $txt)) pos_send(400, ["error" => "robots.txt must Disallow /api/ so the POS application is not indexed."]);
     @file_put_contents(__DIR__ . "/robots.txt", $txt);
     pos_q("UPDATE seo_settings SET robots_txt=?, updated_at=CURRENT_TIMESTAMP(3) WHERE id='platform'", "s", [$txt]);

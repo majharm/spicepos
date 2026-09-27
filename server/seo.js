@@ -26,7 +26,7 @@ export const RESERVED_SLUGS = new Set([
 export const DEFAULT_ROBOTS = `User-agent: *
 Allow: /
 Allow: /about.html
-Allow: /home.html
+Disallow: /home.html
 Disallow: /index.html
 Disallow: /login.html
 Disallow: /master.html
@@ -34,7 +34,33 @@ Disallow: /setup.html
 Disallow: /api/
 Disallow: /server/
 Disallow: /pos-data/
+
+Sitemap: https://pos.atavtelecom.in/sitemap.xml
 `;
+
+export function withSitemapLine(txt) {
+  const body = String(txt || "").trim() || DEFAULT_ROBOTS;
+  if (/sitemap:\s*https?:\/\//i.test(body)) return body.endsWith("\n") ? body : `${body}\n`;
+  return `${body.replace(/\s+$/, "")}\n\nSitemap: https://pos.atavtelecom.in/sitemap.xml\n`;
+}
+
+export function writeVerificationMeta(google, bing) {
+  const clean = (v) => String(v || "").replace(/[^A-Za-z0-9_-]/g, "");
+  const g = clean(google);
+  const b = clean(bing);
+  for (const file of ["home.html", "about.html"]) {
+    const target = path.join(root, file);
+    if (!fs.existsSync(target)) continue;
+    let html = fs.readFileSync(target, "utf8");
+    html = html.replace(/\s*<meta name="google-site-verification" content="[^"]*"\s*\/?>/gi, "");
+    html = html.replace(/\s*<meta name="msvalidate\.01" content="[^"]*"\s*\/?>/gi, "");
+    let inject = "";
+    if (g) inject += `\n    <meta name="google-site-verification" content="${g}" />`;
+    if (b) inject += `\n    <meta name="msvalidate.01" content="${b}" />`;
+    if (inject) html = html.replace(/(<meta name="viewport"[^>]*>)/i, `$1${inject}`);
+    fs.writeFileSync(target, html, "utf8");
+  }
+}
 
 function uid() {
   return crypto.randomUUID();
@@ -587,16 +613,20 @@ async function usage() {
 async function generateSitemap() {
   await ensureSeoSchema();
   const pages = await query("SELECT url, updated_at, index_status, publish_status FROM seo_pages");
-  const staticUrls = ["/", "/about.html"];
+  const today = new Date().toISOString().slice(0, 10);
+  const staticUrls = [
+    { loc: "https://pos.atavtelecom.in/", lastmod: today, changefreq: "weekly", priority: "1.0" },
+    { loc: "https://pos.atavtelecom.in/about.html", lastmod: today, changefreq: "monthly", priority: "0.8" },
+  ];
   const urls = [
-    ...staticUrls.map((u) => ({ loc: `https://pos.atavtelecom.in${u}`, lastmod: new Date().toISOString().slice(0, 10) })),
+    ...staticUrls,
     ...pages
       .filter((p) => p.publish_status === "published" && p.index_status !== "noindex")
-      .map((p) => ({ loc: `https://pos.atavtelecom.in${p.url}`, lastmod: String(p.updated_at || "").slice(0, 10) })),
+      .map((p) => ({ loc: `https://pos.atavtelecom.in${p.url}`, lastmod: String(p.updated_at || "").slice(0, 10) || today })),
   ];
   const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-${urls.map((u) => `  <url><loc>${u.loc}</loc><lastmod>${u.lastmod || ""}</lastmod></url>`).join("\n")}
+${urls.map((u) => `  <url><loc>${u.loc}</loc><lastmod>${u.lastmod || today}</lastmod>${u.changefreq ? `<changefreq>${u.changefreq}</changefreq>` : ""}${u.priority ? `<priority>${u.priority}</priority>` : ""}</url>`).join("\n")}
 </urlset>
 `;
   fs.writeFileSync(path.join(root, "sitemap.xml"), xml, "utf8");
@@ -605,7 +635,7 @@ ${urls.map((u) => `  <url><loc>${u.loc}</loc><lastmod>${u.lastmod || ""}</lastmo
 }
 
 async function saveRobots(body) {
-  const txt = clip(body.robots_txt || DEFAULT_ROBOTS, 8000) || DEFAULT_ROBOTS;
+  const txt = withSitemapLine(clip(body.robots_txt || DEFAULT_ROBOTS, 8000) || DEFAULT_ROBOTS);
   if (!/disallow:\s*\/api/i.test(txt)) {
     throw new Error("robots.txt must Disallow /api/ so the POS application is not indexed.");
   }
@@ -788,6 +818,7 @@ export function registerSeoMaster(app) {
           clip(req.body?.google_site_verification, 128), clip(req.body?.bing_verification, 128),
         ],
       );
+      writeVerificationMeta(req.body?.google_site_verification, req.body?.bing_verification);
       return { ok: true };
     }),
   );
@@ -809,7 +840,7 @@ export function registerSeoPublic(app) {
     try {
       await ensureSeoSchema();
       const [row] = await query("SELECT robots_txt FROM seo_settings WHERE id='platform' LIMIT 1");
-      res.type("text/plain").send(row?.robots_txt || DEFAULT_ROBOTS);
+      res.type("text/plain").send(withSitemapLine(row?.robots_txt || DEFAULT_ROBOTS));
     } catch {
       res.type("text/plain").send(DEFAULT_ROBOTS);
     }
@@ -823,11 +854,43 @@ export function registerSeoPublic(app) {
       res.type("application/xml").send(`<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"></urlset>`);
     }
   });
+  app.get("/api/seo/public", async (_req, res) => {
+    try {
+      await ensureSeoSchema();
+      const [row] = await query(
+        "SELECT site_title, default_description, default_keywords, default_og_image, default_canonical, default_schema, google_site_verification, bing_verification FROM seo_settings WHERE id='platform' LIMIT 1",
+      );
+      res.json({
+        site_title: row?.site_title || "ATAV POS",
+        default_description: row?.default_description || "",
+        default_keywords: row?.default_keywords || "",
+        default_og_image: row?.default_og_image || "",
+        default_canonical: row?.default_canonical || "https://pos.atavtelecom.in/",
+        default_schema: row?.default_schema || "SoftwareApplication",
+        google_site_verification: row?.google_site_verification || "",
+        bing_verification: row?.bing_verification || "",
+      });
+    } catch {
+      res.json({
+        site_title: "ATAV POS",
+        default_description: "",
+        default_keywords: "",
+        default_og_image: "",
+        default_canonical: "https://pos.atavtelecom.in/",
+        default_schema: "SoftwareApplication",
+        google_site_verification: "",
+        bing_verification: "",
+      });
+    }
+  });
   app.get("/api/seo/redirects", async (req, res) => {
     try {
       await ensureSeoSchema();
       const url = clip(req.query.url, 255);
-      const [row] = await query("SELECT * FROM seo_redirects WHERE old_url = ? AND status='active' LIMIT 1", [url]);
+      const [row] = await query("SELECT id, old_url, new_url, redirect_type, status FROM seo_redirects WHERE old_url = ? AND status='active' LIMIT 1", [url]);
+      if (row?.id) {
+        await query("UPDATE seo_redirects SET hit_count = hit_count + 1 WHERE id = ?", [row.id]).catch(() => {});
+      }
       res.json(row || null);
     } catch (err) {
       res.status(400).json({ error: String(err.message) });
