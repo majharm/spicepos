@@ -417,6 +417,7 @@ function pos_ensure_i18n_columns() {
     "payment_qr_url" => "MEDIUMTEXT NULL",
     "payment_upi" => "VARCHAR(160) NULL",
     "dining_tables_json" => "TEXT NULL",
+    "pos_counters_json" => "TEXT NULL",
     "table_shifting_enabled" => "TINYINT(1) NOT NULL DEFAULT 0",
     "quick_add_enabled" => "TINYINT(1) NOT NULL DEFAULT 1",
     "low_stock_threshold" => "INT NOT NULL DEFAULT 5",
@@ -428,6 +429,61 @@ function pos_ensure_i18n_columns() {
   pos_ensure_columns("customers", ["locale" => "VARCHAR(16) NULL", "address" => "VARCHAR(500) NULL", "doctor_rx" => "VARCHAR(180) NULL"]);
   pos_ensure_columns("items", ["local_name" => "VARCHAR(255) NULL"]);
   pos_ensure_columns("notifications", ["locale" => "VARCHAR(16) NULL"]);
+}
+
+function pos_clip_pos_counter_id($raw) {
+  $id = strtolower(trim((string) $raw));
+  $id = preg_replace("/\s+/", "-", $id);
+  $id = preg_replace("/[^a-z0-9_-]/", "", $id);
+  $id = preg_replace("/-+/", "-", $id);
+  $id = trim($id, "-");
+  return substr($id, 0, 32);
+}
+
+function pos_clip_pos_counters_json($raw) {
+  if (is_array($raw)) {
+    $parsed = $raw;
+  } else {
+    $parsed = json_decode((string) $raw, true);
+  }
+  $rows = [];
+  if (is_array($parsed)) {
+    if (isset($parsed["counters"]) && is_array($parsed["counters"])) $rows = $parsed["counters"];
+    else $rows = $parsed;
+  }
+  $counters = [];
+  $seen = [];
+  foreach (array_slice($rows, 0, 16) as $row) {
+    if (is_string($row) || is_numeric($row)) {
+      $name = trim((string) $row);
+      $id = pos_clip_pos_counter_id($name);
+      $status = "active";
+      $operator = "";
+    } else {
+      $name = trim((string) ($row["name"] ?? $row["id"] ?? ""));
+      $id = pos_clip_pos_counter_id($row["id"] ?? $name);
+      $status = strtolower((string) ($row["status"] ?? "active")) === "inactive" ? "inactive" : "active";
+      $operator = substr(trim((string) ($row["operator_id"] ?? $row["operatorId"] ?? "")), 0, 64);
+    }
+    $name = substr($name, 0, 48);
+    if ($id === "") continue;
+    if (isset($seen[$id])) {
+      $n = 2;
+      while (isset($seen[$id . "-" . $n])) $n++;
+      $id = substr($id . "-" . $n, 0, 32);
+    }
+    $seen[$id] = true;
+    if ($name === "") $name = $id;
+    $counters[] = ["id" => $id, "name" => $name, "status" => $status, "operator_id" => $operator];
+  }
+  if (!$counters) {
+    $counters = [
+      ["id" => "c1", "name" => "Counter 1", "status" => "active", "operator_id" => ""],
+      ["id" => "c2", "name" => "Counter 2", "status" => "active", "operator_id" => ""],
+      ["id" => "c3", "name" => "Counter 3", "status" => "active", "operator_id" => ""],
+    ];
+  }
+  return json_encode(["counters" => $counters], JSON_UNESCAPED_UNICODE);
 }
 
 function pos_clip_floor_id($raw) {

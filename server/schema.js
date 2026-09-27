@@ -93,6 +93,7 @@ export async function ensureSchema() {
   await addColumn("company_settings", "payment_qr_url", "MEDIUMTEXT NULL");
   await addColumn("company_settings", "payment_upi", "VARCHAR(160) NULL");
   await addColumn("company_settings", "dining_tables_json", "TEXT NULL");
+  await addColumn("company_settings", "pos_counters_json", "TEXT NULL");
   await addColumn("company_settings", "table_shifting_enabled", "TINYINT(1) NOT NULL DEFAULT 0");
   await addColumn("company_settings", "quick_add_enabled", "TINYINT(1) NOT NULL DEFAULT 1");
   await addColumn("company_settings", "low_stock_threshold", "INT NOT NULL DEFAULT 5");
