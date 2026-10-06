@@ -3,7 +3,7 @@ import "../js/units.js";
 import "../js/footwear.js";
 import { query, withTransaction } from "./db.js";
 import { bid, authUser } from "./context.js";
-import { recordCreditPurchase, reverseCreditSale, recomputeCustomerOutstanding, settleCustomerInvoice, invoiceOpenDueByCustomer, hydrateCustomerOutstandingRows } from "./accounts.js";
+import { recordCreditPurchase, reverseCreditSale, recomputeCustomerOutstanding, settleCustomerInvoice, invoiceOpenDueByCustomer, hydrateCustomerOutstandingRows, persistHydratedOutstanding } from "./accounts.js";
 import { postPurchaseJournal, deleteJournalRef } from "./accounting.js";
 import { audit } from "./audit.js";
 import { onItemSaved, onPurchaseLineSaved, pharmacyLineSnapshot, computeSaleLine, saleStockQty, persistSaleLineNote, reverseLoyaltyOnSale } from "./advanced.js";
@@ -296,7 +296,9 @@ export function registerCrud(app) {
     try {
       const rows = await query("SELECT * FROM customers WHERE business_id = ? ORDER BY name", [bid()]);
       const dues = await invoiceOpenDueByCustomer(bid());
-      res.json(hydrateCustomerOutstandingRows(rows, dues));
+      const customers = hydrateCustomerOutstandingRows(rows, dues);
+      void persistHydratedOutstanding(customers, rows).catch(() => {});
+      res.json(customers);
     } catch (err) {
       res.status(500).json({ error: String(err.message) });
     }

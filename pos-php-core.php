@@ -2047,10 +2047,11 @@ function pos_hydrate_customer_outstanding_rows($businessId, $customers) {
       $c["outstanding"] = 0;
       continue;
     }
+    $cid = (string) ($c["id"] ?? "");
+    if ($cid === "" || !array_key_exists($cid, $dues)) continue;
     $have = (float) ($c["outstanding"] ?? 0);
-    $inv = (float) ($dues[(string) ($c["id"] ?? "")] ?? 0);
-    $next = pos_round2(max($have, $inv));
-    if ($next > $have + 0.009) {
+    $next = pos_round2(max(0, (float) $dues[$cid]));
+    if (abs($next - $have) > 0.009) {
       $c["outstanding"] = $next;
       try {
         pos_q("UPDATE customers SET outstanding = ? WHERE id = ? AND business_id = ?", "dss", [$next, $c["id"], $businessId]);
@@ -2115,14 +2116,14 @@ function pos_recompute_customer_outstanding($businessId, $customerId) {
   $next = pos_round2(max(0, $billed - $received));
   try {
     $inv = pos_q(
-      "SELECT COALESCE(SUM(" . pos_invoice_open_remainder_sql() . "), 0) AS open_due
+      "SELECT COUNT(*) AS n, COALESCE(SUM(" . pos_invoice_open_remainder_sql() . "), 0) AS open_due
        FROM sales_orders
        WHERE business_id = ? AND customer_id = ?
          AND LOWER(TRIM(COALESCE(status,'confirmed'))) <> 'cancelled'",
       "ss",
       [$businessId, $customerId]
     );
-    $next = pos_round2(max($next, (float) ($inv[0]["open_due"] ?? 0)));
+    if ((int) ($inv[0]["n"] ?? 0) > 0) $next = pos_round2((float) ($inv[0]["open_due"] ?? 0));
   } catch (Exception $e) { /* amount_paid optional */ }
   pos_q("UPDATE customers SET outstanding = ? WHERE id = ? AND business_id = ?", "dss", [$next, $customerId, $businessId]);
   return $next;
@@ -2170,10 +2171,12 @@ function pos_recompute_business_outstanding_set($businessId) {
        LEFT JOIN ({$billed}) billed ON billed.id = c.id
        LEFT JOIN ({$received}) rcp ON rcp.id = c.id
        LEFT JOIN ({$invoice}) inv ON inv.id = c.id
-       SET c.outstanding = ROUND(GREATEST(0, GREATEST(
-         COALESCE(billed.billed, 0) - COALESCE(rcp.received, 0),
-         COALESCE(inv.open_due, 0)
-       )), 2)
+       SET c.outstanding = ROUND(GREATEST(0,
+         CASE
+           WHEN inv.id IS NOT NULL THEN COALESCE(inv.open_due, 0)
+           ELSE GREATEST(0, COALESCE(billed.billed, 0) - COALESCE(rcp.received, 0))
+         END
+       ), 2)
        WHERE c.business_id = ?
          AND c.code <> 'CUS-001'
          AND LOWER(TRIM(c.name)) NOT IN ('walk-in','walkin')",
