@@ -8,6 +8,7 @@ import { query, withTransaction } from "./db.js";
 import { bid, branchId, authUser } from "./context.js";
 import { lineAmount, round2, registerCrud, itemBillName } from "./crud.js";
 import { fyRangeForToday } from "./fy.js";
+import { createdToday } from "./sql-time.js";
 import { buildReports, reportsToSheets } from "./reports.js";
 import { buildGrowthDashboard, answerGrowthQuestion, growthToSheets } from "./growth.js";
 import { listCombos, createCombo } from "./combos.js";
@@ -278,22 +279,35 @@ async function listCatalogItems(businessId) {
 app.get("/api/bootstrap", requireStaff, async (_req, res) => {
   try {
     const businessId = bid();
-    const [company] = await query(
-      "SELECT * FROM company_settings WHERE business_id = ? LIMIT 1",
-      [businessId],
-    );
-    const [business] = await query("SELECT * FROM businesses WHERE id = ?", [businessId]);
-    const items = await listCatalogItems(businessId);
-    const customerRows = await query(
-      "SELECT * FROM customers WHERE business_id = ? ORDER BY name",
-      [businessId],
-    );
-    const dues = await invoiceOpenDueByCustomer(businessId);
-    const customers = hydrateCustomerOutstandingRows(customerRows, dues);
-    const packs = await query(
-      "SELECT * FROM packs WHERE business_id = ? ORDER BY name",
-      [businessId],
-    );
+    const [
+      companyRows,
+      businessRows,
+      items,
+      customerRows,
+      packs,
+      notes,
+      units,
+      combos,
+      offers,
+      offerSettings,
+    ] = await Promise.all([
+      query("SELECT * FROM company_settings WHERE business_id = ? LIMIT 1", [businessId]),
+      query("SELECT * FROM businesses WHERE id = ?", [businessId]),
+      listCatalogItems(businessId),
+      query("SELECT * FROM customers WHERE business_id = ? ORDER BY name", [businessId]),
+      query("SELECT * FROM packs WHERE business_id = ? ORDER BY name", [businessId]),
+      query(
+        `SELECT id, title, body, image_url, created_at FROM notifications
+         WHERE business_id IS NULL OR business_id = '' OR business_id = ? ORDER BY created_at DESC LIMIT 8`,
+        [businessId],
+      ),
+      ensureInventoryUnits(businessId).catch(() => []),
+      listCombos(businessId).catch(() => []),
+      listOffers(businessId).catch(() => []),
+      getPromoSettings(businessId).catch(() => ({ stacking: "product_and_bill" })),
+    ]);
+    const [company] = companyRows;
+    const [business] = businessRows;
     const packItems = packs.length
       ? await query(
           `SELECT pi.*, i.name AS spice_name, i.local_name, i.code AS item_code
@@ -304,32 +318,25 @@ app.get("/api/bootstrap", requireStaff, async (_req, res) => {
           packs.map((p) => p.id),
         )
       : [];
-    const notes = await query(
-      `SELECT id, title, body, image_url, created_at FROM notifications
-       WHERE business_id IS NULL OR business_id = '' OR business_id = ? ORDER BY created_at DESC LIMIT 8`,
-      [businessId],
-    );
-    let units = [];
-    try {
-      units = await ensureInventoryUnits(businessId);
-    } catch {
-      units = [];
-    }
+    const [dues, planRows, support] = await Promise.all([
+      invoiceOpenDueByCustomer(businessId),
+      business?.plan_id
+        ? query(
+            "SELECT id, code, name, fee_monthly, max_branches, max_users, max_devices FROM subscription_plans WHERE id = ?",
+            [business.plan_id],
+          )
+        : Promise.resolve([]),
+      shopSupportContact(businessId),
+    ]);
+    const customers = hydrateCustomerOutstandingRows(customerRows, dues);
     res.json({
       company: {
         ...attachInvoiceText(company, business),
         ...companyTimezone(company || {}),
       },
       business,
-      plan: business?.plan_id
-        ? (
-            await query(
-              "SELECT id, code, name, fee_monthly, max_branches, max_users, max_devices FROM subscription_plans WHERE id = ?",
-              [business.plan_id],
-            )
-          )[0] || null
-        : null,
-      support: await shopSupportContact(businessId),
+      plan: planRows[0] || null,
+      support,
       notes,
       items,
       units,
@@ -338,9 +345,9 @@ app.get("/api/bootstrap", requireStaff, async (_req, res) => {
         ...p,
         items: packItems.filter((row) => row.pack_id === p.id),
       })),
-      combos: await listCombos(businessId).catch(() => []),
-      offers: await listOffers(businessId).catch(() => []),
-      offerSettings: await getPromoSettings(businessId).catch(() => ({ stacking: "product_and_bill" })),
+      combos,
+      offers,
+      offerSettings,
     });
     void tickShopAlerts(businessId).catch((err) => console.error("shop alert tick failed:", err.message));
   } catch (err) {
@@ -440,7 +447,7 @@ app.get("/api/today", requireStaff, async (_req, res) => {
               COALESCE(SUM(total),0) AS takings,
               COALESCE(SUM(gst),0) AS gst
        FROM sales_orders
-       WHERE business_id = ? AND DATE(created_at) = CURDATE()`,
+       WHERE business_id = ? AND ${createdToday()}`,
       [bid()],
     );
     res.json({ today: today || { bills: 0, takings: 0, gst: 0 } });

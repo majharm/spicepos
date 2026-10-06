@@ -23,6 +23,7 @@ import {
   partyLedgerSignedAmount,
 } from "./accounting.js";
 import { fyRangeForToday } from "./fy.js";
+import { createdBetween, createdBeforeDay } from "./sql-time.js";
 
 function payMoney(raw) {
   const method = globalThis.POSPay?.normalize?.(raw) || String(raw || "cash").toLowerCase();
@@ -516,8 +517,70 @@ export async function recomputeCustomerOutstanding(conn, customerId) {
 }
 
 export async function recomputeBusinessOutstanding(conn) {
-  const [rows] = await execSql(conn, "SELECT id FROM customers WHERE business_id = ?", [bid()]);
-  for (const row of rows) await recomputeCustomerOutstanding(conn, row.id);
+  try {
+    await recomputeBusinessOutstandingSetBased(conn);
+  } catch {
+    /* stored outstanding is maintained on each sale/receipt */
+  }
+}
+
+async function recomputeBusinessOutstandingSetBased(conn) {
+  const businessId = bid();
+  await execSql(
+    conn,
+    `UPDATE customers SET outstanding = 0
+     WHERE business_id = ?
+       AND (code = 'CUS-001' OR LOWER(TRIM(name)) IN ('walk-in','walkin'))`,
+    [businessId],
+  );
+  const billedJoin = `SELECT l.party_id AS id, COALESCE(SUM(l.amount),0) AS billed
+       FROM account_ledger l
+       LEFT JOIN sales_orders o ON o.id = l.reference_id AND o.business_id = l.business_id
+       WHERE l.business_id = ? AND l.party_type = 'customer' AND l.entry_type = 'sale_credit'
+         AND (o.id IS NULL OR LOWER(TRIM(COALESCE(o.status,'confirmed'))) <> 'cancelled')
+       GROUP BY l.party_id`;
+  const receivedJoin = `SELECT l.party_id AS id, COALESCE(SUM(l.amount),0) AS received
+       FROM account_ledger l
+       LEFT JOIN sales_orders o ON o.id = l.reference_id AND o.business_id = l.business_id
+       WHERE l.business_id = ? AND l.party_type = 'customer' AND l.entry_type = 'receipt'
+         AND (
+           l.reference_id IS NULL OR l.reference_type <> 'sales_order'
+           OR LOWER(TRIM(COALESCE(o.status,'confirmed'))) <> 'cancelled'
+         )
+       GROUP BY l.party_id`;
+  const invoiceJoin = `SELECT customer_id AS id,
+            COALESCE(SUM(GREATEST(0, COALESCE(total,0) - COALESCE(amount_paid,0))), 0) AS open_due
+     FROM sales_orders
+     WHERE business_id = ? AND LOWER(TRIM(COALESCE(status,'confirmed'))) <> 'cancelled'
+     GROUP BY customer_id`;
+  try {
+    await execSql(
+      conn,
+      `UPDATE customers c
+       LEFT JOIN (${billedJoin}) billed ON billed.id = c.id
+       LEFT JOIN (${receivedJoin}) rcp ON rcp.id = c.id
+       LEFT JOIN (${invoiceJoin}) inv ON inv.id = c.id
+       SET c.outstanding = ROUND(GREATEST(0, GREATEST(
+         COALESCE(billed.billed, 0) - COALESCE(rcp.received, 0),
+         COALESCE(inv.open_due, 0)
+       )), 2)
+       WHERE c.business_id = ?
+         AND c.code <> 'CUS-001'
+         AND LOWER(TRIM(c.name)) NOT IN ('walk-in','walkin')`,
+      [businessId, businessId, businessId, businessId],
+    );
+  } catch {
+    await execSql(
+      conn,
+      `UPDATE customers c
+       LEFT JOIN (${invoiceJoin}) inv ON inv.id = c.id
+       SET c.outstanding = ROUND(GREATEST(0, COALESCE(inv.open_due, 0)), 2)
+       WHERE c.business_id = ?
+         AND c.code <> 'CUS-001'
+         AND LOWER(TRIM(c.name)) NOT IN ('walk-in','walkin')`,
+      [businessId, businessId],
+    );
+  }
 }
 
 export async function recordCreditPurchase(conn, { supplier, total, purchaseId, purchaseNumber, method }) {
@@ -614,7 +677,7 @@ export function registerAccounts(app) {
       const to = req.query.to || from;
       const partyType = String(req.query.party_type || "").trim().toLowerCase();
       const partyId = String(req.query.party_id || "").trim();
-      const filters = ["business_id = ?", "DATE(created_at) BETWEEN ? AND ?"];
+      const filters = ["business_id = ?", createdBetween()];
       const params = [bid(), from, to];
       if ((partyType === "customer" || partyType === "supplier") && partyId) {
         filters.push("party_type = ?", "party_id = ?");
@@ -649,7 +712,7 @@ export function registerAccounts(app) {
       const to = req.query.to || from;
       const prior = await query(
         `SELECT entry_type, amount FROM account_ledger
-         WHERE business_id = ? AND party_type = ? AND party_id = ? AND DATE(created_at) < ?`,
+         WHERE business_id = ? AND party_type = ? AND party_id = ? AND ${createdBeforeDay()}`,
         [bid(), partyType, partyId, from],
       );
       const opening = round2(
@@ -657,7 +720,7 @@ export function registerAccounts(app) {
       );
       const rows = await query(
         `SELECT * FROM account_ledger
-         WHERE business_id = ? AND party_type = ? AND party_id = ? AND DATE(created_at) BETWEEN ? AND ?
+         WHERE business_id = ? AND party_type = ? AND party_id = ? AND ${createdBetween()}
          ORDER BY created_at ASC, entry_no ASC
          LIMIT 1000`,
         [bid(), partyType, partyId, from, to],

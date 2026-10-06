@@ -32,6 +32,40 @@ async function addColumn(table, column, def) {
   }
 }
 
+async function hasIndex(table, name) {
+  const rows = await query(
+    `SELECT INDEX_NAME FROM INFORMATION_SCHEMA.STATISTICS
+     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND INDEX_NAME = ? LIMIT 1`,
+    [table, name],
+  );
+  return rows.length > 0;
+}
+
+async function addIndex(table, name, cols) {
+  if (!(await hasTable(table))) return;
+  if (await hasIndex(table, name)) return;
+  try {
+    await query(`ALTER TABLE \`${table}\` ADD INDEX \`${name}\` (${cols})`);
+  } catch {
+    /* duplicate or unsupported engine */
+  }
+}
+
+async function ensureHotIndexes() {
+  await addIndex("sales_orders", "idx_so_biz_created", "business_id, created_at");
+  await addIndex("sales_orders", "idx_so_biz_customer", "business_id, customer_id");
+  await addIndex("sales_order_lines", "idx_sol_biz_order", "business_id, order_id");
+  await addIndex("items", "idx_items_biz_name", "business_id, name");
+  await addIndex("customers", "idx_cust_biz_name", "business_id, name");
+  await addIndex("purchases", "idx_po_biz_date", "business_id, purchase_date");
+  await addIndex("purchase_lines", "idx_pl_purchase", "purchase_id");
+  await addIndex("stock_movements", "idx_sm_biz_created", "business_id, created_at");
+  await addIndex("notifications", "idx_notes_biz_created", "business_id, created_at");
+  await addIndex("item_barcodes", "idx_ib_biz_item", "business_id, item_id");
+  await addIndex("stock_batches", "idx_sb_biz_item", "business_id, item_id");
+  await addIndex("account_ledger", "idx_al_biz_created", "business_id, created_at");
+}
+
 async function create(sql) {
   await query(sql);
 }
@@ -582,6 +616,7 @@ export async function ensureSchema() {
   } catch {
     /* advanced tables optional during early setup */
   }
+  await ensureHotIndexes();
 }
 
 async function seedPlans() {

@@ -41,7 +41,7 @@ function pos_build_reports($bid, $from, $to) {
   if (function_exists("pos_ensure_accounts_schema")) pos_ensure_accounts_schema();
   pos_ensure_report_columns();
   [$start, $end] = pos_report_range($from, $to);
-  $salesWhere = "business_id = ? AND DATE(created_at) BETWEEN ? AND ?";
+  $salesWhere = "business_id = ? AND " . pos_created_between() . "";
   $poWhere = "business_id = ? AND purchase_date BETWEEN ? AND ?";
 
   $summary = pos_q(
@@ -66,7 +66,7 @@ function pos_build_reports($bid, $from, $to) {
             SUM(l.amount * l.gst_rate / 100) AS gst
      FROM sales_order_lines l
      JOIN sales_orders o ON o.id = l.order_id
-     WHERE o.business_id = ? AND DATE(o.created_at) BETWEEN ? AND ? AND l.cancelled = 0
+     WHERE o.business_id = ? AND " . pos_created_between("o") . " AND l.cancelled = 0
      GROUP BY l.item_name ORDER BY amount DESC",
     "sss",
     [$bid, $start, $end]
@@ -172,7 +172,7 @@ function pos_build_reports($bid, $from, $to) {
      FROM sales_order_lines l
      JOIN sales_orders o ON o.id = l.order_id
      LEFT JOIN customers c ON c.id = o.customer_id
-     WHERE o.business_id = ? AND DATE(o.created_at) BETWEEN ? AND ? AND l.cancelled = 0",
+     WHERE o.business_id = ? AND " . pos_created_between("o") . " AND l.cancelled = 0",
     "sss",
     [$bid, $start, $end]
   );
@@ -204,7 +204,7 @@ function pos_build_reports($bid, $from, $to) {
      FROM sales_order_lines l
      JOIN sales_orders o ON o.id = l.order_id
      LEFT JOIN items i ON i.id = l.item_id
-     WHERE o.business_id = ? AND DATE(o.created_at) BETWEEN ? AND ? AND l.cancelled = 0
+     WHERE o.business_id = ? AND " . pos_created_between("o") . " AND l.cancelled = 0
      GROUP BY i.hsn, i.code, l.item_name, l.gst_rate
      ORDER BY hsn, l.item_name",
     "sss",
@@ -215,7 +215,7 @@ function pos_build_reports($bid, $from, $to) {
             c.state AS customer_state, o.subtotal AS taxable, o.gst, o.total
      FROM sales_orders o
      LEFT JOIN customers c ON c.id = o.customer_id
-     WHERE o.business_id = ? AND DATE(o.created_at) BETWEEN ? AND ?
+     WHERE o.business_id = ? AND " . pos_created_between("o") . "
        AND c.gstin IS NOT NULL AND TRIM(c.gstin) <> ''
      ORDER BY o.created_at",
     "sss",
@@ -226,7 +226,7 @@ function pos_build_reports($bid, $from, $to) {
             c.state AS customer_state, o.subtotal AS taxable, o.gst, o.total
      FROM sales_orders o
      LEFT JOIN customers c ON c.id = o.customer_id
-     WHERE o.business_id = ? AND DATE(o.created_at) BETWEEN ? AND ?
+     WHERE o.business_id = ? AND " . pos_created_between("o") . "
        AND (c.gstin IS NULL OR TRIM(c.gstin) = '')
      ORDER BY o.created_at",
     "sss",

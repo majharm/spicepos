@@ -1,5 +1,6 @@
 import { query } from "./db.js";
 import { bid } from "./context.js";
+import { createdBeforeDay, createdBetween } from "./sql-time.js";
 
 export function num(value) {
   const n = Number(value);
@@ -604,14 +605,14 @@ async function periodSales(tenant, start, end) {
             COALESCE(SUM(gst),0) AS gst,
             COALESCE(SUM(discount),0) AS discount
      FROM sales_orders
-     WHERE business_id = ? AND DATE(created_at) BETWEEN ? AND ?`,
+     WHERE business_id = ? AND ${createdBetween()}`,
     [tenant, start, end],
   );
   const [p] = await query(
     `SELECT COALESCE(SUM(COALESCE(l.profit, l.amount - COALESCE(l.cost, 0))),0) AS profit
      FROM sales_order_lines l
      JOIN sales_orders o ON o.id = l.order_id
-     WHERE o.business_id = ? AND DATE(o.created_at) BETWEEN ? AND ? AND l.cancelled = 0`,
+     WHERE o.business_id = ? AND ${createdBetween("o")} AND l.cancelled = 0`,
     [tenant, start, end],
   );
   return {
@@ -652,19 +653,19 @@ export async function buildGrowthDashboard() {
 
   const daywise = await query(
     `SELECT DATE(created_at) AS day, COUNT(*) AS bills, COALESCE(SUM(total),0) AS takings
-     FROM sales_orders WHERE business_id = ? AND DATE(created_at) BETWEEN ? AND ?
+     FROM sales_orders WHERE business_id = ? AND ${createdBetween()}
      GROUP BY DATE(created_at) ORDER BY day`,
     [tenant, last30, today],
   );
   const hourwise = await query(
     `SELECT HOUR(created_at) AS hour, COUNT(*) AS bills, COALESCE(SUM(total),0) AS takings
-     FROM sales_orders WHERE business_id = ? AND DATE(created_at) BETWEEN ? AND ?
+     FROM sales_orders WHERE business_id = ? AND ${createdBetween()}
      GROUP BY HOUR(created_at) ORDER BY hour`,
     [tenant, last30, today],
   );
   const weekday = await query(
     `SELECT DAYOFWEEK(created_at) AS dow, COUNT(*) AS bills, COALESCE(SUM(total),0) AS takings
-     FROM sales_orders WHERE business_id = ? AND DATE(created_at) BETWEEN ? AND ?
+     FROM sales_orders WHERE business_id = ? AND ${createdBetween()}
      GROUP BY DAYOFWEEK(created_at) ORDER BY dow`,
     [tenant, last90, today],
   );
@@ -681,7 +682,7 @@ export async function buildGrowthDashboard() {
      FROM sales_order_lines l
      JOIN sales_orders o ON o.id = l.order_id
      LEFT JOIN items i ON i.id = l.item_id
-     WHERE o.business_id = ? AND DATE(o.created_at) BETWEEN ? AND ? AND l.cancelled = 0
+     WHERE o.business_id = ? AND ${createdBetween("o")} AND l.cancelled = 0
      GROUP BY l.item_name
      ORDER BY amount DESC`,
     [tenant, monthStart, today],
@@ -690,7 +691,7 @@ export async function buildGrowthDashboard() {
     `SELECT l.item_name AS name, SUM(l.amount) AS amount
      FROM sales_order_lines l
      JOIN sales_orders o ON o.id = l.order_id
-     WHERE o.business_id = ? AND DATE(o.created_at) BETWEEN ? AND ? AND l.cancelled = 0
+     WHERE o.business_id = ? AND ${createdBetween("o")} AND l.cancelled = 0
      GROUP BY l.item_name`,
     [tenant, prevMonthStart, prevMonthEnd],
   );
@@ -765,7 +766,7 @@ export async function buildGrowthDashboard() {
   try {
     const [dmg] = await query(
       `SELECT COALESCE(SUM(loss_amount),0) AS loss FROM damage_records
-       WHERE business_id = ? AND DATE(created_at) BETWEEN ? AND ?`,
+       WHERE business_id = ? AND ${createdBetween()}`,
       [tenant, monthStart, today],
     );
     damageLoss = num(dmg?.loss);
@@ -780,7 +781,7 @@ export async function buildGrowthDashboard() {
             MAX(o.created_at) AS last_sale
      FROM customers c
      LEFT JOIN sales_orders o ON o.customer_id = c.id AND o.business_id = c.business_id
-       AND DATE(o.created_at) BETWEEN ? AND ?
+       AND ${createdBetween("o")}
      WHERE c.business_id = ?
      GROUP BY c.id, c.name, c.mobile, c.outstanding
      ORDER BY takings DESC`,
@@ -798,7 +799,7 @@ export async function buildGrowthDashboard() {
     count: customers.filter((c) => c.segment === name).length,
   }));
   const [newCust] = await query(
-    `SELECT COUNT(*) AS n FROM customers WHERE business_id = ? AND DATE(created_at) BETWEEN ? AND ?`,
+    `SELECT COUNT(*) AS n FROM customers WHERE business_id = ? AND ${createdBetween()}`,
     [tenant, monthStart, today],
   ).catch(() => [{ n: customers.filter((c) => c.segment === "New").length }]);
   const returning = customers.filter((c) => num(c.bills) >= 2).length;
@@ -806,7 +807,7 @@ export async function buildGrowthDashboard() {
   const [overdue] = await query(
     `SELECT COUNT(*) AS n FROM sales_orders
      WHERE business_id = ? AND LOWER(COALESCE(payment_status,'')) IN ('unpaid','partial','credit')
-       AND DATE(created_at) < ?`,
+       AND ${createdBeforeDay()}`,
     [tenant, ymdAdd(today, -7)],
   ).catch(() => [{ n: 0 }]);
 
@@ -825,7 +826,7 @@ export async function buildGrowthDashboard() {
       `SELECT COALESCE(b.name, 'Main') AS name, COUNT(o.id) AS bills, COALESCE(SUM(o.total),0) AS takings
        FROM sales_orders o
        LEFT JOIN branches b ON b.id = o.branch_id
-       WHERE o.business_id = ? AND DATE(o.created_at) BETWEEN ? AND ?
+       WHERE o.business_id = ? AND ${createdBetween("o")}
        GROUP BY COALESCE(b.name, 'Main') ORDER BY takings DESC`,
       [tenant, monthStart, today],
     );

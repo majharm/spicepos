@@ -1,5 +1,6 @@
 import { query } from "./db.js";
 import { bid } from "./context.js";
+import { createdBetween } from "./sql-time.js";
 import {
   aggregateGstByRate,
   round2,
@@ -24,174 +25,195 @@ function range(from, to) {
 export async function buildReports(from, to) {
   const { start, end } = range(from, to);
   const tenant = bid();
-  const salesWhere = "business_id = ? AND DATE(created_at) BETWEEN ? AND ?";
+  const salesWhere = `business_id = ? AND ${createdBetween()}`;
   const poWhere = "business_id = ? AND purchase_date BETWEEN ? AND ?";
 
-  const summary = await query(
-    `SELECT COUNT(*) AS bills,
-            COALESCE(SUM(subtotal),0) AS taxable,
-            COALESCE(SUM(gst),0) AS gst,
-            COALESCE(SUM(total),0) AS takings
-     FROM sales_orders WHERE ${salesWhere}`,
-    [tenant, start, end],
-  );
-  const sales = await query(
-    `SELECT order_number, customer_name, customer_type, pack_name, pack_count,
-            status, total_quantity_gm, subtotal, gst, total, payment_method,
-            payment_status, created_at
-     FROM sales_orders WHERE ${salesWhere} ORDER BY created_at`,
-    [tenant, start, end],
-  );
-  const byItem = await query(
-    `SELECT l.item_name, SUM(l.quantity_gm) AS quantity_gm, SUM(l.amount) AS amount,
-            SUM(l.amount * l.gst_rate / 100) AS gst
-     FROM sales_order_lines l
-     JOIN sales_orders o ON o.id = l.order_id
-     WHERE o.business_id = ? AND DATE(o.created_at) BETWEEN ? AND ? AND l.cancelled = 0
-     GROUP BY l.item_name ORDER BY amount DESC`,
-    [tenant, start, end],
-  );
-  const byCustomer = await query(
-    `SELECT customer_name, customer_type, COUNT(*) AS bills,
-            COALESCE(SUM(total),0) AS takings, COALESCE(SUM(gst),0) AS gst
-     FROM sales_orders WHERE ${salesWhere}
-     GROUP BY customer_name, customer_type ORDER BY takings DESC`,
-    [tenant, start, end],
-  );
-  const byPack = await query(
-    `SELECT COALESCE(pack_name, 'Loose items') AS pack_type,
-            COALESCE(SUM(pack_count),0) AS pack_count,
-            COUNT(*) AS bills, COALESCE(SUM(total),0) AS takings
-     FROM sales_orders WHERE ${salesWhere}
-     GROUP BY COALESCE(pack_name, 'Loose items') ORDER BY takings DESC`,
-    [tenant, start, end],
-  );
-  const byPay = await query(
-    `SELECT payment_method, COUNT(*) AS bills, COALESCE(SUM(total),0) AS takings
-     FROM sales_orders WHERE ${salesWhere}
-     GROUP BY payment_method`,
-    [tenant, start, end],
-  );
-  const payDaywise = await query(
-    `SELECT DATE(created_at) AS day,
-            COUNT(*) AS bills,
-            COALESCE(SUM(CASE WHEN LOWER(payment_method) = 'cash' THEN total ELSE 0 END),0) AS cash,
-            COALESCE(SUM(CASE WHEN LOWER(payment_method) = 'upi' THEN total ELSE 0 END),0) AS upi,
-            COALESCE(SUM(CASE WHEN LOWER(payment_method) = 'card' THEN total ELSE 0 END),0) AS card,
-            COALESCE(SUM(CASE WHEN LOWER(payment_method) = 'credit' THEN total ELSE 0 END),0) AS credit,
-            COALESCE(SUM(CASE WHEN LOWER(COALESCE(payment_method,'')) NOT IN ('cash','upi','card','credit') THEN total ELSE 0 END),0) AS other,
-            COALESCE(SUM(total),0) AS total
-     FROM sales_orders WHERE ${salesWhere}
-     GROUP BY DATE(created_at) ORDER BY day`,
-    [tenant, start, end],
-  );
-  const gst = await query(
-    `SELECT DATE(created_at) AS day, COALESCE(SUM(subtotal),0) AS taxable,
-            COALESCE(SUM(gst),0) AS gst, COALESCE(SUM(total),0) AS total
-     FROM sales_orders WHERE ${salesWhere}
-     GROUP BY DATE(created_at) ORDER BY day`,
-    [tenant, start, end],
-  );
-  const stock = await query(
-    `SELECT code, name, hsn, local_name, category, subcategory, stock_gm, reorder_level_gm,
-            retail_rate, b2b_rate, purchase_rate, gst_rate
-     FROM items WHERE business_id = ? ORDER BY name`,
-    [tenant],
-  );
+  const hsnExpr = "COALESCE(NULLIF(TRIM(i.hsn), ''), NULLIF(TRIM(i.code), ''), '-')";
+  const rangeParams = [tenant, start, end];
+  const [
+    summary,
+    sales,
+    byItem,
+    byCustomer,
+    byPack,
+    byPay,
+    payDaywise,
+    gst,
+    stock,
+    purchases,
+    expenses,
+    expenseSum,
+    customers,
+    companyRows,
+    gstOutputLines,
+    gstInputLines,
+    gstHsn,
+    gstB2B,
+    gstB2C,
+    purchaseGst,
+  ] = await Promise.all([
+    query(
+      `SELECT COUNT(*) AS bills,
+              COALESCE(SUM(subtotal),0) AS taxable,
+              COALESCE(SUM(gst),0) AS gst,
+              COALESCE(SUM(total),0) AS takings
+       FROM sales_orders WHERE ${salesWhere}`,
+      rangeParams,
+    ),
+    query(
+      `SELECT order_number, customer_name, customer_type, pack_name, pack_count,
+              status, total_quantity_gm, subtotal, gst, total, payment_method,
+              payment_status, created_at
+       FROM sales_orders WHERE ${salesWhere} ORDER BY created_at`,
+      rangeParams,
+    ),
+    query(
+      `SELECT l.item_name, SUM(l.quantity_gm) AS quantity_gm, SUM(l.amount) AS amount,
+              SUM(l.amount * l.gst_rate / 100) AS gst
+       FROM sales_order_lines l
+       JOIN sales_orders o ON o.id = l.order_id
+       WHERE o.business_id = ? AND ${createdBetween("o")} AND l.cancelled = 0
+       GROUP BY l.item_name ORDER BY amount DESC`,
+      rangeParams,
+    ),
+    query(
+      `SELECT customer_name, customer_type, COUNT(*) AS bills,
+              COALESCE(SUM(total),0) AS takings, COALESCE(SUM(gst),0) AS gst
+       FROM sales_orders WHERE ${salesWhere}
+       GROUP BY customer_name, customer_type ORDER BY takings DESC`,
+      rangeParams,
+    ),
+    query(
+      `SELECT COALESCE(pack_name, 'Loose items') AS pack_type,
+              COALESCE(SUM(pack_count),0) AS pack_count,
+              COUNT(*) AS bills, COALESCE(SUM(total),0) AS takings
+       FROM sales_orders WHERE ${salesWhere}
+       GROUP BY COALESCE(pack_name, 'Loose items') ORDER BY takings DESC`,
+      rangeParams,
+    ),
+    query(
+      `SELECT payment_method, COUNT(*) AS bills, COALESCE(SUM(total),0) AS takings
+       FROM sales_orders WHERE ${salesWhere}
+       GROUP BY payment_method`,
+      rangeParams,
+    ),
+    query(
+      `SELECT DATE(created_at) AS day,
+              COUNT(*) AS bills,
+              COALESCE(SUM(CASE WHEN LOWER(payment_method) = 'cash' THEN total ELSE 0 END),0) AS cash,
+              COALESCE(SUM(CASE WHEN LOWER(payment_method) = 'upi' THEN total ELSE 0 END),0) AS upi,
+              COALESCE(SUM(CASE WHEN LOWER(payment_method) = 'card' THEN total ELSE 0 END),0) AS card,
+              COALESCE(SUM(CASE WHEN LOWER(payment_method) = 'credit' THEN total ELSE 0 END),0) AS credit,
+              COALESCE(SUM(CASE WHEN LOWER(COALESCE(payment_method,'')) NOT IN ('cash','upi','card','credit') THEN total ELSE 0 END),0) AS other,
+              COALESCE(SUM(total),0) AS total
+       FROM sales_orders WHERE ${salesWhere}
+       GROUP BY DATE(created_at) ORDER BY day`,
+      rangeParams,
+    ),
+    query(
+      `SELECT DATE(created_at) AS day, COALESCE(SUM(subtotal),0) AS taxable,
+              COALESCE(SUM(gst),0) AS gst, COALESCE(SUM(total),0) AS total
+       FROM sales_orders WHERE ${salesWhere}
+       GROUP BY DATE(created_at) ORDER BY day`,
+      rangeParams,
+    ),
+    query(
+      `SELECT code, name, hsn, local_name, category, subcategory, stock_gm, reorder_level_gm,
+              retail_rate, b2b_rate, purchase_rate, gst_rate
+       FROM items WHERE business_id = ? ORDER BY name`,
+      [tenant],
+    ),
+    query(
+      `SELECT purchase_number, supplier_name, supplier_invoice_number, purchase_date,
+              subtotal, gst, total, payment_method, payment_status
+       FROM purchases WHERE ${poWhere} ORDER BY purchase_date`,
+      rangeParams,
+    ),
+    query(
+      `SELECT expense_number, expense_date, category, account_code, amount, gst, payment_method, notes,
+              (amount + gst) AS total
+       FROM expenses WHERE business_id = ? AND expense_date BETWEEN ? AND ?
+       ORDER BY expense_date`,
+      rangeParams,
+    ),
+    query(
+      `SELECT COALESCE(SUM(amount),0) AS amount, COALESCE(SUM(gst),0) AS gst, COUNT(*) AS bills
+       FROM expenses WHERE business_id = ? AND expense_date BETWEEN ? AND ?`,
+      rangeParams,
+    ),
+    query(
+      `SELECT code, name, business_name, mobile, type, gstin, state, credit_limit, outstanding
+       FROM customers WHERE business_id = ? ORDER BY name`,
+      [tenant],
+    ),
+    query("SELECT gstin, state FROM company_settings WHERE business_id = ? LIMIT 1", [tenant]),
+    query(
+      `SELECT l.gst_rate, l.amount, o.id AS order_id,
+              c.gstin AS party_gstin, c.state AS party_state
+       FROM sales_order_lines l
+       JOIN sales_orders o ON o.id = l.order_id
+       LEFT JOIN customers c ON c.id = o.customer_id
+       WHERE o.business_id = ? AND ${createdBetween("o")} AND l.cancelled = 0`,
+      rangeParams,
+    ),
+    query(
+      `SELECT l.gst_rate, l.amount,
+              COALESCE(l.gst_amount, l.amount * l.gst_rate / 100) AS gst,
+              p.id AS purchase_id, s.gstin AS party_gstin
+       FROM purchase_lines l
+       JOIN purchases p ON p.id = l.purchase_id
+       LEFT JOIN suppliers s ON s.id = p.supplier_id
+       WHERE p.business_id = ? AND p.purchase_date BETWEEN ? AND ?`,
+      rangeParams,
+    ),
+    query(
+      `SELECT ${hsnExpr} AS hsn, l.item_name, l.gst_rate,
+              SUM(l.quantity_gm) AS quantity_gm,
+              SUM(l.amount) AS taxable,
+              SUM(l.amount * l.gst_rate / 100) AS gst
+       FROM sales_order_lines l
+       JOIN sales_orders o ON o.id = l.order_id
+       LEFT JOIN items i ON i.id = l.item_id
+       WHERE o.business_id = ? AND ${createdBetween("o")} AND l.cancelled = 0
+       GROUP BY i.hsn, i.code, l.item_name, l.gst_rate
+       ORDER BY hsn, l.item_name`,
+      rangeParams,
+    ),
+    query(
+      `SELECT o.order_number, DATE(o.created_at) AS bill_date, o.customer_name, c.gstin,
+              c.state AS customer_state, o.subtotal AS taxable, o.gst, o.total
+       FROM sales_orders o
+       LEFT JOIN customers c ON c.id = o.customer_id
+       WHERE o.business_id = ? AND ${createdBetween("o")}
+         AND c.gstin IS NOT NULL AND TRIM(c.gstin) <> ''
+       ORDER BY o.created_at`,
+      rangeParams,
+    ),
+    query(
+      `SELECT o.order_number, DATE(o.created_at) AS bill_date, o.customer_name,
+              c.state AS customer_state, o.subtotal AS taxable, o.gst, o.total
+       FROM sales_orders o
+       LEFT JOIN customers c ON c.id = o.customer_id
+       WHERE o.business_id = ? AND ${createdBetween("o")}
+         AND (c.gstin IS NULL OR TRIM(c.gstin) = '')
+       ORDER BY o.created_at`,
+      rangeParams,
+    ),
+    query(
+      `SELECT COALESCE(SUM(subtotal),0) AS taxable, COALESCE(SUM(gst),0) AS gst, COALESCE(SUM(total),0) AS total
+       FROM purchases WHERE ${poWhere}`,
+      rangeParams,
+    ),
+  ]);
   const low = stock.filter((i) => Number(i.stock_gm) <= Number(i.reorder_level_gm));
-  const purchases = await query(
-    `SELECT purchase_number, supplier_name, supplier_invoice_number, purchase_date,
-            subtotal, gst, total, payment_method, payment_status
-     FROM purchases WHERE ${poWhere} ORDER BY purchase_date`,
-    [tenant, start, end],
-  );
-  const expenses = await query(
-    `SELECT expense_number, expense_date, category, account_code, amount, gst, payment_method, notes,
-            (amount + gst) AS total
-     FROM expenses WHERE business_id = ? AND expense_date BETWEEN ? AND ?
-     ORDER BY expense_date`,
-    [tenant, start, end],
-  );
-  const expenseSum = await query(
-    `SELECT COALESCE(SUM(amount),0) AS amount, COALESCE(SUM(gst),0) AS gst, COUNT(*) AS bills
-     FROM expenses WHERE business_id = ? AND expense_date BETWEEN ? AND ?`,
-    [tenant, start, end],
-  );
-  const customers = await query(
-    `SELECT code, name, business_name, mobile, type, gstin, state, credit_limit, outstanding
-     FROM customers WHERE business_id = ? ORDER BY name`,
-    [tenant],
-  );
-  const companyRows = await query(
-    "SELECT gstin, state FROM company_settings WHERE business_id = ? LIMIT 1",
-    [tenant],
-  );
   const shop = {
     gstin: companyRows[0]?.gstin,
     state: companyRows[0]?.state,
   };
-  const gstOutputLines = await query(
-    `SELECT l.gst_rate, l.amount, o.id AS order_id,
-            c.gstin AS party_gstin, c.state AS party_state
-     FROM sales_order_lines l
-     JOIN sales_orders o ON o.id = l.order_id
-     LEFT JOIN customers c ON c.id = o.customer_id
-     WHERE o.business_id = ? AND DATE(o.created_at) BETWEEN ? AND ? AND l.cancelled = 0`,
-    [tenant, start, end],
-  );
-  const gstInputLines = await query(
-    `SELECT l.gst_rate, l.amount,
-            COALESCE(l.gst_amount, l.amount * l.gst_rate / 100) AS gst,
-            p.id AS purchase_id, s.gstin AS party_gstin
-     FROM purchase_lines l
-     JOIN purchases p ON p.id = l.purchase_id
-     LEFT JOIN suppliers s ON s.id = p.supplier_id
-     WHERE p.business_id = ? AND p.purchase_date BETWEEN ? AND ?`,
-    [tenant, start, end],
-  );
   const gstByRate = aggregateGstByRate(gstOutputLines, shop);
   const gstInputByRate = aggregateGstByRate(
     gstInputLines.map((r) => ({ ...r, order_id: r.purchase_id })),
     shop,
-  );
-  const hsnExpr = "COALESCE(NULLIF(TRIM(i.hsn), ''), NULLIF(TRIM(i.code), ''), '-')";
-  const gstHsn = await query(
-    `SELECT ${hsnExpr} AS hsn, l.item_name, l.gst_rate,
-            SUM(l.quantity_gm) AS quantity_gm,
-            SUM(l.amount) AS taxable,
-            SUM(l.amount * l.gst_rate / 100) AS gst
-     FROM sales_order_lines l
-     JOIN sales_orders o ON o.id = l.order_id
-     LEFT JOIN items i ON i.id = l.item_id
-     WHERE o.business_id = ? AND DATE(o.created_at) BETWEEN ? AND ? AND l.cancelled = 0
-     GROUP BY i.hsn, i.code, l.item_name, l.gst_rate
-     ORDER BY hsn, l.item_name`,
-    [tenant, start, end],
-  );
-  const gstB2B = await query(
-    `SELECT o.order_number, DATE(o.created_at) AS bill_date, o.customer_name, c.gstin,
-            c.state AS customer_state, o.subtotal AS taxable, o.gst, o.total
-     FROM sales_orders o
-     LEFT JOIN customers c ON c.id = o.customer_id
-     WHERE o.business_id = ? AND DATE(o.created_at) BETWEEN ? AND ?
-       AND c.gstin IS NOT NULL AND TRIM(c.gstin) <> ''
-     ORDER BY o.created_at`,
-    [tenant, start, end],
-  );
-  const gstB2C = await query(
-    `SELECT o.order_number, DATE(o.created_at) AS bill_date, o.customer_name,
-            c.state AS customer_state, o.subtotal AS taxable, o.gst, o.total
-     FROM sales_orders o
-     LEFT JOIN customers c ON c.id = o.customer_id
-     WHERE o.business_id = ? AND DATE(o.created_at) BETWEEN ? AND ?
-       AND (c.gstin IS NULL OR TRIM(c.gstin) = '')
-     ORDER BY o.created_at`,
-    [tenant, start, end],
-  );
-  const purchaseGst = await query(
-    `SELECT COALESCE(SUM(subtotal),0) AS taxable, COALESCE(SUM(gst),0) AS gst, COALESCE(SUM(total),0) AS total
-     FROM purchases WHERE ${poWhere}`,
-    [tenant, start, end],
   );
   const outputGst = Number(summary[0]?.gst || 0);
   const inputGst = Number(purchaseGst[0]?.gst || 0) + Number(expenseSum[0]?.gst || 0);

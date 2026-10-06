@@ -316,6 +316,37 @@ function pos_q($sql, $types = "", $params = []) {
   return $rows;
 }
 
+function pos_created_today($alias = "") {
+  $col = $alias !== "" ? "{$alias}.created_at" : "created_at";
+  return "{$col} >= CURDATE() AND {$col} < DATE_ADD(CURDATE(), INTERVAL 1 DAY)";
+}
+
+function pos_created_yesterday($alias = "") {
+  $col = $alias !== "" ? "{$alias}.created_at" : "created_at";
+  return "{$col} >= DATE_SUB(CURDATE(), INTERVAL 1 DAY) AND {$col} < CURDATE()";
+}
+
+function pos_created_since_days($days, $alias = "") {
+  $n = (int) $days;
+  $col = $alias !== "" ? "{$alias}.created_at" : "created_at";
+  return "{$col} >= DATE_SUB(CURDATE(), INTERVAL {$n} DAY)";
+}
+
+function pos_created_between($alias = "") {
+  $col = $alias !== "" ? "{$alias}.created_at" : "created_at";
+  return "{$col} >= ? AND {$col} < DATE_ADD(?, INTERVAL 1 DAY)";
+}
+
+function pos_created_this_month($alias = "") {
+  $col = $alias !== "" ? "{$alias}.created_at" : "created_at";
+  return "{$col} >= DATE_FORMAT(CURDATE(), '%Y-%m-01') AND {$col} < DATE_ADD(DATE_FORMAT(CURDATE(), '%Y-%m-01'), INTERVAL 1 MONTH)";
+}
+
+function pos_created_prev_month($alias = "") {
+  $col = $alias !== "" ? "{$alias}.created_at" : "created_at";
+  return "{$col} >= DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 1 MONTH), '%Y-%m-01') AND {$col} < DATE_FORMAT(CURDATE(), '%Y-%m-01')";
+}
+
 function pos_with_transaction(callable $fn) {
   $db = pos_db();
   $db->begin_transaction();
@@ -337,6 +368,35 @@ function pos_ensure_columns($table, $cols) {
       @$db->query("ALTER TABLE `{$table}` ADD COLUMN `{$name}` {$def}");
     }
     if ($res) $res->free();
+  }
+}
+
+function pos_ensure_hot_indexes() {
+  static $done = false;
+  if ($done) return;
+  $done = true;
+  $db = pos_db();
+  $indexes = [
+    ["sales_orders", "idx_so_biz_created", "business_id, created_at"],
+    ["sales_orders", "idx_so_biz_customer", "business_id, customer_id"],
+    ["sales_order_lines", "idx_sol_biz_order", "business_id, order_id"],
+    ["items", "idx_items_biz_name", "business_id, name"],
+    ["customers", "idx_cust_biz_name", "business_id, name"],
+    ["purchases", "idx_po_biz_date", "business_id, purchase_date"],
+    ["stock_movements", "idx_sm_biz_created", "business_id, created_at"],
+  ];
+  foreach ($indexes as [$table, $name, $cols]) {
+    $safeTable = preg_replace("/[^a-z0-9_]/i", "", $table);
+    $safeName = preg_replace("/[^a-z0-9_]/i", "", $name);
+    if ($safeTable === "" || $safeName === "") continue;
+    $res = @$db->query(
+      "SELECT INDEX_NAME FROM INFORMATION_SCHEMA.STATISTICS
+       WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = '{$safeTable}' AND INDEX_NAME = '{$safeName}' LIMIT 1"
+    );
+    $exists = $res && $res->num_rows > 0;
+    if ($res) $res->free();
+    if ($exists) continue;
+    @$db->query("ALTER TABLE `{$safeTable}` ADD INDEX `{$safeName}` ({$cols})");
   }
 }
 
@@ -1443,6 +1503,7 @@ function pos_ensure_sales_schema() {
     }
     if ($res) $res->free();
   }
+  if (function_exists("pos_ensure_hot_indexes")) pos_ensure_hot_indexes();
   if (function_exists("pos_ensure_columns")) {
     pos_ensure_columns("sales_order_lines", [
       "batch_no" => "VARCHAR(64) NULL",
@@ -2022,8 +2083,69 @@ function pos_recompute_customer_outstanding($businessId, $customerId) {
 }
 
 function pos_recompute_business_outstanding($businessId) {
-  $custs = pos_q("SELECT id FROM customers WHERE business_id = ?", "s", [$businessId]);
-  foreach ($custs as $row) pos_recompute_customer_outstanding($businessId, $row["id"]);
+  try {
+    pos_recompute_business_outstanding_set($businessId);
+  } catch (Exception $e) {
+    /* stored outstanding is maintained on each sale/receipt */
+  }
+}
+
+function pos_recompute_business_outstanding_set($businessId) {
+  pos_q(
+    "UPDATE customers SET outstanding = 0
+     WHERE business_id = ?
+       AND (code = 'CUS-001' OR LOWER(TRIM(name)) IN ('walk-in','walkin'))",
+    "s",
+    [$businessId]
+  );
+  $billed = "SELECT l.party_id AS id, COALESCE(SUM(l.amount),0) AS billed
+       FROM account_ledger l
+       LEFT JOIN sales_orders o ON o.id = l.reference_id AND o.business_id = l.business_id
+       WHERE l.business_id = ? AND l.party_type = 'customer' AND l.entry_type = 'sale_credit'
+         AND (o.id IS NULL OR LOWER(TRIM(COALESCE(o.status,'confirmed'))) <> 'cancelled')
+       GROUP BY l.party_id";
+  $received = "SELECT l.party_id AS id, COALESCE(SUM(l.amount),0) AS received
+       FROM account_ledger l
+       LEFT JOIN sales_orders o ON o.id = l.reference_id AND o.business_id = l.business_id
+       WHERE l.business_id = ? AND l.party_type = 'customer' AND l.entry_type = 'receipt'
+         AND (
+           l.reference_id IS NULL OR l.reference_type <> 'sales_order'
+           OR LOWER(TRIM(COALESCE(o.status,'confirmed'))) <> 'cancelled'
+         )
+       GROUP BY l.party_id";
+  $invoice = "SELECT customer_id AS id,
+            COALESCE(SUM(GREATEST(0, COALESCE(total,0) - COALESCE(amount_paid,0))), 0) AS open_due
+     FROM sales_orders
+     WHERE business_id = ? AND LOWER(TRIM(COALESCE(status,'confirmed'))) <> 'cancelled'
+     GROUP BY customer_id";
+  try {
+    pos_q(
+      "UPDATE customers c
+       LEFT JOIN ({$billed}) billed ON billed.id = c.id
+       LEFT JOIN ({$received}) rcp ON rcp.id = c.id
+       LEFT JOIN ({$invoice}) inv ON inv.id = c.id
+       SET c.outstanding = ROUND(GREATEST(0, GREATEST(
+         COALESCE(billed.billed, 0) - COALESCE(rcp.received, 0),
+         COALESCE(inv.open_due, 0)
+       )), 2)
+       WHERE c.business_id = ?
+         AND c.code <> 'CUS-001'
+         AND LOWER(TRIM(c.name)) NOT IN ('walk-in','walkin')",
+      "ssss",
+      [$businessId, $businessId, $businessId, $businessId]
+    );
+  } catch (Exception $e) {
+    pos_q(
+      "UPDATE customers c
+       LEFT JOIN ({$invoice}) inv ON inv.id = c.id
+       SET c.outstanding = ROUND(GREATEST(0, COALESCE(inv.open_due, 0)), 2)
+       WHERE c.business_id = ?
+         AND c.code <> 'CUS-001'
+         AND LOWER(TRIM(c.name)) NOT IN ('walk-in','walkin')",
+      "ss",
+      [$businessId, $businessId]
+    );
+  }
 }
 
 function pos_record_credit_purchase($supplier, $total, $purchaseId, $purchaseNumber, $method, $businessId, $uid = null) {
@@ -2857,7 +2979,7 @@ function pos_php_dispatch($path, $method, $rawBody) {
       $branches = pos_q("SELECT COUNT(*) AS n FROM branches");
       $devices = pos_q("SELECT COUNT(*) AS n FROM pos_devices");
       $tx = pos_q("SELECT COUNT(*) AS n FROM sales_orders");
-      $sales = pos_q("SELECT COALESCE(SUM(total),0) AS takings FROM sales_orders WHERE DATE(created_at)=CURDATE()");
+      $sales = pos_q("SELECT COALESCE(SUM(total),0) AS takings FROM sales_orders WHERE " . pos_created_today());
       $plans = pos_q("SELECT * FROM subscription_plans");
       $planMap = [];
       foreach ($plans as $p) $planMap[$p["id"]] = $p;
@@ -2871,7 +2993,7 @@ function pos_php_dispatch($path, $method, $rawBody) {
                 p.name AS plan_name, p.fee_monthly,
                 (SELECT COUNT(*) FROM staff_users u WHERE u.business_id=b.id) AS users,
                 (SELECT COUNT(*) FROM branches br WHERE br.business_id=b.id) AS branches,
-                (SELECT COALESCE(SUM(total),0) FROM sales_orders s WHERE s.business_id=b.id AND DATE(s.created_at)=CURDATE()) AS today_sales
+                (SELECT COALESCE(SUM(total),0) FROM sales_orders s WHERE s.business_id=b.id AND " . pos_created_today("s") . ") AS today_sales
          FROM businesses b
          LEFT JOIN subscription_plans p ON p.id = b.plan_id
          ORDER BY b.name"

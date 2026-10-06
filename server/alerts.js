@@ -1,4 +1,5 @@
 import { query } from "./db.js";
+import { createdBetween } from "./sql-time.js";
 import {
   sendMail,
   publicAppUrl,
@@ -1201,8 +1202,8 @@ export async function sendClosingAlerts(businessId, { force = false } = {}) {
             COALESCE(SUM(CASE WHEN LOWER(payment_method)='card' THEN total ELSE 0 END),0) AS card,
             COALESCE(SUM(CASE WHEN LOWER(payment_method)='credit' THEN total ELSE 0 END),0) AS credit
      FROM sales_orders
-     WHERE business_id = ? AND DATE(created_at) = ? AND COALESCE(status,'') <> 'cancelled'`,
-    [shop.businessId, day],
+     WHERE business_id = ? AND ${createdBetween()} AND COALESCE(status,'') <> 'cancelled'`,
+    [shop.businessId, day, day],
   );
   const low = flagOn(settings.alert_low_stock, true)
     ? await query(

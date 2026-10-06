@@ -25,7 +25,7 @@ const creds = process.env.DATABASE_URL
 const pool = mysql.createPool({
   ...creds,
   waitForConnections: true,
-  connectionLimit: Number(process.env.DB_POOL || 8),
+  connectionLimit: Number(process.env.DB_POOL || 16),
   charset: "utf8mb4",
   timezone: "Z",
   supportBigNumbers: true,

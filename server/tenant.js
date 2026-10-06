@@ -9,6 +9,8 @@ import { workbookXml } from "./excel.js";
 import { stockToSheets } from "./stock-excel.js";
 import { recomputeBusinessOutstanding } from "./accounts.js";
 import { attachQrKitchenTicket, ensureKitchenTicketTable, syncQrFromKot } from "./qr-ordering.js";
+import { createdToday } from "./sql-time.js";
+import { buildHubDashboard } from "./hub.js";
 
 function send(res, fn) {
   return Promise.resolve()
@@ -287,45 +289,56 @@ export function registerTenant(app) {
       } catch {
         /* outstanding rebuild is best-effort */
       }
-      const [sales] = await query(
-        `SELECT COUNT(*) AS bills, COALESCE(SUM(total),0) AS takings, COALESCE(SUM(gst),0) AS gst
-         FROM sales_orders WHERE business_id = ? AND DATE(created_at)=CURDATE()`,
-        [businessId],
-      );
-      const [purchase] = await query(
-        `SELECT COALESCE(SUM(total),0) AS total FROM purchases
-         WHERE business_id = ? AND purchase_date = CURDATE()`,
-        [businessId],
-      );
-      const [stock] = await query(
-        `SELECT COALESCE(SUM(CASE WHEN LOWER(COALESCE(u.family,'')) = 'count' OR UPPER(REPLACE(COALESCE(i.base_unit, i.unit, 'GM'), ' ', '')) IN ('PCS','PC','QTY','NOS','NO','COUNT','UNIT','UNITS') THEN i.stock_gm * i.purchase_rate ELSE i.stock_gm/1000.0 * i.purchase_rate END),0) AS value FROM items i LEFT JOIN inventory_units u ON u.business_id = i.business_id AND u.code = COALESCE(i.base_unit, i.unit) WHERE i.business_id = ?`,
-        [businessId],
-      );
-      const [out] = await query(
-        `SELECT COALESCE(SUM(outstanding),0) AS outstanding FROM customers WHERE business_id = ?`,
-        [businessId],
-      );
-      const branches = await query("SELECT * FROM branches WHERE business_id = ? ORDER BY name", [businessId]);
-      const notes = await query(
-        `SELECT * FROM notifications WHERE business_id IS NULL OR business_id = '' OR business_id = ? ORDER BY created_at DESC LIMIT 8`,
-        [businessId],
-      );
-      const [biz] = await query(
-        `SELECT subscription_expires_at, status,
-                DATEDIFF(subscription_expires_at, CURDATE()) AS days_left
-         FROM businesses WHERE id = ? LIMIT 1`,
-        [businessId],
-      );
+      const [
+        salesRows,
+        purchaseRows,
+        stockRows,
+        outRows,
+        branches,
+        notes,
+        bizRows,
+        hub,
+      ] = await Promise.all([
+        query(
+          `SELECT COUNT(*) AS bills, COALESCE(SUM(total),0) AS takings, COALESCE(SUM(gst),0) AS gst
+           FROM sales_orders WHERE business_id = ? AND ${createdToday()}`,
+          [businessId],
+        ),
+        query(
+          `SELECT COALESCE(SUM(total),0) AS total FROM purchases
+           WHERE business_id = ? AND purchase_date = CURDATE()`,
+          [businessId],
+        ),
+        query(
+          `SELECT COALESCE(SUM(CASE WHEN LOWER(COALESCE(u.family,'')) = 'count' OR UPPER(REPLACE(COALESCE(i.base_unit, i.unit, 'GM'), ' ', '')) IN ('PCS','PC','QTY','NOS','NO','COUNT','UNIT','UNITS') THEN i.stock_gm * i.purchase_rate ELSE i.stock_gm/1000.0 * i.purchase_rate END),0) AS value FROM items i LEFT JOIN inventory_units u ON u.business_id = i.business_id AND u.code = COALESCE(i.base_unit, i.unit) WHERE i.business_id = ?`,
+          [businessId],
+        ),
+        query(
+          `SELECT COALESCE(SUM(outstanding),0) AS outstanding FROM customers WHERE business_id = ?`,
+          [businessId],
+        ),
+        query("SELECT * FROM branches WHERE business_id = ? ORDER BY name", [businessId]),
+        query(
+          `SELECT * FROM notifications WHERE business_id IS NULL OR business_id = '' OR business_id = ? ORDER BY created_at DESC LIMIT 8`,
+          [businessId],
+        ),
+        query(
+          `SELECT subscription_expires_at, status,
+                  DATEDIFF(subscription_expires_at, CURDATE()) AS days_left
+           FROM businesses WHERE id = ? LIMIT 1`,
+          [businessId],
+        ),
+        buildHubDashboard().catch(() => ({})),
+      ]);
+      const [sales] = salesRows;
+      const [purchase] = purchaseRows;
+      const [stock] = stockRows;
+      const [out] = outRows;
+      const [biz] = bizRows;
       const expiresAt = biz?.subscription_expires_at
         ? String(biz.subscription_expires_at).slice(0, 10)
         : null;
       const daysLeft = expiresAt && biz?.days_left != null ? Number(biz.days_left) : null;
-      let hub = {};
-      try {
-        hub = await buildHubDashboard();
-      } catch {
-        hub = {};
-      }
       return {
         today: sales,
         purchase: purchase.total,

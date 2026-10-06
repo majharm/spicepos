@@ -211,6 +211,7 @@ test("customer outstanding hydrates from open invoice remainders on the Customer
   const index = readFileSync(path.join(root, "index.html"), "utf8");
   const css = readFileSync(path.join(root, "css/pos.css"), "utf8");
   assert.match(accounts, /export async function invoiceOpenDueByCustomer/);
+  assert.match(accounts, /async function recomputeBusinessOutstandingSetBased/);
   assert.match(accounts, /export function hydrateCustomerOutstandingRows/);
   assert.match(accounts, /LEFT JOIN sales_orders o ON o.id = l.reference_id/);
   assert.match(accounts, /GREATEST\(0, COALESCE\(total,0\) - COALESCE\(amount_paid,0\)\)/);

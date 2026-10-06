@@ -6,6 +6,7 @@ import { platformAudit } from "./audit.js";
 import { registerBusiness, updateBusiness } from "./onboard.js";
 import { defaultPerms } from "./roles.js";
 import { publicStatus } from "./auth.js";
+import { createdToday } from "./sql-time.js";
 import { getPlatformSettings, setPlatformSetting } from "./settings.js";
 import { normalizeLocale } from "./i18n.js";
 import { cleanShopData, registerMasterBackup, tickBackupEmail } from "./backup.js";
@@ -120,7 +121,7 @@ export function registerMaster(app) {
       const [devices] = await query("SELECT COUNT(*) AS n FROM pos_devices");
       const [tx] = await query("SELECT COUNT(*) AS n FROM sales_orders");
       const [sales] = await query(
-        `SELECT COALESCE(SUM(total),0) AS takings FROM sales_orders WHERE DATE(created_at)=CURDATE()`,
+        `SELECT COALESCE(SUM(total),0) AS takings FROM sales_orders WHERE ${createdToday()}`,
       );
       const plans = await query("SELECT * FROM subscription_plans");
       const planMap = Object.fromEntries(plans.map((p) => [p.id, p]));
@@ -133,9 +134,15 @@ export function registerMaster(app) {
                 p.name AS plan_name, p.fee_monthly,
                 (SELECT COUNT(*) FROM staff_users u WHERE u.business_id=b.id) AS users,
                 (SELECT COUNT(*) FROM branches br WHERE br.business_id=b.id) AS branches,
-                (SELECT COALESCE(SUM(total),0) FROM sales_orders s WHERE s.business_id=b.id AND DATE(s.created_at)=CURDATE()) AS today_sales
+                COALESCE(s.today_sales, 0) AS today_sales
          FROM businesses b
          LEFT JOIN subscription_plans p ON p.id = b.plan_id
+         LEFT JOIN (
+           SELECT business_id, COALESCE(SUM(total),0) AS today_sales
+           FROM sales_orders
+           WHERE ${createdToday()}
+           GROUP BY business_id
+         ) s ON s.business_id = b.id
          ORDER BY b.name`,
       );
       return {

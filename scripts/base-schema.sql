@@ -142,7 +142,7 @@ CREATE TABLE IF NOT EXISTS items (
   business_id VARCHAR(255) NOT NULL,
   created_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
   updated_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
-  INDEX (business_id),
+  INDEX idx_items_biz_name (business_id, name),
   INDEX (code),
   INDEX (barcode)
 );
@@ -163,7 +163,7 @@ CREATE TABLE IF NOT EXISTS customers (
   business_id VARCHAR(255) NOT NULL,
   created_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
   updated_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
-  INDEX (business_id)
+  INDEX idx_cust_biz_name (business_id, name)
 );
 
 CREATE TABLE IF NOT EXISTS packs (
@@ -225,8 +225,7 @@ CREATE TABLE IF NOT EXISTS purchases (
   business_id VARCHAR(255) NOT NULL,
   created_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
   updated_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
-  INDEX (business_id),
-  INDEX (purchase_date)
+  INDEX idx_po_biz_date (business_id, purchase_date)
 );
 
 CREATE TABLE IF NOT EXISTS purchase_lines (
@@ -279,7 +278,8 @@ CREATE TABLE IF NOT EXISTS sales_orders (
   business_id VARCHAR(255) NOT NULL,
   created_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
   updated_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
-  INDEX (business_id),
+  INDEX idx_so_biz_created (business_id, created_at),
+  INDEX idx_so_biz_customer (business_id, customer_id),
   INDEX (order_number)
 );
 
@@ -303,7 +303,7 @@ CREATE TABLE IF NOT EXISTS sales_order_lines (
   profit DECIMAL(12,2) NOT NULL DEFAULT 0,
   business_id VARCHAR(255) NOT NULL,
   INDEX (order_id),
-  INDEX (business_id)
+  INDEX idx_sol_biz_order (business_id, order_id)
 );
 
 CREATE TABLE IF NOT EXISTS qr_orders (
@@ -365,6 +365,6 @@ CREATE TABLE IF NOT EXISTS stock_movements (
   ref_type VARCHAR(32) NULL,
   ref_id VARCHAR(255) NULL,
   created_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
-  INDEX (business_id),
+  INDEX idx_sm_biz_created (business_id, created_at),
   INDEX (item_id)
 );

@@ -326,8 +326,8 @@ function pos_growth_ask($question, $analysis) {
 }
 
 function pos_growth_period($bid, $from, $to) {
-  $row = pos_q("SELECT COUNT(*) AS bills, COALESCE(SUM(total),0) AS takings, COALESCE(SUM(gst),0) AS gst, COALESCE(SUM(discount),0) AS discount FROM sales_orders WHERE business_id = ? AND DATE(created_at) BETWEEN ? AND ?", "sss", [$bid, $from, $to]);
-  $p = pos_q("SELECT COALESCE(SUM(COALESCE(l.profit, l.amount - COALESCE(l.cost,0))),0) AS profit FROM sales_order_lines l JOIN sales_orders o ON o.id = l.order_id WHERE o.business_id = ? AND DATE(o.created_at) BETWEEN ? AND ? AND l.cancelled = 0", "sss", [$bid, $from, $to]);
+  $row = pos_q("SELECT COUNT(*) AS bills, COALESCE(SUM(total),0) AS takings, COALESCE(SUM(gst),0) AS gst, COALESCE(SUM(discount),0) AS discount FROM sales_orders WHERE business_id = ? AND " . pos_created_between() . "", "sss", [$bid, $from, $to]);
+  $p = pos_q("SELECT COALESCE(SUM(COALESCE(l.profit, l.amount - COALESCE(l.cost,0))),0) AS profit FROM sales_order_lines l JOIN sales_orders o ON o.id = l.order_id WHERE o.business_id = ? AND " . pos_created_between("o") . " AND l.cancelled = 0", "sss", [$bid, $from, $to]);
   return [
     "bills" => pos_growth_num($row[0]["bills"] ?? 0),
     "takings" => pos_growth_num($row[0]["takings"] ?? 0),
@@ -372,23 +372,23 @@ function pos_build_growth($bid) {
   $lastYear = pos_growth_period($bid, $lastYearStart, $lastYearEnd);
 
   $daywise = [];
-  foreach (pos_q("SELECT DATE(created_at) AS day, COUNT(*) AS bills, COALESCE(SUM(total),0) AS takings FROM sales_orders WHERE business_id = ? AND DATE(created_at) BETWEEN ? AND ? GROUP BY DATE(created_at) ORDER BY day", "sss", [$bid, $last30, $today]) as $r) {
+  foreach (pos_q("SELECT DATE(created_at) AS day, COUNT(*) AS bills, COALESCE(SUM(total),0) AS takings FROM sales_orders WHERE business_id = ? AND " . pos_created_between() . " GROUP BY DATE(created_at) ORDER BY day", "sss", [$bid, $last30, $today]) as $r) {
     $daywise[] = ["label" => substr($r["day"], 0, 10), "bills" => pos_growth_num($r["bills"]), "takings" => pos_growth_num($r["takings"])];
   }
   $hourwise = [];
-  foreach (pos_q("SELECT HOUR(created_at) AS hour, COUNT(*) AS bills, COALESCE(SUM(total),0) AS takings FROM sales_orders WHERE business_id = ? AND DATE(created_at) BETWEEN ? AND ? GROUP BY HOUR(created_at) ORDER BY hour", "sss", [$bid, $last30, $today]) as $r) {
+  foreach (pos_q("SELECT HOUR(created_at) AS hour, COUNT(*) AS bills, COALESCE(SUM(total),0) AS takings FROM sales_orders WHERE business_id = ? AND " . pos_created_between() . " GROUP BY HOUR(created_at) ORDER BY hour", "sss", [$bid, $last30, $today]) as $r) {
     $hourwise[] = ["label" => str_pad((string) (int) $r["hour"], 2, "0", STR_PAD_LEFT) . ":00", "hour" => (int) $r["hour"], "bills" => pos_growth_num($r["bills"]), "takings" => pos_growth_num($r["takings"])];
   }
   $names = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
   $weekday = [];
-  foreach (pos_q("SELECT DAYOFWEEK(created_at) AS dow, COUNT(*) AS bills, COALESCE(SUM(total),0) AS takings FROM sales_orders WHERE business_id = ? AND DATE(created_at) BETWEEN ? AND ? GROUP BY DAYOFWEEK(created_at) ORDER BY dow", "sss", [$bid, $last90, $today]) as $r) {
+  foreach (pos_q("SELECT DAYOFWEEK(created_at) AS dow, COUNT(*) AS bills, COALESCE(SUM(total),0) AS takings FROM sales_orders WHERE business_id = ? AND " . pos_created_between() . " GROUP BY DAYOFWEEK(created_at) ORDER BY dow", "sss", [$bid, $last90, $today]) as $r) {
     $weekday[] = ["label" => $names[max(0, ((int) $r["dow"]) - 1)] ?? "—", "bills" => pos_growth_num($r["bills"]), "takings" => pos_growth_num($r["takings"])];
   }
 
   $daysInMonth = max(1, (int) date("j"));
   $products = [];
   foreach (pos_q(
-    "SELECT COALESCE(MAX(l.item_id),'') AS item_id, l.item_name AS name, COALESCE(MAX(i.category),'') AS category, COALESCE(MAX(i.stock_gm),0) AS stock_gm, COALESCE(MAX(i.reorder_level_gm),0) AS reorder_gm, SUM(l.quantity_gm) AS qty, SUM(l.amount) AS amount, SUM(COALESCE(l.profit, l.amount - COALESCE(l.cost,0))) AS profit FROM sales_order_lines l JOIN sales_orders o ON o.id = l.order_id LEFT JOIN items i ON i.id = l.item_id WHERE o.business_id = ? AND DATE(o.created_at) BETWEEN ? AND ? AND l.cancelled = 0 GROUP BY l.item_name ORDER BY amount DESC",
+    "SELECT COALESCE(MAX(l.item_id),'') AS item_id, l.item_name AS name, COALESCE(MAX(i.category),'') AS category, COALESCE(MAX(i.stock_gm),0) AS stock_gm, COALESCE(MAX(i.reorder_level_gm),0) AS reorder_gm, SUM(l.quantity_gm) AS qty, SUM(l.amount) AS amount, SUM(COALESCE(l.profit, l.amount - COALESCE(l.cost,0))) AS profit FROM sales_order_lines l JOIN sales_orders o ON o.id = l.order_id LEFT JOIN items i ON i.id = l.item_id WHERE o.business_id = ? AND " . pos_created_between("o") . " AND l.cancelled = 0 GROUP BY l.item_name ORDER BY amount DESC",
     "sss",
     [$bid, $monthStart, $today]
   ) as $p) {
@@ -433,13 +433,13 @@ function pos_build_growth($bid) {
   $exp = pos_q("SELECT COALESCE(SUM(amount + COALESCE(gst,0)),0) AS total FROM expenses WHERE business_id = ? AND expense_date BETWEEN ? AND ?", "sss", [$bid, $monthStart, $today]);
   $damage = 0;
   try {
-    $d = pos_q("SELECT COALESCE(SUM(loss_amount),0) AS loss FROM damage_records WHERE business_id = ? AND DATE(created_at) BETWEEN ? AND ?", "sss", [$bid, $monthStart, $today]);
+    $d = pos_q("SELECT COALESCE(SUM(loss_amount),0) AS loss FROM damage_records WHERE business_id = ? AND " . pos_created_between() . "", "sss", [$bid, $monthStart, $today]);
     $damage = pos_growth_num($d[0]["loss"] ?? 0);
   } catch (Throwable $e) { $damage = 0; }
 
   $customers = [];
   foreach (pos_q(
-    "SELECT c.name, c.mobile, c.outstanding, COUNT(o.id) AS bills, COALESCE(SUM(o.total),0) AS takings, MAX(o.created_at) AS last_sale FROM customers c LEFT JOIN sales_orders o ON o.customer_id = c.id AND o.business_id = c.business_id AND DATE(o.created_at) BETWEEN ? AND ? WHERE c.business_id = ? GROUP BY c.id, c.name, c.mobile, c.outstanding ORDER BY takings DESC",
+    "SELECT c.name, c.mobile, c.outstanding, COUNT(o.id) AS bills, COALESCE(SUM(o.total),0) AS takings, MAX(o.created_at) AS last_sale FROM customers c LEFT JOIN sales_orders o ON o.customer_id = c.id AND o.business_id = c.business_id AND " . pos_created_between("o") . " WHERE c.business_id = ? GROUP BY c.id, c.name, c.mobile, c.outstanding ORDER BY takings DESC",
     "sss",
     [$last90, $today, $bid]
   ) as $c) {
@@ -453,13 +453,13 @@ function pos_build_growth($bid) {
   foreach ($segNames as $name) $segments[] = ["name" => $name, "count" => count(array_filter($customers, function ($c) use ($name) { return ($c["segment"] ?? "") === $name; }))];
   $newN = count(array_filter($customers, function ($c) { return ($c["segment"] ?? "") === "New"; }));
   try {
-    $nr = pos_q("SELECT COUNT(*) AS n FROM customers WHERE business_id = ? AND DATE(created_at) BETWEEN ? AND ?", "sss", [$bid, $monthStart, $today]);
+    $nr = pos_q("SELECT COUNT(*) AS n FROM customers WHERE business_id = ? AND " . pos_created_between() . "", "sss", [$bid, $monthStart, $today]);
     if ($nr) $newN = (int) ($nr[0]["n"] ?? $newN);
   } catch (Throwable $e) {}
   $returning = count(array_filter($customers, function ($c) { return pos_growth_num($c["bills"]) >= 2; }));
   $overdue = 0;
   try {
-    $ov = pos_q("SELECT COUNT(*) AS n FROM sales_orders WHERE business_id = ? AND LOWER(COALESCE(payment_status,'')) IN ('unpaid','partial','credit') AND DATE(created_at) < ?", "ss", [$bid, pos_ymd_add($today, -7)]);
+    $ov = pos_q("SELECT COUNT(*) AS n FROM sales_orders WHERE business_id = ? AND LOWER(COALESCE(payment_status,'')) IN ('unpaid','partial','credit') AND created_at < ?", "ss", [$bid, pos_ymd_add($today, -7)]);
     $overdue = (int) ($ov[0]["n"] ?? 0);
   } catch (Throwable $e) {}
 
@@ -473,7 +473,7 @@ function pos_build_growth($bid) {
   usort($categories, function ($a, $b) { return $b["amount"] <=> $a["amount"]; });
   $branches = [];
   try {
-    foreach (pos_q("SELECT COALESCE(b.name,'Main') AS name, COUNT(o.id) AS bills, COALESCE(SUM(o.total),0) AS takings FROM sales_orders o LEFT JOIN branches b ON b.id = o.branch_id WHERE o.business_id = ? AND DATE(o.created_at) BETWEEN ? AND ? GROUP BY COALESCE(b.name,'Main') ORDER BY takings DESC", "sss", [$bid, $monthStart, $today]) as $b) {
+    foreach (pos_q("SELECT COALESCE(b.name,'Main') AS name, COUNT(o.id) AS bills, COALESCE(SUM(o.total),0) AS takings FROM sales_orders o LEFT JOIN branches b ON b.id = o.branch_id WHERE o.business_id = ? AND " . pos_created_between("o") . " GROUP BY COALESCE(b.name,'Main') ORDER BY takings DESC", "sss", [$bid, $monthStart, $today]) as $b) {
       $branches[] = ["name" => $b["name"], "bills" => pos_growth_num($b["bills"]), "takings" => pos_growth_num($b["takings"])];
     }
   } catch (Throwable $e) {}

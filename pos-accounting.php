@@ -440,14 +440,14 @@ function pos_accounts_dispatch($path, $method, $body, $bid, $auth, $branchId, $u
     $partyId = trim((string) ($_GET["party_id"] ?? ""));
     if (($partyType === "customer" || $partyType === "supplier") && $partyId !== "") {
       pos_send(200, pos_q(
-        "SELECT * FROM account_ledger WHERE business_id = ? AND DATE(created_at) BETWEEN ? AND ?
+        "SELECT * FROM account_ledger WHERE business_id = ? AND " . pos_created_between() . "
          AND party_type = ? AND party_id = ?
          ORDER BY created_at DESC, entry_no DESC LIMIT 500",
         "sssss", [$bid, $from, $to, $partyType, $partyId]
       ));
     }
     pos_send(200, pos_q(
-      "SELECT * FROM account_ledger WHERE business_id = ? AND DATE(created_at) BETWEEN ? AND ?
+      "SELECT * FROM account_ledger WHERE business_id = ? AND " . pos_created_between() . "
        ORDER BY created_at DESC, entry_no DESC LIMIT 500",
       "sss", [$bid, $from, $to]
     ));
@@ -466,7 +466,7 @@ function pos_accounts_dispatch($path, $method, $body, $bid, $auth, $branchId, $u
     $to = $_GET["to"] ?? $from;
     $prior = pos_q(
       "SELECT entry_type, amount FROM account_ledger
-       WHERE business_id = ? AND party_type = ? AND party_id = ? AND DATE(created_at) < ?",
+       WHERE business_id = ? AND party_type = ? AND party_id = ? AND created_at < ?",
       "ssss",
       [$bid, $partyType, $partyId, $from]
     );
@@ -476,7 +476,7 @@ function pos_accounts_dispatch($path, $method, $body, $bid, $auth, $branchId, $u
     }
     $rows = pos_q(
       "SELECT * FROM account_ledger
-       WHERE business_id = ? AND party_type = ? AND party_id = ? AND DATE(created_at) BETWEEN ? AND ?
+       WHERE business_id = ? AND party_type = ? AND party_id = ? AND " . pos_created_between() . "
        ORDER BY created_at ASC, entry_no ASC LIMIT 1000",
       "sssss",
       [$bid, $partyType, $partyId, $from, $to]

@@ -3313,7 +3313,13 @@ function startKotWatch() {
   const kick = () => void loadKots({ announce: false });
   if (typeof requestIdleCallback === "function") requestIdleCallback(kick, { timeout: 2500 });
   else setTimeout(kick, 1200);
-  kotPollTimer = setInterval(() => void loadKots({ announce: true }), 2500);
+  let kotTick = 0;
+  kotPollTimer = setInterval(() => {
+    kotTick += 1;
+    const hot = state.currentView === "kot" || state.currentView === "counter";
+    if (!hot && kotTick % 4 !== 0) return;
+    void loadKots({ announce: true });
+  }, 2500);
   $("view-kot")?.addEventListener("pointerdown", () => {
     if (globalThis.POSQrNotify?.needsUnlock?.()) armQrOrderSound();
   });
@@ -3548,6 +3554,15 @@ function filteredItems() {
       .toLowerCase()
       .includes(q);
   });
+}
+
+const CATALOG_RENDER_LIMIT = 96;
+const ITEMS_PAGE_LIMIT = 200;
+const STOCK_PAGE_LIMIT = 200;
+
+function listRenderHint(shown, total, extra) {
+  if (!(shown < total)) return "";
+  return `<p class="hint catalog-more">Showing ${shown} of ${total}${extra || ". Search to find the rest."}</p>`;
 }
 
 function itemPhotoUrl(item) {
@@ -3974,8 +3989,8 @@ function renderCatalog() {
   renderCatalogCats();
   const root = $("catalog");
   if (!root) return;
-  const rows = filteredItems();
-  if (!rows.length) {
+  const allRows = filteredItems();
+  if (!allRows.length) {
     const q = String(state.query || "").trim();
     const addBtn = quickAddVisible()
       ? ` <button class="btn primary" type="button" data-counter-add-item="${escapeHtml(q)}">Add item</button>`
@@ -3985,6 +4000,9 @@ function renderCatalog() {
     }${addBtn}</div>`;
     return;
   }
+  const limit = String(state.categoryFilter || "").trim() || String(state.query || "").trim() ? 160 : CATALOG_RENDER_LIMIT;
+  const rows = allRows.slice(0, limit);
+  const moreHint = listRenderHint(rows.length, allRows.length, ". Search or pick a category to narrow.");
   const grouped = new Map();
   for (const i of rows) {
     const key = itemCategoryLabel(i);
@@ -3993,10 +4011,10 @@ function renderCatalog() {
   }
   const keys = [...grouped.keys()].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
   if (isRestaurantShop() && String(state.categoryFilter || "")) {
-    root.innerHTML = `<div class="catalog-group-grid">${rows.map(catalogCardHtml).join("")}</div>`;
+    root.innerHTML = `${moreHint}<div class="catalog-group-grid">${rows.map(catalogCardHtml).join("")}</div>`;
     return;
   }
-  root.innerHTML = keys
+  root.innerHTML = `${moreHint}${keys
     .map((key) => {
       const items = grouped.get(key);
       return `<section class="catalog-group">
@@ -4004,7 +4022,7 @@ function renderCatalog() {
       <div class="catalog-group-grid">${items.map(catalogCardHtml).join("")}</div>
     </section>`;
     })
-    .join("");
+    .join("")}`;
 }
 
 function cartTotals() {
@@ -5159,14 +5177,21 @@ function paintItemsHero() {
 }
 
 function filterItemsCatalog() {
+  renderItemsTable();
+}
+
+function matchingItemsForTable() {
   const q = String($("item-catalog-search")?.value || "").trim().toLowerCase();
   const lowOnly = Boolean($("item-low-only")?.checked);
   const hideInactive = Boolean($("item-hide-inactive")?.checked);
-  document.querySelectorAll("#items-table [data-item-card]").forEach((card) => {
-    const hay = card.dataset.itemSearch || "";
-    const low = card.dataset.itemLow === "1";
-    const inactive = card.dataset.itemInactive === "1";
-    card.hidden = (Boolean(q) && !hay.includes(q)) || (lowOnly && !low) || (hideInactive && inactive);
+  return (state.items || []).filter((i) => {
+    const hay = itemSearchHay(i);
+    const low = Number(i.stock_gm) <= Number(i.reorder_level_gm);
+    const inactive = itemStatusOf(i.status) === "inactive";
+    if (q && !hay.includes(q)) return false;
+    if (lowOnly && !low) return false;
+    if (hideInactive && inactive) return false;
+    return true;
   });
 }
 
@@ -5351,8 +5376,8 @@ function renderItemsTable() {
   const variant = isVariantShop();
   const footwear = isFootwearShop();
   paintItemsHero();
-  const items = state.items || [];
-  if (!items.length) {
+  const allItems = state.items || [];
+  if (!allItems.length) {
     el.innerHTML = `<div class="item-empty-card">
       <strong>No items yet</strong>
       <p>${isPharmacyShop()
@@ -5362,8 +5387,18 @@ function renderItemsTable() {
     </div>`;
     return;
   }
+  const matched = matchingItemsForTable();
+  const items = matched.slice(0, ITEMS_PAGE_LIMIT);
+  const moreHint = listRenderHint(items.length, matched.length);
+  if (!items.length) {
+    el.innerHTML = `<div class="item-empty-card">
+      <strong>No matching items</strong>
+      <p>Clear search or turn off filters to see the rest of the catalog.</p>
+    </div>`;
+    return;
+  }
   if (isPharmacyShop()) {
-    el.innerHTML = `<table class="items-pharm-table"><thead><tr>
+    el.innerHTML = `${moreHint}<table class="items-pharm-table"><thead><tr>
       <th>Medicine</th><th>Generic</th><th>Type</th><th>Pack</th><th>Batch</th><th>Expiry</th>
       <th class="pharm-n">MRP</th><th class="pharm-n">Rate</th><th>Stock</th><th></th>
     </tr></thead><tbody>${items
@@ -5392,10 +5427,9 @@ function renderItemsTable() {
       </tr>`;
       })
       .join("")}</tbody></table>`;
-    filterItemsCatalog();
     return;
   }
-  el.innerHTML = items
+  el.innerHTML = `${moreHint}${items
     .map((i) => {
       const src = itemPhotoUrl(i);
       const thumb = src
@@ -5441,8 +5475,7 @@ function renderItemsTable() {
         </div>
       </article>`;
     })
-    .join("");
-  filterItemsCatalog();
+    .join("")}`;
 }
 
 function dueCustomers() {
@@ -6515,8 +6548,8 @@ function paintStockList(rows) {
   const el = $("stock-table");
   if (!el) return;
   const selected = $("stk-item")?.value || "";
-  const list = Array.isArray(rows) ? rows : [];
-  if (!list.length) {
+  const all = Array.isArray(rows) ? rows : [];
+  if (!all.length) {
     el.innerHTML = `<div class="item-empty-card">
       <strong>No stock rows</strong>
       <p>Add items first. Their on-hand quantity shows here.</p>
@@ -6524,8 +6557,9 @@ function paintStockList(rows) {
     return;
   }
   if (isPharmacyShop()) {
-    const cards = pharmacyStockCards(list, state.stockBatches);
-    el.innerHTML = `<table class="stock-batch-table"><thead><tr>
+    const allCards = pharmacyStockCards(all, state.stockBatches);
+    const cards = allCards.slice(0, STOCK_PAGE_LIMIT);
+    el.innerHTML = `${listRenderHint(cards.length, allCards.length)}<table class="stock-batch-table"><thead><tr>
       <th>Medicine</th><th>Batch No.</th><th>Expiry Date</th>
       <th class="pharm-n">On hand</th><th class="pharm-n">Value</th><th>Status</th>
     </tr></thead><tbody>${cards
@@ -6563,7 +6597,8 @@ function paintStockList(rows) {
     filterStockList();
     return;
   }
-  el.innerHTML = `${list
+  const list = all.slice(0, STOCK_PAGE_LIMIT);
+  el.innerHTML = `${listRenderHint(list.length, all.length)}${list
     .map((r) => {
       const item = state.items.find((i) => i.id === r.id) || r;
       const low = stockIsLow(r);
@@ -8048,7 +8083,13 @@ function startQrOrderWatch() {
   const kick = () => void pollQrOrders({ announce: false });
   if (typeof requestIdleCallback === "function") requestIdleCallback(kick, { timeout: 2500 });
   else setTimeout(kick, 1200);
-  qrPollTimer = setInterval(() => void pollQrOrders({ announce: true }), 2500);
+  let qrTick = 0;
+  qrPollTimer = setInterval(() => {
+    qrTick += 1;
+    const hot = state.currentView === "qr-orders" || state.currentView === "counter";
+    if (!hot && qrTick % 4 !== 0) return;
+    void pollQrOrders({ announce: true });
+  }, 2500);
   paintQrSoundArm();
   document.addEventListener("pos-qr-sound", () => {
     paintQrSoundToggle();
@@ -11669,7 +11710,7 @@ function fillItemPicker(datalistId, searchId, hiddenId, filterFn) {
   const list = $(datalistId);
   if (!list) return;
   const items = activeItems().filter((i) => (filterFn ? filterFn(i) : true));
-  list.innerHTML = items.map((i) => pickerOptionHtml(i)).join("");
+  list.innerHTML = items.slice(0, 200).map((i) => pickerOptionHtml(i)).join("");
   const search = $(searchId);
   const hidden = $(hiddenId);
   if (search) search._posFilter = filterFn;
