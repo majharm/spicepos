@@ -60,8 +60,9 @@ test("dashboard outstanding rebuild is set-based", () => {
   const core = read("pos-php-core.php");
   const app = read("js/app.js");
   assert.match(accounts, /async function recomputeBusinessOutstandingSetBased/);
-  assert.doesNotMatch(accounts, /for \(const row of rows\) await recomputeCustomerOutstanding/);
+  assert.match(accounts, /export async function recomputeAllBusinessesOutstanding/);
   assert.match(core, /function pos_recompute_business_outstanding_set/);
+  assert.match(core, /function pos_recompute_all_businesses_outstanding/);
   assert.doesNotMatch(core, /foreach \(\$custs as \$row\) pos_recompute_customer_outstanding/);
   assert.match(app, /const CATALOG_RENDER_LIMIT = 96/);
   assert.match(app, /function listRenderHint/);

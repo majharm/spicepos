@@ -948,12 +948,25 @@ function customerDue(c) {
   return Number.isFinite(n) && n > 0 ? n : 0;
 }
 
+function invoiceOpenRemainder(o) {
+  const total = Number(o?.total) || 0;
+  const paid = Number(o?.amount_paid ?? o?.amountPaid) || 0;
+  if (paid > 0.004) return Math.max(0, total - paid);
+  const status = String(o?.payment_status || "").toLowerCase();
+  const method = String(o?.payment_method || "").toLowerCase();
+  if (status === "paid") return 0;
+  if (status === "unpaid" || status === "due" || method === "credit") return Math.max(0, total - paid);
+  if (status === "partial") return Math.max(0, total - paid);
+  if (method && method !== "credit") return 0;
+  return Math.max(0, total - paid);
+}
+
 function applyInvoiceDuesToCustomers() {
   const extra = {};
   for (const o of orderCache || []) {
     if (!o?.customer_id) continue;
     if (String(o.status || "confirmed").toLowerCase() === "cancelled") continue;
-    const left = Math.max(0, Number(o.total || 0) - Number(o.amount_paid || 0));
+    const left = invoiceOpenRemainder(o);
     if (left > 0.009) extra[o.customer_id] = (extra[o.customer_id] || 0) + left;
   }
   if (!Object.keys(extra).length) return;

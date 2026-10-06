@@ -212,23 +212,47 @@ test("customer outstanding hydrates from open invoice remainders on the Customer
   const css = readFileSync(path.join(root, "css/pos.css"), "utf8");
   assert.match(accounts, /export async function invoiceOpenDueByCustomer/);
   assert.match(accounts, /async function recomputeBusinessOutstandingSetBased/);
+  assert.match(accounts, /export async function recomputeAllBusinessesOutstanding/);
+  assert.match(accounts, /GROUP BY l.business_id, l.party_id/);
   assert.match(accounts, /export function hydrateCustomerOutstandingRows/);
-  assert.match(accounts, /LEFT JOIN sales_orders o ON o.id = l.reference_id/);
-  assert.match(accounts, /INVOICE_OPEN_REMAINDER_SQL/);
-  assert.match(accounts, /async function customerPreviousDue/);
+  assert.match(accounts, /export async function persistHydratedOutstanding/);
+  assert.match(accounts, /Object.prototype.hasOwnProperty.call\(map, c\?\.id\)/);
+  assert.match(accounts, /WHEN inv.id IS NOT NULL THEN COALESCE\(inv.open_due, 0\)/);
+  assert.match(accounts, /if \(Number\(inv\?\.n\) > 0\) next = round2\(Number\(inv\?\.open_due\) \|\| 0\)/);
   assert.match(core, /function pos_hydrate_customer_outstanding_rows/);
   assert.match(core, /function pos_invoice_open_dues/);
+  assert.match(core, /array_key_exists\(\$cid, \$dues\)/);
+  assert.match(core, /WHEN inv.id IS NOT NULL THEN COALESCE\(inv.open_due, 0\)/);
+  assert.match(accounts, /INVOICE_OPEN_REMAINDER_SQL/);
+  assert.match(accounts, /async function customerPreviousDue/);
   assert.match(core, /function pos_invoice_open_remainder_sql/);
   assert.match(core, /function pos_customer_previous_due/);
+  assert.match(core, /function pos_recompute_all_businesses_outstanding/);
+  assert.match(core, /function pos_recompute_outstanding_set/);
   assert.match(till, /pos_hydrate_customer_outstanding_rows/);
   assert.match(app, /function applyInvoiceDuesToCustomers/);
+  assert.match(app, /function invoiceOpenRemainder/);
   assert.match(app, /function refreshCustomersOutstanding/);
   assert.match(app, /td class="cust-due"/);
   assert.match(css, /#customers-table td\.cust-due/);
   assert.match(index, /id="customers-hero-stats"/);
   assert.match(index, /id="customers-table"/);
-  assert.match(accounts, /async function applyInvoicePaidFifo/);
+  assert.match(readFileSync(path.join(root, "server/index.js"), "utf8"), /recomputeAllBusinessesOutstanding\(\)/);
   assert.match(core, /function pos_apply_invoice_paid_fifo/);
+});
+
+test("stale customer outstanding is cleared when open invoices are paid", async () => {
+  const { hydrateCustomerOutstandingRows } = await import("./accounts.js");
+  const paid = hydrateCustomerOutstandingRows(
+    [{ id: "cust-majhar", name: "majhar", outstanding: 1900 }],
+    { "cust-majhar": 0 },
+  );
+  assert.equal(paid[0].outstanding, 0);
+  const untouched = hydrateCustomerOutstandingRows(
+    [{ id: "cust-ledger", name: "Opening balance", outstanding: 500 }],
+    {},
+  );
+  assert.equal(untouched[0].outstanding, 500);
 });
 
 test("invoice settlement posts sale credit, payment receipt, and customer due", () => {
