@@ -382,7 +382,8 @@ test("invoice due rows use previous due + invoice − payment", () => {
   });
   assert.equal(due.previous, 10000);
   assert.equal(due.paid, 3000);
-  assert.equal(due.current, 12000);
+  assert.equal(due.current, 2000);
+  assert.equal(due.account, 12000);
   const html = InvoicePrint.invoiceDueRowsHtml(
     { total: 5000, previous_due: 10000, amount_paid: 3000, payment_reference: "UTR123456", payment_date: "2026-09-19" },
     (n) => `₹${Number(n).toFixed(2)}`,
@@ -493,6 +494,33 @@ test("office invoice lists ledger receipts till date then total due", () => {
   });
   assert.equal(due.paid, 26000);
   assert.equal(due.current, 14000);
+});
+
+test("Paid invoice Total due is this bill remaining, not older customer due", () => {
+  const InvoicePrint = loadInvoicePrint();
+  const order = {
+    order_number: "SO-10004",
+    customer_name: "majhar",
+    total: 2850,
+    previous_due: 1900,
+    amount_paid: 2850,
+    payment_method: "cash",
+    payment_status: "paid",
+    payment_date: "2026-10-06",
+    subtotal: 2850,
+    gst: 0,
+  };
+  const due = InvoicePrint.invoiceDueFigures(order);
+  assert.equal(due.previous, 1900);
+  assert.equal(due.paid, 2850);
+  assert.equal(due.current, 0);
+  const html = InvoicePrint.invoiceDueRowsHtml(order, (n) => `₹${Number(n).toFixed(2)}`, (v) => String(v));
+  assert.match(html, /Previous due/);
+  assert.match(html, /₹1,900\.00|₹1900\.00/);
+  assert.match(html, /Payment Made/);
+  assert.match(html, /₹2,850\.00|₹2850\.00/);
+  assert.match(html, /Total due/);
+  assert.match(html, /₹0\.00/);
 });
 
 test("Walk-in cafe bill does not carry house outstanding onto Total due", () => {

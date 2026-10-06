@@ -783,7 +783,7 @@ function invoiceSettlementHtml(o) {
   const total = due ? due.total : Number(o.total) || 0;
   const current = due
     ? due.current
-    : o.current_due != null ? Number(o.current_due) : Math.max(0, previous + total - paid);
+    : Math.max(0, total - Math.min(Math.max(0, paid), total));
   const mobile = o.customer_mobile || "";
   const ref = String(o.payment_reference || "").trim();
   const payRaw =
@@ -796,7 +796,7 @@ function invoiceSettlementHtml(o) {
   const receiptNo = o.receipt?.entryNo || o.receipt?.entry_no || o.receipt_entry_no || "";
   return `<details class="invoice-settle" open>
     <summary>Total due ${money(current)} · Paid till date ${money(paid)}</summary>
-    <p class="hint">Previous due + invoice − payment = outstanding</p>
+    <p class="hint">Total due is this invoice after payment. Previous due is older unpaid bills.</p>
     <div class="invoice-settle-grid">
       <div><span>Invoice No.</span><strong>${escapeHtml(o.order_number || "—")}</strong></div>
       <div><span>Invoice Date</span><strong>${escapeHtml(formatShopDateTime(o.created_at))}</strong></div>

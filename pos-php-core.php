@@ -1755,10 +1755,10 @@ function pos_apply_invoice_paid_fifo($customerId, $amount, $businessId) {
   if ($left <= 0 || !$customerId) return;
   try {
     $rows = pos_q(
-      "SELECT id, total, COALESCE(amount_paid,0) AS amount_paid FROM sales_orders
+      "SELECT id, total, COALESCE(amount_paid,0) AS amount_paid, " . pos_invoice_open_remainder_sql() . " AS open_need FROM sales_orders
        WHERE business_id = ? AND customer_id = ?
          AND LOWER(TRIM(COALESCE(status,'confirmed'))) <> 'cancelled'
-         AND (COALESCE(total,0) - COALESCE(amount_paid,0)) > 0.004
+         AND " . pos_invoice_open_remainder_sql() . " > 0.004
        ORDER BY created_at ASC",
       "ss",
       [$businessId, $customerId]
@@ -1768,7 +1768,7 @@ function pos_apply_invoice_paid_fifo($customerId, $amount, $businessId) {
   }
   foreach ($rows as $o) {
     if ($left <= 0) break;
-    $need = pos_round2(max(0, (float) ($o["total"] ?? 0) - (float) ($o["amount_paid"] ?? 0)));
+    $need = pos_round2((float) ($o["open_need"] ?? max(0, (float) ($o["total"] ?? 0) - (float) ($o["amount_paid"] ?? 0))));
     if ($need <= 0) continue;
     $chunk = min($need, $left);
     pos_apply_invoice_paid_delta($o["id"], $chunk, $businessId);
@@ -1806,7 +1806,7 @@ function pos_invoice_paid_amount($method, $total, $raw) {
 function pos_settle_customer_invoice($customer, $total, $method, $orderId, $orderNumber, $businessId, $uid = null, $amountPaid = null, $paymentReference = null, $paymentDate = null) {
   $invoiceTotal = pos_round2($total);
   $walkIn = pos_is_walk_in_customer($customer);
-  $previousDue = $walkIn ? 0 : pos_round2((float) ($customer["outstanding"] ?? 0));
+  $previousDue = $walkIn ? 0 : pos_customer_previous_due($businessId, $customer["id"] ?? "", $orderId);
   $paid = pos_invoice_paid_amount($method, $invoiceTotal, $amountPaid);
   if ($walkIn && $paid > $invoiceTotal) $paid = $invoiceTotal;
   $maxPaid = pos_round2($previousDue + $invoiceTotal);
@@ -1972,11 +1972,56 @@ function pos_attach_order_payments($bid, $orders) {
   return $orders;
 }
 
+function pos_invoice_open_remainder_sql() {
+  return "GREATEST(0, COALESCE(total,0) - CASE
+  WHEN COALESCE(amount_paid,0) > 0.004 THEN COALESCE(amount_paid,0)
+  WHEN LOWER(TRIM(COALESCE(payment_status,''))) = 'paid' THEN COALESCE(total,0)
+  WHEN LOWER(TRIM(COALESCE(payment_method,''))) = 'credit'
+    OR LOWER(TRIM(COALESCE(payment_status,''))) IN ('unpaid','due','partial')
+    THEN COALESCE(amount_paid,0)
+  WHEN NULLIF(LOWER(TRIM(COALESCE(payment_method,''))), '') IS NOT NULL
+    THEN COALESCE(total,0)
+  ELSE COALESCE(amount_paid,0)
+END)";
+}
+
+function pos_customer_previous_due($businessId, $customerId, $excludeOrderId = "") {
+  if (!$customerId) return 0;
+  $rem = pos_invoice_open_remainder_sql();
+  $sql = "SELECT COALESCE(SUM({$rem}), 0) AS open_due
+       FROM sales_orders
+       WHERE business_id = ? AND customer_id = ?
+         AND LOWER(TRIM(COALESCE(status,'confirmed'))) <> 'cancelled'";
+  $types = "ss";
+  $params = [$businessId, $customerId];
+  if ($excludeOrderId) {
+    $sql .= " AND id <> ?";
+    $types .= "s";
+    $params[] = $excludeOrderId;
+  }
+  try {
+    $rows = pos_q($sql, $types, $params);
+    return pos_round2((float) ($rows[0]["open_due"] ?? 0));
+  } catch (Exception $e) {
+    try {
+      $fallback = "SELECT COALESCE(SUM(GREATEST(0, COALESCE(total,0) - COALESCE(amount_paid,0))), 0) AS open_due
+       FROM sales_orders
+       WHERE business_id = ? AND customer_id = ?
+         AND LOWER(TRIM(COALESCE(status,'confirmed'))) <> 'cancelled'";
+      if ($excludeOrderId) $fallback .= " AND id <> ?";
+      $rows = pos_q($fallback, $types, $params);
+      return pos_round2((float) ($rows[0]["open_due"] ?? 0));
+    } catch (Exception $e2) {
+      return 0;
+    }
+  }
+}
+
 function pos_invoice_open_dues($businessId) {
   try {
     $rows = pos_q(
       "SELECT customer_id AS id,
-              COALESCE(SUM(GREATEST(0, COALESCE(total,0) - COALESCE(amount_paid,0))), 0) AS open_due
+              COALESCE(SUM(" . pos_invoice_open_remainder_sql() . "), 0) AS open_due
        FROM sales_orders
        WHERE business_id = ?
          AND LOWER(TRIM(COALESCE(status,'confirmed'))) <> 'cancelled'
@@ -2070,7 +2115,7 @@ function pos_recompute_customer_outstanding($businessId, $customerId) {
   $next = pos_round2(max(0, $billed - $received));
   try {
     $inv = pos_q(
-      "SELECT COALESCE(SUM(GREATEST(0, COALESCE(total,0) - COALESCE(amount_paid,0))), 0) AS open_due
+      "SELECT COALESCE(SUM(" . pos_invoice_open_remainder_sql() . "), 0) AS open_due
        FROM sales_orders
        WHERE business_id = ? AND customer_id = ?
          AND LOWER(TRIM(COALESCE(status,'confirmed'))) <> 'cancelled'",
@@ -2115,7 +2160,7 @@ function pos_recompute_business_outstanding_set($businessId) {
          )
        GROUP BY l.party_id";
   $invoice = "SELECT customer_id AS id,
-            COALESCE(SUM(GREATEST(0, COALESCE(total,0) - COALESCE(amount_paid,0))), 0) AS open_due
+            COALESCE(SUM(" . pos_invoice_open_remainder_sql() . "), 0) AS open_due
      FROM sales_orders
      WHERE business_id = ? AND LOWER(TRIM(COALESCE(status,'confirmed'))) <> 'cancelled'
      GROUP BY customer_id";

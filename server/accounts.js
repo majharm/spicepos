@@ -38,6 +38,52 @@ async function execSql(conn, sql, params = []) {
   return [rows];
 }
 
+const INVOICE_OPEN_REMAINDER_SQL = `GREATEST(0, COALESCE(total,0) - CASE
+  WHEN COALESCE(amount_paid,0) > 0.004 THEN COALESCE(amount_paid,0)
+  WHEN LOWER(TRIM(COALESCE(payment_status,''))) = 'paid' THEN COALESCE(total,0)
+  WHEN LOWER(TRIM(COALESCE(payment_method,''))) = 'credit'
+    OR LOWER(TRIM(COALESCE(payment_status,''))) IN ('unpaid','due','partial')
+    THEN COALESCE(amount_paid,0)
+  WHEN NULLIF(LOWER(TRIM(COALESCE(payment_method,''))), '') IS NOT NULL
+    THEN COALESCE(total,0)
+  ELSE COALESCE(amount_paid,0)
+END)`;
+
+async function customerPreviousDue(conn, customerId, excludeOrderId) {
+  if (!customerId) return 0;
+  const params = [bid(), customerId];
+  let exclude = "";
+  if (excludeOrderId) {
+    exclude = " AND id <> ?";
+    params.push(excludeOrderId);
+  }
+  try {
+    const [[row]] = await execSql(
+      conn,
+      `SELECT COALESCE(SUM(${INVOICE_OPEN_REMAINDER_SQL}), 0) AS open_due
+       FROM sales_orders
+       WHERE business_id = ? AND customer_id = ?
+         AND LOWER(TRIM(COALESCE(status,'confirmed'))) <> 'cancelled'${exclude}`,
+      params,
+    );
+    return round2(Number(row?.open_due) || 0);
+  } catch {
+    try {
+      const [[row]] = await execSql(
+        conn,
+        `SELECT COALESCE(SUM(GREATEST(0, COALESCE(total,0) - COALESCE(amount_paid,0))), 0) AS open_due
+         FROM sales_orders
+         WHERE business_id = ? AND customer_id = ?
+           AND LOWER(TRIM(COALESCE(status,'confirmed'))) <> 'cancelled'${exclude}`,
+        params,
+      );
+      return round2(Number(row?.open_due) || 0);
+    } catch {
+      return 0;
+    }
+  }
+}
+
 function requirePaymentDeleteAdmin() {
   if (authUser()?.role !== "business_admin") {
     const err = new Error("Only the business admin can delete payment entries");
@@ -209,11 +255,12 @@ async function applyInvoicePaidFifo(conn, customerId, amount) {
   try {
     const [found] = await execSql(
       conn,
-      `SELECT id, total, COALESCE(amount_paid,0) AS amount_paid
+      `SELECT id, total, COALESCE(amount_paid,0) AS amount_paid,
+              ${INVOICE_OPEN_REMAINDER_SQL} AS open_need
        FROM sales_orders
        WHERE business_id = ? AND customer_id = ?
          AND LOWER(TRIM(COALESCE(status,'confirmed'))) <> 'cancelled'
-         AND (COALESCE(total,0) - COALESCE(amount_paid,0)) > 0.004
+         AND ${INVOICE_OPEN_REMAINDER_SQL} > 0.004
        ORDER BY created_at ASC`,
       [bid(), customerId],
     );
@@ -223,7 +270,7 @@ async function applyInvoicePaidFifo(conn, customerId, amount) {
   }
   for (const o of rows) {
     if (left <= 0) break;
-    const need = round2(Math.max(0, Number(o.total || 0) - Number(o.amount_paid || 0)));
+    const need = round2(Number(o.open_need != null ? o.open_need : Math.max(0, Number(o.total || 0) - Number(o.amount_paid || 0))));
     if (need <= 0) continue;
     const chunk = Math.min(need, left);
     await applyInvoicePaidDelta(conn, o.id, chunk);
@@ -305,7 +352,7 @@ export async function settleCustomerInvoice(conn, {
 }) {
   const invoiceTotal = round2(total);
   const walkIn = isWalkInParty(customer);
-  const previousDue = walkIn ? 0 : round2(Number(customer.outstanding || 0));
+  const previousDue = walkIn ? 0 : await customerPreviousDue(conn, customer.id, orderId);
   let paid = invoicePaidAmount(method, invoiceTotal, amountPaid);
   if (walkIn && paid > invoiceTotal) paid = invoiceTotal;
   const maxPaid = round2(previousDue + invoiceTotal);
@@ -413,7 +460,7 @@ export async function invoiceOpenDueByCustomer(businessId) {
   try {
     const rows = await query(
       `SELECT customer_id AS id,
-              COALESCE(SUM(GREATEST(0, COALESCE(total,0) - COALESCE(amount_paid,0))), 0) AS open_due
+              COALESCE(SUM(${INVOICE_OPEN_REMAINDER_SQL}), 0) AS open_due
        FROM sales_orders
        WHERE business_id = ?
          AND LOWER(TRIM(COALESCE(status,'confirmed'))) <> 'cancelled'
@@ -498,7 +545,7 @@ export async function recomputeCustomerOutstanding(conn, customerId) {
   try {
     const [[inv]] = await execSql(
       conn,
-      `SELECT COALESCE(SUM(GREATEST(0, COALESCE(total,0) - COALESCE(amount_paid,0))), 0) AS open_due
+      `SELECT COALESCE(SUM(${INVOICE_OPEN_REMAINDER_SQL}), 0) AS open_due
        FROM sales_orders
        WHERE business_id = ? AND customer_id = ?
          AND LOWER(TRIM(COALESCE(status,'confirmed'))) <> 'cancelled'`,
@@ -549,7 +596,7 @@ async function recomputeBusinessOutstandingSetBased(conn) {
          )
        GROUP BY l.party_id`;
   const invoiceJoin = `SELECT customer_id AS id,
-            COALESCE(SUM(GREATEST(0, COALESCE(total,0) - COALESCE(amount_paid,0))), 0) AS open_due
+            COALESCE(SUM(${INVOICE_OPEN_REMAINDER_SQL}), 0) AS open_due
      FROM sales_orders
      WHERE business_id = ? AND LOWER(TRIM(COALESCE(status,'confirmed'))) <> 'cancelled'
      GROUP BY customer_id`;
@@ -763,7 +810,7 @@ export function registerAccounts(app) {
            FROM sales_orders
            WHERE business_id = ? AND customer_id = ?
              AND LOWER(TRIM(COALESCE(status,'confirmed'))) <> 'cancelled'
-             AND (COALESCE(total,0) - COALESCE(amount_paid,0)) > 0.004
+             AND ${INVOICE_OPEN_REMAINDER_SQL} > 0.004
            ORDER BY created_at ASC`,
           [bid(), customerId],
         );

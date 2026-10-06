@@ -742,11 +742,14 @@ ${purchaseBody(purchase, ctx)}
     let paid = rows.length ? round2(rows.reduce((sum, r) => sum + r.amount, 0)) : storedN != null && storedN > 0 ? storedN : inferred;
     const maxApply = round2(Math.max(0, previous + total));
     if (paid > maxApply) paid = maxApply;
-    const current = round2(Math.max(0, previous + total - paid));
+    const paidOnThis = round2(Math.min(Math.max(0, paid), total));
+    const current = round2(Math.max(0, total - paidOnThis));
+    const account = round2(Math.max(0, previous + total - paid));
     return {
       previous,
       paid,
       current,
+      account,
       total,
       payments: rows,
       invoiceAmount: round2(order.subtotal),

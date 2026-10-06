@@ -214,9 +214,12 @@ test("customer outstanding hydrates from open invoice remainders on the Customer
   assert.match(accounts, /async function recomputeBusinessOutstandingSetBased/);
   assert.match(accounts, /export function hydrateCustomerOutstandingRows/);
   assert.match(accounts, /LEFT JOIN sales_orders o ON o.id = l.reference_id/);
-  assert.match(accounts, /GREATEST\(0, COALESCE\(total,0\) - COALESCE\(amount_paid,0\)\)/);
+  assert.match(accounts, /INVOICE_OPEN_REMAINDER_SQL/);
+  assert.match(accounts, /async function customerPreviousDue/);
   assert.match(core, /function pos_hydrate_customer_outstanding_rows/);
   assert.match(core, /function pos_invoice_open_dues/);
+  assert.match(core, /function pos_invoice_open_remainder_sql/);
+  assert.match(core, /function pos_customer_previous_due/);
   assert.match(till, /pos_hydrate_customer_outstanding_rows/);
   assert.match(app, /function applyInvoiceDuesToCustomers/);
   assert.match(app, /function refreshCustomersOutstanding/);
