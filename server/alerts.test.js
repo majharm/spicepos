@@ -126,7 +126,8 @@ test("Master Admin Settings lives under Backup with Active/Inactive templates", 
   assert.match(master, /id="note-form"/);
   assert.match(php, /pos_send_shop_welcome_alerts/);
   assert.match(php, /pos_send_credential_alerts/);
-  assert.match(php, /pos_tick_shop_alerts/);
+  assert.doesNotMatch(php, /if \(\$path === "master\/dashboard"[\s\S]*pos_tick_shop_alerts/);
+  assert.match(alerts, /function pos_tick_shop_alerts/);
   assert.match(alerts, /pos_send_renewal_alerts/);
   assert.match(alerts, /tpl_renewal_before/);
   assert.match(alerts, /renewal_expired/);

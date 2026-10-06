@@ -57,6 +57,20 @@ function pos_looks_json($body) {
   return $t !== "" && ($t[0] === "{" || $t[0] === "[");
 }
 
+function pos_port_cache_file() {
+  return rtrim((string) ($_SERVER["DOCUMENT_ROOT"] ?? __DIR__), "/") . "/pos-api-port.cache";
+}
+
+function pos_cached_port() {
+  $p = (int) trim((string) @file_get_contents(pos_port_cache_file()));
+  return ($p > 0 && $p < 65536) ? $p : 0;
+}
+
+function pos_remember_port($port) {
+  $p = (int) $port;
+  if ($p > 0 && $p < 65536) @file_put_contents(pos_port_cache_file(), (string) $p);
+}
+
 function pos_curl($url, $method, $body, $cookie, $hostHeader = "") {
   if (!function_exists("curl_init")) return null;
   $ch = curl_init($url);
@@ -67,14 +81,16 @@ function pos_curl($url, $method, $body, $cookie, $hostHeader = "") {
     $headers[] = "Content-Type: application/json";
     curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
   }
-  curl_setopt_array($ch, [
+  $opts = [
     CURLOPT_CUSTOMREQUEST => $method,
     CURLOPT_RETURNTRANSFER => true,
     CURLOPT_HEADER => true,
     CURLOPT_CONNECTTIMEOUT => 1,
-    CURLOPT_TIMEOUT => 3,
+    CURLOPT_TIMEOUT => 5,
     CURLOPT_HTTPHEADER => $headers,
-  ]);
+  ];
+  if (defined("CURLOPT_CONNECTTIMEOUT_MS")) $opts[CURLOPT_CONNECTTIMEOUT_MS] = 250;
+  curl_setopt_array($ch, $opts);
   $raw = curl_exec($ch);
   if ($raw === false) return null;
   $headerSize = curl_getinfo($ch, CURLINFO_HEADER_SIZE);
@@ -130,6 +146,8 @@ function pos_ports_from_file($file) {
 
 function pos_read_ports() {
   $ports = [];
+  $cached = pos_cached_port();
+  if ($cached) $ports[] = $cached;
   foreach (pos_collect_files() as $file) {
     foreach (pos_ports_from_file($file) as $p) $ports[] = $p;
   }
@@ -146,7 +164,10 @@ function pos_read_ports() {
 function pos_try_proxy($suffix, $method, $body, $cookie) {
   foreach (pos_read_ports() as $port) {
     $got = pos_curl("http://127.0.0.1:" . $port . "/api/" . $suffix, $method, $body, $cookie);
-    if ($got && pos_looks_json($got[3])) return $got;
+    if ($got && pos_looks_json($got[3])) {
+      pos_remember_port($port);
+      return $got;
+    }
   }
   return null;
 }
@@ -199,6 +220,12 @@ $start = "skipped";
 $canExec = function_exists("exec") || function_exists("shell_exec");
 if ($canExec) {
   $start = pos_try_start_node();
+  $got = pos_curl("http://127.0.0.1:38473/api/" . $suffix, $method, $body, $cookie);
+  if ($got && pos_looks_json($got[3])) {
+    pos_remember_port(38473);
+    pos_send_result($got[0], $got[1], $got[2], $got[3]);
+    exit;
+  }
   $got = pos_try_proxy($suffix, $method, $body, $cookie);
   if ($got) {
     pos_send_result($got[0], $got[1], $got[2], $got[3]);

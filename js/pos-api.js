@@ -58,10 +58,10 @@
     const rpc = list.filter((s) => s.mode === "rpc");
     const prefix = list.filter((s) => s.mode !== "rpc");
     const out = [];
-    if (preferred && !mutating) out.push(preferred);
+    // Known-good /api first so master/staff login does not wait on every RPC fallback.
+    if (preferred) out.push(preferred);
     if (mutating) out.push(...rpc, ...prefix);
     else out.push(...prefix, ...rpc);
-    if (preferred && mutating) out.push(preferred);
     return out;
   }
 
