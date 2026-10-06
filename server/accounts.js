@@ -476,13 +476,29 @@ export async function invoiceOpenDueByCustomer(businessId) {
 }
 
 export function hydrateCustomerOutstandingRows(customers, dues) {
+  const map = dues && typeof dues === "object" ? dues : {};
   return (Array.isArray(customers) ? customers : []).map((c) => {
     if (isWalkInParty(c)) return { ...c, outstanding: 0 };
+    if (!Object.prototype.hasOwnProperty.call(map, c?.id)) return c;
     const have = Number(c?.outstanding) || 0;
-    const inv = Number(dues?.[c?.id]) || 0;
-    const next = round2(Math.max(have, inv));
-    return next > have ? { ...c, outstanding: next } : c;
+    const next = round2(Math.max(0, Number(map[c.id]) || 0));
+    return Math.abs(next - have) > 0.009 ? { ...c, outstanding: next } : c;
   });
+}
+
+export async function persistHydratedOutstanding(rows, original) {
+  const prev = new Map((Array.isArray(original) ? original : []).map((c) => [c?.id, Number(c?.outstanding) || 0]));
+  for (const c of Array.isArray(rows) ? rows : []) {
+    if (!c?.id) continue;
+    const next = Number(c.outstanding) || 0;
+    const have = prev.has(c.id) ? prev.get(c.id) : NaN;
+    if (Number.isFinite(have) && Math.abs(next - have) < 0.009) continue;
+    try {
+      await query("UPDATE customers SET outstanding = ? WHERE id = ? AND business_id = ?", [next, c.id, bid()]);
+    } catch {
+      /* optional persist */
+    }
+  }
 }
 
 export async function recomputeCustomerOutstanding(conn, customerId) {
@@ -545,13 +561,13 @@ export async function recomputeCustomerOutstanding(conn, customerId) {
   try {
     const [[inv]] = await execSql(
       conn,
-      `SELECT COALESCE(SUM(${INVOICE_OPEN_REMAINDER_SQL}), 0) AS open_due
+      `SELECT COUNT(*) AS n, COALESCE(SUM(${INVOICE_OPEN_REMAINDER_SQL}), 0) AS open_due
        FROM sales_orders
        WHERE business_id = ? AND customer_id = ?
          AND LOWER(TRIM(COALESCE(status,'confirmed'))) <> 'cancelled'`,
       [bid(), customerId],
     );
-    next = round2(Math.max(next, Number(inv?.open_due) || 0));
+    if (Number(inv?.n) > 0) next = round2(Number(inv?.open_due) || 0);
   } catch {
     /* amount_paid column optional on old shops */
   }
@@ -607,10 +623,12 @@ async function recomputeBusinessOutstandingSetBased(conn) {
        LEFT JOIN (${billedJoin}) billed ON billed.id = c.id
        LEFT JOIN (${receivedJoin}) rcp ON rcp.id = c.id
        LEFT JOIN (${invoiceJoin}) inv ON inv.id = c.id
-       SET c.outstanding = ROUND(GREATEST(0, GREATEST(
-         COALESCE(billed.billed, 0) - COALESCE(rcp.received, 0),
-         COALESCE(inv.open_due, 0)
-       )), 2)
+       SET c.outstanding = ROUND(GREATEST(0,
+         CASE
+           WHEN inv.id IS NOT NULL THEN COALESCE(inv.open_due, 0)
+           ELSE GREATEST(0, COALESCE(billed.billed, 0) - COALESCE(rcp.received, 0))
+         END
+       ), 2)
        WHERE c.business_id = ?
          AND c.code <> 'CUS-001'
          AND LOWER(TRIM(c.name)) NOT IN ('walk-in','walkin')`,

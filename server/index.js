@@ -23,7 +23,7 @@ import { registerTenant } from "./tenant.js";
 import { registerHub } from "./hub.js";
 import { registerBackup } from "./backup.js";
 import { registerUnits, ensureInventoryUnits } from "./units.js";
-import { registerAccounts, recordCreditSale, settleCustomerInvoice, listCustomerReceipts, attachPaymentsToOrders, invoiceOpenDueByCustomer, hydrateCustomerOutstandingRows } from "./accounts.js";
+import { registerAccounts, recordCreditSale, settleCustomerInvoice, listCustomerReceipts, attachPaymentsToOrders, invoiceOpenDueByCustomer, hydrateCustomerOutstandingRows, persistHydratedOutstanding } from "./accounts.js";
 import { postSaleJournal } from "./accounting.js";
 import { audit } from "./audit.js";
 import { getPlatformSettings, shopSupportContact } from "./settings.js";
@@ -329,6 +329,7 @@ app.get("/api/bootstrap", requireStaff, async (_req, res) => {
       shopSupportContact(businessId),
     ]);
     const customers = hydrateCustomerOutstandingRows(customerRows, dues);
+    void persistHydratedOutstanding(customers, customerRows).catch(() => {});
     res.json({
       company: {
         ...attachInvoiceText(company, business),
