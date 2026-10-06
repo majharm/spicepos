@@ -29,6 +29,8 @@ test("i18n falls back to English and never shows the raw key", () => {
   assert.equal(I.t("settings.quick_add", "en"), "Quick Add button");
   assert.equal(I.t("settings.quick_add_show", "en"), "Show Quick Add");
   assert.equal(I.t("settings.quick_add_hide", "en"), "Hide Quick Add");
+  assert.equal(I.t("settings.fast_mode", "en"), "Fast Mode");
+  assert.equal(I.t("settings.fast_mode_on", "en"), "On — Counter first, lighter pages");
   assert.equal(I.t("invoice.scan_to_pay", "en"), "Scan to pay");
   assert.equal(I.t("invoice.terms", "en"), "Terms & conditions");
 });

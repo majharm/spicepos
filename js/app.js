@@ -547,6 +547,7 @@ function applyFootwearMode() {
   applyNav();
   renderTableBoard();
   applyQuickAddVisibility();
+  applyFastMode();
 }
 
 function fillWearerSelects() {
@@ -1957,7 +1958,11 @@ function gstSummaryRows(summary) {
 }
 
 function reportBlock(title, sheet, headers, rows, group) {
-  const n = Array.isArray(rows) ? rows.length : 0;
+  const all = Array.isArray(rows) ? rows : [];
+  const n = all.length;
+  const cap = fastModeOn() ? 80 : n;
+  const shown = all.slice(0, cap);
+  const more = shown.length < n ? `<p class="hint catalog-more">Showing ${shown.length} of ${n} rows. Excel has the full list.</p>` : "";
   return `<section class="report-block" data-report-title="${escapeHtml(title)}" data-report-group="${escapeHtml(group || "")}" data-report-sheet="${escapeHtml(sheet || "")}">
     <div class="report-block-head">
       <div>
@@ -1969,7 +1974,7 @@ function reportBlock(title, sheet, headers, rows, group) {
         <a class="btn" href="${excelHref(sheet)}">Excel</a>
       </div>
     </div>
-    ${htmlTable(headers, rows)}
+    ${more}${htmlTable(headers, shown)}
   </section>`;
 }
 
@@ -2224,10 +2229,31 @@ function landingView() {
   const role = state.session?.role;
   if (isRestaurantShop() && role === "kitchen" && can("kot")) return "kot";
   if (isRestaurantShop() && role === "captain" && can("counter")) return "counter";
+  if (fastModeOn() && can("counter")) return "counter";
   if (can("dashboard")) return "dashboard";
   if (can("counter")) return "counter";
   if (can("kot")) return "kot";
   return "support";
+}
+
+function fastModeOn(company = state.company) {
+  const v = company?.fast_mode_enabled;
+  if (v === 0 || v === "0" || v === 2 || v === "2" || v === false || v === "off" || v === "hide") return false;
+  return true;
+}
+
+function applyFastMode() {
+  document.body.classList.toggle("fast-mode", fastModeOn());
+}
+
+const viewFreshAt = Object.create(null);
+function markViewFresh(name) {
+  viewFreshAt[name] = Date.now();
+}
+function viewStillFresh(name, ms = 60000) {
+  if (!fastModeOn()) return false;
+  const t = viewFreshAt[name] || 0;
+  return Date.now() - t < ms;
 }
 
 function applyNav() {
@@ -2439,10 +2465,15 @@ function showView(name) {
   paintViewHeader(name);
   if (name === "settings") showSettingsTab(requested === "backup" ? "backup" : "profile");
   if (name === "reports") {
-    loadReports();
-    globalThis.POSBizHubUi?.paintReportsCenter?.();
+    if (!viewStillFresh("reports", 90000)) loadReports();
+    else globalThis.POSBizHubUi?.paintReportsCenter?.();
   }
-  if (name === "growth") loadGrowthDashboard();
+  if (name === "growth") {
+    if (!viewStillFresh("growth")) {
+      loadGrowthDashboard();
+      markViewFresh("growth");
+    }
+  }
   if (name === "accounts") loadAccounts();
   if (name === "expenses") loadExpenses();
   if (name === "orders") loadOrders();
@@ -2456,7 +2487,9 @@ function showView(name) {
   if (name === "purchases") loadPurchases();
   if (name === "suppliers") loadSuppliers();
   if (name === "support") renderSupport();
-  if (name === "dashboard") loadDashboard();
+  if (name === "dashboard") {
+    if (!viewStillFresh("dashboard")) loadDashboard();
+  }
   if (name === "hub-sales") globalThis.POSBizHubUi?.paintModuleDesk?.("hub-sales-tiles", "sales");
   if (name === "hub-purchases") globalThis.POSBizHubUi?.paintModuleDesk?.("hub-purchases-tiles", "purchases");
   if (name === "payments") globalThis.POSBizHubUi?.paintPaymentsDesk?.();
@@ -3313,7 +3346,7 @@ function startKotWatch() {
   kotPollTimer = setInterval(() => {
     kotTick += 1;
     const hot = state.currentView === "kot" || state.currentView === "counter";
-    if (!hot && kotTick % 4 !== 0) return;
+    if (!hot && kotTick % (fastModeOn() ? 8 : 4) !== 0) return;
     void loadKots({ announce: true });
   }, 2500);
   $("view-kot")?.addEventListener("pointerdown", () => {
@@ -3572,7 +3605,7 @@ function itemPhotoLetter(item) {
 }
 
 function cardPhotoHtml(item) {
-  const src = itemPhotoUrl(item);
+  const src = fastModeOn() ? "" : itemPhotoUrl(item);
   if (src) {
     return `<div class="card-photo"><img src="${escapeHtml(src)}" alt="" draggable="false"></div>`;
   }
@@ -3996,7 +4029,9 @@ function renderCatalog() {
     }${addBtn}</div>`;
     return;
   }
-  const limit = String(state.categoryFilter || "").trim() || String(state.query || "").trim() ? 160 : CATALOG_RENDER_LIMIT;
+  const limit = String(state.categoryFilter || "").trim() || String(state.query || "").trim()
+    ? (fastModeOn() ? 80 : 160)
+    : (fastModeOn() ? 48 : CATALOG_RENDER_LIMIT);
   const rows = allRows.slice(0, limit);
   const moreHint = listRenderHint(rows.length, allRows.length, ". Search or pick a category to narrow.");
   const grouped = new Map();
@@ -5384,7 +5419,7 @@ function renderItemsTable() {
     return;
   }
   const matched = matchingItemsForTable();
-  const items = matched.slice(0, ITEMS_PAGE_LIMIT);
+  const items = matched.slice(0, fastModeOn() ? 80 : ITEMS_PAGE_LIMIT);
   const moreHint = listRenderHint(items.length, matched.length);
   if (!items.length) {
     el.innerHTML = `<div class="item-empty-card">
@@ -5592,9 +5627,12 @@ function renderCustomersTable() {
   fillDueCustomerSelect();
   const el = $("customers-table");
   if (!el) return;
-  el.innerHTML = `<table><thead><tr>
+  const cap = fastModeOn() ? 80 : list.length;
+  const rows = list.slice(0, cap);
+  const moreHint = listRenderHint(rows.length, list.length);
+  el.innerHTML = `${moreHint}<table><thead><tr>
     <th>Code</th><th>${isPharmacyShop() ? "Customer Name" : "Name"}</th>${isPharmacyShop() ? "<th>Address</th><th>Doctor / Rx</th>" : "<th>Type</th>"}<th>${isPharmacyShop() ? "Mobile No." : "Mobile"}</th>${isPharmacyShop() ? "" : "<th>State</th><th>GSTIN</th>"}<th>Outstanding</th><th></th>
-  </tr></thead><tbody>${list
+  </tr></thead><tbody>${rows
     .map(
       (c) => `<tr>
       <td>${escapeHtml(c.code)}</td>
@@ -5842,15 +5880,22 @@ function renderPoLines() {
   const el = $("po-lines");
   if (!el) return;
   if ($("po-date") && !$("po-date").value) $("po-date").value = ymd();
-  const items = activeItems();
-  if (!items.length) {
-    el.innerHTML = '<p class="hint">No items in the catalog yet.</p>';
+  const q = ($("po-item-search")?.value || "").trim().toLowerCase();
+  let items = activeItems();
+  if (q) {
+    items = items.filter((i) => [i.name, i.hsn, i.code, i.category, i.subcategory].join(" ").toLowerCase().includes(q));
+  }
+  const cap = fastModeOn() ? 80 : items.length;
+  const shown = items.slice(0, cap);
+  const moreHint = listRenderHint(shown.length, items.length, ". Search to find the rest.");
+  if (!shown.length) {
+    el.innerHTML = q ? '<p class="hint">No matching items.</p>' : '<p class="hint">No items in the catalog yet.</p>';
     paintPoTotals();
     return;
   }
   const rows = [];
   const panels = [];
-  for (const i of items) {
+  for (const i of shown) {
     const unit = itemUnit(i);
     const qty = POSUnits.isCount(unit) ? 1 : 1000;
     const search = [i.name, i.hsn, i.code, i.category, i.subcategory].join(" ").toLowerCase();
@@ -5877,11 +5922,11 @@ function renderPoLines() {
         <td class="num" data-po-amt="${escapeHtml(i.id)}">${money(POSUnits.lineAmount(qty, i.purchase_rate, unit))}</td>
       </tr>`);
   }
-  el.innerHTML = `<div class="po-table-wrap"><table class="po-table"><thead><tr>
+  el.innerHTML = `${moreHint}<div class="po-table-wrap"><table class="po-table"><thead><tr>
     <th class="po-check"></th><th>Item</th><th>${taxCodeLabel()}</th><th>Qty</th><th>Unit</th><th>Rate</th><th>Expiry</th><th class="num">Amount</th>
   </tr></thead><tbody>${rows.join("")}</tbody></table></div>
     <div id="po-barcode-panels">${panels.join("")}</div>`;
-  filterPoLines();
+  if (!fastModeOn()) filterPoLines();
   paintPoTotals();
   refreshPoBarcodeRows();
 }
@@ -5972,8 +6017,12 @@ function renderSettings() {
   const showQuickAdd = quickAddVisible();
   if ($("set-quick-add-show")) $("set-quick-add-show").checked = showQuickAdd;
   if ($("set-quick-add-hide")) $("set-quick-add-hide").checked = !showQuickAdd;
+  const showFast = fastModeOn();
+  if ($("set-fast-mode-on")) $("set-fast-mode-on").checked = showFast;
+  if ($("set-fast-mode-off")) $("set-fast-mode-off").checked = !showFast;
   if ($("set-low-stock-threshold")) $("set-low-stock-threshold").value = String(lowStockThreshold());
   applyQuickAddVisibility();
+  applyFastMode();
   paintTableShiftHistory();
   if ($("set-city")) $("set-city").value = state.company.city || "";
   if ($("set-state")) $("set-state").value = state.company.state || "";
@@ -6207,6 +6256,7 @@ async function loadBootstrap() {
   paintPlatformNotices(data.notes);
   paintHeader();
   applyQuickAddVisibility();
+  applyFastMode();
   paintPlatformSupport();
   renderCustomersSelect();
   applyUiLocale();
@@ -6216,7 +6266,13 @@ async function loadBootstrap() {
     paintDashWelcome();
   }
   void loadToday();
-  void loadCustomerLoyalty();
+  if (fastModeOn()) {
+    const later = () => void loadCustomerLoyalty();
+    if (typeof requestIdleCallback === "function") requestIdleCallback(later, { timeout: 8000 });
+    else setTimeout(later, 2500);
+  } else {
+    void loadCustomerLoyalty();
+  }
   if (state.currentView === "counter") maybeShowCounterLowStockAlert();
 }
 
@@ -6299,8 +6355,11 @@ async function loadDashboard() {
       .join("");
     if ($("dash-plan-kpis") && extra) $("dash-plan-kpis").innerHTML = extra;
     if ($("dash-kpis") && extra && !$("dash-plan-kpis")) $("dash-kpis").insertAdjacentHTML("beforeend", extra);
-    if (isServicesShop()) globalThis.POSSalonUi?.loadSalonBoard?.();
-    if (isPrintShop()) globalThis.POSPrintUi?.loadPrintBoard?.();
+    if (!fastModeOn()) {
+      if (isServicesShop()) globalThis.POSSalonUi?.loadSalonBoard?.();
+      if (isPrintShop()) globalThis.POSPrintUi?.loadPrintBoard?.();
+    }
+    markViewFresh("dashboard");
   } catch (err) {
     $("dash-kpis").innerHTML = `<p class="hint error">${escapeHtml(err.message)}</p>`;
   }
@@ -6554,7 +6613,7 @@ function paintStockList(rows) {
   }
   if (isPharmacyShop()) {
     const allCards = pharmacyStockCards(all, state.stockBatches);
-    const cards = allCards.slice(0, STOCK_PAGE_LIMIT);
+    const cards = allCards.slice(0, fastModeOn() ? 80 : STOCK_PAGE_LIMIT);
     el.innerHTML = `${listRenderHint(cards.length, allCards.length)}<table class="stock-batch-table"><thead><tr>
       <th>Medicine</th><th>Batch No.</th><th>Expiry Date</th>
       <th class="pharm-n">On hand</th><th class="pharm-n">Value</th><th>Status</th>
@@ -6593,7 +6652,7 @@ function paintStockList(rows) {
     filterStockList();
     return;
   }
-  const list = all.slice(0, STOCK_PAGE_LIMIT);
+  const list = all.slice(0, fastModeOn() ? 80 : STOCK_PAGE_LIMIT);
   el.innerHTML = `${listRenderHint(list.length, all.length)}${list
     .map((r) => {
       const item = state.items.find((i) => i.id === r.id) || r;
@@ -6855,6 +6914,7 @@ async function loadReports() {
     globalThis.POSBizHubUi?.paintReportsCenter?.();
     $("reports-hint").textContent = "";
     $("reports-hint").className = "hint";
+    markViewFresh("reports");
   } catch (err) {
     $("reports-hint").textContent = err.message;
     $("reports-hint").className = "hint error";
@@ -7120,6 +7180,7 @@ function withOrderPayments(order) {
 
 async function attachMissingOrderPayments(orders) {
   const list = orders || [];
+  if (fastModeOn()) return list;
   const missing = list.filter((o) => o.customer_id && !(Array.isArray(o.payments) && o.payments.length));
   if (!missing.length) return list;
   try {
@@ -8083,7 +8144,7 @@ function startQrOrderWatch() {
   qrPollTimer = setInterval(() => {
     qrTick += 1;
     const hot = state.currentView === "qr-orders" || state.currentView === "counter";
-    if (!hot && qrTick % 4 !== 0) return;
+    if (!hot && qrTick % (fastModeOn() ? 8 : 4) !== 0) return;
     void pollQrOrders({ announce: true });
   }, 2500);
   paintQrSoundArm();
@@ -10429,7 +10490,8 @@ $("packs-table")?.addEventListener("click", (e) => {
 
 $("purchase-form").addEventListener("input", (e) => {
   if (e.target.id === "po-item-search") {
-    filterPoLines();
+    if (fastModeOn()) renderPoLines();
+    else filterPoLines();
     return;
   }
   if (e.target.matches("[data-po-qty],[data-po-rate],[data-po-barcodes]")) {
@@ -10723,6 +10785,9 @@ $("settings-form").addEventListener("submit", async (e) => {
     if ($("set-quick-add-hide") || $("set-quick-add-show")) {
       payload.quick_add_enabled = $("set-quick-add-hide")?.checked ? 0 : 1;
     }
+    if ($("set-fast-mode-off") || $("set-fast-mode-on")) {
+      payload.fast_mode_enabled = $("set-fast-mode-off")?.checked ? 0 : 1;
+    }
     if ($("set-low-stock-threshold")) {
       payload.low_stock_threshold = lowStockThreshold({ low_stock_threshold: $("set-low-stock-threshold").value });
     }
@@ -10737,6 +10802,7 @@ $("settings-form").addEventListener("submit", async (e) => {
     state.payQrDraft = null;
     paintHeader();
     applyQuickAddVisibility();
+    applyFastMode();
     renderCatalog();
     renderSettings();
     tick();
@@ -10770,6 +10836,15 @@ $("set-quick-add-block")?.addEventListener("change", () => {
   state.company.quick_add_enabled = $("set-quick-add-hide")?.checked ? 0 : 1;
   applyQuickAddVisibility();
   renderCatalog();
+});
+
+$("set-fast-mode-block")?.addEventListener("change", () => {
+  if (!state.company) state.company = {};
+  state.company.fast_mode_enabled = $("set-fast-mode-off")?.checked ? 0 : 1;
+  applyFastMode();
+  renderCatalog();
+  if (state.currentView === "customers") renderCustomersTable();
+  if (state.currentView === "purchases") renderPoLines();
 });
 
 $("logo-clear").addEventListener("click", () => {
@@ -12854,6 +12929,7 @@ async function boot() {
     }
     applyUiLocale();
     applyNav();
+    applyFastMode();
     if (isMobileLayout()) setNavCollapsed(true);
     const landing = landingView();
     if (me.business?.status && me.business.status !== "active" && !me.impersonating) {

@@ -6,10 +6,10 @@
     <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
     <title>ATAV POS</title>
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./css/pos.css?v=20261006qa1" />
+    <link rel="stylesheet" href="./css/pos.css?v=20261006fast1" />
     <link rel="stylesheet" href="./css/saas.css?v=20260905deploy136" />
   </head>
-  <body>
+  <body class="fast-mode">
     <div class="app" id="app">
       <nav class="nav" id="app-nav" aria-label="App">
         <div class="brand">
@@ -2216,6 +2216,12 @@
                     <label class="full"><input type="radio" name="set-quick-add" id="set-quick-add-hide" value="2" /> <span data-i18n="settings.quick_add_hide">Hide Quick Add</span></label>
                     <p class="item-composer-note full" data-i18n="settings.quick_add_hint">On Counter, the sidebar and Quick Add hide automatically so the bill is full width. Use the menu button to open the sidebar. This Show/Hide control still applies on Dashboard and other pages. Turning it off does not delete the feature — staff can still add products from Inventory → Items.</p>
                   </fieldset>
+                  <fieldset class="item-block" id="set-fast-mode-block">
+                    <legend data-i18n="settings.fast_mode">Fast Mode</legend>
+                    <label class="full"><input type="radio" name="set-fast-mode" id="set-fast-mode-on" value="1" checked /> <span data-i18n="settings.fast_mode_on">On — Counter first, lighter pages</span></label>
+                    <label class="full"><input type="radio" name="set-fast-mode" id="set-fast-mode-off" value="0" /> <span data-i18n="settings.fast_mode_off">Off — full Dashboard and product photos</span></label>
+                    <p class="item-composer-note full" data-i18n="settings.fast_mode_hint">Fast Mode opens Counter on login, skips product photos on the till, shows fewer rows, and turns off extra motion so every page feels quicker. Billing, stock, and invoices stay the same. Turn it off if you want the full Dashboard when you sign in.</p>
+                  </fieldset>
                   <fieldset class="item-block apparel-only" id="set-low-stock-block" hidden>
                     <legend>Low Stock Alert</legend>
                     <label class="full">Low Stock Threshold (pcs)
@@ -2474,7 +2480,7 @@
         </section>
       </div>
     </aside>
-    <script src="./js/i18n-catalog.js?v=20260924ah1" defer></script>
+    <script src="./js/i18n-catalog.js?v=20261006fast1" defer></script>
     <script src="./js/i18n.js?v=20260924bc1" defer></script>
     <script src="./js/gst-supply.js?v=20260905deploy136" defer></script>
     <script src="./js/pos-api.js?v=20260905deploy154" defer></script>
@@ -2500,7 +2506,7 @@
     <script src="./js/salon-ui.js?v=20260919salon1" defer></script>
     <script src="./js/print.js?v=20260922deploy219" defer></script>
     <script src="./js/print-ui.js?v=20260922deploy218" defer></script>
-    <script src="./js/app.js?v=20261006qa1" defer></script>
+    <script src="./js/app.js?v=20261006fast1" defer></script>
     <script src="./js/growth.js?v=20260905deploy145" defer></script>
     <script src="./js/offers-ui.js?v=20260919off1" defer></script>
   </body>

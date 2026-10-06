@@ -383,6 +383,12 @@ function pos_php_till_dispatch($path, $method, $body) {
       $params[] = ($hide === 0 || $hide === 2) ? "0" : "1";
       $types .= "s";
     }
+    if (array_key_exists("fast_mode_enabled", $body)) {
+      $langSql .= ", fast_mode_enabled = ?";
+      $fast = (int) ($body["fast_mode_enabled"] ?? 1);
+      $params[] = ($fast === 0 || $fast === 2) ? "0" : "1";
+      $types .= "s";
+    }
     if (array_key_exists("low_stock_threshold", $body)) {
       $langSql .= ", low_stock_threshold = ?";
       $n = (int) ($body["low_stock_threshold"] ?? 5);

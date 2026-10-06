@@ -8800,5 +8800,28 @@ html[data-scheme="dark"] .saas-chip.is-stat { background: #1e3a8a; color: #bfdbf
 }
 #customers-hero-stats { justify-content: flex-end; }
 
+body.fast-mode *,
+body.fast-mode *::before,
+body.fast-mode *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
+}
+body.fast-mode .saas-skel { display: none !important; }
+body.fast-mode .card:hover,
+body.fast-mode .dash-tile:hover,
+body.fast-mode .report-card:hover {
+  transform: none !important;
+}
+body.fast-mode .lock,
+body.fast-mode .modal,
+body.fast-mode .nav-scrim,
+body.fast-mode .master-topbar {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+
 
 

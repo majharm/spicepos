@@ -746,6 +746,10 @@ app.post("/api/settings", requireStaff, requirePerm("settings"), async (req, res
     langSql += ", quick_add_enabled = ?";
     params.push(Number(body.quick_add_enabled) === 0 || Number(body.quick_add_enabled) === 2 ? 0 : 1);
   }
+  if (Object.prototype.hasOwnProperty.call(body, "fast_mode_enabled")) {
+    langSql += ", fast_mode_enabled = ?";
+    params.push(Number(body.fast_mode_enabled) === 0 || Number(body.fast_mode_enabled) === 2 ? 0 : 1);
+  }
   if (Object.prototype.hasOwnProperty.call(body, "low_stock_threshold")) {
     const n = Number(body.low_stock_threshold);
     const threshold = Number.isFinite(n) ? Math.max(1, Math.min(9999, Math.round(n))) : 5;
