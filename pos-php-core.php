@@ -1635,9 +1635,6 @@ function pos_ensure_accounts_schema() {
       INDEX idx_exp_biz_date (business_id, expense_date)
     )"
   );
-  if (function_exists("pos_recompute_all_businesses_outstanding")) {
-    try { pos_recompute_all_businesses_outstanding(); } catch (Exception $e) { /* repair optional */ }
-  }
 }
 
 function pos_next_seq($name, $businessId, $start = 1001) {
@@ -2873,11 +2870,6 @@ function pos_php_dispatch($path, $method, $rawBody) {
       if (!$ok) {
         pos_send(401, ["error" => "Invalid master login"]);
       }
-      if (function_exists("pos_password_needs_rehash") && pos_password_needs_rehash($admin["password_hash"] ?? "")) {
-        try {
-          pos_q("UPDATE platform_admins SET password_hash = ? WHERE id = ?", "ss", [pos_hash_password($pass), $admin["id"]]);
-        } catch (Exception $e) { /* ignore rehash */ }
-      }
       $ttl = pos_ttl(pos_remember($body));
       $token = pos_new_token();
       pos_q(
@@ -3093,54 +3085,62 @@ function pos_php_dispatch($path, $method, $rawBody) {
     }
 
     if ($path === "master/dashboard" && $method === "GET") {
-      if (function_exists("pos_tick_shop_alerts")) {
-        try { pos_tick_shop_alerts(); } catch (Throwable $e) { /* closing tick is best-effort */ }
-      }
-      if (is_file(__DIR__ . "/pos-backup.php")) {
-        require_once __DIR__ . "/pos-backup.php";
-        if (function_exists("pos_tick_backup_email")) {
-          try { pos_tick_backup_email(); } catch (Throwable $e) { /* backup email tick is best-effort */ }
-        }
-      }
-      $businesses = pos_q("SELECT * FROM businesses");
-      $statuses = array_map("pos_public_status", $businesses);
-      $users = pos_q("SELECT COUNT(*) AS n FROM staff_users");
-      $branches = pos_q("SELECT COUNT(*) AS n FROM branches");
-      $devices = pos_q("SELECT COUNT(*) AS n FROM pos_devices");
-      $tx = pos_q("SELECT COUNT(*) AS n FROM sales_orders");
-      $sales = pos_q("SELECT COALESCE(SUM(total),0) AS takings FROM sales_orders WHERE " . pos_created_today());
-      $plans = pos_q("SELECT * FROM subscription_plans");
-      $planMap = [];
-      foreach ($plans as $p) $planMap[$p["id"]] = $p;
-      $monthly = 0;
-      foreach ($businesses as $b) {
-        if (pos_public_status($b) !== "active") continue;
-        $monthly += (float) ($planMap[$b["plan_id"]]["fee_monthly"] ?? 0);
-      }
+      $today = pos_created_today();
       $byBiz = pos_q(
         "SELECT b.id, b.name, b.status, b.subscription_expires_at, b.plan_id,
                 p.name AS plan_name, p.fee_monthly,
-                (SELECT COUNT(*) FROM staff_users u WHERE u.business_id=b.id) AS users,
-                (SELECT COUNT(*) FROM branches br WHERE br.business_id=b.id) AS branches,
-                (SELECT COALESCE(SUM(total),0) FROM sales_orders s WHERE s.business_id=b.id AND " . pos_created_today("s") . ") AS today_sales
+                COALESCE(u.users, 0) AS users,
+                COALESCE(br.branches, 0) AS branches,
+                COALESCE(s.today_sales, 0) AS today_sales,
+                COALESCE(s.today_bills, 0) AS today_bills
          FROM businesses b
          LEFT JOIN subscription_plans p ON p.id = b.plan_id
+         LEFT JOIN (
+           SELECT business_id, COUNT(*) AS users FROM staff_users GROUP BY business_id
+         ) u ON u.business_id = b.id
+         LEFT JOIN (
+           SELECT business_id, COUNT(*) AS branches FROM branches GROUP BY business_id
+         ) br ON br.business_id = b.id
+         LEFT JOIN (
+           SELECT business_id, COALESCE(SUM(total),0) AS today_sales, COUNT(*) AS today_bills
+           FROM sales_orders
+           WHERE {$today}
+           GROUP BY business_id
+         ) s ON s.business_id = b.id
          ORDER BY b.name"
       );
-      foreach ($byBiz as &$row) $row["computed_status"] = pos_public_status($row);
+      $devices = pos_q("SELECT COUNT(*) AS n FROM pos_devices");
+      $statuses = [];
+      $monthly = 0;
+      $users = 0;
+      $branches = 0;
+      $todaySales = 0;
+      $todayBills = 0;
+      $trial = 0;
+      foreach ($byBiz as &$row) {
+        $row["computed_status"] = pos_public_status($row);
+        $statuses[] = $row["computed_status"];
+        if ($row["computed_status"] === "active") $monthly += (float) ($row["fee_monthly"] ?? 0);
+        $users += (int) ($row["users"] ?? 0);
+        $branches += (int) ($row["branches"] ?? 0);
+        $todaySales += (float) ($row["today_sales"] ?? 0);
+        $todayBills += (int) ($row["today_bills"] ?? 0);
+        if (($row["plan_id"] ?? "") === "trial") $trial += 1;
+      }
+      unset($row);
       pos_send(200, [
         "totals" => [
-          "businesses" => count($businesses),
+          "businesses" => count($byBiz),
           "active" => count(array_filter($statuses, function ($s) { return $s === "active"; })),
           "inactive" => count(array_filter($statuses, function ($s) { return $s === "inactive"; })),
           "expired" => count(array_filter($statuses, function ($s) { return $s === "expired"; })),
           "suspended" => count(array_filter($statuses, function ($s) { return $s === "suspended"; })),
-          "trial" => count(array_filter($businesses, function ($b) { return ($b["plan_id"] ?? "") === "trial"; })),
-          "users" => (int) ($users[0]["n"] ?? 0),
-          "branches" => (int) ($branches[0]["n"] ?? 0),
+          "trial" => $trial,
+          "users" => $users,
+          "branches" => $branches,
           "devices" => (int) ($devices[0]["n"] ?? 0),
-          "transactions" => (int) ($tx[0]["n"] ?? 0),
-          "todaySales" => $sales[0]["takings"] ?? 0,
+          "transactions" => $todayBills,
+          "todaySales" => $todaySales,
           "subscriptionRevenue" => $monthly,
         ],
         "businesses" => $byBiz,

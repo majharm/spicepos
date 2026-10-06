@@ -120,6 +120,8 @@ test("PHP fallback routes checkout, holds, and order updates through core", () =
   const apiJs = read("js/pos-api.js");
   assert.match(apiJs, /isPhpUnimplemented/);
   assert.match(apiJs, /orderedSpecs/);
+  assert.match(apiJs, /if \(preferred\) out.push\(preferred\)/);
+  assert.doesNotMatch(apiJs, /if \(preferred && !mutating\)/);
   assert.match(apiJs, /localStorage.setItem\(STORAGE/);
   assert.match(apiJs, /window.posApiReady = Promise.resolve/);
   assert.doesNotMatch(apiJs, /window.posApiReady = ensureSpec\(\)/);
@@ -313,7 +315,7 @@ test("Master Admin can set passwords and unlock locked accounts", () => {
   assert.match(core, /pos_register_business\(\$body, true\)/);
   assert.match(core, /strtotime\("\+1 year"\)/);
   assert.match(read("server/onboard.js"), /INTERVAL 1 YEAR/);
-  assert.match(read("master.html"), /master\.js\?v=20260922deploy222/);
+  assert.match(read("master.html"), /master\.js\?v=20261006login1/);
   assert.match(read("js/app.js"), /Subscription fee \/ year/);
   assert.match(read("js/app.js"), /\["Valid till"/);
   assert.match(read("js/app.js"), /\["Days left"/);
@@ -374,7 +376,7 @@ test("POS boot skips API probe and slims catalog photos", () => {
   assert.match(index, /i18n\.js[^>]+defer/);
   assert.match(index, /qrcode\.iife\.js[^>]+defer/);
   assert.match(index, /preload="auto"/);
-  assert.match(index, /pos-api\.js\?v=20260905deploy154/);
+  assert.match(index, /pos-api\.js\?v=20261006login1/);
   assert.match(index, /app\.js\?v=20261006due2/);
   assert.match(index, /class="dialog-head"/);
   assert.match(index, /id="modal-close"/);
@@ -397,7 +399,7 @@ test("POS boot skips API probe and slims catalog photos", () => {
   assert.match(node, /function slimCatalogItem/);
   assert.match(node, /app\.get\("\/api\/items\/:id"/);
   assert.match(node, /CATALOG_ITEM_SELECT/);
-  assert.match(read("master.html"), /pos-api\.js\?v=20260905deploy154/);
+  assert.match(read("master.html"), /pos-api\.js\?v=20261006login1/);
 });
 
 test("Restaurant Counter can create named dining tables", () => {

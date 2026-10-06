@@ -114,50 +114,55 @@ export function registerMaster(app) {
   app.get("/api/master/dashboard", (req, res) =>
     send(res, async () => {
       void tickBackupEmail().catch((err) => console.error("backup email tick:", err.message));
-      const businesses = await query("SELECT * FROM businesses");
-      const statuses = businesses.map((b) => publicStatus(b));
-      const [users] = await query("SELECT COUNT(*) AS n FROM staff_users");
-      const [branches] = await query("SELECT COUNT(*) AS n FROM branches");
-      const [devices] = await query("SELECT COUNT(*) AS n FROM pos_devices");
-      const [tx] = await query("SELECT COUNT(*) AS n FROM sales_orders");
-      const [sales] = await query(
-        `SELECT COALESCE(SUM(total),0) AS takings FROM sales_orders WHERE ${createdToday()}`,
-      );
-      const plans = await query("SELECT * FROM subscription_plans");
-      const planMap = Object.fromEntries(plans.map((p) => [p.id, p]));
-      const monthlyFees = businesses.reduce((sum, b) => {
+      const today = createdToday();
+      const [byBiz, [devices]] = await Promise.all([
+        query(
+          `SELECT b.id, b.name, b.status, b.subscription_expires_at, b.plan_id,
+                  p.name AS plan_name, p.fee_monthly,
+                  COALESCE(u.users, 0) AS users,
+                  COALESCE(br.branches, 0) AS branches,
+                  COALESCE(s.today_sales, 0) AS today_sales,
+                  COALESCE(s.today_bills, 0) AS today_bills
+           FROM businesses b
+           LEFT JOIN subscription_plans p ON p.id = b.plan_id
+           LEFT JOIN (
+             SELECT business_id, COUNT(*) AS users FROM staff_users GROUP BY business_id
+           ) u ON u.business_id = b.id
+           LEFT JOIN (
+             SELECT business_id, COUNT(*) AS branches FROM branches GROUP BY business_id
+           ) br ON br.business_id = b.id
+           LEFT JOIN (
+             SELECT business_id, COALESCE(SUM(total),0) AS today_sales, COUNT(*) AS today_bills
+             FROM sales_orders
+             WHERE ${today}
+             GROUP BY business_id
+           ) s ON s.business_id = b.id
+           ORDER BY b.name`,
+        ),
+        query("SELECT COUNT(*) AS n FROM pos_devices"),
+      ]);
+      const statuses = byBiz.map((b) => publicStatus(b));
+      const monthlyFees = byBiz.reduce((sum, b) => {
         if (publicStatus(b) !== "active") return sum;
-        return sum + Number(planMap[b.plan_id]?.fee_monthly || 0);
+        return sum + Number(b.fee_monthly || 0);
       }, 0);
-      const byBiz = await query(
-        `SELECT b.id, b.name, b.status, b.subscription_expires_at, b.plan_id,
-                p.name AS plan_name, p.fee_monthly,
-                (SELECT COUNT(*) FROM staff_users u WHERE u.business_id=b.id) AS users,
-                (SELECT COUNT(*) FROM branches br WHERE br.business_id=b.id) AS branches,
-                COALESCE(s.today_sales, 0) AS today_sales
-         FROM businesses b
-         LEFT JOIN subscription_plans p ON p.id = b.plan_id
-         LEFT JOIN (
-           SELECT business_id, COALESCE(SUM(total),0) AS today_sales
-           FROM sales_orders
-           WHERE ${createdToday()}
-           GROUP BY business_id
-         ) s ON s.business_id = b.id
-         ORDER BY b.name`,
-      );
+      const users = byBiz.reduce((sum, b) => sum + (Number(b.users) || 0), 0);
+      const branches = byBiz.reduce((sum, b) => sum + (Number(b.branches) || 0), 0);
+      const todaySales = byBiz.reduce((sum, b) => sum + (Number(b.today_sales) || 0), 0);
+      const todayBills = byBiz.reduce((sum, b) => sum + (Number(b.today_bills) || 0), 0);
       return {
         totals: {
-          businesses: businesses.length,
+          businesses: byBiz.length,
           active: statuses.filter((s) => s === "active").length,
           inactive: statuses.filter((s) => s === "inactive").length,
           expired: statuses.filter((s) => s === "expired").length,
           suspended: statuses.filter((s) => s === "suspended").length,
-          trial: businesses.filter((b) => b.plan_id === "trial").length,
-          users: users.n,
-          branches: branches.n,
+          trial: byBiz.filter((b) => b.plan_id === "trial").length,
+          users,
+          branches,
           devices: devices.n,
-          transactions: tx.n,
-          todaySales: sales.takings,
+          transactions: todayBills,
+          todaySales,
           subscriptionRevenue: monthlyFees,
         },
         businesses: byBiz.map((b) => ({ ...b, computed_status: publicStatus(b) })),

@@ -1313,7 +1313,13 @@ ensureSchema()
     .then(() => ensureSalonSchema())
     .then(() => ensurePrintSchema())
     .then(() => ensureLoginPageSchema())
-    .then(() => recomputeAllBusinessesOutstanding())
+    .then(() => {
+      setTimeout(() => {
+        recomputeAllBusinessesOutstanding().catch((err) =>
+          console.error("outstanding rebuild:", err.message),
+        );
+      }, 20000);
+    })
   .catch((err) => {
     console.error("Schema/seed error (API is still up; check DB env vars)", err);
   });

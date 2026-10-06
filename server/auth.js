@@ -443,7 +443,7 @@ export function registerAuth(app) {
         ],
       );
       setCookie(res, "pos_master", token, ttl, req);
-      await query(
+      void query(
         `INSERT INTO staff_audit_logs (
            id, actor_clerk_user_id, actor_name, module, target_name, action, details, business_id, ip
          ) VALUES (?,?,?,?,?,?,?, 'platform', ?)`,
@@ -457,7 +457,7 @@ export function registerAuth(app) {
           "{}",
           clientIp(req),
         ],
-      );
+      ).catch((err) => console.error("master login audit:", err.message));
       res.json({ ok: true, admin: { id: admin.id, email: admin.email, name: admin.name } });
     } catch (err) {
       res.status(500).json({ error: String(err.message) });
