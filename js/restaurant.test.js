@@ -333,8 +333,8 @@ test("Restaurant mobile billing box keeps dish cards visible", () => {
   assert.match(mobile, /display: block !important;/);
   assert.doesNotMatch(mobile, /max-height: 42vh/);
   assert.doesNotMatch(index, /20260925rm1/);
-  assert.match(index, /pos\.css\?v=20260927ol1/);
-  assert.match(index, /app\.js\?v=20261006perf1/);
+  assert.match(index, /pos\.css\?v=20261006qa1/);
+  assert.match(index, /app\.js\?v=20261006qa1/);
 });
 
 test("Restaurant mobile Counter uses readable type and a tight bill sheet", () => {

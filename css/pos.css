@@ -1135,8 +1135,6 @@ body.camera-scan-open { overflow: hidden; }
   font-weight: 800;
 }
 body.classic-bill-mode.counter-mode #counter-add-item { display: none !important; }
-body.quick-add-hidden #dash-quick-add,
-body.quick-add-hidden #saas-fab-wrap,
 body.quick-add-hidden #counter-add-item,
 body.quick-add-hidden #classic-add-item,
 body.quick-add-hidden [data-counter-add-item],
@@ -8599,46 +8597,6 @@ body:has(#view-dashboard:not([hidden])) .session-bar { display: none !important;
   align-items: center;
   font-size: 13px;
   font-weight: 600;
-}
-.saas-fab-wrap {
-  position: fixed;
-  right: 22px;
-  bottom: 22px;
-  z-index: 30;
-  display: grid;
-  justify-items: end;
-  gap: 8px;
-}
-body.counter-mode .saas-fab-wrap { display: none; }
-.saas-fab {
-  width: 52px;
-  height: 52px;
-  border-radius: 16px;
-  border: 0;
-  background: var(--vel-teal);
-  color: #fff;
-  font-size: 28px;
-  font-weight: 700;
-  box-shadow: 0 12px 28px rgba(13, 148, 136, 0.35);
-}
-.saas-fab-menu {
-  display: grid;
-  gap: 6px;
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 14px;
-  padding: 8px;
-  box-shadow: var(--elev-float);
-}
-.saas-fab-menu button {
-  border: 0;
-  background: var(--bg-tint);
-  border-radius: 10px;
-  padding: 8px 12px;
-  text-align: left;
-  font: inherit;
-  font-weight: 700;
-  font-size: 13px;
 }
 html[data-scheme="dark"] {
   --bg: #0b1220;

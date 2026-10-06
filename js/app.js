@@ -2189,15 +2189,11 @@ function quickAddVisible(company = state.company) {
 function applyQuickAddVisibility() {
   const show = quickAddVisible() && !document.body.classList.contains("counter-mode");
   document.body.classList.toggle("quick-add-hidden", !show);
-  for (const id of ["dash-quick-add", "saas-fab-wrap", "counter-add-item", "classic-add-item"]) {
+  for (const id of ["counter-add-item", "classic-add-item"]) {
     const el = $(id);
     if (!el) continue;
     el.hidden = !show;
     el.setAttribute("aria-hidden", show ? "false" : "true");
-  }
-  if (!show) {
-    const menu = $("saas-fab-menu");
-    if (menu) menu.hidden = true;
   }
 }
 
@@ -11086,23 +11082,6 @@ $("view-dashboard")?.addEventListener("click", (e) => {
   }
   const tile = e.target.closest("[data-dash-view]");
   if (tile) showView(tile.dataset.dashView);
-});
-$("saas-fab-wrap")?.addEventListener("click", (e) => {
-  const jump = e.target.closest("[data-dash-view]");
-  if (jump) {
-    showView(jump.dataset.dashView);
-    const menu = $("saas-fab-menu");
-    if (menu) menu.hidden = true;
-    return;
-  }
-  if (e.target.closest("#saas-fab")) {
-    const menu = $("saas-fab-menu");
-    if (menu) menu.hidden = !menu.hidden;
-  }
-});
-$("dash-quick-add")?.addEventListener("click", () => {
-  const menu = $("saas-fab-menu");
-  if (menu) menu.hidden = !menu.hidden;
 });
 function toggleDashWidgets(forceHidden) {
   const drawer = $("dash-widget-drawer");
