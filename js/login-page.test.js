@@ -75,14 +75,15 @@ test("Master Admin Login Page manager is wired without touching auth", () => {
   assert.match(master, /Website Management/);
   assert.match(master, /data-tab="website" data-website-pane="images"/);
   assert.match(master, />Login Page</);
-  assert.match(master, /js\/master-login-page\.js\?v=20260922deploy222/);
-  assert.match(master, /js\/login-page\.js\?v=20260922deploy222/);
+  assert.match(master, /js\/master-login-page\.js\?v=20261006loginimg1/);
+  assert.match(master, /js\/login-page\.js\?v=20261006loginimg1/);
   assert.match(master, /css\/login-page\.css\?v=20260920deploy203/);
   assert.match(masterJs, /function resolveWebsitePane/);
   assert.match(masterJs, /Login Page Management/);
   assert.match(manager, /function resolvePane/);
   assert.doesNotMatch(master, /data-tab="website" data-website-pane="homepage"><span class="nav-icon"/);
-  assert.match(login, /js\/login-page\.js\?v=20260920deploy203/);
+  assert.match(login, /js\/login-page\.js\?v=20261006loginimg1/);
+  assert.match(login, /js\/pos-api\.js\?v=20261006login1/);
   assert.match(login, /css\/login-page\.css\?v=20260920deploy203/);
   assert.match(login, /x-pos-20260830e\.js\?v=20260922deploy207/);
   assert.match(index, /registerLoginPagePublic/);
@@ -96,9 +97,35 @@ test("Master Admin Login Page manager is wired without touching auth", () => {
   assert.match(node, /login_page_campaigns/);
   assert.doesNotMatch(node, /password_hash/);
   assert.doesNotMatch(node, /otp/);
+  assert.match(node, /uploaded: \{ id \}/);
+  assert.match(node, /function usedImageIds/);
+  assert.match(php, /uploaded/);
+  assert.match(php, /function pos_login_page_used_ids/);
   assert.match(auth, /\/api\/auth\/login/);
   assert.match(xpos, /\/api\/auth\/login/);
   assert.doesNotMatch(read("js/login-page.js"), /\/api\/auth\/login/);
+});
+
+test("uploaded login images skip srcset and map backgroundImageId", () => {
+  const data = "data:image/jpeg;base64,abc,def";
+  const html = L.heroPicture(data, data, data, "Hero", "eager", 3);
+  assert.match(html, /<img src="data:image\/jpeg;base64,abc,def"/);
+  assert.doesNotMatch(html, /srcset=/);
+  const file = L.heroPicture("./assets/login-atav-smart-pos.jpg", "./t.jpg", "./m.jpg", "Hero", "eager", 4);
+  assert.match(file, /srcset=/);
+  const bg = L.resolveAppearance({
+    settings: { backgroundImageId: "bg1" },
+    images: [{ id: "bg1", url: "data:image/jpeg;base64,bg", status: "active" }],
+  });
+  assert.equal(bg.backgroundUrl, "data:image/jpeg;base64,bg");
+});
+
+test("Master Admin login can show a published custom image", () => {
+  const src = read("js/login-page.js");
+  assert.match(src, /shell\.id === "master-gate"/);
+  assert.match(src, /getElementById\("master-login"\)/);
+  assert.match(src, /window\.posRequest/);
+  assert.doesNotMatch(src, /if \(!shell \|\| shell\.id === "master-gate"\) return/);
 });
 
 test("Website Homepage pane opens Login Page Management", () => {
@@ -109,4 +136,7 @@ test("Website Homepage pane opens Login Page Management", () => {
   assert.equal(M.resolvePane("unknown"), "images");
   assert.equal(M.resolvePane("media"), "media");
   assert.equal(M.resolvePane("register"), "register");
+  assert.equal(M.fieldForUpload("images", "library"), "desktopImageId");
+  assert.equal(M.fieldForUpload("mobile", "mobile"), "mobileImageId");
+  assert.equal(M.fieldForUpload("media", "desktop"), "desktopImageId");
 });

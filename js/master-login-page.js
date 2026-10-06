@@ -82,6 +82,46 @@
     });
   }
 
+  function dataUrlBytes(dataUrl) {
+    const b64 = String(dataUrl || "").split(",")[1] || "";
+    return Math.ceil((b64.length * 3) / 4);
+  }
+
+  async function compressUnder(file, maxEdge, maxKb) {
+    const cap = Math.min(2048, Math.max(200, Number(maxKb) || 900));
+    let edge = maxEdge;
+    let quality = 0.78;
+    let last = null;
+    for (let i = 0; i < 5; i += 1) {
+      last = await compressFile(file, edge, quality);
+      if (dataUrlBytes(last.dataUrl) <= cap * 1024) return last;
+      quality = Math.max(0.42, quality - 0.12);
+      edge = Math.max(720, Math.round(edge * 0.82));
+    }
+    throw new Error(`Image must be under ${cap} KB after compress`);
+  }
+
+  function fieldForUpload(pane, kind) {
+    const byPane = {
+      images: "desktopImageId",
+      mobile: "mobileImageId",
+      logo: "logoImageId",
+      background: "backgroundImageId",
+      banner: "bannerImageId",
+    };
+    const byKind = {
+      desktop: "desktopImageId",
+      mobile: "mobileImageId",
+      tablet: "tabletImageId",
+      background: "backgroundImageId",
+      banner: "bannerImageId",
+      side: "sideImageId",
+      ad: "adImageId",
+      logo: "logoImageId",
+    };
+    return byPane[pane] || byKind[kind] || "desktopImageId";
+  }
+
   function imgSelect(name, val, kinds) {
     const rows = (bundle.images || []).filter((i) => !kinds || kinds.includes(i.kind) || i.kind === "library");
     return `<select name="${name}"><option value="">Default / none</option>${rows
@@ -434,7 +474,7 @@
       const patch = collectForm(document.getElementById("login-page-form"));
       bundle = await api("/api/master/login-page", { method: "POST", body: JSON.stringify(patch) });
       if (hint()) {
-        hint().textContent = "Draft saved. Publish to update shop login.";
+        hint().textContent = "Draft saved. Click Publish to show this on shop and Master Admin login.";
         hint().className = "hint ok";
       }
     };
@@ -445,7 +485,7 @@
         await saveDraft();
         bundle = await api("/api/master/login-page/publish", { method: "POST", body: "{}" });
         if (hint()) {
-          hint().textContent = `Published v${bundle.published_version}. Shop login uses cache-bust v=${bundle.published_version}.`;
+        hint().textContent = `Published v${bundle.published_version}. Hard-refresh login pages to see the new image.`;
           hint().className = "hint ok";
         }
       } catch (e) {
@@ -462,13 +502,19 @@
       try {
         const kind = form?.querySelector('[name="upload_kind"]')?.value || "library";
         const name = form?.querySelector('[name="upload_name"]')?.value || file.name;
-        const packed = await compressFile(file, kind === "mobile" ? 1080 : 1920, 0.78);
+        const packed = await compressUnder(file, kind === "mobile" ? 1080 : 1920, mergeDraft().maxUploadKb);
         bundle = await api("/api/master/login-page/images", {
           method: "POST",
           body: JSON.stringify({ ...packed, name, kind, maxUploadKb: mergeDraft().maxUploadKb }),
         });
+        const uploadedId = bundle.uploaded?.id || bundle.images?.[0]?.id;
+        const field = fieldForUpload(on, kind);
+        if (uploadedId && field) {
+          const patch = { ...mergeDraft(), ...collectForm(form), [field]: uploadedId };
+          bundle = await api("/api/master/login-page", { method: "POST", body: JSON.stringify(patch) });
+        }
         if (hint()) {
-          hint().textContent = "Image uploaded and optimized.";
+          hint().textContent = "Image uploaded and set on the login page. Click Publish to go live.";
           hint().className = "hint ok";
         }
         opts.setPane(on);
@@ -484,6 +530,10 @@
         const field = b.dataset.setKind === "desktop" ? "desktopImageId" : b.dataset.setKind === "mobile" ? "mobileImageId" : "bannerImageId";
         bundle.draft = { ...mergeDraft(), [field]: b.dataset.img };
         await api("/api/master/login-page", { method: "POST", body: JSON.stringify(bundle.draft) });
+        if (hint()) {
+          hint().textContent = "Image assigned. Click Publish to go live.";
+          hint().className = "hint ok";
+        }
         opts.setPane(on);
       };
     });
@@ -521,5 +571,5 @@
     });
   }
 
-  g.POSMasterLoginPage = { render, PANES, resolvePane };
+  g.POSMasterLoginPage = { render, PANES, resolvePane, fieldForUpload };
 })(typeof window !== "undefined" ? window : globalThis);

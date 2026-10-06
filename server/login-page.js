@@ -145,10 +145,19 @@ async function publish(req) {
   const bundle = await getBundle();
   const next = (bundle.published_version || 0) + 1;
   const json = JSON.stringify(bundle.draft || {});
-  await query(
-    `UPDATE login_page_settings SET published_json = ?, published_version = ?, updated_by = ?, updated_at = CURRENT_TIMESTAMP(3) WHERE id = ?`,
-    [json, next, actor(req), SETTINGS_ID],
-  );
+  const [row] = await query("SELECT id FROM login_page_settings WHERE id = ? LIMIT 1", [SETTINGS_ID]);
+  if (!row) {
+    await query(
+      `INSERT INTO login_page_settings (id, draft_json, published_json, published_version, updated_by, updated_at)
+       VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP(3))`,
+      [SETTINGS_ID, json, json, next, actor(req)],
+    );
+  } else {
+    await query(
+      `UPDATE login_page_settings SET published_json = ?, published_version = ?, updated_by = ?, updated_at = CURRENT_TIMESTAMP(3) WHERE id = ?`,
+      [json, next, actor(req), SETTINGS_ID],
+    );
+  }
   await query(`INSERT INTO login_page_versions (id, version, config_json, status, actor) VALUES (?,?,?,?,?)`, [
     crypto.randomUUID(),
     next,
@@ -190,7 +199,8 @@ async function saveImage(body, req) {
     ],
   );
   await audit(req, "Image Uploaded", { id, name: body.name, kind: body.kind });
-  return getBundle();
+  const bundle = await getBundle();
+  return { ...bundle, uploaded: { id } };
 }
 
 async function patchImage(id, body, req) {
@@ -251,16 +261,46 @@ async function restoreVersion(id, req) {
   return getBundle();
 }
 
+function usedImageIds(published, campaigns) {
+  const ids = new Set();
+  const s = published || {};
+  [
+    "desktopImageId",
+    "mobileImageId",
+    "tabletImageId",
+    "logoImageId",
+    "backgroundImageId",
+    "bannerImageId",
+    "sideImageId",
+    "adImageId",
+  ].forEach((k) => {
+    if (s[k]) ids.add(s[k]);
+  });
+  Object.values(s.businessTypes || {}).forEach((bt) => {
+    if (bt?.imageId) ids.add(bt.imageId);
+  });
+  (s.slides || []).forEach((slide) => {
+    if (slide?.imageId) ids.add(slide.imageId);
+  });
+  (campaigns || []).forEach((c) => {
+    if (c?.image_id) ids.add(c.image_id);
+  });
+  return ids;
+}
+
 export function publicPayload() {
   return (async () => {
     const bundle = await getBundle();
-    const images = (bundle.images || []).map((i) => ({
-      id: i.id,
-      name: i.name,
-      kind: i.kind,
-      url: i.url,
-      status: i.status,
-    }));
+    const ids = usedImageIds(bundle.published, bundle.campaigns);
+    const images = (bundle.images || [])
+      .filter((i) => ids.has(i.id))
+      .map((i) => ({
+        id: i.id,
+        name: i.name,
+        kind: i.kind,
+        url: i.url,
+        status: i.status,
+      }));
     return {
       settings: bundle.published || {},
       images,

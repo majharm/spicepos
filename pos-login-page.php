@@ -122,10 +122,30 @@ function pos_login_page_save_draft($body, $auth) {
   return pos_login_page_bundle();
 }
 
+function pos_login_page_used_ids($published, $campaigns) {
+  $ids = [];
+  $s = is_array($published) ? $published : [];
+  foreach (["desktopImageId", "mobileImageId", "tabletImageId", "logoImageId", "backgroundImageId", "bannerImageId", "sideImageId", "adImageId"] as $k) {
+    if (!empty($s[$k])) $ids[$s[$k]] = true;
+  }
+  foreach (($s["businessTypes"] ?? []) as $bt) {
+    if (!empty($bt["imageId"])) $ids[$bt["imageId"]] = true;
+  }
+  foreach (($s["slides"] ?? []) as $slide) {
+    if (!empty($slide["imageId"])) $ids[$slide["imageId"]] = true;
+  }
+  foreach (is_array($campaigns) ? $campaigns : [] as $c) {
+    if (!empty($c["image_id"])) $ids[$c["image_id"]] = true;
+  }
+  return $ids;
+}
+
 function pos_login_page_public() {
   $b = pos_login_page_bundle();
+  $ids = pos_login_page_used_ids($b["published"], $b["campaigns"]);
   $images = [];
   foreach ($b["images"] as $i) {
+    if (!isset($ids[$i["id"]])) continue;
     $images[] = ["id" => $i["id"], "name" => $i["name"], "kind" => $i["kind"], "url" => $i["url"], "status" => $i["status"]];
   }
   return [
@@ -161,7 +181,12 @@ function pos_login_page_master_dispatch($path, $method, $body, $auth) {
     $next = ((int) $b["published_version"]) + 1;
     $json = json_encode($b["draft"] ?: []);
     $who = pos_login_page_actor($auth);
-    pos_q("UPDATE login_page_settings SET published_json = ?, published_version = ?, updated_by = ?, updated_at = CURRENT_TIMESTAMP(3) WHERE id = 'login'", "siss", [$json, $next, $who]);
+    $exists = pos_q("SELECT id FROM login_page_settings WHERE id = 'login' LIMIT 1");
+    if (!$exists) {
+      pos_q("INSERT INTO login_page_settings (id, draft_json, published_json, published_version, updated_by, updated_at) VALUES ('login', ?, ?, ?, ?, CURRENT_TIMESTAMP(3))", "ssis", [$json, $json, $next, $who]);
+    } else {
+      pos_q("UPDATE login_page_settings SET published_json = ?, published_version = ?, updated_by = ?, updated_at = CURRENT_TIMESTAMP(3) WHERE id = 'login'", "siss", [$json, $next, $who]);
+    }
     pos_q("INSERT INTO login_page_versions (id, version, config_json, status, actor) VALUES (?,?,?,'published',?)", "siss", [pos_login_page_id(), $next, $json, $who]);
     pos_login_page_audit($auth, "Campaign Published", ["version" => $next]);
     pos_send(200, pos_login_page_bundle());
@@ -192,7 +217,9 @@ function pos_login_page_master_dispatch($path, $method, $body, $auth) {
       ]
     );
     pos_login_page_audit($auth, "Image Uploaded", ["id" => $id]);
-    pos_send(200, pos_login_page_bundle());
+    $out = pos_login_page_bundle();
+    $out["uploaded"] = ["id" => $id];
+    pos_send(200, $out);
     return true;
   }
   if (preg_match('#^master/login-page/images/([^/]+)$#', $path, $m) && $method === "POST") {

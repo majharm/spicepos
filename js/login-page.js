@@ -174,6 +174,8 @@
     }
     const mobile = pickImage(images, cfg.mobileImageId) || cfg.mobileUrl || hero;
     const tablet = pickImage(images, cfg.tabletImageId) || cfg.tabletUrl || hero;
+    const background = pickImage(images, cfg.backgroundImageId) || cfg.backgroundUrl || "";
+    const banner = pickImage(images, cfg.bannerImageId) || cfg.bannerUrl || "";
     const slides = (cfg.slides || [])
       .map((s, i) => ({
         url: pickImage(images, s.imageId) || s.url || hero,
@@ -191,6 +193,8 @@
       resolvedLogo: pickImage(images, cfg.logoImageId) || cfg.logoUrl || DEFAULT_LOGO,
       resolvedSource: source,
       resolvedCampaign: live?.name || "",
+      backgroundUrl: background,
+      bannerUrl: banner,
       slides,
       card: clampCard(cfg.card),
     };
@@ -201,6 +205,28 @@
     const u = String(url);
     if (/[?&]v=/.test(u)) return u;
     return `${u}${u.includes("?") ? "&" : "?"}v=${v || 0}`;
+  }
+
+  function isDataUrl(url) {
+    return String(url || "").startsWith("data:");
+  }
+
+  function heroImg(url, alt, loading, v) {
+    const src = String(versioned(url, v) || "").replace(/"/g, "");
+    const a = String(alt || "ATAV POS login").replace(/"/g, "");
+    return `<img src="${src}" alt="${a}" loading="${loading || "eager"}" width="1536" height="1024" />`;
+  }
+
+  function heroPicture(desk, tab, mob, alt, loading, v) {
+    if (isDataUrl(desk) || isDataUrl(tab) || isDataUrl(mob)) return heroImg(desk, alt, loading, v);
+    const d = versioned(desk, v);
+    const t = versioned(tab || desk, v);
+    const m = versioned(mob || desk, v);
+    return `<picture>
+          <source media="(max-width: 760px)" srcset="${m}" />
+          <source media="(max-width: 1100px)" srcset="${t}" />
+          ${heroImg(d, alt, loading, v)}
+        </picture>`;
   }
 
   function setText(sel, value) {
@@ -236,16 +262,12 @@
     shots.dataset.transition = trans;
     shots.innerHTML = slides
       .map((s, i) => {
-        const desk = versioned(s.url || cfg.resolvedHero, v);
-        const tab = versioned(cfg.resolvedTablet || desk, v);
-        const mob = versioned(cfg.resolvedMobile || desk, v);
+        const desk = s.url || cfg.resolvedHero;
+        const tab = cfg.resolvedTablet || desk;
+        const mob = cfg.resolvedMobile || desk;
         const alt = (s.caption || "ATAV POS login").replace(/"/g, "");
         return `<figure class="${i === 0 ? "is-hero is-on" : "is-hero"}" data-slide="${i}">
-        <picture>
-          <source media="(max-width: 760px)" srcset="${mob}" />
-          <source media="(max-width: 1100px)" srcset="${tab}" />
-          <img src="${desk}" alt="${alt}" loading="${i ? "lazy" : "eager"}" width="1536" height="1024" />
-        </picture>
+        ${heroPicture(desk, tab, mob, alt, i ? "lazy" : "eager", v)}
         ${s.caption ? `<figcaption>${s.caption}</figcaption>` : ""}
       </figure>`;
       })
@@ -265,52 +287,55 @@
 
   function applyToLogin(cfg) {
     const shell = document.querySelector(".auth-shell");
-    if (!shell || shell.id === "master-gate") return;
+    if (!shell) return;
+    const isMaster = shell.id === "master-gate";
     applyLayout(shell, cfg.layout || "image-left");
     applyColors(cfg);
     const card = document.getElementById("auth-card");
-    if (card) {
+    if (card && !isMaster) {
       card.style.maxWidth = `${cfg.card.width}px`;
       card.style.borderRadius = `${cfg.card.radius}px`;
       card.style.background = `rgba(255,255,255,${cfg.card.opacity})`;
     }
     const logo = document.querySelector(".auth-logo");
-    if (logo && cfg.resolvedLogo) {
+    if (logo && cfg.resolvedLogo && (!isMaster || cfg.resolvedSource !== "default")) {
       logo.src = cfg.resolvedLogo;
       logo.style.width = `${cfg.card.logoSize}px`;
     }
-    if (cfg.faviconUrl) {
+    if (cfg.faviconUrl && !isMaster) {
       const icon = document.querySelector('link[rel="icon"]');
       if (icon) icon.href = cfg.faviconUrl;
     }
-    setText(".auth-scene-kicker", cfg.kicker || cfg.companyName);
-    setText(".auth-scene-title", cfg.sceneTitle);
-    setText(".auth-scene-lead", cfg.sceneLead);
-    setText("#auth-heading", cfg.heading);
-    setText("#auth-lead", cfg.subheading);
-    setText(".auth-tagline", cfg.tagline);
-    const trial = document.querySelector(".auth-trial-invite");
-    if (trial && cfg.signupText) trial.innerHTML = cfg.signupText.replace(/Get Started/i, "<strong>Get Started</strong>");
-    const foot = document.getElementById("login-footer-brand");
-    if (foot) foot.textContent = cfg.footerText || "";
-    const submit = document.getElementById("login-submit");
-    if (submit && cfg.ctas?.login?.visible !== false) submit.textContent = cfg.ctas.login.text || cfg.loginButton;
-    const forgot = document.querySelector(".auth-forgot");
-    if (forgot && cfg.ctas?.forgot) {
-      forgot.hidden = cfg.ctas.forgot.visible === false;
-      forgot.textContent = cfg.ctas.forgot.text || cfg.forgotText;
-      if (cfg.ctas.forgot.url) forgot.href = cfg.ctas.forgot.url;
+    if (!isMaster) {
+      setText(".auth-scene-kicker", cfg.kicker || cfg.companyName);
+      setText(".auth-scene-title", cfg.sceneTitle);
+      setText(".auth-scene-lead", cfg.sceneLead);
+      setText("#auth-heading", cfg.heading);
+      setText("#auth-lead", cfg.subheading);
+      setText(".auth-tagline", cfg.tagline);
+      const trial = document.querySelector(".auth-trial-invite");
+      if (trial && cfg.signupText) trial.innerHTML = cfg.signupText.replace(/Get Started/i, "<strong>Get Started</strong>");
+      const foot = document.getElementById("login-footer-brand");
+      if (foot) foot.textContent = cfg.footerText || "";
+      const submit = document.getElementById("login-submit");
+      if (submit && cfg.ctas?.login?.visible !== false) submit.textContent = cfg.ctas.login.text || cfg.loginButton;
+      const forgot = document.querySelector(".auth-forgot");
+      if (forgot && cfg.ctas?.forgot) {
+        forgot.hidden = cfg.ctas.forgot.visible === false;
+        forgot.textContent = cfg.ctas.forgot.text || cfg.forgotText;
+        if (cfg.ctas.forgot.url) forgot.href = cfg.ctas.forgot.url;
+      }
+      const signupTab = document.querySelector('[data-panel="signup"]');
+      if (signupTab && cfg.ctas?.register) {
+        signupTab.hidden = cfg.ctas.register.visible === false;
+        signupTab.textContent = cfg.ctas.register.text || "Sign Up Now";
+      }
     }
-    const signupTab = document.querySelector('[data-panel="signup"]');
-    if (signupTab && cfg.ctas?.register) {
-      signupTab.hidden = cfg.ctas.register.visible === false;
-      signupTab.textContent = cfg.ctas.register.text || "Sign Up Now";
-    }
-    paintSlides(cfg);
+    if (!isMaster || cfg.resolvedSource !== "default") paintSlides(cfg);
     const scene = document.querySelector(".auth-scene");
-    if (cfg.backgroundUrl && scene) scene.style.backgroundImage = `url(${cfg.backgroundUrl})`;
+    if (cfg.backgroundUrl && scene) scene.style.backgroundImage = `url("${String(cfg.backgroundUrl).replace(/"/g, "")}")`;
     let promo = document.getElementById("login-promo-panel");
-    if (cfg.promo?.on === true && cfg.promo?.visible !== false) {
+    if (!isMaster && cfg.promo?.on === true && cfg.promo?.visible !== false) {
       if (!promo) {
         promo = document.createElement("aside");
         promo.id = "login-promo-panel";
@@ -324,6 +349,7 @@
       }`;
       promo.hidden = false;
     } else if (promo) promo.remove();
+    if (isMaster) return;
     const demo = document.getElementById("login-demo-cta");
     if (cfg.ctas?.demo?.visible) {
       let a = demo;
@@ -359,14 +385,34 @@
     </div>`;
   }
 
+  async function readLoginPage(path) {
+    if (typeof window !== "undefined" && typeof window.posRequest === "function") {
+      const { res, data } = await window.posRequest(path, { method: "GET" });
+      if (res && res.ok && data && typeof data === "object") return data;
+      return null;
+    }
+    const res = await fetch(path, {
+      credentials: "same-origin",
+      cache: "no-store",
+      headers: { Accept: "application/json" },
+    });
+    const text = await res.text();
+    if (!res.ok) return null;
+    try {
+      const data = JSON.parse(text);
+      return data && typeof data === "object" ? data : null;
+    } catch {
+      return null;
+    }
+  }
+
   async function loadPublished() {
     const params = new URLSearchParams(location.search);
     const biz = params.get("biz") || params.get("type") || "";
     try {
       if (params.get("preview") === "1") {
-        const draftRes = await fetch("/api/master/login-page", { credentials: "same-origin", cache: "no-store" });
-        if (draftRes.ok) {
-          const data = await draftRes.json();
+        const data = await readLoginPage("/api/master/login-page");
+        if (data) {
           return resolveAppearance(
             { settings: { ...(data.draft || {}), version: data.published_version }, images: data.images, campaigns: data.campaigns },
             new Date(),
@@ -374,9 +420,8 @@
           );
         }
       }
-      const res = await fetch("/api/login-page", { credentials: "same-origin", cache: "no-store" });
-      if (!res.ok) return resolveAppearance({ settings: defaults() });
-      const data = await res.json();
+      const data = await readLoginPage("/api/login-page");
+      if (!data) return resolveAppearance({ settings: defaults() });
       return resolveAppearance(
         { ...data, settings: { ...(data.settings || {}), version: data.published_version || data.v } },
         new Date(),
@@ -388,7 +433,7 @@
   }
 
   async function bootLogin() {
-    if (!document.getElementById("login-form")) return;
+    if (!document.getElementById("login-form") && !document.getElementById("master-login")) return;
     const cfg = await loadPublished();
     applyToLogin(cfg);
   }
@@ -405,6 +450,7 @@
     resolveAppearance,
     applyToLogin,
     previewHtml,
+    heroPicture,
     loadPublished,
     bootLogin,
   };
