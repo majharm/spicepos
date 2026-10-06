@@ -1635,6 +1635,9 @@ function pos_ensure_accounts_schema() {
       INDEX idx_exp_biz_date (business_id, expense_date)
     )"
   );
+  if (function_exists("pos_recompute_all_businesses_outstanding")) {
+    try { pos_recompute_all_businesses_outstanding(); } catch (Exception $e) { /* repair optional */ }
+  }
 }
 
 function pos_next_seq($name, $businessId, $start = 1001) {
@@ -2131,27 +2134,68 @@ function pos_recompute_customer_outstanding($businessId, $customerId) {
 
 function pos_recompute_business_outstanding($businessId) {
   try {
-    pos_recompute_business_outstanding_set($businessId);
+    pos_recompute_outstanding_set($businessId);
+  } catch (Exception $e) {
+    /* stored outstanding is maintained on each sale/receipt */
+  }
+}
+
+function pos_recompute_all_businesses_outstanding() {
+  static $done = false;
+  if ($done) return;
+  $done = true;
+  try {
+    pos_recompute_outstanding_set(null);
   } catch (Exception $e) {
     /* stored outstanding is maintained on each sale/receipt */
   }
 }
 
 function pos_recompute_business_outstanding_set($businessId) {
-  pos_q(
-    "UPDATE customers SET outstanding = 0
-     WHERE business_id = ?
-       AND (code = 'CUS-001' OR LOWER(TRIM(name)) IN ('walk-in','walkin'))",
-    "s",
-    [$businessId]
-  );
-  $billed = "SELECT l.party_id AS id, COALESCE(SUM(l.amount),0) AS billed
+  pos_recompute_outstanding_set($businessId);
+}
+
+function pos_recompute_outstanding_set($businessId = null) {
+  $all = $businessId === null || $businessId === "";
+  if ($all) {
+    pos_q(
+      "UPDATE customers SET outstanding = 0
+       WHERE (code = 'CUS-001' OR LOWER(TRIM(name)) IN ('walk-in','walkin'))"
+    );
+  } else {
+    pos_q(
+      "UPDATE customers SET outstanding = 0
+       WHERE business_id = ?
+         AND (code = 'CUS-001' OR LOWER(TRIM(name)) IN ('walk-in','walkin'))",
+      "s",
+      [$businessId]
+    );
+  }
+  $rem = pos_invoice_open_remainder_sql();
+  $billed = $all
+    ? "SELECT l.business_id, l.party_id AS id, COALESCE(SUM(l.amount),0) AS billed
+       FROM account_ledger l
+       LEFT JOIN sales_orders o ON o.id = l.reference_id AND o.business_id = l.business_id
+       WHERE l.party_type = 'customer' AND l.entry_type = 'sale_credit'
+         AND (o.id IS NULL OR LOWER(TRIM(COALESCE(o.status,'confirmed'))) <> 'cancelled')
+       GROUP BY l.business_id, l.party_id"
+    : "SELECT l.party_id AS id, COALESCE(SUM(l.amount),0) AS billed
        FROM account_ledger l
        LEFT JOIN sales_orders o ON o.id = l.reference_id AND o.business_id = l.business_id
        WHERE l.business_id = ? AND l.party_type = 'customer' AND l.entry_type = 'sale_credit'
          AND (o.id IS NULL OR LOWER(TRIM(COALESCE(o.status,'confirmed'))) <> 'cancelled')
        GROUP BY l.party_id";
-  $received = "SELECT l.party_id AS id, COALESCE(SUM(l.amount),0) AS received
+  $received = $all
+    ? "SELECT l.business_id, l.party_id AS id, COALESCE(SUM(l.amount),0) AS received
+       FROM account_ledger l
+       LEFT JOIN sales_orders o ON o.id = l.reference_id AND o.business_id = l.business_id
+       WHERE l.party_type = 'customer' AND l.entry_type = 'receipt'
+         AND (
+           l.reference_id IS NULL OR l.reference_type <> 'sales_order'
+           OR LOWER(TRIM(COALESCE(o.status,'confirmed'))) <> 'cancelled'
+         )
+       GROUP BY l.business_id, l.party_id"
+    : "SELECT l.party_id AS id, COALESCE(SUM(l.amount),0) AS received
        FROM account_ledger l
        LEFT JOIN sales_orders o ON o.id = l.reference_id AND o.business_id = l.business_id
        WHERE l.business_id = ? AND l.party_type = 'customer' AND l.entry_type = 'receipt'
@@ -2160,40 +2204,76 @@ function pos_recompute_business_outstanding_set($businessId) {
            OR LOWER(TRIM(COALESCE(o.status,'confirmed'))) <> 'cancelled'
          )
        GROUP BY l.party_id";
-  $invoice = "SELECT customer_id AS id,
-            COALESCE(SUM(" . pos_invoice_open_remainder_sql() . "), 0) AS open_due
+  $invoice = $all
+    ? "SELECT business_id, customer_id AS id,
+            COALESCE(SUM({$rem}), 0) AS open_due
+       FROM sales_orders
+       WHERE LOWER(TRIM(COALESCE(status,'confirmed'))) <> 'cancelled'
+       GROUP BY business_id, customer_id"
+    : "SELECT customer_id AS id,
+            COALESCE(SUM({$rem}), 0) AS open_due
      FROM sales_orders
      WHERE business_id = ? AND LOWER(TRIM(COALESCE(status,'confirmed'))) <> 'cancelled'
      GROUP BY customer_id";
+  $onBilled = $all ? "billed.id = c.id AND billed.business_id = c.business_id" : "billed.id = c.id";
+  $onRcp = $all ? "rcp.id = c.id AND rcp.business_id = c.business_id" : "rcp.id = c.id";
+  $onInv = $all ? "inv.id = c.id AND inv.business_id = c.business_id" : "inv.id = c.id";
+  $custWhere = $all
+    ? "WHERE c.code <> 'CUS-001'
+         AND LOWER(TRIM(c.name)) NOT IN ('walk-in','walkin')"
+    : "WHERE c.business_id = ?
+         AND c.code <> 'CUS-001'
+         AND LOWER(TRIM(c.name)) NOT IN ('walk-in','walkin')";
   try {
-    pos_q(
-      "UPDATE customers c
-       LEFT JOIN ({$billed}) billed ON billed.id = c.id
-       LEFT JOIN ({$received}) rcp ON rcp.id = c.id
-       LEFT JOIN ({$invoice}) inv ON inv.id = c.id
-       SET c.outstanding = ROUND(GREATEST(0,
-         CASE
-           WHEN inv.id IS NOT NULL THEN COALESCE(inv.open_due, 0)
-           ELSE GREATEST(0, COALESCE(billed.billed, 0) - COALESCE(rcp.received, 0))
-         END
-       ), 2)
-       WHERE c.business_id = ?
-         AND c.code <> 'CUS-001'
-         AND LOWER(TRIM(c.name)) NOT IN ('walk-in','walkin')",
-      "ssss",
-      [$businessId, $businessId, $businessId, $businessId]
-    );
+    if ($all) {
+      pos_q(
+        "UPDATE customers c
+         LEFT JOIN ({$billed}) billed ON {$onBilled}
+         LEFT JOIN ({$received}) rcp ON {$onRcp}
+         LEFT JOIN ({$invoice}) inv ON {$onInv}
+         SET c.outstanding = ROUND(GREATEST(0,
+           CASE
+             WHEN inv.id IS NOT NULL THEN COALESCE(inv.open_due, 0)
+             ELSE GREATEST(0, COALESCE(billed.billed, 0) - COALESCE(rcp.received, 0))
+           END
+         ), 2)
+         {$custWhere}"
+      );
+    } else {
+      pos_q(
+        "UPDATE customers c
+         LEFT JOIN ({$billed}) billed ON {$onBilled}
+         LEFT JOIN ({$received}) rcp ON {$onRcp}
+         LEFT JOIN ({$invoice}) inv ON {$onInv}
+         SET c.outstanding = ROUND(GREATEST(0,
+           CASE
+             WHEN inv.id IS NOT NULL THEN COALESCE(inv.open_due, 0)
+             ELSE GREATEST(0, COALESCE(billed.billed, 0) - COALESCE(rcp.received, 0))
+           END
+         ), 2)
+         {$custWhere}",
+        "ssss",
+        [$businessId, $businessId, $businessId, $businessId]
+      );
+    }
   } catch (Exception $e) {
-    pos_q(
-      "UPDATE customers c
-       LEFT JOIN ({$invoice}) inv ON inv.id = c.id
-       SET c.outstanding = ROUND(GREATEST(0, COALESCE(inv.open_due, 0)), 2)
-       WHERE c.business_id = ?
-         AND c.code <> 'CUS-001'
-         AND LOWER(TRIM(c.name)) NOT IN ('walk-in','walkin')",
-      "ss",
-      [$businessId, $businessId]
-    );
+    if ($all) {
+      pos_q(
+        "UPDATE customers c
+         LEFT JOIN ({$invoice}) inv ON {$onInv}
+         SET c.outstanding = ROUND(GREATEST(0, COALESCE(inv.open_due, 0)), 2)
+         {$custWhere}"
+      );
+    } else {
+      pos_q(
+        "UPDATE customers c
+         LEFT JOIN ({$invoice}) inv ON {$onInv}
+         SET c.outstanding = ROUND(GREATEST(0, COALESCE(inv.open_due, 0)), 2)
+         {$custWhere}",
+        "ss",
+        [$businessId, $businessId]
+      );
+    }
   }
 }
 

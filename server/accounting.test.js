@@ -212,6 +212,8 @@ test("customer outstanding hydrates from open invoice remainders on the Customer
   const css = readFileSync(path.join(root, "css/pos.css"), "utf8");
   assert.match(accounts, /export async function invoiceOpenDueByCustomer/);
   assert.match(accounts, /async function recomputeBusinessOutstandingSetBased/);
+  assert.match(accounts, /export async function recomputeAllBusinessesOutstanding/);
+  assert.match(accounts, /GROUP BY l.business_id, l.party_id/);
   assert.match(accounts, /export function hydrateCustomerOutstandingRows/);
   assert.match(accounts, /export async function persistHydratedOutstanding/);
   assert.match(accounts, /Object.prototype.hasOwnProperty.call\(map, c\?\.id\)/);
@@ -225,6 +227,8 @@ test("customer outstanding hydrates from open invoice remainders on the Customer
   assert.match(accounts, /async function customerPreviousDue/);
   assert.match(core, /function pos_invoice_open_remainder_sql/);
   assert.match(core, /function pos_customer_previous_due/);
+  assert.match(core, /function pos_recompute_all_businesses_outstanding/);
+  assert.match(core, /function pos_recompute_outstanding_set/);
   assert.match(till, /pos_hydrate_customer_outstanding_rows/);
   assert.match(app, /function applyInvoiceDuesToCustomers/);
   assert.match(app, /function invoiceOpenRemainder/);
@@ -233,7 +237,7 @@ test("customer outstanding hydrates from open invoice remainders on the Customer
   assert.match(css, /#customers-table td\.cust-due/);
   assert.match(index, /id="customers-hero-stats"/);
   assert.match(index, /id="customers-table"/);
-  assert.match(accounts, /async function applyInvoicePaidFifo/);
+  assert.match(readFileSync(path.join(root, "server/index.js"), "utf8"), /recomputeAllBusinessesOutstanding\(\)/);
   assert.match(core, /function pos_apply_invoice_paid_fifo/);
 });
 
