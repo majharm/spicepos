@@ -1247,6 +1247,10 @@ body.auth-body::-webkit-scrollbar-thumb {
   margin-right: 0;
   max-width: 640px;
 }
+.master-main .settings[hidden],
+.master-main form[hidden] {
+  display: none !important;
+}
 .master-main .lede {
   margin: 0 0 16px;
 }
