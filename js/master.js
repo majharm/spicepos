@@ -187,6 +187,66 @@ const NAV_FAMILIES = {
   website: ["website"],
 };
 
+const PAGE_HINTS = {
+  dash: "Shops and subscriptions",
+  biz: "Create and open shops",
+  users: "Passwords and locked accounts",
+  plans: "Yearly fees and limits",
+  expiry: "WhatsApp and email alerts",
+  "alert-log": "Delivery history",
+  managers: "Assign shops to support staff",
+  support: "Fallback helpline",
+  advance: "Settings, backup, and logs",
+  backup: "Download or restore data",
+  languages: "India language pack",
+  notes: "Shop dashboard notices",
+  branches: "Every shop branch",
+  devices: "Registered tills",
+  audit: "Who changed what",
+  analytics: "Website traffic",
+  seo: "Search and pages",
+  website: "Login page and branding",
+  alerts: "WhatsApp and SMTP",
+};
+
+const MASTER_PAGES = [
+  { tab: "dash", title: "Dashboard", keywords: "home shops overview" },
+  { tab: "biz", title: "Businesses", keywords: "shops create open pos" },
+  { tab: "users", title: "Users", keywords: "password unlock login" },
+  { tab: "plans", title: "Plans", keywords: "subscription fee yearly" },
+  { tab: "expiry", title: "Send alerts", keywords: "whatsapp email renewal" },
+  { tab: "alert-log", title: "WA & Email log", keywords: "whatsapp email delivery" },
+  { tab: "managers", title: "Account managers", keywords: "support assign" },
+  { tab: "support", title: "Support helpline", keywords: "phone email" },
+  { tab: "advance", title: "Advanced", keywords: "tools hub" },
+  { tab: "backup", pane: "settings", title: "Settings", keywords: "whatsapp smtp messages" },
+  { tab: "backup", pane: "backup", title: "Backup", keywords: "download restore email" },
+  { tab: "languages", title: "Languages", keywords: "i18n translation" },
+  { tab: "notes", title: "Messages", keywords: "notification notice" },
+  { tab: "branches", title: "Branches", keywords: "shop branch" },
+  { tab: "devices", title: "POS devices", keywords: "till device code" },
+  { tab: "audit", title: "Audit log", keywords: "history changes" },
+  { tab: "analytics", pane: "overview", title: "Google Analytics", keywords: "traffic website" },
+  { tab: "analytics", pane: "realtime", title: "Realtime", keywords: "analytics live" },
+  { tab: "analytics", pane: "acquisition", title: "Acquisition", keywords: "analytics source" },
+  { tab: "analytics", pane: "settings", title: "Analytics settings", keywords: "ga4 measurement" },
+  { tab: "seo", pane: "overview", title: "SEO Overview", keywords: "search keywords" },
+  { tab: "seo", pane: "keywords", title: "Keywords", keywords: "seo" },
+  { tab: "seo", pane: "pages", title: "SEO Pages", keywords: "seo meta" },
+  { tab: "seo", pane: "settings", title: "Global SEO Settings", keywords: "seo" },
+  { tab: "website", pane: "images", title: "Login Page", keywords: "website images branding" },
+  { tab: "website", pane: "homepage", title: "Homepage", keywords: "website" },
+  { tab: "website", pane: "register", title: "Registration Page", keywords: "website" },
+  { tab: "website", pane: "contact", title: "Contact Page", keywords: "website" },
+  { tab: "website", pane: "media", title: "Media Library", keywords: "website images" },
+  { tab: "website", pane: "branding", title: "Branding", keywords: "website logo" },
+];
+
+function currentPageHint() {
+  if (tab === "backup") return backupPane === "settings" ? "WhatsApp, SMTP, and auto-messages" : PAGE_HINTS.backup;
+  return PAGE_HINTS[tab] || "Platform control";
+}
+
 function setMasterNavOpen(on) {
   const app = $("master-app");
   const toggle = $("master-nav-toggle");
@@ -212,7 +272,9 @@ function syncMasterNav() {
   });
   document.querySelectorAll(".master-nav-group[data-nav-family]").forEach((g) => {
     const tabs = NAV_FAMILIES[g.dataset.navFamily] || [];
-    g.classList.toggle("is-open", tabs.includes(tab));
+    if (tabs.includes(tab)) g.classList.add("is-open");
+    const toggle = g.querySelector("[data-nav-toggle]");
+    if (toggle) toggle.setAttribute("aria-expanded", g.classList.contains("is-open") ? "true" : "false");
   });
 }
 
@@ -355,10 +417,62 @@ document.querySelectorAll(".master-nav [data-tab]").forEach((btn) => {
     );
 });
 
+document.querySelectorAll(".master-nav [data-nav-toggle]").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    const group = btn.closest(".master-nav-group");
+    if (!group) return;
+    const family = btn.dataset.navToggle;
+    const tabs = NAV_FAMILIES[family] || [];
+    if (tabs.includes(tab) && group.classList.contains("is-open")) return;
+    group.classList.toggle("is-open");
+    btn.setAttribute("aria-expanded", group.classList.contains("is-open") ? "true" : "false");
+  });
+});
+
+function bindMasterJump() {
+  const input = $("master-jump-q");
+  const list = $("master-jump-list");
+  if (!input || !list || input.dataset.bound) return;
+  input.dataset.bound = "1";
+  const paint = () => {
+    const q = String(input.value || "").trim().toLowerCase();
+    const hits = MASTER_PAGES.filter((p) => !q || `${p.title} ${p.keywords || ""}`.toLowerCase().includes(q)).slice(0, 16);
+    list.hidden = !hits.length || document.activeElement !== input;
+    list.innerHTML = hits
+      .map((p, i) => `<button type="button" class="master-jump-item" data-jump="${i}">${attr(p.title)}</button>`)
+      .join("");
+    list.querySelectorAll("[data-jump]").forEach((btn) => {
+      btn.onclick = () => {
+        const page = hits[Number(btn.dataset.jump)];
+        if (!page) return;
+        input.value = "";
+        list.hidden = true;
+        setMasterTab(page.tab, page.pane);
+      };
+    });
+  };
+  input.addEventListener("input", paint);
+  input.addEventListener("focus", paint);
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      list.querySelector("[data-jump]")?.click();
+    }
+    if (e.key === "Escape") {
+      list.hidden = true;
+      input.blur();
+    }
+  });
+  document.addEventListener("click", (e) => {
+    if (!e.target.closest(".master-jump")) list.hidden = true;
+  });
+}
+
 $("master-nav-toggle")?.addEventListener("click", () => {
   setMasterNavOpen(!document.body.classList.contains("master-nav-open"));
 });
 $("master-nav-scrim")?.addEventListener("click", () => setMasterNavOpen(false));
+bindMasterJump();
 
 const ALERT_LOG_KIND_LABEL = {
   welcome: "Welcome",
@@ -1656,20 +1770,7 @@ async function render() {
   syncMasterNav();
   $("panel-title").textContent = titles[tab] || "Dashboard";
   if ($("master-top-title")) $("master-top-title").textContent = titles[tab] || "Dashboard";
-  if ($("master-top-hint")) {
-    $("master-top-hint").textContent =
-      tab === "dash"
-        ? "Shops and subscriptions"
-        : tab === "biz"
-          ? "Create and open shops"
-          : tab === "analytics"
-            ? "Website traffic"
-            : tab === "seo"
-              ? "Search and pages"
-              : tab === "website"
-                ? "Login Page Management"
-                : "Platform control";
-  }
+  if ($("master-top-hint")) $("master-top-hint").textContent = currentPageHint();
   $("panel")?.classList.toggle("has-desk", true);
   const body = $("panel-body");
   body.innerHTML = "<p class='hint'>Loading…</p>";
@@ -2145,6 +2246,7 @@ async function render() {
           <p class="hint" id="user-pw-hint"></p>
         </form>
         <p class="hint" id="users-hint"></p>
+        ${masterListToolbar("Search email, name, or shop…", rows.length)}
         <div class="table-wrap">${table(
         ["Email", "Name", "Role", "Business", "Status", ""],
         rows.map((u) => [
@@ -2160,6 +2262,7 @@ async function render() {
       )}</div>`,
       );
       bindEnterPosButtons(body);
+      bindMasterListFilter(body);
       const usersHint = $("users-hint");
       const userPw = bindPasswordForm($("user-pw-form"), $("user-pw-hint"), $("user-pw-who"), $("user-pw-cancel"), async (fd, password) => {
         await api(`/api/master/users/${fd.get("user_id")}/reset-password`, {
@@ -2214,6 +2317,7 @@ async function render() {
         <button class="btn" type="button" id="plan-cancel" hidden>Cancel edit</button>
         <p class="hint" id="plan-hint"></p>
       </form>
+      ${masterListToolbar("Search plan code or name…", rows.length)}
       <div class="table-wrap">${table(
         ["Code", "Name", "Fee / year", "Branches", "Users", "Devices", "Products", "Active", ""],
         rows.map((p) => [
@@ -2229,6 +2333,7 @@ async function render() {
         ]),
       )}</div>`,
       );
+      bindMasterListFilter(body);
       const form = $("plan-form");
       const saveBtn = $("plan-save");
       const cancelBtn = $("plan-cancel");
@@ -2314,7 +2419,8 @@ async function render() {
         "Languages",
         "Translation coverage for the India language pack. Missing keys fall back to English — never to the raw key.",
         rows.slice(0, 4).map((r) => ({ label: r.name, value: `${r.percent}%` })),
-        `<div class="table-wrap">${table(
+        `${masterListToolbar("Search language…", rows.length)}
+        <div class="table-wrap">${table(
           ["Language", "Native", "Coverage", "Missing"],
           rows.map((r) => [r.name, r.native, `${r.percent}%`, String(r.missing.length)]),
         )}</div>
@@ -2327,6 +2433,7 @@ async function render() {
         </div>
         ${missing.length ? `<h3>Missing sample</h3><div class="table-wrap">${table(["Language", "Key"], missing)}</div>` : ""}`,
       );
+      bindMasterListFilter(body);
       $("i18n-export")?.addEventListener("click", () => {
         const blob = new Blob([JSON.stringify({ strings: I?.STRINGS || {}, overrides: remote.overrides || {} }, null, 2)], {
           type: "application/json",
@@ -2363,11 +2470,13 @@ async function render() {
         "Branches",
         "Every shop branch on the platform.",
         [{ label: "Branches", value: rows.length }],
-        `<div class="table-wrap">${table(
+        `${masterListToolbar("Search business or branch…", rows.length)}
+        <div class="table-wrap">${table(
           ["Business", "Branch", "Status"],
           rows.map((r) => [r.business_name, r.name, statusChip(r.status)]),
         )}</div>`,
       );
+      bindMasterListFilter(body);
     } else if (tab === "devices") {
       const rows = await api("/api/master/devices");
       body.innerHTML = masterDesk(
@@ -2375,11 +2484,13 @@ async function render() {
         "POS devices",
         "Registered tills and device codes.",
         [{ label: "Devices", value: rows.length }],
-        `<div class="table-wrap">${table(
+        `${masterListToolbar("Search device, shop, or code…", rows.length)}
+        <div class="table-wrap">${table(
           ["Business", "Branch", "Device", "Code", "Status"],
           rows.map((r) => [r.business_name, r.branch_name, r.name, r.code, statusChip(r.status)]),
         )}</div>`,
       );
+      bindMasterListFilter(body);
     } else if (tab === "alert-log") {
       const rows = await api("/api/master/alert-log");
       body.innerHTML = alertLogPageHtml(rows);
@@ -2391,7 +2502,8 @@ async function render() {
         "Audit log",
         "Who changed what across the platform.",
         [{ label: "Rows", value: rows.length }],
-        `<div class="table-wrap">${table(
+        `${masterListToolbar("Search actor, action, or shop…", rows.length)}
+        <div class="table-wrap">${table(
           ["When", "Actor", "Action", "Module", "Business", "Order / details"],
           rows.map((r) => [
             formatPlatformTime(r.created_at),
@@ -2403,6 +2515,7 @@ async function render() {
           ]),
         )}</div>`,
       );
+      bindMasterListFilter(body);
     } else if (tab === "backup" || tab === "alerts") {
       if (tab === "alerts") backupPane = "settings";
       const shops = await api("/api/master/businesses");
@@ -3020,9 +3133,58 @@ function attr(value) {
     .replaceAll("<", "&lt;");
 }
 
+function tableText(value) {
+  return String(value ?? "")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&quot;/g, '"')
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function masterListToolbar(placeholder, count) {
+  return `<div class="master-list-toolbar">
+    <label class="master-shop-search">Filter list
+      <input class="master-list-q" type="search" placeholder="${attr(placeholder)}" autocomplete="off" />
+    </label>
+    <p class="hint master-list-count">${count} rows</p>
+  </div>`;
+}
+
+function bindMasterListFilter(root) {
+  root?.querySelectorAll(".master-list-toolbar").forEach((bar) => {
+    const input = bar.querySelector(".master-list-q");
+    const wrap = bar.nextElementSibling;
+    const tableEl = wrap?.matches?.("table.master-data") ? wrap : wrap?.querySelector?.("table.master-data");
+    const countEl = bar.querySelector(".master-list-count");
+    if (!input || !tableEl || input.dataset.bound) return;
+    input.dataset.bound = "1";
+    const rows = [...tableEl.querySelectorAll("tbody tr")];
+    const paint = () => {
+      const q = String(input.value || "").trim().toLowerCase();
+      let n = 0;
+      rows.forEach((tr) => {
+        const hay = String(tr.dataset.rowSearch || tr.textContent || "").toLowerCase();
+        const hide = Boolean(q) && !hay.includes(q);
+        tr.hidden = hide;
+        if (!hide) n += 1;
+      });
+      if (countEl) countEl.textContent = q ? `${n} of ${rows.length} rows` : `${rows.length} rows`;
+    };
+    input.addEventListener("input", paint);
+  });
+}
+
 function table(headers, rows) {
-  return `<table><thead><tr>${headers.map((h) => `<th>${h}</th>`).join("")}</tr></thead><tbody>${rows
-    .map((r) => `<tr>${r.map((c) => `<td>${c}</td>`).join("")}</tr>`)
+  if (!rows?.length) {
+    return `<div class="item-empty-card"><strong>No rows yet</strong><p>Nothing to show on this list.</p></div>`;
+  }
+  return `<table class="master-data data"><thead><tr>${headers.map((h) => `<th>${h}</th>`).join("")}</tr></thead><tbody>${rows
+    .map((r) => {
+      const hay = tableText(r.join(" ")).toLowerCase();
+      return `<tr data-row-search="${attr(hay)}">${r.map((c) => `<td>${c}</td>`).join("")}</tr>`;
+    })
     .join("")}</tbody></table>`;
 }
 

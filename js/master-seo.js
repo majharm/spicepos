@@ -33,9 +33,21 @@
   }
   function table(headers, rows, rowAttrs) {
     if (!rows?.length) return `<p class="hint">No records yet. Add items in Master Admin — nothing is hard-coded.</p>`;
-    return `<div class="table-wrap"><table class="data"><thead><tr>${headers.map((h) => `<th>${h}</th>`).join("")}</tr></thead><tbody>${rows
+    return `<div class="table-wrap"><table class="data master-data"><thead><tr>${headers.map((h) => `<th>${h}</th>`).join("")}</tr></thead><tbody>${rows
       .map((r, i) => `<tr ${rowAttrs?.[i] || ""}>${r.map((c) => `<td>${c}</td>`).join("")}</tr>`)
       .join("")}</tbody></table></div>`;
+  }
+  function wrapDesk(inner) {
+    return `<div class="items-desk master-desk master-embed-desk">
+      <header class="items-hero">
+        <div class="items-hero-copy">
+          <p class="items-kicker">SEO</p>
+          <h3>SEO Management</h3>
+          <p class="lede">Keywords, pages, and search settings for the public site.</p>
+        </div>
+      </header>
+      ${inner}
+    </div>`;
   }
   function badge(s) {
     const v = String(s || "draft");
@@ -57,6 +69,9 @@
   async function render(body, pane, api, opts = {}) {
     opts.api = api;
     const head = tabs(pane);
+    const setBody = (html) => {
+      body.innerHTML = wrapDesk(html);
+    };
 
     if (pane === "overview") {
       const d = await api("/api/master/seo/overview");
@@ -74,17 +89,17 @@
         ["Estimated Traffic", k.estimated_traffic, "keywords"],
         ["Keyword Opportunities", k.keyword_opportunities, "generator"],
       ];
-      body.innerHTML = `${head}<p class="hint">${d.note || ""}</p>
+      setBody(`${head}<p class="hint">${d.note || ""}</p>
         <div class="kpi-grid">${cards
           .map(([l, v, p]) => `<button type="button" class="report-card seo-kpi" data-seo-pane="${p}"><span>${l}</span><strong>${v ?? 0}</strong></button>`)
-          .join("")}</div>`;
+          .join("")}</div>`);
       bindPanes(body, opts);
       return;
     }
 
     if (pane === "keywords") {
       const rows = await api("/api/master/seo/keywords");
-      body.innerHTML = `${head}
+      setBody(`${head}
         <div class="seo-toolbar">
           <input id="seo-q" placeholder="Search keywords" />
           <button class="btn primary" type="button" id="seo-add">+ Add Keyword</button>
@@ -128,7 +143,7 @@
           <label>Notes <textarea name="notes"></textarea></label>
           <input type="hidden" name="id" />
           <button class="btn primary" type="submit">Save keyword</button>
-        </form>`;
+        </form>`);
       const form = body.querySelector("#seo-kw");
       body.querySelector("#seo-add").onclick = () => {
         form.hidden = false;
@@ -183,14 +198,14 @@
 
     if (pane === "groups") {
       const rows = await api("/api/master/seo/groups");
-      body.innerHTML = `${head}
+      setBody(`${head}
         <form id="seo-g" class="settings">
           <label>Group name <input name="name" required placeholder="Pharmacy POS" /></label>
           <label>Business category ${sel("business_category", CATS)}</label>
           <label>Notes <textarea name="notes" placeholder="Primary / secondary / long-tail clusters"></textarea></label>
           <button class="btn primary" type="submit">Save group</button>
         </form>
-        ${table(["Name", "Category", "Notes"], rows.map((r) => [r.name, r.business_category || "", r.notes || ""]))}`;
+        ${table(["Name", "Category", "Notes"], rows.map((r) => [r.name, r.business_category || "", r.notes || ""]))}`);
       body.querySelector("#seo-g").onsubmit = async (e) => {
         e.preventDefault();
         await api("/api/master/seo/groups", { method: "POST", body: JSON.stringify(fd(e.target)) });
@@ -201,7 +216,7 @@
     }
 
     if (pane === "generator") {
-      body.innerHTML = `${head}
+      setBody(`${head}
         <p class="hint">Suggestions stay in this screen until you add them. Nothing is published automatically.</p>
         <form id="seo-gen" class="settings">
           <label>Business type ${sel("businessType", CATS, "Pharmacy")}</label>
@@ -209,7 +224,7 @@
           <label>Location <input name="location" placeholder="Pune" /></label>
           <button class="btn primary" type="submit">Generate suggestions</button>
         </form>
-        <div id="seo-sug"></div>`;
+        <div id="seo-sug"></div>`);
       body.querySelector("#seo-gen").onsubmit = async (e) => {
         e.preventDefault();
         const o = fd(e.target);
@@ -243,7 +258,7 @@
     if (pane === "pages" || pane === "editor" || pane === "business") {
       const pages = await api("/api/master/seo/pages");
       const editing = pane === "editor";
-      body.innerHTML = `${head}
+      setBody(`${head}
         <p class="hint">SEO Score is an on-page checklist, not a Google ranking. Pages stay draft until approved and published.</p>
         <button class="btn primary" type="button" id="seo-new-page">+ SEO page</button>
         ${table(
@@ -293,7 +308,7 @@
           <label><input type="checkbox" name="approved" /> Approve unique content</label>
           <input type="hidden" name="id" />
           <button class="btn primary" type="submit">Save page</button>
-        </form>`;
+        </form>`);
       const form = body.querySelector("#seo-page");
       const paint = () => {
         body.querySelector("#seo-title-n").textContent = `${(form.seo_title.value || "").length} / 60`;
@@ -350,7 +365,7 @@
 
     if (pane === "locations") {
       const rows = await api("/api/master/seo/locations");
-      body.innerHTML = `${head}
+      setBody(`${head}
         <p class="hint">Builds phrases such as “POS software in Pune”. Location landing pages still need unique approved content before publish.</p>
         <form id="seo-loc" class="settings">
           <label>Base phrase <input name="base" value="POS software" /></label>
@@ -361,7 +376,7 @@
           <button class="btn primary" type="submit">Add location</button>
         </form>
         <p id="seo-loc-out" class="hint"></p>
-        ${table(["Country", "State", "City", "Area"], rows.map((r) => [r.country, r.state, r.city, r.area]))}`;
+        ${table(["Country", "State", "City", "Area"], rows.map((r) => [r.country, r.state, r.city, r.area]))}`);
       body.querySelector("#seo-loc").onsubmit = async (e) => {
         e.preventDefault();
         const r = await api("/api/master/seo/locations", { method: "POST", body: JSON.stringify(fd(e.target)) });
@@ -374,7 +389,7 @@
 
     if (pane === "links") {
       const rows = await api("/api/master/seo/links");
-      body.innerHTML = `${head}
+      setBody(`${head}
         <form id="seo-link" class="settings">
           <label>Source page <input name="source_url" placeholder="/pharmacy-pos" required /></label>
           <label>Target page <input name="target_url" placeholder="/pharmacy-inventory" required /></label>
@@ -382,7 +397,7 @@
           <label>Priority ${sel("priority", ["High", "Medium", "Low"])}</label>
           <button class="btn primary" type="submit">Save link</button>
         </form>
-        ${table(["Source", "Anchor", "Target", "Priority"], rows.map((r) => [r.source_url, r.anchor_text, r.target_url, r.priority]))}`;
+        ${table(["Source", "Anchor", "Target", "Priority"], rows.map((r) => [r.source_url, r.anchor_text, r.target_url, r.priority]))}`);
       body.querySelector("#seo-link").onsubmit = async (e) => {
         e.preventDefault();
         await api("/api/master/seo/links", { method: "POST", body: JSON.stringify(fd(e.target)) });
@@ -394,7 +409,7 @@
 
     if (pane === "faq") {
       const rows = await api("/api/master/seo/faq");
-      body.innerHTML = `${head}
+      setBody(`${head}
         <form id="seo-faq" class="settings">
           <label>Question <input name="question" required /></label>
           <label>Answer <textarea name="answer" required></textarea></label>
@@ -405,7 +420,7 @@
           <label>Status ${sel("status", ["draft", "active"])}</label>
           <button class="btn primary" type="submit">Save FAQ</button>
         </form>
-        ${table(["Question", "Category", "Page", "Status"], rows.map((r) => [r.question, r.category, r.target_page, badge(r.status)]))}`;
+        ${table(["Question", "Category", "Page", "Status"], rows.map((r) => [r.question, r.category, r.target_page, badge(r.status)]))}`);
       body.querySelector("#seo-faq").onsubmit = async (e) => {
         e.preventDefault();
         await api("/api/master/seo/faq", { method: "POST", body: JSON.stringify(fd(e.target)) });
@@ -417,14 +432,14 @@
 
     if (pane === "redirects") {
       const rows = await api("/api/master/seo/redirects");
-      body.innerHTML = `${head}
+      setBody(`${head}
         <form id="seo-red" class="settings">
           <label>Old URL <input name="old_url" required /></label>
           <label>New URL <input name="new_url" required /></label>
           <label>Type ${sel("redirect_type", ["301", "302"])}</label>
           <button class="btn primary" type="submit">Save redirect</button>
         </form>
-        ${table(["Old", "New", "Type", "Hits", "Status"], rows.map((r) => [r.old_url, r.new_url, r.redirect_type, r.hit_count, badge(r.status)]))}`;
+        ${table(["Old", "New", "Type", "Hits", "Status"], rows.map((r) => [r.old_url, r.new_url, r.redirect_type, r.hit_count, badge(r.status)]))}`);
       body.querySelector("#seo-red").onsubmit = async (e) => {
         e.preventDefault();
         await api("/api/master/seo/redirects", { method: "POST", body: JSON.stringify(fd(e.target)) });
@@ -436,14 +451,14 @@
 
     if (pane === "broken") {
       const rows = await api("/api/master/seo/broken");
-      body.innerHTML = `${head}${table(["URL", "Status", "Source", "Action"], rows.map((r) => [r.url, r.status_code, r.source || "", r.suggested_action || ""]))}`;
+      setBody(`${head}${table(["URL", "Status", "Source", "Action"], rows.map((r) => [r.url, r.status_code, r.source || "", r.suggested_action || ""]))}`);
       bindPanes(body, opts);
       return;
     }
 
     if (pane === "conflicts") {
       const d = await api("/api/master/seo/conflicts");
-      body.innerHTML = `${head}<p class="hint">${d.note || ""}</p>
+      setBody(`${head}<p class="hint">${d.note || ""}</p>
         ${table(
           ["Keyword", "Pages", "Decision"],
           (d.conflicts || []).map((c) => [
@@ -452,7 +467,7 @@
             `<button class="btn" data-dec="keep" data-kw="${c.keyword}">Keep separate</button>
              <button class="btn" data-dec="ignore" data-kw="${c.keyword}">Ignore</button>`,
           ]),
-        )}`;
+        )}`);
       body.querySelectorAll("[data-dec]").forEach((b) => {
         b.onclick = async () => {
           await api("/api/master/seo/conflicts", { method: "POST", body: JSON.stringify({ keyword: b.dataset.kw, decision: b.dataset.dec }) });
@@ -464,20 +479,20 @@
 
     if (pane === "usage") {
       const rows = await api("/api/master/seo/usage");
-      body.innerHTML = `${head}${table(
+      setBody(`${head}${table(
         ["Keyword", "Intent", "Pages", "Title", "H1", "Meta", "Content", "URL", "Status"],
         (rows || []).map((r) => [r.keyword, r.search_intent, (r.pages || []).join(", "), r.title ? "✓" : "—", r.h1 ? "✓" : "—", r.meta ? "✓" : "—", r.content ? "✓" : "—", r.url ? "✓" : "—", r.status]),
-      )}`;
+      )}`);
       bindPanes(body, opts);
       return;
     }
 
     if (pane === "sitemap") {
-      body.innerHTML = `${head}
+      setBody(`${head}
         <p class="hint">Sitemap includes published, indexable public pages only. Admin, login and POS paths stay out.</p>
         <button class="btn primary" type="button" id="seo-sm">Generate Sitemap</button>
         <a class="btn" href="/sitemap.xml" target="_blank" rel="noopener">View Sitemap</a>
-        <pre id="seo-sm-out" class="seo-pre"></pre>`;
+        <pre id="seo-sm-out" class="seo-pre"></pre>`);
       body.querySelector("#seo-sm").onclick = async () => {
         const r = await api("/api/master/seo/sitemap/generate", { method: "POST", body: "{}" });
         body.querySelector("#seo-sm-out").textContent = r.xml || "";
@@ -488,13 +503,13 @@
 
     if (pane === "robots") {
       const s = await api("/api/master/seo/settings");
-      body.innerHTML = `${head}
+      setBody(`${head}
         <form id="seo-rb" class="settings">
           <label>robots.txt <textarea name="robots_txt" rows="12">${s.robots_txt || ""}</textarea></label>
           <button class="btn" type="button" id="seo-val">Validate</button>
           <button class="btn primary" type="submit">Save / Publish</button>
           <p class="hint" id="seo-rb-h"></p>
-        </form>`;
+        </form>`);
       const hint = body.querySelector("#seo-rb-h");
       const check = () => {
         const t = body.querySelector("[name=robots_txt]").value;
@@ -513,17 +528,17 @@
 
     if (pane === "activity") {
       const rows = await api("/api/master/seo/activity");
-      body.innerHTML = `${head}${table(
+      setBody(`${head}${table(
         ["When", "Actor", "Action", "Page", "Keyword"],
         rows.map((r) => [r.created_at || "", r.actor || "", r.action, r.page_url || "", r.keyword || ""]),
-      )}`;
+      )}`);
       bindPanes(body, opts);
       return;
     }
 
     const s = await api("/api/master/seo/settings");
     const tpls = await api("/api/master/seo/templates");
-    body.innerHTML = `${head}
+    setBody(`${head}
       <p>Only Master Admin can change global SEO settings. Shop staff cannot.</p>
       <form id="seo-set" class="settings">
         <label>Default site title <input name="site_title" value="${s.site_title || ""}" /></label>
@@ -543,7 +558,7 @@
         <label>Description template <textarea name="description_tpl">Manage {category} billing, inventory, customers, payments and reports with ATAV POS.</textarea></label>
         <button class="btn" type="submit">Save template</button>
       </form>
-      ${table(["Name", "Title template"], (tpls || []).map((t) => [t.name, t.title_tpl]))}`;
+      ${table(["Name", "Title template"], (tpls || []).map((t) => [t.name, t.title_tpl]))}`);
     body.querySelector("#seo-set").onsubmit = async (e) => {
       e.preventDefault();
       await api("/api/master/seo/settings", { method: "POST", body: JSON.stringify(fd(e.target)) });

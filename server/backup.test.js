@@ -366,7 +366,7 @@ test("HTML and CSS cache stickers match deploy136", () => {
   assert.doesNotMatch(masterHtml, /assets\/login-pos-stock\.jpg/);
   assert.match(masterHtml, /to access Master Admin/);
   assert.match(masterHtml, /id="master-login-submit"/);
-  assert.match(masterHtml, /nav-group-label">Advanced</);
+  assert.match(masterHtml, /nav-group-label"[^>]*>Advanced</);
   assert.match(masterHtml, /id="master-topbar"|class="master-topbar"/);
   assert.match(masterHtml, /id="master-nav-toggle"/);
   assert.match(masterHtml, /data-nav-family="analytics"/);

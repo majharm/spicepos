@@ -40,9 +40,22 @@
 
   function table(headers, rows) {
     if (!rows?.length) return `<p class="hint">No recorded website events for this view.</p>`;
-    return `<div class="table-wrap"><table class="data"><thead><tr>${headers.map((h) => `<th>${h}</th>`).join("")}</tr></thead><tbody>${rows
+    return `<div class="table-wrap"><table class="data master-data"><thead><tr>${headers.map((h) => `<th>${h}</th>`).join("")}</tr></thead><tbody>${rows
       .map((r) => `<tr>${r.map((c) => `<td>${c}</td>`).join("")}</tr>`)
       .join("")}</tbody></table></div>`;
+  }
+
+  function wrapDesk(inner) {
+    return `<div class="items-desk master-desk master-embed-desk">
+      <header class="items-hero">
+        <div class="items-hero-copy">
+          <p class="items-kicker">Analytics</p>
+          <h3>Google Analytics</h3>
+          <p class="lede">Website traffic, acquisition, and conversions — separate from POS sales.</p>
+        </div>
+      </header>
+      ${inner}
+    </div>`;
   }
 
   function note(d) {
@@ -107,7 +120,7 @@
     opts.api = api;
     if (pane === "settings") {
       const s = await api("/api/master/analytics/settings");
-      body.innerHTML = `${tabs(pane)}
+      body.innerHTML = wrapDesk(`${tabs(pane)}
         <p class="section-note">Measurement ID is not a secret. Do not paste OAuth refresh tokens here. Optional GA4 Data API credentials belong in the server environment as GA4_CREDENTIALS_JSON.</p>
         <p>Google Analytics Status: <strong>${s.connected ? "Connected" : "Not Connected"}</strong></p>
         <form id="ga-form" class="settings">
@@ -126,7 +139,7 @@
           <p class="hint" id="ga-hint"></p>
         </form>
         <h3>Permissions</h3>
-        <p>Master Admin can view analytics, realtime, acquisition, engagement, conversions, manage GA4 settings, events, conversion events, alerts, and export reports. Shop staff cannot.</p>`;
+        <p>Master Admin can view analytics, realtime, acquisition, engagement, conversions, manage GA4 settings, events, conversion events, alerts, and export reports. Shop staff cannot.</p>`);
       const form = body.querySelector("#ga-form");
       const hint = body.querySelector("#ga-hint");
       const payload = () => {
@@ -168,7 +181,7 @@
     if (pane === "alerts") {
       const list = await api("/api/master/analytics/alerts");
       const rows = Array.isArray(list) ? list : [];
-      body.innerHTML = `${tabs(pane)}
+      body.innerHTML = wrapDesk(`${tabs(pane)}
         <p class="section-note">Alerts watch first-party website event counts. They do not invent GA4 traffic.</p>
         <form id="ga-alert" class="settings">
           <label>Alert name <input name="name" required /></label>
@@ -181,7 +194,7 @@
           <label>Status <select name="status"><option value="active">Active</option><option value="inactive">Inactive</option></select></label>
           <button class="btn primary" type="submit">Save alert</button>
         </form>
-        ${table(["Name", "Metric", "Condition", "Threshold", "Frequency", "Status"], rows.map((a) => [a.name, a.metric, a.condition_op, a.threshold, a.frequency, a.status]))}`;
+        ${table(["Name", "Metric", "Condition", "Threshold", "Frequency", "Status"], rows.map((a) => [a.name, a.metric, a.condition_op, a.threshold, a.frequency, a.status]))}`);
       body.querySelector("#ga-alert").onsubmit = async (e) => {
         e.preventDefault();
         const fd = Object.fromEntries(new FormData(e.target).entries());
@@ -197,7 +210,7 @@
     if (pane === "conversions") {
       const s = await api("/api/master/analytics/settings");
       const d = await api(`/api/master/analytics/overview?${qs(range, from, to)}`);
-      body.innerHTML = `${tabs(pane)}${rangeBar(range)}
+      body.innerHTML = wrapDesk(`${tabs(pane)}${rangeBar(range)}
         <p>Mark selected events as conversions. Clicks are not conversions unless listed here.</p>
         <form id="ga-conv">${EVENT_NAMES.map(
           (n) =>
@@ -208,7 +221,7 @@
           ["Lead ID", "Date", "Source", "Campaign", "Landing page", "Business type", "Conversion event"],
           (d.leads || []).map((r) => [r.id, r.occurred_at || "", r.source || "", r.utm_campaign || "", r.page_path || "/", r.business_category || "", r.event_name]),
         )}
-        ${note(d)}`;
+        ${note(d)}`);
       body.querySelector("#ga-conv").onsubmit = async (e) => {
         e.preventDefault();
         const conversion_events = formQuery(e.target, "ev");
@@ -285,7 +298,7 @@
       extra = `${table(["Business category", "Visitors", "Get Started", "Demo", "Leads"], (d.categories || []).map((r) => [r.category, r.visitors, r.get_started, r.demo_requests, r.leads]))}${note(d)}`;
     }
 
-    body.innerHTML = `${tabs(pane)}${rangeBar(range)}${extra}`;
+    body.innerHTML = wrapDesk(`${tabs(pane)}${rangeBar(range)}${extra}`);
     bindChrome(body, pane, { ...opts, api }, range);
   }
 
