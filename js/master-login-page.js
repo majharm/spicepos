@@ -16,14 +16,32 @@
     ["campaigns", "Campaigns"],
   ];
   const KINDS = ["desktop", "mobile", "tablet", "background", "banner", "side", "ad", "logo", "favicon", "library"];
-  const STUB_PANES = { register: "Registration Page", contact: "Contact Page" };
+  const PUBLIC_PANES = {
+    homepage: "Homepage",
+    register: "Registration Page",
+    contact: "Contact Page",
+  };
+  const PANE_COPY = {
+    images: ["Login Page", "Desktop and tablet hero for shop and Master Admin sign-in."],
+    logo: ["Logo", "Brand mark on the sign-in card."],
+    background: ["Background", "Image behind the scene panel."],
+    banner: ["Promotional Banner", "Side banner, advert, or offer art."],
+    text: ["Login Text", "Headings, button labels, and scene copy."],
+    branding: ["Branding", "Company name, tagline, and logo."],
+    layout: ["Layout", "Card size, radius, and input style."],
+    mobile: ["Mobile Image", "Hero used under 760px."],
+    settings: ["Login Settings", "Colors, slider, image source, and CTAs."],
+    preview: ["Preview", "Business-type headings and images."],
+    history: ["Publish History", "Restore a draft, then Publish to go live."],
+    media: ["Media Library", "Every uploaded login image."],
+    campaigns: ["Campaigns", "Schedule a login image. After expiry the next priority image returns."],
+  };
   let bundle = { draft: {}, images: [], campaigns: [], versions: [], audit: [], published_version: 0, published: null };
   let previewMode = "desktop";
 
   function resolvePane(pane) {
     const on = String(pane || "images");
-    if (STUB_PANES[on]) return on;
-    if (on === "homepage") return "images";
+    if (PUBLIC_PANES[on]) return on;
     return PANES.some(([id]) => id === on) ? on : "images";
   }
 
@@ -136,13 +154,13 @@
   }
 
   function shell(pane, inner) {
-    const d = mergeDraft();
+    const copy = PANE_COPY[pane] || ["Login Page Management", "Change images, text, layout, and campaigns. Draft → Preview → Publish."];
     return `<div class="items-desk master-desk login-page-desk">
       <header class="items-hero">
         <div class="items-hero-copy">
-          <p class="items-kicker">Website / UI</p>
-          <h3>Login Page Management</h3>
-          <p class="lede">Change images, text, layout, and campaigns. Sign-in security stays unchanged. Draft → Preview → Publish.</p>
+          <p class="items-kicker">Website</p>
+          <h3>${esc(copy[0])}</h3>
+          <p class="lede">${esc(copy[1])} Sign-in security stays unchanged.</p>
         </div>
         <div class="items-hero-stats">
           <div class="items-stat"><span>Published</span><strong>v${bundle.published_version || 0}</strong></div>
@@ -366,7 +384,7 @@
       if (v !== null && v !== undefined) patch[k] = v;
     };
     for (const [k, v] of fd.entries()) {
-      if (k.startsWith("upload_") || k.startsWith("bt_")) continue;
+      if (k.startsWith("upload_") || k.startsWith("bt_") || k === "cta_register_url") continue;
       if (k === "colors_useGlobal" || k === "sliderOn" || k === "autoRotate" || k === "promo_on" || k === "promo_ctaNewTab") continue;
       if (k.startsWith("card_")) {
         patch.card = patch.card || {};
@@ -415,6 +433,106 @@
     return patch;
   }
 
+  function publicPageHtml(pane) {
+    const d = mergeDraft();
+    if (pane === "homepage") {
+      return `<div class="items-desk master-desk login-page-desk website-page-desk">
+        <header class="items-hero">
+          <div class="items-hero-copy">
+            <p class="items-kicker">Website</p>
+            <h3>Homepage</h3>
+            <p class="lede">The public marketing site at home.html. SEO titles live in SEO Management. Shop login images live under Login Page.</p>
+          </div>
+        </header>
+        <div class="website-hub-actions">
+          <a class="btn primary" href="./home.html" target="_blank" rel="noopener">Open homepage</a>
+          <button class="btn" type="button" data-website-pane="images">Login page images</button>
+          <button class="btn" type="button" data-website-pane="branding">Branding</button>
+        </div>
+        <iframe class="website-live-frame" src="./home.html" title="Homepage preview"></iframe>
+      </div>`;
+    }
+    if (pane === "register") {
+      return `<div class="items-desk master-desk login-page-desk website-page-desk">
+        <header class="items-hero">
+          <div class="items-hero-copy">
+            <p class="items-kicker">Website</p>
+            <h3>Registration Page</h3>
+            <p class="lede">Shop owners sign up from the login screen. Toggle the Sign Up tab, then Publish.</p>
+          </div>
+        </header>
+        <div class="login-page-split">
+          <form id="login-page-form" class="settings item-composer">
+            <p class="item-mode">Sign-up tab</p>
+            <label>Show Sign Up <select name="cta_register_vis"><option value="1"${d.ctas.register.visible !== false ? " selected" : ""}>Yes</option><option value="0"${d.ctas.register.visible === false ? " selected" : ""}>No</option></select></label>
+            <label class="full">Sign Up label <input name="signupText" value="${esc(d.signupText)}" /></label>
+            <label class="full">Sign Up URL <input name="cta_register_url" value="${esc(d.ctas.register.url || "")}" placeholder="Leave blank for the built-in form" /></label>
+            <p class="hint">Draft → Publish. This does not change passwords or shop login security.</p>
+          </form>
+          <aside class="login-page-aside">
+            <p class="support-preview-label">Live signup</p>
+            <a class="btn" href="./login.html?tab=signup" target="_blank" rel="noopener">Open sign-up</a>
+            <iframe class="website-live-frame is-login" src="./login.html?tab=signup" title="Registration preview"></iframe>
+          </aside>
+        </div>
+        <div class="purchase-doc-actions">
+          <button class="btn" type="button" data-login-act="draft">Save Draft</button>
+          <button class="btn primary" type="button" data-login-act="publish">Publish</button>
+          <p class="hint" id="login-page-hint">Draft edits do not change the live login until Publish.</p>
+        </div>
+      </div>`;
+    }
+    return `<div class="items-desk master-desk login-page-desk website-page-desk">
+      <header class="items-hero">
+        <div class="items-hero-copy">
+          <p class="items-kicker">Website</p>
+          <h3>Contact Page</h3>
+          <p class="lede">The public demo and support block on the homepage. Assigned shops also see their account manager on Support.</p>
+        </div>
+      </header>
+      <div class="website-hub-actions">
+        <a class="btn primary" href="./home.html#contact" target="_blank" rel="noopener">Open contact</a>
+        <a class="btn" href="https://wa.me/919765040588" target="_blank" rel="noopener">WhatsApp</a>
+      </div>
+      <iframe class="website-live-frame" src="./home.html#contact" title="Contact preview"></iframe>
+    </div>`;
+  }
+
+  function bindPublicPage(body, api, opts, on) {
+    body.querySelectorAll("[data-website-pane]").forEach((b) => {
+      b.onclick = () => opts.setPane(b.dataset.websitePane);
+    });
+    if (on !== "register") return;
+    const hint = () => document.getElementById("login-page-hint");
+    const saveDraft = async () => {
+      const patch = collectForm(document.getElementById("login-page-form"));
+      const form = document.getElementById("login-page-form");
+      const url = form?.querySelector('[name="cta_register_url"]')?.value;
+      if (url != null) {
+        patch.ctas = patch.ctas || {};
+        patch.ctas.register = { ...(patch.ctas.register || {}), url: String(url) };
+      }
+      bundle = await api("/api/master/login-page", { method: "POST", body: JSON.stringify(patch) });
+      if (hint()) {
+        hint().textContent = "Draft saved. Click Publish to show this on shop login.";
+        hint().className = "hint ok";
+      }
+    };
+    body.querySelector("[data-login-act=draft]")?.addEventListener("click", () => saveDraft().catch((e) => hint() && (hint().textContent = e.message)));
+    body.querySelector("[data-login-act=publish]")?.addEventListener("click", async () => {
+      try {
+        await saveDraft();
+        bundle = await api("/api/master/login-page/publish", { method: "POST", body: "{}" });
+        if (hint()) {
+          hint().textContent = `Published v${bundle.published_version}. Hard-refresh login to see Sign Up.`;
+          hint().className = "hint ok";
+        }
+      } catch (e) {
+        if (hint()) hint().textContent = e.message;
+      }
+    });
+  }
+
   async function render(body, pane, api, opts) {
     const on = resolvePane(pane);
     if (!L()?.defaults) {
@@ -427,17 +545,9 @@
       body.innerHTML = `<p class="hint error">${esc(err.message)}</p>`;
       return;
     }
-    if (STUB_PANES[on]) {
-      body.innerHTML = `<div class="items-desk master-desk login-page-desk">
-        <header class="items-hero"><div class="items-hero-copy">
-          <p class="items-kicker">Website / UI</p>
-          <h3>${esc(STUB_PANES[on])}</h3>
-          <p class="lede">This public page still uses its current HTML. Login Page Management is ready now.</p>
-        </div></header>
-        <p><button class="btn primary" type="button" data-website-pane="images">Open Login Page Management</button></p>
-        ${tabs("images")}
-      </div>`;
-      body.querySelectorAll("[data-website-pane]").forEach((b) => (b.onclick = () => opts.setPane(b.dataset.websitePane)));
+    if (PUBLIC_PANES[on]) {
+      body.innerHTML = publicPageHtml(on);
+      bindPublicPage(body, api, opts, on);
       return;
     }
     try {

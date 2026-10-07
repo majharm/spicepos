@@ -209,6 +209,46 @@ const PAGE_HINTS = {
   alerts: "WhatsApp and SMTP",
 };
 
+const WEBSITE_LOGIN_PANES = ["images", "logo", "background", "banner", "text", "layout", "mobile", "settings", "preview", "history", "campaigns"];
+
+const WEBSITE_TITLES = {
+  images: "Login Page",
+  logo: "Login Logo",
+  background: "Login Background",
+  banner: "Login Banner",
+  text: "Login Text",
+  layout: "Login Layout",
+  mobile: "Login Mobile Image",
+  settings: "Login Settings",
+  preview: "Login Preview",
+  history: "Publish History",
+  campaigns: "Login Campaigns",
+  branding: "Branding",
+  media: "Media Library",
+  homepage: "Homepage",
+  register: "Registration Page",
+  contact: "Contact Page",
+};
+
+const WEBSITE_HINTS = {
+  images: "Shop and Master Admin login images",
+  logo: "Sign-in card logo",
+  background: "Scene background",
+  banner: "Promotional banner",
+  text: "Headings and button labels",
+  layout: "Card size and layout",
+  mobile: "Phone login image",
+  settings: "Colors, slider, and CTAs",
+  preview: "Business-type experience",
+  history: "Published versions",
+  campaigns: "Scheduled login images",
+  branding: "Company name and logo",
+  media: "Uploaded login images",
+  homepage: "Public marketing homepage",
+  register: "Shop sign-up on login",
+  contact: "Public contact and demo",
+};
+
 const MASTER_PAGES = [
   { tab: "dash", title: "Dashboard", keywords: "home shops overview" },
   { tab: "biz", title: "Businesses", keywords: "shops create open pos" },
@@ -244,6 +284,7 @@ const MASTER_PAGES = [
 
 function currentPageHint() {
   if (tab === "backup") return backupPane === "settings" ? "WhatsApp, SMTP, and auto-messages" : PAGE_HINTS.backup;
+  if (tab === "website") return WEBSITE_HINTS[websitePane] || PAGE_HINTS.website;
   return PAGE_HINTS[tab] || "Platform control";
 }
 
@@ -267,7 +308,10 @@ function syncMasterNav() {
     const seo = b.dataset.seoPane;
     if (seo != null) on = tab === "seo" && seo === seoPane;
     const website = b.dataset.websitePane;
-    if (website != null) on = tab === "website" && website === websitePane;
+    if (website != null) {
+      if (website === "images") on = tab === "website" && (websitePane === "images" || WEBSITE_LOGIN_PANES.includes(websitePane));
+      else on = tab === "website" && website === websitePane;
+    }
     b.classList.toggle("active", on);
   });
   document.querySelectorAll(".master-nav-group[data-nav-family]").forEach((g) => {
@@ -381,8 +425,7 @@ function bindBackupFamilyTabs(root) {
 
 function resolveWebsitePane(pane) {
   const p = String(pane || "").trim();
-  if (p === "register" || p === "contact") return p;
-  if (!p || p === "homepage") return "images";
+  if (!p) return "images";
   return p;
 }
 
@@ -1760,7 +1803,7 @@ async function render() {
     backup: backupPane === "settings" ? "Settings" : "Backup",
     analytics: "Google Analytics",
     seo: "SEO Management",
-    website: "Website Management",
+    website: WEBSITE_TITLES[websitePane] || "Website Management",
     notes: "Messages",
     languages: "Languages",
     alerts: "Settings",

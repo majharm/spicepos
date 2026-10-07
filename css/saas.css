@@ -2110,4 +2110,8 @@ body.dev-mode .session-bar::after {
   background: #fff;
   box-shadow: var(--shadow-card);
 }
+.login-page-desk .login-page-form .settings,
+.website-page-desk .settings {
+  max-width: none;
+}
 

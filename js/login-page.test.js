@@ -75,9 +75,9 @@ test("Master Admin Login Page manager is wired without touching auth", () => {
   assert.match(master, /Website Management/);
   assert.match(master, /data-tab="website" data-website-pane="images"/);
   assert.match(master, />Login Page</);
-  assert.match(master, /js\/master-login-page\.js\?v=20261006loginimg1/);
+  assert.match(master, /js\/master-login-page\.js\?v=20261007web1/);
   assert.match(master, /js\/login-page\.js\?v=20261006loginimg1/);
-  assert.match(master, /css\/login-page\.css\?v=20260920deploy203/);
+  assert.match(master, /css\/login-page\.css\?v=20261007web1/);
   assert.match(masterJs, /function resolveWebsitePane/);
   assert.match(masterJs, /Login page and branding/);
   assert.match(manager, /function resolvePane/);
@@ -129,15 +129,19 @@ test("Master Admin login can show a published custom image", () => {
   assert.doesNotMatch(src, /if \(!shell \|\| shell\.id === "master-gate"\) return/);
 });
 
-test("Website Homepage pane opens Login Page Management", () => {
+test("Website Homepage pane is its own desk", () => {
   vm.runInThisContext(read("js/master-login-page.js"), { filename: "js/master-login-page.js" });
   const M = globalThis.POSMasterLoginPage;
-  assert.equal(M.resolvePane("homepage"), "images");
+  assert.equal(M.resolvePane("homepage"), "homepage");
   assert.equal(M.resolvePane(""), "images");
   assert.equal(M.resolvePane("unknown"), "images");
   assert.equal(M.resolvePane("media"), "media");
   assert.equal(M.resolvePane("register"), "register");
+  assert.equal(M.resolvePane("contact"), "contact");
   assert.equal(M.fieldForUpload("images", "library"), "desktopImageId");
   assert.equal(M.fieldForUpload("mobile", "mobile"), "mobileImageId");
   assert.equal(M.fieldForUpload("media", "desktop"), "desktopImageId");
+  assert.match(read("js/master.js"), /function resolveWebsitePane/);
+  assert.match(read("js/master.js"), /WEBSITE_LOGIN_PANES/);
+  assert.doesNotMatch(read("js/master.js"), /if \(!p \|\| p === "homepage"\) return "images"/);
 });

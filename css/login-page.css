@@ -58,6 +58,32 @@
 .login-lib-thumb { width: 64px; height: 40px; object-fit: cover; border-radius: 6px; }
 .login-upload { display: grid; gap: 8px; margin-top: 8px; }
 
+.login-page-desk .settings-tabs,
+.login-page-desk .seo-tabs {
+  flex-wrap: wrap;
+  overflow: visible;
+}
+.website-hub-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 12px;
+}
+.website-live-frame {
+  width: 100%;
+  min-height: 560px;
+  border: 1px solid var(--line, #e2e8f0);
+  border-radius: 14px;
+  background: #fff;
+}
+.website-live-frame.is-login { min-height: 420px; }
+.login-page-desk .purchase-doc-actions {
+  position: sticky;
+  bottom: 0;
+  padding: 12px 0 4px;
+  background: linear-gradient(180deg, rgba(241, 245, 249, 0) 0%, #f1f5f9 28%);
+}
+
 .auth-shell.login-layout-login-left {
   grid-template-columns: minmax(360px, 440px) minmax(320px, 1.12fr);
 }
