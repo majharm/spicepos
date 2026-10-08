@@ -181,6 +181,10 @@ function isPrintShop() {
   return Boolean(globalThis.POSPrint?.isPrintShop?.(state.businessMeta) || globalThis.POSFootwear?.isPrintShop?.(state.businessMeta) || globalThis.POSFootwear?.shopKind?.(state.businessMeta) === "printing");
 }
 
+function isGymShop() {
+  return Boolean(globalThis.POSGym?.isGymShop?.(state.businessMeta) || globalThis.POSFootwear?.isGymShop?.(state.businessMeta) || globalThis.POSFootwear?.shopKind?.(state.businessMeta) === "gym");
+}
+
 function isClassicBillShop() {
   return isPharmacyShop() || isApparelShop();
 }
@@ -415,6 +419,7 @@ function applyFootwearMode() {
   document.body.classList.toggle("classic-bill-mode", isClassicBillShop());
   document.body.classList.toggle("services-mode", isServicesShop());
   document.body.classList.toggle("printing-mode", isPrintShop());
+  document.body.classList.toggle("gym-mode", isGymShop());
   document.querySelectorAll(".footwear-only").forEach((el) => {
     el.hidden = !on;
   });
@@ -438,6 +443,10 @@ function applyFootwearMode() {
   document.querySelectorAll(".printing-only").forEach((el) => {
     if (el.classList.contains("nav-btn")) return;
     el.hidden = !isPrintShop();
+  });
+  document.querySelectorAll(".gym-only").forEach((el) => {
+    if (el.classList.contains("nav-btn")) return;
+    el.hidden = !isGymShop();
   });
   fillPaySelects();
   document.querySelectorAll(".classic-bill-only").forEach((el) => {
@@ -653,6 +662,11 @@ const VIEW_META = {
   "print-orders": { title: "Print orders", subtitle: "File review, quotes, and customer approval" },
   "print-production": { title: "Production", subtitle: "Printing, finishing, QC, ready, and delivery" },
   "print-settings": { title: "Print rates", subtitle: "Materials, finishing, GST, file rules, and portal image" },
+  "gym-board": { title: "Gym desk", subtitle: "Members, check-ins, collection, renewals, and dues" },
+  "gym-members": { title: "Members", subtitle: "Registration, profile, membership ID, QR, and billing" },
+  "gym-attendance": { title: "Attendance", subtitle: "QR check-in / check-out, daily attendance, and absents" },
+  "gym-trainers": { title: "Trainers", subtitle: "Trainer profiles, members, commission, and attendance" },
+  "gym-plans": { title: "Membership plans", subtitle: "Monthly, yearly, couple, family, student, and PT plans" },
 };
 
 function orderStatusClass(status) {
@@ -2314,6 +2328,11 @@ function applyNav() {
       "print-orders": "orders",
       "print-production": "orders",
       "print-settings": "settings",
+      "gym-board": "dashboard",
+      "gym-members": "customers",
+      "gym-attendance": "orders",
+      "gym-trainers": "staff",
+      "gym-plans": "items",
     };
     btn.hidden = map[view] ? !can(map[view]) : false;
     if (view === "growth") btn.hidden = !(can("growth") || can("reports"));
@@ -2326,6 +2345,8 @@ function applyNav() {
     if (view === "kot") btn.hidden = !isRestaurantShop() || !can("kot");
     if ((view === "salon-board" || view === "bookings" || view === "packages") && !isServicesShop()) btn.hidden = true;
     if ((view === "print-board" || view === "print-orders" || view === "print-production" || view === "print-settings") && !isPrintShop()) btn.hidden = true;
+    if ((view === "gym-board" || view === "gym-members" || view === "gym-attendance" || view === "gym-trainers" || view === "gym-plans") && !isGymShop()) btn.hidden = true;
+    if (view === "qr-orders" && isGymShop()) btn.hidden = true;
   });
   globalThis.POSBizHubUi?.paintIndustryNav?.();
   paintStaffRoleOptions();
@@ -2351,6 +2372,7 @@ function applyNav() {
       "salon-board": "dashboard",
       "print-board": "dashboard",
       "print-orders": "orders",
+      "gym-board": "dashboard",
       growth: "growth",
       staff: "staff",
       branches: "settings",
@@ -2502,6 +2524,7 @@ function showView(name) {
   if (name === "support") renderSupport();
   if (name === "dashboard") {
     if (!viewStillFresh("dashboard")) loadDashboard();
+    if (isGymShop()) globalThis.POSGymUi?.loadGymBoard?.();
   }
   if (name === "hub-sales") globalThis.POSBizHubUi?.paintModuleDesk?.("hub-sales-tiles", "sales");
   if (name === "hub-purchases") globalThis.POSBizHubUi?.paintModuleDesk?.("hub-purchases-tiles", "purchases");
@@ -2533,6 +2556,19 @@ function showView(name) {
     globalThis.POSPrintUi?.loadPrintOrders?.();
   }
   if (name === "print-settings") globalThis.POSPrintUi?.loadPrintSettings?.();
+  if (name === "gym-board") {
+    const portal = $("gym-portal-link");
+    if (portal && state.businessMeta?.id) portal.href = `./gym.html?shop=${encodeURIComponent(state.businessMeta.id)}`;
+    globalThis.POSGymUi?.loadGymBoard?.();
+    const list = $("gym-report-list");
+    if (list && globalThis.POSGym?.REPORTS) {
+      list.innerHTML = POSGym.REPORTS.map((r) => `<button type="button" class="dash-tile" data-gym-report="${escapeHtml(r.id)}"><strong>${escapeHtml(r.title)}</strong></button>`).join("");
+    }
+  }
+  if (name === "gym-members") globalThis.POSGymUi?.loadMembers?.();
+  if (name === "gym-attendance") globalThis.POSGymUi?.loadAttendance?.();
+  if (name === "gym-trainers") globalThis.POSGymUi?.loadTrainers?.();
+  if (name === "gym-plans") globalThis.POSGymUi?.loadPlans?.();
   paintDeskState(name);
   if (name === "stock") loadStock();
   if (name === "counter") {

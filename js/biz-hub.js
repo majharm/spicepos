@@ -136,6 +136,13 @@
     { id: "print-prod", group: "industry", title: "Production", view: "print-production", perm: "orders", kinds: ["printing"] },
     { id: "print-rates", group: "industry", title: "Print rates", view: "print-settings", perm: "settings", kinds: ["printing"] },
     { id: "print-portal", group: "industry", title: "Customer portal", view: "print-board", perm: "dashboard", kinds: ["printing"] },
+    { id: "gym-board", group: "industry", title: "Gym desk", view: "gym-board", perm: "dashboard", kinds: ["gym"] },
+    { id: "gym-members", group: "industry", title: "Members", view: "gym-members", perm: "customers", kinds: ["gym"] },
+    { id: "gym-plans", group: "industry", title: "Membership plans", view: "gym-plans", perm: "items", kinds: ["gym"] },
+    { id: "gym-att", group: "industry", title: "Attendance", view: "gym-attendance", perm: "orders", kinds: ["gym"] },
+    { id: "gym-trainers", group: "industry", title: "Trainers", view: "gym-trainers", perm: "staff", kinds: ["gym"] },
+    { id: "gym-products", group: "industry", title: "Supplements / merchandise", view: "items", perm: "items", kinds: ["gym"] },
+    { id: "gym-portal", group: "industry", title: "Member portal", view: "gym-board", perm: "dashboard", kinds: ["gym"] },
   ];
 
   const GROUPS = [
@@ -262,6 +269,17 @@
     { id: "print-material-sales", center: "print", title: "Material-wise Sales", kinds: ["printing"] },
     { id: "print-production", center: "print", title: "Production Status", kinds: ["printing"] },
     { id: "print-delivery", center: "print", title: "Print Delivery", kinds: ["printing"] },
+    { id: "gym-members", center: "gym", title: "Member Report", kinds: ["gym"] },
+    { id: "gym-attendance", center: "gym", title: "Attendance Report", kinds: ["gym"] },
+    { id: "gym-collection", center: "gym", title: "Collection Report", kinds: ["gym"] },
+    { id: "gym-dues", center: "gym", title: "Due Report", kinds: ["gym"] },
+    { id: "gym-expiry", center: "gym", title: "Membership Expiry Report", kinds: ["gym"] },
+    { id: "gym-trainers", center: "gym", title: "Trainer Report", kinds: ["gym"] },
+    { id: "gym-expense", center: "gym", title: "Expense Report", kinds: ["gym"] },
+    { id: "gym-pl", center: "gym", title: "Profit/Loss", kinds: ["gym"] },
+    { id: "gym-sales-daily", center: "gym", title: "Daily Sales", kinds: ["gym"] },
+    { id: "gym-sales-monthly", center: "gym", title: "Monthly Sales", kinds: ["gym"] },
+    { id: "gym-sales-yearly", center: "gym", title: "Yearly Sales", kinds: ["gym"] },
   ];
 
   const CENTERS = [
@@ -280,6 +298,7 @@
     { id: "audit", title: "Audit Log" },
     { id: "salon", title: "Salon / Spa" },
     { id: "print", title: "Flex & Printing" },
+    { id: "gym", title: "Gym & Fitness Center" },
   ];
 
   const PURCHASE_DOC_KINDS = {

@@ -722,10 +722,12 @@ function pos_shop_kind($biz) {
   $type = strtolower(trim((string) ($biz["business_type"] ?? "")));
   if ($type === "restaurant" || $type === "cafe" || $type === "bakery") return "restaurant";
   if ($type === "printing business" || $type === "printing") return "printing";
+  if ($type === "gym" || $type === "gym & fitness center" || $type === "fitness") return "gym";
   if (pos_is_footwear_shop($biz)) return "footwear";
   if (pos_is_apparel_shop($biz)) return "apparel";
   $text = strtolower(trim((string) (($biz["category"] ?? "") . " " . ($biz["business_type"] ?? "") . " " . ($biz["name"] ?? ""))));
   if (preg_match("/(flex\\s*&\\s*printing|flex printing|banner printing|large format printing)/", $text)) return "printing";
+  if (preg_match("/(gym|fitness center|fitness centre|health club|workout studio|\\bfitness\\b)/", $text)) return "gym";
   if (preg_match("/(spice|masala)/", $text)) return "spice";
   if (preg_match("/(kirana|fmcg|grocery|supermarket|general trade)/", $text)) return "grocery";
   if (preg_match("/(restaurant|cafe|bakery|food)/", $text)) return "restaurant";
@@ -745,8 +747,13 @@ function pos_is_print_shop($biz) {
   return pos_shop_kind($biz) === "printing";
 }
 
+function pos_is_gym_shop($biz) {
+  return pos_shop_kind($biz) === "gym";
+}
+
 function pos_tax_code_label($biz) {
-  return pos_is_services_shop($biz) ? "SAC" : "HSN";
+  $kind = pos_shop_kind($biz);
+  return ($kind === "services" || $kind === "gym") ? "SAC" : "HSN";
 }
 
 function pos_is_spice_shop($biz) {
@@ -770,6 +777,7 @@ function pos_item_code_prefix($biz) {
     "hardware" => "HW-",
     "services" => "SV-",
     "printing" => "FP-",
+    "gym" => "GY-",
     "general" => "IT-",
   ];
   $kind = pos_shop_kind($biz);
@@ -793,6 +801,7 @@ function pos_default_item_category($biz) {
     "hardware" => "Hardware",
     "services" => "Service",
     "printing" => "Flex & Printing",
+    "gym" => "Membership",
     "general" => "General",
   ];
   return $fallback[$kind] ?? "General";
@@ -2758,6 +2767,10 @@ function pos_php_dispatch($path, $method, $rawBody) {
       require_once __DIR__ . "/pos-print.php";
       if (function_exists("pos_print_public_dispatch") && pos_print_public_dispatch($path, $method, $body)) return;
     }
+    if (strpos($path, "gym/public/") === 0 || strpos($path, "gym/public") === 0) {
+      require_once __DIR__ . "/pos-gym.php";
+      if (function_exists("pos_gym_public_dispatch") && pos_gym_public_dispatch($path, $method, $body)) return;
+    }
     if (strpos($path, "analytics/") === 0) {
       require_once __DIR__ . "/pos-analytics.php";
       if (function_exists("pos_analytics_public_dispatch") && pos_analytics_public_dispatch($path, $method, $body)) return;
@@ -3835,6 +3848,12 @@ function pos_php_dispatch($path, $method, $rawBody) {
           if (is_file(__DIR__ . "/pos-print.php")) {
             require_once __DIR__ . "/pos-print.php";
             if (function_exists("pos_print_staff_dispatch") && pos_print_staff_dispatch($path, $method, $body, $bid, $auth)) {
+              return;
+            }
+          }
+          if (is_file(__DIR__ . "/pos-gym.php")) {
+            require_once __DIR__ . "/pos-gym.php";
+            if (function_exists("pos_gym_staff_dispatch") && pos_gym_staff_dispatch($path, $method, $body, $bid, $auth)) {
               return;
             }
           }

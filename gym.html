@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Gym member portal · ATAV POS</title>
+    <link rel="stylesheet" href="./css/gym.css?v=20261008gym1" />
+  </head>
+  <body class="gym-portal">
+    <header class="sp-top">
+      <div>
+        <p class="sp-kicker">Member portal</p>
+        <h1 id="gp-shop">Gym &amp; Fitness Center</h1>
+        <p id="gp-cat"></p>
+      </div>
+      <nav class="sp-nav">
+        <button type="button" data-gp="home">Home</button>
+        <button type="button" data-gp="plans">Plans</button>
+        <button type="button" data-gp="progress">Progress</button>
+        <button type="button" data-gp="card">QR card</button>
+        <button type="button" id="gp-logout">Sign out</button>
+      </nav>
+    </header>
+    <main>
+      <section class="sp-auth" id="gp-auth">
+        <div class="sp-card">
+          <h2>Member sign in</h2>
+          <form id="gp-login">
+            <label>Mobile or email <input name="mobile" required autocomplete="username" /></label>
+            <label>Password <input name="password" type="password" autocomplete="current-password" required /></label>
+            <button class="btn primary" type="submit">Sign in</button>
+          </form>
+          <form id="gp-register">
+            <h3>Online membership registration</h3>
+            <label>Name <input name="name" required /></label>
+            <label>Mobile <input name="mobile" inputmode="tel" required /></label>
+            <label>Email <input name="email" type="email" /></label>
+            <label>Password <input name="password" type="password" required minlength="6" /></label>
+            <label>Gender <select name="gender"><option value="">—</option><option>male</option><option>female</option><option>other</option></select></label>
+            <label>Emergency contact <input name="emergency_name" /></label>
+            <label>Emergency mobile <input name="emergency_mobile" inputmode="tel" /></label>
+            <label>Preferred trainer <select id="gp-trainers" name="trainer_id"><option value="">Any</option></select></label>
+            <button class="btn" type="submit">Register</button>
+          </form>
+          <p class="hint" id="gp-auth-hint"></p>
+        </div>
+      </section>
+
+      <section class="sp-app" id="gp-app" hidden>
+        <div class="sp-kpis" id="gp-kpis"></div>
+        <div class="sp-pane" data-pane="home">
+          <h2>Membership</h2>
+          <p class="hint">Renew online, show your QR at the door, and follow diet/workout plans from your trainer.</p>
+          <h3>Services</h3>
+          <ul id="gp-services"></ul>
+        </div>
+        <div class="sp-pane" data-pane="plans" hidden>
+          <h2>Subscription renewal</h2>
+          <label>Amount to pay now <input id="gp-paid" type="number" min="0" step="0.01" value="0" /></label>
+          <label>Pay mode <select id="gp-pay"></select></label>
+          <p class="hint" id="gp-renew-hint"></p>
+          <div id="gp-plans"></div>
+        </div>
+        <div class="sp-pane" data-pane="progress" hidden>
+          <h2>Diet / workout</h2>
+          <div id="gp-programs"></div>
+          <h2>Weight, BMI &amp; measurements</h2>
+          <div id="gp-measures"></div>
+        </div>
+        <div class="sp-pane" data-pane="card" hidden>
+          <h2>Member QR code card</h2>
+          <div class="sp-card gym-qr-card">
+            <img id="gp-qr-img" alt="Membership QR" hidden width="200" height="200" />
+            <code id="gp-qr"></code>
+            <p class="hint">Show this QR at check-in. Optional biometric readers can scan the same membership ID.</p>
+          </div>
+        </div>
+      </section>
+    </main>
+    <script src="./js/qrcode.iife.js?v=20260905qr1"></script>
+    <script src="./js/gym.js?v=20261008gym1"></script>
+    <script src="./js/gym-portal.js?v=20261008gym1"></script>
+  </body>
+</html>

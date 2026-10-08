@@ -17,7 +17,7 @@ function money(n) {
   return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR" }).format(Number(n) || 0);
 }
 
-const BIZ_TYPES = ["Retail", "Wholesale", "Distributor", "Restaurant", "Cafe", "Bakery", "Grocery", "Pharmacy", "Electronics", "Fashion", "Footwear", "Services", "Printing Business", "Other"];
+const BIZ_TYPES = ["Retail", "Wholesale", "Distributor", "Restaurant", "Cafe", "Bakery", "Grocery", "Pharmacy", "Electronics", "Fashion", "Footwear", "Services", "Printing Business", "Gym & Fitness Center", "Other"];
 const BIZ_CATEGORIES = [
   "Spices & masala",
   "Kirana / FMCG",
@@ -41,6 +41,7 @@ const BIZ_CATEGORIES = [
   "Repair",
   "Consultancy",
   "Flex & Printing",
+  "Gym & Fitness Center",
   "General trade",
   "Other",
 ];
@@ -55,6 +56,7 @@ const BIZ_CATEGORIES_FOR_TYPE = {
   Footwear: ["Footwear"],
   Services: ["Services", "Salon / spa", "Repair", "Consultancy"],
   "Printing Business": ["Flex & Printing"],
+  "Gym & Fitness Center": ["Gym & Fitness Center"],
 };
 
 function categoriesForType(type) {

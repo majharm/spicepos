@@ -1119,6 +1119,8 @@
         spice: "Grocery",
         electronics: "Electronics",
         services: "Services",
+        printing: "Printing",
+        gym: "Gym",
       };
       label.textContent = names[kind] || "Business type";
     }

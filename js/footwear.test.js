@@ -115,6 +115,7 @@ test("Every signup category gets its own item copy, not Whole Spices", () => {
     "Repair",
     "Consultancy",
     "Flex & Printing",
+    "Gym & Fitness Center",
     "General trade",
     "Other",
   ];
@@ -141,6 +142,7 @@ test("Every signup category gets its own item copy, not Whole Spices", () => {
     Repair: "services",
     Consultancy: "services",
     "Flex & Printing": "printing",
+    "Gym & Fitness Center": "gym",
     "General trade": "grocery",
     Other: "general",
   };
@@ -159,6 +161,10 @@ test("Every signup category gets its own item copy, not Whole Spices", () => {
   assert.equal(F.shopKind({ business_type: "Printing Business" }), "printing");
   assert.equal(F.shopKind({ category: "Flex & Printing" }), "printing");
   assert.equal(F.shopKind({ name: "OM Printing Press" }), "printing");
+  assert.equal(F.shopKind({ business_type: "Gym & Fitness Center" }), "gym");
+  assert.equal(F.shopKind({ category: "Gym & Fitness Center" }), "gym");
+  assert.equal(F.isGymShop({ category: "Gym & Fitness Center" }), true);
+  assert.equal(F.taxCodeLabel({ category: "Gym & Fitness Center" }), "SAC");
   assert.equal(F.taxCodeLabel({ category: "Spices & masala" }), "HSN");
   assert.equal(F.taxCodeLabel({ category: "Medical" }), "HSN");
   assert.equal(F.taxCodeLabel({ category: "Food & beverage" }), "HSN");

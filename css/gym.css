@@ -1,0 +1,40 @@
+.gym-portal {
+  margin: 0;
+  font-family: system-ui, sans-serif;
+  background: #f3f4f6;
+  color: #1f2433;
+}
+.sp-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 20px;
+  background: #111827;
+  color: #fff;
+  border-bottom: 3px solid #ea580c;
+}
+.sp-kicker { margin: 0; font-size: 11px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: #fdba74; }
+.sp-top h1 { margin: 4px 0 0; font-size: 22px; }
+.sp-nav { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.sp-nav button, .btn {
+  min-height: 36px; padding: 0 14px; border-radius: 6px; border: 1px solid #d1d5db; background: #fff; cursor: pointer; font: inherit; font-weight: 700;
+}
+.btn.primary, .sp-nav button.is-on { background: #ea580c; color: #fff; border-color: #ea580c; }
+main { max-width: 960px; margin: 0 auto; padding: 16px; }
+.sp-card, .sp-pane, .sp-kpis .kpi {
+  background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; padding: 16px; margin-bottom: 12px;
+}
+.sp-card form, #gp-register, #gp-login { display: grid; gap: 10px; }
+label { display: grid; gap: 4px; font-size: 12px; font-weight: 700; color: #6b7280; }
+input, select, textarea { min-height: 36px; padding: 6px 10px; border: 1px solid #d1d5db; border-radius: 6px; font: inherit; }
+.sp-kpis { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; }
+.kpi span { display: block; font-size: 11px; color: #6b7280; }
+.kpi strong { font-size: 20px; }
+.hint { color: #6b7280; font-size: 13px; }
+.hint.error { color: #b91c1c; }
+.gym-qr-card { text-align: center; display: grid; gap: 8px; justify-items: center; }
+.gym-qr-card img { max-width: 220px; }
+code { font-size: 12px; word-break: break-all; }
+@media (max-width: 720px) {
+  .sp-top { flex-direction: column; }
+}

@@ -33,6 +33,7 @@
     hardware: "HW",
     services: "SV",
     printing: "FP",
+    gym: "GY",
     general: "IT",
   };
 
@@ -53,10 +54,12 @@
     const type = String(biz?.business_type || "").toLowerCase().trim();
     if (type === "restaurant" || type === "cafe" || type === "bakery") return "restaurant";
     if (type === "printing business" || type === "printing") return "printing";
+    if (type === "gym" || type === "gym & fitness center" || type === "fitness") return "gym";
     if (isFootwearShop(biz)) return "footwear";
     if (isApparelShop(biz)) return "apparel";
     const t = shopText(biz);
     if (/(flex\s*&\s*printing|flex printing|banner printing|vinyl printing|large format printing|printing press|\bprinting\b)/.test(t)) return "printing";
+    if (/(gym|fitness center|fitness centre|health club|workout studio|\bfitness\b)/.test(t)) return "gym";
     if (/(spice|masala)/.test(t)) return "spice";
     if (/(kirana|fmcg|grocery|supermarket|general trade)/.test(t)) return "grocery";
     if (/(restaurant|cafe|bakery|food)/.test(t)) return "restaurant";
@@ -150,8 +153,13 @@
     return shopKind(biz) === "printing";
   }
 
+  function isGymShop(biz) {
+    return shopKind(biz) === "gym";
+  }
+
   function taxCodeKind(biz) {
-    return isServicesShop(biz) ? "SAC" : "HSN";
+    const k = shopKind(biz);
+    return k === "services" || k === "gym" ? "SAC" : "HSN";
   }
 
   function taxCodeLabel(biz) {
@@ -163,7 +171,7 @@
   }
 
   function qrOrderingEnabled(biz) {
-    return !isPharmacyShop(biz) && !isPrintShop(biz);
+    return !isPharmacyShop(biz) && !isPrintShop(biz) && !isGymShop(biz);
   }
 
   function suggestedItemCategories(biz) {
@@ -207,6 +215,19 @@
         "Custom Print",
       ];
     }
+    if (shopKind(biz) === "gym") {
+      return [
+        "Personal Training",
+        "Diet Consultation",
+        "Zumba",
+        "Yoga",
+        "CrossFit",
+        "Cardio Training",
+        "Supplements",
+        "Gym Accessories",
+        "Merchandise",
+      ];
+    }
     if (shopKind(biz) !== "restaurant") return [];
     return [
       "South Indian",
@@ -241,6 +262,7 @@
       hardware: "Hardware",
       services: "Service",
       printing: "Flex & Printing",
+      gym: "Membership",
       general: "General",
     };
     return fallback[k] || "General";
@@ -423,6 +445,22 @@
         counterSub: "Print jobs: open Flex & Printing desk",
         ticket: "Use Flex & Printing for jobs",
         hsn: "e.g. 4911",
+      },
+      gym: {
+        name: "Whey protein",
+        localName: "प्रोटीन / Protein",
+        category: "Supplements",
+        subcategory: "Whey",
+        categoryLab: "Service / product",
+        subcategoryLab: "Type",
+        search: "Search supplement, class, or SAC…",
+        scan: "Search gym product",
+        lede: "Supplements and merchandise on Counter. Memberships, attendance, and trainers stay on the Gym desk.",
+        itemsSub: "Optional retail items — memberships stay on the Gym desk",
+        counterSub: "Memberships: open Gym desk · supplements here",
+        ticket: "Use Gym desk for memberships",
+        hsn: "e.g. 9997",
+        catalogSearch: "Search name, SAC…",
       },
       general: {
         name: "Item name",
@@ -815,6 +853,7 @@
     isPharmacyShop,
     isServicesShop,
     isPrintShop,
+    isGymShop,
     taxCodeKind,
     taxCodeLabel,
     taxCodeFieldLabel,

@@ -36,6 +36,7 @@ import { registerLoginPagePublic, registerLoginPageMaster, ensureLoginPageSchema
 import { registerRxPublic, registerRxStaff } from "./prescriptions.js";
 import { registerSalonPublic, registerSalonStaff, ensureSalonSchema } from "./salon.js";
 import { registerPrintPublic, registerPrintStaff, ensurePrintSchema, attachPrintInvoiceLines } from "./print.js";
+import { registerGymPublic, registerGymStaff, ensureGymSchema } from "./gym.js";
 import "../js/discount.js";
 import "../js/payment-methods.js";
 import { registerQrPublic, registerQrStaff, ensureQrOrderSchema, linkQrOrderSale } from "./qr-ordering.js";
@@ -88,6 +89,7 @@ registerQrPublic(app);
 registerRxPublic(app);
 registerSalonPublic(app);
 registerPrintPublic(app);
+registerGymPublic(app);
 registerAnalyticsPublic(app);
 registerSeoPublic(app);
 registerLoginPagePublic(app);
@@ -195,6 +197,7 @@ app.use((req, res, next) => {
     url.startsWith("/api/rx/") ||
     url.startsWith("/api/salon/public") ||
     url.startsWith("/api/print/public") ||
+    url.startsWith("/api/gym/public") ||
     url.startsWith("/api/invoices") ||
     url.startsWith("/api/health") ||
     url.startsWith("/api/master") ||
@@ -221,6 +224,7 @@ registerQrStaff(app);
 registerRxStaff(app);
 registerSalonStaff(app);
 registerPrintStaff(app);
+registerGymStaff(app);
 
 app.get("/api/support-contact", async (_req, res) => {
   try {
@@ -1312,6 +1316,7 @@ ensureSchema()
   .then(() => seedPlatform())
     .then(() => ensureSalonSchema())
     .then(() => ensurePrintSchema())
+    .then(() => ensureGymSchema())
     .then(() => ensureLoginPageSchema())
     .then(() => {
       setTimeout(() => {

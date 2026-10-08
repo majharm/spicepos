@@ -81,6 +81,11 @@
             <button class="nav-btn printing-only" type="button" data-view="print-orders" data-hub-kind="printing"><span class="nav-icon" aria-hidden="true">▤</span>Print orders</button>
             <button class="nav-btn printing-only" type="button" data-view="print-production" data-hub-kind="printing"><span class="nav-icon" aria-hidden="true">▣</span>Production</button>
             <button class="nav-btn printing-only" type="button" data-view="print-settings" data-hub-kind="printing"><span class="nav-icon" aria-hidden="true">⚙</span>Print rates</button>
+            <button class="nav-btn gym-only" type="button" data-view="gym-board" data-hub-kind="gym"><span class="nav-icon" aria-hidden="true">▣</span>Gym desk</button>
+            <button class="nav-btn gym-only" type="button" data-view="gym-members" data-hub-kind="gym"><span class="nav-icon" aria-hidden="true">▤</span>Members</button>
+            <button class="nav-btn gym-only" type="button" data-view="gym-attendance" data-hub-kind="gym"><span class="nav-icon" aria-hidden="true">▦</span>Attendance</button>
+            <button class="nav-btn gym-only" type="button" data-view="gym-trainers" data-hub-kind="gym"><span class="nav-icon" aria-hidden="true">◉</span>Trainers</button>
+            <button class="nav-btn gym-only" type="button" data-view="gym-plans" data-hub-kind="gym"><span class="nav-icon" aria-hidden="true">⚙</span>Plans</button>
           </div>
           <div class="nav-group">
             <p class="nav-group-label" data-i18n="nav.admin">Admin</p>
@@ -165,6 +170,7 @@
             </div>
             <div class="report-grid dash-kpi-grid services-only" id="salon-dash-kpis" hidden></div>
             <div class="report-grid dash-kpi-grid printing-only" id="print-dash-kpis" hidden></div>
+            <div class="report-grid dash-kpi-grid gym-only" id="gym-dash-kpis" hidden></div>
             <div class="an-plan" id="dash-plan-kpis"></div>
             <div class="dash-shortcuts visually-hidden" id="dash-shortcuts" aria-hidden="true">
               <button type="button" class="dash-tile" data-dash-view="counter">
@@ -1044,6 +1050,108 @@
               </div>
             </header>
             <div id="print-settings-box"></div>
+          </div>
+        </section>
+        <section class="view view-finance gym-only" id="view-gym-board" hidden>
+          <div class="items-desk">
+            <header class="items-hero">
+              <div class="items-hero-copy">
+                <p class="items-kicker">Gym &amp; Fitness Center</p>
+                <h3>Gym desk</h3>
+                <p class="lede">Members, today’s check-ins, collection, pending dues, and renewals. Members join from the public portal.</p>
+              </div>
+              <p class="dash-actions">
+                <a class="btn primary" id="gym-portal-link" href="./gym.html" target="_blank" rel="noopener">Open member portal</a>
+                <button class="btn" type="button" data-view-jump="gym-members">Members</button>
+                <button class="btn" type="button" data-view-jump="gym-attendance">Attendance</button>
+                <button class="btn" type="button" id="gym-remind">WhatsApp / SMS reminders</button>
+              </p>
+            </header>
+            <div class="report-grid dash-kpi-grid" id="gym-board-kpis"></div>
+            <h4>Upcoming expiry</h4>
+            <div class="table-wrap" id="gym-expiry-preview"></div>
+            <h4>Reports</h4>
+            <div class="hub-tile-grid" id="gym-report-list"></div>
+            <div class="table-wrap" id="gym-report-out"></div>
+          </div>
+        </section>
+        <section class="view view-finance gym-only" id="view-gym-members" hidden>
+          <div class="items-desk">
+            <header class="items-hero">
+              <div class="items-hero-copy">
+                <p class="items-kicker">Members</p>
+                <h3>Member management</h3>
+                <p class="lede">Registration, photo, membership ID / QR, emergency contact, trainer, and Active / Expired / Frozen status.</p>
+              </div>
+              <button class="btn primary" type="button" id="gym-member-new">New member</button>
+            </header>
+            <form class="report-toolbar" id="gym-member-toolbar">
+              <label>Search <input id="gym-member-q" type="search" placeholder="Name, mobile, membership ID…" autocomplete="off" /></label>
+              <label>Status
+                <select id="gym-member-status">
+                  <option value="">All</option>
+                  <option value="active">Active</option>
+                  <option value="expired">Expired</option>
+                  <option value="frozen">Frozen</option>
+                </select>
+              </label>
+            </form>
+            <div class="table-wrap" id="gym-members-table"></div>
+            <div id="gym-member-work"></div>
+          </div>
+        </section>
+        <section class="view view-finance gym-only" id="view-gym-attendance" hidden>
+          <div class="items-desk">
+            <header class="items-hero">
+              <div class="items-hero-copy">
+                <p class="items-kicker">Attendance</p>
+                <h3>Check-in / check-out</h3>
+                <p class="lede">QR attendance, daily history, and late/absent report. Optional biometric readers can send the same membership QR.</p>
+              </div>
+            </header>
+            <form class="report-toolbar" id="gym-att-form">
+              <label>Date <input id="gym-att-date" type="date" /></label>
+              <label>Report
+                <select id="gym-att-report">
+                  <option value="">Today’s check-ins</option>
+                  <option value="absent">Absent (active, no check-in)</option>
+                </select>
+              </label>
+              <label>Member QR / ID <input name="qr" placeholder="Scan ATAVGYM:shop:member" autocomplete="off" /></label>
+              <button class="btn primary" type="submit">Check in / out</button>
+            </form>
+            <p class="hint" id="gym-att-hint"></p>
+            <div class="table-wrap" id="gym-attendance-table"></div>
+          </div>
+        </section>
+        <section class="view view-finance gym-only" id="view-gym-trainers" hidden>
+          <div class="items-desk">
+            <header class="items-hero">
+              <div class="items-hero-copy">
+                <p class="items-kicker">Trainers</p>
+                <h3>Trainer management</h3>
+                <p class="lede">Profiles, trainer-wise members, personal training packages, commission, attendance, and performance.</p>
+              </div>
+              <button class="btn primary" type="button" id="gym-trainer-new">New trainer</button>
+            </header>
+            <div class="table-wrap" id="gym-trainers-table"></div>
+            <form class="report-toolbar">
+              <label>Trainer attendance date <input id="gym-trainer-att-date" type="date" /></label>
+            </form>
+            <div class="table-wrap" id="gym-trainer-att-table"></div>
+          </div>
+        </section>
+        <section class="view view-finance gym-only" id="view-gym-plans" hidden>
+          <div class="items-desk">
+            <header class="items-hero">
+              <div class="items-hero-copy">
+                <p class="items-kicker">Membership plans</p>
+                <h3>Plans &amp; packages</h3>
+                <p class="lede">Monthly, quarterly, half-yearly, yearly, custom, couple, family, student, and personal training plans.</p>
+              </div>
+              <button class="btn primary" type="button" id="gym-plan-new">Custom plan</button>
+            </header>
+            <div id="gym-plans-table"></div>
           </div>
         </section>
         <section class="view" id="view-orders" hidden>
@@ -2485,7 +2593,7 @@
     <script src="./js/gst-supply.js?v=20260905deploy136" defer></script>
     <script src="./js/pos-api.js?v=20261006login1" defer></script>
     <script src="./js/units.js?v=20260919unit1" defer></script>
-    <script src="./js/footwear.js?v=20260922deploy219" defer></script>
+    <script src="./js/footwear.js?v=20261008gym1" defer></script>
     <script src="./js/restaurant.js?v=20260923deploy226" defer></script>
     <script src="./js/discount.js?v=20260905deploy136" defer></script>
     <script src="./js/offers.js?v=20260905deploy170" defer></script>
@@ -2506,7 +2614,9 @@
     <script src="./js/salon-ui.js?v=20260919salon1" defer></script>
     <script src="./js/print.js?v=20260922deploy219" defer></script>
     <script src="./js/print-ui.js?v=20260922deploy218" defer></script>
-    <script src="./js/app.js?v=20261006due2" defer></script>
+    <script src="./js/gym.js?v=20261008gym1" defer></script>
+    <script src="./js/gym-ui.js?v=20261008gym1" defer></script>
+    <script src="./js/app.js?v=20261008gym1" defer></script>
     <script src="./js/growth.js?v=20260905deploy145" defer></script>
     <script src="./js/offers-ui.js?v=20260919off1" defer></script>
   </body>
