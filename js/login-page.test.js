@@ -40,12 +40,14 @@ test("login appearance priority is campaign then business then custom then defau
   };
   const during = L.resolveAppearance({ settings, images, campaigns }, new Date("2026-10-15T12:00:00"), "Pharmacy");
   assert.equal(during.resolvedSource, "campaign");
-  assert.equal(during.resolvedHero, "data:image/jpeg;base64,aaa");
+  assert.equal(during.resolvedHero, "/api/login-page/file/c1");
   const after = L.resolveAppearance({ settings, images, campaigns }, new Date("2026-11-02T12:00:00"), "Pharmacy");
   assert.equal(after.resolvedSource, "business");
+  assert.equal(after.resolvedHero, "/api/login-page/file/b1");
   assert.equal(after.heading, "Manage Your Pharmacy Smarter");
   const custom = L.resolveAppearance({ settings, images, campaigns: [] }, new Date("2026-11-02T12:00:00"), "");
   assert.equal(custom.resolvedSource, "custom");
+  assert.equal(custom.resolvedHero, "/api/login-page/file/u1");
   const def = L.resolveAppearance({ settings: {}, images: [], campaigns: [] }, new Date());
   assert.equal(def.resolvedSource, "default");
   assert.match(def.resolvedHero, /login-atav-smart-pos\.jpg/);
@@ -75,23 +77,24 @@ test("Master Admin Login Page manager is wired without touching auth", () => {
   assert.match(master, /Website Management/);
   assert.match(master, /data-tab="website" data-website-pane="images"/);
   assert.match(master, />Login Page</);
-  assert.match(master, /js\/master-login-page\.js\?v=20261007web1/);
-  assert.match(master, /js\/login-page\.js\?v=20261006loginimg1/);
-  assert.match(master, /css\/login-page\.css\?v=20261007web1/);
+  assert.match(master, /js\/master-login-page\.js\?v=20261008loginfile1/);
+  assert.match(master, /js\/login-page\.js\?v=20261008loginfile1/);
+  assert.match(master, /css\/login-page\.css\?v=20261008loginfile1/);
   assert.match(masterJs, /function resolveWebsitePane/);
   assert.match(masterJs, /Login page and branding/);
   assert.match(manager, /function resolvePane/);
   assert.match(manager, /Login Page Management/);
   assert.doesNotMatch(master, /data-tab="website" data-website-pane="homepage"><span class="nav-icon"/);
-  assert.match(login, /js\/login-page\.js\?v=20261006loginimg1/);
+  assert.match(login, /js\/login-page\.js\?v=20261008loginfile1/);
   assert.match(login, /js\/pos-api\.js\?v=20261006login1/);
-  assert.match(login, /css\/login-page\.css\?v=20260920deploy203/);
+  assert.match(login, /css\/login-page\.css\?v=20261008loginfile1/);
   assert.match(login, /x-pos-20260830e\.js\?v=20260922deploy207/);
   assert.match(index, /registerLoginPagePublic/);
   assert.match(index, /registerLoginPageMaster/);
   assert.match(index, /\/api\/login-page/);
   assert.match(core, /pos_login_page_public_dispatch/);
   assert.match(core, /pos_login_page_master_dispatch/);
+  assert.match(core, /strpos\(\$path, "login-page\/"\) === 0/);
   assert.match(php, /function pos_login_page_validate/);
   assert.match(node, /Only JPG, PNG, or WebP/);
   assert.match(node, /login_page_settings/);
@@ -100,8 +103,17 @@ test("Master Admin Login Page manager is wired without touching auth", () => {
   assert.doesNotMatch(node, /otp/);
   assert.match(node, /uploaded: \{ id \}/);
   assert.match(node, /function usedImageIds/);
+  assert.match(node, /\/api\/login-page\/file\/:id/);
+  assert.match(node, /SELECT id, name, kind, width, height, bytes, mime/);
   assert.match(php, /uploaded/);
   assert.match(php, /function pos_login_page_used_ids/);
+  assert.match(php, /function pos_login_page_send_file/);
+  assert.match(php, /login-page\/file\//);
+  assert.match(php, /SELECT id, name, kind, width, height, bytes, mime/);
+  assert.match(read("js/login-page.js"), /function imageFileUrl/);
+  assert.match(read("css/login-page.css"), /auth-scene-shots picture/);
+  assert.match(manager, /assignUpload/);
+  assert.match(manager, /login-page\/publish/);
   assert.match(auth, /\/api\/auth\/login/);
   assert.match(xpos, /\/api\/auth\/login/);
   assert.doesNotMatch(read("js/login-page.js"), /\/api\/auth\/login/);
@@ -118,7 +130,7 @@ test("uploaded login images skip srcset and map backgroundImageId", () => {
     settings: { backgroundImageId: "bg1" },
     images: [{ id: "bg1", url: "data:image/jpeg;base64,bg", status: "active" }],
   });
-  assert.equal(bg.backgroundUrl, "data:image/jpeg;base64,bg");
+  assert.equal(bg.backgroundUrl, "/api/login-page/file/bg1");
 });
 
 test("Master Admin login can show a published custom image", () => {
@@ -141,6 +153,9 @@ test("Website Homepage pane is its own desk", () => {
   assert.equal(M.fieldForUpload("images", "library"), "desktopImageId");
   assert.equal(M.fieldForUpload("mobile", "mobile"), "mobileImageId");
   assert.equal(M.fieldForUpload("media", "desktop"), "desktopImageId");
+  const assigned = M.assignUpload({}, "desktopImageId", "img-9");
+  assert.equal(assigned.desktopImageId, "img-9");
+  assert.equal(assigned.desktopUrl, "/api/login-page/file/img-9");
   assert.match(read("js/master.js"), /function resolveWebsitePane/);
   assert.match(read("js/master.js"), /WEBSITE_LOGIN_PANES/);
   assert.doesNotMatch(read("js/master.js"), /if \(!p \|\| p === "homepage"\) return "images"/);

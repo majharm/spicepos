@@ -89,16 +89,72 @@ function pos_login_page_validate($dataUrl, $maxKb) {
   return $bytes;
 }
 
+function pos_login_page_file_url($id, $thumb = false) {
+  $safe = rawurlencode((string) $id);
+  return "/api/login-page/file/" . $safe . ($thumb ? "?thumb=1" : "");
+}
+
+function pos_login_page_public_image($row) {
+  $id = (string) ($row["id"] ?? "");
+  return [
+    "id" => $id,
+    "name" => $row["name"] ?? "",
+    "kind" => $row["kind"] ?? "library",
+    "url" => pos_login_page_file_url($id),
+    "thumb" => pos_login_page_file_url($id, true),
+    "width" => (int) ($row["width"] ?? 0),
+    "height" => (int) ($row["height"] ?? 0),
+    "bytes" => (int) ($row["bytes"] ?? 0),
+    "mime" => $row["mime"] ?? "",
+    "status" => $row["status"] ?? "active",
+    "uploaded_by" => $row["uploaded_by"] ?? "",
+    "created_at" => $row["created_at"] ?? "",
+  ];
+}
+
+function pos_login_page_send_file($id, $thumb = false) {
+  pos_ensure_login_page_schema();
+  $rows = pos_q("SELECT url, thumb, mime FROM login_page_images WHERE id = ? AND status <> 'deleted' LIMIT 1", "s", [$id]);
+  $row = $rows[0] ?? null;
+  if (!$row) {
+    http_response_code(404);
+    header("Content-Type: application/json; charset=utf-8");
+    echo json_encode(["error" => "Image not found"]);
+    exit;
+  }
+  $raw = ($thumb && ($row["thumb"] ?? "") !== "") ? $row["thumb"] : $row["url"];
+  $mime = (string) ($row["mime"] ?: "image/jpeg");
+  $bin = "";
+  if (preg_match('#^data:(image/[a-zA-Z0-9.+-]+);base64,#i', (string) $raw, $m)) {
+    $mime = $m[1];
+    $parts = explode(",", (string) $raw, 2);
+    $bin = base64_decode($parts[1] ?? "", true);
+  }
+  if ($bin === false || $bin === "") {
+    http_response_code(404);
+    header("Content-Type: application/json; charset=utf-8");
+    echo json_encode(["error" => "Image not found"]);
+    exit;
+  }
+  header("Cache-Control: public, max-age=86400");
+  header("Content-Type: " . $mime);
+  echo $bin;
+  exit;
+}
+
 function pos_login_page_bundle() {
   pos_ensure_login_page_schema();
   $rows = pos_q("SELECT * FROM login_page_settings WHERE id = 'login' LIMIT 1");
   $row = $rows[0] ?? null;
+  $images = pos_q("SELECT id, name, kind, width, height, bytes, mime, status, uploaded_by, created_at FROM login_page_images WHERE status <> 'deleted' ORDER BY created_at DESC");
+  $mapped = [];
+  foreach ($images as $i) $mapped[] = pos_login_page_public_image($i);
   return [
     "draft" => pos_login_page_json($row["draft_json"] ?? null, []),
     "published" => pos_login_page_json($row["published_json"] ?? null, null),
     "published_version" => (int) ($row["published_version"] ?? 0),
     "updated_by" => $row["updated_by"] ?? "",
-    "images" => pos_q("SELECT id, name, kind, url, thumb, width, height, bytes, mime, status, uploaded_by, created_at FROM login_page_images WHERE status <> 'deleted' ORDER BY created_at DESC"),
+    "images" => $mapped,
     "campaigns" => pos_q("SELECT * FROM login_page_campaigns ORDER BY created_at DESC"),
     "versions" => pos_q("SELECT id, version, status, actor, created_at FROM login_page_versions ORDER BY version DESC LIMIT 40"),
     "audit" => pos_q("SELECT * FROM login_page_audit_logs ORDER BY created_at DESC LIMIT 80"),
@@ -158,6 +214,10 @@ function pos_login_page_public() {
 }
 
 function pos_login_page_public_dispatch($path, $method, $body) {
+  if (preg_match('#^login-page/file/([^/]+)$#', $path, $m) && $method === "GET") {
+    pos_login_page_send_file($m[1], !empty($_GET["thumb"]));
+    return true;
+  }
   if ($path === "login-page" && $method === "GET") {
     header("Cache-Control: no-store");
     pos_send(200, pos_login_page_public());

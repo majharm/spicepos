@@ -2766,7 +2766,7 @@ function pos_php_dispatch($path, $method, $rawBody) {
       require_once __DIR__ . "/pos-seo.php";
       if (function_exists("pos_seo_public_dispatch") && pos_seo_public_dispatch($path, $method, $body)) return;
     }
-    if ($path === "login-page") {
+    if ($path === "login-page" || strpos($path, "login-page/") === 0) {
       require_once __DIR__ . "/pos-login-page.php";
       if (function_exists("pos_login_page_public_dispatch") && pos_login_page_public_dispatch($path, $method, $body)) return;
     }

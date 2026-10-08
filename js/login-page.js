@@ -35,7 +35,7 @@
       rotateMs: 5000,
       transition: "fade",
       imageSource: "default",
-      maxUploadKb: 900,
+      maxUploadKb: 500,
       heading: "Sign in",
       subheading: "to access ATAV POS",
       loginButton: "Sign In",
@@ -133,10 +133,19 @@
     return t >= a && t <= b;
   }
 
+  function imageFileUrl(id, thumb) {
+    const safe = encodeURIComponent(String(id || ""));
+    if (!safe) return "";
+    return `/api/login-page/file/${safe}${thumb ? "?thumb=1" : ""}`;
+  }
+
   function pickImage(images, id) {
     if (!id || !Array.isArray(images)) return "";
     const row = images.find((i) => i.id === id && i.status !== "deleted");
-    return row?.url || "";
+    if (!row) return "";
+    const url = String(row.url || "");
+    if (url.startsWith("data:")) return imageFileUrl(id);
+    return url || imageFileUrl(id);
   }
 
   function resolveAppearance(input, now = new Date(), bizType = "") {
@@ -447,6 +456,7 @@
     defaults,
     clampCard,
     campaignActive,
+    imageFileUrl,
     resolveAppearance,
     applyToLogin,
     previewHtml,

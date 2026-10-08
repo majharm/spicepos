@@ -119,6 +119,24 @@
     throw new Error(`Image must be under ${cap} KB after compress`);
   }
 
+  function fileUrlFor(id) {
+    return L()?.imageFileUrl ? L().imageFileUrl(id) : `/api/login-page/file/${encodeURIComponent(id)}`;
+  }
+
+  function assignUpload(patch, field, uploadedId) {
+    const fileUrl = fileUrlFor(uploadedId);
+    patch[field] = uploadedId;
+    if (field === "desktopImageId") patch.desktopUrl = fileUrl;
+    if (field === "mobileImageId") patch.mobileUrl = fileUrl;
+    if (field === "tabletImageId") patch.tabletUrl = fileUrl;
+    if (field === "logoImageId") patch.logoUrl = fileUrl;
+    if (field === "backgroundImageId") patch.backgroundUrl = fileUrl;
+    if (field === "bannerImageId") patch.bannerUrl = fileUrl;
+    if (field === "sideImageId") patch.sideUrl = fileUrl;
+    if (field === "adImageId") patch.adUrl = fileUrl;
+    return patch;
+  }
+
   function fieldForUpload(pane, kind) {
     const byPane = {
       images: "desktopImageId",
@@ -620,11 +638,12 @@
         const uploadedId = bundle.uploaded?.id || bundle.images?.[0]?.id;
         const field = fieldForUpload(on, kind);
         if (uploadedId && field) {
-          const patch = { ...mergeDraft(), ...collectForm(form), [field]: uploadedId };
+          const patch = assignUpload({ ...mergeDraft(), ...collectForm(form) }, field, uploadedId);
           bundle = await api("/api/master/login-page", { method: "POST", body: JSON.stringify(patch) });
+          bundle = await api("/api/master/login-page/publish", { method: "POST", body: "{}" });
         }
         if (hint()) {
-          hint().textContent = "Image uploaded and set on the login page. Click Publish to go live.";
+          hint().textContent = `Image published v${bundle.published_version || 0}. Hard-refresh shop login to see it.`;
           hint().className = "hint ok";
         }
         opts.setPane(on);
@@ -638,10 +657,11 @@
     body.querySelectorAll("[data-set-kind]").forEach((b) => {
       b.onclick = async () => {
         const field = b.dataset.setKind === "desktop" ? "desktopImageId" : b.dataset.setKind === "mobile" ? "mobileImageId" : "bannerImageId";
-        bundle.draft = { ...mergeDraft(), [field]: b.dataset.img };
+        bundle.draft = assignUpload({ ...mergeDraft() }, field, b.dataset.img);
         await api("/api/master/login-page", { method: "POST", body: JSON.stringify(bundle.draft) });
+        bundle = await api("/api/master/login-page/publish", { method: "POST", body: "{}" });
         if (hint()) {
-          hint().textContent = "Image assigned. Click Publish to go live.";
+          hint().textContent = `Image published v${bundle.published_version || 0}. Hard-refresh shop login to see it.`;
           hint().className = "hint ok";
         }
         opts.setPane(on);
@@ -681,5 +701,5 @@
     });
   }
 
-  g.POSMasterLoginPage = { render, PANES, resolvePane, fieldForUpload };
+  g.POSMasterLoginPage = { render, PANES, resolvePane, fieldForUpload, assignUpload };
 })(typeof window !== "undefined" ? window : globalThis);

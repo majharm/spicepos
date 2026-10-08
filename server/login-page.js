@@ -95,10 +95,49 @@ function validateDataUrl(dataUrl, maxKb) {
   return { bytes, mime: (raw.match(/^data:(image\/[a-z]+)/i) || [])[1] || "image/jpeg" };
 }
 
+function imageFileUrl(id, thumb = false) {
+  const safe = encodeURIComponent(String(id || ""));
+  return `/api/login-page/file/${safe}${thumb ? "?thumb=1" : ""}`;
+}
+
+function publicImage(row) {
+  const id = String(row?.id || "");
+  return {
+    id,
+    name: row?.name || "",
+    kind: row?.kind || "library",
+    url: imageFileUrl(id),
+    thumb: imageFileUrl(id, true),
+    width: Number(row?.width) || 0,
+    height: Number(row?.height) || 0,
+    bytes: Number(row?.bytes) || 0,
+    mime: row?.mime || "",
+    status: row?.status || "active",
+    uploaded_by: row?.uploaded_by || "",
+    created_at: row?.created_at || "",
+  };
+}
+
+function decodeStoredImage(raw, fallbackMime) {
+  const text = String(raw || "");
+  const m = text.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,/i);
+  if (!m) return null;
+  const b64 = text.split(",")[1] || "";
+  try {
+    const buf = Buffer.from(b64, "base64");
+    if (!buf.length) return null;
+    return { mime: m[1] || fallbackMime || "image/jpeg", buf };
+  } catch {
+    return null;
+  }
+}
+
 async function getBundle() {
   await ensureLoginPageSchema();
   const [row] = await query("SELECT * FROM login_page_settings WHERE id = ? LIMIT 1", [SETTINGS_ID]);
-  const images = await query("SELECT id, name, kind, url, thumb, width, height, bytes, mime, status, uploaded_by, created_at FROM login_page_images WHERE status <> 'deleted' ORDER BY created_at DESC");
+  const images = await query(
+    "SELECT id, name, kind, width, height, bytes, mime, status, uploaded_by, created_at FROM login_page_images WHERE status <> 'deleted' ORDER BY created_at DESC",
+  );
   const campaigns = await query("SELECT * FROM login_page_campaigns ORDER BY created_at DESC");
   const versions = await query("SELECT id, version, status, actor, created_at FROM login_page_versions ORDER BY version DESC LIMIT 40");
   const auditRows = await query("SELECT * FROM login_page_audit_logs ORDER BY created_at DESC LIMIT 80");
@@ -107,7 +146,7 @@ async function getBundle() {
     published: parseJson(row?.published_json, null),
     published_version: Number(row?.published_version) || 0,
     updated_by: row?.updated_by || "",
-    images,
+    images: (images || []).map(publicImage),
     campaigns,
     versions,
     audit: auditRows,
@@ -319,6 +358,30 @@ function send(res, fn) {
 }
 
 export function registerLoginPagePublic(app) {
+  app.get("/api/login-page/file/:id", (req, res) => {
+    const id = String(req.params.id || "");
+    const thumb = String(req.query.thumb || "") === "1";
+    Promise.resolve()
+      .then(async () => {
+        await ensureLoginPageSchema();
+        const [row] = await query(
+          "SELECT url, thumb, mime FROM login_page_images WHERE id = ? AND status <> 'deleted' LIMIT 1",
+          [id],
+        );
+        if (!row) {
+          res.status(404).json({ error: "Image not found" });
+          return;
+        }
+        const decoded = decodeStoredImage(thumb && row.thumb ? row.thumb : row.url, row.mime);
+        if (!decoded) {
+          res.status(404).json({ error: "Image not found" });
+          return;
+        }
+        res.setHeader("Cache-Control", "public, max-age=86400");
+        res.type(decoded.mime).send(decoded.buf);
+      })
+      .catch((err) => res.status(400).json({ error: String(err.message || err) }));
+  });
   app.get("/api/login-page", (_req, res) => {
     res.setHeader("Cache-Control", "no-store");
     send(res, publicPayload);
