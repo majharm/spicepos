@@ -27,6 +27,8 @@ test("Member status is active, expired, or frozen from end date", () => {
   assert.equal(G.memberStatus({ end_date: "2026-12-01" }, "2026-10-08"), "active");
   assert.equal(G.memberStatus({ end_date: "2026-09-01" }, "2026-10-08"), "expired");
   assert.equal(G.memberStatus({ status: "frozen", end_date: "2026-12-01" }, "2026-10-08"), "frozen");
+  assert.equal(G.memberStatus({}, "2026-10-08"), "expired");
+  assert.equal(G.ymdLocal(new Date(2026, 9, 8)), "2026-10-08");
 });
 
 test("Membership bill supports admission, discount, and partial payment due", () => {
@@ -67,8 +69,8 @@ test("Gym POS, PHP, portal, signup, and hub are wired", () => {
   assert.match(index, /id="view-gym-attendance"/);
   assert.match(index, /id="view-gym-trainers"/);
   assert.match(index, /id="view-gym-plans"/);
-  assert.match(index, /js\/gym\.js\?v=20261008gym1/);
-  assert.match(index, /js\/gym-ui\.js\?v=20261008gym1/);
+  assert.match(index, /js\/gym\.js\?v=20261008gym2/);
+  assert.match(index, /js\/gym-ui\.js\?v=20261008gym2/);
   assert.match(index, /id="gym-portal-link"/);
   assert.match(index, /gym\.html/);
   assert.match(app, /function isGymShop/);
@@ -77,6 +79,7 @@ test("Gym POS, PHP, portal, signup, and hub are wired", () => {
   assert.match(node, /url\.startsWith\("\/api\/gym\/public"\)/);
   assert.match(core, /pos_gym_public_dispatch/);
   assert.match(core, /pos_gym_staff_dispatch/);
+  assert.match(read("gym.html"), /js\/gym\.js\?v=20261008gym2/);
   assert.match(read("gym.html"), /Online membership registration/);
   assert.match(read("gym.html"), /Member QR code card/);
   assert.match(read("js/login.js"), /Gym & Fitness Center/);
@@ -84,6 +87,8 @@ test("Gym POS, PHP, portal, signup, and hub are wired", () => {
   assert.match(read("js/biz-hub.js"), /gym-board/);
   assert.match(read("js/master.js"), /Gym & Fitness Center/);
   assert.match(read("home.html"), /Gym &amp; Fitness/);
+  assert.match(read("server/gym.js"), /password_hash=\?, name=\?, email=\?/);
+  assert.match(read("pos-gym.php"), /This mobile is already registered/);
   assert.match(read("package.json"), /js\/gym\.test\.js/);
   assert.equal(G.REPORTS.length, 11);
   assert.ok(G.SERVICES.includes("Zumba"));

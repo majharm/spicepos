@@ -319,8 +319,37 @@ export function registerGymPublic(app) {
       const email = clip(req.body.email, 160).toLowerCase();
       const password = String(req.body.password || "");
       if (!name || mobile.length < 10 || password.length < 6) throw new Error("Name, 10-digit mobile, and a 6+ character password are required");
-      const exists = await query("SELECT id FROM gym_members WHERE business_id=? AND mobile=? LIMIT 1", [shopId, mobile]);
-      if (exists[0]) throw new Error("This mobile is already registered");
+      const exists = await query("SELECT * FROM gym_members WHERE business_id=? AND mobile=? LIMIT 1", [shopId, mobile]);
+      if (exists[0]) {
+        if (exists[0].password_hash) throw new Error("This mobile is already registered");
+        const hash = await hashPassword(password);
+        await query(
+          `UPDATE gym_members SET password_hash=?, name=?, email=?, gender=?, emergency_name=?, emergency_mobile=? WHERE id=? AND business_id=?`,
+          [
+            hash,
+            name,
+            email,
+            clip(req.body.gender, 16),
+            clip(req.body.emergency_name, 180),
+            digits(req.body.emergency_mobile).slice(-10),
+            exists[0].id,
+            shopId,
+          ],
+        );
+        const token = await issueSession(exists[0].id, shopId);
+        return res.json({
+          token,
+          member: {
+            id: exists[0].id,
+            member_no: exists[0].member_no,
+            name,
+            mobile,
+            email,
+            status: exists[0].status,
+            qr: POSGym.qrPayload(shopId, exists[0].id),
+          },
+        });
+      }
       const id = uuid();
       const memberNo = await nextNo(shopId, "gym_member", "GY-", 1001);
       const hash = await hashPassword(password);
@@ -424,7 +453,7 @@ export function registerGymPublic(app) {
       if (st === "expired") throw new Error("Membership expired — renew before check-in");
       const open = await query(
         "SELECT id FROM gym_attendance WHERE member_id=? AND check_out IS NULL ORDER BY check_in DESC LIMIT 1",
-        [memberId],
+        [m.id],
       );
       if (open[0]) {
         await query("UPDATE gym_attendance SET check_out=CURRENT_TIMESTAMP(3) WHERE id=?", [open[0].id]);
@@ -432,7 +461,7 @@ export function registerGymPublic(app) {
       }
       await query(
         `INSERT INTO gym_attendance (id, member_id, source, business_id) VALUES (?,?, 'qr', ?)`,
-        [uuid(), memberId, req.params.shopId],
+        [uuid(), m.id, req.params.shopId],
       );
       res.json({ ok: true, action: "checkin", member: publicMember(m) });
     } catch (err) {
@@ -611,6 +640,8 @@ export function registerGymStaff(app) {
       const mobile = digits(b.mobile).slice(-10);
       if (!name || mobile.length < 10) throw new Error("Name and 10-digit mobile are required");
       const id = b.id || uuid();
+      const dup = (await query("SELECT id FROM gym_members WHERE business_id=? AND mobile=? AND id<>? LIMIT 1", [bid(), mobile, id]))[0];
+      if (dup) throw new Error("This mobile is already registered");
       const exists = (await query("SELECT * FROM gym_members WHERE id=? AND business_id=?", [id, bid()]))[0];
       if (exists) {
         await query(
@@ -732,14 +763,14 @@ export function registerGymStaff(app) {
       const st = withStatus(m, membership, todayYmd()).status;
       if (st === "frozen") throw new Error("Membership is frozen");
       if (st === "expired") throw new Error("Membership expired — renew before check-in");
-      const open = await query("SELECT id FROM gym_attendance WHERE member_id=? AND check_out IS NULL ORDER BY check_in DESC LIMIT 1", [memberId]);
+      const open = await query("SELECT id FROM gym_attendance WHERE member_id=? AND check_out IS NULL ORDER BY check_in DESC LIMIT 1", [m.id]);
       if (open[0]) {
         await query("UPDATE gym_attendance SET check_out=CURRENT_TIMESTAMP(3) WHERE id=?", [open[0].id]);
         return res.json({ ok: true, action: "checkout", member: publicMember(m) });
       }
       await query(`INSERT INTO gym_attendance (id, member_id, source, business_id) VALUES (?,?,?,?)`, [
         uuid(),
-        memberId,
+        m.id,
         clip(req.body.source, 16) || "manual",
         bid(),
       ]);

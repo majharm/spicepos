@@ -90,7 +90,7 @@ function pos_gym_member_status($row, $day = "") {
   if ((string) ($row["status"] ?? "") === "frozen") return "frozen";
   $end = substr((string) ($row["end_date"] ?? ""), 0, 10);
   $day = substr((string) ($day ?: pos_gym_today()), 0, 10);
-  if ($end !== "" && $end < $day) return "expired";
+  if ($end === "" || $end < $day) return "expired";
   return "active";
 }
 
@@ -353,12 +353,13 @@ function pos_gym_checkin($shop, $body, $source = "manual") {
   $m = $rows[0] ?? null;
   if (!$m) throw new Exception("Member not found");
   pos_gym_assert_checkin($m, $shop);
-  $open = pos_q("SELECT id FROM gym_attendance WHERE member_id=? AND check_out IS NULL ORDER BY check_in DESC LIMIT 1", "s", [$memberId]);
+  $uid = $m["id"];
+  $open = pos_q("SELECT id FROM gym_attendance WHERE member_id=? AND check_out IS NULL ORDER BY check_in DESC LIMIT 1", "s", [$uid]);
   if ($open) {
     pos_q("UPDATE gym_attendance SET check_out=CURRENT_TIMESTAMP(3) WHERE id=?", "s", [$open[0]["id"]]);
     return ["ok" => true, "action" => "checkout", "member" => pos_gym_public_member($m)];
   }
-  pos_q("INSERT INTO gym_attendance (id, member_id, source, business_id) VALUES (?,?,?,?)", "ssss", [pos_uuid(), $memberId, pos_gym_clip($source, 16) ?: "manual", $shop]);
+  pos_q("INSERT INTO gym_attendance (id, member_id, source, business_id) VALUES (?,?,?,?)", "ssss", [pos_uuid(), $uid, pos_gym_clip($source, 16) ?: "manual", $shop]);
   return ["ok" => true, "action" => "checkin", "member" => pos_gym_public_member($m)];
 }
 
@@ -385,8 +386,19 @@ function pos_gym_public_dispatch($path, $method, $body) {
       $email = strtolower(pos_gym_clip($body["email"] ?? "", 160));
       $password = (string) ($body["password"] ?? "");
       if ($name === "" || strlen($mobile) < 10 || strlen($password) < 6) throw new Exception("Name, 10-digit mobile, and a 6+ character password are required");
-      $exists = pos_q("SELECT id FROM gym_members WHERE business_id=? AND mobile=? LIMIT 1", "ss", [$shopId, $mobile]);
-      if ($exists) throw new Exception("This mobile is already registered");
+      $exists = pos_q("SELECT * FROM gym_members WHERE business_id=? AND mobile=? LIMIT 1", "ss", [$shopId, $mobile]);
+      if ($exists) {
+        $row = $exists[0];
+        if (!empty($row["password_hash"])) throw new Exception("This mobile is already registered");
+        $hash = pos_hash_password($password);
+        pos_q(
+          "UPDATE gym_members SET password_hash=?, name=?, email=?, gender=?, emergency_name=?, emergency_mobile=? WHERE id=? AND business_id=?",
+          "ssssssss",
+          [$hash, $name, $email, pos_gym_clip($body["gender"] ?? "", 16), pos_gym_clip($body["emergency_name"] ?? "", 180), substr(pos_gym_digits($body["emergency_mobile"] ?? ""), -10), $row["id"], $shopId]
+        );
+        $token = pos_gym_issue_session($row["id"], $shopId);
+        pos_send(200, ["token" => $token, "member" => ["id" => $row["id"], "member_no" => $row["member_no"], "name" => $name, "mobile" => $mobile, "email" => $email, "status" => $row["status"], "qr" => pos_gym_qr($shopId, $row["id"])]]);
+      }
       $id = pos_uuid();
       $memberNo = pos_gym_next_no($shopId, "gym_member", "GY-", 1001);
       $hash = pos_hash_password($password);
@@ -565,6 +577,8 @@ function pos_gym_staff_dispatch($path, $method, $body, $bid, $auth) {
       $mobile = substr(pos_gym_digits($body["mobile"] ?? ""), -10);
       if ($name === "" || strlen($mobile) < 10) throw new Exception("Name and 10-digit mobile are required");
       $id = pos_gym_clip($body["id"] ?? "", 64) ?: pos_uuid();
+      $dup = pos_q("SELECT id FROM gym_members WHERE business_id=? AND mobile=? AND id<>? LIMIT 1", "sss", [$bid, $mobile, $id]);
+      if ($dup) throw new Exception("This mobile is already registered");
       $exists = pos_q("SELECT * FROM gym_members WHERE id=? AND business_id=?", "ss", [$id, $bid]);
       $email = pos_gym_clip($body["email"] ?? "", 160);
       $photo = pos_gym_clip($body["photo_url"] ?? "", 4000);

@@ -69,11 +69,20 @@
     return k.days;
   }
 
+  function ymdLocal(d) {
+    const x = d instanceof Date ? d : new Date();
+    if (Number.isNaN(x.getTime())) return "";
+    const y = x.getFullYear();
+    const m = String(x.getMonth() + 1).padStart(2, "0");
+    const day = String(x.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
+  }
+
   function addDays(ymd, days) {
     const d = new Date(`${String(ymd || "").slice(0, 10)}T00:00:00`);
     if (Number.isNaN(d.getTime())) return "";
     d.setDate(d.getDate() + Number(days || 0));
-    return d.toISOString().slice(0, 10);
+    return ymdLocal(d);
   }
 
   function membershipWindow(startDate, kind, customDays) {
@@ -85,8 +94,8 @@
   function memberStatus(row, today) {
     if (String(row?.frozen || row?.status) === "frozen") return "frozen";
     const end = String(row?.end_date || "").slice(0, 10);
-    const day = String(today || new Date().toISOString().slice(0, 10)).slice(0, 10);
-    if (end && end < day) return "expired";
+    const day = String(today || ymdLocal(new Date())).slice(0, 10);
+    if (!end || end < day) return "expired";
     return "active";
   }
 
@@ -182,5 +191,6 @@
     noticeCopy,
     dashboardCards,
     round2,
+    ymdLocal,
   };
 });

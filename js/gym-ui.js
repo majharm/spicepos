@@ -15,7 +15,7 @@
     return root.api(path, opts);
   }
   function today() {
-    return new Date().toISOString().slice(0, 10);
+    return G()?.ymdLocal?.(new Date()) || new Date().toISOString().slice(0, 10);
   }
   function hint(el, msg, err) {
     if (!el) return;
@@ -457,7 +457,7 @@
       const mem = e.target.closest("[data-gym-tmembers]");
       if (edit) return openTrainer(edit.dataset.gymTrainer);
       if (att) {
-        const d = await api(`/api/gym/trainers/${att.dataset.gymTatt}/attendance`, { method: "POST", body: "{}" });
+        const d = await api(`/api/gym/trainers/${att.dataset.gymTatt}/attendance`, { method: "POST", body: JSON.stringify({}) });
         if (root.setHint) root.setHint(`${d.action === "checkout" ? "Trainer checked out" : "Trainer checked in"}`, "ok");
         await loadTrainers();
       }
@@ -468,7 +468,7 @@
     });
     $("gym-remind")?.addEventListener("click", async () => {
       try {
-        const d = await api("/api/gym/reminders", { method: "POST", body: "{}" });
+        const d = await api("/api/gym/reminders", { method: "POST", body: JSON.stringify({}) });
         if (root.setHint) root.setHint(`WhatsApp/SMS reminders queued for ${d.queued || 0} members (${d.sent || 0} sent)`, "ok");
       } catch (err) {
         if (root.setHint) root.setHint(err.message, "error");
