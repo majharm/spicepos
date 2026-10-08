@@ -23,7 +23,7 @@ function digits(v) {
 }
 
 function todayYmd() {
-  return new Date().toISOString().slice(0, 10);
+  return POSGym?.ymdIst?.(new Date()) || new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
 }
 
 export async function ensureGymSchema() {
@@ -208,7 +208,8 @@ async function latestMembership(memberId, shopId) {
 function withStatus(member, membership, day) {
   const frozen = member.status === "frozen";
   const status = frozen ? "frozen" : POSGym.memberStatus({ ...member, end_date: membership?.end_date }, day);
-  return { ...member, status, membership, qr: POSGym.qrPayload(member.business_id, member.id) };
+  const { password_hash: _hash, ...safe } = member || {};
+  return { ...safe, status, membership, qr: POSGym.qrPayload(member.business_id, member.id) };
 }
 
 async function bumpOutstanding(customerId, shopId, delta) {
@@ -755,6 +756,7 @@ export function registerGymStaff(app) {
       await ensureGymSchema();
       const parsed = POSGym.parseQr(req.body.qr || req.body.code);
       const memberId = parsed?.memberId || clip(req.body.member_id, 64) || clip(req.body.qr || req.body.code, 64);
+      if (!memberId) throw new Error("Scan a member QR code");
       const m = (
         await query("SELECT * FROM gym_members WHERE business_id=? AND (id=? OR member_no=?) LIMIT 1", [bid(), memberId, memberId])
       )[0];

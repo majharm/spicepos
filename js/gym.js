@@ -64,9 +64,9 @@
   }
 
   function planDurationDays(kind, customDays) {
-    const k = planKind(kind);
-    if (k.id === "custom") return Math.max(1, Number(customDays) || k.days);
-    return k.days;
+    const custom = Number(customDays);
+    if (Number.isFinite(custom) && custom > 0) return Math.max(1, Math.round(custom));
+    return planKind(kind).days;
   }
 
   function ymdLocal(d) {
@@ -76,6 +76,16 @@
     const m = String(x.getMonth() + 1).padStart(2, "0");
     const day = String(x.getDate()).padStart(2, "0");
     return `${y}-${m}-${day}`;
+  }
+
+  function ymdIst(d) {
+    const x = d instanceof Date ? d : new Date();
+    if (Number.isNaN(x.getTime())) return "";
+    try {
+      return x.toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
+    } catch {
+      return ymdLocal(x);
+    }
   }
 
   function addDays(ymd, days) {
@@ -94,7 +104,7 @@
   function memberStatus(row, today) {
     if (String(row?.frozen || row?.status) === "frozen") return "frozen";
     const end = String(row?.end_date || "").slice(0, 10);
-    const day = String(today || ymdLocal(new Date())).slice(0, 10);
+    const day = String(today || ymdIst(new Date())).slice(0, 10);
     if (!end || end < day) return "expired";
     return "active";
   }
@@ -192,5 +202,6 @@
     dashboardCards,
     round2,
     ymdLocal,
+    ymdIst,
   };
 });

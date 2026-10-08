@@ -15,7 +15,7 @@
     return root.api(path, opts);
   }
   function today() {
-    return G()?.ymdLocal?.(new Date()) || new Date().toISOString().slice(0, 10);
+    return G()?.ymdIst?.(new Date()) || G()?.ymdLocal?.(new Date()) || new Date().toISOString().slice(0, 10);
   }
   function hint(el, msg, err) {
     if (!el) return;
@@ -300,6 +300,11 @@
   async function checkinFromForm(e) {
     e.preventDefault();
     const fd = new FormData(e.target);
+    const qr = String(fd.get("qr") || fd.get("member_id") || "").trim();
+    if (!qr) {
+      hint($("gym-att-hint"), "Scan a member QR code or type the membership ID.", true);
+      return;
+    }
     try {
       const d = await api("/api/gym/attendance/checkin", {
         method: "POST",

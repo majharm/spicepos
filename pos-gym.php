@@ -27,24 +27,30 @@ function pos_gym_round2($n) {
 }
 
 function pos_gym_today() {
-  return date("Y-m-d");
+  $tzName = function_exists("pos_shop_timezone") ? pos_shop_timezone() : "Asia/Kolkata";
+  try {
+    $tz = new DateTimeZone($tzName ?: "Asia/Kolkata");
+    return (new DateTime("now", $tz))->format("Y-m-d");
+  } catch (Exception $e) {
+    return date("Y-m-d");
+  }
 }
 
-function pos_gym_kind_days($kind, $custom = 30) {
+function pos_gym_kind_days($kind, $custom = 0) {
+  $customDays = (int) $custom;
+  if ($customDays > 0) return $customDays;
   $map = [
     "monthly" => 30,
     "quarterly" => 90,
     "half_yearly" => 182,
     "yearly" => 365,
-    "custom" => max(1, (int) $custom),
+    "custom" => 30,
     "couple" => 365,
     "family" => 365,
     "student" => 30,
     "personal_training" => 30,
   ];
-  $k = strtolower((string) $kind);
-  if ($k === "custom") return max(1, (int) $custom ?: 30);
-  return $map[$k] ?? 30;
+  return $map[strtolower((string) $kind)] ?? 30;
 }
 
 function pos_gym_add_days($ymd, $days) {
@@ -568,6 +574,7 @@ function pos_gym_staff_dispatch($path, $method, $body, $bid, $auth) {
         $full["qr"] = pos_gym_qr($bid, $row["id"]);
         if ($status !== "" && $full["status"] !== $status) continue;
         if ($q !== "" && strpos(strtolower($full["name"] . " " . $full["mobile"] . " " . $full["member_no"]), $q) === false) continue;
+        unset($full["password_hash"]);
         $out[] = $full;
       }
       pos_send(200, $out);
