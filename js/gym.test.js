@@ -84,8 +84,15 @@ test("Gym POS, PHP, portal, signup, and hub are wired", () => {
   assert.match(core, /pos_gym_public_dispatch/);
   assert.match(core, /pos_gym_staff_dispatch/);
   assert.match(read("gym.html"), /js\/gym\.js\?v=20261008gym3/);
+  assert.match(read("gym.html"), /js\/gym-portal\.js\?v=20261008gym4/);
+  assert.match(read("gym.html"), /css\/gym\.css\?v=20261008gym4/);
+  assert.match(read("gym.html"), /gp-locked/);
+  assert.match(read("gym.html"), /gp-shell/);
+  assert.match(read("gym.html"), /data-auth-tab="register"/);
   assert.match(read("gym.html"), /Online membership registration/);
   assert.match(read("gym.html"), /Member QR code card/);
+  assert.match(read("js/gym-portal.js"), /classList\.remove\("gp-locked"\)/);
+  assert.match(read("js/gym-portal.js"), /escapeHtml/);
   assert.match(read("js/login.js"), /Gym & Fitness Center/);
   assert.match(read("login.html"), /Gym &amp; Fitness Center/);
   assert.match(read("js/biz-hub.js"), /gym-board/);
