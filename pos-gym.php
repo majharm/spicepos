@@ -12,6 +12,8 @@ function pos_gym_ensure() {
   $db->query("CREATE TABLE IF NOT EXISTS gym_measurements (id VARCHAR(255) PRIMARY KEY, member_id VARCHAR(255) NOT NULL, measured_at DATE NOT NULL, weight_kg DECIMAL(8,2) NOT NULL DEFAULT 0, height_cm DECIMAL(8,2) NOT NULL DEFAULT 0, bmi DECIMAL(8,2) NOT NULL DEFAULT 0, chest DECIMAL(8,2) NULL, waist DECIMAL(8,2) NULL, hip DECIMAL(8,2) NULL, arms DECIMAL(8,2) NULL, photo_before TEXT NULL, photo_after TEXT NULL, notes TEXT NULL, business_id VARCHAR(255) NOT NULL, created_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3), INDEX (member_id), INDEX (business_id))");
   $db->query("CREATE TABLE IF NOT EXISTS gym_programs (id VARCHAR(255) PRIMARY KEY, member_id VARCHAR(255) NOT NULL, kind VARCHAR(16) NOT NULL DEFAULT 'workout', title VARCHAR(180) NOT NULL, body TEXT NULL, trainer_id VARCHAR(255) NULL, business_id VARCHAR(255) NOT NULL, created_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3), INDEX (member_id), INDEX (business_id))");
   $db->query("CREATE TABLE IF NOT EXISTS gym_sessions (id VARCHAR(255) PRIMARY KEY, token_hash VARCHAR(64) NOT NULL, member_id VARCHAR(255) NOT NULL, business_id VARCHAR(255) NOT NULL, expires_at TIMESTAMP(3) NOT NULL, INDEX (token_hash))");
+  $db->query("CREATE TABLE IF NOT EXISTS gym_settings (business_id VARCHAR(255) PRIMARY KEY, settings_json MEDIUMTEXT NULL, updated_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3))");
+  @$db->query("ALTER TABLE gym_settings MODIFY settings_json MEDIUMTEXT NULL");
 }
 
 function pos_gym_clip($v, $n) {
@@ -152,6 +154,63 @@ function pos_gym_seed($shop) {
 function pos_gym_next_no($shop, $name, $prefix, $start = 1001) {
   $n = function_exists("pos_next_seq") ? pos_next_seq($name, $shop, $start) : random_int($start, $start + 9000);
   return $prefix . $n;
+}
+
+function pos_gym_portal_image($raw, $existing = "") {
+  $s = trim((string) $raw);
+  if ($s === "") return "";
+  if (preg_match('#^data:image/(jpeg|jpg|png|webp|gif);base64,#i', $s) && strlen($s) <= 1200000) return $s;
+  if (preg_match('#^(\./assets/|https?://)#i', $s)) return substr($s, 0, 500);
+  if (preg_match('#/api/gym/public/[^/]+/login-image#i', $s)) return (string) $existing;
+  throw new Exception("Use a JPG, PNG or WebP under 900 KB for the member portal image");
+}
+
+function pos_gym_settings($shop) {
+  $rows = pos_q("SELECT settings_json FROM gym_settings WHERE business_id=?", "s", [$shop]);
+  $extra = [];
+  if (!empty($rows[0]["settings_json"])) {
+    $decoded = json_decode($rows[0]["settings_json"], true);
+    if (is_array($decoded)) $extra = $decoded;
+  }
+  return array_merge(["portal_login_image" => ""], $extra);
+}
+
+function pos_gym_save_settings($shop, $incoming) {
+  if (!is_array($incoming)) return pos_gym_settings($shop);
+  $cur = pos_gym_settings($shop);
+  $next = array_merge($cur, $incoming);
+  if (array_key_exists("portal_login_image", $incoming)) {
+    $next["portal_login_image"] = pos_gym_portal_image($incoming["portal_login_image"], $cur["portal_login_image"] ?? "");
+  }
+  pos_q(
+    "INSERT INTO gym_settings (business_id, settings_json) VALUES (?,?) ON DUPLICATE KEY UPDATE settings_json = VALUES(settings_json)",
+    "ss",
+    [$shop, json_encode($next, JSON_UNESCAPED_UNICODE)]
+  );
+  return pos_gym_settings($shop);
+}
+
+function pos_gym_public_settings($shop, $settings = null) {
+  $settings = $settings ?: pos_gym_settings($shop);
+  $custom = trim((string) ($settings["portal_login_image"] ?? ""));
+  return ["portal_login_image" => $custom !== "" ? "/api/gym/public/" . rawurlencode($shop) . "/login-image" : ""];
+}
+
+function pos_gym_send_login_image($shop) {
+  $raw = trim((string) (pos_gym_settings($shop)["portal_login_image"] ?? ""));
+  if (preg_match('#^data:(image/[^;]+);base64,(.+)$#s', $raw, $m)) {
+    $bin = base64_decode($m[2], true);
+    if ($bin === false) pos_send(404, ["error" => "Image not found", "php" => true]);
+    header("Content-Type: " . $m[1]);
+    header("Cache-Control: public, max-age=3600");
+    echo $bin;
+    exit;
+  }
+  if (preg_match('#^https?://#i', $raw) || strpos($raw, "./assets/") === 0) {
+    header("Location: " . $raw);
+    exit;
+  }
+  pos_send(404, ["error" => "Image not found", "php" => true]);
 }
 
 function pos_gym_is_shop($biz) {
@@ -382,7 +441,12 @@ function pos_gym_public_dispatch($path, $method, $body) {
       pos_gym_seed($shopId);
       $plans = pos_q("SELECT id, name, kind, duration_days, price, admission_fee, sessions FROM gym_plans WHERE business_id=? AND status='active'", "s", [$shopId]);
       $trainers = pos_q("SELECT id, name, specialty FROM gym_trainers WHERE business_id=? AND status='active'", "s", [$shopId]);
-      pos_send(200, ["shop" => $shop, "plans" => $plans, "trainers" => $trainers, "services" => pos_gym_services(), "pay" => pos_gym_pay_modes()]);
+      pos_send(200, ["shop" => $shop, "plans" => $plans, "trainers" => $trainers, "services" => pos_gym_services(), "pay" => pos_gym_pay_modes(), "settings" => pos_gym_public_settings($shopId)]);
+    }
+    if ($method === "GET" && $rest === "login-image") {
+      $shop = pos_gym_shop($shopId);
+      if (!$shop || !pos_gym_is_shop($shop)) pos_send(404, ["error" => "Gym not found", "php" => true]);
+      pos_gym_send_login_image($shopId);
     }
     if ($method === "POST" && $rest === "register") {
       $shop = pos_gym_shop($shopId);
@@ -489,6 +553,14 @@ function pos_gym_staff_dispatch($path, $method, $body, $bid, $auth) {
         [$bid]
       );
       pos_send(200, ["stats" => $stats, "cards" => pos_gym_dashboard_cards($stats), "expiring" => $expiring, "reports" => pos_gym_reports(), "services" => pos_gym_services()]);
+    }
+    if ($path === "gym/settings" && $method === "GET") {
+      $settings = pos_gym_settings($bid);
+      pos_send(200, array_merge($settings, pos_gym_public_settings($bid, $settings)));
+    }
+    if ($path === "gym/settings" && $method === "POST") {
+      $settings = pos_gym_save_settings($bid, $body);
+      pos_send(200, array_merge(["ok" => true], $settings, pos_gym_public_settings($bid, $settings)));
     }
     if ($path === "gym/plans" && $method === "GET") {
       pos_send(200, pos_q("SELECT * FROM gym_plans WHERE business_id=? ORDER BY duration_days, name", "s", [$bid]));

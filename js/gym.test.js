@@ -73,9 +73,11 @@ test("Gym POS, PHP, portal, signup, and hub are wired", () => {
   assert.match(index, /id="view-gym-attendance"/);
   assert.match(index, /id="view-gym-trainers"/);
   assert.match(index, /id="view-gym-plans"/);
-  assert.match(index, /js\/gym\.js\?v=20261008gym3/);
-  assert.match(index, /js\/gym-ui\.js\?v=20261008gym3/);
+  assert.match(index, /js\/gym\.js\?v=20261008gym5/);
+  assert.match(index, /js\/gym-ui\.js\?v=20261008gym5/);
   assert.match(index, /id="gym-portal-link"/);
+  assert.match(index, /id="gym-settings-box"/);
+  assert.match(index, /member portal login image/);
   assert.match(index, /gym\.html/);
   assert.match(app, /function isGymShop/);
   assert.match(app, /gym-mode/);
@@ -83,8 +85,8 @@ test("Gym POS, PHP, portal, signup, and hub are wired", () => {
   assert.match(node, /url\.startsWith\("\/api\/gym\/public"\)/);
   assert.match(core, /pos_gym_public_dispatch/);
   assert.match(core, /pos_gym_staff_dispatch/);
-  assert.match(read("gym.html"), /js\/gym\.js\?v=20261008gym3/);
-  assert.match(read("gym.html"), /js\/gym-portal\.js\?v=20261008gym4/);
+  assert.match(read("gym.html"), /js\/gym\.js\?v=20261008gym5/);
+  assert.match(read("gym.html"), /js\/gym-portal\.js\?v=20261008gym5/);
   assert.match(read("gym.html"), /css\/gym\.css\?v=20261008gym4/);
   assert.match(read("gym.html"), /gp-locked/);
   assert.match(read("gym.html"), /gp-shell/);
@@ -110,4 +112,27 @@ test("Gym POS, PHP, portal, signup, and hub are wired", () => {
   assert.ok(G.SERVICES.includes("Zumba"));
   assert.ok(G.PAY_MODES.includes("upi"));
   assert.match(G.noticeCopy("reminder", { name: "Asha", end_date: "2026-10-15" }), /2026-10-15/);
+});
+
+test("Gym shop can set the member portal login image", () => {
+  assert.equal(G.DEFAULT_SETTINGS.portal_login_image, "");
+  assert.match(G.DEFAULT_PORTAL_HERO, /login-atav-smart-pos/);
+  const ui = read("js/gym-ui.js");
+  const portal = read("js/gym-portal.js");
+  const php = read("pos-gym.php");
+  const node = read("server/gym.js");
+  assert.match(ui, /gym-portal-art/);
+  assert.match(ui, /Member portal login image/);
+  assert.match(ui, /gym-portal-hero-file/);
+  assert.match(ui, /portal_login_image: fd\.get\("portal_login_image"\)/);
+  assert.match(portal, /gp-portal-hero/);
+  assert.match(portal, /catalog\.settings\?\.portal_login_image/);
+  assert.match(read("gym.html"), /id="gp-portal-hero"/);
+  assert.match(node, /function clipPortalImage/);
+  assert.match(node, /settings_json MEDIUMTEXT/);
+  assert.match(node, /\/api\/gym\/public\/:shopId\/login-image/);
+  assert.match(php, /function pos_gym_portal_image/);
+  assert.match(php, /function pos_gym_save_settings/);
+  assert.match(php, /login-image/);
+  assert.match(php, /CREATE TABLE IF NOT EXISTS gym_settings/);
 });

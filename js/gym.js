@@ -35,6 +35,9 @@
     "Merchandise",
   ];
 
+  const DEFAULT_PORTAL_HERO = "./assets/login-atav-smart-pos.jpg?v=20260919loginp1";
+  const DEFAULT_SETTINGS = { portal_login_image: "" };
+
   const REPORTS = [
     { id: "gym-members", title: "Member Report" },
     { id: "gym-attendance", title: "Attendance Report" },
@@ -187,6 +190,8 @@
     PAY_MODES,
     SERVICES,
     REPORTS,
+    DEFAULT_PORTAL_HERO,
+    DEFAULT_SETTINGS,
     isGymShop,
     planKind,
     planDurationDays,

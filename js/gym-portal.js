@@ -3,7 +3,7 @@
   const shopId = new URLSearchParams(location.search).get("shop") || "";
   const storeKey = `gym-token:${shopId}`;
   let token = localStorage.getItem(storeKey) || "";
-  let catalog = { shop: {}, plans: [], trainers: [], services: [], pay: [] };
+  let catalog = { shop: {}, plans: [], trainers: [], services: [], pay: [], settings: {} };
   let me = null;
 
   const $ = (id) => document.getElementById(id);
@@ -107,6 +107,11 @@
     }
     if ($("gp-pay")) {
       $("gp-pay").innerHTML = (catalog.pay || G?.PAY_MODES || ["upi"]).map((p) => `<option value="${escapeHtml(p)}">${escapeHtml(p)}</option>`).join("");
+    }
+    const hero = $("gp-portal-hero");
+    if (hero) {
+      const custom = String(catalog.settings?.portal_login_image || "").trim();
+      hero.src = custom || G?.DEFAULT_PORTAL_HERO || "./assets/login-atav-smart-pos.jpg?v=20260919loginp1";
     }
   }
 

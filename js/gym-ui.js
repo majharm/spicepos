@@ -335,6 +335,74 @@
           )
           .join("")}</div>`
       : `<p class="hint">Default monthly, quarterly, yearly, couple, family, student, and PT plans are created on first open.</p>`;
+    await loadGymSettings();
+  }
+
+  async function loadGymSettings() {
+    const el = $("gym-settings-box");
+    if (!el) return;
+    let d = {};
+    try {
+      d = await api("/api/gym/settings");
+    } catch {
+      d = {};
+    }
+    const hero = G()?.DEFAULT_PORTAL_HERO || "./assets/login-atav-smart-pos.jpg?v=20260919loginp1";
+    const current = String(d.portal_login_image || "").trim();
+    const previewSrc = current ? `${current}${current.includes("?") ? "&" : "?"}t=${Date.now()}` : hero;
+    el.innerHTML = `<form id="gym-settings-form" class="settings">
+      <fieldset class="gym-portal-art">
+        <legend>Member portal login image</legend>
+        <p class="hint">This is the one side image on the member gym login (same layout as shop admin login). JPG, PNG or WebP, under 900 KB.</p>
+        <img id="gym-portal-hero-preview" alt="Member portal preview" src="${escapeHtml(previewSrc)}" style="display:block;max-width:min(420px,100%);max-height:180px;object-fit:cover;border-radius:12px;margin:8px 0;border:1px solid #dbe7f3" />
+        <input name="portal_login_image" id="gym-portal-hero-url" type="hidden" value="${escapeHtml(current)}" />
+        <label>Upload image
+          <input id="gym-portal-hero-file" type="file" accept="image/jpeg,image/png,image/webp,image/gif" />
+        </label>
+        <button class="btn" type="button" id="gym-portal-hero-reset">Use default ATAV image</button>
+      </fieldset>
+      <button class="btn primary" type="submit">Save gym settings</button>
+    </form>`;
+    $("gym-settings-form")?.addEventListener("submit", async (ev) => {
+      ev.preventDefault();
+      const fd = new FormData(ev.target);
+      try {
+        await api("/api/gym/settings", {
+          method: "POST",
+          body: JSON.stringify({ portal_login_image: fd.get("portal_login_image") || "" }),
+        });
+        if (root.setHint) root.setHint("Gym member login image saved", "ok");
+        await loadGymSettings();
+      } catch (err) {
+        if (root.setHint) root.setHint(err.message, "error");
+      }
+    });
+    const preview = $("gym-portal-hero-preview");
+    const hidden = $("gym-portal-hero-url");
+    $("gym-portal-hero-file")?.addEventListener("change", (ev) => {
+      const file = ev.target.files?.[0];
+      if (!file) return;
+      if (file.size > 900 * 1024) {
+        if (root.toast) root.toast("Image must be under 900 KB");
+        else if (root.setHint) root.setHint("Image must be under 900 KB", "error");
+        else alert("Image must be under 900 KB");
+        ev.target.value = "";
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = () => {
+        const url = String(reader.result || "");
+        if (hidden) hidden.value = url;
+        if (preview) preview.src = url;
+      };
+      reader.readAsDataURL(file);
+    });
+    $("gym-portal-hero-reset")?.addEventListener("click", () => {
+      if (hidden) hidden.value = "";
+      if (preview) preview.src = hero;
+      const file = $("gym-portal-hero-file");
+      if (file) file.value = "";
+    });
   }
 
   function planFormHtml(p) {
@@ -495,6 +563,7 @@
     loadAttendance,
     loadPlans,
     loadTrainers,
+    loadGymSettings,
     bind,
   };
   document.addEventListener("DOMContentLoaded", bind);

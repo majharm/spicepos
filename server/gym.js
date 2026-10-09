@@ -154,6 +154,16 @@ export async function ensureGymSchema() {
     expires_at TIMESTAMP(3) NOT NULL,
     INDEX (token_hash)
   )`);
+  await query(`CREATE TABLE IF NOT EXISTS gym_settings (
+    business_id VARCHAR(255) PRIMARY KEY,
+    settings_json MEDIUMTEXT NULL,
+    updated_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3)
+  )`);
+  try {
+    await query("ALTER TABLE gym_settings MODIFY settings_json MEDIUMTEXT NULL");
+  } catch {
+    /* already MEDIUMTEXT */
+  }
 }
 
 async function seedPlans(shopId) {
@@ -181,6 +191,57 @@ async function nextNo(shopId, name, prefix, start) {
     }
   }
   return `${prefix}${next}`;
+}
+
+function clipPortalImage(raw, existing) {
+  const s = String(raw ?? "").trim();
+  if (!s) return "";
+  if (/^data:image\/(jpeg|jpg|png|webp|gif);base64,/i.test(s) && s.length <= 1_200_000) return s;
+  if (/^(\.\/assets\/|https?:\/\/)/i.test(s)) return s.slice(0, 500);
+  if (/\/api\/gym\/public\/[^/]+\/login-image/i.test(s)) return String(existing || "");
+  throw new Error("Use a JPG, PNG or WebP under 900 KB for the member portal image");
+}
+
+function decodeDataImage(raw) {
+  const m = String(raw || "").match(/^data:(image\/[a-z0-9.+-]+);base64,(.+)$/i);
+  if (!m) return null;
+  try {
+    return { mime: m[1], buf: Buffer.from(m[2], "base64") };
+  } catch {
+    return null;
+  }
+}
+
+async function settingsOf(shopId) {
+  const rows = await query("SELECT settings_json FROM gym_settings WHERE business_id=?", [shopId]);
+  let extra = {};
+  try {
+    extra = JSON.parse(rows[0]?.settings_json || "{}");
+  } catch {
+    extra = {};
+  }
+  return { ...(POSGym.DEFAULT_SETTINGS || { portal_login_image: "" }), ...extra };
+}
+
+async function saveSettings(shopId, incoming) {
+  const cur = await settingsOf(shopId);
+  const next = { ...cur, ...(incoming || {}) };
+  if (Object.prototype.hasOwnProperty.call(incoming || {}, "portal_login_image")) {
+    next.portal_login_image = clipPortalImage(incoming.portal_login_image, cur.portal_login_image);
+  }
+  await query(
+    `INSERT INTO gym_settings (business_id, settings_json) VALUES (?,?)
+     ON DUPLICATE KEY UPDATE settings_json=VALUES(settings_json)`,
+    [shopId, JSON.stringify(next)],
+  );
+  return settingsOf(shopId);
+}
+
+function publicSettings(shopId, settings) {
+  const custom = String(settings?.portal_login_image || "").trim();
+  return {
+    portal_login_image: custom ? `/api/gym/public/${encodeURIComponent(shopId)}/login-image` : "",
+  };
 }
 
 function publicMember(row) {
@@ -303,7 +364,27 @@ export function registerGymPublic(app) {
       await seedPlans(shop.id);
       const plans = await query("SELECT id, name, kind, duration_days, price, admission_fee, sessions FROM gym_plans WHERE business_id=? AND status='active'", [shop.id]);
       const trainers = await query("SELECT id, name, specialty FROM gym_trainers WHERE business_id=? AND status='active'", [shop.id]);
-      res.json({ shop, plans, trainers, services: POSGym.SERVICES, pay: POSGym.PAY_MODES });
+      const settings = publicSettings(shop.id, await settingsOf(shop.id));
+      res.json({ shop, plans, trainers, services: POSGym.SERVICES, pay: POSGym.PAY_MODES, settings });
+    } catch (err) {
+      res.status(400).json({ error: err.message });
+    }
+  });
+
+  app.get("/api/gym/public/:shopId/login-image", async (req, res) => {
+    try {
+      await ensureGymSchema();
+      const shop = await shopRow(req.params.shopId);
+      if (!shop || !POSGym.isGymShop(shop)) return res.status(404).json({ error: "Gym not found" });
+      const settings = await settingsOf(shop.id);
+      const raw = String(settings.portal_login_image || "").trim();
+      const decoded = decodeDataImage(raw);
+      if (decoded) {
+        res.setHeader("Cache-Control", "public, max-age=3600");
+        return res.type(decoded.mime).send(decoded.buf);
+      }
+      if (/^https?:\/\//i.test(raw) || /^\.\/assets\//i.test(raw)) return res.redirect(raw);
+      return res.status(404).json({ error: "Image not found" });
     } catch (err) {
       res.status(400).json({ error: err.message });
     }
@@ -533,6 +614,28 @@ export function registerGymStaff(app) {
         [bid()],
       );
       res.json({ stats, cards: POSGym.dashboardCards(stats), expiring, reports: POSGym.REPORTS, services: POSGym.SERVICES });
+    } catch (err) {
+      res.status(400).json({ error: err.message });
+    }
+  });
+
+  app.get("/api/gym/settings", requirePerm("items"), async (_req, res) => {
+    try {
+      await ensureGymSchema();
+      const shopId = bid();
+      const settings = await settingsOf(shopId);
+      res.json({ ...settings, ...publicSettings(shopId, settings) });
+    } catch (err) {
+      res.status(400).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/gym/settings", requirePerm("items"), async (req, res) => {
+    try {
+      await ensureGymSchema();
+      const shopId = bid();
+      const settings = await saveSettings(shopId, req.body || {});
+      res.json({ ok: true, ...settings, ...publicSettings(shopId, settings) });
     } catch (err) {
       res.status(400).json({ error: err.message });
     }
