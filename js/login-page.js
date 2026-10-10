@@ -1,5 +1,5 @@
 (function (root) {
-  const DEFAULT_DESKTOP = "./assets/login-atav-navratri-dussehra.jpg?v=20261010nav1";
+  const DEFAULT_DESKTOP = "./assets/login-atav-navratri-dussehra.jpg?v=20261010nav2";
   const DEFAULT_LOGO = "./assets/atav-telecom-logo.png";
   const BIZ_TYPES = [
     "Retail",
@@ -35,7 +35,7 @@
       rotateMs: 5000,
       transition: "fade",
       imageSource: "default",
-      maxUploadKb: 500,
+      maxUploadKb: 900,
       heading: "Sign in",
       subheading: "to access ATAV POS",
       loginButton: "Sign In",

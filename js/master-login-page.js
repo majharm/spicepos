@@ -110,13 +110,13 @@
     let edge = maxEdge;
     let quality = 0.78;
     let last = null;
-    for (let i = 0; i < 5; i += 1) {
+    for (let i = 0; i < 8; i += 1) {
       last = await compressFile(file, edge, quality);
       if (dataUrlBytes(last.dataUrl) <= cap * 1024) return last;
-      quality = Math.max(0.42, quality - 0.12);
-      edge = Math.max(720, Math.round(edge * 0.82));
+      quality = Math.max(0.32, quality - 0.08);
+      edge = Math.max(640, Math.round(edge * 0.82));
     }
-    throw new Error(`Image must be under ${cap} KB after compress`);
+    throw new Error(`Image must be under ${cap} KB after compress. Use JPG or raise Max upload KB in Login Settings.`);
   }
 
   function fileUrlFor(id) {
@@ -288,7 +288,7 @@
       const kind = pane === "images" ? "desktop" : pane === "logo" ? "logo" : pane === "mobile" ? "mobile" : pane;
       const rec =
         kind === "desktop"
-          ? "Desktop 1920×1080 JPG/PNG/WebP. Compressed automatically."
+          ? "Desktop or square festive poster. JPG, PNG or WebP — large files are compressed under 900 KB and published to shop login."
           : kind === "mobile"
             ? "Mobile 1080×1920. Used under 760px."
             : kind === "background"
