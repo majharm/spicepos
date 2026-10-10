@@ -644,7 +644,7 @@ test("HTML and CSS cache stickers match deploy136", () => {
   assert.match(login, /class="auth-scene"/);
   assert.match(login, /All types of businesses use ATAV POS/);
   assert.match(login, /class="auth-scene-shots"/);
-  assert.match(login, /assets\/login-atav-smart-pos\.jpg/);
+  assert.match(login, /assets\/login-atav-navratri-dussehra\.jpg/);
   assert.match(login, /auth-shell-poster/);
   assert.doesNotMatch(login, /assets\/login-pos-counter\.jpg/);
   assert.doesNotMatch(login, /assets\/login-pos-invoice\.jpg/);

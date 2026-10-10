@@ -1,5 +1,5 @@
 (function (root) {
-  const DEFAULT_DESKTOP = "./assets/login-atav-smart-pos.jpg?v=20260919loginp1";
+  const DEFAULT_DESKTOP = "./assets/login-atav-navratri-dussehra.jpg?v=20261010nav1";
   const DEFAULT_LOGO = "./assets/atav-telecom-logo.png";
   const BIZ_TYPES = [
     "Retail",
