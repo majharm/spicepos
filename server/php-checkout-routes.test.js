@@ -487,7 +487,7 @@ test("Restaurant Counter can create named dining tables", () => {
   assert.match(index, /pos\.css\?v=20261006fast1/);
   assert.match(index, /restaurant\.js\?v=20261011kot1/);
   assert.match(index, /app\.js\?v=20261011kot1/);
-  assert.match(index, /footwear\.js\?v=20261011lounge1/);
+  assert.match(index, /footwear\.js\?v=20261011resort1/);
   assert.match(app, /function resolveKitchenKot/);
   assert.match(app, /function paintKotTimers/);
   assert.match(app, /data-kot-timer/);
