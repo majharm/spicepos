@@ -1973,6 +1973,9 @@ async function render() {
                 <label>PAN
                   <input name="panNumber" maxlength="12" placeholder="Optional" />
                 </label>
+                <label class="full">DSA Code
+                  <input name="dsaCode" maxlength="32" autocomplete="off" placeholder="Optional — agent's code" />
+                </label>
               </fieldset>
               <fieldset class="item-block">
                 <legend>Address</legend>
@@ -2031,7 +2034,7 @@ async function render() {
             </div>
             <div class="items-library-list" id="biz-library">${rows
               .map((b) => {
-                const hay = `${b.name || ""} ${b.owner_name || ""} ${b.city || ""} ${b.category || ""} ${b.plan_name || ""} ${b.account_manager_name || ""}`.toLowerCase();
+                const hay = `${b.name || ""} ${b.owner_name || ""} ${b.city || ""} ${b.category || ""} ${b.plan_name || ""} ${b.account_manager_name || ""} ${b.dsa_code || ""}`.toLowerCase();
                 const src = String(b.logo_url || "").trim();
                 const thumb = src
                   ? `<img class="item-thumb" src="${attr(src)}" alt="">`
@@ -2051,6 +2054,7 @@ async function render() {
                     <span class="item-chip">${money(b.fee_monthly)} / year</span>
                     <span class="item-chip">Exp ${attr(ymd(b.subscription_expires_at) || "—")}</span>
                     <span class="item-chip">${attr(b.account_manager_name || "No account manager")}</span>
+                    ${b.dsa_code ? `<span class="item-chip">DSA ${attr(b.dsa_code)}</span>` : ""}
                   </div>
                   <div class="item-card-foot">
                     <div class="item-card-actions">
@@ -2108,6 +2112,7 @@ async function render() {
         setSelect(form.plan_id, b?.plan_id || "");
         form.subscription_expires_at.value = b ? ymd(b.subscription_expires_at) : yearlyStartYmd();
         setSelect(form.account_manager_id, b?.account_manager_id || "");
+        if (form.dsaCode) form.dsaCode.value = b?.dsa_code || "";
         const editing = Boolean(b);
         setAdminRequired(!editing);
         $("biz-title").textContent = editing ? "Edit business" : "Add business";

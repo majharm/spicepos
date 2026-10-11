@@ -86,6 +86,8 @@ test("PHP fallback routes checkout, holds, and order updates through core", () =
   assert.match(core, /master\/account-managers/);
   assert.match(core, /businesses\/\(\[\^\/\]\+\)\/account-manager/);
   assert.match(core, /account_manager_id/);
+  assert.match(core, /function pos_normalize_dsa_code/);
+  assert.match(core, /"dsa_code" => "VARCHAR\(32\) NULL"/);
   assert.match(read("pos-php-till.php"), /pos_shop_support\(\$bid\)/);
   assert.match(read("server/settings.js"), /export async function shopSupportContact/);
   assert.match(read("api/master/account-managers/index.php"), /master\/account-managers/);
@@ -315,7 +317,7 @@ test("Master Admin can set passwords and unlock locked accounts", () => {
   assert.match(core, /pos_register_business\(\$body, true\)/);
   assert.match(core, /strtotime\("\+1 year"\)/);
   assert.match(read("server/onboard.js"), /INTERVAL 1 YEAR/);
-  assert.match(read("master.html"), /master\.js\?v=20261007web1/);
+  assert.match(read("master.html"), /master\.js\?v=20261011dsa1/);
   assert.match(read("js/app.js"), /Subscription fee \/ year/);
   assert.match(read("js/app.js"), /\["Valid till"/);
   assert.match(read("js/app.js"), /\["Days left"/);

@@ -33,6 +33,15 @@ function normalizeDateOnly(val) {
   return d.toISOString().slice(0, 10);
 }
 
+function normalizeDsaCode(val) {
+  const code = String(val || "")
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9._-]/g, "")
+    .slice(0, 32);
+  return code || null;
+}
+
 export function validateSignup(body, opts = {}) {
   const requireAdmin = opts.requireAdmin !== false;
   const raw = body || {};
@@ -55,6 +64,7 @@ export function validateSignup(body, opts = {}) {
     confirm_password: pick(raw, "confirm_password", "confirmPassword", "admin_password_confirm"),
     plan_id: pick(raw, "plan_id"),
     account_manager_id: pick(raw, "account_manager_id"),
+    dsa_code: pick(raw, "dsa_code", "dsaCode"),
     subscription_expires_at: normalizeDateOnly(pick(raw, "subscription_expires_at")),
     status: pick(raw, "status"),
   };
@@ -108,6 +118,7 @@ export function validateSignup(body, opts = {}) {
     subscription_expires_at: normalizeDateOnly(String(b.subscription_expires_at || "").trim() || null),
     status,
     account_manager_id: String(b.account_manager_id || "").trim(),
+    dsa_code: normalizeDsaCode(b.dsa_code),
   };
 }
 
@@ -142,8 +153,8 @@ export async function registerBusiness(raw, opts = {}) {
       `INSERT INTO businesses (
          id, code, name, status, owner_name, mobile, email, address, gstin,
          business_type, plan_id, subscription_expires_at, logo_url,
-         category, pan, city, state, pin_code, account_manager_id
-       ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+         category, pan, city, state, pin_code, account_manager_id, dsa_code
+       ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       [
         id,
         code,
@@ -164,6 +175,7 @@ export async function registerBusiness(raw, opts = {}) {
         b.state,
         b.pin_code,
         amId,
+        b.dsa_code,
       ],
     );
     if (!expiry) {
@@ -280,7 +292,7 @@ export async function updateBusiness(id, raw) {
     `UPDATE businesses SET
        name=?, owner_name=?, mobile=?, email=?, address=?, gstin=?, business_type=?,
        status=?, plan_id=?, subscription_expires_at=?, logo_url=?,
-       category=?, pan=?, city=?, state=?, pin_code=?, account_manager_id=?
+       category=?, pan=?, city=?, state=?, pin_code=?, account_manager_id=?, dsa_code=?
      WHERE id=?`,
     [
       b.name,
@@ -300,6 +312,7 @@ export async function updateBusiness(id, raw) {
       b.state,
       b.pin_code,
       amId,
+      b.dsa_code,
       id,
     ],
   );

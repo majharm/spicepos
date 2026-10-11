@@ -669,6 +669,8 @@ test("HTML and CSS cache stickers match deploy136", () => {
   assert.match(login, /href="https:\/\/atavtelecom\.in\/legal\/shipping"[^>]*>Shipping &amp; Delivery</);
   assert.match(login, /href="https:\/\/atavtelecom\.in\/legal\/cookies"[^>]*>Cookie Policy</);
   assert.match(login, /class="signup-block"/);
+  assert.match(login, /name="dsaCode"/);
+  assert.match(login, /DSA Code/);
   assert.match(login, /class="auth-trial-banner"/);
   assert.match(login, /class="auth-trial-invite"/);
   assert.match(login, /class="auth-heading"/);

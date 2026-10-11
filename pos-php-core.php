@@ -616,6 +616,7 @@ function pos_ensure_business_columns() {
     "state" => "VARCHAR(64) NULL",
     "pin_code" => "VARCHAR(12) NULL",
     "account_manager_id" => "VARCHAR(255) NULL",
+    "dsa_code" => "VARCHAR(32) NULL",
     "created_at" => "TIMESTAMP(3) NULL",
     "updated_at" => "TIMESTAMP(3) NULL",
   ]);
@@ -2400,6 +2401,12 @@ function pos_normalize_date_only($val) {
   return gmdate("Y-m-d", $ts);
 }
 
+function pos_normalize_dsa_code($val) {
+  $code = strtoupper(preg_replace("/[^A-Z0-9._-]/", "", trim((string) $val)));
+  $code = substr($code, 0, 32);
+  return $code !== "" ? $code : null;
+}
+
 function pos_validate_signup($raw, $requireAdmin = true) {
   $b = [
     "name" => pos_pick($raw, "name", "businessName"),
@@ -2422,6 +2429,7 @@ function pos_validate_signup($raw, $requireAdmin = true) {
     "subscription_expires_at" => pos_pick($raw, "subscription_expires_at"),
     "status" => pos_pick($raw, "status"),
     "account_manager_id" => pos_pick($raw, "account_manager_id"),
+    "dsa_code" => pos_pick($raw, "dsa_code", "dsaCode"),
   ];
   $required = ["name", "business_type", "category", "owner_name", "mobile", "email", "address", "city", "state", "pin_code"];
   if ($requireAdmin) {
@@ -2474,6 +2482,7 @@ function pos_validate_signup($raw, $requireAdmin = true) {
     "subscription_expires_at" => pos_normalize_date_only(trim((string) $b["subscription_expires_at"]) ?: null),
     "status" => $status,
     "account_manager_id" => trim((string) ($b["account_manager_id"] ?? "")),
+    "dsa_code" => pos_normalize_dsa_code($b["dsa_code"] ?? ""),
   ];
 }
 
@@ -2506,12 +2515,12 @@ function pos_register_business($raw, $yearly = false) {
   pos_q(
     "INSERT INTO businesses (
        id, code, name, status, owner_name, mobile, email, address, gstin,
-       business_type, plan_id, subscription_expires_at, logo_url, category, pan, city, state, pin_code
-     ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-    "ssssssssssssssssss",
+       business_type, plan_id, subscription_expires_at, logo_url, category, pan, city, state, pin_code, dsa_code
+     ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+    "sssssssssssssssssss",
     [
       $id, $code, $shop, $b["status"] ?: "active", $b["owner_name"], $b["mobile"], $b["email"], $full, $b["gstin"],
-      $b["business_type"], $planId, $expiry, $b["logo_url"], $b["category"], $b["pan"],       $b["city"], $b["state"], $b["pin_code"],
+      $b["business_type"], $planId, $expiry, $b["logo_url"], $b["category"], $b["pan"],       $b["city"], $b["state"], $b["pin_code"], $b["dsa_code"],
     ]
   );
   $amId = trim((string) ($b["account_manager_id"] ?? ""));
@@ -2586,12 +2595,12 @@ function pos_update_business($id, $raw) {
   }
   pos_q(
     "UPDATE businesses SET name=?, owner_name=?, mobile=?, email=?, address=?, gstin=?, business_type=?,
-       status=?, plan_id=?, subscription_expires_at=?, logo_url=?, category=?, pan=?, city=?, state=?, pin_code=?, account_manager_id=?
+       status=?, plan_id=?, subscription_expires_at=?, logo_url=?, category=?, pan=?, city=?, state=?, pin_code=?, account_manager_id=?, dsa_code=?
      WHERE id=?",
-    "ssssssssssssssssss",
+    "sssssssssssssssssss",
     [
       $b["name"], $b["owner_name"], $b["mobile"], $b["email"], $full, $b["gstin"], $b["business_type"],
-      $b["status"], $planId, $expiry, $logo, $b["category"], $b["pan"], $b["city"], $b["state"], $b["pin_code"], $amId === null ? "" : $amId, $id,
+      $b["status"], $planId, $expiry, $logo, $b["category"], $b["pan"], $b["city"], $b["state"], $b["pin_code"], $amId === null ? "" : $amId, $b["dsa_code"], $id,
     ]
   );
   try {
