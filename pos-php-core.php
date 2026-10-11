@@ -617,6 +617,7 @@ function pos_ensure_business_columns() {
     "pin_code" => "VARCHAR(12) NULL",
     "account_manager_id" => "VARCHAR(255) NULL",
     "dsa_code" => "VARCHAR(32) NULL",
+    "bar_enabled" => "TINYINT(1) NOT NULL DEFAULT 0",
     "created_at" => "TIMESTAMP(3) NULL",
     "updated_at" => "TIMESTAMP(3) NULL",
   ]);
@@ -722,6 +723,7 @@ function pos_is_apparel_shop($biz) {
 function pos_shop_kind($biz) {
   $type = strtolower(trim((string) ($biz["business_type"] ?? "")));
   if ($type === "restaurant" || $type === "cafe" || $type === "bakery") return "restaurant";
+  if ($type === "bar" || $type === "pub" || $type === "bar & lounge") return "bar";
   if ($type === "printing business" || $type === "printing") return "printing";
   if ($type === "gym" || $type === "gym & fitness center" || $type === "fitness") return "gym";
   if (pos_is_footwear_shop($biz)) return "footwear";
@@ -729,6 +731,7 @@ function pos_shop_kind($biz) {
   $text = strtolower(trim((string) (($biz["category"] ?? "") . " " . ($biz["business_type"] ?? "") . " " . ($biz["name"] ?? ""))));
   if (preg_match("/(flex\\s*&\\s*printing|flex printing|banner printing|large format printing)/", $text)) return "printing";
   if (preg_match("/(gym|fitness center|fitness centre|health club|workout studio|\\bfitness\\b)/", $text)) return "gym";
+  if (!preg_match("/(juice\\s*bar|coffee\\s*bar|snack\\s*bar|salad\\s*bar|milk\\s*bar)/", $text) && preg_match("/(\\bbar\\b|\\bpub\\b|\\blounge\\b|\\bbrewery\\b|\\btaproom\\b|\\bnightclub\\b|\\bliquor\\b)/", $text)) return "bar";
   if (preg_match("/(spice|masala)/", $text)) return "spice";
   if (preg_match("/(kirana|fmcg|grocery|supermarket|general trade)/", $text)) return "grocery";
   if (preg_match("/(restaurant|cafe|bakery|food)/", $text)) return "restaurant";
@@ -750,6 +753,14 @@ function pos_is_print_shop($biz) {
 
 function pos_is_gym_shop($biz) {
   return pos_shop_kind($biz) === "gym";
+}
+
+function pos_is_bar_shop($biz) {
+  $flag = $biz["bar_enabled"] ?? 0;
+  if ($flag === 1 || $flag === "1" || $flag === true) return true;
+  $type = strtolower(trim((string) ($biz["business_type"] ?? "")));
+  if ($type === "restaurant" || $type === "cafe" || $type === "bakery") return false;
+  return pos_shop_kind($biz) === "bar";
 }
 
 function pos_tax_code_label($biz) {
@@ -779,6 +790,7 @@ function pos_item_code_prefix($biz) {
     "services" => "SV-",
     "printing" => "FP-",
     "gym" => "GY-",
+    "bar" => "BR-",
     "general" => "IT-",
   ];
   $kind = pos_shop_kind($biz);
@@ -803,6 +815,7 @@ function pos_default_item_category($biz) {
     "services" => "Service",
     "printing" => "Flex & Printing",
     "gym" => "Membership",
+    "bar" => "Whisky",
     "general" => "General",
   ];
   return $fallback[$kind] ?? "General";
@@ -811,6 +824,7 @@ function pos_default_item_category($biz) {
 function pos_default_item_unit($biz) {
   $kind = pos_shop_kind($biz);
   if ($kind === "printing") return "SQFT";
+  if ($kind === "bar") return "ML";
   return ($kind === "spice" || $kind === "grocery") ? "GM" : "PCS";
 }
 
@@ -1225,6 +1239,7 @@ function pos_staff_me_payload($staff) {
       "status" => $status,
       "category" => $staff["business"]["category"] ?? null,
       "business_type" => $staff["business"]["business_type"] ?? null,
+      "bar_enabled" => (int) ($staff["business"]["bar_enabled"] ?? 0),
       "plan_id" => $staff["business"]["plan_id"] ?? null,
       "subscription_expires_at" => $staff["business"]["subscription_expires_at"] ?? null,
     ],
@@ -1236,7 +1251,7 @@ function pos_staff_me_payload($staff) {
 }
 
 function pos_known_roles() {
-  return ["business_admin", "branch_manager", "manager", "cashier", "captain", "kitchen", "stock_manager", "accountant", "staff"];
+  return ["business_admin", "branch_manager", "manager", "cashier", "captain", "kitchen", "stock_manager", "accountant", "staff", "bartender"];
 }
 
 function pos_default_perms($role) {
@@ -1257,6 +1272,9 @@ function pos_default_perms($role) {
   }
   if ($role === "cashier") {
     return ["dashboard" => true, "counter" => true, "customers" => true, "orders" => true, "accounts" => true, "support" => true, "discount" => true, "loyalty" => true, "offers" => true, "kot" => true];
+  }
+  if ($role === "bartender") {
+    return ["dashboard" => true, "counter" => true, "customers" => true, "orders" => true, "support" => true];
   }
   if ($role === "captain") {
     return ["dashboard" => true, "counter" => true, "kot" => true, "customers" => true, "orders" => true, "support" => true];
@@ -2407,6 +2425,13 @@ function pos_normalize_dsa_code($val) {
   return $code !== "" ? $code : null;
 }
 
+function pos_normalize_bar_enabled($val, $type = "") {
+  $t = strtolower(trim((string) $type));
+  if ($t === "bar" || $t === "pub" || $t === "bar & lounge") return 1;
+  if ($val === true || $val === 1 || $val === "1" || $val === "on" || $val === "true" || $val === "yes") return 1;
+  return 0;
+}
+
 function pos_validate_signup($raw, $requireAdmin = true) {
   $b = [
     "name" => pos_pick($raw, "name", "businessName"),
@@ -2430,6 +2455,7 @@ function pos_validate_signup($raw, $requireAdmin = true) {
     "status" => pos_pick($raw, "status"),
     "account_manager_id" => pos_pick($raw, "account_manager_id"),
     "dsa_code" => pos_pick($raw, "dsa_code", "dsaCode"),
+    "bar_enabled" => pos_pick($raw, "bar_enabled", "barEnabled"),
   ];
   $required = ["name", "business_type", "category", "owner_name", "mobile", "email", "address", "city", "state", "pin_code"];
   if ($requireAdmin) {
@@ -2483,6 +2509,7 @@ function pos_validate_signup($raw, $requireAdmin = true) {
     "status" => $status,
     "account_manager_id" => trim((string) ($b["account_manager_id"] ?? "")),
     "dsa_code" => pos_normalize_dsa_code($b["dsa_code"] ?? ""),
+    "bar_enabled" => pos_normalize_bar_enabled($b["bar_enabled"] ?? 0, $b["business_type"] ?? ""),
   ];
 }
 
@@ -2515,12 +2542,12 @@ function pos_register_business($raw, $yearly = false) {
   pos_q(
     "INSERT INTO businesses (
        id, code, name, status, owner_name, mobile, email, address, gstin,
-       business_type, plan_id, subscription_expires_at, logo_url, category, pan, city, state, pin_code, dsa_code
-     ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-    "sssssssssssssssssss",
+       business_type, plan_id, subscription_expires_at, logo_url, category, pan, city, state, pin_code, dsa_code, bar_enabled
+     ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+    "sssssssssssssssssssi",
     [
       $id, $code, $shop, $b["status"] ?: "active", $b["owner_name"], $b["mobile"], $b["email"], $full, $b["gstin"],
-      $b["business_type"], $planId, $expiry, $b["logo_url"], $b["category"], $b["pan"],       $b["city"], $b["state"], $b["pin_code"], $b["dsa_code"],
+      $b["business_type"], $planId, $expiry, $b["logo_url"], $b["category"], $b["pan"],       $b["city"], $b["state"], $b["pin_code"], $b["dsa_code"], $b["bar_enabled"],
     ]
   );
   $amId = trim((string) ($b["account_manager_id"] ?? ""));
@@ -2595,12 +2622,12 @@ function pos_update_business($id, $raw) {
   }
   pos_q(
     "UPDATE businesses SET name=?, owner_name=?, mobile=?, email=?, address=?, gstin=?, business_type=?,
-       status=?, plan_id=?, subscription_expires_at=?, logo_url=?, category=?, pan=?, city=?, state=?, pin_code=?, account_manager_id=?, dsa_code=?
+       status=?, plan_id=?, subscription_expires_at=?, logo_url=?, category=?, pan=?, city=?, state=?, pin_code=?, account_manager_id=?, dsa_code=?, bar_enabled=?
      WHERE id=?",
-    "sssssssssssssssssss",
+    "ssssssssssssssssssis",
     [
       $b["name"], $b["owner_name"], $b["mobile"], $b["email"], $full, $b["gstin"], $b["business_type"],
-      $b["status"], $planId, $expiry, $logo, $b["category"], $b["pan"], $b["city"], $b["state"], $b["pin_code"], $amId === null ? "" : $amId, $b["dsa_code"], $id,
+      $b["status"], $planId, $expiry, $logo, $b["category"], $b["pan"], $b["city"], $b["state"], $b["pin_code"], $amId === null ? "" : $amId, $b["dsa_code"], $b["bar_enabled"], $id,
     ]
   );
   try {
@@ -2985,6 +3012,7 @@ function pos_php_dispatch($path, $method, $rawBody) {
           "status" => $status,
           "category" => $business["category"] ?? null,
           "business_type" => $business["business_type"] ?? null,
+          "bar_enabled" => (int) ($business["bar_enabled"] ?? 0),
           "subscription_expires_at" => $business["subscription_expires_at"] ?? null,
         ],
       ]);
@@ -3863,6 +3891,12 @@ function pos_php_dispatch($path, $method, $rawBody) {
           if (is_file(__DIR__ . "/pos-gym.php")) {
             require_once __DIR__ . "/pos-gym.php";
             if (function_exists("pos_gym_staff_dispatch") && pos_gym_staff_dispatch($path, $method, $body, $bid, $auth)) {
+              return;
+            }
+          }
+          if (is_file(__DIR__ . "/pos-bar.php")) {
+            require_once __DIR__ . "/pos-bar.php";
+            if (function_exists("pos_bar_staff_dispatch") && pos_bar_staff_dispatch($path, $method, $body, $bid, $auth)) {
               return;
             }
           }

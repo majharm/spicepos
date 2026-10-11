@@ -37,6 +37,7 @@ import { registerRxPublic, registerRxStaff } from "./prescriptions.js";
 import { registerSalonPublic, registerSalonStaff, ensureSalonSchema } from "./salon.js";
 import { registerPrintPublic, registerPrintStaff, ensurePrintSchema, attachPrintInvoiceLines } from "./print.js";
 import { registerGymPublic, registerGymStaff, ensureGymSchema } from "./gym.js";
+import { registerBarStaff, ensureBarSchema } from "./bar.js";
 import "../js/discount.js";
 import "../js/payment-methods.js";
 import { registerQrPublic, registerQrStaff, ensureQrOrderSchema, linkQrOrderSale } from "./qr-ordering.js";
@@ -225,6 +226,7 @@ registerRxStaff(app);
 registerSalonStaff(app);
 registerPrintStaff(app);
 registerGymStaff(app);
+registerBarStaff(app);
 
 app.get("/api/support-contact", async (_req, res) => {
   try {
@@ -1317,6 +1319,7 @@ ensureSchema()
     .then(() => ensureSalonSchema())
     .then(() => ensurePrintSchema())
     .then(() => ensureGymSchema())
+    .then(() => ensureBarSchema())
     .then(() => ensureLoginPageSchema())
     .then(() => {
       setTimeout(() => {

@@ -8,6 +8,7 @@
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="./css/pos.css?v=20261006fast1" />
     <link rel="stylesheet" href="./css/saas.css?v=20260905deploy136" />
+    <link rel="stylesheet" href="./css/bar.css?v=20261011bar1" />
   </head>
   <body class="fast-mode">
     <div class="app" id="app">
@@ -86,6 +87,13 @@
             <button class="nav-btn gym-only" type="button" data-view="gym-attendance" data-hub-kind="gym"><span class="nav-icon" aria-hidden="true">▦</span>Attendance</button>
             <button class="nav-btn gym-only" type="button" data-view="gym-trainers" data-hub-kind="gym"><span class="nav-icon" aria-hidden="true">◉</span>Trainers</button>
             <button class="nav-btn gym-only" type="button" data-view="gym-plans" data-hub-kind="gym"><span class="nav-icon" aria-hidden="true">⚙</span>Plans</button>
+            <button class="nav-btn bar-only" type="button" data-view="bar-board" data-hub-kind="bar"><span class="nav-icon" aria-hidden="true">▣</span>Bar desk</button>
+            <button class="nav-btn bar-only" type="button" data-view="bar-counter" data-hub-kind="bar"><span class="nav-icon" aria-hidden="true">▤</span>Bar Counter</button>
+            <button class="nav-btn bar-only" type="button" data-view="bar-products" data-hub-kind="bar"><span class="nav-icon" aria-hidden="true">◫</span>Bar products</button>
+            <button class="nav-btn bar-only" type="button" data-view="bar-tables" data-hub-kind="bar"><span class="nav-icon" aria-hidden="true">⬡</span>Bar tables</button>
+            <button class="nav-btn bar-only" type="button" data-view="bar-stock" data-hub-kind="bar"><span class="nav-icon" aria-hidden="true">☰</span>Bar stock</button>
+            <button class="nav-btn bar-only" type="button" data-view="bar-reports" data-hub-kind="bar"><span class="nav-icon" aria-hidden="true">▦</span>Bar reports</button>
+            <button class="nav-btn bar-only" type="button" data-view="bar-settings" data-hub-kind="bar"><span class="nav-icon" aria-hidden="true">⚙</span>Bar settings</button>
           </div>
           <div class="nav-group">
             <p class="nav-group-label" data-i18n="nav.admin">Admin</p>
@@ -1155,6 +1163,129 @@
             <div id="gym-settings-box"></div>
           </div>
         </section>
+        <section class="view view-finance bar-only" id="view-bar-board" hidden>
+          <div class="items-desk">
+            <header class="items-hero">
+              <div class="items-hero-copy">
+                <p class="items-kicker">Bar Business Model</p>
+                <h3>Bar desk</h3>
+                <p class="lede">Bottle and peg sales, remaining stock, open tables, and collections. Restaurant POS stays on Counter.</p>
+              </div>
+              <p class="dash-actions">
+                <button class="btn primary" type="button" data-view-jump="bar-counter">Bar Counter</button>
+                <button class="btn" type="button" data-view-jump="bar-products">Products</button>
+                <button class="btn" type="button" data-view-jump="bar-tables">Tables</button>
+                <button class="btn" type="button" data-view-jump="bar-stock">Stock</button>
+              </p>
+            </header>
+            <div class="report-grid dash-kpi-grid bar-kpi" id="bar-board-kpis"></div>
+            <h4>Low stock &amp; expiry</h4>
+            <div class="table-wrap" id="bar-stock-alerts"></div>
+            <h4>Reports</h4>
+            <div class="hub-tile-grid" id="bar-report-list"></div>
+            <div class="table-wrap" id="bar-report-out"></div>
+          </div>
+        </section>
+        <section class="view view-finance bar-only" id="view-bar-counter" hidden>
+          <div class="items-desk bar-desk">
+            <header class="items-hero">
+              <div class="items-hero-copy">
+                <p class="items-kicker">Billing</p>
+                <h3>Bar Counter</h3>
+                <p class="lede">Search, scan a barcode, or tap a category. Price follows peg, quarter, half, or bottle.</p>
+              </div>
+            </header>
+            <div class="bar-counter">
+              <div>
+                <form class="report-toolbar">
+                  <label>Search / barcode <input id="bar-counter-q" type="search" placeholder="Brand, bottle, barcode…" autocomplete="off" /></label>
+                </form>
+                <div class="bar-cats" id="bar-counter-cats"></div>
+                <div class="bar-grid" id="bar-counter-grid"></div>
+              </div>
+              <div class="bar-ticket" id="bar-ticket"></div>
+            </div>
+          </div>
+        </section>
+        <section class="view view-finance bar-only" id="view-bar-products" hidden>
+          <div class="items-desk">
+            <header class="items-hero">
+              <div class="items-hero-copy">
+                <p class="items-kicker">Catalog</p>
+                <h3>Bar products</h3>
+                <p class="lede">Brand, bottle size, packaging, peg prices, batch, and expiry. Remaining quantity is tracked in ml.</p>
+              </div>
+              <button class="btn primary" type="button" id="bar-product-new">New product</button>
+            </header>
+            <form class="report-toolbar">
+              <label>Search <input id="bar-product-q" type="search" placeholder="Name, brand, barcode…" autocomplete="off" /></label>
+              <label>Category
+                <select id="bar-product-cat">
+                  <option value="">All</option>
+                  <option>Whisky</option>
+                  <option>Rum</option>
+                  <option>Vodka</option>
+                  <option>Beer</option>
+                  <option>Wine</option>
+                  <option>Cocktails</option>
+                  <option>Soft Drinks</option>
+                </select>
+              </label>
+            </form>
+            <div class="table-wrap" id="bar-products-table"></div>
+          </div>
+        </section>
+        <section class="view view-finance bar-only" id="view-bar-tables" hidden>
+          <div class="items-desk">
+            <header class="items-hero">
+              <div class="items-hero-copy">
+                <p class="items-kicker">Service</p>
+                <h3>Bar tables</h3>
+                <p class="lede">Assign an order, add more serves, transfer, split, or combine. Live status shows pending payments.</p>
+              </div>
+            </header>
+            <div class="bar-tables" id="bar-tables-grid"></div>
+            <div id="bar-tables-work"></div>
+          </div>
+        </section>
+        <section class="view view-finance bar-only" id="view-bar-stock" hidden>
+          <div class="items-desk">
+            <header class="items-hero">
+              <div class="items-hero-copy">
+                <p class="items-kicker">Inventory</p>
+                <h3>Bar stock</h3>
+                <p class="lede">Opening stock, purchases, transfers, wastage, and breakage. Closing stock is remaining millilitres.</p>
+              </div>
+            </header>
+            <div class="table-wrap" id="bar-stock-table"></div>
+            <div id="bar-stock-move"></div>
+          </div>
+        </section>
+        <section class="view view-finance bar-only" id="view-bar-reports" hidden>
+          <div class="items-desk">
+            <header class="items-hero">
+              <div class="items-hero-copy">
+                <p class="items-kicker">Reports</p>
+                <h3>Bar reports</h3>
+                <p class="lede">Daily to monthly sales, brand and category, peg vs bottle, stock variance, collections, and estimated profit.</p>
+              </div>
+            </header>
+            <div class="hub-tile-grid" id="bar-report-list"></div>
+            <div class="table-wrap" id="bar-report-out"></div>
+          </div>
+        </section>
+        <section class="view view-finance bar-only" id="view-bar-settings" hidden>
+          <div class="items-desk">
+            <header class="items-hero">
+              <div class="items-hero-copy">
+                <p class="items-kicker">Compliance</p>
+                <h3>Bar settings</h3>
+                <p class="lede">Liquor license, operating hours, peg sizes, tax, and regulated sales for this shop only.</p>
+              </div>
+            </header>
+            <div id="bar-settings-box"></div>
+          </div>
+        </section>
         <section class="view" id="view-orders" hidden>
           <h2 class="visually-hidden">Invoices</h2>
           <div class="items-desk invoices-desk">
@@ -1723,6 +1854,7 @@
                 <option value="cashier">Cashier</option>
                 <option value="captain">Captain</option>
                 <option value="kitchen">Kitchen</option>
+                <option value="bartender">Bartender</option>
                 <option value="manager">Manager</option>
                 <option value="branch_manager">Branch Manager</option>
                 <option value="stock_manager">Stock Manager</option>
@@ -2594,7 +2726,7 @@
     <script src="./js/gst-supply.js?v=20260905deploy136" defer></script>
     <script src="./js/pos-api.js?v=20261006login1" defer></script>
     <script src="./js/units.js?v=20260919unit1" defer></script>
-    <script src="./js/footwear.js?v=20261008gym1" defer></script>
+    <script src="./js/footwear.js?v=20261011bar1" defer></script>
     <script src="./js/restaurant.js?v=20260923deploy226" defer></script>
     <script src="./js/discount.js?v=20260905deploy136" defer></script>
     <script src="./js/offers.js?v=20260905deploy170" defer></script>
@@ -2609,15 +2741,17 @@
     <script src="./js/qrcode.iife.js?v=20260905qr1" defer></script>
     <script src="./js/qr-notify.js?v=20260922deploy205" defer></script>
     <script src="./js/payment-methods.js?v=20260918pay1" defer></script>
-    <script src="./js/biz-hub.js?v=20260922deploy207" defer></script>
-    <script src="./js/biz-hub-ui.js?v=20260920deploy201" defer></script>
+    <script src="./js/biz-hub.js?v=20261011bar1" defer></script>
+    <script src="./js/biz-hub-ui.js?v=20261011bar1" defer></script>
     <script src="./js/salon.js?v=20260919salon1" defer></script>
     <script src="./js/salon-ui.js?v=20260919salon1" defer></script>
     <script src="./js/print.js?v=20260922deploy219" defer></script>
     <script src="./js/print-ui.js?v=20260922deploy218" defer></script>
     <script src="./js/gym.js?v=20261008gym5" defer></script>
     <script src="./js/gym-ui.js?v=20261008gym5" defer></script>
-    <script src="./js/app.js?v=20261008gym1" defer></script>
+    <script src="./js/bar.js?v=20261011bar1" defer></script>
+    <script src="./js/bar-ui.js?v=20261011bar1" defer></script>
+    <script src="./js/app.js?v=20261011bar1" defer></script>
     <script src="./js/growth.js?v=20260905deploy145" defer></script>
     <script src="./js/offers-ui.js?v=20260919off1" defer></script>
   </body>

@@ -17,7 +17,7 @@ function money(n) {
   return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR" }).format(Number(n) || 0);
 }
 
-const BIZ_TYPES = ["Retail", "Wholesale", "Distributor", "Restaurant", "Cafe", "Bakery", "Grocery", "Pharmacy", "Electronics", "Fashion", "Footwear", "Services", "Printing Business", "Gym & Fitness Center", "Other"];
+const BIZ_TYPES = ["Retail", "Wholesale", "Distributor", "Restaurant", "Cafe", "Bakery", "Bar", "Grocery", "Pharmacy", "Electronics", "Fashion", "Footwear", "Services", "Printing Business", "Gym & Fitness Center", "Other"];
 const BIZ_CATEGORIES = [
   "Spices & masala",
   "Kirana / FMCG",
@@ -33,6 +33,7 @@ const BIZ_CATEGORIES = [
   "Footwear",
   "Mobile & electronics",
   "Food & beverage",
+  "Bar & Lounge",
   "Hardware",
   "Jewellery",
   "Medical",
@@ -49,6 +50,7 @@ const BIZ_CATEGORIES_FOR_TYPE = {
   Restaurant: ["Food & beverage"],
   Cafe: ["Food & beverage"],
   Bakery: ["Food & beverage"],
+  Bar: ["Bar & Lounge"],
   Grocery: ["Kirana / FMCG", "Supermarket", "General trade"],
   Pharmacy: ["Medical"],
   Electronics: ["Mobile & electronics"],
@@ -1955,6 +1957,10 @@ async function render() {
                     <option value="inactive">Inactive</option>
                   </select>
                 </label>
+                <label class="full">
+                  <input type="checkbox" name="barEnabled" />
+                  Enable Bar Business Model — bottle/peg billing, bar inventory, and bar tables for this shop
+                </label>
               </fieldset>
               <fieldset class="item-block">
                 <legend>Owner</legend>
@@ -2055,6 +2061,7 @@ async function render() {
                     <span class="item-chip">Exp ${attr(ymd(b.subscription_expires_at) || "—")}</span>
                     <span class="item-chip">${attr(b.account_manager_name || "No account manager")}</span>
                     ${b.dsa_code ? `<span class="item-chip">DSA ${attr(b.dsa_code)}</span>` : ""}
+                    ${Number(b.bar_enabled) === 1 || String(b.business_type || "").toLowerCase() === "bar" ? `<span class="item-chip">Bar model</span>` : ""}
                   </div>
                   <div class="item-card-foot">
                     <div class="item-card-actions">
@@ -2113,6 +2120,10 @@ async function render() {
         form.subscription_expires_at.value = b ? ymd(b.subscription_expires_at) : yearlyStartYmd();
         setSelect(form.account_manager_id, b?.account_manager_id || "");
         if (form.dsaCode) form.dsaCode.value = b?.dsa_code || "";
+        if (form.barEnabled) {
+          const type = String(b?.business_type || "").toLowerCase();
+          form.barEnabled.checked = Number(b?.bar_enabled) === 1 || type === "bar" || type === "pub" || type === "bar & lounge";
+        }
         const editing = Boolean(b);
         setAdminRequired(!editing);
         $("biz-title").textContent = editing ? "Edit business" : "Add business";
@@ -2150,6 +2161,7 @@ async function render() {
         hint.className = "hint";
         const fd = new FormData(form);
         const payload = Object.fromEntries(fd);
+        payload.barEnabled = form.barEnabled?.checked ? 1 : 0;
         const id = payload.business_id;
         delete payload.business_id;
         delete payload.logo;

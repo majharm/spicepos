@@ -34,6 +34,7 @@
     services: "SV",
     printing: "FP",
     gym: "GY",
+    bar: "BR",
     general: "IT",
   };
 
@@ -53,6 +54,7 @@
   function shopKind(biz) {
     const type = String(biz?.business_type || "").toLowerCase().trim();
     if (type === "restaurant" || type === "cafe" || type === "bakery") return "restaurant";
+    if (type === "bar" || type === "pub" || type === "bar & lounge") return "bar";
     if (type === "printing business" || type === "printing") return "printing";
     if (type === "gym" || type === "gym & fitness center" || type === "fitness") return "gym";
     if (isFootwearShop(biz)) return "footwear";
@@ -60,6 +62,7 @@
     const t = shopText(biz);
     if (/(flex\s*&\s*printing|flex printing|banner printing|vinyl printing|large format printing|printing press|\bprinting\b)/.test(t)) return "printing";
     if (/(gym|fitness center|fitness centre|health club|workout studio|\bfitness\b)/.test(t)) return "gym";
+    if (globalThis.POSBar?.looksLikeLiquorBar?.(t) || (/(?<!(juice|coffee|snack|salad|milk)\s)\b(bar|pub|lounge|brewery|taproom|nightclub|liquor)\b/.test(t) && !/(juice\s*bar|coffee\s*bar|snack\s*bar|salad\s*bar|milk\s*bar)/.test(t))) return "bar";
     if (/(spice|masala)/.test(t)) return "spice";
     if (/(kirana|fmcg|grocery|supermarket|general trade)/.test(t)) return "grocery";
     if (/(restaurant|cafe|bakery|food)/.test(t)) return "restaurant";
@@ -157,6 +160,11 @@
     return shopKind(biz) === "gym";
   }
 
+  function isBarShop(biz) {
+    if (globalThis.POSBar?.isBarShop?.(biz)) return true;
+    return shopKind(biz) === "bar";
+  }
+
   function taxCodeKind(biz) {
     const k = shopKind(biz);
     return k === "services" || k === "gym" ? "SAC" : "HSN";
@@ -228,6 +236,9 @@
         "Merchandise",
       ];
     }
+    if (shopKind(biz) === "bar") {
+      return ["Whisky", "Rum", "Vodka", "Beer", "Wine", "Cocktails", "Soft Drinks"];
+    }
     if (shopKind(biz) !== "restaurant") return [];
     return [
       "South Indian",
@@ -263,6 +274,7 @@
       services: "Service",
       printing: "Flex & Printing",
       gym: "Membership",
+      bar: "Whisky",
       general: "General",
     };
     return fallback[k] || "General";
@@ -270,6 +282,7 @@
 
   function defaultUnit(biz) {
     if (isPrintShop(biz)) return "SQFT";
+    if (shopKind(biz) === "bar") return "ML";
     return isWeightShop(biz) ? "GM" : "PCS";
   }
 
@@ -461,6 +474,22 @@
         ticket: "Use Gym desk for memberships",
         hsn: "e.g. 9997",
         catalogSearch: "Search name, SAC…",
+      },
+      bar: {
+        name: "Single malt",
+        localName: "व्हिस्की / Whisky",
+        category: "Whisky",
+        subcategory: "Blended",
+        categoryLab: "Spirit / drink",
+        subcategoryLab: "Brand",
+        search: "Search brand, bottle, or HSN…",
+        scan: "Scan bottle barcode",
+        lede: "Snacks and retail on Counter. Bottle and peg sales stay on the Bar Counter.",
+        itemsSub: "Optional snacks — liquor inventory stays on the Bar desk",
+        counterSub: "Liquor: open Bar Counter · snacks here",
+        ticket: "Use Bar Counter for peg and bottle sales",
+        hsn: "e.g. 2208",
+        catalogSearch: "Search brand, bottle…",
       },
       general: {
         name: "Item name",
@@ -854,6 +883,7 @@
     isServicesShop,
     isPrintShop,
     isGymShop,
+    isBarShop,
     taxCodeKind,
     taxCodeLabel,
     taxCodeFieldLabel,

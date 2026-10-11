@@ -1,0 +1,92 @@
+/* Bar POS desk — compact, fast, mobile-first. */
+.bar-mode .bar-only { display: block; }
+body:not(.bar-mode) .bar-only:not(.nav-btn) { display: none; }
+
+.bar-desk { display: grid; gap: 1rem; }
+.bar-counter {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(280px, 0.9fr);
+  gap: 1rem;
+  align-items: start;
+}
+@media (max-width: 900px) {
+  .bar-counter { grid-template-columns: 1fr; }
+}
+
+.bar-cats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+.bar-cat {
+  border: 1px solid var(--line, #d7c7b0);
+  background: #fff8ef;
+  color: #4a2e12;
+  border-radius: 999px;
+  padding: 0.35rem 0.75rem;
+  font: inherit;
+  cursor: pointer;
+}
+.bar-cat.is-on,
+.bar-cat:hover { background: #8b3a1a; color: #fff8ef; border-color: #8b3a1a; }
+
+.bar-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
+  gap: 0.6rem;
+}
+.bar-sku {
+  text-align: left;
+  border: 1px solid var(--line, #e3d5c3);
+  background: #fff;
+  border-radius: 12px;
+  padding: 0.7rem;
+  cursor: pointer;
+  min-height: 7.2rem;
+}
+.bar-sku strong { display: block; font-size: 0.95rem; }
+.bar-sku span { display: block; color: #6b5340; font-size: 0.8rem; }
+.bar-sku em { font-style: normal; color: #8b3a1a; font-weight: 700; }
+.bar-sku.is-low { outline: 2px solid #c45c26; }
+
+.bar-ticket {
+  background: #1c1410;
+  color: #f6efe6;
+  border-radius: 16px;
+  padding: 0.9rem;
+  display: grid;
+  gap: 0.7rem;
+}
+.bar-ticket h3 { margin: 0; font-size: 1.05rem; }
+.bar-ticket table { width: 100%; border-collapse: collapse; font-size: 0.86rem; }
+.bar-ticket th, .bar-ticket td { padding: 0.35rem 0.2rem; border-bottom: 1px solid #3a2b22; text-align: left; }
+.bar-ticket .bar-tot { display: flex; justify-content: space-between; font-weight: 700; }
+.bar-serves { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+.bar-serves button, .bar-pay button {
+  border: 1px solid #6b4a33;
+  background: #2a1c15;
+  color: #f6efe6;
+  border-radius: 8px;
+  padding: 0.4rem 0.6rem;
+  cursor: pointer;
+}
+.bar-serves button.is-on, .bar-pay button.is-on { background: #c45c26; border-color: #c45c26; }
+.bar-tables {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+  gap: 0.55rem;
+}
+.bar-table {
+  border: 1px solid #e3d5c3;
+  border-radius: 12px;
+  padding: 0.7rem;
+  background: #fff;
+  text-align: left;
+  cursor: pointer;
+  min-height: 5.4rem;
+}
+.bar-table.is-busy { background: #fff1d6; border-color: #c45c26; }
+.bar-table.is-on { outline: 2px solid #8b3a1a; }
+.bar-badge { display: inline-block; border-radius: 999px; padding: 0.1rem 0.45rem; font-size: 0.72rem; background: #efe3d4; }
+.bar-badge.warn { background: #f3c6a0; }
+.bar-kpi .report-card { cursor: pointer; }
