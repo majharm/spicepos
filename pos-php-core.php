@@ -618,6 +618,7 @@ function pos_ensure_business_columns() {
     "account_manager_id" => "VARCHAR(255) NULL",
     "dsa_code" => "VARCHAR(32) NULL",
     "bar_enabled" => "TINYINT(1) NOT NULL DEFAULT 0",
+    "resort_enabled" => "TINYINT(1) NOT NULL DEFAULT 0",
     "created_at" => "TIMESTAMP(3) NULL",
     "updated_at" => "TIMESTAMP(3) NULL",
   ]);
@@ -723,9 +724,11 @@ function pos_is_apparel_shop($biz) {
 function pos_shop_kind($biz) {
   $type = strtolower(trim((string) ($biz["business_type"] ?? "")));
   if ($type === "restaurant" || $type === "cafe" || $type === "bakery" || $type === "bar & lounge") return "restaurant";
+  if ($type === "resort" || $type === "resort & restaurant" || $type === "resort and restaurant") return "restaurant";
   if ($type === "bar" || $type === "pub") return "bar";
   $cat = strtolower(trim((string) ($biz["category"] ?? "")));
   if ($cat === "bar & lounge" || $cat === "food & beverage") return "restaurant";
+  if ($cat === "resort & restaurant with room booking" || $cat === "resort & restaurant" || $cat === "resort") return "restaurant";
   if ($type === "printing business" || $type === "printing") return "printing";
   if ($type === "gym" || $type === "gym & fitness center" || $type === "fitness") return "gym";
   if (pos_is_footwear_shop($biz)) return "footwear";
@@ -766,6 +769,16 @@ function pos_is_bar_shop($biz) {
   if ($cat === "bar & lounge" || $cat === "bar" || $cat === "liquor" || $type === "bar & lounge") return true;
   if ($type === "restaurant" || $type === "cafe" || $type === "bakery") return false;
   return pos_shop_kind($biz) === "bar";
+}
+
+function pos_is_resort_shop($biz) {
+  $flag = $biz["resort_enabled"] ?? 0;
+  if ($flag === 1 || $flag === "1" || $flag === true) return true;
+  $type = strtolower(trim((string) ($biz["business_type"] ?? "")));
+  $cat = strtolower(trim((string) ($biz["category"] ?? "")));
+  if ($type === "resort" || $type === "resort & restaurant" || $type === "resort and restaurant") return true;
+  if ($cat === "resort & restaurant with room booking" || $cat === "resort & restaurant" || $cat === "resort") return true;
+  return false;
 }
 
 function pos_tax_code_label($biz) {
@@ -1245,6 +1258,7 @@ function pos_staff_me_payload($staff) {
       "category" => $staff["business"]["category"] ?? null,
       "business_type" => $staff["business"]["business_type"] ?? null,
       "bar_enabled" => (int) ($staff["business"]["bar_enabled"] ?? 0),
+      "resort_enabled" => (int) ($staff["business"]["resort_enabled"] ?? 0),
       "plan_id" => $staff["business"]["plan_id"] ?? null,
       "subscription_expires_at" => $staff["business"]["subscription_expires_at"] ?? null,
     ],
@@ -1256,7 +1270,7 @@ function pos_staff_me_payload($staff) {
 }
 
 function pos_known_roles() {
-  return ["business_admin", "branch_manager", "manager", "cashier", "captain", "kitchen", "stock_manager", "accountant", "staff", "bartender"];
+  return ["business_admin", "branch_manager", "manager", "cashier", "captain", "kitchen", "stock_manager", "accountant", "staff", "bartender", "receptionist", "reservation_executive", "housekeeping", "maintenance", "property_manager", "resort_owner", "restaurant_manager", "restaurant_staff"];
 }
 
 function pos_default_perms($role) {
@@ -1264,10 +1278,10 @@ function pos_default_perms($role) {
     "dashboard" => true, "counter" => true, "items" => true, "customers" => true, "packs" => true,
     "orders" => true, "purchases" => true, "suppliers" => true, "stock" => true, "staff" => true,
     "branches" => true, "devices" => true, "reports" => true, "growth" => true, "accounts" => true, "settings" => true,
-    "support" => true, "discount" => true, "loyalty" => true, "offers" => true, "damage" => true, "kot" => true,
+    "support" => true, "discount" => true, "loyalty" => true, "offers" => true, "damage" => true, "kot" => true, "rooms" => true,
   ];
-  if ($role === "business_admin") return $all;
-  if ($role === "branch_manager" || $role === "manager") {
+  if ($role === "business_admin" || $role === "resort_owner") return $all;
+  if ($role === "branch_manager" || $role === "manager" || $role === "property_manager") {
     return array_merge($all, [
       "staff" => $role === "branch_manager",
       "settings" => $role === "branch_manager",
@@ -1276,7 +1290,16 @@ function pos_default_perms($role) {
     ]);
   }
   if ($role === "cashier") {
-    return ["dashboard" => true, "counter" => true, "customers" => true, "orders" => true, "accounts" => true, "support" => true, "discount" => true, "loyalty" => true, "offers" => true, "kot" => true];
+    return ["dashboard" => true, "counter" => true, "customers" => true, "orders" => true, "accounts" => true, "support" => true, "discount" => true, "loyalty" => true, "offers" => true, "kot" => true, "rooms" => true];
+  }
+  if ($role === "receptionist" || $role === "reservation_executive") {
+    return ["dashboard" => true, "counter" => true, "customers" => true, "orders" => true, "rooms" => true, "support" => true, "kot" => true];
+  }
+  if ($role === "housekeeping" || $role === "maintenance") {
+    return ["dashboard" => true, "rooms" => true, "support" => true];
+  }
+  if ($role === "restaurant_manager" || $role === "restaurant_staff") {
+    return ["dashboard" => true, "counter" => true, "kot" => true, "customers" => true, "orders" => true, "support" => true];
   }
   if ($role === "bartender") {
     return ["dashboard" => true, "counter" => true, "customers" => true, "orders" => true, "support" => true];
@@ -2439,6 +2462,15 @@ function pos_normalize_bar_enabled($val, $type = "", $category = "") {
   return 0;
 }
 
+function pos_normalize_resort_enabled($val, $type = "", $category = "") {
+  $t = strtolower(trim((string) $type));
+  $c = strtolower(trim((string) $category));
+  if ($t === "resort" || $t === "resort & restaurant" || $t === "resort and restaurant") return 1;
+  if ($c === "resort & restaurant with room booking" || $c === "resort & restaurant" || $c === "resort") return 1;
+  if ($val === true || $val === 1 || $val === "1" || $val === "on" || $val === "true" || $val === "yes") return 1;
+  return 0;
+}
+
 function pos_validate_signup($raw, $requireAdmin = true) {
   $b = [
     "name" => pos_pick($raw, "name", "businessName"),
@@ -2463,6 +2495,7 @@ function pos_validate_signup($raw, $requireAdmin = true) {
     "account_manager_id" => pos_pick($raw, "account_manager_id"),
     "dsa_code" => pos_pick($raw, "dsa_code", "dsaCode"),
     "bar_enabled" => pos_pick($raw, "bar_enabled", "barEnabled"),
+    "resort_enabled" => pos_pick($raw, "resort_enabled", "resortEnabled"),
   ];
   $required = ["name", "business_type", "category", "owner_name", "mobile", "email", "address", "city", "state", "pin_code"];
   if ($requireAdmin) {
@@ -2517,6 +2550,7 @@ function pos_validate_signup($raw, $requireAdmin = true) {
     "account_manager_id" => trim((string) ($b["account_manager_id"] ?? "")),
     "dsa_code" => pos_normalize_dsa_code($b["dsa_code"] ?? ""),
     "bar_enabled" => pos_normalize_bar_enabled($b["bar_enabled"] ?? 0, $b["business_type"] ?? "", $b["category"] ?? ""),
+    "resort_enabled" => pos_normalize_resort_enabled($b["resort_enabled"] ?? 0, $b["business_type"] ?? "", $b["category"] ?? ""),
   ];
 }
 
@@ -2549,12 +2583,12 @@ function pos_register_business($raw, $yearly = false) {
   pos_q(
     "INSERT INTO businesses (
        id, code, name, status, owner_name, mobile, email, address, gstin,
-       business_type, plan_id, subscription_expires_at, logo_url, category, pan, city, state, pin_code, dsa_code, bar_enabled
-     ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-    "sssssssssssssssssssi",
+       business_type, plan_id, subscription_expires_at, logo_url, category, pan, city, state, pin_code, dsa_code, bar_enabled, resort_enabled
+     ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+    "sssssssssssssssssssii",
     [
       $id, $code, $shop, $b["status"] ?: "active", $b["owner_name"], $b["mobile"], $b["email"], $full, $b["gstin"],
-      $b["business_type"], $planId, $expiry, $b["logo_url"], $b["category"], $b["pan"],       $b["city"], $b["state"], $b["pin_code"], $b["dsa_code"], $b["bar_enabled"],
+      $b["business_type"], $planId, $expiry, $b["logo_url"], $b["category"], $b["pan"],       $b["city"], $b["state"], $b["pin_code"], $b["dsa_code"], $b["bar_enabled"], $b["resort_enabled"],
     ]
   );
   $amId = trim((string) ($b["account_manager_id"] ?? ""));
@@ -2629,12 +2663,12 @@ function pos_update_business($id, $raw) {
   }
   pos_q(
     "UPDATE businesses SET name=?, owner_name=?, mobile=?, email=?, address=?, gstin=?, business_type=?,
-       status=?, plan_id=?, subscription_expires_at=?, logo_url=?, category=?, pan=?, city=?, state=?, pin_code=?, account_manager_id=?, dsa_code=?, bar_enabled=?
+       status=?, plan_id=?, subscription_expires_at=?, logo_url=?, category=?, pan=?, city=?, state=?, pin_code=?, account_manager_id=?, dsa_code=?, bar_enabled=?, resort_enabled=?
      WHERE id=?",
-    "ssssssssssssssssssis",
+    "ssssssssssssssssssiis",
     [
       $b["name"], $b["owner_name"], $b["mobile"], $b["email"], $full, $b["gstin"], $b["business_type"],
-      $b["status"], $planId, $expiry, $logo, $b["category"], $b["pan"], $b["city"], $b["state"], $b["pin_code"], $amId === null ? "" : $amId, $b["dsa_code"], $b["bar_enabled"], $id,
+      $b["status"], $planId, $expiry, $logo, $b["category"], $b["pan"], $b["city"], $b["state"], $b["pin_code"], $amId === null ? "" : $amId, $b["dsa_code"], $b["bar_enabled"], $b["resort_enabled"], $id,
     ]
   );
   try {
@@ -2813,6 +2847,10 @@ function pos_php_dispatch($path, $method, $rawBody) {
     if (strpos($path, "gym/public/") === 0 || strpos($path, "gym/public") === 0) {
       require_once __DIR__ . "/pos-gym.php";
       if (function_exists("pos_gym_public_dispatch") && pos_gym_public_dispatch($path, $method, $body)) return;
+    }
+    if (strpos($path, "resort/public/") === 0 || strpos($path, "resort/public") === 0) {
+      require_once __DIR__ . "/pos-resort.php";
+      if (function_exists("pos_resort_public_dispatch") && pos_resort_public_dispatch($path, $method, $body)) return;
     }
     if (strpos($path, "analytics/") === 0) {
       require_once __DIR__ . "/pos-analytics.php";
@@ -3020,6 +3058,7 @@ function pos_php_dispatch($path, $method, $rawBody) {
           "category" => $business["category"] ?? null,
           "business_type" => $business["business_type"] ?? null,
           "bar_enabled" => (int) ($business["bar_enabled"] ?? 0),
+          "resort_enabled" => (int) ($business["resort_enabled"] ?? 0),
           "subscription_expires_at" => $business["subscription_expires_at"] ?? null,
         ],
       ]);
@@ -3904,6 +3943,12 @@ function pos_php_dispatch($path, $method, $rawBody) {
           if (is_file(__DIR__ . "/pos-bar.php")) {
             require_once __DIR__ . "/pos-bar.php";
             if (function_exists("pos_bar_staff_dispatch") && pos_bar_staff_dispatch($path, $method, $body, $bid, $auth)) {
+              return;
+            }
+          }
+          if (is_file(__DIR__ . "/pos-resort.php")) {
+            require_once __DIR__ . "/pos-resort.php";
+            if (function_exists("pos_resort_staff_dispatch") && pos_resort_staff_dispatch($path, $method, $body, $bid, $auth)) {
               return;
             }
           }

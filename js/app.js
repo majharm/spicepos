@@ -189,6 +189,10 @@ function isBarShop() {
   return Boolean(globalThis.POSBar?.isBarShop?.(state.businessMeta) || globalThis.POSFootwear?.isBarShop?.(state.businessMeta) || globalThis.POSFootwear?.shopKind?.(state.businessMeta) === "bar" || Number(state.businessMeta?.bar_enabled) === 1);
 }
 
+function isResortShop() {
+  return Boolean(globalThis.POSResort?.isResortShop?.(state.businessMeta) || globalThis.POSFootwear?.isResortShop?.(state.businessMeta) || Number(state.businessMeta?.resort_enabled) === 1);
+}
+
 function isClassicBillShop() {
   return isPharmacyShop() || isApparelShop();
 }
@@ -425,6 +429,7 @@ function applyFootwearMode() {
   document.body.classList.toggle("printing-mode", isPrintShop());
   document.body.classList.toggle("gym-mode", isGymShop());
   document.body.classList.toggle("bar-mode", isBarShop());
+  document.body.classList.toggle("resort-mode", isResortShop());
   document.querySelectorAll(".footwear-only").forEach((el) => {
     el.hidden = !on;
   });
@@ -456,6 +461,10 @@ function applyFootwearMode() {
   document.querySelectorAll(".bar-only").forEach((el) => {
     if (el.classList.contains("nav-btn")) return;
     el.hidden = !isBarShop();
+  });
+  document.querySelectorAll(".resort-only").forEach((el) => {
+    if (el.classList.contains("nav-btn")) return;
+    el.hidden = !isResortShop();
   });
   fillPaySelects();
   document.querySelectorAll(".classic-bill-only").forEach((el) => {
@@ -2258,6 +2267,7 @@ function paintStaffRoleOptions() {
   if (!sel) return;
   const cafe = isRestaurantShop();
   const bar = isBarShop();
+  const resort = isResortShop();
   const current = sel.value;
   sel.querySelectorAll('option[value="captain"], option[value="kitchen"]').forEach((opt) => {
     const keep = cafe || current === opt.value;
@@ -2266,6 +2276,11 @@ function paintStaffRoleOptions() {
   });
   sel.querySelectorAll('option[value="bartender"]').forEach((opt) => {
     const keep = bar || current === opt.value;
+    opt.hidden = !keep;
+    opt.disabled = !keep;
+  });
+  sel.querySelectorAll('option[value="receptionist"], option[value="reservation_executive"], option[value="housekeeping"], option[value="maintenance"], option[value="property_manager"]').forEach((opt) => {
+    const keep = resort || current === opt.value;
     opt.hidden = !keep;
     opt.disabled = !keep;
   });
@@ -2282,6 +2297,7 @@ function landingView() {
   if (isRestaurantShop() && role === "kitchen" && can("kot")) return "kot";
   if (isRestaurantShop() && role === "captain" && can("counter")) return "counter";
   if (isBarShop() && role === "bartender" && can("counter")) return "bar-counter";
+  if (isResortShop() && (role === "receptionist" || role === "reservation_executive" || role === "housekeeping") && (can("rooms") || can("dashboard"))) return "resort-desk";
   if (fastModeOn() && can("counter")) return "counter";
   if (can("dashboard")) return "dashboard";
   if (can("counter")) return "counter";
@@ -2366,6 +2382,12 @@ function applyNav() {
       "bar-stock": "stock",
       "bar-reports": "reports",
       "bar-settings": "settings",
+      "resort-board": "dashboard",
+      "resort-rooms": "dashboard",
+      "resort-bookings": "dashboard",
+      "resort-desk": "dashboard",
+      "resort-housekeeping": "dashboard",
+      "resort-settings": "settings",
     };
     btn.hidden = map[view] ? !can(map[view]) : false;
     if (view === "growth") btn.hidden = !(can("growth") || can("reports"));
@@ -2380,6 +2402,7 @@ function applyNav() {
     if ((view === "print-board" || view === "print-orders" || view === "print-production" || view === "print-settings") && !isPrintShop()) btn.hidden = true;
     if ((view === "gym-board" || view === "gym-members" || view === "gym-attendance" || view === "gym-trainers" || view === "gym-plans") && !isGymShop()) btn.hidden = true;
     if ((view === "bar-board" || view === "bar-counter" || view === "bar-products" || view === "bar-tables" || view === "bar-stock" || view === "bar-reports" || view === "bar-settings") && !isBarShop()) btn.hidden = true;
+    if ((view === "resort-board" || view === "resort-rooms" || view === "resort-bookings" || view === "resort-desk" || view === "resort-housekeeping" || view === "resort-settings") && !isResortShop()) btn.hidden = true;
     if (view === "qr-orders" && isGymShop()) btn.hidden = true;
   });
   globalThis.POSBizHubUi?.paintIndustryNav?.();
@@ -2562,6 +2585,7 @@ function showView(name) {
     if (!viewStillFresh("dashboard")) loadDashboard();
     if (isGymShop()) globalThis.POSGymUi?.loadGymBoard?.();
     if (isBarShop()) globalThis.POSBarUi?.loadBarBoard?.();
+    if (isResortShop()) globalThis.POSResortUi?.loadResortBoard?.();
   }
   if (name === "hub-sales") globalThis.POSBizHubUi?.paintModuleDesk?.("hub-sales-tiles", "sales");
   if (name === "hub-purchases") globalThis.POSBizHubUi?.paintModuleDesk?.("hub-purchases-tiles", "purchases");
@@ -2619,6 +2643,13 @@ function showView(name) {
   if (name === "bar-stock") globalThis.POSBarUi?.loadStock?.();
   if (name === "bar-reports") globalThis.POSBarUi?.loadBarBoard?.();
   if (name === "bar-settings") globalThis.POSBarUi?.loadSettings?.();
+  if (name === "resort-board") globalThis.POSResortUi?.loadResortBoard?.();
+  if (name === "resort-rooms") globalThis.POSResortUi?.loadRooms?.();
+  if (name === "resort-bookings") globalThis.POSResortUi?.loadBookings?.();
+  if (name === "resort-desk") globalThis.POSResortUi?.loadDesk?.();
+  if (name === "resort-housekeeping") globalThis.POSResortUi?.loadHousekeeping?.();
+  if (name === "resort-settings") globalThis.POSResortUi?.loadSettings?.();
+  if (name === "counter" && isResortShop()) globalThis.POSResortUi?.loadInhouseFolio?.();
   paintDeskState(name);
   if (name === "stock") loadStock();
   if (name === "counter") {

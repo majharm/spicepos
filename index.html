@@ -9,6 +9,7 @@
     <link rel="stylesheet" href="./css/pos.css?v=20261006fast1" />
     <link rel="stylesheet" href="./css/saas.css?v=20260905deploy136" />
     <link rel="stylesheet" href="./css/bar.css?v=20261011bar2" />
+    <link rel="stylesheet" href="./css/resort.css?v=20261011resort1" />
   </head>
   <body class="fast-mode">
     <div class="app" id="app">
@@ -94,6 +95,12 @@
             <button class="nav-btn bar-only" type="button" data-view="bar-stock" data-hub-kind="bar"><span class="nav-icon" aria-hidden="true">☰</span>Bar stock</button>
             <button class="nav-btn bar-only" type="button" data-view="bar-reports" data-hub-kind="bar"><span class="nav-icon" aria-hidden="true">▦</span>Bar reports</button>
             <button class="nav-btn bar-only" type="button" data-view="bar-settings" data-hub-kind="bar"><span class="nav-icon" aria-hidden="true">⚙</span>Bar settings</button>
+            <button class="nav-btn resort-only" type="button" data-view="resort-board" data-hub-kind="resort"><span class="nav-icon" aria-hidden="true">▣</span>Resort desk</button>
+            <button class="nav-btn resort-only" type="button" data-view="resort-rooms" data-hub-kind="resort"><span class="nav-icon" aria-hidden="true">▤</span>Rooms</button>
+            <button class="nav-btn resort-only" type="button" data-view="resort-bookings" data-hub-kind="resort"><span class="nav-icon" aria-hidden="true">▦</span>Bookings</button>
+            <button class="nav-btn resort-only" type="button" data-view="resort-desk" data-hub-kind="resort"><span class="nav-icon" aria-hidden="true">◉</span>Front desk</button>
+            <button class="nav-btn resort-only" type="button" data-view="resort-housekeeping" data-hub-kind="resort"><span class="nav-icon" aria-hidden="true">☰</span>Housekeeping</button>
+            <button class="nav-btn resort-only" type="button" data-view="resort-settings" data-hub-kind="resort"><span class="nav-icon" aria-hidden="true">⚙</span>Resort settings</button>
           </div>
           <div class="nav-group">
             <p class="nav-group-label" data-i18n="nav.admin">Admin</p>
@@ -292,6 +299,12 @@
           <div class="workspace">
             <div class="catalog-pane">
               <div class="table-board" id="table-board" hidden></div>
+              <div id="counter-resort-box" class="resort-only resort-folio-box" hidden>
+                <label>Post restaurant bill to room folio
+                  <select id="counter-resort-folio"></select>
+                </label>
+                <button type="button" class="btn" id="counter-resort-post">Add current bill to room</button>
+              </div>
               <div class="catalog-cats" id="catalog-cats" hidden role="tablist" aria-label="Item categories"></div>
               <div class="catalog" id="catalog"></div>
             </div>
@@ -1286,6 +1299,157 @@
             <div id="bar-settings-box"></div>
           </div>
         </section>
+        <section class="view view-finance resort-only" id="view-resort-board" hidden>
+          <div class="items-desk">
+            <header class="items-hero">
+              <div class="items-hero-copy">
+                <p class="items-kicker">Resort</p>
+                <h3>Resort desk</h3>
+                <p class="lede">Today's arrivals, departures, occupancy, and room revenue. Website availability uses the same live bookings.</p>
+              </div>
+              <a class="btn" id="resort-portal-link" href="./resort-book.html" target="_blank" rel="noopener">Online booking page</a>
+            </header>
+            <div class="hub-tile-grid" id="resort-board-kpis"></div>
+            <h4>Arrivals</h4>
+            <div class="table-wrap" id="resort-arrivals"></div>
+            <h4>Departures</h4>
+            <div class="table-wrap" id="resort-departures"></div>
+            <div class="hub-tile-grid" id="resort-report-list"></div>
+            <div class="table-wrap" id="resort-report-out"></div>
+          </div>
+        </section>
+        <section class="view view-finance resort-only" id="view-resort-rooms" hidden>
+          <div class="items-desk">
+            <header class="items-hero">
+              <div class="items-hero-copy">
+                <p class="items-kicker">Inventory</p>
+                <h3>Rooms</h3>
+                <p class="lede">Room numbers, categories, occupancy, rates, and physical status. Deactivating a room keeps historical bookings.</p>
+              </div>
+            </header>
+            <form id="resort-room-form" class="resort-form">
+              <input type="hidden" id="rr-id" />
+              <label>Room no <input id="rr-number" required /></label>
+              <label>Name <input id="rr-name" /></label>
+              <label>Category
+                <select id="rr-category">
+                  <option value="standard">Standard Room</option>
+                  <option value="deluxe">Deluxe Room</option>
+                  <option value="super_deluxe">Super Deluxe Room</option>
+                  <option value="premium">Premium Room</option>
+                  <option value="suite">Suite Room</option>
+                  <option value="family">Family Room</option>
+                  <option value="cottage">Cottage / Villa</option>
+                  <option value="dormitory">Dormitory or Group Accommodation</option>
+                </select>
+              </label>
+              <label>Rate <input id="rr-rate" type="number" min="0" /></label>
+              <label>Max adults <input id="rr-adults" type="number" min="1" value="2" /></label>
+              <label>Max children <input id="rr-children" type="number" min="0" value="1" /></label>
+              <label>Status
+                <select id="rr-status">
+                  <option value="available">Available</option>
+                  <option value="reserved">Reserved</option>
+                  <option value="occupied">Occupied</option>
+                  <option value="checkout_pending">Check-Out Pending</option>
+                  <option value="cleaning">Cleaning</option>
+                  <option value="maintenance">Maintenance</option>
+                  <option value="blocked">Blocked</option>
+                </select>
+              </label>
+              <label><input type="checkbox" id="rr-active" checked /> Active</label>
+              <button class="btn primary" type="submit">Save room</button>
+            </form>
+            <p class="hint" id="resort-room-hint"></p>
+            <div id="resort-rooms-grid" class="resort-grid"></div>
+          </div>
+        </section>
+        <section class="view view-finance resort-only" id="view-resort-bookings" hidden>
+          <div class="items-desk">
+            <header class="items-hero">
+              <div class="items-hero-copy">
+                <p class="items-kicker">Reservations</p>
+                <h3>Bookings</h3>
+                <p class="lede">Walk-in, website, and pending reservations. Date changes re-check availability before they save.</p>
+              </div>
+            </header>
+            <label>Filter
+              <select id="resort-book-filter">
+                <option value="all">All bookings</option>
+                <option value="arrivals">Today's arrivals</option>
+                <option value="departures">Today's departures</option>
+                <option value="in_house">In-house</option>
+                <option value="upcoming">Upcoming</option>
+                <option value="pending">Pending confirmations</option>
+                <option value="pending_payment">Pending payments</option>
+                <option value="cancelled">Cancelled</option>
+                <option value="no_show">No-show</option>
+              </select>
+            </label>
+            <form id="resort-walkin-form" class="resort-form">
+              <label>Room id <input id="rb-room" required /></label>
+              <label>Check-in <input id="rb-in" type="date" required /></label>
+              <label>Check-out <input id="rb-out" type="date" required /></label>
+              <label>Adults <input id="rb-adults" type="number" value="2" /></label>
+              <label>Children <input id="rb-children" type="number" value="0" /></label>
+              <label>Guest <input id="rb-guest" required /></label>
+              <label>Mobile <input id="rb-mobile" required /></label>
+              <label>Email <input id="rb-email" type="email" /></label>
+              <label>Advance <input id="rb-advance" type="number" min="0" value="0" /></label>
+              <label>Payment
+                <select id="rb-pay">
+                  <option value="cash">Cash</option>
+                  <option value="upi">UPI</option>
+                  <option value="card">Card</option>
+                  <option value="pay_on_arrival">Pay on arrival</option>
+                </select>
+              </label>
+              <button class="btn primary" type="submit">Create walk-in booking</button>
+            </form>
+            <p class="hint" id="resort-book-hint"></p>
+            <div class="table-wrap" id="resort-bookings-table"></div>
+          </div>
+        </section>
+        <section class="view view-finance resort-only" id="view-resort-desk" hidden>
+          <div class="items-desk">
+            <header class="items-hero">
+              <div class="items-hero-copy">
+                <p class="items-kicker">Front desk</p>
+                <h3>Check-in &amp; check-out</h3>
+                <p class="lede">Assign rooms, occupy them on check-in, and send rooms to cleaning after check-out. Future bookings stay blocked.</p>
+              </div>
+            </header>
+            <p class="hint" id="resort-desk-hint"></p>
+            <h4>Arrivals</h4>
+            <div id="resort-desk-arrivals" class="resort-grid"></div>
+            <h4>In-house</h4>
+            <div id="resort-desk-house" class="resort-grid"></div>
+          </div>
+        </section>
+        <section class="view view-finance resort-only" id="view-resort-housekeeping" hidden>
+          <div class="items-desk">
+            <header class="items-hero">
+              <div class="items-hero-copy">
+                <p class="items-kicker">Housekeeping</p>
+                <h3>Room readiness</h3>
+                <p class="lede">Cleaning, inspection, and maintenance. A dirty or blocked room is not offered for conflicting dates.</p>
+              </div>
+            </header>
+            <div id="resort-hk-grid" class="resort-grid"></div>
+          </div>
+        </section>
+        <section class="view view-finance resort-only" id="view-resort-settings" hidden>
+          <div class="items-desk">
+            <header class="items-hero">
+              <div class="items-hero-copy">
+                <p class="items-kicker">Property</p>
+                <h3>Resort settings</h3>
+                <p class="lede">Property name, check-in times, hold duration, taxes, and booking policy for this authorized shop only.</p>
+              </div>
+            </header>
+            <div id="resort-settings-box"></div>
+          </div>
+        </section>
         <section class="view" id="view-orders" hidden>
           <h2 class="visually-hidden">Invoices</h2>
           <div class="items-desk invoices-desk">
@@ -1855,6 +2019,11 @@
                 <option value="captain">Captain</option>
                 <option value="kitchen">Kitchen</option>
                 <option value="bartender">Bartender</option>
+                <option value="receptionist">Receptionist</option>
+                <option value="reservation_executive">Reservation Executive</option>
+                <option value="housekeeping">Housekeeping</option>
+                <option value="maintenance">Maintenance</option>
+                <option value="property_manager">Property Manager</option>
                 <option value="manager">Manager</option>
                 <option value="branch_manager">Branch Manager</option>
                 <option value="stock_manager">Stock Manager</option>
@@ -2726,7 +2895,7 @@
     <script src="./js/gst-supply.js?v=20260905deploy136" defer></script>
     <script src="./js/pos-api.js?v=20261006login1" defer></script>
     <script src="./js/units.js?v=20260919unit1" defer></script>
-    <script src="./js/footwear.js?v=20261011lounge1" defer></script>
+    <script src="./js/footwear.js?v=20261011resort1" defer></script>
     <script src="./js/restaurant.js?v=20261011kot1" defer></script>
     <script src="./js/discount.js?v=20260905deploy136" defer></script>
     <script src="./js/offers.js?v=20260905deploy170" defer></script>
@@ -2751,6 +2920,8 @@
     <script src="./js/gym-ui.js?v=20261008gym5" defer></script>
     <script src="./js/bar.js?v=20261011lounge1" defer></script>
     <script src="./js/bar-ui.js?v=20261011bar2" defer></script>
+    <script src="./js/resort.js?v=20261011resort1" defer></script>
+    <script src="./js/resort-ui.js?v=20261011resort1" defer></script>
     <script src="./js/app.js?v=20261011kot1" defer></script>
     <script src="./js/growth.js?v=20260905deploy145" defer></script>
     <script src="./js/offers-ui.js?v=20260919off1" defer></script>

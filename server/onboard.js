@@ -51,6 +51,15 @@ function normalizeBarEnabled(val, type, category) {
   return 0;
 }
 
+function normalizeResortEnabled(val, type, category) {
+  const t = String(type || "").toLowerCase().trim();
+  const c = String(category || "").toLowerCase().trim();
+  if (t === "resort" || t === "resort & restaurant" || t === "resort and restaurant") return 1;
+  if (c === "resort & restaurant with room booking" || c === "resort & restaurant" || c === "resort") return 1;
+  if (val === true || val === 1 || val === "1" || val === "on" || val === "true" || val === "yes") return 1;
+  return 0;
+}
+
 export function validateSignup(body, opts = {}) {
   const requireAdmin = opts.requireAdmin !== false;
   const raw = body || {};
@@ -75,6 +84,7 @@ export function validateSignup(body, opts = {}) {
     account_manager_id: pick(raw, "account_manager_id"),
     dsa_code: pick(raw, "dsa_code", "dsaCode"),
     bar_enabled: pick(raw, "bar_enabled", "barEnabled"),
+    resort_enabled: pick(raw, "resort_enabled", "resortEnabled"),
     subscription_expires_at: normalizeDateOnly(pick(raw, "subscription_expires_at")),
     status: pick(raw, "status"),
   };
@@ -130,6 +140,7 @@ export function validateSignup(body, opts = {}) {
     account_manager_id: String(b.account_manager_id || "").trim(),
     dsa_code: normalizeDsaCode(b.dsa_code),
     bar_enabled: normalizeBarEnabled(b.bar_enabled, b.business_type, b.category),
+    resort_enabled: normalizeResortEnabled(b.resort_enabled, b.business_type, b.category),
   };
 }
 
@@ -164,8 +175,8 @@ export async function registerBusiness(raw, opts = {}) {
       `INSERT INTO businesses (
          id, code, name, status, owner_name, mobile, email, address, gstin,
          business_type, plan_id, subscription_expires_at, logo_url,
-         category, pan, city, state, pin_code, account_manager_id, dsa_code, bar_enabled
-       ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+         category, pan, city, state, pin_code, account_manager_id, dsa_code, bar_enabled, resort_enabled
+       ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       [
         id,
         code,
@@ -188,6 +199,7 @@ export async function registerBusiness(raw, opts = {}) {
         amId,
         b.dsa_code,
         b.bar_enabled,
+        b.resort_enabled,
       ],
     );
     if (!expiry) {
@@ -304,7 +316,7 @@ export async function updateBusiness(id, raw) {
     `UPDATE businesses SET
        name=?, owner_name=?, mobile=?, email=?, address=?, gstin=?, business_type=?,
        status=?, plan_id=?, subscription_expires_at=?, logo_url=?,
-       category=?, pan=?, city=?, state=?, pin_code=?, account_manager_id=?, dsa_code=?, bar_enabled=?
+       category=?, pan=?, city=?, state=?, pin_code=?, account_manager_id=?, dsa_code=?, bar_enabled=?, resort_enabled=?
      WHERE id=?`,
     [
       b.name,
@@ -326,6 +338,7 @@ export async function updateBusiness(id, raw) {
       amId,
       b.dsa_code,
       b.bar_enabled,
+      b.resort_enabled,
       id,
     ],
   );

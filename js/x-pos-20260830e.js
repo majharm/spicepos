@@ -124,6 +124,7 @@
     if (t === "Footwear") return ["Footwear"];
     if (t === "Services") return ["Services", "Salon / spa", "Repair", "Consultancy"];
     if (t === "Printing Business") return ["Flex & Printing"];
+    if (t === "Resort") return ["Resort & Restaurant with Room Booking"];
     return null;
   }
 

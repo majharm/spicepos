@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Book a room · ATAV Resort</title>
+    <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="./css/pos.css?v=20261006fast1" />
+    <link rel="stylesheet" href="./css/resort.css?v=20261011resort1" />
+  </head>
+  <body>
+    <main class="resort-book">
+      <header>
+        <p class="items-kicker">Online booking</p>
+        <h1 id="book-title">Resort booking</h1>
+        <p id="book-sub">Choose dates to see rooms that are actually available.</p>
+      </header>
+      <form id="book-search" class="resort-form">
+        <label>Check-in <input id="book-in" type="date" required /></label>
+        <label>Check-out <input id="book-out" type="date" required /></label>
+        <label>Adults <input id="book-adults" type="number" min="1" value="2" /></label>
+        <label>Children <input id="book-children" type="number" min="0" value="0" /></label>
+        <label>Rooms <input id="book-qty" type="number" min="1" value="1" /></label>
+        <button class="btn primary" type="submit">Search rooms</button>
+      </form>
+      <p class="hint" id="book-hint"></p>
+      <div id="book-rooms" class="resort-room-list"></div>
+      <form id="book-guest" class="resort-form" hidden>
+        <h2 class="full">Guest details</h2>
+        <p class="full" id="book-review"></p>
+        <label>Lead guest name <input id="guest-name" required /></label>
+        <label>Mobile <input id="guest-mobile" required /></label>
+        <label>Email <input id="guest-email" type="email" /></label>
+        <label>Payment
+          <select id="guest-pay">
+            <option value="upi">UPI</option>
+            <option value="card">Card</option>
+            <option value="online">Online</option>
+            <option value="pay_on_arrival">Pay on arrival</option>
+          </select>
+        </label>
+        <button class="btn primary full" type="submit">Hold room and confirm</button>
+      </form>
+      <div id="book-done" hidden></div>
+      <section>
+        <h2>Find a booking</h2>
+        <form id="lookup-form" class="resort-form">
+          <label class="full">Booking ID <input id="lookup-ref" placeholder="RSV-…" /></label>
+          <button class="btn" type="submit">View</button>
+        </form>
+        <div id="lookup-out"></div>
+      </section>
+    </main>
+    <script src="./js/pos-api.js?v=20261006login1" defer></script>
+    <script src="./js/resort.js?v=20261011resort1" defer></script>
+    <script src="./js/resort-book.js?v=20261011resort1" defer></script>
+  </body>
+</html>

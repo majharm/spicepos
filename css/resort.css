@@ -1,0 +1,73 @@
+/* Resort desk — compact, mobile-first, keeps restaurant POS intact. */
+.resort-mode .resort-only { display: block; }
+body:not(.resort-mode) .resort-only:not(.nav-btn) { display: none; }
+
+.resort-desk { display: grid; gap: 1rem; }
+.resort-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
+  gap: 0.7rem;
+}
+.resort-card {
+  text-align: left;
+  border: 1px solid var(--line, #d7c7b0);
+  background: #fffdf8;
+  border-radius: 12px;
+  padding: 0.75rem;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+}
+.resort-card strong { display: block; margin-top: 0.2rem; }
+.resort-card.is-on,
+.resort-card:hover { border-color: #1f4d3a; background: #eef6f1; }
+.resort-badge {
+  display: inline-block;
+  border-radius: 999px;
+  padding: 0.1rem 0.5rem;
+  font-size: 0.75rem;
+  background: #efe4d2;
+}
+.resort-badge.status-available,
+.resort-badge.status-ready { background: #d9efe3; color: #14532d; }
+.resort-badge.status-occupied,
+.resort-badge.status-checked_in { background: #fde7d4; color: #9a3412; }
+.resort-badge.status-reserved,
+.resort-badge.status-confirmed { background: #dbeafe; color: #1e3a8a; }
+.resort-badge.status-cleaning,
+.resort-badge.status-checkout_pending { background: #fef3c7; color: #92400e; }
+.resort-badge.status-maintenance,
+.resort-badge.status-blocked { background: #fee2e2; color: #991b1b; }
+.resort-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 0.6rem;
+  align-items: end;
+}
+.resort-form .full { grid-column: 1 / -1; }
+.resort-book {
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 1.2rem;
+}
+.resort-book header { margin-bottom: 1rem; }
+.resort-room-list {
+  display: grid;
+  gap: 0.8rem;
+}
+.resort-room-offer {
+  border: 1px solid #e4d6c4;
+  border-radius: 14px;
+  padding: 1rem;
+  background: #fff;
+}
+.resort-folio-box {
+  margin: 0.5rem 0;
+  padding: 0.6rem 0.75rem;
+  border: 1px dashed #c9b8a2;
+  border-radius: 10px;
+  background: #fffaf3;
+}
+@media (max-width: 720px) {
+  .resort-form { grid-template-columns: 1fr; }
+}

@@ -22,6 +22,7 @@ export const MODULES = [
   "damage",
   "kot",
   "bookings",
+  "rooms",
 ];
 
 export const ROLES = [
@@ -35,13 +36,21 @@ export const ROLES = [
   "accountant",
   "staff",
   "bartender",
+  "receptionist",
+  "reservation_executive",
+  "housekeeping",
+  "maintenance",
+  "property_manager",
+  "resort_owner",
+  "restaurant_manager",
+  "restaurant_staff",
 ];
 
 const ALL = Object.fromEntries(MODULES.map((m) => [m, true]));
 
 export function defaultPerms(role) {
-  if (role === "business_admin") return { ...ALL };
-  if (role === "branch_manager" || role === "manager") {
+  if (role === "business_admin" || role === "resort_owner") return { ...ALL };
+  if (role === "branch_manager" || role === "manager" || role === "property_manager") {
     return {
       ...ALL,
       staff: role === "branch_manager",
@@ -64,6 +73,31 @@ export function defaultPerms(role) {
       offers: true,
       kot: true,
       bookings: true,
+      rooms: true,
+    };
+  }
+  if (role === "receptionist" || role === "reservation_executive") {
+    return {
+      dashboard: true,
+      counter: true,
+      customers: true,
+      orders: true,
+      rooms: true,
+      kot: true,
+      support: true,
+    };
+  }
+  if (role === "housekeeping" || role === "maintenance") {
+    return { dashboard: true, rooms: true, support: true };
+  }
+  if (role === "restaurant_manager" || role === "restaurant_staff") {
+    return {
+      dashboard: true,
+      counter: true,
+      kot: true,
+      customers: true,
+      orders: true,
+      support: true,
     };
   }
   if (role === "bartender") {

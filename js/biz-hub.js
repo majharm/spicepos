@@ -13,6 +13,7 @@
     const kind = shopKind(biz);
     const extras = [];
     if (globalThis.POSBar?.isBarShop?.(biz) && kind !== "bar") extras.push("bar");
+    if (globalThis.POSResort?.isResortShop?.(biz) && kind !== "resort") extras.push("resort");
     return [kind, ...extras];
   }
 
@@ -158,6 +159,12 @@
     { id: "bar-stock", group: "industry", title: "Bar stock", view: "bar-stock", perm: "stock", kinds: ["bar"] },
     { id: "bar-reports", group: "industry", title: "Bar reports", view: "bar-reports", perm: "reports", kinds: ["bar"] },
     { id: "bar-settings", group: "industry", title: "Bar settings", view: "bar-settings", perm: "settings", kinds: ["bar"] },
+    { id: "resort-board", group: "industry", title: "Resort desk", view: "resort-board", perm: "dashboard", kinds: ["resort"] },
+    { id: "resort-rooms", group: "industry", title: "Rooms", view: "resort-rooms", perm: "dashboard", kinds: ["resort"] },
+    { id: "resort-bookings", group: "industry", title: "Room bookings", view: "resort-bookings", perm: "dashboard", kinds: ["resort"] },
+    { id: "resort-desk", group: "industry", title: "Front desk", view: "resort-desk", perm: "dashboard", kinds: ["resort"] },
+    { id: "resort-hk", group: "industry", title: "Housekeeping", view: "resort-housekeeping", perm: "dashboard", kinds: ["resort"] },
+    { id: "resort-settings", group: "industry", title: "Resort settings", view: "resort-settings", perm: "settings", kinds: ["resort"] },
   ];
 
   const GROUPS = [

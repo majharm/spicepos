@@ -54,9 +54,11 @@
   function shopKind(biz) {
     const type = String(biz?.business_type || "").toLowerCase().trim();
     if (type === "restaurant" || type === "cafe" || type === "bakery" || type === "bar & lounge") return "restaurant";
+    if (type === "resort" || type === "resort & restaurant" || type === "resort and restaurant") return "restaurant";
     if (type === "bar" || type === "pub") return "bar";
     const cat = String(biz?.category || "").toLowerCase().trim();
     if (cat === "bar & lounge" || cat === "food & beverage") return "restaurant";
+    if (cat === "resort & restaurant with room booking" || cat === "resort & restaurant" || cat === "resort") return "restaurant";
     if (type === "printing business" || type === "printing") return "printing";
     if (type === "gym" || type === "gym & fitness center" || type === "fitness") return "gym";
     if (isFootwearShop(biz)) return "footwear";
@@ -165,6 +167,11 @@
   function isBarShop(biz) {
     if (globalThis.POSBar?.isBarShop?.(biz)) return true;
     return shopKind(biz) === "bar";
+  }
+
+  function isResortShop(biz) {
+    if (globalThis.POSResort?.isResortShop?.(biz)) return true;
+    return Number(biz?.resort_enabled) === 1;
   }
 
   function taxCodeKind(biz) {
@@ -886,6 +893,7 @@
     isPrintShop,
     isGymShop,
     isBarShop,
+    isResortShop,
     taxCodeKind,
     taxCodeLabel,
     taxCodeFieldLabel,
