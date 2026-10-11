@@ -135,7 +135,7 @@ test("Every signup category gets its own item copy, not Whole Spices", () => {
     Footwear: "footwear",
     "Mobile & electronics": "electronics",
     "Food & beverage": "restaurant",
-    "Bar & Lounge": "bar",
+    "Bar & Lounge": "restaurant",
     Hardware: "hardware",
     Jewellery: "jewellery",
     Medical: "pharmacy",

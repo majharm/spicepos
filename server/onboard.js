@@ -42,9 +42,11 @@ function normalizeDsaCode(val) {
   return code || null;
 }
 
-function normalizeBarEnabled(val, type) {
+function normalizeBarEnabled(val, type, category) {
   const t = String(type || "").toLowerCase().trim();
-  if (t === "bar" || t === "pub" || t === "bar & lounge") return 1;
+  const c = String(category || "").toLowerCase().trim();
+  if (t === "bar" || t === "pub") return 1;
+  if (t === "bar & lounge" || c === "bar & lounge" || c === "bar" || c === "liquor") return 1;
   if (val === true || val === 1 || val === "1" || val === "on" || val === "true" || val === "yes") return 1;
   return 0;
 }
@@ -127,7 +129,7 @@ export function validateSignup(body, opts = {}) {
     status,
     account_manager_id: String(b.account_manager_id || "").trim(),
     dsa_code: normalizeDsaCode(b.dsa_code),
-    bar_enabled: normalizeBarEnabled(b.bar_enabled, b.business_type),
+    bar_enabled: normalizeBarEnabled(b.bar_enabled, b.business_type, b.category),
   };
 }
 

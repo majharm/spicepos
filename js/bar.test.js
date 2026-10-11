@@ -90,17 +90,19 @@ test("Stock movements, split/combine, hours, and license rules", () => {
 
 test("Bar is a shop kind; restaurants stay restaurant unless Master enables Bar", () => {
   assert.equal(F.shopKind({ business_type: "Bar" }), "bar");
-  assert.equal(F.shopKind({ business_type: "Bar & Lounge" }), "bar");
-  assert.equal(F.shopKind({ category: "Bar & Lounge" }), "bar");
+  assert.equal(F.shopKind({ business_type: "Bar & Lounge" }), "restaurant");
+  assert.equal(F.shopKind({ category: "Bar & Lounge" }), "restaurant");
   assert.equal(F.shopKind({ name: "The Oak Pub" }), "bar");
   assert.equal(F.shopKind({ name: "Juice Bar Express" }), "general");
   assert.equal(F.shopKind({ business_type: "Restaurant" }), "restaurant");
   assert.equal(F.shopKind({ business_type: "Restaurant", category: "Bar & Lounge" }), "restaurant");
   assert.equal(F.shopKind({ category: "Food & beverage" }), "restaurant");
+  assert.equal(F.isRestaurantShop({ category: "Bar & Lounge" }), true);
   assert.equal(F.isBarShop({ business_type: "Bar" }), true);
   assert.equal(B.isBarShop({ business_type: "Bar" }), true);
   assert.equal(B.isBarShop({ business_type: "Restaurant" }), false);
   assert.equal(B.isBarShop({ business_type: "Restaurant", bar_enabled: 1 }), true);
+  assert.equal(B.isBarShop({ business_type: "Restaurant", category: "Bar & Lounge" }), true);
   assert.equal(B.isBarShop({ business_type: "Restaurant", name: "Joe's Bar" }), false);
   assert.equal(F.isRestaurantShop({ business_type: "Restaurant", bar_enabled: 1 }), true);
   assert.equal(F.qrOrderingEnabled({ business_type: "Bar" }), true);
@@ -120,7 +122,7 @@ test("Bar POS, PHP, signup, Master Admin toggle, and hub are wired", () => {
   assert.match(index, /id="view-bar-tables"/);
   assert.match(index, /id="view-bar-stock"/);
   assert.match(index, /id="bar-settings-box"/);
-  assert.match(index, /js\/bar\.js\?v=20261011bar2/);
+  assert.match(index, /js\/bar\.js\?v=20261011lounge1/);
   assert.match(index, /js\/bar-ui\.js\?v=20261011bar2/);
   assert.match(index, /css\/bar\.css\?v=20261011bar2/);
   const ui = read("js/bar-ui.js");
@@ -141,10 +143,11 @@ test("Bar POS, PHP, signup, Master Admin toggle, and hub are wired", () => {
   assert.match(core, /pos_bar_staff_dispatch/);
   assert.match(core, /function pos_is_bar_shop/);
   assert.match(core, /bar_enabled/);
-  assert.match(read("js/login.js"), /Bar & Lounge/);
+  assert.match(read("js/login.js"), /Restaurant"\) return \["Food & beverage", "Bar & Lounge"\]/);
+  assert.match(read("js/x-pos-20260830e.js"), /Restaurant"\) return \["Food & beverage", "Bar & Lounge"\]/);
+  assert.match(read("js/master.js"), /Restaurant: \["Food & beverage", "Bar & Lounge"\]/);
   assert.match(read("login.html"), />Bar</);
   assert.match(read("login.html"), /Bar &amp; Lounge/);
-  assert.match(read("js/x-pos-20260830e.js"), /Bar & Lounge/);
   assert.match(read("js/biz-hub.js"), /bar-board/);
   assert.match(read("js/master.js"), /"Bar"/);
   assert.match(read("js/master.js"), /barEnabled/);
