@@ -3153,6 +3153,17 @@ function kotLinesForPrint(lines) {
   });
 }
 
+function sameKotLine(a, b) {
+  const R = restaurantApi();
+  const key = R?.kotLineKey;
+  if (key) return key(a) === key(b);
+  const idA = String(a?.itemId || a?.item_id || "");
+  const idB = String(b?.itemId || b?.item_id || "");
+  const nA = String(a?.notes || a?.special_instruction || "").trim();
+  const nB = String(b?.notes || b?.special_instruction || "").trim();
+  return idA === idB && nA === nB;
+}
+
 function resolveKitchenKot(opts = {}) {
   const R = restaurantApi();
   if (!R) throw new Error("Kitchen KOT is not available");
@@ -3162,7 +3173,7 @@ function resolveKitchenKot(opts = {}) {
   const pick = opts.full ? { kind: "reprint", lines: R.cartSnapshot(source) } : R.kotKind(source, opts.printed || state.kotPrinted);
   if (!pick.lines.length) throw new Error("Nothing new for kitchen");
   const named = kotLinesForPrint(pick.lines.map((line) => {
-    const live = source.find((row) => (row.itemId || row.item_id) === line.itemId) || line;
+    const live = source.find((row) => sameKotLine(row, line)) || line;
     return { ...live, ...line };
   }));
   return { R, tableNo, pick, named, notes: opts.notes || "" };
@@ -3190,7 +3201,13 @@ function printKitchenKot(opts = {}) {
   return resolved.pick;
 }
 
+let sendingKot = false;
 async function sendKitchenKot() {
+  if (sendingKot) return;
+  sendingKot = true;
+  const btn = $("btn-kot");
+  if (btn) btn.disabled = true;
+  try {
   ensureDiningTable();
   const resolved = resolveKitchenKot({ tableNo: state.activeTable, lines: state.cart, printed: state.kotPrinted });
   const data = await api("/api/kots", {
@@ -3231,6 +3248,10 @@ async function sendKitchenKot() {
       : "Kitchen ticket saved. Allow pop-ups to print the slip.",
     "ok",
   );
+  } finally {
+    sendingKot = false;
+    if (btn) btn.disabled = false;
+  }
 }
 
 function kotStatusLabel(status) {
@@ -3313,12 +3334,15 @@ function renderKotBoard() {
           const table = R?.displayTable?.(ticket.table_no) || ticket.table_no || "—";
           const when = ticket.created_at ? formatShopDateTime(ticket.created_at) : "";
           const kind = ticket.kind === "reprint" ? "Reprint" : "KOT";
-          const kotNo = ticket.kot_number || "";
+          const kotNo = String(ticket.kot_number || "").trim();
+          const ident = kotNo || table;
+          const shortId = !kotNo && ticket.id ? String(ticket.id).replace(/-/g, "").slice(0, 8) : "";
+          const meta = [kotNo ? table : kind, shortId, when].filter(Boolean).join(" · ");
           return `<article class="kot-card is-${escapeHtml(ticket.status || "new")}${String(ticket.status || "new") === "new" && kotAckIds && !kotAckIds.has(String(ticket.id)) ? " is-flash" : ""}" data-kot="${escapeHtml(ticket.id)}">
             <header class="kot-card-head">
               <div>
-                <h3>${escapeHtml(kotNo || table)}</h3>
-                <p class="kot-meta">${escapeHtml(kotNo ? table : kind)}${when ? ` · ${escapeHtml(when)}` : ""}</p>
+                <h3>${escapeHtml(ident)}</h3>
+                <p class="kot-meta">${escapeHtml(meta)}</p>
               </div>
               <div class="kot-head-right">
                 ${kotTimerHtml(ticket)}
@@ -3404,7 +3428,11 @@ function showKotToast(ticket, extra = 0) {
 }
 
 function applyKotSnapshot(rows, { announce = false } = {}) {
-  const list = Array.isArray(rows) ? rows : [];
+  const R = restaurantApi();
+  const list = R?.uniqueKotTickets?.(rows) || (Array.isArray(rows) ? rows : []).filter((row, i, all) => {
+    const id = String(row?.id || "");
+    return id && all.findIndex((r) => String(r?.id || "") === id) === i;
+  });
   if (kotAckIds == null) {
     kotAckIds = new Set(list.filter((row) => String(row.status || "new") === "new").map((row) => String(row.id)).filter(Boolean));
   }
@@ -3423,7 +3451,6 @@ function applyKotSnapshot(rows, { announce = false } = {}) {
   if (!announce || !incoming.length) return incoming;
   globalThis.POSQrNotify?.playTone?.({ force: true });
   setTimeout(() => globalThis.POSQrNotify?.playTone?.({ force: true }), 450);
-  const R = restaurantApi();
   globalThis.POSQrNotify?.desktopNotify?.(incoming[0], incoming.length - 1, {
     title: "New kitchen KOT",
     body: R?.kotToastCopy?.(incoming[0], incoming.length - 1) || "New ticket",
@@ -3454,7 +3481,10 @@ function startKotWatch() {
   try {
     kotChannel()?.addEventListener("message", (ev) => {
       if (ev.data?.type === "kot-new" && ev.data.ticket) {
-        const list = [ev.data.ticket, ...(state.kotTickets || []).filter((row) => row.id !== ev.data.ticket.id)];
+        const incoming = ev.data.ticket;
+        const id = String(incoming?.id || "");
+        if (!id) return;
+        const list = [incoming, ...(state.kotTickets || []).filter((row) => String(row.id) !== id)];
         applyKotSnapshot(list, { announce: true });
       }
     });
@@ -3491,6 +3521,9 @@ function printQrKitchenKot(order) {
 }
 
 async function sendQrKitchenKot(order) {
+  if (sendingKot) return;
+  sendingKot = true;
+  try {
   const R = restaurantApi();
   if (!R || !order) return;
   const lines = (order.lines || []).map((line) => ({
@@ -3535,6 +3568,9 @@ async function sendQrKitchenKot(order) {
   }
   setHint("Kitchen KOT sent. Kitchen board and ding update on kitchen terminals.", "ok");
   return data?.ticket;
+  } finally {
+    sendingKot = false;
+  }
 }
 
 function kotChannel() {

@@ -55,8 +55,8 @@ test("Kitchen KOT prints new dishes only, then reprint of the full ticket", () =
   const printed = [{ itemId: "dosa", qtyGm: 1 }];
   const delta = R.kotDelta(cart, printed);
   assert.deepEqual(delta, [
-    { itemId: "dosa", qtyGm: 1 },
-    { itemId: "tea", qtyGm: 1 },
+    { itemId: "dosa", qtyGm: 1, notes: "", name: "Masala dosa" },
+    { itemId: "tea", qtyGm: 1, notes: "", name: "Tea" },
   ]);
   const first = R.kotKind(cart, []);
   assert.equal(first.kind, "new");
@@ -83,6 +83,36 @@ test("Kitchen KOT prints new dishes only, then reprint of the full ticket", () =
   assert.match(html, /kot-si/);
   assert.doesNotMatch(html, /TAX INVOICE/);
   assert.doesNotMatch(html, /Grand total/);
+});
+
+test("KOT line identity keeps the same dish with different notes as two lines", () => {
+  const cart = [
+    { itemId: "dosa", qtyGm: 1, name: "Masala dosa", notes: "No onion" },
+    { itemId: "dosa", qtyGm: 2, name: "Masala dosa", notes: "Extra ghee" },
+    { itemId: "dosa", qtyGm: 1, name: "Masala dosa", notes: "No onion" },
+  ];
+  assert.equal(R.kotLineKey(cart[0]), "dosa\nNo onion");
+  const delta = R.kotDelta(cart, []);
+  assert.equal(delta.length, 2);
+  assert.deepEqual(delta.find((l) => l.notes === "No onion"), { itemId: "dosa", qtyGm: 2, notes: "No onion", name: "Masala dosa" });
+  assert.deepEqual(delta.find((l) => l.notes === "Extra ghee"), { itemId: "dosa", qtyGm: 2, notes: "Extra ghee", name: "Masala dosa" });
+  const reprint = R.kotKind(cart, cart);
+  assert.equal(reprint.kind, "reprint");
+  assert.equal(reprint.lines.some((l) => l.notes === "No onion"), true);
+  assert.deepEqual(
+    R.uniqueKotTickets([{ id: "a" }, { id: "a" }, { id: "" }, { id: "b" }]).map((r) => r.id),
+    ["a", "b"],
+  );
+  const here = path.dirname(fileURLToPath(import.meta.url));
+  const src = (rel) => readFileSync(path.join(here, "..", rel), "utf8");
+  assert.match(src("js/app.js"), /if \(sendingKot\) return/);
+  assert.match(src("js/app.js"), /uniqueKotTickets/);
+  assert.match(src("js/app.js"), /sameKotLine/);
+  assert.match(src("pos-kots.php"), /function pos_next_kot_number/);
+  assert.match(src("pos-kots.php"), /kot_number, created_at, updated_at/);
+  assert.match(src("server/tenant.js"), /nextKotNumber/);
+  assert.match(src("server/qr-ordering.js"), /AS kot_number/);
+  assert.match(src("index.html"), /restaurant\.js\?v=20261011kot1/);
 });
 
 test("Restaurant shops keep custom table names and can add or remove seats", () => {
@@ -334,7 +364,7 @@ test("Restaurant mobile billing box keeps dish cards visible", () => {
   assert.doesNotMatch(mobile, /max-height: 42vh/);
   assert.doesNotMatch(index, /20260925rm1/);
   assert.match(index, /pos\.css\?v=20261006fast1/);
-  assert.match(index, /app\.js\?v=20261011bar1/);
+  assert.match(index, /app\.js\?v=20261011kot1/);
 });
 
 test("Restaurant mobile Counter uses readable type and a tight bill sheet", () => {

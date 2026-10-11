@@ -33,15 +33,29 @@ function pos_clip_kot_lines($raw) {
     if (!is_array($line)) continue;
     $qty = (float) ($line["qtyGm"] ?? $line["quantity_gm"] ?? 0);
     if ($qty <= 0) continue;
-    $out[] = [
-      "itemId" => substr((string) ($line["itemId"] ?? $line["item_id"] ?? ""), 0, 64),
+    $itemId = substr((string) ($line["itemId"] ?? $line["item_id"] ?? ""), 0, 64);
+    $notes = substr(trim((string) ($line["notes"] ?? $line["special_instruction"] ?? $line["specialInstruction"] ?? "")), 0, 240);
+    $key = $itemId . "\n" . $notes;
+    if (isset($out[$key])) {
+      $out[$key]["qtyGm"] += $qty;
+      continue;
+    }
+    $out[$key] = [
+      "itemId" => $itemId,
       "name" => substr(trim((string) ($line["name"] ?? $line["item_name"] ?? "Item")) ?: "Item", 0, 120),
       "qtyGm" => $qty,
       "unit" => substr((string) ($line["unit"] ?? "PCS"), 0, 16),
-      "notes" => substr(trim((string) ($line["notes"] ?? $line["special_instruction"] ?? $line["specialInstruction"] ?? "")), 0, 240),
+      "notes" => $notes,
     ];
   }
-  return $out;
+  return array_values($out);
+}
+
+function pos_next_kot_number($bid) {
+  $rows = pos_q("SELECT MAX(CAST(SUBSTRING(kot_number, 5) AS UNSIGNED)) n FROM kitchen_tickets WHERE business_id = ? AND kot_number LIKE 'KOT-%'", "s", [$bid]);
+  $last = (int) ($rows[0]["n"] ?? 0);
+  if ($last < 1024) $last = 1024;
+  return "KOT-" . ($last + 1);
 }
 
 function pos_kot_row($row) {
@@ -65,6 +79,7 @@ function pos_sync_qr_from_kot($qrOrderId, $kotStatus, $bid) {
   if ($qrOrderId === "") return;
   $map = ["preparing" => "preparing", "ready" => "ready", "done" => "completed"];
   $next = $map[$kotStatus] ?? "kot_sent";
+  $rank = ["pending" => 0, "accepted" => 1, "kot_sent" => 2, "preparing" => 3, "ready" => 4, "completed" => 5];
   $rows = pos_q("SELECT status FROM qr_orders WHERE id = ? AND business_id = ? LIMIT 1", "ss", [$qrOrderId, $bid]);
   $cur = (string) ($rows[0]["status"] ?? "pending");
   if ($cur === "cancelled" || $cur === "rejected" || $cur === "completed") return;
@@ -94,7 +109,13 @@ function pos_dispatch_kots($path, $method, $body, $bid, $auth) {
       [$bid]
     );
     $out = [];
-    foreach ($rows as $row) $out[] = pos_kot_row($row);
+    $seen = [];
+    foreach ($rows as $row) {
+      $id = (string) ($row["id"] ?? "");
+      if ($id === "" || isset($seen[$id])) continue;
+      $seen[$id] = true;
+      $out[] = pos_kot_row($row);
+    }
     pos_send(200, $out);
   }
 
@@ -107,6 +128,7 @@ function pos_dispatch_kots($path, $method, $body, $bid, $auth) {
     $tableNo = substr(trim((string) ($body["table_no"] ?? $body["tableNo"] ?? "")), 0, 64);
     $kind = (($body["kind"] ?? "") === "reprint") ? "reprint" : "new";
     $notes = substr(trim((string) ($body["notes"] ?? "")), 0, 250);
+    $kotNumber = pos_next_kot_number($bid);
     if ($qrOrderId !== "") {
       $have = pos_q("SELECT * FROM kitchen_tickets WHERE qr_order_id = ? AND business_id = ? ORDER BY created_at DESC LIMIT 1", "ss", [$qrOrderId, $bid]);
       if ($have) {
@@ -116,18 +138,27 @@ function pos_dispatch_kots($path, $method, $body, $bid, $auth) {
     }
     try {
       pos_q(
-        "INSERT INTO kitchen_tickets (id, business_id, table_no, kind, status, notes, lines_json, qr_order_id, created_at, updated_at)
-         VALUES (?,?,?,?, 'new', ?, ?, ?, NOW(3), NOW(3))",
-        "sssssss",
-        [$id, $bid, $tableNo !== "" ? $tableNo : null, $kind, $notes !== "" ? $notes : null, json_encode($lines, JSON_UNESCAPED_UNICODE), $qrOrderId !== "" ? $qrOrderId : null]
+        "INSERT INTO kitchen_tickets (id, business_id, table_no, kind, status, notes, lines_json, qr_order_id, kot_number, created_at, updated_at)
+         VALUES (?,?,?,?, 'new', ?, ?, ?, ?, NOW(3), NOW(3))",
+        "ssssssss",
+        [$id, $bid, $tableNo !== "" ? $tableNo : null, $kind, $notes !== "" ? $notes : null, json_encode($lines, JSON_UNESCAPED_UNICODE), $qrOrderId !== "" ? $qrOrderId : null, $kotNumber]
       );
     } catch (Exception $e) {
-      pos_q(
-        "INSERT INTO kitchen_tickets (id, business_id, table_no, kind, status, notes, lines_json, created_at, updated_at)
-         VALUES (?,?,?,?, 'new', ?, ?, NOW(3), NOW(3))",
-        "ssssss",
-        [$id, $bid, $tableNo !== "" ? $tableNo : null, $kind, $notes !== "" ? $notes : null, json_encode($lines, JSON_UNESCAPED_UNICODE)]
-      );
+      try {
+        pos_q(
+          "INSERT INTO kitchen_tickets (id, business_id, table_no, kind, status, notes, lines_json, qr_order_id, created_at, updated_at)
+           VALUES (?,?,?,?, 'new', ?, ?, ?, NOW(3), NOW(3))",
+          "sssssss",
+          [$id, $bid, $tableNo !== "" ? $tableNo : null, $kind, $notes !== "" ? $notes : null, json_encode($lines, JSON_UNESCAPED_UNICODE), $qrOrderId !== "" ? $qrOrderId : null]
+        );
+      } catch (Exception $e2) {
+        pos_q(
+          "INSERT INTO kitchen_tickets (id, business_id, table_no, kind, status, notes, lines_json, created_at, updated_at)
+           VALUES (?,?,?,?, 'new', ?, ?, NOW(3), NOW(3))",
+          "ssssss",
+          [$id, $bid, $tableNo !== "" ? $tableNo : null, $kind, $notes !== "" ? $notes : null, json_encode($lines, JSON_UNESCAPED_UNICODE)]
+        );
+      }
     }
     if ($qrOrderId !== "") {
       pos_q("UPDATE qr_orders SET status = CASE WHEN status IN ('pending','') OR status IS NULL THEN 'kot_sent' ELSE status END WHERE id = ? AND business_id = ?", "ss", [$qrOrderId, $bid]);
