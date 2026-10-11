@@ -78,9 +78,9 @@ test("Master Admin Login Page manager is wired without touching auth", () => {
   assert.match(master, /Website Management/);
   assert.match(master, /data-tab="website" data-website-pane="images"/);
   assert.match(master, />Login Page</);
-  assert.match(master, /js\/master-login-page\.js\?v=20261010nav2/);
+  assert.match(master, /js\/master-login-page\.js\?v=20261011login1/);
   assert.match(master, /js\/login-page\.js\?v=20261010nav2/);
-  assert.match(master, /css\/login-page\.css\?v=20261008loginfile1/);
+  assert.match(master, /css\/login-page\.css\?v=20261011login1/);
   assert.match(masterJs, /function resolveWebsitePane/);
   assert.match(masterJs, /Login page and branding/);
   assert.match(manager, /function resolvePane/);
@@ -115,6 +115,9 @@ test("Master Admin Login Page manager is wired without touching auth", () => {
   assert.match(read("js/login-page.js"), /function imageFileUrl/);
   assert.match(read("css/login-page.css"), /auth-scene-shots picture/);
   assert.match(manager, /assignUpload/);
+  assert.match(manager, /function assignLoginHero/);
+  assert.match(manager, /function simpleImagesHtml/);
+  assert.match(manager, /data-login-act="reset-default"/);
   assert.match(manager, /login-page\/publish/);
   assert.match(auth, /\/api\/auth\/login/);
   assert.match(xpos, /\/api\/auth\/login/);
@@ -158,6 +161,11 @@ test("Website Homepage pane is its own desk", () => {
   const assigned = M.assignUpload({}, "desktopImageId", "img-9");
   assert.equal(assigned.desktopImageId, "img-9");
   assert.equal(assigned.desktopUrl, "/api/login-page/file/img-9");
+  const hero = M.assignLoginHero({}, "img-10");
+  assert.equal(hero.desktopImageId, "img-10");
+  assert.equal(hero.mobileImageId, "img-10");
+  assert.equal(hero.tabletImageId, "img-10");
+  assert.equal(hero.imageSource, "custom");
   assert.match(read("js/master.js"), /function resolveWebsitePane/);
   assert.match(read("js/master.js"), /WEBSITE_LOGIN_PANES/);
   assert.doesNotMatch(read("js/master.js"), /if \(!p \|\| p === "homepage"\) return "images"/);

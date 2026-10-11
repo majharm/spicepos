@@ -317,7 +317,7 @@ test("Master Admin can set passwords and unlock locked accounts", () => {
   assert.match(core, /pos_register_business\(\$body, true\)/);
   assert.match(core, /strtotime\("\+1 year"\)/);
   assert.match(read("server/onboard.js"), /INTERVAL 1 YEAR/);
-  assert.match(read("master.html"), /master\.js\?v=20261011dsa1/);
+  assert.match(read("master.html"), /master\.js\?v=20261011login1/);
   assert.match(read("js/app.js"), /Subscription fee \/ year/);
   assert.match(read("js/app.js"), /\["Valid till"/);
   assert.match(read("js/app.js"), /\["Days left"/);

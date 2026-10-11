@@ -22,7 +22,7 @@
     contact: "Contact Page",
   };
   const PANE_COPY = {
-    images: ["Login Page", "Desktop and tablet hero for shop and Master Admin sign-in."],
+    images: ["Login Page Image", "Upload one picture. It shows on shop login as soon as it finishes."],
     logo: ["Logo", "Brand mark on the sign-in card."],
     background: ["Background", "Image behind the scene panel."],
     banner: ["Promotional Banner", "Side banner, advert, or offer art."],
@@ -137,6 +137,14 @@
     return patch;
   }
 
+  function assignLoginHero(patch, uploadedId) {
+    const next = assignUpload({ ...patch }, "desktopImageId", uploadedId);
+    assignUpload(next, "mobileImageId", uploadedId);
+    assignUpload(next, "tabletImageId", uploadedId);
+    next.imageSource = "custom";
+    return next;
+  }
+
   function fieldForUpload(pane, kind) {
     const byPane = {
       images: "desktopImageId",
@@ -214,6 +222,44 @@
       <label>Name <input name="upload_name" maxlength="180" placeholder="${esc(kind)} image" /></label>
       <label>Type <select name="upload_kind">${KINDS.map((k) => `<option${k === kind ? " selected" : ""}>${k}</option>`).join("")}</select></label>
       <label class="full">File <input type="file" accept="image/jpeg,image/png,image/webp" data-login-file /></label>
+    </div>`;
+  }
+
+  function simpleImagesHtml() {
+    const cfg = resolved();
+    const hero = cfg.resolvedHero || L()?.DEFAULT_DESKTOP || "";
+    return `<div class="items-desk master-desk login-page-desk website-page-desk login-simple-desk">
+      <header class="items-hero">
+        <div class="items-hero-copy">
+          <p class="items-kicker">Website</p>
+          <h3>Login Page Image</h3>
+          <p class="lede">Choose a file. It replaces the shop login picture as soon as upload finishes.</p>
+        </div>
+      </header>
+      <div class="login-simple-upload">
+        <div class="login-simple-preview">
+          <p class="support-preview-label">Current login image</p>
+          <img id="login-simple-hero" src="${esc(hero)}" alt="Current shop login image" />
+        </div>
+        <form id="login-page-form" class="settings item-composer">
+          <input type="hidden" name="upload_kind" value="desktop" />
+          <input type="hidden" name="upload_name" value="Login image" />
+          <p class="item-mode">Upload</p>
+          <label class="full">Choose image
+            <input type="file" accept="image/jpeg,image/png,image/webp" data-login-file />
+          </label>
+          <p class="hint">JPG, PNG or WebP. Large files are compressed automatically. Shop login updates immediately — no extra Publish step.</p>
+          <div class="item-composer-actions">
+            <button class="btn" type="button" data-login-act="reset-default">Use default image</button>
+            <a class="btn" href="./login.html" target="_blank" rel="noopener">Open login page</a>
+          </div>
+          <p class="hint" id="login-page-hint"></p>
+        </form>
+      </div>
+      <details class="login-simple-more">
+        <summary>More login settings</summary>
+        ${tabs("images")}
+      </details>
     </div>`;
   }
 
@@ -569,7 +615,7 @@
       return;
     }
     try {
-      body.innerHTML = shell(on, paneHtml(on));
+      body.innerHTML = on === "images" ? simpleImagesHtml() : shell(on, paneHtml(on));
     } catch (err) {
       body.innerHTML = `<p class="hint error">${esc(err.message || err)}</p>`;
       return;
@@ -624,26 +670,51 @@
       bundle = await api("/api/master/login-page/unpublish", { method: "POST", body: "{}" });
       if (hint()) hint().textContent = "Unpublished. Shop login uses built-in defaults.";
     });
+    body.querySelector("[data-login-act=reset-default]")?.addEventListener("click", async () => {
+      try {
+        if (hint()) {
+          hint().textContent = "Restoring the default login image…";
+          hint().className = "hint";
+        }
+        bundle = await api("/api/master/login-page/unpublish", { method: "POST", body: "{}" });
+        if (hint()) {
+          hint().textContent = "Default login image is live. Hard-refresh shop login if you still see the old picture.";
+          hint().className = "hint ok";
+        }
+        opts.setPane(on);
+      } catch (err) {
+        if (hint()) {
+          hint().textContent = err.message;
+          hint().className = "hint error";
+        }
+      }
+    });
     body.querySelector("[data-login-file]")?.addEventListener("change", async (e) => {
       const file = e.target.files?.[0];
       if (!file) return;
       try {
-        const kind = form?.querySelector('[name="upload_kind"]')?.value || "library";
+        const kind = form?.querySelector('[name="upload_kind"]')?.value || "desktop";
         const name = form?.querySelector('[name="upload_name"]')?.value || file.name;
-        const packed = await compressUnder(file, kind === "mobile" ? 1080 : 1920, mergeDraft().maxUploadKb);
+        const cap = Math.max(900, Number(mergeDraft().maxUploadKb) || 900);
+        if (hint()) {
+          hint().textContent = "Uploading and publishing to shop login…";
+          hint().className = "hint";
+        }
+        const packed = await compressUnder(file, kind === "mobile" ? 1080 : 1920, cap);
         bundle = await api("/api/master/login-page/images", {
           method: "POST",
-          body: JSON.stringify({ ...packed, name, kind, maxUploadKb: mergeDraft().maxUploadKb }),
+          body: JSON.stringify({ ...packed, name, kind, maxUploadKb: cap }),
         });
         const uploadedId = bundle.uploaded?.id || bundle.images?.[0]?.id;
         const field = fieldForUpload(on, kind);
         if (uploadedId && field) {
-          const patch = assignUpload({ ...mergeDraft(), ...collectForm(form) }, field, uploadedId);
+          const base = { ...mergeDraft(), ...collectForm(form) };
+          const patch = on === "images" || field === "desktopImageId" ? assignLoginHero(base, uploadedId) : assignUpload(base, field, uploadedId);
           bundle = await api("/api/master/login-page", { method: "POST", body: JSON.stringify(patch) });
           bundle = await api("/api/master/login-page/publish", { method: "POST", body: "{}" });
         }
         if (hint()) {
-          hint().textContent = `Image published v${bundle.published_version || 0}. Hard-refresh shop login to see it.`;
+          hint().textContent = `Live on shop login (v${bundle.published_version || 0}). Open the login page to see it.`;
           hint().className = "hint ok";
         }
         opts.setPane(on);
@@ -701,5 +772,5 @@
     });
   }
 
-  g.POSMasterLoginPage = { render, PANES, resolvePane, fieldForUpload, assignUpload };
+  g.POSMasterLoginPage = { render, PANES, resolvePane, fieldForUpload, assignUpload, assignLoginHero };
 })(typeof window !== "undefined" ? window : globalThis);

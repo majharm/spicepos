@@ -233,7 +233,7 @@ const WEBSITE_TITLES = {
 };
 
 const WEBSITE_HINTS = {
-  images: "Shop and Master Admin login images",
+  images: "Upload the shop login image",
   logo: "Sign-in card logo",
   background: "Scene background",
   banner: "Promotional banner",
