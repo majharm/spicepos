@@ -48,7 +48,25 @@ test("Bar bills support item discount, tax, and estimated profit", () => {
   assert.equal(line.serve_ml, 60);
   const bill = B.billTotals([line], 20);
   assert.equal(bill.bill_discount, 20);
+  assert.equal(bill.taxable, 340);
+  assert.equal(bill.tax, 34);
+  assert.equal(bill.total, 374);
   assert.ok(bill.profit !== undefined);
+});
+
+test("priceCart deducts remaining ml so two pegs cannot oversell one bottle", () => {
+  const product = { id: "w", name: "Whisky", bottle_ml: 750, price_peg30: 100, on_hand_ml: 40 };
+  const map = { w: product };
+  const over = B.priceCart(map, [
+    { product_id: "w", serve: "peg30", qty: 1 },
+    { product_id: "w", serve: "peg30", qty: 1 },
+  ], 0);
+  assert.equal(over.ok, false);
+  assert.match(over.reason, /Only 10 ml left/);
+  const ok = B.priceCart(map, [{ product_id: "w", serve: "peg30", qty: 1 }], 0);
+  assert.equal(ok.ok, true);
+  assert.equal(ok.priced[0].remaining_ml, 10);
+  assert.equal(ok.priced[0].row.serve_ml, 30);
 });
 
 test("Stock movements, split/combine, hours, and license rules", () => {
@@ -102,9 +120,19 @@ test("Bar POS, PHP, signup, Master Admin toggle, and hub are wired", () => {
   assert.match(index, /id="view-bar-tables"/);
   assert.match(index, /id="view-bar-stock"/);
   assert.match(index, /id="bar-settings-box"/);
-  assert.match(index, /js\/bar\.js\?v=20261011bar1/);
-  assert.match(index, /js\/bar-ui\.js\?v=20261011bar1/);
-  assert.match(index, /css\/bar\.css\?v=20261011bar1/);
+  assert.match(index, /js\/bar\.js\?v=20261011bar2/);
+  assert.match(index, /js\/bar-ui\.js\?v=20261011bar2/);
+  assert.match(index, /css\/bar\.css\?v=20261011bar2/);
+  const ui = read("js/bar-ui.js");
+  assert.match(ui, /payBtn\.onclick = checkout/);
+  assert.match(ui, /\|\| paying\) return/);
+  assert.match(ui, /bar_enabled/);
+  const php = read("pos-bar.php");
+  assert.match(php, /NULLIF\(\?, ''\)/);
+  assert.match(php, /function pos_bar_can_operate/);
+  assert.match(php, /remaining_ml/);
+  assert.match(php, /"total" => \$tot\["total"\]/);
+  assert.match(read("server/bar.js"), /priceCart/);
   assert.match(index, /bartender/);
   assert.match(app, /function isBarShop/);
   assert.match(app, /bar-mode/);

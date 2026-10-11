@@ -141,24 +141,69 @@ function pos_bar_line($product, $serve, $qty, $discount, $settings) {
 }
 
 function pos_bar_totals($lines, $billDiscount) {
-  $gross = 0; $disc = 0; $tax = 0; $cogs = 0;
+  $gross = 0; $disc = 0; $taxRaw = 0; $cogs = 0;
   foreach ($lines as $l) {
     $gross += pos_bar_num($l["gross"] ?? 0);
     $disc += pos_bar_num($l["discount"] ?? 0);
-    $tax += pos_bar_num($l["tax"] ?? 0);
+    $taxRaw += pos_bar_num($l["tax"] ?? 0);
     $cogs += pos_bar_num($l["cogs"] ?? 0);
   }
   $extra = max(0, pos_bar_num($billDiscount));
-  $taxable = pos_bar_round2(max(0, $gross - $disc - $extra));
+  $preTaxable = pos_bar_round2(max(0, $gross - $disc));
+  $taxable = pos_bar_round2(max(0, $preTaxable - $extra));
+  $tax = $preTaxable > 0 ? pos_bar_round2($taxRaw * ($taxable / $preTaxable)) : 0;
   return [
     "item_gross" => pos_bar_round2($gross),
     "item_discount" => pos_bar_round2($disc),
     "bill_discount" => pos_bar_round2($extra),
-    "tax" => pos_bar_round2($tax),
+    "taxable" => $taxable,
+    "tax" => $tax,
     "total" => pos_bar_round2($taxable + $tax),
     "cogs" => pos_bar_round2($cogs),
     "profit" => pos_bar_round2($taxable - $cogs),
   ];
+}
+
+function pos_bar_parse_minutes($hhmm) {
+  if (!preg_match('/^(\d{1,2}):(\d{2})$/', trim((string) $hhmm), $m)) return null;
+  $h = (int) $m[1];
+  $min = (int) $m[2];
+  if ($h > 23 || $min > 59) return null;
+  return $h * 60 + $min;
+}
+
+function pos_bar_in_hours($settings, $now = null) {
+  $open = pos_bar_parse_minutes($settings["open_hour"] ?? "");
+  $close = pos_bar_parse_minutes($settings["close_hour"] ?? "");
+  if ($open === null || $close === null) return true;
+  if (!$now instanceof DateTime) {
+    $tz = function_exists("pos_shop_timezone") ? (pos_shop_timezone() ?: "Asia/Kolkata") : "Asia/Kolkata";
+    $now = new DateTime("now", new DateTimeZone($tz));
+  }
+  $cur = ((int) $now->format("H")) * 60 + (int) $now->format("i");
+  if ($open === $close) return true;
+  if ($close > $open) return $cur >= $open && $cur < $close;
+  return $cur >= $open || $cur < $close;
+}
+
+function pos_bar_today() {
+  if (function_exists("pos_shop_timezone")) {
+    return (new DateTime("now", new DateTimeZone(pos_shop_timezone() ?: "Asia/Kolkata")))->format("Y-m-d");
+  }
+  return date("Y-m-d");
+}
+
+function pos_bar_can_operate($settings, $today = null) {
+  $regulated = pos_bar_flag($settings["regulated"] ?? 1);
+  $exp = substr((string) ($settings["license_expires"] ?? ""), 0, 10);
+  $day = $today ?: pos_bar_today();
+  if ($regulated && $exp !== "" && $exp < $day) {
+    return ["ok" => false, "reason" => "License expired on $exp"];
+  }
+  if ($regulated && !pos_bar_flag($settings["allow_after_hours"] ?? 0) && !pos_bar_in_hours($settings)) {
+    return ["ok" => false, "reason" => "Sales allowed " . ($settings["open_hour"] ?? "") . "–" . ($settings["close_hour"] ?? "")];
+  }
+  return ["ok" => true];
 }
 
 function pos_bar_can_discount($auth) {
@@ -278,18 +323,24 @@ function pos_bar_staff_dispatch($path, $method, $body, $bid, $auth) {
   $body = is_array($body) ? $body : [];
   try {
     if ($path === "bar/board" && $method === "GET") {
-      $today = function_exists("pos_shop_timezone") ? (new DateTime("now", new DateTimeZone(pos_shop_timezone() ?: "Asia/Kolkata")))->format("Y-m-d") : date("Y-m-d");
+      $today = pos_bar_today();
       $sales = pos_q("SELECT COALESCE(SUM(total),0) sales, COUNT(*) bills, COALESCE(SUM(profit),0) profit FROM bar_sales WHERE business_id=? AND status='paid' AND DATE(created_at)=?", "ss", [$bid, $today]);
       $pegs = pos_q("SELECT COALESCE(SUM(l.qty),0) n FROM bar_sale_lines l JOIN bar_sales s ON s.id=l.sale_id WHERE l.business_id=? AND s.status='paid' AND DATE(s.created_at)=? AND l.serve IN ('peg30','peg60')", "ss", [$bid, $today]);
       $bottles = pos_q("SELECT COALESCE(SUM(l.qty),0) n FROM bar_sale_lines l JOIN bar_sales s ON s.id=l.sale_id WHERE l.business_id=? AND s.status='paid' AND DATE(s.created_at)=? AND l.serve='bottle'", "ss", [$bid, $today]);
       $open = pos_q("SELECT COUNT(*) n FROM bar_tables WHERE business_id=? AND status='busy'", "s", [$bid]);
+      $holds = pos_q("SELECT hold_json FROM bar_tables WHERE business_id=? AND status='busy'", "s", [$bid]);
+      $pendingPay = 0;
+      foreach ($holds as $h) {
+        $hold = json_decode($h["hold_json"] ?? "{}", true) ?: [];
+        $pendingPay += pos_bar_num($hold["total"] ?? 0);
+      }
       $products = pos_bar_products($bid, "", "");
       $low = [];
       $exp = [];
       foreach ($products as $p) {
         if (pos_bar_low($p)) $low[] = $p;
         $ex = substr((string) ($p["expiry_date"] ?? ""), 0, 10);
-        if ($ex !== "" && $ex <= date("Y-m-d", strtotime("+30 days"))) $exp[] = $p;
+        if ($ex !== "" && $ex !== "0000-00-00" && $ex <= date("Y-m-d", strtotime("+30 days"))) $exp[] = $p;
       }
       $stats = [
         "todaySales" => (float) ($sales[0]["sales"] ?? 0),
@@ -298,7 +349,7 @@ function pos_bar_staff_dispatch($path, $method, $body, $bid, $auth) {
         "todayPegs" => (float) ($pegs[0]["n"] ?? 0),
         "todayBottles" => (float) ($bottles[0]["n"] ?? 0),
         "openTables" => (int) ($open[0]["n"] ?? 0),
-        "pendingPay" => 0,
+        "pendingPay" => pos_bar_round2($pendingPay),
         "lowStock" => count($low),
         "expiryAlerts" => count($exp),
       ];
@@ -334,14 +385,14 @@ function pos_bar_staff_dispatch($path, $method, $body, $bid, $auth) {
         pos_bar_num($body["on_hand_ml"] ?? 0),
         pos_bar_num($body["low_stock_ml"] ?? 0),
         pos_bar_clip($body["batch_no"] ?? "", 64),
-        pos_bar_clip($body["expiry_date"] ?? "", 10) ?: null,
+        pos_bar_clip($body["expiry_date"] ?? "", 10),
         pos_bar_num($body["gst_rate"] ?? 0),
         pos_bar_clip($body["status"] ?? "active", 16) ?: "active",
       ];
       if ($exists) {
-        pos_q("UPDATE bar_products SET name=?, brand=?, category=?, pack_type=?, bottle_ml=?, barcode=?, price_peg30=?, price_peg60=?, price_quarter=?, price_half=?, price_bottle=?, cost_bottle=?, on_hand_ml=?, low_stock_ml=?, batch_no=?, expiry_date=?, gst_rate=?, status=? WHERE id=? AND business_id=?", "ssssdsddddddddssdsss", array_merge($vals, [$id, $bid]));
+        pos_q("UPDATE bar_products SET name=?, brand=?, category=?, pack_type=?, bottle_ml=?, barcode=?, price_peg30=?, price_peg60=?, price_quarter=?, price_half=?, price_bottle=?, cost_bottle=?, on_hand_ml=?, low_stock_ml=?, batch_no=?, expiry_date=NULLIF(?, ''), gst_rate=?, status=? WHERE id=? AND business_id=?", "ssssdsddddddddssdsss", array_merge($vals, [$id, $bid]));
       } else {
-        pos_q("INSERT INTO bar_products (id, name, brand, category, pack_type, bottle_ml, barcode, price_peg30, price_peg60, price_quarter, price_half, price_bottle, cost_bottle, on_hand_ml, low_stock_ml, batch_no, expiry_date, gst_rate, status, business_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", "sssssdsddddddddssdss", array_merge([$id], $vals, [$bid]));
+        pos_q("INSERT INTO bar_products (id, name, brand, category, pack_type, bottle_ml, barcode, price_peg30, price_peg60, price_quarter, price_half, price_bottle, cost_bottle, on_hand_ml, low_stock_ml, batch_no, expiry_date, gst_rate, status, business_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,NULLIF(?, ''),?,?,?,?)", "sssssdsddddddddssdss", array_merge([$id], $vals, [$bid]));
       }
       pos_bar_audit($bid, $auth, "product", ($exists ? "Updated " : "Added ") . $vals[0]);
       pos_send(200, ["ok" => true, "id" => $id]);
@@ -388,8 +439,23 @@ function pos_bar_staff_dispatch($path, $method, $body, $bid, $auth) {
       pos_send(200, ["ok" => true, "id" => $id]);
     }
     if (preg_match("#^bar/tables/([^/]+)/hold$#", $path, $mm) && $method === "POST") {
-      pos_q("UPDATE bar_tables SET status='busy', hold_json=? WHERE id=? AND business_id=?", "sss", [json_encode($body), $mm[1], $bid]);
-      pos_send(200, ["ok" => true, "hold" => $body]);
+      $settings = pos_bar_settings($bid);
+      $priced = [];
+      foreach (($body["lines"] ?? []) as $line) {
+        $prod = pos_q("SELECT * FROM bar_products WHERE id=? AND business_id=?", "ss", [pos_bar_clip($line["product_id"] ?? "", 64), $bid]);
+        if (!$prod) throw new Exception("Unknown product");
+        $row = pos_bar_line($prod[0], $line["serve"] ?? "bottle", $line["qty"] ?? 1, $line["discount"] ?? 0, $settings);
+        $priced[] = array_merge($row, ["product_id" => $prod[0]["id"], "name" => $prod[0]["name"]]);
+      }
+      $tot = pos_bar_totals($priced, 0);
+      $hold = [
+        "lines" => $body["lines"] ?? [],
+        "priced" => $priced,
+        "total" => $tot["total"],
+        "service_type" => pos_bar_clip($body["service_type"] ?? "dine-in", 32),
+      ];
+      pos_q("UPDATE bar_tables SET status='busy', hold_json=? WHERE id=? AND business_id=?", "sss", [json_encode($hold), $mm[1], $bid]);
+      pos_send(200, ["ok" => true, "hold" => $hold]);
     }
     if ($path === "bar/tables/transfer" && $method === "POST") {
       $from = pos_q("SELECT * FROM bar_tables WHERE id=? AND business_id=?", "ss", [pos_bar_clip($body["from_id"] ?? "", 64), $bid]);
@@ -429,27 +495,36 @@ function pos_bar_staff_dispatch($path, $method, $body, $bid, $auth) {
     }
     if ($path === "bar/checkout" && $method === "POST") {
       $settings = pos_bar_settings($bid);
+      $operate = pos_bar_can_operate($settings);
+      if (empty($operate["ok"]) && !pos_bar_can_void($auth)) {
+        throw new Exception($operate["reason"] ?? "Bar sales restricted");
+      }
       if (pos_bar_num($body["bill_discount"] ?? 0) > 0 && !pos_bar_can_discount($auth)) {
         throw new Exception("Bill discount needs manager authorization");
       }
       $raw = $body["lines"] ?? [];
       if (!$raw) throw new Exception("Add at least one serve");
       $priced = [];
+      $remaining = [];
       foreach ($raw as $line) {
         $prod = pos_q("SELECT * FROM bar_products WHERE id=? AND business_id=?", "ss", [pos_bar_clip($line["product_id"] ?? "", 64), $bid]);
         if (!$prod) throw new Exception("Unknown product");
         if (pos_bar_num($line["discount"] ?? 0) > 0 && !pos_bar_can_discount($auth)) throw new Exception("Item discount needs manager authorization");
-        $row = pos_bar_line($prod[0], $line["serve"] ?? "bottle", $line["qty"] ?? 1, $line["discount"] ?? 0, $settings);
-        if (pos_bar_num($prod[0]["on_hand_ml"]) + 0.001 < $row["serve_ml"]) throw new Exception($prod[0]["name"] . ": Only " . $prod[0]["on_hand_ml"] . " ml left");
-        $priced[] = ["product" => $prod[0], "row" => $row];
+        $id = $prod[0]["id"];
+        if (!isset($remaining[$id])) $remaining[$id] = pos_bar_num($prod[0]["on_hand_ml"]);
+        $live = $prod[0];
+        $live["on_hand_ml"] = $remaining[$id];
+        $row = pos_bar_line($live, $line["serve"] ?? "bottle", $line["qty"] ?? 1, $line["discount"] ?? 0, $settings);
+        if ($remaining[$id] + 0.001 < $row["serve_ml"]) throw new Exception($live["name"] . ": Only " . $remaining[$id] . " ml left");
+        $remaining[$id] = pos_bar_round2(max(0, $remaining[$id] - $row["serve_ml"]));
+        $priced[] = ["product" => $live, "row" => $row, "remaining_ml" => $remaining[$id]];
       }
       $tot = pos_bar_totals(array_column($priced, "row"), $body["bill_discount"] ?? 0);
       $saleId = pos_uuid();
       $count = pos_q("SELECT COUNT(*) n FROM bar_sales WHERE business_id=?", "s", [$bid]);
       $billNo = "BAR-" . (1001 + (int) ($count[0]["n"] ?? 0));
       foreach ($priced as $line) {
-        $next = max(0, pos_bar_num($line["product"]["on_hand_ml"]) - $line["row"]["serve_ml"]);
-        pos_q("UPDATE bar_products SET on_hand_ml=? WHERE id=? AND business_id=?", "dss", [$next, $line["product"]["id"], $bid]);
+        pos_q("UPDATE bar_products SET on_hand_ml=? WHERE id=? AND business_id=?", "dss", [$line["remaining_ml"], $line["product"]["id"], $bid]);
         pos_q("INSERT INTO bar_movements (id, product_id, kind, qty_ml, note, ref_id, user_name, business_id) VALUES (?,?,?,?,?,?,?,?)", "sssdssss", [pos_uuid(), $line["product"]["id"], "sale", -abs($line["row"]["serve_ml"]), $billNo, $saleId, pos_bar_clip($auth["user"]["name"] ?? "", 180), $bid]);
         pos_q("INSERT INTO bar_sale_lines (id, sale_id, product_id, name, brand, category, serve, qty, serve_ml, unit_price, discount, tax, total, cogs, business_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", "sssssssddddddds", [
           pos_uuid(), $saleId, $line["product"]["id"], $line["product"]["name"], $line["product"]["brand"], $line["product"]["category"], $line["row"]["serve"], $line["row"]["qty"], $line["row"]["serve_ml"], $line["row"]["unit_price"], $line["row"]["discount"], $line["row"]["tax"], $line["row"]["total"], $line["row"]["cogs"], $bid

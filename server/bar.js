@@ -576,25 +576,22 @@ export function registerBarStaff(app) {
       const map = Object.fromEntries(products.map((p) => [p.id, p]));
       const rawLines = req.body?.lines || [];
       if (!rawLines.length) throw new Error("Add at least one serve");
-      const priced = rawLines.map((l) => {
-        const product = map[l.product_id];
-        if (!product) throw new Error("Unknown product");
+      for (const l of rawLines) {
         if (num(l.discount) > 0 && !B().canDiscount(roleOf(), permsOf())) throw new Error("Item discount needs manager authorization");
-        const check = B().canSellQty(product, l.serve, l.qty, settings);
-        if (!check.ok) throw new Error(`${product.name}: ${check.reason}`);
-        return { product, raw: l, row: B().lineTotals(product, l.serve, l.qty, l.discount, settings) };
-      });
-      const totals = B().billTotals(priced.map((p) => p.row), req.body?.bill_discount, settings);
+      }
+      const cart = B().priceCart(map, rawLines, req.body?.bill_discount, settings);
+      if (!cart.ok) throw new Error(cart.reason);
+      const priced = cart.priced;
+      const totals = cart.totals;
       const user = authUser() || {};
       const saleId = crypto.randomUUID();
       const billNo = await nextBillNo(bid());
       await withTransaction(async (conn) => {
         for (const line of priced) {
-          const next = B().applySale(line.product, line.raw.serve, line.raw.qty, settings);
-          await conn.query("UPDATE bar_products SET on_hand_ml=? WHERE id=? AND business_id=?", [next.on_hand_ml, line.product.id, bid()]);
+          await conn.query("UPDATE bar_products SET on_hand_ml=? WHERE id=? AND business_id=?", [line.remaining_ml, line.product.id, bid()]);
           await conn.query(
             `INSERT INTO bar_movements (id, product_id, kind, qty_ml, note, ref_id, user_id, user_name, business_id) VALUES (?,?,?,?,?,?,?,?,?)`,
-            [crypto.randomUUID(), line.product.id, "sale", -Math.abs(next.used_ml), billNo, saleId, user.id || null, clip(user.first_name || user.name || "", 180), bid()],
+            [crypto.randomUUID(), line.product.id, "sale", -Math.abs(line.row.serve_ml), billNo, saleId, user.id || null, clip(user.first_name || user.name || "", 180), bid()],
           );
           await conn.query(
             `INSERT INTO bar_sale_lines (id, sale_id, product_id, name, brand, category, serve, qty, serve_ml, unit_price, discount, tax, total, cogs, business_id)

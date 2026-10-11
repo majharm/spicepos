@@ -226,8 +226,10 @@
     const itemGross = round2(rows.reduce((s, l) => s + (Number(l.gross) || 0), 0));
     const itemDisc = round2(rows.reduce((s, l) => s + (Number(l.discount) || 0), 0));
     const extra = round2(Math.max(0, Number(billDiscount) || 0));
-    const taxable = round2(Math.max(0, itemGross - itemDisc - extra));
-    const tax = round2(rows.reduce((s, l) => s + (Number(l.tax) || 0), 0));
+    const preTaxable = round2(Math.max(0, itemGross - itemDisc));
+    const taxable = round2(Math.max(0, preTaxable - extra));
+    const taxRaw = round2(rows.reduce((s, l) => s + (Number(l.tax) || 0), 0));
+    const tax = preTaxable > 0 ? round2(taxRaw * (taxable / preTaxable)) : 0;
     const cogs = round2(rows.reduce((s, l) => s + (Number(l.cogs) || 0), 0));
     const total = round2(taxable + tax);
     return {
@@ -240,6 +242,28 @@
       cogs,
       profit: round2(taxable - cogs),
     };
+  }
+
+  function priceCart(productsById, rawLines, billDiscount, settings) {
+    const remaining = {};
+    const priced = [];
+    const lines = Array.isArray(rawLines) ? rawLines : [];
+    if (!lines.length) {
+      return { ok: false, reason: "Add at least one serve", priced, totals: billTotals([], billDiscount, settings), remaining };
+    }
+    for (const l of lines) {
+      const id = String(l?.product_id || l?.product?.id || "");
+      const product = productsById?.[id];
+      if (!product) return { ok: false, reason: "Unknown product", priced, totals: billTotals(priced.map((p) => p.row), billDiscount, settings), remaining };
+      if (remaining[id] == null) remaining[id] = Number(product.on_hand_ml) || 0;
+      const live = { ...product, on_hand_ml: remaining[id] };
+      const check = canSellQty(live, l.serve, l.qty, settings);
+      if (!check.ok) return { ok: false, reason: `${product.name}: ${check.reason}`, priced, totals: billTotals(priced.map((p) => p.row), billDiscount, settings), remaining };
+      const row = lineTotals(live, l.serve, l.qty, l.discount, settings);
+      remaining[id] = round2(Math.max(0, remaining[id] - row.serve_ml));
+      priced.push({ product: live, raw: l, row, remaining_ml: remaining[id] });
+    }
+    return { ok: true, priced, totals: billTotals(priced.map((p) => p.row), billDiscount, settings), remaining };
   }
 
   function allowedServings(product, settings) {
@@ -443,6 +467,7 @@
     movementSign,
     lineTotals,
     billTotals,
+    priceCart,
     allowedServings,
     canSellQty,
     inOperatingHours,
