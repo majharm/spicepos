@@ -98,6 +98,8 @@ test("Master Admin Login Page manager is wired without touching auth", () => {
   assert.match(core, /pos_login_page_master_dispatch/);
   assert.match(core, /strpos\(\$path, "login-page\/"\) === 0/);
   assert.match(php, /function pos_login_page_validate/);
+  assert.match(php, /published_json = \?, published_version = \?, updated_by = \?[^;]*"sis",\s*\[\$json, \$next, \$who\]/);
+  assert.doesNotMatch(php, /published_json = \?, published_version = \?, updated_by = \?[^;]*"siss"/);
   assert.match(node, /Only JPG, PNG, or WebP/);
   assert.match(node, /login_page_settings/);
   assert.match(node, /login_page_campaigns/);
