@@ -15,7 +15,13 @@
     return root.api(path, opts);
   }
   function isBar() {
-    return Boolean(B()?.isBarShop?.(root.state?.businessMeta) || root.POSFootwear?.shopKind?.(root.state?.businessMeta) === "bar");
+    const meta = root.state?.businessMeta;
+    return Boolean(
+      B()?.isBarShop?.(meta) ||
+        root.POSFootwear?.isBarShop?.(meta) ||
+        root.POSFootwear?.shopKind?.(meta) === "bar" ||
+        Number(meta?.bar_enabled) === 1,
+    );
   }
   function hint(el, msg, err) {
     if (!el) return;
@@ -180,8 +186,10 @@
         paintTicket();
       };
     });
-    $("bar-pay-now")?.addEventListener("click", checkout);
-    $("bar-hold-table")?.addEventListener("click", holdToTable);
+    const payBtn = $("bar-pay-now");
+    if (payBtn) payBtn.onclick = checkout;
+    const holdBtn = $("bar-hold-table");
+    if (holdBtn) holdBtn.onclick = holdToTable;
   }
 
   async function loadCounter() {
@@ -236,9 +244,13 @@
     });
   }
 
+  let paying = false;
   async function checkout() {
     const t = ticketState();
-    if (!t.lines.length) return;
+    if (!t.lines.length || paying) return;
+    paying = true;
+    const payBtn = $("bar-pay-now");
+    if (payBtn) payBtn.disabled = true;
     try {
       const billed = await api("/api/bar/checkout", {
         method: "POST",
@@ -258,6 +270,9 @@
       if (billed.receipt_html && root.showModal) root.showModal("Bar receipt", billed.receipt_html);
     } catch (err) {
       if (root.setHint) root.setHint(err.message, "error");
+      if (payBtn) payBtn.disabled = false;
+    } finally {
+      paying = false;
     }
   }
 
