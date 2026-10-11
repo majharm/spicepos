@@ -52,7 +52,7 @@
     return {
       shopName: "ATAV POS",
       today: { bills: 35, takings: 30000 },
-      outstanding: 5,
+      outstanding: 5000,
       hub: {
         expenses: 1200,
         recent: [

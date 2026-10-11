@@ -203,7 +203,7 @@
   display: grid;
   place-items: center;
   background:
-    radial-gradient(120% 80% at 50% 0%, #d9f6ef 0%, var(--m-mint) 42%, #fff 78%);
+    radial-gradient(120% 90% at 50% 0%, #c8f3e8 0%, #e7f8f2 48%, #f7fffc 100%);
   border-radius: 28px;
   padding: 28px 16px 18px;
   min-height: 46vh;
