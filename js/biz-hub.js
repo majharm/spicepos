@@ -9,9 +9,17 @@
     return globalThis.POSFootwear?.shopKind?.(biz) || "general";
   }
 
+  function kindsFor(biz) {
+    const kind = shopKind(biz);
+    const extras = [];
+    if (globalThis.POSBar?.isBarShop?.(biz) && kind !== "bar") extras.push("bar");
+    return [kind, ...extras];
+  }
+
   function matchKinds(kinds, kind) {
     if (!kinds || kinds === ALL || kinds.includes(ALL)) return true;
-    return kinds.includes(kind);
+    const list = Array.isArray(kind) ? kind : [kind];
+    return list.some((k) => kinds.includes(k));
   }
 
   const MODULES = [
@@ -143,6 +151,13 @@
     { id: "gym-trainers", group: "industry", title: "Trainers", view: "gym-trainers", perm: "staff", kinds: ["gym"] },
     { id: "gym-products", group: "industry", title: "Supplements / merchandise", view: "items", perm: "items", kinds: ["gym"] },
     { id: "gym-portal", group: "industry", title: "Member portal", view: "gym-board", perm: "dashboard", kinds: ["gym"] },
+    { id: "bar-board", group: "industry", title: "Bar desk", view: "bar-board", perm: "dashboard", kinds: ["bar"] },
+    { id: "bar-counter", group: "industry", title: "Bar Counter", view: "bar-counter", perm: "counter", kinds: ["bar"] },
+    { id: "bar-products", group: "industry", title: "Bar products", view: "bar-products", perm: "items", kinds: ["bar"] },
+    { id: "bar-tables", group: "industry", title: "Bar tables", view: "bar-tables", perm: "counter", kinds: ["bar"] },
+    { id: "bar-stock", group: "industry", title: "Bar stock", view: "bar-stock", perm: "stock", kinds: ["bar"] },
+    { id: "bar-reports", group: "industry", title: "Bar reports", view: "bar-reports", perm: "reports", kinds: ["bar"] },
+    { id: "bar-settings", group: "industry", title: "Bar settings", view: "bar-settings", perm: "settings", kinds: ["bar"] },
   ];
 
   const GROUPS = [
@@ -269,6 +284,8 @@
     { id: "print-material-sales", center: "print", title: "Material-wise Sales", kinds: ["printing"] },
     { id: "print-production", center: "print", title: "Production Status", kinds: ["printing"] },
     { id: "print-delivery", center: "print", title: "Print Delivery", kinds: ["printing"] },
+    { id: "bar-sales", center: "sales", title: "Bar Daily Sales", kinds: ["bar"] },
+    { id: "bar-consumption", center: "inventory", title: "Bar Consumption", kinds: ["bar"] },
     { id: "gym-members", center: "gym", title: "Member Report", kinds: ["gym"] },
     { id: "gym-attendance", center: "gym", title: "Attendance Report", kinds: ["gym"] },
     { id: "gym-collection", center: "gym", title: "Collection Report", kinds: ["gym"] },
@@ -406,17 +423,15 @@
   ];
 
   function modulesFor(biz) {
-    const kind = shopKind(biz);
-    return MODULES.filter((m) => matchKinds(m.kinds, kind));
+    return MODULES.filter((m) => matchKinds(m.kinds, kindsFor(biz)));
   }
 
   function reportsFor(biz) {
-    const kind = shopKind(biz);
-    return REPORTS.filter((r) => matchKinds(r.kinds, kind));
+    return REPORTS.filter((r) => matchKinds(r.kinds, kindsFor(biz)));
   }
 
   function reportsByCenter(biz) {
-    const kind = shopKind(biz);
+    const kind = kindsFor(biz);
     return CENTERS.map((c) => ({
       ...c,
       reports: REPORTS.filter((r) => r.center === c.id && matchKinds(r.kinds, kind)),
@@ -435,6 +450,7 @@
     PAY_MODES,
     DASH_KPIS,
     shopKind,
+    kindsFor,
     matchKinds,
     modulesFor,
     reportsFor,

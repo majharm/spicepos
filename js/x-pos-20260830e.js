@@ -115,6 +115,7 @@
   function categoriesForSignupType(type) {
     const t = String(type || "").trim();
     if (t === "Restaurant" || t === "Cafe" || t === "Bakery") return ["Food & beverage"];
+    if (t === "Bar") return ["Bar & Lounge"];
     if (t === "Grocery") return ["Kirana / FMCG", "Supermarket", "General trade"];
     if (t === "Pharmacy") return ["Medical"];
     if (t === "Electronics") return ["Mobile & electronics"];

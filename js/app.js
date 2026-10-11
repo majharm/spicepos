@@ -185,6 +185,10 @@ function isGymShop() {
   return Boolean(globalThis.POSGym?.isGymShop?.(state.businessMeta) || globalThis.POSFootwear?.isGymShop?.(state.businessMeta) || globalThis.POSFootwear?.shopKind?.(state.businessMeta) === "gym");
 }
 
+function isBarShop() {
+  return Boolean(globalThis.POSBar?.isBarShop?.(state.businessMeta) || globalThis.POSFootwear?.isBarShop?.(state.businessMeta) || globalThis.POSFootwear?.shopKind?.(state.businessMeta) === "bar" || Number(state.businessMeta?.bar_enabled) === 1);
+}
+
 function isClassicBillShop() {
   return isPharmacyShop() || isApparelShop();
 }
@@ -420,6 +424,7 @@ function applyFootwearMode() {
   document.body.classList.toggle("services-mode", isServicesShop());
   document.body.classList.toggle("printing-mode", isPrintShop());
   document.body.classList.toggle("gym-mode", isGymShop());
+  document.body.classList.toggle("bar-mode", isBarShop());
   document.querySelectorAll(".footwear-only").forEach((el) => {
     el.hidden = !on;
   });
@@ -447,6 +452,10 @@ function applyFootwearMode() {
   document.querySelectorAll(".gym-only").forEach((el) => {
     if (el.classList.contains("nav-btn")) return;
     el.hidden = !isGymShop();
+  });
+  document.querySelectorAll(".bar-only").forEach((el) => {
+    if (el.classList.contains("nav-btn")) return;
+    el.hidden = !isBarShop();
   });
   fillPaySelects();
   document.querySelectorAll(".classic-bill-only").forEach((el) => {
@@ -667,6 +676,13 @@ const VIEW_META = {
   "gym-attendance": { title: "Attendance", subtitle: "QR check-in / check-out, daily attendance, and absents" },
   "gym-trainers": { title: "Trainers", subtitle: "Trainer profiles, members, commission, and attendance" },
   "gym-plans": { title: "Membership plans", subtitle: "Monthly, yearly, couple, family, student, and PT plans" },
+  "bar-board": { title: "Bar desk", subtitle: "Bottle and peg sales, stock alerts, tables, and collections" },
+  "bar-counter": { title: "Bar Counter", subtitle: "Search, scan, or tap a category — bill pegs and bottles" },
+  "bar-products": { title: "Bar products", subtitle: "Brand, bottle size, peg prices, batch, and expiry" },
+  "bar-tables": { title: "Bar tables", subtitle: "Assign, transfer, split, or combine open bar orders" },
+  "bar-stock": { title: "Bar stock", subtitle: "Opening, purchase, wastage, breakage, and remaining ml" },
+  "bar-reports": { title: "Bar reports", subtitle: "Sales, consumption, stock variance, and gross profit" },
+  "bar-settings": { title: "Bar settings", subtitle: "License, hours, peg sizes, tax, and regulated sales" },
 };
 
 function orderStatusClass(status) {
@@ -2241,13 +2257,22 @@ function paintStaffRoleOptions() {
   const sel = $("st-role");
   if (!sel) return;
   const cafe = isRestaurantShop();
+  const bar = isBarShop();
   const current = sel.value;
   sel.querySelectorAll('option[value="captain"], option[value="kitchen"]').forEach((opt) => {
     const keep = cafe || current === opt.value;
     opt.hidden = !keep;
     opt.disabled = !keep;
   });
+  sel.querySelectorAll('option[value="bartender"]').forEach((opt) => {
+    const keep = bar || current === opt.value;
+    opt.hidden = !keep;
+    opt.disabled = !keep;
+  });
   if (!cafe && (sel.value === "captain" || sel.value === "kitchen") && sel.querySelector(`option[value="${sel.value}"]`)?.hidden) {
+    sel.value = "cashier";
+  }
+  if (!bar && sel.value === "bartender" && sel.querySelector('option[value="bartender"]')?.hidden) {
     sel.value = "cashier";
   }
 }
@@ -2256,6 +2281,7 @@ function landingView() {
   const role = state.session?.role;
   if (isRestaurantShop() && role === "kitchen" && can("kot")) return "kot";
   if (isRestaurantShop() && role === "captain" && can("counter")) return "counter";
+  if (isBarShop() && role === "bartender" && can("counter")) return "bar-counter";
   if (fastModeOn() && can("counter")) return "counter";
   if (can("dashboard")) return "dashboard";
   if (can("counter")) return "counter";
@@ -2333,6 +2359,13 @@ function applyNav() {
       "gym-attendance": "orders",
       "gym-trainers": "staff",
       "gym-plans": "items",
+      "bar-board": "dashboard",
+      "bar-counter": "counter",
+      "bar-products": "items",
+      "bar-tables": "counter",
+      "bar-stock": "stock",
+      "bar-reports": "reports",
+      "bar-settings": "settings",
     };
     btn.hidden = map[view] ? !can(map[view]) : false;
     if (view === "growth") btn.hidden = !(can("growth") || can("reports"));
@@ -2346,6 +2379,7 @@ function applyNav() {
     if ((view === "salon-board" || view === "bookings" || view === "packages") && !isServicesShop()) btn.hidden = true;
     if ((view === "print-board" || view === "print-orders" || view === "print-production" || view === "print-settings") && !isPrintShop()) btn.hidden = true;
     if ((view === "gym-board" || view === "gym-members" || view === "gym-attendance" || view === "gym-trainers" || view === "gym-plans") && !isGymShop()) btn.hidden = true;
+    if ((view === "bar-board" || view === "bar-counter" || view === "bar-products" || view === "bar-tables" || view === "bar-stock" || view === "bar-reports" || view === "bar-settings") && !isBarShop()) btn.hidden = true;
     if (view === "qr-orders" && isGymShop()) btn.hidden = true;
   });
   globalThis.POSBizHubUi?.paintIndustryNav?.();
@@ -2373,6 +2407,8 @@ function applyNav() {
       "print-board": "dashboard",
       "print-orders": "orders",
       "gym-board": "dashboard",
+      "bar-board": "dashboard",
+      "bar-counter": "counter",
       growth: "growth",
       staff: "staff",
       branches: "settings",
@@ -2525,6 +2561,7 @@ function showView(name) {
   if (name === "dashboard") {
     if (!viewStillFresh("dashboard")) loadDashboard();
     if (isGymShop()) globalThis.POSGymUi?.loadGymBoard?.();
+    if (isBarShop()) globalThis.POSBarUi?.loadBarBoard?.();
   }
   if (name === "hub-sales") globalThis.POSBizHubUi?.paintModuleDesk?.("hub-sales-tiles", "sales");
   if (name === "hub-purchases") globalThis.POSBizHubUi?.paintModuleDesk?.("hub-purchases-tiles", "purchases");
@@ -2569,6 +2606,19 @@ function showView(name) {
   if (name === "gym-attendance") globalThis.POSGymUi?.loadAttendance?.();
   if (name === "gym-trainers") globalThis.POSGymUi?.loadTrainers?.();
   if (name === "gym-plans") globalThis.POSGymUi?.loadPlans?.();
+  if (name === "bar-board") {
+    globalThis.POSBarUi?.loadBarBoard?.();
+    const list = $("bar-report-list");
+    if (list && globalThis.POSBar?.REPORTS) {
+      list.innerHTML = POSBar.REPORTS.map((r) => `<button type="button" class="dash-tile" data-bar-report="${escapeHtml(r.id)}"><strong>${escapeHtml(r.title)}</strong></button>`).join("");
+    }
+  }
+  if (name === "bar-counter") globalThis.POSBarUi?.loadCounter?.();
+  if (name === "bar-products") globalThis.POSBarUi?.loadProducts?.();
+  if (name === "bar-tables") globalThis.POSBarUi?.loadTables?.();
+  if (name === "bar-stock") globalThis.POSBarUi?.loadStock?.();
+  if (name === "bar-reports") globalThis.POSBarUi?.loadBarBoard?.();
+  if (name === "bar-settings") globalThis.POSBarUi?.loadSettings?.();
   paintDeskState(name);
   if (name === "stock") loadStock();
   if (name === "counter") {

@@ -1096,12 +1096,13 @@
 
   function paintIndustryNav() {
     const kind = hub()?.shopKind(biz()) || "general";
+    const active = hub()?.kindsFor?.(biz()) || [kind];
     document.querySelectorAll("[data-hub-kind]").forEach((el) => {
       const kinds = String(el.dataset.hubKind || "")
         .split(",")
         .map((s) => s.trim())
         .filter(Boolean);
-      el.hidden = kinds.length ? !kinds.includes(kind) : false;
+      el.hidden = kinds.length ? !kinds.some((k) => active.includes(k)) : false;
     });
     const group = $("nav-industry-group");
     if (group) {
@@ -1121,8 +1122,9 @@
         services: "Services",
         printing: "Printing",
         gym: "Gym",
+        bar: "Bar",
       };
-      label.textContent = names[kind] || "Business type";
+      label.textContent = active.includes("bar") && kind === "restaurant" ? "Restaurant + Bar" : names[kind] || "Business type";
     }
   }
 

@@ -34,6 +34,7 @@ export const ROLES = [
   "stock_manager",
   "accountant",
   "staff",
+  "bartender",
 ];
 
 const ALL = Object.fromEntries(MODULES.map((m) => [m, true]));
@@ -63,6 +64,15 @@ export function defaultPerms(role) {
       offers: true,
       kot: true,
       bookings: true,
+    };
+  }
+  if (role === "bartender") {
+    return {
+      dashboard: true,
+      counter: true,
+      customers: true,
+      orders: true,
+      support: true,
     };
   }
   if (role === "captain") {

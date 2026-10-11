@@ -347,6 +347,7 @@ export function registerAuth(app) {
           status,
           category: business?.category,
           business_type: business?.business_type,
+          bar_enabled: Number(business?.bar_enabled) === 1 ? 1 : 0,
           subscription_expires_at: business?.subscription_expires_at,
         },
       });
@@ -527,6 +528,7 @@ export function registerAuth(app) {
           status,
           category: req.auth.business?.category,
           business_type: req.auth.business?.business_type,
+          bar_enabled: Number(req.auth.business?.bar_enabled) === 1 ? 1 : 0,
           plan_id: req.auth.business?.plan_id,
           subscription_expires_at: req.auth.business?.subscription_expires_at,
         },
