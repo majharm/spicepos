@@ -11,8 +11,46 @@
     <link rel="stylesheet" href="./css/pos.css?v=20260905deploy136" />
     <link rel="stylesheet" href="./css/saas.css?v=20260919loginp1" />
     <link rel="stylesheet" href="./css/login-page.css?v=20261008loginfile1" />
+    <link rel="stylesheet" href="./css/mobile-app.css?v=20261011m1" />
   </head>
   <body class="auth-body auth-zoho">
+    <section id="m-welcome" class="m-welcome" aria-label="Welcome to ATAV POS">
+      <div class="m-welcome-art">
+        <article class="m-bill-card">
+          <header>
+            <div>
+              <p>Payment · INV-0123</p>
+            </div>
+            <strong>₹4,500.00</strong>
+          </header>
+          <div class="m-bill-people">
+            <div class="m-bill-who">
+              <span class="m-avatar">A</span>
+              <div>ATAV shop<small>11 Oct 2026</small></div>
+            </div>
+            <span class="m-avatar is-peer">C</span>
+          </div>
+          <div class="m-bill-lines">
+            <p>Invoice details</p>
+            <ul>
+              <li><span>5 kg Masala</span><b>₹2,250</b></li>
+              <li><span>3 kg Tea</span><b>₹1,250</b></li>
+              <li><span>Oil 5 L</span><b>₹1,000</b></li>
+            </ul>
+            <div class="m-bill-total"><span>Total</span><b>₹4,500</b></div>
+          </div>
+        </article>
+      </div>
+      <div class="m-welcome-copy">
+        <h1>All-in-One Billing Solution</h1>
+        <p>Get started with hassle-free billing and manage your shop efficiently.</p>
+        <div class="m-dots" aria-hidden="true"><i class="is-on"></i><i></i><i></i></div>
+      </div>
+      <div class="m-welcome-actions">
+        <button type="button" class="m-btn m-btn-primary" id="m-go-signup">Sign up</button>
+        <button type="button" class="m-btn m-btn-ghost" id="m-go-signin">Sign in</button>
+      </div>
+    </section>
     <div class="auth-shell auth-shell-v2 auth-shell-zoho auth-shell-poster">
       <aside class="auth-scene" aria-hidden="true">
         <div class="auth-scene-copy">
@@ -47,6 +85,12 @@
       </aside>
       <div class="auth-main">
         <main class="auth-card" id="auth-card">
+          <div id="m-login-hello" class="m-login-hello">
+            <button type="button" class="m-back" id="m-back-welcome" aria-label="Back">‹</button>
+            <p class="m-brand">ATAV POS</p>
+            <h2>Hello, Welcome back!</h2>
+            <p>Sign in with your credentials</p>
+          </div>
           <div class="auth-zoho-top">
             <div class="auth-brand">
               <img class="auth-logo" src="./assets/atav-telecom-logo.png" alt="ATAV Telecom" width="200" height="86" />
@@ -243,6 +287,7 @@
             <p class="hint" id="signup-hint"></p>
             <p class="auth-note">After signup you open your own shop POS as business admin. No card for the trial.</p>
           </form>
+          <p id="m-signup-foot" class="m-signup-foot">Not signed up yet? <button type="button" id="m-foot-signup">Sign up</button></p>
           <p class="auth-note" id="login-footer-brand">ATAV Telecom</p>
           <div class="login-support" id="login-support" hidden></div>
         </main>
@@ -260,6 +305,7 @@
     <script src="./js/pos-api.js?v=20261006login1"></script>
     <script src="./js/login-page.js?v=20261010nav2"></script>
     <script src="./js/x-pos-20260830e.js?v=20261011lounge1"></script>
+    <script src="./js/mobile-app.js?v=20261011m1"></script>
     <script src="./js/ga4.js?v=20260927seo241" defer></script>
   </body>
 </html>

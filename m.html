@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>ATAV POS · Mobile preview</title>
+    <link rel="stylesheet" href="./css/mobile-app.css?v=20261011m1" />
+    <style>
+      body { margin: 0; font-family: Inter, system-ui, sans-serif; background: #f3f4f6; }
+      body.m-preview { background: #fff; }
+      @media (max-width: 720px) {
+        body.m-preview #m-home { display: block; }
+        body.m-preview #m-tabbar { display: flex; }
+      }
+    </style>
+  </head>
+  <body class="m-preview m-app analytics-home">
+    <article id="m-home" class="m-home" data-recent="all">
+      <header class="m-home-top">
+        <div>
+          <p class="m-home-kicker">ATAV POS</p>
+          <h2 id="m-home-shop">Your shop</h2>
+        </div>
+        <button type="button" class="m-icon-btn" id="m-home-notify" aria-label="Notifications">🔔</button>
+      </header>
+      <div class="m-kpis">
+        <button type="button"><span>Total bills</span><strong id="m-kpi-total">0</strong><em>today</em></button>
+        <button type="button"><span>Paid today</span><strong id="m-kpi-paid">₹0</strong><em>last 24 hours</em></button>
+        <button type="button"><span>Pending due</span><strong id="m-kpi-pending">0</strong><em>outstanding</em></button>
+      </div>
+      <div class="m-actions">
+        <button type="button"><span class="m-tile-ico is-bill"></span>New bill</button>
+        <button type="button"><span class="m-tile-ico is-inv"></span>Invoices</button>
+        <button type="button"><span class="m-tile-ico is-cust"></span>Customers</button>
+        <button type="button"><span class="m-tile-ico is-item"></span>Items</button>
+        <button type="button"><span class="m-tile-ico is-exp"></span>Expenses</button>
+        <button type="button"><span class="m-tile-ico is-inc"></span>Income</button>
+      </div>
+      <section class="m-recent">
+        <header><h3>Recent transactions</h3></header>
+        <div class="m-chips">
+          <button type="button" class="is-on" data-m-recent="all">All invoices</button>
+          <button type="button" data-m-recent="expenses">Expenses</button>
+          <button type="button" data-m-recent="income">Income</button>
+        </div>
+        <ul class="m-recent-list" id="m-recent-list"></ul>
+      </section>
+    </article>
+    <nav id="m-tabbar" class="m-tabbar" aria-label="Mobile">
+      <button type="button" data-m-tab="dashboard" class="is-on">Home</button>
+      <button type="button" data-m-tab="orders">Invoices</button>
+      <button type="button" data-m-tab="reports">Reports</button>
+      <button type="button" data-m-tab="menu">Menu</button>
+    </nav>
+    <script src="./js/mobile-app.js?v=20261011m1"></script>
+    <script>
+      POSMobileApp.paintHome(POSMobileApp.demoDashboard());
+    </script>
+  </body>
+</html>
