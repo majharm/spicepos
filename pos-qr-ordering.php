@@ -612,8 +612,9 @@ function pos_qr_track_payload($order, $lines) {
 }
 
 function pos_qr_next_kot_number($bid) {
-  $rows = pos_q("SELECT kot_number FROM kitchen_tickets WHERE business_id = ? AND kot_number LIKE 'KOT-%' ORDER BY created_at DESC LIMIT 1", "s", [$bid]);
-  $last = (int) preg_replace("/\D/", "", (string) ($rows[0]["kot_number"] ?? ""));
+  if (function_exists("pos_next_kot_number")) return pos_next_kot_number($bid);
+  $rows = pos_q("SELECT MAX(CAST(SUBSTRING(kot_number, 5) AS UNSIGNED)) n FROM kitchen_tickets WHERE business_id = ? AND kot_number LIKE 'KOT-%'", "s", [$bid]);
+  $last = (int) ($rows[0]["n"] ?? 0);
   if ($last < 1024) $last = 1024;
   return "KOT-" . ($last + 1);
 }
@@ -635,14 +636,22 @@ function pos_qr_send_kitchen_ticket($business, $orderId, $tableNo, $notes, $buil
   foreach ($built as $line) {
     $qty = (float) ($line["qty"] ?? $line["quantityBase"] ?? $line["quantity_gm"] ?? 0);
     if ($qty <= 0) continue;
-    $lines[] = [
-      "itemId" => (string) ($line["item"]["id"] ?? $line["item_id"] ?? ""),
+    $itemId = (string) ($line["item"]["id"] ?? $line["item_id"] ?? "");
+    $notes = trim((string) ($line["notes"] ?? ""));
+    $key = $itemId . "\n" . $notes;
+    if (isset($lines[$key])) {
+      $lines[$key]["qtyGm"] += $qty;
+      continue;
+    }
+    $lines[$key] = [
+      "itemId" => $itemId,
       "name" => (string) ($line["item"]["name"] ?? $line["item_name"] ?? "Item"),
       "qtyGm" => $qty,
       "unit" => (string) ($line["unit"] ?? "PCS"),
-      "notes" => (string) ($line["notes"] ?? ""),
+      "notes" => $notes,
     ];
   }
+  $lines = array_values($lines);
   if (!$lines) return null;
   $id = pos_uuid();
   $kotNumber = pos_qr_next_kot_number($business["id"]);

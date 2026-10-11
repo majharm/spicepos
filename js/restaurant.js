@@ -423,21 +423,29 @@
       .filter((line) => line.itemId && line.qtyGm > 0);
   }
 
-  function qtyByItem(lines) {
+  function kotLineKey(line) {
+    const itemId = String(line?.itemId || line?.item_id || "");
+    return `${itemId}\n${lineSpecialInstruction(line)}`;
+  }
+
+  function qtyByKotLine(lines) {
     const map = new Map();
     for (const line of cartSnapshot(lines)) {
-      map.set(line.itemId, (map.get(line.itemId) || 0) + line.qtyGm);
+      const key = kotLineKey(line);
+      const prev = map.get(key);
+      if (prev) prev.qtyGm += line.qtyGm;
+      else map.set(key, { itemId: line.itemId, qtyGm: line.qtyGm, notes: line.notes, name: line.name });
     }
     return map;
   }
 
   function kotDelta(cart, printed) {
-    const now = qtyByItem(cart);
-    const done = qtyByItem(printed);
+    const now = qtyByKotLine(cart);
+    const done = qtyByKotLine(printed);
     const out = [];
-    for (const [itemId, qty] of now) {
-      const add = qty - (done.get(itemId) || 0);
-      if (add > 0) out.push({ itemId, qtyGm: add });
+    for (const [key, line] of now) {
+      const add = line.qtyGm - (done.get(key)?.qtyGm || 0);
+      if (add > 0) out.push({ itemId: line.itemId, qtyGm: add, notes: line.notes, name: line.name });
     }
     return out;
   }
@@ -445,8 +453,25 @@
   function kotKind(cart, printed) {
     const delta = kotDelta(cart, printed);
     if (delta.length) return { kind: "new", lines: delta };
-    const all = cartSnapshot(cart).map((line) => ({ itemId: line.itemId, qtyGm: line.qtyGm }));
+    const all = cartSnapshot(cart).map((line) => ({
+      itemId: line.itemId,
+      qtyGm: line.qtyGm,
+      notes: line.notes,
+      name: line.name,
+    }));
     return { kind: "reprint", lines: all };
+  }
+
+  function uniqueKotTickets(rows) {
+    const seen = new Set();
+    const out = [];
+    for (const row of Array.isArray(rows) ? rows : []) {
+      const id = String(row?.id || "").trim();
+      if (!id || seen.has(id)) continue;
+      seen.add(id);
+      out.push(row);
+    }
+    return out;
   }
 
   function newKots(seen, rows) {
@@ -650,8 +675,10 @@ ${kotBody(opts)}
     specialInstruction,
     lineSpecialInstruction,
     cartSnapshot,
+    kotLineKey,
     kotDelta,
     kotKind,
+    uniqueKotTickets,
     newKots,
     kotToastCopy,
     kotElapsedMs,

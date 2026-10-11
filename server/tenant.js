@@ -8,7 +8,7 @@ import { sendCredentialAlerts } from "./alerts.js";
 import { workbookXml } from "./excel.js";
 import { stockToSheets } from "./stock-excel.js";
 import { recomputeBusinessOutstanding } from "./accounts.js";
-import { attachQrKitchenTicket, ensureKitchenTicketTable, syncQrFromKot } from "./qr-ordering.js";
+import { attachQrKitchenTicket, ensureKitchenTicketTable, nextKotNumber, syncQrFromKot } from "./qr-ordering.js";
 import { createdToday } from "./sql-time.js";
 import { buildHubDashboard } from "./hub.js";
 
@@ -77,17 +77,27 @@ function clipDiningTablesJson(raw) {
 const KOT_STATUSES = new Set(["new", "preparing", "ready", "done"]);
 
 function clipKotLines(raw) {
-  const list = Array.isArray(raw) ? raw : [];
-  return list
-    .slice(0, 80)
-    .map((line) => ({
-      itemId: String(line?.itemId || line?.item_id || "").slice(0, 64),
+  const merged = new Map();
+  for (const line of (Array.isArray(raw) ? raw : []).slice(0, 80)) {
+    const itemId = String(line?.itemId || line?.item_id || "").slice(0, 64);
+    const notes = String(line?.notes || line?.special_instruction || line?.specialInstruction || "").trim().slice(0, 240);
+    const qtyGm = Number(line?.qtyGm || line?.quantity_gm) || 0;
+    if (qtyGm <= 0) continue;
+    const key = `${itemId}\n${notes}`;
+    const prev = merged.get(key);
+    if (prev) {
+      prev.qtyGm += qtyGm;
+      continue;
+    }
+    merged.set(key, {
+      itemId,
       name: String(line?.name || line?.item_name || "Item").trim().slice(0, 120) || "Item",
-      qtyGm: Number(line?.qtyGm || line?.quantity_gm) || 0,
+      qtyGm,
       unit: String(line?.unit || "PCS").slice(0, 16),
-      notes: String(line?.notes || line?.special_instruction || line?.specialInstruction || "").trim().slice(0, 240),
-    }))
-    .filter((line) => line.qtyGm > 0);
+      notes,
+    });
+  }
+  return [...merged.values()];
 }
 
 function kotRow(row) {
@@ -817,7 +827,15 @@ export function registerTenant(app) {
          LIMIT 80`,
         [bid()],
       );
-      return rows.map(kotRow);
+      const seen = new Set();
+      return rows
+        .map(kotRow)
+        .filter((row) => {
+          const id = String(row?.id || "");
+          if (!id || seen.has(id)) return false;
+          seen.add(id);
+          return true;
+        });
     }),
   );
 
@@ -843,14 +861,19 @@ export function registerTenant(app) {
       const tableNo = String(b.table_no || b.tableNo || "").trim().slice(0, 64);
       const kind = b.kind === "reprint" ? "reprint" : "new";
       const notes = String(b.notes || "").trim().slice(0, 250);
+      const kotNumber = await nextKotNumber(query, bid());
       try {
+        await query(
+          `INSERT INTO kitchen_tickets (id, business_id, table_no, kind, status, notes, lines_json, kot_number, created_at, updated_at)
+           VALUES (?,?,?,?, 'new', ?, ?, ?, NOW(3), NOW(3))`,
+          [id, bid(), tableNo || null, kind, notes || null, JSON.stringify(lines), kotNumber],
+        );
+      } catch {
         await query(
           `INSERT INTO kitchen_tickets (id, business_id, table_no, kind, status, notes, lines_json, created_at, updated_at)
            VALUES (?,?,?,?, 'new', ?, ?, NOW(3), NOW(3))`,
           [id, bid(), tableNo || null, kind, notes || null, JSON.stringify(lines)],
         );
-      } catch (err) {
-        throw err;
       }
       const [row] = await query("SELECT * FROM kitchen_tickets WHERE id = ? AND business_id = ? LIMIT 1", [id, bid()]);
       return { ok: true, ticket: kotRow(row) };

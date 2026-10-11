@@ -487,14 +487,14 @@ async function sqlRows(exec, sql, params = []) {
   return Array.isArray(out) && Array.isArray(out[0]) ? out[0] : out || [];
 }
 
-async function nextKotNumber(exec, businessId) {
+export async function nextKotNumber(exec, businessId) {
   const rows = await sqlRows(
     exec,
-    "SELECT kot_number FROM kitchen_tickets WHERE business_id = ? AND kot_number LIKE 'KOT-%' ORDER BY created_at DESC LIMIT 1",
+    "SELECT MAX(CAST(SUBSTRING(kot_number, 5) AS UNSIGNED)) n FROM kitchen_tickets WHERE business_id = ? AND kot_number LIKE 'KOT-%'",
     [businessId],
   );
-  const last = Number(String(rows[0]?.kot_number || "").replace(/\D/g, "")) || 1024;
-  return `KOT-${last + 1}`;
+  const last = Number(rows[0]?.n) || 0;
+  return `KOT-${Math.max(1024, last) + 1}`;
 }
 
 export async function attachQrKitchenTicket(exec, { businessId, qrOrderId, tableNo, notes, lines }) {
@@ -522,15 +522,27 @@ export async function attachQrKitchenTicket(exec, { businessId, qrOrderId, table
   }
   const id = crypto.randomUUID();
   const kotNumber = await nextKotNumber(exec, businessId);
-  const kotLines = (lines || [])
-    .map((line) => ({
-      itemId: String(line.item_id || line.item?.id || "").slice(0, 64),
-      name: String(line.item_name || line.item?.name || "Item").slice(0, 120),
-      qtyGm: Number(line.quantity_gm || line.quantityBase || line.qty) || 0,
+  const kotMerged = new Map();
+  for (const line of lines || []) {
+    const itemId = String(line.item_id || line.itemId || line.item?.id || "").slice(0, 64);
+    const notes = String(line.notes || line.special_instruction || "").trim().slice(0, 240);
+    const qtyGm = Number(line.quantity_gm || line.qtyGm || line.quantityBase || line.qty) || 0;
+    if (qtyGm <= 0) continue;
+    const key = `${itemId}\n${notes}`;
+    const prev = kotMerged.get(key);
+    if (prev) {
+      prev.qtyGm += qtyGm;
+      continue;
+    }
+    kotMerged.set(key, {
+      itemId,
+      name: String(line.item_name || line.name || line.item?.name || "Item").slice(0, 120),
+      qtyGm,
       unit: String(line.unit || "PCS").slice(0, 16),
-      notes: String(line.notes || "").slice(0, 240),
-    }))
-    .filter((line) => line.qtyGm > 0);
+      notes,
+    });
+  }
+  const kotLines = [...kotMerged.values()];
   if (!kotLines.length) return "";
   try {
     await sqlRows(
@@ -576,10 +588,12 @@ async function qrOrdersWithLines(businessId, status = "") {
     params.push(status);
   }
   const orders = await query(
-    `SELECT q.*, s.order_number AS invoice_number, s.payment_status AS invoice_payment_status, k.kot_number
+    `SELECT q.*, s.order_number AS invoice_number, s.payment_status AS invoice_payment_status,
+        (SELECT k.kot_number FROM kitchen_tickets k
+          WHERE k.qr_order_id = q.id AND k.business_id = q.business_id
+          ORDER BY k.created_at DESC LIMIT 1) AS kot_number
      FROM qr_orders q
      LEFT JOIN sales_orders s ON s.id = q.sales_order_id AND s.business_id = q.business_id
-     LEFT JOIN kitchen_tickets k ON k.qr_order_id = q.id AND k.business_id = q.business_id
      WHERE q.business_id = ?${statusSql}
      ORDER BY CASE q.status WHEN 'pending' THEN 0 WHEN 'accepted' THEN 1 WHEN 'kot_sent' THEN 2 WHEN 'preparing' THEN 3
        WHEN 'ready' THEN 4 ELSE 5 END, q.created_at DESC LIMIT 100`,
@@ -904,9 +918,11 @@ export function registerQrPublic(app) {
       const tableNo = cleanText(req.query.table || req.query.table_no, 64);
       if (!tableNo) return res.status(400).json({ error: "Table required" });
       const orders = await query(
-        `SELECT q.*, k.kot_number
+        `SELECT q.*,
+            (SELECT k.kot_number FROM kitchen_tickets k
+              WHERE k.qr_order_id = q.id AND k.business_id = q.business_id
+              ORDER BY k.created_at DESC LIMIT 1) AS kot_number
          FROM qr_orders q
-         LEFT JOIN kitchen_tickets k ON k.qr_order_id = q.id AND k.business_id = q.business_id
          WHERE q.business_id = ? AND q.table_no <> '' AND q.status NOT IN ('cancelled','rejected')
            AND (q.status NOT IN ('completed') OR q.updated_at >= DATE_SUB(NOW(), INTERVAL 4 HOUR))
          ORDER BY q.created_at DESC LIMIT 20`,
