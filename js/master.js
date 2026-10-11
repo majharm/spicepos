@@ -47,7 +47,7 @@ const BIZ_CATEGORIES = [
   "Other",
 ];
 const BIZ_CATEGORIES_FOR_TYPE = {
-  Restaurant: ["Food & beverage"],
+  Restaurant: ["Food & beverage", "Bar & Lounge"],
   Cafe: ["Food & beverage"],
   Bakery: ["Food & beverage"],
   Bar: ["Bar & Lounge"],
@@ -2122,7 +2122,8 @@ async function render() {
         if (form.dsaCode) form.dsaCode.value = b?.dsa_code || "";
         if (form.barEnabled) {
           const type = String(b?.business_type || "").toLowerCase();
-          form.barEnabled.checked = Number(b?.bar_enabled) === 1 || type === "bar" || type === "pub" || type === "bar & lounge";
+          const cat = String(b?.category || "").toLowerCase();
+          form.barEnabled.checked = Number(b?.bar_enabled) === 1 || type === "bar" || type === "pub" || type === "bar & lounge" || cat === "bar & lounge";
         }
         const editing = Boolean(b);
         setAdminRequired(!editing);

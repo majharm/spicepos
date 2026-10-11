@@ -722,8 +722,10 @@ function pos_is_apparel_shop($biz) {
 
 function pos_shop_kind($biz) {
   $type = strtolower(trim((string) ($biz["business_type"] ?? "")));
-  if ($type === "restaurant" || $type === "cafe" || $type === "bakery") return "restaurant";
-  if ($type === "bar" || $type === "pub" || $type === "bar & lounge") return "bar";
+  if ($type === "restaurant" || $type === "cafe" || $type === "bakery" || $type === "bar & lounge") return "restaurant";
+  if ($type === "bar" || $type === "pub") return "bar";
+  $cat = strtolower(trim((string) ($biz["category"] ?? "")));
+  if ($cat === "bar & lounge" || $cat === "food & beverage") return "restaurant";
   if ($type === "printing business" || $type === "printing") return "printing";
   if ($type === "gym" || $type === "gym & fitness center" || $type === "fitness") return "gym";
   if (pos_is_footwear_shop($biz)) return "footwear";
@@ -759,6 +761,9 @@ function pos_is_bar_shop($biz) {
   $flag = $biz["bar_enabled"] ?? 0;
   if ($flag === 1 || $flag === "1" || $flag === true) return true;
   $type = strtolower(trim((string) ($biz["business_type"] ?? "")));
+  $cat = strtolower(trim((string) ($biz["category"] ?? "")));
+  if ($type === "bar" || $type === "pub") return true;
+  if ($cat === "bar & lounge" || $cat === "bar" || $cat === "liquor" || $type === "bar & lounge") return true;
   if ($type === "restaurant" || $type === "cafe" || $type === "bakery") return false;
   return pos_shop_kind($biz) === "bar";
 }
@@ -2425,9 +2430,11 @@ function pos_normalize_dsa_code($val) {
   return $code !== "" ? $code : null;
 }
 
-function pos_normalize_bar_enabled($val, $type = "") {
+function pos_normalize_bar_enabled($val, $type = "", $category = "") {
   $t = strtolower(trim((string) $type));
-  if ($t === "bar" || $t === "pub" || $t === "bar & lounge") return 1;
+  $c = strtolower(trim((string) $category));
+  if ($t === "bar" || $t === "pub") return 1;
+  if ($t === "bar & lounge" || $c === "bar & lounge" || $c === "bar" || $c === "liquor") return 1;
   if ($val === true || $val === 1 || $val === "1" || $val === "on" || $val === "true" || $val === "yes") return 1;
   return 0;
 }
@@ -2509,7 +2516,7 @@ function pos_validate_signup($raw, $requireAdmin = true) {
     "status" => $status,
     "account_manager_id" => trim((string) ($b["account_manager_id"] ?? "")),
     "dsa_code" => pos_normalize_dsa_code($b["dsa_code"] ?? ""),
-    "bar_enabled" => pos_normalize_bar_enabled($b["bar_enabled"] ?? 0, $b["business_type"] ?? ""),
+    "bar_enabled" => pos_normalize_bar_enabled($b["bar_enabled"] ?? 0, $b["business_type"] ?? "", $b["category"] ?? ""),
   ];
 }
 

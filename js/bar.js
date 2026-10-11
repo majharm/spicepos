@@ -98,21 +98,27 @@
 
   function isStandaloneBarType(biz) {
     const type = String(biz?.business_type || "").toLowerCase().trim();
-    return type === "bar" || type === "pub" || type === "bar & lounge";
+    return type === "bar" || type === "pub";
   }
 
   function isFoodShopType(biz) {
     const type = String(biz?.business_type || "").toLowerCase().trim();
-    return type === "restaurant" || type === "cafe" || type === "bakery";
+    return type === "restaurant" || type === "cafe" || type === "bakery" || type === "bar & lounge";
+  }
+
+  function isLoungeCategory(biz) {
+    const cat = String(biz?.category || "").toLowerCase().trim();
+    const type = String(biz?.business_type || "").toLowerCase().trim();
+    return cat === "bar & lounge" || cat === "bar" || cat === "liquor" || type === "bar & lounge";
   }
 
   function isBarShop(biz) {
     if (flagOn(biz?.bar_enabled)) return true;
     if (isStandaloneBarType(biz)) return true;
+    if (isLoungeCategory(biz)) return true;
     if (isFoodShopType(biz)) return false;
     if (globalThis.POSFootwear?.shopKind?.(biz) === "bar") return true;
-    const cat = String(biz?.category || "").toLowerCase().trim();
-    return cat === "bar & lounge" || cat === "bar" || cat === "liquor";
+    return false;
   }
 
   function bottleMl(product, settings) {
