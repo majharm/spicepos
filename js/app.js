@@ -665,7 +665,7 @@ const VIEW_META = {
   orders: { title: "Invoices", subtitle: "Search, print POS or A4, and update payment" },
   returns: { title: "Manage Returns", subtitle: "Pharmacy and garment returns against a sales invoice" },
   "qr-orders": { title: "QR Orders", subtitle: "Incoming customer self-orders" },
-  "online-orders": { title: "Zomato / Swiggy", subtitle: "Live delivery-platform orders" },
+  "online-orders": { title: "Online orders", subtitle: "Zomato and Swiggy kitchen tickets" },
   prescriptions: { title: "Prescription Orders", subtitle: "Customer QR uploads for this pharmacy" },
   kot: { title: "Kitchen KOT", subtitle: "Captain fires tickets; kitchen marks preparing and ready" },
   purchases: { title: "Purchases", subtitle: "20 pcs = 20 barcodes you type or scan" },
@@ -8448,6 +8448,7 @@ async function loadAggregatorSettings() {
     const origin = location.origin;
     if ($("set-zomato-hook")) $("set-zomato-hook").textContent = origin + (data.webhooks?.zomato || A.webhookPath("zomato", shopBusinessId()));
     if ($("set-swiggy-hook")) $("set-swiggy-hook").textContent = origin + (data.webhooks?.swiggy || A.webhookPath("swiggy", shopBusinessId()));
+    paintAggregatorSetupCard();
   } catch {
     /* optional on older servers */
   }
@@ -8483,42 +8484,137 @@ function paintAggregatorBadge() {
   }
 }
 
+function paintAggregatorLanes() {
+  const A = aggregatorApi();
+  const el = $("agg-lane-stats");
+  if (!el || !A) return;
+  const lanes = A.laneCounts(aggOrderCache);
+  el.innerHTML = [
+    ["New", lanes.pending],
+    ["Kitchen", lanes.kitchen],
+    ["Ready", lanes.ready],
+    ["Rider", lanes.out],
+  ].map(([label, value]) => `<div class="items-stat"><span>${label}</span><strong>${value}</strong></div>`).join("");
+}
+
+function paintAggregatorSoundToggle() {
+  const btn = $("agg-sound-toggle");
+  if (!btn) return;
+  const on = globalThis.POSQrNotify?.soundOn?.() !== false;
+  btn.textContent = on ? "Sound on" : "Sound off";
+  btn.setAttribute("aria-pressed", on ? "true" : "false");
+  btn.classList.toggle("is-sounding", on);
+}
+
+function hideAggregatorToast() {
+  const toast = $("agg-order-toast");
+  if (toast) toast.hidden = true;
+}
+
+function showAggregatorToast(order, extra = 0) {
+  const A = aggregatorApi();
+  const toast = $("agg-order-toast");
+  if (!toast || !order) return;
+  if ($("agg-toast-kicker")) $("agg-toast-kicker").textContent = `NEW ${String(A?.sourceLabel(order.source) || "ONLINE").toUpperCase()}`;
+  if ($("agg-toast-title")) $("agg-toast-title").textContent = `${A?.sourceLabel(order.source) || "Online"} ${order.order_number || ""}`.trim();
+  if ($("agg-toast-copy")) {
+    const guest = order.customer_name || "Guest";
+    const more = extra > 0 ? ` · +${extra} more` : "";
+    $("agg-toast-copy").textContent = `${guest}${order.fulfillment === "pickup" ? " · Pickup" : " · Delivery"}${more}`;
+  }
+  toast.hidden = false;
+}
+
+function paintAggregatorSetupCard() {
+  const zOn = $("set-zomato-enabled")?.checked;
+  const sOn = $("set-swiggy-enabled")?.checked;
+  const zHook = $("set-zomato-hook")?.textContent || "/api/webhooks/zomato?shop=";
+  const sHook = $("set-swiggy-hook")?.textContent || "/api/webhooks/swiggy?shop=";
+  if ($("agg-zomato-hook")) $("agg-zomato-hook").textContent = zHook;
+  if ($("agg-swiggy-hook")) $("agg-swiggy-hook").textContent = sHook;
+  if ($("agg-zomato-state")) $("agg-zomato-state").textContent = zOn ? "Live" : "Off — turn on in Settings";
+  if ($("agg-swiggy-state")) $("agg-swiggy-state").textContent = sOn ? "Live" : "Off — turn on in Settings";
+  $("agg-zomato-hook")?.closest(".agg-hook")?.classList.toggle("is-on", Boolean(zOn));
+  $("agg-swiggy-hook")?.closest(".agg-hook")?.classList.toggle("is-on", Boolean(sOn));
+}
+
+function aggregatorTotalsHtml(order) {
+  const save = Math.round((Number(order.discount) || 0) * 100) / 100;
+  const tax = Math.round((Number(order.tax) || 0) * 100) / 100;
+  const disc = save > 0
+    ? `<div class="qr-order-total qr-order-discount"><span>Platform discount</span><strong>−${money(save)}</strong></div>`
+    : "";
+  const gst = tax > 0 ? `<div class="qr-order-total"><span>GST / tax</span><strong>${money(tax)}</strong></div>` : "";
+  return `${disc}${gst}<div class="qr-order-total"><span>Ticket total</span><strong>${money(order.total)}</strong></div>`;
+}
+
 function renderAggregatorOrders() {
   const A = aggregatorApi();
   const el = $("agg-order-list");
   if (!el || !A) return;
+  const query = String($("agg-order-search")?.value || "").trim().toLowerCase();
   const rows = (aggOrderCache || []).filter((row) => {
     if (aggSourceFilter && row.source !== aggSourceFilter) return false;
-    if (!aggStatusFilter) return A.isOpen(row.status);
-    return row.status === aggStatusFilter;
+    if (!aggStatusFilter) {
+      if (!A.isOpen(row.status)) return false;
+    } else if (aggStatusFilter === "kitchen") {
+      if (!["accepted", "preparing"].includes(row.status)) return false;
+    } else if (row.status !== aggStatusFilter) return false;
+    const hay = [
+      row.order_number,
+      row.customer_name,
+      row.mobile,
+      row.address,
+      row.notes,
+      ...(row.lines || []).map((line) => `${line.name || ""} ${line.notes || ""}`),
+    ].join(" ").toLowerCase();
+    return !query || hay.includes(query);
   });
   el.innerHTML = rows.length
     ? rows
         .map((order) => {
-          const lines = (order.lines || [])
-            .map((line) => `<li>${escapeHtml(line.name)} × ${escapeHtml(String(line.qty))}${line.notes ? ` <em>${escapeHtml(line.notes)}</em>` : ""}</li>`)
-            .join("");
+          const source = A.normalizeSource(order.source) || "zomato";
+          const closed = ["delivered", "cancelled", "rejected"].includes(order.status);
           const actions = A.nextActions(order.status)
-            .map((st) => `<button class="btn ${st === "accepted" ? "primary" : ""}" type="button" data-agg-status-next="${escapeHtml(st)}">${escapeHtml(A.actionLabel(st))}</button>`)
+            .map((st) => `<button class="btn ${st === "accepted" ? "primary" : st === "rejected" || st === "cancelled" ? "danger" : st === "ready" || st === "delivered" ? "primary" : ""}" type="button" data-agg-status-next="${escapeHtml(st)}">${escapeHtml(A.actionLabel(st))}</button>`)
             .join("");
-          return `<article class="qr-order-card ${order.status === "pending" ? "is-pending" : ""}" data-agg-order="${escapeHtml(order.id)}">
-            <header>
-              <strong>${escapeHtml(A.sourceLabel(order.source))} · ${escapeHtml(order.order_number)}</strong>
-              <span>${escapeHtml(A.statusLabel(order.status))} · ${escapeHtml(order.fulfillment === "pickup" ? "Pickup" : "Delivery")}</span>
+          const seat = order.fulfillment === "pickup" ? "Parcel / pickup" : `${A.sourceLabel(source)} delivery`;
+          const prep = order.prep_minutes ? ` · ${escapeHtml(String(order.prep_minutes))} min prep` : "";
+          return `<article class="qr-order-card agg-ticket is-${escapeHtml(order.status || "pending")} is-${escapeHtml(source)}${order.status === "pending" ? " is-pending" : ""}" data-agg-order="${escapeHtml(order.id)}">
+            <header class="qr-order-head">
+              <div>
+                <span class="agg-brand is-${escapeHtml(source)}">${escapeHtml(A.sourceLabel(source))}</span>
+                <h3>${escapeHtml(order.order_number)}</h3>
+                <p class="qr-order-meta">${escapeHtml(formatShopDateTime(order.created_at))}${prep}</p>
+              </div>
+              <span class="qr-order-status is-${escapeHtml(order.status || "pending")}">${escapeHtml(A.statusLabel(order.status))}</span>
             </header>
-            <p>${escapeHtml(order.customer_name || "Guest")}${order.mobile ? ` · ${escapeHtml(order.mobile)}` : ""} · ${escapeHtml(money(order.total))}</p>
-            ${order.address ? `<p class="field-hint">${escapeHtml(order.address)}</p>` : ""}
-            <ul>${lines}</ul>
-            <p class="dash-actions">
+            <p class="qr-order-meta"><strong>${escapeHtml(order.customer_name || "Guest")}</strong>${order.mobile ? ` · ${escapeHtml(order.mobile)}` : ""} · ${escapeHtml(seat)}</p>
+            ${order.address ? `<p class="qr-order-note">${escapeHtml(order.address)}</p>` : ""}
+            <div class="qr-order-lines">${(order.lines || []).map((line) => {
+              const si = String(line.notes || "").trim();
+              return `<div class="qr-order-line"><span>${escapeHtml(line.name)} · ${escapeHtml(String(line.qty))}${si ? `<small class="qr-line-si">${escapeHtml(si)}</small>` : ""}</span><strong>${money(line.amount)}</strong></div>`;
+            }).join("")}</div>
+            ${aggregatorTotalsHtml(order)}
+            ${order.notes ? `<p class="qr-order-note">Note: ${escapeHtml(order.notes)}</p>` : ""}
+            <div class="qr-order-actions">
               ${actions}
-              <button class="btn" type="button" data-agg-kot>Kitchen KOT</button>
-              <button class="btn" type="button" data-agg-counter>Open in Counter</button>
-            </p>
+              ${!closed && order.status !== "pending" ? `<button class="btn" type="button" data-agg-kot>Kitchen KOT</button>` : ""}
+              ${!closed ? `<button class="btn" type="button" data-agg-counter>Open in Counter</button>` : ""}
+            </div>
           </article>`;
         })
         .join("")
-    : `<div class="item-empty-card"><strong>No platform orders</strong><p>Turn on Zomato or Swiggy in Settings, or send a test order.</p></div>`;
+    : `<p class="item-empty-card"><strong>No online tickets here</strong><span>New Zomato and Swiggy orders ding and appear as kitchen tickets. Use Test Zomato or Test Swiggy to try the desk.</span></p>`;
   paintAggregatorBadge();
+  paintAggregatorLanes();
+  paintAggregatorSetupCard();
+  paintAggregatorSoundToggle();
+  const hint = $("agg-orders-hint");
+  if (hint && !hint.classList.contains("error")) {
+    hint.textContent = rows.length ? `${rows.length} ticket${rows.length === 1 ? "" : "s"}` : "";
+    hint.className = "hint";
+  }
 }
 
 async function loadAggregatorOrders({ announce = false } = {}) {
@@ -8533,7 +8629,8 @@ async function loadAggregatorOrders({ announce = false } = {}) {
     renderAggregatorOrders();
     if (announce && incoming.length) {
       globalThis.POSQrNotify?.playTone?.({ force: true });
-      setHint(`${incoming.length} new ${aggregatorApi()?.sourceLabel(incoming[0].source) || "platform"} order${incoming.length === 1 ? "" : "s"}`, "ok");
+      showAggregatorToast(incoming[0], incoming.length - 1);
+      setHint(`${incoming.length} new ${aggregatorApi()?.sourceLabel(incoming[0].source) || "online"} order${incoming.length === 1 ? "" : "s"}`, "ok");
     }
   } catch (err) {
     if ($("agg-orders-hint")) {
@@ -8544,11 +8641,21 @@ async function loadAggregatorOrders({ announce = false } = {}) {
 }
 
 async function updateAggregatorOrder(order, status) {
-  await api(`/api/aggregator/orders/${encodeURIComponent(order.id)}`, {
+  const data = await api(`/api/aggregator/orders/${encodeURIComponent(order.id)}`, {
     method: "PATCH",
     body: JSON.stringify({ status }),
   });
+  if (status === "accepted") {
+    setHint("Order accepted · sending kitchen KOT", "ok");
+    try {
+      await sendAggregatorKot(data.order || order);
+      return data.order || order;
+    } catch (err) {
+      setHint(`Accepted. Kitchen KOT failed: ${err.message}`, "error");
+    }
+  }
   await loadAggregatorOrders();
+  return data.order || order;
 }
 
 async function sendAggregatorKot(order) {
@@ -10547,6 +10654,33 @@ $("kot-toast-open")?.addEventListener("click", () => {
   showView("kot");
 });
 $("kot-toast-dismiss")?.addEventListener("click", hideKotToast);
+$("agg-sound-toggle")?.addEventListener("click", () => {
+  const on = globalThis.POSQrNotify?.soundOn?.() !== false;
+  if (!on) {
+    const ok = globalThis.POSQrNotify?.setSoundOn?.(true);
+    globalThis.POSQrNotify?.playTone?.({ force: true });
+    paintAggregatorSoundToggle();
+    setHint(ok === false ? "Tap Sound on again if you did not hear a ding." : "Online order sound on.", "ok");
+    return;
+  }
+  globalThis.POSQrNotify?.setSoundOn?.(false);
+  paintAggregatorSoundToggle();
+  setHint("Online order sound off.", "ok");
+});
+$("agg-order-search")?.addEventListener("input", renderAggregatorOrders);
+$("agg-toast-open")?.addEventListener("click", () => {
+  hideAggregatorToast();
+  showView("online-orders");
+});
+$("agg-toast-dismiss")?.addEventListener("click", hideAggregatorToast);
+$("agg-copy-zomato")?.addEventListener("click", async () => {
+  const text = $("agg-zomato-hook")?.textContent || "";
+  try { await navigator.clipboard.writeText(text); setHint("Zomato webhook copied", "ok"); } catch { setHint(text, "ok"); }
+});
+$("agg-copy-swiggy")?.addEventListener("click", async () => {
+  const text = $("agg-swiggy-hook")?.textContent || "";
+  try { await navigator.clipboard.writeText(text); setHint("Swiggy webhook copied", "ok"); } catch { setHint(text, "ok"); }
+});
 $("agg-refresh")?.addEventListener("click", () => void loadAggregatorOrders());
 $("agg-sandbox-zomato")?.addEventListener("click", () => void sandboxAggregatorOrder("zomato").catch((err) => setHint(err.message, "error")));
 $("agg-sandbox-swiggy")?.addEventListener("click", () => void sandboxAggregatorOrder("swiggy").catch((err) => setHint(err.message, "error")));

@@ -6,7 +6,7 @@
     <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
     <title>ATAV POS</title>
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./css/pos.css?v=20261006fast1" />
+    <link rel="stylesheet" href="./css/pos.css?v=20261012agg2" />
     <link rel="stylesheet" href="./css/saas.css?v=20260905deploy136" />
     <link rel="stylesheet" href="./css/bar.css?v=20261011bar2" />
     <link rel="stylesheet" href="./css/resort.css?v=20261011resort1" />
@@ -37,7 +37,7 @@
             <button class="nav-btn" type="button" data-view="orders"><span class="nav-icon" aria-hidden="true">▤</span><span data-i18n="nav.invoices">Invoices</span></button>
             <button class="nav-btn classic-bill-only" type="button" data-view="returns"><span class="nav-icon" aria-hidden="true">↺</span><span data-i18n="nav.returns">Manage Returns</span></button>
             <button class="nav-btn pharmacy-hide" type="button" data-view="qr-orders"><span class="nav-icon" aria-hidden="true">▦</span><span data-i18n="nav.qr_orders">QR Orders</span> <span class="nav-badge" id="qr-order-badge" hidden></span></button>
-            <button class="nav-btn pharmacy-hide" type="button" data-view="online-orders"><span class="nav-icon" aria-hidden="true">▢</span>Zomato / Swiggy <span class="nav-badge" id="agg-order-badge" hidden></span></button>
+            <button class="nav-btn pharmacy-hide" type="button" data-view="online-orders"><span class="nav-icon" aria-hidden="true">▢</span>Online orders <span class="nav-badge" id="agg-order-badge" hidden></span></button>
             <button class="nav-btn pharmacy-only" type="button" data-view="prescriptions"><span class="nav-icon" aria-hidden="true">▦</span>Prescriptions <span class="nav-badge" id="rx-badge" hidden></span></button>
             <button class="nav-btn" type="button" data-view="offers"><span class="nav-icon" aria-hidden="true">%</span><span data-i18n="nav.offers">Offers</span></button>
           </div>
@@ -78,7 +78,7 @@
             <button class="nav-btn classic-bill-only" type="button" data-view="returns" data-hub-kind="pharmacy,apparel,footwear"><span class="nav-icon" aria-hidden="true">↺</span>Returns</button>
             <button class="nav-btn" type="button" data-view="kot" data-hub-kind="restaurant"><span class="nav-icon" aria-hidden="true">▣</span>KOT / Kitchen</button>
             <button class="nav-btn" type="button" data-view="qr-orders" data-hub-kind="restaurant"><span class="nav-icon" aria-hidden="true">▦</span>QR Ordering</button>
-            <button class="nav-btn" type="button" data-view="online-orders" data-hub-kind="restaurant,bar"><span class="nav-icon" aria-hidden="true">▢</span>Zomato / Swiggy</button>
+            <button class="nav-btn" type="button" data-view="online-orders" data-hub-kind="restaurant,bar"><span class="nav-icon" aria-hidden="true">▢</span>Online orders</button>
             <button class="nav-btn" type="button" data-view="items" data-hub-kind="apparel,footwear"><span class="nav-icon" aria-hidden="true">◫</span>Size / Colour</button>
             <button class="nav-btn" type="button" data-view="barcodes" data-hub-kind="electronics"><span class="nav-icon" aria-hidden="true">▦</span>Serial / IMEI</button>
             <button class="nav-btn" type="button" data-view="items" data-hub-kind="services"><span class="nav-icon" aria-hidden="true">◫</span>Services</button>
@@ -982,36 +982,60 @@
           </div>
         </section>
         <section class="view" id="view-online-orders" hidden>
-          <div class="qr-orders-page">
-            <header class="qr-orders-hero">
+          <div class="qr-orders-page agg-desk">
+            <header class="qr-orders-hero agg-hero">
               <div>
-                <p class="items-kicker">Delivery platforms</p>
-                <h2>Zomato &amp; Swiggy</h2>
-                <p>Orders placed on Zomato or Swiggy land here through their POS APIs. Accept, send a kitchen KOT, mark ready, and hand the bag to the rider without a second tablet.</p>
+                <p class="items-kicker">Restaurant desk</p>
+                <h2>Online orders</h2>
+                <p>Zomato and Swiggy tickets land here like a table order. Accept, fire the kitchen KOT, mark food ready, then hand the bag to the rider.</p>
               </div>
               <div class="qr-orders-hero-actions">
+                <button class="btn" type="button" id="agg-sound-toggle" aria-pressed="true">Sound on</button>
                 <button class="btn" type="button" id="agg-refresh">Refresh</button>
-                <button class="btn" type="button" id="agg-sandbox-zomato">Test Zomato order</button>
-                <button class="btn" type="button" id="agg-sandbox-swiggy">Test Swiggy order</button>
+                <button class="btn" type="button" id="agg-sandbox-zomato">Test Zomato</button>
+                <button class="btn" type="button" id="agg-sandbox-swiggy">Test Swiggy</button>
               </div>
             </header>
-            <div class="qr-orders-toolbar">
+            <div class="items-hero-stats agg-lane-stats" id="agg-lane-stats"></div>
+            <section class="qr-setup-card agg-setup-card" id="agg-setup-card">
+              <div>
+                <p class="items-kicker">PLATFORM HOOKUP</p>
+                <h3>Zomato &amp; Swiggy on this shop</h3>
+                <p>Give each partner the webhook below. Orders ding here the same way QR table orders do. API keys stay in Settings.</p>
+                <div class="agg-hook-grid">
+                  <div class="agg-hook">
+                    <strong>Zomato</strong>
+                    <span id="agg-zomato-state">Off</span>
+                    <code id="agg-zomato-hook">/api/webhooks/zomato?shop=</code>
+                    <button class="btn" type="button" id="agg-copy-zomato">Copy webhook</button>
+                  </div>
+                  <div class="agg-hook">
+                    <strong>Swiggy</strong>
+                    <span id="agg-swiggy-state">Off</span>
+                    <code id="agg-swiggy-hook">/api/webhooks/swiggy?shop=</code>
+                    <button class="btn" type="button" id="agg-copy-swiggy">Copy webhook</button>
+                  </div>
+                </div>
+              </div>
+            </section>
+            <div class="qr-orders-toolbar agg-toolbar">
               <div class="qr-status-tabs" id="agg-source-tabs">
                 <button type="button" class="active" data-agg-source="">All</button>
-                <button type="button" data-agg-source="zomato">Zomato</button>
-                <button type="button" data-agg-source="swiggy">Swiggy</button>
+                <button type="button" class="agg-tab-zomato" data-agg-source="zomato">Zomato</button>
+                <button type="button" class="agg-tab-swiggy" data-agg-source="swiggy">Swiggy</button>
               </div>
               <div class="qr-status-tabs" id="agg-status-tabs">
                 <button type="button" class="active" data-agg-status="">Open</button>
                 <button type="button" data-agg-status="pending">New</button>
-                <button type="button" data-agg-status="accepted">Accepted</button>
+                <button type="button" data-agg-status="kitchen">Kitchen</button>
                 <button type="button" data-agg-status="ready">Ready</button>
-                <button type="button" data-agg-status="dispatched">Out</button>
-                <button type="button" data-agg-status="delivered">Delivered</button>
+                <button type="button" data-agg-status="dispatched">Rider</button>
+                <button type="button" data-agg-status="delivered">Done</button>
               </div>
+              <input id="agg-order-search" type="search" placeholder="Search order, guest, or dish…" autocomplete="off" />
             </div>
             <p class="hint" id="agg-orders-hint"></p>
-            <div class="qr-order-list" id="agg-order-list"></div>
+            <div class="qr-order-list agg-order-list" id="agg-order-list"></div>
           </div>
         </section>
         <section class="view" id="view-prescriptions" hidden>
@@ -2778,22 +2802,25 @@
                     <div id="table-shift-history" class="table-wrap"></div>
                   </fieldset>
                   <fieldset class="item-block aggregator-only" id="set-aggregator" hidden>
-                    <legend>Zomato &amp; Swiggy</legend>
-                    <label class="full"><input id="set-zomato-enabled" type="checkbox" /> Enable Zomato orders</label>
-                    <label class="full"><input id="set-swiggy-enabled" type="checkbox" /> Enable Swiggy orders</label>
-                    <label class="full"><input id="set-agg-auto-accept" type="checkbox" /> Auto-accept new platform orders</label>
-                    <label>Default prep minutes <input id="set-agg-prep" type="number" min="5" max="90" value="20" /></label>
-                    <label>Zomato restaurant ID <input id="set-zomato-rid" maxlength="80" placeholder="From Zomato partner desk" autocomplete="off" /></label>
+                    <legend>Online orders — Zomato &amp; Swiggy</legend>
+                    <label class="full"><input id="set-zomato-enabled" type="checkbox" /> Take Zomato orders on this shop</label>
+                    <label class="full"><input id="set-swiggy-enabled" type="checkbox" /> Take Swiggy orders on this shop</label>
+                    <label class="full"><input id="set-agg-auto-accept" type="checkbox" /> Auto-accept and send kitchen KOT</label>
+                    <label>Kitchen prep minutes <input id="set-agg-prep" type="number" min="5" max="90" value="20" /></label>
+                    <label>Zomato restaurant ID <input id="set-zomato-rid" maxlength="80" placeholder="Outlet ID from Zomato" autocomplete="off" /></label>
                     <label>Zomato API key <input id="set-zomato-key" maxlength="180" placeholder="Partner API key" autocomplete="off" /></label>
-                    <label>Zomato webhook secret <input id="set-zomato-secret" maxlength="180" placeholder="Webhook header secret" autocomplete="off" /></label>
-                    <label class="full">Zomato API base <input id="set-zomato-base" maxlength="180" placeholder="https://api.zomato.com" /></label>
-                    <label>Swiggy outlet ID <input id="set-swiggy-oid" maxlength="80" placeholder="From Swiggy partner desk" autocomplete="off" /></label>
+                    <label>Zomato webhook secret <input id="set-zomato-secret" maxlength="180" placeholder="Optional header secret" autocomplete="off" /></label>
+                    <label>Swiggy outlet ID <input id="set-swiggy-oid" maxlength="80" placeholder="Outlet ID from Swiggy" autocomplete="off" /></label>
                     <label>Swiggy API key <input id="set-swiggy-key" maxlength="180" placeholder="Partner API key" autocomplete="off" /></label>
-                    <label>Swiggy webhook secret <input id="set-swiggy-secret" maxlength="180" placeholder="Webhook header secret" autocomplete="off" /></label>
-                    <label class="full">Swiggy API base <input id="set-swiggy-base" maxlength="180" placeholder="https://partner.swiggy.com" /></label>
-                    <p class="item-composer-note full">Give Zomato and Swiggy these webhook URLs. They push live orders here; Accept / Reject / Ready call their POS APIs when a key is saved.</p>
+                    <label>Swiggy webhook secret <input id="set-swiggy-secret" maxlength="180" placeholder="Optional header secret" autocomplete="off" /></label>
+                    <p class="item-composer-note full">Copy the webhook URLs from the Online orders board and paste them in the Zomato / Swiggy partner desk. Keys stay hidden after save.</p>
                     <p class="field-hint full">Zomato webhook: <code id="set-zomato-hook">/api/webhooks/zomato?shop=</code></p>
                     <p class="field-hint full">Swiggy webhook: <code id="set-swiggy-hook">/api/webhooks/swiggy?shop=</code></p>
+                    <details class="full agg-advanced">
+                      <summary>Advanced API URLs</summary>
+                      <label class="full">Zomato API base <input id="set-zomato-base" maxlength="180" placeholder="https://api.zomato.com" /></label>
+                      <label class="full">Swiggy API base <input id="set-swiggy-base" maxlength="180" placeholder="https://partner.swiggy.com" /></label>
+                    </details>
                   </fieldset>
                   <fieldset class="item-block">
                     <legend>Timezone</legend>
@@ -2978,6 +3005,15 @@
       <button class="btn primary" type="button" id="kot-toast-open">Open</button>
       <button class="icon-btn qr-toast-x" type="button" id="kot-toast-dismiss" aria-label="Dismiss">×</button>
     </div>
+    <div class="qr-order-toast agg-order-toast" id="agg-order-toast" hidden role="status" aria-live="assertive">
+      <div>
+        <p class="qr-toast-kicker" id="agg-toast-kicker">NEW ONLINE ORDER</p>
+        <strong id="agg-toast-title">New Zomato / Swiggy order</strong>
+        <p id="agg-toast-copy"></p>
+      </div>
+      <button class="btn primary" type="button" id="agg-toast-open">Open</button>
+      <button class="icon-btn qr-toast-x" type="button" id="agg-toast-dismiss" aria-label="Dismiss">×</button>
+    </div>
     <div class="qr-order-toast" id="qr-order-toast" hidden role="status" aria-live="assertive">
       <div>
         <p class="qr-toast-kicker">NEW QR ORDER</p>
@@ -3093,7 +3129,7 @@
     <script src="./js/footwear.js?v=20261012fix1" defer></script>
     <script src="./js/restaurant.js?v=20261012kot2" defer></script>
     <script src="./js/pay-integrity.js?v=20261012table1" defer></script>
-    <script src="./js/aggregator.js?v=20261012agg1" defer></script>
+    <script src="./js/aggregator.js?v=20261012agg2" defer></script>
     <script src="./js/discount.js?v=20260905deploy136" defer></script>
     <script src="./js/offers.js?v=20260905deploy170" defer></script>
     <script src="./js/loyalty.js?v=20260905deploy136" defer></script>
@@ -3121,7 +3157,7 @@
     <script src="./js/resort-ui.js?v=20261011resort1" defer></script>
     <script src="./js/item-master.js?v=20261012brand1" defer></script>
     <script src="./js/customer-master.js?v=20261012cust1" defer></script>
-    <script src="./js/app.js?v=20261012agg1" defer></script>
+    <script src="./js/app.js?v=20261012agg2" defer></script>
     <script src="./js/item-master-ui.js?v=20261012brand1" defer></script>
     <script src="./js/customer-master-ui.js?v=20261012cust1" defer></script>
     <script src="./js/mobile-app.js?v=20261012m3" defer></script>
