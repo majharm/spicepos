@@ -3,10 +3,12 @@ import { hashPassword, verifyPassword } from "./password.js";
 import { requireMaster, issueStaffSession } from "./auth.js";
 import { displayName } from "./roles.js";
 import { platformAudit } from "./audit.js";
-import { registerBusiness, updateBusiness } from "./onboard.js";
+import { registerBusiness, updateBusiness, normalizeDsaCode } from "./onboard.js";
 import { defaultPerms } from "./roles.js";
 import { publicStatus } from "./auth.js";
-import { createdToday } from "./sql-time.js";
+import { createdToday, createdBetween } from "./sql-time.js";
+import { assembleDsaSales, dsaSalesToSheets } from "./reports.js";
+import { workbookXml } from "./excel.js";
 import { getPlatformSettings, setPlatformSetting } from "./settings.js";
 import { normalizeLocale } from "./i18n.js";
 import { cleanShopData, registerMasterBackup, tickBackupEmail } from "./backup.js";
@@ -107,6 +109,49 @@ async function notifyPasswordChange(user, password, req) {
   }
 }
 
+async function buildMasterDsaSales(queryParams = {}) {
+  const from = String(queryParams.from || "").slice(0, 10) || new Date().toISOString().slice(0, 10);
+  const to = String(queryParams.to || "").slice(0, 10) || from;
+  const code = normalizeDsaCode(queryParams.code || "") || "";
+  const shops = await query(
+    `SELECT id, name, city, status, dsa_code
+     FROM businesses
+     WHERE dsa_code IS NOT NULL AND TRIM(dsa_code) <> ''
+     ORDER BY name`,
+  );
+  const ids = shops.map((s) => s.id);
+  let sales = [];
+  let refunds = {};
+  if (ids.length) {
+    const ph = ids.map(() => "?").join(",");
+    sales = await query(
+      `SELECT id, business_id, order_number, customer_name, status, subtotal, discount, gst, total,
+              payment_method, payment_status, created_at
+       FROM sales_orders
+       WHERE business_id IN (${ph}) AND ${createdBetween()}
+       ORDER BY created_at`,
+      [...ids, from, to],
+    );
+    try {
+      const refundRows = await query(
+        `SELECT r.order_id, COALESCE(SUM(r.refund_amount),0) AS refunded
+         FROM sales_returns r
+         JOIN sales_orders o ON o.id = r.order_id AND o.business_id = r.business_id
+         WHERE o.business_id IN (${ph}) AND ${createdBetween("o")}
+           AND LOWER(COALESCE(r.status,'')) <> 'cancelled'
+         GROUP BY r.order_id`,
+        [...ids, from, to],
+      );
+      refunds = Object.fromEntries(
+        (refundRows || []).map((r) => [String(r.order_id), Number(r.refunded) || 0]),
+      );
+    } catch {
+      refunds = {};
+    }
+  }
+  return assembleDsaSales(shops, sales, refunds, { code, from, to });
+}
+
 export function registerMaster(app) {
   app.use("/api/master", requireMaster);
   registerMasterBackup(app);
@@ -117,7 +162,7 @@ export function registerMaster(app) {
       const today = createdToday();
       const [byBiz, [devices]] = await Promise.all([
         query(
-          `SELECT b.id, b.name, b.status, b.subscription_expires_at, b.plan_id,
+          `SELECT b.id, b.name, b.status, b.subscription_expires_at, b.plan_id, b.dsa_code,
                   p.name AS plan_name, p.fee_monthly,
                   COALESCE(u.users, 0) AS users,
                   COALESCE(br.branches, 0) AS branches,
@@ -169,6 +214,26 @@ export function registerMaster(app) {
       };
     }),
   );
+
+  app.get("/api/master/dsa-sales", (req, res) =>
+    send(res, () => buildMasterDsaSales(req.query || {})),
+  );
+
+  app.get("/api/master/dsa-sales/excel", async (req, res) => {
+    try {
+      const data = await buildMasterDsaSales(req.query || {});
+      const xml = workbookXml(dsaSalesToSheets(data));
+      const slug = String(data.code || "all").toLowerCase().replaceAll(/[^a-z0-9]+/g, "-") || "all";
+      res.setHeader("Content-Type", "application/vnd.ms-excel; charset=utf-8");
+      res.setHeader(
+        "Content-Disposition",
+        `attachment; filename="dsa-sales-${slug}-${data.from}-to-${data.to}.xls"`,
+      );
+      res.send(xml);
+    } catch (err) {
+      res.status(500).json({ error: String(err.message) });
+    }
+  });
 
   app.get("/api/master/plans", (_req, res) =>
     send(res, () => query("SELECT * FROM subscription_plans ORDER BY max_users")),

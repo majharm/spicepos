@@ -103,6 +103,199 @@ function pos_summarize_daily_sales($sales, $refundsByOrderId = []) {
   return ["invoices" => $invoices, "totals" => $totals];
 }
 
+function pos_assemble_dsa_sales($shops, $sales, $refundsByOrderId = [], $opts = []) {
+  [$start, $end] = pos_report_range($opts["from"] ?? null, $opts["to"] ?? null);
+  $wanted = function_exists("pos_normalize_dsa_code") ? pos_normalize_dsa_code($opts["code"] ?? "") : strtoupper(trim((string) ($opts["code"] ?? "")));
+  if ($wanted === "") $wanted = null;
+  $shopList = [];
+  foreach ($shops ?? [] as $s) {
+    if (trim((string) ($s["dsa_code"] ?? "")) !== "") $shopList[] = $s;
+  }
+  $salesByShop = [];
+  foreach ($sales ?? [] as $row) {
+    $bid = (string) ($row["business_id"] ?? "");
+    if (!isset($salesByShop[$bid])) $salesByShop[$bid] = [];
+    $salesByShop[$bid][] = $row;
+  }
+  $codeMap = [];
+  foreach ($shopList as $shop) {
+    $code = function_exists("pos_normalize_dsa_code") ? pos_normalize_dsa_code($shop["dsa_code"] ?? "") : strtoupper(trim((string) ($shop["dsa_code"] ?? "")));
+    if (!$code) continue;
+    $ds = pos_summarize_daily_sales($salesByShop[(string) $shop["id"]] ?? [], $refundsByOrderId);
+    if (!isset($codeMap[$code])) $codeMap[$code] = ["code" => $code, "shops" => 0, "bills" => 0, "net" => 0.0];
+    $codeMap[$code]["shops"] += 1;
+    $codeMap[$code]["bills"] += (int) ($ds["totals"]["bills"] ?? 0);
+    $codeMap[$code]["net"] = round($codeMap[$code]["net"] + (float) ($ds["totals"]["net"] ?? 0), 2);
+  }
+  if (!isset($codeMap["0001"])) $codeMap["0001"] = ["code" => "0001", "shops" => 0, "bills" => 0, "net" => 0.0];
+  $filtered = $wanted
+    ? array_values(array_filter($shopList, function ($s) use ($wanted) {
+        $code = function_exists("pos_normalize_dsa_code") ? pos_normalize_dsa_code($s["dsa_code"] ?? "") : strtoupper(trim((string) ($s["dsa_code"] ?? "")));
+        return $code === $wanted;
+      }))
+    : $shopList;
+  $shopRows = [];
+  $invoices = [];
+  $filteredIds = [];
+  foreach ($filtered as $shop) {
+    $ds = pos_summarize_daily_sales($salesByShop[(string) $shop["id"]] ?? [], $refundsByOrderId);
+    $t = $ds["totals"];
+    $code = function_exists("pos_normalize_dsa_code") ? pos_normalize_dsa_code($shop["dsa_code"] ?? "") : strtoupper(trim((string) ($shop["dsa_code"] ?? "")));
+    $shopRows[] = [
+      "id" => $shop["id"],
+      "name" => $shop["name"] ?? "—",
+      "city" => $shop["city"] ?? "",
+      "status" => $shop["status"] ?? "",
+      "dsa_code" => $code,
+      "bills" => $t["bills"],
+      "net" => $t["net"],
+      "cash" => $t["cash"],
+      "upi" => $t["upi"],
+      "card" => $t["card"],
+      "credit" => $t["credit"],
+      "paid" => $t["paid"],
+      "unpaid" => $t["unpaid"],
+      "partial" => $t["partial"],
+    ];
+    $filteredIds[(string) $shop["id"]] = true;
+    foreach ($ds["invoices"] as $inv) {
+      $invoices[] = array_merge($inv, [
+        "business_id" => $shop["id"],
+        "shop_name" => $shop["name"] ?? "—",
+        "dsa_code" => $code,
+      ]);
+    }
+  }
+  $filteredSales = [];
+  foreach ($sales ?? [] as $row) {
+    if (isset($filteredIds[(string) ($row["business_id"] ?? "")])) $filteredSales[] = $row;
+  }
+  $totals = pos_summarize_daily_sales($filteredSales, $refundsByOrderId)["totals"];
+  $totals["shops"] = count($shopRows);
+  $codes = array_values($codeMap);
+  usort($codes, function ($a, $b) { return strcmp($a["code"], $b["code"]); });
+  return [
+    "from" => $start,
+    "to" => $end,
+    "code" => $wanted ?: "",
+    "codes" => $codes,
+    "shops" => $shopRows,
+    "invoices" => $invoices,
+    "totals" => $totals,
+  ];
+}
+
+function pos_build_dsa_sales($code, $from, $to) {
+  if (function_exists("pos_ensure_report_columns")) pos_ensure_report_columns();
+  $end = $to ?: date("Y-m-d");
+  $start = $from ?: $end;
+  $shops = pos_q(
+    "SELECT id, name, city, status, dsa_code
+     FROM businesses
+     WHERE dsa_code IS NOT NULL AND TRIM(dsa_code) <> ''
+     ORDER BY name"
+  ) ?: [];
+  $ids = [];
+  foreach ($shops as $s) $ids[] = $s["id"];
+  $sales = [];
+  $refunds = [];
+  if ($ids) {
+    $ph = implode(",", array_fill(0, count($ids), "?"));
+    $types = str_repeat("s", count($ids) + 2);
+    $params = array_merge($ids, [$start, $end]);
+    $sales = pos_q(
+      "SELECT id, business_id, order_number, customer_name, status, subtotal, discount, gst, total,
+              payment_method, payment_status, created_at
+       FROM sales_orders
+       WHERE business_id IN ($ph) AND " . pos_created_between() . "
+       ORDER BY created_at",
+      $types,
+      $params
+    ) ?: [];
+    try {
+      $refundRows = pos_q(
+        "SELECT r.order_id, COALESCE(SUM(r.refund_amount),0) AS refunded
+         FROM sales_returns r
+         JOIN sales_orders o ON o.id = r.order_id AND o.business_id = r.business_id
+         WHERE o.business_id IN ($ph) AND " . pos_created_between("o") . "
+           AND LOWER(COALESCE(r.status,'')) <> 'cancelled'
+         GROUP BY r.order_id",
+        $types,
+        $params
+      ) ?: [];
+      foreach ($refundRows as $r) {
+        $refunds[(string) ($r["order_id"] ?? "")] = pos_report_num($r["refunded"] ?? 0);
+      }
+    } catch (Exception $e) {
+      $refunds = [];
+    }
+  }
+  return pos_assemble_dsa_sales($shops, $sales, $refunds, ["code" => $code, "from" => $start, "to" => $end]);
+}
+
+function pos_dsa_sales_to_sheets($data) {
+  $num = function ($v) { return pos_report_num($v); };
+  $t = $data["totals"] ?? [];
+  $shopRows = [];
+  foreach ($data["shops"] ?? [] as $s) {
+    $shopRows[] = [
+      $s["name"] ?? "",
+      $s["city"] ?? "",
+      $s["dsa_code"] ?? "",
+      $num($s["bills"] ?? 0),
+      $num($s["cash"] ?? 0),
+      $num($s["upi"] ?? 0),
+      $num($s["card"] ?? 0),
+      $num($s["credit"] ?? 0),
+      $num($s["net"] ?? 0),
+    ];
+  }
+  $invRows = [];
+  foreach ($data["invoices"] ?? [] as $o) {
+    $invRows[] = [
+      $o["shop_name"] ?? "",
+      $o["order_number"] ?? "",
+      (string) ($o["created_at"] ?? ""),
+      $o["customer_name"] ?? "",
+      $o["payment_method"] ?? ($o["payment_mode"] ?? ""),
+      $o["payment_status"] ?? "",
+      $num($o["subtotal"] ?? 0),
+      $num($o["discount"] ?? 0),
+      $num($o["gst"] ?? 0),
+      $num($o["returned"] ?? 0),
+      $num($o["net"] ?? 0),
+    ];
+  }
+  return [
+    [
+      "name" => "DSA summary",
+      "headers" => ["DSA", "From", "To", "Shops", "Invoices", "Cash", "UPI", "Card", "Credit", "Total"],
+      "rows" => [[
+        $data["code"] ?: "All",
+        $data["from"] ?? "",
+        $data["to"] ?? "",
+        $num($t["shops"] ?? 0),
+        $num($t["bills"] ?? 0),
+        $num($t["cash"] ?? 0),
+        $num($t["upi"] ?? 0),
+        $num($t["card"] ?? 0),
+        $num($t["credit"] ?? 0),
+        $num($t["net"] ?? 0),
+      ]],
+    ],
+    [
+      "name" => "DSA shops",
+      "headers" => ["Shop", "City", "DSA", "Invoices", "Cash", "UPI", "Card", "Credit", "Total"],
+      "rows" => $shopRows,
+    ],
+    [
+      "name" => "DSA invoices",
+      "headers" => ["Shop", "Invoice", "Date & Time", "Customer", "Payment Mode", "Status", "Subtotal", "Discount", "GST", "Returned", "Amount"],
+      "rows" => $invRows,
+    ],
+  ];
+}
+
 function pos_report_range($from, $to) {
   $fy = function_exists("pos_indian_fy") ? pos_indian_fy() : ["from" => date("Y") . "-04-01", "to" => date("Y-m-d")];
   $end = $to ?: date("Y-m-d");
@@ -719,6 +912,18 @@ function pos_reports_excel_response($bid, $from, $to, $sheetFilter = "") {
   http_response_code(200);
   header("Content-Type: application/vnd.ms-excel; charset=utf-8");
   header("Content-Disposition: attachment; filename=\"reports-" . $slug . "-" . $data["from"] . "-to-" . $data["to"] . ".xls\"");
+  echo $xml;
+  exit;
+}
+
+function pos_dsa_sales_excel_response($code, $from, $to) {
+  $data = pos_build_dsa_sales($code, $from, $to);
+  $sheets = pos_dsa_sales_to_sheets($data);
+  $slug = strtolower(preg_replace("/[^a-z0-9]+/", "-", (string) ($data["code"] ?: "all"))) ?: "all";
+  $xml = pos_workbook_xml($sheets);
+  http_response_code(200);
+  header("Content-Type: application/vnd.ms-excel; charset=utf-8");
+  header("Content-Disposition: attachment; filename=\"dsa-sales-" . $slug . "-" . $data["from"] . "-to-" . $data["to"] . ".xls\"");
   echo $xml;
   exit;
 }

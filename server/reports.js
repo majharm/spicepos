@@ -8,6 +8,7 @@ import {
   splitOrderGst,
   sumSplitGst,
 } from "./gst-supply.js";
+import { DEFAULT_DSA_CODE, normalizeDsaCode } from "./onboard.js";
 import "../js/footwear.js";
 
 const POSFootwear = globalThis.POSFootwear;
@@ -121,6 +122,152 @@ export function summarizeDailySales(sales, refundsByOrderId = {}) {
     totals[payStatus] = (Number(totals[payStatus]) || 0) + 1;
   }
   return { invoices, totals };
+}
+
+export { DEFAULT_DSA_CODE };
+
+export function assembleDsaSales(shops = [], sales = [], refundsByOrderId = {}, opts = {}) {
+  const { start, end } = range(opts.from, opts.to);
+  const wanted = normalizeDsaCode(opts.code || "");
+  const shopList = (shops || []).filter((s) => String(s?.dsa_code || "").trim());
+  const salesByShop = new Map();
+  for (const row of sales || []) {
+    const bid = String(row.business_id || "");
+    if (!salesByShop.has(bid)) salesByShop.set(bid, []);
+    salesByShop.get(bid).push(row);
+  }
+  const codeMap = new Map();
+  const bumpCode = (code, bills, net) => {
+    const cur = codeMap.get(code) || { code, shops: 0, bills: 0, net: 0 };
+    cur.shops += 1;
+    cur.bills += bills;
+    cur.net = round2(cur.net + net);
+    codeMap.set(code, cur);
+  };
+  for (const shop of shopList) {
+    const code = normalizeDsaCode(shop.dsa_code);
+    if (!code) continue;
+    const ds = summarizeDailySales(salesByShop.get(String(shop.id)) || [], refundsByOrderId);
+    bumpCode(code, ds.totals.bills, ds.totals.net);
+  }
+  if (!codeMap.has(DEFAULT_DSA_CODE)) {
+    codeMap.set(DEFAULT_DSA_CODE, { code: DEFAULT_DSA_CODE, shops: 0, bills: 0, net: 0 });
+  }
+  const filtered = wanted
+    ? shopList.filter((s) => normalizeDsaCode(s.dsa_code) === wanted)
+    : shopList;
+  const shopRows = filtered.map((shop) => {
+    const ds = summarizeDailySales(salesByShop.get(String(shop.id)) || [], refundsByOrderId);
+    return {
+      id: shop.id,
+      name: shop.name || "—",
+      city: shop.city || "",
+      status: shop.status || "",
+      dsa_code: normalizeDsaCode(shop.dsa_code),
+      bills: ds.totals.bills,
+      net: ds.totals.net,
+      cash: ds.totals.cash,
+      upi: ds.totals.upi,
+      card: ds.totals.card,
+      credit: ds.totals.credit,
+      paid: ds.totals.paid,
+      unpaid: ds.totals.unpaid,
+      partial: ds.totals.partial,
+      invoices: ds.invoices,
+    };
+  });
+  const invoices = [];
+  for (const shop of shopRows) {
+    for (const inv of shop.invoices) {
+      invoices.push({
+        ...inv,
+        business_id: shop.id,
+        shop_name: shop.name,
+        dsa_code: shop.dsa_code,
+      });
+    }
+  }
+  const totals = summarizeDailySales(
+    (sales || []).filter((row) => filtered.some((s) => String(s.id) === String(row.business_id))),
+    refundsByOrderId,
+  ).totals;
+  totals.shops = shopRows.length;
+  return {
+    from: start,
+    to: end,
+    code: wanted || "",
+    codes: [...codeMap.values()].sort((a, b) => a.code.localeCompare(b.code)),
+    shops: shopRows.map(({ invoices: _inv, ...rest }) => rest),
+    invoices,
+    totals,
+  };
+}
+
+export function dsaSalesToSheets(data) {
+  const num = (v) => Number(v) || 0;
+  const t = data?.totals || {};
+  return [
+    {
+      name: "DSA summary",
+      headers: ["DSA", "From", "To", "Shops", "Invoices", "Cash", "UPI", "Card", "Credit", "Total"],
+      rows: [[
+        data.code || "All",
+        data.from,
+        data.to,
+        num(t.shops),
+        num(t.bills),
+        num(t.cash),
+        num(t.upi),
+        num(t.card),
+        num(t.credit),
+        num(t.net),
+      ]],
+    },
+    {
+      name: "DSA shops",
+      headers: ["Shop", "City", "DSA", "Invoices", "Cash", "UPI", "Card", "Credit", "Total"],
+      rows: (data.shops || []).map((s) => [
+        s.name,
+        s.city,
+        s.dsa_code,
+        num(s.bills),
+        num(s.cash),
+        num(s.upi),
+        num(s.card),
+        num(s.credit),
+        num(s.net),
+      ]),
+    },
+    {
+      name: "DSA invoices",
+      headers: [
+        "Shop",
+        "Invoice",
+        "Date & Time",
+        "Customer",
+        "Payment Mode",
+        "Status",
+        "Subtotal",
+        "Discount",
+        "GST",
+        "Returned",
+        "Amount",
+      ],
+      rows: (data.invoices || []).map((o) => [
+        o.shop_name,
+        o.order_number,
+        String(o.created_at || ""),
+        o.customer_name,
+        o.payment_method || o.payment_mode,
+        o.payment_status,
+        num(o.subtotal),
+        num(o.discount),
+        num(o.gst),
+        num(o.returned),
+        num(o.net),
+      ]),
+    },
+  ];
 }
 
 async function loadInvoiceRefunds(tenant, start, end) {

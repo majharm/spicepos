@@ -6,6 +6,9 @@ let seoPane = "overview";
 let websitePane = "images";
 let panelFlash = "";
 let alertLogFocus = "";
+let dsaCode = "0001";
+let dsaFrom = "";
+let dsaTo = "";
 
 async function api(path, options) {
   const { res, data } = await posRequest(path, options);
@@ -184,7 +187,7 @@ function showLogin(on) {
 }
 
 const NAV_FAMILIES = {
-  main: ["dash", "biz", "users", "plans"],
+  main: ["dash", "biz", "users", "plans", "dsa-sales"],
   alerts: ["expiry", "alert-log"],
   people: ["managers", "support"],
   advance: ["advance", "backup", "languages", "notes", "branches", "devices", "audit", "customers"],
@@ -198,6 +201,7 @@ const PAGE_HINTS = {
   biz: "Create and open shops",
   users: "Passwords and locked accounts",
   plans: "Yearly fees and limits",
+  "dsa-sales": "Invoice-wise sales by DSA code",
   expiry: "WhatsApp and email alerts",
   "alert-log": "Delivery history",
   managers: "Assign shops to support staff",
@@ -261,6 +265,7 @@ const MASTER_PAGES = [
   { tab: "biz", title: "Businesses", keywords: "shops create open pos" },
   { tab: "users", title: "Users", keywords: "password unlock login" },
   { tab: "plans", title: "Plans", keywords: "subscription fee yearly" },
+  { tab: "dsa-sales", title: "DSA Sales", keywords: "dsa 0001 agent invoice sales report" },
   { tab: "expiry", title: "Send alerts", keywords: "whatsapp email renewal" },
   { tab: "alert-log", title: "WA & Email log", keywords: "whatsapp email delivery" },
   { tab: "managers", title: "Account managers", keywords: "support assign" },
@@ -1192,6 +1197,26 @@ function todayYmdIst() {
   return new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
 }
 
+function formatMasterWhen(v) {
+  const s = String(v || "");
+  const m = s.match(/^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2})/);
+  if (m) return `${m[1]} ${m[2]}`;
+  return s.replace("T", " ").slice(0, 16);
+}
+
+function dsaPayChip(status) {
+  const s = String(status || "paid").toLowerCase();
+  const label = s === "unpaid" ? "Unpaid" : s === "partial" ? "Partial" : "Paid";
+  return `<span class="pay-status ${attr(s)}">${label}</span>`;
+}
+
+function dsaExcelHref() {
+  const from = dsaFrom || todayYmdIst();
+  const to = dsaTo || from;
+  const q = `from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&code=${encodeURIComponent(dsaCode || "0001")}`;
+  return typeof posUrl === "function" ? posUrl(`/api/master/dsa-sales/excel?${q}`) : `/api/master/dsa-sales/excel?${q}`;
+}
+
 function isExpiredBusiness(b) {
   const st = String(b?.computed_status || b?.status || "").toLowerCase();
   if (st === "expired") return true;
@@ -1804,6 +1829,7 @@ async function render() {
     managers: "Account managers",
     users: "Users",
     plans: "Subscription plans",
+    "dsa-sales": "DSA Sales",
     branches: "Branches",
     devices: "POS devices",
     audit: "Audit log",
@@ -1841,26 +1867,28 @@ async function render() {
           { label: "Expired", value: t.expired, warn: Number(t.expired) > 0 },
           { label: "Trial", value: t.trial },
           { label: "Users", value: t.users },
+          { label: "Today's sales", value: money(t.todaySales) },
           { label: "Fees / year", value: money(t.subscriptionRevenue) },
         ],
         `<div class="master-shop-toolbar">
         <label class="master-shop-search">Search shops
-          <input id="master-shop-q" type="search" placeholder="Name, plan, or status" autocomplete="off" />
+          <input id="master-shop-q" type="search" placeholder="Name, DSA, plan, or status" autocomplete="off" />
         </label>
-        <p class="hint">${t.branches || 0} branches · ${t.devices || 0} POS devices · ${t.transactions || 0} bills</p>
+        <p class="hint">${t.branches || 0} branches · ${t.devices || 0} POS devices · ${t.transactions || 0} bills today</p>
       </div>
       <div class="master-shop-board">${
         (d.businesses || []).length
           ? d.businesses
               .map(
                 (b) => `<article class="master-shop-card" data-shop-card data-shop-search="${attr(
-                  `${b.name} ${b.computed_status} ${b.plan_name || b.plan_id || ""}`.toLowerCase(),
+                  `${b.name} ${b.computed_status} ${b.plan_name || b.plan_id || ""} ${b.dsa_code || ""}`.toLowerCase(),
                 )}">
             <div class="master-shop-mark" aria-hidden="true">${letterMark(b.name)}</div>
             <div class="master-shop-copy">
               <strong>${attr(b.name)}</strong>
               <span class="master-shop-meta">${statusChip(b.computed_status)} ${attr(b.plan_name || b.plan_id || "—")} · ${money(b.fee_monthly)}/yr</span>
-              <span class="master-shop-meta">${Number(b.users) || 0} users · ${Number(b.branches) || 0} branches</span>
+              <span class="master-shop-meta">${money(b.today_sales)} today · ${Number(b.today_bills) || 0} bills · ${Number(b.users) || 0} users</span>
+              ${b.dsa_code ? `<span class="master-shop-meta"><span class="item-chip">DSA ${attr(b.dsa_code)}</span></span>` : ""}
             </div>
             <button class="btn primary" type="button" data-enter="${attr(b.id)}">Open POS</button>
           </article>`,
@@ -1998,7 +2026,7 @@ async function render() {
                   <input name="panNumber" maxlength="12" placeholder="Optional" />
                 </label>
                 <label class="full">DSA Code
-                  <input name="dsaCode" maxlength="32" autocomplete="off" placeholder="Optional — agent's code" />
+                  <input name="dsaCode" maxlength="32" autocomplete="off" placeholder="e.g. 0001" />
                 </label>
               </fieldset>
               <fieldset class="item-block">
@@ -2473,6 +2501,116 @@ async function render() {
           hint.className = "hint error";
         }
       };
+    } else if (tab === "dsa-sales") {
+      if (!dsaFrom || !dsaTo) {
+        dsaFrom = todayYmdIst();
+        dsaTo = dsaFrom;
+      }
+      if (!dsaCode) dsaCode = "0001";
+      const data = await api(
+        `/api/master/dsa-sales?code=${encodeURIComponent(dsaCode)}&from=${encodeURIComponent(dsaFrom)}&to=${encodeURIComponent(dsaTo)}`,
+      );
+      const t = data.totals || {};
+      const codes = data.codes || [];
+      body.innerHTML = masterDesk(
+        "Platform",
+        "DSA Sales",
+        "Invoice-wise sales for shops tagged with a DSA code. Totals use invoice amounts, skip cancelled bills, and net returns.",
+        [
+          { label: "Total sales", value: money(t.net) },
+          { label: "Shops", value: t.shops || 0 },
+          { label: "Invoices", value: t.bills || 0 },
+          { label: "Cash", value: money(t.cash) },
+          { label: "UPI", value: money(t.upi) },
+          { label: "Card", value: money(t.card) },
+          { label: "Credit", value: money(t.credit) },
+        ],
+        `<form class="dsa-sales-toolbar" id="dsa-sales-form">
+          <label>DSA code
+            <input id="dsa-code" name="code" maxlength="32" value="${attr(dsaCode)}" placeholder="e.g. 0001" autocomplete="off" />
+          </label>
+          <label>From <input id="dsa-from" name="from" type="date" value="${attr(dsaFrom)}" required /></label>
+          <label>To <input id="dsa-to" name="to" type="date" value="${attr(dsaTo)}" required /></label>
+          <button class="btn primary" type="submit">Show</button>
+          <button class="btn" type="button" id="dsa-today">Today</button>
+          <button class="btn" type="button" id="dsa-print">Print</button>
+          <a class="btn" id="dsa-excel" href="${attr(dsaExcelHref())}">Excel</a>
+        </form>
+        <div class="dsa-code-chips">${
+          codes
+            .map(
+              (c) =>
+                `<button type="button" class="dsa-code-chip${c.code === dsaCode ? " is-on" : ""}" data-dsa-code="${attr(c.code)}"><strong>${attr(c.code)}</strong><span>${Number(c.shops) || 0} shops · ${money(c.net)}</span></button>`,
+            )
+            .join("") || `<p class="hint">No DSA-tagged shops yet. Code 0001 is ready to use.</p>`
+        }</div>
+        <div class="master-shop-board dsa-shop-board">${
+          (data.shops || []).length
+            ? data.shops
+                .map(
+                  (s) => `<article class="master-shop-card">
+              <div class="master-shop-mark" aria-hidden="true">${letterMark(s.name)}</div>
+              <div class="master-shop-copy">
+                <strong>${attr(s.name)}</strong>
+                <span class="master-shop-meta">${attr(s.city || "—")} · DSA ${attr(s.dsa_code || dsaCode)}</span>
+                <span class="master-shop-meta">${Number(s.bills) || 0} invoices · ${money(s.net)}</span>
+              </div>
+              <button class="btn primary" type="button" data-enter="${attr(s.id)}">Open POS</button>
+            </article>`,
+                )
+                .join("")
+            : `<div class="item-empty-card"><strong>No shops for DSA ${attr(dsaCode)}</strong><p>Tag a business with this code, then invoices for the selected dates will list here.</p></div>`
+        }</div>
+        ${masterListToolbar("Invoice, shop, customer…", (data.invoices || []).length)}
+        <div class="table-wrap">${
+          (data.invoices || []).length
+            ? `<table class="master-data data dsa-sales-table">
+          <thead><tr>
+            <th>Invoice</th><th>Date &amp; Time</th><th>Shop</th><th>Customer</th>
+            <th>Payment</th><th>Status</th><th>Subtotal</th><th>Discount</th><th>GST</th><th>Returned</th><th>Amount</th>
+          </tr></thead>
+          <tbody>${(data.invoices || [])
+            .map((o) => {
+              const hay = `${o.order_number} ${o.shop_name} ${o.customer_name} ${o.payment_method} ${o.payment_status}`.toLowerCase();
+              return `<tr data-row-search="${attr(hay)}">
+              <td><strong>${attr(o.order_number || "—")}</strong></td>
+              <td>${attr(formatMasterWhen(o.created_at))}</td>
+              <td>${attr(o.shop_name || "—")}</td>
+              <td>${attr(o.customer_name || "Walk-in")}</td>
+              <td>${attr(String(o.payment_method || o.payment_mode || "—").toUpperCase())}</td>
+              <td>${dsaPayChip(o.payment_status)}</td>
+              <td>${money(o.subtotal)}</td>
+              <td>${money(o.discount)}</td>
+              <td>${money(o.gst)}</td>
+              <td>${Number(o.returned) > 0 ? money(o.returned) : "—"}</td>
+              <td><strong>${money(o.net)}</strong></td>
+            </tr>`;
+            })
+            .join("")}</tbody></table>`
+            : `<div class="item-empty-card"><strong>No invoices</strong><p>No invoice-wise sales for this DSA code in the selected dates.</p></div>`
+        }</div>`,
+      );
+      bindEnterPosButtons(body);
+      bindMasterListFilter(body);
+      $("dsa-sales-form")?.addEventListener("submit", (e) => {
+        e.preventDefault();
+        dsaCode = String($("dsa-code")?.value || "0001").trim().toUpperCase() || "0001";
+        dsaFrom = $("dsa-from")?.value || todayYmdIst();
+        dsaTo = $("dsa-to")?.value || dsaFrom;
+        render();
+      });
+      $("dsa-today")?.addEventListener("click", () => {
+        dsaFrom = todayYmdIst();
+        dsaTo = dsaFrom;
+        render();
+      });
+      body.querySelectorAll("[data-dsa-code]").forEach((btn) => {
+        btn.onclick = () => {
+          dsaCode = btn.dataset.dsaCode || "0001";
+          render();
+        };
+      });
+      $("dsa-print")?.addEventListener("click", () => window.print());
     } else if (tab === "analytics") {
       if (!window.POSMasterAnalytics?.render) {
         body.innerHTML = `<p class="hint error">Analytics UI did not load. Upload js/master-analytics.js.</p>`;

@@ -324,7 +324,14 @@ test("Master Admin can set passwords and unlock locked accounts", () => {
   assert.match(core, /pos_register_business\(\$body, true\)/);
   assert.match(core, /strtotime\("\+1 year"\)/);
   assert.match(read("server/onboard.js"), /INTERVAL 1 YEAR/);
-  assert.match(read("master.html"), /master\.js\?v=20261012agg3/);
+  assert.match(read("master.html"), /master\.js\?v=20261012dsa1/);
+  assert.match(read("api/master/dsa-sales/index.php"), /master\/dsa-sales/);
+  assert.match(read("api/master/dsa-sales/excel/index.php"), /master\/dsa-sales\/excel/);
+  assert.match(core, /master\/dsa-sales/);
+  assert.match(read("pos-reports.php"), /function pos_assemble_dsa_sales/);
+  assert.match(read("pos-reports.php"), /function pos_build_dsa_sales/);
+  assert.match(read("pos-reports.php"), /\$codeMap\["0001"\]/);
+  assert.match(core, /\$_GET\["code"\] \?\? "0001"/);
   assert.match(read("js/app.js"), /Subscription fee \/ year/);
   assert.match(read("js/app.js"), /\["Valid till"/);
   assert.match(read("js/app.js"), /\["Days left"/);

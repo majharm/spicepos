@@ -9,7 +9,7 @@ const read = (rel) => readFileSync(path.join(root, rel), "utf8");
 
 test("master login does not wait on alerts, backup, or all-shop due rebuild", () => {
   const core = read("pos-php-core.php");
-  const dash = core.slice(core.indexOf('if ($path === "master/dashboard"'), core.indexOf('if ($path === "master/plans"'));
+  const dash = core.slice(core.indexOf('if ($path === "master/dashboard"'), core.indexOf('if (($path === "master/dsa-sales"'));
   assert.doesNotMatch(dash, /pos_tick_shop_alerts/);
   assert.doesNotMatch(dash, /pos_tick_backup_email/);
   assert.doesNotMatch(dash, /SELECT COUNT\(\*\) AS n FROM sales_orders/);
@@ -27,7 +27,7 @@ test("master login does not wait on alerts, backup, or all-shop due rebuild", ()
   assert.doesNotMatch(login, /pos_hash_password\(\$pass\)/);
 
   const nodeDash = read("server/master.js");
-  const nodeDashFn = nodeDash.slice(nodeDash.indexOf('app.get("/api/master/dashboard"'), nodeDash.indexOf('app.get("/api/master/plans"'));
+  const nodeDashFn = nodeDash.slice(nodeDash.indexOf('app.get("/api/master/dashboard"'), nodeDash.indexOf('app.get("/api/master/dsa-sales"'));
   assert.doesNotMatch(nodeDashFn, /SELECT COUNT\(\*\) AS n FROM sales_orders/);
   assert.match(nodeDashFn, /GROUP BY business_id/);
   assert.match(nodeDashFn, /today_bills/);
@@ -60,6 +60,6 @@ test("browser login tries the last working \/api first", () => {
   assert.doesNotMatch(apiJs, /if \(preferred && !mutating\)/);
   assert.doesNotMatch(apiJs, /if \(preferred && mutating\) out\.push\(preferred\)/);
   assert.match(read("master.html"), /pos-api\.js\?v=20261006login1/);
-  assert.match(read("master.html"), /master\.js\?v=20261012agg3/);
+  assert.match(read("master.html"), /master\.js\?v=20261012dsa1/);
   assert.match(read("index.html"), /pos-api\.js\?v=20261006login1/);
 });

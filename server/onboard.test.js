@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import path from "path";
 import { fileURLToPath } from "node:url";
-import { validateSignup } from "./onboard.js";
+import { DEFAULT_DSA_CODE, normalizeDsaCode, validateSignup } from "./onboard.js";
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const read = (rel) => readFileSync(path.join(root, rel), "utf8");
@@ -34,6 +34,11 @@ test("signup keeps an optional DSA code", () => {
   assert.equal(coded.dsa_code, "ATAV-DSA12");
   const junk = validateSignup(sample({ dsa_code: "@@@" }));
   assert.equal(junk.dsa_code, null);
+  assert.equal(DEFAULT_DSA_CODE, "0001");
+  assert.equal(normalizeDsaCode("0001"), "0001");
+  assert.equal(normalizeDsaCode(" 0001 "), "0001");
+  const numbered = validateSignup(sample({ dsaCode: "0001" }));
+  assert.equal(numbered.dsa_code, "0001");
 });
 
 test("Sign Up Now and Master Admin collect DSA Code", () => {

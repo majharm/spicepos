@@ -1,6 +1,15 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { formatReportDay, reportsToSheets, summarizeDailySales, payModeBucket, payStatusBucket } from "./reports.js";
+import {
+  formatReportDay,
+  reportsToSheets,
+  summarizeDailySales,
+  payModeBucket,
+  payStatusBucket,
+  assembleDsaSales,
+  dsaSalesToSheets,
+  DEFAULT_DSA_CODE,
+} from "./reports.js";
 
 const emptyReports = (from, to) => ({
   from,
@@ -206,4 +215,84 @@ test("Payment daywise sheet splits cash UPI card credit by calendar day", () => 
   assert.equal(pay.rows[0][4], 250);
   assert.equal(pay.rows[0][6], 4);
   assert.equal(pay.rows[0][7], 2250.5);
+});
+
+test("assembleDsaSales keeps DSA 0001 and tags invoices by shop", () => {
+  assert.equal(DEFAULT_DSA_CODE, "0001");
+  const empty = assembleDsaSales([], [], {}, { from: "2026-10-12", to: "2026-10-12" });
+  assert.equal(empty.codes.some((c) => c.code === "0001"), true);
+  assert.equal(empty.codes.find((c) => c.code === "0001").shops, 0);
+
+  const shops = [
+    { id: "a", name: "Alpha", city: "Pune", dsa_code: "0001" },
+    { id: "b", name: "Beta", city: "Nashik", dsa_code: "dsa-2" },
+  ];
+  const sales = [
+    {
+      id: "1",
+      business_id: "a",
+      order_number: "INV1",
+      customer_name: "Asha",
+      payment_method: "cash",
+      payment_status: "paid",
+      subtotal: 100,
+      discount: 0,
+      gst: 0,
+      total: 100,
+      status: "confirmed",
+      created_at: "2026-10-12 09:00:00",
+    },
+    {
+      id: "2",
+      business_id: "a",
+      order_number: "INV2",
+      customer_name: "Void",
+      payment_method: "cash",
+      payment_status: "paid",
+      subtotal: 50,
+      discount: 0,
+      gst: 0,
+      total: 50,
+      status: "cancelled",
+    },
+    {
+      id: "3",
+      business_id: "b",
+      order_number: "INV3",
+      customer_name: "Bala",
+      payment_method: "upi",
+      payment_status: "paid",
+      subtotal: 200,
+      discount: 0,
+      gst: 0,
+      total: 200,
+      status: "confirmed",
+    },
+  ];
+  const all = assembleDsaSales(shops, sales, { 1: 10 }, { from: "2026-10-12", to: "2026-10-12" });
+  assert.equal(all.codes.find((c) => c.code === "0001").shops, 1);
+  assert.equal(all.codes.find((c) => c.code === "DSA-2").shops, 1);
+  assert.equal(all.invoices.length, 2);
+
+  const filtered = assembleDsaSales(shops, sales, { 1: 10 }, {
+    code: "0001",
+    from: "2026-10-12",
+    to: "2026-10-12",
+  });
+  assert.equal(filtered.code, "0001");
+  assert.equal(filtered.shops.length, 1);
+  assert.equal(filtered.invoices.length, 1);
+  assert.equal(filtered.invoices[0].shop_name, "Alpha");
+  assert.equal(filtered.invoices[0].dsa_code, "0001");
+  assert.equal(filtered.invoices[0].net, 90);
+  assert.equal(filtered.totals.net, 90);
+  assert.equal(filtered.totals.shops, 1);
+
+  const sheets = dsaSalesToSheets(filtered);
+  assert.deepEqual(
+    sheets.map((s) => s.name),
+    ["DSA summary", "DSA shops", "DSA invoices"],
+  );
+  assert.equal(sheets[0].rows[0][0], "0001");
+  assert.equal(sheets[2].rows[0][0], "Alpha");
 });

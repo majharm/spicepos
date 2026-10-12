@@ -2115,3 +2115,103 @@ body.dev-mode .session-bar::after {
   max-width: none;
 }
 
+/* DSA Sales — Master Admin invoice-wise report */
+.master-desk .items-hero {
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+.master-desk .items-hero-stats {
+  max-width: 100%;
+}
+.master-desk .items-stat {
+  min-width: 96px;
+}
+.dsa-sales-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 10px 12px;
+  margin: 4px 0 14px;
+}
+.dsa-sales-toolbar label {
+  display: grid;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted, #64748b);
+}
+.dsa-sales-toolbar input {
+  min-height: 42px;
+  border-radius: 10px;
+  border: 1px solid var(--line, #e2e8f0);
+  padding: 8px 12px;
+  font: inherit;
+  color: inherit;
+  background: #fff;
+}
+.dsa-sales-toolbar input[name="code"] {
+  width: 8.5rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-weight: 800;
+}
+.dsa-code-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 16px;
+}
+.dsa-code-chip {
+  display: grid;
+  gap: 2px;
+  text-align: left;
+  padding: 10px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--line, #e2e8f0);
+  background: #fff;
+  box-shadow: var(--shadow-card);
+  cursor: pointer;
+  color: inherit;
+  font: inherit;
+}
+.dsa-code-chip strong {
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+.dsa-code-chip span {
+  font-size: 12px;
+  color: var(--muted, #64748b);
+}
+.dsa-code-chip.is-on {
+  border-color: var(--vel-teal, #0d9488);
+  background: #f0fdfa;
+  box-shadow: 0 0 0 3px rgba(13, 148, 136, 0.12);
+}
+.dsa-shop-board {
+  margin-bottom: 16px;
+}
+.dsa-sales-table td strong {
+  font-variant-numeric: tabular-nums;
+}
+@media print {
+  .master-nav,
+  .master-topbar,
+  #master-nav-toggle,
+  #master-nav-scrim,
+  .dsa-sales-toolbar .btn,
+  .dsa-sales-toolbar a.btn,
+  .dsa-code-chips,
+  .dsa-shop-board .btn,
+  .master-list-toolbar {
+    display: none !important;
+  }
+  .master-shell {
+    display: block;
+  }
+  .master-shop-card,
+  .master-main .table-wrap {
+    box-shadow: none;
+  }
+}
+

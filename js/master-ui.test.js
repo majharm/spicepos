@@ -17,9 +17,15 @@ test("Master Admin desk collapses nested nav and uses a shop board", () => {
   assert.match(html, /data-nav-family="analytics"/);
   assert.match(html, /data-nav-family="seo"/);
   assert.match(html, /nav-group-label"[^>]*>Advanced</);
-  assert.match(html, /master\.js\?v=20261012agg3/);
+  assert.match(html, /master\.js\?v=20261012dsa1/);
   assert.match(js, /name="dsaCode"/);
-  assert.match(html, /saas\.css\?v=20261007web1/);
+  assert.match(html, /saas\.css\?v=20261012dsa1/);
+  assert.match(html, /data-tab="dsa-sales"/);
+  assert.match(js, /tab === "dsa-sales"/);
+  assert.match(js, /dsaCode = "0001"/);
+  assert.match(js, /\/api\/master\/dsa-sales/);
+  assert.match(css, /\.dsa-sales-toolbar/);
+  assert.match(css, /\.dsa-code-chip\.is-on/);
   assert.match(html, /id="master-jump-q"/);
   assert.match(html, /data-nav-toggle="advance"/);
   assert.match(js, /function setMasterNavOpen/);
@@ -30,6 +36,8 @@ test("Master Admin desk collapses nested nav and uses a shop board", () => {
   assert.match(js, /function bindMasterListFilter/);
   assert.match(js, /master-shop-card/);
   assert.match(js, /id="master-shop-q"/);
+  assert.match(js, /Today's sales/);
+  assert.match(js, /NAV_FAMILIES[\s\S]*dsa-sales/);
   assert.match(js, /master-top-title/);
   assert.match(js, /class="master-data data"/);
   assert.doesNotMatch(js, /Yearly subscription fees/);

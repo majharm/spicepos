@@ -3231,7 +3231,7 @@ function pos_php_dispatch($path, $method, $rawBody) {
     if ($path === "master/dashboard" && $method === "GET") {
       $today = pos_created_today();
       $byBiz = pos_q(
-        "SELECT b.id, b.name, b.status, b.subscription_expires_at, b.plan_id,
+        "SELECT b.id, b.name, b.status, b.subscription_expires_at, b.plan_id, b.dsa_code,
                 p.name AS plan_name, p.fee_monthly,
                 COALESCE(u.users, 0) AS users,
                 COALESCE(br.branches, 0) AS branches,
@@ -3289,6 +3289,17 @@ function pos_php_dispatch($path, $method, $rawBody) {
         ],
         "businesses" => $byBiz,
       ]);
+    }
+
+    if (($path === "master/dsa-sales" || $path === "master/dsa-sales/excel") && $method === "GET") {
+      require_once __DIR__ . "/pos-reports.php";
+      $from = $_GET["from"] ?? date("Y-m-d");
+      $to = $_GET["to"] ?? $from;
+      $code = $_GET["code"] ?? "0001";
+      if ($path === "master/dsa-sales/excel") {
+        pos_dsa_sales_excel_response($code, $from, $to);
+      }
+      pos_send(200, pos_build_dsa_sales($code, $from, $to));
     }
 
     if ($path === "master/plans" && $method === "GET") {

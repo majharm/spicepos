@@ -33,7 +33,9 @@ function normalizeDateOnly(val) {
   return d.toISOString().slice(0, 10);
 }
 
-function normalizeDsaCode(val) {
+export const DEFAULT_DSA_CODE = "0001";
+
+export function normalizeDsaCode(val) {
   const code = String(val || "")
     .trim()
     .toUpperCase()
