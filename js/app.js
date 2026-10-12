@@ -2711,6 +2711,7 @@ function paintDeskState(name) {
   if (name === "customers") {
     renderCustomersTable();
     fillDueCustomerSelect();
+    globalThis.POSCustomerMasterUi?.loadDupes?.();
   }
 }
 
@@ -4561,21 +4562,41 @@ async function saveCustomer(fields) {
   const name = String(fields.name || "").trim();
   const mobile = String(fields.mobile || "").replace(/\s+/g, "").trim();
   if (!name || !mobile) throw new Error("Name and mobile are required");
-  const data = await api("/api/customers", {
+  const payload = {
+    name,
+    mobile,
+    business_name: fields.business_name || "",
+    type: fields.type === "b2b" ? "b2b" : "b2c",
+    gstin: fields.gstin || "",
+    dob: fields.dob || "",
+    referred_by: fields.referred_by || "",
+    locale: fields.locale || "",
+    address: fields.address || "",
+    doctor_rx: fields.doctor_rx || "",
+  };
+  const match = globalThis.POSCustomerMaster?.findMatch(state.customers || [], payload);
+  if (match && !fields.force) {
+    const warning = globalThis.POSCustomerMaster.warningCopy(match, payload);
+    if ($("cust-match-hint")) {
+      $("cust-match-hint").textContent = warning;
+      $("cust-match-hint").className = "hint error";
+    }
+    throw new Error(warning);
+  }
+  const { res, data } = await posRequest("/api/customers", {
     method: "POST",
-    body: JSON.stringify({
-      name,
-      mobile,
-      business_name: fields.business_name || "",
-      type: fields.type === "b2b" ? "b2b" : "b2c",
-      gstin: fields.gstin || "",
-      dob: fields.dob || "",
-      referred_by: fields.referred_by || "",
-      locale: fields.locale || "",
-      address: fields.address || "",
-      doctor_rx: fields.doctor_rx || "",
-    }),
+    body: JSON.stringify(payload),
   });
+  if (res.status === 409 && data?.customer) {
+    const warning = data.error || globalThis.POSCustomerMaster?.warningCopy(data.customer, payload);
+    if ($("cust-match-hint")) {
+      $("cust-match-hint").textContent = warning;
+      $("cust-match-hint").className = "hint error";
+    }
+    if (data.customer.id) state.customerId = data.customer.id;
+    throw new Error(warning || "A customer with these details already exists");
+  }
+  if (!res.ok) throw new Error(data?.error || res.statusText);
   const customer = data.customer;
   if (customer?.id) state.customerId = customer.id;
   await loadBootstrap();
@@ -6441,6 +6462,7 @@ async function loadBootstrap() {
   }
   if (state.currentView === "counter") maybeShowCounterLowStockAlert();
 }
+globalThis.loadBootstrap = loadBootstrap;
 
 function dashRoleLabel(role) {
   const r = String(role || "").trim();

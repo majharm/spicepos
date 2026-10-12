@@ -39,6 +39,7 @@ import { registerPrintPublic, registerPrintStaff, ensurePrintSchema, attachPrint
 import { registerGymPublic, registerGymStaff, ensureGymSchema } from "./gym.js";
 import { registerBarStaff, ensureBarSchema } from "./bar.js";
 import { registerResortPublic, registerResortStaff, ensureResortSchema } from "./resort.js";
+import { registerCustomerDedupeStaff, registerCustomerDedupeMaster, ensureCustomerDedupeSchema } from "./customers-dedupe.js";
 import "../js/discount.js";
 import "../js/payment-methods.js";
 import { registerQrPublic, registerQrStaff, ensureQrOrderSchema, linkQrOrderSale } from "./qr-ordering.js";
@@ -214,6 +215,7 @@ app.use((req, res, next) => {
   return requireStaff(req, res, next);
 });
 registerMaster(app);
+registerCustomerDedupeMaster(app);
 registerAnalyticsMaster(app);
 registerSeoMaster(app);
 registerLoginPageMaster(app);
@@ -230,6 +232,7 @@ registerPrintStaff(app);
 registerGymStaff(app);
 registerBarStaff(app);
 registerResortStaff(app);
+registerCustomerDedupeStaff(app);
 
 app.get("/api/support-contact", async (_req, res) => {
   try {
@@ -337,7 +340,9 @@ app.get("/api/bootstrap", requireStaff, async (_req, res) => {
         : Promise.resolve([]),
       shopSupportContact(businessId),
     ]);
-    const customers = hydrateCustomerOutstandingRows(customerRows, dues);
+    const customers = hydrateCustomerOutstandingRows(customerRows, dues).filter(
+      (c) => String(c?.status || "").toLowerCase() !== "merged" && !c?.merged_into,
+    );
     void persistHydratedOutstanding(customers, customerRows).catch(() => {});
     res.json({
       company: {
@@ -1324,6 +1329,7 @@ ensureSchema()
     .then(() => ensureGymSchema())
     .then(() => ensureBarSchema())
     .then(() => ensureResortSchema())
+    .then(() => ensureCustomerDedupeSchema())
     .then(() => ensureLoginPageSchema())
     .then(() => {
       setTimeout(() => {

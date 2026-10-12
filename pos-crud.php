@@ -52,6 +52,13 @@ function pos_crud_dispatch($path, $method, $body, $bid, $auth, $branchId, $uid) 
     $name = trim((string) ($body["name"] ?? ""));
     $mobile = trim((string) ($body["mobile"] ?? ""));
     if ($name === "" || $mobile === "") pos_send(400, ["error" => "Name and mobile are required"]);
+    if (is_file(__DIR__ . "/pos-customers-dedupe.php")) {
+      require_once __DIR__ . "/pos-customers-dedupe.php";
+      if (empty($body["force"]) && function_exists("pos_find_existing_customer")) {
+        $existing = pos_find_existing_customer($bid, array_merge(is_array($body) ? $body : [], ["name" => $name, "mobile" => $mobile]));
+        if ($existing) pos_send(409, ["error" => "A customer with these details already exists", "customer" => $existing, "duplicate" => true]);
+      }
+    }
     pos_ensure_columns("customers", ["state" => "VARCHAR(64) NULL", "dob" => "DATE NULL", "referred_by" => "VARCHAR(255) NULL", "locale" => "VARCHAR(16) NULL", "address" => "VARCHAR(500) NULL", "doctor_rx" => "VARCHAR(180) NULL"]);
     $type = (($body["type"] ?? "") === "b2b") ? "b2b" : "b2c";
     $id = pos_uuid();
@@ -86,6 +93,7 @@ function pos_crud_dispatch($path, $method, $body, $bid, $auth, $branchId, $uid) 
       } catch (Exception $e) { /* optional */ }
     }
     $rows = pos_q("SELECT * FROM customers WHERE id = ? LIMIT 1", "s", [$id]);
+    if (function_exists("pos_stamp_customer_norms")) pos_stamp_customer_norms($id, array_merge(is_array($body) ? $body : [], ["mobile" => $mobile]));
     pos_send(200, ["ok" => true, "customer" => $rows[0] ?? null]);
   }
 

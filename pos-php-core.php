@@ -3562,6 +3562,59 @@ function pos_php_dispatch($path, $method, $rawBody) {
       ));
     }
 
+    if ($path === "master/customer-duplicates" || $path === "master/customer-share" || $path === "master/customer-duplicates/merge") {
+      if (is_file(__DIR__ . "/pos-customers-dedupe.php")) require_once __DIR__ . "/pos-customers-dedupe.php";
+      if ($path === "master/customer-share" && $method === "GET") {
+        $row = [];
+        try {
+          $row = pos_q("SELECT setting_value FROM platform_settings WHERE setting_key='customer_share' LIMIT 1");
+        } catch (Exception $e) {
+          $row = [];
+        }
+        pos_send(200, ["enabled" => (($row[0]["setting_value"] ?? "") === "1")]);
+      }
+      if ($path === "master/customer-share" && $method === "POST") {
+        $on = !empty($body["enabled"]) && $body["enabled"] !== "0";
+        if (function_exists("pos_set_setting")) pos_set_setting("customer_share", $on ? "1" : "0");
+        pos_send(200, ["ok" => true, "enabled" => $on]);
+      }
+      if ($path === "master/customer-duplicates" && $method === "GET") {
+        $shopId = trim((string) ($_GET["business_id"] ?? ""));
+        $shops = $shopId !== ""
+          ? pos_q("SELECT id, name, category, business_type FROM businesses WHERE id=? LIMIT 1", "s", [$shopId])
+          : pos_q("SELECT id, name, category, business_type FROM businesses ORDER BY name");
+        $out = [];
+        $groupsTotal = 0;
+        $extraTotal = 0;
+        foreach ($shops as $shop) {
+          $groups = function_exists("pos_customer_duplicate_groups") ? pos_customer_duplicate_groups($shop["id"]) : [];
+          $extra = 0;
+          foreach ($groups as $g) $extra += max(0, ((int) $g["count"]) - 1);
+          $groupsTotal += count($groups);
+          $extraTotal += $extra;
+          $out[] = [
+            "business_id" => $shop["id"],
+            "business_name" => $shop["name"],
+            "business_type" => $shop["business_type"] ?? $shop["category"] ?? "",
+            "groups" => $groups,
+            "summary" => ["groups" => count($groups), "extra" => $extra],
+          ];
+        }
+        pos_send(200, ["shops" => $out, "summary" => ["shops" => count($out), "groups" => $groupsTotal, "extra" => $extraTotal], "share_enabled" => false, "cross_shop" => []]);
+      }
+      if ($path === "master/customer-duplicates/merge" && $method === "POST") {
+        $shopId = trim((string) ($body["business_id"] ?? ""));
+        if ($shopId === "") pos_send(400, ["error" => "Shop is required"]);
+        if (!function_exists("pos_merge_customers")) pos_send(503, ["error" => "Customer merge is not available"]);
+        try {
+          $result = pos_merge_customers($shopId, trim((string) ($body["primary_id"] ?? "")), $body["loser_ids"] ?? [], ["email" => "master"]);
+          pos_send(200, $result);
+        } catch (Exception $e) {
+          pos_send(400, ["error" => $e->getMessage()]);
+        }
+      }
+    }
+
     if ($path === "master/alert-log" && $method === "GET") {
       pos_send(200, pos_list_alert_delivery_logs(200));
     }

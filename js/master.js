@@ -187,7 +187,7 @@ const NAV_FAMILIES = {
   main: ["dash", "biz", "users", "plans"],
   alerts: ["expiry", "alert-log"],
   people: ["managers", "support"],
-  advance: ["advance", "backup", "languages", "notes", "branches", "devices", "audit"],
+  advance: ["advance", "backup", "languages", "notes", "branches", "devices", "audit", "customers"],
   analytics: ["analytics"],
   seo: ["seo"],
   website: ["website"],
@@ -209,6 +209,7 @@ const PAGE_HINTS = {
   branches: "Every shop branch",
   devices: "Registered tills",
   audit: "Who changed what",
+  customers: "Duplicate customers by shop",
   analytics: "Website traffic",
   seo: "Search and pages",
   website: "Login page and branding",
@@ -272,6 +273,7 @@ const MASTER_PAGES = [
   { tab: "branches", title: "Branches", keywords: "shop branch" },
   { tab: "devices", title: "POS devices", keywords: "till device code" },
   { tab: "audit", title: "Audit log", keywords: "history changes" },
+  { tab: "customers", title: "Customer duplicates", keywords: "merge mobile gstin email" },
   { tab: "analytics", pane: "overview", title: "Google Analytics", keywords: "traffic website" },
   { tab: "analytics", pane: "realtime", title: "Realtime", keywords: "analytics live" },
   { tab: "analytics", pane: "acquisition", title: "Acquisition", keywords: "analytics source" },
@@ -1100,6 +1102,7 @@ function advanceHubHtml() {
       ${advanceCard("branches", "", "Branches", "Every shop branch and its status.")}
       ${advanceCard("devices", "", "POS devices", "Registered tills and device codes.")}
       ${advanceCard("audit", "", "Audit log", "Who changed what across the platform.")}
+      ${advanceCard("customers", "", "Customer duplicates", "Find and merge same-shop duplicates. History is kept; records are not deleted.")}
     </div>`,
   );
 }
@@ -1804,6 +1807,7 @@ async function render() {
     branches: "Branches",
     devices: "POS devices",
     audit: "Audit log",
+    customers: "Customer duplicates",
     expiry: "Send alerts",
     "alert-log": "WA Master & Email log",
     backup: backupPane === "settings" ? "Settings" : "Backup",
@@ -2571,6 +2575,78 @@ async function render() {
       const rows = await api("/api/master/alert-log");
       body.innerHTML = alertLogPageHtml(rows);
       bindAlertLogPage(rows);
+    } else if (tab === "customers") {
+      const data = await api("/api/master/customer-duplicates");
+      const shops = data.shops || [];
+      const shareOn = Boolean(data.share_enabled);
+      body.innerHTML = masterDesk(
+        "Advance",
+        "Customer duplicates",
+        "Review matches inside each shop. Merge keeps invoices, payments, and dues on the primary record. Duplicates are archived, never deleted.",
+        [
+          { label: "Shops", value: data.summary?.shops || shops.length },
+          { label: "Groups", value: data.summary?.groups || 0, warn: Number(data.summary?.groups) > 0 },
+          { label: "Extra records", value: data.summary?.extra || 0, warn: Number(data.summary?.extra) > 0 },
+        ],
+        `<label class="check">Allow cross-shop identity report
+          <input id="customer-share" type="checkbox" ${shareOn ? "checked" : ""} />
+        </label>
+        <p class="hint">Financial data stays per shop. Cross-shop sharing only shows the same mobile / email / GSTIN in more than one business.</p>
+        ${shops
+          .map((shop) => {
+            const groups = shop.groups || [];
+            return `<section class="master-customer-shop">
+              <h4>${attr(shop.business_name)} · ${attr(shop.business_type || "shop")} · ${groups.length} group${groups.length === 1 ? "" : "s"}</h4>
+              ${
+                groups.length
+                  ? groups
+                      .map((g) => {
+                        const primary = g.primary_id || g.members?.[0]?.id || "";
+                        const losers = (g.members || []).filter((m) => m.id !== primary).map((m) => m.id);
+                        return `<article class="customer-dupe-card">
+                          <p>${attr((g.reasons || []).join(", ") || "match")} · ${attr(shop.business_name)}</p>
+                          <ul>${(g.members || [])
+                            .map((m) => `<li>${attr(m.business_name || m.name)} · ${attr(m.mobile || "—")} · ${attr(m.code || "")}${m.id === primary ? " · keep" : ""}</li>`)
+                            .join("")}</ul>
+                          <button class="btn primary" type="button" data-master-merge-biz="${attr(shop.business_id)}" data-master-merge-primary="${attr(primary)}" data-master-merge-losers="${attr(losers.join(","))}">Authorize merge</button>
+                        </article>`;
+                      })
+                      .join("")
+                  : `<p class="hint">No duplicates in this shop.</p>`
+              }
+            </section>`;
+          })
+          .join("")}
+        ${
+          (data.cross_shop || []).length
+            ? `<h4>Same identity in more than one shop</h4>${(data.cross_shop || [])
+                .map(
+                  (g) => `<article class="customer-dupe-card"><p>Shared across ${g.shops} shops</p><ul>${(g.members || [])
+                    .map((m) => `<li>${attr(m.business_name)} · ${attr(m.name)} · ${attr(m.mobile || m.email || m.gstin || "")}</li>`)
+                    .join("")}</ul></article>`,
+                )
+                .join("")}`
+            : ""
+        }`,
+      );
+      $("customer-share")?.addEventListener("change", async (e) => {
+        await api("/api/master/customer-share", { method: "POST", body: JSON.stringify({ enabled: e.target.checked }) });
+        render();
+      });
+      body.querySelectorAll("[data-master-merge-primary]").forEach((btn) => {
+        btn.onclick = async () => {
+          if (!confirm("Authorize this shop merge? Invoices and dues move to the primary customer. Duplicates are archived, not deleted.")) return;
+          await api("/api/master/customer-duplicates/merge", {
+            method: "POST",
+            body: JSON.stringify({
+              business_id: btn.dataset.masterMergeBiz,
+              primary_id: btn.dataset.masterMergePrimary,
+              loser_ids: String(btn.dataset.masterMergeLosers || "").split(",").filter(Boolean),
+            }),
+          });
+          render();
+        };
+      });
     } else if (tab === "audit") {
       const rows = await api("/api/master/audit");
       body.innerHTML = masterDesk(

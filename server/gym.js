@@ -437,12 +437,19 @@ export function registerGymPublic(app) {
       const hash = await hashPassword(password);
       let customerId = null;
       try {
-        customerId = uuid();
-        await query(
-          `INSERT INTO customers (id, code, name, mobile, email, password_hash, type, outstanding, business_id)
-           VALUES (?,?,?,?,?,?,'b2c',0,?)`,
-          [customerId, memberNo, name, mobile, email, hash, shopId],
-        );
+        const { findExistingCustomer, stampCustomerNorms } = await import("./customers-dedupe.js");
+        const existing = await findExistingCustomer(shopId, { name, mobile, email });
+        if (existing) {
+          customerId = existing.id;
+        } else {
+          customerId = uuid();
+          await query(
+            `INSERT INTO customers (id, code, name, mobile, email, password_hash, type, outstanding, business_id)
+             VALUES (?,?,?,?,?,?,'b2c',0,?)`,
+            [customerId, memberNo, name, mobile, email, hash, shopId],
+          );
+          await stampCustomerNorms(null, { id: customerId, mobile, email });
+        }
       } catch {
         customerId = null;
       }

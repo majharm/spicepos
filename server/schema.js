@@ -198,6 +198,12 @@ export async function ensureSchema() {
   await addColumn("customers", "locale", "VARCHAR(16) NULL");
   await addColumn("customers", "address", "VARCHAR(500) NULL");
   await addColumn("customers", "doctor_rx", "VARCHAR(180) NULL");
+  await addColumn("customers", "email", "VARCHAR(160) NULL");
+  await addColumn("customers", "merged_into", "VARCHAR(255) NULL");
+  await addColumn("customers", "status", "VARCHAR(16) NOT NULL DEFAULT 'active'");
+  await addColumn("customers", "mobile_norm", "VARCHAR(16) NULL");
+  await addColumn("customers", "email_norm", "VARCHAR(160) NULL");
+  await addColumn("customers", "gstin_norm", "VARCHAR(32) NULL");
   await addColumn("prescription_orders", "customer_address", "VARCHAR(500) NULL");
   await addColumn("prescription_orders", "doctor_name", "VARCHAR(160) NULL");
   await addColumn("prescription_orders", "clinic_name", "VARCHAR(180) NULL");
@@ -238,6 +244,17 @@ export async function ensureSchema() {
   await addColumn("stock_movements", "reason", "VARCHAR(64) NULL");
   await addColumn("stock_movements", "ref_type", "VARCHAR(32) NULL");
   await addColumn("stock_movements", "ref_id", "VARCHAR(255) NULL");
+
+  await create(`CREATE TABLE IF NOT EXISTS customer_merge_backups (
+    id VARCHAR(255) PRIMARY KEY,
+    business_id VARCHAR(255) NOT NULL,
+    primary_id VARCHAR(255) NOT NULL,
+    loser_ids TEXT NOT NULL,
+    snapshot MEDIUMTEXT NULL,
+    created_by VARCHAR(255) NULL,
+    created_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    INDEX idx_cmb_biz (business_id)
+  )`);
 
   await create(`CREATE TABLE IF NOT EXISTS inventory_units (
     id VARCHAR(255) PRIMARY KEY,

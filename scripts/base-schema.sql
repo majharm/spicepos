@@ -163,10 +163,27 @@ CREATE TABLE IF NOT EXISTS customers (
   referred_by VARCHAR(255) NULL,
   credit_limit DECIMAL(12,2) NOT NULL DEFAULT 0,
   outstanding DECIMAL(12,2) NOT NULL DEFAULT 0,
+  email VARCHAR(160) NULL,
+  merged_into VARCHAR(255) NULL,
+  status VARCHAR(16) NOT NULL DEFAULT 'active',
+  mobile_norm VARCHAR(16) NULL,
+  email_norm VARCHAR(160) NULL,
+  gstin_norm VARCHAR(32) NULL,
   business_id VARCHAR(255) NOT NULL,
   created_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
   updated_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
   INDEX idx_cust_biz_name (business_id, name)
+);
+
+CREATE TABLE IF NOT EXISTS customer_merge_backups (
+  id VARCHAR(255) PRIMARY KEY,
+  business_id VARCHAR(255) NOT NULL,
+  primary_id VARCHAR(255) NOT NULL,
+  loser_ids TEXT NOT NULL,
+  snapshot MEDIUMTEXT NULL,
+  created_by VARCHAR(255) NULL,
+  created_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  INDEX idx_cmb_biz (business_id)
 );
 
 CREATE TABLE IF NOT EXISTS packs (
