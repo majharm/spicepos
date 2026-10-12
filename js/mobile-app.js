@@ -20,23 +20,49 @@
     const v = Number(n) || 0;
     return `₹${v.toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
   }
+  function formatCount(n) {
+    return String(Math.max(0, Math.round(Number(n) || 0)));
+  }
+  function formatDate(raw) {
+    const s = String(raw || "").trim();
+    if (!s) return "";
+    const d = new Date(s.includes("T") || s.includes(" ") ? s : `${s}T00:00:00`);
+    if (Number.isNaN(d.getTime())) return s.slice(0, 10);
+    return d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+  }
+  function isExpense(row) {
+    return /expens|purchase/i.test(String(row?.type || row?.kind || ""));
+  }
   function isPaid(row) {
+    if (isExpense(row)) return true;
     const due = Number(row?.balance ?? row?.due ?? row?.outstanding);
     if (Number.isFinite(due) && due > 0) return false;
     const s = String(row?.payment_status || row?.status || "").toLowerCase();
-    if (/unpaid|due|pending|partial/.test(s)) return false;
+    if (/unpaid|due|pending|partial|credit/.test(s)) return false;
     if (/paid|settled|completed|cash|upi/.test(s)) return true;
     return due === 0;
+  }
+  function txStatus(row) {
+    if (isExpense(row)) return { label: "Paid", cls: "is-paid" };
+    const due = Number(row?.balance ?? row?.due ?? row?.outstanding);
+    const s = String(row?.payment_status || row?.status || "").toLowerCase();
+    if ((Number.isFinite(due) && due > 0) || /due|partial/.test(s)) return { label: "Due", cls: "is-due" };
+    if (/unpaid|pending|credit/.test(s)) return { label: "Unpaid", cls: "is-unpaid" };
+    if (isPaid(row)) return { label: "Paid", cls: "is-paid" };
+    return { label: "Unpaid", cls: "is-unpaid" };
   }
   function summarizeDashboard(d) {
     const h = d?.hub || {};
     const today = d?.today || {};
-    const recent = Array.isArray(h.recent) ? h.recent : [];
+    const sales = Array.isArray(h.recent) ? h.recent : [];
+    const expenses = Array.isArray(h.recentExpenses) ? h.recentExpenses : [];
+    const recent = [...sales, ...expenses].sort((a, b) => String(b.created_at || "").localeCompare(String(a.created_at || "")));
     return {
       shop: String(d?.shopName || d?.business?.name || "").trim(),
+      logo: String(d?.company?.logo_url || d?.logo_url || "").trim(),
       totalBills: Number(today.bills ?? h.todayOrders) || 0,
-      paid: Number(today.takings) || 0,
-      pending: Number(d?.outstanding) || 0,
+      paid: Number(h.monthPaidOrders != null ? h.monthPaidOrders : h.todayOrders) || 0,
+      pending: Number(h.monthPendingOrders != null ? h.monthPendingOrders : h.outstandingCustomers) || 0,
       pendingCount: Number(h.outstandingCustomers) || 0,
       expenses: Number(h.expenses) || 0,
       recent,
@@ -50,14 +76,21 @@
   }
   function demoDashboard() {
     return {
-      shopName: "ATAV POS",
+      shopName: "Rahatot Nursery",
       today: { bills: 35, takings: 30000 },
       outstanding: 5000,
       hub: {
+        todayOrders: 35,
+        monthPaidOrders: 30,
+        monthPendingOrders: 5,
         expenses: 1200,
         recent: [
-          { customer_name: "Karim Ahmed", order_number: "INV0678", total: 35000, status: "paid", payment_method: "UPI", created_at: "2026-06-25" },
-          { customer_name: "Nasir Hussain", order_number: "INV0678", total: 35000, status: "unpaid", payment_method: "Credit", created_at: "2026-06-25" },
+          { id: "s1", customer_name: "Karim Ahmed", order_number: "INV0678", total: 35000, status: "paid", payment_method: "UPI", created_at: "2026-06-25" },
+          { id: "s2", customer_name: "Nasir Hussain", order_number: "INV0678", total: 35000, status: "unpaid", payment_method: "Credit", created_at: "2026-06-25" },
+          { id: "s3", customer_name: "Kabir Ahmed", order_number: "INV0678", total: 35000, status: "due", payment_method: "Credit", created_at: "2026-06-25", due: 35000 },
+        ],
+        recentExpenses: [
+          { id: "e1", customer_name: "Shop rent", order_number: "EXP12", total: 8000, kind: "expense", status: "paid", created_at: "2026-06-24" },
         ],
       },
     };
@@ -100,23 +133,32 @@
     );
   }
 
+  function paintLogo(summary) {
+    const img = $("m-home-logo");
+    const mark = $("m-home-mark");
+    const src = summary.logo || $("shop-logo")?.getAttribute("src") || root.state?.company?.logo_url || "";
+    if (img && src) {
+      img.src = src;
+      img.hidden = false;
+      if (mark) mark.hidden = true;
+    } else {
+      if (img) img.hidden = true;
+      if (mark) mark.hidden = false;
+    }
+  }
+
   function txHtml(row) {
-    const paid = isPaid(row);
-    const name = escapeHtml(row.customer_name || "Walk-in");
-    const no = escapeHtml(row.order_number || "Sale");
-    const when = escapeHtml(String(row.created_at || row.date || "").slice(0, 10));
-    const kind = /purchase/i.test(String(row.type || row.kind || "")) ? "Purchase" : "Sales";
-    const initial = name.slice(0, 1).toUpperCase() || "S";
-    return `<li class="m-tx">
-      <span class="m-avatar">${initial}</span>
-      <div>
-        <p class="m-tx-name">${name}</p>
-        <p class="m-tx-meta">${kind} · #${no}${when ? ` · ${when}` : ""}</p>
-      </div>
-      <div class="m-tx-amt">
-        <span class="m-chip ${paid ? "is-paid" : "is-unpaid"}">${paid ? "paid" : "unpaid"}</span>
-        <strong>${escapeHtml(formatMoney(row.total))}</strong>
-      </div>
+    const st = txStatus(row);
+    const name = escapeHtml(row.customer_name || (isExpense(row) ? "Expense" : "Walk-in"));
+    const no = escapeHtml(row.order_number || (isExpense(row) ? "EXP" : "Sale"));
+    const when = formatDate(row.created_at || row.date || row.expense_date);
+    const kind = isExpense(row) ? "Expense" : /purchase/i.test(String(row.type || row.kind || "")) ? "Purchase" : "Sales";
+    const view = isExpense(row) ? "expenses" : "orders";
+    return `<li class="m-tx" data-m-open="${view}" data-m-id="${escapeHtml(row.id || "")}">
+      <p class="m-tx-name">${name}</p>
+      <span class="m-chip ${st.cls}">${st.label}</span>
+      <p class="m-tx-meta">${kind} · #${no}${when ? ` · ${when}` : ""}</p>
+      <div class="m-tx-amt"><strong>${escapeHtml(formatMoney(row.total))}</strong></div>
     </li>`;
   }
 
@@ -127,20 +169,25 @@
     const s = summarizeDashboard(d || root.__mLastDash || {});
     const shop = $("m-home-shop");
     if (shop) shop.textContent = shopName(s);
+    paintLogo(s);
     const total = $("m-kpi-total");
     const paid = $("m-kpi-paid");
     const pending = $("m-kpi-pending");
-    if (total) total.textContent = String(s.totalBills);
-    if (paid) paid.textContent = formatMoney(s.paid);
-    if (pending) pending.textContent = formatMoney(s.pending);
+    if (total) total.textContent = formatCount(s.totalBills);
+    if (paid) paid.textContent = formatCount(s.paid);
+    if (pending) pending.textContent = formatCount(s.pending);
     const filter = home.dataset.recent || "all";
     const rows = s.recent.filter((r) => {
-      if (filter === "expenses") return /expens|purchase/i.test(String(r.type || r.kind || r.status || ""));
-      if (filter === "income") return isPaid(r);
-      return true;
+      if (filter === "expenses") return isExpense(r);
+      if (filter === "income") return !isExpense(r) && isPaid(r);
+      return !isExpense(r);
     });
     const list = $("m-recent-list");
-    if (list) list.innerHTML = rows.length ? rows.slice(0, 8).map(txHtml).join("") : `<p class="m-empty">No recent bills.</p>`;
+    if (list) {
+      list.innerHTML = rows.length
+        ? rows.slice(0, 8).map(txHtml).join("")
+        : `<li class="m-empty">${filter === "expenses" ? "No recent expenses." : "No recent bills."}</li>`;
+    }
     return s;
   }
 
@@ -205,8 +252,14 @@
       $("m-home").querySelectorAll("[data-m-recent]").forEach((b) => b.classList.toggle("is-on", b === btn));
       paintHome(root.__mLastDash || demoDashboard());
     });
+    $("m-recent-list")?.addEventListener("click", (e) => {
+      const row = e.target.closest("[data-m-open]");
+      if (row) goView(row.dataset.mOpen);
+    });
     hookShowView();
     hookPaint();
+    setTimeout(hookPaint, 0);
+    setTimeout(hookPaint, 250);
     syncTab("dashboard");
     if (new URLSearchParams(location.search).get("m-preview") === "1") {
       document.body.classList.add("analytics-home", "m-app");
@@ -228,7 +281,11 @@
     PHONE_MQ,
     isPhone,
     formatMoney,
+    formatCount,
+    formatDate,
+    isExpense,
     isPaid,
+    txStatus,
     summarizeDashboard,
     authPaneFromLocation,
     demoDashboard,

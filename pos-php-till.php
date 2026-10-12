@@ -227,6 +227,9 @@ function pos_php_till_dispatch($path, $method, $body) {
       "categories" => [],
       "monthGraph" => [],
       "todayOrders" => 0,
+      "monthPaidOrders" => 0,
+      "monthPendingOrders" => 0,
+      "recentExpenses" => [],
       "yesterdayOrders" => 0,
       "weekSales" => 0,
       "customersCount" => 0,
@@ -259,7 +262,7 @@ function pos_php_till_dispatch($path, $method, $body) {
       $hub["bankBalance"] = (float) ($bankIn[0]["total"] ?? 0) - (float) ($bankOut[0]["total"] ?? 0);
       $hub["salesGraph"] = pos_q("SELECT DATE(created_at) AS day, COALESCE(SUM(total),0) AS sales, COUNT(*) AS bills FROM sales_orders WHERE business_id = ? AND " . pos_created_since_days(13) . " GROUP BY DATE(created_at) ORDER BY day", "s", [$bid]);
       $hub["topItems"] = pos_q("SELECT l.item_name AS name, SUM(l.amount) AS amount FROM sales_order_lines l JOIN sales_orders o ON o.id = l.order_id WHERE o.business_id = ? AND " . pos_created_today("o") . " AND COALESCE(l.cancelled,0) = 0 GROUP BY l.item_name ORDER BY amount DESC LIMIT 8", "s", [$bid]);
-      $hub["recent"] = pos_q("SELECT order_number, customer_name, total, payment_method, payment_status, status, created_at FROM sales_orders WHERE business_id = ? ORDER BY created_at DESC LIMIT 10", "s", [$bid]);
+      $hub["recent"] = pos_q("SELECT id, order_number, customer_name, total, payment_method, payment_status, status, created_at FROM sales_orders WHERE business_id = ? ORDER BY created_at DESC LIMIT 10", "s", [$bid]);
       $ys = pos_q("SELECT COALESCE(SUM(total),0) AS takings FROM sales_orders WHERE business_id = ? AND " . pos_created_yesterday() . " AND LOWER(COALESCE(status,'')) <> 'cancelled'", "s", [$bid]);
       $hub["yesterdaySales"] = (float) ($ys[0]["takings"] ?? 0);
       $ms = pos_q("SELECT COALESCE(SUM(total),0) AS takings FROM sales_orders WHERE business_id = ? AND " . pos_created_this_month() . " AND LOWER(COALESCE(status,'')) <> 'cancelled'", "s", [$bid]);
@@ -277,6 +280,27 @@ function pos_php_till_dispatch($path, $method, $body) {
       $hub["monthGraph"] = pos_q("SELECT DATE_FORMAT(created_at, '%Y-%m') AS month, COALESCE(SUM(total),0) AS sales FROM sales_orders WHERE business_id = ? AND created_at >= DATE_SUB(CURDATE(), INTERVAL 11 MONTH) AND LOWER(COALESCE(status,'')) <> 'cancelled' GROUP BY DATE_FORMAT(created_at, '%Y-%m') ORDER BY month", "s", [$bid]);
       $to = pos_q("SELECT COUNT(*) AS n FROM sales_orders WHERE business_id = ? AND " . pos_created_today() . " AND LOWER(COALESCE(status,'')) <> 'cancelled'", "s", [$bid]);
       $hub["todayOrders"] = (int) ($to[0]["n"] ?? 0);
+      $mpaid = pos_q(
+        "SELECT COUNT(*) AS n FROM sales_orders WHERE business_id = ? AND created_at >= DATE_SUB(CURDATE(), INTERVAL 29 DAY) AND LOWER(COALESCE(status,'')) <> 'cancelled' AND (LOWER(COALESCE(payment_status,'')) IN ('paid','settled','completed') OR (LOWER(COALESCE(payment_status,'')) NOT IN ('unpaid','due','pending','partial','credit') AND LOWER(COALESCE(payment_method,'')) NOT IN ('credit','')))",
+        "s",
+        [$bid]
+      );
+      $hub["monthPaidOrders"] = (int) ($mpaid[0]["n"] ?? 0);
+      $mpend = pos_q(
+        "SELECT COUNT(*) AS n FROM sales_orders WHERE business_id = ? AND created_at >= DATE_SUB(CURDATE(), INTERVAL 29 DAY) AND LOWER(COALESCE(status,'')) <> 'cancelled' AND LOWER(COALESCE(payment_status,'')) NOT IN ('paid','settled','completed') AND (LOWER(COALESCE(payment_status,'')) IN ('unpaid','due','pending','partial','credit') OR LOWER(COALESCE(payment_method,'')) IN ('credit',''))",
+        "s",
+        [$bid]
+      );
+      $hub["monthPendingOrders"] = (int) ($mpend[0]["n"] ?? 0);
+      try {
+        $hub["recentExpenses"] = pos_q(
+          "SELECT id, category AS customer_name, expense_number AS order_number, (amount + gst) AS total, expense_date AS created_at, 'expense' AS kind, 'paid' AS payment_status FROM expenses WHERE business_id = ? ORDER BY expense_date DESC, created_at DESC LIMIT 8",
+          "s",
+          [$bid]
+        );
+      } catch (Exception $e) {
+        $hub["recentExpenses"] = [];
+      }
       $yo = pos_q("SELECT COUNT(*) AS n FROM sales_orders WHERE business_id = ? AND " . pos_created_yesterday() . " AND LOWER(COALESCE(status,'')) <> 'cancelled'", "s", [$bid]);
       $hub["yesterdayOrders"] = (int) ($yo[0]["n"] ?? 0);
       $ws = pos_q("SELECT COALESCE(SUM(total),0) AS takings FROM sales_orders WHERE business_id = ? AND " . pos_created_since_days(6) . " AND LOWER(COALESCE(status,'')) <> 'cancelled'", "s", [$bid]);

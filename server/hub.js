@@ -173,7 +173,7 @@ export async function buildHubDashboard() {
       [businessId],
     ),
     many(
-      `SELECT order_number, customer_name, total, payment_method, payment_status, status, created_at
+      `SELECT id, order_number, customer_name, total, payment_method, payment_status, status, created_at
        FROM sales_orders WHERE business_id = ? ORDER BY created_at DESC LIMIT 10`,
       [businessId],
     ),
@@ -281,6 +281,39 @@ export async function buildHubDashboard() {
       [businessId],
     ),
   ]);
+  const monthPaid = createdSinceDays(29);
+  const [monthPaidOrders, monthPendingOrders, recentExpenses] = await Promise.all([
+    one(
+      `SELECT COUNT(*) AS n FROM sales_orders
+       WHERE business_id = ? AND ${monthPaid}
+         AND LOWER(COALESCE(status,'')) <> 'cancelled'
+         AND (
+           LOWER(COALESCE(payment_status,'')) IN ('paid','settled','completed')
+           OR (
+             LOWER(COALESCE(payment_status,'')) NOT IN ('unpaid','due','pending','partial','credit')
+             AND LOWER(COALESCE(payment_method,'')) NOT IN ('credit','')
+           )
+         )`,
+      [businessId],
+    ),
+    one(
+      `SELECT COUNT(*) AS n FROM sales_orders
+       WHERE business_id = ? AND ${monthPaid}
+         AND LOWER(COALESCE(status,'')) <> 'cancelled'
+         AND LOWER(COALESCE(payment_status,'')) NOT IN ('paid','settled','completed')
+         AND (
+           LOWER(COALESCE(payment_status,'')) IN ('unpaid','due','pending','partial','credit')
+           OR LOWER(COALESCE(payment_method,'')) IN ('credit','')
+         )`,
+      [businessId],
+    ),
+    many(
+      `SELECT id, category AS customer_name, expense_number AS order_number,
+              (amount + gst) AS total, expense_date AS created_at, 'expense' AS kind, 'paid' AS payment_status
+       FROM expenses WHERE business_id = ? ORDER BY expense_date DESC, created_at DESC LIMIT 8`,
+      [businessId],
+    ),
+  ]);
   const gross = round2(profit.gross);
   const net = round2(gross - num(monthExp.total));
   return {
@@ -310,6 +343,9 @@ export async function buildHubDashboard() {
     categories,
     monthGraph,
     todayOrders: num(todayOrders.n),
+    monthPaidOrders: num(monthPaidOrders.n),
+    monthPendingOrders: num(monthPendingOrders.n),
+    recentExpenses,
     yesterdayOrders: num(yesterdayOrders.n),
     weekSales: round2(weekSales.takings),
     customersCount: num(customersCount.n),
