@@ -1132,7 +1132,7 @@
     mr: "\u092a\u094d\u0930\u093e\u0926\u0947\u0936\u093f\u0915 \u0928\u093e\u0935",
   };
   S["settings.profile"] = {
-    en: "Profile",
+    en: "Company Profile",
     hi: "\u092a\u094d\u0930\u094b\u092b\u093c\u093e\u0907\u0932",
     mr: "\u092a\u094d\u0930\u094b\u092b\u093e\u0907\u0932",
   };

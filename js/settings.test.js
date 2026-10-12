@@ -81,6 +81,7 @@ test("Settings hub groups company, hardware, table, and aggregator controls", ()
   assert.match(app, /const data = await api\("\/api\/table-shifts\/"\)/);
   assert.doesNotMatch(app, /if \(!tableShiftingEnabled\(\)\) \{[\s\S]*return;[\s\S]*api\("\/api\/table-shifts\//);
   assert.match(css, /\.settings-hub/);
-  assert.match(index, /app\.js\?v=20261012set2/);
-  assert.match(index, /pos\.css\?v=20261012set2/);
+  assert.match(css, /\.settings-hub \[hidden\][\s\S]*display:\s*none\s*!important/);
+  assert.match(index, /app\.js\?v=20261012set3/);
+  assert.match(index, /pos\.css\?v=20261012set3/);
 });

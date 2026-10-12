@@ -3016,7 +3016,7 @@ tr:last-child td { border-bottom: 0; }
 }
 .settings-hub {
   display: grid;
-  grid-template-columns: minmax(180px, 220px) minmax(0, 1fr);
+  grid-template-columns: minmax(210px, 250px) minmax(0, 1fr);
   gap: 16px 20px;
   align-items: start;
 }
@@ -3029,12 +3029,19 @@ tr:last-child td { border-bottom: 0; }
   border: 1px solid var(--line);
   border-radius: 16px;
   background: #fff;
+  max-height: min(72vh, calc(100vh - 140px));
+  overflow-y: auto;
 }
 .settings-hub-nav .btn {
   width: 100%;
   justify-content: flex-start;
   text-align: left;
   margin: 0;
+  white-space: normal;
+  line-height: 1.25;
+}
+.settings-hub [hidden] {
+  display: none !important;
 }
 .settings-hub-main { min-width: 0; display: grid; gap: 16px; }
 .settings-card {
@@ -3064,7 +3071,8 @@ tr:last-child td { border-bottom: 0; }
 #set-aggregator .settings-card { margin-top: 8px; }
 #settings-pane-hardware { display: grid; gap: 16px; grid-column: 1 / -1; }
 #settings-pane-hardware[hidden] { display: none; }
-.settings-profile-split:has(#settings-form[hidden]) {
+.settings-profile-split:has(#settings-form[hidden]),
+.settings-profile-split:has(.settings-side[hidden]) {
   grid-template-columns: 1fr;
 }
 @media (max-width: 900px) {
