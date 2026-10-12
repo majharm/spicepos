@@ -1,4 +1,4 @@
-/* InvoiceJet-style phone chrome. Desktop and tablet stay on the existing POS / login layouts. */
+/* InvoiceJet-style phone and tablet chrome. Desktop (981px+) stays on the existing POS / login layouts. */
 :root {
   --m-teal: #12b8a6;
   --m-teal-deep: #0d9488;
@@ -24,7 +24,7 @@
   display: none;
 }
 
-@media (min-width: 721px) {
+@media (min-width: 981px) {
   #m-welcome,
   #m-login-hello,
   #m-signup-foot,
@@ -36,7 +36,7 @@
 }
 
 
-@media (max-width: 720px) {
+@media (max-width: 980px) {
   #m-welcome {
     display: flex;
     flex-direction: column;
@@ -227,6 +227,20 @@
   }
   body.m-app.reports-home .reports-desk > :not(#m-reports) {
     display: none !important;
+  }
+
+  @media (min-width: 721px) {
+    #m-welcome {
+      max-width: 480px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+    body.m-app.analytics-home #m-home,
+    body.m-app.reports-home #m-reports {
+      max-width: 560px;
+      margin-left: auto;
+      margin-right: auto;
+    }
   }
 }
 
