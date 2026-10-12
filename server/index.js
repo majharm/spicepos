@@ -46,6 +46,7 @@ import { registerCustomerDedupeStaff, registerCustomerDedupeMaster, ensureCustom
 import "../js/discount.js";
 import "../js/payment-methods.js";
 import { registerQrPublic, registerQrStaff, ensureQrOrderSchema, linkQrOrderSale } from "./qr-ordering.js";
+import { registerAggregatorPublic, registerAggregatorStaff } from "./aggregator.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.join(__dirname, "..");
@@ -92,6 +93,7 @@ app.use((req, res, next) => {
 app.use(attachAuth);
 registerAuth(app);
 registerQrPublic(app);
+registerAggregatorPublic(app);
 registerRxPublic(app);
 registerSalonPublic(app);
 registerPrintPublic(app);
@@ -201,6 +203,7 @@ app.use((req, res, next) => {
   if (
     url.startsWith("/api/auth") ||
     url.startsWith("/api/qr/") ||
+    url.startsWith("/api/webhooks/") ||
     url.startsWith("/api/rx/") ||
     url.startsWith("/api/salon/public") ||
     url.startsWith("/api/print/public") ||
@@ -229,6 +232,7 @@ registerReturns(app);
 registerBackup(app);
 registerUnits(app);
 registerQrStaff(app);
+registerAggregatorStaff(app);
 registerRxStaff(app);
 registerSalonStaff(app);
 registerPrintStaff(app);

@@ -37,6 +37,9 @@ test("PHP fallback routes checkout, holds, and order updates through core", () =
   assert.match(core, /function pos_ensure_held_bills_schema/);
   assert.match(till, /pos_dispatch_order_route/);
   assert.match(till, /pos_dispatch_holds/);
+  assert.match(core, /webhooks\/zomato/);
+  assert.match(till, /pos_agg_staff_dispatch/);
+  assert.match(read("pos-aggregator.php"), /function pos_agg_public_dispatch/);
   assert.match(crud, /checkout.*POST.*pos_dispatch_checkout/s);
   assert.match(crud, /pos_dispatch_holds/);
   assert.match(core, /function pos_customer_label/);
@@ -379,7 +382,7 @@ test("POS boot skips API probe and slims catalog photos", () => {
   assert.match(index, /qrcode\.iife\.js[^>]+defer/);
   assert.match(index, /preload="auto"/);
   assert.match(index, /pos-api\.js\?v=20261006login1/);
-  assert.match(index, /app\.js\?v=20261012kot2/);
+  assert.match(index, /app\.js\?v=20261012agg1/);
   assert.match(index, /class="dialog-head"/);
   assert.match(index, /id="modal-close"/);
   assert.match(read("css/pos.css"), /#modal-close,/);
@@ -491,7 +494,7 @@ test("Restaurant Counter can create named dining tables", () => {
   assert.match(restaurant, /function canShiftTable/);
   assert.match(index, /pos\.css\?v=20261006fast1/);
   assert.match(index, /restaurant\.js\?v=20261012kot2/);
-  assert.match(index, /app\.js\?v=20261012kot2/);
+  assert.match(index, /app\.js\?v=20261012agg1/);
   assert.match(index, /footwear\.js\?v=20261012fix1/);
   assert.match(app, /function resolveKitchenKot/);
   assert.match(app, /function paintKotTimers/);
