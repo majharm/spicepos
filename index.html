@@ -10,8 +10,17 @@
     <link rel="stylesheet" href="./css/saas.css?v=20260905deploy136" />
     <link rel="stylesheet" href="./css/bar.css?v=20261011bar2" />
     <link rel="stylesheet" href="./css/resort.css?v=20261011resort1" />
-    <link rel="stylesheet" href="./css/mobile-app.css?v=20261012mob1" />
+    <link rel="stylesheet" href="./css/mobile-app.css?v=20261012gone1" />
     <link rel="stylesheet" href="./css/item-master.css?v=20261012brand1" />
+    <style>
+      /* Kill the old InvoiceJet phone overlay even if a cached stylesheet still tries to show it. */
+      #m-home, #m-reports, #m-tabbar { display: none !important; }
+      body.m-app:not(.m-preview).analytics-home .saas-dash-desk,
+      body.m-app:not(.m-preview).analytics-home #dash-kpis { display: grid !important; }
+      body.m-app:not(.m-preview).analytics-home .saas-dash-head,
+      body.m-app:not(.m-preview) #view-topbar { display: flex !important; }
+      body.m-app:not(.m-preview).reports-home .reports-desk > :not(#m-reports) { display: block !important; }
+    </style>
     <link rel="stylesheet" href="./css/customer-master.css?v=20261012cust1" />
   </head>
   <body class="fast-mode">
@@ -163,40 +172,6 @@
         <div class="platform-notices" id="platform-notices" hidden aria-live="polite"></div>
         <section class="view saas-dash" id="view-dashboard">
           <h2 class="visually-hidden">Dashboard</h2>
-          <article id="m-home" class="m-home" data-recent="all">
-            <header class="m-home-top">
-              <div class="m-home-brand">
-                <img id="m-home-logo" alt="" hidden />
-                <span class="m-home-mark" id="m-home-mark" aria-hidden="true"><svg viewBox="0 0 32 32" fill="none"><path d="M5 16.2 26.8 7.2c.8-.3 1.6.5 1.3 1.3L20.2 28c-.4.9-1.6.8-1.9-.1l-2.8-10-10.2-3.2c-.9-.3-1-1.6-.3-1.5z" fill="#12b8a6"/><path d="M15.4 17.8 26.7 8.4" stroke="#fff" stroke-width="1.4" stroke-linecap="round"/></svg></span>
-                <h2 id="m-home-shop">Your shop</h2>
-              </div>
-              <button type="button" class="m-icon-btn" id="m-home-notify" aria-label="Notifications">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 17h12l-1.2-2.1V10a4.8 4.8 0 1 0-9.6 0v4.9L6 17z"/><path d="M10 17a2 2 0 0 0 4 0"/></svg>
-              </button>
-            </header>
-            <div class="m-kpis">
-              <button type="button" data-m-view="orders"><span>Total invoices</span><strong id="m-kpi-total">0</strong><em>Last 24 hours</em></button>
-              <button type="button" data-m-view="orders"><span>Paid invoice</span><strong id="m-kpi-paid">0</strong><em>Last 30 days</em></button>
-              <button type="button" data-m-view="customers"><span>Pending invoice</span><strong id="m-kpi-pending">0</strong><em>Last 30 days</em></button>
-            </div>
-            <div class="m-actions">
-              <button type="button" data-m-view="counter"><span class="m-tile-ico is-bill"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="6" y="3.5" width="12" height="17" rx="2"/><path d="M9 8h6M9 12h6M9 16h3"/><circle cx="16.5" cy="16.5" r="3.2" fill="#d8f6f1" stroke="#0f766e"/><path d="M16.5 15v3M15 16.5h3" stroke="#0f766e"/></svg></span>Create invoice</button>
-              <button type="button" data-m-view="orders"><span class="m-tile-ico is-inv"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M7 3.5h8l4 4V20H7z"/><path d="M15 3.5V8h4"/><path d="M12 11v6M10 13.2h3.2a1.6 1.6 0 1 1 0 3.2H10"/></svg></span>Advance invoice</button>
-              <button type="button" data-m-view="customers"><span class="m-tile-ico is-cust"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="9" cy="8" r="2.6"/><path d="M4.2 18.2c.6-2.8 2.8-4.4 4.8-4.4s4.2 1.6 4.8 4.4"/><circle cx="16.6" cy="9" r="2.1"/><path d="M15.4 13.8c1.8.4 3.3 1.8 3.8 3.8"/></svg></span>Customers</button>
-              <button type="button" data-m-view="items"><span class="m-tile-ico is-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 8.2 12 4.4l8 3.8-8 3.8-8-3.8z"/><path d="M4 8.2v7.4L12 19.4l8-3.8V8.2"/><path d="M12 12v7.4"/></svg></span>Items / Services</button>
-              <button type="button" data-m-view="expenses"><span class="m-tile-ico is-exp"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M8 3.5h8l.8 2H19a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-13a1 1 0 0 1 1-1h2.2L8 3.5z"/><path d="M9 11h6M9 14.5h4"/></svg></span>Expenses</button>
-              <button type="button" data-m-view="payments"><span class="m-tile-ico is-inc"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3.5" y="7" width="17" height="11.5" rx="2.2"/><path d="M3.5 11h17"/><circle cx="16.2" cy="14.6" r="1.3"/></svg></span>Income</button>
-            </div>
-            <section class="m-recent">
-              <header><h3>Recent transactions</h3></header>
-              <div class="m-chips">
-                <button type="button" class="is-on" data-m-recent="all">All invoices</button>
-                <button type="button" data-m-recent="expenses">Expenses</button>
-                <button type="button" data-m-recent="income">Income</button>
-              </div>
-              <ul class="m-recent-list" id="m-recent-list"></ul>
-            </section>
-          </article>
           <div class="items-desk dash-desk saas-dash-desk">
             <header class="saas-dash-head">
               <div>
@@ -2463,36 +2438,6 @@
         <section class="view view-finance" id="view-reports" hidden>
           <h2 class="visually-hidden">Reports</h2>
           <div class="items-desk reports-desk">
-            <article id="m-reports" class="m-reports" data-range="month" data-group="sales">
-              <header class="m-reports-top">
-                <h2>Reports</h2>
-                <button type="button" class="m-icon-btn" id="m-rep-refresh" aria-label="Refresh reports">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 12a8 8 0 1 1-2.2-5.5"/><path d="M20 4v6h-6"/></svg>
-                </button>
-              </header>
-              <div class="m-chips m-rep-range">
-                <button type="button" data-m-range="today">Today</button>
-                <button type="button" class="is-on" data-m-range="month">This month</button>
-                <button type="button" data-m-range="fy">This FY</button>
-              </div>
-              <div class="m-kpis m-rep-kpis">
-                <button type="button" data-m-rep-tab="sales"><span>Sales</span><strong id="m-rep-sales">₹0</strong></button>
-                <button type="button" data-m-rep-tab="books"><span>Expenses</span><strong id="m-rep-exp">₹0</strong></button>
-                <button type="button" data-m-rep-tab="gst"><span>Net GST</span><strong id="m-rep-gst">₹0</strong></button>
-              </div>
-              <div class="m-chips m-rep-groups" id="m-rep-groups"></div>
-              <input class="m-rep-find" id="m-rep-find" type="search" placeholder="Find a report" autocomplete="off" />
-              <ul class="m-rep-list" id="m-rep-list"></ul>
-              <section class="m-rep-sheet" id="m-rep-sheet" hidden>
-                <header class="m-rep-sheet-top">
-                  <button type="button" class="m-rep-back" id="m-rep-back">Back</button>
-                  <h3 id="m-rep-sheet-title">Report</h3>
-                  <button type="button" class="m-rep-export" id="m-rep-print">Print</button>
-                </header>
-                <p class="m-rep-sheet-meta" id="m-rep-sheet-meta"></p>
-                <ul class="m-rep-rows" id="m-rep-rows"></ul>
-              </section>
-            </article>
             <header class="items-hero">
               <div class="items-hero-copy">
                 <p class="items-kicker">Reports Center</p>
@@ -3063,12 +3008,6 @@
         </section>
       </div>
     </div>
-    <nav id="m-tabbar" class="m-tabbar" aria-label="Mobile">
-      <button type="button" data-m-tab="dashboard" class="is-on"><span class="m-tab-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 10.5 12 4l8 6.5V20H4z"/></svg></span>Home</button>
-      <button type="button" data-m-tab="orders"><span class="m-tab-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M7 4h8l4 4v12H7z"/><path d="M15 4v4h4"/></svg></span>Invoices</button>
-      <button type="button" data-m-tab="reports"><span class="m-tab-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 19V9h4v10H4zm6 0V5h4v14h-4zm6 0v-7h4v7h-4z"/></svg></span>Reports</button>
-      <button type="button" data-m-tab="menu"><span class="m-tab-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 7h14M5 12h14M5 17h14"/></svg></span>Menu</button>
-    </nav>
     <audio class="pharmacy-hide" id="qr-order-chime" src="./sounds/qr-order.wav?v=20260920deploy204" preload="auto" playsinline></audio>
     <div class="qr-sound-arm pharmacy-hide" id="qr-sound-arm" hidden>
       <div>
@@ -3242,7 +3181,7 @@
     <script src="./js/app.js?v=20261012fast1" defer></script>
     <script src="./js/item-master-ui.js?v=20261012brand1" defer></script>
     <script src="./js/customer-master-ui.js?v=20261012cust1" defer></script>
-    <script src="./js/mobile-app.js?v=20261012mob1" defer></script>
+    <script src="./js/mobile-app.js?v=20261012gone1" defer></script>
     <script src="./js/growth.js?v=20260905deploy145" defer></script>
     <script src="./js/offers-ui.js?v=20260919off1" defer></script>
   </body>

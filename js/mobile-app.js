@@ -472,8 +472,9 @@
   }
 
   function bindPos() {
+    // POS phones use the tablet overlay-nav. InvoiceJet home/tabbar is m.html preview only.
+    if (!document.body?.classList.contains("m-preview")) return;
     if (!$("m-home")) return;
-    // POS phones use the same tablet chrome. InvoiceJet home/tabbar stay on login.html and m.html.
     document.querySelectorAll("[data-m-view]").forEach((btn) => {
       btn.addEventListener("click", () => goView(btn.dataset.mView));
     });

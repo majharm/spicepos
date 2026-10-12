@@ -175,56 +175,57 @@ body:not(.m-preview) #m-tabbar {
     font-size: 13px;
   }
 
-  body.m-app.analytics-home #view-topbar,
-  body.m-app.analytics-home .session-bar,
-  body.m-app.analytics-home .saas-dash-head,
-  body.m-app.analytics-home #dash-notes,
-  body.m-app.analytics-home #dash-kpis,
-  body.m-app.analytics-home #dash-plan-kpis,
-  body.m-app.analytics-home #dash-widget-drawer,
-  body.m-app.analytics-home #salon-dash-kpis,
-  body.m-app.analytics-home #print-dash-kpis,
-  body.m-app.analytics-home #gym-dash-kpis,
-  body.m-app.analytics-home .dash-shortcuts,
-  body.m-app.analytics-home .saas-dash-desk {
+  /* Overlay only on m.html. POS phones keep the tablet dashboard and reports desk. */
+  body.m-preview.m-app.analytics-home #view-topbar,
+  body.m-preview.m-app.analytics-home .session-bar,
+  body.m-preview.m-app.analytics-home .saas-dash-head,
+  body.m-preview.m-app.analytics-home #dash-notes,
+  body.m-preview.m-app.analytics-home #dash-kpis,
+  body.m-preview.m-app.analytics-home #dash-plan-kpis,
+  body.m-preview.m-app.analytics-home #dash-widget-drawer,
+  body.m-preview.m-app.analytics-home #salon-dash-kpis,
+  body.m-preview.m-app.analytics-home #print-dash-kpis,
+  body.m-preview.m-app.analytics-home #gym-dash-kpis,
+  body.m-preview.m-app.analytics-home .dash-shortcuts,
+  body.m-preview.m-app.analytics-home .saas-dash-desk {
     display: none !important;
   }
-  body.m-app #m-home {
+  body.m-preview.m-app #m-home {
     display: none;
   }
-  body.m-app.analytics-home #m-home {
+  body.m-preview.m-app.analytics-home #m-home {
     display: block;
   }
-  body.m-app #m-tabbar {
+  body.m-preview.m-app #m-tabbar {
     display: flex;
   }
-  body.m-app.counter-mode #m-tabbar {
+  body.m-preview.m-app.counter-mode #m-tabbar {
     display: none;
   }
-  body.m-app .stage:not(.is-counter) {
+  body.m-preview.m-app .stage:not(.is-counter) {
     padding-bottom: calc(var(--m-tab-h) + env(safe-area-inset-bottom));
   }
-  body.m-app.analytics-home #view-dashboard {
+  body.m-preview.m-app.analytics-home #view-dashboard {
     background: #fff;
   }
-  body.m-app.reports-home #view-topbar,
-  body.m-app.reports-home .session-bar {
+  body.m-preview.m-app.reports-home #view-topbar,
+  body.m-preview.m-app.reports-home .session-bar {
     display: none !important;
   }
-  body.m-app #m-reports {
+  body.m-preview.m-app #m-reports {
     display: none;
   }
-  body.m-app.reports-home #m-reports {
+  body.m-preview.m-app.reports-home #m-reports {
     display: block;
   }
-  body.m-app.reports-home #view-reports {
+  body.m-preview.m-app.reports-home #view-reports {
     background: #fff;
   }
-  body.m-app.reports-home .reports-desk {
+  body.m-preview.m-app.reports-home .reports-desk {
     margin: 0;
     gap: 0;
   }
-  body.m-app.reports-home .reports-desk > :not(#m-reports) {
+  body.m-preview.m-app.reports-home .reports-desk > :not(#m-reports) {
     display: none !important;
   }
 }

@@ -57,7 +57,7 @@ test("phone login starts on welcome unless signup is requested", () => {
   assert.equal(M.PHONE_MQ, "(max-width: 720px)");
 });
 
-test("InvoiceJet-style chrome is wired on login and POS without breaking pins", () => {
+test("InvoiceJet overlay is gone from POS; login welcome and m.html stay", () => {
   const login = read("login.html");
   const index = read("index.html");
   const css = read("css/mobile-app.css");
@@ -68,34 +68,29 @@ test("InvoiceJet-style chrome is wired on login and POS without breaking pins", 
   assert.match(login, /js\/pos-api\.js\?v=20261006login1/);
   assert.match(login, /css\/login-page\.css\?v=20261008loginfile1/);
   assert.match(login, /x-pos-20260830e\.js\?v=20261011lounge1/);
-  assert.match(login, /css\/mobile-app\.css\?v=20261012mob1/);
-  assert.match(login, /js\/mobile-app\.js\?v=20261012mob1/);
+  assert.match(login, /css\/mobile-app\.css\?v=20261012gone1/);
+  assert.match(login, /js\/mobile-app\.js\?v=20261012gone1/);
   assert.match(login, /id="m-welcome"/);
   assert.match(login, /Hello, Welcome back!/);
   assert.match(login, /id="m-go-signin"/);
   assert.match(login, /id="m-go-signup"/);
 
   assert.match(index, /app\.js\?v=20261012fast1/);
-  assert.match(index, /css\/mobile-app\.css\?v=20261012mob1/);
-  assert.match(index, /js\/mobile-app\.js\?v=20261012mob1/);
-  assert.match(index, /id="m-home"/);
-  assert.match(index, /id="m-reports"/);
-  assert.match(index, /data-m-range="month"/);
-  assert.match(index, /Create invoice/);
-  assert.match(index, /Items \/ Services/);
-  assert.match(index, /Last 24 hours/);
-  assert.match(index, /id="m-tabbar"/);
-  assert.match(index, /id="m-kpi-total"/);
-  assert.match(index, /data-m-tab="dashboard"/);
-  assert.match(index, /data-m-tab="orders"/);
-  assert.match(index, /data-m-tab="reports"/);
-  assert.match(index, /data-m-tab="menu"/);
+  assert.match(index, /css\/mobile-app\.css\?v=20261012gone1/);
+  assert.match(index, /js\/mobile-app\.js\?v=20261012gone1/);
+  assert.match(index, /Kill the old InvoiceJet phone overlay/);
+  assert.doesNotMatch(index, /id="m-home"/);
+  assert.doesNotMatch(index, /id="m-reports"/);
+  assert.doesNotMatch(index, /id="m-tabbar"/);
+  assert.doesNotMatch(index, /id="m-kpi-total"/);
+  assert.doesNotMatch(index, /Create invoice/);
   assert.match(read("m.html"), /POSMobileApp\.paintHome/);
 
   assert.match(css, /@media \(max-width: 720px\)/);
   assert.match(css, /@media \(min-width: 721px\)/);
   assert.match(css, /#m-welcome/);
   assert.match(css, /\.m-tabbar/);
+  assert.match(css, /body\.m-preview\.m-app\.analytics-home \.saas-dash-desk/);
   assert.match(js, /function paintHome/);
   assert.match(js, /function paintReports/);
   assert.match(js, /openMobileReport/);
@@ -111,7 +106,7 @@ test("InvoiceJet-style chrome is wired on login and POS without breaking pins", 
   assert.doesNotMatch(js, /password_hash/);
   assert.doesNotMatch(js, /classList\.toggle\("m-app", isPhone\(\)\)/);
   assert.doesNotMatch(js, /isPhone\(\) && openMobileReport/);
-  assert.match(js, /POS phones use the same tablet chrome/);
+  assert.match(js, /POS phones use the tablet overlay-nav/);
   assert.match(css, /body:not\(\.m-preview\) #m-home/);
   assert.match(read("css/pos.css"), /phone-pos: same tablet chrome/);
   assert.match(read("index.html"), /pos\.css\?v=20261012mob3/);
