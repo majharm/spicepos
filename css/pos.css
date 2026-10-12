@@ -3025,11 +3025,12 @@ tr:last-child td { border-bottom: 0; }
   top: 12px;
   flex-direction: column;
   flex-wrap: nowrap;
-  padding: 12px;
+  gap: 4px;
+  padding: 8px;
   border: 1px solid var(--line);
   border-radius: 16px;
   background: #fff;
-  max-height: min(72vh, calc(100vh - 140px));
+  max-height: min(78vh, calc(100vh - 120px));
   overflow-y: auto;
 }
 .settings-hub-nav .btn {
@@ -3039,6 +3040,8 @@ tr:last-child td { border-bottom: 0; }
   margin: 0;
   white-space: normal;
   line-height: 1.25;
+  padding: 7px 10px;
+  font-size: 13px;
 }
 .settings-hub [hidden] {
   display: none !important;
@@ -8057,7 +8060,7 @@ body.bill-collapsed .scale-dock { display: none !important; }
 }
 .scale-hw-status { margin: 4px 0 0; font-size: 13px; font-weight: 800; color: #b45309; }
 .scale-hw-status.is-on { color: #0f766e; }
-.scale-enable-lab { display: flex; gap: 8px; align-items: center; font-weight: 800; }
+.scale-enable-lab { display: flex; gap: 8px; align-items: center; font-weight: 800; flex: 0 0 auto; white-space: nowrap; }
 .scale-setup-copy { margin: 0; }
 .scale-setup-row {
   display: flex;
