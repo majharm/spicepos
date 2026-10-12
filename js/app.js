@@ -51,6 +51,7 @@ const state = {
   activeTable: "",
   activeFloor: "",
   shiftFromTable: "",
+  openTableOrderId: "",
   kotPrinted: [],
   kotTickets: [],
   kotFilter: "",
@@ -59,10 +60,12 @@ globalThis.state = state;
 
 function debounce(fn, wait = 120) {
   let timer;
-  return (...args) => {
+  const wrapped = (...args) => {
     clearTimeout(timer);
     timer = setTimeout(() => fn(...args), wait);
   };
+  wrapped.cancel = () => clearTimeout(timer);
+  return wrapped;
 }
 
 const renderCatalogDebounced = debounce(() => renderCatalog(), 100);
@@ -1677,6 +1680,7 @@ function clearCounterAfterSale(order, result) {
   state.lastPack = null;
   resetOfferPopup();
   state.editingOrderId = null;
+  state.openTableOrderId = "";
   state.activeQrOrderId = "";
   state.activeTable = "";
   state.kotPrinted = [];
@@ -2844,31 +2848,30 @@ function diningFloors() {
 function tableIsBusy(tableId) {
   const R = restaurantApi();
   if (!R || !tableId) return false;
-  const want = R.normalizeTableNo(tableId);
-  const qrBusy = (qrOrderCache || []).some((order) => {
-    const open = R.qrOrderOpen ? R.qrOrderOpen(order) : !["cancelled", "rejected", "completed"].includes(String(order.status || "").toLowerCase()) && !order.sales_order_id;
-    return open && R.normalizeTableNo(order.table_no) === want;
-  });
-  return Boolean(R.findTableHold(state.held, tableId) || (state.activeTable === tableId && state.cart.length) || qrBusy);
+  return Boolean(
+    R.tableOccupied(state.held, qrOrderCache, tableId, {
+      activeTable: state.activeTable,
+      cartCount: state.cart.length,
+    }),
+  );
 }
 
 function tableLiveLabel(tableId) {
   const R = restaurantApi();
+  if (!tableIsBusy(tableId)) return "Available";
   const want = R?.normalizeTableNo?.(tableId) || String(tableId || "");
-  const orders = (qrOrderCache || []).filter((order) => R?.normalizeTableNo?.(order.table_no) === want);
-  const open = orders.filter((order) => !["cancelled", "rejected"].includes(order.status));
-  const hold = R?.findTableHold?.(state.held, tableId);
-  const paid = open.some((order) => order.sales_order_id || order.payment_status === "paid");
+  const open = (qrOrderCache || []).filter(
+    (order) => (R?.qrOrderOpen ? R.qrOrderOpen(order) : true) && R?.normalizeTableNo?.(order.table_no) === want,
+  );
   if (open.some((o) => o.status === "ready")) return "Ready";
   if (open.some((o) => o.status === "preparing")) return "Preparing";
   if (open.some((o) => o.status === "kot_sent")) return "Occupied";
   if (open.some((o) => o.status === "accepted")) return "Order Accepted";
   if (open.some((o) => o.status === "pending")) return "Order Received";
-  if (open.some((o) => o.status === "completed") && !paid) return "Bill Pending";
-  if (open.some((o) => o.status === "completed") && paid) return "Payment Completed";
-  if (hold) return "Occupied";
-  if (state.activeTable === tableId && state.cart.length) return `${state.cart.length} dishes`;
-  return "Available";
+  if (R?.findTableHolds?.(state.held, tableId)?.some((row) => R.holdIsActive?.(row) !== false) || (state.activeTable === tableId && state.cart.length)) {
+    return state.activeTable === tableId && state.cart.length ? `${state.cart.length} dishes` : "Occupied";
+  }
+  return "Occupied";
 }
 
 function busyTableIds(tables) {
@@ -3022,7 +3025,7 @@ function renderTableBoard() {
           const payload = hold ? R.holdPayload(hold) || {} : {};
           const dishes = (payload.cart || []).length;
           const on = state.activeTable === t.id;
-          const busy = Boolean(hold) || (on && state.cart.length) || tableIsBusy(t.id);
+          const busy = tableIsBusy(t.id);
           const metaLine = tableLiveLabel(t.id);
           return `<div class="table-seat-wrap">
             <button class="table-seat${on ? " is-on" : ""}${busy ? " is-busy" : ""}" type="button" data-table="${escapeHtml(t.id)}">
@@ -3063,12 +3066,19 @@ async function saveActiveTableHold() {
 async function dropTableHold(tableNo) {
   const R = restaurantApi();
   if (!R || !tableNo) return;
-  const hold = R.findTableHold(state.held, tableNo);
-  if (!hold?.id) return;
+  const rows = R.findTableHolds ? R.findTableHolds(state.held, tableNo) : [R.findTableHold(state.held, tableNo)].filter(Boolean);
+  for (const hold of rows) {
+    if (!hold?.id) continue;
+    try {
+      await api(`/api/holds/${encodeURIComponent(hold.id)}`, { method: "DELETE" });
+    } catch {
+      /* already gone */
+    }
+  }
   try {
-    await api(`/api/holds/${encodeURIComponent(hold.id)}`, { method: "DELETE" });
+    await api("/api/tables/vacate", { method: "POST", body: JSON.stringify({ table_no: tableNo }) });
   } catch {
-    /* already gone */
+    /* optional on older servers */
   }
   await loadHolds();
 }
@@ -3121,30 +3131,49 @@ function bindQrOrderAfterTableShift(tableNo) {
   state.activeQrOrderId = live || (cached ? fromHold : "") || "";
 }
 
+let shiftingTable = false;
 async function confirmAndShiftTable(fromId, toId) {
   const R = restaurantApi();
-  if (!R) return;
+  if (!R || shiftingTable) return;
   const check = R.canShiftTable(state.held, qrOrderCache, fromId, toId, tableShiftOpts());
   if (!check.ok) throw new Error(check.error);
   const fromName = R.displayTable(check.from);
   const toName = R.displayTable(check.to);
   if (!window.confirm(`Move the active order from ${fromName} to ${toName}?`)) return;
-  if (state.activeTable === check.from && state.cart.length) await saveActiveTableHold();
-  const data = await api("/api/table-shift/", {
-    method: "POST",
-    body: JSON.stringify({ from_table: check.from, to_table: check.to }),
-  });
-  state.shiftFromTable = "";
-  if (state.activeTable === check.from) {
-    state.activeTable = check.to;
-    syncActiveFloor(check.to);
+  shiftingTable = true;
+  saveTableHoldDebounced.cancel?.();
+  try {
+    if (state.activeTable === check.from && state.cart.length) await saveActiveTableHold();
+    const key = globalThis.POSPayIntegrity?.newKey?.() || `shift-${Date.now()}`;
+    const data = await api("/api/table-shift/", {
+      method: "POST",
+      body: JSON.stringify({
+        from_table: check.from,
+        to_table: check.to,
+        idempotencyKey: key,
+        order_id: state.openTableOrderId || undefined,
+      }),
+    });
+    if (R.applyShiftLocal) {
+      const moved = R.applyShiftLocal(state.held, qrOrderCache, state.kotTickets, check.from, check.to);
+      state.held = moved.holds;
+      qrOrderCache = moved.qrOrders;
+      if (Array.isArray(moved.kots)) state.kotTickets = moved.kots;
+    }
+    state.shiftFromTable = "";
+    if (state.activeTable === check.from) {
+      state.activeTable = check.to;
+      syncActiveFloor(check.to);
+    }
+    await Promise.all([loadHolds(), loadKots().catch(() => {}), loadQrOrders().catch(() => {})]);
+    bindQrOrderAfterTableShift(check.to);
+    renderCart();
+    renderTableBoard();
+    setHint(`Order moved from ${fromName} to ${toName}`, "ok");
+    return data;
+  } finally {
+    shiftingTable = false;
   }
-  await Promise.all([loadHolds(), loadKots().catch(() => {}), loadQrOrders().catch(() => {})]);
-  bindQrOrderAfterTableShift(check.to);
-  renderCart();
-  renderTableBoard();
-  setHint(`Order moved from ${fromName} to ${toName}`, "ok");
-  return data;
 }
 
 async function selectDiningTable(tableNo) {
@@ -9894,7 +9923,13 @@ document.addEventListener("click", (e) => {
   if (e.target.id === "btn-cancel-edit") cancelOrderEdit();
 });
 
+let payingBill = false;
+let payIdempotencyKey = "";
 $("btn-pay").addEventListener("click", async () => {
+  if (payingBill) return;
+  payingBill = true;
+  const payBtn = $("btn-pay");
+  if (payBtn) payBtn.disabled = true;
   try {
     if (isClassicBillShop()) {
       const billed = resolveClassicBillCustomerId();
@@ -9913,7 +9948,10 @@ $("btn-pay").addEventListener("click", async () => {
     }
     assertCartWithinStock();
     setHint("Saving…");
+    const Pay = globalThis.POSPayIntegrity;
+    if (!payIdempotencyKey) payIdempotencyKey = Pay?.newKey?.() || `pay-${Date.now()}`;
     const cartSnapshot = state.cart.map((l) => ({ ...l }));
+    const amountPaid = checkoutAmountPaid();
     const payload = {
       customerId: state.customerId,
       paymentMethod: $("pay-method").value,
@@ -9934,7 +9972,8 @@ $("btn-pay").addEventListener("click", async () => {
         return id;
       })(),
       table_no: isRestaurantShop() ? (state.activeTable || undefined) : undefined,
-      amountPaid: checkoutAmountPaid(),
+      amountPaid,
+      idempotencyKey: payIdempotencyKey,
       customer_name: isClassicBillShop() ? pharmacyBillCustomerName() : undefined,
       customer_mobile: isClassicBillShop() ? pharmacyBillCustomerMobile() : undefined,
       customer_address: isClassicBillShop() ? pharmacyBillCustomerAddress() : undefined,
@@ -9950,9 +9989,21 @@ $("btn-pay").addEventListener("click", async () => {
         weight_source: l.weightSource || undefined,
       })),
     };
-    const result = state.editingOrderId
-      ? await api(`/api/orders/${state.editingOrderId}`, { method: "PUT", body: JSON.stringify(payload) })
-      : await api("/api/checkout", { method: "POST", body: JSON.stringify(payload) });
+    let result;
+    if (state.openTableOrderId && !state.editingOrderId) {
+      result = await api(`/api/orders/${encodeURIComponent(state.openTableOrderId)}/payments`, {
+        method: "POST",
+        body: JSON.stringify({
+          amount: amountPaid,
+          payment_method: payload.paymentMethod,
+          idempotencyKey: payIdempotencyKey,
+        }),
+      });
+    } else if (state.editingOrderId) {
+      result = await api(`/api/orders/${state.editingOrderId}`, { method: "PUT", body: JSON.stringify(payload) });
+    } else {
+      result = await api("/api/checkout", { method: "POST", body: JSON.stringify(payload) });
+    }
     const order = orderFromResult(result);
     if (!orderSaved(result)) throw new Error("Checkout did not return an order");
     const wasEdit = Boolean(state.editingOrderId);
@@ -10024,21 +10075,45 @@ $("btn-pay").addEventListener("click", async () => {
       payments: src.payments || receiptOrder.payments,
     };
     showOrder(receiptOrder);
+    const remaining = Number(receiptOrder.current_due ?? src.remaining ?? 0);
+    const keepTable =
+      isRestaurantShop() &&
+      tableNo &&
+      (globalThis.POSPayIntegrity?.keepTableAfterPayment?.(receiptOrder.payment_status, remaining) ??
+        String(receiptOrder.payment_status || "").toLowerCase() === "partial");
     showInvoicePrintModal(receiptOrder, {
       title: `Invoice ${orderLabel(order, result)}`,
-      message: "Bill saved. POS cleared for the next customer.",
+      message: keepTable
+        ? `Partial payment saved. Outstanding ${money(remaining)}.`
+        : "Bill saved. POS cleared for the next customer.",
     });
-    clearCounterAfterSale(order, result);
+    payIdempotencyKey = "";
+    if (keepTable) {
+      state.openTableOrderId = receiptOrder.id || src.id || state.openTableOrderId;
+      if ($("pay-amount")) {
+        $("pay-amount").value = "";
+        delete $("pay-amount").dataset.dirty;
+      }
+      saveTableHoldDebounced.cancel?.();
+      await saveActiveTableHold().catch(() => {});
+      setHint(`Partial payment saved. Outstanding ${money(remaining)}`, "ok");
+    } else {
+      clearCounterAfterSale(order, result);
+    }
     showView("counter");
     try {
       await Promise.all([loadBootstrap(), loadToday()]);
     } catch {
       /* order is already saved; keep the success message and cleared cart */
     }
-    resetClassicCustomerRecord();
+    if (!keepTable) resetClassicCustomerRecord();
     renderCart();
+    renderTableBoard();
   } catch (err) {
     setHint(userHintMessage(err), "error");
+  } finally {
+    payingBill = false;
+    if (payBtn) payBtn.disabled = false;
   }
 });
 

@@ -67,6 +67,10 @@ function pos_php_till_dispatch($path, $method, $body) {
       require_once __DIR__ . "/pos-table-shift.php";
       if (function_exists("pos_ensure_table_shift_schema")) pos_ensure_table_shift_schema();
     }
+    if (is_file(__DIR__ . "/pos-idempotency.php")) {
+      require_once __DIR__ . "/pos-idempotency.php";
+      if (function_exists("pos_ensure_idempotency_table")) pos_ensure_idempotency_table();
+    }
     require_once __DIR__ . "/pos-combos.php";
     require_once __DIR__ . "/pos-offers.php";
     $co = [];
@@ -528,7 +532,7 @@ function pos_php_till_dispatch($path, $method, $body) {
     pos_send(200, ["ok" => true, "company" => $co]);
   }
 
-  if ($path === "tables/shift" || $path === "tables/shifts" || $path === "table-shift" || $path === "table-shifts") {
+  if ($path === "tables/shift" || $path === "tables/shifts" || $path === "table-shift" || $path === "table-shifts" || $path === "tables/vacate" || $path === "tables/reconcile") {
     require_once __DIR__ . "/pos-table-shift.php";
     pos_require_holds();
     pos_dispatch_table_shift($path, $method, $body, $bid, $auth);
@@ -689,7 +693,7 @@ function pos_php_till_dispatch($path, $method, $body) {
     pos_send(200, $orders);
   }
 
-  if (preg_match('#^orders/([^/]+)$#', $path, $m)) {
+  if (preg_match('#^orders/([^/]+)(/payments)?$#', $path, $m)) {
     require_once __DIR__ . "/pos-orders.php";
     pos_dispatch_order_route($path, $method, $body, $bid, $auth);
     return true;

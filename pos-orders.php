@@ -318,7 +318,92 @@ function pos_delete_order($bid, $orderId, $auth) {
   pos_send(200, ["ok" => true, "deleted" => true, "order" => $existing, "php" => true]);
 }
 
+function pos_collect_order_payment($bid, $orderId, $body, $auth) {
+  if (is_file(__DIR__ . "/pos-idempotency.php")) require_once __DIR__ . "/pos-idempotency.php";
+  require_once __DIR__ . "/pos-accounting.php";
+  $key = function_exists("pos_clip_idempotency_key")
+    ? pos_clip_idempotency_key($body["idempotencyKey"] ?? $body["idempotency_key"] ?? "")
+    : "";
+  if ($key !== "" && function_exists("pos_find_idempotent")) {
+    $prior = pos_find_idempotent($bid, $key);
+    $replay = function_exists("pos_idempotent_payload") ? pos_idempotent_payload($prior) : null;
+    if (is_array($replay)) pos_send(200, array_merge($replay, ["replay" => true, "php" => true]));
+  }
+  $order = pos_order_with_lines($bid, $orderId);
+  if (!$order) pos_send(404, ["error" => "Order not found", "php" => true]);
+  if (strtolower((string) ($order["status"] ?? "")) === "cancelled") {
+    pos_send(400, ["error" => "Cancelled bills cannot take payments", "php" => true]);
+  }
+  $cust = pos_q("SELECT * FROM customers WHERE id = ? AND business_id = ? LIMIT 1", "ss", [$order["customer_id"], $bid]);
+  $customer = $cust[0] ?? null;
+  if (!$customer) pos_send(400, ["error" => "Customer not found", "php" => true]);
+  $amount = pos_round2($body["amount"] ?? $body["amountPaid"] ?? $body["amount_paid"] ?? 0);
+  $total = pos_round2($order["total"] ?? 0);
+  $already = pos_round2($order["amount_paid"] ?? 0);
+  $due = pos_round2(max(0, $total - $already));
+  if ($amount <= 0) pos_send(400, ["error" => "Enter a payment amount", "php" => true]);
+  if ($amount > $due + 0.004) pos_send(400, ["error" => "Amount exceeds outstanding (₹" . number_format($due, 2) . ")", "php" => true]);
+  $method = pos_pay_normalize($body["payment_method"] ?? $body["paymentMethod"] ?? "cash");
+  if (!pos_pay_is_money($method)) $method = "cash";
+  $uid = $auth["user"]["id"] ?? null;
+  $out = pos_with_transaction(function () use ($bid, $order, $customer, $amount, $method, $body, $already, $total, $uid, $key) {
+    $previousDue = pos_round2($customer["outstanding"] ?? 0);
+    $nextOut = pos_round2(max(0, $previousDue - $amount));
+    pos_q("UPDATE customers SET outstanding = ? WHERE id = ? AND business_id = ?", "dss", [$nextOut, $customer["id"], $bid]);
+    $rn = pos_next_seq("receipt", $bid, 1);
+    $entryNo = pos_format_payment_receipt_no($rn);
+    $ledgerId = pos_insert_ledger([
+      "entry_no" => $entryNo,
+      "entry_type" => "receipt",
+      "party_type" => "customer",
+      "party_id" => $customer["id"],
+      "party_name" => pos_customer_label($customer),
+      "amount" => $amount,
+      "payment_method" => $method,
+      "reference_type" => "sales_order",
+      "reference_id" => $order["id"],
+      "notes" => $order["order_number"],
+    ], $bid, $uid);
+    pos_stamp_ledger_due($ledgerId, [
+      "payment_reference" => $body["payment_reference"] ?? $body["paymentReference"] ?? null,
+      "invoice_no" => $order["order_number"],
+      "invoice_amount" => $total,
+      "previous_due" => $previousDue,
+      "remaining_due" => $nextOut,
+    ], $bid);
+    pos_apply_invoice_paid_delta($order["id"], $amount, $bid);
+    $amountPaid = pos_round2($already + $amount);
+    $payStatus = $amountPaid + 0.0001 < $total ? "partial" : "paid";
+    $currentDue = pos_round2(max(0, pos_round2($order["previous_due"] ?? 0) + $total - $amountPaid));
+    if (function_exists("pos_persist_invoice_settlement")) {
+      pos_persist_invoice_settlement($order["id"], [
+        "previousDue" => $order["previous_due"] ?? 0,
+        "amountPaid" => $amountPaid,
+        "currentDue" => $currentDue,
+        "paymentStatus" => $payStatus,
+        "paymentReference" => $body["payment_reference"] ?? $body["paymentReference"] ?? $order["payment_reference"] ?? null,
+        "paymentDate" => $body["payment_date"] ?? $body["paymentDate"] ?? $order["payment_date"] ?? null,
+      ], $bid);
+    } else {
+      pos_q(
+        "UPDATE sales_orders SET amount_paid = ?, current_due = ?, payment_status = ? WHERE id = ? AND business_id = ?",
+        "ddsss",
+        [(string) $amountPaid, (string) $currentDue, $payStatus, $order["id"], $bid]
+      );
+    }
+    $fresh = pos_order_with_lines($bid, $order["id"]);
+    $payload = ["ok" => true, "order" => $fresh, "receipt" => ["entryNo" => $entryNo, "ledgerId" => $ledgerId, "amount" => $amount], "remaining" => pos_round2(max(0, $total - $amountPaid)), "php" => true];
+    if ($key !== "" && function_exists("pos_save_idempotent")) pos_save_idempotent($bid, $key, "receipt", $ledgerId, $payload);
+    return $payload;
+  });
+  pos_send(200, $out);
+}
+
 function pos_dispatch_order_route($path, $method, $body, $bid, $auth) {
+  if (preg_match('#^orders/([^/]+)/payments$#', $path, $pm) && $method === "POST") {
+    pos_collect_order_payment($bid, $pm[1], $body, $auth);
+    return true;
+  }
   if (!preg_match('#^orders/([^/]+)$#', $path, $m)) return false;
   $orderId = $m[1];
   if ($method === "PUT") pos_update_order($bid, $orderId, $body, $auth);

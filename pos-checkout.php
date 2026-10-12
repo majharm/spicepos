@@ -26,7 +26,24 @@ function pos_assert_apparel_sale_stock($bid, $built) {
 
 function pos_checkout_sale($bid, $branchId, $uid, $auth, $body) {
   require_once __DIR__ . "/pos-accounting.php";
+  if (is_file(__DIR__ . "/pos-idempotency.php")) require_once __DIR__ . "/pos-idempotency.php";
   pos_ensure_sales_schema();
+  $idemKey = function_exists("pos_clip_idempotency_key")
+    ? pos_clip_idempotency_key($body["idempotencyKey"] ?? $body["idempotency_key"] ?? "")
+    : "";
+  if ($idemKey !== "" && function_exists("pos_find_idempotent")) {
+    $prior = pos_find_idempotent($bid, $idemKey);
+    if (!empty($prior["ref_id"])) {
+      $exist = pos_q("SELECT * FROM sales_orders WHERE id = ? AND business_id = ? LIMIT 1", "ss", [$prior["ref_id"], $bid]);
+      if ($exist) {
+        $lines = pos_q("SELECT * FROM sales_order_lines WHERE order_id = ?", "s", [$prior["ref_id"]]);
+        $row = $exist[0];
+        $row["lines"] = $lines;
+        $row["replay"] = true;
+        return $row;
+      }
+    }
+  }
   $qrOrderId = trim((string) ($body["qrOrderId"] ?? $body["qr_order_id"] ?? ""));
   if ($qrOrderId !== "") {
     require_once __DIR__ . "/pos-qr-ordering.php";
@@ -39,7 +56,7 @@ function pos_checkout_sale($bid, $branchId, $uid, $auth, $body) {
       }
     } catch (Exception $e) { /* optional */ }
   }
-  return pos_with_transaction(function () use ($body, $bid, $branchId, $uid, $auth, $qrOrderId) {
+  return pos_with_transaction(function () use ($body, $bid, $branchId, $uid, $auth, $qrOrderId, $idemKey) {
     $lines = $body["lines"] ?? [];
     if (!is_array($lines) || !$lines) throw new Exception("Cart is empty");
     $methodPay = pos_pay_normalize($body["paymentMethod"] ?? "cash");
@@ -291,6 +308,9 @@ function pos_checkout_sale($bid, $branchId, $uid, $auth, $body) {
     try {
       pos_post_sale_journal($bid, $uid, $orderRow);
     } catch (Throwable $e) { /* GL journal optional on PHP-only shops */ }
+    if ($idemKey !== "" && function_exists("pos_save_idempotent")) {
+      pos_save_idempotent($bid, $idemKey, "checkout", $orderRow["id"] ?? "", $orderRow);
+    }
     return $orderRow;
   });
 }

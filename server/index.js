@@ -24,6 +24,8 @@ import { registerHub } from "./hub.js";
 import { registerBackup } from "./backup.js";
 import { registerUnits, ensureInventoryUnits } from "./units.js";
 import { registerAccounts, recordCreditSale, settleCustomerInvoice, listCustomerReceipts, attachPaymentsToOrders, invoiceOpenDueByCustomer, hydrateCustomerOutstandingRows, persistHydratedOutstanding, recomputeAllBusinessesOutstanding } from "./accounts.js";
+import { clipIdempotencyKey, ensureIdempotencyTable, findIdempotent, saveIdempotent, parseIdempotentPayload } from "./idempotency.js";
+import "../js/pay-integrity.js";
 import { postSaleJournal } from "./accounting.js";
 import { audit } from "./audit.js";
 import { getPlatformSettings, shopSupportContact } from "./settings.js";
@@ -902,6 +904,24 @@ app.post("/api/checkout", requireStaff, requirePerm("counter"), async (req, res)
         /* optional */
       }
     }
+    await ensureIdempotencyTable();
+    const idemKey = clipIdempotencyKey(req.body?.idempotencyKey || req.body?.idempotency_key);
+    if (idemKey) {
+      const prior = await findIdempotent(query, businessId, idemKey);
+      if (prior?.ref_id) {
+        const existing = await query("SELECT * FROM sales_orders WHERE id = ? AND business_id = ? LIMIT 1", [prior.ref_id, businessId]);
+        if (existing[0]) {
+          const lines = await query("SELECT * FROM sales_order_lines WHERE order_id = ?", [prior.ref_id]);
+          res.json({ ok: true, order: { ...existing[0], lines }, replay: true });
+          return;
+        }
+        const cached = parseIdempotentPayload(prior);
+        if (cached) {
+          res.json({ ok: true, order: cached, replay: true });
+          return;
+        }
+      }
+    }
     const result = await withTransaction(async (conn) => {
       const [customers] = await conn.query(
         "SELECT * FROM customers WHERE id = ? AND business_id = ?",
@@ -1190,6 +1210,7 @@ app.post("/api/checkout", requireStaff, requirePerm("counter"), async (req, res)
         amountPaid: req.body?.amountPaid ?? req.body?.amount_paid,
         paymentReference: req.body?.paymentReference ?? req.body?.payment_reference,
         paymentDate: req.body?.paymentDate ?? req.body?.payment_date,
+        payments: Array.isArray(req.body?.payments) ? req.body.payments : null,
       });
       orderRow.previous_due = dueSnap.previousDue;
       orderRow.amount_paid = dueSnap.amountPaid;
@@ -1214,6 +1235,7 @@ app.post("/api/checkout", requireStaff, requirePerm("counter"), async (req, res)
           ]
         : [];
       await postSaleJournal(conn, orderRow);
+      if (idemKey) await saveIdempotent(conn, businessId, idemKey, "checkout", orderId, orderRow);
       return orderRow;
     });
     await audit("Sale Created", {

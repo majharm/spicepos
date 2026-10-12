@@ -356,11 +356,24 @@
     return Boolean(tableNoFromHold(row));
   }
 
-  function findTableHold(holds, tableNo) {
+  function findTableHolds(holds, tableNo) {
     const want = normalizeTableNo(tableNo);
-    if (!want) return null;
-    const list = Array.isArray(holds) ? holds : [];
-    return list.find((row) => tableNoFromHold(row) === want) || null;
+    if (!want) return [];
+    return (Array.isArray(holds) ? holds : []).filter((row) => tableNoFromHold(row) === want);
+  }
+
+  function findTableHold(holds, tableNo) {
+    return findTableHolds(holds, tableNo)[0] || null;
+  }
+
+  function holdCartCount(row) {
+    const payload = holdPayload(row) || {};
+    const cart = Array.isArray(payload.cart) ? payload.cart : [];
+    return cart.filter((line) => Number(line?.qtyGm || line?.quantity_gm || line?.qty) > 0).length;
+  }
+
+  function holdIsActive(row) {
+    return holdCartCount(row) > 0;
   }
 
   function tableShiftingOn(biz) {
@@ -379,11 +392,31 @@
   function tableOccupied(holds, qrOrders, tableNo, opts = {}) {
     const want = normalizeTableNo(tableNo);
     if (!want || want === PARCEL) return false;
-    if (findTableHold(holds, want)) return true;
+    if (findTableHolds(holds, want).some(holdIsActive)) return true;
     const qrs = Array.isArray(qrOrders) ? qrOrders : [];
     if (qrs.some((order) => qrOrderOpen(order) && normalizeTableNo(order.table_no) === want)) return true;
     if (opts.activeTable && normalizeTableNo(opts.activeTable) === want && Number(opts.cartCount || 0) > 0) return true;
     return false;
+  }
+
+  function applyShiftLocal(holds, qrOrders, kots, from, to) {
+    const src = normalizeTableNo(from);
+    const dest = normalizeTableNo(to);
+    const nextHolds = (Array.isArray(holds) ? holds : []).map((row) => {
+      if (tableNoFromHold(row) !== src) return row;
+      const payload = { ...(holdPayload(row) || {}), table_no: dest };
+      return { ...row, label: holdLabel(dest), payload, payload_json: JSON.stringify(payload) };
+    });
+    const nextQr = (Array.isArray(qrOrders) ? qrOrders : []).map((order) => {
+      if (!qrOrderOpen(order) || normalizeTableNo(order.table_no) !== src) return order;
+      return { ...order, table_no: dest };
+    });
+    const nextKots = (Array.isArray(kots) ? kots : []).map((ticket) => {
+      if (normalizeTableNo(ticket.table_no) !== src) return ticket;
+      if (["cancelled", "void"].includes(String(ticket.status || "").toLowerCase())) return ticket;
+      return { ...ticket, table_no: dest };
+    });
+    return { holds: nextHolds, qrOrders: nextQr, kots: nextKots };
   }
 
   function canShiftTable(holds, qrOrders, from, to, opts = {}) {
@@ -667,10 +700,14 @@ ${kotBody(opts)}
     holdPayload,
     tableNoFromHold,
     isTableHold,
+    findTableHolds,
     findTableHold,
+    holdCartCount,
+    holdIsActive,
     tableShiftingOn,
     qrOrderOpen,
     tableOccupied,
+    applyShiftLocal,
     canShiftTable,
     specialInstruction,
     lineSpecialInstruction,

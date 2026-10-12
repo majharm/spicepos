@@ -75,14 +75,40 @@ function pos_table_qr_open($order) {
   return true;
 }
 
+function pos_hold_cart_count($payload) {
+  $cart = is_array($payload["cart"] ?? null) ? $payload["cart"] : [];
+  $n = 0;
+  foreach ($cart as $line) {
+    $qty = (float) ($line["qtyGm"] ?? $line["quantity_gm"] ?? $line["qty"] ?? 0);
+    if ($qty > 0) $n++;
+  }
+  return $n;
+}
+
+function pos_delete_holds_for_table($bid, $tableNo) {
+  $want = pos_normalize_table_no($tableNo);
+  if ($want === "") return 0;
+  $n = 0;
+  try {
+    $holds = pos_q("SELECT id, label, payload_json FROM held_bills WHERE business_id = ?", "s", [$bid]);
+    foreach ($holds as $row) {
+      [$have] = pos_hold_payload_table($row);
+      if ($have !== $want) continue;
+      pos_q("DELETE FROM held_bills WHERE id = ? AND business_id = ?", "ss", [$row["id"], $bid]);
+      $n++;
+    }
+  } catch (Exception $e) { /* optional */ }
+  return $n;
+}
+
 function pos_table_occupied($bid, $tableNo) {
   $want = pos_normalize_table_no($tableNo);
   if ($want === "" || $want === "Parcel") return false;
   try {
     $holds = pos_q("SELECT id, label, payload_json FROM held_bills WHERE business_id = ?", "s", [$bid]);
     foreach ($holds as $row) {
-      [$have] = pos_hold_payload_table($row);
-      if ($have === $want) return true;
+      [$have, $payload] = pos_hold_payload_table($row);
+      if ($have === $want && pos_hold_cart_count($payload) > 0) return true;
     }
   } catch (Exception $e) { /* optional */ }
   try {
@@ -98,8 +124,40 @@ function pos_table_occupied($bid, $tableNo) {
 function pos_dispatch_table_shift($path, $method, $body, $bid, $auth) {
   pos_ensure_table_shift_schema();
   pos_ensure_held_bills_schema();
+  if (is_file(__DIR__ . "/pos-idempotency.php")) require_once __DIR__ . "/pos-idempotency.php";
   $hist = $path === "tables/shifts" || $path === "table-shifts";
   $move = $path === "tables/shift" || $path === "table-shift";
+  $vacate = $path === "tables/vacate";
+  $reconcile = $path === "tables/reconcile";
+  if ($vacate && $method === "POST") {
+    $tableNo = pos_normalize_table_no($body["table_no"] ?? $body["tableNo"] ?? "");
+    if ($tableNo === "" || $tableNo === "Parcel") pos_send(400, ["error" => "Choose a table", "php" => true]);
+    $dropped = pos_delete_holds_for_table($bid, $tableNo);
+    pos_send(200, ["ok" => true, "table_no" => $tableNo, "dropped" => $dropped, "occupied" => pos_table_occupied($bid, $tableNo), "php" => true]);
+  }
+  if ($reconcile && $method === "POST") {
+    $empty = 0;
+    try {
+      $holds = pos_q("SELECT id, label, payload_json FROM held_bills WHERE business_id = ?", "s", [$bid]);
+      foreach ($holds as $row) {
+        [, $payload] = pos_hold_payload_table($row);
+        if (pos_hold_cart_count($payload) > 0) continue;
+        pos_q("DELETE FROM held_bills WHERE id = ? AND business_id = ?", "ss", [$row["id"], $bid]);
+        $empty++;
+      }
+    } catch (Exception $e) { /* optional */ }
+    $barFreed = 0;
+    try {
+      $bars = pos_q("SELECT id, status, hold_json FROM bar_tables WHERE business_id = ?", "s", [$bid]);
+      foreach ($bars as $tbl) {
+        $hold = json_decode($tbl["hold_json"] ?? "{}", true) ?: [];
+        if (!empty($hold["lines"])) continue;
+        pos_q("UPDATE bar_tables SET status='free', hold_json=NULL WHERE id=? AND business_id=?", "ss", [$tbl["id"], $bid]);
+        $barFreed++;
+      }
+    } catch (Exception $e) { /* bar optional */ }
+    pos_send(200, ["ok" => true, "empty_holds_removed" => $empty, "bar_tables_freed" => $barFreed, "payments_untouched" => true, "php" => true]);
+  }
   if ($hist && $method === "GET") {
     $rows = [];
     try {
@@ -130,73 +188,100 @@ function pos_dispatch_table_shift($path, $method, $body, $bid, $auth) {
     if ($from === "Parcel" || $to === "Parcel") pos_send(400, ["error" => "Parcel / takeaway cannot be shifted", "php" => true]);
     $ids = pos_table_layout_ids($bid);
     if ($ids && !isset($ids[$to])) pos_send(400, ["error" => "New table is not on the floor plan", "php" => true]);
+    $key = function_exists("pos_clip_idempotency_key")
+      ? pos_clip_idempotency_key($body["idempotencyKey"] ?? $body["idempotency_key"] ?? $body["request_id"] ?? "")
+      : "";
+    if ($key !== "" && function_exists("pos_find_idempotent")) {
+      $prior = pos_find_idempotent($bid, $key);
+      $replay = function_exists("pos_idempotent_payload") ? pos_idempotent_payload($prior) : null;
+      if (is_array($replay)) pos_send(200, array_merge($replay, ["replay" => true, "php" => true]));
+    }
     if (!pos_table_occupied($bid, $from)) pos_send(400, ["error" => "No active order on that table", "php" => true]);
     if (pos_table_occupied($bid, $to)) pos_send(400, ["error" => "Destination table is occupied", "php" => true]);
 
-    $movedQr = [];
-    $movedKots = 0;
-    $movedHold = false;
-    $orderNumbers = [];
-
-    try {
-      $holds = pos_q("SELECT id, label, payload_json FROM held_bills WHERE business_id = ?", "s", [$bid]);
-      foreach ($holds as $row) {
-        [$have, $payload] = pos_hold_payload_table($row);
-        if ($have !== $from) continue;
-        $payload["table_no"] = $to;
-        $label = pos_hold_table_label($to);
-        pos_q(
-          "UPDATE held_bills SET label = ?, payload_json = ? WHERE id = ? AND business_id = ?",
-          "ssss",
-          [$label, json_encode($payload), $row["id"], $bid]
-        );
-        $movedHold = true;
-      }
-    } catch (Exception $e) { /* optional */ }
-
-    try {
-      $kots = pos_q("SELECT id, table_no, status FROM kitchen_tickets WHERE business_id = ?", "s", [$bid]);
-      foreach ($kots as $row) {
-        if (pos_normalize_table_no($row["table_no"] ?? "") !== $from) continue;
-        $st = strtolower((string) ($row["status"] ?? ""));
-        if (in_array($st, ["cancelled", "void"], true)) continue;
-        try {
-          pos_q("UPDATE kitchen_tickets SET table_no = ?, updated_at = CURRENT_TIMESTAMP(3) WHERE id = ? AND business_id = ?", "sss", [$to, $row["id"], $bid]);
-        } catch (Exception $e) {
-          pos_q("UPDATE kitchen_tickets SET table_no = ? WHERE id = ? AND business_id = ?", "sss", [$to, $row["id"], $bid]);
+    $out = pos_with_transaction(function () use ($bid, $auth, $from, $to, $body, $key) {
+      $movedQr = [];
+      $movedKots = 0;
+      $movedHold = false;
+      $orderNumbers = [];
+      try {
+        $holds = pos_q("SELECT id, label, payload_json FROM held_bills WHERE business_id = ?", "s", [$bid]);
+        foreach ($holds as $row) {
+          [$have, $payload] = pos_hold_payload_table($row);
+          if ($have !== $from) continue;
+          $payload["table_no"] = $to;
+          $label = pos_hold_table_label($to);
+          pos_q(
+            "UPDATE held_bills SET label = ?, payload_json = ? WHERE id = ? AND business_id = ?",
+            "ssss",
+            [$label, json_encode($payload), $row["id"], $bid]
+          );
+          $movedHold = true;
         }
-        $movedKots += 1;
-      }
-    } catch (Exception $e) { /* optional */ }
+      } catch (Exception $e) { /* optional */ }
 
-    try {
-      $qrs = pos_q("SELECT id, order_number, table_no, status, sales_order_id FROM qr_orders WHERE business_id = ?", "s", [$bid]);
-      foreach ($qrs as $row) {
-        if (!pos_table_qr_open($row)) continue;
-        if (pos_normalize_table_no($row["table_no"] ?? "") !== $from) continue;
-        pos_q("UPDATE qr_orders SET table_no = ? WHERE id = ? AND business_id = ?", "sss", [$to, $row["id"], $bid]);
-        $movedQr[] = $row["id"];
-        if (!empty($row["order_number"])) $orderNumbers[] = $row["order_number"];
-      }
-    } catch (Exception $e) { /* optional */ }
+      try {
+        $kots = pos_q("SELECT id, table_no, status FROM kitchen_tickets WHERE business_id = ?", "s", [$bid]);
+        foreach ($kots as $row) {
+          if (pos_normalize_table_no($row["table_no"] ?? "") !== $from) continue;
+          $st = strtolower((string) ($row["status"] ?? ""));
+          if (in_array($st, ["cancelled", "void"], true)) continue;
+          try {
+            pos_q("UPDATE kitchen_tickets SET table_no = ?, updated_at = CURRENT_TIMESTAMP(3) WHERE id = ? AND business_id = ?", "sss", [$to, $row["id"], $bid]);
+          } catch (Exception $e) {
+            pos_q("UPDATE kitchen_tickets SET table_no = ? WHERE id = ? AND business_id = ?", "sss", [$to, $row["id"], $bid]);
+          }
+          $movedKots += 1;
+        }
+      } catch (Exception $e) { /* optional */ }
 
-    $who = (string) ($auth["user"]["name"] ?? $auth["user"]["email"] ?? $auth["user"]["username"] ?? "staff");
-    $orderNumber = $orderNumbers ? implode(", ", array_values(array_unique($orderNumbers))) : ($movedHold ? pos_hold_table_label($from) : "");
-    pos_q(
-      "INSERT INTO table_shift_history (id, business_id, order_number, old_table, new_table, shifted_by) VALUES (?,?,?,?,?,?)",
-      "ssssss",
-      [bin2hex(random_bytes(16)), $bid, $orderNumber, $from, $to, $who]
-    );
-    pos_send(200, [
-      "ok" => true,
-      "from" => $from,
-      "to" => $to,
-      "hold" => $movedHold,
-      "kots" => $movedKots,
-      "qr_orders" => $movedQr,
-      "order_number" => $orderNumber,
-      "php" => true,
-    ]);
+      try {
+        $qrs = pos_q("SELECT id, order_number, table_no, status, sales_order_id FROM qr_orders WHERE business_id = ?", "s", [$bid]);
+        foreach ($qrs as $row) {
+          if (!pos_table_qr_open($row)) continue;
+          if (pos_normalize_table_no($row["table_no"] ?? "") !== $from) continue;
+          pos_q("UPDATE qr_orders SET table_no = ? WHERE id = ? AND business_id = ?", "sss", [$to, $row["id"], $bid]);
+          $movedQr[] = $row["id"];
+          if (!empty($row["order_number"])) $orderNumbers[] = $row["order_number"];
+        }
+      } catch (Exception $e) { /* optional */ }
+
+      try {
+        $bills = pos_q("SELECT id, order_number, table_no FROM sales_orders WHERE business_id = ? AND LOWER(TRIM(COALESCE(status,'confirmed'))) <> 'cancelled'", "s", [$bid]);
+        foreach ($bills as $bill) {
+          if (pos_normalize_table_no($bill["table_no"] ?? "") !== $from) continue;
+          pos_q("UPDATE sales_orders SET table_no = ? WHERE id = ? AND business_id = ?", "sss", [$to, $bill["id"], $bid]);
+          if (!empty($bill["order_number"])) $orderNumbers[] = $bill["order_number"];
+        }
+      } catch (Exception $e) { /* optional */ }
+      $orderId = trim((string) ($body["order_id"] ?? $body["orderId"] ?? ""));
+      if ($orderId !== "") {
+        try { pos_q("UPDATE sales_orders SET table_no = ? WHERE id = ? AND business_id = ?", "sss", [$to, $orderId, $bid]); } catch (Exception $e) { /* optional */ }
+      }
+
+      $who = (string) ($auth["user"]["name"] ?? $auth["user"]["email"] ?? $auth["user"]["username"] ?? "staff");
+      $orderNumber = $orderNumbers ? implode(", ", array_values(array_unique($orderNumbers))) : ($movedHold ? pos_hold_table_label($from) : "");
+      pos_q(
+        "INSERT INTO table_shift_history (id, business_id, order_number, old_table, new_table, shifted_by) VALUES (?,?,?,?,?,?)",
+        "ssssss",
+        [bin2hex(random_bytes(16)), $bid, $orderNumber, $from, $to, $who]
+      );
+      $out = [
+        "ok" => true,
+        "from" => $from,
+        "to" => $to,
+        "hold" => $movedHold,
+        "kots" => $movedKots,
+        "qr_orders" => $movedQr,
+        "order_number" => $orderNumber,
+        "source_vacant" => !pos_table_occupied($bid, $from),
+        "dest_occupied" => pos_table_occupied($bid, $to),
+        "php" => true,
+      ];
+      if ($key !== "" && function_exists("pos_save_idempotent")) pos_save_idempotent($bid, $key, "table-shift", $from . "->" . $to, $out);
+      return $out;
+    });
+    pos_send(200, $out);
   }
   return false;
 }

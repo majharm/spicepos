@@ -260,6 +260,7 @@
           method: t.pay,
           table_id: t.table_id,
           service_type: t.service_type,
+          idempotencyKey: globalThis.POSPayIntegrity?.newKey?.() || `bar-${Date.now()}`,
         }),
       });
       t.lines = [];
@@ -344,7 +345,15 @@
     if (!t.table_id) return;
     const to = window.prompt("Transfer to table id", pickTable(t.table_id));
     if (!to) return;
-    await api("/api/bar/tables/transfer", { method: "POST", body: JSON.stringify({ from_id: t.table_id, to_id: to }) });
+    await api("/api/bar/tables/transfer", {
+      method: "POST",
+      body: JSON.stringify({
+        from_id: t.table_id,
+        to_id: to,
+        idempotencyKey: globalThis.POSPayIntegrity?.newKey?.() || `bar-shift-${Date.now()}`,
+      }),
+    });
+    t.table_id = to;
     await loadTables();
   }
 
