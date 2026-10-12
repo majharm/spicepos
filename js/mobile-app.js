@@ -468,13 +468,20 @@
       };
       ui.paintReportsCenter.__mApp = true;
     }
-    // POS phones keep the tablet reports desk. InvoiceJet sheet stays on m.html preview.
+    if (ui.openReport && !ui.openReport.__mApp) {
+      const origOpen = ui.openReport.bind(ui);
+      ui.openReport = function (id) {
+        if (isPhone() && openMobileReport(id)) return;
+        origOpen(id);
+      };
+      ui.openReport.__mApp = true;
+    }
   }
 
   function bindPos() {
-    // POS phones use the tablet overlay-nav. InvoiceJet home/tabbar is m.html preview only.
-    if (!document.body?.classList.contains("m-preview")) return;
     if (!$("m-home")) return;
+    document.body.classList.toggle("m-app", isPhone());
+    window.addEventListener("resize", () => document.body.classList.toggle("m-app", isPhone()));
     document.querySelectorAll("[data-m-view]").forEach((btn) => {
       btn.addEventListener("click", () => goView(btn.dataset.mView));
     });
@@ -535,7 +542,7 @@
       paintHome(demoDashboard());
     }
     if (params.get("m-tab") === "reports" || location.hash === "#reports") {
-      if (params.get("m-preview") === "1") document.body.classList.add("m-app");
+      document.body.classList.add("m-app");
       setPhoneSurface("reports");
       paintReports();
       syncTab("reports");

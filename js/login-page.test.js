@@ -79,14 +79,14 @@ test("Master Admin Login Page manager is wired without touching auth", () => {
   assert.match(master, /data-tab="website" data-website-pane="images"/);
   assert.match(master, />Login Page</);
   assert.match(master, /js\/master-login-page\.js\?v=20261011login1/);
-  assert.match(master, /js\/login-page\.js\?v=20261010nav2/);
+  assert.match(master, /js\/login-page\.js\?v=20261012jet1/);
   assert.match(master, /css\/login-page\.css\?v=20261011login1/);
   assert.match(masterJs, /function resolveWebsitePane/);
   assert.match(masterJs, /Login page and branding/);
   assert.match(manager, /function resolvePane/);
   assert.match(manager, /Login Page Management/);
   assert.doesNotMatch(master, /data-tab="website" data-website-pane="homepage"><span class="nav-icon"/);
-  assert.match(login, /js\/login-page\.js\?v=20261010nav2/);
+  assert.match(login, /js\/login-page\.js\?v=20261012jet1/);
   assert.match(login, /login-atav-navratri-dussehra\.jpg/);
   assert.match(login, /js\/pos-api\.js\?v=20261006login1/);
   assert.match(login, /css\/login-page\.css\?v=20261008loginfile1/);
