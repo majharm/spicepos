@@ -125,13 +125,19 @@ function pos_dispatch_kots($path, $method, $body, $bid, $auth) {
     if (!$lines) pos_send(400, ["error" => "Nothing to send to kitchen"]);
     $qrOrderId = substr(trim((string) ($body["qr_order_id"] ?? $body["qrOrderId"] ?? "")), 0, 255);
     $id = pos_uuid();
-    $tableNo = substr(trim((string) ($body["table_no"] ?? $body["tableNo"] ?? "")), 0, 64);
+    $tableNo = function_exists("pos_normalize_table_no")
+      ? pos_normalize_table_no($body["table_no"] ?? $body["tableNo"] ?? "")
+      : substr(trim((string) ($body["table_no"] ?? $body["tableNo"] ?? "")), 0, 64);
     $kind = (($body["kind"] ?? "") === "reprint") ? "reprint" : "new";
     $notes = substr(trim((string) ($body["notes"] ?? "")), 0, 250);
     $kotNumber = pos_next_kot_number($bid);
     if ($qrOrderId !== "") {
       $have = pos_q("SELECT * FROM kitchen_tickets WHERE qr_order_id = ? AND business_id = ? ORDER BY created_at DESC LIMIT 1", "ss", [$qrOrderId, $bid]);
       if ($have) {
+        if ($tableNo !== "") {
+          pos_q("UPDATE kitchen_tickets SET table_no = ? WHERE id = ? AND business_id = ?", "sss", [$tableNo, $have[0]["id"], $bid]);
+          $have[0]["table_no"] = $tableNo;
+        }
         pos_q("UPDATE qr_orders SET status = CASE WHEN status IN ('pending','') OR status IS NULL THEN 'kot_sent' ELSE status END WHERE id = ? AND business_id = ?", "ss", [$qrOrderId, $bid]);
         pos_send(200, ["ok" => true, "ticket" => pos_kot_row($have[0])]);
       }

@@ -64,11 +64,19 @@ test("empty holds and completed QR orders do not occupy a table; shift moves the
   assert.equal(R.tableOccupied(empty, [], "2"), false);
   const holds = [{ id: "h1", label: "Table 5", payload: { table_no: "5", cart: [{ itemId: "dosa", qtyGm: 1 }] } }];
   const qrs = [{ table_no: "5", status: "preparing", id: "q1" }];
-  const kots = [{ id: "k1", table_no: "5", status: "new" }];
+  const kots = [
+    { id: "k1", table_no: "5", status: "new" },
+    { id: "k2", table_no: "5", status: "done" },
+    { id: "k3", table_no: "5", status: "preparing" },
+  ];
   const moved = R.applyShiftLocal(holds, qrs, kots, "5", "8");
   assert.equal(R.tableNoFromHold(moved.holds[0]), "8");
   assert.equal(moved.qrOrders[0].table_no, "8");
-  assert.equal(moved.kots[0].table_no, "8");
+  assert.equal(moved.kots.find((k) => k.id === "k1").table_no, "8");
+  assert.equal(moved.kots.find((k) => k.id === "k3").table_no, "8");
+  assert.equal(moved.kots.find((k) => k.id === "k2").table_no, "5");
+  assert.equal(R.kotTicketOpen({ status: "done" }), false);
+  assert.equal(R.kotTicketOpen({ status: "ready" }), true);
   assert.equal(R.tableOccupied(moved.holds, moved.qrOrders, "5"), false);
   assert.equal(R.tableOccupied(moved.holds, moved.qrOrders, "8"), true);
   assert.equal(P.sourceVacantAfterShift({ sourceHoldCount: 0, sourceOpenQr: 0 }), true);
@@ -86,8 +94,8 @@ test("Cafe, restaurant, and bar share shift and payment wiring", () => {
   const barPhp = read("pos-bar.php");
   const barUi = read("js/bar-ui.js");
   assert.match(index, /js\/pay-integrity\.js\?v=20261012table1/);
-  assert.match(index, /js\/app\.js\?v=20261012table1/);
-  assert.match(index, /js\/restaurant\.js\?v=20261012table1/);
+  assert.match(index, /js\/app\.js\?v=20261012kot2/);
+  assert.match(index, /js\/restaurant\.js\?v=20261012kot2/);
   assert.match(index, /js\/bar-ui\.js\?v=20261012table1/);
   assert.match(app, /idempotencyKey/);
   assert.match(app, /saveTableHoldDebounced\.cancel/);
@@ -114,4 +122,8 @@ test("Cafe, restaurant, and bar share shift and payment wiring", () => {
   assert.match(accounts, /replay: true/);
   assert.match(read("server/crud.js"), /\/api\/orders\/:id\/payments/);
   assert.match(read("server/bar.js"), /saveIdempotent\(conn, bid\(\), idemKey/);
+  assert.match(tenant, /ensureKitchenTicketTable/);
+  assert.match(tenant, /\["new", "preparing", "ready"\]/);
+  assert.match(php, /pos_ensure_kitchen_tickets_schema/);
+  assert.match(php, /new.*preparing.*ready/s);
 });

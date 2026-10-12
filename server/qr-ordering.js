@@ -511,6 +511,14 @@ export async function attachQrKitchenTicket(exec, { businessId, qrOrderId, table
     return "";
   }
   if (existing[0]?.id) {
+    const nextTable = String(tableNo || "").trim().slice(0, 64);
+    if (nextTable) {
+      await sqlRows(exec, "UPDATE kitchen_tickets SET table_no = ? WHERE id = ? AND business_id = ?", [
+        nextTable,
+        existing[0].id,
+        businessId,
+      ]);
+    }
     await sqlRows(
       exec,
       `UPDATE qr_orders SET status = CASE WHEN status IN ('pending','accepted','') OR status IS NULL THEN 'kot_sent' ELSE status END,

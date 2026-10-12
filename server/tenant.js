@@ -780,6 +780,7 @@ export function registerTenant(app) {
     send(res, async () => {
       await ensureTableShiftSchema();
       await ensureIdempotencyTable();
+      await ensureKitchenTicketTable(query);
       const [biz] = await query("SELECT * FROM businesses WHERE id = ? LIMIT 1", [bid()]);
       const type = String(biz?.business_type || "").toLowerCase();
       const text = `${biz?.category || ""} ${biz?.business_type || ""}`.toLowerCase();
@@ -820,10 +821,11 @@ export function registerTenant(app) {
           ]);
           movedHold = true;
         }
-        const [kots] = await conn.query("SELECT id, table_no, status FROM kitchen_tickets WHERE business_id = ?", [bid()]).catch(() => [[]]);
+        const [kots] = await conn.query("SELECT id, table_no, status FROM kitchen_tickets WHERE business_id = ?", [bid()]);
         for (const row of kots || []) {
           if (normalizeShiftTableNo(row.table_no) !== from) continue;
-          if (["cancelled", "void"].includes(String(row.status || "").toLowerCase())) continue;
+          const st = String(row.status || "new").toLowerCase();
+          if (!["new", "preparing", "ready"].includes(st)) continue;
           await conn.query("UPDATE kitchen_tickets SET table_no = ?, updated_at = CURRENT_TIMESTAMP(3) WHERE id = ? AND business_id = ?", [
             to,
             row.id,
@@ -959,7 +961,7 @@ export function registerTenant(app) {
         const ticketId = await attachQrKitchenTicket(query, {
           businessId: bid(),
           qrOrderId,
-          tableNo: String(b.table_no || b.tableNo || "").trim().slice(0, 64),
+          tableNo: normalizeShiftTableNo(b.table_no || b.tableNo),
           notes: String(b.notes || "").trim().slice(0, 250),
           lines,
         });
@@ -967,7 +969,7 @@ export function registerTenant(app) {
         return { ok: true, ticket: kotRow(row) };
       }
       const id = crypto.randomUUID();
-      const tableNo = String(b.table_no || b.tableNo || "").trim().slice(0, 64);
+      const tableNo = normalizeShiftTableNo(b.table_no || b.tableNo);
       const kind = b.kind === "reprint" ? "reprint" : "new";
       const notes = String(b.notes || "").trim().slice(0, 250);
       const kotNumber = await nextKotNumber(query, bid());

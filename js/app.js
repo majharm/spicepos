@@ -3165,7 +3165,13 @@ async function confirmAndShiftTable(fromId, toId) {
       state.activeTable = check.to;
       syncActiveFloor(check.to);
     }
-    await Promise.all([loadHolds(), loadKots().catch(() => {}), loadQrOrders().catch(() => {})]);
+    await Promise.all([
+      loadHolds(),
+      loadKots().catch((err) => {
+        setHint(`Order moved. Kitchen board refresh failed: ${err.message}`, "error");
+      }),
+      loadQrOrders().catch(() => {}),
+    ]);
     bindQrOrderAfterTableShift(check.to);
     renderCart();
     renderTableBoard();
@@ -3287,10 +3293,15 @@ async function sendKitchenKot() {
   try {
   ensureDiningTable();
   const resolved = resolveKitchenKot({ tableNo: state.activeTable, lines: state.cart, printed: state.kotPrinted });
+  if (resolved.pick.kind === "reprint") {
+    writeKitchenKotWindow(resolved);
+    setHint("Kitchen KOT reprint", "ok");
+    return;
+  }
   const data = await api("/api/kots", {
     method: "POST",
     body: JSON.stringify({
-      table_no: state.activeTable,
+      table_no: resolved.tableNo,
       kind: resolved.pick.kind,
       lines: resolved.named,
     }),
@@ -3614,7 +3625,7 @@ async function sendQrKitchenKot(order) {
   const data = await api("/api/kots", {
     method: "POST",
     body: JSON.stringify({
-      table_no: order.table_no,
+      table_no: restaurantApi()?.normalizeTableNo?.(order.table_no) || order.table_no,
       kind: "new",
       lines,
       notes: order.notes || "",
@@ -8503,7 +8514,35 @@ async function updateQrOrder(order, status) {
       "ok",
     );
     try {
-      await sendQrKitchenKot(data.order || order);
+      if (ticket?.id) {
+        if (!kotSeenIds) kotSeenIds = new Set();
+        kotSeenIds.add(String(ticket.id));
+        try {
+          kotChannel()?.postMessage({ type: "kot-new", ticket });
+        } catch {
+          /* ignore */
+        }
+        const accepted = data.order || order;
+        try {
+          printKitchenKot({
+            tableNo: accepted.table_no,
+            lines: (accepted.lines || []).map((line) => ({
+              itemId: line.item_id,
+              qtyGm: Number(line.quantity_gm) || 0,
+              name: line.item_name,
+              unit: line.unit || "PCS",
+              notes: String(line.notes || "").trim(),
+            })),
+            printed: [],
+            notes: accepted.notes,
+            full: true,
+          });
+        } catch {
+          /* ticket is already on the kitchen board */
+        }
+      } else {
+        await sendQrKitchenKot(data.order || order);
+      }
     } catch (err) {
       setHint(err.message, "error");
     }
