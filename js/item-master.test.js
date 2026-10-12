@@ -21,7 +21,7 @@ const M = globalThis.POSItemMaster;
 test("brand keys collapse case and spaces for every shop kind", () => {
   assert.equal(M.normalizeBrandName("  Tata  Salt  "), "Tata  Salt");
   assert.equal(M.brandKey(" Tata  Salt "), "tata salt");
-  assert.equal(M.sameBrand("MDH", "mdh"));
+  assert.equal(M.sameBrand("MDH", "mdh"), true);
   assert.equal(M.sameBrand("Bata", "Local"), false);
   assert.equal(M.itemBrandName({ brand: "Cipla" }), "Cipla");
   assert.equal(M.itemBrandName({ name: "Dolo" }), "");
@@ -68,7 +68,7 @@ test("Item Master and Brand Management are wired for all shop types", () => {
   assert.match(index, /js\/item-master\.js\?v=20261012brand1/);
   assert.match(index, /css\/item-master\.css\?v=20261012brand1/);
   assert.match(index, /Item Master/);
-  assert.match(app, /body\.brand/);
+  assert.match(app, /brand: \$\("item-brand"\)/);
   assert.match(app, /item\.brand/);
   assert.match(fw, /brandLab/);
   assert.match(hub, /view: "brands"/);
