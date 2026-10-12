@@ -183,7 +183,7 @@
   ];
 
   const REPORTS = [
-    { id: "daily-sales", center: "sales", title: "Daily Sales", tab: "sales", sheet: "Sales bills" },
+    { id: "daily-sales", center: "sales", title: "Daily Sales", tab: "sales", sheet: "Daily Sales" },
     { id: "monthly-sales", center: "sales", title: "Monthly Sales", tab: "sales", sheet: "Sales bills" },
     { id: "yearly-sales", center: "sales", title: "Yearly Sales", tab: "sales", sheet: "Sales bills" },
     { id: "sales-by-customer", center: "sales", title: "Sales by Customer", tab: "sales", sheet: "Customer sales" },

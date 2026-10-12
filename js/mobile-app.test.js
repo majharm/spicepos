@@ -68,8 +68,8 @@ test("InvoiceJet phone overlay is on POS login, home, and tab bar", () => {
   assert.match(login, /js\/pos-api\.js\?v=20261006login1/);
   assert.match(login, /css\/login-page\.css\?v=20261008loginfile1/);
   assert.match(login, /x-pos-20260830e\.js\?v=20261011lounge1/);
-  assert.match(login, /css\/mobile-app\.css\?v=20261012jet4/);
-  assert.match(login, /js\/mobile-app\.js\?v=20261012jet4/);
+  assert.match(login, /css\/mobile-app\.css\?v=20261012jet5/);
+  assert.match(login, /js\/mobile-app\.js\?v=20261012jet5/);
   assert.match(login, /id="m-welcome"/);
   assert.match(login, /All-in-One Invoicing Solution/);
   assert.match(login, /Hi, Welcome back!/);
@@ -79,9 +79,9 @@ test("InvoiceJet phone overlay is on POS login, home, and tab bar", () => {
   assert.match(login, /id="m-go-signin"/);
   assert.match(login, /id="m-go-signup"/);
 
-  assert.match(index, /app\.js\?v=20261012jet4/);
-  assert.match(index, /css\/mobile-app\.css\?v=20261012jet4/);
-  assert.match(index, /js\/mobile-app\.js\?v=20261012jet4/);
+  assert.match(index, /app\.js\?v=20261012jet5/);
+  assert.match(index, /css\/mobile-app\.css\?v=20261012jet5/);
+  assert.match(index, /js\/mobile-app\.js\?v=20261012jet5/);
   assert.match(index, /id="m-home"/);
   assert.match(index, /id="m-reports"/);
   assert.match(index, /id="m-tabbar"/);
@@ -122,4 +122,10 @@ test("InvoiceJet phone overlay is on POS login, home, and tab bar", () => {
   assert.match(read("index.html"), /pos\.css\?v=20261012mob3/);
   assert.equal(M.openMobileReport("not-a-report"), false);
   assert.equal(M.openMobileReport("daily-sales"), true);
+  assert.match(js, /dailySalesRows/);
+  assert.match(js, /sheet: "Daily Sales"/);
+  assert.match(read("js/app.js"), /function dailySalesBlock/);
+  assert.match(read("js/app.js"), /data-open-invoice/);
+  assert.match(read("server/reports.js"), /export function summarizeDailySales/);
+  assert.match(read("pos-reports.php"), /function pos_summarize_daily_sales/);
 });
