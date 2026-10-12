@@ -2187,14 +2187,14 @@ function setNavCollapsed(collapsed) {
   }
   const scrim = $("nav-scrim");
   if (scrim) {
-    const overlay = isMobileLayout() || document.body.classList.contains("counter-mode");
+    const overlay = isMobileLayout() || document.body.classList.contains("counter-mode") || document.body.classList.contains("m-app");
     scrim.hidden = collapsed || !overlay;
   }
 }
 
 function applyCounterWorkspaceChrome() {
   if (document.body.classList.contains("counter-mode")) setNavCollapsed(true);
-  else if (isMobileLayout()) setNavCollapsed(true);
+  else if (isMobileLayout() || document.body.classList.contains("m-app")) setNavCollapsed(true);
   else setNavCollapsed(false);
   applyQuickAddVisibility();
   applyRestaurantMobileChrome();
@@ -12207,7 +12207,7 @@ window.addEventListener("resize", () => {
     const app = document.getElementById("app");
     setNavCollapsed(app ? app.classList.contains("nav-collapsed") : true);
     applyQuickAddVisibility();
-  } else if (isMobileLayout()) {
+  } else if (isMobileLayout() || document.body.classList.contains("m-app")) {
     applyCounterWorkspaceChrome();
   } else {
     setNavCollapsed(false);
@@ -14034,7 +14034,7 @@ async function boot() {
     }
     applyUiLocale();
     applyNav();
-    if (isMobileLayout()) setNavCollapsed(true);
+    if (isMobileLayout() || document.body.classList.contains("m-app")) setNavCollapsed(true);
     try {
       await loadBootstrap();
     } catch (err) {
