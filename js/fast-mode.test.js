@@ -63,6 +63,10 @@ test("Fast Mode is a shop setting that lightens every POS page without removing 
   assert.match(app, /if \(fastModeOn\(\)\) return list;/);
   assert.match(app, /viewStillFresh\("dashboard"\)/);
   assert.match(app, /viewStillFresh\("reports", 90000\)/);
+  assert.match(app, /await loadBootstrap\(\);[\s\S]*showView\(landingView\(\)\)/);
+  assert.match(app, /state\.fastModePreview/);
+  assert.match(app, /Saved\. Fast Mode is on/);
+  assert.match(app, /Saved\. Fast Mode is off/);
 
   assert.match(css, /body\.fast-mode \*/);
   assert.match(css, /body\.fast-mode \.saas-skel/);

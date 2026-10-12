@@ -55,6 +55,7 @@ const state = {
   kotPrinted: [],
   kotTickets: [],
   kotFilter: "",
+  fastModePreview: null,
 };
 globalThis.state = state;
 
@@ -2356,6 +2357,7 @@ function landingView() {
 }
 
 function fastModeOn(company = state.company) {
+  if (state.fastModePreview === true || state.fastModePreview === false) return state.fastModePreview;
   const v = company?.fast_mode_enabled;
   if (v === 0 || v === "0" || v === 2 || v === "2" || v === false || v === "off" || v === "hide") return false;
   return true;
@@ -2607,6 +2609,7 @@ function markSettingsDirty() {
 
 function clearSettingsDirty() {
   state.settingsDirty = false;
+  state.fastModePreview = null;
 }
 
 function showSettingsTab(tab) {
@@ -2627,6 +2630,11 @@ function showSettingsTab(tab) {
     if (!keys.length) return;
     el.hidden = !keys.includes(name);
   });
+  if (!isApparelShop()) {
+    document.querySelectorAll(".settings-hub .apparel-only").forEach((el) => {
+      el.hidden = true;
+    });
+  }
   const split = document.querySelector(".settings-profile-split");
   if (split) {
     const form = split.querySelector("#settings-form");
@@ -6382,6 +6390,7 @@ function renderSettings() {
   const showQuickAdd = quickAddVisible();
   if ($("set-quick-add-show")) $("set-quick-add-show").checked = showQuickAdd;
   if ($("set-quick-add-hide")) $("set-quick-add-hide").checked = !showQuickAdd;
+  state.fastModePreview = null;
   const showFast = fastModeOn();
   if ($("set-fast-mode-on")) $("set-fast-mode-on").checked = showFast;
   if ($("set-fast-mode-off")) $("set-fast-mode-off").checked = !showFast;
@@ -11862,6 +11871,10 @@ $("settings-form").addEventListener("submit", async (e) => {
       body: JSON.stringify(payload),
     });
     state.company = data.company ? { ...state.company, ...data.company } : state.company;
+    if (Object.prototype.hasOwnProperty.call(payload, "fast_mode_enabled")) {
+      state.company.fast_mode_enabled = payload.fast_mode_enabled;
+    }
+    state.fastModePreview = null;
     state.logoDraft = null;
     state.payQrDraft = null;
     paintHeader();
@@ -11871,7 +11884,13 @@ $("settings-form").addEventListener("submit", async (e) => {
     renderSettings();
     tick();
     renderTableBoard();
-    $("settings-hint").textContent = "Saved";
+    if (state.settingsSection === "fast-mode") {
+      $("settings-hint").textContent = fastModeOn()
+        ? "Saved. Fast Mode is on — Counter opens when you sign in, with lighter pages."
+        : "Saved. Fast Mode is off — Dashboard and product photos are on.";
+    } else {
+      $("settings-hint").textContent = "Saved";
+    }
     $("settings-hint").className = "hint ok";
     clearSettingsDirty();
   } catch (err) {
@@ -11904,8 +11923,7 @@ $("set-quick-add-block")?.addEventListener("change", () => {
 });
 
 $("set-fast-mode-block")?.addEventListener("change", () => {
-  if (!state.company) state.company = {};
-  state.company.fast_mode_enabled = $("set-fast-mode-off")?.checked ? 0 : 1;
+  state.fastModePreview = !$("set-fast-mode-off")?.checked;
   applyFastMode();
   renderCatalog();
   if (state.currentView === "customers") renderCustomersTable();
@@ -14016,21 +14034,20 @@ async function boot() {
     }
     applyUiLocale();
     applyNav();
-    applyFastMode();
     if (isMobileLayout()) setNavCollapsed(true);
-    const landing = landingView();
+    try {
+      await loadBootstrap();
+    } catch (err) {
+      setHint(err.message || "Could not load shop data", "error");
+    }
+    applyFastMode();
     if (me.business?.status && me.business.status !== "active" && !me.impersonating) {
       $("expired-banner").hidden = false;
       $("shop-name").textContent = me.business.name || "POS";
       showView("dashboard");
       return;
     }
-    showView(landing);
-    try {
-      await loadBootstrap();
-    } catch (err) {
-      setHint(err.message || "Could not load shop data", "error");
-    }
+    showView(landingView());
     if (window.DevMode) {
       DevMode.updateContext({
         session: state.session,
