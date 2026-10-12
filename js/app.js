@@ -8579,10 +8579,8 @@ async function openAggregatorInCounter(order) {
   if (!liveLines.length) throw new Error("Map these platform items to your menu, then open in Counter");
   if (state.cart.length && !confirm("Replace the current Counter bill with this platform order?")) return;
   const R = restaurantApi();
-  if (isRestaurantShop() && R) {
-    state.activeTable = A?.kotTable?.(order.source, order.fulfillment) || R.PARCEL;
-    syncActiveFloor?.(state.activeTable);
-  }
+  state.activeTable = A?.kotTable?.(order.source, order.fulfillment) || R?.PARCEL || "Parcel";
+  if (isRestaurantShop() && R) syncActiveFloor(state.activeTable);
   state.cart = liveLines.map(({ line, item }) => ({
     lineId: newCartLineId(),
     itemId: item.id,
