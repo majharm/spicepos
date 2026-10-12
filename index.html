@@ -12,6 +12,7 @@
     <link rel="stylesheet" href="./css/resort.css?v=20261011resort1" />
     <link rel="stylesheet" href="./css/mobile-app.css?v=20261011m1" />
     <link rel="stylesheet" href="./css/item-master.css?v=20261012brand1" />
+    <link rel="stylesheet" href="./css/customer-master.css?v=20261012cust1" />
   </head>
   <body class="fast-mode">
     <div class="app" id="app">
@@ -757,7 +758,7 @@
               <div class="items-hero-copy">
                 <p class="items-kicker">Sales</p>
                 <h3>Customers</h3>
-                <p class="lede" id="customers-lede">Add accounts, collect outstanding dues, and print a receipt.</p>
+                <p class="lede" id="customers-lede">Add accounts, collect outstanding dues, and print a receipt. Matching mobile, email, or GSTIN warns before a duplicate is created.</p>
               </div>
               <div class="items-hero-stats" id="customers-hero-stats"></div>
             </header>
@@ -772,6 +773,8 @@
                   <label><span id="cust-name-lab">Name</span> <input id="cust-name" required /></label>
                   <label class="pharmacy-hide">Business name <input id="cust-biz" /></label>
                   <label><span id="cust-mobile-lab">Mobile</span> <input id="cust-mobile" required type="tel" inputmode="numeric" maxlength="15" /></label>
+                  <p class="hint" id="cust-match-hint"></p>
+                  <button class="btn" type="button" id="cust-use-match">Use existing customer</button>
                   <label class="full">Address <input id="cust-address" maxlength="500" placeholder="House, street, area" /></label>
                   <label class="full pharmacy-only" id="cust-doctor-wrap" hidden>Doctor Name / Prescription No. <input id="cust-doctor-rx" maxlength="180" placeholder="If required" /></label>
                   <label>Type
@@ -838,6 +841,7 @@
                 </div>
               </form>
             </div>
+            <div class="customer-dupes" id="customer-dupes" hidden></div>
             <div class="table-wrap" id="customers-table"></div>
           </div>
         </section>
@@ -3000,7 +3004,7 @@
     <script src="./js/gst-supply.js?v=20260905deploy136" defer></script>
     <script src="./js/pos-api.js?v=20261006login1" defer></script>
     <script src="./js/units.js?v=20260919unit1" defer></script>
-    <script src="./js/footwear.js?v=20261011resort1" defer></script>
+    <script src="./js/footwear.js?v=20261012fix1" defer></script>
     <script src="./js/restaurant.js?v=20261011kot1" defer></script>
     <script src="./js/discount.js?v=20260905deploy136" defer></script>
     <script src="./js/offers.js?v=20260905deploy170" defer></script>
@@ -3015,7 +3019,7 @@
     <script src="./js/qrcode.iife.js?v=20260905qr1" defer></script>
     <script src="./js/qr-notify.js?v=20260922deploy205" defer></script>
     <script src="./js/payment-methods.js?v=20260918pay1" defer></script>
-    <script src="./js/biz-hub.js?v=20261011bar1" defer></script>
+    <script src="./js/biz-hub.js?v=20261012fix1" defer></script>
     <script src="./js/biz-hub-ui.js?v=20261011bar1" defer></script>
     <script src="./js/salon.js?v=20260919salon1" defer></script>
     <script src="./js/salon-ui.js?v=20260919salon1" defer></script>
@@ -3028,8 +3032,10 @@
     <script src="./js/resort.js?v=20261011resort1" defer></script>
     <script src="./js/resort-ui.js?v=20261011resort1" defer></script>
     <script src="./js/item-master.js?v=20261012brand1" defer></script>
-    <script src="./js/app.js?v=20261011kot1" defer></script>
+    <script src="./js/customer-master.js?v=20261012cust1" defer></script>
+    <script src="./js/app.js?v=20261012fix1" defer></script>
     <script src="./js/item-master-ui.js?v=20261012brand1" defer></script>
+    <script src="./js/customer-master-ui.js?v=20261012cust1" defer></script>
     <script src="./js/mobile-app.js?v=20261011m1" defer></script>
     <script src="./js/growth.js?v=20260905deploy145" defer></script>
     <script src="./js/offers-ui.js?v=20260919off1" defer></script>

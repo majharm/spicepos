@@ -472,15 +472,24 @@ function pos_gym_public_dispatch($path, $method, $body) {
       $id = pos_uuid();
       $memberNo = pos_gym_next_no($shopId, "gym_member", "GY-", 1001);
       $hash = pos_hash_password($password);
-      $customerId = pos_uuid();
-      try {
-        pos_q(
-          "INSERT INTO customers (id, code, name, mobile, email, password_hash, type, outstanding, business_id) VALUES (?,?,?,?,?,?,'b2c',0,?)",
-          "sssssss",
-          [$customerId, $memberNo, $name, $mobile, $email, $hash, $shopId]
-        );
-      } catch (Exception $e) {
-        $customerId = null;
+      $customerId = null;
+      if (is_file(__DIR__ . "/pos-customers-dedupe.php")) require_once __DIR__ . "/pos-customers-dedupe.php";
+      if (function_exists("pos_find_existing_customer")) {
+        $existingCust = pos_find_existing_customer($shopId, ["name" => $name, "mobile" => $mobile, "email" => $email]);
+        if (!empty($existingCust["id"])) $customerId = $existingCust["id"];
+      }
+      if (!$customerId) {
+        $customerId = pos_uuid();
+        try {
+          pos_q(
+            "INSERT INTO customers (id, code, name, mobile, email, password_hash, type, outstanding, business_id) VALUES (?,?,?,?,?,?,'b2c',0,?)",
+            "sssssss",
+            [$customerId, $memberNo, $name, $mobile, $email, $hash, $shopId]
+          );
+          if (function_exists("pos_stamp_customer_norms")) pos_stamp_customer_norms($customerId, ["mobile" => $mobile, "email" => $email]);
+        } catch (Exception $e) {
+          $customerId = null;
+        }
       }
       pos_q(
         "INSERT INTO gym_members (id, member_no, customer_id, name, mobile, email, gender, emergency_name, emergency_mobile, trainer_id, status, password_hash, business_id) VALUES (?,?,?,?,?,?,?,?,?,?, 'active', ?, ?)",
@@ -676,11 +685,20 @@ function pos_gym_staff_dispatch($path, $method, $body, $bid, $auth) {
         pos_send(200, ["ok" => true, "id" => $id, "member_no" => $exists[0]["member_no"]]);
       }
       $memberNo = pos_gym_next_no($bid, "gym_member", "GY-", 1001);
-      $customerId = pos_uuid();
-      try {
-        pos_q("INSERT INTO customers (id, code, name, mobile, email, type, outstanding, business_id) VALUES (?,?,?,?,?,'b2c',0,?)", "ssssss", [$customerId, $memberNo, $name, $mobile, $email, $bid]);
-      } catch (Exception $e) {
-        $customerId = null;
+      $customerId = null;
+      if (is_file(__DIR__ . "/pos-customers-dedupe.php")) require_once __DIR__ . "/pos-customers-dedupe.php";
+      if (function_exists("pos_find_existing_customer")) {
+        $existingCust = pos_find_existing_customer($bid, ["name" => $name, "mobile" => $mobile, "email" => $email]);
+        if (!empty($existingCust["id"])) $customerId = $existingCust["id"];
+      }
+      if (!$customerId) {
+        $customerId = pos_uuid();
+        try {
+          pos_q("INSERT INTO customers (id, code, name, mobile, email, type, outstanding, business_id) VALUES (?,?,?,?,?,'b2c',0,?)", "ssssss", [$customerId, $memberNo, $name, $mobile, $email, $bid]);
+          if (function_exists("pos_stamp_customer_norms")) pos_stamp_customer_norms($customerId, ["mobile" => $mobile, "email" => $email]);
+        } catch (Exception $e) {
+          $customerId = null;
+        }
       }
       pos_q(
         "INSERT INTO gym_members (id, member_no, customer_id, name, mobile, email, photo_url, gender, dob, emergency_name, emergency_mobile, trainer_id, status, notes, business_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?, 'active', ?, ?)",

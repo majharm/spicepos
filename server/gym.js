@@ -437,14 +437,25 @@ export function registerGymPublic(app) {
       const hash = await hashPassword(password);
       let customerId = null;
       try {
-        customerId = uuid();
-        await query(
-          `INSERT INTO customers (id, code, name, mobile, email, password_hash, type, outstanding, business_id)
-           VALUES (?,?,?,?,?,?,'b2c',0,?)`,
-          [customerId, memberNo, name, mobile, email, hash, shopId],
-        );
+        const { findExistingCustomer } = await import("./customers-dedupe.js");
+        const existing = await findExistingCustomer(shopId, { name, mobile, email });
+        if (existing?.id) customerId = existing.id;
       } catch {
-        customerId = null;
+        /* still try a new customer row */
+      }
+      if (!customerId) {
+        try {
+          customerId = uuid();
+          await query(
+            `INSERT INTO customers (id, code, name, mobile, email, password_hash, type, outstanding, business_id)
+             VALUES (?,?,?,?,?,?,'b2c',0,?)`,
+            [customerId, memberNo, name, mobile, email, hash, shopId],
+          );
+          const { stampCustomerNorms } = await import("./customers-dedupe.js");
+          await stampCustomerNorms(null, { id: customerId, mobile, email });
+        } catch {
+          customerId = null;
+        }
       }
       await query(
         `INSERT INTO gym_members (id, member_no, customer_id, name, mobile, email, gender, emergency_name, emergency_mobile, trainer_id, status, password_hash, business_id)
@@ -768,14 +779,26 @@ export function registerGymStaff(app) {
         return res.json({ ok: true, id, member_no: exists.member_no });
       }
       const memberNo = await nextNo(bid(), "gym_member", "GY-", 1001);
-      let customerId = uuid();
+      let customerId = null;
       try {
-        await query(
-          `INSERT INTO customers (id, code, name, mobile, email, type, outstanding, business_id) VALUES (?,?,?,?,?,'b2c',0,?)`,
-          [customerId, memberNo, name, mobile, clip(b.email, 160), bid()],
-        );
+        const { findExistingCustomer } = await import("./customers-dedupe.js");
+        const existing = await findExistingCustomer(bid(), { name, mobile, email: clip(b.email, 160) });
+        if (existing?.id) customerId = existing.id;
       } catch {
-        customerId = null;
+        /* still try a new customer row */
+      }
+      if (!customerId) {
+        try {
+          customerId = uuid();
+          await query(
+            `INSERT INTO customers (id, code, name, mobile, email, type, outstanding, business_id) VALUES (?,?,?,?,?,'b2c',0,?)`,
+            [customerId, memberNo, name, mobile, clip(b.email, 160), bid()],
+          );
+          const { stampCustomerNorms } = await import("./customers-dedupe.js");
+          await stampCustomerNorms(null, { id: customerId, mobile, email: clip(b.email, 160) });
+        } catch {
+          customerId = null;
+        }
       }
       await query(
         `INSERT INTO gym_members (id, member_no, customer_id, name, mobile, email, photo_url, gender, dob, emergency_name, emergency_mobile, trainer_id, status, notes, business_id)

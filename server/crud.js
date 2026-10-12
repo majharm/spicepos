@@ -296,7 +296,9 @@ export function registerCrud(app) {
     try {
       const rows = await query("SELECT * FROM customers WHERE business_id = ? ORDER BY name", [bid()]);
       const dues = await invoiceOpenDueByCustomer(bid());
-      const customers = hydrateCustomerOutstandingRows(rows, dues);
+      const customers = hydrateCustomerOutstandingRows(rows, dues).filter(
+        (c) => String(c?.status || "").toLowerCase() !== "merged" && !c?.merged_into,
+      );
       void persistHydratedOutstanding(customers, rows).catch(() => {});
       res.json(customers);
     } catch (err) {
@@ -311,6 +313,16 @@ export function registerCrud(app) {
     }
     const custType = type === "b2b" ? "b2b" : "b2c";
     try {
+      const { findExistingCustomer, stampCustomerNorms } = await import("./customers-dedupe.js");
+      const existing = await findExistingCustomer(bid(), { name, mobile, gstin, email: req.body?.email });
+      if (existing && !req.body?.force) {
+        res.status(409).json({
+          error: "A customer with these details already exists",
+          customer: existing,
+          duplicate: true,
+        });
+        return;
+      }
       const customer = await withTransaction(async (conn) => {
         const n = await nextSeq(conn, "customer", 4);
         const code = `CUS-${String(n).padStart(3, "0")}`;
@@ -361,7 +373,9 @@ export function registerCrud(app) {
           }
         }
         const [rows] = await conn.query("SELECT * FROM customers WHERE id = ?", [id]);
-        return rows[0];
+        const created = rows[0];
+        await stampCustomerNorms(conn, created);
+        return created;
       });
       res.json({ ok: true, customer });
     } catch (err) {

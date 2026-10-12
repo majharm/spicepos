@@ -83,6 +83,8 @@ function pos_php_till_dispatch($path, $method, $body) {
     } catch (Exception $e) { /* optional */ }
     try {
       $customers = pos_q("SELECT * FROM customers WHERE business_id = ? ORDER BY name", "s", [$bid]);
+      if (is_file(__DIR__ . "/pos-customers-dedupe.php")) require_once __DIR__ . "/pos-customers-dedupe.php";
+      if (function_exists("pos_active_customers")) $customers = pos_active_customers($customers);
       if (function_exists("pos_hydrate_customer_outstanding_rows")) {
         $customers = pos_hydrate_customer_outstanding_rows($bid, $customers);
       }
@@ -541,8 +543,15 @@ function pos_php_till_dispatch($path, $method, $body) {
     pos_send(200, pos_catalog_items($bid));
   }
 
+  if ($path === "customers/duplicates" || $path === "customers/match" || $path === "customers/merge") {
+    if (is_file(__DIR__ . "/pos-customers-dedupe.php")) require_once __DIR__ . "/pos-customers-dedupe.php";
+    if (function_exists("pos_customers_dedupe_dispatch") && pos_customers_dedupe_dispatch($path, $method, $body, $bid, $auth)) return true;
+  }
+
   if ($path === "customers" && $method === "GET") {
     $rows = pos_q("SELECT * FROM customers WHERE business_id = ? ORDER BY name", "s", [$bid]);
+    if (is_file(__DIR__ . "/pos-customers-dedupe.php")) require_once __DIR__ . "/pos-customers-dedupe.php";
+    if (function_exists("pos_active_customers")) $rows = pos_active_customers($rows);
     if (function_exists("pos_hydrate_customer_outstanding_rows")) {
       $rows = pos_hydrate_customer_outstanding_rows($bid, $rows);
     }

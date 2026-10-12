@@ -1539,7 +1539,12 @@ async function addClassicBillCustomer() {
       doctor_rx: pharmacyBillDoctorRx(),
     });
     if (created) selectCounterCustomer(created);
-    setHint(`Customer added · ${created?.name || name}`, "ok");
+    setHint(
+      created?._duplicate
+        ? `Using existing ${created.name || name}`
+        : `Customer added · ${created?.name || name}`,
+      "ok",
+    );
   } catch (err) {
     setHint(err.message || "Could not add customer", "error");
   }
@@ -2722,6 +2727,7 @@ function paintDeskState(name) {
   if (name === "customers") {
     renderCustomersTable();
     fillDueCustomerSelect();
+    globalThis.POSCustomerMasterUi?.loadDupes?.();
   }
 }
 
@@ -4572,21 +4578,40 @@ async function saveCustomer(fields) {
   const name = String(fields.name || "").trim();
   const mobile = String(fields.mobile || "").replace(/\s+/g, "").trim();
   if (!name || !mobile) throw new Error("Name and mobile are required");
-  const data = await api("/api/customers", {
+  const payload = {
+    name,
+    mobile,
+    business_name: fields.business_name || "",
+    type: fields.type === "b2b" ? "b2b" : "b2c",
+    gstin: fields.gstin || "",
+    dob: fields.dob || "",
+    referred_by: fields.referred_by || "",
+    locale: fields.locale || "",
+    address: fields.address || "",
+    doctor_rx: fields.doctor_rx || "",
+  };
+  const adoptExisting = (customer, warning) => {
+    if ($("cust-match-hint")) {
+      $("cust-match-hint").textContent = warning;
+      $("cust-match-hint").className = "hint error";
+    }
+    if (customer?.id) state.customerId = customer.id;
+    if (fields.reuseExisting === false) throw new Error(warning);
+    return Object.assign({}, customer, { _duplicate: true, _warning: warning });
+  };
+  const match = globalThis.POSCustomerMaster?.findMatch(state.customers || [], payload);
+  if (match && !fields.force) {
+    return adoptExisting(match, globalThis.POSCustomerMaster.warningCopy(match, payload));
+  }
+  const { res, data } = await posRequest("/api/customers", {
     method: "POST",
-    body: JSON.stringify({
-      name,
-      mobile,
-      business_name: fields.business_name || "",
-      type: fields.type === "b2b" ? "b2b" : "b2c",
-      gstin: fields.gstin || "",
-      dob: fields.dob || "",
-      referred_by: fields.referred_by || "",
-      locale: fields.locale || "",
-      address: fields.address || "",
-      doctor_rx: fields.doctor_rx || "",
-    }),
+    body: JSON.stringify(payload),
   });
+  if (res.status === 409 && data?.customer) {
+    const warning = data.error || globalThis.POSCustomerMaster?.warningCopy(data.customer, payload) || "A customer with these details already exists";
+    return adoptExisting(data.customer, warning);
+  }
+  if (!res.ok) throw new Error(data?.error || res.statusText);
   const customer = data.customer;
   if (customer?.id) state.customerId = customer.id;
   await loadBootstrap();
@@ -6463,6 +6488,7 @@ async function loadBootstrap() {
   }
   if (state.currentView === "counter") maybeShowCounterLowStockAlert();
 }
+globalThis.loadBootstrap = loadBootstrap;
 
 function dashRoleLabel(role) {
   const r = String(role || "").trim();
@@ -10547,6 +10573,7 @@ $("customer-form").addEventListener("submit", async (e) => {
       locale: $("cust-locale")?.value || "",
       address: $("cust-address")?.value || "",
       doctor_rx: $("cust-doctor-rx")?.value || "",
+      reuseExisting: false,
     });
     $("cust-hint").textContent = "Saved";
     $("cust-hint").className = "hint ok";
@@ -10613,10 +10640,17 @@ $("quick-customer-form")?.addEventListener("submit", async (e) => {
     if ($("qc-address")) $("qc-address").value = "";
     if ($("qc-doctor-rx")) $("qc-doctor-rx").value = "";
     if (hint) {
-      hint.textContent = `Added ${customer?.name || "customer"}`;
+      hint.textContent = customer?._duplicate
+        ? `Using existing ${customer.name || "customer"}`
+        : `Added ${customer?.name || "customer"}`;
       hint.className = "hint ok";
     }
-    setHint(`Customer added · ${customer?.name || ""}`, "ok");
+    setHint(
+      customer?._duplicate
+        ? `Using existing ${customer.name || ""}`
+        : `Customer added · ${customer?.name || ""}`,
+      "ok",
+    );
     if (customer) selectCounterCustomer(customer);
   } catch (err) {
     if (hint) {
