@@ -624,6 +624,8 @@ function pos_ensure_business_columns() {
     "dsa_code" => "VARCHAR(32) NULL",
     "bar_enabled" => "TINYINT(1) NOT NULL DEFAULT 0",
     "resort_enabled" => "TINYINT(1) NOT NULL DEFAULT 0",
+    "zomato_allowed" => "TINYINT(1) NOT NULL DEFAULT 0",
+    "swiggy_allowed" => "TINYINT(1) NOT NULL DEFAULT 0",
     "created_at" => "TIMESTAMP(3) NULL",
     "updated_at" => "TIMESTAMP(3) NULL",
   ]);
@@ -1266,6 +1268,8 @@ function pos_staff_me_payload($staff) {
       "business_type" => $staff["business"]["business_type"] ?? null,
       "bar_enabled" => (int) ($staff["business"]["bar_enabled"] ?? 0),
       "resort_enabled" => (int) ($staff["business"]["resort_enabled"] ?? 0),
+      "zomato_allowed" => ((int) ($staff["business"]["zomato_allowed"] ?? 0)) === 1 ? 1 : 0,
+      "swiggy_allowed" => ((int) ($staff["business"]["swiggy_allowed"] ?? 0)) === 1 ? 1 : 0,
       "plan_id" => $staff["business"]["plan_id"] ?? null,
       "subscription_expires_at" => $staff["business"]["subscription_expires_at"] ?? null,
     ],
@@ -2472,6 +2476,11 @@ function pos_normalize_dsa_code($val) {
   return $code !== "" ? $code : null;
 }
 
+function pos_normalize_aggregator_allowed($val) {
+  if ($val === true || $val === 1 || $val === "1" || $val === "on" || $val === "true" || $val === "yes") return 1;
+  return 0;
+}
+
 function pos_normalize_bar_enabled($val, $type = "", $category = "") {
   $t = strtolower(trim((string) $type));
   $c = strtolower(trim((string) $category));
@@ -2515,6 +2524,8 @@ function pos_validate_signup($raw, $requireAdmin = true) {
     "dsa_code" => pos_pick($raw, "dsa_code", "dsaCode"),
     "bar_enabled" => pos_pick($raw, "bar_enabled", "barEnabled"),
     "resort_enabled" => pos_pick($raw, "resort_enabled", "resortEnabled"),
+    "zomato_allowed" => pos_pick($raw, "zomato_allowed", "zomatoAllowed"),
+    "swiggy_allowed" => pos_pick($raw, "swiggy_allowed", "swiggyAllowed"),
   ];
   $required = ["name", "business_type", "category", "owner_name", "mobile", "email", "address", "city", "state", "pin_code"];
   if ($requireAdmin) {
@@ -2570,6 +2581,8 @@ function pos_validate_signup($raw, $requireAdmin = true) {
     "dsa_code" => pos_normalize_dsa_code($b["dsa_code"] ?? ""),
     "bar_enabled" => pos_normalize_bar_enabled($b["bar_enabled"] ?? 0, $b["business_type"] ?? "", $b["category"] ?? ""),
     "resort_enabled" => pos_normalize_resort_enabled($b["resort_enabled"] ?? 0, $b["business_type"] ?? "", $b["category"] ?? ""),
+    "zomato_allowed" => pos_normalize_aggregator_allowed($b["zomato_allowed"] ?? 0),
+    "swiggy_allowed" => pos_normalize_aggregator_allowed($b["swiggy_allowed"] ?? 0),
   ];
 }
 
@@ -2610,6 +2623,9 @@ function pos_register_business($raw, $yearly = false) {
       $b["business_type"], $planId, $expiry, $b["logo_url"], $b["category"], $b["pan"],       $b["city"], $b["state"], $b["pin_code"], $b["dsa_code"], $b["bar_enabled"], $b["resort_enabled"],
     ]
   );
+  try {
+    pos_q("UPDATE businesses SET zomato_allowed = ?, swiggy_allowed = ? WHERE id = ?", "iis", [$b["zomato_allowed"], $b["swiggy_allowed"], $id]);
+  } catch (Exception $e) { /* columns added on first aggregator boot */ }
   $amId = trim((string) ($b["account_manager_id"] ?? ""));
   if ($amId !== "") {
     pos_ensure_account_managers();
@@ -2690,6 +2706,9 @@ function pos_update_business($id, $raw) {
       $b["status"], $planId, $expiry, $logo, $b["category"], $b["pan"], $b["city"], $b["state"], $b["pin_code"], $amId === null ? "" : $amId, $b["dsa_code"], $b["bar_enabled"], $b["resort_enabled"], $id,
     ]
   );
+  try {
+    pos_q("UPDATE businesses SET zomato_allowed = ?, swiggy_allowed = ? WHERE id = ?", "iis", [$b["zomato_allowed"], $b["swiggy_allowed"], $id]);
+  } catch (Exception $e) { /* columns added on first aggregator boot */ }
   try {
     pos_q(
       "UPDATE company_settings SET name=?, address=?, phone=?, email=?, gstin=?, pan=?, city=?, state=?, pincode=?, logo_url=? WHERE business_id=?",
@@ -3082,6 +3101,8 @@ function pos_php_dispatch($path, $method, $rawBody) {
           "business_type" => $business["business_type"] ?? null,
           "bar_enabled" => (int) ($business["bar_enabled"] ?? 0),
           "resort_enabled" => (int) ($business["resort_enabled"] ?? 0),
+          "zomato_allowed" => ((int) ($business["zomato_allowed"] ?? 0)) === 1 ? 1 : 0,
+          "swiggy_allowed" => ((int) ($business["swiggy_allowed"] ?? 0)) === 1 ? 1 : 0,
           "subscription_expires_at" => $business["subscription_expires_at"] ?? null,
         ],
       ]);

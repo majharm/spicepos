@@ -2416,7 +2416,7 @@ function applyNav() {
     if (view === "packs" && !isSpiceShop()) btn.hidden = true;
     if (view === "qr-orders" && isPharmacyShop()) btn.hidden = true;
     if (view === "qr-orders" && isPrintShop()) btn.hidden = true;
-    if (view === "online-orders") btn.hidden = !(isRestaurantShop() || isBarShop()) || !can("orders");
+    if (view === "online-orders") btn.hidden = !aggregatorDeskAllowed() || !can("orders");
     if (view === "prescriptions") btn.hidden = !isPharmacyShop() || !can("orders");
     if (view === "returns") btn.hidden = !isClassicBillShop() || !can("orders");
     if (view === "kot") btn.hidden = !isRestaurantShop() || !can("kot");
@@ -8409,7 +8409,7 @@ function startQrOrderWatch() {
     const hot = state.currentView === "qr-orders" || state.currentView === "online-orders" || state.currentView === "counter";
     if (!hot && qrTick % (fastModeOn() ? 8 : 4) !== 0) return;
     void pollQrOrders({ announce: true });
-    if (isRestaurantShop() || isBarShop()) void loadAggregatorOrders({ announce: true });
+    if (aggregatorDeskAllowed()) void loadAggregatorOrders({ announce: true });
   }, 2500);
   paintQrSoundArm();
   document.addEventListener("pos-qr-sound", () => {
@@ -8427,14 +8427,54 @@ function aggregatorApi() {
   return globalThis.POSAggregator;
 }
 
+function aggregatorSettings() {
+  const A = aggregatorApi();
+  const saved = state.aggregatorSettings || {};
+  const biz = state.businessMeta || {};
+  const company = state.company || {};
+  return {
+    zomato_allowed: A?.flagOn?.(saved.zomato_allowed ?? biz.zomato_allowed),
+    swiggy_allowed: A?.flagOn?.(saved.swiggy_allowed ?? biz.swiggy_allowed),
+    zomato_enabled: A?.flagOn?.(saved.zomato_enabled ?? company.zomato_enabled),
+    swiggy_enabled: A?.flagOn?.(saved.swiggy_enabled ?? company.swiggy_enabled),
+    zomato_live: A?.isLive?.("zomato", { ...saved, zomato_allowed: saved.zomato_allowed ?? biz.zomato_allowed, zomato_enabled: saved.zomato_enabled ?? company.zomato_enabled }),
+    swiggy_live: A?.isLive?.("swiggy", { ...saved, swiggy_allowed: saved.swiggy_allowed ?? biz.swiggy_allowed, swiggy_enabled: saved.swiggy_enabled ?? company.swiggy_enabled }),
+  };
+}
+
+function aggregatorDeskAllowed() {
+  if (!(isRestaurantShop() || isBarShop())) return false;
+  const s = aggregatorSettings();
+  return Boolean(s.zomato_allowed || s.swiggy_allowed);
+}
+
+function aggregatorStatusCopy(source, settings) {
+  const A = aggregatorApi();
+  const label = A?.sourceLabel?.(source) || source;
+  if (!A?.isAuthorized?.(source, settings)) return `${label}: Disabled — Master Admin has not allowed this shop`;
+  if (!A?.isLive?.(source, settings)) return `${label}: Disabled — Business Admin has not activated it`;
+  return `${label}: Enabled`;
+}
+
 async function loadAggregatorSettings() {
   const A = aggregatorApi();
   if (!A || !(isRestaurantShop() || isBarShop()) || !can("settings")) return;
   try {
     const data = await api("/api/aggregator/settings");
     const s = data.settings || {};
-    if ($("set-zomato-enabled")) $("set-zomato-enabled").checked = Boolean(s.zomato_enabled);
-    if ($("set-swiggy-enabled")) $("set-swiggy-enabled").checked = Boolean(s.swiggy_enabled);
+    state.aggregatorSettings = s;
+    if (state.businessMeta) {
+      state.businessMeta.zomato_allowed = s.zomato_allowed ? 1 : 0;
+      state.businessMeta.swiggy_allowed = s.swiggy_allowed ? 1 : 0;
+    }
+    if ($("set-zomato-enabled")) {
+      $("set-zomato-enabled").checked = aggregatorApi()?.flagOn?.(s.zomato_enabled) === true;
+      $("set-zomato-enabled").disabled = !aggregatorApi()?.flagOn?.(s.zomato_allowed);
+    }
+    if ($("set-swiggy-enabled")) {
+      $("set-swiggy-enabled").checked = aggregatorApi()?.flagOn?.(s.swiggy_enabled) === true;
+      $("set-swiggy-enabled").disabled = !aggregatorApi()?.flagOn?.(s.swiggy_allowed);
+    }
     if ($("set-agg-auto-accept")) $("set-agg-auto-accept").checked = Boolean(s.aggregator_auto_accept);
     if ($("set-agg-prep")) $("set-agg-prep").value = String(s.aggregator_prep_minutes || 20);
     if ($("set-zomato-rid")) $("set-zomato-rid").value = s.zomato_restaurant_id || "";
@@ -8448,15 +8488,19 @@ async function loadAggregatorSettings() {
     const origin = location.origin;
     if ($("set-zomato-hook")) $("set-zomato-hook").textContent = origin + (data.webhooks?.zomato || A.webhookPath("zomato", shopBusinessId()));
     if ($("set-swiggy-hook")) $("set-swiggy-hook").textContent = origin + (data.webhooks?.swiggy || A.webhookPath("swiggy", shopBusinessId()));
+    if ($("agg-zomato-status")) $("agg-zomato-status").textContent = aggregatorStatusCopy("zomato", s);
+    if ($("agg-swiggy-status")) $("agg-swiggy-status").textContent = aggregatorStatusCopy("swiggy", s);
     paintAggregatorSetupCard();
+    applyNav();
   } catch {
     /* optional on older servers */
   }
 }
 
 async function saveAggregatorSettings() {
-  if (!(isRestaurantShop() || isBarShop()) || !$("set-zomato-enabled")) return;
-  await api("/api/aggregator/settings", {
+  if (!$("set-zomato-enabled")) return;
+  const hint = $("agg-settings-hint");
+  const data = await api("/api/aggregator/settings", {
     method: "PUT",
     body: JSON.stringify({
       zomato_enabled: $("set-zomato-enabled").checked ? 1 : 0,
@@ -8473,6 +8517,12 @@ async function saveAggregatorSettings() {
       swiggy_api_base: $("set-swiggy-base")?.value || "",
     }),
   });
+  state.aggregatorSettings = data.settings || state.aggregatorSettings;
+  if (hint) {
+    hint.textContent = "Saved. Zomato and Swiggy stay off until you activate them and Master Admin allows them.";
+    hint.className = "hint ok";
+  }
+  await loadAggregatorSettings();
 }
 
 function paintAggregatorBadge() {
@@ -8526,16 +8576,17 @@ function showAggregatorToast(order, extra = 0) {
 }
 
 function paintAggregatorSetupCard() {
-  const zOn = $("set-zomato-enabled")?.checked;
-  const sOn = $("set-swiggy-enabled")?.checked;
+  const s = aggregatorSettings();
   const zHook = $("set-zomato-hook")?.textContent || "/api/webhooks/zomato?shop=";
   const sHook = $("set-swiggy-hook")?.textContent || "/api/webhooks/swiggy?shop=";
   if ($("agg-zomato-hook")) $("agg-zomato-hook").textContent = zHook;
   if ($("agg-swiggy-hook")) $("agg-swiggy-hook").textContent = sHook;
-  if ($("agg-zomato-state")) $("agg-zomato-state").textContent = zOn ? "Live" : "Off — turn on in Settings";
-  if ($("agg-swiggy-state")) $("agg-swiggy-state").textContent = sOn ? "Live" : "Off — turn on in Settings";
-  $("agg-zomato-hook")?.closest(".agg-hook")?.classList.toggle("is-on", Boolean(zOn));
-  $("agg-swiggy-hook")?.closest(".agg-hook")?.classList.toggle("is-on", Boolean(sOn));
+  if ($("agg-zomato-state")) $("agg-zomato-state").textContent = aggregatorStatusCopy("zomato", state.aggregatorSettings || s);
+  if ($("agg-swiggy-state")) $("agg-swiggy-state").textContent = aggregatorStatusCopy("swiggy", state.aggregatorSettings || s);
+  $("agg-zomato-hook")?.closest(".agg-hook")?.classList.toggle("is-on", Boolean(s.zomato_live));
+  $("agg-swiggy-hook")?.closest(".agg-hook")?.classList.toggle("is-on", Boolean(s.swiggy_live));
+  if ($("agg-sandbox-zomato")) $("agg-sandbox-zomato").hidden = !s.zomato_live;
+  if ($("agg-sandbox-swiggy")) $("agg-sandbox-swiggy").hidden = !s.swiggy_live;
 }
 
 function aggregatorTotalsHtml(order) {
@@ -8618,7 +8669,7 @@ function renderAggregatorOrders() {
 }
 
 async function loadAggregatorOrders({ announce = false } = {}) {
-  if (!(isRestaurantShop() || isBarShop()) || !can("orders")) return;
+  if (!aggregatorDeskAllowed() || !can("orders")) return;
   try {
     const rows = await api("/api/aggregator/orders");
     const list = Array.isArray(rows) ? rows : rows?.orders || [];
@@ -8704,9 +8755,12 @@ async function openAggregatorInCounter(order) {
 }
 
 async function sandboxAggregatorOrder(source) {
+  const A = aggregatorApi();
+  const block = A?.activationBlock?.(source, state.aggregatorSettings || aggregatorSettings());
+  if (block) throw new Error(block);
   await api("/api/aggregator/sandbox", { method: "POST", body: JSON.stringify({ source }) });
   await loadAggregatorOrders({ announce: true });
-  setHint(`Test ${aggregatorApi()?.sourceLabel(source) || source} order added`, "ok");
+  setHint(`Test ${A?.sourceLabel(source) || source} order added`, "ok");
 }
 
 function qrStatusLabel(status) {
@@ -10681,6 +10735,21 @@ $("agg-copy-swiggy")?.addEventListener("click", async () => {
   const text = $("agg-swiggy-hook")?.textContent || "";
   try { await navigator.clipboard.writeText(text); setHint("Swiggy webhook copied", "ok"); } catch { setHint(text, "ok"); }
 });
+$("agg-settings-save")?.addEventListener("click", async () => {
+  const hint = $("agg-settings-hint");
+  try {
+    if (hint) {
+      hint.textContent = "Saving…";
+      hint.className = "hint";
+    }
+    await saveAggregatorSettings();
+  } catch (err) {
+    if (hint) {
+      hint.textContent = err.message;
+      hint.className = "hint error";
+    } else setHint(err.message, "error");
+  }
+});
 $("agg-refresh")?.addEventListener("click", () => void loadAggregatorOrders());
 $("agg-sandbox-zomato")?.addEventListener("click", () => void sandboxAggregatorOrder("zomato").catch((err) => setHint(err.message, "error")));
 $("agg-sandbox-swiggy")?.addEventListener("click", () => void sandboxAggregatorOrder("swiggy").catch((err) => setHint(err.message, "error")));
@@ -11493,12 +11562,6 @@ $("settings-form").addEventListener("submit", async (e) => {
       method: "POST",
       body: JSON.stringify(payload),
     });
-    if (isRestaurantShop() || isBarShop()) {
-      try { await saveAggregatorSettings(); } catch (aggErr) {
-        $("settings-hint").textContent = "Shop saved, but Zomato / Swiggy settings failed: " + aggErr.message;
-        $("settings-hint").className = "hint error";
-      }
-    }
     state.company = data.company ? { ...state.company, ...data.company } : state.company;
     state.logoDraft = null;
     state.payQrDraft = null;

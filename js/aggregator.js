@@ -282,6 +282,49 @@
     return /•/.test(String(raw || ""));
   }
 
+  function flagOn(raw) {
+    return raw === true || raw === 1 || raw === "1";
+  }
+
+  function isAuthorized(source, settings = {}) {
+    const src = normalizeSource(source);
+    if (src === "swiggy") return flagOn(settings.swiggy_allowed);
+    if (src === "zomato") return flagOn(settings.zomato_allowed);
+    return false;
+  }
+
+  function hasCredentials(source, settings = {}) {
+    const src = normalizeSource(source);
+    if (src === "swiggy") return Boolean(clip(settings.swiggy_outlet_id, 80) && clip(settings.swiggy_api_key, 180) && !isMasked(settings.swiggy_api_key));
+    if (src === "zomato") return Boolean(clip(settings.zomato_restaurant_id, 80) && clip(settings.zomato_api_key, 180) && !isMasked(settings.zomato_api_key));
+    return false;
+  }
+
+  function isLive(source, settings = {}) {
+    const src = normalizeSource(source);
+    if (!isAuthorized(src, settings)) return false;
+    if (src === "swiggy") return flagOn(settings.swiggy_enabled);
+    if (src === "zomato") return flagOn(settings.zomato_enabled);
+    return false;
+  }
+
+  function activationBlock(source, settings = {}, { wantEnable = false, storedKey = "" } = {}) {
+    const src = normalizeSource(source) || "zomato";
+    const label = sourceLabel(src);
+    if (!isAuthorized(src, settings)) {
+      return `${label} is not authorized for this shop. Ask Master Admin to allow it first.`;
+    }
+    if (wantEnable) {
+      const idOk = src === "swiggy" ? clip(settings.swiggy_outlet_id, 80) : clip(settings.zomato_restaurant_id, 80);
+      const keyRaw = src === "swiggy" ? settings.swiggy_api_key : settings.zomato_api_key;
+      const keyOk = (clip(keyRaw, 180) && !isMasked(keyRaw)) || clip(storedKey, 180);
+      if (!idOk) return `Save the ${label} ${src === "swiggy" ? "outlet ID" : "restaurant ID"} before activating.`;
+      if (!keyOk) return `Save the ${label} API key before activating.`;
+    }
+    if (!isLive(src, settings)) return `${label} is disabled. A Business Admin must turn it on in Settings.`;
+    return "";
+  }
+
   root.POSAggregator = {
     SOURCES,
     STATUSES,
@@ -303,5 +346,10 @@
     webhookPath,
     maskSecret,
     isMasked,
+    flagOn,
+    isAuthorized,
+    hasCredentials,
+    isLive,
+    activationBlock,
   };
 })(typeof window !== "undefined" ? window : globalThis);

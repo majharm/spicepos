@@ -130,6 +130,8 @@ export async function ensureSchema() {
   await addColumn("company_settings", "payment_qr_url", "MEDIUMTEXT NULL");
   await addColumn("company_settings", "payment_upi", "VARCHAR(160) NULL");
   await addColumn("company_settings", "dining_tables_json", "TEXT NULL");
+  await addColumn("businesses", "zomato_allowed", "TINYINT(1) NOT NULL DEFAULT 0");
+  await addColumn("businesses", "swiggy_allowed", "TINYINT(1) NOT NULL DEFAULT 0");
   await addColumn("company_settings", "table_shifting_enabled", "TINYINT(1) NOT NULL DEFAULT 0");
   await addColumn("company_settings", "zomato_enabled", "TINYINT(1) NOT NULL DEFAULT 0");
   await addColumn("company_settings", "swiggy_enabled", "TINYINT(1) NOT NULL DEFAULT 0");

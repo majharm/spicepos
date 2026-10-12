@@ -85,6 +85,13 @@ export async function ensureAggregatorSchema(exec = query) {
       /* present */
     }
   }
+  for (const col of ["zomato_allowed", "swiggy_allowed"]) {
+    try {
+      await exec(`ALTER TABLE businesses ADD COLUMN ${col} TINYINT(1) NOT NULL DEFAULT 0`);
+    } catch {
+      /* present */
+    }
+  }
 }
 
 function stampCol(status) {
@@ -140,14 +147,21 @@ async function loadOrder(businessId, id) {
 async function settingsOf(businessId) {
   await ensureAggregatorSchema();
   const [row] = await query("SELECT * FROM company_settings WHERE business_id = ? LIMIT 1", [businessId]).catch(() => []);
-  return row || {};
+  const [biz] = await query("SELECT zomato_allowed, swiggy_allowed FROM businesses WHERE id = ? LIMIT 1", [businessId]).catch(() => []);
+  return {
+    ...(row || {}),
+    zomato_allowed: biz?.zomato_allowed ?? 0,
+    swiggy_allowed: biz?.swiggy_allowed ?? 0,
+  };
 }
 
 function publicSettings(row = {}) {
-  return {
-    zomato_enabled: Number(row.zomato_enabled) === 1,
-    swiggy_enabled: Number(row.swiggy_enabled) === 1,
-    aggregator_auto_accept: Number(row.aggregator_auto_accept) === 1,
+  const packed = {
+    zomato_allowed: A.flagOn(row.zomato_allowed),
+    swiggy_allowed: A.flagOn(row.swiggy_allowed),
+    zomato_enabled: A.flagOn(row.zomato_enabled),
+    swiggy_enabled: A.flagOn(row.swiggy_enabled),
+    aggregator_auto_accept: A.flagOn(row.aggregator_auto_accept),
     aggregator_prep_minutes: Number(row.aggregator_prep_minutes) || 20,
     zomato_restaurant_id: row.zomato_restaurant_id || "",
     swiggy_outlet_id: row.swiggy_outlet_id || "",
@@ -158,6 +172,9 @@ function publicSettings(row = {}) {
     swiggy_api_key: A.maskSecret(row.swiggy_api_key),
     swiggy_webhook_secret: A.maskSecret(row.swiggy_webhook_secret),
   };
+  packed.zomato_live = A.isLive("zomato", packed);
+  packed.swiggy_live = A.isLive("swiggy", packed);
+  return packed;
 }
 
 function headerSecret(req) {
@@ -269,8 +286,8 @@ async function ingestWebhook(req, source) {
   const businessId = await findBusiness(req, parsed.source, parsed);
   if (!businessId) throw new Error("Unknown restaurant. Add the shop id to the webhook URL or save the outlet id in Settings.");
   const settings = await settingsOf(businessId);
-  const enabled = parsed.source === "swiggy" ? Number(settings.swiggy_enabled) === 1 : Number(settings.zomato_enabled) === 1;
-  if (!enabled) throw new Error(`${A.sourceLabel(parsed.source)} ordering is turned off for this shop`);
+  const block = A.activationBlock(parsed.source, settings);
+  if (block) throw new Error(block);
   const want = parsed.source === "swiggy" ? settings.swiggy_webhook_secret : settings.zomato_webhook_secret;
   if (want && !secretsMatch(headerSecret(req), want)) throw new Error("Webhook secret does not match");
   const saved = await upsertOrder(businessId, parsed, req.body);
@@ -315,10 +332,30 @@ export function registerAggregatorStaff(app) {
     send(res, async () => {
       await ensureAggregatorSchema();
       const b = req.body || {};
+      const current = await settingsOf(bid());
+      const nextZomatoKey = b.zomato_api_key && !A.isMasked(b.zomato_api_key) ? A.clip(b.zomato_api_key, 180) : current.zomato_api_key;
+      const nextSwiggyKey = b.swiggy_api_key && !A.isMasked(b.swiggy_api_key) ? A.clip(b.swiggy_api_key, 180) : current.swiggy_api_key;
+      const draft = {
+        ...current,
+        zomato_restaurant_id: A.clip(b.zomato_restaurant_id, 80) || current.zomato_restaurant_id,
+        swiggy_outlet_id: A.clip(b.swiggy_outlet_id, 80) || current.swiggy_outlet_id,
+        zomato_api_key: nextZomatoKey,
+        swiggy_api_key: nextSwiggyKey,
+        zomato_enabled: A.flagOn(b.zomato_enabled) ? 1 : 0,
+        swiggy_enabled: A.flagOn(b.swiggy_enabled) ? 1 : 0,
+      };
+      if (A.flagOn(b.zomato_enabled)) {
+        const err = A.activationBlock("zomato", { ...draft, zomato_enabled: 1 }, { wantEnable: true, storedKey: current.zomato_api_key });
+        if (err) throw new Error(err);
+      }
+      if (A.flagOn(b.swiggy_enabled)) {
+        const err = A.activationBlock("swiggy", { ...draft, swiggy_enabled: 1 }, { wantEnable: true, storedKey: current.swiggy_api_key });
+        if (err) throw new Error(err);
+      }
       const sets = [
-        ["zomato_enabled", Number(b.zomato_enabled) ? 1 : 0],
-        ["swiggy_enabled", Number(b.swiggy_enabled) ? 1 : 0],
-        ["aggregator_auto_accept", Number(b.aggregator_auto_accept) ? 1 : 0],
+        ["zomato_enabled", A.flagOn(b.zomato_enabled) ? 1 : 0],
+        ["swiggy_enabled", A.flagOn(b.swiggy_enabled) ? 1 : 0],
+        ["aggregator_auto_accept", A.flagOn(b.aggregator_auto_accept) ? 1 : 0],
         ["aggregator_prep_minutes", Math.max(5, Math.min(90, Number(b.aggregator_prep_minutes) || 20))],
         ["zomato_restaurant_id", A.clip(b.zomato_restaurant_id, 80) || null],
         ["swiggy_outlet_id", A.clip(b.swiggy_outlet_id, 80) || null],
@@ -408,6 +445,8 @@ export function registerAggregatorStaff(app) {
     send(res, async () => {
       await ensureAggregatorSchema();
       const source = A.normalizeSource(req.body?.source) || "zomato";
+      const gate = A.activationBlock(source, await settingsOf(bid()));
+      if (gate) throw new Error(gate);
       const sample =
         req.body?.order ||
         (source === "swiggy"
