@@ -64,6 +64,8 @@ test("Settings hub groups company, hardware, table, and aggregator controls", ()
   assert.match(index, /id="set-swiggy-enabled"/);
   assert.match(index, /id="set-copy-zomato-hook"/);
   assert.match(index, /id="set-copy-swiggy-hook"/);
+  assert.match(index, /data-secret-toggle="set-zomato-key"/);
+  assert.match(index, /data-secret-toggle="set-swiggy-secret"/);
   assert.match(index, /id="settings-cancel"/);
   assert.match(index, /Save changes/);
   assert.match(index, /India — IST \(UTC\+5:30\)/);
@@ -76,7 +78,9 @@ test("Settings hub groups company, hardware, table, and aggregator controls", ()
   assert.match(app, /confirmLeaveSettings/);
   assert.match(app, /Test the connection before activating/);
   assert.match(app, /payload\.table_shifting_enabled = \$\("set-table-shifting"\)\.checked \? 1 : 0/);
+  assert.match(app, /const data = await api\("\/api\/table-shifts\/"\)/);
+  assert.doesNotMatch(app, /if \(!tableShiftingEnabled\(\)\) \{[\s\S]*return;[\s\S]*api\("\/api\/table-shifts\//);
   assert.match(css, /\.settings-hub/);
-  assert.match(index, /app\.js\?v=20261012set1/);
-  assert.match(index, /pos\.css\?v=20261012set1/);
+  assert.match(index, /app\.js\?v=20261012set2/);
+  assert.match(index, /pos\.css\?v=20261012set2/);
 });

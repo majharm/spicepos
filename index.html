@@ -6,7 +6,7 @@
     <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
     <title>ATAV POS</title>
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./css/pos.css?v=20261012set1" />
+    <link rel="stylesheet" href="./css/pos.css?v=20261012set2" />
     <link rel="stylesheet" href="./css/saas.css?v=20260905deploy136" />
     <link rel="stylesheet" href="./css/bar.css?v=20261011bar2" />
     <link rel="stylesheet" href="./css/resort.css?v=20261011resort1" />
@@ -2762,8 +2762,18 @@
                       <p class="field-hint" id="agg-zomato-status">Zomato: Disabled</p>
                       <label class="full"><input id="set-zomato-enabled" type="checkbox" disabled /> Enable Zomato Orders</label>
                       <label>Zomato restaurant ID <input id="set-zomato-rid" maxlength="80" placeholder="Outlet ID from Zomato" autocomplete="off" /></label>
-                      <label>Zomato API key <input id="set-zomato-key" type="password" maxlength="180" placeholder="Partner API key" autocomplete="off" /></label>
-                      <label>Zomato webhook secret <input id="set-zomato-secret" type="password" maxlength="180" placeholder="Optional header secret" autocomplete="off" /></label>
+                      <label>Zomato API key
+                        <span class="shop-id-row">
+                          <input id="set-zomato-key" type="password" maxlength="180" placeholder="Partner API key" autocomplete="off" />
+                          <button class="btn" type="button" data-secret-toggle="set-zomato-key">Show</button>
+                        </span>
+                      </label>
+                      <label>Zomato webhook secret
+                        <span class="shop-id-row">
+                          <input id="set-zomato-secret" type="password" maxlength="180" placeholder="Optional header secret" autocomplete="off" />
+                          <button class="btn" type="button" data-secret-toggle="set-zomato-secret">Show</button>
+                        </span>
+                      </label>
                       <p class="field-hint full">Zomato webhook
                         <span class="shop-id-row">
                           <code id="set-zomato-hook">/api/webhooks/zomato?shop=</code>
@@ -2780,8 +2790,18 @@
                       <p class="field-hint" id="agg-swiggy-status">Swiggy: Disabled</p>
                       <label class="full"><input id="set-swiggy-enabled" type="checkbox" disabled /> Enable Swiggy Orders</label>
                       <label>Swiggy outlet ID <input id="set-swiggy-oid" maxlength="80" placeholder="Outlet ID from Swiggy" autocomplete="off" /></label>
-                      <label>Swiggy API key <input id="set-swiggy-key" type="password" maxlength="180" placeholder="Partner API key" autocomplete="off" /></label>
-                      <label>Swiggy webhook secret <input id="set-swiggy-secret" type="password" maxlength="180" placeholder="Optional header secret" autocomplete="off" /></label>
+                      <label>Swiggy API key
+                        <span class="shop-id-row">
+                          <input id="set-swiggy-key" type="password" maxlength="180" placeholder="Partner API key" autocomplete="off" />
+                          <button class="btn" type="button" data-secret-toggle="set-swiggy-key">Show</button>
+                        </span>
+                      </label>
+                      <label>Swiggy webhook secret
+                        <span class="shop-id-row">
+                          <input id="set-swiggy-secret" type="password" maxlength="180" placeholder="Optional header secret" autocomplete="off" />
+                          <button class="btn" type="button" data-secret-toggle="set-swiggy-secret">Show</button>
+                        </span>
+                      </label>
                       <p class="field-hint full">Swiggy webhook
                         <span class="shop-id-row">
                           <code id="set-swiggy-hook">/api/webhooks/swiggy?shop=</code>
@@ -3189,7 +3209,7 @@
     <script src="./js/pos-api.js?v=20261006login1" defer></script>
     <script src="./js/units.js?v=20260919unit1" defer></script>
     <script src="./js/footwear.js?v=20261012fix1" defer></script>
-    <script src="./js/restaurant.js?v=20261012set1" defer></script>
+    <script src="./js/restaurant.js?v=20261012set2" defer></script>
     <script src="./js/pay-integrity.js?v=20261012table1" defer></script>
     <script src="./js/aggregator.js?v=20261012agg3" defer></script>
     <script src="./js/discount.js?v=20260905deploy136" defer></script>
@@ -3197,7 +3217,7 @@
     <script src="./js/loyalty.js?v=20260905deploy136" defer></script>
     <script src="./js/barcode.js?v=20260924bc1" defer></script>
     <script src="./js/camera-scan.js?v=20260918bill2" defer></script>
-    <script src="./js/scale.js?v=20261012set1" defer></script>
+    <script src="./js/scale.js?v=20261012set2" defer></script>
     <script src="./js/dev-mode.js?v=20260905deploy136" defer></script>
     <script src="./js/invoice.js?v=20261006due1" defer></script>
     <script src="./js/invoice-share.js?v=20260913share1" defer></script>
@@ -3219,7 +3239,7 @@
     <script src="./js/resort-ui.js?v=20261011resort1" defer></script>
     <script src="./js/item-master.js?v=20261012brand1" defer></script>
     <script src="./js/customer-master.js?v=20261012cust1" defer></script>
-    <script src="./js/app.js?v=20261012set1" defer></script>
+    <script src="./js/app.js?v=20261012set2" defer></script>
     <script src="./js/item-master-ui.js?v=20261012brand1" defer></script>
     <script src="./js/customer-master-ui.js?v=20261012cust1" defer></script>
     <script src="./js/mobile-app.js?v=20261012m3" defer></script>

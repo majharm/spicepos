@@ -6443,11 +6443,6 @@ async function paintTableShiftHistory() {
     if ($("table-shift-pager")) $("table-shift-pager").hidden = true;
     return;
   }
-  if (!tableShiftingEnabled()) {
-    el.innerHTML = "<p class='hint'>Turn on Enable Table Shifting to move active orders between tables. Shift history stays saved.</p>";
-    if ($("table-shift-pager")) $("table-shift-pager").hidden = true;
-    return;
-  }
   try {
     const data = await api("/api/table-shifts/");
     const rows = data.shifts || [];
@@ -6477,7 +6472,9 @@ async function paintTableShiftHistory() {
       if ($("table-shift-next")) $("table-shift-next").disabled = state.tableShiftPage >= pages;
     }
     if (!list.length) {
-      el.innerHTML = "<p class='hint'>No table shifts yet.</p>";
+      el.innerHTML = tableShiftingEnabled()
+        ? "<p class='hint'>No table shifts yet.</p>"
+        : "<p class='hint'>Table shifting is off. Past shifts stay listed here after you turn it on and records exist.</p>";
       return;
     }
     const R = restaurantApi();
@@ -7267,11 +7264,13 @@ async function loadDevices() {
       ? list
           .map((d) => {
             const on = String(d.status || "") === "active";
+            const code = String(d.code || "").trim();
+            const status = on ? "Connected" : code ? "Disabled" : "Not Configured";
             return `<tr>
               <td>${escapeHtml(d.name)}</td>
-              <td>${escapeHtml(d.code)}</td>
+              <td>${escapeHtml(d.code || "")}</td>
               <td>${escapeHtml(d.branch_name || "")}</td>
-              <td>${on ? "Enabled" : "Disabled"}</td>
+              <td>${status}</td>
               <td><button class="btn" type="button" data-device-toggle="${escapeHtml(d.id)}" data-next-status="${on ? "inactive" : "active"}">${on ? "Disable" : "Activate"}</button></td>
             </tr>`;
           })
@@ -10302,12 +10301,27 @@ function paintScaleSetupStatus() {
   const S = globalThis.POSScale;
   const on = Boolean(S?.connected?.());
   const kind = S?.connectionKind?.() || "";
-  el.className = `scale-hw-status ${on ? "is-on" : "is-off"}`;
-  el.textContent = !isScaleEnabled()
-    ? "● Disabled"
-    : on
-      ? `● Connected${kind ? ` · ${kind}` : ""}`
-      : "● Disconnected";
+  const cfg = scaleSettings();
+  const src = String(cfg.source || "serial");
+  const configured =
+    src === "wedge" ||
+    (src === "network" && String(cfg.host || "").trim()) ||
+    (src === "serial" && (String(cfg.port || "").trim() || on)) ||
+    src === "bluetooth";
+  let label = "● Disabled";
+  let cls = "is-off";
+  if (!isScaleEnabled()) {
+    label = "● Disabled";
+  } else if (!configured) {
+    label = "● Not Configured";
+  } else if (on) {
+    label = `● Connected${kind ? ` · ${kind}` : ""}`;
+    cls = "is-on";
+  } else {
+    label = "● Disconnected";
+  }
+  el.className = `scale-hw-status ${cls}`;
+  el.textContent = label;
 }
 function paintScaleLog() {
   const el = $("scale-log");
@@ -11628,6 +11642,16 @@ $("settings-cancel")?.addEventListener("click", () => {
   renderSettings();
   $("settings-hint").textContent = "Changes discarded.";
   $("settings-hint").className = "hint";
+});
+document.querySelectorAll("[data-secret-toggle]").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    const input = $(btn.dataset.secretToggle);
+    if (!input) return;
+    const show = input.type === "password";
+    input.type = show ? "text" : "password";
+    btn.textContent = show ? "Hide" : "Show";
+    btn.setAttribute("aria-label", show ? "Hide secret" : "Show secret");
+  });
 });
 window.addEventListener("beforeunload", (e) => {
   if (!state.settingsDirty) return;
