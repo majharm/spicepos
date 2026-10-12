@@ -1018,3 +1018,52 @@ test("print flex invoice without stored unit shows sqft not g/kg", () => {
   assert.doesNotMatch(html, /50 g/);
   assert.doesNotMatch(html, /\/kg/);
 });
+
+test("print invoice shows dimensions, area, and rate per unit", () => {
+  const InvoicePrint = loadInvoicePrint();
+  const order = {
+    order_number: "SO-10002",
+    customer_name: "Walk-in",
+    subtotal: 1000,
+    gst: 180,
+    total: 1180,
+    extra_charges: 0,
+    payment_method: "upi",
+    payment_status: "paid",
+    amount_paid: 1180,
+    previous_due: 0,
+    lines: [
+      {
+        item_name: "Frontlit flex",
+        quantity_gm: 50,
+        rate_per_kg: 20,
+        amount: 1000,
+        gst_rate: 18,
+        unit: "SQFT",
+        print_width: 10,
+        print_height: 5,
+        print_dim_unit: "ft",
+        print_copies: 1,
+        notes: "10 × 5 ft · 50 sqft",
+      },
+    ],
+  };
+  const ctx = {
+    company: { name: "Print Shop" },
+    businessMeta: { category: "Flex & Printing", business_type: "Printing Business" },
+    customers: [],
+    items: [{ id: "fp", name: "Frontlit flex", base_unit: "SQFT", gst_rate: 18, retail_rate: 20 }],
+    formatDateTime: (v) => String(v),
+    money: (n) => `₹${Number(n).toFixed(2)}`,
+    escapeHtml: (v) => String(v ?? ""),
+  };
+  const html = InvoicePrint.invoiceBody(order, ctx);
+  assert.match(html, /10 × 5 ft/);
+  assert.match(html, /50 sqft/);
+  assert.match(html, /₹20\.00\/sqft/);
+  assert.match(html, /₹1000\.00/);
+  const office = InvoicePrint.officeInvoiceBody(order, ctx);
+  assert.match(office, /10 × 5 ft/);
+  assert.match(office, /50 sqft/);
+  assert.match(office, /₹20\.00\/sqft/);
+});

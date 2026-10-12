@@ -220,6 +220,8 @@ export async function ensureSchema() {
   await addColumn("items", "size", "VARCHAR(32) NULL");
   await addColumn("items", "wearer_type", "VARCHAR(16) NULL");
   await addColumn("items", "local_name", "VARCHAR(255) NULL");
+  await addColumn("items", "min_billing_qty", "DECIMAL(12,4) NOT NULL DEFAULT 0");
+  await addColumn("items", "custom_unit", "VARCHAR(32) NULL");
   await addColumn("customers", "state", "VARCHAR(64) NULL");
   await addColumn("customers", "dob", "DATE NULL");
   await addColumn("customers", "referred_by", "VARCHAR(255) NULL");
@@ -262,6 +264,15 @@ export async function ensureSchema() {
   await addColumn("sales_order_lines", "pack_label", "VARCHAR(64) NULL");
   await addColumn("sales_order_lines", "notes", "TEXT NULL");
   await addColumn("sales_order_lines", "unit", "VARCHAR(32) NULL");
+  await addColumn("sales_order_lines", "print_width", "DECIMAL(12,4) NOT NULL DEFAULT 0");
+  await addColumn("sales_order_lines", "print_height", "DECIMAL(12,4) NOT NULL DEFAULT 0");
+  await addColumn("sales_order_lines", "print_dim_unit", "VARCHAR(16) NULL");
+  await addColumn("sales_order_lines", "print_copies", "INT NOT NULL DEFAULT 1");
+  await addColumn("sales_order_lines", "print_file_id", "VARCHAR(255) NULL");
+  await addColumn("sales_order_lines", "print_file_name", "VARCHAR(255) NULL");
+  await addColumn("sales_order_lines", "print_area", "DECIMAL(14,4) NOT NULL DEFAULT 0");
+  await addColumn("sales_order_lines", "print_custom_unit", "VARCHAR(32) NULL");
+  await addColumn("sales_orders", "extra_charges", "DECIMAL(12,2) NOT NULL DEFAULT 0");
   await addColumn("purchase_lines", "batch_no", "VARCHAR(64) NULL");
   await addColumn("purchase_lines", "barcode", "VARCHAR(64) NULL");
   await addColumn("purchase_lines", "expiry_date", "DATE NULL");

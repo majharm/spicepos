@@ -147,7 +147,7 @@ function pos_update_order($bid, $orderId, $body, $auth) {
     $qty = (float) ($line["quantity_gm"] ?? 0);
     if ($qty <= 0) pos_send(400, ["error" => "Invalid quantity", "php" => true]);
     if (function_exists("pos_compute_sale_line")) {
-      $built[] = pos_compute_sale_line($item, $qty, $customer, $line);
+      $built[] = pos_compute_sale_line($item, $qty, $customer, $line, $auth["user"] ?? null);
     } else {
       $rate = (($customer["type"] ?? "") === "b2b") ? (float) $item["b2b_rate"] : (float) $item["retail_rate"];
       $amount = pos_round2(pos_line_amount_for_item($qty, $rate, $item));
@@ -164,7 +164,8 @@ function pos_update_order($bid, $orderId, $body, $auth) {
   $billDiscount = function_exists("pos_adv_discount_amount")
     ? pos_adv_discount_amount($subtotal + $gst, $billType, $billValue)
     : pos_round2((float) ($body["discount"] ?? 0));
-  $total = pos_round2(max(0, $subtotal + $gst - $billDiscount));
+  $extraCharges = pos_round2(max(0, (float) ($body["extraCharges"] ?? $body["extra_charges"] ?? 0)));
+  $total = pos_round2(max(0, $subtotal + $gst - $billDiscount + $extraCharges));
   $totalGm = array_sum(array_column($built, "qty"));
   $methodPay = pos_pay_normalize($body["paymentMethod"] ?? $existing["payment_method"] ?? "cash");
   if (!pos_pay_is_sale($methodPay)) {
@@ -215,8 +216,13 @@ function pos_update_order($bid, $orderId, $body, $auth) {
     );
   } catch (Exception $e) { /* optional columns */ }
 
+  try {
+    pos_q("UPDATE sales_orders SET extra_charges = ? WHERE id = ? AND business_id = ?", "sss", [(string) $extraCharges, $orderId, $bid]);
+  } catch (Exception $e) { /* optional */ }
+
   if ($newStatus !== "cancelled") {
     foreach ($built as $line) {
+      $lineId = pos_uuid();
       $lineDisc = (string) ($line["discount"] ?? 0);
       try {
         pos_q(
@@ -227,7 +233,7 @@ function pos_update_order($bid, $orderId, $body, $auth) {
            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
           "sssssssssssssssss",
           [
-            pos_uuid(), $orderId, $line["item"]["id"], pos_item_bill_name($line["item"]), (string) $line["qty"], (string) $line["rate"],
+            $lineId, $orderId, $line["item"]["id"], pos_item_bill_name($line["item"]), (string) $line["qty"], (string) $line["rate"],
             $lineDisc, (string) $line["amount"], (string) $line["gstRate"], "0", $bid,
             (string) ($line["mrp"] ?? 0), $line["discountType"] ?? "amt", (string) ($line["discountValue"] ?? 0),
             $line["barcode"] ?? null, (string) ($line["cost"] ?? 0), (string) ($line["profit"] ?? 0),
@@ -241,12 +247,13 @@ function pos_update_order($bid, $orderId, $body, $auth) {
            ) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
           "sssssssssss",
           [
-            pos_uuid(), $orderId, $line["item"]["id"], pos_item_bill_name($line["item"]), (string) $line["qty"], (string) $line["rate"],
+            $lineId, $orderId, $line["item"]["id"], pos_item_bill_name($line["item"]), (string) $line["qty"], (string) $line["rate"],
             $lineDisc, (string) $line["amount"], (string) $line["gstRate"], "0", $bid,
           ]
         );
       }
       if (function_exists("pos_persist_sale_line_note")) pos_persist_sale_line_note($lineId, $line["notes"] ?? "");
+      if (function_exists("pos_persist_print_sale_line")) pos_persist_print_sale_line($lineId, $line, $bid);
       pos_q("UPDATE items SET stock_gm = stock_gm - ? WHERE id = ? AND business_id = ?", "dss", [$line["qty"], $line["item"]["id"], $bid]);
     }
   }

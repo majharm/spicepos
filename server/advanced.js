@@ -6,7 +6,7 @@ import "../js/footwear.js";
 import "../js/barcode.js";
 import { query, withTransaction } from "./db.js";
 import { bid, branchId, authUser } from "./context.js";
-import { requireStaff, requirePerm } from "./auth.js";
+import { requireStaff, requirePerm, parsePerms } from "./auth.js";
 import { saveItemBrand } from "./brands.js";
 
 const POSDiscount = globalThis.POSDiscount;
@@ -261,6 +261,44 @@ export async function ensureAdvancedSchema() {
       /* exists */
     }
   }
+  const printItemCols = [
+    ["min_billing_qty", "DECIMAL(12,4) NOT NULL DEFAULT 0"],
+    ["custom_unit", "VARCHAR(32) NULL"],
+  ];
+  for (const [col, ddl] of printItemCols) {
+    try {
+      await query(`ALTER TABLE items ADD COLUMN ${col} ${ddl}`);
+    } catch {
+      /* exists */
+    }
+  }
+  const printLineCols = [
+    ["print_width", "DECIMAL(12,4) NOT NULL DEFAULT 0"],
+    ["print_height", "DECIMAL(12,4) NOT NULL DEFAULT 0"],
+    ["print_dim_unit", "VARCHAR(16) NULL"],
+    ["print_copies", "INT NOT NULL DEFAULT 1"],
+    ["print_file_id", "VARCHAR(255) NULL"],
+    ["print_file_name", "VARCHAR(255) NULL"],
+    ["print_area", "DECIMAL(14,4) NOT NULL DEFAULT 0"],
+    ["print_custom_unit", "VARCHAR(32) NULL"],
+  ];
+  for (const [col, ddl] of printLineCols) {
+    try {
+      await query(`ALTER TABLE sales_order_lines ADD COLUMN ${col} ${ddl}`);
+    } catch {
+      /* exists */
+    }
+  }
+  try {
+    await query("ALTER TABLE sales_orders ADD COLUMN extra_charges DECIMAL(12,2) NOT NULL DEFAULT 0");
+  } catch {
+    /* exists */
+  }
+  try {
+    await query("ALTER TABLE print_files ADD COLUMN sales_line_id VARCHAR(255) NULL");
+  } catch {
+    /* exists */
+  }
   await query(`CREATE TABLE IF NOT EXISTS damage_records (
     id VARCHAR(255) PRIMARY KEY,
     business_id VARCHAR(255) NOT NULL,
@@ -460,6 +498,28 @@ export async function onItemSaved(conn, businessId, itemId, body = {}) {
       await sqlExec(conn, "UPDATE items SET mrp = ? WHERE id = ? AND business_id = ?", [Number(body.mrp) || 0, itemId, businessId]);
     } catch {
       /* optional */
+    }
+  }
+  if (Object.prototype.hasOwnProperty.call(body, "min_billing_qty") || Object.prototype.hasOwnProperty.call(body, "custom_unit")) {
+    try {
+      await sqlExec(conn, "UPDATE items SET min_billing_qty = ?, custom_unit = ? WHERE id = ? AND business_id = ?", [
+        Number(body.min_billing_qty) || 0,
+        String(body.custom_unit || "").trim().slice(0, 32) || null,
+        itemId,
+        businessId,
+      ]);
+    } catch {
+      try {
+        if (Object.prototype.hasOwnProperty.call(body, "min_billing_qty")) {
+          await sqlExec(conn, "UPDATE items SET min_billing_qty = ? WHERE id = ? AND business_id = ?", [
+            Number(body.min_billing_qty) || 0,
+            itemId,
+            businessId,
+          ]);
+        }
+      } catch {
+        /* optional */
+      }
     }
   }
   if (!isCountItem(item || body)) return own;
@@ -680,11 +740,19 @@ export function pharmacyLineSnapshot(item, batch) {
   };
 }
 
+export function canOverrideSaleRate(user = authUser()) {
+  if (!user) return false;
+  const role = String(user.role || "");
+  if (role === "business_admin" || role === "resort_owner") return true;
+  const perms = parsePerms(user);
+  return Boolean(perms.items || perms.settings);
+}
+
 export function computeSaleLine(item, customer, lineIn) {
   const qty = Number(lineIn.quantity_gm ?? lineIn.qty);
   const isB2b = customer?.type === "b2b";
   const customerType = isB2b ? "b2b" : "b2c";
-  const rate = lineIn.rate != null && lineIn.rate !== ""
+  const rate = lineIn.rate != null && lineIn.rate !== "" && canOverrideSaleRate()
     ? Number(lineIn.rate)
     : Number(POSFootwear?.looseSaleRate?.(item, customerType) ?? (isB2b ? item.b2b_rate : item.retail_rate));
   const mrpRate = Number(POSFootwear?.looseMrp?.(item) ?? item.mrp ?? item.retail_rate) || rate;
@@ -716,6 +784,15 @@ export function computeSaleLine(item, customer, lineIn) {
     barcode: String(lineIn.barcode || "").trim(),
     batchId: String(lineIn.batchId || lineIn.batch_id || "").trim(),
     notes: String(lineIn.notes || lineIn.special_instruction || lineIn.specialInstruction || "").trim().slice(0, 240),
+    print_width: Number(lineIn.print_width ?? lineIn.printWidth) || 0,
+    print_height: Number(lineIn.print_height ?? lineIn.printHeight) || 0,
+    print_dim_unit: String(lineIn.print_dim_unit ?? lineIn.printDimUnit ?? "").slice(0, 16),
+    print_copies: Math.max(1, Number(lineIn.print_copies ?? lineIn.printCopies) || 1),
+    print_file_id: String(lineIn.print_file_id ?? lineIn.printFileId ?? "").trim(),
+    print_file_name: String(lineIn.print_file_name ?? lineIn.printFileName ?? "").trim().slice(0, 255),
+    print_area: Number(lineIn.print_area ?? lineIn.printArea ?? qty) || 0,
+    print_custom_unit: String(lineIn.print_custom_unit ?? lineIn.printCustomUnit ?? item.custom_unit ?? "").trim().slice(0, 32),
+    unit: String(item.base_unit || item.unit || "").trim(),
   };
 }
 
@@ -726,6 +803,57 @@ export async function persistSaleLineNote(conn, lineId, raw) {
     await conn.query("UPDATE sales_order_lines SET notes=? WHERE id=?", [notes, lineId]);
   } catch {
     /* optional column */
+  }
+}
+
+export async function persistPrintSaleLine(conn, lineId, line, businessId) {
+  if (!lineId || !line) return;
+  try {
+    await ensureAdvancedSchema();
+  } catch {
+    /* schema optional */
+  }
+  const unit = String(line.unit || line.item?.base_unit || line.item?.unit || "").trim();
+  if (unit) {
+    try {
+      await conn.query("UPDATE sales_order_lines SET `unit`=? WHERE id=?", [unit, lineId]);
+    } catch {
+      /* optional */
+    }
+  }
+  const width = Number(line.print_width) || 0;
+  const height = Number(line.print_height) || 0;
+  if (!(width > 0 && height > 0) && !line.print_file_id) return;
+  try {
+    await conn.query(
+      `UPDATE sales_order_lines SET
+         print_width=?, print_height=?, print_dim_unit=?, print_copies=?,
+         print_file_id=?, print_file_name=?, print_area=?, print_custom_unit=?
+       WHERE id=?`,
+      [
+        width,
+        height,
+        line.print_dim_unit || null,
+        Math.max(1, Number(line.print_copies) || 1),
+        line.print_file_id || null,
+        line.print_file_name || null,
+        Number(line.print_area) || Number(line.qty) || 0,
+        line.print_custom_unit || null,
+        lineId,
+      ],
+    );
+  } catch {
+    /* optional print columns */
+  }
+  if (line.print_file_id && businessId) {
+    try {
+      await conn.query(
+        "UPDATE print_files SET sales_line_id=? WHERE id=? AND business_id=?",
+        [lineId, line.print_file_id, businessId],
+      );
+    } catch {
+      /* optional */
+    }
   }
 }
 

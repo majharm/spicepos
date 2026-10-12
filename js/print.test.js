@@ -33,12 +33,72 @@ test("Size conversion and area engine match the print formula", () => {
   assert.equal(P.areaSqFt(10, 5, "ft"), 50);
   assert.equal(P.areaSqFt(120, 60, "in"), 50);
   assert.equal(P.areaSqFt(304.8, 152.4, "cm"), 50);
+  assert.equal(P.areaSqFt(3.048, 1.524, "m"), 50);
   const conv = P.convertSize(10, 5, "ft");
   assert.equal(conv.inches.width, 120);
   assert.equal(conv.inches.height, 60);
   assert.equal(conv.sqft, 50);
   const pxArea = P.areaSqFt(3000, 1500, "px", 150);
   assert.ok(pxArea > 1);
+});
+
+test("Counter 10×5 ft flex at ₹20/sqft bills 50 sqft and ₹1,000", () => {
+  const q = P.counterQuote({
+    width: 10,
+    height: 5,
+    dimUnit: "ft",
+    billUnit: "SQFT",
+    copies: 1,
+    rate: 20,
+    gstRate: 0,
+  });
+  assert.equal(q.rawArea, 50);
+  assert.equal(q.billedArea, 50);
+  assert.equal(q.itemAmount, 1000);
+  assert.equal(q.total, 1000);
+  const gst = P.counterQuote({
+    width: 10,
+    height: 5,
+    dimUnit: "ft",
+    billUnit: "SQFT",
+    rate: 20,
+    gstRate: 18,
+  });
+  assert.equal(gst.itemAmount, 1000);
+  assert.equal(gst.gst, 180);
+  assert.equal(gst.total, 1180);
+});
+
+test("Mixed dimension units convert to the item's billing unit", () => {
+  const fromIn = P.billedArea({ width: 120, height: 60, dimUnit: "in", billUnit: "SQFT" });
+  assert.equal(fromIn.billedArea, 50);
+  const fromM = P.billedArea({ width: 3.048, height: 1.524, dimUnit: "m", billUnit: "SQFT" });
+  assert.equal(fromM.billedArea, 50);
+  const sqmDirect = P.billedArea({ width: 2, height: 3, dimUnit: "m", billUnit: "SQM" });
+  assert.equal(sqmDirect.billedArea, 6);
+  const sqmFromFt = P.billedArea({ width: 10, height: 5, dimUnit: "ft", billUnit: "SQM" });
+  assert.equal(sqmFromFt.billedArea, P.round4(50 / P.SQFT_PER_SQM));
+  const sqin = P.billedArea({ width: 12, height: 12, dimUnit: "in", billUnit: "SQIN" });
+  assert.equal(sqin.billedArea, 144);
+  const custom = P.billedArea({ width: 4, height: 2, dimUnit: "custom", billUnit: "CUSTOM" });
+  assert.equal(custom.billedArea, 8);
+  const minBill = P.billedArea({ width: 2, height: 2, dimUnit: "ft", billUnit: "SQFT", minQty: 10 });
+  assert.equal(minBill.billedArea, 10);
+});
+
+test("Print caption and area-bill detection keep units honest", () => {
+  const cap = P.printLineCaption({ width: 10, height: 5, dimUnit: "ft", billUnit: "SQFT" });
+  assert.match(cap, /10 × 5 ft/);
+  assert.match(cap, /50 sqft/);
+  assert.equal(P.isAreaBillItem({ base_unit: "SQFT" }), true);
+  assert.equal(P.isAreaBillItem({ base_unit: "SQM" }), true);
+  assert.equal(P.isAreaBillItem({ base_unit: "PCS" }, { category: "Kirana" }), false);
+  assert.equal(P.defaultDimUnit("SQM"), "m");
+  assert.equal(P.defaultDimUnit("SQIN"), "in");
+  const decoded = P.decodePrintSpec("10 × 5 ft · 50 sqft");
+  assert.equal(decoded.width, 10);
+  assert.equal(decoded.height, 5);
+  assert.equal(decoded.dimUnit, "ft");
 });
 
 test("Qty 2 of 50 sq ft bills 100 sq ft of printing", () => {
@@ -149,7 +209,7 @@ test("PHP Hostinger can open a print order, download files, quote, bill, and mov
   assert.match(ui, /View \/ Download/);
   assert.match(ui, /\/api\/print\/files\//);
   assert.match(read("index.html"), /print-ui\.js\?v=20260922deploy218/);
-  assert.match(read("index.html"), /app\.js\?v=20261012jet5/);
+  assert.match(read("index.html"), /app\.js\?v=20261012print1/);
 });
 
 test("Print orders page opens the shop modal and paints list or wrapped API rows", () => {
@@ -178,7 +238,7 @@ test("Print order review modal is a stepped desk with quote grid and production 
   assert.match(ui, /Approve file/);
   assert.match(css, /#modal:has\(\.print-order-desk\)/);
   assert.match(css, /\.pod-step\.is-on/);
-  assert.match(index, /pos\.css\?v=20261012mob3/);
+  assert.match(index, /pos\.css\?v=20261012print1/);
   assert.match(css, /\.lock, \.modal \{[\s\S]*z-index: 90;/);
   assert.match(read("js/app.js"), /id="modal-print-close"/);
 });
@@ -216,4 +276,32 @@ test("Print Create Bill stores a Flex line and backfills empty FP invoices", () 
   assert.match(core, /pos_print_attach_sale_lines/);
   assert.match(indexJs, /attachPrintInvoiceLines/);
   assert.equal(F.isPrintShop({ name: "OM Printing Press" }), true);
+});
+
+test("Counter bills print items by width × height using the item unit and rate", () => {
+  const index = read("index.html");
+  const app = read("js/app.js");
+  const node = read("server/print.js");
+  const adv = read("server/advanced.js");
+  const php = read("pos-print.php");
+  const checkout = read("pos-checkout.php");
+  const css = read("css/pos.css");
+  assert.match(index, /item-min-billing/);
+  assert.match(index, /item-print-uom/);
+  assert.match(index, /print-extra-charges/);
+  assert.match(index, /print\.js\?v=20261012print1/);
+  assert.match(app, /data-print-w/);
+  assert.match(app, /function isPrintAreaItem/);
+  assert.match(app, /function canChangeRate/);
+  assert.match(app, /\/api\/print\/counter-file/);
+  assert.match(app, /Enter width and height for each print item/);
+  assert.match(node, /\/api\/print\/counter-file/);
+  assert.match(adv, /function persistPrintSaleLine/);
+  assert.match(adv, /min_billing_qty/);
+  assert.match(php, /print\/counter-file/);
+  assert.match(checkout, /extraCharges/);
+  assert.match(checkout, /pos_persist_print_sale_line/);
+  assert.match(css, /\.print-dims/);
+  assert.match(F.itemFormCopy({ category: "Flex & Printing" }).lede, /Width × Height|rate per unit/i);
+  assert.match(F.itemFormCopy({ category: "Flex & Printing" }).ticket, /width × height/i);
 });

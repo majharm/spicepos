@@ -75,7 +75,7 @@ function pos_checkout_sale($bid, $branchId, $uid, $auth, $body) {
       $qty = (float) ($line["quantity_gm"] ?? 0);
       if ($qty <= 0) throw new Exception("Invalid quantity");
       if (function_exists("pos_compute_sale_line")) {
-        $built[] = pos_compute_sale_line($item, $qty, $customer, $line);
+        $built[] = pos_compute_sale_line($item, $qty, $customer, $line, $auth["user"] ?? null);
       } else {
         $rate = (($customer["type"] ?? "") === "b2b") ? (float) $item["b2b_rate"] : (float) $item["retail_rate"];
         $amount = pos_round2(pos_line_amount_for_item($qty, $rate, $item));
@@ -92,7 +92,8 @@ function pos_checkout_sale($bid, $branchId, $uid, $auth, $body) {
     $billDiscount = function_exists("pos_adv_discount_amount")
       ? pos_adv_discount_amount($subtotal + $gst, $billType, $billValue)
       : pos_round2((float) ($body["discount"] ?? 0));
-    $afterBill = pos_round2(max(0, $subtotal + $gst - $billDiscount));
+    $extraCharges = pos_round2(max(0, (float) ($body["extraCharges"] ?? $body["extra_charges"] ?? 0)));
+    $afterBill = pos_round2(max(0, $subtotal + $gst - $billDiscount + $extraCharges));
     $total = $afterBill;
     $loyaltyDiscount = 0;
     $loyaltyEarn = 0;
@@ -128,6 +129,11 @@ function pos_checkout_sale($bid, $branchId, $uid, $auth, $body) {
         $branchId ? (string) $branchId : null, $uid ? (string) $uid : null,
       ]
     );
+    if ($extraCharges > 0) {
+      try {
+        pos_q("UPDATE sales_orders SET extra_charges = ? WHERE id = ? AND business_id = ?", "sss", [(string) $extraCharges, $orderId, $bid]);
+      } catch (Exception $e) { /* optional */ }
+    }
     $tableNo = trim((string) ($body["table_no"] ?? $body["tableNo"] ?? ""));
     if ($tableNo !== "") {
       if (strlen($tableNo) > 64) $tableNo = substr($tableNo, 0, 64);
@@ -199,6 +205,7 @@ function pos_checkout_sale($bid, $branchId, $uid, $auth, $body) {
         );
       }
       if (function_exists("pos_persist_sale_line_note")) pos_persist_sale_line_note($lineId, $line["notes"] ?? "");
+      if (function_exists("pos_persist_print_sale_line")) pos_persist_print_sale_line($lineId, $line, $bid);
       $firstBatch = null;
       $stockQty = function_exists("pos_pack_stock_qty") ? pos_pack_stock_qty($line["item"], $line["qty"]) : $line["qty"];
       if (function_exists("pos_allocate_batches")) {

@@ -585,10 +585,15 @@ function pos_pharmacy_line_snapshot($item, $batch = null) {
   ];
 }
 
-function pos_compute_sale_line($item, $qty, $customer, $lineIn) {
+function pos_can_override_rate($user) {
+  if (!$user) return false;
+  return pos_can($user, "items") || pos_can($user, "settings");
+}
+
+function pos_compute_sale_line($item, $qty, $customer, $lineIn, $user = null) {
   $isB2b = (($customer["type"] ?? "") === "b2b");
   $rate = pos_loose_sale_rate($item, $isB2b ? "b2b" : "b2c");
-  if (isset($lineIn["rate"]) && $lineIn["rate"] !== "" && $lineIn["rate"] !== null) {
+  if (isset($lineIn["rate"]) && $lineIn["rate"] !== "" && $lineIn["rate"] !== null && pos_can_override_rate($user)) {
     $rate = (float) $lineIn["rate"];
   }
   $isCount = pos_item_is_count($item);
@@ -621,6 +626,15 @@ function pos_compute_sale_line($item, $qty, $customer, $lineIn) {
     "barcode" => trim((string) ($lineIn["barcode"] ?? "")),
     "batchId" => trim((string) ($lineIn["batchId"] ?? $lineIn["batch_id"] ?? "")),
     "notes" => substr(trim((string) ($lineIn["notes"] ?? $lineIn["special_instruction"] ?? $lineIn["specialInstruction"] ?? "")), 0, 240),
+    "print_width" => (float) ($lineIn["print_width"] ?? $lineIn["printWidth"] ?? 0),
+    "print_height" => (float) ($lineIn["print_height"] ?? $lineIn["printHeight"] ?? 0),
+    "print_dim_unit" => substr((string) ($lineIn["print_dim_unit"] ?? $lineIn["printDimUnit"] ?? ""), 0, 16),
+    "print_copies" => max(1, (int) ($lineIn["print_copies"] ?? $lineIn["printCopies"] ?? 1)),
+    "print_file_id" => trim((string) ($lineIn["print_file_id"] ?? $lineIn["printFileId"] ?? "")),
+    "print_file_name" => substr(trim((string) ($lineIn["print_file_name"] ?? $lineIn["printFileName"] ?? "")), 0, 255),
+    "print_area" => (float) ($lineIn["print_area"] ?? $lineIn["printArea"] ?? $qty),
+    "print_custom_unit" => substr(trim((string) ($lineIn["print_custom_unit"] ?? $lineIn["printCustomUnit"] ?? ($item["custom_unit"] ?? ""))), 0, 32),
+    "unit" => trim((string) ($item["base_unit"] ?? $item["unit"] ?? "")),
   ];
 }
 
@@ -630,6 +644,53 @@ function pos_persist_sale_line_note($lineId, $raw) {
   try {
     pos_q("UPDATE sales_order_lines SET notes = ? WHERE id = ?", "ss", [$notes, $lineId]);
   } catch (Exception $e) { /* optional column */ }
+}
+
+function pos_save_item_print_fields($id, $body) {
+  if (!is_array($body)) return;
+  $min = (float) ($body["min_billing_qty"] ?? 0);
+  $custom = substr(trim((string) ($body["custom_unit"] ?? "")), 0, 32);
+  try {
+    pos_q("UPDATE items SET min_billing_qty = ?, custom_unit = ? WHERE id = ?", "dss", [$min, $custom !== "" ? $custom : null, $id]);
+  } catch (Exception $e) {
+    try {
+      pos_q("UPDATE items SET min_billing_qty = ? WHERE id = ?", "ds", [$min, $id]);
+    } catch (Exception $e2) { /* optional */ }
+  }
+}
+
+function pos_persist_print_sale_line($lineId, $line, $bid = "") {
+  if (!$lineId || !is_array($line)) return;
+  $unit = trim((string) ($line["unit"] ?? ($line["item"]["base_unit"] ?? $line["item"]["unit"] ?? "")));
+  if ($unit !== "") {
+    try { pos_q("UPDATE sales_order_lines SET `unit` = ? WHERE id = ?", "ss", [$unit, $lineId]); } catch (Exception $e) { /* optional */ }
+  }
+  $w = (float) ($line["print_width"] ?? 0);
+  $h = (float) ($line["print_height"] ?? 0);
+  $fileId = trim((string) ($line["print_file_id"] ?? ""));
+  if (!($w > 0 && $h > 0) && $fileId === "") return;
+  try {
+    pos_q(
+      "UPDATE sales_order_lines SET print_width=?, print_height=?, print_dim_unit=?, print_copies=?, print_file_id=?, print_file_name=?, print_area=?, print_custom_unit=? WHERE id=?",
+      "sssssssss",
+      [
+        (string) $w,
+        (string) $h,
+        $line["print_dim_unit"] ?? null,
+        (string) max(1, (int) ($line["print_copies"] ?? 1)),
+        $fileId !== "" ? $fileId : null,
+        $line["print_file_name"] ?? null,
+        (string) ((float) ($line["print_area"] ?? $line["qty"] ?? 0)),
+        $line["print_custom_unit"] ?? null,
+        $lineId,
+      ]
+    );
+  } catch (Exception $e) { /* optional print columns */ }
+  if ($fileId !== "" && $bid !== "") {
+    try {
+      pos_q("UPDATE print_files SET sales_line_id = ? WHERE id = ? AND business_id = ?", "sss", [$lineId, $fileId, $bid]);
+    } catch (Exception $e) { /* optional */ }
+  }
 }
 
 function pos_write_stock_movement($bid, $branchId, $uid, $itemId, $kind, $qty, $note, $extra = []) {

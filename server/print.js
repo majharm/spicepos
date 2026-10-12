@@ -143,6 +143,11 @@ export async function ensurePrintSchema() {
     created_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     INDEX (order_id), INDEX (business_id)
   )`);
+  try {
+    await query("ALTER TABLE print_files ADD COLUMN sales_line_id VARCHAR(255) NULL");
+  } catch {
+    /* exists */
+  }
   await query(`CREATE TABLE IF NOT EXISTS print_quotes (
     id VARCHAR(255) PRIMARY KEY,
     order_id VARCHAR(255) NOT NULL,
@@ -1250,6 +1255,42 @@ export function registerPrintStaff(app) {
       res.json({ rows: out, kpi: { total_sqft: sqft, orders: rows.length, sales: round(rows.reduce((s, r) => s + Number(r.quote_total || 0), 0)) } });
     } catch (err) {
       res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/print/counter-file", requirePerm("counter"), async (req, res) => {
+    try {
+      await ensurePrintSchema();
+      const settings = await settingsOf(bid());
+      const decoded = decodeDataUrl(req.body?.content);
+      if (!decoded) throw new Error("Upload a print file");
+      const name = clip(req.body?.file_name, 255) || "design.bin";
+      if (!POSPrint.allowedFile(name, decoded.mime, settings)) throw new Error("This file type is not allowed");
+      const max = (Number(settings.max_file_mb) || 25) * 1024 * 1024;
+      if (decoded.buf.length > max) throw new Error(`File exceeds ${settings.max_file_mb} MB`);
+      const id = uuid();
+      await query(
+        `INSERT INTO print_files (id, order_id, business_id, customer_id, version, file_name, file_type, file_size, mime, width_px, height_px, status, uploaded_by, content)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?, 'counter', ?)`,
+        [
+          id,
+          null,
+          bid(),
+          req.body?.customerId || req.body?.customer_id || null,
+          1,
+          name,
+          (name.split(".").pop() || "").toLowerCase(),
+          decoded.buf.length,
+          decoded.mime,
+          Number(req.body?.width_px) || null,
+          Number(req.body?.height_px) || null,
+          "uploaded",
+          decoded.buf,
+        ],
+      );
+      res.json({ file: { id, file_name: name, file_size: decoded.buf.length, mime: decoded.mime, status: "uploaded", uploaded_by: "counter" } });
+    } catch (err) {
+      res.status(400).json({ error: err.message });
     }
   });
 

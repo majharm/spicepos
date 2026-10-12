@@ -6,7 +6,7 @@
     <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
     <title>ATAV POS</title>
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./css/pos.css?v=20261012mob3" />
+    <link rel="stylesheet" href="./css/pos.css?v=20261012print1" />
     <link rel="stylesheet" href="./css/saas.css?v=20260905deploy136" />
     <link rel="stylesheet" href="./css/bar.css?v=20261011bar2" />
     <link rel="stylesheet" href="./css/resort.css?v=20261011resort1" />
@@ -425,7 +425,7 @@
               <div id="offer-banner" class="combo-banner offer-banner" hidden></div>
               <div class="lines" id="lines"></div>
               <details class="bill-extras" id="bill-extras">
-                <summary>Discount</summary>
+                <summary id="bill-extras-summary">Discount</summary>
                 <div class="bill-disc" id="bill-disc-wrap">
                   <div class="classic-loyalty-bar" id="classic-loyalty-balance" hidden></div>
                   <div class="classic-disc-row">
@@ -442,6 +442,9 @@
                       <input id="loyalty-redeem" type="number" min="0" step="1" value="0" aria-label="Royalty points to redeem" placeholder="0" />
                       <span class="hint" id="loyalty-hint"></span>
                     </label>
+                    <label class="printing-only" id="print-extra-wrap" hidden>Additional charges ₹
+                      <input id="print-extra-charges" type="number" min="0" step="0.01" value="0" inputmode="decimal" aria-label="Additional charges" />
+                    </label>
                   </div>
                 </div>
               </details>
@@ -451,6 +454,7 @@
                   <div id="taxable-row"><span data-i18n="pos.taxable">Taxable</span><span id="taxable">₹0.00</span></div>
                   <div id="gst-row"><span data-i18n="pos.gst">GST</span><span id="tax">₹0.00</span></div>
                   <div id="disc-row" hidden><span data-i18n="pos.discount">Discount</span><span id="disc-total">₹0.00</span></div>
+                  <div id="extra-row" hidden><span>Additional</span><span id="extra-total">₹0.00</span></div>
                   <div id="loyalty-row" hidden><span data-i18n="pos.royalty">Royalty</span><span id="loyalty-total">₹0.00</span></div>
                   <div id="profit-row"><span data-i18n="pos.profit">Profit</span><span id="profit-total">₹0.00</span></div>
                   <div id="due-row" hidden><span>Outstanding</span><span id="due-total">₹0.00</span></div>
@@ -532,6 +536,16 @@
                   <label><span id="item-hsn-lab">HSN code (goods)</span> <input id="item-hsn" maxlength="16" placeholder="e.g. 0908" autocomplete="off" /></label>
                   <label>Unit type
                     <select id="item-unit"></select>
+                  </label>
+                  <div class="print-uom-chips printing-only full" id="item-print-uom" hidden>
+                    <span class="print-uom-lab">Printing unit</span>
+                    <button class="btn" type="button" data-print-uom="SQFT">Sq. Ft.</button>
+                    <button class="btn" type="button" data-print-uom="SQM">Sq. Meter</button>
+                    <button class="btn" type="button" data-print-uom="SQIN">Inch</button>
+                    <button class="btn" type="button" data-print-uom="CUSTOM">Custom</button>
+                  </div>
+                  <label class="printing-only" id="item-custom-unit-wrap" hidden>Custom unit
+                    <input id="item-custom-unit" maxlength="32" placeholder="e.g. panel, running ft" />
                   </label>
                   <label id="item-own-barcode-wrap">Barcode
                     <input id="item-own-barcode" maxlength="64" placeholder="Scan or type barcode" autocomplete="off" />
@@ -633,6 +647,13 @@
                   <label class="pharmacy-only" id="item-reorder-wrap" hidden>Reorder Level
                     <input id="item-reorder" type="number" step="0.001" min="0" />
                   </label>
+                  <label class="printing-only" id="item-min-billing-wrap" hidden>Minimum billing qty
+                    <input id="item-min-billing" type="number" min="0" step="0.01" placeholder="Optional" />
+                  </label>
+                </fieldset>
+                <fieldset class="item-block printing-only" id="item-print-meta" hidden>
+                  <legend>Printing</legend>
+                  <p class="hint">Counter bills Width × Height using this item’s unit and rate. Choose Sq. Ft., Sq. Meter, Inch, or a custom unit. GST applies on the calculated amount after discount.</p>
                 </fieldset>
                 <fieldset class="item-block pharmacy-only" id="item-pharmacy-pack" hidden>
                   <legend>Pack, batch &amp; expiry</legend>
@@ -3138,6 +3159,9 @@
           <label>Unit
             <select id="ci-unit"></select>
           </label>
+          <label class="printing-only" id="ci-min-billing-wrap" hidden>Min billing qty
+            <input id="ci-min-billing" type="number" min="0" step="0.01" placeholder="Optional" />
+          </label>
           <label>Qty
             <input id="ci-qty" type="number" min="0.001" step="any" value="1" />
           </label>
@@ -3212,7 +3236,7 @@
     <script src="./js/gst-supply.js?v=20260905deploy136" defer></script>
     <script src="./js/pos-api.js?v=20261006login1" defer></script>
     <script src="./js/units.js?v=20260919unit1" defer></script>
-    <script src="./js/footwear.js?v=20261012fix1" defer></script>
+    <script src="./js/footwear.js?v=20261012print1" defer></script>
     <script src="./js/restaurant.js?v=20261012set4" defer></script>
     <script src="./js/pay-integrity.js?v=20261012table1" defer></script>
     <script src="./js/aggregator.js?v=20261012agg3" defer></script>
@@ -3223,7 +3247,7 @@
     <script src="./js/camera-scan.js?v=20260918bill2" defer></script>
     <script src="./js/scale.js?v=20261012set4" defer></script>
     <script src="./js/dev-mode.js?v=20260905deploy136" defer></script>
-    <script src="./js/invoice.js?v=20261006due1" defer></script>
+    <script src="./js/invoice.js?v=20261012print1" defer></script>
     <script src="./js/invoice-share.js?v=20260913share1" defer></script>
     <script src="./js/support.js?v=20260920deploy199" defer></script>
     <script src="./js/qrcode.iife.js?v=20260905qr1" defer></script>
@@ -3233,7 +3257,7 @@
     <script src="./js/biz-hub-ui.js?v=20261011bar1" defer></script>
     <script src="./js/salon.js?v=20260919salon1" defer></script>
     <script src="./js/salon-ui.js?v=20260919salon1" defer></script>
-    <script src="./js/print.js?v=20260922deploy219" defer></script>
+    <script src="./js/print.js?v=20261012print1" defer></script>
     <script src="./js/print-ui.js?v=20260922deploy218" defer></script>
     <script src="./js/gym.js?v=20261008gym5" defer></script>
     <script src="./js/gym-ui.js?v=20261008gym5" defer></script>
@@ -3243,7 +3267,7 @@
     <script src="./js/resort-ui.js?v=20261011resort1" defer></script>
     <script src="./js/item-master.js?v=20261012brand1" defer></script>
     <script src="./js/customer-master.js?v=20261012cust1" defer></script>
-    <script src="./js/app.js?v=20261012jet5" defer></script>
+    <script src="./js/app.js?v=20261012print1" defer></script>
     <script src="./js/item-master-ui.js?v=20261012brand1" defer></script>
     <script src="./js/customer-master-ui.js?v=20261012cust1" defer></script>
     <script src="./js/mobile-app.js?v=20261012jet5" defer></script>

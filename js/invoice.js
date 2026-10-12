@@ -228,6 +228,14 @@
           expiry_date: l.expiry_date || item?.default_expiry || "",
           pack_label: l.pack_label || medicinePackLabel(item),
           mrp: unitMrp,
+          notes: l.notes || "",
+          print_width: num(l.print_width),
+          print_height: num(l.print_height),
+          print_dim_unit: l.print_dim_unit || "",
+          print_copies: num(l.print_copies) || 1,
+          print_file_name: l.print_file_name || "",
+          print_area: num(l.print_area) || qty,
+          print_custom_unit: l.print_custom_unit || item?.custom_unit || "",
         };
       });
   }
@@ -350,6 +358,20 @@
     if (typeof window !== "undefined" && window.POSUnits) return window.POSUnits;
     if (typeof globalThis !== "undefined" && globalThis.POSUnits) return globalThis.POSUnits;
     return null;
+  }
+
+  function printLineCaption(l) {
+    const w = num(l.print_width);
+    const h = num(l.print_height);
+    if (w > 0 && h > 0) {
+      const dim = String(l.print_dim_unit || "ft");
+      const copies = num(l.print_copies) > 1 ? ` × ${num(l.print_copies)}` : "";
+      const file = String(l.print_file_name || "").trim();
+      return `${w} × ${h} ${dim}${copies}${file ? ` · ${file}` : ""}`;
+    }
+    const note = String(l.notes || "");
+    if (/\d+(?:\.\d+)?\s*[x×]\s*\d+(?:\.\d+)?/.test(note)) return note;
+    return "";
   }
 
   function formatQty(gm, unit) {
@@ -820,6 +842,7 @@ ${purchaseBody(purchase, ctx)}
     const custAddr = String(order.customer_address || cust?.address || "").trim();
     const doctorRx = String(order.doctor_rx || "").trim();
 
+    const printBill = isPrintBill(order, ctx);
     const itemRows = pharmacy
       ? lines
           .map((l, i) => {
@@ -838,18 +861,20 @@ ${purchaseBody(purchase, ctx)}
           })
           .join("")
       : lines
-          .map(
-            (l, i) => `<tr>
+          .map((l, i) => {
+            const caption = printBill ? printLineCaption(l) : "";
+            return `<tr>
         <td class="inv-item" colspan="4">${i + 1}. ${escapeHtml(lineName(l, ctx))}</td>
       </tr>
+      ${caption ? `<tr class="inv-tax"><td colspan="4">${escapeHtml(caption)}</td></tr>` : ""}
       <tr class="inv-line">
         <td class="inv-hsn">${taxCode(ctx)} ${escapeHtml(l.hsn)}</td>
         <td class="inv-num">${escapeHtml(formatQty(l.quantity_gm, l.unit))}</td>
         <td class="inv-num">${escapeHtml(money(l.rate_per_kg))}${escapeHtml(rateSuffix(l.unit))}</td>
         <td class="inv-num">${escapeHtml(money(l.amount))}</td>
       </tr>
-      <tr class="inv-tax"><td colspan="4">GST ${l.gst_rate}% · ${escapeHtml(money(l.gst_amount))}${Number(l.discount) > 0 ? ` · Disc ${escapeHtml(money(l.discount))}` : ""}</td></tr>`,
-          )
+      <tr class="inv-tax"><td colspan="4">GST ${l.gst_rate}% · ${escapeHtml(money(l.gst_amount))}${Number(l.discount) > 0 ? ` · Disc ${escapeHtml(money(l.discount))}` : ""}</td></tr>`;
+          })
           .join("");
 
     const interState = saleInterState(order, ctx);
@@ -902,6 +927,7 @@ ${purchaseBody(purchase, ctx)}
       ${round2(order.loyalty_discount) > 0 ? `<tr><td colspan="3">Royalty</td><td class="inv-num">-${escapeHtml(money(order.loyalty_discount))}</td></tr>` : ""}
       ${gstRows}
       <tr class="inv-gst-total"><td colspan="3">${escapeHtml(L(ctx, "invoice.total_gst", "Total GST"))}</td><td class="inv-num">${escapeHtml(money(gst))}</td></tr>
+      ${round2(order.extra_charges) > 0 ? `<tr><td colspan="3">Additional charges</td><td class="inv-num">${escapeHtml(money(order.extra_charges))}</td></tr>` : ""}
       <tr class="inv-grand"><td colspan="3"><strong>${escapeHtml(L(ctx, "invoice.grand_total", "Grand total"))}</strong></td><td class="inv-num"><strong>${escapeHtml(money(total))}</strong></td></tr>
       ${invoiceDueRowsHtml({ ...order, total: figures.total, gst: figures.gst, subtotal: figures.subtotal }, money, escapeHtml, ctx)}
     </tbody>
@@ -1114,6 +1140,8 @@ ${invoiceBody(order, ctx)}
               `GST ${l.gst_rate}%`,
             ]
           : [`${taxCode(ctx)}: ${l.hsn}`, `GST ${l.gst_rate}%`];
+        const caption = printLineCaption(l);
+        if (caption) descBits.unshift(caption);
         return `<tr>
         <td class="off-c">${i + 1}</td>
         <td>
@@ -1246,6 +1274,7 @@ ${invoiceBody(order, ctx)}
         <tr><td>Sub Total</td><td class="off-n">${escapeHtml(money(subtotal))}</td></tr>
         ${discount > 0 ? `<tr><td>Discount</td><td class="off-n">(-) ${escapeHtml(money(discount))}</td></tr>` : ""}
         ${round2(order.loyalty_discount) > 0 ? `<tr><td>Royalty</td><td class="off-n">(-) ${escapeHtml(money(order.loyalty_discount))}</td></tr>` : ""}
+        ${round2(order.extra_charges) > 0 ? `<tr><td>Additional charges</td><td class="off-n">${escapeHtml(money(order.extra_charges))}</td></tr>` : ""}
         <tr><td>Tax</td><td class="off-n">${escapeHtml(money(gst))}</td></tr>
         <tr class="off-grand"><td>Invoice total</td><td class="off-n">${escapeHtml(money(total))}</td></tr>
         <tr class="off-paid"><td>Payment Made</td><td class="off-n">(-) ${escapeHtml(money(due.paid))}</td></tr>

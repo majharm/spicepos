@@ -30,7 +30,7 @@ import { postSaleJournal } from "./accounting.js";
 import { audit } from "./audit.js";
 import { getPlatformSettings, shopSupportContact } from "./settings.js";
 import { sendLowStockAlerts, tickShopAlerts, startAlertScheduler, scheduleAlertTick } from "./alerts.js";
-import { registerAdvanced, computeSaleLine, applySaleStock, applyLoyaltyOnSale, pharmacyLineSnapshot, enrichCatalogPharmacy, enrichCatalogBarcodes, saleStockQty, persistSaleLineNote, assertApparelSaleStock } from "./advanced.js";
+import { registerAdvanced, computeSaleLine, applySaleStock, applyLoyaltyOnSale, pharmacyLineSnapshot, enrichCatalogPharmacy, enrichCatalogBarcodes, saleStockQty, persistSaleLineNote, persistPrintSaleLine, assertApparelSaleStock } from "./advanced.js";
 import { registerReturns } from "./returns.js";
 import { registerAnalyticsPublic, registerAnalyticsMaster } from "./analytics.js";
 import { registerSeoPublic, registerSeoMaster } from "./seo.js";
@@ -1001,7 +1001,8 @@ app.post("/api/checkout", requireStaff, requirePerm("counter"), async (req, res)
         packName = packs[0]?.name || null;
       }
 
-      const afterBill = round2(Math.max(0, subtotal + gst - billDiscount));
+      const extraCharges = round2(Math.max(0, Number(req.body?.extraCharges ?? req.body?.extra_charges) || 0));
+      const afterBill = round2(Math.max(0, subtotal + gst - billDiscount + extraCharges));
       total = afterBill;
       await conn.query(
         `INSERT INTO sales_orders (
@@ -1039,6 +1040,17 @@ app.post("/api/checkout", requireStaff, requirePerm("counter"), async (req, res)
         );
       } catch {
         /* optional columns */
+      }
+      if (extraCharges > 0) {
+        try {
+          await conn.query("UPDATE sales_orders SET extra_charges=? WHERE id=? AND business_id=?", [
+            extraCharges,
+            orderId,
+            businessId,
+          ]);
+        } catch {
+          /* optional */
+        }
       }
       const tableNo = String(req.body?.table_no || req.body?.tableNo || "").trim().slice(0, 64);
       if (tableNo) {
@@ -1143,6 +1155,7 @@ app.post("/api/checkout", requireStaff, requirePerm("counter"), async (req, res)
           /* optional pharmacy line columns */
         }
         await persistSaleLineNote(conn, lineId, line.notes);
+        await persistPrintSaleLine(conn, lineId, line, businessId);
       }
 
       try {

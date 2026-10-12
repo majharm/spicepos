@@ -6,7 +6,7 @@ import { bid, authUser } from "./context.js";
 import { recordCreditPurchase, reverseCreditSale, recomputeCustomerOutstanding, settleCustomerInvoice, invoiceOpenDueByCustomer, hydrateCustomerOutstandingRows, persistHydratedOutstanding, collectOrderPayment } from "./accounts.js";
 import { postPurchaseJournal, deleteJournalRef } from "./accounting.js";
 import { audit } from "./audit.js";
-import { onItemSaved, onPurchaseLineSaved, pharmacyLineSnapshot, computeSaleLine, saleStockQty, persistSaleLineNote, reverseLoyaltyOnSale } from "./advanced.js";
+import { onItemSaved, onPurchaseLineSaved, pharmacyLineSnapshot, computeSaleLine, saleStockQty, persistSaleLineNote, persistPrintSaleLine, reverseLoyaltyOnSale } from "./advanced.js";
 import {
   decodeImportUpload,
   itemBodyFromImportRow,
@@ -830,7 +830,8 @@ export function registerCrud(app) {
         const subtotal = bill ? bill.subtotal : round2(built.reduce((s, l) => s + l.amount, 0));
         const gst = bill ? bill.gst : round2(built.reduce((s, l) => s + (l.amount * l.gstRate) / 100, 0));
         const billDiscount = bill ? bill.billDiscount : 0;
-        const total = bill ? bill.total : round2(subtotal + gst);
+        const extraCharges = round2(Math.max(0, Number(req.body?.extraCharges ?? req.body?.extra_charges) || 0));
+        const total = round2((bill ? bill.total : round2(subtotal + gst)) + extraCharges);
         const totalGm = built.reduce((s, l) => s + l.qty, 0);
         const method = globalThis.POSPay?.normalize?.(paymentMethod || existing.payment_method) || String(paymentMethod || existing.payment_method).toLowerCase();
         if (globalThis.POSPay?.isSaleMode && !globalThis.POSPay.isSaleMode(method)) {
@@ -880,6 +881,15 @@ export function registerCrud(app) {
           );
         } catch {
           /* optional columns */
+        }
+        try {
+          await conn.query("UPDATE sales_orders SET extra_charges=? WHERE id=? AND business_id=?", [
+            extraCharges,
+            existing.id,
+            bid(),
+          ]);
+        } catch {
+          /* optional */
         }
         const doctorRx = String(req.body?.doctor_rx ?? req.body?.doctorRx ?? "").trim().slice(0, 180) || null;
         const customerAddress = String(req.body?.customer_address ?? req.body?.customerAddress ?? "").trim().slice(0, 500) || null;
@@ -961,6 +971,7 @@ export function registerCrud(app) {
               /* optional */
             }
             await persistSaleLineNote(conn, lineId, line.notes);
+            await persistPrintSaleLine(conn, lineId, line, bid());
             await conn.query(
               "UPDATE items SET stock_gm = stock_gm - ? WHERE id = ? AND business_id = ?",
               [saleStockQty(line.item, line.qty), line.item.id, bid()],

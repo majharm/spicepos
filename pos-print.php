@@ -10,6 +10,7 @@ function pos_print_ensure() {
   $db->query("CREATE TABLE IF NOT EXISTS print_orders (id VARCHAR(255) PRIMARY KEY, order_number VARCHAR(32) NOT NULL, business_id VARCHAR(255) NOT NULL, branch_id VARCHAR(255) NULL, customer_id VARCHAR(255) NOT NULL, customer_name VARCHAR(180) NULL, customer_mobile VARCHAR(32) NULL, customer_email VARCHAR(160) NULL, product VARCHAR(80) NOT NULL, print_type VARCHAR(16) NOT NULL DEFAULT 'single', material_id VARCHAR(255) NULL, material_name VARCHAR(180) NULL, width DECIMAL(12,4) NOT NULL DEFAULT 0, height DECIMAL(12,4) NOT NULL DEFAULT 0, unit VARCHAR(16) NOT NULL DEFAULT 'ft', dpi INT NULL, area_sqft DECIMAL(14,4) NOT NULL DEFAULT 0, quantity INT NOT NULL DEFAULT 1, rate DECIMAL(12,2) NOT NULL DEFAULT 0, price_model VARCHAR(16) NOT NULL DEFAULT 'sqft', printing_amount DECIMAL(12,2) NOT NULL DEFAULT 0, finishing_amount DECIMAL(12,2) NOT NULL DEFAULT 0, delivery_amount DECIMAL(12,2) NOT NULL DEFAULT 0, other_charges DECIMAL(12,2) NOT NULL DEFAULT 0, discount DECIMAL(12,2) NOT NULL DEFAULT 0, gst DECIMAL(12,2) NOT NULL DEFAULT 0, gst_rate DECIMAL(8,2) NOT NULL DEFAULT 18, estimate_total DECIMAL(12,2) NOT NULL DEFAULT 0, quote_total DECIMAL(12,2) NOT NULL DEFAULT 0, paid_amount DECIMAL(12,2) NOT NULL DEFAULT 0, balance_due DECIMAL(12,2) NOT NULL DEFAULT 0, pay_status VARCHAR(16) NOT NULL DEFAULT 'pending', status VARCHAR(32) NOT NULL DEFAULT 'pending_review', notes TEXT NULL, admin_notes TEXT NULL, approved_file_id VARCHAR(255) NULL, sales_order_id VARCHAR(255) NULL, staff_id VARCHAR(255) NULL, staff_name VARCHAR(180) NULL, urgent TINYINT NOT NULL DEFAULT 0, created_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3), updated_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3), INDEX (business_id), INDEX (customer_id), INDEX (status))");
   $db->query("CREATE TABLE IF NOT EXISTS print_order_finishing (id VARCHAR(255) PRIMARY KEY, order_id VARCHAR(255) NOT NULL, finishing_id VARCHAR(255) NULL, name VARCHAR(180) NOT NULL, rate DECIMAL(12,2) NOT NULL DEFAULT 0, unit VARCHAR(16) NOT NULL DEFAULT 'job', amount DECIMAL(12,2) NOT NULL DEFAULT 0, business_id VARCHAR(255) NOT NULL, INDEX (order_id))");
   $db->query("CREATE TABLE IF NOT EXISTS print_files (id VARCHAR(255) PRIMARY KEY, order_id VARCHAR(255) NULL, business_id VARCHAR(255) NOT NULL, customer_id VARCHAR(255) NULL, version INT NOT NULL DEFAULT 1, file_name VARCHAR(255) NOT NULL, file_type VARCHAR(32) NULL, file_size INT NOT NULL DEFAULT 0, mime VARCHAR(80) NULL, width_px INT NULL, height_px INT NULL, status VARCHAR(24) NOT NULL DEFAULT 'uploaded', uploaded_by VARCHAR(24) NOT NULL DEFAULT 'customer', content LONGBLOB NULL, created_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3), INDEX (order_id), INDEX (business_id))");
+  @$db->query("ALTER TABLE print_files ADD COLUMN sales_line_id VARCHAR(255) NULL");
   $db->query("CREATE TABLE IF NOT EXISTS print_quotes (id VARCHAR(255) PRIMARY KEY, order_id VARCHAR(255) NOT NULL, business_id VARCHAR(255) NOT NULL, quote_json TEXT NULL, total DECIMAL(12,2) NOT NULL DEFAULT 0, status VARCHAR(16) NOT NULL DEFAULT 'sent', created_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3), INDEX (order_id))");
   $db->query("CREATE TABLE IF NOT EXISTS print_status_history (id VARCHAR(255) PRIMARY KEY, order_id VARCHAR(255) NOT NULL, status VARCHAR(32) NOT NULL, staff_id VARCHAR(255) NULL, staff_name VARCHAR(180) NULL, note TEXT NULL, business_id VARCHAR(255) NOT NULL, created_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3), INDEX (order_id))");
   $db->query("CREATE TABLE IF NOT EXISTS print_payments (id VARCHAR(255) PRIMARY KEY, order_id VARCHAR(255) NOT NULL, customer_id VARCHAR(255) NULL, amount DECIMAL(12,2) NOT NULL DEFAULT 0, method VARCHAR(32) NOT NULL DEFAULT 'upi', kind VARCHAR(24) NOT NULL DEFAULT 'advance', status VARCHAR(16) NOT NULL DEFAULT 'paid', reference VARCHAR(80) NULL, receipt_no VARCHAR(32) NULL, business_id VARCHAR(255) NOT NULL, created_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3), INDEX (order_id))");
@@ -932,6 +933,37 @@ function pos_print_staff_dispatch($path, $method, $body, $bid, $auth) {
         $sales += (float) ($r["quote_total"] ?? 0);
       }
       pos_send(200, ["rows" => $out, "kpi" => ["total_sqft" => pos_print_round2($sqft), "orders" => count($rows), "sales" => pos_print_round2($sales)]]);
+    }
+    if ($path === "print/counter-file" && $method === "POST") {
+      $raw = (string) ($body["content"] ?? "");
+      if ($raw === "") pos_send(400, ["error" => "Upload a print file", "php" => true]);
+      $mime = "application/octet-stream";
+      $bin = $raw;
+      if (preg_match("#^data:([^;]+);base64,(.+)$#s", $raw, $dm)) {
+        $mime = $dm[1];
+        $bin = base64_decode($dm[2], true);
+        if ($bin === false) pos_send(400, ["error" => "Upload a print file", "php" => true]);
+      }
+      $name = pos_print_clip($body["file_name"] ?? "design.bin", 255) ?: "design.bin";
+      $settings = pos_print_settings($bid);
+      $max = ((int) ($settings["max_file_mb"] ?? 25)) * 1024 * 1024;
+      if (strlen($bin) > $max) pos_send(400, ["error" => "File exceeds " . ($settings["max_file_mb"] ?? 25) . " MB", "php" => true]);
+      $fid = pos_uuid();
+      $ext = strtolower(pathinfo($name, PATHINFO_EXTENSION));
+      $custId = trim((string) ($body["customerId"] ?? $body["customer_id"] ?? ""));
+      pos_q(
+        "INSERT INTO print_files (id, order_id, business_id, customer_id, version, file_name, file_type, file_size, mime, width_px, height_px, status, uploaded_by, content)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?, 'counter', ?)",
+        "ssssissisiiss",
+        [
+          $fid, null, $bid, $custId !== "" ? $custId : null, 1, $name, $ext, strlen($bin), $mime,
+          (int) ($body["width_px"] ?? 0), (int) ($body["height_px"] ?? 0), "uploaded", $bin,
+        ]
+      );
+      pos_send(200, ["file" => [
+        "id" => $fid, "file_name" => $name, "file_size" => strlen($bin), "mime" => $mime,
+        "status" => "uploaded", "uploaded_by" => "counter",
+      ]]);
     }
     if ($path === "print/catalog" && $method === "GET") {
       pos_send(200, pos_print_catalog_payload($bid));

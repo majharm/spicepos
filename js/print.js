@@ -25,13 +25,35 @@
     { id: "double", label: "Double Side" },
   ];
 
+  const SQFT_PER_SQM = 10.7639;
+  const SQIN_PER_SQFT = 144;
+  const IN_PER_M = 39.37007874;
+
   const UNITS = [
     { id: "ft", label: "Feet", toSqFt: 1 },
-    { id: "in", label: "Inches", toSqFt: 1 / 144 },
+    { id: "in", label: "Inches", toSqFt: 1 / SQIN_PER_SQFT },
+    { id: "m", label: "Meters", toSqFt: SQFT_PER_SQM },
     { id: "cm", label: "Centimeters", toSqFt: 1 / 929.0304 },
     { id: "mm", label: "Millimeters", toSqFt: 1 / 92903.04 },
     { id: "px", label: "Pixels", toSqFt: 0 },
     { id: "sqft", label: "Square Feet", toSqFt: 1 },
+    { id: "custom", label: "Custom", toSqFt: 0 },
+  ];
+
+  const COUNTER_DIM_UNITS = [
+    { id: "ft", label: "ft" },
+    { id: "in", label: "in" },
+    { id: "m", label: "m" },
+    { id: "cm", label: "cm" },
+    { id: "mm", label: "mm" },
+    { id: "custom", label: "custom" },
+  ];
+
+  const PRINT_BILL_UNITS = [
+    { id: "SQFT", label: "Sq. Ft.", dim: "ft" },
+    { id: "SQM", label: "Sq. Meter", dim: "m" },
+    { id: "SQIN", label: "Inch", dim: "in" },
+    { id: "CUSTOM", label: "Custom Unit", dim: "custom" },
   ];
 
   const DPIS = [72, 96, 150, 200, 300];
@@ -181,6 +203,16 @@
     return Math.round((Number(n) || 0) * 100) / 100;
   }
 
+  function round4(n) {
+    return Math.round((Number(n) || 0) * 10000) / 10000;
+  }
+
+  function clampArea(n) {
+    const v = Number(n);
+    if (!Number.isFinite(v) || v <= 0) return 0;
+    return Math.min(1000000000, round4(v));
+  }
+
   function isPrintShop(biz) {
     const type = String(biz?.business_type || "").toLowerCase().trim();
     if (type === "printing business" || type === "printing") return true;
@@ -194,14 +226,68 @@
   }
 
   function unitMeta(id) {
-    const u = String(id || "ft").toLowerCase();
-    if (u === "feet" || u === "foot") return UNITS.find((x) => x.id === "ft");
-    if (u === "inches" || u === "inch") return UNITS.find((x) => x.id === "in");
-    if (u === "centimeters" || u === "centimetres") return UNITS.find((x) => x.id === "cm");
-    if (u === "millimeters" || u === "millimetres") return UNITS.find((x) => x.id === "mm");
-    if (u === "pixels" || u === "pixel") return UNITS.find((x) => x.id === "px");
-    if (u === "sq ft" || u === "sqft" || u === "square feet") return UNITS.find((x) => x.id === "sqft");
+    const u = String(id || "ft").toLowerCase().trim();
+    if (u === "feet" || u === "foot" || u === "ft") return UNITS.find((x) => x.id === "ft");
+    if (u === "inches" || u === "inch" || u === "in") return UNITS.find((x) => x.id === "in");
+    if (u === "meters" || u === "metres" || u === "meter" || u === "metre" || u === "m") return UNITS.find((x) => x.id === "m");
+    if (u === "centimeters" || u === "centimetres" || u === "cm") return UNITS.find((x) => x.id === "cm");
+    if (u === "millimeters" || u === "millimetres" || u === "mm") return UNITS.find((x) => x.id === "mm");
+    if (u === "pixels" || u === "pixel" || u === "px") return UNITS.find((x) => x.id === "px");
+    if (u === "sq ft" || u === "sqft" || u === "square feet" || u === "square foot") return UNITS.find((x) => x.id === "sqft");
+    if (u === "custom" || u === "other" || u === "unt") return UNITS.find((x) => x.id === "custom");
     return UNITS.find((x) => x.id === u) || UNITS[0];
+  }
+
+  function billUnitCode(raw) {
+    const s = String(raw || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+    if (["SQM", "SQMETER", "SQMETRE", "M2", "SQMT"].includes(s)) return "SQM";
+    if (["SQIN", "SQINCH", "IN2", "INCH", "IN", "INCHES"].includes(s)) return "SQIN";
+    if (["SQFT", "SQFEET", "SFT", "SQFOOT"].includes(s)) return "SQFT";
+    if (["CUSTOM", "UNT", "OTH", "OTHER"].includes(s)) return "CUSTOM";
+    return s || "SQFT";
+  }
+
+  function billUnitLabel(code, customName) {
+    const b = billUnitCode(code);
+    if (b === "SQM") return "sqm";
+    if (b === "SQIN") return "sqin";
+    if (b === "CUSTOM") return String(customName || "unit").trim() || "unit";
+    return "sqft";
+  }
+
+  function dimUnitId(raw) {
+    return unitMeta(raw).id;
+  }
+
+  function defaultDimUnit(billUnit) {
+    const b = billUnitCode(billUnit);
+    if (b === "SQM") return "m";
+    if (b === "SQIN") return "in";
+    if (b === "CUSTOM") return "custom";
+    return "ft";
+  }
+
+  function isMatchingPair(dimUnit, billUnit) {
+    const d = dimUnitId(dimUnit);
+    const b = billUnitCode(billUnit);
+    if (b === "CUSTOM" || d === "custom") return true;
+    if (b === "SQFT" && d === "ft") return true;
+    if (b === "SQM" && d === "m") return true;
+    if (b === "SQIN" && d === "in") return true;
+    return false;
+  }
+
+  function isAreaBillItem(item, biz) {
+    if (!item) return false;
+    const code = billUnitCode(item.base_unit || item.unit);
+    if (["SQFT", "SQM", "SQIN", "SQYD", "SQCM", "SQMM", "CUSTOM"].includes(code)) return true;
+    if (String(item.custom_unit || "").trim()) return true;
+    const family = String(item.unit_family || "").toLowerCase();
+    if (family === "area") return true;
+    if (!isPrintShop(biz || {})) return false;
+    return /(flex|banner|vinyl|sunboard|hoarding|canvas|acp|sticker|poster|print)/i.test(
+      [item.category, item.subcategory, item.name].filter(Boolean).join(" "),
+    );
   }
 
   function pxToInches(px, dpi) {
@@ -216,16 +302,20 @@
     if (u.id === "ft") {
       wIn *= 12;
       hIn *= 12;
+    } else if (u.id === "m") {
+      wIn *= IN_PER_M;
+      hIn *= IN_PER_M;
     } else if (u.id === "cm") {
       wIn /= 2.54;
       hIn /= 2.54;
     } else if (u.id === "mm") {
       wIn /= 25.4;
       hIn /= 25.4;
-    } else if (u.id === "sqft") {
+    } else if (u.id === "sqft" || u.id === "custom") {
       return {
         inches: { width: 0, height: 0 },
         feet: { width: 0, height: 0 },
+        m: { width: 0, height: 0 },
         cm: { width: 0, height: 0 },
         mm: { width: 0, height: 0 },
         sqft: round2(Number(width) || 0),
@@ -233,10 +323,11 @@
     }
     const inches = { width: round2(wIn), height: round2(hIn) };
     const feet = { width: round2(wIn / 12), height: round2(hIn / 12) };
+    const m = { width: round2(wIn / IN_PER_M), height: round2(hIn / IN_PER_M) };
     const cm = { width: round2(wIn * 2.54), height: round2(hIn * 2.54) };
     const mm = { width: round2(wIn * 25.4), height: round2(hIn * 25.4) };
-    const sqft = round2((wIn * hIn) / 144);
-    return { inches, feet, cm, mm, sqft };
+    const sqft = round2((wIn * hIn) / SQIN_PER_SQFT);
+    return { inches, feet, m, cm, mm, sqft };
   }
 
   function areaSqFt(width, height, unit, dpi) {
@@ -244,16 +335,108 @@
     const w = Number(width) || 0;
     const h = Number(height) || 0;
     if (u.id === "sqft") return round2(w);
+    if (u.id === "custom") return round2(w * h);
     if (u.id === "px") {
       const win = pxToInches(w, dpi);
       const hin = pxToInches(h, dpi);
-      return round2((win * hin) / 144);
+      return round2((win * hin) / SQIN_PER_SQFT);
     }
     if (u.id === "ft") return round2(w * h);
-    if (u.id === "in") return round2((w * h) / 144);
+    if (u.id === "in") return round2((w * h) / SQIN_PER_SQFT);
+    if (u.id === "m") return round2(w * h * SQFT_PER_SQM);
     if (u.id === "cm") return round2((w * h) / 929.0304);
     if (u.id === "mm") return round2((w * h) / 92903.04);
     return round2(w * h);
+  }
+
+  function billedArea(input) {
+    const w = Number(input?.width) || 0;
+    const h = Number(input?.height) || 0;
+    const copies = Math.max(1, Number(input?.copies ?? input?.quantity) || 1);
+    const minQty = Math.max(0, Number(input?.minQty ?? input?.min_billing_qty) || 0);
+    const dim = dimUnitId(input?.dimUnit ?? input?.unit);
+    const bill = billUnitCode(input?.billUnit ?? input?.base_unit);
+    const customName = String(input?.customUnit || "").trim();
+    let raw = 0;
+    if (isMatchingPair(dim, bill)) {
+      raw = round4(w * h);
+    } else {
+      const sqft = areaSqFt(w, h, dim, input?.dpi);
+      if (bill === "SQM") raw = round4(sqft / SQFT_PER_SQM);
+      else if (bill === "SQIN") raw = round4(sqft * SQIN_PER_SQFT);
+      else raw = round4(sqft);
+    }
+    const total = round4(raw * copies);
+    const billed = clampArea(Math.max(total, minQty));
+    return {
+      rawArea: raw,
+      totalArea: total,
+      billedArea: billed,
+      billUnit: bill,
+      billLabel: billUnitLabel(bill, customName),
+      dimUnit: dim,
+      copies,
+      minQty,
+    };
+  }
+
+  function counterQuote(input) {
+    const area = billedArea(input);
+    const rate = Number(input?.rate) || 0;
+    const itemAmount = round2(area.billedArea * rate);
+    const dtype = String(input?.discountType || "amt").toLowerCase() === "pct" ? "pct" : "amt";
+    const dval = Number(input?.discountValue) || 0;
+    const discount = round2(dtype === "pct" ? (itemAmount * dval) / 100 : dval);
+    const taxable = round2(Math.max(0, itemAmount - discount));
+    const gstRate = Number(input?.gstRate);
+    const gst = round2(taxable * ((Number.isFinite(gstRate) ? gstRate : 0) / 100));
+    const extra = round2(Number(input?.extraCharges) || 0);
+    const total = round2(taxable + gst + extra);
+    return {
+      ...area,
+      rate,
+      itemAmount,
+      discount,
+      taxable,
+      gst,
+      gst_rate: Number.isFinite(gstRate) ? gstRate : 0,
+      extra,
+      total,
+      width: Number(input?.width) || 0,
+      height: Number(input?.height) || 0,
+    };
+  }
+
+  function printSizeLabel(width, height, dimUnit, customName) {
+    const d = dimUnitId(dimUnit);
+    const unit = d === "custom" ? String(customName || "unit") : d;
+    return `${Number(width) || 0} × ${Number(height) || 0} ${unit}`;
+  }
+
+  function printAreaLabel(area, billUnit, customName) {
+    const n = clampArea(area);
+    const shown = Math.abs(n - Math.round(n)) < 1e-9 ? String(Math.round(n)) : String(n);
+    return `${shown} ${billUnitLabel(billUnit, customName)}`;
+  }
+
+  function printLineCaption(input) {
+    const area = billedArea(input);
+    const size = printSizeLabel(input?.width, input?.height, area.dimUnit, input?.customUnit);
+    const copies = area.copies > 1 ? ` × ${area.copies}` : "";
+    const file = String(input?.fileName || "").trim();
+    const fileBit = file ? ` · ${file}` : "";
+    return `${size}${copies} · ${printAreaLabel(area.billedArea, area.billUnit, input?.customUnit)}${fileBit}`.slice(0, 240);
+  }
+
+  function decodePrintSpec(raw) {
+    const s = String(raw || "");
+    const m = s.match(/(\d+(?:\.\d+)?)\s*[x×]\s*(\d+(?:\.\d+)?)\s*(ft|in|m|cm|mm|custom|[a-z]+)?/i);
+    if (!m) return null;
+    return {
+      width: Number(m[1]) || 0,
+      height: Number(m[2]) || 0,
+      dimUnit: dimUnitId(m[3] || "ft"),
+    };
   }
 
   function effectiveDpi(pxW, pxH, printW, printH, printUnit) {
@@ -449,6 +632,10 @@
     PRODUCTS,
     PRINT_SIDES,
     UNITS,
+    COUNTER_DIM_UNITS,
+    PRINT_BILL_UNITS,
+    SQFT_PER_SQM,
+    SQIN_PER_SQFT,
     DPIS,
     ALLOWED_TYPES,
     PRICE_MODELS,
@@ -462,11 +649,25 @@
     NOTICE_KINDS,
     REPORTS,
     round2,
+    round4,
+    clampArea,
     isPrintShop,
     statusMeta,
     unitMeta,
+    billUnitCode,
+    billUnitLabel,
+    dimUnitId,
+    defaultDimUnit,
+    isMatchingPair,
+    isAreaBillItem,
     convertSize,
     areaSqFt,
+    billedArea,
+    counterQuote,
+    printSizeLabel,
+    printAreaLabel,
+    printLineCaption,
+    decodePrintSpec,
     pxToInches,
     effectiveDpi,
     qualityWarning,

@@ -169,6 +169,7 @@ function pos_crud_dispatch($path, $method, $body, $bid, $auth, $branchId, $uid) 
       if (array_key_exists("mrp", $body)) {
         try { pos_q("UPDATE items SET mrp = ? WHERE id = ?", "ds", [(float) $body["mrp"], $id]); } catch (Exception $e) { /* optional */ }
       }
+      if (function_exists("pos_save_item_print_fields")) pos_save_item_print_fields($id, $body);
       $rows = pos_q("SELECT * FROM items WHERE id = ? LIMIT 1", "s", [$id]);
       if (!empty($rows[0])) $createdItems[] = $rows[0];
     }
@@ -234,6 +235,7 @@ function pos_crud_dispatch($path, $method, $body, $bid, $auth, $branchId, $uid) 
     if (array_key_exists("mrp", $body)) {
       try { pos_q("UPDATE items SET mrp = ? WHERE id = ?", "ds", [(float) $body["mrp"], $itemId]); } catch (Exception $e) { /* optional */ }
     }
+    if (function_exists("pos_save_item_print_fields")) pos_save_item_print_fields($itemId, $body);
     $rows = pos_q("SELECT * FROM items WHERE id = ? LIMIT 1", "s", [$itemId]);
     pos_send(200, ["ok" => true, "item" => $rows[0] ?? null]);
   }

@@ -37,6 +37,7 @@ const state = {
   categoryFilter: "",
   billDiscountType: "amt",
   billDiscountValue: 0,
+  extraCharges: 0,
   loyaltyRedeem: 0,
   loyaltyAccount: null,
   loyaltySettings: null,
@@ -184,6 +185,147 @@ function isServicesShop() {
 
 function isPrintShop() {
   return Boolean(globalThis.POSPrint?.isPrintShop?.(state.businessMeta) || globalThis.POSFootwear?.isPrintShop?.(state.businessMeta) || globalThis.POSFootwear?.shopKind?.(state.businessMeta) === "printing");
+}
+
+function printApi() {
+  return globalThis.POSPrint || null;
+}
+
+function isPrintAreaItem(item) {
+  const P = printApi();
+  if (!P?.isAreaBillItem) return false;
+  return Boolean(P.isAreaBillItem(item, state.businessMeta));
+}
+
+function canChangeRate() {
+  return state.session?.role === "business_admin" || can("items") || can("settings");
+}
+
+function printBillUnit(item) {
+  const P = printApi();
+  const custom = String(item?.custom_unit || "").trim();
+  if (custom && P?.billUnitCode) return "CUSTOM";
+  return P?.billUnitCode?.(itemUnit(item)) || "SQFT";
+}
+
+function printLineQuote(item, line) {
+  const P = printApi();
+  if (!P?.counterQuote || !item) return null;
+  const dim = line?.printDimUnit || P.defaultDimUnit?.(printBillUnit(item)) || "ft";
+  return P.counterQuote({
+    width: Number(line?.printWidth) || 0,
+    height: Number(line?.printHeight) || 0,
+    dimUnit: dim,
+    billUnit: printBillUnit(item),
+    copies: Math.max(1, Number(line?.printCopies) || 1),
+    minQty: Number(item.min_billing_qty) || 0,
+    customUnit: item.custom_unit || line?.printCustomUnit || "",
+    rate: rateFor(item, line),
+    discountType: line?.discountType || "amt",
+    discountValue: line?.discountValue || 0,
+    gstRate: Number(item.gst_rate) || 0,
+  });
+}
+
+function syncPrintLineQty(line, item) {
+  if (!line || !isPrintAreaItem(item)) return line;
+  const q = printLineQuote(item, line);
+  if (!q) return line;
+  line.qtyGm = q.billedArea;
+  line.printDimUnit = q.dimUnit;
+  line.printCopies = q.copies;
+  line.notes = printApi()?.printLineCaption?.({
+    width: line.printWidth,
+    height: line.printHeight,
+    dimUnit: line.printDimUnit,
+    billUnit: printBillUnit(item),
+    copies: line.printCopies,
+    customUnit: item.custom_unit || line.printCustomUnit,
+    fileName: line.printFileName,
+    minQty: Number(item.min_billing_qty) || 0,
+  }) || line.notes;
+  return line;
+}
+
+function printLineCaptionText(item, line) {
+  const P = printApi();
+  const q = printLineQuote(item, line);
+  if (!q || !P) return "";
+  const rate = rateFor(item, line);
+  const area = P.printAreaLabel?.(q.billedArea, q.billUnit, item.custom_unit) || `${q.billedArea}`;
+  const size = P.printSizeLabel?.(line.printWidth, line.printHeight, q.dimUnit, item.custom_unit) || "";
+  const copies = q.copies > 1 ? ` × ${q.copies}` : "";
+  const file = String(line.printFileName || "").trim();
+  return `${size}${copies} · ${area} @ ${money(rate)}/${q.billLabel}${file ? ` · ${file}` : ""}`;
+}
+
+function printDimOptionsHtml(selected) {
+  const units = printApi()?.COUNTER_DIM_UNITS || [
+    { id: "ft", label: "ft" },
+    { id: "in", label: "in" },
+    { id: "m", label: "m" },
+    { id: "cm", label: "cm" },
+    { id: "mm", label: "mm" },
+    { id: "custom", label: "custom" },
+  ];
+  const cur = String(selected || "ft");
+  return units
+    .map((u) => `<option value="${escapeHtml(u.id)}"${u.id === cur ? " selected" : ""}>${escapeHtml(u.label)}</option>`)
+    .join("");
+}
+
+function printAreaLineHtml(item, line, key, calc) {
+  const P = printApi();
+  const dim = line.printDimUnit || P?.defaultDimUnit?.(printBillUnit(item)) || "ft";
+  const copies = Math.max(1, Number(line.printCopies) || 1);
+  const cap = printLineCaptionText(item, line);
+  const rateVal = rateFor(item, line);
+  const rateField = canChangeRate()
+    ? `<label class="print-dim">Rate ₹
+        <input data-print-rate="${escapeHtml(key)}" type="number" min="0" step="0.01" inputmode="decimal" value="${escapeHtml(rateVal)}" aria-label="Rate per unit" />
+      </label>`
+    : `<span class="print-rate-ro">${escapeHtml(money(rateVal))}/${escapeHtml(P?.billUnitLabel?.(printBillUnit(item), item.custom_unit) || "unit")}</span>`;
+  const fileBit = line.printFileName
+    ? `<span class="print-file-name">${escapeHtml(line.printFileName)}</span>
+       <button type="button" class="btn" data-print-file-clear="${escapeHtml(key)}">Remove file</button>`
+    : `<label class="btn print-file-pick">Attach file
+        <input class="logo-file-input" data-print-file="${escapeHtml(key)}" type="file" accept=".pdf,.jpg,.jpeg,.png,.svg,.ai,.eps,.cdr,image/*,application/pdf" />
+      </label>`;
+  return `<div class="line print-line">
+    <div class="line-main">
+      <div class="line-info">
+        <div class="who">${escapeHtml(item.name)}</div>
+        <div class="pack print-line-summary">${escapeHtml(cap)}</div>
+      </div>
+      <div class="line-ops">
+        <div class="line-amt">${money(calc.taxable + calc.gst)}</div>
+        <button type="button" class="classic-del" data-del-line="${escapeHtml(key)}" aria-label="Remove ${escapeHtml(item.name)}">×</button>
+      </div>
+    </div>
+    <div class="print-dims">
+      <label class="print-dim">W
+        <input data-print-w="${escapeHtml(key)}" type="number" min="0" step="0.01" inputmode="decimal" value="${escapeHtml(line.printWidth || "")}" aria-label="Width" />
+      </label>
+      <label class="print-dim">H
+        <input data-print-h="${escapeHtml(key)}" type="number" min="0" step="0.01" inputmode="decimal" value="${escapeHtml(line.printHeight || "")}" aria-label="Height" />
+      </label>
+      <label class="print-dim">Unit
+        <select data-print-dim="${escapeHtml(key)}" aria-label="Dimension unit">${printDimOptionsHtml(dim)}</select>
+      </label>
+      <label class="print-dim">Qty
+        <input data-print-copies="${escapeHtml(key)}" type="number" min="1" step="1" inputmode="numeric" value="${escapeHtml(copies)}" aria-label="Copies" />
+      </label>
+      ${rateField}
+    </div>
+    <div class="print-file-row">${fileBit}</div>
+    ${canDiscount() ? `<div class="line-disc">
+        <select data-line-disc-type="${escapeHtml(key)}" aria-label="Line discount type">
+          <option value="amt"${(line.discountType || "amt") === "amt" ? " selected" : ""}>₹</option>
+          <option value="pct"${line.discountType === "pct" ? " selected" : ""}>%</option>
+        </select>
+        <input data-line-disc="${escapeHtml(key)}" type="number" min="0" step="0.01" value="${escapeHtml(line.discountValue || 0)}" aria-label="Line discount" />
+      </div>` : ""}
+  </div>`;
 }
 
 function isGymShop() {
@@ -571,6 +713,8 @@ function applyFootwearMode() {
       : "Company profile, timezone, shop logo, and your login password. Shop backup is under Settings → Backup.";
   }
   if ($("ticket-sub") && !state.cart?.length) $("ticket-sub").textContent = copy.ticket || emptyTicketHint();
+  if ($("bill-extras-summary")) $("bill-extras-summary").textContent = isPrintShop() ? "Discount & charges" : "Discount";
+  paintPrintUomChips();
   paintBillTable();
   VIEW_META.items.subtitle = copy.itemsSub || `Photo, ${taxCodeLabel()}, unit type, rates, and stock`;
   VIEW_META.counter.subtitle = copy.counterSub || "Scan, tap, or search — then Pay";
@@ -633,11 +777,47 @@ function fillFootwearFilters() {
   }
 }
 
+function paintPrintUomChips() {
+  const wrap = $("item-print-uom");
+  if (!wrap) return;
+  const P = printApi();
+  const custom = String($("item-custom-unit")?.value || "").trim();
+  const code = custom ? "CUSTOM" : P?.billUnitCode?.($("item-unit")?.value) || "";
+  wrap.querySelectorAll("[data-print-uom]").forEach((btn) => {
+    btn.classList.toggle("primary", btn.dataset.printUom === code);
+  });
+  if ($("item-custom-unit-wrap")) $("item-custom-unit-wrap").hidden = !isPrintShop();
+}
+
+function applyPrintUom(code) {
+  const id = String(code || "SQFT").toUpperCase();
+  if (id === "CUSTOM") {
+    if ($("item-unit")) {
+      fillItemUnitSelect("UNT");
+      $("item-unit").value = "UNT";
+    }
+    $("item-custom-unit")?.focus();
+  } else {
+    const map = { SQFT: "SQFT", SQM: "SQM", SQIN: "SQIN" };
+    const unit = map[id] || "SQFT";
+    fillItemUnitSelect(unit);
+    if ($("item-unit")) $("item-unit").value = unit;
+    if ($("item-custom-unit") && id !== "CUSTOM") $("item-custom-unit").value = "";
+  }
+  refreshItemUnitLabels();
+  paintPrintUomChips();
+}
+
 function refreshItemUnitLabels() {
   const u = POSUnits.normalize($("item-unit")?.value);
+  const custom = String($("item-custom-unit")?.value || "").trim();
   const retailWord = isPharmacyShop() ? "Strip / pack price" : "Retail";
   const purchaseWord = isPharmacyShop() ? "Purchase / strip" : "Purchase";
-  if ($("item-retail-lab")) $("item-retail-lab").textContent = POSUnits.rateLabel(retailWord, u);
+  if ($("item-retail-lab")) {
+    $("item-retail-lab").textContent = custom && isPrintShop()
+      ? `Retail ₹/${custom}`
+      : POSUnits.rateLabel(retailWord, u);
+  }
   if ($("item-b2b-lab")) $("item-b2b-lab").textContent = POSUnits.rateLabel("B2B", u);
   if ($("item-purchase-lab")) $("item-purchase-lab").textContent = POSUnits.rateLabel(purchaseWord, u);
   if ($("item-stock-lab")) $("item-stock-lab").textContent = POSUnits.stockLabel(u);
@@ -645,6 +825,7 @@ function refreshItemUnitLabels() {
   document.querySelectorAll(".pcs-barcode-only").forEach((el) => {
     el.hidden = !pcs;
   });
+  paintPrintUomChips();
 }
 
 const ORDER_STATUSES = ["confirmed", "delivered", "cancelled"];
@@ -891,6 +1072,7 @@ function cancelOrderEdit() {
   state.lastPack = null;
   state.billDiscountType = "amt";
   state.billDiscountValue = 0;
+  state.extraCharges = 0;
   state.loyaltyRedeem = 0;
   state.offerBillLocked = false;
   state.offerAuto = true;
@@ -898,6 +1080,7 @@ function cancelOrderEdit() {
   $("pack-choice").value = "";
   if ($("bill-disc-type")) $("bill-disc-type").value = "amt";
   if ($("bill-disc-value")) $("bill-disc-value").value = 0;
+  if ($("print-extra-charges")) $("print-extra-charges").value = 0;
   if ($("loyalty-redeem")) $("loyalty-redeem").value = 0;
   resetClassicBillEntry();
   resetClassicCustomerRecord({ focus: true });
@@ -911,14 +1094,32 @@ function cartLineFromOrderLine(l) {
   let value = Number(l.discount_value);
   if (!Number.isFinite(value) || value < 0) value = 0;
   if (value <= 0 && Number(l.discount) > 0) value = Number(l.discount) || 0;
-  return {
+  const out = {
+    lineId: newCartLineId(),
     itemId: l.item_id,
     qtyGm: Number(l.quantity_gm),
     discountType: type,
     discountValue: value,
     barcode: l.barcode || "",
     notes: String(l.notes || l.special_instruction || "").trim(),
+    printWidth: Number(l.print_width ?? l.printWidth) || 0,
+    printHeight: Number(l.print_height ?? l.printHeight) || 0,
+    printDimUnit: l.print_dim_unit || l.printDimUnit || "",
+    printCopies: Math.max(1, Number(l.print_copies ?? l.printCopies) || 1),
+    printFileId: l.print_file_id || l.printFileId || "",
+    printFileName: l.print_file_name || l.printFileName || "",
+    printCustomUnit: l.print_custom_unit || l.printCustomUnit || "",
+    rate: l.rate_per_kg != null && (l.print_width || l.printWidth) ? Number(l.rate_per_kg) : undefined,
   };
+  if ((!out.printWidth || !out.printHeight) && out.notes) {
+    const decoded = printApi()?.decodePrintSpec?.(out.notes);
+    if (decoded) {
+      out.printWidth = decoded.width;
+      out.printHeight = decoded.height;
+      out.printDimUnit = decoded.dimUnit;
+    }
+  }
+  return out;
 }
 
 function applyOrderDiscountsToCounter(o) {
@@ -928,12 +1129,14 @@ function applyOrderDiscountsToCounter(o) {
   state.billDiscountType = type;
   state.billDiscountValue = value;
   state.loyaltyRedeem = Number(o.loyalty_points_redeemed) || 0;
+  state.extraCharges = Number(o.extra_charges) || 0;
   state.offerBillLocked = value > 0;
   state.offerAuto = false;
   if ($("bill-disc-type")) $("bill-disc-type").value = type;
   if ($("bill-disc-value")) $("bill-disc-value").value = value;
+  if ($("print-extra-charges")) $("print-extra-charges").value = state.extraCharges;
   if ($("loyalty-redeem")) $("loyalty-redeem").value = state.loyaltyRedeem;
-  if (value > 0 || state.loyaltyRedeem > 0) {
+  if (value > 0 || state.loyaltyRedeem > 0 || state.extraCharges > 0) {
     const extras = $("bill-extras");
     if (extras) extras.open = true;
   }
@@ -1307,15 +1510,18 @@ function applyCounterMobile(raw, { announceMiss = true } = {}) {
   return false;
 }
 
-function rateFor(item) {
+function rateFor(item, line) {
+  if (line && line.rate != null && line.rate !== "" && Number.isFinite(Number(line.rate))) {
+    return Number(line.rate);
+  }
   const type = customer()?.type || "b2c";
   const F = globalThis.POSFootwear;
   if (F?.looseSaleRate) return F.looseSaleRate(item, type);
   return Number(type === "b2b" ? item.b2b_rate : item.retail_rate);
 }
 
-function lineAmt(item, qtyGm) {
-  return POSUnits.lineAmount(qtyGm, rateFor(item), itemUnit(item));
+function lineAmt(item, qtyGm, line) {
+  return POSUnits.lineAmount(qtyGm, rateFor(item, line), itemUnit(item));
 }
 
 function canDiscount() {
@@ -1345,15 +1551,17 @@ function detachClassicUnknownCustomer() {
 function lineCalc(item, line) {
   const D = globalThis.POSDiscount;
   const F = globalThis.POSFootwear;
+  if (isPrintAreaItem(item)) syncPrintLineQty(line, item);
+  const rate = rateFor(item, line);
   if (!D) {
-    const amount = lineAmt(item, line.qtyGm);
-    return { taxable: amount, gst: (amount * Number(item.gst_rate)) / 100, discount: 0, profit: 0, mrp: amount, total: amount, gross: amount };
+    const amount = lineAmt(item, line.qtyGm, line);
+    return { taxable: amount, gst: (amount * Number(item.gst_rate)) / 100, discount: 0, profit: 0, mrp: amount, total: amount, gross: amount, rate };
   }
   return D.computeLine({
     qty: line.qtyGm,
-    rate: rateFor(item),
+    rate,
     gstRate: Number(item.gst_rate) || 0,
-    mrp: Number(F?.looseMrp?.(item) ?? item.mrp ?? item.retail_rate) || rateFor(item),
+    mrp: Number(F?.looseMrp?.(item) ?? item.mrp ?? item.retail_rate) || rate,
     purchase_rate: Number(F?.looseCostRate?.(item) ?? item.purchase_rate) || 0,
     isCount: POSUnits.isCount(itemUnit(item)),
     discountType: line.discountType || "amt",
@@ -1690,10 +1898,12 @@ function clearCounterAfterSale(order, result) {
   state.activeTable = "";
   state.kotPrinted = [];
   state.billDiscountValue = 0;
+  state.extraCharges = 0;
   state.loyaltyRedeem = 0;
   state.offerBillLocked = false;
   state.offerAuto = true;
   if ($("bill-disc-value")) $("bill-disc-value").value = 0;
+  if ($("print-extra-charges")) $("print-extra-charges").value = 0;
   if ($("loyalty-redeem")) $("loyalty-redeem").value = 0;
   state.query = "";
   if ($("search")) $("search").value = "";
@@ -3029,6 +3239,7 @@ function tableHoldPayload() {
     lastPack: state.lastPack,
     billDiscountType: state.billDiscountType,
     billDiscountValue: state.billDiscountValue,
+    extraCharges: state.extraCharges || 0,
     loyaltyRedeem: state.loyaltyRedeem,
     kotPrinted: state.kotPrinted || [],
     qrOrderId: state.activeQrOrderId || "",
@@ -3045,6 +3256,14 @@ function cartLineFromHold(line) {
     barcode: line.barcode || "",
     offerId: line.offerId || "",
     notes: String(line.notes || "").trim(),
+    printWidth: line.printWidth ?? "",
+    printHeight: line.printHeight ?? "",
+    printDimUnit: line.printDimUnit || "",
+    printCopies: Math.max(1, Number(line.printCopies) || 1),
+    printFileId: line.printFileId || "",
+    printFileName: line.printFileName || "",
+    printCustomUnit: line.printCustomUnit || "",
+    rate: line.rate != null && line.rate !== "" ? Number(line.rate) : undefined,
   };
 }
 
@@ -3053,9 +3272,11 @@ function applyHoldToCart(payload, opts = {}) {
   state.cart = (payload?.cart || []).map(cartLineFromHold).filter((l) => l.itemId && l.qtyGm > 0);
   state.billDiscountType = payload.billDiscountType || "amt";
   state.billDiscountValue = Number(payload.billDiscountValue) || 0;
+  state.extraCharges = Number(payload.extraCharges) || 0;
   state.loyaltyRedeem = Number(payload.loyaltyRedeem) || 0;
   if ($("bill-disc-type")) $("bill-disc-type").value = state.billDiscountType;
   if ($("bill-disc-value")) $("bill-disc-value").value = state.billDiscountValue;
+  if ($("print-extra-charges")) $("print-extra-charges").value = state.extraCharges;
   if ($("loyalty-redeem")) $("loyalty-redeem").value = state.loyaltyRedeem;
   if (payload.customerId) state.customerId = payload.customerId;
   state.lastPack = payload.lastPack || null;
@@ -4318,6 +4539,11 @@ async function refreshCatalogStock() {
 }
 
 function clampBillQty(item, want, exceptKey) {
+  if (isPrintAreaItem(item)) {
+    const next = printApi()?.clampArea?.(want) ?? (Number(want) || 0);
+    if (!shouldCapBillStock(item)) return next;
+    return Math.min(next, printApi()?.clampArea?.(maxBillQtyForItem(item, exceptKey)) ?? next);
+  }
   const next = POSUnits.clampQty(want);
   if (!shouldCapBillStock(item)) return next;
   return Math.min(next, POSUnits.clampQty(maxBillQtyForItem(item, exceptKey)));
@@ -4538,18 +4764,24 @@ function cartTotals() {
     const check = L.canRedeem(state.loyaltyAccount?.points_balance || 0, state.loyaltyRedeem, state.loyaltySettings);
     if (check.ok) loyaltyDiscount = Math.min(bill.total, check.rupees);
   }
-  const total = D.round2(Math.max(0, bill.total - loyaltyDiscount));
+  const extra = isPrintShop() ? round2safe(Number(state.extraCharges) || 0) : 0;
+  const total = D.round2(Math.max(0, bill.total - loyaltyDiscount + extra));
   const qty = state.cart.reduce((s, l) => s + (Number(l.qtyGm) || 0), 0);
   return {
     qty,
     taxable: bill.subtotal,
     tax: bill.gst,
     discount: bill.billDiscount,
+    extra,
     lineDiscount: lines.reduce((s, l) => s + (l.discount || 0), 0),
     loyalty: loyaltyDiscount,
     profit: D.round2((bill.profit || 0) - loyaltyDiscount),
     total,
   };
+}
+
+function round2safe(n) {
+  return Math.round((Number(n) || 0) * 100) / 100;
 }
 
 function restaurantLineNoteHtml(line, key) {
@@ -4707,14 +4939,15 @@ function renderCart() {
       .map((line) => {
         const item = state.items.find((i) => i.id === line.itemId);
         if (!item) return "";
+        const calc = lineCalc(item, line);
+        const key = cartLineKey(line);
+        if (isPrintAreaItem(item)) return printAreaLineHtml(item, line, key, calc);
         const unitCode = itemUnit(item);
         const step = POSUnits.counterStep(unitCode);
         const unit = POSUnits.qtySuffix(unitCode);
         const qtyShow = POSUnits.displayQty(line.qtyGm, unitCode);
         const qtyStep = POSUnits.displayQty(step, unitCode) || 1;
-        const calc = lineCalc(item, line);
         const bc = String(line.barcode || "").trim();
-        const key = cartLineKey(line);
         const wait = (state.appliedOffers?.pending || []).find((o) => !o.itemIds?.length || o.itemIds.includes(String(line.itemId)));
         return `<div class="line">
           <div class="line-main">
@@ -4755,9 +4988,11 @@ function renderCart() {
   $("taxable").textContent = money(t.taxable);
   $("tax").textContent = money(t.tax);
   if ($("disc-total")) $("disc-total").textContent = money((t.discount || 0) + (t.lineDiscount || 0));
+  if ($("extra-total")) $("extra-total").textContent = money(t.extra || 0);
   if ($("loyalty-total")) $("loyalty-total").textContent = money(t.loyalty || 0);
   if ($("profit-total")) $("profit-total").textContent = money(t.profit || 0);
   if ($("disc-row")) $("disc-row").hidden = !(((t.discount || 0) + (t.lineDiscount || 0)) > 0);
+  if ($("extra-row")) $("extra-row").hidden = !(Number(t.extra) > 0);
   if ($("loyalty-row")) $("loyalty-row").hidden = !(Number(t.loyalty) > 0);
   if ($("taxable-row")) $("taxable-row").hidden = !(Number(t.taxable) > 0);
   if ($("gst-row")) $("gst-row").hidden = !(Number(t.tax) > 0);
@@ -5190,7 +5425,8 @@ async function saveCounterAddItem(e) {
     retail_rate: retail,
     b2b_rate: retail,
     purchase_rate: 0,
-    gst_rate: Number($("ci-gst")?.value) || 5,
+    gst_rate: Number($("ci-gst")?.value) || (isPrintShop() ? 18 : 5),
+    min_billing_qty: Number($("ci-min-billing")?.value) || 0,
     barcode: globalThis.POSBarcode?.cleanCode ? POSBarcode.cleanCode($("ci-barcode")?.value) : String($("ci-barcode")?.value || "").trim(),
     status: "active",
     stock_gm: 0,
@@ -5253,6 +5489,31 @@ function addItem(id, qtyGm, lineBarcode) {
   const item = state.items.find((i) => i.id === id);
   if (!item) return;
   ensureDiningTable();
+  if (isPrintAreaItem(item) && !barcodeText(lineBarcode)) {
+    const P = printApi();
+    const dim = P?.defaultDimUnit?.(printBillUnit(item)) || "ft";
+    const line = {
+      lineId: newCartLineId(),
+      itemId: id,
+      qtyGm: 0,
+      discountType: "amt",
+      discountValue: 0,
+      barcode: "",
+      notes: "",
+      printWidth: "",
+      printHeight: "",
+      printDimUnit: dim,
+      printCopies: 1,
+      printFileId: "",
+      printFileName: "",
+      printCustomUnit: item.custom_unit || "",
+    };
+    syncPrintLineQty(line, item);
+    state.cart.push(line);
+    renderCart();
+    warnClassicItem(item);
+    return true;
+  }
   const add = qtyGm == null ? POSUnits.counterStep(itemUnit(item)) : Number(qtyGm);
   const code = barcodeText(lineBarcode);
   const count = POSUnits.isCount(itemUnit(item));
@@ -5813,6 +6074,11 @@ function resetItemForm() {
   }
   if ($("item-brand")) $("item-brand").value = "";
   if ($("item-brand-id")) $("item-brand-id").value = "";
+  if ($("item-min-billing")) $("item-min-billing").value = "";
+  if ($("item-custom-unit")) $("item-custom-unit").value = "";
+  if (isPrintShop() && $("item-gst") && !$("item-gst").value) $("item-gst").value = "18";
+  if (isPrintShop() && $("item-gst") && Number($("item-gst").value) === 5) $("item-gst").value = "18";
+  paintPrintUomChips();
 }
 
 function fillItemForm(i) {
@@ -5846,6 +6112,8 @@ function fillItemForm(i) {
   fillItemUnitSelect(itemUnit(i));
   $("item-unit").value = itemUnit(i);
   $("item-stock").value = POSUnits.fromBase(i.stock_gm, itemUnit(i));
+  if ($("item-min-billing")) $("item-min-billing").value = Number(i.min_billing_qty) > 0 ? i.min_billing_qty : "";
+  if ($("item-custom-unit")) $("item-custom-unit").value = i.custom_unit || "";
   paintItemStatus(i.status);
   refreshItemUnitLabels();
   paintItemImage(itemPhotoUrl(i));
@@ -9757,7 +10025,91 @@ $("catalog-cats")?.addEventListener("click", (e) => {
   renderCatalog();
   $("catalog")?.scrollTo({ top: 0 });
 });
+function paintBillFigures() {
+  const t = cartTotals();
+  const families = [...new Set(state.cart.map((l) => POSUnits.typeOf(itemUnit(state.items.find((i) => i.id === l.itemId))).family))];
+  if ($("qty-total")) {
+    $("qty-total").textContent = families.length <= 1 && state.cart.length
+      ? fmtQty(t.qty, state.items.find((i) => i.id === state.cart[0].itemId))
+      : families.length > 1
+        ? `${state.cart.length} lines`
+        : "0";
+  }
+  if ($("taxable")) $("taxable").textContent = money(t.taxable);
+  if ($("tax")) $("tax").textContent = money(t.tax);
+  if ($("disc-total")) $("disc-total").textContent = money((t.discount || 0) + (t.lineDiscount || 0));
+  if ($("extra-total")) $("extra-total").textContent = money(t.extra || 0);
+  if ($("loyalty-total")) $("loyalty-total").textContent = money(t.loyalty || 0);
+  if ($("profit-total")) $("profit-total").textContent = money(t.profit || 0);
+  if ($("disc-row")) $("disc-row").hidden = !(((t.discount || 0) + (t.lineDiscount || 0)) > 0);
+  if ($("extra-row")) $("extra-row").hidden = !(Number(t.extra) > 0);
+  if ($("loyalty-row")) $("loyalty-row").hidden = !(Number(t.loyalty) > 0);
+  if ($("taxable-row")) $("taxable-row").hidden = !(Number(t.taxable) > 0);
+  if ($("gst-row")) $("gst-row").hidden = !(Number(t.tax) > 0);
+  if ($("total")) $("total").textContent = money(t.total != null ? t.total : t.taxable + t.tax);
+}
+
+function refreshPrintLineLive(key) {
+  const line = findCartLine(key);
+  const item = line ? state.items.find((i) => i.id === line.itemId) : null;
+  if (!line || !item) return;
+  syncPrintLineQty(line, item);
+  const sel = (attr) => document.querySelector(`[${attr}="${CSS.escape(String(key))}"]`);
+  const root = sel("data-print-w")?.closest(".print-line");
+  if (root) {
+    const calc = lineCalc(item, line);
+    const summary = root.querySelector(".print-line-summary");
+    const amt = root.querySelector(".line-amt");
+    if (summary) summary.textContent = printLineCaptionText(item, line);
+    if (amt) amt.textContent = money(calc.taxable + calc.gst);
+  }
+  paintBillFigures();
+}
+
+async function attachPrintCounterFile(key, file) {
+  const line = findCartLine(key);
+  if (!line || !file) return;
+  const P = printApi();
+  if (P?.allowedFile && !P.allowedFile(file.name, file.type, P.DEFAULT_SETTINGS)) {
+    setHint("This file type is not allowed", "error");
+    return;
+  }
+  setHint("Uploading print file…");
+  const content = await new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(new Error("Could not read file"));
+    reader.readAsDataURL(file);
+  });
+  const res = await api("/api/print/counter-file", {
+    method: "POST",
+    body: JSON.stringify({
+      file_name: file.name,
+      content,
+      customerId: state.customerId || "",
+    }),
+  });
+  line.printFileId = res.file?.id || res.id || "";
+  line.printFileName = res.file?.file_name || file.name;
+  const item = state.items.find((i) => i.id === line.itemId);
+  syncPrintLineQty(line, item);
+  renderCart();
+  setHint(`Attached ${line.printFileName}`, "ok");
+}
+
 $("lines").addEventListener("click", (e) => {
+  const clearFile = e.target.closest("[data-print-file-clear]");
+  if (clearFile) {
+    const line = findCartLine(clearFile.dataset.printFileClear);
+    if (line) {
+      line.printFileId = "";
+      line.printFileName = "";
+      const item = state.items.find((i) => i.id === line.itemId);
+      syncPrintLineQty(line, item);
+      renderCart();
+    }
+    return;
+  }
   const scaleLine = e.target.closest("[data-scale-line]");
   if (scaleLine) {
     applyScaleWeight(scaleLine.dataset.scaleLine);
@@ -9778,22 +10130,55 @@ $("lines").addEventListener("click", (e) => {
     }
     return;
   }
-  if (e.target.closest("[data-qty]") || e.target.closest("[data-line-note]")) return;
+  if (e.target.closest("[data-qty]") || e.target.closest("[data-line-note]") || e.target.closest(".print-dims") || e.target.closest(".print-file-row")) return;
   const btn = e.target.closest("[data-chg]");
   if (!btn) return;
   changeLineQty(btn.dataset.chg, Number(btn.dataset.d));
 });
 $("lines").addEventListener("input", (e) => {
   const ta = e.target.closest("[data-line-note]");
-  if (!ta) return;
-  const line = findCartLine(ta.dataset.lineNote);
-  if (line) line.notes = String(ta.value || "").slice(0, 240);
+  if (ta) {
+    const line = findCartLine(ta.dataset.lineNote);
+    if (line) line.notes = String(ta.value || "").slice(0, 240);
+    return;
+  }
+  const w = e.target.closest("[data-print-w]");
+  const h = e.target.closest("[data-print-h]");
+  const copies = e.target.closest("[data-print-copies]");
+  const rate = e.target.closest("[data-print-rate]");
+  const dim = e.target.closest("[data-print-dim]");
+  const key = w?.dataset.printW || h?.dataset.printH || copies?.dataset.printCopies || rate?.dataset.printRate || dim?.dataset.printDim;
+  if (!key) return;
+  const line = findCartLine(key);
+  if (!line) return;
+  if (w) line.printWidth = w.value;
+  if (h) line.printHeight = h.value;
+  if (copies) line.printCopies = Math.max(1, Number(copies.value) || 1);
+  if (rate && canChangeRate()) line.rate = Number(rate.value) || 0;
+  if (dim) line.printDimUnit = dim.value;
+  refreshPrintLineLive(key);
 });
 $("lines").addEventListener("focusin", (e) => {
   const input = e.target.closest("[data-qty]");
   if (input && typeof input.select === "function") input.select();
 });
 $("lines").addEventListener("change", (e) => {
+  const file = e.target.closest("[data-print-file]");
+  if (file) {
+    const picked = file.files?.[0];
+    if (picked) attachPrintCounterFile(file.dataset.printFile, picked).catch((err) => setHint(err.message, "error"));
+    file.value = "";
+    return;
+  }
+  const dim = e.target.closest("[data-print-dim]");
+  if (dim) {
+    const line = findCartLine(dim.dataset.printDim);
+    if (line) {
+      line.printDimUnit = dim.value;
+      refreshPrintLineLive(dim.dataset.printDim);
+    }
+    return;
+  }
   const input = e.target.closest("[data-qty]");
   if (input) {
     const line = findCartLine(input.dataset.qty);
@@ -10658,11 +11043,13 @@ $("btn-clear").addEventListener("click", () => {
   state.activeQrOrderId = "";
   state.kotPrinted = [];
   state.billDiscountValue = 0;
+  state.extraCharges = 0;
   state.loyaltyRedeem = 0;
   state.offerAuto = true;
   state.offerBillLocked = false;
   resetOfferPopup();
   if ($("bill-disc-value")) $("bill-disc-value").value = 0;
+  if ($("print-extra-charges")) $("print-extra-charges").value = 0;
   if ($("loyalty-redeem")) $("loyalty-redeem").value = 0;
   $("pack-choice").value = "";
   if ($("pay-amount")) {
@@ -10699,6 +11086,11 @@ $("btn-pay").addEventListener("click", async () => {
     }
     if (!state.customerId) throw new Error("Add a customer before saving the bill");
     if (!state.cart.length) throw new Error("Cart is empty");
+    const printMissing = state.cart.find((l) => {
+      const item = state.items.find((i) => i.id === l.itemId);
+      return isPrintAreaItem(item) && !(Number(l.printWidth) > 0 && Number(l.printHeight) > 0 && Number(l.qtyGm) > 0);
+    });
+    if (printMissing) throw new Error("Enter width and height for each print item");
     if (isApparelShop()) {
       await refreshCatalogStock();
       clampCartToAvailableStock();
@@ -10736,16 +11128,30 @@ $("btn-pay").addEventListener("click", async () => {
       customer_mobile: isClassicBillShop() ? pharmacyBillCustomerMobile() : undefined,
       customer_address: isClassicBillShop() ? pharmacyBillCustomerAddress() : undefined,
       doctor_rx: isPharmacyShop() ? pharmacyBillDoctorRx() : undefined,
-      lines: state.cart.map((l) => ({
-        itemId: l.itemId,
-        quantity_gm: l.qtyGm,
-        discountType: l.discountType || "amt",
-        discountValue: l.discountValue || 0,
-        barcode: l.barcode || "",
-        notes: scaleLineNote(l),
-        scale_grams: Number(l.scaleGrams) || undefined,
-        weight_source: l.weightSource || undefined,
-      })),
+      extraCharges: isPrintShop() ? Number(state.extraCharges) || 0 : 0,
+      lines: state.cart.map((l) => {
+        const item = state.items.find((i) => i.id === l.itemId);
+        const print = isPrintAreaItem(item);
+        return {
+          itemId: l.itemId,
+          quantity_gm: l.qtyGm,
+          discountType: l.discountType || "amt",
+          discountValue: l.discountValue || 0,
+          barcode: l.barcode || "",
+          notes: print ? (l.notes || scaleLineNote(l)) : scaleLineNote(l),
+          scale_grams: Number(l.scaleGrams) || undefined,
+          weight_source: l.weightSource || undefined,
+          rate: print && canChangeRate() && l.rate != null && l.rate !== "" ? Number(l.rate) : undefined,
+          print_width: print ? Number(l.printWidth) || 0 : undefined,
+          print_height: print ? Number(l.printHeight) || 0 : undefined,
+          print_dim_unit: print ? (l.printDimUnit || "") : undefined,
+          print_copies: print ? Math.max(1, Number(l.printCopies) || 1) : undefined,
+          print_file_id: print ? (l.printFileId || "") : undefined,
+          print_file_name: print ? (l.printFileName || "") : undefined,
+          print_area: print ? Number(l.qtyGm) || 0 : undefined,
+          print_custom_unit: print ? (item.custom_unit || l.printCustomUnit || "") : undefined,
+        };
+      }),
     };
     let result;
     if (state.openTableOrderId && !state.editingOrderId) {
@@ -10807,8 +11213,14 @@ $("btn-pay").addEventListener("click", async () => {
             item_name: itemBillName(item),
             quantity_gm: l.qtyGm,
             unit: item ? itemUnit(item) : "PCS",
-            rate_per_kg: item ? rateFor(item) : 0,
-            amount: calc ? calc.taxable : (item ? lineAmt(item, l.qtyGm) : 0),
+            rate_per_kg: item ? rateFor(item, l) : 0,
+            amount: calc ? calc.taxable : (item ? lineAmt(item, l.qtyGm, l) : 0),
+            notes: l.notes || "",
+            print_width: l.printWidth,
+            print_height: l.printHeight,
+            print_dim_unit: l.printDimUnit,
+            print_copies: l.printCopies,
+            print_file_name: l.printFileName,
             gst_amount: calc ? calc.gst : 0,
             gst_rate: item?.gst_rate || 0,
             mrp: item ? Number(globalThis.POSFootwear?.looseMrp?.(item) ?? item.mrp ?? item.retail_rate) || 0 : 0,
@@ -11258,6 +11670,8 @@ $("item-form").addEventListener("submit", async (e) => {
     b2b_rate: $("item-b2b").value,
     purchase_rate: $("item-purchase").value,
     gst_rate: $("item-gst").value,
+    min_billing_qty: Number($("item-min-billing")?.value) || 0,
+    custom_unit: String($("item-custom-unit")?.value || "").trim(),
     mrp: $("item-mrp")?.value || "",
     barcode_qty: POSUnits.isCount(unit) ? Number($("item-barcode-qty")?.value) || 0 : 0,
     barcode: globalThis.POSBarcode?.cleanCode ? POSBarcode.cleanCode($("item-own-barcode")?.value) : String($("item-own-barcode")?.value || "").trim(),
@@ -11313,6 +11727,11 @@ $("item-cancel").addEventListener("click", () => {
   resetItemForm();
 });
 $("item-unit")?.addEventListener("change", refreshItemUnitLabels);
+$("item-custom-unit")?.addEventListener("input", refreshItemUnitLabels);
+$("item-print-uom")?.addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-print-uom]");
+  if (btn) applyPrintUom(btn.dataset.printUom);
+});
 $("item-catalog-search")?.addEventListener("input", filterItemsCatalog);
 $("item-low-only")?.addEventListener("change", filterItemsCatalog);
 $("item-hide-inactive")?.addEventListener("change", filterItemsCatalog);
@@ -12518,6 +12937,7 @@ $("btn-hold")?.addEventListener("click", async () => {
           lastPack: state.lastPack,
           billDiscountType: state.billDiscountType,
           billDiscountValue: state.billDiscountValue,
+          extraCharges: state.extraCharges || 0,
           loyaltyRedeem: state.loyaltyRedeem,
         },
       }),
@@ -13156,10 +13576,11 @@ document.getElementById("stock-mode")?.addEventListener("click", (e) => {
   if ($("stock-mode-label")) $("stock-mode-label").textContent = state.stockMode === "advanced" ? "Adjust stock — advanced" : "Adjust stock";
 });
 
-["bill-disc-type", "bill-disc-value", "loyalty-redeem"].forEach((id) => {
+["bill-disc-type", "bill-disc-value", "loyalty-redeem", "print-extra-charges"].forEach((id) => {
   $(id)?.addEventListener("input", () => {
     state.billDiscountType = $("bill-disc-type")?.value || "amt";
     state.billDiscountValue = Number($("bill-disc-value")?.value) || 0;
+    state.extraCharges = Number($("print-extra-charges")?.value) || 0;
     clampLoyaltyRedeem();
     if (id !== "loyalty-redeem") state.offerBillLocked = true;
     renderCart();
@@ -13167,6 +13588,7 @@ document.getElementById("stock-mode")?.addEventListener("click", (e) => {
   $(id)?.addEventListener("change", () => {
     state.billDiscountType = $("bill-disc-type")?.value || "amt";
     state.billDiscountValue = Number($("bill-disc-value")?.value) || 0;
+    state.extraCharges = Number($("print-extra-charges")?.value) || 0;
     clampLoyaltyRedeem();
     if (id !== "loyalty-redeem") state.offerBillLocked = true;
     renderCart();

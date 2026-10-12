@@ -873,6 +873,8 @@ function pos_ensure_item_unit_columns() {
     "mrp" => "DECIMAL(12,2) NULL",
     "brand" => "VARCHAR(128) NULL",
     "brand_id" => "VARCHAR(255) NULL",
+    "min_billing_qty" => "DECIMAL(12,4) NOT NULL DEFAULT 0",
+    "custom_unit" => "VARCHAR(32) NULL",
   ]);
 }
 
@@ -1595,6 +1597,17 @@ function pos_ensure_sales_schema() {
       "pack_label" => "VARCHAR(64) NULL",
       "notes" => "TEXT NULL",
       "unit" => "VARCHAR(32) NULL",
+      "print_width" => "DECIMAL(12,4) NOT NULL DEFAULT 0",
+      "print_height" => "DECIMAL(12,4) NOT NULL DEFAULT 0",
+      "print_dim_unit" => "VARCHAR(16) NULL",
+      "print_copies" => "INT NOT NULL DEFAULT 1",
+      "print_file_id" => "VARCHAR(255) NULL",
+      "print_file_name" => "VARCHAR(255) NULL",
+      "print_area" => "DECIMAL(14,4) NOT NULL DEFAULT 0",
+      "print_custom_unit" => "VARCHAR(32) NULL",
+    ]);
+    pos_ensure_columns("sales_orders", [
+      "extra_charges" => "DECIMAL(12,2) NOT NULL DEFAULT 0",
     ]);
     pos_ensure_columns("customers", [
       "outstanding" => "DECIMAL(12,2) NOT NULL DEFAULT 0",
