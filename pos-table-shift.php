@@ -220,20 +220,20 @@ function pos_dispatch_table_shift($path, $method, $body, $bid, $auth) {
         }
       } catch (Exception $e) { /* optional */ }
 
-      try {
-        $kots = pos_q("SELECT id, table_no, status FROM kitchen_tickets WHERE business_id = ?", "s", [$bid]);
-        foreach ($kots as $row) {
-          if (pos_normalize_table_no($row["table_no"] ?? "") !== $from) continue;
-          $st = strtolower((string) ($row["status"] ?? ""));
-          if (in_array($st, ["cancelled", "void"], true)) continue;
-          try {
-            pos_q("UPDATE kitchen_tickets SET table_no = ?, updated_at = CURRENT_TIMESTAMP(3) WHERE id = ? AND business_id = ?", "sss", [$to, $row["id"], $bid]);
-          } catch (Exception $e) {
-            pos_q("UPDATE kitchen_tickets SET table_no = ? WHERE id = ? AND business_id = ?", "sss", [$to, $row["id"], $bid]);
-          }
-          $movedKots += 1;
+      if (is_file(__DIR__ . "/pos-kots.php")) require_once __DIR__ . "/pos-kots.php";
+      if (function_exists("pos_ensure_kitchen_tickets_schema")) pos_ensure_kitchen_tickets_schema();
+      $kots = pos_q("SELECT id, table_no, status FROM kitchen_tickets WHERE business_id = ?", "s", [$bid]);
+      foreach ($kots as $row) {
+        if (pos_normalize_table_no($row["table_no"] ?? "") !== $from) continue;
+        $st = strtolower((string) ($row["status"] ?? "new"));
+        if (!in_array($st, ["new", "preparing", "ready"], true)) continue;
+        try {
+          pos_q("UPDATE kitchen_tickets SET table_no = ?, updated_at = CURRENT_TIMESTAMP(3) WHERE id = ? AND business_id = ?", "sss", [$to, $row["id"], $bid]);
+        } catch (Exception $e) {
+          pos_q("UPDATE kitchen_tickets SET table_no = ? WHERE id = ? AND business_id = ?", "sss", [$to, $row["id"], $bid]);
         }
-      } catch (Exception $e) { /* optional */ }
+        $movedKots += 1;
+      }
 
       try {
         $qrs = pos_q("SELECT id, order_number, table_no, status, sales_order_id FROM qr_orders WHERE business_id = ?", "s", [$bid]);

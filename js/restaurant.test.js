@@ -108,11 +108,14 @@ test("KOT line identity keeps the same dish with different notes as two lines", 
   assert.match(src("js/app.js"), /if \(sendingKot\) return/);
   assert.match(src("js/app.js"), /uniqueKotTickets/);
   assert.match(src("js/app.js"), /sameKotLine/);
+  assert.match(src("js/app.js"), /resolved\.pick\.kind === "reprint"/);
+  assert.match(src("js/app.js"), /if \(ticket\?\.id\)/);
+  assert.match(src("js/app.js"), /Kitchen board refresh failed/);
   assert.match(src("pos-kots.php"), /function pos_next_kot_number/);
   assert.match(src("pos-kots.php"), /kot_number, created_at, updated_at/);
   assert.match(src("server/tenant.js"), /nextKotNumber/);
   assert.match(src("server/qr-ordering.js"), /AS kot_number/);
-  assert.match(src("index.html"), /restaurant\.js\?v=20261012table1/);
+  assert.match(src("index.html"), /restaurant\.js\?v=20261012kot2/);
 });
 
 test("Restaurant shops keep custom table names and can add or remove seats", () => {
@@ -364,7 +367,7 @@ test("Restaurant mobile billing box keeps dish cards visible", () => {
   assert.doesNotMatch(mobile, /max-height: 42vh/);
   assert.doesNotMatch(index, /20260925rm1/);
   assert.match(index, /pos\.css\?v=20261006fast1/);
-  assert.match(index, /app\.js\?v=20261012table1/);
+  assert.match(index, /app\.js\?v=20261012kot2/);
 });
 
 test("Restaurant mobile Counter uses readable type and a tight bill sheet", () => {

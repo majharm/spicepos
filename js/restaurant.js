@@ -399,6 +399,11 @@
     return false;
   }
 
+  function kotTicketOpen(ticket) {
+    const st = String(ticket?.status || "new").toLowerCase();
+    return ["new", "preparing", "ready"].includes(st);
+  }
+
   function applyShiftLocal(holds, qrOrders, kots, from, to) {
     const src = normalizeTableNo(from);
     const dest = normalizeTableNo(to);
@@ -413,7 +418,7 @@
     });
     const nextKots = (Array.isArray(kots) ? kots : []).map((ticket) => {
       if (normalizeTableNo(ticket.table_no) !== src) return ticket;
-      if (["cancelled", "void"].includes(String(ticket.status || "").toLowerCase())) return ticket;
+      if (!kotTicketOpen(ticket)) return ticket;
       return { ...ticket, table_no: dest };
     });
     return { holds: nextHolds, qrOrders: nextQr, kots: nextKots };
@@ -707,6 +712,7 @@ ${kotBody(opts)}
     tableShiftingOn,
     qrOrderOpen,
     tableOccupied,
+    kotTicketOpen,
     applyShiftLocal,
     canShiftTable,
     specialInstruction,
