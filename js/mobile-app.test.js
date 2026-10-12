@@ -68,16 +68,16 @@ test("InvoiceJet-style chrome is wired on login and POS without breaking pins", 
   assert.match(login, /js\/pos-api\.js\?v=20261006login1/);
   assert.match(login, /css\/login-page\.css\?v=20261008loginfile1/);
   assert.match(login, /x-pos-20260830e\.js\?v=20261011lounge1/);
-  assert.match(login, /css\/mobile-app\.css\?v=20261012m3/);
-  assert.match(login, /js\/mobile-app\.js\?v=20261012m3/);
+  assert.match(login, /css\/mobile-app\.css\?v=20261012mob1/);
+  assert.match(login, /js\/mobile-app\.js\?v=20261012mob1/);
   assert.match(login, /id="m-welcome"/);
   assert.match(login, /Hello, Welcome back!/);
   assert.match(login, /id="m-go-signin"/);
   assert.match(login, /id="m-go-signup"/);
 
   assert.match(index, /app\.js\?v=20261012fast1/);
-  assert.match(index, /css\/mobile-app\.css\?v=20261012m3/);
-  assert.match(index, /js\/mobile-app\.js\?v=20261012m3/);
+  assert.match(index, /css\/mobile-app\.css\?v=20261012mob1/);
+  assert.match(index, /js\/mobile-app\.js\?v=20261012mob1/);
   assert.match(index, /id="m-home"/);
   assert.match(index, /id="m-reports"/);
   assert.match(index, /data-m-range="month"/);
@@ -109,6 +109,12 @@ test("InvoiceJet-style chrome is wired on login and POS without breaking pins", 
   assert.match(read("server/hub.js"), /monthPaidOrders/);
   assert.match(read("pos-php-till.php"), /monthPendingOrders/);
   assert.doesNotMatch(js, /password_hash/);
+  assert.doesNotMatch(js, /classList\.toggle\("m-app", isPhone\(\)\)/);
+  assert.doesNotMatch(js, /isPhone\(\) && openMobileReport/);
+  assert.match(js, /POS phones use the same tablet chrome/);
+  assert.match(css, /body:not\(\.m-preview\) #m-home/);
+  assert.match(read("css/pos.css"), /phone-pos: same tablet chrome/);
+  assert.match(read("index.html"), /pos\.css\?v=20261012mob1/);
   assert.equal(M.openMobileReport("not-a-report"), false);
   assert.equal(M.openMobileReport("daily-sales"), true);
 });

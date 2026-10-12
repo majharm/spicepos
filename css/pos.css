@@ -7187,6 +7187,104 @@ body.pharmacy-mode .stock-desk .items-library-list {
   .growth-score-card { flex-direction: column; align-items: flex-start; }
   .growth-ask-form { flex-direction: column; }
   .growth-action { flex-direction: column; }
+
+  /* phone-pos: same tablet chrome, tighter spacing and 16px fields */
+  html { -webkit-text-size-adjust: 100%; }
+  .view-topbar {
+    padding: 8px 10px;
+    gap: 8px;
+  }
+  .saas-dash-desk.dash-desk,
+  .dash-desk,
+  .reports-desk,
+  .settings-desk,
+  .items-desk,
+  .invoices-desk,
+  .customers-desk,
+  .stock-desk {
+    margin-left: 8px;
+    margin-right: 8px;
+  }
+  .saas-dash-desk.dash-desk { padding: 10px 10px 28px; }
+  .saas-dash-desk #dash-welcome { font-size: 22px; }
+  .saas-kpi { min-height: 96px; padding: 12px; }
+  .saas-kpi strong { font-size: 20px; }
+  .packs-desk,
+  .items-desk,
+  .dash-desk,
+  .branches-desk,
+  .customers-desk,
+  .settings-desk,
+  .expiry-desk,
+  .stock-desk,
+  .offers-desk,
+  .purchases-desk,
+  .sales-desk { margin-left: 8px; margin-right: 8px; }
+  .split, .orders-split, .purchases-split, .returns-desk { padding: 0 8px 20px; }
+  .lede, .view > .hint, .orders-toolbar, .orders-summary, .purchase-new, .accounts-toolbar {
+    margin-left: 8px;
+    margin-right: 8px;
+  }
+  .settings { margin-left: 8px; margin-right: 8px; padding: 14px 12px; }
+  .stage:not(.is-counter) input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="hidden"]):not([type="file"]):not([type="color"]),
+  .stage:not(.is-counter) select,
+  .stage:not(.is-counter) textarea,
+  #modal input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="hidden"]):not([type="file"]):not([type="color"]),
+  #modal select,
+  #modal textarea {
+    font-size: 16px;
+  }
+  .table-wrap,
+  .invoices-table-wrap,
+  .pack-table-wrap,
+  .po-table-wrap,
+  .rx-table-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .table-wrap table,
+  .invoices-table-wrap table,
+  #view-reports .report-block table,
+  .view-finance .table-wrap table {
+    min-width: 540px;
+  }
+  .settings-hub-nav {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    max-height: none;
+    padding: 6px;
+  }
+  .settings-hub-nav .btn {
+    flex: 0 0 auto;
+    white-space: nowrap;
+    min-height: 44px;
+  }
+  .settings-actions { gap: 8px; }
+  .settings-actions .btn { flex: 1 1 140px; }
+  .reports-tabs,
+  .reports-center-bar,
+  .reports-desk .report-toolbar {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .reports-tabs::-webkit-scrollbar,
+  .reports-center-bar::-webkit-scrollbar,
+  .reports-desk .report-toolbar::-webkit-scrollbar { display: none; }
+  .reports-tab,
+  .reports-desk .report-toolbar select { flex: 0 0 auto; }
+  .items-library-head { grid-template-columns: 1fr; }
+  .dash-kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .zoho-kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .btn { min-height: 44px; }
+  #modal .dialog {
+    width: calc(100% - 12px);
+    max-width: calc(100% - 12px);
+    max-height: calc(100dvh - 12px);
+    margin: 6px auto;
+  }
 }
 
 html[dir="rtl"] .app {

@@ -1,4 +1,5 @@
-/* InvoiceJet-style phone chrome. Desktop and tablet stay on the existing POS / login layouts. */
+/* InvoiceJet-style phone chrome for login welcome and m.html preview.
+   POS phones use the same overlay-nav tablet layout as 721–980px. */
 :root {
   --m-teal: #12b8a6;
   --m-teal-deep: #0d9488;
@@ -33,6 +34,13 @@
   #m-tabbar {
     display: none !important;
   }
+}
+
+/* Keep the real POS dashboard, reports, and nav on phones. Overlay is m.html only. */
+body:not(.m-preview) #m-home,
+body:not(.m-preview) #m-reports,
+body:not(.m-preview) #m-tabbar {
+  display: none !important;
 }
 
 @media (max-width: 720px) {

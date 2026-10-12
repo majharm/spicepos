@@ -468,20 +468,12 @@
       };
       ui.paintReportsCenter.__mApp = true;
     }
-    if (ui.openReport && !ui.openReport.__mApp) {
-      const origOpen = ui.openReport.bind(ui);
-      ui.openReport = function (id) {
-        if (isPhone() && openMobileReport(id)) return;
-        origOpen(id);
-      };
-      ui.openReport.__mApp = true;
-    }
+    // POS phones keep the tablet reports desk. InvoiceJet sheet stays on m.html preview.
   }
 
   function bindPos() {
     if (!$("m-home")) return;
-    document.body.classList.toggle("m-app", isPhone());
-    window.addEventListener("resize", () => document.body.classList.toggle("m-app", isPhone()));
+    // POS phones use the same tablet chrome. InvoiceJet home/tabbar stay on login.html and m.html.
     document.querySelectorAll("[data-m-view]").forEach((btn) => {
       btn.addEventListener("click", () => goView(btn.dataset.mView));
     });
@@ -536,13 +528,13 @@
     setTimeout(hookPaint, 0);
     setTimeout(hookPaint, 250);
     syncTab("dashboard");
-    if (new URLSearchParams(location.search).get("m-preview") === "1") {
+    const params = new URLSearchParams(location.search);
+    if (params.get("m-preview") === "1") {
       document.body.classList.add("analytics-home", "m-app");
       paintHome(demoDashboard());
     }
-    const params = new URLSearchParams(location.search);
     if (params.get("m-tab") === "reports" || location.hash === "#reports") {
-      document.body.classList.add("m-app");
+      if (params.get("m-preview") === "1") document.body.classList.add("m-app");
       setPhoneSurface("reports");
       paintReports();
       syncTab("reports");

@@ -20,7 +20,7 @@ test("Invoices page is a sales desk with search, chips, and preview split", () =
   assert.match(index, /id="orders-toolbar"/);
   assert.match(index, /id="orders-search"/);
   assert.match(index, /id="order-pane"/);
-  assert.match(index, /pos\.css\?v=20261012set4/);
+  assert.match(index, /pos\.css\?v=20261012mob1/);
   assert.match(index, /app\.js\?v=20261012fast1/);
 
   assert.match(app, /function paintInvoicesHero/);

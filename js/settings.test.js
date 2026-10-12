@@ -83,5 +83,5 @@ test("Settings hub groups company, hardware, table, and aggregator controls", ()
   assert.match(css, /\.settings-hub/);
   assert.match(css, /\.settings-hub \[hidden\][\s\S]*display:\s*none\s*!important/);
   assert.match(index, /app\.js\?v=20261012fast1/);
-  assert.match(index, /pos\.css\?v=20261012set4/);
+  assert.match(index, /pos\.css\?v=20261012mob1/);
 });
