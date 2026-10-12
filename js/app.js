@@ -2029,6 +2029,135 @@ function gstSummaryRows(summary) {
   ];
 }
 
+function dailySalesData(data) {
+  if (data?.dailySales?.invoices) return data.dailySales;
+  const invoices = [];
+  const seen = new Set();
+  const totals = {
+    bills: 0, subtotal: 0, discount: 0, gst: 0, returned: 0, net: 0,
+    cash: 0, upi: 0, card: 0, credit: 0, other: 0, paid: 0, unpaid: 0, partial: 0,
+  };
+  for (const row of data?.sales || []) {
+    const st = String(row.status || "").toLowerCase();
+    if (st === "cancelled" || st === "void") continue;
+    const key = String(row.id || row.order_number || "");
+    if (key) {
+      if (seen.has(key)) continue;
+      seen.add(key);
+    }
+    const mode = String(row.payment_method || "other").toLowerCase();
+    const bucket = ["cash", "upi", "card", "credit"].includes(mode) ? mode : "other";
+    let pay = String(row.payment_status || "paid").toLowerCase();
+    if (pay === "due") pay = "unpaid";
+    if (pay === "partially-paid" || pay === "part-paid") pay = "partial";
+    if (pay !== "unpaid" && pay !== "partial") pay = "paid";
+    const total = Number(row.total) || 0;
+    const returned = Math.max(0, Number(row.returned) || 0);
+    const net = Math.max(0, total - returned);
+    invoices.push({
+      id: row.id || "",
+      order_number: row.order_number || "",
+      created_at: row.created_at,
+      customer_name: row.customer_name || "Walk-in",
+      payment_method: row.payment_method || "",
+      payment_mode: bucket,
+      payment_status: pay,
+      subtotal: Number(row.subtotal) || 0,
+      discount: Number(row.discount) || 0,
+      gst: Number(row.gst) || 0,
+      total,
+      returned,
+      net,
+    });
+    totals.bills += 1;
+    totals.subtotal += Number(row.subtotal) || 0;
+    totals.discount += Number(row.discount) || 0;
+    totals.gst += Number(row.gst) || 0;
+    totals.returned += returned;
+    totals.net += net;
+    totals[bucket] += net;
+    totals[pay] += 1;
+  }
+  return { invoices, totals };
+}
+
+function dailySalesKpi(label, value, extra) {
+  return `<div class="daily-sales-kpi${extra ? ` ${extra}` : ""}"><span>${escapeHtml(label)}</span><strong>${value}</strong></div>`;
+}
+
+function dailySalesBlock(data) {
+  const ds = dailySalesData(data);
+  const t = ds.totals || {};
+  const all = ds.invoices || [];
+  const n = all.length;
+  const cap = fastModeOn() ? 80 : n;
+  const shown = all.slice(0, cap);
+  const more = shown.length < n ? `<p class="hint catalog-more">Showing ${shown.length} of ${n} invoices. Excel has the full list.</p>` : "";
+  const day = data?.from && data.from === data.to ? data.from : "";
+  const rows = shown.length
+    ? `<div class="table-wrap"><table class="daily-sales-table">
+      <thead><tr>
+        <th>Invoice</th><th>Date &amp; Time</th><th>Customer</th><th>Payment Mode</th>
+        <th>Status</th><th>Subtotal</th><th>Discount</th><th>GST</th><th>Returned</th><th>Amount</th>
+      </tr></thead>
+      <tbody>${shown
+        .map((o) => {
+          const search = [
+            o.order_number,
+            o.customer_name,
+            o.payment_method,
+            o.payment_mode,
+            o.payment_status,
+            formatShopDateTime(o.created_at),
+          ]
+            .join(" ")
+            .toLowerCase();
+          const inv = escapeHtml(o.order_number || "—");
+          const open = o.id
+            ? `<button type="button" class="daily-sales-inv" data-open-invoice="${escapeHtml(o.id)}" data-order-number="${inv}">${inv}</button>`
+            : inv;
+          return `<tr data-report-row="${escapeHtml(search)}" data-open-invoice="${escapeHtml(o.id || "")}" data-order-number="${inv}">
+            <td>${open}</td>
+            <td>${escapeHtml(formatShopDateTime(o.created_at))}</td>
+            <td>${escapeHtml(o.customer_name || "Walk-in")}</td>
+            <td>${escapeHtml(paymentMethodLabel(o.payment_method || o.payment_mode))}</td>
+            <td>${payStatusBadge(o.payment_status)}</td>
+            <td>${escapeHtml(money(o.subtotal))}</td>
+            <td>${escapeHtml(money(o.discount))}</td>
+            <td>${escapeHtml(money(o.gst))}</td>
+            <td>${Number(o.returned) > 0 ? escapeHtml(money(o.returned)) : "—"}</td>
+            <td><strong>${escapeHtml(money(o.net))}</strong></td>
+          </tr>`;
+        })
+        .join("")}</tbody></table></div>`
+    : `<p class="report-empty">No invoices in this range</p>`;
+  return `<section class="report-block daily-sales-block" data-report-title="Daily Sales" data-report-group="sales" data-report-sheet="Daily Sales">
+    <div class="report-block-head">
+      <div>
+        <h3>Daily Sales</h3>
+        <p class="report-block-meta">${n} ${n === 1 ? "invoice" : "invoices"} · invoice totals, not payment entries</p>
+      </div>
+      <div class="print-actions daily-sales-toolbar">
+        <label>Date <input id="daily-sales-day" type="date" value="${escapeHtml(day || data?.from || "")}" /></label>
+        <button class="btn" type="button" data-print-report>Print</button>
+        <a class="btn" href="${excelHref("Daily Sales")}">Excel</a>
+      </div>
+    </div>
+    <div class="daily-sales-kpis">
+      ${dailySalesKpi("Total sales", money(t.net), "is-total")}
+      ${dailySalesKpi("Invoices", String(t.bills || 0))}
+      ${dailySalesKpi("Cash", money(t.cash))}
+      ${dailySalesKpi("UPI", money(t.upi))}
+      ${dailySalesKpi("Card", money(t.card))}
+      ${dailySalesKpi("Credit", money(t.credit))}
+      ${dailySalesKpi("Paid", String(t.paid || 0))}
+      ${dailySalesKpi("Unpaid", String(t.unpaid || 0))}
+      ${dailySalesKpi("Partial", String(t.partial || 0))}
+    </div>
+    ${more}${rows}
+  </section>`;
+}
+
 function reportBlock(title, sheet, headers, rows, group) {
   const all = Array.isArray(rows) ? rows : [];
   const n = all.length;
@@ -7331,7 +7460,9 @@ async function loadReports() {
     ]
       .map(([k, v]) => `<div class="report-card"><span>${k}</span><strong>${v}</strong></div>`)
       .join("");
+    globalThis.__mLastReports = data;
     $("reports").innerHTML = [
+      dailySalesBlock(data),
       reportBlock("GST summary (India)", "GST summary", ["Type", "CGST", "SGST", "IGST", "Total GST"], gstSummaryRows(s), "gst"),
       reportBlock("Sales bills", "Sales bills", ["Order", "Customer", "Type", "Pack", "Pack count", "Status", "Qty g", "Taxable", "GST", "Total", "Pay", "Pay status", "Date"], (data.sales || []).map((o) => [o.order_number, o.customer_name, o.customer_type, o.pack_name || "Loose items", Number(o.pack_count) || 0, orderStatusLabel(o.status), Number(o.total_quantity_gm) || 0, Number(o.subtotal) || 0, Number(o.gst) || 0, Number(o.total) || 0, o.payment_method, o.payment_status, formatShopDateTime(o.created_at)]), "sales"),
       reportBlock("Item sales", "Item sales", ["Item", "Qty g", "Amount", "GST"], (data.byItem || []).map((r) => [r.item_name, Number(r.quantity_gm) || 0, Number(r.amount) || 0, Number(r.gst) || 0]), "sales"),
@@ -12011,7 +12142,34 @@ $("rep-pdf")?.addEventListener("click", () => {
     to: $("rep-to")?.value,
   });
 });
+async function openInvoiceFromReport(id, orderNumber) {
+  const wantedId = String(id || "").trim();
+  const wantedNo = String(orderNumber || "").trim();
+  if (!wantedId && !wantedNo) return;
+  orderFilter.q = wantedNo;
+  if ($("orders-search")) $("orders-search").value = wantedNo;
+  showView("orders");
+  const match = (rows) =>
+    (rows || []).find((x) => (wantedId && x.id === wantedId) || (wantedNo && x.order_number === wantedNo));
+  let found = match(orderCache);
+  if (!found) {
+    await loadOrders();
+    found = match(orderCache);
+  }
+  if (found) {
+    showOrder(found);
+    return;
+  }
+  setHint(`Invoice ${wantedNo || wantedId} is not in the recent invoice list.`, "");
+}
+
 $("reports")?.addEventListener("click", (e) => {
+  const inv = e.target.closest("[data-open-invoice]");
+  if (inv?.dataset.openInvoice || inv?.dataset.orderNumber) {
+    e.preventDefault();
+    openInvoiceFromReport(inv.dataset.openInvoice, inv.dataset.orderNumber);
+    return;
+  }
   const btn = e.target.closest("[data-print-report]");
   if (!btn) return;
   const block = btn.closest(".report-block");
@@ -12022,6 +12180,13 @@ $("reports")?.addEventListener("click", (e) => {
     from: $("rep-from")?.value,
     to: $("rep-to")?.value,
   });
+});
+$("reports")?.addEventListener("change", (e) => {
+  const day = e.target?.closest?.("#daily-sales-day");
+  if (!day || !day.value) return;
+  if ($("rep-from")) $("rep-from").value = day.value;
+  if ($("rep-to")) $("rep-to").value = day.value;
+  $("report-form")?.requestSubmit();
 });
 $("acc-this-fy")?.addEventListener("click", async () => {
   applyFyRange("acc-from", "acc-to", "acc-asof", "acc-fy-year");

@@ -12,6 +12,97 @@ function pos_report_day($value) {
   return $s;
 }
 
+function pos_pay_mode_bucket($method) {
+  $m = strtolower(trim(preg_replace("/[\\s_]+/", "-", (string) ($method ?? ""))));
+  if ($m === "cash") return "cash";
+  if ($m === "upi") return "upi";
+  if ($m === "card" || $m === "credit-card" || $m === "debit-card") return "card";
+  if ($m === "credit") return "credit";
+  return "other";
+}
+
+function pos_pay_status_bucket($status) {
+  $s = strtolower(trim((string) ($status ?? "paid")));
+  if (in_array($s, ["partial", "partially-paid", "part-paid", "partly-paid"], true)) return "partial";
+  if (in_array($s, ["unpaid", "due"], true)) return "unpaid";
+  return "paid";
+}
+
+function pos_summarize_daily_sales($sales, $refundsByOrderId = []) {
+  $seen = [];
+  $invoices = [];
+  $totals = [
+    "bills" => 0,
+    "subtotal" => 0.0,
+    "discount" => 0.0,
+    "gst" => 0.0,
+    "returned" => 0.0,
+    "net" => 0.0,
+    "cash" => 0.0,
+    "upi" => 0.0,
+    "card" => 0.0,
+    "credit" => 0.0,
+    "other" => 0.0,
+    "paid" => 0,
+    "unpaid" => 0,
+    "partial" => 0,
+  ];
+  $refunds = is_array($refundsByOrderId) ? $refundsByOrderId : [];
+  foreach ($sales ?? [] as $row) {
+    if (!is_array($row)) continue;
+    $st = strtolower((string) ($row["status"] ?? ""));
+    if ($st === "cancelled" || $st === "void") continue;
+    $id = trim((string) ($row["id"] ?? ""));
+    $num = trim((string) ($row["order_number"] ?? ""));
+    $key = $id !== "" ? "id:" . $id : ($num !== "" ? "no:" . $num : "");
+    if ($key !== "") {
+      if (isset($seen[$key])) continue;
+      $seen[$key] = true;
+    }
+    $total = pos_report_num($row["total"] ?? 0);
+    $returnedRaw = $row["returned"] ?? null;
+    if ($returnedRaw === null) {
+      if ($id !== "" && isset($refunds[$id])) $returnedRaw = $refunds[$id];
+      else if ($num !== "" && isset($refunds[$num])) $returnedRaw = $refunds[$num];
+      else $returnedRaw = 0;
+    }
+    $returned = max(0, pos_report_num($returnedRaw));
+    $net = max(0, $total - $returned);
+    $mode = pos_pay_mode_bucket($row["payment_method"] ?? "");
+    $payStatus = pos_pay_status_bucket($row["payment_status"] ?? "paid");
+    $name = trim((string) ($row["customer_name"] ?? ""));
+    $invoice = [
+      "id" => $id,
+      "order_number" => $row["order_number"] ?? "",
+      "created_at" => $row["created_at"] ?? "",
+      "customer_name" => $name !== "" ? $name : "Walk-in",
+      "payment_method" => $row["payment_method"] ?? "",
+      "payment_mode" => $mode,
+      "payment_status" => $payStatus,
+      "status" => $row["status"] ?? "confirmed",
+      "subtotal" => pos_report_num($row["subtotal"] ?? 0),
+      "discount" => pos_report_num($row["discount"] ?? 0),
+      "gst" => pos_report_num($row["gst"] ?? 0),
+      "total" => $total,
+      "returned" => $returned,
+      "net" => $net,
+    ];
+    $invoices[] = $invoice;
+    $totals["bills"] += 1;
+    $totals["subtotal"] += $invoice["subtotal"];
+    $totals["discount"] += $invoice["discount"];
+    $totals["gst"] += $invoice["gst"];
+    $totals["returned"] += $returned;
+    $totals["net"] += $net;
+    $totals[$mode] += $net;
+    $totals[$payStatus] += 1;
+  }
+  foreach (["subtotal", "discount", "gst", "returned", "net", "cash", "upi", "card", "credit", "other"] as $k) {
+    $totals[$k] = round($totals[$k], 2);
+  }
+  return ["invoices" => $invoices, "totals" => $totals];
+}
+
 function pos_report_range($from, $to) {
   $fy = function_exists("pos_indian_fy") ? pos_indian_fy() : ["from" => date("Y") . "-04-01", "to" => date("Y-m-d")];
   $end = $to ?: date("Y-m-d");
@@ -21,6 +112,9 @@ function pos_report_range($from, $to) {
 
 function pos_ensure_report_columns() {
   if (!function_exists("pos_ensure_columns")) return;
+  pos_ensure_columns("sales_orders", [
+    "discount" => "DECIMAL(12,2) NOT NULL DEFAULT 0",
+  ]);
   pos_ensure_columns("items", [
     "hsn" => "VARCHAR(32) NULL",
     "local_name" => "VARCHAR(255) NULL",
@@ -54,13 +148,32 @@ function pos_build_reports($bid, $from, $to) {
     [$bid, $start, $end]
   );
   $sales = pos_q(
-    "SELECT order_number, customer_name, customer_type, pack_name, pack_count,
-            status, total_quantity_gm, subtotal, gst, total, payment_method,
+    "SELECT id, order_number, customer_name, customer_type, pack_name, pack_count,
+            status, total_quantity_gm, subtotal, discount, gst, total, payment_method,
             payment_status, created_at
      FROM sales_orders WHERE $salesWhere ORDER BY created_at",
     "sss",
     [$bid, $start, $end]
   );
+  $refunds = [];
+  try {
+    $refundRows = pos_q(
+      "SELECT r.order_id, COALESCE(SUM(r.refund_amount),0) AS refunded
+       FROM sales_returns r
+       JOIN sales_orders o ON o.id = r.order_id AND o.business_id = r.business_id
+       WHERE o.business_id = ? AND " . pos_created_between("o") . "
+         AND LOWER(COALESCE(r.status,'')) <> 'cancelled'
+       GROUP BY r.order_id",
+      "sss",
+      [$bid, $start, $end]
+    );
+    foreach ($refundRows ?: [] as $r) {
+      $refunds[(string) ($r["order_id"] ?? "")] = pos_report_num($r["refunded"] ?? 0);
+    }
+  } catch (Exception $e) {
+    $refunds = [];
+  }
+  $dailySales = pos_summarize_daily_sales($sales ?: [], $refunds);
   $byItem = pos_q(
     "SELECT l.item_name, SUM(l.quantity_gm) AS quantity_gm, SUM(l.amount) AS amount,
             SUM(l.amount * l.gst_rate / 100) AS gst
@@ -283,6 +396,7 @@ function pos_build_reports($bid, $from, $to) {
       "gstSummary" => $gstSummary,
     ]),
     "sales" => $sales,
+    "dailySales" => $dailySales,
     "byItem" => $byItem,
     "byCustomer" => $byCustomer,
     "byPack" => $byPack,
@@ -359,6 +473,24 @@ function pos_reports_to_sheets($data, $biz = null) {
         $num($s["netGst"] ?? 0),
         $num($s["takings"] ?? 0),
       ]],
+    ],
+    [
+      "name" => "Daily Sales",
+      "headers" => ["Invoice", "Date & Time", "Customer", "Payment Mode", "Status", "Subtotal", "Discount", "GST", "Returned", "Amount"],
+      "rows" => array_map(function ($o) use ($num) {
+        return [
+          $o["order_number"] ?? "",
+          (string) ($o["created_at"] ?? ""),
+          $o["customer_name"] ?? "",
+          $o["payment_method"] ?? ($o["payment_mode"] ?? ""),
+          $o["payment_status"] ?? "",
+          $num($o["subtotal"] ?? 0),
+          $num($o["discount"] ?? 0),
+          $num($o["gst"] ?? 0),
+          $num($o["returned"] ?? 0),
+          $num($o["net"] ?? 0),
+        ];
+      }, $data["dailySales"]["invoices"] ?? []),
     ],
     [
       "name" => "Sales bills",

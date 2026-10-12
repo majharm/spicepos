@@ -18,6 +18,7 @@ test("Reports Center lists common reports plus pharmacy extras only for pharmaci
   const grocery = H.reportsFor({ category: "Grocery" });
   const pharm = H.reportsFor({ category: "Medical / Pharmacy" });
   assert.ok(grocery.some((r) => r.id === "daily-sales"));
+  assert.equal(grocery.find((r) => r.id === "daily-sales").sheet, "Daily Sales");
   assert.ok(grocery.some((r) => r.id === "tax-summary"));
   assert.ok(grocery.some((r) => r.id === "expiry-report"));
   assert.ok(!H.reportsFor({ category: "Garments" }).some((r) => r.id === "expiry-report"));

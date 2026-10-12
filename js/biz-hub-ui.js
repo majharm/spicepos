@@ -1145,6 +1145,17 @@
       return;
     }
     if (typeof root.showView === "function") root.showView("reports");
+    if (String(id) === "daily-sales") {
+      const from = $("rep-from");
+      const to = $("rep-to");
+      const today = typeof root.ymd === "function" ? root.ymd() : new Date().toISOString().slice(0, 10);
+      if (from && to && (from.value !== to.value || !from.value)) {
+        from.value = today;
+        to.value = today;
+        if ($("report-form") && typeof $("report-form").requestSubmit === "function") $("report-form").requestSubmit();
+        else $("report-form")?.dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }));
+      }
+    }
     if (r.tab && typeof root.setReportTab === "function") {
       setTimeout(() => {
         root.setReportTab(r.tab);

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { formatReportDay, reportsToSheets } from "./reports.js";
+import { formatReportDay, reportsToSheets, summarizeDailySales, payModeBucket, payStatusBucket } from "./reports.js";
 
 const emptyReports = (from, to) => ({
   from,
@@ -53,6 +53,132 @@ test("GST daywise sheet uses YYYY-MM-DD not a Date string", () => {
   });
   const gst = sheets.find((s) => s.name === "GST daywise");
   assert.equal(gst.rows[0][0], "2026-08-21");
+});
+
+test("summarizeDailySales is invoice-wise, skips voids, nets returns, and avoids duplicates", () => {
+  assert.equal(payModeBucket("credit-card"), "card");
+  assert.equal(payModeBucket("UPI"), "upi");
+  assert.equal(payStatusBucket("due"), "unpaid");
+  assert.equal(payStatusBucket("partially-paid"), "partial");
+  const out = summarizeDailySales(
+    [
+      {
+        id: "1",
+        order_number: "INV1",
+        customer_name: "Asha",
+        payment_method: "cash",
+        payment_status: "paid",
+        subtotal: 100,
+        discount: 10,
+        gst: 5,
+        total: 95,
+        status: "confirmed",
+      },
+      {
+        id: "1",
+        order_number: "INV1",
+        customer_name: "Asha",
+        payment_method: "cash",
+        payment_status: "paid",
+        subtotal: 100,
+        discount: 10,
+        gst: 5,
+        total: 95,
+        status: "confirmed",
+      },
+      {
+        id: "2",
+        order_number: "INV2",
+        customer_name: "Bala",
+        payment_method: "upi",
+        payment_status: "unpaid",
+        subtotal: 200,
+        discount: 0,
+        gst: 10,
+        total: 210,
+        status: "confirmed",
+      },
+      {
+        id: "3",
+        order_number: "INV3",
+        customer_name: "Void",
+        payment_method: "cash",
+        payment_status: "paid",
+        subtotal: 50,
+        discount: 0,
+        gst: 0,
+        total: 50,
+        status: "cancelled",
+      },
+      {
+        id: "4",
+        order_number: "INV4",
+        customer_name: "Cardy",
+        payment_method: "card",
+        payment_status: "partial",
+        subtotal: 300,
+        discount: 0,
+        gst: 15,
+        total: 315,
+        status: "confirmed",
+      },
+      {
+        id: "5",
+        order_number: "INV5",
+        customer_name: "Credit",
+        payment_method: "credit",
+        payment_status: "due",
+        subtotal: 80,
+        discount: 0,
+        gst: 4,
+        total: 84,
+        status: "confirmed",
+      },
+    ],
+    { 2: 10 },
+  );
+  assert.equal(out.invoices.length, 4);
+  assert.equal(out.totals.bills, 4);
+  assert.equal(out.totals.cash, 95);
+  assert.equal(out.totals.upi, 200);
+  assert.equal(out.totals.card, 315);
+  assert.equal(out.totals.credit, 84);
+  assert.equal(out.totals.net, 694);
+  assert.equal(out.totals.paid, 1);
+  assert.equal(out.totals.unpaid, 2);
+  assert.equal(out.totals.partial, 1);
+  assert.equal(out.invoices.find((i) => i.id === "2").returned, 10);
+  assert.equal(out.invoices.find((i) => i.id === "2").net, 200);
+  assert.equal(
+    out.totals.cash + out.totals.upi + out.totals.card + out.totals.credit + out.totals.other,
+    out.totals.net,
+  );
+});
+
+test("Daily Sales sheet uses invoice totals not payment entries", () => {
+  const sheets = reportsToSheets({
+    ...emptyReports("2026-10-12", "2026-10-12"),
+    dailySales: summarizeDailySales([
+      {
+        id: "9",
+        order_number: "INV9",
+        customer_name: "Neha",
+        payment_method: "cash",
+        payment_status: "paid",
+        subtotal: 500,
+        discount: 20,
+        gst: 24,
+        total: 504,
+        created_at: "2026-10-12 09:15:00",
+      },
+    ]),
+  });
+  const daily = sheets.find((s) => s.name === "Daily Sales");
+  assert.ok(daily);
+  assert.equal(daily.headers[0], "Invoice");
+  assert.equal(daily.headers[6], "Discount");
+  assert.equal(daily.rows[0][0], "INV9");
+  assert.equal(daily.rows[0][9], 504);
 });
 
 test("Payment daywise sheet splits cash UPI card credit by calendar day", () => {

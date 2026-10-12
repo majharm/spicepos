@@ -202,7 +202,7 @@
 
   function demoReports() {
     return [
-      { id: "daily-sales", center: "sales", title: "Daily Sales", tab: "sales", sheet: "Sales bills" },
+      { id: "daily-sales", center: "sales", title: "Daily Sales", tab: "sales", sheet: "Daily Sales" },
       { id: "sales-by-customer", center: "sales", title: "Sales by Customer", tab: "sales", sheet: "Customer sales" },
       { id: "sales-by-pay", center: "sales", title: "Sales by Payment Mode", tab: "payment", sheet: "Payment" },
       { id: "low-stock", center: "inventory", title: "Low Stock", tab: "stock", sheet: "Low stock" },
@@ -328,6 +328,44 @@
     if (sheet) sheet.hidden = true;
   }
 
+  function dailySalesRows(block) {
+    if (!block) return [];
+    return [...block.querySelectorAll("tbody tr")]
+      .filter((tr) => !tr.hidden)
+      .slice(0, 80)
+      .map((tr) => {
+        const cells = [...tr.children].map((td) => String(td.textContent || "").trim());
+        const btn = tr.querySelector("[data-open-invoice]");
+        return {
+          title: cells[0] || "—",
+          meta: [cells[2], cells[3], cells[4]].filter(Boolean).join(" · "),
+          value: cells[cells.length - 1] || "",
+          invoiceId: btn?.dataset.openInvoice || tr.dataset.openInvoice || "",
+          orderNumber: btn?.dataset.orderNumber || tr.dataset.orderNumber || cells[0] || "",
+        };
+      });
+  }
+
+  function paintDailySalesKpis(block) {
+    const host = $("m-rep-kpis-sheet");
+    if (!host) return;
+    const cards = [...(block?.querySelectorAll(".daily-sales-kpi") || [])];
+    if (!cards.length) {
+      host.hidden = true;
+      host.innerHTML = "";
+      return;
+    }
+    host.hidden = false;
+    host.innerHTML = cards
+      .slice(0, 6)
+      .map((el) => {
+        const k = String(el.querySelector("span")?.textContent || "").trim();
+        const v = String(el.querySelector("strong")?.textContent || "").trim();
+        return `<div class="m-ds-kpi"><span>${escapeHtml(k)}</span><strong>${escapeHtml(v)}</strong></div>`;
+      })
+      .join("");
+  }
+
   function paintReportSheet(report, attempt) {
     const sheetEl = $("m-rep-sheet");
     if (!sheetEl || !report) return false;
@@ -336,8 +374,18 @@
     const from = $("rep-from")?.value || "";
     const to = $("rep-to")?.value || "";
     if ($("m-rep-sheet-meta")) $("m-rep-sheet-meta").textContent = from && to ? `${from} → ${to}` : "This range";
+    const excel = $("m-rep-excel");
+    if (excel) {
+      const href = document.querySelector(`#reports .report-block[data-report-sheet="${report.sheet || ""}"] a.btn[href*="excel"]`)?.getAttribute("href") || "";
+      excel.href = href || "#";
+      excel.hidden = !href;
+    }
+    const find = $("m-rep-sheet-find");
+    if (find) find.hidden = false;
     const block = findReportBlock(report);
-    let rows = blockToRows(block);
+    const isDaily = report.id === "daily-sales";
+    paintDailySalesKpis(isDaily ? block : null);
+    let rows = isDaily ? dailySalesRows(block) : blockToRows(block);
     if (!rows.length && (attempt || 0) >= 1 && !$("report-form")) {
       rows = [
         { title: "Karim Ahmed", meta: "Sales · INV0678", value: formatMoney(35000) },
@@ -350,7 +398,11 @@
         box.innerHTML = rows
           .map(
             (r) =>
-              `<li class="m-rep-row"><strong>${escapeHtml(r.title)}</strong><span>${escapeHtml(r.meta)}</span><b>${escapeHtml(r.value)}</b></li>`,
+              `<li class="m-rep-row${r.invoiceId ? " is-btn" : ""}"${
+                r.invoiceId
+                  ? ` data-open-invoice="${escapeHtml(r.invoiceId)}" data-order-number="${escapeHtml(r.orderNumber || "")}"`
+                  : ""
+              }><strong>${escapeHtml(r.title)}</strong><span>${escapeHtml(r.meta)}</span><b>${escapeHtml(r.value)}</b></li>`,
           )
           .join("");
       } else {
@@ -368,6 +420,7 @@
     const report = reportCatalog().find((r) => r.id === id);
     if (!report) return false;
     if (report.view) return false;
+    if (id === "daily-sales") applyReportRange("today");
     if (report.tab && typeof root.setReportTab === "function") root.setReportTab(report.tab);
     paintReportSheet(report, 0);
     return true;
@@ -522,7 +575,33 @@
     });
     $("m-rep-back")?.addEventListener("click", () => closeReportSheet());
     $("m-rep-refresh")?.addEventListener("click", () => applyReportRange($("m-reports")?.dataset.range || "month"));
-    $("m-rep-print")?.addEventListener("click", () => $("rep-print")?.click());
+    $("m-rep-print")?.addEventListener("click", () => {
+      const id = $("m-rep-sheet")?.dataset.reportId;
+      const sheet = reportCatalog().find((r) => r.id === id)?.sheet || "";
+      const btn = sheet
+        ? document.querySelector(`#reports .report-block[data-report-sheet="${sheet}"] [data-print-report]`)
+        : null;
+      if (btn) btn.click();
+      else $("rep-print")?.click();
+    });
+    $("m-rep-sheet-find")?.addEventListener("input", () => {
+      const q = String($("m-rep-sheet-find").value || "").trim();
+      if ($("rep-search")) $("rep-search").value = q;
+      if (typeof root.applyReportsFilter === "function") root.applyReportsFilter();
+      const openId = $("m-rep-sheet")?.dataset.reportId;
+      const report = reportCatalog().find((r) => r.id === openId);
+      if (report) paintReportSheet(report, 8);
+    });
+    $("m-rep-rows")?.addEventListener("click", (e) => {
+      const row = e.target.closest("[data-open-invoice]");
+      if (!row) return;
+      const id = row.dataset.openInvoice;
+      const match = document.querySelector(`#reports [data-open-invoice="${CSS.escape(id)}"]`);
+      if (match) match.click();
+      else if (typeof root.openInvoiceFromReport === "function") {
+        root.openInvoiceFromReport(id, row.dataset.orderNumber);
+      }
+    });
     $("m-reports")?.querySelector(".m-rep-kpis")?.addEventListener("click", (e) => {
       const btn = e.target.closest("[data-m-rep-tab]");
       if (!btn) return;

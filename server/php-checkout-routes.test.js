@@ -241,6 +241,10 @@ test("PHP customer insert bind types match placeholders", () => {
   assert.match(read("pos-orders.php"), /pos_line_amount_for_item/);
   assert.match(read("pos-reports.php"), /payDaywise/);
   assert.match(read("pos-reports.php"), /Payment daywise/);
+  assert.match(read("pos-reports.php"), /pos_summarize_daily_sales/);
+  assert.match(read("pos-reports.php"), /Daily Sales/);
+  assert.match(read("server/reports.js"), /summarizeDailySales/);
+  assert.match(read("js/app.js"), /dailySalesBlock/);
   assert.match(read("js/app.js"), /Payment daywise/);
   assert.match(read("server/reports.js"), /payDaywise/);
   const reportPhp = read("pos-reports.php");
@@ -382,7 +386,7 @@ test("POS boot skips API probe and slims catalog photos", () => {
   assert.match(index, /qrcode\.iife\.js[^>]+defer/);
   assert.match(index, /preload="auto"/);
   assert.match(index, /pos-api\.js\?v=20261006login1/);
-  assert.match(index, /app\.js\?v=20261012jet4/);
+  assert.match(index, /app\.js\?v=20261012jet5/);
   assert.match(index, /class="dialog-head"/);
   assert.match(index, /id="modal-close"/);
   assert.match(read("css/pos.css"), /#modal-close,/);
@@ -494,7 +498,7 @@ test("Restaurant Counter can create named dining tables", () => {
   assert.match(restaurant, /function canShiftTable/);
   assert.match(index, /pos\.css\?v=20261012mob3/);
   assert.match(index, /restaurant\.js\?v=20261012set4/);
-  assert.match(index, /app\.js\?v=20261012jet4/);
+  assert.match(index, /app\.js\?v=20261012jet5/);
   assert.match(index, /footwear\.js\?v=20261012fix1/);
   assert.match(app, /function resolveKitchenKot/);
   assert.match(app, /function paintKotTimers/);

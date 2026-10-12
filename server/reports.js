@@ -22,6 +22,126 @@ function range(from, to) {
   return { start, end };
 }
 
+export function payModeBucket(method) {
+  const m = String(method || "")
+    .toLowerCase()
+    .trim()
+    .replace(/[\s_]+/g, "-");
+  if (m === "cash") return "cash";
+  if (m === "upi") return "upi";
+  if (m === "card" || m === "credit-card" || m === "debit-card") return "card";
+  if (m === "credit") return "credit";
+  return "other";
+}
+
+export function payStatusBucket(status) {
+  const s = String(status || "paid").toLowerCase().trim();
+  if (s === "partial" || s === "partially-paid" || s === "part-paid" || s === "partly-paid") {
+    return "partial";
+  }
+  if (s === "unpaid" || s === "due") return "unpaid";
+  return "paid";
+}
+
+function invoiceKey(row) {
+  const id = String(row?.id || "").trim();
+  if (id) return `id:${id}`;
+  const num = String(row?.order_number || "").trim();
+  if (num) return `no:${num}`;
+  return "";
+}
+
+function isVoidInvoice(row) {
+  const s = String(row?.status || "").toLowerCase();
+  return s === "cancelled" || s === "void";
+}
+
+export function summarizeDailySales(sales, refundsByOrderId = {}) {
+  const seen = new Set();
+  const invoices = [];
+  const totals = {
+    bills: 0,
+    subtotal: 0,
+    discount: 0,
+    gst: 0,
+    returned: 0,
+    net: 0,
+    cash: 0,
+    upi: 0,
+    card: 0,
+    credit: 0,
+    other: 0,
+    paid: 0,
+    unpaid: 0,
+    partial: 0,
+  };
+  const refunds = refundsByOrderId && typeof refundsByOrderId === "object" ? refundsByOrderId : {};
+  for (const row of sales || []) {
+    if (!row || isVoidInvoice(row)) continue;
+    const key = invoiceKey(row);
+    if (key) {
+      if (seen.has(key)) continue;
+      seen.add(key);
+    }
+    const id = String(row.id || "").trim();
+    const total = round2(row.total);
+    const returned = round2(
+      Math.max(
+        0,
+        Number(row.returned ?? refunds[id] ?? refunds[row.order_number] ?? 0) || 0,
+      ),
+    );
+    const net = round2(Math.max(0, total - returned));
+    const mode = payModeBucket(row.payment_method);
+    const payStatus = payStatusBucket(row.payment_status);
+    const invoice = {
+      id,
+      order_number: row.order_number || "",
+      created_at: row.created_at,
+      customer_name: String(row.customer_name || "").trim() || "Walk-in",
+      payment_method: row.payment_method || "",
+      payment_mode: mode,
+      payment_status: payStatus,
+      status: row.status || "confirmed",
+      subtotal: round2(row.subtotal),
+      discount: round2(row.discount),
+      gst: round2(row.gst),
+      total,
+      returned,
+      net,
+    };
+    invoices.push(invoice);
+    totals.bills += 1;
+    totals.subtotal = round2(totals.subtotal + invoice.subtotal);
+    totals.discount = round2(totals.discount + invoice.discount);
+    totals.gst = round2(totals.gst + invoice.gst);
+    totals.returned = round2(totals.returned + returned);
+    totals.net = round2(totals.net + net);
+    totals[mode] = round2((Number(totals[mode]) || 0) + net);
+    totals[payStatus] = (Number(totals[payStatus]) || 0) + 1;
+  }
+  return { invoices, totals };
+}
+
+async function loadInvoiceRefunds(tenant, start, end) {
+  try {
+    const rows = await query(
+      `SELECT r.order_id, COALESCE(SUM(r.refund_amount),0) AS refunded
+       FROM sales_returns r
+       JOIN sales_orders o ON o.id = r.order_id AND o.business_id = r.business_id
+       WHERE o.business_id = ? AND ${createdBetween("o")}
+         AND LOWER(COALESCE(r.status,'')) <> 'cancelled'
+       GROUP BY r.order_id`,
+      [tenant, start, end],
+    );
+    return Object.fromEntries(
+      (rows || []).map((r) => [String(r.order_id), Number(r.refunded) || 0]),
+    );
+  } catch {
+    return {};
+  }
+}
+
 export async function buildReports(from, to) {
   const { start, end } = range(from, to);
   const tenant = bid();
@@ -61,8 +181,8 @@ export async function buildReports(from, to) {
       rangeParams,
     ),
     query(
-      `SELECT order_number, customer_name, customer_type, pack_name, pack_count,
-              status, total_quantity_gm, subtotal, gst, total, payment_method,
+      `SELECT id, order_number, customer_name, customer_type, pack_name, pack_count,
+              status, total_quantity_gm, subtotal, discount, gst, total, payment_method,
               payment_status, created_at
        FROM sales_orders WHERE ${salesWhere} ORDER BY created_at`,
       rangeParams,
@@ -257,6 +377,8 @@ export async function buildReports(from, to) {
     const split = splitOrderGst(row, shop);
     return { ...row, ...split };
   });
+  const refunds = await loadInvoiceRefunds(tenant, start, end);
+  const dailySales = summarizeDailySales(sales, refunds);
 
   return {
     from: start,
@@ -271,6 +393,7 @@ export async function buildReports(from, to) {
       gstSummary,
     },
     sales,
+    dailySales,
     byItem,
     byCustomer,
     byPack,
@@ -343,6 +466,33 @@ export function reportsToSheets(data, biz = {}) {
         num(data.summary.netGst),
         num(data.summary.takings),
       ]],
+    },
+    {
+      name: "Daily Sales",
+      headers: [
+        "Invoice",
+        "Date & Time",
+        "Customer",
+        "Payment Mode",
+        "Status",
+        "Subtotal",
+        "Discount",
+        "GST",
+        "Returned",
+        "Amount",
+      ],
+      rows: (data.dailySales?.invoices || summarizeDailySales(data.sales || []).invoices).map((o) => [
+        o.order_number,
+        String(o.created_at || ""),
+        o.customer_name,
+        o.payment_method || o.payment_mode,
+        o.payment_status,
+        num(o.subtotal),
+        num(o.discount),
+        num(o.gst),
+        num(o.returned),
+        num(o.net),
+      ]),
     },
     {
       name: "Sales bills",
