@@ -2803,8 +2803,11 @@
                   </fieldset>
                   <fieldset class="item-block aggregator-only" id="set-aggregator" hidden>
                     <legend>Online orders — Zomato &amp; Swiggy</legend>
-                    <label class="full"><input id="set-zomato-enabled" type="checkbox" /> Take Zomato orders on this shop</label>
-                    <label class="full"><input id="set-swiggy-enabled" type="checkbox" /> Take Swiggy orders on this shop</label>
+                    <p class="item-composer-note full">Both stay <strong>Disabled</strong> until Master Admin allows them and a Business Admin turns them on. Restaurant or Cafe does not activate either one.</p>
+                    <p class="field-hint full" id="agg-zomato-status">Zomato: Disabled</p>
+                    <label class="full"><input id="set-zomato-enabled" type="checkbox" /> Activate Zomato for this shop</label>
+                    <p class="field-hint full" id="agg-swiggy-status">Swiggy: Disabled</p>
+                    <label class="full"><input id="set-swiggy-enabled" type="checkbox" /> Activate Swiggy for this shop</label>
                     <label class="full"><input id="set-agg-auto-accept" type="checkbox" /> Auto-accept and send kitchen KOT</label>
                     <label>Kitchen prep minutes <input id="set-agg-prep" type="number" min="5" max="90" value="20" /></label>
                     <label>Zomato restaurant ID <input id="set-zomato-rid" maxlength="80" placeholder="Outlet ID from Zomato" autocomplete="off" /></label>
@@ -2821,6 +2824,8 @@
                       <label class="full">Zomato API base <input id="set-zomato-base" maxlength="180" placeholder="https://api.zomato.com" /></label>
                       <label class="full">Swiggy API base <input id="set-swiggy-base" maxlength="180" placeholder="https://partner.swiggy.com" /></label>
                     </details>
+                    <p class="hint full" id="agg-settings-hint"></p>
+                    <button class="btn primary" type="button" id="agg-settings-save">Save Zomato &amp; Swiggy</button>
                   </fieldset>
                   <fieldset class="item-block">
                     <legend>Timezone</legend>
@@ -3129,7 +3134,7 @@
     <script src="./js/footwear.js?v=20261012fix1" defer></script>
     <script src="./js/restaurant.js?v=20261012kot2" defer></script>
     <script src="./js/pay-integrity.js?v=20261012table1" defer></script>
-    <script src="./js/aggregator.js?v=20261012agg2" defer></script>
+    <script src="./js/aggregator.js?v=20261012agg3" defer></script>
     <script src="./js/discount.js?v=20260905deploy136" defer></script>
     <script src="./js/offers.js?v=20260905deploy170" defer></script>
     <script src="./js/loyalty.js?v=20260905deploy136" defer></script>
@@ -3157,7 +3162,7 @@
     <script src="./js/resort-ui.js?v=20261011resort1" defer></script>
     <script src="./js/item-master.js?v=20261012brand1" defer></script>
     <script src="./js/customer-master.js?v=20261012cust1" defer></script>
-    <script src="./js/app.js?v=20261012agg2" defer></script>
+    <script src="./js/app.js?v=20261012agg3" defer></script>
     <script src="./js/item-master-ui.js?v=20261012brand1" defer></script>
     <script src="./js/customer-master-ui.js?v=20261012cust1" defer></script>
     <script src="./js/mobile-app.js?v=20261012m3" defer></script>

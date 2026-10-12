@@ -51,6 +51,35 @@ test("Zomato and Swiggy webhooks normalize to one order shape", () => {
   assert.equal(A.kotTable("zomato", "delivery"), "Zomato");
 });
 
+test("Zomato and Swiggy stay off unless Master allows and Business Admin activates", () => {
+  const restaurant = { business_type: "Restaurant", category: "Cafe" };
+  assert.equal(A.flagOn(0), false);
+  assert.equal(A.flagOn("0"), false);
+  assert.equal(A.flagOn(""), false);
+  assert.equal(A.flagOn(undefined), false);
+  assert.equal(A.flagOn(1), true);
+  assert.equal(A.flagOn("1"), true);
+  assert.equal(A.flagOn(true), true);
+  assert.equal(A.isAuthorized("zomato", { zomato_allowed: 0, ...restaurant }), false);
+  assert.equal(A.isLive("zomato", { zomato_allowed: 1, zomato_enabled: 0 }), false);
+  assert.equal(A.isLive("swiggy", { swiggy_allowed: 1, swiggy_enabled: 1 }), true);
+  assert.equal(A.isLive("swiggy", { swiggy_allowed: 0, swiggy_enabled: 1 }), false);
+  assert.match(A.activationBlock("zomato", { zomato_allowed: 0 }), /Master Admin/);
+  assert.match(A.activationBlock("swiggy", { swiggy_allowed: 1, swiggy_enabled: 0 }), /Business Admin/);
+  assert.match(
+    A.activationBlock("zomato", { zomato_allowed: 1, zomato_enabled: 1, zomato_restaurant_id: "" }, { wantEnable: true }),
+    /restaurant ID/,
+  );
+  const onboard = read("server/onboard.js");
+  assert.match(onboard, /function normalizeAggregatorAllowed/);
+  assert.doesNotMatch(onboard, /normalizeAggregatorAllowed\([^)]*business_type/);
+  assert.match(read("js/app.js"), /aggregatorDeskAllowed/);
+  assert.match(read("js/app.js"), /Save Zomato & Swiggy|agg-settings-save/);
+  assert.doesNotMatch(read("js/app.js"), /if \(isRestaurantShop\(\) \|\| isBarShop\(\)\) \{\s*try \{ await saveAggregatorSettings/);
+  assert.match(read("js/master.js"), /name="zomatoAllowed"/);
+  assert.match(read("js/master.js"), /form\.zomatoAllowed\.checked = Number\(b\?\.zomato_allowed\) === 1/);
+});
+
 test("duplicate status callbacks do not require items", () => {
   const status = A.parseInbound({
     order_id: "1965530160",
@@ -80,7 +109,7 @@ test("Cafe, restaurant, and bar share Zomato and Swiggy wiring", () => {
   const server = read("server/aggregator.js");
   const php = read("pos-aggregator.php");
   const core = read("pos-php-core.php");
-  assert.match(index, /js\/aggregator\.js\?v=20261012agg2/);
+  assert.match(index, /js\/aggregator\.js\?v=20261012agg3/);
   assert.match(index, /id="agg-desk"|class="qr-orders-page agg-desk"/);
   assert.match(index, /id="agg-lane-stats"/);
   assert.match(index, /id="agg-setup-card"/);

@@ -51,6 +51,11 @@ function normalizeBarEnabled(val, type, category) {
   return 0;
 }
 
+function normalizeAggregatorAllowed(val) {
+  if (val === true || val === 1 || val === "1" || val === "on" || val === "true" || val === "yes") return 1;
+  return 0;
+}
+
 function normalizeResortEnabled(val, type, category) {
   const t = String(type || "").toLowerCase().trim();
   const c = String(category || "").toLowerCase().trim();
@@ -85,6 +90,8 @@ export function validateSignup(body, opts = {}) {
     dsa_code: pick(raw, "dsa_code", "dsaCode"),
     bar_enabled: pick(raw, "bar_enabled", "barEnabled"),
     resort_enabled: pick(raw, "resort_enabled", "resortEnabled"),
+    zomato_allowed: pick(raw, "zomato_allowed", "zomatoAllowed"),
+    swiggy_allowed: pick(raw, "swiggy_allowed", "swiggyAllowed"),
     subscription_expires_at: normalizeDateOnly(pick(raw, "subscription_expires_at")),
     status: pick(raw, "status"),
   };
@@ -141,6 +148,8 @@ export function validateSignup(body, opts = {}) {
     dsa_code: normalizeDsaCode(b.dsa_code),
     bar_enabled: normalizeBarEnabled(b.bar_enabled, b.business_type, b.category),
     resort_enabled: normalizeResortEnabled(b.resort_enabled, b.business_type, b.category),
+    zomato_allowed: normalizeAggregatorAllowed(b.zomato_allowed),
+    swiggy_allowed: normalizeAggregatorAllowed(b.swiggy_allowed),
   };
 }
 
@@ -202,6 +211,15 @@ export async function registerBusiness(raw, opts = {}) {
         b.resort_enabled,
       ],
     );
+    try {
+      await conn.query("UPDATE businesses SET zomato_allowed = ?, swiggy_allowed = ? WHERE id = ?", [
+        b.zomato_allowed,
+        b.swiggy_allowed,
+        id,
+      ]);
+    } catch {
+      /* columns added on first aggregator boot */
+    }
     if (!expiry) {
       await conn.query(
         opts.yearly
@@ -342,6 +360,15 @@ export async function updateBusiness(id, raw) {
       id,
     ],
   );
+  try {
+    await query("UPDATE businesses SET zomato_allowed = ?, swiggy_allowed = ? WHERE id = ?", [
+      b.zomato_allowed,
+      b.swiggy_allowed,
+      id,
+    ]);
+  } catch {
+    /* columns added on first aggregator boot */
+  }
   await query(
     `UPDATE company_settings
      SET name=?, address=?, phone=?, email=?, gstin=?, pan=?, city=?, state=?, pincode=?, logo_url=?

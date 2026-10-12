@@ -1971,6 +1971,14 @@ async function render() {
                   <input type="checkbox" name="resortEnabled" />
                   Enable Resort Business Model — room booking, front desk, housekeeping, and room folio for this shop
                 </label>
+                <label class="full">
+                  <input type="checkbox" name="zomatoAllowed" />
+                  Allow Zomato integration — Business Admin can activate it only after Master Admin checks this
+                </label>
+                <label class="full">
+                  <input type="checkbox" name="swiggyAllowed" />
+                  Allow Swiggy integration — Business Admin can activate it only after Master Admin checks this
+                </label>
               </fieldset>
               <fieldset class="item-block">
                 <legend>Owner</legend>
@@ -2073,6 +2081,8 @@ async function render() {
                     ${b.dsa_code ? `<span class="item-chip">DSA ${attr(b.dsa_code)}</span>` : ""}
                     ${Number(b.bar_enabled) === 1 || String(b.business_type || "").toLowerCase() === "bar" ? `<span class="item-chip">Bar model</span>` : ""}
                     ${Number(b.resort_enabled) === 1 || String(b.business_type || "").toLowerCase().includes("resort") ? `<span class="item-chip">Resort model</span>` : ""}
+                    ${Number(b.zomato_allowed) === 1 ? `<span class="item-chip">Zomato allowed</span>` : ""}
+                    ${Number(b.swiggy_allowed) === 1 ? `<span class="item-chip">Swiggy allowed</span>` : ""}
                   </div>
                   <div class="item-card-foot">
                     <div class="item-card-actions">
@@ -2141,6 +2151,8 @@ async function render() {
           const cat = String(b?.category || "").toLowerCase();
           form.resortEnabled.checked = Number(b?.resort_enabled) === 1 || type === "resort" || type.includes("resort") || cat.includes("resort");
         }
+        if (form.zomatoAllowed) form.zomatoAllowed.checked = Number(b?.zomato_allowed) === 1;
+        if (form.swiggyAllowed) form.swiggyAllowed.checked = Number(b?.swiggy_allowed) === 1;
         const editing = Boolean(b);
         setAdminRequired(!editing);
         $("biz-title").textContent = editing ? "Edit business" : "Add business";
@@ -2180,6 +2192,8 @@ async function render() {
         const payload = Object.fromEntries(fd);
         payload.barEnabled = form.barEnabled?.checked ? 1 : 0;
         payload.resortEnabled = form.resortEnabled?.checked ? 1 : 0;
+        payload.zomatoAllowed = form.zomatoAllowed?.checked ? 1 : 0;
+        payload.swiggyAllowed = form.swiggyAllowed?.checked ? 1 : 0;
         const id = payload.business_id;
         delete payload.business_id;
         delete payload.logo;

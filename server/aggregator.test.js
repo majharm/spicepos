@@ -28,4 +28,9 @@ test("Node and PHP expose the same Zomato and Swiggy POS API surface", () => {
   assert.match(read("pos-php-till.php"), /aggregator/);
   assert.equal(A.normalizeSource("Zomato POS"), "zomato");
   assert.equal(A.normalizeStatus("food_ready"), "ready");
+  assert.match(server, /zomato_allowed/);
+  assert.match(php, /pos_agg_block/);
+  assert.match(read("server/onboard.js"), /zomato_allowed/);
+  assert.match(read("pos-php-core.php"), /pos_normalize_aggregator_allowed/);
+  assert.match(read("server/schema.js"), /zomato_allowed.*DEFAULT 0/);
 });

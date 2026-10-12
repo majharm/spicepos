@@ -67,6 +67,16 @@ function pos_agg_ensure_schema() {
       "swiggy_api_base" => "VARCHAR(180) NULL",
     ]);
   }
+  if (function_exists("pos_ensure_columns")) {
+    pos_ensure_columns("businesses", [
+      "zomato_allowed" => "TINYINT(1) NOT NULL DEFAULT 0",
+      "swiggy_allowed" => "TINYINT(1) NOT NULL DEFAULT 0",
+    ]);
+  }
+}
+
+function pos_agg_flag($raw) {
+  return $raw === true || $raw === 1 || $raw === "1";
 }
 
 function pos_agg_source($raw) {
@@ -170,7 +180,14 @@ function pos_agg_with_lines($row) {
 function pos_agg_settings($bid) {
   pos_agg_ensure_schema();
   $rows = pos_q("SELECT * FROM company_settings WHERE business_id = ? LIMIT 1", "s", [$bid]);
-  return $rows[0] ?? [];
+  $biz = [];
+  try {
+    $biz = pos_q("SELECT zomato_allowed, swiggy_allowed FROM businesses WHERE id = ? LIMIT 1", "s", [$bid]);
+  } catch (Exception $e) { $biz = []; }
+  $row = $rows[0] ?? [];
+  $row["zomato_allowed"] = $biz[0]["zomato_allowed"] ?? 0;
+  $row["swiggy_allowed"] = $biz[0]["swiggy_allowed"] ?? 0;
+  return $row;
 }
 
 function pos_agg_mask($raw) {
@@ -180,10 +197,34 @@ function pos_agg_mask($raw) {
   return substr($v, 0, 2) . "••••" . substr($v, -2);
 }
 
+function pos_agg_live($source, $row) {
+  $allowed = $source === "swiggy" ? pos_agg_flag($row["swiggy_allowed"] ?? 0) : pos_agg_flag($row["zomato_allowed"] ?? 0);
+  $on = $source === "swiggy" ? pos_agg_flag($row["swiggy_enabled"] ?? 0) : pos_agg_flag($row["zomato_enabled"] ?? 0);
+  return $allowed && $on;
+}
+
+function pos_agg_block($source, $row, $wantEnable = false) {
+  $label = $source === "swiggy" ? "Swiggy" : "Zomato";
+  $allowed = $source === "swiggy" ? pos_agg_flag($row["swiggy_allowed"] ?? 0) : pos_agg_flag($row["zomato_allowed"] ?? 0);
+  if (!$allowed) return "$label is not authorized for this shop. Ask Master Admin to allow it first.";
+  if ($wantEnable) {
+    $id = $source === "swiggy" ? trim((string) ($row["swiggy_outlet_id"] ?? "")) : trim((string) ($row["zomato_restaurant_id"] ?? ""));
+    $key = $source === "swiggy" ? trim((string) ($row["swiggy_api_key"] ?? "")) : trim((string) ($row["zomato_api_key"] ?? ""));
+    if ($id === "") return "Save the $label " . ($source === "swiggy" ? "outlet ID" : "restaurant ID") . " before activating.";
+    if ($key === "") return "Save the $label API key before activating.";
+  }
+  if (!pos_agg_live($source, $row)) return "$label is disabled. A Business Admin must turn it on in Settings.";
+  return "";
+}
+
 function pos_agg_public_settings($row) {
   return [
-    "zomato_enabled" => ((int) ($row["zomato_enabled"] ?? 0)) === 1,
-    "swiggy_enabled" => ((int) ($row["swiggy_enabled"] ?? 0)) === 1,
+    "zomato_allowed" => pos_agg_flag($row["zomato_allowed"] ?? 0),
+    "swiggy_allowed" => pos_agg_flag($row["swiggy_allowed"] ?? 0),
+    "zomato_enabled" => pos_agg_flag($row["zomato_enabled"] ?? 0),
+    "swiggy_enabled" => pos_agg_flag($row["swiggy_enabled"] ?? 0),
+    "zomato_live" => pos_agg_live("zomato", $row),
+    "swiggy_live" => pos_agg_live("swiggy", $row),
     "aggregator_auto_accept" => ((int) ($row["aggregator_auto_accept"] ?? 0)) === 1,
     "aggregator_prep_minutes" => (int) ($row["aggregator_prep_minutes"] ?? 20),
     "zomato_restaurant_id" => $row["zomato_restaurant_id"] ?? "",
@@ -287,8 +328,8 @@ function pos_agg_ingest($path, $method, $body) {
   $bid = pos_agg_find_business($parsed["source"], $parsed);
   if ($bid === "") pos_send(400, ["error" => "Unknown restaurant. Add ?shop= to the webhook URL.", "php" => true]);
   $settings = pos_agg_settings($bid);
-  $on = $parsed["source"] === "swiggy" ? (int) ($settings["swiggy_enabled"] ?? 0) : (int) ($settings["zomato_enabled"] ?? 0);
-  if ($on !== 1) pos_send(400, ["error" => "Ordering is turned off for this shop", "php" => true]);
+  $block = pos_agg_block($parsed["source"], $settings);
+  if ($block !== "") pos_send(400, ["error" => $block, "php" => true]);
   $want = $parsed["source"] === "swiggy" ? ($settings["swiggy_webhook_secret"] ?? "") : ($settings["zomato_webhook_secret"] ?? "");
   $have = trim((string) ($_SERVER["HTTP_X_WEBHOOK_SECRET"] ?? ($_SERVER["HTTP_X_API_KEY"] ?? "")));
   if ($want !== "" && !hash_equals($want, $have)) pos_send(401, ["error" => "Webhook secret does not match", "php" => true]);
@@ -314,9 +355,27 @@ function pos_agg_staff_dispatch($path, $method, $body, $bid, $auth) {
     ], "php" => true]);
   }
   if ($path === "aggregator/settings" && $method === "PUT") {
+    $current = pos_agg_settings($bid);
+    $draft = $current;
+    $draft["zomato_restaurant_id"] = substr((string) ($body["zomato_restaurant_id"] ?? $current["zomato_restaurant_id"] ?? ""), 0, 80);
+    $draft["swiggy_outlet_id"] = substr((string) ($body["swiggy_outlet_id"] ?? $current["swiggy_outlet_id"] ?? ""), 0, 80);
+    $zKey = (string) ($body["zomato_api_key"] ?? "");
+    $sKey = (string) ($body["swiggy_api_key"] ?? "");
+    if ($zKey !== "" && strpos($zKey, "•") === false) $draft["zomato_api_key"] = $zKey;
+    if ($sKey !== "" && strpos($sKey, "•") === false) $draft["swiggy_api_key"] = $sKey;
+    $draft["zomato_enabled"] = pos_agg_flag($body["zomato_enabled"] ?? 0) ? 1 : 0;
+    $draft["swiggy_enabled"] = pos_agg_flag($body["swiggy_enabled"] ?? 0) ? 1 : 0;
+    if (pos_agg_flag($body["zomato_enabled"] ?? 0)) {
+      $err = pos_agg_block("zomato", $draft, true);
+      if ($err !== "") pos_send(400, ["error" => $err, "php" => true]);
+    }
+    if (pos_agg_flag($body["swiggy_enabled"] ?? 0)) {
+      $err = pos_agg_block("swiggy", $draft, true);
+      if ($err !== "") pos_send(400, ["error" => $err, "php" => true]);
+    }
     $sets = [
-      "zomato_enabled" => !empty($body["zomato_enabled"]) ? 1 : 0,
-      "swiggy_enabled" => !empty($body["swiggy_enabled"]) ? 1 : 0,
+      "zomato_enabled" => pos_agg_flag($body["zomato_enabled"] ?? 0) ? 1 : 0,
+      "swiggy_enabled" => pos_agg_flag($body["swiggy_enabled"] ?? 0) ? 1 : 0,
       "aggregator_auto_accept" => !empty($body["aggregator_auto_accept"]) ? 1 : 0,
       "aggregator_prep_minutes" => max(5, min(90, (int) ($body["aggregator_prep_minutes"] ?? 20))),
       "zomato_restaurant_id" => substr((string) ($body["zomato_restaurant_id"] ?? ""), 0, 80),
@@ -385,6 +444,8 @@ function pos_agg_staff_dispatch($path, $method, $body, $bid, $auth) {
   }
   if ($path === "aggregator/sandbox" && $method === "POST") {
     $source = pos_agg_source($body["source"] ?? "zomato") ?: "zomato";
+    $gate = pos_agg_block($source, pos_agg_settings($bid));
+    if ($gate !== "") pos_send(400, ["error" => $gate, "php" => true]);
     $sample = $body["order"] ?? ($source === "swiggy"
       ? ["orderId" => "SWG-DEMO-" . substr((string) time(), -6), "items" => [["name" => "Masala Dosa", "quantity" => 1, "unit_price" => 120]], "customer" => ["name" => "Swiggy guest"], "order_total" => 120]
       : ["order_id" => "ZMT-DEMO-" . substr((string) time(), -6), "dishes" => [["name" => "Paneer Tikka", "quantity" => 1, "unit_cost" => 249]], "customer" => ["name" => "Zomato guest"], "net_total" => 249]);
