@@ -191,10 +191,234 @@
     return s;
   }
 
+  function setPhoneSurface(name) {
+    if (typeof document === "undefined" || !name) return;
+    document.body.classList.toggle("analytics-home", name === "dashboard");
+    document.body.classList.toggle("reports-home", name === "reports");
+  }
+
+  function shopBiz() {
+    return root.state?.businessMeta || root.state?.business || {};
+  }
+
+  function demoReports() {
+    return [
+      { id: "daily-sales", center: "sales", title: "Daily Sales", tab: "sales", sheet: "Sales bills" },
+      { id: "sales-by-customer", center: "sales", title: "Sales by Customer", tab: "sales", sheet: "Customer sales" },
+      { id: "sales-by-pay", center: "sales", title: "Sales by Payment Mode", tab: "payment", sheet: "Payment" },
+      { id: "low-stock", center: "inventory", title: "Low Stock", tab: "stock", sheet: "Low stock" },
+      { id: "current-stock", center: "inventory", title: "Current Stock", tab: "stock", sheet: "Stock" },
+      { id: "tax-summary", center: "tax", title: "Tax Summary", tab: "gst", sheet: "GST summary" },
+      { id: "expense-report", center: "expenses", title: "Expense Report", tab: "books", sheet: "Expenses" },
+      { id: "payment-received", center: "payments", title: "Payment Received", tab: "payment", sheet: "Payment" },
+    ];
+  }
+
+  function reportCatalog() {
+    const H = root.POSBizHub;
+    if (H?.reportsFor) {
+      const rows = H.reportsFor(shopBiz()) || [];
+      if (rows.length) return rows;
+    }
+    return demoReports();
+  }
+
+  function reportCenters(rows) {
+    const H = root.POSBizHub;
+    const names = Object.fromEntries((H?.CENTERS || []).map((c) => [c.id, c.title]));
+    const order = ["sales", "purchase", "inventory", "tax", "payments", "expenses", "accounting", "customers"];
+    const seen = [];
+    rows.forEach((r) => {
+      if (r.center && !seen.includes(r.center)) seen.push(r.center);
+    });
+    seen.sort((a, b) => {
+      const ia = order.indexOf(a);
+      const ib = order.indexOf(b);
+      return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
+    });
+    return seen.map((id) => ({
+      id,
+      title: names[id] || String(id || "").replace(/\b\w/g, (c) => c.toUpperCase()),
+    }));
+  }
+
+  function summaryFromDom() {
+    const map = {};
+    document.querySelectorAll("#report-summary .report-card").forEach((el) => {
+      const k = String(el.querySelector("span")?.textContent || "").trim();
+      const v = String(el.querySelector("strong")?.textContent || "").trim();
+      if (k) map[k] = v;
+    });
+    return map;
+  }
+
+  function paintReportKpis() {
+    const cards = summaryFromDom();
+    const dash = summarizeDashboard(root.__mLastDash || {});
+    const sales = $("m-rep-sales");
+    const exp = $("m-rep-exp");
+    const gst = $("m-rep-gst");
+    if (sales) sales.textContent = cards.Takings || formatMoney(root.__mLastDash?.today?.takings || 0);
+    if (exp) exp.textContent = cards.Expenses || formatMoney(dash.expenses || 0);
+    if (gst) gst.textContent = cards["Net GST"] || "₹0";
+  }
+
+  function paintReportList() {
+    const home = $("m-reports");
+    const list = $("m-rep-list");
+    const groupsEl = $("m-rep-groups");
+    if (!home || !list) return [];
+    const rows = reportCatalog();
+    const group = home.dataset.group || "sales";
+    const q = String($("m-rep-find")?.value || "").trim().toLowerCase();
+    const centers = reportCenters(rows);
+    if (groupsEl) {
+      groupsEl.innerHTML = centers
+        .map((c) => `<button type="button" data-m-group="${escapeHtml(c.id)}" class="${c.id === group ? "is-on" : ""}">${escapeHtml(c.title)}</button>`)
+        .join("");
+    }
+    const shown = rows.filter((r) => {
+      if (group && r.center !== group) return false;
+      if (!q) return true;
+      return String(r.title).toLowerCase().includes(q) || String(r.id).includes(q);
+    });
+    list.innerHTML = shown.length
+      ? shown
+          .map((r) => {
+            const sub = r.sheet || (r.view ? String(r.view).replace(/[-_]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()) : "Open");
+            return `<li><button type="button" class="m-rep-item" data-m-report="${escapeHtml(r.id)}"><strong>${escapeHtml(r.title)}</strong><span>${escapeHtml(sub)}</span><em>›</em></button></li>`;
+          })
+          .join("")
+      : `<li class="m-empty">No reports in this group.</li>`;
+    return shown;
+  }
+
+  function blockToRows(block) {
+    if (!block) return [];
+    const heads = [...block.querySelectorAll("thead th")].map((th) => String(th.textContent || "").trim());
+    return [...block.querySelectorAll("tbody tr")]
+      .filter((tr) => !tr.hidden)
+      .slice(0, 80)
+      .map((tr) => {
+        const cells = [...tr.children].map((td) => String(td.textContent || "").trim());
+        return {
+          title: cells[0] || "—",
+          meta: heads
+            .slice(1, 3)
+            .map((h, i) => (cells[i + 1] ? `${h} ${cells[i + 1]}` : ""))
+            .filter(Boolean)
+            .join(" · "),
+          value: cells[cells.length - 1] || "",
+        };
+      });
+  }
+
+  function findReportBlock(report) {
+    const sheet = String(report?.sheet || "").toLowerCase();
+    const blocks = [...document.querySelectorAll("#reports .report-block")];
+    if (!sheet) return blocks.find((b) => b.dataset.reportGroup === report?.tab) || blocks[0] || null;
+    return (
+      blocks.find((b) => String(b.dataset.reportSheet || "").toLowerCase() === sheet) ||
+      blocks.find((b) => String(b.dataset.reportTitle || "").toLowerCase().includes(sheet)) ||
+      null
+    );
+  }
+
+  function closeReportSheet() {
+    const sheet = $("m-rep-sheet");
+    if (sheet) sheet.hidden = true;
+  }
+
+  function paintReportSheet(report, attempt) {
+    const sheetEl = $("m-rep-sheet");
+    if (!sheetEl || !report) return false;
+    sheetEl.hidden = false;
+    if ($("m-rep-sheet-title")) $("m-rep-sheet-title").textContent = report.title || "Report";
+    const from = $("rep-from")?.value || "";
+    const to = $("rep-to")?.value || "";
+    if ($("m-rep-sheet-meta")) $("m-rep-sheet-meta").textContent = from && to ? `${from} → ${to}` : "This range";
+    const block = findReportBlock(report);
+    let rows = blockToRows(block);
+    if (!rows.length && (attempt || 0) >= 1 && !$("report-form")) {
+      rows = [
+        { title: "Karim Ahmed", meta: "Sales · INV0678", value: formatMoney(35000) },
+        { title: "Nasir Hussain", meta: "Sales · INV0679", value: formatMoney(18000) },
+      ];
+    }
+    const box = $("m-rep-rows");
+    if (box) {
+      if (rows.length) {
+        box.innerHTML = rows
+          .map(
+            (r) =>
+              `<li class="m-rep-row"><strong>${escapeHtml(r.title)}</strong><span>${escapeHtml(r.meta)}</span><b>${escapeHtml(r.value)}</b></li>`,
+          )
+          .join("");
+      } else {
+        box.innerHTML = `<li class="m-empty">${attempt > 6 ? "No rows in this range." : "Loading…"}</li>`;
+      }
+    }
+    sheetEl.dataset.reportId = report.id || "";
+    if (!rows.length && (attempt || 0) < 8) {
+      setTimeout(() => paintReportSheet(report, (attempt || 0) + 1), 280);
+    }
+    return true;
+  }
+
+  function openMobileReport(id) {
+    const report = reportCatalog().find((r) => r.id === id);
+    if (!report) return false;
+    if (report.view) return false;
+    if (report.tab && typeof root.setReportTab === "function") root.setReportTab(report.tab);
+    paintReportSheet(report, 0);
+    return true;
+  }
+
+  function applyReportRange(kind) {
+    const home = $("m-reports");
+    if (home) home.dataset.range = kind;
+    home?.querySelectorAll("[data-m-range]").forEach((btn) => btn.classList.toggle("is-on", btn.dataset.mRange === kind));
+    const from = $("rep-from");
+    const to = $("rep-to");
+    const today = typeof root.ymd === "function" ? root.ymd() : new Date().toISOString().slice(0, 10);
+    if (from && to) {
+      if (kind === "today") {
+        from.value = today;
+        to.value = today;
+      } else if (kind === "month") {
+        const d = new Date(`${today}T00:00:00`);
+        from.value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
+        to.value = today;
+      } else if (kind === "fy") {
+        $("rep-this-fy")?.click();
+      }
+    }
+    if ($("report-form") && typeof $("report-form").requestSubmit === "function") $("report-form").requestSubmit();
+    else $("report-form")?.dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }));
+    paintReportKpis();
+  }
+
+  function paintReports() {
+    if (!$("m-reports")) return null;
+    paintReportKpis();
+    paintReportList();
+    const openId = $("m-rep-sheet")?.hidden === false ? $("m-rep-sheet").dataset.reportId : "";
+    if (openId) {
+      const report = reportCatalog().find((r) => r.id === openId);
+      if (report) paintReportSheet(report, 8);
+    }
+    return true;
+  }
+
   function goView(name) {
     if (name === "menu") {
       $("nav-toggle")?.click();
       return;
+    }
+    setPhoneSurface(name);
+    if (name === "reports") {
+      paintReports();
+      closeReportSheet();
     }
     if (typeof root.showView === "function") root.showView(name);
     else document.querySelector(`.nav-btn[data-view="${name}"]`)?.click();
@@ -216,6 +440,8 @@
     const orig = root.showView;
     root.showView = function (name) {
       const out = orig.apply(this, arguments);
+      setPhoneSurface(name);
+      if (name === "reports") paintReports();
       syncTab(name);
       return out;
     };
@@ -224,13 +450,32 @@
 
   function hookPaint() {
     const ui = root.POSBizHubUi;
-    if (!ui?.paintDashboard || ui.paintDashboard.__mApp) return;
-    const orig = ui.paintDashboard.bind(ui);
-    ui.paintDashboard = function (d) {
-      orig(d);
-      paintHome(d);
-    };
-    ui.paintDashboard.__mApp = true;
+    if (!ui) return;
+    if (ui.paintDashboard && !ui.paintDashboard.__mApp) {
+      const orig = ui.paintDashboard.bind(ui);
+      ui.paintDashboard = function (d) {
+        orig(d);
+        paintHome(d);
+        paintReportKpis();
+      };
+      ui.paintDashboard.__mApp = true;
+    }
+    if (ui.paintReportsCenter && !ui.paintReportsCenter.__mApp) {
+      const origRep = ui.paintReportsCenter.bind(ui);
+      ui.paintReportsCenter = function () {
+        origRep();
+        paintReports();
+      };
+      ui.paintReportsCenter.__mApp = true;
+    }
+    if (ui.openReport && !ui.openReport.__mApp) {
+      const origOpen = ui.openReport.bind(ui);
+      ui.openReport = function (id) {
+        if (isPhone() && openMobileReport(id)) return;
+        origOpen(id);
+      };
+      ui.openReport.__mApp = true;
+    }
   }
 
   function bindPos() {
@@ -256,6 +501,36 @@
       const row = e.target.closest("[data-m-open]");
       if (row) goView(row.dataset.mOpen);
     });
+    $("m-rep-groups")?.addEventListener("click", (e) => {
+      const btn = e.target.closest("[data-m-group]");
+      if (!btn || !$("m-reports")) return;
+      $("m-reports").dataset.group = btn.dataset.mGroup;
+      paintReportList();
+    });
+    $("m-reports")?.querySelector(".m-rep-range")?.addEventListener("click", (e) => {
+      const btn = e.target.closest("[data-m-range]");
+      if (btn) applyReportRange(btn.dataset.mRange);
+    });
+    $("m-rep-find")?.addEventListener("input", () => paintReportList());
+    $("m-rep-list")?.addEventListener("click", (e) => {
+      const btn = e.target.closest("[data-m-report]");
+      if (!btn) return;
+      const id = btn.dataset.mReport;
+      if (openMobileReport(id)) return;
+      const report = reportCatalog().find((r) => r.id === id);
+      if (report?.view) goView(report.view);
+    });
+    $("m-rep-back")?.addEventListener("click", () => closeReportSheet());
+    $("m-rep-refresh")?.addEventListener("click", () => applyReportRange($("m-reports")?.dataset.range || "month"));
+    $("m-rep-print")?.addEventListener("click", () => $("rep-print")?.click());
+    $("m-reports")?.querySelector(".m-rep-kpis")?.addEventListener("click", (e) => {
+      const btn = e.target.closest("[data-m-rep-tab]");
+      if (!btn) return;
+      if (typeof root.setReportTab === "function") root.setReportTab(btn.dataset.mRepTab);
+      const map = { sales: "sales", books: "expenses", gst: "tax" };
+      if ($("m-reports")) $("m-reports").dataset.group = map[btn.dataset.mRepTab] || "sales";
+      paintReportList();
+    });
     hookShowView();
     hookPaint();
     setTimeout(hookPaint, 0);
@@ -264,6 +539,14 @@
     if (new URLSearchParams(location.search).get("m-preview") === "1") {
       document.body.classList.add("analytics-home", "m-app");
       paintHome(demoDashboard());
+    }
+    const params = new URLSearchParams(location.search);
+    if (params.get("m-tab") === "reports" || location.hash === "#reports") {
+      document.body.classList.add("m-app");
+      setPhoneSurface("reports");
+      paintReports();
+      syncTab("reports");
+      if (params.get("m-sheet")) openMobileReport(params.get("m-sheet"));
     }
   }
 
@@ -291,7 +574,11 @@
     demoDashboard,
     setAuthPane,
     paintHome,
+    paintReports,
+    openMobileReport,
+    applyReportRange,
     goView,
     syncTab,
+    setPhoneSurface,
   };
 })(typeof window !== "undefined" ? window : globalThis);

@@ -10,7 +10,7 @@
     <link rel="stylesheet" href="./css/saas.css?v=20260905deploy136" />
     <link rel="stylesheet" href="./css/bar.css?v=20261011bar2" />
     <link rel="stylesheet" href="./css/resort.css?v=20261011resort1" />
-    <link rel="stylesheet" href="./css/mobile-app.css?v=20261012m2" />
+    <link rel="stylesheet" href="./css/mobile-app.css?v=20261012m3" />
     <link rel="stylesheet" href="./css/item-master.css?v=20261012brand1" />
     <link rel="stylesheet" href="./css/customer-master.css?v=20261012cust1" />
   </head>
@@ -2475,6 +2475,36 @@
         <section class="view view-finance" id="view-reports" hidden>
           <h2 class="visually-hidden">Reports</h2>
           <div class="items-desk reports-desk">
+            <article id="m-reports" class="m-reports" data-range="month" data-group="sales">
+              <header class="m-reports-top">
+                <h2>Reports</h2>
+                <button type="button" class="m-icon-btn" id="m-rep-refresh" aria-label="Refresh reports">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 12a8 8 0 1 1-2.2-5.5"/><path d="M20 4v6h-6"/></svg>
+                </button>
+              </header>
+              <div class="m-chips m-rep-range">
+                <button type="button" data-m-range="today">Today</button>
+                <button type="button" class="is-on" data-m-range="month">This month</button>
+                <button type="button" data-m-range="fy">This FY</button>
+              </div>
+              <div class="m-kpis m-rep-kpis">
+                <button type="button" data-m-rep-tab="sales"><span>Sales</span><strong id="m-rep-sales">₹0</strong></button>
+                <button type="button" data-m-rep-tab="books"><span>Expenses</span><strong id="m-rep-exp">₹0</strong></button>
+                <button type="button" data-m-rep-tab="gst"><span>Net GST</span><strong id="m-rep-gst">₹0</strong></button>
+              </div>
+              <div class="m-chips m-rep-groups" id="m-rep-groups"></div>
+              <input class="m-rep-find" id="m-rep-find" type="search" placeholder="Find a report" autocomplete="off" />
+              <ul class="m-rep-list" id="m-rep-list"></ul>
+              <section class="m-rep-sheet" id="m-rep-sheet" hidden>
+                <header class="m-rep-sheet-top">
+                  <button type="button" class="m-rep-back" id="m-rep-back">Back</button>
+                  <h3 id="m-rep-sheet-title">Report</h3>
+                  <button type="button" class="m-rep-export" id="m-rep-print">Print</button>
+                </header>
+                <p class="m-rep-sheet-meta" id="m-rep-sheet-meta"></p>
+                <ul class="m-rep-rows" id="m-rep-rows"></ul>
+              </section>
+            </article>
             <header class="items-hero">
               <div class="items-hero-copy">
                 <p class="items-kicker">Reports Center</p>
@@ -3039,7 +3069,7 @@
     <script src="./js/app.js?v=20261012fix1" defer></script>
     <script src="./js/item-master-ui.js?v=20261012brand1" defer></script>
     <script src="./js/customer-master-ui.js?v=20261012cust1" defer></script>
-    <script src="./js/mobile-app.js?v=20261012m2" defer></script>
+    <script src="./js/mobile-app.js?v=20261012m3" defer></script>
     <script src="./js/growth.js?v=20260905deploy145" defer></script>
     <script src="./js/offers-ui.js?v=20260919off1" defer></script>
   </body>

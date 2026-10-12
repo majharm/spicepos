@@ -4,12 +4,14 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <title>ATAV POS · Mobile preview</title>
-    <link rel="stylesheet" href="./css/mobile-app.css?v=20261012m2" />
+    <link rel="stylesheet" href="./css/mobile-app.css?v=20261012m3" />
     <style>
       body { margin: 0; font-family: Inter, system-ui, sans-serif; background: #fff; }
       @media (max-width: 720px) {
         body.m-preview #m-home { display: block; }
         body.m-preview #m-tabbar { display: flex; }
+        body.m-preview.reports-home #m-home { display: none; }
+        body.m-preview.reports-home #m-reports { display: block; }
       }
     </style>
   </head>
@@ -48,15 +50,46 @@
         <ul class="m-recent-list" id="m-recent-list"></ul>
       </section>
     </article>
+    <article id="m-reports" class="m-reports" data-range="month" data-group="sales">
+      <header class="m-reports-top">
+        <h2>Reports</h2>
+        <button type="button" class="m-icon-btn" id="m-rep-refresh" aria-label="Refresh reports">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 12a8 8 0 1 1-2.2-5.5"/><path d="M20 4v6h-6"/></svg>
+        </button>
+      </header>
+      <div class="m-chips m-rep-range">
+        <button type="button" data-m-range="today">Today</button>
+        <button type="button" class="is-on" data-m-range="month">This month</button>
+        <button type="button" data-m-range="fy">This FY</button>
+      </div>
+      <div class="m-kpis m-rep-kpis">
+        <button type="button" data-m-rep-tab="sales"><span>Sales</span><strong id="m-rep-sales">₹0</strong></button>
+        <button type="button" data-m-rep-tab="books"><span>Expenses</span><strong id="m-rep-exp">₹0</strong></button>
+        <button type="button" data-m-rep-tab="gst"><span>Net GST</span><strong id="m-rep-gst">₹0</strong></button>
+      </div>
+      <div class="m-chips m-rep-groups" id="m-rep-groups"></div>
+      <input class="m-rep-find" id="m-rep-find" type="search" placeholder="Find a report" autocomplete="off" />
+      <ul class="m-rep-list" id="m-rep-list"></ul>
+      <section class="m-rep-sheet" id="m-rep-sheet" hidden>
+        <header class="m-rep-sheet-top">
+          <button type="button" class="m-rep-back" id="m-rep-back">Back</button>
+          <h3 id="m-rep-sheet-title">Report</h3>
+          <button type="button" class="m-rep-export" id="m-rep-print">Print</button>
+        </header>
+        <p class="m-rep-sheet-meta" id="m-rep-sheet-meta"></p>
+        <ul class="m-rep-rows" id="m-rep-rows"></ul>
+      </section>
+    </article>
     <nav id="m-tabbar" class="m-tabbar" aria-label="Mobile">
       <button type="button" data-m-tab="dashboard" class="is-on"><span class="m-tab-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 10.5 12 4l8 6.5V20H4z"/></svg></span>Home</button>
       <button type="button" data-m-tab="orders"><span class="m-tab-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M7 4h8l4 4v12H7z"/><path d="M15 4v4h4"/></svg></span>Invoices</button>
       <button type="button" data-m-tab="reports"><span class="m-tab-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 19V9h4v10H4zm6 0V5h4v14h-4zm6 0v-7h4v7h-4z"/></svg></span>Reports</button>
       <button type="button" data-m-tab="menu"><span class="m-tab-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 7h14M5 12h14M5 17h14"/></svg></span>Menu</button>
     </nav>
-    <script src="./js/mobile-app.js?v=20261012m2"></script>
+    <script src="./js/mobile-app.js?v=20261012m3"></script>
     <script>
       POSMobileApp.paintHome(POSMobileApp.demoDashboard());
+      POSMobileApp.paintReports();
     </script>
   </body>
 </html>
