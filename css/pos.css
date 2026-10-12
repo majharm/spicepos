@@ -7194,6 +7194,26 @@ body.pharmacy-mode .stock-desk .items-library-list {
     padding: 8px 10px;
     gap: 8px;
   }
+  .saas-top-tools {
+    flex: 1 1 100%;
+  }
+  .saas-top-tools input[type="search"] {
+    flex: 1 1 100%;
+    min-width: 0;
+    width: 100%;
+  }
+  .session-bar {
+    padding: 8px 10px;
+    gap: 8px;
+    align-items: center;
+  }
+  .items-hero-stats {
+    width: 100%;
+  }
+  .items-stat {
+    min-width: calc(50% - 8px);
+    flex: 1 1 calc(50% - 8px);
+  }
   .saas-dash-desk.dash-desk,
   .dash-desk,
   .reports-desk,
@@ -7249,32 +7269,21 @@ body.pharmacy-mode .stock-desk .items-library-list {
     min-width: 540px;
   }
   .settings-hub-nav {
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
     max-height: none;
     padding: 6px;
   }
-  .settings-hub-nav .btn {
-    flex: 0 0 auto;
-    white-space: nowrap;
-    min-height: 44px;
-  }
+  .settings-hub-nav .btn { min-height: 44px; }
   .settings-actions { gap: 8px; }
   .settings-actions .btn { flex: 1 1 140px; }
   .reports-tabs,
-  .reports-center-bar,
-  .reports-desk .report-toolbar {
-    flex-wrap: nowrap;
+  .reports-center-bar {
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
-    scrollbar-width: none;
   }
-  .reports-tabs::-webkit-scrollbar,
-  .reports-center-bar::-webkit-scrollbar,
-  .reports-desk .report-toolbar::-webkit-scrollbar { display: none; }
-  .reports-tab,
-  .reports-desk .report-toolbar select { flex: 0 0 auto; }
+  .reports-desk .report-toolbar {
+    flex-wrap: wrap;
+  }
+  .reports-desk .report-toolbar select { min-width: 0; max-width: 100%; }
   .items-library-head { grid-template-columns: 1fr; }
   .dash-kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .zoho-kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
