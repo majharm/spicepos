@@ -1,4 +1,5 @@
-import { query } from "./db.js";
+import { query, withTransaction } from "./db.js";
+import { clipIdempotencyKey, ensureIdempotencyTable, findIdempotent, saveIdempotent, parseIdempotentPayload } from "./idempotency.js";
 import { bid, branchId, authUser } from "./context.js";
 import { requireStaff, requirePerm, requirePermAny, requireBusinessAdmin, parsePerms, hashPassword, publicStatus } from "./auth.js";
 import { defaultPerms, ROLES, MODULES } from "./roles.js";
@@ -170,6 +171,31 @@ function holdPayloadTable(row) {
   return { have: normalizeShiftTableNo(row.label), payload: parsed };
 }
 
+function holdCartCount(payload) {
+  const cart = Array.isArray(payload?.cart) ? payload.cart : [];
+  return cart.filter((line) => Number(line?.qtyGm || line?.quantity_gm || line?.qty) > 0).length;
+}
+
+async function deleteHoldsForTable(runner, businessId, tableNo) {
+  const want = normalizeShiftTableNo(tableNo);
+  if (!want) return 0;
+  const run = async (sql, params) => {
+    if (typeof runner.query === "function") {
+      const [rows] = await runner.query(sql, params);
+      return rows;
+    }
+    return runner(sql, params);
+  };
+  const holds = await run("SELECT id, label, payload_json FROM held_bills WHERE business_id = ?", [businessId]).catch(() => []);
+  let n = 0;
+  for (const row of holds || []) {
+    if (holdPayloadTable(row).have !== want) continue;
+    await run("DELETE FROM held_bills WHERE id=? AND business_id=?", [row.id, businessId]);
+    n += 1;
+  }
+  return n;
+}
+
 async function tableLayoutIds(businessId) {
   const [co] = await query("SELECT dining_tables_json FROM company_settings WHERE business_id = ? LIMIT 1", [businessId]);
   const json = clipDiningTablesJson(co?.dining_tables_json || "[]");
@@ -190,17 +216,31 @@ async function tableLayoutIds(businessId) {
   return ids;
 }
 
-async function tableIsOccupied(businessId, tableNo) {
+function qrRowOpen(row) {
+  const st = String(row?.status || "").toLowerCase();
+  if (["cancelled", "rejected", "completed"].includes(st) || row?.sales_order_id) return false;
+  return true;
+}
+
+async function tableIsOccupied(businessId, tableNo, runner) {
   const want = normalizeShiftTableNo(tableNo);
   if (!want || want === "Parcel") return false;
-  const holds = await query("SELECT id, label, payload_json FROM held_bills WHERE business_id = ?", [businessId]).catch(() => []);
-  for (const row of holds) {
-    if (holdPayloadTable(row).have === want) return true;
+  const run = async (sql, params) => {
+    const db = runner || query;
+    if (typeof db.query === "function") {
+      const [rows] = await db.query(sql, params);
+      return rows;
+    }
+    return db(sql, params);
+  };
+  const holds = await run("SELECT id, label, payload_json FROM held_bills WHERE business_id = ?", [businessId]).catch(() => []);
+  for (const row of holds || []) {
+    const { have, payload } = holdPayloadTable(row);
+    if (have === want && holdCartCount(payload) > 0) return true;
   }
-  const qrs = await query("SELECT table_no, status, sales_order_id FROM qr_orders WHERE business_id = ?", [businessId]).catch(() => []);
-  for (const row of qrs) {
-    const st = String(row.status || "").toLowerCase();
-    if (["cancelled", "rejected", "completed"].includes(st) || row.sales_order_id) continue;
+  const qrs = await run("SELECT table_no, status, sales_order_id FROM qr_orders WHERE business_id = ?", [businessId]).catch(() => []);
+  for (const row of qrs || []) {
+    if (!qrRowOpen(row)) continue;
     if (normalizeShiftTableNo(row.table_no) === want) return true;
   }
   return false;
@@ -686,28 +726,15 @@ export function registerTenant(app) {
 
   app.post("/api/holds", requireStaff, requirePerm("counter"), (req, res) =>
     send(res, async () => {
-      const payload = req.body?.payload && typeof req.body.payload === "object" ? req.body.payload : {};
-      const tableNo = String(payload.table_no || payload.tableNo || "").trim();
-      if (tableNo) {
-        const rows = await query("SELECT id, payload_json FROM held_bills WHERE business_id = ?", [bid()]);
-        for (const row of rows) {
-          let have = "";
-          try {
-            const parsed = JSON.parse(row.payload_json || "{}") || {};
-            have = String(parsed.table_no || parsed.tableNo || "").trim();
-          } catch {
-            have = "";
-          }
-          if (have && have === tableNo) {
-            await query("DELETE FROM held_bills WHERE id=? AND business_id=?", [row.id, bid()]);
-          }
-        }
-      }
+      const payload = req.body?.payload && typeof req.body.payload === "object" ? { ...req.body.payload } : {};
+      const tableNo = normalizeShiftTableNo(payload.table_no || payload.tableNo || "");
+      if (tableNo) payload.table_no = tableNo;
+      if (tableNo) await deleteHoldsForTable(query, bid(), tableNo);
       const id = crypto.randomUUID();
       await query(
         `INSERT INTO held_bills (id, business_id, branch_id, user_id, label, payload_json)
          VALUES (?,?,?,?,?,?)`,
-        [id, bid(), branchId(), authUser()?.id, req.body?.label || "Held bill", JSON.stringify(payload)],
+        [id, bid(), branchId(), authUser()?.id, req.body?.label || holdLabelForTable(tableNo) || "Held bill", JSON.stringify(payload)],
       );
       return { ok: true, id };
     }),
@@ -752,6 +779,7 @@ export function registerTenant(app) {
   app.post(["/api/tables/shift", "/api/tables/shift/", "/api/table-shift", "/api/table-shift/"], requireStaff, requirePermAny("kot", "counter"), (req, res) =>
     send(res, async () => {
       await ensureTableShiftSchema();
+      await ensureIdempotencyTable();
       const [biz] = await query("SELECT * FROM businesses WHERE id = ? LIMIT 1", [bid()]);
       const type = String(biz?.business_type || "").toLowerCase();
       const text = `${biz?.category || ""} ${biz?.business_type || ""}`.toLowerCase();
@@ -767,52 +795,133 @@ export function registerTenant(app) {
       if (from === "Parcel" || to === "Parcel") throw new Error("Parcel / takeaway cannot be shifted");
       const ids = await tableLayoutIds(bid());
       if (ids.size && !ids.has(to)) throw new Error("New table is not on the floor plan");
-      if (!(await tableIsOccupied(bid(), from))) throw new Error("No active order on that table");
-      if (await tableIsOccupied(bid(), to)) throw new Error("Destination table is occupied");
-      let movedHold = false;
-      const movedQr = [];
-      const orderNumbers = [];
-      let movedKots = 0;
-      const holds = await query("SELECT id, label, payload_json FROM held_bills WHERE business_id = ?", [bid()]).catch(() => []);
-      for (const row of holds) {
-        const { have, payload } = holdPayloadTable(row);
-        if (have !== from) continue;
-        payload.table_no = to;
-        await query("UPDATE held_bills SET label = ?, payload_json = ? WHERE id = ? AND business_id = ?", [
-          holdLabelForTable(to),
-          JSON.stringify(payload),
-          row.id,
-          bid(),
-        ]);
-        movedHold = true;
+      const key = clipIdempotencyKey(req.body?.idempotencyKey || req.body?.idempotency_key || req.body?.request_id);
+      if (key) {
+        const prior = await findIdempotent(query, bid(), key);
+        if (prior) return parseIdempotentPayload(prior) || { ok: true, replay: true, from, to };
       }
-      const kots = await query("SELECT id, table_no, status FROM kitchen_tickets WHERE business_id = ?", [bid()]).catch(() => []);
-      for (const row of kots) {
-        if (normalizeShiftTableNo(row.table_no) !== from) continue;
-        if (["cancelled", "void"].includes(String(row.status || "").toLowerCase())) continue;
-        await query("UPDATE kitchen_tickets SET table_no = ?, updated_at = CURRENT_TIMESTAMP(3) WHERE id = ? AND business_id = ?", [
+      return withTransaction(async (conn) => {
+        if (await tableIsOccupied(bid(), to, conn)) throw new Error("Destination table is occupied");
+        if (!(await tableIsOccupied(bid(), from, conn))) throw new Error("No active order on that table");
+        let movedHold = false;
+        const movedQr = [];
+        const orderNumbers = [];
+        let movedKots = 0;
+        const [holds] = await conn.query("SELECT id, label, payload_json FROM held_bills WHERE business_id = ? FOR UPDATE", [bid()]);
+        for (const row of holds || []) {
+          const { have, payload } = holdPayloadTable(row);
+          if (have !== from) continue;
+          payload.table_no = to;
+          await conn.query("UPDATE held_bills SET label = ?, payload_json = ? WHERE id = ? AND business_id = ?", [
+            holdLabelForTable(to),
+            JSON.stringify(payload),
+            row.id,
+            bid(),
+          ]);
+          movedHold = true;
+        }
+        const [kots] = await conn.query("SELECT id, table_no, status FROM kitchen_tickets WHERE business_id = ?", [bid()]).catch(() => [[]]);
+        for (const row of kots || []) {
+          if (normalizeShiftTableNo(row.table_no) !== from) continue;
+          if (["cancelled", "void"].includes(String(row.status || "").toLowerCase())) continue;
+          await conn.query("UPDATE kitchen_tickets SET table_no = ?, updated_at = CURRENT_TIMESTAMP(3) WHERE id = ? AND business_id = ?", [
+            to,
+            row.id,
+            bid(),
+          ]);
+          movedKots += 1;
+        }
+        const [qrs] = await conn.query("SELECT id, order_number, table_no, status, sales_order_id FROM qr_orders WHERE business_id = ?", [bid()]).catch(() => [[]]);
+        for (const row of qrs || []) {
+          if (!qrRowOpen(row)) continue;
+          if (normalizeShiftTableNo(row.table_no) !== from) continue;
+          await conn.query("UPDATE qr_orders SET table_no = ? WHERE id = ? AND business_id = ?", [to, row.id, bid()]);
+          movedQr.push(row.id);
+          if (row.order_number) orderNumbers.push(row.order_number);
+        }
+        try {
+          const [openBills] = await conn.query(
+            `SELECT id, order_number, table_no FROM sales_orders
+             WHERE business_id = ? AND LOWER(TRIM(COALESCE(status,'confirmed'))) <> 'cancelled'`,
+            [bid()],
+          );
+          for (const bill of openBills || []) {
+            if (normalizeShiftTableNo(bill.table_no) !== from) continue;
+            await conn.query("UPDATE sales_orders SET table_no = ? WHERE id = ? AND business_id = ?", [to, bill.id, bid()]);
+            if (bill.order_number) orderNumbers.push(bill.order_number);
+          }
+        } catch {
+          /* table_no optional */
+        }
+        const orderId = String(req.body?.order_id || req.body?.orderId || "").trim();
+        if (orderId) {
+          try {
+            await conn.query("UPDATE sales_orders SET table_no = ? WHERE id = ? AND business_id = ?", [to, orderId, bid()]);
+          } catch {
+            /* optional */
+          }
+        }
+        const who = authUser()?.name || authUser()?.email || authUser()?.username || "staff";
+        const orderNumber = [...new Set(orderNumbers)].join(", ") || (movedHold ? holdLabelForTable(from) : "");
+        await conn.query(
+          "INSERT INTO table_shift_history (id, business_id, order_number, old_table, new_table, shifted_by) VALUES (?,?,?,?,?,?)",
+          [crypto.randomUUID(), bid(), orderNumber, from, to, who],
+        );
+        const out = {
+          ok: true,
+          from,
           to,
-          row.id,
-          bid(),
-        ]);
-        movedKots += 1;
+          hold: movedHold,
+          kots: movedKots,
+          qr_orders: movedQr,
+          order_number: orderNumber,
+          source_vacant: !(await tableIsOccupied(bid(), from, conn)),
+          dest_occupied: await tableIsOccupied(bid(), to, conn),
+        };
+        if (key) await saveIdempotent(conn, bid(), key, "table-shift", `${from}->${to}`, out);
+        return out;
+      });
+    }),
+  );
+
+  app.post(["/api/tables/vacate", "/api/tables/vacate/"], requireStaff, requirePermAny("kot", "counter"), (req, res) =>
+    send(res, async () => {
+      const tableNo = normalizeShiftTableNo(req.body?.table_no || req.body?.tableNo);
+      if (!tableNo || tableNo === "Parcel") throw new Error("Choose a table");
+      const dropped = await deleteHoldsForTable(query, bid(), tableNo);
+      return { ok: true, table_no: tableNo, dropped, occupied: await tableIsOccupied(bid(), tableNo) };
+    }),
+  );
+
+  app.post(["/api/tables/reconcile", "/api/tables/reconcile/"], requireStaff, requirePermAny("kot", "counter", "settings"), (req, res) =>
+    send(res, async () => {
+      const holds = await query("SELECT id, label, payload_json FROM held_bills WHERE business_id = ?", [bid()]).catch(() => []);
+      const empty = [];
+      for (const row of holds || []) {
+        const { payload } = holdPayloadTable(row);
+        if (holdCartCount(payload) > 0) continue;
+        await query("DELETE FROM held_bills WHERE id=? AND business_id=?", [row.id, bid()]);
+        empty.push(row.id);
       }
-      const qrs = await query("SELECT id, order_number, table_no, status, sales_order_id FROM qr_orders WHERE business_id = ?", [bid()]).catch(() => []);
-      for (const row of qrs) {
-        const st = String(row.status || "").toLowerCase();
-        if (["cancelled", "rejected", "completed"].includes(st) || row.sales_order_id) continue;
-        if (normalizeShiftTableNo(row.table_no) !== from) continue;
-        await query("UPDATE qr_orders SET table_no = ? WHERE id = ? AND business_id = ?", [to, row.id, bid()]);
-        movedQr.push(row.id);
-        if (row.order_number) orderNumbers.push(row.order_number);
+      let barFreed = 0;
+      try {
+        const bars = await query("SELECT id, status, hold_json FROM bar_tables WHERE business_id = ?", [bid()]);
+        for (const tbl of bars || []) {
+          let hold = {};
+          try {
+            hold = JSON.parse(tbl.hold_json || "{}") || {};
+          } catch {
+            hold = {};
+          }
+          if ((hold.lines || []).length) continue;
+          if (String(tbl.status || "").toLowerCase() === "free" && !tbl.hold_json) continue;
+          await query("UPDATE bar_tables SET status='free', hold_json=NULL WHERE id=? AND business_id=?", [tbl.id, bid()]);
+          barFreed += 1;
+        }
+      } catch {
+        /* bar optional */
       }
-      const who = authUser()?.name || authUser()?.email || authUser()?.username || "staff";
-      const orderNumber = [...new Set(orderNumbers)].join(", ") || (movedHold ? holdLabelForTable(from) : "");
-      await query(
-        "INSERT INTO table_shift_history (id, business_id, order_number, old_table, new_table, shifted_by) VALUES (?,?,?,?,?,?)",
-        [crypto.randomUUID(), bid(), orderNumber, from, to, who],
-      );
-      return { ok: true, from, to, hold: movedHold, kots: movedKots, qr_orders: movedQr, order_number: orderNumber };
+      return { ok: true, empty_holds_removed: empty.length, bar_tables_freed: barFreed, payments_untouched: true };
     }),
   );
 

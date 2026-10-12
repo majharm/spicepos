@@ -39,17 +39,26 @@ function pos_dispatch_holds($path, $method, $body, $bid, $branchId, $uid, $auth)
     if (!is_array($cart) || !$cart) {
       pos_send(400, ["error" => "Cart is empty", "php" => true]);
     }
-    $tableNo = trim((string) ($payload["table_no"] ?? $payload["tableNo"] ?? ""));
+    if (is_file(__DIR__ . "/pos-table-shift.php")) require_once __DIR__ . "/pos-table-shift.php";
+    $tableNo = function_exists("pos_normalize_table_no")
+      ? pos_normalize_table_no($payload["table_no"] ?? $payload["tableNo"] ?? "")
+      : trim((string) ($payload["table_no"] ?? $payload["tableNo"] ?? ""));
+    if ($tableNo !== "") $payload["table_no"] = $tableNo;
     if ($tableNo !== "") {
       try {
         $existing = pos_q(
-          "SELECT id, payload_json FROM held_bills WHERE business_id = ?",
+          "SELECT id, label, payload_json FROM held_bills WHERE business_id = ?",
           "s",
           [$bid]
         );
         foreach ($existing as $row) {
-          $parsed = json_decode($row["payload_json"] ?? "{}", true);
-          $have = is_array($parsed) ? trim((string) ($parsed["table_no"] ?? $parsed["tableNo"] ?? "")) : "";
+          $have = "";
+          if (function_exists("pos_hold_payload_table")) {
+            [$have] = pos_hold_payload_table($row);
+          } else {
+            $parsed = json_decode($row["payload_json"] ?? "{}", true);
+            $have = is_array($parsed) ? trim((string) ($parsed["table_no"] ?? $parsed["tableNo"] ?? "")) : "";
+          }
           if ($have !== "" && $have === $tableNo) {
             pos_q("DELETE FROM held_bills WHERE id = ? AND business_id = ?", "ss", [$row["id"], $bid]);
           }

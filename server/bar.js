@@ -1,4 +1,5 @@
 import { query, withTransaction } from "./db.js";
+import { clipIdempotencyKey, ensureIdempotencyTable, findIdempotent, saveIdempotent, parseIdempotentPayload } from "./idempotency.js";
 import { bid, authUser } from "./context.js";
 import { requirePerm } from "./auth.js";
 import "../js/bar.js";
@@ -513,13 +514,31 @@ export function registerBarStaff(app) {
     try {
       const fromId = clip(req.body?.from_id, 64);
       const toId = clip(req.body?.to_id, 64);
-      const [from] = await query("SELECT * FROM bar_tables WHERE id=? AND business_id=?", [fromId, bid()]);
-      const [to] = await query("SELECT * FROM bar_tables WHERE id=? AND business_id=?", [toId, bid()]);
-      if (!from || !to) throw new Error("Table not found");
-      await query("UPDATE bar_tables SET status='busy', hold_json=? WHERE id=? AND business_id=?", [from.hold_json, toId, bid()]);
-      await query("UPDATE bar_tables SET status='free', hold_json=NULL WHERE id=? AND business_id=?", [fromId, bid()]);
-      await audit("table", `Transferred ${from.name} → ${to.name}`);
-      res.json({ ok: true });
+      await ensureIdempotencyTable();
+      const key = clipIdempotencyKey(req.body?.idempotencyKey || req.body?.idempotency_key);
+      if (key) {
+        const prior = await findIdempotent(query, bid(), key);
+        if (prior) {
+          res.json(parseIdempotentPayload(prior) || { ok: true, replay: true });
+          return;
+        }
+      }
+      const out = await withTransaction(async (conn) => {
+        const [[from]] = await conn.query("SELECT * FROM bar_tables WHERE id=? AND business_id=? FOR UPDATE", [fromId, bid()]);
+        const [[to]] = await conn.query("SELECT * FROM bar_tables WHERE id=? AND business_id=? FOR UPDATE", [toId, bid()]);
+        if (!from || !to) throw new Error("Table not found");
+        const destHold = parseHold(to.hold_json);
+        if (destHold.lines?.length) throw new Error("Destination table is occupied");
+        const srcHold = parseHold(from.hold_json);
+        if (!srcHold.lines?.length) throw new Error("No active order on that table");
+        await conn.query("UPDATE bar_tables SET status='busy', hold_json=? WHERE id=? AND business_id=?", [from.hold_json, toId, bid()]);
+        await conn.query("UPDATE bar_tables SET status='free', hold_json=NULL WHERE id=? AND business_id=?", [fromId, bid()]);
+        const payload = { ok: true, from_id: fromId, to_id: toId, source_vacant: true, dest_occupied: true };
+        if (key) await saveIdempotent(conn, bid(), key, "bar-transfer", `${fromId}->${toId}`, payload);
+        return payload;
+      });
+      await audit("table", `Transferred order`);
+      res.json(out);
     } catch (err) {
       res.status(400).json({ error: String(err.message) });
     }
@@ -566,6 +585,15 @@ export function registerBarStaff(app) {
 
   app.post("/api/bar/checkout", requirePerm("counter"), async (req, res) => {
     try {
+      await ensureIdempotencyTable();
+      const idemKey = clipIdempotencyKey(req.body?.idempotencyKey || req.body?.idempotency_key);
+      if (idemKey) {
+        const prior = await findIdempotent(query, bid(), idemKey);
+        if (prior) {
+          res.json(parseIdempotentPayload(prior) || { ok: true, replay: true, id: prior.ref_id });
+          return;
+        }
+      }
       const settings = await settingsOf(bid());
       const operate = B().canOperate(settings, new Date(), B().ymdIst(new Date()));
       if (!operate.ok && !B().canVoid(roleOf(), permsOf())) throw new Error(operate.reason || "Bar sales restricted");
@@ -586,7 +614,7 @@ export function registerBarStaff(app) {
       const user = authUser() || {};
       const saleId = crypto.randomUUID();
       const billNo = await nextBillNo(bid());
-      await withTransaction(async (conn) => {
+      const out = await withTransaction(async (conn) => {
         for (const line of priced) {
           await conn.query("UPDATE bar_products SET on_hand_ml=? WHERE id=? AND business_id=?", [line.remaining_ml, line.product.id, bid()]);
           await conn.query(
@@ -607,10 +635,13 @@ export function registerBarStaff(app) {
         if (req.body?.table_id) {
           await conn.query("UPDATE bar_tables SET status='free', hold_json=NULL WHERE id=? AND business_id=?", [req.body.table_id, bid()]);
         }
+        const sale = { id: saleId, bill_no: billNo, ...totals, method: req.body?.method || "cash", table_name: req.body?.table_name || "" };
+        const billed = { ...sale, receipt_html: receiptHtml(sale, priced.map((p) => ({ ...p.row, name: p.product.name })), settings) };
+        if (idemKey) await saveIdempotent(conn, bid(), idemKey, "bar-checkout", saleId, billed);
+        return billed;
       });
       await audit("sale", `${billNo} ${totals.total}`);
-      const sale = { id: saleId, bill_no: billNo, ...totals, method: req.body?.method || "cash", table_name: req.body?.table_name || "" };
-      res.json({ ...sale, receipt_html: receiptHtml(sale, priced.map((p) => ({ ...p.row, name: p.product.name })), settings) });
+      res.json(out);
     } catch (err) {
       res.status(400).json({ error: String(err.message) });
     }

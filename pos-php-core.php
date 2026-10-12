@@ -3863,7 +3863,7 @@ function pos_php_dispatch($path, $method, $rawBody) {
         pos_dispatch_checkout($path, $method, $body, $bid, $branchId, $uid, $auth);
         return;
       }
-      if (preg_match('#^orders/[^/]+$#', $path)) {
+      if (preg_match('#^orders/[^/]+(/payments)?$#', $path)) {
         $auth = pos_staff_session();
         if (!$auth || ($auth["type"] ?? "") !== "staff") pos_send(401, ["error" => "Sign in required"]);
         $bid = $auth["user"]["business_id"];

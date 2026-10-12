@@ -1,5 +1,7 @@
 import crypto from "node:crypto";
 import "../js/payment-methods.js";
+import "../js/pay-integrity.js";
+import { clipIdempotencyKey, ensureIdempotencyTable, findIdempotent, saveIdempotent, parseIdempotentPayload } from "./idempotency.js";
 import { query, withTransaction } from "./db.js";
 import { bid, branchId, authUser } from "./context.js";
 import { nextSeq, round2 } from "./crud.js";
@@ -304,6 +306,15 @@ export async function persistInvoiceSettlement(conn, orderId, snap = {}) {
 }
 
 export async function postCustomerReceipt(conn, opts) {
+  const key = clipIdempotencyKey(opts.idempotencyKey || opts.idempotency_key);
+  if (key) {
+    await ensureIdempotencyTable();
+    const prior = await findIdempotent(conn, bid(), key);
+    if (prior) {
+      const cached = parseIdempotentPayload(prior);
+      return { ...(cached || {}), replay: true, ledgerId: prior.ref_id, amount: cached?.amount ?? 0, entryNo: cached?.entryNo || "" };
+    }
+  }
   const customer = opts.customer;
   const amt = round2(opts.amount);
   const method = payMoney(opts.method || opts.payment_method || "cash") || "cash";
@@ -331,7 +342,7 @@ export async function postCustomerReceipt(conn, opts) {
   });
   await postReceiptJournal(conn, { amount: amt, payment_method: method, entryNo, ledgerId });
   if (opts.orderId) await applyInvoicePaidDelta(conn, opts.orderId, amt);
-  return {
+  const result = {
     entryNo,
     ledgerId,
     amount: amt,
@@ -345,15 +356,90 @@ export async function postCustomerReceipt(conn, opts) {
     payment_date: opts.paymentDate || opts.payment_date || null,
     order_id: opts.orderId || null,
   };
+  if (key) await saveIdempotent(conn, bid(), key, "receipt", ledgerId, result);
+  return result;
+}
+
+export async function collectOrderPayment(conn, { order, customer, amount, method, paymentReference, paymentDate, idempotencyKey }) {
+  const invoiceTotal = round2(order.total);
+  const already = round2(Number(order.amount_paid || 0));
+  const key = clipIdempotencyKey(idempotencyKey);
+  if (key) {
+    await ensureIdempotencyTable();
+    const prior = await findIdempotent(conn, bid(), key);
+    if (prior) {
+      const cached = parseIdempotentPayload(prior);
+      const remaining = round2(Math.max(0, invoiceTotal - already));
+      return {
+        ok: true,
+        replay: true,
+        order: cached?.order || order,
+        receipt: cached?.receipt || cached,
+        remaining: cached?.remaining ?? remaining,
+      };
+    }
+  }
+  let paidNow = round2(amount);
+  if (!(paidNow > 0)) paidNow = round2(Math.max(0, invoiceTotal - already));
+  const check = globalThis.POSPayIntegrity?.validatePaymentAttempt?.({
+    billTotal: invoiceTotal,
+    alreadyPaid: already,
+    amount: paidNow,
+    idempotencyKey: key,
+    existingKeys: [],
+  }) || { ok: true, remaining: round2(Math.max(0, invoiceTotal - already - paidNow)) };
+  if (check.replay) {
+    return { ok: true, replay: true, order, remaining: check.remaining };
+  }
+  if (!check.ok) throw new Error(check.error || "Payment rejected");
+  if (!(paidNow > 0)) throw new Error("Enter a payment amount");
+  const previousDue = round2(Number(customer?.outstanding || 0));
+  const nextOut = round2(Math.max(0, previousDue - paidNow));
+  if (customer && !isWalkInParty(customer)) {
+    await execSql(conn, "UPDATE customers SET outstanding = ? WHERE id = ? AND business_id = ?", [nextOut, customer.id, bid()]);
+    customer.outstanding = nextOut;
+  }
+  const receipt = await postCustomerReceipt(conn, {
+    customer,
+    amount: paidNow,
+    method,
+    orderId: order.id,
+    orderNumber: order.order_number,
+    notes: order.order_number,
+    paymentReference,
+    paymentDate,
+    invoiceAmount: invoiceTotal,
+    previousDue,
+    remainingDue: nextOut,
+    idempotencyKey,
+  });
+  const amountPaid = round2(already + (receipt?.replay ? 0 : paidNow));
+  const paymentStatus = amountPaid <= 0 ? "unpaid" : amountPaid + 0.0001 < invoiceTotal ? "partial" : "paid";
+  const currentDue = round2(Math.max(0, invoiceTotal - Math.min(amountPaid, invoiceTotal)));
+  const snap = {
+    previousDue: round2(Number(order.previous_due || 0)),
+    amountPaid,
+    currentDue: round2(Math.max(0, Number(order.previous_due || 0) + invoiceTotal - amountPaid)),
+    paymentStatus,
+    paymentReference: paymentReference || order.payment_reference,
+    paymentDate: paymentDate || order.payment_date,
+    receipt,
+  };
+  await persistInvoiceSettlement(conn, order.id, snap);
+  return { ok: true, order: { ...order, ...snap, amount_paid: amountPaid, payment_status: paymentStatus, current_due: snap.currentDue }, receipt, remaining: currentDue };
 }
 
 export async function settleCustomerInvoice(conn, {
-  customer, total, method, orderId, orderNumber, amountPaid, paymentReference, paymentDate,
+  customer, total, method, orderId, orderNumber, amountPaid, paymentReference, paymentDate, payments,
 }) {
   const invoiceTotal = round2(total);
   const walkIn = isWalkInParty(customer);
   const previousDue = walkIn ? 0 : await customerPreviousDue(conn, customer.id, orderId);
-  let paid = invoicePaidAmount(method, invoiceTotal, amountPaid);
+  const split = Array.isArray(payments) && payments.length && globalThis.POSPayIntegrity
+    ? globalThis.POSPayIntegrity.splitPayments(payments, invoiceTotal, 0)
+    : null;
+  if (split && !split.ok) throw new Error(split.error);
+  let paid = invoicePaidAmount(method, invoiceTotal, split?.ok ? split.paid : amountPaid);
   if (walkIn && paid > invoiceTotal) paid = invoiceTotal;
   const maxPaid = round2(previousDue + invoiceTotal);
   if (paid > maxPaid) paid = maxPaid;
@@ -401,7 +487,27 @@ export async function settleCustomerInvoice(conn, {
     });
   }
   let receipt = null;
-  if (paid > 0) {
+  const receiptRows = [];
+  if (split?.ok && split.payments.length) {
+    for (const p of split.payments) {
+      const row = await postCustomerReceipt(conn, {
+        customer,
+        amount: p.amount,
+        method: p.method || "cash",
+        orderId,
+        orderNumber,
+        notes: orderNumber,
+        paymentReference: p.reference || paymentReference,
+        paymentDate,
+        invoiceAmount: invoiceTotal,
+        previousDue,
+        remainingDue: currentDue,
+        idempotencyKey: p.idempotencyKey,
+      });
+      receiptRows.push(row);
+      receipt = row;
+    }
+  } else if (paid > 0) {
     const receiptMethod = String(method || "cash").toLowerCase() === "credit" ? "cash" : method;
     receipt = await postCustomerReceipt(conn, {
       customer,
@@ -416,6 +522,7 @@ export async function settleCustomerInvoice(conn, {
       previousDue,
       remainingDue: currentDue,
     });
+    if (receipt) receiptRows.push(receipt);
   }
   const paymentStatus = paid <= 0 ? "unpaid" : paid + 0.0001 < invoiceTotal ? "partial" : "paid";
   const snap = {
@@ -426,6 +533,7 @@ export async function settleCustomerInvoice(conn, {
     paymentReference: paymentReference || null,
     paymentDate: paymentDate || null,
     receipt,
+    payments: receiptRows,
   };
   await persistInvoiceSettlement(conn, orderId, snap);
   return snap;
@@ -905,6 +1013,15 @@ export function registerAccounts(app) {
       return;
     }
     try {
+      await ensureIdempotencyTable();
+      const idemKey = clipIdempotencyKey(req.body?.idempotencyKey || req.body?.idempotency_key);
+      if (idemKey) {
+        const prior = await findIdempotent(query, bid(), idemKey);
+        if (prior) {
+          res.json({ ok: true, replay: true, ...(parseIdempotentPayload(prior) || { ledgerId: prior.ref_id }) });
+          return;
+        }
+      }
       const result = await withTransaction(async (conn) => {
         const [rows] = await conn.query(
           "SELECT * FROM customers WHERE id = ? AND business_id = ? FOR UPDATE",
@@ -944,6 +1061,7 @@ export function registerAccounts(app) {
           invoiceAmount,
           previousDue: outstanding,
           remainingDue: next,
+          idempotencyKey: idemKey,
         });
         if (!order_id) await applyInvoicePaidFifo(conn, customer.id, amt);
         return {

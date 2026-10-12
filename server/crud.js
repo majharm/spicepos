@@ -3,7 +3,7 @@ import "../js/units.js";
 import "../js/footwear.js";
 import { query, withTransaction } from "./db.js";
 import { bid, authUser } from "./context.js";
-import { recordCreditPurchase, reverseCreditSale, recomputeCustomerOutstanding, settleCustomerInvoice, invoiceOpenDueByCustomer, hydrateCustomerOutstandingRows, persistHydratedOutstanding } from "./accounts.js";
+import { recordCreditPurchase, reverseCreditSale, recomputeCustomerOutstanding, settleCustomerInvoice, invoiceOpenDueByCustomer, hydrateCustomerOutstandingRows, persistHydratedOutstanding, collectOrderPayment } from "./accounts.js";
 import { postPurchaseJournal, deleteJournalRef } from "./accounting.js";
 import { audit } from "./audit.js";
 import { onItemSaved, onPurchaseLineSaved, pharmacyLineSnapshot, computeSaleLine, saleStockQty, persistSaleLineNote, reverseLoyaltyOnSale } from "./advanced.js";
@@ -1005,6 +1005,39 @@ export function registerCrud(app) {
 
   const orderStatuses = ["confirmed", "delivered", "cancelled"];
   const paymentStatuses = ["paid", "partial", "unpaid"];
+
+  app.post("/api/orders/:id/payments", async (req, res) => {
+    try {
+      const result = await withTransaction(async (conn) => {
+        const [existRows] = await conn.query("SELECT * FROM sales_orders WHERE id = ? AND business_id = ? FOR UPDATE", [
+          req.params.id,
+          bid(),
+        ]);
+        const order = existRows[0];
+        if (!order) throw new Error("Order not found");
+        if (String(order.status || "").toLowerCase() === "cancelled") throw new Error("Cancelled bills cannot take payments");
+        const [custRows] = await conn.query("SELECT * FROM customers WHERE id = ? AND business_id = ?", [
+          order.customer_id,
+          bid(),
+        ]);
+        const customer = custRows[0];
+        if (!customer) throw new Error("Customer not found");
+        const method = globalThis.POSPay?.normalize?.(req.body?.payment_method || req.body?.paymentMethod || "cash") || "cash";
+        return collectOrderPayment(conn, {
+          order,
+          customer,
+          amount: req.body?.amount ?? req.body?.amountPaid ?? req.body?.amount_paid,
+          method,
+          paymentReference: req.body?.payment_reference ?? req.body?.paymentReference,
+          paymentDate: req.body?.payment_date ?? req.body?.paymentDate,
+          idempotencyKey: req.body?.idempotencyKey || req.body?.idempotency_key,
+        });
+      });
+      res.json({ ok: true, ...result, order: result.order });
+    } catch (err) {
+      res.status(400).json({ error: String(err.message) });
+    }
+  });
 
   app.patch("/api/orders/:id", async (req, res) => {
     const { status, payment_status } = req.body || {};

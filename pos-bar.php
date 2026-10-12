@@ -458,13 +458,31 @@ function pos_bar_staff_dispatch($path, $method, $body, $bid, $auth) {
       pos_send(200, ["ok" => true, "hold" => $hold]);
     }
     if ($path === "bar/tables/transfer" && $method === "POST") {
-      $from = pos_q("SELECT * FROM bar_tables WHERE id=? AND business_id=?", "ss", [pos_bar_clip($body["from_id"] ?? "", 64), $bid]);
-      $to = pos_q("SELECT id FROM bar_tables WHERE id=? AND business_id=?", "ss", [pos_bar_clip($body["to_id"] ?? "", 64), $bid]);
-      if (!$from || !$to) throw new Exception("Table not found");
-      pos_q("UPDATE bar_tables SET status='busy', hold_json=? WHERE id=? AND business_id=?", "sss", [$from[0]["hold_json"], $body["to_id"], $bid]);
-      pos_q("UPDATE bar_tables SET status='free', hold_json=NULL WHERE id=? AND business_id=?", "ss", [$body["from_id"], $bid]);
+      if (is_file(__DIR__ . "/pos-idempotency.php")) require_once __DIR__ . "/pos-idempotency.php";
+      $fromId = pos_bar_clip($body["from_id"] ?? "", 64);
+      $toId = pos_bar_clip($body["to_id"] ?? "", 64);
+      $key = function_exists("pos_clip_idempotency_key") ? pos_clip_idempotency_key($body["idempotencyKey"] ?? $body["idempotency_key"] ?? "") : "";
+      if ($key !== "" && function_exists("pos_find_idempotent")) {
+        $prior = pos_find_idempotent($bid, $key);
+        $replay = function_exists("pos_idempotent_payload") ? pos_idempotent_payload($prior) : null;
+        if (is_array($replay)) pos_send(200, array_merge($replay, ["replay" => true]));
+      }
+      $payload = pos_with_transaction(function () use ($bid, $fromId, $toId, $key) {
+        $from = pos_q("SELECT * FROM bar_tables WHERE id=? AND business_id=?", "ss", [$fromId, $bid]);
+        $to = pos_q("SELECT * FROM bar_tables WHERE id=? AND business_id=?", "ss", [$toId, $bid]);
+        if (!$from || !$to) throw new Exception("Table not found");
+        $destHold = json_decode($to[0]["hold_json"] ?? "{}", true) ?: [];
+        if (!empty($destHold["lines"])) throw new Exception("Destination table is occupied");
+        $srcHold = json_decode($from[0]["hold_json"] ?? "{}", true) ?: [];
+        if (empty($srcHold["lines"])) throw new Exception("No active order on that table");
+        pos_q("UPDATE bar_tables SET status='busy', hold_json=? WHERE id=? AND business_id=?", "sss", [$from[0]["hold_json"], $toId, $bid]);
+        pos_q("UPDATE bar_tables SET status='free', hold_json=NULL WHERE id=? AND business_id=?", "ss", [$fromId, $bid]);
+        $out = ["ok" => true, "from_id" => $fromId, "to_id" => $toId, "source_vacant" => true, "dest_occupied" => true];
+        if ($key !== "" && function_exists("pos_save_idempotent")) pos_save_idempotent($bid, $key, "bar-transfer", $fromId . "->" . $toId, $out);
+        return $out;
+      });
       pos_bar_audit($bid, $auth, "table", "Transferred order");
-      pos_send(200, ["ok" => true]);
+      pos_send(200, $payload);
     }
     if (preg_match("#^bar/tables/([^/]+)/split$#", $path, $mm) && $method === "POST") {
       $tbl = pos_q("SELECT * FROM bar_tables WHERE id=? AND business_id=?", "ss", [$mm[1], $bid]);
@@ -494,6 +512,13 @@ function pos_bar_staff_dispatch($path, $method, $body, $bid, $auth) {
       pos_send(200, ["ok" => true]);
     }
     if ($path === "bar/checkout" && $method === "POST") {
+      if (is_file(__DIR__ . "/pos-idempotency.php")) require_once __DIR__ . "/pos-idempotency.php";
+      $idemKey = function_exists("pos_clip_idempotency_key") ? pos_clip_idempotency_key($body["idempotencyKey"] ?? $body["idempotency_key"] ?? "") : "";
+      if ($idemKey !== "" && function_exists("pos_find_idempotent")) {
+        $prior = pos_find_idempotent($bid, $idemKey);
+        $replay = function_exists("pos_idempotent_payload") ? pos_idempotent_payload($prior) : null;
+        if (is_array($replay)) pos_send(200, array_merge($replay, ["replay" => true]));
+      }
       $settings = pos_bar_settings($bid);
       $operate = pos_bar_can_operate($settings);
       if (empty($operate["ok"]) && !pos_bar_can_void($auth)) {
@@ -539,7 +564,9 @@ function pos_bar_staff_dispatch($path, $method, $body, $bid, $auth) {
       }
       pos_bar_audit($bid, $auth, "sale", "$billNo {$tot["total"]}");
       $html = "<div class=\"bar-ticket\"><h3>" . htmlspecialchars($settings["invoice_title"]) . "</h3><p>$billNo</p><p>Total ₹" . $tot["total"] . "</p></div>";
-      pos_send(200, array_merge($tot, ["id" => $saleId, "bill_no" => $billNo, "receipt_html" => $html]));
+      $billed = array_merge($tot, ["id" => $saleId, "bill_no" => $billNo, "receipt_html" => $html]);
+      if ($idemKey !== "" && function_exists("pos_save_idempotent")) pos_save_idempotent($bid, $idemKey, "bar-checkout", $saleId, $billed);
+      pos_send(200, $billed);
     }
     if (preg_match("#^bar/sales/([^/]+)/(void|refund)$#", $path, $mm) && $method === "POST") {
       if (!pos_bar_can_void($auth)) throw new Exception("Voids need manager authorization");
