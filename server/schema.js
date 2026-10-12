@@ -131,6 +131,18 @@ export async function ensureSchema() {
   await addColumn("company_settings", "payment_upi", "VARCHAR(160) NULL");
   await addColumn("company_settings", "dining_tables_json", "TEXT NULL");
   await addColumn("company_settings", "table_shifting_enabled", "TINYINT(1) NOT NULL DEFAULT 0");
+  await addColumn("company_settings", "zomato_enabled", "TINYINT(1) NOT NULL DEFAULT 0");
+  await addColumn("company_settings", "swiggy_enabled", "TINYINT(1) NOT NULL DEFAULT 0");
+  await addColumn("company_settings", "aggregator_auto_accept", "TINYINT(1) NOT NULL DEFAULT 0");
+  await addColumn("company_settings", "aggregator_prep_minutes", "INT NULL");
+  await addColumn("company_settings", "zomato_restaurant_id", "VARCHAR(80) NULL");
+  await addColumn("company_settings", "zomato_api_key", "VARCHAR(180) NULL");
+  await addColumn("company_settings", "zomato_webhook_secret", "VARCHAR(180) NULL");
+  await addColumn("company_settings", "zomato_api_base", "VARCHAR(180) NULL");
+  await addColumn("company_settings", "swiggy_outlet_id", "VARCHAR(80) NULL");
+  await addColumn("company_settings", "swiggy_api_key", "VARCHAR(180) NULL");
+  await addColumn("company_settings", "swiggy_webhook_secret", "VARCHAR(180) NULL");
+  await addColumn("company_settings", "swiggy_api_base", "VARCHAR(180) NULL");
   await addColumn("company_settings", "quick_add_enabled", "TINYINT(1) NOT NULL DEFAULT 1");
   await addColumn("company_settings", "fast_mode_enabled", "TINYINT(1) NOT NULL DEFAULT 1");
   await addColumn("company_settings", "low_stock_threshold", "INT NOT NULL DEFAULT 5");

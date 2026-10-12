@@ -2846,6 +2846,10 @@ function pos_php_dispatch($path, $method, $rawBody) {
   $path = trim((string) $path, "/");
   $body = pos_json_body($rawBody);
   try {
+    if ($path === "webhooks/zomato" || $path === "webhooks/swiggy") {
+      require_once __DIR__ . "/pos-aggregator.php";
+      if (pos_agg_public_dispatch($path, $method, $body)) return;
+    }
     if ($path === "qr/menu" || $path === "qr/orders" || $path === "qr/order" || $path === "qr/table") {
       require_once __DIR__ . "/pos-qr-ordering.php";
       if (pos_qr_public_dispatch($path, $method, $body)) return;

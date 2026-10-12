@@ -75,7 +75,7 @@ test("InvoiceJet-style chrome is wired on login and POS without breaking pins", 
   assert.match(login, /id="m-go-signin"/);
   assert.match(login, /id="m-go-signup"/);
 
-  assert.match(index, /app\.js\?v=20261012kot2/);
+  assert.match(index, /app\.js\?v=20261012agg1/);
   assert.match(index, /css\/mobile-app\.css\?v=20261012m3/);
   assert.match(index, /js\/mobile-app\.js\?v=20261012m3/);
   assert.match(index, /id="m-home"/);

@@ -11,7 +11,7 @@ function pos_php_till_dispatch($path, $method, $body) {
     "bootstrap", "dashboard", "today", "suppliers", "items", "customers", "packs",
     "orders", "purchases", "stock", "staff", "branches", "devices", "holds",
     "checkout", "settings", "dining-tables", "tables", "table-shift", "table-shifts", "kots", "reports", "growth", "audit", "accounts", "backup", "units", "brands",
-    "barcodes", "damage", "loyalty", "batches", "qr-orders", "prescriptions", "combos", "offers",
+    "barcodes", "damage", "loyalty", "batches", "qr-orders", "prescriptions", "combos", "offers", "aggregator",
   ];
   if (!in_array($head, $staff, true)) return false;
   $auth = pos_staff_session();
@@ -46,6 +46,11 @@ function pos_php_till_dispatch($path, $method, $body) {
     pos_require_checkout();
     pos_dispatch_checkout($path, $method, $body, $bid, $branchId, $uid, $auth);
     return true;
+  }
+
+  if ($path === "aggregator" || strpos($path, "aggregator/") === 0) {
+    require_once __DIR__ . "/pos-aggregator.php";
+    if (pos_agg_staff_dispatch($path, $method, $body, $bid, $auth)) return true;
   }
 
   if ($path === "qr-orders" || strpos($path, "qr-orders/") === 0) {

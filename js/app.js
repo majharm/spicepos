@@ -450,6 +450,9 @@ function applyFootwearMode() {
   document.querySelectorAll(".restaurant-only").forEach((el) => {
     el.hidden = !isRestaurantShop();
   });
+  document.querySelectorAll(".aggregator-only").forEach((el) => {
+    el.hidden = !(isRestaurantShop() || isBarShop());
+  });
   document.querySelectorAll(".services-only").forEach((el) => {
     if (el.classList.contains("nav-btn")) return;
     el.hidden = !isServicesShop();
@@ -662,6 +665,7 @@ const VIEW_META = {
   orders: { title: "Invoices", subtitle: "Search, print POS or A4, and update payment" },
   returns: { title: "Manage Returns", subtitle: "Pharmacy and garment returns against a sales invoice" },
   "qr-orders": { title: "QR Orders", subtitle: "Incoming customer self-orders" },
+  "online-orders": { title: "Zomato / Swiggy", subtitle: "Live delivery-platform orders" },
   prescriptions: { title: "Prescription Orders", subtitle: "Customer QR uploads for this pharmacy" },
   kot: { title: "Kitchen KOT", subtitle: "Captain fires tickets; kitchen marks preparing and ready" },
   purchases: { title: "Purchases", subtitle: "20 pcs = 20 barcodes you type or scan" },
@@ -2354,6 +2358,7 @@ function applyNav() {
       orders: "orders",
       returns: "orders",
       "qr-orders": "orders",
+      "online-orders": "orders",
       prescriptions: "orders",
       kot: "kot",
       purchases: "purchases",
@@ -2411,6 +2416,7 @@ function applyNav() {
     if (view === "packs" && !isSpiceShop()) btn.hidden = true;
     if (view === "qr-orders" && isPharmacyShop()) btn.hidden = true;
     if (view === "qr-orders" && isPrintShop()) btn.hidden = true;
+    if (view === "online-orders") btn.hidden = !(isRestaurantShop() || isBarShop()) || !can("orders");
     if (view === "prescriptions") btn.hidden = !isPharmacyShop() || !can("orders");
     if (view === "returns") btn.hidden = !isClassicBillShop() || !can("orders");
     if (view === "kot") btn.hidden = !isRestaurantShop() || !can("kot");
@@ -2420,6 +2426,7 @@ function applyNav() {
     if ((view === "bar-board" || view === "bar-counter" || view === "bar-products" || view === "bar-tables" || view === "bar-stock" || view === "bar-reports" || view === "bar-settings") && !isBarShop()) btn.hidden = true;
     if ((view === "resort-board" || view === "resort-rooms" || view === "resort-bookings" || view === "resort-desk" || view === "resort-housekeeping" || view === "resort-settings") && !isResortShop()) btn.hidden = true;
     if (view === "qr-orders" && isGymShop()) btn.hidden = true;
+    if (view === "online-orders" && (isGymShop() || isPrintShop() || isPharmacyShop())) btn.hidden = true;
   });
   globalThis.POSBizHubUi?.paintIndustryNav?.();
   paintStaffRoleOptions();
@@ -2589,6 +2596,7 @@ function showView(name) {
   if (name === "orders") loadOrders();
   if (name === "returns") loadReturnsView();
   if (name === "qr-orders") loadQrOrders();
+  if (name === "online-orders") loadAggregatorOrders();
   if (name === "prescriptions") loadPrescriptions();
   if (name === "kot") {
     loadKots();
@@ -6266,6 +6274,7 @@ function renderSettings() {
   if ($("set-fssai")) $("set-fssai").value = state.company.fssai_licence_no || "";
   if ($("set-ndps")) $("set-ndps").value = state.company.ndps_licence_no || "";
   if ($("set-table-shifting")) $("set-table-shifting").checked = tableShiftingEnabled();
+  void loadAggregatorSettings();
   const showQuickAdd = quickAddVisible();
   if ($("set-quick-add-show")) $("set-quick-add-show").checked = showQuickAdd;
   if ($("set-quick-add-hide")) $("set-quick-add-hide").checked = !showQuickAdd;
@@ -8397,15 +8406,200 @@ function startQrOrderWatch() {
   let qrTick = 0;
   qrPollTimer = setInterval(() => {
     qrTick += 1;
-    const hot = state.currentView === "qr-orders" || state.currentView === "counter";
+    const hot = state.currentView === "qr-orders" || state.currentView === "online-orders" || state.currentView === "counter";
     if (!hot && qrTick % (fastModeOn() ? 8 : 4) !== 0) return;
     void pollQrOrders({ announce: true });
+    if (isRestaurantShop() || isBarShop()) void loadAggregatorOrders({ announce: true });
   }, 2500);
   paintQrSoundArm();
   document.addEventListener("pos-qr-sound", () => {
     paintQrSoundToggle();
     paintQrSoundArm();
   });
+}
+
+let aggOrderCache = [];
+let aggSourceFilter = "";
+let aggStatusFilter = "";
+let aggSeenIds = null;
+
+function aggregatorApi() {
+  return globalThis.POSAggregator;
+}
+
+async function loadAggregatorSettings() {
+  const A = aggregatorApi();
+  if (!A || !(isRestaurantShop() || isBarShop()) || !can("settings")) return;
+  try {
+    const data = await api("/api/aggregator/settings");
+    const s = data.settings || {};
+    if ($("set-zomato-enabled")) $("set-zomato-enabled").checked = Boolean(s.zomato_enabled);
+    if ($("set-swiggy-enabled")) $("set-swiggy-enabled").checked = Boolean(s.swiggy_enabled);
+    if ($("set-agg-auto-accept")) $("set-agg-auto-accept").checked = Boolean(s.aggregator_auto_accept);
+    if ($("set-agg-prep")) $("set-agg-prep").value = String(s.aggregator_prep_minutes || 20);
+    if ($("set-zomato-rid")) $("set-zomato-rid").value = s.zomato_restaurant_id || "";
+    if ($("set-zomato-key")) $("set-zomato-key").value = s.zomato_api_key || "";
+    if ($("set-zomato-secret")) $("set-zomato-secret").value = s.zomato_webhook_secret || "";
+    if ($("set-zomato-base")) $("set-zomato-base").value = s.zomato_api_base || "https://api.zomato.com";
+    if ($("set-swiggy-oid")) $("set-swiggy-oid").value = s.swiggy_outlet_id || "";
+    if ($("set-swiggy-key")) $("set-swiggy-key").value = s.swiggy_api_key || "";
+    if ($("set-swiggy-secret")) $("set-swiggy-secret").value = s.swiggy_webhook_secret || "";
+    if ($("set-swiggy-base")) $("set-swiggy-base").value = s.swiggy_api_base || "https://partner.swiggy.com";
+    const origin = location.origin;
+    if ($("set-zomato-hook")) $("set-zomato-hook").textContent = origin + (data.webhooks?.zomato || A.webhookPath("zomato", shopBusinessId()));
+    if ($("set-swiggy-hook")) $("set-swiggy-hook").textContent = origin + (data.webhooks?.swiggy || A.webhookPath("swiggy", shopBusinessId()));
+  } catch {
+    /* optional on older servers */
+  }
+}
+
+async function saveAggregatorSettings() {
+  if (!(isRestaurantShop() || isBarShop()) || !$("set-zomato-enabled")) return;
+  await api("/api/aggregator/settings", {
+    method: "PUT",
+    body: JSON.stringify({
+      zomato_enabled: $("set-zomato-enabled").checked ? 1 : 0,
+      swiggy_enabled: $("set-swiggy-enabled")?.checked ? 1 : 0,
+      aggregator_auto_accept: $("set-agg-auto-accept")?.checked ? 1 : 0,
+      aggregator_prep_minutes: Number($("set-agg-prep")?.value) || 20,
+      zomato_restaurant_id: $("set-zomato-rid")?.value || "",
+      zomato_api_key: $("set-zomato-key")?.value || "",
+      zomato_webhook_secret: $("set-zomato-secret")?.value || "",
+      zomato_api_base: $("set-zomato-base")?.value || "",
+      swiggy_outlet_id: $("set-swiggy-oid")?.value || "",
+      swiggy_api_key: $("set-swiggy-key")?.value || "",
+      swiggy_webhook_secret: $("set-swiggy-secret")?.value || "",
+      swiggy_api_base: $("set-swiggy-base")?.value || "",
+    }),
+  });
+}
+
+function paintAggregatorBadge() {
+  const n = (aggOrderCache || []).filter((row) => String(row.status || "") === "pending").length;
+  const badge = $("agg-order-badge");
+  if (badge) {
+    badge.textContent = String(n);
+    badge.hidden = n === 0;
+  }
+}
+
+function renderAggregatorOrders() {
+  const A = aggregatorApi();
+  const el = $("agg-order-list");
+  if (!el || !A) return;
+  const rows = (aggOrderCache || []).filter((row) => {
+    if (aggSourceFilter && row.source !== aggSourceFilter) return false;
+    if (!aggStatusFilter) return A.isOpen(row.status);
+    return row.status === aggStatusFilter;
+  });
+  el.innerHTML = rows.length
+    ? rows
+        .map((order) => {
+          const lines = (order.lines || [])
+            .map((line) => `<li>${escapeHtml(line.name)} × ${escapeHtml(String(line.qty))}${line.notes ? ` <em>${escapeHtml(line.notes)}</em>` : ""}</li>`)
+            .join("");
+          const actions = A.nextActions(order.status)
+            .map((st) => `<button class="btn ${st === "accepted" ? "primary" : ""}" type="button" data-agg-status-next="${escapeHtml(st)}">${escapeHtml(A.actionLabel(st))}</button>`)
+            .join("");
+          return `<article class="qr-order-card ${order.status === "pending" ? "is-pending" : ""}" data-agg-order="${escapeHtml(order.id)}">
+            <header>
+              <strong>${escapeHtml(A.sourceLabel(order.source))} · ${escapeHtml(order.order_number)}</strong>
+              <span>${escapeHtml(A.statusLabel(order.status))} · ${escapeHtml(order.fulfillment === "pickup" ? "Pickup" : "Delivery")}</span>
+            </header>
+            <p>${escapeHtml(order.customer_name || "Guest")}${order.mobile ? ` · ${escapeHtml(order.mobile)}` : ""} · ${escapeHtml(money(order.total))}</p>
+            ${order.address ? `<p class="field-hint">${escapeHtml(order.address)}</p>` : ""}
+            <ul>${lines}</ul>
+            <p class="dash-actions">
+              ${actions}
+              <button class="btn" type="button" data-agg-kot>Kitchen KOT</button>
+              <button class="btn" type="button" data-agg-counter>Open in Counter</button>
+            </p>
+          </article>`;
+        })
+        .join("")
+    : `<div class="item-empty-card"><strong>No platform orders</strong><p>Turn on Zomato or Swiggy in Settings, or send a test order.</p></div>`;
+  paintAggregatorBadge();
+}
+
+async function loadAggregatorOrders({ announce = false } = {}) {
+  if (!(isRestaurantShop() || isBarShop()) || !can("orders")) return;
+  try {
+    const rows = await api("/api/aggregator/orders");
+    const list = Array.isArray(rows) ? rows : rows?.orders || [];
+    const incoming = list.filter((row) => row?.id && row.status === "pending" && aggSeenIds && !aggSeenIds.has(String(row.id)));
+    aggOrderCache = list;
+    if (aggSeenIds == null) aggSeenIds = new Set(list.map((row) => String(row.id)).filter(Boolean));
+    else list.forEach((row) => row?.id && aggSeenIds.add(String(row.id)));
+    renderAggregatorOrders();
+    if (announce && incoming.length) {
+      globalThis.POSQrNotify?.playTone?.({ force: true });
+      setHint(`${incoming.length} new ${aggregatorApi()?.sourceLabel(incoming[0].source) || "platform"} order${incoming.length === 1 ? "" : "s"}`, "ok");
+    }
+  } catch (err) {
+    if ($("agg-orders-hint")) {
+      $("agg-orders-hint").textContent = err.message;
+      $("agg-orders-hint").className = "hint error";
+    }
+  }
+}
+
+async function updateAggregatorOrder(order, status) {
+  await api(`/api/aggregator/orders/${encodeURIComponent(order.id)}`, {
+    method: "PATCH",
+    body: JSON.stringify({ status }),
+  });
+  await loadAggregatorOrders();
+}
+
+async function sendAggregatorKot(order) {
+  const data = await api(`/api/aggregator/orders/${encodeURIComponent(order.id)}/kot`, { method: "POST", body: "{}" });
+  const A = aggregatorApi();
+  try {
+    printKitchenKot({
+      tableNo: A?.kotTable?.(order.source, order.fulfillment) || "Parcel",
+      lines: (order.lines || []).map((line) => ({ itemId: line.external_item_id || line.name, qtyGm: Number(line.qty) || 1, name: line.name, notes: line.notes })),
+      printed: [],
+      notes: `${A?.sourceLabel(order.source) || ""} ${order.order_number}`,
+      full: true,
+    });
+  } catch {
+    /* ticket already saved */
+  }
+  await loadAggregatorOrders();
+  void loadKots({ announce: false });
+  setHint(data?.kot_ticket_id ? "Kitchen KOT sent" : "Kitchen ticket saved", "ok");
+}
+
+async function openAggregatorInCounter(order) {
+  const A = aggregatorApi();
+  const matchItem = (line) =>
+    state.items.find((item) => item.id === line.item_id) ||
+    state.items.find((item) => String(item.name || "").toLowerCase() === String(line.name || "").toLowerCase());
+  const liveLines = (order.lines || []).map((line) => ({ line, item: matchItem(line) })).filter((row) => row.item);
+  if (!liveLines.length) throw new Error("Map these platform items to your menu, then open in Counter");
+  if (state.cart.length && !confirm("Replace the current Counter bill with this platform order?")) return;
+  const R = restaurantApi();
+  state.activeTable = A?.kotTable?.(order.source, order.fulfillment) || R?.PARCEL || "Parcel";
+  if (isRestaurantShop() && R) syncActiveFloor(state.activeTable);
+  state.cart = liveLines.map(({ line, item }) => ({
+    lineId: newCartLineId(),
+    itemId: item.id,
+    qtyGm: Number(line.qty) || 1,
+    notes: String(line.notes || "").trim(),
+  }));
+  const walkIn = state.customers.find((customer) => customer.code === "CUS-001") || state.customers[0];
+  state.customerId = walkIn?.id || "";
+  renderCustomersSelect();
+  renderCatalog();
+  renderCart();
+  showView("counter");
+  setHint(`${A?.sourceLabel(order.source) || "Online"} ${order.order_number} opened in Counter`, "ok");
+}
+
+async function sandboxAggregatorOrder(source) {
+  await api("/api/aggregator/sandbox", { method: "POST", body: JSON.stringify({ source }) });
+  await loadAggregatorOrders({ announce: true });
+  setHint(`Test ${aggregatorApi()?.sourceLabel(source) || source} order added`, "ok");
 }
 
 function qrStatusLabel(status) {
@@ -10353,6 +10547,36 @@ $("kot-toast-open")?.addEventListener("click", () => {
   showView("kot");
 });
 $("kot-toast-dismiss")?.addEventListener("click", hideKotToast);
+$("agg-refresh")?.addEventListener("click", () => void loadAggregatorOrders());
+$("agg-sandbox-zomato")?.addEventListener("click", () => void sandboxAggregatorOrder("zomato").catch((err) => setHint(err.message, "error")));
+$("agg-sandbox-swiggy")?.addEventListener("click", () => void sandboxAggregatorOrder("swiggy").catch((err) => setHint(err.message, "error")));
+$("agg-source-tabs")?.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-agg-source]");
+  if (!button) return;
+  aggSourceFilter = button.dataset.aggSource || "";
+  $("agg-source-tabs").querySelectorAll("[data-agg-source]").forEach((row) => row.classList.toggle("active", row === button));
+  renderAggregatorOrders();
+});
+$("agg-status-tabs")?.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-agg-status]");
+  if (!button) return;
+  aggStatusFilter = button.dataset.aggStatus || "";
+  $("agg-status-tabs").querySelectorAll("[data-agg-status]").forEach((row) => row.classList.toggle("active", row === button));
+  renderAggregatorOrders();
+});
+$("agg-order-list")?.addEventListener("click", async (event) => {
+  const card = event.target.closest("[data-agg-order]");
+  const order = aggOrderCache.find((row) => row.id === card?.dataset.aggOrder);
+  if (!order) return;
+  try {
+    const next = event.target.closest("[data-agg-status-next]");
+    if (next) await updateAggregatorOrder(order, next.dataset.aggStatusNext);
+    else if (event.target.closest("[data-agg-kot]")) await sendAggregatorKot(order);
+    else if (event.target.closest("[data-agg-counter]")) await openAggregatorInCounter(order);
+  } catch (err) {
+    setHint(err.message, "error");
+  }
+});
 $("qr-order-search")?.addEventListener("input", renderQrOrders);
 $("qr-status-tabs")?.addEventListener("click", (event) => {
   const button = event.target.closest("[data-qr-status]");
@@ -11135,6 +11359,12 @@ $("settings-form").addEventListener("submit", async (e) => {
       method: "POST",
       body: JSON.stringify(payload),
     });
+    if (isRestaurantShop() || isBarShop()) {
+      try { await saveAggregatorSettings(); } catch (aggErr) {
+        $("settings-hint").textContent = "Shop saved, but Zomato / Swiggy settings failed: " + aggErr.message;
+        $("settings-hint").className = "hint error";
+      }
+    }
     state.company = data.company ? { ...state.company, ...data.company } : state.company;
     state.logoDraft = null;
     state.payQrDraft = null;
