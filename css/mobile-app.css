@@ -404,7 +404,7 @@
   gap: 12px;
   padding: 16px 18px 8px;
   background:
-    linear-gradient(180deg, #fde8e4 0%, #f6eef8 28%, #e8f7f2 62%, #fff 100%);
+    linear-gradient(180deg, #f8d9d3 0%, #f3e4f4 26%, #d9f3ea 58%, #ffffff 100%);
 }
 .m-home-brand {
   display: flex;
@@ -642,7 +642,8 @@
   gap: 2px;
   padding: 6px 4px;
 }
-.m-tabbar button.is-on { color: var(--m-teal-deep); }
+.m-tabbar button.is-on { color: var(--m-teal); }
+.m-tabbar button.is-on .m-tab-ico svg { stroke: var(--m-teal); stroke-width: 2.1; }
 .m-tab-ico {
   width: 22px;
   height: 22px;
