@@ -8862,6 +8862,22 @@ html[data-scheme="dark"] .saas-chip.is-stat { background: #1e3a8a; color: #bfdbf
   .saas-top-tools { flex: 1 1 100%; }
   .saas-dash-head { flex-direction: column; align-items: stretch; }
 }
+@media (max-width: 720px) {
+  .saas-top-tools input[type="search"] {
+    flex: 1 1 100%;
+    min-width: 0;
+    width: 100%;
+  }
+  .reports-desk .report-toolbar label {
+    flex: 1 1 100%;
+    min-width: 0;
+  }
+  .reports-desk .report-toolbar input,
+  .reports-desk .report-toolbar select {
+    width: 100%;
+    min-width: 0;
+  }
+}
 
 #modal:has(.print-order-desk) .dialog {
   width: min(720px, calc(100% - 16px));

@@ -114,7 +114,7 @@ test("InvoiceJet-style chrome is wired on login and POS without breaking pins", 
   assert.match(js, /POS phones use the same tablet chrome/);
   assert.match(css, /body:not\(\.m-preview\) #m-home/);
   assert.match(read("css/pos.css"), /phone-pos: same tablet chrome/);
-  assert.match(read("index.html"), /pos\.css\?v=20261012mob2/);
+  assert.match(read("index.html"), /pos\.css\?v=20261012mob3/);
   assert.equal(M.openMobileReport("not-a-report"), false);
   assert.equal(M.openMobileReport("daily-sales"), true);
 });
