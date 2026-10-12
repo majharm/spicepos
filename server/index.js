@@ -39,6 +39,7 @@ import { registerPrintPublic, registerPrintStaff, ensurePrintSchema, attachPrint
 import { registerGymPublic, registerGymStaff, ensureGymSchema } from "./gym.js";
 import { registerBarStaff, ensureBarSchema } from "./bar.js";
 import { registerResortPublic, registerResortStaff, ensureResortSchema } from "./resort.js";
+import { registerBrandStaff, ensureBrandSchema, listBrands } from "./brands.js";
 import "../js/discount.js";
 import "../js/payment-methods.js";
 import { registerQrPublic, registerQrStaff, ensureQrOrderSchema, linkQrOrderSale } from "./qr-ordering.js";
@@ -230,6 +231,7 @@ registerPrintStaff(app);
 registerGymStaff(app);
 registerBarStaff(app);
 registerResortStaff(app);
+registerBrandStaff(app);
 
 app.get("/api/support-contact", async (_req, res) => {
   try {
@@ -250,7 +252,7 @@ app.get("/api/health", async (_req, res) => {
 });
 
 const CATALOG_ITEM_SELECT = `id, code, name, local_name, category, subcategory, color, size, wearer_type,
-  base_unit, unit, purchase_rate, retail_rate, b2b_rate, gst_rate, hsn, barcode, mrp, brand,
+  base_unit, unit, purchase_rate, retail_rate, b2b_rate, gst_rate, hsn, barcode, mrp, brand, brand_id,
   stock_gm, reorder_level_gm, status, business_id,
   generic_name, medicine_type, manufacturer, pack_size, pack_unit, units_per_pack, batch_no, default_expiry,
   (image_url IS NOT NULL AND image_url <> '') AS has_image`;
@@ -292,6 +294,7 @@ app.get("/api/bootstrap", requireStaff, async (_req, res) => {
       companyRows,
       businessRows,
       items,
+      brands,
       customerRows,
       packs,
       notes,
@@ -303,6 +306,7 @@ app.get("/api/bootstrap", requireStaff, async (_req, res) => {
       query("SELECT * FROM company_settings WHERE business_id = ? LIMIT 1", [businessId]),
       query("SELECT * FROM businesses WHERE id = ?", [businessId]),
       listCatalogItems(businessId),
+      listBrands(businessId).catch(() => []),
       query("SELECT * FROM customers WHERE business_id = ? ORDER BY name", [businessId]),
       query("SELECT * FROM packs WHERE business_id = ? ORDER BY name", [businessId]),
       query(
@@ -349,6 +353,7 @@ app.get("/api/bootstrap", requireStaff, async (_req, res) => {
       support,
       notes,
       items,
+      brands,
       units,
       customers,
       packs: packs.map((p) => ({
@@ -1324,6 +1329,7 @@ ensureSchema()
     .then(() => ensureGymSchema())
     .then(() => ensureBarSchema())
     .then(() => ensureResortSchema())
+    .then(() => ensureBrandSchema())
     .then(() => ensureLoginPageSchema())
     .then(() => {
       setTimeout(() => {

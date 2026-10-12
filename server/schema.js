@@ -185,6 +185,7 @@ export async function ensureSchema() {
   await addColumn("items", "barcode", "VARCHAR(64) NULL");
   await addColumn("items", "mrp", "DECIMAL(12,2) NULL");
   await addColumn("items", "brand", "VARCHAR(128) NULL");
+  await addColumn("items", "brand_id", "VARCHAR(255) NULL");
   await addColumn("items", "image_url", "MEDIUMTEXT NULL");
   await addColumn("items", "unit", "VARCHAR(32) NULL");
   await addColumn("items", "base_unit", "VARCHAR(32) NOT NULL DEFAULT 'GM'");
@@ -238,6 +239,19 @@ export async function ensureSchema() {
   await addColumn("stock_movements", "reason", "VARCHAR(64) NULL");
   await addColumn("stock_movements", "ref_type", "VARCHAR(32) NULL");
   await addColumn("stock_movements", "ref_id", "VARCHAR(255) NULL");
+
+  await create(`CREATE TABLE IF NOT EXISTS brands (
+    id VARCHAR(255) PRIMARY KEY,
+    name VARCHAR(128) NOT NULL,
+    company VARCHAR(160) NULL,
+    notes VARCHAR(255) NULL,
+    status VARCHAR(16) NOT NULL DEFAULT 'active',
+    business_id VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    updated_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+    UNIQUE KEY uq_brands_biz_name (business_id, name),
+    INDEX idx_brands_biz (business_id)
+  )`);
 
   await create(`CREATE TABLE IF NOT EXISTS inventory_units (
     id VARCHAR(255) PRIMARY KEY,

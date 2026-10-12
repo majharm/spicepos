@@ -138,6 +138,7 @@ CREATE TABLE IF NOT EXISTS items (
   barcode VARCHAR(64) NULL,
   mrp DECIMAL(12,2) NULL,
   brand VARCHAR(128) NULL,
+  brand_id VARCHAR(255) NULL,
   image_url MEDIUMTEXT NULL,
   stock_gm DECIMAL(14,3) NOT NULL DEFAULT 0,
   reorder_level_gm DECIMAL(14,3) NOT NULL DEFAULT 0,
@@ -148,6 +149,19 @@ CREATE TABLE IF NOT EXISTS items (
   INDEX idx_items_biz_name (business_id, name),
   INDEX (code),
   INDEX (barcode)
+);
+
+CREATE TABLE IF NOT EXISTS brands (
+  id VARCHAR(255) PRIMARY KEY,
+  name VARCHAR(128) NOT NULL,
+  company VARCHAR(160) NULL,
+  notes VARCHAR(255) NULL,
+  status VARCHAR(16) NOT NULL DEFAULT 'active',
+  business_id VARCHAR(255) NOT NULL,
+  created_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  updated_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+  UNIQUE KEY uq_brands_biz_name (business_id, name),
+  INDEX idx_brands_biz (business_id)
 );
 
 CREATE TABLE IF NOT EXISTS customers (

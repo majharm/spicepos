@@ -10,7 +10,7 @@ function pos_php_till_dispatch($path, $method, $body) {
   $staff = [
     "bootstrap", "dashboard", "today", "suppliers", "items", "customers", "packs",
     "orders", "purchases", "stock", "staff", "branches", "devices", "holds",
-    "checkout", "settings", "dining-tables", "tables", "table-shift", "table-shifts", "kots", "reports", "growth", "audit", "accounts", "backup", "units",
+    "checkout", "settings", "dining-tables", "tables", "table-shift", "table-shifts", "kots", "reports", "growth", "audit", "accounts", "backup", "units", "brands",
     "barcodes", "damage", "loyalty", "batches", "qr-orders", "prescriptions", "combos", "offers",
   ];
   if (!in_array($head, $staff, true)) return false;
@@ -35,6 +35,11 @@ function pos_php_till_dispatch($path, $method, $body) {
     pos_require_units();
     pos_dispatch_units($path, $method, $body, $bid, $branchId, $uid, $auth);
     return true;
+  }
+  if ($path === "brands" || preg_match('#^brands/#', $path)) {
+    if (function_exists("pos_require_brands")) pos_require_brands();
+    elseif (is_file(__DIR__ . "/pos-brands.php")) require_once __DIR__ . "/pos-brands.php";
+    if (function_exists("pos_brands_dispatch") && pos_brands_dispatch($path, $method, $body, $bid)) return true;
   }
 
   if ($path === "checkout" && $method === "POST") {
@@ -161,6 +166,14 @@ function pos_php_till_dispatch($path, $method, $body) {
         }
       })(),
       "units" => function_exists("pos_list_units") ? pos_list_units($bid) : [],
+      "brands" => (function () use ($bid) {
+        try {
+          if (is_file(__DIR__ . "/pos-brands.php")) require_once __DIR__ . "/pos-brands.php";
+          return function_exists("pos_list_brands") ? pos_list_brands($bid) : [];
+        } catch (Exception $e) {
+          return [];
+        }
+      })(),
       "php" => true,
     ]);
   }

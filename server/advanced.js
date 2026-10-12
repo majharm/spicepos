@@ -7,6 +7,7 @@ import "../js/barcode.js";
 import { query, withTransaction } from "./db.js";
 import { bid, branchId, authUser } from "./context.js";
 import { requireStaff, requirePerm } from "./auth.js";
+import { saveItemBrand } from "./brands.js";
 
 const POSDiscount = globalThis.POSDiscount;
 const POSLoyalty = globalThis.POSLoyalty;
@@ -441,6 +442,7 @@ export async function savePharmacyItemFields(conn, businessId, itemId, body = {}
 export async function onItemSaved(conn, businessId, itemId, body = {}) {
   await ensureAdvancedSchema();
   await savePharmacyItemFields(conn, businessId, itemId, body);
+  await saveItemBrand(conn, businessId, itemId, body);
   const item = await sqlOne(conn, "SELECT * FROM items WHERE id = ? AND business_id = ?", [itemId, businessId]);
   const own = barcodeText(body.barcode || "");
   const mfr = barcodeText(body.mfr_barcode || body.manufacturer_barcode || "");

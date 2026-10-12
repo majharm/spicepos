@@ -11,6 +11,7 @@
     <link rel="stylesheet" href="./css/bar.css?v=20261011bar2" />
     <link rel="stylesheet" href="./css/resort.css?v=20261011resort1" />
     <link rel="stylesheet" href="./css/mobile-app.css?v=20261011m1" />
+    <link rel="stylesheet" href="./css/item-master.css?v=20261012brand1" />
   </head>
   <body class="fast-mode">
     <div class="app" id="app">
@@ -52,6 +53,7 @@
           <div class="nav-group">
             <p class="nav-group-label" data-i18n="nav.inventory">Products</p>
             <button class="nav-btn" type="button" data-view="items"><span class="nav-icon" aria-hidden="true">◫</span><span data-i18n="pos.items">Items</span></button>
+            <button class="nav-btn" type="button" data-view="brands"><span class="nav-icon" aria-hidden="true">◈</span>Brands</button>
             <button class="nav-btn" type="button" data-view="units"><span class="nav-icon" aria-hidden="true">⚖</span>Units</button>
             <button class="nav-btn" type="button" data-view="packs"><span class="nav-icon" aria-hidden="true">▦</span>Packs</button>
             <button class="nav-btn" type="button" data-view="barcodes"><span class="nav-icon" aria-hidden="true">▦</span>Barcodes</button>
@@ -476,16 +478,20 @@
         </section>
 
         <section class="view view-items" id="view-items" hidden>
-          <h2 class="visually-hidden">Items</h2>
+          <h2 class="visually-hidden">Item Master</h2>
           <div class="items-desk">
             <header class="items-hero">
               <div class="items-hero-copy">
-                <p class="items-kicker">Inventory</p>
-                <h3>Items</h3>
-                <p class="lede" id="items-lede">Name, photo, HSN code, unit type, rates, and stock.</p>
+                <p class="items-kicker" id="items-kicker">Item Master</p>
+                <h3>Item Master</h3>
+                <p class="lede" id="items-lede">Name, brand, photo, HSN code, unit type, rates, and stock.</p>
               </div>
               <div class="items-hero-stats" id="items-hero-stats"></div>
             </header>
+            <div class="items-desk-tabs" role="tablist">
+              <button type="button" class="is-on" data-items-tab="items">Items</button>
+              <button type="button" data-items-tab="brands">Brands</button>
+            </div>
             <div class="item-import-bar">
               <p class="item-import-copy" id="item-import-copy">Bulk add from Excel. Download the template, fill one item per row, then upload .xlsx, Excel XML, or CSV.</p>
               <div class="item-import-actions">
@@ -509,6 +515,14 @@
                   <label class="pharmacy-only" id="item-mfr-wrap" hidden>Company / Manufacturer
                     <input id="item-mfr" maxlength="160" placeholder="e.g. Cipla" />
                   </label>
+                  <div class="item-brand-row full">
+                    <label><span id="item-brand-lab">Brand</span>
+                      <input id="item-brand" list="brand-list" maxlength="128" placeholder="Brand / make" autocomplete="off" />
+                    </label>
+                    <button class="btn" type="button" id="item-brand-add">Manage brands</button>
+                  </div>
+                  <input type="hidden" id="item-brand-id" />
+                  <datalist id="brand-list"></datalist>
                   <label><span id="item-hsn-lab">HSN code (goods)</span> <input id="item-hsn" maxlength="16" placeholder="e.g. 0908" autocomplete="off" /></label>
                   <label>Unit type
                     <select id="item-unit"></select>
@@ -651,9 +665,62 @@
                   <div class="items-library-toggles">
                     <label class="item-toggle"><input type="checkbox" id="item-low-only" /> Low stock</label>
                     <label class="item-toggle"><input type="checkbox" id="item-hide-inactive" /> Hide inactive</label>
+                    <select id="item-brand-filter" aria-label="Filter by brand">
+                      <option value="">All brands</option>
+                    </select>
                   </div>
                 </div>
                 <div class="table-wrap items-library-list" id="items-table"></div>
+              </aside>
+            </div>
+          </div>
+        </section>
+        <section class="view view-brands" id="view-brands" hidden>
+          <h2 class="visually-hidden">Brand Management</h2>
+          <div class="items-desk brand-desk">
+            <header class="items-hero">
+              <div class="items-hero-copy">
+                <p class="items-kicker" id="brands-kicker">Brand Management</p>
+                <h3>Brand Management</h3>
+                <p class="lede" id="brands-lede">One brand list for Restaurant, Bar, Resort, Pharmacy, Garment, Grocery, and every other shop type.</p>
+              </div>
+              <div class="items-hero-stats" id="brands-hero-stats"></div>
+            </header>
+            <div class="items-desk-tabs" role="tablist">
+              <button type="button" data-items-tab="items">Items</button>
+              <button type="button" class="is-on" data-items-tab="brands">Brands</button>
+            </div>
+            <div class="items-split">
+              <form class="settings item-composer" id="brand-form" autocomplete="off">
+                <input type="hidden" id="brand-id" />
+                <div class="item-composer-top">
+                  <p class="item-mode" id="brand-mode">New brand</p>
+                  <p class="item-composer-note">Create a brand once, then assign it on Item Master. Liquor brands from the Bar desk are included automatically.</p>
+                </div>
+                <fieldset class="item-block">
+                  <legend>Brand</legend>
+                  <label class="full">Brand name * <input id="brand-name" required maxlength="128" placeholder="Brand / make" /></label>
+                  <label class="full">Company / house <input id="brand-company" maxlength="160" placeholder="Optional company" /></label>
+                  <label class="full">Notes <input id="brand-notes" maxlength="255" placeholder="Optional" /></label>
+                  <label>Status
+                    <select id="brand-status">
+                      <option value="active">Active</option>
+                      <option value="inactive">Inactive</option>
+                    </select>
+                  </label>
+                </fieldset>
+                <div class="item-composer-actions">
+                  <button class="btn primary" type="submit">Save brand</button>
+                  <button class="btn" type="button" id="brand-cancel">Clear</button>
+                  <div class="hint" id="brand-hint"></div>
+                </div>
+              </form>
+              <aside class="items-library">
+                <div class="items-library-head">
+                  <h4>Brands</h4>
+                  <input id="brand-catalog-search" type="search" placeholder="Search brand or company…" autocomplete="off" />
+                </div>
+                <div class="table-wrap items-library-list" id="brands-table"></div>
               </aside>
             </div>
           </div>
@@ -2960,7 +3027,9 @@
     <script src="./js/bar-ui.js?v=20261011bar2" defer></script>
     <script src="./js/resort.js?v=20261011resort1" defer></script>
     <script src="./js/resort-ui.js?v=20261011resort1" defer></script>
+    <script src="./js/item-master.js?v=20261012brand1" defer></script>
     <script src="./js/app.js?v=20261011kot1" defer></script>
+    <script src="./js/item-master-ui.js?v=20261012brand1" defer></script>
     <script src="./js/mobile-app.js?v=20261011m1" defer></script>
     <script src="./js/growth.js?v=20260905deploy145" defer></script>
     <script src="./js/offers-ui.js?v=20260919off1" defer></script>

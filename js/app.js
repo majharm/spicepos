@@ -3,6 +3,7 @@ const inr = new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR" 
 const state = {
   company: {},
   items: [],
+  brands: [],
   units: [],
   customers: [],
   packs: [],
@@ -506,6 +507,10 @@ function applyFootwearMode() {
   if ($("item-category")) $("item-category").placeholder = copy.category || "Group / Section";
   if ($("item-subcategory-lab")) $("item-subcategory-lab").textContent = copy.subcategoryLab || "Subcategory";
   if ($("item-subcategory")) $("item-subcategory").placeholder = copy.subcategory || "Type / Brand";
+  const brandCopy = globalThis.POSItemMaster?.brandCopy?.(globalThis.POSFootwear?.shopKind?.(state.businessMeta) || "general") || {};
+  if ($("item-brand-lab")) $("item-brand-lab").textContent = copy.brandLab || brandCopy.brandLab || "Brand";
+  if ($("item-brand")) $("item-brand").placeholder = copy.brandHint || brandCopy.brandHint || "Brand / make";
+  if ($("items-kicker")) $("items-kicker").textContent = "Item Master";
   if ($("item-name")) $("item-name").placeholder = copy.name || "Item name";
   if ($("item-local-lab")) $("item-local-lab").textContent = copy.localNameLab || "Regional name";
   if ($("item-local-name")) $("item-local-name").placeholder = copy.localName || "स्थानीय नाम / Local name";
@@ -641,7 +646,8 @@ const PAYMENT_STATUSES = ["paid", "partial", "unpaid"];
 const VIEW_META = {
   dashboard: { title: "Dashboard", subtitle: "Your shop today" },
   counter: { title: "Counter", subtitle: "Scan, tap, or search — then Pay" },
-  items: { title: "Items", subtitle: "Photo, HSN, unit type, rates, and stock" },
+  items: { title: "Item Master", subtitle: "Brand, photo, HSN, unit type, rates, and stock" },
+  brands: { title: "Brand Management", subtitle: "One brand list for every business type" },
   units: { title: "Unit master", subtitle: "Quantity, weight, length, area, volume, packaging, pharmacy, food, and service units" },
   customers: { title: "Customers", subtitle: "Accounts, due collection, and receipts" },
   barcodes: { title: "Barcodes", subtitle: "Generate unique piece codes and print labels" },
@@ -2332,6 +2338,7 @@ function applyNav() {
       dashboard: "dashboard",
       counter: "counter",
       items: "items",
+      brands: "items",
       units: "items",
       customers: "customers",
       packs: "items",
@@ -2689,6 +2696,10 @@ function paintDeskState(name) {
     fillItemUnitSelect($("item-unit")?.value || defaultItemUnit());
     refreshItemUnitLabels();
     paintItemImportLink();
+    globalThis.POSItemMasterUi?.fillBrandLists?.();
+  }
+  if (name === "brands") {
+    globalThis.POSItemMasterUi?.loadBrands?.();
   }
   if (name === "packs") {
     fillDatalists();
@@ -5351,10 +5362,11 @@ function fillDatalists() {
   const subs = [...new Set((state.items || []).map((i) => i.subcategory).filter(Boolean))];
   if ($("category-list")) $("category-list").innerHTML = cats.map((c) => `<option value="${escapeHtml(c)}">`).join("");
   if ($("subcategory-list")) $("subcategory-list").innerHTML = subs.map((c) => `<option value="${escapeHtml(c)}">`).join("");
+  globalThis.POSItemMasterUi?.fillBrandLists?.();
 }
 
 function itemSearchHay(item) {
-  const raw = `${item.name || ""} ${item.local_name || ""} ${item.generic_name || ""} ${item.manufacturer || ""} ${item.medicine_type || ""} ${item.batch_no || ""} ${item.code || ""} ${item.hsn || ""} ${item.barcode || ""} ${item.mfr_barcode || ""} ${item.category || ""} ${item.subcategory || ""} ${item.color || ""} ${item.size || ""} ${item.wearer_type || ""} ${itemStatusOf(item.status)}`;
+  const raw = `${item.name || ""} ${item.local_name || ""} ${item.generic_name || ""} ${item.manufacturer || ""} ${item.brand || ""} ${item.medicine_type || ""} ${item.batch_no || ""} ${item.code || ""} ${item.hsn || ""} ${item.barcode || ""} ${item.mfr_barcode || ""} ${item.category || ""} ${item.subcategory || ""} ${item.color || ""} ${item.size || ""} ${item.wearer_type || ""} ${itemStatusOf(item.status)}`;
   const I = window.POSI18n;
   const blob = I ? I.searchBlob(item) : raw.toLowerCase();
   return `${blob} ${itemStatusOf(item.status)}`.trim();
@@ -5370,7 +5382,8 @@ function paintItemsHero() {
   stats.innerHTML = `<div class="items-stat"><span>Items</span><strong>${items.length}</strong></div>
     <div class="items-stat${low ? " is-warn" : ""}"><span>Low stock</span><strong>${low}</strong></div>
     <div class="items-stat${inactive ? " is-warn" : ""}"><span>Inactive</span><strong>${inactive}</strong></div>
-    <div class="items-stat"><span>Groups</span><strong>${cats}</strong></div>`;
+    <div class="items-stat"><span>Groups</span><strong>${cats}</strong></div>
+    <div class="items-stat"><span>Brands</span><strong>${new Set(items.map((i) => i.brand).filter(Boolean)).size}</strong></div>`;
 }
 
 function filterItemsCatalog() {
@@ -5381,11 +5394,13 @@ function matchingItemsForTable() {
   const q = String($("item-catalog-search")?.value || "").trim().toLowerCase();
   const lowOnly = Boolean($("item-low-only")?.checked);
   const hideInactive = Boolean($("item-hide-inactive")?.checked);
+  const brand = $("item-brand-filter")?.value || "";
   return (state.items || []).filter((i) => {
     const hay = itemSearchHay(i);
     const low = Number(i.stock_gm) <= Number(i.reorder_level_gm);
     const inactive = itemStatusOf(i.status) === "inactive";
     if (q && !hay.includes(q)) return false;
+    if (brand && !globalThis.POSItemMaster?.itemMatchesBrand(i, brand)) return false;
     if (lowOnly && !low) return false;
     if (hideInactive && inactive) return false;
     return true;
@@ -5490,6 +5505,8 @@ function resetItemForm() {
     if ($("item-pack-unit")) $("item-pack-unit").value = "Strip";
     if ($("item-upp")) $("item-upp").value = "10";
   }
+  if ($("item-brand")) $("item-brand").value = "";
+  if ($("item-brand-id")) $("item-brand-id").value = "";
 }
 
 function fillItemForm(i) {
@@ -5500,6 +5517,8 @@ function fillItemForm(i) {
   $("item-hsn").value = i.hsn || "";
   $("item-category").value = i.category || "";
   $("item-subcategory").value = i.subcategory || "";
+  if ($("item-brand")) $("item-brand").value = i.brand || "";
+  if ($("item-brand-id")) $("item-brand-id").value = i.brand_id || "";
   if ($("item-type")) $("item-type").value = i.medicine_type || "Tablet";
   if ($("item-mfr")) $("item-mfr").value = i.manufacturer || "";
   if ($("item-own-barcode")) $("item-own-barcode").value = i.barcode != null ? String(i.barcode) : "";
@@ -5607,7 +5626,7 @@ function renderItemsTable() {
         const pack = medicinePackLabel(i) || i.pack_size || "—";
         const expiry = formatExpiryShort(i.default_expiry) || "—";
         return `<tr class="${editing ? "is-editing " : ""}${inactive ? "is-inactive " : ""}" data-item-card data-edit-item="${escapeHtml(i.id)}" data-item-search="${escapeHtml(search)}" data-item-low="${low ? "1" : "0"}" data-item-inactive="${inactive ? "1" : "0"}">
-        <td class="pharm-med">${escapeHtml(i.name)}${inactive ? ` <span class="item-chip stock low">Inactive</span>` : ""}</td>
+        <td class="pharm-med">${escapeHtml(i.name)}${i.brand ? ` <span class="item-chip is-brand">${escapeHtml(i.brand)}</span>` : ""}${inactive ? ` <span class="item-chip stock low">Inactive</span>` : ""}</td>
         <td>${escapeHtml(i.generic_name || i.local_name || "—")}</td>
         <td>${escapeHtml(i.medicine_type || "—")}</td>
         <td>${escapeHtml(pack)}</td>
@@ -5640,7 +5659,8 @@ function renderItemsTable() {
           : `${escapeHtml(i.code || "")}${i.hsn ? ` · ${taxCodeLabel()} ${escapeHtml(i.hsn)}` : ""}`;
       const group = footwear
         ? `${escapeHtml(i.category || "Style")} / ${escapeHtml(i.subcategory || "—")}`
-        : `${escapeHtml(i.category || "—")} / ${escapeHtml(i.subcategory || "—")}`;
+          : `${escapeHtml(i.category || "—")} / ${escapeHtml(i.subcategory || "—")}`;
+      const brandChip = i.brand ? `<span class="item-chip is-brand">${escapeHtml(i.brand)}</span>` : "";
       const suffix = POSUnits.rateSuffix(itemUnit(i));
       const search = itemSearchHay(i);
       const editing = $("item-id")?.value === i.id;
@@ -5656,6 +5676,7 @@ function renderItemsTable() {
         <div class="item-card-meta">
           <span class="item-chip">${escapeHtml(itemUnit(i))}</span>
           <span class="item-chip">${group}</span>
+          ${brandChip}
           <span class="item-chip ${low ? "stock low" : "stock ok"}">${escapeHtml(fmtQty(i.stock_gm, i))}</span>
           <span class="item-chip ${inactive ? "stock low" : "stock ok"}">${inactive ? "Inactive" : "Active"}</span>
         </div>
@@ -6413,6 +6434,7 @@ async function loadBootstrap() {
   state.support = data.support || {};
   state.plan = data.plan || null;
   state.items = data.items;
+  state.brands = data.brands || [];
   applyUnitMaster(data.units || []);
   state.customers = data.customers;
   state.packs = data.packs;
@@ -10294,6 +10316,8 @@ $("item-form").addEventListener("submit", async (e) => {
     hsn: $("item-hsn").value,
     category: $("item-category").value || defaultItemCategory(),
     subcategory: $("item-subcategory").value,
+    brand: $("item-brand")?.value || "",
+    brand_id: $("item-brand-id")?.value || "",
     color: $("item-color")?.value || "",
     size: $("item-size")?.value || "",
     wearer_type: $("item-wearer")?.value || "",

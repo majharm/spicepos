@@ -15,7 +15,7 @@ function pos_item_import_headers($biz = null) {
   $tax = function_exists("pos_tax_code_label") ? pos_tax_code_label($biz ?: []) : "HSN";
   return [
     "Name", $tax, "Category", "Subcategory", "Unit", "MRP", "GST %", "Retail", "B2B", "Purchase",
-    "Stock", "Barcode", "Manufacturer barcode", "Code", "Colour", "Size", "Wearer",
+    "Stock", "Barcode", "Manufacturer barcode", "Code", "Colour", "Size", "Wearer", "Brand",
   ];
 }
 
@@ -41,6 +41,7 @@ function pos_item_import_header_key($raw) {
     "generic" => "generic_name", "genericname" => "generic_name",
     "localname" => "local_name", "regionalname" => "local_name",
     "manufacturer" => "manufacturer", "company" => "manufacturer", "companyname" => "manufacturer", "mfr" => "manufacturer",
+    "brand" => "brand", "brandname" => "brand", "make" => "brand",
     "pack" => "pack_size", "packsize" => "pack_size", "packunit" => "pack_unit",
     "itemsperpack" => "units_per_pack", "itemsperstrip" => "units_per_pack",
     "unitsperpack" => "units_per_pack", "unitspperpack" => "units_per_pack",
@@ -92,8 +93,8 @@ function pos_item_import_template_xml($biz = null) {
       "name" => "Items",
       "headers" => pos_item_import_headers($biz),
       "rows" => [
-        ["Turmeric powder", "091030", "Whole Spices", "Powder", "GM", 220, 5, 240, 210, 180, 5000, "", "", "", "", "", ""],
-        ["Soap bar", "", "Grocery", "", "PCS", 25, 5, 30, 28, 22, 24, "", "", "", "", "", ""],
+        ["Turmeric powder", "091030", "Whole Spices", "Powder", "GM", 220, 5, 240, 210, 180, 5000, "", "", "", "", "", "", "MDH"],
+        ["Soap bar", "", "Grocery", "", "PCS", 25, 5, 30, 28, 22, 24, "", "", "", "", "", "", ""],
       ],
     ],
     [
@@ -104,6 +105,7 @@ function pos_item_import_template_xml($biz = null) {
         ["Unit", "GM, KG, PCS, ML, or LTR (or your unit master code)."],
         ["Stock", "Quantity in that unit: grams for GM, kg for KG, pcs for PCS."],
         ["GST %", "Defaults to 5 if blank on a new item."],
+        ["Brand", "Optional. Saved to Brand Management for every shop type."],
         ["Code", "Leave blank to create a new SKU. Matching Code or Barcode updates that item."],
         ["Limit", "Up to 500 rows per upload. .xlsx, Excel XML, or CSV."],
       ],
@@ -447,6 +449,7 @@ function pos_item_body_from_import_row($row, $biz) {
     $body["local_name"] = $generic;
   }
   if (trim((string) ($row["manufacturer"] ?? "")) !== "") $body["manufacturer"] = trim((string) $row["manufacturer"]);
+  if (trim((string) ($row["brand"] ?? "")) !== "") $body["brand"] = trim((string) $row["brand"]);
   if (trim((string) ($row["medicine_type"] ?? "")) !== "") $body["medicine_type"] = trim((string) $row["medicine_type"]);
   if (trim((string) ($row["pack_size"] ?? "")) !== "") $body["pack_size"] = trim((string) $row["pack_size"]);
   if (trim((string) ($row["pack_unit"] ?? "")) !== "") $body["pack_unit"] = trim((string) $row["pack_unit"]);

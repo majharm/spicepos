@@ -16,15 +16,17 @@ import {
 import { workbookXml } from "./excel.js";
 
 test("CSV item import maps Name and GST percent headers", () => {
-  const grid = parseCsv(`Name,GST %,Unit,Stock,Retail\nChilli powder,5,GM,2000,180\n`);
+  const grid = parseCsv(`Name,GST %,Unit,Stock,Retail,Brand\nChilli powder,5,GM,2000,180,MDH\n`);
   const rows = mapItemImportRows(grid);
   assert.equal(rows.length, 1);
   assert.equal(rows[0].name, "Chilli powder");
   assert.equal(rows[0].gst, "5");
+  assert.equal(rows[0].brand, "MDH");
   const body = itemBodyFromImportRow(rows[0], { business_type: "spice" });
   assert.equal(body.unit, "GM");
   assert.equal(body.stock_gm, 2000);
   assert.equal(body.retail_rate, 180);
+  assert.equal(body.brand, "MDH");
 });
 
 test("SpreadsheetML template round-trips through the parser", () => {

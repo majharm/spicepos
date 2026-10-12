@@ -27,6 +27,7 @@ export const ITEM_IMPORT_HEADERS = [
   "Colour",
   "Size",
   "Wearer",
+  "Brand",
 ];
 
 const HEADER_ALIASES = {
@@ -79,6 +80,9 @@ const HEADER_ALIASES = {
   company: "manufacturer",
   companyname: "manufacturer",
   mfr: "manufacturer",
+  brand: "brand",
+  brandname: "brand",
+  make: "brand",
   pack: "pack_size",
   packsize: "pack_size",
   packunit: "pack_unit",
@@ -171,8 +175,8 @@ export function itemImportTemplateSheets(biz) {
       name: "Items",
       headers: itemImportHeaders(biz),
       rows: [
-        ["Turmeric powder", "091030", "Whole Spices", "Powder", "GM", 220, 5, 240, 210, 180, 5000, "", "", "", "", "", ""],
-        ["Soap bar", "", "Grocery", "", "PCS", 25, 5, 30, 28, 22, 24, "", "", "", "", "", ""],
+        ["Turmeric powder", "091030", "Whole Spices", "Powder", "GM", 220, 5, 240, 210, 180, 5000, "", "", "", "", "", "", "MDH"],
+        ["Soap bar", "", "Grocery", "", "PCS", 25, 5, 30, 28, 22, 24, "", "", "", "", "", "", ""],
       ],
     },
     {
@@ -184,6 +188,7 @@ export function itemImportTemplateSheets(biz) {
         ["Unit", "GM, KG, PCS, ML, or LTR (or your unit master code)."],
         ["Stock", "Quantity in that unit: grams for GM, kg for KG, pcs for PCS."],
         ["GST %", "Defaults to 5 if blank on a new item."],
+        ["Brand", "Optional. Saved to Brand Management for every shop type."],
         ["Code", "Leave blank to create a new SKU. Matching Code or Barcode updates that item."],
         ["Limit", "Up to 500 rows per upload. .xlsx, Excel XML, or CSV."],
       ],
@@ -438,6 +443,7 @@ export function itemBodyFromImportRow(row, biz) {
     body.local_name = generic;
   }
   if (row.manufacturer) body.manufacturer = String(row.manufacturer).trim();
+  if (row.brand) body.brand = String(row.brand).trim();
   if (row.medicine_type) body.medicine_type = String(row.medicine_type).trim();
   if (row.pack_size) body.pack_size = String(row.pack_size).trim();
   if (row.pack_unit) body.pack_unit = String(row.pack_unit).trim();

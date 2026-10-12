@@ -367,6 +367,10 @@ function pos_save_pharmacy_item_fields($bid, $itemId, $body = []) {
 function pos_assign_item_barcodes($bid, $itemId, $body = []) {
   pos_ensure_advanced_schema();
   pos_save_pharmacy_item_fields($bid, $itemId, $body);
+  if (is_file(__DIR__ . "/pos-brands.php")) {
+    require_once __DIR__ . "/pos-brands.php";
+    if (function_exists("pos_save_item_brand")) pos_save_item_brand($bid, $itemId, $body);
+  }
   $item = pos_q("SELECT * FROM items WHERE id = ? AND business_id = ? LIMIT 1", "ss", [$itemId, $bid]);
   $row = $item[0] ?? $body;
   $own = pos_barcode_text($body["barcode"] ?? "");

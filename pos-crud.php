@@ -153,6 +153,10 @@ function pos_crud_dispatch($path, $method, $body, $bid, $auth, $branchId, $uid) 
       if (is_file(__DIR__ . "/pos-advanced.php")) {
         require_once __DIR__ . "/pos-advanced.php";
         if (function_exists("pos_assign_item_barcodes")) pos_assign_item_barcodes($bid, $id, array_merge($body, ["size" => $size]));
+        if (is_file(__DIR__ . "/pos-brands.php")) {
+          require_once __DIR__ . "/pos-brands.php";
+          if (function_exists("pos_save_item_brand")) pos_save_item_brand($bid, $id, array_merge($body, ["size" => $size]));
+        }
       }
       if (array_key_exists("mrp", $body)) {
         try { pos_q("UPDATE items SET mrp = ? WHERE id = ?", "ds", [(float) $body["mrp"], $id]); } catch (Exception $e) { /* optional */ }
@@ -214,6 +218,10 @@ function pos_crud_dispatch($path, $method, $body, $bid, $auth, $branchId, $uid) 
     if (is_file(__DIR__ . "/pos-advanced.php")) {
       require_once __DIR__ . "/pos-advanced.php";
       if (function_exists("pos_assign_item_barcodes")) pos_assign_item_barcodes($bid, $itemId, $body);
+      if (is_file(__DIR__ . "/pos-brands.php")) {
+        require_once __DIR__ . "/pos-brands.php";
+        if (function_exists("pos_save_item_brand")) pos_save_item_brand($bid, $itemId, $body);
+      }
     }
     if (array_key_exists("mrp", $body)) {
       try { pos_q("UPDATE items SET mrp = ? WHERE id = ?", "ds", [(float) $body["mrp"], $itemId]); } catch (Exception $e) { /* optional */ }
