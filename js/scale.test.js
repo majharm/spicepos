@@ -57,5 +57,5 @@ test("POS shell wires a Counter scale dock and USB / Bluetooth helpers", () => {
   assert.match(S.connectBluetooth.toString(), /bluetooth/);
   assert.equal(typeof S.connectionKind, "function");
   assert.equal(typeof S.connectNetwork, "function");
-  assert.equal(S.loadSettings("t").enabled, true);
+  assert.equal(S.loadSettings("t").enabled, false);
 });

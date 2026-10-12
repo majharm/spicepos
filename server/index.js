@@ -766,7 +766,13 @@ app.post("/api/settings", requireStaff, requirePerm("settings"), async (req, res
   }
   if (Object.prototype.hasOwnProperty.call(body, "table_shifting_enabled")) {
     langSql += ", table_shifting_enabled = ?";
-    params.push(Number(body.table_shifting_enabled) === 2 ? 2 : 1);
+    params.push(Number(body.table_shifting_enabled) === 1 ? 1 : 0);
+  }
+  for (const col of ["scale_enabled", "camera_scanner_enabled", "receipt_printer_enabled", "cash_drawer_enabled"]) {
+    if (Object.prototype.hasOwnProperty.call(body, col)) {
+      langSql += `, ${col} = ?`;
+      params.push(Number(body[col]) === 1 ? 1 : 0);
+    }
   }
   if (Object.prototype.hasOwnProperty.call(body, "quick_add_enabled")) {
     langSql += ", quick_add_enabled = ?";

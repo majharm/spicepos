@@ -483,6 +483,10 @@ function pos_ensure_i18n_columns() {
     "payment_upi" => "VARCHAR(160) NULL",
     "dining_tables_json" => "TEXT NULL",
     "table_shifting_enabled" => "TINYINT(1) NOT NULL DEFAULT 0",
+    "scale_enabled" => "TINYINT(1) NOT NULL DEFAULT 0",
+    "camera_scanner_enabled" => "TINYINT(1) NOT NULL DEFAULT 0",
+    "receipt_printer_enabled" => "TINYINT(1) NOT NULL DEFAULT 0",
+    "cash_drawer_enabled" => "TINYINT(1) NOT NULL DEFAULT 0",
     "quick_add_enabled" => "TINYINT(1) NOT NULL DEFAULT 1",
     "fast_mode_enabled" => "TINYINT(1) NOT NULL DEFAULT 1",
     "low_stock_threshold" => "INT NOT NULL DEFAULT 5",
@@ -2648,7 +2652,7 @@ function pos_register_business($raw, $yearly = false) {
   );
   try {
     pos_q(
-      "INSERT INTO pos_devices (id, business_id, branch_id, name, code, status) VALUES (?,?,?,?,?, 'active')",
+      "INSERT INTO pos_devices (id, business_id, branch_id, name, code, status) VALUES (?,?,?,?,?, 'inactive')",
       "sssss",
       [pos_uuid(), $id, $branchId, "POS 01", "POS-" . $code]
     );

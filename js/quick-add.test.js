@@ -37,7 +37,7 @@ test("Quick Add visibility is a per-business settings control, not a removed fea
   const core = read("pos-php-core.php");
   const till = read("pos-php-till.php");
 
-  assert.match(index, /<fieldset class="item-block" id="set-quick-add-block">/);
+  assert.match(index, /<fieldset class="item-block" id="set-quick-add-block"/);
   assert.match(index, /id="set-quick-add-show"/);
   assert.match(index, /id="set-quick-add-hide"/);
   assert.match(index, /Show Quick Add/);

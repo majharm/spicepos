@@ -256,7 +256,7 @@ export async function registerBusiness(raw, opts = {}) {
     ]);
     await conn.query(
       `INSERT INTO pos_devices (id, business_id, branch_id, name, code, status)
-       VALUES (?,?,?,?,?, 'active')`,
+       VALUES (?,?,?,?,?, 'inactive')`,
       [crypto.randomUUID(), id, branchId, "POS 01", `POS-${code}`],
     );
     try {

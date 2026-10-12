@@ -2256,6 +2256,37 @@ function tableShiftingEnabled() {
   return isRestaurantShop() && Boolean(restaurantApi()?.tableShiftingOn?.(diningCompany()));
 }
 
+function hardwareFlagOn(raw) {
+  return raw === true || raw === 1 || raw === "1";
+}
+
+function cameraScannerEnabled(company = state.company) {
+  return hardwareFlagOn(company?.camera_scanner_enabled);
+}
+
+function receiptPrinterEnabled(company = state.company) {
+  return hardwareFlagOn(company?.receipt_printer_enabled);
+}
+
+function cashDrawerEnabled(company = state.company) {
+  return hardwareFlagOn(company?.cash_drawer_enabled);
+}
+
+function shopScaleEnabled(company = state.company) {
+  return hardwareFlagOn(company?.scale_enabled);
+}
+
+function hardwareStatusLabel(on, extra = "") {
+  if (!on) return extra ? `Disabled — ${extra}` : "Disabled";
+  return extra || "Enabled";
+}
+
+function validGstin(raw) {
+  const v = String(raw || "").trim().toUpperCase();
+  if (!v) return true;
+  return /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/.test(v);
+}
+
 function quickAddVisible(company = state.company) {
   const v = company?.quick_add_enabled;
   if (v === 0 || v === "0" || v === 2 || v === "2" || v === false || v === "off" || v === "hide") return false;
@@ -2461,6 +2492,7 @@ function applyNav() {
     }[view];
     btn.hidden = module ? !can(module) : false;
   });
+  applyCameraScannerVisibility();
 }
 
 function tt(key, fallback, vars) {
@@ -2543,20 +2575,81 @@ function paintViewHeader(name) {
   document.getElementById("view-topbar")?.classList.toggle("is-counter", name === "counter");
 }
 
+const SETTINGS_SECTIONS = [
+  "profile",
+  "hardware",
+  "tables",
+  "aggregator",
+  "timezone",
+  "quick-add",
+  "fast-mode",
+  "branding",
+  "payment",
+  "invoice",
+  "security",
+  "backup",
+];
+
+function settingsSectionAllowed(name) {
+  if (name === "tables") return isRestaurantShop();
+  if (name === "aggregator") return isRestaurantShop() || isBarShop();
+  return true;
+}
+
+function confirmLeaveSettings() {
+  if (!state.settingsDirty) return true;
+  return window.confirm("You have unsaved settings. Leave without saving?");
+}
+
+function markSettingsDirty() {
+  state.settingsDirty = true;
+}
+
+function clearSettingsDirty() {
+  state.settingsDirty = false;
+}
+
 function showSettingsTab(tab) {
-  const name = tab === "backup" ? tab : "profile";
-  if ($("settings-pane-profile")) $("settings-pane-profile").hidden = name !== "profile";
-  if ($("settings-pane-backup")) $("settings-pane-backup").hidden = name !== "backup";
+  let name = SETTINGS_SECTIONS.includes(tab) ? tab : "profile";
+  if (!settingsSectionAllowed(name)) name = "profile";
+  if (state.settingsSection && state.settingsSection !== name && !confirmLeaveSettings()) return false;
+  const backup = name === "backup";
+  const hardware = name === "hardware";
+  const security = name === "security";
+  if ($("settings-pane-profile")) $("settings-pane-profile").hidden = backup;
+  if ($("settings-pane-hardware")) $("settings-pane-hardware").hidden = !hardware;
+  if ($("settings-pane-backup")) $("settings-pane-backup").hidden = !backup;
+  document.querySelectorAll("[data-set-section]").forEach((el) => {
+    const keys = String(el.dataset.setSection || "")
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (!keys.length) return;
+    el.hidden = !keys.includes(name);
+  });
+  const split = document.querySelector(".settings-profile-split");
+  if (split) {
+    const form = split.querySelector("#settings-form");
+    const side = split.querySelector(".settings-side");
+    if (form) form.hidden = backup || hardware || security;
+    if (side) side.hidden = !security;
+  }
   document.querySelectorAll("[data-settings-tab]").forEach((btn) => {
     const on = btn.dataset.settingsTab === name;
     btn.classList.toggle("active", on);
     btn.setAttribute("aria-selected", on ? "true" : "false");
   });
-  paintViewHeader(name === "backup" ? "backup" : "settings");
+  state.settingsSection = name;
+  paintViewHeader(backup ? "backup" : hardware ? "devices" : "settings");
   document.querySelectorAll(".nav-btn").forEach((btn) => {
-    btn.classList.toggle("active", btn.dataset.view === "settings");
+    const view = btn.dataset.view;
+    btn.classList.toggle("active", view === "settings" || (hardware && view === "devices"));
   });
-  if (name === "backup" && $("btn-backup-download")) $("btn-backup-download").href = posUrl("/api/backup");
+  if (backup && $("btn-backup-download")) $("btn-backup-download").href = posUrl("/api/backup");
+  if (hardware) loadDevices();
+  if (name === "tables") paintTableShiftHistory();
+  if (name === "aggregator") void loadAggregatorSettings();
+  return true;
 }
 
 function showView(name) {
@@ -2564,8 +2657,8 @@ function showView(name) {
   if (name === "prescriptions" && !isPharmacyShop()) name = can("counter") ? "counter" : landingView();
   if (name === "kot" && (!isRestaurantShop() || !can("kot"))) name = can("counter") ? "counter" : landingView();
   const requested = name;
-  state.currentView = name === "backup" ? "settings" : name;
-  if (name === "backup") name = "settings";
+  state.currentView = name === "backup" || name === "devices" ? (name === "devices" ? "devices" : "settings") : name;
+  if (name === "backup" || name === "devices") name = "settings";
   document.querySelectorAll(".view").forEach((el) => {
     el.hidden = el.id !== `view-${name}`;
   });
@@ -2580,7 +2673,10 @@ function showView(name) {
   const page = document.getElementById(`view-${name}`);
   if (page) page.scrollTop = 0;
   paintViewHeader(name);
-  if (name === "settings") showSettingsTab(requested === "backup" ? "backup" : "profile");
+  if (name === "settings") {
+    const tab = requested === "backup" ? "backup" : requested === "devices" ? "hardware" : state.settingsSection || "profile";
+    showSettingsTab(tab);
+  }
   if (name === "reports") {
     if (!viewStillFresh("reports", 90000)) loadReports();
     else globalThis.POSBizHubUi?.paintReportsCenter?.();
@@ -2700,7 +2796,7 @@ function showView(name) {
     void refreshCustomersOutstanding();
   }
   if (name === "branches") loadBranches();
-  if (name === "devices") loadDevices();
+  if (name === "settings" && requested === "devices") loadDevices();
   paintImpersonationControls();
   applyCounterWorkspaceChrome();
 }
@@ -6274,6 +6370,14 @@ function renderSettings() {
   if ($("set-fssai")) $("set-fssai").value = state.company.fssai_licence_no || "";
   if ($("set-ndps")) $("set-ndps").value = state.company.ndps_licence_no || "";
   if ($("set-table-shifting")) $("set-table-shifting").checked = tableShiftingEnabled();
+  if ($("table-shift-status")) $("table-shift-status").textContent = `Table shifting: ${tableShiftingEnabled() ? "Enabled" : "Disabled"}`;
+  if ($("set-camera-scanner")) $("set-camera-scanner").checked = cameraScannerEnabled();
+  if ($("set-receipt-printer")) $("set-receipt-printer").checked = receiptPrinterEnabled();
+  if ($("set-cash-drawer")) $("set-cash-drawer").checked = cashDrawerEnabled();
+  if ($("camera-scanner-status")) $("camera-scanner-status").textContent = `Camera scanner: ${cameraScannerEnabled() ? "Enabled" : "Disabled"}`;
+  if ($("receipt-printer-status")) $("receipt-printer-status").textContent = `Receipt printer: ${receiptPrinterEnabled() ? "Enabled" : "Disabled"}`;
+  if ($("cash-drawer-status")) $("cash-drawer-status").textContent = `Cash drawer: ${cashDrawerEnabled() ? "Enabled" : "Disabled"}`;
+  applyCameraScannerVisibility();
   void loadAggregatorSettings();
   const showQuickAdd = quickAddVisible();
   if ($("set-quick-add-show")) $("set-quick-add-show").checked = showQuickAdd;
@@ -6317,6 +6421,7 @@ function renderSettings() {
   }
   if ($("btn-backup-download")) $("btn-backup-download").href = posUrl("/api/backup");
   fillLocaleSelects();
+  clearSettingsDirty();
   if (window.DevMode) {
     const section = $("dev-settings-section");
     if (section) section.hidden = !DevMode.canUse(state.session);
@@ -6335,22 +6440,48 @@ async function paintTableShiftHistory() {
   if (!el) return;
   if (!isRestaurantShop()) {
     el.innerHTML = "";
+    if ($("table-shift-pager")) $("table-shift-pager").hidden = true;
     return;
   }
   if (!tableShiftingEnabled()) {
-    el.innerHTML = "<p class='hint'>Turn on Enable Table Shifting to move active orders between tables.</p>";
+    el.innerHTML = "<p class='hint'>Turn on Enable Table Shifting to move active orders between tables. Shift history stays saved.</p>";
+    if ($("table-shift-pager")) $("table-shift-pager").hidden = true;
     return;
   }
   try {
     const data = await api("/api/table-shifts/");
     const rows = data.shifts || [];
-    const list = Array.isArray(rows) ? rows : [];
+    let list = Array.isArray(rows) ? rows : [];
+    const q = String($("table-shift-search")?.value || "").trim().toLowerCase();
+    const from = String($("table-shift-from")?.value || "");
+    const to = String($("table-shift-to")?.value || "");
+    if (q) {
+      list = list.filter((row) =>
+        [row.order_number, row.old_table, row.new_table, row.shifted_by]
+          .map((v) => String(v || "").toLowerCase())
+          .some((v) => v.includes(q)),
+      );
+    }
+    if (from) list = list.filter((row) => String(row.created_at || "").slice(0, 10) >= from);
+    if (to) list = list.filter((row) => String(row.created_at || "").slice(0, 10) <= to);
+    const pageSize = 10;
+    const pages = Math.max(1, Math.ceil(list.length / pageSize));
+    state.tableShiftPage = Math.min(Math.max(1, Number(state.tableShiftPage) || 1), pages);
+    const start = (state.tableShiftPage - 1) * pageSize;
+    const pageRows = list.slice(start, start + pageSize);
+    const pager = $("table-shift-pager");
+    if (pager) {
+      pager.hidden = list.length <= pageSize;
+      if ($("table-shift-page-label")) $("table-shift-page-label").textContent = `Page ${state.tableShiftPage} of ${pages}`;
+      if ($("table-shift-prev")) $("table-shift-prev").disabled = state.tableShiftPage <= 1;
+      if ($("table-shift-next")) $("table-shift-next").disabled = state.tableShiftPage >= pages;
+    }
     if (!list.length) {
       el.innerHTML = "<p class='hint'>No table shifts yet.</p>";
       return;
     }
     const R = restaurantApi();
-    el.innerHTML = `<table><thead><tr><th>Order</th><th>From</th><th>To</th><th>By</th><th>When</th></tr></thead><tbody>${list
+    el.innerHTML = `<table><thead><tr><th>Order</th><th>From</th><th>To</th><th>By</th><th>When</th></tr></thead><tbody>${pageRows
       .map((row) => {
         const when = row.created_at ? String(row.created_at).replace("T", " ").slice(0, 19) : "";
         return `<tr>
@@ -6365,6 +6496,32 @@ async function paintTableShiftHistory() {
   } catch {
     el.innerHTML = "<p class='hint'>Shift history unavailable.</p>";
   }
+}
+
+async function saveHardwareFlags(extra = {}) {
+  const payload = {
+    name: state.company?.name || $("set-name")?.value || "Shop",
+    address: state.company?.address || "",
+    phone: state.company?.phone || "",
+    email: state.company?.email || "",
+    gstin: state.company?.gstin || "",
+    camera_scanner_enabled: $("set-camera-scanner")?.checked ? 1 : 0,
+    receipt_printer_enabled: $("set-receipt-printer")?.checked ? 1 : 0,
+    cash_drawer_enabled: $("set-cash-drawer")?.checked ? 1 : 0,
+    ...extra,
+  };
+  const data = await api("/api/settings", { method: "POST", body: JSON.stringify(payload) });
+  if (data.company) state.company = { ...state.company, ...data.company };
+  applyCameraScannerVisibility();
+  return data;
+}
+
+function applyCameraScannerVisibility() {
+  const on = cameraScannerEnabled();
+  ["scan-camera-btn", "bill-scan-camera-btn"].forEach((id) => {
+    const el = $(id);
+    if (el) el.hidden = !on;
+  });
 }
 
 function paintTimezonePreview() {
@@ -7104,9 +7261,23 @@ async function loadBranches() {
 
 async function loadDevices() {
   const rows = await api("/api/devices");
-  $("device-table").innerHTML = `<table><thead><tr><th>Name</th><th>Code</th><th>Branch</th><th>Status</th></tr></thead><tbody>${rows
-    .map((d) => `<tr><td>${escapeHtml(d.name)}</td><td>${escapeHtml(d.code)}</td><td>${escapeHtml(d.branch_name)}</td><td>${escapeHtml(d.status)}</td></tr>`)
-    .join("")}</tbody></table>`;
+  const list = Array.isArray(rows) ? rows : [];
+  $("device-table").innerHTML = `<table><thead><tr><th>Name</th><th>Code</th><th>Branch</th><th>Status</th><th></th></tr></thead><tbody>${
+    list.length
+      ? list
+          .map((d) => {
+            const on = String(d.status || "") === "active";
+            return `<tr>
+              <td>${escapeHtml(d.name)}</td>
+              <td>${escapeHtml(d.code)}</td>
+              <td>${escapeHtml(d.branch_name || "")}</td>
+              <td>${on ? "Enabled" : "Disabled"}</td>
+              <td><button class="btn" type="button" data-device-toggle="${escapeHtml(d.id)}" data-next-status="${on ? "inactive" : "active"}">${on ? "Disable" : "Activate"}</button></td>
+            </tr>`;
+          })
+          .join("")
+      : `<tr><td colspan="5">No registers yet. Add one above — it stays disabled until you activate it.</td></tr>`
+  }</tbody></table>`;
   paintScaleSetup();
 }
 
@@ -7578,7 +7749,7 @@ function showVoucherResult(entry, opts = {}) {
   if (alter) alter.onclick = () => showAlterVoucherModal(entry);
   const del = $("modal-delete-voucher");
   if (del) del.onclick = () => deleteVoucherEntry(entry).catch((err) => setHint(err.message, "error"));
-  if (opts.autoPrint) printVoucher(entry);
+  if (opts.autoPrint && receiptPrinterEnabled()) printVoucher(entry);
 }
 
 function voucherMethodOptions(selected) {
@@ -8252,7 +8423,7 @@ function printQrOrder(qr, invoice) {
       ? `Invoice ${bill.order_number || ""} saved.`
       : "Print this QR order like a Counter bill.",
   });
-  printOrder(bill, "pos");
+  if (receiptPrinterEnabled()) printOrder(bill, "pos");
 }
 
 function printQrPoster(tableId) {
@@ -8500,6 +8671,12 @@ async function loadAggregatorSettings() {
 async function saveAggregatorSettings() {
   if (!$("set-zomato-enabled")) return;
   const hint = $("agg-settings-hint");
+  const prev = state.aggregatorSettings || {};
+  const zOn = $("set-zomato-enabled").checked;
+  const sOn = Boolean($("set-swiggy-enabled")?.checked);
+  if ((prev.zomato_live && !zOn) || (prev.swiggy_live && !sOn) || (prev.zomato_enabled && !zOn) || (prev.swiggy_enabled && !sOn)) {
+    if (!window.confirm("Disable this integration? New platform orders will stop. In-progress tickets stay. Keys and history are kept.")) return;
+  }
   const data = await api("/api/aggregator/settings", {
     method: "PUT",
     body: JSON.stringify({
@@ -9913,10 +10090,11 @@ function scaleBizKey() {
   return String(state.session?.business_id || state.businessMeta?.id || state.company?.id || "local");
 }
 function scaleSettings() {
-  return globalThis.POSScale?.loadSettings?.(scaleBizKey()) || { baud: 9600, unit: "kg", autoApply: true, enabled: true, precision: 3, allowManual: true };
+  const local = globalThis.POSScale?.loadSettings?.(scaleBizKey()) || { baud: 9600, unit: "kg", autoApply: true, enabled: false, precision: 3, allowManual: true };
+  return { ...local, enabled: shopScaleEnabled() };
 }
 function isScaleEnabled() {
-  return scaleSettings().enabled !== false;
+  return shopScaleEnabled() && scaleSettings().enabled === true;
 }
 function canOverrideScaleWeight() {
   if (state.session?.role === "business_admin") return true;
@@ -10126,7 +10304,7 @@ function paintScaleSetupStatus() {
   const kind = S?.connectionKind?.() || "";
   el.className = `scale-hw-status ${on ? "is-on" : "is-off"}`;
   el.textContent = !isScaleEnabled()
-    ? "● Off"
+    ? "● Disabled"
     : on
       ? `● Connected${kind ? ` · ${kind}` : ""}`
       : "● Disconnected";
@@ -10150,7 +10328,7 @@ function paintScaleLog() {
 }
 function paintScaleSetup() {
   const cfg = scaleSettings();
-  if ($("scale-enabled")) $("scale-enabled").checked = cfg.enabled !== false;
+  if ($("scale-enabled")) $("scale-enabled").checked = isScaleEnabled();
   if ($("scale-name")) $("scale-name").value = cfg.name || "Weighing scale";
   if ($("scale-source")) $("scale-source").value = cfg.source || "serial";
   if ($("scale-baud")) $("scale-baud").value = String(cfg.baud || 9600);
@@ -10164,8 +10342,17 @@ function paintScaleSetup() {
   paintScaleLog();
 }
 function saveScaleSetup() {
+  const wantOn = Boolean($("scale-enabled")?.checked);
+  if (wantOn && !canActivateScale()) {
+    if ($("scale-enabled")) $("scale-enabled").checked = false;
+    if ($("scale-setup-hint")) {
+      $("scale-setup-hint").textContent = "Test the connection before activating the weighing scale.";
+      $("scale-setup-hint").className = "hint error";
+    }
+    return;
+  }
   globalThis.POSScale?.saveSettings?.(scaleBizKey(), {
-    enabled: Boolean($("scale-enabled")?.checked),
+    enabled: wantOn,
     name: String($("scale-name")?.value || "Weighing scale").trim() || "Weighing scale",
     source: String($("scale-source")?.value || "serial"),
     baud: Number($("scale-baud")?.value) || 9600,
@@ -10176,14 +10363,29 @@ function saveScaleSetup() {
     autoApply: Boolean($("scale-auto")?.checked),
     allowManual: Boolean($("scale-allow-manual")?.checked),
   });
+  if (state.company) state.company.scale_enabled = wantOn ? 1 : 0;
+  void saveHardwareFlags({ scale_enabled: wantOn ? 1 : 0 }).catch((err) => {
+    if ($("scale-setup-hint")) {
+      $("scale-setup-hint").textContent = err.message;
+      $("scale-setup-hint").className = "hint error";
+    }
+  });
   paintScaleDock();
   paintScaleSetup();
   if ($("scale-setup-hint")) {
-    $("scale-setup-hint").textContent = isScaleEnabled()
-      ? "Saved. Pharmacy, garment, grocery, dairy, and other shops use this same hardware switch."
+    $("scale-setup-hint").textContent = wantOn
+      ? "Saved. The scale stays off on other tills until each one tests and connects."
       : "Weighing scale is off for this shop. Counter will hide the kg dock.";
     $("scale-setup-hint").className = "hint ok";
   }
+}
+function canActivateScale() {
+  const S = globalThis.POSScale;
+  const src = String($("scale-source")?.value || scaleSettings().source || "serial");
+  if (src === "wedge") return true;
+  if (S?.connected?.()) return true;
+  if (src === "network" && String($("scale-host")?.value || "").trim()) return Boolean(state.scaleTested);
+  return Boolean(state.scaleTested);
 }
 function initWeighingScale() {
   const S = globalThis.POSScale;
@@ -10233,6 +10435,7 @@ async function testWeighingScale() {
     }
     const hit = S.current?.();
     const g = Number(hit?.grams) || 0;
+    state.scaleTested = true;
     if (hint) {
       hint.textContent = g > 0 ? `Test ok — ${formatScaleKg(g)} kg` : "Connected. Place an item on the pan.";
       hint.className = "hint ok";
@@ -10247,6 +10450,13 @@ async function testWeighingScale() {
   }
 }
 async function reconnectWeighingScale() {
+  if (!isScaleEnabled()) {
+    if ($("scale-setup-hint")) {
+      $("scale-setup-hint").textContent = "Enable the weighing scale before reconnecting.";
+      $("scale-setup-hint").className = "hint error";
+    }
+    return;
+  }
   const S = globalThis.POSScale;
   if (S?.connected?.()) await S.disconnect();
   const src = scaleSettings().source || "serial";
@@ -11405,13 +11615,72 @@ $("set-copy-shop-id")?.addEventListener("click", async () => {
   }
 });
 
-document.querySelector(".settings-tabs")?.addEventListener("click", (e) => {
+document.querySelector(".settings-hub-nav")?.addEventListener("click", (e) => {
   const btn = e.target.closest("[data-settings-tab]");
   if (!btn) return;
   e.preventDefault();
   e.stopPropagation();
   showSettingsTab(btn.dataset.settingsTab);
 });
+$("settings-form")?.addEventListener("input", markSettingsDirty);
+$("settings-form")?.addEventListener("change", markSettingsDirty);
+$("settings-cancel")?.addEventListener("click", () => {
+  renderSettings();
+  $("settings-hint").textContent = "Changes discarded.";
+  $("settings-hint").className = "hint";
+});
+window.addEventListener("beforeunload", (e) => {
+  if (!state.settingsDirty) return;
+  e.preventDefault();
+  e.returnValue = "";
+});
+["table-shift-search", "table-shift-from", "table-shift-to"].forEach((id) => {
+  $(id)?.addEventListener("input", () => {
+    state.tableShiftPage = 1;
+    paintTableShiftHistory();
+  });
+  $(id)?.addEventListener("change", () => {
+    state.tableShiftPage = 1;
+    paintTableShiftHistory();
+  });
+});
+$("table-shift-prev")?.addEventListener("click", () => {
+  state.tableShiftPage = Math.max(1, (Number(state.tableShiftPage) || 1) - 1);
+  paintTableShiftHistory();
+});
+$("table-shift-next")?.addEventListener("click", () => {
+  state.tableShiftPage = (Number(state.tableShiftPage) || 1) + 1;
+  paintTableShiftHistory();
+});
+$("hardware-extras-save")?.addEventListener("click", async () => {
+  const hint = $("hardware-extras-hint");
+  try {
+    await saveHardwareFlags();
+    if ($("camera-scanner-status")) $("camera-scanner-status").textContent = `Camera scanner: ${cameraScannerEnabled() ? "Enabled" : "Disabled"}`;
+    if ($("receipt-printer-status")) $("receipt-printer-status").textContent = `Receipt printer: ${receiptPrinterEnabled() ? "Enabled" : "Disabled"}`;
+    if ($("cash-drawer-status")) $("cash-drawer-status").textContent = `Cash drawer: ${cashDrawerEnabled() ? "Enabled" : "Disabled"}`;
+    if (hint) {
+      hint.textContent = "Saved. Disabled devices stay off after login and restart.";
+      hint.className = "hint ok";
+    }
+  } catch (err) {
+    if (hint) {
+      hint.textContent = err.message;
+      hint.className = "hint error";
+    }
+  }
+});
+async function copySettingText(id, label) {
+  const text = $(id)?.textContent || "";
+  try {
+    await copyText(text);
+    setHint(`${label} copied`, "ok");
+  } catch {
+    setHint(text, "ok");
+  }
+}
+$("set-copy-zomato-hook")?.addEventListener("click", () => void copySettingText("set-zomato-hook", "Zomato webhook"));
+$("set-copy-swiggy-hook")?.addEventListener("click", () => void copySettingText("set-swiggy-hook", "Swiggy webhook"));
 
 $("btn-backup-download")?.addEventListener("click", () => {
   if ($("btn-backup-download")) $("btn-backup-download").href = posUrl("/api/backup");
@@ -11544,9 +11813,15 @@ $("settings-form").addEventListener("submit", async (e) => {
       invoice_terms: $("set-invoice-terms")?.value || "",
       payment_upi: $("set-payment-upi")?.value || "",
     };
+    if (!validGstin(payload.gstin)) throw new Error("Enter a valid 15-character GSTIN or leave it blank.");
+    const upi = String(payload.payment_upi || "").trim();
+    if (upi && !/^[a-zA-Z0-9.\-_]{2,256}@[a-zA-Z]{2,64}$/.test(upi)) throw new Error("Enter a valid UPI ID such as shop@upi.");
     if (isRestaurantShop() && $("set-table-shifting")) {
-      payload.table_shifting_enabled = $("set-table-shifting").checked ? 1 : 2;
+      payload.table_shifting_enabled = $("set-table-shifting").checked ? 1 : 0;
     }
+    payload.camera_scanner_enabled = $("set-camera-scanner")?.checked ? 1 : 0;
+    payload.receipt_printer_enabled = $("set-receipt-printer")?.checked ? 1 : 0;
+    payload.cash_drawer_enabled = $("set-cash-drawer")?.checked ? 1 : 0;
     if ($("set-quick-add-hide") || $("set-quick-add-show")) {
       payload.quick_add_enabled = $("set-quick-add-hide")?.checked ? 0 : 1;
     }
@@ -11574,6 +11849,7 @@ $("settings-form").addEventListener("submit", async (e) => {
     renderTableBoard();
     $("settings-hint").textContent = "Saved";
     $("settings-hint").className = "hint ok";
+    clearSettingsDirty();
   } catch (err) {
     $("settings-hint").textContent = err.message;
     $("settings-hint").className = "hint error";
@@ -12520,10 +12796,32 @@ $("device-form")?.addEventListener("submit", async (e) => {
   e.preventDefault();
   await api("/api/devices", {
     method: "POST",
-    body: JSON.stringify({ name: $("dev-name").value, code: $("dev-code").value }),
+    body: JSON.stringify({
+      name: $("dev-name").value,
+      code: $("dev-code").value,
+      status: $("dev-activate")?.checked ? "active" : "inactive",
+    }),
   });
   $("device-form").reset();
   loadDevices();
+});
+$("device-table")?.addEventListener("click", async (e) => {
+  const btn = e.target.closest("[data-device-toggle]");
+  if (!btn) return;
+  const next = btn.dataset.nextStatus || "inactive";
+  if (next === "inactive" && !window.confirm("Disable this register in ATAV POS? The physical till stays as it is.")) return;
+  btn.disabled = true;
+  try {
+    await api(`/api/devices/${encodeURIComponent(btn.dataset.deviceToggle)}`, {
+      method: "PATCH",
+      body: JSON.stringify({ status: next }),
+    });
+    await loadDevices();
+  } catch (err) {
+    setHint(err.message, "error");
+  } finally {
+    btn.disabled = false;
+  }
 });
 function fillItemPicker(datalistId, searchId, hiddenId, filterFn) {
   const list = $(datalistId);

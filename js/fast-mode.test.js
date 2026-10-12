@@ -39,7 +39,7 @@ test("Fast Mode is a shop setting that lightens every POS page without removing 
   const catalog = read("js/i18n-catalog.js");
 
   assert.match(index, /<body class="fast-mode">/);
-  assert.match(index, /<fieldset class="item-block" id="set-fast-mode-block">/);
+  assert.match(index, /<fieldset class="item-block" id="set-fast-mode-block"/);
   assert.match(index, /id="set-fast-mode-on"/);
   assert.match(index, /id="set-fast-mode-off"/);
   assert.match(index, /On — Counter first, lighter pages/);

@@ -422,8 +422,15 @@ function pos_php_till_dispatch($path, $method, $body) {
     }
     if (array_key_exists("table_shifting_enabled", $body)) {
       $langSql .= ", table_shifting_enabled = ?";
-      $params[] = ((int) ($body["table_shifting_enabled"] ?? 1) === 2) ? "2" : "1";
+      $params[] = ((int) ($body["table_shifting_enabled"] ?? 0) === 1) ? "1" : "0";
       $types .= "s";
+    }
+    foreach (["scale_enabled", "camera_scanner_enabled", "receipt_printer_enabled", "cash_drawer_enabled"] as $col) {
+      if (array_key_exists($col, $body)) {
+        $langSql .= ", $col = ?";
+        $params[] = ((int) ($body[$col] ?? 0) === 1) ? "1" : "0";
+        $types .= "s";
+      }
     }
     if (array_key_exists("quick_add_enabled", $body)) {
       $langSql .= ", quick_add_enabled = ?";

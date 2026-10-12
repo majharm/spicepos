@@ -378,8 +378,7 @@
 
   function tableShiftingOn(biz) {
     const v = biz?.table_shifting_enabled;
-    if (v === 2 || v === "2" || v === "off" || v === false) return false;
-    return true;
+    return v === 1 || v === "1" || v === true || v === "on";
   }
 
   function qrOrderOpen(order) {

@@ -115,7 +115,7 @@ test("KOT line identity keeps the same dish with different notes as two lines", 
   assert.match(src("pos-kots.php"), /kot_number, created_at, updated_at/);
   assert.match(src("server/tenant.js"), /nextKotNumber/);
   assert.match(src("server/qr-ordering.js"), /AS kot_number/);
-  assert.match(src("index.html"), /restaurant\.js\?v=20261012kot2/);
+  assert.match(src("index.html"), /restaurant\.js\?v=20261012set1/);
 });
 
 test("Restaurant shops keep custom table names and can add or remove seats", () => {
@@ -267,9 +267,9 @@ test("Food order special instructions stay on each item", () => {
   assert.doesNotMatch(html, /Note: Less spicy/);
 });
 
-test("Table shifting is on by default and only allows a free destination", () => {
-  assert.equal(R.tableShiftingOn({}), true);
-  assert.equal(R.tableShiftingOn({ table_shifting_enabled: 0 }), true);
+test("Table shifting stays off until a Business Admin enables it", () => {
+  assert.equal(R.tableShiftingOn({}), false);
+  assert.equal(R.tableShiftingOn({ table_shifting_enabled: 0 }), false);
   assert.equal(R.tableShiftingOn({ table_shifting_enabled: 1 }), true);
   assert.equal(R.tableShiftingOn({ table_shifting_enabled: "1" }), true);
   assert.equal(R.tableShiftingOn({ table_shifting_enabled: 2 }), false);
@@ -366,8 +366,8 @@ test("Restaurant mobile billing box keeps dish cards visible", () => {
   assert.match(mobile, /display: block !important;/);
   assert.doesNotMatch(mobile, /max-height: 42vh/);
   assert.doesNotMatch(index, /20260925rm1/);
-  assert.match(index, /pos\.css\?v=20261012agg2/);
-  assert.match(index, /app\.js\?v=20261012agg3/);
+  assert.match(index, /pos\.css\?v=20261012set1/);
+  assert.match(index, /app\.js\?v=20261012set1/);
 });
 
 test("Restaurant mobile Counter uses readable type and a tight bill sheet", () => {

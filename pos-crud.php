@@ -487,13 +487,30 @@ function pos_crud_dispatch($path, $method, $body, $bid, $auth, $branchId, $uid) 
     if ($name === "") pos_send(400, ["error" => "Device name is required"]);
     $id = pos_uuid();
     $code = $body["code"] ?? ("POS-" . strtoupper(base_convert((string) time(), 10, 36)));
+    $status = (($body["status"] ?? "") === "active") ? "active" : "inactive";
     pos_q(
       "INSERT INTO pos_devices (id, business_id, branch_id, name, code, status) VALUES (?,?,?,?,?,?)",
       "ssssss",
-      [$id, $bid, $body["branch_id"] ?? $branchId, $name, $code, $body["status"] ?? "active"]
+      [$id, $bid, $body["branch_id"] ?? $branchId, $name, $code, $status]
     );
     $rows = pos_q("SELECT * FROM pos_devices WHERE id = ? LIMIT 1", "s", [$id]);
     pos_send(200, ["ok" => true, "device" => $rows[0] ?? null]);
+  }
+
+  if (preg_match('#^devices/([^/]+)$#', $path, $m) && $method === "PATCH") {
+    $id = $m[1];
+    $want = strtolower((string) ($body["status"] ?? "")) === "active" ? "active" : "inactive";
+    $have = pos_q("SELECT id FROM pos_devices WHERE id = ? AND business_id = ? LIMIT 1", "ss", [$id, $bid]);
+    if (!$have) pos_send(404, ["error" => "Device not found", "php" => true]);
+    pos_q("UPDATE pos_devices SET status = ? WHERE id = ? AND business_id = ?", "sss", [$want, $id, $bid]);
+    $rows = pos_q(
+      "SELECT d.*, br.name AS branch_name FROM pos_devices d
+       LEFT JOIN branches br ON br.id = d.branch_id
+       WHERE d.id = ? AND d.business_id = ? LIMIT 1",
+      "ss",
+      [$id, $bid]
+    );
+    pos_send(200, ["ok" => true, "device" => $rows[0] ?? null, "php" => true]);
   }
 
   if ($path === "staff" && $method === "POST") {

@@ -103,7 +103,7 @@
 
   function defaultSettings() {
     return {
-      enabled: true,
+      enabled: false,
       name: "Weighing scale",
       baud: 9600,
       unit: "kg",

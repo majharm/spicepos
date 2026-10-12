@@ -6,7 +6,7 @@
     <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
     <title>ATAV POS</title>
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./css/pos.css?v=20261012agg2" />
+    <link rel="stylesheet" href="./css/pos.css?v=20261012set1" />
     <link rel="stylesheet" href="./css/saas.css?v=20260905deploy136" />
     <link rel="stylesheet" href="./css/bar.css?v=20261011bar2" />
     <link rel="stylesheet" href="./css/resort.css?v=20261011resort1" />
@@ -2258,77 +2258,6 @@
         </section>
         <section class="view" id="view-devices" hidden>
           <h2 class="visually-hidden">Hardware &amp; devices</h2>
-          <div class="items-desk">
-            <header class="items-hero">
-              <div class="items-hero-copy">
-                <p class="items-kicker">Hardware</p>
-                <h3>Hardware &amp; devices</h3>
-                <p class="lede">Till registers plus a weighing scale you can turn on for any shop type — pharmacy, garment, grocery, dairy, scrap, and others.</p>
-              </div>
-            </header>
-          <form class="settings wide" id="device-form">
-            <label>Name <input id="dev-name" required /></label>
-            <label>Code <input id="dev-code" placeholder="POS-02" /></label>
-            <button class="btn primary" type="submit">Save</button>
-          </form>
-          <div class="table-wrap" id="device-table"></div>
-          <div class="scale-setup" id="scale-setup">
-            <header class="scale-setup-head">
-              <div>
-                <h3>Weighing Scale</h3>
-                <p class="scale-hw-status is-off" id="scale-hw-status">● Disconnected</p>
-              </div>
-              <label class="scale-enable-lab"><input type="checkbox" id="scale-enabled" checked /> Enable weighing scale</label>
-            </header>
-            <p class="lede scale-setup-copy">Hardware capability, not a grocery-only module. Loose pharmacy medicines, fabric by kg, produce, dairy, and scrap all use the same Counter kg dock when this is on.</p>
-            <div class="scale-setup-row">
-              <label>Scale name <input id="scale-name" maxlength="80" placeholder="Counter scale" /></label>
-              <label>Connection type
-                <select id="scale-source" aria-label="Scale connection type">
-                  <option value="serial">USB / Serial (COM)</option>
-                  <option value="bluetooth">Bluetooth</option>
-                  <option value="network">Network (http)</option>
-                  <option value="wedge">Keyboard wedge</option>
-                </select>
-              </label>
-              <label>USB baud
-                <select id="scale-baud" aria-label="Scale baud rate">
-                  <option value="2400">2400</option>
-                  <option value="4800">4800</option>
-                  <option value="9600" selected>9600</option>
-                  <option value="19200">19200</option>
-                  <option value="38400">38400</option>
-                  <option value="115200">115200</option>
-                </select>
-              </label>
-              <label>Port / COM <input id="scale-port" maxlength="40" placeholder="COM3 or leave blank" /></label>
-              <label>Network URL <input id="scale-host" maxlength="200" placeholder="http://192.168.1.50/weight" /></label>
-              <label>Scale sends
-                <select id="scale-unit" aria-label="Scale unit">
-                  <option value="kg">Kilograms</option>
-                  <option value="g">Grams</option>
-                </select>
-              </label>
-              <label>Decimal precision
-                <select id="scale-precision" aria-label="Weight decimals">
-                  <option value="2">2</option>
-                  <option value="3" selected>3</option>
-                  <option value="4">4</option>
-                </select>
-              </label>
-              <label class="scale-auto-lab"><input type="checkbox" id="scale-auto" checked /> Auto-fill the last kg item on the bill</label>
-              <label class="scale-auto-lab"><input type="checkbox" id="scale-allow-manual" checked /> Allow typed kg (cashiers). Off = managers only</label>
-            </div>
-            <p class="scale-setup-actions">
-              <button type="button" class="btn" id="scale-test">Test connection</button>
-              <button type="button" class="btn" id="scale-reconnect">Reconnect</button>
-              <button type="button" class="btn primary" id="scale-save">Save configuration</button>
-            </p>
-            <p class="hint" id="scale-setup-hint">Use Chrome or Edge on this computer for USB serial. Keyboard-wedge scales can type kg into Scan or the Type kg box.</p>
-            <h4 class="scale-log-title">Weight history</h4>
-            <div class="table-wrap" id="scale-log"></div>
-          </div>
-          </div>
         </section>
         <section class="view" id="view-support" hidden>
           <h2 class="visually-hidden">Support</h2>
@@ -2755,16 +2684,27 @@
             <header class="items-hero">
               <div class="items-hero-copy">
                 <p class="items-kicker">Account</p>
-                <h3>Shop profile</h3>
-                <p class="lede" id="settings-lede">Company profile, timezone, shop logo, and your login password. Shop backup is under Settings → Backup.</p>
+                <h3>Settings</h3>
+                <p class="lede" id="settings-lede">Company profile, hardware, online orders, and invoice branding. Hardware and Swiggy/Zomato stay off until you turn them on. Shop backup is under Settings → Backup.</p>
               </div>
               <div class="items-hero-stats" id="settings-hero-stats"></div>
             </header>
-            <div class="settings-tabs" role="tablist" aria-label="Settings sections">
-              <button class="btn active" type="button" role="tab" aria-selected="true" data-settings-tab="profile" data-i18n="settings.profile">Profile</button>
+            <div class="settings-hub">
+            <nav class="settings-hub-nav" aria-label="Settings sections">
+              <button class="btn active" type="button" role="tab" aria-selected="true" data-settings-tab="profile" data-settings-section="profile" data-i18n="settings.profile">Company Profile</button>
+              <button class="btn" type="button" data-settings-tab="hardware" data-settings-section="hardware">Hardware &amp; Devices</button>
+              <button class="btn restaurant-only" type="button" data-settings-tab="tables" data-settings-section="tables" hidden>Table Management</button>
+              <button class="btn aggregator-only" type="button" data-settings-tab="aggregator" data-settings-section="aggregator" hidden>Swiggy &amp; Zomato</button>
+              <button class="btn" type="button" data-settings-tab="timezone" data-settings-section="timezone">Timezone &amp; Regional</button>
+              <button class="btn" type="button" data-settings-tab="quick-add" data-settings-section="quick-add">Counter &amp; Quick Add</button>
+              <button class="btn" type="button" data-settings-tab="fast-mode" data-settings-section="fast-mode">Fast Mode &amp; Performance</button>
+              <button class="btn" type="button" data-settings-tab="branding" data-settings-section="branding">Branding &amp; Shop Logo</button>
+              <button class="btn" type="button" data-settings-tab="payment" data-settings-section="payment">Payment QR &amp; UPI</button>
+              <button class="btn" type="button" data-settings-tab="invoice" data-settings-section="invoice">Invoice Text &amp; Terms</button>
+              <button class="btn" type="button" data-settings-tab="security" data-settings-section="security">User Permissions &amp; Security</button>
               <button class="btn" type="button" role="tab" aria-selected="false" data-settings-tab="backup" data-view="backup" data-i18n="settings.backup">Backup</button>
-              <button class="btn" type="button" data-view-jump="devices">Hardware &amp; devices</button>
-            </div>
+            </nav>
+            <div class="settings-hub-main">
             <div class="settings-pane" id="settings-pane-profile">
               <div class="items-split settings-profile-split">
                 <form class="settings item-composer" id="settings-form" autocomplete="off">
@@ -2772,8 +2712,8 @@
                     <p class="item-mode">Company profile</p>
                     <p class="item-composer-note" id="settings-profile-note">This name, address, GSTIN, and logo print on invoices and appear in the left nav.</p>
                   </div>
-                  <fieldset class="item-block">
-                    <legend id="set-shop-legend">Shop</legend>
+                  <fieldset class="item-block" data-set-section="profile">
+                    <legend id="set-shop-legend">Company profile</legend>
                     <label class="full">Shop ID
                       <span class="shop-id-row">
                         <input id="set-shop-id" readonly autocomplete="off" />
@@ -2789,79 +2729,109 @@
                     <label>State <input id="set-state" maxlength="64" placeholder="e.g. Maharashtra" autocomplete="address-level1" /></label>
                     <label>PIN code <input id="set-pincode" maxlength="12" inputmode="numeric" placeholder="6-digit PIN" autocomplete="postal-code" /></label>
                   </fieldset>
-                  <fieldset class="item-block pharmacy-only" id="set-licence-block" hidden>
+                  <fieldset class="item-block pharmacy-only" id="set-licence-block" data-set-section="profile" hidden>
                     <legend>Pharmacy licences</legend>
                     <label class="full">Drug Licence No. <input id="set-drug-licence" maxlength="80" placeholder="e.g. 20B/MH/12345" autocomplete="off" /></label>
                     <label class="full">FSSAI License (Food License) No. <input id="set-fssai" maxlength="20" inputmode="numeric" placeholder="14-digit FSSAI number" autocomplete="off" /></label>
                     <label class="full">NDPS / Restricted Drug License No. <input id="set-ndps" maxlength="80" placeholder="If applicable" autocomplete="off" /></label>
                   </fieldset>
-                  <fieldset class="item-block restaurant-only" id="set-table-mgmt" hidden>
+                  <fieldset class="item-block restaurant-only" id="set-table-mgmt" data-set-section="tables" hidden>
                     <legend>Table Management</legend>
+                    <p class="field-hint full" id="table-shift-status">Table shifting: Disabled</p>
                     <label class="full"><input id="set-table-shifting" type="checkbox" /> Enable Table Shifting</label>
-                    <p class="item-composer-note full">On by default. Staff can move an active order to another free table. Order number, dishes, KOT, and amount stay the same. Uncheck to hide Shift Table.</p>
+                    <p class="item-composer-note full">Off until you turn it on. Authorized staff can then move an active order to another free table. Order number, dishes, KOT, amount, and payment history stay the same. Uncheck to hide Shift Table.</p>
+                    <div class="settings-filter-row full">
+                      <label>Search <input id="table-shift-search" type="search" placeholder="Order, table, or staff" /></label>
+                      <label>From <input id="table-shift-from" type="date" /></label>
+                      <label>To <input id="table-shift-to" type="date" /></label>
+                    </div>
                     <div id="table-shift-history" class="table-wrap"></div>
+                    <div class="settings-pager" id="table-shift-pager" hidden>
+                      <button class="btn" type="button" id="table-shift-prev">Previous</button>
+                      <p class="field-hint" id="table-shift-page-label"></p>
+                      <button class="btn" type="button" id="table-shift-next">Next</button>
+                    </div>
                   </fieldset>
-                  <fieldset class="item-block aggregator-only" id="set-aggregator" hidden>
-                    <legend>Online orders — Zomato &amp; Swiggy</legend>
-                    <p class="item-composer-note full">Both stay <strong>Disabled</strong> until Master Admin allows them and a Business Admin turns them on. Restaurant or Cafe does not activate either one.</p>
-                    <p class="field-hint full" id="agg-zomato-status">Zomato: Disabled</p>
-                    <label class="full"><input id="set-zomato-enabled" type="checkbox" /> Activate Zomato for this shop</label>
-                    <p class="field-hint full" id="agg-swiggy-status">Swiggy: Disabled</p>
-                    <label class="full"><input id="set-swiggy-enabled" type="checkbox" /> Activate Swiggy for this shop</label>
-                    <label class="full"><input id="set-agg-auto-accept" type="checkbox" /> Auto-accept and send kitchen KOT</label>
-                    <label>Kitchen prep minutes <input id="set-agg-prep" type="number" min="5" max="90" value="20" /></label>
-                    <label>Zomato restaurant ID <input id="set-zomato-rid" maxlength="80" placeholder="Outlet ID from Zomato" autocomplete="off" /></label>
-                    <label>Zomato API key <input id="set-zomato-key" maxlength="180" placeholder="Partner API key" autocomplete="off" /></label>
-                    <label>Zomato webhook secret <input id="set-zomato-secret" maxlength="180" placeholder="Optional header secret" autocomplete="off" /></label>
-                    <label>Swiggy outlet ID <input id="set-swiggy-oid" maxlength="80" placeholder="Outlet ID from Swiggy" autocomplete="off" /></label>
-                    <label>Swiggy API key <input id="set-swiggy-key" maxlength="180" placeholder="Partner API key" autocomplete="off" /></label>
-                    <label>Swiggy webhook secret <input id="set-swiggy-secret" maxlength="180" placeholder="Optional header secret" autocomplete="off" /></label>
-                    <p class="item-composer-note full">Copy the webhook URLs from the Online orders board and paste them in the Zomato / Swiggy partner desk. Keys stay hidden after save.</p>
-                    <p class="field-hint full">Zomato webhook: <code id="set-zomato-hook">/api/webhooks/zomato?shop=</code></p>
-                    <p class="field-hint full">Swiggy webhook: <code id="set-swiggy-hook">/api/webhooks/swiggy?shop=</code></p>
-                    <details class="full agg-advanced">
-                      <summary>Advanced API URLs</summary>
-                      <label class="full">Zomato API base <input id="set-zomato-base" maxlength="180" placeholder="https://api.zomato.com" /></label>
-                      <label class="full">Swiggy API base <input id="set-swiggy-base" maxlength="180" placeholder="https://partner.swiggy.com" /></label>
-                    </details>
+                  <fieldset class="item-block aggregator-only" id="set-aggregator" data-set-section="aggregator" hidden>
+                    <legend>Swiggy &amp; Zomato Integration</legend>
+                    <p class="item-composer-note full">Both stay <strong>Disabled</strong> until Master Admin allows them and a Business Admin turns them on. Restaurant or Cafe does not activate either one. Receiving a webhook does not turn an integration on.</p>
+                    <label class="full"><input id="set-agg-auto-accept" type="checkbox" /> Auto-accept new platform orders</label>
+                    <label>Default preparation time (minutes) <input id="set-agg-prep" type="number" min="5" max="90" value="20" /></label>
+                    <div class="settings-card full" id="agg-zomato-card">
+                      <h4>Zomato</h4>
+                      <p class="field-hint" id="agg-zomato-status">Zomato: Disabled</p>
+                      <label class="full"><input id="set-zomato-enabled" type="checkbox" disabled /> Enable Zomato Orders</label>
+                      <label>Zomato restaurant ID <input id="set-zomato-rid" maxlength="80" placeholder="Outlet ID from Zomato" autocomplete="off" /></label>
+                      <label>Zomato API key <input id="set-zomato-key" type="password" maxlength="180" placeholder="Partner API key" autocomplete="off" /></label>
+                      <label>Zomato webhook secret <input id="set-zomato-secret" type="password" maxlength="180" placeholder="Optional header secret" autocomplete="off" /></label>
+                      <p class="field-hint full">Zomato webhook
+                        <span class="shop-id-row">
+                          <code id="set-zomato-hook">/api/webhooks/zomato?shop=</code>
+                          <button class="btn" type="button" id="set-copy-zomato-hook">Copy</button>
+                        </span>
+                      </p>
+                      <details class="agg-advanced">
+                        <summary>Zomato API base URL</summary>
+                        <label class="full">Zomato API base <input id="set-zomato-base" maxlength="180" placeholder="https://api.zomato.com" /></label>
+                      </details>
+                    </div>
+                    <div class="settings-card full" id="agg-swiggy-card">
+                      <h4>Swiggy</h4>
+                      <p class="field-hint" id="agg-swiggy-status">Swiggy: Disabled</p>
+                      <label class="full"><input id="set-swiggy-enabled" type="checkbox" disabled /> Enable Swiggy Orders</label>
+                      <label>Swiggy outlet ID <input id="set-swiggy-oid" maxlength="80" placeholder="Outlet ID from Swiggy" autocomplete="off" /></label>
+                      <label>Swiggy API key <input id="set-swiggy-key" type="password" maxlength="180" placeholder="Partner API key" autocomplete="off" /></label>
+                      <label>Swiggy webhook secret <input id="set-swiggy-secret" type="password" maxlength="180" placeholder="Optional header secret" autocomplete="off" /></label>
+                      <p class="field-hint full">Swiggy webhook
+                        <span class="shop-id-row">
+                          <code id="set-swiggy-hook">/api/webhooks/swiggy?shop=</code>
+                          <button class="btn" type="button" id="set-copy-swiggy-hook">Copy</button>
+                        </span>
+                      </p>
+                      <details class="agg-advanced">
+                        <summary>Swiggy API base URL</summary>
+                        <label class="full">Swiggy API base <input id="set-swiggy-base" maxlength="180" placeholder="https://partner.swiggy.com" /></label>
+                      </details>
+                    </div>
+                    <p class="item-composer-note full">Webhook URLs are shop-specific. Paste them in the Zomato / Swiggy partner desk. Keys stay hidden after save. Disabling one platform does not change the other.</p>
                     <p class="hint full" id="agg-settings-hint"></p>
                     <button class="btn primary" type="button" id="agg-settings-save">Save Zomato &amp; Swiggy</button>
                   </fieldset>
-                  <fieldset class="item-block">
-                    <legend>Timezone</legend>
+                  <fieldset class="item-block" data-set-section="timezone">
+                    <legend>Timezone &amp; Regional Settings</legend>
                     <label class="full">Shop timezone
                       <select id="set-timezone" aria-label="Shop timezone">
-                        <option value="Asia/Kolkata">India (IST, UTC+5:30)</option>
-                        <option value="Asia/Dubai">UAE (UTC+4)</option>
-                        <option value="Asia/Singapore">Singapore (UTC+8)</option>
-                        <option value="Asia/Colombo">Sri Lanka (UTC+5:30)</option>
-                        <option value="Asia/Kathmandu">Nepal (UTC+5:45)</option>
+                        <option value="Asia/Kolkata">India — IST (UTC+5:30)</option>
+                        <option value="Asia/Dubai">UAE — UTC+4</option>
+                        <option value="Asia/Singapore">Singapore — UTC+8</option>
+                        <option value="Asia/Colombo">Sri Lanka — UTC+5:30</option>
+                        <option value="Asia/Kathmandu">Nepal — UTC+5:45</option>
                         <option value="UTC">UTC</option>
                       </select>
                     </label>
-                    <p class="item-composer-note full" id="timezone-preview">Used for reports, invoices, and order timestamps.</p>
+                    <p class="item-composer-note full" id="timezone-preview">Used for reports, invoices, shift history, and order timestamps. Changing timezone does not alter stored records.</p>
                   </fieldset>
-                  <fieldset class="item-block" id="set-quick-add-block">
+                  <fieldset class="item-block" id="set-quick-add-block" data-set-section="quick-add">
                     <legend data-i18n="settings.quick_add">Quick Add button</legend>
                     <label class="full"><input type="radio" name="set-quick-add" id="set-quick-add-show" value="1" checked /> <span data-i18n="settings.quick_add_show">Show Quick Add</span></label>
                     <label class="full"><input type="radio" name="set-quick-add" id="set-quick-add-hide" value="2" /> <span data-i18n="settings.quick_add_hide">Hide Quick Add</span></label>
                     <p class="item-composer-note full" data-i18n="settings.quick_add_hint">On Counter, the sidebar and Quick Add hide automatically so the bill is full width. Use the menu button to open the sidebar. This Show/Hide control still applies on Dashboard and other pages. Turning it off does not delete the feature — staff can still add products from Inventory → Items.</p>
                   </fieldset>
-                  <fieldset class="item-block" id="set-fast-mode-block">
+                  <fieldset class="item-block" id="set-fast-mode-block" data-set-section="fast-mode">
                     <legend data-i18n="settings.fast_mode">Fast Mode</legend>
                     <label class="full"><input type="radio" name="set-fast-mode" id="set-fast-mode-on" value="1" checked /> <span data-i18n="settings.fast_mode_on">On — Counter first, lighter pages</span></label>
                     <label class="full"><input type="radio" name="set-fast-mode" id="set-fast-mode-off" value="0" /> <span data-i18n="settings.fast_mode_off">Off — full Dashboard and product photos</span></label>
                     <p class="item-composer-note full" data-i18n="settings.fast_mode_hint">Fast Mode opens Counter on login, skips product photos on the till, shows fewer rows, and turns off extra motion so every page feels quicker. Billing, stock, and invoices stay the same. Turn it off if you want the full Dashboard when you sign in.</p>
                   </fieldset>
-                  <fieldset class="item-block apparel-only" id="set-low-stock-block" hidden>
+                  <fieldset class="item-block apparel-only" id="set-low-stock-block" data-set-section="fast-mode" hidden>
                     <legend>Low Stock Alert</legend>
                     <label class="full">Low Stock Threshold (pcs)
                       <input id="set-low-stock-threshold" type="number" min="1" max="9999" step="1" value="5" inputmode="numeric" />
                     </label>
                     <p class="item-composer-note full">On Counter, active garments at or below this stock show in the Low Stock popup. Stock 0 is Out of Stock and cannot be billed. Default is 5 pcs.</p>
                   </fieldset>
-                  <fieldset class="item-block">
-                    <legend>Shop logo</legend>
+                  <fieldset class="item-block" data-set-section="branding">
+                    <legend>Branding &amp; Shop Logo</legend>
                     <div class="logo-row full">
                       <div class="logo-preview-frame">
                         <img id="logo-preview" class="logo-preview" alt="Logo preview" hidden />
@@ -2877,7 +2847,7 @@
                       </div>
                     </div>
                   </fieldset>
-                  <fieldset class="item-block">
+                  <fieldset class="item-block" data-set-section="payment">
                     <legend data-i18n="settings.collect_payment">Collect payment</legend>
                     <div class="logo-row full">
                       <div class="logo-preview-frame pay-qr-frame">
@@ -2897,7 +2867,7 @@
                       <input id="set-payment-upi" maxlength="160" placeholder="shop@upi" autocomplete="off" />
                     </label>
                   </fieldset>
-                  <fieldset class="item-block">
+                  <fieldset class="item-block" data-set-section="invoice">
                     <legend data-i18n="settings.invoice_text">Invoice text</legend>
                     <label class="full"><span data-i18n="settings.customer_notes">Customer notes</span>
                       <textarea id="set-invoice-footer" rows="3" maxlength="4000" placeholder="Thank you for your business!"></textarea>
@@ -2908,12 +2878,97 @@
                     </label>
                     <p class="item-composer-note full" data-i18n="settings.invoice_terms_hint">Printed under the customer notes on tax invoices.</p>
                   </fieldset>
-                  <div class="item-composer-actions">
-                    <button class="btn primary" type="submit">Save profile</button>
+                  <div class="item-composer-actions" data-set-section="profile,tables,timezone,quick-add,fast-mode,branding,payment,invoice">
+                    <button class="btn primary" type="submit">Save changes</button>
+                    <button class="btn" type="button" id="settings-cancel">Cancel</button>
                     <p class="hint" id="settings-hint"></p>
                   </div>
                 </form>
-                <div class="settings-side">
+                <div class="settings-pane" id="settings-pane-hardware" hidden>
+                  <div class="settings-card">
+                    <h3>Registers &amp; POS terminals</h3>
+                    <p class="item-composer-note">New registers stay <strong>inactive</strong> until a Business Admin activates them. This controls ATAV POS pairing, not whether the physical till is powered on.</p>
+                    <form class="settings wide" id="device-form">
+                      <label>Name <input id="dev-name" required /></label>
+                      <label>Code <input id="dev-code" placeholder="POS-02" /></label>
+                      <label class="full"><input id="dev-activate" type="checkbox" /> Activate this register now</label>
+                      <button class="btn primary" type="submit">Add register</button>
+                    </form>
+                    <div class="table-wrap" id="device-table"></div>
+                  </div>
+                  <div class="scale-setup settings-card" id="scale-setup">
+                    <header class="scale-setup-head">
+                      <div>
+                        <h3>Weighing Scale</h3>
+                        <p class="scale-hw-status is-off" id="scale-hw-status">● Disabled</p>
+                      </div>
+                      <label class="scale-enable-lab"><input type="checkbox" id="scale-enabled" /> Enable weighing scale</label>
+                    </header>
+                    <p class="lede scale-setup-copy">Off by default. Configure the connection and tap Test before activating. This switch controls ATAV POS kg capture, not the physical scale power.</p>
+                    <div class="scale-setup-row">
+                      <label>Scale name <input id="scale-name" maxlength="80" placeholder="Counter scale" /></label>
+                      <label>Connection type
+                        <select id="scale-source" aria-label="Scale connection type">
+                          <option value="serial">USB / Serial (COM)</option>
+                          <option value="bluetooth">Bluetooth</option>
+                          <option value="network">Network (http)</option>
+                          <option value="wedge">Keyboard wedge</option>
+                        </select>
+                      </label>
+                      <label>USB baud
+                        <select id="scale-baud" aria-label="Scale baud rate">
+                          <option value="2400">2400</option>
+                          <option value="4800">4800</option>
+                          <option value="9600" selected>9600</option>
+                          <option value="19200">19200</option>
+                          <option value="38400">38400</option>
+                          <option value="115200">115200</option>
+                        </select>
+                      </label>
+                      <label>Port / COM <input id="scale-port" maxlength="40" placeholder="COM3 or leave blank" /></label>
+                      <label>Network URL <input id="scale-host" maxlength="200" placeholder="http://192.168.1.50/weight" /></label>
+                      <label>Scale sends
+                        <select id="scale-unit" aria-label="Scale unit">
+                          <option value="kg">Kilograms</option>
+                          <option value="g">Grams</option>
+                        </select>
+                      </label>
+                      <label>Decimal precision
+                        <select id="scale-precision" aria-label="Weight decimals">
+                          <option value="2">2</option>
+                          <option value="3" selected>3</option>
+                          <option value="4">4</option>
+                        </select>
+                      </label>
+                      <label class="scale-auto-lab"><input type="checkbox" id="scale-auto" checked /> Auto-fill the last kg item on the bill</label>
+                      <label class="scale-auto-lab"><input type="checkbox" id="scale-allow-manual" checked /> Allow typed kg (cashiers). Off = managers only</label>
+                    </div>
+                    <p class="scale-setup-actions">
+                      <button type="button" class="btn" id="scale-test">Test connection</button>
+                      <button type="button" class="btn" id="scale-reconnect">Reconnect</button>
+                      <button type="button" class="btn primary" id="scale-save">Save configuration</button>
+                    </p>
+                    <p class="hint" id="scale-setup-hint">Use Chrome or Edge on this computer for USB serial. Keyboard-wedge scales can type kg into Scan or the Type kg box.</p>
+                    <h4 class="scale-log-title">Weight history</h4>
+                    <div class="table-wrap" id="scale-log"></div>
+                  </div>
+                  <div class="settings-card">
+                    <h3>Other till devices</h3>
+                    <p class="item-composer-note">These switches control ATAV POS software only. A USB barcode scanner that types into Scan still works as a keyboard even if camera scanning is off.</p>
+                    <label class="full"><input id="set-camera-scanner" type="checkbox" /> Enable camera barcode scanning in ATAV POS</label>
+                    <p class="field-hint" id="camera-scanner-status">Camera scanner: Disabled</p>
+                    <label class="full"><input id="set-receipt-printer" type="checkbox" /> Enable receipt printer from ATAV POS</label>
+                    <p class="field-hint" id="receipt-printer-status">Receipt printer: Disabled</p>
+                    <label class="full"><input id="set-cash-drawer" type="checkbox" /> Enable cash drawer kick with receipts</label>
+                    <p class="field-hint" id="cash-drawer-status">Cash drawer: Disabled</p>
+                    <p class="item-composer-note">Save these with Save changes on Company Profile / this hardware list. A disabled drawer is not reopened automatically after login.</p>
+                    <div class="item-composer-actions">
+                      <button class="btn primary" type="button" id="hardware-extras-save">Save device switches</button>
+                      <p class="hint" id="hardware-extras-hint"></p>
+                    </div>
+                  </div>
+                </div>
+                <div class="settings-side" data-set-section="security">
                   <form class="settings item-composer" id="password-form">
                     <div class="item-composer-top">
                       <p class="item-mode">Login password</p>
@@ -2981,6 +3036,8 @@
                   </form>
                 </div>
               </div>
+            </div>
+            </div>
             </div>
           </div>
         </section>
@@ -3132,7 +3189,7 @@
     <script src="./js/pos-api.js?v=20261006login1" defer></script>
     <script src="./js/units.js?v=20260919unit1" defer></script>
     <script src="./js/footwear.js?v=20261012fix1" defer></script>
-    <script src="./js/restaurant.js?v=20261012kot2" defer></script>
+    <script src="./js/restaurant.js?v=20261012set1" defer></script>
     <script src="./js/pay-integrity.js?v=20261012table1" defer></script>
     <script src="./js/aggregator.js?v=20261012agg3" defer></script>
     <script src="./js/discount.js?v=20260905deploy136" defer></script>
@@ -3140,7 +3197,7 @@
     <script src="./js/loyalty.js?v=20260905deploy136" defer></script>
     <script src="./js/barcode.js?v=20260924bc1" defer></script>
     <script src="./js/camera-scan.js?v=20260918bill2" defer></script>
-    <script src="./js/scale.js?v=20260920scale4" defer></script>
+    <script src="./js/scale.js?v=20261012set1" defer></script>
     <script src="./js/dev-mode.js?v=20260905deploy136" defer></script>
     <script src="./js/invoice.js?v=20261006due1" defer></script>
     <script src="./js/invoice-share.js?v=20260913share1" defer></script>
@@ -3162,7 +3219,7 @@
     <script src="./js/resort-ui.js?v=20261011resort1" defer></script>
     <script src="./js/item-master.js?v=20261012brand1" defer></script>
     <script src="./js/customer-master.js?v=20261012cust1" defer></script>
-    <script src="./js/app.js?v=20261012agg3" defer></script>
+    <script src="./js/app.js?v=20261012set1" defer></script>
     <script src="./js/item-master-ui.js?v=20261012brand1" defer></script>
     <script src="./js/customer-master-ui.js?v=20261012cust1" defer></script>
     <script src="./js/mobile-app.js?v=20261012m3" defer></script>

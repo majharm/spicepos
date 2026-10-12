@@ -36,8 +36,7 @@ function pos_table_shifting_on($bid) {
   pos_ensure_table_shift_schema();
   $rows = pos_q("SELECT table_shifting_enabled FROM company_settings WHERE business_id = ? LIMIT 1", "s", [$bid]);
   $v = $rows[0]["table_shifting_enabled"] ?? 0;
-  if ($v === 2 || $v === "2") return false;
-  return true;
+  return $v === 1 || $v === "1" || $v === true;
 }
 
 function pos_table_layout_ids($bid) {

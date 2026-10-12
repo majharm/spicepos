@@ -484,9 +484,25 @@ export function registerTenant(app) {
       await query(
         `INSERT INTO pos_devices (id, business_id, branch_id, name, code, status)
          VALUES (?,?,?,?,?,?)`,
-        [id, bid(), branch_id || branchId(), name, code || `POS-${Date.now().toString(36)}`, status || "active"],
+        [id, bid(), branch_id || branchId(), name, code || `POS-${Date.now().toString(36)}`, status === "active" ? "active" : "inactive"],
       );
       const [row] = await query("SELECT * FROM pos_devices WHERE id = ?", [id]);
+      return { ok: true, device: row };
+    }),
+  );
+
+  app.patch("/api/devices/:id", requireStaff, requirePerm("devices"), (req, res) =>
+    send(res, async () => {
+      const want = String(req.body?.status || "").toLowerCase() === "active" ? "active" : "inactive";
+      const [have] = await query("SELECT id FROM pos_devices WHERE id = ? AND business_id = ? LIMIT 1", [req.params.id, bid()]);
+      if (!have) throw new Error("Device not found");
+      await query("UPDATE pos_devices SET status = ? WHERE id = ? AND business_id = ?", [want, req.params.id, bid()]);
+      const [row] = await query(
+        `SELECT d.*, br.name AS branch_name FROM pos_devices d
+         LEFT JOIN branches br ON br.id = d.branch_id
+         WHERE d.id = ? AND d.business_id = ?`,
+        [req.params.id, bid()],
+      );
       return { ok: true, device: row };
     }),
   );
@@ -787,7 +803,7 @@ export function registerTenant(app) {
       const restaurant = type === "restaurant" || type === "cafe" || type === "bakery" || /(restaurant|cafe|bakery|food)/.test(text);
       if (!restaurant) throw new Error("Table shifting is for restaurant and cafe shops");
       const [co] = await query("SELECT table_shifting_enabled FROM company_settings WHERE business_id = ? LIMIT 1", [bid()]);
-      const on = Number(co?.table_shifting_enabled) !== 2;
+      const on = Number(co?.table_shifting_enabled) === 1;
       if (!on) throw new Error("Table shifting is turned off in Settings");
       const from = normalizeShiftTableNo(req.body?.from_table || req.body?.fromTable || req.body?.from);
       const to = normalizeShiftTableNo(req.body?.to_table || req.body?.toTable || req.body?.to);
