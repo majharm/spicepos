@@ -60,7 +60,8 @@ test("duplicate status callbacks do not require items", () => {
   assert.equal(status.kind, "status");
   assert.equal(status.status, "cancelled");
   assert.deepEqual(A.nextActions("pending"), ["accepted", "rejected"]);
-  assert.equal(A.actionLabel("accepted"), "Accept");
+  assert.equal(A.actionLabel("accepted"), "Accept order");
+  assert.equal(A.laneCounts([{ status: "pending" }, { status: "accepted" }, { status: "ready" }]).kitchen, 1);
 });
 
 test("outbound calls hit official Zomato and Swiggy POS endpoints", () => {
@@ -79,7 +80,17 @@ test("Cafe, restaurant, and bar share Zomato and Swiggy wiring", () => {
   const server = read("server/aggregator.js");
   const php = read("pos-aggregator.php");
   const core = read("pos-php-core.php");
-  assert.match(index, /js\/aggregator\.js\?v=20261012agg1/);
+  assert.match(index, /js\/aggregator\.js\?v=20261012agg2/);
+  assert.match(index, /id="agg-desk"|class="qr-orders-page agg-desk"/);
+  assert.match(index, /id="agg-lane-stats"/);
+  assert.match(index, /id="agg-setup-card"/);
+  assert.match(index, /id="agg-order-toast"/);
+  assert.match(index, /id="agg-order-search"/);
+  assert.match(app, /function renderAggregatorOrders/);
+  assert.match(app, /agg-ticket/);
+  assert.match(app, /showAggregatorToast/);
+  assert.match(app, /sending kitchen KOT/);
+  assert.match(read("css/pos.css"), /\.agg-ticket\.is-zomato/);
   assert.match(index, /data-view="online-orders"/);
   assert.match(index, /id="view-online-orders"/);
   assert.match(index, /id="set-zomato-enabled"/);

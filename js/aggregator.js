@@ -63,13 +63,13 @@
 
   function actionLabel(status) {
     const s = normalizeStatus(status);
-    if (s === "accepted") return "Accept";
-    if (s === "rejected") return "Reject";
+    if (s === "accepted") return "Accept order";
+    if (s === "rejected") return "Reject order";
     if (s === "preparing") return "Start kitchen";
-    if (s === "ready") return "Mark ready";
+    if (s === "ready") return "Mark food ready";
     if (s === "dispatched") return "Hand to rider";
-    if (s === "delivered") return "Delivered";
-    if (s === "cancelled") return "Cancel";
+    if (s === "delivered") return "Mark delivered";
+    if (s === "cancelled") return "Cancel order";
     return statusLabel(s);
   }
 
@@ -217,6 +217,18 @@
     return OPEN.includes(normalizeStatus(status) || "pending");
   }
 
+  function laneCounts(rows) {
+    const list = Array.isArray(rows) ? rows : [];
+    const n = (status) => list.filter((row) => (Array.isArray(status) ? status.includes(row.status) : row.status === status)).length;
+    return {
+      pending: n("pending"),
+      kitchen: n(["accepted", "preparing"]),
+      ready: n("ready"),
+      out: n("dispatched"),
+      open: list.filter((row) => isOpen(row.status)).length,
+    };
+  }
+
   function zomatoConfirmUrl(base) {
     return `${String(base || "https://api.zomato.com").replace(/\/$/, "")}/online-ordering/v1/order/confirm`;
   }
@@ -286,6 +298,7 @@
     orderNumber,
     kotTable,
     isOpen,
+    laneCounts,
     outboundFor,
     webhookPath,
     maskSecret,
