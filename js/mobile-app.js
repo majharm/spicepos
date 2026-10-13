@@ -1,12 +1,12 @@
 (function (root) {
-  const PHONE_MQ = "all";
+  const PHONE_MQ = "(max-width: 980px)";
   const PLANE = `<svg viewBox="0 0 48 48" aria-hidden="true"><path d="M6.6 22.7 41.2 8c1.3-.5 2.6.8 2.1 2.1L29 41.8c-.6 1.5-2.7 1.4-3.1-.2l-4.5-16.3L6.7 25.7c-1.5-.4-1.6-2.5-.1-3z" fill="#12b8a6"/><path d="M21.2 25.3 41.4 9.5" stroke="#fff" stroke-width="1.7" stroke-linecap="round"/></svg>`;
 
   function $(id) {
     return typeof document === "undefined" ? null : document.getElementById(id);
   }
   function isPhone() {
-    return typeof window !== "undefined";
+    return typeof window !== "undefined" && window.matchMedia?.(PHONE_MQ).matches;
   }
   function escapeHtml(s) {
     return String(s ?? "")
@@ -119,7 +119,8 @@
     $("m-foot-signup")?.addEventListener("click", () => setAuthPane("signup"));
     $("m-back-welcome")?.addEventListener("click", () => setAuthPane("welcome"));
     const start = authPaneFromLocation(location.search, location.hash);
-    setAuthPane(start);
+    if (isPhone()) setAuthPane(start);
+    else document.body.classList.add("m-auth-form");
   }
 
   function shopName(summary) {
@@ -532,9 +533,8 @@
 
   function bindPos() {
     if (!$("m-home")) return;
-    document.body.classList.add("m-app");
-    $("app")?.classList.add("nav-collapsed");
-    window.addEventListener("resize", () => document.body.classList.add("m-app"));
+    document.body.classList.toggle("m-app", isPhone());
+    window.addEventListener("resize", () => document.body.classList.toggle("m-app", isPhone()));
     document.querySelectorAll("[data-m-view]").forEach((btn) => {
       btn.addEventListener("click", () => goView(btn.dataset.mView));
     });

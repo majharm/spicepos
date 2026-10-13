@@ -54,7 +54,10 @@ test("phone login starts on welcome unless signup is requested", () => {
   assert.equal(M.authPaneFromLocation("?tab=signup", ""), "signup");
   assert.equal(M.authPaneFromLocation("", "#signup"), "signup");
   assert.equal(M.authPaneFromLocation("?tab=signin", ""), "signin");
-  assert.equal(M.PHONE_MQ, "all");
+  assert.equal(M.PHONE_MQ, "(max-width: 980px)");
+  const js = read("js/mobile-app.js");
+  assert.match(js, /if \(isPhone\(\)\) setAuthPane\(start\)/);
+  assert.match(js, /else document\.body\.classList\.add\("m-auth-form"\)/);
 });
 
 test("InvoiceJet phone overlay is on POS login, home, and tab bar", () => {
@@ -68,8 +71,8 @@ test("InvoiceJet phone overlay is on POS login, home, and tab bar", () => {
   assert.match(login, /js\/pos-api\.js\?v=20261013item1/);
   assert.match(login, /css\/login-page\.css\?v=20261008loginfile1/);
   assert.match(login, /x-pos-20260830e\.js\?v=20261011lounge1/);
-  assert.match(login, /css\/mobile-app\.css\?v=20261012jet5/);
-  assert.match(login, /js\/mobile-app\.js\?v=20261012jet5/);
+  assert.match(login, /css\/mobile-app\.css\?v=20261012jet6/);
+  assert.match(login, /js\/mobile-app\.js\?v=20261012jet6/);
   assert.match(login, /id="m-welcome"/);
   assert.match(login, /All-in-One Invoicing Solution/);
   assert.match(login, /Hi, Welcome back!/);
@@ -80,8 +83,8 @@ test("InvoiceJet phone overlay is on POS login, home, and tab bar", () => {
   assert.match(login, /id="m-go-signup"/);
 
   assert.match(index, /app\.js\?v=20261013item2/);
-  assert.match(index, /css\/mobile-app\.css\?v=20261012jet5/);
-  assert.match(index, /js\/mobile-app\.js\?v=20261012jet5/);
+  assert.match(index, /css\/mobile-app\.css\?v=20261012jet6/);
+  assert.match(index, /js\/mobile-app\.js\?v=20261012jet6/);
   assert.match(index, /id="m-home"/);
   assert.match(index, /id="m-reports"/);
   assert.match(index, /id="m-tabbar"/);
@@ -93,7 +96,8 @@ test("InvoiceJet phone overlay is on POS login, home, and tab bar", () => {
   assert.match(index, />Menu</);
   assert.match(read("m.html"), /POSMobileApp\.paintHome/);
 
-  assert.doesNotMatch(css, /@media \(min-width: 981px\)/);
+  assert.match(css, /@media \(max-width: 980px\)/);
+  assert.match(css, /@media \(min-width: 981px\)/);
   assert.match(css, /@media \(min-width: 721px\) \{\s*#m-welcome/);
   assert.match(css, /body\.m-app \.app\.nav-collapsed \.nav/);
   assert.match(css, /#m-welcome/);
@@ -115,7 +119,7 @@ test("InvoiceJet phone overlay is on POS login, home, and tab bar", () => {
   assert.match(read("server/hub.js"), /monthPaidOrders/);
   assert.match(read("pos-php-till.php"), /monthPendingOrders/);
   assert.doesNotMatch(js, /password_hash/);
-  assert.match(js, /classList\.add\("m-app"\)/);
+  assert.match(js, /classList\.toggle\("m-app", isPhone\(\)\)/);
   assert.match(js, /isPhone\(\) && openMobileReport/);
   assert.doesNotMatch(css, /body:not\(\.m-preview\) #m-home/);
   assert.match(read("css/pos.css"), /phone-pos: same tablet chrome/);
