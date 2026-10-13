@@ -71,7 +71,12 @@ function pos_remember_port($port) {
   if ($p > 0 && $p < 65536) @file_put_contents(pos_port_cache_file(), (string) $p);
 }
 
-function pos_curl($url, $method, $body, $cookie, $hostHeader = "") {
+function pos_is_mutating($method) {
+  $m = strtoupper((string) $method);
+  return $m !== "GET" && $m !== "HEAD" && $m !== "OPTIONS";
+}
+
+function pos_curl($url, $method, $body, $cookie, $hostHeader = "", &$dispatched = null) {
   if (!function_exists("curl_init")) return null;
   $ch = curl_init($url);
   $headers = ["Accept: application/json"];
@@ -92,9 +97,15 @@ function pos_curl($url, $method, $body, $cookie, $hostHeader = "") {
   if (defined("CURLOPT_CONNECTTIMEOUT_MS")) $opts[CURLOPT_CONNECTTIMEOUT_MS] = 250;
   curl_setopt_array($ch, $opts);
   $raw = curl_exec($ch);
-  if ($raw === false) return null;
-  $headerSize = curl_getinfo($ch, CURLINFO_HEADER_SIZE);
+  $errno = curl_errno($ch);
+  $headerSize = (int) curl_getinfo($ch, CURLINFO_HEADER_SIZE);
   $status = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+  $total = (float) curl_getinfo($ch, CURLINFO_TOTAL_TIME);
+  // Timeout after connect, or a dropped HTTP reply, means Node may already have saved.
+  if ($status > 0 || $errno === 52 || $errno === 56 || ($errno === 28 && $total >= 1.0)) {
+    $dispatched = true;
+  }
+  if ($raw === false) return null;
   return pos_parse_http($raw, $headerSize, $status);
 }
 
@@ -161,13 +172,17 @@ function pos_read_ports() {
   return array_values($out);
 }
 
-function pos_try_proxy($suffix, $method, $body, $cookie) {
+function pos_try_proxy($suffix, $method, $body, $cookie, &$dispatched = null) {
+  $mutating = pos_is_mutating($method);
   foreach (pos_read_ports() as $port) {
-    $got = pos_curl("http://127.0.0.1:" . $port . "/api/" . $suffix, $method, $body, $cookie);
+    $sent = false;
+    $got = pos_curl("http://127.0.0.1:" . $port . "/api/" . $suffix, $method, $body, $cookie, "", $sent);
+    if ($sent) $dispatched = true;
     if ($got && pos_looks_json($got[3])) {
       pos_remember_port($port);
       return $got;
     }
+    if ($mutating && $sent) return $got;
   }
   return null;
 }
@@ -210,15 +225,26 @@ function pos_try_start_node() {
 }
 
 $suffix = $path . ($qs !== "" ? "?" . $qs : "");
-$got = pos_try_proxy($suffix, $method, $body, $cookie);
-if ($got) {
+$mutating = pos_is_mutating($method);
+$dispatched = false;
+$got = pos_try_proxy($suffix, $method, $body, $cookie, $dispatched);
+if ($got && pos_looks_json($got[3])) {
   pos_send_result($got[0], $got[1], $got[2], $got[3]);
+  exit;
+}
+if ($mutating && $dispatched) {
+  http_response_code(($got && !empty($got[0])) ? (int) $got[0] : 504);
+  header("Content-Type: application/json; charset=utf-8");
+  echo json_encode([
+    "error" => "POS Node took the save but did not reply. Refresh the catalog before saving again.",
+    "php" => true,
+  ]);
   exit;
 }
 
 $start = "skipped";
 $canExec = function_exists("exec") || function_exists("shell_exec");
-if ($canExec) {
+if (!$mutating && $canExec) {
   $start = pos_try_start_node();
   $got = pos_curl("http://127.0.0.1:38473/api/" . $suffix, $method, $body, $cookie);
   if ($got && pos_looks_json($got[3])) {
@@ -227,12 +253,14 @@ if ($canExec) {
     exit;
   }
   $got = pos_try_proxy($suffix, $method, $body, $cookie);
-  if ($got) {
+  if ($got && pos_looks_json($got[3])) {
     pos_send_result($got[0], $got[1], $got[2], $got[3]);
     exit;
   }
-} else {
+} elseif (!$canExec) {
   $start = "PHP exec is disabled";
+} else {
+  $start = "skipped mutating";
 }
 
 $hint = "";

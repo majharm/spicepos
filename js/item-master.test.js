@@ -48,6 +48,26 @@ test("collectBrands merges item, liquor, and master rows", () => {
   assert.equal(sum.assigned, 2);
 });
 
+test("Item Master save ignores a second click while the first POST is in flight", () => {
+  const app = read("js/app.js");
+  const php = read("pos-api.php");
+  const apiJs = read("js/pos-api.js");
+  assert.match(app, /let itemFormBusy = false/);
+  assert.match(app, /if \(itemFormBusy\) return/);
+  assert.match(app, /itemFormBusy = true/);
+  assert.match(app, /\$\("item-save"\)/);
+  assert.match(app, /saveBtn\.disabled = true/);
+  assert.match(app, /Saving…/);
+  assert.match(app, /itemFormBusy = false/);
+  assert.match(app, /if \(saveBtn\?\.disabled\) return/);
+  assert.match(php, /function pos_is_mutating/);
+  assert.match(php, /skipped mutating/);
+  assert.match(php, /\$mutating && \$dispatched/);
+  assert.match(php, /Refresh the catalog before saving again/);
+  assert.match(apiJs, /mutating && res\.status >= 200 && res\.status < 300/);
+  assert.match(apiJs, /refresh the catalog before saving again/i);
+});
+
 test("Item Master and Brand Management are wired for all shop types", () => {
   const index = read("index.html");
   const app = read("js/app.js");

@@ -186,6 +186,7 @@
       headers["Content-Type"] = "application/json";
     }
     const method = String(options.method || "GET").toUpperCase();
+    const mutating = isMutating(method);
     const trySpecs = orderedSpecs(method, await ensureSpec());
 
     const seen = new Set();
@@ -202,7 +203,12 @@
         const res = await fetch(url, { credentials: "same-origin", cache: "no-store", redirect: "follow", ...options, headers: hdrs });
         const text = await res.text();
         lastText = text;
-        if (!looksLikeJson(text, res)) continue;
+        if (!looksLikeJson(text, res)) {
+          if (mutating && res.status >= 200 && res.status < 300) {
+            throw new Error("POS saved but the reply was not JSON. Refresh the catalog before saving again.");
+          }
+          continue;
+        }
         const data = text ? JSON.parse(text) : {};
         if (isDeadBridge(data, res)) continue;
         if (isPhpUnimplemented(data, res)) {
@@ -211,7 +217,8 @@
         }
         saveSpec(spec);
         return { res, data, text };
-      } catch {
+      } catch (err) {
+        if (mutating && err && /refresh the catalog/i.test(String(err.message || err))) throw err;
         /* try next */
       }
     }

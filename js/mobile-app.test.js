@@ -65,7 +65,7 @@ test("InvoiceJet phone overlay is on POS login, home, and tab bar", () => {
 
   assert.match(login, /login-atav-navratri-dussehra\.jpg/);
   assert.match(login, /js\/login-page\.js\?v=20261012jet1/);
-  assert.match(login, /js\/pos-api\.js\?v=20261006login1/);
+  assert.match(login, /js\/pos-api\.js\?v=20261013item1/);
   assert.match(login, /css\/login-page\.css\?v=20261008loginfile1/);
   assert.match(login, /x-pos-20260830e\.js\?v=20261011lounge1/);
   assert.match(login, /css\/mobile-app\.css\?v=20261012jet5/);
@@ -79,7 +79,7 @@ test("InvoiceJet phone overlay is on POS login, home, and tab bar", () => {
   assert.match(login, /id="m-go-signin"/);
   assert.match(login, /id="m-go-signup"/);
 
-  assert.match(index, /app\.js\?v=20261013flex1/);
+  assert.match(index, /app\.js\?v=20261013item1/);
   assert.match(index, /css\/mobile-app\.css\?v=20261012jet5/);
   assert.match(index, /js\/mobile-app\.js\?v=20261012jet5/);
   assert.match(index, /id="m-home"/);

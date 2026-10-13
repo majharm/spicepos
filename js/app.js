@@ -5430,6 +5430,9 @@ function openCounterAddItem(prefill = {}) {
 
 async function saveCounterAddItem(e) {
   e?.preventDefault?.();
+  const saveBtn = $("ci-save");
+  if (saveBtn?.disabled) return;
+  if (saveBtn) saveBtn.disabled = true;
   const hint = $("ci-hint");
   const name = String($("ci-name")?.value || "").trim();
   const retail = Number($("ci-retail")?.value);
@@ -5438,6 +5441,7 @@ async function saveCounterAddItem(e) {
       hint.textContent = "Name is required.";
       hint.className = "hint error";
     }
+    if (saveBtn) saveBtn.disabled = false;
     return;
   }
   if (!Number.isFinite(retail) || retail < 0) {
@@ -5445,6 +5449,7 @@ async function saveCounterAddItem(e) {
       hint.textContent = "Enter a retail rate.";
       hint.className = "hint error";
     }
+    if (saveBtn) saveBtn.disabled = false;
     return;
   }
   const unit = POSUnits.normalize($("ci-unit")?.value || defaultItemUnit());
@@ -5467,8 +5472,6 @@ async function saveCounterAddItem(e) {
     body.manufacturer = String($("ci-mfr")?.value || "").trim();
     body.generic_name = name;
   }
-  const saveBtn = $("ci-save");
-  if (saveBtn) saveBtn.disabled = true;
   if (hint) {
     hint.textContent = "Saving…";
     hint.className = "hint";
@@ -11688,8 +11691,17 @@ $("item-form").addEventListener("click", (e) => {
   if (!btn) return;
   paintItemStatus(btn.dataset.setItemStatus);
 });
+let itemFormBusy = false;
 $("item-form").addEventListener("submit", async (e) => {
   e.preventDefault();
+  if (itemFormBusy) return;
+  itemFormBusy = true;
+  const saveBtn = $("item-save");
+  if (saveBtn) saveBtn.disabled = true;
+  if ($("item-hint")) {
+    $("item-hint").textContent = "Saving…";
+    $("item-hint").className = "hint";
+  }
   const unit = POSUnits.normalize($("item-unit").value);
   const body = {
     name: $("item-name").value,
@@ -11759,6 +11771,9 @@ $("item-form").addEventListener("submit", async (e) => {
   } catch (err) {
     $("item-hint").textContent = err.message;
     $("item-hint").className = "hint error";
+  } finally {
+    itemFormBusy = false;
+    if (saveBtn) saveBtn.disabled = false;
   }
 });
 $("item-cancel").addEventListener("click", () => {
