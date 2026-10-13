@@ -274,50 +274,80 @@ function printDimOptionsHtml(selected) {
     .join("");
 }
 
+function printLineNeedsSize(line) {
+  return !(Number(line?.printWidth) > 0 && Number(line?.printHeight) > 0);
+}
+
+function printAreaChipText(item, line) {
+  const P = printApi();
+  const q = printLineQuote(item, line);
+  if (!q || printLineNeedsSize(line)) return "Area";
+  return P?.printAreaLabel?.(q.billedArea, q.billUnit, item.custom_unit) || String(q.billedArea);
+}
+
+function focusPrintLineWidth(line) {
+  const key = cartLineKey(line);
+  queueMicrotask(() => {
+    const el = document.querySelector(`[data-print-w="${CSS.escape(key)}"]`);
+    if (el && typeof el.focus === "function") {
+      el.focus();
+      if (typeof el.select === "function") el.select();
+    }
+  });
+}
+
 function printAreaLineHtml(item, line, key, calc) {
   const P = printApi();
   const dim = line.printDimUnit || P?.defaultDimUnit?.(printBillUnit(item)) || "ft";
   const copies = Math.max(1, Number(line.printCopies) || 1);
-  const cap = printLineCaptionText(item, line);
+  const need = printLineNeedsSize(line);
+  const cap = need ? "Enter width × height" : printLineCaptionText(item, line);
+  const billLab = P?.billUnitLabel?.(printBillUnit(item), item.custom_unit) || "sqft";
   const rateVal = rateFor(item, line);
   const rateField = canChangeRate()
-    ? `<label class="print-dim">Rate ₹
+    ? `<label class="print-dim print-dim-rate">₹/${escapeHtml(billLab)}
         <input data-print-rate="${escapeHtml(key)}" type="number" min="0" step="0.01" inputmode="decimal" value="${escapeHtml(rateVal)}" aria-label="Rate per unit" />
       </label>`
-    : `<span class="print-rate-ro">${escapeHtml(money(rateVal))}/${escapeHtml(P?.billUnitLabel?.(printBillUnit(item), item.custom_unit) || "unit")}</span>`;
+    : `<span class="print-rate-ro">${escapeHtml(money(rateVal))}/${escapeHtml(billLab)}</span>`;
   const fileBit = line.printFileName
     ? `<span class="print-file-name">${escapeHtml(line.printFileName)}</span>
-       <button type="button" class="btn" data-print-file-clear="${escapeHtml(key)}">Remove file</button>`
-    : `<label class="btn print-file-pick">Attach file
+       <button type="button" class="btn print-file-clear" data-print-file-clear="${escapeHtml(key)}">Remove</button>`
+    : `<label class="print-file-pick">File
         <input class="logo-file-input" data-print-file="${escapeHtml(key)}" type="file" accept=".pdf,.jpg,.jpeg,.png,.svg,.ai,.eps,.cdr,image/*,application/pdf" />
       </label>`;
-  return `<div class="line print-line">
+  return `<div class="line print-line${need ? " is-need-size" : ""}">
     <div class="line-main">
       <div class="line-info">
         <div class="who">${escapeHtml(item.name)}</div>
         <div class="pack print-line-summary">${escapeHtml(cap)}</div>
       </div>
       <div class="line-ops">
-        <div class="line-amt">${money(calc.taxable + calc.gst)}</div>
+        <div class="line-amt">${need ? "—" : money(calc.taxable + calc.gst)}</div>
         <button type="button" class="classic-del" data-del-line="${escapeHtml(key)}" aria-label="Remove ${escapeHtml(item.name)}">×</button>
       </div>
     </div>
-    <div class="print-dims">
-      <label class="print-dim">W
-        <input data-print-w="${escapeHtml(key)}" type="number" min="0" step="0.01" inputmode="decimal" value="${escapeHtml(line.printWidth || "")}" aria-label="Width" />
-      </label>
-      <label class="print-dim">H
-        <input data-print-h="${escapeHtml(key)}" type="number" min="0" step="0.01" inputmode="decimal" value="${escapeHtml(line.printHeight || "")}" aria-label="Height" />
-      </label>
-      <label class="print-dim">Unit
-        <select data-print-dim="${escapeHtml(key)}" aria-label="Dimension unit">${printDimOptionsHtml(dim)}</select>
-      </label>
-      <label class="print-dim">Qty
-        <input data-print-copies="${escapeHtml(key)}" type="number" min="1" step="1" inputmode="numeric" value="${escapeHtml(copies)}" aria-label="Copies" />
-      </label>
-      ${rateField}
+    <div class="print-job">
+      <div class="print-size-row">
+        <label class="print-dim">W
+          <input data-print-w="${escapeHtml(key)}" type="number" min="0" step="0.01" inputmode="decimal" value="${escapeHtml(line.printWidth || "")}" placeholder="0" aria-label="Width" />
+        </label>
+        <span class="print-size-x" aria-hidden="true">×</span>
+        <label class="print-dim">H
+          <input data-print-h="${escapeHtml(key)}" type="number" min="0" step="0.01" inputmode="decimal" value="${escapeHtml(line.printHeight || "")}" placeholder="0" aria-label="Height" />
+        </label>
+        <label class="print-dim print-dim-unit">
+          <select data-print-dim="${escapeHtml(key)}" aria-label="Dimension unit">${printDimOptionsHtml(dim)}</select>
+        </label>
+        <span class="print-area-chip" data-print-area="${escapeHtml(key)}">${escapeHtml(printAreaChipText(item, line))}</span>
+      </div>
+      <div class="print-meta-row">
+        <label class="print-dim print-dim-copies">Copies
+          <input data-print-copies="${escapeHtml(key)}" type="number" min="1" step="1" inputmode="numeric" value="${escapeHtml(copies)}" aria-label="Copies" />
+        </label>
+        ${rateField}
+        <div class="print-file-row">${fileBit}</div>
+      </div>
     </div>
-    <div class="print-file-row">${fileBit}</div>
     ${canDiscount() ? `<div class="line-disc">
         <select data-line-disc-type="${escapeHtml(key)}" aria-label="Line discount type">
           <option value="amt"${(line.discountType || "amt") === "amt" ? " selected" : ""}>₹</option>
@@ -4325,8 +4355,9 @@ function catalogCardHtml(i) {
   const low = Number(i.stock_gm) <= Number(i.reorder_level_gm);
   const meta = catalogCardMeta(i);
   const restaurant = isRestaurantShop();
-  const qty = restaurant ? "" : fmtQty(i.stock_gm, i);
-  const stock = restaurant
+  const print = isPrintShop();
+  const qty = restaurant || print ? "" : fmtQty(i.stock_gm, i);
+  const stock = restaurant || print
     ? (Number(i.gst_rate) ? `GST ${escapeHtml(i.gst_rate)}%` : "")
     : `${escapeHtml(i.code)} · GST ${escapeHtml(i.gst_rate)}%`;
   return `<button class="card" type="button" data-add="${escapeHtml(i.id)}">
@@ -4980,6 +5011,7 @@ function renderCart() {
   }
   const t = cartTotals();
   const families = [...new Set(state.cart.map((l) => POSUnits.typeOf(itemUnit(state.items.find((i) => i.id === l.itemId))).family))];
+  if ($("qty-lab")) $("qty-lab").textContent = isPrintShop() ? "Area" : "Qty";
   $("qty-total").textContent = families.length <= 1 && state.cart.length
     ? fmtQty(t.qty, state.items.find((i) => i.id === state.cart[0].itemId))
     : families.length > 1
@@ -5511,6 +5543,7 @@ function addItem(id, qtyGm, lineBarcode) {
     syncPrintLineQty(line, item);
     state.cart.push(line);
     renderCart();
+    focusPrintLineWidth(line);
     warnClassicItem(item);
     return true;
   }
@@ -10028,6 +10061,7 @@ $("catalog-cats")?.addEventListener("click", (e) => {
 function paintBillFigures() {
   const t = cartTotals();
   const families = [...new Set(state.cart.map((l) => POSUnits.typeOf(itemUnit(state.items.find((i) => i.id === l.itemId))).family))];
+  if ($("qty-lab")) $("qty-lab").textContent = isPrintShop() ? "Area" : "Qty";
   if ($("qty-total")) {
     $("qty-total").textContent = families.length <= 1 && state.cart.length
       ? fmtQty(t.qty, state.items.find((i) => i.id === state.cart[0].itemId))
@@ -10058,10 +10092,14 @@ function refreshPrintLineLive(key) {
   const root = sel("data-print-w")?.closest(".print-line");
   if (root) {
     const calc = lineCalc(item, line);
+    const need = printLineNeedsSize(line);
     const summary = root.querySelector(".print-line-summary");
     const amt = root.querySelector(".line-amt");
-    if (summary) summary.textContent = printLineCaptionText(item, line);
-    if (amt) amt.textContent = money(calc.taxable + calc.gst);
+    const chip = root.querySelector("[data-print-area]");
+    root.classList.toggle("is-need-size", need);
+    if (summary) summary.textContent = need ? "Enter width × height" : printLineCaptionText(item, line);
+    if (amt) amt.textContent = need ? "—" : money(calc.taxable + calc.gst);
+    if (chip) chip.textContent = printAreaChipText(item, line);
   }
   paintBillFigures();
 }
@@ -10130,7 +10168,7 @@ $("lines").addEventListener("click", (e) => {
     }
     return;
   }
-  if (e.target.closest("[data-qty]") || e.target.closest("[data-line-note]") || e.target.closest(".print-dims") || e.target.closest(".print-file-row")) return;
+  if (e.target.closest("[data-qty]") || e.target.closest("[data-line-note]") || e.target.closest(".print-dims") || e.target.closest(".print-job") || e.target.closest(".print-file-row") || e.target.closest(".print-extra-bar")) return;
   const btn = e.target.closest("[data-chg]");
   if (!btn) return;
   changeLineQty(btn.dataset.chg, Number(btn.dataset.d));

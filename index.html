@@ -6,7 +6,7 @@
     <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
     <title>ATAV POS</title>
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./css/pos.css?v=20261012print1" />
+    <link rel="stylesheet" href="./css/pos.css?v=20261013flex1" />
     <link rel="stylesheet" href="./css/saas.css?v=20260905deploy136" />
     <link rel="stylesheet" href="./css/bar.css?v=20261011bar2" />
     <link rel="stylesheet" href="./css/resort.css?v=20261011resort1" />
@@ -442,15 +442,15 @@
                       <input id="loyalty-redeem" type="number" min="0" step="1" value="0" aria-label="Royalty points to redeem" placeholder="0" />
                       <span class="hint" id="loyalty-hint"></span>
                     </label>
-                    <label class="printing-only" id="print-extra-wrap" hidden>Additional charges ₹
-                      <input id="print-extra-charges" type="number" min="0" step="0.01" value="0" inputmode="decimal" aria-label="Additional charges" />
-                    </label>
                   </div>
                 </div>
               </details>
+              <label class="printing-only print-extra-bar" id="print-extra-wrap" hidden>Additional ₹
+                <input id="print-extra-charges" type="number" min="0" step="0.01" value="0" inputmode="decimal" aria-label="Additional charges" placeholder="0.00" />
+              </label>
               <div class="totals">
                 <div class="totals-meta">
-                  <div><span data-i18n="pos.quantity">Qty</span><span id="qty-total">0</span></div>
+                  <div><span id="qty-lab" data-i18n="pos.quantity">Qty</span><span id="qty-total">0</span></div>
                   <div id="taxable-row"><span data-i18n="pos.taxable">Taxable</span><span id="taxable">₹0.00</span></div>
                   <div id="gst-row"><span data-i18n="pos.gst">GST</span><span id="tax">₹0.00</span></div>
                   <div id="disc-row" hidden><span data-i18n="pos.discount">Discount</span><span id="disc-total">₹0.00</span></div>
@@ -3267,7 +3267,7 @@
     <script src="./js/resort-ui.js?v=20261011resort1" defer></script>
     <script src="./js/item-master.js?v=20261012brand1" defer></script>
     <script src="./js/customer-master.js?v=20261012cust1" defer></script>
-    <script src="./js/app.js?v=20261012print1" defer></script>
+    <script src="./js/app.js?v=20261013flex1" defer></script>
     <script src="./js/item-master-ui.js?v=20261012brand1" defer></script>
     <script src="./js/customer-master-ui.js?v=20261012cust1" defer></script>
     <script src="./js/mobile-app.js?v=20261012jet5" defer></script>
