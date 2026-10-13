@@ -3221,6 +3221,32 @@ function setHint(msg, kind = "") {
   $("hint").className = `hint ${kind}`.trim();
 }
 
+let itemSaveToastTimer = 0;
+
+function hideItemSaveToast() {
+  const toast = $("item-save-toast");
+  if (toast) toast.hidden = true;
+  if (itemSaveToastTimer) {
+    clearTimeout(itemSaveToastTimer);
+    itemSaveToastTimer = 0;
+  }
+}
+
+function showItemSaveToast(title, copy = "") {
+  const toast = $("item-save-toast");
+  if (!toast) return;
+  const titleEl = $("item-save-toast-title");
+  const copyEl = $("item-save-toast-copy");
+  if (titleEl) titleEl.textContent = title || "Item created successfully";
+  if (copyEl) {
+    copyEl.textContent = copy || "";
+    copyEl.hidden = !copy;
+  }
+  toast.hidden = false;
+  if (itemSaveToastTimer) clearTimeout(itemSaveToastTimer);
+  itemSaveToastTimer = setTimeout(hideItemSaveToast, 5000);
+}
+
 function holdPayload(row) {
   if (row?.payload && typeof row.payload === "object" && !Array.isArray(row.payload)) return row.payload;
   if (row?.payload && Array.isArray(row.payload.cart)) return row.payload;
@@ -5483,7 +5509,8 @@ async function saveCounterAddItem(e) {
     const id = item?.id || res.item?.id;
     if (id) addItem(id, POSUnits.toBase(qty, unit), body.barcode || "");
     closeCounterAddItem();
-    setHint(`Added ${name} to catalog and bill`, "ok");
+    setHint(`Item created successfully · ${name} added to catalog and bill`, "ok");
+    showItemSaveToast("Item created successfully", name);
     clearCounterQuery($("bill-item-search") || $("scan-code"));
     paintClassicItemHits();
     focusScanLane();
@@ -11525,6 +11552,7 @@ $("kot-toast-open")?.addEventListener("click", () => {
   showView("kot");
 });
 $("kot-toast-dismiss")?.addEventListener("click", hideKotToast);
+$("item-save-toast-dismiss")?.addEventListener("click", hideItemSaveToast);
 $("agg-sound-toggle")?.addEventListener("click", () => {
   const on = globalThis.POSQrNotify?.soundOn?.() !== false;
   if (!on) {
@@ -11743,14 +11771,15 @@ $("item-form").addEventListener("submit", async (e) => {
   }
   try {
     let savedId = $("item-id").value;
+    const wasNew = !savedId;
+    const itemName = String(body.name || "").trim();
+    let createdCount = 1;
     if (savedId) {
       await api(`/api/items/${savedId}`, { method: "PUT", body: JSON.stringify(body) });
-      $("item-hint").textContent = "Saved";
     } else {
       const res = await api("/api/items", { method: "POST", body: JSON.stringify(body) });
-      const count = res?.created_count || (res?.items ? res.items.length : 1);
+      createdCount = res?.created_count || (res?.items ? res.items.length : 1);
       savedId = res?.item?.id || res?.items?.[0]?.id || "";
-      $("item-hint").textContent = count > 1 ? `Created ${count} sizes` : "Saved";
     }
     if (isServicesShop() && savedId) {
       await api(`/api/salon/services/${savedId}`, {
@@ -11765,9 +11794,16 @@ $("item-form").addEventListener("submit", async (e) => {
         }),
       });
     }
-    $("item-hint").className = "hint ok";
     resetItemForm();
     await loadBootstrap();
+    const msg = wasNew
+      ? (createdCount > 1 ? `Item created successfully · ${createdCount} sizes` : "Item created successfully")
+      : "Item saved successfully";
+    if ($("item-hint")) {
+      $("item-hint").textContent = msg;
+      $("item-hint").className = "hint ok";
+    }
+    showItemSaveToast(wasNew ? "Item created successfully" : "Item saved successfully", itemName);
   } catch (err) {
     $("item-hint").textContent = err.message;
     $("item-hint").className = "hint error";

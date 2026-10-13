@@ -6,7 +6,7 @@
     <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
     <title>ATAV POS</title>
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./css/pos.css?v=20261013flex1" />
+    <link rel="stylesheet" href="./css/pos.css?v=20261013item2" />
     <link rel="stylesheet" href="./css/saas.css?v=20260905deploy136" />
     <link rel="stylesheet" href="./css/bar.css?v=20261011bar2" />
     <link rel="stylesheet" href="./css/resort.css?v=20261011resort1" />
@@ -3130,6 +3130,14 @@
       <button class="btn primary" type="button" id="qr-toast-open">Open</button>
       <button class="icon-btn qr-toast-x" type="button" id="qr-toast-dismiss" aria-label="Dismiss">×</button>
     </div>
+    <div class="qr-order-toast" id="item-save-toast" hidden role="status" aria-live="polite">
+      <div>
+        <p class="qr-toast-kicker">ITEM</p>
+        <strong id="item-save-toast-title">Item created successfully</strong>
+        <p id="item-save-toast-copy"></p>
+      </div>
+      <button class="icon-btn qr-toast-x" type="button" id="item-save-toast-dismiss" aria-label="Dismiss">×</button>
+    </div>
     <div class="modal offer-popup" id="offer-popup" hidden>
       <div class="dialog offer-popup-sheet" role="dialog" aria-modal="true" aria-labelledby="offer-popup-title">
         <p class="offer-popup-kicker">Best offer</p>
@@ -3267,7 +3275,7 @@
     <script src="./js/resort-ui.js?v=20261011resort1" defer></script>
     <script src="./js/item-master.js?v=20261012brand1" defer></script>
     <script src="./js/customer-master.js?v=20261012cust1" defer></script>
-    <script src="./js/app.js?v=20261013item1" defer></script>
+    <script src="./js/app.js?v=20261013item2" defer></script>
     <script src="./js/item-master-ui.js?v=20261012brand1" defer></script>
     <script src="./js/customer-master-ui.js?v=20261012cust1" defer></script>
     <script src="./js/mobile-app.js?v=20261012jet5" defer></script>

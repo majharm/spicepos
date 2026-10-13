@@ -48,6 +48,20 @@ test("collectBrands merges item, liquor, and master rows", () => {
   assert.equal(sum.assigned, 2);
 });
 
+test("Item Master shows a created-successfully notice after save", () => {
+  const index = read("index.html");
+  const app = read("js/app.js");
+  const css = read("css/pos.css");
+  assert.match(index, /id="item-save-toast"/);
+  assert.match(index, /Item created successfully/);
+  assert.match(index, /id="item-save-toast-dismiss"/);
+  assert.match(app, /function showItemSaveToast/);
+  assert.match(app, /Item created successfully/);
+  assert.match(app, /showItemSaveToast\(wasNew \? "Item created successfully"/);
+  assert.match(app, /showItemSaveToast\("Item created successfully", name\)/);
+  assert.match(css, /#item-save-toast\[hidden\]/);
+});
+
 test("Item Master save ignores a second click while the first POST is in flight", () => {
   const app = read("js/app.js");
   const php = read("pos-api.php");

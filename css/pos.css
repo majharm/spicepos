@@ -4365,7 +4365,8 @@ body.pharmacy-mode .items-library-list {
 .qr-sound-arm[hidden],
 .qr-order-toast[hidden],
 #kot-toast[hidden],
-#agg-order-toast[hidden] { display: none !important; }
+#agg-order-toast[hidden],
+#item-save-toast[hidden] { display: none !important; }
 .qr-order-toast {
   position: fixed;
   z-index: 42;
