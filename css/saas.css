@@ -1335,6 +1335,20 @@ body.auth-body::-webkit-scrollbar-thumb {
   box-shadow: var(--shadow-card);
 }
 .platform-notice strong { display: block; margin-bottom: 4px; color: #78350f; }
+.platform-notice .notice-body {
+  margin: 0;
+  white-space: pre-wrap;
+  font-size: 13px;
+  line-height: 1.45;
+  color: #92400e;
+}
+.platform-notice .notice-when {
+  display: block;
+  margin-top: 8px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #a16207;
+}
 .platform-notice img,
 .notice-thumb {
   display: block;

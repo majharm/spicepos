@@ -319,8 +319,8 @@ app.get("/api/bootstrap", requireStaff, async (_req, res) => {
       query("SELECT * FROM customers WHERE business_id = ? ORDER BY name", [businessId]),
       query("SELECT * FROM packs WHERE business_id = ? ORDER BY name", [businessId]),
       query(
-        `SELECT id, title, body, image_url, created_at FROM notifications
-         WHERE business_id IS NULL OR business_id = '' OR business_id = ? ORDER BY created_at DESC LIMIT 8`,
+        `SELECT id, title, body, image_url, locale, created_at FROM notifications
+         WHERE business_id IS NULL OR business_id = '' OR business_id = ? ORDER BY created_at DESC LIMIT 20`,
         [businessId],
       ),
       ensureInventoryUnits(businessId).catch(() => []),

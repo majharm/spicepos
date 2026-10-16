@@ -22,6 +22,7 @@ import {
   saveSmtpConnection,
   publicAlertSettings,
   sanitizeNoticeImage,
+  saveDashboardNotification,
   ensureAlertSettings,
   sendRenewalAlerts,
   sendManualAlerts,
@@ -836,11 +837,18 @@ export function registerMaster(app) {
       if (!title) throw new Error("Title is required");
       const image = sanitizeNoticeImage(image_url);
       const locale = normalizeLocale(req.body?.locale) || "";
-      const id = crypto.randomUUID();
-      await query(
-        `INSERT INTO notifications (id, business_id, title, body, image_url, locale) VALUES (?,?,?,?,?,?)`,
-        [id, business_id || null, title, body || null, image || null, locale || null],
-      );
+      let id = "";
+      try {
+        id = await saveDashboardNotification({
+          businessId: business_id || "",
+          title,
+          body: body || "",
+          image,
+          locale,
+        });
+      } catch (err) {
+        console.error("dashboard notification save failed:", err.message);
+      }
       let delivery = { skipped: true };
       try {
         delivery = await sendUpdateAlerts({
@@ -853,6 +861,7 @@ export function registerMaster(app) {
         console.error("notification alerts failed:", err.message);
         delivery = { ok: false, error: String(err.message || err) };
       }
+      if (!id && delivery?.ok === false) throw new Error(delivery.error || "Could not save or send notification");
       return { ok: true, id, delivery };
     }),
   );

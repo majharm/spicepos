@@ -153,7 +153,7 @@ test("PHP customer insert bind types match placeholders", () => {
   assert.match(core, /image_url.*MEDIUMTEXT/);
   assert.match(core, /pos-alerts\.php/);
   assert.match(core, /master\/alerts/);
-  assert.match(core, /INSERT INTO notifications[\s\S]*image_url/);
+  assert.match(read("pos-alerts.php"), /INSERT INTO notifications[\s\S]*image_url/);
   assert.match(read("pos-alerts.php"), /function pos_send_update_alerts/);
   assert.match(read("pos-alerts.php"), /function pos_notice_image/);
   assert.match(read("pos-alerts.php"), /cid:notice-image/);
@@ -324,7 +324,7 @@ test("Master Admin can set passwords and unlock locked accounts", () => {
   assert.match(core, /pos_register_business\(\$body, true\)/);
   assert.match(core, /strtotime\("\+1 year"\)/);
   assert.match(read("server/onboard.js"), /INTERVAL 1 YEAR/);
-  assert.match(read("master.html"), /master\.js\?v=20261012dsa1/);
+  assert.match(read("master.html"), /master\.js\?v=20261016note1/);
   assert.match(read("api/master/dsa-sales/index.php"), /master\/dsa-sales/);
   assert.match(read("api/master/dsa-sales/excel/index.php"), /master\/dsa-sales\/excel/);
   assert.match(core, /master\/dsa-sales/);
@@ -393,7 +393,7 @@ test("POS boot skips API probe and slims catalog photos", () => {
   assert.match(index, /qrcode\.iife\.js[^>]+defer/);
   assert.match(index, /preload="auto"/);
   assert.match(index, /pos-api\.js\?v=20261013item1/);
-  assert.match(index, /app\.js\?v=20261016rate1/);
+  assert.match(index, /app\.js\?v=20261016note1/);
   assert.match(index, /class="dialog-head"/);
   assert.match(index, /id="modal-close"/);
   assert.match(read("css/pos.css"), /#modal-close,/);
@@ -503,9 +503,9 @@ test("Restaurant Counter can create named dining tables", () => {
   assert.match(index, /id="btn-shift-table"/);
   assert.match(index, /id="set-table-shifting"/);
   assert.match(restaurant, /function canShiftTable/);
-  assert.match(index, /pos\.css\?v=20261016rate1/);
+  assert.match(index, /pos\.css\?v=20261016note1/);
   assert.match(index, /restaurant\.js\?v=20261012set4/);
-  assert.match(index, /app\.js\?v=20261016rate1/);
+  assert.match(index, /app\.js\?v=20261016note1/);
   assert.match(index, /footwear\.js\?v=20261012print1/);
   assert.match(app, /function resolveKitchenKot/);
   assert.match(app, /function paintKotTimers/);

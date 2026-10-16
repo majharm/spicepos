@@ -11,6 +11,7 @@ import {
   DEFAULT_FROM_NAME,
 } from "./mail.js";
 import { getPlatformSettings, setPlatformSetting } from "./settings.js";
+import { normalizeLocale } from "./i18n.js";
 
 export const WA_DEFAULT_URL = "https://wamaster.atavtelecom.in/api/v1/send";
 export const WA_DEFAULT_COUNTRY = "91";
@@ -454,6 +455,55 @@ export function sanitizeNoticeImage(raw) {
   }
   if (/^https:\/\//i.test(img) && img.length < 2048) return img;
   throw new Error("Notification image must be an uploaded image");
+}
+
+export async function saveDashboardNotification({ businessId, title, body, image, locale } = {}) {
+  const heading = String(title || "").trim() || "ATAV POS update";
+  const id = crypto.randomUUID();
+  const bid = businessId ? String(businessId).trim() : "";
+  let img = "";
+  try {
+    img = image ? sanitizeNoticeImage(image) : "";
+  } catch {
+    img = "";
+  }
+  const loc = normalizeLocale(locale) || "";
+  try {
+    await query(
+      `CREATE TABLE IF NOT EXISTS notifications (
+        id VARCHAR(255) PRIMARY KEY,
+        business_id VARCHAR(255) NULL,
+        title VARCHAR(255) NOT NULL,
+        body TEXT NULL,
+        image_url MEDIUMTEXT NULL,
+        created_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3)
+      )`,
+    );
+  } catch {
+    /* table may already exist */
+  }
+  try {
+    await query("ALTER TABLE notifications ADD COLUMN image_url MEDIUMTEXT NULL");
+  } catch {
+    /* already present */
+  }
+  try {
+    await query("ALTER TABLE notifications ADD COLUMN locale VARCHAR(16) NULL");
+  } catch {
+    /* already present */
+  }
+  try {
+    await query(
+      `INSERT INTO notifications (id, business_id, title, body, image_url, locale) VALUES (?,?,?,?,?,?)`,
+      [id, bid || null, heading, body ? String(body) : null, img || null, loc || null],
+    );
+  } catch {
+    await query(
+      `INSERT INTO notifications (id, business_id, title, body, image_url) VALUES (?,?,?,?,?)`,
+      [id, bid || null, heading, body ? String(body) : null, img || null],
+    );
+  }
+  return id;
 }
 
 export async function ensureAlertSettings() {
@@ -1380,7 +1430,7 @@ export async function sendManualAlerts({ kinds = [], businessId = null, title = 
       continue;
     }
     const shop = await shopContacts(id);
-    if (!shop.phones.length && !shop.emails.length) {
+    if (!shop.phones.length && !shop.emails.length && !wanted.includes("updates")) {
       results.push({ businessId: id, shopName: biz.name, skipped: true, reason: "no-number" });
       continue;
     }
@@ -1473,6 +1523,16 @@ async function sendOneManualAlert({
   }
   if (kind === "updates") {
     const heading = String(title || "ATAV POS update").trim() || "ATAV POS update";
+    let dashboard = false;
+    try {
+      await saveDashboardNotification({ businessId: biz.id, title: heading, body });
+      dashboard = true;
+    } catch (err) {
+      console.error("dashboard notification save failed:", err.message);
+    }
+    if (!shop.phones.length && !shop.emails.length) {
+      return { ok: dashboard, dashboard, skipped: true, reason: "no-number" };
+    }
     const text = updateText({ shopName: name, title: heading, body: body || "" }, settings);
     return dispatchAlert({
       phones: shop.phones,

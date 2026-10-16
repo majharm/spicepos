@@ -369,7 +369,7 @@ export function registerTenant(app) {
         ),
         query("SELECT * FROM branches WHERE business_id = ? ORDER BY name", [businessId]),
         query(
-          `SELECT * FROM notifications WHERE business_id IS NULL OR business_id = '' OR business_id = ? ORDER BY created_at DESC LIMIT 8`,
+          `SELECT * FROM notifications WHERE business_id IS NULL OR business_id = '' OR business_id = ? ORDER BY created_at DESC LIMIT 20`,
           [businessId],
         ),
         query(

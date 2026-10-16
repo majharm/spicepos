@@ -7146,12 +7146,6 @@ function paintDashChrome(d) {
     if ([...sel.options].some((o) => o.value === cur)) sel.value = cur;
     sel.hidden = rows.length < 1;
   }
-  const n = Number((d?.notes || []).length) || 0;
-  const badge = $("dash-notify-count");
-  if (badge) {
-    badge.hidden = n < 1;
-    badge.textContent = n > 9 ? "9+" : String(n);
-  }
 }
 
 applyColorScheme();
@@ -12974,7 +12968,10 @@ $("dash-theme")?.addEventListener("click", () => {
   applyColorScheme(document.documentElement.dataset.scheme === "dark" ? "light" : "dark");
 });
 $("dash-notify")?.addEventListener("click", () => {
-  const notes = document.getElementById("dash-notes") || document.getElementById("platform-notices");
+  const onPhone = document.body.classList.contains("m-app");
+  const notes = onPhone
+    ? document.getElementById("m-home-notes") || document.getElementById("dash-notes")
+    : document.getElementById("dash-notes") || document.getElementById("platform-notices");
   notes?.scrollIntoView({ behavior: "smooth", block: "nearest" });
 });
 $("dash-search")?.addEventListener("keydown", (e) => {
@@ -14657,41 +14654,43 @@ $("loy-birthday")?.addEventListener("click", async () => {
   }
 });
 
+function noticeCardHtml(n) {
+  const when = formatShopDateTime(n.created_at);
+  const body = String(n.body || "").trim();
+  return `<article class="platform-notice dash-notice-card">
+    <strong>${escapeHtml(n.title || "Notice")}</strong>
+    ${body ? `<p class="notice-body">${escapeHtml(body)}</p>` : ""}
+    ${n.image_url ? `<img class="notice-thumb" src="${escapeHtml(n.image_url)}" alt="" />` : ""}
+    ${when ? `<time class="notice-when" datetime="${escapeHtml(String(n.created_at || ""))}">${escapeHtml(when)}</time>` : ""}
+  </article>`;
+}
+
 function paintPlatformNotices(notes) {
-  const I = window.POSI18n;
-  const uiLocale = I?.locale() || "en";
-  const shopLocale = I?.normalizeLocale(state.company?.locale) || "en";
   const list = (Array.isArray(notes) ? notes : []).filter((n) => {
     const title = String(n.title || "").trim().toLowerCase();
     const body = String(n.body || "").toLowerCase();
     if (title === "master admin login") return false;
     if (body.includes("opened this shop from master admin")) return false;
     if (body.includes("viewing this shop") || body.includes("is viewing")) return false;
-    const noteLoc = I?.normalizeLocale(n.locale) || "";
-    if (noteLoc && noteLoc !== uiLocale && noteLoc !== shopLocale && noteLoc !== "en") return false;
     return true;
   });
-  const top = $("platform-notices");
-  const dash = $("dash-notes");
-  const html = list
-    .map(
-      (n) =>
-        `<div class="platform-notice"><strong>${escapeHtml(n.title || "Notice")}</strong>${escapeHtml(n.body || "")}${
-          n.image_url ? `<img class="notice-thumb" src="${escapeHtml(n.image_url)}" alt="" />` : ""
-        }</div>`,
-    )
-    .join("");
-  if (top) {
-    if (list.length) {
-      top.innerHTML = html;
-      top.hidden = false;
-      top.removeAttribute("hidden");
-    } else {
-      top.innerHTML = "";
-      top.hidden = true;
+  const html = list.map(noticeCardHtml).join("");
+  const paint = (el, hideWhenEmpty) => {
+    if (!el) return;
+    el.innerHTML = html;
+    if (hideWhenEmpty) {
+      el.hidden = !list.length;
+      if (list.length) el.removeAttribute("hidden");
     }
+  };
+  paint($("platform-notices"), true);
+  paint($("dash-notes"), false);
+  paint($("m-home-notes"), true);
+  const badge = $("dash-notify-count");
+  if (badge) {
+    badge.hidden = list.length < 1;
+    badge.textContent = list.length > 9 ? "9+" : String(list.length);
   }
-  if (dash) dash.innerHTML = html;
 }
 
 function paintImpersonationControls() {

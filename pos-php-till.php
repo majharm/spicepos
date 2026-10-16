@@ -140,8 +140,9 @@ function pos_php_till_dispatch($path, $method, $body) {
     $coRow["tz_offset"] = $tzMeta["tz_offset"];
     $notes = [];
     try {
+      if (function_exists("pos_ensure_notification_schema")) pos_ensure_notification_schema();
       $notes = pos_q(
-        "SELECT id, title, body, image_url, created_at FROM notifications WHERE business_id IS NULL OR business_id = '' OR business_id = ? ORDER BY created_at DESC LIMIT 8",
+        "SELECT id, title, body, image_url, locale, created_at FROM notifications WHERE business_id IS NULL OR business_id = '' OR business_id = ? ORDER BY created_at DESC LIMIT 20",
         "s",
         [$bid]
       );
@@ -330,8 +331,9 @@ function pos_php_till_dispatch($path, $method, $body) {
     $branches = function_exists("pos_list_branches")
       ? pos_list_branches($bid)
       : pos_q("SELECT * FROM branches WHERE business_id = ? ORDER BY name", "s", [$bid]);
+    if (function_exists("pos_ensure_notification_schema")) pos_ensure_notification_schema();
     $notes = pos_q(
-      "SELECT * FROM notifications WHERE business_id IS NULL OR business_id = '' OR business_id = ? ORDER BY created_at DESC LIMIT 8",
+      "SELECT * FROM notifications WHERE business_id IS NULL OR business_id = '' OR business_id = ? ORDER BY created_at DESC LIMIT 20",
       "s",
       [$bid]
     );

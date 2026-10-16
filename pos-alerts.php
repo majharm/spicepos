@@ -300,6 +300,35 @@ function pos_ensure_notification_schema() {
     )"
   );
   @$db->query("ALTER TABLE notifications ADD COLUMN image_url MEDIUMTEXT NULL");
+  @$db->query("ALTER TABLE notifications ADD COLUMN locale VARCHAR(16) NULL");
+}
+
+function pos_save_dashboard_notification($businessId, $title, $body = "", $image = "", $locale = "") {
+  pos_ensure_notification_schema();
+  $heading = trim((string) $title);
+  if ($heading === "") $heading = "ATAV POS update";
+  $nid = pos_uuid();
+  $bid = trim((string) ($businessId ?? ""));
+  if ($bid === "") $bid = null;
+  $img = "";
+  if (function_exists("pos_notice_image")) {
+    try { $img = pos_notice_image($image); } catch (Throwable $e) { $img = ""; }
+  }
+  $loc = function_exists("pos_normalize_locale") ? pos_normalize_locale($locale) : trim((string) $locale);
+  try {
+    pos_q(
+      "INSERT INTO notifications (id, business_id, title, body, image_url, locale) VALUES (?,?,?,?,?,?)",
+      "ssssss",
+      [$nid, $bid, $heading, $body === "" || $body === null ? null : (string) $body, $img === "" ? null : $img, $loc !== "" ? $loc : null]
+    );
+  } catch (Exception $e) {
+    pos_q(
+      "INSERT INTO notifications (id, business_id, title, body, image_url) VALUES (?,?,?,?,?)",
+      "sssss",
+      [$nid, $bid, $heading, $body === "" || $body === null ? null : (string) $body, $img === "" ? null : $img]
+    );
+  }
+  return $nid;
 }
 
 function pos_ensure_alert_schema() {
@@ -1152,7 +1181,7 @@ function pos_send_manual_alerts($kinds = [], $bid = null, $title = "", $body = "
       continue;
     }
     $shop = pos_shop_alert_contacts($id);
-    if (!$shop["phones"] && !$shop["emails"]) {
+    if (!$shop["phones"] && !$shop["emails"] && !in_array("updates", $wanted, true)) {
       $results[] = ["businessId" => $id, "shopName" => $row["name"], "skipped" => true, "reason" => "no-number"];
       continue;
     }
@@ -1203,6 +1232,18 @@ function pos_send_one_manual_alert($kind, $biz, $shop, $admin, $cfg, $support, $
   }
   if ($kind === "updates") {
     $heading = trim((string) $title) !== "" ? trim((string) $title) : "ATAV POS update";
+    $dashboard = false;
+    try {
+      if (function_exists("pos_save_dashboard_notification")) {
+        pos_save_dashboard_notification($biz["id"] ?? "", $heading, $body);
+        $dashboard = true;
+      }
+    } catch (Throwable $e) {
+      error_log("dashboard notification save failed: " . $e->getMessage());
+    }
+    if (!$shop["phones"] && !$shop["emails"]) {
+      return ["ok" => $dashboard, "dashboard" => $dashboard, "skipped" => true, "reason" => "no-number"];
+    }
     $text = pos_alert_update_text($name, $heading, $body, $cfg);
     return pos_alert_dispatch($shop["phones"], $shop["emails"], "ATAV POS update · {$heading}", $text, pos_notice_html($heading, $body, ""), "", pos_alert_log_meta("updates", $shop, ["shopName" => $name]));
   }

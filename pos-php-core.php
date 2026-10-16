@@ -3922,28 +3922,22 @@ function pos_php_dispatch($path, $method, $rawBody) {
       if (!$title) throw new Exception("Title is required");
       if (function_exists("pos_ensure_notification_schema")) pos_ensure_notification_schema();
       $image = function_exists("pos_notice_image") ? pos_notice_image($body["image_url"] ?? "") : "";
-      $nid = pos_uuid();
       $bid = $body["business_id"] ?? null;
       if ($bid === "") $bid = null;
       pos_ensure_i18n_columns();
       $locale = pos_normalize_locale($body["locale"] ?? "");
+      $nid = "";
       try {
-        pos_q(
-          "INSERT INTO notifications (id, business_id, title, body, image_url, locale) VALUES (?,?,?,?,?,?)",
-          "ssssss",
-          [$nid, $bid, $title, $body["body"] ?? null, $image === "" ? null : $image, $locale !== "" ? $locale : null]
-        );
-      } catch (Exception $e) {
-        pos_q(
-          "INSERT INTO notifications (id, business_id, title, body, image_url) VALUES (?,?,?,?,?)",
-          "sssss",
-          [$nid, $bid, $title, $body["body"] ?? null, $image === "" ? null : $image]
-        );
+        if (!function_exists("pos_save_dashboard_notification")) throw new Exception("pos-alerts.php is missing on this host");
+        $nid = pos_save_dashboard_notification($bid, $title, $body["body"] ?? "", $image, $locale);
+      } catch (Throwable $e) {
+        error_log("dashboard notification save failed: " . $e->getMessage());
       }
       $delivery = ["skipped" => true];
       if (function_exists("pos_send_update_alerts")) {
         $delivery = pos_send_update_alerts($title, $body["body"] ?? "", $bid, $image);
       }
+      if ($nid === "" && empty($delivery["ok"])) throw new Exception($delivery["error"] ?? "Could not save or send notification");
       pos_send(200, ["ok" => true, "id" => $nid, "delivery" => $delivery]);
     }
 

@@ -399,3 +399,44 @@ test("Master Admin notifications form can attach an image", () => {
   assert.match(alerts, /cid:notice-image/);
   assert.match(mail, /Content-ID: <notice-image>/);
 });
+
+test("Master Admin Email and WhatsApp updates also save a shop dashboard card", () => {
+  const nodeAlerts = readFileSync(path.join(root, "server/alerts.js"), "utf8");
+  const masterApi = readFileSync(path.join(root, "server/master.js"), "utf8");
+  const php = readFileSync(path.join(root, "pos-php-core.php"), "utf8");
+  const alerts = readFileSync(path.join(root, "pos-alerts.php"), "utf8");
+  const app = readFileSync(path.join(root, "js/app.js"), "utf8");
+  const index = readFileSync(path.join(root, "index.html"), "utf8");
+  const css = readFileSync(path.join(root, "css/saas.css"), "utf8");
+  const mobile = readFileSync(path.join(root, "css/mobile-app.css"), "utf8");
+  const tenant = readFileSync(path.join(root, "server/tenant.js"), "utf8");
+  const nodeIndex = readFileSync(path.join(root, "server/index.js"), "utf8");
+  const till = readFileSync(path.join(root, "pos-php-till.php"), "utf8");
+
+  assert.match(nodeAlerts, /export async function saveDashboardNotification/);
+  assert.match(nodeAlerts, /INSERT INTO notifications \(id, business_id, title, body, image_url, locale\)/);
+  assert.match(nodeAlerts, /kind === "updates"/);
+  assert.match(nodeAlerts, /await saveDashboardNotification\(\{ businessId: biz\.id, title: heading, body \}\)/);
+  assert.match(nodeAlerts, /!shop\.phones\.length && !shop\.emails\.length && !wanted\.includes\("updates"\)/);
+  assert.match(alerts, /function pos_save_dashboard_notification/);
+  assert.match(alerts, /in_array\("updates", \$wanted, true\)/);
+  assert.match(alerts, /pos_save_dashboard_notification\(\$biz\["id"\] \?\? "", \$heading, \$body\)/);
+  assert.match(masterApi, /saveDashboardNotification\(/);
+  assert.match(masterApi, /sendUpdateAlerts\(/);
+  assert.match(php, /pos_save_dashboard_notification\(\$bid, \$title/);
+  assert.match(php, /pos_send_update_alerts\(\$title/);
+  assert.match(app, /function noticeCardHtml/);
+  assert.match(app, /class="notice-when"/);
+  assert.match(app, /class="notice-body"/);
+  assert.match(app, /notice-thumb/);
+  assert.match(app, /paint\(\$\("dash-notes"\)/);
+  assert.match(app, /paint\(\$\("m-home-notes"\)/);
+  assert.doesNotMatch(app, /n\.locale &&/);
+  assert.match(index, /id="dash-notes"/);
+  assert.match(index, /id="m-home-notes"/);
+  assert.match(css, /\.platform-notice \.notice-when/);
+  assert.match(mobile, /\.m-home-notes/);
+  assert.match(tenant, /FROM notifications WHERE business_id IS NULL OR business_id = '' OR business_id = \?/);
+  assert.match(nodeIndex, /FROM notifications[\s\S]*business_id IS NULL OR business_id = '' OR business_id = \?/);
+  assert.match(till, /FROM notifications WHERE business_id IS NULL OR business_id = '' OR business_id = \?/);
+});

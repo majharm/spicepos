@@ -470,6 +470,15 @@
   color: var(--m-ink);
   background: #fff;
 }
+.m-home-notes {
+  display: grid;
+  gap: 8px;
+  padding: 0 16px 8px;
+}
+.m-home-notes[hidden] { display: none !important; }
+.m-home-notes .platform-notice {
+  margin: 0;
+}
 .m-home-top {
   display: flex;
   align-items: center;

@@ -3021,6 +3021,7 @@ async function render() {
                           <div class="item-card-copy">
                             <strong>${attr(n.title || "Notice")}</strong>
                             <span>${attr(n.body || "")}</span>
+                            <em class="notice-when">${attr(n.created_at ? new Date(n.created_at).toLocaleString("en-IN", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "")}</em>
                           </div>
                           ${n.image_url ? `<img class="notice-thumb" src="${attr(n.image_url)}" alt="" />` : ""}
                         </article>`,
