@@ -133,6 +133,8 @@ test("item save and checkout persist barcode and line discount fields", () => {
   assert.match(nodeCrud, /onPurchaseLineSaved/);
   assert.match(nodeCrud, /barcode_count/);
   assert.match(nodeIndex, /computeSaleLine/);
+  assert.match(nodeIndex, /billedPrintQty/);
+  assert.match(nodeAdv, /export function billedPrintQty/);
   assert.match(nodeIndex, /applyLoyaltyOnSale/);
   assert.match(nodeAdv, /export async function reverseLoyaltyOnSale/);
   assert.match(adv, /function pos_loyalty_reverse_sale/);

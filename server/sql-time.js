@@ -9,6 +9,12 @@ export function createdToday(alias = "") {
   return `${col} >= CURDATE() AND ${col} < DATE_ADD(CURDATE(), INTERVAL 1 DAY)`;
 }
 
+/** Paid/open invoices only — voids must not inflate today/Master KPIs. */
+export function saleNotVoidSql(alias = "") {
+  const col = alias ? `${alias}.status` : "status";
+  return `LOWER(COALESCE(${col},'')) NOT IN ('cancelled','void')`;
+}
+
 export function createdYesterday(alias = "") {
   const col = createdCol(alias);
   return `${col} >= DATE_SUB(CURDATE(), INTERVAL 1 DAY) AND ${col} < CURDATE()`;

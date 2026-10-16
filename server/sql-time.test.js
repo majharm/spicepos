@@ -11,6 +11,7 @@ import {
   createdThisMonth,
   createdToday,
   createdYesterday,
+  saleNotVoidSql,
 } from "./sql-time.js";
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
@@ -28,6 +29,22 @@ test("calendar filters keep created_at sargable", () => {
   assert.match(createdPrevMonth(), /INTERVAL 1 MONTH/);
   assert.throws(() => createdSinceDays(-1));
   assert.throws(() => createdSinceDays(1.5));
+  assert.match(saleNotVoidSql(), /NOT IN \('cancelled','void'\)/);
+  assert.match(saleNotVoidSql("o"), /o\.status/);
+});
+
+test("today and Master shop sales skip voided invoices", () => {
+  const files = [
+    "server/index.js",
+    "server/tenant.js",
+    "server/master.js",
+    "pos-php-till.php",
+    "pos-php-core.php",
+  ];
+  for (const rel of files) {
+    const src = read(rel);
+    assert.match(src, /saleNotVoidSql|pos_sale_not_void/, `${rel} is missing the void filter`);
+  }
 });
 
 test("hot sales queries no longer wrap created_at in DATE()", () => {

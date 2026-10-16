@@ -10,7 +10,7 @@ import { workbookXml } from "./excel.js";
 import { stockToSheets } from "./stock-excel.js";
 import { recomputeBusinessOutstanding } from "./accounts.js";
 import { attachQrKitchenTicket, ensureKitchenTicketTable, nextKotNumber, syncQrFromKot } from "./qr-ordering.js";
-import { createdToday } from "./sql-time.js";
+import { createdToday, saleNotVoidSql } from "./sql-time.js";
 import { buildHubDashboard } from "./hub.js";
 
 function send(res, fn) {
@@ -351,7 +351,7 @@ export function registerTenant(app) {
       ] = await Promise.all([
         query(
           `SELECT COUNT(*) AS bills, COALESCE(SUM(total),0) AS takings, COALESCE(SUM(gst),0) AS gst
-           FROM sales_orders WHERE business_id = ? AND ${createdToday()}`,
+           FROM sales_orders WHERE business_id = ? AND ${createdToday()} AND ${saleNotVoidSql()}`,
           [businessId],
         ),
         query(

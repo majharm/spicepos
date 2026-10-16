@@ -195,7 +195,7 @@ function pos_php_till_dispatch($path, $method, $body) {
     }
     $sales = pos_q(
       "SELECT COUNT(*) AS bills, COALESCE(SUM(total),0) AS takings, COALESCE(SUM(gst),0) AS gst
-       FROM sales_orders WHERE business_id = ? AND " . pos_created_today() . "",
+       FROM sales_orders WHERE business_id = ? AND " . pos_created_today() . " AND " . pos_sale_not_void(),
       "s",
       [$bid]
     );
@@ -351,7 +351,7 @@ function pos_php_till_dispatch($path, $method, $body) {
   if ($path === "today" && $method === "GET") {
     $today = pos_q(
       "SELECT COUNT(*) AS bills, COALESCE(SUM(total),0) AS takings, COALESCE(SUM(gst),0) AS gst
-       FROM sales_orders WHERE business_id = ? AND " . pos_created_today() . "",
+       FROM sales_orders WHERE business_id = ? AND " . pos_created_today() . " AND " . pos_sale_not_void() . "",
       "s",
       [$bid]
     );

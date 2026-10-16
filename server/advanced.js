@@ -4,6 +4,7 @@ import "../js/loyalty.js";
 import "../js/units.js";
 import "../js/footwear.js";
 import "../js/barcode.js";
+import "../js/print.js";
 import { query, withTransaction } from "./db.js";
 import { bid, branchId, authUser } from "./context.js";
 import { requireStaff, requirePerm, parsePerms } from "./auth.js";
@@ -14,6 +15,7 @@ const POSLoyalty = globalThis.POSLoyalty;
 const POSUnits = globalThis.POSUnits;
 const POSFootwear = globalThis.POSFootwear;
 const POSBarcode = globalThis.POSBarcode;
+const POSPrint = globalThis.POSPrint;
 
 function barcodeText(raw) {
   return POSBarcode?.cleanCode ? POSBarcode.cleanCode(raw) : String(raw || "").trim().replace(/\s+/g, "");
@@ -748,8 +750,30 @@ export function canOverrideSaleRate(user = authUser()) {
   return Boolean(perms.items || perms.settings);
 }
 
+export function billedPrintQty(item, lineIn) {
+  const width = Number(lineIn?.print_width ?? lineIn?.printWidth) || 0;
+  const height = Number(lineIn?.print_height ?? lineIn?.printHeight) || 0;
+  if (!(width > 0 && height > 0) || !POSPrint?.billedArea) return null;
+  const copies = Math.max(1, Number(lineIn.print_copies ?? lineIn.printCopies) || 1);
+  const custom = String(lineIn.print_custom_unit ?? lineIn.printCustomUnit ?? item?.custom_unit ?? "").trim();
+  const billUnit = custom ? "CUSTOM" : item?.base_unit || item?.unit;
+  const dimUnit = lineIn.print_dim_unit ?? lineIn.printDimUnit ?? POSPrint.defaultDimUnit?.(billUnit) ?? "ft";
+  const area = POSPrint.billedArea({
+    width,
+    height,
+    copies,
+    dimUnit,
+    billUnit,
+    minQty: item?.min_billing_qty,
+    customUnit: custom,
+  });
+  const billed = Number(area?.billedArea);
+  return Number.isFinite(billed) && billed > 0 ? billed : null;
+}
+
 export function computeSaleLine(item, customer, lineIn) {
-  const qty = Number(lineIn.quantity_gm ?? lineIn.qty);
+  const printQty = billedPrintQty(item, lineIn);
+  const qty = Number(printQty ?? lineIn.quantity_gm ?? lineIn.qty);
   const isB2b = customer?.type === "b2b";
   const customerType = isB2b ? "b2b" : "b2c";
   const rate = lineIn.rate != null && lineIn.rate !== "" && canOverrideSaleRate()
@@ -790,7 +814,7 @@ export function computeSaleLine(item, customer, lineIn) {
     print_copies: Math.max(1, Number(lineIn.print_copies ?? lineIn.printCopies) || 1),
     print_file_id: String(lineIn.print_file_id ?? lineIn.printFileId ?? "").trim(),
     print_file_name: String(lineIn.print_file_name ?? lineIn.printFileName ?? "").trim().slice(0, 255),
-    print_area: Number(lineIn.print_area ?? lineIn.printArea ?? qty) || 0,
+    print_area: Number(printQty ?? lineIn.print_area ?? lineIn.printArea ?? qty) || 0,
     print_custom_unit: String(lineIn.print_custom_unit ?? lineIn.printCustomUnit ?? item.custom_unit ?? "").trim().slice(0, 32),
     unit: String(item.base_unit || item.unit || "").trim(),
   };

@@ -8,7 +8,7 @@ import { query, withTransaction } from "./db.js";
 import { bid, branchId, authUser } from "./context.js";
 import { lineAmount, round2, registerCrud, itemBillName } from "./crud.js";
 import { fyRangeForToday } from "./fy.js";
-import { createdToday } from "./sql-time.js";
+import { createdToday, saleNotVoidSql } from "./sql-time.js";
 import { buildReports, reportsToSheets } from "./reports.js";
 import { buildGrowthDashboard, answerGrowthQuestion, growthToSheets } from "./growth.js";
 import { listCombos, createCombo } from "./combos.js";
@@ -30,7 +30,7 @@ import { postSaleJournal } from "./accounting.js";
 import { audit } from "./audit.js";
 import { getPlatformSettings, shopSupportContact } from "./settings.js";
 import { sendLowStockAlerts, tickShopAlerts, startAlertScheduler, scheduleAlertTick } from "./alerts.js";
-import { registerAdvanced, computeSaleLine, applySaleStock, applyLoyaltyOnSale, pharmacyLineSnapshot, enrichCatalogPharmacy, enrichCatalogBarcodes, saleStockQty, persistSaleLineNote, persistPrintSaleLine, assertApparelSaleStock } from "./advanced.js";
+import { registerAdvanced, computeSaleLine, billedPrintQty, applySaleStock, applyLoyaltyOnSale, pharmacyLineSnapshot, enrichCatalogPharmacy, enrichCatalogBarcodes, saleStockQty, persistSaleLineNote, persistPrintSaleLine, assertApparelSaleStock } from "./advanced.js";
 import { registerReturns } from "./returns.js";
 import { registerAnalyticsPublic, registerAnalyticsMaster } from "./analytics.js";
 import { registerSeoPublic, registerSeoMaster } from "./seo.js";
@@ -473,7 +473,7 @@ app.get("/api/today", requireStaff, async (_req, res) => {
               COALESCE(SUM(total),0) AS takings,
               COALESCE(SUM(gst),0) AS gst
        FROM sales_orders
-       WHERE business_id = ? AND ${createdToday()}`,
+       WHERE business_id = ? AND ${createdToday()} AND ${saleNotVoidSql()}`,
       [bid()],
     );
     res.json({ today: today || { bills: 0, takings: 0, gst: 0 } });
@@ -948,9 +948,10 @@ app.post("/api/checkout", requireStaff, requirePerm("counter"), async (req, res)
         );
         const item = items[0];
         if (!item) throw new Error("Unknown item");
-        const qty = Number(line.quantity_gm);
+        const printQty = billedPrintQty(item, line);
+        const qty = Number(printQty ?? line.quantity_gm);
         if (!Number.isFinite(qty) || qty <= 0) throw new Error("Invalid quantity");
-        built.push(computeSaleLine(item, customer, line));
+        built.push(computeSaleLine(item, customer, { ...line, quantity_gm: qty }));
       }
       await assertApparelSaleStock(conn, businessId, built);
 

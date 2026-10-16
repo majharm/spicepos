@@ -326,6 +326,11 @@ function pos_created_today($alias = "") {
   return "{$col} >= CURDATE() AND {$col} < DATE_ADD(CURDATE(), INTERVAL 1 DAY)";
 }
 
+function pos_sale_not_void($alias = "") {
+  $col = $alias !== "" ? "{$alias}.status" : "status";
+  return "LOWER(COALESCE({$col},'')) NOT IN ('cancelled','void')";
+}
+
 function pos_created_yesterday($alias = "") {
   $col = $alias !== "" ? "{$alias}.created_at" : "created_at";
   return "{$col} >= DATE_SUB(CURDATE(), INTERVAL 1 DAY) AND {$col} < CURDATE()";
@@ -3243,6 +3248,7 @@ function pos_php_dispatch($path, $method, $rawBody) {
 
     if ($path === "master/dashboard" && $method === "GET") {
       $today = pos_created_today();
+      $notVoid = pos_sale_not_void();
       $byBiz = pos_q(
         "SELECT b.id, b.name, b.status, b.subscription_expires_at, b.plan_id, b.dsa_code,
                 p.name AS plan_name, p.fee_monthly,
@@ -3261,7 +3267,7 @@ function pos_php_dispatch($path, $method, $rawBody) {
          LEFT JOIN (
            SELECT business_id, COALESCE(SUM(total),0) AS today_sales, COUNT(*) AS today_bills
            FROM sales_orders
-           WHERE {$today}
+           WHERE {$today} AND {$notVoid}
            GROUP BY business_id
          ) s ON s.business_id = b.id
          ORDER BY b.name"

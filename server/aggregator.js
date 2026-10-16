@@ -289,7 +289,8 @@ async function ingestWebhook(req, source) {
   const block = A.activationBlock(parsed.source, settings);
   if (block) throw new Error(block);
   const want = parsed.source === "swiggy" ? settings.swiggy_webhook_secret : settings.zomato_webhook_secret;
-  if (want && !secretsMatch(headerSecret(req), want)) throw new Error("Webhook secret does not match");
+  if (!String(want || "").trim()) throw new Error("Webhook secret is required before live orders can be accepted");
+  if (!secretsMatch(headerSecret(req), want)) throw new Error("Webhook secret does not match");
   const saved = await upsertOrder(businessId, parsed, req.body);
   if (!saved.replay && Number(settings.aggregator_auto_accept) === 1 && saved.order.status === "pending") {
     return applyStatus(businessId, saved.order.id, "accepted", settings);
@@ -410,7 +411,16 @@ export function registerAggregatorStaff(app) {
     send(res, async () => {
       const order = await loadOrder(bid(), req.params.id);
       if (!order) throw new Error("Order not found");
-      const tableNo = A.kotTable(order.source, order.fulfillment);
+      const [shop] = await query(
+        "SELECT business_type, category, name, bar_enabled FROM businesses WHERE id = ? LIMIT 1",
+        [bid()],
+      ).catch(() => []);
+      const type = String(shop?.business_type || "").toLowerCase();
+      const barShop =
+        Number(shop?.bar_enabled) === 1 ||
+        type === "bar" ||
+        /bar\s*&\s*lounge/.test([shop?.category, shop?.business_type].filter(Boolean).join(" ").toLowerCase());
+      const tableNo = A.kotTable(order.source, order.fulfillment, { parcel: barShop });
       const lines = (order.lines || []).map((line) => ({
         itemId: line.item_id || line.external_item_id || line.name,
         name: line.name,
