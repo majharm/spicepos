@@ -747,7 +747,7 @@ export function canOverrideSaleRate(user = authUser()) {
   const role = String(user.role || "");
   if (role === "business_admin" || role === "resort_owner") return true;
   const perms = parsePerms(user);
-  return Boolean(perms.items || perms.settings);
+  return Boolean(perms.items || perms.settings || perms.counter);
 }
 
 export function billedPrintQty(item, lineIn) {
@@ -777,7 +777,7 @@ export function computeSaleLine(item, customer, lineIn) {
   const isB2b = customer?.type === "b2b";
   const customerType = isB2b ? "b2b" : "b2c";
   const rate = lineIn.rate != null && lineIn.rate !== "" && canOverrideSaleRate()
-    ? Number(lineIn.rate)
+    ? (POSUnits?.roundRate8 ? POSUnits.roundRate8(lineIn.rate) : Number(lineIn.rate))
     : Number(POSFootwear?.looseSaleRate?.(item, customerType) ?? (isB2b ? item.b2b_rate : item.retail_rate));
   const mrpRate = Number(POSFootwear?.looseMrp?.(item) ?? item.mrp ?? item.retail_rate) || rate;
   const costRate = Number(POSFootwear?.looseCostRate?.(item) ?? item.purchase_rate) || 0;

@@ -149,9 +149,13 @@ function pos_update_order($bid, $orderId, $body, $auth) {
     if (function_exists("pos_compute_sale_line")) {
       $built[] = pos_compute_sale_line($item, $qty, $customer, $line, $auth["user"] ?? null);
     } else {
-      $rate = (($customer["type"] ?? "") === "b2b") ? (float) $item["b2b_rate"] : (float) $item["retail_rate"];
-      $amount = pos_round2(pos_line_amount_for_item($qty, $rate, $item));
-      $built[] = ["item" => $item, "qty" => $qty, "rate" => $rate, "amount" => $amount, "gstRate" => (float) ($item["gst_rate"] ?? 0), "discount" => 0, "gst" => pos_round2(($amount * (float) ($item["gst_rate"] ?? 0)) / 100)];
+      $round = function_exists("pos_round8") ? "pos_round8" : "pos_round2";
+      $rate = $round((($customer["type"] ?? "") === "b2b") ? ($item["b2b_rate"] ?? 0) : ($item["retail_rate"] ?? 0));
+      if (isset($line["rate"]) && $line["rate"] !== "" && $line["rate"] !== null && function_exists("pos_can_override_rate") && pos_can_override_rate($auth["user"] ?? null)) {
+        $rate = $round($line["rate"]);
+      }
+      $amount = $round(pos_line_amount_for_item($qty, $rate, $item));
+      $built[] = ["item" => $item, "qty" => $qty, "rate" => $rate, "amount" => $amount, "gstRate" => (float) ($item["gst_rate"] ?? 0), "discount" => 0, "gst" => $round(($amount * (float) ($item["gst_rate"] ?? 0)) / 100)];
     }
   }
 

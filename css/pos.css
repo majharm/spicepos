@@ -1670,6 +1670,12 @@ body.restaurant-mode .cafe-bill-table .qty-input {
   text-align: center;
   padding: 2px 4px;
 }
+body.restaurant-mode .cafe-bill-table .line-rate-input,
+body.restaurant-mode .cafe-order-card .line-rate-input {
+  width: 5.4em;
+  min-height: 28px;
+  font-size: 13px;
+}
 body.restaurant-mode .cafe-bill-table .cafe-del {
   width: 28px;
   padding: 0;
@@ -2211,6 +2217,12 @@ body.classic-bill-mode .pharm-bill-table .qty-input {
   max-width: 4.5em;
   min-height: 28px;
 }
+body.classic-bill-mode .pharm-bill-table .line-rate-input {
+  width: 5.6em;
+  min-width: 4.8em;
+  min-height: 28px;
+  font-size: 13px;
+}
 body.classic-bill-mode .line-disc-cell .line-disc,
 body.classic-bill-mode .view-counter .line-disc,
 body.classic-bill-mode.counter-mode .stage.is-counter .line-disc {
@@ -2695,6 +2707,25 @@ body.bill-collapsed .bill-toggle[data-count]:not([data-count="0"])::after {
   align-items: center;
   justify-content: flex-end;
   gap: 8px;
+}
+.line-rate,
+.cafe-rate,
+.pharm-rate {
+  flex: 0 0 auto;
+}
+.line-rate-input {
+  width: 6.2em;
+  min-width: 5.4em;
+  max-width: 8.5em;
+  min-height: 32px;
+  text-align: right;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.line-rate-ro {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 .print-dims,
 .print-job {

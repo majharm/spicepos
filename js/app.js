@@ -198,7 +198,40 @@ function isPrintAreaItem(item) {
 }
 
 function canChangeRate() {
-  return state.session?.role === "business_admin" || can("items") || can("settings");
+  return state.session?.role === "business_admin" || can("items") || can("settings") || can("counter");
+}
+
+function parseCartLineRate(raw) {
+  return POSUnits.roundRate8?.(raw) ?? Math.round((Number(raw) || 0) * 1e8) / 1e8;
+}
+
+function lineRateFieldHtml(item, line, key) {
+  const rate = rateFor(item, line);
+  if (!canChangeRate()) return `<span class="line-rate-ro">${escapeHtml(money(rate))}</span>`;
+  const shown = POSUnits.rateInputValue?.(rate) ?? String(rate);
+  return `<input class="line-rate-input" type="number" min="0" step="0.00000001" inputmode="decimal" value="${escapeHtml(shown)}" data-line-rate="${escapeHtml(key)}" aria-label="Item rate" />`;
+}
+
+function applyCartLineRate(key, raw) {
+  if (!canChangeRate()) return;
+  const line = findCartLine(key);
+  if (!line) return;
+  line.rate = parseCartLineRate(raw);
+  refreshCartLineLive(key);
+}
+
+function refreshCartLineLive(key) {
+  const line = findCartLine(key);
+  const item = line ? state.items.find((i) => i.id === line.itemId) : null;
+  if (!line || !item) return;
+  if (isPrintAreaItem(item)) {
+    refreshPrintLineLive(key);
+    return;
+  }
+  const calc = lineCalc(item, line);
+  const amtEl = document.querySelector(`[data-line-amt="${CSS.escape(String(key))}"]`);
+  if (amtEl) amtEl.textContent = money(calc.taxable + calc.gst);
+  paintBillFigures();
 }
 
 function printBillUnit(item) {
@@ -304,9 +337,10 @@ function printAreaLineHtml(item, line, key, calc) {
   const cap = need ? "Enter width × height" : printLineCaptionText(item, line);
   const billLab = P?.billUnitLabel?.(printBillUnit(item), item.custom_unit) || "sqft";
   const rateVal = rateFor(item, line);
+  const rateShown = POSUnits.rateInputValue?.(rateVal) ?? String(rateVal);
   const rateField = canChangeRate()
     ? `<label class="print-dim print-dim-rate">₹/${escapeHtml(billLab)}
-        <input data-print-rate="${escapeHtml(key)}" type="number" min="0" step="0.00000001" inputmode="decimal" value="${escapeHtml(rateVal)}" aria-label="Rate per unit" />
+        <input data-print-rate="${escapeHtml(key)}" data-line-rate="${escapeHtml(key)}" type="number" min="0" step="0.00000001" inputmode="decimal" value="${escapeHtml(rateShown)}" aria-label="Rate per unit" />
       </label>`
     : `<span class="print-rate-ro">${escapeHtml(money(rateVal))}/${escapeHtml(billLab)}</span>`;
   const fileBit = line.printFileName
@@ -322,7 +356,7 @@ function printAreaLineHtml(item, line, key, calc) {
         <div class="pack print-line-summary">${escapeHtml(cap)}</div>
       </div>
       <div class="line-ops">
-        <div class="line-amt">${need ? "—" : money(calc.taxable + calc.gst)}</div>
+        <div class="line-amt" data-line-amt="${escapeHtml(key)}">${need ? "—" : money(calc.taxable + calc.gst)}</div>
         <button type="button" class="classic-del" data-del-line="${escapeHtml(key)}" aria-label="Remove ${escapeHtml(item.name)}">×</button>
       </div>
     </div>
@@ -485,8 +519,8 @@ function cafeBillLinesHtml() {
               <button type="button" data-chg="${escapeHtml(key)}" data-d="${step}">+</button>
             </div>
           </td>
-          <td class="cafe-n">${escapeHtml(money(rateFor(item)))}</td>
-          <td class="cafe-n cafe-amt">${escapeHtml(money(calc.taxable + calc.gst))}</td>
+          <td class="cafe-n cafe-rate">${lineRateFieldHtml(item, line, key)}</td>
+          <td class="cafe-n cafe-amt" data-line-amt="${escapeHtml(key)}">${escapeHtml(money(calc.taxable + calc.gst))}</td>
           <td class="cafe-del"><button type="button" class="classic-del cafe-del-btn" data-del-line="${escapeHtml(key)}" aria-label="Remove ${escapeHtml(item.name)}">×</button></td>
         </tr>
         ${note ? `<tr class="cafe-note-row"><td colspan="5">${note}</td></tr>` : ""}`;
@@ -525,7 +559,8 @@ function cafeMobileOrderHtml() {
             <input class="qty-input" type="number" inputmode="decimal" min="${POSUnits.displayQty(POSUnits.qtyMin(), unitCode) || 0.001}" max="${POSUnits.qtyMax()}" step="${escapeHtml(qtyStep)}" value="${escapeHtml(qtyShow)}" data-qty="${escapeHtml(key)}" aria-label="Quantity in ${unit}" />
             <button type="button" data-chg="${escapeHtml(key)}" data-d="${step}">+</button>
           </div>
-          <div class="cafe-amt">${escapeHtml(money(calc.taxable + calc.gst))}</div>
+          <div class="cafe-rate">${lineRateFieldHtml(item, line, key)}</div>
+          <div class="cafe-amt" data-line-amt="${escapeHtml(key)}">${escapeHtml(money(calc.taxable + calc.gst))}</div>
         </div>
       </article>`;
     })
@@ -1139,7 +1174,7 @@ function cartLineFromOrderLine(l) {
     printFileId: l.print_file_id || l.printFileId || "",
     printFileName: l.print_file_name || l.printFileName || "",
     printCustomUnit: l.print_custom_unit || l.printCustomUnit || "",
-    rate: l.rate_per_kg != null && (l.print_width || l.printWidth) ? Number(l.rate_per_kg) : undefined,
+    rate: l.rate_per_kg != null && l.rate_per_kg !== "" ? Number(l.rate_per_kg) : undefined,
   };
   if ((!out.printWidth || !out.printHeight) && out.notes) {
     const decoded = printApi()?.decodePrintSpec?.(out.notes);
@@ -4928,8 +4963,11 @@ function renderCart() {
               <input class="qty-input" type="number" inputmode="decimal" min="${POSUnits.displayQty(POSUnits.qtyMin(), unitCode) || 0.001}" max="${POSUnits.qtyMax()}" step="${escapeHtml(qtyStep)}" value="${escapeHtml(qtyShow)}" data-qty="${escapeHtml(key)}" aria-label="Quantity in ${unit}" />
               <button type="button" data-chg="${escapeHtml(key)}" data-d="${step}">+</button>
               ${isScaleEnabled() && isWeightItem(item) ? `<button type="button" class="scale-line-btn" data-scale-line="${escapeHtml(key)}" title="Read scale">⚖</button>` : ""}
+            </div>
+          </td>
+          <td class="pharm-n pharm-rate">${lineRateFieldHtml(item, line, key)}</td>
           <td class="line-disc-cell">${classicLineDiscHtml(line, key)}</td>
-          <td class="pharm-n">${escapeHtml(money(calc.taxable + calc.gst))}</td>
+          <td class="pharm-n" data-line-amt="${escapeHtml(key)}">${escapeHtml(money(calc.taxable + calc.gst))}</td>
           <td><button type="button" class="classic-del" data-del-line="${escapeHtml(key)}" aria-label="Remove ${escapeHtml(item.name)}">×</button></td>
         </tr>`;
       }).join("")}</tbody>
@@ -4972,7 +5010,7 @@ function renderCart() {
           <td class="pharm-med">${escapeHtml(item.name)}</td>
           <td class="classic-barcode">${barcode ? escapeHtml(barcode) : "—"}</td>
           <td>${escapeHtml(variant || "—")}${alert.exp.expired ? ` · EXPIRED ${escapeHtml(classicDateOnly(alert.exp.date) || alert.exp.short)}` : ""}</td>
-          <td class="pharm-n">${escapeHtml(money(rateFor(item)))}</td>
+          <td class="pharm-n pharm-rate">${lineRateFieldHtml(item, line, key)}</td>
           <td>
             <div class="qty">
               <button type="button" data-chg="${escapeHtml(key)}" data-d="${-step}">−</button>
@@ -4984,7 +5022,7 @@ function renderCart() {
           <td class="line-disc-cell">${classicLineDiscHtml(line, key)}</td>
           <td class="pharm-n stock-cell">${escapeHtml(alert.stock.label)}</td>
           <td class="pharm-n">${escapeHtml(String(Number(item.gst_rate) || 0))}%</td>
-          <td class="pharm-n">${escapeHtml(money(calc.taxable + calc.gst))}</td>
+          <td class="pharm-n" data-line-amt="${escapeHtml(key)}">${escapeHtml(money(calc.taxable + calc.gst))}</td>
           <td><button type="button" class="classic-del" data-del-line="${escapeHtml(key)}" aria-label="Remove ${escapeHtml(item.name)}">×</button></td>
         </tr>`;
       }).join("")}</tbody>
@@ -5020,7 +5058,8 @@ function renderCart() {
                 <button type="button" data-chg="${escapeHtml(key)}" data-d="${step}">+</button>
                 ${POSUnits.isCount(unitCode) || !isScaleEnabled() ? "" : `<button type="button" class="scale-line-btn" data-scale-line="${escapeHtml(key)}" title="Read scale">⚖</button>`}
               </div>
-              <div class="line-amt">${money(calc.taxable + calc.gst)}</div>
+              <div class="line-rate">${lineRateFieldHtml(item, line, key)}</div>
+              <div class="line-amt" data-line-amt="${escapeHtml(key)}">${money(calc.taxable + calc.gst)}</div>
             </div>
           </div>
           ${canDiscount() ? `<div class="line-disc">
@@ -10198,7 +10237,7 @@ $("lines").addEventListener("click", (e) => {
     }
     return;
   }
-  if (e.target.closest("[data-qty]") || e.target.closest("[data-line-note]") || e.target.closest(".print-dims") || e.target.closest(".print-job") || e.target.closest(".print-file-row") || e.target.closest(".print-extra-bar")) return;
+  if (e.target.closest("[data-qty]") || e.target.closest("[data-line-rate]") || e.target.closest("[data-print-rate]") || e.target.closest("[data-line-note]") || e.target.closest(".print-dims") || e.target.closest(".print-job") || e.target.closest(".print-file-row") || e.target.closest(".print-extra-bar")) return;
   const btn = e.target.closest("[data-chg]");
   if (!btn) return;
   changeLineQty(btn.dataset.chg, Number(btn.dataset.d));
@@ -10210,24 +10249,28 @@ $("lines").addEventListener("input", (e) => {
     if (line) line.notes = String(ta.value || "").slice(0, 240);
     return;
   }
+  const lineRate = e.target.closest("[data-line-rate], [data-print-rate]");
+  if (lineRate && !e.target.closest("[data-print-w], [data-print-h], [data-print-copies], [data-print-dim]")) {
+    const rateKey = lineRate.dataset.lineRate || lineRate.dataset.printRate;
+    applyCartLineRate(rateKey, lineRate.value);
+    return;
+  }
   const w = e.target.closest("[data-print-w]");
   const h = e.target.closest("[data-print-h]");
   const copies = e.target.closest("[data-print-copies]");
-  const rate = e.target.closest("[data-print-rate]");
   const dim = e.target.closest("[data-print-dim]");
-  const key = w?.dataset.printW || h?.dataset.printH || copies?.dataset.printCopies || rate?.dataset.printRate || dim?.dataset.printDim;
+  const key = w?.dataset.printW || h?.dataset.printH || copies?.dataset.printCopies || dim?.dataset.printDim;
   if (!key) return;
   const line = findCartLine(key);
   if (!line) return;
   if (w) line.printWidth = w.value;
   if (h) line.printHeight = h.value;
   if (copies) line.printCopies = Math.max(1, Number(copies.value) || 1);
-  if (rate && canChangeRate()) line.rate = Number(rate.value) || 0;
   if (dim) line.printDimUnit = dim.value;
   refreshPrintLineLive(key);
 });
 $("lines").addEventListener("focusin", (e) => {
-  const input = e.target.closest("[data-qty]");
+  const input = e.target.closest("[data-qty], [data-line-rate], [data-print-rate]");
   if (input && typeof input.select === "function") input.select();
 });
 $("lines").addEventListener("change", (e) => {
@@ -10271,7 +10314,7 @@ $("lines").addEventListener("change", (e) => {
 });
 $("lines").addEventListener("keydown", (e) => {
   if (e.key !== "Enter") return;
-  const input = e.target.closest("[data-qty], [data-line-disc]");
+  const input = e.target.closest("[data-qty], [data-line-disc], [data-line-rate], [data-print-rate]");
   if (!input) return;
   e.preventDefault();
   input.blur();
@@ -11209,7 +11252,7 @@ $("btn-pay").addEventListener("click", async () => {
           notes: print ? (l.notes || scaleLineNote(l)) : scaleLineNote(l),
           scale_grams: Number(l.scaleGrams) || undefined,
           weight_source: l.weightSource || undefined,
-          rate: print && canChangeRate() && l.rate != null && l.rate !== "" ? Number(l.rate) : undefined,
+          rate: canChangeRate() && l.rate != null && l.rate !== "" ? parseCartLineRate(l.rate) : undefined,
           print_width: print ? Number(l.printWidth) || 0 : undefined,
           print_height: print ? Number(l.printHeight) || 0 : undefined,
           print_dim_unit: print ? (l.printDimUnit || "") : undefined,

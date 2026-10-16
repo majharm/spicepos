@@ -588,7 +588,7 @@ function pos_pharmacy_line_snapshot($item, $batch = null) {
 
 function pos_can_override_rate($user) {
   if (!$user) return false;
-  return pos_can($user, "items") || pos_can($user, "settings");
+  return pos_can($user, "items") || pos_can($user, "settings") || pos_can($user, "counter");
 }
 
 function pos_print_round4($n) {

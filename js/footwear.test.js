@@ -526,6 +526,24 @@ test("Medical shops show pharmacy medicine fields on the item form", () => {
   assert.equal(F.demoItems({ category: "Spices & masala" }).length, 0);
 });
 
+test("Counter bill lets staff edit item-wise rate and checkout sends it", () => {
+  const app = readFileSync(path.join(root, "js/app.js"), "utf8");
+  const css = readFileSync(path.join(root, "css/pos.css"), "utf8");
+  const php = readFileSync(path.join(root, "pos-orders.php"), "utf8");
+  assert.match(app, /function canChangeRate/);
+  assert.match(app, /can\("counter"\)/);
+  assert.match(app, /function lineRateFieldHtml/);
+  assert.match(app, /function applyCartLineRate/);
+  assert.match(app, /data-line-rate/);
+  assert.match(app, /data-line-amt/);
+  assert.match(app, /rate: canChangeRate\(\) && l\.rate != null/);
+  assert.match(app, /rate: l\.rate_per_kg != null && l\.rate_per_kg !== ""/);
+  assert.match(app, /<td class="pharm-n pharm-rate">\$\{lineRateFieldHtml/);
+  assert.match(app, /<div class="line-rate">\$\{lineRateFieldHtml/);
+  assert.match(css, /\.line-rate-input/);
+  assert.match(php, /pos_can_override_rate\(\$auth\["user"\]/);
+});
+
 test("Items catalog has Active and Inactive status buttons", () => {
   const index = readFileSync(path.join(root, "index.html"), "utf8");
   const app = readFileSync(path.join(root, "js/app.js"), "utf8");
