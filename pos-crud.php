@@ -102,6 +102,7 @@ function pos_crud_dispatch($path, $method, $body, $bid, $auth, $branchId, $uid) 
     if ($name === "") pos_send(400, ["error" => "Item name is required"]);
     pos_ensure_business_columns();
     pos_ensure_item_unit_columns();
+    if (function_exists("pos_ensure_rate_precision")) pos_ensure_rate_precision();
     $bizRows = pos_q("SELECT category, business_type FROM businesses WHERE id = ? LIMIT 1", "s", [$bid]);
     $biz = $bizRows[0] ?? [];
     $variant = pos_is_variant_shop($biz);
@@ -147,7 +148,7 @@ function pos_crud_dispatch($path, $method, $body, $bid, $auth, $branchId, $uid) 
         [
           $id, $code, $name, $body["local_name"] ?? null, $category,
           $body["subcategory"] ?? null, $color, $size, $wearer, $unit,
-          (float) ($body["purchase_rate"] ?? 0), (float) ($body["retail_rate"] ?? 0),
+          pos_round4($body["purchase_rate"] ?? 0), (float) ($body["retail_rate"] ?? 0),
           (float) ($body["b2b_rate"] ?? 0), (float) ($body["gst_rate"] ?? 5),
           trim((string) ($body["hsn"] ?? "")) ?: null,
           ($image === null || $image === "") ? null : $image,
@@ -185,6 +186,7 @@ function pos_crud_dispatch($path, $method, $body, $bid, $auth, $branchId, $uid) 
     $itemId = $m[1];
     pos_ensure_business_columns();
     pos_ensure_item_unit_columns();
+    if (function_exists("pos_ensure_rate_precision")) pos_ensure_rate_precision();
     $bizRows = pos_q("SELECT category, business_type FROM businesses WHERE id = ? LIMIT 1", "s", [$bid]);
     $biz = $bizRows[0] ?? [];
     $unitRaw = trim((string) ($body["base_unit"] ?? $body["unit"] ?? ""));
@@ -211,7 +213,7 @@ function pos_crud_dispatch($path, $method, $body, $bid, $auth, $branchId, $uid) 
         [
           $body["name"] ?? "", $body["local_name"] ?? null, $category,
           $body["subcategory"] ?? null, $color, $size, $wearer, $unit,
-          (float) ($body["purchase_rate"] ?? 0), (float) ($body["retail_rate"] ?? 0),
+          pos_round4($body["purchase_rate"] ?? 0), (float) ($body["retail_rate"] ?? 0),
           (float) ($body["b2b_rate"] ?? 0), (float) ($body["gst_rate"] ?? 5),
           trim((string) ($body["hsn"] ?? "")) ?: null,
           (float) ($body["stock_gm"] ?? 0), (float) ($body["reorder_level_gm"] ?? 0),
@@ -308,6 +310,7 @@ function pos_crud_dispatch($path, $method, $body, $bid, $auth, $branchId, $uid) 
     $supplierId = $body["supplier_id"] ?? "";
     $lines = $body["lines"] ?? [];
     if (!$supplierId || !is_array($lines) || !$lines) pos_send(400, ["error" => "Supplier and purchase lines are required"]);
+    if (function_exists("pos_ensure_rate_precision")) pos_ensure_rate_precision();
     require_once __DIR__ . "/pos-accounting.php";
     try {
       $purchase = pos_with_transaction(function () use ($body, $bid, $uid, $supplierId, $lines) {
@@ -320,7 +323,7 @@ function pos_crud_dispatch($path, $method, $body, $bid, $auth, $branchId, $uid) 
           $item = $it[0] ?? null;
           if (!$item) throw new Exception("Unknown item");
           $qty = (float) ($line["quantity_gm"] ?? 0);
-          $rate = (float) ($line["rate_per_kg"] ?? $item["purchase_rate"]);
+          $rate = pos_round4($line["rate_per_kg"] ?? $item["purchase_rate"]);
           $amount = pos_round2(pos_line_amount_for_item($qty, $rate, $item));
           $gstRate = (float) ($item["gst_rate"] ?? 0);
           $gstAmount = pos_round2(($amount * $gstRate) / 100);

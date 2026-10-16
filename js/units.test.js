@@ -25,6 +25,12 @@ test("counter qty is any grams from 1 to 1e9, not a 100 g step", () => {
   assert.equal(U.clampQty(0), 0);
   assert.equal(U.clampQty(0.4), 0);
   assert.equal(U.lineAmount(5, 1000, "GM"), 5);
+  assert.equal(U.roundRate4(0.1456), 0.1456);
+  assert.equal(U.roundRate4(0.14564), 0.1456);
+  assert.equal(U.roundRate4("0.1456"), 0.1456);
+  assert.equal(U.rateInputValue(0.1456), "0.1456");
+  assert.equal(U.lineAmount(10000, 0.1456, "PCS"), 1456);
+  assert.match(U.formatRate(0.1456), /0\.1456/);
 });
 
 test("unit aliases and count pricing", () => {

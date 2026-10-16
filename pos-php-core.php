@@ -183,6 +183,7 @@ function pos_apply_business_timezone($businessId) {
   pos_ensure_company_timezone_columns();
   try { pos_ensure_business_columns(); } catch (Throwable $e) { /* businesses table optional during setup */ }
   try { pos_ensure_item_unit_columns(); } catch (Throwable $e) { /* items table optional during setup */ }
+  try { pos_ensure_rate_precision(); } catch (Throwable $e) { /* rate columns optional during setup */ }
   $unitsFile = __DIR__ . "/pos-units.php";
   if (is_file($unitsFile)) {
     require_once $unitsFile;
@@ -363,6 +364,32 @@ function pos_with_transaction(callable $fn) {
     $db->rollback();
     throw $e;
   }
+}
+
+function pos_widen_decimal($table, $column, $def) {
+  $db = pos_db();
+  $safeTable = preg_replace("/[^a-z0-9_]/i", "", (string) $table);
+  $safeCol = preg_replace("/[^a-z0-9_]/i", "", (string) $column);
+  if ($safeTable === "" || $safeCol === "") return;
+  $res = @$db->query(
+    "SELECT NUMERIC_SCALE AS scale FROM INFORMATION_SCHEMA.COLUMNS
+     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = '{$safeTable}' AND COLUMN_NAME = '{$safeCol}' LIMIT 1"
+  );
+  $row = $res ? $res->fetch_assoc() : null;
+  if ($res) $res->free();
+  if (!$row) return;
+  if ((int) ($row["scale"] ?? 0) >= 4) return;
+  @$db->query("ALTER TABLE `{$safeTable}` MODIFY COLUMN `{$safeCol}` {$def}");
+}
+
+function pos_ensure_rate_precision() {
+  static $done = false;
+  if ($done) return;
+  $done = true;
+  pos_widen_decimal("items", "purchase_rate", "DECIMAL(12,4) NOT NULL DEFAULT 0");
+  pos_widen_decimal("purchase_lines", "rate_per_kg", "DECIMAL(12,4) NOT NULL DEFAULT 0");
+  pos_widen_decimal("stock_batches", "unit_cost", "DECIMAL(12,4) NOT NULL DEFAULT 0");
+  pos_widen_decimal("stock_movements", "unit_cost", "DECIMAL(12,4) NOT NULL DEFAULT 0");
 }
 
 function pos_ensure_columns($table, $cols) {
@@ -876,6 +903,7 @@ function pos_ensure_item_unit_columns() {
     "min_billing_qty" => "DECIMAL(12,4) NOT NULL DEFAULT 0",
     "custom_unit" => "VARCHAR(32) NULL",
   ]);
+  try { pos_ensure_rate_precision(); } catch (Throwable $e) { /* rate precision optional */ }
 }
 
 function pos_item_image_url($body) {
@@ -1085,6 +1113,10 @@ function pos_indian_fy($ymd = null) {
 
 function pos_round2($n) {
   return round((float) $n, 2);
+}
+
+function pos_round4($n) {
+  return round((float) $n, 4);
 }
 
 function pos_pay_modes() {

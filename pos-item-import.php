@@ -366,7 +366,7 @@ function pos_item_import_insert($bid, $biz, $body) {
     [
       $id, $code, $body["name"], $body["local_name"] ?? null, $category,
       $body["subcategory"] ?? null, $color, $size, $wearer, $unit,
-      (float) ($body["purchase_rate"] ?? 0), (float) ($body["retail_rate"] ?? 0),
+      pos_round4($body["purchase_rate"] ?? 0), (float) ($body["retail_rate"] ?? 0),
       (float) ($body["b2b_rate"] ?? 0), (float) ($body["gst_rate"] ?? 5),
       trim((string) ($body["hsn"] ?? "")) ?: null, null,
       (float) ($body["stock_gm"] ?? 0), (float) ($body["reorder_level_gm"] ?? 0), $bid,
@@ -397,7 +397,7 @@ function pos_item_import_update($bid, $existing, $biz, $body, $row) {
   $wearer = array_key_exists("wearer_type", $row) && $row["wearer_type"] !== ""
     ? (pos_item_wearer($body["wearer_type"]) ?: null)
     : ($existing["wearer_type"] ?? null);
-  $purchase = array_key_exists("purchase", $row) && $row["purchase"] !== "" ? (float) $body["purchase_rate"] : (float) ($existing["purchase_rate"] ?? 0);
+  $purchase = array_key_exists("purchase", $row) && $row["purchase"] !== "" ? pos_round4($body["purchase_rate"]) : pos_round4($existing["purchase_rate"] ?? 0);
   $retail = array_key_exists("retail", $row) && $row["retail"] !== "" ? (float) $body["retail_rate"] : (float) ($existing["retail_rate"] ?? 0);
   $b2b = array_key_exists("b2b", $row) && $row["b2b"] !== "" ? (float) $body["b2b_rate"] : (float) ($existing["b2b_rate"] ?? 0);
   $gst = array_key_exists("gst", $row) && $row["gst"] !== "" ? (float) $body["gst_rate"] : (float) ($existing["gst_rate"] ?? 5);
@@ -463,7 +463,7 @@ function pos_item_body_from_import_row($row, $biz) {
   if (trim((string) ($row["mrp"] ?? "")) !== "") $body["mrp"] = (float) $row["mrp"];
   if (trim((string) ($row["retail"] ?? "")) !== "") $body["retail_rate"] = (float) $row["retail"];
   if (trim((string) ($row["b2b"] ?? "")) !== "") $body["b2b_rate"] = (float) $row["b2b"];
-  if (trim((string) ($row["purchase"] ?? "")) !== "") $body["purchase_rate"] = (float) $row["purchase"];
+  if (trim((string) ($row["purchase"] ?? "")) !== "") $body["purchase_rate"] = pos_round4($row["purchase"]);
   if ($stock !== null) $body["stock_gm"] = $stock;
   return $body;
 }

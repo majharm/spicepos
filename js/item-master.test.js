@@ -48,6 +48,32 @@ test("collectBrands merges item, liquor, and master rows", () => {
   assert.equal(sum.assigned, 2);
 });
 
+test("Item Master and Purchases keep four-decimal purchase rates like ₹0.1456 / SMS", () => {
+  const index = read("index.html");
+  const app = read("js/app.js");
+  const units = read("js/units.js");
+  const schema = read("server/schema.js");
+  const sql = read("scripts/base-schema.sql");
+  const core = read("pos-php-core.php");
+  const crud = read("server/crud.js");
+  const phpCrud = read("pos-crud.php");
+  assert.match(index, /id="item-purchase"[^>]*step="0.0001"/);
+  assert.match(app, /step="0.0001"[^>]*data-po-rate/);
+  assert.match(app, /POSUnits\.roundRate4\?\.\(\$\("item-purchase"\)\.value\)/);
+  assert.match(units, /function roundRate4/);
+  assert.match(units, /maximumFractionDigits: 4/);
+  assert.match(sql, /purchase_rate DECIMAL\(12,4\)/);
+  assert.match(schema, /widenDecimal\("items", "purchase_rate"/);
+  assert.match(schema, /widenDecimal\("purchase_lines", "rate_per_kg"/);
+  assert.match(core, /function pos_round4/);
+  assert.match(core, /function pos_widen_decimal/);
+  assert.match(core, /function pos_ensure_rate_precision/);
+  assert.match(crud, /function rate4/);
+  assert.match(crud, /const rate = rate4\(line.rate_per_kg/);
+  assert.match(phpCrud, /pos_round4\(\$body\["purchase_rate"\]/);
+  assert.match(phpCrud, /pos_round4\(\$line\["rate_per_kg"\]/);
+});
+
 test("Item Master shows a created-successfully notice after save", () => {
   const index = read("index.html");
   const app = read("js/app.js");
