@@ -27,6 +27,9 @@
 
   const SQFT_PER_SQM = 10.7639;
   const SQIN_PER_SQFT = 144;
+  const SQFT_PER_SQYD = 9;
+  const SQCM_PER_SQFT = 929.0304;
+  const SQMM_PER_SQFT = 92903.04;
   const IN_PER_M = 39.37007874;
 
   const UNITS = [
@@ -34,7 +37,8 @@
     { id: "in", label: "Inches", toSqFt: 1 / SQIN_PER_SQFT },
     { id: "m", label: "Meters", toSqFt: SQFT_PER_SQM },
     { id: "cm", label: "Centimeters", toSqFt: 1 / 929.0304 },
-    { id: "mm", label: "Millimeters", toSqFt: 1 / 92903.04 },
+    { id: "mm", label: "Millimeters", toSqFt: 1 / SQMM_PER_SQFT },
+    { id: "yd", label: "Yards", toSqFt: SQFT_PER_SQYD },
     { id: "px", label: "Pixels", toSqFt: 0 },
     { id: "sqft", label: "Square Feet", toSqFt: 1 },
     { id: "custom", label: "Custom", toSqFt: 0 },
@@ -46,6 +50,7 @@
     { id: "m", label: "m" },
     { id: "cm", label: "cm" },
     { id: "mm", label: "mm" },
+    { id: "yd", label: "yd" },
     { id: "custom", label: "custom" },
   ];
 
@@ -53,6 +58,9 @@
     { id: "SQFT", label: "Sq. Ft.", dim: "ft" },
     { id: "SQM", label: "Sq. Meter", dim: "m" },
     { id: "SQIN", label: "Inch", dim: "in" },
+    { id: "SQYD", label: "Sq. Yard", dim: "yd" },
+    { id: "SQCM", label: "Sq. Cm", dim: "cm" },
+    { id: "SQMM", label: "Sq. Mm", dim: "mm" },
     { id: "CUSTOM", label: "Custom Unit", dim: "custom" },
   ];
 
@@ -232,6 +240,7 @@
     if (u === "meters" || u === "metres" || u === "meter" || u === "metre" || u === "m") return UNITS.find((x) => x.id === "m");
     if (u === "centimeters" || u === "centimetres" || u === "cm") return UNITS.find((x) => x.id === "cm");
     if (u === "millimeters" || u === "millimetres" || u === "mm") return UNITS.find((x) => x.id === "mm");
+    if (u === "yards" || u === "yard" || u === "yd") return UNITS.find((x) => x.id === "yd");
     if (u === "pixels" || u === "pixel" || u === "px") return UNITS.find((x) => x.id === "px");
     if (u === "sq ft" || u === "sqft" || u === "square feet" || u === "square foot") return UNITS.find((x) => x.id === "sqft");
     if (u === "custom" || u === "other" || u === "unt") return UNITS.find((x) => x.id === "custom");
@@ -242,6 +251,9 @@
     const s = String(raw || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
     if (["SQM", "SQMETER", "SQMETRE", "M2", "SQMT"].includes(s)) return "SQM";
     if (["SQIN", "SQINCH", "IN2", "INCH", "IN", "INCHES"].includes(s)) return "SQIN";
+    if (["SQYD", "SQYARD", "YD2", "SQYARDS", "YARD"].includes(s)) return "SQYD";
+    if (["SQCM", "CM2"].includes(s)) return "SQCM";
+    if (["SQMM", "MM2"].includes(s)) return "SQMM";
     if (["SQFT", "SQFEET", "SFT", "SQFOOT"].includes(s)) return "SQFT";
     if (["CUSTOM", "UNT", "OTH", "OTHER"].includes(s)) return "CUSTOM";
     return s || "SQFT";
@@ -251,6 +263,9 @@
     const b = billUnitCode(code);
     if (b === "SQM") return "sqm";
     if (b === "SQIN") return "sqin";
+    if (b === "SQYD") return "sqyd";
+    if (b === "SQCM") return "sqcm";
+    if (b === "SQMM") return "sqmm";
     if (b === "CUSTOM") return String(customName || "unit").trim() || "unit";
     return "sqft";
   }
@@ -263,6 +278,9 @@
     const b = billUnitCode(billUnit);
     if (b === "SQM") return "m";
     if (b === "SQIN") return "in";
+    if (b === "SQYD") return "yd";
+    if (b === "SQCM") return "cm";
+    if (b === "SQMM") return "mm";
     if (b === "CUSTOM") return "custom";
     return "ft";
   }
@@ -274,6 +292,9 @@
     if (b === "SQFT" && d === "ft") return true;
     if (b === "SQM" && d === "m") return true;
     if (b === "SQIN" && d === "in") return true;
+    if (b === "SQYD" && d === "yd") return true;
+    if (b === "SQCM" && d === "cm") return true;
+    if (b === "SQMM" && d === "mm") return true;
     return false;
   }
 
@@ -311,6 +332,9 @@
     } else if (u.id === "mm") {
       wIn /= 25.4;
       hIn /= 25.4;
+    } else if (u.id === "yd") {
+      wIn *= 36;
+      hIn *= 36;
     } else if (u.id === "sqft" || u.id === "custom") {
       return {
         inches: { width: 0, height: 0 },
@@ -344,8 +368,9 @@
     if (u.id === "ft") return round2(w * h);
     if (u.id === "in") return round2((w * h) / SQIN_PER_SQFT);
     if (u.id === "m") return round2(w * h * SQFT_PER_SQM);
-    if (u.id === "cm") return round2((w * h) / 929.0304);
-    if (u.id === "mm") return round2((w * h) / 92903.04);
+    if (u.id === "cm") return round2((w * h) / SQCM_PER_SQFT);
+    if (u.id === "mm") return round2((w * h) / SQMM_PER_SQFT);
+    if (u.id === "yd") return round2(w * h * SQFT_PER_SQYD);
     return round2(w * h);
   }
 
@@ -364,6 +389,9 @@
       const sqft = areaSqFt(w, h, dim, input?.dpi);
       if (bill === "SQM") raw = round4(sqft / SQFT_PER_SQM);
       else if (bill === "SQIN") raw = round4(sqft * SQIN_PER_SQFT);
+      else if (bill === "SQYD") raw = round4(sqft / SQFT_PER_SQYD);
+      else if (bill === "SQCM") raw = round4(sqft * SQCM_PER_SQFT);
+      else if (bill === "SQMM") raw = round4(sqft * SQMM_PER_SQFT);
       else raw = round4(sqft);
     }
     const total = round4(raw * copies);
@@ -636,6 +664,9 @@
     PRINT_BILL_UNITS,
     SQFT_PER_SQM,
     SQIN_PER_SQFT,
+    SQFT_PER_SQYD,
+    SQCM_PER_SQFT,
+    SQMM_PER_SQFT,
     DPIS,
     ALLOWED_TYPES,
     PRICE_MODELS,

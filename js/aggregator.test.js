@@ -49,6 +49,7 @@ test("Zomato and Swiggy webhooks normalize to one order shape", () => {
   assert.equal(A.orderNumber("swiggy", "SWG-8891"), "SWG-SWG8891");
   assert.equal(A.kotTable("swiggy", "pickup"), "Parcel");
   assert.equal(A.kotTable("zomato", "delivery"), "Zomato");
+  assert.equal(A.kotTable("zomato", "delivery", { parcel: true }), "Parcel");
 });
 
 test("Zomato and Swiggy stay off unless Master allows and Business Admin activates", () => {
@@ -73,6 +74,7 @@ test("Zomato and Swiggy stay off unless Master allows and Business Admin activat
   const onboard = read("server/onboard.js");
   assert.match(onboard, /function normalizeAggregatorAllowed/);
   assert.doesNotMatch(onboard, /normalizeAggregatorAllowed\([^)]*business_type/);
+  assert.match(read("js/app.js"), /kotTable\?\.\(order\.source, order\.fulfillment, \{ parcel: isBarShop\(\) \}\)/);
   assert.match(read("js/app.js"), /aggregatorDeskAllowed/);
   assert.match(read("js/app.js"), /Save Zomato & Swiggy|agg-settings-save/);
   assert.doesNotMatch(read("js/app.js"), /if \(isRestaurantShop\(\) \|\| isBarShop\(\)\) \{\s*try \{ await saveAggregatorSettings/);

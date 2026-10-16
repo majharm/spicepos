@@ -84,6 +84,14 @@ test("Mixed dimension units convert to the item's billing unit", () => {
   assert.equal(custom.billedArea, 8);
   const minBill = P.billedArea({ width: 2, height: 2, dimUnit: "ft", billUnit: "SQFT", minQty: 10 });
   assert.equal(minBill.billedArea, 10);
+  const sqyd = P.billedArea({ width: 10, height: 5, dimUnit: "ft", billUnit: "SQYD" });
+  assert.equal(sqyd.billedArea, P.round4(50 / P.SQFT_PER_SQYD));
+  assert.equal(sqyd.billLabel, "sqyd");
+  const sqydDirect = P.billedArea({ width: 2, height: 3, dimUnit: "yd", billUnit: "SQYD" });
+  assert.equal(sqydDirect.billedArea, 6);
+  const sqcm = P.billedArea({ width: 10, height: 10, dimUnit: "cm", billUnit: "SQCM" });
+  assert.equal(sqcm.billedArea, 100);
+  assert.equal(P.billUnitLabel("SQMM"), "sqmm");
 });
 
 test("Print caption and area-bill detection keep units honest", () => {
@@ -291,7 +299,7 @@ test("Counter bills print items by width × height using the item unit and rate"
   assert.match(index, /print-extra-charges/);
   assert.match(index, /print-extra-bar/);
   assert.match(index, /id="qty-lab"/);
-  assert.match(index, /print\.js\?v=20261012print1/);
+  assert.match(index, /print\.js\?v=20261016sales1/);
   assert.match(app, /data-print-w/);
   assert.match(app, /print-size-row/);
   assert.match(app, /print-area-chip/);
@@ -303,10 +311,14 @@ test("Counter bills print items by width × height using the item unit and rate"
   assert.match(app, /Enter width × height/);
   assert.match(node, /\/api\/print\/counter-file/);
   assert.match(adv, /function persistPrintSaleLine/);
+  assert.match(adv, /function billedPrintQty/);
+  assert.match(adv, /const printQty = billedPrintQty/);
   assert.match(adv, /min_billing_qty/);
   assert.match(php, /print\/counter-file/);
   assert.match(checkout, /extraCharges/);
+  assert.match(checkout, /pos_print_billed_qty/);
   assert.match(checkout, /pos_persist_print_sale_line/);
+  assert.match(read("pos-advanced.php"), /function pos_print_billed_qty/);
   assert.match(css, /\.print-size-row/);
   assert.match(css, /body\.printing-mode\.counter-mode/);
   assert.match(F.itemFormCopy({ category: "Flex & Printing" }).lede, /Width × Height|rate per unit/i);

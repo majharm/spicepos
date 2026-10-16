@@ -73,6 +73,10 @@ function pos_checkout_sale($bid, $branchId, $uid, $auth, $body) {
       $item = $it[0] ?? null;
       if (!$item) throw new Exception("Unknown item");
       $qty = (float) ($line["quantity_gm"] ?? 0);
+      if (function_exists("pos_print_billed_qty")) {
+        $printQty = pos_print_billed_qty($item, $line);
+        if ($printQty !== null) $qty = (float) $printQty;
+      }
       if ($qty <= 0) throw new Exception("Invalid quantity");
       if (function_exists("pos_compute_sale_line")) {
         $built[] = pos_compute_sale_line($item, $qty, $customer, $line, $auth["user"] ?? null);

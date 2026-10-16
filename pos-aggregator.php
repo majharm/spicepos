@@ -332,7 +332,8 @@ function pos_agg_ingest($path, $method, $body) {
   if ($block !== "") pos_send(400, ["error" => $block, "php" => true]);
   $want = $parsed["source"] === "swiggy" ? ($settings["swiggy_webhook_secret"] ?? "") : ($settings["zomato_webhook_secret"] ?? "");
   $have = trim((string) ($_SERVER["HTTP_X_WEBHOOK_SECRET"] ?? ($_SERVER["HTTP_X_API_KEY"] ?? "")));
-  if ($want !== "" && !hash_equals($want, $have)) pos_send(401, ["error" => "Webhook secret does not match", "php" => true]);
+  if (trim((string) $want) === "") pos_send(401, ["error" => "Webhook secret is required before live orders can be accepted", "php" => true]);
+  if (!hash_equals((string) $want, $have)) pos_send(401, ["error" => "Webhook secret does not match", "php" => true]);
   $saved = pos_agg_upsert($bid, $parsed, $body);
   pos_send(200, ["ok" => true, "php" => true] + $saved);
 }
@@ -426,7 +427,11 @@ function pos_agg_staff_dispatch($path, $method, $body, $bid, $auth) {
     $rows = pos_q("SELECT * FROM aggregator_orders WHERE id = ? AND business_id = ? LIMIT 1", "ss", [$id, $bid]);
     if (!$rows) pos_send(404, ["error" => "Order not found", "php" => true]);
     $order = pos_agg_with_lines($rows[0]);
-    $table = ($order["fulfillment"] ?? "") === "pickup" ? "Parcel" : ($order["source"] === "swiggy" ? "Swiggy" : "Zomato");
+    $shop = pos_q("SELECT business_type, category, bar_enabled FROM businesses WHERE id = ? LIMIT 1", "s", [$bid]);
+    $barShop = ((int) ($shop[0]["bar_enabled"] ?? 0) === 1)
+      || strtolower((string) ($shop[0]["business_type"] ?? "")) === "bar"
+      || preg_match("/bar\\s*&\\s*lounge/i", (string) (($shop[0]["category"] ?? "") . " " . ($shop[0]["business_type"] ?? "")));
+    $table = (($order["fulfillment"] ?? "") === "pickup" || $barShop) ? "Parcel" : ($order["source"] === "swiggy" ? "Swiggy" : "Zomato");
     $kotId = function_exists("pos_uuid") ? pos_uuid() : bin2hex(random_bytes(16));
     $lines = [];
     foreach ($order["lines"] as $line) {

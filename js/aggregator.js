@@ -208,8 +208,11 @@
     return `${prefix}-${tail}`;
   }
 
-  function kotTable(source, fulfillment) {
-    if (fulfillment === "pickup") return "Parcel";
+  function kotTable(source, fulfillment, opts = {}) {
+    if (fulfillment === "pickup" || opts?.parcel) return "Parcel";
+    const shop = opts && typeof opts === "object" && !Array.isArray(opts) ? opts : {};
+    if (shop.parcel) return "Parcel";
+    if (globalThis.POSBar?.isBarShop?.(shop) || globalThis.POSFootwear?.isBarShop?.(shop)) return "Parcel";
     return sourceLabel(source);
   }
 

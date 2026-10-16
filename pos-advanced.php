@@ -590,7 +590,85 @@ function pos_can_override_rate($user) {
   return pos_can($user, "items") || pos_can($user, "settings");
 }
 
+function pos_print_round4($n) {
+  return round((float) $n, 4);
+}
+
+function pos_print_bill_unit($raw) {
+  $s = strtoupper(preg_replace("/[^A-Z0-9]/", "", (string) $raw));
+  if (in_array($s, ["SQM", "SQMETER", "SQMETRE", "M2", "SQMT"], true)) return "SQM";
+  if (in_array($s, ["SQIN", "SQINCH", "IN2", "INCH", "IN", "INCHES"], true)) return "SQIN";
+  if (in_array($s, ["SQYD", "SQYARD", "YD2", "SQYARDS", "YARD"], true)) return "SQYD";
+  if (in_array($s, ["SQCM", "CM2"], true)) return "SQCM";
+  if (in_array($s, ["SQMM", "MM2"], true)) return "SQMM";
+  if (in_array($s, ["CUSTOM", "UNT", "OTH", "OTHER"], true)) return "CUSTOM";
+  if (in_array($s, ["SQFT", "SQFEET", "SFT", "SQFOOT"], true) || $s === "") return "SQFT";
+  return $s ?: "SQFT";
+}
+
+function pos_print_dim_unit($raw) {
+  $u = strtolower(trim((string) $raw));
+  if (in_array($u, ["feet", "foot", "ft"], true)) return "ft";
+  if (in_array($u, ["inches", "inch", "in"], true)) return "in";
+  if (in_array($u, ["meters", "metres", "meter", "metre", "m"], true)) return "m";
+  if (in_array($u, ["centimeters", "centimetres", "cm"], true)) return "cm";
+  if (in_array($u, ["millimeters", "millimetres", "mm"], true)) return "mm";
+  if (in_array($u, ["yards", "yard", "yd"], true)) return "yd";
+  if (in_array($u, ["custom", "other", "unt"], true)) return "custom";
+  return $u !== "" ? $u : "ft";
+}
+
+function pos_print_area_sqft($w, $h, $dim) {
+  $w = (float) $w;
+  $h = (float) $h;
+  if ($dim === "ft") return round($w * $h, 2);
+  if ($dim === "in") return round(($w * $h) / 144, 2);
+  if ($dim === "m") return round($w * $h * 10.7639, 2);
+  if ($dim === "cm") return round(($w * $h) / 929.0304, 2);
+  if ($dim === "mm") return round(($w * $h) / 92903.04, 2);
+  if ($dim === "yd") return round($w * $h * 9, 2);
+  if ($dim === "custom") return round($w * $h, 2);
+  return round($w * $h, 2);
+}
+
+function pos_print_matching_pair($dim, $bill) {
+  if ($bill === "CUSTOM" || $dim === "custom") return true;
+  return ($bill === "SQFT" && $dim === "ft")
+    || ($bill === "SQM" && $dim === "m")
+    || ($bill === "SQIN" && $dim === "in")
+    || ($bill === "SQYD" && $dim === "yd")
+    || ($bill === "SQCM" && $dim === "cm")
+    || ($bill === "SQMM" && $dim === "mm");
+}
+
+function pos_print_billed_qty($item, $lineIn) {
+  if (!is_array($item) || !is_array($lineIn)) return null;
+  $w = (float) ($lineIn["print_width"] ?? $lineIn["printWidth"] ?? 0);
+  $h = (float) ($lineIn["print_height"] ?? $lineIn["printHeight"] ?? 0);
+  if ($w <= 0 || $h <= 0) return null;
+  $copies = max(1, (int) ($lineIn["print_copies"] ?? $lineIn["printCopies"] ?? 1));
+  $custom = trim((string) ($lineIn["print_custom_unit"] ?? $lineIn["printCustomUnit"] ?? ($item["custom_unit"] ?? "")));
+  $bill = $custom !== "" ? "CUSTOM" : pos_print_bill_unit($item["base_unit"] ?? $item["unit"] ?? "SQFT");
+  $dim = pos_print_dim_unit($lineIn["print_dim_unit"] ?? $lineIn["printDimUnit"] ?? ($bill === "SQM" ? "m" : ($bill === "SQIN" ? "in" : ($bill === "SQYD" ? "yd" : ($bill === "SQCM" ? "cm" : ($bill === "SQMM" ? "mm" : "ft"))))));
+  $minQty = max(0.0, (float) ($item["min_billing_qty"] ?? 0));
+  if (pos_print_matching_pair($dim, $bill)) {
+    $raw = pos_print_round4($w * $h);
+  } else {
+    $sqft = pos_print_area_sqft($w, $h, $dim);
+    if ($bill === "SQM") $raw = pos_print_round4($sqft / 10.7639);
+    else if ($bill === "SQIN") $raw = pos_print_round4($sqft * 144);
+    else if ($bill === "SQYD") $raw = pos_print_round4($sqft / 9);
+    else if ($bill === "SQCM") $raw = pos_print_round4($sqft * 929.0304);
+    else if ($bill === "SQMM") $raw = pos_print_round4($sqft * 92903.04);
+    else $raw = pos_print_round4($sqft);
+  }
+  $billed = pos_print_round4(max($raw * $copies, $minQty));
+  return $billed > 0 ? $billed : null;
+}
+
 function pos_compute_sale_line($item, $qty, $customer, $lineIn, $user = null) {
+  $printQty = pos_print_billed_qty($item, is_array($lineIn) ? $lineIn : []);
+  if ($printQty !== null) $qty = $printQty;
   $isB2b = (($customer["type"] ?? "") === "b2b");
   $rate = pos_loose_sale_rate($item, $isB2b ? "b2b" : "b2c");
   if (isset($lineIn["rate"]) && $lineIn["rate"] !== "" && $lineIn["rate"] !== null && pos_can_override_rate($user)) {
@@ -632,7 +710,7 @@ function pos_compute_sale_line($item, $qty, $customer, $lineIn, $user = null) {
     "print_copies" => max(1, (int) ($lineIn["print_copies"] ?? $lineIn["printCopies"] ?? 1)),
     "print_file_id" => trim((string) ($lineIn["print_file_id"] ?? $lineIn["printFileId"] ?? "")),
     "print_file_name" => substr(trim((string) ($lineIn["print_file_name"] ?? $lineIn["printFileName"] ?? "")), 0, 255),
-    "print_area" => (float) ($lineIn["print_area"] ?? $lineIn["printArea"] ?? $qty),
+    "print_area" => (float) ($printQty ?? $lineIn["print_area"] ?? $lineIn["printArea"] ?? $qty),
     "print_custom_unit" => substr(trim((string) ($lineIn["print_custom_unit"] ?? $lineIn["printCustomUnit"] ?? ($item["custom_unit"] ?? ""))), 0, 32),
     "unit" => trim((string) ($item["base_unit"] ?? $item["unit"] ?? "")),
   ];

@@ -9361,7 +9361,7 @@ async function sendAggregatorKot(order) {
   const A = aggregatorApi();
   try {
     printKitchenKot({
-      tableNo: A?.kotTable?.(order.source, order.fulfillment) || "Parcel",
+      tableNo: A?.kotTable?.(order.source, order.fulfillment, { parcel: isBarShop() }) || "Parcel",
       lines: (order.lines || []).map((line) => ({ itemId: line.external_item_id || line.name, qtyGm: Number(line.qty) || 1, name: line.name, notes: line.notes })),
       printed: [],
       notes: `${A?.sourceLabel(order.source) || ""} ${order.order_number}`,
@@ -9384,7 +9384,7 @@ async function openAggregatorInCounter(order) {
   if (!liveLines.length) throw new Error("Map these platform items to your menu, then open in Counter");
   if (state.cart.length && !confirm("Replace the current Counter bill with this platform order?")) return;
   const R = restaurantApi();
-  state.activeTable = A?.kotTable?.(order.source, order.fulfillment) || R?.PARCEL || "Parcel";
+  state.activeTable = A?.kotTable?.(order.source, order.fulfillment, { parcel: isBarShop() }) || R?.PARCEL || "Parcel";
   if (isRestaurantShop() && R) syncActiveFloor(state.activeTable);
   state.cart = liveLines.map(({ line, item }) => ({
     lineId: newCartLineId(),

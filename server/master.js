@@ -6,7 +6,7 @@ import { platformAudit } from "./audit.js";
 import { registerBusiness, updateBusiness, normalizeDsaCode } from "./onboard.js";
 import { defaultPerms } from "./roles.js";
 import { publicStatus } from "./auth.js";
-import { createdToday, createdBetween } from "./sql-time.js";
+import { createdToday, createdBetween, saleNotVoidSql } from "./sql-time.js";
 import { assembleDsaSales, dsaSalesToSheets } from "./reports.js";
 import { workbookXml } from "./excel.js";
 import { getPlatformSettings, setPlatformSetting } from "./settings.js";
@@ -179,7 +179,7 @@ export function registerMaster(app) {
            LEFT JOIN (
              SELECT business_id, COALESCE(SUM(total),0) AS today_sales, COUNT(*) AS today_bills
              FROM sales_orders
-             WHERE ${today}
+             WHERE ${today} AND ${saleNotVoidSql()}
              GROUP BY business_id
            ) s ON s.business_id = b.id
            ORDER BY b.name`,
