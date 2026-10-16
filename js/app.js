@@ -11750,7 +11750,7 @@ $("item-form").addEventListener("submit", async (e) => {
     gst_rate: $("item-gst").value,
     min_billing_qty: Number($("item-min-billing")?.value) || 0,
     custom_unit: String($("item-custom-unit")?.value || "").trim(),
-    mrp: POSUnits.roundRate8?.($("item-mrp")?.value) ?? $("item-mrp")?.value || "",
+    mrp: POSUnits.roundRate8?.($("item-mrp")?.value) ?? ($("item-mrp")?.value || ""),
     barcode_qty: POSUnits.isCount(unit) ? Number($("item-barcode-qty")?.value) || 0 : 0,
     barcode: globalThis.POSBarcode?.cleanCode ? POSBarcode.cleanCode($("item-own-barcode")?.value) : String($("item-own-barcode")?.value || "").trim(),
     stock_gm: POSUnits.toBase($("item-stock").value, unit),
