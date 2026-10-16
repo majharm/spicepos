@@ -41,7 +41,7 @@ async function widenDecimal(table, column, def) {
     [table, column],
   );
   const scale = Number(rows[0]?.scale);
-  if (Number.isFinite(scale) && scale >= 4) return;
+  if (Number.isFinite(scale) && scale >= 8) return;
   await query(`ALTER TABLE \`${table}\` MODIFY COLUMN \`${column}\` ${def}`);
 }
 
@@ -286,10 +286,6 @@ export async function ensureSchema() {
   await addColumn("sales_order_lines", "print_area", "DECIMAL(14,4) NOT NULL DEFAULT 0");
   await addColumn("sales_order_lines", "print_custom_unit", "VARCHAR(32) NULL");
   await addColumn("sales_orders", "extra_charges", "DECIMAL(12,2) NOT NULL DEFAULT 0");
-  await widenDecimal("items", "purchase_rate", "DECIMAL(12,4) NOT NULL DEFAULT 0");
-  await widenDecimal("purchase_lines", "rate_per_kg", "DECIMAL(12,4) NOT NULL DEFAULT 0");
-  await widenDecimal("stock_batches", "unit_cost", "DECIMAL(12,4) NOT NULL DEFAULT 0");
-  await widenDecimal("stock_movements", "unit_cost", "DECIMAL(12,4) NOT NULL DEFAULT 0");
   await addColumn("purchase_lines", "batch_no", "VARCHAR(64) NULL");
   await addColumn("purchase_lines", "barcode", "VARCHAR(64) NULL");
   await addColumn("purchase_lines", "expiry_date", "DATE NULL");
@@ -300,6 +296,45 @@ export async function ensureSchema() {
   await addColumn("stock_movements", "reason", "VARCHAR(64) NULL");
   await addColumn("stock_movements", "ref_type", "VARCHAR(32) NULL");
   await addColumn("stock_movements", "ref_id", "VARCHAR(255) NULL");
+  const money8 = "DECIMAL(20,8) NOT NULL DEFAULT 0";
+  const money8Null = "DECIMAL(20,8) NULL";
+  await widenDecimal("items", "purchase_rate", money8);
+  await widenDecimal("items", "retail_rate", money8);
+  await widenDecimal("items", "b2b_rate", money8);
+  await widenDecimal("items", "mrp", money8Null);
+  await widenDecimal("pack_items", "retail_rate", money8);
+  await widenDecimal("pack_items", "b2b_rate", money8);
+  await widenDecimal("purchase_lines", "rate_per_kg", money8);
+  await widenDecimal("purchase_lines", "amount", money8);
+  await widenDecimal("purchase_lines", "gst_amount", money8);
+  await widenDecimal("purchase_lines", "total_amount", money8);
+  await widenDecimal("purchase_lines", "mrp", money8Null);
+  await widenDecimal("purchases", "subtotal", money8);
+  await widenDecimal("purchases", "gst", money8);
+  await widenDecimal("purchases", "total", money8);
+  await widenDecimal("sales_order_lines", "rate_per_kg", money8);
+  await widenDecimal("sales_order_lines", "amount", money8);
+  await widenDecimal("sales_order_lines", "discount", money8);
+  await widenDecimal("sales_order_lines", "discount_value", money8);
+  await widenDecimal("sales_order_lines", "mrp", money8);
+  await widenDecimal("sales_order_lines", "cost", money8);
+  await widenDecimal("sales_order_lines", "profit", money8);
+  await widenDecimal("sales_orders", "subtotal", money8);
+  await widenDecimal("sales_orders", "discount", money8);
+  await widenDecimal("sales_orders", "discount_value", money8);
+  await widenDecimal("sales_orders", "gst", money8);
+  await widenDecimal("sales_orders", "total", money8);
+  await widenDecimal("sales_orders", "extra_charges", money8);
+  await widenDecimal("sales_orders", "loyalty_discount", money8);
+  await widenDecimal("stock_batches", "unit_cost", money8);
+  await widenDecimal("stock_batches", "mrp", money8Null);
+  await widenDecimal("stock_movements", "unit_cost", money8);
+  await widenDecimal("qr_order_lines", "rate_per_kg", money8);
+  await widenDecimal("qr_order_lines", "amount", money8);
+  await widenDecimal("qr_order_lines", "gst_amount", money8);
+  await widenDecimal("qr_orders", "subtotal", money8);
+  await widenDecimal("qr_orders", "gst", money8);
+  await widenDecimal("qr_orders", "total", money8);
 
   await create(`CREATE TABLE IF NOT EXISTS brands (
     id VARCHAR(255) PRIMARY KEY,

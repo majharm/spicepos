@@ -320,14 +320,19 @@
     return `${prefix} ₹${typeOf(code).rateSuffix}`;
   }
 
+  function roundRate8(n) {
+    return Math.round((Number(n) || 0) * 1e8) / 1e8;
+  }
+
   function roundRate4(n) {
-    return Math.round((Number(n) || 0) * 10000) / 10000;
+    return roundRate8(n);
   }
 
   function rateInputValue(n) {
-    const t = roundRate4(n);
-    if (!Number.isFinite(t) || t === 0) return "0";
-    return String(t);
+    const t = roundRate8(n);
+    if (!Number.isFinite(t)) return "0";
+    if (t === 0) return "0.00000000";
+    return t.toFixed(8).replace(/\.?0+$/, "") || "0";
   }
 
   function formatRate(n) {
@@ -335,13 +340,13 @@
       style: "currency",
       currency: "INR",
       minimumFractionDigits: 2,
-      maximumFractionDigits: 4,
-    }).format(roundRate4(n));
+      maximumFractionDigits: 8,
+    }).format(roundRate8(n));
   }
 
   function lineAmount(qty, rate, code) {
     const q = Number(qty) || 0;
-    const r = roundRate4(rate);
+    const r = roundRate8(rate);
     if (isCount(code)) return q * r;
     return (q / 1000) * r;
   }
@@ -396,7 +401,8 @@
     toBase,
     stockLabel,
     rateLabel,
-    RATE_STEP: 0.0001,
+    RATE_STEP: 0.00000001,
+    roundRate8,
     roundRate4,
     rateInputValue,
     formatRate,

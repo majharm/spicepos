@@ -454,12 +454,13 @@ export function itemBodyFromImportRow(row, biz) {
     const reorder = itemImportStockToBase(row.reorder_level, unit);
     if (reorder != null) body.reorder_level_gm = reorder;
   }
-  if (row.mrp !== "" && row.mrp != null) body.mrp = Number(row.mrp) || 0;
+  const roundRate = (n) => (POSUnits?.roundRate8 ? POSUnits.roundRate8(n) : Math.round((Number(n) || 0) * 1e8) / 1e8);
+  if (row.mrp !== "" && row.mrp != null) body.mrp = roundRate(row.mrp);
   if (gstRaw !== "" && gstRaw != null) body.gst_rate = Number(gstRaw);
   else body.gst_rate = 5;
-  if (row.retail !== "" && row.retail != null) body.retail_rate = Number(row.retail) || 0;
-  if (row.b2b !== "" && row.b2b != null) body.b2b_rate = Number(row.b2b) || 0;
-  if (row.purchase !== "" && row.purchase != null) body.purchase_rate = Math.round((Number(row.purchase) || 0) * 10000) / 10000;
+  if (row.retail !== "" && row.retail != null) body.retail_rate = roundRate(row.retail);
+  if (row.b2b !== "" && row.b2b != null) body.b2b_rate = roundRate(row.b2b);
+  if (row.purchase !== "" && row.purchase != null) body.purchase_rate = roundRate(row.purchase);
   if (stock != null) body.stock_gm = stock;
   return body;
 }

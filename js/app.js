@@ -1,4 +1,4 @@
-const inr = new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR" });
+const inr = new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", minimumFractionDigits: 2, maximumFractionDigits: 8 });
 
 const state = {
   company: {},
@@ -306,7 +306,7 @@ function printAreaLineHtml(item, line, key, calc) {
   const rateVal = rateFor(item, line);
   const rateField = canChangeRate()
     ? `<label class="print-dim print-dim-rate">₹/${escapeHtml(billLab)}
-        <input data-print-rate="${escapeHtml(key)}" type="number" min="0" step="0.01" inputmode="decimal" value="${escapeHtml(rateVal)}" aria-label="Rate per unit" />
+        <input data-print-rate="${escapeHtml(key)}" type="number" min="0" step="0.00000001" inputmode="decimal" value="${escapeHtml(rateVal)}" aria-label="Rate per unit" />
       </label>`
     : `<span class="print-rate-ro">${escapeHtml(money(rateVal))}/${escapeHtml(billLab)}</span>`;
   const fileBit = line.printFileName
@@ -5485,8 +5485,8 @@ async function saveCounterAddItem(e) {
     category: defaultItemCategory(),
     unit,
     base_unit: unit,
-    retail_rate: retail,
-    b2b_rate: retail,
+    retail_rate: POSUnits.roundRate8?.(retail) ?? retail,
+    b2b_rate: POSUnits.roundRate8?.(retail) ?? retail,
     purchase_rate: 0,
     gst_rate: Number($("ci-gst")?.value) || (isPrintShop() ? 18 : 5),
     min_billing_qty: Number($("ci-min-billing")?.value) || 0,
@@ -6166,10 +6166,10 @@ function fillItemForm(i) {
   if ($("item-wearer")) $("item-wearer").value = globalThis.POSFootwear?.normalizeWearer(i.wearer_type) || "";
   if ($("item-color")) $("item-color").value = i.color || "";
   if ($("item-size")) $("item-size").value = i.size || "";
-  $("item-retail").value = i.retail_rate;
-  if ($("item-mrp")) $("item-mrp").value = i.mrp || i.retail_rate || "";
+  $("item-retail").value = POSUnits.rateInputValue?.(i.retail_rate) ?? i.retail_rate;
+  if ($("item-mrp")) $("item-mrp").value = POSUnits.rateInputValue?.(i.mrp || i.retail_rate || 0) ?? (i.mrp || i.retail_rate || "");
   if ($("item-barcode-qty")) $("item-barcode-qty").value = "";
-  $("item-b2b").value = i.b2b_rate;
+  $("item-b2b").value = POSUnits.rateInputValue?.(i.b2b_rate) ?? i.b2b_rate;
   $("item-purchase").value = POSUnits.rateInputValue?.(i.purchase_rate) ?? i.purchase_rate;
   $("item-gst").value = i.gst_rate;
   fillItemUnitSelect(itemUnit(i));
@@ -6741,7 +6741,7 @@ function renderPoLines() {
         <td class="po-hsn">${escapeHtml(i.hsn || "—")}</td>
         <td><input type="number" min="${POSUnits.qtyMin()}" max="${POSUnits.qtyMax()}" step="1" value="${qty}" data-po-qty="${escapeHtml(i.id)}" /></td>
         <td class="po-unit">${escapeHtml(poUnitLabel(i))}</td>
-        <td><div class="po-rate-cell"><input type="number" min="0" step="0.0001" inputmode="decimal" value="${escapeHtml(POSUnits.rateInputValue?.(i.purchase_rate) ?? i.purchase_rate)}" data-po-rate="${escapeHtml(i.id)}" /><span class="po-suffix">₹${escapeHtml(POSUnits.rateSuffix(unit))}</span></div></td>
+        <td><div class="po-rate-cell"><input type="number" min="0" step="0.00000001" inputmode="decimal" value="${escapeHtml(POSUnits.rateInputValue?.(i.purchase_rate) ?? i.purchase_rate)}" data-po-rate="${escapeHtml(i.id)}" /><span class="po-suffix">₹${escapeHtml(POSUnits.rateSuffix(unit))}</span></div></td>
         <td><input type="date" data-po-expiry="${escapeHtml(i.id)}" /></td>
         <td class="num" data-po-amt="${escapeHtml(i.id)}">${money(POSUnits.lineAmount(qty, i.purchase_rate, unit))}</td>
       </tr>`);
@@ -11744,13 +11744,13 @@ $("item-form").addEventListener("submit", async (e) => {
     wearer_type: $("item-wearer")?.value || "",
     base_unit: unit,
     unit,
-    retail_rate: $("item-retail").value,
-    b2b_rate: $("item-b2b").value,
-    purchase_rate: POSUnits.roundRate4?.($("item-purchase").value) ?? $("item-purchase").value,
+    retail_rate: POSUnits.roundRate8?.($("item-retail").value) ?? $("item-retail").value,
+    b2b_rate: POSUnits.roundRate8?.($("item-b2b").value) ?? $("item-b2b").value,
+    purchase_rate: POSUnits.roundRate8?.($("item-purchase").value) ?? $("item-purchase").value,
     gst_rate: $("item-gst").value,
     min_billing_qty: Number($("item-min-billing")?.value) || 0,
     custom_unit: String($("item-custom-unit")?.value || "").trim(),
-    mrp: $("item-mrp")?.value || "",
+    mrp: POSUnits.roundRate8?.($("item-mrp")?.value) ?? $("item-mrp")?.value || "",
     barcode_qty: POSUnits.isCount(unit) ? Number($("item-barcode-qty")?.value) || 0 : 0,
     barcode: globalThis.POSBarcode?.cleanCode ? POSBarcode.cleanCode($("item-own-barcode")?.value) : String($("item-own-barcode")?.value || "").trim(),
     stock_gm: POSUnits.toBase($("item-stock").value, unit),
@@ -12198,7 +12198,7 @@ $("purchase-form").addEventListener("submit", async (e) => {
       lines.push({
         item_id: box.dataset.poItem,
         quantity_gm,
-        rate_per_kg: POSUnits.roundRate4?.(document.querySelector(`[data-po-rate="${box.dataset.poItem}"]`)?.value) ?? Number(document.querySelector(`[data-po-rate="${box.dataset.poItem}"]`)?.value),
+        rate_per_kg: POSUnits.roundRate8?.(document.querySelector(`[data-po-rate="${box.dataset.poItem}"]`)?.value) ?? Number(document.querySelector(`[data-po-rate="${box.dataset.poItem}"]`)?.value),
         expiry_date: document.querySelector(`[data-po-expiry="${box.dataset.poItem}"]`)?.value || "",
         barcodes,
       });

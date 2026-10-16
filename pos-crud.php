@@ -148,8 +148,8 @@ function pos_crud_dispatch($path, $method, $body, $bid, $auth, $branchId, $uid) 
         [
           $id, $code, $name, $body["local_name"] ?? null, $category,
           $body["subcategory"] ?? null, $color, $size, $wearer, $unit,
-          pos_round4($body["purchase_rate"] ?? 0), (float) ($body["retail_rate"] ?? 0),
-          (float) ($body["b2b_rate"] ?? 0), (float) ($body["gst_rate"] ?? 5),
+          pos_round8($body["purchase_rate"] ?? 0), pos_round8($body["retail_rate"] ?? 0),
+          pos_round8($body["b2b_rate"] ?? 0), (float) ($body["gst_rate"] ?? 5),
           trim((string) ($body["hsn"] ?? "")) ?: null,
           ($image === null || $image === "") ? null : $image,
           (float) ($body["stock_gm"] ?? 0), (float) ($body["reorder_level_gm"] ?? 0),
@@ -168,7 +168,7 @@ function pos_crud_dispatch($path, $method, $body, $bid, $auth, $branchId, $uid) 
         if (function_exists("pos_save_item_brand")) pos_save_item_brand($bid, $id, array_merge($body, ["size" => $size]));
       }
       if (array_key_exists("mrp", $body)) {
-        try { pos_q("UPDATE items SET mrp = ? WHERE id = ?", "ds", [(float) $body["mrp"], $id]); } catch (Exception $e) { /* optional */ }
+        try { pos_q("UPDATE items SET mrp = ? WHERE id = ?", "ds", [pos_round8($body["mrp"]), $id]); } catch (Exception $e) { /* optional */ }
       }
       if (function_exists("pos_save_item_print_fields")) pos_save_item_print_fields($id, $body);
       $rows = pos_q("SELECT * FROM items WHERE id = ? LIMIT 1", "s", [$id]);
@@ -213,8 +213,8 @@ function pos_crud_dispatch($path, $method, $body, $bid, $auth, $branchId, $uid) 
         [
           $body["name"] ?? "", $body["local_name"] ?? null, $category,
           $body["subcategory"] ?? null, $color, $size, $wearer, $unit,
-          pos_round4($body["purchase_rate"] ?? 0), (float) ($body["retail_rate"] ?? 0),
-          (float) ($body["b2b_rate"] ?? 0), (float) ($body["gst_rate"] ?? 5),
+          pos_round8($body["purchase_rate"] ?? 0), pos_round8($body["retail_rate"] ?? 0),
+          pos_round8($body["b2b_rate"] ?? 0), (float) ($body["gst_rate"] ?? 5),
           trim((string) ($body["hsn"] ?? "")) ?: null,
           (float) ($body["stock_gm"] ?? 0), (float) ($body["reorder_level_gm"] ?? 0),
           pos_item_status($body["status"] ?? "active"),
@@ -235,7 +235,7 @@ function pos_crud_dispatch($path, $method, $body, $bid, $auth, $branchId, $uid) 
       if (function_exists("pos_save_item_brand")) pos_save_item_brand($bid, $itemId, $body);
     }
     if (array_key_exists("mrp", $body)) {
-      try { pos_q("UPDATE items SET mrp = ? WHERE id = ?", "ds", [(float) $body["mrp"], $itemId]); } catch (Exception $e) { /* optional */ }
+      try { pos_q("UPDATE items SET mrp = ? WHERE id = ?", "ds", [pos_round8($body["mrp"]), $itemId]); } catch (Exception $e) { /* optional */ }
     }
     if (function_exists("pos_save_item_print_fields")) pos_save_item_print_fields($itemId, $body);
     $rows = pos_q("SELECT * FROM items WHERE id = ? LIMIT 1", "s", [$itemId]);
@@ -323,15 +323,15 @@ function pos_crud_dispatch($path, $method, $body, $bid, $auth, $branchId, $uid) 
           $item = $it[0] ?? null;
           if (!$item) throw new Exception("Unknown item");
           $qty = (float) ($line["quantity_gm"] ?? 0);
-          $rate = pos_round4($line["rate_per_kg"] ?? $item["purchase_rate"]);
-          $amount = pos_round2(pos_line_amount_for_item($qty, $rate, $item));
+          $rate = pos_round8($line["rate_per_kg"] ?? $item["purchase_rate"]);
+          $amount = pos_round8(pos_line_amount_for_item($qty, $rate, $item));
           $gstRate = (float) ($item["gst_rate"] ?? 0);
-          $gstAmount = pos_round2(($amount * $gstRate) / 100);
-          $built[] = ["item" => $item, "qty" => $qty, "rate" => $rate, "amount" => $amount, "gstRate" => $gstRate, "gstAmount" => $gstAmount, "total" => pos_round2($amount + $gstAmount)];
+          $gstAmount = pos_round8(($amount * $gstRate) / 100);
+          $built[] = ["item" => $item, "qty" => $qty, "rate" => $rate, "amount" => $amount, "gstRate" => $gstRate, "gstAmount" => $gstAmount, "total" => pos_round8($amount + $gstAmount)];
         }
-        $subtotal = pos_round2(array_sum(array_column($built, "amount")));
-        $gst = pos_round2(array_sum(array_column($built, "gstAmount")));
-        $total = pos_round2($subtotal + $gst);
+        $subtotal = pos_round8(array_sum(array_column($built, "amount")));
+        $gst = pos_round8(array_sum(array_column($built, "gstAmount")));
+        $total = pos_round8($subtotal + $gst);
         $n = pos_next_seq("purchase", $bid, 10002);
         $id = pos_uuid();
         $purchaseNumber = "PO-{$n}";

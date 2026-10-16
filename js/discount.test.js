@@ -56,3 +56,22 @@ test("discount cannot exceed line amount", () => {
   assert.equal(line.discount, 20);
   assert.equal(line.taxable, 0);
 });
+
+test("sale line keeps eight-decimal unit prices", () => {
+  const line = D.computeLine({
+    qty: 1,
+    rate: 0.00000001,
+    gstRate: 0,
+    isCount: true,
+  });
+  assert.equal(line.gross, 0.00000001);
+  assert.equal(line.taxable, 0.00000001);
+  const sms = D.computeLine({
+    qty: 1,
+    rate: 0.1456,
+    gstRate: 0,
+    isCount: true,
+  });
+  assert.equal(sms.gross, 0.1456);
+  assert.equal(sms.taxable, 0.1456);
+});

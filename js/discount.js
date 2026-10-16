@@ -4,7 +4,7 @@
   if (typeof window !== "undefined") window.POSDiscount = api;
 })(typeof globalThis !== "undefined" ? globalThis : this, function () {
   function round2(n) {
-    return Math.round((Number(n) || 0) * 100) / 100;
+    return Math.round((Number(n) || 0) * 1e8) / 1e8;
   }
 
   function num(n, fallback = 0) {

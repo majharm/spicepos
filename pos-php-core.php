@@ -383,18 +383,53 @@ function pos_widen_decimal($table, $column, $def) {
   $row = $res ? $res->fetch_assoc() : null;
   if ($res) $res->free();
   if (!$row) return;
-  if ((int) ($row["scale"] ?? 0) >= 4) return;
+  if ((int) ($row["scale"] ?? 0) >= 8) return;
   @$db->query("ALTER TABLE `{$safeTable}` MODIFY COLUMN `{$safeCol}` {$def}");
 }
 
-function pos_ensure_rate_precision() {
+function pos_ensure_rate_precision($force = false) {
   static $done = false;
-  if ($done) return;
+  if ($done && !$force) return;
   $done = true;
-  pos_widen_decimal("items", "purchase_rate", "DECIMAL(12,4) NOT NULL DEFAULT 0");
-  pos_widen_decimal("purchase_lines", "rate_per_kg", "DECIMAL(12,4) NOT NULL DEFAULT 0");
-  pos_widen_decimal("stock_batches", "unit_cost", "DECIMAL(12,4) NOT NULL DEFAULT 0");
-  pos_widen_decimal("stock_movements", "unit_cost", "DECIMAL(12,4) NOT NULL DEFAULT 0");
+  $money8 = "DECIMAL(20,8) NOT NULL DEFAULT 0";
+  $money8Null = "DECIMAL(20,8) NULL";
+  pos_widen_decimal("items", "purchase_rate", $money8);
+  pos_widen_decimal("items", "retail_rate", $money8);
+  pos_widen_decimal("items", "b2b_rate", $money8);
+  pos_widen_decimal("items", "mrp", $money8Null);
+  pos_widen_decimal("pack_items", "retail_rate", $money8);
+  pos_widen_decimal("pack_items", "b2b_rate", $money8);
+  pos_widen_decimal("purchase_lines", "rate_per_kg", $money8);
+  pos_widen_decimal("purchase_lines", "amount", $money8);
+  pos_widen_decimal("purchase_lines", "gst_amount", $money8);
+  pos_widen_decimal("purchase_lines", "total_amount", $money8);
+  pos_widen_decimal("purchase_lines", "mrp", $money8Null);
+  pos_widen_decimal("purchases", "subtotal", $money8);
+  pos_widen_decimal("purchases", "gst", $money8);
+  pos_widen_decimal("purchases", "total", $money8);
+  pos_widen_decimal("sales_order_lines", "rate_per_kg", $money8);
+  pos_widen_decimal("sales_order_lines", "amount", $money8);
+  pos_widen_decimal("sales_order_lines", "discount", $money8);
+  pos_widen_decimal("sales_order_lines", "discount_value", $money8);
+  pos_widen_decimal("sales_order_lines", "mrp", $money8);
+  pos_widen_decimal("sales_order_lines", "cost", $money8);
+  pos_widen_decimal("sales_order_lines", "profit", $money8);
+  pos_widen_decimal("sales_orders", "subtotal", $money8);
+  pos_widen_decimal("sales_orders", "discount", $money8);
+  pos_widen_decimal("sales_orders", "discount_value", $money8);
+  pos_widen_decimal("sales_orders", "gst", $money8);
+  pos_widen_decimal("sales_orders", "total", $money8);
+  pos_widen_decimal("sales_orders", "extra_charges", $money8);
+  pos_widen_decimal("sales_orders", "loyalty_discount", $money8);
+  pos_widen_decimal("stock_batches", "unit_cost", $money8);
+  pos_widen_decimal("stock_batches", "mrp", $money8Null);
+  pos_widen_decimal("stock_movements", "unit_cost", $money8);
+  pos_widen_decimal("qr_order_lines", "rate_per_kg", $money8);
+  pos_widen_decimal("qr_order_lines", "amount", $money8);
+  pos_widen_decimal("qr_order_lines", "gst_amount", $money8);
+  pos_widen_decimal("qr_orders", "subtotal", $money8);
+  pos_widen_decimal("qr_orders", "gst", $money8);
+  pos_widen_decimal("qr_orders", "total", $money8);
 }
 
 function pos_ensure_columns($table, $cols) {
@@ -1120,8 +1155,12 @@ function pos_round2($n) {
   return round((float) $n, 2);
 }
 
+function pos_round8($n) {
+  return round((float) $n, 8);
+}
+
 function pos_round4($n) {
-  return round((float) $n, 4);
+  return pos_round8($n);
 }
 
 function pos_pay_modes() {
@@ -1652,6 +1691,7 @@ function pos_ensure_sales_schema() {
       "doctor_rx" => "VARCHAR(180) NULL",
     ]);
   }
+  if (function_exists("pos_ensure_rate_precision")) pos_ensure_rate_precision(true);
 }
 
 function pos_ensure_accounts_schema() {

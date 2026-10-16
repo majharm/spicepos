@@ -48,7 +48,7 @@ test("collectBrands merges item, liquor, and master rows", () => {
   assert.equal(sum.assigned, 2);
 });
 
-test("Item Master and Purchases keep four-decimal purchase rates like ₹0.1456 / SMS", () => {
+test("Item Master and Purchases keep eight-decimal prices like ₹0.00000001", () => {
   const index = read("index.html");
   const app = read("js/app.js");
   const units = read("js/units.js");
@@ -57,21 +57,29 @@ test("Item Master and Purchases keep four-decimal purchase rates like ₹0.1456 
   const core = read("pos-php-core.php");
   const crud = read("server/crud.js");
   const phpCrud = read("pos-crud.php");
-  assert.match(index, /id="item-purchase"[^>]*step="0.0001"/);
-  assert.match(app, /step="0.0001"[^>]*data-po-rate/);
-  assert.match(app, /POSUnits\.roundRate4\?\.\(\$\("item-purchase"\)\.value\)/);
-  assert.match(units, /function roundRate4/);
-  assert.match(units, /maximumFractionDigits: 4/);
-  assert.match(sql, /purchase_rate DECIMAL\(12,4\)/);
+  const disc = read("js/discount.js");
+  assert.match(index, /id="item-purchase"[^>]*step="0.00000001"/);
+  assert.match(index, /id="item-retail"[^>]*step="0.00000001"/);
+  assert.match(index, /id="item-b2b"[^>]*step="0.00000001"/);
+  assert.match(index, /id="ci-retail"[^>]*step="0.00000001"/);
+  assert.match(index, /placeholder="0.00000000"/);
+  assert.match(app, /step="0.00000001"[^>]*data-po-rate/);
+  assert.match(app, /POSUnits\.roundRate8\?\.\(\$\("item-purchase"\)\.value\)/);
+  assert.match(app, /POSUnits\.roundRate8\?\.\(\$\("item-retail"\)\.value\)/);
+  assert.match(units, /function roundRate8/);
+  assert.match(units, /maximumFractionDigits: 8/);
+  assert.match(sql, /purchase_rate DECIMAL\(20,8\)/);
+  assert.match(sql, /retail_rate DECIMAL\(20,8\)/);
   assert.match(schema, /widenDecimal\("items", "purchase_rate"/);
-  assert.match(schema, /widenDecimal\("purchase_lines", "rate_per_kg"/);
-  assert.match(core, /function pos_round4/);
-  assert.match(core, /function pos_widen_decimal/);
+  assert.match(schema, /widenDecimal\("sales_order_lines", "rate_per_kg"/);
+  assert.match(schema, /scale >= 8/);
+  assert.match(core, /function pos_round8/);
   assert.match(core, /function pos_ensure_rate_precision/);
-  assert.match(crud, /function rate4/);
+  assert.match(core, /DECIMAL\(20,8\)/);
   assert.match(crud, /const rate = rate4\(line.rate_per_kg/);
-  assert.match(phpCrud, /pos_round4\(\$body\["purchase_rate"\]/);
-  assert.match(phpCrud, /pos_round4\(\$line\["rate_per_kg"\]/);
+  assert.match(phpCrud, /pos_round8\(\$body\["purchase_rate"\]/);
+  assert.match(phpCrud, /pos_round8\(\$line\["rate_per_kg"\]/);
+  assert.match(disc, /\* 1e8/);
 });
 
 test("Item Master shows a created-successfully notice after save", () => {

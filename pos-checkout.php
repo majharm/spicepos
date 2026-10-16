@@ -81,23 +81,23 @@ function pos_checkout_sale($bid, $branchId, $uid, $auth, $body) {
       if (function_exists("pos_compute_sale_line")) {
         $built[] = pos_compute_sale_line($item, $qty, $customer, $line, $auth["user"] ?? null);
       } else {
-        $rate = (($customer["type"] ?? "") === "b2b") ? (float) $item["b2b_rate"] : (float) $item["retail_rate"];
-        $amount = pos_round2(pos_line_amount_for_item($qty, $rate, $item));
-        $built[] = ["item" => $item, "qty" => $qty, "rate" => $rate, "amount" => $amount, "gstRate" => (float) ($item["gst_rate"] ?? 0), "discount" => 0, "gst" => pos_round2(($amount * (float) ($item["gst_rate"] ?? 0)) / 100)];
+        $rate = pos_round8((($customer["type"] ?? "") === "b2b") ? ($item["b2b_rate"] ?? 0) : ($item["retail_rate"] ?? 0));
+        $amount = pos_round8(pos_line_amount_for_item($qty, $rate, $item));
+        $built[] = ["item" => $item, "qty" => $qty, "rate" => $rate, "amount" => $amount, "gstRate" => (float) ($item["gst_rate"] ?? 0), "discount" => 0, "gst" => pos_round8(($amount * (float) ($item["gst_rate"] ?? 0)) / 100)];
       }
     }
     pos_assert_apparel_sale_stock($bid, $built);
-    $subtotal = pos_round2(array_sum(array_column($built, "amount")));
+    $subtotal = pos_round8(array_sum(array_column($built, "amount")));
     $gst = 0;
     foreach ($built as $l) $gst += isset($l["gst"]) ? (float) $l["gst"] : (($l["amount"] * $l["gstRate"]) / 100);
-    $gst = pos_round2($gst);
+    $gst = pos_round8($gst);
     $billType = $body["discountType"] ?? $body["discount_type"] ?? "amt";
     $billValue = $body["discountValue"] ?? $body["discount_value"] ?? $body["discount"] ?? 0;
     $billDiscount = function_exists("pos_adv_discount_amount")
       ? pos_adv_discount_amount($subtotal + $gst, $billType, $billValue)
-      : pos_round2((float) ($body["discount"] ?? 0));
-    $extraCharges = pos_round2(max(0, (float) ($body["extraCharges"] ?? $body["extra_charges"] ?? 0)));
-    $afterBill = pos_round2(max(0, $subtotal + $gst - $billDiscount + $extraCharges));
+      : pos_round8((float) ($body["discount"] ?? 0));
+    $extraCharges = pos_round8(max(0, (float) ($body["extraCharges"] ?? $body["extra_charges"] ?? 0)));
+    $afterBill = pos_round8(max(0, $subtotal + $gst - $billDiscount + $extraCharges));
     $total = $afterBill;
     $loyaltyDiscount = 0;
     $loyaltyEarn = 0;
@@ -249,7 +249,7 @@ function pos_checkout_sale($bid, $branchId, $uid, $auth, $body) {
       $loyaltyDiscount = (float) ($loy["rupees"] ?? 0);
       $loyaltyEarn = (int) ($loy["earned"] ?? 0);
       $loyaltyRedeem = (int) ($loy["points"] ?? 0);
-      $total = pos_round2(max(0, $afterBill - $loyaltyDiscount));
+      $total = pos_round8(max(0, $afterBill - $loyaltyDiscount));
       try {
         pos_q(
           "UPDATE sales_orders SET total = ?, discount_type = ?, discount_value = ?, loyalty_points_redeemed = ?, loyalty_points_earned = ?, loyalty_discount = ? WHERE id = ?",

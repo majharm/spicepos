@@ -19,7 +19,7 @@ const POSUnits = globalThis.POSUnits;
 const POSFootwear = globalThis.POSFootwear;
 
 function rate4(n) {
-  return POSUnits?.roundRate4 ? POSUnits.roundRate4(n) : Math.round((Number(n) || 0) * 10000) / 10000;
+  return POSUnits?.roundRate8 ? POSUnits.roundRate8(n) : Math.round((Number(n) || 0) * 1e8) / 1e8;
 }
 
 function itemStatus(raw) {
@@ -45,7 +45,7 @@ export function lineAmount(quantityGm, ratePerKg, unitOrItem) {
 }
 
 export function round2(n) {
-  return Math.round(Number(n) * 100) / 100;
+  return Math.round((Number(n) || 0) * 1e8) / 1e8;
 }
 
 function itemImageFromBody(b) {
@@ -165,8 +165,8 @@ async function insertImportedItem(conn, biz, body) {
       variants.wearer_type,
       itemUnit(body.base_unit || body.unit || POSFootwear.defaultUnit(biz || {})),
       rate4(body.purchase_rate),
-      Number(body.retail_rate) || 0,
-      Number(body.b2b_rate) || 0,
+      rate4(body.retail_rate),
+      rate4(body.b2b_rate),
       Number(body.gst_rate) || 5,
       String(body.hsn || "").trim() || null,
       null,
@@ -221,8 +221,8 @@ async function updateImportedItem(conn, existing, biz, body, row) {
   const subcategory = row.subcategory !== "" && row.subcategory != null ? body.subcategory : existing.subcategory;
   const hsn = row.hsn !== "" && row.hsn != null ? body.hsn : existing.hsn;
   const purchase = row.purchase !== "" && row.purchase != null ? rate4(body.purchase_rate) : rate4(existing.purchase_rate);
-  const retail = row.retail !== "" && row.retail != null ? Number(body.retail_rate) || 0 : Number(existing.retail_rate) || 0;
-  const b2b = row.b2b !== "" && row.b2b != null ? Number(body.b2b_rate) || 0 : Number(existing.b2b_rate) || 0;
+  const retail = row.retail !== "" && row.retail != null ? rate4(body.retail_rate) : rate4(existing.retail_rate);
+  const b2b = row.b2b !== "" && row.b2b != null ? rate4(body.b2b_rate) : rate4(existing.b2b_rate);
   const gst = row.gst !== "" && row.gst != null ? Number(body.gst_rate) || 5 : Number(existing.gst_rate) || 5;
   const stock = Object.prototype.hasOwnProperty.call(body, "stock_gm") ? Number(body.stock_gm) || 0 : Number(existing.stock_gm) || 0;
   await conn.query(
@@ -465,8 +465,8 @@ export function registerCrud(app) {
               variants.wearer_type,
               itemUnit(b.base_unit || b.unit || POSFootwear.defaultUnit(bizRows[0] || {})),
               rate4(b.purchase_rate),
-              Number(b.retail_rate) || 0,
-              Number(b.b2b_rate) || 0,
+              rate4(b.retail_rate),
+              rate4(b.b2b_rate),
               Number(b.gst_rate) || 5,
               String(b.hsn || "").trim() || null,
               imageUrl === undefined ? null : imageUrl,
@@ -514,8 +514,8 @@ export function registerCrud(app) {
         variants.wearer_type,
         itemUnit(b.base_unit || b.unit || POSFootwear.defaultUnit(bizRows[0] || {})),
         rate4(b.purchase_rate),
-        Number(b.retail_rate) || 0,
-        Number(b.b2b_rate) || 0,
+        rate4(b.retail_rate),
+        rate4(b.b2b_rate),
         Number(b.gst_rate) || 5,
         String(b.hsn || "").trim() || null,
         Number(b.stock_gm) || 0,

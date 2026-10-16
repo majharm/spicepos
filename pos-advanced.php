@@ -16,7 +16,7 @@ function pos_is_reusable_barcode_kind($kind) {
 }
 
 function pos_adv_round2($n) {
-  return round((float) $n, 2);
+  return function_exists("pos_round8") ? pos_round8($n) : round((float) $n, 8);
 }
 
 function pos_adv_is_pct($type) {
@@ -221,6 +221,7 @@ function pos_ensure_advanced_schema() {
       INDEX (order_id)
     )"
   );
+  if (function_exists("pos_ensure_rate_precision")) pos_ensure_rate_precision(true);
 }
 
 function pos_ean13_checksum($digits12) {
@@ -670,9 +671,9 @@ function pos_compute_sale_line($item, $qty, $customer, $lineIn, $user = null) {
   $printQty = pos_print_billed_qty($item, is_array($lineIn) ? $lineIn : []);
   if ($printQty !== null) $qty = $printQty;
   $isB2b = (($customer["type"] ?? "") === "b2b");
-  $rate = pos_loose_sale_rate($item, $isB2b ? "b2b" : "b2c");
+  $rate = pos_adv_round2(pos_loose_sale_rate($item, $isB2b ? "b2b" : "b2c"));
   if (isset($lineIn["rate"]) && $lineIn["rate"] !== "" && $lineIn["rate"] !== null && pos_can_override_rate($user)) {
-    $rate = (float) $lineIn["rate"];
+    $rate = pos_adv_round2($lineIn["rate"]);
   }
   $isCount = pos_item_is_count($item);
   $gross = pos_adv_round2($isCount ? $qty * $rate : ($qty / 1000) * $rate);
