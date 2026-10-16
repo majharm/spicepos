@@ -18,6 +18,10 @@ import {
 const POSUnits = globalThis.POSUnits;
 const POSFootwear = globalThis.POSFootwear;
 
+function rate4(n) {
+  return POSUnits?.roundRate4 ? POSUnits.roundRate4(n) : Math.round((Number(n) || 0) * 10000) / 10000;
+}
+
 function itemStatus(raw) {
   return String(raw || "active").toLowerCase() === "inactive" ? "inactive" : "active";
 }
@@ -160,7 +164,7 @@ async function insertImportedItem(conn, biz, body) {
       variants.size,
       variants.wearer_type,
       itemUnit(body.base_unit || body.unit || POSFootwear.defaultUnit(biz || {})),
-      Number(body.purchase_rate) || 0,
+      rate4(body.purchase_rate),
       Number(body.retail_rate) || 0,
       Number(body.b2b_rate) || 0,
       Number(body.gst_rate) || 5,
@@ -216,7 +220,7 @@ async function updateImportedItem(conn, existing, biz, body, row) {
   const category = row.category ? body.category : existing.category;
   const subcategory = row.subcategory !== "" && row.subcategory != null ? body.subcategory : existing.subcategory;
   const hsn = row.hsn !== "" && row.hsn != null ? body.hsn : existing.hsn;
-  const purchase = row.purchase !== "" && row.purchase != null ? Number(body.purchase_rate) || 0 : Number(existing.purchase_rate) || 0;
+  const purchase = row.purchase !== "" && row.purchase != null ? rate4(body.purchase_rate) : rate4(existing.purchase_rate);
   const retail = row.retail !== "" && row.retail != null ? Number(body.retail_rate) || 0 : Number(existing.retail_rate) || 0;
   const b2b = row.b2b !== "" && row.b2b != null ? Number(body.b2b_rate) || 0 : Number(existing.b2b_rate) || 0;
   const gst = row.gst !== "" && row.gst != null ? Number(body.gst_rate) || 5 : Number(existing.gst_rate) || 5;
@@ -460,7 +464,7 @@ export function registerCrud(app) {
               sz || null,
               variants.wearer_type,
               itemUnit(b.base_unit || b.unit || POSFootwear.defaultUnit(bizRows[0] || {})),
-              Number(b.purchase_rate) || 0,
+              rate4(b.purchase_rate),
               Number(b.retail_rate) || 0,
               Number(b.b2b_rate) || 0,
               Number(b.gst_rate) || 5,
@@ -509,7 +513,7 @@ export function registerCrud(app) {
         variants.size,
         variants.wearer_type,
         itemUnit(b.base_unit || b.unit || POSFootwear.defaultUnit(bizRows[0] || {})),
-        Number(b.purchase_rate) || 0,
+        rate4(b.purchase_rate),
         Number(b.retail_rate) || 0,
         Number(b.b2b_rate) || 0,
         Number(b.gst_rate) || 5,
@@ -654,7 +658,7 @@ export function registerCrud(app) {
           const item = itemRows[0];
           if (!item) throw new Error("Unknown item");
           const qty = Number(line.quantity_gm);
-          const rate = Number(line.rate_per_kg ?? item.purchase_rate);
+          const rate = rate4(line.rate_per_kg ?? item.purchase_rate);
           const amount = round2(lineAmount(qty, rate, item));
           const gstRate = Number(item.gst_rate) || 0;
           const gstAmount = round2((amount * gstRate) / 100);

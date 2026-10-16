@@ -459,7 +459,7 @@ export function itemBodyFromImportRow(row, biz) {
   else body.gst_rate = 5;
   if (row.retail !== "" && row.retail != null) body.retail_rate = Number(row.retail) || 0;
   if (row.b2b !== "" && row.b2b != null) body.b2b_rate = Number(row.b2b) || 0;
-  if (row.purchase !== "" && row.purchase != null) body.purchase_rate = Number(row.purchase) || 0;
+  if (row.purchase !== "" && row.purchase != null) body.purchase_rate = Math.round((Number(row.purchase) || 0) * 10000) / 10000;
   if (stock != null) body.stock_gm = stock;
   return body;
 }

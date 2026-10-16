@@ -320,9 +320,28 @@
     return `${prefix} ₹${typeOf(code).rateSuffix}`;
   }
 
+  function roundRate4(n) {
+    return Math.round((Number(n) || 0) * 10000) / 10000;
+  }
+
+  function rateInputValue(n) {
+    const t = roundRate4(n);
+    if (!Number.isFinite(t) || t === 0) return "0";
+    return String(t);
+  }
+
+  function formatRate(n) {
+    return new Intl.NumberFormat("en-IN", {
+      style: "currency",
+      currency: "INR",
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 4,
+    }).format(roundRate4(n));
+  }
+
   function lineAmount(qty, rate, code) {
     const q = Number(qty) || 0;
-    const r = Number(rate) || 0;
+    const r = roundRate4(rate);
     if (isCount(code)) return q * r;
     return (q / 1000) * r;
   }
@@ -377,6 +396,10 @@
     toBase,
     stockLabel,
     rateLabel,
+    RATE_STEP: 0.0001,
+    roundRate4,
+    rateInputValue,
+    formatRate,
     lineAmount,
     optionsHtml,
     groupOf,

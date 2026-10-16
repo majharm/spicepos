@@ -32,6 +32,19 @@ async function addColumn(table, column, def) {
   }
 }
 
+async function widenDecimal(table, column, def) {
+  if (!(await hasTable(table))) return;
+  if (!(await hasColumn(table, column))) return;
+  const rows = await query(
+    `SELECT NUMERIC_SCALE AS scale FROM INFORMATION_SCHEMA.COLUMNS
+     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?`,
+    [table, column],
+  );
+  const scale = Number(rows[0]?.scale);
+  if (Number.isFinite(scale) && scale >= 4) return;
+  await query(`ALTER TABLE \`${table}\` MODIFY COLUMN \`${column}\` ${def}`);
+}
+
 async function hasIndex(table, name) {
   const rows = await query(
     `SELECT INDEX_NAME FROM INFORMATION_SCHEMA.STATISTICS
@@ -273,6 +286,10 @@ export async function ensureSchema() {
   await addColumn("sales_order_lines", "print_area", "DECIMAL(14,4) NOT NULL DEFAULT 0");
   await addColumn("sales_order_lines", "print_custom_unit", "VARCHAR(32) NULL");
   await addColumn("sales_orders", "extra_charges", "DECIMAL(12,2) NOT NULL DEFAULT 0");
+  await widenDecimal("items", "purchase_rate", "DECIMAL(12,4) NOT NULL DEFAULT 0");
+  await widenDecimal("purchase_lines", "rate_per_kg", "DECIMAL(12,4) NOT NULL DEFAULT 0");
+  await widenDecimal("stock_batches", "unit_cost", "DECIMAL(12,4) NOT NULL DEFAULT 0");
+  await widenDecimal("stock_movements", "unit_cost", "DECIMAL(12,4) NOT NULL DEFAULT 0");
   await addColumn("purchase_lines", "batch_no", "VARCHAR(64) NULL");
   await addColumn("purchase_lines", "barcode", "VARCHAR(64) NULL");
   await addColumn("purchase_lines", "expiry_date", "DATE NULL");
