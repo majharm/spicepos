@@ -389,6 +389,7 @@ function printAreaLineHtml(item, line, key, calc) {
         </select>
         <input data-line-disc="${escapeHtml(key)}" type="number" min="0" step="0.01" value="${escapeHtml(line.discountValue || 0)}" aria-label="Line discount" />
       </div>` : ""}
+    ${lineDescriptionHtml(line, key)}
   </div>`;
 }
 
@@ -562,6 +563,7 @@ function cafeMobileOrderHtml() {
           <div class="cafe-rate">${lineRateFieldHtml(item, line, key)}</div>
           <div class="cafe-amt" data-line-amt="${escapeHtml(key)}">${escapeHtml(money(calc.taxable + calc.gst))}</div>
         </div>
+        ${lineDescriptionHtml(line, key)}
       </article>`;
     })
     .join("");
@@ -1073,6 +1075,16 @@ function checkoutAmountPaid() {
   return Number.isFinite(n) ? n : undefined;
 }
 
+function thisBillPayable() {
+  const t = typeof cartTotals === "function" ? cartTotals() : { total: 0 };
+  const total = Number(t.total != null ? t.total : (t.taxable || 0) + (t.tax || 0)) || 0;
+  if (!state.editingOrderId) return total;
+  const o = (typeof orderCache !== "undefined" ? orderCache : []).find((row) => row.id === state.editingOrderId);
+  const due = globalThis.InvoicePrint?.invoiceDueFigures?.(o || { total });
+  const already = due ? Number(due.paid) || 0 : Math.min(total, Math.max(0, Number(o?.amount_paid) || 0));
+  return Math.max(0, total - already);
+}
+
 function invoiceSettlementHtml(o) {
   const due = globalThis.InvoicePrint?.invoiceDueFigures
     ? globalThis.InvoicePrint.invoiceDueFigures(o)
@@ -1166,7 +1178,7 @@ function cartLineFromOrderLine(l) {
     discountType: type,
     discountValue: value,
     barcode: l.barcode || "",
-    notes: String(l.notes || l.special_instruction || "").trim(),
+    notes: String(l.notes || l.description || l.special_instruction || "").trim(),
     printWidth: Number(l.print_width ?? l.printWidth) || 0,
     printHeight: Number(l.print_height ?? l.printHeight) || 0,
     printDimUnit: l.print_dim_unit || l.printDimUnit || "",
@@ -1459,10 +1471,9 @@ function syncPayAmountDefault() {
   const el = $("pay-amount");
   if (!el) return;
   if (!el.dataset.dirty) {
-    const t = typeof cartTotals === "function" ? cartTotals() : { total: 0 };
-    const total = Number(t.total != null ? t.total : (t.taxable || 0) + (t.tax || 0)) || 0;
+    const dueNow = thisBillPayable();
     const method = $("pay-method")?.value;
-    el.value = method === "credit" ? "0" : total.toFixed(2);
+    el.value = method === "credit" ? "0" : dueNow.toFixed(2);
   }
 }
 
@@ -4877,13 +4888,18 @@ function round2safe(n) {
 }
 
 function restaurantLineNoteHtml(line, key) {
-  if (!isRestaurantShop()) return "";
+  return lineDescriptionHtml(line, key, isRestaurantShop() ? "Special Instruction" : "Item Description");
+}
+
+function lineDescriptionHtml(line, key, label) {
   const note = String(line.notes || "");
   const open = Boolean(line.noteOpen) || Boolean(note.trim());
+  const title = label || (isRestaurantShop() ? "Special Instruction" : "Item Description");
+  const ph = isRestaurantShop() ? "No onion, extra cheese" : "Package, service, or other details";
   if (open) {
-    return `<label class="line-si"><span>Special Instruction</span><textarea data-line-note="${escapeHtml(key)}" maxlength="240" rows="2" placeholder="No onion, extra cheese">${escapeHtml(note)}</textarea></label>`;
+    return `<label class="line-si line-desc"><span>${escapeHtml(title)}</span><textarea data-line-note="${escapeHtml(key)}" maxlength="500" rows="2" placeholder="${escapeHtml(ph)}">${escapeHtml(note)}</textarea></label>`;
   }
-  return `<button class="line-si-btn" type="button" data-note-open="${escapeHtml(key)}">Add Special Instruction</button>`;
+  return `<button class="line-si-btn" type="button" data-note-open="${escapeHtml(key)}">Add ${escapeHtml(title)}</button>`;
 }
 
 function classicLineDiscHtml(line, key) {
@@ -4955,7 +4971,7 @@ function renderCart() {
         const packBit = preview.pack && preview.pack !== "—" ? preview.pack : "";
         return `<tr class="tone-${alert.stock.tone} exp-${alert.exp.tone}">
           <td class="pharm-n">${idx + 1}</td>
-          <td class="pharm-med">${escapeHtml(item.name)}${packBit ? `<small>${escapeHtml(packBit)} · ${escapeHtml(alert.stock.label)}</small>` : `<small>${escapeHtml(alert.stock.label)}</small>`}</td>
+          <td class="pharm-med">${escapeHtml(item.name)}${packBit ? `<small>${escapeHtml(packBit)} · ${escapeHtml(alert.stock.label)}</small>` : `<small>${escapeHtml(alert.stock.label)}</small>`}${lineDescriptionHtml(line, key)}</td>
           <td class="exp-cell">${escapeHtml(preview.batchNo || "—")}<small>${escapeHtml(preview.expiry || "—")}${alert.exp.expired ? " · EXP" : alert.exp.soon ? ` · ${escapeHtml(alert.exp.label)}` : ""}</small></td>
           <td>
             <div class="qty">
@@ -5007,7 +5023,7 @@ function renderCart() {
         return `<tr class="tone-${alert.stock.tone} exp-${alert.exp.tone}">
           <td class="pharm-n">${idx + 1}</td>
           <td>${escapeHtml(item.code || item.hsn || "—")}</td>
-          <td class="pharm-med">${escapeHtml(item.name)}</td>
+          <td class="pharm-med">${escapeHtml(item.name)}${lineDescriptionHtml(line, key)}</td>
           <td class="classic-barcode">${barcode ? escapeHtml(barcode) : "—"}</td>
           <td>${escapeHtml(variant || "—")}${alert.exp.expired ? ` · EXPIRED ${escapeHtml(classicDateOnly(alert.exp.date) || alert.exp.short)}` : ""}</td>
           <td class="pharm-n pharm-rate">${lineRateFieldHtml(item, line, key)}</td>
@@ -5069,7 +5085,7 @@ function renderCart() {
               </select>
               <input data-line-disc="${escapeHtml(key)}" type="number" min="0" step="0.01" value="${escapeHtml(line.discountValue || 0)}" aria-label="Line discount" />
             </div>` : ""}
-          ${restaurantLineNoteHtml(line, key)}
+          ${lineDescriptionHtml(line, key)}
         </div>`;
       })
       .join("");
@@ -5130,7 +5146,7 @@ function renderCart() {
     $("btn-shift-table").hidden = !show;
     $("btn-shift-table").disabled = !can;
   }
-  const payTotal = t.total != null ? t.total : t.taxable + t.tax;
+  const payTotal = thisBillPayable();
   $("btn-pay").textContent = state.editingOrderId
     ? tt("pos.save_changes", "Save changes")
     : state.cart.length
@@ -10240,7 +10256,7 @@ $("lines").addEventListener("input", (e) => {
   const ta = e.target.closest("[data-line-note]");
   if (ta) {
     const line = findCartLine(ta.dataset.lineNote);
-    if (line) line.notes = String(ta.value || "").slice(0, 240);
+    if (line) line.notes = String(ta.value || "").slice(0, 500);
     return;
   }
   const lineRate = e.target.closest("[data-line-rate], [data-print-rate]");
@@ -10513,10 +10529,7 @@ $("order-pane").addEventListener("click", async (e) => {
     state.lastPack = o.pack_id ? { id: o.pack_id, name: o.pack_name, count: o.pack_count || 1 } : null;
     $("customer").value = state.customerId;
     $("pay-method").value = o.payment_method || "cash";
-    if ($("pay-amount")) {
-      $("pay-amount").value = String(Number(o.amount_paid) || 0);
-      $("pay-amount").dataset.dirty = "1";
-    }
+    if ($("pay-amount")) delete $("pay-amount").dataset.dirty;
     $("pack-choice").value = o.pack_id || "";
     if ($("bill-cust-name")) $("bill-cust-name").value = o.customer_name || "";
     if ($("bill-cust-mobile")) $("bill-cust-mobile").value = o.customer_mobile || digitsMobile(customer()?.mobile);

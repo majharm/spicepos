@@ -1923,19 +1923,33 @@ function pos_apply_invoice_paid_delta($orderId, $delta, $businessId) {
   } catch (Exception $e) { /* optional */ }
 }
 
-function pos_apply_invoice_paid_fifo($customerId, $amount, $businessId) {
+function pos_apply_invoice_paid_fifo($customerId, $amount, $businessId, $excludeOrderId = "") {
   $left = pos_round2($amount);
   if ($left <= 0 || !$customerId) return;
   try {
-    $rows = pos_q(
-      "SELECT id, total, COALESCE(amount_paid,0) AS amount_paid, " . pos_invoice_open_remainder_sql() . " AS open_need FROM sales_orders
-       WHERE business_id = ? AND customer_id = ?
-         AND LOWER(TRIM(COALESCE(status,'confirmed'))) <> 'cancelled'
-         AND " . pos_invoice_open_remainder_sql() . " > 0.004
-       ORDER BY created_at ASC",
-      "ss",
-      [$businessId, $customerId]
-    );
+    $exclude = trim((string) $excludeOrderId);
+    if ($exclude !== "") {
+      $rows = pos_q(
+        "SELECT id, total, COALESCE(amount_paid,0) AS amount_paid, " . pos_invoice_open_remainder_sql() . " AS open_need FROM sales_orders
+         WHERE business_id = ? AND customer_id = ?
+           AND LOWER(TRIM(COALESCE(status,'confirmed'))) <> 'cancelled'
+           AND " . pos_invoice_open_remainder_sql() . " > 0.004
+           AND id <> ?
+         ORDER BY created_at ASC",
+        "sss",
+        [$businessId, $customerId, $exclude]
+      );
+    } else {
+      $rows = pos_q(
+        "SELECT id, total, COALESCE(amount_paid,0) AS amount_paid, " . pos_invoice_open_remainder_sql() . " AS open_need FROM sales_orders
+         WHERE business_id = ? AND customer_id = ?
+           AND LOWER(TRIM(COALESCE(status,'confirmed'))) <> 'cancelled'
+           AND " . pos_invoice_open_remainder_sql() . " > 0.004
+         ORDER BY created_at ASC",
+        "ss",
+        [$businessId, $customerId]
+      );
+    }
   } catch (Exception $e) {
     return;
   }
@@ -1976,6 +1990,14 @@ function pos_invoice_paid_amount($method, $total, $raw) {
   return $credit ? 0 : pos_round2($total);
 }
 
+function pos_split_invoice_collection($paidRaw, $invoiceTotal) {
+  $total = pos_round2($invoiceTotal);
+  $paid = pos_round2(max(0, (float) $paidRaw));
+  $onThis = pos_round2(min($paid, $total));
+  $overflow = pos_round2(max(0, $paid - $onThis));
+  return ["paid" => $paid, "onThis" => $onThis, "overflow" => $overflow, "total" => $total];
+}
+
 function pos_settle_customer_invoice($customer, $total, $method, $orderId, $orderNumber, $businessId, $uid = null, $amountPaid = null, $paymentReference = null, $paymentDate = null) {
   $invoiceTotal = pos_round2($total);
   $walkIn = pos_is_walk_in_customer($customer);
@@ -1984,6 +2006,11 @@ function pos_settle_customer_invoice($customer, $total, $method, $orderId, $orde
   if ($walkIn && $paid > $invoiceTotal) $paid = $invoiceTotal;
   $maxPaid = pos_round2($previousDue + $invoiceTotal);
   if ($paid > $maxPaid) $paid = $maxPaid;
+  $parts = pos_split_invoice_collection($paid, $invoiceTotal);
+  $onThis = $parts["onThis"];
+  if ($parts["overflow"] > 0 && !$walkIn) {
+    pos_apply_invoice_paid_fifo($customer["id"] ?? "", $parts["overflow"], $businessId, $orderId);
+  }
   $currentDue = pos_round2(max(0, $previousDue + $invoiceTotal - $paid));
   $limit = (float) ($customer["credit_limit"] ?? 0);
   if (!$walkIn && $limit > 0 && $currentDue > $limit) {
@@ -2047,13 +2074,13 @@ function pos_settle_customer_invoice($customer, $total, $method, $orderId, $orde
     if (function_exists("pos_post_receipt_journal")) {
       try { pos_post_receipt_journal($businessId, $uid, $paid, $receiptMethod, $entryNo, $ledgerId); } catch (Exception $e) { /* optional */ }
     }
-    pos_apply_invoice_paid_delta($orderId, $paid, $businessId);
+    pos_apply_invoice_paid_delta($orderId, $onThis, $businessId);
     $receipt = ["entryNo" => $entryNo, "ledgerId" => $ledgerId, "amount" => $paid];
   }
-  $payStatus = $paid <= 0 ? "unpaid" : ($paid + 0.0001 < $invoiceTotal ? "partial" : "paid");
+  $payStatus = $onThis <= 0 ? "unpaid" : ($onThis + 0.0001 < $invoiceTotal ? "partial" : "paid");
   $snap = [
     "previousDue" => $previousDue,
-    "amountPaid" => $paid,
+    "amountPaid" => $onThis,
     "currentDue" => $currentDue,
     "paymentStatus" => $payStatus,
     "paymentReference" => $paymentReference,

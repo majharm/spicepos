@@ -61,7 +61,8 @@ test("Customer QR page tracks live kitchen status without a refresh", () => {
 test("Counter restaurant cart and QR desk show item-wise instructions", () => {
   const app = read("js/app.js");
   assert.match(app, /function restaurantLineNoteHtml/);
-  assert.match(app, /Add Special Instruction/);
+  assert.match(app, /Special Instruction/);
+  assert.match(app, /Item Description/);
   assert.match(app, /qr-line-si/);
   assert.match(app, /notes: print \? \(l\.notes \|\| scaleLineNote\(l\)\) : scaleLineNote\(l\)/);
   assert.match(app, /function scaleLineNote/);

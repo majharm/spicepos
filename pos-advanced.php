@@ -704,7 +704,7 @@ function pos_compute_sale_line($item, $qty, $customer, $lineIn, $user = null) {
     "profit" => pos_adv_round2($taxable - $cost),
     "barcode" => trim((string) ($lineIn["barcode"] ?? "")),
     "batchId" => trim((string) ($lineIn["batchId"] ?? $lineIn["batch_id"] ?? "")),
-    "notes" => substr(trim((string) ($lineIn["notes"] ?? $lineIn["special_instruction"] ?? $lineIn["specialInstruction"] ?? "")), 0, 240),
+    "notes" => substr(trim((string) ($lineIn["notes"] ?? $lineIn["description"] ?? $lineIn["special_instruction"] ?? $lineIn["specialInstruction"] ?? "")), 0, 500),
     "print_width" => (float) ($lineIn["print_width"] ?? $lineIn["printWidth"] ?? 0),
     "print_height" => (float) ($lineIn["print_height"] ?? $lineIn["printHeight"] ?? 0),
     "print_dim_unit" => substr((string) ($lineIn["print_dim_unit"] ?? $lineIn["printDimUnit"] ?? ""), 0, 16),
@@ -718,7 +718,7 @@ function pos_compute_sale_line($item, $qty, $customer, $lineIn, $user = null) {
 }
 
 function pos_persist_sale_line_note($lineId, $raw) {
-  $notes = substr(trim((string) $raw), 0, 240);
+  $notes = substr(trim((string) $raw), 0, 500);
   if ($notes === "" || !$lineId) return;
   try {
     pos_q("UPDATE sales_order_lines SET notes = ? WHERE id = ?", "ss", [$notes, $lineId]);

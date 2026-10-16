@@ -127,6 +127,14 @@ export function invoicePaidAmount(method, total, raw) {
   return credit ? 0 : round2(total);
 }
 
+export function splitInvoiceCollection(paidRaw, invoiceTotal) {
+  const total = round2(invoiceTotal);
+  const paid = round2(Math.max(0, Number(paidRaw) || 0));
+  const onThis = round2(Math.min(paid, total));
+  const overflow = round2(Math.max(0, paid - onThis));
+  return { paid, onThis, overflow, total };
+}
+
 function isWalkInParty(customer) {
   if (!customer) return false;
   return String(customer.code || "") === "CUS-001" || /^walk-?in$/i.test(String(customer.name || "").trim());
@@ -250,11 +258,12 @@ async function applyInvoicePaidDelta(conn, orderId, delta) {
   }
 }
 
-async function applyInvoicePaidFifo(conn, customerId, amount) {
+async function applyInvoicePaidFifo(conn, customerId, amount, excludeOrderId = "") {
   let left = round2(amount);
   if (!customerId || left <= 0) return;
   let rows = [];
   try {
+    const exclude = String(excludeOrderId || "").trim();
     const [found] = await execSql(
       conn,
       `SELECT id, total, COALESCE(amount_paid,0) AS amount_paid,
@@ -263,8 +272,9 @@ async function applyInvoicePaidFifo(conn, customerId, amount) {
        WHERE business_id = ? AND customer_id = ?
          AND LOWER(TRIM(COALESCE(status,'confirmed'))) <> 'cancelled'
          AND ${INVOICE_OPEN_REMAINDER_SQL} > 0.004
+         ${exclude ? "AND id <> ?" : ""}
        ORDER BY created_at ASC`,
-      [bid(), customerId],
+      exclude ? [bid(), customerId, exclude] : [bid(), customerId],
     );
     rows = found || [];
   } catch {
@@ -443,6 +453,11 @@ export async function settleCustomerInvoice(conn, {
   if (walkIn && paid > invoiceTotal) paid = invoiceTotal;
   const maxPaid = round2(previousDue + invoiceTotal);
   if (paid > maxPaid) paid = maxPaid;
+  const parts = splitInvoiceCollection(paid, invoiceTotal);
+  if (parts.overflow > 0 && !walkIn) {
+    await applyInvoicePaidFifo(conn, customer.id, parts.overflow, orderId);
+  }
+  const onThis = parts.onThis;
   const currentDue = round2(Math.max(0, previousDue + invoiceTotal - paid));
   const limit = Number(customer.credit_limit || 0);
   if (!walkIn && limit > 0 && currentDue > limit) {
@@ -524,10 +539,10 @@ export async function settleCustomerInvoice(conn, {
     });
     if (receipt) receiptRows.push(receipt);
   }
-  const paymentStatus = paid <= 0 ? "unpaid" : paid + 0.0001 < invoiceTotal ? "partial" : "paid";
+  const paymentStatus = onThis <= 0 ? "unpaid" : onThis + 0.0001 < invoiceTotal ? "partial" : "paid";
   const snap = {
     previousDue,
-    amountPaid: paid,
+    amountPaid: onThis,
     currentDue,
     paymentStatus,
     paymentReference: paymentReference || null,

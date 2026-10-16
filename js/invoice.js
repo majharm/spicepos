@@ -157,6 +157,7 @@
     const U = unitsApi();
     const countLike = U?.isCount?.(unit);
     if (!countLike || !(qty > 0) || !(rate > 0)) return l;
+    if (num(l.discount) > 0.009) return l;
     const kgAmt = round2((qty / 1000) * rate);
     const countAmt = round2(qty * rate);
     if (Math.abs(stored - kgAmt) > 0.051 || Math.abs(countAmt - stored) <= 0.05) return l;
@@ -372,6 +373,14 @@
     const note = String(l.notes || "");
     if (/\d+(?:\.\d+)?\s*[x×]\s*\d+(?:\.\d+)?/.test(note)) return note;
     return "";
+  }
+
+  function lineDescriptionText(l) {
+    const note = String(l.notes || l.description || l.special_instruction || l.specialInstruction || "").trim();
+    if (!note) return "";
+    const caption = printLineCaption(l);
+    if (caption && (note === caption || caption.includes(note) || note.includes(caption))) return "";
+    return note;
   }
 
   function formatQty(gm, unit) {
@@ -769,7 +778,8 @@ ${purchaseBody(purchase, ctx)}
     const account = round2(Math.max(0, previous + total - paid));
     return {
       previous,
-      paid,
+      paid: paidOnThis,
+      collected: paid,
       current,
       account,
       total,
@@ -847,9 +857,11 @@ ${purchaseBody(purchase, ctx)}
       ? lines
           .map((l, i) => {
             const lineTotal = round2(num(l.amount) + num(l.gst_amount));
+            const desc = lineDescriptionText(l);
             return `<tr>
         <td class="inv-item" colspan="4">${i + 1}. ${escapeHtml(lineName(l, ctx))}</td>
       </tr>
+      ${desc ? `<tr class="inv-tax"><td colspan="4">${escapeHtml(desc)}</td></tr>` : ""}
       <tr class="inv-tax"><td colspan="4">Batch ${escapeHtml(l.batch_no || "—")} · Exp ${escapeHtml(formatExpiryShort(l.expiry_date) || "—")} · Pack ${escapeHtml(l.pack_label || "—")}</td></tr>
       <tr class="inv-line">
         <td class="inv-hsn">Qty ${escapeHtml(formatQty(l.quantity_gm, l.unit))}</td>
@@ -863,10 +875,12 @@ ${purchaseBody(purchase, ctx)}
       : lines
           .map((l, i) => {
             const caption = printBill ? printLineCaption(l) : "";
+            const desc = lineDescriptionText(l);
             return `<tr>
         <td class="inv-item" colspan="4">${i + 1}. ${escapeHtml(lineName(l, ctx))}</td>
       </tr>
       ${caption ? `<tr class="inv-tax"><td colspan="4">${escapeHtml(caption)}</td></tr>` : ""}
+      ${desc ? `<tr class="inv-tax"><td colspan="4">${escapeHtml(desc)}</td></tr>` : ""}
       <tr class="inv-line">
         <td class="inv-hsn">${taxCode(ctx)} ${escapeHtml(l.hsn)}</td>
         <td class="inv-num">${escapeHtml(formatQty(l.quantity_gm, l.unit))}</td>
@@ -1142,6 +1156,8 @@ ${invoiceBody(order, ctx)}
           : [`${taxCode(ctx)}: ${l.hsn}`, `GST ${l.gst_rate}%`];
         const caption = printLineCaption(l);
         if (caption) descBits.unshift(caption);
+        const desc = lineDescriptionText(l);
+        if (desc) descBits.unshift(desc);
         return `<tr>
         <td class="off-c">${i + 1}</td>
         <td>
@@ -1512,6 +1528,7 @@ ${voucherBody(entry, ctx)}
     purchaseBody,
     thermalPurchaseDocument,
     invoiceDueFigures,
+    lineDescriptionText,
     invoiceDueRowsHtml,
     invoicePaymentRows,
     voucherBody,

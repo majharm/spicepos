@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { DEFAULT_COA, expenseJournalLines, saleDiscountAmount, buildPartyLedger } from "./accounting.js";
 import { splitGstAmount } from "./gst-supply.js";
+import { splitInvoiceCollection } from "./accounts.js";
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 
@@ -241,6 +242,13 @@ test("customer outstanding hydrates from open invoice remainders on the Customer
   assert.match(core, /function pos_apply_invoice_paid_fifo/);
 });
 
+test("extra collection above this bill is overflow, not this invoice payment", () => {
+  const parts = splitInvoiceCollection(17700, 12980);
+  assert.equal(parts.onThis, 12980);
+  assert.equal(parts.overflow, 4720);
+  assert.equal(parts.paid, 17700);
+});
+
 test("stale customer outstanding is cleared when open invoices are paid", async () => {
   const { hydrateCustomerOutstandingRows } = await import("./accounts.js");
   const paid = hydrateCustomerOutstandingRows(
@@ -271,6 +279,12 @@ test("invoice settlement posts sale credit, payment receipt, and customer due", 
   assert.match(core, /if \(\$credit\) return 0/);
   assert.match(core, /PR-%05d/);
   assert.match(core, /\$previousDue \+ \$invoiceTotal - \$paid/);
+  assert.match(accounts, /export function splitInvoiceCollection/);
+  assert.match(accounts, /amountPaid: onThis/);
+  assert.match(core, /function pos_split_invoice_collection/);
+  assert.match(core, /"amountPaid" => \$onThis/);
+  assert.match(app, /function thisBillPayable/);
+  assert.match(app, /Item Description/);
   assert.match(app, /function checkoutAmountPaid/);
   assert.match(app, /function invoiceSettlementHtml/);
   assert.match(app, /function receiptEntryFromInvoice/);

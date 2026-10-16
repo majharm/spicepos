@@ -496,6 +496,76 @@ test("office invoice lists ledger receipts till date then total due", () => {
   assert.equal(due.current, 14000);
 });
 
+test("Payment Made is this invoice after discount, not previous due bundled in", () => {
+  const InvoicePrint = loadInvoicePrint();
+  const due = InvoicePrint.invoiceDueFigures({
+    total: 12980,
+    previous_due: 4720,
+    amount_paid: 17700,
+    payment_method: "upi",
+    payment_status: "paid",
+    subtotal: 11000,
+    gst: 1980,
+    discount: 4000,
+  });
+  assert.equal(due.total, 12980);
+  assert.equal(due.paid, 12980);
+  assert.equal(due.current, 0);
+  assert.equal(due.account, 0);
+  assert.equal(due.previous, 4720);
+  const html = InvoicePrint.invoiceDueRowsHtml(
+    {
+      total: 12980,
+      previous_due: 4720,
+      amount_paid: 17700,
+      payment_method: "upi",
+      payment_status: "paid",
+    },
+    (n) => `₹${Number(n).toFixed(2)}`,
+    (v) => String(v),
+  );
+  assert.match(html, /Payment Made/);
+  assert.match(html, /₹12980\.00|₹12,980\.00/);
+  assert.doesNotMatch(html, /₹17700\.00|₹17,700\.00/);
+});
+
+test("printed invoice shows item description from the bill line", () => {
+  const InvoicePrint = loadInvoicePrint();
+  const ctx = {
+    company: { name: "QTECH ISP CONSULTANCY" },
+    customers: [],
+    items: [],
+    formatDateTime: (v) => String(v),
+    money: (n) => `₹${Number(n).toFixed(2)}`,
+    escapeHtml: (v) => String(v ?? ""),
+  };
+  const order = {
+    order_number: "SO-SMS",
+    total: 12980,
+    subtotal: 11000,
+    gst: 1980,
+    payment_method: "upi",
+    payment_status: "paid",
+    amount_paid: 12980,
+    lines: [
+      {
+        item_name: "BULK SMS",
+        quantity_gm: 120000,
+        unit: "NOS",
+        rate_per_kg: 0.09166667,
+        amount: 11000,
+        gst_rate: 18,
+        gst_amount: 1980,
+        notes: "120000 promotional SMS · 30 day validity",
+      },
+    ],
+  };
+  const office = InvoicePrint.officeInvoiceBody(order, ctx);
+  assert.match(office, /120000 promotional SMS/);
+  const thermal = InvoicePrint.invoiceBody(order, ctx);
+  assert.match(thermal, /120000 promotional SMS/);
+});
+
 test("Paid invoice Total due is this bill remaining, not older customer due", () => {
   const InvoicePrint = loadInvoicePrint();
   const order = {

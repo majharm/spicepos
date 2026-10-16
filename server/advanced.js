@@ -807,7 +807,7 @@ export function computeSaleLine(item, customer, lineIn) {
     profit: calc.profit,
     barcode: String(lineIn.barcode || "").trim(),
     batchId: String(lineIn.batchId || lineIn.batch_id || "").trim(),
-    notes: String(lineIn.notes || lineIn.special_instruction || lineIn.specialInstruction || "").trim().slice(0, 240),
+    notes: String(lineIn.notes || lineIn.description || lineIn.special_instruction || lineIn.specialInstruction || "").trim().slice(0, 500),
     print_width: Number(lineIn.print_width ?? lineIn.printWidth) || 0,
     print_height: Number(lineIn.print_height ?? lineIn.printHeight) || 0,
     print_dim_unit: String(lineIn.print_dim_unit ?? lineIn.printDimUnit ?? "").slice(0, 16),
