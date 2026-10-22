@@ -59,6 +59,7 @@ test("Apparel shops get female/male/kids colour and size, not spice copy", () =>
     ["female", "male", "kids", "unisex"],
   );
   assert.ok(F.sizesForShop({ category: "Garments" }).includes("XL"));
+  assert.ok(F.sizesForShop({ category: "Garments" }).includes("XXXL"));
   assert.ok(F.sizesForShop({ category: "Footwear" }).includes("7"));
   assert.equal(
     F.billName({ name: "Kurti", wearer_type: "female", color: "Maroon", size: "M" }),

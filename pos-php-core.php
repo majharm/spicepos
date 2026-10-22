@@ -799,6 +799,66 @@ function pos_is_apparel_shop($biz) {
   return (bool) preg_match("/(apparel|garment|clothing|boutique|saree|fashion|dress|textile)/", $text);
 }
 
+function pos_garment_normalize_size($raw) {
+  $s = strtoupper(preg_replace("/\s+/", "", trim((string) $raw)));
+  if ($s === "") return "";
+  if ($s === "3XL" || $s === "XXXL") return "XXXL";
+  if ($s === "2XL" || $s === "XXL") return "XXL";
+  if (preg_match("/^(\d+)X[L]?$/", $s, $m)) {
+    $n = (int) $m[1];
+    if ($n === 2) return "XXL";
+    if ($n >= 3) return "XXXL";
+  }
+  return $s;
+}
+
+function pos_garment_sizes_equal($a, $b) {
+  $left = pos_garment_normalize_size($a);
+  $right = pos_garment_normalize_size($b);
+  return $left !== "" && $left === $right;
+}
+
+function pos_garment_plan_size_lines($sizeQtys, $opts = []) {
+  if (!is_array($sizeQtys)) return [];
+  $merged = [];
+  foreach ($sizeQtys as $raw => $qtyRaw) {
+    $size = pos_garment_normalize_size($raw);
+    $qty = (int) round((float) $qtyRaw);
+    if ($size === "" || $qty <= 0) continue;
+    $merged[$size] = ($merged[$size] ?? 0) + $qty;
+  }
+  $out = [];
+  $bySize = $opts["barcodes_by_size"] ?? $opts["barcodesBySize"] ?? [];
+  $generate = !empty($opts["generate_barcodes"]) || !empty($opts["generateBarcodes"]);
+  $allowEmpty = !empty($opts["allow_empty_barcodes"]) || !empty($opts["allowEmptyBarcodes"]);
+  foreach ($merged as $size => $qty) {
+    $rawCodes = [];
+    if (is_array($bySize)) {
+      foreach ($bySize as $key => $val) {
+        if (pos_garment_sizes_equal($key, $size)) {
+          $rawCodes = $val;
+          break;
+        }
+      }
+    }
+    $codes = function_exists("pos_parse_manual_barcodes") ? pos_parse_manual_barcodes($rawCodes) : [];
+    if ($generate) {
+      if (count($codes) > $qty) throw new Exception("{$size}: too many barcodes for {$qty} pcs");
+    } elseif ($codes && count($codes) !== $qty) {
+      throw new Exception("{$size}: enter {$qty} barcodes for {$qty} pcs (entered " . count($codes) . ")");
+    }
+    $out[] = [
+      "size" => $size,
+      "qty" => $qty,
+      "rate" => $opts["rate"] ?? null,
+      "barcodes" => $codes,
+      "generate_barcodes" => $generate,
+      "allow_empty_barcodes" => $allowEmpty,
+    ];
+  }
+  return $out;
+}
+
 function pos_shop_kind($biz) {
   $type = strtolower(trim((string) ($biz["business_type"] ?? "")));
   if ($type === "restaurant" || $type === "cafe" || $type === "bakery" || $type === "bar & lounge") return "restaurant";

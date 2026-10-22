@@ -69,6 +69,7 @@ JavaScript
   js/offers-ui.js
   js/units.js
   js/footwear.js
+  js/garment-purchase.js
   js/discount.js
   js/loyalty.js
   js/barcode.js

@@ -1,6 +1,7 @@
 import "../js/payment-methods.js";
 import "../js/units.js";
 import "../js/footwear.js";
+import "../js/garment-purchase.js";
 import { query, withTransaction } from "./db.js";
 import { bid, authUser } from "./context.js";
 import { recordCreditPurchase, reverseCreditSale, recomputeCustomerOutstanding, settleCustomerInvoice, invoiceOpenDueByCustomer, hydrateCustomerOutstandingRows, persistHydratedOutstanding, collectOrderPayment } from "./accounts.js";
@@ -17,6 +18,7 @@ import {
 
 const POSUnits = globalThis.POSUnits;
 const POSFootwear = globalThis.POSFootwear;
+const POSGarmentPurchase = globalThis.POSGarmentPurchase;
 
 function rate4(n) {
   return POSUnits?.roundRate8 ? POSUnits.roundRate8(n) : Math.round((Number(n) || 0) * 1e8) / 1e8;
@@ -46,6 +48,118 @@ export function lineAmount(quantityGm, ratePerKg, unitOrItem) {
 
 export function round2(n) {
   return Math.round((Number(n) || 0) * 1e8) / 1e8;
+}
+
+function garmentSizeOf(item) {
+  return POSGarmentPurchase?.normalizeSize?.(item?.size) || String(item?.size || "").trim();
+}
+
+async function findOrCreateSizeVariant(conn, parent, size, biz) {
+  const want = POSGarmentPurchase?.normalizeSize?.(size) || String(size || "").trim();
+  if (!want) throw new Error("Size is required");
+  const [rows] = await conn.query(
+    `SELECT * FROM items
+     WHERE business_id = ? AND name = ?
+       AND COALESCE(color,'') = ? AND COALESCE(wearer_type,'') = ?`,
+    [bid(), parent.name, parent.color || "", parent.wearer_type || ""],
+  );
+  const match = (rows || []).find((row) => POSGarmentPurchase?.sizesEqual?.(row.size, want) || garmentSizeOf(row) === want);
+  if (match) return match;
+  const n = await nextSeq(conn, "item", 7);
+  const prefix = POSFootwear.itemPrefix(biz || {});
+  const id = crypto.randomUUID();
+  const code = `${prefix}-${String(n).padStart(3, "0")}`;
+  await conn.query(
+    `INSERT INTO items (
+       id, code, name, local_name, category, subcategory, color, size, wearer_type, base_unit,
+       purchase_rate, retail_rate, b2b_rate, gst_rate, hsn, image_url, stock_gm,
+       reorder_level_gm, status, business_id
+     ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    [
+      id,
+      code,
+      parent.name,
+      parent.local_name || null,
+      parent.category || POSFootwear.defaultCategory(biz || {}),
+      parent.subcategory || null,
+      parent.color || null,
+      want,
+      parent.wearer_type || null,
+      itemUnit(parent),
+      rate4(parent.purchase_rate),
+      rate4(parent.retail_rate),
+      rate4(parent.b2b_rate),
+      Number(parent.gst_rate) || 5,
+      parent.hsn || null,
+      parent.image_url || null,
+      0,
+      Number(parent.reorder_level_gm) || 0,
+      itemStatus(parent.status),
+      bid(),
+    ],
+  );
+  try {
+    await conn.query("UPDATE items SET unit=?, brand=?, brand_id=?, mrp=? WHERE id=? AND business_id=?", [
+      parent.unit || parent.base_unit || null,
+      parent.brand || null,
+      parent.brand_id || null,
+      parent.mrp ?? parent.retail_rate ?? null,
+      id,
+      bid(),
+    ]);
+  } catch {
+    /* optional columns */
+  }
+  await onItemSaved(conn, bid(), id, {
+    size: want,
+    color: parent.color,
+    wearer_type: parent.wearer_type,
+    mrp: parent.mrp,
+    brand: parent.brand,
+    brand_id: parent.brand_id,
+    min_billing_qty: parent.min_billing_qty,
+    custom_unit: parent.custom_unit,
+  });
+  const [created] = await conn.query("SELECT * FROM items WHERE id = ?", [id]);
+  return created[0];
+}
+
+export async function expandGarmentPurchaseLines(conn, lines, biz) {
+  const apparel = Boolean(POSFootwear?.isApparelShop?.(biz));
+  const out = [];
+  for (const line of lines || []) {
+    const sizeQtys = line.size_qtys || line.sizeQtys;
+    if (!apparel || !sizeQtys || typeof sizeQtys !== "object" || Array.isArray(sizeQtys)) {
+      out.push(line);
+      continue;
+    }
+    const [itemRows] = await conn.query("SELECT * FROM items WHERE id = ? AND business_id = ?", [line.item_id, bid()]);
+    const parent = itemRows[0];
+    if (!parent) throw new Error("Unknown item");
+    const planned = POSGarmentPurchase.planSizeLines(sizeQtys, {
+      rate: line.rate_per_kg,
+      generate_barcodes: line.generate_barcodes ?? line.generateBarcodes,
+      barcodes_by_size: line.barcodes_by_size || line.barcodesBySize,
+      allow_empty_barcodes: line.allow_empty_barcodes ?? line.allowEmptyBarcodes ?? true,
+    });
+    if (!planned.length) throw new Error(`${parent.name}: enter size-wise quantity`);
+    for (const row of planned) {
+      const item = await findOrCreateSizeVariant(conn, parent, row.size, biz);
+      out.push({
+        ...line,
+        item_id: item.id,
+        quantity_gm: row.qty,
+        rate_per_kg: row.rate ?? line.rate_per_kg,
+        barcodes: row.barcodes,
+        generate_barcodes: row.generate_barcodes,
+        allow_empty_barcodes: row.allow_empty_barcodes,
+        size: row.size,
+        color: parent.color || "",
+      });
+    }
+  }
+  if (!out.length) throw new Error("Enter at least one product with size-wise quantity");
+  return out;
 }
 
 function itemImageFromBody(b) {
@@ -649,8 +763,10 @@ export function registerCrud(app) {
         );
         const supplier = supRows[0];
         if (!supplier) throw new Error("Supplier not found");
+        const [bizRows] = await conn.query("SELECT category, business_type, name FROM businesses WHERE id = ?", [bid()]);
+        const expanded = await expandGarmentPurchaseLines(conn, lines, bizRows[0] || {});
         const built = [];
-        for (const line of lines) {
+        for (const line of expanded) {
           const [itemRows] = await conn.query(
             "SELECT * FROM items WHERE id = ? AND business_id = ?",
             [line.item_id, bid()],
@@ -708,30 +824,56 @@ export function registerCrud(app) {
         for (let i = 0; i < built.length; i++) {
           const line = built[i];
           const lineId = crypto.randomUUID();
-          await conn.query(
-            `INSERT INTO purchase_lines (
-               id, purchase_id, item_id, item_name, quantity_gm, rate_per_kg,
-               gst_rate, amount, gst_amount, total_amount, business_id
-             ) VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
-            [
-              lineId,
-              id,
-              line.item.id,
-              itemBillName(line.item),
-              line.qty,
-              line.rate,
-              line.gstRate,
-              line.amount,
-              line.gstAmount,
-              line.total,
-              bid(),
-            ],
-          );
+          const src = expanded[i] || {};
+          const size = POSGarmentPurchase?.normalizeSize?.(src.size || line.item.size) || line.item.size || null;
+          const color = String(src.color || line.item.color || "").trim() || null;
+          try {
+            await conn.query(
+              `INSERT INTO purchase_lines (
+                 id, purchase_id, item_id, item_name, quantity_gm, rate_per_kg,
+                 gst_rate, amount, gst_amount, total_amount, business_id, size, color
+               ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+              [
+                lineId,
+                id,
+                line.item.id,
+                itemBillName(line.item),
+                line.qty,
+                line.rate,
+                line.gstRate,
+                line.amount,
+                line.gstAmount,
+                line.total,
+                bid(),
+                size,
+                color,
+              ],
+            );
+          } catch {
+            await conn.query(
+              `INSERT INTO purchase_lines (
+                 id, purchase_id, item_id, item_name, quantity_gm, rate_per_kg,
+                 gst_rate, amount, gst_amount, total_amount, business_id
+               ) VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+              [
+                lineId,
+                id,
+                line.item.id,
+                itemBillName(line.item),
+                line.qty,
+                line.rate,
+                line.gstRate,
+                line.amount,
+                line.gstAmount,
+                line.total,
+                bid(),
+              ],
+            );
+          }
           await conn.query(
             "UPDATE items SET stock_gm = stock_gm + ? WHERE id = ? AND business_id = ?",
             [line.qty, line.item.id, bid()],
           );
-          const src = lines[i] || {};
           const batch = await onPurchaseLineSaved(conn, {
             businessId: bid(),
             branchId: null,
@@ -745,9 +887,13 @@ export function registerCrud(app) {
             rate: line.rate,
             barcode: src.barcode,
             barcodes: src.barcodes,
+            generate_barcodes: src.generate_barcodes || src.generateBarcodes,
+            allow_empty_barcodes: src.allow_empty_barcodes || src.allowEmptyBarcodes,
             batchNo: src.batch_no || src.batchNo,
             expiry: src.expiry_date || src.expiryDate,
             mrp: src.mrp,
+            size,
+            color,
           });
           barcodeCount += Array.isArray(batch?.barcodes)
             ? batch.barcodes.filter((r) => r.barcode).length

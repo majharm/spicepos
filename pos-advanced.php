@@ -86,6 +86,8 @@ function pos_ensure_advanced_schema() {
       "barcode" => "VARCHAR(64) NULL",
       "expiry_date" => "DATE NULL",
       "mrp" => "DECIMAL(12,2) NULL",
+      "size" => "VARCHAR(32) NULL",
+      "color" => "VARCHAR(64) NULL",
     ]);
     pos_ensure_columns("stock_movements", [
       "barcode" => "VARCHAR(64) NULL",
@@ -123,6 +125,9 @@ function pos_ensure_advanced_schema() {
       "status" => "VARCHAR(16) NOT NULL DEFAULT 'active'",
       "used_kind" => "VARCHAR(16) NULL",
       "used_at" => "TIMESTAMP(3) NULL",
+      "purchase_id" => "VARCHAR(255) NULL",
+      "size" => "VARCHAR(32) NULL",
+      "color" => "VARCHAR(64) NULL",
     ]);
   }
   @$db->query("UPDATE item_barcodes SET status='active', used_kind=NULL, used_at=NULL WHERE LOWER(kind) IN ('own','manufacturer') AND LOWER(COALESCE(status,'active')) <> 'active'");
@@ -260,7 +265,7 @@ function pos_unique_ean13($bid) {
   return pos_new_ean13($bid) . "X";
 }
 
-function pos_attach_item_barcode($bid, $itemId, $code, $kind = "own", $primary = false) {
+function pos_attach_item_barcode($bid, $itemId, $code, $kind = "own", $primary = false, $meta = []) {
   $code = pos_barcode_text($code);
   if ($code === "") return null;
   if (strlen($code) > 64) throw new Exception("Barcode is too long (max 64 characters)");
@@ -269,6 +274,7 @@ function pos_attach_item_barcode($bid, $itemId, $code, $kind = "own", $primary =
     "ss",
     [$bid, $code]
   );
+  $rowId = "";
   if ($existing) {
     if (($existing[0]["item_id"] ?? "") !== $itemId) throw new Exception("Barcode already used on another item");
     if ($primary || $kind === "own") {
@@ -276,21 +282,34 @@ function pos_attach_item_barcode($bid, $itemId, $code, $kind = "own", $primary =
         pos_q("UPDATE items SET barcode = ? WHERE id = ? AND business_id = ?", "sss", [$code, $itemId, $bid]);
       } catch (Exception $e) { /* optional */ }
     }
-    return $existing[0];
+    $rowId = $existing[0]["id"] ?? "";
+    $row = $existing[0];
+  } else {
+    $id = pos_uuid();
+    pos_q(
+      "INSERT INTO item_barcodes (id, business_id, item_id, barcode, kind, is_primary) VALUES (?,?,?,?,?,?)",
+      "sssssi",
+      [$id, $bid, $itemId, $code, $kind, $primary ? 1 : 0]
+    );
+    if ($primary || $kind === "own") {
+      try {
+        pos_q("UPDATE items SET barcode = ? WHERE id = ? AND business_id = ?", "sss", [$code, $itemId, $bid]);
+      } catch (Exception $e) { /* barcode column optional */ }
+    }
+    $rowId = $id;
+    $rows = pos_q("SELECT * FROM item_barcodes WHERE id = ? LIMIT 1", "s", [$id]);
+    $row = $rows[0] ?? null;
   }
-  $id = pos_uuid();
-  pos_q(
-    "INSERT INTO item_barcodes (id, business_id, item_id, barcode, kind, is_primary) VALUES (?,?,?,?,?,?)",
-    "sssssi",
-    [$id, $bid, $itemId, $code, $kind, $primary ? 1 : 0]
-  );
-  if ($primary || $kind === "own") {
+  if ($rowId && is_array($meta) && (!empty($meta["purchase_id"]) || !empty($meta["size"]) || !empty($meta["color"]))) {
     try {
-      pos_q("UPDATE items SET barcode = ? WHERE id = ? AND business_id = ?", "sss", [$code, $itemId, $bid]);
-    } catch (Exception $e) { /* barcode column optional */ }
+      pos_q(
+        "UPDATE item_barcodes SET purchase_id = ?, size = ?, color = ? WHERE id = ?",
+        "ssss",
+        [$meta["purchase_id"] ?? null, $meta["size"] ?? null, $meta["color"] ?? null, $rowId]
+      );
+    } catch (Exception $e) { /* optional columns */ }
   }
-  $rows = pos_q("SELECT * FROM item_barcodes WHERE id = ? LIMIT 1", "s", [$id]);
-  return $rows[0] ?? null;
+  return $row;
 }
 
 function pos_parse_manual_barcodes($raw) {
@@ -315,6 +334,44 @@ function pos_resolve_purchase_barcodes($item, $qty, $lineIn = []) {
   $codes = pos_parse_manual_barcodes($raw);
   if ($pieces < 1) throw new Exception("Quantity required");
   if ($pieces > 500) throw new Exception("Max 500 barcodes at once");
+  $generate = !empty($lineIn["generate_barcodes"]) || !empty($lineIn["generateBarcodes"]);
+  $allowEmpty = !empty($lineIn["allow_empty_barcodes"]) || !empty($lineIn["allowEmptyBarcodes"]);
+  if ($generate) {
+    if (count($codes) > $pieces) throw new Exception("Too many barcodes for {$pieces} pcs");
+    return $codes;
+  }
+  if ($allowEmpty && !$codes) return [];
+  if (count($codes) !== $pieces) {
+    throw new Exception("Enter {$pieces} barcodes for {$pieces} pcs (you entered " . count($codes) . ")");
+  }
+  return $codes;
+}
+
+function pos_resolve_purchase_piece_barcodes($bid, $item, $qty, $lineIn = []) {
+  if (!pos_item_is_count($item)) return [];
+  $pieces = max(0, (int) round((float) $qty));
+  $raw = array_key_exists("barcodes", $lineIn) ? $lineIn["barcodes"] : ($lineIn["barcode"] ?? []);
+  $codes = pos_parse_manual_barcodes($raw);
+  $generate = !empty($lineIn["generate_barcodes"]) || !empty($lineIn["generateBarcodes"]);
+  $allowEmpty = !empty($lineIn["allow_empty_barcodes"]) || !empty($lineIn["allowEmptyBarcodes"]);
+  if ($pieces < 1) throw new Exception("Quantity required");
+  if ($pieces > 500) throw new Exception("Max 500 barcodes at once");
+  if ($generate) {
+    if (count($codes) > $pieces) throw new Exception("Too many barcodes for {$pieces} pcs");
+    $used = array_fill_keys($codes, true);
+    while (count($codes) < $pieces) {
+      $next = pos_unique_ean13($bid);
+      $n = 0;
+      while (isset($used[$next]) && $n < 8) {
+        $next = pos_unique_ean13($bid);
+        $n++;
+      }
+      $used[$next] = true;
+      $codes[] = $next;
+    }
+    return $codes;
+  }
+  if ($allowEmpty && !$codes) return [];
   if (count($codes) !== $pieces) {
     throw new Exception("Enter {$pieces} barcodes for {$pieces} pcs (you entered " . count($codes) . ")");
   }
@@ -844,7 +901,7 @@ function pos_restore_batches_for_lines($bid, $lines) {
   }
 }
 
-function pos_insert_purchase_batch($bid, $branchId, $uid, $purchase, $lineId, $item, $qty, $rate, $barcode, $batchNo, $expiry, $mrp, $kind) {
+function pos_insert_purchase_batch($bid, $branchId, $uid, $purchase, $lineId, $item, $qty, $rate, $barcode, $batchNo, $expiry, $mrp, $kind, $lineIn = []) {
   $id = pos_uuid();
   pos_q(
     "INSERT INTO stock_batches (
@@ -860,7 +917,11 @@ function pos_insert_purchase_batch($bid, $branchId, $uid, $purchase, $lineId, $i
   );
   if (trim((string) $barcode) !== "") {
     try {
-      pos_attach_item_barcode($bid, $item["id"], $barcode, $kind, false);
+      pos_attach_item_barcode($bid, $item["id"], $barcode, $kind, false, [
+        "purchase_id" => $purchase["id"] ?? null,
+        "size" => $lineIn["size"] ?? ($item["size"] ?? ""),
+        "color" => $lineIn["color"] ?? ($item["color"] ?? ""),
+      ]);
     } catch (Exception $e) { /* unique */ }
   }
   pos_write_stock_movement($bid, $branchId, $uid, $item["id"], "purchase", $qty, $batchNo, [
@@ -877,13 +938,13 @@ function pos_create_purchase_batch($bid, $branchId, $uid, $purchase, $lineId, $i
   }
   $expiry = trim((string) ($lineIn["expiry_date"] ?? $lineIn["expiryDate"] ?? ""));
   $mrp = (float) ($lineIn["mrp"] ?? $item["mrp"] ?? $item["retail_rate"] ?? 0);
-  $codes = pos_resolve_purchase_barcodes($item, $qty, $lineIn);
+  $codes = pos_resolve_purchase_piece_barcodes($bid, $item, $qty, $lineIn);
   if ($codes) {
     $rows = [];
     for ($i = 0; $i < count($codes); $i++) {
       $used = pos_q("SELECT id FROM stock_batches WHERE business_id = ? AND barcode = ? AND remaining_gm > 0 LIMIT 1", "ss", [$bid, $codes[$i]]);
       if ($used) throw new Exception("Barcode {$codes[$i]} is already in stock");
-      $rows[] = pos_insert_purchase_batch($bid, $branchId, $uid, $purchase, $lineId, $item, 1, $rate, $codes[$i], $baseNo . "-" . str_pad((string) ($i + 1), 3, "0", STR_PAD_LEFT), $expiry, $mrp, "unit");
+      $rows[] = pos_insert_purchase_batch($bid, $branchId, $uid, $purchase, $lineId, $item, 1, $rate, $codes[$i], $baseNo . "-" . str_pad((string) ($i + 1), 3, "0", STR_PAD_LEFT), $expiry, $mrp, "unit", $lineIn);
     }
     try {
       pos_q("UPDATE purchase_lines SET batch_no = ?, barcode = ?, expiry_date = ?, mrp = ? WHERE id = ?", "sssds", [$rows[0]["batch_no"], $rows[0]["barcode"], $expiry !== "" ? $expiry : null, $mrp, $lineId]);
@@ -892,7 +953,7 @@ function pos_create_purchase_batch($bid, $branchId, $uid, $purchase, $lineId, $i
     $first["barcodes"] = $rows;
     return $first;
   }
-  $row = pos_insert_purchase_batch($bid, $branchId, $uid, $purchase, $lineId, $item, $qty, $rate, "", $baseNo, $expiry, $mrp, "batch");
+  $row = pos_insert_purchase_batch($bid, $branchId, $uid, $purchase, $lineId, $item, $qty, $rate, "", $baseNo, $expiry, $mrp, "batch", $lineIn);
   try {
     pos_q("UPDATE purchase_lines SET batch_no = ?, barcode = ?, expiry_date = ?, mrp = ? WHERE id = ?", "sssds", [$row["batch_no"], $row["barcode"], $expiry !== "" ? $expiry : null, $mrp, $lineId]);
   } catch (Exception $e) { /* optional */ }
