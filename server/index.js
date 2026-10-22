@@ -25,7 +25,7 @@ import {
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.join(__dirname, "..");
 const app = express();
-const APP_VERSION = "pos-10";
+const APP_VERSION = "pos-11";
 const APP_VERTICAL = "pharmacy";
 app.use(express.json({ limit: "8mb" }));
 
@@ -240,7 +240,7 @@ app.get("/api/size-stock", async (_req, res) => {
 
 app.get("/api/barcodes", async (req, res) => {
   try {
-    res.json(await listPieceBarcodes(req.query.purchase_id || null));
+    res.json(await listPieceBarcodes(req.query.purchase_id || null, req.query.code || null));
   } catch (err) {
     res.status(500).json({ error: String(err.message) });
   }

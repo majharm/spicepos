@@ -21,12 +21,21 @@ import {
 } from "../js/pharmacy.js";
 import { deductBatches, restoreBatchQty, saveItemBatch, syncItemStock, upsertBatch } from "./pharmacy-stock.js";
 import {
+  allocateSizeStock,
   deductGarmentQty,
   hasSizeStock,
   receiveGarmentPurchase,
   restoreGarmentQty,
+  sellableSizeQty,
 } from "./garment-stock.js";
-import { formatSizeQuantities, isGarmentCategory, parseSizeQuantities, totalSizeQty } from "../js/garment.js";
+import {
+  isGarmentCategory,
+  normalizeBarcode,
+  normalizeColour,
+  normalizeSize,
+  parseSizeQuantities,
+  totalSizeQty,
+} from "../js/garment.js";
 
 export function lineAmount(quantity, ratePerUnit) {
   return Number(quantity) * Number(ratePerUnit);
@@ -76,28 +85,43 @@ export async function buildPricedLines(conn, customer, lines, opts = {}) {
     if (!item) throw new Error("Unknown medicine");
     const qty = qtyOf(line);
     if (!Number.isFinite(qty) || qty <= 0) throw new Error("Invalid quantity");
-    const size = String(line.size || "").trim();
-    const colour = String(line.colour || line.color || item.colour || "").trim();
-    const barcode = String(line.barcode || line.piece_barcode || "").trim();
     const sized = await hasSizeStock(conn, item.id);
-    if (sized || size || barcode) {
-      if (!size && !barcode) throw new Error(`Select a size for ${item.name}`);
-      if (barcode) {
-        const [pieceRows] = await conn.query(
-          "SELECT * FROM item_piece_barcodes WHERE business_id = ? AND barcode = ?",
-          [BUSINESS_ID, barcode.toUpperCase()],
-        );
-        if (!pieceRows[0] || pieceRows[0].status !== "in_stock") {
-          throw new Error(`${item.name} barcode is not in stock`);
-        }
-      } else {
-        const [varRows] = await conn.query(
-          `SELECT COALESCE(SUM(qty),0) AS qty FROM item_size_stock
-           WHERE business_id = ? AND item_id = ? AND colour = ? AND size = ?`,
-          [BUSINESS_ID, item.id, colour, size],
-        );
-        if (qty > Number(varRows[0]?.qty || 0)) {
-          throw new Error(`${item.name} ${size} does not have enough stock`);
+    const barcode = normalizeBarcode(line.barcode || line.piece_barcode);
+    let chunks = [
+      {
+        qty,
+        size: normalizeSize(line.size),
+        colour: normalizeColour(line.colour || line.color || item.colour),
+        barcode,
+      },
+    ];
+    if (sized || chunks[0].size || barcode) {
+      if (barcode && qty !== 1) throw new Error(`Scan each piece barcode separately for ${item.name}`);
+      if (!chunks[0].size && !barcode) {
+        const plan = await allocateSizeStock(conn, item.id, qty);
+        if (!plan.ok) throw new Error(`${item.name} does not have enough size stock`);
+        chunks = plan.parts.map((part) => ({
+          qty: part.qty,
+          size: part.size,
+          colour: part.colour,
+          barcode: "",
+        }));
+      }
+      for (const chunk of chunks) {
+        if (!chunk.size && !chunk.barcode) throw new Error(`Select a size for ${item.name}`);
+        if (chunk.barcode) {
+          const [pieceRows] = await conn.query(
+            "SELECT * FROM item_piece_barcodes WHERE business_id = ? AND barcode = ?",
+            [BUSINESS_ID, chunk.barcode],
+          );
+          if (!pieceRows[0] || pieceRows[0].status !== "in_stock") {
+            throw new Error(`${item.name} barcode is not in stock`);
+          }
+        } else {
+          const available = await sellableSizeQty(conn, item.id, chunk.colour, chunk.size);
+          if (chunk.qty > available) {
+            throw new Error(`${item.name} ${chunk.size} does not have enough stock`);
+          }
         }
       }
     } else {
@@ -113,31 +137,33 @@ export async function buildPricedLines(conn, customer, lines, opts = {}) {
       if (qty > available) throw new Error(`${item.name} does not have enough stock`);
     }
     const rate = Number(line.rate ?? line.rate_per_kg) || sellingRate(item, customer);
-    const priced = saleLineTotals({
-      qty,
-      rate,
-      mrp: Number(line.mrp) || looseMrp(item) || rate,
-      gstRate: Number(item.gst_rate) || 0,
-      discount: Number(line.discount) || 0,
-      interstate: useInter,
-    });
-    built.push({
-      item,
-      qty,
-      rate: priced.rate,
-      amount: priced.taxable,
-      gstRate: Number(item.gst_rate) || 0,
-      gstAmount: priced.gst,
-      cgst: priced.cgst,
-      sgst: priced.sgst,
-      igst: priced.igst,
-      mrp: priced.mrp,
-      batchId: line.batchId || line.batch_id || null,
-      packType: line.packType || line.pack_type || item.pack_unit || (size ? "Piece" : "Strip"),
-      size,
-      colour,
-      barcode,
-    });
+    for (const chunk of chunks) {
+      const priced = saleLineTotals({
+        qty: chunk.qty,
+        rate,
+        mrp: Number(line.mrp) || looseMrp(item) || rate,
+        gstRate: Number(item.gst_rate) || 0,
+        discount: Number(line.discount) || 0,
+        interstate: useInter,
+      });
+      built.push({
+        item,
+        qty: chunk.qty,
+        rate: priced.rate,
+        amount: priced.taxable,
+        gstRate: Number(item.gst_rate) || 0,
+        gstAmount: priced.gst,
+        cgst: priced.cgst,
+        sgst: priced.sgst,
+        igst: priced.igst,
+        mrp: priced.mrp,
+        batchId: line.batchId || line.batch_id || null,
+        packType: line.packType || line.pack_type || item.pack_unit || (chunk.size ? "Piece" : "Strip"),
+        size: chunk.size,
+        colour: chunk.colour,
+        barcode: chunk.barcode,
+      });
+    }
   }
   return built;
 }
@@ -337,7 +363,7 @@ function itemPayload(b) {
     mrp: Number(b.mrp) || selling,
     barcode: b.barcode || null,
     default_expiry: expiryMonthToDate(b.expiry_date) || b.default_expiry || null,
-    colour: String(b.colour || b.color || "").trim() || null,
+    colour: normalizeColour(b.colour || b.color) || null,
     size_chart: b.size_chart || "letter",
     sizes_json: Array.isArray(b.sizes) ? JSON.stringify(b.sizes) : b.sizes_json || b.custom_sizes || null,
     status: b.status || "active",
@@ -738,7 +764,6 @@ export function registerCrud(app) {
         );
         for (const line of built) {
           const lineId = crypto.randomUUID();
-          const sizeText = line.garmentLine ? formatSizeQuantities(line.sizeQuantities) : "";
           await conn.query(
             `INSERT INTO purchase_lines (
                id, purchase_id, item_id, item_name, quantity_gm, rate_per_kg,
@@ -762,7 +787,7 @@ export function registerCrud(app) {
               line.generic_name,
               line.manufacturer,
               line.hsn,
-              line.garmentLine ? sizeText || "SIZE" : line.batch_no,
+              line.garmentLine ? "SIZE" : line.batch_no,
               line.garmentLine ? null : line.expiry_date,
               line.pack_type,
               line.calc.packQty,

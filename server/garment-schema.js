@@ -14,6 +14,18 @@ async function addColumn(table, column, ddl) {
   await query(`ALTER TABLE \`${table}\` ADD COLUMN ${ddl}`);
 }
 
+async function widenVarchar(table, column, minLength, { nullable = true } = {}) {
+  const rows = await query(
+    `SELECT CHARACTER_MAXIMUM_LENGTH AS len FROM INFORMATION_SCHEMA.COLUMNS
+     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?`,
+    [table, column],
+  );
+  const len = Number(rows[0]?.len);
+  if (!rows[0] || (Number.isFinite(len) && len >= minLength)) return;
+  const nullSql = nullable ? "NULL" : "NOT NULL";
+  await query(`ALTER TABLE \`${table}\` MODIFY \`${column}\` VARCHAR(${minLength}) ${nullSql}`);
+}
+
 export async function ensureGarmentSchema() {
   await addColumn("company_settings", "business_category", "business_category VARCHAR(40) NOT NULL DEFAULT 'pharmacy'");
   await addColumn("items", "colour", "colour VARCHAR(80) NULL");
@@ -24,7 +36,7 @@ export async function ensureGarmentSchema() {
   await addColumn("purchase_lines", "generate_barcodes", "generate_barcodes TINYINT NOT NULL DEFAULT 0");
   await addColumn("sales_order_lines", "colour", "colour VARCHAR(80) NULL");
   await addColumn("sales_order_lines", "size", "size VARCHAR(32) NULL");
-  await addColumn("sales_order_lines", "piece_barcode", "piece_barcode VARCHAR(64) NULL");
+  await addColumn("sales_order_lines", "piece_barcode", "piece_barcode VARCHAR(128) NULL");
   await addColumn("sales_return_lines", "colour", "colour VARCHAR(80) NULL");
   await addColumn("sales_return_lines", "size", "size VARCHAR(32) NULL");
   await addColumn("sales_return_lines", "piece_barcode", "piece_barcode VARCHAR(64) NULL");
@@ -40,10 +52,14 @@ export async function ensureGarmentSchema() {
     INDEX idx_item_size_item (item_id)
   )`);
 
+  await widenVarchar("item_piece_barcodes", "barcode", 128, { nullable: false });
+  await widenVarchar("sales_order_lines", "piece_barcode", 128);
+  await widenVarchar("sales_return_lines", "piece_barcode", 128);
+
   await query(`CREATE TABLE IF NOT EXISTS item_piece_barcodes (
     id VARCHAR(36) PRIMARY KEY,
     business_id VARCHAR(36) NOT NULL,
-    barcode VARCHAR(64) NOT NULL,
+    barcode VARCHAR(128) NOT NULL,
     item_id VARCHAR(36) NOT NULL,
     colour VARCHAR(80) NOT NULL DEFAULT '',
     size VARCHAR(32) NOT NULL,

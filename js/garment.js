@@ -29,6 +29,12 @@ export function normalizeSize(value) {
   return raw;
 }
 
+export function normalizeColour(value) {
+  return String(value ?? "")
+    .trim()
+    .replaceAll(/\s+/g, " ");
+}
+
 export function parseSizeList(value) {
   if (Array.isArray(value)) return [...new Set(value.map(normalizeSize).filter(Boolean))];
   const text = String(value || "").trim();
@@ -126,7 +132,7 @@ export function garmentPurchaseLineTotals(line = {}) {
   return {
     ...calc,
     sizeQuantities: sizes,
-    colour: String(line.colour || line.color || "").trim(),
+    colour: normalizeColour(line.colour || line.color),
     amount: round2(totalQty * rate),
   };
 }
@@ -150,11 +156,11 @@ export function normalizeBarcode(value) {
     .replaceAll(/\s+/g, "");
 }
 
-export function generatePieceBarcode({ itemCode, size, colour, sequence, purchaseNumber } = {}) {
+export function generatePieceBarcode({ itemCode, size, colour, sequence, purchaseNumber, lineId } = {}) {
   const parts = [
     "G",
     compactToken(purchaseNumber || "PO"),
-    compactToken(itemCode || "SKU"),
+    compactToken(lineId || itemCode || "SKU"),
     compactToken(size || "SZ"),
     compactToken(colour || "CLR"),
     String(Math.max(1, Number(sequence) || 1)).padStart(4, "0"),
@@ -174,6 +180,7 @@ export function expandPieceBarcodes({
   colour,
   sizeQuantities,
   purchaseNumber,
+  lineId,
   generate = false,
   assigned = [],
 } = {}) {
@@ -195,6 +202,7 @@ export function expandPieceBarcodes({
         colour,
         sequence: seq,
         purchaseNumber,
+        lineId,
       });
       assignedIndex += 1;
       seq += 1;
@@ -206,7 +214,32 @@ export function expandPieceBarcodes({
 }
 
 export function variantKey(itemId, colour, size) {
-  return `${itemId || ""}|${String(colour || "").trim().toLowerCase()}|${normalizeSize(size).toLowerCase()}`;
+  return `${itemId || ""}|${normalizeColour(colour).toLowerCase()}|${normalizeSize(size).toLowerCase()}`;
+}
+
+export function sizeStockVariants(rows = [], itemId) {
+  return (rows || [])
+    .filter((row) => (row.item_id || row.itemId) === itemId && (Number(row.qty ?? row.quantity) || 0) > 0)
+    .map((row) => ({
+      colour: normalizeColour(row.colour),
+      size: normalizeSize(row.size),
+      qty: Number(row.qty ?? row.quantity) || 0,
+    }))
+    .filter((row) => row.size);
+}
+
+export function allocateSizePlan(rows = [], itemId, qty) {
+  let need = Number(qty) || 0;
+  const parts = [];
+  if (need <= 0) return { ok: false, parts };
+  for (const row of sizeStockVariants(rows, itemId)) {
+    if (need <= 0) break;
+    const take = Math.min(row.qty, need);
+    if (take <= 0) continue;
+    parts.push({ ...row, qty: take });
+    need -= take;
+  }
+  return { ok: need <= 0, parts, remaining: need };
 }
 
 export function stockByVariant(rows = []) {
@@ -222,7 +255,7 @@ export function sizeStockForItem(rows = [], itemId, colour) {
   const map = {};
   for (const row of rows) {
     if ((row.item_id || row.itemId) !== itemId) continue;
-    if (colour && String(row.colour || "").trim().toLowerCase() !== String(colour).trim().toLowerCase()) continue;
+    if (colour && normalizeColour(row.colour).toLowerCase() !== normalizeColour(colour).toLowerCase()) continue;
     const size = normalizeSize(row.size);
     if (!size) continue;
     map[size] = (map[size] || 0) + (Number(row.qty ?? row.quantity) || 0);

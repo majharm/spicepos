@@ -108,7 +108,7 @@ function allBatchesFor(itemId) {
 
 function sellableOf(item, opts = {}) {
   const size = opts.size;
-  const colour = opts.colour ?? itemColour(item);
+  const colour = opts.colour;
   const sized = sizeStockRows().some((row) => row.item_id === item.id);
   if (size) return variantQty(item.id, colour, size);
   if (sized) {
@@ -133,7 +133,7 @@ function cartLineMatch(line, itemId, size, colour, barcode) {
 
 function availableForSale(item, opts = {}) {
   const size = opts.size;
-  const colour = opts.colour ?? itemColour(item);
+  const colour = opts.colour;
   const barcode = opts.barcode || "";
   const inCart =
     state.cart.find((l) => cartLineMatch(l, item.id, size, colour, barcode))?.qty ||
@@ -260,7 +260,7 @@ function filteredItems() {
   const list = activeItems();
   if (!q) return list;
   return list.filter((i) =>
-    [i.name, i.local_name, i.generic_name, i.code, i.barcode, i.manufacturer, i.category, i.medicine_type].join(" ").toLowerCase().includes(q),
+    [i.name, i.local_name, i.generic_name, i.code, i.barcode, i.manufacturer, i.category, i.medicine_type, i.colour].join(" ").toLowerCase().includes(q),
   );
 }
 
@@ -273,11 +273,12 @@ function renderCatalog() {
           const low = sellableOf(i) <= Number(i.reorder_level_gm);
           const out = sellableOf(i) <= 0;
           const colour = itemColour(i);
-          const sizeMap = garment ? Garment.sizeStockForItem(sizeStockRows(), i.id, colour) : {};
-          const chips = Object.entries(sizeMap)
-            .map(([size, qty]) => {
-              const disabled = qty <= 0 ? "disabled" : "";
-              return `<button class="size-chip" type="button" data-add-size="${escapeHtml(i.id)}" data-size="${escapeHtml(size)}" data-colour="${escapeHtml(colour)}" ${disabled}>${escapeHtml(size)} ${qty}</button>`;
+          const variants = garment ? Garment.sizeStockVariants(sizeStockRows(), i.id) : [];
+          const multiColour = new Set(variants.map((v) => v.colour)).size > 1;
+          const chips = variants
+            .map((v) => {
+              const label = multiColour && v.colour ? `${v.colour} ${v.size}` : v.size;
+              return `<button class="size-chip" type="button" data-add-size="${escapeHtml(i.id)}" data-size="${escapeHtml(v.size)}" data-colour="${escapeHtml(v.colour)}" ${v.qty <= 0 ? "disabled" : ""}>${escapeHtml(label)} ${v.qty}</button>`;
             })
             .join("");
           return `<div class="card" ${out && !garment ? "data-disabled=1" : ""}>
@@ -406,10 +407,18 @@ function addItem(id, qty = 1, opts = {}) {
   if (!item) return;
   const sizedItem = sizeStockRows().some((row) => row.item_id === id);
   const size = Garment.normalizeSize(opts.size);
-  const colour = String(opts.colour ?? itemColour(item));
-  const barcode = String(opts.barcode || "");
+  const colour = Garment.normalizeColour(opts.colour ?? (size ? "" : itemColour(item)));
+  const barcode = Garment.normalizeBarcode(opts.barcode || "");
   if ((isGarmentShop() || sizedItem) && !size && !barcode) {
     setHint(`Choose a size for ${item.name}`, "error");
+    return;
+  }
+  if (barcode && qty > 0 && state.cart.some((l) => Garment.normalizeBarcode(l.barcode) === barcode)) {
+    setHint(`Barcode ${barcode} is already on this bill`, "error");
+    return;
+  }
+  if (barcode && qty > 1) {
+    setHint("Scan each piece barcode separately", "error");
     return;
   }
   const line = state.cart.find((l) => cartLineMatch(l, id, size, colour, barcode));
@@ -420,7 +429,7 @@ function addItem(id, qty = 1, opts = {}) {
     return;
   }
   if (line) line.qty = Math.max(0, next);
-  else state.cart.push({ itemId: id, qty, size, colour, barcode });
+  else state.cart.push({ itemId: id, qty: barcode ? Math.min(1, qty) : qty, size, colour, barcode });
   state.cart = state.cart.filter((l) => l.qty > 0);
   renderCart();
 }
@@ -523,7 +532,7 @@ function renderItemsTable() {
       <td>${escapeHtml(isGarmentShop() ? i.colour || "—" : genericOf(i) || "—")}</td>
       <td>${escapeHtml(i.medicine_type || "—")}</td>
       <td>${escapeHtml(i.manufacturer || "—")}</td>
-      <td>${escapeHtml(isGarmentShop() ? Garment.formatSizeStock(Garment.sizeStockForItem(sizeStockRows(), i.id, i.colour)) : i.pack_size || i.pack_unit || "—")}</td>
+      <td>${escapeHtml(isGarmentShop() ? Garment.formatSizeStock(Garment.sizeStockForItem(sizeStockRows(), i.id)) : i.pack_size || i.pack_unit || "—")}</td>
       <td>${money(i.mrp)}</td>
       <td>${money(i.selling_price || i.retail_rate)}</td>
       <td class="${stockOf(i) <= Number(i.reorder_level_gm) ? "stock low" : "stock ok"}">${stockOf(i)}</td>
@@ -1325,11 +1334,32 @@ $("order-pane").addEventListener("click", (e) => {
   }
 });
 
+async function tryScanBarcode(raw) {
+  const code = Garment.normalizeBarcode(raw);
+  if (!code || code.length < 4) return false;
+  const rows = await api(`/api/barcodes?code=${encodeURIComponent(code)}`).catch(() => []);
+  const piece = Array.isArray(rows) ? rows[0] : rows;
+  if (!piece?.item_id) return false;
+  if (piece.status && piece.status !== "in_stock") {
+    setHint(`Barcode ${piece.barcode} is ${String(piece.status).replaceAll("_", " ")}`, "error");
+    return true;
+  }
+  addItem(piece.item_id, 1, { size: piece.size, colour: piece.colour, barcode: piece.barcode });
+  $("search").value = "";
+  state.query = "";
+  renderCatalog();
+  setHint(`Added ${piece.item_name} ${piece.size || ""}`.trim(), "ok");
+  return true;
+}
+
 $("search").addEventListener("input", () => {
   state.query = $("search").value;
   renderCatalog();
 });
-$("search-form").addEventListener("submit", (e) => e.preventDefault());
+$("search-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  await tryScanBarcode($("search").value);
+});
 $("customer").addEventListener("change", () => {
   state.customerId = $("customer").value;
   renderCatalog();
