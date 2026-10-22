@@ -20,6 +20,13 @@ import {
   saleLineTotals,
 } from "../js/pharmacy.js";
 import { deductBatches, restoreBatchQty, saveItemBatch, syncItemStock, upsertBatch } from "./pharmacy-stock.js";
+import {
+  deductGarmentQty,
+  hasSizeStock,
+  receiveGarmentPurchase,
+  restoreGarmentQty,
+} from "./garment-stock.js";
+import { formatSizeQuantities, isGarmentCategory, parseSizeQuantities, totalSizeQty } from "../js/garment.js";
 
 export function lineAmount(quantity, ratePerUnit) {
   return Number(quantity) * Number(ratePerUnit);
@@ -69,16 +76,42 @@ export async function buildPricedLines(conn, customer, lines, opts = {}) {
     if (!item) throw new Error("Unknown medicine");
     const qty = qtyOf(line);
     if (!Number.isFinite(qty) || qty <= 0) throw new Error("Invalid quantity");
-    const [sumRows] = await conn.query(
-      `SELECT
-         COUNT(*) AS n,
-         COALESCE(SUM(CASE WHEN qty > 0 AND (expiry_date IS NULL OR expiry_date >= CURDATE()) THEN qty ELSE 0 END),0) AS live_qty
-       FROM item_batches WHERE item_id = ? AND business_id = ?`,
-      [item.id, BUSINESS_ID],
-    );
-    const hasBatches = Number(sumRows[0]?.n) > 0;
-    const available = hasBatches ? Number(sumRows[0]?.live_qty) || 0 : Number(item.stock_gm || 0);
-    if (qty > available) throw new Error(`${item.name} does not have enough stock`);
+    const size = String(line.size || "").trim();
+    const colour = String(line.colour || line.color || item.colour || "").trim();
+    const barcode = String(line.barcode || line.piece_barcode || "").trim();
+    const sized = await hasSizeStock(conn, item.id);
+    if (sized || size || barcode) {
+      if (!size && !barcode) throw new Error(`Select a size for ${item.name}`);
+      if (barcode) {
+        const [pieceRows] = await conn.query(
+          "SELECT * FROM item_piece_barcodes WHERE business_id = ? AND barcode = ?",
+          [BUSINESS_ID, barcode.toUpperCase()],
+        );
+        if (!pieceRows[0] || pieceRows[0].status !== "in_stock") {
+          throw new Error(`${item.name} barcode is not in stock`);
+        }
+      } else {
+        const [varRows] = await conn.query(
+          `SELECT COALESCE(SUM(qty),0) AS qty FROM item_size_stock
+           WHERE business_id = ? AND item_id = ? AND colour = ? AND size = ?`,
+          [BUSINESS_ID, item.id, colour, size],
+        );
+        if (qty > Number(varRows[0]?.qty || 0)) {
+          throw new Error(`${item.name} ${size} does not have enough stock`);
+        }
+      }
+    } else {
+      const [sumRows] = await conn.query(
+        `SELECT
+           COUNT(*) AS n,
+           COALESCE(SUM(CASE WHEN qty > 0 AND (expiry_date IS NULL OR expiry_date >= CURDATE()) THEN qty ELSE 0 END),0) AS live_qty
+         FROM item_batches WHERE item_id = ? AND business_id = ?`,
+        [item.id, BUSINESS_ID],
+      );
+      const hasBatches = Number(sumRows[0]?.n) > 0;
+      const available = hasBatches ? Number(sumRows[0]?.live_qty) || 0 : Number(item.stock_gm || 0);
+      if (qty > available) throw new Error(`${item.name} does not have enough stock`);
+    }
     const rate = Number(line.rate ?? line.rate_per_kg) || sellingRate(item, customer);
     const priced = saleLineTotals({
       qty,
@@ -100,7 +133,10 @@ export async function buildPricedLines(conn, customer, lines, opts = {}) {
       igst: priced.igst,
       mrp: priced.mrp,
       batchId: line.batchId || line.batch_id || null,
-      packType: line.packType || line.pack_type || item.pack_unit || "Strip",
+      packType: line.packType || line.pack_type || item.pack_unit || (size ? "Piece" : "Strip"),
+      size,
+      colour,
+      barcode,
     });
   }
   return built;
@@ -194,20 +230,36 @@ export async function insertSalesOrder(
     ],
   );
   for (const line of built) {
-    const taken = await deductBatches(conn, line.item.id, line.qty, line.batchId);
+    const sized = line.size || line.barcode || (await hasSizeStock(conn, line.item.id));
+    const taken = sized
+      ? [
+          await deductGarmentQty(conn, {
+            itemId: line.item.id,
+            colour: line.colour,
+            size: line.size,
+            qty: line.qty,
+            barcode: line.barcode,
+          }),
+        ]
+      : await deductBatches(conn, line.item.id, line.qty, line.batchId);
     for (const part of taken) {
       const share = line.qty ? part.take / line.qty : 1;
+      const size = part.size || line.size || null;
+      const colour = part.colour || line.colour || null;
+      const pieceBarcode = part.barcode || line.barcode || null;
+      const itemName = size ? `${line.item.name} (${size}${colour ? ` · ${colour}` : ""})` : line.item.name;
       await conn.query(
         `INSERT INTO sales_order_lines (
            id, order_id, item_id, item_name, quantity_gm, rate_per_kg,
            discount, amount, gst_rate, cancelled, business_id,
-           batch_id, batch_no, expiry_date, pack_type, mrp, cgst, sgst, igst, hsn
-         ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+           batch_id, batch_no, expiry_date, pack_type, mrp, cgst, sgst, igst, hsn,
+           colour, size, piece_barcode
+         ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         [
           crypto.randomUUID(),
           orderId,
           line.item.id,
-          line.item.name,
+          itemName,
           part.take,
           line.rate,
           0,
@@ -215,15 +267,18 @@ export async function insertSalesOrder(
           line.gstRate,
           0,
           BUSINESS_ID,
-          part.id,
-          part.batch_no,
-          part.expiry_date,
+          part.id || null,
+          part.batch_no || (size ? size : null),
+          part.expiry_date || null,
           line.packType,
           part.mrp || line.mrp,
           round2(line.cgst * share),
           round2(line.sgst * share),
           round2(line.igst * share),
           line.item.hsn || null,
+          colour,
+          size,
+          pieceBarcode,
         ],
       );
     }
@@ -282,6 +337,9 @@ function itemPayload(b) {
     mrp: Number(b.mrp) || selling,
     barcode: b.barcode || null,
     default_expiry: expiryMonthToDate(b.expiry_date) || b.default_expiry || null,
+    colour: String(b.colour || b.color || "").trim() || null,
+    size_chart: b.size_chart || "letter",
+    sizes_json: Array.isArray(b.sizes) ? JSON.stringify(b.sizes) : b.sizes_json || b.custom_sizes || null,
     status: b.status || "active",
   };
 }
@@ -373,8 +431,9 @@ export function registerCrud(app) {
              purchase_rate, retail_rate, b2b_rate, gst_rate, hsn, stock_gm,
              reorder_level_gm, status, business_id,
              generic_name, medicine_type, manufacturer, pack_size, pack_unit,
-             units_per_pack, mrp, selling_price, barcode, default_expiry
-           ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'active', ?,?,?,?,?,?,?,?,?,?,?)`,
+             units_per_pack, mrp, selling_price, barcode, default_expiry,
+             colour, size_chart, sizes_json
+           ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'active', ?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
           [
             id,
             code,
@@ -401,6 +460,9 @@ export function registerCrud(app) {
             p.selling_price,
             p.barcode,
             p.default_expiry,
+            p.colour,
+            p.size_chart,
+            p.sizes_json,
           ],
         );
         await persistItemBatch(conn, id, b, p);
@@ -424,7 +486,8 @@ export function registerCrud(app) {
              purchase_rate=?, retail_rate=?, b2b_rate=?, gst_rate=?, hsn=?,
              reorder_level_gm=?, status=?,
              generic_name=?, medicine_type=?, manufacturer=?, pack_size=?, pack_unit=?,
-             units_per_pack=?, mrp=?, selling_price=?, barcode=?, default_expiry=?
+             units_per_pack=?, mrp=?, selling_price=?, barcode=?, default_expiry=?,
+             colour=?, size_chart=?, sizes_json=?
            WHERE id=? AND business_id=?`,
           [
             p.name,
@@ -449,6 +512,9 @@ export function registerCrud(app) {
             p.selling_price,
             p.barcode,
             p.default_expiry,
+            p.colour,
+            p.size_chart,
+            p.sizes_json,
             req.params.id,
             BUSINESS_ID,
           ],
@@ -577,10 +643,11 @@ export function registerCrud(app) {
         const supplier = supRows[0];
         if (!supplier) throw new Error("Supplier not found");
         const [companyRows] = await conn.query(
-          "SELECT gstin, state_code FROM company_settings WHERE business_id = ? LIMIT 1",
+          "SELECT gstin, state_code, business_category FROM company_settings WHERE business_id = ? LIMIT 1",
           [BUSINESS_ID],
         );
         const interstate = isInterstate(companyRows[0], supplier);
+        const garmentMode = isGarmentCategory(companyRows[0]?.business_category);
         const built = [];
         for (const line of lines) {
           const [itemRows] = await conn.query("SELECT * FROM items WHERE id = ? AND business_id = ?", [
@@ -588,13 +655,20 @@ export function registerCrud(app) {
             BUSINESS_ID,
           ]);
           const item = itemRows[0];
-          if (!item) throw new Error("Unknown medicine");
-          if (!line.batch_no) throw new Error(`Batch No. is required for ${item.name}`);
-          if (!line.expiry_date) throw new Error(`Expiry Date is required for ${item.name}`);
+          if (!item) throw new Error("Unknown product");
+          const sizeQuantities = parseSizeQuantities(line.size_quantities || line.sizeQuantities);
+          const garmentLine = garmentMode || totalSizeQty(sizeQuantities) > 0;
+          if (!garmentLine) {
+            if (!line.batch_no) throw new Error(`Batch No. is required for ${item.name}`);
+            if (!line.expiry_date) throw new Error(`Expiry Date is required for ${item.name}`);
+          }
+          const packQty = garmentLine
+            ? totalSizeQty(sizeQuantities) || Number(line.pack_qty ?? line.quantity_gm ?? line.quantity) || 0
+            : line.pack_qty ?? line.quantity_gm ?? line.quantity;
           const calc = purchaseLineTotals({
-            packQty: line.pack_qty ?? line.quantity_gm ?? line.quantity,
-            unitsPerPack: line.units_per_pack ?? item.units_per_pack,
-            totalQty: line.total_qty,
+            packQty,
+            unitsPerPack: garmentLine ? 1 : line.units_per_pack ?? item.units_per_pack,
+            totalQty: garmentLine ? packQty : line.total_qty,
             freeQty: line.free_qty,
             purchaseRate: line.purchase_rate ?? line.rate_per_kg ?? item.purchase_rate,
             discount: line.discount,
@@ -602,12 +676,20 @@ export function registerCrud(app) {
             interstate,
           });
           if (calc.stockQty <= 0) throw new Error(`Quantity required for ${item.name}`);
+          if (garmentLine && totalSizeQty(sizeQuantities) <= 0) {
+            throw new Error(`Enter size-wise quantity for ${item.name}`);
+          }
           built.push({
             item,
             calc,
-            batch_no: String(line.batch_no).trim(),
+            garmentLine,
+            sizeQuantities,
+            colour: String(line.colour || line.color || item.colour || "").trim(),
+            generateBarcodes: Boolean(line.generate_barcodes || line.generateBarcodes),
+            assignedBarcodes: line.barcodes || line.assigned_barcodes || [],
+            batch_no: String(line.batch_no || "").trim(),
             expiry_date: line.expiry_date,
-            pack_type: line.pack_type || item.pack_unit || "Strip",
+            pack_type: line.pack_type || item.pack_unit || (garmentLine ? "Piece" : "Strip"),
             mrp: Number(line.mrp ?? item.mrp) || 0,
             generic_name: line.generic_name || item.generic_name || item.local_name,
             manufacturer: line.manufacturer || item.manufacturer,
@@ -655,15 +737,18 @@ export function registerCrud(app) {
           ],
         );
         for (const line of built) {
+          const lineId = crypto.randomUUID();
+          const sizeText = line.garmentLine ? formatSizeQuantities(line.sizeQuantities) : "";
           await conn.query(
             `INSERT INTO purchase_lines (
                id, purchase_id, item_id, item_name, quantity_gm, rate_per_kg,
                gst_rate, amount, gst_amount, total_amount, business_id,
                generic_name, manufacturer, hsn, batch_no, expiry_date, pack_type,
-               pack_qty, units_per_pack, total_qty, free_qty, mrp, discount, cgst, sgst, igst
-             ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+               pack_qty, units_per_pack, total_qty, free_qty, mrp, discount, cgst, sgst, igst,
+               colour, size_quantities, generate_barcodes
+             ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
             [
-              crypto.randomUUID(),
+              lineId,
               id,
               line.item.id,
               line.item.name,
@@ -677,8 +762,8 @@ export function registerCrud(app) {
               line.generic_name,
               line.manufacturer,
               line.hsn,
-              line.batch_no,
-              line.expiry_date,
+              line.garmentLine ? sizeText || "SIZE" : line.batch_no,
+              line.garmentLine ? null : line.expiry_date,
               line.pack_type,
               line.calc.packQty,
               line.calc.unitsPerPack,
@@ -689,22 +774,38 @@ export function registerCrud(app) {
               line.calc.cgst,
               line.calc.sgst,
               line.calc.igst,
+              line.colour || null,
+              line.garmentLine ? JSON.stringify(line.sizeQuantities) : null,
+              line.generateBarcodes ? 1 : 0,
             ],
           );
-          await upsertBatch(conn, {
-            itemId: line.item.id,
-            batchNo: line.batch_no,
-            expiryDate: line.expiry_date,
-            qty: line.calc.stockQty,
-            mrp: line.mrp,
-            purchaseRate: line.calc.purchaseRate,
-            purchaseId: id,
-          });
+          if (line.garmentLine) {
+            await receiveGarmentPurchase(conn, {
+              item: line.item,
+              purchaseId: id,
+              purchaseLineId: lineId,
+              purchaseNumber,
+              colour: line.colour,
+              sizeQuantities: line.sizeQuantities,
+              generateBarcodes: line.generateBarcodes,
+              assignedBarcodes: line.assignedBarcodes,
+            });
+          } else {
+            await upsertBatch(conn, {
+              itemId: line.item.id,
+              batchNo: line.batch_no,
+              expiryDate: line.expiry_date,
+              qty: line.calc.stockQty,
+              mrp: line.mrp,
+              purchaseRate: line.calc.purchaseRate,
+              purchaseId: id,
+            });
+            await syncItemStock(conn, line.item.id);
+          }
           await conn.query(
-            "UPDATE items SET purchase_rate = ?, mrp = COALESCE(NULLIF(?,0), mrp) WHERE id = ? AND business_id = ?",
-            [line.calc.purchaseRate, line.mrp, line.item.id, BUSINESS_ID],
+            "UPDATE items SET purchase_rate = ?, mrp = COALESCE(NULLIF(?,0), mrp), colour = COALESCE(NULLIF(?, ''), colour) WHERE id = ? AND business_id = ?",
+            [line.calc.purchaseRate, line.mrp, line.colour || "", line.item.id, BUSINESS_ID],
           );
-          await syncItemStock(conn, line.item.id);
         }
         const [rows] = await conn.query("SELECT * FROM purchases WHERE id = ?", [id]);
         return rows[0];
@@ -736,14 +837,24 @@ export function registerCrud(app) {
           [existing.id],
         );
         for (const line of oldLines) {
-          await restoreBatchQty(conn, {
-            batchId: line.batch_id,
-            itemId: line.item_id,
-            qty: line.quantity_gm,
-            batchNo: line.batch_no,
-            expiryDate: line.expiry_date,
-            mrp: line.mrp,
-          });
+          if (line.size || line.piece_barcode) {
+            await restoreGarmentQty(conn, {
+              itemId: line.item_id,
+              colour: line.colour,
+              size: line.size,
+              qty: line.quantity_gm,
+              barcode: line.piece_barcode,
+            });
+          } else {
+            await restoreBatchQty(conn, {
+              batchId: line.batch_id,
+              itemId: line.item_id,
+              qty: line.quantity_gm,
+              batchNo: line.batch_no,
+              expiryDate: line.expiry_date,
+              mrp: line.mrp,
+            });
+          }
         }
         await conn.query("DELETE FROM sales_order_lines WHERE order_id = ?", [existing.id]);
 
@@ -821,20 +932,36 @@ export function registerCrud(app) {
         );
         if (newStatus !== "cancelled") {
           for (const line of built) {
-            const taken = await deductBatches(conn, line.item.id, line.qty, line.batchId);
+            const sized = line.size || line.barcode || (await hasSizeStock(conn, line.item.id));
+            const taken = sized
+              ? [
+                  await deductGarmentQty(conn, {
+                    itemId: line.item.id,
+                    colour: line.colour,
+                    size: line.size,
+                    qty: line.qty,
+                    barcode: line.barcode,
+                  }),
+                ]
+              : await deductBatches(conn, line.item.id, line.qty, line.batchId);
             for (const part of taken) {
               const share = line.qty ? part.take / line.qty : 1;
+              const size = part.size || line.size || null;
+              const colour = part.colour || line.colour || null;
+              const pieceBarcode = part.barcode || line.barcode || null;
+              const itemName = size ? `${line.item.name} (${size}${colour ? ` · ${colour}` : ""})` : line.item.name;
               await conn.query(
                 `INSERT INTO sales_order_lines (
                    id, order_id, item_id, item_name, quantity_gm, rate_per_kg,
                    discount, amount, gst_rate, cancelled, business_id,
-                   batch_id, batch_no, expiry_date, pack_type, mrp, cgst, sgst, igst, hsn
-                 ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+                   batch_id, batch_no, expiry_date, pack_type, mrp, cgst, sgst, igst, hsn,
+                   colour, size, piece_barcode
+                 ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
                 [
                   crypto.randomUUID(),
                   existing.id,
                   line.item.id,
-                  line.item.name,
+                  itemName,
                   part.take,
                   line.rate,
                   0,
@@ -842,15 +969,18 @@ export function registerCrud(app) {
                   line.gstRate,
                   0,
                   BUSINESS_ID,
-                  part.id,
-                  part.batch_no,
-                  part.expiry_date,
+                  part.id || null,
+                  part.batch_no || (size ? size : null),
+                  part.expiry_date || null,
                   line.packType,
                   part.mrp || line.mrp,
                   round2(line.cgst * share),
                   round2(line.sgst * share),
                   round2(line.igst * share),
                   line.item.hsn || null,
+                  colour,
+                  size,
+                  pieceBarcode,
                 ],
               );
             }
@@ -935,8 +1065,8 @@ export function registerCrud(app) {
           await conn.query(
             `INSERT INTO sales_return_lines (
                id, return_id, order_line_id, item_id, item_name, batch_id, batch_no,
-               quantity, amount, gst_amount, business_id
-             ) VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+               quantity, amount, gst_amount, business_id, colour, size, piece_barcode
+             ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
             [
               crypto.randomUUID(),
               id,
@@ -949,16 +1079,29 @@ export function registerCrud(app) {
               line.amount,
               line.gst,
               BUSINESS_ID,
+              line.source.colour || null,
+              line.source.size || null,
+              line.source.piece_barcode || null,
             ],
           );
-          await restoreBatchQty(conn, {
-            batchId: line.source.batch_id,
-            itemId: line.source.item_id,
-            qty: line.qty,
-            batchNo: line.source.batch_no,
-            expiryDate: line.source.expiry_date,
-            mrp: line.source.mrp,
-          });
+          if (line.source.size || line.source.piece_barcode) {
+            await restoreGarmentQty(conn, {
+              itemId: line.source.item_id,
+              colour: line.source.colour,
+              size: line.source.size,
+              qty: line.qty,
+              barcode: line.source.piece_barcode,
+            });
+          } else {
+            await restoreBatchQty(conn, {
+              batchId: line.source.batch_id,
+              itemId: line.source.item_id,
+              qty: line.qty,
+              batchNo: line.source.batch_no,
+              expiryDate: line.source.expiry_date,
+              mrp: line.source.mrp,
+            });
+          }
         }
         const [rows] = await conn.query("SELECT * FROM sales_returns WHERE id = ?", [id]);
         const [rLines] = await conn.query("SELECT * FROM sales_return_lines WHERE return_id = ?", [id]);

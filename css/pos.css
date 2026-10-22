@@ -279,6 +279,18 @@ a.btn { text-decoration: none; display: inline-block; }
 .card .sku { color: var(--muted); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; }
 .card .name { font-weight: 700; font-size: 15px; line-height: 1.3; }
 .card .meta { display: flex; justify-content: space-between; color: var(--muted); font-size: 13px; margin-top: auto; }
+.card-hit {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  text-align: left;
+  color: inherit;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  flex: 1;
+}
 .stock.ok { color: var(--mint); font-weight: 700; }
 .stock.low { color: var(--saffron-deep); font-weight: 700; }
 .stock.out { color: var(--danger); font-weight: 700; }
@@ -642,6 +654,56 @@ tr:hover td { background: #f3f7fc; }
   padding: 8px;
 }
 .po-line input, .po-line select { min-width: 0; width: 100%; padding: 8px; border-radius: 8px; border: 1px solid var(--line); background: #fff; }
+body:not(.vertical-garment) .garment-only { display: none !important; }
+body.vertical-garment .pharmacy-only { display: none !important; }
+.po-line.garment-po {
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+.po-garment-head {
+  display: grid;
+  grid-template-columns: minmax(160px, 1.6fr) repeat(4, minmax(110px, 1fr)) auto;
+  gap: 8px;
+  align-items: end;
+}
+.po-garment-head label {
+  display: grid;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 650;
+  color: var(--muted);
+}
+.size-matrix {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.size-cell {
+  display: grid;
+  gap: 4px;
+  min-width: 72px;
+  font-size: 12px;
+  font-weight: 650;
+  color: var(--muted);
+}
+.size-cell input { width: 72px; padding: 8px; border-radius: 8px; border: 1px solid var(--line); }
+.po-garment-foot {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  font-size: 13px;
+}
+.size-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.size-chip {
+  border: 1px solid var(--line);
+  background: #fff;
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 650;
+}
+.size-chip:disabled { opacity: 0.45; }
 tr.exp-expired td { background: #fdecea; }
 tr.exp-near td { background: #fff6e0; }
 

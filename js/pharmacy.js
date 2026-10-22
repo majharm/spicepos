@@ -378,13 +378,27 @@ export function mergeSaleLines(lines = []) {
     const id = line.itemId || line.item_id;
     if (!id) continue;
     const qty = Number(line.quantity ?? line.quantity_gm ?? line.qty) || 0;
-    const prev = map.get(id);
+    const size = String(line.size || "").trim();
+    const colour = String(line.colour || line.color || "").trim();
+    const barcode = String(line.barcode || line.piece_barcode || "").trim();
+    const key = `${id}|${size}|${colour}|${barcode}`;
+    const prev = map.get(key);
     if (prev) {
       prev.quantity = (Number(prev.quantity) || 0) + qty;
       prev.qty = prev.quantity;
       prev.quantity_gm = prev.quantity;
     } else {
-      map.set(id, { ...line, itemId: id, item_id: id, quantity: qty, qty, quantity_gm: qty });
+      map.set(key, {
+        ...line,
+        itemId: id,
+        item_id: id,
+        quantity: qty,
+        qty,
+        quantity_gm: qty,
+        size,
+        colour,
+        barcode,
+      });
     }
   }
   return [...map.values()];

@@ -5,12 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Pharmacy Medical POS</title>
     <meta http-equiv="Cache-Control" content="no-store" />
-    <meta name="app-version" content="pharmacy-9" />
+    <meta name="app-version" content="pos-10" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Outfit:wght@400;500;600;700&display=swap" />
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./css/pos.css?v=pharmacy-9" />
+    <link rel="stylesheet" href="./css/pos.css?v=pos-10" />
   </head>
   <body>
     <div class="app">
@@ -33,8 +33,8 @@
         <button class="nav-btn" type="button" data-view="reports">Reports</button>
         <button class="nav-btn" type="button" data-view="settings">Settings</button>
         <div class="nav-foot">
-          <div class="chip">Pharmacy</div>
-          <div class="chip" id="app-version-chip">pharmacy-9</div>
+          <div class="chip" id="vertical-chip">Pharmacy</div>
+          <div class="chip" id="app-version-chip">pos-10</div>
           <div class="chip">Today <b id="today-total">₹0.00</b></div>
           <div class="chip">Bills <b id="today-count">0</b></div>
           <div class="chip" id="clock">--:--</div>
@@ -140,6 +140,16 @@
             <label>Loose Unit <output id="item-loose-unit" class="computed">Tablet</output></label>
             <label>Loose Rate <output id="item-loose-rate" class="computed">—</output></label>
             <label>GST % <input id="item-gst" type="number" step="0.01" value="12" /></label>
+            <label class="garment-only">Colour <input id="item-colour" placeholder="Navy / Black" /></label>
+            <label class="garment-only">Size chart
+              <select id="item-size-chart">
+                <option value="letter">Letter (XS–XXXL)</option>
+                <option value="numeric">Numeric (28–38)</option>
+                <option value="both">Letter + numeric</option>
+                <option value="custom">Custom sizes</option>
+              </select>
+            </label>
+            <label class="garment-only">Custom sizes <input id="item-sizes" placeholder="Free size, 40, 42" /></label>
             <label>Barcode <input id="item-barcode" /></label>
             <label>Reorder Level <input id="item-reorder" type="number" /></label>
             <button class="btn primary" type="submit">Save</button>
@@ -168,8 +178,8 @@
           <div class="table-wrap" id="customers-table"></div>
         </section>
         <section class="view" id="view-batches" hidden>
-          <h2>Stock / Expiry</h2>
-          <p class="lede">Batches created from purchases. Near-expiry (90 days) and expired stock are highlighted.</p>
+          <h2 id="stock-heading">Stock / Expiry</h2>
+          <p class="lede" id="stock-lede">Batches created from purchases. Near-expiry (90 days) and expired stock are highlighted.</p>
           <div class="report-grid" id="batch-summary"></div>
           <div class="table-wrap" id="batches-table"></div>
         </section>
@@ -204,7 +214,7 @@
         </section>
         <section class="view" id="view-purchases" hidden>
           <h2>Purchases</h2>
-          <p class="lede">Supplier invoice → medicine batches → stock. Batch No. and Expiry are required on every line.</p>
+          <p class="lede" id="po-lede">Supplier invoice → medicine batches → stock. Batch No. and Expiry are required on every line.</p>
           <form class="settings wide" id="purchase-form">
             <label>Purchase Invoice No. * <input id="po-invoice" required /></label>
             <label>Invoice Date * <input id="po-date" type="date" required /></label>
@@ -226,6 +236,8 @@
           </form>
           <div class="hint" id="po-hint"></div>
           <div class="table-wrap" id="purchases-table"></div>
+          <h3 class="garment-only">Piece barcodes</h3>
+          <div class="table-wrap garment-only" id="barcodes-table"></div>
         </section>
         <section class="view" id="view-suppliers" hidden>
           <h2>Suppliers</h2>
@@ -294,6 +306,14 @@
             </label>
             <label>Phone <input id="set-phone" type="tel" autocomplete="tel" /></label>
             <label>Email <input id="set-email" type="email" autocomplete="email" /></label>
+            <label>Business category
+              <select id="set-vertical">
+                <option value="pharmacy">Pharmacy</option>
+                <option value="restaurant">Restaurant</option>
+                <option value="garment">Garment &amp; Fashion</option>
+                <option value="other">Other</option>
+              </select>
+            </label>
             <label>GSTIN
               <input id="set-gstin" maxlength="15" placeholder="27AABCU9603R1ZX" autocomplete="off" />
             </label>
@@ -326,7 +346,7 @@
         </div>
       </div>
     </div>
-    <script src="./js/qrcode.iife.js?v=pharmacy-9"></script>
-    <script type="module" src="./js/app.js?v=pharmacy-9"></script>
+    <script src="./js/qrcode.iife.js?v=pos-10"></script>
+    <script type="module" src="./js/app.js?v=pos-10"></script>
   </body>
 </html>
