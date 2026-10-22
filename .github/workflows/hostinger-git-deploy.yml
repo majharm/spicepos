@@ -30,8 +30,11 @@ jobs:
           node --check js/app.js
           node --check js/qr-order.js
           node --check js/pharmacy.js
+          node --check js/garment.js
           node --check server/pharmacy-schema.js
           node --check server/pharmacy-stock.js
+          node --check server/garment-schema.js
+          node --check server/garment-stock.js
 
       - name: Run unit tests
         run: npm test

@@ -105,6 +105,12 @@ export async function buildReports(from, to) {
      WHERE b.business_id = ? ORDER BY b.expiry_date`,
     [bid],
   ).catch(() => []);
+  const sizeStock = await query(
+    `SELECT i.code, i.name, s.colour, s.size, s.qty
+     FROM item_size_stock s JOIN items i ON i.id = s.item_id
+     WHERE s.business_id = ? ORDER BY i.name, s.colour, s.size`,
+    [bid],
+  ).catch(() => []);
   const expiry = batches.filter((b) => {
     if (!b.expiry_date) return false;
     const d = new Date(b.expiry_date);
@@ -139,6 +145,7 @@ export async function buildReports(from, to) {
     low,
     purchases,
     batches,
+    sizeStock,
     expiry,
     returns,
     customers,
@@ -208,6 +215,11 @@ export function reportsToSheets(data) {
       name: "Low stock",
       headers: ["Code", "Name", "Stock", "Reorder"],
       rows: data.low.map((i) => [i.code, i.name, num(i.stock_gm), num(i.reorder_level_gm)]),
+    },
+    {
+      name: "Size stock",
+      headers: ["Code", "Name", "Colour", "Size", "Qty"],
+      rows: (data.sizeStock || []).map((r) => [r.code, r.name, r.colour, r.size, num(r.qty)]),
     },
     {
       name: "Batches",

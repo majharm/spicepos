@@ -232,6 +232,17 @@ test("merged sale lines combine FEFO-split qty for the same medicine", () => {
   assert.equal(merged.length, 2);
 });
 
+test("merged sale lines keep garment sizes separate", () => {
+  const merged = mergeSaleLines([
+    { itemId: "a", qty: 2, size: "M", colour: "Navy" },
+    { itemId: "a", qty: 3, size: "L", colour: "Navy" },
+    { itemId: "a", qty: 1, size: "M", colour: "Navy" },
+  ]);
+  assert.equal(merged.length, 2);
+  assert.equal(merged.find((l) => l.size === "M").qty, 3);
+  assert.equal(merged.find((l) => l.size === "L").qty, 3);
+});
+
 test("return qty cannot exceed remaining billed units", () => {
   assert.equal(remainingReturnQty(10, 4), 6);
   assert.equal(remainingReturnQty(10, 10), 0);

@@ -1,4 +1,5 @@
 import * as Pharmacy from "./pharmacy.js";
+import * as Garment from "./garment.js";
 import {
   buildReceiptText,
   moneyINR,
@@ -14,6 +15,8 @@ const state = {
   packs: [],
   suppliers: [],
   batches: [],
+  sizeStock: [],
+  barcodes: [],
   cart: [],
   query: "",
   customerId: "",
@@ -48,6 +51,22 @@ function kg(_gm) {
 
 function stockOf(item) {
   return Number(item?.stock_gm) || 0;
+}
+
+function isGarmentShop() {
+  return Garment.isGarmentCategory(state.company?.business_category);
+}
+
+function itemColour(item) {
+  return String(item?.colour || "").trim();
+}
+
+function sizeStockRows() {
+  return state.sizeStock || [];
+}
+
+function variantQty(itemId, colour, size) {
+  return Garment.sizeStockForItem(sizeStockRows(), itemId, colour)[Garment.normalizeSize(size)] || 0;
 }
 
 function genericOf(item) {
@@ -87,15 +106,39 @@ function allBatchesFor(itemId) {
   return (state.batches || []).filter((b) => b.item_id === itemId && Number(b.qty) > 0);
 }
 
-function sellableOf(item) {
+function sellableOf(item, opts = {}) {
+  const size = opts.size;
+  const colour = opts.colour ?? itemColour(item);
+  const sized = sizeStockRows().some((row) => row.item_id === item.id);
+  if (size) return variantQty(item.id, colour, size);
+  if (sized) {
+    return Object.values(Garment.sizeStockForItem(sizeStockRows(), item.id, colour)).reduce(
+      (sum, qty) => sum + qty,
+      0,
+    );
+  }
   const hasBatch = (state.batches || []).some((b) => b.item_id === item.id);
   if (hasBatch) return batchesFor(item.id).reduce((s, b) => s + (Number(b.qty) || 0), 0);
   return stockOf(item);
 }
 
-function availableForSale(item) {
-  const inCart = state.cart.find((l) => l.itemId === item.id)?.qty || 0;
-  return sellableOf(item) + (state.editingOrderId ? inCart : 0);
+function cartLineMatch(line, itemId, size, colour, barcode) {
+  return (
+    line.itemId === itemId &&
+    String(line.size || "") === String(size || "") &&
+    String(line.colour || "") === String(colour || "") &&
+    String(line.barcode || "") === String(barcode || "")
+  );
+}
+
+function availableForSale(item, opts = {}) {
+  const size = opts.size;
+  const colour = opts.colour ?? itemColour(item);
+  const barcode = opts.barcode || "";
+  const inCart =
+    state.cart.find((l) => cartLineMatch(l, item.id, size, colour, barcode))?.qty ||
+    (!size ? state.cart.filter((l) => l.itemId === item.id).reduce((s, l) => s + l.qty, 0) : 0);
+  return sellableOf(item, { size, colour }) + (state.editingOrderId ? inCart : 0);
 }
 
 async function api(path, options) {
@@ -223,20 +266,32 @@ function filteredItems() {
 
 function renderCatalog() {
   const items = filteredItems();
+  const garment = isGarmentShop();
   $("catalog").innerHTML = items.length
     ? items
         .map((i) => {
           const low = sellableOf(i) <= Number(i.reorder_level_gm);
           const out = sellableOf(i) <= 0;
-          return `<button class="card" type="button" data-add="${escapeHtml(i.id)}" ${out ? "disabled" : ""}>
-        <div class="sku">${escapeHtml(i.medicine_type || i.category || "Medical")} · ${escapeHtml(i.pack_unit || "Strip")}</div>
+          const colour = itemColour(i);
+          const sizeMap = garment ? Garment.sizeStockForItem(sizeStockRows(), i.id, colour) : {};
+          const chips = Object.entries(sizeMap)
+            .map(([size, qty]) => {
+              const disabled = qty <= 0 ? "disabled" : "";
+              return `<button class="size-chip" type="button" data-add-size="${escapeHtml(i.id)}" data-size="${escapeHtml(size)}" data-colour="${escapeHtml(colour)}" ${disabled}>${escapeHtml(size)} ${qty}</button>`;
+            })
+            .join("");
+          return `<div class="card" ${out && !garment ? "data-disabled=1" : ""}>
+        <button class="card-hit" type="button" data-add="${escapeHtml(i.id)}" ${out && !garment ? "disabled" : ""}>
+        <div class="sku">${escapeHtml(garment ? colour || i.category || "Garment" : i.medicine_type || i.category || "Medical")} · ${escapeHtml(garment ? "Piece" : i.pack_unit || "Strip")}</div>
         <div class="name">${escapeHtml(i.name)} <small>${escapeHtml(genericOf(i))}</small></div>
-        <div class="meta"><span>${sellableOf(i)} ${escapeHtml(Pharmacy.looseUnitLabel(i))}</span><span>${money(rateFor(i))}/${escapeHtml(Pharmacy.looseUnitLabel(i))}${Pharmacy.unitsPerPack(i) > 1 ? ` · ${money(packRateFor(i))}/${escapeHtml(i.pack_unit || "Pack")}` : ""}</span></div>
+        <div class="meta"><span>${sellableOf(i)} ${escapeHtml(garment ? "pcs" : Pharmacy.looseUnitLabel(i))}</span><span>${money(rateFor(i))}${garment ? "/pc" : `/${escapeHtml(Pharmacy.looseUnitLabel(i))}`}${!garment && Pharmacy.unitsPerPack(i) > 1 ? ` · ${money(packRateFor(i))}/${escapeHtml(i.pack_unit || "Pack")}` : ""}</span></div>
         <div class="stock ${out ? "out" : low ? "low" : "ok"}">${escapeHtml(i.code)} · GST ${escapeHtml(i.gst_rate)}%</div>
-      </button>`;
+        </button>
+        ${garment ? `<div class="size-chips">${chips || `<span class="hint">No size stock</span>`}</div>` : ""}
+      </div>`;
         })
         .join("")
-    : `<p class="hint">${state.query ? "No medicines match this search." : "No medicines yet. Add them in Medicines, then receive stock in Purchases."}</p>`;
+    : `<p class="hint">${state.query ? "No products match this search." : garment ? "No garments yet. Add them in Products, then receive size-wise stock in Purchases." : "No medicines yet. Add them in Medicines, then receive stock in Purchases."}</p>`;
 }
 
 function cartTotals() {
@@ -273,13 +328,13 @@ function lineCalc(item, line) {
 function renderCart() {
   if ($("chosen-pack")) $("chosen-pack").textContent = packLabel();
   if (!state.cart.length) {
-    $("lines").innerHTML = `<p class="hint">Tap a medicine to add 1 loose unit. Use +/− for qty. Batch is picked FEFO (earliest expiry first).</p>`;
+    $("lines").innerHTML = `<p class="hint">${isGarmentShop() ? "Tap a size chip to add a piece. Stock is tracked by size and colour." : "Tap a medicine to add 1 loose unit. Use +/− for qty. Batch is picked FEFO (earliest expiry first)."}</p>`;
   } else {
     $("lines").innerHTML = `<div class="pharm-bill-wrap"><table class="pharm-bill-table">
       <thead><tr>
-        <th>Medicine</th>
-        <th>Batch No.</th>
-        <th>Expiry</th>
+        <th>${isGarmentShop() ? "Product" : "Medicine"}</th>
+        <th>${isGarmentShop() ? "Size" : "Batch No."}</th>
+        <th>${isGarmentShop() ? "Colour" : "Expiry"}</th>
         <th>Pack</th>
         <th>Qty</th>
         <th class="pharm-n">MRP</th>
@@ -296,15 +351,15 @@ function renderCart() {
           const calc = lineCalc(item, line);
           const unit = Pharmacy.looseUnitLabel(item);
           return `<tr>
-            <td class="pharm-med">${escapeHtml(item.name)}</td>
-            <td>${escapeHtml(batch.batchNo)}</td>
-            <td>${escapeHtml(batch.expiry)}</td>
+            <td class="pharm-med">${escapeHtml(item.name)}${line.size ? ` · ${escapeHtml(line.size)}` : ""}${line.colour ? ` · ${escapeHtml(line.colour)}` : ""}</td>
+            <td>${escapeHtml(isGarmentShop() ? line.size || "—" : batch.batchNo)}</td>
+            <td>${escapeHtml(isGarmentShop() ? line.colour || "—" : batch.expiry)}</td>
             <td>${escapeHtml(batch.pack)}</td>
             <td>
               <div class="qty">
-                <button type="button" data-chg="${escapeHtml(item.id)}" data-d="-1">−</button>
-                <span>${line.qty} ${escapeHtml(unit)}</span>
-                <button type="button" data-chg="${escapeHtml(item.id)}" data-d="1">+</button>
+                <button type="button" data-chg="${escapeHtml(item.id)}" data-d="-1" data-size="${escapeHtml(line.size || "")}" data-colour="${escapeHtml(line.colour || "")}" data-barcode="${escapeHtml(line.barcode || "")}">−</button>
+                <span>${line.qty} ${escapeHtml(line.size ? `${line.size}` : unit)}</span>
+                <button type="button" data-chg="${escapeHtml(item.id)}" data-d="1" data-size="${escapeHtml(line.size || "")}" data-colour="${escapeHtml(line.colour || "")}" data-barcode="${escapeHtml(line.barcode || "")}">+</button>
               </div>
             </td>
             <td class="pharm-n">${money(Pharmacy.looseMrp(item))}</td>
@@ -346,18 +401,26 @@ function renderCustomersSelect() {
 
 function renderPackChoice() {}
 
-function addItem(id, qty = 1) {
+function addItem(id, qty = 1, opts = {}) {
   const item = state.items.find((i) => i.id === id);
   if (!item) return;
-  const line = state.cart.find((l) => l.itemId === id);
+  const sizedItem = sizeStockRows().some((row) => row.item_id === id);
+  const size = Garment.normalizeSize(opts.size);
+  const colour = String(opts.colour ?? itemColour(item));
+  const barcode = String(opts.barcode || "");
+  if ((isGarmentShop() || sizedItem) && !size && !barcode) {
+    setHint(`Choose a size for ${item.name}`, "error");
+    return;
+  }
+  const line = state.cart.find((l) => cartLineMatch(l, id, size, colour, barcode));
   const next = (line ? line.qty : 0) + qty;
-  const available = availableForSale(item);
+  const available = availableForSale(item, { size, colour, barcode });
   if (next > available) {
-    setHint(`Only ${available} in-date stock for ${item.name}`, "error");
+    setHint(`Only ${available} in stock for ${item.name}${size ? ` ${size}` : ""}`, "error");
     return;
   }
   if (line) line.qty = Math.max(0, next);
-  else state.cart.push({ itemId: id, qty });
+  else state.cart.push({ itemId: id, qty, size, colour, barcode });
   state.cart = state.cart.filter((l) => l.qty > 0);
   renderCart();
 }
@@ -408,8 +471,11 @@ function clearItemForm() {
   $("item-id").value = "";
   if ($("item-upp")) $("item-upp").value = 10;
   if ($("item-gst")) $("item-gst").value = 12;
-  if ($("item-category")) $("item-category").value = "Medical";
+  if ($("item-category")) $("item-category").value = isGarmentShop() ? "Apparel" : "Medical";
   if ($("item-opening-qty")) $("item-opening-qty").value = "";
+  if ($("item-colour")) $("item-colour").value = "";
+  if ($("item-size-chart")) $("item-size-chart").value = "letter";
+  if ($("item-sizes")) $("item-sizes").value = "";
   updateLooseRatePreview();
 }
 
@@ -440,21 +506,24 @@ function fillItemForm(item) {
     $("item-expiry").value = Pharmacy.expiryDateToMonth(batch?.expiry_date || item.default_expiry);
   }
   if ($("item-opening-qty")) $("item-opening-qty").value = "";
+  if ($("item-colour")) $("item-colour").value = item.colour || "";
+  if ($("item-size-chart")) $("item-size-chart").value = item.size_chart || "letter";
+  if ($("item-sizes")) $("item-sizes").value = item.sizes_json || "";
   updateLooseRatePreview();
 }
 
 function renderItemsTable() {
   $("items-table").innerHTML = `<table><thead><tr>
-    <th>Code</th><th>Medicine</th><th>Generic</th><th>Type</th><th>Mfr</th><th>Pack</th><th>MRP</th><th>Sale</th><th>Stock</th><th></th>
+    <th>Code</th><th>${isGarmentShop() ? "Product" : "Medicine"}</th><th>${isGarmentShop() ? "Colour" : "Generic"}</th><th>Type</th><th>Mfr</th><th>${isGarmentShop() ? "Sizes" : "Pack"}</th><th>MRP</th><th>Sale</th><th>Stock</th><th></th>
   </tr></thead><tbody>${state.items
     .map(
       (i) => `<tr>
       <td>${escapeHtml(i.code)}</td>
       <td>${escapeHtml(i.name)}</td>
-      <td>${escapeHtml(genericOf(i) || "—")}</td>
+      <td>${escapeHtml(isGarmentShop() ? i.colour || "—" : genericOf(i) || "—")}</td>
       <td>${escapeHtml(i.medicine_type || "—")}</td>
       <td>${escapeHtml(i.manufacturer || "—")}</td>
-      <td>${escapeHtml(i.pack_size || i.pack_unit || "—")}</td>
+      <td>${escapeHtml(isGarmentShop() ? Garment.formatSizeStock(Garment.sizeStockForItem(sizeStockRows(), i.id, i.colour)) : i.pack_size || i.pack_unit || "—")}</td>
       <td>${money(i.mrp)}</td>
       <td>${money(i.selling_price || i.retail_rate)}</td>
       <td class="${stockOf(i) <= Number(i.reorder_level_gm) ? "stock low" : "stock ok"}">${stockOf(i)}</td>
@@ -483,11 +552,45 @@ function renderCustomersTable() {
 
 function renderPackCompose() {}
 
+function garmentSizeInputs(item) {
+  const sizes = Garment.sizesForChart(item?.size_chart || "both", item?.sizes_json);
+  return sizes
+    .map(
+      (size) => `<label class="size-cell">${escapeHtml(size)}
+        <input data-po-size="${escapeHtml(size)}" type="number" min="0" step="1" value="" />
+      </label>`,
+    )
+    .join("");
+}
+
 function poLineHtml(i) {
   const id = i?.id || "";
-  const options = `<option value="">Select medicine</option>` + activeItems()
+  const options = `<option value="">Select ${isGarmentShop() ? "product" : "medicine"}</option>` + activeItems()
     .map((m) => `<option value="${escapeHtml(m.id)}" ${m.id === id ? "selected" : ""}>${escapeHtml(m.name)}</option>`)
     .join("");
+  if (isGarmentShop()) {
+    const rate = i?.id ? i.purchase_rate ?? "" : "";
+    const mrp = i?.id ? i.mrp || i.retail_rate || "" : "";
+    const gst = i?.gst_rate ?? 5;
+    return `<div class="po-line garment-po" data-po-row data-garment="1">
+      <div class="po-garment-head">
+        <label>Product <select data-po-item>${options}</select></label>
+        <label>Colour <input data-po-colour placeholder="Navy / Black" value="${escapeHtml(i?.colour || "")}" /></label>
+        <label>Purchase rate <input data-po-rate type="number" step="0.01" min="0" value="${escapeHtml(rate)}" placeholder="0.00" /></label>
+        <label>MRP <input data-po-mrp type="number" step="0.01" min="0" value="${escapeHtml(mrp)}" placeholder="0.00" /></label>
+        <label>GST % <input data-po-gst type="number" step="0.01" min="0" value="${escapeHtml(gst)}" placeholder="5" /></label>
+        <button class="btn danger" type="button" data-po-remove>×</button>
+      </div>
+      <div class="size-matrix" data-po-sizes>${garmentSizeInputs(i)}</div>
+      <div class="po-garment-foot">
+        <label>Custom size <input data-po-custom-size placeholder="40 / Free size" /></label>
+        <button class="btn" type="button" data-po-add-size>Add size</button>
+        <label><input data-po-gen-bc type="checkbox" checked /> Generate barcode per piece</label>
+        <label>Assigned barcodes <input data-po-barcodes placeholder="Optional, comma separated" /></label>
+        <strong data-po-total>Qty 0 · Amount ₹0.00</strong>
+      </div>
+    </div>`;
+  }
   return `<div class="po-line" data-po-row>
     <select data-po-item>${options}</select>
     <input data-po-generic placeholder="Generic" value="${escapeHtml(i?.generic_name || i?.local_name || "")}" />
@@ -507,6 +610,19 @@ function poLineHtml(i) {
     <input data-po-gst type="number" step="0.01" value="${escapeHtml(i?.gst_rate || 12)}" placeholder="GST %" />
     <button class="btn danger" type="button" data-po-remove>×</button>
   </div>`;
+}
+
+function refreshGarmentPoTotals(row) {
+  if (!row?.hasAttribute("data-garment")) return;
+  const sizes = {};
+  row.querySelectorAll("[data-po-size]").forEach((input) => {
+    const qty = Number(input.value) || 0;
+    if (qty > 0) sizes[input.dataset.poSize] = qty;
+  });
+  const rate = Number(row.querySelector("[data-po-rate]")?.value) || 0;
+  const total = Garment.totalSizeQty(sizes);
+  const el = row.querySelector("[data-po-total]");
+  if (el) el.textContent = `Qty ${total} · Amount ${money(total * rate)}`;
 }
 
 function renderPoLines() {
@@ -532,6 +648,7 @@ function renderSettings() {
   if ($("set-preg")) $("set-preg").value = state.company.pharmacy_registration_no || "";
   if ($("set-other")) $("set-other").value = state.company.other_licence_no || "";
   if ($("set-lexp")) $("set-lexp").value = String(state.company.licence_expiry || "").slice(0, 10);
+  if ($("set-vertical")) $("set-vertical").value = state.company.business_category || "pharmacy";
   state.logoDraft = null;
   $("set-logo").value = "";
   showLogo($("logo-preview"), state.company.logo_url);
@@ -540,7 +657,8 @@ function renderSettings() {
 function renderSupport() {
   const expiry = String(state.company.licence_expiry || "").slice(0, 10);
   $("support-cards").innerHTML = [
-    ["Pharmacy", state.company.name],
+    [isGarmentShop() ? "Shop" : "Pharmacy", state.company.name],
+    ["Business category", state.company.business_category || "pharmacy"],
     ["Address", state.company.address || "—"],
     ["State", [state.company.state, state.company.state_code].filter(Boolean).join(" · ") || "—"],
     ["Phone", state.company.phone || "—"],
@@ -562,8 +680,40 @@ function paintHeader() {
   $("shop-name").textContent = name;
   document.title = name;
   const place = [state.company.address, state.company.phone].filter(Boolean).join(" · ");
-  $("shop-place").textContent = place || "Pharmacy · Medicines · Batches · Bills";
+  $("shop-place").textContent = place || (isGarmentShop()
+    ? "Garment & Fashion · Size-wise stock · Bills"
+    : "Pharmacy · Medicines · Batches · Bills");
   showLogo($("shop-logo"), state.company.logo_url);
+  applyVerticalUi();
+}
+
+function applyVerticalUi() {
+  const garment = isGarmentShop();
+  document.body.classList.toggle("vertical-garment", garment);
+  const chip = $("vertical-chip");
+  if (chip) chip.textContent = garment ? "Garment" : state.company.business_category || "Pharmacy";
+  const navMap = {
+    counter: garment ? "Counter bill" : "Pharmacy Bill",
+    items: garment ? "Products" : "Medicines",
+    batches: garment ? "Inventory" : "Stock / Expiry",
+  };
+  document.querySelectorAll(".nav-btn[data-view]").forEach((btn) => {
+    if (navMap[btn.dataset.view]) btn.textContent = navMap[btn.dataset.view];
+  });
+  if ($("stock-heading")) $("stock-heading").textContent = garment ? "Size-wise inventory" : "Stock / Expiry";
+  if ($("stock-lede")) {
+    $("stock-lede").textContent = garment
+      ? "Stock by product, size, and colour. Purchases, sales, returns, and adjustments update the same size."
+      : "Batches created from purchases. Near-expiry (90 days) and expired stock are highlighted.";
+  }
+  if ($("po-lede")) {
+    $("po-lede").textContent = garment
+      ? "One invoice can include many garments. Enter size-wise quantities; total qty and amount calculate automatically. Optional unique barcode per piece."
+      : "Supplier invoice → medicine batches → stock. Batch No. and Expiry are required on every line.";
+  }
+  if ($("po-add-line")) $("po-add-line").textContent = garment ? "Add product" : "Add medicine line";
+  const itemsH = document.querySelector("#view-items h2");
+  if (itemsH) itemsH.textContent = garment ? "Products" : "Medicines";
 }
 
 async function loadBootstrap() {
@@ -573,6 +723,7 @@ async function loadBootstrap() {
   state.customers = data.customers;
   state.packs = data.packs;
   state.batches = data.batches || [];
+  state.sizeStock = data.sizeStock || [];
   const ver = $("app-version-chip");
   if (ver) ver.textContent = data.version || "pharmacy-1";
   paintHeader();
@@ -588,6 +739,15 @@ async function loadBootstrap() {
   loadToday();
   loadSuppliers();
   loadQrOrders(true);
+  previewVerticalFromUrl();
+}
+
+function previewVerticalFromUrl() {
+  const vertical = new URLSearchParams(location.search).get("vertical");
+  if (!vertical) return;
+  state.company = { ...state.company, business_category: vertical };
+  applyVerticalUi();
+  if ($("po-lines")) $("po-lines").innerHTML = poLineHtml(activeItems()[0]);
 }
 
 async function loadToday() {
@@ -628,6 +788,7 @@ async function loadReports() {
       reportBlock("GST daywise", "GST daywise", ["Day", "Taxable", "GST", "Total"], (data.gst || []).map((r) => [String(r.day), Number(r.taxable) || 0, Number(r.gst) || 0, Number(r.total) || 0])),
       reportBlock("Stock", "Stock", ["Code", "Name", "Generic", "Type", "Mfr", "Pack", "Stock", "Reorder", "MRP", "Sale", "Purchase", "GST %", "HSN"], (data.stock || []).map((i) => [i.code, i.name, i.generic_name || i.local_name, i.medicine_type, i.manufacturer, i.pack_unit, Number(i.stock_gm) || 0, Number(i.reorder_level_gm) || 0, Number(i.mrp) || 0, Number(i.selling_price || i.retail_rate) || 0, Number(i.purchase_rate) || 0, Number(i.gst_rate) || 0, i.hsn])),
       reportBlock("Low stock", "Low stock", ["Code", "Name", "Stock", "Reorder"], (data.low || []).map((i) => [i.code, i.name, Number(i.stock_gm) || 0, Number(i.reorder_level_gm) || 0])),
+      reportBlock("Size stock", "Size stock", ["Code", "Name", "Colour", "Size", "Qty"], (data.sizeStock || []).map((r) => [r.code, r.name, r.colour, r.size, Number(r.qty) || 0])),
       reportBlock("Batches", "Batches", ["Code", "Medicine", "Batch", "Expiry", "Qty", "MRP"], (data.batches || []).map((b) => [b.code, b.name, b.batch_no, b.expiry_date, Number(b.qty) || 0, Number(b.mrp) || 0])),
       reportBlock("Expiry", "Expiry", ["Code", "Medicine", "Batch", "Expiry", "Qty"], (data.expiry || []).map((b) => [b.code, b.name, b.batch_no, b.expiry_date, Number(b.qty) || 0])),
       reportBlock("Purchases", "Purchases", ["PO", "Supplier", "Invoice", "Date", "Taxable", "GST", "Total", "Pay", "Status", "E-Way"], (data.purchases || []).map((p) => [p.purchase_number, p.supplier_name, p.supplier_invoice_number, p.purchase_date, Number(p.subtotal) || 0, Number(p.gst) || 0, Number(p.total) || 0, p.payment_method, p.payment_status, p.eway_bill_no])),
@@ -877,8 +1038,33 @@ async function loadPurchases() {
       <td>${escapeHtml(String(p.purchase_date || "").slice(0, 10))}</td>
       <td>${escapeHtml(p.supplier_invoice_number || "—")}</td>
       <td>${escapeHtml(p.payment_method || "")}</td>
-      <td>${(p.lines || []).map((l) => `${escapeHtml(l.item_name)} ${l.batch_no || ""} × ${l.pack_qty || l.quantity_gm}`).join(", ") || "—"}</td>
+      <td>${(p.lines || []).map((l) => {
+        const sizes = l.size_quantities ? Garment.formatSizeQuantities(l.size_quantities) : "";
+        const qty = l.total_qty || l.pack_qty || l.quantity_gm;
+        return `${escapeHtml(l.item_name)}${l.colour ? ` ${escapeHtml(l.colour)}` : ""}${sizes ? ` (${escapeHtml(sizes)})` : l.batch_no ? ` ${escapeHtml(l.batch_no)}` : ""} × ${qty} @ ${money(l.rate_per_kg)} = ${money(l.total_amount)}`;
+      }).join("; ") || "—"}</td>
       <td>${money(p.total)}</td>
+    </tr>`,
+    )
+    .join("")}</tbody></table>`;
+  if (isGarmentShop()) await loadBarcodes();
+}
+
+async function loadBarcodes() {
+  if (!$("barcodes-table")) return;
+  const rows = await api("/api/barcodes").catch(() => []);
+  state.barcodes = rows;
+  $("barcodes-table").innerHTML = `<table><thead><tr>
+    <th>Barcode</th><th>Product</th><th>Size</th><th>Colour</th><th>Purchase</th><th>Status</th>
+  </tr></thead><tbody>${(rows || [])
+    .map(
+      (b) => `<tr>
+      <td>${escapeHtml(b.barcode)}</td>
+      <td>${escapeHtml(b.item_name)}</td>
+      <td>${escapeHtml(b.size)}</td>
+      <td>${escapeHtml(b.colour || "—")}</td>
+      <td>${escapeHtml(String(b.purchase_id || "").slice(0, 8))}</td>
+      <td>${escapeHtml(b.status)}</td>
     </tr>`,
     )
     .join("")}</tbody></table>`;
@@ -910,6 +1096,32 @@ async function loadSuppliers() {
 }
 
 async function loadBatches() {
+  if (isGarmentShop()) {
+    const rows = await api("/api/size-stock").catch(() => state.sizeStock || []);
+    state.sizeStock = rows;
+    const products = new Set(rows.map((r) => r.item_id)).size;
+    const pieces = rows.reduce((s, r) => s + (Number(r.qty) || 0), 0);
+    $("batch-summary").innerHTML = [
+      ["Variants", rows.length],
+      ["Products", products],
+      ["Pieces", pieces],
+    ]
+      .map(([k, v]) => `<div class="report-card"><span>${k}</span><strong>${v}</strong></div>`)
+      .join("");
+    $("batches-table").innerHTML = `<table><thead><tr>
+      <th>Product</th><th>Colour</th><th>Size</th><th>Qty</th>
+    </tr></thead><tbody>${rows
+      .map(
+        (r) => `<tr>
+        <td>${escapeHtml(r.item_name)}</td>
+        <td>${escapeHtml(r.colour || "—")}</td>
+        <td>${escapeHtml(r.size)}</td>
+        <td class="${Number(r.qty) <= 0 ? "stock out" : "stock ok"}">${Number(r.qty) || 0}</td>
+      </tr>`,
+      )
+      .join("")}</tbody></table>`;
+    return;
+  }
   const rows = await api("/api/batches").catch(() => state.batches || []);
   state.batches = rows;
   const P = Pharmacy;
@@ -996,13 +1208,25 @@ function paintReturnLines() {
 }
 
 $("catalog").addEventListener("click", (e) => {
+  const sizeBtn = e.target.closest("[data-add-size]");
+  if (sizeBtn) {
+    addItem(sizeBtn.dataset.addSize, 1, {
+      size: sizeBtn.dataset.size,
+      colour: sizeBtn.dataset.colour,
+    });
+    return;
+  }
   const btn = e.target.closest("[data-add]");
   if (btn) addItem(btn.dataset.add, 1);
 });
 $("lines").addEventListener("click", (e) => {
   const btn = e.target.closest("[data-chg]");
   if (!btn) return;
-  addItem(btn.dataset.chg, Number(btn.dataset.d));
+  addItem(btn.dataset.chg, Number(btn.dataset.d), {
+    size: btn.dataset.size,
+    colour: btn.dataset.colour,
+    barcode: btn.dataset.barcode,
+  });
 });
 
 $("items-table").addEventListener("click", async (e) => {
@@ -1080,8 +1304,14 @@ $("order-pane").addEventListener("click", (e) => {
     state.editingOrderId = o.id;
     state.customerId = o.customer_id;
     state.cart = Pharmacy.mergeSaleLines(
-      (o.lines || []).map((l) => ({ itemId: l.item_id, qty: Number(l.quantity_gm) })),
-    ).map((l) => ({ itemId: l.itemId, qty: l.qty }));
+      (o.lines || []).map((l) => ({
+        itemId: l.item_id,
+        qty: Number(l.quantity_gm),
+        size: l.size,
+        colour: l.colour,
+        barcode: l.piece_barcode,
+      })),
+    ).map((l) => ({ itemId: l.itemId, qty: l.qty, size: l.size, colour: l.colour, barcode: l.barcode }));
     state.lastPack = null;
     $("customer").value = state.customerId;
     $("pay-method").value = o.payment_method || "cash";
@@ -1124,7 +1354,15 @@ $("btn-pay").addEventListener("click", async () => {
       prescriptionNo: ($("bill-rx")?.value || "").trim(),
       discount: Number($("bill-discount")?.value) || 0,
       amountPaid: $("bill-paid")?.value === "" ? undefined : Number($("bill-paid")?.value),
-      lines: Pharmacy.mergeSaleLines(state.cart.map((l) => ({ itemId: l.itemId, quantity: l.qty }))),
+      lines: Pharmacy.mergeSaleLines(
+        state.cart.map((l) => ({
+          itemId: l.itemId,
+          quantity: l.qty,
+          size: l.size,
+          colour: l.colour,
+          barcode: l.barcode,
+        })),
+      ),
     };
     const result = state.editingOrderId
       ? await api(`/api/orders/${state.editingOrderId}`, { method: "PUT", body: JSON.stringify(payload) })
@@ -1191,6 +1429,9 @@ $("item-form").addEventListener("submit", async (e) => {
     gst_rate: $("item-gst").value,
     barcode: $("item-barcode")?.value,
     reorder_level: $("item-reorder")?.value,
+    colour: $("item-colour")?.value,
+    size_chart: $("item-size-chart")?.value,
+    sizes_json: $("item-sizes")?.value,
   };
   try {
     const result = itemId
@@ -1243,22 +1484,45 @@ $("customer-form").addEventListener("submit", async (e) => {
 
 $("purchase-form").addEventListener("submit", async (e) => {
   e.preventDefault();
-  const lines = [...document.querySelectorAll("[data-po-row]")].map((row) => ({
-    item_id: row.querySelector("[data-po-item]")?.value,
-    generic_name: row.querySelector("[data-po-generic]")?.value,
-    manufacturer: row.querySelector("[data-po-mfr]")?.value,
-    hsn: row.querySelector("[data-po-hsn]")?.value,
-    batch_no: row.querySelector("[data-po-batch]")?.value,
-    expiry_date: row.querySelector("[data-po-exp]")?.value,
-    pack_type: row.querySelector("[data-po-pack]")?.value,
-    pack_qty: row.querySelector("[data-po-qty]")?.value,
-    units_per_pack: row.querySelector("[data-po-upp]")?.value,
-    free_qty: row.querySelector("[data-po-free]")?.value,
-    purchase_rate: row.querySelector("[data-po-rate]")?.value,
-    mrp: row.querySelector("[data-po-mrp]")?.value,
-    discount: row.querySelector("[data-po-disc]")?.value,
-    gst_rate: row.querySelector("[data-po-gst]")?.value,
-  })).filter((l) => l.item_id);
+  const lines = [...document.querySelectorAll("[data-po-row]")].map((row) => {
+    if (row.hasAttribute("data-garment")) {
+      const sizeQuantities = {};
+      row.querySelectorAll("[data-po-size]").forEach((input) => {
+        const qty = Number(input.value) || 0;
+        if (qty > 0) sizeQuantities[input.dataset.poSize] = qty;
+      });
+      const assigned = (row.querySelector("[data-po-barcodes]")?.value || "")
+        .split(/[, \n]+/)
+        .map((c) => c.trim())
+        .filter(Boolean);
+      return {
+        item_id: row.querySelector("[data-po-item]")?.value,
+        colour: row.querySelector("[data-po-colour]")?.value,
+        purchase_rate: row.querySelector("[data-po-rate]")?.value,
+        mrp: row.querySelector("[data-po-mrp]")?.value,
+        gst_rate: row.querySelector("[data-po-gst]")?.value,
+        size_quantities: sizeQuantities,
+        generate_barcodes: Boolean(row.querySelector("[data-po-gen-bc]")?.checked),
+        barcodes: assigned,
+      };
+    }
+    return {
+      item_id: row.querySelector("[data-po-item]")?.value,
+      generic_name: row.querySelector("[data-po-generic]")?.value,
+      manufacturer: row.querySelector("[data-po-mfr]")?.value,
+      hsn: row.querySelector("[data-po-hsn]")?.value,
+      batch_no: row.querySelector("[data-po-batch]")?.value,
+      expiry_date: row.querySelector("[data-po-exp]")?.value,
+      pack_type: row.querySelector("[data-po-pack]")?.value,
+      pack_qty: row.querySelector("[data-po-qty]")?.value,
+      units_per_pack: row.querySelector("[data-po-upp]")?.value,
+      free_qty: row.querySelector("[data-po-free]")?.value,
+      purchase_rate: row.querySelector("[data-po-rate]")?.value,
+      mrp: row.querySelector("[data-po-mrp]")?.value,
+      discount: row.querySelector("[data-po-disc]")?.value,
+      gst_rate: row.querySelector("[data-po-gst]")?.value,
+    };
+  }).filter((l) => l.item_id);
   try {
     await api("/api/purchases", {
       method: "POST",
@@ -1342,6 +1606,7 @@ $("settings-form").addEventListener("submit", async (e) => {
       pharmacy_registration_no: $("set-preg")?.value,
       other_licence_no: $("set-other")?.value,
       licence_expiry: $("set-lexp")?.value,
+      business_category: $("set-vertical")?.value || "pharmacy",
     };
     if (state.logoDraft !== null) payload.logo_url = state.logoDraft;
     const data = await api("/api/settings", {
@@ -1353,6 +1618,10 @@ $("settings-form").addEventListener("submit", async (e) => {
     paintHeader();
     renderSettings();
     renderSupport();
+    renderItemsTable();
+    renderCatalog();
+    renderCart();
+    if ($("po-lines")) $("po-lines").innerHTML = poLineHtml(activeItems()[0]);
     $("settings-hint").textContent = "Saved";
     $("settings-hint").className = "hint ok";
   } catch (err) {
@@ -1459,6 +1728,26 @@ $("po-add-line")?.addEventListener("click", () => {
 });
 $("po-lines")?.addEventListener("click", (e) => {
   if (e.target.closest("[data-po-remove]")) e.target.closest("[data-po-row]")?.remove();
+  const addSize = e.target.closest("[data-po-add-size]");
+  if (addSize) {
+    const row = addSize.closest("[data-po-row]");
+    const custom = Garment.normalizeSize(row.querySelector("[data-po-custom-size]")?.value);
+    if (!custom) return;
+    const matrix = row.querySelector("[data-po-sizes]");
+    if (matrix && ![...matrix.querySelectorAll("[data-po-size]")].some((el) => el.dataset.poSize === custom)) {
+      matrix.insertAdjacentHTML(
+        "beforeend",
+        `<label class="size-cell">${escapeHtml(custom)}
+          <input data-po-size="${escapeHtml(custom)}" type="number" min="0" step="1" value="1" />
+        </label>`,
+      );
+    }
+    refreshGarmentPoTotals(row);
+  }
+});
+$("po-lines")?.addEventListener("input", (e) => {
+  const row = e.target.closest("[data-po-row]");
+  if (row?.hasAttribute("data-garment")) refreshGarmentPoTotals(row);
 });
 $("po-lines")?.addEventListener("change", (e) => {
   const sel = e.target.closest("[data-po-item]");
@@ -1466,6 +1755,16 @@ $("po-lines")?.addEventListener("change", (e) => {
   const item = state.items.find((i) => i.id === sel.value);
   const row = sel.closest("[data-po-row]");
   if (!item || !row) return;
+  if (row.hasAttribute("data-garment")) {
+    if (row.querySelector("[data-po-colour]")) row.querySelector("[data-po-colour]").value = item.colour || "";
+    row.querySelector("[data-po-rate]").value = item.purchase_rate || 0;
+    row.querySelector("[data-po-mrp]").value = item.mrp || item.retail_rate || 0;
+    row.querySelector("[data-po-gst]").value = item.gst_rate || 5;
+    const matrix = row.querySelector("[data-po-sizes]");
+    if (matrix) matrix.innerHTML = garmentSizeInputs(item);
+    refreshGarmentPoTotals(row);
+    return;
+  }
   row.querySelector("[data-po-generic]").value = genericOf(item);
   row.querySelector("[data-po-mfr]").value = item.manufacturer || "";
   row.querySelector("[data-po-hsn]").value = item.hsn || "";
@@ -1516,5 +1815,6 @@ loadBootstrap().catch((err) => {
   const msg = err.message || "Cannot load shop data";
   if ($("shop-place")) $("shop-place").textContent = msg;
   setHint(msg, "error");
+  previewVerticalFromUrl();
   showQrPoster().catch(() => {});
 });

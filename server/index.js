@@ -8,7 +8,10 @@ import { buildReports, reportsToSheets } from "./reports.js";
 import { workbookXml } from "./excel.js";
 import { ensureQrOrderSchema, registerQrOrdering } from "./qr-ordering.js";
 import { ensurePharmacySchema } from "./pharmacy-schema.js";
+import { ensureGarmentSchema } from "./garment-schema.js";
 import { listAllBatches, upsertBatch } from "./pharmacy-stock.js";
+import { listAllSizeStock, listPieceBarcodes } from "./garment-stock.js";
+import { isGarmentCategory } from "../js/garment.js";
 import {
   formatGstin,
   gstinStateCode,
@@ -22,7 +25,7 @@ import {
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.join(__dirname, "..");
 const app = express();
-const APP_VERSION = "pharmacy-9";
+const APP_VERSION = "pos-10";
 const APP_VERTICAL = "pharmacy";
 app.use(express.json({ limit: "8mb" }));
 
@@ -54,6 +57,7 @@ app.get("/api/health", async (_req, res) => {
       vertical: APP_VERTICAL,
       version: APP_VERSION,
       pharmacy: true,
+      garment: true,
       medicineFields: cols.length > 0,
       businessId: BUSINESS_ID,
     });
@@ -95,6 +99,11 @@ app.get("/api/bootstrap", async (_req, res) => {
        ORDER BY expiry_date IS NULL, expiry_date`,
       [BUSINESS_ID],
     ).catch(() => []);
+    const sizeStock = await query(
+      `SELECT * FROM item_size_stock WHERE business_id = ? AND qty > 0
+       ORDER BY colour, size`,
+      [BUSINESS_ID],
+    ).catch(() => []);
     const enrichedItems = items.map((item) => {
       const primary = primaryBatch(batches, item.id);
       return {
@@ -104,14 +113,17 @@ app.get("/api/bootstrap", async (_req, res) => {
         primary_expiry: primary?.expiry_date || item.default_expiry || null,
       };
     });
+    const category = company?.business_category || APP_VERTICAL;
     res.json({
-      vertical: APP_VERTICAL,
+      vertical: category,
       version: APP_VERSION,
-      pharmacy: true,
-      company: company || { name: "Pharmacy Medical POS" },
+      pharmacy: !isGarmentCategory(category),
+      garment: isGarmentCategory(category),
+      company: company || { name: "Pharmacy Medical POS", business_category: "pharmacy" },
       items: enrichedItems,
       customers,
       batches,
+      sizeStock,
       packs: packs.map((p) => ({
         ...p,
         items: packItems.filter((row) => row.pack_id === p.id),
@@ -218,6 +230,22 @@ app.get("/api/batches", async (_req, res) => {
   }
 });
 
+app.get("/api/size-stock", async (_req, res) => {
+  try {
+    res.json(await listAllSizeStock());
+  } catch (err) {
+    res.status(500).json({ error: String(err.message) });
+  }
+});
+
+app.get("/api/barcodes", async (req, res) => {
+  try {
+    res.json(await listPieceBarcodes(req.query.purchase_id || null));
+  } catch (err) {
+    res.status(500).json({ error: String(err.message) });
+  }
+});
+
 app.get("/api/returns", async (_req, res) => {
   try {
     const returns = await query(
@@ -298,7 +326,9 @@ app.post("/api/items/:id/receive", async (req, res) => {
     res.status(400).json({ error: "Quantity must be positive" });
     return;
   }
-  if (!batchNo || !expiryDate) {
+  const size = String(req.body?.size || "").trim();
+  const colour = String(req.body?.colour || req.body?.color || "").trim();
+  if (!size && (!batchNo || !expiryDate)) {
     res.status(400).json({ error: "Batch No. and Expiry Date are required to receive stock" });
     return;
   }
@@ -308,15 +338,20 @@ app.post("/api/items/:id/receive", async (req, res) => {
         req.params.id,
         BUSINESS_ID,
       ]);
-      if (!rows[0]) throw new Error("Medicine not found");
-      await upsertBatch(conn, {
-        itemId: req.params.id,
-        batchNo,
-        expiryDate,
-        qty,
-        mrp: req.body?.mrp ?? rows[0].mrp,
-        purchaseRate: req.body?.purchase_rate ?? rows[0].purchase_rate,
-      });
+      if (!rows[0]) throw new Error("Item not found");
+      if (size) {
+        const { adjustSizeStock } = await import("./garment-stock.js");
+        await adjustSizeStock(conn, { itemId: req.params.id, colour, size, qty });
+      } else {
+        await upsertBatch(conn, {
+          itemId: req.params.id,
+          batchNo,
+          expiryDate,
+          qty,
+          mrp: req.body?.mrp ?? rows[0].mrp,
+          purchaseRate: req.body?.purchase_rate ?? rows[0].purchase_rate,
+        });
+      }
       const [item] = await conn.query("SELECT * FROM items WHERE id = ?", [req.params.id]);
       return item[0];
     });
@@ -394,6 +429,9 @@ app.post("/api/settings", async (req, res) => {
     licence_expiry: blank(body.licence_expiry),
     state,
     state_code: stateCode,
+    business_category: ["pharmacy", "restaurant", "garment", "other"].includes(blank(body.business_category) || "pharmacy")
+      ? blank(body.business_category) || "pharmacy"
+      : "pharmacy",
   };
   if (Object.prototype.hasOwnProperty.call(body, "logo_url")) {
     const logo = body.logo_url ? String(body.logo_url) : "";
@@ -410,6 +448,7 @@ app.post("/api/settings", async (req, res) => {
   try {
     await ensureLogoColumn();
     await ensurePharmacySchema();
+    await ensureGarmentSchema();
     await upsertCompanySettings(fields);
     const [company] = await query("SELECT * FROM company_settings WHERE business_id = ?", [BUSINESS_ID]);
     res.json({ ok: true, company: company || { ...fields, business_id: BUSINESS_ID } });
@@ -488,7 +527,7 @@ app.get(["/invoice", "/invoice/"], (req, res) => {
 });
 
 const port = Number(process.env.PORT || 5173);
-Promise.all([ensureLogoColumn(), ensureQrOrderSchema(), ensurePharmacySchema()])
+Promise.all([ensureLogoColumn(), ensureQrOrderSchema(), ensurePharmacySchema(), ensureGarmentSchema()])
   .catch((err) => console.error("schema", err.message))
   .finally(() => {
     app.listen(port, "0.0.0.0", () => {
