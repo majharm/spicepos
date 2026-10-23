@@ -14,6 +14,7 @@
   let lastCode = "";
   let lastAt = 0;
   let onScanCb = null;
+  let keepOpen = false;
 
   function hasCameraApi() {
     return Boolean(
@@ -39,7 +40,7 @@
     modal.innerHTML = `
       <div class="camera-scan-sheet" role="dialog" aria-modal="true" aria-label="Scan barcode">
         <div class="camera-scan-head">
-          <strong>Scan barcode</strong>
+          <strong class="camera-scan-title">Scan barcode</strong>
           <button type="button" class="camera-scan-close" aria-label="Close camera">×</button>
         </div>
         <div class="camera-scan-viewport">
@@ -90,6 +91,11 @@
     if (hint) hint.textContent = text || "Point the camera at a barcode";
   }
 
+  function setTitle(text) {
+    const title = modal?.querySelector(".camera-scan-title");
+    if (title) title.textContent = text || "Scan barcode";
+  }
+
   async function scanLoop() {
     if (!scanning || !video || !detector) return;
     if (video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
@@ -105,10 +111,16 @@
         if (code !== lastCode || now - lastAt > 1200) {
           lastCode = code;
           lastAt = now;
-          setHint(`Found: ${code}`);
-          if (onScanCb) onScanCb(code);
-          close();
-          return;
+          setHint(keepOpen ? `Found: ${code} — scan next or tap ×` : `Found: ${code}`);
+          try {
+            if (onScanCb) onScanCb(code);
+          } catch {
+            /* caller shows the error */
+          }
+          if (!keepOpen) {
+            close();
+            return;
+          }
         }
       }
     } catch {
@@ -119,6 +131,7 @@
 
   async function open(opts) {
     onScanCb = typeof opts?.onScan === "function" ? opts.onScan : null;
+    keepOpen = Boolean(opts?.keepOpen);
     if (!isSupported()) {
       const msg = hasCameraApi()
         ? "Camera scan needs Chrome or a browser with barcode detection."
@@ -129,6 +142,7 @@
     }
     ensureModal();
     stopStream();
+    setTitle(opts?.title || (keepOpen ? "Scan barcodes" : "Scan barcode"));
     setHint("Starting camera…");
     modal.hidden = false;
     document.body.classList.add("camera-scan-open");
@@ -167,6 +181,7 @@
     if (modal) modal.hidden = true;
     document.body.classList.remove("camera-scan-open");
     onScanCb = null;
+    keepOpen = false;
     lastCode = "";
     lastAt = 0;
   }
