@@ -33,6 +33,23 @@ test("size-wise quantity matrix totals and amounts", () => {
   );
 });
 
+test("one garment style keeps every colour and size together", () => {
+  const groups = G.styleGroups([
+    { id: "1", name: "Cotton Kurti", color: "Pink", wearer_type: "female", size: "M" },
+    { id: "2", name: "Cotton Kurti", color: "Pink", wearer_type: "female", size: "L" },
+    { id: "3", name: "Cotton Kurti", color: "black", wearer_type: "female", size: "XL" },
+    { id: "4", name: "Cotton Kurti", color: "Pink", wearer_type: "male", size: "M" },
+  ]);
+  assert.equal(groups.length, 2);
+  const female = groups.find((g) => g.wearer_type === "female");
+  assert.deepEqual(female.colors, ["Pink", "Black"]);
+  assert.equal(female.variants.length, 3);
+  assert.equal(G.normalizeColor("pink"), "Pink");
+  assert.match(G.swatchCss("Black"), /#111827/);
+  assert.match(G.swatchCss("Seafoam"), /hsl\(/);
+  assert.deepEqual(G.barcodesForColor({ "pink|M": ["A1"], "black|XL": ["B1"] }, "Pink"), { M: ["A1"] });
+});
+
 test("multi-product grouping keeps colour and wearer together", () => {
   const groups = G.groupItems([
     { id: "1", name: "Cotton Kurti", color: "Maroon", wearer_type: "female", size: "S", purchase_rate: 250 },
@@ -108,7 +125,13 @@ test("purchase form and APIs wire garment size matrix without breaking pharmacy"
   assert.match(app, /function renderApparelPoLines/);
   assert.match(app, /data-po-size-qty/);
   assert.match(app, /size_qtys/);
+  assert.match(app, /color_size_qtys/);
+  assert.match(app, /data-po-color/);
+  assert.match(index, /id="garment-color-list"/);
   assert.match(app, /generate_barcodes/);
+  assert.match(crud, /color_size_qtys/);
+  assert.match(phpCrud, /color_size_qtys/);
+  assert.match(phpCrud, /pos_garment_normalize_color/);
   assert.match(app, /isApparelShop\(\)/);
   assert.match(crud, /expandGarmentPurchaseLines/);
   assert.match(phpCrud, /pos_expand_garment_purchase_lines/);

@@ -5087,7 +5087,7 @@ function renderCart() {
           <td>${escapeHtml(item.code || item.hsn || "—")}</td>
           <td class="pharm-med">${escapeHtml(item.name)}${garmentCartCaptionHtml(item)}${lineDescriptionHtml(line, key)}</td>
           <td class="classic-barcode">${barcode ? escapeHtml(barcode) : "—"}</td>
-          <td>${escapeHtml(variant || "—")}${alert.exp.expired ? ` · EXPIRED ${escapeHtml(classicDateOnly(alert.exp.date) || alert.exp.short)}` : ""}</td>
+          <td>${garmentSwatchHtml(item.color, item.color_image)}${escapeHtml(variant || "—")}${alert.exp.expired ? ` · EXPIRED ${escapeHtml(classicDateOnly(alert.exp.date) || alert.exp.short)}` : ""}</td>
           <td class="pharm-n pharm-rate">${lineRateFieldHtml(item, line, key)}</td>
           <td>
             <div class="qty">
@@ -5686,6 +5686,12 @@ function garmentCounterApi() {
   return globalThis.POSGarmentCounter || null;
 }
 
+function garmentSwatchHtml(color, image) {
+  const css = globalThis.POSGarmentPurchase?.swatchCss?.(color, image);
+  if (!css || !String(color || image || "").trim()) return "";
+  return `<i class="garment-swatch" style="${css}" aria-hidden="true"></i>`;
+}
+
 function garmentCartCaptionHtml(item) {
   const caption = garmentCounterApi()?.cartCaption?.(item) || "";
   const name = String(item?.name || "");
@@ -5694,14 +5700,20 @@ function garmentCartCaptionHtml(item) {
 }
 
 function resetGarmentVariantDraft() {
-  state.garmentVariants = { colorsText: "", sizes: [], cells: {} };
-  if ($("item-variant-colors") && document.activeElement !== $("item-variant-colors")) $("item-variant-colors").value = "";
+  state.garmentVariants = { colorsText: "", colors: [], colorImages: {}, sizes: [], cells: {} };
+  if ($("item-variant-custom-color")) $("item-variant-custom-color").value = "";
   paintGarmentVariantEditor();
 }
 
 function readGarmentVariantCells() {
-  if (!state.garmentVariants) state.garmentVariants = { colorsText: "", sizes: [], cells: {} };
-  if ($("item-variant-colors")) state.garmentVariants.colorsText = $("item-variant-colors").value || "";
+  if (!state.garmentVariants) state.garmentVariants = { colorsText: "", colors: [], colorImages: {}, sizes: [], cells: {} };
+  const colors = state.garmentVariants.colors || [];
+  state.garmentVariants.colorsText = colors.join(", ");
+  if (!state.garmentVariants.colorImages) state.garmentVariants.colorImages = {};
+  document.querySelectorAll("[data-gv-color-image]").forEach((el) => {
+    const key = el.dataset.gvColorImage;
+    if (key) state.garmentVariants.colorImages[key] = el.value || "";
+  });
   document.querySelectorAll("#item-variant-grid [data-gv]").forEach((el) => {
     const key = el.dataset.gvKey;
     if (!key) return;
@@ -5725,7 +5737,9 @@ function paintGarmentVariantEditor() {
   }
   const C = garmentCounterApi();
   const G = globalThis.POSGarmentPurchase;
-  const draft = state.garmentVariants || { colorsText: "", sizes: [], cells: {} };
+  const draft = state.garmentVariants || { colorsText: "", colors: [], colorImages: {}, sizes: [], cells: {} };
+  if (!draft.colors) draft.colors = C?.parseColors?.(draft.colorsText) || [];
+  if (!draft.colorImages) draft.colorImages = {};
   state.garmentVariants = draft;
   const catalog = []
     .concat(G?.LETTER_SIZES || ["XS", "S", "M", "L", "XL", "XXL", "XXXL"])
@@ -5741,7 +5755,35 @@ function paintGarmentVariantEditor() {
     const on = (draft.sizes || []).some((s) => (G?.sizesEqual ? G.sizesEqual(s, size) : s === size));
     return `<button type="button" class="garment-size-chip${on ? " is-on" : ""}" data-gv-size="${escapeHtml(size)}" aria-pressed="${on ? "true" : "false"}">${escapeHtml(size)}</button>`;
   }).join("");
-  const colors = C?.parseColors?.(draft.colorsText) || [];
+  const palette = []
+    .concat(G?.STANDARD_COLORS?.map((row) => row.name) || [])
+    .concat(draft.colors || []);
+  const paletteColors = [];
+  for (const raw of palette) {
+    const color = G?.normalizeColor?.(raw) || String(raw || "").trim();
+    if (!color || paletteColors.some((row) => (G?.colorsEqual ? G.colorsEqual(row, color) : row === color))) continue;
+    paletteColors.push(color);
+  }
+  const picks = $("item-variant-colors");
+  if (picks) {
+    picks.innerHTML = paletteColors.map((color) => {
+      const on = (draft.colors || []).some((row) => (G?.colorsEqual ? G.colorsEqual(row, color) : row === color));
+      const css = G?.swatchCss?.(color, draft.colorImages?.[G?.colorKey?.(color) || color.toLowerCase()]) || "";
+      return `<button type="button" class="garment-color-btn${on ? " is-on" : ""}" data-gv-color="${escapeHtml(color)}" aria-pressed="${on ? "true" : "false"}"><i class="garment-swatch" style="${css}"></i>${escapeHtml(color)}</button>`;
+    }).join("");
+  }
+  const imageBox = $("item-variant-color-images");
+  if (imageBox) {
+    const chosenColors = draft.colors || [];
+    imageBox.innerHTML = chosenColors.length
+      ? chosenColors.map((color) => {
+          const key = G?.colorKey?.(color) || String(color).toLowerCase();
+          const css = G?.swatchCss?.(color, draft.colorImages?.[key]) || "";
+          return `<label class="garment-color-image"><i class="garment-swatch" style="${css}"></i><span>${escapeHtml(color)} image or swatch URL</span><input data-gv-color-image="${escapeHtml(key)}" value="${escapeHtml(draft.colorImages?.[key] || "")}" placeholder="#ec4899 or https://" maxlength="500" /></label>`;
+        }).join("")
+      : "";
+  }
+  const colors = draft.colors || [];
   const colorList = colors.length ? colors : [""];
   const chosen = draft.sizes || [];
   if (!chosen.length) {
@@ -5809,10 +5851,12 @@ function paintGarmentSizePicker() {
   const colors = (picker.colors || []).filter((c) => String(c || "").trim());
   const colorBox = $("garment-size-colors");
   if (colorBox) {
-    colorBox.hidden = colors.length < 2;
+    colorBox.hidden = !colors.length;
     colorBox.innerHTML = colors.map((color) => {
       const on = String(picker.color || "").trim().toLowerCase() === String(color).trim().toLowerCase();
-      return `<button type="button" class="garment-color-btn${on ? " is-on" : ""}" data-gs-color="${escapeHtml(color)}">${escapeHtml(color)}</button>`;
+      const image = picker.colorImages?.[String(color).trim().toLowerCase()] || "";
+      const css = globalThis.POSGarmentPurchase?.swatchCss?.(color, image) || "";
+      return `<button type="button" class="garment-color-btn${on ? " is-on" : ""}" data-gs-color="${escapeHtml(color)}"><i class="garment-swatch" style="${css}"></i>${escapeHtml(color)}</button>`;
     }).join("");
   }
   const sizes = C.pickerSizes(picker);
@@ -6503,8 +6547,7 @@ function fillItemForm(i) {
   if ($("item-color")) $("item-color").value = i.color || "";
   if ($("item-size")) $("item-size").value = i.size || "";
   if (isApparelShop()) {
-    state.garmentVariants = garmentCounterApi()?.draftFromItems?.(state.items, i) || { colorsText: "", sizes: [], cells: {} };
-    if ($("item-variant-colors")) $("item-variant-colors").value = state.garmentVariants.colorsText || "";
+    state.garmentVariants = garmentCounterApi()?.draftFromItems?.(state.items, i) || { colorsText: "", colors: [], colorImages: {}, sizes: [], cells: {} };
     paintGarmentVariantEditor();
   }
   $("item-retail").value = POSUnits.rateInputValue?.(i.retail_rate) ?? i.retail_rate;
@@ -7135,12 +7178,34 @@ function apparelPoGroupSearch(group) {
     .toLowerCase();
 }
 
+function apparelPoColorBlockHtml(color, sizes, variants) {
+  const G = globalThis.POSGarmentPurchase;
+  const label = color || "No colour";
+  const swatch = G?.swatchCss?.(color, (variants || []).find((v) => G?.colorsEqual?.(v.color, color))?.color_image) || "";
+  const cells = sizes
+    .map((sz) => {
+      const variant = (variants || []).find((v) => (G?.colorsEqual ? G.colorsEqual(v.color, color) : String(v.color || "") === color) && (G?.sizesEqual?.(v.size, sz) || String(v.size || "").toUpperCase() === sz));
+      const have = variant ? fmtQty(variant.stock_gm, variant) : "";
+      return `<label class="po-size-cell${variant ? " has-sku" : ""}">
+        <span>${escapeHtml(sz)}</span>
+        <input type="number" min="0" max="${POSUnits.qtyMax()}" step="1" inputmode="numeric" value="" placeholder="0" data-po-color="${escapeHtml(color)}" data-po-size-qty="${escapeHtml(sz)}" aria-label="${escapeHtml(label)} ${escapeHtml(sz)} quantity" />
+        ${have ? `<em>stock ${escapeHtml(have)}</em>` : `<em>new</em>`}
+      </label>`;
+    })
+    .join("");
+  return `<section class="po-color-block" data-po-color-block="${escapeHtml(color)}">
+    <header class="po-color-head"><i class="garment-swatch" style="${swatch}"></i><strong>${escapeHtml(label)}</strong></header>
+    <div class="po-size-matrix">${cells}</div>
+  </section>`;
+}
+
 function renderApparelPoLines(el, shown, moreHint) {
   const G = globalThis.POSGarmentPurchase;
-  const groups = G?.groupItems?.(shown) || shown.map((item) => ({
+  const groups = G?.styleGroups?.(shown) || G?.groupItems?.(shown) || shown.map((item) => ({
     key: item.id,
     name: item.name,
     color: item.color || "",
+    colors: item.color ? [item.color] : [],
     wearer_type: item.wearer_type || "",
     hsn: item.hsn || "",
     purchase_rate: item.purchase_rate,
@@ -7153,34 +7218,28 @@ function renderApparelPoLines(el, shown, moreHint) {
     const key = escapeHtml(g.key);
     const unit = itemUnit(g.anchor || g.variants[0] || {});
     const sizes = G?.sizeColumns?.(g) || ["XS", "S", "M", "L", "XL", "XXL", "XXXL", "28", "30", "32", "34", "36", "38"];
-    const cells = sizes
-      .map((sz) => {
-        const variant = (g.variants || []).find((v) => G?.sizesEqual?.(v.size, sz) || String(v.size || "").toUpperCase() === sz);
-        const have = variant ? fmtQty(variant.stock_gm, variant) : "";
-        return `<label class="po-size-cell${variant ? " has-sku" : ""}">
-          <span>${escapeHtml(sz)}</span>
-          <input type="number" min="0" max="${POSUnits.qtyMax()}" step="1" inputmode="numeric" value="" placeholder="0" data-po-size-qty="${escapeHtml(sz)}" aria-label="${escapeHtml(sz)} quantity" />
-          ${have ? `<em>stock ${escapeHtml(have)}</em>` : `<em>new</em>`}
-        </label>`;
-      })
-      .join("");
+    const colors = (g.colors && g.colors.length ? g.colors : [g.color || ""]).filter((color, idx, all) => all.indexOf(color) === idx);
+    const blocks = (colors.length ? colors : [""]).map((color) => apparelPoColorBlockHtml(color, sizes, g.variants)).join("");
     const wear = globalThis.POSFootwear?.wearerLabel?.(g.wearer_type) || g.wearer_type || "";
-    const meta = [wear, g.color].filter(Boolean).join(" · ");
-    const search = apparelPoGroupSearch(g);
+    const search = apparelPoGroupSearch({ ...g, color: (g.colors || []).join(" ") });
     const variantIds = escapeHtml((g.variants || []).map((v) => v.id).filter(Boolean).join(" "));
-    return `<article class="po-product" data-po-product-row="${key}" data-po-anchor="${escapeHtml(g.anchor?.id || "")}" data-po-variant-ids="${variantIds}" data-po-search="${escapeHtml(search)}" data-po-unit="${escapeHtml(unit)}">
+    return `<article class="po-product" data-po-product-row="${key}" data-po-anchor="${escapeHtml(g.anchor?.id || "")}" data-po-variant-ids="${variantIds}" data-po-sizes="${escapeHtml(sizes.join(" "))}" data-po-search="${escapeHtml(search)}" data-po-unit="${escapeHtml(unit)}">
       <header class="po-product-head">
         <label class="po-check"><input type="checkbox" data-po-product="${key}" /></label>
         <div class="po-product-copy">
           <strong>${escapeHtml(g.name)}</strong>
-          <span>${escapeHtml(meta || "Set colour on the item if needed")}${g.hsn ? ` · ${escapeHtml(taxCodeLabel())} ${escapeHtml(g.hsn)}` : ""}</span>
+          <span>${escapeHtml(wear || "Garment")}${g.hsn ? ` · ${escapeHtml(taxCodeLabel())} ${escapeHtml(g.hsn)}` : ""} · colour and size</span>
         </div>
         <div class="po-product-totals">
           <span data-po-qty-total="${key}">0 pcs</span>
           <span class="num" data-po-amt="${key}">${money(0)}</span>
         </div>
       </header>
-      <div class="po-size-matrix">${cells}</div>
+      <div class="po-color-blocks" data-po-color-blocks="${key}">${blocks}</div>
+      <div class="po-color-add">
+        <input data-po-custom-color list="garment-color-list" maxlength="40" placeholder="Add colour" aria-label="Add colour for ${escapeHtml(g.name)}" />
+        <button class="btn" type="button" data-po-add-color="${key}">Add colour</button>
+      </div>
       <div class="po-extra-sizes" data-po-extra-wrap="${key}"></div>
       <div class="po-product-meta">
         <label>Rate
@@ -7196,7 +7255,7 @@ function renderApparelPoLines(el, shown, moreHint) {
         <div class="po-bc-box">
           <div class="po-bc-head">
             <strong>Barcodes for ${escapeHtml(g.name)}</strong>
-            <span class="hint" data-po-bc-count="${key}">Scan each size, or leave empty to generate</span>
+            <span class="hint" data-po-bc-count="${key}">Scan each colour and size, or leave empty to generate</span>
           </div>
           <div class="po-size-bc-list" data-po-size-bc="${key}"></div>
         </div>
@@ -7209,10 +7268,10 @@ function renderApparelPoLines(el, shown, moreHint) {
   applyCameraScannerVisibility();
 }
 
-function extraSizeCellHtml() {
-  return `<label class="po-size-cell is-custom" data-po-extra-size>
+function extraSizeCellHtml(color = "") {
+  return `<label class="po-size-cell is-custom" data-po-extra-size data-po-color="${escapeHtml(color)}">
     <input data-po-extra-name maxlength="16" placeholder="Size" aria-label="Custom size" />
-    <input type="number" min="0" max="${POSUnits.qtyMax()}" step="1" inputmode="numeric" value="" placeholder="Qty" data-po-extra-qty aria-label="Custom size quantity" />
+    <input type="number" min="0" max="${POSUnits.qtyMax()}" step="1" inputmode="numeric" value="" placeholder="Qty" data-po-color="${escapeHtml(color)}" data-po-extra-qty aria-label="Custom size quantity" />
   </label>`;
 }
 
@@ -7224,44 +7283,62 @@ function apparelSizeBarcodeCount(raw) {
   }
 }
 
-function apparelSizeBarcodeBlockHtml(sz, n, saved, gen) {
+function apparelVariantBcKey(color, size) {
+  const G = globalThis.POSGarmentPurchase;
+  return G?.variantKey?.(color, size) || `${String(color || "").trim().toLowerCase()}|${size}`;
+}
+
+function apparelSizeBarcodeBlockHtml(key, label, n, saved, gen) {
   const typed = apparelSizeBarcodeCount(saved);
-  const label = `${sz} · ${typed} / ${n} pcs`;
-  return `<div class="po-size-bc" data-po-size-bc-row="${escapeHtml(sz)}">
+  const caption = `${label} · ${typed} / ${n} pcs`;
+  return `<div class="po-size-bc" data-po-size-bc-row="${escapeHtml(key)}">
     <div class="po-size-bc-head">
-      <span data-po-size-bc-label="${escapeHtml(sz)}">${escapeHtml(label)}</span>
+      <span data-po-size-bc-label="${escapeHtml(key)}">${escapeHtml(caption)}</span>
       <span class="hint${typed === n && n > 0 ? " ok" : ""}">${gen && typed < n ? "rest generated" : ""}</span>
     </div>
     <div class="po-bc-scan-row">
-      <input class="po-bc-scan" data-po-size-bc-scan="${escapeHtml(sz)}" maxlength="64" placeholder="Scan ${escapeHtml(sz)} barcode, then Enter" autocomplete="off" aria-label="Scan ${escapeHtml(sz)} barcode" />
-      ${poCameraButtonHtml(`data-po-size-bc-camera="${escapeHtml(sz)}"`)}
+      <input class="po-bc-scan" data-po-size-bc-scan="${escapeHtml(key)}" maxlength="64" placeholder="Scan ${escapeHtml(label)} barcode, then Enter" autocomplete="off" aria-label="Scan ${escapeHtml(label)} barcode" />
+      ${poCameraButtonHtml(`data-po-size-bc-camera="${escapeHtml(key)}"`)}
     </div>
-    <textarea class="po-bc-list" data-po-size-barcodes="${escapeHtml(sz)}" rows="${Math.min(6, Math.max(2, n))}" placeholder="${gen ? "Optional — leftover codes are generated" : `${n} barcodes, one per line`}">${escapeHtml(saved)}</textarea>
+    <textarea class="po-bc-list" data-po-size-barcodes="${escapeHtml(key)}" rows="${Math.min(6, Math.max(2, n))}" placeholder="${gen ? "Optional — leftover codes are generated" : `${n} barcodes, one per line`}">${escapeHtml(saved)}</textarea>
   </div>`;
 }
 
-function apparelSizeQtysFromCard(card) {
+function apparelColorSizeQtysFromCard(card) {
   const G = globalThis.POSGarmentPurchase;
-  const qtys = {};
-  card.querySelectorAll("[data-po-size-qty]").forEach((inp) => {
-    const sz = G?.normalizeSize?.(inp.dataset.poSizeQty) || String(inp.dataset.poSizeQty || "").trim();
-    const n = Math.max(0, Math.round(Number(inp.value) || 0));
-    if (sz && n) qtys[sz] = (qtys[sz] || 0) + n;
-  });
+  const matrix = {};
+  const add = (color, size, qty) => {
+    const sz = G?.normalizeSize?.(size) || String(size || "").trim();
+    const n = Math.max(0, Math.round(Number(qty) || 0));
+    if (!sz || !n) return;
+    const name = G?.normalizeColor?.(color) || String(color || "").trim();
+    if (!matrix[name]) matrix[name] = {};
+    matrix[name][sz] = (matrix[name][sz] || 0) + n;
+  };
+  card.querySelectorAll("[data-po-size-qty]").forEach((inp) => add(inp.dataset.poColor || "", inp.dataset.poSizeQty, inp.value));
   card.querySelectorAll("[data-po-extra-size]").forEach((wrap) => {
-    const sz = G?.normalizeSize?.(wrap.querySelector("[data-po-extra-name]")?.value) || String(wrap.querySelector("[data-po-extra-name]")?.value || "").trim();
-    const n = Math.max(0, Math.round(Number(wrap.querySelector("[data-po-extra-qty]")?.value) || 0));
-    if (sz && n) qtys[sz] = (qtys[sz] || 0) + n;
+    add(wrap.dataset.poColor || wrap.querySelector("[data-po-extra-qty]")?.dataset.poColor || "", wrap.querySelector("[data-po-extra-name]")?.value, wrap.querySelector("[data-po-extra-qty]")?.value);
   });
-  return qtys;
+  return matrix;
+}
+
+function apparelSizeQtysFromCard(card) {
+  const flat = {};
+  for (const sizes of Object.values(apparelColorSizeQtysFromCard(card))) {
+    for (const [sz, n] of Object.entries(sizes)) flat[sz] = (flat[sz] || 0) + n;
+  }
+  return flat;
 }
 
 function refreshApparelPoCard(card) {
   if (!card) return;
-  const G = globalThis.POSGarmentPurchase;
   const key = card.dataset.poProductRow;
-  const qtys = apparelSizeQtysFromCard(card);
-  const total = G?.totalQty?.(qtys) || Object.values(qtys).reduce((s, n) => s + n, 0);
+  const matrix = apparelColorSizeQtysFromCard(card);
+  const pairs = [];
+  for (const [color, sizes] of Object.entries(matrix)) {
+    for (const [sz, n] of Object.entries(sizes)) pairs.push({ color, size: sz, qty: n, key: apparelVariantBcKey(color, sz) });
+  }
+  const total = pairs.reduce((sum, row) => sum + row.qty, 0);
   const rate = Number(card.querySelector("[data-po-rate]")?.value) || 0;
   const unit = card.dataset.poUnit || "PCS";
   const amt = POSUnits.lineAmount(total, rate, unit);
@@ -7278,29 +7355,31 @@ function refreshApparelPoCard(card) {
   if (bcPanel) bcPanel.hidden = !box?.checked || total <= 0;
   const list = card.querySelector("[data-po-size-bc]");
   if (list) {
-    const sizes = Object.keys(qtys);
-    const sizeKey = sizes.join("|");
+    const sizeKey = pairs.map((row) => row.key).join("|");
     if (list.dataset.poSizeKey !== sizeKey) {
       const existing = new Map();
       list.querySelectorAll("[data-po-size-barcodes]").forEach((ta) => existing.set(ta.dataset.poSizeBarcodes, ta.value));
       list.dataset.poSizeKey = sizeKey;
-      list.innerHTML = sizes.map((sz) => apparelSizeBarcodeBlockHtml(sz, qtys[sz], existing.get(sz) || "", gen)).join("");
+      list.innerHTML = pairs.map((row) => {
+        const label = [row.color, row.size].filter(Boolean).join(" · ");
+        return apparelSizeBarcodeBlockHtml(row.key, label, row.qty, existing.get(row.key) || "", gen);
+      }).join("");
       applyCameraScannerVisibility();
     } else {
-      sizes.forEach((sz) => {
-        const ta = list.querySelector(`[data-po-size-barcodes="${sz}"]`);
+      pairs.forEach((row) => {
+        const ta = list.querySelector(`[data-po-size-barcodes="${CSS.escape(row.key)}"]`);
         if (!ta) return;
-        const n = qtys[sz];
         const typed = apparelSizeBarcodeCount(ta.value);
-        const lab = list.querySelector(`[data-po-size-bc-label="${sz}"]`);
-        if (lab) lab.textContent = `${sz} · ${typed} / ${n} pcs`;
+        const lab = list.querySelector(`[data-po-size-bc-label="${CSS.escape(row.key)}"]`);
+        const label = [row.color, row.size].filter(Boolean).join(" · ");
+        if (lab) lab.textContent = `${label} · ${typed} / ${row.qty} pcs`;
         const rest = lab?.parentElement?.querySelector(".hint");
         if (rest) {
-          rest.textContent = gen && typed < n ? "rest generated" : "";
-          rest.className = typed === n && n > 0 ? "hint ok" : "hint";
+          rest.textContent = gen && typed < row.qty ? "rest generated" : "";
+          rest.className = typed === row.qty && row.qty > 0 ? "hint ok" : "hint";
         }
-        ta.rows = Math.min(6, Math.max(2, n));
-        ta.placeholder = gen ? "Optional — leftover codes are generated" : `${n} barcodes, one per line`;
+        ta.rows = Math.min(6, Math.max(2, row.qty));
+        ta.placeholder = gen ? "Optional — leftover codes are generated" : `${row.qty} barcodes, one per line`;
       });
     }
   }
@@ -7329,28 +7408,31 @@ function collectApparelPoLines() {
     const box = card.querySelector("[data-po-product]");
     if (!box?.checked) return;
     const name = card.querySelector(".po-product-copy strong")?.textContent || "Item";
-    const qtys = apparelSizeQtysFromCard(card);
-    const total = G?.totalQty?.(qtys) || 0;
-    if (!total) throw new Error(`${name}: enter size-wise quantity`);
+    const matrix = apparelColorSizeQtysFromCard(card);
+    const total = Object.values(matrix).reduce((sum, sizes) => sum + (G?.totalQty?.(sizes) || 0), 0);
+    if (!total) throw new Error(`${name}: enter colour and size quantity`);
     const generate = card.querySelector("[data-po-gen-bc]")?.checked !== false;
-    const barcodesBySize = {};
+    const barcodesByVariant = {};
     card.querySelectorAll("[data-po-size-barcodes]").forEach((ta) => {
-      const sz = G?.normalizeSize?.(ta.dataset.poSizeBarcodes) || ta.dataset.poSizeBarcodes;
       const codes = parsePoBarcodes(ta.value);
-      barcodesBySize[sz] = codes;
+      barcodesByVariant[ta.dataset.poSizeBarcodes] = codes;
       allCodes.push(codes);
     });
-    G?.planSizeLines?.(qtys, {
-      generate_barcodes: generate,
-      barcodes_by_size: barcodesBySize,
-      allow_empty_barcodes: true,
-    });
+    for (const [color, qtys] of Object.entries(matrix)) {
+      G?.planSizeLines?.(qtys, {
+        generate_barcodes: generate,
+        barcodes_by_size: G?.barcodesForColor?.(barcodesByVariant, color) || {},
+        allow_empty_barcodes: true,
+      });
+    }
+    const only = Object.keys(matrix);
     lines.push({
       item_id: card.dataset.poAnchor,
-      size_qtys: qtys,
+      color_size_qtys: matrix,
+      size_qtys: only.length === 1 ? matrix[only[0]] : undefined,
       rate_per_kg: POSUnits.roundRate8?.(card.querySelector("[data-po-rate]")?.value) ?? Number(card.querySelector("[data-po-rate]")?.value),
       generate_barcodes: generate,
-      barcodes_by_size: barcodesBySize,
+      barcodes_by_variant: barcodesByVariant,
       allow_empty_barcodes: true,
     });
   });
@@ -7452,31 +7534,36 @@ function bumpClassicPoQty(item) {
   return true;
 }
 
-function apparelSizeQtyInput(card, size) {
+function apparelSizeQtyInput(card, size, color) {
   const G = globalThis.POSGarmentPurchase;
   const sz = G?.normalizeSize?.(size) || String(size || "").trim();
+  const wantColor = color == null ? null : (G?.normalizeColor?.(color) || String(color || "").trim());
   if (!card || !sz) return null;
+  const sameColor = (value) => wantColor == null || (G?.colorsEqual ? G.colorsEqual(value, wantColor) : String(value || "") === wantColor);
   const preset = [...card.querySelectorAll("[data-po-size-qty]")].find((inp) =>
-    G?.sizesEqual?.(inp.dataset.poSizeQty, sz) || String(inp.dataset.poSizeQty || "") === sz,
+    sameColor(inp.dataset.poColor) && (G?.sizesEqual?.(inp.dataset.poSizeQty, sz) || String(inp.dataset.poSizeQty || "") === sz),
   );
   if (preset) return preset;
   const extras = [...card.querySelectorAll("[data-po-extra-size]")];
   const match = extras.find((wrap) => {
     const name = wrap.querySelector("[data-po-extra-name]")?.value;
-    return G?.sizesEqual?.(name, sz) || String(name || "").trim() === sz;
+    return sameColor(wrap.dataset.poColor) && (G?.sizesEqual?.(name, sz) || String(name || "").trim() === sz);
   });
   if (match) return match.querySelector("[data-po-extra-qty]");
-  const wrap = card.querySelector("[data-po-extra-wrap]");
-  if (!wrap) return null;
-  wrap.insertAdjacentHTML("beforeend", extraSizeCellHtml());
-  const cell = wrap.querySelector("[data-po-extra-size]:last-child");
+  const block = wantColor == null
+    ? card.querySelector("[data-po-color-block]")
+    : [...card.querySelectorAll("[data-po-color-block]")].find((row) => sameColor(row.dataset.poColorBlock));
+  const matrix = block?.querySelector(".po-size-matrix");
+  if (!matrix) return null;
+  matrix.insertAdjacentHTML("beforeend", extraSizeCellHtml(wantColor || block.dataset.poColorBlock || ""));
+  const cell = matrix.querySelector("[data-po-extra-size]:last-child");
   const nameEl = cell?.querySelector("[data-po-extra-name]");
   if (nameEl) nameEl.value = sz;
   return cell?.querySelector("[data-po-extra-qty]") || null;
 }
 
-function setApparelSizeQty(card, size, qty) {
-  const input = apparelSizeQtyInput(card, size);
+function setApparelSizeQty(card, size, qty, color) {
+  const input = apparelSizeQtyInput(card, size, color);
   if (!input) return false;
   input.value = String(Math.max(0, Math.round(Number(qty) || 0)));
   const box = card.querySelector("[data-po-product]");
@@ -7486,11 +7573,13 @@ function setApparelSizeQty(card, size, qty) {
   return true;
 }
 
-function bumpApparelPoSize(card, size) {
+function bumpApparelPoSize(card, size, color) {
   const G = globalThis.POSGarmentPurchase;
   const sz = G?.normalizeSize?.(size) || String(size || "").trim();
-  const current = apparelSizeQtysFromCard(card)[sz] || 0;
-  return setApparelSizeQty(card, sz, current + 1);
+  const want = color == null ? "" : (G?.normalizeColor?.(color) || String(color || "").trim());
+  const matrix = apparelColorSizeQtysFromCard(card);
+  const bucket = want ? matrix[want] || {} : Object.values(matrix)[0] || {};
+  return setApparelSizeQty(card, sz, (bucket[sz] || 0) + 1, want || Object.keys(matrix)[0] || "");
 }
 
 function selectPurchaseCatalogItem(item) {
@@ -7498,7 +7587,7 @@ function selectPurchaseCatalogItem(item) {
   if (isApparelShop()) {
     const card = findApparelPoCard(item);
     if (!card) return false;
-    if (item.size) return bumpApparelPoSize(card, item.size);
+    if (item.size) return bumpApparelPoSize(card, item.size, item.color || "");
     const box = card.querySelector("[data-po-product]");
     if (box) box.checked = true;
     card.scrollIntoView({ block: "nearest" });
@@ -7510,32 +7599,44 @@ function selectPurchaseCatalogItem(item) {
 
 function apparelPieceSizeTarget(card, item, sizeHint) {
   const G = globalThis.POSGarmentPurchase;
-  if (sizeHint) return G?.normalizeSize?.(sizeHint) || String(sizeHint || "").trim();
-  if (item?.size) return G?.normalizeSize?.(item.size) || String(item.size).trim();
+  const color = G?.normalizeColor?.(item?.color) || String(item?.color || "").trim();
+  const hinted = sizeHint && !String(sizeHint).includes("|")
+    ? (G?.normalizeSize?.(sizeHint) || String(sizeHint).trim())
+    : "";
+  if (hinted) return { color, size: hinted, key: apparelVariantBcKey(color, hinted) };
+  if (sizeHint && String(sizeHint).includes("|")) {
+    const [rawColor, ...rest] = String(sizeHint).split("|");
+    const size = G?.normalizeSize?.(rest.join("|")) || rest.join("|");
+    const parsed = G?.normalizeColor?.(rawColor) || rawColor;
+    return { color: parsed || color, size, key: sizeHint };
+  }
+  if (item?.size) {
+    const size = G?.normalizeSize?.(item.size) || String(item.size).trim();
+    return { color, size, key: apparelVariantBcKey(color, size) };
+  }
   const active = document.activeElement;
   const sizeScan = active?.closest?.("[data-po-size-bc-scan]");
-  if (sizeScan && card.contains(sizeScan)) {
-    return G?.normalizeSize?.(sizeScan.dataset.poSizeBcScan) || sizeScan.dataset.poSizeBcScan;
-  }
+  if (sizeScan && card.contains(sizeScan)) return { key: sizeScan.dataset.poSizeBcScan, size: sizeScan.dataset.poSizeBcScan, color };
   const focused = active?.closest?.("[data-po-size-barcodes]");
-  if (focused && card.contains(focused)) {
-    return G?.normalizeSize?.(focused.dataset.poSizeBarcodes) || focused.dataset.poSizeBarcodes;
+  if (focused && card.contains(focused)) return { key: focused.dataset.poSizeBarcodes, size: focused.dataset.poSizeBarcodes, color };
+  const pairs = [];
+  for (const [rowColor, sizes] of Object.entries(apparelColorSizeQtysFromCard(card))) {
+    for (const sz of Object.keys(sizes)) pairs.push({ color: rowColor, size: sz, key: apparelVariantBcKey(rowColor, sz) });
   }
-  const qtys = apparelSizeQtysFromCard(card);
-  const sizes = Object.keys(qtys);
-  if (!sizes.length) return "";
-  if (sizes.length === 1) return sizes[0];
-  for (const sz of sizes) {
-    const ta = card.querySelector(`[data-po-size-barcodes="${sz}"]`);
+  if (!pairs.length) return { color, size: "", key: "" };
+  if (pairs.length === 1) return pairs[0];
+  for (const row of pairs) {
+    const ta = card.querySelector(`[data-po-size-barcodes="${CSS.escape(row.key)}"]`);
     let n = 0;
     try {
       n = parsePoBarcodes(ta?.value || "").length;
     } catch {
       n = 0;
     }
-    if (n < qtys[sz]) return sz;
+    const qty = apparelColorSizeQtysFromCard(card)[row.color]?.[row.size] || 0;
+    if (n < qty) return row;
   }
-  return sizes[0];
+  return pairs[0];
 }
 
 function addPurchasePieceBarcode(code, source) {
@@ -7560,17 +7661,23 @@ function addPurchasePieceBarcode(code, source) {
   }
   const card = source?.card || document.querySelector(`[data-po-product-row="${source?.id || ""}"]`);
   if (!card) throw new Error("Select a garment, then scan piece barcodes");
-  const size = apparelPieceSizeTarget(card, source?.item, source?.size);
-  if (!size) throw new Error("Enter a size quantity first, then scan that size with the camera");
-  if (!(apparelSizeQtysFromCard(card)[size] > 0)) setApparelSizeQty(card, size, 1);
-  const ta = card.querySelector(`[data-po-size-barcodes="${size}"]`);
+  const target = apparelPieceSizeTarget(card, source?.item, source?.size);
+  if (!target?.key && !target?.size) throw new Error("Enter a colour and size quantity first, then scan that variant");
+  const color = target.color || "";
+  const size = target.size || "";
+  const key = target.key || apparelVariantBcKey(color, size);
+  const current = apparelColorSizeQtysFromCard(card)[color]?.[size] || 0;
+  if (!(current > 0) && size) setApparelSizeQty(card, size, 1, color);
+  const ta = card.querySelector(`[data-po-size-barcodes="${CSS.escape(key)}"]`);
   appendCodesToPoList(ta, cleaned);
   const n = parsePoBarcodes(ta?.value || "").length;
-  if (n > (apparelSizeQtysFromCard(card)[size] || 0)) setApparelSizeQty(card, size, n);
-  const scan = card.querySelector(`[data-po-size-bc-scan="${size}"]`) || card.querySelector("[data-po-product-bc-scan]");
+  const qtyNow = apparelColorSizeQtysFromCard(card)[color]?.[size] || 0;
+  if (n > qtyNow && size) setApparelSizeQty(card, size, n, color);
+  const scan = card.querySelector(`[data-po-size-bc-scan="${CSS.escape(key)}"]`) || card.querySelector("[data-po-product-bc-scan]");
   if (scan) scan.value = "";
   paintPoTotals();
-  return { size, n, qty: apparelSizeQtysFromCard(card)[size] || 0 };
+  const label = [color, size].filter(Boolean).join(" · ") || size;
+  return { size: label, n, qty: apparelColorSizeQtysFromCard(card)[color]?.[size] || n };
 }
 
 function selectedPurchasePieceSource() {
@@ -8829,8 +8936,13 @@ async function loadReports() {
           ? [i.code, i.name, i.hsn, i.category, i.subcategory, i.color || "—", i.size || "—", Number(i.stock_gm) || 0, Number(i.reorder_level_gm) || 0, Number(i.retail_rate) || 0, Number(i.b2b_rate) || 0, Number(i.purchase_rate) || 0, Number(i.gst_rate) || 0]
           : [i.code, i.name, i.hsn, i.category, i.subcategory, Number(i.stock_gm) || 0, Number(i.reorder_level_gm) || 0, Number(i.retail_rate) || 0, Number(i.b2b_rate) || 0, Number(i.purchase_rate) || 0, Number(i.gst_rate) || 0]
       )), "stock"),
-      reportBlock("Low stock", "Low stock", ["Code", "Name", "Stock g", "Reorder g"], (data.low || []).map((i) => [i.code, i.name, Number(i.stock_gm) || 0, Number(i.reorder_level_gm) || 0]), "stock"),
+      reportBlock("Low stock", "Low stock", isApparelShop() ? ["Code", "Name", "Colour", "Size", "Stock g", "Reorder g"] : ["Code", "Name", "Stock g", "Reorder g"], (data.low || []).map((i) => (
+        isApparelShop()
+          ? [i.code, i.name, i.color || "—", i.size || "—", Number(i.stock_gm) || 0, Number(i.reorder_level_gm) || 0]
+          : [i.code, i.name, Number(i.stock_gm) || 0, Number(i.reorder_level_gm) || 0]
+      )), "stock"),
       reportBlock("Purchases", "Purchases", ["PO", "Supplier", "Invoice", "Date", "Taxable", "GST", "Total", "Pay", "Status"], (data.purchases || []).map((p) => [p.purchase_number, p.supplier_name, p.supplier_invoice_number, p.purchase_date, Number(p.subtotal) || 0, Number(p.gst) || 0, Number(p.total) || 0, p.payment_method, p.payment_status]), "books"),
+      ...(isApparelShop() ? [reportBlock("Purchase lines", "Purchase lines", ["PO", "Date", "Supplier", "Item", "Colour", "Size", "Qty g", "Amount"], (data.purchaseLines || []).map((r) => [r.purchase_number, r.purchase_date, r.supplier_name, r.item_name, r.color || "—", r.size || "—", Number(r.quantity_gm) || 0, Number(r.amount) || 0]), "books")] : []),
       reportBlock("Expenses", "Expenses", ["No.", "Date", "Category", "Amount", "GST", "Total", "Pay", "Notes"], (data.expenses || []).map((e) => [e.expense_number, e.expense_date, e.category, Number(e.amount) || 0, Number(e.gst) || 0, Number(e.total) || (Number(e.amount) || 0) + (Number(e.gst) || 0), e.payment_method, e.notes]), "books"),
       reportBlock("Customers", "Customers", ["Code", "Name", "Business", "Mobile", "Type", "State", "GSTIN", "Credit limit", "Outstanding"], (data.customers || []).map((c) => [c.code, c.name, c.business_name, c.mobile, c.type, c.state, c.gstin, Number(c.credit_limit) || 0, Number(c.outstanding) || 0]), "books"),
       reportBlock("Cancelled sales", "Cancelled sales", ["Order", "Customer", "Total", "Pay", "Date"], (data.sales || []).filter((o) => String(o.status || "").toLowerCase() === "cancelled").map((o) => [o.order_number, o.customer_name, Number(o.total) || 0, o.payment_method, formatShopDateTime(o.created_at)]), "sales"),
@@ -11768,10 +11880,34 @@ $("item-variant-sizes")?.addEventListener("click", (e) => {
   state.garmentVariants.sizes = list;
   paintGarmentVariantEditor();
 });
-$("item-variant-colors")?.addEventListener("change", () => {
+$("item-variant-colors")?.addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-gv-color]");
+  if (!btn) return;
+  e.preventDefault();
   readGarmentVariantCells();
+  const G = globalThis.POSGarmentPurchase;
+  const color = G?.normalizeColor?.(btn.dataset.gvColor) || btn.dataset.gvColor;
+  const list = state.garmentVariants.colors || [];
+  const idx = list.findIndex((row) => (G?.colorsEqual ? G.colorsEqual(row, color) : row === color));
+  if (idx >= 0) list.splice(idx, 1);
+  else list.push(color);
+  state.garmentVariants.colors = list;
+  state.garmentVariants.colorsText = list.join(", ");
   paintGarmentVariantEditor();
 });
+$("item-variant-add-color")?.addEventListener("click", () => {
+  const raw = $("item-variant-custom-color")?.value || "";
+  const color = globalThis.POSGarmentPurchase?.normalizeColor?.(raw) || String(raw).trim();
+  if (!color) return;
+  readGarmentVariantCells();
+  const list = state.garmentVariants.colors || [];
+  if (!list.some((row) => globalThis.POSGarmentPurchase?.colorsEqual?.(row, color) || row === color)) list.push(color);
+  state.garmentVariants.colors = list;
+  state.garmentVariants.colorsText = list.join(", ");
+  if ($("item-variant-custom-color")) $("item-variant-custom-color").value = "";
+  paintGarmentVariantEditor();
+});
+$("item-variant-color-images")?.addEventListener("input", () => readGarmentVariantCells());
 $("item-variant-add-size")?.addEventListener("click", () => {
   const raw = $("item-variant-custom-size")?.value || "";
   const size = globalThis.POSGarmentPurchase?.normalizeSize?.(raw) || String(raw).trim().toUpperCase().replace(/\s+/g, "");
@@ -13340,13 +13476,38 @@ $("purchase-form").addEventListener("change", (e) => {
   if (e.target.matches("[data-po-item],[data-po-product],[data-po-gen-bc]")) paintPoTotals();
 });
 $("po-lines")?.addEventListener("click", (e) => {
+  const addColor = e.target.closest("[data-po-add-color]");
+  if (addColor) {
+    const card = addColor.closest("[data-po-product-row]");
+    const input = card?.querySelector("[data-po-custom-color]");
+    const G = globalThis.POSGarmentPurchase;
+    const color = G?.normalizeColor?.(input?.value) || String(input?.value || "").trim();
+    if (!card || !color) return;
+    const exists = [...card.querySelectorAll("[data-po-color-block]")].some((row) => G?.colorsEqual?.(row.dataset.poColorBlock, color) || row.dataset.poColorBlock === color);
+    if (exists) {
+      if (input) input.value = "";
+      return;
+    }
+    const sizes = String(card.dataset.poSizes || "").split(/\s+/).filter(Boolean);
+    const host = card.querySelector("[data-po-color-blocks]");
+    const sample = host?.querySelector("[data-po-color-block]");
+    const extraCount = sample ? sample.querySelectorAll("[data-po-extra-size]").length : 0;
+    host?.insertAdjacentHTML("beforeend", apparelPoColorBlockHtml(color, sizes, []));
+    const block = host?.lastElementChild;
+    for (let i = 0; i < extraCount; i += 1) {
+      block?.querySelector(".po-size-matrix")?.insertAdjacentHTML("beforeend", extraSizeCellHtml(color));
+    }
+    if (input) input.value = "";
+    return;
+  }
   const addSize = e.target.closest("[data-po-add-size]");
   if (addSize) {
-    const wrap = document.querySelector(`[data-po-extra-wrap="${addSize.dataset.poAddSize}"]`);
-    if (wrap) {
-      wrap.insertAdjacentHTML("beforeend", extraSizeCellHtml());
-      wrap.querySelector("[data-po-extra-size]:last-child [data-po-extra-name]")?.focus();
-    }
+    const card = addSize.closest("[data-po-product-row]");
+    const blocks = [...(card?.querySelectorAll("[data-po-color-block]") || [])];
+    blocks.forEach((block) => {
+      block.querySelector(".po-size-matrix")?.insertAdjacentHTML("beforeend", extraSizeCellHtml(block.dataset.poColorBlock || ""));
+    });
+    blocks[0]?.querySelector("[data-po-extra-size]:last-child [data-po-extra-name]")?.focus();
     return;
   }
   const product = e.target.closest("[data-po-product-row]");

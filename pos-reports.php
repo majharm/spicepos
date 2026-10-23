@@ -441,6 +441,24 @@ function pos_build_reports($bid, $from, $to) {
   foreach ($stock as $i) {
     if (pos_report_num($i["stock_gm"]) <= pos_report_num($i["reorder_level_gm"])) $low[] = $i;
   }
+  $purchaseLines = [];
+  try {
+    $purchaseLines = pos_q(
+      "SELECT p.purchase_number, p.purchase_date, p.supplier_name, l.item_name,
+              COALESCE(NULLIF(TRIM(l.color), ''), NULLIF(TRIM(i.color), ''), '') AS color,
+              COALESCE(NULLIF(TRIM(l.size), ''), NULLIF(TRIM(i.size), ''), '') AS size,
+              l.quantity_gm, l.amount
+       FROM purchase_lines l
+       JOIN purchases p ON p.id = l.purchase_id
+       LEFT JOIN items i ON i.id = l.item_id
+       WHERE p.business_id = ? AND p.purchase_date BETWEEN ? AND ?
+       ORDER BY p.purchase_date, l.item_name",
+      "sss",
+      [$bid, $start, $end]
+    ) ?: [];
+  } catch (Exception $e) {
+    $purchaseLines = [];
+  }
   $purchases = pos_q(
     "SELECT purchase_number, supplier_name, supplier_invoice_number, purchase_date,
             subtotal, gst, total, payment_method, payment_status
@@ -611,6 +629,7 @@ function pos_build_reports($bid, $from, $to) {
     "stock" => $stock,
     "low" => $low,
     "purchases" => $purchases,
+    "purchaseLines" => $purchaseLines,
     "expenses" => $expenses,
     "customers" => $customers,
     "php" => true,
@@ -650,7 +669,7 @@ function pos_reports_to_sheets($data, $biz = null) {
   $out = $gstSummary["output"] ?? [];
   $inp = $gstSummary["input"] ?? [];
   $net = $gstSummary["net"] ?? [];
-  return [
+  $sheets = [
     [
       "name" => "GST summary",
       "headers" => ["Type", "CGST", "SGST", "IGST", "Total GST"],
@@ -841,8 +860,13 @@ function pos_reports_to_sheets($data, $biz = null) {
     ],
     [
       "name" => "Low stock",
-      "headers" => ["Code", "Name", "Stock g", "Reorder g"],
-      "rows" => array_map(function ($i) use ($num) {
+      "headers" => (function_exists("pos_is_apparel_shop") && pos_is_apparel_shop($biz))
+        ? ["Code", "Name", "Colour", "Size", "Stock g", "Reorder g"]
+        : ["Code", "Name", "Stock g", "Reorder g"],
+      "rows" => array_map(function ($i) use ($num, $biz) {
+        if (function_exists("pos_is_apparel_shop") && pos_is_apparel_shop($biz)) {
+          return [$i["code"], $i["name"], $i["color"] ?? "", $i["size"] ?? "", $num($i["stock_gm"]), $num($i["reorder_level_gm"])];
+        }
         return [$i["code"], $i["name"], $num($i["stock_gm"]), $num($i["reorder_level_gm"])];
       }, $data["low"] ?? []),
     ],
@@ -878,6 +902,24 @@ function pos_reports_to_sheets($data, $biz = null) {
       }, $data["customers"] ?? []),
     ],
   ];
+  if (function_exists("pos_is_apparel_shop") && pos_is_apparel_shop($biz)) {
+    $lineSheet = [
+      "name" => "Purchase lines",
+      "headers" => ["PO", "Date", "Supplier", "Item", "Colour", "Size", "Qty g", "Amount"],
+      "rows" => array_map(function ($r) use ($num) {
+        return [
+          $r["purchase_number"] ?? "", $r["purchase_date"] ?? "", $r["supplier_name"] ?? "", $r["item_name"] ?? "",
+          $r["color"] ?? "", $r["size"] ?? "", $num($r["quantity_gm"] ?? 0), $num($r["amount"] ?? 0),
+        ];
+      }, $data["purchaseLines"] ?? []),
+    ];
+    $at = count($sheets);
+    foreach ($sheets as $i => $sheet) {
+      if (($sheet["name"] ?? "") === "Purchases") $at = $i + 1;
+    }
+    array_splice($sheets, $at, 0, [$lineSheet]);
+  }
+  return $sheets;
 }
 
 function pos_escape_xml($value) {

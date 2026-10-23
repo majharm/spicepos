@@ -5380,6 +5380,37 @@ body.classic-bill-mode .bill-settle {
   flex-wrap: wrap;
   gap: 8px;
 }
+.garment-swatch {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 1px solid var(--line-strong);
+  vertical-align: -3px;
+  margin-right: 6px;
+  flex: 0 0 16px;
+}
+.garment-color-picks,
+.po-color-blocks { display: grid; gap: 10px; }
+.garment-color-picks { display: flex; flex-wrap: wrap; gap: 8px; }
+.garment-color-image {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+.garment-color-image input { flex: 1; }
+.po-color-block {
+  display: grid;
+  gap: 8px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fff;
+}
+.po-color-head { display: flex; align-items: center; gap: 8px; font-weight: 700; }
+.po-color-add { display: flex; gap: 8px; align-items: center; }
+.po-color-add input { flex: 1; }
 .garment-color-btn,
 .garment-size-btn {
   min-width: 64px;
@@ -5433,7 +5464,8 @@ body.apparel-mode #item-size-wrap { display: none; }
   .garment-color-btn { min-width: 52px; min-height: 44px; }
   .garment-size-buy { grid-template-columns: 1fr 1fr; }
   .garment-size-buy label { grid-column: 1 / -1; }
-  .garment-variant-custom { flex-direction: column; align-items: stretch; }
+  .garment-variant-custom,
+  .po-color-add { flex-direction: column; align-items: stretch; }
 }
 .po-table-wrap {
   max-height: min(48vh, 520px);

@@ -71,6 +71,7 @@ function pos_insert_apparel_variant($bid, $biz, $body, $variant, $image) {
   $savedBody["color"] = $variant["color"];
   $savedBody["barcode_qty"] = 0;
   if (function_exists("pos_assign_item_barcodes")) pos_assign_item_barcodes($bid, $id, $savedBody);
+  pos_stamp_color_image($id, $variant["color_image"] ?? "");
   if (function_exists("pos_save_item_brand")) pos_save_item_brand($bid, $id, $savedBody);
   if (array_key_exists("mrp", $body)) {
     try { pos_q("UPDATE items SET mrp = ? WHERE id = ?", "ds", [pos_round8($body["mrp"]), $id]); } catch (Exception $e) { /* optional */ }
@@ -119,6 +120,7 @@ function pos_update_apparel_variant($bid, $biz, $existing, $body, $variant, $ima
   $savedBody["color"] = $variant["color"];
   $savedBody["barcode_qty"] = 0;
   if (function_exists("pos_assign_item_barcodes")) pos_assign_item_barcodes($bid, $existing["id"], $savedBody);
+  pos_stamp_color_image($existing["id"], $variant["color_image"] ?? "");
   if (function_exists("pos_save_item_brand")) pos_save_item_brand($bid, $existing["id"], $savedBody);
   $rows = pos_q("SELECT * FROM items WHERE id = ? LIMIT 1", "s", [$existing["id"]]);
   return $rows[0] ?? $existing;
@@ -183,13 +185,23 @@ function pos_normalize_pack_items($items) {
   return $out;
 }
 
-function pos_find_or_create_size_variant($bid, $parent, $size, $biz) {
+function pos_stamp_color_image($id, $image) {
+  $value = trim((string) $image);
+  if ($id === "" || $value === "" || strlen($value) > 400000) return;
+  if (!preg_match('/^(#(?:[0-9a-f]{3}|[0-9a-f]{6})|https?:\\/\\/|data:image\\/)/i', $value)) return;
+  try {
+    pos_q("UPDATE items SET color_image = ? WHERE id = ?", "ss", [$value, $id]);
+  } catch (Exception $e) { /* optional column */ }
+}
+
+function pos_find_or_create_size_variant($bid, $parent, $size, $biz, $color = null) {
   $want = pos_garment_normalize_size($size);
   if ($want === "") throw new Exception("Size is required");
+  $wantColor = $color === null ? (string) ($parent["color"] ?? "") : pos_garment_normalize_color($color);
   $rows = pos_q(
     "SELECT * FROM items WHERE business_id = ? AND name = ? AND COALESCE(color,'') = ? AND COALESCE(wearer_type,'') = ?",
     "ssss",
-    [$bid, $parent["name"], $parent["color"] ?? "", $parent["wearer_type"] ?? ""]
+    [$bid, $parent["name"], $wantColor, $parent["wearer_type"] ?? ""]
   );
   foreach ($rows as $row) {
     if (pos_garment_sizes_equal($row["size"] ?? "", $want)) return $row;
@@ -207,7 +219,7 @@ function pos_find_or_create_size_variant($bid, $parent, $size, $biz) {
     "ssssssssssddddssddss",
     [
       $id, $code, $parent["name"], $parent["local_name"] ?? null, $parent["category"] ?? pos_default_item_category($biz),
-      $parent["subcategory"] ?? null, $parent["color"] ?? null, $want, $parent["wearer_type"] ?? null, $unit,
+      $parent["subcategory"] ?? null, $wantColor !== "" ? $wantColor : null, $want, $parent["wearer_type"] ?? null, $unit,
       pos_round8($parent["purchase_rate"] ?? 0), pos_round8($parent["retail_rate"] ?? 0),
       pos_round8($parent["b2b_rate"] ?? 0), (float) ($parent["gst_rate"] ?? 5),
       $parent["hsn"] ?? null, $parent["image_url"] ?? null, 0, (float) ($parent["reorder_level_gm"] ?? 0),
@@ -220,17 +232,75 @@ function pos_find_or_create_size_variant($bid, $parent, $size, $biz) {
   if (is_file(__DIR__ . "/pos-advanced.php")) {
     require_once __DIR__ . "/pos-advanced.php";
     if (function_exists("pos_assign_item_barcodes")) {
-      pos_assign_item_barcodes($bid, $id, ["size" => $want, "color" => $parent["color"] ?? "", "mrp" => $parent["mrp"] ?? null]);
+      pos_assign_item_barcodes($bid, $id, ["size" => $want, "color" => $wantColor, "mrp" => $parent["mrp"] ?? null]);
     }
   }
+  $image = "";
+  foreach ($rows as $row) {
+    $img = trim((string) ($row["color_image"] ?? ""));
+    if ($img !== "") {
+      $image = $img;
+      break;
+    }
+  }
+  $parentColor = pos_garment_normalize_color($parent["color"] ?? "");
+  $sameColor = $color === null || strcasecmp($parentColor, $wantColor) === 0;
+  pos_stamp_color_image($id, $image !== "" ? $image : ($sameColor ? ($parent["color_image"] ?? "") : ""));
   $created = pos_q("SELECT * FROM items WHERE id = ? LIMIT 1", "s", [$id]);
   return $created[0] ?? $parent;
+}
+
+function pos_barcodes_for_color($map, $color) {
+  $prefix = strtolower(trim((string) $color)) . "|";
+  $out = [];
+  if (!is_array($map)) return $out;
+  foreach ($map as $key => $val) {
+    $raw = (string) $key;
+    if (stripos($raw, $prefix) !== 0) continue;
+    $size = pos_garment_normalize_size(substr($raw, strlen($prefix)));
+    if ($size !== "") $out[$size] = $val;
+  }
+  return $out;
 }
 
 function pos_expand_garment_purchase_lines($bid, $lines, $biz) {
   $out = [];
   $apparel = function_exists("pos_is_apparel_shop") && pos_is_apparel_shop($biz);
   foreach ($lines as $line) {
+    $matrix = $line["color_size_qtys"] ?? $line["colorSizeQtys"] ?? null;
+    if ($apparel && is_array($matrix)) {
+      $it = pos_q("SELECT * FROM items WHERE id = ? AND business_id = ? LIMIT 1", "ss", [$line["item_id"] ?? "", $bid]);
+      $parent = $it[0] ?? null;
+      if (!$parent) throw new Exception("Unknown item");
+      if (is_file(__DIR__ . "/pos-advanced.php")) require_once __DIR__ . "/pos-advanced.php";
+      $any = false;
+      foreach ($matrix as $colorName => $sizeQtys) {
+        if (is_int($colorName)) continue;
+        $color = pos_garment_normalize_color($colorName);
+        $planned = pos_garment_plan_size_lines(is_array($sizeQtys) ? $sizeQtys : [], [
+          "rate" => $line["rate_per_kg"] ?? null,
+          "generate_barcodes" => $line["generate_barcodes"] ?? $line["generateBarcodes"] ?? false,
+          "barcodes_by_size" => pos_barcodes_for_color($line["barcodes_by_variant"] ?? $line["barcodesByVariant"] ?? [], $color),
+          "allow_empty_barcodes" => $line["allow_empty_barcodes"] ?? $line["allowEmptyBarcodes"] ?? true,
+        ]);
+        foreach ($planned as $row) {
+          $any = true;
+          $item = pos_find_or_create_size_variant($bid, $parent, $row["size"], $biz, $color);
+          $out[] = array_merge($line, [
+            "item_id" => $item["id"],
+            "quantity_gm" => $row["qty"],
+            "rate_per_kg" => $row["rate"] ?? ($line["rate_per_kg"] ?? $item["purchase_rate"]),
+            "barcodes" => $row["barcodes"],
+            "generate_barcodes" => $row["generate_barcodes"],
+            "allow_empty_barcodes" => $row["allow_empty_barcodes"],
+            "size" => $row["size"],
+            "color" => $color,
+          ]);
+        }
+      }
+      if (!$any) throw new Exception(($parent["name"] ?? "Item") . ": enter colour and size quantity");
+      continue;
+    }
     $sizeQtys = $line["size_qtys"] ?? $line["sizeQtys"] ?? null;
     $looksLikeSizeMap = false;
     if (is_array($sizeQtys)) {

@@ -533,6 +533,23 @@ export async function buildReports(from, to) {
   });
   const refunds = await loadInvoiceRefunds(tenant, start, end);
   const dailySales = summarizeDailySales(sales, refunds);
+  let purchaseLines = [];
+  try {
+    purchaseLines = await query(
+      `SELECT p.purchase_number, p.purchase_date, p.supplier_name, l.item_name,
+              COALESCE(NULLIF(TRIM(l.color), ''), NULLIF(TRIM(i.color), ''), '') AS color,
+              COALESCE(NULLIF(TRIM(l.size), ''), NULLIF(TRIM(i.size), ''), '') AS size,
+              l.quantity_gm, l.amount
+       FROM purchase_lines l
+       JOIN purchases p ON p.id = l.purchase_id
+       LEFT JOIN items i ON i.id = l.item_id
+       WHERE p.business_id = ? AND p.purchase_date BETWEEN ? AND ?
+       ORDER BY p.purchase_date, l.item_name`,
+      rangeParams,
+    );
+  } catch {
+    purchaseLines = [];
+  }
 
   return {
     from: start,
@@ -562,6 +579,7 @@ export async function buildReports(from, to) {
     stock,
     low,
     purchases,
+    purchaseLines,
     expenses,
     customers,
   };
@@ -779,9 +797,23 @@ export function reportsToSheets(data, biz = {}) {
     },
     {
       name: "Low stock",
-      headers: ["Code", "Name", "Stock g", "Reorder g"],
-      rows: data.low.map((i) => [i.code, i.name, num(i.stock_gm), num(i.reorder_level_gm)]),
+      headers: POSFootwear?.isApparelShop?.(biz)
+        ? ["Code", "Name", "Colour", "Size", "Stock g", "Reorder g"]
+        : ["Code", "Name", "Stock g", "Reorder g"],
+      rows: data.low.map((i) => (
+        POSFootwear?.isApparelShop?.(biz)
+          ? [i.code, i.name, i.color || "", i.size || "", num(i.stock_gm), num(i.reorder_level_gm)]
+          : [i.code, i.name, num(i.stock_gm), num(i.reorder_level_gm)]
+      )),
     },
+    ...(POSFootwear?.isApparelShop?.(biz) ? [{
+      name: "Purchase lines",
+      headers: ["PO", "Date", "Supplier", "Item", "Colour", "Size", "Qty g", "Amount"],
+      rows: (data.purchaseLines || []).map((r) => [
+        r.purchase_number, r.purchase_date, r.supplier_name, r.item_name,
+        r.color || "", r.size || "", num(r.quantity_gm), num(r.amount),
+      ]),
+    }] : []),
     {
       name: "Purchases",
       headers: ["PO", "Supplier", "Invoice", "Date", "Taxable", "GST", "Total", "Pay", "Status"],

@@ -74,6 +74,24 @@ test("apparel item sales and stock sheets include colour and size", () => {
       purchase_rate: 400,
       gst_rate: 5,
     }],
+    low: [{
+      code: "AP-001",
+      name: "Cotton Kurti",
+      color: "Pink",
+      size: "M",
+      stock_gm: 1,
+      reorder_level_gm: 2,
+    }],
+    purchaseLines: [{
+      purchase_number: "PO-1",
+      purchase_date: "2026-10-23",
+      supplier_name: "Mill",
+      item_name: "Cotton Kurti",
+      color: "Black",
+      size: "L",
+      quantity_gm: 8,
+      amount: 3200,
+    }],
   };
   const apparel = reportsToSheets(data, { business_type: "Garment & Fashion" });
   const items = apparel.find((s) => s.name === "Item sales");
@@ -95,6 +113,16 @@ test("apparel item sales and stock sheets include colour and size", () => {
   assert.equal(pharmacy.find((s) => s.name === "Stock").headers[2], "HSN");
   const restaurant = reportsToSheets(emptyReports("2026-10-01", "2026-10-23"), { business_type: "Restaurant" });
   assert.deepEqual(restaurant.find((s) => s.name === "Item sales").headers, ["Item", "Qty g", "Amount", "GST"]);
+  const low = apparel.find((s) => s.name === "Low stock");
+  assert.deepEqual(low.headers, ["Code", "Name", "Colour", "Size", "Stock g", "Reorder g"]);
+  assert.equal(low.rows[0][2], "Pink");
+  assert.equal(low.rows[0][3], "M");
+  const lines = apparel.find((s) => s.name === "Purchase lines");
+  assert.deepEqual(lines.headers, ["PO", "Date", "Supplier", "Item", "Colour", "Size", "Qty g", "Amount"]);
+  assert.equal(lines.rows[0][3], "Cotton Kurti");
+  assert.equal(lines.rows[0][4], "Black");
+  assert.equal(pharmacy.find((s) => s.name === "Low stock").headers.includes("Colour"), false);
+  assert.equal(pharmacy.find((s) => s.name === "Purchase lines"), undefined);
 });
 
 test("GST daywise sheet uses YYYY-MM-DD not a Date string", () => {
