@@ -5300,13 +5300,28 @@ body.classic-bill-mode .bill-settle {
 }
 .po-size-bc-list {
   display: grid;
-  gap: 8px;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
 }
 .po-size-bc {
   display: grid;
-  gap: 4px;
+  gap: 6px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+}
+.po-size-bc-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
 }
 .po-size-bc span { font-size: 12px; font-weight: 700; }
+.po-size-bc .po-bc-scan-row,
+.po-size-bc .po-bc-list {
+  max-width: none;
+}
 .garment-stock-sizes {
   display: flex;
   flex-wrap: wrap;
