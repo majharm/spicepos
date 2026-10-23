@@ -30,7 +30,9 @@ test("camera scan module exposes mobile scanner helpers", () => {
   assert.match(app, /applyPurchaseBarcodeScan/);
   assert.match(app, /openPurchaseCamera/);
   assert.match(app, /data-po-bc-camera/);
-  assert.match(app, /data-po-product-bc-camera/);
+  assert.match(app, /data-po-size-bc-camera/);
+  assert.match(app, /data-po-size-bc-scan/);
+  assert.match(css, /\.po-size-bc-head/);
   assert.match(css, /\.camera-scan-modal/);
   assert.match(css, /\.scan-camera-btn/);
   assert.match(css, /\.classic-bill-scan/);
