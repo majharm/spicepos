@@ -288,7 +288,12 @@
         </div>
         <div class="saas-split-lists">
           <div><h4>Fast moving</h4>${brandBarsHtml((h.topItems || []).slice(0, 4))}</div>
-          <div><h4>Watch stock</h4><p class="hint">${Number(h.lowStock) || 0} low · ${Number(h.outStock) || 0} out</p></div>
+          <div><h4>Watch stock</h4><p class="hint">${Number(h.lowStock) || 0} low · ${Number(h.outStock) || 0} out</p>${(h.lowItems || []).length ? `<ul class="saas-stock-alerts">${(h.lowItems || []).slice(0, 6).map((item) => {
+            const variant = [item.color, item.size].filter(Boolean).join(" · ");
+            const qty = Number(item.stock_gm) || 0;
+            const tone = qty <= 0 ? "out" : "low";
+            return `<li><button type="button" data-dash-view="stock" data-dash-stock="${tone}"><strong>${escapeHtml(item.name || "Item")}</strong><span>${escapeHtml(variant || "Variant")} · ${qty <= 0 ? "Out" : qty}</span></button></li>`;
+          }).join("")}</ul>` : ""}</div>
         </div>
       </section>`;
     }

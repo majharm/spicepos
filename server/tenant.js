@@ -609,10 +609,11 @@ export function registerTenant(app) {
   );
 
   app.get("/api/stock", requireStaff, requirePerm("stock"), (_req, res) =>
-    send(res, () =>
-      query(
+    send(res, async () => {
+      const rows = await query(
         `SELECT i.id, i.code, i.name, i.unit, i.base_unit, i.stock_gm AS master_stock,
                 i.reorder_level_gm, i.purchase_rate, i.retail_rate, i.barcode, i.batch_no,
+                i.color, i.size, i.wearer_type, i.category, i.subcategory, i.hsn, i.status, i.mrp,
                 DATE_FORMAT(i.default_expiry, '%Y-%m-%d') AS default_expiry,
                 COALESCE(bs.stock_gm, i.stock_gm) AS stock_gm, bs.branch_id
          FROM items i
@@ -620,8 +621,27 @@ export function registerTenant(app) {
          WHERE i.business_id = ?
          ORDER BY i.name`,
         [branchId(), bid()],
-      ),
-    ),
+      );
+      const suppliers = new Map();
+      try {
+        const purchases = await query(
+          `SELECT pl.item_id, s.name AS supplier_name
+           FROM purchase_lines pl
+           JOIN purchases p ON p.id = pl.purchase_id
+           LEFT JOIN suppliers s ON s.id = p.supplier_id
+           WHERE pl.business_id = ?
+           ORDER BY p.purchase_date DESC, p.created_at DESC
+           LIMIT 8000`,
+          [bid()],
+        );
+        for (const row of purchases || []) {
+          if (!suppliers.has(row.item_id) && row.supplier_name) suppliers.set(row.item_id, row.supplier_name);
+        }
+      } catch {
+        /* supplier filter stays empty */
+      }
+      return (rows || []).map((row) => ({ ...row, supplier_name: suppliers.get(row.id) || "" }));
+    }),
   );
 
   app.get("/api/stock/excel", requireStaff, requirePerm("stock"), async (_req, res) => {
@@ -650,7 +670,17 @@ export function registerTenant(app) {
       } catch {
         batches = [];
       }
-      const xml = workbookXml(stockToSheets(rows, biz, batches));
+      let pieceCodes = [];
+      try {
+        pieceCodes = await query(
+          "SELECT item_id, barcode, kind, status FROM item_barcodes WHERE business_id=?",
+          [bid()],
+        );
+      } catch {
+        pieceCodes = [];
+      }
+      const withCodes = globalThis.POSGarmentPurchase?.withBarcodes?.(rows, pieceCodes) || rows;
+      const xml = workbookXml(stockToSheets(withCodes, biz, batches));
       const day = new Date().toISOString().slice(0, 10);
       res.setHeader("Content-Type", "application/vnd.ms-excel; charset=utf-8");
       res.setHeader("Content-Disposition", `attachment; filename="stock-list-${day}.xls"`);
@@ -662,13 +692,14 @@ export function registerTenant(app) {
 
   app.post("/api/stock/adjust", requireStaff, requirePerm("stock"), (req, res) =>
     send(res, async () => {
-      const { item_id, quantity_gm, kind, note } = req.body || {};
+      const { item_id, quantity_gm, kind, note, reason, barcode } = req.body || {};
       let qty = Number(quantity_gm);
       const k = String(kind || "adjustment");
       if (["damaged", "expired", "returned"].includes(k) && qty > 0) qty = -qty;
       if (!item_id || !Number.isFinite(qty) || !qty) throw new Error("Item and quantity required");
       const [item] = await query("SELECT * FROM items WHERE id=? AND business_id=?", [item_id, bid()]);
       if (!item) throw new Error("Item not found");
+      if (Number(item.stock_gm) + qty < -0.0001) throw new Error("Not enough stock for this adjustment");
       await query("UPDATE items SET stock_gm = stock_gm + ? WHERE id=? AND business_id=?", [qty, item_id, bid()]);
       const br = branchId();
       if (br) {
@@ -679,13 +710,37 @@ export function registerTenant(app) {
           [crypto.randomUUID(), bid(), br, item_id, qty],
         );
       }
-      await query(
-        `INSERT INTO stock_movements (id, business_id, branch_id, item_id, kind, quantity_gm, note, created_by)
-         VALUES (?,?,?,?,?,?,?,?)`,
-        [crypto.randomUUID(), bid(), br, item_id, k, qty, note || null, authUser()?.id],
-      );
-      await audit("Stock Adjusted", { module: "stock", target_id: item_id, kind, qty }, req);
+      const actor = authUser()?.id || null;
+      const why = String(reason || "").trim().slice(0, 64);
+      const code = String(barcode || "").trim().slice(0, 64);
+      try {
+        await query(
+          `INSERT INTO stock_movements (id, business_id, branch_id, item_id, kind, quantity_gm, note, created_by, barcode, reason)
+           VALUES (?,?,?,?,?,?,?,?,?,?)`,
+          [crypto.randomUUID(), bid(), br, item_id, k, qty, note || null, actor, code || null, why || null],
+        );
+      } catch {
+        await query(
+          `INSERT INTO stock_movements (id, business_id, branch_id, item_id, kind, quantity_gm, note, created_by)
+           VALUES (?,?,?,?,?,?,?,?)`,
+          [crypto.randomUUID(), bid(), br, item_id, k, qty, note || null, actor],
+        );
+      }
+      await audit("Stock Adjusted", { module: "stock", target_id: item_id, kind: k, qty, reason: why, barcode: code }, req);
       return { ok: true };
+    }),
+  );
+
+  app.post("/api/stock/reorder", requireStaff, requirePerm("stock"), (req, res) =>
+    send(res, async () => {
+      const itemId = String(req.body?.item_id || "");
+      const reorder = Math.max(0, Math.round(Number(req.body?.reorder_level_gm) || 0));
+      if (!itemId) throw new Error("Item is required");
+      const [item] = await query("SELECT id, name FROM items WHERE id=? AND business_id=?", [itemId, bid()]);
+      if (!item) throw new Error("Item not found");
+      await query("UPDATE items SET reorder_level_gm=? WHERE id=? AND business_id=?", [reorder, itemId, bid()]);
+      await audit("Reorder level", { module: "stock", target_id: itemId, target_name: item.name, reorder }, req);
+      return { ok: true, reorder_level_gm: reorder };
     }),
   );
 

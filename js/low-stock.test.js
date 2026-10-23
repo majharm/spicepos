@@ -71,7 +71,7 @@ test("Counter Low Stock popup, bell, settings, and oversell hints are wired", ()
   assert.match(app, /await refreshCatalogStock\(\)/);
   assert.match(app, /maybeShowCounterLowStockAlert\(\)/);
   assert.match(app, /payload\.low_stock_threshold/);
-  assert.match(app, /if \(isApparelShop\(\)\) \{\s*low = stock <= lowStockThreshold\(\);/);
+  assert.match(app, /reorder > 0 \? stock <= reorder : stock <= lowStockThreshold\(\)/);
 
   assert.match(css, /#counter-low-stock-btn/);
   assert.match(css, /\.low-stock-modal/);

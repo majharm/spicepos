@@ -99,6 +99,56 @@ test("invoice grouping shows size-wise quantities on one product row", () => {
   assert.equal(groups[1].name, "Turmeric");
 });
 
+test("stock board nests product, colour, size, and barcode", () => {
+  const board = G.stockBoard([
+    {
+      id: "p-m",
+      name: "Cotton Kurti",
+      color: "Pink",
+      size: "M",
+      wearer_type: "female",
+      code: "K-M",
+      barcode: "SKU-PINK-M",
+      category: "Kurtis",
+      supplier_name: "Loom House",
+      stock_gm: 2,
+      reorder_level_gm: 1,
+      purchase_rate: 250,
+      barcodes: [
+        { barcode: "P1", kind: "unit", status: "active" },
+        { barcode: "P2", kind: "unit", status: "sold" },
+      ],
+    },
+    {
+      id: "b-l",
+      name: "Cotton Kurti",
+      color: "Black",
+      size: "L",
+      wearer_type: "female",
+      code: "K-L",
+      barcode: "SKU-BLACK-L",
+      category: "Kurtis",
+      stock_gm: 0,
+      reorder_level_gm: 2,
+      purchase_rate: 250,
+    },
+  ]);
+  assert.equal(board.styles.length, 1);
+  assert.equal(board.styles[0].colors.length, 2);
+  const pink = board.styles[0].colors.find((c) => c.color === "Pink");
+  assert.equal(pink.sizes[0].stock, 2);
+  assert.equal(pink.sizes[0].status, "ok");
+  assert.deepEqual(pink.sizes[0].barcodes.map((b) => `${b.barcode}:${b.onHand}`), ["P1:1", "P2:0"]);
+  const black = board.styles[0].colors.find((c) => c.color === "Black");
+  assert.equal(black.sizes[0].status, "out");
+  assert.equal(black.sizes[0].barcodes[0].barcode, "SKU-BLACK-L");
+  assert.equal(black.sizes[0].barcodes[0].onHand, 0);
+  assert.equal(board.styles[0].status, "out");
+  assert.equal(board.barcodeRows.filter((r) => r.color === "Pink").length, 2);
+  const attached = G.withBarcodes([{ id: "p-m", stock_gm: 1 }], [{ item_id: "p-m", barcode: "Z9", kind: "unit", status: "active" }]);
+  assert.equal(attached[0].barcodes[0].barcode, "Z9");
+});
+
 test("inventory groups size-wise stock for one garment", () => {
   const stock = G.stockGroups([
     { name: "Cotton Kurti", color: "Maroon", wearer_type: "female", size: "S", stock_gm: 5, purchase_rate: 250 },

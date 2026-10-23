@@ -402,6 +402,136 @@
     });
   }
 
+  function stockStatus(item) {
+    const stock = Number(item?.stock_gm) || 0;
+    const reorder = Number(item?.reorder_level_gm) || 0;
+    if (stock <= 0) return "out";
+    if (reorder > 0 && stock <= reorder) return "low";
+    return "ok";
+  }
+
+  function worseStatus(a, b) {
+    const rank = { ok: 0, low: 1, out: 2 };
+    return (rank[b] || 0) > (rank[a] || 0) ? b : a;
+  }
+
+  function withBarcodes(items, codes) {
+    const byItem = new Map();
+    for (const row of codes || []) {
+      const id = row?.item_id || row?.itemId;
+      if (!id) continue;
+      if (!byItem.has(id)) byItem.set(id, []);
+      byItem.get(id).push(row);
+    }
+    return (items || []).map((item) => ({
+      ...item,
+      barcodes: byItem.get(item?.id) || item?.barcodes || [],
+    }));
+  }
+
+  function variantPieces(item) {
+    const B = globalThis.POSBarcode;
+    const seen = new Set();
+    const pieces = [];
+    const skuCodes = [];
+    for (const row of item?.barcodes || []) {
+      const code = B?.extraBarcodeValue?.(row) || String(row?.barcode || "").trim();
+      if (!code) continue;
+      const key = code.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const kind = String(row?.kind || "");
+      const status = String(row?.status || "active").toLowerCase() || "active";
+      const piece = B?.shouldConsumePieceBarcode ? B.shouldConsumePieceBarcode({ kind: kind || "unit" }) : kind.toLowerCase() === "unit";
+      if (!piece) {
+        skuCodes.push({ barcode: code, kind: kind || "own", status: "sku", onHand: Number(item.stock_gm) || 0, piece: false });
+        continue;
+      }
+      const onHand = status === "sold" || status === "damaged" || status === "inactive" ? 0 : 1;
+      pieces.push({ barcode: code, kind: kind || "unit", status, onHand, piece: true });
+    }
+    if (pieces.length) return pieces;
+    if (skuCodes.length) return skuCodes.slice(0, 1).map((row) => ({ ...row, onHand: Number(item.stock_gm) || 0 }));
+    const sku = String(item?.barcode || "").trim();
+    if (sku) return [{ barcode: sku, kind: "sku", status: "sku", onHand: Number(item.stock_gm) || 0, piece: false }];
+    return [{ barcode: "", kind: "", status: "sku", onHand: Number(item.stock_gm) || 0, piece: false }];
+  }
+
+  function stockBoard(items) {
+    const styles = styleGroups(items).map((g) => {
+      const byColor = new Map();
+      for (const item of g.variants) {
+        const color = normalizeColor(item.color) || "";
+        const key = colorKey(color);
+        if (!byColor.has(key)) byColor.set(key, { color, sizes: [], stock: 0, value: 0, status: "ok" });
+        const bucket = byColor.get(key);
+        const size = normalizeSize(item.size) || "—";
+        const stock = Number(item.stock_gm) || 0;
+        const status = stockStatus(item);
+        const value = lineAmount(stock, item.purchase_rate);
+        bucket.sizes.push({
+          size,
+          item,
+          stock,
+          reorder: Number(item.reorder_level_gm) || 0,
+          status,
+          code: String(item.code || ""),
+          barcodes: variantPieces(item),
+          value: round2(value),
+          supplier: String(item.supplier_name || "").trim(),
+        });
+        bucket.stock += stock;
+        bucket.value += value;
+        bucket.status = worseStatus(bucket.status, status);
+      }
+      const colors = [...byColor.values()].map((bucket) => ({ ...bucket, value: round2(bucket.value) }));
+      const total = colors.reduce((sum, color) => sum + color.stock, 0);
+      const status = colors.reduce((cur, color) => worseStatus(cur, color.status), "ok");
+      const suppliers = [];
+      for (const color of colors) {
+        for (const size of color.sizes) {
+          if (size.supplier && !suppliers.includes(size.supplier)) suppliers.push(size.supplier);
+        }
+      }
+      return {
+        ...g,
+        colors,
+        totalStock: total,
+        value: round2(colors.reduce((sum, color) => sum + color.value, 0)),
+        status,
+        suppliers,
+        category: String(g.category || ""),
+      };
+    });
+    const barcodeRows = [];
+    for (const style of styles) {
+      for (const color of style.colors) {
+        for (const size of color.sizes) {
+          for (const code of size.barcodes) {
+            const onHand = code.piece ? code.onHand : size.stock;
+            barcodeRows.push({
+              barcode: code.barcode,
+              kind: code.kind,
+              piece: code.piece,
+              onHand,
+              name: style.name,
+              color: color.color,
+              size: size.size,
+              code: size.code,
+              itemId: size.item?.id || "",
+              category: style.category,
+              supplier: size.supplier,
+              wearer: style.wearer_type,
+              status: code.piece ? (onHand > 0 ? "ok" : "out") : size.status,
+              variantStatus: size.status,
+            });
+          }
+        }
+      }
+    }
+    return { styles, barcodeRows };
+  }
+
   return {
     LETTER_SIZES,
     NUMERIC_SIZES,
@@ -432,5 +562,9 @@
     stripVariantSuffix,
     groupInvoiceLines,
     stockGroups,
+    stockStatus,
+    withBarcodes,
+    variantPieces,
+    stockBoard,
   };
 });

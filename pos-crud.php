@@ -784,6 +784,7 @@ function pos_crud_dispatch($path, $method, $body, $bid, $auth, $branchId, $uid) 
     if (!$itemId || !$qty) pos_send(400, ["error" => "Item and quantity required"]);
     $it = pos_q("SELECT * FROM items WHERE id = ? AND business_id = ? LIMIT 1", "ss", [$itemId, $bid]);
     if (!$it) pos_send(400, ["error" => "Item not found"]);
+    if ((float) ($it[0]["stock_gm"] ?? 0) + $qty < -0.0001) pos_send(400, ["error" => "Not enough stock for this adjustment"]);
     pos_q("UPDATE items SET stock_gm = stock_gm + ? WHERE id = ? AND business_id = ?", "dss", [$qty, $itemId, $bid]);
     if ($branchId) {
       try {
@@ -795,14 +796,34 @@ function pos_crud_dispatch($path, $method, $body, $bid, $auth, $branchId, $uid) 
         );
       } catch (Exception $e) { /* optional */ }
     }
+    $why = substr(trim((string) ($body["reason"] ?? "")), 0, 64);
+    $code = substr(trim((string) ($body["barcode"] ?? "")), 0, 64);
     try {
       pos_q(
-        "INSERT INTO stock_movements (id, business_id, branch_id, item_id, kind, quantity_gm, note, created_by) VALUES (?,?,?,?,?,?,?,?)",
-        "sssssdsi",
-        [pos_uuid(), $bid, (string) $branchId, $itemId, (string) ($body["kind"] ?? "adjustment"), $qty, $body["note"] ?? null, $uid]
+        "INSERT INTO stock_movements (id, business_id, branch_id, item_id, kind, quantity_gm, note, created_by, barcode, reason) VALUES (?,?,?,?,?,?,?,?,?,?)",
+        "sssssdssss",
+        [pos_uuid(), $bid, (string) $branchId, $itemId, (string) ($body["kind"] ?? "adjustment"), $qty, $body["note"] ?? null, $uid, $code !== "" ? $code : null, $why !== "" ? $why : null]
       );
-    } catch (Exception $e) { /* optional */ }
+    } catch (Exception $e) {
+      try {
+        pos_q(
+          "INSERT INTO stock_movements (id, business_id, branch_id, item_id, kind, quantity_gm, note, created_by) VALUES (?,?,?,?,?,?,?,?)",
+          "sssssdss",
+          [pos_uuid(), $bid, (string) $branchId, $itemId, (string) ($body["kind"] ?? "adjustment"), $qty, $body["note"] ?? null, $uid]
+        );
+      } catch (Exception $e2) { /* optional */ }
+    }
     pos_send(200, ["ok" => true]);
+  }
+
+  if ($path === "stock/reorder" && $method === "POST") {
+    $itemId = trim((string) ($body["item_id"] ?? ""));
+    $reorder = max(0, (int) round((float) ($body["reorder_level_gm"] ?? 0)));
+    if ($itemId === "") pos_send(400, ["error" => "Item is required"]);
+    $it = pos_q("SELECT id, name FROM items WHERE id = ? AND business_id = ? LIMIT 1", "ss", [$itemId, $bid]);
+    if (!$it) pos_send(400, ["error" => "Item not found"]);
+    pos_q("UPDATE items SET reorder_level_gm = ? WHERE id = ? AND business_id = ?", "dss", [$reorder, $itemId, $bid]);
+    pos_send(200, ["ok" => true, "reorder_level_gm" => $reorder]);
   }
 
   if ($path === "branches" && $method === "POST") {

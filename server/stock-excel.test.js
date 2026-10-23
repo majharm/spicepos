@@ -94,6 +94,23 @@ test("stockToSheets writes a full list and a Low stock sheet", () => {
   assert.match(xml, /Turmeric powder/);
 });
 
+test("apparel stock Excel adds a barcode sheet and keeps spice sheets unchanged", () => {
+  const spice = stockToSheets(items, { category: "Spices & masala" }, []);
+  assert.equal(spice.length, 2);
+  assert.equal(spice.find((s) => s.name === "Barcode stock"), undefined);
+  const apparel = stockToSheets(
+    [{ id: "k1", name: "Cotton Kurti", code: "K-M", color: "Pink", size: "M", barcode: "SKU1", category: "Kurtis", base_unit: "PCS", stock_gm: 2, reorder_level_gm: 1, purchase_rate: 250, barcodes: [{ barcode: "P1", kind: "unit", status: "active" }] }],
+    { category: "Garment & Fashion" },
+    [],
+  );
+  const sheet = apparel.find((s) => s.name === "Barcode stock");
+  assert.ok(sheet);
+  assert.equal(sheet.headers[0], "Barcode");
+  assert.equal(sheet.rows[0][0], "P1");
+  assert.equal(sheet.rows[0][2], "Pink");
+  assert.equal(sheet.rows[0][3], "M");
+});
+
 test("pharmacy stock Excel lists one row per batch of the same item", () => {
   const batches = [
     {

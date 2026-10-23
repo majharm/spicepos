@@ -1,4 +1,5 @@
 import "../js/footwear.js";
+import "../js/garment-purchase.js";
 
 const WEIGHT_VOL = new Set(["GM", "G", "KG", "ML", "L", "LTR"]);
 const POSFootwear = globalThis.POSFootwear;
@@ -207,6 +208,25 @@ export function stockExcelRowFromBatch(batch) {
   });
 }
 
+export function garmentBarcodeSheet(items) {
+  const rows = globalThis.POSGarmentPurchase?.barcodeStockRows?.(items) || globalThis.POSGarmentPurchase?.stockBoard?.(items)?.barcodeRows || [];
+  return {
+    name: "Barcode stock",
+    headers: ["Barcode", "Product", "Colour", "Size", "SKU", "On hand", "Status", "Category", "Supplier"],
+    rows: rows.map((r) => [
+      r.barcode || "",
+      r.name || "",
+      r.color || "",
+      r.size || "",
+      r.code || "",
+      Number(r.onHand) || 0,
+      r.piece ? (Number(r.onHand) > 0 ? "On hand" : "Sold") : r.variantStatus === "out" ? "Out" : r.variantStatus === "low" ? "Low" : "OK",
+      r.category || "",
+      r.supplier || "",
+    ]),
+  };
+}
+
 export function stockToSheets(rows, biz = {}, batches = []) {
   const list = Array.isArray(rows) ? rows : [];
   const skuRows = list.map(stockExcelRow);
@@ -214,18 +234,23 @@ export function stockToSheets(rows, biz = {}, batches = []) {
   const headers = stockExcelHeaders(biz);
   const live = onHandBatches(batches);
   const pharmacy = Boolean(POSFootwear?.isPharmacyShop?.(biz));
+  const apparel = Boolean(POSFootwear?.isApparelShop?.(biz));
+  let sheets;
   if (pharmacy || live.length) {
     const covered = new Set(live.map((b) => String(b.item_id || "")).filter(Boolean));
     const extras = list.filter((item) => item?.id && !covered.has(String(item.id))).map(stockExcelRow);
     const stockRows = live.map(stockExcelRowFromBatch).concat(extras);
-    return [
+    sheets = [
       { name: "Stock", headers, rows: stockRows },
       { name: "SKUs", headers, rows: skuRows },
       { name: "Low stock", headers, rows: low },
     ];
+  } else {
+    sheets = [
+      { name: "Stock", headers, rows: skuRows },
+      { name: "Low stock", headers, rows: low },
+    ];
   }
-  return [
-    { name: "Stock", headers, rows: skuRows },
-    { name: "Low stock", headers, rows: low },
-  ];
+  if (apparel) sheets.push(garmentBarcodeSheet(list));
+  return sheets;
 }

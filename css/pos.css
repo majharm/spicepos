@@ -5322,6 +5322,63 @@ body.classic-bill-mode .bill-settle {
 .po-size-bc .po-bc-list {
   max-width: none;
 }
+.stock-garment-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  width: 100%;
+}
+.stock-garment-tools select,
+.stock-garment-tools .btn { min-height: 40px; }
+.garment-stock-style {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fff;
+  margin-bottom: 8px;
+}
+.garment-stock-style.is-low { border-color: #fcd34d; }
+.garment-stock-style.is-out { border-color: #fca5a5; }
+.garment-stock-style-head {
+  width: 100%;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  text-align: left;
+  background: transparent;
+  border: 0;
+  padding: 12px;
+  cursor: pointer;
+  font: inherit;
+}
+.garment-stock-style-head span { display: grid; gap: 2px; flex: 1; }
+.garment-stock-style-head small { color: var(--muted); }
+.garment-stock-colours { display: grid; gap: 8px; padding: 0 12px 12px; }
+.garment-stock-color { display: grid; gap: 6px; padding: 8px; border: 1px solid var(--line); border-radius: 10px; }
+.garment-stock-color header { display: flex; align-items: center; gap: 8px; }
+.garment-stock-size-row {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr) auto auto auto;
+  gap: 8px;
+  align-items: center;
+  padding: 6px;
+  border-radius: 8px;
+}
+.garment-stock-size-row.is-editing { outline: 2px solid var(--vel-teal); }
+.garment-stock-size-row label { display: flex; align-items: center; gap: 4px; font-size: 12px; color: var(--muted); }
+.garment-stock-size-row input { width: 64px; }
+.garment-stock-barcodes { grid-column: 1 / -1; margin: 0; padding: 0; list-style: none; display: grid; gap: 4px; }
+.garment-barcode-line { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; color: var(--muted); cursor: pointer; }
+.garment-barcode-table { width: 100%; border-collapse: collapse; min-width: 680px; background: #fff; }
+.garment-barcode-table th,
+.garment-barcode-table td { padding: 8px; border-bottom: 1px solid var(--line); text-align: left; }
+.garment-barcode-row { cursor: pointer; }
+.garment-barcode-row.is-editing { outline: 2px solid var(--vel-teal); }
+.stock-history { margin-top: 8px; }
+.stock-history h4 { margin: 0 0 6px; font-size: 13px; }
+.stock-history ul { list-style: none; margin: 0; padding: 0; }
+.stock-history li { display: grid; gap: 2px; padding: 6px 0; border-bottom: 1px solid var(--line); font-size: 12px; }
+.saas-stock-alerts { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 6px; }
+.saas-stock-alerts button { width: 100%; text-align: left; background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; display: grid; }
 .garment-stock-sizes {
   display: flex;
   flex-wrap: wrap;
@@ -5465,7 +5522,11 @@ body.apparel-mode #item-size-wrap { display: none; }
   .garment-size-buy { grid-template-columns: 1fr 1fr; }
   .garment-size-buy label { grid-column: 1 / -1; }
   .garment-variant-custom,
-  .po-color-add { flex-direction: column; align-items: stretch; }
+  .po-color-add,
+  .stock-garment-tools { flex-direction: column; align-items: stretch; }
+  .garment-stock-size-row { grid-template-columns: 48px minmax(0, 1fr); }
+  .garment-stock-size-row .stock-pill,
+  .garment-stock-size-row .item-chip { justify-self: start; }
 }
 .po-table-wrap {
   max-height: min(48vh, 520px);

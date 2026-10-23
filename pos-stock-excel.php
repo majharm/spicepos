@@ -145,7 +145,62 @@ function pos_stock_excel_row_from_batch($batch) {
   ]);
 }
 
-function pos_stock_to_sheets($rows, $biz = null, $batches = []) {
+function pos_garment_barcode_sheet($rows, $codes) {
+  $byItem = [];
+  foreach (is_array($codes) ? $codes : [] as $code) {
+    $id = (string) ($code["item_id"] ?? "");
+    if ($id === "") continue;
+    if (!isset($byItem[$id])) $byItem[$id] = [];
+    $byItem[$id][] = $code;
+  }
+  $out = [];
+  foreach (is_array($rows) ? $rows : [] as $item) {
+    $id = (string) ($item["id"] ?? "");
+    $stock = (float) ($item["stock_gm"] ?? 0);
+    $pieces = [];
+    $sku = null;
+    foreach ($byItem[$id] ?? [] as $code) {
+      $barcode = trim((string) ($code["barcode"] ?? ""));
+      if ($barcode === "") continue;
+      $kind = strtolower(trim((string) ($code["kind"] ?? "")));
+      $status = strtolower(trim((string) ($code["status"] ?? "active")));
+      $piece = $kind !== "own" && $kind !== "manufacturer" && $kind !== "";
+      if (!$piece && $kind === "") $piece = false;
+      if ($kind === "unit" || ($kind !== "own" && $kind !== "manufacturer" && $kind !== "")) {
+        $onHand = ($status === "sold" || $status === "damaged" || $status === "inactive") ? 0 : 1;
+        $pieces[] = [$barcode, $onHand, $onHand > 0 ? "On hand" : "Sold"];
+      } elseif ($sku === null) {
+        $sku = [$barcode, $stock, pos_stock_alert($item) === "Out" ? "Out" : (pos_stock_alert($item) === "Low" ? "Low" : "OK")];
+      }
+    }
+    $lines = $pieces;
+    if (!$lines) {
+      $barcode = $sku[0] ?? trim((string) ($item["barcode"] ?? ""));
+      $alert = pos_stock_alert($item);
+      $lines = [[$barcode, $stock, $alert === "Out" ? "Out" : ($alert === "Low" ? "Low" : "OK")]];
+    }
+    foreach ($lines as $line) {
+      $out[] = [
+        $line[0],
+        $item["name"] ?? "",
+        $item["color"] ?? "",
+        $item["size"] ?? "",
+        $item["code"] ?? "",
+        $line[1],
+        $line[2],
+        $item["category"] ?? "",
+        $item["supplier_name"] ?? "",
+      ];
+    }
+  }
+  return [
+    "name" => "Barcode stock",
+    "headers" => ["Barcode", "Product", "Colour", "Size", "SKU", "On hand", "Status", "Category", "Supplier"],
+    "rows" => $out,
+  ];
+}
+
+function pos_stock_to_sheets($rows, $biz = null, $batches = [], $codes = []) {
   $list = is_array($rows) ? $rows : [];
   $skuRows = [];
   $low = [];
@@ -170,16 +225,21 @@ function pos_stock_to_sheets($rows, $biz = null, $batches = []) {
       if ($id === "" || isset($covered[$id])) continue;
       $stockRows[] = pos_stock_excel_row($item);
     }
-    return [
+    $sheets = [
       ["name" => "Stock", "headers" => $headers, "rows" => $stockRows],
       ["name" => "SKUs", "headers" => $headers, "rows" => $skuRows],
       ["name" => "Low stock", "headers" => $headers, "rows" => $low],
     ];
+  } else {
+    $sheets = [
+      ["name" => "Stock", "headers" => $headers, "rows" => $skuRows],
+      ["name" => "Low stock", "headers" => $headers, "rows" => $low],
+    ];
   }
-  return [
-    ["name" => "Stock", "headers" => $headers, "rows" => $skuRows],
-    ["name" => "Low stock", "headers" => $headers, "rows" => $low],
-  ];
+  if (function_exists("pos_is_apparel_shop") && pos_is_apparel_shop($biz ?: [])) {
+    $sheets[] = pos_garment_barcode_sheet($list, $codes);
+  }
+  return $sheets;
 }
 
 function pos_stock_excel_batches($bid) {
@@ -217,7 +277,13 @@ function pos_stock_excel_response($bid) {
   $bizRows = pos_q("SELECT name, category, business_type FROM businesses WHERE id = ? LIMIT 1", "s", [$bid]);
   $biz = is_array($bizRows) && $bizRows ? $bizRows[0] : [];
   $batches = pos_stock_excel_batches($bid);
-  $xml = pos_workbook_xml(pos_stock_to_sheets($rows, $biz, $batches));
+  $codes = [];
+  try {
+    $codes = pos_q("SELECT item_id, barcode, kind, status FROM item_barcodes WHERE business_id = ?", "s", [$bid]);
+  } catch (Exception $e) {
+    $codes = [];
+  }
+  $xml = pos_workbook_xml(pos_stock_to_sheets($rows, $biz, $batches, is_array($codes) ? $codes : []));
   $day = date("Y-m-d");
   http_response_code(200);
   header("Content-Type: application/vnd.ms-excel; charset=utf-8");

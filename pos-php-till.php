@@ -632,13 +632,43 @@ function pos_php_till_dispatch($path, $method, $body) {
   }
 
   if ($path === "stock" && $method === "GET") {
-    pos_send(200, pos_q(
+    $rows = pos_q(
       "SELECT id, code, name, unit, base_unit, stock_gm, reorder_level_gm, purchase_rate, retail_rate, barcode, category, subcategory, batch_no,
+              color, size, wearer_type, hsn, status, mrp,
               DATE_FORMAT(default_expiry, '%Y-%m-%d') AS default_expiry
        FROM items WHERE business_id = ? ORDER BY name",
       "s",
       [$bid]
-    ));
+    );
+    if (!is_array($rows)) $rows = [];
+    $suppliers = [];
+    try {
+      $suppliers = pos_q(
+        "SELECT pl.item_id, s.name AS supplier_name
+         FROM purchase_lines pl
+         JOIN purchases p ON p.id = pl.purchase_id
+         LEFT JOIN suppliers s ON s.id = p.supplier_id
+         WHERE pl.business_id = ?
+         ORDER BY p.purchase_date DESC, p.created_at DESC
+         LIMIT 8000",
+        "s",
+        [$bid]
+      );
+    } catch (Exception $e) {
+      $suppliers = [];
+    }
+    $named = [];
+    foreach (is_array($suppliers) ? $suppliers : [] as $sup) {
+      $id = (string) ($sup["item_id"] ?? "");
+      if ($id !== "" && !isset($named[$id]) && trim((string) ($sup["supplier_name"] ?? "")) !== "") {
+        $named[$id] = $sup["supplier_name"];
+      }
+    }
+    foreach ($rows as &$row) {
+      $row["supplier_name"] = $named[$row["id"] ?? ""] ?? "";
+    }
+    unset($row);
+    pos_send(200, $rows);
   }
 
   if ($path === "staff" && $method === "GET") {
