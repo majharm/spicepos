@@ -83,8 +83,16 @@
     let last = "";
     let lastJsonErr = "";
     for (const url of candidateUrls(apiPath)) {
+      const ctrl = typeof AbortController !== "undefined" ? new AbortController() : null;
+      const timer = ctrl ? setTimeout(() => ctrl.abort(), 8000) : 0;
       try {
-        const res = await fetch(url, { credentials: "same-origin", cache: "no-store", ...options, headers });
+        const res = await fetch(url, {
+          credentials: "same-origin",
+          cache: "no-store",
+          ...options,
+          headers,
+          signal: options.signal || (ctrl ? ctrl.signal : undefined),
+        });
         const text = await res.text();
         last = text;
         if (!looksJson(text)) continue;
@@ -97,6 +105,8 @@
         return { res, data, text };
       } catch {
         /* next */
+      } finally {
+        if (timer) clearTimeout(timer);
       }
     }
     throw new Error(

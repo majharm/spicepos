@@ -383,7 +383,7 @@ export function registerLoginPagePublic(app) {
       .catch((err) => res.status(400).json({ error: String(err.message || err) }));
   });
   app.get("/api/login-page", (_req, res) => {
-    res.setHeader("Cache-Control", "no-store");
+    res.setHeader("Cache-Control", "private, max-age=30");
     send(res, publicPayload);
   });
 }

@@ -76,7 +76,33 @@ function pos_is_mutating($method) {
   return $m !== "GET" && $m !== "HEAD" && $m !== "OPTIONS";
 }
 
-function pos_curl($url, $method, $body, $cookie, $hostHeader = "", &$dispatched = null) {
+function pos_node_down_file() {
+  return rtrim((string) ($_SERVER["DOCUMENT_ROOT"] ?? __DIR__), "/") . "/pos-api-node-down.cache";
+}
+
+function pos_node_down_fresh($ttl = 90) {
+  $t = (int) trim((string) @file_get_contents(pos_node_down_file()));
+  return $t > 0 && (time() - $t) < $ttl;
+}
+
+function pos_mark_node_down() {
+  @file_put_contents(pos_node_down_file(), (string) time());
+}
+
+function pos_clear_node_down() {
+  $f = pos_node_down_file();
+  if (is_file($f)) @unlink($f);
+}
+
+function pos_is_login_fast_path($path, $method) {
+  $p = strtolower((string) $path);
+  $m = strtoupper((string) $method);
+  if ($m === "GET" && ($p === "health" || $p === "login-page" || strpos($p, "login-page/") === 0)) return true;
+  if ($m === "POST" && ($p === "auth/login" || $p === "auth/master-login" || $p === "auth/signup")) return true;
+  return false;
+}
+
+function pos_curl($url, $method, $body, $cookie, $hostHeader = "", &$dispatched = null, $timeoutSec = 5, $connectMs = 250) {
   if (!function_exists("curl_init")) return null;
   $ch = curl_init($url);
   $headers = ["Accept: application/json"];
@@ -86,15 +112,17 @@ function pos_curl($url, $method, $body, $cookie, $hostHeader = "", &$dispatched 
     $headers[] = "Content-Type: application/json";
     curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
   }
+  $timeout = ((int) $timeoutSec) > 0 ? (int) $timeoutSec : 5;
+  $connect = ((int) $connectMs) > 0 ? (int) $connectMs : 250;
   $opts = [
     CURLOPT_CUSTOMREQUEST => $method,
     CURLOPT_RETURNTRANSFER => true,
     CURLOPT_HEADER => true,
     CURLOPT_CONNECTTIMEOUT => 1,
-    CURLOPT_TIMEOUT => 5,
+    CURLOPT_TIMEOUT => $timeout,
     CURLOPT_HTTPHEADER => $headers,
   ];
-  if (defined("CURLOPT_CONNECTTIMEOUT_MS")) $opts[CURLOPT_CONNECTTIMEOUT_MS] = 250;
+  if (defined("CURLOPT_CONNECTTIMEOUT_MS")) $opts[CURLOPT_CONNECTTIMEOUT_MS] = $connect;
   curl_setopt_array($ch, $opts);
   $raw = curl_exec($ch);
   $errno = curl_errno($ch);
@@ -226,41 +254,78 @@ function pos_try_start_node() {
 
 $suffix = $path . ($qs !== "" ? "?" . $qs : "");
 $mutating = pos_is_mutating($method);
+$fastLogin = pos_is_login_fast_path($path, $method);
 $dispatched = false;
-$got = pos_try_proxy($suffix, $method, $body, $cookie, $dispatched);
-if ($got && pos_looks_json($got[3])) {
-  pos_send_result($got[0], $got[1], $got[2], $got[3]);
-  exit;
-}
-if ($mutating && $dispatched) {
-  http_response_code(($got && !empty($got[0])) ? (int) $got[0] : 504);
-  header("Content-Type: application/json; charset=utf-8");
-  echo json_encode([
-    "error" => "POS Node took the save but did not reply. Refresh the catalog before saving again.",
-    "php" => true,
-  ]);
-  exit;
-}
-
+$got = null;
 $start = "skipped";
 $canExec = function_exists("exec") || function_exists("shell_exec");
-if (!$mutating && $canExec) {
-  $start = pos_try_start_node();
-  $got = pos_curl("http://127.0.0.1:38473/api/" . $suffix, $method, $body, $cookie);
+
+if ($fastLogin) {
+  $start = "skipped login fast-path";
+  if (!pos_node_down_fresh()) {
+    $cached = pos_cached_port();
+    if ($cached) {
+      $sent = false;
+      $got = pos_curl("http://127.0.0.1:" . $cached . "/api/" . $suffix, $method, $body, $cookie, "", $sent, 1, 150);
+      if ($sent) $dispatched = true;
+      if ($got && pos_looks_json($got[3])) {
+        pos_remember_port($cached);
+        pos_clear_node_down();
+        pos_send_result($got[0], $got[1], $got[2], $got[3]);
+        exit;
+      }
+      if ($mutating && $sent) {
+        http_response_code(($got && !empty($got[0])) ? (int) $got[0] : 504);
+        header("Content-Type: application/json; charset=utf-8");
+        echo json_encode([
+          "error" => "POS Node took the save but did not reply. Refresh the catalog before saving again.",
+          "php" => true,
+        ]);
+        exit;
+      }
+    }
+    pos_mark_node_down();
+  }
+} elseif (!pos_node_down_fresh()) {
+  $got = pos_try_proxy($suffix, $method, $body, $cookie, $dispatched);
   if ($got && pos_looks_json($got[3])) {
-    pos_remember_port(38473);
+    pos_clear_node_down();
     pos_send_result($got[0], $got[1], $got[2], $got[3]);
     exit;
   }
-  $got = pos_try_proxy($suffix, $method, $body, $cookie);
-  if ($got && pos_looks_json($got[3])) {
-    pos_send_result($got[0], $got[1], $got[2], $got[3]);
+  if ($mutating && $dispatched) {
+    http_response_code(($got && !empty($got[0])) ? (int) $got[0] : 504);
+    header("Content-Type: application/json; charset=utf-8");
+    echo json_encode([
+      "error" => "POS Node took the save but did not reply. Refresh the catalog before saving again.",
+      "php" => true,
+    ]);
     exit;
   }
-} elseif (!$canExec) {
-  $start = "PHP exec is disabled";
+
+  if (!$mutating && $canExec) {
+    $start = pos_try_start_node();
+    $got = pos_curl("http://127.0.0.1:38473/api/" . $suffix, $method, $body, $cookie);
+    if ($got && pos_looks_json($got[3])) {
+      pos_remember_port(38473);
+      pos_clear_node_down();
+      pos_send_result($got[0], $got[1], $got[2], $got[3]);
+      exit;
+    }
+    $got = pos_try_proxy($suffix, $method, $body, $cookie);
+    if ($got && pos_looks_json($got[3])) {
+      pos_clear_node_down();
+      pos_send_result($got[0], $got[1], $got[2], $got[3]);
+      exit;
+    }
+  } elseif (!$canExec) {
+    $start = "PHP exec is disabled";
+  } else {
+    $start = "skipped mutating";
+  }
+  pos_mark_node_down();
 } else {
-  $start = "skipped mutating";
+  $start = "skipped node-down";
 }
 
 $hint = "";

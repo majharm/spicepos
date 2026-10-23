@@ -392,7 +392,7 @@ test("POS boot skips API probe and slims catalog photos", () => {
   assert.match(index, /i18n\.js[^>]+defer/);
   assert.match(index, /qrcode\.iife\.js[^>]+defer/);
   assert.match(index, /preload="auto"/);
-  assert.match(index, /pos-api\.js\?v=20261013item1/);
+  assert.match(index, /pos-api\.js\?v=20261023login1/);
   assert.match(index, /app\.js\?v=20261023cam2/);
   assert.match(index, /class="dialog-head"/);
   assert.match(index, /id="modal-close"/);
@@ -404,7 +404,7 @@ test("POS boot skips API probe and slims catalog photos", () => {
   assert.doesNotMatch(index, /app\.js\?v=20260905deploy166/);
   assert.match(index, /offers\.js\?v=20260905deploy170/);
   assert.match(index, /restaurant\.js\?v=20261012set4/);
-  assert.match(login, /x-pos-20260830e\.js\?v=20261011lounge1/);
+  assert.match(login, /x-pos-20260830e\.js\?v=20261023login1/);
   assert.match(loginJs, /saveLoginSpec/);
   assert.match(core, /function pos_catalog_items/);
   assert.match(core, /function pos_slim_catalog_item/);
@@ -415,7 +415,7 @@ test("POS boot skips API probe and slims catalog photos", () => {
   assert.match(node, /function slimCatalogItem/);
   assert.match(node, /app\.get\("\/api\/items\/:id"/);
   assert.match(node, /CATALOG_ITEM_SELECT/);
-  assert.match(read("master.html"), /pos-api\.js\?v=20261013item1/);
+  assert.match(read("master.html"), /pos-api\.js\?v=20261023login1/);
 });
 
 test("Restaurant Counter can create named dining tables", () => {
