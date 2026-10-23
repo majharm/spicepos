@@ -306,11 +306,12 @@
       card.style.borderRadius = `${cfg.card.radius}px`;
       card.style.background = `rgba(255,255,255,${cfg.card.opacity})`;
     }
-    const logo = document.querySelector(".auth-logo");
-    if (logo && cfg.resolvedLogo && (!isMaster || cfg.resolvedSource !== "default")) {
-      logo.src = cfg.resolvedLogo;
-      logo.style.width = `${cfg.card.logoSize}px`;
-    }
+    document.querySelectorAll(".auth-logo").forEach((logo) => {
+      if (cfg.resolvedLogo && (!isMaster || cfg.resolvedSource !== "default")) logo.src = cfg.resolvedLogo;
+      if (!logo.classList.contains("m-welcome-logo") && !logo.classList.contains("m-login-logo")) {
+        logo.style.width = `${cfg.card.logoSize}px`;
+      }
+    });
     if (cfg.faviconUrl && !isMaster) {
       const icon = document.querySelector('link[rel="icon"]');
       if (icon) icon.href = cfg.faviconUrl;

@@ -108,7 +108,7 @@
   function bindLogin() {
     if (!$("login-form") || $("app")) return;
     const hello = $("m-login-hello");
-    if (hello && !hello.querySelector(".m-mark")) {
+    if (hello && !hello.querySelector(".m-login-logo") && !hello.querySelector(".m-mark")) {
       const mark = document.createElement("div");
       mark.className = "m-mark";
       mark.innerHTML = PLANE;
