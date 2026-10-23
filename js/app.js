@@ -260,6 +260,12 @@ function printLineQuote(item, line) {
   });
 }
 
+function isAutoPrintSpecNote(notes) {
+  const s = String(notes || "").trim();
+  if (!s) return true;
+  return /^\d+(?:\.\d+)?\s*[x×]\s*\d+(?:\.\d+)?\s+\S+/i.test(s);
+}
+
 function syncPrintLineQty(line, item) {
   if (!line || !isPrintAreaItem(item)) return line;
   const q = printLineQuote(item, line);
@@ -267,16 +273,20 @@ function syncPrintLineQty(line, item) {
   line.qtyGm = q.billedArea;
   line.printDimUnit = q.dimUnit;
   line.printCopies = q.copies;
-  line.notes = printApi()?.printLineCaption?.({
-    width: line.printWidth,
-    height: line.printHeight,
-    dimUnit: line.printDimUnit,
-    billUnit: printBillUnit(item),
-    copies: line.printCopies,
-    customUnit: item.custom_unit || line.printCustomUnit,
-    fileName: line.printFileName,
-    minQty: Number(item.min_billing_qty) || 0,
-  }) || line.notes;
+  const sized = Number(line.printWidth) > 0 && Number(line.printHeight) > 0 && Number(q.billedArea) > 0;
+  const next = sized
+    ? printApi()?.printLineCaption?.({
+        width: line.printWidth,
+        height: line.printHeight,
+        dimUnit: line.printDimUnit,
+        billUnit: printBillUnit(item),
+        copies: line.printCopies,
+        customUnit: item.custom_unit || line.printCustomUnit,
+        fileName: line.printFileName,
+        minQty: Number(item.min_billing_qty) || 0,
+      }) || ""
+    : "";
+  if (isAutoPrintSpecNote(line.notes)) line.notes = next;
   return line;
 }
 
@@ -1085,7 +1095,12 @@ function checkoutAmountPaid() {
   const raw = String(el.value ?? "").trim();
   if (raw === "") return undefined;
   const n = Number(raw);
-  return Number.isFinite(n) ? n : undefined;
+  if (!Number.isFinite(n)) return undefined;
+  if (n === 0 && el.dataset.dirty !== "1" && String($("pay-method")?.value || "") !== "credit") {
+    const due = thisBillPayable();
+    if (due > 0) return due;
+  }
+  return n;
 }
 
 function thisBillPayable() {
@@ -5159,16 +5174,7 @@ function renderCart() {
     $("btn-shift-table").hidden = !show;
     $("btn-shift-table").disabled = !can;
   }
-  const payTotal = thisBillPayable();
-  $("btn-pay").textContent = state.editingOrderId
-    ? tt("pos.save_changes", "Save changes")
-    : state.cart.length
-      ? isClassicBillShop()
-        ? `Save Bill ${money(payTotal)}`
-        : tt("pos.pay_amount", `Pay ${money(payTotal)}`, { amount: money(payTotal) })
-      : isClassicBillShop()
-        ? "Save Bill"
-        : tt("pos.pay", "Pay");
+  paintPayAction();
   const face = $("customer-face");
   if (face) {
     face.hidden = true;
@@ -5185,8 +5191,6 @@ function renderCart() {
   paintClassicLoyalty();
   paintClassicStockAlert();
   renderTableBoard();
-  syncPayAmountDefault();
-  paintCounterDue();
   if (isRestaurantShop() && state.activeTable && state.cart.length) saveTableHoldDebounced();
   if (window.DevMode?.isEnabled()) {
     DevMode.updateContext({ cartLines: state.cart.length });
@@ -10828,6 +10832,24 @@ $("catalog-cats")?.addEventListener("click", (e) => {
   renderCatalog();
   $("catalog")?.scrollTo({ top: 0 });
 });
+function paintPayAction() {
+  const payTotal = thisBillPayable();
+  const btn = $("btn-pay");
+  if (btn) {
+    btn.textContent = state.editingOrderId
+      ? tt("pos.save_changes", "Save changes")
+      : state.cart.length
+        ? isClassicBillShop()
+          ? `Save Bill ${money(payTotal)}`
+          : tt("pos.pay_amount", `Pay ${money(payTotal)}`, { amount: money(payTotal) })
+        : isClassicBillShop()
+          ? "Save Bill"
+          : tt("pos.pay", "Pay");
+  }
+  syncPayAmountDefault();
+  paintCounterDue();
+}
+
 function paintBillFigures() {
   const t = cartTotals();
   const families = [...new Set(state.cart.map((l) => POSUnits.typeOf(itemUnit(state.items.find((i) => i.id === l.itemId))).family))];
@@ -10851,6 +10873,7 @@ function paintBillFigures() {
   if ($("taxable-row")) $("taxable-row").hidden = !(Number(t.taxable) > 0);
   if ($("gst-row")) $("gst-row").hidden = !(Number(t.tax) > 0);
   if ($("total")) $("total").textContent = money(t.total != null ? t.total : t.taxable + t.tax);
+  paintPayAction();
 }
 
 function refreshPrintLineLive(key) {
@@ -10870,6 +10893,8 @@ function refreshPrintLineLive(key) {
     if (summary) summary.textContent = need ? "Enter width × height" : printLineCaptionText(item, line);
     if (amt) amt.textContent = need ? "—" : money(calc.taxable + calc.gst);
     if (chip) chip.textContent = printAreaChipText(item, line);
+    const ta = root.querySelector("[data-line-note]");
+    if (ta && isAutoPrintSpecNote(ta.value)) ta.value = line.notes || "";
   }
   paintBillFigures();
 }
@@ -11948,7 +11973,7 @@ $("btn-pay").addEventListener("click", async () => {
           discountType: l.discountType || "amt",
           discountValue: l.discountValue || 0,
           barcode: l.barcode || "",
-          notes: print ? (l.notes || scaleLineNote(l)) : scaleLineNote(l),
+          notes: print ? (String(l.notes || "").trim() || printLineCaptionText(item, l) || scaleLineNote(l)) : scaleLineNote(l),
           scale_grams: Number(l.scaleGrams) || undefined,
           weight_source: l.weightSource || undefined,
           rate: canChangeRate() && l.rate != null && l.rate !== "" ? parseCartLineRate(l.rate) : undefined,
