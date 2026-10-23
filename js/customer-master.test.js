@@ -23,7 +23,23 @@ test("customer keys normalize mobile, email, and GSTIN for every shop kind", () 
   assert.equal(M.sameCustomer({ mobile: "9876543210" }, { mobile: "+91-98765-43210" }), true);
   assert.equal(M.sameCustomer({ gstin: "27ABCDE1234F1Z5" }, { gstin: "27abcde1234f1z5" }), true);
   assert.equal(M.sameCustomer({ mobile: "9876543210" }, { mobile: "9123456780" }), false);
+  assert.equal(M.emailError(""), "");
+  assert.equal(M.emailError("  ada@shop.in "), "");
+  assert.equal(M.isValidEmail("ada@shop.in"), true);
+  assert.equal(M.emailError("not-an-email"), "Enter a valid email address.");
+  assert.equal(M.findMatch(rowsFromEmail(), { email: "Ada@Shop.in" }).id, "e1");
+  assert.equal(M.findMatch(rowsFromEmail(), { email: "Ada@Shop.in" }, "e1"), null);
+  const reminder = M.dueReminder({ shopName: "ATAV", customerName: "Rahul", outstanding: 120 });
+  assert.match(reminder.subject, /payment reminder/);
+  assert.match(reminder.body, /Rahul/);
+  assert.match(M.mailtoUrl("Ada@Shop.in", reminder.subject, reminder.body), /^mailto:ada@shop.in\?/);
+  assert.equal(M.mailtoUrl("", "Hi", "There"), "");
+  assert.equal(M.mailtoUrl("bad", "Hi", "There"), "");
 });
+
+function rowsFromEmail() {
+  return [{ id: "e1", code: "CUS-009", name: "Ada", email: "ada@shop.in", mobile: "9000000001" }];
+}
 
 test("duplicate groups stay inside one shop and skip walk-in", () => {
   const rows = [
@@ -56,8 +72,23 @@ test("Customer Master duplicate wiring covers shop, PHP, and Master Admin", () =
   const node = read("server/customers-dedupe.js");
 
   assert.match(index, /id="cust-match-hint"/);
+  assert.match(index, /id="cust-email"/);
+  assert.match(index, /placeholder="Enter customer email address"/);
+  assert.match(index, /id="customers-search"/);
+  assert.match(index, /id="customer-details"/);
+  assert.match(index, /id="qc-email"/);
+  assert.match(index, /id="bill-cust-email"/);
   assert.match(index, /id="customer-dupes"/);
-  assert.match(index, /js\/customer-master\.js\?v=20261012cust1/);
+  assert.match(index, /js\/customer-master\.js\?v=20261023cemail1/);
+  assert.match(app, /const emailRaw = String\(fields\.email \|\| ""\)\.trim\(\)/);
+  assert.match(app, /method: id \? "PUT" : "POST"/);
+  assert.match(app, /Email reminder/);
+  assert.match(app, /WhatsApp reminder/);
+  assert.match(crud, /app.put\("\/api\/customers\/:id"/);
+  assert.match(crud, /Enter a valid email address/);
+  assert.match(read("pos-crud.php"), /customers\/\(\[A-Za-z0-9-\]\+\)/);
+  assert.match(read("server/reports.js"), /c\.email \|\| ""/);
+  assert.match(read("pos-reports.php"), /\$c\["email"\]/);
   assert.match(app, /customers\/match|POSCustomerMaster|duplicate/);
   assert.match(app, /reuseExisting: false/);
   assert.match(app, /_duplicate/);

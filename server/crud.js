@@ -635,6 +635,15 @@ export async function importShopItems(payload) {
   };
 }
 
+function customerEmailField(raw) {
+  const s = String(raw ?? "").trim();
+  if (!s) return { email: null };
+  if (s.length > 160 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s)) {
+    return { error: "Enter a valid email address." };
+  }
+  return { email: s.toLowerCase() };
+}
+
 export function registerCrud(app) {
   app.get("/api/customers", async (_req, res) => {
     try {
@@ -655,10 +664,15 @@ export function registerCrud(app) {
       res.status(400).json({ error: "Name and mobile are required" });
       return;
     }
+    const emailField = customerEmailField(req.body?.email);
+    if (emailField.error) {
+      res.status(400).json({ error: emailField.error });
+      return;
+    }
     const custType = type === "b2b" ? "b2b" : "b2c";
     try {
       const { findExistingCustomer, stampCustomerNorms } = await import("./customers-dedupe.js");
-      const existing = await findExistingCustomer(bid(), { name, mobile, gstin, email: req.body?.email });
+      const existing = await findExistingCustomer(bid(), { name, mobile, gstin, email: emailField.email });
       if (existing && !req.body?.force) {
         res.status(409).json({
           error: "A customer with these details already exists",
@@ -716,6 +730,11 @@ export function registerCrud(app) {
             /* optional */
           }
         }
+        try {
+          await conn.query("UPDATE customers SET email=? WHERE id=?", [emailField.email, id]);
+        } catch {
+          /* optional until the email column exists */
+        }
         const [rows] = await conn.query("SELECT * FROM customers WHERE id = ?", [id]);
         const created = rows[0];
         await stampCustomerNorms(conn, created);
@@ -724,6 +743,91 @@ export function registerCrud(app) {
       res.json({ ok: true, customer });
     } catch (err) {
       res.status(500).json({ error: String(err.message) });
+    }
+  });
+
+  app.put("/api/customers/:id", async (req, res) => {
+    const id = String(req.params.id || "").trim();
+    const { name, business_name, mobile, type, gstin, state, dob, referred_by, locale, address, doctor_rx } = req.body || {};
+    if (!id) {
+      res.status(400).json({ error: "Customer id is required" });
+      return;
+    }
+    if (!name || !mobile) {
+      res.status(400).json({ error: "Name and mobile are required" });
+      return;
+    }
+    const emailField = customerEmailField(req.body?.email);
+    if (emailField.error) {
+      res.status(400).json({ error: emailField.error });
+      return;
+    }
+    const custType = type === "b2b" ? "b2b" : "b2c";
+    try {
+      const { findExistingCustomer, stampCustomerNorms } = await import("./customers-dedupe.js");
+      const existing = await findExistingCustomer(bid(), { name, mobile, gstin, email: emailField.email }, id);
+      if (existing && !req.body?.force) {
+        res.status(409).json({
+          error: "A customer with these details already exists",
+          customer: existing,
+          duplicate: true,
+        });
+        return;
+      }
+      const customer = await withTransaction(async (conn) => {
+        const [found] = await conn.query("SELECT id FROM customers WHERE id=? AND business_id=? LIMIT 1", [id, bid()]);
+        if (!found[0]) {
+          const err = new Error("Customer not found");
+          err.status = 404;
+          throw err;
+        }
+        await conn.query(
+          `UPDATE customers SET name=?, business_name=?, mobile=?, type=?, gstin=?, state=? WHERE id=? AND business_id=?`,
+          [String(name).trim(), business_name || null, String(mobile).trim(), custType, gstin || null, state || null, id, bid()],
+        );
+        try {
+          await conn.query("UPDATE customers SET email=? WHERE id=? AND business_id=?", [emailField.email, id, bid()]);
+        } catch {
+          /* optional until the email column exists */
+        }
+        try {
+          await conn.query("UPDATE customers SET dob=?, referred_by=?, locale=? WHERE id=?", [
+            dob || null,
+            referred_by || null,
+            locale || null,
+            id,
+          ]);
+        } catch {
+          try {
+            await conn.query("UPDATE customers SET dob=?, referred_by=? WHERE id=?", [dob || null, referred_by || null, id]);
+          } catch {
+            /* optional */
+          }
+        }
+        try {
+          await conn.query("UPDATE customers SET address=? WHERE id=?", [
+            address ? String(address).trim().slice(0, 500) : null,
+            id,
+          ]);
+        } catch {
+          /* optional */
+        }
+        try {
+          await conn.query("UPDATE customers SET doctor_rx=? WHERE id=?", [
+            doctor_rx ? String(doctor_rx).trim().slice(0, 180) : null,
+            id,
+          ]);
+        } catch {
+          /* optional */
+        }
+        const [rows] = await conn.query("SELECT * FROM customers WHERE id = ?", [id]);
+        const updated = rows[0];
+        await stampCustomerNorms(conn, updated);
+        return updated;
+      });
+      res.json({ ok: true, customer });
+    } catch (err) {
+      res.status(err.status || 500).json({ error: String(err.message) });
     }
   });
 

@@ -359,6 +359,15 @@ function pos_insert_pack_lines($packId, $items, $bid) {
   }
 }
 
+function pos_customer_email_field($raw) {
+  $s = trim((string) $raw);
+  if ($s === "") return ["email" => null];
+  if (strlen($s) > 160 || !preg_match('/^[^\s@]+@[^\s@]+\.[^\s@]+$/', $s)) {
+    return ["error" => "Enter a valid email address."];
+  }
+  return ["email" => strtolower($s)];
+}
+
 function pos_crud_dispatch($path, $method, $body, $bid, $auth, $branchId, $uid) {
   if ($path === "items/import" || $path === "items/import/template") {
     require_once __DIR__ . "/pos-item-import.php";
@@ -384,14 +393,16 @@ function pos_crud_dispatch($path, $method, $body, $bid, $auth, $branchId, $uid) 
     $name = trim((string) ($body["name"] ?? ""));
     $mobile = trim((string) ($body["mobile"] ?? ""));
     if ($name === "" || $mobile === "") pos_send(400, ["error" => "Name and mobile are required"]);
+    $emailField = pos_customer_email_field($body["email"] ?? "");
+    if (!empty($emailField["error"])) pos_send(400, ["error" => $emailField["error"]]);
     if (is_file(__DIR__ . "/pos-customers-dedupe.php")) {
       require_once __DIR__ . "/pos-customers-dedupe.php";
       if (empty($body["force"]) && function_exists("pos_find_existing_customer")) {
-        $existing = pos_find_existing_customer($bid, array_merge(is_array($body) ? $body : [], ["name" => $name, "mobile" => $mobile]));
+        $existing = pos_find_existing_customer($bid, array_merge(is_array($body) ? $body : [], ["name" => $name, "mobile" => $mobile, "email" => $emailField["email"]]));
         if ($existing) pos_send(409, ["error" => "A customer with these details already exists", "customer" => $existing, "duplicate" => true]);
       }
     }
-    pos_ensure_columns("customers", ["state" => "VARCHAR(64) NULL", "dob" => "DATE NULL", "referred_by" => "VARCHAR(255) NULL", "locale" => "VARCHAR(16) NULL", "address" => "VARCHAR(500) NULL", "doctor_rx" => "VARCHAR(180) NULL"]);
+    pos_ensure_columns("customers", ["state" => "VARCHAR(64) NULL", "dob" => "DATE NULL", "referred_by" => "VARCHAR(255) NULL", "locale" => "VARCHAR(16) NULL", "address" => "VARCHAR(500) NULL", "doctor_rx" => "VARCHAR(180) NULL", "email" => "VARCHAR(160) NULL"]);
     $type = (($body["type"] ?? "") === "b2b") ? "b2b" : "b2c";
     $id = pos_uuid();
     $n = pos_next_seq("customer", $bid, 4);
@@ -424,8 +435,58 @@ function pos_crud_dispatch($path, $method, $body, $bid, $auth, $branchId, $uid) 
         pos_q("UPDATE customers SET doctor_rx = ? WHERE id = ?", "ss", [substr($doctorRx, 0, 180), $id]);
       } catch (Exception $e) { /* optional */ }
     }
+    try {
+      pos_q("UPDATE customers SET email = ? WHERE id = ?", "ss", [$emailField["email"], $id]);
+    } catch (Exception $e) { /* optional until the email column exists */ }
     $rows = pos_q("SELECT * FROM customers WHERE id = ? LIMIT 1", "s", [$id]);
-    if (function_exists("pos_stamp_customer_norms")) pos_stamp_customer_norms($id, array_merge(is_array($body) ? $body : [], ["mobile" => $mobile]));
+    if (function_exists("pos_stamp_customer_norms")) pos_stamp_customer_norms($id, array_merge(is_array($body) ? $body : [], ["mobile" => $mobile, "email" => $emailField["email"]]));
+    pos_send(200, ["ok" => true, "customer" => $rows[0] ?? null]);
+  }
+
+  if (preg_match('#^customers/([A-Za-z0-9-]+)$#', $path, $custMatch) && ($method === "PUT" || $method === "PATCH")) {
+    $id = $custMatch[1];
+    $name = trim((string) ($body["name"] ?? ""));
+    $mobile = trim((string) ($body["mobile"] ?? ""));
+    if ($name === "" || $mobile === "") pos_send(400, ["error" => "Name and mobile are required"]);
+    $emailField = pos_customer_email_field($body["email"] ?? "");
+    if (!empty($emailField["error"])) pos_send(400, ["error" => $emailField["error"]]);
+    if (is_file(__DIR__ . "/pos-customers-dedupe.php")) require_once __DIR__ . "/pos-customers-dedupe.php";
+    pos_ensure_columns("customers", ["state" => "VARCHAR(64) NULL", "dob" => "DATE NULL", "referred_by" => "VARCHAR(255) NULL", "locale" => "VARCHAR(16) NULL", "address" => "VARCHAR(500) NULL", "doctor_rx" => "VARCHAR(180) NULL", "email" => "VARCHAR(160) NULL"]);
+    $found = pos_q("SELECT id FROM customers WHERE id = ? AND business_id = ? LIMIT 1", "ss", [$id, $bid]);
+    if (!$found) pos_send(404, ["error" => "Customer not found"]);
+    if (empty($body["force"]) && function_exists("pos_find_existing_customer")) {
+      $existing = pos_find_existing_customer($bid, array_merge(is_array($body) ? $body : [], ["name" => $name, "mobile" => $mobile, "email" => $emailField["email"]]), $id);
+      if ($existing) pos_send(409, ["error" => "A customer with these details already exists", "customer" => $existing, "duplicate" => true]);
+    }
+    $type = (($body["type"] ?? "") === "b2b") ? "b2b" : "b2c";
+    pos_q(
+      "UPDATE customers SET name = ?, business_name = ?, mobile = ?, type = ?, gstin = ?, state = ? WHERE id = ? AND business_id = ?",
+      "ssssssss",
+      [$name, $body["business_name"] ?? null, $mobile, $type, $body["gstin"] ?? null, $body["state"] ?? null, $id, $bid]
+    );
+    try {
+      pos_q("UPDATE customers SET email = ? WHERE id = ? AND business_id = ?", "sss", [$emailField["email"], $id, $bid]);
+    } catch (Exception $e) { /* optional */ }
+    if (!empty($body["dob"]) || !empty($body["referred_by"]) || array_key_exists("locale", $body)) {
+      try {
+        $locale = function_exists("pos_normalize_locale") ? pos_normalize_locale($body["locale"] ?? "") : "";
+        pos_q("UPDATE customers SET dob = ?, referred_by = ?, locale = ? WHERE id = ?", "ssss", [$body["dob"] ?? null, $body["referred_by"] ?? null, $locale !== "" ? $locale : null, $id]);
+      } catch (Exception $e) {
+        try {
+          pos_q("UPDATE customers SET dob = ?, referred_by = ? WHERE id = ?", "sss", [$body["dob"] ?? null, $body["referred_by"] ?? null, $id]);
+        } catch (Exception $e2) { /* optional */ }
+      }
+    }
+    try {
+      $addr = trim((string) ($body["address"] ?? ""));
+      pos_q("UPDATE customers SET address = ? WHERE id = ?", "ss", [$addr !== "" ? substr($addr, 0, 500) : null, $id]);
+    } catch (Exception $e) { /* optional */ }
+    try {
+      $doctorRx = trim((string) ($body["doctor_rx"] ?? $body["doctorRx"] ?? ""));
+      pos_q("UPDATE customers SET doctor_rx = ? WHERE id = ?", "ss", [$doctorRx !== "" ? substr($doctorRx, 0, 180) : null, $id]);
+    } catch (Exception $e) { /* optional */ }
+    $rows = pos_q("SELECT * FROM customers WHERE id = ? LIMIT 1", "s", [$id]);
+    if (function_exists("pos_stamp_customer_norms")) pos_stamp_customer_norms($id, array_merge(is_array($body) ? $body : [], ["mobile" => $mobile, "email" => $emailField["email"]]));
     pos_send(200, ["ok" => true, "customer" => $rows[0] ?? null]);
   }
 

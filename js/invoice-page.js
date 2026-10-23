@@ -31,6 +31,7 @@
           gstin: order.customer_gstin,
           state: order.customer_state,
           mobile: order.customer_mobile,
+          email: order.customer_email,
         },
       ],
       items: items || [],
@@ -88,6 +89,7 @@
       if (share) {
         actions.hidden = false;
         actions.innerHTML = `
+          ${share.email ? `<a class="btn" href="${escapeHtml(share.email)}">Email invoice</a>` : ""}
           <a class="btn primary" href="${escapeHtml(share.whatsapp)}" target="_blank" rel="noopener">Share on WhatsApp</a>
           <button class="btn" type="button" id="copy-link">Copy link</button>
           <button class="btn" type="button" id="print-btn">Print</button>

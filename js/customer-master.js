@@ -16,6 +16,35 @@
     return clip(raw, 160).toLowerCase();
   }
 
+  function isValidEmail(raw) {
+    const s = String(raw ?? "").trim();
+    if (!s) return true;
+    return s.length <= 160 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s);
+  }
+
+  function emailError(raw) {
+    return isValidEmail(raw) ? "" : "Enter a valid email address.";
+  }
+
+  function mailtoUrl(email, subject, body) {
+    const addr = normalizeEmail(email);
+    if (!addr || emailError(addr)) return "";
+    return `mailto:${addr}?subject=${encodeURIComponent(subject || "")}&body=${encodeURIComponent(body || "")}`;
+  }
+
+  function dueReminder({ shopName, customerName, outstanding } = {}) {
+    const shop = String(shopName || "Shop").trim() || "Shop";
+    const name = String(customerName || "Customer").trim() || "Customer";
+    const amount = Number(outstanding);
+    const due = Number.isFinite(amount)
+      ? new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR" }).format(amount)
+      : "";
+    return {
+      subject: `${shop} · payment reminder`,
+      body: [shop, name, due ? `Outstanding ${due}` : "Outstanding balance", "Please clear the pending amount."].join("\n"),
+    };
+  }
+
   function normalizeGstin(raw) {
     return clip(raw, 32).toUpperCase().replace(/\s+/g, "");
   }
@@ -173,6 +202,10 @@
     clip,
     normalizeMobile,
     normalizeEmail,
+    isValidEmail,
+    emailError,
+    mailtoUrl,
+    dueReminder,
     normalizeGstin,
     isWalkIn,
     isMerged,

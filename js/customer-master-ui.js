@@ -13,7 +13,7 @@
   function inputBody() {
     return {
       mobile: $("cust-mobile")?.value || $("qc-mobile")?.value || "",
-      email: $("cust-email")?.value || "",
+      email: $("cust-email")?.value || $("qc-email")?.value || "",
       gstin: $("cust-gstin")?.value || "",
       name: $("cust-name")?.value || "",
     };
@@ -32,15 +32,29 @@
     hint.dataset.matchId = match.id || "";
   }
 
+  function editingId() {
+    return String($("cust-id")?.value || "").trim();
+  }
+
+  function paintEmailField(input) {
+    if (!input || !M()) return;
+    const err = M().emailError(input.value);
+    input.setCustomValidity(err);
+    const hint = input.id === "cust-email" ? $("cust-email-hint") : input.id === "qc-email" ? $("qc-email-hint") : input.id === "bill-cust-email" ? $("bill-cust-email-hint") : null;
+    if (!hint) return;
+    hint.textContent = err;
+    hint.className = err ? "hint error" : "hint";
+  }
+
   async function checkMatch(source) {
     const body = source === "quick"
-      ? { mobile: $("qc-mobile")?.value || "", name: $("qc-name")?.value || "" }
+      ? { mobile: $("qc-mobile")?.value || "", email: $("qc-email")?.value || "", name: $("qc-name")?.value || "" }
       : inputBody();
     if (!M()?.normalizeMobile(body.mobile) && !M()?.normalizeGstin(body.gstin) && !M()?.normalizeEmail(body.email)) {
       paintMatch(null, "", source === "quick" ? "qc-hint" : "cust-match-hint");
       return null;
     }
-    const local = M()?.findMatch(root.state?.customers || [], body);
+    const local = M()?.findMatch(root.state?.customers || [], body, source === "quick" ? "" : editingId());
     if (local) {
       const warning = M().warningCopy(local, body);
       paintMatch(local, warning, source === "quick" ? "qc-hint" : "cust-match-hint");
@@ -52,6 +66,8 @@
         email: body.email || "",
         gstin: body.gstin || "",
       });
+      const exclude = source === "quick" ? "" : editingId();
+      if (exclude) q.set("exclude", exclude);
       const data = await root.api?.(`/api/customers/match?${q}`);
       paintMatch(data?.match, data?.warning, source === "quick" ? "qc-hint" : "cust-match-hint");
       return data?.match || null;
@@ -65,9 +81,15 @@
     if (!match) return;
     if ($("cust-name")) $("cust-name").value = match.name || "";
     if ($("cust-mobile")) $("cust-mobile").value = match.mobile || "";
+    if ($("cust-email")) $("cust-email").value = match.email || "";
     if ($("cust-gstin")) $("cust-gstin").value = match.gstin || "";
     if ($("cust-state")) $("cust-state").value = match.state || "";
     if ($("cust-address")) $("cust-address").value = match.address || "";
+    if ($("cust-biz")) $("cust-biz").value = match.business_name || "";
+    if ($("cust-id")) $("cust-id").value = match.id || "";
+    if ($("cust-form-mode")) $("cust-form-mode").textContent = match.id ? "Edit customer" : "Customer";
+    if ($("cust-save")) $("cust-save").textContent = match.id ? "Update customer" : "Save customer";
+    paintEmailField($("cust-email"));
     if (root.state) root.state.customerId = match.id;
     if ($("customer")) $("customer").value = match.id;
     if ($("cust-hint")) {
@@ -130,11 +152,17 @@
   }
 
   function bind() {
-    ["cust-mobile", "cust-gstin", "cust-name"].forEach((id) => {
+    ["cust-mobile", "cust-gstin", "cust-name", "cust-email"].forEach((id) => {
       $(id)?.addEventListener("blur", () => checkMatch("form"));
       $(id)?.addEventListener("change", () => checkMatch("form"));
     });
+    ["cust-email", "qc-email", "bill-cust-email"].forEach((id) => {
+      $(id)?.addEventListener("input", () => paintEmailField($(id)));
+      $(id)?.addEventListener("blur", () => paintEmailField($(id)));
+    });
     $("qc-mobile")?.addEventListener("blur", () => checkMatch("quick"));
+    $("qc-email")?.addEventListener("blur", () => checkMatch("quick"));
+    $("qc-email")?.addEventListener("change", () => checkMatch("quick"));
     $("cust-use-match")?.addEventListener("click", async () => {
       const match = await checkMatch("form");
       if (match) useMatch(match);
@@ -171,5 +199,5 @@
     else boot();
   }
 
-  root.POSCustomerMasterUi = { checkMatch, paintDupes, loadDupes, useMatch, paintMatch };
+  root.POSCustomerMasterUi = { checkMatch, paintDupes, loadDupes, useMatch, paintMatch, paintEmailField };
 })(typeof window !== "undefined" ? window : globalThis);

@@ -30,6 +30,12 @@
     return digits ? `https://wa.me/${digits}?${q}` : `https://wa.me/?${q}`;
   }
 
+  function mailtoShareUrl(email, subject, body) {
+    const addr = String(email || "").trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(addr)) return "";
+    return `mailto:${addr}?subject=${encodeURIComponent(subject || "Invoice")}&body=${encodeURIComponent(body || "")}`;
+  }
+
   function uniqueCustomerLines(order) {
     const name = String(order?.customer_name || "").trim();
     const mobile = String(order?.customer_mobile || "").trim();
@@ -49,10 +55,12 @@
       total: order.total,
       url,
     });
+    const subject = [company?.name, order.order_number ? `Invoice ${order.order_number}` : "Invoice"].filter(Boolean).join(" · ");
     return {
       url,
       text,
       whatsapp: whatsappShareUrl(order.customer_mobile, text),
+      email: mailtoShareUrl(order.customer_email, subject, text),
     };
   }
 
@@ -62,6 +70,7 @@
     invoicePageUrl,
     shareMessage,
     whatsappShareUrl,
+    mailtoShareUrl,
     uniqueCustomerLines,
     shareActions,
   };

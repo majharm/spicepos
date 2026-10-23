@@ -354,11 +354,15 @@ export function registerCustomerDedupeStaff(app) {
 
   app.get("/api/customers/match", requireStaff, requirePerm("customers"), async (req, res) => {
     try {
-      const match = await findExistingCustomer(bid(), {
-        mobile: req.query.mobile,
-        email: req.query.email,
-        gstin: req.query.gstin,
-      });
+      const match = await findExistingCustomer(
+        bid(),
+        {
+          mobile: req.query.mobile,
+          email: req.query.email,
+          gstin: req.query.gstin,
+        },
+        String(req.query.exclude || ""),
+      );
       res.json({ match, warning: match ? M.warningCopy(match, req.query) : "" });
     } catch (err) {
       res.status(500).json({ error: String(err.message) });

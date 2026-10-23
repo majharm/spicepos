@@ -172,6 +172,17 @@ app.get("/api/invoices/:id", async (req, res) => {
     );
     res.setHeader("Cache-Control", "no-store");
     let payments = [];
+    if (order.customer_id && !String(order.customer_email || "").trim()) {
+      try {
+        const [cust] = await query(
+          "SELECT email FROM customers WHERE id = ? AND business_id = ? LIMIT 1",
+          [order.customer_id, order.business_id],
+        );
+        if (cust?.email) order.customer_email = cust.email;
+      } catch {
+        /* email stays off the bill when the column is unavailable */
+      }
+    }
     if (order.customer_id) {
       try {
         payments = await query(
