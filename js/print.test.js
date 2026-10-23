@@ -246,7 +246,7 @@ test("Print order review modal is a stepped desk with quote grid and production 
   assert.match(ui, /Approve file/);
   assert.match(css, /#modal:has\(\.print-order-desk\)/);
   assert.match(css, /\.pod-step\.is-on/);
-  assert.match(index, /pos\.css\?v=20261023flex2/);
+  assert.match(index, /pos\.css\?v=20261023flex3/);
   assert.match(css, /\.lock, \.modal \{[\s\S]*z-index: 90;/);
   assert.match(read("js/app.js"), /id="modal-print-close"/);
 });
@@ -334,6 +334,9 @@ test("Counter bills print items by width × height using the item unit and rate"
   assert.match(css, /body\.printing-mode\.bill-collapsed \.stage\.is-counter \.print-extra-bar/);
   assert.match(css, /body\.printing-mode\.bill-collapsed \.stage\.is-counter \.bill-settle/);
   assert.match(css, /body\.printing-mode\.counter-mode \.stage\.is-counter \.pay-this-hint/);
+  assert.match(css, /body\.printing-mode\.counter-mode \.stage\.is-counter \.card \.name \{\n    font-size: 13px;/);
+  assert.match(css, /body\.printing-mode\.bill-collapsed \.stage\.is-counter \.totals \.grand \{\n    font-size: 13px;/);
+  assert.match(css, /body\.printing-mode\.counter-mode\.has-cart \.stage\.is-counter \.pay #btn-pay \{\n    min-height: 40px;\n    font-size: 13px;/);
   assert.match(F.itemFormCopy({ category: "Flex & Printing" }).lede, /Width × Height|rate per unit/i);
   assert.match(F.itemFormCopy({ category: "Flex & Printing" }).ticket, /width × height/i);
 });

@@ -6326,17 +6326,23 @@ body.classic-bill-mode .bill-settle {
   body.printing-mode.counter-mode .stage.is-counter .print-dim-rate input {
     width: 100%;
     max-width: none;
-    min-height: 44px;
+    min-height: 34px;
     font-size: 16px;
   }
+  body.printing-mode.counter-mode .stage.is-counter .print-dim {
+    font-size: 10px;
+  }
   body.printing-mode.counter-mode .stage.is-counter .print-size-x {
-    padding-bottom: 12px;
+    padding-bottom: 8px;
+    font-size: 13px;
   }
   body.printing-mode.counter-mode .stage.is-counter .print-area-chip {
     grid-column: 1 / -1;
     margin: 0;
     text-align: center;
-    min-height: 32px;
+    min-height: 22px;
+    padding: 2px 8px;
+    font-size: 11px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -6355,14 +6361,16 @@ body.classic-bill-mode .bill-settle {
   }
   body.printing-mode.counter-mode .stage.is-counter .print-extra-bar {
     margin: 0 10px 6px;
+    font-size: 11px;
+    padding: 4px 8px;
   }
   body.printing-mode.counter-mode .stage.is-counter .print-extra-bar input {
-    min-height: 44px;
-    font-size: 16px;
+    min-height: 30px;
+    font-size: 13px;
   }
   body.printing-mode.counter-mode.has-cart .stage.is-counter .pay #btn-pay {
-    min-height: 52px;
-    font-size: 16px;
+    min-height: 40px;
+    font-size: 13px;
     font-weight: 800;
   }
   /* Flex phone: collapsed sheet still shows W×H so size can be entered. */
@@ -6391,15 +6399,70 @@ body.classic-bill-mode .bill-settle {
     padding: 4px 12px 0;
   }
   body.printing-mode.bill-collapsed .stage.is-counter .totals .grand {
-    font-size: 18px;
+    font-size: 13px;
     font-weight: 800;
   }
   body.printing-mode.counter-mode.bill-collapsed .stage.is-counter .print-line {
-    padding: 8px 6px;
-    gap: 6px;
+    padding: 6px 4px;
+    gap: 4px;
   }
   body.printing-mode.counter-mode .stage.is-counter .pay-this-hint {
     display: none;
+  }
+  /* Flex phone: compact catalog and bill type */
+  body.printing-mode.counter-mode .stage.is-counter .catalog-cats .chip {
+    padding: 4px 8px;
+    font-size: 11px;
+  }
+  body.printing-mode.counter-mode .stage.is-counter .catalog-group-head {
+    font-size: 10px;
+    padding: 4px 2px 2px;
+  }
+  body.printing-mode.counter-mode .stage.is-counter .card {
+    min-height: 48px;
+    padding: 6px 8px;
+    gap: 8px;
+    border-radius: 10px;
+  }
+  body.printing-mode.counter-mode .stage.is-counter .card .name {
+    font-size: 13px;
+    line-height: 1.2;
+  }
+  body.printing-mode.counter-mode .stage.is-counter .card .name small {
+    font-size: 10px;
+  }
+  body.printing-mode.counter-mode .stage.is-counter .card .meta {
+    font-size: 11px;
+  }
+  body.printing-mode.counter-mode .stage.is-counter .card-price {
+    font-size: 12px;
+  }
+  body.printing-mode.counter-mode .stage.is-counter .card-photo,
+  body.printing-mode.counter-mode .stage.is-counter .card-photo img {
+    width: 40px;
+    height: 40px;
+    max-height: 40px;
+    flex-basis: 40px;
+  }
+  body.printing-mode.counter-mode .stage.is-counter .print-line .who {
+    font-size: 12px;
+  }
+  body.printing-mode.counter-mode .stage.is-counter .print-line .print-line-summary {
+    font-size: 11px;
+  }
+  body.printing-mode.counter-mode .stage.is-counter .print-line .line-amt {
+    font-size: 12px;
+    min-width: 3.6em;
+  }
+  body.printing-mode.counter-mode .stage.is-counter .totals .grand {
+    font-size: 13px;
+  }
+  body.printing-mode.counter-mode .stage.is-counter .bill-settle label {
+    font-size: 10px;
+  }
+  body.printing-mode.counter-mode .stage.is-counter .bill-settle input {
+    min-height: 30px;
+    font-size: 13px;
   }
   .stage.is-counter .line .who {
     font-size: 14px;
@@ -7161,6 +7224,10 @@ body.classic-bill-mode .bill-settle {
   .stage.is-counter .card { min-height: 64px; padding: 8px 10px; }
   .stage.is-counter .card .name { font-size: 15px; }
   .stage.is-counter .card .meta { font-size: 12px; }
+  body.printing-mode.counter-mode .stage.is-counter .card { min-height: 48px; padding: 6px 8px; }
+  body.printing-mode.counter-mode .stage.is-counter .card .name { font-size: 13px; }
+  body.printing-mode.counter-mode .stage.is-counter .card .meta { font-size: 11px; }
+  body.printing-mode.counter-mode .stage.is-counter .card-price { font-size: 12px; }
   .card { min-height: 64px; }
   .card .name { font-size: 13px; }
   .card .sku { font-size: 10px; }
