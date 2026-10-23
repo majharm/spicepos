@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
-import { DEFAULT_COA, expenseJournalLines, saleDiscountAmount, buildPartyLedger, sortPartyLedgerRows } from "./accounting.js";
+import { DEFAULT_COA, expenseJournalLines, saleDiscountAmount, buildPartyLedger, sortPartyLedgerRows, allocatePartyLedgerInvoices } from "./accounting.js";
 import { splitGstAmount } from "./gst-supply.js";
 import { splitInvoiceCollection } from "./accounts.js";
 
@@ -129,6 +129,34 @@ test("customer ledger sorts by payment date so backdated receipts do not jump th
   assert.equal(sortPartyLedgerRows(ledger.rows)[3].entry_type, "sale_credit");
 });
 
+test("customer-wise ledger allocates receipts to the invoice and reports billed/paid/due", () => {
+  const ledger = buildPartyLedger({
+    opening: 0,
+    rows: [
+      { entry_type: "sale_credit", amount: 30000, payment_date: null, created_at: "2026-09-19 12:00:00", entry_no: "JV-1", notes: "SO-10003" },
+      { entry_type: "receipt", amount: 1000, payment_date: "2026-09-08", created_at: "2026-09-20 10:00:00", entry_no: "RCP-1" },
+      { entry_type: "receipt", amount: 15000, payment_date: "2026-09-11", created_at: "2026-09-20 10:01:00", entry_no: "RCP-2" },
+      { entry_type: "receipt", amount: 10000, payment_date: "2026-09-16", created_at: "2026-09-20 10:02:00", entry_no: "RCP-3" },
+      { entry_type: "receipt", amount: 3000, payment_date: "2026-10-21", created_at: "2026-10-21 11:00:00", entry_no: "RCP-5" },
+    ],
+  });
+  assert.equal(ledger.closing, 1000);
+  assert.ok(ledger.rows.every((r) => r.entry_type !== "receipt" || r.invoice_no === "SO-10003"));
+  assert.equal(ledger.invoices.length, 1);
+  assert.equal(ledger.invoices[0].invoice_no, "SO-10003");
+  assert.equal(ledger.invoices[0].billed, 30000);
+  assert.equal(ledger.invoices[0].paid, 29000);
+  assert.equal(ledger.invoices[0].due, 1000);
+  const missingSale = buildPartyLedger({
+    opening: 0,
+    rows: [{ entry_type: "receipt", amount: 1000, payment_date: "2026-09-08", created_at: "2026-09-08", entry_no: "RCP-1" }],
+    sales: [{ id: "ord-1", order_number: "SO-10003", total: 30000, created_at: "2026-09-19", customer_id: "c1" }],
+  });
+  assert.equal(missingSale.rows.some((r) => r.entry_type === "sale_credit" && r.invoice_no === "SO-10003"), true);
+  assert.equal(missingSale.invoices[0].due, 29000);
+  assert.equal(allocatePartyLedgerInvoices([{ entry_type: "receipt", amount: 50, invoice_no: "" }])[0].invoice_no, "Advance");
+});
+
 test("Accounts wires customer and supplier ledgers", () => {
   const accounts = readFileSync(path.join(root, "server/accounts.js"), "utf8");
   const php = readFileSync(path.join(root, "pos-accounting.php"), "utf8");
@@ -138,11 +166,15 @@ test("Accounts wires customer and supplier ledgers", () => {
   assert.match(php, /accounts\/party-ledger/);
   assert.match(php, /function pos_build_party_ledger/);
   assert.match(php, /function pos_sort_party_ledger_rows/);
+  assert.match(php, /function pos_allocate_party_ledger_invoices/);
+  assert.match(php, /function pos_merge_party_ledger_sales/);
   assert.match(php, /pos_ledger_event_between/);
   assert.match(accounts, /ledgerEventBetween/);
   assert.match(accounts, /ledgerEventOrderAsc/);
+  assert.match(accounts, /linked_order_number/);
   assert.match(app, /function loadPartyLedgerTab/);
   assert.match(app, /function ledgerBalanceText/);
+  assert.match(app, /acc-inv-head/);
   assert.match(app, /formatShopDate\(data\?\.from\)/);
   assert.match(app, /\/api\/accounts\/party-ledger/);
   assert.match(index, /data-acc-tab="customer-ledger"/);

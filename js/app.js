@@ -95,6 +95,7 @@ function money(n) {
 function ledgerBalanceText(n) {
   const v = Number(n) || 0;
   if (v < 0) return `${money(Math.abs(v))} Cr`;
+  if (v > 0) return `${money(v)} Dr`;
   return money(v);
 }
 
@@ -10519,9 +10520,20 @@ function renderPartyLedgerTable(targetId, data, kind) {
     if (s === "purchase_credit") return "Purchase";
     return t || "—";
   };
-  const invoiceOf = (r) => r.invoice_no || (r.entry_type === "sale_credit" ? r.notes : "") || "—";
+  const invoiceOf = (r) => r.invoice_no || (r.entry_type === "sale_credit" || r.entry_type === "purchase_credit" ? r.notes : "") || "—";
+  const invoices = data?.invoices || [];
+  const invTable = invoices.length
+    ? `<h3 class="acc-inv-head">Invoices</h3><table><thead><tr>
+        <th>Invoice</th><th>Billed</th><th>Paid</th><th>Due</th>
+      </tr></thead><tbody>${invoices.map((inv) => `<tr>
+        <td>${escapeHtml(inv.invoice_no)}</td>
+        <td>${money(inv.billed)}</td>
+        <td>${money(inv.paid)}</td>
+        <td>${ledgerBalanceText(inv.due)}</td>
+      </tr>`).join("")}</tbody></table>`
+    : "";
   if (!rows.length) {
-    el.innerHTML = `${head}<p class="hint">No ${kind} ledger entries in this period.</p>`;
+    el.innerHTML = `${head}<p class="hint">No ${kind} ledger entries in this period.</p>${invTable}`;
     return;
   }
   el.innerHTML = `${head}<table><thead><tr>
@@ -10549,7 +10561,7 @@ function renderPartyLedgerTable(targetId, data, kind) {
       <td>${printable ? voucherRowActions(i) : ""}</td>
     </tr>`;
     })
-    .join("")}</tbody></table>`;
+    .join("")}</tbody></table>${invTable}`;
 }
 
 async function loadPartyLedgerTab(kind) {

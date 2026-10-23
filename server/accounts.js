@@ -25,7 +25,7 @@ import {
   partyLedgerSignedAmount,
 } from "./accounting.js";
 import { fyRangeForToday } from "./fy.js";
-import { createdBetween, ledgerEventBetween, ledgerEventBeforeDay, ledgerEventOrderAsc } from "./sql-time.js";
+import { createdBetween, ledgerEventBetween, ledgerEventBeforeDay, ledgerEventOrderAsc, saleNotVoidSql } from "./sql-time.js";
 
 function payMoney(raw) {
   const method = globalThis.POSPay?.normalize?.(raw) || String(raw || "cash").toLowerCase();
@@ -949,12 +949,29 @@ export function registerAccounts(app) {
         prior.reduce((sum, row) => sum + partyLedgerSignedAmount(row.entry_type, row.amount), 0),
       );
       const rows = await query(
-        `SELECT * FROM account_ledger
-         WHERE business_id = ? AND party_type = ? AND party_id = ? AND ${ledgerEventBetween()}
-         ORDER BY ${ledgerEventOrderAsc()}
+        `SELECT l.*, o.order_number AS linked_order_number
+         FROM account_ledger l
+         LEFT JOIN sales_orders o ON o.id = l.reference_id AND o.business_id = l.business_id
+         WHERE l.business_id = ? AND l.party_type = ? AND l.party_id = ? AND ${ledgerEventBetween("l")}
+         ORDER BY ${ledgerEventOrderAsc("l")}
          LIMIT 1000`,
         [bid(), partyType, partyId, from, to],
       );
+      let sales = [];
+      if (partyType === "customer") {
+        try {
+          sales = await query(
+            `SELECT id, customer_id, order_number, created_at, total, payment_date
+             FROM sales_orders
+             WHERE business_id = ? AND customer_id = ? AND ${saleNotVoidSql()} AND ${createdBetween()}
+             ORDER BY created_at ASC
+             LIMIT 1000`,
+            [bid(), partyId, from, to],
+          );
+        } catch {
+          sales = [];
+        }
+      }
       let party = null;
       if (partyType === "customer") {
         const found = await query(
@@ -971,7 +988,7 @@ export function registerAccounts(app) {
         );
         party = found[0] || { id: partyId, name: rows[0]?.party_name || "Supplier" };
       }
-      res.json({ partyType, party, from, to, ...buildPartyLedger({ opening, rows }) });
+      res.json({ partyType, party, from, to, ...buildPartyLedger({ opening, rows, sales }) });
     } catch (err) {
       res.status(500).json({ error: String(err.message) });
     }

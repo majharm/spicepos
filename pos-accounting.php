@@ -345,10 +345,128 @@ function pos_sort_party_ledger_rows($rows) {
   return $out;
 }
 
-function pos_build_party_ledger($opening, $rows) {
+function pos_looks_like_invoice_no($value) {
+  return preg_match('/^(SO|INV|PO)[-\\/]?\\d+/i', trim((string) $value)) === 1;
+}
+
+function pos_party_ledger_invoice_no($row) {
+  $inv = trim((string) ($row["invoice_no"] ?? ($row["linked_order_number"] ?? "")));
+  if ($inv !== "" && $inv !== "—") return $inv;
+  $notes = trim((string) ($row["notes"] ?? ""));
+  if (pos_looks_like_invoice_no($notes)) return $notes;
+  return "";
+}
+
+function pos_merge_party_ledger_sales($rows, $sales) {
+  $have = [];
+  foreach ($rows as $r) {
+    $type = (string) ($r["entry_type"] ?? "");
+    if ($type !== "sale_credit" && $type !== "purchase_credit") continue;
+    if (!empty($r["reference_id"])) $have[(string) $r["reference_id"]] = true;
+    $no = pos_party_ledger_invoice_no($r);
+    if ($no === "") $no = trim((string) ($r["entry_no"] ?? ""));
+    if ($no !== "") $have[$no] = true;
+  }
+  $extra = [];
+  foreach ($sales as $o) {
+    $id = (string) ($o["id"] ?? "");
+    $no = trim((string) ($o["order_number"] ?? ($o["invoice_no"] ?? "")));
+    if (($id !== "" && isset($have[$id])) || ($no !== "" && isset($have[$no]))) continue;
+    $extra[] = [
+      "entry_type" => "sale_credit",
+      "amount" => (float) ($o["total"] ?? 0),
+      "invoice_no" => $no,
+      "notes" => $no,
+      "created_at" => $o["created_at"] ?? null,
+      "payment_date" => $o["payment_date"] ?? null,
+      "reference_id" => $o["id"] ?? null,
+      "reference_type" => "sales_order",
+      "entry_no" => $no,
+      "party_id" => $o["customer_id"] ?? null,
+    ];
+  }
+  return $extra ? array_merge($rows, $extra) : $rows;
+}
+
+function pos_allocate_party_ledger_invoices($rows) {
+  $invoices = [];
+  foreach ($rows as $r) {
+    $type = (string) ($r["entry_type"] ?? "");
+    if ($type !== "sale_credit" && $type !== "purchase_credit") continue;
+    $no = pos_party_ledger_invoice_no($r);
+    if ($no === "") $no = trim((string) ($r["entry_no"] ?? ""));
+    if ($no === "") $no = "—";
+    $invoices[] = ["no" => $no, "left" => pos_round2($r["amount"] ?? 0)];
+  }
+  $out = [];
+  foreach ($rows as $r) {
+    $type = (string) ($r["entry_type"] ?? "");
+    if ($type === "sale_credit" || $type === "purchase_credit") {
+      $no = pos_party_ledger_invoice_no($r);
+      if ($no === "") $no = trim((string) ($r["entry_no"] ?? ""));
+      if ($no === "") $no = "—";
+      $r["invoice_no"] = $no;
+      $out[] = $r;
+      continue;
+    }
+    if ($type !== "receipt" && $type !== "payment") {
+      $out[] = $r;
+      continue;
+    }
+    $invoiceNo = pos_party_ledger_invoice_no($r);
+    $amt = pos_round2($r["amount"] ?? 0);
+    if ($invoiceNo !== "") {
+      foreach ($invoices as $i => $inv) {
+        if ($inv["no"] !== $invoiceNo) continue;
+        $invoices[$i]["left"] = pos_round2(max(0, $inv["left"] - $amt));
+        break;
+      }
+      $r["invoice_no"] = $invoiceNo;
+      $out[] = $r;
+      continue;
+    }
+    $names = [];
+    foreach ($invoices as $i => $inv) {
+      if ($amt <= 0.004) break;
+      if ($inv["left"] <= 0.004) continue;
+      $take = pos_round2(min($inv["left"], $amt));
+      $invoices[$i]["left"] = pos_round2($inv["left"] - $take);
+      $amt = pos_round2($amt - $take);
+      if (!in_array($inv["no"], $names, true)) $names[] = $inv["no"];
+    }
+    $r["invoice_no"] = $names ? implode(", ", $names) : "Advance";
+    $out[] = $r;
+  }
+  return $out;
+}
+
+function pos_party_ledger_invoice_summary($rows) {
+  $map = [];
+  foreach ($rows as $r) {
+    $no = trim((string) ($r["invoice_no"] ?? ""));
+    if ($no === "" || $no === "—" || strcasecmp($no, "Advance") === 0) continue;
+    if (!isset($map[$no])) $map[$no] = ["invoice_no" => $no, "billed" => 0.0, "paid" => 0.0];
+    $type = (string) ($r["entry_type"] ?? "");
+    if ($type === "sale_credit" || $type === "purchase_credit") {
+      $map[$no]["billed"] = pos_round2($map[$no]["billed"] + (float) ($r["amount"] ?? 0));
+    }
+    if ($type === "receipt" || $type === "payment") {
+      $map[$no]["paid"] = pos_round2($map[$no]["paid"] + (float) ($r["amount"] ?? 0));
+    }
+  }
+  $out = [];
+  foreach ($map as $rec) {
+    $rec["due"] = pos_round2(max(0, $rec["billed"] - $rec["paid"]));
+    $out[] = $rec;
+  }
+  return $out;
+}
+
+function pos_build_party_ledger($opening, $rows, $sales = []) {
   $balance = pos_round2($opening);
   $out = [];
-  foreach (pos_sort_party_ledger_rows($rows) as $r) {
+  $merged = pos_merge_party_ledger_sales(is_array($rows) ? $rows : [], is_array($sales) ? $sales : []);
+  foreach (pos_sort_party_ledger_rows($merged) as $r) {
     $sides = pos_party_ledger_sides($r["entry_type"] ?? "", $r["amount"] ?? 0);
     $balance = pos_round2($balance + pos_party_ledger_signed_amount($r["entry_type"] ?? "", $r["amount"] ?? 0));
     $r["debit"] = $sides["debit"];
@@ -356,7 +474,13 @@ function pos_build_party_ledger($opening, $rows) {
     $r["balance"] = $balance;
     $out[] = $r;
   }
-  return ["opening" => pos_round2($opening), "closing" => $balance, "rows" => $out];
+  $allocated = pos_allocate_party_ledger_invoices($out);
+  return [
+    "opening" => pos_round2($opening),
+    "closing" => $balance,
+    "rows" => $allocated,
+    "invoices" => pos_party_ledger_invoice_summary($allocated),
+  ];
 }
 
 function pos_accounts_dispatch($path, $method, $body, $bid, $auth, $branchId, $uid) {
@@ -502,12 +626,29 @@ function pos_accounts_dispatch($path, $method, $body, $bid, $auth, $branchId, $u
       $opening = pos_round2($opening + pos_party_ledger_signed_amount($row["entry_type"] ?? "", $row["amount"] ?? 0));
     }
     $rows = pos_q(
-      "SELECT * FROM account_ledger
-       WHERE business_id = ? AND party_type = ? AND party_id = ? AND " . pos_ledger_event_between() . "
-       ORDER BY " . pos_ledger_event_order_asc() . " LIMIT 1000",
+      "SELECT l.*, o.order_number AS linked_order_number
+       FROM account_ledger l
+       LEFT JOIN sales_orders o ON o.id = l.reference_id AND o.business_id = l.business_id
+       WHERE l.business_id = ? AND l.party_type = ? AND l.party_id = ? AND " . pos_ledger_event_between("l") . "
+       ORDER BY " . pos_ledger_event_order_asc("l") . " LIMIT 1000",
       "sssss",
       [$bid, $partyType, $partyId, $from, $to]
     );
+    $sales = [];
+    if ($partyType === "customer") {
+      try {
+        $sales = pos_q(
+          "SELECT id, customer_id, order_number, created_at, total, payment_date
+           FROM sales_orders
+           WHERE business_id = ? AND customer_id = ? AND " . pos_sale_not_void() . " AND " . pos_created_between() . "
+           ORDER BY created_at ASC LIMIT 1000",
+          "ssss",
+          [$bid, $partyId, $from, $to]
+        );
+      } catch (Exception $e) {
+        $sales = [];
+      }
+    }
     $party = null;
     if ($partyType === "customer") {
       $found = pos_q(
@@ -525,7 +666,7 @@ function pos_accounts_dispatch($path, $method, $body, $bid, $auth, $branchId, $u
       );
       $party = $found[0] ?? ["id" => $partyId, "name" => $rows[0]["party_name"] ?? "Supplier"];
     }
-    $built = pos_build_party_ledger($opening, $rows);
+    $built = pos_build_party_ledger($opening, $rows, $sales);
     pos_send(200, array_merge([
       "partyType" => $partyType,
       "party" => $party,

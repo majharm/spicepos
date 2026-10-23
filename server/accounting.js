@@ -509,12 +509,109 @@ export function sortPartyLedgerRows(rows) {
   });
 }
 
-export function buildPartyLedger({ opening = 0, rows = [] } = {}) {
+function looksLikeInvoiceNo(value) {
+  return /^(SO|INV|PO)[-/]?\d+/i.test(String(value || "").trim());
+}
+
+function partyLedgerInvoiceNo(row) {
+  const inv = String(row?.invoice_no || row?.linked_order_number || "").trim();
+  if (inv && inv !== "—") return inv;
+  const notes = String(row?.notes || "").trim();
+  if (looksLikeInvoiceNo(notes)) return notes;
+  return "";
+}
+
+export function mergePartyLedgerSales(rows, sales) {
+  const have = new Set();
+  for (const r of rows || []) {
+    if (r.entry_type !== "sale_credit" && r.entry_type !== "purchase_credit") continue;
+    if (r.reference_id) have.add(String(r.reference_id));
+    const no = partyLedgerInvoiceNo(r) || String(r.entry_no || "").trim();
+    if (no) have.add(no);
+  }
+  const extra = [];
+  for (const o of sales || []) {
+    const id = String(o.id || "");
+    const no = String(o.order_number || o.invoice_no || "").trim();
+    if ((id && have.has(id)) || (no && have.has(no))) continue;
+    extra.push({
+      entry_type: "sale_credit",
+      amount: Number(o.total) || 0,
+      invoice_no: no,
+      notes: no,
+      created_at: o.created_at,
+      payment_date: o.payment_date || null,
+      reference_id: o.id,
+      reference_type: "sales_order",
+      entry_no: no,
+      party_id: o.customer_id,
+    });
+  }
+  return extra.length ? [...(rows || []), ...extra] : (rows || []);
+}
+
+export function allocatePartyLedgerInvoices(rows) {
+  const invoices = [];
+  for (const r of rows || []) {
+    if (r.entry_type !== "sale_credit" && r.entry_type !== "purchase_credit") continue;
+    const no = partyLedgerInvoiceNo(r) || String(r.entry_no || "").trim() || "—";
+    invoices.push({ no, left: round2(r.amount) });
+  }
+  return (rows || []).map((r) => {
+    if (r.entry_type === "sale_credit" || r.entry_type === "purchase_credit") {
+      const no = partyLedgerInvoiceNo(r) || String(r.entry_no || "").trim() || "—";
+      return { ...r, invoice_no: no };
+    }
+    if (r.entry_type !== "receipt" && r.entry_type !== "payment") return r;
+    let invoiceNo = partyLedgerInvoiceNo(r);
+    let amt = round2(r.amount);
+    if (invoiceNo) {
+      const hit = invoices.find((x) => x.no === invoiceNo);
+      if (hit) hit.left = round2(Math.max(0, hit.left - amt));
+      return { ...r, invoice_no: invoiceNo };
+    }
+    const names = [];
+    for (const inv of invoices) {
+      if (amt <= 0.004) break;
+      if (inv.left <= 0.004) continue;
+      const take = round2(Math.min(inv.left, amt));
+      inv.left = round2(inv.left - take);
+      amt = round2(amt - take);
+      if (!names.includes(inv.no)) names.push(inv.no);
+    }
+    return { ...r, invoice_no: names.join(", ") || "Advance" };
+  });
+}
+
+export function partyLedgerInvoiceSummary(rows) {
+  const map = new Map();
+  for (const r of rows || []) {
+    const no = String(r.invoice_no || "").trim();
+    if (!no || no === "—" || /^advance$/i.test(no)) continue;
+    if (!map.has(no)) map.set(no, { invoice_no: no, billed: 0, paid: 0 });
+    const rec = map.get(no);
+    if (r.entry_type === "sale_credit" || r.entry_type === "purchase_credit") {
+      rec.billed = round2(rec.billed + (Number(r.amount) || 0));
+    }
+    if (r.entry_type === "receipt" || r.entry_type === "payment") {
+      rec.paid = round2(rec.paid + (Number(r.amount) || 0));
+    }
+  }
+  return [...map.values()].map((r) => ({ ...r, due: round2(Math.max(0, r.billed - r.paid)) }));
+}
+
+export function buildPartyLedger({ opening = 0, rows = [], sales = [] } = {}) {
   let balance = round2(opening);
-  const out = sortPartyLedgerRows(rows).map((r) => {
+  const out = sortPartyLedgerRows(mergePartyLedgerSales(rows, sales)).map((r) => {
     const sides = partyLedgerSides(r.entry_type, r.amount);
     balance = round2(balance + partyLedgerSignedAmount(r.entry_type, r.amount));
     return { ...r, debit: sides.debit, credit: sides.credit, balance };
   });
-  return { opening: round2(opening), closing: balance, rows: out };
+  const allocated = allocatePartyLedgerInvoices(out);
+  return {
+    opening: round2(opening),
+    closing: balance,
+    rows: allocated,
+    invoices: partyLedgerInvoiceSummary(allocated),
+  };
 }
