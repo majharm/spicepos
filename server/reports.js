@@ -335,12 +335,19 @@ export async function buildReports(from, to) {
       rangeParams,
     ),
     query(
-      `SELECT l.item_name, SUM(l.quantity_gm) AS quantity_gm, SUM(l.amount) AS amount,
+      `SELECT l.item_name,
+              COALESCE(NULLIF(TRIM(l.color), ''), NULLIF(TRIM(i.color), ''), '') AS color,
+              COALESCE(NULLIF(TRIM(l.size), ''), NULLIF(TRIM(i.size), ''), '') AS size,
+              SUM(l.quantity_gm) AS quantity_gm, SUM(l.amount) AS amount,
               SUM(l.amount * l.gst_rate / 100) AS gst
        FROM sales_order_lines l
        JOIN sales_orders o ON o.id = l.order_id
+       LEFT JOIN items i ON i.id = l.item_id
        WHERE o.business_id = ? AND ${createdBetween("o")} AND l.cancelled = 0
-       GROUP BY l.item_name ORDER BY amount DESC`,
+       GROUP BY l.item_name,
+                COALESCE(NULLIF(TRIM(l.color), ''), NULLIF(TRIM(i.color), ''), ''),
+                COALESCE(NULLIF(TRIM(l.size), ''), NULLIF(TRIM(i.size), ''), '')
+       ORDER BY amount DESC`,
       rangeParams,
     ),
     query(
@@ -385,7 +392,7 @@ export async function buildReports(from, to) {
       rangeParams,
     ),
     query(
-      `SELECT code, name, hsn, local_name, category, subcategory, stock_gm, reorder_level_gm,
+      `SELECT code, name, hsn, local_name, category, subcategory, color, size, stock_gm, reorder_level_gm,
               retail_rate, b2b_rate, purchase_rate, gst_rate
        FROM items WHERE business_id = ? ORDER BY name`,
       [tenant],
@@ -662,8 +669,12 @@ export function reportsToSheets(data, biz = {}) {
     },
     {
       name: "Item sales",
-      headers: ["Item", "Qty g", "Amount", "GST"],
-      rows: data.byItem.map((r) => [r.item_name, num(r.quantity_gm), num(r.amount), num(r.gst)]),
+      headers: POSFootwear?.isApparelShop?.(biz) ? ["Item", "Colour", "Size", "Qty g", "Amount", "GST"] : ["Item", "Qty g", "Amount", "GST"],
+      rows: data.byItem.map((r) => (
+        POSFootwear?.isApparelShop?.(biz)
+          ? [r.item_name, r.color || "", r.size || "", num(r.quantity_gm), num(r.amount), num(r.gst)]
+          : [r.item_name, num(r.quantity_gm), num(r.amount), num(r.gst)]
+      )),
     },
     {
       name: "Customer sales",
@@ -749,12 +760,22 @@ export function reportsToSheets(data, biz = {}) {
     },
     {
       name: "Stock",
-      headers: ["Code", "Name", tax, "Category", "Subcategory", "Stock g", "Reorder g", "Retail", "B2B", "Purchase", "GST %"],
-      rows: data.stock.map((i) => [
-        i.code, i.name, i.hsn, i.category, i.subcategory,
-        num(i.stock_gm), num(i.reorder_level_gm), num(i.retail_rate), num(i.b2b_rate),
-        num(i.purchase_rate), num(i.gst_rate),
-      ]),
+      headers: POSFootwear?.isApparelShop?.(biz)
+        ? ["Code", "Name", tax, "Category", "Subcategory", "Colour", "Size", "Stock g", "Reorder g", "Retail", "B2B", "Purchase", "GST %"]
+        : ["Code", "Name", tax, "Category", "Subcategory", "Stock g", "Reorder g", "Retail", "B2B", "Purchase", "GST %"],
+      rows: data.stock.map((i) => (
+        POSFootwear?.isApparelShop?.(biz)
+          ? [
+              i.code, i.name, i.hsn, i.category, i.subcategory, i.color || "", i.size || "",
+              num(i.stock_gm), num(i.reorder_level_gm), num(i.retail_rate), num(i.b2b_rate),
+              num(i.purchase_rate), num(i.gst_rate),
+            ]
+          : [
+              i.code, i.name, i.hsn, i.category, i.subcategory,
+              num(i.stock_gm), num(i.reorder_level_gm), num(i.retail_rate), num(i.b2b_rate),
+              num(i.purchase_rate), num(i.gst_rate),
+            ]
+      )),
     },
     {
       name: "Low stock",

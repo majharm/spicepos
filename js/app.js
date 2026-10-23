@@ -665,6 +665,8 @@ function applyFootwearMode() {
   document.querySelectorAll(".footwear-only").forEach((el) => {
     el.hidden = !on;
   });
+  if ($("item-color-wrap")) $("item-color-wrap").hidden = !fw;
+  if ($("item-size-wrap")) $("item-size-wrap").hidden = !fw;
   document.querySelectorAll(".apparel-only").forEach((el) => {
     if (el.id === "counter-low-stock-btn") return;
     el.hidden = !ap;
@@ -829,6 +831,10 @@ function applyFootwearMode() {
   renderTableBoard();
   applyQuickAddVisibility();
   applyFastMode();
+  if ($("item-variant-grid")) {
+    if (document.querySelector("#item-variant-grid [data-gv]")) readGarmentVariantCells();
+    paintGarmentVariantEditor();
+  }
 }
 
 function fillWearerSelects() {
@@ -4807,7 +4813,10 @@ function paintClassicItemHits() {
     box.innerHTML = "";
     return;
   }
-  const rows = filteredItems().slice(0, 12);
+  const rawHits = filteredItems();
+  const rows = isApparelShop() && garmentCounterApi()
+    ? garmentCounterApi().collapseCatalog(rawHits, activeItems(), q).slice(0, 12)
+    : rawHits.slice(0, 12).map((item) => ({ kind: "item", item }));
   if (!rows.length) {
     if (!quickAddVisible()) {
       box.hidden = true;
@@ -4821,7 +4830,20 @@ function paintClassicItemHits() {
     return;
   }
   box.hidden = false;
-  box.innerHTML = rows.map((i) => {
+  box.innerHTML = rows.map((row) => {
+    if (row.kind === "picker") {
+      const item = row.item;
+      const sizes = (row.sizes || []).join(" ");
+      const colors = (row.colors || []).join(", ");
+      const price = row.priceMin === row.priceMax ? money(row.priceMin) : `${money(row.priceMin)}+`;
+      return `<button type="button" class="classic-hit" data-size-pick="${escapeHtml(item.id)}" data-size-color="${escapeHtml(row.preferredId ? item.color || "" : "")}" data-size="${escapeHtml(row.preferredId ? item.size || "" : "")}">
+      <span class="classic-hit-main"><strong>${escapeHtml(item.name)}</strong><em>${escapeHtml([colors, sizes].filter(Boolean).join(" · "))}</em></span>
+      <span class="classic-hit-stock">${escapeHtml(String(row.stock ?? ""))}</span>
+      <span class="classic-hit-exp">Size</span>
+      <span class="classic-hit-rate">${escapeHtml(price)}</span>
+    </button>`;
+    }
+    const i = row.item || row;
     const { stock, exp } = classicItemAlerts(i);
     const extra = isPharmacyShop()
       ? [i.batch_no, classicDateOnly(exp.date) || exp.short].filter(Boolean).join(" · ")
@@ -5063,7 +5085,7 @@ function renderCart() {
         return `<tr class="tone-${alert.stock.tone} exp-${alert.exp.tone}">
           <td class="pharm-n">${idx + 1}</td>
           <td>${escapeHtml(item.code || item.hsn || "—")}</td>
-          <td class="pharm-med">${escapeHtml(item.name)}${lineDescriptionHtml(line, key)}</td>
+          <td class="pharm-med">${escapeHtml(item.name)}${garmentCartCaptionHtml(item)}${lineDescriptionHtml(line, key)}</td>
           <td class="classic-barcode">${barcode ? escapeHtml(barcode) : "—"}</td>
           <td>${escapeHtml(variant || "—")}${alert.exp.expired ? ` · EXPIRED ${escapeHtml(classicDateOnly(alert.exp.date) || alert.exp.short)}` : ""}</td>
           <td class="pharm-n pharm-rate">${lineRateFieldHtml(item, line, key)}</td>
@@ -5457,6 +5479,12 @@ async function applyBarcodeScan(raw, sourceEl) {
     applyBarcodeScan._last = code;
     applyBarcodeScan._at = Date.now();
     applyBarcodeScan._pending = "";
+    if (garmentScanGate(item, { barcodeMapped: true, query: code })) {
+      clearCounterQuery(sourceEl);
+      paintScanLane(true, item.name);
+      setHint(`Choose a size for ${item.name}`, "ok");
+      return true;
+    }
     const piece = findItemByBarcode(code) || (globalThis.POSBarcode?.itemHasBarcode?.(item, code) ? item : null);
     const added = addWeighableItem(item.id, classicScanAddQty(item), (piece || isClassicBillShop()) ? code : "");
     clearCounterQuery(sourceEl);
@@ -5478,6 +5506,26 @@ async function applyBarcodeScan(raw, sourceEl) {
   }
   syncCounterQuery(code, sourceEl);
   const hits = filteredItems();
+  if (isApparelShop() && garmentCounterApi() && hits.length) {
+    const decision = garmentCounterApi().searchDecision(hits, state.items, code);
+    if (decision.action === "popup") {
+      applyBarcodeScan._pending = "";
+      openGarmentSizePicker(decision.itemId, decision);
+      clearCounterQuery(sourceEl);
+      paintScanLane(true, "Choose size");
+      return true;
+    }
+    if (decision.action === "add" && hits.length !== 1) {
+      applyBarcodeScan._pending = "";
+      const picked = state.items.find((i) => i.id === decision.itemId) || hits[0];
+      addWeighableItem(picked.id, classicScanAddQty(picked), garmentCounterApi().identityMatch(picked, code) ? code : "");
+      clearCounterQuery(sourceEl);
+      paintScanLane(true, picked.name);
+      setHint(`Added ${picked.name}`, "ok");
+      focusScanLane();
+      return true;
+    }
+  }
   if (hits.length === 1) {
     applyBarcodeScan._pending = "";
     addWeighableItem(
@@ -5632,6 +5680,205 @@ function pieceBarcodeQty(item) {
   const F = globalThis.POSFootwear;
   if (F?.isStripLooseItem?.(item)) return F.unitsPerPack(item);
   return 1;
+}
+
+function garmentCounterApi() {
+  return globalThis.POSGarmentCounter || null;
+}
+
+function garmentCartCaptionHtml(item) {
+  const caption = garmentCounterApi()?.cartCaption?.(item) || "";
+  const name = String(item?.name || "");
+  const extra = caption.startsWith(name) ? caption.slice(name.length).replace(/^\s*[–-]\s*/, "") : "";
+  return extra ? `<small>${escapeHtml(extra)}</small>` : "";
+}
+
+function resetGarmentVariantDraft() {
+  state.garmentVariants = { colorsText: "", sizes: [], cells: {} };
+  if ($("item-variant-colors") && document.activeElement !== $("item-variant-colors")) $("item-variant-colors").value = "";
+  paintGarmentVariantEditor();
+}
+
+function readGarmentVariantCells() {
+  if (!state.garmentVariants) state.garmentVariants = { colorsText: "", sizes: [], cells: {} };
+  if ($("item-variant-colors")) state.garmentVariants.colorsText = $("item-variant-colors").value || "";
+  document.querySelectorAll("#item-variant-grid [data-gv]").forEach((el) => {
+    const key = el.dataset.gvKey;
+    if (!key) return;
+    const cell = state.garmentVariants.cells[key] || {};
+    if (el.dataset.gvId) cell.id = el.dataset.gvId;
+    if (el.dataset.gv === "stock_gm") cell.stock_gm = el.value;
+    else if (el.dataset.gv === "retail_rate") cell.retail_rate = el.value;
+    else cell[el.dataset.gv] = el.value;
+    state.garmentVariants.cells[key] = cell;
+  });
+}
+
+function paintGarmentVariantEditor() {
+  const box = $("item-variant-sizes");
+  const grid = $("item-variant-grid");
+  if (!box || !grid) return;
+  if (!isApparelShop()) {
+    box.innerHTML = "";
+    grid.innerHTML = "";
+    return;
+  }
+  const C = garmentCounterApi();
+  const G = globalThis.POSGarmentPurchase;
+  const draft = state.garmentVariants || { colorsText: "", sizes: [], cells: {} };
+  state.garmentVariants = draft;
+  const catalog = []
+    .concat(G?.LETTER_SIZES || ["XS", "S", "M", "L", "XL", "XXL", "XXXL"])
+    .concat(G?.NUMERIC_SIZES || ["28", "30", "32", "34", "36", "38"])
+    .concat(draft.sizes || []);
+  const sizes = [];
+  for (const raw of catalog) {
+    const size = G?.normalizeSize?.(raw) || String(raw || "").trim().toUpperCase();
+    if (!size || sizes.some((s) => (G?.sizesEqual ? G.sizesEqual(s, size) : s === size))) continue;
+    sizes.push(size);
+  }
+  box.innerHTML = sizes.map((size) => {
+    const on = (draft.sizes || []).some((s) => (G?.sizesEqual ? G.sizesEqual(s, size) : s === size));
+    return `<button type="button" class="garment-size-chip${on ? " is-on" : ""}" data-gv-size="${escapeHtml(size)}" aria-pressed="${on ? "true" : "false"}">${escapeHtml(size)}</button>`;
+  }).join("");
+  const colors = C?.parseColors?.(draft.colorsText) || [];
+  const colorList = colors.length ? colors : [""];
+  const chosen = draft.sizes || [];
+  if (!chosen.length) {
+    grid.innerHTML = `<p class="hint">Select the sizes this garment is sold in. Leave selling price blank to use the retail rate.</p>`;
+    return;
+  }
+  const body = [];
+  for (const color of colorList) {
+    for (const size of chosen) {
+      const key = C?.cellKey?.(color, size) || `${String(color).toLowerCase()}|${size}`;
+      const cell = draft.cells[key] || {};
+      body.push(`<tr>
+        <td>${escapeHtml(color || "—")}</td>
+        <td>${escapeHtml(size)}</td>
+        <td><input data-gv="code" data-gv-key="${escapeHtml(key)}" data-gv-id="${escapeHtml(cell.id || "")}" value="${escapeHtml(cell.code || "")}" maxlength="64" aria-label="SKU ${escapeHtml(color)} ${escapeHtml(size)}" /></td>
+        <td><input data-gv="barcode" data-gv-key="${escapeHtml(key)}" data-gv-id="${escapeHtml(cell.id || "")}" value="${escapeHtml(cell.barcode || "")}" maxlength="64" aria-label="Barcode ${escapeHtml(color)} ${escapeHtml(size)}" /></td>
+        <td><input data-gv="stock_gm" data-gv-key="${escapeHtml(key)}" data-gv-id="${escapeHtml(cell.id || "")}" type="number" min="0" step="1" value="${escapeHtml(cell.stock_gm ?? "")}" aria-label="Opening stock ${escapeHtml(size)}" /></td>
+        <td><input data-gv="retail_rate" data-gv-key="${escapeHtml(key)}" data-gv-id="${escapeHtml(cell.id || "")}" type="number" min="0" step="0.01" value="${escapeHtml(cell.retail_rate ?? "")}" placeholder="Retail" aria-label="Selling price ${escapeHtml(size)}" /></td>
+      </tr>`);
+    }
+  }
+  grid.innerHTML = `<table class="garment-variant-table"><thead><tr><th>Colour</th><th>Size</th><th>SKU</th><th>Barcode</th><th>Opening stock</th><th>Selling price</th></tr></thead><tbody>${body.join("")}</tbody></table>`;
+}
+
+let garmentPicker = null;
+
+function closeGarmentSizePicker() {
+  const modal = $("garment-size-modal");
+  if (modal) modal.hidden = true;
+  garmentPicker = null;
+}
+
+function openGarmentSizePicker(itemId, opts = {}) {
+  const item = state.items.find((i) => i.id === itemId);
+  const C = garmentCounterApi();
+  if (!isApparelShop() || !item || !C) return false;
+  const family = C.activeFamily(item, state.items);
+  if (!opts.force && !C.needsSizePopup(item, family)) return false;
+  garmentPicker = C.createPicker(family, { color: opts.color || "", size: opts.size || "" });
+  paintGarmentSizePicker();
+  const modal = $("garment-size-modal");
+  if (modal) modal.hidden = false;
+  const qty = $("garment-size-qty");
+  const preset = Number(opts.qty);
+  if (qty && preset > 0) qty.value = String(Math.round(preset));
+  qty?.focus();
+  qty?.select();
+  return true;
+}
+
+function paintGarmentSizePicker() {
+  const C = garmentCounterApi();
+  const picker = garmentPicker;
+  if (!C || !picker) return;
+  if ($("garment-size-title")) $("garment-size-title").textContent = picker.name || "Select size";
+  const wear = globalThis.POSFootwear?.wearerLabel?.(picker.wearer) || "";
+  if ($("garment-size-meta")) $("garment-size-meta").textContent = wear || "Choose colour and size";
+  const photo = $("garment-size-photo");
+  if (photo) {
+    const src = itemPhotoUrl({ image_url: picker.image, name: picker.name });
+    photo.innerHTML = src
+      ? `<img src="${escapeHtml(src)}" alt="">`
+      : `<span>${escapeHtml(itemPhotoLetter({ name: picker.name }))}</span>`;
+  }
+  const colors = (picker.colors || []).filter((c) => String(c || "").trim());
+  const colorBox = $("garment-size-colors");
+  if (colorBox) {
+    colorBox.hidden = colors.length < 2;
+    colorBox.innerHTML = colors.map((color) => {
+      const on = String(picker.color || "").trim().toLowerCase() === String(color).trim().toLowerCase();
+      return `<button type="button" class="garment-color-btn${on ? " is-on" : ""}" data-gs-color="${escapeHtml(color)}">${escapeHtml(color)}</button>`;
+    }).join("");
+  }
+  const sizes = C.pickerSizes(picker);
+  const sizeBox = $("garment-size-sizes");
+  if (sizeBox) {
+    sizeBox.innerHTML = sizes.length
+      ? sizes.map((row) => {
+          const on = row.size === picker.size;
+          return `<button type="button" class="garment-size-btn${on ? " is-on" : ""}${row.out ? " is-out" : ""}" data-gs-size="${escapeHtml(row.size)}" ${row.out ? "disabled" : ""} role="option" aria-selected="${on ? "true" : "false"}"><strong>${escapeHtml(row.size)}</strong><em>${row.out ? "Out" : escapeHtml(String(row.stock))}</em></button>`;
+        }).join("")
+      : `<p class="hint">No sizes are configured for this colour.</p>`;
+  }
+  const selected = C.selectedVariant(picker);
+  const item = selected ? state.items.find((i) => i.id === selected.id) : null;
+  const cartQty = item ? cartQtyForItem(item.id) : 0;
+  const max = item ? Math.max(0, Math.round(itemOnHandBase(item) - cartQty)) : 0;
+  if ($("garment-size-stock")) $("garment-size-stock").textContent = !selected ? "—" : selected.out ? "Out of stock" : String(selected.stock);
+  if ($("garment-size-price")) $("garment-size-price").textContent = item ? money(rateFor(item)) : "—";
+  const qty = $("garment-size-qty");
+  if (qty) {
+    qty.max = String(Math.max(0, max));
+    const current = Math.max(1, Math.round(Number(qty.value) || 1));
+    if (max > 0) qty.value = String(Math.min(current, max));
+  }
+  const hint = $("garment-size-hint");
+  if (hint) {
+    hint.className = "hint";
+    if (!selected || selected.out || max <= 0) {
+      hint.textContent = `${picker.name}: out of stock`;
+      hint.className = "hint error";
+    } else {
+      hint.textContent = `${max} in stock for ${selected.size}. ← → size, ↑ ↓ colour, Enter adds.`;
+    }
+  }
+  const add = $("garment-size-add");
+  if (add) add.disabled = !selected || selected.out || max <= 0;
+}
+
+function confirmGarmentSize() {
+  const C = garmentCounterApi();
+  const selected = C?.selectedVariant?.(garmentPicker);
+  const item = selected ? state.items.find((i) => i.id === selected.id) : null;
+  if (!selected || !item || selected.out) {
+    setHint("Choose a size that is in stock", "error");
+    return;
+  }
+  const want = Math.max(1, Math.round(Number($("garment-size-qty")?.value) || 1));
+  const next = C.clampSaleQty(itemOnHandBase(item), cartQtyForItem(item.id), want);
+  if (next <= 0) {
+    setHint(stockCapHint(item), "error");
+    paintGarmentSizePicker();
+    return;
+  }
+  if (next < want) setHint(stockCapHint(item), "error");
+  closeGarmentSizePicker();
+  const added = addItem(item.id, next);
+  if (added !== false) setHint(`Added ${C.cartCaption(item)} · Qty ${next}`, next < want ? "error" : "ok");
+}
+
+function garmentScanGate(item, opts = {}) {
+  if (!isApparelShop() || !item) return false;
+  const C = garmentCounterApi();
+  if (!C) return false;
+  const decision = C.scanAction(item, state.items, opts);
+  if (decision.action !== "popup") return false;
+  return openGarmentSizePicker(decision.itemId, { ...decision, force: true, qty: classicScanAddQty(item) });
 }
 
 function addItem(id, qtyGm, lineBarcode) {
@@ -6230,6 +6477,7 @@ function resetItemForm() {
   if (isPrintShop() && $("item-gst") && !$("item-gst").value) $("item-gst").value = "18";
   if (isPrintShop() && $("item-gst") && Number($("item-gst").value) === 5) $("item-gst").value = "18";
   paintPrintUomChips();
+  resetGarmentVariantDraft();
 }
 
 function fillItemForm(i) {
@@ -6254,6 +6502,11 @@ function fillItemForm(i) {
   if ($("item-wearer")) $("item-wearer").value = globalThis.POSFootwear?.normalizeWearer(i.wearer_type) || "";
   if ($("item-color")) $("item-color").value = i.color || "";
   if ($("item-size")) $("item-size").value = i.size || "";
+  if (isApparelShop()) {
+    state.garmentVariants = garmentCounterApi()?.draftFromItems?.(state.items, i) || { colorsText: "", sizes: [], cells: {} };
+    if ($("item-variant-colors")) $("item-variant-colors").value = state.garmentVariants.colorsText || "";
+    paintGarmentVariantEditor();
+  }
   $("item-retail").value = POSUnits.rateInputValue?.(i.retail_rate) ?? i.retail_rate;
   if ($("item-mrp")) $("item-mrp").value = POSUnits.rateInputValue?.(i.mrp || i.retail_rate || 0) ?? (i.mrp || i.retail_rate || "");
   if ($("item-barcode-qty")) $("item-barcode-qty").value = "";
@@ -8556,7 +8809,11 @@ async function loadReports() {
       dailySalesBlock(data),
       reportBlock("GST summary (India)", "GST summary", ["Type", "CGST", "SGST", "IGST", "Total GST"], gstSummaryRows(s), "gst"),
       reportBlock("Sales bills", "Sales bills", ["Order", "Customer", "Type", "Pack", "Pack count", "Status", "Qty g", "Taxable", "GST", "Total", "Pay", "Pay status", "Date"], (data.sales || []).map((o) => [o.order_number, o.customer_name, o.customer_type, o.pack_name || "Loose items", Number(o.pack_count) || 0, orderStatusLabel(o.status), Number(o.total_quantity_gm) || 0, Number(o.subtotal) || 0, Number(o.gst) || 0, Number(o.total) || 0, o.payment_method, o.payment_status, formatShopDateTime(o.created_at)]), "sales"),
-      reportBlock("Item sales", "Item sales", ["Item", "Qty g", "Amount", "GST"], (data.byItem || []).map((r) => [r.item_name, Number(r.quantity_gm) || 0, Number(r.amount) || 0, Number(r.gst) || 0]), "sales"),
+      reportBlock("Item sales", "Item sales", isApparelShop() ? ["Item", "Colour", "Size", "Qty g", "Amount", "GST"] : ["Item", "Qty g", "Amount", "GST"], (data.byItem || []).map((r) => (
+        isApparelShop()
+          ? [r.item_name, r.color || "—", r.size || "—", Number(r.quantity_gm) || 0, Number(r.amount) || 0, Number(r.gst) || 0]
+          : [r.item_name, Number(r.quantity_gm) || 0, Number(r.amount) || 0, Number(r.gst) || 0]
+      )), "sales"),
       reportBlock("Customer sales", "Customer sales", ["Customer", "Type", "Bills", "Takings", "GST"], (data.byCustomer || []).map((r) => [r.customer_name, r.customer_type, Number(r.bills) || 0, Number(r.takings) || 0, Number(r.gst) || 0]), "sales"),
       reportBlock("Pack sales", "Pack sales", ["Pack type", "Pack count", "Bills", "Takings"], (data.byPack || []).map((r) => [r.pack_type, Number(r.pack_count) || 0, Number(r.bills) || 0, Number(r.takings) || 0]), "sales"),
       reportBlock("Payment", "Payment", ["Method", "Bills", "Takings"], (data.byPay || []).map((r) => [r.payment_method, Number(r.bills) || 0, Number(r.takings) || 0]), "payment"),
@@ -8567,7 +8824,11 @@ async function loadReports() {
       reportBlock(`GST ${taxCodeLabel()} itemwise`, `GST ${taxCodeLabel()} itemwise`, [`${taxCodeLabel()}/SKU`, "Item", "GST %", "Qty g", "Taxable", "GST"], (data.gstHsn || []).map((r) => [r.hsn, r.item_name, Number(r.gst_rate) || 0, Number(r.quantity_gm) || 0, Number(r.taxable) || 0, Number(r.gst) || 0]), "gst"),
       reportBlock("GST B2B sales", "GST B2B sales", ["Bill", "Date", "Customer", "GSTIN", "Taxable", "CGST", "SGST", "IGST", "Total", "Supply"], (data.gstB2B || []).map((r) => [r.order_number, reportDay(r.bill_date), r.customer_name, r.gstin, Number(r.taxable) || 0, Number(r.cgst) || 0, Number(r.sgst) || 0, Number(r.igst) || 0, Number(r.total) || 0, r.interState ? "Inter-state" : "Intra-state"]), "gst"),
       reportBlock("GST B2C sales", "GST B2C sales", ["Bill", "Date", "Customer", "Taxable", "CGST", "SGST", "IGST", "Total", "Supply"], (data.gstB2C || []).map((r) => [r.order_number, reportDay(r.bill_date), r.customer_name, Number(r.taxable) || 0, Number(r.cgst) || 0, Number(r.sgst) || 0, Number(r.igst) || 0, Number(r.total) || 0, r.interState ? "Inter-state" : "Intra-state"]), "gst"),
-      reportBlock("Stock", "Stock", ["Code", "Name", taxCodeLabel(), "Category", "Subcategory", "Stock g", "Reorder g", "Retail", "B2B", "Purchase", "GST %"], (data.stock || []).map((i) => [i.code, i.name, i.hsn, i.category, i.subcategory, Number(i.stock_gm) || 0, Number(i.reorder_level_gm) || 0, Number(i.retail_rate) || 0, Number(i.b2b_rate) || 0, Number(i.purchase_rate) || 0, Number(i.gst_rate) || 0]), "stock"),
+      reportBlock("Stock", "Stock", isApparelShop() ? ["Code", "Name", taxCodeLabel(), "Category", "Subcategory", "Colour", "Size", "Stock g", "Reorder g", "Retail", "B2B", "Purchase", "GST %"] : ["Code", "Name", taxCodeLabel(), "Category", "Subcategory", "Stock g", "Reorder g", "Retail", "B2B", "Purchase", "GST %"], (data.stock || []).map((i) => (
+        isApparelShop()
+          ? [i.code, i.name, i.hsn, i.category, i.subcategory, i.color || "—", i.size || "—", Number(i.stock_gm) || 0, Number(i.reorder_level_gm) || 0, Number(i.retail_rate) || 0, Number(i.b2b_rate) || 0, Number(i.purchase_rate) || 0, Number(i.gst_rate) || 0]
+          : [i.code, i.name, i.hsn, i.category, i.subcategory, Number(i.stock_gm) || 0, Number(i.reorder_level_gm) || 0, Number(i.retail_rate) || 0, Number(i.b2b_rate) || 0, Number(i.purchase_rate) || 0, Number(i.gst_rate) || 0]
+      )), "stock"),
       reportBlock("Low stock", "Low stock", ["Code", "Name", "Stock g", "Reorder g"], (data.low || []).map((i) => [i.code, i.name, Number(i.stock_gm) || 0, Number(i.reorder_level_gm) || 0]), "stock"),
       reportBlock("Purchases", "Purchases", ["PO", "Supplier", "Invoice", "Date", "Taxable", "GST", "Total", "Pay", "Status"], (data.purchases || []).map((p) => [p.purchase_number, p.supplier_name, p.supplier_invoice_number, p.purchase_date, Number(p.subtotal) || 0, Number(p.gst) || 0, Number(p.total) || 0, p.payment_method, p.payment_status]), "books"),
       reportBlock("Expenses", "Expenses", ["No.", "Date", "Category", "Amount", "GST", "Total", "Pay", "Notes"], (data.expenses || []).map((e) => [e.expense_number, e.expense_date, e.category, Number(e.amount) || 0, Number(e.gst) || 0, Number(e.total) || (Number(e.amount) || 0) + (Number(e.gst) || 0), e.payment_method, e.notes]), "books"),
@@ -10832,6 +11093,11 @@ $("catalog").addEventListener("click", (e) => {
   }
   const btn = e.target.closest("[data-add]");
   if (btn) {
+    const item = state.items.find((i) => i.id === btn.dataset.add);
+    if (item && garmentScanGate(item, {})) {
+      focusScanLane();
+      return;
+    }
     addWeighableItem(btn.dataset.add);
     focusScanLane();
   }
@@ -10844,9 +11110,26 @@ $("classic-item-hits")?.addEventListener("click", (e) => {
     openCounterAddItem(fromCode ? { barcode: q } : { name: q });
     return;
   }
+  const pick = e.target.closest("[data-size-pick]");
+  if (pick) {
+    openGarmentSizePicker(pick.dataset.sizePick, {
+      color: pick.dataset.sizeColor || "",
+      size: pick.dataset.size || "",
+      force: true,
+      qty: classicScanAddQty(state.items.find((i) => i.id === pick.dataset.sizePick)),
+    });
+    clearCounterQuery($("bill-scan-code"));
+    paintClassicItemHits();
+    return;
+  }
   const btn = e.target.closest("[data-add]");
   if (!btn) return;
   const item = state.items.find((i) => i.id === btn.dataset.add);
+  if (item && garmentScanGate(item, {})) {
+    clearCounterQuery($("bill-scan-code"));
+    paintClassicItemHits();
+    return;
+  }
   addWeighableItem(btn.dataset.add, classicScanAddQty(item));
   clearCounterQuery($("bill-scan-code"));
   paintClassicItemHits();
@@ -11418,6 +11701,89 @@ $("ci-cancel")?.addEventListener("click", () => closeCounterAddItem());
 $("counter-item-modal")?.addEventListener("click", (e) => {
   if (e.target === $("counter-item-modal")) closeCounterAddItem();
 });
+$("garment-size-close")?.addEventListener("click", () => closeGarmentSizePicker());
+$("garment-size-add")?.addEventListener("click", () => confirmGarmentSize());
+$("garment-size-modal")?.addEventListener("click", (e) => {
+  if (e.target === $("garment-size-modal")) closeGarmentSizePicker();
+  const color = e.target.closest("[data-gs-color]");
+  if (color && garmentPicker) {
+    garmentCounterApi()?.selectColor?.(garmentPicker, color.dataset.gsColor);
+    paintGarmentSizePicker();
+    return;
+  }
+  const size = e.target.closest("[data-gs-size]");
+  if (size && garmentPicker) {
+    garmentCounterApi()?.selectSize?.(garmentPicker, size.dataset.gsSize);
+    paintGarmentSizePicker();
+    return;
+  }
+  const step = e.target.closest("[data-gs-qty]");
+  if (step) {
+    const qty = $("garment-size-qty");
+    if (!qty) return;
+    const max = Number(qty.max);
+    const next = Math.max(1, Math.round(Number(qty.value) || 1) + Number(step.dataset.gsQty || 0));
+    qty.value = String(Number.isFinite(max) && max > 0 ? Math.min(next, max) : next);
+    paintGarmentSizePicker();
+  }
+});
+$("garment-size-modal")?.addEventListener("keydown", (e) => {
+  if ($("garment-size-modal")?.hidden) return;
+  if (e.key === "Escape") {
+    e.preventDefault();
+    closeGarmentSizePicker();
+    focusScanLane();
+    return;
+  }
+  if (e.key === "Enter") {
+    e.preventDefault();
+    confirmGarmentSize();
+    return;
+  }
+  if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
+    if (e.target?.id === "garment-size-qty") return;
+    e.preventDefault();
+    garmentCounterApi()?.moveSelection?.(garmentPicker, e.key === "ArrowLeft" ? "size-prev" : "size-next");
+    paintGarmentSizePicker();
+    return;
+  }
+  if (e.key === "ArrowUp" || e.key === "ArrowDown") {
+    if (e.target?.id === "garment-size-qty") return;
+    e.preventDefault();
+    garmentCounterApi()?.moveSelection?.(garmentPicker, e.key === "ArrowUp" ? "color-prev" : "color-next");
+    paintGarmentSizePicker();
+  }
+});
+$("item-variant-sizes")?.addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-gv-size]");
+  if (!btn) return;
+  e.preventDefault();
+  readGarmentVariantCells();
+  const G = globalThis.POSGarmentPurchase;
+  const size = btn.dataset.gvSize;
+  const list = state.garmentVariants?.sizes || [];
+  const idx = list.findIndex((s) => (G?.sizesEqual ? G.sizesEqual(s, size) : s === size));
+  if (idx >= 0) list.splice(idx, 1);
+  else list.push(size);
+  state.garmentVariants.sizes = list;
+  paintGarmentVariantEditor();
+});
+$("item-variant-colors")?.addEventListener("change", () => {
+  readGarmentVariantCells();
+  paintGarmentVariantEditor();
+});
+$("item-variant-add-size")?.addEventListener("click", () => {
+  const raw = $("item-variant-custom-size")?.value || "";
+  const size = globalThis.POSGarmentPurchase?.normalizeSize?.(raw) || String(raw).trim().toUpperCase().replace(/\s+/g, "");
+  if (!size) return;
+  readGarmentVariantCells();
+  const list = state.garmentVariants?.sizes || [];
+  if (!list.some((s) => globalThis.POSGarmentPurchase?.sizesEqual?.(s, size) || s === size)) list.push(size);
+  state.garmentVariants.sizes = list;
+  if ($("item-variant-custom-size")) $("item-variant-custom-size").value = "";
+  paintGarmentVariantEditor();
+});
+$("item-variant-grid")?.addEventListener("input", () => readGarmentVariantCells());
 $("bill-scan-code")?.addEventListener("input", () => {
   syncCounterQuery($("bill-scan-code").value, $("bill-scan-code"));
   scheduleBarcodeAutoSearch($("bill-scan-code"));
@@ -12551,6 +12917,24 @@ $("item-form").addEventListener("submit", async (e) => {
     status: itemStatusOf($("item-status")?.value),
     image_url: state.itemImage || "",
   };
+  if (isApparelShop()) {
+    readGarmentVariantCells();
+    const rows = garmentCounterApi()?.rowsFromDraft?.(state.garmentVariants) || [];
+    if (rows.length) {
+      try {
+        body.variants = garmentCounterApi().normalizeVariants(rows);
+        body.barcode = "";
+        body.color = body.variants[0].color || "";
+        body.size = body.variants.length === 1 ? body.variants[0].size : "";
+      } catch (err) {
+        $("item-hint").textContent = err.message;
+        $("item-hint").className = "hint error";
+        itemFormBusy = false;
+        if (saveBtn) saveBtn.disabled = false;
+        return;
+      }
+    }
+  }
   if (isPharmacyShop()) {
     body.generic_name = $("item-local-name")?.value || "";
     body.medicine_type = $("item-type")?.value || "";

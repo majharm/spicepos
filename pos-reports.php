@@ -368,12 +368,19 @@ function pos_build_reports($bid, $from, $to) {
   }
   $dailySales = pos_summarize_daily_sales($sales ?: [], $refunds);
   $byItem = pos_q(
-    "SELECT l.item_name, SUM(l.quantity_gm) AS quantity_gm, SUM(l.amount) AS amount,
+    "SELECT l.item_name,
+            COALESCE(NULLIF(TRIM(l.color), ''), NULLIF(TRIM(i.color), ''), '') AS color,
+            COALESCE(NULLIF(TRIM(l.size), ''), NULLIF(TRIM(i.size), ''), '') AS size,
+            SUM(l.quantity_gm) AS quantity_gm, SUM(l.amount) AS amount,
             SUM(l.amount * l.gst_rate / 100) AS gst
      FROM sales_order_lines l
      JOIN sales_orders o ON o.id = l.order_id
+     LEFT JOIN items i ON i.id = l.item_id
      WHERE o.business_id = ? AND " . pos_created_between("o") . " AND l.cancelled = 0
-     GROUP BY l.item_name ORDER BY amount DESC",
+     GROUP BY l.item_name,
+              COALESCE(NULLIF(TRIM(l.color), ''), NULLIF(TRIM(i.color), ''), ''),
+              COALESCE(NULLIF(TRIM(l.size), ''), NULLIF(TRIM(i.size), ''), '')
+     ORDER BY amount DESC",
     "sss",
     [$bid, $start, $end]
   );
@@ -424,7 +431,7 @@ function pos_build_reports($bid, $from, $to) {
     [$bid, $start, $end]
   );
   $stock = pos_q(
-    "SELECT code, name, hsn, local_name, category, subcategory, stock_gm, reorder_level_gm,
+    "SELECT code, name, hsn, local_name, category, subcategory, color, size, stock_gm, reorder_level_gm,
             retail_rate, b2b_rate, purchase_rate, gst_rate
      FROM items WHERE business_id = ? ORDER BY name",
     "s",
@@ -708,8 +715,11 @@ function pos_reports_to_sheets($data, $biz = null) {
     ],
     [
       "name" => "Item sales",
-      "headers" => ["Item", "Qty g", "Amount", "GST"],
-      "rows" => array_map(function ($r) use ($num) {
+      "headers" => (function_exists("pos_is_apparel_shop") && pos_is_apparel_shop($biz)) ? ["Item", "Colour", "Size", "Qty g", "Amount", "GST"] : ["Item", "Qty g", "Amount", "GST"],
+      "rows" => array_map(function ($r) use ($num, $biz) {
+        if (function_exists("pos_is_apparel_shop") && pos_is_apparel_shop($biz)) {
+          return [$r["item_name"], $r["color"] ?? "", $r["size"] ?? "", $num($r["quantity_gm"]), $num($r["amount"]), $num($r["gst"])];
+        }
         return [$r["item_name"], $num($r["quantity_gm"]), $num($r["amount"]), $num($r["gst"])];
       }, $data["byItem"] ?? []),
     ],
@@ -811,8 +821,17 @@ function pos_reports_to_sheets($data, $biz = null) {
     ],
     [
       "name" => "Stock",
-      "headers" => ["Code", "Name", $tax, "Category", "Subcategory", "Stock g", "Reorder g", "Retail", "B2B", "Purchase", "GST %"],
-      "rows" => array_map(function ($i) use ($num) {
+      "headers" => (function_exists("pos_is_apparel_shop") && pos_is_apparel_shop($biz))
+        ? ["Code", "Name", $tax, "Category", "Subcategory", "Colour", "Size", "Stock g", "Reorder g", "Retail", "B2B", "Purchase", "GST %"]
+        : ["Code", "Name", $tax, "Category", "Subcategory", "Stock g", "Reorder g", "Retail", "B2B", "Purchase", "GST %"],
+      "rows" => array_map(function ($i) use ($num, $biz) {
+        if (function_exists("pos_is_apparel_shop") && pos_is_apparel_shop($biz)) {
+          return [
+            $i["code"], $i["name"], $i["hsn"], $i["category"], $i["subcategory"], $i["color"] ?? "", $i["size"] ?? "",
+            $num($i["stock_gm"]), $num($i["reorder_level_gm"]), $num($i["retail_rate"]), $num($i["b2b_rate"]),
+            $num($i["purchase_rate"]), $num($i["gst_rate"]),
+          ];
+        }
         return [
           $i["code"], $i["name"], $i["hsn"], $i["category"], $i["subcategory"],
           $num($i["stock_gm"]), $num($i["reorder_level_gm"]), $num($i["retail_rate"]), $num($i["b2b_rate"]),

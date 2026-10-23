@@ -2,12 +2,13 @@ import "../js/payment-methods.js";
 import "../js/units.js";
 import "../js/footwear.js";
 import "../js/garment-purchase.js";
+import "../js/garment-counter.js";
 import { query, withTransaction } from "./db.js";
 import { bid, authUser } from "./context.js";
 import { recordCreditPurchase, reverseCreditSale, recomputeCustomerOutstanding, settleCustomerInvoice, invoiceOpenDueByCustomer, hydrateCustomerOutstandingRows, persistHydratedOutstanding, collectOrderPayment } from "./accounts.js";
 import { postPurchaseJournal, deleteJournalRef } from "./accounting.js";
 import { audit } from "./audit.js";
-import { onItemSaved, onPurchaseLineSaved, pharmacyLineSnapshot, computeSaleLine, saleStockQty, persistSaleLineNote, persistPrintSaleLine, reverseLoyaltyOnSale } from "./advanced.js";
+import { onItemSaved, onPurchaseLineSaved, pharmacyLineSnapshot, computeSaleLine, saleStockQty, persistSaleLineNote, persistPrintSaleLine, reverseLoyaltyOnSale, assertApparelSaleStock } from "./advanced.js";
 import {
   decodeImportUpload,
   itemBodyFromImportRow,
@@ -19,6 +20,7 @@ import {
 const POSUnits = globalThis.POSUnits;
 const POSFootwear = globalThis.POSFootwear;
 const POSGarmentPurchase = globalThis.POSGarmentPurchase;
+const POSGarmentCounter = globalThis.POSGarmentCounter;
 
 function rate4(n) {
   return POSUnits?.roundRate8 ? POSUnits.roundRate8(n) : Math.round((Number(n) || 0) * 1e8) / 1e8;
@@ -30,6 +32,177 @@ function itemStatus(raw) {
 
 export function itemBillName(item) {
   return POSFootwear.billName(item);
+}
+
+export async function stampSaleLineVariant(conn, lineId, item) {
+  const size = POSGarmentPurchase?.normalizeSize?.(item?.size) || String(item?.size || "").trim();
+  const color = String(item?.color || "").trim();
+  if (!lineId || (!size && !color)) return;
+  try {
+    await conn.query("UPDATE sales_order_lines SET size=?, color=? WHERE id=?", [size || null, color || null, lineId]);
+  } catch {
+    /* optional columns */
+  }
+}
+
+function apparelVariantMatrix(biz, body) {
+  if (!POSFootwear?.isApparelShop?.(biz)) return null;
+  if (!Array.isArray(body?.variants) || !body.variants.length) return null;
+  return POSGarmentCounter.normalizeVariants(body.variants);
+}
+
+async function insertApparelVariant(conn, biz, body, variant, imageUrl) {
+  const n = await nextSeq(conn, "item", 7);
+  const prefix = POSFootwear.itemPrefix(biz || {});
+  const code = variant.code || `${prefix}-${String(n).padStart(3, "0")}`;
+  const id = crypto.randomUUID();
+  const wearer = POSFootwear.fieldsFromBody(body).wearer_type;
+  const unit = itemUnit(body.base_unit || body.unit || POSFootwear.defaultUnit(biz || {}));
+  const retail = variant.retail_rate == null ? rate4(body.retail_rate) : rate4(variant.retail_rate);
+  const b2b = rate4(body.b2b_rate || retail);
+  await conn.query(
+    `INSERT INTO items (
+       id, code, name, local_name, category, subcategory, color, size, wearer_type, base_unit,
+       purchase_rate, retail_rate, b2b_rate, gst_rate, hsn, image_url, stock_gm,
+       reorder_level_gm, status, business_id
+     ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    [
+      id,
+      code,
+      String(body.name).trim(),
+      body.local_name || null,
+      body.category || POSFootwear.defaultCategory(biz || {}),
+      body.subcategory || null,
+      variant.color || null,
+      variant.size,
+      wearer,
+      unit,
+      rate4(body.purchase_rate),
+      retail,
+      b2b,
+      Number(body.gst_rate) || 5,
+      String(body.hsn || "").trim() || null,
+      imageUrl === undefined || imageUrl === "" ? null : imageUrl,
+      Number(variant.stock_gm) || 0,
+      Number(body.reorder_level_gm) || 0,
+      itemStatus(body.status),
+      bid(),
+    ],
+  );
+  try {
+    await conn.query("UPDATE items SET unit=? WHERE id=?", [unit, id]);
+  } catch {
+    /* optional */
+  }
+  await onItemSaved(conn, bid(), id, {
+    ...body,
+    barcode: variant.barcode || "",
+    size: variant.size,
+    color: variant.color,
+    barcode_qty: 0,
+    barcodes: [],
+    barcode_list: [],
+  });
+  const [rows] = await conn.query("SELECT * FROM items WHERE id=?", [id]);
+  return rows[0];
+}
+
+async function updateApparelVariant(conn, biz, existing, body, variant, imageUrl) {
+  const wearer = POSFootwear.fieldsFromBody(body).wearer_type;
+  const unit = itemUnit(body.base_unit || body.unit || existing.base_unit || existing.unit);
+  const retail = variant.retail_rate == null ? rate4(body.retail_rate) : rate4(variant.retail_rate);
+  const b2b = rate4(body.b2b_rate || retail);
+  const params = [
+    String(body.name || existing.name).trim(),
+    body.local_name || body.generic_name || null,
+    body.category || POSFootwear.defaultCategory(biz || {}),
+    body.subcategory || null,
+    variant.color || null,
+    variant.size,
+    wearer,
+    unit,
+    rate4(body.purchase_rate),
+    retail,
+    b2b,
+    Number(body.gst_rate) || 5,
+    String(body.hsn || "").trim() || null,
+    Number(variant.stock_gm) || 0,
+    Number(body.reorder_level_gm) || Number(existing.reorder_level_gm) || 0,
+    itemStatus(body.status),
+  ];
+  let imageSql = "";
+  if (imageUrl !== undefined) {
+    imageSql = ", image_url=?";
+    params.push(imageUrl === "" ? null : imageUrl);
+  }
+  params.push(existing.id, bid());
+  await conn.query(
+    `UPDATE items SET
+       name=?, local_name=?, category=?, subcategory=?, color=?, size=?, wearer_type=?, base_unit=?,
+       purchase_rate=?, retail_rate=?, b2b_rate=?, gst_rate=?, hsn=?,
+       stock_gm=?, reorder_level_gm=?, status=?${imageSql}
+     WHERE id=? AND business_id=?`,
+    params,
+  );
+  try {
+    await conn.query("UPDATE items SET unit=? WHERE id=?", [unit, existing.id]);
+  } catch {
+    /* optional */
+  }
+  await onItemSaved(conn, bid(), existing.id, {
+    ...body,
+    barcode: variant.barcode || "",
+    size: variant.size,
+    color: variant.color,
+    barcode_qty: 0,
+    barcodes: [],
+    barcode_list: [],
+  });
+  const [rows] = await conn.query("SELECT * FROM items WHERE id=?", [existing.id]);
+  return rows[0];
+}
+
+async function saveApparelVariantMatrix(conn, biz, anchorId, body, matrix, imageUrl) {
+  let anchor = null;
+  if (anchorId) {
+    const [rows] = await conn.query("SELECT * FROM items WHERE id=? AND business_id=?", [anchorId, bid()]);
+    anchor = rows[0] || null;
+    if (!anchor) throw new Error("Item not found");
+  }
+  const oldName = anchor?.name || String(body.name || "").trim();
+  const oldWearer = anchor?.wearer_type || "";
+  const [family] = anchor
+    ? await conn.query(
+        `SELECT * FROM items WHERE business_id=? AND name=? AND COALESCE(wearer_type,'')=?`,
+        [bid(), oldName, oldWearer || ""],
+      )
+    : [[]];
+  const byId = new Map((family || []).map((row) => [row.id, row]));
+  const kept = new Set();
+  const saved = [];
+  for (const variant of matrix) {
+    let existing = variant.id && byId.has(variant.id) ? byId.get(variant.id) : null;
+    if (!existing) {
+      existing = (family || []).find(
+        (row) =>
+          (POSGarmentPurchase?.sizesEqual?.(row.size, variant.size) || garmentSizeOf(row) === variant.size) &&
+          String(row.color || "").trim().toLowerCase() === String(variant.color || "").trim().toLowerCase(),
+      ) || null;
+    }
+    const row = existing
+      ? await updateApparelVariant(conn, biz, existing, body, variant, imageUrl)
+      : await insertApparelVariant(conn, biz, body, variant, imageUrl);
+    if (row?.id) {
+      kept.add(row.id);
+      saved.push(row);
+    }
+  }
+  for (const row of family || []) {
+    if (!kept.has(row.id)) {
+      await conn.query("UPDATE items SET status='inactive' WHERE id=? AND business_id=?", [row.id, bid()]);
+    }
+  }
+  return saved;
 }
 
 export function itemUnit(item) {
@@ -553,6 +726,8 @@ export function registerCrud(app) {
     try {
       const items = await withTransaction(async (conn) => {
         const [bizRows] = await conn.query("SELECT category, business_type FROM businesses WHERE id = ?", [bid()]);
+        const matrix = apparelVariantMatrix(bizRows[0] || {}, b);
+        if (matrix) return saveApparelVariantMatrix(conn, bizRows[0] || {}, "", b, matrix, imageUrl);
         const variants = POSFootwear.fieldsFromBody(b);
         const prefix = POSFootwear.itemPrefix(bizRows[0] || {});
         const sizesToCreate = POSFootwear.isVariantShop(bizRows[0] || {}) && variants.sizes?.length > 1 ? variants.sizes : [variants.size];
@@ -612,8 +787,15 @@ export function registerCrud(app) {
       return;
     }
     try {
-      const variants = POSFootwear.fieldsFromBody(b);
       const [bizRows] = await query("SELECT category, business_type FROM businesses WHERE id = ?", [bid()]);
+      const matrix = apparelVariantMatrix(bizRows[0] || {}, b);
+      if (matrix) {
+        const saved = await withTransaction((conn) => saveApparelVariantMatrix(conn, bizRows[0] || {}, req.params.id, b, matrix, imageUrl));
+        const item = saved.find((row) => row.id === req.params.id) || saved[0] || null;
+        res.json({ ok: true, item, items: saved, created_count: saved.length });
+        return;
+      }
+      const variants = POSFootwear.fieldsFromBody(b);
       const [existing] = await query("SELECT reorder_level_gm FROM items WHERE id=? AND business_id=? LIMIT 1", [req.params.id, bid()]);
       const reorder = Object.prototype.hasOwnProperty.call(b, "reorder_level_gm")
         ? Number(b.reorder_level_gm) || 0
@@ -970,6 +1152,7 @@ export function registerCrud(app) {
           if (!Number.isFinite(qty) || qty <= 0) throw new Error("Invalid quantity");
           built.push(computeSaleLine(item, customer, line));
         }
+        await assertApparelSaleStock(conn, bid(), built);
         const D = globalThis.POSDiscount;
         const bill = D
           ? D.computeBill(built, {
@@ -1122,6 +1305,7 @@ export function registerCrud(app) {
             }
             await persistSaleLineNote(conn, lineId, line.notes);
             await persistPrintSaleLine(conn, lineId, line, bid());
+            await stampSaleLineVariant(conn, lineId, line.item);
             await conn.query(
               "UPDATE items SET stock_gm = stock_gm - ? WHERE id = ? AND business_id = ?",
               [saleStockQty(line.item, line.qty), line.item.id, bid()],
@@ -1242,11 +1426,20 @@ export function registerCrud(app) {
             "SELECT * FROM sales_order_lines WHERE order_id = ?",
             [existing.id],
           );
+          const reopen = [];
           for (const line of allLines) {
             const [itemRows] = await conn.query("SELECT * FROM items WHERE id = ? AND business_id = ?", [line.item_id, bid()]);
+            reopen.push({
+              item: itemRows[0] || { id: line.item_id, name: line.item_name, size: line.size, color: line.color },
+              qty: line.quantity_gm,
+            });
+          }
+          await assertApparelSaleStock(conn, bid(), reopen);
+          for (const line of allLines) {
+            const match = reopen.find((row) => row.item?.id === line.item_id) || reopen[0];
             await conn.query(
               "UPDATE items SET stock_gm = stock_gm - ? WHERE id = ? AND business_id = ?",
-              [saleStockQty(itemRows[0], line.quantity_gm), line.item_id, bid()],
+              [saleStockQty(match?.item, line.quantity_gm), line.item_id, bid()],
             );
             await conn.query("UPDATE sales_order_lines SET cancelled = 0 WHERE id = ?", [line.id]);
           }

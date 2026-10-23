@@ -55,6 +55,48 @@ test("reportsToSheets includes GST summary and IGST columns", () => {
   assert.equal(sheets.find((s) => s.name === "Summary").rows[0][2], 0);
 });
 
+test("apparel item sales and stock sheets include colour and size", () => {
+  const data = {
+    ...emptyReports("2026-10-01", "2026-10-23"),
+    byItem: [{ item_name: "Cotton Kurti", color: "Pink", size: "M", quantity_gm: 2, amount: 1698, gst: 84.9 }],
+    stock: [{
+      code: "AP-001",
+      name: "Cotton Kurti",
+      hsn: "6204",
+      category: "Kurtis",
+      subcategory: "Cotton",
+      color: "Pink",
+      size: "M",
+      stock_gm: 5,
+      reorder_level_gm: 1,
+      retail_rate: 849,
+      b2b_rate: 700,
+      purchase_rate: 400,
+      gst_rate: 5,
+    }],
+  };
+  const apparel = reportsToSheets(data, { business_type: "Garment & Fashion" });
+  const items = apparel.find((s) => s.name === "Item sales");
+  assert.deepEqual(items.headers, ["Item", "Colour", "Size", "Qty g", "Amount", "GST"]);
+  assert.equal(items.rows[0][0], "Cotton Kurti");
+  assert.equal(items.rows[0][1], "Pink");
+  assert.equal(items.rows[0][2], "M");
+  assert.equal(items.rows[0][3], 2);
+  const stock = apparel.find((s) => s.name === "Stock");
+  assert.equal(stock.headers[2], "HSN");
+  assert.equal(stock.headers[5], "Colour");
+  assert.equal(stock.headers[6], "Size");
+  assert.equal(stock.rows[0][5], "Pink");
+  assert.equal(stock.rows[0][6], "M");
+  const pharmacy = reportsToSheets(data, { business_type: "Pharmacy" });
+  assert.deepEqual(pharmacy.find((s) => s.name === "Item sales").headers, ["Item", "Qty g", "Amount", "GST"]);
+  assert.equal(pharmacy.find((s) => s.name === "Item sales").rows[0][0], "Cotton Kurti");
+  assert.equal(pharmacy.find((s) => s.name === "Stock").headers.includes("Colour"), false);
+  assert.equal(pharmacy.find((s) => s.name === "Stock").headers[2], "HSN");
+  const restaurant = reportsToSheets(emptyReports("2026-10-01", "2026-10-23"), { business_type: "Restaurant" });
+  assert.deepEqual(restaurant.find((s) => s.name === "Item sales").headers, ["Item", "Qty g", "Amount", "GST"]);
+});
+
 test("GST daywise sheet uses YYYY-MM-DD not a Date string", () => {
   const sheets = reportsToSheets({
     ...emptyReports("2026-08-01", "2026-08-30"),

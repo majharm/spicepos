@@ -1793,6 +1793,8 @@ function pos_ensure_sales_schema() {
       "print_file_name" => "VARCHAR(255) NULL",
       "print_area" => "DECIMAL(14,4) NOT NULL DEFAULT 0",
       "print_custom_unit" => "VARCHAR(32) NULL",
+      "size" => "VARCHAR(32) NULL",
+      "color" => "VARCHAR(64) NULL",
     ]);
     pos_ensure_columns("sales_orders", [
       "extra_charges" => "DECIMAL(12,2) NOT NULL DEFAULT 0",

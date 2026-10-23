@@ -1,5 +1,176 @@
 <?php
 
+function pos_garment_variant_matrix($body) {
+  $rows = $body["variants"] ?? null;
+  if (!is_array($rows) || !$rows) return [];
+  $out = [];
+  $seen = [];
+  $bars = [];
+  foreach ($rows as $raw) {
+    if (!is_array($raw)) continue;
+    $size = function_exists("pos_garment_normalize_size") ? pos_garment_normalize_size($raw["size"] ?? "") : strtoupper(trim((string) ($raw["size"] ?? "")));
+    if ($size === "") continue;
+    $color = trim((string) ($raw["color"] ?? ""));
+    $key = strtolower($color) . "|" . $size;
+    if (isset($seen[$key])) throw new Exception("Duplicate variant " . trim($color . " " . $size));
+    $seen[$key] = true;
+    $barcode = trim((string) ($raw["barcode"] ?? ""));
+    if ($barcode !== "") {
+      $bk = strtolower($barcode);
+      if (isset($bars[$bk])) throw new Exception("Duplicate barcode " . $barcode);
+      $bars[$bk] = true;
+    }
+    $price = $raw["retail_rate"] ?? null;
+    if ($price === "") $price = null;
+    if ($price !== null && (float) $price < 0) throw new Exception("Invalid price for " . $size);
+    $out[] = [
+      "id" => trim((string) ($raw["id"] ?? "")),
+      "size" => $size,
+      "color" => $color,
+      "barcode" => $barcode,
+      "code" => substr(trim((string) ($raw["code"] ?? "")), 0, 64),
+      "stock_gm" => max(0, (float) ($raw["stock_gm"] ?? 0)),
+      "retail_rate" => $price === null ? null : (function_exists("pos_round8") ? pos_round8($price) : (float) $price),
+    ];
+  }
+  if (!$out) throw new Exception("Choose at least one size");
+  return $out;
+}
+
+function pos_insert_apparel_variant($bid, $biz, $body, $variant, $image) {
+  $id = pos_uuid();
+  $n = pos_next_seq("item", $bid, 7);
+  $code = $variant["code"] !== "" ? $variant["code"] : (pos_item_code_prefix($biz) . str_pad((string) $n, 3, "0", STR_PAD_LEFT));
+  $unitRaw = trim((string) ($body["base_unit"] ?? $body["unit"] ?? ""));
+  $unit = pos_item_unit($unitRaw !== "" ? $unitRaw : pos_default_item_unit($biz));
+  $wearer = pos_item_wearer($body["wearer_type"] ?? "") ?: null;
+  $retail = $variant["retail_rate"] === null ? pos_round8($body["retail_rate"] ?? 0) : $variant["retail_rate"];
+  $b2b = pos_round8($body["b2b_rate"] ?? $retail);
+  $category = trim((string) ($body["category"] ?? "")) ?: pos_default_item_category($biz);
+  pos_q(
+    "INSERT INTO items (
+       id, code, name, local_name, category, subcategory, color, size, wearer_type, base_unit,
+       purchase_rate, retail_rate, b2b_rate, gst_rate, hsn, image_url, stock_gm,
+       reorder_level_gm, status, business_id
+     ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+    "ssssssssssddddssddss",
+    [
+      $id, $code, trim((string) ($body["name"] ?? "")), $body["local_name"] ?? null, $category,
+      $body["subcategory"] ?? null, $variant["color"] !== "" ? $variant["color"] : null, $variant["size"], $wearer, $unit,
+      pos_round8($body["purchase_rate"] ?? 0), $retail, $b2b, (float) ($body["gst_rate"] ?? 5),
+      trim((string) ($body["hsn"] ?? "")) ?: null,
+      ($image === null || $image === "") ? null : $image,
+      (float) $variant["stock_gm"], (float) ($body["reorder_level_gm"] ?? 0),
+      pos_item_status($body["status"] ?? "active"), $bid,
+    ]
+  );
+  try { pos_q("UPDATE items SET unit = ? WHERE id = ?", "ss", [$unit, $id]); } catch (Exception $e) { /* optional */ }
+  $savedBody = $body;
+  $savedBody["barcode"] = $variant["barcode"];
+  $savedBody["size"] = $variant["size"];
+  $savedBody["color"] = $variant["color"];
+  $savedBody["barcode_qty"] = 0;
+  if (function_exists("pos_assign_item_barcodes")) pos_assign_item_barcodes($bid, $id, $savedBody);
+  if (function_exists("pos_save_item_brand")) pos_save_item_brand($bid, $id, $savedBody);
+  if (array_key_exists("mrp", $body)) {
+    try { pos_q("UPDATE items SET mrp = ? WHERE id = ?", "ds", [pos_round8($body["mrp"]), $id]); } catch (Exception $e) { /* optional */ }
+  }
+  $rows = pos_q("SELECT * FROM items WHERE id = ? LIMIT 1", "s", [$id]);
+  return $rows[0] ?? ["id" => $id];
+}
+
+function pos_update_apparel_variant($bid, $biz, $existing, $body, $variant, $image) {
+  $unitRaw = trim((string) ($body["base_unit"] ?? $body["unit"] ?? ""));
+  $unit = pos_item_unit($unitRaw !== "" ? $unitRaw : ($existing["base_unit"] ?? $existing["unit"] ?? "PCS"));
+  $wearer = pos_item_wearer($body["wearer_type"] ?? "") ?: null;
+  $retail = $variant["retail_rate"] === null ? pos_round8($body["retail_rate"] ?? 0) : $variant["retail_rate"];
+  $b2b = pos_round8($body["b2b_rate"] ?? $retail);
+  $category = trim((string) ($body["category"] ?? "")) ?: pos_default_item_category($biz);
+  $imageSql = "";
+  $imageType = "";
+  $imageVal = [];
+  if ($image !== null) {
+    $imageSql = ", image_url=?";
+    $imageType = "s";
+    $imageVal = [$image === "" ? null : $image];
+  }
+  pos_q(
+    "UPDATE items SET name=?, local_name=?, category=?, subcategory=?, color=?, size=?, wearer_type=?, base_unit=?,
+       purchase_rate=?, retail_rate=?, b2b_rate=?, gst_rate=?, hsn=?, stock_gm=?, reorder_level_gm=?, status=?{$imageSql}
+     WHERE id=? AND business_id=?",
+    "ssssssssddddsdds{$imageType}ss",
+    array_merge(
+      [
+        trim((string) ($body["name"] ?? $existing["name"] ?? "")), $body["local_name"] ?? null, $category,
+        $body["subcategory"] ?? null, $variant["color"] !== "" ? $variant["color"] : null, $variant["size"], $wearer, $unit,
+        pos_round8($body["purchase_rate"] ?? 0), $retail, $b2b, (float) ($body["gst_rate"] ?? 5),
+        trim((string) ($body["hsn"] ?? "")) ?: null,
+        (float) $variant["stock_gm"], (float) ($body["reorder_level_gm"] ?? ($existing["reorder_level_gm"] ?? 0)),
+        pos_item_status($body["status"] ?? "active"),
+      ],
+      $imageVal,
+      [$existing["id"], $bid]
+    )
+  );
+  try { pos_q("UPDATE items SET unit = ? WHERE id = ?", "ss", [$unit, $existing["id"]]); } catch (Exception $e) { /* optional */ }
+  $savedBody = $body;
+  $savedBody["barcode"] = $variant["barcode"];
+  $savedBody["size"] = $variant["size"];
+  $savedBody["color"] = $variant["color"];
+  $savedBody["barcode_qty"] = 0;
+  if (function_exists("pos_assign_item_barcodes")) pos_assign_item_barcodes($bid, $existing["id"], $savedBody);
+  if (function_exists("pos_save_item_brand")) pos_save_item_brand($bid, $existing["id"], $savedBody);
+  $rows = pos_q("SELECT * FROM items WHERE id = ? LIMIT 1", "s", [$existing["id"]]);
+  return $rows[0] ?? $existing;
+}
+
+function pos_save_garment_variant_matrix($bid, $biz, $anchorId, $body, $matrix, $image) {
+  $anchor = null;
+  $family = [];
+  if ($anchorId !== "") {
+    $found = pos_q("SELECT * FROM items WHERE id = ? AND business_id = ? LIMIT 1", "ss", [$anchorId, $bid]);
+    $anchor = $found[0] ?? null;
+    if (!$anchor) throw new Exception("Item not found");
+    $family = pos_q(
+      "SELECT * FROM items WHERE business_id = ? AND name = ? AND COALESCE(wearer_type,'') = ?",
+      "sss",
+      [$bid, $anchor["name"], $anchor["wearer_type"] ?? ""]
+    );
+  }
+  $byId = [];
+  foreach ($family as $row) $byId[$row["id"]] = $row;
+  $kept = [];
+  $saved = [];
+  foreach ($matrix as $variant) {
+    $existing = ($variant["id"] !== "" && isset($byId[$variant["id"]])) ? $byId[$variant["id"]] : null;
+    if (!$existing) {
+      foreach ($family as $row) {
+        $sameSize = function_exists("pos_garment_sizes_equal")
+          ? pos_garment_sizes_equal($row["size"] ?? "", $variant["size"])
+          : strtoupper(trim((string) ($row["size"] ?? ""))) === $variant["size"];
+        $sameColor = strtolower(trim((string) ($row["color"] ?? ""))) === strtolower($variant["color"]);
+        if ($sameSize && $sameColor) {
+          $existing = $row;
+          break;
+        }
+      }
+    }
+    $row = $existing
+      ? pos_update_apparel_variant($bid, $biz, $existing, $body, $variant, $image)
+      : pos_insert_apparel_variant($bid, $biz, $body, $variant, $image);
+    if (!empty($row["id"])) {
+      $kept[$row["id"]] = true;
+      $saved[] = $row;
+    }
+  }
+  foreach ($family as $row) {
+    if (empty($kept[$row["id"]])) {
+      pos_q("UPDATE items SET status = 'inactive' WHERE id = ? AND business_id = ?", "ss", [$row["id"], $bid]);
+    }
+  }
+  return $saved;
+}
+
 function pos_normalize_pack_items($items) {
   if (!is_array($items)) return [];
   $out = [];
@@ -218,6 +389,21 @@ function pos_crud_dispatch($path, $method, $body, $bid, $auth, $branchId, $uid) 
       }
     }
     $sizesList = array_values(array_unique($sizesList));
+    $matrix = [];
+    if (function_exists("pos_is_apparel_shop") && pos_is_apparel_shop($biz) && !empty($body["variants"]) && is_array($body["variants"])) {
+      $matrix = pos_garment_variant_matrix($body);
+    }
+    if ($matrix) {
+      if (is_file(__DIR__ . "/pos-advanced.php")) require_once __DIR__ . "/pos-advanced.php";
+      if (is_file(__DIR__ . "/pos-brands.php")) require_once __DIR__ . "/pos-brands.php";
+      $createdItems = pos_save_garment_variant_matrix($bid, $biz, "", $body, $matrix, $image);
+      pos_send(200, [
+        "ok" => true,
+        "item" => $createdItems[0] ?? null,
+        "items" => $createdItems,
+        "created_count" => count($createdItems),
+      ]);
+    }
     $sizesToCreate = ($variant && count($sizesList) > 1) ? $sizesList : [count($sizesList) === 1 ? $sizesList[0] : (trim((string) ($body["size"] ?? "")) ?: null)];
     $wearer = pos_item_wearer($body["wearer_type"] ?? "") ?: null;
     $category = trim((string) ($body["category"] ?? "")) ?: pos_default_item_category($biz);
@@ -283,6 +469,17 @@ function pos_crud_dispatch($path, $method, $body, $bid, $auth, $branchId, $uid) 
     $unitRaw = trim((string) ($body["base_unit"] ?? $body["unit"] ?? ""));
     $unit = pos_item_unit($unitRaw !== "" ? $unitRaw : pos_default_item_unit($biz));
     $image = pos_item_image_url($body);
+    if (function_exists("pos_is_apparel_shop") && pos_is_apparel_shop($biz) && !empty($body["variants"]) && is_array($body["variants"])) {
+      if (is_file(__DIR__ . "/pos-advanced.php")) require_once __DIR__ . "/pos-advanced.php";
+      if (is_file(__DIR__ . "/pos-brands.php")) require_once __DIR__ . "/pos-brands.php";
+      $matrix = pos_garment_variant_matrix($body);
+      $saved = pos_save_garment_variant_matrix($bid, $biz, $itemId, $body, $matrix, $image);
+      $item = null;
+      foreach ($saved as $row) {
+        if (($row["id"] ?? "") === $itemId) $item = $row;
+      }
+      pos_send(200, ["ok" => true, "item" => $item ?: ($saved[0] ?? null), "items" => $saved]);
+    }
     $color = trim((string) ($body["color"] ?? "")) ?: null;
     $size = trim((string) ($body["size"] ?? "")) ?: null;
     $wearer = pos_item_wearer($body["wearer_type"] ?? "") ?: null;

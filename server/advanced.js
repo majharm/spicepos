@@ -560,7 +560,7 @@ export async function onItemSaved(conn, businessId, itemId, body = {}) {
   const item = await sqlOne(conn, "SELECT * FROM items WHERE id = ? AND business_id = ?", [itemId, businessId]);
   const own = barcodeText(body.barcode || "");
   const mfr = barcodeText(body.mfr_barcode || body.manufacturer_barcode || "");
-  if (own) await attachItemBarcode(conn, businessId, itemId, own, "own", true);
+  if (own) await attachItemBarcode(conn, businessId, itemId, own, "own", true, { size: body.size, color: body.color });
   else if (own === "" && Object.prototype.hasOwnProperty.call(body, "barcode")) {
     try {
       await sqlExec(conn, "UPDATE items SET barcode = NULL WHERE id = ? AND business_id = ?", [itemId, businessId]);

@@ -218,6 +218,8 @@
           item_name: l.item_name || item?.name || "Item",
           local_name: l.local_name || item?.local_name || "",
           name: l.item_name || item?.name || "Item",
+          size: l.size || item?.size || "",
+          color: l.color || item?.color || "",
           hsn: item?.hsn || l.hsn || item?.code || "—",
           quantity_gm: qty,
           rate_per_kg: num(l.rate_per_kg),
@@ -623,6 +625,18 @@ ${purchaseBody(purchase, ctx)}
     return l.item_name || l.name || "Item";
   }
 
+  function garmentSaleNote(l) {
+    if (globalThis.POSGarmentCounter?.invoiceNote) return globalThis.POSGarmentCounter.invoiceNote(l);
+    const color = String(l?.color || "").trim();
+    const size = String(l?.size || "").trim();
+    if (!color && !size) return "";
+    const name = String(l?.item_name || l?.name || "").toLowerCase();
+    const bits = [];
+    if (color && !name.includes(color.toLowerCase())) bits.push(color);
+    if (size && !name.includes(size.toLowerCase()) && !name.includes(`sz ${size.toLowerCase()}`)) bits.push(`Size ${size}`);
+    return bits.join(" · ");
+  }
+
   function ymdFromValue(raw) {
     if (raw == null || raw === "") return "";
     if (raw instanceof Date && !Number.isNaN(raw.getTime())) {
@@ -900,9 +914,11 @@ ${purchaseBody(purchase, ctx)}
           .map((l, i) => {
             const caption = printBill ? printLineCaption(l) : "";
             const desc = lineDescriptionText(l);
+            const variantNote = garmentSaleNote(l);
             return `<tr>
         <td class="inv-item" colspan="4">${i + 1}. ${escapeHtml(lineName(l, ctx))}</td>
       </tr>
+      ${variantNote ? `<tr class="inv-tax"><td colspan="4">${escapeHtml(variantNote)}</td></tr>` : ""}
       ${caption ? `<tr class="inv-tax"><td colspan="4">${escapeHtml(caption)}</td></tr>` : ""}
       ${desc ? `<tr class="inv-tax"><td colspan="4">${escapeHtml(desc)}</td></tr>` : ""}
       <tr class="inv-line">
@@ -1180,6 +1196,8 @@ ${invoiceBody(order, ctx)}
           : [`${taxCode(ctx)}: ${l.hsn}`, `GST ${l.gst_rate}%`];
         const caption = printLineCaption(l);
         if (caption) descBits.unshift(caption);
+        const variantNote = garmentSaleNote(l);
+        if (variantNote) descBits.unshift(variantNote);
         const desc = lineDescriptionText(l);
         if (desc) descBits.unshift(desc);
         return `<tr>

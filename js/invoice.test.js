@@ -7,12 +7,14 @@ function loadInvoicePrint() {
   const gst = fs.readFileSync(new URL("./gst-supply.js", import.meta.url), "utf8");
   const units = fs.readFileSync(new URL("./units.js", import.meta.url), "utf8");
   const garment = fs.readFileSync(new URL("./garment-purchase.js", import.meta.url), "utf8");
+  const counter = fs.readFileSync(new URL("./garment-counter.js", import.meta.url), "utf8");
   const code = fs.readFileSync(new URL("./invoice.js", import.meta.url), "utf8");
   const context = { window: {}, console };
   vm.createContext(context);
   vm.runInContext(gst, context);
   vm.runInContext(units, context);
   vm.runInContext(garment, context);
+  vm.runInContext(counter, context);
   vm.runInContext(code, context);
   return context.window.InvoicePrint;
 }
@@ -70,6 +72,41 @@ test("thermal invoice HTML includes tax invoice header and invoice number", () =
   assert.match(html, /CGST/);
   assert.match(html, /SGST/);
   assert.doesNotMatch(html, />VOID</);
+});
+
+test("garment invoices print colour and size on thermal and office copies", () => {
+  const InvoicePrint = loadInvoicePrint();
+  const order = {
+    order_number: "SO-20001",
+    customer_name: "Walk-in",
+    subtotal: 1698,
+    gst: 84.9,
+    total: 1782.9,
+    payment_method: "cash",
+    payment_status: "paid",
+    created_at: "2026-10-23T10:30:00.000Z",
+    lines: [
+      { item_name: "Cotton Kurti", color: "Pink", size: "M", quantity_gm: 2, rate_per_kg: 849, amount: 1698, gst_rate: 5 },
+      { item_name: "Cotton Kurti (Female · Pink · Sz L)", color: "Pink", size: "L", quantity_gm: 1, rate_per_kg: 849, amount: 849, gst_rate: 5 },
+      { item_name: "Rice", quantity_gm: 1000, rate_per_kg: 50, amount: 50, gst_rate: 5 },
+    ],
+  };
+  const ctx = {
+    company: { name: "ATAV Fashions", gstin: "27AABCU9603R1ZX", address: "Pune" },
+    customers: [],
+    items: [],
+    formatDateTime: (v) => String(v),
+    money: (n) => `₹${Number(n).toFixed(2)}`,
+    escapeHtml: (v) => String(v ?? ""),
+  };
+  const thermal = InvoicePrint.invoiceBody(order, ctx);
+  const office = InvoicePrint.officeInvoiceBody(order, ctx);
+  assert.match(thermal, /Cotton Kurti/);
+  assert.match(thermal, /Pink · Size M/);
+  assert.match(office, /Pink · Size M/);
+  assert.match(thermal, /Cotton Kurti \(Female · Pink · Sz L\)/);
+  assert.equal((thermal.match(/Pink · Size M/g) || []).length, 1);
+  assert.doesNotMatch(thermal, /Size Rice|Rice · Size/);
 });
 
 test("cancelled invoices print VOID on thermal and office copies", () => {

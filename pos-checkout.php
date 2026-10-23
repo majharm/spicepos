@@ -1,5 +1,20 @@
 <?php
 
+function pos_stamp_sale_line_variant($lineId, $item) {
+  $size = function_exists("pos_garment_normalize_size")
+    ? pos_garment_normalize_size($item["size"] ?? "")
+    : trim((string) ($item["size"] ?? ""));
+  $color = trim((string) ($item["color"] ?? ""));
+  if ($lineId === "" || ($size === "" && $color === "")) return;
+  try {
+    pos_q(
+      "UPDATE sales_order_lines SET size = ?, color = ? WHERE id = ?",
+      "sss",
+      [$size !== "" ? $size : null, $color !== "" ? $color : null, $lineId]
+    );
+  } catch (Exception $e) { /* optional columns */ }
+}
+
 function pos_assert_apparel_sale_stock($bid, $built) {
   $bizRows = pos_q("SELECT category, business_type, name FROM businesses WHERE id = ? LIMIT 1", "s", [$bid]);
   $biz = $bizRows[0] ?? [];
@@ -210,6 +225,7 @@ function pos_checkout_sale($bid, $branchId, $uid, $auth, $body) {
       }
       if (function_exists("pos_persist_sale_line_note")) pos_persist_sale_line_note($lineId, $line["notes"] ?? "");
       if (function_exists("pos_persist_print_sale_line")) pos_persist_print_sale_line($lineId, $line, $bid);
+      pos_stamp_sale_line_variant($lineId, $line["item"]);
       $firstBatch = null;
       $stockQty = function_exists("pos_pack_stock_qty") ? pos_pack_stock_qty($line["item"], $line["qty"]) : $line["qty"];
       if (function_exists("pos_allocate_batches")) {

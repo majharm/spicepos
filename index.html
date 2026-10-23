@@ -612,6 +612,19 @@
                   <label class="footwear-only" id="item-size-wrap" hidden>Size(s)
                     <input id="item-size" list="size-list" placeholder="e.g. 6, 7, 8 or 5" maxlength="80" />
                   </label>
+                  <fieldset class="item-block apparel-only full" id="item-variant-block" hidden>
+                    <legend>Size &amp; colour variants</legend>
+                    <p class="hint">Choose the sizes this garment uses. Add colours when the same style is sold in more than one colour. Each size keeps its own SKU, barcode, opening stock, and selling price.</p>
+                    <label class="full">Colours
+                      <input id="item-variant-colors" placeholder="Pink, Blue" maxlength="180" autocomplete="off" />
+                    </label>
+                    <div id="item-variant-sizes" class="garment-variant-sizes" role="group" aria-label="Sizes"></div>
+                    <div class="garment-variant-custom">
+                      <input id="item-variant-custom-size" placeholder="Custom size" maxlength="16" />
+                      <button class="btn" type="button" id="item-variant-add-size">Add size</button>
+                    </div>
+                    <div id="item-variant-grid" class="garment-variant-grid"></div>
+                  </fieldset>
                   <datalist id="category-list"></datalist>
                   <datalist id="subcategory-list"></datalist>
                   <datalist id="color-list"></datalist>
@@ -3157,6 +3170,33 @@
         </div>
       </div>
     </div>
+    <div class="modal garment-size-modal" id="garment-size-modal" hidden>
+      <div class="dialog garment-size-dialog" role="dialog" aria-modal="true" aria-labelledby="garment-size-title">
+        <div class="garment-size-head">
+          <div class="garment-size-photo" id="garment-size-photo"></div>
+          <div class="garment-size-copy">
+            <h3 id="garment-size-title">Select size</h3>
+            <p id="garment-size-meta"></p>
+          </div>
+          <button class="btn garment-size-x" type="button" id="garment-size-close" aria-label="Close">×</button>
+        </div>
+        <div id="garment-size-colors" class="garment-size-colors" role="group" aria-label="Colour"></div>
+        <div id="garment-size-sizes" class="garment-size-sizes" role="listbox" aria-label="Size"></div>
+        <div class="garment-size-buy">
+          <div><span>Stock</span><strong id="garment-size-stock">—</strong></div>
+          <div><span>Price</span><strong id="garment-size-price">—</strong></div>
+          <label>Qty
+            <span class="qty garment-size-qty">
+              <button type="button" data-gs-qty="-1" aria-label="Decrease quantity">−</button>
+              <input id="garment-size-qty" type="number" min="1" step="1" value="1" inputmode="numeric" />
+              <button type="button" data-gs-qty="1" aria-label="Increase quantity">+</button>
+            </span>
+          </label>
+        </div>
+        <p class="hint" id="garment-size-hint">Arrow keys change size and colour. Enter adds to the cart.</p>
+        <button class="btn primary" type="button" id="garment-size-add">Add to Cart</button>
+      </div>
+    </div>
     <div class="modal" id="counter-item-modal" hidden>
       <div class="dialog counter-item-dialog" role="dialog" aria-labelledby="counter-item-title">
         <h3 id="counter-item-title">Add item</h3>
@@ -3253,6 +3293,7 @@
     <script src="./js/units.js?v=20260919unit1" defer></script>
     <script src="./js/footwear.js?v=20261012print1" defer></script>
     <script src="./js/garment-purchase.js?v=20261023gar1" defer></script>
+    <script src="./js/garment-counter.js?v=20261023size1" defer></script>
     <script src="./js/restaurant.js?v=20261012set4" defer></script>
     <script src="./js/pay-integrity.js?v=20261012table1" defer></script>
     <script src="./js/aggregator.js?v=20261012agg3" defer></script>

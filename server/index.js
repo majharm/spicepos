@@ -6,7 +6,7 @@ import http from "node:http";
 import { fileURLToPath } from "node:url";
 import { query, withTransaction } from "./db.js";
 import { bid, branchId, authUser } from "./context.js";
-import { lineAmount, round2, registerCrud, itemBillName } from "./crud.js";
+import { lineAmount, round2, registerCrud, itemBillName, stampSaleLineVariant } from "./crud.js";
 import { fyRangeForToday } from "./fy.js";
 import { createdToday, saleNotVoidSql } from "./sql-time.js";
 import { buildReports, reportsToSheets } from "./reports.js";
@@ -1157,6 +1157,7 @@ app.post("/api/checkout", requireStaff, requirePerm("counter"), async (req, res)
         }
         await persistSaleLineNote(conn, lineId, line.notes);
         await persistPrintSaleLine(conn, lineId, line, businessId);
+        await stampSaleLineVariant(conn, lineId, line.item);
       }
 
       try {

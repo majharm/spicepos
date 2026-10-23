@@ -79,6 +79,19 @@ function pos_patch_order($bid, $orderId, $body, $auth) {
     pos_recompute_customer_outstanding($bid, $existing["customer_id"] ?? "");
   } elseif ($oldStatus === "cancelled" && $newStatus !== "cancelled") {
     $allLines = $existing["lines"] ?? [];
+    if (is_file(__DIR__ . "/pos-checkout.php")) require_once __DIR__ . "/pos-checkout.php";
+    if (function_exists("pos_assert_apparel_sale_stock")) {
+      $reopen = [];
+      foreach ($allLines as $l) {
+        $found = pos_q("SELECT * FROM items WHERE id = ? AND business_id = ? LIMIT 1", "ss", [$l["item_id"] ?? "", $bid]);
+        $reopen[] = ["item" => $found[0] ?? ["id" => $l["item_id"] ?? "", "name" => $l["item_name"] ?? "Item", "size" => $l["size"] ?? "", "color" => $l["color"] ?? ""], "qty" => pos_order_line_stock_qty($bid, $l)];
+      }
+      try {
+        pos_assert_apparel_sale_stock($bid, $reopen);
+      } catch (Exception $e) {
+        pos_send(400, ["error" => $e->getMessage(), "php" => true]);
+      }
+    }
     pos_deduct_order_stock($bid, $allLines);
     foreach ($allLines as $l) {
       pos_q("UPDATE sales_order_lines SET cancelled = 0 WHERE id = ?", "s", [$l["id"]]);
@@ -130,8 +143,6 @@ function pos_update_order($bid, $orderId, $body, $auth) {
   $oldActive = array_values(array_filter($existing["lines"] ?? [], function ($l) {
     return ($l["cancelled"] ?? 0) != 1 && ($l["cancelled"] ?? "0") !== "1";
   }));
-  pos_restore_order_stock($bid, $oldActive);
-  pos_q("DELETE FROM sales_order_lines WHERE order_id = ?", "s", [$orderId]);
 
   $customerId = $body["customerId"] ?? $existing["customer_id"];
   $cust = pos_q("SELECT * FROM customers WHERE id = ? AND business_id = ? LIMIT 1", "ss", [$customerId, $bid]);
@@ -158,6 +169,16 @@ function pos_update_order($bid, $orderId, $body, $auth) {
       $built[] = ["item" => $item, "qty" => $qty, "rate" => $rate, "amount" => $amount, "gstRate" => (float) ($item["gst_rate"] ?? 0), "discount" => 0, "gst" => $round(($amount * (float) ($item["gst_rate"] ?? 0)) / 100)];
     }
   }
+
+  pos_restore_order_stock($bid, $oldActive);
+  if (is_file(__DIR__ . "/pos-checkout.php")) require_once __DIR__ . "/pos-checkout.php";
+  try {
+    if (function_exists("pos_assert_apparel_sale_stock")) pos_assert_apparel_sale_stock($bid, $built);
+  } catch (Exception $e) {
+    pos_deduct_order_stock($bid, $oldActive);
+    pos_send(400, ["error" => $e->getMessage(), "php" => true]);
+  }
+  pos_q("DELETE FROM sales_order_lines WHERE order_id = ?", "s", [$orderId]);
 
   $subtotal = pos_round2(array_sum(array_column($built, "amount")));
   $gst = 0;
@@ -258,6 +279,7 @@ function pos_update_order($bid, $orderId, $body, $auth) {
       }
       if (function_exists("pos_persist_sale_line_note")) pos_persist_sale_line_note($lineId, $line["notes"] ?? "");
       if (function_exists("pos_persist_print_sale_line")) pos_persist_print_sale_line($lineId, $line, $bid);
+      if (function_exists("pos_stamp_sale_line_variant")) pos_stamp_sale_line_variant($lineId, $line["item"]);
       pos_q("UPDATE items SET stock_gm = stock_gm - ? WHERE id = ? AND business_id = ?", "dss", [$line["qty"], $line["item"]["id"], $bid]);
     }
   }
