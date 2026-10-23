@@ -191,6 +191,13 @@ test("purchase form and APIs wire garment size matrix without breaking pharmacy"
   assert.match(css, /po-size-matrix/);
   assert.match(app, /function renderClassicPoLines/);
   assert.match(app, /paintGarmentStockList/);
+  assert.match(app, /garment-size-chip/);
+  assert.match(app, /garment-stock-detail/);
+  assert.match(app, /garment-bc-card garment-barcode-row/);
+  assert.match(index, /stock-filter-row/);
+  assert.match(index, /class="item-composer-note apparel-only"/);
+  assert.match(css, /body\.apparel-mode \.stock-desk \.items-library \{ order: -1; \}/);
+  assert.match(css, /\.garment-bc-card/);
   assert.match(index, /id="po-scan-camera-btn"/);
   assert.match(app, /data-po-size-bc-camera/);
   assert.match(app, /data-po-size-bc-scan/);
