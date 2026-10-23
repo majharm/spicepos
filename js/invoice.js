@@ -429,8 +429,10 @@
       const gstRate = num(l.gst_rate) || num(item?.gst_rate);
       const amount = num(l.amount);
       const gstAmount = num(l.gst_amount) || lineGst({ amount, gst_rate: gstRate });
+      const G = globalThis.POSGarmentPurchase;
       return {
         item_name: l.item_name || item?.name || "Item",
+        product_name: item?.name || G?.stripVariantSuffix?.(l.item_name) || l.item_name || "Item",
         hsn: item?.hsn || item?.code || l.hsn || "—",
         quantity_gm: num(l.quantity_gm),
         rate_per_kg: num(l.rate_per_kg),
@@ -438,6 +440,9 @@
         gst_rate: gstRate,
         amount,
         gst_amount: gstAmount,
+        size: l.size || item?.size || "",
+        color: l.color || item?.color || "",
+        wearer_type: item?.wearer_type || l.wearer_type || "",
       };
     });
   }
@@ -479,9 +484,28 @@
       .filter(Boolean)
       .join(" · ");
 
-    const itemRows = lines
-      .map(
-        (l, i) => `<tr>
+    const G = globalThis.POSGarmentPurchase;
+    const grouped = G?.groupInvoiceLines?.(lines) || lines.map((l) => ({ kind: "plain", ...l, lines: [l] }));
+    const itemRows = grouped
+      .map((g, i) => {
+        if (g.kind === "garment") {
+          const bits = [g.name, g.wearer_type, g.color].filter(Boolean).join(" · ");
+          const qty = formatQty(g.totalQty, g.unit || "PCS");
+          const sizeLine = g.summary ? `Sizes ${g.summary}` : "";
+          return `<tr>
+        <td class="inv-item" colspan="4">${i + 1}. ${escapeHtml(bits)}</td>
+      </tr>
+      ${sizeLine ? `<tr class="inv-sizes"><td colspan="4">${escapeHtml(sizeLine)}</td></tr>` : ""}
+      <tr class="inv-line">
+        <td class="inv-hsn">${taxCode(ctx)} ${escapeHtml(g.hsn)}</td>
+        <td class="inv-num">${escapeHtml(qty)}</td>
+        <td class="inv-num">${escapeHtml(money(g.rate))}${escapeHtml(rateSuffix(g.unit || "PCS"))}</td>
+        <td class="inv-num">${escapeHtml(money(g.amount))}</td>
+      </tr>
+      <tr class="inv-tax"><td colspan="4">Input GST ${g.gst_rate}% · ${escapeHtml(money(g.gst_amount))}</td></tr>`;
+        }
+        const l = g.lines ? g.lines[0] : g;
+        return `<tr>
         <td class="inv-item" colspan="4">${i + 1}. ${escapeHtml(lineName(l, ctx))}</td>
       </tr>
       <tr class="inv-line">
@@ -490,8 +514,8 @@
         <td class="inv-num">${escapeHtml(money(l.rate_per_kg))}${escapeHtml(rateSuffix(l.unit))}</td>
         <td class="inv-num">${escapeHtml(money(l.amount))}</td>
       </tr>
-      <tr class="inv-tax"><td colspan="4">Input GST ${l.gst_rate}% · ${escapeHtml(money(l.gst_amount))}</td></tr>`,
-      )
+      <tr class="inv-tax"><td colspan="4">Input GST ${l.gst_rate}% · ${escapeHtml(money(l.gst_amount))}</td></tr>`;
+      })
       .join("");
 
     const interState = purchaseInterState(purchase, ctx);

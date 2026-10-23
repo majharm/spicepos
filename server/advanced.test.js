@@ -122,6 +122,8 @@ test("resolvePurchaseBarcodes requires one typed code per piece", async () => {
   assert.deepEqual(resolvePurchaseBarcodes(pcs, 3, { barcodes: ["A1", "A2", "A3"] }), ["A1", "A2", "A3"]);
   assert.throws(() => resolvePurchaseBarcodes(pcs, 20, { barcodes: ["A1"] }), /Enter 20 barcodes for 20 pcs/);
   assert.deepEqual(resolvePurchaseBarcodes({ base_unit: "GM" }, 1000, { barcodes: ["X"] }), []);
+  assert.deepEqual(resolvePurchaseBarcodes(pcs, 3, { barcodes: ["A1"], generate_barcodes: true }), ["A1"]);
+  assert.deepEqual(resolvePurchaseBarcodes(pcs, 3, { barcodes: [], allow_empty_barcodes: true }), []);
 });
 
 test("item save and checkout persist barcode and line discount fields", () => {

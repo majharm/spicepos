@@ -12,6 +12,97 @@ function pos_normalize_pack_items($items) {
   return $out;
 }
 
+function pos_find_or_create_size_variant($bid, $parent, $size, $biz) {
+  $want = pos_garment_normalize_size($size);
+  if ($want === "") throw new Exception("Size is required");
+  $rows = pos_q(
+    "SELECT * FROM items WHERE business_id = ? AND name = ? AND COALESCE(color,'') = ? AND COALESCE(wearer_type,'') = ?",
+    "ssss",
+    [$bid, $parent["name"], $parent["color"] ?? "", $parent["wearer_type"] ?? ""]
+  );
+  foreach ($rows as $row) {
+    if (pos_garment_sizes_equal($row["size"] ?? "", $want)) return $row;
+  }
+  $id = pos_uuid();
+  $n = pos_next_seq("item", $bid, 7);
+  $code = pos_item_code_prefix($biz) . str_pad((string) $n, 3, "0", STR_PAD_LEFT);
+  $unit = pos_item_unit($parent["base_unit"] ?? $parent["unit"] ?? pos_default_item_unit($biz));
+  pos_q(
+    "INSERT INTO items (
+       id, code, name, local_name, category, subcategory, color, size, wearer_type, base_unit,
+       purchase_rate, retail_rate, b2b_rate, gst_rate, hsn, image_url, stock_gm,
+       reorder_level_gm, status, business_id
+     ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+    "ssssssssssddddssddss",
+    [
+      $id, $code, $parent["name"], $parent["local_name"] ?? null, $parent["category"] ?? pos_default_item_category($biz),
+      $parent["subcategory"] ?? null, $parent["color"] ?? null, $want, $parent["wearer_type"] ?? null, $unit,
+      pos_round8($parent["purchase_rate"] ?? 0), pos_round8($parent["retail_rate"] ?? 0),
+      pos_round8($parent["b2b_rate"] ?? 0), (float) ($parent["gst_rate"] ?? 5),
+      $parent["hsn"] ?? null, $parent["image_url"] ?? null, 0, (float) ($parent["reorder_level_gm"] ?? 0),
+      pos_item_status($parent["status"] ?? "active"), $bid,
+    ]
+  );
+  try {
+    pos_q("UPDATE items SET unit = ? WHERE id = ?", "ss", [$unit, $id]);
+  } catch (Exception $e) { /* optional */ }
+  if (is_file(__DIR__ . "/pos-advanced.php")) {
+    require_once __DIR__ . "/pos-advanced.php";
+    if (function_exists("pos_assign_item_barcodes")) {
+      pos_assign_item_barcodes($bid, $id, ["size" => $want, "color" => $parent["color"] ?? "", "mrp" => $parent["mrp"] ?? null]);
+    }
+  }
+  $created = pos_q("SELECT * FROM items WHERE id = ? LIMIT 1", "s", [$id]);
+  return $created[0] ?? $parent;
+}
+
+function pos_expand_garment_purchase_lines($bid, $lines, $biz) {
+  $out = [];
+  $apparel = function_exists("pos_is_apparel_shop") && pos_is_apparel_shop($biz);
+  foreach ($lines as $line) {
+    $sizeQtys = $line["size_qtys"] ?? $line["sizeQtys"] ?? null;
+    $looksLikeSizeMap = false;
+    if (is_array($sizeQtys)) {
+      foreach ($sizeQtys as $k => $v) {
+        if (!is_int($k) && pos_garment_normalize_size((string) $k) !== "") {
+          $looksLikeSizeMap = true;
+          break;
+        }
+      }
+    }
+    if (!$apparel || !$looksLikeSizeMap) {
+      $out[] = $line;
+      continue;
+    }
+    $it = pos_q("SELECT * FROM items WHERE id = ? AND business_id = ? LIMIT 1", "ss", [$line["item_id"] ?? "", $bid]);
+    $parent = $it[0] ?? null;
+    if (!$parent) throw new Exception("Unknown item");
+    if (is_file(__DIR__ . "/pos-advanced.php")) require_once __DIR__ . "/pos-advanced.php";
+    $planned = pos_garment_plan_size_lines($sizeQtys, [
+      "rate" => $line["rate_per_kg"] ?? null,
+      "generate_barcodes" => $line["generate_barcodes"] ?? $line["generateBarcodes"] ?? false,
+      "barcodes_by_size" => $line["barcodes_by_size"] ?? $line["barcodesBySize"] ?? [],
+      "allow_empty_barcodes" => $line["allow_empty_barcodes"] ?? $line["allowEmptyBarcodes"] ?? true,
+    ]);
+    if (!$planned) throw new Exception(($parent["name"] ?? "Item") . ": enter size-wise quantity");
+    foreach ($planned as $row) {
+      $item = pos_find_or_create_size_variant($bid, $parent, $row["size"], $biz);
+      $out[] = array_merge($line, [
+        "item_id" => $item["id"],
+        "quantity_gm" => $row["qty"],
+        "rate_per_kg" => $row["rate"] ?? ($line["rate_per_kg"] ?? $item["purchase_rate"]),
+        "barcodes" => $row["barcodes"],
+        "generate_barcodes" => $row["generate_barcodes"],
+        "allow_empty_barcodes" => $row["allow_empty_barcodes"],
+        "size" => $row["size"],
+        "color" => $parent["color"] ?? "",
+      ]);
+    }
+  }
+  if (!$out) throw new Exception("Enter at least one product with size-wise quantity");
+  return $out;
+}
+
 function pos_insert_pack_lines($packId, $items, $bid) {
   $sort = 1;
   foreach ($items as $row) {
@@ -313,12 +404,14 @@ function pos_crud_dispatch($path, $method, $body, $bid, $auth, $branchId, $uid) 
     if (function_exists("pos_ensure_rate_precision")) pos_ensure_rate_precision();
     require_once __DIR__ . "/pos-accounting.php";
     try {
-      $purchase = pos_with_transaction(function () use ($body, $bid, $uid, $supplierId, $lines) {
+      $purchase = pos_with_transaction(function () use ($body, $bid, $uid, $supplierId, $lines, $branchId) {
         $sup = pos_q("SELECT * FROM suppliers WHERE id = ? AND business_id = ? LIMIT 1", "ss", [$supplierId, $bid]);
         $supplier = $sup[0] ?? null;
         if (!$supplier) throw new Exception("Supplier not found");
+        $bizRows = pos_q("SELECT category, business_type, name FROM businesses WHERE id = ? LIMIT 1", "s", [$bid]);
+        $expanded = pos_expand_garment_purchase_lines($bid, $lines, $bizRows[0] ?? []);
         $built = [];
-        foreach ($lines as $line) {
+        foreach ($expanded as $line) {
           $it = pos_q("SELECT * FROM items WHERE id = ? AND business_id = ? LIMIT 1", "ss", [$line["item_id"] ?? "", $bid]);
           $item = $it[0] ?? null;
           if (!$item) throw new Exception("Unknown item");
@@ -353,20 +446,37 @@ function pos_crud_dispatch($path, $method, $body, $bid, $auth, $branchId, $uid) 
         $barcodeCount = 0;
         foreach ($built as $idx => $line) {
           $lineId = pos_uuid();
-          pos_q(
-            "INSERT INTO purchase_lines (
-               id, purchase_id, item_id, item_name, quantity_gm, rate_per_kg,
-               gst_rate, amount, gst_amount, total_amount, business_id
-             ) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
-            "ssssdddddds",
-            [
-              $lineId, $id, $line["item"]["id"], pos_item_bill_name($line["item"]), $line["qty"], $line["rate"],
-              $line["gstRate"], $line["amount"], $line["gstAmount"], $line["total"], $bid,
-            ]
-          );
+          $src = $expanded[$idx] ?? [];
+          $size = pos_garment_normalize_size($src["size"] ?? ($line["item"]["size"] ?? ""));
+          $color = trim((string) ($src["color"] ?? ($line["item"]["color"] ?? "")));
+          try {
+            pos_q(
+              "INSERT INTO purchase_lines (
+                 id, purchase_id, item_id, item_name, quantity_gm, rate_per_kg,
+                 gst_rate, amount, gst_amount, total_amount, business_id, size, color
+               ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+              "ssssddddddsss",
+              [
+                $lineId, $id, $line["item"]["id"], pos_item_bill_name($line["item"]), $line["qty"], $line["rate"],
+                $line["gstRate"], $line["amount"], $line["gstAmount"], $line["total"], $bid,
+                $size !== "" ? $size : null, $color !== "" ? $color : null,
+              ]
+            );
+          } catch (Exception $e) {
+            pos_q(
+              "INSERT INTO purchase_lines (
+                 id, purchase_id, item_id, item_name, quantity_gm, rate_per_kg,
+                 gst_rate, amount, gst_amount, total_amount, business_id
+               ) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+              "ssssdddddds",
+              [
+                $lineId, $id, $line["item"]["id"], pos_item_bill_name($line["item"]), $line["qty"], $line["rate"],
+                $line["gstRate"], $line["amount"], $line["gstAmount"], $line["total"], $bid,
+              ]
+            );
+          }
           pos_q("UPDATE items SET stock_gm = stock_gm + ? WHERE id = ? AND business_id = ?", "dss", [$line["qty"], $line["item"]["id"], $bid]);
           if (function_exists("pos_create_purchase_batch")) {
-            $src = $lines[$idx] ?? [];
             $batch = pos_create_purchase_batch($bid, $branchId ?? null, $uid, [
               "id" => $id, "purchase_number" => $purchaseNumber, "supplier_id" => $supplier["id"],
             ], $lineId, $line["item"], $line["qty"], $line["rate"], $src);

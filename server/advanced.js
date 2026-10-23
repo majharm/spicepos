@@ -156,6 +156,26 @@ export async function ensureAdvancedSchema() {
   } catch {
     /* exists */
   }
+  try {
+    await query(`ALTER TABLE item_barcodes ADD COLUMN purchase_id VARCHAR(255) NULL`);
+  } catch {
+    /* exists */
+  }
+  try {
+    await query(`ALTER TABLE item_barcodes ADD COLUMN size VARCHAR(32) NULL`);
+  } catch {
+    /* exists */
+  }
+  try {
+    await query(`ALTER TABLE item_barcodes ADD COLUMN color VARCHAR(64) NULL`);
+  } catch {
+    /* exists */
+  }
+  try {
+    await query(`ALTER TABLE item_barcodes ADD INDEX idx_ib_purchase (purchase_id)`);
+  } catch {
+    /* exists */
+  }
   await ensureBarcodeVarchar("items");
   await ensureBarcodeVarchar("item_barcodes", true);
   await ensureBarcodeVarchar("stock_batches");
@@ -364,7 +384,20 @@ export async function ensureAdvancedSchema() {
   )`);
 }
 
-export async function attachItemBarcode(conn, businessId, itemId, code, kind = "own", primary = false) {
+async function stampBarcodeMeta(conn, rowId, meta = {}) {
+  if (!rowId || (!meta.purchaseId && !meta.size && !meta.color)) return;
+  try {
+    await sqlExec(
+      conn,
+      "UPDATE item_barcodes SET purchase_id=?, size=?, color=? WHERE id=?",
+      [meta.purchaseId || null, meta.size || null, meta.color || null, rowId],
+    );
+  } catch {
+    /* optional columns */
+  }
+}
+
+export async function attachItemBarcode(conn, businessId, itemId, code, kind = "own", primary = false, meta = {}) {
   code = barcodeText(code);
   if (!code) return null;
   if (code.length > 64) throw new Error("Barcode is too long (max 64 characters)");
@@ -378,6 +411,7 @@ export async function attachItemBarcode(conn, businessId, itemId, code, kind = "
         /* optional */
       }
     }
+    await stampBarcodeMeta(conn, exist.id, meta);
     return exist;
   }
   const id = crypto.randomUUID();
@@ -393,6 +427,7 @@ export async function attachItemBarcode(conn, businessId, itemId, code, kind = "
       /* optional */
     }
   }
+  await stampBarcodeMeta(conn, id, meta);
   return sqlOne(conn, "SELECT * FROM item_barcodes WHERE id = ?", [id]);
 }
 
@@ -418,6 +453,45 @@ export function resolvePurchaseBarcodes(item, qty, lineIn = {}) {
   const codes = parseManualBarcodes(raw);
   if (pieces < 1) throw new Error("Quantity required");
   if (pieces > 500) throw new Error("Max 500 barcodes at once");
+  const generate = Boolean(lineIn.generate_barcodes || lineIn.generateBarcodes);
+  const allowEmpty = Boolean(lineIn.allow_empty_barcodes || lineIn.allowEmptyBarcodes);
+  if (generate) {
+    if (codes.length > pieces) throw new Error(`Too many barcodes for ${pieces} pcs`);
+    return codes;
+  }
+  if (allowEmpty && codes.length === 0) return [];
+  if (codes.length !== pieces) {
+    throw new Error(`Enter ${pieces} barcodes for ${pieces} pcs (you entered ${codes.length})`);
+  }
+  return codes;
+}
+
+export async function resolvePurchasePieceBarcodes(conn, ctx) {
+  if (!isCountItem(ctx.item)) return [];
+  const pieces = Math.max(0, Math.round(Number(ctx.qty) || 0));
+  const raw = ctx.barcodes != null ? ctx.barcodes : (ctx.barcode || []);
+  const codes = parseManualBarcodes(raw);
+  const generate = Boolean(ctx.generate_barcodes || ctx.generateBarcodes);
+  const allowEmpty = Boolean(ctx.allow_empty_barcodes || ctx.allowEmptyBarcodes);
+  if (pieces < 1) throw new Error("Quantity required");
+  if (pieces > 500) throw new Error("Max 500 barcodes at once");
+  if (generate) {
+    if (codes.length > pieces) throw new Error(`Too many barcodes for ${pieces} pcs`);
+    const used = new Set(codes);
+    const out = [...codes];
+    while (out.length < pieces) {
+      let next = await uniqueEan13(conn, ctx.businessId);
+      let n = 0;
+      while (used.has(next) && n < 8) {
+        next = await uniqueEan13(conn, ctx.businessId);
+        n += 1;
+      }
+      used.add(next);
+      out.push(next);
+    }
+    return out;
+  }
+  if (allowEmpty && codes.length === 0) return [];
   if (codes.length !== pieces) {
     throw new Error(`Enter ${pieces} barcodes for ${pieces} pcs (you entered ${codes.length})`);
   }
@@ -592,7 +666,11 @@ async function insertPurchaseBatch(conn, ctx, barcode, batchNo, qty, kind) {
   );
   if (barcode) {
     try {
-      await attachItemBarcode(conn, ctx.businessId, ctx.item.id, barcode, kind, false);
+      await attachItemBarcode(conn, ctx.businessId, ctx.item.id, barcode, kind, false, {
+        purchaseId: ctx.purchaseId,
+        size: ctx.size || ctx.item?.size || "",
+        color: ctx.color || ctx.item?.color || "",
+      });
     } catch {
       /* unique */
     }
@@ -617,7 +695,7 @@ async function insertPurchaseBatch(conn, ctx, barcode, batchNo, qty, kind) {
 export async function onPurchaseLineSaved(conn, ctx) {
   await ensureAdvancedSchema();
   const baseNo = String(ctx.batchNo || `${ctx.purchaseNumber || "PO"}-${ctx.item?.code || "IT"}-${String(ctx.lineId || "").slice(0, 4)}`);
-  const codes = resolvePurchaseBarcodes(ctx.item, ctx.qty, ctx);
+  const codes = await resolvePurchasePieceBarcodes(conn, ctx);
   if (codes.length) {
     const rows = [];
     for (let i = 0; i < codes.length; i++) {

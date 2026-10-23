@@ -6,11 +6,13 @@ import vm from "node:vm";
 function loadInvoicePrint() {
   const gst = fs.readFileSync(new URL("./gst-supply.js", import.meta.url), "utf8");
   const units = fs.readFileSync(new URL("./units.js", import.meta.url), "utf8");
+  const garment = fs.readFileSync(new URL("./garment-purchase.js", import.meta.url), "utf8");
   const code = fs.readFileSync(new URL("./invoice.js", import.meta.url), "utf8");
   const context = { window: {}, console };
   vm.createContext(context);
   vm.runInContext(gst, context);
   vm.runInContext(units, context);
+  vm.runInContext(garment, context);
   vm.runInContext(code, context);
   return context.window.InvoicePrint;
 }
@@ -126,6 +128,45 @@ test("thermal and office invoices print the dining table", () => {
   const office = InvoicePrint.officeInvoiceBody(order, ctx);
   assert.match(thermal, /Table 4/);
   assert.match(office, /Table 4/);
+});
+
+test("garment purchase bill groups size-wise quantities on one product", () => {
+  const InvoicePrint = loadInvoicePrint();
+  const html = InvoicePrint.purchaseBody(
+    {
+      purchase_number: "PO-10040",
+      supplier_name: "Textile Mills",
+      supplier_invoice_number: "TM-12",
+      purchase_date: "2026-10-23",
+      subtotal: 10000,
+      gst: 500,
+      total: 10500,
+      payment_method: "cash",
+      payment_status: "paid",
+      lines: [
+        { item_id: "s", item_name: "Cotton Kurti (Female · Maroon · Sz S)", quantity_gm: 5, rate_per_kg: 250, amount: 1250, gst_rate: 5, gst_amount: 62.5, size: "S", color: "Maroon" },
+        { item_id: "m", item_name: "Cotton Kurti (Female · Maroon · Sz M)", quantity_gm: 10, rate_per_kg: 250, amount: 2500, gst_rate: 5, gst_amount: 125, size: "M", color: "Maroon" },
+        { item_id: "l", item_name: "Cotton Kurti (Female · Maroon · Sz L)", quantity_gm: 15, rate_per_kg: 250, amount: 3750, gst_rate: 5, gst_amount: 187.5, size: "L", color: "Maroon" },
+        { item_id: "xl", item_name: "Cotton Kurti (Female · Maroon · Sz XL)", quantity_gm: 10, rate_per_kg: 250, amount: 2500, gst_rate: 5, gst_amount: 125, size: "XL", color: "Maroon" },
+      ],
+    },
+    {
+      company: { name: "ATAV Garments" },
+      items: [
+        { id: "s", name: "Cotton Kurti", color: "Maroon", wearer_type: "female", size: "S", base_unit: "PCS", gst_rate: 5 },
+        { id: "m", name: "Cotton Kurti", color: "Maroon", wearer_type: "female", size: "M", base_unit: "PCS", gst_rate: 5 },
+        { id: "l", name: "Cotton Kurti", color: "Maroon", wearer_type: "female", size: "L", base_unit: "PCS", gst_rate: 5 },
+        { id: "xl", name: "Cotton Kurti", color: "Maroon", wearer_type: "female", size: "XL", base_unit: "PCS", gst_rate: 5 },
+      ],
+      formatDateTime: (v) => String(v),
+      money: (n) => `₹${Number(n).toFixed(2)}`,
+      escapeHtml: (v) => String(v),
+    },
+  );
+  assert.match(html, /Cotton Kurti/);
+  assert.match(html, /Sizes S: 5, M: 10, L: 15, XL: 10/);
+  assert.match(html, /40 pcs/);
+  assert.match(html, /₹10000.00/);
 });
 
 test("purchase bill HTML includes purchase header and input GST", () => {

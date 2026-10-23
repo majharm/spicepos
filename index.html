@@ -1750,7 +1750,7 @@
         </section>
         <section class="view" id="view-purchases" hidden>
           <h2 class="visually-hidden">Purchases</h2>
-          <p class="lede">Supplier bills. For Quantity (pcs), type or scan one barcode per piece — 20 pcs needs 20 codes. Nothing is auto generated.</p>
+          <p class="lede" id="purchases-lede">Supplier bills. For Quantity (pcs), type or scan one barcode per piece — 20 pcs needs 20 codes. Nothing is auto generated.</p>
           <details class="purchase-new" id="purchase-new">
             <summary class="btn">New purchase</summary>
             <form class="settings purchase-form" id="purchase-form">
@@ -1776,7 +1776,7 @@
               </div>
               <div class="purchase-items">
                 <div class="purchase-items-bar">
-                  <h3>Item list</h3>
+                  <h3 id="po-items-title">Item list</h3>
                   <input id="po-item-search" type="search" placeholder="Search item or HSN…" autocomplete="off" />
                   <span class="purchase-items-meta" id="po-selected-meta">0 selected</span>
                 </div>
@@ -3247,6 +3247,7 @@
     <script src="./js/pos-api.js?v=20261013item1" defer></script>
     <script src="./js/units.js?v=20260919unit1" defer></script>
     <script src="./js/footwear.js?v=20261012print1" defer></script>
+    <script src="./js/garment-purchase.js?v=20261023gar1" defer></script>
     <script src="./js/restaurant.js?v=20261012set4" defer></script>
     <script src="./js/pay-integrity.js?v=20261012table1" defer></script>
     <script src="./js/aggregator.js?v=20261012agg3" defer></script>
