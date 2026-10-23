@@ -5322,19 +5322,49 @@ body.classic-bill-mode .bill-settle {
 .po-size-bc .po-bc-list {
   max-width: none;
 }
+body.apparel-mode .stock-desk .items-split {
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 340px);
+}
+body.apparel-mode .stock-desk .items-library { order: -1; }
+body.apparel-mode .stock-desk .items-library-head {
+  grid-template-columns: 1fr;
+  align-items: stretch;
+}
+body.apparel-mode .stock-desk .stock-low-toggle { display: none; }
+body.apparel-mode .stock-desk #stock-form .item-block { grid-template-columns: 1fr; }
+body.apparel-mode .stock-desk .stock-selected { min-width: 0; }
+body.apparel-mode .stock-desk .stock-selected span { overflow-wrap: anywhere; }
+@media (min-width: 981px) {
+  body.apparel-mode .stock-desk #stock-form {
+    position: sticky;
+    top: 12px;
+    align-self: start;
+  }
+}
 .stock-garment-tools {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
   gap: 8px;
   width: 100%;
 }
-.stock-garment-tools select,
-.stock-garment-tools .btn { min-height: 40px; }
+.stock-garment-tools .mode-toggle {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin: 0;
+}
+.stock-garment-tools .mode-toggle .btn { width: 100%; }
+.stock-filter-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 8px;
+}
+.stock-filter-row select,
+.stock-garment-tools .btn { min-height: 40px; width: 100%; }
 .garment-stock-style {
   border: 1px solid var(--line);
   border-radius: 12px;
   background: #fff;
-  margin-bottom: 8px;
+  margin: 0;
 }
 .garment-stock-style.is-low { border-color: #fcd34d; }
 .garment-stock-style.is-out { border-color: #fca5a5; }
@@ -5350,27 +5380,53 @@ body.classic-bill-mode .bill-settle {
   cursor: pointer;
   font: inherit;
 }
-.garment-stock-style-head span { display: grid; gap: 2px; flex: 1; }
+.garment-stock-style-head span { display: grid; gap: 2px; flex: 1; min-width: 0; }
 .garment-stock-style-head small { color: var(--muted); }
-.garment-stock-colours { display: grid; gap: 8px; padding: 0 12px 12px; }
-.garment-stock-color { display: grid; gap: 6px; padding: 8px; border: 1px solid var(--line); border-radius: 10px; }
-.garment-stock-color header { display: flex; align-items: center; gap: 8px; }
-.garment-stock-size-row {
-  display: grid;
-  grid-template-columns: 52px minmax(0, 1fr) auto auto auto;
-  gap: 8px;
-  align-items: center;
-  padding: 6px;
-  border-radius: 8px;
+.garment-stock-caret {
+  width: 8px;
+  height: 8px;
+  border-right: 2px solid var(--muted);
+  border-bottom: 2px solid var(--muted);
+  transform: rotate(-45deg);
+  flex: 0 0 8px;
 }
-.garment-stock-size-row.is-editing { outline: 2px solid var(--vel-teal); }
-.garment-stock-size-row label { display: flex; align-items: center; gap: 4px; font-size: 12px; color: var(--muted); }
-.garment-stock-size-row input { width: 64px; }
-.garment-stock-barcodes { grid-column: 1 / -1; margin: 0; padding: 0; list-style: none; display: grid; gap: 4px; }
-.garment-barcode-line { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; color: var(--muted); cursor: pointer; }
-.garment-barcode-table { width: 100%; border-collapse: collapse; min-width: 680px; background: #fff; }
-.garment-barcode-table th,
-.garment-barcode-table td { padding: 8px; border-bottom: 1px solid var(--line); text-align: left; }
+.garment-stock-style-head[aria-expanded="true"] .garment-stock-caret { transform: rotate(45deg); }
+.garment-stock-colours { display: grid; gap: 8px; padding: 0 12px 12px; }
+.garment-stock-color { display: grid; gap: 8px; padding: 10px; border: 1px solid var(--line); border-radius: 10px; background: #fafafa; }
+.garment-stock-color header { display: flex; align-items: center; gap: 8px; }
+.garment-stock-color header em { margin-left: auto; font-style: normal; font-weight: 800; }
+.garment-stock-detail { display: none; gap: 8px; padding: 8px 10px; border-radius: 10px; background: #fff; border: 1px solid var(--line); }
+.garment-stock-detail.is-editing { display: grid; }
+.garment-stock-style[hidden],
+.garment-stock-colours[hidden],
+.garment-stock-color[hidden],
+.garment-bc-card[hidden],
+.garment-barcode-row[hidden],
+.garment-size-chip[hidden],
+.garment-stock-detail[hidden] { display: none !important; }
+.garment-stock-detail-top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+.garment-stock-detail label { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
+.garment-stock-detail input { width: 72px; }
+.garment-stock-barcodes { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px; }
+.garment-barcode-line { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; color: var(--muted); cursor: pointer; padding: 4px 0; border-top: 1px solid var(--line); }
+.garment-bc-list { display: grid; gap: 8px; }
+.garment-bc-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1.4fr) auto;
+  gap: 8px 12px;
+  align-items: center;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fff;
+}
+.garment-bc-card.is-low { border-color: #fcd34d; background: #fffbeb; }
+.garment-bc-card.is-out { border-color: #fca5a5; background: #fef2f2; }
+.garment-bc-code { font-variant-numeric: tabular-nums; letter-spacing: 0.02em; word-break: break-all; }
+.garment-bc-meta { display: grid; gap: 2px; min-width: 0; }
+.garment-bc-meta small { color: var(--muted); }
+.garment-bc-qty { display: grid; justify-items: end; gap: 4px; }
+.garment-bc-qty em { font-style: normal; font-weight: 800; font-size: 16px; }
 .garment-barcode-row { cursor: pointer; }
 .garment-barcode-row.is-editing { outline: 2px solid var(--vel-teal); }
 .stock-history { margin-top: 8px; }
@@ -5401,6 +5457,12 @@ body.classic-bill-mode .bill-settle {
 .garment-size-chip.is-low { border-color: #fcd34d; background: #fffbeb; }
 .garment-size-chip.is-editing,
 .garment-size-chip.is-on { outline: 2px solid var(--vel-teal); background: var(--bg-tint-soft); }
+.garment-stock-sizes .garment-size-chip {
+  min-width: 64px;
+  min-height: 48px;
+  padding: 6px 10px;
+}
+.garment-stock-sizes .garment-size-chip strong { font-size: 14px; }
 .garment-size-dialog {
   width: min(520px, 100%);
   max-height: min(92dvh, 760px);
@@ -5522,11 +5584,11 @@ body.apparel-mode #item-size-wrap { display: none; }
   .garment-size-buy { grid-template-columns: 1fr 1fr; }
   .garment-size-buy label { grid-column: 1 / -1; }
   .garment-variant-custom,
-  .po-color-add,
-  .stock-garment-tools { flex-direction: column; align-items: stretch; }
-  .garment-stock-size-row { grid-template-columns: 48px minmax(0, 1fr); }
-  .garment-stock-size-row .stock-pill,
-  .garment-stock-size-row .item-chip { justify-self: start; }
+  .po-color-add { flex-direction: column; align-items: stretch; }
+  .garment-bc-card { grid-template-columns: 1fr auto; }
+  .garment-bc-meta { grid-column: 1 / -1; }
+  .garment-stock-style-head { flex-wrap: wrap; align-items: flex-start; }
+  .garment-stock-style-head > span { flex: 1 1 100%; }
 }
 .po-table-wrap {
   max-height: min(48vh, 520px);
@@ -6079,6 +6141,7 @@ body.apparel-mode #item-size-wrap { display: none; }
   .agg-ticket .qr-order-actions .btn { flex: 1 1 46%; min-height: 42px; }
   .packs-split,
   .items-split,
+  body.apparel-mode .stock-desk .items-split,
   .pack-composer-top,
   .pack-items-bar,
   .packs-library-head,

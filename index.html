@@ -6,7 +6,7 @@
     <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
     <title>ATAV POS</title>
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./css/pos.css?v=20261023flex3" />
+    <link rel="stylesheet" href="./css/pos.css?v=20261023stkui1" />
     <link rel="stylesheet" href="./css/saas.css?v=20261016note1" />
     <link rel="stylesheet" href="./css/bar.css?v=20261011bar2" />
     <link rel="stylesheet" href="./css/resort.css?v=20261011resort1" />
@@ -1909,13 +1909,14 @@
                 <p class="items-kicker">Inventory</p>
                 <h3>Stock</h3>
                 <p class="lede pharmacy-hide apparel-hide">Search a SKU, tap it, then post + or − quantity. Low-stock items are highlighted.</p>
-                <p class="lede apparel-only" hidden>Stock by product, colour, size, and barcode. Tap a size to adjust it. Each variant keeps its own reorder level.</p>
+                <p class="lede apparel-only" hidden>Browse by product, then colour and size. Tap a size to adjust that variant, or switch to barcode view to find one code.</p>
                 <p class="lede pharmacy-only" hidden>On-hand by batch number and expiry date. Tap a row, then post + or − quantity.</p>
               </div>
               <div class="items-hero-stats" id="stock-hero-stats"></div>
             </header>
             <div class="item-import-bar stock-export-bar">
-              <p class="item-import-copy pharmacy-hide">Download the on-hand list. Excel has every SKU field plus a Low stock sheet.</p>
+              <p class="item-import-copy pharmacy-hide apparel-hide">Download the on-hand list. Excel has every SKU field plus a Low stock sheet.</p>
+              <p class="item-import-copy apparel-only" hidden>Download Excel with every variant, plus a Barcode stock sheet for each code and on-hand quantity.</p>
               <p class="item-import-copy pharmacy-only" hidden>Download Excel with every field: SKU, batch no, expiry, pack, rates, and a Batches sheet.</p>
               <div class="item-import-actions">
                 <a class="btn" id="stock-excel" href="#">Download Excel</a>
@@ -1925,7 +1926,8 @@
               <form class="settings item-composer" id="stock-form" autocomplete="off">
                 <div class="item-composer-top">
                   <p class="item-mode" id="stock-mode-label">Adjust stock</p>
-                  <p class="item-composer-note">Tap a card on the right, or type a name, code, or barcode. Damaged, expired, and returned quantities come off the shelf.</p>
+                  <p class="item-composer-note apparel-hide">Tap a card on the right, or type a name, code, or barcode. Damaged, expired, and returned quantities come off the shelf.</p>
+                  <p class="item-composer-note apparel-only" hidden>Tap a size in the list. The quantity you post adds to or removes from that colour and size.</p>
                 </div>
                 <div class="mode-toggle stock-mode-toggle" id="stock-mode">
                   <button class="btn primary" type="button" data-stock-mode="simple">Simple</button>
@@ -1975,24 +1977,26 @@
               <aside class="items-library">
                 <div class="items-library-head">
                   <h4>On hand</h4>
+                  <input id="stock-search" type="search" placeholder="Search name, batch no, expiry…" autocomplete="off" />
                   <div class="stock-garment-tools apparel-only" hidden>
                     <div class="mode-toggle" id="stock-garment-view">
                       <button class="btn primary" type="button" data-stock-view="item">Item-wise</button>
                       <button class="btn" type="button" data-stock-view="barcode">Barcode-wise</button>
                     </div>
-                    <select id="stock-filter-category" aria-label="Category"><option value="">All categories</option></select>
-                    <select id="stock-filter-color" aria-label="Colour"><option value="">All colours</option></select>
-                    <select id="stock-filter-size" aria-label="Size"><option value="">All sizes</option></select>
-                    <select id="stock-filter-supplier" aria-label="Supplier"><option value="">All suppliers</option></select>
-                    <select id="stock-filter-status" aria-label="Stock status">
-                      <option value="">All stock</option>
-                      <option value="ok">In stock</option>
-                      <option value="low">Low / out</option>
-                      <option value="out">Out</option>
-                    </select>
+                    <div class="stock-filter-row">
+                      <select id="stock-filter-category" aria-label="Category"><option value="">All categories</option></select>
+                      <select id="stock-filter-color" aria-label="Colour"><option value="">All colours</option></select>
+                      <select id="stock-filter-size" aria-label="Size"><option value="">All sizes</option></select>
+                      <select id="stock-filter-supplier" aria-label="Supplier"><option value="">All suppliers</option></select>
+                      <select id="stock-filter-status" aria-label="Stock status">
+                        <option value="">All stock</option>
+                        <option value="ok">In stock</option>
+                        <option value="low">Low / out</option>
+                        <option value="out">Out</option>
+                      </select>
+                    </div>
                   </div>
-                  <input id="stock-search" type="search" placeholder="Search name, batch no, expiry…" autocomplete="off" />
-                  <label class="item-toggle"><input type="checkbox" id="stock-low-only" /> Low stock</label>
+                  <label class="item-toggle stock-low-toggle"><input type="checkbox" id="stock-low-only" /> Low stock</label>
                 </div>
                 <div class="table-wrap items-library-list" id="stock-table"></div>
               </aside>
@@ -3369,7 +3373,7 @@
     <script src="./js/resort-ui.js?v=20261011resort1" defer></script>
     <script src="./js/item-master.js?v=20261012brand1" defer></script>
     <script src="./js/customer-master.js?v=20261012cust1" defer></script>
-    <script src="./js/app.js?v=20261023led2" defer></script>
+    <script src="./js/app.js?v=20261023stkui1" defer></script>
     <script src="./js/item-master-ui.js?v=20261012brand1" defer></script>
     <script src="./js/customer-master-ui.js?v=20261012cust1" defer></script>
     <script src="./js/mobile-app.js?v=20261023logo1" defer></script>

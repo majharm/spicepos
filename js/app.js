@@ -8421,7 +8421,18 @@ function selectStockItem(id, barcode) {
   if ($("stk-item-search")) $("stk-item-search").value = item.name;
   paintStockSelected(item);
   document.querySelectorAll("#stock-table [data-stock-item]").forEach((el) => {
-    el.classList.toggle("is-editing", el.dataset.stockItem === id);
+    const on = el.dataset.stockItem === id;
+    el.classList.toggle("is-editing", on);
+    if (!on) return;
+    const style = el.closest(".garment-stock-style");
+    const body = style?.querySelector(".garment-stock-colours");
+    const toggle = style?.querySelector("[data-stock-toggle]");
+    if (body) body.hidden = false;
+    if (toggle) {
+      toggle.setAttribute("aria-expanded", "true");
+      if (!(state.stockOpenStyles instanceof Set)) state.stockOpenStyles = new Set();
+      if (toggle.dataset.stockToggle) state.stockOpenStyles.add(toggle.dataset.stockToggle);
+    }
   });
   void paintStockHistory(id);
   $("stk-qty")?.focus();
@@ -8698,26 +8709,25 @@ function paintGarmentStockList(el, all, selected) {
     searchBox.dataset.garmentPh = "1";
   }
   const view = state.stockView === "barcode" ? "barcode" : "item";
+  document.querySelectorAll("#stock-garment-view [data-stock-view]").forEach((btn) => {
+    btn.classList.toggle("primary", btn.dataset.stockView === view);
+  });
   if (view === "barcode") {
     const rows = board.barcodeRows.slice(0, fastModeOn() ? 120 : STOCK_PAGE_LIMIT);
     if (!rows.length) {
       el.innerHTML = `<div class="item-empty-card"><strong>No barcodes</strong><p>Purchase or assign a barcode. Each piece or variant code is listed here.</p></div>`;
       return;
     }
-    el.innerHTML = `${listRenderHint(rows.length, board.barcodeRows.length)}<table class="garment-barcode-table"><thead><tr>
-      <th>Barcode</th><th>Product</th><th>Colour</th><th>Size</th><th>SKU</th><th>On hand</th><th>Status</th>
-    </tr></thead><tbody>${rows.map((row) => {
+    el.innerHTML = `${listRenderHint(rows.length, board.barcodeRows.length)}<div class="garment-bc-list">${rows.map((row) => {
       const search = [row.barcode, row.name, row.color, row.size, row.code, row.category, row.supplier, row.wearer].join(" ").toLowerCase();
-      return `<tr class="garment-barcode-row${selected === row.itemId ? " is-editing" : ""}" data-stock-item="${escapeHtml(row.itemId)}" data-stock-barcode="${escapeHtml(row.barcode)}" data-stock-search="${escapeHtml(search)}" data-stock-status="${escapeHtml(row.status)}" data-stock-low="${row.status === "ok" ? "0" : "1"}" data-stock-category="${escapeHtml(row.category || "")}" data-stock-color="${escapeHtml(row.color || "")}" data-stock-size="${escapeHtml(row.size || "")}" data-stock-supplier="${escapeHtml(row.supplier || "")}">
-        <td class="classic-barcode">${escapeHtml(row.barcode || "—")}</td>
-        <td>${escapeHtml(row.name)}</td>
-        <td>${garmentSwatchHtml(row.color)}${escapeHtml(row.color || "—")}</td>
-        <td>${escapeHtml(row.size || "—")}</td>
-        <td>${escapeHtml(row.code || "—")}</td>
-        <td>${escapeHtml(String(row.onHand))}</td>
-        <td>${garmentStockPill(row.status)}</td>
-      </tr>`;
-    }).join("")}</tbody></table>
+      const tone = row.status === "out" ? " is-out" : row.status === "low" ? " is-low" : "";
+      const variant = [row.color, row.size, row.code].filter(Boolean).join(" · ");
+      return `<article class="garment-bc-card garment-barcode-row${tone}${selected === row.itemId ? " is-editing" : ""}" data-stock-item="${escapeHtml(row.itemId)}" data-stock-barcode="${escapeHtml(row.barcode)}" data-stock-search="${escapeHtml(search)}" data-stock-status="${escapeHtml(row.status)}" data-stock-low="${row.status === "ok" ? "0" : "1"}" data-stock-category="${escapeHtml(row.category || "")}" data-stock-color="${escapeHtml(row.color || "")}" data-stock-size="${escapeHtml(row.size || "")}" data-stock-supplier="${escapeHtml(row.supplier || "")}">
+        <strong class="garment-bc-code">${escapeHtml(row.barcode || "No barcode")}</strong>
+        <span class="garment-bc-meta"><strong>${escapeHtml(row.name)}</strong><small>${garmentSwatchHtml(row.color)}${escapeHtml(variant || "—")}</small></span>
+        <span class="garment-bc-qty"><em>${escapeHtml(String(row.onHand))}</em>${garmentStockPill(row.status)}</span>
+      </article>`;
+    }).join("")}</div>
     <div class="item-empty-card" id="stock-filter-empty" hidden><strong>No matching barcodes</strong><p>Clear search or filters to see the rest.</p></div>`;
     filterStockList();
     return;
@@ -8734,20 +8744,29 @@ function paintGarmentStockList(el, all, selected) {
     const expanded = open.has(style.key) || style.status !== "ok";
     if (expanded) open.add(style.key);
     const colors = (style.colors || []).map((color) => {
-      const sizes = (color.sizes || []).map((size) => {
-        const codes = (size.barcodes || []).map((code) => `<li class="garment-barcode-line" data-stock-item="${escapeHtml(size.item?.id || "")}" data-stock-barcode="${escapeHtml(code.barcode)}"><span>${escapeHtml(code.barcode || "No barcode")}</span><em>${code.piece ? (code.onHand > 0 ? "On hand 1" : "Sold") : `On hand ${escapeHtml(String(size.stock))}`}</em></li>`).join("");
-        return `<div class="garment-stock-size-row${selected === size.item?.id ? " is-editing" : ""}" data-stock-item="${escapeHtml(size.item?.id || "")}" data-stock-size="${escapeHtml(size.size)}">
+      const chips = (color.sizes || []).map((size) => {
+        const on = selected === size.item?.id;
+        const tone = size.status === "out" ? " is-out" : size.status === "low" ? " is-low" : "";
+        return `<button type="button" class="garment-size-chip${tone}${on ? " is-editing" : ""}" data-stock-item="${escapeHtml(size.item?.id || "")}" data-stock-size="${escapeHtml(size.size)}">
           <strong>${escapeHtml(size.size)}</strong>
-          <span>${escapeHtml(size.code || "—")}${size.barcodes?.[0]?.barcode ? ` · ${escapeHtml(size.barcodes[0].barcode)}` : ""}</span>
-          <label>Reorder <input type="number" min="0" step="1" value="${escapeHtml(String(size.reorder || 0))}" data-stock-reorder="${escapeHtml(size.item?.id || "")}" aria-label="Reorder ${escapeHtml(style.name)} ${escapeHtml(color.color)} ${escapeHtml(size.size)}" /></label>
-          <span class="item-chip ${size.status === "ok" ? "stock ok" : "stock low"}">${escapeHtml(fmtQty(size.stock, size.item))}</span>
-          ${garmentStockPill(size.status)}
-          <ul class="garment-stock-barcodes">${codes}</ul>
+          <em>${escapeHtml(fmtQty(size.stock, size.item))}</em>
+        </button>`;
+      }).join("");
+      const details = (color.sizes || []).map((size) => {
+        const on = selected === size.item?.id;
+        const codes = (size.barcodes || []).map((code) => `<li class="garment-barcode-line" data-stock-item="${escapeHtml(size.item?.id || "")}" data-stock-barcode="${escapeHtml(code.barcode)}"><span>${escapeHtml(code.barcode || "No barcode")}</span><em>${code.piece ? (code.onHand > 0 ? "On hand 1" : "Sold") : `On hand ${escapeHtml(String(size.stock))}`}</em></li>`).join("");
+        return `<div class="garment-stock-detail${on ? " is-editing" : ""}" data-stock-item="${escapeHtml(size.item?.id || "")}" data-stock-size="${escapeHtml(size.size)}">
+          <div class="garment-stock-detail-top">
+            <span><strong>${escapeHtml(size.code || "No SKU")}</strong>${size.supplier ? ` · ${escapeHtml(size.supplier)}` : ""}</span>
+            <label>Reorder <input type="number" min="0" step="1" value="${escapeHtml(String(size.reorder || 0))}" data-stock-reorder="${escapeHtml(size.item?.id || "")}" aria-label="Reorder ${escapeHtml(style.name)} ${escapeHtml(color.color)} ${escapeHtml(size.size)}" /></label>
+          </div>
+          <ul class="garment-stock-barcodes">${codes || `<li class="garment-barcode-line"><span>No barcode on this size</span></li>`}</ul>
         </div>`;
       }).join("");
       return `<section class="garment-stock-color" data-stock-color-block="${escapeHtml(color.color)}">
         <header>${garmentSwatchHtml(color.color, color.sizes?.[0]?.item?.color_image)}<strong>${escapeHtml(color.color || "No colour")}</strong><em>${escapeHtml(fmtQty(color.stock, color.sizes?.[0]?.item))}</em>${garmentStockPill(color.status)}</header>
-        ${sizes}
+        <div class="garment-stock-sizes">${chips}</div>
+        ${details}
       </section>`;
     }).join("");
     const search = [
@@ -8759,6 +8778,7 @@ function paintGarmentStockList(el, all, selected) {
         <span><strong>${escapeHtml(style.name)}</strong><small>${escapeHtml([wear, `${(style.colors || []).length} colour${(style.colors || []).length === 1 ? "" : "s"}`, `On hand ${fmtQty(style.totalStock, style.anchor)}`].filter(Boolean).join(" · "))}</small></span>
         ${garmentStockPill(style.status)}
         <em>${money(style.value)}</em>
+        <i class="garment-stock-caret" aria-hidden="true"></i>
       </button>
       <div class="garment-stock-colours"${expanded ? "" : " hidden"}>${colors}</div>
     </article>`;
