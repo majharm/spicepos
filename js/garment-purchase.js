@@ -6,6 +6,27 @@
   const LETTER_SIZES = ["XS", "S", "M", "L", "XL", "XXL", "XXXL"];
   const NUMERIC_SIZES = ["28", "30", "32", "34", "36", "38"];
   const DEFAULT_SIZES = LETTER_SIZES.concat(NUMERIC_SIZES);
+  const STANDARD_COLORS = [
+    { name: "Black", hex: "#111827" },
+    { name: "White", hex: "#f8fafc" },
+    { name: "Red", hex: "#dc2626" },
+    { name: "Blue", hex: "#2563eb" },
+    { name: "Green", hex: "#16a34a" },
+    { name: "Pink", hex: "#ec4899" },
+    { name: "Yellow", hex: "#eab308" },
+    { name: "Maroon", hex: "#7f1d1d" },
+    { name: "Grey", hex: "#6b7280" },
+    { name: "Beige", hex: "#d6c4a8" },
+    { name: "Brown", hex: "#92400e" },
+    { name: "Navy", hex: "#1e3a8a" },
+    { name: "Orange", hex: "#ea580c" },
+    { name: "Purple", hex: "#7c3aed" },
+    { name: "Gold", hex: "#d4a017" },
+    { name: "Silver", hex: "#cbd5e1" },
+    { name: "Cream", hex: "#f5f0e6" },
+    { name: "Tan", hex: "#c4a484" },
+    { name: "Multi", hex: "linear-gradient(135deg,#ef4444,#eab308,#22c55e,#2563eb)" },
+  ];
   const SIZE_ALIASES = {
     "3XL": "XXXL",
     XXXL: "XXXL",
@@ -47,10 +68,73 @@
     return normalizeSize(raw) || String(raw || "").trim();
   }
 
+  function colorKey(raw) {
+    return String(raw || "").trim().toLowerCase();
+  }
+
+  function normalizeColor(raw) {
+    const text = String(raw || "").trim().replace(/\s+/g, " ");
+    if (!text) return "";
+    const known = STANDARD_COLORS.find((row) => row.name.toLowerCase() === text.toLowerCase());
+    if (known) return known.name;
+    return text.replace(/\b\p{L}/gu, (ch) => ch.toUpperCase());
+  }
+
+  function colorsEqual(a, b) {
+    const left = colorKey(normalizeColor(a));
+    const right = colorKey(normalizeColor(b));
+    return Boolean(left) && left === right;
+  }
+
+  function swatchOf(name, image) {
+    const img = String(image || "").trim();
+    if (/^data:image\//i.test(img) || /^https?:\/\//i.test(img)) return { kind: "image", value: img };
+    if (/^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i.test(img)) return { kind: "hex", value: img };
+    const known = STANDARD_COLORS.find((row) => colorsEqual(row.name, name));
+    if (known) return { kind: known.hex.startsWith("linear") ? "gradient" : "hex", value: known.hex };
+    const label = normalizeColor(name) || "Colour";
+    let hue = 0;
+    for (const ch of label) hue = (hue * 33 + ch.charCodeAt(0)) % 360;
+    return { kind: "hex", value: `hsl(${hue} 52% 46%)` };
+  }
+
+  function swatchCss(name, image) {
+    const swatch = swatchOf(name, image);
+    if (swatch.kind === "image") {
+      const safe = swatch.value.replace(/["\\]/g, "");
+      return `background-image:url("${safe}");background-size:cover;background-position:center`;
+    }
+    if (swatch.kind === "gradient") return `background:${swatch.value}`;
+    return `background:${swatch.value}`;
+  }
+
+  function variantKey(color, size) {
+    return `${colorKey(normalizeColor(color))}|${normalizeSize(size)}`;
+  }
+
+  function barcodesForColor(map, color) {
+    const prefix = `${colorKey(normalizeColor(color))}|`;
+    const out = {};
+    for (const [key, val] of Object.entries(map || {})) {
+      const raw = String(key || "");
+      if (!raw.toLowerCase().startsWith(prefix)) continue;
+      const size = normalizeSize(raw.slice(prefix.length));
+      if (size) out[size] = val;
+    }
+    return out;
+  }
+
   function productKey(item) {
     return [
       String(item?.name || "").trim().toLowerCase(),
-      String(item?.color || "").trim().toLowerCase(),
+      colorKey(item?.color),
+      String(item?.wearer_type || "").trim().toLowerCase(),
+    ].join("|");
+  }
+
+  function styleKey(item) {
+    return [
+      String(item?.name || "").trim().toLowerCase(),
       String(item?.wearer_type || "").trim().toLowerCase(),
     ].join("|");
   }
@@ -106,6 +190,38 @@
       }
       const g = map.get(key);
       g.variants.push(item);
+      const size = normalizeSize(item.size);
+      if (size && !g.sizes.includes(size)) g.sizes.push(size);
+      if (!g.anchor?.id) g.anchor = item;
+    }
+    return [...map.values()];
+  }
+
+  function styleGroups(items) {
+    const map = new Map();
+    for (const item of items || []) {
+      if (!item) continue;
+      const key = styleKey(item);
+      if (!map.has(key)) {
+        map.set(key, {
+          key,
+          name: String(item.name || "Item").trim() || "Item",
+          wearer_type: String(item.wearer_type || "").trim(),
+          hsn: item.hsn || "",
+          category: item.category || "",
+          subcategory: item.subcategory || "",
+          purchase_rate: Number(item.purchase_rate) || 0,
+          unit: item.base_unit || item.unit || "PCS",
+          anchor: item,
+          variants: [],
+          colors: [],
+          sizes: [],
+        });
+      }
+      const g = map.get(key);
+      g.variants.push(item);
+      const color = normalizeColor(item.color);
+      if (color && !g.colors.some((row) => colorsEqual(row, color))) g.colors.push(color);
       const size = normalizeSize(item.size);
       if (size && !g.sizes.includes(size)) g.sizes.push(size);
       if (!g.anchor?.id) g.anchor = item;
@@ -290,14 +406,24 @@
     LETTER_SIZES,
     NUMERIC_SIZES,
     DEFAULT_SIZES,
+    STANDARD_COLORS,
     normalizeSize,
     sizesEqual,
     sizeLabel,
+    normalizeColor,
+    colorsEqual,
+    colorKey,
+    swatchOf,
+    swatchCss,
+    variantKey,
+    barcodesForColor,
     productKey,
+    styleKey,
     productLabel,
     uniqueSizes,
     sizeColumns,
     groupItems,
+    styleGroups,
     totalQty,
     lineAmount,
     formatSizeQtySummary,

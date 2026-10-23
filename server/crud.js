@@ -94,6 +94,7 @@ async function insertApparelVariant(conn, biz, body, variant, imageUrl) {
   } catch {
     /* optional */
   }
+  await stampColorImage(conn, id, variant.color_image);
   await onItemSaved(conn, bid(), id, {
     ...body,
     barcode: variant.barcode || "",
@@ -149,6 +150,7 @@ async function updateApparelVariant(conn, biz, existing, body, variant, imageUrl
   } catch {
     /* optional */
   }
+  await stampColorImage(conn, existing.id, variant.color_image);
   await onItemSaved(conn, bid(), existing.id, {
     ...body,
     barcode: variant.barcode || "",
@@ -227,17 +229,34 @@ function garmentSizeOf(item) {
   return POSGarmentPurchase?.normalizeSize?.(item?.size) || String(item?.size || "").trim();
 }
 
-async function findOrCreateSizeVariant(conn, parent, size, biz) {
+async function stampColorImage(conn, id, image) {
+  const value = String(image || "").trim();
+  if (!id || !value || value.length > 400000) return;
+  if (!/^(#(?:[0-9a-f]{3}|[0-9a-f]{6})|https?:\/\/|data:image\/)/i.test(value)) return;
+  try {
+    await conn.query("UPDATE items SET color_image=? WHERE id=? AND business_id=?", [value, id, bid()]);
+  } catch {
+    /* optional column */
+  }
+}
+
+async function findOrCreateSizeVariant(conn, parent, size, biz, color) {
   const want = POSGarmentPurchase?.normalizeSize?.(size) || String(size || "").trim();
   if (!want) throw new Error("Size is required");
+  const wantColor = color === undefined
+    ? String(parent.color || "")
+    : (POSGarmentPurchase?.normalizeColor?.(color) || String(color || "").trim());
   const [rows] = await conn.query(
     `SELECT * FROM items
      WHERE business_id = ? AND name = ?
        AND COALESCE(color,'') = ? AND COALESCE(wearer_type,'') = ?`,
-    [bid(), parent.name, parent.color || "", parent.wearer_type || ""],
+    [bid(), parent.name, wantColor, parent.wearer_type || ""],
   );
   const match = (rows || []).find((row) => POSGarmentPurchase?.sizesEqual?.(row.size, want) || garmentSizeOf(row) === want);
   if (match) return match;
+  const siblingImage = (rows || []).map((row) => String(row.color_image || "").trim()).find(Boolean) || "";
+  const parentColor = POSGarmentPurchase?.normalizeColor?.(parent.color) || String(parent.color || "").trim();
+  const sameColor = color === undefined || parentColor.toLowerCase() === String(wantColor || "").toLowerCase();
   const n = await nextSeq(conn, "item", 7);
   const prefix = POSFootwear.itemPrefix(biz || {});
   const id = crypto.randomUUID();
@@ -255,7 +274,7 @@ async function findOrCreateSizeVariant(conn, parent, size, biz) {
       parent.local_name || null,
       parent.category || POSFootwear.defaultCategory(biz || {}),
       parent.subcategory || null,
-      parent.color || null,
+      wantColor || null,
       want,
       parent.wearer_type || null,
       itemUnit(parent),
@@ -283,9 +302,10 @@ async function findOrCreateSizeVariant(conn, parent, size, biz) {
   } catch {
     /* optional columns */
   }
+  await stampColorImage(conn, id, siblingImage || (sameColor ? parent.color_image : ""));
   await onItemSaved(conn, bid(), id, {
     size: want,
-    color: parent.color,
+    color: wantColor,
     wearer_type: parent.wearer_type,
     mrp: parent.mrp,
     brand: parent.brand,
@@ -301,6 +321,39 @@ export async function expandGarmentPurchaseLines(conn, lines, biz) {
   const apparel = Boolean(POSFootwear?.isApparelShop?.(biz));
   const out = [];
   for (const line of lines || []) {
+    const matrix = line.color_size_qtys || line.colorSizeQtys;
+    if (apparel && matrix && typeof matrix === "object" && !Array.isArray(matrix)) {
+      const [itemRows] = await conn.query("SELECT * FROM items WHERE id = ? AND business_id = ?", [line.item_id, bid()]);
+      const parent = itemRows[0];
+      if (!parent) throw new Error("Unknown item");
+      let any = false;
+      for (const [colorName, sizeQtys] of Object.entries(matrix)) {
+        const color = POSGarmentPurchase?.normalizeColor?.(colorName) || String(colorName || "").trim();
+        const planned = POSGarmentPurchase.planSizeLines(sizeQtys, {
+          rate: line.rate_per_kg,
+          generate_barcodes: line.generate_barcodes ?? line.generateBarcodes,
+          barcodes_by_size: POSGarmentPurchase.barcodesForColor?.(line.barcodes_by_variant || line.barcodesByVariant, color) || {},
+          allow_empty_barcodes: line.allow_empty_barcodes ?? line.allowEmptyBarcodes ?? true,
+        });
+        for (const row of planned) {
+          any = true;
+          const item = await findOrCreateSizeVariant(conn, parent, row.size, biz, color);
+          out.push({
+            ...line,
+            item_id: item.id,
+            quantity_gm: row.qty,
+            rate_per_kg: row.rate ?? line.rate_per_kg,
+            barcodes: row.barcodes,
+            generate_barcodes: row.generate_barcodes,
+            allow_empty_barcodes: row.allow_empty_barcodes,
+            size: row.size,
+            color,
+          });
+        }
+      }
+      if (!any) throw new Error(`${parent.name}: enter colour and size quantity`);
+      continue;
+    }
     const sizeQtys = line.size_qtys || line.sizeQtys;
     if (!apparel || !sizeQtys || typeof sizeQtys !== "object" || Array.isArray(sizeQtys)) {
       out.push(line);

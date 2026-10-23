@@ -620,11 +620,17 @@
     return (lines || []).reduce((sum, l) => sum + (Number(l.qty) || 0) * (Number(l.rate) || 0), 0);
   }
 
+  function apparelShop() {
+    return hub()?.shopKind?.(biz()) === "apparel";
+  }
+
   function snapshotLines(lines) {
     return (lines || []).map((l) => ({
       id: l.id,
       item_id: l.item_id || "",
       name: l.name,
+      color: l.color || "",
+      size: l.size || "",
       qty: Number(l.qty) || 0,
       rate: Number(l.rate) || 0,
       amount: (Number(l.qty) || 0) * (Number(l.rate) || 0),
@@ -635,10 +641,12 @@
     if (!lines.length) {
       return `<p class="hint doc-lines-empty">No items yet. Search the catalog or type a name, then Add.</p>`;
     }
-    return `<div class="table-wrap"><table class="doc-lines-table"><thead><tr><th>Item</th><th>Qty</th><th>Rate</th><th>Amount</th><th></th></tr></thead><tbody>${lines
+    const colours = apparelShop();
+    return `<div class="table-wrap"><table class="doc-lines-table"><thead><tr><th>Item</th>${colours ? "<th>Colour</th><th>Size</th>" : ""}<th>Qty</th><th>Rate</th><th>Amount</th><th></th></tr></thead><tbody>${lines
       .map(
         (l) => `<tr>
           <td>${escapeHtml(l.name)}</td>
+          ${colours ? `<td>${escapeHtml(l.color || "—")}</td><td>${escapeHtml(l.size || "—")}</td>` : ""}
           <td>${escapeHtml(String(l.qty))}</td>
           <td>${money(l.rate)}</td>
           <td>${money((Number(l.qty) || 0) * (Number(l.rate) || 0))}</td>
@@ -651,7 +659,7 @@
   function itemsSummary(row) {
     const items = Array.isArray(row?.items) ? row.items : [];
     if (!items.length) return "No items";
-    const names = items.map((i) => i.name).filter(Boolean);
+    const names = items.map((i) => [i.name, i.color, i.size].filter(Boolean).join(" ")).filter(Boolean);
     const head = names.slice(0, 2).join(", ");
     return names.length > 2 ? `${items.length}: ${head}…` : `${items.length}: ${head}`;
   }
@@ -667,6 +675,7 @@
           <input id="${searchId}" list="${listId}" maxlength="180" placeholder="Search name, code, or barcode" autocomplete="off" />
           <datalist id="${listId}">${catalogDatalistHtml()}</datalist>
         </label>
+        ${apparelShop() ? `<label>Colour <input id="${which}-doc-item-color" list="garment-color-list" maxlength="40" placeholder="Pink" /></label><label>Size <input id="${which}-doc-item-size" maxlength="16" placeholder="M" /></label>` : ""}
         <label>Qty <input id="${which}-doc-item-qty" type="number" min="0.001" step="0.001" value="1" /></label>
         <label>Rate ₹ <input id="${which}-doc-item-rate" type="number" min="0" step="0.01" value="0" /></label>
         <button class="btn" type="button" data-doc-add-line="${escapeHtml(which)}">Add item</button>
@@ -694,10 +703,14 @@
     const qty = Number(qtyEl?.value) || 1;
     const fallbackRate = which === "sales" ? itemSellRate(found) : itemBuyRate(found);
     const rate = Number(rateEl?.value) || fallbackRate;
+    const colorEl = $(`${which}-doc-item-color`);
+    const sizeEl = $(`${which}-doc-item-size`);
     const line = {
       id: `l${Date.now()}`,
       item_id: found?.id || "",
       name: found?.name || typed,
+      color: String(colorEl?.value || found?.color || "").trim(),
+      size: String(sizeEl?.value || found?.size || "").trim(),
       qty,
       rate,
     };
@@ -706,6 +719,8 @@
     if (search) search.value = "";
     if (qtyEl) qtyEl.value = "1";
     if (rateEl) rateEl.value = "0";
+    if (colorEl) colorEl.value = "";
+    if (sizeEl) sizeEl.value = "";
     paintDocLines(which);
   }
 
@@ -716,6 +731,10 @@
     const found = resolveCatalogItem(search.value);
     if (!found) return;
     rateEl.value = String(which === "sales" ? itemSellRate(found) : itemBuyRate(found));
+    const colorEl = $(`${which}-doc-item-color`);
+    const sizeEl = $(`${which}-doc-item-size`);
+    if (colorEl && !colorEl.value) colorEl.value = found.color || "";
+    if (sizeEl && !sizeEl.value) sizeEl.value = found.size || "";
   }
 
   function paintPurchaseWork(kind) {
@@ -757,7 +776,7 @@
             <select name="status">${meta.statuses.map((s) => `<option>${escapeHtml(s)}</option>`).join("")}</select>
           </label>
           <label class="full">Notes <textarea name="notes" rows="2" maxlength="400" placeholder="Items, qty, or reason"></textarea></label>
-          ${kind === "po" ? itemPickerHtml("purchase") : ""}
+          ${kind === "po" || (apparelShop() && (kind === "preturn" || kind === "debit")) ? itemPickerHtml("purchase") : ""}
           <div class="purchase-doc-actions">
             <button class="btn primary" type="submit">${escapeHtml(meta.save)}</button>
             ${kind === "pr" ? `<button class="btn" type="button" data-doc-convert="po">Save as purchase order</button>` : ""}

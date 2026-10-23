@@ -870,6 +870,19 @@ function pos_garment_sizes_equal($a, $b) {
   return $left !== "" && $left === $right;
 }
 
+function pos_garment_normalize_color($raw) {
+  $text = trim((string) preg_replace('/\s+/', ' ', (string) $raw));
+  if ($text === "") return "";
+  $known = ["Black", "White", "Red", "Blue", "Green", "Pink", "Yellow", "Maroon", "Grey", "Beige", "Brown", "Navy", "Orange", "Purple", "Gold", "Silver", "Cream", "Tan", "Multi"];
+  foreach ($known as $name) {
+    if (strcasecmp($name, $text) === 0) return $name;
+  }
+  return preg_replace_callback('/\b\p{L}/u', function ($m) {
+    $ch = $m[0];
+    return function_exists("mb_strtoupper") ? mb_strtoupper($ch, "UTF-8") : strtoupper($ch);
+  }, $text);
+}
+
 function pos_garment_plan_size_lines($sizeQtys, $opts = []) {
   if (!is_array($sizeQtys)) return [];
   $merged = [];
@@ -1046,6 +1059,7 @@ function pos_ensure_item_unit_columns() {
     "hsn" => "VARCHAR(32) NULL",
     "image_url" => "MEDIUMTEXT NULL",
     "color" => "VARCHAR(64) NULL",
+    "color_image" => "MEDIUMTEXT NULL",
     "size" => "VARCHAR(32) NULL",
     "wearer_type" => "VARCHAR(16) NULL",
     "barcode" => "VARCHAR(64) NULL",

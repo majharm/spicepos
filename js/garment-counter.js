@@ -223,6 +223,11 @@
       image: String(rows[0]?.image_url || ""),
       wearer: wearerKey(rows[0]),
       colors: colorList,
+      colorImages: Object.fromEntries(
+        rows
+          .filter((item) => String(item.color_image || "").trim())
+          .map((item) => [colorKey(item.color), String(item.color_image).trim()]),
+      ),
       color,
       size: inStock?.size || "",
     };
@@ -305,10 +310,14 @@
   }
 
   function parseColors(raw) {
-    if (Array.isArray(raw)) {
-      return [...new Set(raw.map((c) => String(c || "").trim()).filter(Boolean))];
+    const list = Array.isArray(raw) ? raw : String(raw || "").split(/[,/|]+/);
+    const out = [];
+    for (const part of list) {
+      const color = G()?.normalizeColor?.(part) || String(part || "").trim();
+      if (!color || out.some((row) => row.toLowerCase() === color.toLowerCase())) continue;
+      out.push(color);
     }
-    return [...new Set(String(raw || "").split(/[,/|]+/).map((c) => c.trim()).filter(Boolean))];
+    return out;
   }
 
   function draftFromItems(items, anchor) {
@@ -316,8 +325,12 @@
     const sizes = configuredSizes(family.length ? family : [anchor].filter(Boolean));
     const colors = configuredColors(family.length ? family : [anchor].filter(Boolean)).filter(Boolean);
     const cells = {};
+    const colorImages = {};
     for (const item of family) {
       const size = normalizeSize(item.size);
+      const image = String(item.color_image || "").trim();
+      const imageKey = colorKey(item.color);
+      if (image && imageKey && !colorImages[imageKey]) colorImages[imageKey] = image;
       if (!size) continue;
       cells[cellKey(item.color, size)] = {
         id: item.id,
@@ -329,14 +342,17 @@
     }
     return {
       colorsText: colors.join(", "),
+      colors,
+      colorImages,
       sizes,
       cells,
     };
   }
 
   function rowsFromDraft(draft) {
-    const colors = parseColors(draft?.colorsText);
+    const colors = parseColors(draft?.colors?.length ? draft.colors : draft?.colorsText);
     const colorList = colors.length ? colors : [""];
+    const images = draft?.colorImages || {};
     const rows = [];
     for (const color of colorList) {
       for (const size of draft?.sizes || []) {
@@ -348,6 +364,7 @@
           id: String(cell.id || ""),
           size: norm,
           color: String(color || "").trim(),
+          color_image: String(images[colorKey(color)] || "").trim(),
           barcode: String(cell.barcode || "").trim(),
           code: String(cell.code || "").trim(),
           stock_gm: Math.max(0, Math.round(Number(cell.stock_gm) || 0)),
@@ -382,10 +399,13 @@
         if (!Number.isFinite(retail) || retail < 0) throw new Error(`Invalid price for ${size}`);
       }
       const stock = Math.max(0, Math.round(Number(raw?.stock_gm ?? raw?.stock) || 0));
+      let colorImage = String(raw?.color_image || "").trim();
+      if (!/^(#(?:[0-9a-f]{3}|[0-9a-f]{6})|https?:\/\/|data:image\/)/i.test(colorImage) || colorImage.length > 400000) colorImage = "";
       out.push({
         id: String(raw?.id || "").trim(),
         size,
         color,
+        color_image: colorImage,
         barcode,
         code: String(raw?.code || "").trim().slice(0, 64),
         stock_gm: stock,

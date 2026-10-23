@@ -615,9 +615,36 @@
                   <fieldset class="item-block apparel-only full" id="item-variant-block" hidden>
                     <legend>Size &amp; colour variants</legend>
                     <p class="hint">Choose the sizes this garment uses. Add colours when the same style is sold in more than one colour. Each size keeps its own SKU, barcode, opening stock, and selling price.</p>
-                    <label class="full">Colours
-                      <input id="item-variant-colors" placeholder="Pink, Blue" maxlength="180" autocomplete="off" />
-                    </label>
+                    <div class="full">
+                      <span>Colours</span>
+                      <div id="item-variant-colors" class="garment-color-picks" role="group" aria-label="Colours"></div>
+                      <div class="garment-variant-custom">
+                        <input id="item-variant-custom-color" list="garment-color-list" placeholder="Custom colour" maxlength="40" />
+                        <datalist id="garment-color-list">
+                          <option value="Black"></option>
+                          <option value="White"></option>
+                          <option value="Red"></option>
+                          <option value="Blue"></option>
+                          <option value="Green"></option>
+                          <option value="Pink"></option>
+                          <option value="Yellow"></option>
+                          <option value="Maroon"></option>
+                          <option value="Grey"></option>
+                          <option value="Beige"></option>
+                          <option value="Brown"></option>
+                          <option value="Navy"></option>
+                          <option value="Orange"></option>
+                          <option value="Purple"></option>
+                          <option value="Gold"></option>
+                          <option value="Silver"></option>
+                          <option value="Cream"></option>
+                          <option value="Tan"></option>
+                          <option value="Multi"></option>
+                        </datalist>
+                        <button class="btn" type="button" id="item-variant-add-color">Add colour</button>
+                      </div>
+                      <div id="item-variant-color-images" class="garment-color-images"></div>
+                    </div>
                     <div id="item-variant-sizes" class="garment-variant-sizes" role="group" aria-label="Sizes"></div>
                     <div class="garment-variant-custom">
                       <input id="item-variant-custom-size" placeholder="Custom size" maxlength="16" />
@@ -3292,8 +3319,8 @@
     <script src="./js/pos-api.js?v=20261023login1" defer></script>
     <script src="./js/units.js?v=20260919unit1" defer></script>
     <script src="./js/footwear.js?v=20261012print1" defer></script>
-    <script src="./js/garment-purchase.js?v=20261023gar1" defer></script>
-    <script src="./js/garment-counter.js?v=20261023size1" defer></script>
+    <script src="./js/garment-purchase.js?v=20261023col1" defer></script>
+    <script src="./js/garment-counter.js?v=20261023col1" defer></script>
     <script src="./js/restaurant.js?v=20261012set4" defer></script>
     <script src="./js/pay-integrity.js?v=20261012table1" defer></script>
     <script src="./js/aggregator.js?v=20261012agg3" defer></script>
