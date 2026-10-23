@@ -217,7 +217,7 @@ test("PHP Hostinger can open a print order, download files, quote, bill, and mov
   assert.match(ui, /View \/ Download/);
   assert.match(ui, /\/api\/print\/files\//);
   assert.match(read("index.html"), /print-ui\.js\?v=20260922deploy218/);
-  assert.match(read("index.html"), /app\.js\?v=20261023flex1/);
+  assert.match(read("index.html"), /app\.js\?v=20261023flex2/);
 });
 
 test("Print orders page opens the shop modal and paints list or wrapped API rows", () => {
@@ -246,7 +246,7 @@ test("Print order review modal is a stepped desk with quote grid and production 
   assert.match(ui, /Approve file/);
   assert.match(css, /#modal:has\(\.print-order-desk\)/);
   assert.match(css, /\.pod-step\.is-on/);
-  assert.match(index, /pos\.css\?v=20261023cam2/);
+  assert.match(index, /pos\.css\?v=20261023flex2/);
   assert.match(css, /\.lock, \.modal \{[\s\S]*z-index: 90;/);
   assert.match(read("js/app.js"), /id="modal-print-close"/);
 });
@@ -306,6 +306,9 @@ test("Counter bills print items by width × height using the item unit and rate"
   assert.match(app, /function isPrintAreaItem/);
   assert.match(app, /function canChangeRate/);
   assert.match(app, /function focusPrintLineWidth/);
+  assert.match(app, /function isPrintMobileLayout/);
+  assert.match(app, /if \(isPrintMobileLayout\(\)\) setBillCollapsed\(true\)/);
+  assert.match(app, /scrollIntoView\(\{ block: "nearest" \}\)/);
   assert.match(app, /\/api\/print\/counter-file/);
   assert.match(app, /Enter width and height for each print item/);
   assert.match(app, /Enter width × height/);
@@ -327,6 +330,10 @@ test("Counter bills print items by width × height using the item unit and rate"
   assert.match(read("pos-advanced.php"), /function pos_print_billed_qty/);
   assert.match(css, /\.print-size-row/);
   assert.match(css, /body\.printing-mode\.counter-mode/);
+  assert.match(css, /body\.printing-mode\.bill-collapsed\.has-cart \.stage\.is-counter \.lines/);
+  assert.match(css, /body\.printing-mode\.bill-collapsed \.stage\.is-counter \.print-extra-bar/);
+  assert.match(css, /body\.printing-mode\.bill-collapsed \.stage\.is-counter \.bill-settle/);
+  assert.match(css, /body\.printing-mode\.counter-mode \.stage\.is-counter \.pay-this-hint/);
   assert.match(F.itemFormCopy({ category: "Flex & Printing" }).lede, /Width × Height|rate per unit/i);
   assert.match(F.itemFormCopy({ category: "Flex & Printing" }).ticket, /width × height/i);
 });

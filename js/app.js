@@ -333,6 +333,7 @@ function focusPrintLineWidth(line) {
   queueMicrotask(() => {
     const el = document.querySelector(`[data-print-w="${CSS.escape(key)}"]`);
     if (el && typeof el.focus === "function") {
+      el.closest(".print-line")?.scrollIntoView({ block: "nearest" });
       el.focus();
       if (typeof el.select === "function") el.select();
     }
@@ -2577,6 +2578,10 @@ function isRestaurantMobileLayout() {
   return isRestaurantShop() && isMobileLayout();
 }
 
+function isPrintMobileLayout() {
+  return isPrintShop() && isMobileLayout();
+}
+
 function restaurantTablesCompactPreferred() {
   return isRestaurantMobileLayout() && Boolean(state.activeTable) && !state.shiftFromTable;
 }
@@ -2678,7 +2683,7 @@ function restoreBillCollapsed() {
   } catch {
     collapsed = undefined;
   }
-  if (collapsed == null && isRestaurantMobileLayout()) collapsed = true;
+  if (collapsed == null && (isRestaurantMobileLayout() || isPrintMobileLayout())) collapsed = true;
   setBillCollapsed(Boolean(collapsed), { persist: false });
 }
 
@@ -5157,6 +5162,9 @@ function renderCart() {
   if (isRestaurantMobileLayout()) {
     if (!hadCart && state.cart.length) setBillCollapsed(false);
     else if (hadCart && !state.cart.length) setBillCollapsed(true);
+  } else if (isPrintMobileLayout()) {
+    if (!hadCart && state.cart.length) setBillCollapsed(true);
+    else if (hadCart && !state.cart.length) setBillCollapsed(true);
   }
   applyRestaurantMobileChrome();
   paintBillToggleCount();
@@ -5644,6 +5652,7 @@ function addItem(id, qtyGm, lineBarcode) {
     };
     syncPrintLineQty(line, item);
     state.cart.push(line);
+    if (isPrintMobileLayout()) setBillCollapsed(true);
     renderCart();
     focusPrintLineWidth(line);
     warnClassicItem(item);

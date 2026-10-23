@@ -6365,6 +6365,42 @@ body.classic-bill-mode .bill-settle {
     font-size: 16px;
     font-weight: 800;
   }
+  /* Flex phone: collapsed sheet still shows W×H so size can be entered. */
+  body.printing-mode.bill-collapsed.has-cart .stage.is-counter .lines,
+  body.printing-mode.counter-mode.has-cart.bill-collapsed .stage.is-counter .lines {
+    display: block !important;
+    flex: 0 1 auto;
+    min-height: 0;
+    max-height: 38vh;
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+    padding: 6px 10px 4px;
+  }
+  body.printing-mode.bill-collapsed .stage.is-counter .print-extra-bar,
+  body.printing-mode.bill-collapsed .stage.is-counter .bill-extras,
+  body.printing-mode.bill-collapsed .stage.is-counter .bill-settle,
+  body.printing-mode.bill-collapsed .stage.is-counter .print-meta-row,
+  body.printing-mode.bill-collapsed .stage.is-counter .line-disc,
+  body.printing-mode.bill-collapsed .stage.is-counter .line-si,
+  body.printing-mode.bill-collapsed .stage.is-counter .line-si-btn {
+    display: none !important;
+  }
+  body.printing-mode.bill-collapsed .stage.is-counter .totals {
+    display: grid;
+    padding: 4px 12px 0;
+  }
+  body.printing-mode.bill-collapsed .stage.is-counter .totals .grand {
+    font-size: 18px;
+    font-weight: 800;
+  }
+  body.printing-mode.counter-mode.bill-collapsed .stage.is-counter .print-line {
+    padding: 8px 6px;
+    gap: 6px;
+  }
+  body.printing-mode.counter-mode .stage.is-counter .pay-this-hint {
+    display: none;
+  }
   .stage.is-counter .line .who {
     font-size: 14px;
     font-weight: 700;
