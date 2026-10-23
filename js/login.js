@@ -46,9 +46,20 @@ loginForm.addEventListener("submit", async (e) => {
         remember: Boolean(fd.get("remember")),
       }),
     });
-    if (!res.ok) throw new Error(data.error || "Login failed");
-    if (data.expired) {
-      hint.textContent = "Subscription expired. You can view the renewal message after opening the dashboard.";
+    if (!res.ok) {
+      if (String(data?.code || "").startsWith("subscription_")) {
+        const box = document.getElementById("subscription-alert");
+        const title = document.getElementById("subscription-alert-title");
+        const message = document.getElementById("subscription-alert-message");
+        if (box && title && message) {
+          title.textContent = data.title || "Subscription Expired!";
+          message.textContent = data.error || "";
+          box.hidden = false;
+          hint.textContent = "";
+          return;
+        }
+      }
+      throw new Error(data.error || "Login failed");
     }
     if (fd.get("remember")) localStorage.setItem("pos_remember_login", String(fd.get("identifier") || ""));
     else localStorage.removeItem("pos_remember_login");

@@ -6,6 +6,13 @@ import { platformAudit } from "./audit.js";
 import { registerBusiness, updateBusiness, normalizeDsaCode } from "./onboard.js";
 import { defaultPerms } from "./roles.js";
 import { publicStatus } from "./auth.js";
+import {
+  calendarYmd,
+  extendExpiryYmd,
+  publicStatus as subscriptionStatus,
+  recordSubscriptionEvent,
+  shopTodayYmd,
+} from "./subscription.js";
 import { createdToday, createdBetween, saleNotVoidSql } from "./sql-time.js";
 import { assembleDsaSales, dsaSalesToSheets } from "./reports.js";
 import { workbookXml } from "./excel.js";
@@ -374,7 +381,28 @@ export function registerMaster(app) {
 
   app.put("/api/master/businesses/:id", async (req, res) => {
     try {
+      const [before] = await query(
+        "SELECT status, plan_id, subscription_expires_at FROM businesses WHERE id = ?",
+        [req.params.id],
+      );
       const { business } = await updateBusiness(req.params.id, req.body || {});
+      const beforeExp = calendarYmd(before?.subscription_expires_at);
+      const afterExp = calendarYmd(business?.subscription_expires_at);
+      if (
+        before &&
+        (before.status !== business?.status ||
+          String(before.plan_id || "") !== String(business?.plan_id || "") ||
+          beforeExp !== afterExp)
+      ) {
+        await recordSubscriptionEvent(req.params.id, {
+          action: "edit",
+          status: business?.status,
+          planId: business?.plan_id,
+          expiresAt: business?.subscription_expires_at,
+          note: "Subscription updated",
+          actorEmail: req.auth?.admin?.email,
+        });
+      }
       await platformAudit(
         req.auth.admin,
         "Business Edited",
@@ -393,9 +421,96 @@ export function registerMaster(app) {
     send(res, async () => {
       const status = String(req.body?.status || "active");
       if (!["active", "inactive", "suspended"].includes(status)) throw new Error("Invalid status");
+      const [biz] = await query(
+        "SELECT id, plan_id, subscription_expires_at FROM businesses WHERE id = ?",
+        [req.params.id],
+      );
+      if (!biz) throw new Error("Business not found");
       await query("UPDATE businesses SET status = ? WHERE id = ?", [status, req.params.id]);
+      const action = status === "active" ? "activate" : status === "suspended" ? "suspend" : "inactive";
+      await recordSubscriptionEvent(req.params.id, {
+        action,
+        status,
+        planId: biz.plan_id,
+        expiresAt: biz.subscription_expires_at,
+        note: `Status set to ${status}`,
+        actorEmail: req.auth?.admin?.email,
+      });
       await platformAudit(req.auth.admin, "Business Status", { module: "businesses", target_id: req.params.id, status }, req);
       return { ok: true, status };
+    }),
+  );
+
+  app.post("/api/master/businesses/:id/renew", (req, res) =>
+    send(res, async () => {
+      const [biz] = await query("SELECT * FROM businesses WHERE id = ?", [req.params.id]);
+      if (!biz) throw new Error("Business not found");
+      let years = Number(req.body?.years || 1);
+      if (!Number.isFinite(years)) years = 1;
+      years = Math.min(5, Math.max(1, Math.round(years)));
+      const next = extendExpiryYmd(biz.subscription_expires_at, shopTodayYmd(), years);
+      await query("UPDATE businesses SET subscription_expires_at = ?, status = 'active' WHERE id = ?", [
+        next,
+        biz.id,
+      ]);
+      await recordSubscriptionEvent(biz.id, {
+        action: "renew",
+        status: "active",
+        planId: biz.plan_id,
+        expiresAt: next,
+        note: `Renewed ${years} year`,
+        actorEmail: req.auth?.admin?.email,
+      });
+      await platformAudit(
+        req.auth.admin,
+        "Subscription Renewed",
+        { module: "businesses", target_id: biz.id, target_name: biz.name, expires_at: next },
+        req,
+      );
+      const [row] = await query("SELECT * FROM businesses WHERE id = ?", [biz.id]);
+      return { ok: true, expires_at: next, business: { ...row, computed_status: subscriptionStatus(row) } };
+    }),
+  );
+
+  app.get("/api/master/businesses/:id/subscription", (req, res) =>
+    send(res, async () => {
+      const [biz] = await query(
+        `SELECT b.id, b.name, b.status, b.plan_id, b.subscription_expires_at,
+                p.code AS plan_code, p.name AS plan_name, p.fee_monthly
+         FROM businesses b
+         LEFT JOIN subscription_plans p ON p.id = b.plan_id
+         WHERE b.id = ? LIMIT 1`,
+        [req.params.id],
+      );
+      if (!biz) throw new Error("Business not found");
+      let events = [];
+      try {
+        events = await query(
+          `SELECT id, action, status, plan_id, expires_at, note, actor_email, created_at
+           FROM business_subscription_events
+           WHERE business_id = ?
+           ORDER BY created_at DESC
+           LIMIT 50`,
+          [biz.id],
+        );
+      } catch {
+        events = [];
+      }
+      return {
+        ok: true,
+        computed_status: subscriptionStatus(biz),
+        business: {
+          id: biz.id,
+          name: biz.name,
+          status: biz.status,
+          plan_id: biz.plan_id,
+          subscription_expires_at: biz.subscription_expires_at,
+        },
+        plan: biz.plan_id
+          ? { id: biz.plan_id, code: biz.plan_code, name: biz.plan_name, fee_monthly: biz.fee_monthly }
+          : null,
+        events,
+      };
     }),
   );
 

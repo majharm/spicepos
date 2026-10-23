@@ -630,6 +630,19 @@ export async function ensureSchema() {
     INDEX idx_adl_biz (business_id)
   )`);
 
+  await create(`CREATE TABLE IF NOT EXISTS business_subscription_events (
+    id VARCHAR(255) PRIMARY KEY,
+    business_id VARCHAR(255) NOT NULL,
+    action VARCHAR(32) NOT NULL,
+    status VARCHAR(32) NULL,
+    plan_id VARCHAR(255) NULL,
+    expires_at DATE NULL,
+    note VARCHAR(255) NULL,
+    actor_email VARCHAR(255) NULL,
+    created_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    INDEX idx_bse_biz (business_id, created_at)
+  )`);
+
   await create(`CREATE TABLE IF NOT EXISTS platform_settings (
     setting_key VARCHAR(64) PRIMARY KEY,
     setting_value TEXT NULL,

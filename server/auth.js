@@ -8,6 +8,16 @@ import { sendWelcomeSignup, publicLoginUrl } from "./mail.js";
 import { sendWelcomeAlerts } from "./alerts.js";
 import { canonApiUrl } from "./http-path.js";
 import { normalizeLocale } from "./i18n.js";
+import {
+  publicStatus,
+  subscriptionBlock,
+  subscriptionDenial,
+  isRenewalApiPath,
+  SUBSCRIPTION_EXPIRED_TITLE,
+  SUBSCRIPTION_EXPIRED_MESSAGE,
+} from "./subscription.js";
+
+export { publicStatus };
 
 const SESSION_HOURS = 12;
 const REMEMBER_DAYS = 30;
@@ -73,14 +83,14 @@ export function parsePerms(user) {
   return out;
 }
 
-export function publicStatus(business) {
-  if (!business) return "inactive";
-  if (business.status === "suspended" || business.status === "inactive") return business.status;
-  if (business.subscription_expires_at) {
-    const exp = new Date(business.subscription_expires_at);
-    if (!Number.isNaN(exp.getTime()) && exp < new Date()) return "expired";
-  }
-  return business.status || "active";
+async function loadPlan(planId) {
+  if (!planId) return null;
+  const rows = await query("SELECT id, code, name, fee_monthly FROM subscription_plans WHERE id = ?", [planId]);
+  return rows[0] || null;
+}
+
+function requestPath(req) {
+  return canonApiUrl(req.originalUrl || "", req.headers["x-pos-path"]).split("?")[0];
 }
 
 async function loadStaffSession(token) {
@@ -181,16 +191,25 @@ export function requireStaff(req, res, next) {
     return;
   }
   const status = publicStatus(req.auth.business);
-  const open = canonApiUrl(req.originalUrl || "", req.headers["x-pos-path"]).split("?")[0].startsWith("/api/auth");
+  const path = requestPath(req);
   const impersonating = Boolean(req.auth.impersonatorAdminId);
-  if (!open && status !== "active" && !impersonating) {
-    res.status(403).json({
-      error: "Subscription expired. Ask the platform owner to renew.",
-      status,
-    });
+  const allowed =
+    impersonating ||
+    status === "active" ||
+    path.startsWith("/api/auth") ||
+    (status === "expired" && isRenewalApiPath(req.method, path)) ||
+    !subscriptionBlock(status);
+  if (allowed) {
+    next();
     return;
   }
-  next();
+  loadPlan(req.auth.business?.plan_id)
+    .then((plan) => {
+      res.status(403).json(subscriptionDenial(req.auth.business, status, plan));
+    })
+    .catch(() => {
+      res.status(403).json(subscriptionDenial(req.auth.business, status, null));
+    });
 }
 
 export function requireMaster(req, res, next) {
@@ -303,8 +322,12 @@ export function registerAuth(app) {
       }
       const [business] = await query("SELECT * FROM businesses WHERE id = ?", [user.business_id]);
       const status = publicStatus(business);
-      if (status === "suspended" || status === "inactive") {
-        res.status(403).json({ error: `Business is ${status}` });
+      if (subscriptionBlock(status)) {
+        await query("UPDATE staff_users SET failed_logins = 0, locked_until = NULL WHERE id = ?", [
+          user.id,
+        ]);
+        const plan = await loadPlan(business?.plan_id);
+        res.status(403).json(subscriptionDenial(business, status, plan));
         return;
       }
       await query("UPDATE staff_users SET failed_logins = 0, locked_until = NULL WHERE id = ?", [
@@ -333,7 +356,6 @@ export function registerAuth(app) {
       });
       res.json({
         ok: true,
-        expired: status === "expired",
         user: {
           id: user.id,
           email: user.email,
@@ -505,13 +527,10 @@ export function registerAuth(app) {
     }
     if (req.auth?.type === "staff") {
       const status = publicStatus(req.auth.business);
-      let plan = null;
-      if (req.auth.business?.plan_id) {
-        const rows = await query(
-          "SELECT id, code, name, fee_monthly FROM subscription_plans WHERE id = ?",
-          [req.auth.business.plan_id],
-        );
-        plan = rows[0] || null;
+      const plan = await loadPlan(req.auth.business?.plan_id);
+      if (!req.auth.impersonatorAdminId && subscriptionBlock(status)) {
+        res.status(403).json(subscriptionDenial(req.auth.business, status, plan));
+        return;
       }
       res.json({
         ok: true,
@@ -546,6 +565,33 @@ export function registerAuth(app) {
       return;
     }
     res.status(401).json({ error: "Not signed in" });
+  });
+
+  app.get("/api/billing/renewal", async (req, res) => {
+    if (req.auth?.type !== "staff") {
+      res.status(401).json({ error: "Sign in required" });
+      return;
+    }
+    const status = publicStatus(req.auth.business);
+    const plan = await loadPlan(req.auth.business?.plan_id);
+    if (!req.auth.impersonatorAdminId && status !== "active" && status !== "expired") {
+      res.status(403).json(subscriptionDenial(req.auth.business, status, plan));
+      return;
+    }
+    res.json({
+      ok: true,
+      status,
+      title: SUBSCRIPTION_EXPIRED_TITLE,
+      error: status === "expired" ? SUBSCRIPTION_EXPIRED_MESSAGE : "",
+      business: {
+        id: req.auth.business?.id || null,
+        name: req.auth.business?.name || null,
+        subscription_expires_at: req.auth.business?.subscription_expires_at || null,
+      },
+      plan: plan
+        ? { id: plan.id, code: plan.code, name: plan.name, fee_monthly: plan.fee_monthly }
+        : null,
+    });
   });
 
   app.post("/api/me/locale", requireStaff, async (req, res) => {

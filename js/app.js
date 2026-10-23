@@ -16455,6 +16455,15 @@ $("exit-impersonate")?.addEventListener("click", async (e) => {
 async function boot() {
   try {
     const { res, data: me } = await posRequest("/api/auth/me");
+    if (res.status === 403 && String(me?.code || "").startsWith("subscription_")) {
+      try {
+        sessionStorage.setItem("pos_subscription_notice", JSON.stringify(me));
+      } catch {
+        /* display handoff only — the server remains the check */
+      }
+      location.href = "/login.html";
+      return;
+    }
     if (res.status === 401 || !me?.ok) {
       location.href = "/login.html";
       return;

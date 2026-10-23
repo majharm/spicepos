@@ -152,6 +152,75 @@
     if (want) catSel.value = want;
   }
 
+  function escapeHtml(value) {
+    return String(value ?? "").replace(/[&<>"']/g, (ch) => ({
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      '"': "&quot;",
+      "'": "&#39;",
+    }[ch]));
+  }
+
+  function showSubscriptionAlert(data) {
+    const box = document.getElementById("subscription-alert");
+    if (!box || !data) return;
+    const title = document.getElementById("subscription-alert-title");
+    const message = document.getElementById("subscription-alert-message");
+    const facts = document.getElementById("subscription-alert-facts");
+    const renew = document.getElementById("subscription-renew");
+    const panel = document.getElementById("subscription-renew-panel");
+    const copy = document.getElementById("subscription-renew-copy");
+    if (title) title.textContent = data.title || "Subscription Expired!";
+    if (message) message.textContent = data.error || data.message || "";
+    const exp = String(data.business?.subscription_expires_at || "").slice(0, 10);
+    const plan = data.plan || null;
+    const bits = [];
+    if (data.business?.name) bits.push(`<div><dt>Business</dt><dd>${escapeHtml(data.business.name)}</dd></div>`);
+    if (exp) bits.push(`<div><dt>Expiry date</dt><dd>${escapeHtml(exp)}</dd></div>`);
+    if (plan?.name) {
+      const fee = plan.fee_monthly != null && plan.fee_monthly !== "" ? ` · ₹${plan.fee_monthly} / year` : "";
+      bits.push(`<div><dt>Renewal plan</dt><dd>${escapeHtml(String(plan.name) + fee)}</dd></div>`);
+    }
+    if (facts) facts.innerHTML = bits.join("");
+    if (renew) {
+      renew.hidden = data.code !== "subscription_expired";
+      renew.onclick = () => {
+        if (!panel) return;
+        panel.hidden = false;
+        const fee = plan?.name
+          ? `Plan ${plan.name}${plan.fee_monthly != null && plan.fee_monthly !== "" ? ` is ₹${plan.fee_monthly} / year` : ""}. `
+          : "";
+        if (copy) {
+          copy.textContent = `${fee}Contact ATAV support to renew. The same business account works again after the subscription is updated on the server.`;
+        }
+      };
+    }
+    const support = document.getElementById("subscription-support");
+    if (support) {
+      support.onclick = () => {
+        const el = document.getElementById("login-support");
+        if (!el) return;
+        el.hidden = false;
+        el.scrollIntoView({ block: "nearest" });
+      };
+    }
+    if (panel) panel.hidden = true;
+    box.hidden = false;
+    box.scrollIntoView({ block: "nearest" });
+  }
+
+  function readSubscriptionNotice() {
+    try {
+      const raw = sessionStorage.getItem("pos_subscription_notice");
+      if (!raw) return;
+      sessionStorage.removeItem("pos_subscription_notice");
+      showSubscriptionAlert(JSON.parse(raw));
+    } catch {
+      try { sessionStorage.removeItem("pos_subscription_notice"); } catch { /* ignore */ }
+    }
+  }
+
   function bindShopLogin() {
     const loginForm = document.getElementById("login-form");
     const signupForm = document.getElementById("signup-form");
@@ -195,6 +264,7 @@
       );
     }
 
+    readSubscriptionNotice();
     if (!loginForm) return;
 
     document.querySelectorAll(".auth-tab").forEach((tab) => {
@@ -287,9 +357,21 @@
             body: JSON.stringify(payload),
           });
         }
-        if (!result.res.ok) throw new Error(result.data.error || "Login failed");
-        if (result.data.expired && hint) {
-          hint.textContent = "Subscription expired. You can view the renewal message after opening the dashboard.";
+        if (!result.res.ok) {
+          if (String(result.data?.code || "").startsWith("subscription_")) {
+            showSubscriptionAlert(result.data);
+            if (fd.get("remember")) localStorage.setItem("pos_remember_login", String(fd.get("identifier") || ""));
+            if (hint) {
+              hint.textContent = "";
+              hint.className = "hint";
+            }
+            if (submit) {
+              submit.disabled = false;
+              submit.textContent = "Sign in";
+            }
+            return;
+          }
+          throw new Error(result.data.error || "Login failed");
         }
         if (fd.get("remember")) localStorage.setItem("pos_remember_login", String(fd.get("identifier") || ""));
         else localStorage.removeItem("pos_remember_login");

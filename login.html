@@ -10,7 +10,7 @@
     <link rel="preload" as="image" href="./assets/login-atav-navratri-dussehra.jpg?v=20261010nav2" />
     <link rel="stylesheet" href="./css/pos.css?v=20260905deploy136" />
     <link rel="stylesheet" href="./css/saas.css?v=20260919loginp1" />
-    <link rel="stylesheet" href="./css/login-page.css?v=20261008loginfile1" />
+    <link rel="stylesheet" href="./css/login-page.css?v=20261023sub1" />
     <link rel="stylesheet" href="./css/mobile-app.css?v=20261023logo1" />
   </head>
   <body class="auth-body auth-zoho">
@@ -105,6 +105,18 @@
           </div>
           <h1 class="auth-heading" id="auth-heading">Sign in</h1>
           <p id="auth-lead">to access ATAV POS</p>
+          <div class="sub-alert" id="subscription-alert" hidden role="alertdialog" aria-labelledby="subscription-alert-title">
+            <h2 id="subscription-alert-title">Subscription Expired!</h2>
+            <p id="subscription-alert-message">Your business subscription has expired. Please renew your subscription to continue using ATAV POS.</p>
+            <dl id="subscription-alert-facts"></dl>
+            <div class="sub-alert-actions">
+              <button class="btn primary" type="button" id="subscription-renew">Renew Subscription</button>
+              <a class="btn" id="subscription-support" href="#login-support">Contact Support</a>
+            </div>
+            <div id="subscription-renew-panel" hidden>
+              <p id="subscription-renew-copy"></p>
+            </div>
+          </div>
           <p class="auth-trial-invite">Don't have an account? Start a <strong>2-day free trial</strong> — tap Sign Up Now. No card needed.</p>
           <aside class="auth-trial-banner" aria-label="2-day free trial">
             <span class="auth-trial-badge">2 days free</span>
@@ -306,7 +318,7 @@
     <script src="./js/support.js?v=20260905deploy136"></script>
     <script src="./js/pos-api.js?v=20261023login1"></script>
     <script src="./js/login-page.js?v=20261023logo1"></script>
-    <script src="./js/x-pos-20260830e.js?v=20261023login1"></script>
+    <script src="./js/x-pos-20260830e.js?v=20261023sub1"></script>
     <script src="./js/mobile-app.js?v=20261023logo1"></script>
     <script src="./js/ga4.js?v=20260927seo241" defer></script>
   </body>

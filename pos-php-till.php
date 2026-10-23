@@ -16,6 +16,7 @@ function pos_php_till_dispatch($path, $method, $body) {
   if (!in_array($head, $staff, true)) return false;
   $auth = pos_staff_session();
   if (!$auth || ($auth["type"] ?? "") !== "staff") pos_send(401, ["error" => "Sign in required"]);
+  pos_reject_inactive_subscription($auth, $path);
   $bid = $auth["user"]["business_id"];
   $branchId = $auth["branchId"] ?? $auth["user"]["branch_id"] ?? null;
   $uid = $auth["user"]["id"];

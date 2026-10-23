@@ -1403,15 +1403,145 @@ function pos_cookie($name) {
   return isset($_COOKIE[$name]) ? (string) $_COOKIE[$name] : "";
 }
 
+function pos_shop_today_ymd() {
+  try {
+    return (new DateTime("now", new DateTimeZone("Asia/Kolkata")))->format("Y-m-d");
+  } catch (Exception $e) {
+    return gmdate("Y-m-d");
+  }
+}
+
+function pos_calendar_ymd($value) {
+  if ($value instanceof DateTimeInterface) return $value->format("Y-m-d");
+  if (preg_match('/(\d{4}-\d{2}-\d{2})/', (string) $value, $m)) return $m[1];
+  return "";
+}
+
 function pos_public_status($b) {
   if (!$b) return "inactive";
   $st = (string) ($b["status"] ?? "");
   if ($st === "suspended" || $st === "inactive") return $st;
-  if (!empty($b["subscription_expires_at"])) {
-    $exp = strtotime($b["subscription_expires_at"]);
-    if ($exp && $exp < time()) return "expired";
-  }
+  $exp = pos_calendar_ymd($b["subscription_expires_at"] ?? "");
+  if ($exp !== "" && $exp < pos_shop_today_ymd()) return "expired";
   return $st !== "" ? $st : "active";
+}
+
+function pos_subscription_block($status) {
+  if ($status === "expired") {
+    return [
+      "code" => "subscription_expired",
+      "title" => "Subscription Expired!",
+      "error" => "Your business subscription has expired. Please renew your subscription to continue using ATAV POS.",
+    ];
+  }
+  if ($status === "suspended") {
+    return [
+      "code" => "subscription_suspended",
+      "title" => "Account suspended",
+      "error" => "This business account is suspended. Contact support to restore access.",
+    ];
+  }
+  if ($status === "inactive") {
+    return [
+      "code" => "subscription_inactive",
+      "title" => "Account inactive",
+      "error" => "This business account is inactive. Contact support to restore access.",
+    ];
+  }
+  return null;
+}
+
+function pos_plan_brief($planId) {
+  if (!$planId) return null;
+  $rows = pos_q("SELECT id, code, name, fee_monthly FROM subscription_plans WHERE id = ? LIMIT 1", "s", [$planId]);
+  $p = $rows[0] ?? null;
+  if (!$p) return null;
+  return [
+    "id" => $p["id"],
+    "code" => $p["code"] ?? null,
+    "name" => $p["name"] ?? null,
+    "fee_monthly" => $p["fee_monthly"] ?? null,
+  ];
+}
+
+function pos_subscription_denial($business, $status) {
+  $block = pos_subscription_block($status) ?: pos_subscription_block("inactive");
+  $plan = pos_plan_brief($business["plan_id"] ?? null);
+  $exp = pos_calendar_ymd($business["subscription_expires_at"] ?? "");
+  return [
+    "ok" => false,
+    "code" => $block["code"],
+    "title" => $block["title"],
+    "error" => $block["error"],
+    "status" => $status,
+    "business" => [
+      "id" => $business["id"] ?? null,
+      "name" => $business["name"] ?? null,
+      "subscription_expires_at" => $exp !== "" ? $exp : null,
+    ],
+    "plan" => $plan,
+  ];
+}
+
+function pos_reject_inactive_subscription($auth, $path = "") {
+  if (!$auth || !empty($auth["impersonatorAdminId"])) return;
+  $status = pos_public_status($auth["business"] ?? null);
+  if ($status === "active" || !pos_subscription_block($status)) return;
+  if ($status === "expired" && $path === "billing/renewal") return;
+  pos_send(403, pos_subscription_denial($auth["business"] ?? [], $status));
+}
+
+function pos_add_years_ymd($ymd, $years = 1) {
+  $dt = DateTime::createFromFormat("!Y-m-d", (string) $ymd, new DateTimeZone("UTC"));
+  if (!$dt) return "";
+  $dt->modify("+" . (int) $years . " year");
+  return $dt->format("Y-m-d");
+}
+
+function pos_extend_expiry_ymd($current, $today, $years = 1) {
+  $cur = pos_calendar_ymd($current);
+  $base = ($cur !== "" && $cur > $today) ? $cur : $today;
+  return pos_add_years_ymd($base, $years);
+}
+
+function pos_ensure_subscription_history() {
+  static $done = false;
+  if ($done) return;
+  pos_q("CREATE TABLE IF NOT EXISTS business_subscription_events (
+    id VARCHAR(255) PRIMARY KEY,
+    business_id VARCHAR(255) NOT NULL,
+    action VARCHAR(32) NOT NULL,
+    status VARCHAR(32) NULL,
+    plan_id VARCHAR(255) NULL,
+    expires_at DATE NULL,
+    note VARCHAR(255) NULL,
+    actor_email VARCHAR(255) NULL,
+    created_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    INDEX idx_bse_biz (business_id, created_at)
+  )");
+  $done = true;
+}
+
+function pos_record_subscription_event($businessId, $action, $status, $planId, $expiresAt, $note, $actorEmail) {
+  if (!$businessId) return;
+  try {
+    pos_ensure_subscription_history();
+    pos_q(
+      "INSERT INTO business_subscription_events (id, business_id, action, status, plan_id, expires_at, note, actor_email)
+       VALUES (?,?,?,?,?,NULLIF(?, ''),?,?)",
+      "ssssssss",
+      [
+        pos_uuid(),
+        $businessId,
+        substr((string) $action, 0, 32),
+        (string) $status,
+        (string) $planId,
+        pos_calendar_ymd($expiresAt),
+        substr((string) $note, 0, 255),
+        (string) $actorEmail,
+      ]
+    );
+  } catch (Exception $e) { /* history is best-effort */ }
 }
 
 function pos_subscription_snapshot($bid) {
@@ -1420,7 +1550,7 @@ function pos_subscription_snapshot($bid) {
   $exp = pos_normalize_date_only($b["subscription_expires_at"] ?? null);
   $days = null;
   if ($exp) {
-    $today = date("Y-m-d");
+    $today = pos_shop_today_ymd();
     $days = (int) round((strtotime($exp . " 00:00:00") - strtotime($today . " 00:00:00")) / 86400);
   }
   return [
@@ -3321,7 +3451,10 @@ function pos_php_dispatch($path, $method, $rawBody) {
       $bizRows = pos_q("SELECT * FROM businesses WHERE id = ? LIMIT 1", "s", [$user["business_id"]]);
       $business = $bizRows[0] ?? null;
       $status = pos_public_status($business);
-      if ($status === "suspended" || $status === "inactive") pos_send(403, ["error" => "Business is " . $status]);
+      if (pos_subscription_block($status)) {
+        pos_q("UPDATE staff_users SET failed_logins = 0, locked_until = NULL WHERE id = ?", "s", [$user["id"]]);
+        pos_send(403, pos_subscription_denial($business ?: [], $status));
+      }
       pos_q("UPDATE staff_users SET failed_logins = 0, locked_until = NULL WHERE id = ?", "s", [$user["id"]]);
       $ttl = pos_ttl(pos_remember($body));
       $token = pos_new_token();
@@ -3335,7 +3468,6 @@ function pos_php_dispatch($path, $method, $rawBody) {
       pos_set_cookie("pos_sid", $token, $ttl);
       pos_send(200, [
         "ok" => true,
-        "expired" => $status === "expired",
         "php" => true,
         "user" => [
           "id" => $user["id"],
@@ -3425,15 +3557,45 @@ function pos_php_dispatch($path, $method, $rawBody) {
     if ($path === "me/locale" && $method === "POST") {
       $auth = pos_staff_session();
       if (!$auth || ($auth["type"] ?? "") !== "staff") pos_send(401, ["error" => "Sign in required"]);
+        pos_reject_inactive_subscription($auth, $path);
       pos_ensure_i18n_columns();
       $locale = pos_normalize_locale($body["locale"] ?? "");
       pos_q("UPDATE staff_users SET locale = ? WHERE id = ?", "ss", [$locale !== "" ? $locale : null, $auth["user"]["id"]]);
       pos_send(200, ["ok" => true, "locale" => $locale]);
     }
 
+    if ($path === "billing/renewal" && $method === "GET") {
+      $staff = pos_staff_session();
+      if (!$staff) pos_send(401, ["error" => "Sign in required"]);
+      $status = pos_public_status($staff["business"] ?? null);
+      $plan = pos_plan_brief($staff["business"]["plan_id"] ?? null);
+      if (empty($staff["impersonatorAdminId"]) && $status !== "active" && $status !== "expired") {
+        pos_send(403, pos_subscription_denial($staff["business"] ?? [], $status));
+      }
+      $exp = pos_calendar_ymd($staff["business"]["subscription_expires_at"] ?? "");
+      pos_send(200, [
+        "ok" => true,
+        "status" => $status,
+        "title" => "Subscription Expired!",
+        "error" => $status === "expired" ? "Your business subscription has expired. Please renew your subscription to continue using ATAV POS." : "",
+        "business" => [
+          "id" => $staff["business"]["id"] ?? null,
+          "name" => $staff["business"]["name"] ?? null,
+          "subscription_expires_at" => $exp !== "" ? $exp : null,
+        ],
+        "plan" => $plan,
+      ]);
+    }
+
     if ($path === "auth/me" && $method === "GET") {
       $staff = pos_staff_session();
-      if ($staff) pos_send(200, pos_staff_me_payload($staff));
+      if ($staff) {
+        $status = pos_public_status($staff["business"] ?? null);
+        if (empty($staff["impersonatorAdminId"]) && pos_subscription_block($status)) {
+          pos_send(403, pos_subscription_denial($staff["business"] ?? [], $status));
+        }
+        pos_send(200, pos_staff_me_payload($staff));
+      }
       $master = pos_master_session();
       if ($master) pos_send(200, ["ok" => true, "type" => "master", "admin" => $master["admin"]]);
       pos_send(401, ["error" => "Not signed in"]);
@@ -3663,13 +3825,110 @@ function pos_php_dispatch($path, $method, $rawBody) {
     if (preg_match("#^master/businesses/([^/]+)/status$#", $path, $m) && $method === "POST") {
       $status = (string) ($body["status"] ?? "active");
       if (!in_array($status, ["active", "inactive", "suspended"], true)) throw new Exception("Invalid status");
+      $before = pos_q("SELECT id, plan_id, subscription_expires_at FROM businesses WHERE id = ? LIMIT 1", "s", [$m[1]]);
+      if (!$before) throw new Exception("Business not found");
       pos_q("UPDATE businesses SET status = ? WHERE id = ?", "ss", [$status, $m[1]]);
+      $action = $status === "active" ? "activate" : ($status === "suspended" ? "suspend" : "inactive");
+      pos_record_subscription_event(
+        $m[1],
+        $action,
+        $status,
+        $before[0]["plan_id"] ?? "",
+        $before[0]["subscription_expires_at"] ?? "",
+        "Status set to " . $status,
+        $auth["admin"]["email"] ?? ""
+      );
       pos_audit($auth["admin"], "Business Status", ["module" => "businesses", "target_id" => $m[1], "status" => $status]);
       pos_send(200, ["ok" => true, "status" => $status]);
     }
 
+    if (preg_match("#^master/businesses/([^/]+)/renew$#", $path, $m) && $method === "POST") {
+      $rows = pos_q("SELECT * FROM businesses WHERE id = ? LIMIT 1", "s", [$m[1]]);
+      if (!$rows) throw new Exception("Business not found");
+      $biz = $rows[0];
+      $years = (int) ($body["years"] ?? 1);
+      if ($years < 1) $years = 1;
+      if ($years > 5) $years = 5;
+      $next = pos_extend_expiry_ymd($biz["subscription_expires_at"] ?? "", pos_shop_today_ymd(), $years);
+      pos_q("UPDATE businesses SET subscription_expires_at = ?, status = 'active' WHERE id = ?", "ss", [$next, $biz["id"]]);
+      pos_record_subscription_event(
+        $biz["id"],
+        "renew",
+        "active",
+        $biz["plan_id"] ?? "",
+        $next,
+        "Renewed " . $years . " year",
+        $auth["admin"]["email"] ?? ""
+      );
+      pos_audit($auth["admin"], "Subscription Renewed", [
+        "module" => "businesses",
+        "target_id" => $biz["id"],
+        "target_name" => $biz["name"] ?? "",
+        "expires_at" => $next,
+      ]);
+      $fresh = pos_q("SELECT * FROM businesses WHERE id = ? LIMIT 1", "s", [$biz["id"]]);
+      $out = $fresh[0];
+      $out["computed_status"] = pos_public_status($out);
+      pos_send(200, ["ok" => true, "expires_at" => $next, "business" => $out]);
+    }
+
+    if (preg_match("#^master/businesses/([^/]+)/subscription$#", $path, $m) && $method === "GET") {
+      pos_ensure_subscription_history();
+      $rows = pos_q(
+        "SELECT b.*, p.name AS plan_name, p.code AS plan_code, p.fee_monthly
+         FROM businesses b
+         LEFT JOIN subscription_plans p ON p.id = b.plan_id
+         WHERE b.id = ? LIMIT 1",
+        "s",
+        [$m[1]]
+      );
+      if (!$rows) throw new Exception("Business not found");
+      $biz = $rows[0];
+      $events = pos_q(
+        "SELECT id, action, status, plan_id, expires_at, note, actor_email, created_at
+         FROM business_subscription_events WHERE business_id = ? ORDER BY created_at DESC LIMIT 50",
+        "s",
+        [$m[1]]
+      );
+      pos_send(200, [
+        "ok" => true,
+        "computed_status" => pos_public_status($biz),
+        "business" => [
+          "id" => $biz["id"],
+          "name" => $biz["name"] ?? null,
+          "status" => $biz["status"] ?? null,
+          "plan_id" => $biz["plan_id"] ?? null,
+          "subscription_expires_at" => $biz["subscription_expires_at"] ?? null,
+        ],
+        "plan" => !empty($biz["plan_id"]) ? [
+          "id" => $biz["plan_id"],
+          "code" => $biz["plan_code"] ?? null,
+          "name" => $biz["plan_name"] ?? null,
+          "fee_monthly" => $biz["fee_monthly"] ?? null,
+        ] : null,
+        "events" => $events,
+      ]);
+    }
+
     if (preg_match("#^master/businesses/([^/]+)$#", $path, $m) && $method === "PUT") {
+      $beforeRows = pos_q("SELECT status, plan_id, subscription_expires_at FROM businesses WHERE id = ? LIMIT 1", "s", [$m[1]]);
+      $before = $beforeRows[0] ?? null;
       $row = pos_update_business($m[1], $body);
+      if ($before) {
+        $beforeExp = pos_calendar_ymd($before["subscription_expires_at"] ?? "");
+        $afterExp = pos_calendar_ymd($row["subscription_expires_at"] ?? "");
+        if (($before["status"] ?? "") !== ($row["status"] ?? "") || (string) ($before["plan_id"] ?? "") !== (string) ($row["plan_id"] ?? "") || $beforeExp !== $afterExp) {
+          pos_record_subscription_event(
+            $m[1],
+            "edit",
+            $row["status"] ?? "",
+            $row["plan_id"] ?? "",
+            $afterExp,
+            "Subscription updated",
+            $auth["admin"]["email"] ?? ""
+          );
+        }
+      }
       pos_audit($auth["admin"], "Business Edited", ["module" => "businesses", "target_id" => $m[1], "target_name" => $row["name"] ?? ""]);
       pos_send(200, ["ok" => true, "business" => $row]);
     }
@@ -4121,6 +4380,7 @@ function pos_php_dispatch($path, $method, $rawBody) {
       if ($path === "checkout") {
         $auth = pos_staff_session();
         if (!$auth || ($auth["type"] ?? "") !== "staff") pos_send(401, ["error" => "Sign in required"]);
+        pos_reject_inactive_subscription($auth, $path);
         if ($method !== "POST") {
           pos_send(405, [
             "error" => "Use POST to save a bill. GET /api/checkout usually means Apache redirected into the api/checkout folder.",
@@ -4148,6 +4408,7 @@ function pos_php_dispatch($path, $method, $rawBody) {
       if (preg_match('#^orders/[^/]+(/payments)?$#', $path)) {
         $auth = pos_staff_session();
         if (!$auth || ($auth["type"] ?? "") !== "staff") pos_send(401, ["error" => "Sign in required"]);
+        pos_reject_inactive_subscription($auth, $path);
         $bid = $auth["user"]["business_id"];
         pos_apply_business_timezone($bid);
         require_once __DIR__ . "/pos-orders.php";
@@ -4157,6 +4418,7 @@ function pos_php_dispatch($path, $method, $rawBody) {
       if ($path === "holds" || preg_match('#^holds/#', $path)) {
         $auth = pos_staff_session();
         if (!$auth || ($auth["type"] ?? "") !== "staff") pos_send(401, ["error" => "Sign in required"]);
+        pos_reject_inactive_subscription($auth, $path);
         $bid = $auth["user"]["business_id"];
         $branchId = $auth["branchId"] ?? $auth["user"]["branch_id"] ?? null;
         $uid = $auth["user"]["id"];
@@ -4175,6 +4437,7 @@ function pos_php_dispatch($path, $method, $rawBody) {
       if ($path === "backup" || $path === "backup/restore" || $path === "backup/clean") {
         $auth = pos_staff_session();
         if (!$auth || ($auth["type"] ?? "") !== "staff") pos_send(401, ["error" => "Sign in required"]);
+        pos_reject_inactive_subscription($auth, $path);
         $bid = $auth["user"]["business_id"];
         $branchId = $auth["branchId"] ?? $auth["user"]["branch_id"] ?? null;
         $uid = $auth["user"]["id"];
@@ -4193,6 +4456,7 @@ function pos_php_dispatch($path, $method, $rawBody) {
       if (pos_is_returns_path($path)) {
         $auth = pos_staff_session();
         if (!$auth || ($auth["type"] ?? "") !== "staff") pos_send(401, ["error" => "Sign in required"]);
+        pos_reject_inactive_subscription($auth, $path);
         $bid = $auth["user"]["business_id"];
         $branchId = $auth["branchId"] ?? $auth["user"]["branch_id"] ?? null;
         $uid = $auth["user"]["id"];
@@ -4214,6 +4478,7 @@ function pos_php_dispatch($path, $method, $rawBody) {
       if (pos_is_advanced_path($path)) {
         $auth = pos_staff_session();
         if (!$auth || ($auth["type"] ?? "") !== "staff") pos_send(401, ["error" => "Sign in required"]);
+        pos_reject_inactive_subscription($auth, $path);
         $bid = $auth["user"]["business_id"];
         $branchId = $auth["branchId"] ?? $auth["user"]["branch_id"] ?? null;
         $uid = $auth["user"]["id"];
@@ -4234,6 +4499,7 @@ function pos_php_dispatch($path, $method, $rawBody) {
       if ($path === "units" || preg_match('#^units/#', $path)) {
         $auth = pos_staff_session();
         if (!$auth || ($auth["type"] ?? "") !== "staff") pos_send(401, ["error" => "Sign in required"]);
+        pos_reject_inactive_subscription($auth, $path);
         $bid = $auth["user"]["business_id"];
         $branchId = $auth["branchId"] ?? $auth["user"]["branch_id"] ?? null;
         $uid = $auth["user"]["id"];
@@ -4252,6 +4518,7 @@ function pos_php_dispatch($path, $method, $rawBody) {
       if ($path === "brands" || preg_match('#^brands/#', $path)) {
         $auth = pos_staff_session();
         if (!$auth || ($auth["type"] ?? "") !== "staff") pos_send(401, ["error" => "Sign in required"]);
+        pos_reject_inactive_subscription($auth, $path);
         $bid = $auth["user"]["business_id"];
         pos_apply_business_timezone($bid);
         pos_require_brands();
@@ -4276,6 +4543,7 @@ function pos_php_dispatch($path, $method, $rawBody) {
       if (!$handled) {
         $auth = pos_staff_session();
         if ($auth && ($auth["type"] ?? "") === "staff") {
+          pos_reject_inactive_subscription($auth, $path);
           $bid = $auth["user"]["business_id"];
           $branchId = $auth["branchId"] ?? $auth["user"]["branch_id"] ?? null;
           $uid = $auth["user"]["id"];

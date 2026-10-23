@@ -324,7 +324,7 @@ test("Master Admin can set passwords and unlock locked accounts", () => {
   assert.match(core, /pos_register_business\(\$body, true\)/);
   assert.match(core, /strtotime\("\+1 year"\)/);
   assert.match(read("server/onboard.js"), /INTERVAL 1 YEAR/);
-  assert.match(read("master.html"), /master\.js\?v=20261016note1/);
+  assert.match(read("master.html"), /master\.js\?v=20261023sub1/);
   assert.match(read("api/master/dsa-sales/index.php"), /master\/dsa-sales/);
   assert.match(read("api/master/dsa-sales/excel/index.php"), /master\/dsa-sales\/excel/);
   assert.match(core, /master\/dsa-sales/);
@@ -338,7 +338,8 @@ test("Master Admin can set passwords and unlock locked accounts", () => {
   assert.match(read("js/app.js"), /function subscriptionValidity/);
   assert.match(read("pos-php-core.php"), /function pos_subscription_snapshot/);
   assert.match(read("pos-php-till.php"), /"subscription" => function_exists\("pos_subscription_snapshot"\)/);
-  assert.match(read("server/tenant.js"), /DATEDIFF\(subscription_expires_at, CURDATE\(\)\)/);
+  assert.match(read("server/tenant.js"), /DATEDIFF\(subscription_expires_at, \?\) AS days_left/);
+  assert.match(read("server/tenant.js"), /shopTodayYmd\(\)/);
   assert.match(read("server/tenant.js"), /subscription: \{/);
   assert.match(read("css/pos.css"), /\.dash-kpi\.is-warn/);
   assert.match(core, /users\/\(\[\^\/\]\+\)\/unlock/);
@@ -393,7 +394,7 @@ test("POS boot skips API probe and slims catalog photos", () => {
   assert.match(index, /qrcode\.iife\.js[^>]+defer/);
   assert.match(index, /preload="auto"/);
   assert.match(index, /pos-api\.js\?v=20261023login1/);
-  assert.match(index, /app\.js\?v=20261023cemail1/);
+  assert.match(index, /app\.js\?v=20261023sub1/);
   assert.match(index, /class="dialog-head"/);
   assert.match(index, /id="modal-close"/);
   assert.match(read("css/pos.css"), /#modal-close,/);
@@ -404,7 +405,7 @@ test("POS boot skips API probe and slims catalog photos", () => {
   assert.doesNotMatch(index, /app\.js\?v=20260905deploy166/);
   assert.match(index, /offers\.js\?v=20260905deploy170/);
   assert.match(index, /restaurant\.js\?v=20261012set4/);
-  assert.match(login, /x-pos-20260830e\.js\?v=20261023login1/);
+  assert.match(login, /x-pos-20260830e\.js\?v=20261023sub1/);
   assert.match(loginJs, /saveLoginSpec/);
   assert.match(core, /function pos_catalog_items/);
   assert.match(core, /function pos_slim_catalog_item/);
@@ -505,7 +506,7 @@ test("Restaurant Counter can create named dining tables", () => {
   assert.match(restaurant, /function canShiftTable/);
   assert.match(index, /pos\.css\?v=20261023stkui1/);
   assert.match(index, /restaurant\.js\?v=20261012set4/);
-  assert.match(index, /app\.js\?v=20261023cemail1/);
+  assert.match(index, /app\.js\?v=20261023sub1/);
   assert.match(index, /footwear\.js\?v=20261012print1/);
   assert.match(app, /function resolveKitchenKot/);
   assert.match(app, /function paintKotTimers/);

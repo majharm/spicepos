@@ -159,6 +159,25 @@
 .login-promo-panel ul { margin: 8px 0; padding-left: 18px; }
 .login-promo-panel a { color: #fff; }
 
+.sub-alert[hidden],
+#subscription-renew-panel[hidden] { display: none !important; }
+.sub-alert {
+  margin: 12px 0 0;
+  padding: 14px 16px;
+  border: 1px solid #f1aeb5;
+  background: #fff5f5;
+  border-radius: 16px;
+}
+.sub-alert h2 { margin: 0 0 6px; font-size: 1.15rem; }
+.sub-alert p { margin: 0 0 10px; }
+.sub-alert dl { display: grid; gap: 4px; margin: 0 0 12px; }
+.sub-alert dt { font-size: 0.78rem; color: #7f1d1d; }
+.sub-alert dd { margin: 0; font-weight: 650; }
+.sub-alert-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+@media (max-width: 640px) {
+  .sub-alert-actions .btn { flex: 1 1 100%; text-align: center; }
+}
+
 @media (max-width: 980px) {
   .login-page-split { grid-template-columns: 1fr; }
   .login-page-aside { position: static; }

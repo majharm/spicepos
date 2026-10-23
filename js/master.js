@@ -2119,6 +2119,8 @@ async function render() {
                       <button class="btn" type="button" data-reset-biz="${attr(b.id)}">Password</button>
                       <button class="btn" type="button" data-send-expiry="${attr(b.id)}">Expiry alert</button>
                       <button class="btn danger" type="button" data-clean-biz="${attr(b.id)}">Clean data</button>
+                      <button class="btn" type="button" data-renew="${attr(b.id)}">Renew 1 year</button>
+                      <button class="btn" type="button" data-history="${attr(b.id)}">History</button>
                       <button class="btn" type="button" data-act="suspend" data-id="${attr(b.id)}">Suspend</button>
                       <button class="btn" type="button" data-act="activate" data-id="${attr(b.id)}">Activate</button>
                     </div>
@@ -2129,6 +2131,12 @@ async function render() {
             </div>
           </aside>
         </div>
+        <section class="item-composer" id="biz-sub-history" hidden>
+          <div class="item-composer-top">
+            <p class="item-mode" id="biz-sub-history-title">Subscription history</p>
+          </div>
+          <div id="biz-sub-history-body"></div>
+        </section>
       </div>`;
       bindEnterPosButtons(body);
       $("biz-search")?.addEventListener("input", () => {
@@ -2246,6 +2254,50 @@ async function render() {
           btn.disabled = false;
         }
       };
+      body.querySelectorAll("[data-renew]").forEach((btn) => {
+        btn.onclick = async () => {
+          const shop = rows.find((r) => r.id === btn.dataset.renew);
+          if (!confirm(`Renew ${shop?.name || "this shop"} for 1 year and mark the subscription active? The same login stays.`)) return;
+          btn.disabled = true;
+          try {
+            await api(`/api/master/businesses/${btn.dataset.renew}/renew`, { method: "POST", body: "{}" });
+            panelFlash = `${shop?.name || "Shop"} renewed for 1 year. The same account can sign in.`;
+            render();
+          } catch (err) {
+            alert(err.message);
+            btn.disabled = false;
+          }
+        };
+      });
+      body.querySelectorAll("[data-history]").forEach((btn) => {
+        btn.onclick = async () => {
+          const shop = rows.find((r) => r.id === btn.dataset.history);
+          const box = $("biz-sub-history");
+          const title = $("biz-sub-history-title");
+          const slot = $("biz-sub-history-body");
+          if (!box || !slot) return;
+          box.hidden = false;
+          if (title) title.textContent = `Subscription history · ${shop?.name || ""}`;
+          slot.textContent = "Loading…";
+          box.scrollIntoView({ block: "nearest" });
+          try {
+            const data = await api(`/api/master/businesses/${btn.dataset.history}/subscription`);
+            const events = Array.isArray(data.events) ? data.events : [];
+            const exp = ymd(data.business?.subscription_expires_at) || "—";
+            const planName = data.plan?.name || "No plan";
+            const fee = data.plan?.fee_monthly != null ? `${money(data.plan.fee_monthly)} / year` : "";
+            const head = `<p class="item-composer-note">Status ${attr(data.computed_status || "")} · Exp ${attr(exp)} · ${attr(planName)}${fee ? ` · ${attr(fee)}` : ""}</p>`;
+            const table = events.length
+              ? `<div class="table-wrap"><table><thead><tr><th>When</th><th>Action</th><th>Status</th><th>Expiry</th><th>Note</th><th>By</th></tr></thead><tbody>${events
+                  .map((ev) => `<tr><td>${attr(String(ev.created_at || "").replace("T", " ").slice(0, 16))}</td><td>${attr(ev.action || "")}</td><td>${attr(ev.status || "")}</td><td>${attr(ymd(ev.expires_at) || "—")}</td><td>${attr(ev.note || "")}</td><td>${attr(ev.actor_email || "")}</td></tr>`)
+                  .join("")}</tbody></table></div>`
+              : `<p class="item-composer-note">No renewal history yet.</p>`;
+            slot.innerHTML = head + table;
+          } catch (err) {
+            slot.textContent = err.message;
+          }
+        };
+      });
       body.querySelectorAll("[data-act]").forEach((btn) => {
         btn.onclick = async () => {
           await api(`/api/master/businesses/${btn.dataset.id}/status`, {

@@ -2,6 +2,7 @@ import { query, withTransaction } from "./db.js";
 import { clipIdempotencyKey, ensureIdempotencyTable, findIdempotent, saveIdempotent, parseIdempotentPayload } from "./idempotency.js";
 import { bid, branchId, authUser } from "./context.js";
 import { requireStaff, requirePerm, requirePermAny, requireBusinessAdmin, parsePerms, hashPassword, publicStatus } from "./auth.js";
+import { shopTodayYmd } from "./subscription.js";
 import { defaultPerms, ROLES, MODULES } from "./roles.js";
 import { audit } from "./audit.js";
 import { sendWelcomeStaff, publicLoginUrl } from "./mail.js";
@@ -374,9 +375,9 @@ export function registerTenant(app) {
         ),
         query(
           `SELECT subscription_expires_at, status,
-                  DATEDIFF(subscription_expires_at, CURDATE()) AS days_left
+                  DATEDIFF(subscription_expires_at, ?) AS days_left
            FROM businesses WHERE id = ? LIMIT 1`,
-          [businessId],
+          [shopTodayYmd(), businessId],
         ),
         buildHubDashboard().catch(() => ({})),
       ]);
