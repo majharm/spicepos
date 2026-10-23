@@ -57,6 +57,7 @@ test("phone login starts on welcome unless signup is requested", () => {
   assert.equal(M.PHONE_MQ, "(max-width: 980px)");
   const js = read("js/mobile-app.js");
   assert.match(js, /if \(isPhone\(\)\) setAuthPane\(start\)/);
+  assert.match(js, /hello\.querySelector\("\.m-login-logo"\)/);
   assert.match(js, /else document\.body\.classList\.add\("m-auth-form"\)/);
 });
 
@@ -67,13 +68,16 @@ test("InvoiceJet phone overlay is on POS login, home, and tab bar", () => {
   const js = read("js/mobile-app.js");
 
   assert.match(login, /login-atav-navratri-dussehra\.jpg/);
-  assert.match(login, /js\/login-page\.js\?v=20261023login1/);
+  assert.match(login, /js\/login-page\.js\?v=20261023logo1/);
   assert.match(login, /js\/pos-api\.js\?v=20261023login1/);
   assert.match(login, /css\/login-page\.css\?v=20261008loginfile1/);
   assert.match(login, /x-pos-20260830e\.js\?v=20261023login1/);
-  assert.match(login, /css\/mobile-app\.css\?v=20261012jet6/);
-  assert.match(login, /js\/mobile-app\.js\?v=20261012jet6/);
+  assert.match(login, /css\/mobile-app\.css\?v=20261023logo1/);
+  assert.match(login, /js\/mobile-app\.js\?v=20261023logo1/);
   assert.match(login, /id="m-welcome"/);
+  assert.match(login, /m-welcome-logo/);
+  assert.match(login, /m-login-logo/);
+  assert.match(login, /atav-telecom-logo\.png/);
   assert.match(login, /All-in-One Invoicing Solution/);
   assert.match(login, /Hi, Welcome back!/);
   assert.match(login, /Forgot password\?/);
@@ -83,8 +87,8 @@ test("InvoiceJet phone overlay is on POS login, home, and tab bar", () => {
   assert.match(login, /id="m-go-signup"/);
 
   assert.match(index, /app\.js\?v=20261023cam2/);
-  assert.match(index, /css\/mobile-app\.css\?v=20261016note1/);
-  assert.match(index, /js\/mobile-app\.js\?v=20261012jet6/);
+  assert.match(index, /css\/mobile-app\.css\?v=20261023logo1/);
+  assert.match(index, /js\/mobile-app\.js\?v=20261023logo1/);
   assert.match(index, /id="m-home"/);
   assert.match(index, /id="m-reports"/);
   assert.match(index, /id="m-tabbar"/);
@@ -101,6 +105,8 @@ test("InvoiceJet phone overlay is on POS login, home, and tab bar", () => {
   assert.match(css, /@media \(min-width: 721px\) \{\s*#m-welcome/);
   assert.match(css, /body\.m-app \.app\.nav-collapsed \.nav/);
   assert.match(css, /#m-welcome/);
+  assert.match(css, /\.m-welcome-logo/);
+  assert.match(css, /\.m-login-logo/);
   assert.match(css, /\.m-tabbar/);
   assert.match(css, /body\.m-app\.analytics-home \.saas-dash-desk/);
   assert.match(css, /body\.m-app\.analytics-home \.qr-sound-arm/);
