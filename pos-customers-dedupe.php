@@ -325,7 +325,7 @@ function pos_customers_dedupe_dispatch($path, $method, $body, $bid, $auth = []) 
   }
   if ($path === "customers/match" && $method === "GET") {
     $input = ["mobile" => $_GET["mobile"] ?? "", "email" => $_GET["email"] ?? "", "gstin" => $_GET["gstin"] ?? ""];
-    $match = pos_find_existing_customer($bid, $input);
+    $match = pos_find_existing_customer($bid, $input, trim((string) ($_GET["exclude"] ?? "")));
     pos_send(200, ["match" => $match, "warning" => pos_customer_match_warning($match, $input)]);
     return true;
   }

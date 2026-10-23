@@ -486,12 +486,26 @@ function pos_build_reports($bid, $from, $to) {
   } catch (Exception $e) {
     $expenses = [];
   }
-  $customers = pos_q(
-    "SELECT code, name, business_name, mobile, type, gstin, state, credit_limit, outstanding
-     FROM customers WHERE business_id = ? ORDER BY name",
-    "s",
-    [$bid]
-  );
+  if (function_exists("pos_ensure_columns")) {
+    pos_ensure_columns("customers", ["email" => "VARCHAR(160) NULL"]);
+  }
+  try {
+    $customers = pos_q(
+      "SELECT code, name, business_name, mobile, email, type, gstin, state, credit_limit, outstanding
+       FROM customers WHERE business_id = ? ORDER BY name",
+      "s",
+      [$bid]
+    );
+  } catch (Exception $e) {
+    $customers = pos_q(
+      "SELECT code, name, business_name, mobile, type, gstin, state, credit_limit, outstanding
+       FROM customers WHERE business_id = ? ORDER BY name",
+      "s",
+      [$bid]
+    );
+    foreach ($customers as &$customerRow) $customerRow["email"] = null;
+    unset($customerRow);
+  }
   $companyRows = pos_q("SELECT gstin, state FROM company_settings WHERE business_id = ? LIMIT 1", "s", [$bid]);
   $shop = [
     "gstin" => $companyRows[0]["gstin"] ?? null,
@@ -893,10 +907,10 @@ function pos_reports_to_sheets($data, $biz = null) {
     ],
     [
       "name" => "Customers",
-      "headers" => ["Code", "Name", "Business", "Mobile", "Type", "State", "GSTIN", "Credit limit", "Outstanding"],
+      "headers" => ["Code", "Name", "Business", "Mobile", "Email", "Type", "State", "GSTIN", "Credit limit", "Outstanding"],
       "rows" => array_map(function ($c) use ($num) {
         return [
-          $c["code"], $c["name"], $c["business_name"], $c["mobile"], $c["type"], $c["state"] ?? null, $c["gstin"],
+          $c["code"], $c["name"], $c["business_name"], $c["mobile"], $c["email"] ?? "", $c["type"], $c["state"] ?? null, $c["gstin"],
           $num($c["credit_limit"]), $num($c["outstanding"]),
         ];
       }, $data["customers"] ?? []),

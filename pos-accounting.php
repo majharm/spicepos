@@ -569,11 +569,20 @@ function pos_accounts_dispatch($path, $method, $body, $bid, $auth, $branchId, $u
   }
 
   if ($path === "accounts/receivables" && $method === "GET") {
-    pos_send(200, pos_q(
-      "SELECT id, code, name, business_name, mobile, type, credit_limit, outstanding
-       FROM customers WHERE business_id = ? AND outstanding > 0 ORDER BY outstanding DESC, name",
-      "s", [$bid]
-    ));
+    if (function_exists("pos_ensure_columns")) pos_ensure_columns("customers", ["email" => "VARCHAR(160) NULL"]);
+    try {
+      pos_send(200, pos_q(
+        "SELECT id, code, name, business_name, mobile, email, type, credit_limit, outstanding
+         FROM customers WHERE business_id = ? AND outstanding > 0 ORDER BY outstanding DESC, name",
+        "s", [$bid]
+      ));
+    } catch (Exception $e) {
+      pos_send(200, pos_q(
+        "SELECT id, code, name, business_name, mobile, type, credit_limit, outstanding
+         FROM customers WHERE business_id = ? AND outstanding > 0 ORDER BY outstanding DESC, name",
+        "s", [$bid]
+      ));
+    }
   }
 
   if ($path === "accounts/payables" && $method === "GET") {
@@ -651,11 +660,19 @@ function pos_accounts_dispatch($path, $method, $body, $bid, $auth, $branchId, $u
     }
     $party = null;
     if ($partyType === "customer") {
-      $found = pos_q(
-        "SELECT id, code, name, business_name, mobile, outstanding FROM customers WHERE id = ? AND business_id = ? LIMIT 1",
-        "ss",
-        [$partyId, $bid]
-      );
+      try {
+        $found = pos_q(
+          "SELECT id, code, name, business_name, mobile, email, outstanding FROM customers WHERE id = ? AND business_id = ? LIMIT 1",
+          "ss",
+          [$partyId, $bid]
+        );
+      } catch (Exception $e) {
+        $found = pos_q(
+          "SELECT id, code, name, business_name, mobile, outstanding FROM customers WHERE id = ? AND business_id = ? LIMIT 1",
+          "ss",
+          [$partyId, $bid]
+        );
+      }
       $party = $found[0] ?? ["id" => $partyId, "name" => $rows[0]["party_name"] ?? "Customer"];
     } else {
       $found = pos_q(

@@ -1290,7 +1290,8 @@ function findCustomersByName(raw) {
   return (state.customers || []).filter((c) => {
     if (isWalkInCustomer(c)) return false;
     const name = String(c.business_name || c.name || "").trim().toLowerCase();
-    return name.includes(q);
+    const email = String(c.email || "").trim().toLowerCase();
+    return name.includes(q) || (email && email.includes(q));
   }).slice(0, 8);
 }
 
@@ -1392,6 +1393,7 @@ function classicCustomerRecordDirty() {
   return [
     "bill-cust-name",
     "bill-cust-mobile",
+    "bill-cust-email",
     "bill-cust-address",
     "bill-cust-area",
     "bill-cust-city",
@@ -1410,6 +1412,7 @@ function resetClassicCustomerRecord({ focus = false } = {}) {
   [
     "bill-cust-name",
     "bill-cust-mobile",
+    "bill-cust-email",
     "bill-cust-address",
     "bill-cust-area",
     "bill-cust-city",
@@ -1417,6 +1420,7 @@ function resetClassicCustomerRecord({ focus = false } = {}) {
     "bill-doctor-rx",
     "qc-name",
     "qc-mobile",
+    "qc-email",
     "qc-address",
     "qc-doctor-rx",
   ].forEach((id) => {
@@ -1783,6 +1787,7 @@ function fillPharmacyBillCustomerFromCustomer(cust, { force = false } = {}) {
   setClassicField("bill-doctor-rx", walk ? "" : String(c?.doctor_rx || ""), { force });
   const shown = digitsMobile(c?.mobile);
   setClassicField("bill-cust-mobile", isRealMobile(shown) ? shown : "", { force });
+  setClassicField("bill-cust-email", walk ? "" : String(c?.email || ""), { force });
   paintClassicCustomerStatus();
 }
 
@@ -1868,10 +1873,18 @@ async function addClassicBillCustomer() {
     setHint("Enter customer name to add", "error");
     return;
   }
+  const emailError = globalThis.POSCustomerMaster?.emailError?.($("bill-cust-email")?.value || "");
+  if (emailError) {
+    $("bill-cust-email")?.focus();
+    globalThis.POSCustomerMasterUi?.paintEmailField?.($("bill-cust-email"));
+    setHint(emailError, "error");
+    return;
+  }
   try {
     const created = await saveCustomer({
       name,
       mobile: digitsMobile($("bill-cust-mobile")?.value || mobile),
+      email: $("bill-cust-email")?.value || "",
       address: pharmacyBillCustomerAddress(),
       doctor_rx: pharmacyBillDoctorRx(),
     });
@@ -5265,12 +5278,19 @@ async function saveCustomer(fields) {
   const name = String(fields.name || "").trim();
   const mobile = String(fields.mobile || "").replace(/\s+/g, "").trim();
   if (!name || !mobile) throw new Error("Name and mobile are required");
+  const emailRaw = String(fields.email || "").trim();
+  const emailError = globalThis.POSCustomerMaster?.emailError?.(emailRaw) || "";
+  if (emailError) throw new Error(emailError);
+  const email = globalThis.POSCustomerMaster?.normalizeEmail?.(emailRaw) || emailRaw.toLowerCase();
+  const id = String(fields.id || "").trim();
   const payload = {
     name,
     mobile,
+    email,
     business_name: fields.business_name || "",
     type: fields.type === "b2b" ? "b2b" : "b2c",
     gstin: fields.gstin || "",
+    state: fields.state || "",
     dob: fields.dob || "",
     referred_by: fields.referred_by || "",
     locale: fields.locale || "",
@@ -5286,12 +5306,12 @@ async function saveCustomer(fields) {
     if (fields.reuseExisting === false) throw new Error(warning);
     return Object.assign({}, customer, { _duplicate: true, _warning: warning });
   };
-  const match = globalThis.POSCustomerMaster?.findMatch(state.customers || [], payload);
+  const match = globalThis.POSCustomerMaster?.findMatch(state.customers || [], payload, id);
   if (match && !fields.force) {
     return adoptExisting(match, globalThis.POSCustomerMaster.warningCopy(match, payload));
   }
-  const { res, data } = await posRequest("/api/customers", {
-    method: "POST",
+  const { res, data } = await posRequest(id ? `/api/customers/${encodeURIComponent(id)}` : "/api/customers", {
+    method: id ? "PUT" : "POST",
     body: JSON.stringify(payload),
   });
   if (res.status === 409 && data?.customer) {
@@ -6822,6 +6842,100 @@ async function collectCustomerDue(customer, amount, method, notes, extras = {}) 
   return data;
 }
 
+function customerRecord(row) {
+  if (!row?.id) return row || null;
+  const saved = (state.customers || []).find((c) => c.id === row.id);
+  if (!saved) return row;
+  return { ...saved, ...row, email: row.email || saved.email || "" };
+}
+
+function customerReminderLinks(row, outstanding) {
+  const c = customerRecord(row) || row;
+  const due = Number(outstanding);
+  if (!(due > 0)) return { email: "", whatsapp: "" };
+  const M = globalThis.POSCustomerMaster;
+  const S = globalThis.POSInvoiceShare;
+  const note = M?.dueReminder?.({
+    shopName: state.company?.name,
+    customerName: c?.business_name || c?.name,
+    outstanding: due,
+  }) || { subject: "Payment reminder", body: "" };
+  const email = String(c?.email || "").trim();
+  return {
+    email: email && !M?.emailError?.(email) ? M.mailtoUrl(email, note.subject, note.body) : "",
+    whatsapp: S?.whatsappShareUrl ? S.whatsappShareUrl(c?.mobile, note.body || "") : "",
+  };
+}
+
+function customerRemindButtons(row, outstanding) {
+  const links = customerReminderLinks(row, outstanding);
+  return `${links.email ? `<a class="btn" href="${escapeHtml(links.email)}">Email reminder</a>` : ""}${links.whatsapp ? `<a class="btn" href="${escapeHtml(links.whatsapp)}" target="_blank" rel="noopener">WhatsApp reminder</a>` : ""}`;
+}
+
+function resetCustomerForm() {
+  $("customer-form")?.reset();
+  if ($("cust-id")) $("cust-id").value = "";
+  if ($("cust-form-mode")) $("cust-form-mode").textContent = "Customer";
+  if ($("cust-save")) $("cust-save").textContent = "Save customer";
+  if ($("cust-email")) $("cust-email").setCustomValidity("");
+  const emailHint = $("cust-email-hint");
+  if (emailHint) {
+    emailHint.textContent = "";
+    emailHint.className = "hint";
+  }
+  const matchHint = $("cust-match-hint");
+  if (matchHint) {
+    matchHint.textContent = "";
+    matchHint.className = "hint";
+  }
+}
+
+function fillCustomerForm(c) {
+  if (!c) return;
+  if ($("cust-id")) $("cust-id").value = c.id || "";
+  if ($("cust-name")) $("cust-name").value = c.name || "";
+  if ($("cust-biz")) $("cust-biz").value = c.business_name || "";
+  if ($("cust-mobile")) $("cust-mobile").value = c.mobile || "";
+  if ($("cust-email")) $("cust-email").value = c.email || "";
+  if ($("cust-address")) $("cust-address").value = c.address || "";
+  if ($("cust-doctor-rx")) $("cust-doctor-rx").value = c.doctor_rx || "";
+  if ($("cust-type")) $("cust-type").value = c.type === "b2b" ? "b2b" : "b2c";
+  if ($("cust-gstin")) $("cust-gstin").value = c.gstin || "";
+  if ($("cust-state")) $("cust-state").value = c.state || "";
+  if ($("cust-dob")) $("cust-dob").value = String(c.dob || "").slice(0, 10);
+  if ($("cust-ref")) $("cust-ref").value = c.referred_by || "";
+  if ($("cust-locale")) $("cust-locale").value = c.locale || "";
+  if ($("cust-form-mode")) $("cust-form-mode").textContent = "Edit customer";
+  if ($("cust-save")) $("cust-save").textContent = "Update customer";
+  globalThis.POSCustomerMasterUi?.paintEmailField?.($("cust-email"));
+}
+
+function paintCustomerDetails(c) {
+  const el = $("customer-details");
+  if (!el) return;
+  if (!c) {
+    el.hidden = true;
+    el.innerHTML = "";
+    return;
+  }
+  const due = customerDue(c);
+  const rows = [
+    ["Code", c.code || "—"],
+    ["Name", c.business_name || c.name || "—"],
+    ["Mobile", c.mobile || "—"],
+    ["Email ID", c.email || "—"],
+    ["Type", c.type || "—"],
+    ["State", c.state || "—"],
+    ["GSTIN", c.gstin || "—"],
+    ["Address", c.address || "—"],
+    ["Outstanding", money(due)],
+  ];
+  el.hidden = false;
+  el.innerHTML = `<h4>Customer details</h4><dl>${rows
+    .map(([k, v]) => `<div><dt>${escapeHtml(k)}</dt><dd>${escapeHtml(String(v))}</dd></div>`)
+    .join("")}</dl><div class="cust-actions">${due > 0 ? `<button class="btn primary" type="button" data-collect-due="${escapeHtml(c.id)}">Collect</button>` : ""}${customerRemindButtons(c, due)}<button class="btn" type="button" data-cust-edit="${escapeHtml(c.id)}">Edit</button></div>`;
+}
+
 function renderCustomersTable() {
   applyInvoiceDuesToCustomers();
   const list = Array.isArray(state.customers) ? state.customers : [];
@@ -6839,25 +6953,40 @@ function renderCustomersTable() {
   fillDueCustomerSelect();
   const el = $("customers-table");
   if (!el) return;
-  const cap = fastModeOn() ? 80 : list.length;
-  const rows = list.slice(0, cap);
-  const moreHint = listRenderHint(rows.length, list.length);
+  const q = String($("customers-search")?.value || "").trim().toLowerCase();
+  const filtered = !q
+    ? list
+    : list.filter((c) => [c.code, c.name, c.business_name, c.mobile, c.email, c.gstin, c.state].join(" ").toLowerCase().includes(q));
+  if (q && !filtered.length) {
+    el.innerHTML = `<p class="hint">No customers match this search.</p>`;
+    return;
+  }
+  const cap = fastModeOn() ? 80 : filtered.length;
+  const rows = filtered.slice(0, cap);
+  const moreHint = listRenderHint(rows.length, filtered.length);
   el.innerHTML = `${moreHint}<table><thead><tr>
-    <th>Code</th><th>${isPharmacyShop() ? "Customer Name" : "Name"}</th>${isPharmacyShop() ? "<th>Address</th><th>Doctor / Rx</th>" : "<th>Type</th>"}<th>${isPharmacyShop() ? "Mobile No." : "Mobile"}</th>${isPharmacyShop() ? "" : "<th>State</th><th>GSTIN</th>"}<th>Outstanding</th><th></th>
+    <th>Code</th><th>${isPharmacyShop() ? "Customer Name" : "Name"}</th>${isPharmacyShop() ? "<th>Address</th><th>Doctor / Rx</th>" : "<th>Type</th>"}<th>${isPharmacyShop() ? "Mobile No." : "Mobile"}</th><th>Email ID</th>${isPharmacyShop() ? "" : "<th>State</th><th>GSTIN</th>"}<th>Outstanding</th><th></th>
   </tr></thead><tbody>${rows
-    .map(
-      (c) => `<tr>
+    .map((c) => {
+      const due = customerDue(c);
+      return `<tr>
       <td>${escapeHtml(c.code)}</td>
       <td>${escapeHtml(c.business_name || c.name)}</td>
       ${isPharmacyShop()
         ? `<td>${escapeHtml(c.address || "—")}</td><td>${escapeHtml(c.doctor_rx || "—")}</td>`
         : `<td>${escapeHtml(c.type)}</td>`}
       <td>${escapeHtml(c.mobile)}</td>
+      <td>${escapeHtml(c.email || "—")}</td>
       ${isPharmacyShop() ? "" : `<td>${escapeHtml(c.state || "—")}</td><td>${escapeHtml(c.gstin || "—")}</td>`}
-      <td class="cust-due">${money(customerDue(c))}</td>
-      <td>${customerDue(c) > 0 ? `<button class="btn primary" type="button" data-collect-due="${escapeHtml(c.id)}">Collect</button>` : ""}</td>
-    </tr>`,
-    )
+      <td class="cust-due">${money(due)}</td>
+      <td><div class="cust-actions">
+        <button class="btn" type="button" data-cust-details="${escapeHtml(c.id)}">Details</button>
+        <button class="btn" type="button" data-cust-edit="${escapeHtml(c.id)}">Edit</button>
+        ${due > 0 ? `<button class="btn primary" type="button" data-collect-due="${escapeHtml(c.id)}">Collect</button>` : ""}
+        ${customerRemindButtons(c, due)}
+      </div></td>
+    </tr>`;
+    })
     .join("")}</tbody></table>`;
 }
 
@@ -9130,7 +9259,7 @@ async function loadReports() {
       reportBlock("Purchases", "Purchases", ["PO", "Supplier", "Invoice", "Date", "Taxable", "GST", "Total", "Pay", "Status"], (data.purchases || []).map((p) => [p.purchase_number, p.supplier_name, p.supplier_invoice_number, p.purchase_date, Number(p.subtotal) || 0, Number(p.gst) || 0, Number(p.total) || 0, p.payment_method, p.payment_status]), "books"),
       ...(isApparelShop() ? [reportBlock("Purchase lines", "Purchase lines", ["PO", "Date", "Supplier", "Item", "Colour", "Size", "Qty g", "Amount"], (data.purchaseLines || []).map((r) => [r.purchase_number, r.purchase_date, r.supplier_name, r.item_name, r.color || "—", r.size || "—", Number(r.quantity_gm) || 0, Number(r.amount) || 0]), "books")] : []),
       reportBlock("Expenses", "Expenses", ["No.", "Date", "Category", "Amount", "GST", "Total", "Pay", "Notes"], (data.expenses || []).map((e) => [e.expense_number, e.expense_date, e.category, Number(e.amount) || 0, Number(e.gst) || 0, Number(e.total) || (Number(e.amount) || 0) + (Number(e.gst) || 0), e.payment_method, e.notes]), "books"),
-      reportBlock("Customers", "Customers", ["Code", "Name", "Business", "Mobile", "Type", "State", "GSTIN", "Credit limit", "Outstanding"], (data.customers || []).map((c) => [c.code, c.name, c.business_name, c.mobile, c.type, c.state, c.gstin, Number(c.credit_limit) || 0, Number(c.outstanding) || 0]), "books"),
+      reportBlock("Customers", "Customers", ["Code", "Name", "Business", "Mobile", "Email", "Type", "State", "GSTIN", "Credit limit", "Outstanding"], (data.customers || []).map((c) => [c.code, c.name, c.business_name, c.mobile, c.email || "", c.type, c.state, c.gstin, Number(c.credit_limit) || 0, Number(c.outstanding) || 0]), "books"),
       reportBlock("Cancelled sales", "Cancelled sales", ["Order", "Customer", "Total", "Pay", "Date"], (data.sales || []).filter((o) => String(o.status || "").toLowerCase() === "cancelled").map((o) => [o.order_number, o.customer_name, Number(o.total) || 0, o.payment_method, formatShopDateTime(o.created_at)]), "sales"),
     ].join("");
     applyReportsFilter();
@@ -9288,14 +9417,17 @@ function setInvoiceLook(look) {
 function orderShare(order) {
   const S = globalThis.POSInvoiceShare;
   if (!S || !order?.id) return null;
-  return S.shareActions(order, state.company || {}, location.origin);
+  const cust = (state.customers || []).find((c) => c.id === order.customer_id);
+  const enriched = { ...order, customer_email: order.customer_email || cust?.email || "" };
+  return S.shareActions(enriched, state.company || {}, location.origin);
 }
 
 function invoiceShareButtons(order, { copyId } = {}) {
   const share = orderShare(order);
   if (!share) return "";
   const idAttr = copyId ? ` id="${escapeHtml(copyId)}"` : "";
-  return `<a class="btn" href="${escapeHtml(share.whatsapp)}" target="_blank" rel="noopener">Share WhatsApp</a>
+  const email = share.email ? `<a class="btn" href="${escapeHtml(share.email)}">Email invoice</a>` : "";
+  return `${email}<a class="btn" href="${escapeHtml(share.whatsapp)}" target="_blank" rel="noopener">Share WhatsApp</a>
       <button class="btn" type="button" data-copy-invoice="${escapeHtml(order.id)}"${idAttr}>Copy link</button>`;
 }
 
@@ -11277,10 +11409,12 @@ async function loadExpenses() {
 }
 
 function showReceiptModal(customer) {
-  const due = Number(customer.outstanding) || 0;
-  $("modal-title").textContent = `Collect due · ${customer.business_name || customer.name}`;
+  const row = customerRecord(customer);
+  const due = Number(row.outstanding) || 0;
+  $("modal-title").textContent = `Collect due · ${row.business_name || row.name}`;
   $("modal-body").innerHTML = `<form class="settings" id="receipt-modal-form">
-    <p class="section-note">Outstanding: <strong>${money(due)}</strong>${customer.mobile ? ` · ${escapeHtml(customer.mobile)}` : ""}</p>
+    <p class="section-note">Outstanding: <strong>${money(due)}</strong>${row.mobile ? ` · ${escapeHtml(row.mobile)}` : ""}${row.email ? ` · ${escapeHtml(row.email)}` : ""}</p>
+    <div class="cust-actions">${customerRemindButtons(row, due)}</div>
     <label>Amount <input id="rcp-amount" type="number" min="0.01" step="0.01" max="${due}" required value="${due}" /></label>
     <label>Payment date <input id="rcp-date" type="date" required value="${escapeHtml(shopDateInputValue())}" /></label>
     <label>Method <select id="rcp-method">${globalThis.POSPay?.optionsHtml?.({ selected: "cash" }) || `<option value="cash">Cash</option><option value="upi">UPI</option>`}</select></label>
@@ -11295,7 +11429,7 @@ function showReceiptModal(customer) {
     const note = String($("rcp-notes").value || "").trim();
     const method = $("rcp-method").value;
     try {
-      await collectCustomerDue(customer, $("rcp-amount").value, method, note, {
+      await collectCustomerDue(row, $("rcp-amount").value, method, note, {
         payment_date: $("rcp-date")?.value || shopDateInputValue(),
         payment_reference: ref,
         order_id: "",
@@ -11364,8 +11498,11 @@ async function loadAccounts() {
       ["Suppliers due", summary.suppliersDue],
     ].map(([k, v]) => `<div class="report-card"><span>${k}</span><strong>${v}</strong></div>`).join("");
     $("acc-receivables-table").innerHTML = receivables.length
-      ? `<table><thead><tr><th>Code</th><th>Name</th><th>Business</th><th>Mobile</th><th>Credit limit</th><th>Outstanding</th><th></th></tr></thead><tbody>${receivables
-        .map((c) => `<tr><td>${escapeHtml(c.code)}</td><td>${escapeHtml(c.name)}</td><td>${escapeHtml(c.business_name || "—")}</td><td>${escapeHtml(c.mobile || "—")}</td><td>${money(Number(c.credit_limit) || 0)}</td><td>${money(Number(c.outstanding) || 0)}</td><td><button class="btn primary" type="button" data-rcp="${escapeHtml(c.id)}">Receipt</button></td></tr>`)
+      ? `<table><thead><tr><th>Code</th><th>Name</th><th>Business</th><th>Mobile</th><th>Email ID</th><th>Credit limit</th><th>Outstanding</th><th></th></tr></thead><tbody>${receivables
+        .map((c) => {
+          const due = Number(c.outstanding) || 0;
+          return `<tr><td>${escapeHtml(c.code)}</td><td>${escapeHtml(c.name)}</td><td>${escapeHtml(c.business_name || "—")}</td><td>${escapeHtml(c.mobile || "—")}</td><td>${escapeHtml(c.email || "—")}</td><td>${money(Number(c.credit_limit) || 0)}</td><td>${money(due)}</td><td><div class="cust-actions"><button class="btn primary" type="button" data-rcp="${escapeHtml(c.id)}">Receipt</button>${customerRemindButtons(c, due)}</div></td></tr>`;
+        })
         .join("")}</tbody></table>`
       : `<p class="hint">No receivables.</p>`;
     $("acc-payables-table").innerHTML = payables.length
@@ -13473,11 +13610,15 @@ $("units-table")?.addEventListener("click", async (e) => {
 
 $("customer-form").addEventListener("submit", async (e) => {
   e.preventDefault();
+  const editing = Boolean($("cust-id")?.value);
   try {
+    globalThis.POSCustomerMasterUi?.paintEmailField?.($("cust-email"));
     await saveCustomer({
+      id: $("cust-id")?.value || "",
       name: $("cust-name").value,
       business_name: $("cust-biz").value,
       mobile: $("cust-mobile").value,
+      email: $("cust-email")?.value || "",
       type: $("cust-type").value,
       gstin: $("cust-gstin").value,
       state: $("cust-state")?.value || "",
@@ -13488,12 +13629,20 @@ $("customer-form").addEventListener("submit", async (e) => {
       doctor_rx: $("cust-doctor-rx")?.value || "",
       reuseExisting: false,
     });
-    $("cust-hint").textContent = "Saved";
+    $("cust-hint").textContent = editing ? "Customer updated" : "Saved";
     $("cust-hint").className = "hint ok";
-    $("customer-form").reset();
+    resetCustomerForm();
+    paintCustomerDetails(null);
   } catch (err) {
     $("cust-hint").textContent = err.message;
     $("cust-hint").className = "hint error";
+  }
+});
+$("cust-clear")?.addEventListener("click", () => {
+  resetCustomerForm();
+  if ($("cust-hint")) {
+    $("cust-hint").textContent = "";
+    $("cust-hint").className = "hint";
   }
 });
 
@@ -13526,30 +13675,57 @@ $("due-collect-form")?.addEventListener("submit", async (e) => {
   }
 });
 
-$("customers-table")?.addEventListener("click", (e) => {
-  const btn = e.target.closest("[data-collect-due]");
-  if (!btn) return;
-  const c = (state.customers || []).find((row) => row.id === btn.dataset.collectDue);
+function onCustomerRowClick(e) {
+  const details = e.target.closest("[data-cust-details]");
+  const edit = e.target.closest("[data-cust-edit]");
+  const collect = e.target.closest("[data-collect-due]");
+  const id = details?.dataset.custDetails || edit?.dataset.custEdit || collect?.dataset.collectDue;
+  if (!id) return;
+  const c = (state.customers || []).find((row) => row.id === id);
   if (!c) return;
+  if (details) {
+    paintCustomerDetails(c);
+    $("customer-details")?.scrollIntoView({ block: "nearest" });
+    return;
+  }
+  if (edit) {
+    fillCustomerForm(c);
+    $("customer-form")?.scrollIntoView({ block: "nearest" });
+    $("cust-name")?.focus();
+    return;
+  }
   fillDueCustomerSelect(c.id);
   $("due-amount").value = String(customerDue(c));
   paintDueOutstanding();
   $("due-collect-form")?.scrollIntoView({ block: "nearest" });
   $("due-amount")?.focus();
-});
+}
+$("customers-table")?.addEventListener("click", onCustomerRowClick);
+$("customer-details")?.addEventListener("click", onCustomerRowClick);
+$("customers-search")?.addEventListener("input", () => renderCustomersTable());
 
 $("quick-customer-form")?.addEventListener("submit", async (e) => {
   e.preventDefault();
   const hint = $("qc-hint");
   try {
+    globalThis.POSCustomerMasterUi?.paintEmailField?.($("qc-email"));
     const customer = await saveCustomer({
       name: $("qc-name").value,
       mobile: $("qc-mobile").value,
+      email: $("qc-email")?.value || "",
       address: $("qc-address")?.value || "",
       doctor_rx: $("qc-doctor-rx")?.value || "",
     });
     $("qc-name").value = "";
     $("qc-mobile").value = "";
+    if ($("qc-email")) {
+      $("qc-email").value = "";
+      $("qc-email").setCustomValidity("");
+    }
+    if ($("qc-email-hint")) {
+      $("qc-email-hint").textContent = "";
+      $("qc-email-hint").className = "hint";
+    }
     if ($("qc-address")) $("qc-address").value = "";
     if ($("qc-doctor-rx")) $("qc-doctor-rx").value = "";
     if (hint) {

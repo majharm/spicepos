@@ -3096,6 +3096,12 @@ function pos_public_invoice_send($id) {
   $items = pos_q("SELECT id, name, local_name, hsn, code, gst_rate, mrp, category FROM items WHERE business_id = ?", "s", [$bid]);
   $company = pos_public_company_payload($co[0] ?? []);
   if (!$company && !empty($biz[0]["name"])) $company = ["name" => $biz[0]["name"]];
+  if (!empty($order["customer_id"]) && empty($order["customer_email"])) {
+    try {
+      $custEmail = pos_q("SELECT email FROM customers WHERE id = ? AND business_id = ? LIMIT 1", "ss", [$order["customer_id"], $bid]);
+      if (!empty($custEmail[0]["email"])) $order["customer_email"] = $custEmail[0]["email"];
+    } catch (Throwable $e) { /* email stays off the bill when the column is unavailable */ }
+  }
   if (!empty($order["customer_id"]) && function_exists("pos_attach_order_payments")) {
     $attached = pos_attach_order_payments($bid, [$order]);
     $order = $attached[0] ?? $order;

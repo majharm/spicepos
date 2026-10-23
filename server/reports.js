@@ -416,7 +416,7 @@ export async function buildReports(from, to) {
       rangeParams,
     ),
     query(
-      `SELECT code, name, business_name, mobile, type, gstin, state, credit_limit, outstanding
+      `SELECT code, name, business_name, mobile, email, type, gstin, state, credit_limit, outstanding
        FROM customers WHERE business_id = ? ORDER BY name`,
       [tenant],
     ),
@@ -832,9 +832,9 @@ export function reportsToSheets(data, biz = {}) {
     },
     {
       name: "Customers",
-      headers: ["Code", "Name", "Business", "Mobile", "Type", "State", "GSTIN", "Credit limit", "Outstanding"],
+      headers: ["Code", "Name", "Business", "Mobile", "Email", "Type", "State", "GSTIN", "Credit limit", "Outstanding"],
       rows: data.customers.map((c) => [
-        c.code, c.name, c.business_name, c.mobile, c.type, c.state, c.gstin,
+        c.code, c.name, c.business_name, c.mobile, c.email || "", c.type, c.state, c.gstin,
         num(c.credit_limit), num(c.outstanding),
       ]),
     },

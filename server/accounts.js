@@ -876,7 +876,7 @@ export function registerAccounts(app) {
   app.get("/api/accounts/receivables", requirePerm("accounts"), async (_req, res) => {
     try {
       const rows = await query(
-        `SELECT id, code, name, business_name, mobile, type, credit_limit, outstanding
+        `SELECT id, code, name, business_name, mobile, email, type, credit_limit, outstanding
          FROM customers WHERE business_id = ? AND outstanding > 0
          ORDER BY outstanding DESC, name`,
         [bid()],
@@ -975,7 +975,7 @@ export function registerAccounts(app) {
       let party = null;
       if (partyType === "customer") {
         const found = await query(
-          `SELECT id, code, name, business_name, mobile, outstanding
+          `SELECT id, code, name, business_name, mobile, email, outstanding
            FROM customers WHERE id = ? AND business_id = ? LIMIT 1`,
           [partyId, bid()],
         );

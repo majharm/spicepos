@@ -111,6 +111,12 @@
     return raw;
   }
 
+  function invoicePartyEmail(order, cust) {
+    const raw = String(order?.customer_email || cust?.email || "").trim();
+    if (!raw || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(raw)) return "";
+    return raw;
+  }
+
   function taxCode(ctx) {
     if (ctx?.taxCode) return ctx.taxCode;
     const F = globalThis.POSFootwear;
@@ -887,6 +893,7 @@ ${purchaseBody(purchase, ctx)}
 
     const pharmacy = isPharmacyBill(order, ctx);
     const custMobile = invoicePartyMobile(order, cust);
+    const custEmail = invoicePartyEmail(order, cust);
     const custAddr = String(order.customer_address || cust?.address || "").trim();
     const doctorRx = String(order.doctor_rx || "").trim();
 
@@ -952,6 +959,7 @@ ${purchaseBody(purchase, ctx)}
     <div class="inv-row"><span>${escapeHtml(L(ctx, "invoice.date", "Date"))}</span><span>${escapeHtml(when)}</span></div>
     <div class="inv-row"><span>${escapeHtml(L(ctx, "invoice.customer", "Customer"))}</span><span>${escapeHtml(order.customer_name || cust?.business_name || cust?.name || "Walk-in")}</span></div>
     ${custMobile ? `<div class="inv-row"><span>Mobile No.</span><span>${escapeHtml(custMobile)}</span></div>` : ""}
+    ${custEmail ? `<div class="inv-row"><span>Email ID</span><span>${escapeHtml(custEmail)}</span></div>` : ""}
     ${custAddr ? `<div class="inv-row"><span>Address</span><span>${escapeHtml(custAddr)}</span></div>` : ""}
     ${doctorRx ? `<div class="inv-row"><span>Doctor / Rx</span><span>${escapeHtml(doctorRx)}</span></div>` : ""}
     ${custGstin ? `<div class="inv-row"><span>GSTIN</span><span>${escapeHtml(custGstin)}</span></div>` : ""}
@@ -1169,11 +1177,13 @@ ${invoiceBody(order, ctx)}
     const buyerName = order.customer_name || cust?.business_name || cust?.name || "Walk-in";
     const pharmacy = isPharmacyBill(order, ctx);
     const custMobile = invoicePartyMobile(order, cust);
+    const custEmail = invoicePartyEmail(order, cust);
     const custAddr = String(order.customer_address || cust?.address || "").trim();
     const doctorRx = String(order.doctor_rx || "").trim();
     const buyerBits = [
       cust?.business_name && cust?.name && cust.business_name !== cust.name ? cust.name : "",
       custMobile,
+      custEmail ? `Email: ${custEmail}` : "",
       custAddr,
       doctorRx ? `Doctor / Rx: ${doctorRx}` : "",
       custGstin ? `GSTIN: ${custGstin}` : "",

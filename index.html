@@ -12,7 +12,7 @@
     <link rel="stylesheet" href="./css/resort.css?v=20261011resort1" />
     <link rel="stylesheet" href="./css/mobile-app.css?v=20261023logo1" />
     <link rel="stylesheet" href="./css/item-master.css?v=20261012brand1" />
-    <link rel="stylesheet" href="./css/customer-master.css?v=20261012cust1" />
+    <link rel="stylesheet" href="./css/customer-master.css?v=20261023cemail1" />
   </head>
   <body class="fast-mode">
     <div class="app" id="app">
@@ -314,6 +314,8 @@
                 <form class="quick-customer" id="quick-customer-form" autocomplete="off">
                   <input id="qc-name" name="qc-name" placeholder="Customer Name" maxlength="120" />
                   <input id="qc-mobile" name="qc-mobile" placeholder="Mobile No." inputmode="tel" maxlength="15" />
+                  <input id="qc-email" name="qc-email" type="email" inputmode="email" maxlength="160" autocomplete="email" placeholder="Enter customer email address" />
+                  <span class="hint" id="qc-email-hint"></span>
                   <input id="qc-address" name="qc-address" class="pharmacy-only" hidden placeholder="Address" maxlength="500" />
                   <input id="qc-doctor-rx" name="qc-doctor-rx" class="pharmacy-only" hidden placeholder="Doctor / Rx (optional)" maxlength="180" />
                   <button class="btn primary" type="submit" id="qc-save">Add</button>
@@ -381,6 +383,7 @@
               <div class="classic-bill-head" id="classic-bill-head" hidden>
                 <div class="classic-cust-toolbar classic-span-4">
                   <label class="classic-cust-mobile">Mobile No. <input id="bill-cust-mobile" type="tel" inputmode="numeric" maxlength="15" autocomplete="tel" placeholder="10-digit mobile — auto-fills customer" /></label>
+                  <label class="classic-cust-email">Email ID <input id="bill-cust-email" type="email" inputmode="email" maxlength="160" autocomplete="email" placeholder="Enter customer email address" /><span class="hint" id="bill-cust-email-hint"></span></label>
                   <label class="classic-cust-name">Customer <input id="bill-cust-name" maxlength="180" autocomplete="name" placeholder="Name — type to find" /></label>
                   <label class="classic-bill-date-lab">Bill Date <input id="classic-bill-date" readonly tabindex="-1" inputmode="numeric" /></label>
                   <div class="classic-cust-meta">
@@ -832,6 +835,7 @@
             </header>
             <div class="items-split">
               <form class="settings item-composer" id="customer-form" autocomplete="off">
+                <input type="hidden" id="cust-id" />
                 <div class="item-composer-top">
                   <p class="item-mode" id="cust-form-mode">Customer</p>
                   <p class="item-composer-note" id="cust-form-note">B2C retail or B2B wholesale. Outstanding grows on credit sales.</p>
@@ -841,6 +845,8 @@
                   <label><span id="cust-name-lab">Name</span> <input id="cust-name" required /></label>
                   <label class="pharmacy-hide">Business name <input id="cust-biz" /></label>
                   <label><span id="cust-mobile-lab">Mobile</span> <input id="cust-mobile" required type="tel" inputmode="numeric" maxlength="15" /></label>
+                  <label>Email ID <input id="cust-email" type="email" inputmode="email" maxlength="160" autocomplete="email" placeholder="Enter customer email address" /></label>
+                  <p class="hint" id="cust-email-hint"></p>
                   <p class="hint" id="cust-match-hint"></p>
                   <button class="btn" type="button" id="cust-use-match">Use existing customer</button>
                   <label class="full">Address <input id="cust-address" maxlength="500" placeholder="House, street, area" /></label>
@@ -862,7 +868,8 @@
                   </label>
                 </fieldset>
                 <div class="item-composer-actions">
-                  <button class="btn primary" type="submit">Save customer</button>
+                  <button class="btn primary" type="submit" id="cust-save">Save customer</button>
+                  <button class="btn" type="button" id="cust-clear">Clear</button>
                   <p class="hint" id="cust-hint"></p>
                 </div>
               </form>
@@ -910,6 +917,10 @@
               </form>
             </div>
             <div class="customer-dupes" id="customer-dupes" hidden></div>
+            <div class="customers-list-bar">
+              <input id="customers-search" type="search" placeholder="Search name, mobile, or email" autocomplete="off" />
+            </div>
+            <section class="customer-details" id="customer-details" hidden></section>
             <div class="table-wrap" id="customers-table"></div>
           </div>
         </section>
@@ -3353,8 +3364,8 @@
     <script src="./js/camera-scan.js?v=20261023cam1" defer></script>
     <script src="./js/scale.js?v=20261012set4" defer></script>
     <script src="./js/dev-mode.js?v=20260905deploy136" defer></script>
-    <script src="./js/invoice.js?v=20261016pay1" defer></script>
-    <script src="./js/invoice-share.js?v=20260913share1" defer></script>
+    <script src="./js/invoice.js?v=20261023cemail1" defer></script>
+    <script src="./js/invoice-share.js?v=20261023cemail1" defer></script>
     <script src="./js/support.js?v=20260920deploy199" defer></script>
     <script src="./js/qrcode.iife.js?v=20260905qr1" defer></script>
     <script src="./js/qr-notify.js?v=20260922deploy205" defer></script>
@@ -3372,10 +3383,10 @@
     <script src="./js/resort.js?v=20261011resort1" defer></script>
     <script src="./js/resort-ui.js?v=20261011resort1" defer></script>
     <script src="./js/item-master.js?v=20261012brand1" defer></script>
-    <script src="./js/customer-master.js?v=20261012cust1" defer></script>
-    <script src="./js/app.js?v=20261023stkui1" defer></script>
+    <script src="./js/customer-master.js?v=20261023cemail1" defer></script>
+    <script src="./js/app.js?v=20261023cemail1" defer></script>
     <script src="./js/item-master-ui.js?v=20261012brand1" defer></script>
-    <script src="./js/customer-master-ui.js?v=20261012cust1" defer></script>
+    <script src="./js/customer-master-ui.js?v=20261023cemail1" defer></script>
     <script src="./js/mobile-app.js?v=20261023logo1" defer></script>
     <script src="./js/growth.js?v=20260905deploy145" defer></script>
     <script src="./js/offers-ui.js?v=20260919off1" defer></script>

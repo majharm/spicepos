@@ -82,4 +82,30 @@ test("share actions point WhatsApp at the customer and the public invoice URL", 
   assert.equal(actions.url, "https://pos.local/invoice.html?id=order-1");
   assert.equal(actions.whatsapp.startsWith("https://wa.me/919876543210?text="), true);
   assert.equal(decodeURIComponent(actions.whatsapp).includes(actions.url), true);
+  assert.equal(actions.email, "");
+});
+
+test("invoice email is optional and WhatsApp still works without it", () => {
+  const S = loadShare();
+  const withEmail = S.shareActions(
+    {
+      id: "order-2",
+      order_number: "SO-10",
+      total: 20,
+      customer_mobile: "9876543210",
+      customer_email: "ada@shop.in",
+    },
+    { name: "Shop" },
+    "https://pos.local",
+  );
+  assert.equal(withEmail.whatsapp.startsWith("https://wa.me/919876543210?text="), true);
+  assert.match(withEmail.email, /^mailto:ada@shop.in\?/);
+  assert.equal(decodeURIComponent(withEmail.email).includes(withEmail.url), true);
+  const withoutEmail = S.shareActions(
+    { id: "order-3", order_number: "SO-11", total: 5, customer_mobile: "" },
+    { name: "Shop" },
+    "https://pos.local",
+  );
+  assert.equal(withoutEmail.email, "");
+  assert.equal(withoutEmail.whatsapp.startsWith("https://wa.me/?text="), true);
 });
