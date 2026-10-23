@@ -92,6 +92,12 @@ function money(n) {
   return inr.format(Number(n) || 0);
 }
 
+function ledgerBalanceText(n) {
+  const v = Number(n) || 0;
+  if (v < 0) return `${money(Math.abs(v))} Cr`;
+  return money(v);
+}
+
 function kg(gm) {
   return `${(Number(gm) / 1000).toFixed(2)} kg`;
 }
@@ -10501,7 +10507,7 @@ function renderPartyLedgerTable(targetId, data, kind) {
       : "";
   const head = `<div class="report-grid">
     <div class="report-card"><span>Opening</span><strong>${money(data?.opening || 0)}</strong></div>
-    <div class="report-card"><span>Closing</span><strong>${money(data?.closing || 0)}</strong></div>
+    <div class="report-card"><span>Closing</span><strong>${ledgerBalanceText(data?.closing || 0)}</strong></div>
     <div class="report-card"><span>${kind === "customer" ? "Outstanding" : "Payable"}</span><strong>${money(due)}</strong></div>
   </div>${action ? `<p class="hint">${action}</p>` : ""}`;
   const opening = Number(data?.opening || 0);
@@ -10522,12 +10528,12 @@ function renderPartyLedgerTable(targetId, data, kind) {
     <th>Date</th><th>Type</th><th>Invoice</th><th>Debit</th><th>Credit</th><th>Balance</th><th></th>
   </tr></thead><tbody>
     <tr>
-      <td>${escapeHtml(data?.from || "")}</td>
+      <td>${escapeHtml(formatShopDate(data?.from) || data?.from || "")}</td>
       <td>Opening Due</td>
       <td>—</td>
       <td>${opening > 0 ? money(opening) : "—"}</td>
       <td>${opening < 0 ? money(Math.abs(opening)) : "—"}</td>
-      <td>${money(opening)}</td>
+      <td>${ledgerBalanceText(opening)}</td>
       <td></td>
     </tr>
     ${rows
@@ -10539,7 +10545,7 @@ function renderPartyLedgerTable(targetId, data, kind) {
       <td>${escapeHtml(invoiceOf(r))}</td>
       <td>${r.debit ? money(r.debit) : "—"}</td>
       <td>${r.credit ? money(r.credit) : "—"}</td>
-      <td>${money(r.balance)}</td>
+      <td>${ledgerBalanceText(r.balance)}</td>
       <td>${printable ? voucherRowActions(i) : ""}</td>
     </tr>`;
     })

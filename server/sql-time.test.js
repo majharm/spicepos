@@ -6,6 +6,10 @@ import { fileURLToPath } from "node:url";
 import {
   createdBeforeDay,
   createdBetween,
+  ledgerEventBeforeDay,
+  ledgerEventBetween,
+  ledgerEventExpr,
+  ledgerEventOrderAsc,
   createdPrevMonth,
   createdSinceDays,
   createdThisMonth,
@@ -25,6 +29,10 @@ test("calendar filters keep created_at sargable", () => {
   assert.equal(createdBetween(), "created_at >= ? AND created_at < DATE_ADD(?, INTERVAL 1 DAY)");
   assert.equal(createdBetween("o"), "o.created_at >= ? AND o.created_at < DATE_ADD(?, INTERVAL 1 DAY)");
   assert.equal(createdBeforeDay(), "created_at < ?");
+  assert.match(ledgerEventExpr(), /COALESCE\(NULLIF\(payment_date, '0000-00-00'\), created_at\)/);
+  assert.match(ledgerEventBetween(), /DATE_ADD\(\?, INTERVAL 1 DAY\)/);
+  assert.match(ledgerEventBeforeDay(), /< \?/);
+  assert.match(ledgerEventOrderAsc(), /sale_credit/);
   assert.match(createdThisMonth(), /%Y-%m-01/);
   assert.match(createdPrevMonth(), /INTERVAL 1 MONTH/);
   assert.throws(() => createdSinceDays(-1));

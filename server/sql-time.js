@@ -39,6 +39,27 @@ export function createdBeforeDay(alias = "") {
   return `${col} < ?`;
 }
 
+/** Party ledger uses the voucher date (payment_date) when present, else created_at. */
+export function ledgerEventExpr(alias = "") {
+  const p = alias ? `${alias}.` : "";
+  return `COALESCE(NULLIF(${p}payment_date, '0000-00-00'), ${p}created_at)`;
+}
+
+export function ledgerEventBetween(alias = "") {
+  const expr = ledgerEventExpr(alias);
+  return `${expr} >= ? AND ${expr} < DATE_ADD(?, INTERVAL 1 DAY)`;
+}
+
+export function ledgerEventBeforeDay(alias = "") {
+  return `${ledgerEventExpr(alias)} < ?`;
+}
+
+export function ledgerEventOrderAsc(alias = "") {
+  const p = alias ? `${alias}.` : "";
+  const expr = ledgerEventExpr(alias);
+  return `${expr} ASC, CASE WHEN ${p}entry_type IN ('sale_credit','purchase_credit') THEN 0 ELSE 1 END ASC, ${p}created_at ASC, ${p}entry_no ASC`;
+}
+
 export function createdThisMonth(alias = "") {
   const col = createdCol(alias);
   return `${col} >= DATE_FORMAT(CURDATE(), '%Y-%m-01') AND ${col} < DATE_ADD(DATE_FORMAT(CURDATE(), '%Y-%m-01'), INTERVAL 1 MONTH)`;

@@ -25,7 +25,7 @@ import {
   partyLedgerSignedAmount,
 } from "./accounting.js";
 import { fyRangeForToday } from "./fy.js";
-import { createdBetween, createdBeforeDay } from "./sql-time.js";
+import { createdBetween, ledgerEventBetween, ledgerEventBeforeDay, ledgerEventOrderAsc } from "./sql-time.js";
 
 function payMoney(raw) {
   const method = globalThis.POSPay?.normalize?.(raw) || String(raw || "cash").toLowerCase();
@@ -942,7 +942,7 @@ export function registerAccounts(app) {
       const to = req.query.to || from;
       const prior = await query(
         `SELECT entry_type, amount FROM account_ledger
-         WHERE business_id = ? AND party_type = ? AND party_id = ? AND ${createdBeforeDay()}`,
+         WHERE business_id = ? AND party_type = ? AND party_id = ? AND ${ledgerEventBeforeDay()}`,
         [bid(), partyType, partyId, from],
       );
       const opening = round2(
@@ -950,8 +950,8 @@ export function registerAccounts(app) {
       );
       const rows = await query(
         `SELECT * FROM account_ledger
-         WHERE business_id = ? AND party_type = ? AND party_id = ? AND ${createdBetween()}
-         ORDER BY created_at ASC, entry_no ASC
+         WHERE business_id = ? AND party_type = ? AND party_id = ? AND ${ledgerEventBetween()}
+         ORDER BY ${ledgerEventOrderAsc()}
          LIMIT 1000`,
         [bid(), partyType, partyId, from, to],
       );

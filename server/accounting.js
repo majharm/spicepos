@@ -476,9 +476,42 @@ export function partyLedgerSides(entryType, amount) {
   return { debit: 0, credit: 0 };
 }
 
+function ymdPart(value) {
+  if (value == null || value === "") return "";
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    const y = value.getFullYear();
+    const m = String(value.getMonth() + 1).padStart(2, "0");
+    const d = String(value.getDate()).padStart(2, "0");
+    return `${y}-${m}-${d}`;
+  }
+  const s = String(value).trim();
+  if (s.startsWith("0000")) return "";
+  const match = s.match(/^(\d{4}-\d{2}-\d{2})/);
+  return match ? match[1] : "";
+}
+
+export function partyLedgerEventDate(row) {
+  return ymdPart(row?.payment_date) || ymdPart(row?.created_at) || "9999-12-31";
+}
+
+export function sortPartyLedgerRows(rows) {
+  return [...(rows || [])].sort((a, b) => {
+    const da = partyLedgerEventDate(a);
+    const db = partyLedgerEventDate(b);
+    if (da !== db) return da < db ? -1 : 1;
+    const invoiceA = a.entry_type === "sale_credit" || a.entry_type === "purchase_credit" ? 0 : 1;
+    const invoiceB = b.entry_type === "sale_credit" || b.entry_type === "purchase_credit" ? 0 : 1;
+    if (invoiceA !== invoiceB) return invoiceA - invoiceB;
+    const ca = String(a.created_at || "");
+    const cb = String(b.created_at || "");
+    if (ca !== cb) return ca < cb ? -1 : 1;
+    return String(a.entry_no || "").localeCompare(String(b.entry_no || ""));
+  });
+}
+
 export function buildPartyLedger({ opening = 0, rows = [] } = {}) {
   let balance = round2(opening);
-  const out = (rows || []).map((r) => {
+  const out = sortPartyLedgerRows(rows).map((r) => {
     const sides = partyLedgerSides(r.entry_type, r.amount);
     balance = round2(balance + partyLedgerSignedAmount(r.entry_type, r.amount));
     return { ...r, debit: sides.debit, credit: sides.credit, balance };

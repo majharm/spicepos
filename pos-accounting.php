@@ -318,10 +318,37 @@ function pos_party_ledger_sides($entryType, $amount) {
   return ["debit" => 0.0, "credit" => 0.0];
 }
 
+function pos_party_ledger_event_date($row) {
+  $pay = trim((string) ($row["payment_date"] ?? ""));
+  if ($pay !== "" && strncmp($pay, "0000", 4) !== 0) return substr($pay, 0, 10);
+  $created = trim((string) ($row["created_at"] ?? ""));
+  if ($created !== "" && strncmp($created, "0000", 4) !== 0) return substr($created, 0, 10);
+  return "9999-12-31";
+}
+
+function pos_sort_party_ledger_rows($rows) {
+  $out = is_array($rows) ? array_values($rows) : [];
+  usort($out, function ($a, $b) {
+    $da = pos_party_ledger_event_date($a);
+    $db = pos_party_ledger_event_date($b);
+    if ($da !== $db) return $da < $db ? -1 : 1;
+    $typeA = (string) ($a["entry_type"] ?? "");
+    $typeB = (string) ($b["entry_type"] ?? "");
+    $rankA = ($typeA === "sale_credit" || $typeA === "purchase_credit") ? 0 : 1;
+    $rankB = ($typeB === "sale_credit" || $typeB === "purchase_credit") ? 0 : 1;
+    if ($rankA !== $rankB) return $rankA - $rankB;
+    $ca = (string) ($a["created_at"] ?? "");
+    $cb = (string) ($b["created_at"] ?? "");
+    if ($ca !== $cb) return $ca < $cb ? -1 : 1;
+    return strcmp((string) ($a["entry_no"] ?? ""), (string) ($b["entry_no"] ?? ""));
+  });
+  return $out;
+}
+
 function pos_build_party_ledger($opening, $rows) {
   $balance = pos_round2($opening);
   $out = [];
-  foreach ($rows as $r) {
+  foreach (pos_sort_party_ledger_rows($rows) as $r) {
     $sides = pos_party_ledger_sides($r["entry_type"] ?? "", $r["amount"] ?? 0);
     $balance = pos_round2($balance + pos_party_ledger_signed_amount($r["entry_type"] ?? "", $r["amount"] ?? 0));
     $r["debit"] = $sides["debit"];
@@ -466,7 +493,7 @@ function pos_accounts_dispatch($path, $method, $body, $bid, $auth, $branchId, $u
     $to = $_GET["to"] ?? $from;
     $prior = pos_q(
       "SELECT entry_type, amount FROM account_ledger
-       WHERE business_id = ? AND party_type = ? AND party_id = ? AND created_at < ?",
+       WHERE business_id = ? AND party_type = ? AND party_id = ? AND " . pos_ledger_event_before_day(),
       "ssss",
       [$bid, $partyType, $partyId, $from]
     );
@@ -476,8 +503,8 @@ function pos_accounts_dispatch($path, $method, $body, $bid, $auth, $branchId, $u
     }
     $rows = pos_q(
       "SELECT * FROM account_ledger
-       WHERE business_id = ? AND party_type = ? AND party_id = ? AND " . pos_created_between() . "
-       ORDER BY created_at ASC, entry_no ASC LIMIT 1000",
+       WHERE business_id = ? AND party_type = ? AND party_id = ? AND " . pos_ledger_event_between() . "
+       ORDER BY " . pos_ledger_event_order_asc() . " LIMIT 1000",
       "sssss",
       [$bid, $partyType, $partyId, $from, $to]
     );

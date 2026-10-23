@@ -348,6 +348,26 @@ function pos_created_between($alias = "") {
   return "{$col} >= ? AND {$col} < DATE_ADD(?, INTERVAL 1 DAY)";
 }
 
+function pos_ledger_event_expr($alias = "") {
+  $p = $alias !== "" ? "{$alias}." : "";
+  return "COALESCE(NULLIF({$p}payment_date, '0000-00-00'), {$p}created_at)";
+}
+
+function pos_ledger_event_between($alias = "") {
+  $expr = pos_ledger_event_expr($alias);
+  return "{$expr} >= ? AND {$expr} < DATE_ADD(?, INTERVAL 1 DAY)";
+}
+
+function pos_ledger_event_before_day($alias = "") {
+  return pos_ledger_event_expr($alias) . " < ?";
+}
+
+function pos_ledger_event_order_asc($alias = "") {
+  $p = $alias !== "" ? "{$alias}." : "";
+  $expr = pos_ledger_event_expr($alias);
+  return "{$expr} ASC, CASE WHEN {$p}entry_type IN ('sale_credit','purchase_credit') THEN 0 ELSE 1 END ASC, {$p}created_at ASC, {$p}entry_no ASC";
+}
+
 function pos_created_this_month($alias = "") {
   $col = $alias !== "" ? "{$alias}.created_at" : "created_at";
   return "{$col} >= DATE_FORMAT(CURDATE(), '%Y-%m-01') AND {$col} < DATE_ADD(DATE_FORMAT(CURDATE(), '%Y-%m-01'), INTERVAL 1 MONTH)";

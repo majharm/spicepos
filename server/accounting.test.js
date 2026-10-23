@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
-import { DEFAULT_COA, expenseJournalLines, saleDiscountAmount, buildPartyLedger } from "./accounting.js";
+import { DEFAULT_COA, expenseJournalLines, saleDiscountAmount, buildPartyLedger, sortPartyLedgerRows } from "./accounting.js";
 import { splitGstAmount } from "./gst-supply.js";
 import { splitInvoiceCollection } from "./accounts.js";
 
@@ -105,6 +105,30 @@ test("party ledger running balance for customer and supplier", () => {
   assert.equal(supplier.closing, 380);
 });
 
+test("customer ledger sorts by payment date so backdated receipts do not jump the sale", () => {
+  const ledger = buildPartyLedger({
+    opening: 0,
+    rows: [
+      { entry_type: "sale_credit", amount: 30000, payment_date: null, created_at: "2026-09-19 12:00:00", entry_no: "SO-10003", invoice_no: "SO-10003" },
+      { entry_type: "receipt", amount: 1000, payment_date: "2026-09-08", created_at: "2026-09-20 10:00:00", entry_no: "RCP-1" },
+      { entry_type: "receipt", amount: 15000, payment_date: "2026-09-11", created_at: "2026-09-20 10:01:00", entry_no: "RCP-2" },
+      { entry_type: "receipt", amount: 10000, payment_date: "2026-09-16", created_at: "2026-09-20 10:02:00", entry_no: "RCP-3" },
+      { entry_type: "receipt", amount: 26000, payment_date: "2026-09-19", created_at: "2026-09-20 10:03:00", entry_no: "RCP-4" },
+      { entry_type: "receipt", amount: 3000, payment_date: "2026-10-21", created_at: "2026-10-21 11:00:00", entry_no: "RCP-5" },
+    ],
+  });
+  assert.deepEqual(ledger.rows.map((r) => r.entry_no), ["RCP-1", "RCP-2", "RCP-3", "SO-10003", "RCP-4", "RCP-5"]);
+  assert.equal(ledger.rows[0].balance, -1000);
+  assert.equal(ledger.rows[1].balance, -16000);
+  assert.equal(ledger.rows[2].balance, -26000);
+  assert.equal(ledger.rows[3].entry_type, "sale_credit");
+  assert.equal(ledger.rows[3].balance, 4000);
+  assert.equal(ledger.rows[4].balance, -22000);
+  assert.equal(ledger.rows[5].balance, -25000);
+  assert.equal(ledger.closing, -25000);
+  assert.equal(sortPartyLedgerRows(ledger.rows)[3].entry_type, "sale_credit");
+});
+
 test("Accounts wires customer and supplier ledgers", () => {
   const accounts = readFileSync(path.join(root, "server/accounts.js"), "utf8");
   const php = readFileSync(path.join(root, "pos-accounting.php"), "utf8");
@@ -113,7 +137,13 @@ test("Accounts wires customer and supplier ledgers", () => {
   assert.match(accounts, /\/api\/accounts\/party-ledger/);
   assert.match(php, /accounts\/party-ledger/);
   assert.match(php, /function pos_build_party_ledger/);
+  assert.match(php, /function pos_sort_party_ledger_rows/);
+  assert.match(php, /pos_ledger_event_between/);
+  assert.match(accounts, /ledgerEventBetween/);
+  assert.match(accounts, /ledgerEventOrderAsc/);
   assert.match(app, /function loadPartyLedgerTab/);
+  assert.match(app, /function ledgerBalanceText/);
+  assert.match(app, /formatShopDate\(data\?\.from\)/);
   assert.match(app, /\/api\/accounts\/party-ledger/);
   assert.match(index, /data-acc-tab="customer-ledger"/);
   assert.match(index, /data-acc-tab="supplier-ledger"/);
