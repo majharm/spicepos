@@ -76,6 +76,7 @@ function pos_php_till_dispatch($path, $method, $body) {
       require_once __DIR__ . "/pos-idempotency.php";
       if (function_exists("pos_ensure_idempotency_table")) pos_ensure_idempotency_table();
     }
+    if (function_exists("pos_schema_stamp_mark")) pos_schema_stamp_mark();
     require_once __DIR__ . "/pos-combos.php";
     require_once __DIR__ . "/pos-offers.php";
     $co = [];

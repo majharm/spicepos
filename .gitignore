@@ -7,6 +7,9 @@ pos-port.txt
 pos-node.log
 pos-node.startlock
 pos-node.json
+pos-api-port.cache
+pos-api-node-down.cache
+pos-schema.stamp
 /.htaccess
 uploads/prescriptions/*
 !uploads/prescriptions/.gitkeep

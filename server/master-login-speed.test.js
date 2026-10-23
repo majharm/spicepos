@@ -49,7 +49,7 @@ test("PHP proxy remembers the live Node port and fails closed ports quickly", ()
   assert.match(api, /function pos_remember_port/);
   assert.match(api, /pos-api-port\.cache/);
   assert.match(api, /CURLOPT_CONNECTTIMEOUT_MS/);
-  assert.match(api, /CURLOPT_TIMEOUT => 5/);
+  assert.match(api, /CURLOPT_TIMEOUT => \$timeout/);
   assert.doesNotMatch(api, /CURLOPT_TIMEOUT => 3/);
   assert.match(api, /pos_curl\("http:\/\/127\.0\.0\.1:38473\/api\/"/);
   assert.match(api, /function pos_is_mutating/);
@@ -62,7 +62,7 @@ test("browser login tries the last working \/api first", () => {
   assert.match(apiJs, /if \(preferred\) out\.push\(preferred\)/);
   assert.doesNotMatch(apiJs, /if \(preferred && !mutating\)/);
   assert.doesNotMatch(apiJs, /if \(preferred && mutating\) out\.push\(preferred\)/);
-  assert.match(read("master.html"), /pos-api\.js\?v=20261013item1/);
+  assert.match(read("master.html"), /pos-api\.js\?v=20261023login1/);
   assert.match(read("master.html"), /master\.js\?v=20261016note1/);
-  assert.match(read("index.html"), /pos-api\.js\?v=20261013item1/);
+  assert.match(read("index.html"), /pos-api\.js\?v=20261023login1/);
 });

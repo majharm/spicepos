@@ -432,6 +432,32 @@ function pos_ensure_rate_precision($force = false) {
   pos_widen_decimal("qr_orders", "total", $money8);
 }
 
+function pos_schema_stamp_file() {
+  return rtrim((string) ($_SERVER["DOCUMENT_ROOT"] ?? __DIR__), "/") . "/pos-schema.stamp";
+}
+
+function pos_schema_stamp_fresh() {
+  static $fresh = null;
+  if ($fresh !== null) return $fresh;
+  $want = (string) ((int) @filemtime(__DIR__ . "/pos-php-core.php"));
+  $raw = trim((string) @file_get_contents(pos_schema_stamp_file()));
+  if ($raw === "" || $want === "0") {
+    $fresh = false;
+    return false;
+  }
+  $parts = explode(":", $raw, 2);
+  $have = (string) ($parts[0] ?? "");
+  $at = (int) ($parts[1] ?? 0);
+  $fresh = $have === $want && $at > (time() - 21600);
+  return $fresh;
+}
+
+function pos_schema_stamp_mark() {
+  $want = (string) ((int) @filemtime(__DIR__ . "/pos-php-core.php"));
+  if ($want === "0") return;
+  @file_put_contents(pos_schema_stamp_file(), $want . ":" . time());
+}
+
 function pos_ensure_columns($table, $cols) {
   $db = pos_db();
   foreach ($cols as $name => $def) {
@@ -538,6 +564,7 @@ function pos_ensure_i18n_columns() {
   static $done = false;
   if ($done) return;
   $done = true;
+  if (pos_schema_stamp_fresh()) return;
   pos_ensure_columns("company_settings", [
     "locale" => "VARCHAR(16) NULL",
     "invoice_language" => "VARCHAR(16) NULL",
@@ -634,6 +661,10 @@ function pos_clip_dining_tables_json($raw) {
 }
 
 function pos_ensure_staff_lock_columns() {
+  static $done = false;
+  if ($done) return;
+  $done = true;
+  if (pos_schema_stamp_fresh()) return;
   pos_ensure_columns("staff_users", [
     "failed_logins" => "INT NOT NULL DEFAULT 0",
     "locked_until" => "TIMESTAMP(3) NULL",
@@ -669,6 +700,7 @@ function pos_ensure_business_columns() {
   static $done = false;
   if ($done) return;
   $done = true;
+  if (pos_schema_stamp_fresh()) return;
   pos_ensure_columns("businesses", [
     "owner_name" => "VARCHAR(255) NULL",
     "mobile" => "VARCHAR(32) NULL",
@@ -1758,6 +1790,7 @@ function pos_ensure_accounts_schema() {
   static $done = false;
   if ($done) return;
   $done = true;
+  if (pos_schema_stamp_fresh()) return;
   $db = pos_db();
   if (function_exists("pos_ensure_columns")) {
     pos_ensure_columns("customers", ["outstanding" => "DECIMAL(12,2) NOT NULL DEFAULT 0"]);
@@ -3242,11 +3275,6 @@ function pos_php_dispatch($path, $method, $rawBody) {
           pos_q("UPDATE staff_users SET failed_logins = ? WHERE id = ?", "is", [$fails, $user["id"]]);
         }
         pos_send(401, ["error" => "Invalid login"]);
-      }
-      if (function_exists("pos_password_needs_rehash") && pos_password_needs_rehash($user["password_hash"] ?? "")) {
-        try {
-          pos_q("UPDATE staff_users SET password_hash = ? WHERE id = ?", "ss", [pos_hash_password($pass), $user["id"]]);
-        } catch (Exception $e) { /* ignore rehash */ }
       }
       $bizRows = pos_q("SELECT * FROM businesses WHERE id = ? LIMIT 1", "s", [$user["business_id"]]);
       $business = $bizRows[0] ?? null;

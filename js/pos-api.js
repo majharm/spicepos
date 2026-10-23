@@ -199,8 +199,17 @@
       const url = applySpec(spec, path);
       const hdrs = { ...headers };
       if (spec.mode === "rpc") hdrs["X-Pos-Path"] = String(path).replace(/^\/api\/?/, "").split("?")[0];
+      const ctrl = typeof AbortController !== "undefined" ? new AbortController() : null;
+      const timer = ctrl ? setTimeout(() => ctrl.abort(), mutating ? 20000 : 8000) : 0;
       try {
-        const res = await fetch(url, { credentials: "same-origin", cache: "no-store", redirect: "follow", ...options, headers: hdrs });
+        const res = await fetch(url, {
+          credentials: "same-origin",
+          cache: "no-store",
+          redirect: "follow",
+          ...options,
+          headers: hdrs,
+          signal: options.signal || (ctrl ? ctrl.signal : undefined),
+        });
         const text = await res.text();
         lastText = text;
         if (!looksLikeJson(text, res)) {
@@ -220,6 +229,8 @@
       } catch (err) {
         if (mutating && err && /refresh the catalog/i.test(String(err.message || err))) throw err;
         /* try next */
+      } finally {
+        if (timer) clearTimeout(timer);
       }
     }
     if (lastUnimplemented) return lastUnimplemented;

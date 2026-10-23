@@ -394,24 +394,49 @@
     </div>`;
   }
 
+  function loginPageUrls(path) {
+    const raw = String(path || "/api/login-page");
+    const apiPath = raw.replace(/^\/api\/?/, "").replace(/^\//, "");
+    const urls = [raw, `/pos-api.php?p=${encodeURIComponent(apiPath)}`];
+    const out = [];
+    const seen = new Set();
+    for (const u of urls) {
+      if (!u || seen.has(u)) continue;
+      seen.add(u);
+      out.push(u);
+    }
+    return out;
+  }
+
   async function readLoginPage(path) {
-    if (typeof window !== "undefined" && typeof window.posRequest === "function") {
+    const isMaster = /\/master\//.test(String(path || ""));
+    if (isMaster && typeof window !== "undefined" && typeof window.posRequest === "function") {
       const { res, data } = await window.posRequest(path, { method: "GET" });
       if (res && res.ok && data && typeof data === "object") return data;
       return null;
     }
-    const res = await fetch(path, {
-      credentials: "same-origin",
-      cache: "no-store",
-      headers: { Accept: "application/json" },
-    });
-    const text = await res.text();
-    if (!res.ok) return null;
+    const ctrl = typeof AbortController !== "undefined" ? new AbortController() : null;
+    const timer = ctrl ? setTimeout(() => ctrl.abort(), 2500) : 0;
     try {
-      const data = JSON.parse(text);
-      return data && typeof data === "object" ? data : null;
-    } catch {
+      for (const url of loginPageUrls(path)) {
+        try {
+          const res = await fetch(url, {
+            credentials: "same-origin",
+            cache: "default",
+            headers: { Accept: "application/json", "X-Pos-Path": String(path || "").replace(/^\/api\/?/, "").split("?")[0] },
+            signal: ctrl ? ctrl.signal : undefined,
+          });
+          const text = await res.text();
+          if (!res.ok) continue;
+          const data = JSON.parse(text);
+          if (data && typeof data === "object") return data;
+        } catch {
+          /* next url or abort */
+        }
+      }
       return null;
+    } finally {
+      if (timer) clearTimeout(timer);
     }
   }
 

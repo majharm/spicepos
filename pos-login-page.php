@@ -197,19 +197,41 @@ function pos_login_page_used_ids($published, $campaigns) {
 }
 
 function pos_login_page_public() {
-  $b = pos_login_page_bundle();
-  $ids = pos_login_page_used_ids($b["published"], $b["campaigns"]);
-  $images = [];
-  foreach ($b["images"] as $i) {
-    if (!isset($ids[$i["id"]])) continue;
-    $images[] = ["id" => $i["id"], "name" => $i["name"], "kind" => $i["kind"], "url" => $i["url"], "status" => $i["status"]];
+  pos_ensure_login_page_schema();
+  $rows = pos_q("SELECT published_json, published_version FROM login_page_settings WHERE id = 'login' LIMIT 1");
+  $published = pos_login_page_json($rows[0]["published_json"] ?? null, null);
+  $campaigns = [];
+  try {
+    $campaigns = pos_q("SELECT * FROM login_page_campaigns ORDER BY created_at DESC");
+  } catch (Exception $e) {
+    $campaigns = [];
   }
+  $ids = pos_login_page_used_ids($published, $campaigns);
+  $images = [];
+  if ($ids) {
+    try {
+      $all = pos_q("SELECT id, name, kind, status FROM login_page_images WHERE status <> 'deleted' ORDER BY created_at DESC");
+      foreach ($all as $i) {
+        if (!isset($ids[$i["id"]])) continue;
+        $images[] = [
+          "id" => $i["id"],
+          "name" => $i["name"],
+          "kind" => $i["kind"],
+          "url" => pos_login_page_file_url($i["id"]),
+          "status" => $i["status"],
+        ];
+      }
+    } catch (Exception $e) {
+      $images = [];
+    }
+  }
+  $ver = (int) ($rows[0]["published_version"] ?? 0);
   return [
-    "settings" => $b["published"] ?: new stdClass(),
+    "settings" => $published ?: new stdClass(),
     "images" => $images,
-    "campaigns" => $b["campaigns"],
-    "published_version" => $b["published_version"],
-    "v" => $b["published_version"],
+    "campaigns" => $campaigns,
+    "published_version" => $ver,
+    "v" => $ver,
   ];
 }
 
@@ -219,7 +241,7 @@ function pos_login_page_public_dispatch($path, $method, $body) {
     return true;
   }
   if ($path === "login-page" && $method === "GET") {
-    header("Cache-Control: no-store");
+    header("Cache-Control: private, max-age=30");
     pos_send(200, pos_login_page_public());
     return true;
   }
