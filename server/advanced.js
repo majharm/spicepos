@@ -1470,8 +1470,12 @@ export function registerAdvanced(app) {
       const kind = String(req.query.kind || "");
       const itemId = String(req.query.item_id || "");
       const args = [bid()];
-      let sql = `SELECT m.*, i.name AS item_name, i.code AS item_code
-                 FROM stock_movements m JOIN items i ON i.id=m.item_id WHERE m.business_id=?`;
+      let sql = `SELECT m.*, i.name AS item_name, i.code AS item_code, i.color AS item_color, i.size AS item_size,
+                        TRIM(CONCAT(COALESCE(u.first_name,''), ' ', COALESCE(u.last_name,''))) AS staff_name
+                 FROM stock_movements m
+                 JOIN items i ON i.id=m.item_id
+                 LEFT JOIN staff_users u ON u.id = m.created_by
+                 WHERE m.business_id=?`;
       if (kind) {
         sql += " AND m.kind=?";
         args.push(kind);
@@ -1481,7 +1485,23 @@ export function registerAdvanced(app) {
         args.push(itemId);
       }
       sql += " ORDER BY m.created_at DESC LIMIT 400";
-      return query(sql, args);
+      try {
+        return await query(sql, args);
+      } catch {
+        let plain = `SELECT m.*, i.name AS item_name, i.code AS item_code
+                     FROM stock_movements m JOIN items i ON i.id=m.item_id WHERE m.business_id=?`;
+        const plainArgs = [bid()];
+        if (kind) {
+          plain += " AND m.kind=?";
+          plainArgs.push(kind);
+        }
+        if (itemId) {
+          plain += " AND m.item_id=?";
+          plainArgs.push(itemId);
+        }
+        plain += " ORDER BY m.created_at DESC LIMIT 400";
+        return query(plain, plainArgs);
+      }
     });
   app.get("/api/stock/ledger", requireStaff, requirePerm("stock"), stockLedger);
   app.get("/api/stock/movements", requireStaff, requirePerm("stock"), stockLedger);

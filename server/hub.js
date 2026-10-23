@@ -316,6 +316,20 @@ export async function buildHubDashboard() {
   ]);
   const gross = round2(profit.gross);
   const net = round2(gross - num(monthExp.total));
+  let lowItems = [];
+  try {
+    lowItems = await query(
+      `SELECT id, name, code, color, size, barcode, stock_gm, reorder_level_gm
+       FROM items
+       WHERE business_id = ? AND status = 'active'
+         AND (stock_gm <= 0 OR (reorder_level_gm > 0 AND stock_gm <= reorder_level_gm))
+       ORDER BY stock_gm ASC, name ASC
+       LIMIT 12`,
+      [businessId],
+    );
+  } catch {
+    lowItems = [];
+  }
   return {
     todayReceipts: round2(receipts.total),
     todayPayments: round2(payments.total),
@@ -354,6 +368,7 @@ export async function buildHubDashboard() {
     topCustomers,
     expirySoon: num(expirySoon.n),
     expired: num(expired.n),
+    lowItems: lowItems || [],
   };
 }
 

@@ -1908,7 +1908,8 @@
               <div class="items-hero-copy">
                 <p class="items-kicker">Inventory</p>
                 <h3>Stock</h3>
-                <p class="lede pharmacy-hide">Search a SKU, tap it, then post + or − quantity. Low-stock items are highlighted.</p>
+                <p class="lede pharmacy-hide apparel-hide">Search a SKU, tap it, then post + or − quantity. Low-stock items are highlighted.</p>
+                <p class="lede apparel-only" hidden>Stock by product, colour, size, and barcode. Tap a size to adjust it. Each variant keeps its own reorder level.</p>
                 <p class="lede pharmacy-only" hidden>On-hand by batch number and expiry date. Tap a row, then post + or − quantity.</p>
               </div>
               <div class="items-hero-stats" id="stock-hero-stats"></div>
@@ -1969,10 +1970,27 @@
                   <button class="btn" type="button" id="stock-clear">Clear</button>
                   <p class="hint" id="stock-hint"></p>
                 </div>
+                <div id="stock-history" class="stock-history apparel-only" hidden></div>
               </form>
               <aside class="items-library">
                 <div class="items-library-head">
                   <h4>On hand</h4>
+                  <div class="stock-garment-tools apparel-only" hidden>
+                    <div class="mode-toggle" id="stock-garment-view">
+                      <button class="btn primary" type="button" data-stock-view="item">Item-wise</button>
+                      <button class="btn" type="button" data-stock-view="barcode">Barcode-wise</button>
+                    </div>
+                    <select id="stock-filter-category" aria-label="Category"><option value="">All categories</option></select>
+                    <select id="stock-filter-color" aria-label="Colour"><option value="">All colours</option></select>
+                    <select id="stock-filter-size" aria-label="Size"><option value="">All sizes</option></select>
+                    <select id="stock-filter-supplier" aria-label="Supplier"><option value="">All suppliers</option></select>
+                    <select id="stock-filter-status" aria-label="Stock status">
+                      <option value="">All stock</option>
+                      <option value="ok">In stock</option>
+                      <option value="low">Low / out</option>
+                      <option value="out">Out</option>
+                    </select>
+                  </div>
                   <input id="stock-search" type="search" placeholder="Search name, batch no, expiry…" autocomplete="off" />
                   <label class="item-toggle"><input type="checkbox" id="stock-low-only" /> Low stock</label>
                 </div>
@@ -3319,7 +3337,7 @@
     <script src="./js/pos-api.js?v=20261023login1" defer></script>
     <script src="./js/units.js?v=20260919unit1" defer></script>
     <script src="./js/footwear.js?v=20261012print1" defer></script>
-    <script src="./js/garment-purchase.js?v=20261023col1" defer></script>
+    <script src="./js/garment-purchase.js?v=20261023stk1" defer></script>
     <script src="./js/garment-counter.js?v=20261023col1" defer></script>
     <script src="./js/restaurant.js?v=20261012set4" defer></script>
     <script src="./js/pay-integrity.js?v=20261012table1" defer></script>

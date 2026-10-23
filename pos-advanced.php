@@ -1323,7 +1323,7 @@ function pos_dispatch_advanced($path, $method, $body, $bid, $branchId, $uid, $au
     if ($method !== "GET") pos_send(405, ["error" => "Use GET"]);
     $kind = trim((string) ($_GET["kind"] ?? ""));
     $itemId = trim((string) ($_GET["item_id"] ?? ""));
-    $sql = "SELECT m.*, i.name AS item_name, i.code AS item_code
+    $sql = "SELECT m.*, i.name AS item_name, i.code AS item_code, i.color AS item_color, i.size AS item_size
             FROM stock_movements m JOIN items i ON i.id = m.item_id
             WHERE m.business_id = ?";
     $args = [$bid];
