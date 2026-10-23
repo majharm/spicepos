@@ -64,6 +64,6 @@ test("Counter restaurant cart and QR desk show item-wise instructions", () => {
   assert.match(app, /Special Instruction/);
   assert.match(app, /Item Description/);
   assert.match(app, /qr-line-si/);
-  assert.match(app, /notes: print \? \(l\.notes \|\| scaleLineNote\(l\)\) : scaleLineNote\(l\)/);
+  assert.match(app, /notes: print \? \(String\(l\.notes \|\| ""\)\.trim\(\) \|\| printLineCaptionText\(item, l\) \|\| scaleLineNote\(l\)\) : scaleLineNote\(l\)/);
   assert.match(app, /function scaleLineNote/);
 });

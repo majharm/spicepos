@@ -217,7 +217,7 @@ test("PHP Hostinger can open a print order, download files, quote, bill, and mov
   assert.match(ui, /View \/ Download/);
   assert.match(ui, /\/api\/print\/files\//);
   assert.match(read("index.html"), /print-ui\.js\?v=20260922deploy218/);
-  assert.match(read("index.html"), /app\.js\?v=20261023cam2/);
+  assert.match(read("index.html"), /app\.js\?v=20261023flex1/);
 });
 
 test("Print orders page opens the shop modal and paints list or wrapped API rows", () => {
@@ -309,6 +309,12 @@ test("Counter bills print items by width × height using the item unit and rate"
   assert.match(app, /\/api\/print\/counter-file/);
   assert.match(app, /Enter width and height for each print item/);
   assert.match(app, /Enter width × height/);
+  assert.match(app, /function paintPayAction/);
+  assert.match(app, /function isAutoPrintSpecNote/);
+  assert.match(app, /if \(isAutoPrintSpecNote\(line\.notes\)\) line\.notes = next/);
+  assert.match(app, /if \(\$\("total"\)\)[\s\S]*paintPayAction\(\)/);
+  assert.match(app, /if \(n === 0 && el\.dataset\.dirty !== "1"/);
+  assert.match(app, /printLineCaptionText\(item, l\) \|\| scaleLineNote\(l\)/);
   assert.match(node, /\/api\/print\/counter-file/);
   assert.match(adv, /function persistPrintSaleLine/);
   assert.match(adv, /function billedPrintQty/);
