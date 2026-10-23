@@ -6,7 +6,7 @@
     <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
     <title>ATAV POS</title>
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./css/pos.css?v=20261016pay1" />
+    <link rel="stylesheet" href="./css/pos.css?v=20261023cam1" />
     <link rel="stylesheet" href="./css/saas.css?v=20261016note1" />
     <link rel="stylesheet" href="./css/bar.css?v=20261011bar2" />
     <link rel="stylesheet" href="./css/resort.css?v=20261011resort1" />
@@ -1777,7 +1777,12 @@
               <div class="purchase-items">
                 <div class="purchase-items-bar">
                   <h3 id="po-items-title">Item list</h3>
-                  <input id="po-item-search" type="search" placeholder="Search item or HSN…" autocomplete="off" />
+                  <div class="po-scan-field">
+                    <input id="po-item-search" type="search" placeholder="Search item or HSN…" autocomplete="off" />
+                    <button type="button" class="scan-camera-btn" id="po-scan-camera-btn" aria-label="Scan barcode with camera" title="Camera scan" hidden>
+                      <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M9.5 4.5v2H7.8c-.5 0-.9.2-1.2.5L4.7 9.5H3.5c-.8 0-1.5.7-1.5 1.5v7c0 .8.7 1.5 1.5 1.5h17c.8 0 1.5-.7 1.5-1.5v-7c0-.8-.7-1.5-1.5-1.5h-1.2l-1.9-2.5c-.3-.3-.7-.5-1.2-.5h-1.7v-2c0-.8-.7-1.5-1.5-1.5h-3c-.8 0-1.5.7-1.5 1.5zm3 11.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z"/></svg>
+                    </button>
+                  </div>
                   <span class="purchase-items-meta" id="po-selected-meta">0 selected</span>
                 </div>
                 <div id="po-lines" class="po-lines"></div>
@@ -3002,7 +3007,7 @@
                   <div class="settings-card">
                     <h3>Other till devices</h3>
                     <p class="item-composer-note">These switches control ATAV POS software only. A USB barcode scanner that types into Scan still works as a keyboard even if camera scanning is off.</p>
-                    <label class="full"><input id="set-camera-scanner" type="checkbox" /> Enable camera barcode scanning in ATAV POS</label>
+                    <label class="full"><input id="set-camera-scanner" type="checkbox" /> Enable camera barcode scanning in ATAV POS (Counter and Purchases)</label>
                     <p class="field-hint" id="camera-scanner-status">Camera scanner: Disabled</p>
                     <label class="full"><input id="set-receipt-printer" type="checkbox" /> Enable receipt printer from ATAV POS</label>
                     <p class="field-hint" id="receipt-printer-status">Receipt printer: Disabled</p>
@@ -3255,7 +3260,7 @@
     <script src="./js/offers.js?v=20260905deploy170" defer></script>
     <script src="./js/loyalty.js?v=20260905deploy136" defer></script>
     <script src="./js/barcode.js?v=20260924bc1" defer></script>
-    <script src="./js/camera-scan.js?v=20260918bill2" defer></script>
+    <script src="./js/camera-scan.js?v=20261023cam1" defer></script>
     <script src="./js/scale.js?v=20261012set4" defer></script>
     <script src="./js/dev-mode.js?v=20260905deploy136" defer></script>
     <script src="./js/invoice.js?v=20261016pay1" defer></script>
@@ -3278,7 +3283,7 @@
     <script src="./js/resort-ui.js?v=20261011resort1" defer></script>
     <script src="./js/item-master.js?v=20261012brand1" defer></script>
     <script src="./js/customer-master.js?v=20261012cust1" defer></script>
-    <script src="./js/app.js?v=20261016pay1" defer></script>
+    <script src="./js/app.js?v=20261023cam1" defer></script>
     <script src="./js/item-master-ui.js?v=20261012brand1" defer></script>
     <script src="./js/customer-master-ui.js?v=20261012cust1" defer></script>
     <script src="./js/mobile-app.js?v=20261012jet6" defer></script>

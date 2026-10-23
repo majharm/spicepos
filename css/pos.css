@@ -5157,6 +5157,50 @@ body.classic-bill-mode .bill-settle {
   border: 1px solid var(--line);
   background: #fff;
 }
+.purchase-items-bar .po-scan-field {
+  max-width: none;
+  width: 100%;
+}
+.purchase-items-bar .po-scan-field input[type="search"] {
+  width: auto;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.purchase-items-bar .po-scan-field:has(.scan-camera-btn:not([hidden])) input[type="search"] {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+  border-right: 0;
+}
+.po-scan-field,
+.po-bc-scan-row {
+  display: flex;
+  align-items: stretch;
+  min-width: 0;
+  max-width: 560px;
+}
+.po-scan-field input,
+.po-bc-scan-row input {
+  flex: 1 1 auto;
+  min-width: 0;
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+.po-scan-field .scan-camera-btn,
+.po-bc-scan-row .scan-camera-btn {
+  width: 40px;
+  min-width: 40px;
+  height: auto;
+  min-height: 40px;
+  border-radius: 0 10px 10px 0;
+}
+.po-scan-field .scan-camera-btn[hidden],
+.po-bc-scan-row .scan-camera-btn[hidden] {
+  display: none;
+}
+.po-scan-field:has(.scan-camera-btn:not([hidden])) input,
+.po-bc-scan-row:has(.scan-camera-btn:not([hidden])) input {
+  border-right: 0;
+}
 .purchase-items-meta {
   color: var(--muted);
   font-size: 12px;
@@ -5348,6 +5392,11 @@ body.classic-bill-mode .bill-settle {
   border-radius: 8px;
   border: 1px solid var(--line);
   background: #fff;
+}
+.po-bc-scan-row .po-bc-scan,
+.po-scan-field .po-bc-scan,
+.purchase-items-bar .po-scan-field input {
+  max-width: none;
 }
 .po-bc-list {
   min-height: 72px;
