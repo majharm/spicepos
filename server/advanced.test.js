@@ -79,6 +79,17 @@ test("PHP and Node wire barcode, damage, loyalty, and ledger modules", () => {
   assert.match(app, /barcodes\/generate-qty/);
   assert.match(app, /kind !== "own"/);
   assert.match(app, /kind !== "manufacturer"/);
+  assert.match(app, /\/api\/barcodes\?/);
+  assert.match(nodeAdv, /req\.query\.desk/);
+  assert.match(nodeAdv, /deactivated: true/);
+  assert.match(nodeAdv, /barcode_events/);
+  assert.match(adv, /function pos_barcode_desk_payload/);
+  assert.match(adv, /function pos_create_desk_barcodes/);
+  assert.match(adv, /deactivated/);
+  assert.match(index, /id="bc-filter-kind"/);
+  assert.match(index, /id="bc-export"/);
+  assert.match(index, /id="bc-print-selected"/);
+  assert.match(index, /css\/barcode-desk\.css/);
   assert.match(app, /pcs-barcode-only/);
   assert.match(nodeAdv, /\/api\/damage/);
   assert.match(nodeAdv, /\/api\/loyalty\/settings/);

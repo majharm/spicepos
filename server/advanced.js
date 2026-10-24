@@ -171,6 +171,31 @@ export async function ensureAdvancedSchema() {
   } catch {
     /* exists */
   }
+  for (const [col, ddl] of [
+    ["batch_no", "VARCHAR(64) NULL"],
+    ["serial_no", "VARCHAR(64) NULL"],
+    ["barcode_format", "VARCHAR(16) NULL"],
+    ["printed_at", "TIMESTAMP(3) NULL"],
+    ["note", "VARCHAR(255) NULL"],
+    ["expiry_date", "DATE NULL"],
+  ]) {
+    try {
+      await query(`ALTER TABLE item_barcodes ADD COLUMN ${col} ${ddl}`);
+    } catch {
+      /* exists */
+    }
+  }
+  await query(`CREATE TABLE IF NOT EXISTS barcode_events (
+    id VARCHAR(255) PRIMARY KEY,
+    business_id VARCHAR(255) NOT NULL,
+    barcode_id VARCHAR(255) NOT NULL,
+    barcode VARCHAR(64) NOT NULL,
+    action VARCHAR(32) NOT NULL,
+    detail VARCHAR(255) NULL,
+    actor_id VARCHAR(255) NULL,
+    created_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    INDEX idx_bcev (business_id, barcode_id, created_at)
+  )`);
   try {
     await query(`ALTER TABLE item_barcodes ADD INDEX idx_ib_purchase (purchase_id)`);
   } catch {
@@ -186,7 +211,7 @@ export async function ensureAdvancedSchema() {
     await query(
       `UPDATE item_barcodes
        SET status='active', used_kind=NULL, used_at=NULL
-       WHERE LOWER(kind) IN ('own','manufacturer') AND LOWER(COALESCE(status,'active')) <> 'active'`,
+       WHERE LOWER(kind) IN ('own','manufacturer','variant','product','batch') AND LOWER(COALESCE(status,'active')) <> 'active'`,
     );
   } catch {
     /* optional */
@@ -613,6 +638,210 @@ export function clampBarcodeQty(raw) {
   if (n < 1) throw new Error("Quantity required");
   if (n > 500) throw new Error("Max 500 barcodes at once");
   return n;
+}
+
+function newCode128Value(seq) {
+  const n = Math.max(1, Number(seq) || 1);
+  return `BC${String(n).padStart(10, "0")}`;
+}
+
+async function uniqueCode128(conn, businessId) {
+  for (let i = 0; i < 8; i++) {
+    const seq = await nextBarcodeSeq(conn, businessId);
+    const code = newCode128Value(seq);
+    if (!(await barcodeTaken(conn, businessId, code))) return code;
+  }
+  return newCode128Value(Date.now() % 10000000000);
+}
+
+async function recordBarcodeEvent(conn, businessId, row, action, detail) {
+  if (!row?.id) return;
+  try {
+    await sqlExec(
+      conn,
+      `INSERT INTO barcode_events (id, business_id, barcode_id, barcode, action, detail, actor_id)
+       VALUES (?,?,?,?,?,?,?)`,
+      [
+        crypto.randomUUID(),
+        businessId,
+        row.id,
+        barcodeText(row.barcode),
+        String(action || "edit").slice(0, 32),
+        detail ? String(detail).slice(0, 255) : null,
+        authUser()?.id || null,
+      ],
+    );
+  } catch {
+    /* history is best-effort */
+  }
+}
+
+async function stampBarcodeDesk(conn, rowId, meta = {}, allowBlank = false) {
+  if (!rowId) return;
+  const sets = [];
+  const args = [];
+  for (const [col, key] of [
+    ["batch_no", "batch_no"],
+    ["serial_no", "serial_no"],
+    ["barcode_format", "barcode_format"],
+    ["size", "size"],
+    ["color", "color"],
+    ["note", "note"],
+    ["expiry_date", "expiry_date"],
+  ]) {
+    if (meta[key] == null) continue;
+    if (!allowBlank && meta[key] === "") continue;
+    const limit = col === "note" ? 255 : col === "expiry_date" ? 10 : 64;
+    const value = meta[key] === "" ? null : String(meta[key]).slice(0, limit);
+    if (col === "expiry_date" && value && !/^\d{4}-\d{2}-\d{2}$/.test(value)) continue;
+    sets.push(`${col}=?`);
+    args.push(value);
+  }
+  if (!sets.length) return;
+  args.push(rowId);
+  try {
+    await sqlExec(conn, `UPDATE item_barcodes SET ${sets.join(", ")} WHERE id=?`, args);
+  } catch {
+    /* optional columns */
+  }
+}
+
+async function barcodeIsLocked(businessId, row) {
+  const status = String(row?.status || "active").toLowerCase();
+  if (status === "sold" || status === "damaged" || row?.used_at) return true;
+  const code = barcodeText(row?.barcode);
+  if (!code) return false;
+  try {
+    const sale = await sqlOne(null, "SELECT id FROM sales_order_lines WHERE business_id=? AND barcode=? LIMIT 1", [businessId, code]);
+    if (sale) return true;
+  } catch {
+    /* lines optional */
+  }
+  try {
+    const purchase = await sqlOne(null, "SELECT id FROM purchase_lines WHERE business_id=? AND barcode=? LIMIT 1", [businessId, code]);
+    if (purchase) return true;
+  } catch {
+    /* lines optional */
+  }
+  return false;
+}
+
+function deskMeta(body = {}) {
+  return {
+    size: String(body.size || "").trim(),
+    color: String(body.color || "").trim(),
+    batch_no: String(body.batch_no || body.batch || "").trim(),
+    serial_no: String(body.serial_no || body.serial || "").trim(),
+    barcode_format: String(body.format || body.barcode_format || "ean13").toLowerCase() === "code128" ? "code128" : "ean13",
+    note: String(body.note || "").trim(),
+    expiry_date: String(body.expiry || body.expiry_date || "").trim().slice(0, 10),
+  };
+}
+
+export async function createDeskBarcodes(conn, businessId, body = {}) {
+  await ensureAdvancedSchema();
+  const itemId = String(body.item_id || body.itemId || "");
+  const item = await sqlOne(conn, "SELECT * FROM items WHERE id=? AND business_id=?", [itemId, businessId]);
+  if (!item) throw new Error("Item not found");
+  const kind = POSBarcode?.normalizeBarcodeKind ? POSBarcode.normalizeBarcodeKind(body.kind) : String(body.kind || "own");
+  const piece = POSBarcode?.isPieceKind ? POSBarcode.isPieceKind(kind) : kind === "unit" || kind === "serial";
+  if (piece && !isCountItem(item)) throw new Error("Barcodes are only for Quantity (pcs) items");
+  const meta = deskMeta(body);
+  const manual = barcodeText(body.barcode || "");
+  let qty = Math.floor(Number(body.qty ?? body.quantity ?? 1) || 1);
+  if (!piece && manual) qty = 1;
+  if (!piece && qty !== 1) throw new Error("A shared barcode is one code. Switch to piece or serial to generate many.");
+  if (qty < 1) throw new Error("Quantity required");
+  if (qty > 500) throw new Error("Max 500 barcodes at once");
+  if (manual && qty > 1) throw new Error("Enter one manual barcode, or clear it to generate unique codes.");
+  if (manual && meta.barcode_format === "ean13" && !POSBarcode.isValidEan13(manual)) {
+    throw new Error("Enter a valid EAN-13 barcode");
+  }
+  const out = [];
+  for (let i = 0; i < qty; i++) {
+    let code = manual;
+    if (!code) code = meta.barcode_format === "code128" ? await uniqueCode128(conn, businessId) : await uniqueEan13(conn, businessId);
+    const taken = await sqlOne(conn, "SELECT id, item_id, status FROM item_barcodes WHERE business_id=? AND barcode=? LIMIT 1", [businessId, code]);
+    if (taken) throw new Error(`Duplicate barcode ${code}`);
+    const row = await attachItemBarcode(conn, businessId, itemId, code, kind, kind === "own");
+    await stampBarcodeDesk(conn, row?.id, meta);
+    const fresh = await sqlOne(conn, "SELECT * FROM item_barcodes WHERE id=?", [row.id]);
+    await recordBarcodeEvent(conn, businessId, fresh, "create", `${kind} ${code}`);
+    out.push(fresh || row);
+  }
+  return out;
+}
+
+async function barcodeDesk(businessId, queryIn = {}) {
+  await ensureAdvancedSchema();
+  const q = String(queryIn.q || "").trim();
+  const kind = String(queryIn.kind || "").trim().toLowerCase();
+  const status = String(queryIn.status || "").trim().toLowerCase();
+  const page = Math.max(1, Number(queryIn.page) || 1);
+  const pageSize = Math.min(100, Math.max(10, Number(queryIn.limit) || 40));
+  const where = ["ib.business_id=?"];
+  const args = [businessId];
+  if (q) {
+    where.push("(ib.barcode LIKE ? OR i.name LIKE ? OR i.code LIKE ? OR COALESCE(ib.batch_no,'') LIKE ? OR COALESCE(ib.color,'') LIKE ? OR COALESCE(ib.size,'') LIKE ? OR COALESCE(ib.serial_no,'') LIKE ?)");
+    const like = `%${q}%`;
+    args.push(like, like, like, like, like, like, like);
+  }
+  const category = String(queryIn.category || "").trim();
+  if (kind === "piece") where.push("LOWER(ib.kind) IN ('unit','serial')");
+  else if (kind === "product") where.push("LOWER(ib.kind) IN ('own','manufacturer')");
+  else if (kind) {
+    where.push("LOWER(ib.kind)=?");
+    args.push(kind);
+  }
+  if (category) {
+    where.push("i.category=?");
+    args.push(category);
+  }
+  if (status === "unprinted") where.push("ib.printed_at IS NULL AND LOWER(COALESCE(ib.status,'active'))='active'");
+  else if (status === "unassigned") where.push("ib.purchase_id IS NULL AND ib.used_at IS NULL AND LOWER(ib.kind) IN ('unit','serial') AND LOWER(COALESCE(ib.status,'active'))='active'");
+  else if (status) {
+    where.push("LOWER(COALESCE(ib.status,'active'))=?");
+    args.push(status);
+  }
+  const whereSql = where.join(" AND ");
+  const [countRow] = await query(
+    `SELECT COUNT(*) AS n FROM item_barcodes ib JOIN items i ON i.id=ib.item_id WHERE ${whereSql}`,
+    args,
+  );
+  const rows = await query(
+    `SELECT ib.*, i.name AS item_name, i.code AS item_code, i.retail_rate, i.stock_gm, i.category,
+            COALESCE(i.mrp, i.retail_rate) AS label_mrp,
+            DATE_FORMAT(COALESCE(ib.expiry_date, i.default_expiry), '%Y-%m-%d') AS item_expiry,
+            p.purchase_number
+     FROM item_barcodes ib
+     JOIN items i ON i.id = ib.item_id
+     LEFT JOIN purchases p ON p.id = ib.purchase_id
+     WHERE ${whereSql}
+     ORDER BY ib.created_at DESC
+     LIMIT ${pageSize} OFFSET ${(page - 1) * pageSize}`,
+    args,
+  );
+  const [summary] = await query(
+    `SELECT COUNT(*) AS total,
+            SUM(LOWER(COALESCE(status,'active'))='active') AS active,
+            SUM(LOWER(COALESCE(status,'active'))='active' AND purchase_id IS NULL AND used_at IS NULL AND LOWER(kind) IN ('unit','serial')) AS unassigned,
+            SUM(printed_at IS NULL AND LOWER(COALESCE(status,'active'))='active') AS pending_print
+     FROM item_barcodes WHERE business_id=?`,
+    [businessId],
+  );
+  return {
+    ok: true,
+    rows,
+    total: Number(countRow?.n) || 0,
+    page,
+    pageSize,
+    summary: {
+      total: Number(summary?.total) || 0,
+      active: Number(summary?.active) || 0,
+      unassigned: Number(summary?.unassigned) || 0,
+      pending_print: Number(summary?.pending_print) || 0,
+    },
+  };
 }
 
 export async function generateQtyBarcodes(conn, businessId, itemId, qty) {
@@ -1343,6 +1572,7 @@ export function registerAdvanced(app) {
 
   app.get("/api/barcodes", requireStaff, requirePerm("items"), (req, res) =>
     send(res, async () => {
+      if (String(req.query.desk || "") === "1") return barcodeDesk(bid(), req.query);
       const itemId = String(req.query.item_id || "");
       const purchaseId = String(req.query.purchase_id || "");
       if (purchaseId) {
@@ -1394,6 +1624,45 @@ export function registerAdvanced(app) {
     }),
   );
 
+  app.post("/api/barcodes/bulk", requireStaff, requirePerm("items"), (req, res) =>
+    send(res, async () => {
+      const body = req.body || {};
+      const lines = Array.isArray(body.items) ? body.items : [];
+      const ids = Array.isArray(body.item_ids) ? body.item_ids : [];
+      const jobs = lines.length
+        ? lines
+        : ids.map((item_id) => ({ item_id, qty: body.qty, kind: body.kind, format: body.format, size: body.size, color: body.color, batch_no: body.batch_no, serial_no: body.serial_no }));
+      if (!jobs.length) throw new Error("Select at least one product");
+      const barcodes = [];
+      for (const job of jobs) {
+        const made = await createDeskBarcodes(null, bid(), { ...body, ...job });
+        barcodes.push(...made);
+        if (barcodes.length > 500) throw new Error("Max 500 barcodes at once");
+      }
+      return { ok: true, generated: barcodes.length, barcodes };
+    }),
+  );
+
+  app.post("/api/barcodes", requireStaff, requirePerm("items"), (req, res) =>
+    send(res, async () => {
+      const barcodes = await createDeskBarcodes(null, bid(), req.body || {});
+      return { ok: true, generated: barcodes.length, barcodes };
+    }),
+  );
+
+  app.post("/api/barcodes/printed", requireStaff, requirePerm("items"), (req, res) =>
+    send(res, async () => {
+      const ids = Array.isArray(req.body?.ids) ? req.body.ids.map((id) => String(id)).filter(Boolean).slice(0, 500) : [];
+      if (!ids.length) return { ok: true, printed: 0 };
+      const marks = ids.map(() => "?").join(",");
+      await query(
+        `UPDATE item_barcodes SET printed_at=CURRENT_TIMESTAMP(3) WHERE business_id=? AND id IN (${marks})`,
+        [bid(), ...ids],
+      );
+      return { ok: true, printed: ids.length };
+    }),
+  );
+
   app.post("/api/items/:id/barcodes", requireStaff, requirePerm("items"), (req, res) =>
     send(res, async () => {
       const item = await sqlOne(null, "SELECT * FROM items WHERE id=? AND business_id=?", [req.params.id, bid()]);
@@ -1407,10 +1676,83 @@ export function registerAdvanced(app) {
     }),
   );
 
+  app.get("/api/barcodes/:id", requireStaff, requirePerm("items"), (req, res) =>
+    send(res, async () => {
+      const [row] = await query(
+        `SELECT ib.*, i.name AS item_name, i.code AS item_code, i.retail_rate, i.stock_gm, i.category,
+                COALESCE(i.mrp, i.retail_rate) AS label_mrp,
+                DATE_FORMAT(COALESCE(ib.expiry_date, i.default_expiry), '%Y-%m-%d') AS item_expiry,
+                p.purchase_number
+         FROM item_barcodes ib
+         JOIN items i ON i.id = ib.item_id
+         LEFT JOIN purchases p ON p.id = ib.purchase_id
+         WHERE ib.id=? AND ib.business_id=? LIMIT 1`,
+        [req.params.id, bid()],
+      );
+      if (!row) throw new Error("Barcode not found");
+      let events = [];
+      try {
+        events = await query(
+          "SELECT action, detail, actor_id, created_at FROM barcode_events WHERE business_id=? AND barcode_id=? ORDER BY created_at DESC LIMIT 30",
+          [bid(), row.id],
+        );
+      } catch {
+        events = [];
+      }
+      return { ok: true, barcode: row, events, locked: await barcodeIsLocked(bid(), row) };
+    }),
+  );
+
+  app.post("/api/barcodes/:id", requireStaff, requirePerm("items"), (req, res) =>
+    send(res, async () => {
+      const row = await sqlOne(null, "SELECT * FROM item_barcodes WHERE id=? AND business_id=?", [req.params.id, bid()]);
+      if (!row) throw new Error("Barcode not found");
+      const locked = await barcodeIsLocked(bid(), row);
+      const body = req.body || {};
+      if (locked && (body.item_id || body.barcode)) {
+        throw new Error("This barcode is on a completed sale and cannot be reassigned.");
+      }
+      if (!locked && body.item_id && body.item_id !== row.item_id) {
+        const item = await sqlOne(null, "SELECT id FROM items WHERE id=? AND business_id=?", [body.item_id, bid()]);
+        if (!item) throw new Error("Item not found");
+        await query("UPDATE item_barcodes SET item_id=? WHERE id=? AND business_id=?", [body.item_id, row.id, bid()]);
+      }
+      if (!locked && body.barcode) {
+        const code = barcodeText(body.barcode);
+        if (code && code !== barcodeText(row.barcode)) {
+          const taken = await sqlOne(null, "SELECT id FROM item_barcodes WHERE business_id=? AND barcode=? AND id<>? LIMIT 1", [bid(), code, row.id]);
+          if (taken) throw new Error(`Duplicate barcode ${code}`);
+          await query("UPDATE item_barcodes SET barcode=? WHERE id=? AND business_id=?", [code, row.id, bid()]);
+        }
+      }
+      if (!locked && body.kind) {
+        const kind = POSBarcode.normalizeBarcodeKind(body.kind);
+        const itemId = String(body.item_id || row.item_id);
+        const item = await sqlOne(null, "SELECT * FROM items WHERE id=? AND business_id=?", [itemId, bid()]);
+        if ((kind === "unit" || kind === "serial") && item && !isCountItem(item)) {
+          throw new Error("Barcodes are only for Quantity (pcs) items");
+        }
+        await query("UPDATE item_barcodes SET kind=? WHERE id=? AND business_id=?", [kind, row.id, bid()]);
+      }
+      await stampBarcodeDesk(null, row.id, deskMeta(body), true);
+      const fresh = await sqlOne(null, "SELECT * FROM item_barcodes WHERE id=?", [row.id]);
+      await recordBarcodeEvent(null, bid(), fresh, "edit", "Barcode details updated");
+      return { ok: true, barcode: fresh };
+    }),
+  );
+
   app.delete("/api/barcodes/:id", requireStaff, requirePerm("items"), (req, res) =>
     send(res, async () => {
-      await query("DELETE FROM item_barcodes WHERE id=? AND business_id=?", [req.params.id, bid()]);
-      return { ok: true };
+      const row = await sqlOne(null, "SELECT * FROM item_barcodes WHERE id=? AND business_id=?", [req.params.id, bid()]);
+      if (!row) throw new Error("Barcode not found");
+      const status = String(row.status || "active").toLowerCase();
+      if (status === "sold" || status === "damaged") {
+        throw new Error("This barcode is on a completed transaction and stays on file.");
+      }
+      await query("UPDATE item_barcodes SET status='inactive' WHERE id=? AND business_id=?", [row.id, bid()]);
+      const fresh = { ...row, status: "inactive" };
+      await recordBarcodeEvent(null, bid(), fresh, "deactivate", "Barcode deactivated");
+      return { ok: true, deactivated: true, barcode: fresh };
     }),
   );
 

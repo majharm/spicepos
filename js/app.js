@@ -3265,7 +3265,10 @@ function showView(name) {
     counterLowStockPrompted = false;
     closeLowStockModal();
   }
-  if (name === "barcodes") loadBarcodesView();
+  if (name === "barcodes") {
+    loadBarcodesView();
+    queueMicrotask(() => $("bc-search")?.focus());
+  }
   if (name === "expiry") loadExpiryView();
   if (name === "damage") loadDamageView();
   if (name === "ledger") loadLedgerView();
@@ -15591,124 +15594,594 @@ async function loadCustomerLoyalty() {
   }
 }
 
-async function loadBarcodesView() {
-  fillItemPicker("bc-item-list", "bc-item-search", "bc-item", (i) => POSUnits.isCount(itemUnit(i)));
+let barcodeDeskPage = 1;
+let barcodeDeskRows = [];
+let barcodeDeskTotal = 0;
+let barcodeDeskTimer = 0;
+let barcodeDeskProfileKey = "";
+
+function isPieceBarcodeRow(kind) {
+  return kind !== "own" && kind !== "manufacturer";
+}
+
+function barcodeHint(message, tone) {
   const hint = $("bc-hint");
-  try {
-    const all = await api("/api/barcodes");
-    const countIds = new Set(state.items.filter((i) => POSUnits.isCount(itemUnit(i))).map((i) => i.id));
-    const rows = (Array.isArray(all) ? all : []).filter((r) => {
-      const kind = String(r.kind || "").toLowerCase();
-      return countIds.has(r.item_id) && kind !== "own" && kind !== "manufacturer";
-    });
-    $("barcodes-table").innerHTML = `<table><thead><tr>
-      <th></th><th>Item</th><th>Kind</th><th>Barcode</th><th>Status</th><th>MRP</th><th>SP</th><th></th>
-    </tr></thead><tbody>${(rows || [])
-      .map(
-        (r) => {
-          const st = String(r.status || "active").toLowerCase() || "active";
-          const inactive = st !== "active";
-          return `<tr class="${inactive ? "is-inactive" : ""}">
-          <td>${inactive ? "" : `<input type="checkbox" data-bc-pick="${escapeHtml(r.barcode)}" data-bc-name="${escapeHtml(r.item_name)}" data-bc-mrp="${escapeHtml(r.label_mrp || "")}" data-bc-rate="${escapeHtml(r.retail_rate || "")}" />`}</td>
-          <td>${escapeHtml(r.item_name)} <small>${escapeHtml(r.item_code || "")}</small></td>
-          <td>${escapeHtml(r.kind)}</td>
-          <td>${escapeHtml(r.barcode)}</td>
-          <td>${escapeHtml(st)}</td>
-          <td>${money(r.label_mrp)}</td>
-          <td>${money(r.retail_rate)}</td>
-          <td>${inactive ? "" : `<button class="btn" type="button" data-bc-print="${escapeHtml(r.barcode)}" data-bc-name="${escapeHtml(r.item_name)}" data-bc-mrp="${escapeHtml(r.label_mrp || "")}" data-bc-rate="${escapeHtml(r.retail_rate || "")}">Print</button>`}</td>
-        </tr>`;
-        },
-      )
-      .join("")}</tbody></table>`;
-    const active = (rows || []).filter((r) => String(r.status || "active").toLowerCase() === "active").length;
-    const stats = $("barcodes-hero-stats");
-    if (stats) {
-      stats.innerHTML = `<button type="button" class="items-stat"><span>Codes</span><strong>${rows.length}</strong></button>
-        <button type="button" class="items-stat"><span>Active</span><strong>${active}</strong></button>`;
-    }
-    if (hint) hint.textContent = `${(rows || []).length} barcodes`;
-    filterBarcodesTable();
-  } catch (err) {
-    if (hint) hint.textContent = err.message;
+  if (!hint) return;
+  hint.textContent = message || "";
+  hint.classList.toggle("ok", tone === "ok");
+  hint.classList.toggle("error", tone === "error");
+}
+
+function barcodeWhen(value) {
+  const s = String(value || "");
+  if (!s) return "—";
+  const d = new Date(s.includes("T") ? s : s.replace(" ", "T"));
+  if (Number.isNaN(d.getTime())) return s.slice(0, 16);
+  return d.toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "2-digit", month: "short", year: "numeric" });
+}
+
+function barcodeDeskProfile() {
+  const key = globalThis.POSFootwear?.shopKind?.(state.businessMeta) || "general";
+  return globalThis.POSBarcode?.deskProfile?.(key) || {
+    size: true, color: true, sku: true, price: true, batch: true, expiry: true, serial: true,
+    kinds: ["own", "manufacturer", "variant", "batch", "unit", "serial"],
+    shopKind: key,
+  };
+}
+
+function applyBarcodeDeskProfile() {
+  const profile = barcodeDeskProfile();
+  document.querySelectorAll("[data-bc-field]").forEach((el) => {
+    el.hidden = profile[el.dataset.bcField] === false;
+  });
+  const select = $("bc-kind");
+  if (select && barcodeDeskProfileKey !== profile.shopKind) {
+    const current = select.value;
+    const labels = { own: "Product", manufacturer: "Manufacturer", variant: "Variant", batch: "Batch", unit: "Piece", serial: "Serial" };
+    select.innerHTML = (profile.kinds || []).map((kind) => `<option value="${kind}">${labels[kind] || kind}</option>`).join("");
+    if ([...select.options].some((opt) => opt.value === current)) select.value = current;
+    barcodeDeskProfileKey = profile.shopKind;
+  }
+  const lede = $("bc-lede");
+  if (lede) {
+    const lead = globalThis.POSBarcode?.deskLead?.(profile.shopKind) || "";
+    lede.textContent = `${lead} Quantity (pcs) piece and serial codes stay unique. Sold or damaged codes go inactive and cannot be scanned again.`.replace(/\s+/g, " ").trim();
+  }
+  syncBarcodeQtyLock();
+}
+
+function syncBarcodeQtyLock() {
+  const kind = $("bc-kind")?.value || "own";
+  const piece = globalThis.POSBarcode?.isPieceKind?.(kind) || kind === "unit" || kind === "serial";
+  const qty = $("bc-qty");
+  const editing = Boolean($("bc-edit-id")?.value);
+  if (qty) {
+    qty.disabled = editing || !piece;
+    if (!piece) qty.value = "1";
   }
 }
 
-function filterBarcodesTable() {
-  const q = String($("bc-search")?.value || "").trim().toLowerCase();
-  $("barcodes-table")?.querySelectorAll("tbody tr").forEach((tr) => {
-    tr.hidden = Boolean(q) && !String(tr.textContent || "").toLowerCase().includes(q);
+function restoreBarcodeLabelSettings() {
+  if (restoreBarcodeLabelSettings.done) return;
+  restoreBarcodeLabelSettings.done = true;
+  try {
+    const saved = JSON.parse(localStorage.getItem("atav-bc-label") || "{}") || {};
+    if (saved.layout && $("bc-layout")) $("bc-layout").value = saved.layout;
+    if (saved.width && $("bc-label-w")) $("bc-label-w").value = saved.width;
+    if (saved.height && $("bc-label-h")) $("bc-label-h").value = saved.height;
+  } catch { /* private mode */ }
+}
+
+function saveBarcodeLabelSettings() {
+  try {
+    localStorage.setItem("atav-bc-label", JSON.stringify({
+      layout: $("bc-layout")?.value || "thermal",
+      width: $("bc-label-w")?.value || "",
+      height: $("bc-label-h")?.value || "",
+    }));
+  } catch { /* private mode */ }
+}
+
+function barcodePrintOpts() {
+  return {
+    layout: $("bc-layout")?.value === "a4" ? "a4" : "thermal",
+    widthMm: Number($("bc-label-w")?.value) || 0,
+    heightMm: Number($("bc-label-h")?.value) || 0,
+  };
+}
+
+function barcodeLabelFromRow(row) {
+  const profile = barcodeDeskProfile();
+  return {
+    name: row.item_name || row.name,
+    barcode: row.barcode,
+    format: row.barcode_format || row.format,
+    barcode_format: row.barcode_format || row.format,
+    mrp: profile.price === false ? "" : (row.label_mrp || row.mrp),
+    rate: profile.price === false ? "" : (row.retail_rate || row.rate),
+    size: row.size,
+    color: row.color,
+    batch_no: row.batch_no,
+    expiry: row.item_expiry || row.expiry,
+    serial_no: row.serial_no,
+    item_code: row.item_code,
+    sku: row.item_code,
+    shop: shopPrintName(),
+    logo: state.company?.logo_url || "",
+  };
+}
+
+function barcodeFormBody() {
+  const body = {
+    item_id: $("bc-item")?.value || "",
+    kind: $("bc-kind")?.value || "own",
+    format: $("bc-format")?.value || "code128",
+    barcode: String($("bc-manual")?.value || "").trim(),
+    qty: Number($("bc-qty")?.value) || 1,
+    size: $("bc-size")?.value || "",
+    color: $("bc-color")?.value || "",
+    batch_no: $("bc-batch")?.value || "",
+    serial_no: $("bc-serial")?.value || "",
+    expiry: $("bc-expiry")?.value || "",
+    note: $("bc-note")?.value || "",
+  };
+  document.querySelectorAll("[data-bc-field]").forEach((el) => {
+    if (!el.hidden) return;
+    const key = el.dataset.bcField;
+    if (key === "size") body.size = "";
+    if (key === "color") body.color = "";
+    if (key === "batch") body.batch_no = "";
+    if (key === "serial") body.serial_no = "";
+    if (key === "expiry") body.expiry = "";
   });
+  return body;
+}
+
+function validateBarcodeBody(body, item) {
+  const piece = globalThis.POSBarcode?.isPieceKind?.(body.kind) || body.kind === "unit" || body.kind === "serial";
+  if (!body.item_id || !item) return "Select a product";
+  if (piece && !POSUnits.isCount(itemUnit(item))) return "Barcodes are only for Quantity (pcs) items";
+  if (!piece && Number(body.qty) !== 1) return "A shared barcode is one code. Switch to piece or serial to generate many.";
+  if (body.barcode && Number(body.qty) > 1) return "Enter one manual barcode, or clear it to generate unique codes.";
+  if (body.barcode && body.format === "ean13" && globalThis.POSBarcode?.isValidEan13 && !POSBarcode.isValidEan13(body.barcode)) {
+    return "Enter a valid EAN-13 barcode";
+  }
+  return "";
+}
+
+function paintBarcodeCategoryFilter() {
+  const sel = $("bc-filter-category");
+  if (!sel) return;
+  const current = sel.value;
+  const cats = [...new Set(activeItems().map((item) => String(item.category || "").trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+  sel.innerHTML = `<option value="">All categories</option>${cats.map((cat) => `<option value="${escapeHtml(cat)}">${escapeHtml(cat)}</option>`).join("")}`;
+  if ([...sel.options].some((opt) => opt.value === current)) sel.value = current;
+}
+
+function paintBarcodeBulkList() {
+  const box = $("bc-bulk-list");
+  if (!box) return;
+  const checked = new Set([...box.querySelectorAll(":checked")].map((el) => el.value));
+  const q = String($("bc-item-search")?.value || "").trim().toLowerCase();
+  const items = activeItems().filter((item) => {
+    if (!q) return true;
+    return String(item.name || "").toLowerCase().includes(q) || String(item.code || "").toLowerCase().includes(q);
+  }).slice(0, 60);
+  box.innerHTML = items.map((item) => `<label><input type="checkbox" data-bc-bulk-item value="${escapeHtml(item.id)}" ${checked.has(item.id) ? "checked" : ""} /> ${escapeHtml(item.name)}</label>`).join("") || "<p>No products</p>";
+}
+
+function barcodeVariantText(row) {
+  const profile = barcodeDeskProfile();
+  const bits = [];
+  const kind = globalThis.POSBarcode?.kindLabel?.(row.kind) || row.kind || "";
+  if (kind) bits.push(kind);
+  if (profile.size && row.size) bits.push(row.size);
+  if (profile.color && row.color) bits.push(row.color);
+  if (profile.batch && row.batch_no) bits.push(row.batch_no);
+  if (profile.expiry && row.item_expiry) bits.push(row.item_expiry);
+  if (profile.serial && row.serial_no) bits.push(row.serial_no);
+  if (profile.sku && row.item_code) bits.push(row.item_code);
+  return bits.join(" · ");
+}
+
+function barcodeAssignment(row) {
+  const st = String(row.status || "active").toLowerCase() || "active";
+  if (st !== "active") return st;
+  const kind = String(row.kind || "").toLowerCase();
+  if ((kind === "unit" || kind === "serial") && !row.purchase_id && !row.used_at) return "unassigned";
+  if (!row.printed_at) return "pending print";
+  if (row.purchase_number) return `purchase ${row.purchase_number}`;
+  return "assigned";
+}
+
+function selectedBarcodeRows() {
+  const ids = new Set([...document.querySelectorAll("[data-bc-id]:checked")].map((el) => el.dataset.bcId));
+  return barcodeDeskRows.filter((row) => ids.has(String(row.id)));
+}
+
+function barcodePrintSource(row, extra = {}) {
+  const item = state.items.find((entry) => entry.id === (row.item_id || extra.item_id)) || {};
+  return {
+    ...extra,
+    ...row,
+    item_name: row.item_name || extra.item_name || item.name,
+    item_code: row.item_code || extra.item_code || item.code,
+    label_mrp: row.label_mrp || extra.label_mrp || item.mrp || item.retail_rate,
+    retail_rate: row.retail_rate || extra.retail_rate || item.retail_rate,
+    item_expiry: row.item_expiry || extra.item_expiry || extra.expiry,
+    size: row.size || extra.size,
+    color: row.color || extra.color,
+    batch_no: row.batch_no || extra.batch_no,
+    serial_no: row.serial_no || extra.serial_no,
+  };
+}
+
+async function printBarcodeRows(rows, reload) {
+  if (!rows.length) {
+    barcodeHint("Select labels first", "error");
+    return;
+  }
+  if (!globalThis.POSBarcode?.printLabels) {
+    barcodeHint("Label printing is unavailable", "error");
+    return;
+  }
+  const copies = Number($("bc-copies")?.value) || 1;
+  const ok = POSBarcode.printLabels(rows.map(barcodeLabelFromRow), copies, barcodePrintOpts());
+  saveBarcodeLabelSettings();
+  if (ok === false) {
+    barcodeHint("Allow pop-ups to print labels", "error");
+    return;
+  }
+  const ids = rows.map((row) => row.id).filter(Boolean);
+  if (ids.length && can("items")) {
+    try {
+      await api("/api/barcodes/printed", { method: "POST", body: JSON.stringify({ ids }) });
+    } catch { /* the label window already opened */ }
+  }
+  if (reload) await loadBarcodesView();
+}
+
+function cancelBarcodeEdit() {
+  if ($("bc-edit-id")) $("bc-edit-id").value = "";
+  if ($("bc-manual")) $("bc-manual").value = "";
+  if ($("bc-submit")) $("bc-submit").textContent = "Generate barcode";
+  if ($("bc-form-title")) $("bc-form-title").textContent = "Generate barcode";
+  if ($("bc-cancel-edit")) $("bc-cancel-edit").hidden = true;
+  syncBarcodeQtyLock();
+}
+
+function editBarcodeRow(row) {
+  if (!row) return;
+  if ($("bc-edit-id")) $("bc-edit-id").value = row.id || "";
+  if ($("bc-item")) $("bc-item").value = row.item_id || "";
+  if ($("bc-item-search")) $("bc-item-search").value = row.item_name || "";
+  const kind = String(row.kind || "own");
+  const sel = $("bc-kind");
+  if (sel && ![...sel.options].some((opt) => opt.value === kind)) {
+    const extra = document.createElement("option");
+    extra.value = kind;
+    extra.textContent = globalThis.POSBarcode?.kindLabel?.(kind) || kind;
+    sel.appendChild(extra);
+  }
+  if (sel) sel.value = kind;
+  if ($("bc-format")) $("bc-format").value = row.barcode_format === "ean13" || globalThis.POSBarcode?.isValidEan13?.(row.barcode) ? (row.barcode_format || "ean13") : (row.barcode_format || "code128");
+  if ($("bc-manual")) $("bc-manual").value = row.barcode || "";
+  if ($("bc-qty")) $("bc-qty").value = "1";
+  if ($("bc-size")) $("bc-size").value = row.size || "";
+  if ($("bc-color")) $("bc-color").value = row.color || "";
+  if ($("bc-batch")) $("bc-batch").value = row.batch_no || "";
+  if ($("bc-expiry")) $("bc-expiry").value = String(row.item_expiry || row.expiry_date || "").slice(0, 10);
+  if ($("bc-serial")) $("bc-serial").value = row.serial_no || "";
+  if ($("bc-note")) $("bc-note").value = row.note || "";
+  if ($("bc-submit")) $("bc-submit").textContent = "Save barcode";
+  if ($("bc-form-title")) $("bc-form-title").textContent = "Edit barcode";
+  if ($("bc-cancel-edit")) $("bc-cancel-edit").hidden = false;
+  syncBarcodeQtyLock();
+  $("bc-qty-form")?.scrollIntoView({ block: "nearest" });
+}
+
+async function openBarcodeDetail(id) {
+  const data = await api(`/api/barcodes/${encodeURIComponent(id)}`);
+  const row = data.barcode || {};
+  const box = $("bc-detail");
+  if (!box) return;
+  const events = Array.isArray(data.events) ? data.events : [];
+  box.hidden = false;
+  box.innerHTML = `<h4>${escapeHtml(row.item_name || "Barcode")}</h4>
+    <p>${escapeHtml(row.barcode || "")} · ${escapeHtml(barcodeAssignment(row))} · ${escapeHtml(barcodeWhen(row.created_at))}</p>
+    <p>${escapeHtml(barcodeVariantText(row))}${row.purchase_number ? ` · Purchase ${escapeHtml(row.purchase_number)}` : ""}${data.locked ? " · Linked to history" : ""}</p>
+    ${events.length ? `<ul>${events.map((event) => `<li>${escapeHtml(event.action || "")} · ${escapeHtml(event.detail || "")} · ${escapeHtml(barcodeWhen(event.created_at))}</li>`).join("")}</ul>` : "<p>No changes yet.</p>"}
+    <button class="btn" type="button" id="bc-detail-close">Close</button>`;
+}
+
+async function loadBarcodesView() {
+  restoreBarcodeLabelSettings();
+  applyBarcodeDeskProfile();
+  fillItemPicker("bc-item-list", "bc-item-search", "bc-item", () => true);
+  paintBarcodeCategoryFilter();
+  paintBarcodeBulkList();
+  const form = $("bc-qty-form");
+  if (form) form.querySelectorAll("button, input, select").forEach((el) => {
+    if (el.id === "bc-search") return;
+    if (!can("items") && el.closest("#bc-qty-form")) el.disabled = el.type !== "search";
+  });
+  const params = new URLSearchParams({ desk: "1", page: String(barcodeDeskPage), limit: "40" });
+  const q = String($("bc-search")?.value || "").trim();
+  const kind = $("bc-filter-kind")?.value || "";
+  const status = $("bc-filter-status")?.value || "";
+  const category = $("bc-filter-category")?.value || "";
+  if (q) params.set("q", q);
+  if (kind) params.set("kind", kind);
+  if (status) params.set("status", status);
+  if (category) params.set("category", category);
+  try {
+    const data = await api(`/api/barcodes?${params.toString()}`);
+    barcodeDeskRows = Array.isArray(data.rows) ? data.rows : [];
+    barcodeDeskTotal = Number(data.total) || barcodeDeskRows.length;
+    const summary = data.summary || {};
+    const stats = $("barcodes-hero-stats");
+    if (stats) {
+      const cards = [
+        ["", "Total", summary.total],
+        ["active", "Active", summary.active],
+        ["unassigned", "Unassigned", summary.unassigned],
+        ["unprinted", "Pending print", summary.pending_print],
+      ];
+      stats.innerHTML = cards.map(([key, label, value]) => `<button type="button" class="items-stat" data-bc-stat="${key}"><span>${label}</span><strong>${Number(value) || 0}</strong></button>`).join("");
+    }
+    const table = $("barcodes-table");
+    if (table) {
+      const body = barcodeDeskRows.map((row) => {
+        const st = String(row.status || "active").toLowerCase() || "active";
+        const kindName = String(row.kind || "").toLowerCase();
+        const tracked = isPieceBarcodeRow(kindName);
+        const svg = globalThis.POSBarcode?.barcodeSvg?.(row, { height: 36, scale: 1.2 }) || "";
+        const locked = st === "sold" || st === "damaged";
+        return `<tr class="${st === "active" ? "" : "is-inactive"}${tracked ? " is-piece" : ""}">
+          <td><input type="checkbox" data-bc-pick="${escapeHtml(row.barcode)}" data-bc-id="${escapeHtml(row.id)}" /></td>
+          <td class="bc-preview">${svg}<div class="bc-num">${escapeHtml(row.barcode)}</div></td>
+          <td>${escapeHtml(row.item_name || "")}</td>
+          <td>${escapeHtml(barcodeVariantText(row))}</td>
+          <td>${escapeHtml(barcodeAssignment(row))}</td>
+          <td>${escapeHtml(barcodeWhen(row.created_at))}</td>
+          <td class="bc-actions">
+            <button class="btn" type="button" data-bc-view="${escapeHtml(row.id)}">View</button>
+            <button class="btn" type="button" data-bc-edit="${escapeHtml(row.id)}">Edit</button>
+            <button class="btn" type="button" data-bc-print="${escapeHtml(row.id)}">Print</button>
+            ${locked || st === "inactive" ? "" : `<button class="btn" type="button" data-bc-off="${escapeHtml(row.id)}">Deactivate</button>`}
+          </td>
+        </tr>`;
+      }).join("");
+      table.innerHTML = `<table><thead><tr>
+        <th><input type="checkbox" id="bc-select-all" aria-label="Select all" /></th>
+        <th>Barcode</th><th>Product</th><th>Variant</th><th>Status</th><th>Created</th><th></th>
+      </tr></thead><tbody>${body || `<tr><td colspan="7">No barcodes yet.</td></tr>`}</tbody></table>`;
+    }
+    const pages = Math.max(1, Math.ceil(barcodeDeskTotal / (Number(data.pageSize) || 40)));
+    const pager = $("bc-pager");
+    if (pager) {
+      pager.innerHTML = `<button type="button" class="btn" data-bc-page="${barcodeDeskPage - 1}" ${barcodeDeskPage <= 1 ? "disabled" : ""}>Previous</button>
+        <span>Page ${barcodeDeskPage} of ${pages}</span>
+        <button type="button" class="btn" data-bc-page="${barcodeDeskPage + 1}" ${barcodeDeskPage >= pages ? "disabled" : ""}>Next</button>`;
+    }
+  } catch (err) {
+    barcodeHint(err.message, "error");
+  }
 }
 
 $("bc-qty-form")?.addEventListener("submit", async (e) => {
   e.preventDefault();
-  const itemId = $("bc-item")?.value || "";
-  const qty = Number($("bc-qty")?.value) || 0;
-  const item = state.items.find((i) => i.id === itemId);
-  if (!itemId || !item) {
-    if ($("bc-hint")) $("bc-hint").textContent = "Select a Quantity (pcs) item";
+  if (!can("items")) {
+    barcodeHint("You cannot change barcodes", "error");
     return;
   }
-  if (!POSUnits.isCount(itemUnit(item))) {
-    if ($("bc-hint")) $("bc-hint").textContent = "Barcodes are only for Quantity (pcs) items";
+  const body = barcodeFormBody();
+  const item = state.items.find((row) => row.id === body.item_id) || resolvePickerItem($("bc-item-search")?.value, activeItems());
+  if (item && !body.item_id) body.item_id = item.id;
+  const problem = validateBarcodeBody(body, item);
+  if (problem) {
+    barcodeHint(problem, "error");
     return;
   }
+  const editId = $("bc-edit-id")?.value || "";
   try {
-    const data = await api("/api/barcodes/generate-qty", {
-      method: "POST",
-      body: JSON.stringify({ item_id: itemId, qty }),
-    });
-    const rows = data.barcodes || [];
-    if ($("bc-hint")) $("bc-hint").textContent = `Generated ${data.generated || rows.length} unique barcodes`;
-    await loadBootstrap();
-    await loadBarcodesView();
-    if ($("bc-qty-print")?.checked && rows.length && globalThis.POSBarcode?.printLabels) {
-      globalThis.POSBarcode.printLabels(
-        rows.map((r) => ({
-          name: item.name,
-          barcode: r.barcode,
-          mrp: item.mrp || item.retail_rate,
-          rate: item.retail_rate,
-        })),
-        1,
-      );
+    if (editId) {
+      const existing = barcodeDeskRows.find((row) => String(row.id) === String(editId));
+      const locked = existing && (["sold", "damaged"].includes(String(existing.status || "").toLowerCase()) || existing.used_at);
+      const payload = { ...body };
+      delete payload.qty;
+      if (locked) {
+        delete payload.item_id;
+        delete payload.barcode;
+        delete payload.kind;
+      }
+      await api(`/api/barcodes/${encodeURIComponent(editId)}`, { method: "POST", body: JSON.stringify(payload) });
+      barcodeHint("Barcode updated", "ok");
+      cancelBarcodeEdit();
+    } else {
+      const piece = globalThis.POSBarcode?.isPieceKind?.(body.kind);
+      const plainPiece = piece && body.kind === "unit" && body.format === "ean13" && !body.barcode && !body.size && !body.color && !body.batch_no && !body.serial_no && !body.expiry && !body.note;
+      const data = plainPiece
+        ? await api("/api/barcodes/generate-qty", { method: "POST", body: JSON.stringify({ item_id: body.item_id, qty: body.qty }) })
+        : await api("/api/barcodes", { method: "POST", body: JSON.stringify(body) });
+      const rows = data.barcodes || [];
+      barcodeHint(`Generated ${data.generated || rows.length} unique barcodes`, "ok");
+      if ($("bc-qty-print")?.checked && rows.length) {
+        await printBarcodeRows(rows.map((row) => barcodePrintSource(row, { ...body, item_name: item.name, item_code: item.code, label_mrp: item.mrp || item.retail_rate, retail_rate: item.retail_rate })));
+      }
+      if ($("bc-manual")) $("bc-manual").value = "";
     }
+    await loadBootstrap();
+    barcodeDeskPage = 1;
+    await loadBarcodesView();
   } catch (err) {
-    if ($("bc-hint")) $("bc-hint").textContent = err.message;
+    barcodeHint(err.message, "error");
+  }
+});
+$("bc-bulk")?.addEventListener("click", async () => {
+  if (!can("items")) {
+    barcodeHint("You cannot change barcodes", "error");
+    return;
+  }
+  const body = barcodeFormBody();
+  const ids = [...document.querySelectorAll("[data-bc-bulk-item]:checked")].map((el) => el.value);
+  if (!ids.length && body.item_id) ids.push(body.item_id);
+  if (!ids.length) {
+    barcodeHint("Select at least one product", "error");
+    return;
+  }
+  const piece = globalThis.POSBarcode?.isPieceKind?.(body.kind);
+  if (piece && ids.some((id) => {
+    const item = state.items.find((row) => row.id === id);
+    return item && !POSUnits.isCount(itemUnit(item));
+  })) {
+    barcodeHint("Barcodes are only for Quantity (pcs) items", "error");
+    return;
+  }
+  if (!window.confirm(`Generate barcodes for ${ids.length} products?`)) return;
+  try {
+    const data = await api("/api/barcodes/bulk", {
+      method: "POST",
+      body: JSON.stringify({ ...body, barcode: "", item_ids: ids }),
+    });
+    barcodeHint(`Generated ${data.generated || 0} unique barcodes`, "ok");
+    if ($("bc-qty-print")?.checked && data.barcodes?.length) {
+      await printBarcodeRows(data.barcodes.map((row) => barcodePrintSource(row, body)));
+    }
+    await loadBootstrap();
+    barcodeDeskPage = 1;
+    await loadBarcodesView();
+  } catch (err) {
+    barcodeHint(err.message, "error");
   }
 });
 $("bc-generate-missing")?.addEventListener("click", async () => {
+  if (!can("items")) {
+    barcodeHint("You cannot change barcodes", "error");
+    return;
+  }
   try {
     const data = await api("/api/barcodes/generate-missing", { method: "POST", body: "{}" });
-    $("bc-hint").textContent = `Generated ${data.generated || 0}`;
+    barcodeHint(`Generated ${data.generated || 0}`, "ok");
     await loadBootstrap();
     loadBarcodesView();
   } catch (err) {
-    $("bc-hint").textContent = err.message;
+    barcodeHint(err.message, "error");
   }
 });
-$("bc-print-selected")?.addEventListener("click", () => {
-  const copies = Number($("bc-copies")?.value) || 1;
-  const rows = [...document.querySelectorAll("[data-bc-pick]:checked")].map((el) => ({
-    name: el.dataset.bcName,
-    barcode: el.dataset.bcPick,
-    mrp: el.dataset.bcMrp,
-    rate: el.dataset.bcRate,
-    copies,
-  }));
-  if (!rows.length) {
-    $("bc-hint").textContent = "Select labels first";
+$("bc-cancel-edit")?.addEventListener("click", () => cancelBarcodeEdit());
+$("bc-kind")?.addEventListener("change", syncBarcodeQtyLock);
+$("bc-layout")?.addEventListener("change", saveBarcodeLabelSettings);
+$("bc-label-w")?.addEventListener("change", saveBarcodeLabelSettings);
+$("bc-label-h")?.addEventListener("change", saveBarcodeLabelSettings);
+$("bc-print-selected")?.addEventListener("click", async () => {
+  const rows = selectedBarcodeRows();
+  if (rows.length > 1 && !window.confirm(`Print ${rows.length} labels?`)) return;
+  await printBarcodeRows(rows, true);
+});
+$("bc-export")?.addEventListener("click", () => {
+  const picked = selectedBarcodeRows();
+  const rows = picked.length ? picked : barcodeDeskRows;
+  const csv = globalThis.POSBarcode?.labelsCsv?.(rows) || "";
+  const blob = new Blob([csv], { type: "text/csv" });
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = "barcodes.csv";
+  link.click();
+  URL.revokeObjectURL(link.href);
+});
+$("bc-deactivate-selected")?.addEventListener("click", async () => {
+  if (!can("items")) {
+    barcodeHint("You cannot change barcodes", "error");
     return;
   }
-  globalThis.POSBarcode?.printLabels(rows, copies);
+  const rows = selectedBarcodeRows().filter((row) => !["sold", "damaged", "inactive"].includes(String(row.status || "active").toLowerCase()));
+  if (!rows.length) {
+    barcodeHint("This barcode is on a completed transaction and stays on file.", "error");
+    return;
+  }
+  if (!window.confirm(`Deactivate ${rows.length} barcodes? Historical sales stay on file.`)) return;
+  try {
+    for (const row of rows) {
+      await api(`/api/barcodes/${encodeURIComponent(row.id)}`, { method: "DELETE" });
+    }
+    barcodeHint(`Deactivated ${rows.length}`, "ok");
+    await loadBarcodesView();
+  } catch (err) {
+    barcodeHint(err.message, "error");
+  }
 });
-$("barcodes-table")?.addEventListener("click", (e) => {
-  const btn = e.target.closest("[data-bc-print]");
-  if (!btn) return;
-  globalThis.POSBarcode?.printLabels([{ name: btn.dataset.bcName, barcode: btn.dataset.bcPrint, mrp: btn.dataset.bcMrp, rate: btn.dataset.bcRate }], Number($("bc-copies")?.value) || 1);
+$("barcodes-hero-stats")?.addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-bc-stat]");
+  if (!btn || !$("bc-filter-status")) return;
+  $("bc-filter-status").value = btn.dataset.bcStat || "";
+  barcodeDeskPage = 1;
+  loadBarcodesView();
 });
-$("bc-search")?.addEventListener("input", filterBarcodesTable);
+$("barcodes-table")?.addEventListener("click", async (e) => {
+  const view = e.target.closest("[data-bc-view]");
+  const edit = e.target.closest("[data-bc-edit]");
+  const print = e.target.closest("[data-bc-print]");
+  const off = e.target.closest("[data-bc-off]");
+  try {
+    if (view) await openBarcodeDetail(view.dataset.bcView);
+    if (edit) {
+      if (!can("items")) {
+        barcodeHint("You cannot change barcodes", "error");
+        return;
+      }
+      editBarcodeRow(barcodeDeskRows.find((row) => String(row.id) === edit.dataset.bcEdit));
+    }
+    if (print) await printBarcodeRows(barcodeDeskRows.filter((row) => String(row.id) === print.dataset.bcPrint), true);
+    if (off) {
+      if (!can("items")) {
+        barcodeHint("You cannot change barcodes", "error");
+        return;
+      }
+      const row = barcodeDeskRows.find((item) => String(item.id) === off.dataset.bcOff);
+      if (!window.confirm(`Deactivate ${row?.barcode || "this barcode"}? Historical sales stay on file.`)) return;
+      await api(`/api/barcodes/${encodeURIComponent(off.dataset.bcOff)}`, { method: "DELETE" });
+      barcodeHint("Barcode deactivated", "ok");
+      await loadBarcodesView();
+    }
+  } catch (err) {
+    barcodeHint(err.message, "error");
+  }
+});
+$("barcodes-table")?.addEventListener("change", (e) => {
+  if (e.target?.id !== "bc-select-all") return;
+  document.querySelectorAll("[data-bc-pick]").forEach((el) => { el.checked = e.target.checked; });
+});
+$("bc-pager")?.addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-bc-page]");
+  if (!btn || btn.disabled) return;
+  const next = Number(btn.dataset.bcPage);
+  if (!Number.isFinite(next) || next < 1) return;
+  barcodeDeskPage = next;
+  loadBarcodesView();
+});
+$("bc-detail")?.addEventListener("click", (e) => {
+  if (e.target?.id === "bc-detail-close" && $("bc-detail")) $("bc-detail").hidden = true;
+});
+function scheduleBarcodeDesk() {
+  window.clearTimeout(barcodeDeskTimer);
+  barcodeDeskTimer = window.setTimeout(() => {
+    barcodeDeskPage = 1;
+    loadBarcodesView();
+  }, 250);
+}
+$("bc-search")?.addEventListener("input", scheduleBarcodeDesk);
+$("bc-search")?.addEventListener("keydown", (e) => {
+  if (e.key !== "Enter") return;
+  e.preventDefault();
+  window.clearTimeout(barcodeDeskTimer);
+  barcodeDeskPage = 1;
+  loadBarcodesView();
+});
+$("bc-filter-kind")?.addEventListener("change", () => { barcodeDeskPage = 1; loadBarcodesView(); });
+$("bc-filter-status")?.addEventListener("change", () => { barcodeDeskPage = 1; loadBarcodesView(); });
+$("bc-filter-category")?.addEventListener("change", () => { barcodeDeskPage = 1; loadBarcodesView(); });
+$("bc-item-search")?.addEventListener("input", paintBarcodeBulkList);
 
 function expiryDaysLeft(row) {
   if (row?.days_left != null && row.days_left !== "") {

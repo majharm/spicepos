@@ -7,6 +7,7 @@
     <title>ATAV POS</title>
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="./css/pos.css?v=20261023stkui1" />
+    <link rel="stylesheet" href="./css/barcode-desk.css?v=20261024bcdesk1" />
     <link rel="stylesheet" href="./css/saas.css?v=20261016note1" />
     <link rel="stylesheet" href="./css/bar.css?v=20261011bar2" />
     <link rel="stylesheet" href="./css/resort.css?v=20261011resort1" />
@@ -1874,40 +1875,99 @@
               <div class="items-hero-copy">
                 <p class="items-kicker">Inventory</p>
                 <h3>Barcodes</h3>
-                <p class="lede">Quantity (pcs) items only. One unique code per piece. Sold or damaged codes go inactive and cannot be scanned again.</p>
+                <p class="lede" id="bc-lede">Quantity (pcs) items only. One unique code per piece. Sold or damaged codes go inactive and cannot be scanned again.</p>
               </div>
               <div class="items-hero-stats" id="barcodes-hero-stats"></div>
             </header>
+            <div class="bc-toolbar">
+              <input id="bc-search" type="search" placeholder="Scan or search barcode, product, SKU, batch, colour, size, serial" autocomplete="off" enterkeyhint="search" />
+              <select id="bc-filter-category" aria-label="Business category"><option value="">All categories</option></select>
+              <select id="bc-filter-kind" aria-label="Barcode type">
+                <option value="">All types</option>
+                <option value="product">Product</option>
+                <option value="variant">Variant</option>
+                <option value="batch">Batch</option>
+                <option value="piece">Piece / serial</option>
+                <option value="manufacturer">Manufacturer</option>
+              </select>
+              <select id="bc-filter-status" aria-label="Status">
+                <option value="">All statuses</option>
+                <option value="active">Active</option>
+                <option value="unassigned">Unassigned</option>
+                <option value="unprinted">Labels pending</option>
+                <option value="inactive">Inactive</option>
+                <option value="sold">Sold</option>
+                <option value="damaged">Damaged</option>
+              </select>
+              <button class="btn" type="button" id="bc-print-selected">Print selected</button>
+              <button class="btn" type="button" id="bc-export">Export</button>
+              <button class="btn" type="button" id="bc-deactivate-selected">Deactivate</button>
+            </div>
             <div class="items-split">
               <form class="settings item-composer" id="bc-qty-form" autocomplete="off">
                 <div class="item-composer-top">
-                  <p class="item-mode">Generate labels</p>
-                  <p class="item-composer-note">Pick a piece item, set how many unique barcodes to create, then print.</p>
+                  <p class="item-mode" id="bc-form-title">Generate barcode</p>
+                  <p class="item-composer-note">One shared code for a product, or a unique code for every piece. Piece and serial codes are only for Quantity (pcs) items.</p>
                 </div>
+                <input type="hidden" id="bc-edit-id" value="" />
                 <fieldset class="item-block">
-                  <legend>Piece item</legend>
-                  <label class="full">Item
-                    <input id="bc-item-search" list="bc-item-list" placeholder="Search Quantity (pcs) item" />
-                    <input type="hidden" id="bc-item" required />
+                  <legend>Product</legend>
+                  <label class="full">Product
+                    <input id="bc-item-search" list="bc-item-list" placeholder="Search product" />
+                    <input type="hidden" id="bc-item" />
                     <datalist id="bc-item-list"></datalist>
                   </label>
-                  <label>Qty (unique barcodes) <input id="bc-qty" type="number" min="1" max="500" step="1" value="1" required /></label>
+                  <label>Barcode type
+                    <select id="bc-kind">
+                      <option value="own">Product</option>
+                      <option value="variant">Variant</option>
+                      <option value="batch">Batch</option>
+                      <option value="unit">Piece</option>
+                      <option value="serial">Serial</option>
+                      <option value="manufacturer">Manufacturer</option>
+                    </select>
+                  </label>
+                  <label>Format
+                    <select id="bc-format">
+                      <option value="code128">Code 128</option>
+                      <option value="ean13">EAN-13</option>
+                    </select>
+                  </label>
+                  <label class="full">Manual barcode <input id="bc-manual" type="text" inputmode="text" autocomplete="off" placeholder="Leave blank to generate" /></label>
+                  <label>Quantity <input id="bc-qty" type="number" min="1" max="500" step="1" value="1" /></label>
                   <label>Copies <input id="bc-copies" type="number" min="1" max="50" value="1" /></label>
+                  <label data-bc-field="size">Size <input id="bc-size" type="text" autocomplete="off" /></label>
+                  <label data-bc-field="color">Colour <input id="bc-color" type="text" autocomplete="off" /></label>
+                  <label data-bc-field="batch">Batch <input id="bc-batch" type="text" autocomplete="off" /></label>
+                  <label data-bc-field="expiry">Expiry <input id="bc-expiry" type="date" /></label>
+                  <label data-bc-field="serial">Serial <input id="bc-serial" type="text" autocomplete="off" /></label>
+                  <label class="full">Note <input id="bc-note" type="text" maxlength="255" autocomplete="off" /></label>
+                  <label>Label layout
+                    <select id="bc-layout">
+                      <option value="thermal">Thermal</option>
+                      <option value="a4">A4 sheet</option>
+                    </select>
+                  </label>
+                  <label>Width mm <input id="bc-label-w" type="number" min="20" max="120" step="1" value="50" /></label>
+                  <label>Height mm <input id="bc-label-h" type="number" min="15" max="90" step="1" value="30" /></label>
                   <label class="full"><input type="checkbox" id="bc-qty-print" checked /> Print labels after generate</label>
                 </fieldset>
+                <details class="bc-bulk" id="bc-bulk-panel">
+                  <summary>Products for bulk</summary>
+                  <div id="bc-bulk-list" class="bc-bulk-list"></div>
+                </details>
                 <div class="item-composer-actions">
-                  <button class="btn primary" type="submit">Generate qty-wise</button>
+                  <button class="btn primary" type="submit" id="bc-submit">Generate barcode</button>
+                  <button class="btn" type="button" id="bc-bulk">Bulk generate</button>
                   <button class="btn" type="button" id="bc-generate-missing">Fill missing</button>
-                  <p class="hint" id="bc-hint"></p>
+                  <button class="btn" type="button" id="bc-cancel-edit" hidden>Cancel edit</button>
+                  <p class="hint" id="bc-hint" role="status"></p>
                 </div>
               </form>
               <aside class="items-library">
-                <div class="items-library-head">
-                  <h4>Codes on file</h4>
-                  <input id="bc-search" type="search" placeholder="Find item or code…" autocomplete="off" />
-                  <button class="btn" type="button" id="bc-print-selected">Print selected</button>
-                </div>
                 <div class="table-wrap" id="barcodes-table"></div>
+                <div id="bc-pager" class="bc-pager"></div>
+                <div id="bc-detail" class="bc-detail" hidden></div>
               </aside>
             </div>
           </div>
@@ -3360,7 +3420,7 @@
     <script src="./js/discount.js?v=20260905deploy136" defer></script>
     <script src="./js/offers.js?v=20260905deploy170" defer></script>
     <script src="./js/loyalty.js?v=20260905deploy136" defer></script>
-    <script src="./js/barcode.js?v=20260924bc1" defer></script>
+    <script src="./js/barcode.js?v=20261024bcdesk1" defer></script>
     <script src="./js/camera-scan.js?v=20261023cam1" defer></script>
     <script src="./js/scale.js?v=20261012set4" defer></script>
     <script src="./js/dev-mode.js?v=20260905deploy136" defer></script>
@@ -3384,7 +3444,7 @@
     <script src="./js/resort-ui.js?v=20261011resort1" defer></script>
     <script src="./js/item-master.js?v=20261012brand1" defer></script>
     <script src="./js/customer-master.js?v=20261023cemail1" defer></script>
-    <script src="./js/app.js?v=20261023sub1" defer></script>
+    <script src="./js/app.js?v=20261024bcdesk1" defer></script>
     <script src="./js/item-master-ui.js?v=20261012brand1" defer></script>
     <script src="./js/customer-master-ui.js?v=20261023cemail1" defer></script>
     <script src="./js/mobile-app.js?v=20261023logo1" defer></script>
