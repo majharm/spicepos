@@ -5,7 +5,7 @@ import { sha256, newToken, audit } from "./audit.js";
 import { defaultPerms, displayName, can } from "./roles.js";
 import { registerBusiness } from "./onboard.js";
 import { sendWelcomeSignup, publicLoginUrl } from "./mail.js";
-import { sendWelcomeAlerts } from "./alerts.js";
+import { notifySignupAdmin, sendWelcomeAlerts } from "./alerts.js";
 import { canonApiUrl } from "./http-path.js";
 import { normalizeLocale } from "./i18n.js";
 import {
@@ -410,6 +410,17 @@ export function registerAuth(app) {
       } catch (err) {
         console.error("welcome alerts failed:", err.message);
       }
+      await notifySignupAdmin({
+        businessId: business?.id || user.business_id,
+        userId: user.id,
+        name: displayName(user) || user.first_name,
+        mobile: business?.mobile || req.body?.mobile,
+        email: user.email || business?.email,
+        businessName: business?.name,
+        category: business?.category || business?.business_type,
+        registrationId: business?.code || business?.id,
+        registeredAt: business?.created_at,
+      });
       const ttl = sessionSecs(wantsRemember(req.body));
       const token = newToken();
       await query(

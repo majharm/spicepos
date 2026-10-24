@@ -630,6 +630,22 @@ export async function ensureSchema() {
     INDEX idx_adl_biz (business_id)
   )`);
 
+  await create(`CREATE TABLE IF NOT EXISTS signup_whatsapp_alerts (
+    id VARCHAR(255) PRIMARY KEY,
+    business_id VARCHAR(255) NOT NULL,
+    user_id VARCHAR(255) NOT NULL DEFAULT '',
+    recipient VARCHAR(32) NOT NULL DEFAULT '',
+    status VARCHAR(16) NOT NULL DEFAULT 'pending',
+    provider_message_id VARCHAR(128) NULL,
+    error VARCHAR(255) NULL,
+    http_status INT NULL,
+    attempts INT NOT NULL DEFAULT 0,
+    created_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    updated_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+    sent_at TIMESTAMP(3) NULL,
+    UNIQUE KEY uniq_signup_wa_biz (business_id)
+  )`);
+
   await create(`CREATE TABLE IF NOT EXISTS business_subscription_events (
     id VARCHAR(255) PRIMARY KEY,
     business_id VARCHAR(255) NOT NULL,

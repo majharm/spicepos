@@ -3515,6 +3515,19 @@ function pos_php_dispatch($path, $method, $rawBody) {
           "mobile" => $body["mobile"] ?? "",
         ]);
       }
+      if (function_exists("pos_notify_signup_whatsapp")) {
+        pos_notify_signup_whatsapp([
+          "businessId" => $business["id"] ?? $user["business_id"],
+          "userId" => $user["id"] ?? "",
+          "name" => pos_display_name($user),
+          "mobile" => $business["mobile"] ?? ($body["mobile"] ?? ""),
+          "email" => $user["email"] ?? ($business["email"] ?? ""),
+          "businessName" => $business["name"] ?? "",
+          "category" => $business["category"] ?? ($business["business_type"] ?? ""),
+          "registrationId" => $business["code"] ?? ($business["id"] ?? ""),
+          "registeredAt" => $business["created_at"] ?? "",
+        ]);
+      }
       $ttl = pos_ttl(pos_remember($body));
       $token = pos_new_token();
       pos_q(

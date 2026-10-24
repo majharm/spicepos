@@ -36,6 +36,7 @@ function pos_alert_defaults() {
     "tpl_renewal_before" => "",
     "tpl_renewal_expired" => "",
     "backup_email_to" => "",
+    "signup_wa_to" => "9112090347",
   ];
 }
 
@@ -418,6 +419,7 @@ function pos_alert_settings() {
     "tpl_renewal_before" => $map["tpl_renewal_before"] ?? "",
     "tpl_renewal_expired" => $map["tpl_renewal_expired"] ?? "",
     "backup_email_to" => trim((string) ($map["backup_email_to"] ?? "")),
+    "signup_wa_to" => pos_signup_wa_recipient($map["signup_wa_to"] ?? "9112090347"),
   ];
   $stored = pos_persist_smtp_connection($cfg);
   return array_merge($cfg, $stored);
@@ -434,6 +436,7 @@ function pos_alert_settings_public($cfg = null) {
   $cfg["smtp_stored"] = ($raw["smtp_host"] ?? "") !== "" && ($raw["smtp_user"] ?? "") !== "" && ($raw["smtp_pass"] ?? "") !== "";
   $cfg["defaults"] = pos_alert_default_templates();
   $cfg["sample_vars"] = pos_alert_vars(pos_alert_sample_payload());
+  $cfg["signup_wa_to"] = pos_format_signup_wa_display($raw["signup_wa_to"] ?? "", $raw["wa_country_code"] ?? "91");
   $cfg["samples"] = [];
   foreach (pos_alert_kinds() as $kind) {
     $cfg["tpl_{$kind}"] = pos_effective_tpl($kind, $raw["tpl_{$kind}"] ?? "");
@@ -471,6 +474,7 @@ function pos_save_alert_settings($body) {
   $cur["smtp_user"] = $cur["smtp_user"] ?: $d["smtp_user"];
   $cur["mail_from"] = $cur["mail_from"] ?: ($cur["smtp_user"] ?: $d["mail_from"]);
   $cur["mail_from_name"] = $cur["mail_from_name"] ?: $d["mail_from_name"];
+  $cur["signup_wa_to"] = pos_signup_wa_recipient($cur["signup_wa_to"] ?? "9112090347");
   foreach ($keys as $key) pos_set_setting($key, $cur[$key]);
   return pos_alert_settings();
 }
@@ -667,6 +671,7 @@ function pos_wa_send_one($cfg, $number, $message, $media = "") {
         "number" => $shown,
         "delivery" => $delivery["status"],
         "detail" => $delivery["detail"],
+        "json" => $parsed["json"] ?? null,
       ];
     }
     if (($last["status"] ?? 0) === 429 && $attempt < 3) {
@@ -713,6 +718,7 @@ function pos_wa_send_one($cfg, $number, $message, $media = "") {
     "number" => $getParsed["to"] ?? $shown,
     "delivery" => $delivery["status"],
     "detail" => $delivery["detail"],
+    "json" => $getParsed["json"] ?? null,
   ];
 }
 
@@ -856,6 +862,180 @@ function pos_alert_sent($bid, $kind, $day, $itemId = "") {
     [$bid, $kind, $itemId, $day]
   );
   return (bool) ($rows[0] ?? null);
+}
+
+function pos_signup_wa_recipient($raw) {
+  $local = pos_normalize_in_mobile($raw ?: "9112090347");
+  return $local !== "" ? $local : "9112090347";
+}
+
+function pos_format_signup_wa_display($raw, $country = "91") {
+  $local = pos_signup_wa_recipient($raw);
+  $cc = preg_replace("/\D+/", "", (string) $country) ?: "91";
+  return "+" . $cc . $local;
+}
+
+function pos_signup_dash($value) {
+  $text = trim(preg_replace("/\s+/", " ", (string) $value));
+  return $text === "" ? "—" : $text;
+}
+
+function pos_format_signup_when($value) {
+  $raw = trim((string) $value);
+  if ($raw === "") $raw = date("c");
+  try {
+    $dt = new DateTime($raw);
+    $dt->setTimezone(new DateTimeZone("Asia/Kolkata"));
+    return $dt->format("d M Y, g:i a") . " IST";
+  } catch (Exception $e) {
+    return "—";
+  }
+}
+
+function pos_signup_admin_message($payload) {
+  $when = (string) ($payload["registeredAt"] ?? "");
+  if ($when === "" || !preg_match("/IST$/", $when)) $when = pos_format_signup_when($when);
+  $lines = [
+    "🎉 *New User Registered – ATAV POS*",
+    "",
+    "A new user has signed up on ATAV POS.",
+    "",
+    "👤 *User Details*",
+    "- Name: " . pos_signup_dash($payload["name"] ?? ""),
+    "- Mobile: " . pos_signup_dash($payload["mobile"] ?? ""),
+    "- Email: " . pos_signup_dash($payload["email"] ?? ""),
+    "- Business Name: " . pos_signup_dash($payload["businessName"] ?? ""),
+    "- Business Category: " . pos_signup_dash($payload["category"] ?? ""),
+    "- Registration Date: " . pos_signup_dash($when),
+    "- Registration ID: " . pos_signup_dash($payload["registrationId"] ?? ""),
+    "",
+    "Please review the registration in the ATAV POS Admin Panel.",
+    "",
+    "*ATAV POS – Business Management Made Easy*",
+  ];
+  return implode("\n", $lines);
+}
+
+function pos_wa_provider_message_id($wa) {
+  $json = $wa["json"] ?? ($wa["results"][0]["json"] ?? null);
+  if (!is_array($json)) return "";
+  $row = isset($json["results"][0]) && is_array($json["results"][0]) ? $json["results"][0] : $json;
+  $id = $row["message_id"] ?? ($row["messageId"] ?? ($row["msg_id"] ?? ($json["message_id"] ?? "")));
+  return substr((string) $id, 0, 128);
+}
+
+function pos_signup_wa_temporary($wa) {
+  if (!$wa) return true;
+  if (!empty($wa["skipped"]) && in_array($wa["reason"] ?? "", ["wa-off", "no-number"], true)) return false;
+  $status = (int) ($wa["status"] ?? ($wa["http_status"] ?? 0));
+  $reason = (string) ($wa["reason"] ?? ($wa["error"] ?? ""));
+  if ($status === 429 || $status >= 500 || $status === 0) return true;
+  return (bool) preg_match("/timeout|network|econn|fetch failed|rate limit|temporar/i", $reason);
+}
+
+function pos_ensure_signup_wa_table() {
+  static $done = false;
+  if ($done) return;
+  $done = true;
+  $db = pos_db();
+  @$db->query(
+    "CREATE TABLE IF NOT EXISTS signup_whatsapp_alerts (
+      id VARCHAR(255) PRIMARY KEY,
+      business_id VARCHAR(255) NOT NULL,
+      user_id VARCHAR(255) NOT NULL DEFAULT '',
+      recipient VARCHAR(32) NOT NULL DEFAULT '',
+      status VARCHAR(16) NOT NULL DEFAULT 'pending',
+      provider_message_id VARCHAR(128) NULL,
+      error VARCHAR(255) NULL,
+      http_status INT NULL,
+      attempts INT NOT NULL DEFAULT 0,
+      created_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+      updated_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+      sent_at TIMESTAMP(3) NULL,
+      UNIQUE KEY uniq_signup_wa_biz (business_id)
+    )"
+  );
+}
+
+function pos_notify_signup_whatsapp($payload) {
+  try {
+    pos_ensure_signup_wa_table();
+    $cfg = pos_alert_settings();
+    $recipient = pos_signup_wa_recipient($cfg["signup_wa_to"] ?? "");
+    $bid = trim((string) ($payload["businessId"] ?? ""));
+    if ($bid === "") return ["ok" => false, "skipped" => true, "reason" => "no-business"];
+    $rows = pos_q("SELECT * FROM signup_whatsapp_alerts WHERE business_id = ? LIMIT 1", "s", [$bid]);
+    $row = $rows[0] ?? null;
+    if ($row && in_array($row["status"] ?? "", ["sent", "queued"], true)) {
+      return ["ok" => true, "duplicate" => true, "status" => $row["status"], "providerMessageId" => $row["provider_message_id"] ?? ""];
+    }
+    if ($row && (int) ($row["attempts"] ?? 0) >= 4) return ["ok" => false, "duplicate" => true, "exhausted" => true];
+    if ($row && ($row["status"] ?? "") === "pending") {
+      $stamp = strtotime((string) ($row["updated_at"] ?? $row["created_at"] ?? ""));
+      if ($stamp && (time() - $stamp) < 60) return ["ok" => true, "duplicate" => true, "inFlight" => true];
+    }
+    if ($row && ($row["status"] ?? "") === "failed" && !pos_signup_wa_temporary(["status" => (int) ($row["http_status"] ?? 0), "error" => $row["error"] ?? ""])) {
+      return ["ok" => false, "duplicate" => true, "status" => "failed"];
+    }
+    $attempts = ((int) ($row["attempts"] ?? 0)) + 1;
+    $id = $row["id"] ?? pos_uuid();
+    if (!$row) {
+      pos_q(
+        "INSERT INTO signup_whatsapp_alerts (id, business_id, user_id, recipient, status, attempts) VALUES (?,?,?,?, 'pending', ?)",
+        "ssssi",
+        [$id, $bid, (string) ($payload["userId"] ?? ""), $recipient, 1]
+      );
+      $attempts = 1;
+    }
+    $message = pos_signup_admin_message($payload);
+    $waCfg = [
+      "wa_enabled" => $cfg["wa_enabled"] ?? "1",
+      "wa_api_url" => $cfg["wa_api_url"] ?? "",
+      "wa_api_key" => $cfg["wa_api_key"] ?? "",
+      "wa_profile_id" => $cfg["wa_profile_id"] ?? "",
+      "wa_country_code" => $cfg["wa_country_code"] ?? "91",
+    ];
+    $wa = pos_wa_send($waCfg, [$recipient], $message);
+    $one = $wa["results"][0] ?? $wa;
+    if (empty($wa["ok"]) && pos_signup_wa_temporary($one) && $attempts < 4) {
+      $wa = pos_wa_send($waCfg, [$recipient], $message);
+      $one = $wa["results"][0] ?? $wa;
+      $attempts++;
+    }
+    $ok = !empty($wa["ok"]);
+    $status = $ok ? (string) ($one["delivery"] ?? "sent") : "failed";
+    $providerId = pos_wa_provider_message_id($one);
+    $http = (int) ($one["status"] ?? 0);
+    $error = $ok ? "" : substr((string) ($wa["reason"] ?? ($one["error"] ?? "WhatsApp did not accept the signup alert")), 0, 255);
+    $sentSql = $ok ? ", sent_at=CURRENT_TIMESTAMP(3)" : ", sent_at=NULL";
+    pos_q(
+      "UPDATE signup_whatsapp_alerts SET status=?, provider_message_id=?, error=?, http_status=?, attempts=?, recipient=?{$sentSql} WHERE business_id=? AND status NOT IN ('sent','queued')",
+      "sssiiss",
+      [$status, $providerId, $error, $http, $attempts, $recipient, $bid]
+    );
+    if ($providerId !== "" && isset($wa["results"][0]) && is_array($wa["results"][0])) {
+      $wa["results"][0]["detail"] = "id " . $providerId;
+    }
+    pos_log_alert_deliveries(
+      ["kind" => "signup", "businessId" => $bid, "shopName" => (string) ($payload["businessName"] ?? "")],
+      "New user registered",
+      $message,
+      $wa,
+      []
+    );
+    return [
+      "ok" => $ok,
+      "duplicate" => false,
+      "status" => $status,
+      "attempts" => $attempts,
+      "providerMessageId" => $providerId,
+      "recipient" => pos_format_signup_wa_display($recipient, $cfg["wa_country_code"] ?? "91"),
+      "temporary" => !$ok && pos_signup_wa_temporary($one),
+    ];
+  } catch (Throwable $e) {
+    error_log("signup whatsapp failed: " . $e->getMessage());
+    return ["ok" => false, "error" => $e->getMessage()];
+  }
 }
 
 function pos_send_shop_welcome_alerts($payload) {

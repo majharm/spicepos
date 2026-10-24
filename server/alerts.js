@@ -61,6 +61,7 @@ const ALERT_KEYS = [
   "tpl_renewal_before",
   "tpl_renewal_expired",
   "backup_email_to",
+  "signup_wa_to",
 ];
 
 export const SMTP_KEYS = [
@@ -278,6 +279,260 @@ export function waApiNumber(raw, country = WA_DEFAULT_COUNTRY) {
   const intl = waIntlNumber(raw, country);
   if (intl) return intl;
   return String(raw || "").replace(/\D/g, "");
+}
+
+export const SIGNUP_WA_DEFAULT = "9112090347";
+export const SIGNUP_WA_MAX_ATTEMPTS = 4;
+
+export function signupWaRecipient(raw) {
+  return normalizeInMobile(raw || SIGNUP_WA_DEFAULT) || SIGNUP_WA_DEFAULT;
+}
+
+export function formatSignupWaDisplay(raw, country = WA_DEFAULT_COUNTRY) {
+  const local = signupWaRecipient(raw);
+  const cc = String(country || WA_DEFAULT_COUNTRY).replace(/\D/g, "") || WA_DEFAULT_COUNTRY;
+  return `+${cc}${local}`;
+}
+
+export function formatSignupWhen(value, timeZone = "Asia/Kolkata") {
+  const d = value instanceof Date ? value : new Date(value || Date.now());
+  if (Number.isNaN(d.getTime())) return "—";
+  const text = new Intl.DateTimeFormat("en-IN", {
+    timeZone,
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  }).format(d);
+  return `${text} IST`;
+}
+
+function signupDash(value) {
+  const text = String(value ?? "").replace(/\s+/g, " ").trim();
+  return text || "—";
+}
+
+export function signupAdminMessage(payload = {}) {
+  return [
+    "🎉 *New User Registered – ATAV POS*",
+    "",
+    "A new user has signed up on ATAV POS.",
+    "",
+    "👤 *User Details*",
+    `- Name: ${signupDash(payload.name)}`,
+    `- Mobile: ${signupDash(payload.mobile)}`,
+    `- Email: ${signupDash(payload.email)}`,
+    `- Business Name: ${signupDash(payload.businessName)}`,
+    `- Business Category: ${signupDash(payload.category)}`,
+    `- Registration Date: ${signupDash(payload.registeredAt)}`,
+    `- Registration ID: ${signupDash(payload.registrationId)}`,
+    "",
+    "Please review the registration in the ATAV POS Admin Panel.",
+    "",
+    "*ATAV POS – Business Management Made Easy*",
+  ].join("\n");
+}
+
+export function waProviderMessageId(wa) {
+  const sources = [wa?.results?.[0]?.json, wa?.json, wa?.results?.[0], wa];
+  for (const json of sources) {
+    if (!json || typeof json !== "object") continue;
+    const row = Array.isArray(json.results) ? json.results[0] : json;
+    const id = row?.message_id || row?.messageId || row?.msg_id || json.message_id || json.messageId || "";
+    if (id) return String(id).slice(0, 128);
+  }
+  return "";
+}
+
+export function signupWaTemporary(wa) {
+  if (!wa) return true;
+  if (wa.skipped && (wa.reason === "wa-off" || wa.reason === "no-number")) return false;
+  const status = Number(wa.status || wa.http_status || wa.results?.[0]?.status) || 0;
+  const reason = String(wa.reason || wa.error || wa.results?.[0]?.error || "");
+  if (status === 429 || status >= 500 || status === 0) return true;
+  return /timeout|network|econn|fetch failed|rate limit|temporar/i.test(reason);
+}
+
+async function ensureSignupWaTable() {
+  await query(`CREATE TABLE IF NOT EXISTS signup_whatsapp_alerts (
+    id VARCHAR(255) PRIMARY KEY,
+    business_id VARCHAR(255) NOT NULL,
+    user_id VARCHAR(255) NOT NULL DEFAULT '',
+    recipient VARCHAR(32) NOT NULL DEFAULT '',
+    status VARCHAR(16) NOT NULL DEFAULT 'pending',
+    provider_message_id VARCHAR(128) NULL,
+    error VARCHAR(255) NULL,
+    http_status INT NULL,
+    attempts INT NOT NULL DEFAULT 0,
+    created_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    updated_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+    sent_at TIMESTAMP(3) NULL,
+    UNIQUE KEY uniq_signup_wa_biz (business_id)
+  )`);
+}
+
+function signupRowAgeMs(row) {
+  const raw = row?.updated_at || row?.created_at;
+  const ms = raw instanceof Date ? raw.getTime() : Date.parse(String(raw || ""));
+  if (!Number.isFinite(ms)) return Number.POSITIVE_INFINITY;
+  return Date.now() - ms;
+}
+
+const sqlSignupStore = {
+  async get(businessId) {
+    await ensureSignupWaTable();
+    const rows = await query("SELECT * FROM signup_whatsapp_alerts WHERE business_id = ? LIMIT 1", [businessId]);
+    return rows[0] || null;
+  },
+  async insert(row) {
+    await ensureSignupWaTable();
+    await query(
+      `INSERT INTO signup_whatsapp_alerts
+       (id, business_id, user_id, recipient, status, attempts)
+       VALUES (?,?,?,?, 'pending', ?)`,
+      [row.id, row.business_id, row.user_id || "", row.recipient || "", row.attempts || 1],
+    );
+    return row;
+  },
+  async update(businessId, patch) {
+    await ensureSignupWaTable();
+    const result = await query(
+      `UPDATE signup_whatsapp_alerts
+       SET status=?, provider_message_id=?, error=?, http_status=?, attempts=?, recipient=?, sent_at=?
+       WHERE business_id=? AND status NOT IN ('sent','queued')`,
+      [
+        patch.status,
+        patch.provider_message_id || null,
+        patch.error || null,
+        patch.http_status || null,
+        patch.attempts || 0,
+        patch.recipient || "",
+        patch.sent_at || null,
+        businessId,
+      ],
+    );
+    return Number(result?.affectedRows) || 0;
+  },
+};
+
+export async function deliverSignupWhatsApp(payload = {}, options = {}) {
+  const settings = options.settings || (await loadAlertSettings());
+  const store = options.store || sqlSignupStore;
+  const fetchImpl = options.fetchImpl || fetch;
+  const businessId = String(payload.businessId || "").trim();
+  if (!businessId) return { ok: false, skipped: true, reason: "no-business" };
+  const recipient = signupWaRecipient(settings.signup_wa_to || SIGNUP_WA_DEFAULT);
+  const existing = await store.get(businessId);
+  if (existing && (existing.status === "sent" || existing.status === "queued")) {
+    return {
+      ok: true,
+      duplicate: true,
+      status: existing.status,
+      providerMessageId: existing.provider_message_id || "",
+      recipient: existing.recipient || formatSignupWaDisplay(recipient, settings.wa_country_code),
+    };
+  }
+  if (existing && Number(existing.attempts) >= SIGNUP_WA_MAX_ATTEMPTS) {
+    return { ok: false, duplicate: true, exhausted: true, status: existing.status };
+  }
+  if (existing?.status === "pending" && signupRowAgeMs(existing) < 60000) {
+    return { ok: true, duplicate: true, inFlight: true, status: "pending" };
+  }
+  if (existing?.status === "failed" && !signupWaTemporary({ status: existing.http_status, error: existing.error })) {
+    return { ok: false, duplicate: true, status: "failed", error: existing.error || "" };
+  }
+  const attempts = (Number(existing?.attempts) || 0) + 1;
+  const id = existing?.id || crypto.randomUUID();
+  if (!existing) {
+    try {
+      await store.insert({ id, business_id: businessId, user_id: payload.userId || "", recipient, attempts: 1 });
+    } catch (err) {
+      if (!/duplicate/i.test(String(err.message || err))) throw err;
+      if ((options.hop || 0) > 0) return { ok: true, duplicate: true, status: "pending" };
+      return deliverSignupWhatsApp(payload, { ...options, hop: 1 });
+    }
+  }
+  const registeredAt = payload.registeredAt && !/IST$/.test(String(payload.registeredAt))
+    ? formatSignupWhen(payload.registeredAt)
+    : signupDash(payload.registeredAt || formatSignupWhen(new Date()));
+  const message = signupAdminMessage({
+    name: payload.name,
+    mobile: payload.mobile,
+    email: payload.email,
+    businessName: payload.businessName,
+    category: payload.category,
+    registeredAt,
+    registrationId: payload.registrationId,
+  });
+  let wa;
+  try {
+    wa = await sendWhatsApp(waCfg(settings), [recipient], message, fetchImpl);
+  } catch (err) {
+    wa = { ok: false, status: 0, error: String(err.message || err) };
+  }
+  const one = wa?.results?.[0] || wa || {};
+  const ok = Boolean(wa?.ok);
+  const status = ok ? (one.delivery || wa.delivery || "sent") : "failed";
+  const providerMessageId = waProviderMessageId(wa);
+  const httpStatus = Number(one.status || wa?.status) || 0;
+  const error = ok ? "" : String(wa?.reason || wa?.error || one.error || "WhatsApp did not accept the signup alert").slice(0, 255);
+  await store.update(businessId, {
+    status,
+    provider_message_id: providerMessageId,
+    error,
+    http_status: httpStatus || null,
+    attempts,
+    recipient,
+    sent_at: ok ? new Date() : null,
+  });
+  if (!options.store) {
+    try {
+      await logAlertDeliveries({
+        kind: "signup",
+        businessId,
+        shopName: payload.businessName || "",
+        subject: "New user registered",
+        text: message,
+        wa: {
+          ...wa,
+          to: [formatSignupWaDisplay(recipient, settings.wa_country_code)],
+          detail: providerMessageId ? `id ${providerMessageId}` : wa?.detail,
+        },
+      });
+    } catch {
+      /* the signup row already stores status */
+    }
+  }
+  return {
+    ok,
+    duplicate: false,
+    status,
+    attempts,
+    providerMessageId,
+    recipient: formatSignupWaDisplay(recipient, settings.wa_country_code),
+    temporary: !ok && signupWaTemporary({ ...wa, status: httpStatus, error }),
+    error,
+  };
+}
+
+export async function notifySignupAdmin(payload = {}, options = {}) {
+  try {
+    const first = await deliverSignupWhatsApp(payload, options);
+    if (first?.temporary && !options.retrying) {
+      const timer = setTimeout(() => {
+        deliverSignupWhatsApp(payload, { ...options, retrying: true }).catch((err) => {
+          console.error("signup whatsapp retry failed:", err.message);
+        });
+      }, 15000);
+      timer.unref?.();
+    }
+    return first;
+  } catch (err) {
+    console.error("signup whatsapp failed:", err.message);
+    return { ok: false, error: String(err.message || err) };
+  }
 }
 
 export const WA_RATE_LIMIT_ERROR = "WhatsApp rate limited (HTTP 429). Wait a minute and send again.";
@@ -553,6 +808,7 @@ export async function ensureAlertSettings() {
     smtp_pass: DEFAULT_SMTP_PASS,
     mail_from: DEFAULT_SMTP_FROM,
     mail_from_name: DEFAULT_FROM_NAME,
+    signup_wa_to: SIGNUP_WA_DEFAULT,
   };
   const fillIfEmpty = [
     "wa_api_key",
@@ -613,6 +869,7 @@ export async function loadAlertSettings() {
     tpl_renewal_before: map.tpl_renewal_before || "",
     tpl_renewal_expired: map.tpl_renewal_expired || "",
     backup_email_to: String(map.backup_email_to || "").trim(),
+    signup_wa_to: signupWaRecipient(map.signup_wa_to || SIGNUP_WA_DEFAULT),
   };
   const stored = await persistSmtpConnection(cfg);
   Object.assign(cfg, stored);
@@ -631,6 +888,7 @@ export function publicAlertSettings(cfg) {
     defaults: { ...DEFAULT_TEMPLATES },
     sample_vars: sampleAlertVars(),
     samples: {},
+    signup_wa_to: formatSignupWaDisplay(cfg.signup_wa_to, cfg.wa_country_code),
   };
   for (const kind of ALERT_KINDS) {
     out[`tpl_${kind}`] = effectiveTemplate(kind, cfg[`tpl_${kind}`]);
@@ -674,6 +932,7 @@ export async function saveAlertSettings(body = {}) {
   next.smtp_user = next.smtp_user || DEFAULT_SMTP_USER;
   next.mail_from = next.mail_from || next.smtp_user || DEFAULT_SMTP_FROM;
   next.mail_from_name = next.mail_from_name || DEFAULT_FROM_NAME;
+  next.signup_wa_to = signupWaRecipient(next.signup_wa_to || SIGNUP_WA_DEFAULT);
   for (const key of ALERT_KEYS) await setPlatformSetting(key, next[key]);
   await persistSmtpConnection(next);
   return loadAlertSettings();

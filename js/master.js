@@ -1594,6 +1594,7 @@ function alertsFormHtml(alerts = {}) {
         <label>API key <input name="wa_api_key" type="password" autocomplete="off" value="${attr(alerts.wa_api_key || "")}" /></label>
         <label>Profile ID <input name="wa_profile_id" value="${attr(alerts.wa_profile_id || "")}" autocomplete="off" /></label>
         <label>Country code <input name="wa_country_code" value="${attr(alerts.wa_country_code || "91")}" maxlength="3" inputmode="numeric" /></label>
+        <label>New signup alert <input name="signup_wa_to" value="${attr(alerts.signup_wa_to || "+919112090347")}" inputmode="tel" autocomplete="off" placeholder="+919112090347" /></label>
         <label>Test mobile <input id="alert-test-number" inputmode="tel" placeholder="+91…" autocomplete="off" /></label>
         <div class="backup-actions full">
           <button class="btn primary" type="button" id="alert-send-test">Send test WhatsApp</button>

@@ -28,6 +28,12 @@ import {
   WA_DEFAULT_KEY,
   WA_REVOKED_KEYS,
   normalizeSmtpConnection,
+  signupAdminMessage,
+  signupWaRecipient,
+  formatSignupWaDisplay,
+  deliverSignupWhatsApp,
+  notifySignupAdmin,
+  SIGNUP_WA_DEFAULT,
 } from "./alerts.js";
 import { parseDataImage } from "./mail.js";
 
@@ -439,4 +445,139 @@ test("Master Admin Email and WhatsApp updates also save a shop dashboard card", 
   assert.match(tenant, /FROM notifications WHERE business_id IS NULL OR business_id = '' OR business_id = \?/);
   assert.match(nodeIndex, /FROM notifications[\s\S]*business_id IS NULL OR business_id = '' OR business_id = \?/);
   assert.match(till, /FROM notifications WHERE business_id IS NULL OR business_id = '' OR business_id = \?/);
+});
+
+function memorySignupStore() {
+  const rows = new Map();
+  return {
+    rows,
+    async get(id) {
+      return rows.get(id) || null;
+    },
+    async insert(row) {
+      if (rows.has(row.business_id)) throw new Error("Duplicate entry");
+      const now = new Date().toISOString();
+      rows.set(row.business_id, { ...row, status: "pending", created_at: now, updated_at: now });
+      return row;
+    },
+    async update(id, patch) {
+      const cur = rows.get(id);
+      if (!cur || cur.status === "sent" || cur.status === "queued") return 0;
+      Object.assign(cur, patch, { updated_at: new Date().toISOString() });
+      return 1;
+    },
+  };
+}
+
+function signupSettings(extra = {}) {
+  return {
+    wa_enabled: "1",
+    wa_api_key: "k",
+    wa_profile_id: "acc_1",
+    wa_country_code: "91",
+    wa_api_url: "https://example.test/send",
+    signup_wa_to: SIGNUP_WA_DEFAULT,
+    ...extra,
+  };
+}
+
+test("signup WhatsApp names the new shop and the admin number", () => {
+  const text = signupAdminMessage({
+    name: "Riya Shah",
+    mobile: "9876543210",
+    email: "",
+    businessName: "Riya Fashions",
+    category: "Garment & Fashion",
+    registeredAt: "24 Oct 2026, 5:21 pm IST",
+    registrationId: "BSHOP1",
+  });
+  assert.match(text, /New User Registered – ATAV POS/);
+  assert.match(text, /Name: Riya Shah/);
+  assert.match(text, /Email: —/);
+  assert.match(text, /Business Name: Riya Fashions/);
+  assert.match(text, /Business Category: Garment & Fashion/);
+  assert.match(text, /Registration ID: BSHOP1/);
+  assert.match(text, /ATAV POS – Business Management Made Easy/);
+  assert.equal(signupWaRecipient(""), SIGNUP_WA_DEFAULT);
+  assert.equal(formatSignupWaDisplay("+91 91120 90347"), "+919112090347");
+  const auth = readFileSync(path.join(root, "server/auth.js"), "utf8");
+  const php = readFileSync(path.join(root, "pos-php-core.php"), "utf8");
+  const master = readFileSync(path.join(root, "js/master.js"), "utf8");
+  assert.match(auth, /notifySignupAdmin\(/);
+  assert.match(php, /pos_notify_signup_whatsapp\(/);
+  assert.match(master, /name="signup_wa_to"/);
+  assert.match(master, /\+919112090347/);
+});
+
+test("signup WhatsApp sends once, stores the provider id, and retries a temporary failure", async () => {
+  const store = memorySignupStore();
+  const bodies = [];
+  let mode = "down";
+  const fetchImpl = async (_url, opts) => {
+    bodies.push(JSON.parse(opts.body || "{}"));
+    if (mode === "down") {
+      return { status: 503, text: async () => '{"ok":false,"error":"temporary"}' };
+    }
+    if (mode === "reject") {
+      return { status: 400, text: async () => '{"ok":false,"error":"bad template"}' };
+    }
+    return {
+      status: 200,
+      text: async () => JSON.stringify({
+        ok: true,
+        sent: 1,
+        message_id: "wamid.SIGNUP1",
+        results: [{ number: "919112090347", ok: true, message_id: "wamid.SIGNUP1" }],
+      }),
+    };
+  };
+  const payload = {
+    businessId: "biz-1",
+    userId: "user-1",
+    name: "Riya",
+    mobile: "9876543210",
+    email: "riya@shop.test",
+    businessName: "Riya Fashions",
+    category: "Garment",
+    registrationId: "BSHOP1",
+    registeredAt: "24 Oct 2026, 5:21 pm IST",
+  };
+  const settings = signupSettings();
+  const failed = await deliverSignupWhatsApp(payload, { settings, store, fetchImpl });
+  assert.equal(failed.ok, false);
+  assert.equal(failed.temporary, true);
+  assert.equal(failed.recipient, "+919112090347");
+  assert.equal(store.rows.size, 1);
+  assert.equal(bodies[0].numbers, "919112090347");
+  assert.match(bodies[0].message, /Riya Fashions/);
+  mode = "up";
+  const sent = await deliverSignupWhatsApp(payload, { settings, store, fetchImpl });
+  assert.equal(sent.ok, true);
+  assert.equal(sent.duplicate, false);
+  assert.equal(sent.providerMessageId, "wamid.SIGNUP1");
+  assert.equal(store.rows.get("biz-1").status, "sent");
+  assert.equal(store.rows.get("biz-1").attempts, 2);
+  const again = await deliverSignupWhatsApp(payload, { settings, store, fetchImpl });
+  assert.equal(again.duplicate, true);
+  assert.equal(again.providerMessageId, "wamid.SIGNUP1");
+  const callsAfterSent = bodies.length;
+  await deliverSignupWhatsApp(payload, { settings, store, fetchImpl });
+  assert.equal(bodies.length, callsAfterSent);
+
+  const rejected = memorySignupStore();
+  mode = "reject";
+  const hard = await deliverSignupWhatsApp({ ...payload, businessId: "biz-2" }, { settings, store: rejected, fetchImpl });
+  assert.equal(hard.ok, false);
+  assert.equal(hard.temporary, false);
+  const before = bodies.length;
+  const skipped = await deliverSignupWhatsApp({ ...payload, businessId: "biz-2" }, { settings, store: rejected, fetchImpl });
+  assert.equal(skipped.duplicate, true);
+  assert.equal(bodies.length, before);
+
+  const blown = await notifySignupAdmin(
+    { ...payload, businessId: "biz-3" },
+    { settings, store: memorySignupStore(), fetchImpl: async () => { throw new Error("network down"); } },
+  );
+  assert.equal(blown.ok, false);
+  assert.equal(typeof blown.error === "string" || blown.temporary === true || blown.ok === false, true);
 });
