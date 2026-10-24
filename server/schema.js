@@ -646,6 +646,28 @@ export async function ensureSchema() {
     UNIQUE KEY uniq_signup_wa_biz (business_id)
   )`);
 
+  await create(`CREATE TABLE IF NOT EXISTS due_whatsapp_reminders (
+    id VARCHAR(255) PRIMARY KEY,
+    business_id VARCHAR(255) NOT NULL,
+    customer_id VARCHAR(255) NOT NULL,
+    order_id VARCHAR(255) NOT NULL DEFAULT '',
+    invoice_number VARCHAR(255) NOT NULL DEFAULT '',
+    recipient VARCHAR(32) NOT NULL DEFAULT '',
+    outstanding DECIMAL(12,2) NOT NULL DEFAULT 0,
+    message TEXT NULL,
+    status VARCHAR(16) NOT NULL DEFAULT 'pending',
+    provider_message_id VARCHAR(128) NULL,
+    error VARCHAR(255) NULL,
+    http_status INT NULL,
+    attempts INT NOT NULL DEFAULT 0,
+    dedupe_key VARCHAR(191) NOT NULL,
+    created_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    updated_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+    sent_at TIMESTAMP(3) NULL,
+    INDEX idx_due_wa_biz (business_id, created_at),
+    INDEX idx_due_wa_key (business_id, dedupe_key)
+  )`);
+
   await create(`CREATE TABLE IF NOT EXISTS business_subscription_events (
     id VARCHAR(255) PRIMARY KEY,
     business_id VARCHAR(255) NOT NULL,

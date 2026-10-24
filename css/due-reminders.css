@@ -1,0 +1,45 @@
+.dues-desk { display: grid; gap: 12px; }
+.dues-filters {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+  align-items: end;
+}
+.dues-filters label { display: grid; gap: 4px; font-size: 13px; }
+.dues-filters input,
+.dues-filters select { min-height: 40px; width: 100%; }
+.dues-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.dues-table { width: 100%; border-collapse: collapse; }
+.dues-table th,
+.dues-table td {
+  text-align: left;
+  vertical-align: top;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--line, #e2e8f0);
+}
+.dues-actions { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; min-width: 180px; }
+.dues-status { font-size: 12px; font-weight: 700; }
+.dues-status.is-sent,
+.dues-status.is-delivered { color: #0f766e; }
+.dues-status.is-failed { color: #b91c1c; }
+.dues-status.is-pending { color: #b45309; }
+.dues-overdue { color: #b91c1c; font-size: 12px; font-weight: 700; }
+.dues-bad { color: #b91c1c; }
+.dues-preview { display: grid; gap: 6px; margin: 0 0 12px; }
+.dues-preview textarea {
+  width: 100%;
+  min-height: 140px;
+  font: inherit;
+}
+.dues-resend { display: flex; gap: 8px; align-items: center; margin: 0 0 12px; }
+.dues-preview-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.dues-jump { margin-top: 8px; }
+@media (max-width: 720px) {
+  .dues-filters { grid-template-columns: 1fr; }
+  .dues-actions .btn { width: 100%; }
+}

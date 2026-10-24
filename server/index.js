@@ -24,6 +24,7 @@ import { registerHub } from "./hub.js";
 import { registerBackup } from "./backup.js";
 import { registerUnits, ensureInventoryUnits } from "./units.js";
 import { registerAccounts, recordCreditSale, settleCustomerInvoice, listCustomerReceipts, attachPaymentsToOrders, invoiceOpenDueByCustomer, hydrateCustomerOutstandingRows, persistHydratedOutstanding, recomputeAllBusinessesOutstanding } from "./accounts.js";
+import { registerDueReminders } from "./due-reminders.js";
 import { clipIdempotencyKey, ensureIdempotencyTable, findIdempotent, saveIdempotent, parseIdempotentPayload } from "./idempotency.js";
 import "../js/pay-integrity.js";
 import { postSaleJournal } from "./accounting.js";
@@ -892,6 +893,7 @@ app.post("/api/settings", requireStaff, requirePerm("settings"), async (req, res
 
 registerCrud(app);
 registerAccounts(app);
+registerDueReminders(app);
 
 app.post("/api/checkout", requireStaff, requirePerm("counter"), async (req, res) => {
   const { customerId, paymentMethod, lines, packId, packCount, discount, discountType, discountValue, loyaltyPoints, offerIds } = req.body || {};

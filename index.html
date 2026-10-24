@@ -14,6 +14,7 @@
     <link rel="stylesheet" href="./css/mobile-app.css?v=20261023logo1" />
     <link rel="stylesheet" href="./css/item-master.css?v=20261012brand1" />
     <link rel="stylesheet" href="./css/customer-master.css?v=20261023cemail1" />
+    <link rel="stylesheet" href="./css/due-reminders.css?v=20261024duewa1" />
   </head>
   <body class="fast-mode">
     <div class="app" id="app">
@@ -51,6 +52,7 @@
           <div class="nav-group">
             <p class="nav-group-label">Customers</p>
             <button class="nav-btn" type="button" data-view="customers"><span class="nav-icon" aria-hidden="true">◎</span><span data-i18n="nav.customers">Customers</span></button>
+            <button class="nav-btn" type="button" data-view="dues"><span class="nav-icon" aria-hidden="true">₹</span>Outstanding</button>
             <button class="nav-btn" type="button" data-view="loyalty"><span class="nav-icon" aria-hidden="true">★</span><span data-i18n="nav.loyalty">Royalty</span></button>
           </div>
           <div class="nav-group">
@@ -831,6 +833,7 @@
                 <p class="items-kicker">Sales</p>
                 <h3>Customers</h3>
                 <p class="lede" id="customers-lede">Add accounts, collect outstanding dues, and print a receipt. Matching mobile, email, or GSTIN warns before a duplicate is created.</p>
+                <button class="btn dues-jump" type="button" data-view-jump="dues">Outstanding payments</button>
               </div>
               <div class="items-hero-stats" id="customers-hero-stats"></div>
             </header>
@@ -923,6 +926,41 @@
             </div>
             <section class="customer-details" id="customer-details" hidden></section>
             <div class="table-wrap" id="customers-table"></div>
+          </div>
+        </section>
+        <section class="view" id="view-dues" hidden>
+          <h2 class="visually-hidden">Outstanding payments</h2>
+          <div class="dues-desk">
+            <header class="items-hero">
+              <div class="items-hero-copy">
+                <p class="items-kicker">Customers</p>
+                <h3>Outstanding payments</h3>
+                <p class="lede">Open invoice balances. A WhatsApp reminder does not mark a bill paid. Due date follows the invoice date.</p>
+              </div>
+              <div class="items-hero-stats" id="dues-hero-stats"></div>
+            </header>
+            <form class="dues-filters" id="dues-filters">
+              <label>Customer <input id="dues-customer" type="search" placeholder="Name or mobile" autocomplete="off" /></label>
+              <label>From <input id="dues-from" type="date" /></label>
+              <label>To <input id="dues-to" type="date" /></label>
+              <label>Payment status
+                <select id="dues-status">
+                  <option value="">Any open</option>
+                  <option value="due">Due</option>
+                  <option value="partial">Partial</option>
+                  <option value="overdue">Overdue</option>
+                </select>
+              </label>
+              <label>Min due <input id="dues-min" type="number" min="0" step="0.01" /></label>
+              <label>Max due <input id="dues-max" type="number" min="0" step="0.01" /></label>
+              <button class="btn" type="submit">Show</button>
+            </form>
+            <div class="dues-toolbar">
+              <button class="btn primary" type="button" id="dues-send-selected">Send WhatsApp to selected</button>
+              <button class="btn" type="button" id="dues-send-totals">Send total due for selected customers</button>
+              <p class="hint" id="dues-hint"></p>
+            </div>
+            <div class="table-wrap" id="dues-table"></div>
           </div>
         </section>
         <section class="view view-packs" id="view-packs" hidden>
@@ -3444,7 +3482,9 @@
     <script src="./js/resort-ui.js?v=20261011resort1" defer></script>
     <script src="./js/item-master.js?v=20261012brand1" defer></script>
     <script src="./js/customer-master.js?v=20261023cemail1" defer></script>
-    <script src="./js/app.js?v=20261024bcdesk1" defer></script>
+    <script src="./js/due-reminders.js?v=20261024duewa1" defer></script>
+    <script src="./js/app.js?v=20261024duewa1" defer></script>
+    <script src="./js/due-reminders-ui.js?v=20261024duewa1" defer></script>
     <script src="./js/item-master-ui.js?v=20261012brand1" defer></script>
     <script src="./js/customer-master-ui.js?v=20261023cemail1" defer></script>
     <script src="./js/mobile-app.js?v=20261023logo1" defer></script>

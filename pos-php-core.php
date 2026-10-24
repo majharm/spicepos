@@ -4561,6 +4561,12 @@ function pos_php_dispatch($path, $method, $rawBody) {
           $branchId = $auth["branchId"] ?? $auth["user"]["branch_id"] ?? null;
           $uid = $auth["user"]["id"];
           pos_apply_business_timezone($bid);
+          if (is_file(__DIR__ . "/pos-due-reminders.php")) {
+            require_once __DIR__ . "/pos-due-reminders.php";
+            if (function_exists("pos_due_reminders_dispatch") && pos_due_reminders_dispatch($path, $method, $body, $bid, $auth)) {
+              return;
+            }
+          }
           if (is_file(__DIR__ . "/pos-accounting.php")) {
             require_once __DIR__ . "/pos-accounting.php";
             if (function_exists("pos_accounts_dispatch") && pos_accounts_dispatch($path, $method, $body, $bid, $auth, $branchId, $uid)) {

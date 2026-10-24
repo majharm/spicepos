@@ -945,6 +945,7 @@ const VIEW_META = {
   brands: { title: "Brand Management", subtitle: "One brand list for every business type" },
   units: { title: "Unit master", subtitle: "Quantity, weight, length, area, volume, packaging, pharmacy, food, and service units" },
   customers: { title: "Customers", subtitle: "Accounts, due collection, and receipts" },
+  dues: { title: "Outstanding payments", subtitle: "WhatsApp reminders for balances still due" },
   barcodes: { title: "Barcodes", subtitle: "Generate unique piece codes and print labels" },
   damage: { title: "Damage stock", subtitle: "Wastage, approval, and estimated loss" },
   ledger: { title: "Stock ledger", subtitle: "Purchase, sale, return, and damage history" },
@@ -2864,6 +2865,7 @@ function applyNav() {
       brands: "items",
       units: "items",
       customers: "customers",
+      dues: "customers",
       packs: "items",
       orders: "orders",
       returns: "orders",
@@ -3175,6 +3177,7 @@ function showView(name) {
   if (name === "accounts") loadAccounts();
   if (name === "expenses") loadExpenses();
   if (name === "orders") loadOrders();
+  if (name === "dues") globalThis.POSDueRemindersUi?.load?.();
   if (name === "returns") loadReturnsView();
   if (name === "qr-orders") loadQrOrders();
   if (name === "online-orders") loadAggregatorOrders();
@@ -6812,6 +6815,7 @@ async function collectCustomerDue(customer, amount, method, notes, extras = {}) 
   await loadBootstrap();
   fillDueCustomerSelect();
   renderCustomersTable();
+  globalThis.POSDueRemindersUi?.refreshIfOpen?.();
   try {
     await loadAccounts();
   } catch {
