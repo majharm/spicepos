@@ -1,0 +1,112 @@
+.barcodes-desk [hidden] {
+  display: none !important;
+}
+.bc-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin: 12px 0;
+}
+.bc-toolbar input[type="search"],
+.bc-toolbar select,
+.barcodes-desk .item-block input,
+.barcodes-desk .item-block select {
+  min-height: 40px;
+  border-radius: 12px;
+  border: 1px solid var(--line, #d7dee8);
+  padding: 8px 12px;
+  background: #fff;
+  color: inherit;
+}
+.bc-toolbar input[type="search"] {
+  flex: 1 1 240px;
+}
+.barcodes-desk .bc-preview {
+  display: grid;
+  gap: 2px;
+  min-width: 120px;
+}
+.barcodes-desk .bc-preview svg {
+  height: 36px;
+  width: auto;
+  max-width: 160px;
+}
+.barcodes-desk .bc-num {
+  font-family: ui-monospace, monospace;
+  font-size: 12px;
+}
+.barcodes-desk .table-wrap {
+  padding: 0;
+  overflow-x: auto;
+}
+.barcodes-desk .table-wrap table {
+  overflow: visible;
+}
+.barcodes-desk th,
+.barcodes-desk td {
+  padding: 8px;
+}
+.barcodes-desk .bc-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.barcodes-desk .bc-actions .btn {
+  min-height: 32px;
+  padding: 4px 8px;
+  white-space: nowrap;
+}
+.bc-pager {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: flex-end;
+  margin-top: 8px;
+}
+.bc-detail {
+  margin-top: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--line, #d7dee8);
+  border-radius: 16px;
+  background: #fff;
+}
+.bc-detail h4 {
+  margin: 0 0 8px;
+}
+.bc-detail ul {
+  margin: 8px 0 0;
+  padding-left: 18px;
+}
+.bc-bulk-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 6px;
+  max-height: 180px;
+  overflow: auto;
+  margin-top: 8px;
+}
+.barcodes-desk .hint.ok { color: #047857; }
+.barcodes-desk .hint.error { color: #b91c1c; }
+.barcodes-desk tr.is-inactive { opacity: 0.62; }
+@media (max-width: 720px) {
+  .bc-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .bc-toolbar .btn,
+  .barcodes-desk .item-composer-actions .btn,
+  .barcodes-desk .bc-actions .btn {
+    width: 100%;
+  }
+  .barcodes-desk .items-split {
+    display: block;
+  }
+  .barcodes-desk .table-wrap {
+    overflow-x: auto;
+  }
+  .bc-pager {
+    justify-content: stretch;
+    flex-wrap: wrap;
+  }
+}

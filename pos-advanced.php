@@ -12,7 +12,7 @@ function pos_barcode_text($raw) {
 
 function pos_is_reusable_barcode_kind($kind) {
   $k = strtolower(trim((string) $kind));
-  return $k === "own" || $k === "manufacturer";
+  return $k === "own" || $k === "manufacturer" || $k === "variant" || $k === "product" || $k === "batch";
 }
 
 function pos_adv_round2($n) {
@@ -128,9 +128,28 @@ function pos_ensure_advanced_schema() {
       "purchase_id" => "VARCHAR(255) NULL",
       "size" => "VARCHAR(32) NULL",
       "color" => "VARCHAR(64) NULL",
+      "batch_no" => "VARCHAR(64) NULL",
+      "serial_no" => "VARCHAR(64) NULL",
+      "barcode_format" => "VARCHAR(16) NULL",
+      "printed_at" => "TIMESTAMP(3) NULL",
+      "note" => "VARCHAR(255) NULL",
+      "expiry_date" => "DATE NULL",
     ]);
   }
-  @$db->query("UPDATE item_barcodes SET status='active', used_kind=NULL, used_at=NULL WHERE LOWER(kind) IN ('own','manufacturer') AND LOWER(COALESCE(status,'active')) <> 'active'");
+  @$db->query(
+    "CREATE TABLE IF NOT EXISTS barcode_events (
+      id VARCHAR(255) PRIMARY KEY,
+      business_id VARCHAR(255) NOT NULL,
+      barcode_id VARCHAR(255) NOT NULL,
+      barcode VARCHAR(64) NOT NULL,
+      action VARCHAR(32) NOT NULL,
+      detail VARCHAR(255) NULL,
+      actor_id VARCHAR(255) NULL,
+      created_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+      INDEX idx_bcev (business_id, barcode_id, created_at)
+    )"
+  );
+  @$db->query("UPDATE item_barcodes SET status='active', used_kind=NULL, used_at=NULL WHERE LOWER(kind) IN ('own','manufacturer','variant','product','batch') AND LOWER(COALESCE(status,'active')) <> 'active'");
   @$db->query(
     "CREATE TABLE IF NOT EXISTS stock_batches (
       id VARCHAR(255) PRIMARY KEY,
@@ -450,6 +469,222 @@ function pos_clamp_barcode_qty($raw) {
   if ($n < 1) throw new Exception("Quantity required");
   if ($n > 500) throw new Exception("Max 500 barcodes at once");
   return $n;
+}
+
+function pos_barcode_kind($kind) {
+  $k = strtolower(trim((string) $kind));
+  if ($k === "piece") return "unit";
+  if ($k === "product") return "own";
+  if (in_array($k, ["own", "manufacturer", "variant", "batch", "unit", "serial"], true)) return $k;
+  return "own";
+}
+
+function pos_barcode_is_piece($kind) {
+  $k = pos_barcode_kind($kind);
+  return $k === "unit" || $k === "serial";
+}
+
+function pos_barcode_actor() {
+  if (!function_exists("pos_staff_session")) return "";
+  $staff = pos_staff_session();
+  return (string) ($staff["user"]["id"] ?? "");
+}
+
+function pos_record_barcode_event($bid, $row, $action, $detail) {
+  if (empty($row["id"])) return;
+  try {
+    pos_q(
+      "INSERT INTO barcode_events (id, business_id, barcode_id, barcode, action, detail, actor_id) VALUES (?,?,?,?,?,?,?)",
+      "sssssss",
+      [pos_uuid(), $bid, $row["id"], pos_barcode_text($row["barcode"] ?? ""), substr((string) $action, 0, 32), substr((string) $detail, 0, 255), pos_barcode_actor()]
+    );
+  } catch (Exception $e) { /* history is best-effort */ }
+}
+
+function pos_stamp_barcode_desk($id, $meta, $allowBlank = false) {
+  if (!$id) return;
+  $sets = [];
+  $types = "";
+  $args = [];
+  foreach (["batch_no", "serial_no", "barcode_format", "size", "color", "note", "expiry_date"] as $col) {
+    if (!array_key_exists($col, $meta) && !$allowBlank) continue;
+    $val = trim((string) ($meta[$col] ?? ""));
+    if ($val === "" && !$allowBlank) continue;
+    if ($col === "expiry_date" && $val !== "" && !preg_match('/^\d{4}-\d{2}-\d{2}$/', $val)) continue;
+    if ($val === "") {
+      $sets[] = $col . "=NULL";
+      continue;
+    }
+    $sets[] = $col . "=?";
+    $types .= "s";
+    $args[] = substr($val, 0, $col === "note" ? 255 : ($col === "expiry_date" ? 10 : 64));
+  }
+  if (!$sets) return;
+  $types .= "s";
+  $args[] = $id;
+  try {
+    pos_q("UPDATE item_barcodes SET " . implode(", ", $sets) . " WHERE id=?", $types, $args);
+  } catch (Exception $e) { /* optional columns */ }
+}
+
+function pos_barcode_locked($bid, $row) {
+  $status = strtolower((string) ($row["status"] ?? "active"));
+  if ($status === "sold" || $status === "damaged" || !empty($row["used_at"])) return true;
+  $code = pos_barcode_text($row["barcode"] ?? "");
+  if ($code === "") return false;
+  try {
+    $sale = pos_q("SELECT id FROM sales_order_lines WHERE business_id = ? AND barcode = ? LIMIT 1", "ss", [$bid, $code]);
+    if ($sale) return true;
+  } catch (Exception $e) { /* optional */ }
+  try {
+    $purchase = pos_q("SELECT id FROM purchase_lines WHERE business_id = ? AND barcode = ? LIMIT 1", "ss", [$bid, $code]);
+    if ($purchase) return true;
+  } catch (Exception $e) { /* optional */ }
+  return false;
+}
+
+function pos_new_code128($seq) {
+  $n = max(1, (int) $seq);
+  return "BC" . str_pad((string) $n, 10, "0", STR_PAD_LEFT);
+}
+
+function pos_next_barcode_seq($bid) {
+  return pos_next_seq("barcode", $bid, 1);
+}
+
+function pos_unique_code128($bid) {
+  for ($i = 0; $i < 8; $i++) {
+    $code = pos_new_code128(pos_next_barcode_seq($bid));
+    if (!pos_barcode_taken($bid, $code)) return $code;
+  }
+  return pos_new_code128(time() % 10000000000);
+}
+
+function pos_create_desk_barcodes($bid, $body) {
+  pos_ensure_advanced_schema();
+  $itemId = trim((string) ($body["item_id"] ?? $body["itemId"] ?? ""));
+  $item = pos_q("SELECT * FROM items WHERE id = ? AND business_id = ? LIMIT 1", "ss", [$itemId, $bid]);
+  if (!$item) throw new Exception("Item not found");
+  $kind = pos_barcode_kind($body["kind"] ?? "own");
+  $piece = pos_barcode_is_piece($kind);
+  if ($piece && !pos_item_is_count($item[0])) throw new Exception("Barcodes are only for Quantity (pcs) items");
+  $format = strtolower((string) ($body["format"] ?? $body["barcode_format"] ?? "ean13")) === "code128" ? "code128" : "ean13";
+  $meta = [
+    "size" => trim((string) ($body["size"] ?? "")),
+    "color" => trim((string) ($body["color"] ?? "")),
+    "batch_no" => trim((string) ($body["batch_no"] ?? $body["batch"] ?? "")),
+    "serial_no" => trim((string) ($body["serial_no"] ?? $body["serial"] ?? "")),
+    "barcode_format" => $format,
+    "note" => trim((string) ($body["note"] ?? "")),
+    "expiry_date" => substr(trim((string) ($body["expiry"] ?? $body["expiry_date"] ?? "")), 0, 10),
+  ];
+  $manual = pos_barcode_text($body["barcode"] ?? "");
+  $qty = (int) ($body["qty"] ?? $body["quantity"] ?? 1);
+  if (!$piece && $manual !== "") $qty = 1;
+  if (!$piece && $qty !== 1) throw new Exception("A shared barcode is one code. Switch to piece or serial to generate many.");
+  if ($qty < 1) throw new Exception("Quantity required");
+  if ($qty > 500) throw new Exception("Max 500 barcodes at once");
+  if ($manual !== "" && $qty > 1) throw new Exception("Enter one manual barcode, or clear it to generate unique codes.");
+  if ($manual !== "" && $format === "ean13" && !pos_valid_ean13($manual)) throw new Exception("Enter a valid EAN-13 barcode");
+  $out = [];
+  for ($i = 0; $i < $qty; $i++) {
+    $code = $manual;
+    if ($code === "") $code = $format === "code128" ? pos_unique_code128($bid) : pos_unique_ean13($bid);
+    $taken = pos_q("SELECT id FROM item_barcodes WHERE business_id = ? AND barcode = ? LIMIT 1", "ss", [$bid, $code]);
+    if ($taken) throw new Exception("Duplicate barcode " . $code);
+    $row = pos_attach_item_barcode($bid, $itemId, $code, $kind, $kind === "own");
+    pos_stamp_barcode_desk($row["id"] ?? "", $meta);
+    $fresh = pos_q("SELECT * FROM item_barcodes WHERE id = ? LIMIT 1", "s", [$row["id"] ?? ""]);
+    $saved = $fresh[0] ?? $row;
+    pos_record_barcode_event($bid, $saved, "create", $kind . " " . $code);
+    $out[] = $saved;
+  }
+  return $out;
+}
+
+function pos_valid_ean13($code) {
+  $d = preg_replace("/\D/", "", (string) $code);
+  if (strlen($d) !== 13) return false;
+  $sum = 0;
+  for ($i = 0; $i < 12; $i++) $sum += (int) $d[$i] * ($i % 2 === 0 ? 1 : 3);
+  return (int) $d[12] === (10 - ($sum % 10)) % 10;
+}
+
+function pos_barcode_desk_payload($bid, $query) {
+  pos_ensure_advanced_schema();
+  $q = trim((string) ($query["q"] ?? ""));
+  $kind = strtolower(trim((string) ($query["kind"] ?? "")));
+  $status = strtolower(trim((string) ($query["status"] ?? "")));
+  $page = max(1, (int) ($query["page"] ?? 1));
+  $pageSize = min(100, max(10, (int) ($query["limit"] ?? 40)));
+  $where = "ib.business_id = ?";
+  $types = "s";
+  $args = [$bid];
+  if ($q !== "") {
+    $like = "%" . $q . "%";
+    $where .= " AND (ib.barcode LIKE ? OR i.name LIKE ? OR i.code LIKE ? OR IFNULL(ib.batch_no,'') LIKE ? OR IFNULL(ib.color,'') LIKE ? OR IFNULL(ib.size,'') LIKE ? OR IFNULL(ib.serial_no,'') LIKE ?)";
+    $types .= "sssssss";
+    array_push($args, $like, $like, $like, $like, $like, $like, $like);
+  }
+  $category = trim((string) ($query["category"] ?? ""));
+  if ($kind === "piece") $where .= " AND LOWER(ib.kind) IN ('unit','serial')";
+  else if ($kind === "product") $where .= " AND LOWER(ib.kind) IN ('own','manufacturer')";
+  else if ($kind !== "") {
+    $where .= " AND LOWER(ib.kind) = ?";
+    $types .= "s";
+    $args[] = $kind;
+  }
+  if ($category !== "") {
+    $where .= " AND i.category = ?";
+    $types .= "s";
+    $args[] = $category;
+  }
+  if ($status === "unprinted") $where .= " AND ib.printed_at IS NULL AND LOWER(IFNULL(ib.status,'active')) = 'active'";
+  else if ($status === "unassigned") $where .= " AND ib.purchase_id IS NULL AND ib.used_at IS NULL AND LOWER(ib.kind) IN ('unit','serial') AND LOWER(IFNULL(ib.status,'active')) = 'active'";
+  else if ($status !== "") {
+    $where .= " AND LOWER(IFNULL(ib.status,'active')) = ?";
+    $types .= "s";
+    $args[] = $status;
+  }
+  $count = pos_q("SELECT COUNT(*) AS n FROM item_barcodes ib JOIN items i ON i.id = ib.item_id WHERE $where", $types, $args);
+  $offset = ($page - 1) * $pageSize;
+  $rows = pos_q(
+    "SELECT ib.*, i.name AS item_name, i.code AS item_code, i.retail_rate, i.stock_gm, i.category,
+            COALESCE(i.mrp, i.retail_rate) AS label_mrp,
+            DATE_FORMAT(COALESCE(ib.expiry_date, i.default_expiry), '%Y-%m-%d') AS item_expiry,
+            p.purchase_number
+     FROM item_barcodes ib
+     JOIN items i ON i.id = ib.item_id
+     LEFT JOIN purchases p ON p.id = ib.purchase_id
+     WHERE $where
+     ORDER BY ib.created_at DESC
+     LIMIT $pageSize OFFSET $offset",
+    $types,
+    $args
+  );
+  $summary = pos_q(
+    "SELECT COUNT(*) AS total,
+            SUM(LOWER(IFNULL(status,'active'))='active') AS active,
+            SUM(LOWER(IFNULL(status,'active'))='active' AND purchase_id IS NULL AND used_at IS NULL AND LOWER(kind) IN ('unit','serial')) AS unassigned,
+            SUM(printed_at IS NULL AND LOWER(IFNULL(status,'active'))='active') AS pending_print
+     FROM item_barcodes WHERE business_id = ?",
+    "s",
+    [$bid]
+  );
+  $sum = $summary[0] ?? [];
+  return [
+    "ok" => true,
+    "rows" => $rows,
+    "total" => (int) ($count[0]["n"] ?? 0),
+    "page" => $page,
+    "pageSize" => $pageSize,
+    "summary" => [
+      "total" => (int) ($sum["total"] ?? 0),
+      "active" => (int) ($sum["active"] ?? 0),
+      "unassigned" => (int) ($sum["unassigned"] ?? 0),
+      "pending_print" => (int) ($sum["pending_print"] ?? 0),
+    ],
+  ];
 }
 
 function pos_generate_qty_barcodes($bid, $itemId, $qty) {
@@ -1187,6 +1422,9 @@ function pos_dispatch_advanced($path, $method, $body, $bid, $branchId, $uid, $au
   }
 
   if ($path === "barcodes" && $method === "GET") {
+    if (trim((string) ($_GET["desk"] ?? "")) === "1") {
+      pos_send(200, pos_barcode_desk_payload($bid, $_GET));
+    }
     $itemId = trim((string) ($_GET["item_id"] ?? ""));
     $purchaseId = trim((string) ($_GET["purchase_id"] ?? ""));
     if ($purchaseId !== "") {
@@ -1243,6 +1481,65 @@ function pos_dispatch_advanced($path, $method, $body, $bid, $branchId, $uid, $au
     pos_send(200, ["ok" => true, "generated" => count($rows), "barcodes" => $rows, "php" => true]);
   }
 
+  if ($path === "barcodes/bulk" && $method === "POST") {
+    $lines = is_array($body["items"] ?? null) ? $body["items"] : [];
+    $ids = is_array($body["item_ids"] ?? null) ? $body["item_ids"] : [];
+    $jobs = $lines;
+    if (!$jobs) {
+      foreach ($ids as $itemId) {
+        $jobs[] = [
+          "item_id" => $itemId,
+          "qty" => $body["qty"] ?? 1,
+          "kind" => $body["kind"] ?? "own",
+          "format" => $body["format"] ?? "",
+          "size" => $body["size"] ?? "",
+          "color" => $body["color"] ?? "",
+          "batch_no" => $body["batch_no"] ?? "",
+          "serial_no" => $body["serial_no"] ?? "",
+          "expiry" => $body["expiry"] ?? "",
+        ];
+      }
+    }
+    if (!$jobs) pos_send(400, ["error" => "Select at least one product", "php" => true]);
+    try {
+      $made = [];
+      foreach ($jobs as $job) {
+        $part = pos_create_desk_barcodes($bid, array_merge(is_array($body) ? $body : [], is_array($job) ? $job : []));
+        $made = array_merge($made, $part);
+        if (count($made) > 500) throw new Exception("Max 500 barcodes at once");
+      }
+      pos_send(200, ["ok" => true, "generated" => count($made), "barcodes" => $made, "php" => true]);
+    } catch (Exception $e) {
+      pos_send(400, ["error" => $e->getMessage(), "php" => true]);
+    }
+  }
+
+  if ($path === "barcodes" && $method === "POST") {
+    try {
+      $rows = pos_create_desk_barcodes($bid, is_array($body) ? $body : []);
+      pos_send(200, ["ok" => true, "generated" => count($rows), "barcodes" => $rows, "php" => true]);
+    } catch (Exception $e) {
+      pos_send(400, ["error" => $e->getMessage(), "php" => true]);
+    }
+  }
+
+  if ($path === "barcodes/printed" && $method === "POST") {
+    $ids = [];
+    foreach ((array) ($body["ids"] ?? []) as $id) {
+      $id = trim((string) $id);
+      if ($id !== "") $ids[] = $id;
+    }
+    $ids = array_slice($ids, 0, 500);
+    if (!$ids) pos_send(200, ["ok" => true, "printed" => 0, "php" => true]);
+    $marks = implode(",", array_fill(0, count($ids), "?"));
+    pos_q(
+      "UPDATE item_barcodes SET printed_at=CURRENT_TIMESTAMP(3) WHERE business_id=? AND id IN ($marks)",
+      "s" . str_repeat("s", count($ids)),
+      array_merge([$bid], $ids)
+    );
+    pos_send(200, ["ok" => true, "printed" => count($ids), "php" => true]);
+  }
+
   if (preg_match('#^items/([^/]+)/barcodes$#', $path, $m) && $method === "POST") {
     $item = pos_q("SELECT * FROM items WHERE id = ? AND business_id = ? LIMIT 1", "ss", [$m[1], $bid]);
     if (!$item) pos_send(400, ["error" => "Item not found", "php" => true]);
@@ -1259,9 +1556,93 @@ function pos_dispatch_advanced($path, $method, $body, $bid, $branchId, $uid, $au
     pos_send(200, ["ok" => true, "barcode" => $row, "php" => true]);
   }
 
+  if (preg_match('#^barcodes/([^/]+)$#', $path, $m) && $method === "GET") {
+    $rows = pos_q(
+      "SELECT ib.*, i.name AS item_name, i.code AS item_code, i.retail_rate, i.stock_gm, i.category,
+              COALESCE(i.mrp, i.retail_rate) AS label_mrp,
+              DATE_FORMAT(COALESCE(ib.expiry_date, i.default_expiry), '%Y-%m-%d') AS item_expiry,
+              p.purchase_number
+       FROM item_barcodes ib
+       JOIN items i ON i.id = ib.item_id
+       LEFT JOIN purchases p ON p.id = ib.purchase_id
+       WHERE ib.id = ? AND ib.business_id = ? LIMIT 1",
+      "ss",
+      [$m[1], $bid]
+    );
+    if (!$rows) pos_send(404, ["error" => "Barcode not found", "php" => true]);
+    $events = [];
+    try {
+      $events = pos_q(
+        "SELECT action, detail, actor_id, created_at FROM barcode_events WHERE business_id = ? AND barcode_id = ? ORDER BY created_at DESC LIMIT 30",
+        "ss",
+        [$bid, $rows[0]["id"]]
+      );
+    } catch (Exception $e) { /* history optional */ }
+    pos_send(200, ["ok" => true, "barcode" => $rows[0], "events" => $events, "locked" => pos_barcode_locked($bid, $rows[0]), "php" => true]);
+  }
+
+  if (preg_match('#^barcodes/([^/]+)$#', $path, $m) && $method === "POST") {
+    $rows = pos_q("SELECT * FROM item_barcodes WHERE id = ? AND business_id = ? LIMIT 1", "ss", [$m[1], $bid]);
+    if (!$rows) pos_send(404, ["error" => "Barcode not found", "php" => true]);
+    $row = $rows[0];
+    $locked = pos_barcode_locked($bid, $row);
+    try {
+      if ($locked && (!empty($body["item_id"]) || !empty($body["barcode"]))) {
+        throw new Exception("This barcode is on a completed sale and cannot be reassigned.");
+      }
+      if (!$locked && !empty($body["item_id"]) && $body["item_id"] !== ($row["item_id"] ?? "")) {
+        $item = pos_q("SELECT id FROM items WHERE id = ? AND business_id = ? LIMIT 1", "ss", [$body["item_id"], $bid]);
+        if (!$item) throw new Exception("Item not found");
+        pos_q("UPDATE item_barcodes SET item_id = ? WHERE id = ? AND business_id = ?", "sss", [$body["item_id"], $row["id"], $bid]);
+      }
+      if (!$locked && !empty($body["barcode"])) {
+        $code = pos_barcode_text($body["barcode"]);
+        if ($code !== "" && $code !== pos_barcode_text($row["barcode"] ?? "")) {
+          $taken = pos_q("SELECT id FROM item_barcodes WHERE business_id = ? AND barcode = ? AND id <> ? LIMIT 1", "sss", [$bid, $code, $row["id"]]);
+          if ($taken) throw new Exception("Duplicate barcode " . $code);
+          pos_q("UPDATE item_barcodes SET barcode = ? WHERE id = ? AND business_id = ?", "sss", [$code, $row["id"], $bid]);
+        }
+      }
+      if (!$locked && !empty($body["kind"])) {
+        $kind = pos_barcode_kind($body["kind"]);
+        $itemId = trim((string) ($body["item_id"] ?? $row["item_id"] ?? ""));
+        $item = pos_q("SELECT * FROM items WHERE id = ? AND business_id = ? LIMIT 1", "ss", [$itemId, $bid]);
+        if (pos_barcode_is_piece($kind) && $item && !pos_item_is_count($item[0])) {
+          throw new Exception("Barcodes are only for Quantity (pcs) items");
+        }
+        pos_q("UPDATE item_barcodes SET kind = ? WHERE id = ? AND business_id = ?", "sss", [$kind, $row["id"], $bid]);
+      }
+      $format = strtolower((string) ($body["format"] ?? $body["barcode_format"] ?? "ean13")) === "code128" ? "code128" : "ean13";
+      pos_stamp_barcode_desk($row["id"], [
+        "size" => trim((string) ($body["size"] ?? "")),
+        "color" => trim((string) ($body["color"] ?? "")),
+        "batch_no" => trim((string) ($body["batch_no"] ?? $body["batch"] ?? "")),
+        "serial_no" => trim((string) ($body["serial_no"] ?? $body["serial"] ?? "")),
+        "barcode_format" => $format,
+        "note" => trim((string) ($body["note"] ?? "")),
+        "expiry_date" => substr(trim((string) ($body["expiry"] ?? $body["expiry_date"] ?? "")), 0, 10),
+      ], true);
+      $freshRows = pos_q("SELECT * FROM item_barcodes WHERE id = ? LIMIT 1", "s", [$row["id"]]);
+      $fresh = $freshRows[0] ?? $row;
+      pos_record_barcode_event($bid, $fresh, "edit", "Barcode details updated");
+      pos_send(200, ["ok" => true, "barcode" => $fresh, "php" => true]);
+    } catch (Exception $e) {
+      pos_send(400, ["error" => $e->getMessage(), "php" => true]);
+    }
+  }
+
   if (preg_match('#^barcodes/([^/]+)$#', $path, $m) && $method === "DELETE") {
-    pos_q("DELETE FROM item_barcodes WHERE id = ? AND business_id = ?", "ss", [$m[1], $bid]);
-    pos_send(200, ["ok" => true, "php" => true]);
+    $rows = pos_q("SELECT * FROM item_barcodes WHERE id = ? AND business_id = ? LIMIT 1", "ss", [$m[1], $bid]);
+    if (!$rows) pos_send(404, ["error" => "Barcode not found", "php" => true]);
+    $status = strtolower((string) ($rows[0]["status"] ?? "active"));
+    if ($status === "sold" || $status === "damaged") {
+      pos_send(400, ["error" => "This barcode is on a completed transaction and stays on file.", "php" => true]);
+    }
+    pos_q("UPDATE item_barcodes SET status='inactive' WHERE id = ? AND business_id = ?", "ss", [$rows[0]["id"], $bid]);
+    $fresh = $rows[0];
+    $fresh["status"] = "inactive";
+    pos_record_barcode_event($bid, $fresh, "deactivate", "Barcode deactivated");
+    pos_send(200, ["ok" => true, "deactivated" => true, "barcode" => $fresh, "php" => true]);
   }
 
   if ($path === "batches/expiry" && $method === "GET") {

@@ -41,6 +41,59 @@ test("19-digit garment barcodes stay exact strings after trim and scanner junk",
   assert.equal(B.shouldConsumePieceBarcode({ kind: "unit" }), true);
 });
 
+test("desk profiles follow the shop and piece codes stay unique", () => {
+  const apparel = B.deskProfile("apparel");
+  assert.equal(apparel.size, true);
+  assert.equal(apparel.batch, false);
+  assert.equal(apparel.kinds.includes("unit"), true);
+  const pharmacy = B.deskProfile("pharmacy");
+  assert.equal(pharmacy.batch, true);
+  assert.equal(pharmacy.expiry, true);
+  assert.equal(pharmacy.size, false);
+  const electronics = B.deskProfile("electronics");
+  assert.equal(electronics.serial, true);
+  assert.equal(B.deskProfile("unknown-shop").shopKind, "general");
+  assert.match(B.deskLead("apparel"), /size and colour/);
+  assert.equal(B.isReusableProductKind("variant"), true);
+  assert.equal(B.isReusableProductKind("batch"), true);
+  assert.equal(B.isReusableProductKind("serial"), false);
+  assert.equal(B.isPieceKind("piece"), true);
+  assert.equal(B.isPieceKind("own"), false);
+  assert.equal(B.normalizeBarcodeKind("product"), "own");
+  assert.equal(B.kindLabel("unit"), "Piece");
+});
+
+test("EAN-13 bars use a valid check digit and labels keep variant text", () => {
+  const bits = B.encodeEan13("4006381333931");
+  assert.ok(bits.startsWith("101"));
+  assert.equal(B.encodeEan13("4006381333930"), "");
+  const svg = B.ean13Svg("4006381333931");
+  assert.match(svg, /<svg /);
+  assert.match(svg, /4006381333931/);
+  const html = B.labelsDocument([{
+    name: "Shirt",
+    barcode: "4006381333931",
+    format: "ean13",
+    mrp: 999,
+    rate: 799,
+    size: "M",
+    color: "Navy",
+    batch_no: "B1",
+    expiry: "2027-01-01",
+    serial_no: "SN1",
+    shop: "ATAV",
+    sku: "SH1",
+  }], { layout: "a4", widthMm: 48, heightMm: 30 });
+  assert.match(html, /Size M/);
+  assert.match(html, /Batch B1/);
+  assert.match(html, /Exp 2027-01-01/);
+  assert.match(html, /SN1/);
+  assert.match(html, /ATAV/);
+  const csv = B.labelsCsv([{ barcode: "BC1", kind: "unit", status: "active", item_name: "Shirt", size: "M" }]);
+  assert.match(csv, /Shirt/);
+  assert.match(csv, /barcode,kind,status/);
+});
+
 test("CODE128 encodes digits and prints label copies", () => {
   const bits = B.encodeCode128("8901234567893");
   assert.ok(bits.startsWith("0000000000"));
