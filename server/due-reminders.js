@@ -6,6 +6,7 @@ import { requirePerm } from "./auth.js";
 import {
   loadAlertSettings,
   sendWhatsApp,
+  dueWaCfg,
   waProviderMessageId,
   signupWaTemporary,
   logAlertDeliveries,
@@ -55,17 +56,7 @@ export async function ensureDueWaTable() {
 function waConfigured(settings) {
   const v = settings?.wa_enabled;
   const off = v === 0 || v === "0" || v === false || v === "off";
-  return !off && Boolean(settings?.wa_api_key) && Boolean(settings?.wa_profile_id);
-}
-
-function waReady(settings) {
-  return {
-    wa_enabled: settings?.wa_enabled,
-    wa_api_url: settings?.wa_api_url,
-    apiKey: settings?.wa_api_key,
-    profileId: settings?.wa_profile_id,
-    wa_country_code: settings?.wa_country_code,
-  };
+  return !off && Boolean(settings?.wa_api_key);
 }
 
 function rowAgeMs(row) {
@@ -258,9 +249,9 @@ async function deliverOne(item, ctx) {
     if (status === "failed" && !ctx.resend && storedTemporary(existing) && Number(existing.attempts) < MAX_ATTEMPTS) {
       ctx.rowId = existing.id;
       const attempts = Number(existing.attempts) + 1;
-      let wa = await sendWhatsApp(waReady(ctx.settings), [item.recipient], item.message, ctx.fetchImpl);
+      let wa = await sendWhatsApp(dueWaCfg(ctx.settings), [item.recipient], item.message, ctx.fetchImpl);
       if (!wa.ok && signupWaTemporary(wa) && attempts < MAX_ATTEMPTS) {
-        wa = await sendWhatsApp(waReady(ctx.settings), [item.recipient], item.message, ctx.fetchImpl);
+        wa = await sendWhatsApp(dueWaCfg(ctx.settings), [item.recipient], item.message, ctx.fetchImpl);
         return remember(ctx, item, wa, attempts + 1);
       }
       return remember(ctx, item, wa, attempts);
@@ -286,10 +277,10 @@ async function deliverOne(item, ctx) {
     created_at: new Date().toISOString(),
   });
   let attempts = 1;
-  let wa = await sendWhatsApp(waReady(ctx.settings), [item.recipient], item.message, ctx.fetchImpl);
+  let wa = await sendWhatsApp(dueWaCfg(ctx.settings), [item.recipient], item.message, ctx.fetchImpl);
   if (!wa.ok && signupWaTemporary(wa) && attempts < MAX_ATTEMPTS) {
     attempts += 1;
-    wa = await sendWhatsApp(waReady(ctx.settings), [item.recipient], item.message, ctx.fetchImpl);
+    wa = await sendWhatsApp(dueWaCfg(ctx.settings), [item.recipient], item.message, ctx.fetchImpl);
   }
   return remember(ctx, item, wa, attempts);
 }

@@ -357,10 +357,19 @@ function pos_due_message_item($row, $scope, $orderId, $outstanding, $invoiceNumb
   ];
 }
 
+function pos_due_wa_profile() {
+  return "acc_1792638026073";
+}
+
+function pos_due_apply_profile($cfg) {
+  $cfg["wa_profile_id"] = pos_due_wa_profile();
+  return $cfg;
+}
+
 function pos_due_wa_configured($cfg) {
   $flag = $cfg["wa_enabled"] ?? "1";
   $off = $flag === 0 || $flag === "0" || $flag === false || $flag === "off";
-  return !$off && ($cfg["wa_api_key"] ?? "") !== "" && ($cfg["wa_profile_id"] ?? "") !== "";
+  return !$off && ($cfg["wa_api_key"] ?? "") !== "";
 }
 
 function pos_due_map_status($wa) {
@@ -526,7 +535,7 @@ function pos_due_reminders_dispatch($path, $method, $body, $bid, $auth) {
     if (!is_array($sends) || !$sends) pos_send(400, ["error" => "Choose a customer or invoice", "php" => true]);
     $today = pos_due_today();
     $shop = pos_due_shop_name($bid);
-    $cfg = function_exists("pos_alert_settings") ? pos_alert_settings() : [];
+    $cfg = pos_due_apply_profile(function_exists("pos_alert_settings") ? pos_alert_settings() : []);
     $messages = pos_due_prepare($body, pos_due_load_invoices($bid), $shop, $today);
     if (!$messages) pos_send(200, ["ok" => false, "error" => "Choose a customer or invoice with a balance due", "php" => true, "results" => []]);
     if (!empty($body["preview"])) {

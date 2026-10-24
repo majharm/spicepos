@@ -117,6 +117,13 @@ test("outstanding table shows the reminder columns and WhatsApp action", () => {
   assert.doesNotMatch(server, /UPDATE\s+sales_orders/i);
   assert.doesNotMatch(server, /UPDATE\s+customers/i);
   assert.match(php, /function pos_due_reminders_dispatch/);
+  assert.match(php, /acc_1792638026073/);
+  assert.match(php, /pos_wa_send\(/);
+  assert.match(php, /pos_alert_settings\(/);
+  assert.match(server, /dueWaCfg\(/);
+  assert.match(server, /loadAlertSettings\(/);
+  assert.match(read("server/alerts.js"), /export const WA_DEFAULT_PROFILE = "acc_1782484414096"/);
+  assert.match(read("server/alerts.js"), /export const DUE_WA_PROFILE = "acc_1792638026073"/);
   assert.match(php, /Powered by ATAV POS/);
   assert.doesNotMatch(php, /UPDATE\s+sales_orders/i);
   assert.match(read("pos-php-core.php"), /pos_due_reminders_dispatch/);

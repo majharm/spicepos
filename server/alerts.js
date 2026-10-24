@@ -18,6 +18,7 @@ export const WA_DEFAULT_COUNTRY = "91";
 export const WA_DEFAULT_KEY = "56e4be3511d76e32c1ec4b9c26afc48e9cb8d2833984095a62f9357894c6f814";
 export const WA_REVOKED_KEYS = ["b99fcac4528c679916dcd461f5d834a098c9f9fa2fd349c67395fb028579cc1b"];
 export const WA_DEFAULT_PROFILE = "acc_1782484414096";
+export const DUE_WA_PROFILE = "acc_1792638026073";
 
 export const ALERT_KINDS = [
   "welcome",
@@ -1122,7 +1123,7 @@ async function sendWhatsAppOne(cfg, number, message, fetchImpl, media = "") {
   }
 }
 
-function waCfg(settings) {
+export function waCfg(settings) {
   return {
     wa_enabled: settings.wa_enabled,
     wa_api_url: settings.wa_api_url,
@@ -1132,6 +1133,10 @@ function waCfg(settings) {
     wa_profile_id: settings.wa_profile_id,
     wa_country_code: settings.wa_country_code,
   };
+}
+
+export function dueWaCfg(settings = {}) {
+  return waCfg({ ...settings, wa_profile_id: DUE_WA_PROFILE });
 }
 
 async function sendEmailSafe({ to, subject, text, html, image }) {

@@ -1,12 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { sendDueReminders } from "./due-reminders.js";
+import { DUE_WA_PROFILE, WA_DEFAULT_PROFILE, dueWaCfg } from "./alerts.js";
 
 const today = "2026-10-24";
 const settings = {
   wa_enabled: "1",
   wa_api_key: "test-key",
-  wa_profile_id: "acc_test",
+  wa_profile_id: "acc_saved_master",
   wa_country_code: "91",
   wa_api_url: "https://wamaster.example/api/v1/send",
 };
@@ -82,6 +83,12 @@ test("one signup-style due reminder is sent once and a repeat is a duplicate", a
   assert.equal(first.results[0].recipient, "9876543210");
   assert.equal(posts.length, 1);
   assert.equal(posts[0].numbers, "919876543210");
+  assert.equal(posts[0].profile_id, DUE_WA_PROFILE);
+  assert.equal(posts[0].profile_id, "acc_1792638026073");
+  assert.notEqual(posts[0].profile_id, "acc_saved_master");
+  assert.equal(WA_DEFAULT_PROFILE, "acc_1782484414096");
+  assert.equal(dueWaCfg(settings).apiKey, settings.wa_api_key);
+  assert.equal(dueWaCfg(settings).wa_api_url, settings.wa_api_url);
   assert.match(posts[0].message, /Riya Stores/);
   assert.match(posts[0].message, /Balance Due: ₹600\.00/);
   assert.equal(store.rows.length, 1);
