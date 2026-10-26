@@ -1840,7 +1840,7 @@
         </section>
         <section class="view" id="view-purchases" hidden>
           <h2 class="visually-hidden">Purchases</h2>
-          <p class="lede" id="purchases-lede">Supplier bills. For Quantity (pcs), type or scan one barcode per piece — 20 pcs needs 20 codes. Nothing is auto generated.</p>
+          <p class="lede" id="purchases-lede">Scan an existing product barcode to add it. Quantity, rate, tax, and discount stay editable. New barcodes are not generated. Stock updates when the purchase is saved.</p>
           <details class="purchase-new" id="purchase-new">
             <summary class="btn">New purchase</summary>
             <form class="settings purchase-form" id="purchase-form">
@@ -1887,12 +1887,13 @@
               </div>
             </form>
             <div class="hint" id="po-hint"></div>
+            <div class="po-scan-detail" id="po-scan-detail" hidden></div>
             <div class="po-missing" id="po-missing" hidden>
               <strong>Product Not Found</strong>
               <p>No product matches barcode <span id="po-missing-code"></span>.</p>
               <div class="po-missing-actions">
-                <button class="btn primary" type="button" id="po-missing-create">Create product</button>
-                <button class="btn" type="button" id="po-missing-assign">Assign barcode</button>
+                <button class="btn primary" type="button" id="po-missing-assign">Map to existing product</button>
+                <button class="btn" type="button" id="po-missing-create">Create product</button>
               </div>
             </div>
           </details>
@@ -3471,7 +3472,7 @@
     <script src="./js/offers.js?v=20260905deploy170" defer></script>
     <script src="./js/loyalty.js?v=20260905deploy136" defer></script>
     <script src="./js/barcode.js?v=20261024bcdesk1" defer></script>
-    <script src="./js/camera-scan.js?v=20261026poscam1" defer></script>
+    <script src="./js/camera-scan.js?v=20261026poscan2" defer></script>
     <script src="./js/scale.js?v=20261012set4" defer></script>
     <script src="./js/dev-mode.js?v=20260905deploy136" defer></script>
     <script src="./js/invoice.js?v=20261023cemail1" defer></script>
@@ -3495,7 +3496,7 @@
     <script src="./js/item-master.js?v=20261012brand1" defer></script>
     <script src="./js/customer-master.js?v=20261023cemail1" defer></script>
     <script src="./js/due-reminders.js?v=20261024duewa1" defer></script>
-    <script src="./js/app.js?v=20261026poscam1" defer></script>
+    <script src="./js/app.js?v=20261026poscan2" defer></script>
     <script src="./js/due-reminders-ui.js?v=20261024duewa1" defer></script>
     <script src="./js/item-master-ui.js?v=20261012brand1" defer></script>
     <script src="./js/customer-master-ui.js?v=20261023cemail1" defer></script>

@@ -61,7 +61,7 @@
         <p class="camera-scan-result" hidden></p>
         <div class="camera-scan-missing" hidden>
           <button type="button" class="btn primary camera-scan-create">Create product</button>
-          <button type="button" class="btn camera-scan-assign">Assign barcode</button>
+          <button type="button" class="btn camera-scan-assign">Map to existing product</button>
         </div>
         <div class="camera-scan-actions">
           <button type="button" class="btn primary camera-scan-start">Start Camera</button>

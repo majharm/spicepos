@@ -78,6 +78,16 @@ test("purchase entry scans with the camera and keeps stock on save", () => {
   assert.match(app, /purchaseScanLabel/);
   assert.match(app, /deskProfile/);
   assert.match(app, /kind: "search"/);
+  assert.match(index, /Map to existing product/);
+  assert.match(index, /id="po-scan-detail"/);
+  assert.match(scan, /Map to existing product/);
+  assert.match(app, /fillPurchaseScanDetail/);
+  assert.match(app, /allow_empty_barcodes: allowEmpty/);
+  assert.match(app, /generate_barcodes: false/);
+  assert.doesNotMatch(app, /data-po-gen-bc="\$\{key\}" checked/);
+  const scanFn = app.slice(app.indexOf("async function applyPurchaseBarcodeScan"), app.indexOf("function createProductForBarcode"));
+  assert.doesNotMatch(scanFn, /addPurchasePieceBarcode/);
+  assert.doesNotMatch(scanFn, /generate_barcodes/);
   assert.doesNotMatch(app, /openPurchaseCamera[\s\S]{0,500}cameraScannerEnabled\(\)/);
 
   assert.match(css, /\.po-scan-barcode-btn/);
@@ -92,7 +102,6 @@ test("purchase entry scans with the camera and keeps stock on save", () => {
   assert.match(php, /function pos_spread_purchase_discount/);
   assert.match(php, /stock_gm = stock_gm \+ \?/);
   assert.match(app, /\/api\/purchases/);
-  const scanFn = app.slice(app.indexOf("async function applyPurchaseBarcodeScan"), app.indexOf("function createProductForBarcode"));
   assert.doesNotMatch(scanFn, /\/api\/purchases/);
   assert.doesNotMatch(scanFn, /stock_gm/);
 });

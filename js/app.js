@@ -7276,7 +7276,7 @@ function renderClassicPoLines(el, shown, moreHint) {
             <span class="hint" data-po-bc-count="${escapeHtml(i.id)}">0 / ${qty} — type or scan, one per piece</span>
           </div>
           <div class="po-bc-scan-row">
-            <input class="po-bc-scan" data-po-bc-scan="${escapeHtml(i.id)}" maxlength="64" placeholder="Scan or type one barcode, then Enter" autocomplete="off" />
+            <input class="po-bc-scan" data-po-bc-scan="${escapeHtml(i.id)}" maxlength="64" placeholder="Scan an existing product barcode, then Enter" autocomplete="off" />
             ${poCameraButtonHtml(`data-po-bc-camera="${escapeHtml(i.id)}"`)}
           </div>
           <textarea class="po-bc-list" data-po-barcodes="${escapeHtml(i.id)}" rows="4" placeholder="One barcode per line — ${qty} pcs needs ${qty} codes"></textarea>
@@ -7397,13 +7397,13 @@ function renderApparelPoLines(el, shown, moreHint) {
           <input type="number" min="0" step="0.01" inputmode="decimal" value="0" data-po-discount="${key}" aria-label="Discount amount for ${escapeHtml(g.name)}" />
         </label>
         <button class="btn" type="button" data-po-add-size="${key}">Add size</button>
-        <label class="po-gen-bc"><input type="checkbox" data-po-gen-bc="${key}" checked /> Generate unique barcodes</label>
+        <label class="po-gen-bc"><input type="checkbox" data-po-gen-bc="${key}" /> Generate unique barcodes</label>
       </div>
       <div class="po-bc-panel" data-po-bc-product="${key}" hidden>
         <div class="po-bc-box">
           <div class="po-bc-head">
             <strong>Barcodes for ${escapeHtml(g.name)}</strong>
-            <span class="hint" data-po-bc-count="${key}">Scan each colour and size, or leave empty to generate</span>
+            <span class="hint" data-po-bc-count="${key}">Scan an existing product barcode. New codes are not generated.</span>
           </div>
           <div class="po-size-bc-list" data-po-size-bc="${key}"></div>
         </div>
@@ -7445,7 +7445,7 @@ function apparelSizeBarcodeBlockHtml(key, label, n, saved, gen) {
       <span class="hint${typed === n && n > 0 ? " ok" : ""}">${gen && typed < n ? "rest generated" : ""}</span>
     </div>
     <div class="po-bc-scan-row">
-      <input class="po-bc-scan" data-po-size-bc-scan="${escapeHtml(key)}" maxlength="64" placeholder="Scan ${escapeHtml(label)} barcode, then Enter" autocomplete="off" aria-label="Scan ${escapeHtml(label)} barcode" />
+      <input class="po-bc-scan" data-po-size-bc-scan="${escapeHtml(key)}" maxlength="64" placeholder="Scan existing ${escapeHtml(label)} barcode, then Enter" autocomplete="off" aria-label="Scan ${escapeHtml(label)} barcode" />
       ${poCameraButtonHtml(`data-po-size-bc-camera="${escapeHtml(key)}"`)}
     </div>
     <textarea class="po-bc-list" data-po-size-barcodes="${escapeHtml(key)}" rows="${Math.min(6, Math.max(2, n))}" placeholder="${gen ? "Optional — leftover codes are generated" : `${n} barcodes, one per line`}">${escapeHtml(saved)}</textarea>
@@ -7501,7 +7501,7 @@ function refreshApparelPoCard(card) {
   if (qtyEl) qtyEl.textContent = `${total} pcs`;
   const amtEl = card.querySelector(`[data-po-amt="${key}"]`);
   if (amtEl) amtEl.textContent = money(amt);
-  const gen = card.querySelector("[data-po-gen-bc]")?.checked !== false;
+  const gen = card.querySelector("[data-po-gen-bc]")?.checked === true;
   const bcPanel = card.querySelector("[data-po-bc-product]");
   if (bcPanel) bcPanel.hidden = !box?.checked || total <= 0;
   const list = card.querySelector("[data-po-size-bc]");
@@ -7562,7 +7562,7 @@ function collectApparelPoLines() {
     const matrix = apparelColorSizeQtysFromCard(card);
     const total = Object.values(matrix).reduce((sum, sizes) => sum + (G?.totalQty?.(sizes) || 0), 0);
     if (!total) throw new Error(`${name}: enter colour and size quantity`);
-    const generate = card.querySelector("[data-po-gen-bc]")?.checked !== false;
+    const generate = card.querySelector("[data-po-gen-bc]")?.checked === true;
     const barcodesByVariant = {};
     card.querySelectorAll("[data-po-size-barcodes]").forEach((ta) => {
       const codes = parsePoBarcodes(ta.value);
@@ -7735,8 +7735,19 @@ function bumpApparelPoSize(card, size, color) {
   return setApparelSizeQty(card, sz, (bucket[sz] || 0) + 1, want || Object.keys(matrix)[0] || "");
 }
 
+function markCatalogPurchaseLine(item) {
+  const box = document.querySelector(`[data-po-item="${item.id}"]`);
+  if (box) box.dataset.poCatalog = "1";
+  const card = findApparelPoCard(item);
+  if (!card) return;
+  card.dataset.poCatalog = "1";
+  const gen = card.querySelector("[data-po-gen-bc]");
+  if (gen) gen.checked = false;
+}
+
 function selectPurchaseCatalogItem(item) {
   revealPurchaseCatalogItem(item);
+  markCatalogPurchaseLine(item);
   if (isApparelShop()) {
     const card = findApparelPoCard(item);
     if (!card) return false;
@@ -7878,7 +7889,39 @@ function showPurchaseMissing(code) {
     box.hidden = false;
     box.dataset.code = code;
   }
+  const detail = $("po-scan-detail");
+  if (detail) {
+    detail.hidden = true;
+    detail.innerHTML = "";
+  }
   setPoHint("Product Not Found", "error");
+}
+
+function fillPurchaseScanDetail(item, match) {
+  const el = $("po-scan-detail");
+  if (!el || !item) return;
+  const kind = globalThis.POSFootwear?.shopKind?.(state.businessMeta) || "general";
+  const profile = globalThis.POSBarcode?.deskProfile?.(kind) || {};
+  const rate = item.purchase_rate;
+  const rows = [
+    ["Product", item.name || match?.item_name],
+    ["SKU", profile.sku === false ? "" : (item.code || match?.item_code || "")],
+    ["Colour", profile.color ? (item.color || match?.color || "") : ""],
+    ["Size", profile.size ? (item.size || match?.size || "") : ""],
+    ["Unit", poUnitLabel(item)],
+    ["Purchase rate", rate != null && rate !== "" ? money(rate) : ""],
+  ];
+  const batch = match?.batch_no || item.primary_batch_no || item.batch_no || "";
+  const exp = match?.expiry_date || match?.item_expiry || item.primary_expiry || "";
+  const serial = match?.serial_no || "";
+  if (profile.batch && batch) rows.push(["Batch", batch]);
+  if (profile.expiry && exp) rows.push(["Expiry", String(exp).slice(0, 10)]);
+  if (profile.serial && serial) rows.push(["Serial", serial]);
+  el.hidden = false;
+  el.innerHTML = rows
+    .filter(([, value]) => String(value || "").trim())
+    .map(([label, value]) => `<span><em>${escapeHtml(label)}</em> ${escapeHtml(String(value))}</span>`)
+    .join("");
 }
 
 function purchaseScanLabel(item, match) {
@@ -7898,6 +7941,7 @@ function purchaseScanLabel(item, match) {
   const serial = match?.serial_no || "";
   if (profile.serial && serial) bits.push(`serial ${serial}`);
   if (item) bits.push(poUnitLabel(item));
+  if (item && item.purchase_rate != null && item.purchase_rate !== "") bits.push(money(item.purchase_rate));
   return bits.filter(Boolean).join(" · ");
 }
 
@@ -7914,17 +7958,6 @@ async function applyPurchaseBarcodeScan(raw, source) {
   applyPurchaseBarcodeScan._pending = code;
   const run = (async () => {
     try {
-      if (source?.kind === "classic" || source?.kind === "apparel") {
-        const added = addPurchasePieceBarcode(code, source);
-        hidePurchaseMissing();
-        const text = added && added.size
-          ? (added.qty > 0 && added.n >= added.qty
-            ? `${added.size}: ${added.n} / ${added.qty} pcs complete`
-            : `Added ${code} to ${added.size} (${added.n} / ${added.qty})`)
-          : `Added barcode ${code}`;
-        setPoHint(text, "ok");
-        return purchaseScanResult(true, text);
-      }
       const found = await lookupPurchaseScanItem(code);
       const item = found.item;
       const catalog = item && isCatalogPurchaseBarcode(item, found.match, code);
@@ -7938,12 +7971,16 @@ async function applyPurchaseBarcodeScan(raw, source) {
           return purchaseScanResult(false, text);
         }
         hidePurchaseMissing();
+        fillPurchaseScanDetail(item, found.match);
+        document.querySelectorAll("[data-po-bc-scan],[data-po-size-bc-scan],[data-po-product-bc-scan]").forEach((el) => {
+          if (cleanPoBarcode(el.value) === code) el.value = "";
+        });
         const qtyEl = document.querySelector(`[data-po-qty="${CSS.escape(item.id)}"]`);
         const card = findApparelPoCard(item);
         const qty = qtyEl?.value || card?.querySelector("[data-po-qty-total]")?.textContent || "";
         const text = `Added ${purchaseScanLabel(item, found.match)}${qty ? ` · qty ${qty}` : ""}`;
         setPoHint(text, "ok");
-        if (source?.kind === "search" && !document.body.classList.contains("camera-scan-open")) {
+        if (!document.body.classList.contains("camera-scan-open")) {
           const search = $("po-item-search");
           if (search) {
             try { search.focus({ preventScroll: true }); } catch { search.focus(); }
@@ -7951,19 +7988,6 @@ async function applyPurchaseBarcodeScan(raw, source) {
           }
         }
         return purchaseScanResult(true, text);
-      }
-      if (source?.kind !== "search") {
-        const selected = selectedPurchasePieceSource();
-        if (selected) {
-          if (item) selected.item = item;
-          const added = addPurchasePieceBarcode(code, selected);
-          hidePurchaseMissing();
-          const text = added && added.size
-            ? `Added ${code} to ${added.size} (${added.n} / ${added.qty})`
-            : `Added barcode ${code}`;
-          setPoHint(text, "ok");
-          return purchaseScanResult(true, text);
-        }
       }
       showPurchaseMissing(code);
       return purchaseScanResult(false, `Product Not Found · ${code}`, { missing: true });
@@ -8007,16 +8031,16 @@ function assignPurchaseBarcode(code) {
     const sku = item.code ? ` · ${item.code}` : "";
     return `<option value="${escapeHtml(item.id)}">${escapeHtml(item.name || "Item")}${escapeHtml(sku)}</option>`;
   }).join("");
-  if (!showModal("Assign barcode", `
+  if (!showModal("Map to existing product", `
     <form id="po-assign-form" class="settings">
-      <p>Assign <strong>${escapeHtml(cleaned)}</strong> to an existing product. The code stays unique for this shop.</p>
+      <p>Map <strong>${escapeHtml(cleaned)}</strong> to an existing product. The scanned code is kept as it is and no new barcode is generated.</p>
       <label>Search
         <input id="po-assign-search" type="search" placeholder="Product name or SKU" autocomplete="off" />
       </label>
       <label>Product
         <select id="po-assign-item" size="8">${options}</select>
       </label>
-      <button class="btn primary" type="submit">Assign barcode</button>
+      <button class="btn primary" type="submit">Map to existing product</button>
     </form>
     <p class="hint" id="po-assign-hint"></p>
   `)) return;
@@ -14107,10 +14131,12 @@ $("purchase-form").addEventListener("submit", async (e) => {
       const qtyInput = Number(document.querySelector(`[data-po-qty="${box.dataset.poItem}"]`)?.value);
       const quantity_gm = POSUnits.toBase(qtyInput, unit);
       let barcodes = [];
+      let allowEmpty = false;
       if (POSUnits.isCount(unit)) {
         const pieces = Math.round(quantity_gm);
         barcodes = parsePoBarcodes(document.querySelector(`[data-po-barcodes="${box.dataset.poItem}"]`)?.value);
-        if (barcodes.length !== pieces) {
+        if (!barcodes.length && box.dataset.poCatalog === "1") allowEmpty = true;
+        else if (barcodes.length !== pieces) {
           throw new Error(`${item?.name || "Item"}: enter ${pieces} barcodes for ${pieces} pcs (entered ${barcodes.length})`);
         }
       }
@@ -14122,6 +14148,8 @@ $("purchase-form").addEventListener("submit", async (e) => {
         discount: document.querySelector(`[data-po-discount="${box.dataset.poItem}"]`)?.value,
         expiry_date: document.querySelector(`[data-po-expiry="${box.dataset.poItem}"]`)?.value || "",
         barcodes,
+        generate_barcodes: false,
+        allow_empty_barcodes: allowEmpty,
       });
     }
     if (!lines.length) {
