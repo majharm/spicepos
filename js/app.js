@@ -774,12 +774,10 @@ function applyFootwearMode() {
   }
   if ($("purchases-lede")) {
     $("purchases-lede").textContent = ap
-      ? "Buy multiple garments in one invoice. Enter size-wise qty (S, M, L, XL or 28–38) per product — total qty and amount calculate automatically. Scan barcodes per size with the camera, or generate the rest."
-      : "Supplier bills. Scan with the camera or a USB scanner. For Quantity (pcs), one unique barcode per piece — 20 pcs needs 20 codes.";
+      ? "Buy multiple garments in one invoice. Enter size-wise qty, or tap the camera on the item qty to scan an existing barcode. New barcodes are not generated unless you tick Generate unique barcodes."
+      : "Tap the camera on each item qty, or use a USB scanner. Scanning an existing product barcode adds that item. Quantity, rate, tax, and discount stay editable. Stock updates when the purchase is saved.";
   }
-  VIEW_META.purchases.subtitle = ap
-    ? "Multi-product, size-wise qty, and size-wise barcode scan"
-    : "20 pcs = 20 barcodes you type or scan";
+  VIEW_META.purchases.subtitle = "Camera on each item qty — scan an existing barcode";
   if ($("item-import-copy")) {
     $("item-import-copy").textContent = copy.importCopy
       || "Bulk add from Excel. Download the template, fill one item per row, then upload .xlsx, Excel XML, or CSV.";
@@ -958,7 +956,7 @@ const VIEW_META = {
   "online-orders": { title: "Online orders", subtitle: "Zomato and Swiggy kitchen tickets" },
   prescriptions: { title: "Prescription Orders", subtitle: "Customer QR uploads for this pharmacy" },
   kot: { title: "Kitchen KOT", subtitle: "Captain fires tickets; kitchen marks preparing and ready" },
-  purchases: { title: "Purchases", subtitle: "20 pcs = 20 barcodes you type or scan" },
+  purchases: { title: "Purchases", subtitle: "Camera on each item qty — scan an existing barcode" },
   suppliers: { title: "Suppliers", subtitle: "Vendor contacts, address, and GSTIN" },
   stock: { title: "Stock", subtitle: "On-hand qty, low-stock alerts, and adjustments" },
   expiry: { title: "Expiry", subtitle: "Dated batches still on hand — expired first" },
@@ -7226,8 +7224,9 @@ function poUnitLabel(item) {
 
 const PO_CAMERA_ICON = `<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M9.5 4.5v2H7.8c-.5 0-.9.2-1.2.5L4.7 9.5H3.5c-.8 0-1.5.7-1.5 1.5v7c0 .8.7 1.5 1.5 1.5h17c.8 0 1.5-.7 1.5-1.5v-7c0-.8-.7-1.5-1.5-1.5h-1.2l-1.9-2.5c-.3-.3-.7-.5-1.2-.5h-1.7v-2c0-.8-.7-1.5-1.5-1.5h-3c-.8 0-1.5.7-1.5 1.5zm3 11.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z"/></svg>`;
 
-function poCameraButtonHtml(attrs) {
-  return `<button type="button" class="scan-camera-btn po-scan-camera-btn" ${attrs} aria-label="Scan barcode with camera" title="Camera scan" hidden>${PO_CAMERA_ICON}</button>`;
+function poCameraButtonHtml(attrs, opts = {}) {
+  const hidden = opts.always ? "" : " hidden";
+  return `<button type="button" class="scan-camera-btn po-scan-camera-btn" ${attrs} aria-label="Scan barcode with camera" title="Scan camera"${hidden}>${PO_CAMERA_ICON}</button>`;
 }
 
 function setPoHint(msg, kind) {
@@ -7287,7 +7286,7 @@ function renderClassicPoLines(el, shown, moreHint) {
         <td class="po-check"><input type="checkbox" data-po-item="${escapeHtml(i.id)}" /></td>
         <td class="po-name">${escapeHtml(i.name)}</td>
         <td class="po-hsn">${escapeHtml(i.hsn || "—")}</td>
-        <td><input type="number" min="${POSUnits.qtyMin()}" max="${POSUnits.qtyMax()}" step="1" value="${qty}" data-po-qty="${escapeHtml(i.id)}" /></td>
+        <td class="po-qty"><div class="po-qty-cell"><input type="number" min="${POSUnits.qtyMin()}" max="${POSUnits.qtyMax()}" step="1" value="${qty}" data-po-qty="${escapeHtml(i.id)}" aria-label="Quantity for ${escapeHtml(i.name)}" />${poCameraButtonHtml(`data-po-qty-camera="${escapeHtml(i.id)}"`, { always: true })}</div></td>
         <td class="po-unit">${escapeHtml(poUnitLabel(i))}</td>
         <td><div class="po-rate-cell"><input type="number" min="0" step="0.00000001" inputmode="decimal" value="${escapeHtml(POSUnits.rateInputValue?.(i.purchase_rate) ?? i.purchase_rate)}" data-po-rate="${escapeHtml(i.id)}" /><span class="po-suffix">₹${escapeHtml(POSUnits.rateSuffix(unit))}</span></div></td>
         <td><input type="number" min="0" step="0.01" inputmode="decimal" value="${escapeHtml(String(Number(i.gst_rate) || 0))}" data-po-gst="${escapeHtml(i.id)}" aria-label="GST percent for ${escapeHtml(i.name)}" /></td>
@@ -7373,7 +7372,7 @@ function renderApparelPoLines(el, shown, moreHint) {
           <span>${escapeHtml(wear || "Garment")}${g.hsn ? ` · ${escapeHtml(taxCodeLabel())} ${escapeHtml(g.hsn)}` : ""} · colour and size</span>
         </div>
         <div class="po-product-totals">
-          <span data-po-qty-total="${key}">0 pcs</span>
+          <span class="po-qty-cell"><span data-po-qty-total="${key}">0 pcs</span>${poCameraButtonHtml(`data-po-qty-camera="${key}"`, { always: true })}</span>
           <span class="num" data-po-amt="${key}">${money(0)}</span>
         </div>
       </header>
@@ -8119,6 +8118,12 @@ function initPurchaseCameraScan() {
       openPurchaseCamera({ kind: "search" });
       return;
     }
+    const qtyBtn = e.target.closest("[data-po-qty-camera]");
+    if (qtyBtn) {
+      e.preventDefault();
+      openPurchaseCamera({ kind: "search", title: "Scan barcode" });
+      return;
+    }
     const classicBtn = e.target.closest("[data-po-bc-camera]");
     if (classicBtn) {
       e.preventDefault();
@@ -8421,8 +8426,8 @@ function applyCameraScannerVisibility() {
     const el = $(id);
     if (el) el.hidden = !on;
   });
-  document.querySelectorAll("[data-po-bc-camera], [data-po-product-bc-camera], [data-po-size-bc-camera]").forEach((el) => {
-    el.hidden = !on;
+  document.querySelectorAll("[data-po-qty-camera], [data-po-bc-camera], [data-po-product-bc-camera], [data-po-size-bc-camera]").forEach((el) => {
+    el.hidden = false;
   });
 }
 

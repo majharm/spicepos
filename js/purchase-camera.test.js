@@ -78,6 +78,21 @@ test("purchase entry scans with the camera and keeps stock on save", () => {
   assert.match(app, /purchaseScanLabel/);
   assert.match(app, /deskProfile/);
   assert.match(app, /kind: "search"/);
+  assert.match(app, /data-po-qty-camera/);
+  assert.match(app, /po-qty-cell/);
+  assert.match(app, /always: true/);
+  assert.match(app, /openPurchaseCamera\(\{ kind: "search", title: "Scan barcode" \}\)/);
+  assert.match(app, /Camera on each item qty/);
+  const classic = app.slice(app.indexOf("function renderClassicPoLines"), app.indexOf("function apparelPoGroupSearch"));
+  assert.match(classic, /data-po-qty-camera=/);
+  assert.match(classic, /always: true/);
+  const apparel = app.slice(app.indexOf("function renderApparelPoLines"), app.indexOf("function extraSizeCellHtml"));
+  assert.match(apparel, /data-po-qty-camera=/);
+  assert.match(apparel, /always: true/);
+  const vis = app.slice(app.indexOf("function applyCameraScannerVisibility"), app.indexOf("function paintTimezonePreview"));
+  assert.match(vis, /data-po-qty-camera/);
+  assert.match(vis, /el\.hidden = false/);
+  assert.doesNotMatch(vis, /data-po-qty-camera[\s\S]{0,180}el\.hidden = !on/);
   assert.match(index, /Map to existing product/);
   assert.match(index, /id="po-scan-detail"/);
   assert.match(scan, /Map to existing product/);
@@ -91,6 +106,8 @@ test("purchase entry scans with the camera and keeps stock on save", () => {
   assert.doesNotMatch(app, /openPurchaseCamera[\s\S]{0,500}cameraScannerEnabled\(\)/);
 
   assert.match(css, /\.po-scan-barcode-btn/);
+  assert.match(css, /\.po-qty-cell/);
+  assert.match(css, /\.po-qty-cell \.scan-camera-btn/);
   assert.match(css, /\.po-missing\[hidden\]/);
   assert.match(css, /\.camera-scan-manual/);
   assert.match(css, /\.camera-scan-actions/);

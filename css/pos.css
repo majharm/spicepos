@@ -5778,6 +5778,31 @@ body.apparel-mode #item-size-wrap { display: none; }
   border: 1px solid var(--line);
   background: #fff;
 }
+.po-qty-cell {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.po-qty-cell input[type="number"] {
+  width: 88px;
+  min-width: 64px;
+  max-width: 110px;
+  min-height: 44px;
+  flex: 1 1 auto;
+}
+.po-qty-cell .scan-camera-btn {
+  width: 44px;
+  min-width: 44px;
+  height: 44px;
+  min-height: 44px;
+  border-radius: 8px;
+}
+.po-product-totals .po-qty-cell {
+  justify-content: flex-end;
+}
+.po-qty-cell .scan-camera-btn[hidden] {
+  display: none;
+}
 .po-rate-cell {
   display: flex;
   align-items: center;
