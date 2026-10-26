@@ -225,6 +225,17 @@ export function round2(n) {
   return Math.round((Number(n) || 0) * 1e8) / 1e8;
 }
 
+function spreadPurchaseDiscount(rows, parent, discount) {
+  let left = Math.max(0, Number(discount) || 0);
+  for (const row of rows) {
+    const gross = Math.max(0, lineAmount(row.quantity_gm, row.rate_per_kg, parent));
+    const take = Math.min(left, gross);
+    row.discount = take;
+    left -= take;
+  }
+  return rows;
+}
+
 function garmentSizeOf(item) {
   return POSGarmentPurchase?.normalizeSize?.(item?.size) || String(item?.size || "").trim();
 }
@@ -327,6 +338,7 @@ export async function expandGarmentPurchaseLines(conn, lines, biz) {
       const parent = itemRows[0];
       if (!parent) throw new Error("Unknown item");
       let any = false;
+      const made = [];
       for (const [colorName, sizeQtys] of Object.entries(matrix)) {
         const color = POSGarmentPurchase?.normalizeColor?.(colorName) || String(colorName || "").trim();
         const planned = POSGarmentPurchase.planSizeLines(sizeQtys, {
@@ -338,7 +350,7 @@ export async function expandGarmentPurchaseLines(conn, lines, biz) {
         for (const row of planned) {
           any = true;
           const item = await findOrCreateSizeVariant(conn, parent, row.size, biz, color);
-          out.push({
+          made.push({
             ...line,
             item_id: item.id,
             quantity_gm: row.qty,
@@ -348,10 +360,12 @@ export async function expandGarmentPurchaseLines(conn, lines, biz) {
             allow_empty_barcodes: row.allow_empty_barcodes,
             size: row.size,
             color,
+            discount: 0,
           });
         }
       }
       if (!any) throw new Error(`${parent.name}: enter colour and size quantity`);
+      out.push(...spreadPurchaseDiscount(made, parent, line.discount));
       continue;
     }
     const sizeQtys = line.size_qtys || line.sizeQtys;
@@ -369,9 +383,10 @@ export async function expandGarmentPurchaseLines(conn, lines, biz) {
       allow_empty_barcodes: line.allow_empty_barcodes ?? line.allowEmptyBarcodes ?? true,
     });
     if (!planned.length) throw new Error(`${parent.name}: enter size-wise quantity`);
+    const made = [];
     for (const row of planned) {
       const item = await findOrCreateSizeVariant(conn, parent, row.size, biz);
-      out.push({
+      made.push({
         ...line,
         item_id: item.id,
         quantity_gm: row.qty,
@@ -381,8 +396,10 @@ export async function expandGarmentPurchaseLines(conn, lines, biz) {
         allow_empty_barcodes: row.allow_empty_barcodes,
         size: row.size,
         color: parent.color || "",
+        discount: 0,
       });
     }
+    out.push(...spreadPurchaseDiscount(made, parent, line.discount));
   }
   if (!out.length) throw new Error("Enter at least one product with size-wise quantity");
   return out;
@@ -1114,17 +1131,15 @@ export function registerCrud(app) {
           if (!item) throw new Error("Unknown item");
           const qty = Number(line.quantity_gm);
           const rate = rate4(line.rate_per_kg ?? item.purchase_rate);
-          const amount = round2(lineAmount(qty, rate, item));
-          const gstRate = Number(item.gst_rate) || 0;
-          const gstAmount = round2((amount * gstRate) / 100);
+          const fig = POSUnits.purchaseLineFigures(lineAmount(qty, rate, item), item.gst_rate, line);
           built.push({
             item,
             qty,
             rate,
-            amount,
-            gstRate,
-            gstAmount,
-            total: round2(amount + gstAmount),
+            amount: fig.amount,
+            gstRate: fig.gstRate,
+            gstAmount: fig.gstAmount,
+            total: fig.total,
           });
         }
         const subtotal = round2(built.reduce((s, l) => s + l.amount, 0));

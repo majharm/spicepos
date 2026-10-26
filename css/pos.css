@@ -1064,12 +1064,54 @@ body.camera-scan-open { overflow: hidden; }
 }
 .camera-scan-hint {
   margin: 0;
-  padding: 12px 14px 14px;
+  padding: 12px 14px 8px;
   font-size: 14px;
   font-weight: 600;
   color: #334155;
   text-align: center;
 }
+.camera-scan-result {
+  margin: 0;
+  padding: 0 14px 8px;
+  font-size: 14px;
+  font-weight: 700;
+  text-align: center;
+}
+.camera-scan-result.is-hit { color: #0f766e; }
+.camera-scan-result.is-miss { color: var(--danger, #b91c1c); }
+.camera-scan-missing {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  padding: 0 14px 10px;
+}
+.camera-scan-missing[hidden] { display: none !important; }
+.camera-scan-actions,
+.camera-scan-manual {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 0 14px 12px;
+}
+.camera-scan-actions button,
+.camera-scan-manual button,
+.camera-scan-missing button {
+  min-height: 44px;
+  padding: 8px 12px;
+}
+.camera-scan-manual input {
+  flex: 1 1 140px;
+  min-width: 0;
+  min-height: 44px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--line, #e2e8f0);
+}
+.camera-scan-frame.is-hit { border-color: #14b8a6; }
+.camera-scan-frame.is-miss { border-color: #f87171; }
+.camera-scan-sheet.is-hit { box-shadow: 0 0 0 3px rgba(20, 184, 166, 0.45), 0 18px 48px rgba(15, 23, 42, 0.28); }
+.camera-scan-sheet.is-miss { box-shadow: 0 0 0 3px rgba(248, 113, 113, 0.45), 0 18px 48px rgba(15, 23, 42, 0.28); }
 @media (min-width: 720px) {
   .camera-scan-modal { align-items: center; }
   .camera-scan-sheet { border-radius: 16px; }
@@ -5192,6 +5234,38 @@ body.classic-bill-mode .bill-settle {
   height: auto;
   min-height: 40px;
   border-radius: 0 10px 10px 0;
+}
+.po-scan-field .po-scan-barcode-btn {
+  width: auto;
+  min-width: 44px;
+  gap: 6px;
+  padding: 0 12px;
+  font-size: 13px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+.po-missing {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+  padding: 12px;
+  border: 1px solid #fecaca;
+  border-radius: 12px;
+  background: #fff7f7;
+}
+.po-missing[hidden] { display: none !important; }
+.po-missing-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.po-missing-actions .btn { min-height: 44px; }
+.po-total-wrap { display: grid; gap: 2px; }
+.po-tax {
+  margin: 0;
+  color: var(--muted, #64748b);
+  font-size: 13px;
+  font-weight: 700;
 }
 .po-scan-field .scan-camera-btn[hidden],
 .po-bc-scan-row .scan-camera-btn[hidden] {

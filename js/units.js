@@ -351,6 +351,27 @@
     return (q / 1000) * r;
   }
 
+  function purchaseLineFigures(gross, itemGst, line) {
+    const base = Math.max(0, Number(gross) || 0);
+    let discount = Number(line?.discount);
+    if (!Number.isFinite(discount) || discount < 0) discount = 0;
+    if (discount > base) discount = base;
+    const amount = roundRate8(base - discount);
+    const given = line?.gst_rate ?? line?.gstRate;
+    const parsed = Number(given);
+    const gstRate = given === "" || given == null || !Number.isFinite(parsed)
+      ? (Number(itemGst) || 0)
+      : Math.max(0, parsed);
+    const gstAmount = roundRate8((amount * gstRate) / 100);
+    return {
+      amount,
+      discount,
+      gstRate,
+      gstAmount,
+      total: roundRate8(amount + gstAmount),
+    };
+  }
+
   function optionsHtml(selected) {
     const cur = normalize(selected);
     const groups = [];
@@ -407,6 +428,7 @@
     rateInputValue,
     formatRate,
     lineAmount,
+    purchaseLineFigures,
     optionsHtml,
     groupOf,
   };

@@ -263,6 +263,35 @@ function pos_barcodes_for_color($map, $color) {
   return $out;
 }
 
+function pos_purchase_line_figures($gross, $itemGst, $line) {
+  $base = max(0, (float) $gross);
+  $discount = (float) ($line["discount"] ?? 0);
+  if ($discount < 0) $discount = 0;
+  if ($discount > $base) $discount = $base;
+  $amount = pos_round8($base - $discount);
+  $given = array_key_exists("gst_rate", $line) ? $line["gst_rate"] : ($line["gstRate"] ?? null);
+  $gstRate = ($given === null || $given === "") ? (float) $itemGst : max(0, (float) $given);
+  $gstAmount = pos_round8(($amount * $gstRate) / 100);
+  return [
+    "amount" => $amount,
+    "gstRate" => $gstRate,
+    "gstAmount" => $gstAmount,
+    "total" => pos_round8($amount + $gstAmount),
+  ];
+}
+
+function pos_spread_purchase_discount($rows, $parent, $discount) {
+  $left = max(0, (float) $discount);
+  foreach ($rows as &$row) {
+    $gross = max(0, (float) pos_line_amount_for_item($row["quantity_gm"] ?? 0, $row["rate_per_kg"] ?? 0, $parent));
+    $take = min($left, $gross);
+    $row["discount"] = $take;
+    $left -= $take;
+  }
+  unset($row);
+  return $rows;
+}
+
 function pos_expand_garment_purchase_lines($bid, $lines, $biz) {
   $out = [];
   $apparel = function_exists("pos_is_apparel_shop") && pos_is_apparel_shop($biz);
@@ -274,6 +303,7 @@ function pos_expand_garment_purchase_lines($bid, $lines, $biz) {
       if (!$parent) throw new Exception("Unknown item");
       if (is_file(__DIR__ . "/pos-advanced.php")) require_once __DIR__ . "/pos-advanced.php";
       $any = false;
+      $made = [];
       foreach ($matrix as $colorName => $sizeQtys) {
         if (is_int($colorName)) continue;
         $color = pos_garment_normalize_color($colorName);
@@ -286,7 +316,7 @@ function pos_expand_garment_purchase_lines($bid, $lines, $biz) {
         foreach ($planned as $row) {
           $any = true;
           $item = pos_find_or_create_size_variant($bid, $parent, $row["size"], $biz, $color);
-          $out[] = array_merge($line, [
+          $made[] = array_merge($line, [
             "item_id" => $item["id"],
             "quantity_gm" => $row["qty"],
             "rate_per_kg" => $row["rate"] ?? ($line["rate_per_kg"] ?? $item["purchase_rate"]),
@@ -295,10 +325,12 @@ function pos_expand_garment_purchase_lines($bid, $lines, $biz) {
             "allow_empty_barcodes" => $row["allow_empty_barcodes"],
             "size" => $row["size"],
             "color" => $color,
+            "discount" => 0,
           ]);
         }
       }
       if (!$any) throw new Exception(($parent["name"] ?? "Item") . ": enter colour and size quantity");
+      foreach (pos_spread_purchase_discount($made, $parent, $line["discount"] ?? 0) as $spread) $out[] = $spread;
       continue;
     }
     $sizeQtys = $line["size_qtys"] ?? $line["sizeQtys"] ?? null;
@@ -326,9 +358,10 @@ function pos_expand_garment_purchase_lines($bid, $lines, $biz) {
       "allow_empty_barcodes" => $line["allow_empty_barcodes"] ?? $line["allowEmptyBarcodes"] ?? true,
     ]);
     if (!$planned) throw new Exception(($parent["name"] ?? "Item") . ": enter size-wise quantity");
+    $made = [];
     foreach ($planned as $row) {
       $item = pos_find_or_create_size_variant($bid, $parent, $row["size"], $biz);
-      $out[] = array_merge($line, [
+      $made[] = array_merge($line, [
         "item_id" => $item["id"],
         "quantity_gm" => $row["qty"],
         "rate_per_kg" => $row["rate"] ?? ($line["rate_per_kg"] ?? $item["purchase_rate"]),
@@ -337,8 +370,10 @@ function pos_expand_garment_purchase_lines($bid, $lines, $biz) {
         "allow_empty_barcodes" => $row["allow_empty_barcodes"],
         "size" => $row["size"],
         "color" => $parent["color"] ?? "",
+        "discount" => 0,
       ]);
     }
+    foreach (pos_spread_purchase_discount($made, $parent, $line["discount"] ?? 0) as $spread) $out[] = $spread;
   }
   if (!$out) throw new Exception("Enter at least one product with size-wise quantity");
   return $out;
@@ -745,10 +780,11 @@ function pos_crud_dispatch($path, $method, $body, $bid, $auth, $branchId, $uid) 
           if (!$item) throw new Exception("Unknown item");
           $qty = (float) ($line["quantity_gm"] ?? 0);
           $rate = pos_round8($line["rate_per_kg"] ?? $item["purchase_rate"]);
-          $amount = pos_round8(pos_line_amount_for_item($qty, $rate, $item));
-          $gstRate = (float) ($item["gst_rate"] ?? 0);
-          $gstAmount = pos_round8(($amount * $gstRate) / 100);
-          $built[] = ["item" => $item, "qty" => $qty, "rate" => $rate, "amount" => $amount, "gstRate" => $gstRate, "gstAmount" => $gstAmount, "total" => pos_round8($amount + $gstAmount)];
+          $fig = pos_purchase_line_figures(pos_line_amount_for_item($qty, $rate, $item), $item["gst_rate"] ?? 0, $line);
+          $amount = $fig["amount"];
+          $gstRate = $fig["gstRate"];
+          $gstAmount = $fig["gstAmount"];
+          $built[] = ["item" => $item, "qty" => $qty, "rate" => $rate, "amount" => $amount, "gstRate" => $gstRate, "gstAmount" => $gstAmount, "total" => $fig["total"]];
         }
         $subtotal = pos_round8(array_sum(array_column($built, "amount")));
         $gst = pos_round8(array_sum(array_column($built, "gstAmount")));
