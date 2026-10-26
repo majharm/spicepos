@@ -46,7 +46,21 @@ test("due reminder uses the outstanding template and a partial balance", () => {
   assert.match(text, /\*Balance Due: ₹600\.00\*/);
   assert.match(text, /Due Date: 20 Oct 2026/);
   assert.match(text, /Powered by ATAV POS/);
-  assert.match(D.dueReminderMessage({}), /Email|Name|Invoice No\.: —/);
+  assert.match(D.dueReminderMessage({}), /Invoice No\.: —/);
+});
+
+test("the bill name fills Dear when the account name is blank", () => {
+  const fromBill = D.shapeInvoice(invoice({
+    business_name: " ",
+    name: "",
+    customer_name: "Asha Patel",
+  }), null, today);
+  assert.equal(fromBill.customerName, "Asha Patel");
+  assert.match(D.invoiceMessage(fromBill, "City Shop"), /Dear \*Asha Patel\*,/);
+  const fromAccount = D.shapeInvoice(invoice({ business_name: "", name: "Ravi", customer_name: "" }), null, today);
+  assert.equal(fromAccount.customerName, "Ravi");
+  const saved = "Dear *—*,\n\nPlease clear the due.";
+  assert.equal(D.withCustomerName(saved, "Asha Patel"), "Dear *Asha Patel*,\n\nPlease clear the due.");
 });
 
 test("fully paid invoices drop out and a later payment reduces the due", () => {

@@ -153,6 +153,31 @@ test("temporary WhatsApp failure retries the same reminder and a bad number does
   assert.equal(posts, 2);
 });
 
+test("a saved Dear dash is replaced with the customer on the bill", async () => {
+  const posts = [];
+  const store = memoryStore();
+  const fetchImpl = async (_url, opts = {}) => {
+    if ((opts.method || "GET") === "GET") return jsonResponse(503, { ok: false });
+    posts.push(JSON.parse(opts.body));
+    return jsonResponse(200, { ok: true, sent: 1, results: [{ ok: true, message_id: "wamid.NAME" }] });
+  };
+  const sent = await sendDueReminders({
+    sends: [{ customerId: "cus-1", orderId: "ord-1", scope: "invoice", message: "Dear *—*,\n\nBalance is still open." }],
+  }, {
+    invoices: [invoice({ business_name: "", name: "", customer_name: "Asha Patel" })],
+    settings,
+    store,
+    fetchImpl,
+    businessId: "biz-1",
+    shopName: "ATAV Fashion",
+    today,
+    log: false,
+  });
+  assert.equal(sent.results[0].ok, true);
+  assert.match(posts[0].message, /Dear \*Asha Patel\*,/);
+  assert.doesNotMatch(posts[0].message, /Dear \*—\*,/);
+});
+
 test("WhatsApp off opens a prefilled chat and a paid invoice is not reminded", async () => {
   let called = 0;
   const store = memoryStore();

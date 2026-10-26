@@ -116,7 +116,7 @@ export function prepareDueReminders(payload = {}, options = {}) {
         orderId,
         outstanding: row.outstanding,
         invoiceNumber: row.invoiceNumber,
-        message: (edited || api.invoiceMessage(row, shopName)).slice(0, 2000),
+        message: api.withCustomerName((edited || api.invoiceMessage(row, shopName)).slice(0, 2000), row.customerName),
         dedupeKey: api.dedupeKey(customerId, orderId, row.outstanding, today),
       }));
       continue;
@@ -132,7 +132,7 @@ export function prepareDueReminders(payload = {}, options = {}) {
       orderId: "",
       outstanding,
       invoiceNumber: list.map((row) => row.invoiceNumber).filter(Boolean).join(", "),
-      message: (edited || api.customerMessage(list, shopName)).slice(0, 2000),
+      message: api.withCustomerName((edited || api.customerMessage(list, shopName)).slice(0, 2000), list[0].customerName),
       dedupeKey: api.dedupeKey(customerId, "", outstanding, today),
     }));
   }
@@ -400,7 +400,8 @@ export async function loadOpenInvoices(businessId) {
       `SELECT o.id, o.order_number, o.created_at, o.total,
               COALESCE(o.amount_paid,0) AS amount_paid,
               o.payment_method, o.payment_status, o.customer_id,
-              c.name, c.business_name, c.mobile
+              c.name, c.business_name, c.mobile,
+              COALESCE(NULLIF(TRIM(o.customer_name), ''), NULLIF(TRIM(c.business_name), ''), NULLIF(TRIM(c.name), '')) AS customer_name
        FROM sales_orders o
        JOIN customers c ON c.id = o.customer_id AND c.business_id = o.business_id
        WHERE o.business_id = ?
@@ -414,7 +415,8 @@ export async function loadOpenInvoices(businessId) {
     return query(
       `SELECT o.id, o.order_number, o.created_at, o.total,
               o.payment_method, o.payment_status, o.customer_id,
-              c.name, c.business_name, c.mobile
+              c.name, c.business_name, c.mobile,
+              COALESCE(NULLIF(TRIM(o.customer_name), ''), NULLIF(TRIM(c.business_name), ''), NULLIF(TRIM(c.name), '')) AS customer_name
        FROM sales_orders o
        JOIN customers c ON c.id = o.customer_id AND c.business_id = o.business_id
        WHERE o.business_id = ?

@@ -93,6 +93,21 @@
     return text || "—";
   }
 
+  function firstText(...values) {
+    for (const value of values) {
+      const text = String(value ?? "").replace(/\s+/g, " ").trim();
+      if (text && text !== "—") return text;
+    }
+    return "";
+  }
+
+  function withCustomerName(message, customerName) {
+    const name = firstText(customerName);
+    const text = String(message || "");
+    if (!name) return text;
+    return text.replace(/Dear \*—\*,/g, `Dear *${name}*,`).replace(/Dear —,/g, `Dear ${name},`);
+  }
+
   function dueReminderMessage(payload = {}) {
     return [
       `Dear *${dash(payload.customerName)}*,`,
@@ -129,7 +144,7 @@
     const day = today || istToday();
     return {
       customerId: String(order?.customer_id || order?.customerId || ""),
-      customerName: String(order?.business_name || order?.customer_name || order?.name || order?.customerName || "").trim(),
+      customerName: firstText(order?.customer_name, order?.customerName, order?.business_name, order?.name),
       mobile: String(mobile || ""),
       mobileOk: Boolean(normalizeMobile(mobile)),
       orderId: String(order?.id || order?.orderId || ""),
@@ -305,6 +320,8 @@
     shopYmd,
     formatDay,
     dueReminderMessage,
+    firstText,
+    withCustomerName,
     shapeInvoice,
     filterOutstanding,
     invoiceMessage,

@@ -103,12 +103,27 @@ function pos_due_reminder_message($payload) {
   ]);
 }
 
+function pos_due_customer_name($order) {
+  foreach (["customer_name", "business_name", "name"] as $key) {
+    $text = trim(preg_replace('/\s+/', " ", (string) ($order[$key] ?? "")));
+    if ($text !== "" && $text !== "—") return $text;
+  }
+  return "";
+}
+
+function pos_due_with_customer_name($message, $customerName) {
+  $name = pos_due_customer_name(["customer_name" => $customerName]);
+  $text = (string) $message;
+  if ($name === "") return $text;
+  return str_replace(["Dear *—*,", "Dear —,"], ["Dear *{$name}*,", "Dear {$name},"], $text);
+}
+
 function pos_due_shape($order, $today) {
   $outstanding = pos_due_open_remainder($order);
   $invoiceDate = pos_due_ymd($order["created_at"] ?? "");
   $dueDate = pos_due_ymd($order["due_date"] ?? ($order["created_at"] ?? ""));
   $mobile = (string) ($order["mobile"] ?? "");
-  $name = trim((string) ($order["business_name"] ?? ($order["name"] ?? "")));
+  $name = pos_due_customer_name($order);
   return [
     "customerId" => (string) ($order["customer_id"] ?? ""),
     "customerName" => $name,
@@ -236,7 +251,8 @@ function pos_due_load_invoices($bid) {
   try {
     return pos_q(
       "SELECT o.id, o.order_number, o.created_at, o.total, COALESCE(o.amount_paid,0) AS amount_paid,
-              o.payment_method, o.payment_status, o.customer_id, c.name, c.business_name, c.mobile
+              o.payment_method, o.payment_status, o.customer_id, c.name, c.business_name, c.mobile,
+              COALESCE(NULLIF(TRIM(o.customer_name), ''), NULLIF(TRIM(c.business_name), ''), NULLIF(TRIM(c.name), '')) AS customer_name
        FROM sales_orders o
        JOIN customers c ON c.id = o.customer_id AND c.business_id = o.business_id
        WHERE o.business_id = ?
@@ -319,7 +335,8 @@ function pos_due_prepare($body, $invoices, $shop, $today) {
         continue;
       }
       $edited = trim((string) ($send["message"] ?? ""));
-      $messages[] = pos_due_message_item($row, $scope, $orderId, $row["outstanding"], $row["invoiceNumber"], $edited !== "" ? $edited : pos_due_invoice_message($row, $shop), $customerId, $today);
+      $text = $edited !== "" ? $edited : pos_due_invoice_message($row, $shop);
+      $messages[] = pos_due_message_item($row, $scope, $orderId, $row["outstanding"], $row["invoiceNumber"], pos_due_with_customer_name($text, $row["customerName"]), $customerId, $today);
       continue;
     }
     if (!$list) {
@@ -333,7 +350,8 @@ function pos_due_prepare($body, $invoices, $shop, $today) {
       if ($item["invoiceNumber"] !== "") $numbers[] = $item["invoiceNumber"];
     }
     $edited = trim((string) ($send["message"] ?? ""));
-    $messages[] = pos_due_message_item($list[0], "customer", "", pos_due_round($outstanding), implode(", ", $numbers), $edited !== "" ? $edited : pos_due_customer_message($list, $shop), $customerId, $today);
+    $text = $edited !== "" ? $edited : pos_due_customer_message($list, $shop);
+    $messages[] = pos_due_message_item($list[0], "customer", "", pos_due_round($outstanding), implode(", ", $numbers), pos_due_with_customer_name($text, $list[0]["customerName"]), $customerId, $today);
   }
   return $messages;
 }
