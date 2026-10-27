@@ -137,6 +137,26 @@ test("resolvePurchaseBarcodes requires one typed code per piece", async () => {
   assert.deepEqual(resolvePurchaseBarcodes(pcs, 3, { barcodes: [], allow_empty_barcodes: true }), []);
 });
 
+test("purchase barcodes are required only when the shop and the product both opt in", async () => {
+  const { applyPurchaseBarcodePolicy, resolvePurchaseBarcodes } = await import("./advanced.js");
+  const pcs = { base_unit: "PCS", unit: "PCS", barcode_tracked: 1 };
+  const plain = { base_unit: "PCS", unit: "PCS", barcode_tracked: 0 };
+  const weight = { base_unit: "GM", unit: "GM", barcode_tracked: 1 };
+  const required = applyPurchaseBarcodePolicy(true, pcs, { barcodes: ["A1"], allow_empty_barcodes: true });
+  assert.equal(required.allow_empty_barcodes, false);
+  assert.equal(required.generate_barcodes, false);
+  assert.throws(() => resolvePurchaseBarcodes(pcs, 2, required), /Enter 2 barcodes/);
+  const skipped = applyPurchaseBarcodePolicy(true, plain, { barcodes: ["A1"], allow_empty_barcodes: false });
+  assert.deepEqual(skipped.barcodes, []);
+  assert.equal(skipped.allow_empty_barcodes, true);
+  const shopOff = applyPurchaseBarcodePolicy(false, pcs, { barcodes: ["A1", "A2"], allow_empty_barcodes: false });
+  assert.deepEqual(shopOff.barcodes, []);
+  assert.equal(shopOff.allow_empty_barcodes, true);
+  const grams = applyPurchaseBarcodePolicy(true, weight, { barcodes: ["A1"], allow_empty_barcodes: false });
+  assert.deepEqual(grams.barcodes, []);
+  assert.equal(grams.allow_empty_barcodes, true);
+});
+
 test("item save and checkout persist barcode and line discount fields", () => {
   const nodeCrud = read("server/crud.js");
   const nodeIndex = read("server/index.js");

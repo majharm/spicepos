@@ -73,8 +73,11 @@ test("purchase entry is manual search only and still saves stock", () => {
   assert.doesNotMatch(app, /assignPurchaseBarcode/);
   assert.doesNotMatch(app, /purchaseScanLabel/);
   assert.doesNotMatch(app, /data-po-qty-camera/);
-  assert.doesNotMatch(app, /data-po-bc-camera/);
   assert.doesNotMatch(app, /data-po-size-bc-camera/);
+  assert.match(app, /function purchaseBarcodeOn/);
+  assert.match(app, /function itemBarcodeTracked/);
+  assert.match(app, /function openPurchaseBarcodeCamera/);
+  assert.match(app, /Add Item Barcodes/);
   assert.doesNotMatch(app, /data-po-bc-scan/);
   assert.doesNotMatch(app, /data-po-size-bc-scan/);
   assert.doesNotMatch(app, /Camera on each item qty/);
@@ -83,7 +86,8 @@ test("purchase entry is manual search only and still saves stock", () => {
   assert.match(app, /po-qty-cell/);
   assert.match(app, /po-item-search/);
   assert.match(app, /allow_empty_barcodes: allowEmpty/);
-  assert.match(app, /if \(!barcodes\.length\) allowEmpty = true/);
+  assert.match(app, /if \(itemBarcodeTracked\(item\)\)/);
+  assert.match(app, /allowEmpty = false/);
   assert.match(app, /function capturePoDraft/);
   assert.match(app, /function renderPoSearchResults/);
   assert.match(app, /function addPoItemById/);

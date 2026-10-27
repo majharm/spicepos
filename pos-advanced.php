@@ -441,6 +441,27 @@ function pos_save_pharmacy_item_fields($bid, $itemId, $body = []) {
   } catch (Exception $e) { /* optional */ }
 }
 
+function pos_purchase_barcode_enabled($bid) {
+  try {
+    $rows = pos_q("SELECT purchase_barcode_enabled FROM company_settings WHERE business_id = ? LIMIT 1", "s", [$bid]);
+    return ((int) ($rows[0]["purchase_barcode_enabled"] ?? 0)) === 1;
+  } catch (Exception $e) {
+    return false;
+  }
+}
+
+function pos_apply_purchase_barcode_policy($settingOn, $item, &$lineIn) {
+  $tracked = $settingOn && pos_item_is_count($item) && ((int) ($item["barcode_tracked"] ?? 0) === 1);
+  $lineIn["generate_barcodes"] = false;
+  if (!$tracked) {
+    $lineIn["barcodes"] = [];
+    $lineIn["barcode"] = "";
+    $lineIn["allow_empty_barcodes"] = true;
+    return;
+  }
+  $lineIn["allow_empty_barcodes"] = false;
+}
+
 function pos_assign_item_barcodes($bid, $itemId, $body = []) {
   pos_ensure_advanced_schema();
   pos_save_pharmacy_item_fields($bid, $itemId, $body);
@@ -450,6 +471,13 @@ function pos_assign_item_barcodes($bid, $itemId, $body = []) {
   }
   $item = pos_q("SELECT * FROM items WHERE id = ? AND business_id = ? LIMIT 1", "ss", [$itemId, $bid]);
   $row = $item[0] ?? $body;
+  if (array_key_exists("barcode_tracked", $body)) {
+    $tracked = pos_item_is_count($row) && ((int) $body["barcode_tracked"] === 1) ? 1 : 0;
+    try {
+      pos_q("UPDATE items SET barcode_tracked = ? WHERE id = ? AND business_id = ?", "iss", [$tracked, $itemId, $bid]);
+      $row["barcode_tracked"] = $tracked;
+    } catch (Exception $e) { /* column arrives with schema */ }
+  }
   $own = pos_barcode_text($body["barcode"] ?? "");
   $mfr = pos_barcode_text($body["mfr_barcode"] ?? $body["manufacturer_barcode"] ?? "");
   if ($own !== "") pos_attach_item_barcode($bid, $itemId, $own, "own", true);
@@ -1167,6 +1195,7 @@ function pos_insert_purchase_batch($bid, $branchId, $uid, $purchase, $lineId, $i
 
 function pos_create_purchase_batch($bid, $branchId, $uid, $purchase, $lineId, $item, $qty, $rate, $lineIn = []) {
   pos_ensure_advanced_schema();
+  pos_apply_purchase_barcode_policy(pos_purchase_barcode_enabled($bid), $item, $lineIn);
   $baseNo = trim((string) ($lineIn["batch_no"] ?? $lineIn["batchNo"] ?? ""));
   if ($baseNo === "") {
     $baseNo = ($purchase["purchase_number"] ?? "PO") . "-" . ($item["code"] ?? "IT") . "-" . substr($lineId, 0, 4);

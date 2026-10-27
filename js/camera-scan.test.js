@@ -30,7 +30,8 @@ test("camera scan module exposes mobile scanner helpers", () => {
   assert.doesNotMatch(app, /po-scan-camera-btn/);
   assert.doesNotMatch(app, /applyPurchaseBarcodeScan/);
   assert.doesNotMatch(app, /openPurchaseCamera/);
-  assert.doesNotMatch(app, /data-po-bc-camera/);
+  assert.match(app, /function openPurchaseBarcodeCamera/);
+  assert.match(app, /if \(!purchaseBarcodeOn\(\) \|\| !scan\?\.open\) return/);
   assert.doesNotMatch(app, /data-po-size-bc-camera/);
   assert.doesNotMatch(app, /data-po-size-bc-scan/);
   assert.match(css, /\.po-size-bc-head/);

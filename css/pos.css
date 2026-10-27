@@ -5765,6 +5765,7 @@ body.apparel-mode #item-size-wrap { display: none; }
   overflow: auto;
 }
 .po-bc-saved code { font-size: 13px; }
+.po-bc-camera { justify-self: start; }
 .po-table input[type="number"] {
   width: 100%;
   min-width: 88px;

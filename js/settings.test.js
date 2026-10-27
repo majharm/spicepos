@@ -24,6 +24,8 @@ test("hardware and optional integrations stay off until explicitly enabled", () 
   assert.match(read("pos-php-core.php"), /INSERT INTO pos_devices[\s\S]*'inactive'/);
   assert.match(read("server/schema.js"), /scale_enabled.*DEFAULT 0/);
   assert.match(read("server/schema.js"), /camera_scanner_enabled.*DEFAULT 0/);
+  assert.match(read("server/schema.js"), /purchase_barcode_enabled.*DEFAULT 0/);
+  assert.match(read("server/schema.js"), /barcode_tracked.*DEFAULT 0/);
   assert.match(read("server/schema.js"), /receipt_printer_enabled.*DEFAULT 0/);
   assert.match(read("server/schema.js"), /cash_drawer_enabled.*DEFAULT 0/);
   assert.match(read("server/tenant.js"), /status === "active" \? "active" : "inactive"/);
@@ -58,6 +60,12 @@ test("Settings hub groups company, hardware, table, and aggregator controls", ()
   assert.match(index, /id="scale-enabled"/);
   assert.doesNotMatch(index, /id="scale-enabled" checked/);
   assert.match(index, /id="set-camera-scanner"/);
+  assert.match(index, /id="set-purchase-barcode"/);
+  assert.match(index, /Enable Barcode-wise Purchase/);
+  assert.doesNotMatch(index, /id="set-purchase-barcode" checked/);
+  assert.match(index, /data-settings-section="purchases"/);
+  assert.match(index, /id="item-barcode-tracked"/);
+  assert.doesNotMatch(index, /id="item-barcode-tracked" checked/);
   assert.match(index, /id="set-receipt-printer"/);
   assert.match(index, /id="set-cash-drawer"/);
   assert.match(index, /id="set-zomato-enabled"/);
@@ -82,6 +90,6 @@ test("Settings hub groups company, hardware, table, and aggregator controls", ()
   assert.doesNotMatch(app, /if \(!tableShiftingEnabled\(\)\) \{[\s\S]*return;[\s\S]*api\("\/api\/table-shifts\//);
   assert.match(css, /\.settings-hub/);
   assert.match(css, /\.settings-hub \[hidden\][\s\S]*display:\s*none\s*!important/);
-  assert.match(index, /app\.js\?v=20261027pogen1/);
-  assert.match(index, /pos\.css\?v=20261027pogen1/);
+  assert.match(index, /app\.js\?v=20261027pobc1/);
+  assert.match(index, /pos\.css\?v=20261027pobc1/);
 });

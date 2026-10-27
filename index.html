@@ -6,7 +6,7 @@
     <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
     <title>ATAV POS</title>
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./css/pos.css?v=20261027pogen1" />
+    <link rel="stylesheet" href="./css/pos.css?v=20261027pobc1" />
     <link rel="stylesheet" href="./css/barcode-desk.css?v=20261024bcdesk1" />
     <link rel="stylesheet" href="./css/saas.css?v=20261016note1" />
     <link rel="stylesheet" href="./css/bar.css?v=20261011bar2" />
@@ -723,6 +723,8 @@
                 </fieldset>
                 <fieldset class="item-block pcs-barcode-only" id="item-barcode-block">
                   <legend>Barcodes</legend>
+                  <label class="full"><input id="item-barcode-tracked" type="checkbox" /> Track each piece with its own barcode</label>
+                  <p class="item-composer-note full">Used only when this business turns on Enable Barcode-wise Purchase. Other products stay quantity-only.</p>
                   <label class="full">Qty-wise barcodes
                     <input id="item-barcode-qty" type="number" min="0" max="500" step="1" placeholder="e.g. 10 unique pcs codes" />
                   </label>
@@ -2896,6 +2898,7 @@
             <div class="settings-hub">
             <nav class="settings-hub-nav" aria-label="Settings sections">
               <button class="btn active" type="button" role="tab" aria-selected="true" data-settings-tab="profile" data-settings-section="profile" data-i18n="settings.profile">Company Profile</button>
+              <button class="btn" type="button" data-settings-tab="purchases" data-settings-section="purchases">Purchase Settings</button>
               <button class="btn" type="button" data-settings-tab="hardware" data-settings-section="hardware">Hardware &amp; Devices</button>
               <button class="btn restaurant-only" type="button" data-settings-tab="tables" data-settings-section="tables" hidden>Table Management</button>
               <button class="btn aggregator-only" type="button" data-settings-tab="aggregator" data-settings-section="aggregator" hidden>Swiggy &amp; Zomato</button>
@@ -3102,7 +3105,14 @@
                     </label>
                     <p class="item-composer-note full" data-i18n="settings.invoice_terms_hint">Printed under the customer notes on tax invoices.</p>
                   </fieldset>
-                  <div class="item-composer-actions" data-set-section="profile,tables,timezone,quick-add,fast-mode,branding,payment,invoice">
+                  <fieldset class="item-block" data-set-section="purchases">
+                    <legend>Barcode Management</legend>
+                    <p class="item-composer-note full">This switch belongs to this business only. It stays off until you turn it on. Counter scanning and the Barcodes page are separate.</p>
+                    <label class="full"><input id="set-purchase-barcode" type="checkbox" /> Enable Barcode-wise Purchase</label>
+                    <p class="field-hint" id="purchase-barcode-status">Barcode-wise purchase: Off</p>
+                    <p class="item-composer-note full">On: after you add a product that tracks individual barcodes, use Add Item Barcodes to scan or type one code per piece. Off: purchases stay quantity, rate, tax, and discount only.</p>
+                  </fieldset>
+                  <div class="item-composer-actions" data-set-section="profile,tables,timezone,quick-add,fast-mode,branding,payment,invoice,purchases">
                     <button class="btn primary" type="submit">Save changes</button>
                     <button class="btn" type="button" id="settings-cancel">Cancel</button>
                     <p class="hint" id="settings-hint"></p>
@@ -3484,7 +3494,7 @@
     <script src="./js/item-master.js?v=20261012brand1" defer></script>
     <script src="./js/customer-master.js?v=20261023cemail1" defer></script>
     <script src="./js/due-reminders.js?v=20261024duewa1" defer></script>
-    <script src="./js/app.js?v=20261027pogen1" defer></script>
+    <script src="./js/app.js?v=20261027pobc1" defer></script>
     <script src="./js/due-reminders-ui.js?v=20261024duewa1" defer></script>
     <script src="./js/item-master-ui.js?v=20261012brand1" defer></script>
     <script src="./js/customer-master-ui.js?v=20261023cemail1" defer></script>

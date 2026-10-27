@@ -2741,6 +2741,14 @@ function cameraScannerEnabled(company = state.company) {
   return hardwareFlagOn(company?.camera_scanner_enabled);
 }
 
+function purchaseBarcodeOn(company = state.company) {
+  return hardwareFlagOn(company?.purchase_barcode_enabled);
+}
+
+function itemBarcodeTracked(item) {
+  return purchaseBarcodeOn() && POSUnits.isCount(itemUnit(item || {})) && hardwareFlagOn(item?.barcode_tracked);
+}
+
 function receiptPrinterEnabled(company = state.company) {
   return hardwareFlagOn(company?.receipt_printer_enabled);
 }
@@ -3056,6 +3064,7 @@ function paintViewHeader(name) {
 
 const SETTINGS_SECTIONS = [
   "profile",
+  "purchases",
   "hardware",
   "tables",
   "aggregator",
@@ -6581,6 +6590,7 @@ function fillItemForm(i) {
   $("item-retail").value = POSUnits.rateInputValue?.(i.retail_rate) ?? i.retail_rate;
   if ($("item-mrp")) $("item-mrp").value = POSUnits.rateInputValue?.(i.mrp || i.retail_rate || 0) ?? (i.mrp || i.retail_rate || "");
   if ($("item-barcode-qty")) $("item-barcode-qty").value = "";
+  if ($("item-barcode-tracked")) $("item-barcode-tracked").checked = hardwareFlagOn(i.barcode_tracked);
   $("item-b2b").value = POSUnits.rateInputValue?.(i.b2b_rate) ?? i.b2b_rate;
   $("item-purchase").value = POSUnits.rateInputValue?.(i.purchase_rate) ?? i.purchase_rate;
   $("item-gst").value = i.gst_rate;
@@ -7579,14 +7589,19 @@ function renderClassicPoLines(el, shown, moreHint) {
     const unit = itemUnit(i);
     const qty = POSUnits.isCount(unit) ? 1 : 1000;
     const search = poItemHay(i);
-    if (POSUnits.isCount(unit)) {
-      panels.push(`<details class="po-more" data-po-bc-row="${escapeHtml(i.id)}">
-        <summary>Barcodes for ${escapeHtml(i.name)} (optional)</summary>
-        <div class="po-bc-box">
-          <span class="hint" data-po-bc-count="${escapeHtml(i.id)}">0 / ${qty} — barcodes optional</span>
-          <textarea class="po-bc-list" data-po-barcodes="${escapeHtml(i.id)}" rows="4" placeholder="Optional — one barcode per line"></textarea>
+    if (itemBarcodeTracked(i)) {
+      panels.push(`<div class="po-bc-panel" data-po-bc-row="${escapeHtml(i.id)}">
+        <button type="button" class="btn" data-po-add-barcodes="${escapeHtml(i.id)}">Add Item Barcodes</button>
+        <div class="po-bc-box" data-po-bc-editor="${escapeHtml(i.id)}" hidden>
+          <div class="po-bc-head">
+            <strong>Barcodes for ${escapeHtml(i.name)}</strong>
+            <span class="hint" data-po-bc-count="${escapeHtml(i.id)}">0 / ${qty} scanned</span>
+          </div>
+          <textarea class="po-bc-list" data-po-barcodes="${escapeHtml(i.id)}" rows="4" placeholder="One barcode per line"></textarea>
+          <ul class="po-bc-saved" data-po-bc-saved="${escapeHtml(i.id)}"></ul>
+          <button type="button" class="btn po-bc-camera" data-po-bc-camera="${escapeHtml(i.id)}">Scan with camera</button>
         </div>
-      </details>`);
+      </div>`);
     }
     rows.push(`<tr data-po-row="${escapeHtml(i.id)}" data-po-search="${escapeHtml(search)}" data-po-unit="${escapeHtml(unit)}">
         <td class="po-check"><input type="checkbox" data-po-item="${escapeHtml(i.id)}" checked hidden /><button type="button" class="po-remove" data-po-remove="${escapeHtml(i.id)}" aria-label="Remove ${escapeHtml(i.name)}">Remove</button></td>
@@ -7701,6 +7716,7 @@ function renderApparelPoLines(el, shown, moreHint) {
           <input type="number" min="0" step="0.01" inputmode="decimal" value="0" data-po-discount="${key}" aria-label="Discount amount for ${escapeHtml(g.name)}" />
         </label>
         <button class="btn" type="button" data-po-add-size="${key}">Add size</button>
+        ${purchaseBarcodeOn() && (g.variants || []).some((v) => hardwareFlagOn(v.barcode_tracked)) ? `<button class="btn" type="button" data-po-add-barcodes="${key}" hidden>Add Item Barcodes</button>` : ""}
       </div>
       <div class="po-bc-panel" data-po-bc-product="${key}" hidden>
         <div class="po-bc-box">
@@ -7744,8 +7760,40 @@ function apparelSizeBarcodeBlockHtml(key, label, n, saved) {
     <div class="po-size-bc-head">
       <span data-po-size-bc-label="${escapeHtml(key)}">${escapeHtml(caption)}</span>
     </div>
-    <textarea class="po-bc-list" data-po-size-barcodes="${escapeHtml(key)}" rows="${Math.min(6, Math.max(2, n))}" placeholder="Optional — one barcode per line">${escapeHtml(saved)}</textarea>
+    <textarea class="po-bc-list" data-po-size-barcodes="${escapeHtml(key)}" rows="${Math.min(6, Math.max(2, n))}" placeholder="One barcode per line">${escapeHtml(saved)}</textarea>
+    <ul class="po-bc-saved" data-po-bc-saved="${escapeHtml(key)}"></ul>
+    <button type="button" class="btn po-bc-camera" data-po-bc-camera="${escapeHtml(key)}" data-po-size-camera="${escapeHtml(key)}">Scan with camera</button>
   </div>`;
+}
+
+function apparelVariantFor(card, color, size) {
+  const G = globalThis.POSGarmentPurchase;
+  const ids = new Set(String(card?.dataset.poVariantIds || "").split(/\s+/).filter(Boolean));
+  return (state.items || []).find((item) => {
+    if (ids.size && !ids.has(item.id)) return false;
+    const colorOk = G?.colorsEqual ? G.colorsEqual(item.color, color) : String(item.color || "") === String(color || "");
+    const sizeOk = G?.sizesEqual ? G.sizesEqual(item.size, size) : String(item.size || "") === String(size || "");
+    return colorOk && sizeOk;
+  });
+}
+
+function openPurchaseBarcodeCamera(targetKey, sizeKey) {
+  const scan = globalThis.POSCameraScan;
+  if (!purchaseBarcodeOn() || !scan?.open) return;
+  scan.open({
+    keepOpen: true,
+    title: "Scan item barcodes",
+    onScan(code) {
+      const sel = sizeKey
+        ? `[data-po-size-barcodes="${CSS.escape(sizeKey)}"]`
+        : `[data-po-barcodes="${CSS.escape(targetKey)}"]`;
+      const ta = document.querySelector(sel);
+      if (!ta) return;
+      const cur = String(ta.value || "").trim();
+      ta.value = cur ? `${cur}\n${code}` : code;
+      ta.dispatchEvent(new Event("input", { bubbles: true }));
+    },
+  });
 }
 
 function apparelColorSizeQtysFromCard(card) {
@@ -7797,34 +7845,45 @@ function refreshApparelPoCard(card) {
   if (qtyEl) qtyEl.textContent = `${total} pcs`;
   const amtEl = card.querySelector(`[data-po-amt="${key}"]`);
   if (amtEl) amtEl.textContent = money(amt);
+  const trackedPairs = pairs.filter((row) => itemBarcodeTracked(apparelVariantFor(card, row.color, row.size)));
+  const addBtn = card.querySelector("[data-po-add-barcodes]");
+  if (addBtn) addBtn.hidden = trackedPairs.length === 0;
   const bcPanel = card.querySelector("[data-po-bc-product]");
-  if (bcPanel) bcPanel.hidden = !box?.checked || total <= 0;
+  if (bcPanel) bcPanel.hidden = card.dataset.poBcOpen !== "1" || trackedPairs.length === 0;
   const list = card.querySelector("[data-po-size-bc]");
   if (list) {
-    const sizeKey = pairs.map((row) => row.key).join("|");
+    const sizeKey = trackedPairs.map((row) => row.key).join("|");
     if (list.dataset.poSizeKey !== sizeKey) {
       const existing = new Map();
       list.querySelectorAll("[data-po-size-barcodes]").forEach((ta) => existing.set(ta.dataset.poSizeBarcodes, ta.value));
       list.dataset.poSizeKey = sizeKey;
-      list.innerHTML = pairs.map((row) => {
+      list.innerHTML = trackedPairs.map((row) => {
         const label = [row.color, row.size].filter(Boolean).join(" · ");
         return apparelSizeBarcodeBlockHtml(row.key, label, row.qty, existing.get(row.key) || "");
       }).join("");
     } else {
-      pairs.forEach((row) => {
+      trackedPairs.forEach((row) => {
         const ta = list.querySelector(`[data-po-size-barcodes="${CSS.escape(row.key)}"]`);
         if (!ta) return;
-        const typed = apparelSizeBarcodeCount(ta.value);
+        let codes = [];
+        try {
+          codes = parsePoBarcodes(ta.value);
+        } catch {
+          codes = [];
+        }
         const lab = list.querySelector(`[data-po-size-bc-label="${CSS.escape(row.key)}"]`);
         const label = [row.color, row.size].filter(Boolean).join(" · ");
-        if (lab) lab.textContent = `${label} · ${typed} / ${row.qty} pcs`;
+        if (lab) lab.textContent = `${label} · ${codes.length} / ${row.qty} scanned`;
         ta.rows = Math.min(6, Math.max(2, row.qty));
-        ta.placeholder = "Optional — one barcode per line";
+        ta.placeholder = "One barcode per line";
+        const saved = list.querySelector(`[data-po-bc-saved="${CSS.escape(row.key)}"]`);
+        if (saved) saved.innerHTML = codes.map((code) => `<li><code>${escapeHtml(code)}</code></li>`).join("");
       });
     }
   }
   const countEl = card.querySelector(`[data-po-bc-count="${key}"]`);
   if (countEl) {
+    const need = trackedPairs.reduce((sum, row) => sum + row.qty, 0);
     let typed = 0;
     card.querySelectorAll("[data-po-size-barcodes]").forEach((ta) => {
       try {
@@ -7833,8 +7892,8 @@ function refreshApparelPoCard(card) {
         /* ignore until submit */
       }
     });
-    countEl.textContent = typed ? `${typed} / ${total} barcodes` : `${total} pcs — barcodes optional`;
-    countEl.className = !typed || typed === total ? "hint ok" : "hint";
+    countEl.textContent = `${typed} / ${need} scanned`;
+    countEl.className = typed === need && need > 0 ? "hint ok" : "hint";
   }
 }
 
@@ -7856,6 +7915,16 @@ function collectApparelPoLines() {
       allCodes.push(codes);
     });
     for (const [color, qtys] of Object.entries(matrix)) {
+      for (const [size, qty] of Object.entries(qtys)) {
+        const variant = apparelVariantFor(card, color, size);
+        if (!itemBarcodeTracked(variant)) continue;
+        const pieceKey = apparelVariantBcKey(color, size);
+        const codes = barcodesByVariant[pieceKey] || [];
+        if (codes.length !== qty) {
+          const label = [color, size].filter(Boolean).join(" ");
+          throw new Error(`${name} ${label}: scan ${qty} unique barcodes (entered ${codes.length})`);
+        }
+      }
       G?.planSizeLines?.(qtys, {
         generate_barcodes: false,
         barcodes_by_size: G?.barcodesForColor?.(barcodesByVariant, color) || {},
@@ -7909,24 +7978,30 @@ function refreshPoBarcodeRows() {
   document.querySelectorAll("[data-po-bc-row]").forEach((row) => {
     const id = row.dataset.poBcRow;
     const box = document.querySelector(`[data-po-item="${id}"]`);
+    const item = (state.items || []).find((entry) => entry.id === id);
     const qty = Math.max(0, Math.round(Number(document.querySelector(`[data-po-qty="${id}"]`)?.value) || 0));
-    row.hidden = !box?.checked;
-    const ta = document.querySelector(`[data-po-barcodes="${id}"]`);
-    let n = 0;
+    row.hidden = !itemBarcodeTracked(item) || !box?.checked;
+    const ta = row.querySelector("[data-po-barcodes]");
+    let codes = [];
+    let problem = "";
     try {
-      n = parsePoBarcodes(ta?.value).length;
-    } catch {
-      n = 0;
+      codes = parsePoBarcodes(ta?.value);
+    } catch (err) {
+      problem = err.message;
     }
-    const countEl = document.querySelector(`[data-po-bc-count="${id}"]`);
+    const countEl = row.querySelector("[data-po-bc-count]");
     if (countEl) {
-      countEl.textContent = n ? `${n} / ${qty} barcodes` : `${qty} pcs — barcodes optional`;
-      countEl.className = !n || n === qty ? "hint ok" : "hint";
+      countEl.textContent = problem || `${codes.length} / ${qty} scanned`;
+      countEl.className = !problem && codes.length === qty && qty > 0 ? "hint ok" : "hint";
     }
+    const saved = row.querySelector("[data-po-bc-saved]");
+    if (saved) saved.innerHTML = codes.map((code) => `<li><code>${escapeHtml(code)}</code></li>`).join("");
     if (ta) {
-      ta.placeholder = "Optional — one barcode per line";
-      ta.rows = Math.min(8, Math.max(3, qty));
+      ta.placeholder = "One barcode per line";
+      ta.rows = Math.min(8, Math.max(3, qty || 3));
     }
+    const editor = row.querySelector("[data-po-bc-editor]");
+    if (editor && codes.length) editor.hidden = false;
   });
 }
 
@@ -8028,6 +8103,8 @@ function renderSettings() {
   if ($("set-table-shifting")) $("set-table-shifting").checked = tableShiftingEnabled();
   if ($("table-shift-status")) $("table-shift-status").textContent = `Table shifting: ${tableShiftingEnabled() ? "Enabled" : "Disabled"}`;
   if ($("set-camera-scanner")) $("set-camera-scanner").checked = cameraScannerEnabled();
+  if ($("set-purchase-barcode")) $("set-purchase-barcode").checked = purchaseBarcodeOn();
+  if ($("purchase-barcode-status")) $("purchase-barcode-status").textContent = `Barcode-wise purchase: ${purchaseBarcodeOn() ? "On" : "Off"}`;
   if ($("set-receipt-printer")) $("set-receipt-printer").checked = receiptPrinterEnabled();
   if ($("set-cash-drawer")) $("set-cash-drawer").checked = cashDrawerEnabled();
   if ($("camera-scanner-status")) $("camera-scanner-status").textContent = `Camera scanner: ${cameraScannerEnabled() ? "Enabled" : "Disabled"}`;
@@ -13353,6 +13430,7 @@ $("item-form").addEventListener("submit", async (e) => {
     custom_unit: String($("item-custom-unit")?.value || "").trim(),
     mrp: POSUnits.roundRate8?.($("item-mrp")?.value) ?? ($("item-mrp")?.value || ""),
     barcode_qty: POSUnits.isCount(unit) ? Number($("item-barcode-qty")?.value) || 0 : 0,
+    barcode_tracked: POSUnits.isCount(unit) && $("item-barcode-tracked")?.checked ? 1 : 0,
     barcode: globalThis.POSBarcode?.cleanCode ? POSBarcode.cleanCode($("item-own-barcode")?.value) : String($("item-own-barcode")?.value || "").trim(),
     stock_gm: POSUnits.toBase($("item-stock").value, unit),
     status: itemStatusOf($("item-status")?.value),
@@ -13837,6 +13915,30 @@ $("purchase-form").addEventListener("change", (e) => {
   if (e.target.matches("[data-po-item],[data-po-product]")) paintPoTotals();
 });
 $("po-lines")?.addEventListener("click", (e) => {
+  const addBarcodes = e.target.closest("[data-po-add-barcodes]");
+  if (addBarcodes) {
+    e.preventDefault();
+    const card = addBarcodes.closest("[data-po-product-row]");
+    if (card) {
+      card.dataset.poBcOpen = "1";
+      const panel = card.querySelector("[data-po-bc-product]");
+      if (panel) panel.hidden = false;
+      card.querySelector("[data-po-size-barcodes], [data-po-barcodes]")?.focus();
+      return;
+    }
+    const editor = document.querySelector(`[data-po-bc-editor="${CSS.escape(addBarcodes.dataset.poAddBarcodes || "")}"]`);
+    if (editor) {
+      editor.hidden = false;
+      editor.querySelector("[data-po-barcodes]")?.focus();
+    }
+    return;
+  }
+  const cameraBtn = e.target.closest("[data-po-bc-camera]");
+  if (cameraBtn) {
+    e.preventDefault();
+    openPurchaseBarcodeCamera(cameraBtn.dataset.poBcCamera, cameraBtn.dataset.poSizeCamera || "");
+    return;
+  }
   const remove = e.target.closest("[data-po-remove]");
   if (remove) {
     e.preventDefault();
@@ -13889,13 +13991,13 @@ $("purchase-form").addEventListener("submit", async (e) => {
       const qtyInput = Number(document.querySelector(`[data-po-qty="${box.dataset.poItem}"]`)?.value);
       const quantity_gm = POSUnits.toBase(qtyInput, unit);
       let barcodes = [];
-      let allowEmpty = false;
-      if (POSUnits.isCount(unit)) {
+      let allowEmpty = true;
+      if (itemBarcodeTracked(item)) {
         const pieces = Math.round(quantity_gm);
         barcodes = parsePoBarcodes(document.querySelector(`[data-po-barcodes="${box.dataset.poItem}"]`)?.value);
-        if (!barcodes.length) allowEmpty = true;
-        else if (barcodes.length !== pieces) {
-          throw new Error(`${item?.name || "Item"}: enter ${pieces} barcodes for ${pieces} pcs (entered ${barcodes.length})`);
+        allowEmpty = false;
+        if (barcodes.length !== pieces) {
+          throw new Error(`${item?.name || "Item"}: scan ${pieces} unique barcodes (entered ${barcodes.length})`);
         }
       }
       lines.push({
@@ -14205,6 +14307,7 @@ $("settings-form").addEventListener("submit", async (e) => {
       payload.table_shifting_enabled = $("set-table-shifting").checked ? 1 : 0;
     }
     payload.camera_scanner_enabled = $("set-camera-scanner")?.checked ? 1 : 0;
+    payload.purchase_barcode_enabled = $("set-purchase-barcode")?.checked ? 1 : 0;
     payload.receipt_printer_enabled = $("set-receipt-printer")?.checked ? 1 : 0;
     payload.cash_drawer_enabled = $("set-cash-drawer")?.checked ? 1 : 0;
     if ($("set-quick-add-hide") || $("set-quick-add-show")) {
@@ -14226,6 +14329,10 @@ $("settings-form").addEventListener("submit", async (e) => {
     if (Object.prototype.hasOwnProperty.call(payload, "fast_mode_enabled")) {
       state.company.fast_mode_enabled = payload.fast_mode_enabled;
     }
+    if (Object.prototype.hasOwnProperty.call(payload, "purchase_barcode_enabled")) {
+      state.company.purchase_barcode_enabled = payload.purchase_barcode_enabled;
+    }
+    if (state.currentView === "purchases") renderPoLines();
     state.fastModePreview = null;
     state.logoDraft = null;
     state.payQrDraft = null;

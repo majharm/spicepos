@@ -578,11 +578,43 @@ export async function savePharmacyItemFields(conn, businessId, itemId, body = {}
   }
 }
 
+export function applyPurchaseBarcodePolicy(settingOn, item, line) {
+  const tracked = Boolean(settingOn) && isCountItem(item) && Number(item?.barcode_tracked) === 1;
+  const next = line || {};
+  next.generate_barcodes = false;
+  if (!tracked) {
+    next.barcodes = [];
+    next.barcode = "";
+    next.allow_empty_barcodes = true;
+    return next;
+  }
+  next.allow_empty_barcodes = false;
+  return next;
+}
+
+export async function purchaseBarcodeEnabled(conn, businessId) {
+  try {
+    const row = await sqlOne(conn, "SELECT purchase_barcode_enabled FROM company_settings WHERE business_id = ? LIMIT 1", [businessId]);
+    return Number(row?.purchase_barcode_enabled) === 1;
+  } catch {
+    return false;
+  }
+}
+
 export async function onItemSaved(conn, businessId, itemId, body = {}) {
   await ensureAdvancedSchema();
   await savePharmacyItemFields(conn, businessId, itemId, body);
   await saveItemBrand(conn, businessId, itemId, body);
   const item = await sqlOne(conn, "SELECT * FROM items WHERE id = ? AND business_id = ?", [itemId, businessId]);
+  if (Object.prototype.hasOwnProperty.call(body, "barcode_tracked")) {
+    const tracked = isCountItem(item || body) && Number(body.barcode_tracked) === 1 ? 1 : 0;
+    try {
+      await sqlExec(conn, "UPDATE items SET barcode_tracked = ? WHERE id = ? AND business_id = ?", [tracked, itemId, businessId]);
+      if (item) item.barcode_tracked = tracked;
+    } catch {
+      /* column arrives with schema */
+    }
+  }
   const own = barcodeText(body.barcode || "");
   const mfr = barcodeText(body.mfr_barcode || body.manufacturer_barcode || "");
   if (own) await attachItemBarcode(conn, businessId, itemId, own, "own", true, { size: body.size, color: body.color });
@@ -923,6 +955,8 @@ async function insertPurchaseBatch(conn, ctx, barcode, batchNo, qty, kind) {
 
 export async function onPurchaseLineSaved(conn, ctx) {
   await ensureAdvancedSchema();
+  const settingOn = await purchaseBarcodeEnabled(conn, ctx.businessId);
+  applyPurchaseBarcodePolicy(settingOn, ctx.item, ctx);
   const baseNo = String(ctx.batchNo || `${ctx.purchaseNumber || "PO"}-${ctx.item?.code || "IT"}-${String(ctx.lineId || "").slice(0, 4)}`);
   const codes = await resolvePurchasePieceBarcodes(conn, ctx);
   if (codes.length) {

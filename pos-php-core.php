@@ -599,6 +599,7 @@ function pos_ensure_i18n_columns() {
     "table_shifting_enabled" => "TINYINT(1) NOT NULL DEFAULT 0",
     "scale_enabled" => "TINYINT(1) NOT NULL DEFAULT 0",
     "camera_scanner_enabled" => "TINYINT(1) NOT NULL DEFAULT 0",
+    "purchase_barcode_enabled" => "TINYINT(1) NOT NULL DEFAULT 0",
     "receipt_printer_enabled" => "TINYINT(1) NOT NULL DEFAULT 0",
     "cash_drawer_enabled" => "TINYINT(1) NOT NULL DEFAULT 0",
     "quick_add_enabled" => "TINYINT(1) NOT NULL DEFAULT 1",
@@ -1063,6 +1064,7 @@ function pos_ensure_item_unit_columns() {
     "size" => "VARCHAR(32) NULL",
     "wearer_type" => "VARCHAR(16) NULL",
     "barcode" => "VARCHAR(64) NULL",
+    "barcode_tracked" => "TINYINT(1) NOT NULL DEFAULT 0",
     "mrp" => "DECIMAL(12,2) NULL",
     "brand" => "VARCHAR(128) NULL",
     "brand_id" => "VARCHAR(255) NULL",
@@ -1105,7 +1107,7 @@ function pos_slim_catalog_items($rows) {
 }
 
 function pos_catalog_item_select_sql() {
-  return "id, code, name, local_name, category, subcategory, color, size, wearer_type, base_unit, unit, purchase_rate, retail_rate, b2b_rate, gst_rate, hsn, barcode, mrp, brand, brand_id, stock_gm, reorder_level_gm, status, business_id, generic_name, medicine_type, manufacturer, pack_size, pack_unit, units_per_pack, batch_no, default_expiry, (image_url IS NOT NULL AND image_url <> '') AS has_image";
+  return "id, code, name, local_name, category, subcategory, color, size, wearer_type, base_unit, unit, purchase_rate, retail_rate, b2b_rate, gst_rate, hsn, barcode, barcode_tracked, mrp, brand, brand_id, stock_gm, reorder_level_gm, status, business_id, generic_name, medicine_type, manufacturer, pack_size, pack_unit, units_per_pack, batch_no, default_expiry, (image_url IS NOT NULL AND image_url <> '') AS has_image";
 }
 
 function pos_catalog_items($bid) {

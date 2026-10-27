@@ -148,6 +148,7 @@ export async function ensureSchema() {
   await addColumn("company_settings", "table_shifting_enabled", "TINYINT(1) NOT NULL DEFAULT 0");
   await addColumn("company_settings", "scale_enabled", "TINYINT(1) NOT NULL DEFAULT 0");
   await addColumn("company_settings", "camera_scanner_enabled", "TINYINT(1) NOT NULL DEFAULT 0");
+  await addColumn("company_settings", "purchase_barcode_enabled", "TINYINT(1) NOT NULL DEFAULT 0");
   await addColumn("company_settings", "receipt_printer_enabled", "TINYINT(1) NOT NULL DEFAULT 0");
   await addColumn("company_settings", "cash_drawer_enabled", "TINYINT(1) NOT NULL DEFAULT 0");
   await addColumn("company_settings", "zomato_enabled", "TINYINT(1) NOT NULL DEFAULT 0");
@@ -223,6 +224,7 @@ export async function ensureSchema() {
   await addColumn("purchases", "branch_id", "VARCHAR(255) NULL");
   await addColumn("items", "hsn", "VARCHAR(32) NULL");
   await addColumn("items", "barcode", "VARCHAR(64) NULL");
+  await addColumn("items", "barcode_tracked", "TINYINT(1) NOT NULL DEFAULT 0");
   await addColumn("items", "mrp", "DECIMAL(12,2) NULL");
   await addColumn("items", "brand", "VARCHAR(128) NULL");
   await addColumn("items", "brand_id", "VARCHAR(255) NULL");
