@@ -21,8 +21,8 @@ test("Invoices page is a sales desk with search, chips, and preview split", () =
   assert.match(index, /id="orders-toolbar"/);
   assert.match(index, /id="orders-search"/);
   assert.match(index, /id="order-pane"/);
-  assert.match(index, /pos\.css\?v=20261027invui1/);
-  assert.match(index, /app\.js\?v=20261027invui1/);
+  assert.match(index, /pos\.css\?v=20261027invui2/);
+  assert.match(index, /app\.js\?v=20261027invui2/);
 
   assert.match(app, /function paintInvoicesHero/);
   assert.match(app, /function invoicesEmptyHtml/);
@@ -39,4 +39,21 @@ test("Invoices page is a sales desk with search, chips, and preview split", () =
   assert.match(css, /\.invoices-empty-title/);
   assert.match(css, /\.inv-stat-row/);
   assert.match(css, /button\.inv-card/);
+  assert.match(css, /\.office-invoice \{ min-width: 680px/);
+});
+
+test("invoice totals hide float dust past two paise", () => {
+  const app = read("js/app.js");
+  const start = app.indexOf("const inr = ");
+  const end = app.indexOf("function ledgerBalanceText");
+  const money = new Function(`${app.slice(start, end)}\nreturn money;`)();
+  const bill = new Intl.NumberFormat("en-IN", {
+    style: "currency",
+    currency: "INR",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(12980);
+  assert.equal(money(12980.000472), bill);
+  assert.equal(money(49560), bill.replace("12,980.00", "49,560.00"));
+  assert.match(money(12.125), /12\.125/);
 });

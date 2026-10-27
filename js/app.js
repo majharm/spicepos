@@ -1,4 +1,5 @@
 const inr = new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", minimumFractionDigits: 2, maximumFractionDigits: 8 });
+const inrBill = new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 const state = {
   company: {},
@@ -91,7 +92,10 @@ function escapeHtml(value) {
 }
 
 function money(n) {
-  return inr.format(Number(n) || 0);
+  const v = Number(n) || 0;
+  const cents = Math.round((v + Number.EPSILON) * 100) / 100;
+  if (Math.abs(v - cents) < 0.004) return inrBill.format(cents);
+  return inr.format(v);
 }
 
 function ledgerBalanceText(n) {
@@ -1148,7 +1152,7 @@ function invoiceSettlementHtml(o) {
         : due?.payments?.[0]?.created_at || o.created_at || "";
   const payDate = formatShopDate(payRaw);
   const receiptNo = o.receipt?.entryNo || o.receipt?.entry_no || o.receipt_entry_no || "";
-  return `<details class="invoice-settle" open>
+  return `<details class="invoice-settle">
     <summary>Total due ${money(current)} · Paid till date ${money(paid)}</summary>
     <p class="hint">Total due is this invoice after payment. Previous due is older unpaid bills.</p>
     <div class="invoice-settle-grid">
