@@ -122,6 +122,6 @@ test("Settings hub groups company, hardware, table, and aggregator controls", ()
   assert.match(read("pos-php-till.php"), /recurring_invoices_enabled/);
   assert.match(read("pos-php-core.php"), /recurring_invoices_enabled/);
   assert.match(index, /app\.js\?v=20261027invui3/);
-  assert.match(index, /pos\.css\?v=20261027invui4/);
+  assert.match(index, /pos\.css\?v=20261027invui5/);
   assert.match(index, /invoice\.js\?v=20261027inv1/);
 });
