@@ -10232,10 +10232,9 @@ function showOrder(o) {
   const look = getInvoiceLook();
   $("order-pane").innerHTML = `<div class="invoice-detail-card">
       <div class="invoice-detail-top">
-        <div>
+        <div class="invoice-id-line">
           <h3 class="invoice-so">${escapeHtml(o.order_number || "—")}</h3>
-          <p class="hint">${escapeHtml(orderCustomerName(o))}</p>
-          <p class="hint">${escapeHtml(formatShopDateTime(o.created_at))}</p>
+          <p class="hint">${escapeHtml(orderCustomerName(o))} · ${escapeHtml(formatShopDateTime(o.created_at))}</p>
         </div>
         <div class="invoice-detail-meta">
           <div class="invoice-total">${money(o.total)}</div>
@@ -10244,9 +10243,11 @@ function showOrder(o) {
         </div>
       </div>
       ${invoiceSettlementHtml(withOrderPayments(o))}
+      ${lineCount ? "" : '<p class="hint error">Line items missing — refresh or re-upload pos-php-till.php</p>'}
+    </div>
+    <div class="invoice-desk-tools">
       ${renderOrderStatusControls(o)}
       ${invoiceEmailBox(o)}
-      ${lineCount ? "" : '<p class="hint error">Line items missing — refresh or re-upload pos-php-till.php</p>'}
     </div>
     ${invoiceLookTabs(look)}
     ${invoicePreviewHtml(o, look)}

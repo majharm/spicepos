@@ -9479,14 +9479,103 @@ button.inv-card.is-selected::before { background: #0f766e; }
   box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
 }
 .invoices-desk .invoice-detail-top {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: start;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   gap: 8px 12px;
 }
-.invoices-desk .invoice-so { font-size: 14px; }
+.invoices-desk .invoice-id-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+  min-width: 0;
+}
+.invoices-desk .invoice-so { font-size: 14px; margin: 0; }
 .invoices-desk .invoice-total { font-size: 14px; }
+.invoices-desk .invoice-detail-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+}
 .invoices-desk .invoice-detail-card .hint { margin: 0; }
+.invoices-desk .invoice-settle { margin-top: 6px; padding-top: 6px; }
+.invoices-desk .invoice-desk-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #fff;
+}
+.invoices-desk .order-status-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.invoices-desk .order-status-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.invoices-desk .order-status-btn {
+  min-height: 26px;
+  padding: 2px 8px;
+  font-size: 11px;
+}
+.invoices-desk .order-pay-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: none;
+  margin: 0;
+  font-size: 11px;
+}
+.invoices-desk .order-pay-status select {
+  min-height: 26px;
+  padding: 2px 8px;
+  font-size: 12px;
+}
+.invoices-desk .invoice-email-box {
+  display: flex;
+  flex: 1 1 220px;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  min-width: 0;
+}
+.invoices-desk .invoice-email-box label {
+  display: flex;
+  flex: 1 1 140px;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  min-width: 0;
+  font-size: 11px;
+}
+.invoices-desk .invoice-email-box input {
+  flex: 1 1 120px;
+  min-width: 0;
+  min-height: 26px;
+  padding: 2px 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-size: 12px;
+}
+.invoices-desk .invoice-email-actions { margin: 0; }
+.invoices-desk .invoice-email-log { flex: 1 1 100%; }
 .invoices-desk .invoice-email-box { margin-bottom: 0; }
 .invoices-desk .order-pane > .thermal-preview,
 .invoices-desk .order-pane > .office-preview {
