@@ -1,5 +1,4 @@
 const inr = new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", minimumFractionDigits: 2, maximumFractionDigits: 8 });
-const inrBill = new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 const state = {
   company: {},
@@ -92,10 +91,7 @@ function escapeHtml(value) {
 }
 
 function money(n) {
-  const v = Number(n) || 0;
-  const cents = Math.round((v + Number.EPSILON) * 100) / 100;
-  if (Math.abs(v - cents) < 0.004) return inrBill.format(cents);
-  return inr.format(v);
+  return inr.format(Number(n) || 0);
 }
 
 function ledgerBalanceText(n) {
