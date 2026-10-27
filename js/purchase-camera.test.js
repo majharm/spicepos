@@ -78,7 +78,8 @@ test("purchase entry is manual search only and still saves stock", () => {
   assert.match(app, /function purchaseBarcodeEntryOn/);
   assert.match(app, /function itemBarcodeTracked/);
   assert.match(app, /function openPurchaseBarcodeCamera/);
-  assert.match(app, /Add Item Barcodes/);
+  assert.match(app, /Add Item Barcodes with camera/);
+  assert.match(app, /apparelCameraTarget/);
   assert.doesNotMatch(app, /data-po-bc-scan/);
   assert.doesNotMatch(app, /data-po-size-bc-scan/);
   assert.doesNotMatch(app, /Camera on each item qty/);

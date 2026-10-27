@@ -5768,7 +5768,12 @@ body.apparel-mode #item-size-wrap { display: none; }
   overflow: auto;
 }
 .po-bc-saved code { font-size: 13px; }
-.po-bc-camera { justify-self: start; }
+.po-bc-panel > .btn,
+.po-product-meta > [data-po-add-barcodes],
+.po-bc-camera {
+  min-height: 44px;
+  justify-self: start;
+}
 .po-table input[type="number"] {
   width: 100%;
   min-width: 88px;

@@ -7573,7 +7573,7 @@ function paintPurchaseLede() {
     ? "Find a garment and add it. Enter colour and size quantity on the bill. Stock updates when the purchase is saved."
     : "Find an item and add it, then set the quantity. Rate, tax, and discount stay editable. Stock updates when the purchase is saved.";
   el.textContent = purchaseBarcodeOn()
-    ? `${base} Piece items show Add Item Barcodes. Scan or type one code per piece.`
+    ? `${base} Piece items show Add Item Barcodes with camera. Scan or type one code per piece.`
     : base;
 }
 
@@ -7612,13 +7612,13 @@ function renderClassicPoLines(el, shown, moreHint) {
     const search = poItemHay(i);
     if (purchaseBarcodeEntryOn(i)) {
       panels.push(`<div class="po-bc-panel" data-po-bc-row="${escapeHtml(i.id)}">
-        <button type="button" class="btn" data-po-add-barcodes="${escapeHtml(i.id)}">Add Item Barcodes</button>
+        <button type="button" class="btn" data-po-add-barcodes="${escapeHtml(i.id)}">Add Item Barcodes with camera</button>
         <div class="po-bc-box" data-po-bc-editor="${escapeHtml(i.id)}" hidden>
           <div class="po-bc-head">
             <strong>Barcodes for ${escapeHtml(i.name)}</strong>
             <span class="hint" data-po-bc-count="${escapeHtml(i.id)}">0 / ${qty} scanned</span>
           </div>
-          <textarea class="po-bc-list" data-po-barcodes="${escapeHtml(i.id)}" rows="4" placeholder="One barcode per line"></textarea>
+          <textarea class="po-bc-list" data-po-barcodes="${escapeHtml(i.id)}" data-po-need="${qty}" rows="4" placeholder="One barcode per line"></textarea>
           <ul class="po-bc-saved" data-po-bc-saved="${escapeHtml(i.id)}"></ul>
           <button type="button" class="btn po-bc-camera" data-po-bc-camera="${escapeHtml(i.id)}">Scan with camera</button>
         </div>
@@ -7737,7 +7737,7 @@ function renderApparelPoLines(el, shown, moreHint) {
           <input type="number" min="0" step="0.01" inputmode="decimal" value="0" data-po-discount="${key}" aria-label="Discount amount for ${escapeHtml(g.name)}" />
         </label>
         <button class="btn" type="button" data-po-add-size="${key}">Add size</button>
-        ${purchaseBarcodeOn() && POSUnits.isCount(unit) ? `<button class="btn" type="button" data-po-add-barcodes="${key}" hidden>Add Item Barcodes</button>` : ""}
+        ${purchaseBarcodeOn() && POSUnits.isCount(unit) ? `<button class="btn" type="button" data-po-add-barcodes="${key}" hidden>Add Item Barcodes with camera</button>` : ""}
       </div>
       <div class="po-bc-panel" data-po-bc-product="${key}" hidden>
         <div class="po-bc-box">
@@ -7781,7 +7781,7 @@ function apparelSizeBarcodeBlockHtml(key, label, n, saved) {
     <div class="po-size-bc-head">
       <span data-po-size-bc-label="${escapeHtml(key)}">${escapeHtml(caption)}</span>
     </div>
-    <textarea class="po-bc-list" data-po-size-barcodes="${escapeHtml(key)}" rows="${Math.min(6, Math.max(2, n))}" placeholder="One barcode per line">${escapeHtml(saved)}</textarea>
+    <textarea class="po-bc-list" data-po-size-barcodes="${escapeHtml(key)}" data-po-need="${n}" rows="${Math.min(6, Math.max(2, n))}" placeholder="One barcode per line">${escapeHtml(saved)}</textarea>
     <ul class="po-bc-saved" data-po-bc-saved="${escapeHtml(key)}"></ul>
     <button type="button" class="btn po-bc-camera" data-po-bc-camera="${escapeHtml(key)}" data-po-size-camera="${escapeHtml(key)}">Scan with camera</button>
   </div>`;
@@ -7798,9 +7798,36 @@ function apparelVariantFor(card, color, size) {
   });
 }
 
+function poBarcodeCodes(raw) {
+  try {
+    return parsePoBarcodes(raw);
+  } catch (err) {
+    const error = new Error(err.message || "Could not read barcodes");
+    error.barcodeParse = true;
+    throw error;
+  }
+}
+
+function apparelCameraTarget(card) {
+  const areas = [...(card?.querySelectorAll("[data-po-size-barcodes]") || [])];
+  const short = areas.find((ta) => {
+    let n = 0;
+    try {
+      n = poBarcodeCodes(ta.value).length;
+    } catch {
+      return true;
+    }
+    const need = Number(ta.dataset.poNeed) || 0;
+    return need > 0 && n < need;
+  });
+  return (short || areas[0])?.dataset.poSizeBarcodes || "";
+}
+
 function openPurchaseBarcodeCamera(targetKey, sizeKey) {
   const scan = globalThis.POSCameraScan;
   if (!purchaseBarcodeOn() || !scan?.open) return;
+  const key = sizeKey || targetKey;
+  if (!key) return;
   scan.open({
     keepOpen: true,
     title: "Scan item barcodes",
@@ -7809,10 +7836,31 @@ function openPurchaseBarcodeCamera(targetKey, sizeKey) {
         ? `[data-po-size-barcodes="${CSS.escape(sizeKey)}"]`
         : `[data-po-barcodes="${CSS.escape(targetKey)}"]`;
       const ta = document.querySelector(sel);
-      if (!ta) return;
-      const cur = String(ta.value || "").trim();
-      ta.value = cur ? `${cur}\n${code}` : code;
+      if (!ta) return { ok: false, text: "Barcode list is not open" };
+      const cleaned = String(code || "").trim();
+      if (!cleaned) return { ok: false, text: "Empty barcode" };
+      let existing = [];
+      try {
+        existing = poBarcodeCodes(ta.value);
+      } catch (err) {
+        return { ok: false, text: err.message };
+      }
+      const taken = [...document.querySelectorAll("[data-po-barcodes], [data-po-size-barcodes]")].some((other) => {
+        try {
+          return poBarcodeCodes(other.value).includes(cleaned);
+        } catch {
+          return false;
+        }
+      });
+      if (taken) return { ok: false, text: `${cleaned} is already scanned` };
+      const need = Number(ta.dataset.poNeed) || 0;
+      if (need && existing.length >= need) return { ok: false, text: `Already scanned ${need}` };
+      const next = existing.concat(cleaned);
+      ta.value = next.join("\n");
       ta.dispatchEvent(new Event("input", { bubbles: true }));
+      const done = Boolean(need) && next.length >= need;
+      if (done) setTimeout(() => globalThis.POSCameraScan?.close?.(), 500);
+      return { ok: true, text: done ? `${cleaned} added. ${next.length} / ${need} scanned` : `${cleaned} added. ${next.length}${need ? ` / ${need}` : ""} scanned` };
     },
   });
 }
@@ -7899,6 +7947,7 @@ function refreshApparelPoCard(card) {
         const note = !required && !codes.length ? "optional" : `${codes.length} / ${row.qty} scanned`;
         if (lab) lab.textContent = `${label} · ${note}`;
         ta.rows = Math.min(6, Math.max(2, row.qty));
+        ta.dataset.poNeed = String(row.qty);
         ta.placeholder = "One barcode per line";
         const saved = list.querySelector(`[data-po-bc-saved="${CSS.escape(row.key)}"]`);
         if (saved) saved.innerHTML = codes.map((code) => `<li><code>${escapeHtml(code)}</code></li>`).join("");
@@ -8038,6 +8087,7 @@ function refreshPoBarcodeRows() {
     if (saved) saved.innerHTML = codes.map((code) => `<li><code>${escapeHtml(code)}</code></li>`).join("");
     if (ta) {
       ta.placeholder = "One barcode per line";
+      ta.dataset.poNeed = String(qty);
       ta.rows = Math.min(8, Math.max(3, qty || 3));
     }
     const editor = row.querySelector("[data-po-bc-editor]");
@@ -13962,18 +14012,19 @@ $("po-lines")?.addEventListener("click", (e) => {
     if (card) {
       card.dataset.poBcOpen = "1";
       refreshApparelPoCard(card);
-      const focus = card.querySelector("[data-po-size-barcodes], [data-po-barcodes]");
-      focus?.focus();
       card.querySelector("[data-po-bc-product]")?.scrollIntoView({ block: "nearest" });
+      const sizeKey = apparelCameraTarget(card);
+      if (sizeKey) openPurchaseBarcodeCamera(card.dataset.poProductRow || "", sizeKey);
       return;
     }
-    const editor = document.querySelector(`[data-po-bc-editor="${CSS.escape(addBarcodes.dataset.poAddBarcodes || "")}"]`);
+    const id = addBarcodes.dataset.poAddBarcodes || "";
+    const editor = document.querySelector(`[data-po-bc-editor="${CSS.escape(id)}"]`);
     if (editor) {
       editor.hidden = false;
       editor.dataset.poBcOpen = "1";
-      editor.querySelector("[data-po-barcodes]")?.focus();
       editor.scrollIntoView({ block: "nearest" });
     }
+    openPurchaseBarcodeCamera(id, "");
     return;
   }
   const cameraBtn = e.target.closest("[data-po-bc-camera]");
