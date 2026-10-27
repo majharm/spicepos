@@ -121,7 +121,16 @@ test("Settings hub groups company, hardware, table, and aggregator controls", ()
   assert.match(read("server/index.js"), /recurring_invoices_enabled/);
   assert.match(read("pos-php-till.php"), /recurring_invoices_enabled/);
   assert.match(read("pos-php-core.php"), /recurring_invoices_enabled/);
-  assert.match(index, /app\.js\?v=20261027cust1/);
+  assert.match(index, /id="set-quotations"/);
+  assert.doesNotMatch(index, /id="set-quotations" checked/);
+  assert.match(index, /Enable Quotations/);
+  assert.match(app, /function quotationsOn/);
+  assert.match(app, /payload\.quotations_enabled = \$\("set-quotations"\)\.checked \? 1 : 0/);
+  assert.match(read("server/schema.js"), /quotations_enabled.*DEFAULT 0/);
+  assert.match(read("server/index.js"), /quotations_enabled/);
+  assert.match(read("pos-php-till.php"), /quotations_enabled/);
+  assert.match(read("pos-php-core.php"), /quotations_enabled/);
+  assert.match(index, /app\.js\?v=20261027qt1/);
   assert.match(index, /pos\.css\?v=20261027invui7/);
   assert.match(index, /invoice\.js\?v=20261027inv1/);
 });

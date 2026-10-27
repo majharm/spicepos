@@ -615,6 +615,9 @@ function pos_ensure_i18n_columns() {
     "invoice_signature_enabled" => "TINYINT(1) NOT NULL DEFAULT 0",
     "invoice_stamp_enabled" => "TINYINT(1) NOT NULL DEFAULT 0",
     "recurring_invoices_enabled" => "TINYINT(1) NOT NULL DEFAULT 0",
+    "quotations_enabled" => "TINYINT(1) NOT NULL DEFAULT 0",
+    "quotation_valid_days" => "INT NOT NULL DEFAULT 15",
+    "quotation_terms" => "TEXT NULL",
     "receipt_printer_enabled" => "TINYINT(1) NOT NULL DEFAULT 0",
     "cash_drawer_enabled" => "TINYINT(1) NOT NULL DEFAULT 0",
     "quick_add_enabled" => "TINYINT(1) NOT NULL DEFAULT 1",
@@ -4640,6 +4643,12 @@ function pos_php_dispatch($path, $method, $rawBody) {
           if (is_file(__DIR__ . "/pos-recurring.php")) {
             require_once __DIR__ . "/pos-recurring.php";
             if (function_exists("pos_recurring_dispatch") && pos_recurring_dispatch($path, $method, $body, $bid, $auth)) {
+              return;
+            }
+          }
+          if (is_file(__DIR__ . "/pos-quotations.php")) {
+            require_once __DIR__ . "/pos-quotations.php";
+            if (function_exists("pos_quotations_dispatch") && pos_quotations_dispatch($path, $method, $body, $bid, $auth)) {
               return;
             }
           }

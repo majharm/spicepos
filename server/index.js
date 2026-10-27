@@ -32,6 +32,7 @@ import { audit } from "./audit.js";
 import { getPlatformSettings, shopSupportContact } from "./settings.js";
 import { sendLowStockAlerts, tickShopAlerts, startAlertScheduler, scheduleAlertTick } from "./alerts.js";
 import { registerRecurring, startRecurringScheduler, ensureRecurringSchema } from "./recurring.js";
+import { registerQuotations, ensureQuotationSchema } from "./quotations.js";
 import { registerMailbox, ensureMailboxSchema, deliverInvoiceCopy } from "./mail-box.js";
 import { registerAdvanced, computeSaleLine, billedPrintQty, applySaleStock, applyLoyaltyOnSale, pharmacyLineSnapshot, enrichCatalogPharmacy, enrichCatalogBarcodes, saleStockQty, persistSaleLineNote, persistPrintSaleLine, assertApparelSaleStock } from "./advanced.js";
 import { registerReturns } from "./returns.js";
@@ -794,6 +795,19 @@ app.post("/api/settings", requireStaff, requirePerm("settings"), async (req, res
     langSql += ", recurring_invoices_enabled = ?";
     params.push(Number(body.recurring_invoices_enabled) === 1 ? 1 : 0);
   }
+  if (Object.prototype.hasOwnProperty.call(body, "quotations_enabled")) {
+    langSql += ", quotations_enabled = ?";
+    params.push(Number(body.quotations_enabled) === 1 ? 1 : 0);
+  }
+  if (Object.prototype.hasOwnProperty.call(body, "quotation_valid_days")) {
+    const days = Math.max(1, Math.min(365, Number(body.quotation_valid_days) || 15));
+    langSql += ", quotation_valid_days = ?";
+    params.push(days);
+  }
+  if (Object.prototype.hasOwnProperty.call(body, "quotation_terms")) {
+    langSql += ", quotation_terms = ?";
+    params.push(clipInvoiceText(body.quotation_terms, 4000) || null);
+  }
   for (const [key, label] of [
     ["invoice_signature_url", "Signature"],
     ["invoice_stamp_url", "Stamp"],
@@ -928,6 +942,7 @@ registerCrud(app);
 registerAccounts(app);
 registerDueReminders(app);
 registerRecurring(app);
+registerQuotations(app);
 registerMailbox(app);
 
 app.post("/api/checkout", requireStaff, requirePerm("counter"), async (req, res) => {
@@ -1438,6 +1453,7 @@ ensureSchema()
     .then(() => ensureCustomerDedupeSchema())
     .then(() => ensureLoginPageSchema())
     .then(() => ensureRecurringSchema())
+    .then(() => ensureQuotationSchema())
     .then(() => ensureMailboxSchema())
     .then(() => {
       setTimeout(() => {

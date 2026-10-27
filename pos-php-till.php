@@ -439,6 +439,21 @@ function pos_php_till_dispatch($path, $method, $body) {
       $params[] = ((int) ($body["recurring_invoices_enabled"] ?? 0) === 1) ? "1" : "0";
       $types .= "s";
     }
+    if (array_key_exists("quotations_enabled", $body)) {
+      $langSql .= ", quotations_enabled = ?";
+      $params[] = ((int) ($body["quotations_enabled"] ?? 0) === 1) ? "1" : "0";
+      $types .= "s";
+    }
+    if (array_key_exists("quotation_valid_days", $body)) {
+      $langSql .= ", quotation_valid_days = ?";
+      $params[] = (string) max(1, min(365, (int) ($body["quotation_valid_days"] ?? 15)));
+      $types .= "s";
+    }
+    if (array_key_exists("quotation_terms", $body)) {
+      $langSql .= ", quotation_terms = ?";
+      $params[] = function_exists("pos_clip_invoice_text") ? (pos_clip_invoice_text($body["quotation_terms"] ?? "", 4000) ?: null) : ($body["quotation_terms"] ?? null);
+      $types .= "s";
+    }
     foreach (["invoice_signature_url" => "Signature", "invoice_stamp_url" => "Stamp"] as $markKey => $markLabel) {
       if (!array_key_exists($markKey, $body)) continue;
       $langSql .= ", {$markKey} = ?";

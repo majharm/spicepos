@@ -15,6 +15,7 @@
     <link rel="stylesheet" href="./css/item-master.css?v=20261012brand1" />
     <link rel="stylesheet" href="./css/customer-master.css?v=20261027cust1" />
     <link rel="stylesheet" href="./css/due-reminders.css?v=20261027dues1" />
+    <link rel="stylesheet" href="./css/quotations.css?v=20261027qt1" />
   </head>
   <body class="fast-mode">
     <div class="app" id="app">
@@ -38,6 +39,7 @@
             <button class="nav-btn" type="button" data-view="hub-sales"><span class="nav-icon" aria-hidden="true">▤</span>Sales desk</button>
             <button class="nav-btn" type="button" data-view="orders"><span class="nav-icon" aria-hidden="true">▤</span><span data-i18n="nav.invoices">Invoices</span></button>
             <button class="nav-btn" type="button" data-view="recurring"><span class="nav-icon" aria-hidden="true">↻</span>Recurring Invoices</button>
+            <button class="nav-btn" type="button" data-view="quotations" hidden><span class="nav-icon" aria-hidden="true">✎</span>Quotations</button>
             <button class="nav-btn classic-bill-only" type="button" data-view="returns"><span class="nav-icon" aria-hidden="true">↺</span><span data-i18n="nav.returns">Manage Returns</span></button>
             <button class="nav-btn pharmacy-hide" type="button" data-view="qr-orders"><span class="nav-icon" aria-hidden="true">▦</span><span data-i18n="nav.qr_orders">QR Orders</span> <span class="nav-badge" id="qr-order-badge" hidden></span></button>
             <button class="nav-btn pharmacy-hide" type="button" data-view="online-orders"><span class="nav-icon" aria-hidden="true">▢</span>Online orders <span class="nav-badge" id="agg-order-badge" hidden></span></button>
@@ -2802,6 +2804,42 @@
             <div id="reports"></div>
           </div>
         </section>
+        <section class="view view-finance" id="view-quotations" hidden>
+          <h2 class="visually-hidden">Quotations</h2>
+          <div class="items-desk quotations-desk">
+            <header class="items-hero">
+              <div class="items-hero-copy">
+                <p class="items-kicker">Sales</p>
+                <h3>Quotations</h3>
+                <p class="lede">Prepare a price offer, share it, and turn an accepted quotation into one unpaid sales invoice. A quotation is not a tax invoice and does not change stock.</p>
+              </div>
+              <div class="quote-nav" id="quote-nav">
+                <button class="btn" type="button" data-quote-tab="all">All Quotations</button>
+                <button class="btn primary" type="button" data-quote-tab="create">Create Quotation</button>
+                <button class="btn" type="button" data-quote-tab="settings">Quotation Settings</button>
+                <button class="btn" type="button" data-quote-tab="reports">Quotation Reports</button>
+              </div>
+            </header>
+            <div class="quote-stat-row" id="quote-stats"></div>
+            <p class="hint" id="quote-hint" role="status"></p>
+            <div id="quote-all">
+              <form class="quote-filters" id="quote-filters">
+                <label>Search <input id="quote-q" type="search" placeholder="Number, customer, or reference" autocomplete="off" /></label>
+                <label>Customer <select id="quote-customer-filter"><option value="">All customers</option></select></label>
+                <label>From <input id="quote-from" type="date" /></label>
+                <label>To <input id="quote-to" type="date" /></label>
+                <label>Status <select id="quote-status"><option value="">All statuses</option></select></label>
+                <label>Salesperson <input id="quote-salesperson-filter" type="search" autocomplete="off" /></label>
+                <button class="btn" type="submit">Show</button>
+              </form>
+              <div class="quote-list" id="quote-list"></div>
+            </div>
+            <div id="quote-detail" hidden></div>
+            <div id="quote-form-wrap" hidden></div>
+            <div id="quote-settings" hidden></div>
+            <div id="quote-reports" hidden></div>
+          </div>
+        </section>
         <section class="view view-finance" id="view-recurring" hidden>
           <h2 class="visually-hidden">Recurring invoices</h2>
           <div class="items-desk recurring-desk">
@@ -3150,6 +3188,12 @@
                     <p class="item-composer-note full">Off until you turn it on. This business only. The Sales menu stays available. On: active schedules can create unpaid tax invoices.</p>
                     <label class="full"><input id="set-recurring-invoices" type="checkbox" /> Enable Recurring Invoices</label>
                     <p class="field-hint" id="recurring-invoices-status">Recurring invoices: Off</p>
+                  </fieldset>
+                  <fieldset class="item-block" data-set-section="invoice">
+                    <legend>Sales settings</legend>
+                    <p class="item-composer-note full">Off until you turn it on. This business only. Sales → Quotations stays hidden until this is on. A quotation does not create an invoice, take a payment, or change stock.</p>
+                    <label class="full"><input id="set-quotations" type="checkbox" /> Enable Quotations</label>
+                    <p class="field-hint" id="quotations-status">Quotations: Off</p>
                   </fieldset>
                   <fieldset class="item-block" data-set-section="invoice">
                     <legend>Signature / Stamp</legend>
@@ -3615,8 +3659,10 @@
     <script src="./js/customer-master.js?v=20261023cemail1" defer></script>
     <script src="./js/due-reminders.js?v=20261027dues1" defer></script>
     <script src="./js/recurring.js?v=20261027rec1" defer></script>
-    <script src="./js/app.js?v=20261027cust1" defer></script>
+    <script src="./js/quotations.js?v=20261027qt1" defer></script>
+    <script src="./js/app.js?v=20261027qt1" defer></script>
     <script src="./js/recurring-ui.js?v=20261027rec3" defer></script>
+    <script src="./js/quotations-ui.js?v=20261027qt1" defer></script>
     <script src="./js/due-reminders-ui.js?v=20261027dues1" defer></script>
     <script src="./js/item-master-ui.js?v=20261012brand1" defer></script>
     <script src="./js/customer-master-ui.js?v=20261027cust1" defer></script>

@@ -85,3 +85,48 @@ export function buildPdf(textLines) {
 export function invoicePdfBuffer(company, order, lines) {
   return buildPdf(invoicePdfLines(company, order, lines));
 }
+
+export function quotationPdfLines(company = {}, quote = {}) {
+  const shop = ascii(company.name) || "Shop";
+  const rows = [
+    shop,
+    ascii(company.address),
+    [company.phone ? `Phone ${ascii(company.phone)}` : "", company.gstin ? `GSTIN ${ascii(company.gstin)}` : ""]
+      .filter(Boolean)
+      .join("   "),
+    "",
+    "QUOTATION",
+    "QUOTATION - NOT A TAX INVOICE",
+    `Number ${ascii(quote.quotation_number) || "Quotation"}`,
+    `Date ${ascii(quote.quotation_date) || ""}`,
+    `Valid until ${ascii(quote.valid_until) || ""}`,
+    `Customer ${ascii(quote.customer_name) || "Customer"}`,
+    quote.customer_email ? `Email ${ascii(quote.customer_email)}` : "",
+    quote.billing_address ? ascii(quote.billing_address) : "",
+    "",
+    "Item                          Qty        Rate       Amount",
+  ];
+  const items = Array.isArray(quote.lines) ? quote.lines : [];
+  const shown = items.slice(0, 18);
+  for (const line of shown) {
+    const name = ascii(line.name || line.item_name || "Item").slice(0, 28).padEnd(28, " ");
+    const qty = ascii(line.quantity ?? line.qty ?? "").slice(0, 8).padStart(8, " ");
+    const rate = money(line.rate).padStart(12, " ");
+    const amount = money(line.total ?? line.amount).padStart(12, " ");
+    rows.push(`${name}${qty}${rate}${amount}`);
+  }
+  if (items.length > shown.length) rows.push(`+ ${items.length - shown.length} more lines on the printed quotation`);
+  rows.push("");
+  if (Number(quote.subtotal)) rows.push(`Subtotal ${money(quote.subtotal)}`);
+  if (Number(quote.discount)) rows.push(`Discount ${money(quote.discount)}`);
+  if (Number(quote.gst)) rows.push(`Tax ${money(quote.gst)}`);
+  rows.push(`Grand total ${money(quote.total)}`);
+  rows.push("");
+  rows.push("This document is a quotation, not a tax invoice.");
+  rows.push("Stock and payment are unchanged until a sales invoice is posted.");
+  return rows.filter((line) => line !== "");
+}
+
+export function quotationPdfBuffer(company, quote) {
+  return buildPdf(quotationPdfLines(company, quote));
+}
