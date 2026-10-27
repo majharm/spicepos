@@ -9183,16 +9183,18 @@ body.bill-collapsed .scale-dock { display: none !important; }
 .stage:not(.is-counter) > #view-orders:not([hidden]) {
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 .invoices-desk,
 .invoices-desk > * { min-width: 0; }
 .invoices-desk {
   display: flex;
   flex-direction: column;
-  flex: 1 1 auto;
+  flex: none;
   gap: 8px;
-  min-height: 0;
+  min-height: auto;
   margin-bottom: 8px;
   font-size: 13px;
   line-height: 1.35;
@@ -9332,14 +9334,15 @@ body.bill-collapsed .scale-dock { display: none !important; }
   font-weight: 700;
 }
 .invoices-split.split {
-  flex: 1 1 auto;
+  flex: none;
+  height: auto;
   min-height: 0;
   padding: 0;
   gap: 12px;
   grid-template-columns: minmax(240px, 340px) minmax(0, 1fr);
-  grid-template-rows: minmax(0, 1fr);
-  align-items: stretch;
-  overflow: hidden;
+  grid-template-rows: auto;
+  align-items: start;
+  overflow: visible;
 }
 .invoices-list-card.orders-list-wrap {
   padding: 8px;
@@ -9348,7 +9351,9 @@ body.bill-collapsed .scale-dock { display: none !important; }
   border-radius: 14px;
   box-shadow: inset 0 1px 0 #fff;
   min-height: 0;
+  max-height: min(72vh, 760px);
   overflow: auto;
+  -webkit-overflow-scrolling: touch;
 }
 .invoices-table-wrap,
 .inv-list {
@@ -9464,7 +9469,7 @@ button.inv-card.is-selected::before { background: #0f766e; }
   min-height: 0;
   border-radius: 16px;
   padding: 12px;
-  overflow: auto;
+  overflow: visible;
   background:
     radial-gradient(720px 220px at 12% 0%, rgba(15, 118, 110, 0.08), transparent 60%),
     linear-gradient(180deg, #f8fafc 0%, #e8eef5 100%);
@@ -9579,10 +9584,13 @@ button.inv-card.is-selected::before { background: #0f766e; }
 .invoices-desk .invoice-email-box { margin-bottom: 0; }
 .invoices-desk .order-pane > .thermal-preview,
 .invoices-desk .order-pane > .office-preview {
-  flex: 1 1 auto;
+  flex: none;
+  height: auto;
   min-height: 0;
+  max-height: none;
   width: 100%;
-  overflow: auto;
+  overflow-x: auto;
+  overflow-y: visible;
 }
 .invoices-desk .office-preview {
   font-size: 10px;

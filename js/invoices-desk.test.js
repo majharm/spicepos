@@ -21,7 +21,7 @@ test("Invoices page is a sales desk with search, chips, and preview split", () =
   assert.match(index, /id="orders-toolbar"/);
   assert.match(index, /id="orders-search"/);
   assert.match(index, /id="order-pane"/);
-  assert.match(index, /pos\.css\?v=20261027invui6/);
+  assert.match(index, /pos\.css\?v=20261027invui7/);
   assert.match(index, /app\.js\?v=20261027invui6/);
 
   assert.match(app, /function paintInvoicesHero/);
@@ -47,7 +47,8 @@ test("Invoices page is a sales desk with search, chips, and preview split", () =
   assert.match(css, /\.invoices-desk \.office-preview \{[^}]*font-size: 10px/s);
   assert.match(css, /\.inv-stat::before/);
   assert.match(css, /button\.inv-card\.is-selected::before/);
-  assert.match(css, /\.invoices-desk \.invoice-desk-tools/);
+  assert.match(css, /#view-orders:not\(\[hidden\]\) \{[^}]*overflow-y: auto/s);
+  assert.match(css, /\.invoices-desk \.order-pane \{[^}]*overflow: visible/s);
 });
 
 test("invoice totals keep digits past four decimal places", () => {
