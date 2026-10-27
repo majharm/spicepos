@@ -6793,8 +6793,10 @@ function fillItemForm(i) {
   }
   document.querySelectorAll("#items-table .is-editing").forEach((el) => el.classList.remove("is-editing"));
   document.querySelector(`#items-table [data-edit-item="${CSS.escape(i.id)}"]`)?.classList.add("is-editing");
-  $("item-form")?.scrollIntoView({ block: "start" });
-  $("item-name")?.focus();
+  const form = $("item-form");
+  if (form) form.scrollTop = 0;
+  if (window.matchMedia("(max-width: 980px)").matches) form?.scrollIntoView({ block: "nearest" });
+  $("item-name")?.focus({ preventScroll: true });
   if (!itemPhotoUrl(i) && i.has_image && i.id) {
     void api(`/api/items/${encodeURIComponent(i.id)}`)
       .then((data) => {
