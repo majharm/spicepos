@@ -103,7 +103,8 @@ test("purchase entry is manual search only and still saves stock", () => {
   assert.match(searchInput, /renderPoSearchResults\(\)/);
   assert.doesNotMatch(searchInput, /renderPoLines\(\)/);
   assert.match(app, /generate_barcodes: false/);
-  assert.doesNotMatch(app, /data-po-gen-bc="\$\{key\}" checked/);
+  assert.doesNotMatch(app, /Generate unique barcodes/);
+  assert.doesNotMatch(app, /data-po-gen-bc/);
   const classic = app.slice(app.indexOf("function renderClassicPoLines"), app.indexOf("function apparelPoGroupSearch"));
   assert.match(classic, /data-po-qty=/);
   assert.match(classic, /data-po-gst=/);
@@ -116,7 +117,11 @@ test("purchase entry is manual search only and still saves stock", () => {
   assert.match(colorBlock, /data-po-size-qty=/);
   assert.match(apparel, /data-po-gst=/);
   assert.match(apparel, /data-po-discount=/);
-  assert.match(apparel, /data-po-gen-bc=/);
+  assert.doesNotMatch(apparel, /data-po-gen-bc/);
+  assert.doesNotMatch(apparel, /Generate unique barcodes/);
+  const apparelSave = app.slice(app.indexOf("function collectApparelPoLines"), app.indexOf("function filterPoLines"));
+  assert.match(apparelSave, /generate_barcodes: false/);
+  assert.doesNotMatch(apparelSave, /data-po-gen-bc/);
   assert.doesNotMatch(apparel, /scan-camera-btn/);
   assert.doesNotMatch(apparel, /data-po-size-bc-scan/);
   const vis = app.slice(app.indexOf("function applyCameraScannerVisibility"), app.indexOf("function paintTimezonePreview"));
@@ -127,6 +132,7 @@ test("purchase entry is manual search only and still saves stock", () => {
   assert.match(app, /function initCameraScan/);
   assert.match(app, /function applyBarcodeScan/);
 
+  assert.doesNotMatch(css, /\.po-gen-bc/);
   assert.doesNotMatch(css, /\.po-scan-barcode-btn/);
   assert.match(css, /\.po-qty-cell/);
   assert.doesNotMatch(css, /\.po-qty-cell \.scan-camera-btn/);

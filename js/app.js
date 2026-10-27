@@ -7253,7 +7253,6 @@ function classicDraftDirty(item, fields) {
 
 function apparelDraftDirty(fields) {
   if (fields.checked) return true;
-  if (fields.gen) return true;
   if (Number(fields.discount) > 0) return true;
   if ((fields.sizes || []).some((row) => Number(row.qty) > 0)) return true;
   if ((fields.extras || []).some((row) => String(row.name || "").trim() || Number(row.qty) > 0)) return true;
@@ -7302,7 +7301,6 @@ function capturePoDraft() {
       rate: card.querySelector("[data-po-rate]")?.value ?? "",
       gst: card.querySelector("[data-po-gst]")?.value ?? "",
       discount: card.querySelector("[data-po-discount]")?.value ?? "",
-      gen: Boolean(card.querySelector("[data-po-gen-bc]")?.checked),
       colors: [...card.querySelectorAll("[data-po-color-block]")].map((row) => row.dataset.poColorBlock || ""),
       sizes,
       extras,
@@ -7352,8 +7350,6 @@ function restoreApparelDraft() {
     if (gst && fields.gst != null) gst.value = fields.gst;
     const discount = card.querySelector("[data-po-discount]");
     if (discount && fields.discount != null) discount.value = fields.discount;
-    const gen = card.querySelector("[data-po-gen-bc]");
-    if (gen) gen.checked = Boolean(fields.gen);
     const sizes = String(card.dataset.poSizes || "").split(/\s+/).filter(Boolean);
     for (const color of fields.colors || []) {
       if (!color) continue;
@@ -7531,7 +7527,6 @@ function addPoStyle(key) {
       rate: String(POSUnits.rateInputValue?.(sample?.purchase_rate) ?? sample?.purchase_rate ?? ""),
       gst: String(Number(sample?.gst_rate) || 0),
       discount: "0",
-      gen: false,
       colors: [],
       sizes: [],
       extras: [],
@@ -7706,13 +7701,12 @@ function renderApparelPoLines(el, shown, moreHint) {
           <input type="number" min="0" step="0.01" inputmode="decimal" value="0" data-po-discount="${key}" aria-label="Discount amount for ${escapeHtml(g.name)}" />
         </label>
         <button class="btn" type="button" data-po-add-size="${key}">Add size</button>
-        <label class="po-gen-bc"><input type="checkbox" data-po-gen-bc="${key}" /> Generate unique barcodes</label>
       </div>
       <div class="po-bc-panel" data-po-bc-product="${key}" hidden>
         <div class="po-bc-box">
           <div class="po-bc-head">
             <strong>Barcodes for ${escapeHtml(g.name)}</strong>
-            <span class="hint" data-po-bc-count="${key}">Optional. Leave blank, or type one barcode per piece. New codes are generated only if Generate unique barcodes is on.</span>
+            <span class="hint" data-po-bc-count="${key}">Optional. Leave blank, or type one barcode per piece.</span>
           </div>
           <div class="po-size-bc-list" data-po-size-bc="${key}"></div>
         </div>
@@ -7743,15 +7737,14 @@ function apparelVariantBcKey(color, size) {
   return G?.variantKey?.(color, size) || `${String(color || "").trim().toLowerCase()}|${size}`;
 }
 
-function apparelSizeBarcodeBlockHtml(key, label, n, saved, gen) {
+function apparelSizeBarcodeBlockHtml(key, label, n, saved) {
   const typed = apparelSizeBarcodeCount(saved);
   const caption = `${label} · ${typed} / ${n} pcs`;
   return `<div class="po-size-bc" data-po-size-bc-row="${escapeHtml(key)}">
     <div class="po-size-bc-head">
       <span data-po-size-bc-label="${escapeHtml(key)}">${escapeHtml(caption)}</span>
-      <span class="hint${typed === n && n > 0 ? " ok" : ""}">${gen && typed < n ? "rest generated" : ""}</span>
     </div>
-    <textarea class="po-bc-list" data-po-size-barcodes="${escapeHtml(key)}" rows="${Math.min(6, Math.max(2, n))}" placeholder="${gen ? "Optional — leftover codes are generated" : `${n} barcodes, one per line`}">${escapeHtml(saved)}</textarea>
+    <textarea class="po-bc-list" data-po-size-barcodes="${escapeHtml(key)}" rows="${Math.min(6, Math.max(2, n))}" placeholder="Optional — one barcode per line">${escapeHtml(saved)}</textarea>
   </div>`;
 }
 
@@ -7804,7 +7797,6 @@ function refreshApparelPoCard(card) {
   if (qtyEl) qtyEl.textContent = `${total} pcs`;
   const amtEl = card.querySelector(`[data-po-amt="${key}"]`);
   if (amtEl) amtEl.textContent = money(amt);
-  const gen = card.querySelector("[data-po-gen-bc]")?.checked === true;
   const bcPanel = card.querySelector("[data-po-bc-product]");
   if (bcPanel) bcPanel.hidden = !box?.checked || total <= 0;
   const list = card.querySelector("[data-po-size-bc]");
@@ -7816,7 +7808,7 @@ function refreshApparelPoCard(card) {
       list.dataset.poSizeKey = sizeKey;
       list.innerHTML = pairs.map((row) => {
         const label = [row.color, row.size].filter(Boolean).join(" · ");
-        return apparelSizeBarcodeBlockHtml(row.key, label, row.qty, existing.get(row.key) || "", gen);
+        return apparelSizeBarcodeBlockHtml(row.key, label, row.qty, existing.get(row.key) || "");
       }).join("");
     } else {
       pairs.forEach((row) => {
@@ -7826,13 +7818,8 @@ function refreshApparelPoCard(card) {
         const lab = list.querySelector(`[data-po-size-bc-label="${CSS.escape(row.key)}"]`);
         const label = [row.color, row.size].filter(Boolean).join(" · ");
         if (lab) lab.textContent = `${label} · ${typed} / ${row.qty} pcs`;
-        const rest = lab?.parentElement?.querySelector(".hint");
-        if (rest) {
-          rest.textContent = gen && typed < row.qty ? "rest generated" : "";
-          rest.className = typed === row.qty && row.qty > 0 ? "hint ok" : "hint";
-        }
         ta.rows = Math.min(6, Math.max(2, row.qty));
-        ta.placeholder = gen ? "Optional — leftover codes are generated" : `${row.qty} barcodes, one per line`;
+        ta.placeholder = "Optional — one barcode per line";
       });
     }
   }
@@ -7846,10 +7833,8 @@ function refreshApparelPoCard(card) {
         /* ignore until submit */
       }
     });
-    countEl.textContent = gen
-      ? `${typed} typed / ${total} pcs — rest generated if generate is on`
-      : `${typed} / ${total} typed barcodes`;
-    countEl.className = (!gen && typed === total && total > 0) || (gen && typed <= total) ? "hint ok" : "hint";
+    countEl.textContent = typed ? `${typed} / ${total} barcodes` : `${total} pcs — barcodes optional`;
+    countEl.className = !typed || typed === total ? "hint ok" : "hint";
   }
 }
 
@@ -7864,7 +7849,6 @@ function collectApparelPoLines() {
     const matrix = apparelColorSizeQtysFromCard(card);
     const total = Object.values(matrix).reduce((sum, sizes) => sum + (G?.totalQty?.(sizes) || 0), 0);
     if (!total) throw new Error(`${name}: enter colour and size quantity`);
-    const generate = card.querySelector("[data-po-gen-bc]")?.checked === true;
     const barcodesByVariant = {};
     card.querySelectorAll("[data-po-size-barcodes]").forEach((ta) => {
       const codes = parsePoBarcodes(ta.value);
@@ -7873,7 +7857,7 @@ function collectApparelPoLines() {
     });
     for (const [color, qtys] of Object.entries(matrix)) {
       G?.planSizeLines?.(qtys, {
-        generate_barcodes: generate,
+        generate_barcodes: false,
         barcodes_by_size: G?.barcodesForColor?.(barcodesByVariant, color) || {},
         allow_empty_barcodes: true,
       });
@@ -7886,7 +7870,7 @@ function collectApparelPoLines() {
       rate_per_kg: POSUnits.roundRate8?.(card.querySelector("[data-po-rate]")?.value) ?? Number(card.querySelector("[data-po-rate]")?.value),
       gst_rate: card.querySelector("[data-po-gst]")?.value,
       discount: card.querySelector("[data-po-discount]")?.value,
-      generate_barcodes: generate,
+      generate_barcodes: false,
       barcodes_by_variant: barcodesByVariant,
       allow_empty_barcodes: true,
     });
@@ -13850,7 +13834,7 @@ $("purchase-form").addEventListener("input", (e) => {
   }
 });
 $("purchase-form").addEventListener("change", (e) => {
-  if (e.target.matches("[data-po-item],[data-po-product],[data-po-gen-bc]")) paintPoTotals();
+  if (e.target.matches("[data-po-item],[data-po-product]")) paintPoTotals();
 });
 $("po-lines")?.addEventListener("click", (e) => {
   const remove = e.target.closest("[data-po-remove]");

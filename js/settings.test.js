@@ -82,6 +82,6 @@ test("Settings hub groups company, hardware, table, and aggregator controls", ()
   assert.doesNotMatch(app, /if \(!tableShiftingEnabled\(\)\) \{[\s\S]*return;[\s\S]*api\("\/api\/table-shifts\//);
   assert.match(css, /\.settings-hub/);
   assert.match(css, /\.settings-hub \[hidden\][\s\S]*display:\s*none\s*!important/);
-  assert.match(index, /app\.js\?v=20261027pofind1/);
-  assert.match(index, /pos\.css\?v=20261027pofind1/);
+  assert.match(index, /app\.js\?v=20261027pogen1/);
+  assert.match(index, /pos\.css\?v=20261027pogen1/);
 });
