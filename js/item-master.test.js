@@ -134,7 +134,7 @@ test("Item Master and Brand Management are wired for all shop types", () => {
   assert.match(index, /id="item-brand-filter"/);
   assert.match(index, /data-view="brands"/);
   assert.match(index, /js\/item-master\.js\?v=20261012brand1/);
-  assert.match(index, /css\/item-master\.css\?v=20261027items1/);
+  assert.match(index, /css\/item-master\.css\?v=20261027items2/);
   assert.match(index, /Item Master/);
   assert.match(app, /brand: \$\("item-brand"\)/);
   assert.match(app, /item\.brand/);
@@ -161,9 +161,10 @@ test("Item Master desk keeps search and save inside scrolling panes", () => {
   assert.match(css, /#view-items \.items-library-head/);
   assert.match(css, /position:\s*sticky/);
   assert.match(css, /#view-items \.items-library \{ order: -1; \}/);
+  assert.match(css, /items-desk: phone tablet scroll 2026/);
   assert.match(css, /max-height:\s*none/);
-  assert.match(index, /css\/item-master\.css\?v=20261027items1/);
-  assert.match(index, /app\.js\?v=20261027items1/);
+  assert.match(index, /css\/item-master\.css\?v=20261027items2/);
+  assert.match(index, /app\.js\?v=20261027items2/);
   assert.match(app, /form\.scrollTop = 0/);
   assert.match(app, /preventScroll:\s*true/);
   assert.match(index, /css\/pos\.css\?v=20261027invui7/);

@@ -249,7 +249,21 @@ body.pharmacy-mode #view-items #items-table.table-wrap {
   box-shadow: 0 -6px 16px rgba(15, 23, 42, 0.06);
 }
 @media (max-width: 980px) {
-  #view-items .items-desk { margin: 6px 8px 8px; gap: 6px; }
+  /* items-desk: phone tablet scroll 2026 */
+  #view-items:not([hidden]) {
+    display: block;
+    overflow-x: hidden;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  #view-items .items-desk {
+    flex: none;
+    height: auto;
+    min-height: auto;
+    overflow: visible;
+    margin: 6px 8px 16px;
+    gap: 8px;
+  }
   #view-items .items-hero { align-items: stretch; }
   #view-items .items-hero .lede { display: none; }
   #view-items .items-hero h3 { font-size: 15px; }
@@ -257,8 +271,46 @@ body.pharmacy-mode #view-items #items-table.table-wrap {
   #view-items .items-stat strong { font-size: 15px; }
   #view-items .items-split,
   body.pharmacy-mode #view-items .items-split {
+    display: flex;
+    flex-direction: column;
+    flex: none;
+    height: auto;
+    min-height: auto;
+    max-height: none;
+    overflow: visible;
     grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: minmax(0, 0.9fr) minmax(0, 1.1fr);
+    grid-template-rows: none;
+  }
+  #view-items .items-library,
+  #view-items .item-composer.settings {
+    order: 0;
+    flex: none;
+    height: auto;
+    max-height: none;
+    overflow: visible;
   }
   #view-items .items-library { order: -1; }
+  #view-items .items-library-head {
+    position: sticky;
+    top: 0;
+    z-index: 4;
+    background: #fff;
+    padding-bottom: 6px;
+  }
+  #view-items .items-library-head input[type="search"] { min-height: 44px; }
+  #view-items #items-table.table-wrap,
+  #view-items .items-library-list,
+  body.pharmacy-mode #view-items #items-table.table-wrap,
+  body.pharmacy-mode #view-items .items-library-list {
+    display: block;
+    flex: none;
+    height: auto;
+    min-height: auto;
+    max-height: none;
+    overflow-x: auto;
+    overflow-y: visible;
+  }
+  #view-items .item-card .btn,
+  #view-items .items-pharm-table .btn,
+  #view-items .item-import-actions .btn { min-height: 44px; }
 }

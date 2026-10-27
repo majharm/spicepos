@@ -6795,8 +6795,8 @@ function fillItemForm(i) {
   document.querySelector(`#items-table [data-edit-item="${CSS.escape(i.id)}"]`)?.classList.add("is-editing");
   const form = $("item-form");
   if (form) form.scrollTop = 0;
-  if (window.matchMedia("(max-width: 980px)").matches) form?.scrollIntoView({ block: "nearest" });
-  $("item-name")?.focus({ preventScroll: true });
+  if (window.matchMedia("(max-width: 980px)").matches) $("item-name")?.focus();
+  else $("item-name")?.focus({ preventScroll: true });
   if (!itemPhotoUrl(i) && i.has_image && i.id) {
     void api(`/api/items/${encodeURIComponent(i.id)}`)
       .then((data) => {
