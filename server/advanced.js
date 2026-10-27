@@ -578,17 +578,24 @@ export async function savePharmacyItemFields(conn, businessId, itemId, body = {}
   }
 }
 
+function enteredBarcodeCount(raw) {
+  const parts = Array.isArray(raw) ? raw : String(raw ?? "").split(/[\s,;]+/);
+  return parts.map((part) => String(part ?? "").trim()).filter(Boolean).length;
+}
+
 export function applyPurchaseBarcodePolicy(settingOn, item, line) {
-  const tracked = Boolean(settingOn) && isCountItem(item) && Number(item?.barcode_tracked) === 1;
   const next = line || {};
   next.generate_barcodes = false;
-  if (!tracked) {
+  const countItem = Boolean(settingOn) && isCountItem(item);
+  if (!countItem) {
     next.barcodes = [];
     next.barcode = "";
     next.allow_empty_barcodes = true;
     return next;
   }
-  next.allow_empty_barcodes = false;
+  const tracked = Number(item?.barcode_tracked) === 1;
+  const entered = enteredBarcodeCount(next.barcodes) || enteredBarcodeCount(next.barcode);
+  next.allow_empty_barcodes = !(tracked || entered > 0);
   return next;
 }
 

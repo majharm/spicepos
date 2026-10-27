@@ -232,7 +232,21 @@ function pos_find_or_create_size_variant($bid, $parent, $size, $biz, $color = nu
   if (is_file(__DIR__ . "/pos-advanced.php")) {
     require_once __DIR__ . "/pos-advanced.php";
     if (function_exists("pos_assign_item_barcodes")) {
-      pos_assign_item_barcodes($bid, $id, ["size" => $want, "color" => $wantColor, "mrp" => $parent["mrp"] ?? null]);
+      $tracked = ((int) ($parent["barcode_tracked"] ?? 0) === 1);
+      if (!$tracked) {
+        foreach ($rows as $row) {
+          if ((int) ($row["barcode_tracked"] ?? 0) === 1) {
+            $tracked = true;
+            break;
+          }
+        }
+      }
+      pos_assign_item_barcodes($bid, $id, [
+        "size" => $want,
+        "color" => $wantColor,
+        "mrp" => $parent["mrp"] ?? null,
+        "barcode_tracked" => $tracked ? 1 : 0,
+      ]);
     }
   }
   $image = "";

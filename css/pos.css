@@ -5733,6 +5733,9 @@ body.apparel-mode #item-size-wrap { display: none; }
   border-radius: 12px;
   background: #f8fafc;
 }
+.po-bc-panel[hidden],
+.po-bc-box[hidden],
+.po-bc-camera[hidden] { display: none !important; }
 .po-bc-box { display: grid; gap: 8px; }
 .po-bc-head {
   display: flex;

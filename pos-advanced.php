@@ -450,16 +450,35 @@ function pos_purchase_barcode_enabled($bid) {
   }
 }
 
+function pos_entered_barcode_count($raw) {
+  $n = 0;
+  if (is_array($raw)) {
+    foreach ($raw as $code) {
+      if (trim((string) $code) !== "") $n++;
+    }
+    return $n;
+  }
+  $parts = preg_split('/[\s,;]+/', trim((string) $raw));
+  if (!is_array($parts)) return 0;
+  foreach ($parts as $code) {
+    if (trim((string) $code) !== "") $n++;
+  }
+  return $n;
+}
+
 function pos_apply_purchase_barcode_policy($settingOn, $item, &$lineIn) {
-  $tracked = $settingOn && pos_item_is_count($item) && ((int) ($item["barcode_tracked"] ?? 0) === 1);
   $lineIn["generate_barcodes"] = false;
-  if (!$tracked) {
+  $countItem = $settingOn && pos_item_is_count($item);
+  if (!$countItem) {
     $lineIn["barcodes"] = [];
     $lineIn["barcode"] = "";
     $lineIn["allow_empty_barcodes"] = true;
     return;
   }
-  $lineIn["allow_empty_barcodes"] = false;
+  $tracked = ((int) ($item["barcode_tracked"] ?? 0) === 1);
+  $entered = pos_entered_barcode_count($lineIn["barcodes"] ?? null);
+  if ($entered < 1) $entered = pos_entered_barcode_count($lineIn["barcode"] ?? "");
+  $lineIn["allow_empty_barcodes"] = !($tracked || $entered > 0);
 }
 
 function pos_assign_item_barcodes($bid, $itemId, $body = []) {

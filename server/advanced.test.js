@@ -146,9 +146,13 @@ test("purchase barcodes are required only when the shop and the product both opt
   assert.equal(required.allow_empty_barcodes, false);
   assert.equal(required.generate_barcodes, false);
   assert.throws(() => resolvePurchaseBarcodes(pcs, 2, required), /Enter 2 barcodes/);
-  const skipped = applyPurchaseBarcodePolicy(true, plain, { barcodes: ["A1"], allow_empty_barcodes: false });
+  const skipped = applyPurchaseBarcodePolicy(true, plain, { barcodes: [], allow_empty_barcodes: false });
   assert.deepEqual(skipped.barcodes, []);
   assert.equal(skipped.allow_empty_barcodes, true);
+  const kept = applyPurchaseBarcodePolicy(true, plain, { barcodes: ["A1", "A2"], allow_empty_barcodes: true });
+  assert.deepEqual(kept.barcodes, ["A1", "A2"]);
+  assert.equal(kept.allow_empty_barcodes, false);
+  assert.deepEqual(resolvePurchaseBarcodes(plain, 2, kept), ["A1", "A2"]);
   const shopOff = applyPurchaseBarcodePolicy(false, pcs, { barcodes: ["A1", "A2"], allow_empty_barcodes: false });
   assert.deepEqual(shopOff.barcodes, []);
   assert.equal(shopOff.allow_empty_barcodes, true);

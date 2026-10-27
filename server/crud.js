@@ -314,6 +314,7 @@ async function findOrCreateSizeVariant(conn, parent, size, biz, color) {
     /* optional columns */
   }
   await stampColorImage(conn, id, siblingImage || (sameColor ? parent.color_image : ""));
+  const styleTracked = Number(parent.barcode_tracked) === 1 || (rows || []).some((row) => Number(row.barcode_tracked) === 1);
   await onItemSaved(conn, bid(), id, {
     size: want,
     color: wantColor,
@@ -323,6 +324,7 @@ async function findOrCreateSizeVariant(conn, parent, size, biz, color) {
     brand_id: parent.brand_id,
     min_billing_qty: parent.min_billing_qty,
     custom_unit: parent.custom_unit,
+    barcode_tracked: styleTracked ? 1 : 0,
   });
   const [created] = await conn.query("SELECT * FROM items WHERE id = ?", [id]);
   return created[0];

@@ -6,7 +6,7 @@
     <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
     <title>ATAV POS</title>
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./css/pos.css?v=20261027pobc1" />
+    <link rel="stylesheet" href="./css/pos.css?v=20261027pobc2" />
     <link rel="stylesheet" href="./css/barcode-desk.css?v=20261024bcdesk1" />
     <link rel="stylesheet" href="./css/saas.css?v=20261016note1" />
     <link rel="stylesheet" href="./css/bar.css?v=20261011bar2" />
@@ -724,7 +724,7 @@
                 <fieldset class="item-block pcs-barcode-only" id="item-barcode-block">
                   <legend>Barcodes</legend>
                   <label class="full"><input id="item-barcode-tracked" type="checkbox" /> Track each piece with its own barcode</label>
-                  <p class="item-composer-note full">Used only when this business turns on Enable Barcode-wise Purchase. Other products stay quantity-only.</p>
+                  <p class="item-composer-note full">When Enable Barcode-wise Purchase is on, this product must have one barcode per piece. Leave it off to keep that product quantity-only.</p>
                   <label class="full">Qty-wise barcodes
                     <input id="item-barcode-qty" type="number" min="0" max="500" step="1" placeholder="e.g. 10 unique pcs codes" />
                   </label>
@@ -3110,7 +3110,7 @@
                     <p class="item-composer-note full">This switch belongs to this business only. It stays off until you turn it on. Counter scanning and the Barcodes page are separate.</p>
                     <label class="full"><input id="set-purchase-barcode" type="checkbox" /> Enable Barcode-wise Purchase</label>
                     <p class="field-hint" id="purchase-barcode-status">Barcode-wise purchase: Off</p>
-                    <p class="item-composer-note full">On: after you add a product that tracks individual barcodes, use Add Item Barcodes to scan or type one code per piece. Off: purchases stay quantity, rate, tax, and discount only.</p>
+                    <p class="item-composer-note full">On: piece purchase lines show Add Item Barcodes. Scan or type one code per piece. Products set to track each piece must match the quantity. Other piece products can leave the list blank. Off: purchases stay quantity, rate, tax, and discount only.</p>
                   </fieldset>
                   <div class="item-composer-actions" data-set-section="profile,tables,timezone,quick-add,fast-mode,branding,payment,invoice,purchases">
                     <button class="btn primary" type="submit">Save changes</button>
@@ -3494,7 +3494,7 @@
     <script src="./js/item-master.js?v=20261012brand1" defer></script>
     <script src="./js/customer-master.js?v=20261023cemail1" defer></script>
     <script src="./js/due-reminders.js?v=20261024duewa1" defer></script>
-    <script src="./js/app.js?v=20261027pobc1" defer></script>
+    <script src="./js/app.js?v=20261027pobc2" defer></script>
     <script src="./js/due-reminders-ui.js?v=20261024duewa1" defer></script>
     <script src="./js/item-master-ui.js?v=20261012brand1" defer></script>
     <script src="./js/customer-master-ui.js?v=20261023cemail1" defer></script>

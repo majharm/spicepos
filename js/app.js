@@ -772,11 +772,7 @@ function applyFootwearMode() {
       ? "Find a garment, then add quantity…"
       : "Find an item, then add quantity…";
   }
-  if ($("purchases-lede")) {
-    $("purchases-lede").textContent = ap
-      ? "Find a garment and add it. Enter colour and size quantity on the bill. Stock updates when the purchase is saved."
-      : "Find an item and add it, then set the quantity. Rate, tax, and discount stay editable. Stock updates when the purchase is saved.";
-  }
+  paintPurchaseLede();
   VIEW_META.purchases.subtitle = "Find an item and add the quantity";
   if ($("item-import-copy")) {
     $("item-import-copy").textContent = copy.importCopy
@@ -2745,8 +2741,12 @@ function purchaseBarcodeOn(company = state.company) {
   return hardwareFlagOn(company?.purchase_barcode_enabled);
 }
 
+function purchaseBarcodeEntryOn(item) {
+  return purchaseBarcodeOn() && POSUnits.isCount(itemUnit(item || {}));
+}
+
 function itemBarcodeTracked(item) {
-  return purchaseBarcodeOn() && POSUnits.isCount(itemUnit(item || {})) && hardwareFlagOn(item?.barcode_tracked);
+  return purchaseBarcodeEntryOn(item) && hardwareFlagOn(item?.barcode_tracked);
 }
 
 function receiptPrinterEnabled(company = state.company) {
@@ -7263,6 +7263,7 @@ function classicDraftDirty(item, fields) {
 
 function apparelDraftDirty(fields) {
   if (fields.checked) return true;
+  if (fields.bcOpen) return true;
   if (Number(fields.discount) > 0) return true;
   if ((fields.sizes || []).some((row) => Number(row.qty) > 0)) return true;
   if ((fields.extras || []).some((row) => String(row.name || "").trim() || Number(row.qty) > 0)) return true;
@@ -7284,6 +7285,7 @@ function capturePoDraft() {
       discount: document.querySelector(`[data-po-discount="${CSS.escape(id)}"]`)?.value ?? "",
       expiry: document.querySelector(`[data-po-expiry="${CSS.escape(id)}"]`)?.value ?? "",
       barcodes: document.querySelector(`[data-po-barcodes="${CSS.escape(id)}"]`)?.value ?? "",
+      bcOpen: document.querySelector(`[data-po-bc-editor="${CSS.escape(id)}"]`)?.hidden === false,
     };
     if (classicDraftDirty(item, fields)) poLineDraft.set(id, fields);
     else poLineDraft.delete(id);
@@ -7315,6 +7317,7 @@ function capturePoDraft() {
       sizes,
       extras,
       barcodes,
+      bcOpen: card.dataset.poBcOpen === "1",
     };
     if (apparelDraftDirty(fields)) poLineDraft.set(`apparel:${key}`, fields);
     else poLineDraft.delete(`apparel:${key}`);
@@ -7344,6 +7347,11 @@ function restoreClassicDraft() {
     set(`[data-po-discount="${CSS.escape(id)}"]`, fields.discount);
     set(`[data-po-expiry="${CSS.escape(id)}"]`, fields.expiry);
     set(`[data-po-barcodes="${CSS.escape(id)}"]`, fields.barcodes);
+    const editor = document.querySelector(`[data-po-bc-editor="${CSS.escape(id)}"]`);
+    if (editor && (fields.bcOpen || String(fields.barcodes || "").trim())) {
+      editor.hidden = false;
+      editor.dataset.poBcOpen = "1";
+    }
   }
 }
 
@@ -7354,6 +7362,7 @@ function restoreApparelDraft() {
     if (!fields) return;
     const box = card.querySelector("[data-po-product]");
     if (box) box.checked = Boolean(fields.checked);
+    if (fields.bcOpen) card.dataset.poBcOpen = "1";
     const rate = card.querySelector("[data-po-rate]");
     if (rate && fields.rate != null) rate.value = fields.rate;
     const gst = card.querySelector("[data-po-gst]");
@@ -7557,8 +7566,20 @@ function removePoDraft(key) {
   $("po-item-search")?.focus();
 }
 
+function paintPurchaseLede() {
+  const el = $("purchases-lede");
+  if (!el) return;
+  const base = isApparelShop()
+    ? "Find a garment and add it. Enter colour and size quantity on the bill. Stock updates when the purchase is saved."
+    : "Find an item and add it, then set the quantity. Rate, tax, and discount stay editable. Stock updates when the purchase is saved.";
+  el.textContent = purchaseBarcodeOn()
+    ? `${base} Piece items show Add Item Barcodes. Scan or type one code per piece.`
+    : base;
+}
+
 function renderPoLines(opts = {}) {
   const el = $("po-lines");
+  paintPurchaseLede();
   if (!el) return;
   if ($("po-date") && !$("po-date").value) $("po-date").value = ymd();
   if (opts.capture !== false) capturePoDraft();
@@ -7589,7 +7610,7 @@ function renderClassicPoLines(el, shown, moreHint) {
     const unit = itemUnit(i);
     const qty = POSUnits.isCount(unit) ? 1 : 1000;
     const search = poItemHay(i);
-    if (itemBarcodeTracked(i)) {
+    if (purchaseBarcodeEntryOn(i)) {
       panels.push(`<div class="po-bc-panel" data-po-bc-row="${escapeHtml(i.id)}">
         <button type="button" class="btn" data-po-add-barcodes="${escapeHtml(i.id)}">Add Item Barcodes</button>
         <div class="po-bc-box" data-po-bc-editor="${escapeHtml(i.id)}" hidden>
@@ -7716,7 +7737,7 @@ function renderApparelPoLines(el, shown, moreHint) {
           <input type="number" min="0" step="0.01" inputmode="decimal" value="0" data-po-discount="${key}" aria-label="Discount amount for ${escapeHtml(g.name)}" />
         </label>
         <button class="btn" type="button" data-po-add-size="${key}">Add size</button>
-        ${purchaseBarcodeOn() && (g.variants || []).some((v) => hardwareFlagOn(v.barcode_tracked)) ? `<button class="btn" type="button" data-po-add-barcodes="${key}" hidden>Add Item Barcodes</button>` : ""}
+        ${purchaseBarcodeOn() && POSUnits.isCount(unit) ? `<button class="btn" type="button" data-po-add-barcodes="${key}" hidden>Add Item Barcodes</button>` : ""}
       </div>
       <div class="po-bc-panel" data-po-bc-product="${key}" hidden>
         <div class="po-bc-box">
@@ -7845,24 +7866,24 @@ function refreshApparelPoCard(card) {
   if (qtyEl) qtyEl.textContent = `${total} pcs`;
   const amtEl = card.querySelector(`[data-po-amt="${key}"]`);
   if (amtEl) amtEl.textContent = money(amt);
-  const trackedPairs = pairs.filter((row) => itemBarcodeTracked(apparelVariantFor(card, row.color, row.size)));
+  const entryPairs = purchaseBarcodeOn() && POSUnits.isCount(unit) ? pairs : [];
   const addBtn = card.querySelector("[data-po-add-barcodes]");
-  if (addBtn) addBtn.hidden = trackedPairs.length === 0;
+  if (addBtn) addBtn.hidden = entryPairs.length === 0;
   const bcPanel = card.querySelector("[data-po-bc-product]");
-  if (bcPanel) bcPanel.hidden = card.dataset.poBcOpen !== "1" || trackedPairs.length === 0;
+  if (bcPanel) bcPanel.hidden = card.dataset.poBcOpen !== "1" || entryPairs.length === 0;
   const list = card.querySelector("[data-po-size-bc]");
   if (list) {
-    const sizeKey = trackedPairs.map((row) => row.key).join("|");
+    const sizeKey = entryPairs.map((row) => row.key).join("|");
     if (list.dataset.poSizeKey !== sizeKey) {
       const existing = new Map();
       list.querySelectorAll("[data-po-size-barcodes]").forEach((ta) => existing.set(ta.dataset.poSizeBarcodes, ta.value));
       list.dataset.poSizeKey = sizeKey;
-      list.innerHTML = trackedPairs.map((row) => {
+      list.innerHTML = entryPairs.map((row) => {
         const label = [row.color, row.size].filter(Boolean).join(" · ");
         return apparelSizeBarcodeBlockHtml(row.key, label, row.qty, existing.get(row.key) || "");
       }).join("");
     } else {
-      trackedPairs.forEach((row) => {
+      entryPairs.forEach((row) => {
         const ta = list.querySelector(`[data-po-size-barcodes="${CSS.escape(row.key)}"]`);
         if (!ta) return;
         let codes = [];
@@ -7873,7 +7894,10 @@ function refreshApparelPoCard(card) {
         }
         const lab = list.querySelector(`[data-po-size-bc-label="${CSS.escape(row.key)}"]`);
         const label = [row.color, row.size].filter(Boolean).join(" · ");
-        if (lab) lab.textContent = `${label} · ${codes.length} / ${row.qty} scanned`;
+        const variant = apparelVariantFor(card, row.color, row.size);
+        const required = itemBarcodeTracked(variant) || apparelStyleTracked(card);
+        const note = !required && !codes.length ? "optional" : `${codes.length} / ${row.qty} scanned`;
+        if (lab) lab.textContent = `${label} · ${note}`;
         ta.rows = Math.min(6, Math.max(2, row.qty));
         ta.placeholder = "One barcode per line";
         const saved = list.querySelector(`[data-po-bc-saved="${CSS.escape(row.key)}"]`);
@@ -7883,18 +7907,31 @@ function refreshApparelPoCard(card) {
   }
   const countEl = card.querySelector(`[data-po-bc-count="${key}"]`);
   if (countEl) {
-    const need = trackedPairs.reduce((sum, row) => sum + row.qty, 0);
+    const need = entryPairs.reduce((sum, row) => sum + row.qty, 0);
     let typed = 0;
+    let problem = false;
     card.querySelectorAll("[data-po-size-barcodes]").forEach((ta) => {
       try {
         typed += parsePoBarcodes(ta.value).length;
       } catch {
-        /* ignore until submit */
+        problem = true;
       }
     });
-    countEl.textContent = `${typed} / ${need} scanned`;
-    countEl.className = typed === need && need > 0 ? "hint ok" : "hint";
+    const required = entryPairs.some((row) => itemBarcodeTracked(apparelVariantFor(card, row.color, row.size)) || apparelStyleTracked(card));
+    if (!required && !typed && !problem) {
+      countEl.textContent = need ? `Optional · 0 / ${need} scanned` : "Enter a size quantity, then add barcodes";
+      countEl.className = "hint";
+    } else {
+      countEl.textContent = `${typed} / ${need} scanned`;
+      countEl.className = !problem && typed === need && need > 0 ? "hint ok" : "hint";
+    }
   }
+}
+
+function apparelStyleTracked(card) {
+  const ids = new Set(String(card?.dataset.poVariantIds || "").split(/\s+/).filter(Boolean));
+  if (!ids.size) return false;
+  return (state.items || []).some((item) => ids.has(item.id) && itemBarcodeTracked(item));
 }
 
 function collectApparelPoLines() {
@@ -7914,12 +7951,14 @@ function collectApparelPoLines() {
       barcodesByVariant[ta.dataset.poSizeBarcodes] = codes;
       allCodes.push(codes);
     });
+    const styleTracked = apparelStyleTracked(card);
     for (const [color, qtys] of Object.entries(matrix)) {
       for (const [size, qty] of Object.entries(qtys)) {
         const variant = apparelVariantFor(card, color, size);
-        if (!itemBarcodeTracked(variant)) continue;
         const pieceKey = apparelVariantBcKey(color, size);
         const codes = barcodesByVariant[pieceKey] || [];
+        const required = itemBarcodeTracked(variant) || (styleTracked && !variant) || codes.length > 0;
+        if (!required) continue;
         if (codes.length !== qty) {
           const label = [color, size].filter(Boolean).join(" ");
           throw new Error(`${name} ${label}: scan ${qty} unique barcodes (entered ${codes.length})`);
@@ -7980,7 +8019,7 @@ function refreshPoBarcodeRows() {
     const box = document.querySelector(`[data-po-item="${id}"]`);
     const item = (state.items || []).find((entry) => entry.id === id);
     const qty = Math.max(0, Math.round(Number(document.querySelector(`[data-po-qty="${id}"]`)?.value) || 0));
-    row.hidden = !itemBarcodeTracked(item) || !box?.checked;
+    row.hidden = !purchaseBarcodeEntryOn(item) || !box?.checked;
     const ta = row.querySelector("[data-po-barcodes]");
     let codes = [];
     let problem = "";
@@ -7989,10 +8028,11 @@ function refreshPoBarcodeRows() {
     } catch (err) {
       problem = err.message;
     }
+    const required = itemBarcodeTracked(item) || codes.length > 0;
     const countEl = row.querySelector("[data-po-bc-count]");
     if (countEl) {
-      countEl.textContent = problem || `${codes.length} / ${qty} scanned`;
-      countEl.className = !problem && codes.length === qty && qty > 0 ? "hint ok" : "hint";
+      countEl.textContent = problem || (!required ? `Optional · ${codes.length} / ${qty} scanned` : `${codes.length} / ${qty} scanned`);
+      countEl.className = !problem && required && codes.length === qty && qty > 0 ? "hint ok" : "hint";
     }
     const saved = row.querySelector("[data-po-bc-saved]");
     if (saved) saved.innerHTML = codes.map((code) => `<li><code>${escapeHtml(code)}</code></li>`).join("");
@@ -8001,7 +8041,7 @@ function refreshPoBarcodeRows() {
       ta.rows = Math.min(8, Math.max(3, qty || 3));
     }
     const editor = row.querySelector("[data-po-bc-editor]");
-    if (editor && codes.length) editor.hidden = false;
+    if (editor && (codes.length || editor.dataset.poBcOpen === "1")) editor.hidden = false;
   });
 }
 
@@ -13921,15 +13961,18 @@ $("po-lines")?.addEventListener("click", (e) => {
     const card = addBarcodes.closest("[data-po-product-row]");
     if (card) {
       card.dataset.poBcOpen = "1";
-      const panel = card.querySelector("[data-po-bc-product]");
-      if (panel) panel.hidden = false;
-      card.querySelector("[data-po-size-barcodes], [data-po-barcodes]")?.focus();
+      refreshApparelPoCard(card);
+      const focus = card.querySelector("[data-po-size-barcodes], [data-po-barcodes]");
+      focus?.focus();
+      card.querySelector("[data-po-bc-product]")?.scrollIntoView({ block: "nearest" });
       return;
     }
     const editor = document.querySelector(`[data-po-bc-editor="${CSS.escape(addBarcodes.dataset.poAddBarcodes || "")}"]`);
     if (editor) {
       editor.hidden = false;
+      editor.dataset.poBcOpen = "1";
       editor.querySelector("[data-po-barcodes]")?.focus();
+      editor.scrollIntoView({ block: "nearest" });
     }
     return;
   }
@@ -13992,12 +14035,14 @@ $("purchase-form").addEventListener("submit", async (e) => {
       const quantity_gm = POSUnits.toBase(qtyInput, unit);
       let barcodes = [];
       let allowEmpty = true;
-      if (itemBarcodeTracked(item)) {
+      if (purchaseBarcodeEntryOn(item)) {
         const pieces = Math.round(quantity_gm);
         barcodes = parsePoBarcodes(document.querySelector(`[data-po-barcodes="${box.dataset.poItem}"]`)?.value);
-        allowEmpty = false;
-        if (barcodes.length !== pieces) {
-          throw new Error(`${item?.name || "Item"}: scan ${pieces} unique barcodes (entered ${barcodes.length})`);
+        if (itemBarcodeTracked(item) || barcodes.length) {
+          allowEmpty = false;
+          if (barcodes.length !== pieces) {
+            throw new Error(`${item?.name || "Item"}: scan ${pieces} unique barcodes (entered ${barcodes.length})`);
+          }
         }
       }
       lines.push({
