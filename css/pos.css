@@ -3321,6 +3321,8 @@ tr:last-child td { border-bottom: 0; }
 #set-aggregator .settings-card { margin-top: 8px; }
 #settings-pane-hardware { display: grid; gap: 16px; grid-column: 1 / -1; }
 #settings-pane-hardware[hidden] { display: none; }
+#settings-pane-email { display: grid; gap: 16px; grid-column: 1 / -1; }
+#settings-pane-email[hidden] { display: none; }
 .settings-profile-split:has(#settings-form[hidden]),
 .settings-profile-split:has(.settings-side[hidden]) {
   grid-template-columns: 1fr;
@@ -10242,6 +10244,29 @@ body.fast-mode .master-topbar {
   .recur-stat-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
   .recur-toolbar { grid-template-columns: minmax(0, 1fr); }
 }
+
+.invoice-email-box {
+  display: grid;
+  gap: 8px;
+  margin: 0 0 12px;
+  padding: 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 14px;
+  background: #fff;
+}
+.invoice-email-box label {
+  display: grid;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+}
+.invoice-email-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.invoice-email-log { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px; }
+.invoice-email-log li { font-size: 12px; color: var(--muted); }
+.mail-status { margin: 0; font-size: 13px; font-weight: 700; color: var(--muted); }
+.mail-status.is-ok { color: #0f766e; }
+.mail-status.is-bad { color: #b91c1c; }
 
 
 

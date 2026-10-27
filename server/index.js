@@ -32,6 +32,7 @@ import { audit } from "./audit.js";
 import { getPlatformSettings, shopSupportContact } from "./settings.js";
 import { sendLowStockAlerts, tickShopAlerts, startAlertScheduler, scheduleAlertTick } from "./alerts.js";
 import { registerRecurring, startRecurringScheduler, ensureRecurringSchema } from "./recurring.js";
+import { registerMailbox, ensureMailboxSchema, deliverInvoiceCopy } from "./mail-box.js";
 import { registerAdvanced, computeSaleLine, billedPrintQty, applySaleStock, applyLoyaltyOnSale, pharmacyLineSnapshot, enrichCatalogPharmacy, enrichCatalogBarcodes, saleStockQty, persistSaleLineNote, persistPrintSaleLine, assertApparelSaleStock } from "./advanced.js";
 import { registerReturns } from "./returns.js";
 import { registerAnalyticsPublic, registerAnalyticsMaster } from "./analytics.js";
@@ -927,6 +928,7 @@ registerCrud(app);
 registerAccounts(app);
 registerDueReminders(app);
 registerRecurring(app);
+registerMailbox(app);
 
 app.post("/api/checkout", requireStaff, requirePerm("counter"), async (req, res) => {
   const { customerId, paymentMethod, lines, packId, packCount, discount, discountType, discountValue, loyaltyPoints, offerIds } = req.body || {};
@@ -1306,6 +1308,7 @@ app.post("/api/checkout", requireStaff, requirePerm("counter"), async (req, res)
           ]
         : [];
       await postSaleJournal(conn, orderRow);
+      orderRow.customer_email = orderRow.customer_email || customer.email || "";
       if (idemKey) await saveIdempotent(conn, businessId, idemKey, "checkout", orderId, orderRow);
       return orderRow;
     });
@@ -1320,6 +1323,9 @@ app.post("/api/checkout", requireStaff, requirePerm("counter"), async (req, res)
     const soldIds = (result.lines || []).map((line) => line.item_id).filter(Boolean);
     void sendLowStockAlerts(businessId, soldIds).catch((err) => console.error("low stock alert failed:", err.message));
     void tickShopAlerts(businessId).catch((err) => console.error("closing alert failed:", err.message));
+    void deliverInvoiceCopy({ businessId, order: result, source: "auto" }).catch((err) =>
+      console.error("invoice email failed:", String(err?.message || err).slice(0, 180)),
+    );
     res.json({ ok: true, order: result });
   } catch (err) {
     res.status(500).json({ error: String(err.message) });
@@ -1432,6 +1438,7 @@ ensureSchema()
     .then(() => ensureCustomerDedupeSchema())
     .then(() => ensureLoginPageSchema())
     .then(() => ensureRecurringSchema())
+    .then(() => ensureMailboxSchema())
     .then(() => {
       setTimeout(() => {
         recomputeAllBusinessesOutstanding().catch((err) =>

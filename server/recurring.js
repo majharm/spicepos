@@ -13,7 +13,6 @@ import { settleCustomerInvoice } from "./accounts.js";
 import { postSaleJournal } from "./accounting.js";
 import { audit } from "./audit.js";
 import { getPlatformSettings } from "./settings.js";
-import { sendMail } from "./mail.js";
 import { sendWhatsApp, waCfg } from "./alerts.js";
 
 const R = globalThis.POSRecurring;
@@ -490,16 +489,24 @@ async function notifyGenerated(schedule, order, customer, dueDate) {
       log.push({ channel: "whatsapp", status: "failed", error: String(err.message || err).slice(0, 180) });
     }
   }
-  if (R.flagOn(schedule.email_invoice)) {
-    try {
-      if (!customer.email) log.push({ channel: "email", status: "failed", error: "no email" });
-      else {
-        const sent = await sendMail({ to: customer.email, subject: `Invoice ${order.order_number}`, text });
-        log.push({ channel: "email", status: sent?.ok ? "sent" : "failed", error: sent?.ok ? "" : sent?.error || sent?.reason || "not sent" });
-      }
-    } catch (err) {
-      log.push({ channel: "email", status: "failed", error: String(err.message || err).slice(0, 180) });
+  try {
+    const { deliverInvoiceCopy } = await import("./mail-box.js");
+    const sent = await deliverInvoiceCopy({
+      businessId: schedule.business_id,
+      order: { ...order, customer_email: customer.email || order.customer_email || "" },
+      to: customer.email || "",
+      source: "recurring",
+      scheduleOptIn: R.flagOn(schedule.email_invoice),
+    });
+    if (!sent.skipped) {
+      log.push({
+        channel: "email",
+        status: sent.ok ? "sent" : "failed",
+        error: sent.ok ? "" : String(sent.error || "not sent").slice(0, 180),
+      });
     }
+  } catch (err) {
+    log.push({ channel: "email", status: "failed", error: String(err.message || err).slice(0, 180) });
   }
   return log;
 }

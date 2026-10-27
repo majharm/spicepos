@@ -6,7 +6,7 @@
     <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
     <title>ATAV POS</title>
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./css/pos.css?v=20261027rec3" />
+    <link rel="stylesheet" href="./css/pos.css?v=20261027mail1" />
     <link rel="stylesheet" href="./css/barcode-desk.css?v=20261024bcdesk1" />
     <link rel="stylesheet" href="./css/saas.css?v=20261016note1" />
     <link rel="stylesheet" href="./css/bar.css?v=20261011bar2" />
@@ -2930,7 +2930,7 @@
               <div class="items-hero-copy">
                 <p class="items-kicker">Account</p>
                 <h3>Settings</h3>
-                <p class="lede" id="settings-lede">Company profile, hardware, online orders, and invoice branding. Hardware and Swiggy/Zomato stay off until you turn them on. Shop backup is under Settings → Backup.</p>
+                <p class="lede" id="settings-lede">Company profile, hardware, email, online orders, and invoice branding. Hardware and Swiggy/Zomato stay off until you turn them on. Shop backup is under Settings → Backup.</p>
               </div>
               <div class="items-hero-stats" id="settings-hero-stats"></div>
             </header>
@@ -2947,6 +2947,7 @@
               <button class="btn" type="button" data-settings-tab="branding" data-settings-section="branding">Branding &amp; Shop Logo</button>
               <button class="btn" type="button" data-settings-tab="payment" data-settings-section="payment">Payment QR &amp; UPI</button>
               <button class="btn" type="button" data-settings-tab="invoice" data-settings-section="invoice">Invoice &amp; Print Settings</button>
+              <button class="btn" type="button" data-settings-tab="email" data-settings-section="email">Email Settings</button>
               <button class="btn" type="button" data-settings-tab="security" data-settings-section="security">User Permissions &amp; Security</button>
               <button class="btn" type="button" role="tab" aria-selected="false" data-settings-tab="backup" data-view="backup" data-i18n="settings.backup">Backup</button>
             </nav>
@@ -3197,6 +3198,46 @@
                     <p class="hint" id="settings-hint"></p>
                   </div>
                 </form>
+                <div class="settings-pane" id="settings-pane-email" hidden>
+                  <form class="settings item-composer" id="business-email-form" autocomplete="off">
+                    <div class="item-composer-top">
+                      <p class="item-mode">This business only</p>
+                      <h3>Email settings</h3>
+                      <p class="item-composer-note">Invoice copies are sent from this shop’s mailbox. The password stays encrypted on the server and is not shared with any other business.</p>
+                    </div>
+                    <fieldset class="item-block">
+                      <legend>Sender</legend>
+                      <label class="full">Business email address <input id="set-mail-from" type="email" maxlength="160" autocomplete="off" placeholder="billing@yourshop.com" required /></label>
+                      <label>Sender display name <input id="set-mail-name" maxlength="160" autocomplete="off" placeholder="Uses the business name when blank" /></label>
+                      <label>Reply-To email address <input id="set-mail-reply" type="email" maxlength="160" autocomplete="off" placeholder="Optional" /></label>
+                    </fieldset>
+                    <fieldset class="item-block">
+                      <legend>SMTP connection</legend>
+                      <p class="item-composer-note full">Use the mailbox provider’s SMTP host. Port 465 uses a secure connection. Port 587 starts TLS after connect.</p>
+                      <label>SMTP host <input id="set-mail-host" maxlength="180" autocomplete="off" placeholder="smtp.example.com" /></label>
+                      <label>Port
+                        <select id="set-mail-port">
+                          <option value="465">465 · SSL</option>
+                          <option value="587">587 · STARTTLS</option>
+                        </select>
+                      </label>
+                      <label>SMTP username <input id="set-mail-user" maxlength="180" autocomplete="off" placeholder="Usually the email address" /></label>
+                      <label>Password <input id="set-mail-pass" type="password" maxlength="200" autocomplete="new-password" placeholder="Stored encrypted on the server" /></label>
+                    </fieldset>
+                    <fieldset class="item-block">
+                      <legend>Automatic invoice email</legend>
+                      <p class="mail-status full" id="set-mail-status">Add this business mailbox. It is not shared with other shops.</p>
+                      <label class="remember dev-toggle full"><input id="set-mail-auto" type="checkbox" /> Enable automatic invoice email</label>
+                      <p class="item-composer-note full">Off until a test email connects. When on, each saved sales invoice is emailed to the customer if they have an email address. Billing still completes when they do not.</p>
+                      <label class="full">Send test to <input id="set-mail-test-to" type="email" maxlength="160" autocomplete="off" placeholder="Defaults to the business email" /></label>
+                    </fieldset>
+                    <div class="item-composer-actions">
+                      <button class="btn primary" type="submit">Save email settings</button>
+                      <button class="btn" type="button" id="business-email-test">Send test email</button>
+                      <p class="hint" id="business-email-hint"></p>
+                    </div>
+                  </form>
+                </div>
                 <div class="settings-pane" id="settings-pane-hardware" hidden>
                   <div class="settings-card">
                     <h3>Registers &amp; POS terminals</h3>
@@ -3574,7 +3615,7 @@
     <script src="./js/customer-master.js?v=20261023cemail1" defer></script>
     <script src="./js/due-reminders.js?v=20261024duewa1" defer></script>
     <script src="./js/recurring.js?v=20261027rec1" defer></script>
-    <script src="./js/app.js?v=20261027rec2" defer></script>
+    <script src="./js/app.js?v=20261027mail1" defer></script>
     <script src="./js/recurring-ui.js?v=20261027rec3" defer></script>
     <script src="./js/due-reminders-ui.js?v=20261024duewa1" defer></script>
     <script src="./js/item-master-ui.js?v=20261012brand1" defer></script>

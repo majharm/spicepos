@@ -3094,6 +3094,7 @@ const SETTINGS_SECTIONS = [
   "branding",
   "payment",
   "invoice",
+  "email",
   "security",
   "backup",
 ];
@@ -3118,6 +3119,132 @@ function clearSettingsDirty() {
   state.fastModePreview = null;
 }
 
+function paintBusinessEmail(box) {
+  const row = box || {};
+  if ($("set-mail-from")) $("set-mail-from").value = row.from_email || "";
+  if ($("set-mail-name")) $("set-mail-name").value = row.from_name || state.company?.name || "";
+  if ($("set-mail-reply")) $("set-mail-reply").value = row.reply_to || "";
+  if ($("set-mail-host")) $("set-mail-host").value = row.smtp_host || "";
+  if ($("set-mail-port")) $("set-mail-port").value = String(row.smtp_port || 465) === "587" ? "587" : "465";
+  if ($("set-mail-user")) $("set-mail-user").value = row.smtp_user || "";
+  if ($("set-mail-pass")) {
+    $("set-mail-pass").value = "";
+    $("set-mail-pass").placeholder = row.password_set ? "Saved on the server. Leave blank to keep it." : "Stored encrypted on the server";
+  }
+  const status = $("set-mail-status");
+  if (status) {
+    const label =
+      row.status === "verified"
+        ? "Connected. Automatic invoice emails can be turned on."
+        : row.status === "failed"
+          ? row.status_detail || "The test email was not delivered."
+          : row.status === "unverified"
+            ? "Saved. Send a test email before automatic invoices."
+            : "Add this business mailbox. It is not shared with other shops.";
+    status.textContent = label;
+    status.className = row.status === "verified" ? "mail-status is-ok" : row.status === "failed" ? "mail-status is-bad" : "mail-status";
+  }
+  const auto = $("set-mail-auto");
+  if (auto) {
+    auto.checked = Number(row.auto_invoice_email) === 1 && row.status === "verified";
+    auto.disabled = row.status !== "verified";
+  }
+}
+
+async function loadBusinessEmail() {
+  const hint = $("business-email-hint");
+  try {
+    const data = await api("/api/business-email");
+    paintBusinessEmail(data.mailbox);
+    if (hint && !hint.textContent) hint.textContent = "";
+  } catch (err) {
+    if (hint) {
+      hint.textContent = err.message || "Could not load email settings";
+      hint.className = "hint error";
+    }
+  }
+}
+
+function businessEmailPayload() {
+  const port = $("set-mail-port")?.value === "587" ? 587 : 465;
+  return {
+    from_email: $("set-mail-from")?.value || "",
+    from_name: $("set-mail-name")?.value || "",
+    reply_to: $("set-mail-reply")?.value || "",
+    smtp_host: $("set-mail-host")?.value || "",
+    smtp_port: port,
+    smtp_secure: port === 465 ? 1 : 0,
+    smtp_user: $("set-mail-user")?.value || "",
+    smtp_pass: $("set-mail-pass")?.value || "",
+    auto_invoice_email: $("set-mail-auto")?.checked ? 1 : 0,
+  };
+}
+
+let businessEmailBound = false;
+function bindBusinessEmail() {
+  if (businessEmailBound) return;
+  businessEmailBound = true;
+  ["set-mail-from", "set-mail-host", "set-mail-user", "set-mail-pass", "set-mail-port"].forEach((id) => {
+    $(id)?.addEventListener("input", () => {
+      const auto = $("set-mail-auto");
+      if (!auto) return;
+      auto.checked = false;
+      auto.disabled = true;
+    });
+  });
+  $("set-mail-port")?.addEventListener("change", () => {
+    const auto = $("set-mail-auto");
+    if (!auto) return;
+    auto.checked = false;
+    auto.disabled = true;
+  });
+  $("business-email-form")?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const hint = $("business-email-hint");
+    if (hint) {
+      hint.textContent = "Saving email settings…";
+      hint.className = "hint";
+    }
+    try {
+      const data = await api("/api/business-email", { method: "POST", body: JSON.stringify(businessEmailPayload()) });
+      paintBusinessEmail(data.mailbox);
+      if ($("set-mail-pass")) $("set-mail-pass").value = "";
+      if (hint) {
+        hint.textContent = "Email settings saved for this business.";
+        hint.className = "hint ok";
+      }
+    } catch (err) {
+      if (hint) {
+        hint.textContent = err.message || "Could not save email settings";
+        hint.className = "hint error";
+      }
+    }
+  });
+  $("business-email-test")?.addEventListener("click", async () => {
+    const hint = $("business-email-hint");
+    if (hint) {
+      hint.textContent = "Sending test email…";
+      hint.className = "hint";
+    }
+    try {
+      const data = await api("/api/business-email/test", {
+        method: "POST",
+        body: JSON.stringify({ to: $("set-mail-test-to")?.value || "" }),
+      });
+      paintBusinessEmail(data.mailbox);
+      if (hint) {
+        hint.textContent = data.ok ? `Test email sent to ${data.to}.` : data.error || "Test email was not sent";
+        hint.className = data.ok ? "hint ok" : "hint error";
+      }
+    } catch (err) {
+      if (hint) {
+        hint.textContent = err.message || "Test email was not sent";
+        hint.className = "hint error";
+      }
+    }
+  });
+}
+
 function showSettingsTab(tab) {
   let name = SETTINGS_SECTIONS.includes(tab) ? tab : "profile";
   if (!settingsSectionAllowed(name)) name = "profile";
@@ -3125,9 +3252,11 @@ function showSettingsTab(tab) {
   const backup = name === "backup";
   const hardware = name === "hardware";
   const security = name === "security";
+  const email = name === "email";
   if ($("settings-pane-profile")) $("settings-pane-profile").hidden = backup;
   if ($("settings-pane-hardware")) $("settings-pane-hardware").hidden = !hardware;
   if ($("settings-pane-backup")) $("settings-pane-backup").hidden = !backup;
+  if ($("settings-pane-email")) $("settings-pane-email").hidden = !email;
   document.querySelectorAll("[data-set-section]").forEach((el) => {
     const keys = String(el.dataset.setSection || "")
       .split(",")
@@ -3145,7 +3274,7 @@ function showSettingsTab(tab) {
   if (split) {
     const form = split.querySelector("#settings-form");
     const side = split.querySelector(".settings-side");
-    if (form) form.hidden = backup || hardware || security;
+    if (form) form.hidden = backup || hardware || security || email;
     if (side) side.hidden = !security;
   }
   document.querySelectorAll("[data-settings-tab]").forEach((btn) => {
@@ -3163,6 +3292,10 @@ function showSettingsTab(tab) {
   if (hardware) loadDevices();
   if (name === "tables") paintTableShiftHistory();
   if (name === "aggregator") void loadAggregatorSettings();
+  if (email) {
+    bindBusinessEmail();
+    void loadBusinessEmail();
+  }
   return true;
 }
 
@@ -9630,8 +9763,86 @@ function findInvoice(id) {
   return orderCache.find((row) => row.id === id) || (lastInvoice?.id === id ? lastInvoice : null);
 }
 
+function invoiceEmailBox(order) {
+  const cust = (state.customers || []).find((row) => row.id === order?.customer_id);
+  const email = order?.customer_email || cust?.email || "";
+  return `<div class="invoice-email-box" data-invoice-email="${escapeHtml(order?.id || "")}">
+      <label>Send invoice copy
+        <input data-invoice-email-to type="email" maxlength="160" autocomplete="email" value="${escapeHtml(email)}" placeholder="Customer email address" />
+      </label>
+      <div class="invoice-email-actions">
+        <button class="btn" type="button" data-send-invoice-email="${escapeHtml(order?.id || "")}">Send Email</button>
+      </div>
+      <p class="hint" data-invoice-email-status></p>
+      <ul class="invoice-email-log" data-invoice-email-log></ul>
+    </div>`;
+}
+
+function paintInvoiceEmailLog(orderId, rows) {
+  document.querySelectorAll("[data-invoice-email]").forEach((box) => {
+    if (box.getAttribute("data-invoice-email") !== orderId) return;
+    const log = box.querySelector("[data-invoice-email-log]");
+    if (!log) return;
+    log.innerHTML = (rows || [])
+      .slice(0, 8)
+      .map((row) => {
+        const label = row.status === "sent" ? "Sent" : row.status === "failed" ? "Failed" : row.status === "pending" ? "Sending" : "Skipped";
+        const why = row.status === "failed" && row.error ? ` — ${row.error}` : "";
+        return `<li>${escapeHtml(label)} to ${escapeHtml(row.recipient || "—")} · ${escapeHtml(formatShopDateTime(row.created_at))}${escapeHtml(why)}</li>`;
+      })
+      .join("");
+  });
+}
+
+async function loadInvoiceEmailLog(orderId) {
+  if (!orderId) return;
+  try {
+    const data = await api(`/api/orders/${encodeURIComponent(orderId)}/emails`);
+    paintInvoiceEmailLog(orderId, data.emails || []);
+  } catch {
+    /* history stays blank when the shop has not sent a copy yet */
+  }
+}
+
+async function onSendInvoiceEmail(btn) {
+  const orderId = btn.getAttribute("data-send-invoice-email");
+  const box = btn.closest("[data-invoice-email]");
+  const to = box?.querySelector("[data-invoice-email-to]")?.value || "";
+  const status = box?.querySelector("[data-invoice-email-status]");
+  const paint = (text, kind) => {
+    if (!status) return;
+    status.textContent = text;
+    status.className = kind === "ok" ? "hint ok" : kind === "bad" ? "hint error" : "hint";
+  };
+  btn.disabled = true;
+  paint("Sending invoice email…", "");
+  try {
+    const post = (force) =>
+      api(`/api/orders/${encodeURIComponent(orderId)}/email`, {
+        method: "POST",
+        body: JSON.stringify({ to, force: force ? 1 : 0 }),
+      });
+    let data = await post(false);
+    if (data.duplicate) {
+      const again = window.confirm("This invoice was just emailed to that address. Send it again?");
+      if (!again) {
+        paint("Not sent again.", "");
+        return;
+      }
+      data = await post(true);
+    }
+    paint(data.ok ? `Invoice emailed to ${data.to || to}` : data.error || "Email was not sent", data.ok ? "ok" : "bad");
+    if (data.emails) paintInvoiceEmailLog(orderId, data.emails);
+  } catch (err) {
+    paint(err.message || "Email was not sent", "bad");
+  } finally {
+    btn.disabled = false;
+  }
+}
+
 function invoiceModalPrintActions(look, order) {
   return `<div class="print-actions">
+      ${invoiceEmailBox(order)}
       ${invoiceShareButtons(order, { copyId: "modal-copy-invoice" })}
       <button class="btn${look === "pos" ? " primary" : ""}" type="button" id="modal-print-pos">Print POS slip</button>
       <button class="btn${look === "office" ? " primary" : ""}" type="button" id="modal-print-office">Print official bill</button>
@@ -9662,6 +9873,9 @@ function bindInvoiceModalPrint(order) {
     const modal = $("modal");
     if (modal) modal.hidden = true;
   };
+  const sendEmail = $("modal-body")?.querySelector("[data-send-invoice-email]");
+  if (sendEmail) sendEmail.onclick = () => onSendInvoiceEmail(sendEmail);
+  if (order?.id) void loadInvoiceEmailLog(order.id);
 }
 
 function showInvoicePrintModal(order, { title, message } = {}) {
@@ -10031,6 +10245,7 @@ function showOrder(o) {
       </div>
       ${invoiceSettlementHtml(withOrderPayments(o))}
       ${renderOrderStatusControls(o)}
+      ${invoiceEmailBox(o)}
       ${lineCount ? "" : '<p class="hint error">Line items missing — refresh or re-upload pos-php-till.php</p>'}
     </div>
     ${invoiceLookTabs(look)}
@@ -10044,6 +10259,7 @@ function showOrder(o) {
       <button class="btn" type="button" data-edit-order="${escapeHtml(o.id)}"${cancelled ? " disabled title=\"Restore order status before editing items\"" : ""}>Change items</button>
       ${canDeleteInvoice() ? `<button class="btn danger" type="button" data-delete-order="${escapeHtml(o.id)}">Delete invoice</button>` : ""}
     </div>`;
+  void loadInvoiceEmailLog(o.id);
 }
 
 function renderOrdersList() {
@@ -12140,6 +12356,11 @@ $("order-pane").addEventListener("click", async (e) => {
     setInvoiceLook(lookBtn.dataset.invoiceLook);
     const current = orderCache.find((row) => row.id === selectedOrderId);
     if (current) showOrder(current);
+    return;
+  }
+  const sendEmailBtn = e.target.closest("[data-send-invoice-email]");
+  if (sendEmailBtn) {
+    void onSendInvoiceEmail(sendEmailBtn);
     return;
   }
   const printBtn = e.target.closest("[data-print]");

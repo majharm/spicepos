@@ -301,7 +301,7 @@ function attachmentParts(mix, attachments) {
   return chunks;
 }
 
-export function mimePayload({ from, fromName, to, subject, text, html, image, attachments = [] }) {
+export function mimePayload({ from, fromName, to, replyTo, subject, text, html, image, attachments = [] }) {
   const alt = `posalt${Date.now().toString(36)}`;
   const htmlBody = html || `<pre>${escapeHtml(text)}</pre>`;
   const altPart = [
@@ -320,9 +320,10 @@ export function mimePayload({ from, fromName, to, subject, text, html, image, at
   const headers = [
     `From: ${headerAddress(from, fromName)}`,
     `To: ${to}`,
+    replyTo ? `Reply-To: ${headerAddress(replyTo, "")}` : "",
     `Subject: ${encodeSubject(subject)}`,
     "MIME-Version: 1.0",
-  ];
+  ].filter(Boolean);
   const files = (attachments || []).filter(Boolean);
   const parsed = files.length ? null : parseDataImage(image);
   let body;
@@ -365,9 +366,19 @@ export function mimePayload({ from, fromName, to, subject, text, html, image, at
   return [...headers, body].join("\r\n");
 }
 
-export async function sendMail({ to, subject, text, html, image, attachments, timeoutMs: timeoutOpt } = {}) {
-  const cfg = smtpConfig();
-  if (!smtpConfigured(cfg)) return { ok: false, skipped: true, error: "SMTP not configured" };
+export function safeMailError(err, secret = "") {
+  let message = String(err?.message || err || "Email was not sent");
+  const hidden = String(secret || "");
+  if (hidden && hidden.length >= 3) message = message.split(hidden).join("[redacted]");
+  return message.replace(/[\r\n]+/g, " ").slice(0, 180);
+}
+
+export async function sendMail({ to, subject, text, html, image, attachments, timeoutMs: timeoutOpt, smtp, replyTo } = {}) {
+  const cfg = smtp || smtpConfig();
+  if (!smtp && !smtpConfigured(cfg)) return { ok: false, skipped: true, error: "SMTP not configured" };
+  if (smtp && !(cfg.host && cfg.port && cfg.user && cfg.pass && cfg.from)) {
+    return { ok: false, error: "Email settings are incomplete" };
+  }
   const recipient = String(to || "").trim();
   if (!recipient || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipient)) {
     return { ok: false, error: "Invalid recipient" };
@@ -416,6 +427,7 @@ export async function sendMail({ to, subject, text, html, image, attachments, ti
       from: cfg.from,
       fromName: cfg.fromName,
       to: recipient,
+      replyTo: replyTo || cfg.replyTo || "",
       subject,
       text,
       html,
@@ -430,7 +442,7 @@ export async function sendMail({ to, subject, text, html, image, attachments, ti
     await io.write("QUIT").catch(() => {});
     return { ok: true };
   } catch (err) {
-    return { ok: false, error: String(err.message || err) };
+    return { ok: false, error: safeMailError(err, cfg.pass) };
   } finally {
     try {
       socket?.end();

@@ -214,7 +214,7 @@ test("recurring invoices stay behind the business switch and post through sales"
   assert.doesNotMatch(index, /id="set-recurring-invoices" checked/);
   assert.match(index, /js\/recurring\.js\?v=20261027rec1/);
   assert.match(index, /js\/recurring-ui\.js\?v=20261027rec3/);
-  assert.match(index, /pos\.css\?v=20261027rec3/);
+  assert.match(index, /pos\.css\?v=20261027mail1/);
   assert.match(index, /id="recur-filters"/);
   assert.match(index, /class="recur-stat-row"/);
   assert.match(ui, /settings-section/);
