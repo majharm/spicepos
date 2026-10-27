@@ -82,6 +82,12 @@ test("purchase entry is manual search only and still saves stock", () => {
   assert.match(app, /po-qty-cell/);
   assert.match(app, /po-item-search/);
   assert.match(app, /allow_empty_barcodes: allowEmpty/);
+  assert.match(app, /if \(!barcodes\.length\) allowEmpty = true/);
+  assert.match(app, /function capturePoDraft/);
+  assert.match(app, /poLineDraft\.clear\(\)/);
+  assert.match(app, /\$\("po-item-search"\)\?\.addEventListener\("keydown"/);
+  const searchKeys = app.slice(app.indexOf('$("po-item-search")?.addEventListener("keydown"'), app.indexOf('$("purchase-form").addEventListener("input"'));
+  assert.match(searchKeys, /preventDefault\(\)/);
   assert.match(app, /generate_barcodes: false/);
   assert.doesNotMatch(app, /data-po-gen-bc="\$\{key\}" checked/);
   const classic = app.slice(app.indexOf("function renderClassicPoLines"), app.indexOf("function apparelPoGroupSearch"));

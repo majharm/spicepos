@@ -7229,18 +7229,183 @@ function setPoHint(msg, kind) {
   el.className = kind ? `hint ${kind}` : "hint";
 }
 
+const poLineDraft = new Map();
+
+function poItemHay(item) {
+  return [item?.name, item?.hsn, item?.code, item?.barcode, item?.category, item?.subcategory, item?.color, item?.size, item?.wearer_type]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+}
+
+function classicDraftDirty(item, fields) {
+  if (fields.checked) return true;
+  if (String(fields.barcodes || "").trim()) return true;
+  if (fields.expiry) return true;
+  if (Number(fields.discount) > 0) return true;
+  const unit = itemUnit(item || {});
+  const defaultQty = POSUnits.isCount(unit) ? 1 : 1000;
+  if (String(fields.qty ?? "") !== "" && Number(fields.qty) !== defaultQty) return true;
+  if (item && String(fields.rate ?? "") !== "" && Number(fields.rate) !== Number(item.purchase_rate)) return true;
+  if (item && String(fields.gst ?? "") !== "" && Number(fields.gst) !== Number(item.gst_rate || 0)) return true;
+  return false;
+}
+
+function apparelDraftDirty(fields) {
+  if (fields.checked) return true;
+  if (fields.gen) return true;
+  if (Number(fields.discount) > 0) return true;
+  if ((fields.sizes || []).some((row) => Number(row.qty) > 0)) return true;
+  if ((fields.extras || []).some((row) => String(row.name || "").trim() || Number(row.qty) > 0)) return true;
+  if (Object.values(fields.barcodes || {}).some((value) => String(value || "").trim())) return true;
+  return false;
+}
+
+function capturePoDraft() {
+  document.querySelectorAll("tr[data-po-row]").forEach((tr) => {
+    const id = tr.dataset.poRow;
+    if (!id) return;
+    const item = (state.items || []).find((row) => row.id === id);
+    const fields = {
+      kind: "classic",
+      checked: Boolean(tr.querySelector("[data-po-item]")?.checked),
+      qty: tr.querySelector("[data-po-qty]")?.value ?? "",
+      rate: document.querySelector(`[data-po-rate="${CSS.escape(id)}"]`)?.value ?? "",
+      gst: document.querySelector(`[data-po-gst="${CSS.escape(id)}"]`)?.value ?? "",
+      discount: document.querySelector(`[data-po-discount="${CSS.escape(id)}"]`)?.value ?? "",
+      expiry: document.querySelector(`[data-po-expiry="${CSS.escape(id)}"]`)?.value ?? "",
+      barcodes: document.querySelector(`[data-po-barcodes="${CSS.escape(id)}"]`)?.value ?? "",
+    };
+    if (classicDraftDirty(item, fields)) poLineDraft.set(id, fields);
+    else poLineDraft.delete(id);
+  });
+  document.querySelectorAll("[data-po-product-row]").forEach((card) => {
+    const key = card.dataset.poProductRow;
+    if (!key) return;
+    const sizes = [];
+    card.querySelectorAll("[data-po-size-qty]").forEach((inp) => {
+      if (Number(inp.value) > 0) sizes.push({ color: inp.dataset.poColor || "", size: inp.dataset.poSizeQty || "", qty: inp.value });
+    });
+    const extras = [];
+    card.querySelectorAll("[data-po-extra-size]").forEach((wrap) => {
+      const name = wrap.querySelector("[data-po-extra-name]")?.value || "";
+      const qty = wrap.querySelector("[data-po-extra-qty]")?.value || "";
+      if (String(name).trim() || Number(qty) > 0) extras.push({ color: wrap.dataset.poColor || "", name, qty });
+    });
+    const barcodes = {};
+    card.querySelectorAll("[data-po-size-barcodes]").forEach((ta) => {
+      if (String(ta.value || "").trim()) barcodes[ta.dataset.poSizeBarcodes] = ta.value;
+    });
+    const fields = {
+      kind: "apparel",
+      checked: Boolean(card.querySelector("[data-po-product]")?.checked),
+      rate: card.querySelector("[data-po-rate]")?.value ?? "",
+      gst: card.querySelector("[data-po-gst]")?.value ?? "",
+      discount: card.querySelector("[data-po-discount]")?.value ?? "",
+      gen: Boolean(card.querySelector("[data-po-gen-bc]")?.checked),
+      colors: [...card.querySelectorAll("[data-po-color-block]")].map((row) => row.dataset.poColorBlock || ""),
+      sizes,
+      extras,
+      barcodes,
+    };
+    if (apparelDraftDirty(fields)) poLineDraft.set(`apparel:${key}`, fields);
+    else poLineDraft.delete(`apparel:${key}`);
+  });
+}
+
+function poDraftWantsItem(item) {
+  if (!item) return false;
+  if (poLineDraft.has(item.id)) return true;
+  const key = globalThis.POSGarmentPurchase?.styleKey?.(item);
+  return Boolean(key && poLineDraft.has(`apparel:${key}`));
+}
+
+function restoreClassicDraft() {
+  for (const [id, fields] of poLineDraft) {
+    if (fields.kind !== "classic") continue;
+    const box = document.querySelector(`[data-po-item="${CSS.escape(id)}"]`);
+    if (!box) continue;
+    box.checked = Boolean(fields.checked);
+    const set = (sel, value) => {
+      const el = document.querySelector(sel);
+      if (el && value != null) el.value = value;
+    };
+    set(`[data-po-qty="${CSS.escape(id)}"]`, fields.qty);
+    set(`[data-po-rate="${CSS.escape(id)}"]`, fields.rate);
+    set(`[data-po-gst="${CSS.escape(id)}"]`, fields.gst);
+    set(`[data-po-discount="${CSS.escape(id)}"]`, fields.discount);
+    set(`[data-po-expiry="${CSS.escape(id)}"]`, fields.expiry);
+    set(`[data-po-barcodes="${CSS.escape(id)}"]`, fields.barcodes);
+  }
+}
+
+function restoreApparelDraft() {
+  const G = globalThis.POSGarmentPurchase;
+  document.querySelectorAll("[data-po-product-row]").forEach((card) => {
+    const fields = poLineDraft.get(`apparel:${card.dataset.poProductRow}`);
+    if (!fields) return;
+    const box = card.querySelector("[data-po-product]");
+    if (box) box.checked = Boolean(fields.checked);
+    const rate = card.querySelector("[data-po-rate]");
+    if (rate && fields.rate != null) rate.value = fields.rate;
+    const gst = card.querySelector("[data-po-gst]");
+    if (gst && fields.gst != null) gst.value = fields.gst;
+    const discount = card.querySelector("[data-po-discount]");
+    if (discount && fields.discount != null) discount.value = fields.discount;
+    const gen = card.querySelector("[data-po-gen-bc]");
+    if (gen) gen.checked = Boolean(fields.gen);
+    const sizes = String(card.dataset.poSizes || "").split(/\s+/).filter(Boolean);
+    for (const color of fields.colors || []) {
+      if (!color) continue;
+      const exists = [...card.querySelectorAll("[data-po-color-block]")].some((row) => G?.colorsEqual?.(row.dataset.poColorBlock, color) || row.dataset.poColorBlock === color);
+      if (!exists) card.querySelector("[data-po-color-blocks]")?.insertAdjacentHTML("beforeend", apparelPoColorBlockHtml(color, sizes, []));
+    }
+    for (const row of fields.sizes || []) {
+      const input = [...card.querySelectorAll("[data-po-size-qty]")].find((inp) =>
+        (G?.colorsEqual ? G.colorsEqual(inp.dataset.poColor, row.color) : String(inp.dataset.poColor || "") === String(row.color || ""))
+        && (G?.sizesEqual?.(inp.dataset.poSizeQty, row.size) || String(inp.dataset.poSizeQty || "") === String(row.size || "")));
+      if (input) input.value = row.qty;
+    }
+    for (const extra of fields.extras || []) {
+      const sameColor = (value) => G?.colorsEqual ? G.colorsEqual(value, extra.color) : String(value || "") === String(extra.color || "");
+      let cell = [...card.querySelectorAll("[data-po-extra-size]")].find((wrap) => sameColor(wrap.dataset.poColor) && !wrap.querySelector("[data-po-extra-name]")?.value);
+      if (!cell) {
+        const block = [...card.querySelectorAll("[data-po-color-block]")].find((row) => sameColor(row.dataset.poColorBlock));
+        block?.querySelector(".po-size-matrix")?.insertAdjacentHTML("beforeend", extraSizeCellHtml(extra.color || block.dataset.poColorBlock || ""));
+        cell = block?.querySelector("[data-po-extra-size]:last-child");
+      }
+      const nameEl = cell?.querySelector("[data-po-extra-name]");
+      const qtyEl = cell?.querySelector("[data-po-extra-qty]");
+      if (nameEl) nameEl.value = extra.name || "";
+      if (qtyEl) qtyEl.value = extra.qty || "";
+    }
+  });
+}
+
+function restoreApparelBarcodes() {
+  document.querySelectorAll("[data-po-product-row]").forEach((card) => {
+    const fields = poLineDraft.get(`apparel:${card.dataset.poProductRow}`);
+    if (!fields?.barcodes) return;
+    for (const [key, value] of Object.entries(fields.barcodes)) {
+      const ta = card.querySelector(`[data-po-size-barcodes="${CSS.escape(key)}"]`);
+      if (ta) ta.value = value;
+    }
+  });
+}
+
 function renderPoLines() {
   const el = $("po-lines");
   if (!el) return;
   if ($("po-date") && !$("po-date").value) $("po-date").value = ymd();
+  capturePoDraft();
   const q = ($("po-item-search")?.value || "").trim().toLowerCase();
-  let items = activeItems();
-  if (q) {
-    items = items.filter((i) => [i.name, i.hsn, i.code, i.category, i.subcategory, i.color, i.size, i.wearer_type].join(" ").toLowerCase().includes(q));
-  }
-  const cap = fastModeOn() ? 80 : items.length;
-  const shown = items.slice(0, cap);
-  const moreHint = listRenderHint(shown.length, items.length, ". Search to find the rest.");
+  const all = activeItems();
+  const matched = q ? all.filter((item) => poItemHay(item).includes(q)) : all;
+  const matchedIds = new Set(matched.map((item) => item.id));
+  const pinned = all.filter((item) => poDraftWantsItem(item) && !matchedIds.has(item.id));
+  const cap = fastModeOn() ? 80 : matched.length;
+  const shown = pinned.concat(matched.slice(0, cap));
+  const moreHint = `${q && !matched.length ? '<p class="hint">No other matching items. Selected lines stay on this bill.</p>' : ""}${listRenderHint(shown.length, pinned.length + matched.length, ". Search to find the rest.")}`;
   if (!shown.length) {
     el.innerHTML = q ? '<p class="hint">No matching items.</p>' : '<p class="hint">No items in the catalog yet.</p>';
     paintPoTotals();
@@ -7248,9 +7413,16 @@ function renderPoLines() {
   }
   if (isApparelShop()) {
     renderApparelPoLines(el, shown, moreHint);
+    restoreApparelDraft();
+    paintPoTotals();
+    restoreApparelBarcodes();
+    paintPoTotals();
     return;
   }
   renderClassicPoLines(el, shown, moreHint);
+  restoreClassicDraft();
+  if (!fastModeOn()) filterPoLines();
+  paintPoTotals();
 }
 
 function renderClassicPoLines(el, shown, moreHint) {
@@ -7259,15 +7431,15 @@ function renderClassicPoLines(el, shown, moreHint) {
   for (const i of shown) {
     const unit = itemUnit(i);
     const qty = POSUnits.isCount(unit) ? 1 : 1000;
-    const search = [i.name, i.hsn, i.code, i.category, i.subcategory].join(" ").toLowerCase();
+    const search = poItemHay(i);
     if (POSUnits.isCount(unit)) {
       panels.push(`<div class="po-bc-panel" data-po-bc-row="${escapeHtml(i.id)}" hidden>
         <div class="po-bc-box">
           <div class="po-bc-head">
             <strong>Barcodes for ${escapeHtml(i.name)}</strong>
-            <span class="hint" data-po-bc-count="${escapeHtml(i.id)}">0 / ${qty} — one barcode per piece</span>
+            <span class="hint" data-po-bc-count="${escapeHtml(i.id)}">0 / ${qty} — barcodes optional</span>
           </div>
-          <textarea class="po-bc-list" data-po-barcodes="${escapeHtml(i.id)}" rows="4" placeholder="One barcode per line — ${qty} pcs needs ${qty} codes"></textarea>
+          <textarea class="po-bc-list" data-po-barcodes="${escapeHtml(i.id)}" rows="4" placeholder="Optional — one barcode per line"></textarea>
         </div>
       </div>`);
     }
@@ -7390,7 +7562,7 @@ function renderApparelPoLines(el, shown, moreHint) {
         <div class="po-bc-box">
           <div class="po-bc-head">
             <strong>Barcodes for ${escapeHtml(g.name)}</strong>
-            <span class="hint" data-po-bc-count="${key}">Type one barcode per piece. New codes are generated only if Generate unique barcodes is on.</span>
+            <span class="hint" data-po-bc-count="${key}">Optional. Leave blank, or type one barcode per piece. New codes are generated only if Generate unique barcodes is on.</span>
           </div>
           <div class="po-size-bc-list" data-po-size-bc="${key}"></div>
         </div>
@@ -7578,14 +7750,16 @@ function filterPoLines() {
   const q = ($("po-item-search")?.value || "").trim().toLowerCase();
   document.querySelectorAll("#po-lines tbody tr[data-po-row]").forEach((tr) => {
     const hay = tr.dataset.poSearch || "";
-    const hide = Boolean(q) && !hay.includes(q);
+    const keep = Boolean(tr.querySelector("[data-po-item]")?.checked) || poLineDraft.has(tr.dataset.poRow);
+    const hide = Boolean(q) && !hay.includes(q) && !keep;
     tr.hidden = hide;
     const bc = document.querySelector(`[data-po-bc-row="${tr.dataset.poRow}"]`);
     if (bc && hide) bc.hidden = true;
   });
   document.querySelectorAll("#po-lines [data-po-product-row]").forEach((card) => {
     const hay = card.dataset.poSearch || "";
-    card.hidden = Boolean(q) && !hay.includes(q);
+    const keep = Boolean(card.querySelector("[data-po-product]")?.checked) || poLineDraft.has(`apparel:${card.dataset.poProductRow}`);
+    card.hidden = Boolean(q) && !hay.includes(q) && !keep;
   });
   if (!q) refreshPoBarcodeRows();
 }
@@ -7613,11 +7787,11 @@ function refreshPoBarcodeRows() {
     }
     const countEl = document.querySelector(`[data-po-bc-count="${id}"]`);
     if (countEl) {
-      countEl.textContent = `${n} / ${qty} — one barcode per piece`;
-      countEl.className = n === qty && qty > 0 ? "hint ok" : "hint";
+      countEl.textContent = n ? `${n} / ${qty} barcodes` : `${qty} pcs — barcodes optional`;
+      countEl.className = !n || n === qty ? "hint ok" : "hint";
     }
     if (ta) {
-      ta.placeholder = `${qty} barcode${qty === 1 ? "" : "s"}, one per line`;
+      ta.placeholder = "Optional — one barcode per line";
       ta.rows = Math.min(8, Math.max(3, qty));
     }
   });
@@ -13476,6 +13650,27 @@ $("packs-table")?.addEventListener("click", (e) => {
   if (pack) fillPackForm(pack);
 });
 
+$("po-item-search")?.addEventListener("keydown", (e) => {
+  if (e.key !== "Enter") return;
+  e.preventDefault();
+  const q = String(e.target.value || "").trim().toLowerCase();
+  if (!q) return;
+  if (isApparelShop()) {
+    const cards = [...document.querySelectorAll("[data-po-product-row]")].filter((card) => !card.hidden && String(card.dataset.poSearch || "").includes(q));
+    if (cards.length !== 1) return;
+    const box = cards[0].querySelector("[data-po-product]");
+    if (box) box.checked = true;
+    (cards[0].querySelector("[data-po-size-qty]") || cards[0].querySelector("[data-po-rate]"))?.focus();
+    paintPoTotals();
+    return;
+  }
+  const rows = [...document.querySelectorAll("tr[data-po-row]")].filter((tr) => !tr.hidden && String(tr.dataset.poSearch || "").includes(q));
+  if (rows.length !== 1) return;
+  const box = rows[0].querySelector("[data-po-item]");
+  if (box) box.checked = true;
+  rows[0].querySelector("[data-po-qty]")?.focus();
+  paintPoTotals();
+});
 $("purchase-form").addEventListener("input", (e) => {
   if (e.target.id === "po-item-search") {
     if (fastModeOn()) renderPoLines();
@@ -13564,7 +13759,7 @@ $("purchase-form").addEventListener("submit", async (e) => {
       if (POSUnits.isCount(unit)) {
         const pieces = Math.round(quantity_gm);
         barcodes = parsePoBarcodes(document.querySelector(`[data-po-barcodes="${box.dataset.poItem}"]`)?.value);
-        if (!barcodes.length && box.dataset.poCatalog === "1") allowEmpty = true;
+        if (!barcodes.length) allowEmpty = true;
         else if (barcodes.length !== pieces) {
           throw new Error(`${item?.name || "Item"}: enter ${pieces} barcodes for ${pieces} pcs (entered ${barcodes.length})`);
         }
@@ -13597,6 +13792,7 @@ $("purchase-form").addEventListener("submit", async (e) => {
     const n = Number(saved?.purchase?.barcode_count || saved?.barcode_count) || 0;
     $("po-hint").textContent = n ? `Saved — ${n} barcodes added` : "Saved";
     $("po-hint").className = "hint ok";
+    poLineDraft.clear();
     $("purchase-form").reset();
     $("purchase-new").open = false;
     renderPoLines();
