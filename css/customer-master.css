@@ -59,3 +59,82 @@
   .classic-cust-toolbar { grid-template-columns: 1fr; }
   .cust-actions .btn { flex: 1 1 auto; }
 }
+
+/* customers-desk: collect due 2026 */
+.customers-desk #cust-use-match {
+  grid-column: 1 / -1;
+  justify-self: stretch;
+  border-color: #fdba74;
+  background: #fff7ed;
+  color: #9a3412;
+}
+.customers-desk #cust-use-match[hidden] { display: none !important; }
+#cust-match-hint:empty { display: none; }
+.customers-desk #due-outstanding {
+  margin: 0;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: #fff7ed;
+  color: #9a3412;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.due-invoice-field {
+  position: relative;
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  color: var(--muted, #64748b);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+}
+.due-invoice-native {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
+.due-invoice-picks {
+  display: grid;
+  gap: 6px;
+  max-height: 168px;
+  overflow: auto;
+}
+.due-invoice-pick {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: 40px;
+  padding: 8px 12px;
+  border: 1px solid var(--line-strong, #d7dee8);
+  border-radius: 10px;
+  background: #fff;
+  color: var(--text, #0f172a);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: none;
+  text-align: left;
+  cursor: pointer;
+}
+.due-invoice-pick.is-on {
+  border-color: #0d9488;
+  background: #f0fdfa;
+  box-shadow: inset 3px 0 0 #0d9488;
+}
+.customers-desk > .customers-list-bar { margin: 0; }
+.customers-desk > #customers-table.table-wrap { padding: 0; margin: 0; }
+#customers-table tr.is-due td.cust-due,
+#customers-table td.cust-due.is-due { color: #9a3412; }
+@media (max-width: 720px) {
+  .due-invoice-pick { min-height: 44px; font-size: 16px; }
+}

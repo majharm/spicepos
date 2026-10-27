@@ -25,11 +25,13 @@
     if (!match) {
       hint.textContent = "";
       hint.className = "hint";
+      if ((hintId || "cust-match-hint") === "cust-match-hint" && $("cust-use-match")) $("cust-use-match").hidden = true;
       return;
     }
     hint.textContent = warning || M()?.warningCopy(match, inputBody()) || "This customer already exists.";
     hint.className = "hint error";
     hint.dataset.matchId = match.id || "";
+    if ((hintId || "cust-match-hint") === "cust-match-hint" && $("cust-use-match")) $("cust-use-match").hidden = false;
   }
 
   function editingId() {

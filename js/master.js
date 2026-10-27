@@ -3034,7 +3034,7 @@ async function render() {
                   <option value="">All languages</option>
                   ${
                     window.POSI18n
-                      ? window.POSI18n.LOCALES.map((l) => `<option value="${attr(l.code)}">${attr(l.native)} ${attr(l.name)}</option>`).join("")
+                      ? window.POSI18n.LOCALES.map((l) => `<option value="${attr(l.code)}">${attr(l.native === l.name ? l.name : `${l.native} ${l.name}`)}</option>`).join("")
                       : `<option value="en">English</option>`
                   }
                 </select>

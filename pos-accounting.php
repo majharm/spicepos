@@ -34,6 +34,24 @@ function pos_default_coa() {
   ];
 }
 
+function pos_unique_open_invoices($rows) {
+  if (!is_array($rows)) return [];
+  $seenId = [];
+  $seenNo = [];
+  $out = [];
+  foreach ($rows as $o) {
+    if (!is_array($o)) continue;
+    $id = trim((string) ($o["id"] ?? ""));
+    $num = trim((string) ($o["order_number"] ?? ""));
+    if ($id !== "" && isset($seenId[$id])) continue;
+    if ($num !== "" && isset($seenNo[$num])) continue;
+    if ($id !== "") $seenId[$id] = true;
+    if ($num !== "") $seenNo[$num] = true;
+    $out[] = $o;
+  }
+  return $out;
+}
+
 function pos_expense_categories() {
   $out = [];
   foreach (pos_default_coa() as $row) {
@@ -827,7 +845,7 @@ function pos_accounts_dispatch($path, $method, $body, $bid, $auth, $branchId, $u
     $customerId = trim((string) ($_GET["customer_id"] ?? ""));
     if ($customerId === "") pos_send(400, ["error" => "customer_id is required", "php" => true]);
     try {
-      pos_send(200, pos_q(
+      pos_send(200, pos_unique_open_invoices(pos_q(
         "SELECT id, order_number, created_at, total, COALESCE(amount_paid,0) AS amount_paid,
                 COALESCE(previous_due,0) AS previous_due, COALESCE(current_due,0) AS current_due,
                 payment_method, payment_status
@@ -838,9 +856,9 @@ function pos_accounts_dispatch($path, $method, $body, $bid, $auth, $branchId, $u
          ORDER BY created_at ASC",
         "ss",
         [$bid, $customerId]
-      ));
+      )));
     } catch (Exception $e) {
-      pos_send(200, pos_q(
+      pos_send(200, pos_unique_open_invoices(pos_q(
         "SELECT id, order_number, created_at, total, payment_method, payment_status
          FROM sales_orders
          WHERE business_id = ? AND customer_id = ?
@@ -850,7 +868,7 @@ function pos_accounts_dispatch($path, $method, $body, $bid, $auth, $branchId, $u
          ORDER BY created_at ASC",
         "ss",
         [$bid, $customerId]
-      ));
+      )));
     }
   }
 

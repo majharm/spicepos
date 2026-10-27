@@ -133,10 +133,14 @@
     });
   }
 
+  function localeOptionLabel(l) {
+    return l.native === l.name ? l.name : l.native + " " + l.name;
+  }
+
   function optionsHtml(selected) {
     return LOCALES.map((l) => {
       const sel = l.code === selected ? " selected" : "";
-      return '<option value="' + l.code + '"' + sel + ">" + l.native + " " + l.name + "</option>";
+      return '<option value="' + l.code + '"' + sel + ">" + localeOptionLabel(l) + "</option>";
     }).join("");
   }
 

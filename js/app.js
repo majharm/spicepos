@@ -6910,8 +6910,20 @@ function renderItemsTable() {
     .join("")}`;
 }
 
+function uniqueById(rows) {
+  const seen = new Set();
+  const out = [];
+  for (const row of rows || []) {
+    const id = String(row?.id || "");
+    if (id && seen.has(id)) continue;
+    if (id) seen.add(id);
+    out.push(row);
+  }
+  return out;
+}
+
 function dueCustomers() {
-  return (state.customers || []).filter((c) => customerDue(c) > 0);
+  return uniqueById((state.customers || []).filter((c) => customerDue(c) > 0));
 }
 
 function fillDueCustomerSelect(selectedId) {
@@ -6940,20 +6952,70 @@ function paintDueOutstanding() {
   if ($("due-date") && !$("due-date").value) $("due-date").value = shopDateInputValue();
 }
 
+let dueInvoiceFillSeq = 0;
+
+function uniqueOpenInvoices(rows) {
+  const seenId = new Set();
+  const seenNo = new Set();
+  const out = [];
+  for (const o of Array.isArray(rows) ? rows : []) {
+    const id = String(o?.id || "").trim();
+    const num = String(o?.order_number || "").trim();
+    if (id && seenId.has(id)) continue;
+    if (num && seenNo.has(num)) continue;
+    if (id) seenId.add(id);
+    if (num) seenNo.add(num);
+    out.push(o);
+  }
+  return out;
+}
+
+function paintDueInvoicePicks(sel) {
+  const box = $("due-invoice-picks");
+  if (!box || !sel) return;
+  const current = sel.value;
+  box.innerHTML = [...sel.options]
+    .map((opt) => {
+      const on = opt.value === current;
+      return `<button type="button" class="due-invoice-pick${on ? " is-on" : ""}" data-due-invoice="${escapeHtml(opt.value)}" aria-pressed="${on ? "true" : "false"}">${escapeHtml(opt.textContent || "")}</button>`;
+    })
+    .join("");
+}
+
+function applyDueInvoiceAmount() {
+  const sel = $("due-invoice");
+  const amt = $("due-amount");
+  if (!sel || !amt) return;
+  const opt = sel.selectedOptions?.[0];
+  const invoiceDue = Number(opt?.dataset?.due || 0);
+  const cap = Number(amt.max || 0);
+  const next = sel.value && invoiceDue > 0 ? (cap > 0 ? Math.min(invoiceDue, cap) : invoiceDue) : cap;
+  if (next > 0) amt.value = String(next);
+}
+
 async function fillDueInvoiceSelect(customerId, due) {
   const sel = $("due-invoice");
   if (!sel) return;
+  const seq = ++dueInvoiceFillSeq;
+  const keep = sel.value;
   sel.innerHTML = `<option value="">Unallocated (customer due)</option>`;
+  paintDueInvoicePicks(sel);
   if (!customerId || !(Number(due) > 0)) return;
   try {
     const rows = await api(`/api/accounts/open-invoices?customer_id=${encodeURIComponent(customerId)}`);
-    (Array.isArray(rows) ? rows : []).forEach((o) => {
+    if (seq !== dueInvoiceFillSeq) return;
+    if (($("due-customer")?.value || "") !== String(customerId)) return;
+    sel.innerHTML = `<option value="">Unallocated (customer due)</option>`;
+    for (const o of uniqueOpenInvoices(rows)) {
       const left = Math.max(0, Number(o.total || 0) - Number(o.amount_paid || 0));
+      const dueAmt = left > 0.004 ? left : Number(o.current_due || 0);
       sel.insertAdjacentHTML(
         "beforeend",
-        `<option value="${escapeHtml(o.id)}">${escapeHtml(o.order_number || o.id)} · due ${money(left || o.current_due || 0)}</option>`,
+        `<option value="${escapeHtml(o.id)}" data-due="${Number(dueAmt) || 0}">${escapeHtml(o.order_number || o.id)} · due ${money(dueAmt)}</option>`,
       );
-    });
+    }
+    if (keep && [...sel.options].some((opt) => opt.value === keep)) sel.value = keep;
+    paintDueInvoicePicks(sel);
   } catch {
     /* optional */
   }
@@ -7058,6 +7120,7 @@ function resetCustomerForm() {
     matchHint.textContent = "";
     matchHint.className = "hint";
   }
+  if ($("cust-use-match")) $("cust-use-match").hidden = true;
 }
 
 function fillCustomerForm(c) {
@@ -7108,7 +7171,7 @@ function paintCustomerDetails(c) {
 
 function renderCustomersTable() {
   applyInvoiceDuesToCustomers();
-  const list = Array.isArray(state.customers) ? state.customers : [];
+  const list = uniqueById(Array.isArray(state.customers) ? state.customers : []);
   const dueTotal = dueCustomers().reduce((s, c) => s + customerDue(c), 0);
   const stats = $("customers-hero-stats");
   if (stats) {
@@ -7139,7 +7202,7 @@ function renderCustomersTable() {
   </tr></thead><tbody>${rows
     .map((c) => {
       const due = customerDue(c);
-      return `<tr>
+      return `<tr class="${due > 0 ? "is-due" : ""}">
       <td>${escapeHtml(c.code)}</td>
       <td>${escapeHtml(c.business_name || c.name)}</td>
       ${isPharmacyShop()
@@ -14059,6 +14122,16 @@ $("due-customer")?.addEventListener("change", () => {
   if (c) $("due-amount").value = String(customerDue(c));
 });
 
+$("due-invoice-picks")?.addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-due-invoice]");
+  if (!btn) return;
+  const sel = $("due-invoice");
+  if (!sel) return;
+  sel.value = btn.dataset.dueInvoice || "";
+  paintDueInvoicePicks(sel);
+  applyDueInvoiceAmount();
+});
+
 $("due-collect-form")?.addEventListener("submit", async (e) => {
   e.preventDefault();
   const hint = $("due-hint");
@@ -14103,7 +14176,6 @@ function onCustomerRowClick(e) {
   }
   fillDueCustomerSelect(c.id);
   $("due-amount").value = String(customerDue(c));
-  paintDueOutstanding();
   $("due-collect-form")?.scrollIntoView({ block: "nearest" });
   $("due-amount")?.focus();
 }

@@ -67,6 +67,9 @@ test("coverage reports every locale and Urdu is RTL", () => {
   assert.ok(hi.percent >= 95);
   assert.equal(ur.dir, "rtl");
   assert.ok(I.optionsHtml("mr").includes("value=\"mr\""));
+  assert.equal(I.optionsHtml("en").includes("English English"), false);
+  assert.match(I.optionsHtml("en"), />English</);
+  assert.match(I.optionsHtml("hi"), /हिन्दी Hindi/);
 });
 
 test("regional search matches local names and Latin folds", () => {

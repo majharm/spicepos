@@ -311,6 +311,27 @@ test("extra collection above this bill is overflow, not this invoice payment", (
   assert.equal(parts.paid, 17700);
 });
 
+test("open invoice list collapses duplicate ids and order numbers", async () => {
+  const { uniqueOpenInvoiceRows } = await import("./accounts.js");
+  const php = readFileSync(path.join(root, "pos-accounting.php"), "utf8");
+  const app = readFileSync(path.join(root, "js/app.js"), "utf8");
+  const index = readFileSync(path.join(root, "index.html"), "utf8");
+  const rows = uniqueOpenInvoiceRows([
+    { id: "a", order_number: "SO-10003", total: 1000, amount_paid: 0 },
+    { id: "a", order_number: "SO-10003", total: 1000, amount_paid: 0 },
+    { id: "b", order_number: "SO-10003", total: 1000, amount_paid: 0 },
+    { id: "c", order_number: "SO-10004", total: 500, amount_paid: 0 },
+  ]);
+  assert.deepEqual(rows.map((r) => r.id), ["a", "c"]);
+  assert.match(php, /function pos_unique_open_invoices/);
+  assert.match(php, /pos_unique_open_invoices\(pos_q/);
+  assert.match(app, /dueInvoiceFillSeq/);
+  assert.match(app, /function uniqueOpenInvoices/);
+  assert.match(app, /id="due-invoice-picks"|due-invoice-picks/);
+  assert.match(index, /id="due-invoice-picks"/);
+  assert.match(index, /id="due-invoice"/);
+});
+
 test("stale customer outstanding is cleared when open invoices are paid", async () => {
   const { hydrateCustomerOutstandingRows } = await import("./accounts.js");
   const paid = hydrateCustomerOutstandingRows(

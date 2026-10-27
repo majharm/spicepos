@@ -598,6 +598,22 @@ export async function invoiceOpenDueByCustomer(businessId) {
   }
 }
 
+export function uniqueOpenInvoiceRows(rows) {
+  const seenId = new Set();
+  const seenNo = new Set();
+  const out = [];
+  for (const o of Array.isArray(rows) ? rows : []) {
+    const id = String(o?.id || "").trim();
+    const num = String(o?.order_number || "").trim();
+    if (id && seenId.has(id)) continue;
+    if (num && seenNo.has(num)) continue;
+    if (id) seenId.add(id);
+    if (num) seenNo.add(num);
+    out.push(o);
+  }
+  return out;
+}
+
 export function hydrateCustomerOutstandingRows(customers, dues) {
   const map = dues && typeof dues === "object" ? dues : {};
   return (Array.isArray(customers) ? customers : []).map((c) => {
@@ -1026,7 +1042,7 @@ export function registerAccounts(app) {
           [bid(), customerId],
         );
       }
-      res.json(rows);
+      res.json(uniqueOpenInvoiceRows(rows));
     } catch (err) {
       res.status(500).json({ error: String(err.message) });
     }

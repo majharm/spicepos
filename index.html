@@ -13,7 +13,7 @@
     <link rel="stylesheet" href="./css/resort.css?v=20261011resort1" />
     <link rel="stylesheet" href="./css/mobile-app.css?v=20261023logo1" />
     <link rel="stylesheet" href="./css/item-master.css?v=20261012brand1" />
-    <link rel="stylesheet" href="./css/customer-master.css?v=20261023cemail1" />
+    <link rel="stylesheet" href="./css/customer-master.css?v=20261027cust1" />
     <link rel="stylesheet" href="./css/due-reminders.css?v=20261027dues1" />
   </head>
   <body class="fast-mode">
@@ -855,7 +855,7 @@
                   <label>Email ID <input id="cust-email" type="email" inputmode="email" maxlength="160" autocomplete="email" placeholder="Enter customer email address" /></label>
                   <p class="hint" id="cust-email-hint"></p>
                   <p class="hint" id="cust-match-hint"></p>
-                  <button class="btn" type="button" id="cust-use-match">Use existing customer</button>
+                  <button class="btn" type="button" id="cust-use-match" hidden>Use existing customer</button>
                   <label class="full">Address <input id="cust-address" maxlength="500" placeholder="House, street, area" /></label>
                   <label class="full pharmacy-only" id="cust-doctor-wrap" hidden>Doctor Name / Prescription No. <input id="cust-doctor-rx" maxlength="180" placeholder="If required" /></label>
                   <label>Type
@@ -893,11 +893,15 @@
                     </select>
                   </label>
                   <p class="item-composer-note full" id="due-outstanding">Outstanding: —</p>
-                  <label class="full">Against invoice
-                    <select id="due-invoice">
+                  <div class="full due-invoice-field">
+                    <span>Against invoice</span>
+                    <select id="due-invoice" class="due-invoice-native" tabindex="-1" aria-hidden="true">
                       <option value="">Unallocated (customer due)</option>
                     </select>
-                  </label>
+                    <div id="due-invoice-picks" class="due-invoice-picks" role="radiogroup" aria-label="Against invoice">
+                      <button type="button" class="due-invoice-pick is-on" data-due-invoice="" aria-pressed="true">Unallocated (customer due)</button>
+                    </div>
+                  </div>
                   <label>Amount <input id="due-amount" type="number" min="0.01" step="0.01" required /></label>
                   <label>Payment date <input id="due-date" type="date" /></label>
                   <label>Method
@@ -3572,7 +3576,7 @@
       </div>
     </aside>
     <script src="./js/i18n-catalog.js?v=20261006fast1" defer></script>
-    <script src="./js/i18n.js?v=20260924bc1" defer></script>
+    <script src="./js/i18n.js?v=20261027cust1" defer></script>
     <script src="./js/gst-supply.js?v=20260905deploy136" defer></script>
     <script src="./js/pos-api.js?v=20261023login1" defer></script>
     <script src="./js/units.js?v=20261026poscam1" defer></script>
@@ -3611,11 +3615,11 @@
     <script src="./js/customer-master.js?v=20261023cemail1" defer></script>
     <script src="./js/due-reminders.js?v=20261027dues1" defer></script>
     <script src="./js/recurring.js?v=20261027rec1" defer></script>
-    <script src="./js/app.js?v=20261027invui6" defer></script>
+    <script src="./js/app.js?v=20261027cust1" defer></script>
     <script src="./js/recurring-ui.js?v=20261027rec3" defer></script>
     <script src="./js/due-reminders-ui.js?v=20261027dues1" defer></script>
     <script src="./js/item-master-ui.js?v=20261012brand1" defer></script>
-    <script src="./js/customer-master-ui.js?v=20261023cemail1" defer></script>
+    <script src="./js/customer-master-ui.js?v=20261027cust1" defer></script>
     <script src="./js/mobile-app.js?v=20261023logo1" defer></script>
     <script src="./js/growth.js?v=20260905deploy145" defer></script>
     <script src="./js/offers-ui.js?v=20260919off1" defer></script>
