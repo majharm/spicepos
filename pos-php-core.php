@@ -4637,6 +4637,12 @@ function pos_php_dispatch($path, $method, $rawBody) {
               return;
             }
           }
+          if (is_file(__DIR__ . "/pos-recurring.php")) {
+            require_once __DIR__ . "/pos-recurring.php";
+            if (function_exists("pos_recurring_dispatch") && pos_recurring_dispatch($path, $method, $body, $bid, $auth)) {
+              return;
+            }
+          }
         }
       }
     }

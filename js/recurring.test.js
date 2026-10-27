@@ -242,4 +242,12 @@ test("recurring invoices stay behind the business switch and post through sales"
   assert.match(ui, /data-recur-generate/);
   assert.match(ui, /data-recur-history/);
   assert.doesNotMatch(server, /payment_status = 'paid'/);
+  const php = read("pos-recurring.php");
+  assert.match(php, /function pos_recurring_dispatch/);
+  assert.match(php, /\$path === "recurring" && \$method === "GET"/);
+  assert.match(php, /recurring_schedules/);
+  assert.match(php, /"enabled" => false/);
+  assert.match(php, /pos_checkout_sale/);
+  assert.match(read("pos-php-core.php"), /pos-recurring\.php/);
+  assert.match(read("pos-php-core.php"), /pos_recurring_dispatch/);
 });
