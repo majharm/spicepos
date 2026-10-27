@@ -46,8 +46,9 @@ test("purchase entry is manual search only and still saves stock", () => {
   const purchase = index.slice(index.indexOf('id="view-purchases"'), index.indexOf('id="view-suppliers"'));
 
   assert.match(purchase, /id="po-item-search"/);
+  assert.match(purchase, /id="po-search-results"/);
   assert.match(purchase, /id="po-tax"/);
-  assert.match(purchase, /Search the item list and select/);
+  assert.match(purchase, /Find an item and add it, then set the quantity/);
   assert.doesNotMatch(purchase, /id="po-scan-camera-btn"/);
   assert.doesNotMatch(purchase, /Scan Barcode/);
   assert.doesNotMatch(purchase, /id="po-missing"/);
@@ -84,10 +85,23 @@ test("purchase entry is manual search only and still saves stock", () => {
   assert.match(app, /allow_empty_barcodes: allowEmpty/);
   assert.match(app, /if \(!barcodes\.length\) allowEmpty = true/);
   assert.match(app, /function capturePoDraft/);
+  assert.match(app, /function renderPoSearchResults/);
+  assert.match(app, /function addPoItemById/);
+  assert.match(app, /function addPoStyle/);
+  assert.match(app, /data-po-add-item/);
+  assert.match(app, /data-po-add-style/);
+  assert.match(app, /data-po-remove/);
+  assert.match(app, /PO_SEARCH_LIMIT = 8/);
   assert.match(app, /poLineDraft\.clear\(\)/);
+  assert.doesNotMatch(app, /const matched = q \? all\.filter/);
   assert.match(app, /\$\("po-item-search"\)\?\.addEventListener\("keydown"/);
   const searchKeys = app.slice(app.indexOf('$("po-item-search")?.addEventListener("keydown"'), app.indexOf('$("purchase-form").addEventListener("input"'));
   assert.match(searchKeys, /preventDefault\(\)/);
+  assert.match(searchKeys, /hits\.length !== 1/);
+  assert.match(searchKeys, /addPoItemById/);
+  const searchInput = app.slice(app.indexOf('$("purchase-form").addEventListener("input"'), app.indexOf('$("purchase-form").addEventListener("change"'));
+  assert.match(searchInput, /renderPoSearchResults\(\)/);
+  assert.doesNotMatch(searchInput, /renderPoLines\(\)/);
   assert.match(app, /generate_barcodes: false/);
   assert.doesNotMatch(app, /data-po-gen-bc="\$\{key\}" checked/);
   const classic = app.slice(app.indexOf("function renderClassicPoLines"), app.indexOf("function apparelPoGroupSearch"));

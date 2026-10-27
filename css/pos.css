@@ -5200,12 +5200,94 @@ body.classic-bill-mode .bill-settle {
   background: #fff;
 }
 .purchase-items-bar .po-scan-field {
+  position: relative;
   max-width: none;
   width: 100%;
 }
 .purchase-items-bar .po-scan-field input[type="search"] {
   width: 100%;
   min-width: 0;
+}
+.po-search-results {
+  position: absolute;
+  z-index: 30;
+  left: 0;
+  right: 0;
+  top: calc(100% + 4px);
+  max-height: min(320px, 50vh);
+  overflow: auto;
+  padding: 6px;
+  border: 1px solid var(--line-strong);
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: var(--shadow-card);
+}
+.po-search-results[hidden] { display: none !important; }
+.po-search-list { display: grid; gap: 2px; }
+.po-search-hit {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 48px;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+.po-search-hit:hover,
+.po-search-hit:focus {
+  background: #ecfdf5;
+  outline: none;
+}
+.po-search-copy {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.po-search-copy strong { font-size: 14px; }
+.po-search-copy span {
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.po-search-action {
+  flex: 0 0 auto;
+  color: var(--vel-teal, #0d9488);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.po-search-more { margin: 6px 8px 4px; }
+.po-empty { margin: 4px 0 0; }
+.po-remove {
+  border: 0;
+  background: transparent;
+  color: #a12822;
+  font-size: 12px;
+  font-weight: 800;
+  padding: 6px 4px;
+  min-height: 36px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.po-more {
+  margin-top: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #f8fafc;
+}
+.po-more summary {
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 700;
 }
 .po-scan-field {
   display: flex;
@@ -5251,7 +5333,7 @@ body.classic-bill-mode .bill-settle {
 }
 .po-product-head {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   gap: 10px;
   align-items: center;
 }
@@ -5635,7 +5717,7 @@ body.apparel-mode #item-size-wrap { display: none; }
   box-shadow: 0 1px 0 var(--line-strong);
 }
 .po-table .po-check {
-  width: 44px;
+  width: 76px;
   text-align: center;
 }
 .po-table .po-check input {
@@ -5650,7 +5732,7 @@ body.apparel-mode #item-size-wrap { display: none; }
   white-space: nowrap;
 }
 .po-table .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.po-table tbody tr { cursor: pointer; }
+.po-table tbody tr { cursor: default; }
 .po-table tbody tr.is-checked td { background: #ecfdf5; }
 .po-bc-panel {
   margin-top: 10px;

@@ -766,18 +766,18 @@ function applyFootwearMode() {
       : "Search name, code, barcode…";
   }
   if ($("pack-item-search")) $("pack-item-search").placeholder = `Search spice or ${taxCodeLabel()}…`;
-  if ($("po-items-title")) $("po-items-title").textContent = ap ? "Garments" : "Item list";
+  if ($("po-items-title")) $("po-items-title").textContent = "On this bill";
   if ($("po-item-search")) {
     $("po-item-search").placeholder = ap
-      ? "Search garment, colour, or size…"
-      : `Search item or ${taxCodeLabel()}…`;
+      ? "Find a garment, then add quantity…"
+      : "Find an item, then add quantity…";
   }
   if ($("purchases-lede")) {
     $("purchases-lede").textContent = ap
-      ? "Buy multiple garments in one invoice. Search the list, then enter colour and size-wise qty. New barcodes are not generated unless you tick Generate unique barcodes."
-      : "Search the item list and select what you are buying. Quantity, rate, tax, and discount stay editable. Stock updates when the purchase is saved.";
+      ? "Find a garment and add it. Enter colour and size quantity on the bill. Stock updates when the purchase is saved."
+      : "Find an item and add it, then set the quantity. Rate, tax, and discount stay editable. Stock updates when the purchase is saved.";
   }
-  VIEW_META.purchases.subtitle = "Search and select items for a purchase bill";
+  VIEW_META.purchases.subtitle = "Find an item and add the quantity";
   if ($("item-import-copy")) {
     $("item-import-copy").textContent = copy.importCopy
       || "Bulk add from Excel. Download the template, fill one item per row, then upload .xlsx, Excel XML, or CSV.";
@@ -7393,35 +7393,187 @@ function restoreApparelBarcodes() {
   });
 }
 
-function renderPoLines() {
+const PO_SEARCH_LIMIT = 8;
+
+function poBillItems() {
+  const all = activeItems();
+  if (isApparelShop()) {
+    const keys = new Set();
+    for (const key of poLineDraft.keys()) {
+      if (String(key).startsWith("apparel:")) keys.add(String(key).slice("apparel:".length));
+    }
+    return all.filter((item) => keys.has(globalThis.POSGarmentPurchase?.styleKey?.(item)));
+  }
+  const byId = new Map(all.map((item) => [item.id, item]));
+  const shown = [];
+  for (const key of poLineDraft.keys()) {
+    if (String(key).startsWith("apparel:")) continue;
+    const item = byId.get(key);
+    if (item) shown.push(item);
+  }
+  return shown;
+}
+
+function poSearchMatches(raw) {
+  const query = String(raw || "").trim().toLowerCase();
+  if (!query) return { hits: [], extra: 0 };
+  const all = activeItems();
+  if (isApparelShop()) {
+    const groups = globalThis.POSGarmentPurchase?.styleGroups?.(all) || [];
+    const matched = groups.filter((group) => apparelPoGroupSearch({ ...group, color: (group.colors || []).join(" ") }).includes(query));
+    return {
+      hits: matched.slice(0, PO_SEARCH_LIMIT).map((group) => ({ kind: "apparel", key: group.key, group })),
+      extra: Math.max(0, matched.length - PO_SEARCH_LIMIT),
+    };
+  }
+  const matched = all.filter((item) => poItemHay(item).includes(query));
+  return {
+    hits: matched.slice(0, PO_SEARCH_LIMIT).map((item) => ({ kind: "classic", id: item.id, item })),
+    extra: Math.max(0, matched.length - PO_SEARCH_LIMIT),
+  };
+}
+
+function renderPoSearchResults() {
+  const host = $("po-search-results");
+  if (!host) return;
+  const q = ($("po-item-search")?.value || "").trim();
+  if (!q) {
+    host.hidden = true;
+    host.innerHTML = "";
+    return;
+  }
+  host.hidden = false;
+  if (!activeItems().length) {
+    host.innerHTML = '<p class="hint">No items in the catalog yet.</p>';
+    return;
+  }
+  const { hits, extra } = poSearchMatches(q);
+  if (!hits.length) {
+    host.innerHTML = '<p class="hint">No matching items. Try another name or code.</p>';
+    return;
+  }
+  const rows = hits.map((hit) => {
+    if (hit.kind === "apparel") {
+      const group = hit.group;
+      const wear = globalThis.POSFootwear?.wearerLabel?.(group.wearer_type) || group.wearer_type || "";
+      const colors = (group.colors || []).slice(0, 3).join(", ");
+      const meta = [wear, colors, group.hsn ? `${taxCodeLabel()} ${group.hsn}` : ""].filter(Boolean).join(" · ");
+      const onBill = poLineDraft.has(`apparel:${group.key}`);
+      return `<button type="button" class="po-search-hit" data-po-add-style="${escapeHtml(group.key)}">
+        <span class="po-search-copy"><strong>${escapeHtml(group.name)}</strong><span>${escapeHtml(meta || "Garment")}</span></span>
+        <span class="po-search-action">${onBill ? "Edit qty" : "Add"}</span>
+      </button>`;
+    }
+    const item = hit.item;
+    const unit = itemUnit(item);
+    const stock = fmtQty(item.stock_gm, item);
+    const meta = [item.code || item.hsn || "", poUnitLabel(item), stock ? `stock ${stock}` : ""].filter(Boolean).join(" · ");
+    const onBill = poLineDraft.has(item.id);
+    const action = onBill ? (POSUnits.isCount(unit) ? "Add 1" : "Edit qty") : "Add";
+    return `<button type="button" class="po-search-hit" data-po-add-item="${escapeHtml(item.id)}">
+      <span class="po-search-copy"><strong>${escapeHtml(item.name)}</strong><span>${escapeHtml(meta || "Item")}</span></span>
+      <span class="po-search-action">${action}</span>
+    </button>`;
+  }).join("");
+  const more = extra ? `<p class="hint po-search-more">${extra} more — keep typing to narrow the list.</p>` : "";
+  host.innerHTML = `<div class="po-search-list">${rows}</div>${more}`;
+}
+
+function clearPoSearch() {
+  const search = $("po-item-search");
+  if (search) search.value = "";
+  renderPoSearchResults();
+}
+
+function focusPoQty(selector) {
+  const el = document.querySelector(selector);
+  if (!el) return;
+  el.focus();
+  if (typeof el.select === "function") el.select();
+}
+
+function addPoItemById(id) {
+  const item = activeItems().find((row) => row.id === id);
+  if (!item) return;
+  capturePoDraft();
+  const unit = itemUnit(item);
+  const count = POSUnits.isCount(unit);
+  const existing = poLineDraft.get(item.id);
+  const fields = existing
+    ? { ...existing, kind: "classic", checked: true }
+    : {
+      kind: "classic",
+      checked: true,
+      qty: String(count ? 1 : 1000),
+      rate: String(POSUnits.rateInputValue?.(item.purchase_rate) ?? item.purchase_rate ?? ""),
+      gst: String(Number(item.gst_rate) || 0),
+      discount: "0",
+      expiry: "",
+      barcodes: "",
+    };
+  if (existing && count) fields.qty = String((Number(existing.qty) || 0) + 1);
+  poLineDraft.set(item.id, fields);
+  clearPoSearch();
+  renderPoLines({ capture: false });
+  focusPoQty(`[data-po-qty="${CSS.escape(item.id)}"]`);
+}
+
+function addPoStyle(key) {
+  const sample = activeItems().find((item) => globalThis.POSGarmentPurchase?.styleKey?.(item) === key);
+  if (!sample && !poLineDraft.has(`apparel:${key}`)) return;
+  capturePoDraft();
+  const existing = poLineDraft.get(`apparel:${key}`);
+  poLineDraft.set(`apparel:${key}`, existing
+    ? { ...existing, kind: "apparel", checked: true }
+    : {
+      kind: "apparel",
+      checked: true,
+      rate: String(POSUnits.rateInputValue?.(sample?.purchase_rate) ?? sample?.purchase_rate ?? ""),
+      gst: String(Number(sample?.gst_rate) || 0),
+      discount: "0",
+      gen: false,
+      colors: [],
+      sizes: [],
+      extras: [],
+      barcodes: {},
+    });
+  clearPoSearch();
+  renderPoLines({ capture: false });
+  const card = document.querySelector(`[data-po-product-row="${CSS.escape(key)}"]`);
+  const qty = card?.querySelector("[data-po-size-qty]");
+  if (qty) qty.focus();
+  else card?.querySelector("[data-po-rate]")?.focus();
+}
+
+function removePoDraft(key) {
+  capturePoDraft();
+  poLineDraft.delete(key);
+  renderPoLines({ capture: false });
+  $("po-item-search")?.focus();
+}
+
+function renderPoLines(opts = {}) {
   const el = $("po-lines");
   if (!el) return;
   if ($("po-date") && !$("po-date").value) $("po-date").value = ymd();
-  capturePoDraft();
-  const q = ($("po-item-search")?.value || "").trim().toLowerCase();
-  const all = activeItems();
-  const matched = q ? all.filter((item) => poItemHay(item).includes(q)) : all;
-  const matchedIds = new Set(matched.map((item) => item.id));
-  const pinned = all.filter((item) => poDraftWantsItem(item) && !matchedIds.has(item.id));
-  const cap = fastModeOn() ? 80 : matched.length;
-  const shown = pinned.concat(matched.slice(0, cap));
-  const moreHint = `${q && !matched.length ? '<p class="hint">No other matching items. Selected lines stay on this bill.</p>' : ""}${listRenderHint(shown.length, pinned.length + matched.length, ". Search to find the rest.")}`;
+  if (opts.capture !== false) capturePoDraft();
+  renderPoSearchResults();
+  const shown = poBillItems();
   if (!shown.length) {
-    el.innerHTML = q ? '<p class="hint">No matching items.</p>' : '<p class="hint">No items in the catalog yet.</p>';
+    el.innerHTML = '<p class="hint po-empty">Search above, find the item, then set the quantity.</p>';
     paintPoTotals();
     return;
   }
   if (isApparelShop()) {
-    renderApparelPoLines(el, shown, moreHint);
+    renderApparelPoLines(el, shown, "");
     restoreApparelDraft();
     paintPoTotals();
     restoreApparelBarcodes();
     paintPoTotals();
     return;
   }
-  renderClassicPoLines(el, shown, moreHint);
+  renderClassicPoLines(el, shown, "");
   restoreClassicDraft();
-  if (!fastModeOn()) filterPoLines();
   paintPoTotals();
 }
 
@@ -7433,18 +7585,16 @@ function renderClassicPoLines(el, shown, moreHint) {
     const qty = POSUnits.isCount(unit) ? 1 : 1000;
     const search = poItemHay(i);
     if (POSUnits.isCount(unit)) {
-      panels.push(`<div class="po-bc-panel" data-po-bc-row="${escapeHtml(i.id)}" hidden>
+      panels.push(`<details class="po-more" data-po-bc-row="${escapeHtml(i.id)}">
+        <summary>Barcodes for ${escapeHtml(i.name)} (optional)</summary>
         <div class="po-bc-box">
-          <div class="po-bc-head">
-            <strong>Barcodes for ${escapeHtml(i.name)}</strong>
-            <span class="hint" data-po-bc-count="${escapeHtml(i.id)}">0 / ${qty} — barcodes optional</span>
-          </div>
+          <span class="hint" data-po-bc-count="${escapeHtml(i.id)}">0 / ${qty} — barcodes optional</span>
           <textarea class="po-bc-list" data-po-barcodes="${escapeHtml(i.id)}" rows="4" placeholder="Optional — one barcode per line"></textarea>
         </div>
-      </div>`);
+      </details>`);
     }
     rows.push(`<tr data-po-row="${escapeHtml(i.id)}" data-po-search="${escapeHtml(search)}" data-po-unit="${escapeHtml(unit)}">
-        <td class="po-check"><input type="checkbox" data-po-item="${escapeHtml(i.id)}" /></td>
+        <td class="po-check"><input type="checkbox" data-po-item="${escapeHtml(i.id)}" checked hidden /><button type="button" class="po-remove" data-po-remove="${escapeHtml(i.id)}" aria-label="Remove ${escapeHtml(i.name)}">Remove</button></td>
         <td class="po-name">${escapeHtml(i.name)}</td>
         <td class="po-hsn">${escapeHtml(i.hsn || "—")}</td>
         <td class="po-qty"><div class="po-qty-cell"><input type="number" min="${POSUnits.qtyMin()}" max="${POSUnits.qtyMax()}" step="1" value="${qty}" data-po-qty="${escapeHtml(i.id)}" aria-label="Quantity for ${escapeHtml(i.name)}" /></div></td>
@@ -7460,7 +7610,6 @@ function renderClassicPoLines(el, shown, moreHint) {
     <th class="po-check"></th><th>Item</th><th>${taxCodeLabel()}</th><th>Qty</th><th>Unit</th><th>Rate</th><th>GST %</th><th>Disc</th><th>Expiry</th><th class="num">Amount</th>
   </tr></thead><tbody>${rows.join("")}</tbody></table></div>
     <div id="po-barcode-panels">${panels.join("")}</div>`;
-  if (!fastModeOn()) filterPoLines();
   paintPoTotals();
   refreshPoBarcodeRows();
 }
@@ -7526,7 +7675,6 @@ function renderApparelPoLines(el, shown, moreHint) {
     const variantIds = escapeHtml((g.variants || []).map((v) => v.id).filter(Boolean).join(" "));
     return `<article class="po-product" data-po-product-row="${key}" data-po-anchor="${escapeHtml(g.anchor?.id || "")}" data-po-variant-ids="${variantIds}" data-po-sizes="${escapeHtml(sizes.join(" "))}" data-po-search="${escapeHtml(search)}" data-po-unit="${escapeHtml(unit)}">
       <header class="po-product-head">
-        <label class="po-check"><input type="checkbox" data-po-product="${key}" /></label>
         <div class="po-product-copy">
           <strong>${escapeHtml(g.name)}</strong>
           <span>${escapeHtml(wear || "Garment")}${g.hsn ? ` · ${escapeHtml(taxCodeLabel())} ${escapeHtml(g.hsn)}` : ""} · colour and size</span>
@@ -7535,6 +7683,8 @@ function renderApparelPoLines(el, shown, moreHint) {
           <span class="po-qty-cell"><span data-po-qty-total="${key}">0 pcs</span></span>
           <span class="num" data-po-amt="${key}">${money(0)}</span>
         </div>
+        <button class="po-remove" type="button" data-po-remove="apparel:${key}" aria-label="Remove ${escapeHtml(g.name)}">Remove</button>
+        <input type="checkbox" data-po-product="${key}" data-po-manual="1" checked hidden />
       </header>
       <div class="po-color-blocks" data-po-color-blocks="${key}">${blocks}</div>
       <div class="po-color-add">
@@ -7570,7 +7720,6 @@ function renderApparelPoLines(el, shown, moreHint) {
     </article>`;
   });
   el.innerHTML = `${moreHint}<div class="po-product-list">${cards.join("")}</div>`;
-  if (!fastModeOn()) filterPoLines();
   paintPoTotals();
 }
 
@@ -7851,7 +8000,7 @@ function paintPoTotals() {
       total += fig.amount;
       gst += fig.gstAmount;
     });
-    if ($("po-selected-meta")) $("po-selected-meta").textContent = `${n} selected`;
+    if ($("po-selected-meta")) $("po-selected-meta").textContent = n ? `${n} on this bill` : "0 on this bill";
     if ($("po-total")) $("po-total").textContent = money(total);
     paintPoTax(gst, total + gst);
     return;
@@ -7877,7 +8026,7 @@ function paintPoTotals() {
   document.querySelectorAll("#po-lines tbody tr").forEach((tr) => {
     if (!tr.querySelector("[data-po-item]:checked")) tr.classList.remove("is-checked");
   });
-  if ($("po-selected-meta")) $("po-selected-meta").textContent = `${checked.length} selected`;
+  if ($("po-selected-meta")) $("po-selected-meta").textContent = checked.length ? `${checked.length} on this bill` : "0 on this bill";
   if ($("po-total")) $("po-total").textContent = money(total);
   paintPoTax(gst, total + gst);
   refreshPoBarcodeRows();
@@ -13651,30 +13800,41 @@ $("packs-table")?.addEventListener("click", (e) => {
 });
 
 $("po-item-search")?.addEventListener("keydown", (e) => {
-  if (e.key !== "Enter") return;
-  e.preventDefault();
-  const q = String(e.target.value || "").trim().toLowerCase();
-  if (!q) return;
-  if (isApparelShop()) {
-    const cards = [...document.querySelectorAll("[data-po-product-row]")].filter((card) => !card.hidden && String(card.dataset.poSearch || "").includes(q));
-    if (cards.length !== 1) return;
-    const box = cards[0].querySelector("[data-po-product]");
-    if (box) box.checked = true;
-    (cards[0].querySelector("[data-po-size-qty]") || cards[0].querySelector("[data-po-rate]"))?.focus();
-    paintPoTotals();
+  if (e.key === "Escape") {
+    e.target.value = "";
+    renderPoSearchResults();
     return;
   }
-  const rows = [...document.querySelectorAll("tr[data-po-row]")].filter((tr) => !tr.hidden && String(tr.dataset.poSearch || "").includes(q));
-  if (rows.length !== 1) return;
-  const box = rows[0].querySelector("[data-po-item]");
-  if (box) box.checked = true;
-  rows[0].querySelector("[data-po-qty]")?.focus();
-  paintPoTotals();
+  if (e.key !== "Enter") return;
+  e.preventDefault();
+  const { hits } = poSearchMatches(e.target.value);
+  if (hits.length !== 1) return;
+  const hit = hits[0];
+  if (hit.kind === "apparel") addPoStyle(hit.key);
+  else addPoItemById(hit.id);
+});
+$("po-item-search")?.addEventListener("focus", () => renderPoSearchResults());
+$("po-search-results")?.addEventListener("click", (e) => {
+  const itemBtn = e.target.closest("[data-po-add-item]");
+  if (itemBtn) {
+    e.preventDefault();
+    addPoItemById(itemBtn.dataset.poAddItem);
+    return;
+  }
+  const styleBtn = e.target.closest("[data-po-add-style]");
+  if (!styleBtn) return;
+  e.preventDefault();
+  addPoStyle(styleBtn.dataset.poAddStyle);
+});
+document.addEventListener("click", (e) => {
+  const host = $("po-search-results");
+  if (!host || host.hidden) return;
+  if (e.target.closest("#po-item-search, #po-search-results")) return;
+  host.hidden = true;
 });
 $("purchase-form").addEventListener("input", (e) => {
   if (e.target.id === "po-item-search") {
-    if (fastModeOn()) renderPoLines();
-    else filterPoLines();
+    renderPoSearchResults();
     return;
   }
   if (e.target.matches("[data-po-size-qty],[data-po-extra-qty],[data-po-extra-name],[data-po-rate],[data-po-qty],[data-po-gst],[data-po-discount],[data-po-barcodes],[data-po-size-barcodes]")) {
@@ -13693,6 +13853,12 @@ $("purchase-form").addEventListener("change", (e) => {
   if (e.target.matches("[data-po-item],[data-po-product],[data-po-gen-bc]")) paintPoTotals();
 });
 $("po-lines")?.addEventListener("click", (e) => {
+  const remove = e.target.closest("[data-po-remove]");
+  if (remove) {
+    e.preventDefault();
+    removePoDraft(remove.dataset.poRemove);
+    return;
+  }
   const addColor = e.target.closest("[data-po-add-color]");
   if (addColor) {
     const card = addColor.closest("[data-po-product-row]");
@@ -13725,23 +13891,7 @@ $("po-lines")?.addEventListener("click", (e) => {
       block.querySelector(".po-size-matrix")?.insertAdjacentHTML("beforeend", extraSizeCellHtml(block.dataset.poColorBlock || ""));
     });
     blocks[0]?.querySelector("[data-po-extra-size]:last-child [data-po-extra-name]")?.focus();
-    return;
   }
-  const product = e.target.closest("[data-po-product-row]");
-  if (product && !e.target.closest("input, textarea, button, label, select, .po-size-bc, .po-bc-panel")) {
-    const box = product.querySelector("[data-po-product]");
-    if (box) {
-      box.checked = !box.checked;
-      paintPoTotals();
-    }
-    return;
-  }
-  const tr = e.target.closest("tr[data-po-row]");
-  if (!tr || e.target.closest("input")) return;
-  const box = tr.querySelector("[data-po-item]");
-  if (!box) return;
-  box.checked = !box.checked;
-  paintPoTotals();
 });
 $("purchase-form").addEventListener("submit", async (e) => {
   e.preventDefault();
@@ -13777,7 +13927,7 @@ $("purchase-form").addEventListener("submit", async (e) => {
       });
     }
     if (!lines.length) {
-      throw new Error(isApparelShop() ? "Select a garment and enter size-wise quantity" : "Select at least one item");
+      throw new Error(isApparelShop() ? "Add a garment and enter the size quantity" : "Add an item and enter the quantity");
     }
     const saved = await api("/api/purchases", {
       method: "POST",
@@ -13794,6 +13944,7 @@ $("purchase-form").addEventListener("submit", async (e) => {
     $("po-hint").className = "hint ok";
     poLineDraft.clear();
     $("purchase-form").reset();
+    if ($("po-lines")) $("po-lines").innerHTML = "";
     $("purchase-new").open = false;
     renderPoLines();
     await loadBootstrap();

@@ -6,7 +6,7 @@
     <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
     <title>ATAV POS</title>
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./css/pos.css?v=20261027pofix1" />
+    <link rel="stylesheet" href="./css/pos.css?v=20261027pofind1" />
     <link rel="stylesheet" href="./css/barcode-desk.css?v=20261024bcdesk1" />
     <link rel="stylesheet" href="./css/saas.css?v=20261016note1" />
     <link rel="stylesheet" href="./css/bar.css?v=20261011bar2" />
@@ -1840,7 +1840,7 @@
         </section>
         <section class="view" id="view-purchases" hidden>
           <h2 class="visually-hidden">Purchases</h2>
-          <p class="lede" id="purchases-lede">Search the item list and select what you are buying. Quantity, rate, tax, and discount stay editable. Stock updates when the purchase is saved.</p>
+          <p class="lede" id="purchases-lede">Find an item and add it, then set the quantity. Rate, tax, and discount stay editable. Stock updates when the purchase is saved.</p>
           <details class="purchase-new" id="purchase-new">
             <summary class="btn">New purchase</summary>
             <form class="settings purchase-form" id="purchase-form">
@@ -1866,11 +1866,12 @@
               </div>
               <div class="purchase-items">
                 <div class="purchase-items-bar">
-                  <h3 id="po-items-title">Item list</h3>
+                  <h3 id="po-items-title">On this bill</h3>
                   <div class="po-scan-field">
-                    <input id="po-item-search" type="search" placeholder="Search item, SKU, colour, or size…" autocomplete="off" />
+                    <input id="po-item-search" type="search" placeholder="Find an item, then add quantity…" autocomplete="off" enterkeyhint="search" />
+                    <div id="po-search-results" class="po-search-results" hidden></div>
                   </div>
-                  <span class="purchase-items-meta" id="po-selected-meta">0 selected</span>
+                  <span class="purchase-items-meta" id="po-selected-meta">0 on this bill</span>
                 </div>
                 <div id="po-lines" class="po-lines"></div>
               </div>
@@ -3483,7 +3484,7 @@
     <script src="./js/item-master.js?v=20261012brand1" defer></script>
     <script src="./js/customer-master.js?v=20261023cemail1" defer></script>
     <script src="./js/due-reminders.js?v=20261024duewa1" defer></script>
-    <script src="./js/app.js?v=20261027pofix1" defer></script>
+    <script src="./js/app.js?v=20261027pofind1" defer></script>
     <script src="./js/due-reminders-ui.js?v=20261024duewa1" defer></script>
     <script src="./js/item-master-ui.js?v=20261012brand1" defer></script>
     <script src="./js/customer-master-ui.js?v=20261023cemail1" defer></script>
