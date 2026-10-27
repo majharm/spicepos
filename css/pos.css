@@ -5204,98 +5204,25 @@ body.classic-bill-mode .bill-settle {
   width: 100%;
 }
 .purchase-items-bar .po-scan-field input[type="search"] {
-  width: auto;
-  flex: 1 1 auto;
+  width: 100%;
   min-width: 0;
 }
-.purchase-items-bar .po-scan-field:has(.scan-camera-btn:not([hidden])) input[type="search"] {
-  border-top-right-radius: 0;
-  border-bottom-right-radius: 0;
-  border-right: 0;
-}
-.po-scan-field,
-.po-bc-scan-row {
+.po-scan-field {
   display: flex;
   align-items: stretch;
   min-width: 0;
   max-width: 560px;
 }
-.po-scan-field input,
-.po-bc-scan-row input {
+.po-scan-field input {
   flex: 1 1 auto;
   min-width: 0;
-  border-top-right-radius: 0;
-  border-bottom-right-radius: 0;
 }
-.po-scan-field .scan-camera-btn,
-.po-bc-scan-row .scan-camera-btn {
-  width: 40px;
-  min-width: 40px;
-  height: auto;
-  min-height: 40px;
-  border-radius: 0 10px 10px 0;
-}
-.po-scan-field .po-scan-barcode-btn {
-  width: auto;
-  min-width: 44px;
-  gap: 6px;
-  padding: 0 12px;
-  font-size: 13px;
-  font-weight: 800;
-  white-space: nowrap;
-}
-.po-missing {
-  display: grid;
-  gap: 8px;
-  margin-top: 10px;
-  padding: 12px;
-  border: 1px solid #fecaca;
-  border-radius: 12px;
-  background: #fff7f7;
-}
-.po-scan-detail {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px 14px;
-  margin-top: 8px;
-  padding: 10px 12px;
-  border: 1px solid #99f6e4;
-  border-radius: 12px;
-  background: #f0fdfa;
-  font-size: 13px;
-  font-weight: 700;
-}
-.po-scan-detail[hidden] { display: none !important; }
-.po-scan-detail em {
-  display: block;
-  color: var(--muted, #64748b);
-  font-style: normal;
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-.po-missing[hidden] { display: none !important; }
-.po-missing-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-.po-missing-actions .btn { min-height: 44px; }
 .po-total-wrap { display: grid; gap: 2px; }
 .po-tax {
   margin: 0;
   color: var(--muted, #64748b);
   font-size: 13px;
   font-weight: 700;
-}
-.po-scan-field .scan-camera-btn[hidden],
-.po-bc-scan-row .scan-camera-btn[hidden] {
-  display: none;
-}
-.po-scan-field:has(.scan-camera-btn:not([hidden])) input,
-.po-bc-scan-row:has(.scan-camera-btn:not([hidden])) input {
-  border-right: 0;
 }
 .purchase-items-meta {
   color: var(--muted);
@@ -5414,7 +5341,6 @@ body.classic-bill-mode .bill-settle {
   gap: 8px;
 }
 .po-size-bc span { font-size: 12px; font-weight: 700; }
-.po-size-bc .po-bc-scan-row,
 .po-size-bc .po-bc-list {
   max-width: none;
 }
@@ -5741,7 +5667,6 @@ body.apparel-mode #item-size-wrap { display: none; }
   flex-wrap: wrap;
   align-items: baseline;
 }
-.po-bc-scan,
 .po-bc-list {
   width: 100%;
   max-width: 560px;
@@ -5751,8 +5676,6 @@ body.apparel-mode #item-size-wrap { display: none; }
   border: 1px solid var(--line);
   background: #fff;
 }
-.po-bc-scan-row .po-bc-scan,
-.po-scan-field .po-bc-scan,
 .purchase-items-bar .po-scan-field input {
   max-width: none;
 }
@@ -5790,18 +5713,8 @@ body.apparel-mode #item-size-wrap { display: none; }
   min-height: 44px;
   flex: 1 1 auto;
 }
-.po-qty-cell .scan-camera-btn {
-  width: 44px;
-  min-width: 44px;
-  height: 44px;
-  min-height: 44px;
-  border-radius: 8px;
-}
 .po-product-totals .po-qty-cell {
   justify-content: flex-end;
-}
-.po-qty-cell .scan-camera-btn[hidden] {
-  display: none;
 }
 .po-rate-cell {
   display: flex;
