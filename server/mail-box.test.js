@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import path from "node:path";
+import { execFileSync, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 process.env.MAIL_CREDENTIAL_KEY = "mail-box-test-key";
@@ -132,8 +133,32 @@ test("each business configures its own mailbox and invoice email does not mark t
   assert.match(server, /smtp_pass_enc/);
   assert.match(server, /aes-256-gcm/);
   assert.doesNotMatch(server, /smtp_pass_enc: stored/);
+  const phpMail = read("pos-business-email.php");
+  const core = read("pos-php-core.php");
+  assert.match(core, /pos-business-email\.php/);
+  assert.match(core, /pos_business_email_dispatch/);
+  assert.match(phpMail, /business-email\/test/);
+  assert.match(phpMail, /aes-256-gcm/);
+  assert.match(phpMail, /Save the mailbox before sending a test email/);
+  assert.match(phpMail, /v1:/);
+  assert.match(read("pos-mail.php"), /\$cfgOverride = null/);
+  assert.match(read("pos-mail.php"), /Reply-To:/);
+  assert.doesNotMatch(phpMail, /smtp_pass_enc: stored/);
   assert.match(checkout, /deliverInvoiceCopy\(\{ businessId, order: result, source: "auto" \}\)/);
   assert.match(recurring, /source: "recurring"/);
   assert.match(recurring, /scheduleOptIn/);
   assert.doesNotMatch(read("server/mail-box.js"), /payment_status = 'paid'/);
+});
+
+test("PHP mailbox cipher matches the Node AES-GCM secret", { skip: spawnSync("php", ["-v"]).status === 0 ? false : "php CLI not installed" }, () => {
+  const plain = "mailbox-pass-99";
+  const php = (mode, value) =>
+    execFileSync(
+      "php",
+      ["-r", 'require "pos-business-email.php"; echo $argv[1] === "enc" ? pos_bizmail_encrypt($argv[2]) : pos_bizmail_decrypt($argv[2]);', "--", mode, value],
+      { encoding: "utf8", cwd: root },
+    ).trim();
+  assert.equal(decryptSecret(php("enc", plain)), plain);
+  assert.equal(php("dec", encryptSecret(plain)), plain);
+  assert.equal(php("dec", php("enc", plain)), plain);
 });

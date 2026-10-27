@@ -4643,6 +4643,12 @@ function pos_php_dispatch($path, $method, $rawBody) {
               return;
             }
           }
+          if (is_file(__DIR__ . "/pos-business-email.php")) {
+            require_once __DIR__ . "/pos-business-email.php";
+            if (function_exists("pos_business_email_dispatch") && pos_business_email_dispatch($path, $method, $body, $bid, $auth)) {
+              return;
+            }
+          }
         }
       }
     }

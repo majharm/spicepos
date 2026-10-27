@@ -209,10 +209,17 @@ function pos_mail_safe_filename($name) {
   return $n !== "" ? $n : "backup.bin";
 }
 
-function pos_send_mail($to, $subject, $text, $html = "", $image = "", $attachments = [], $timeoutSec = null) {
+function pos_send_mail($to, $subject, $text, $html = "", $image = "", $attachments = [], $timeoutSec = null, $cfgOverride = null) {
   if (function_exists("pos_load_dotenv")) pos_load_dotenv();
-  $cfg = pos_smtp_config();
-  if (!pos_smtp_configured($cfg)) {
+  $ownMailbox = is_array($cfgOverride);
+  $cfg = $ownMailbox ? $cfgOverride : pos_smtp_config();
+  if ($ownMailbox) {
+    $cfg["port"] = (int) ($cfg["port"] ?? 0);
+    $cfg["secure"] = !empty($cfg["secure"]);
+    if (($cfg["host"] ?? "") === "" || $cfg["port"] <= 0 || ($cfg["user"] ?? "") === "" || ($cfg["pass"] ?? "") === "" || ($cfg["from"] ?? "") === "") {
+      return ["ok" => false, "error" => "Email settings are incomplete"];
+    }
+  } elseif (!pos_smtp_configured($cfg)) {
     $fallback = pos_send_mail_fallback($to, $subject, $text);
     if (!empty($fallback["ok"])) return $fallback;
     return ["ok" => false, "skipped" => true, "error" => $fallback["error"] ?? "SMTP not configured"];
@@ -274,8 +281,13 @@ function pos_send_mail($to, $subject, $text, $html = "", $image = "", $attachmen
       . pos_dot_stuff($htmlBody) . "\r\n"
       . "--{$alt}--";
     $parsed = $files ? null : pos_parse_data_image($image);
-    $headers = "From: " . pos_mail_from_header($cfg["from"], $cfg["fromName"]) . "\r\n"
+    $replyTo = pos_mail_header_safe($cfg["replyTo"] ?? "");
+    $replyHeader = ($replyTo !== "" && preg_match("/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/", $replyTo))
+      ? "Reply-To: {$replyTo}\r\n"
+      : "";
+    $headers = "From: " . pos_mail_from_header($cfg["from"], $cfg["fromName"] ?? "") . "\r\n"
       . "To: {$recipient}\r\n"
+      . $replyHeader
       . "Subject: " . pos_mail_subject($subject) . "\r\n"
       . "MIME-Version: 1.0\r\n";
     if ($files) {
@@ -319,7 +331,12 @@ function pos_send_mail($to, $subject, $text, $html = "", $image = "", $attachmen
     pos_smtp_write($fp, "QUIT");
     return ["ok" => true];
   } catch (Throwable $e) {
-    return ["ok" => false, "error" => $e->getMessage()];
+    $msg = (string) $e->getMessage();
+    $secret = (string) ($cfg["pass"] ?? "");
+    if ($secret !== "" && strlen($secret) >= 3) $msg = str_replace($secret, "[redacted]", $msg);
+    $msg = trim(preg_replace("/[\\r\\n]+/", " ", $msg));
+    if (strlen($msg) > 180) $msg = substr($msg, 0, 180);
+    return ["ok" => false, "error" => $msg !== "" ? $msg : "Email was not sent"];
   } finally {
     fclose($fp);
   }
