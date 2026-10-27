@@ -806,6 +806,95 @@ ${purchaseBody(purchase, ctx)}
     return all;
   }
 
+  function realReceiptNo(value) {
+    const no = String(value || "").trim();
+    if (!no || no === "PR" || no === "—") return "";
+    return no;
+  }
+
+  function linkedReceiptRow(order) {
+    const rows = [];
+    if (Array.isArray(order?.payments)) rows.push(...order.payments);
+    if (Array.isArray(order?.receipts)) rows.push(...order.receipts);
+    const num = String(order?.order_number || order?.orderNumber || "");
+    const id = String(order?.id || "");
+    const linked = [];
+    for (const row of rows) {
+      if (!row || typeof row !== "object") continue;
+      const type = String(row.entry_type || row.entryType || "receipt").toLowerCase();
+      if (type !== "receipt") continue;
+      if (!(round2(row.amount) > 0)) continue;
+      const rid = String(row.reference_id || row.referenceId || "");
+      const inv = String(row.invoice_no || row.invoiceNo || "");
+      const notes = String(row.notes || "");
+      const match = (id && rid && rid === id) || (num && (inv === num || notes === num));
+      if (match) linked.push(row);
+    }
+    return linked.length ? linked[linked.length - 1] : null;
+  }
+
+  /**
+   * Remaining due on a payment receipt.
+   * A numbered ledger receipt keeps its stored remaining (customer outstanding minus this payment).
+   * An invoice reprint ignores a stored current_due that already subtracted the payment twice.
+   */
+  function receiptRemainingFromInvoice(order, entry) {
+    const r = entry && typeof entry === "object" ? entry : null;
+    const entryNo = realReceiptNo(r?.entryNo || r?.entry_no);
+    const ledgerRemaining = r?.remaining_due ?? r?.remainingDue ?? r?.balance_due ?? r?.balanceDue;
+    if (entryNo && ledgerRemaining != null && ledgerRemaining !== "") return round2(ledgerRemaining);
+    const previous = round2(order?.previous_due ?? order?.previousDue ?? 0);
+    const total = round2(order?.total ?? 0);
+    const paid = round2(r?.amount ?? order?.amount_paid ?? order?.amountPaid ?? 0);
+    return round2(Math.max(0, previous + total - paid));
+  }
+
+  function receiptSlipFromInvoice(order) {
+    if (!order || typeof order !== "object") return null;
+    const r = order.receipt && typeof order.receipt === "object" ? order.receipt : null;
+    const linked = linkedReceiptRow(order);
+    const paidStored = round2(order.amount_paid ?? order.amountPaid ?? 0);
+    const amount = round2(r?.amount ?? (paidStored > 0 ? paidStored : linked?.amount ?? 0));
+    if (!r && !linked && !(amount > 0)) return null;
+    const entryNo =
+      realReceiptNo(r?.entryNo || r?.entry_no) ||
+      realReceiptNo(linked?.entry_no || linked?.entryNo) ||
+      "—";
+    const ledger = realReceiptNo(r?.entryNo || r?.entry_no) ? r : { amount };
+    return {
+      id: r?.ledgerId || r?.ledger_id || r?.id || linked?.id || "",
+      entry_no: entryNo,
+      amount,
+      payment_method:
+        r?.method ||
+        r?.payment_method ||
+        r?.paymentMethod ||
+        linked?.payment_method ||
+        linked?.paymentMethod ||
+        linked?.method ||
+        order.payment_method ||
+        "cash",
+      invoice_no: r?.invoice_no || r?.invoiceNo || linked?.invoice_no || linked?.invoiceNo || order.order_number || "",
+      invoice_amount: r?.invoice_amount ?? r?.invoiceAmount ?? order.total,
+      previous_due: r?.previous_due ?? r?.previousDue ?? order.previous_due ?? order.previousDue ?? 0,
+      remaining_due: receiptRemainingFromInvoice(order, ledger),
+      payment_reference:
+        r?.payment_reference ||
+        r?.paymentReference ||
+        linked?.payment_reference ||
+        linked?.paymentReference ||
+        order.payment_reference ||
+        "",
+      payment_date:
+        r?.payment_date ||
+        r?.paymentDate ||
+        linked?.payment_date ||
+        linked?.paymentDate ||
+        order.payment_date ||
+        "",
+    };
+  }
+
   function invoiceDueFigures(order) {
     const total = round2(order.total);
     const walkIn = isWalkInOrder(order);
@@ -1614,6 +1703,8 @@ ${voucherBody(entry, ctx)}
     purchaseBody,
     thermalPurchaseDocument,
     invoiceDueFigures,
+    receiptRemainingFromInvoice,
+    receiptSlipFromInvoice,
     lineDescriptionText,
     invoiceDueRowsHtml,
     invoicePaymentRows,

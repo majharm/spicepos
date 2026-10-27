@@ -237,21 +237,35 @@ async function stampLedgerExtras(conn, id, extra = {}) {
   }
 }
 
+/** New invoice balance after one payment. The payment is subtracted once. */
+export function invoicePaidAfterDelta({ previousDue = 0, total = 0, amountPaid = 0, delta = 0 } = {}) {
+  const paid = round2(Math.max(0, (Number(amountPaid) || 0) + (Number(delta) || 0)));
+  const bill = round2(Number(total) || 0);
+  const previous = round2(Number(previousDue) || 0);
+  const currentDue = round2(Math.max(0, previous + bill - paid));
+  let paymentStatus = "unpaid";
+  if (paid + 1e-9 >= bill) paymentStatus = "paid";
+  else if (paid > 0) paymentStatus = "partial";
+  return { amountPaid: paid, currentDue, paymentStatus };
+}
+
 async function applyInvoicePaidDelta(conn, orderId, delta) {
   if (!orderId || !delta) return;
   try {
+    // @pos_paid is the new amount_paid. MySQL reads an updated column in a later
+    // assignment, so current_due must not add the payment a second time.
     await execSql(
       conn,
       `UPDATE sales_orders SET
-         amount_paid = GREATEST(0, COALESCE(amount_paid, 0) + ?),
-         current_due = GREATEST(0, COALESCE(previous_due, 0) + COALESCE(total, 0) - GREATEST(0, COALESCE(amount_paid, 0) + ?)),
+         amount_paid = (@pos_paid := GREATEST(0, COALESCE(amount_paid, 0) + ?)),
+         current_due = GREATEST(0, COALESCE(previous_due, 0) + COALESCE(total, 0) - @pos_paid),
          payment_status = CASE
-           WHEN GREATEST(0, COALESCE(amount_paid, 0) + ?) >= total THEN 'paid'
-           WHEN GREATEST(0, COALESCE(amount_paid, 0) + ?) > 0 THEN 'partial'
+           WHEN @pos_paid >= COALESCE(total, 0) THEN 'paid'
+           WHEN @pos_paid > 0 THEN 'partial'
            ELSE 'unpaid'
          END
        WHERE id = ? AND business_id = ? AND LOWER(COALESCE(status,'confirmed')) <> 'cancelled'`,
-      [delta, delta, delta, delta, orderId, bid()],
+      [delta, orderId, bid()],
     );
   } catch {
     /* optional amount_paid */

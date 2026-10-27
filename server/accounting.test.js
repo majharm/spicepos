@@ -346,6 +346,20 @@ test("stale customer outstanding is cleared when open invoices are paid", async 
   assert.equal(untouched[0].outstanding, 500);
 });
 
+test("invoice payment is counted once on the receipt balance", async () => {
+  const { invoicePaidAfterDelta } = await import("./accounts.js");
+  const once = invoicePaidAfterDelta({ previousDue: 0, total: 49560, amountPaid: 0, delta: 48720 });
+  assert.equal(once.amountPaid, 48720);
+  assert.equal(once.currentDue, 840);
+  assert.equal(once.paymentStatus, "partial");
+  const partial = invoicePaidAfterDelta({ previousDue: 0, total: 49560, amountPaid: 0, delta: 10000 });
+  assert.equal(partial.currentDue, 39560);
+  assert.notEqual(partial.currentDue, 29560);
+  const settled = invoicePaidAfterDelta({ previousDue: 0, total: 49560, amountPaid: 48720, delta: 840 });
+  assert.equal(settled.currentDue, 0);
+  assert.equal(settled.paymentStatus, "paid");
+});
+
 test("invoice settlement posts sale credit, payment receipt, and customer due", () => {
   const accounts = readFileSync(path.join(root, "server/accounts.js"), "utf8");
   const core = readFileSync(path.join(root, "pos-php-core.php"), "utf8");
@@ -371,6 +385,20 @@ test("invoice settlement posts sale credit, payment receipt, and customer due", 
   assert.match(app, /function checkoutAmountPaid/);
   assert.match(app, /function invoiceSettlementHtml/);
   assert.match(app, /function receiptEntryFromInvoice/);
+  assert.match(app, /receiptSlipFromInvoice/);
+  assert.doesNotMatch(app, /\|\| "PR"/);
+  assert.match(accounts, /@pos_paid := GREATEST\(0, COALESCE\(amount_paid, 0\) \+ \?\)/);
+  assert.match(accounts, /COALESCE\(total, 0\) - @pos_paid/);
+  assert.match(accounts, /\[delta, orderId, bid\(\)\]/);
+  assert.doesNotMatch(accounts, /\[delta, delta, delta, delta, orderId, bid\(\)\]/);
+  assert.doesNotMatch(accounts, /COALESCE\(total, 0\) - GREATEST\(0, COALESCE\(amount_paid, 0\) \+ \?\)/);
+  assert.match(core, /@pos_paid := GREATEST\(0, COALESCE\(amount_paid, 0\) \+ \?\)/);
+  assert.match(core, /COALESCE\(total, 0\) - @pos_paid/);
+  assert.match(core, /"dss"/);
+  assert.doesNotMatch(core, /"ddddss"/);
+  assert.doesNotMatch(core, /COALESCE\(total, 0\) - GREATEST\(0, COALESCE\(amount_paid, 0\) \+ \?\)/);
+  assert.match(invoice, /function receiptSlipFromInvoice/);
+  assert.match(invoice, /function receiptRemainingFromInvoice/);
   assert.match(app, /details class="invoice-settle"/);
   assert.match(css, /min-height: min\(52vh, 420px\)/);
   assert.match(index, /id="pay-amount"/);

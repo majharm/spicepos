@@ -2190,18 +2190,20 @@ function pos_persist_invoice_settlement($orderId, $snap, $businessId) {
 function pos_apply_invoice_paid_delta($orderId, $delta, $businessId) {
   if (!$orderId || abs((float) $delta) < 0.0001) return;
   try {
+    // @pos_paid is the new amount_paid. MySQL reads an updated column in a later
+    // assignment, so current_due must not add the payment a second time.
     pos_q(
       "UPDATE sales_orders SET
-         amount_paid = GREATEST(0, COALESCE(amount_paid, 0) + ?),
-         current_due = GREATEST(0, COALESCE(previous_due, 0) + COALESCE(total, 0) - GREATEST(0, COALESCE(amount_paid, 0) + ?)),
+         amount_paid = (@pos_paid := GREATEST(0, COALESCE(amount_paid, 0) + ?)),
+         current_due = GREATEST(0, COALESCE(previous_due, 0) + COALESCE(total, 0) - @pos_paid),
          payment_status = CASE
-           WHEN GREATEST(0, COALESCE(amount_paid, 0) + ?) >= total THEN 'paid'
-           WHEN GREATEST(0, COALESCE(amount_paid, 0) + ?) > 0 THEN 'partial'
+           WHEN @pos_paid >= COALESCE(total, 0) THEN 'paid'
+           WHEN @pos_paid > 0 THEN 'partial'
            ELSE 'unpaid'
          END
        WHERE id = ? AND business_id = ? AND LOWER(COALESCE(status,'confirmed')) <> 'cancelled'",
-      "ddddss",
-      [(float) $delta, (float) $delta, (float) $delta, (float) $delta, $orderId, $businessId]
+      "dss",
+      [(float) $delta, $orderId, $businessId]
     );
   } catch (Exception $e) { /* optional */ }
 }

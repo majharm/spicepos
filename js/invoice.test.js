@@ -412,6 +412,78 @@ test("receipt voucher prints party, amount, and mode; payment voucher labels dif
   assert.match(html, /UPI/);
   assert.doesNotMatch(html, /Paid to/);
 
+  const so10006 = {
+    id: "so-10006",
+    order_number: "SO-10006",
+    customer_name: "MHASWADKAR SARAF PRIVATE LIMITED",
+    total: 49560,
+    previous_due: 0,
+    amount_paid: 48720,
+    current_due: 0,
+    payment_method: "credit",
+    payment_status: "paid",
+    created_at: "2026-10-26T10:00:00.000Z",
+  };
+  const slip = InvoicePrint.receiptSlipFromInvoice(so10006);
+  assert.equal(slip.amount, 48720);
+  assert.equal(slip.previous_due, 0);
+  assert.equal(slip.invoice_amount, 49560);
+  assert.equal(slip.remaining_due, 840);
+  assert.equal(slip.entry_no, "—");
+  assert.notEqual(slip.entry_no, "PR");
+  const reprint = InvoicePrint.voucherBody(
+    {
+      ...slip,
+      entry_type: "receipt",
+      party_name: so10006.customer_name,
+      payment_date: "2026-10-26",
+    },
+    ctx,
+  );
+  assert.match(reprint, /PAYMENT RECEIPT/);
+  assert.match(reprint, /SO-10006/);
+  assert.match(reprint, /₹840\.00/);
+  assert.doesNotMatch(reprint, /Remaining Due<\/td><td class="inv-num">₹0\.00/);
+  assert.equal(
+    InvoicePrint.receiptRemainingFromInvoice({
+      total: 49560,
+      previous_due: 0,
+      amount_paid: 10000,
+      current_due: 29560,
+    }),
+    39560,
+  );
+  const named = InvoicePrint.receiptSlipFromInvoice({
+    ...so10006,
+    payments: [
+      {
+        entry_no: "PR-00012",
+        entry_type: "receipt",
+        amount: 48720,
+        payment_method: "upi",
+        invoice_no: "SO-10006",
+      },
+    ],
+  });
+  assert.equal(named.entry_no, "PR-00012");
+  assert.equal(named.payment_method, "upi");
+  assert.equal(named.remaining_due, 840);
+  const collect = InvoicePrint.receiptSlipFromInvoice({
+    ...so10006,
+    receipt: {
+      entryNo: "PR-00006",
+      amount: 48720,
+      method: "cash",
+      previous_due: 60000,
+      invoice_amount: 49560,
+      remaining_due: 11280,
+    },
+  });
+  assert.equal(collect.entry_no, "PR-00006");
+  assert.equal(collect.previous_due, 60000);
+  assert.equal(collect.remaining_due, 11280);
+  assert.equal(collect.payment_method, "cash");
+
   const payment = { ...receipt, entry_no: "PAY-2001", entry_type: "payment", party_name: "Spice Traders" };
   const payHtml = InvoicePrint.voucherBody(payment, ctx);
   assert.match(payHtml, /PAYMENT VOUCHER/);

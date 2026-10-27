@@ -1526,26 +1526,23 @@ function syncPayAmountDefault() {
 }
 
 function receiptEntryFromInvoice(order) {
-  const r = order?.receipt;
-  const paid = globalThis.InvoicePrint?.invoiceDueFigures
-    ? Number(globalThis.InvoicePrint.invoiceDueFigures(order).paid) || 0
-    : Number(order?.amount_paid) || 0;
-  if (!r && !(paid > 0)) return null;
+  const built = globalThis.InvoicePrint?.receiptSlipFromInvoice?.(order);
+  if (!built) return null;
   return {
-    id: r?.ledgerId || r?.ledger_id || r?.id || "",
-    entry_no: r?.entryNo || r?.entry_no || "PR",
+    id: built.id || "",
+    entry_no: built.entry_no || "—",
     entry_type: "receipt",
     party_name: orderCustomerName(order),
     party_mobile: order.customer_mobile,
     party_id: order.customer_id,
-    amount: r?.amount ?? paid,
-    payment_method: r?.method || order.payment_method,
-    invoice_no: r?.invoice_no || order.order_number,
-    invoice_amount: r?.invoice_amount ?? order.total,
-    previous_due: r?.previous_due ?? order.previous_due,
-    remaining_due: r?.remaining_due ?? r?.balance_due ?? order.current_due,
-    payment_reference: r?.payment_reference || order.payment_reference,
-    payment_date: r?.payment_date || order.payment_date,
+    amount: built.amount,
+    payment_method: built.payment_method,
+    invoice_no: built.invoice_no,
+    invoice_amount: built.invoice_amount,
+    previous_due: built.previous_due,
+    remaining_due: built.remaining_due,
+    payment_reference: built.payment_reference,
+    payment_date: built.payment_date,
     created_at: order.created_at,
   };
 }
