@@ -316,7 +316,9 @@ test("official invoice is an A4 list view not a POS slip", () => {
   assert.match(html, /Item &amp; Description/);
   assert.match(html, /Invoice total/);
   assert.match(html, /Payment Made/);
-  assert.match(html, /Payments till date/);
+  assert.doesNotMatch(html, /Payments till date/);
+  assert.match(html, /This is a computer-generated invoice\. No signature is required\./);
+  assert.match(html, /class="off-generated"/);
   assert.match(html, /Total due/);
   assert.match(html, /Cardamom/);
   assert.match(html, /Clove/);
@@ -333,7 +335,9 @@ test("official invoice is an A4 list view not a POS slip", () => {
     },
   );
   assert.match(doc, /size: A4 portrait/);
+  assert.match(doc, /margin: 12mm 12mm 14mm/);
   assert.match(doc, /page-break-inside: avoid/);
+  assert.doesNotMatch(doc, /width: 210mm/);
   assert.doesNotMatch(doc, /size: 80mm/);
 });
 
@@ -444,8 +448,10 @@ test("receipt voucher prints party, amount, and mode; payment voucher labels dif
     },
     ctx,
   );
-  assert.match(officeDate, /2026-09-09/);
-  assert.doesNotMatch(officeDate, /2026-09-19T10:00:00/);
+  assert.doesNotMatch(officeDate, /Payments till date/);
+  assert.doesNotMatch(officeDate, /RCP-1002/);
+  assert.match(officeDate, /Payment Made/);
+  assert.match(officeDate, /This is a computer-generated invoice\. No signature is required\./);
 });
 
 test("invoice due rows use previous due + invoice − payment", () => {
@@ -509,18 +515,13 @@ test("invoice due rows use previous due + invoice − payment", () => {
   );
   assert.match(office, /class="off-paid"/);
   assert.match(office, /Payment Made/);
-  assert.match(office, /Payments till date/);
-  assert.match(office, /<th>Entry<\/th>/);
-  assert.match(office, /<th>Type<\/th>/);
-  assert.match(office, /<th>Party<\/th>/);
-  assert.match(office, /<th>Method<\/th>/);
-  assert.match(office, /<th>Reference<\/th>/);
-  assert.match(office, /<th>Notes<\/th>/);
-  assert.match(office, /<th>Date<\/th>/);
+  assert.doesNotMatch(office, /Payments till date/);
+  assert.doesNotMatch(office, /<th>Entry<\/th>/);
   assert.match(office, /\(\-\) ₹840\.00/);
+  assert.match(office, /Total due/);
 });
 
-test("office invoice lists ledger receipts till date then total due", () => {
+test("office invoice keeps payment made and total due without the ledger list", () => {
   const InvoicePrint = loadInvoicePrint();
   const html = InvoicePrint.officeInvoiceBody(
     {
@@ -557,14 +558,14 @@ test("office invoice lists ledger receipts till date then total due", () => {
   );
   assert.match(html, /Invoice total/);
   assert.match(html, /Payment Made/);
-  assert.match(html, /Payments till date/);
-  assert.match(html, /RCP-1002/);
-  assert.match(html, /receipt/);
+  assert.doesNotMatch(html, /Payments till date/);
+  assert.doesNotMatch(html, /RCP-1002/);
+  assert.doesNotMatch(html, /cash payment recived M\.Mulani sir/);
   assert.match(html, /Swami Masale/);
   assert.match(html, /₹26000\.00|₹26,000\.00/);
-  assert.match(html, /cash payment recived M\.Mulani sir/);
   assert.match(html, /Total due/);
   assert.match(html, /₹14000\.00|₹14,000\.00/);
+  assert.match(html, /This is a computer-generated invoice\. No signature is required\./);
   const due = InvoicePrint.invoiceDueFigures({
     total: 40000,
     payments: [{ entry_no: "RCP-1002", entry_type: "receipt", amount: 26000 }],
@@ -745,6 +746,100 @@ test("invoice HSN uses item hsn ahead of SKU code", () => {
     [{ id: "i1", code: "SP-007", hsn: "0910", gst_rate: 5 }],
   );
   assert.equal(lines[0].hsn, "0910");
+});
+
+test("invoices print the computer-generated line and only enabled signature or stamp images", () => {
+  const InvoicePrint = loadInvoicePrint();
+  const sig = "data:image/png;base64,SIG";
+  const stamp = "data:image/jpeg;base64,STAMP";
+  const order = {
+    order_number: "SO-9",
+    customer_name: "Ramesh Traders",
+    total: 10,
+    payment_method: "cash",
+    payment_status: "paid",
+    lines: [],
+  };
+  const base = {
+    customers: [],
+    items: [],
+    formatDateTime: (v) => String(v),
+    money: (n) => `₹${Number(n).toFixed(2)}`,
+    escapeHtml: (v) => String(v ?? ""),
+  };
+  const hidden = InvoicePrint.officeInvoiceBody(order, {
+    ...base,
+    company: {
+      name: "Shop A",
+      invoice_signature_url: sig,
+      invoice_stamp_url: stamp,
+      invoice_signature_enabled: 0,
+      invoice_stamp_enabled: 0,
+    },
+  });
+  assert.match(hidden, /class="off-generated"/);
+  assert.match(hidden, /This is a computer-generated invoice\. No signature is required\./);
+  assert.doesNotMatch(hidden, /data:image\/png;base64,SIG/);
+  assert.doesNotMatch(hidden, /data:image\/jpeg;base64,STAMP/);
+  assert.doesNotMatch(hidden, /Payments till date/);
+
+  const shown = InvoicePrint.officeInvoiceBody(order, {
+    ...base,
+    company: {
+      name: "Shop A",
+      invoice_signature_url: sig,
+      invoice_stamp_url: stamp,
+      invoice_signature_enabled: 1,
+      invoice_stamp_enabled: "1",
+    },
+  });
+  assert.match(shown, /class="off-sign-img"/);
+  assert.match(shown, /class="off-stamp-img"/);
+  assert.match(shown, /data:image\/png;base64,SIG/);
+  assert.match(shown, /data:image\/jpeg;base64,STAMP/);
+  const signAt = shown.indexOf("off-sign-img");
+  const footerAt = shown.indexOf("off-generated");
+  assert.ok(signAt > 0 && footerAt > signAt);
+
+  const otherShop = InvoicePrint.officeInvoiceBody(order, {
+    ...base,
+    company: { name: "Shop B" },
+  });
+  assert.doesNotMatch(otherShop, /data:image\/png;base64,SIG/);
+  assert.doesNotMatch(otherShop, /off-sign-img/);
+
+  const bad = InvoicePrint.officeInvoiceBody(order, {
+    ...base,
+    company: {
+      name: "Shop A",
+      invoice_signature_url: "https://evil.example/sig.png",
+      invoice_signature_enabled: 1,
+    },
+  });
+  assert.doesNotMatch(bad, /off-sign-img/);
+  assert.doesNotMatch(bad, /evil\.example/);
+
+  const slip = InvoicePrint.invoiceBody(order, {
+    ...base,
+    company: {
+      name: "Shop A",
+      invoice_signature_url: sig,
+      invoice_signature_enabled: 1,
+      invoice_stamp_url: stamp,
+      invoice_stamp_enabled: 0,
+    },
+  });
+  assert.match(slip, /class="inv-generated"/);
+  assert.match(slip, /This is a computer-generated invoice\. No signature is required\./);
+  assert.match(slip, /class="inv-sign-img"/);
+  assert.doesNotMatch(slip, /inv-stamp-img/);
+  assert.doesNotMatch(slip, /Payments till date/);
+  const thermal = InvoicePrint.thermalInvoiceDocument(order, {
+    ...base,
+    company: { name: "Shop A" },
+  });
+  assert.match(thermal, /size: 80mm auto/);
+  assert.match(thermal, /This is a computer-generated invoice\. No signature is required\./);
 });
 
 test("POS slip and official bill print customer notes and terms from the shop profile", () => {

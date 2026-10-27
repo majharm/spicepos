@@ -563,6 +563,16 @@ function pos_clip_invoice_text($raw, $max = 4000) {
   return strlen($s) > $max ? substr($s, 0, $max) : $s;
 }
 
+function pos_invoice_mark_url($raw, $label) {
+  $url = trim((string) ($raw ?? ""));
+  if ($url === "") return null;
+  if (!preg_match('#^data:image/(png|jpeg);#i', $url)) {
+    pos_send(400, ["error" => $label . " must be a PNG or JPEG image"]);
+  }
+  if (strlen($url) > 2000000) pos_send(400, ["error" => $label . " is too large"]);
+  return $url;
+}
+
 function pos_attach_invoice_text($company, $business) {
   $row = is_array($company) ? $company : ["name" => $business["name"] ?? "POS"];
   if (!array_key_exists("invoice_footer", $row) || $row["invoice_footer"] === null) {
@@ -600,6 +610,10 @@ function pos_ensure_i18n_columns() {
     "scale_enabled" => "TINYINT(1) NOT NULL DEFAULT 0",
     "camera_scanner_enabled" => "TINYINT(1) NOT NULL DEFAULT 0",
     "purchase_barcode_enabled" => "TINYINT(1) NOT NULL DEFAULT 0",
+    "invoice_signature_url" => "MEDIUMTEXT NULL",
+    "invoice_stamp_url" => "MEDIUMTEXT NULL",
+    "invoice_signature_enabled" => "TINYINT(1) NOT NULL DEFAULT 0",
+    "invoice_stamp_enabled" => "TINYINT(1) NOT NULL DEFAULT 0",
     "receipt_printer_enabled" => "TINYINT(1) NOT NULL DEFAULT 0",
     "cash_drawer_enabled" => "TINYINT(1) NOT NULL DEFAULT 0",
     "quick_add_enabled" => "TINYINT(1) NOT NULL DEFAULT 1",
@@ -3193,7 +3207,8 @@ function pos_public_company_payload($row) {
     "name", "address", "phone", "email", "gstin", "state", "logo_url",
     "invoice_footer", "invoice_terms", "invoice_language", "locale",
     "fssai_licence_no", "drug_licence_no", "drug_licence_type", "pharmacy_registration_no",
-    "other_licence_no", "licence_expiry", "ndps_licence_no", "payment_qr_url", "payment_upi",
+    "other_licence_no", "licence_expiry", "ndps_licence_no",     "payment_qr_url", "payment_upi",
+    "invoice_signature_url", "invoice_stamp_url", "invoice_signature_enabled", "invoice_stamp_enabled",
   ];
   $out = [];
   foreach ($keys as $key) {

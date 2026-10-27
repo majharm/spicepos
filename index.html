@@ -6,7 +6,7 @@
     <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
     <title>ATAV POS</title>
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./css/pos.css?v=20261027pobc3" />
+    <link rel="stylesheet" href="./css/pos.css?v=20261027inv1" />
     <link rel="stylesheet" href="./css/barcode-desk.css?v=20261024bcdesk1" />
     <link rel="stylesheet" href="./css/saas.css?v=20261016note1" />
     <link rel="stylesheet" href="./css/bar.css?v=20261011bar2" />
@@ -2907,7 +2907,7 @@
               <button class="btn" type="button" data-settings-tab="fast-mode" data-settings-section="fast-mode">Fast Mode &amp; Performance</button>
               <button class="btn" type="button" data-settings-tab="branding" data-settings-section="branding">Branding &amp; Shop Logo</button>
               <button class="btn" type="button" data-settings-tab="payment" data-settings-section="payment">Payment QR &amp; UPI</button>
-              <button class="btn" type="button" data-settings-tab="invoice" data-settings-section="invoice">Invoice Text &amp; Terms</button>
+              <button class="btn" type="button" data-settings-tab="invoice" data-settings-section="invoice">Invoice &amp; Print Settings</button>
               <button class="btn" type="button" data-settings-tab="security" data-settings-section="security">User Permissions &amp; Security</button>
               <button class="btn" type="button" role="tab" aria-selected="false" data-settings-tab="backup" data-view="backup" data-i18n="settings.backup">Backup</button>
             </nav>
@@ -3104,6 +3104,40 @@
                       <textarea id="set-invoice-terms" rows="4" maxlength="4000" placeholder="Goods once sold cannot be returned."></textarea>
                     </label>
                     <p class="item-composer-note full" data-i18n="settings.invoice_terms_hint">Printed under the customer notes on tax invoices.</p>
+                  </fieldset>
+                  <fieldset class="item-block" data-set-section="invoice">
+                    <legend>Signature / Stamp</legend>
+                    <p class="item-composer-note full">Optional images for this business only. They print on official bills and receipt slips when the matching switch is on. PNG, JPG, or JPEG.</p>
+                    <label class="full"><input id="set-signature-print" type="checkbox" /> Enable signature printing</label>
+                    <div class="logo-row full">
+                      <div class="logo-preview-frame">
+                        <img id="signature-preview" class="logo-preview" alt="Signature preview" hidden />
+                      </div>
+                      <div class="logo-controls">
+                        <p class="item-composer-note">Upload Signature Image. The preview updates before you save.</p>
+                        <div class="logo-pick-row">
+                          <input id="set-invoice-signature" class="logo-file-input" type="file" accept=".png,.jpg,.jpeg,image/png,image/jpeg" />
+                          <label class="btn logo-pick" for="set-invoice-signature">Choose signature</label>
+                          <span class="logo-file-name" id="signature-file-name">PNG, JPG, or JPEG</span>
+                        </div>
+                        <button class="btn" type="button" id="signature-clear" hidden>Remove signature</button>
+                      </div>
+                    </div>
+                    <label class="full"><input id="set-stamp-print" type="checkbox" /> Enable stamp printing</label>
+                    <div class="logo-row full">
+                      <div class="logo-preview-frame">
+                        <img id="stamp-preview" class="logo-preview" alt="Company stamp preview" hidden />
+                      </div>
+                      <div class="logo-controls">
+                        <p class="item-composer-note">Upload Company Stamp Image. Leave this blank if you do not use a stamp.</p>
+                        <div class="logo-pick-row">
+                          <input id="set-invoice-stamp" class="logo-file-input" type="file" accept=".png,.jpg,.jpeg,image/png,image/jpeg" />
+                          <label class="btn logo-pick" for="set-invoice-stamp">Choose stamp</label>
+                          <span class="logo-file-name" id="stamp-file-name">PNG, JPG, or JPEG</span>
+                        </div>
+                        <button class="btn" type="button" id="stamp-clear" hidden>Remove stamp</button>
+                      </div>
+                    </div>
                   </fieldset>
                   <fieldset class="item-block" data-set-section="purchases">
                     <legend>Barcode Management</legend>
@@ -3473,7 +3507,7 @@
     <script src="./js/camera-scan.js?v=20261026poscan2" defer></script>
     <script src="./js/scale.js?v=20261012set4" defer></script>
     <script src="./js/dev-mode.js?v=20260905deploy136" defer></script>
-    <script src="./js/invoice.js?v=20261023cemail1" defer></script>
+    <script src="./js/invoice.js?v=20261027inv1" defer></script>
     <script src="./js/invoice-share.js?v=20261023cemail1" defer></script>
     <script src="./js/support.js?v=20260920deploy199" defer></script>
     <script src="./js/qrcode.iife.js?v=20260905qr1" defer></script>
@@ -3494,7 +3528,7 @@
     <script src="./js/item-master.js?v=20261012brand1" defer></script>
     <script src="./js/customer-master.js?v=20261023cemail1" defer></script>
     <script src="./js/due-reminders.js?v=20261024duewa1" defer></script>
-    <script src="./js/app.js?v=20261027pobc3" defer></script>
+    <script src="./js/app.js?v=20261027inv1" defer></script>
     <script src="./js/due-reminders-ui.js?v=20261024duewa1" defer></script>
     <script src="./js/item-master-ui.js?v=20261012brand1" defer></script>
     <script src="./js/customer-master-ui.js?v=20261023cemail1" defer></script>

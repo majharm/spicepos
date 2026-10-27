@@ -149,6 +149,10 @@ export async function ensureSchema() {
   await addColumn("company_settings", "scale_enabled", "TINYINT(1) NOT NULL DEFAULT 0");
   await addColumn("company_settings", "camera_scanner_enabled", "TINYINT(1) NOT NULL DEFAULT 0");
   await addColumn("company_settings", "purchase_barcode_enabled", "TINYINT(1) NOT NULL DEFAULT 0");
+  await addColumn("company_settings", "invoice_signature_url", "MEDIUMTEXT NULL");
+  await addColumn("company_settings", "invoice_stamp_url", "MEDIUMTEXT NULL");
+  await addColumn("company_settings", "invoice_signature_enabled", "TINYINT(1) NOT NULL DEFAULT 0");
+  await addColumn("company_settings", "invoice_stamp_enabled", "TINYINT(1) NOT NULL DEFAULT 0");
   await addColumn("company_settings", "receipt_printer_enabled", "TINYINT(1) NOT NULL DEFAULT 0");
   await addColumn("company_settings", "cash_drawer_enabled", "TINYINT(1) NOT NULL DEFAULT 0");
   await addColumn("company_settings", "zomato_enabled", "TINYINT(1) NOT NULL DEFAULT 0");

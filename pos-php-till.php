@@ -434,6 +434,18 @@ function pos_php_till_dispatch($path, $method, $body) {
       $params[] = ((int) ($body["purchase_barcode_enabled"] ?? 0) === 1) ? "1" : "0";
       $types .= "s";
     }
+    foreach (["invoice_signature_url" => "Signature", "invoice_stamp_url" => "Stamp"] as $markKey => $markLabel) {
+      if (!array_key_exists($markKey, $body)) continue;
+      $langSql .= ", {$markKey} = ?";
+      $params[] = pos_invoice_mark_url($body[$markKey] ?? "", $markLabel);
+      $types .= "s";
+    }
+    foreach (["invoice_signature_enabled", "invoice_stamp_enabled"] as $markFlag) {
+      if (!array_key_exists($markFlag, $body)) continue;
+      $langSql .= ", {$markFlag} = ?";
+      $params[] = ((int) ($body[$markFlag] ?? 0) === 1) ? "1" : "0";
+      $types .= "s";
+    }
     foreach (["scale_enabled", "camera_scanner_enabled", "receipt_printer_enabled", "cash_drawer_enabled"] as $col) {
       if (array_key_exists($col, $body)) {
         $langSql .= ", $col = ?";

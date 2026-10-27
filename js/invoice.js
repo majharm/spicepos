@@ -834,6 +834,28 @@ ${purchaseBody(purchase, ctx)}
     };
   }
 
+  const GENERATED_INVOICE_NOTE = "This is a computer-generated invoice. No signature is required.";
+
+  function invoiceMarkOn(raw) {
+    return raw === true || raw === 1 || raw === "1";
+  }
+
+  function invoiceMarkUrl(raw) {
+    const url = String(raw || "").trim();
+    return /^data:image\/(?:png|jpeg);/i.test(url) ? url : "";
+  }
+
+  function invoiceMarksHtml(co, escapeHtml, mode) {
+    const company = co || {};
+    const stamp = invoiceMarkOn(company.invoice_stamp_enabled) ? invoiceMarkUrl(company.invoice_stamp_url) : "";
+    const sign = invoiceMarkOn(company.invoice_signature_enabled) ? invoiceMarkUrl(company.invoice_signature_url) : "";
+    if (!stamp && !sign) return "";
+    if (mode === "thermal") {
+      return `<div class="inv-marks">${stamp ? `<img class="inv-stamp-img" src="${escapeHtml(stamp)}" alt="Company stamp">` : ""}${sign ? `<img class="inv-sign-img" src="${escapeHtml(sign)}" alt="Authorised signature">` : ""}</div>`;
+    }
+    return `<div class="off-marks">${stamp ? `<img class="off-stamp-img" src="${escapeHtml(stamp)}" alt="Company stamp">` : ""}${sign ? `<img class="off-sign-img" src="${escapeHtml(sign)}" alt="Authorised signature">` : ""}</div>`;
+  }
+
   function invoiceDueRowsHtml(order, money, escapeHtml, ctx) {
     const due = invoiceDueFigures(order);
     const ref = String(order.payment_reference || order.paymentReference || "").trim();
@@ -999,6 +1021,8 @@ ${purchaseBody(purchase, ctx)}
   ${paymentQrHtml(co, ctx, "pos")}
   ${footer ? `<p class="inv-footer">${noteHtml(footer, escapeHtml)}</p>` : `<p class="inv-footer">${escapeHtml(L(ctx, "invoice.thank_you", "Thank you for your business!"))}</p>`}
   ${terms ? `<p class="inv-terms"><strong>${escapeHtml(L(ctx, "invoice.terms", "Terms & conditions"))}</strong><br>${noteHtml(terms, escapeHtml)}</p>` : ""}
+  ${invoiceMarksHtml(co, escapeHtml, "thermal")}
+  <p class="inv-generated">${escapeHtml(GENERATED_INVOICE_NOTE)}</p>
   <p class="inv-powered">ATAV POS</p>
 </article>`;
   }
@@ -1008,7 +1032,7 @@ ${purchaseBody(purchase, ctx)}
 * { box-sizing: border-box; }
 body {
   margin: 0;
-  padding: 2mm;
+  padding: 0;
   width: 76mm;
   font-family: "Courier New", Courier, ui-monospace, monospace;
   font-size: 11px;
@@ -1016,7 +1040,7 @@ body {
   color: #000;
   background: #fff;
 }
-.thermal-invoice { width: 100%; }
+.thermal-invoice { width: 100%; overflow-wrap: anywhere; }
 .inv-logo { display: block; max-height: 52px; max-width: 64mm; margin: 0 auto 6px; }
 .inv-head { text-align: center; }
 .inv-shop { font-size: 14px; margin: 0 0 4px; font-weight: 700; }
@@ -1055,11 +1079,26 @@ body {
 .inv-pay-qr-title { margin: 0 0 4px; font-size: 10px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; }
 .inv-pay-qr-img { display: block; width: 28mm; height: 28mm; object-fit: contain; margin: 0 auto; background: #fff; }
 .inv-pay-qr-upi { margin: 4px 0 0; font-size: 10px; font-weight: 700; }
-.inv-footer, .inv-terms { text-align: center; font-size: 9px; margin: 4px 0; }
+.inv-footer, .inv-terms { text-align: center; font-size: 9px; margin: 4px 0; overflow-wrap: anywhere; }
+.inv-marks { text-align: center; margin: 6px 0 2px; }
+.inv-sign-img, .inv-stamp-img { display: inline-block; max-height: 42px; max-width: 32mm; object-fit: contain; vertical-align: middle; margin: 0 3px; }
+.inv-generated {
+  clear: both;
+  text-align: center;
+  font-family: "Segoe UI", Calibri, Arial, sans-serif;
+  font-size: 9px;
+  line-height: 1.4;
+  margin: 8px 0 0;
+  color: #333;
+}
 .inv-powered { text-align: center; font-size: 8px; margin-top: 8px; color: #444; }
 .inv-empty { text-align: center; padding: 8px 0; }
+.inv-item, .inv-addr { overflow-wrap: anywhere; }
 @media screen {
-  body { width: 320px; margin: 12px auto; border: 1px dashed #999; }
+  body { width: 320px; margin: 12px auto; padding: 8px; border: 1px dashed #999; }
+}
+@media print {
+  html, body { width: 76mm; height: auto; }
 }
 `;
 
@@ -1235,35 +1274,6 @@ ${invoiceBody(order, ctx)}
     const tableLine = tableNo
       ? `<tr><td>Table</td><td>${escapeHtml(/^\d+$/.test(tableNo) ? `Table ${tableNo}` : tableNo)}</td></tr>`
       : "";
-    const payRows = due.payments || [];
-    const payTable = payRows.length
-      ? `<section class="off-pays-wrap">
-      <h3>Payments till date</h3>
-      <table class="off-pays">
-        <thead>
-          <tr>
-            <th>Entry</th><th>Type</th><th>Party</th><th class="off-n">Amount</th>
-            <th>Method</th><th>Reference</th><th>Notes</th><th>Date</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${payRows
-            .map((r) => `<tr>
-            <td>${escapeHtml(r.entry_no || "—")}</td>
-            <td>${escapeHtml(r.entry_type || "receipt")}</td>
-            <td>${escapeHtml(r.party_name || buyerName)}</td>
-            <td class="off-n">${escapeHtml(money(r.amount))}</td>
-            <td>${escapeHtml(r.payment_method || "—")}</td>
-            <td>${escapeHtml(r.reference || "—")}</td>
-            <td>${escapeHtml(r.notes || "—")}</td>
-            <td>${escapeHtml(formatInvoiceDate(r.payment_date, ctx) || formatInvoiceDate(r.created_at, ctx) || "—")}</td>
-          </tr>`)
-            .join("")}
-        </tbody>
-      </table>
-    </section>`
-      : "";
-
     return `<article class="office-invoice">
   <header class="off-head">
     <div class="off-seller">
@@ -1350,38 +1360,43 @@ ${invoiceBody(order, ctx)}
       </tbody>
     </table>
   </div>
-  ${payTable}
   <div class="off-end">
     ${paymentQrHtml(co, ctx, "office")}
     <div class="off-end-copy">
       <p class="off-thanks">Thanks for your business.</p>
       <footer class="off-sign">
-        <div>Customer signature</div>
-        <div>For ${escapeHtml(co.name || "Shop")}<br><span>Authorised signatory</span></div>
+        <div><span class="off-sign-line">Customer signature</span></div>
+        <div class="off-auth">
+          ${invoiceMarksHtml(co, escapeHtml, "office")}
+          <span class="off-sign-line">For ${escapeHtml(co.name || "Shop")}<br><span>Authorised signatory</span></span>
+        </div>
       </footer>
     </div>
   </div>
+  <p class="off-generated">${escapeHtml(GENERATED_INVOICE_NOTE)}</p>
 </article>`;
   }
 
   const OFFICE_CSS = `
-@page { size: A4 portrait; margin: 7mm; }
+@page { size: A4 portrait; margin: 12mm 12mm 14mm; }
 * { box-sizing: border-box; }
 html, body {
   margin: 0;
   padding: 0;
+  width: auto;
   color: #212121;
   background: #fff;
   font-family: "Segoe UI", Calibri, Arial, sans-serif;
-  font-size: 10.5px;
-  line-height: 1.28;
+  font-size: 11px;
+  line-height: 1.4;
 }
-.office-invoice { width: 100%; color: #212121; page-break-inside: avoid; break-inside: avoid-page; }
-.off-head { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; padding-bottom: 8px; }
-.off-logo { max-height: 40px; max-width: 140px; display: block; margin-bottom: 4px; }
-.off-shop { margin: 0 0 3px; font-size: 18px; font-weight: 700; color: #1a7a6d; letter-spacing: -0.02em; }
-.off-seller-meta { font-size: 10px; color: #555; }
-.off-doc { min-width: 230px; max-width: 280px; }
+.office-invoice { width: 100%; max-width: 100%; color: #212121; }
+.off-head { display: flex; justify-content: space-between; gap: 18px; align-items: flex-start; padding-bottom: 10px; }
+.off-seller { flex: 1 1 auto; min-width: 0; }
+.off-logo { max-height: 48px; max-width: 42mm; display: block; margin-bottom: 6px; object-fit: contain; }
+.off-shop { margin: 0 0 4px; font-size: 18px; font-weight: 700; color: #1a7a6d; letter-spacing: -0.02em; }
+.off-seller-meta { font-size: 10.5px; color: #555; overflow-wrap: anywhere; }
+.off-doc { flex: 0 0 72mm; max-width: 78mm; }
 .off-title { margin: 0; font-size: 18px; font-weight: 700; color: #1a7a6d; letter-spacing: 0.04em; text-align: right; }
 .off-void {
   margin: 4px 0 6px;
@@ -1415,6 +1430,8 @@ html, body {
 .off-parties h2 { margin: 0 0 3px; font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; color: #888; font-weight: 700; }
 .off-parties strong { font-size: 12px; }
 .off-items, .off-gst, .off-totals { width: 100%; border-collapse: collapse; }
+.off-items { table-layout: fixed; }
+.off-items thead { display: table-header-group; }
 .off-items thead th {
   background: #1a7a6d;
   color: #fff;
@@ -1422,18 +1439,23 @@ html, body {
   font-weight: 700;
   text-transform: none;
   letter-spacing: 0.02em;
-  padding: 5px 7px;
+  padding: 6px 8px;
   border: 0;
 }
 .off-items tbody td {
   border: 0;
   border-bottom: 1px solid #e6e6e6;
-  padding: 5px 7px;
+  padding: 6px 8px;
   vertical-align: top;
 }
-.off-item-name { font-weight: 600; }
-.off-item-desc { margin-top: 1px; font-size: 9.5px; color: #666; }
-.off-gst th, .off-gst td { border: 0; border-bottom: 1px solid #eee; padding: 3px 5px; }
+.off-items th:nth-child(1), .off-items td:nth-child(1) { width: 8%; }
+.off-items th:nth-child(3), .off-items td:nth-child(3) { width: 14%; }
+.off-items th:nth-child(4), .off-items td:nth-child(4) { width: 18%; }
+.off-items th:nth-child(5), .off-items td:nth-child(5) { width: 18%; }
+.off-item-name { font-weight: 600; overflow-wrap: anywhere; }
+.off-item-desc { margin-top: 2px; font-size: 10px; color: #666; overflow-wrap: anywhere; }
+.off-gst { table-layout: fixed; }
+.off-gst th, .off-gst td { border: 0; border-bottom: 1px solid #eee; padding: 4px 5px; overflow-wrap: anywhere; }
 .off-gst thead th { background: #f4f8f7; color: #555; font-size: 9px; text-transform: uppercase; }
 .off-totals { margin-left: auto; }
 .off-totals td { border: 0; padding: 3px 0 3px 10px; }
@@ -1448,24 +1470,36 @@ html, body {
 .off-grand td { font-weight: 800; font-size: 12px; border-top: 1px solid #ddd; }
 .off-paid td { font-weight: 700; }
 .off-due td { font-weight: 800; font-size: 12px; color: #1a7a6d; border-top: 2px solid #1a7a6d; }
-.off-pays-wrap { margin-top: 8px; }
-.off-pays-wrap h3 { margin: 0 0 4px; font-size: 11px; color: #1a7a6d; }
-.off-pays { width: 100%; border-collapse: collapse; font-size: 9.5px; }
-.off-pays th { background: #1a7a6d; color: #fff; text-align: left; padding: 3px 5px; font-weight: 700; }
-.off-pays td { border-bottom: 1px solid #e6e6e6; padding: 3px 5px; vertical-align: top; }
-.off-end { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; margin-top: 8px; }
-.off-end-copy { flex: 1; }
-.off-thanks { margin: 0 0 8px; font-size: 12px; color: #1a7a6d; }
+.off-end { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; margin-top: 14px; }
+.off-end-copy { flex: 1; min-width: 0; }
+.off-thanks { margin: 0 0 10px; font-size: 12px; color: #1a7a6d; }
 .off-pay-qr { text-align: center; margin: 0; flex: 0 0 auto; }
 .off-pay-qr-title { margin: 0 0 3px; font-size: 9px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: #333; }
 .off-pay-qr-img { display: block; width: 72px; height: 72px; object-fit: contain; margin: 0 auto; background: #fff; }
 .off-pay-qr-upi { margin: 3px 0 0; font-size: 10px; font-weight: 700; }
-.off-sign { display: flex; justify-content: space-between; gap: 16px; margin-top: 0; }
-.off-sign > div { min-width: 140px; border-top: 1px solid #ccc; padding-top: 4px; font-size: 10px; color: #555; }
+.off-sign { display: flex; justify-content: space-between; align-items: flex-end; gap: 24px; margin-top: 16px; }
+.off-auth { text-align: right; }
+.off-sign-line { display: inline-block; min-width: 42mm; border-top: 1px solid #ccc; padding-top: 4px; font-size: 10px; color: #555; }
+.off-marks { display: flex; justify-content: flex-end; align-items: flex-end; gap: 12px; margin: 0 0 6px; }
+.off-sign-img, .off-stamp-img { display: block; max-height: 64px; max-width: 42mm; object-fit: contain; }
+.off-generated {
+  clear: both;
+  margin: 16px 0 0;
+  padding-top: 8px;
+  border-top: 1px solid #e6e6e6;
+  text-align: center;
+  font-family: "Segoe UI", Calibri, Arial, sans-serif;
+  font-size: 10.5px;
+  line-height: 1.4;
+  color: #555;
+}
+.off-items tr, .off-gst tr, .off-totals tr, .off-end, .off-generated, .off-marks {
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
 @media print {
-  html, body { width: 210mm; height: auto; }
+  html, body { width: auto; height: auto; }
   body { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
-  .office-invoice { page-break-after: avoid; page-break-inside: avoid; break-inside: avoid-page; }
 }
 `;
 

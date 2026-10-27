@@ -17,7 +17,7 @@ import { workbookXml } from "./excel.js";
 import { ensureSchema, seedPlatform } from "./schema.js";
 import { companyTimezone, normalizeTimezone, shopTimezonePayload, tzOffsetFor } from "./timezone.js";
 import { attachAuth, registerAuth, requireStaff, requirePerm } from "./auth.js";
-import { normalizeLocale, normalizeInvoiceLanguage, normalizeWhatsappLanguage, clipInvoiceText, attachInvoiceText } from "./i18n.js";
+import { normalizeLocale, normalizeInvoiceLanguage, normalizeWhatsappLanguage, clipInvoiceText, attachInvoiceText, invoiceMarkUrl } from "./i18n.js";
 import { registerMaster } from "./master.js";
 import { registerTenant } from "./tenant.js";
 import { registerHub } from "./hub.js";
@@ -128,6 +128,10 @@ function publicCompanyPayload(row = {}) {
     "ndps_licence_no",
     "payment_qr_url",
     "payment_upi",
+    "invoice_signature_url",
+    "invoice_stamp_url",
+    "invoice_signature_enabled",
+    "invoice_stamp_enabled",
   ];
   const out = {};
   for (const key of keys) {
@@ -783,6 +787,25 @@ app.post("/api/settings", requireStaff, requirePerm("settings"), async (req, res
   if (Object.prototype.hasOwnProperty.call(body, "purchase_barcode_enabled")) {
     langSql += ", purchase_barcode_enabled = ?";
     params.push(Number(body.purchase_barcode_enabled) === 1 ? 1 : 0);
+  }
+  for (const [key, label] of [
+    ["invoice_signature_url", "Signature"],
+    ["invoice_stamp_url", "Stamp"],
+  ]) {
+    if (!Object.prototype.hasOwnProperty.call(body, key)) continue;
+    const mark = invoiceMarkUrl(body[key], label);
+    if (mark instanceof Error) {
+      res.status(mark.status || 400).json({ error: mark.message });
+      return;
+    }
+    langSql += `, ${key} = ?`;
+    params.push(mark);
+  }
+  for (const col of ["invoice_signature_enabled", "invoice_stamp_enabled"]) {
+    if (Object.prototype.hasOwnProperty.call(body, col)) {
+      langSql += `, ${col} = ?`;
+      params.push(Number(body[col]) === 1 ? 1 : 0);
+    }
   }
   for (const col of ["scale_enabled", "camera_scanner_enabled", "receipt_printer_enabled", "cash_drawer_enabled"]) {
     if (Object.prototype.hasOwnProperty.call(body, col)) {

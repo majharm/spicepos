@@ -24,6 +24,8 @@ const state = {
   editingOrderId: null,
   logoDraft: null,
   payQrDraft: null,
+  signatureDraft: null,
+  stampDraft: null,
   itemImage: "",
   session: null,
   perms: {},
@@ -2293,8 +2295,14 @@ function showLogo(img, url) {
     img.removeAttribute("src");
     img.hidden = true;
   }
-  if (img.id === "logo-preview" && $("logo-clear")) $("logo-clear").hidden = !url;
-  if (img.id === "pay-qr-preview" && $("pay-qr-clear")) $("pay-qr-clear").hidden = !url;
+  const clearFor = {
+    "logo-preview": "logo-clear",
+    "pay-qr-preview": "pay-qr-clear",
+    "signature-preview": "signature-clear",
+    "stamp-preview": "stamp-clear",
+  };
+  const clearId = clearFor[img.id];
+  if (clearId && $(clearId)) $(clearId).hidden = !url;
 }
 
 function paintLogoFileName(name = "") {
@@ -2305,6 +2313,11 @@ function paintLogoFileName(name = "") {
 function paintPayQrFileName(name = "") {
   const el = $("pay-qr-file-name");
   if (el) el.textContent = name || "PNG or JPG";
+}
+
+function paintMarkFileName(id, name = "") {
+  const el = $(id);
+  if (el) el.textContent = name || "PNG, JPG, or JPEG";
 }
 
 function excelHref(sheet) {
@@ -8218,17 +8231,27 @@ function renderSettings() {
   if ($("set-pincode")) $("set-pincode").value = state.company.pincode || state.company.pin_code || "";
   if ($("set-invoice-footer")) $("set-invoice-footer").value = state.company.invoice_footer || "";
   if ($("set-invoice-terms")) $("set-invoice-terms").value = state.company.invoice_terms || "";
+  if ($("set-signature-print")) $("set-signature-print").checked = hardwareFlagOn(state.company.invoice_signature_enabled);
+  if ($("set-stamp-print")) $("set-stamp-print").checked = hardwareFlagOn(state.company.invoice_stamp_enabled);
   if ($("set-payment-upi")) $("set-payment-upi").value = state.company.payment_upi || "";
   if ($("set-timezone")) $("set-timezone").value = shopTimezone();
   paintTimezonePreview();
   state.logoDraft = null;
   state.payQrDraft = null;
+  state.signatureDraft = null;
+  state.stampDraft = null;
   $("set-logo").value = "";
   if ($("set-pay-qr")) $("set-pay-qr").value = "";
+  if ($("set-invoice-signature")) $("set-invoice-signature").value = "";
+  if ($("set-invoice-stamp")) $("set-invoice-stamp").value = "";
   paintLogoFileName();
   paintPayQrFileName();
+  paintMarkFileName("signature-file-name");
+  paintMarkFileName("stamp-file-name");
   showLogo($("logo-preview"), state.company.logo_url);
   showLogo($("pay-qr-preview"), state.company.payment_qr_url);
+  showLogo($("signature-preview"), state.company.invoice_signature_url);
+  showLogo($("stamp-preview"), state.company.invoice_stamp_url);
   if ($("set-shop-id")) $("set-shop-id").value = shopBusinessId();
   const stats = $("settings-hero-stats");
   if (stats) {
@@ -14404,6 +14427,8 @@ $("settings-form").addEventListener("submit", async (e) => {
     }
     payload.camera_scanner_enabled = $("set-camera-scanner")?.checked ? 1 : 0;
     payload.purchase_barcode_enabled = $("set-purchase-barcode")?.checked ? 1 : 0;
+    payload.invoice_signature_enabled = $("set-signature-print")?.checked ? 1 : 0;
+    payload.invoice_stamp_enabled = $("set-stamp-print")?.checked ? 1 : 0;
     payload.receipt_printer_enabled = $("set-receipt-printer")?.checked ? 1 : 0;
     payload.cash_drawer_enabled = $("set-cash-drawer")?.checked ? 1 : 0;
     if ($("set-quick-add-hide") || $("set-quick-add-show")) {
@@ -14417,6 +14442,8 @@ $("settings-form").addEventListener("submit", async (e) => {
     }
     if (state.logoDraft !== null) payload.logo_url = state.logoDraft;
     if (state.payQrDraft !== null) payload.payment_qr_url = state.payQrDraft;
+    if (state.signatureDraft !== null) payload.invoice_signature_url = state.signatureDraft;
+    if (state.stampDraft !== null) payload.invoice_stamp_url = state.stampDraft;
     const data = await api("/api/settings", {
       method: "POST",
       body: JSON.stringify(payload),
@@ -14428,10 +14455,18 @@ $("settings-form").addEventListener("submit", async (e) => {
     if (Object.prototype.hasOwnProperty.call(payload, "purchase_barcode_enabled")) {
       state.company.purchase_barcode_enabled = payload.purchase_barcode_enabled;
     }
+    if (Object.prototype.hasOwnProperty.call(payload, "invoice_signature_enabled")) {
+      state.company.invoice_signature_enabled = payload.invoice_signature_enabled;
+    }
+    if (Object.prototype.hasOwnProperty.call(payload, "invoice_stamp_enabled")) {
+      state.company.invoice_stamp_enabled = payload.invoice_stamp_enabled;
+    }
     if (state.currentView === "purchases") renderPoLines();
     state.fastModePreview = null;
     state.logoDraft = null;
     state.payQrDraft = null;
+    state.signatureDraft = null;
+    state.stampDraft = null;
     paintHeader();
     applyQuickAddVisibility();
     applyFastMode();
@@ -14518,6 +14553,43 @@ $("pay-qr-clear").addEventListener("click", () => {
   $("settings-hint").textContent = "Payment QR will be removed on Save";
   $("settings-hint").className = "hint";
 });
+
+function bindInvoiceMarkPicker(inputId, draftKey, previewId, nameId, label) {
+  $(inputId)?.addEventListener("change", async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const url = await readInvoiceMarkFile(file);
+      state[draftKey] = url;
+      showLogo($(previewId), url);
+      paintMarkFileName(nameId, file.name);
+      markSettingsDirty();
+      $("settings-hint").textContent = `${label} ready — click Save`;
+      $("settings-hint").className = "hint";
+    } catch (err) {
+      e.target.value = "";
+      $("settings-hint").textContent = err.message;
+      $("settings-hint").className = "hint error";
+    }
+  });
+}
+
+function bindInvoiceMarkClear(buttonId, inputId, draftKey, previewId, nameId, label) {
+  $(buttonId)?.addEventListener("click", () => {
+    state[draftKey] = "";
+    if ($(inputId)) $(inputId).value = "";
+    paintMarkFileName(nameId);
+    showLogo($(previewId), "");
+    markSettingsDirty();
+    $("settings-hint").textContent = `${label} will be removed on Save`;
+    $("settings-hint").className = "hint";
+  });
+}
+
+bindInvoiceMarkPicker("set-invoice-signature", "signatureDraft", "signature-preview", "signature-file-name", "Signature");
+bindInvoiceMarkPicker("set-invoice-stamp", "stampDraft", "stamp-preview", "stamp-file-name", "Stamp");
+bindInvoiceMarkClear("signature-clear", "set-invoice-signature", "signatureDraft", "signature-preview", "signature-file-name", "Signature");
+bindInvoiceMarkClear("stamp-clear", "set-invoice-stamp", "stampDraft", "stamp-preview", "stamp-file-name", "Stamp");
 
 $("report-form").addEventListener("submit", async (e) => {
   e.preventDefault();
@@ -14727,6 +14799,56 @@ function readLogoFile(file, max = 480) {
       canvas.getContext("2d").drawImage(img, 0, 0, w, h);
       URL.revokeObjectURL(blobUrl);
       resolve(canvas.toDataURL("image/jpeg", 0.86));
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(blobUrl);
+      reject(new Error("Could not read image"));
+    };
+    img.src = blobUrl;
+  });
+}
+
+function readInvoiceMarkFile(file) {
+  return new Promise((resolve, reject) => {
+    const name = String(file?.name || "").toLowerCase();
+    const type = String(file?.type || "").toLowerCase();
+    const png = type === "image/png" || name.endsWith(".png");
+    const jpeg = type === "image/jpeg" || type === "image/jpg" || name.endsWith(".jpg") || name.endsWith(".jpeg");
+    if (!png && !jpeg) {
+      reject(new Error("Use a PNG, JPG, or JPEG image"));
+      return;
+    }
+    if (file.size > 8_000_000) {
+      reject(new Error("Choose an image under 8 MB"));
+      return;
+    }
+    const img = new Image();
+    const blobUrl = URL.createObjectURL(file);
+    img.onload = () => {
+      const max = 640;
+      let w = img.width || 1;
+      let h = img.height || 1;
+      if (w > max || h > max) {
+        const scale = max / Math.max(w, h);
+        w = Math.max(1, Math.round(w * scale));
+        h = Math.max(1, Math.round(h * scale));
+      }
+      const canvas = document.createElement("canvas");
+      canvas.width = w;
+      canvas.height = h;
+      const g = canvas.getContext("2d");
+      if (!png) {
+        g.fillStyle = "#fff";
+        g.fillRect(0, 0, w, h);
+      }
+      g.drawImage(img, 0, 0, w, h);
+      URL.revokeObjectURL(blobUrl);
+      const url = png ? canvas.toDataURL("image/png") : canvas.toDataURL("image/jpeg", 0.86);
+      if (url.length > 2_000_000) {
+        reject(new Error("Image is too large after preview. Choose a smaller file."));
+        return;
+      }
+      resolve(url);
     };
     img.onerror = () => {
       URL.revokeObjectURL(blobUrl);

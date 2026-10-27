@@ -31,6 +31,22 @@ export function clipInvoiceText(raw, max = 4000) {
   return s.length > max ? s.slice(0, max) : s;
 }
 
+export function invoiceMarkUrl(raw, label) {
+  const url = raw ? String(raw) : "";
+  if (!url) return null;
+  if (!/^data:image\/(?:png|jpeg);/i.test(url)) {
+    const err = new Error(`${label} must be a PNG or JPEG image`);
+    err.status = 400;
+    return err;
+  }
+  if (url.length > 2_000_000) {
+    const err = new Error(`${label} is too large`);
+    err.status = 400;
+    return err;
+  }
+  return url;
+}
+
 export function attachInvoiceText(company, business) {
   const row = { ...(company || { name: business?.name || "POS" }) };
   if (row.invoice_footer == null) row.invoice_footer = business?.invoice_footer || "";
