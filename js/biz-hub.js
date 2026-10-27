@@ -31,7 +31,7 @@
     { id: "quotation", group: "sales", title: "Quotation", view: "hub-sales", perm: "orders", desk: "quotation", blurb: "Price offer — no stock, no GST invoice" },
     { id: "sales-order", group: "sales", title: "Sales Order", view: "hub-sales", perm: "orders", desk: "sales-order", blurb: "Confirmed order before challan or invoice" },
     { id: "challan", group: "sales", title: "Delivery Challan", view: "hub-sales", perm: "orders", desk: "challan", blurb: "Send goods without a tax invoice" },
-    { id: "recurring", group: "sales", title: "Recurring Invoice", view: "hub-sales", perm: "orders", desk: "recurring", blurb: "Repeat schedule — does not auto-bill" },
+    { id: "recurring", group: "sales", title: "Recurring Invoice", view: "recurring", perm: "orders", blurb: "Scheduled unpaid tax invoices" },
     { id: "credit-note", group: "sales", title: "Credit Note", view: "returns", perm: "orders", kinds: ["pharmacy", "apparel", "footwear"], blurb: "Reduce a billed tax invoice" },
     { id: "sales-return", group: "sales", title: "Sales Return", view: "returns", perm: "orders", kinds: ["pharmacy", "apparel", "footwear"], blurb: "Take goods back against an invoice" },
     { id: "cancelled", group: "sales", title: "Cancelled Invoice", view: "orders", perm: "orders", query: "cancelled", blurb: "Voided tax invoices" },
@@ -395,7 +395,7 @@
       title: "Recurring Invoice",
       prefix: "RI",
       save: "Save schedule",
-      hint: "Reminder to bill this customer on a cycle. ATAV POS does not auto-create tax invoices — open Counter on the next bill date.",
+      hint: "Use Sales → Recurring Invoices when Invoice settings has the feature on. That screen creates unpaid tax invoices on the schedule.",
       statuses: ["Draft", "Active", "Paused", "Ended"],
       party: "Customer",
       extra: "repeat",
@@ -403,8 +403,8 @@
   };
 
   const SALES_SECTIONS = [
-    { id: "billing", title: "Tax invoices", ids: ["counter", "invoices", "new-invoice", "cancelled"] },
-    { id: "docs", title: "Other invoice types", ids: ["quotation", "sales-order", "challan", "recurring"] },
+    { id: "billing", title: "Tax invoices", ids: ["counter", "invoices", "new-invoice", "cancelled", "recurring"] },
+    { id: "docs", title: "Other invoice types", ids: ["quotation", "sales-order", "challan"] },
     { id: "returns", title: "Returns", ids: ["credit-note", "sales-return"] },
     { id: "money", title: "Collections", ids: ["receipt", "customer-due", "customer-ledger"] },
   ];

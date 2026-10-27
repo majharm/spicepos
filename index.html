@@ -6,7 +6,7 @@
     <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
     <title>ATAV POS</title>
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./css/pos.css?v=20261027inv1" />
+    <link rel="stylesheet" href="./css/pos.css?v=20261027rec1" />
     <link rel="stylesheet" href="./css/barcode-desk.css?v=20261024bcdesk1" />
     <link rel="stylesheet" href="./css/saas.css?v=20261016note1" />
     <link rel="stylesheet" href="./css/bar.css?v=20261011bar2" />
@@ -37,6 +37,7 @@
             <p class="nav-group-label" data-i18n="nav.sales">Sales</p>
             <button class="nav-btn" type="button" data-view="hub-sales"><span class="nav-icon" aria-hidden="true">▤</span>Sales desk</button>
             <button class="nav-btn" type="button" data-view="orders"><span class="nav-icon" aria-hidden="true">▤</span><span data-i18n="nav.invoices">Invoices</span></button>
+            <button class="nav-btn" type="button" data-view="recurring" hidden><span class="nav-icon" aria-hidden="true">↻</span>Recurring Invoices</button>
             <button class="nav-btn classic-bill-only" type="button" data-view="returns"><span class="nav-icon" aria-hidden="true">↺</span><span data-i18n="nav.returns">Manage Returns</span></button>
             <button class="nav-btn pharmacy-hide" type="button" data-view="qr-orders"><span class="nav-icon" aria-hidden="true">▦</span><span data-i18n="nav.qr_orders">QR Orders</span> <span class="nav-badge" id="qr-order-badge" hidden></span></button>
             <button class="nav-btn pharmacy-hide" type="button" data-view="online-orders"><span class="nav-icon" aria-hidden="true">▢</span>Online orders <span class="nav-badge" id="agg-order-badge" hidden></span></button>
@@ -2801,6 +2802,41 @@
             <div id="reports"></div>
           </div>
         </section>
+        <section class="view view-finance" id="view-recurring" hidden>
+          <h2 class="visually-hidden">Recurring invoices</h2>
+          <div class="items-desk recurring-desk">
+            <header class="items-hero">
+              <div class="items-hero-copy">
+                <p class="items-kicker">Sales</p>
+                <h3>Recurring invoices</h3>
+                <p class="lede">Schedules create unpaid sales invoices on the next date. A payment is recorded only when you take one. Pausing or cancelling stops future invoices.</p>
+              </div>
+              <div class="items-hero-stats recurring-stats" id="recurring-stats"></div>
+            </header>
+            <p class="hint" id="recurring-hint"></p>
+            <div class="recurring-filters">
+              <label>Search <input id="recur-q" type="search" placeholder="Name or customer" autocomplete="off" /></label>
+              <label>Customer <select id="recur-customer"><option value="">All customers</option></select></label>
+              <label>Status
+                <select id="recur-status">
+                  <option value="">All statuses</option>
+                  <option value="active">Active</option>
+                  <option value="paused">Paused</option>
+                  <option value="completed">Completed</option>
+                  <option value="cancelled">Cancelled</option>
+                </select>
+              </label>
+              <label>Frequency <select id="recur-frequency"><option value="">All frequencies</option></select></label>
+              <label>Next from <input id="recur-from" type="date" /></label>
+              <label>Next to <input id="recur-to" type="date" /></label>
+              <button class="btn" type="button" id="recur-filter">Filter</button>
+              <button class="btn primary" type="button" id="recur-new">Create recurring invoice</button>
+            </div>
+            <div id="recurring-form-wrap" hidden></div>
+            <div class="table-wrap" id="recurring-table"></div>
+            <div id="recurring-history" hidden></div>
+          </div>
+        </section>
         <section class="view view-finance" id="view-hub-sales" hidden>
           <h2 class="visually-hidden">Sales desk</h2>
           <div class="items-desk sales-desk">
@@ -2808,7 +2844,7 @@
               <div class="items-hero-copy">
                 <p class="items-kicker">Sales</p>
                 <h3>Sales desk</h3>
-                <p class="lede">Tax invoices bill on Counter and list under Sales Invoice. Quotations, sales orders, challans, and recurring schedules open on this page — they do not post GST or stock until you bill a tax invoice.</p>
+                <p class="lede">Tax invoices bill on Counter and list under Sales Invoice. Quotations, sales orders, and challans stay on this page until you bill them. Recurring invoices, when enabled in Invoice settings, create unpaid tax invoices on their schedule.</p>
                 <label class="purchases-desk-search purchases-desk-search-hero">Find
                   <input id="hub-sales-search" type="search" placeholder="Quotation, challan, invoice, receipt…" autocomplete="off" />
                 </label>
@@ -3104,6 +3140,12 @@
                       <textarea id="set-invoice-terms" rows="4" maxlength="4000" placeholder="Goods once sold cannot be returned."></textarea>
                     </label>
                     <p class="item-composer-note full" data-i18n="settings.invoice_terms_hint">Printed under the customer notes on tax invoices.</p>
+                  </fieldset>
+                  <fieldset class="item-block" data-set-section="invoice">
+                    <legend>Recurring invoices</legend>
+                    <p class="item-composer-note full">Off until you turn it on. This business only. On: Sales shows Recurring Invoices, and active schedules can create unpaid tax invoices.</p>
+                    <label class="full"><input id="set-recurring-invoices" type="checkbox" /> Enable Recurring Invoices</label>
+                    <p class="field-hint" id="recurring-invoices-status">Recurring invoices: Off</p>
                   </fieldset>
                   <fieldset class="item-block" data-set-section="invoice">
                     <legend>Signature / Stamp</legend>
@@ -3513,8 +3555,8 @@
     <script src="./js/qrcode.iife.js?v=20260905qr1" defer></script>
     <script src="./js/qr-notify.js?v=20260922deploy205" defer></script>
     <script src="./js/payment-methods.js?v=20260918pay1" defer></script>
-    <script src="./js/biz-hub.js?v=20261012fix1" defer></script>
-    <script src="./js/biz-hub-ui.js?v=20261011bar1" defer></script>
+    <script src="./js/biz-hub.js?v=20261027rec1" defer></script>
+    <script src="./js/biz-hub-ui.js?v=20261027rec1" defer></script>
     <script src="./js/salon.js?v=20260919salon1" defer></script>
     <script src="./js/salon-ui.js?v=20260919salon1" defer></script>
     <script src="./js/print.js?v=20261016sales1" defer></script>
@@ -3528,7 +3570,9 @@
     <script src="./js/item-master.js?v=20261012brand1" defer></script>
     <script src="./js/customer-master.js?v=20261023cemail1" defer></script>
     <script src="./js/due-reminders.js?v=20261024duewa1" defer></script>
-    <script src="./js/app.js?v=20261027inv1" defer></script>
+    <script src="./js/recurring.js?v=20261027rec1" defer></script>
+    <script src="./js/app.js?v=20261027rec1" defer></script>
+    <script src="./js/recurring-ui.js?v=20261027rec1" defer></script>
     <script src="./js/due-reminders-ui.js?v=20261024duewa1" defer></script>
     <script src="./js/item-master-ui.js?v=20261012brand1" defer></script>
     <script src="./js/customer-master-ui.js?v=20261023cemail1" defer></script>

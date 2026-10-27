@@ -25,6 +25,7 @@ test("hardware and optional integrations stay off until explicitly enabled", () 
   assert.match(read("server/schema.js"), /scale_enabled.*DEFAULT 0/);
   assert.match(read("server/schema.js"), /camera_scanner_enabled.*DEFAULT 0/);
   assert.match(read("server/schema.js"), /purchase_barcode_enabled.*DEFAULT 0/);
+  assert.match(read("server/schema.js"), /recurring_invoices_enabled.*DEFAULT 0/);
   assert.match(read("server/schema.js"), /invoice_signature_enabled.*DEFAULT 0/);
   assert.match(read("server/schema.js"), /invoice_stamp_enabled.*DEFAULT 0/);
   assert.match(read("server/schema.js"), /barcode_tracked.*DEFAULT 0/);
@@ -111,7 +112,16 @@ test("Settings hub groups company, hardware, table, and aggregator controls", ()
   assert.match(read("server/index.js"), /invoice_signature_enabled/);
   assert.match(read("pos-php-till.php"), /invoice_stamp_enabled/);
   assert.match(read("pos-php-core.php"), /invoice_signature_url/);
-  assert.match(index, /app\.js\?v=20261027inv1/);
-  assert.match(index, /pos\.css\?v=20261027inv1/);
+  assert.match(index, /id="set-recurring-invoices"/);
+  assert.doesNotMatch(index, /id="set-recurring-invoices" checked/);
+  assert.match(index, /Enable Recurring Invoices/);
+  assert.match(app, /function recurringInvoicesOn/);
+  assert.match(app, /if \(\$\("set-recurring-invoices"\)\)/);
+  assert.match(app, /payload\.recurring_invoices_enabled = \$\("set-recurring-invoices"\)\.checked \? 1 : 0/);
+  assert.match(read("server/index.js"), /recurring_invoices_enabled/);
+  assert.match(read("pos-php-till.php"), /recurring_invoices_enabled/);
+  assert.match(read("pos-php-core.php"), /recurring_invoices_enabled/);
+  assert.match(index, /app\.js\?v=20261027rec1/);
+  assert.match(index, /pos\.css\?v=20261027rec1/);
   assert.match(index, /invoice\.js\?v=20261027inv1/);
 });

@@ -434,6 +434,11 @@ function pos_php_till_dispatch($path, $method, $body) {
       $params[] = ((int) ($body["purchase_barcode_enabled"] ?? 0) === 1) ? "1" : "0";
       $types .= "s";
     }
+    if (array_key_exists("recurring_invoices_enabled", $body)) {
+      $langSql .= ", recurring_invoices_enabled = ?";
+      $params[] = ((int) ($body["recurring_invoices_enabled"] ?? 0) === 1) ? "1" : "0";
+      $types .= "s";
+    }
     foreach (["invoice_signature_url" => "Signature", "invoice_stamp_url" => "Stamp"] as $markKey => $markLabel) {
       if (!array_key_exists($markKey, $body)) continue;
       $langSql .= ", {$markKey} = ?";

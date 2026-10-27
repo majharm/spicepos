@@ -31,6 +31,7 @@ import { postSaleJournal } from "./accounting.js";
 import { audit } from "./audit.js";
 import { getPlatformSettings, shopSupportContact } from "./settings.js";
 import { sendLowStockAlerts, tickShopAlerts, startAlertScheduler, scheduleAlertTick } from "./alerts.js";
+import { registerRecurring, startRecurringScheduler, ensureRecurringSchema } from "./recurring.js";
 import { registerAdvanced, computeSaleLine, billedPrintQty, applySaleStock, applyLoyaltyOnSale, pharmacyLineSnapshot, enrichCatalogPharmacy, enrichCatalogBarcodes, saleStockQty, persistSaleLineNote, persistPrintSaleLine, assertApparelSaleStock } from "./advanced.js";
 import { registerReturns } from "./returns.js";
 import { registerAnalyticsPublic, registerAnalyticsMaster } from "./analytics.js";
@@ -788,6 +789,10 @@ app.post("/api/settings", requireStaff, requirePerm("settings"), async (req, res
     langSql += ", purchase_barcode_enabled = ?";
     params.push(Number(body.purchase_barcode_enabled) === 1 ? 1 : 0);
   }
+  if (Object.prototype.hasOwnProperty.call(body, "recurring_invoices_enabled")) {
+    langSql += ", recurring_invoices_enabled = ?";
+    params.push(Number(body.recurring_invoices_enabled) === 1 ? 1 : 0);
+  }
   for (const [key, label] of [
     ["invoice_signature_url", "Signature"],
     ["invoice_stamp_url", "Stamp"],
@@ -921,6 +926,7 @@ app.post("/api/settings", requireStaff, requirePerm("settings"), async (req, res
 registerCrud(app);
 registerAccounts(app);
 registerDueReminders(app);
+registerRecurring(app);
 
 app.post("/api/checkout", requireStaff, requirePerm("counter"), async (req, res) => {
   const { customerId, paymentMethod, lines, packId, packCount, discount, discountType, discountValue, loyaltyPoints, offerIds } = req.body || {};
@@ -1409,6 +1415,7 @@ async function startHttp() {
 startHttp()
   .then(() => {
     startAlertScheduler();
+    startRecurringScheduler();
   })
   .catch((err) => {
     console.error("HTTP listen failed", err);
@@ -1424,6 +1431,7 @@ ensureSchema()
     .then(() => ensureBrandSchema())
     .then(() => ensureCustomerDedupeSchema())
     .then(() => ensureLoginPageSchema())
+    .then(() => ensureRecurringSchema())
     .then(() => {
       setTimeout(() => {
         recomputeAllBusinessesOutstanding().catch((err) =>

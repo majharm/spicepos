@@ -949,6 +949,7 @@ const VIEW_META = {
   offers: { title: "Offers & promotions", subtitle: "Combos, discounts, happy hours, and AI suggestions" },
   packs: { title: "Packs", subtitle: "Named mixes for the Counter" },
   orders: { title: "Invoices", subtitle: "Search, print POS or A4, and update payment" },
+  recurring: { title: "Recurring invoices", subtitle: "Schedules that create unpaid sales invoices" },
   returns: { title: "Manage Returns", subtitle: "Pharmacy and garment returns against a sales invoice" },
   "qr-orders": { title: "QR Orders", subtitle: "Incoming customer self-orders" },
   "online-orders": { title: "Online orders", subtitle: "Zomato and Swiggy kitchen tickets" },
@@ -2754,6 +2755,10 @@ function purchaseBarcodeOn(company = state.company) {
   return hardwareFlagOn(company?.purchase_barcode_enabled);
 }
 
+function recurringInvoicesOn(company = state.company) {
+  return hardwareFlagOn(company?.recurring_invoices_enabled);
+}
+
 function purchaseBarcodeEntryOn(item) {
   return purchaseBarcodeOn() && POSUnits.isCount(itemUnit(item || {}));
 }
@@ -2887,6 +2892,7 @@ function applyNav() {
       dues: "customers",
       packs: "items",
       orders: "orders",
+      recurring: "orders",
       returns: "orders",
       "qr-orders": "orders",
       "online-orders": "orders",
@@ -2942,6 +2948,7 @@ function applyNav() {
       "resort-settings": "settings",
     };
     btn.hidden = map[view] ? !can(map[view]) : false;
+    if (view === "recurring") btn.hidden = !recurringInvoicesOn() || !can("orders");
     if (view === "growth") btn.hidden = !(can("growth") || can("reports"));
     if (view === "offers") btn.hidden = !(can("discount") || can("items") || can("growth"));
     if (view === "packs" && !isSpiceShop()) btn.hidden = true;
@@ -3163,6 +3170,7 @@ function showView(name) {
   if (name === "qr-orders" && isPharmacyShop()) name = "prescriptions";
   if (name === "prescriptions" && !isPharmacyShop()) name = can("counter") ? "counter" : landingView();
   if (name === "kot" && (!isRestaurantShop() || !can("kot"))) name = can("counter") ? "counter" : landingView();
+  if (name === "recurring" && (!recurringInvoicesOn() || !can("orders"))) name = can("orders") ? "orders" : landingView();
   const requested = name;
   state.currentView = name === "backup" || name === "devices" ? (name === "devices" ? "devices" : "settings") : name;
   if (name === "backup" || name === "devices") name = "settings";
@@ -3197,6 +3205,7 @@ function showView(name) {
   if (name === "accounts") loadAccounts();
   if (name === "expenses") loadExpenses();
   if (name === "orders") loadOrders();
+  if (name === "recurring") globalThis.POSRecurringUi?.load?.();
   if (name === "dues") globalThis.POSDueRemindersUi?.load?.();
   if (name === "returns") loadReturnsView();
   if (name === "qr-orders") loadQrOrders();
@@ -8207,6 +8216,8 @@ function renderSettings() {
   if ($("table-shift-status")) $("table-shift-status").textContent = `Table shifting: ${tableShiftingEnabled() ? "Enabled" : "Disabled"}`;
   if ($("set-camera-scanner")) $("set-camera-scanner").checked = cameraScannerEnabled();
   if ($("set-purchase-barcode")) $("set-purchase-barcode").checked = purchaseBarcodeOn();
+  if ($("set-recurring-invoices")) $("set-recurring-invoices").checked = recurringInvoicesOn();
+  if ($("recurring-invoices-status")) $("recurring-invoices-status").textContent = `Recurring invoices: ${recurringInvoicesOn() ? "On" : "Off"}`;
   if ($("purchase-barcode-status")) $("purchase-barcode-status").textContent = `Barcode-wise purchase: ${purchaseBarcodeOn() ? "On" : "Off"}`;
   if ($("set-receipt-printer")) $("set-receipt-printer").checked = receiptPrinterEnabled();
   if ($("set-cash-drawer")) $("set-cash-drawer").checked = cashDrawerEnabled();
@@ -14427,6 +14438,9 @@ $("settings-form").addEventListener("submit", async (e) => {
     }
     payload.camera_scanner_enabled = $("set-camera-scanner")?.checked ? 1 : 0;
     payload.purchase_barcode_enabled = $("set-purchase-barcode")?.checked ? 1 : 0;
+    if ($("set-recurring-invoices")) {
+      payload.recurring_invoices_enabled = $("set-recurring-invoices").checked ? 1 : 0;
+    }
     payload.invoice_signature_enabled = $("set-signature-print")?.checked ? 1 : 0;
     payload.invoice_stamp_enabled = $("set-stamp-print")?.checked ? 1 : 0;
     payload.receipt_printer_enabled = $("set-receipt-printer")?.checked ? 1 : 0;
@@ -14455,6 +14469,9 @@ $("settings-form").addEventListener("submit", async (e) => {
     if (Object.prototype.hasOwnProperty.call(payload, "purchase_barcode_enabled")) {
       state.company.purchase_barcode_enabled = payload.purchase_barcode_enabled;
     }
+    if (Object.prototype.hasOwnProperty.call(payload, "recurring_invoices_enabled")) {
+      state.company.recurring_invoices_enabled = payload.recurring_invoices_enabled;
+    }
     if (Object.prototype.hasOwnProperty.call(payload, "invoice_signature_enabled")) {
       state.company.invoice_signature_enabled = payload.invoice_signature_enabled;
     }
@@ -14472,6 +14489,7 @@ $("settings-form").addEventListener("submit", async (e) => {
     applyFastMode();
     renderCatalog();
     renderSettings();
+    applyNav();
     tick();
     renderTableBoard();
     if (state.settingsSection === "fast-mode") {

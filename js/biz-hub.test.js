@@ -53,7 +53,7 @@ test("Dashboard uses a SaaS business control center", () => {
   assert.match(app, /function paintDashChrome/);
   assert.match(app, /applyColorScheme/);
   assert.match(index, /id="dash-plan-kpis"/);
-  assert.match(index, /biz-hub-ui\.js\?v=20261011bar1/);
+  assert.match(index, /biz-hub-ui\.js\?v=20261027rec1/);
   assert.match(css, /saas-kpi-grid/);
   assert.match(ui, /function kpiCard/);
   assert.match(ui, /Today's Sales/);
@@ -77,7 +77,7 @@ test("POS shell wires Reports Center, payments, audit, and hub scripts", () => {
   assert.match(index, /id="view-hub-sales"/);
   assert.match(index, /id="dash-kpis"/);
   assert.match(ui, /id="dash-sales-graph"/);
-  assert.match(index, /biz-hub\.js\?v=20261012fix1/);
+  assert.match(index, /biz-hub\.js\?v=20261027rec1/);
   assert.match(index, /id="rep-pdf"/);
   assert.match(index, /id="rep-pay-mode"/);
   assert.match(app, /POSBizHubUi\?\.paintDashboard/);
@@ -170,7 +170,8 @@ test("Sales desk lists invoice types and opens quotation on this page", () => {
   assert.ok(sales.find((m) => m.id === "quotation").desk === "quotation");
   assert.ok(sales.find((m) => m.id === "sales-order").desk === "sales-order");
   assert.ok(sales.find((m) => m.id === "challan").desk === "challan");
-  assert.ok(sales.find((m) => m.id === "recurring").desk === "recurring");
+  assert.equal(sales.find((m) => m.id === "recurring").view, "recurring");
+  assert.equal(sales.find((m) => m.id === "recurring").desk, undefined);
   assert.equal(sales.find((m) => m.id === "invoices").view, "orders");
   assert.equal(sales.find((m) => m.id === "new-invoice").view, "counter");
   assert.ok(H.SALES_DOC_KINDS.quotation && H.SALES_DOC_KINDS.challan);
@@ -238,7 +239,7 @@ test("Quotation opens Sales desk work instead of Purchase desk", () => {
   assert.match(els["hub-sales-work"].innerHTML, /Delivery Challan/);
   assert.match(els["hub-sales-work"].innerHTML, /Vehicle/);
   sandbox.POSBizHubUi.openModule("recurring");
-  assert.match(els["hub-sales-work"].innerHTML, /Next bill date/);
+  assert.equal(views.at(-1), "recurring");
   sandbox.POSBizHubUi.openModule("invoices");
   assert.equal(views.at(-1), "orders");
 });

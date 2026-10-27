@@ -10047,6 +10047,19 @@ body.fast-mode .master-topbar {
   -webkit-backdrop-filter: none !important;
 }
 
+.recurring-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
+.recurring-filters { display: flex; flex-wrap: wrap; gap: 10px; align-items: end; margin: 12px 0 16px; }
+.recurring-filters label { display: grid; gap: 4px; font-size: 12px; }
+.recurring-form { margin: 8px 0 16px; }
+.recurring-line-grid { display: grid; gap: 8px; grid-column: 1 / -1; }
+.recurring-line { display: grid; grid-template-columns: minmax(160px, 1.6fr) repeat(4, minmax(88px, 1fr)) auto; gap: 8px; align-items: end; }
+.recur-status { font-weight: 700; text-transform: capitalize; }
+.recur-status-paused, .recur-status-cancelled { color: var(--muted); }
+.recur-status-overdue { color: #b45309; }
+@media (max-width: 800px) {
+  .recurring-line { grid-template-columns: 1fr 1fr; }
+}
+
 
 
 

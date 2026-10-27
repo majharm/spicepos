@@ -614,6 +614,7 @@ function pos_ensure_i18n_columns() {
     "invoice_stamp_url" => "MEDIUMTEXT NULL",
     "invoice_signature_enabled" => "TINYINT(1) NOT NULL DEFAULT 0",
     "invoice_stamp_enabled" => "TINYINT(1) NOT NULL DEFAULT 0",
+    "recurring_invoices_enabled" => "TINYINT(1) NOT NULL DEFAULT 0",
     "receipt_printer_enabled" => "TINYINT(1) NOT NULL DEFAULT 0",
     "cash_drawer_enabled" => "TINYINT(1) NOT NULL DEFAULT 0",
     "quick_add_enabled" => "TINYINT(1) NOT NULL DEFAULT 1",
@@ -627,6 +628,10 @@ function pos_ensure_i18n_columns() {
   pos_ensure_columns("customers", ["locale" => "VARCHAR(16) NULL", "address" => "VARCHAR(500) NULL", "doctor_rx" => "VARCHAR(180) NULL"]);
   pos_ensure_columns("items", ["local_name" => "VARCHAR(255) NULL"]);
   pos_ensure_columns("notifications", ["locale" => "VARCHAR(16) NULL"]);
+  pos_ensure_columns("sales_orders", [
+    "due_date" => "DATE NULL",
+    "recurring_schedule_id" => "VARCHAR(36) NULL",
+  ]);
 }
 
 function pos_clip_floor_id($raw) {

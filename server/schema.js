@@ -153,6 +153,7 @@ export async function ensureSchema() {
   await addColumn("company_settings", "invoice_stamp_url", "MEDIUMTEXT NULL");
   await addColumn("company_settings", "invoice_signature_enabled", "TINYINT(1) NOT NULL DEFAULT 0");
   await addColumn("company_settings", "invoice_stamp_enabled", "TINYINT(1) NOT NULL DEFAULT 0");
+  await addColumn("company_settings", "recurring_invoices_enabled", "TINYINT(1) NOT NULL DEFAULT 0");
   await addColumn("company_settings", "receipt_printer_enabled", "TINYINT(1) NOT NULL DEFAULT 0");
   await addColumn("company_settings", "cash_drawer_enabled", "TINYINT(1) NOT NULL DEFAULT 0");
   await addColumn("company_settings", "zomato_enabled", "TINYINT(1) NOT NULL DEFAULT 0");
@@ -271,6 +272,8 @@ export async function ensureSchema() {
   await addColumn("sales_orders", "current_due", "DECIMAL(12,2) NOT NULL DEFAULT 0");
   await addColumn("sales_orders", "payment_reference", "VARCHAR(80) NULL");
   await addColumn("sales_orders", "payment_date", "DATE NULL");
+  await addColumn("sales_orders", "due_date", "DATE NULL");
+  await addColumn("sales_orders", "recurring_schedule_id", "VARCHAR(36) NULL");
   await addColumn("sales_order_lines", "mrp", "DECIMAL(12,2) NOT NULL DEFAULT 0");
   await addColumn("sales_order_lines", "discount_type", "VARCHAR(16) NOT NULL DEFAULT 'amt'");
   await addColumn("sales_order_lines", "discount_value", "DECIMAL(12,2) NOT NULL DEFAULT 0");

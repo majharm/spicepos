@@ -851,17 +851,22 @@
     { id: "quotation", title: "Quotation", desk: "quotation", blurb: "Price offer — no stock, no GST invoice" },
     { id: "sales-order", title: "Sales Order", desk: "sales-order", blurb: "Confirmed order before challan or invoice" },
     { id: "challan", title: "Delivery Challan", desk: "challan", blurb: "Send goods without a tax invoice" },
-    { id: "recurring", title: "Recurring Invoice", desk: "recurring", blurb: "Repeat schedule — does not auto-bill" },
+    { id: "recurring", title: "Recurring Invoice", view: "recurring", blurb: "Scheduled unpaid tax invoices" },
     { id: "cancelled", title: "Cancelled Invoice", view: "orders", query: "cancelled", blurb: "Voided tax invoices" },
     { id: "receipt", title: "Payment Receipt", view: "payments", blurb: "Collect customer due" },
     { id: "customer-due", title: "Customer Due", view: "customers", blurb: "Outstanding on customer accounts" },
     { id: "customer-ledger", title: "Customer Ledger", view: "accounts", acc: "customer-ledger", blurb: "Customer account history" },
   ];
 
+  function recurringInvoicesOn() {
+    const raw = root.state?.company?.recurring_invoices_enabled;
+    return raw === true || raw === 1 || raw === "1";
+  }
+
   function salesModules() {
     const H = hub();
-    if (H?.modulesFor) return H.modulesFor(biz()).filter((m) => m.group === "sales");
-    return SALES_FALLBACK;
+    const rows = H?.modulesFor ? H.modulesFor(biz()).filter((m) => m.group === "sales") : SALES_FALLBACK;
+    return rows.filter((m) => m.id !== "recurring" || recurringInvoicesOn());
   }
 
   function salesMeta(kind) {
