@@ -2948,7 +2948,7 @@ function applyNav() {
       "resort-settings": "settings",
     };
     btn.hidden = map[view] ? !can(map[view]) : false;
-    if (view === "recurring") btn.hidden = !recurringInvoicesOn() || !can("orders");
+    if (view === "recurring") btn.hidden = !can("orders");
     if (view === "growth") btn.hidden = !(can("growth") || can("reports"));
     if (view === "offers") btn.hidden = !(can("discount") || can("items") || can("growth"));
     if (view === "packs" && !isSpiceShop()) btn.hidden = true;
@@ -3170,7 +3170,7 @@ function showView(name) {
   if (name === "qr-orders" && isPharmacyShop()) name = "prescriptions";
   if (name === "prescriptions" && !isPharmacyShop()) name = can("counter") ? "counter" : landingView();
   if (name === "kot" && (!isRestaurantShop() || !can("kot"))) name = can("counter") ? "counter" : landingView();
-  if (name === "recurring" && (!recurringInvoicesOn() || !can("orders"))) name = can("orders") ? "orders" : landingView();
+  if (name === "recurring" && !can("orders")) name = landingView();
   const requested = name;
   state.currentView = name === "backup" || name === "devices" ? (name === "devices" ? "devices" : "settings") : name;
   if (name === "backup" || name === "devices") name = "settings";
@@ -8511,6 +8511,7 @@ async function loadBootstrap() {
     }
   }
   state.company = data.company;
+  applyNav();
   state.support = data.support || {};
   state.plan = data.plan || null;
   state.items = data.items;

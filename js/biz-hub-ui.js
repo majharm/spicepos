@@ -858,15 +858,10 @@
     { id: "customer-ledger", title: "Customer Ledger", view: "accounts", acc: "customer-ledger", blurb: "Customer account history" },
   ];
 
-  function recurringInvoicesOn() {
-    const raw = root.state?.company?.recurring_invoices_enabled;
-    return raw === true || raw === 1 || raw === "1";
-  }
-
   function salesModules() {
     const H = hub();
-    const rows = H?.modulesFor ? H.modulesFor(biz()).filter((m) => m.group === "sales") : SALES_FALLBACK;
-    return rows.filter((m) => m.id !== "recurring" || recurringInvoicesOn());
+    if (H?.modulesFor) return H.modulesFor(biz()).filter((m) => m.group === "sales");
+    return SALES_FALLBACK;
   }
 
   function salesMeta(kind) {
