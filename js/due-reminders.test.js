@@ -123,7 +123,13 @@ test("outstanding table shows the reminder columns and WhatsApp action", () => {
   const php = read("pos-due-reminders.php");
   assert.match(index, /id="view-dues"/);
   assert.match(index, /id="dues-send-selected"/);
+  assert.match(index, /id="dues-clear"/);
   assert.match(index, /Send total due for selected customers/);
+  assert.match(index, /due-reminders\.css\?v=20261027dues1/);
+  assert.match(index, /due-reminders\.js\?v=20261027dues1/);
+  assert.match(read("css/due-reminders.css"), /dues-desk: outstanding payments/);
+  assert.match(html, /dues-pay is-partial/);
+  assert.match(html, /is-overdue/);
   assert.match(app, /POSDueRemindersUi\?\.load/);
   assert.match(app, /POSDueRemindersUi\?\.refreshIfOpen/);
   assert.match(server, /\/api\/customers\/outstanding/);

@@ -29,13 +29,15 @@
     const summary = data?.summary || D().duesSummary(lastRows);
     const stats = $("dues-hero-stats");
     if (stats) {
+      const overdue = lastRows.filter((row) => row.overdue).length;
       const cells = [
-        ["Invoices", summary.invoices],
-        ["Customers", summary.customers],
-        ["Outstanding", D().moneyLabel(summary.outstanding)],
+        ["Invoices", summary.invoices, ""],
+        ["Customers", summary.customers, ""],
+        ["Overdue", overdue, overdue ? " is-warn" : ""],
+        ["Outstanding", D().moneyLabel(summary.outstanding), Number(summary.outstanding) > 0 ? " is-warn" : ""],
       ];
       stats.innerHTML = cells
-        .map(([label, value]) => `<div class="items-stat"><span>${D().escapeHtml(label)}</span><strong>${D().escapeHtml(String(value))}</strong></div>`)
+        .map(([label, value, extra]) => `<div class="items-stat${extra}"><span>${D().escapeHtml(label)}</span><strong>${D().escapeHtml(String(value))}</strong></div>`)
         .join("");
     }
     const table = $("dues-table");
@@ -197,6 +199,16 @@
     }
     if (event.target.closest("#dues-send-totals")) {
       openPreview(selectedSends("customer")).catch((err) => hint(err.message || "Could not prepare the reminder", "bad"));
+      return;
+    }
+    if (event.target.closest("#dues-clear")) {
+      ["dues-customer", "dues-from", "dues-to", "dues-min", "dues-max"].forEach((id) => {
+        const field = $(id);
+        if (field) field.value = "";
+      });
+      const status = $("dues-status");
+      if (status) status.value = "";
+      load();
     }
   });
 

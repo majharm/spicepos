@@ -1,45 +1,209 @@
-.dues-desk { display: grid; gap: 12px; }
+/* dues-desk: outstanding payments */
+.dues-desk {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  margin: 8px 0 20px;
+  font-size: 13px;
+  line-height: 1.35;
+}
+.dues-desk .items-hero {
+  margin: 0 24px;
+  align-items: center;
+}
+.dues-desk .items-hero .lede { max-width: 46ch; margin: 6px 0 0; }
+.dues-desk .items-hero-stats { justify-content: flex-end; }
+.dues-desk .items-stat { min-width: 92px; padding: 8px 12px; }
+.dues-desk .items-stat strong { font-size: 18px; }
 .dues-filters {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-  gap: 10px;
+  grid-template-columns: minmax(160px, 1.5fr) repeat(2, minmax(128px, 0.8fr)) minmax(120px, 0.75fr) repeat(2, minmax(88px, 0.55fr)) auto;
+  gap: 8px 10px;
   align-items: end;
+  margin: 0 24px;
+  padding: 10px 12px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 6px 18px rgba(15, 23, 42, 0.06);
 }
-.dues-filters label { display: grid; gap: 4px; font-size: 13px; }
+.dues-filters label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--muted, #64748b);
+}
 .dues-filters input,
-.dues-filters select { min-height: 40px; width: 100%; }
+.dues-filters select {
+  width: 100%;
+  min-height: 36px;
+  font-size: 13px;
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 600;
+}
+.dues-filter-actions { display: flex; gap: 8px; align-items: center; }
 .dues-toolbar {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
   align-items: center;
+  margin: 0 24px;
 }
-.dues-table { width: 100%; border-collapse: collapse; }
+.dues-toolbar .btn { white-space: normal; }
+.dues-toolbar .hint { flex: 1 1 220px; margin: 0; }
+.dues-desk .table-wrap {
+  margin: 0 24px;
+  padding: 0;
+  max-height: min(68vh, 720px);
+  overflow: auto;
+  border: 1px solid var(--line-strong, #cbd5e1);
+  border-radius: 14px;
+  background: #fff;
+}
+.dues-desk .report-empty {
+  margin: 0 24px;
+  padding: 28px 16px;
+  text-align: center;
+  color: var(--muted, #64748b);
+  background: #fff;
+  border: 1px dashed #cbd5e1;
+  border-radius: 14px;
+}
+.dues-table {
+  width: 100%;
+  min-width: 1080px;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  overflow: visible;
+}
 .dues-table th,
 .dues-table td {
   text-align: left;
-  vertical-align: top;
+  vertical-align: middle;
   padding: 8px 10px;
   border-bottom: 1px solid var(--line, #e2e8f0);
 }
-.dues-actions { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; min-width: 180px; }
-.dues-status { font-size: 12px; font-weight: 700; }
+.dues-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  white-space: nowrap;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  background: #f8fafc;
+}
+.dues-table .dues-check { width: 36px; }
+.dues-table .dues-who { font-weight: 700; min-width: 140px; }
+.dues-table .dues-mobile,
+.dues-table .dues-inv,
+.dues-table .dues-num { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.dues-table .dues-num { text-align: right; }
+.dues-table .dues-balance strong { color: #9a3412; }
+.dues-table tr.is-customer-start td { border-top: 2px solid #cbd5e1; }
+.dues-table tbody tr:first-child.is-customer-start td { border-top: 0; }
+.dues-table tr.is-overdue td { background: #fff7ed; }
+.dues-table tr:has([data-due-check]:checked) td { background: #f0fdfa; }
+.dues-overdue {
+  display: inline-block;
+  margin-left: 4px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: #ffedd5;
+  color: #c2410c;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  vertical-align: middle;
+}
+.dues-pay {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #e2e8f0;
+  color: #334155;
+  font-size: 11px;
+  font-weight: 800;
+}
+.dues-pay.is-partial { background: #fef3c7; color: #92400e; }
+.dues-pay.is-due { background: #fee2e2; color: #991b1b; }
+.dues-pay.is-paid { background: #d1fae5; color: #065f46; }
+.dues-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  min-width: 168px;
+}
+.dues-actions .btn {
+  width: auto;
+  min-height: 30px;
+  padding: 4px 8px;
+  font-size: 12px;
+}
+.dues-status {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: #e2e8f0;
+  color: #334155;
+  font-size: 11px;
+  font-weight: 800;
+}
 .dues-status.is-sent,
-.dues-status.is-delivered { color: #0f766e; }
-.dues-status.is-failed { color: #b91c1c; }
-.dues-status.is-pending { color: #b45309; }
-.dues-overdue { color: #b91c1c; font-size: 12px; font-weight: 700; }
-.dues-bad { color: #b91c1c; }
-.dues-preview { display: grid; gap: 6px; margin: 0 0 12px; }
+.dues-status.is-delivered { background: #d1fae5; color: #065f46; }
+.dues-status.is-failed { background: #fee2e2; color: #991b1b; }
+.dues-status.is-pending { background: #fef3c7; color: #92400e; }
+.dues-preview {
+  display: grid;
+  gap: 6px;
+  margin: 0 0 12px;
+  font-size: 13px;
+  font-weight: 700;
+}
 .dues-preview textarea {
   width: 100%;
-  min-height: 140px;
-  font: inherit;
+  min-height: 160px;
+  font: 13px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-weight: 500;
 }
-.dues-resend { display: flex; gap: 8px; align-items: center; margin: 0 0 12px; }
+.dues-resend {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin: 4px 0 12px;
+  font-size: 13px;
+  font-weight: 700;
+}
 .dues-preview-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.dues-bad,
+.hint.dues-bad { color: #b91c1c; }
 .dues-jump { margin-top: 8px; }
-@media (max-width: 720px) {
-  .dues-filters { grid-template-columns: 1fr; }
-  .dues-actions .btn { width: 100%; }
+@media (max-width: 1100px) {
+  .dues-filters { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .dues-filter-actions { grid-column: 1 / -1; }
+}
+@media (max-width: 800px) {
+  .dues-desk .items-hero,
+  .dues-filters,
+  .dues-toolbar,
+  .dues-desk .table-wrap,
+  .dues-desk .report-empty { margin-left: 12px; margin-right: 12px; }
+  .dues-desk .items-hero { align-items: stretch; flex-direction: column; }
+  .dues-desk .items-hero-stats { justify-content: flex-start; }
+  .dues-filters { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .dues-desk .table-wrap { max-height: none; }
+}
+@media (max-width: 640px) {
+  .dues-desk .items-stat { min-width: 0; flex: 1 1 40%; }
+  .dues-filters { grid-template-columns: minmax(0, 1fr); }
 }

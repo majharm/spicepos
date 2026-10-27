@@ -270,17 +270,18 @@
       const wa = statusLabel(row.whatsappStatus);
       const totalWa = showTotal ? statusLabel(row.totalWhatsappStatus) : "";
       const title = row.whatsappError || row.providerMessageId || "";
-      return `<tr>
-        <td><input type="checkbox" data-due-check value="${escapeHtml(row.orderId)}" data-customer="${escapeHtml(row.customerId)}" aria-label="Select ${escapeHtml(row.invoiceNumber)}" /></td>
-        <td>${escapeHtml(row.customerName || "—")}</td>
-        <td>${escapeHtml(row.mobile || "—")}</td>
-        <td>${escapeHtml(row.invoiceNumber || "—")}</td>
+      const rowClass = ["dues-line", showTotal ? "is-customer-start" : "", row.overdue ? "is-overdue" : "", row.paymentStatus === "partial" ? "is-partial" : ""].filter(Boolean).join(" ");
+      return `<tr class="${rowClass}">
+        <td class="dues-check"><input type="checkbox" data-due-check value="${escapeHtml(row.orderId)}" data-customer="${escapeHtml(row.customerId)}" aria-label="Select ${escapeHtml(row.invoiceNumber)}" /></td>
+        <td class="dues-who">${escapeHtml(row.customerName || "—")}</td>
+        <td class="dues-mobile">${escapeHtml(row.mobile || "—")}</td>
+        <td class="dues-inv">${escapeHtml(row.invoiceNumber || "—")}</td>
         <td>${escapeHtml(row.invoiceDateLabel || "—")}</td>
-        <td>${escapeHtml(moneyLabel(row.total))}</td>
-        <td>${escapeHtml(moneyLabel(row.amountPaid))}</td>
-        <td><strong>${escapeHtml(moneyLabel(row.outstanding))}</strong></td>
+        <td class="dues-num">${escapeHtml(moneyLabel(row.total))}</td>
+        <td class="dues-num">${escapeHtml(moneyLabel(row.amountPaid))}</td>
+        <td class="dues-num dues-balance"><strong>${escapeHtml(moneyLabel(row.outstanding))}</strong></td>
         <td>${escapeHtml(row.dueDateLabel || "—")}${row.overdue ? ` <span class="dues-overdue">Overdue</span>` : ""}</td>
-        <td>${escapeHtml(paymentLabel(row))}</td>
+        <td><span class="dues-pay is-${escapeHtml(row.paymentStatus || "due")}">${escapeHtml(paymentLabel(row))}</span></td>
         <td class="dues-actions">
           <button type="button" class="btn" data-due-wa="invoice" data-customer="${escapeHtml(row.customerId)}" data-order="${escapeHtml(row.orderId)}">Send WhatsApp</button>
           ${showTotal ? `<button type="button" class="btn" data-due-wa="customer" data-customer="${escapeHtml(row.customerId)}">Customer total</button>` : ""}

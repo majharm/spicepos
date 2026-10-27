@@ -14,7 +14,7 @@
     <link rel="stylesheet" href="./css/mobile-app.css?v=20261023logo1" />
     <link rel="stylesheet" href="./css/item-master.css?v=20261012brand1" />
     <link rel="stylesheet" href="./css/customer-master.css?v=20261023cemail1" />
-    <link rel="stylesheet" href="./css/due-reminders.css?v=20261024duewa1" />
+    <link rel="stylesheet" href="./css/due-reminders.css?v=20261027dues1" />
   </head>
   <body class="fast-mode">
     <div class="app" id="app">
@@ -938,7 +938,7 @@
               <div class="items-hero-copy">
                 <p class="items-kicker">Customers</p>
                 <h3>Outstanding payments</h3>
-                <p class="lede">Open invoice balances. A WhatsApp reminder does not mark a bill paid. Due date follows the invoice date.</p>
+                <p class="lede">WhatsApp reminders for balances still due. A reminder does not mark the bill paid.</p>
               </div>
               <div class="items-hero-stats" id="dues-hero-stats"></div>
             </header>
@@ -956,7 +956,10 @@
               </label>
               <label>Min due <input id="dues-min" type="number" min="0" step="0.01" /></label>
               <label>Max due <input id="dues-max" type="number" min="0" step="0.01" /></label>
-              <button class="btn" type="submit">Show</button>
+              <div class="dues-filter-actions">
+                <button class="btn primary" type="submit">Show</button>
+                <button class="btn" type="button" id="dues-clear">Clear</button>
+              </div>
             </form>
             <div class="dues-toolbar">
               <button class="btn primary" type="button" id="dues-send-selected">Send WhatsApp to selected</button>
@@ -3606,11 +3609,11 @@
     <script src="./js/resort-ui.js?v=20261011resort1" defer></script>
     <script src="./js/item-master.js?v=20261012brand1" defer></script>
     <script src="./js/customer-master.js?v=20261023cemail1" defer></script>
-    <script src="./js/due-reminders.js?v=20261024duewa1" defer></script>
+    <script src="./js/due-reminders.js?v=20261027dues1" defer></script>
     <script src="./js/recurring.js?v=20261027rec1" defer></script>
     <script src="./js/app.js?v=20261027invui6" defer></script>
     <script src="./js/recurring-ui.js?v=20261027rec3" defer></script>
-    <script src="./js/due-reminders-ui.js?v=20261024duewa1" defer></script>
+    <script src="./js/due-reminders-ui.js?v=20261027dues1" defer></script>
     <script src="./js/item-master-ui.js?v=20261012brand1" defer></script>
     <script src="./js/customer-master-ui.js?v=20261023cemail1" defer></script>
     <script src="./js/mobile-app.js?v=20261023logo1" defer></script>
