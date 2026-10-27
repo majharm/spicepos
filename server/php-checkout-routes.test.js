@@ -504,7 +504,7 @@ test("Restaurant Counter can create named dining tables", () => {
   assert.match(index, /id="btn-shift-table"/);
   assert.match(index, /id="set-table-shifting"/);
   assert.match(restaurant, /function canShiftTable/);
-  assert.match(index, /pos\.css\?v=20261027rec1/);
+  assert.match(index, /pos\.css\?v=20261027rec3/);
   assert.match(index, /restaurant\.js\?v=20261012set4/);
   assert.match(index, /app\.js\?v=20261027rec2/);
   assert.match(index, /footwear\.js\?v=20261012print1/);

@@ -6,7 +6,7 @@
     <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
     <title>ATAV POS</title>
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./css/pos.css?v=20261027rec1" />
+    <link rel="stylesheet" href="./css/pos.css?v=20261027rec3" />
     <link rel="stylesheet" href="./css/barcode-desk.css?v=20261024bcdesk1" />
     <link rel="stylesheet" href="./css/saas.css?v=20261016note1" />
     <link rel="stylesheet" href="./css/bar.css?v=20261011bar2" />
@@ -2809,13 +2809,15 @@
               <div class="items-hero-copy">
                 <p class="items-kicker">Sales</p>
                 <h3>Recurring invoices</h3>
-                <p class="lede">Schedules create unpaid sales invoices on the next date. A payment is recorded only when you take one. Pausing or cancelling stops future invoices.</p>
+                <p class="lede">Bill a customer on a schedule. Each run creates an unpaid sales invoice. Record the payment when they pay. Pause or cancel to stop future invoices.</p>
               </div>
-              <div class="items-hero-stats recurring-stats" id="recurring-stats"></div>
+              <button class="btn primary" type="button" id="recur-new">Create recurring invoice</button>
             </header>
-            <p class="hint" id="recurring-hint"></p>
-            <div class="recurring-filters">
-              <label>Search <input id="recur-q" type="search" placeholder="Name or customer" autocomplete="off" /></label>
+            <div class="recur-stat-row" id="recurring-stats"></div>
+            <p class="hint" id="recurring-hint" role="status"></p>
+            <div id="recurring-form-wrap" hidden></div>
+            <form class="recur-toolbar" id="recur-filters">
+              <label>Search <input id="recur-q" type="search" placeholder="Name, customer, or invoice" autocomplete="off" /></label>
               <label>Customer <select id="recur-customer"><option value="">All customers</option></select></label>
               <label>Status
                 <select id="recur-status">
@@ -2829,12 +2831,13 @@
               <label>Frequency <select id="recur-frequency"><option value="">All frequencies</option></select></label>
               <label>Next from <input id="recur-from" type="date" /></label>
               <label>Next to <input id="recur-to" type="date" /></label>
-              <button class="btn" type="button" id="recur-filter">Filter</button>
-              <button class="btn primary" type="button" id="recur-new">Create recurring invoice</button>
-            </div>
-            <div id="recurring-form-wrap" hidden></div>
-            <div class="table-wrap" id="recurring-table"></div>
-            <div id="recurring-history" hidden></div>
+              <div class="recur-toolbar-actions">
+                <button class="btn" type="button" id="recur-filter">Show</button>
+                <button class="btn" type="button" id="recur-clear">Clear</button>
+              </div>
+            </form>
+            <div id="recurring-table"></div>
+            <div class="recur-history" id="recurring-history" hidden></div>
           </div>
         </section>
         <section class="view view-finance" id="view-hub-sales" hidden>
@@ -3143,7 +3146,7 @@
                   </fieldset>
                   <fieldset class="item-block" data-set-section="invoice">
                     <legend>Recurring invoices</legend>
-                    <p class="item-composer-note full">Off until you turn it on. This business only. On: Sales shows Recurring Invoices, and active schedules can create unpaid tax invoices.</p>
+                    <p class="item-composer-note full">Off until you turn it on. This business only. The Sales menu stays available. On: active schedules can create unpaid tax invoices.</p>
                     <label class="full"><input id="set-recurring-invoices" type="checkbox" /> Enable Recurring Invoices</label>
                     <p class="field-hint" id="recurring-invoices-status">Recurring invoices: Off</p>
                   </fieldset>
@@ -3572,7 +3575,7 @@
     <script src="./js/due-reminders.js?v=20261024duewa1" defer></script>
     <script src="./js/recurring.js?v=20261027rec1" defer></script>
     <script src="./js/app.js?v=20261027rec2" defer></script>
-    <script src="./js/recurring-ui.js?v=20261027rec1" defer></script>
+    <script src="./js/recurring-ui.js?v=20261027rec3" defer></script>
     <script src="./js/due-reminders-ui.js?v=20261024duewa1" defer></script>
     <script src="./js/item-master-ui.js?v=20261012brand1" defer></script>
     <script src="./js/customer-master-ui.js?v=20261023cemail1" defer></script>

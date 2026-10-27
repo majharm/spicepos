@@ -149,6 +149,59 @@ test("create form lists a real customer, products, and the schedule fields", () 
   assert.match(els["recurring-lines"].innerHTML, /value="18"/);
 });
 
+test("schedule list uses cards, status pills, and a clear empty state", () => {
+  const els = {};
+  const make = (id) => {
+    els[id] = { id, hidden: false, innerHTML: "", value: "", className: "", scrollIntoView() {} };
+    return els[id];
+  };
+  ["recurring-table", "recurring-stats", "recur-q", "recur-customer", "recur-status", "recur-frequency", "recur-from", "recur-to"].forEach(make);
+  const sandbox = {
+    document: {
+      getElementById: (id) => els[id] || null,
+      querySelectorAll: () => [],
+      querySelector: () => null,
+      addEventListener() {},
+    },
+    POSRecurring: R,
+    state: { customers: [], items: [] },
+    console,
+    Date,
+  };
+  sandbox.globalThis = sandbox;
+  vm.runInNewContext(read("js/recurring-ui.js"), sandbox, { filename: "recurring-ui.js" });
+  sandbox.POSRecurringUi.paintStats({ total: 3, active: 1, generatedThisMonth: 2, upcoming: 1, overdue: 1, pausedOrCancelled: 1 });
+  assert.match(els["recurring-stats"].innerHTML, /recur-stat is-warn/);
+  assert.match(els["recurring-stats"].innerHTML, /Overdue/);
+  sandbox.POSRecurringUi.paintTable([
+    {
+      id: "s1",
+      name: "AMC",
+      customer_name: "Asha Stores",
+      frequency: "monthly",
+      status: "active",
+      next_invoice_date: "2026-10-01",
+      last_order_number: "SO-12",
+      cycles_done: 2,
+      max_cycles: 12,
+      last_error: "WhatsApp failed",
+    },
+  ], "2026-10-27");
+  const card = els["recurring-table"].innerHTML;
+  assert.match(card, /class="recur-card"/);
+  assert.match(card, /AMC/);
+  assert.match(card, /Asha Stores/);
+  assert.match(card, /recur-pill-active/);
+  assert.match(card, /recur-pill-overdue/);
+  assert.match(card, /SO-12/);
+  assert.match(card, /WhatsApp failed/);
+  assert.match(card, /data-recur-generate="s1"/);
+  assert.match(card, /data-recur-history="s1"/);
+  assert.match(card, /data-recur-pause="s1"/);
+  sandbox.POSRecurringUi.paintTable([], "2026-10-27");
+  assert.match(els["recurring-table"].innerHTML, /No recurring invoices yet/);
+});
+
 test("recurring invoices stay behind the business switch and post through sales", () => {
   const index = read("index.html");
   const app = read("js/app.js");
@@ -160,7 +213,14 @@ test("recurring invoices stay behind the business switch and post through sales"
   assert.match(index, /id="set-recurring-invoices"/);
   assert.doesNotMatch(index, /id="set-recurring-invoices" checked/);
   assert.match(index, /js\/recurring\.js\?v=20261027rec1/);
-  assert.match(index, /js\/recurring-ui\.js\?v=20261027rec1/);
+  assert.match(index, /js\/recurring-ui\.js\?v=20261027rec3/);
+  assert.match(index, /pos\.css\?v=20261027rec3/);
+  assert.match(index, /id="recur-filters"/);
+  assert.match(index, /class="recur-stat-row"/);
+  assert.match(ui, /settings-section/);
+  assert.match(ui, /recur-pill/);
+  assert.match(read("css/pos.css"), /\.recur-stat-row/);
+  assert.match(read("css/pos.css"), /\.recurring-desk \[hidden\]/);
   assert.match(app, /view === "recurring"\) btn\.hidden = !can\("orders"\)/);
   assert.match(app, /state\.company = data\.company;\n  applyNav\(\)/);
   assert.match(app, /POSRecurringUi\?\.load/);

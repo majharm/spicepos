@@ -87,15 +87,15 @@
     const el = $("recurring-stats");
     if (!el) return;
     const cells = [
-      ["Schedules", stats?.total || 0],
-      ["Active", stats?.active || 0],
-      ["Generated this month", stats?.generatedThisMonth || 0],
-      ["Upcoming", stats?.upcoming || 0],
-      ["Overdue", stats?.overdue || 0],
-      ["Paused or cancelled", stats?.pausedOrCancelled || 0],
+      ["Schedules", stats?.total || 0, ""],
+      ["Active", stats?.active || 0, ""],
+      ["This month", stats?.generatedThisMonth || 0, ""],
+      ["Upcoming", stats?.upcoming || 0, ""],
+      ["Overdue", stats?.overdue || 0, Number(stats?.overdue) > 0 ? " is-warn" : ""],
+      ["Paused or cancelled", stats?.pausedOrCancelled || 0, " is-muted"],
     ];
     el.innerHTML = cells
-      .map(([label, value]) => `<div class="items-stat"><span>${esc(label)}</span><strong>${esc(value)}</strong></div>`)
+      .map(([label, value, extra]) => `<div class="recur-stat${extra}"><span>${esc(label)}</span><strong>${esc(value)}</strong></div>`)
       .join("");
   }
 
@@ -125,7 +125,7 @@
       <label>Rate <input data-line="rate" type="number" min="0" step="0.01" value="${line.rate == null ? "" : esc(line.rate)}" placeholder="Catalog" /></label>
       <label>Discount <input data-line="discount" type="number" min="0" step="0.01" value="${esc(line.discountValue || 0)}" /></label>
       <label>Tax % <input data-line="gst" type="number" min="0" step="0.01" value="${line.gstRate == null ? "" : esc(line.gstRate)}" placeholder="Item" /></label>
-      <button class="btn" type="button" data-recur-remove="${index}">Remove</button>
+      <button class="btn recur-remove" type="button" data-recur-remove="${index}">Remove</button>
     </div>`;
   }
 
@@ -189,75 +189,119 @@
     const status = schedule?.status === "paused" ? "paused" : "active";
     wrap.hidden = false;
     wrap.innerHTML = `<form id="recurring-form" class="settings recurring-form">
-      <h3>${editingId ? "Edit future invoices" : "Create recurring invoice"}</h3>
-      <p class="item-composer-note full">Changes apply to future invoices only. Invoices already generated stay as they are, including payments and stock.</p>
-      <label>Recurring invoice name <input name="name" required maxlength="180" value="${esc(schedule?.name || "")}" /></label>
-      <label>Customer <select name="customer_id" required>${customerOptions(schedule?.customer_id || "")}</select></label>
-      <div id="recurring-lines" class="recurring-line-grid"></div>
-      <button class="btn" type="button" id="recur-add-line">Add product or service</button>
-      <label>Bill discount
-        <input name="discount_value" type="number" min="0" step="0.01" value="${esc(schedule?.discount_value || 0)}" />
-      </label>
-      <label>Start date <input name="start_date" type="date" required value="${esc(schedule?.start_date || "")}" /></label>
-      <label>End date <input name="end_date" type="date" value="${esc(schedule?.end_date || "")}" /></label>
-      <label>Billing cycles <input name="max_cycles" type="number" min="1" max="1000" placeholder="Until cancelled" value="${esc(schedule?.max_cycles || "")}" /></label>
-      ${frequencyFields(schedule)}
-      <label>Next invoice date <input name="next_invoice_date" type="date" required value="${esc(schedule?.next_invoice_date || schedule?.start_date || "")}" /></label>
-      <label>Payment terms (days) <input name="payment_terms_days" type="number" min="0" max="365" value="${esc(schedule?.payment_terms_days || 0)}" /></label>
-      <label class="full"><input name="auto_generate" type="checkbox"${schedule && !R().flagOn(schedule.auto_generate) ? "" : " checked"} /> Generate invoices automatically</label>
-      <label class="full"><input name="whatsapp_invoice" type="checkbox"${R().flagOn(schedule?.whatsapp_invoice) ? " checked" : ""} /> WhatsApp invoice notification</label>
-      <label class="full"><input name="whatsapp_reminder" type="checkbox"${R().flagOn(schedule?.whatsapp_reminder) ? " checked" : ""} /> WhatsApp payment reminder</label>
-      <label class="full"><input name="email_invoice" type="checkbox"${R().flagOn(schedule?.email_invoice) ? " checked" : ""} /> Email invoice notification</label>
-      <label>Status
-        <select name="status">
-          <option value="active"${status === "active" ? " selected" : ""}>Active</option>
-          <option value="paused"${status === "paused" ? " selected" : ""}>Paused</option>
-        </select>
-      </label>
-      <div class="item-composer-actions">
+      <div class="item-composer-top">
+        <p class="item-mode">${editingId ? "Future invoices" : "New schedule"}</p>
+        <h3>${editingId ? "Edit future invoices" : "Create recurring invoice"}</h3>
+        <p class="item-composer-note">Changes apply to future invoices only. Invoices already generated stay as they are, including payments and stock.</p>
+      </div>
+      <section class="settings-section">
+        <h3>Customer</h3>
+        <div class="settings-grid">
+          <label>Recurring invoice name <input name="name" required maxlength="180" value="${esc(schedule?.name || "")}" placeholder="Monthly AMC" /></label>
+          <label>Customer <select name="customer_id" required>${customerOptions(schedule?.customer_id || "")}</select></label>
+        </div>
+      </section>
+      <section class="settings-section">
+        <h3>Products or services</h3>
+        <p class="section-note">Leave rate or tax blank to use the item’s catalog price and GST. Service lines do not reduce stock.</p>
+        <div id="recurring-lines" class="recurring-line-grid"></div>
+        <button class="btn" type="button" id="recur-add-line">Add product or service</button>
+        <div class="settings-grid">
+          <label>Bill discount (₹)
+            <input name="discount_value" type="number" min="0" step="0.01" value="${esc(schedule?.discount_value || 0)}" />
+          </label>
+        </div>
+      </section>
+      <section class="settings-section">
+        <h3>Schedule</h3>
+        <div class="settings-grid">
+          ${frequencyFields(schedule)}
+          <label>Start date <input name="start_date" type="date" required value="${esc(schedule?.start_date || "")}" /></label>
+          <label>End date <input name="end_date" type="date" value="${esc(schedule?.end_date || "")}" /></label>
+          <label>Billing cycles <input name="max_cycles" type="number" min="1" max="1000" placeholder="Until cancelled" value="${esc(schedule?.max_cycles || "")}" /></label>
+          <label>Next invoice date <input name="next_invoice_date" type="date" required value="${esc(schedule?.next_invoice_date || schedule?.start_date || "")}" /></label>
+          <label>Payment terms (days) <input name="payment_terms_days" type="number" min="0" max="365" value="${esc(schedule?.payment_terms_days || 0)}" /></label>
+          <label>Status
+            <select name="status">
+              <option value="active"${status === "active" ? " selected" : ""}>Active</option>
+              <option value="paused"${status === "paused" ? " selected" : ""}>Paused</option>
+            </select>
+          </label>
+        </div>
+      </section>
+      <section class="settings-section">
+        <h3>After each invoice</h3>
+        <div class="recur-checks">
+          <label class="dev-toggle"><input name="auto_generate" type="checkbox"${schedule && !R().flagOn(schedule.auto_generate) ? "" : " checked"} /> Generate invoices automatically</label>
+          <label class="dev-toggle"><input name="whatsapp_invoice" type="checkbox"${R().flagOn(schedule?.whatsapp_invoice) ? " checked" : ""} /> WhatsApp invoice notification</label>
+          <label class="dev-toggle"><input name="whatsapp_reminder" type="checkbox"${R().flagOn(schedule?.whatsapp_reminder) ? " checked" : ""} /> WhatsApp payment reminder</label>
+          <label class="dev-toggle"><input name="email_invoice" type="checkbox"${R().flagOn(schedule?.email_invoice) ? " checked" : ""} /> Email invoice notification</label>
+        </div>
+      </section>
+      <div class="settings-actions">
         <button class="btn primary" type="submit">${editingId ? "Save future invoices" : "Save schedule"}</button>
         <button class="btn" type="button" id="recur-form-cancel">Close</button>
       </div>
     </form>`;
     paintLines();
-    wrap.scrollIntoView({ block: "start" });
+    wrap.scrollIntoView?.({ block: "start" });
+    wrap.querySelector?.("[name=name]")?.focus?.();
+  }
+
+  function prettyDate(value) {
+    const parsed = R()?.parseYmd?.(value);
+    if (!parsed) return value ? String(value).slice(0, 10) : "—";
+    const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    return `${parsed.d} ${months[parsed.m - 1]} ${parsed.y}`;
+  }
+
+  function statusLabel(status) {
+    return { active: "Active", paused: "Paused", completed: "Completed", cancelled: "Cancelled" }[status] || status || "";
   }
 
   function paintTable(rows, today) {
     const el = $("recurring-table");
     if (!el) return;
     if (!rows?.length) {
-      el.innerHTML = `<p class="hint">No recurring invoices match these filters.</p>`;
+      const filtering = Object.values(filters()).some(Boolean);
+      el.innerHTML = `<div class="recur-empty">
+        <strong>${filtering ? "No schedules match these filters" : "No recurring invoices yet"}</strong>
+        <p>${filtering ? "Clear the filters or search for another customer." : "Create a schedule for a customer you bill on a regular date."}</p>
+      </div>`;
       return;
     }
-    const body = rows
+    const cards = rows
       .map((row) => {
         const overdue = row.status === "active" && today && row.next_invoice_date && row.next_invoice_date < today;
         const open = row.status === "active" || row.status === "paused";
+        const cycles = `${row.cycles_done || 0}${row.max_cycles ? ` of ${row.max_cycles}` : ""}`;
         const actions = [
+          open ? `<button class="btn primary" type="button" data-recur-generate="${esc(row.id)}">Generate invoice</button>` : "",
           open ? `<button class="btn" type="button" data-recur-edit="${esc(row.id)}">Edit</button>` : "",
           row.status === "active" ? `<button class="btn" type="button" data-recur-pause="${esc(row.id)}">Pause</button>` : "",
           row.status === "paused" ? `<button class="btn" type="button" data-recur-resume="${esc(row.id)}">Resume</button>` : "",
-          open ? `<button class="btn" type="button" data-recur-generate="${esc(row.id)}">Generate invoice</button>` : "",
           `<button class="btn" type="button" data-recur-history="${esc(row.id)}">History</button>`,
-          open ? `<button class="btn" type="button" data-recur-cancel="${esc(row.id)}">Cancel</button>` : "",
-        ].filter(Boolean).join(" ");
-        return `<tr>
-          <td>${esc(row.name)}</td>
-          <td>${esc(row.customer_name || "")}</td>
-          <td>${esc(freqLabel(row.frequency))}</td>
-          <td class="${overdue ? "recur-status-overdue" : ""}">${esc(row.next_invoice_date || "")}</td>
-          <td class="recur-status recur-status-${esc(row.status)}">${esc(row.status)}</td>
-          <td>${esc(row.last_order_number || "—")}</td>
-          <td>${esc(row.cycles_done || 0)}${row.max_cycles ? ` / ${esc(row.max_cycles)}` : ""}</td>
-          <td>${actions}</td>
-        </tr>`;
+          open ? `<button class="btn danger" type="button" data-recur-cancel="${esc(row.id)}">Cancel</button>` : "",
+        ].filter(Boolean).join("");
+        return `<article class="recur-card">
+          <div class="recur-card-top">
+            <div>
+              <strong class="recur-name">${esc(row.name)}</strong>
+              <p class="recur-sub">${esc(row.customer_name || "Customer")} · ${esc(freqLabel(row.frequency))}</p>
+              ${row.last_error ? `<p class="recur-error">${esc(row.last_error)}</p>` : ""}
+            </div>
+            <span class="recur-pill recur-pill-${esc(row.status)}">${esc(statusLabel(row.status))}</span>
+          </div>
+          <dl class="recur-meta">
+            <div><dt>Next invoice</dt><dd>${esc(prettyDate(row.next_invoice_date))}${overdue ? ` <span class="recur-pill recur-pill-overdue">Overdue</span>` : ""}</dd></div>
+            <div><dt>Last invoice</dt><dd>${esc(row.last_order_number || "—")}</dd></div>
+            <div><dt>Cycles</dt><dd>${esc(cycles)}</dd></div>
+          </dl>
+          <div class="recur-actions">${actions}</div>
+        </article>`;
       })
       .join("");
-    el.innerHTML = `<table class="data">
-      <thead><tr><th>Name</th><th>Customer</th><th>Frequency</th><th>Next invoice</th><th>Status</th><th>Last invoice</th><th>Cycles</th><th></th></tr></thead>
-      <tbody>${body}</tbody>
-    </table>`;
+    el.innerHTML = `<div class="recur-list">${cards}</div>`;
   }
 
   function paintHistory(payload) {
@@ -269,17 +313,23 @@
     const rows = runs.length
       ? runs
           .map((run) => `<tr>
-            <td>${esc(String(run.period_key || "").slice(0, 10))}</td>
+            <td>${esc(prettyDate(run.period_key))}</td>
             <td>${esc(run.order_number || "—")}</td>
-            <td>${esc(run.status || "")}</td>
-            <td>${esc(run.error || "")}</td>
+            <td><span class="recur-pill recur-pill-${esc(run.status === "generated" ? "active" : run.status || "paused")}">${esc(run.status || "")}</span></td>
+            <td>${esc(run.error || "—")}</td>
           </tr>`)
           .join("")
       : `<tr><td colspan="4">No invoices generated yet.</td></tr>`;
-    el.innerHTML = `<h3>Invoices from ${esc(schedule?.name || "this schedule")}</h3>
-      <p class="item-composer-note">Next scheduled date: ${esc(schedule?.next_invoice_date || "—")}. Generated invoices are in Sales Invoice and stay unpaid until a payment is recorded.</p>
-      <table class="data"><thead><tr><th>Period</th><th>Invoice</th><th>Run</th><th>Error</th></tr></thead><tbody>${rows}</tbody></table>
+    el.innerHTML = `<div class="recur-history-head">
+        <div>
+          <h3>Invoices from ${esc(schedule?.name || "this schedule")}</h3>
+          <p class="item-composer-note">Next scheduled date: ${esc(prettyDate(schedule?.next_invoice_date))}. Generated invoices are in Sales Invoice and stay unpaid until a payment is recorded.</p>
+        </div>
+        <button class="btn" type="button" id="recur-history-close">Close</button>
+      </div>
+      <div class="table-wrap"><table class="data"><thead><tr><th>Period</th><th>Invoice</th><th>Run</th><th>Error</th></tr></thead><tbody>${rows}</tbody></table></div>
       <button class="btn" type="button" id="recur-open-invoices">Open sales invoices</button>`;
+    el.scrollIntoView({ block: "nearest" });
   }
 
   async function load() {
@@ -288,12 +338,27 @@
     hint("Loading schedules…");
     try {
       const data = await root.api(`/api/recurring${queryString()}`);
-      if (!data.enabled) {
-        paintStats({ total: 0, active: 0, generatedThisMonth: 0, upcoming: 0, overdue: 0, pausedOrCancelled: 0 });
-        if ($("recurring-table")) $("recurring-table").innerHTML = "";
-        hint("Turn on Enable Recurring Invoices under Business Settings → Invoice & Print Settings.", "bad");
+      const turnedOff = !data.enabled;
+      if ($("recur-new")) $("recur-new").hidden = turnedOff;
+      if ($("recur-filters")) $("recur-filters").hidden = turnedOff;
+      if ($("recurring-stats")) $("recurring-stats").hidden = turnedOff;
+      if (turnedOff) {
+        const history = $("recurring-history");
+        if (history) {
+          history.hidden = true;
+          history.innerHTML = "";
+        }
+        if ($("recurring-form-wrap")) $("recurring-form-wrap").hidden = true;
+        if ($("recurring-table")) {
+          $("recurring-table").innerHTML = `<div class="recur-off">
+            <strong>Recurring invoices are off for this business</strong>
+            <p>Turn on Enable Recurring Invoices under Business Settings → Invoice &amp; Print Settings. The Sales menu stays available so you can open this page.</p>
+          </div>`;
+        }
+        hint("");
         return;
       }
+      if ($("recurring-stats")) $("recurring-stats").hidden = false;
       paintStats(data.stats);
       paintTable(data.schedules, data.today);
       hint("");
@@ -325,6 +390,11 @@
 
   async function onSubmit(event) {
     const form = event.target;
+    if (form?.id === "recur-filters") {
+      event.preventDefault();
+      await load();
+      return;
+    }
     if (form?.id !== "recurring-form") return;
     event.preventDefault();
     const body = Object.fromEntries(new FormData(form).entries());
@@ -354,6 +424,22 @@
     if (!(target instanceof Element)) return;
     if (target.id === "recur-filter") {
       await load();
+      return;
+    }
+    if (target.id === "recur-clear") {
+      ["recur-q", "recur-customer", "recur-status", "recur-frequency", "recur-from", "recur-to"].forEach((id) => {
+        const field = $(id);
+        if (field) field.value = "";
+      });
+      await load();
+      return;
+    }
+    if (target.id === "recur-history-close") {
+      const history = $("recurring-history");
+      if (history) {
+        history.hidden = true;
+        history.innerHTML = "";
+      }
       return;
     }
     if (target.id === "recur-new") {
@@ -426,8 +512,23 @@
     }
   }
 
+  let searchTimer = 0;
+
+  function onInput(event) {
+    if (event.target?.id !== "recur-q") return;
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => {
+      void load();
+    }, 280);
+  }
+
   function onChange(event) {
-    if (event.target?.id !== "recur-form-frequency") return;
+    const id = event.target?.id || "";
+    if (["recur-customer", "recur-status", "recur-frequency", "recur-from", "recur-to"].includes(id)) {
+      void load();
+      return;
+    }
+    if (id !== "recur-form-frequency") return;
     const freq = event.target.value;
     const month = ["monthly", "bimonthly", "quarterly", "half_yearly", "yearly"].includes(freq);
     const interval = $("recur-interval-wrap");
@@ -456,6 +557,7 @@
       void onSubmit(event);
     });
     document.addEventListener("change", onChange);
+    document.addEventListener("input", onInput);
   }
 
   root.POSRecurringUi = { load, paintForm, paintTable, paintStats };
