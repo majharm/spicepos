@@ -9634,10 +9634,10 @@ function paintInvoicesHero(rows) {
   const el = $("invoices-hero-stats");
   if (!el) return;
   const fig = invoicesHeroFigures(rows);
-  el.innerHTML = `<div class="items-stat"><span>Invoices</span><strong>${fig.n}</strong></div>
-    <div class="items-stat"><span>Paid</span><strong>${fig.paid}</strong></div>
-    <div class="items-stat${fig.due ? " is-warn" : ""}"><span>Due</span><strong>${fig.due}</strong></div>
-    <div class="items-stat"><span>Billed</span><strong>${escapeHtml(money(fig.billed))}</strong></div>`;
+  el.innerHTML = `<div class="inv-stat"><span>Invoices</span><strong>${fig.n}</strong></div>
+    <div class="inv-stat"><span>Paid</span><strong>${fig.paid}</strong></div>
+    <div class="inv-stat${fig.due ? " is-warn" : ""}"><span>Due</span><strong>${fig.due}</strong></div>
+    <div class="inv-stat"><span>Billed</span><strong class="inv-stat-money">${escapeHtml(money(fig.billed))}</strong></div>`;
 }
 
 function paintInvoicePayChips() {
@@ -10277,32 +10277,23 @@ function renderOrdersList() {
     return;
   }
   if (!filtered.some((o) => o.id === selectedOrderId)) selectedOrderId = filtered[0].id;
-  $("orders").innerHTML = `<div class="table-wrap invoices-table-wrap"><table class="orders-table">
-    <thead>
-      <tr>
-        <th>Invoice</th>
-        <th>Date</th>
-        <th>Customer</th>
-        <th>Status</th>
-        <th>Pay</th>
-        <th>Method</th>
-        <th class="num">Total</th>
-      </tr>
-    </thead>
-    <tbody>${filtered
-      .map(
-        (o) => `<tr class="order-row${o.id === selectedOrderId ? " is-selected" : ""}" data-oid="${escapeHtml(o.id)}" tabindex="0" role="button">
-        <td class="so-no"><strong>${escapeHtml(o.order_number || "—")}</strong></td>
-        <td>${escapeHtml(formatShopDateTime(o.created_at))}</td>
-        <td>${escapeHtml(orderCustomerName(o))}</td>
-        <td>${orderStatusBadge(o.status)}</td>
-        <td>${payStatusBadge(o)}</td>
-        <td>${escapeHtml(paymentMethodLabel(o.payment_method))}</td>
-        <td class="num">${money(o.total)}</td>
-      </tr>`,
-      )
-      .join("")}</tbody>
-  </table></div>`;
+  $("orders").innerHTML = `<div class="invoices-table-wrap inv-list">${filtered
+    .map((o) => {
+      const selected = o.id === selectedOrderId;
+      return `<button type="button" class="order-row inv-card${selected ? " is-selected" : ""}" data-oid="${escapeHtml(o.id)}" aria-pressed="${selected ? "true" : "false"}">
+        <span class="inv-card-top">
+          <strong class="so-no">${escapeHtml(o.order_number || "—")}</strong>
+          <span class="inv-card-total">${escapeHtml(money(o.total))}</span>
+        </span>
+        <span class="inv-card-who">${escapeHtml(orderCustomerName(o))}</span>
+        <span class="inv-card-meta">
+          <span>${escapeHtml(formatShopDateTime(o.created_at))}</span>
+          <span>${escapeHtml(paymentMethodLabel(o.payment_method))}</span>
+        </span>
+        <span class="inv-card-badges">${orderStatusBadge(o.status)} ${payStatusBadge(o)}</span>
+      </button>`;
+    })
+    .join("")}</div>`;
   const current = filtered.find((o) => o.id === selectedOrderId) || filtered[0];
   try {
     showOrder(current);
@@ -12251,11 +12242,18 @@ $("items-table").addEventListener("click", async (e) => {
   }
 });
 
+function revealInvoiceDetail() {
+  if (!window.matchMedia("(max-width: 980px)").matches) return;
+  $("order-pane")?.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
 $("orders").addEventListener("click", (e) => {
   const row = e.target.closest("[data-oid]");
   if (!row) return;
   const o = orderCache.find((r) => r.id === row.dataset.oid);
-  if (o) showOrder(o);
+  if (!o) return;
+  showOrder(o);
+  revealInvoiceDetail();
 });
 
 $("orders-toolbar")?.addEventListener("submit", (e) => e.preventDefault());
@@ -12310,10 +12308,12 @@ restoreBillCollapsed();
 $("orders").addEventListener("keydown", (e) => {
   if (e.key !== "Enter" && e.key !== " ") return;
   const row = e.target.closest("[data-oid]");
-  if (!row) return;
+  if (!row || row.tagName === "BUTTON") return;
   e.preventDefault();
   const o = orderCache.find((r) => r.id === row.dataset.oid);
-  if (o) showOrder(o);
+  if (!o) return;
+  showOrder(o);
+  revealInvoiceDetail();
 });
 
 $("purchases-list").addEventListener("click", (e) => {
