@@ -143,6 +143,8 @@ test("campaign delivery reuses the existing WAMaster sender", () => {
   assert.match(app, /\/api\/notifications\/ack/);
   assert.match(app, /id="notice-popup"/);
   assert.match(app, /openNoticePopup/);
+  assert.match(app, /Shop notices are popup-only/);
+  assert.match(read("css/saas.css"), /#dash-notes/);
   assert.match(read("pos-notify.php"), /function pos_shop_notice_rows/);
   assert.match(read("pos-php-till.php"), /pos_shop_notice_rows/);
   assert.match(read("css/saas.css"), /notice-popup-photo/);

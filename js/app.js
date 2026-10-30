@@ -18088,18 +18088,15 @@ function paintPlatformNotices(notes) {
     return true;
   }));
   window.__platformNotices = list;
-  const html = list.map(noticeCardHtml).join("");
-  const paint = (el, hideWhenEmpty) => {
+  const paint = (el) => {
     if (!el) return;
-    el.innerHTML = html;
-    if (hideWhenEmpty) {
-      el.hidden = !list.length;
-      if (list.length) el.removeAttribute("hidden");
-    }
+    // Shop notices are popup-only. Inline dashboard cards stay empty.
+    el.innerHTML = "";
+    el.hidden = true;
   };
-  paint($("platform-notices"), true);
-  paint($("dash-notes"), false);
-  paint($("m-home-notes"), true);
+  paint($("platform-notices"));
+  paint($("dash-notes"));
+  paint($("m-home-notes"));
   const badge = $("dash-notify-count");
   if (badge) {
     badge.hidden = list.length < 1;
