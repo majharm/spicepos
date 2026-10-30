@@ -119,6 +119,9 @@ test("growth answers from PHP without scanning every customer order", () => {
   assert.doesNotMatch(php, /LEFT JOIN sales_orders o ON o\.customer_id/);
   assert.match(api, /function pos_is_growth_path/);
   assert.match(api, /skipped growth fast-path/);
+  assert.match(php, /function pos_shop_growth_pct/);
+  assert.doesNotMatch(php, /function pos_growth_pct/);
+  assert.match(readFileSync(path.join(root, "pos-master-live.php"), "utf8"), /function pos_growth_pct/);
   assert.match(client, /Growth reply was not JSON/);
   assert.match(client, /closed the request before Growth finished/);
   assert.match(core, /JSON_INVALID_UTF8_SUBSTITUTE/);

@@ -8,7 +8,7 @@ function pos_growth_round($v) {
   return round(pos_growth_num($v), 2);
 }
 
-function pos_growth_pct($curr, $prev) {
+function pos_shop_growth_pct($curr, $prev) {
   $a = pos_growth_num($curr);
   $b = pos_growth_num($prev);
   if (!$b && !$a) return 0.0;
@@ -78,11 +78,11 @@ function pos_analyze_growth($snap) {
   $customers = $snap["customers"] ?? [];
   $hourwise = $snap["hourwise"] ?? [];
   $weekday = $snap["weekday"] ?? [];
-  $salesGrowth = pos_growth_pct($week["takings"] ?? 0, $lastWeek["takings"] ?? 0);
-  $monthGrowth = pos_growth_pct($month["takings"] ?? 0, $lastMonth["takings"] ?? 0);
-  $yearGrowth = pos_growth_pct($year["takings"] ?? 0, $lastYear["takings"] ?? 0);
-  $todayGrowth = pos_growth_pct($today["takings"] ?? 0, $yesterday["takings"] ?? 0);
-  $profitGrowth = pos_growth_pct($month["profit"] ?? 0, $lastMonth["profit"] ?? 0);
+  $salesGrowth = pos_shop_growth_pct($week["takings"] ?? 0, $lastWeek["takings"] ?? 0);
+  $monthGrowth = pos_shop_growth_pct($month["takings"] ?? 0, $lastMonth["takings"] ?? 0);
+  $yearGrowth = pos_shop_growth_pct($year["takings"] ?? 0, $lastYear["takings"] ?? 0);
+  $todayGrowth = pos_shop_growth_pct($today["takings"] ?? 0, $yesterday["takings"] ?? 0);
+  $profitGrowth = pos_shop_growth_pct($month["profit"] ?? 0, $lastMonth["profit"] ?? 0);
   $avgBill = pos_growth_num($today["bills"] ?? 0) ? pos_growth_round(pos_growth_num($today["takings"] ?? 0) / pos_growth_num($today["bills"])) : 0;
   $margin = pos_growth_num($month["takings"] ?? 0) ? pos_growth_round((pos_growth_num($month["profit"] ?? 0) / pos_growth_num($month["takings"])) * 100) : 0;
   $low = array_values(array_filter($stock, function ($i) {
@@ -120,7 +120,7 @@ function pos_analyze_growth($snap) {
   $score = pos_growth_score([
     "salesGrowth" => $salesGrowth,
     "profitGrowth" => $profitGrowth,
-    "customerGrowth" => pos_growth_pct($newCust + $returning, $lastMonth["customers"] ?? $returning),
+    "customerGrowth" => pos_shop_growth_pct($newCust + $returning, $lastMonth["customers"] ?? $returning),
     "retention" => $retention,
     "inventoryHealth" => $inventoryHealth,
     "expenseControl" => $expenseControl,
@@ -198,7 +198,7 @@ function pos_analyze_growth($snap) {
   $prevDays = array_slice($daywise, -28, 14);
   $lastAvg = $lastDays ? array_sum(array_map(function ($r) { return pos_growth_num($r["takings"] ?? 0); }, $lastDays)) / count($lastDays) : 0;
   $prevAvg = $prevDays ? array_sum(array_map(function ($r) { return pos_growth_num($r["takings"] ?? 0); }, $prevDays)) / count($prevDays) : $lastAvg;
-  $trend = pos_growth_pct($lastAvg, $prevAvg);
+  $trend = pos_shop_growth_pct($lastAvg, $prevAvg);
   $tomorrow = pos_growth_round($lastAvg * (1 + max(-0.15, min(0.15, $trend / 200))));
 
   $why = [];
