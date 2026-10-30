@@ -29,10 +29,14 @@ test("Tax master is on the product menu and saves through PHP and Node", () => {
   assert.match(index, /id="tax-form"/);
   assert.match(index, /id="item-gst"/);
   assert.match(index, /tax-master\.js\?v=20261030tax1/);
-  assert.match(index, /tax-master\.css\?v=20261030tax1/);
+  assert.match(index, /tax-master\.css\?v=20261030tax2/);
   assert.match(app, /tab === "taxes"|name === "taxes"/);
   assert.match(app, /\/api\/taxes/);
   assert.match(app, /function fillTaxSelect/);
+  assert.match(app, /function loadItemTaxes/);
+  assert.match(app, /function itemTaxLabel/);
+  assert.match(index, /id="item-tax-note"/);
+  assert.match(index, /id="ci-gst"/);
   assert.match(read("js/biz-hub.js"), /view: "taxes"/);
   assert.match(php, /CREATE TABLE IF NOT EXISTS tax_rates/);
   assert.match(php, /function pos_dispatch_taxes/);

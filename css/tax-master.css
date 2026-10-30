@@ -1,4 +1,13 @@
 /* tax-master: GST slabs 2026 */
+#view-items .item-block label:has(#item-gst),
+#item-tax-note {
+  grid-column: 1 / -1;
+}
+#item-gst,
+#ci-gst {
+  width: 100%;
+  max-width: 100%;
+}
 #view-taxes .item-block input,
 #view-taxes .item-block select,
 #view-taxes .item-block textarea {

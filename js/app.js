@@ -128,25 +128,66 @@ function applyUnitMaster(rows) {
   fillItemUnitSelect();
 }
 
+function activeTaxes() {
+  return (state.taxes || []).filter((t) => String(t.status || "active") !== "inactive");
+}
+
+function taxForRate(rate) {
+  const key = globalThis.POSTaxes?.rateKey?.(rate);
+  if (key === "" || key == null) return null;
+  return activeTaxes().find((t) => POSTaxes.rateKey(t.rate) === key) || null;
+}
+
+function itemTaxLabel(item) {
+  const tax = taxForRate(item?.gst_rate);
+  if (tax?.name) return tax.name;
+  const key = globalThis.POSTaxes?.rateKey?.(item?.gst_rate);
+  if (!key || key === "0") return "Exempt";
+  return `GST ${key}%`;
+}
+
+function taxOptionsHtml(selectedRate) {
+  const rows = activeTaxes();
+  const want = globalThis.POSTaxes?.rateKey?.(selectedRate) || "";
+  const opts = rows.map((t) => {
+    const key = POSTaxes.rateKey(t.rate);
+    const split = POSTaxes.splitText(t);
+    const label = split && split !== t.name ? `${t.name} · ${split}` : t.name || `GST ${key}%`;
+    return `<option value="${escapeHtml(key)}"${key === want ? " selected" : ""}>${escapeHtml(label)}</option>`;
+  });
+  if (want && !rows.some((t) => POSTaxes.rateKey(t.rate) === want)) {
+    opts.push(`<option value="${escapeHtml(want)}" selected>Custom ${escapeHtml(want)}%</option>`);
+  }
+  return opts.join("") || `<option value="5">GST 5%</option>`;
+}
+
 function applyTaxMaster(rows) {
   state.taxes = Array.isArray(rows) ? rows : [];
   fillTaxSelect($("item-gst")?.value);
+  const note = $("item-tax-note");
+  if (note) {
+    const n = activeTaxes().length;
+    note.textContent = n ? `${n} taxes from Tax master.` : "Add taxes in Tax master. This list uses those rates.";
+  }
 }
 
 function fillTaxSelect(selected) {
-  const el = $("item-gst");
-  if (!el || el.tagName !== "SELECT") return;
-  const want = globalThis.POSTaxes?.rateKey?.(selected != null && selected !== "" ? selected : el.value) || "";
-  const rows = (state.taxes || []).filter((t) => String(t.status || "active") !== "inactive");
-  const opts = rows.map((t) => {
-    const key = POSTaxes.rateKey(t.rate);
-    return `<option value="${escapeHtml(key)}">${escapeHtml(t.name || `GST ${key}%`)}</option>`;
-  });
-  const known = rows.some((t) => POSTaxes.rateKey(t.rate) === want);
-  if (want && !known) opts.push(`<option value="${escapeHtml(want)}">Custom ${escapeHtml(want)}%</option>`);
-  el.innerHTML = opts.join("") || `<option value="5">GST 5%</option>`;
-  if (want && [...el.options].some((o) => o.value === want)) el.value = want;
-  else if (!el.value && el.options[0]) el.value = el.options[0].value;
+  for (const id of ["item-gst", "ci-gst"]) {
+    const el = $(id);
+    if (!el || el.tagName !== "SELECT") continue;
+    const current = selected != null && selected !== "" ? selected : el.value;
+    el.innerHTML = taxOptionsHtml(current);
+  }
+}
+
+async function loadItemTaxes() {
+  try {
+    const rows = await api("/api/taxes");
+    applyTaxMaster(Array.isArray(rows) ? rows : []);
+    if (state.currentView === "items") renderItemsTable();
+  } catch {
+    fillTaxSelect($("item-gst")?.value);
+  }
 }
 
 function paintTaxSplit() {
@@ -3564,6 +3605,8 @@ function paintDeskState(name) {
   if (name === "items") {
     fillDatalists();
     renderItemsTable();
+    fillTaxSelect($("item-gst")?.value);
+    void loadItemTaxes();
     fillItemUnitSelect($("item-unit")?.value || defaultItemUnit());
     refreshItemUnitLabels();
     paintItemImportLink();
@@ -4765,8 +4808,8 @@ function catalogCardHtml(i) {
   const print = isPrintShop();
   const qty = restaurant || print ? "" : fmtQty(i.stock_gm, i);
   const stock = restaurant || print
-    ? (Number(i.gst_rate) ? `GST ${escapeHtml(i.gst_rate)}%` : "")
-    : `${escapeHtml(i.code)} · GST ${escapeHtml(i.gst_rate)}%`;
+    ? escapeHtml(itemTaxLabel(i))
+    : `${escapeHtml(i.code)} · ${escapeHtml(itemTaxLabel(i))}`;
   return `<button class="card" type="button" data-add="${escapeHtml(i.id)}">
         ${cardPhotoHtml(i)}
         <div class="card-body">
@@ -5389,7 +5432,7 @@ function renderCart() {
           </td>
           <td class="line-disc-cell">${classicLineDiscHtml(line, key)}</td>
           <td class="pharm-n stock-cell">${escapeHtml(alert.stock.label)}</td>
-          <td class="pharm-n">${escapeHtml(String(Number(item.gst_rate) || 0))}%</td>
+          <td class="pharm-n">${escapeHtml(itemTaxLabel(item))}</td>
           <td class="pharm-n" data-line-amt="${escapeHtml(key)}">${escapeHtml(money(calc.taxable + calc.gst))}</td>
           <td><button type="button" class="classic-del" data-del-line="${escapeHtml(key)}" aria-label="Remove ${escapeHtml(item.name)}">×</button></td>
         </tr>`;
@@ -5874,7 +5917,15 @@ function openCounterAddItem(prefill = {}) {
   if ($("ci-name")) $("ci-name").value = asCode ? String(prefill.name || "").trim() : raw;
   if ($("ci-barcode")) $("ci-barcode").value = asCode ? (prefill.barcode || raw) : String(prefill.barcode || "").trim();
   if ($("ci-retail")) $("ci-retail").value = prefill.retail || "";
-  if ($("ci-gst")) $("ci-gst").value = prefill.gst != null ? prefill.gst : "5";
+  fillTaxSelect(prefill.gst != null ? prefill.gst : isPrintShop() ? 18 : 5);
+  if (!(state.taxes || []).length) {
+    api("/api/taxes")
+      .then((rows) => {
+        applyTaxMaster(rows);
+        fillTaxSelect(prefill.gst != null ? prefill.gst : isPrintShop() ? 18 : 5);
+      })
+      .catch(() => {});
+  }
   if ($("ci-qty")) $("ci-qty").value = prefill.qty || "1";
   if ($("ci-mfr")) $("ci-mfr").value = prefill.mfr || "";
   if ($("ci-hint")) {
@@ -6946,7 +6997,7 @@ function renderItemsTable() {
         const pack = medicinePackLabel(i) || i.pack_size || "—";
         const expiry = formatExpiryShort(i.default_expiry) || "—";
         return `<tr class="${editing ? "is-editing " : ""}${inactive ? "is-inactive " : ""}" data-item-card data-edit-item="${escapeHtml(i.id)}" data-item-search="${escapeHtml(search)}" data-item-low="${low ? "1" : "0"}" data-item-inactive="${inactive ? "1" : "0"}">
-        <td class="pharm-med">${escapeHtml(i.name)}${i.brand ? ` <span class="item-chip is-brand">${escapeHtml(i.brand)}</span>` : ""}${inactive ? ` <span class="item-chip stock low">Inactive</span>` : ""}</td>
+        <td class="pharm-med">${escapeHtml(i.name)}${i.brand ? ` <span class="item-chip is-brand">${escapeHtml(i.brand)}</span>` : ""} <span class="item-chip">${escapeHtml(itemTaxLabel(i))}</span>${inactive ? ` <span class="item-chip stock low">Inactive</span>` : ""}</td>
         <td>${escapeHtml(i.generic_name || i.local_name || "—")}</td>
         <td>${escapeHtml(i.medicine_type || "—")}</td>
         <td>${escapeHtml(pack)}</td>
@@ -6994,6 +7045,7 @@ function renderItemsTable() {
           </div>
         </div>
         <div class="item-card-meta">
+          <span class="item-chip">${escapeHtml(itemTaxLabel(i))}</span>
           <span class="item-chip">${escapeHtml(itemUnit(i))}</span>
           <span class="item-chip">${group}</span>
           ${brandChip}

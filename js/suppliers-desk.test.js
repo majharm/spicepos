@@ -26,7 +26,7 @@ test("Suppliers desk is searchable on phone and updates the same vendor", () => 
   assert.match(view, /data-view-jump="accounts"/);
   assert.match(view, /data-acc-jump="payables"/);
   assert.match(index, /css\/supplier-master\.css\?v=20261030sup2/);
-  assert.match(index, /app\.js\?v=20261030tax1/);
+  assert.match(index, /app\.js\?v=20261030tax2/);
   assert.match(view, /id="sup-contact"/);
   assert.match(view, /Contact person/);
   assert.match(view, /id="sup-city"/);
