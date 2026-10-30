@@ -23,6 +23,7 @@ import { registerTenant } from "./tenant.js";
 import { registerHub } from "./hub.js";
 import { registerBackup } from "./backup.js";
 import { registerUnits, ensureInventoryUnits } from "./units.js";
+import { registerTaxes, ensureTaxRates } from "./taxes.js";
 import { registerAccounts, recordCreditSale, settleCustomerInvoice, listCustomerReceipts, attachPaymentsToOrders, invoiceOpenDueByCustomer, hydrateCustomerOutstandingRows, persistHydratedOutstanding, recomputeAllBusinessesOutstanding } from "./accounts.js";
 import { registerDueReminders } from "./due-reminders.js";
 import { clipIdempotencyKey, ensureIdempotencyTable, findIdempotent, saveIdempotent, parseIdempotentPayload } from "./idempotency.js";
@@ -250,6 +251,7 @@ registerAdvanced(app);
 registerReturns(app);
 registerBackup(app);
 registerUnits(app);
+registerTaxes(app);
 registerQrStaff(app);
 registerAggregatorStaff(app);
 registerRxStaff(app);
@@ -327,6 +329,7 @@ app.get("/api/bootstrap", requireStaff, async (_req, res) => {
       packs,
       notes,
       units,
+      taxes,
       combos,
       offers,
       offerSettings,
@@ -343,6 +346,7 @@ app.get("/api/bootstrap", requireStaff, async (_req, res) => {
         [businessId],
       ),
       ensureInventoryUnits(businessId).catch(() => []),
+      ensureTaxRates(businessId).catch(() => []),
       listCombos(businessId).catch(() => []),
       listOffers(businessId).catch(() => []),
       getPromoSettings(businessId).catch(() => ({ stacking: "product_and_bill" })),
@@ -385,6 +389,7 @@ app.get("/api/bootstrap", requireStaff, async (_req, res) => {
       items,
       brands,
       units,
+      taxes,
       customers,
       packs: packs.map((p) => ({
         ...p,

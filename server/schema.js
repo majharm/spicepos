@@ -400,6 +400,23 @@ export async function ensureSchema() {
     INDEX (business_id)
   )`);
 
+  await create(`CREATE TABLE IF NOT EXISTS tax_rates (
+    id VARCHAR(255) PRIMARY KEY,
+    business_id VARCHAR(255) NOT NULL,
+    code VARCHAR(16) NOT NULL,
+    name VARCHAR(80) NOT NULL,
+    tax_type VARCHAR(16) NOT NULL DEFAULT 'gst',
+    rate DECIMAL(6,2) NOT NULL DEFAULT 0,
+    cgst_rate DECIMAL(6,2) NOT NULL DEFAULT 0,
+    sgst_rate DECIMAL(6,2) NOT NULL DEFAULT 0,
+    igst_rate DECIMAL(6,2) NOT NULL DEFAULT 0,
+    hsn VARCHAR(32) NULL,
+    status VARCHAR(16) NOT NULL DEFAULT 'active',
+    sort_order INT NOT NULL DEFAULT 0,
+    UNIQUE KEY uniq_tax_biz_code (business_id, code),
+    INDEX (business_id)
+  )`);
+
   await addColumn("suppliers", "email", "VARCHAR(255) NULL");
   await addColumn("suppliers", "address", "TEXT NULL");
   await addColumn("suppliers", "city", "VARCHAR(80) NULL");

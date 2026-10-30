@@ -10,7 +10,7 @@ function pos_php_till_dispatch($path, $method, $body) {
   $staff = [
     "bootstrap", "dashboard", "today", "suppliers", "items", "customers", "packs",
     "orders", "purchases", "stock", "staff", "branches", "devices", "holds",
-    "checkout", "settings", "dining-tables", "tables", "table-shift", "table-shifts", "kots", "reports", "growth", "audit", "accounts", "backup", "units", "brands",
+    "checkout", "settings", "dining-tables", "tables", "table-shift", "table-shifts", "kots", "reports", "growth", "audit", "accounts", "backup", "units", "taxes", "brands",
     "barcodes", "damage", "loyalty", "batches", "qr-orders", "prescriptions", "combos", "offers", "aggregator",
   ];
   if (!in_array($head, $staff, true)) return false;
@@ -31,6 +31,14 @@ function pos_php_till_dispatch($path, $method, $body) {
   if (function_exists("pos_is_advanced_path") && pos_is_advanced_path($path)) {
     pos_require_advanced();
     return (bool) pos_dispatch_advanced($path, $method, $body, $bid, $branchId, $uid, $auth);
+  }
+  if ($path === "taxes" || preg_match('#^taxes/#', $path)) {
+    if (function_exists("pos_require_taxes")) pos_require_taxes();
+    elseif (is_file(__DIR__ . "/pos-taxes.php")) require_once __DIR__ . "/pos-taxes.php";
+    if (function_exists("pos_dispatch_taxes")) {
+      pos_dispatch_taxes($path, $method, $body, $bid, $auth);
+      return true;
+    }
   }
   if ($path === "units" || preg_match('#^units/#', $path)) {
     pos_require_units();
@@ -180,6 +188,7 @@ function pos_php_till_dispatch($path, $method, $body) {
         }
       })(),
       "units" => function_exists("pos_list_units") ? pos_list_units($bid) : [],
+      "taxes" => function_exists("pos_list_taxes") ? pos_list_taxes($bid) : [],
       "brands" => (function () use ($bid) {
         try {
           if (is_file(__DIR__ . "/pos-brands.php")) require_once __DIR__ . "/pos-brands.php";

@@ -1,0 +1,54 @@
+/* tax-master: GST slabs 2026 */
+#view-taxes .item-block input,
+#view-taxes .item-block select,
+#view-taxes .item-block textarea {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+.taxes-desk .items-hero .lede { margin: 6px 0 0; max-width: 58ch; }
+.taxes-list { display: grid; gap: 10px; min-width: 0; }
+.tax-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: start;
+  padding: 12px 14px;
+  border: 1px solid var(--line, #e2e8f0);
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: var(--shadow-card, 0 8px 20px rgba(15, 23, 42, 0.06));
+  cursor: pointer;
+}
+.tax-card.is-editing {
+  border-color: rgba(13, 148, 136, 0.55);
+  box-shadow: 0 0 0 3px rgba(13, 148, 136, 0.12);
+}
+.tax-card.is-off { opacity: 0.72; }
+.tax-card-copy { min-width: 0; }
+.tax-card-copy strong { display: block; font-size: 15px; }
+.tax-card-copy span {
+  display: block;
+  margin-top: 3px;
+  color: var(--muted, #64748b);
+  font-size: 13px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+.tax-card-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.tax-split {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #f8fafc;
+  color: #334155;
+  font-size: 13px;
+}
+@media (max-width: 900px) {
+  #view-taxes .items-split { grid-template-columns: 1fr; }
+  #view-taxes .tax-card { grid-template-columns: minmax(0, 1fr); }
+  #view-taxes .tax-card-actions { display: grid; grid-template-columns: 1fr 1fr; }
+  #view-taxes .tax-card-actions .btn { width: 100%; min-height: 44px; }
+  #view-taxes .item-composer-actions .btn { min-height: 44px; }
+}

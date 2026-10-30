@@ -5,6 +5,7 @@ const state = {
   items: [],
   brands: [],
   units: [],
+  taxes: [],
   customers: [],
   packs: [],
   combos: [],
@@ -125,6 +126,98 @@ function applyUnitMaster(rows) {
   state.units = Array.isArray(rows) ? rows : [];
   POSUnits.hydrate(state.units.filter((u) => u.status !== "inactive"));
   fillItemUnitSelect();
+}
+
+function applyTaxMaster(rows) {
+  state.taxes = Array.isArray(rows) ? rows : [];
+  fillTaxSelect($("item-gst")?.value);
+}
+
+function fillTaxSelect(selected) {
+  const el = $("item-gst");
+  if (!el || el.tagName !== "SELECT") return;
+  const want = globalThis.POSTaxes?.rateKey?.(selected != null && selected !== "" ? selected : el.value) || "";
+  const rows = (state.taxes || []).filter((t) => String(t.status || "active") !== "inactive");
+  const opts = rows.map((t) => {
+    const key = POSTaxes.rateKey(t.rate);
+    return `<option value="${escapeHtml(key)}">${escapeHtml(t.name || `GST ${key}%`)}</option>`;
+  });
+  const known = rows.some((t) => POSTaxes.rateKey(t.rate) === want);
+  if (want && !known) opts.push(`<option value="${escapeHtml(want)}">Custom ${escapeHtml(want)}%</option>`);
+  el.innerHTML = opts.join("") || `<option value="5">GST 5%</option>`;
+  if (want && [...el.options].some((o) => o.value === want)) el.value = want;
+  else if (!el.value && el.options[0]) el.value = el.options[0].value;
+}
+
+function paintTaxSplit() {
+  const el = $("tax-split");
+  if (!el || !globalThis.POSTaxes) return;
+  const type = $("tax-type")?.value || "gst";
+  const rate = type === "exempt" ? 0 : $("tax-rate")?.value;
+  if ($("tax-rate")) $("tax-rate").disabled = type === "exempt";
+  el.textContent = POSTaxes.splitText({ tax_type: type, rate });
+}
+
+function resetTaxForm() {
+  $("tax-form")?.reset();
+  if ($("tax-id")) $("tax-id").value = "";
+  if ($("tax-form-mode")) $("tax-form-mode").textContent = "Add tax";
+  if ($("tax-rate")) $("tax-rate").value = "18";
+  paintTaxSplit();
+  document.querySelectorAll("#taxes-list .is-editing").forEach((el) => el.classList.remove("is-editing"));
+}
+
+function renderTaxDesk() {
+  const list = $("taxes-list");
+  const stats = $("tax-hero-stats");
+  if (!list) return;
+  const q = String($("tax-q")?.value || "").trim().toLowerCase();
+  const rows = [...(state.taxes || [])].sort((a, b) => (Number(a.sort_order) || 0) - (Number(b.sort_order) || 0) || String(a.name).localeCompare(String(b.name)));
+  const active = rows.filter((t) => String(t.status || "active") !== "inactive");
+  if (stats) {
+    stats.innerHTML = [
+      ["Taxes", rows.length],
+      ["Active", active.length],
+      ["GST", rows.filter((t) => t.tax_type !== "exempt" && t.tax_type !== "igst").length],
+      ["Exempt", rows.filter((t) => t.tax_type === "exempt").length],
+    ].map(([label, value]) => `<div class="items-stat"><span>${label}</span><strong>${value}</strong></div>`).join("");
+  }
+  const editing = $("tax-id")?.value || "";
+  const visible = rows.filter((t) => {
+    if (!q) return true;
+    const blob = `${t.name} ${t.code} ${t.rate} ${t.hsn || ""} ${t.tax_type} ${POSTaxes.splitText(t)}`.toLowerCase();
+    return blob.includes(q);
+  });
+  list.innerHTML = visible.length
+    ? visible.map((t) => {
+        const off = String(t.status || "") === "inactive";
+        return `<article class="tax-card${editing === t.id ? " is-editing" : ""}${off ? " is-off" : ""}" data-tax-card="${escapeHtml(t.id)}">
+          <div class="tax-card-copy">
+            <strong>${escapeHtml(t.name)}</strong>
+            <span>${escapeHtml(POSTaxes.splitText(t))}${t.hsn ? ` · HSN ${escapeHtml(t.hsn)}` : ""}</span>
+            <span>${off ? "Inactive" : "Active"}${t.tax_type === "igst" ? " · IGST" : t.tax_type === "exempt" ? " · Exempt" : ""}</span>
+          </div>
+          <div class="tax-card-actions">
+            <button class="btn" type="button" data-edit-tax="${escapeHtml(t.id)}">Edit</button>
+            <button class="btn" type="button" data-del-tax="${escapeHtml(t.id)}">Delete</button>
+          </div>
+        </article>`;
+      }).join("")
+    : `<div class="item-empty-card"><strong>${q ? "No tax matches that search" : "No taxes yet"}</strong><p>${q ? "Try a rate or a name." : "Save a GST slab to use it on items."}</p></div>`;
+}
+
+function fillTaxForm(t) {
+  if (!t) return;
+  if ($("tax-id")) $("tax-id").value = t.id;
+  if ($("tax-name")) $("tax-name").value = t.name || "";
+  if ($("tax-type")) $("tax-type").value = t.tax_type === "igst" || t.tax_type === "exempt" ? t.tax_type : "gst";
+  if ($("tax-rate")) $("tax-rate").value = POSTaxes.rateKey(t.rate);
+  if ($("tax-hsn")) $("tax-hsn").value = t.hsn || "";
+  if ($("tax-status")) $("tax-status").value = t.status === "inactive" ? "inactive" : "active";
+  if ($("tax-form-mode")) $("tax-form-mode").textContent = `Editing ${t.name}`;
+  paintTaxSplit();
+  renderTaxDesk();
+  $("tax-name")?.focus();
 }
 
 function renderUnitsTable() {
@@ -940,6 +1033,7 @@ const VIEW_META = {
   items: { title: "Item Master", subtitle: "Brand, photo, HSN, unit type, rates, and stock" },
   brands: { title: "Brand Management", subtitle: "One brand list for every business type" },
   units: { title: "Unit master", subtitle: "Quantity, weight, length, area, volume, packaging, pharmacy, food, and service units" },
+  taxes: { title: "Tax master", subtitle: "GST slabs, CGST, SGST, and IGST" },
   customers: { title: "Customers", subtitle: "Accounts, due collection, and receipts" },
   dues: { title: "Outstanding payments", subtitle: "WhatsApp reminders for balances still due" },
   barcodes: { title: "Barcodes", subtitle: "Generate unique piece codes and print labels" },
@@ -2890,6 +2984,7 @@ function applyNav() {
       items: "items",
       brands: "items",
       units: "items",
+      taxes: "items",
       customers: "customers",
       dues: "customers",
       packs: "items",
@@ -3462,6 +3557,10 @@ function showView(name) {
 
 function paintDeskState(name) {
   if (name === "units") renderUnitsTable();
+  if (name === "taxes") {
+    renderTaxDesk();
+    paintTaxSplit();
+  }
   if (name === "items") {
     fillDatalists();
     renderItemsTable();
@@ -6716,8 +6815,7 @@ function resetItemForm() {
   if ($("item-brand-id")) $("item-brand-id").value = "";
   if ($("item-min-billing")) $("item-min-billing").value = "";
   if ($("item-custom-unit")) $("item-custom-unit").value = "";
-  if (isPrintShop() && $("item-gst") && !$("item-gst").value) $("item-gst").value = "18";
-  if (isPrintShop() && $("item-gst") && Number($("item-gst").value) === 5) $("item-gst").value = "18";
+  fillTaxSelect(isPrintShop() ? 18 : 5);
   paintPrintUomChips();
   resetGarmentVariantDraft();
 }
@@ -6754,7 +6852,7 @@ function fillItemForm(i) {
   if ($("item-barcode-tracked")) $("item-barcode-tracked").checked = hardwareFlagOn(i.barcode_tracked);
   $("item-b2b").value = POSUnits.rateInputValue?.(i.b2b_rate) ?? i.b2b_rate;
   $("item-purchase").value = POSUnits.rateInputValue?.(i.purchase_rate) ?? i.purchase_rate;
-  $("item-gst").value = i.gst_rate;
+  fillTaxSelect(i.gst_rate);
   fillItemUnitSelect(itemUnit(i));
   $("item-unit").value = itemUnit(i);
   $("item-stock").value = POSUnits.fromBase(i.stock_gm, itemUnit(i));
@@ -8723,6 +8821,7 @@ async function loadBootstrap() {
   state.items = data.items;
   state.brands = data.brands || [];
   applyUnitMaster(data.units || []);
+  applyTaxMaster(data.taxes || []);
   state.customers = data.customers;
   state.packs = data.packs;
   state.combos = data.combos || [];
@@ -14222,6 +14321,89 @@ $("unit-form")?.addEventListener("submit", async (e) => {
 $("unit-cancel")?.addEventListener("click", () => {
   $("unit-form").reset();
   $("unit-id").value = "";
+});
+
+function taxFormBody() {
+  return {
+    name: $("tax-name")?.value || "",
+    tax_type: $("tax-type")?.value || "gst",
+    rate: $("tax-type")?.value === "exempt" ? 0 : $("tax-rate")?.value,
+    hsn: $("tax-hsn")?.value || "",
+    status: $("tax-status")?.value || "active",
+  };
+}
+
+$("tax-type")?.addEventListener("change", paintTaxSplit);
+$("tax-rate")?.addEventListener("input", paintTaxSplit);
+$("tax-q")?.addEventListener("input", () => renderTaxDesk());
+$("tax-cancel")?.addEventListener("click", () => {
+  resetTaxForm();
+  renderTaxDesk();
+});
+$("tax-form")?.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const hint = $("tax-hint");
+  const id = $("tax-id")?.value || "";
+  if (hint) {
+    hint.className = "hint";
+    hint.textContent = "Saving…";
+  }
+  try {
+    const saved = id
+      ? await api(`/api/taxes/${id}`, { method: "PUT", body: JSON.stringify(taxFormBody()) })
+      : await api("/api/taxes", { method: "POST", body: JSON.stringify(taxFormBody()) });
+    const rows = await api("/api/taxes");
+    applyTaxMaster(rows);
+    resetTaxForm();
+    renderTaxDesk();
+    if (hint) {
+      hint.textContent = saved?.tax?.name ? `Saved ${saved.tax.name}` : "Saved";
+      hint.className = "hint ok";
+    }
+  } catch (err) {
+    if (hint) {
+      hint.textContent = err.message;
+      hint.className = "hint error";
+    }
+  }
+});
+$("taxes-list")?.addEventListener("click", async (e) => {
+  const edit = e.target.closest("[data-edit-tax]");
+  const del = e.target.closest("[data-del-tax]");
+  const card = e.target.closest("[data-tax-card]");
+  if (edit || (card && !del)) {
+    const id = edit?.dataset.editTax || card?.dataset.taxCard;
+    const tax = (state.taxes || []).find((t) => t.id === id);
+    if (tax) fillTaxForm(tax);
+    return;
+  }
+  if (!del) return;
+  const tax = (state.taxes || []).find((t) => t.id === del.dataset.delTax);
+  if (!tax) return;
+  if (!confirm(`Delete ${tax.name}?`)) return;
+  const hint = $("tax-hint");
+  try {
+    await api(`/api/taxes/${tax.id}`, { method: "DELETE" });
+    const rows = await api("/api/taxes");
+    applyTaxMaster(rows);
+    if ($("tax-id")?.value === tax.id) resetTaxForm();
+    renderTaxDesk();
+    if (hint) {
+      hint.textContent = "Deleted";
+      hint.className = "hint ok";
+    }
+  } catch (err) {
+    if (hint) {
+      hint.textContent = err.message;
+      hint.className = "hint error";
+    }
+  }
+});
+$("item-gst")?.addEventListener("change", () => {
+  const key = globalThis.POSTaxes?.rateKey?.($("item-gst")?.value);
+  const tax = (state.taxes || []).find((t) => POSTaxes.rateKey(t.rate) === key && t.hsn);
+  const hsn = $("item-hsn");
+  if (tax && hsn && !String(hsn.value || "").trim()) hsn.value = tax.hsn;
 });
 $("units-table")?.addEventListener("click", async (e) => {
   const edit = e.target.closest("[data-edit-unit]");

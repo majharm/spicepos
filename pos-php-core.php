@@ -189,6 +189,11 @@ function pos_apply_business_timezone($businessId) {
     require_once $unitsFile;
     try { pos_ensure_inventory_units_schema($businessId); } catch (Throwable $e) { /* unit master optional */ }
   }
+  $taxFile = __DIR__ . "/pos-taxes.php";
+  if (is_file($taxFile)) {
+    require_once $taxFile;
+    try { pos_ensure_tax_schema($businessId); } catch (Throwable $e) { /* tax master optional */ }
+  }
   $brandsFile = __DIR__ . "/pos-brands.php";
   if (is_file($brandsFile)) {
     require_once $brandsFile;
@@ -1965,6 +1970,18 @@ function pos_require_advanced() {
   require_once $file;
 }
 
+function pos_require_taxes() {
+  $file = __DIR__ . "/pos-taxes.php";
+  if (!is_file($file)) {
+    pos_send(503, [
+      "error" => "pos-taxes.php is missing on the server.",
+      "php" => true,
+      "hint" => "Upload pos-taxes.php from the latest deploy bundle to public_html, then hard-refresh.",
+    ]);
+  }
+  require_once $file;
+}
+
 function pos_require_units() {
   $file = __DIR__ . "/pos-units.php";
   if (!is_file($file)) {
@@ -3310,6 +3327,11 @@ function pos_register_business($raw, $yearly = false) {
     if (is_file($unitsFile)) {
       require_once $unitsFile;
       pos_ensure_inventory_units_schema($id);
+    }
+    $taxFile = __DIR__ . "/pos-taxes.php";
+    if (is_file($taxFile)) {
+      require_once $taxFile;
+      pos_ensure_tax_schema($id);
     }
   } catch (Throwable $e) { /* unit master optional */ }
   return ["businessId" => $id, "user" => $users[0]];
@@ -4797,6 +4819,23 @@ function pos_php_dispatch($path, $method, $rawBody) {
           return;
         }
         pos_send(404, ["error" => "Unknown advanced path", "path" => $path, "php" => true]);
+      }
+      if ($path === "taxes" || preg_match('#^taxes/#', $path)) {
+        $auth = pos_staff_session();
+        if (!$auth || ($auth["type"] ?? "") !== "staff") pos_send(401, ["error" => "Sign in required"]);
+        pos_reject_inactive_subscription($auth, $path);
+        $bid = $auth["user"]["business_id"];
+        pos_apply_business_timezone($bid);
+        pos_require_taxes();
+        if (!function_exists("pos_dispatch_taxes")) {
+          pos_send(503, [
+            "error" => "pos-taxes.php on the server is broken or outdated.",
+            "php" => true,
+            "hint" => "Re-upload pos-taxes.php from the latest deploy bundle.",
+          ]);
+        }
+        pos_dispatch_taxes($path, $method, $body, $bid, $auth);
+        return;
       }
       if ($path === "units" || preg_match('#^units/#', $path)) {
         $auth = pos_staff_session();

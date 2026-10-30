@@ -71,6 +71,7 @@
     { id: "categories", group: "products", title: "Categories", view: "items", perm: "items" },
     { id: "brands", group: "products", title: "Brands", view: "brands", perm: "items" },
     { id: "units", group: "products", title: "Units", view: "units", perm: "items" },
+    { id: "tax-master", group: "products", title: "Tax master", view: "taxes", perm: "items" },
     { id: "hsn", group: "products", title: "HSN/SAC", view: "items", perm: "items" },
     { id: "gst-tax", group: "products", title: "GST/Tax", report: "tax-summary", perm: "reports" },
     { id: "barcode", group: "products", title: "Barcode", view: "barcodes", perm: "items" },

@@ -15,6 +15,7 @@
     <link rel="stylesheet" href="./css/item-master.css?v=20261027items2" />
     <link rel="stylesheet" href="./css/customer-master.css?v=20261027cust1" />
     <link rel="stylesheet" href="./css/supplier-master.css?v=20261030sup2" />
+    <link rel="stylesheet" href="./css/tax-master.css?v=20261030tax1" />
     <link rel="stylesheet" href="./css/due-reminders.css?v=20261027dues1" />
     <link rel="stylesheet" href="./css/quotations.css?v=20261027qt1" />
   </head>
@@ -64,6 +65,7 @@
             <button class="nav-btn" type="button" data-view="items"><span class="nav-icon" aria-hidden="true">◫</span><span data-i18n="pos.items">Items</span></button>
             <button class="nav-btn" type="button" data-view="brands"><span class="nav-icon" aria-hidden="true">◈</span>Brands</button>
             <button class="nav-btn" type="button" data-view="units"><span class="nav-icon" aria-hidden="true">⚖</span>Units</button>
+            <button class="nav-btn" type="button" data-view="taxes"><span class="nav-icon" aria-hidden="true">%</span>Tax master</button>
             <button class="nav-btn" type="button" data-view="packs"><span class="nav-icon" aria-hidden="true">▦</span>Packs</button>
             <button class="nav-btn" type="button" data-view="barcodes"><span class="nav-icon" aria-hidden="true">▦</span>Barcodes</button>
             <button class="nav-btn" type="button" data-view="stock"><span class="nav-icon" aria-hidden="true">▥</span><span data-i18n="nav.stock">Stock</span></button>
@@ -670,7 +672,11 @@
                 <fieldset class="item-block">
                   <legend>Pricing &amp; stock</legend>
                   <label>MRP ₹ <input id="item-mrp" type="number" step="0.00000001" min="0" inputmode="decimal" placeholder="0.00000000" /></label>
-                  <label>GST % <input id="item-gst" type="number" step="0.01" value="5" /></label>
+                  <label>Tax
+                    <select id="item-gst">
+                      <option value="5">GST 5%</option>
+                    </select>
+                  </label>
                   <fieldset class="item-block services-only" id="item-salon-meta" hidden>
                     <legend>Salon / spa booking</legend>
                     <label>Duration (min) <input id="item-duration" type="number" min="15" step="5" value="30" /></label>
@@ -830,6 +836,59 @@
           </form>
           <div class="hint" id="unit-hint"></div>
           <div class="table-wrap" id="units-table"></div>
+        </section>
+        <section class="view" id="view-taxes" hidden>
+          <h2 class="visually-hidden">Tax master</h2>
+          <div class="items-desk taxes-desk">
+            <header class="items-hero">
+              <div class="items-hero-copy">
+                <p class="items-kicker">Products</p>
+                <h3>Tax master</h3>
+                <p class="lede">GST slabs for this shop. Inside the state a bill splits the rate into CGST and SGST. Outside the state it is IGST. Items pick a tax from this list.</p>
+              </div>
+              <div class="items-hero-stats" id="tax-hero-stats"></div>
+            </header>
+            <div class="items-split">
+              <form class="settings item-composer" id="tax-form" autocomplete="off">
+                <input type="hidden" id="tax-id" />
+                <div class="item-composer-top">
+                  <p class="item-mode" id="tax-form-mode">Add tax</p>
+                  <p class="item-composer-note">Changing a rate does not rewrite items already saved. Open the item and pick the tax again.</p>
+                </div>
+                <fieldset class="item-block">
+                  <legend>Tax</legend>
+                  <label class="full">Name <input id="tax-name" required maxlength="80" placeholder="GST 18%" /></label>
+                  <label>Type
+                    <select id="tax-type">
+                      <option value="gst">GST · CGST + SGST</option>
+                      <option value="igst">IGST</option>
+                      <option value="exempt">Exempt</option>
+                    </select>
+                  </label>
+                  <label>Rate % <input id="tax-rate" type="number" min="0" max="100" step="0.01" value="18" inputmode="decimal" /></label>
+                  <label class="full">Default HSN / SAC <input id="tax-hsn" maxlength="32" placeholder="Optional" /></label>
+                  <label>Status
+                    <select id="tax-status">
+                      <option value="active">Active</option>
+                      <option value="inactive">Inactive</option>
+                    </select>
+                  </label>
+                </fieldset>
+                <p class="tax-split" id="tax-split">CGST 9% + SGST 9% · IGST 18%</p>
+                <div class="item-composer-actions">
+                  <button class="btn primary" type="submit">Save tax</button>
+                  <button class="btn" type="button" id="tax-cancel">Clear</button>
+                  <p class="hint" id="tax-hint" role="status"></p>
+                </div>
+              </form>
+              <div class="items-library">
+                <label class="master-shop-search">Search taxes
+                  <input id="tax-q" type="search" placeholder="Name, rate, or HSN" autocomplete="off" />
+                </label>
+                <div class="taxes-list" id="taxes-list"></div>
+              </div>
+            </div>
+          </div>
         </section>
         <section class="view" id="view-customers" hidden>
           <h2 class="visually-hidden">Customers</h2>
@@ -3733,7 +3792,8 @@
     <script src="./js/qrcode.iife.js?v=20260905qr1" defer></script>
     <script src="./js/qr-notify.js?v=20260922deploy205" defer></script>
     <script src="./js/payment-methods.js?v=20260918pay1" defer></script>
-    <script src="./js/biz-hub.js?v=20261027rec1" defer></script>
+    <script src="./js/tax-master.js?v=20261030tax1" defer></script>
+    <script src="./js/biz-hub.js?v=20261030tax1" defer></script>
     <script src="./js/biz-hub-ui.js?v=20261027rec2" defer></script>
     <script src="./js/salon.js?v=20260919salon1" defer></script>
     <script src="./js/salon-ui.js?v=20260919salon1" defer></script>
@@ -3750,7 +3810,7 @@
     <script src="./js/due-reminders.js?v=20261027dues1" defer></script>
     <script src="./js/recurring.js?v=20261027rec1" defer></script>
     <script src="./js/quotations.js?v=20261027qt1" defer></script>
-    <script src="./js/app.js?v=20261030sup2" defer></script>
+    <script src="./js/app.js?v=20261030tax1" defer></script>
     <script src="./js/recurring-ui.js?v=20261027rec3" defer></script>
     <script src="./js/quotations-ui.js?v=20261027qt1" defer></script>
     <script src="./js/due-reminders-ui.js?v=20261027dues1" defer></script>
