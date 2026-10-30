@@ -4855,6 +4855,11 @@ function pos_php_dispatch($path, $method, $rawBody) {
       pos_send(200, ["ok" => true, "id" => $nid, "delivery" => $delivery]);
     }
 
+    if (strpos($path, "master/notify-campaigns") === 0 || preg_match("#^master/businesses/[^/]+/whatsapp-contact$#", $path)) {
+      require_once __DIR__ . "/pos-notify.php";
+      if (function_exists("pos_notify_dispatch") && pos_notify_dispatch($path, $method, $body)) return;
+    }
+
     if (
       $path === "master/backup" ||
       $path === "master/backup/restore" ||

@@ -21,6 +21,7 @@ import { getPlatformSettings, setPlatformSetting } from "./settings.js";
 import { normalizeLocale } from "./i18n.js";
 import { cleanShopData, registerMasterBackup, tickBackupEmail } from "./backup.js";
 import { sendWelcomeSignup, sendWelcomeStaff, publicLoginUrl } from "./mail.js";
+import { registerNotifyCampaigns } from "./notify-routes.js";
 import {
   sendUpdateAlerts,
   sendWelcomeAlerts,
@@ -232,6 +233,7 @@ function masterProfilePublic(row) {
 
 export function registerMaster(app) {
   app.use("/api/master", requireMaster);
+  registerNotifyCampaigns(app);
   registerMasterLive(app);
   registerMasterBackup(app);
 

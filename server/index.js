@@ -19,6 +19,7 @@ import { companyTimezone, normalizeTimezone, shopTimezonePayload, tzOffsetFor } 
 import { attachAuth, registerAuth, requireStaff, requirePerm } from "./auth.js";
 import { normalizeLocale, normalizeInvoiceLanguage, normalizeWhatsappLanguage, clipInvoiceText, attachInvoiceText, invoiceMarkUrl } from "./i18n.js";
 import { registerMaster } from "./master.js";
+import { ackNotifyCampaigns } from "./notify-routes.js";
 import { registerTenant } from "./tenant.js";
 import { registerHub } from "./hub.js";
 import { registerBackup } from "./backup.js";
@@ -316,6 +317,14 @@ async function listCatalogItems(businessId) {
     return enrichCatalogBarcodes(businessId, await enrichCatalogPharmacy(businessId, (rows || []).map(slimCatalogItem)));
   }
 }
+
+app.post("/api/notifications/ack", requireStaff, async (req, res) => {
+  try {
+    res.json(await ackNotifyCampaigns(bid(), req.body?.ids, req.body?.push));
+  } catch (err) {
+    res.status(400).json({ error: String(err.message || err) });
+  }
+});
 
 app.get("/api/bootstrap", requireStaff, async (_req, res) => {
   try {

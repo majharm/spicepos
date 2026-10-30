@@ -12,6 +12,7 @@ function pos_php_till_dispatch($path, $method, $body) {
     "orders", "purchases", "stock", "staff", "branches", "devices", "holds",
     "checkout", "settings", "dining-tables", "tables", "table-shift", "table-shifts", "kots", "reports", "growth", "audit", "accounts", "backup", "units", "taxes", "brands",
     "barcodes", "damage", "loyalty", "batches", "qr-orders", "prescriptions", "combos", "offers", "aggregator",
+    "notifications",
   ];
   if (!in_array($head, $staff, true)) return false;
   $auth = pos_staff_session();
@@ -21,6 +22,12 @@ function pos_php_till_dispatch($path, $method, $body) {
   $branchId = $auth["branchId"] ?? $auth["user"]["branch_id"] ?? null;
   $uid = $auth["user"]["id"];
   pos_apply_business_timezone($bid);
+
+  if ($path === "notifications/ack" && $method === "POST") {
+    require_once __DIR__ . "/pos-notify.php";
+    $ids = is_array($body["ids"] ?? null) ? $body["ids"] : [];
+    pos_send(200, pos_notify_ack($bid, $ids, (string) ($body["push"] ?? "failed")));
+  }
 
   if ($path === "backup" || $path === "backup/restore" || $path === "backup/clean") {
     pos_require_backup();

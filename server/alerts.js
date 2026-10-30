@@ -1024,7 +1024,7 @@ export async function sendWhatsApp(cfg, numbers, message, fetchImpl = fetch, med
   };
 }
 
-async function sendWhatsAppOne(cfg, number, message, fetchImpl, media = "") {
+export async function sendWhatsAppOne(cfg, number, message, fetchImpl, media = "") {
   const httpsMedia = media && /^https:\/\//i.test(media) ? media : "";
   const dataMedia = media && String(media).startsWith("data:image/") ? String(media) : "";
   const endpoint = String(cfg.wa_api_url || WA_DEFAULT_URL).split("?")[0];

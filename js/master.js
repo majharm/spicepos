@@ -3895,15 +3895,20 @@ async function render() {
         }
       }
     } else if (tab === "notes") {
-      const [businesses, settings] = await Promise.all([
+      const [businesses, settings, campaignPack, contactPack] = await Promise.all([
         api("/api/master/businesses"),
         api("/api/master/settings").catch(() => ({ notifications: [] })),
+        api("/api/master/notify-campaigns").catch(() => ({ campaigns: [] })),
+        api("/api/master/notify-campaigns/contacts").catch(() => ({ rows: [] })),
       ]);
       const notes = settings.notifications || [];
+      const campaigns = campaignPack.campaigns || [];
+      const contacts = contactPack.rows || [];
       body.innerHTML = `<div class="items-desk master-desk">
-        ${masterHero("Platform", "Messages", "Post to the shop dashboard. If New update is Active in Settings, shops also get WhatsApp and email.", [
-          { label: "Recent", value: notes.length },
-          { label: "Shops", value: businesses.length },
+        ${masterHero("Platform", "Messages", "Post a dashboard notice, or send one campaign through the in-app bell, browser push, and WhatsApp. WhatsApp uses the connection saved in Settings.", [
+          { label: "Notices", value: notes.length },
+          { label: "Campaigns", value: campaigns.length },
+          { label: "Contact issues", value: contacts.length, warn: contacts.length > 0 },
         ])}
         ${backupFamilyTabs("notes")}
         <div class="items-split">
@@ -3976,8 +3981,10 @@ async function render() {
             }</div>
           </aside>
         </div>
+        ${notifyCampaignHtml(businesses, campaigns, contacts)}
       </div>`;
       bindBackupFamilyTabs(body);
+      bindNotifyCampaigns();
       let noteImage = "";
       const preview = $("note-image-preview");
       const clearBtn = $("note-image-clear");
@@ -4383,6 +4390,384 @@ async function render() {
   } catch (err) {
     body.innerHTML = `<p class="hint error">${err.message}</p>`;
   }
+}
+
+const NOTIFY_TEMPLATES = {
+  feature:
+    "Hello {{owner_name}},\n\nGreetings from ATAV POS!\n\nWe have introduced exciting new features to improve your business operations.\n\nLogin to your ATAV POS account and explore the latest updates.\n\nThank you,\nTeam ATAV Telecom.",
+  renewal:
+    "Hello {{owner_name}},\n\nYour ATAV POS plan {{subscription_plan}} for {{business_name}} is due on {{expiry_date}}.\n\nRenew from your account so billing stays uninterrupted.\n\nThank you,\nTeam ATAV Telecom.",
+};
+
+const NOTIFY_AUDIENCES = [
+  ["all", "All registered business owners"],
+  ["selected", "Selected businesses"],
+  ["one", "One business owner"],
+  ["restaurant", "Restaurant owners"],
+  ["retail", "Retail business owners"],
+  ["garment", "Garment business owners"],
+  ["pharmacy", "Pharmacy owners"],
+  ["cafe", "Cafe owners"],
+  ["salon", "Salon owners"],
+  ["active", "Active subscription users"],
+  ["expired", "Expired subscription users"],
+  ["category", "Selected business category"],
+];
+
+function notifyWhen(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value);
+  return date.toLocaleString("en-IN", {
+    timeZone: "Asia/Kolkata",
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function notifyNum(counts, channel, key) {
+  return Number(counts?.[channel]?.[key] || 0);
+}
+
+function notifyCampaignCard(row) {
+  const counts = row.counts || {};
+  const id = String(row.id || "");
+  const total = Number(counts.total || 0);
+  const open = row.status === "sending" || row.status === "scheduled";
+  return `<article class="report-card item-card">
+    <div class="item-card-copy">
+      <strong>${attr(row.name || row.title || "Campaign")}</strong>
+      <span>${attr(String(row.body || "").replace(/\s+/g, " ").slice(0, 180))}</span>
+      <em class="notice-when">${attr(id.slice(0, 8))} · ${attr(row.status || "")} · ${attr(notifyWhen(row.created_at))}</em>
+      <span>Recipients ${total}. WhatsApp sent ${notifyNum(counts, "whatsapp", "sent")}, delivered ${notifyNum(counts, "whatsapp", "delivered")}, read ${notifyNum(counts, "whatsapp", "read")}, failed ${notifyNum(counts, "whatsapp", "failed")}, pending ${notifyNum(counts, "whatsapp", "pending")}. In-app sent ${notifyNum(counts, "in_app", "sent")} / read ${notifyNum(counts, "in_app", "read")}. Browser push sent ${notifyNum(counts, "push", "sent")} / failed ${notifyNum(counts, "push", "failed")}.</span>
+    </div>
+    <div class="backup-actions">
+      <button class="btn" type="button" data-wa-act="view" data-wa-id="${attr(id)}">View campaign</button>
+      <button class="btn" type="button" data-wa-act="recipients" data-wa-id="${attr(id)}">View recipients</button>
+      <button class="btn" type="button" data-wa-act="retry" data-wa-id="${attr(id)}">Retry failed</button>
+      <a class="btn" href="${attr(typeof posUrl === "function" ? posUrl(`/api/master/notify-campaigns/${encodeURIComponent(id)}/export`) : `/api/master/notify-campaigns/${encodeURIComponent(id)}/export`)}">Export report</a>
+      ${open ? `<button class="btn" type="button" data-wa-act="cancel" data-wa-id="${attr(id)}">Cancel pending</button>` : ""}
+    </div>
+  </article>`;
+}
+
+function notifyCampaignHtml(businesses, campaigns, contacts) {
+  const shops = Array.isArray(businesses) ? businesses : [];
+  const history = Array.isArray(campaigns) ? campaigns : [];
+  const issues = Array.isArray(contacts) ? contacts : [];
+  return `<div class="settings" id="wa-campaign-desk">
+    <div class="settings-section">
+      <h3>WhatsApp campaign</h3>
+      <p class="section-note">Send through the WhatsApp connection already saved in Settings. Marketing messages go only to owners with consent. An accepted API reply is recorded as Sent, not Delivered.</p>
+      <form class="item-composer" id="wa-campaign-form">
+        <fieldset class="item-block">
+          <legend>Message</legend>
+          <label class="full">Campaign name <input name="name" maxlength="180" placeholder="October feature update" /></label>
+          <label class="full">Message title <input name="title" required maxlength="180" placeholder="New ATAV POS features" /></label>
+          <label class="full">Message template
+            <select id="wa-template" name="template_key">
+              <option value="">Custom message</option>
+              <option value="feature">New features</option>
+              <option value="renewal">Plan renewal</option>
+            </select>
+          </label>
+          <label class="full">WhatsApp message
+            <textarea id="wa-body" name="body" rows="8" maxlength="2000" required placeholder="Hello {{owner_name}}"></textarea>
+          </label>
+          <p class="hint">Variables: {{business_name}} {{owner_name}} {{mobile_number}} {{subscription_plan}} {{expiry_date}}</p>
+        </fieldset>
+        <fieldset class="item-block">
+          <legend>Audience and channels</legend>
+          <label class="full">Target audience
+            <select id="wa-audience" name="audience">
+              ${NOTIFY_AUDIENCES.map(([value, label]) => `<option value="${attr(value)}">${attr(label)}</option>`).join("")}
+            </select>
+          </label>
+          <label class="full" id="wa-biz-pick" hidden>Businesses
+            <select id="wa-biz-ids" multiple size="6">
+              ${shops.map((b) => `<option value="${attr(b.id)}">${attr(b.name)} · ${attr(b.owner_name || "Owner")} · ${attr(b.mobile || "no mobile")}</option>`).join("")}
+            </select>
+          </label>
+          <label class="full" id="wa-category-pick" hidden>Category
+            <input id="wa-category" name="category" maxlength="80" placeholder="pharmacy" list="wa-cat-list" />
+            <datalist id="wa-cat-list">
+              ${[...new Set(shops.flatMap((b) => [b.category, b.business_type].filter(Boolean)))].map((c) => `<option value="${attr(c)}"></option>`).join("")}
+            </datalist>
+          </label>
+          <label class="full">Channels
+            <select id="wa-channel-mode" name="channel_mode">
+              <option value="all">All channels</option>
+              <option value="whatsapp">WhatsApp only</option>
+              <option value="in_app">In-app only</option>
+              <option value="push">Browser push only</option>
+              <option value="custom">Choose channels</option>
+            </select>
+          </label>
+          <div id="wa-channel-custom" hidden>
+            <label><input type="checkbox" name="ch_in_app" checked /> In-app notification</label>
+            <label><input type="checkbox" name="ch_push" checked /> Browser push</label>
+            <label><input type="checkbox" name="ch_whatsapp" checked /> WhatsApp message</label>
+          </div>
+        </fieldset>
+        <fieldset class="item-block">
+          <legend>Optional extras</legend>
+          <label class="full">Image
+            <input id="wa-campaign-image" type="file" accept="image/png,image/jpeg" />
+          </label>
+          <label class="full">Document link <input name="document_url" type="url" placeholder="https://" /></label>
+          <label class="full">Website link <input name="link_url" type="url" placeholder="https://pos.atavtelecom.in" /></label>
+          <label><input type="radio" name="when" value="now" checked /> Send now</label>
+          <label><input type="radio" name="when" value="later" /> Schedule message</label>
+          <label class="full" id="wa-schedule-pick" hidden>Schedule (IST)
+            <input id="wa-schedule" type="datetime-local" />
+          </label>
+        </fieldset>
+        <div class="item-composer-actions">
+          <button class="btn" type="button" id="wa-preview">Preview WhatsApp message</button>
+          <button class="btn primary" type="button" id="wa-confirm" disabled>Confirm sending</button>
+          <p class="hint" id="wa-campaign-hint"></p>
+        </div>
+        <pre id="wa-preview-text" class="section-note" hidden></pre>
+      </form>
+    </div>
+    <div class="settings-section">
+      <h3>Campaign history</h3>
+      <p class="section-note">Delivered and read update only when the provider reports them. Pending browser push waits until the shop opens ATAV POS.</p>
+      <div id="wa-history">${history.length ? history.map(notifyCampaignCard).join("") : `<div class="item-empty-card"><strong>No campaigns yet</strong><p>Preview a message, then confirm sending.</p></div>`}</div>
+      <div id="wa-campaign-detail"></div>
+    </div>
+    <div class="settings-section">
+      <h3>Owner mobile numbers</h3>
+      <p class="section-note">Country code +91. Messages are not sent to missing, invalid, duplicate, or opted-out numbers. Consent starts off until you record it.</p>
+      <label class="full">Find a shop <input id="wa-contact-search" type="search" placeholder="Name or mobile" /></label>
+      <div id="wa-contacts">${issues.length ? issues.map(notifyContactCard).join("") : `<div class="item-empty-card"><strong>No contact issues</strong><p>Every listed owner has a valid mobile and WhatsApp consent.</p></div>`}</div>
+    </div>
+  </div>`;
+}
+
+function notifyContactCard(row) {
+  return `<form class="report-card item-card" data-wa-contact="${attr(row.id)}" data-wa-find="${attr(`${row.name || ""} ${row.owner_name || ""} ${row.mobile || ""}`.toLowerCase())}">
+    <div class="item-card-copy">
+      <strong>${attr(row.name || "Business")}</strong>
+      <span>${attr(row.issue || (row.whatsapp_opt_out ? "opted out" : "consent not recorded"))}${row.normalized ? ` · ${attr(row.normalized)}` : ""}</span>
+    </div>
+    <label>Owner name <input name="owner_name" maxlength="180" value="${attr(row.owner_name || "")}" /></label>
+    <label>Mobile <input name="mobile" inputmode="numeric" maxlength="15" value="${attr(row.mobile || "")}" placeholder="10-digit mobile" /></label>
+    <label><input type="checkbox" name="whatsapp_consent" ${row.whatsapp_consent ? "checked" : ""} /> WhatsApp consent</label>
+    <label><input type="checkbox" name="whatsapp_opt_out" ${row.whatsapp_opt_out ? "checked" : ""} /> Opted out</label>
+    <button class="btn" type="submit">Save contact</button>
+  </form>`;
+}
+
+function readNotifyCampaign(image) {
+  const form = $("wa-campaign-form");
+  const fd = new FormData(form);
+  const audience = String(fd.get("audience") || "all");
+  const ids = [...($("wa-biz-ids")?.selectedOptions || [])].map((opt) => opt.value);
+  const mode = String(fd.get("channel_mode") || "all");
+  let channels = mode;
+  if (mode === "custom") {
+    channels = [];
+    if (fd.get("ch_in_app")) channels.push("in_app");
+    if (fd.get("ch_push")) channels.push("push");
+    if (fd.get("ch_whatsapp")) channels.push("whatsapp");
+  }
+  const payload = {
+    name: String(fd.get("name") || "").trim(),
+    title: String(fd.get("title") || "").trim(),
+    body: String(fd.get("body") || "").trim(),
+    template_key: String(fd.get("template_key") || ""),
+    audience,
+    category: String(fd.get("category") || "").trim(),
+    business_ids: ids,
+    channels,
+    document_url: String(fd.get("document_url") || "").trim(),
+    link_url: String(fd.get("link_url") || "").trim(),
+  };
+  if (image) payload.image_url = image;
+  if (fd.get("when") === "later") payload.scheduled_at = String($("wa-schedule")?.value || "");
+  return payload;
+}
+
+async function drainNotifyCampaign(id) {
+  let campaign = null;
+  for (let i = 0; i < 40; i += 1) {
+    const out = await api(`/api/master/notify-campaigns/${encodeURIComponent(id)}/continue`, { method: "POST", body: "{}" });
+    campaign = out.campaign;
+    const counts = campaign?.counts || {};
+    const open = notifyNum(counts, "whatsapp", "pending") + notifyNum(counts, "in_app", "pending");
+    if (!campaign || campaign.status === "cancelled" || campaign.status === "scheduled" || open === 0) break;
+  }
+  return campaign;
+}
+
+function bindNotifyCampaigns() {
+  const form = $("wa-campaign-form");
+  if (!form) return;
+  form.addEventListener("submit", (e) => e.preventDefault());
+  let image = "";
+  let ready = null;
+  const hint = $("wa-campaign-hint");
+  const previewBox = $("wa-preview-text");
+  const confirmBtn = $("wa-confirm");
+  const markDirty = () => {
+    ready = null;
+    if (confirmBtn) confirmBtn.disabled = true;
+  };
+  const paintAudience = () => {
+    const audience = $("wa-audience")?.value || "all";
+    const biz = $("wa-biz-pick");
+    const cat = $("wa-category-pick");
+    if (biz) biz.hidden = audience !== "selected" && audience !== "one";
+    if (cat) cat.hidden = audience !== "category";
+  };
+  $("wa-audience")?.addEventListener("change", () => {
+    paintAudience();
+    markDirty();
+  });
+  paintAudience();
+  $("wa-channel-mode")?.addEventListener("change", () => {
+    const custom = $("wa-channel-custom");
+    if (custom) custom.hidden = $("wa-channel-mode").value !== "custom";
+    markDirty();
+  });
+  form.querySelectorAll('input[name="when"]').forEach((input) => {
+    input.addEventListener("change", () => {
+      const pick = $("wa-schedule-pick");
+      if (pick) pick.hidden = form.querySelector('input[name="when"]:checked')?.value !== "later";
+      markDirty();
+    });
+  });
+  $("wa-template")?.addEventListener("change", () => {
+    const key = $("wa-template").value;
+    if (NOTIFY_TEMPLATES[key] && $("wa-body")) $("wa-body").value = NOTIFY_TEMPLATES[key];
+    markDirty();
+  });
+  form.addEventListener("input", markDirty);
+  $("wa-campaign-image")?.addEventListener("change", async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      image = await readLogo(file, 640);
+      markDirty();
+    } catch (err) {
+      if (hint) {
+        hint.textContent = err.message;
+        hint.className = "hint error";
+      }
+    }
+  });
+  $("wa-preview")?.addEventListener("click", async () => {
+    if (!hint) return;
+    hint.className = "hint";
+    hint.textContent = "Checking recipients…";
+    try {
+      const payload = readNotifyCampaign(image);
+      const out = await api("/api/master/notify-campaigns/preview", { method: "POST", body: JSON.stringify(payload) });
+      ready = payload;
+      const sum = out.summary || {};
+      if (previewBox) {
+        previewBox.hidden = false;
+        previewBox.textContent = out.preview || "";
+      }
+      if (confirmBtn) confirmBtn.disabled = false;
+      hint.className = "hint ok";
+      hint.textContent = `${sum.total || 0} matching businesses. WhatsApp queue ${sum.whatsapp || 0}. Skipped ${sum.skipped || 0} (no consent ${sum.no_consent || 0}, opted out ${sum.opt_out || 0}, missing ${sum.missing || 0}, invalid ${sum.invalid || 0}, duplicate ${sum.duplicate || 0}).`;
+    } catch (err) {
+      hint.textContent = err.message;
+      hint.className = "hint error";
+    }
+  });
+  confirmBtn?.addEventListener("click", async () => {
+    if (!ready || !hint) return;
+    hint.className = "hint";
+    hint.textContent = "Sending in batches…";
+    confirmBtn.disabled = true;
+    try {
+      const out = await api("/api/master/notify-campaigns", { method: "POST", body: JSON.stringify(ready) });
+      let campaign = out.campaign;
+      const counts = campaign?.counts || {};
+      const open = notifyNum(counts, "whatsapp", "pending") + notifyNum(counts, "in_app", "pending");
+      if (campaign?.id && campaign.status === "sending" && open > 0) campaign = await drainNotifyCampaign(campaign.id);
+      const done = campaign?.counts || {};
+      panelFlash = `Campaign saved. WhatsApp sent ${notifyNum(done, "whatsapp", "sent")}, delivered ${notifyNum(done, "whatsapp", "delivered")}, failed ${notifyNum(done, "whatsapp", "failed")}, pending ${notifyNum(done, "whatsapp", "pending")}. API acceptance is not delivery.`;
+      render();
+    } catch (err) {
+      hint.textContent = err.message;
+      hint.className = "hint error";
+      confirmBtn.disabled = false;
+    }
+  });
+  $("wa-history")?.addEventListener("click", async (e) => {
+    const btn = e.target.closest("[data-wa-act]");
+    if (!btn) return;
+    const id = btn.getAttribute("data-wa-id");
+    const act = btn.getAttribute("data-wa-act");
+    const detail = $("wa-campaign-detail");
+    if (!id || !detail) return;
+    try {
+      if (act === "view") {
+        const out = await api(`/api/master/notify-campaigns/${encodeURIComponent(id)}`);
+        const row = out.campaign || {};
+        detail.innerHTML = `<article class="report-card item-card"><strong>${attr(row.name || "")}</strong><p>${attr(row.body || "")}</p><p class="hint">Status ${attr(row.status || "")}. ${attr(row.channels || "")}.</p></article>`;
+      } else if (act === "recipients") {
+        const out = await api(`/api/master/notify-campaigns/${encodeURIComponent(id)}/recipients`);
+        const rows = out.recipients || [];
+        detail.innerHTML = rows.length
+          ? rows
+              .map(
+                (row) =>
+                  `<article class="report-card item-card"><strong>${attr(row.business_name || "")}</strong><span>${attr(row.owner_name || "")} · ${attr(row.mobile || "no mobile")}</span><span>WhatsApp ${attr(row.wa_status || "")}${row.wa_error ? ` (${attr(row.wa_error)})` : ""} · In-app ${attr(row.app_status || "")} · Push ${attr(row.push_status || "")}</span></article>`,
+              )
+              .join("")
+          : `<p class="hint">No recipients on this campaign.</p>`;
+      } else if (act === "retry") {
+        const out = await api(`/api/master/notify-campaigns/${encodeURIComponent(id)}/retry`, { method: "POST", body: "{}" });
+        if (out.campaign?.status === "sending") await drainNotifyCampaign(id);
+        panelFlash = "Failed WhatsApp messages were queued again.";
+        render();
+      } else if (act === "cancel") {
+        await api(`/api/master/notify-campaigns/${encodeURIComponent(id)}/cancel`, { method: "POST", body: "{}" });
+        panelFlash = "Pending campaign cancelled.";
+        render();
+      }
+    } catch (err) {
+      detail.innerHTML = `<p class="hint error">${attr(err.message)}</p>`;
+    }
+  });
+  $("wa-contacts")?.addEventListener("submit", async (e) => {
+    const card = e.target.closest("[data-wa-contact]");
+    if (!card) return;
+    e.preventDefault();
+    const id = card.getAttribute("data-wa-contact");
+    const data = new FormData(card);
+    try {
+      await api(`/api/master/businesses/${encodeURIComponent(id)}/whatsapp-contact`, {
+        method: "POST",
+        body: JSON.stringify({
+          owner_name: String(data.get("owner_name") || ""),
+          mobile: String(data.get("mobile") || ""),
+          whatsapp_consent: data.get("whatsapp_consent") ? 1 : 0,
+          whatsapp_opt_out: data.get("whatsapp_opt_out") ? 1 : 0,
+        }),
+      });
+      panelFlash = "Owner contact saved.";
+      render();
+    } catch (err) {
+      panelFlash = err.message;
+      render();
+    }
+  });
+  $("wa-contact-search")?.addEventListener("input", (e) => {
+    const q = String(e.target.value || "").trim().toLowerCase();
+    document.querySelectorAll("[data-wa-contact]").forEach((card) => {
+      const hay = card.getAttribute("data-wa-find") || "";
+      card.hidden = q !== "" && !hay.includes(q);
+    });
+  });
 }
 
 function summarizeNoticeDelivery(delivery) {

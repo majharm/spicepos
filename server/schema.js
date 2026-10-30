@@ -122,6 +122,8 @@ export async function ensureSchema() {
   await addColumn("businesses", "dsa_code", "VARCHAR(32) NULL");
   await addColumn("businesses", "bar_enabled", "TINYINT(1) NOT NULL DEFAULT 0");
   await addColumn("businesses", "resort_enabled", "TINYINT(1) NOT NULL DEFAULT 0");
+  await addColumn("businesses", "whatsapp_consent", "TINYINT(1) NOT NULL DEFAULT 0");
+  await addColumn("businesses", "whatsapp_opt_out", "TINYINT(1) NOT NULL DEFAULT 0");
   await addColumn("businesses", "created_at", "TIMESTAMP(3) NULL");
   await addColumn("businesses", "updated_at", "TIMESTAMP(3) NULL");
 

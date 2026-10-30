@@ -18004,6 +18004,62 @@ function paintPlatformNotices(notes) {
     badge.hidden = list.length < 1;
     badge.textContent = list.length > 9 ? "9+" : String(list.length);
   }
+  void ackPlatformNotices(list);
+}
+
+function ackPlatformNotices(list) {
+  const notes = (Array.isArray(list) ? list : []).filter((n) => n && n.id);
+  if (!notes.length || typeof Notification === "undefined") return;
+  let seen = [];
+  try {
+    seen = JSON.parse(localStorage.getItem("pos_notice_ack") || "[]");
+  } catch {
+    seen = [];
+  }
+  if (!Array.isArray(seen)) seen = [];
+  const fresh = notes.filter((n) => !seen.includes(n.id));
+  if (!fresh.length) return;
+  const finish = (push) => {
+    const ids = fresh.map((n) => n.id);
+    api("/api/notifications/ack", { method: "POST", body: JSON.stringify({ ids, push }) }).catch(() => {});
+    try {
+      localStorage.setItem("pos_notice_ack", JSON.stringify([...seen, ...ids].slice(-80)));
+    } catch {
+      /* the shop can ack again on the next visit */
+    }
+  };
+  const show = () => {
+    for (const note of fresh) {
+      try {
+        new Notification(note.title || "ATAV POS", { body: String(note.body || "").slice(0, 180) });
+      } catch {
+        /* a blocked notification still counts as a failed push below */
+      }
+    }
+  };
+  if (Notification.permission === "granted") {
+    show();
+    finish("sent");
+    return;
+  }
+  if (Notification.permission !== "default") {
+    finish("failed");
+    return;
+  }
+  try {
+    if (sessionStorage.getItem("pos_notice_push_asked")) return;
+    sessionStorage.setItem("pos_notice_push_asked", "1");
+  } catch {
+    return;
+  }
+  Notification.requestPermission()
+    .then((perm) => {
+      if (perm === "granted") {
+        show();
+        finish("sent");
+      } else finish("failed");
+    })
+    .catch(() => finish("failed"));
 }
 
 function paintImpersonationControls() {
