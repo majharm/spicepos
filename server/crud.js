@@ -663,6 +663,27 @@ function customerEmailField(raw) {
   return { email: s.toLowerCase() };
 }
 
+function supplierWriteFields(body) {
+  const name = String(body?.name || "").trim().slice(0, 180);
+  if (!name) return { error: "Supplier name is required" };
+  const emailRaw = String(body?.email || "").trim();
+  if (emailRaw && (emailRaw.length > 160 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailRaw))) {
+    return { error: "Enter a valid email address." };
+  }
+  const cut = (value, max) => {
+    const text = String(value || "").trim();
+    return text ? text.slice(0, max) : null;
+  };
+  return {
+    name,
+    contact_name: cut(body?.contact_name, 120),
+    mobile: cut(body?.mobile, 15),
+    email: emailRaw ? emailRaw.slice(0, 160).toLowerCase() : null,
+    address: cut(body?.address, 500),
+    gstin: cut(String(body?.gstin || "").toUpperCase(), 20),
+  };
+}
+
 export function registerCrud(app) {
   app.get("/api/customers", async (_req, res) => {
     try {
@@ -1075,9 +1096,9 @@ export function registerCrud(app) {
   });
 
   app.post("/api/suppliers", async (req, res) => {
-    const { name, contact_name, mobile, email, address, gstin } = req.body || {};
-    if (!name) {
-      res.status(400).json({ error: "Supplier name is required" });
+    const fields = supplierWriteFields(req.body);
+    if (fields.error) {
+      res.status(400).json({ error: fields.error });
       return;
     }
     try {
@@ -1087,19 +1108,39 @@ export function registerCrud(app) {
         `INSERT INTO suppliers (
            id, code, name, contact_name, mobile, email, address, gstin, opening_balance, business_id
          ) VALUES (?,?,?,?,?,?,?,?,0,?)`,
-        [
-          id,
-          code,
-          String(name).trim(),
-          String(contact_name || "").trim() || null,
-          String(mobile || "").trim() || null,
-          String(email || "").trim() || null,
-          String(address || "").trim() || null,
-          String(gstin || "").trim() || null,
-          bid(),
-        ],
+        [id, code, fields.name, fields.contact_name, fields.mobile, fields.email, fields.address, fields.gstin, bid()],
       );
-      const [supplier] = await query("SELECT * FROM suppliers WHERE id = ?", [id]);
+      const [supplier] = await query("SELECT * FROM suppliers WHERE id = ? AND business_id = ?", [id, bid()]);
+      res.json({ ok: true, supplier });
+    } catch (err) {
+      res.status(500).json({ error: String(err.message) });
+    }
+  });
+
+  app.put("/api/suppliers/:id", async (req, res) => {
+    const id = String(req.params.id || "").trim();
+    if (!id) {
+      res.status(400).json({ error: "Supplier id is required" });
+      return;
+    }
+    const fields = supplierWriteFields(req.body);
+    if (fields.error) {
+      res.status(400).json({ error: fields.error });
+      return;
+    }
+    try {
+      const [found] = await query("SELECT id FROM suppliers WHERE id = ? AND business_id = ? LIMIT 1", [id, bid()]);
+      if (!found) {
+        res.status(404).json({ error: "Supplier not found" });
+        return;
+      }
+      await query(
+        `UPDATE suppliers
+         SET name = ?, contact_name = ?, mobile = ?, email = ?, address = ?, gstin = ?
+         WHERE id = ? AND business_id = ?`,
+        [fields.name, fields.contact_name, fields.mobile, fields.email, fields.address, fields.gstin, id, bid()],
+      );
+      const [supplier] = await query("SELECT * FROM suppliers WHERE id = ? AND business_id = ?", [id, bid()]);
       res.json({ ok: true, supplier });
     } catch (err) {
       res.status(500).json({ error: String(err.message) });
