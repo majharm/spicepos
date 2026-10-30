@@ -1,0 +1,626 @@
+/* Business login panel theme. Scoped to .atav-business-app only. */
+
+.atav-business-app {
+  --biz-navy: #0b1f3a;
+  --biz-navy-2: #102848;
+  --biz-blue: #2563eb;
+  --biz-blue-2: #1d4ed8;
+  --biz-cyan: #06b6d4;
+  --biz-bg: #f4f7fb;
+  --biz-card: #ffffff;
+  --biz-text: #0f2744;
+  --biz-muted: #64748b;
+  --biz-line: #e2e8f0;
+  --biz-ok: #059669;
+  --biz-warn: #d97706;
+  --biz-danger: #e11d48;
+  --biz-radius: 16px;
+  --biz-shadow: 0 10px 28px rgba(15, 39, 68, 0.06);
+  --biz-shadow-hover: 0 16px 34px rgba(15, 39, 68, 0.1);
+  --vel-ink: var(--biz-navy);
+  --vel-slate: var(--biz-navy);
+  --vel-slate-soft: #16375f;
+  --vel-teal: var(--biz-blue);
+  --vel-teal-bright: #3b82f6;
+  --vel-cyan: var(--biz-cyan);
+  --vel-bg: var(--biz-bg);
+  --vel-surface: var(--biz-card);
+  --vel-muted-surface: #f8fafc;
+  --vel-line: var(--biz-line);
+  --vel-line-strong: #d5deea;
+  --vel-text: var(--biz-text);
+  --vel-muted: var(--biz-muted);
+  --vel-success: var(--biz-ok);
+  --vel-danger: var(--biz-danger);
+  --bg: var(--biz-bg);
+  --bg-deep: #e7eef6;
+  --bg-raised: var(--biz-card);
+  --panel: var(--biz-card);
+  --line: var(--biz-line);
+  --line-strong: #d5deea;
+  --text: var(--biz-text);
+  --muted: var(--biz-muted);
+  --accent: var(--biz-blue);
+  --accent-2: var(--biz-cyan);
+  --accent-soft: rgba(37, 99, 235, 0.1);
+  --brand: var(--biz-blue);
+  --brand-gradient: linear-gradient(135deg, var(--biz-blue) 0%, var(--biz-cyan) 100%);
+  --nav: var(--biz-navy);
+  --nav-soft: var(--biz-navy-2);
+  --nav-text: #e8eef7;
+  --shadow-card: var(--biz-shadow);
+  --elev-float: var(--biz-shadow-hover);
+  --bg-tint: #f8fafc;
+  --bg-tint-soft: #f4f7fb;
+  --radius: 12px;
+  --radius-lg: 16px;
+  --nav-width: 248px;
+  background: var(--biz-bg);
+  color: var(--biz-text);
+}
+
+html[data-scheme="dark"] .atav-business-app {
+  --biz-navy: #06101f;
+  --biz-navy-2: #0c1b33;
+  --biz-bg: #071426;
+  --biz-card: #10243d;
+  --biz-text: #e7eef8;
+  --biz-muted: #93a4bd;
+  --biz-line: #1e3a5f;
+  --vel-surface: #10243d;
+  --vel-text: #e7eef8;
+  --vel-bg: #071426;
+  --bg-tint: #0d1c31;
+  --bg-tint-soft: #0f2744;
+  --shadow-card: 0 12px 32px rgba(0, 0, 0, 0.28);
+  color-scheme: dark;
+}
+
+.atav-business-app .nav {
+  background: linear-gradient(180deg, var(--biz-navy) 0%, var(--biz-navy-2) 100%);
+  border-right: 1px solid rgba(255, 255, 255, 0.06);
+  box-shadow: none;
+  padding: 14px 12px 12px;
+}
+
+.atav-business-app .biz-product {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 2px 12px;
+  padding: 0 2px 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.atav-business-app .biz-mark {
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  flex: none;
+  background: linear-gradient(145deg, #3b82f6, #2563eb);
+  color: #fff;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  box-shadow: 0 8px 18px rgba(37, 99, 235, 0.35);
+}
+
+.atav-business-app .biz-product-name {
+  display: block;
+  color: #fff;
+  font-size: 14px;
+  letter-spacing: -0.02em;
+}
+
+.atav-business-app .biz-product-role {
+  display: block;
+  margin-top: 1px;
+  color: #93c5fd;
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.atav-business-app .brand {
+  padding: 2px 6px 12px;
+  margin-bottom: 6px;
+  border-bottom: 0;
+}
+
+.atav-business-app .brand-logo,
+.atav-business-app .brand-mark {
+  width: 36px;
+  height: 36px;
+  margin-bottom: 8px;
+  border-radius: 10px;
+  box-shadow: none;
+}
+
+.atav-business-app #shop-name {
+  color: #f8fafc;
+  font-size: 14px;
+  letter-spacing: -0.02em;
+}
+
+.atav-business-app #shop-place {
+  color: #93a4bd;
+  font-size: 12px;
+}
+
+.atav-business-app .nav-group-label {
+  margin: 8px 10px 4px;
+  color: #7d92ad;
+  letter-spacing: 0.08em;
+}
+
+.atav-business-app .nav-btn {
+  border-radius: 10px;
+  padding: 8px 10px;
+  color: #c5d2e4;
+  font-weight: 600;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.atav-business-app .nav-btn:hover {
+  background: rgba(255, 255, 255, 0.07);
+  color: #fff;
+}
+
+.atav-business-app .nav-btn.active {
+  background: rgba(37, 99, 235, 0.22);
+  color: #fff;
+  box-shadow: inset 3px 0 0 var(--biz-blue);
+}
+
+.atav-business-app .nav-icon {
+  width: 22px;
+  height: 22px;
+  margin-right: 8px;
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.06);
+  font-size: 12px;
+}
+
+.atav-business-app .nav-btn.active .nav-icon {
+  background: var(--biz-blue);
+  color: #fff;
+  opacity: 1;
+}
+
+.atav-business-app .nav-badge:not([hidden]) {
+  margin-left: auto;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: #e11d48;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 800;
+  display: inline-grid;
+  place-items: center;
+}
+
+.atav-business-app .btn-logout {
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.06);
+  color: #dbe7f5;
+  border-color: rgba(255, 255, 255, 0.1);
+  box-shadow: none;
+}
+
+.atav-business-app .btn-logout:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.atav-business-app .stage {
+  background: var(--biz-bg);
+}
+
+.atav-business-app .view-topbar {
+  min-height: 64px;
+  padding: 10px 18px;
+  gap: 12px;
+  background: var(--biz-card);
+  border-bottom: 1px solid var(--biz-line);
+  box-shadow: 0 1px 0 rgba(15, 39, 68, 0.03);
+}
+
+.atav-business-app .items-hero {
+  background: linear-gradient(135deg, #0b1f3a 0%, #12315c 58%, #2563eb 140%);
+  border-color: #1e3a5f;
+}
+
+.atav-business-app .items-kicker { color: #93c5fd; }
+
+.atav-business-app .view-topbar-titles h1 {
+  font-size: 18px;
+  font-weight: 750;
+  color: var(--biz-text);
+}
+
+.atav-business-app .view-topbar-titles p {
+  margin-top: 2px;
+  color: var(--biz-muted);
+}
+
+.atav-business-app .nav-toggle,
+.atav-business-app .icon-btn {
+  width: 36px;
+  min-width: 36px;
+  height: 36px;
+  padding: 0;
+  border-radius: 10px;
+  border: 1px solid var(--biz-line);
+  background: var(--biz-card);
+  color: var(--biz-text);
+  box-shadow: none;
+}
+
+.atav-business-app .saas-top-tools {
+  gap: 8px;
+}
+
+.atav-business-app #dash-search {
+  min-width: min(280px, 28vw);
+  height: 36px;
+  padding: 0 12px;
+  border-radius: 10px;
+  border: 1px solid var(--biz-line);
+  background: #f8fafc;
+  color: var(--biz-text);
+  box-shadow: none;
+}
+
+.atav-business-app #dash-search:focus,
+.atav-business-app .search input:focus,
+.atav-business-app .select:focus,
+.atav-business-app .settings input:not([type="file"]):focus,
+.atav-business-app .settings select:focus,
+.atav-business-app .settings textarea:focus,
+.atav-business-app .report-toolbar input:focus,
+.atav-business-app .pane input:focus,
+.atav-business-app .pane select:focus,
+.atav-business-app .pane textarea:focus {
+  outline: none;
+  border-color: var(--biz-blue);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.16);
+}
+
+.atav-business-app .mini-stat {
+  height: 36px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: #f8fafc;
+  border-color: var(--biz-line);
+}
+
+.atav-business-app .session-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 18px;
+  background: var(--biz-card);
+  border-bottom: 1px solid var(--biz-line);
+  color: var(--biz-muted);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.atav-business-app .session-bar .btn-logout {
+  width: auto;
+  margin-left: auto;
+  padding: 6px 10px;
+  background: #f8fafc;
+  color: var(--biz-text);
+  border-color: var(--biz-line);
+}
+
+body.counter-mode .atav-business-app .session-bar { display: none; }
+
+.atav-business-app .biz-quick {
+  position: relative;
+}
+
+.atav-business-app .biz-quick summary {
+  list-style: none;
+  height: 36px;
+  padding: 0 12px;
+  border-radius: 10px;
+  border: 0;
+  background: var(--biz-blue);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+}
+
+.atav-business-app .biz-quick summary::-webkit-details-marker { display: none; }
+
+.atav-business-app .biz-quick-menu {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 180px;
+  padding: 6px;
+  border-radius: 12px;
+  background: var(--biz-card);
+  border: 1px solid var(--biz-line);
+  box-shadow: var(--biz-shadow-hover);
+  display: grid;
+  gap: 2px;
+}
+
+.atav-business-app .biz-quick-menu button {
+  text-align: left;
+  border: 0;
+  background: transparent;
+  color: var(--biz-text);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-weight: 650;
+  font-size: 13px;
+}
+
+.atav-business-app .biz-quick-menu button:hover {
+  background: #eff6ff;
+}
+
+.atav-business-app .view {
+  padding-bottom: 28px;
+}
+
+.atav-business-app .saas-dash-desk,
+.atav-business-app .items-desk {
+  padding-top: 8px;
+}
+
+.atav-business-app .saas-dash-head h3,
+.atav-business-app .pane h2,
+.atav-business-app .pane h3,
+.atav-business-app .report-block-head h3 {
+  color: var(--biz-text);
+  letter-spacing: -0.02em;
+}
+
+.atav-business-app .saas-kicker {
+  color: var(--biz-blue);
+  font-weight: 750;
+  letter-spacing: 0.08em;
+}
+
+.atav-business-app .btn {
+  border-radius: 10px;
+  border-color: var(--biz-line);
+  background: var(--biz-card);
+  color: var(--biz-text);
+  box-shadow: none;
+}
+
+.atav-business-app .btn:hover {
+  background: #f8fafc;
+  border-color: #c5d2e4;
+}
+
+.atav-business-app .btn.primary {
+  background: var(--biz-blue);
+  border-color: var(--biz-blue);
+  color: #fff;
+}
+
+.atav-business-app .btn.primary:hover {
+  background: var(--biz-blue-2);
+  border-color: var(--biz-blue-2);
+}
+
+.atav-business-app .btn.danger {
+  background: #fff1f2;
+  border-color: #fecdd3;
+  color: var(--biz-danger);
+  box-shadow: none;
+}
+
+.atav-business-app .saas-kpi,
+.atav-business-app .saas-card,
+.atav-business-app .pane,
+.atav-business-app .dash-kpi,
+.atav-business-app .report-block,
+.atav-business-app .an-card {
+  background: var(--biz-card);
+  border: 1px solid var(--biz-line);
+  border-radius: var(--biz-radius);
+  box-shadow: var(--biz-shadow);
+}
+
+.atav-business-app .saas-kpi {
+  border-top: 0;
+  min-height: 112px;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.atav-business-app .saas-kpi:hover,
+.atav-business-app .saas-card:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--biz-shadow-hover);
+}
+
+.atav-business-app .saas-kpi-ico {
+  width: 34px;
+  height: 34px;
+  flex-basis: 34px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  background: #eff6ff;
+  color: var(--biz-blue);
+}
+
+.atav-business-app .saas-kpi strong {
+  color: var(--biz-text);
+  font-variant-numeric: tabular-nums;
+}
+
+.atav-business-app .saas-kpi.tone-sales { box-shadow: inset 3px 0 0 #059669, var(--biz-shadow); }
+.atav-business-app .saas-kpi.tone-month { box-shadow: inset 3px 0 0 #2563eb, var(--biz-shadow); }
+.atav-business-app .saas-kpi.tone-profit { box-shadow: inset 3px 0 0 #06b6d4, var(--biz-shadow); }
+.atav-business-app .saas-kpi.tone-exp { box-shadow: inset 3px 0 0 #e11d48, var(--biz-shadow); }
+.atav-business-app .saas-kpi.tone-due { box-shadow: inset 3px 0 0 #d97706, var(--biz-shadow); }
+.atav-business-app .saas-kpi.tone-stock { box-shadow: inset 3px 0 0 #0284c7, var(--biz-shadow); }
+.atav-business-app .saas-kpi.tone-warn { box-shadow: inset 3px 0 0 #f59e0b, var(--biz-shadow); }
+
+.atav-business-app table {
+  background: var(--biz-card);
+  border: 1px solid var(--biz-line);
+  border-radius: 14px;
+  box-shadow: var(--biz-shadow);
+}
+
+.atav-business-app th {
+  background: #f8fafc;
+  color: #64748b;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  border-bottom-color: var(--biz-line);
+}
+
+.atav-business-app td {
+  border-bottom-color: #eef2f7;
+  color: var(--biz-text);
+}
+
+.atav-business-app tr:hover td {
+  background: #f4f8fc;
+}
+
+.atav-business-app .search input,
+.atav-business-app .select,
+.atav-business-app .settings input:not([type="file"]),
+.atav-business-app .settings textarea,
+.atav-business-app .settings select,
+.atav-business-app .tender input,
+.atav-business-app .report-toolbar input,
+.atav-business-app .report-toolbar select,
+.atav-business-app .pane input,
+.atav-business-app .pane select,
+.atav-business-app .pane textarea {
+  border-radius: 10px;
+  border-color: var(--biz-line);
+  background: var(--biz-card);
+  color: var(--biz-text);
+  box-shadow: none;
+}
+
+.atav-business-app .dialog {
+  background: var(--biz-card);
+  border-color: var(--biz-line);
+  border-radius: 18px;
+  box-shadow: var(--biz-shadow-hover);
+}
+
+.atav-business-app #modal .dialog-head {
+  background: var(--biz-card);
+}
+
+.atav-business-app .hint { color: var(--biz-muted); }
+.atav-business-app .hint.ok { color: var(--biz-ok); }
+.atav-business-app .hint.error { color: var(--biz-danger); }
+
+.atav-business-app .view-counter .counter-topbar {
+  background: var(--biz-card);
+  border-bottom: 1px solid var(--biz-line);
+}
+
+.atav-business-app .view-counter #scan-code {
+  border-radius: 10px;
+}
+
+@media (min-width: 1280px) {
+  .atav-business-app .saas-kpi-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+  .atav-business-app .view-topbar {
+    flex-wrap: nowrap;
+  }
+  .atav-business-app .view-topbar-titles {
+    flex: 0 1 220px;
+  }
+  .atav-business-app .saas-top-tools {
+    flex: 1 1 auto;
+    flex-wrap: nowrap;
+    min-width: 0;
+  }
+  .atav-business-app #dash-search {
+    min-width: 140px;
+    width: auto;
+    flex: 1 1 160px;
+  }
+  .atav-business-app #dash-branch:not(:has(option)) { display: none; }
+  .atav-business-app .view-topbar-stats { flex-wrap: nowrap; }
+}
+
+@media (min-width: 1280px) and (max-height: 800px) {
+  .atav-business-app .nav-btn { padding: 6px 10px; }
+  .atav-business-app .saas-kpi { min-height: 96px; padding: 12px; }
+  .atav-business-app .view { padding-bottom: 16px; }
+}
+
+@media (min-width: 1600px) {
+  .atav-business-app { --nav-width: 260px; }
+  .atav-business-app .saas-kpi-grid {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+}
+
+html[data-scheme="dark"] .atav-business-app .view-topbar,
+html[data-scheme="dark"] .atav-business-app .session-bar,
+html[data-scheme="dark"] .atav-business-app .btn,
+html[data-scheme="dark"] .atav-business-app .icon-btn,
+html[data-scheme="dark"] .atav-business-app .dialog,
+html[data-scheme="dark"] .atav-business-app #modal .dialog-head,
+html[data-scheme="dark"] .atav-business-app .biz-quick-menu {
+  background: var(--biz-card);
+  color: var(--biz-text);
+  border-color: var(--biz-line);
+}
+
+html[data-scheme="dark"] .atav-business-app .btn.primary,
+html[data-scheme="dark"] .atav-business-app .biz-quick summary {
+  background: var(--biz-blue);
+  border-color: var(--biz-blue);
+  color: #fff;
+}
+
+html[data-scheme="dark"] .atav-business-app #dash-search,
+html[data-scheme="dark"] .atav-business-app .search input,
+html[data-scheme="dark"] .atav-business-app .select,
+html[data-scheme="dark"] .atav-business-app .settings input:not([type="file"]),
+html[data-scheme="dark"] .atav-business-app .settings select,
+html[data-scheme="dark"] .atav-business-app .settings textarea,
+html[data-scheme="dark"] .atav-business-app .pane input,
+html[data-scheme="dark"] .atav-business-app .pane select,
+html[data-scheme="dark"] .atav-business-app .pane textarea,
+html[data-scheme="dark"] .atav-business-app th {
+  background: #0d1c31;
+  color: var(--biz-text);
+  border-color: var(--biz-line);
+}
+
+html[data-scheme="dark"] .atav-business-app tr:hover td,
+html[data-scheme="dark"] .atav-business-app .biz-quick-menu button:hover {
+  background: rgba(37, 99, 235, 0.16);
+}
+
+html[data-scheme="dark"] .atav-business-app .mini-stat,
+html[data-scheme="dark"] .atav-business-app .session-bar .btn-logout {
+  background: #0d1c31;
+  color: var(--biz-text);
+  border-color: var(--biz-line);
+}
+
+html[data-scheme="dark"] .atav-business-app .saas-kpi-ico {
+  background: rgba(37, 99, 235, 0.18);
+  color: #93c5fd;
+}

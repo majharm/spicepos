@@ -304,3 +304,22 @@ test("Purchase Order and Sales Order can add or select catalog items", () => {
   assert.match(els["hub-sales-work"].innerHTML, /Add item/);
   assert.match(els["hub-sales-work"].innerHTML, /Turmeric/);
 });
+
+test("business theme stays on the shop shell and off Master Admin", () => {
+  const index = read("index.html");
+  const theme = read("css/business-theme.css");
+  const master = read("master.html");
+  const masterCss = read("css/master-theme.css");
+  assert.match(index, /class="app atav-business-app"/);
+  assert.match(index, /business-theme\.css\?v=20261031biz1/);
+  assert.match(index, /class="biz-product"/);
+  assert.match(index, /id="dash-settings"/);
+  assert.match(theme, /\.atav-business-app/);
+  assert.match(theme, /#0b1f3a/);
+  assert.match(theme, /#2563eb/);
+  assert.match(theme, /html\[data-scheme="dark"\] \.atav-business-app/);
+  assert.doesNotMatch(master, /business-theme\.css/);
+  assert.doesNotMatch(master, /atav-business-app/);
+  assert.doesNotMatch(masterCss, /atav-business-app/);
+  assert.doesNotMatch(theme, /#master-app/);
+});

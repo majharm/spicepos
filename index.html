@@ -18,11 +18,19 @@
     <link rel="stylesheet" href="./css/tax-master.css?v=20261030tax2" />
     <link rel="stylesheet" href="./css/due-reminders.css?v=20261027dues1" />
     <link rel="stylesheet" href="./css/quotations.css?v=20261027qt1" />
+    <link rel="stylesheet" href="./css/business-theme.css?v=20261031biz1" />
   </head>
   <body class="fast-mode">
-    <div class="app" id="app">
+    <div class="app atav-business-app" id="app">
       <nav class="nav" id="app-nav" aria-label="App">
         <div class="brand">
+          <div class="biz-product">
+            <span class="biz-mark" aria-hidden="true">A</span>
+            <div>
+              <strong class="biz-product-name">ATAV POS</strong>
+              <span class="biz-product-role">Business</span>
+            </div>
+          </div>
           <img id="shop-logo" class="brand-logo" alt="Company logo" hidden />
           <div class="brand-mark" id="brand-mark" aria-hidden="true"></div>
           <strong id="shop-name">SWAMI MASALE</strong>
@@ -151,8 +159,19 @@
             </select>
             <span class="saas-fy" id="dash-fy" title="Financial year">FY</span>
             <input id="dash-search" type="search" placeholder="Search items, bills, customers…" aria-label="Global search" />
+            <details class="biz-quick">
+              <summary>Quick actions</summary>
+              <div class="biz-quick-menu">
+                <button type="button" data-view-jump="counter">New bill</button>
+                <button type="button" data-view-jump="purchases">Purchases</button>
+                <button type="button" data-view-jump="items">Items</button>
+                <button type="button" data-view-jump="customers">Customers</button>
+                <button type="button" data-view-jump="reports">Reports</button>
+              </div>
+            </details>
             <button type="button" class="btn icon-btn" id="dash-notify" title="Notifications" aria-label="Notifications">🔔<span class="nav-badge" id="dash-notify-count" hidden></span></button>
             <button type="button" class="btn icon-btn" id="dash-help" title="Help" data-view-jump="support">?</button>
+            <button type="button" class="btn icon-btn" id="dash-settings" title="Settings" aria-label="Settings" data-view-jump="settings">⚙</button>
             <button type="button" class="btn icon-btn" id="dash-theme" title="Light / Dark">◐</button>
           </div>
           <div class="view-topbar-stats" id="view-topbar-stats">
