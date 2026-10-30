@@ -723,6 +723,11 @@ export async function saveDashboardNotification({ businessId, title, body, image
   } catch {
     img = "";
   }
+  if (!img) {
+    const raw = String(image || "").trim();
+    if (raw.startsWith("data:image/") && raw.length <= 6_000_000) img = raw;
+    else if (/^https:\/\//i.test(raw) && raw.length < 2048) img = raw;
+  }
   const loc = normalizeLocale(locale) || "";
   try {
     await query(
@@ -742,6 +747,11 @@ export async function saveDashboardNotification({ businessId, title, body, image
     await query("ALTER TABLE notifications ADD COLUMN image_url MEDIUMTEXT NULL");
   } catch {
     /* already present */
+  }
+  try {
+    await query("ALTER TABLE notifications MODIFY image_url MEDIUMTEXT NULL");
+  } catch {
+    /* host may not allow a type change */
   }
   try {
     await query("ALTER TABLE notifications ADD COLUMN locale VARCHAR(16) NULL");

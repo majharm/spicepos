@@ -7,6 +7,7 @@ import { defaultPerms, ROLES, MODULES } from "./roles.js";
 import { audit } from "./audit.js";
 import { sendWelcomeStaff, publicLoginUrl } from "./mail.js";
 import { sendCredentialAlerts } from "./alerts.js";
+import { listShopNotices } from "./notify-routes.js";
 import { workbookXml } from "./excel.js";
 import { stockToSheets } from "./stock-excel.js";
 import { recomputeBusinessOutstanding } from "./accounts.js";
@@ -369,9 +370,11 @@ export function registerTenant(app) {
           [businessId],
         ),
         query("SELECT * FROM branches WHERE business_id = ? ORDER BY name", [businessId]),
-        query(
-          `SELECT * FROM notifications WHERE business_id IS NULL OR business_id = '' OR business_id = ? ORDER BY created_at DESC LIMIT 20`,
-          [businessId],
+        listShopNotices(businessId).catch(() =>
+          query(
+            `SELECT * FROM notifications WHERE business_id IS NULL OR business_id = '' OR business_id = ? ORDER BY created_at DESC LIMIT 20`,
+            [businessId],
+          ),
         ),
         query(
           `SELECT subscription_expires_at, status,

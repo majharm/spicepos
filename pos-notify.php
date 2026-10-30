@@ -624,6 +624,29 @@ function pos_notify_export($campaignId) {
   exit;
 }
 
+function pos_shop_notice_rows($businessId) {
+  $sql = "SELECT n.id, n.title, n.body,
+      COALESCE(NULLIF(n.image_url, ''), (
+        SELECT c.image_url FROM notify_recipients r
+        JOIN notify_campaigns c ON c.id = r.campaign_id
+        WHERE r.notification_id = n.id AND c.image_url IS NOT NULL AND c.image_url <> ''
+        ORDER BY r.created_at DESC LIMIT 1
+      )) AS image_url,
+      n.locale, n.created_at
+    FROM notifications n
+    WHERE n.business_id IS NULL OR n.business_id = '' OR n.business_id = ?
+    ORDER BY n.created_at DESC LIMIT 20";
+  try {
+    return pos_q($sql, "s", [$businessId]);
+  } catch (Throwable $e) {
+    return pos_q(
+      "SELECT id, title, body, image_url, locale, created_at FROM notifications WHERE business_id IS NULL OR business_id = '' OR business_id = ? ORDER BY created_at DESC LIMIT 20",
+      "s",
+      [$businessId]
+    );
+  }
+}
+
 function pos_notify_dispatch($path, $method, $body) {
   $contact = preg_match("#^master/businesses/[^/]+/whatsapp-contact$#", $path);
   if (strpos($path, "master/notify-campaigns") !== 0 && !$contact) return false;

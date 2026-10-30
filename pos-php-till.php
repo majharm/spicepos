@@ -158,11 +158,14 @@ function pos_php_till_dispatch($path, $method, $body) {
     $notes = [];
     try {
       if (function_exists("pos_ensure_notification_schema")) pos_ensure_notification_schema();
-      $notes = pos_q(
-        "SELECT id, title, body, image_url, locale, created_at FROM notifications WHERE business_id IS NULL OR business_id = '' OR business_id = ? ORDER BY created_at DESC LIMIT 20",
-        "s",
-        [$bid]
-      );
+      if (!function_exists("pos_shop_notice_rows") && is_file(__DIR__ . "/pos-notify.php")) require_once __DIR__ . "/pos-notify.php";
+      $notes = function_exists("pos_shop_notice_rows")
+        ? pos_shop_notice_rows($bid)
+        : pos_q(
+          "SELECT id, title, body, image_url, locale, created_at FROM notifications WHERE business_id IS NULL OR business_id = '' OR business_id = ? ORDER BY created_at DESC LIMIT 20",
+          "s",
+          [$bid]
+        );
     } catch (Exception $e) { /* optional */ }
     pos_send(200, [
       "company" => $coRow,
@@ -350,11 +353,14 @@ function pos_php_till_dispatch($path, $method, $body) {
       ? pos_list_branches($bid)
       : pos_q("SELECT * FROM branches WHERE business_id = ? ORDER BY name", "s", [$bid]);
     if (function_exists("pos_ensure_notification_schema")) pos_ensure_notification_schema();
-    $notes = pos_q(
-      "SELECT * FROM notifications WHERE business_id IS NULL OR business_id = '' OR business_id = ? ORDER BY created_at DESC LIMIT 20",
-      "s",
-      [$bid]
-    );
+    if (!function_exists("pos_shop_notice_rows") && is_file(__DIR__ . "/pos-notify.php")) require_once __DIR__ . "/pos-notify.php";
+    $notes = function_exists("pos_shop_notice_rows")
+      ? pos_shop_notice_rows($bid)
+      : pos_q(
+        "SELECT * FROM notifications WHERE business_id IS NULL OR business_id = '' OR business_id = ? ORDER BY created_at DESC LIMIT 20",
+        "s",
+        [$bid]
+      );
     pos_send(200, [
       "today" => $sales[0] ?? ["bills" => 0, "takings" => 0, "gst" => 0],
       "purchase" => $purchase[0]["total"] ?? 0,

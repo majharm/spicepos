@@ -1478,11 +1478,65 @@ body.auth-body::-webkit-scrollbar-thumb {
 .platform-notice img,
 .notice-thumb {
   display: block;
-  max-width: min(280px, 100%);
-  max-height: 160px;
+  width: min(100%, 420px);
+  max-width: 100%;
+  max-height: 280px;
   margin-top: 8px;
   border-radius: 8px;
-  object-fit: cover;
+  object-fit: contain;
+  background: #fff;
+}
+.notice-popup[hidden] { display: none !important; }
+.notice-popup {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+.notice-popup-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.48);
+}
+.notice-popup-card {
+  position: relative;
+  width: min(520px, 100%);
+  max-height: min(86vh, 760px);
+  overflow: auto;
+  background: #fff;
+  border-radius: 16px;
+  padding: 22px 22px 18px;
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.28);
+}
+.notice-popup-card h3 {
+  margin: 0 36px 8px 0;
+  font-size: 20px;
+}
+.notice-popup-photo {
+  width: 100%;
+  max-height: 340px;
+  margin: 0 0 12px;
+  object-fit: contain;
+}
+.notice-popup-x {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 999px;
+  background: #f1f5f9;
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+}
+.notice-popup-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 14px;
 }
 .platform-notes {
   margin: 0 24px 16px;

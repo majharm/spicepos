@@ -19,7 +19,7 @@ import { companyTimezone, normalizeTimezone, shopTimezonePayload, tzOffsetFor } 
 import { attachAuth, registerAuth, requireStaff, requirePerm } from "./auth.js";
 import { normalizeLocale, normalizeInvoiceLanguage, normalizeWhatsappLanguage, clipInvoiceText, attachInvoiceText, invoiceMarkUrl } from "./i18n.js";
 import { registerMaster } from "./master.js";
-import { ackNotifyCampaigns } from "./notify-routes.js";
+import { ackNotifyCampaigns, listShopNotices } from "./notify-routes.js";
 import { registerTenant } from "./tenant.js";
 import { registerHub } from "./hub.js";
 import { registerBackup } from "./backup.js";
@@ -349,10 +349,12 @@ app.get("/api/bootstrap", requireStaff, async (_req, res) => {
       listBrands(businessId).catch(() => []),
       query("SELECT * FROM customers WHERE business_id = ? ORDER BY name", [businessId]),
       query("SELECT * FROM packs WHERE business_id = ? ORDER BY name", [businessId]),
-      query(
-        `SELECT id, title, body, image_url, locale, created_at FROM notifications
-         WHERE business_id IS NULL OR business_id = '' OR business_id = ? ORDER BY created_at DESC LIMIT 20`,
-        [businessId],
+      listShopNotices(businessId).catch(() =>
+        query(
+          `SELECT id, title, body, image_url, locale, created_at FROM notifications
+           WHERE business_id IS NULL OR business_id = '' OR business_id = ? ORDER BY created_at DESC LIMIT 20`,
+          [businessId],
+        ),
       ),
       ensureInventoryUnits(businessId).catch(() => []),
       ensureTaxRates(businessId).catch(() => []),

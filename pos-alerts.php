@@ -301,6 +301,7 @@ function pos_ensure_notification_schema() {
     )"
   );
   @$db->query("ALTER TABLE notifications ADD COLUMN image_url MEDIUMTEXT NULL");
+  @$db->query("ALTER TABLE notifications MODIFY image_url MEDIUMTEXT NULL");
   @$db->query("ALTER TABLE notifications ADD COLUMN locale VARCHAR(16) NULL");
 }
 
@@ -314,6 +315,11 @@ function pos_save_dashboard_notification($businessId, $title, $body = "", $image
   $img = "";
   if (function_exists("pos_notice_image")) {
     try { $img = pos_notice_image($image); } catch (Throwable $e) { $img = ""; }
+  }
+  if ($img === "") {
+    $raw = trim((string) $image);
+    if (strpos($raw, "data:image/") === 0 && strlen($raw) <= 6000000) $img = $raw;
+    elseif (stripos($raw, "https://") === 0 && strlen($raw) < 2048) $img = $raw;
   }
   $loc = function_exists("pos_normalize_locale") ? pos_normalize_locale($locale) : trim((string) $locale);
   try {

@@ -15758,6 +15758,11 @@ $("dash-theme")?.addEventListener("click", () => {
   applyColorScheme(document.documentElement.dataset.scheme === "dark" ? "light" : "dark");
 });
 $("dash-notify")?.addEventListener("click", () => {
+  const list = window.__platformNotices || [];
+  if (list[0]) {
+    openNoticePopup(list[0]);
+    return;
+  }
   const onPhone = document.body.classList.contains("m-app");
   const notes = onPhone
     ? document.getElementById("m-home-notes") || document.getElementById("dash-notes")
@@ -17967,26 +17972,122 @@ $("loy-birthday")?.addEventListener("click", async () => {
   }
 });
 
+function dedupePlatformNotices(list) {
+  const map = new Map();
+  for (const note of list) {
+    const key = `${String(note.title || "").trim()}\n${String(note.body || "").trim()}`;
+    const prev = map.get(key);
+    if (!prev) map.set(key, note);
+    else if (!prev.image_url && note.image_url) map.set(key, { ...prev, image_url: note.image_url });
+  }
+  return [...map.values()];
+}
+
 function noticeCardHtml(n) {
   const when = formatShopDateTime(n.created_at);
   const body = String(n.body || "").trim();
   return `<article class="platform-notice dash-notice-card">
     <strong>${escapeHtml(n.title || "Notice")}</strong>
-    ${body ? `<p class="notice-body">${escapeHtml(body)}</p>` : ""}
     ${n.image_url ? `<img class="notice-thumb" src="${escapeHtml(n.image_url)}" alt="" />` : ""}
+    ${body ? `<p class="notice-body">${escapeHtml(body)}</p>` : ""}
     ${when ? `<time class="notice-when" datetime="${escapeHtml(String(n.created_at || ""))}">${escapeHtml(when)}</time>` : ""}
   </article>`;
 }
 
+function ensureNoticePopup() {
+  let root = document.getElementById("notice-popup");
+  if (root) return root;
+  document.body.insertAdjacentHTML(
+    "beforeend",
+    `<div id="notice-popup" class="notice-popup" hidden>
+      <div class="notice-popup-backdrop" data-notice-close></div>
+      <section class="notice-popup-card" role="dialog" aria-modal="true" aria-labelledby="notice-popup-title">
+        <button type="button" class="notice-popup-x" data-notice-close aria-label="Close">×</button>
+        <img id="notice-popup-photo" class="notice-popup-photo notice-thumb" alt="" hidden />
+        <h3 id="notice-popup-title"></h3>
+        <p id="notice-popup-body" class="notice-body"></p>
+        <time id="notice-popup-when" class="notice-when"></time>
+        <div class="notice-popup-actions"><button type="button" class="btn primary" data-notice-close>Close</button></div>
+      </section>
+    </div>`,
+  );
+  root = document.getElementById("notice-popup");
+  root.addEventListener("click", (event) => {
+    if (event.target.closest("[data-notice-close]")) closeNoticePopup();
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && !root.hidden) closeNoticePopup();
+  });
+  return root;
+}
+
+function noticePopupClosed(id) {
+  if (!id) return false;
+  try {
+    const seen = JSON.parse(localStorage.getItem("pos_notice_popup_closed") || "[]");
+    return Array.isArray(seen) && seen.includes(id);
+  } catch {
+    return false;
+  }
+}
+
+function closeNoticePopup() {
+  const root = document.getElementById("notice-popup");
+  if (!root) return;
+  const id = root.dataset.noticeId || "";
+  root.hidden = true;
+  if (!id) return;
+  let seen = [];
+  try {
+    seen = JSON.parse(localStorage.getItem("pos_notice_popup_closed") || "[]");
+  } catch {
+    seen = [];
+  }
+  if (!Array.isArray(seen)) seen = [];
+  if (!seen.includes(id)) seen.push(id);
+  try {
+    localStorage.setItem("pos_notice_popup_closed", JSON.stringify(seen.slice(-40)));
+  } catch {
+    /* the popup can show again on the next visit */
+  }
+}
+
+function openNoticePopup(note) {
+  if (!note) return;
+  const root = ensureNoticePopup();
+  root.dataset.noticeId = note.id || "";
+  const photo = document.getElementById("notice-popup-photo");
+  const title = document.getElementById("notice-popup-title");
+  const body = document.getElementById("notice-popup-body");
+  const when = document.getElementById("notice-popup-when");
+  if (title) title.textContent = note.title || "Notice";
+  if (body) body.textContent = String(note.body || "").trim();
+  if (when) {
+    const label = formatShopDateTime(note.created_at);
+    when.textContent = label || "";
+    when.hidden = !label;
+  }
+  if (photo) {
+    const src = String(note.image_url || "").trim();
+    photo.hidden = !src;
+    photo.src = src || "";
+    photo.onerror = () => {
+      photo.hidden = true;
+    };
+  }
+  root.hidden = false;
+}
+
 function paintPlatformNotices(notes) {
-  const list = (Array.isArray(notes) ? notes : []).filter((n) => {
+  const list = dedupePlatformNotices((Array.isArray(notes) ? notes : []).filter((n) => {
     const title = String(n.title || "").trim().toLowerCase();
     const body = String(n.body || "").toLowerCase();
     if (title === "master admin login") return false;
     if (body.includes("opened this shop from master admin")) return false;
     if (body.includes("viewing this shop") || body.includes("is viewing")) return false;
     return true;
-  });
+  }));
+  window.__platformNotices = list;
   const html = list.map(noticeCardHtml).join("");
   const paint = (el, hideWhenEmpty) => {
     if (!el) return;
@@ -18003,6 +18104,10 @@ function paintPlatformNotices(notes) {
   if (badge) {
     badge.hidden = list.length < 1;
     badge.textContent = list.length > 9 ? "9+" : String(list.length);
+  }
+  const newest = list[0];
+  if (newest && !noticePopupClosed(newest.id) && document.getElementById("notice-popup")?.hidden !== false) {
+    openNoticePopup(newest);
   }
   void ackPlatformNotices(list);
 }
