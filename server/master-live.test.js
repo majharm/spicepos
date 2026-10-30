@@ -42,7 +42,7 @@ test("live monitoring is wired without marking a quiet tab online", () => {
   assert.doesNotMatch(pulse, /setInterval/);
   assert.match(read("index.html"), /session-pulse\.js\?v=20261030live1/);
   assert.match(read("master.html"), /data-tab="live"/);
-  assert.match(read("master.html"), /master\.js\?v=20261030live1/);
+  assert.match(read("master.html"), /master\.js\?v=20261030theme1/);
   assert.match(read("pos-php-core.php"), /session\/pulse/);
   assert.match(read("pos-php-core.php"), /last_seen_at/);
   assert.match(read("pos-master-live.php"), /function pos_master_live_dispatch/);

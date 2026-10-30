@@ -17,7 +17,8 @@ test("Master Admin desk collapses nested nav and uses a shop board", () => {
   assert.match(html, /data-nav-family="analytics"/);
   assert.match(html, /data-nav-family="seo"/);
   assert.match(html, /nav-group-label"[^>]*>Advanced</);
-  assert.match(html, /master\.js\?v=20261030live1/);
+  assert.match(html, /master\.js\?v=20261030theme1/);
+  assert.match(html, /master-theme\.css\?v=20261030theme1/);
   assert.match(html, /data-tab="live"/);
   assert.match(html, /data-tab="profile"/);
   assert.match(html, /data-tab="staff"/);
@@ -70,4 +71,18 @@ test("Master Admin desk collapses nested nav and uses a shop board", () => {
   assert.match(css, /master-ux-2026/);
   assert.match(css, /\.master-jump/);
   assert.match(css, /\.master-list-toolbar/);
+  const theme = read("css/master-theme.css");
+  assert.match(theme, /#master-app/);
+  assert.match(theme, /--ma-navy/);
+  assert.match(theme, /body\.master-dark #master-app/);
+  assert.doesNotMatch(theme, /^(\.btn|body)\s*\{/m);
+  assert.match(js, /kpiButton\("Businesses", k\.businesses\?\.value \?\? t\.businesses, null, "biz"/);
+  assert.match(js, /function revenueChart/);
+  assert.match(js, /pos_master_theme/);
+  assert.match(html, /id="master-system-status"/);
+  assert.match(html, /id="master-theme"/);
+  assert.match(html, /data-tab="fees"/);
+  assert.match(html, /data-tab="health"/);
+  assert.doesNotMatch(js, /1,248/);
+  assert.doesNotMatch(theme, /1,248/);
 });

@@ -8,6 +8,7 @@
     <link rel="icon" href="./favicon.svg" />
     <link rel="stylesheet" href="./css/pos.css?v=20260920deploy201" />
     <link rel="stylesheet" href="./css/saas.css?v=20261030live1" />
+    <link rel="stylesheet" href="./css/master-theme.css?v=20261030theme1" />
     <link rel="stylesheet" href="./css/analytics.css?v=20260920deploy196" />
     <link rel="stylesheet" href="./css/seo.css?v=20260920deploy197" />
     <link rel="stylesheet" href="./css/login-page.css?v=20261011login1" />
@@ -74,36 +75,47 @@
       </div>
     </div>
     <div class="master-shell" id="master-app" hidden>
-      <nav class="master-nav">
+      <nav class="master-nav" aria-label="Master Admin">
         <div class="master-brand">
-          <img src="./assets/atav-telecom-logo.png" alt="ATAV Telecom" width="140" height="60" />
-          <h1>Master Admin</h1>
+          <span class="ma-mark" aria-hidden="true">A</span>
+          <div class="ma-brand-copy">
+            <strong>ATAV POS</strong>
+            <span>Master Admin</span>
+          </div>
+          <button class="ma-collapse" id="master-nav-collapse" type="button" aria-expanded="true" aria-label="Collapse sidebar">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16M4 12h10M4 19h16"/></svg>
+          </button>
         </div>
         <div class="master-nav-scroll">
           <div class="master-nav-group is-open" data-nav-family="main">
-            <button type="button" class="nav-group-label" data-nav-toggle="main" aria-expanded="true">Main</button>
-            <button type="button" class="active" data-tab="dash"><span class="nav-icon" aria-hidden="true">⌂</span>Dashboard</button>
-            <button type="button" data-tab="live"><span class="nav-icon" aria-hidden="true">◉</span>Live users</button>
-            <button type="button" data-tab="profile"><span class="nav-icon" aria-hidden="true">☺</span>My profile</button>
-            <button type="button" data-tab="biz"><span class="nav-icon" aria-hidden="true">◈</span>Businesses</button>
-            <button type="button" data-tab="users"><span class="nav-icon" aria-hidden="true">◉</span>Users</button>
-            <button type="button" data-tab="plans"><span class="nav-icon" aria-hidden="true">▤</span>Plans</button>
-            <button type="button" data-tab="dsa-sales"><span class="nav-icon" aria-hidden="true">▣</span>DSA Sales</button>
+            <button type="button" class="nav-group-label" data-nav-toggle="main" aria-expanded="true">Overview</button>
+            <button type="button" class="active" data-tab="dash" title="Overview"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-5v-6H10v6H5a1 1 0 0 1-1-1z"/></svg></span><span class="ma-label">Overview</span></button>
+            <button type="button" data-tab="live" title="Live Active Users"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/></svg></span><span class="ma-label">Live Active Users</span></button>
+            <button type="button" data-tab="biz" title="Business Management"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 21h18M6 21V7l6-3 6 3v14M10 21v-4h4v4"/></svg></span><span class="ma-label">Business Management</span></button>
+            <button type="button" data-tab="users" title="User Management"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2"/><circle cx="9.5" cy="7" r="3"/><path d="M20 8v6M17 11h6"/></svg></span><span class="ma-label">User Management</span></button>
+            <button type="button" data-tab="plans" title="Subscription Plans"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 4h12v16H6zM9 8h6M9 12h6M9 16h3"/></svg></span><span class="ma-label">Subscription Plans</span></button>
+            <button type="button" data-tab="fees" title="Payments"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="12" rx="2"/><path d="M3 10h18"/></svg></span><span class="ma-label">Payments</span></button>
+            <button type="button" data-tab="dsa-sales" title="Revenue Analytics"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 19V5M4 19h16"/><path d="m7 14 4-4 3 3 5-6"/></svg></span><span class="ma-label">Revenue Analytics</span></button>
+            <button type="button" data-tab="analytics" data-analytics-pane="reports" title="Reports"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 3h9l5 5v13H6z"/><path d="M14 3v6h6M8 13h8M8 17h5"/></svg></span><span class="ma-label">Reports</span></button>
+            <button type="button" data-tab="health" title="System Monitoring"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 12h4l2-5 4 10 2-5h6"/></svg></span><span class="ma-label">System Monitoring</span></button>
+            <button type="button" data-tab="audit" title="Activity Logs"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13"/><path d="M3 6h.01M3 12h.01M3 18h.01"/></svg></span><span class="ma-label">Activity Logs</span></button>
+            <button type="button" data-tab="backup" data-backup-pane="settings" title="Settings"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M18.4 5.6 17 7M7 17l-1.4 1.4"/></svg></span><span class="ma-label">Settings</span></button>
+            <button type="button" data-tab="profile" title="My profile"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3"/><path d="M5 19a7 7 0 0 1 14 0"/></svg></span><span class="ma-label">My profile</span></button>
           </div>
           <div class="master-nav-group" data-nav-family="alerts">
             <button type="button" class="nav-group-label" data-nav-toggle="alerts" aria-expanded="false">Alerts</button>
-            <button type="button" data-tab="expiry"><span class="nav-icon" aria-hidden="true">⚑</span>Send alerts</button>
-            <button type="button" data-tab="alert-log"><span class="nav-icon" aria-hidden="true">▤</span>WA & Email log</button>
+            <button type="button" data-tab="expiry" title="Send alerts"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 16V11a6 6 0 1 1 12 0v5l1.5 2H4.5z"/><path d="M10 19a2 2 0 0 0 4 0"/></svg></span><span class="ma-label">Send alerts</span></button>
+            <button type="button" data-tab="alert-log" title="WA & Email log"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 6h16v12H4z"/><path d="m4 7 8 6 8-6"/></svg></span><span class="ma-label">WA & Email log</span></button>
           </div>
           <div class="master-nav-group" data-nav-family="people">
             <button type="button" class="nav-group-label" data-nav-toggle="people" aria-expanded="false">People</button>
-            <button type="button" data-tab="managers"><span class="nav-icon" aria-hidden="true">◎</span>Account managers</button>
-            <button type="button" data-tab="staff"><span class="nav-icon" aria-hidden="true">◉</span>Staff master</button>
-            <button type="button" data-tab="support"><span class="nav-icon" aria-hidden="true">?</span>Support helpline</button>
+            <button type="button" data-tab="managers" title="Account managers"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3"/><path d="M5 19a7 7 0 0 1 14 0"/></svg></span><span class="ma-label">Account managers</span></button>
+            <button type="button" data-tab="staff" title="Staff master"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2"/><circle cx="9.5" cy="7" r="3"/><path d="M19 8v6M17 11h4"/></svg></span><span class="ma-label">Staff master</span></button>
+            <button type="button" data-tab="support" title="Support helpline"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 18h.01M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.6.4-1 .9-1 1.7V14"/></svg></span><span class="ma-label">Support helpline</span></button>
           </div>
           <div class="master-nav-group" data-nav-family="advance">
             <button type="button" class="nav-group-label" data-nav-toggle="advance" aria-expanded="false">Advanced</button>
-            <button type="button" data-tab="advance"><span class="nav-icon" aria-hidden="true">⚙</span>Advanced</button>
+            <button type="button" data-tab="advance" title="Advanced"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2"/></svg></span><span class="ma-label">Advanced</span></button>
             <button type="button" class="nav-sub" data-tab="backup" data-backup-pane="settings">Settings</button>
             <button type="button" class="nav-sub" data-tab="backup" data-backup-pane="backup">Backup</button>
             <button type="button" class="nav-sub" data-tab="languages">Languages</button>
@@ -115,7 +127,7 @@
           </div>
           <div class="master-nav-group" data-nav-family="analytics">
             <button type="button" class="nav-group-label" data-nav-toggle="analytics" aria-expanded="false">Analytics</button>
-            <button type="button" data-tab="analytics" data-analytics-pane="overview"><span class="nav-icon" aria-hidden="true">▣</span>Google Analytics</button>
+            <button type="button" data-tab="analytics" data-analytics-pane="overview" title="Google Analytics"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 19V9M12 19V5M19 19v-7"/></svg></span><span class="ma-label">Google Analytics</span></button>
             <button type="button" class="nav-sub" data-tab="analytics" data-analytics-pane="overview">Overview</button>
             <button type="button" class="nav-sub" data-tab="analytics" data-analytics-pane="realtime">Realtime</button>
             <button type="button" class="nav-sub" data-tab="analytics" data-analytics-pane="acquisition">Acquisition</button>
@@ -134,7 +146,7 @@
           </div>
           <div class="master-nav-group" data-nav-family="seo">
             <button type="button" class="nav-group-label" data-nav-toggle="seo" aria-expanded="false">SEO Management</button>
-            <button type="button" data-tab="seo" data-seo-pane="overview"><span class="nav-icon" aria-hidden="true">◆</span>Overview</button>
+            <button type="button" data-tab="seo" data-seo-pane="overview" title="SEO overview"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"/><path d="m20 20-3.5-3.5"/></svg></span><span class="ma-label">Overview</span></button>
             <button type="button" class="nav-sub" data-tab="seo" data-seo-pane="keywords">Keywords</button>
             <button type="button" class="nav-sub" data-tab="seo" data-seo-pane="groups">Keyword Groups</button>
             <button type="button" class="nav-sub" data-tab="seo" data-seo-pane="generator">Keyword Generator</button>
@@ -155,7 +167,7 @@
           </div>
           <div class="master-nav-group" data-nav-family="website">
             <button type="button" class="nav-group-label" data-nav-toggle="website" aria-expanded="false">Website Management</button>
-            <button type="button" data-tab="website" data-website-pane="images"><span class="nav-icon" aria-hidden="true">▣</span>Login Page</button>
+            <button type="button" data-tab="website" data-website-pane="images" title="Login Page"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 9h18"/></svg></span><span class="ma-label">Login Page</span></button>
             <button type="button" class="nav-sub" data-tab="website" data-website-pane="homepage">Homepage</button>
             <button type="button" class="nav-sub" data-tab="website" data-website-pane="register">Registration Page</button>
             <button type="button" class="nav-sub" data-tab="website" data-website-pane="contact">Contact Page</button>
@@ -164,7 +176,11 @@
           </div>
         </div>
         <div class="nav-foot">
-          <button class="btn-logout" type="button" id="logout" data-logout>Logout</button>
+          <button type="button" class="master-identity" id="master-side-profile">
+            <strong>Master Admin</strong>
+            <span>Profile</span>
+          </button>
+          <button class="btn-logout" type="button" id="master-side-logout">Logout</button>
         </div>
       </nav>
       <button class="master-nav-scrim" id="master-nav-scrim" type="button" hidden aria-label="Close menu"></button>
@@ -172,17 +188,42 @@
         <header class="master-topbar">
           <button class="btn master-nav-toggle" id="master-nav-toggle" type="button" aria-controls="master-app" aria-expanded="false">Menu</button>
           <div class="master-topbar-copy">
-            <p class="master-topbar-kicker">ATAV POS</p>
-            <h2 id="master-top-title">Dashboard</h2>
+            <p class="master-topbar-kicker" id="master-crumb">ATAV POS / Overview</p>
+            <h2 id="master-top-title">Overview</h2>
           </div>
           <p class="master-topbar-hint" id="master-top-hint">Shops and subscriptions</p>
-          <button class="btn master-icon-btn" id="master-notices" type="button" aria-expanded="false" aria-controls="master-notice-panel">Alerts</button>
-          <button class="btn master-icon-btn" id="master-theme" type="button">Theme</button>
-          <div class="master-notice-panel" id="master-notice-panel" hidden></div>
           <div class="master-jump">
-            <label class="master-jump-lab" for="master-jump-q">Jump</label>
-            <input id="master-jump-q" type="search" placeholder="Jump to page…" autocomplete="off" />
+            <label class="master-jump-lab" for="master-jump-q">Search pages</label>
+            <input id="master-jump-q" type="search" placeholder="Search pages" autocomplete="off" />
+            <kbd class="ma-kbd">Ctrl K</kbd>
             <div class="master-jump-list" id="master-jump-list" hidden></div>
+          </div>
+          <p class="ma-range-chip" id="master-range-chip" hidden>30 days</p>
+          <p class="ma-status" id="master-system-status"><span class="ma-dot" aria-hidden="true"></span>Checking system</p>
+          <div class="ma-menu">
+            <button class="ma-quick-btn" id="master-quick" type="button" aria-expanded="false" aria-controls="master-quick-menu">Quick actions</button>
+            <div class="ma-menu-panel" id="master-quick-menu" hidden>
+              <button type="button" data-open-tab="biz">New business</button>
+              <button type="button" data-open-tab="live">Live users</button>
+              <button type="button" data-open-tab="plans">Subscription plans</button>
+              <a href="/api/master/businesses/export">Export businesses</a>
+            </div>
+          </div>
+          <div class="ma-menu">
+            <button class="btn master-icon-btn" id="master-notices" type="button" aria-expanded="false" aria-controls="master-notice-panel" aria-label="Notifications">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 16V11a6 6 0 1 1 12 0v5l1.5 2H4.5z"/><path d="M10 19a2 2 0 0 0 4 0"/></svg>
+              <span class="ma-badge" hidden>0</span>
+            </button>
+            <div class="master-notice-panel" id="master-notice-panel" hidden></div>
+          </div>
+          <button class="btn master-icon-btn" id="master-theme" type="button" aria-pressed="false">Dark</button>
+          <div class="ma-menu" id="master-profile-wrap">
+            <div id="master-profile-slot"></div>
+            <div class="ma-menu-panel" id="master-profile-menu" hidden>
+              <button type="button" data-open-tab="profile">My profile</button>
+              <button type="button" data-open-tab="backup" data-open-pane="settings">Settings</button>
+              <button class="btn-logout" type="button" id="logout" data-logout>Logout</button>
+            </div>
           </div>
         </header>
         <div id="panel" hidden>
@@ -197,7 +238,7 @@
     <script src="./js/support.js?v=20260920deploy199" defer></script>
     <script src="./js/login-page.js?v=20261023logo1" defer></script>
     <script src="./js/master-login-page.js?v=20261011login1" defer></script>
-    <script src="./js/master.js?v=20261030live1" defer></script>
+    <script src="./js/master.js?v=20261030theme1" defer></script>
     <script src="./js/master-analytics.js?v=20261007masterux1" defer></script>
     <script src="./js/master-seo.js?v=20261007masterux1" defer></script>
   </body>

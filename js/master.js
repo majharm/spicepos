@@ -191,7 +191,7 @@ function showLogin(on) {
 }
 
 const NAV_FAMILIES = {
-  main: ["dash", "live", "profile", "biz", "users", "plans", "dsa-sales"],
+  main: ["dash", "live", "profile", "biz", "users", "plans", "fees", "dsa-sales", "health"],
   alerts: ["expiry", "alert-log"],
   people: ["managers", "staff", "support"],
   advance: ["advance", "backup", "languages", "notes", "branches", "devices", "audit", "customers"],
@@ -202,6 +202,8 @@ const NAV_FAMILIES = {
 
 const PAGE_HINTS = {
   dash: "Shops, sales, and who is signed in",
+  fees: "Yearly plan fees stored on each shop",
+  health: "Database and process status from this server",
   live: "Online only after a real click or keypress",
   profile: "Your name, address, password, and preferences",
   biz: "Create and open shops",
@@ -268,13 +270,15 @@ const WEBSITE_HINTS = {
 };
 
 const MASTER_PAGES = [
-  { tab: "dash", title: "Dashboard", keywords: "home shops overview sales revenue" },
-  { tab: "live", title: "Live users", keywords: "online offline session heartbeat" },
+  { tab: "dash", title: "Overview", keywords: "home shops overview sales revenue dashboard" },
+  { tab: "fees", title: "Payments", keywords: "fees yearly plan billing" },
+  { tab: "health", title: "System monitoring", keywords: "health database status" },
+  { tab: "live", title: "Live active users", keywords: "online offline session heartbeat" },
   { tab: "profile", title: "My profile", keywords: "password name email address timezone language" },
   { tab: "biz", title: "Businesses", keywords: "shops create open pos" },
   { tab: "users", title: "Users", keywords: "password unlock login" },
   { tab: "plans", title: "Plans", keywords: "subscription fee yearly" },
-  { tab: "dsa-sales", title: "DSA Sales", keywords: "dsa 0001 agent invoice sales report" },
+  { tab: "dsa-sales", title: "Revenue analytics", keywords: "dsa 0001 agent invoice sales report revenue" },
   { tab: "expiry", title: "Send alerts", keywords: "whatsapp email renewal" },
   { tab: "alert-log", title: "WA & Email log", keywords: "whatsapp email delivery" },
   { tab: "managers", title: "Account managers", keywords: "support assign" },
@@ -287,7 +291,7 @@ const MASTER_PAGES = [
   { tab: "notes", title: "Messages", keywords: "notification notice" },
   { tab: "branches", title: "Branches", keywords: "shop branch" },
   { tab: "devices", title: "POS devices", keywords: "till device code" },
-  { tab: "audit", title: "Audit log", keywords: "history changes" },
+  { tab: "audit", title: "Activity logs", keywords: "audit history changes" },
   { tab: "customers", title: "Customer duplicates", keywords: "merge mobile gstin email" },
   { tab: "analytics", pane: "overview", title: "Google Analytics", keywords: "traffic website" },
   { tab: "analytics", pane: "realtime", title: "Realtime", keywords: "analytics live" },
@@ -365,6 +369,7 @@ async function boot() {
     if (me.type !== "master") throw new Error("not master");
     paintMasterIdentity(me.admin);
     showLogin(false);
+    api("/api/master/health").then((health) => paintSystemStatus(health)).catch(() => paintSystemStatus({ database: "unavailable" }));
     await render();
   } catch {
     showLogin(true);
@@ -408,6 +413,9 @@ $("master-login").addEventListener("submit", async (e) => {
     if (fd.get("remember")) localStorage.setItem("pos_remember_master", String(fd.get("email") || ""));
     else localStorage.removeItem("pos_remember_master");
     showLogin(false);
+    const me = await api("/api/auth/me");
+    if (me?.admin) paintMasterIdentity(me.admin);
+    api("/api/master/health").then((health) => paintSystemStatus(health)).catch(() => paintSystemStatus({ database: "unavailable" }));
     await render();
   } catch (err) {
     if (hint) {
@@ -530,6 +538,13 @@ function bindMasterJump() {
       input.blur();
     }
   });
+  document.addEventListener("keydown", (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k" && !document.body.classList.contains("master-locked")) {
+      e.preventDefault();
+      input.focus();
+      input.select();
+    }
+  });
   document.addEventListener("click", (e) => {
     if (!e.target.closest(".master-jump")) list.hidden = true;
   });
@@ -554,24 +569,135 @@ function growthMarkup(item) {
   return `<span class="master-growth is-${dir}">${sign}${n}%</span>`;
 }
 
-function kpiButton(label, value, item, nextTab) {
+const KPI_ICONS = {
+  shop: `<svg viewBox="0 0 24 24"><path d="M3 21h18M6 21V7l6-3 6 3v14"/></svg>`,
+  users: `<svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2"/><circle cx="9.5" cy="7" r="3"/></svg>`,
+  pulse: `<svg viewBox="0 0 24 24"><path d="M3 12h4l2-5 4 10 2-5h6"/></svg>`,
+  plan: `<svg viewBox="0 0 24 24"><path d="M6 4h12v16H6zM9 8h6M9 12h6"/></svg>`,
+  sales: `<svg viewBox="0 0 24 24"><path d="M4 19V5M4 19h16"/><path d="m7 14 4-4 3 3 5-6"/></svg>`,
+  bill: `<svg viewBox="0 0 24 24"><path d="M6 3h9l5 5v13H6z"/><path d="M14 3v6h6"/></svg>`,
+};
+
+function sparklineSvg(rows, key) {
+  const list = (rows || []).slice(-24);
+  if (list.length < 2) return "";
+  const vals = list.map((row) => Number(row[key]) || 0);
+  const max = Math.max(...vals, 1);
+  const min = Math.min(...vals, 0);
+  const w = 120;
+  const h = 32;
+  const span = max - min || 1;
+  const pts = vals
+    .map((v, i) => {
+      const x = (i / (vals.length - 1)) * w;
+      const y = h - 2 - ((v - min) / span) * (h - 6);
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
+    })
+    .join(" ");
+  return `<svg class="ma-spark" viewBox="0 0 ${w} ${h}" aria-hidden="true"><polyline points="${pts}" /></svg>`;
+}
+
+function kpiButton(label, value, item, nextTab, opts = {}) {
+  const spark = opts.series ? sparklineSvg(opts.series, opts.key || "sales") : "";
   return `<button type="button" class="master-kpi" data-open-tab="${attr(nextTab || "")}">
-    <span>${attr(label)}</span>
+    <span class="ma-kpi-top"><span class="ma-kpi-icon" aria-hidden="true">${KPI_ICONS[opts.icon] || KPI_ICONS.pulse}</span>${growthMarkup(item)}</span>
+    <span class="ma-kpi-label">${attr(label)}</span>
     <strong>${value}</strong>
-    ${growthMarkup(item)}
+    ${spark}
   </button>`;
 }
 
-function masterBars(rows, key) {
+function revenueChart(rows) {
   const list = (rows || []).slice(-31);
-  const max = Math.max(1, ...list.map((row) => Number(row[key]) || 0));
   if (!list.length) return `<p class="hint">No bills in this range.</p>`;
-  return `<div class="master-bars" role="img" aria-label="Sales by day">${list
-    .map((row) => {
-      const height = Math.max(4, Math.round(((Number(row[key]) || 0) / max) * 100));
-      return `<div class="master-bar" title="${attr(row.day)} · ${attr(money(row.sales))}"><span style="height:${height}%"></span><em>${attr(String(row.day || "").slice(5))}</em></div>`;
+  const vals = list.map((row) => Number(row.sales) || 0);
+  const max = Math.max(...vals, 1);
+  const w = 640;
+  const h = 220;
+  const padX = 8;
+  const padY = 16;
+  const coords = vals.map((v, i) => {
+    const x = padX + (i / Math.max(list.length - 1, 1)) * (w - padX * 2);
+    const y = h - padY - (v / max) * (h - padY * 2);
+    return [x, y];
+  });
+  const line = coords.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(" ");
+  const area = `${coords[0][0].toFixed(1)},${h - padY} ${line} ${coords.at(-1)[0].toFixed(1)},${h - padY}`;
+  const axis = [list[0], list[Math.floor((list.length - 1) / 2)], list.at(-1)];
+  return `<div class="ma-chart" role="img" aria-label="Sales by day"><svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none"><polygon class="ma-chart-area" points="${area}" /><polyline class="ma-chart-line" points="${line}" /></svg><div class="ma-chart-axis">${axis
+    .map((row) => `<span>${attr(String(row?.day || "").slice(5))}</span>`)
+    .join("")}</div><p class="ma-chart-legend"><i></i>Sales</p></div>`;
+}
+
+function categoryDonut(rows) {
+  const list = (rows || []).filter((row) => Number(row.n) > 0).slice(0, 8);
+  const total = list.reduce((sum, row) => sum + (Number(row.n) || 0), 0);
+  if (!total) return `<p class="hint">No businesses yet.</p>`;
+  const r = 42;
+  const c = 2 * Math.PI * r;
+  let acc = 0;
+  const slices = list
+    .map((row, i) => {
+      const n = Number(row.n) || 0;
+      const len = (n / total) * c;
+      const dash = `${len.toFixed(2)} ${(c - len).toFixed(2)}`;
+      const offset = (-acc).toFixed(2);
+      acc += len;
+      return `<circle class="ma-donut-slice ma-slice-${i}" r="${r}" cx="60" cy="60" fill="none" stroke-width="14" stroke-dasharray="${dash}" stroke-dashoffset="${offset}"><title>${attr(row.label)} ${n}</title></circle>`;
     })
-    .join("")}</div>`;
+    .join("");
+  const legend = list
+    .map((row, i) => {
+      const n = Number(row.n) || 0;
+      const pct = Math.round((n / total) * 100);
+      return `<li><i class="ma-slice-${i}"></i><span>${attr(row.label)}</span><strong>${n}</strong><em>${pct}%</em></li>`;
+    })
+    .join("");
+  return `<div class="ma-donut"><svg viewBox="0 0 120 120" role="img" aria-label="Business types"><g transform="rotate(-90 60 60)">${slices}</g><text x="60" y="58" text-anchor="middle">${total}</text><text x="60" y="74" text-anchor="middle">Shops</text></svg><ul>${legend}</ul></div>`;
+}
+
+function subscriptionMix(subs) {
+  const parts = [
+    ["Active", Number(subs?.active) || 0, "is-ok"],
+    ["Expired", Number(subs?.expired) || 0, "is-bad"],
+    ["Suspended", Number(subs?.suspended) || 0, "is-warn"],
+    ["Inactive", Number(subs?.inactive) || 0, "is-muted"],
+  ];
+  const total = parts.reduce((sum, part) => sum + part[1], 0);
+  if (!total) return `<p class="hint">No subscriptions yet.</p>`;
+  return `<div class="ma-mix" role="img" aria-label="Subscription mix">${parts
+    .map(([label, n, cls]) => `<span class="${cls}" style="width:${(n / total) * 100}%" title="${attr(label)} ${n}"></span>`)
+    .join("")}</div><ul class="ma-mix-legend">${parts.map(([label, n]) => `<li><span>${attr(label)}</span><strong>${n}</strong></li>`).join("")}</ul>`;
+}
+
+function healthLines(health) {
+  if (!health) return `<p class="hint">System status is unavailable.</p>`;
+  const rows = [
+    ["Database", health.database || "—"],
+    ["Query", `${Number(health.dbMs) || 0} ms`],
+  ];
+  if (health.uptimeSeconds) rows.push(["Process uptime", `${Math.round(Number(health.uptimeSeconds) / 60)} min`]);
+  if (health.memoryRss) rows.push(["Process memory", `${Math.round(Number(health.memoryRss) / 1048576)} MB`]);
+  if (health.loadAvg != null) rows.push(["Process load", Number(health.loadAvg).toFixed(2)]);
+  return `<ul class="ma-health-list">${rows.map(([label, value]) => `<li><span>${attr(label)}</span><strong>${attr(value)}</strong></li>`).join("")}</ul>${health.note ? `<p class="hint">${attr(health.note)}</p>` : ""}`;
+}
+
+function livePreviewTable(payload) {
+  const rows = payload?.rows || [];
+  if (!rows.length) return `<p class="hint">No staff accounts in this view.</p>`;
+  const when = (value) => (value ? String(value).replace("T", " ").slice(0, 16) : "—");
+  return `<div class="table-wrap"><table class="master-live-table"><thead><tr><th>Business</th><th>User</th><th>Status</th><th>Last activity</th><th>Device</th><th>Plan</th></tr></thead><tbody>${rows
+    .map(
+      (row) => `<tr>
+        <td>${attr(row.businessName)}</td>
+        <td><strong>${attr(row.name)}</strong><span>${attr(row.role || "")}</span></td>
+        <td><span class="master-presence${row.online ? " is-on" : ""}">${row.online ? "Online" : "Offline"}</span></td>
+        <td>${attr(when(row.lastActivity))}</td>
+        <td>${attr(row.device)} · ${attr(row.browser)}</td>
+        <td>${attr(row.plan)}</td>
+      </tr>`,
+    )
+    .join("")}</tbody></table></div>`;
 }
 
 function readNoticeIds() {
@@ -588,7 +714,11 @@ function paintMasterNotices() {
   if (!panel || !button) return;
   const seen = readNoticeIds();
   const unread = masterNotices.filter((item) => !seen.has(item.id)).length;
-  button.textContent = unread ? `Alerts ${unread}` : "Alerts";
+  const badge = button.querySelector(".ma-badge");
+  if (badge) {
+    badge.hidden = !unread;
+    badge.textContent = unread > 9 ? "9+" : String(unread);
+  } else button.textContent = unread ? `Alerts ${unread}` : "Alerts";
   panel.innerHTML = masterNotices.length
     ? masterNotices
         .map(
@@ -601,12 +731,82 @@ function paintMasterNotices() {
     : `<p class="hint">No new shops, renewals, or expired plans right now.</p>`;
 }
 
+function paintThemeButton() {
+  const theme = $("master-theme");
+  if (!theme) return;
+  const dark = document.body.classList.contains("master-dark");
+  theme.textContent = dark ? "Light" : "Dark";
+  theme.setAttribute("aria-pressed", dark ? "true" : "false");
+  theme.setAttribute("aria-label", dark ? "Switch to light mode" : "Switch to dark mode");
+}
+
+function paintSystemStatus(health) {
+  const el = $("master-system-status");
+  if (!el) return;
+  if (!health) {
+    el.className = "ma-status";
+    el.innerHTML = `<span class="ma-dot" aria-hidden="true"></span>Checking system`;
+    return;
+  }
+  const ok = health.database === "connected";
+  el.className = `ma-status${ok ? " is-ok" : " is-bad"}`;
+  el.innerHTML = `<span class="ma-dot" aria-hidden="true"></span>${ok ? "System operational" : "Database unavailable"}`;
+  if (health.note) el.title = health.note;
+}
+
+function bindMasterMenu(buttonId, panelId) {
+  const button = $(buttonId);
+  const panel = $(panelId);
+  if (!button || !panel || button.dataset.boundMenu) return;
+  button.dataset.boundMenu = "1";
+  button.addEventListener("click", (event) => {
+    event.stopPropagation();
+    const open = panel.hidden;
+    document.querySelectorAll(".ma-menu-panel").forEach((el) => {
+      el.hidden = true;
+    });
+    panel.hidden = !open;
+    button.setAttribute("aria-expanded", open ? "true" : "false");
+  });
+}
+
 function bindMasterChrome() {
   const theme = $("master-theme");
   if (localStorage.getItem("pos_master_theme") === "dark") document.body.classList.add("master-dark");
+  paintThemeButton();
+  const app = $("master-app");
+  const collapse = $("master-nav-collapse");
+  if (localStorage.getItem("pos_master_collapsed") === "1") app?.classList.add("is-collapsed");
+  collapse?.setAttribute("aria-expanded", app?.classList.contains("is-collapsed") ? "false" : "true");
+  collapse?.addEventListener("click", () => {
+    app?.classList.toggle("is-collapsed");
+    const closed = app?.classList.contains("is-collapsed");
+    localStorage.setItem("pos_master_collapsed", closed ? "1" : "0");
+    collapse.setAttribute("aria-expanded", closed ? "false" : "true");
+  });
+  $("master-side-profile")?.addEventListener("click", () => setMasterTab("profile"));
+  $("master-side-logout")?.addEventListener("click", () => $("logout")?.click());
+  document.querySelectorAll(".master-topbar [data-open-tab], #master-profile-menu [data-open-tab]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const next = btn.dataset.openTab;
+      if (!next) return;
+      $("master-quick-menu") && ($("master-quick-menu").hidden = true);
+      $("master-profile-menu") && ($("master-profile-menu").hidden = true);
+      setMasterTab(next, btn.dataset.openPane);
+    });
+  });
+  bindMasterMenu("master-quick", "master-quick-menu");
+  document.addEventListener("click", (event) => {
+    if (!event.target.closest(".ma-menu")) {
+      document.querySelectorAll(".ma-menu-panel").forEach((el) => {
+        el.hidden = true;
+      });
+    }
+  });
   theme?.addEventListener("click", () => {
     document.body.classList.toggle("master-dark");
     localStorage.setItem("pos_master_theme", document.body.classList.contains("master-dark") ? "dark" : "light");
+    paintThemeButton();
   });
   $("master-notices")?.addEventListener("click", async () => {
     const panel = $("master-notice-panel");
@@ -1222,23 +1422,25 @@ function masterProfilePlace(profile) {
 }
 
 function paintMasterIdentity(admin) {
-  const foot = document.querySelector(".master-nav .nav-foot");
-  if (!foot) return;
-  let chip = document.getElementById("master-identity");
-  if (!chip) {
-    chip = document.createElement("button");
-    chip.type = "button";
-    chip.id = "master-identity";
-    chip.className = "master-identity";
-    chip.addEventListener("click", () => {
-      tab = "profile";
-      render();
-    });
-    foot.prepend(chip);
-  }
   const name = admin?.name || "Master Admin";
   const extra = [admin?.designation, admin?.email].filter(Boolean).join(" · ");
-  chip.innerHTML = `<strong>${attr(name)}</strong><span>${attr(extra || "My profile")}</span>`;
+  const html = `<strong>${attr(name)}</strong><span>${attr(extra || "My profile")}</span>`;
+  const side = $("master-side-profile");
+  if (side) side.innerHTML = html;
+  const slot = $("master-profile-slot");
+  if (!slot) return;
+  slot.innerHTML = `<button type="button" class="ma-profile-btn" id="master-identity" aria-haspopup="menu" aria-expanded="false" aria-controls="master-profile-menu">${html}</button>`;
+  $("master-identity")?.addEventListener("click", (event) => {
+    event.stopPropagation();
+    const menu = $("master-profile-menu");
+    if (!menu) return;
+    const open = menu.hidden;
+    document.querySelectorAll(".ma-menu-panel").forEach((el) => {
+      el.hidden = true;
+    });
+    menu.hidden = !open;
+    $("master-identity")?.setAttribute("aria-expanded", open ? "true" : "false");
+  });
 }
 
 function advanceCard(tabId, pane, title, blurb) {
@@ -1987,18 +2189,20 @@ function bindAlertsForm(alerts) {
 async function render() {
   stopLivePoll();
   const titles = {
-    dash: "Platform dashboard",
-    live: "Live users",
+    dash: "Overview",
+    live: "Live active users",
     profile: "My profile",
-    biz: "Businesses",
+    biz: "Business management",
+    fees: "Plan fees",
+    health: "System monitoring",
     managers: "Account managers",
-    users: "Users",
+    users: "User management",
     staff: "Staff master",
     plans: "Subscription plans",
-    "dsa-sales": "DSA Sales",
+    "dsa-sales": "Revenue analytics",
     branches: "Branches",
     devices: "POS devices",
-    audit: "Audit log",
+    audit: "Activity logs",
     customers: "Customer duplicates",
     expiry: "Send alerts",
     "alert-log": "WA Master & Email log",
@@ -2013,20 +2217,45 @@ async function render() {
     advance: "Advanced",
   };
   syncMasterNav();
-  $("panel-title").textContent = titles[tab] || "Dashboard";
-  if ($("master-top-title")) $("master-top-title").textContent = titles[tab] || "Dashboard";
+  const familyNames = {
+    main: "Overview",
+    alerts: "Notifications",
+    people: "People",
+    advance: "Advanced",
+    analytics: "Reports",
+    seo: "SEO",
+    website: "Website",
+  };
+  let family = "Overview";
+  for (const [name, tabs] of Object.entries(NAV_FAMILIES)) {
+    if (tabs.includes(tab)) {
+      family = familyNames[name] || name;
+      break;
+    }
+  }
+  const rangeNames = { today: "Today", yesterday: "Yesterday", 7: "7 days", 30: "30 days", month: "This month", prev: "Last month" };
+  $("panel-title").textContent = titles[tab] || "Overview";
+  if ($("master-top-title")) $("master-top-title").textContent = titles[tab] || "Overview";
   if ($("master-top-hint")) $("master-top-hint").textContent = currentPageHint();
+  if ($("master-crumb")) $("master-crumb").textContent = `ATAV POS / ${family}`;
+  const rangeChip = $("master-range-chip");
+  if (rangeChip) {
+    rangeChip.hidden = tab !== "dash";
+    rangeChip.textContent = rangeNames[dashRange] || "30 days";
+  }
   $("panel")?.classList.toggle("has-desk", true);
   const body = $("panel-body");
   body.innerHTML = "<p class='hint'>Loading…</p>";
   try {
     if (tab === "dash") {
-      const [d, insight, health, audit] = await Promise.all([
+      const [d, insight, health, audit, live] = await Promise.all([
         api("/api/master/dashboard"),
         api(`/api/master/insights?range=${encodeURIComponent(dashRange)}`).catch(() => null),
         api("/api/master/health").catch(() => null),
         api("/api/master/audit").catch(() => []),
+        api("/api/master/live-users?page=1&pageSize=8&sort=activity&presence=all").catch(() => null),
       ]);
+      paintSystemStatus(health);
       const t = d.totals;
       const k = insight?.kpis || {};
       if (insight?.notices) {
@@ -2042,8 +2271,9 @@ async function render() {
         ["prev", "Last month"],
       ];
       const subs = insight?.subscriptions || {};
+      const auditRows = (Array.isArray(audit) ? audit : []).slice(0, 6);
       body.innerHTML = masterDesk(
-        "Platform",
+        "Overview",
         "Dashboard",
         insight?.feeNote || "Shops, subscriptions, and a shortcut into any POS.",
         [
@@ -2056,46 +2286,55 @@ async function render() {
           .map(([key, label]) => `<button type="button" class="btn${dashRange === key ? " primary" : ""}" data-dash-range="${attr(key)}">${attr(label)}</button>`)
           .join("")}</div>
         <div class="master-kpi-grid">
-          ${kpiButton("Businesses", k.businesses?.value ?? t.businesses, k.newBusinesses, "biz")}
-          ${kpiButton("Registered users", k.users?.value ?? t.users, k.newUsers, "live")}
-          ${kpiButton("Online now", k.online?.value ?? 0, null, "live")}
-          ${kpiButton("Active today", k.activeToday?.value ?? 0, null, "live")}
-          ${kpiButton("Live sessions", k.sessions?.value ?? 0, null, "live")}
-          ${kpiButton("Active plans", k.activeSubscriptions?.value ?? t.active, null, "plans")}
-          ${kpiButton("Expired plans", k.expiredSubscriptions?.value ?? t.expired, null, "biz")}
-          ${kpiButton("Trial plans", k.trial?.value ?? t.trial, null, "plans")}
-          ${kpiButton("Yearly fees", money(k.arr?.value ?? t.subscriptionRevenue), null, "plans")}
-          ${kpiButton("Fee / month", money(k.mrr?.value ?? 0), null, "plans")}
-          ${kpiButton("Today's sales", money(k.todaySales?.value ?? t.todaySales), k.todaySales, "dsa-sales")}
-          ${kpiButton("Range sales", money(k.rangeSales?.value ?? 0), k.rangeSales, "dsa-sales")}
-          ${kpiButton("This month", money(k.monthSales?.value ?? 0), k.monthSales, "dsa-sales")}
-          ${kpiButton("Invoices", k.invoices?.value ?? t.transactions, k.invoices, "dsa-sales")}
+          ${kpiButton("Businesses", k.businesses?.value ?? t.businesses, null, "biz", { icon: "shop" })}
+          ${kpiButton("New businesses", k.newBusinesses?.value ?? 0, k.newBusinesses, "biz", { icon: "shop" })}
+          ${kpiButton("Registered users", k.users?.value ?? t.users, null, "live", { icon: "users" })}
+          ${kpiButton("New users", k.newUsers?.value ?? 0, k.newUsers, "live", { icon: "users" })}
+          ${kpiButton("Online now", k.online?.value ?? 0, null, "live", { icon: "pulse" })}
+          ${kpiButton("Active today", k.activeToday?.value ?? 0, null, "live", { icon: "pulse" })}
+          ${kpiButton("Live sessions", k.sessions?.value ?? 0, null, "live", { icon: "pulse" })}
+          ${kpiButton("Active plans", k.activeSubscriptions?.value ?? t.active, null, "plans", { icon: "plan" })}
+          ${kpiButton("Expired plans", k.expiredSubscriptions?.value ?? t.expired, null, "biz", { icon: "plan" })}
+          ${kpiButton("Trial plans", k.trial?.value ?? t.trial, null, "plans", { icon: "plan" })}
+          ${kpiButton("Yearly fees", money(k.arr?.value ?? t.subscriptionRevenue), null, "plans", { icon: "bill" })}
+          ${kpiButton("Fee / month", money(k.mrr?.value ?? 0), null, "plans", { icon: "bill" })}
+          ${kpiButton("Today's sales", money(k.todaySales?.value ?? t.todaySales), k.todaySales, "dsa-sales", { icon: "sales" })}
+          ${kpiButton("Range sales", money(k.rangeSales?.value ?? 0), k.rangeSales, "dsa-sales", { icon: "sales", series: insight?.series, key: "sales" })}
+          ${kpiButton("This month", money(k.monthSales?.value ?? 0), k.monthSales, "dsa-sales", { icon: "sales" })}
+          ${kpiButton("Invoices", k.invoices?.value ?? t.transactions, k.invoices, "dsa-sales", { icon: "bill", series: insight?.series, key: "bills" })}
         </div>
         <div class="master-insight-grid">
-          <section class="master-panel">
-            <h3>${attr(insight?.range?.label || "Sales")}</h3>
-            ${masterBars(insight?.series || [], "sales")}
+          <section class="master-panel ma-span-2">
+            <div class="ma-section-head"><h3>${attr(insight?.range?.label || "Sales")}</h3></div>
+            ${revenueChart(insight?.series || [])}
           </section>
           <section class="master-panel">
             <h3>Business types</h3>
-            ${(insight?.categories || []).length ? (insight.categories.slice(0, 8).map((row) => {
-              const max = Math.max(...insight.categories.map((item) => Number(item.n) || 0), 1);
-              return `<div class="master-cat"><span>${attr(row.label)}</span><em style="width:${Math.round(((Number(row.n) || 0) / max) * 100)}%"></em><strong>${Number(row.n) || 0}</strong></div>`;
-            }).join("")) : `<p class="hint">No businesses yet.</p>`}
+            ${categoryDonut(insight?.categories || [])}
           </section>
           <section class="master-panel">
-            <h3>Subscriptions</h3>
-            <p class="master-sub-line">Active ${Number(subs.active) || 0} · Expired ${Number(subs.expired) || 0} · Suspended ${Number(subs.suspended) || 0} · Inactive ${Number(subs.inactive) || 0}</p>
+            <h3>Subscription mix</h3>
+            ${subscriptionMix(subs)}
             <h3>Renewals in 14 days</h3>
             ${(insight?.renewals || []).length ? `<ul class="master-renewals">${insight.renewals.map((row) => `<li><strong>${attr(row.name)}</strong><span>${attr(row.expires)}</span></li>`).join("")}</ul>` : `<p class="hint">No plan expires in the next 14 days.</p>`}
-            ${health ? `<p class="master-health">Database ${attr(health.database)} · ${Number(health.dbMs) || 0} ms${health.uptimeSeconds ? ` · process up ${Math.round(Number(health.uptimeSeconds) / 60)} min` : ""}${health.memoryRss ? ` · memory ${Math.round(Number(health.memoryRss) / 1048576)} MB` : ""}${health.loadAvg != null ? ` · load ${Number(health.loadAvg).toFixed(2)}` : ""}</p>` : ""}
-            <p class="hint">${attr(insight?.failedPaymentsNote || health?.note || "")}</p>
+            <p class="hint">${attr(insight?.failedPaymentsNote || "")}</p>
           </section>
           <section class="master-panel">
-            <h3>Recent admin actions</h3>
-            ${(Array.isArray(audit) ? audit : []).slice(0, 6).length ? `<ul class="master-renewals">${(Array.isArray(audit) ? audit : []).slice(0, 6).map((row) => `<li><strong>${attr(row.action || "Action")}</strong><span>${attr(row.actor_name || "")} · ${attr(String(row.created_at || "").replace("T", " ").slice(0, 16))}</span></li>`).join("")}</ul>` : `<p class="hint">No audit rows yet.</p>`}
+            <div class="ma-section-head"><h3>System health</h3><button class="btn" type="button" data-open-tab="health">View details</button></div>
+            ${healthLines(health)}
+          </section>
+          <section class="master-panel">
+            <div class="ma-section-head"><h3>Recent activity</h3><button class="btn" type="button" data-open-tab="audit">View all</button></div>
+            ${auditRows.length ? `<ul class="master-renewals">${auditRows.map((row) => `<li><strong>${attr(row.action || "Action")}</strong><span>${attr(row.actor_name || "")} · ${attr(String(row.created_at || "").replace("T", " ").slice(0, 16))}</span></li>`).join("")}</ul>` : `<p class="hint">No audit rows yet.</p>`}
           </section>
         </div>
+        <section class="master-panel">
+          <div class="ma-section-head">
+            <div><h3>Live users</h3><p class="hint">${Number(live?.counts?.online ?? k.online?.value ?? 0)} online after a click or keypress in the last 5 minutes</p></div>
+            <button class="btn" type="button" data-open-tab="live">View all</button>
+          </div>
+          ${livePreviewTable(live)}
+        </section>
         <div class="master-shop-toolbar">
         <label class="master-shop-search">Search shops
           <input id="master-shop-q" type="search" placeholder="Name, DSA, plan, or status" autocomplete="off" />
@@ -2191,7 +2430,7 @@ async function render() {
       };
       body.innerHTML = masterDesk(
         "People",
-        "Live users",
+        "Live active users",
         "Online means a click or keypress in the last 5 minutes. An open tab with no activity stays offline.",
         [
           { label: "Registered", value: counts.registered || 0 },
@@ -2290,6 +2529,75 @@ async function render() {
         if (tab !== "live" || document.hidden) return;
         reload().catch(() => {});
       }, 20000);
+    } else if (tab === "fees") {
+      const rows = await api("/api/master/businesses");
+      const list = Array.isArray(rows) ? rows : [];
+      const activeFee = list.reduce((sum, row) => {
+        const status = String(row.computed_status || row.status || "").toLowerCase();
+        return status === "active" ? sum + (Number(row.fee_monthly) || 0) : sum;
+      }, 0);
+      const paintFees = (q) => {
+        const query = String(q || "").trim().toLowerCase();
+        const shown = list.filter((row) => {
+          const hay = `${row.name || ""} ${row.plan_name || ""} ${row.plan_id || ""} ${row.computed_status || row.status || ""}`.toLowerCase();
+          return !query || hay.includes(query);
+        });
+        $("fees-body").innerHTML = shown.length
+          ? shown
+              .map(
+                (row) => `<tr>
+              <td><strong>${attr(row.name)}</strong></td>
+              <td>${attr(row.plan_name || row.plan_id || "—")}</td>
+              <td>${money(row.fee_monthly)}</td>
+              <td>${statusChip(row.computed_status || row.status)}</td>
+              <td>${attr(row.subscription_expires_at ? String(row.subscription_expires_at).slice(0, 10) : "—")}</td>
+            </tr>`,
+              )
+              .join("")
+          : `<tr><td colspan="5">No shops match.</td></tr>`;
+        $("fees-count").textContent = `${shown.length} of ${list.length} shops`;
+      };
+      body.innerHTML = masterDesk(
+        "Billing",
+        "Plan fees",
+        "Yearly plan fee stored on each shop. Card payments and gateway failures are not stored.",
+        [
+          { label: "Shops", value: list.length },
+          { label: "Active yearly fees", value: money(activeFee) },
+        ],
+        `<div class="master-live-filters">
+          <label>Search <input id="fees-q" type="search" placeholder="Shop, plan, or status" /></label>
+          <p class="hint" id="fees-count"></p>
+        </div>
+        <div class="table-wrap"><table class="master-data data"><thead><tr>
+          <th>Business</th><th>Plan</th><th>Yearly fee</th><th>Status</th><th>Expires</th>
+        </tr></thead><tbody id="fees-body"></tbody></table></div>`,
+      );
+      paintFees("");
+      $("fees-q")?.addEventListener("input", () => paintFees($("fees-q").value));
+    } else if (tab === "health") {
+      const [health, auditRows] = await Promise.all([
+        api("/api/master/health"),
+        api("/api/master/audit").catch(() => []),
+      ]);
+      paintSystemStatus(health);
+      const recent = (Array.isArray(auditRows) ? auditRows : []).slice(0, 12);
+      body.innerHTML = masterDesk(
+        "Platform",
+        "System monitoring",
+        health?.note || "Database and process figures returned by this server.",
+        [
+          { label: "Database", value: health?.database || "—" },
+          { label: "Query", value: `${Number(health?.dbMs) || 0} ms` },
+        ],
+        `<div class="master-insight-grid">
+          <section class="master-panel">${healthLines(health)}</section>
+          <section class="master-panel">
+            <h3>Recent activity</h3>
+            ${recent.length ? `<ul class="master-renewals">${recent.map((row) => `<li><strong>${attr(row.action || "Action")}</strong><span>${attr(row.actor_name || "")} · ${attr(String(row.created_at || "").replace("T", " ").slice(0, 16))}</span></li>`).join("")}</ul>` : `<p class="hint">No audit rows yet.</p>`}
+          </section>
+        </div>`,
+      );
     } else if (tab === "biz") {
       const [rows, plans, managers] = await Promise.all([
         api("/api/master/businesses"),
@@ -2308,7 +2616,7 @@ async function render() {
       const trialN = rows.filter((b) => /trial/.test(String(b.computed_status || b.plan_name || "").toLowerCase())).length;
       body.innerHTML = `<div class="items-desk master-desk">
         <p class="master-export-row"><a class="btn" href="/api/master/businesses/export">Export CSV</a></p>
-        ${masterHero("Platform", "Businesses", "Add or edit a shop, set login, and open POS. Status and plan sit on each shop card.", [
+        ${masterHero("Platform", "Business management", "Add or edit a shop, set login, and open POS. Status and plan sit on each shop card.", [
           { label: "Shops", value: rows.length },
           { label: "Active", value: activeN },
           { label: "Expired", value: expiredN, warn: expiredN > 0 },
@@ -2972,7 +3280,7 @@ async function render() {
       const lockedN = rows.filter((u) => /lock/i.test(accountStatusLabel(u))).length;
       body.innerHTML = masterDesk(
         "Platform",
-        "Users",
+        "User management",
         "Set a login password for any shop user, or unlock an account after too many failed sign-ins.",
         [
           { label: "Users", value: rows.length },
@@ -3043,7 +3351,7 @@ async function render() {
       const rows = await api("/api/master/plans");
       body.innerHTML = masterDesk(
         "Platform",
-        "Plans",
+        "Subscription plans",
         "Fees are yearly. Use Edit to change an existing plan. A new code creates a plan.",
         [{ label: "Plans", value: rows.length }],
         `<form class="settings wide" id="plan-form">
@@ -3424,7 +3732,7 @@ async function render() {
       const rows = await api("/api/master/audit");
       body.innerHTML = masterDesk(
         "Advance",
-        "Audit log",
+        "Activity logs",
         "Who changed what across the platform.",
         [{ label: "Rows", value: rows.length }],
         `${masterListToolbar("Search actor, action, or shop…", rows.length)}
