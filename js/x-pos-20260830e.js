@@ -275,6 +275,8 @@
           t.setAttribute("aria-selected", on ? "true" : "false");
         });
         const signup = tab.dataset.panel === "signup";
+        const forgotPanel = document.getElementById("forgot-panel");
+        if (forgotPanel) forgotPanel.hidden = true;
         loginForm.hidden = signup;
         if (signupForm) signupForm.hidden = !signup;
         card?.classList.toggle("signup", signup);
@@ -454,26 +456,130 @@
       });
     }
 
+    const forgotPanel = document.getElementById("forgot-panel");
+    const forgotHint = document.getElementById("forgot-hint");
+
+    function showForgotHint(message, isError) {
+      if (!forgotHint) return;
+      forgotHint.textContent = message || "";
+      forgotHint.className = isError ? "hint error" : "hint";
+    }
+
+    function openForgotPanel() {
+      if (!forgotPanel) return;
+      const idInput = document.getElementById("forgot-id");
+      const loginId = document.getElementById("login-identifier");
+      if (idInput && loginId && !idInput.value) idInput.value = loginId.value || "";
+      forgotPanel.hidden = false;
+      loginForm.hidden = true;
+      if (signupForm) signupForm.hidden = true;
+      idInput?.focus();
+      forgotPanel.scrollIntoView({ block: "nearest" });
+    }
+
+    function closeForgotPanel() {
+      if (forgotPanel) forgotPanel.hidden = true;
+      loginForm.hidden = false;
+      document.getElementById("login-identifier")?.focus();
+    }
+
     document.querySelector(".auth-forgot")?.addEventListener("click", (e) => {
-      const el = document.getElementById("login-support");
-      const hint = document.getElementById("hint");
-      if (el && !el.hidden) return;
+      const href = String(e.currentTarget.getAttribute("href") || "");
+      if (/^https?:\/\//i.test(href)) return;
       e.preventDefault();
-      if (hint) {
-        hint.className = "hint";
-        hint.textContent = "Ask your business admin or ATAV support to reset the password.";
+      openForgotPanel();
+    });
+
+    document.getElementById("forgot-back")?.addEventListener("click", () => {
+      closeForgotPanel();
+    });
+
+    forgotPanel?.addEventListener("submit", (e) => {
+      e.preventDefault();
+      document.getElementById("forgot-save")?.click();
+    });
+
+    document.getElementById("forgot-send")?.addEventListener("click", async () => {
+      const btn = document.getElementById("forgot-send");
+      const identifier = String(document.getElementById("forgot-id")?.value || "").trim();
+      if (!identifier) {
+        showForgotHint("Enter the email, username, or mobile on the account.", true);
+        return;
       }
-      el?.scrollIntoView({ block: "nearest" });
+      if (btn) btn.disabled = true;
+      showForgotHint("Sending a sign-in code…", false);
+      try {
+        const { res, data } = await window.posRequest("/api/auth/forgot-password", {
+          method: "POST",
+          body: JSON.stringify({ identifier }),
+        });
+        if (!res.ok) throw new Error(data.error || "Could not send a sign-in code");
+        showForgotHint(data.message || "Check your email for the code.", false);
+        document.getElementById("forgot-code")?.focus();
+      } catch (err) {
+        showForgotHint(err.message, true);
+      } finally {
+        if (btn) btn.disabled = false;
+      }
+    });
+
+    document.getElementById("forgot-save")?.addEventListener("click", async () => {
+      const btn = document.getElementById("forgot-save");
+      const identifier = String(document.getElementById("forgot-id")?.value || "").trim();
+      const code = String(document.getElementById("forgot-code")?.value || "").replace(/\D/g, "");
+      const password = String(document.getElementById("forgot-next")?.value || "");
+      const confirm = String(document.getElementById("forgot-confirm")?.value || "");
+      if (!identifier || code.length !== 6) {
+        showForgotHint("Enter the account and the 6-digit code from the email.", true);
+        return;
+      }
+      if (password.length < 8) {
+        showForgotHint("Password must be 8+ characters", true);
+        return;
+      }
+      if (password !== confirm) {
+        showForgotHint("New password and confirm password do not match.", true);
+        return;
+      }
+      if (btn) btn.disabled = true;
+      showForgotHint("Saving the new password…", false);
+      try {
+        const { res, data } = await window.posRequest("/api/auth/forgot-password/confirm", {
+          method: "POST",
+          body: JSON.stringify({ identifier, code, password }),
+        });
+        if (!res.ok) throw new Error(data.error || "Could not save the password");
+        const nextPass = document.getElementById("login-password");
+        const loginId = document.getElementById("login-identifier");
+        if (loginId) loginId.value = identifier;
+        if (nextPass) nextPass.value = "";
+        closeForgotPanel();
+        const hint = document.getElementById("hint");
+        if (hint) {
+          hint.className = "hint";
+          hint.textContent = data.message || "Password saved. Sign in with the new password.";
+        }
+      } catch (err) {
+        showForgotHint(err.message, true);
+      } finally {
+        if (btn) btn.disabled = false;
+      }
     });
 
     window.posRequest("/api/support-contact")
       .then(({ data: s }) => {
-        const el = document.getElementById("login-support");
-        if (!el) return;
         const html = window.SupportPage?.loginHtml(s) || "";
         if (!html) return;
-        el.innerHTML = html;
-        el.hidden = false;
+        const el = document.getElementById("login-support");
+        const help = document.getElementById("forgot-help");
+        if (el) {
+          el.innerHTML = html;
+          el.hidden = false;
+        }
+        if (help) {
+          help.innerHTML = html;
+          help.hidden = false;
+        }
       })
       .catch(() => {});
   }

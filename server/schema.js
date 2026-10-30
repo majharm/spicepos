@@ -216,6 +216,8 @@ export async function ensureSchema() {
   await addColumn("staff_users", "permissions_json", "TEXT NULL");
   await addColumn("staff_users", "failed_logins", "INT NOT NULL DEFAULT 0");
   await addColumn("staff_users", "locked_until", "TIMESTAMP(3) NULL");
+  await addColumn("staff_users", "password_reset_hash", "VARCHAR(128) NULL");
+  await addColumn("staff_users", "password_reset_expires", "TIMESTAMP(3) NULL");
   await addColumn("staff_users", "locale", "VARCHAR(16) NULL");
 
   await addColumn("staff_sessions", "ip", "VARCHAR(64) NULL");

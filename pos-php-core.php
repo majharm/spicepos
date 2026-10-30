@@ -714,6 +714,101 @@ function pos_ensure_staff_lock_columns() {
   ]);
 }
 
+function pos_ensure_password_reset_columns() {
+  static $done = false;
+  if ($done) return;
+  $done = true;
+  pos_ensure_columns("staff_users", [
+    "password_reset_hash" => "VARCHAR(128) NULL",
+    "password_reset_expires" => "TIMESTAMP(3) NULL",
+  ]);
+}
+
+function pos_find_staff_by_identifier($identifier) {
+  $id = trim((string) $identifier);
+  if ($id === "") return null;
+  $low = strtolower($id);
+  $rows = pos_q(
+    "SELECT * FROM staff_users WHERE LOWER(email) = ? OR LOWER(IFNULL(username,'')) = ? OR mobile = ? OR clerk_user_id = ? LIMIT 1",
+    "ssss",
+    [$low, $low, $id, $id]
+  );
+  return $rows[0] ?? null;
+}
+
+function pos_staff_email($user) {
+  $email = trim((string) ($user["email"] ?? ""));
+  if ($email !== "" && filter_var($email, FILTER_VALIDATE_EMAIL)) return $email;
+  return "";
+}
+
+function pos_forgot_password_start($identifier) {
+  pos_ensure_password_reset_columns();
+  $generic = [
+    "ok" => true,
+    "message" => "If that account has an email, a sign-in code is on the way. Enter it below with a new password.",
+  ];
+  $user = pos_find_staff_by_identifier($identifier);
+  if (!$user || ($user["status"] ?? "") !== "active") return $generic;
+  $email = pos_staff_email($user);
+  if ($email === "") {
+    return [
+      "ok" => true,
+      "needsSupport" => true,
+      "message" => "This account has no email. Use the support links below to reset the password.",
+    ];
+  }
+  $expires = (string) ($user["password_reset_expires"] ?? "");
+  if ($expires !== "" && strtotime($expires) > time() + 14 * 60) {
+    return [
+      "ok" => true,
+      "message" => "A code was just sent. Check your email, then enter it with a new password.",
+    ];
+  }
+  $code = str_pad((string) random_int(0, 999999), 6, "0", STR_PAD_LEFT);
+  $hash = pos_sha256($user["id"] . ":" . $code);
+  $until = date("Y-m-d H:i:s", time() + 15 * 60);
+  pos_q(
+    "UPDATE staff_users SET password_reset_hash = ?, password_reset_expires = ? WHERE id = ?",
+    "sss",
+    [$hash, $until, $user["id"]]
+  );
+  $text = "Your ATAV POS sign-in code is {$code}. It expires in 15 minutes. If you did not ask for this, ignore this email.";
+  $html = "<p>Your ATAV POS sign-in code is <strong>" . htmlspecialchars($code, ENT_QUOTES, "UTF-8") . "</strong>.</p><p>It expires in 15 minutes. If you did not ask for this, ignore this email.</p>";
+  $sent = pos_send_mail($email, "ATAV POS sign-in code", $text, $html);
+  if (empty($sent["ok"])) {
+    pos_q(
+      "UPDATE staff_users SET password_reset_hash = NULL, password_reset_expires = NULL WHERE id = ?",
+      "s",
+      [$user["id"]]
+    );
+    throw new Exception("Could not email a sign-in code. Use Contact Support if you still cannot sign in.");
+  }
+  return $generic;
+}
+
+function pos_forgot_password_confirm($identifier, $code, $password) {
+  pos_ensure_password_reset_columns();
+  $user = pos_find_staff_by_identifier($identifier);
+  $code = preg_replace("/\\D/", "", (string) $code);
+  $expires = (string) ($user["password_reset_expires"] ?? "");
+  $hash = (string) ($user["password_reset_hash"] ?? "");
+  $expect = $user ? pos_sha256($user["id"] . ":" . $code) : "";
+  $fresh = $expires !== "" && strtotime($expires) >= time();
+  $match = $hash !== "" && strlen($hash) === strlen($expect) && hash_equals($hash, $expect);
+  if (!$user || ($user["status"] ?? "") !== "active" || strlen($code) !== 6 || !$match || !$fresh) {
+    throw new Exception("That code does not match. Request a new one.");
+  }
+  if (strlen((string) $password) < 8) throw new Exception("Password must be 8+ characters");
+  pos_set_staff_password($user["id"], $password);
+  pos_q(
+    "UPDATE staff_users SET password_reset_hash = NULL, password_reset_expires = NULL WHERE id = ?",
+    "s",
+    [$user["id"]]
+  );
+  return ["ok" => true, "message" => "Password saved. Sign in with the new password."];
+}
+
 function pos_unlock_staff_user($id) {
   pos_ensure_staff_lock_columns();
   $rows = pos_q("SELECT id, email FROM staff_users WHERE id = ? LIMIT 1", "s", [$id]);
@@ -3516,6 +3611,17 @@ function pos_php_dispatch($path, $method, $rawBody) {
           "subscription_expires_at" => $business["subscription_expires_at"] ?? null,
         ],
       ]);
+    }
+
+    if ($path === "auth/forgot-password" && $method === "POST") {
+      pos_send(200, pos_forgot_password_start($body["identifier"] ?? ""));
+    }
+    if ($path === "auth/forgot-password/confirm" && $method === "POST") {
+      pos_send(200, pos_forgot_password_confirm(
+        $body["identifier"] ?? "",
+        $body["code"] ?? "",
+        $body["password"] ?? ""
+      ));
     }
 
     if ($path === "auth/signup" && $method === "POST") {

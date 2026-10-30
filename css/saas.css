@@ -824,6 +824,28 @@ body.auth-body::-webkit-scrollbar-thumb {
   text-decoration: none;
 }
 .auth-forgot:hover { text-decoration: underline; }
+.forgot-panel h2 {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 650;
+  color: #111827;
+}
+.forgot-panel .auth-note { margin: 0; }
+#forgot-help {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+}
+#forgot-help[hidden] { display: none; }
+#forgot-back.linkish {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  color: #0b5fff;
+  font: 600 13px/1.4 inherit;
+  cursor: pointer;
+}
 .auth-shell-zoho .auth-card label {
   color: #374151;
   font-weight: 600;

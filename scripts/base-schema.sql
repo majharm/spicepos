@@ -77,6 +77,8 @@ CREATE TABLE IF NOT EXISTS staff_users (
   username VARCHAR(64) NULL,
   failed_logins INT NOT NULL DEFAULT 0,
   locked_until TIMESTAMP(3) NULL,
+  password_reset_hash VARCHAR(128) NULL,
+  password_reset_expires TIMESTAMP(3) NULL,
   created_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
   updated_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
   INDEX (business_id),

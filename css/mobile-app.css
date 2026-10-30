@@ -169,6 +169,20 @@
     text-decoration: none;
     font-size: 13px;
   }
+  body.auth-body.m-auth-form #forgot-panel:not([hidden]) {
+    display: grid !important;
+    gap: 12px;
+    margin-top: 8px;
+  }
+  body.auth-body.m-auth-form #forgot-panel .btn {
+    width: 100%;
+    min-height: 48px;
+  }
+  body.auth-body.m-auth-form #forgot-help:not([hidden]) {
+    display: flex !important;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
 
   body.m-app.analytics-home #view-topbar,
   body.m-app.analytics-home .session-bar,

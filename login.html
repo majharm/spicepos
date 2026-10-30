@@ -9,9 +9,9 @@
     <link rel="icon" href="./favicon.svg" />
     <link rel="preload" as="image" href="./assets/login-atav-navratri-dussehra.jpg?v=20261010nav2" />
     <link rel="stylesheet" href="./css/pos.css?v=20260905deploy136" />
-    <link rel="stylesheet" href="./css/saas.css?v=20260919loginp1" />
+    <link rel="stylesheet" href="./css/saas.css?v=20261030forgot1" />
     <link rel="stylesheet" href="./css/login-page.css?v=20261023sub1" />
-    <link rel="stylesheet" href="./css/mobile-app.css?v=20261023logo1" />
+    <link rel="stylesheet" href="./css/mobile-app.css?v=20261030forgot1" />
   </head>
   <body class="auth-body auth-zoho">
     <section id="m-welcome" class="m-welcome" aria-label="Welcome to ATAV POS">
@@ -144,6 +144,28 @@
               Remember me
             </label>
             <p class="hint" id="hint"></p>
+          </form>
+
+          <form id="forgot-panel" class="forgot-panel" hidden>
+            <h2>Reset password</h2>
+            <p class="auth-note">Enter the email or mobile on the account. We email a 6-digit code, then you choose a new password.</p>
+            <label>Email, username or mobile
+              <input id="forgot-id" name="identifier" autocomplete="username" inputmode="email" placeholder="Email, username or mobile" />
+            </label>
+            <button class="btn" type="button" id="forgot-send">Email me a code</button>
+            <label>6-digit code
+              <input id="forgot-code" name="code" inputmode="numeric" maxlength="6" autocomplete="one-time-code" placeholder="000000" />
+            </label>
+            <label>New password
+              <input id="forgot-next" name="password" type="password" autocomplete="new-password" minlength="8" placeholder="At least 8 characters" />
+            </label>
+            <label>Confirm new password
+              <input id="forgot-confirm" name="confirm" type="password" autocomplete="new-password" minlength="8" />
+            </label>
+            <button class="btn primary" type="button" id="forgot-save">Save new password</button>
+            <p class="hint" id="forgot-hint"></p>
+            <div id="forgot-help" hidden></div>
+            <p class="auth-note"><button type="button" id="forgot-back" class="linkish">Back to sign in</button></p>
           </form>
 
           <form id="signup-form" hidden>
@@ -318,7 +340,7 @@
     <script src="./js/support.js?v=20260905deploy136"></script>
     <script src="./js/pos-api.js?v=20261023login1"></script>
     <script src="./js/login-page.js?v=20261023logo1"></script>
-    <script src="./js/x-pos-20260830e.js?v=20261023sub1"></script>
+    <script src="./js/x-pos-20260830e.js?v=20261030forgot1"></script>
     <script src="./js/mobile-app.js?v=20261023logo1"></script>
     <script src="./js/ga4.js?v=20260927seo241" defer></script>
   </body>

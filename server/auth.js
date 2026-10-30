@@ -4,7 +4,7 @@ import { runTenant } from "./context.js";
 import { sha256, newToken, audit } from "./audit.js";
 import { defaultPerms, displayName, can } from "./roles.js";
 import { registerBusiness } from "./onboard.js";
-import { sendWelcomeSignup, publicLoginUrl } from "./mail.js";
+import { sendWelcomeSignup, publicLoginUrl, sendMail } from "./mail.js";
 import { notifySignupAdmin, sendWelcomeAlerts } from "./alerts.js";
 import { canonApiUrl } from "./http-path.js";
 import { normalizeLocale } from "./i18n.js";
@@ -252,6 +252,18 @@ export function requireBusinessAdmin(req, res, next) {
   next();
 }
 
+function staffEmail(user) {
+  const email = String(user?.email || "").trim();
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ? email : "";
+}
+
+function sameHash(a, b) {
+  const left = Buffer.from(String(a));
+  const right = Buffer.from(String(b));
+  if (left.length !== right.length) return false;
+  return crypto.timingSafeEqual(left, right);
+}
+
 async function findStaff(identifier) {
   const id = String(identifier || "").trim();
   if (!id) return null;
@@ -378,6 +390,87 @@ export function registerAuth(app) {
       });
     } catch (err) {
       res.status(500).json({ error: String(err.message) });
+    }
+  });
+
+  app.post("/api/auth/forgot-password", async (req, res) => {
+    const generic = {
+      ok: true,
+      message:
+        "If that account has an email, a sign-in code is on the way. Enter it below with a new password.",
+    };
+    try {
+      const user = await findStaff(req.body?.identifier);
+      if (!user || user.status !== "active") {
+        res.json(generic);
+        return;
+      }
+      const email = staffEmail(user);
+      if (!email) {
+        res.json({
+          ok: true,
+          needsSupport: true,
+          message: "This account has no email. Use the support links below to reset the password.",
+        });
+        return;
+      }
+      const expiresAt = user.password_reset_expires ? new Date(user.password_reset_expires).getTime() : 0;
+      if (expiresAt > Date.now() + 14 * 60 * 1000) {
+        res.json({
+          ok: true,
+          message: "A code was just sent. Check your email, then enter it with a new password.",
+        });
+        return;
+      }
+      const code = String(crypto.randomInt(0, 1000000)).padStart(6, "0");
+      const until = new Date(Date.now() + 15 * 60 * 1000);
+      await query(
+        "UPDATE staff_users SET password_reset_hash = ?, password_reset_expires = ? WHERE id = ?",
+        [sha256(`${user.id}:${code}`), until, user.id],
+      );
+      const text = `Your ATAV POS sign-in code is ${code}. It expires in 15 minutes. If you did not ask for this, ignore this email.`;
+      const html = `<p>Your ATAV POS sign-in code is <strong>${code}</strong>.</p><p>It expires in 15 minutes. If you did not ask for this, ignore this email.</p>`;
+      const sent = await sendMail({ to: email, subject: "ATAV POS sign-in code", text, html });
+      if (!sent?.ok) {
+        await query(
+          "UPDATE staff_users SET password_reset_hash = NULL, password_reset_expires = NULL WHERE id = ?",
+          [user.id],
+        );
+        res.status(400).json({
+          error: "Could not email a sign-in code. Use Contact Support if you still cannot sign in.",
+        });
+        return;
+      }
+      res.json(generic);
+    } catch (err) {
+      res.status(400).json({ error: String(err.message || "Could not send a sign-in code") });
+    }
+  });
+
+  app.post("/api/auth/forgot-password/confirm", async (req, res) => {
+    try {
+      const user = await findStaff(req.body?.identifier);
+      const code = String(req.body?.code || "").replace(/\D/g, "");
+      const password = String(req.body?.password || "");
+      const expiresAt = user?.password_reset_expires ? new Date(user.password_reset_expires).getTime() : 0;
+      const expect = user ? sha256(`${user.id}:${code}`) : "";
+      const hash = String(user?.password_reset_hash || "");
+      const match = hash && expect && hash.length === expect.length && sameHash(hash, expect);
+      if (!user || user.status !== "active" || code.length !== 6 || !match || !expiresAt || expiresAt < Date.now()) {
+        res.status(400).json({ error: "That code does not match. Request a new one." });
+        return;
+      }
+      if (password.length < 8) {
+        res.status(400).json({ error: "Password must be 8+ characters" });
+        return;
+      }
+      await query(
+        "UPDATE staff_users SET password_hash = ?, failed_logins = 0, locked_until = NULL, password_reset_hash = NULL, password_reset_expires = NULL WHERE id = ?",
+        [await hashPassword(password), user.id],
+      );
+      res.json({ ok: true, message: "Password saved. Sign in with the new password." });
+    } catch (err) {
+      res.status(400).json({ error: String(err.message || "Could not save the password") });
     }
   });
 
