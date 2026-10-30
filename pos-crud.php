@@ -408,6 +408,32 @@ function pos_insert_pack_lines($packId, $items, $bid) {
   }
 }
 
+function pos_supplier_write_fields($body) {
+  $body = is_array($body) ? $body : [];
+  $name = trim((string) ($body["name"] ?? ""));
+  if ($name === "") return ["error" => "Supplier name is required"];
+  if (strlen($name) > 180) $name = substr($name, 0, 180);
+  $email = trim((string) ($body["email"] ?? ""));
+  if ($email !== "" && (strlen($email) > 160 || !preg_match('/^[^\s@]+@[^\s@]+\.[^\s@]+$/', $email))) {
+    return ["error" => "Enter a valid email address."];
+  }
+  $cut = function ($key, $max) use ($body) {
+    $value = trim((string) ($body[$key] ?? ""));
+    if ($value === "") return null;
+    return strlen($value) > $max ? substr($value, 0, $max) : $value;
+  };
+  $gstin = strtoupper(trim((string) ($body["gstin"] ?? "")));
+  if (strlen($gstin) > 20) $gstin = substr($gstin, 0, 20);
+  return [
+    "name" => $name,
+    "contact_name" => $cut("contact_name", 120),
+    "mobile" => $cut("mobile", 15),
+    "email" => $email !== "" ? strtolower($email) : null,
+    "address" => $cut("address", 500),
+    "gstin" => $gstin !== "" ? $gstin : null,
+  ];
+}
+
 function pos_customer_email_field($raw) {
   $s = trim((string) $raw);
   if ($s === "") return ["email" => null];
@@ -759,8 +785,8 @@ function pos_crud_dispatch($path, $method, $body, $bid, $auth, $branchId, $uid) 
   }
 
   if ($path === "suppliers" && $method === "POST") {
-    $name = trim((string) ($body["name"] ?? ""));
-    if ($name === "") pos_send(400, ["error" => "Supplier name is required"]);
+    $fields = pos_supplier_write_fields($body);
+    if (!empty($fields["error"])) pos_send(400, ["error" => $fields["error"]]);
     pos_ensure_accounts_schema();
     $id = pos_uuid();
     $code = "SUP-" . strtoupper(base_convert((string) time(), 10, 36));
@@ -768,9 +794,25 @@ function pos_crud_dispatch($path, $method, $body, $bid, $auth, $branchId, $uid) 
       "INSERT INTO suppliers (id, code, name, contact_name, mobile, email, address, gstin, opening_balance, payable_balance, business_id)
        VALUES (?,?,?,?,?,?,?,?,0,0,?)",
       "sssssssss",
-      [$id, $code, $name, $body["contact_name"] ?? null, $body["mobile"] ?? null, $body["email"] ?? null, $body["address"] ?? null, $body["gstin"] ?? null, $bid]
+      [$id, $code, $fields["name"], $fields["contact_name"], $fields["mobile"], $fields["email"], $fields["address"], $fields["gstin"], $bid]
     );
-    $rows = pos_q("SELECT * FROM suppliers WHERE id = ? LIMIT 1", "s", [$id]);
+    $rows = pos_q("SELECT * FROM suppliers WHERE id = ? AND business_id = ? LIMIT 1", "ss", [$id, $bid]);
+    pos_send(200, ["ok" => true, "supplier" => $rows[0] ?? null]);
+  }
+
+  if (preg_match('#^suppliers/([A-Za-z0-9-]+)$#', $path, $supMatch) && ($method === "PUT" || $method === "PATCH")) {
+    $id = $supMatch[1];
+    $fields = pos_supplier_write_fields($body);
+    if (!empty($fields["error"])) pos_send(400, ["error" => $fields["error"]]);
+    pos_ensure_accounts_schema();
+    $found = pos_q("SELECT id FROM suppliers WHERE id = ? AND business_id = ? LIMIT 1", "ss", [$id, $bid]);
+    if (!$found) pos_send(404, ["error" => "Supplier not found"]);
+    pos_q(
+      "UPDATE suppliers SET name = ?, contact_name = ?, mobile = ?, email = ?, address = ?, gstin = ? WHERE id = ? AND business_id = ?",
+      "ssssssss",
+      [$fields["name"], $fields["contact_name"], $fields["mobile"], $fields["email"], $fields["address"], $fields["gstin"], $id, $bid]
+    );
+    $rows = pos_q("SELECT * FROM suppliers WHERE id = ? AND business_id = ? LIMIT 1", "ss", [$id, $bid]);
     pos_send(200, ["ok" => true, "supplier" => $rows[0] ?? null]);
   }
 

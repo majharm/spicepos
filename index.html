@@ -14,6 +14,7 @@
     <link rel="stylesheet" href="./css/mobile-app.css?v=20261023logo1" />
     <link rel="stylesheet" href="./css/item-master.css?v=20261027items2" />
     <link rel="stylesheet" href="./css/customer-master.css?v=20261027cust1" />
+    <link rel="stylesheet" href="./css/supplier-master.css?v=20261030sup1" />
     <link rel="stylesheet" href="./css/due-reminders.css?v=20261027dues1" />
     <link rel="stylesheet" href="./css/quotations.css?v=20261027qt1" />
   </head>
@@ -1897,20 +1898,52 @@
         </section>
         <section class="view" id="view-suppliers" hidden>
           <h2 class="visually-hidden">Suppliers</h2>
-          <p class="lede">Vendor name, contact, email, address, and GSTIN.</p>
-          <form class="settings wide" id="supplier-form">
-            <label>Name <input id="sup-name" required maxlength="180" autocomplete="organization" /></label>
-            <label>Contact <input id="sup-contact" maxlength="120" autocomplete="name" /></label>
-            <label>Mobile <input id="sup-mobile" type="tel" inputmode="numeric" maxlength="15" placeholder="10-digit mobile" /></label>
-            <label>Email <input id="sup-email" type="email" maxlength="160" placeholder="vendor@email.com" autocomplete="email" /></label>
-            <label>GSTIN <input id="sup-gstin" maxlength="20" placeholder="Optional" autocomplete="off" /></label>
-            <label class="full">Address
-              <textarea id="sup-address" rows="2" maxlength="500" placeholder="Street, city, PIN"></textarea>
-            </label>
-            <button class="btn primary" type="submit">Save</button>
-          </form>
-          <div class="hint" id="sup-hint"></div>
-          <div class="table-wrap" id="suppliers-table"></div>
+          <div class="items-desk suppliers-desk">
+            <header class="items-hero">
+              <div class="items-hero-copy">
+                <p class="items-kicker">Purchases</p>
+                <h3>Suppliers</h3>
+                <p class="lede">Add a vendor, then search the list. Edit keeps the same code. Pay records a payment against what you owe.</p>
+                <button class="btn dues-jump" type="button" data-view-jump="accounts" data-acc-jump="payables">Supplier payables</button>
+              </div>
+              <div class="items-hero-stats" id="suppliers-hero-stats"></div>
+            </header>
+            <div class="items-split">
+              <form class="settings item-composer" id="supplier-form" autocomplete="off">
+                <input type="hidden" id="sup-id" value="" />
+                <div class="item-composer-top">
+                  <p class="item-mode" id="sup-form-mode">New supplier</p>
+                  <p class="item-composer-note">Name is required. Mobile, email, address, and GSTIN show on purchase bills.</p>
+                </div>
+                <fieldset class="item-block">
+                  <legend>Details</legend>
+                  <label>Name <input id="sup-name" required maxlength="180" autocomplete="organization" /></label>
+                  <label>Contact <input id="sup-contact" maxlength="120" autocomplete="name" /></label>
+                  <label>Mobile <input id="sup-mobile" type="tel" inputmode="numeric" maxlength="15" placeholder="10-digit mobile" /></label>
+                  <label>Email <input id="sup-email" type="email" maxlength="160" placeholder="vendor@email.com" autocomplete="email" /></label>
+                  <label>GSTIN <input id="sup-gstin" maxlength="20" placeholder="Optional" autocomplete="off" /></label>
+                  <label class="full">Address
+                    <textarea id="sup-address" rows="2" maxlength="500" placeholder="Street, city, PIN"></textarea>
+                  </label>
+                  <p class="hint full" id="sup-match-hint"></p>
+                  <button class="btn full" type="button" id="sup-use-match" hidden>Use existing supplier</button>
+                </fieldset>
+                <div class="item-composer-actions">
+                  <button class="btn primary" type="submit" id="sup-save">Save supplier</button>
+                  <button class="btn" type="button" id="sup-clear">Clear</button>
+                  <p class="hint" id="sup-hint" role="status"></p>
+                </div>
+              </form>
+              <aside class="items-library">
+                <div class="items-library-head">
+                  <h4>Saved suppliers</h4>
+                  <input id="suppliers-search" type="search" placeholder="Name, mobile, email, GSTIN" autocomplete="off" enterkeyhint="search" />
+                  <label class="item-toggle"><input type="checkbox" id="suppliers-due-only" /> With payable</label>
+                </div>
+                <div class="suppliers-list" id="suppliers-table"></div>
+              </aside>
+            </div>
+          </div>
         </section>
         <section class="view" id="view-barcodes" hidden>
           <h2 class="visually-hidden">Barcodes</h2>
@@ -3660,7 +3693,7 @@
     <script src="./js/due-reminders.js?v=20261027dues1" defer></script>
     <script src="./js/recurring.js?v=20261027rec1" defer></script>
     <script src="./js/quotations.js?v=20261027qt1" defer></script>
-    <script src="./js/app.js?v=20261027rcpt1" defer></script>
+    <script src="./js/app.js?v=20261030sup1" defer></script>
     <script src="./js/recurring-ui.js?v=20261027rec3" defer></script>
     <script src="./js/quotations-ui.js?v=20261027qt1" defer></script>
     <script src="./js/due-reminders-ui.js?v=20261027dues1" defer></script>

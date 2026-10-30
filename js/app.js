@@ -957,7 +957,7 @@ const VIEW_META = {
   prescriptions: { title: "Prescription Orders", subtitle: "Customer QR uploads for this pharmacy" },
   kot: { title: "Kitchen KOT", subtitle: "Captain fires tickets; kitchen marks preparing and ready" },
   purchases: { title: "Purchases", subtitle: "Search and select items for a purchase bill" },
-  suppliers: { title: "Suppliers", subtitle: "Vendor contacts, address, and GSTIN" },
+  suppliers: { title: "Suppliers", subtitle: "Search vendors, edit details, and pay what you owe" },
   stock: { title: "Stock", subtitle: "On-hand qty, low-stock alerts, and adjustments" },
   expiry: { title: "Expiry", subtitle: "Dated batches still on hand — expired first" },
   staff: { title: "Staff & roles", subtitle: "Users, roles, and access" },
@@ -11585,28 +11585,162 @@ async function loadPurchases() {
   }
 }
 
+function supplierDigits(value) {
+  return String(value || "").replace(/\D/g, "");
+}
+
+function supplierEmailError(email) {
+  const value = String(email || "").trim();
+  if (!value) return "";
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) return "Enter a valid email address.";
+  return "";
+}
+
+function readSupplierForm() {
+  return {
+    name: $("sup-name")?.value || "",
+    contact_name: $("sup-contact")?.value || "",
+    mobile: $("sup-mobile")?.value || "",
+    email: $("sup-email")?.value || "",
+    address: $("sup-address")?.value || "",
+    gstin: $("sup-gstin")?.value || "",
+  };
+}
+
+function findSupplierMatch(fields, exceptId) {
+  const name = String(fields?.name || "").trim().toLowerCase();
+  const mobile = supplierDigits(fields?.mobile);
+  const email = String(fields?.email || "").trim().toLowerCase();
+  const gstin = String(fields?.gstin || "").trim().toUpperCase();
+  if (!name && mobile.length < 10 && !email && !gstin) return null;
+  return (state.suppliers || []).find((row) => {
+    if (exceptId && row.id === exceptId) return false;
+    if (name && String(row.name || "").trim().toLowerCase() === name) return true;
+    const rowMobile = supplierDigits(row.mobile);
+    if (mobile.length >= 10 && rowMobile.length >= 10 && rowMobile.slice(-10) === mobile.slice(-10)) return true;
+    if (email && String(row.email || "").trim().toLowerCase() === email) return true;
+    if (gstin && String(row.gstin || "").trim().toUpperCase() === gstin) return true;
+    return false;
+  }) || null;
+}
+
+function paintSupplierMatch() {
+  const hint = $("sup-match-hint");
+  const btn = $("sup-use-match");
+  if (!hint || !btn) return;
+  const match = findSupplierMatch(readSupplierForm(), $("sup-id")?.value || "");
+  if (!match) {
+    hint.textContent = "";
+    btn.hidden = true;
+    delete btn.dataset.supplierId;
+    return;
+  }
+  hint.textContent = `${match.name} already exists${match.code ? ` (${match.code})` : ""}.`;
+  btn.hidden = false;
+  btn.dataset.supplierId = match.id;
+}
+
+function resetSupplierForm() {
+  $("supplier-form")?.reset();
+  if ($("sup-id")) $("sup-id").value = "";
+  if ($("sup-form-mode")) $("sup-form-mode").textContent = "New supplier";
+  if ($("sup-save")) $("sup-save").textContent = "Save supplier";
+  $("supplier-form")?.classList.remove("is-editing");
+  const hint = $("sup-hint");
+  if (hint && !hint.classList.contains("ok") && !hint.classList.contains("error")) hint.textContent = "";
+  paintSupplierMatch();
+  renderSuppliersList();
+}
+
+function fillSupplierForm(supplier) {
+  if (!supplier || !$("supplier-form")) return;
+  if ($("sup-id")) $("sup-id").value = supplier.id || "";
+  if ($("sup-name")) $("sup-name").value = supplier.name || "";
+  if ($("sup-contact")) $("sup-contact").value = supplier.contact_name || "";
+  if ($("sup-mobile")) $("sup-mobile").value = supplier.mobile || "";
+  if ($("sup-email")) $("sup-email").value = supplier.email || "";
+  if ($("sup-gstin")) $("sup-gstin").value = supplier.gstin || "";
+  if ($("sup-address")) $("sup-address").value = supplier.address || "";
+  if ($("sup-form-mode")) $("sup-form-mode").textContent = supplier.code ? `Editing ${supplier.code}` : "Editing supplier";
+  if ($("sup-save")) $("sup-save").textContent = "Update supplier";
+  $("supplier-form").classList.add("is-editing");
+  const hint = $("sup-hint");
+  if (hint) {
+    hint.textContent = "";
+    hint.className = "hint";
+  }
+  paintSupplierMatch();
+  renderSuppliersList();
+  $("supplier-form").scrollIntoView({ block: "nearest", behavior: "smooth" });
+  $("sup-name")?.focus({ preventScroll: true });
+}
+
+function renderSuppliersList() {
+  const rows = Array.isArray(state.suppliers) ? state.suppliers : [];
+  const payableRows = rows.filter((row) => (Number(row.payable_balance) || 0) > 0);
+  const payableTotal = payableRows.reduce((sum, row) => sum + (Number(row.payable_balance) || 0), 0);
+  const stats = $("suppliers-hero-stats");
+  if (stats) {
+    stats.innerHTML = [
+      ["Suppliers", rows.length],
+      ["With payable", payableRows.length],
+      ["Payable", money(payableTotal)],
+    ]
+      .map(([label, value]) => `<div class="items-stat${label === "Payable" && payableTotal > 0 ? " is-warn" : ""}"><span>${escapeHtml(label)}</span><strong>${typeof value === "number" ? value : escapeHtml(String(value))}</strong></div>`)
+      .join("");
+  }
+  const el = $("suppliers-table");
+  if (!el) return;
+  const q = String($("suppliers-search")?.value || "").trim().toLowerCase();
+  const dueOnly = Boolean($("suppliers-due-only")?.checked);
+  const filtered = rows.filter((row) => {
+    if (dueOnly && (Number(row.payable_balance) || 0) <= 0) return false;
+    if (!q) return true;
+    const hay = [row.code, row.name, row.contact_name, row.mobile, row.email, row.address, row.gstin].join(" ").toLowerCase();
+    return hay.includes(q);
+  });
+  if (!filtered.length) {
+    el.innerHTML = `<p class="hint">${rows.length ? "No suppliers match." : "No suppliers yet. Save the first vendor in the form."}</p>`;
+    return;
+  }
+  const cap = fastModeOn() ? 80 : filtered.length;
+  const shown = filtered.slice(0, cap);
+  const editing = $("sup-id")?.value || "";
+  const moreHint = listRenderHint(shown.length, filtered.length);
+  el.innerHTML = `${moreHint}${shown.map((row) => {
+    const due = Number(row.payable_balance) || 0;
+    const opening = Number(row.opening_balance) || 0;
+    const contact = [row.contact_name, row.mobile].filter(Boolean).join(" · ");
+    const mail = [row.email, row.gstin].filter(Boolean).join(" · ");
+    return `<article class="supplier-card${due > 0 ? " is-due" : ""}${row.id === editing ? " is-editing" : ""}" data-supplier-card="${escapeHtml(row.id)}">
+      <div class="supplier-card-copy">
+        <strong>${escapeHtml(row.name || "Supplier")}</strong>
+        <span>${escapeHtml(row.code || "—")}${contact ? ` · ${escapeHtml(contact)}` : ""}</span>
+        ${mail ? `<span>${escapeHtml(mail)}</span>` : ""}
+        ${row.address ? `<span>${escapeHtml(row.address)}</span>` : ""}
+        ${opening ? `<span>Opening ${escapeHtml(money(opening))}</span>` : ""}
+      </div>
+      <div class="supplier-card-side">
+        <span class="supplier-payable">${due > 0 ? "Payable " : ""}${escapeHtml(money(due))}</span>
+        <div class="supplier-card-actions">
+          <button class="btn" type="button" data-sup-edit="${escapeHtml(row.id)}">Edit</button>
+          ${due > 0 ? `<button class="btn primary" type="button" data-sup-pay="${escapeHtml(row.id)}">Pay</button>` : ""}
+        </div>
+      </div>
+    </article>`;
+  }).join("")}`;
+}
+
 async function loadSuppliers() {
   const rows = await api("/api/suppliers");
   state.suppliers = rows;
-  $("po-supplier").innerHTML = rows
-    .map((s) => `<option value="${escapeHtml(s.id)}">${escapeHtml(s.name)}</option>`)
-    .join("");
-  $("suppliers-table").innerHTML = `<table class="suppliers-table"><thead><tr>
-    <th>Code</th><th>Name</th><th>Contact</th><th>Mobile</th><th>Email</th><th>Address</th><th>GSTIN</th><th>Payable</th>
-  </tr></thead><tbody>${rows
-    .map(
-      (s) => `<tr>
-      <td>${escapeHtml(s.code)}</td>
-      <td>${escapeHtml(s.name)}</td>
-      <td>${escapeHtml(s.contact_name || "—")}</td>
-      <td>${escapeHtml(s.mobile || "—")}</td>
-      <td>${escapeHtml(s.email || "—")}</td>
-      <td title="${escapeHtml(s.address || "")}">${escapeHtml(s.address || "—")}</td>
-      <td>${escapeHtml(s.gstin || "—")}</td>
-      <td>${money(Number(s.payable_balance) || 0)}</td>
-    </tr>`,
-    )
-    .join("")}</tbody></table>`;
+  const po = $("po-supplier");
+  if (po) {
+    po.innerHTML = rows
+      .map((s) => `<option value="${escapeHtml(s.id)}">${escapeHtml(s.name)}</option>`)
+      .join("");
+  }
+  renderSuppliersList();
 }
 
 let accTab = "receivables";
@@ -14477,28 +14611,77 @@ $("purchase-form").addEventListener("submit", async (e) => {
   }
 });
 
-$("supplier-form").addEventListener("submit", async (e) => {
+$("supplier-form")?.addEventListener("submit", async (e) => {
   e.preventDefault();
+  const hint = $("sup-hint");
+  const fields = readSupplierForm();
+  const emailErr = supplierEmailError(fields.email);
+  if (emailErr) {
+    if (hint) {
+      hint.textContent = emailErr;
+      hint.className = "hint error";
+    }
+    return;
+  }
+  const id = String($("sup-id")?.value || "").trim();
   try {
-    await api("/api/suppliers", {
-      method: "POST",
-      body: JSON.stringify({
-        name: $("sup-name").value,
-        contact_name: $("sup-contact").value,
-        mobile: $("sup-mobile").value,
-        email: $("sup-email").value,
-        address: $("sup-address").value,
-        gstin: $("sup-gstin").value,
-      }),
+    if (hint) {
+      hint.textContent = "Saving…";
+      hint.className = "hint";
+    }
+    await api(id ? `/api/suppliers/${encodeURIComponent(id)}` : "/api/suppliers", {
+      method: id ? "PUT" : "POST",
+      body: JSON.stringify(fields),
     });
-    $("sup-hint").textContent = "Saved";
-    $("sup-hint").className = "hint ok";
-    $("supplier-form").reset();
+    resetSupplierForm();
+    if (hint) {
+      hint.textContent = id ? "Updated" : "Saved";
+      hint.className = "hint ok";
+    }
     await loadSuppliers();
   } catch (err) {
-    $("sup-hint").textContent = err.message;
-    $("sup-hint").className = "hint error";
+    if (hint) {
+      hint.textContent = err.message;
+      hint.className = "hint error";
+    }
   }
+});
+$("supplier-form")?.addEventListener("input", () => {
+  paintSupplierMatch();
+  const hint = $("sup-hint");
+  if (hint?.classList.contains("ok")) {
+    hint.textContent = "";
+    hint.className = "hint";
+  }
+});
+$("sup-clear")?.addEventListener("click", () => {
+  resetSupplierForm();
+  const hint = $("sup-hint");
+  if (hint) {
+    hint.textContent = "";
+    hint.className = "hint";
+  }
+});
+$("sup-use-match")?.addEventListener("click", () => {
+  const id = $("sup-use-match")?.dataset.supplierId || "";
+  const supplier = (state.suppliers || []).find((row) => row.id === id);
+  if (supplier) fillSupplierForm(supplier);
+});
+$("suppliers-search")?.addEventListener("input", () => renderSuppliersList());
+$("suppliers-due-only")?.addEventListener("change", () => renderSuppliersList());
+$("view-suppliers")?.addEventListener("click", (e) => {
+  const pay = e.target.closest("[data-sup-pay]");
+  if (pay) {
+    const supplier = (state.suppliers || []).find((row) => row.id === pay.dataset.supPay);
+    if (supplier) showPaymentModal(supplier);
+    return;
+  }
+  const edit = e.target.closest("[data-sup-edit]");
+  const card = e.target.closest("[data-supplier-card]");
+  const id = edit?.dataset.supEdit || (card && !e.target.closest("button, a, input, textarea, select") ? card.dataset.supplierCard : "");
+  if (!id) return;
+  const supplier = (state.suppliers || []).find((row) => row.id === id);
+  if (supplier) fillSupplierForm(supplier);
 });
 
 $("set-timezone")?.addEventListener("change", paintTimezonePreview);
