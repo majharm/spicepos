@@ -325,16 +325,55 @@ function pos_growth_ask($question, $analysis) {
   return $a["summary"] ?? "Open AI Growth after you have sales on this shop.";
 }
 
-function pos_growth_period($bid, $from, $to) {
-  $row = pos_q("SELECT COUNT(*) AS bills, COALESCE(SUM(total),0) AS takings, COALESCE(SUM(gst),0) AS gst, COALESCE(SUM(discount),0) AS discount FROM sales_orders WHERE business_id = ? AND " . pos_created_between() . "", "sss", [$bid, $from, $to]);
-  $p = pos_q("SELECT COALESCE(SUM(COALESCE(l.profit, l.amount - COALESCE(l.cost,0))),0) AS profit FROM sales_order_lines l JOIN sales_orders o ON o.id = l.order_id WHERE o.business_id = ? AND " . pos_created_between("o") . " AND l.cancelled = 0", "sss", [$bid, $from, $to]);
-  return [
-    "bills" => pos_growth_num($row[0]["bills"] ?? 0),
-    "takings" => pos_growth_num($row[0]["takings"] ?? 0),
-    "gst" => pos_growth_num($row[0]["gst"] ?? 0),
-    "discount" => pos_growth_num($row[0]["discount"] ?? 0),
-    "profit" => pos_growth_round($p[0]["profit"] ?? 0),
-  ];
+function pos_growth_windows($bid, $windows) {
+  $start = $windows[0]["start"];
+  $end = $windows[0]["end"];
+  foreach ($windows as $w) {
+    if ($w["start"] < $start) $start = $w["start"];
+    if ($w["end"] > $end) $end = $w["end"];
+  }
+  $selects = [];
+  $params = [];
+  foreach ($windows as $i => $w) {
+    $selects[] = "SUM(CASE WHEN created_at >= ? AND created_at < DATE_ADD(?, INTERVAL 1 DAY) THEN 1 ELSE 0 END) AS bills_$i";
+    $selects[] = "SUM(CASE WHEN created_at >= ? AND created_at < DATE_ADD(?, INTERVAL 1 DAY) THEN COALESCE(total,0) ELSE 0 END) AS takings_$i";
+    $selects[] = "SUM(CASE WHEN created_at >= ? AND created_at < DATE_ADD(?, INTERVAL 1 DAY) THEN COALESCE(gst,0) ELSE 0 END) AS gst_$i";
+    $selects[] = "SUM(CASE WHEN created_at >= ? AND created_at < DATE_ADD(?, INTERVAL 1 DAY) THEN COALESCE(discount,0) ELSE 0 END) AS discount_$i";
+    array_push($params, $w["start"], $w["end"], $w["start"], $w["end"], $w["start"], $w["end"], $w["start"], $w["end"]);
+  }
+  $params[] = $bid;
+  $params[] = $start;
+  $params[] = $end;
+  $row = pos_q(
+    "SELECT " . implode(", ", $selects) . " FROM sales_orders WHERE business_id = ? AND " . pos_created_between(),
+    str_repeat("s", count($params)),
+    $params
+  );
+  $profitSelects = [];
+  $profitParams = [];
+  foreach ($windows as $i => $w) {
+    $profitSelects[] = "SUM(CASE WHEN o.created_at >= ? AND o.created_at < DATE_ADD(?, INTERVAL 1 DAY) THEN COALESCE(l.profit, l.amount - COALESCE(l.cost,0)) ELSE 0 END) AS profit_$i";
+    array_push($profitParams, $w["start"], $w["end"]);
+  }
+  $profitParams[] = $bid;
+  $profitParams[] = $start;
+  $profitParams[] = $end;
+  $profit = pos_q(
+    "SELECT " . implode(", ", $profitSelects) . " FROM sales_order_lines l JOIN sales_orders o ON o.id = l.order_id WHERE o.business_id = ? AND " . pos_created_between("o") . " AND l.cancelled = 0",
+    str_repeat("s", count($profitParams)),
+    $profitParams
+  );
+  $out = [];
+  foreach ($windows as $i => $_w) {
+    $out[] = [
+      "bills" => pos_growth_num($row[0]["bills_$i"] ?? 0),
+      "takings" => pos_growth_num($row[0]["takings_$i"] ?? 0),
+      "gst" => pos_growth_num($row[0]["gst_$i"] ?? 0),
+      "discount" => pos_growth_num($row[0]["discount_$i"] ?? 0),
+      "profit" => pos_growth_round($profit[0]["profit_$i"] ?? 0),
+    ];
+  }
+  return $out;
 }
 
 function pos_growth_segment($bills, $takings, $days) {
@@ -362,14 +401,16 @@ function pos_build_growth($bid) {
   $last30 = pos_ymd_add($today, -29);
   $last90 = pos_ymd_add($today, -89);
 
-  $thisToday = pos_growth_period($bid, $today, $today);
-  $thisYest = pos_growth_period($bid, $yesterday, $yesterday);
-  $thisWeek = pos_growth_period($bid, $weekStart, $today);
-  $lastWeek = pos_growth_period($bid, $lastWeekStart, $lastWeekEnd);
-  $thisMonth = pos_growth_period($bid, $monthStart, $today);
-  $lastMonth = pos_growth_period($bid, $prevMonthStart, $prevMonthEnd);
-  $thisYear = pos_growth_period($bid, $yearStart, $today);
-  $lastYear = pos_growth_period($bid, $lastYearStart, $lastYearEnd);
+  [$thisToday, $thisYest, $thisWeek, $lastWeek, $thisMonth, $lastMonth, $thisYear, $lastYear] = pos_growth_windows($bid, [
+    ["start" => $today, "end" => $today],
+    ["start" => $yesterday, "end" => $yesterday],
+    ["start" => $weekStart, "end" => $today],
+    ["start" => $lastWeekStart, "end" => $lastWeekEnd],
+    ["start" => $monthStart, "end" => $today],
+    ["start" => $prevMonthStart, "end" => $prevMonthEnd],
+    ["start" => $yearStart, "end" => $today],
+    ["start" => $lastYearStart, "end" => $lastYearEnd],
+  ]);
 
   $daywise = [];
   foreach (pos_q("SELECT DATE(created_at) AS day, COUNT(*) AS bills, COALESCE(SUM(total),0) AS takings FROM sales_orders WHERE business_id = ? AND " . pos_created_between() . " GROUP BY DATE(created_at) ORDER BY day", "sss", [$bid, $last30, $today]) as $r) {

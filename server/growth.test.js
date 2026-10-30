@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
-import { analyzeGrowth, answerGrowthQuestion, pctChange, ymdAdd, growthScore } from "./growth.js";
+import { analyzeGrowth, answerGrowthQuestion, growthOrderWindowQuery, pctChange, ymdAdd, growthScore } from "./growth.js";
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 
@@ -83,6 +83,24 @@ test("Ask Business AI answers from the same shop snapshot", () => {
   assert.match(answerGrowthQuestion("How can I increase my profit?", out), /margin|profit|price/i);
   assert.match(answerGrowthQuestion("Which customers should I target?", out), /customer|inactive|VIP|high-value/i);
   assert.match(answerGrowthQuestion("What is tomorrow's forecast?", out), /tomorrow|7 days|estimate/i);
+});
+
+test("growth comparison windows share one indexed sales scan", () => {
+  const windows = [
+    { start: "2026-10-31", end: "2026-10-31" },
+    { start: "2026-01-01", end: "2026-10-31" },
+  ];
+  const q = growthOrderWindowQuery("shop-1", windows);
+  assert.equal(q.params.length, windows.length * 8 + 3);
+  assert.equal(q.params.at(-3), "shop-1");
+  assert.equal(q.params.at(-2), "2026-01-01");
+  assert.equal(q.params.at(-1), "2026-10-31");
+  assert.match(q.sql, /created_at >= \? AND created_at < DATE_ADD\(\?, INTERVAL 1 DAY\)/);
+  assert.doesNotMatch(q.sql, /DATE\(created_at\)/);
+  assert.match(readFileSync(path.join(root, "js/growth.js"), "utf8"), /timeoutMs: 25000/);
+  assert.match(readFileSync(path.join(root, "js/pos-api.js"), "utf8"), /took too long to answer/);
+  assert.match(readFileSync(path.join(root, "pos-growth.php"), "utf8"), /function pos_growth_windows/);
+  assert.doesNotMatch(readFileSync(path.join(root, "pos-growth.php"), "utf8"), /function pos_growth_period/);
 });
 
 test("shop UI and PHP wire the AI Growth dashboard", () => {

@@ -199,14 +199,17 @@
       const url = applySpec(spec, path);
       const hdrs = { ...headers };
       if (spec.mode === "rpc") hdrs["X-Pos-Path"] = String(path).replace(/^\/api\/?/, "").split("?")[0];
+      const timeoutMs = Number(options.timeoutMs) > 0 ? Number(options.timeoutMs) : mutating ? 20000 : 8000;
       const ctrl = typeof AbortController !== "undefined" ? new AbortController() : null;
-      const timer = ctrl ? setTimeout(() => ctrl.abort(), mutating ? 20000 : 8000) : 0;
+      const timer = ctrl ? setTimeout(() => ctrl.abort(), timeoutMs) : 0;
+      const fetchInit = { ...options };
+      delete fetchInit.timeoutMs;
       try {
         const res = await fetch(url, {
           credentials: "same-origin",
           cache: "no-store",
           redirect: "follow",
-          ...options,
+          ...fetchInit,
           headers: hdrs,
           signal: options.signal || (ctrl ? ctrl.signal : undefined),
         });
@@ -228,6 +231,10 @@
         return { res, data, text };
       } catch (err) {
         if (mutating && err && /refresh the catalog/i.test(String(err.message || err))) throw err;
+        const aborted = err && (err.name === "AbortError" || /aborted/i.test(String(err.message || err)));
+        if (aborted && Number(options.timeoutMs) > 0 && !options.signal) {
+          throw new Error("The POS API took too long to answer. Wait a moment and open Growth again.");
+        }
         /* try next */
       } finally {
         if (timer) clearTimeout(timer);

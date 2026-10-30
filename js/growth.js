@@ -538,7 +538,7 @@ async function askGrowthQuestion(question) {
   $("growth-ask-answer").textContent = "Reading this shop's latest bills…";
   try {
     const locale = window.POSI18n?.locale() || "en";
-    const data = await api("/api/growth/ask", { method: "POST", body: JSON.stringify({ question: q, locale }) });
+    const data = await api("/api/growth/ask", { method: "POST", body: JSON.stringify({ question: q, locale }), timeoutMs: 25000 });
     let answer = data.answer || "No answer from this shop's data yet.";
     if (window.POSI18n && /sales|विक्री|बिक्री|विक्री किती|आज/.test(String(q).toLowerCase()) && data.todaySales != null) {
       const localized = window.POSI18n.t("ai.today_sales", { amount: money(data.todaySales) });
@@ -559,7 +559,7 @@ async function loadGrowthDashboard() {
   $("growth-hint").textContent = "Reading sales, stock, and customers…";
   $("growth-hint").className = "hint";
   try {
-    const data = await api("/api/growth");
+    const data = await api("/api/growth", { timeoutMs: 25000 });
     renderGrowthAll(data);
     $("growth-hint").textContent = "Shop-data estimate · what happened → why → what to do.";
     $("growth-hint").className = "hint ok";

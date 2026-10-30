@@ -62,7 +62,7 @@ test("browser login tries the last working \/api first", () => {
   assert.match(apiJs, /if \(preferred\) out\.push\(preferred\)/);
   assert.doesNotMatch(apiJs, /if \(preferred && !mutating\)/);
   assert.doesNotMatch(apiJs, /if \(preferred && mutating\) out\.push\(preferred\)/);
-  assert.match(read("master.html"), /pos-api\.js\?v=20261023login1/);
+  assert.match(read("master.html"), /pos-api\.js\?v=20261031growth1/);
   assert.match(read("master.html"), /master\.js\?v=20261031food1/);
-  assert.match(read("index.html"), /pos-api\.js\?v=20261023login1/);
+  assert.match(read("index.html"), /pos-api\.js\?v=20261031growth1/);
 });

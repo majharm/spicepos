@@ -598,30 +598,62 @@ function segmentCustomer(row) {
   return "Occasional";
 }
 
-async function periodSales(tenant, start, end) {
-  const [row] = await query(
-    `SELECT COUNT(*) AS bills,
-            COALESCE(SUM(total),0) AS takings,
-            COALESCE(SUM(gst),0) AS gst,
-            COALESCE(SUM(discount),0) AS discount
-     FROM sales_orders
-     WHERE business_id = ? AND ${createdBetween()}`,
-    [tenant, start, end],
+function windowSpan(windows) {
+  return windows.reduce(
+    (span, w) => ({
+      start: w.start < span.start ? w.start : span.start,
+      end: w.end > span.end ? w.end : span.end,
+    }),
+    { start: windows[0].start, end: windows[0].end },
   );
-  const [p] = await query(
-    `SELECT COALESCE(SUM(COALESCE(l.profit, l.amount - COALESCE(l.cost, 0))),0) AS profit
-     FROM sales_order_lines l
-     JOIN sales_orders o ON o.id = l.order_id
-     WHERE o.business_id = ? AND ${createdBetween("o")} AND l.cancelled = 0`,
-    [tenant, start, end],
-  );
+}
+
+/** One indexed scan for every comparison window. Separate queries time out the Growth page. */
+export function growthOrderWindowQuery(tenant, windows) {
+  const span = windowSpan(windows);
+  const params = [];
+  const selects = windows.map((w, i) => {
+    params.push(w.start, w.end, w.start, w.end, w.start, w.end, w.start, w.end);
+    return `SUM(CASE WHEN created_at >= ? AND created_at < DATE_ADD(?, INTERVAL 1 DAY) THEN 1 ELSE 0 END) AS bills_${i},
+            SUM(CASE WHEN created_at >= ? AND created_at < DATE_ADD(?, INTERVAL 1 DAY) THEN COALESCE(total,0) ELSE 0 END) AS takings_${i},
+            SUM(CASE WHEN created_at >= ? AND created_at < DATE_ADD(?, INTERVAL 1 DAY) THEN COALESCE(gst,0) ELSE 0 END) AS gst_${i},
+            SUM(CASE WHEN created_at >= ? AND created_at < DATE_ADD(?, INTERVAL 1 DAY) THEN COALESCE(discount,0) ELSE 0 END) AS discount_${i}`;
+  });
+  params.push(tenant, span.start, span.end);
   return {
-    bills: num(row?.bills),
-    takings: num(row?.takings),
-    gst: num(row?.gst),
-    discount: num(row?.discount),
-    profit: round2(p?.profit),
+    sql: `SELECT ${selects.join(", ")} FROM sales_orders WHERE business_id = ? AND ${createdBetween()}`,
+    params,
   };
+}
+
+export function growthProfitWindowQuery(tenant, windows) {
+  const span = windowSpan(windows);
+  const params = [];
+  const selects = windows.map((w, i) => {
+    params.push(w.start, w.end);
+    return `SUM(CASE WHEN o.created_at >= ? AND o.created_at < DATE_ADD(?, INTERVAL 1 DAY) THEN COALESCE(l.profit, l.amount - COALESCE(l.cost, 0)) ELSE 0 END) AS profit_${i}`;
+  });
+  params.push(tenant, span.start, span.end);
+  return {
+    sql: `SELECT ${selects.join(", ")}
+          FROM sales_order_lines l
+          JOIN sales_orders o ON o.id = l.order_id
+          WHERE o.business_id = ? AND ${createdBetween("o")} AND l.cancelled = 0`,
+    params,
+  };
+}
+
+async function loadSalesWindows(tenant, windows) {
+  const orders = growthOrderWindowQuery(tenant, windows);
+  const profits = growthProfitWindowQuery(tenant, windows);
+  const [[row], [profit]] = await Promise.all([query(orders.sql, orders.params), query(profits.sql, profits.params)]);
+  return windows.map((_, i) => ({
+    bills: num(row?.[`bills_${i}`]),
+    takings: num(row?.[`takings_${i}`]),
+    gst: num(row?.[`gst_${i}`]),
+    discount: num(row?.[`discount_${i}`]),
+    profit: round2(profit?.[`profit_${i}`]),
+  }));
 }
 
 export async function buildGrowthDashboard() {
@@ -640,61 +672,64 @@ export async function buildGrowthDashboard() {
   const last30 = ymdAdd(today, -29);
   const last90 = ymdAdd(today, -89);
 
-  const [thisToday, thisYest, thisWeek, lastWeek, thisMonth, lastMonth, thisYear, lastYear] = await Promise.all([
-    periodSales(tenant, today, today),
-    periodSales(tenant, yesterday, yesterday),
-    periodSales(tenant, weekStart, today),
-    periodSales(tenant, lastWeekStart, lastWeekEnd),
-    periodSales(tenant, monthStart, today),
-    periodSales(tenant, prevMonthStart, prevMonthEnd),
-    periodSales(tenant, yearStart, today),
-    periodSales(tenant, lastYearStart, lastYearEnd),
+  const windows = [
+    { start: today, end: today },
+    { start: yesterday, end: yesterday },
+    { start: weekStart, end: today },
+    { start: lastWeekStart, end: lastWeekEnd },
+    { start: monthStart, end: today },
+    { start: prevMonthStart, end: prevMonthEnd },
+    { start: yearStart, end: today },
+    { start: lastYearStart, end: lastYearEnd },
+  ];
+  const [periods, daywise, hourwise, weekday, products, prevProducts] = await Promise.all([
+    loadSalesWindows(tenant, windows),
+    query(
+      `SELECT DATE(created_at) AS day, COUNT(*) AS bills, COALESCE(SUM(total),0) AS takings
+       FROM sales_orders WHERE business_id = ? AND ${createdBetween()}
+       GROUP BY DATE(created_at) ORDER BY day`,
+      [tenant, last30, today],
+    ),
+    query(
+      `SELECT HOUR(created_at) AS hour, COUNT(*) AS bills, COALESCE(SUM(total),0) AS takings
+       FROM sales_orders WHERE business_id = ? AND ${createdBetween()}
+       GROUP BY HOUR(created_at) ORDER BY hour`,
+      [tenant, last30, today],
+    ),
+    query(
+      `SELECT DAYOFWEEK(created_at) AS dow, COUNT(*) AS bills, COALESCE(SUM(total),0) AS takings
+       FROM sales_orders WHERE business_id = ? AND ${createdBetween()}
+       GROUP BY DAYOFWEEK(created_at) ORDER BY dow`,
+      [tenant, last90, today],
+    ),
+    query(
+      `SELECT COALESCE(MAX(l.item_id),'') AS item_id,
+              l.item_name AS name,
+              COALESCE(MAX(i.category),'') AS category,
+              COALESCE(MAX(i.stock_gm),0) AS stock_gm,
+              COALESCE(MAX(i.reorder_level_gm),0) AS reorder_gm,
+              COALESCE(MAX(i.purchase_rate),0) AS purchase_rate,
+              SUM(l.quantity_gm) AS qty,
+              SUM(l.amount) AS amount,
+              SUM(COALESCE(l.profit, l.amount - COALESCE(l.cost,0))) AS profit
+       FROM sales_order_lines l
+       JOIN sales_orders o ON o.id = l.order_id
+       LEFT JOIN items i ON i.id = l.item_id
+       WHERE o.business_id = ? AND ${createdBetween("o")} AND l.cancelled = 0
+       GROUP BY l.item_name
+       ORDER BY amount DESC`,
+      [tenant, monthStart, today],
+    ),
+    query(
+      `SELECT l.item_name AS name, SUM(l.amount) AS amount
+       FROM sales_order_lines l
+       JOIN sales_orders o ON o.id = l.order_id
+       WHERE o.business_id = ? AND ${createdBetween("o")} AND l.cancelled = 0
+       GROUP BY l.item_name`,
+      [tenant, prevMonthStart, prevMonthEnd],
+    ),
   ]);
-
-  const daywise = await query(
-    `SELECT DATE(created_at) AS day, COUNT(*) AS bills, COALESCE(SUM(total),0) AS takings
-     FROM sales_orders WHERE business_id = ? AND ${createdBetween()}
-     GROUP BY DATE(created_at) ORDER BY day`,
-    [tenant, last30, today],
-  );
-  const hourwise = await query(
-    `SELECT HOUR(created_at) AS hour, COUNT(*) AS bills, COALESCE(SUM(total),0) AS takings
-     FROM sales_orders WHERE business_id = ? AND ${createdBetween()}
-     GROUP BY HOUR(created_at) ORDER BY hour`,
-    [tenant, last30, today],
-  );
-  const weekday = await query(
-    `SELECT DAYOFWEEK(created_at) AS dow, COUNT(*) AS bills, COALESCE(SUM(total),0) AS takings
-     FROM sales_orders WHERE business_id = ? AND ${createdBetween()}
-     GROUP BY DAYOFWEEK(created_at) ORDER BY dow`,
-    [tenant, last90, today],
-  );
-  const products = await query(
-    `SELECT COALESCE(MAX(l.item_id),'') AS item_id,
-            l.item_name AS name,
-            COALESCE(MAX(i.category),'') AS category,
-            COALESCE(MAX(i.stock_gm),0) AS stock_gm,
-            COALESCE(MAX(i.reorder_level_gm),0) AS reorder_gm,
-            COALESCE(MAX(i.purchase_rate),0) AS purchase_rate,
-            SUM(l.quantity_gm) AS qty,
-            SUM(l.amount) AS amount,
-            SUM(COALESCE(l.profit, l.amount - COALESCE(l.cost,0))) AS profit
-     FROM sales_order_lines l
-     JOIN sales_orders o ON o.id = l.order_id
-     LEFT JOIN items i ON i.id = l.item_id
-     WHERE o.business_id = ? AND ${createdBetween("o")} AND l.cancelled = 0
-     GROUP BY l.item_name
-     ORDER BY amount DESC`,
-    [tenant, monthStart, today],
-  );
-  const prevProducts = await query(
-    `SELECT l.item_name AS name, SUM(l.amount) AS amount
-     FROM sales_order_lines l
-     JOIN sales_orders o ON o.id = l.order_id
-     WHERE o.business_id = ? AND ${createdBetween("o")} AND l.cancelled = 0
-     GROUP BY l.item_name`,
-    [tenant, prevMonthStart, prevMonthEnd],
-  );
+  const [thisToday, thisYest, thisWeek, lastWeek, thisMonth, lastMonth, thisYear, lastYear] = periods;
   const prevMap = Object.fromEntries(prevProducts.map((r) => [r.name, num(r.amount)]));
   const daysInMonth = Math.max(1, Number(today.slice(8, 10)));
   const productRows = products.map((p) => {
