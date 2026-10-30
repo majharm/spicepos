@@ -495,9 +495,27 @@ export async function ensureSchema() {
     email VARCHAR(255) NOT NULL UNIQUE,
     password_hash VARCHAR(255) NOT NULL,
     status VARCHAR(32) NOT NULL DEFAULT 'active',
+    mobile VARCHAR(32) NULL,
+    designation VARCHAR(80) NULL,
+    company VARCHAR(120) NULL,
+    address VARCHAR(500) NULL,
+    city VARCHAR(80) NULL,
+    district VARCHAR(80) NULL,
+    state VARCHAR(64) NULL,
+    timezone VARCHAR(64) NULL,
+    locale VARCHAR(16) NULL,
     created_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     updated_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3)
   )`);
+  await addColumn("platform_admins", "mobile", "VARCHAR(32) NULL");
+  await addColumn("platform_admins", "designation", "VARCHAR(80) NULL");
+  await addColumn("platform_admins", "company", "VARCHAR(120) NULL");
+  await addColumn("platform_admins", "address", "VARCHAR(500) NULL");
+  await addColumn("platform_admins", "city", "VARCHAR(80) NULL");
+  await addColumn("platform_admins", "district", "VARCHAR(80) NULL");
+  await addColumn("platform_admins", "state", "VARCHAR(64) NULL");
+  await addColumn("platform_admins", "timezone", "VARCHAR(64) NULL");
+  await addColumn("platform_admins", "locale", "VARCHAR(16) NULL");
 
   await create(`CREATE TABLE IF NOT EXISTS platform_sessions (
     id VARCHAR(255) PRIMARY KEY,

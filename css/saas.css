@@ -1254,7 +1254,36 @@ body.auth-body::-webkit-scrollbar-thumb {
   font-size: 13px;
 }
 .master-nav .nav-foot { margin-top: auto; padding-top: 16px; }
+.master-identity {
+  display: grid;
+  gap: 2px;
+  width: 100%;
+  margin: 0 0 8px;
+  padding: 8px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.06);
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.master-identity strong { font-size: 13px; }
+.master-identity span {
+  font-size: 11px;
+  opacity: 0.82;
+  word-break: break-word;
+}
 .master-nav .btn-logout { margin-top: 8px; }
+.master-main .items-stat strong { overflow-wrap: anywhere; }
+.master-main .master-profile-form { max-width: 760px; }
+.master-profile-form .item-block input,
+.master-profile-form .item-block select,
+.master-profile-form .item-block textarea {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
 .master-main {
   padding: 28px 32px 40px;
   min-width: 0;

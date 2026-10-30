@@ -160,9 +160,124 @@ async function buildMasterDsaSales(queryParams = {}) {
   return assembleDsaSales(shops, sales, refunds, { code, from, to });
 }
 
+const MASTER_ZONES = new Set(["Asia/Kolkata", "Asia/Dubai", "Asia/Singapore", "UTC", "Europe/London"]);
+const MASTER_LOCALES = new Set(["en", "hi", "mr", "gu", "bn", "ta", "te", "kn", "ml", "pa", "or", "as", "ur"]);
+
+function masterCut(value, max) {
+  const text = String(value || "").trim();
+  return text ? text.slice(0, max) : null;
+}
+
+function masterProfilePublic(row) {
+  return {
+    id: row.id,
+    name: row.name || "",
+    email: row.email || "",
+    mobile: row.mobile || "",
+    designation: row.designation || "",
+    company: row.company || "",
+    address: row.address || "",
+    city: row.city || "",
+    district: row.district || "",
+    state: row.state || "",
+    timezone: MASTER_ZONES.has(row.timezone) ? row.timezone : "Asia/Kolkata",
+    locale: MASTER_LOCALES.has(row.locale) ? row.locale : "en",
+    status: row.status || "active",
+  };
+}
+
 export function registerMaster(app) {
   app.use("/api/master", requireMaster);
   registerMasterBackup(app);
+
+  app.get("/api/master/profile", async (req, res) => {
+    try {
+      const [row] = await query("SELECT * FROM platform_admins WHERE id = ? LIMIT 1", [req.auth.admin.id]);
+      if (!row) {
+        res.status(404).json({ error: "Profile not found" });
+        return;
+      }
+      res.json({ ok: true, profile: masterProfilePublic(row) });
+    } catch (err) {
+      res.status(400).json({ error: String(err.message) });
+    }
+  });
+
+  app.put("/api/master/profile", async (req, res) => {
+    try {
+      const id = req.auth.admin.id;
+      const name = String(req.body?.name || "").trim().slice(0, 120);
+      const email = String(req.body?.email || "").trim().toLowerCase();
+      if (!name) {
+        res.status(400).json({ error: "Name is required" });
+        return;
+      }
+      if (!email || email.length > 160 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        res.status(400).json({ error: "Enter a valid email address." });
+        return;
+      }
+      const [taken] = await query("SELECT id FROM platform_admins WHERE email = ? AND id <> ? LIMIT 1", [email, id]);
+      if (taken) {
+        res.status(400).json({ error: "That email is already used" });
+        return;
+      }
+      const timezone = MASTER_ZONES.has(req.body?.timezone) ? req.body.timezone : "Asia/Kolkata";
+      const locale = MASTER_LOCALES.has(String(req.body?.locale || "").toLowerCase())
+        ? String(req.body.locale).toLowerCase()
+        : "en";
+      await query(
+        `UPDATE platform_admins
+         SET name = ?, email = ?, mobile = ?, designation = ?, company = ?, address = ?, city = ?, district = ?, state = ?, timezone = ?, locale = ?
+         WHERE id = ?`,
+        [
+          name,
+          email,
+          masterCut(req.body?.mobile, 32),
+          masterCut(req.body?.designation, 80),
+          masterCut(req.body?.company, 120),
+          masterCut(req.body?.address, 500),
+          masterCut(req.body?.city, 80),
+          masterCut(req.body?.district, 80),
+          masterCut(req.body?.state, 64),
+          timezone,
+          locale,
+          id,
+        ],
+      );
+      const [row] = await query("SELECT * FROM platform_admins WHERE id = ? LIMIT 1", [id]);
+      res.json({ ok: true, profile: masterProfilePublic(row), message: "Profile saved." });
+    } catch (err) {
+      res.status(400).json({ error: String(err.message) });
+    }
+  });
+
+  app.post("/api/master/profile/password", async (req, res) => {
+    try {
+      const current = String(req.body?.current || "");
+      const next = String(req.body?.next || "");
+      const confirm = String(req.body?.confirm || "");
+      if (next.length < 8) {
+        res.status(400).json({ error: "Password must be 8+ characters" });
+        return;
+      }
+      if (next !== confirm) {
+        res.status(400).json({ error: "New password and confirm password do not match." });
+        return;
+      }
+      const [admin] = await query("SELECT * FROM platform_admins WHERE id = ? LIMIT 1", [req.auth.admin.id]);
+      if (!admin || admin.status !== "active" || !(await verifyPassword(current, admin.password_hash))) {
+        res.status(400).json({ error: "Current password is wrong" });
+        return;
+      }
+      await query("UPDATE platform_admins SET password_hash = ? WHERE id = ?", [
+        await hashPassword(next),
+        admin.id,
+      ]);
+      res.json({ ok: true, message: "Password saved. Sign in with the new password next time." });
+    } catch (err) {
+      res.status(400).json({ error: String(err.message) });
+    }
+  });
 
   app.get("/api/master/dashboard", (req, res) =>
     send(res, async () => {

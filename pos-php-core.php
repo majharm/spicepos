@@ -2909,12 +2909,48 @@ function pos_send_file($status, $contentType, $filename, $body) {
   exit;
 }
 
+function pos_ensure_platform_admin_columns() {
+  static $done = false;
+  if ($done) return;
+  $done = true;
+  pos_ensure_columns("platform_admins", [
+    "mobile" => "VARCHAR(32) NULL",
+    "designation" => "VARCHAR(80) NULL",
+    "company" => "VARCHAR(120) NULL",
+    "address" => "VARCHAR(500) NULL",
+    "city" => "VARCHAR(80) NULL",
+    "district" => "VARCHAR(80) NULL",
+    "state" => "VARCHAR(64) NULL",
+    "timezone" => "VARCHAR(64) NULL",
+    "locale" => "VARCHAR(16) NULL",
+  ]);
+}
+
+function pos_master_profile_public($row) {
+  return [
+    "id" => $row["id"] ?? "",
+    "name" => $row["name"] ?? "",
+    "email" => $row["email"] ?? "",
+    "mobile" => $row["mobile"] ?? "",
+    "designation" => $row["designation"] ?? "",
+    "company" => $row["company"] ?? "",
+    "address" => $row["address"] ?? "",
+    "city" => $row["city"] ?? "",
+    "district" => $row["district"] ?? "",
+    "state" => $row["state"] ?? "",
+    "timezone" => ($row["timezone"] ?? "") !== "" ? $row["timezone"] : "Asia/Kolkata",
+    "locale" => ($row["locale"] ?? "") !== "" ? $row["locale"] : "en",
+    "status" => $row["status"] ?? "active",
+  ];
+}
+
 function pos_master_session() {
   $token = pos_cookie("pos_master");
   if ($token === "") return null;
+  pos_ensure_platform_admin_columns();
   $hash = pos_sha256($token);
   $rows = pos_q(
-    "SELECT s.*, a.email, a.name, a.status
+    "SELECT s.*, a.email, a.name, a.status, a.mobile, a.designation, a.company, a.address, a.city, a.district, a.state, a.timezone, a.locale
      FROM platform_sessions s
      JOIN platform_admins a ON a.id = s.admin_id
      WHERE s.token_hash = ? AND s.revoked_at IS NULL AND s.expires_at > NOW() LIMIT 1",
@@ -2923,7 +2959,22 @@ function pos_master_session() {
   );
   $row = $rows[0] ?? null;
   if (!$row || ($row["status"] ?? "") !== "active") return null;
-  return ["type" => "master", "admin" => ["id" => $row["admin_id"], "email" => $row["email"], "name" => $row["name"]]];
+  $admin = pos_master_profile_public([
+    "id" => $row["admin_id"],
+    "name" => $row["name"],
+    "email" => $row["email"],
+    "status" => $row["status"],
+    "mobile" => $row["mobile"] ?? "",
+    "designation" => $row["designation"] ?? "",
+    "company" => $row["company"] ?? "",
+    "address" => $row["address"] ?? "",
+    "city" => $row["city"] ?? "",
+    "district" => $row["district"] ?? "",
+    "state" => $row["state"] ?? "",
+    "timezone" => $row["timezone"] ?? "",
+    "locale" => $row["locale"] ?? "",
+  ]);
+  return ["type" => "master", "admin" => $admin];
 }
 
 function pos_staff_session() {
@@ -2966,6 +3017,77 @@ function pos_staff_session() {
     "business" => $biz[0] ?? null,
     "branchId" => $row["branch_id"] ?: $row["user_branch_id"],
   ];
+}
+
+function pos_master_cut($value, $max) {
+  $text = trim((string) $value);
+  if ($text === "") return null;
+  return strlen($text) > $max ? substr($text, 0, $max) : $text;
+}
+
+function pos_master_timezone($value) {
+  $allowed = ["Asia/Kolkata", "Asia/Dubai", "Asia/Singapore", "UTC", "Europe/London"];
+  $zone = trim((string) $value);
+  return in_array($zone, $allowed, true) ? $zone : "Asia/Kolkata";
+}
+
+function pos_master_locale($value) {
+  $allowed = ["en", "hi", "mr", "gu", "bn", "ta", "te", "kn", "ml", "pa", "or", "as", "ur"];
+  $locale = strtolower(trim((string) $value));
+  return in_array($locale, $allowed, true) ? $locale : "en";
+}
+
+function pos_save_master_profile($id, $body) {
+  pos_ensure_platform_admin_columns();
+  $name = trim((string) ($body["name"] ?? ""));
+  if ($name === "") throw new Exception("Name is required");
+  if (strlen($name) > 120) $name = substr($name, 0, 120);
+  $email = strtolower(trim((string) ($body["email"] ?? "")));
+  if ($email === "" || strlen($email) > 160 || !preg_match('/^[^\s@]+@[^\s@]+\.[^\s@]+$/', $email)) {
+    throw new Exception("Enter a valid email address.");
+  }
+  $taken = pos_q("SELECT id FROM platform_admins WHERE email = ? AND id <> ? LIMIT 1", "ss", [$email, $id]);
+  if ($taken) throw new Exception("That email is already used");
+  pos_q(
+    "UPDATE platform_admins
+     SET name = ?, email = ?, mobile = ?, designation = ?, company = ?, address = ?, city = ?, district = ?, state = ?, timezone = ?, locale = ?
+     WHERE id = ?",
+    "ssssssssssss",
+    [
+      $name,
+      $email,
+      pos_master_cut($body["mobile"] ?? "", 32),
+      pos_master_cut($body["designation"] ?? "", 80),
+      pos_master_cut($body["company"] ?? "", 120),
+      pos_master_cut($body["address"] ?? "", 500),
+      pos_master_cut($body["city"] ?? "", 80),
+      pos_master_cut($body["district"] ?? "", 80),
+      pos_master_cut($body["state"] ?? "", 64),
+      pos_master_timezone($body["timezone"] ?? ""),
+      pos_master_locale($body["locale"] ?? ""),
+      $id,
+    ]
+  );
+  $rows = pos_q("SELECT * FROM platform_admins WHERE id = ? LIMIT 1", "s", [$id]);
+  if (!$rows) throw new Exception("Profile not found");
+  return pos_master_profile_public($rows[0]);
+}
+
+function pos_change_master_password($id, $body) {
+  $current = (string) ($body["current"] ?? "");
+  $next = (string) ($body["next"] ?? "");
+  $confirm = (string) ($body["confirm"] ?? "");
+  if (strlen($next) < 8) throw new Exception("Password must be 8+ characters");
+  if ($next !== $confirm) throw new Exception("New password and confirm password do not match.");
+  $rows = pos_q("SELECT id, password_hash, status FROM platform_admins WHERE id = ? LIMIT 1", "s", [$id]);
+  $admin = $rows[0] ?? null;
+  if (!$admin || ($admin["status"] ?? "") !== "active") throw new Exception("Profile not found");
+  $envPass = pos_env("MASTER_ADMIN_PASSWORD");
+  $ok = pos_verify_password($current, $admin["password_hash"]);
+  if (!$ok && $envPass !== "" && strlen($envPass) === strlen($current) && hash_equals($envPass, $current)) $ok = true;
+  if (!$ok) throw new Exception("Current password is wrong");
+  pos_q("UPDATE platform_admins SET password_hash = ? WHERE id = ?", "ss", [pos_hash_password($next), $id]);
+  return ["ok" => true, "message" => "Password saved. Sign in with the new password next time."];
 }
 
 function pos_require_master($path) {
@@ -3789,6 +3911,20 @@ function pos_php_dispatch($path, $method, $rawBody) {
     }
 
     $auth = pos_require_master($path);
+
+    if ($path === "master/profile" && $method === "GET") {
+      pos_ensure_platform_admin_columns();
+      $rows = pos_q("SELECT * FROM platform_admins WHERE id = ? LIMIT 1", "s", [$auth["admin"]["id"]]);
+      if (!$rows) pos_send(404, ["error" => "Profile not found"]);
+      pos_send(200, ["ok" => true, "profile" => pos_master_profile_public($rows[0]), "php" => true]);
+    }
+    if ($path === "master/profile" && ($method === "PUT" || $method === "POST")) {
+      $profile = pos_save_master_profile($auth["admin"]["id"], $body);
+      pos_send(200, ["ok" => true, "profile" => $profile, "message" => "Profile saved.", "php" => true]);
+    }
+    if ($path === "master/profile/password" && $method === "POST") {
+      pos_send(200, array_merge(pos_change_master_password($auth["admin"]["id"], $body), ["php" => true]));
+    }
 
     if (strpos($path, "master/analytics") === 0) {
       require_once __DIR__ . "/pos-analytics.php";

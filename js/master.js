@@ -187,7 +187,7 @@ function showLogin(on) {
 }
 
 const NAV_FAMILIES = {
-  main: ["dash", "biz", "users", "plans", "dsa-sales"],
+  main: ["dash", "profile", "biz", "users", "plans", "dsa-sales"],
   alerts: ["expiry", "alert-log"],
   people: ["managers", "support"],
   advance: ["advance", "backup", "languages", "notes", "branches", "devices", "audit", "customers"],
@@ -198,6 +198,7 @@ const NAV_FAMILIES = {
 
 const PAGE_HINTS = {
   dash: "Shops and subscriptions",
+  profile: "Your name, address, password, and preferences",
   biz: "Create and open shops",
   users: "Passwords and locked accounts",
   plans: "Yearly fees and limits",
@@ -262,6 +263,7 @@ const WEBSITE_HINTS = {
 
 const MASTER_PAGES = [
   { tab: "dash", title: "Dashboard", keywords: "home shops overview" },
+  { tab: "profile", title: "My profile", keywords: "password name email address timezone language" },
   { tab: "biz", title: "Businesses", keywords: "shops create open pos" },
   { tab: "users", title: "Users", keywords: "password unlock login" },
   { tab: "plans", title: "Plans", keywords: "subscription fee yearly" },
@@ -353,6 +355,7 @@ async function boot() {
       me = await api("/api/auth/me");
     }
     if (me.type !== "master") throw new Error("not master");
+    paintMasterIdentity(me.admin);
     showLogin(false);
     await render();
   } catch {
@@ -1078,6 +1081,61 @@ function masterHero(kicker, title, lede, stats = []) {
 
 function masterDesk(kicker, title, lede, stats, inner) {
   return `<div class="items-desk master-desk">${masterHero(kicker, title, lede, stats)}${inner}</div>`;
+}
+
+const MASTER_ZONES = ["Asia/Kolkata", "Asia/Dubai", "Asia/Singapore", "UTC", "Europe/London"];
+const MASTER_LOCALES = [
+  ["en", "English"],
+  ["hi", "Hindi"],
+  ["mr", "Marathi"],
+  ["gu", "Gujarati"],
+  ["bn", "Bengali"],
+  ["ta", "Tamil"],
+  ["te", "Telugu"],
+  ["kn", "Kannada"],
+  ["ml", "Malayalam"],
+  ["pa", "Punjabi"],
+  ["ur", "Urdu"],
+];
+
+function selectOptions(values, selected, placeholder) {
+  const cur = String(selected || "");
+  const rows = placeholder ? [`<option value="">${attr(placeholder)}</option>`] : [];
+  const list = values.map((item) => (Array.isArray(item) ? item : [item, item]));
+  for (const [value, label] of list) {
+    rows.push(`<option value="${attr(value)}"${value === cur ? " selected" : ""}>${attr(label)}</option>`);
+  }
+  if (cur && !list.some(([value]) => value === cur)) {
+    rows.push(`<option value="${attr(cur)}" selected>${attr(cur)}</option>`);
+  }
+  return rows.join("");
+}
+
+function masterProfilePlace(profile) {
+  const parts = [profile?.address, profile?.city, profile?.district, profile?.state]
+    .map((part) => String(part || "").trim())
+    .filter(Boolean);
+  return parts.filter((part, i) => part.toLowerCase() !== String(parts[i - 1] || "").toLowerCase()).join(", ");
+}
+
+function paintMasterIdentity(admin) {
+  const foot = document.querySelector(".master-nav .nav-foot");
+  if (!foot) return;
+  let chip = document.getElementById("master-identity");
+  if (!chip) {
+    chip = document.createElement("button");
+    chip.type = "button";
+    chip.id = "master-identity";
+    chip.className = "master-identity";
+    chip.addEventListener("click", () => {
+      tab = "profile";
+      render();
+    });
+    foot.prepend(chip);
+  }
+  const name = admin?.name || "Master Admin";
+  const extra = [admin?.designation, admin?.email].filter(Boolean).join(" · ");
+  chip.innerHTML = `<strong>${attr(name)}</strong><span>${attr(extra || "My profile")}</span>`;
 }
 
 function advanceCard(tabId, pane, title, blurb) {
@@ -1826,6 +1884,7 @@ function bindAlertsForm(alerts) {
 async function render() {
   const titles = {
     dash: "Platform dashboard",
+    profile: "My profile",
     biz: "Businesses",
     managers: "Account managers",
     users: "Users",
@@ -3315,6 +3374,131 @@ async function render() {
         hint.className = "hint ok";
         panelFlash = "";
       }
+    } else if (tab === "profile") {
+      const data = await api("/api/master/profile");
+      const profile = data.profile || {};
+      paintMasterIdentity(profile);
+      const place = masterProfilePlace(profile);
+      body.innerHTML = masterDesk(
+        "Account",
+        "My profile",
+        "This is the Master Admin account. Save your name and address, change the password, and set the clock and language for this desk.",
+        [
+          { label: "Name", value: attr(profile.name || "—") },
+          { label: "Email", value: attr(profile.email || "—") },
+          { label: "Mobile", value: attr(profile.mobile || "—") },
+        ],
+        `<form class="settings item-composer master-profile-form" id="master-profile-form" autocomplete="off">
+          <div class="item-composer-top">
+            <p class="item-mode">${attr(profile.company || "ATAV POS")}</p>
+            <p class="item-composer-note">${place ? attr(place) : "Add a full address so support and bills know where this account sits."}</p>
+          </div>
+          <fieldset class="item-block">
+            <legend>Profile</legend>
+            <label>Name <input name="name" required maxlength="120" value="${attr(profile.name)}" autocomplete="name" /></label>
+            <label>Designation <input name="designation" maxlength="80" value="${attr(profile.designation)}" placeholder="Platform owner" /></label>
+            <label>Email <input name="email" type="email" required maxlength="160" value="${attr(profile.email)}" autocomplete="username" /></label>
+            <label>Mobile <input name="mobile" type="tel" inputmode="numeric" maxlength="15" value="${attr(profile.mobile)}" placeholder="10-digit mobile" /></label>
+            <label class="full">Company <input name="company" maxlength="120" value="${attr(profile.company)}" placeholder="ATAV Telecom" autocomplete="organization" /></label>
+          </fieldset>
+          <fieldset class="item-block">
+            <legend>Address</legend>
+            <label class="full">Full address <textarea name="address" rows="2" maxlength="500" placeholder="Street, area, PIN">${attr(profile.address)}</textarea></label>
+            <label>City <input name="city" maxlength="80" value="${attr(profile.city)}" autocomplete="address-level2" /></label>
+            <label>District <input name="district" maxlength="80" value="${attr(profile.district)}" /></label>
+            <label>State <select name="state">${selectOptions(IN_STATES, profile.state, "Select state")}</select></label>
+          </fieldset>
+          <fieldset class="item-block">
+            <legend>More settings</legend>
+            <label>Timezone <select name="timezone">${selectOptions(MASTER_ZONES, profile.timezone || "Asia/Kolkata")}</select></label>
+            <label>Language <select name="locale">${selectOptions(MASTER_LOCALES, profile.locale || "en")}</select></label>
+          </fieldset>
+          <div class="item-composer-actions">
+            <button class="btn primary" type="submit">Save profile</button>
+            <p class="hint" id="master-profile-hint" role="status"></p>
+          </div>
+        </form>
+        <form class="settings item-composer master-profile-form" id="master-password-form" autocomplete="off">
+          <div class="item-composer-top">
+            <p class="item-mode">Change password</p>
+            <p class="item-composer-note">Use the password you sign in with. The new one must be at least 8 characters.</p>
+          </div>
+          <fieldset class="item-block">
+            <legend>Password</legend>
+            <label class="full">Current password <input name="current" type="password" autocomplete="current-password" required /></label>
+            <label>New password <input name="next" type="password" autocomplete="new-password" minlength="8" required placeholder="At least 8 characters" /></label>
+            <label>Confirm new password <input name="confirm" type="password" autocomplete="new-password" minlength="8" required /></label>
+          </fieldset>
+          <div class="item-composer-actions">
+            <button class="btn primary" type="submit">Save password</button>
+            <p class="hint" id="master-password-hint" role="status"></p>
+          </div>
+        </form>`,
+      );
+      const profileForm = $("master-profile-form");
+      profileForm.onsubmit = async (e) => {
+        e.preventDefault();
+        const hint = $("master-profile-hint");
+        const fields = Object.fromEntries(new FormData(profileForm).entries());
+        if (hint) {
+          hint.className = "hint";
+          hint.textContent = "Saving…";
+        }
+        try {
+          const saved = await api("/api/master/profile", { method: "PUT", body: JSON.stringify(fields) });
+          paintMasterIdentity(saved.profile);
+          const remembered = localStorage.getItem("pos_remember_master");
+          if (remembered && profile.email && remembered.toLowerCase() === String(profile.email).toLowerCase()) {
+            localStorage.setItem("pos_remember_master", saved.profile?.email || fields.email);
+          }
+          if (hint) {
+            hint.textContent = saved.message || "Profile saved.";
+            hint.className = "hint ok";
+          }
+        } catch (err) {
+          if (hint) {
+            hint.textContent = err.message;
+            hint.className = "hint error";
+          }
+        }
+      };
+      const passwordForm = $("master-password-form");
+      passwordForm.onsubmit = async (e) => {
+        e.preventDefault();
+        const hint = $("master-password-hint");
+        const fields = Object.fromEntries(new FormData(passwordForm).entries());
+        if (String(fields.next || "").length < 8) {
+          if (hint) {
+            hint.textContent = "Password must be 8+ characters";
+            hint.className = "hint error";
+          }
+          return;
+        }
+        if (fields.next !== fields.confirm) {
+          if (hint) {
+            hint.textContent = "New password and confirm password do not match.";
+            hint.className = "hint error";
+          }
+          return;
+        }
+        if (hint) {
+          hint.className = "hint";
+          hint.textContent = "Saving password…";
+        }
+        try {
+          const saved = await api("/api/master/profile/password", { method: "POST", body: JSON.stringify(fields) });
+          passwordForm.reset();
+          if (hint) {
+            hint.textContent = saved.message || "Password saved.";
+            hint.className = "hint ok";
+          }
+        } catch (err) {
+          if (hint) {
+            hint.textContent = err.message;
+            hint.className = "hint error";
+          }
+        }
+      };
     } else if (tab === "support") {
       const s = await api("/api/master/support");
       body.innerHTML = masterDesk(

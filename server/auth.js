@@ -141,7 +141,8 @@ async function loadMasterSession(token) {
   if (!token) return null;
   const hash = sha256(token);
   const [row] = await query(
-    `SELECT s.*, a.email, a.name, a.status
+    `SELECT s.*, a.email, a.name, a.status, a.mobile, a.designation, a.company,
+            a.address, a.city, a.district, a.state, a.timezone, a.locale
      FROM platform_sessions s
      JOIN platform_admins a ON a.id = s.admin_id
      WHERE s.token_hash = ? AND s.revoked_at IS NULL AND s.expires_at > NOW()`,
@@ -152,7 +153,20 @@ async function loadMasterSession(token) {
     type: "master",
     tokenHash: hash,
     sessionId: row.id,
-    admin: { id: row.admin_id, email: row.email, name: row.name },
+    admin: {
+      id: row.admin_id,
+      email: row.email,
+      name: row.name,
+      mobile: row.mobile || "",
+      designation: row.designation || "",
+      company: row.company || "",
+      address: row.address || "",
+      city: row.city || "",
+      district: row.district || "",
+      state: row.state || "",
+      timezone: row.timezone || "Asia/Kolkata",
+      locale: row.locale || "en",
+    },
   };
 }
 
