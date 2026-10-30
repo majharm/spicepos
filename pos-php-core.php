@@ -2071,6 +2071,19 @@ function pos_ensure_sales_schema() {
   if (function_exists("pos_ensure_rate_precision")) pos_ensure_rate_precision(true);
 }
 
+function pos_ensure_supplier_profile_columns() {
+  static $done = false;
+  if ($done) return;
+  $done = true;
+  if (!function_exists("pos_ensure_columns")) return;
+  pos_ensure_columns("suppliers", [
+    "city" => "VARCHAR(80) NULL",
+    "district" => "VARCHAR(80) NULL",
+    "state" => "VARCHAR(64) NULL",
+    "supplier_type" => "VARCHAR(32) NULL",
+  ]);
+}
+
 function pos_ensure_accounts_schema() {
   static $done = false;
   if ($done) return;
@@ -2085,7 +2098,14 @@ function pos_ensure_accounts_schema() {
     @$db->query("ALTER TABLE suppliers ADD COLUMN payable_balance DECIMAL(12,2) NOT NULL DEFAULT 0");
   }
   if ($res) $res->free();
-  foreach (["email" => "VARCHAR(255) NULL", "address" => "TEXT NULL"] as $name => $ddl) {
+  foreach ([
+    "email" => "VARCHAR(255) NULL",
+    "address" => "TEXT NULL",
+    "city" => "VARCHAR(80) NULL",
+    "district" => "VARCHAR(80) NULL",
+    "state" => "VARCHAR(64) NULL",
+    "supplier_type" => "VARCHAR(32) NULL",
+  ] as $name => $ddl) {
     $res = $db->query("SHOW COLUMNS FROM suppliers LIKE '" . $db->real_escape_string($name) . "'");
     if ($res && $res->num_rows === 0) {
       @$db->query("ALTER TABLE suppliers ADD COLUMN {$name} {$ddl}");

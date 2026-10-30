@@ -534,6 +534,12 @@
     });
 
     const notes = String(purchase.notes || "").trim();
+    const supplierParts = [supplier?.address, supplier?.city, supplier?.district, supplier?.state]
+      .map((part) => String(part || "").trim())
+      .filter(Boolean);
+    const supplierPlace = supplierParts
+      .filter((part, i) => part.toLowerCase() !== String(supplierParts[i - 1] || "").toLowerCase())
+      .join(", ");
 
     return `<article class="thermal-invoice purchase-invoice">
   ${logo}
@@ -549,10 +555,11 @@
     <div class="inv-row"><span>Supplier bill</span><strong>${supInv}</strong></div>
     <div class="inv-row"><span>Date</span><span>${escapeHtml(when)}</span></div>
     <div class="inv-row"><span>Supplier</span><span>${escapeHtml(purchase.supplier_name || supplier?.name || "—")}</span></div>
-    ${supplier?.contact_name ? `<div class="inv-row"><span>Contact</span><span>${escapeHtml(supplier.contact_name)}</span></div>` : ""}
+    ${supplier?.contact_name ? `<div class="inv-row"><span>Contact person</span><span>${escapeHtml(supplier.contact_name)}</span></div>` : ""}
+    ${supplier?.supplier_type ? `<div class="inv-row"><span>Type</span><span>${escapeHtml(supplier.supplier_type)}</span></div>` : ""}
     ${supplier?.mobile ? `<div class="inv-row"><span>Mobile</span><span>${escapeHtml(supplier.mobile)}</span></div>` : ""}
     ${supplier?.email ? `<div class="inv-row"><span>Email</span><span>${escapeHtml(supplier.email)}</span></div>` : ""}
-    ${supplier?.address ? `<div class="inv-row"><span>Address</span><span>${escapeHtml(supplier.address)}</span></div>` : ""}
+    ${supplierPlace ? `<div class="inv-row"><span>Address</span><span>${escapeHtml(supplierPlace)}</span></div>` : ""}
     ${supGstin ? `<div class="inv-row"><span>Supplier GSTIN</span><span>${escapeHtml(supGstin)}</span></div>` : ""}
   </div>
   <div class="inv-rule"></div>

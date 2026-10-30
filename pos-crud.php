@@ -408,8 +408,15 @@ function pos_insert_pack_lines($packId, $items, $bid) {
   }
 }
 
+function pos_supplier_type($raw) {
+  $allowed = ["Manufacturer", "Wholesaler", "Distributor", "Trader", "Farmer", "Other"];
+  $value = trim((string) $raw);
+  return in_array($value, $allowed, true) ? $value : null;
+}
+
 function pos_supplier_write_fields($body) {
   $body = is_array($body) ? $body : [];
+  if (function_exists("pos_ensure_supplier_profile_columns")) pos_ensure_supplier_profile_columns();
   $name = trim((string) ($body["name"] ?? ""));
   if ($name === "") return ["error" => "Supplier name is required"];
   if (strlen($name) > 180) $name = substr($name, 0, 180);
@@ -430,6 +437,10 @@ function pos_supplier_write_fields($body) {
     "mobile" => $cut("mobile", 15),
     "email" => $email !== "" ? strtolower($email) : null,
     "address" => $cut("address", 500),
+    "city" => $cut("city", 80),
+    "district" => $cut("district", 80),
+    "state" => $cut("state", 64),
+    "supplier_type" => pos_supplier_type($body["supplier_type"] ?? ""),
     "gstin" => $gstin !== "" ? $gstin : null,
   ];
 }
@@ -791,10 +802,13 @@ function pos_crud_dispatch($path, $method, $body, $bid, $auth, $branchId, $uid) 
     $id = pos_uuid();
     $code = "SUP-" . strtoupper(base_convert((string) time(), 10, 36));
     pos_q(
-      "INSERT INTO suppliers (id, code, name, contact_name, mobile, email, address, gstin, opening_balance, payable_balance, business_id)
-       VALUES (?,?,?,?,?,?,?,?,0,0,?)",
-      "sssssssss",
-      [$id, $code, $fields["name"], $fields["contact_name"], $fields["mobile"], $fields["email"], $fields["address"], $fields["gstin"], $bid]
+      "INSERT INTO suppliers (id, code, name, contact_name, mobile, email, address, city, district, state, supplier_type, gstin, opening_balance, payable_balance, business_id)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,0,0,?)",
+      "sssssssssssss",
+      [
+        $id, $code, $fields["name"], $fields["contact_name"], $fields["mobile"], $fields["email"], $fields["address"],
+        $fields["city"], $fields["district"], $fields["state"], $fields["supplier_type"], $fields["gstin"], $bid,
+      ]
     );
     $rows = pos_q("SELECT * FROM suppliers WHERE id = ? AND business_id = ? LIMIT 1", "ss", [$id, $bid]);
     pos_send(200, ["ok" => true, "supplier" => $rows[0] ?? null]);
@@ -808,9 +822,12 @@ function pos_crud_dispatch($path, $method, $body, $bid, $auth, $branchId, $uid) 
     $found = pos_q("SELECT id FROM suppliers WHERE id = ? AND business_id = ? LIMIT 1", "ss", [$id, $bid]);
     if (!$found) pos_send(404, ["error" => "Supplier not found"]);
     pos_q(
-      "UPDATE suppliers SET name = ?, contact_name = ?, mobile = ?, email = ?, address = ?, gstin = ? WHERE id = ? AND business_id = ?",
-      "ssssssss",
-      [$fields["name"], $fields["contact_name"], $fields["mobile"], $fields["email"], $fields["address"], $fields["gstin"], $id, $bid]
+      "UPDATE suppliers SET name = ?, contact_name = ?, mobile = ?, email = ?, address = ?, city = ?, district = ?, state = ?, supplier_type = ?, gstin = ? WHERE id = ? AND business_id = ?",
+      "ssssssssssss",
+      [
+        $fields["name"], $fields["contact_name"], $fields["mobile"], $fields["email"], $fields["address"],
+        $fields["city"], $fields["district"], $fields["state"], $fields["supplier_type"], $fields["gstin"], $id, $bid,
+      ]
     );
     $rows = pos_q("SELECT * FROM suppliers WHERE id = ? AND business_id = ? LIMIT 1", "ss", [$id, $bid]);
     pos_send(200, ["ok" => true, "supplier" => $rows[0] ?? null]);

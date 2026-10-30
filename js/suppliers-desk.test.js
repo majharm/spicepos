@@ -13,6 +13,7 @@ test("Suppliers desk is searchable on phone and updates the same vendor", () => 
   const css = read("css/supplier-master.css");
   const crud = read("server/crud.js");
   const php = read("pos-crud.php");
+  const core = read("pos-php-core.php");
   const view = index.slice(index.indexOf('id="view-suppliers"'), index.indexOf('id="view-barcodes"'));
 
   assert.match(view, /class="items-desk suppliers-desk"/);
@@ -24,11 +25,20 @@ test("Suppliers desk is searchable on phone and updates the same vendor", () => 
   assert.match(view, /id="sup-use-match"/);
   assert.match(view, /data-view-jump="accounts"/);
   assert.match(view, /data-acc-jump="payables"/);
-  assert.match(index, /css\/supplier-master\.css\?v=20261030sup1/);
-  assert.match(index, /app\.js\?v=20261030sup1/);
+  assert.match(index, /css\/supplier-master\.css\?v=20261030sup2/);
+  assert.match(index, /app\.js\?v=20261030sup2/);
+  assert.match(view, /id="sup-contact"/);
+  assert.match(view, /Contact person/);
+  assert.match(view, /id="sup-city"/);
+  assert.match(view, /id="sup-district"/);
+  assert.match(view, /id="sup-state"/);
+  assert.match(view, /id="sup-type"/);
+  assert.match(view, /Maharashtra/);
 
   assert.match(app, /function findSupplierMatch/);
   assert.match(app, /function renderSuppliersList/);
+  assert.match(app, /function supplierPlace/);
+  assert.match(app, /supplier_type/);
   assert.match(app, /data-sup-edit/);
   assert.match(app, /data-sup-pay/);
   assert.match(app, /method: id \? "PUT" : "POST"/);
@@ -43,7 +53,12 @@ test("Suppliers desk is searchable on phone and updates the same vendor", () => 
   assert.match(crud, /function supplierWriteFields/);
   assert.match(crud, /app\.put\("\/api\/suppliers\/:id"/);
   assert.match(crud, /Enter a valid email address/);
+  assert.match(crud, /supplier_type/);
+  assert.match(crud, /city/);
   assert.match(php, /function pos_supplier_write_fields/);
+  assert.match(php, /supplier_type/);
+  assert.match(core, /function pos_ensure_supplier_profile_columns/);
+  assert.match(read("scripts/base-schema.sql"), /supplier_type VARCHAR\(32\) NULL/);
   assert.match(php, /suppliers\/\(\[A-Za-z0-9-\]\+\)/);
   assert.match(php, /UPDATE suppliers SET name/);
 });

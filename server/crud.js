@@ -663,6 +663,8 @@ function customerEmailField(raw) {
   return { email: s.toLowerCase() };
 }
 
+const SUPPLIER_TYPES = new Set(["Manufacturer", "Wholesaler", "Distributor", "Trader", "Farmer", "Other"]);
+
 function supplierWriteFields(body) {
   const name = String(body?.name || "").trim().slice(0, 180);
   if (!name) return { error: "Supplier name is required" };
@@ -674,12 +676,17 @@ function supplierWriteFields(body) {
     const text = String(value || "").trim();
     return text ? text.slice(0, max) : null;
   };
+  const supplierType = String(body?.supplier_type || "").trim();
   return {
     name,
     contact_name: cut(body?.contact_name, 120),
     mobile: cut(body?.mobile, 15),
     email: emailRaw ? emailRaw.slice(0, 160).toLowerCase() : null,
     address: cut(body?.address, 500),
+    city: cut(body?.city, 80),
+    district: cut(body?.district, 80),
+    state: cut(body?.state, 64),
+    supplier_type: SUPPLIER_TYPES.has(supplierType) ? supplierType : null,
     gstin: cut(String(body?.gstin || "").toUpperCase(), 20),
   };
 }
@@ -1106,9 +1113,23 @@ export function registerCrud(app) {
       const code = `SUP-${Date.now().toString(36).toUpperCase()}`;
       await query(
         `INSERT INTO suppliers (
-           id, code, name, contact_name, mobile, email, address, gstin, opening_balance, business_id
-         ) VALUES (?,?,?,?,?,?,?,?,0,?)`,
-        [id, code, fields.name, fields.contact_name, fields.mobile, fields.email, fields.address, fields.gstin, bid()],
+           id, code, name, contact_name, mobile, email, address, city, district, state, supplier_type, gstin, opening_balance, business_id
+         ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,0,?)`,
+        [
+          id,
+          code,
+          fields.name,
+          fields.contact_name,
+          fields.mobile,
+          fields.email,
+          fields.address,
+          fields.city,
+          fields.district,
+          fields.state,
+          fields.supplier_type,
+          fields.gstin,
+          bid(),
+        ],
       );
       const [supplier] = await query("SELECT * FROM suppliers WHERE id = ? AND business_id = ?", [id, bid()]);
       res.json({ ok: true, supplier });
@@ -1136,9 +1157,22 @@ export function registerCrud(app) {
       }
       await query(
         `UPDATE suppliers
-         SET name = ?, contact_name = ?, mobile = ?, email = ?, address = ?, gstin = ?
+         SET name = ?, contact_name = ?, mobile = ?, email = ?, address = ?, city = ?, district = ?, state = ?, supplier_type = ?, gstin = ?
          WHERE id = ? AND business_id = ?`,
-        [fields.name, fields.contact_name, fields.mobile, fields.email, fields.address, fields.gstin, id, bid()],
+        [
+          fields.name,
+          fields.contact_name,
+          fields.mobile,
+          fields.email,
+          fields.address,
+          fields.city,
+          fields.district,
+          fields.state,
+          fields.supplier_type,
+          fields.gstin,
+          id,
+          bid(),
+        ],
       );
       const [supplier] = await query("SELECT * FROM suppliers WHERE id = ? AND business_id = ?", [id, bid()]);
       res.json({ ok: true, supplier });

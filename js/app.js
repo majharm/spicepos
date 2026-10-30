@@ -11603,8 +11603,32 @@ function readSupplierForm() {
     mobile: $("sup-mobile")?.value || "",
     email: $("sup-email")?.value || "",
     address: $("sup-address")?.value || "",
+    city: $("sup-city")?.value || "",
+    district: $("sup-district")?.value || "",
+    state: $("sup-state")?.value || "",
+    supplier_type: $("sup-type")?.value || "",
     gstin: $("sup-gstin")?.value || "",
   };
+}
+
+function supplierPlace(row) {
+  const parts = [row?.address, row?.city, row?.district, row?.state]
+    .map((part) => String(part || "").trim())
+    .filter(Boolean);
+  return parts.filter((part, i) => part.toLowerCase() !== String(parts[i - 1] || "").toLowerCase()).join(", ");
+}
+
+function setSupplierSelect(id, value) {
+  const el = $(id);
+  if (!el) return;
+  const next = String(value || "");
+  if (next && ![...el.options].some((opt) => opt.value === next)) {
+    const opt = document.createElement("option");
+    opt.value = next;
+    opt.textContent = next;
+    el.appendChild(opt);
+  }
+  el.value = next;
 }
 
 function findSupplierMatch(fields, exceptId) {
@@ -11661,6 +11685,10 @@ function fillSupplierForm(supplier) {
   if ($("sup-email")) $("sup-email").value = supplier.email || "";
   if ($("sup-gstin")) $("sup-gstin").value = supplier.gstin || "";
   if ($("sup-address")) $("sup-address").value = supplier.address || "";
+  if ($("sup-city")) $("sup-city").value = supplier.city || "";
+  if ($("sup-district")) $("sup-district").value = supplier.district || "";
+  setSupplierSelect("sup-state", supplier.state || "");
+  setSupplierSelect("sup-type", supplier.supplier_type || "");
   if ($("sup-form-mode")) $("sup-form-mode").textContent = supplier.code ? `Editing ${supplier.code}` : "Editing supplier";
   if ($("sup-save")) $("sup-save").textContent = "Update supplier";
   $("supplier-form").classList.add("is-editing");
@@ -11696,7 +11724,7 @@ function renderSuppliersList() {
   const filtered = rows.filter((row) => {
     if (dueOnly && (Number(row.payable_balance) || 0) <= 0) return false;
     if (!q) return true;
-    const hay = [row.code, row.name, row.contact_name, row.mobile, row.email, row.address, row.gstin].join(" ").toLowerCase();
+    const hay = [row.code, row.name, row.contact_name, row.mobile, row.email, row.address, row.city, row.district, row.state, row.supplier_type, row.gstin].join(" ").toLowerCase();
     return hay.includes(q);
   });
   if (!filtered.length) {
@@ -11711,13 +11739,14 @@ function renderSuppliersList() {
     const due = Number(row.payable_balance) || 0;
     const opening = Number(row.opening_balance) || 0;
     const contact = [row.contact_name, row.mobile].filter(Boolean).join(" · ");
-    const mail = [row.email, row.gstin].filter(Boolean).join(" · ");
+    const mail = [row.supplier_type, row.email, row.gstin].filter(Boolean).join(" · ");
+    const place = supplierPlace(row);
     return `<article class="supplier-card${due > 0 ? " is-due" : ""}${row.id === editing ? " is-editing" : ""}" data-supplier-card="${escapeHtml(row.id)}">
       <div class="supplier-card-copy">
         <strong>${escapeHtml(row.name || "Supplier")}</strong>
         <span>${escapeHtml(row.code || "—")}${contact ? ` · ${escapeHtml(contact)}` : ""}</span>
         ${mail ? `<span>${escapeHtml(mail)}</span>` : ""}
-        ${row.address ? `<span>${escapeHtml(row.address)}</span>` : ""}
+        ${place ? `<span>${escapeHtml(place)}</span>` : ""}
         ${opening ? `<span>Opening ${escapeHtml(money(opening))}</span>` : ""}
       </div>
       <div class="supplier-card-side">
@@ -11737,7 +11766,10 @@ async function loadSuppliers() {
   const po = $("po-supplier");
   if (po) {
     po.innerHTML = rows
-      .map((s) => `<option value="${escapeHtml(s.id)}">${escapeHtml(s.name)}</option>`)
+      .map((s) => {
+        const where = [s.city, s.state].filter(Boolean).join(", ");
+        return `<option value="${escapeHtml(s.id)}">${escapeHtml(s.name || "Supplier")}${where ? ` · ${escapeHtml(where)}` : ""}</option>`;
+      })
       .join("");
   }
   renderSuppliersList();

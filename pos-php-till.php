@@ -611,6 +611,7 @@ function pos_php_till_dispatch($path, $method, $body) {
 
   if ($path === "suppliers" && $method === "GET") {
     pos_ensure_accounts_schema();
+    if (function_exists("pos_ensure_supplier_profile_columns")) pos_ensure_supplier_profile_columns();
     pos_send(200, pos_q("SELECT * FROM suppliers WHERE business_id = ? ORDER BY name", "s", [$bid]));
   }
 

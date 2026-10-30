@@ -402,6 +402,10 @@ export async function ensureSchema() {
 
   await addColumn("suppliers", "email", "VARCHAR(255) NULL");
   await addColumn("suppliers", "address", "TEXT NULL");
+  await addColumn("suppliers", "city", "VARCHAR(80) NULL");
+  await addColumn("suppliers", "district", "VARCHAR(80) NULL");
+  await addColumn("suppliers", "state", "VARCHAR(64) NULL");
+  await addColumn("suppliers", "supplier_type", "VARCHAR(32) NULL");
   await addColumn("suppliers", "payable_balance", "DECIMAL(12,2) NOT NULL DEFAULT 0");
 
   await create(`CREATE TABLE IF NOT EXISTS account_ledger (

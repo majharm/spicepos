@@ -14,7 +14,7 @@
     <link rel="stylesheet" href="./css/mobile-app.css?v=20261023logo1" />
     <link rel="stylesheet" href="./css/item-master.css?v=20261027items2" />
     <link rel="stylesheet" href="./css/customer-master.css?v=20261027cust1" />
-    <link rel="stylesheet" href="./css/supplier-master.css?v=20261030sup1" />
+    <link rel="stylesheet" href="./css/supplier-master.css?v=20261030sup2" />
     <link rel="stylesheet" href="./css/due-reminders.css?v=20261027dues1" />
     <link rel="stylesheet" href="./css/quotations.css?v=20261027qt1" />
   </head>
@@ -1913,17 +1913,74 @@
                 <input type="hidden" id="sup-id" value="" />
                 <div class="item-composer-top">
                   <p class="item-mode" id="sup-form-mode">New supplier</p>
-                  <p class="item-composer-note">Name is required. Mobile, email, address, and GSTIN show on purchase bills.</p>
+                  <p class="item-composer-note">Name is required. Contact person, city, district, and state show on the card and the purchase bill.</p>
                 </div>
                 <fieldset class="item-block">
                   <legend>Details</legend>
                   <label>Name <input id="sup-name" required maxlength="180" autocomplete="organization" /></label>
-                  <label>Contact <input id="sup-contact" maxlength="120" autocomplete="name" /></label>
+                  <label>Contact person <input id="sup-contact" maxlength="120" autocomplete="name" placeholder="Person you deal with" /></label>
                   <label>Mobile <input id="sup-mobile" type="tel" inputmode="numeric" maxlength="15" placeholder="10-digit mobile" /></label>
                   <label>Email <input id="sup-email" type="email" maxlength="160" placeholder="vendor@email.com" autocomplete="email" /></label>
                   <label>GSTIN <input id="sup-gstin" maxlength="20" placeholder="Optional" autocomplete="off" /></label>
-                  <label class="full">Address
-                    <textarea id="sup-address" rows="2" maxlength="500" placeholder="Street, city, PIN"></textarea>
+                  <label>Type
+                    <select id="sup-type">
+                      <option value="">Select type</option>
+                      <option>Manufacturer</option>
+                      <option>Wholesaler</option>
+                      <option>Distributor</option>
+                      <option>Trader</option>
+                      <option>Farmer</option>
+                      <option>Other</option>
+                    </select>
+                  </label>
+                </fieldset>
+                <fieldset class="item-block">
+                  <legend>Address</legend>
+                  <label class="full">Full address
+                    <textarea id="sup-address" rows="2" maxlength="500" placeholder="Street, area, PIN"></textarea>
+                  </label>
+                  <label>City <input id="sup-city" maxlength="80" autocomplete="address-level2" placeholder="City" /></label>
+                  <label>District <input id="sup-district" maxlength="80" placeholder="District" /></label>
+                  <label>State
+                    <select id="sup-state" autocomplete="address-level1">
+                      <option value="">Select state</option>
+                      <option>Andhra Pradesh</option>
+                      <option>Arunachal Pradesh</option>
+                      <option>Assam</option>
+                      <option>Bihar</option>
+                      <option>Chhattisgarh</option>
+                      <option>Goa</option>
+                      <option>Gujarat</option>
+                      <option>Haryana</option>
+                      <option>Himachal Pradesh</option>
+                      <option>Jharkhand</option>
+                      <option>Karnataka</option>
+                      <option>Kerala</option>
+                      <option>Madhya Pradesh</option>
+                      <option>Maharashtra</option>
+                      <option>Manipur</option>
+                      <option>Meghalaya</option>
+                      <option>Mizoram</option>
+                      <option>Nagaland</option>
+                      <option>Odisha</option>
+                      <option>Punjab</option>
+                      <option>Rajasthan</option>
+                      <option>Sikkim</option>
+                      <option>Tamil Nadu</option>
+                      <option>Telangana</option>
+                      <option>Tripura</option>
+                      <option>Uttar Pradesh</option>
+                      <option>Uttarakhand</option>
+                      <option>West Bengal</option>
+                      <option>Delhi</option>
+                      <option>Jammu and Kashmir</option>
+                      <option>Ladakh</option>
+                      <option>Puducherry</option>
+                      <option>Chandigarh</option>
+                      <option>Andaman and Nicobar Islands</option>
+                      <option>Dadra and Nagar Haveli and Daman and Diu</option>
+                      <option>Lakshadweep</option>
+                    </select>
                   </label>
                   <p class="hint full" id="sup-match-hint"></p>
                   <button class="btn full" type="button" id="sup-use-match" hidden>Use existing supplier</button>
@@ -1937,7 +1994,7 @@
               <aside class="items-library">
                 <div class="items-library-head">
                   <h4>Saved suppliers</h4>
-                  <input id="suppliers-search" type="search" placeholder="Name, mobile, email, GSTIN" autocomplete="off" enterkeyhint="search" />
+                  <input id="suppliers-search" type="search" placeholder="Name, person, city, mobile" autocomplete="off" enterkeyhint="search" />
                   <label class="item-toggle"><input type="checkbox" id="suppliers-due-only" /> With payable</label>
                 </div>
                 <div class="suppliers-list" id="suppliers-table"></div>
@@ -3670,7 +3727,7 @@
     <script src="./js/camera-scan.js?v=20261026poscan2" defer></script>
     <script src="./js/scale.js?v=20261012set4" defer></script>
     <script src="./js/dev-mode.js?v=20260905deploy136" defer></script>
-    <script src="./js/invoice.js?v=20261027rcpt1" defer></script>
+    <script src="./js/invoice.js?v=20261030sup2" defer></script>
     <script src="./js/invoice-share.js?v=20261023cemail1" defer></script>
     <script src="./js/support.js?v=20260920deploy199" defer></script>
     <script src="./js/qrcode.iife.js?v=20260905qr1" defer></script>
@@ -3693,7 +3750,7 @@
     <script src="./js/due-reminders.js?v=20261027dues1" defer></script>
     <script src="./js/recurring.js?v=20261027rec1" defer></script>
     <script src="./js/quotations.js?v=20261027qt1" defer></script>
-    <script src="./js/app.js?v=20261030sup1" defer></script>
+    <script src="./js/app.js?v=20261030sup2" defer></script>
     <script src="./js/recurring-ui.js?v=20261027rec3" defer></script>
     <script src="./js/quotations-ui.js?v=20261027qt1" defer></script>
     <script src="./js/due-reminders-ui.js?v=20261027dues1" defer></script>
