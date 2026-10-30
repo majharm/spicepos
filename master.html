@@ -7,7 +7,7 @@
     <title>Master Admin · ATAV POS</title>
     <link rel="icon" href="./favicon.svg" />
     <link rel="stylesheet" href="./css/pos.css?v=20260920deploy201" />
-    <link rel="stylesheet" href="./css/saas.css?v=20261030staff1" />
+    <link rel="stylesheet" href="./css/saas.css?v=20261030live1" />
     <link rel="stylesheet" href="./css/analytics.css?v=20260920deploy196" />
     <link rel="stylesheet" href="./css/seo.css?v=20260920deploy197" />
     <link rel="stylesheet" href="./css/login-page.css?v=20261011login1" />
@@ -83,6 +83,7 @@
           <div class="master-nav-group is-open" data-nav-family="main">
             <button type="button" class="nav-group-label" data-nav-toggle="main" aria-expanded="true">Main</button>
             <button type="button" class="active" data-tab="dash"><span class="nav-icon" aria-hidden="true">⌂</span>Dashboard</button>
+            <button type="button" data-tab="live"><span class="nav-icon" aria-hidden="true">◉</span>Live users</button>
             <button type="button" data-tab="profile"><span class="nav-icon" aria-hidden="true">☺</span>My profile</button>
             <button type="button" data-tab="biz"><span class="nav-icon" aria-hidden="true">◈</span>Businesses</button>
             <button type="button" data-tab="users"><span class="nav-icon" aria-hidden="true">◉</span>Users</button>
@@ -175,6 +176,9 @@
             <h2 id="master-top-title">Dashboard</h2>
           </div>
           <p class="master-topbar-hint" id="master-top-hint">Shops and subscriptions</p>
+          <button class="btn master-icon-btn" id="master-notices" type="button" aria-expanded="false" aria-controls="master-notice-panel">Alerts</button>
+          <button class="btn master-icon-btn" id="master-theme" type="button">Theme</button>
+          <div class="master-notice-panel" id="master-notice-panel" hidden></div>
           <div class="master-jump">
             <label class="master-jump-lab" for="master-jump-q">Jump</label>
             <input id="master-jump-q" type="search" placeholder="Jump to page…" autocomplete="off" />
@@ -193,7 +197,7 @@
     <script src="./js/support.js?v=20260920deploy199" defer></script>
     <script src="./js/login-page.js?v=20261023logo1" defer></script>
     <script src="./js/master-login-page.js?v=20261011login1" defer></script>
-    <script src="./js/master.js?v=20261030staff1" defer></script>
+    <script src="./js/master.js?v=20261030live1" defer></script>
     <script src="./js/master-analytics.js?v=20261007masterux1" defer></script>
     <script src="./js/master-seo.js?v=20261007masterux1" defer></script>
   </body>

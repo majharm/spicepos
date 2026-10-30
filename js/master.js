@@ -5,6 +5,10 @@ let analyticsPane = "overview";
 let seoPane = "overview";
 let websitePane = "images";
 let panelFlash = "";
+let dashRange = "30";
+let liveTimer = 0;
+let liveState = { q: "", presence: "all", category: "", plan: "", sort: "activity", page: 1 };
+let masterNotices = [];
 let alertLogFocus = "";
 let dsaCode = "0001";
 let dsaFrom = "";
@@ -187,7 +191,7 @@ function showLogin(on) {
 }
 
 const NAV_FAMILIES = {
-  main: ["dash", "profile", "biz", "users", "plans", "dsa-sales"],
+  main: ["dash", "live", "profile", "biz", "users", "plans", "dsa-sales"],
   alerts: ["expiry", "alert-log"],
   people: ["managers", "staff", "support"],
   advance: ["advance", "backup", "languages", "notes", "branches", "devices", "audit", "customers"],
@@ -197,7 +201,8 @@ const NAV_FAMILIES = {
 };
 
 const PAGE_HINTS = {
-  dash: "Shops and subscriptions",
+  dash: "Shops, sales, and who is signed in",
+  live: "Online only after a real click or keypress",
   profile: "Your name, address, password, and preferences",
   biz: "Create and open shops",
   users: "Passwords and locked accounts",
@@ -263,7 +268,8 @@ const WEBSITE_HINTS = {
 };
 
 const MASTER_PAGES = [
-  { tab: "dash", title: "Dashboard", keywords: "home shops overview" },
+  { tab: "dash", title: "Dashboard", keywords: "home shops overview sales revenue" },
+  { tab: "live", title: "Live users", keywords: "online offline session heartbeat" },
   { tab: "profile", title: "My profile", keywords: "password name email address timezone language" },
   { tab: "biz", title: "Businesses", keywords: "shops create open pos" },
   { tab: "users", title: "Users", keywords: "password unlock login" },
@@ -534,6 +540,101 @@ $("master-nav-toggle")?.addEventListener("click", () => {
 });
 $("master-nav-scrim")?.addEventListener("click", () => setMasterNavOpen(false));
 bindMasterJump();
+
+function stopLivePoll() {
+  if (liveTimer) clearInterval(liveTimer);
+  liveTimer = 0;
+}
+
+function growthMarkup(item) {
+  if (!item || item.growth === null || item.growth === undefined) return "";
+  const n = Number(item.growth);
+  const dir = n > 0 ? "up" : n < 0 ? "down" : "flat";
+  const sign = n > 0 ? "+" : "";
+  return `<span class="master-growth is-${dir}">${sign}${n}%</span>`;
+}
+
+function kpiButton(label, value, item, nextTab) {
+  return `<button type="button" class="master-kpi" data-open-tab="${attr(nextTab || "")}">
+    <span>${attr(label)}</span>
+    <strong>${value}</strong>
+    ${growthMarkup(item)}
+  </button>`;
+}
+
+function masterBars(rows, key) {
+  const list = (rows || []).slice(-31);
+  const max = Math.max(1, ...list.map((row) => Number(row[key]) || 0));
+  if (!list.length) return `<p class="hint">No bills in this range.</p>`;
+  return `<div class="master-bars" role="img" aria-label="Sales by day">${list
+    .map((row) => {
+      const height = Math.max(4, Math.round(((Number(row[key]) || 0) / max) * 100));
+      return `<div class="master-bar" title="${attr(row.day)} · ${attr(money(row.sales))}"><span style="height:${height}%"></span><em>${attr(String(row.day || "").slice(5))}</em></div>`;
+    })
+    .join("")}</div>`;
+}
+
+function readNoticeIds() {
+  try {
+    return new Set(JSON.parse(localStorage.getItem("pos_master_notice_read") || "[]"));
+  } catch {
+    return new Set();
+  }
+}
+
+function paintMasterNotices() {
+  const panel = $("master-notice-panel");
+  const button = $("master-notices");
+  if (!panel || !button) return;
+  const seen = readNoticeIds();
+  const unread = masterNotices.filter((item) => !seen.has(item.id)).length;
+  button.textContent = unread ? `Alerts ${unread}` : "Alerts";
+  panel.innerHTML = masterNotices.length
+    ? masterNotices
+        .map(
+          (item) => `<button type="button" class="master-notice${seen.has(item.id) ? "" : " is-new"}" data-notice="${attr(item.id)}">
+            <strong>${attr(item.title)}</strong>
+            <span>${attr(item.body || "")}</span>
+          </button>`,
+        )
+        .join("")
+    : `<p class="hint">No new shops, renewals, or expired plans right now.</p>`;
+}
+
+function bindMasterChrome() {
+  const theme = $("master-theme");
+  if (localStorage.getItem("pos_master_theme") === "dark") document.body.classList.add("master-dark");
+  theme?.addEventListener("click", () => {
+    document.body.classList.toggle("master-dark");
+    localStorage.setItem("pos_master_theme", document.body.classList.contains("master-dark") ? "dark" : "light");
+  });
+  $("master-notices")?.addEventListener("click", async () => {
+    const panel = $("master-notice-panel");
+    if (!panel) return;
+    const open = panel.hidden;
+    panel.hidden = !open;
+    $("master-notices")?.setAttribute("aria-expanded", open ? "true" : "false");
+    if (open && !masterNotices.length) {
+      try {
+        const insight = await api("/api/master/insights?range=30");
+        masterNotices = insight.notices || [];
+        paintMasterNotices();
+      } catch (err) {
+        panel.innerHTML = `<p class="hint error">${attr(err.message)}</p>`;
+      }
+    }
+  });
+  $("master-notice-panel")?.addEventListener("click", (event) => {
+    const item = event.target.closest("[data-notice]");
+    if (!item) return;
+    const seen = readNoticeIds();
+    seen.add(item.dataset.notice);
+    localStorage.setItem("pos_master_notice_read", JSON.stringify([...seen].slice(-200)));
+    paintMasterNotices();
+  });
+}
+
+bindMasterChrome();
 
 const ALERT_LOG_KIND_LABEL = {
   welcome: "Welcome",
@@ -1884,8 +1985,10 @@ function bindAlertsForm(alerts) {
 }
 
 async function render() {
+  stopLivePoll();
   const titles = {
     dash: "Platform dashboard",
+    live: "Live users",
     profile: "My profile",
     biz: "Businesses",
     managers: "Account managers",
@@ -1918,22 +2021,82 @@ async function render() {
   body.innerHTML = "<p class='hint'>Loading…</p>";
   try {
     if (tab === "dash") {
-      const d = await api("/api/master/dashboard");
+      const [d, insight, health, audit] = await Promise.all([
+        api("/api/master/dashboard"),
+        api(`/api/master/insights?range=${encodeURIComponent(dashRange)}`).catch(() => null),
+        api("/api/master/health").catch(() => null),
+        api("/api/master/audit").catch(() => []),
+      ]);
       const t = d.totals;
+      const k = insight?.kpis || {};
+      if (insight?.notices) {
+        masterNotices = insight.notices;
+        paintMasterNotices();
+      }
+      const ranges = [
+        ["today", "Today"],
+        ["yesterday", "Yesterday"],
+        ["7", "7 days"],
+        ["30", "30 days"],
+        ["month", "This month"],
+        ["prev", "Last month"],
+      ];
+      const subs = insight?.subscriptions || {};
       body.innerHTML = masterDesk(
         "Platform",
         "Dashboard",
-        "Shops, subscriptions, and a shortcut into any POS.",
+        insight?.feeNote || "Shops, subscriptions, and a shortcut into any POS.",
         [
-          { label: "Shops", value: t.businesses },
-          { label: "Active", value: t.active },
-          { label: "Expired", value: t.expired, warn: Number(t.expired) > 0 },
-          { label: "Trial", value: t.trial },
-          { label: "Users", value: t.users },
-          { label: "Today's sales", value: money(t.todaySales) },
-          { label: "Fees / year", value: money(t.subscriptionRevenue) },
+          { label: "Shops", value: k.businesses?.value ?? t.businesses },
+          { label: "Online", value: k.online?.value ?? 0 },
+          { label: "Today's sales", value: money(k.todaySales?.value ?? t.todaySales) },
+          { label: "Fees / year", value: money(k.arr?.value ?? t.subscriptionRevenue) },
         ],
-        `<div class="master-shop-toolbar">
+        `<div class="master-range" role="group" aria-label="Date range">${ranges
+          .map(([key, label]) => `<button type="button" class="btn${dashRange === key ? " primary" : ""}" data-dash-range="${attr(key)}">${attr(label)}</button>`)
+          .join("")}</div>
+        <div class="master-kpi-grid">
+          ${kpiButton("Businesses", k.businesses?.value ?? t.businesses, k.newBusinesses, "biz")}
+          ${kpiButton("Registered users", k.users?.value ?? t.users, k.newUsers, "live")}
+          ${kpiButton("Online now", k.online?.value ?? 0, null, "live")}
+          ${kpiButton("Active today", k.activeToday?.value ?? 0, null, "live")}
+          ${kpiButton("Live sessions", k.sessions?.value ?? 0, null, "live")}
+          ${kpiButton("Active plans", k.activeSubscriptions?.value ?? t.active, null, "plans")}
+          ${kpiButton("Expired plans", k.expiredSubscriptions?.value ?? t.expired, null, "biz")}
+          ${kpiButton("Trial plans", k.trial?.value ?? t.trial, null, "plans")}
+          ${kpiButton("Yearly fees", money(k.arr?.value ?? t.subscriptionRevenue), null, "plans")}
+          ${kpiButton("Fee / month", money(k.mrr?.value ?? 0), null, "plans")}
+          ${kpiButton("Today's sales", money(k.todaySales?.value ?? t.todaySales), k.todaySales, "dsa-sales")}
+          ${kpiButton("Range sales", money(k.rangeSales?.value ?? 0), k.rangeSales, "dsa-sales")}
+          ${kpiButton("This month", money(k.monthSales?.value ?? 0), k.monthSales, "dsa-sales")}
+          ${kpiButton("Invoices", k.invoices?.value ?? t.transactions, k.invoices, "dsa-sales")}
+        </div>
+        <div class="master-insight-grid">
+          <section class="master-panel">
+            <h3>${attr(insight?.range?.label || "Sales")}</h3>
+            ${masterBars(insight?.series || [], "sales")}
+          </section>
+          <section class="master-panel">
+            <h3>Business types</h3>
+            ${(insight?.categories || []).length ? (insight.categories.slice(0, 8).map((row) => {
+              const max = Math.max(...insight.categories.map((item) => Number(item.n) || 0), 1);
+              return `<div class="master-cat"><span>${attr(row.label)}</span><em style="width:${Math.round(((Number(row.n) || 0) / max) * 100)}%"></em><strong>${Number(row.n) || 0}</strong></div>`;
+            }).join("")) : `<p class="hint">No businesses yet.</p>`}
+          </section>
+          <section class="master-panel">
+            <h3>Subscriptions</h3>
+            <p class="master-sub-line">Active ${Number(subs.active) || 0} · Expired ${Number(subs.expired) || 0} · Suspended ${Number(subs.suspended) || 0} · Inactive ${Number(subs.inactive) || 0}</p>
+            <h3>Renewals in 14 days</h3>
+            ${(insight?.renewals || []).length ? `<ul class="master-renewals">${insight.renewals.map((row) => `<li><strong>${attr(row.name)}</strong><span>${attr(row.expires)}</span></li>`).join("")}</ul>` : `<p class="hint">No plan expires in the next 14 days.</p>`}
+            ${health ? `<p class="master-health">Database ${attr(health.database)} · ${Number(health.dbMs) || 0} ms${health.uptimeSeconds ? ` · process up ${Math.round(Number(health.uptimeSeconds) / 60)} min` : ""}${health.memoryRss ? ` · memory ${Math.round(Number(health.memoryRss) / 1048576)} MB` : ""}${health.loadAvg != null ? ` · load ${Number(health.loadAvg).toFixed(2)}` : ""}</p>` : ""}
+            <p class="hint">${attr(insight?.failedPaymentsNote || health?.note || "")}</p>
+          </section>
+          <section class="master-panel">
+            <h3>Recent admin actions</h3>
+            ${(Array.isArray(audit) ? audit : []).slice(0, 6).length ? `<ul class="master-renewals">${(Array.isArray(audit) ? audit : []).slice(0, 6).map((row) => `<li><strong>${attr(row.action || "Action")}</strong><span>${attr(row.actor_name || "")} · ${attr(String(row.created_at || "").replace("T", " ").slice(0, 16))}</span></li>`).join("")}</ul>` : `<p class="hint">No audit rows yet.</p>`}
+          </section>
+        </div>
+        <div class="master-shop-toolbar">
         <label class="master-shop-search">Search shops
           <input id="master-shop-q" type="search" placeholder="Name, DSA, plan, or status" autocomplete="off" />
         </label>
@@ -1967,6 +2130,166 @@ async function render() {
           el.hidden = Boolean(q) && !String(el.dataset.shopSearch || "").includes(q);
         });
       });
+      body.querySelectorAll("[data-dash-range]").forEach((btn) => {
+        btn.onclick = () => {
+          dashRange = btn.dataset.dashRange || "30";
+          render();
+        };
+      });
+      body.querySelectorAll("[data-open-tab]").forEach((btn) => {
+        btn.onclick = () => {
+          const next = btn.dataset.openTab;
+          if (next) setMasterTab(next);
+        };
+      });
+    } else if (tab === "live") {
+      const whenText = (value) => (value ? String(value).replace("T", " ").slice(0, 16) : "—");
+      const loadLive = () => {
+        const params = new URLSearchParams();
+        if (liveState.q) params.set("q", liveState.q);
+        if (liveState.presence !== "all") params.set("presence", liveState.presence);
+        if (liveState.category) params.set("category", liveState.category);
+        if (liveState.plan) params.set("plan", liveState.plan);
+        params.set("sort", liveState.sort);
+        params.set("page", String(liveState.page));
+        params.set("pageSize", "20");
+        return api(`/api/master/live-users?${params.toString()}`);
+      };
+      const data = await loadLive();
+      const counts = data.counts || {};
+      const paintRows = (payload) => {
+        const rows = payload.rows || [];
+        $("live-list").innerHTML = rows.length
+          ? `<div class="table-wrap"><table class="master-live-table"><thead><tr>
+              <th>User</th><th>Business</th><th>Owner</th><th>Mobile</th><th>Email</th><th>Category</th>
+              <th>Status</th><th>Last login</th><th>Last activity</th><th>Device</th><th>Plan</th><th></th>
+            </tr></thead><tbody>${rows
+              .map(
+                (row) => `<tr>
+              <td><strong>${attr(row.name)}</strong><span>${attr(row.role || "")}</span></td>
+              <td>${attr(row.businessName)}</td>
+              <td>${attr(row.ownerName)}</td>
+              <td>${attr(row.mobile || "—")}</td>
+              <td>${attr(row.email || "—")}</td>
+              <td>${attr(row.category)}</td>
+              <td><span class="master-presence${row.online ? " is-on" : ""}">${row.online ? "Online" : "Offline"}</span><span>${attr(row.accountStatus)}</span></td>
+              <td>${attr(whenText(row.lastLogin))}</td>
+              <td>${attr(whenText(row.lastActivity))}</td>
+              <td>${attr(row.device)} · ${attr(row.browser)}</td>
+              <td>${attr(row.plan)}<span>${attr(row.businessStatus || "")}</span></td>
+              <td>
+                <button class="btn" type="button" data-live-user="${attr(row.id)}">History</button>
+                ${row.sessionId ? `<button class="btn" type="button" data-end-session="${attr(row.sessionId)}">End session</button>` : ""}
+              </td>
+            </tr>`,
+              )
+              .join("")}</tbody></table></div>`
+          : `<div class="item-empty-card"><strong>No users match</strong><p>Try another name, mobile, or filter.</p></div>`;
+        $("live-page").textContent = `Page ${payload.page} of ${payload.pages} · ${payload.total} users`;
+        $("live-prev").disabled = payload.page <= 1;
+        $("live-next").disabled = payload.page >= payload.pages;
+      };
+      body.innerHTML = masterDesk(
+        "People",
+        "Live users",
+        "Online means a click or keypress in the last 5 minutes. An open tab with no activity stays offline.",
+        [
+          { label: "Registered", value: counts.registered || 0 },
+          { label: "Active accounts", value: counts.activeAccounts || 0 },
+          { label: "Online", value: counts.online || 0 },
+          { label: "Offline", value: counts.offline || 0 },
+          { label: "Active today", value: counts.activeToday || 0 },
+          { label: "New today", value: counts.newToday || 0 },
+          { label: "Sessions", value: counts.sessions || 0 },
+          { label: "Active shops", value: counts.activeBusinesses || 0 },
+        ],
+        `<div class="master-live-filters">
+          <label>Search <input id="live-q" type="search" value="${attr(liveState.q)}" placeholder="Business, mobile, or email" /></label>
+          <label>Presence <select id="live-presence">
+            <option value="all">All</option>
+            <option value="online">Online</option>
+            <option value="offline">Offline</option>
+          </select></label>
+          <label>Category <select id="live-category"><option value="">All categories</option>${(data.filters?.categories || []).map((name) => `<option value="${attr(name)}">${attr(name)}</option>`).join("")}</select></label>
+          <label>Plan <select id="live-plan"><option value="">All plans</option>${(data.filters?.plans || []).map((plan) => `<option value="${attr(plan.id)}">${attr(plan.name)}</option>`).join("")}</select></label>
+          <label>Sort <select id="live-sort"><option value="activity">Last activity</option><option value="name">Business name</option></select></label>
+        </div>
+        <div id="live-list"></div>
+        <div class="master-live-pager">
+          <button class="btn" type="button" id="live-prev">Previous</button>
+          <p class="hint" id="live-page"></p>
+          <button class="btn" type="button" id="live-next">Next</button>
+        </div>
+        <div id="live-detail"></div>`,
+      );
+      $("live-presence").value = liveState.presence;
+      $("live-category").value = liveState.category;
+      $("live-plan").value = liveState.plan;
+      $("live-sort").value = liveState.sort;
+      paintRows(data);
+      let liveGen = 0;
+      let liveWait = 0;
+      const reload = async () => {
+        const gen = ++liveGen;
+        const next = await loadLive();
+        if (gen !== liveGen) return;
+        paintRows(next);
+      };
+      const queue = () => {
+        liveState.page = 1;
+        reload().catch((err) => {
+          $("live-page").textContent = err.message;
+        });
+      };
+      $("live-q").addEventListener("input", () => {
+        liveState.q = $("live-q").value.trim();
+        clearTimeout(liveWait);
+        liveWait = setTimeout(queue, 250);
+      });
+      ["live-presence", "live-category", "live-plan", "live-sort"].forEach((id) => {
+        $(id).onchange = () => {
+          liveState.presence = $("live-presence").value;
+          liveState.category = $("live-category").value;
+          liveState.plan = $("live-plan").value;
+          liveState.sort = $("live-sort").value;
+          queue();
+        };
+      });
+      $("live-prev").onclick = () => {
+        liveState.page = Math.max(1, liveState.page - 1);
+        reload();
+      };
+      $("live-next").onclick = () => {
+        liveState.page += 1;
+        reload();
+      };
+      $("live-list").addEventListener("click", async (event) => {
+        const history = event.target.closest("[data-live-user]");
+        const end = event.target.closest("[data-end-session]");
+        if (history) {
+          const detail = await api(`/api/master/live-users/${encodeURIComponent(history.dataset.liveUser)}`);
+          $("live-detail").innerHTML = `<section class="master-panel">
+            <h3>${attr(detail.user?.name || "Sessions")} · ${attr(detail.user?.businessName || "")}</h3>
+            ${(detail.sessions || []).length ? `<ul class="master-renewals">${detail.sessions.map((row) => `<li><strong>${row.online ? "Online" : "Closed"} · ${attr(row.device)} · ${attr(row.browser)}</strong><span>${attr(whenText(row.started))} → ${attr(whenText(row.lastActivity))}${row.ip ? ` · ${attr(row.ip)}` : ""}</span></li>`).join("")}</ul>` : `<p class="hint">No sessions stored.</p>`}
+          </section>`;
+        }
+        if (!end) return;
+        if (!window.confirm("End this login? The person will need to sign in again.")) return;
+        end.disabled = true;
+        try {
+          await api(`/api/master/sessions/${encodeURIComponent(end.dataset.endSession)}/revoke`, { method: "POST" });
+          panelFlash = "Session ended.";
+          render();
+        } catch (err) {
+          end.disabled = false;
+          $("live-page").textContent = err.message;
+        }
+      });
+      stopLivePoll();
+      liveTimer = setInterval(() => {
+        if (tab !== "live" || document.hidden) return;
+        reload().catch(() => {});
+      }, 20000);
     } else if (tab === "biz") {
       const [rows, plans, managers] = await Promise.all([
         api("/api/master/businesses"),
@@ -1984,6 +2307,7 @@ async function render() {
       const expiredN = rows.filter((b) => /expir/.test(String(b.computed_status || "").toLowerCase())).length;
       const trialN = rows.filter((b) => /trial/.test(String(b.computed_status || b.plan_name || "").toLowerCase())).length;
       body.innerHTML = `<div class="items-desk master-desk">
+        <p class="master-export-row"><a class="btn" href="/api/master/businesses/export">Export CSV</a></p>
         ${masterHero("Platform", "Businesses", "Add or edit a shop, set login, and open POS. Status and plan sit on each shop card.", [
           { label: "Shops", value: rows.length },
           { label: "Active", value: activeN },

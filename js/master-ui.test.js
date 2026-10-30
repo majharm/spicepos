@@ -17,11 +17,12 @@ test("Master Admin desk collapses nested nav and uses a shop board", () => {
   assert.match(html, /data-nav-family="analytics"/);
   assert.match(html, /data-nav-family="seo"/);
   assert.match(html, /nav-group-label"[^>]*>Advanced</);
-  assert.match(html, /master\.js\?v=20261030staff1/);
+  assert.match(html, /master\.js\?v=20261030live1/);
+  assert.match(html, /data-tab="live"/);
   assert.match(html, /data-tab="profile"/);
   assert.match(html, /data-tab="staff"/);
   assert.match(js, /name="dsaCode"/);
-  assert.match(html, /saas\.css\?v=20261030staff1/);
+  assert.match(html, /saas\.css\?v=20261030live1/);
   assert.match(html, /data-tab="dsa-sales"/);
   assert.match(js, /tab === "dsa-sales"/);
   assert.match(js, /tab === "profile"/);

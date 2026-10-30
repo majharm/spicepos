@@ -313,11 +313,32 @@ export async function issueStaffSession(req, res, { user, business, branchId, im
       impersonatorAdminId || null,
     ],
   );
+  await query("UPDATE staff_sessions SET last_seen_at = NOW() WHERE id = ?", [sid]);
   setCookie(res, "pos_sid", token, ttl, req);
   return { token, ttl, sessionId: sid };
 }
 
 export function registerAuth(app) {
+  app.post("/api/session/pulse", async (req, res) => {
+    const token = cookies(req).pos_sid;
+    if (!token) {
+      res.status(401).json({ error: "Sign in required" });
+      return;
+    }
+    const staff = await loadStaffSession(token);
+    if (!staff) {
+      res.status(401).json({ error: "Sign in required" });
+      return;
+    }
+    await query(
+      `UPDATE staff_sessions SET last_seen_at = NOW()
+       WHERE token_hash = ? AND revoked_at IS NULL AND expires_at > NOW()
+         AND (last_seen_at IS NULL OR last_seen_at < DATE_SUB(NOW(), INTERVAL 45 SECOND))`,
+      [sha256(token)],
+    );
+    res.json({ ok: true, onlineWindowSeconds: 300 });
+  });
+
   app.post("/api/auth/login", async (req, res) => {
     const { identifier, password, branchId } = req.body || {};
     try {
@@ -376,6 +397,7 @@ export function registerAuth(app) {
           branchId || user.branch_id,
         ],
       );
+      await query("UPDATE staff_sessions SET last_seen_at = NOW() WHERE id = ?", [sid]);
       setCookie(res, "pos_sid", token, ttl, req);
       runTenant({ businessId: user.business_id, branchId: user.branch_id, user }, async () => {
         await audit("User Login", { module: "auth" }, req);
@@ -544,6 +566,7 @@ export function registerAuth(app) {
           user.branch_id,
         ],
       );
+      await query("UPDATE staff_sessions SET last_seen_at = NOW() WHERE token_hash = ?", [sha256(token)]);
       setCookie(res, "pos_sid", token, ttl, req);
       res.json({
         ok: true,

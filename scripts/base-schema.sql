@@ -95,6 +95,7 @@ CREATE TABLE IF NOT EXISTS staff_sessions (
   user_agent VARCHAR(255) NULL,
   branch_id VARCHAR(255) NULL,
   impersonator_admin_id VARCHAR(255) NULL,
+  last_seen_at TIMESTAMP(3) NULL,
   expires_at TIMESTAMP(3) NOT NULL,
   revoked_at TIMESTAMP(3) NULL,
   created_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),

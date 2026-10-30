@@ -2360,4 +2360,118 @@ body.dev-mode .session-bar::after {
     box-shadow: none;
   }
 }
+.master-icon-btn { min-height: 40px; }
+.master-notice-panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 4px;
+  z-index: 12;
+  width: min(360px, calc(100vw - 32px));
+  display: grid;
+  gap: 6px;
+  padding: 10px;
+  border: 1px solid var(--line, #e2e8f0);
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.16);
+}
+.master-notice {
+  display: grid;
+  gap: 2px;
+  width: 100%;
+  text-align: left;
+  border: 0;
+  border-radius: 10px;
+  background: #f8fafc;
+  padding: 8px 10px;
+  color: inherit;
+  cursor: pointer;
+}
+.master-notice.is-new { box-shadow: inset 3px 0 0 #0d9488; }
+.master-notice span { color: var(--muted, #64748b); font-size: 12px; }
+.master-range { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 12px; }
+.master-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.master-kpi {
+  display: grid;
+  gap: 4px;
+  min-height: 92px;
+  padding: 12px;
+  text-align: left;
+  border: 1px solid var(--line, #e2e8f0);
+  border-radius: 14px;
+  background: #fff;
+  color: inherit;
+  box-shadow: var(--shadow-card, 0 8px 20px rgba(15, 23, 42, 0.05));
+  cursor: pointer;
+}
+.master-kpi span { font-size: 12px; color: var(--muted, #64748b); }
+.master-kpi strong { font-size: 20px; font-variant-numeric: tabular-nums; }
+.master-growth { font-size: 12px; font-weight: 700; }
+.master-growth.is-up { color: #047857; }
+.master-growth.is-down { color: #b45309; }
+.master-growth.is-flat { color: #64748b; }
+.master-insight-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.master-panel {
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--line, #e2e8f0);
+  border-radius: 16px;
+  background: #fff;
+}
+.master-panel h3 { margin: 0 0 10px; font-size: 14px; }
+.master-bars {
+  display: flex;
+  align-items: end;
+  gap: 4px;
+  height: 140px;
+  overflow-x: auto;
+}
+.master-bar { display: grid; align-items: end; justify-items: center; min-width: 18px; height: 100%; }
+.master-bar span { display: block; width: 12px; border-radius: 6px 6px 2px 2px; background: #0d9488; }
+.master-bar em { margin-top: 4px; font-style: normal; font-size: 9px; color: #64748b; }
+.master-cat { display: grid; grid-template-columns: minmax(80px, 120px) 1fr auto; gap: 8px; align-items: center; margin: 6px 0; font-size: 13px; }
+.master-cat em { display: block; height: 8px; border-radius: 99px; background: #0d9488; }
+.master-renewals { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.master-renewals li { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; }
+.master-renewals span, .master-sub-line, .master-health { color: var(--muted, #64748b); font-size: 13px; }
+.master-export-row { margin: 0 0 10px; }
+.master-live-filters {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.master-live-filters input, .master-live-filters select { width: 100%; min-height: 40px; }
+.master-live-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.master-live-table th, .master-live-table td { padding: 8px 10px; border-bottom: 1px solid var(--line, #e2e8f0); text-align: left; vertical-align: top; }
+.master-live-table span { display: block; color: var(--muted, #64748b); font-size: 12px; }
+.master-presence { font-weight: 700; color: #64748b; }
+.master-presence.is-on { color: #047857; }
+.master-live-pager { display: flex; align-items: center; gap: 10px; margin: 12px 0; }
+.master-live-table td .btn { margin: 0 6px 6px 0; }
+body.master-dark .master-main { background: #0f172a; color: #e2e8f0; }
+body.master-dark .master-topbar { background: #0f172a; border-color: #334155; }
+body.master-dark .master-kpi,
+body.master-dark .master-panel,
+body.master-dark .master-notice-panel,
+body.master-dark .master-shop-card,
+body.master-dark .item-composer.settings,
+body.master-dark .items-library { background: #1e293b; color: #e2e8f0; border-color: #334155; }
+body.master-dark .master-kpi span,
+body.master-dark .master-health,
+body.master-dark .hint { color: #94a3b8; }
+@media (max-width: 900px) {
+  .master-insight-grid { grid-template-columns: 1fr; }
+  .master-live-table { min-width: 880px; }
+}
 

@@ -231,6 +231,7 @@ function pos_ensure_staff_session_columns() {
     "user_agent" => "VARCHAR(255) NULL",
     "branch_id" => "VARCHAR(255) NULL",
     "impersonator_admin_id" => "VARCHAR(255) NULL",
+    "last_seen_at" => "TIMESTAMP(3) NULL",
   ] as $name => $def) {
     $res = $db->query("SHOW COLUMNS FROM staff_sessions LIKE '" . $db->real_escape_string($name) . "'");
     if ($res && $res->num_rows === 0) {
@@ -267,6 +268,7 @@ function pos_issue_staff_session($user, $branchId, $impersonatorAdminId = null) 
     );
   }
   pos_set_cookie("pos_sid", $token, $ttl);
+  try { pos_q("UPDATE staff_sessions SET last_seen_at = NOW() WHERE token_hash = ?", "s", [pos_sha256($token)]); } catch (Exception $e) { /* seen-at is optional */ }
   return $token;
 }
 
@@ -3805,6 +3807,7 @@ function pos_php_dispatch($path, $method, $rawBody) {
         "sssissss",
         [pos_uuid(), $user["id"], pos_sha256($token), $ttl, $user["business_id"], pos_ip(), pos_ua(), $branchId]
       );
+      try { pos_q("UPDATE staff_sessions SET last_seen_at = NOW() WHERE token_hash = ?", "s", [pos_sha256($token)]); } catch (Exception $e) { /* seen-at is optional */ }
       pos_set_cookie("pos_sid", $token, $ttl);
       pos_send(200, [
         "ok" => true,
@@ -3887,6 +3890,7 @@ function pos_php_dispatch($path, $method, $rawBody) {
         "sssissss",
         [pos_uuid(), $user["id"], pos_sha256($token), $ttl, $user["business_id"], pos_ip(), pos_ua(), $user["branch_id"]]
       );
+      try { pos_q("UPDATE staff_sessions SET last_seen_at = NOW() WHERE token_hash = ?", "s", [pos_sha256($token)]); } catch (Exception $e) { /* seen-at is optional */ }
       pos_set_cookie("pos_sid", $token, $ttl);
       pos_send(200, [
         "ok" => true,
@@ -3986,7 +3990,26 @@ function pos_php_dispatch($path, $method, $rawBody) {
       pos_send(200, ["ok" => true, "php" => true]);
     }
 
+    if ($path === "session/pulse" && $method === "POST") {
+      $staff = pos_staff_session();
+      if (!$staff) pos_send(401, ["error" => "Sign in required"]);
+      pos_ensure_staff_session_columns();
+      pos_q(
+        "UPDATE staff_sessions SET last_seen_at = NOW()
+         WHERE token_hash = ? AND revoked_at IS NULL AND expires_at > NOW()
+           AND (last_seen_at IS NULL OR last_seen_at < DATE_SUB(NOW(), INTERVAL 45 SECOND))",
+        "s",
+        [pos_sha256(pos_cookie("pos_sid"))]
+      );
+      pos_send(200, ["ok" => true, "onlineWindowSeconds" => 300]);
+    }
+
     $auth = pos_require_master($path);
+
+    if (is_file(__DIR__ . "/pos-master-live.php")) {
+      require_once __DIR__ . "/pos-master-live.php";
+      if (function_exists("pos_master_live_dispatch") && pos_master_live_dispatch($path, $method, $auth)) return;
+    }
 
     if ($path === "master/profile" && $method === "GET") {
       pos_ensure_platform_admin_columns();

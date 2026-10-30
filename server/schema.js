@@ -224,6 +224,7 @@ export async function ensureSchema() {
   await addColumn("staff_sessions", "user_agent", "VARCHAR(255) NULL");
   await addColumn("staff_sessions", "branch_id", "VARCHAR(255) NULL");
   await addColumn("staff_sessions", "impersonator_admin_id", "VARCHAR(255) NULL");
+  await addColumn("staff_sessions", "last_seen_at", "TIMESTAMP(3) NULL");
 
   await addColumn("staff_audit_logs", "branch_id", "VARCHAR(255) NULL");
   await addColumn("staff_audit_logs", "ip", "VARCHAR(64) NULL");

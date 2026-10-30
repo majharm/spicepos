@@ -2,6 +2,7 @@ import { query, withTransaction } from "./db.js";
 import { hashPassword, verifyPassword } from "./password.js";
 import { requireMaster, issueStaffSession } from "./auth.js";
 import { displayName } from "./roles.js";
+import { registerMasterLive } from "./master-live.js";
 import { platformAudit } from "./audit.js";
 import { registerBusiness, updateBusiness, normalizeDsaCode } from "./onboard.js";
 import { defaultPerms, ROLES } from "./roles.js";
@@ -231,6 +232,7 @@ function masterProfilePublic(row) {
 
 export function registerMaster(app) {
   app.use("/api/master", requireMaster);
+  registerMasterLive(app);
   registerMasterBackup(app);
 
   app.get("/api/master/profile", async (req, res) => {
