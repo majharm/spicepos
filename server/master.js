@@ -4,7 +4,7 @@ import { requireMaster, issueStaffSession } from "./auth.js";
 import { displayName } from "./roles.js";
 import { platformAudit } from "./audit.js";
 import { registerBusiness, updateBusiness, normalizeDsaCode } from "./onboard.js";
-import { defaultPerms } from "./roles.js";
+import { defaultPerms, ROLES } from "./roles.js";
 import { publicStatus } from "./auth.js";
 import {
   calendarYmd,
@@ -73,6 +73,49 @@ async function listAccountManagers() {
     shops: Number(m.shops) || 0,
     businesses: shops.filter((b) => b.account_manager_id === m.id),
   }));
+}
+
+function masterStaffFields(body, existingId = "") {
+  const name = String(body?.name || body?.first_name || "").trim().slice(0, 120);
+  if (!name) throw new Error("Staff name is required");
+  const email = String(body?.email || "").trim().toLowerCase();
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error("Enter a valid email");
+  const businessId = String(body?.business_id || "").trim();
+  if (!businessId) throw new Error("Choose a shop");
+  const role = ROLES.includes(body?.role) ? body.role : "staff";
+  let username = String(body?.username || "").trim();
+  if (!username) username = email.split("@")[0];
+  username = username.slice(0, 64);
+  const mobile = String(body?.mobile || "").trim().slice(0, 32);
+  const status = String(body?.status || "active").toLowerCase() === "inactive" ? "inactive" : "active";
+  const password = String(body?.password || "");
+  if (!existingId && password.length < 8) throw new Error("Password must be 8+ characters");
+  if (existingId && password && password.length < 8) throw new Error("Password must be 8+ characters");
+  return { name, email, businessId, role, username, mobile, status, password, branchId: String(body?.branch_id || "").trim() };
+}
+
+async function saveMasterStaff(body, existingId = "") {
+  const fields = masterStaffFields(body, existingId);
+  const [shop] = await query("SELECT id, name FROM businesses WHERE id = ? LIMIT 1", [fields.businessId]);
+  if (!shop) throw new Error("Choose a shop");
+  let branchId = fields.branchId;
+  if (branchId) {
+    const [own] = await query("SELECT id FROM branches WHERE id = ? AND business_id = ? LIMIT 1", [branchId, shop.id]);
+    if (!own) throw new Error("That branch is not on this shop");
+  } else {
+    const [first] = await query("SELECT id FROM branches WHERE business_id = ? ORDER BY name LIMIT 1", [shop.id]);
+    branchId = first?.id || "";
+  }
+  const [emailDup] = await query("SELECT id FROM staff_users WHERE LOWER(email) = ? AND id <> ? LIMIT 1", [fields.email, existingId]);
+  if (emailDup) throw new Error("That email is already used");
+  if (fields.username) {
+    const [userDup] = await query(
+      "SELECT id FROM staff_users WHERE business_id = ? AND username = ? AND id <> ? LIMIT 1",
+      [shop.id, fields.username, existingId],
+    );
+    if (userDup) throw new Error("That username is already used in this shop");
+  }
+  return { ...fields, businessName: shop.name, branchId };
 }
 
 async function unlockStaffUser(id) {
@@ -844,6 +887,103 @@ export function registerMaster(app) {
          ORDER BY u.email`,
       ),
     ),
+  );
+
+  app.post("/api/master/staff", (req, res) =>
+    send(res, async () => {
+      const fields = await saveMasterStaff(req.body || {});
+      const id = crypto.randomUUID();
+      await query(
+        `INSERT INTO staff_users (
+           id, clerk_user_id, email, first_name, last_name, role, status, password_hash,
+           business_id, branch_id, permissions_json, username, mobile
+         ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        [
+          id,
+          `local:${id}`,
+          fields.email,
+          fields.name,
+          "",
+          fields.role,
+          fields.status,
+          await hashPassword(fields.password),
+          fields.businessId,
+          fields.branchId,
+          JSON.stringify(defaultPerms(fields.role)),
+          fields.username,
+          fields.mobile,
+        ],
+      );
+      await platformAudit(
+        req.auth.admin,
+        "Staff Created",
+        { module: "staff", target_id: id, target_name: fields.email, business_id: fields.businessId },
+        req,
+      );
+      try {
+        await sendWelcomeStaff(
+          {
+            shopName: fields.businessName,
+            name: fields.name,
+            email: fields.email,
+            username: fields.username,
+            role: fields.role,
+          },
+          req,
+        );
+        await sendCredentialAlerts({
+          businessId: fields.businessId,
+          shopName: fields.businessName,
+          ownerName: fields.name,
+          email: fields.email,
+          username: fields.username,
+          password: fields.password,
+          role: fields.role,
+          mobile: fields.mobile,
+          signInUrl: publicLoginUrl(req),
+        });
+      } catch (err) {
+        console.error("staff credential alerts failed:", err.message);
+      }
+      return { ok: true, id, message: "Staff saved." };
+    }),
+  );
+
+  app.put("/api/master/staff/:id", (req, res) =>
+    send(res, async () => {
+      const [have] = await query("SELECT id FROM staff_users WHERE id = ? LIMIT 1", [req.params.id]);
+      if (!have) throw new Error("Staff not found");
+      const fields = await saveMasterStaff(req.body || {}, req.params.id);
+      await query(
+        `UPDATE staff_users SET email=?, first_name=?, last_name=?, role=?, status=?, business_id=?, branch_id=?, permissions_json=?, username=?, mobile=? WHERE id=?`,
+        [
+          fields.email,
+          fields.name,
+          "",
+          fields.role,
+          fields.status,
+          fields.businessId,
+          fields.branchId,
+          JSON.stringify(defaultPerms(fields.role)),
+          fields.username,
+          fields.mobile,
+          req.params.id,
+        ],
+      );
+      if (fields.password) {
+        await query(
+          "UPDATE staff_users SET password_hash = ?, failed_logins = 0, locked_until = NULL WHERE id = ?",
+          [await hashPassword(fields.password), req.params.id],
+        );
+      }
+      await platformAudit(
+        req.auth.admin,
+        "Staff Updated",
+        { module: "staff", target_id: req.params.id, target_name: fields.email, business_id: fields.businessId },
+        req,
+      );
+      return { ok: true, id: req.params.id, message: "Staff saved." };
+    }),
   );
 
   app.get("/api/master/branches", (_req, res) =>

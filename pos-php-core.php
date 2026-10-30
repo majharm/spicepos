@@ -1792,6 +1792,60 @@ function pos_default_perms($role) {
   return ["dashboard" => true, "counter" => true, "support" => true];
 }
 
+function pos_master_staff_fields($body, $existingId = "") {
+  $name = trim((string) ($body["name"] ?? $body["first_name"] ?? ""));
+  if ($name === "") pos_send(400, ["error" => "Staff name is required"]);
+  if (strlen($name) > 120) $name = substr($name, 0, 120);
+  $email = strtolower(trim((string) ($body["email"] ?? "")));
+  if ($email === "" || !filter_var($email, FILTER_VALIDATE_EMAIL)) pos_send(400, ["error" => "Enter a valid email"]);
+  $bid = trim((string) ($body["business_id"] ?? ""));
+  $shops = $bid !== "" ? pos_q("SELECT id, name FROM businesses WHERE id = ? LIMIT 1", "s", [$bid]) : [];
+  if (!$shops) pos_send(400, ["error" => "Choose a shop"]);
+  $role = (string) ($body["role"] ?? "staff");
+  if (!in_array($role, pos_known_roles(), true)) $role = "staff";
+  $username = trim((string) ($body["username"] ?? ""));
+  if ($username === "") $username = explode("@", $email)[0];
+  $username = substr($username, 0, 64);
+  $mobile = substr(trim((string) ($body["mobile"] ?? "")), 0, 32);
+  $status = strtolower((string) ($body["status"] ?? "active")) === "inactive" ? "inactive" : "active";
+  $password = (string) ($body["password"] ?? "");
+  if ($existingId === "") {
+    if (strlen($password) < 8) pos_send(400, ["error" => "Password must be 8+ characters"]);
+  } elseif ($password !== "" && strlen($password) < 8) {
+    pos_send(400, ["error" => "Password must be 8+ characters"]);
+  }
+  $branchId = trim((string) ($body["branch_id"] ?? ""));
+  if ($branchId !== "") {
+    $own = pos_q("SELECT id FROM branches WHERE id = ? AND business_id = ? LIMIT 1", "ss", [$branchId, $bid]);
+    if (!$own) pos_send(400, ["error" => "That branch is not on this shop"]);
+  } else {
+    $first = pos_q("SELECT id FROM branches WHERE business_id = ? ORDER BY name LIMIT 1", "s", [$bid]);
+    $branchId = (string) ($first[0]["id"] ?? "");
+  }
+  $emailDup = pos_q("SELECT id FROM staff_users WHERE LOWER(email) = ? AND id <> ? LIMIT 1", "ss", [$email, $existingId]);
+  if ($emailDup) pos_send(400, ["error" => "That email is already used"]);
+  if ($username !== "") {
+    $userDup = pos_q(
+      "SELECT id FROM staff_users WHERE business_id = ? AND username = ? AND id <> ? LIMIT 1",
+      "sss",
+      [$bid, $username, $existingId]
+    );
+    if ($userDup) pos_send(400, ["error" => "That username is already used in this shop"]);
+  }
+  return [
+    "name" => $name,
+    "email" => $email,
+    "business_id" => $bid,
+    "business_name" => $shops[0]["name"] ?? "",
+    "role" => $role,
+    "username" => $username,
+    "mobile" => $mobile,
+    "status" => $status,
+    "password" => $password,
+    "branch_id" => $branchId,
+  ];
+}
+
 function pos_list_branches($bid) {
   return pos_q(
     "SELECT b.*,
@@ -4423,6 +4477,96 @@ function pos_php_dispatch($path, $method, $rawBody) {
       $user = pos_unlock_staff_user($m[1]);
       pos_audit($auth["admin"], "Account Unlocked", ["module" => "users", "target_id" => $m[1], "target_name" => $user["email"] ?? ""]);
       pos_send(200, ["ok" => true, "email" => $user["email"] ?? ""]);
+    }
+
+    if ($path === "master/staff" && $method === "POST") {
+      $fields = pos_master_staff_fields($body);
+      $id = pos_uuid();
+      pos_q(
+        "INSERT INTO staff_users (
+           id, clerk_user_id, email, first_name, last_name, role, status, password_hash,
+           business_id, branch_id, permissions_json, username, mobile
+         ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        "sssssssssssss",
+        [
+          $id,
+          "local:{$id}",
+          $fields["email"],
+          $fields["name"],
+          "",
+          $fields["role"],
+          $fields["status"],
+          pos_hash_password($fields["password"]),
+          $fields["business_id"],
+          $fields["branch_id"],
+          json_encode(pos_default_perms($fields["role"])),
+          $fields["username"],
+          $fields["mobile"],
+        ]
+      );
+      pos_audit($auth["admin"], "Staff Created", [
+        "module" => "staff",
+        "target_id" => $id,
+        "target_name" => $fields["email"],
+        "business_id" => $fields["business_id"],
+      ]);
+      if (function_exists("pos_send_welcome_staff")) {
+        try {
+          pos_send_welcome_staff([
+            "shopName" => $fields["business_name"],
+            "name" => $fields["name"],
+            "email" => $fields["email"],
+            "username" => $fields["username"],
+            "role" => $fields["role"],
+          ]);
+        } catch (Exception $e) { /* mail is optional */ }
+      }
+      if (function_exists("pos_send_credential_alerts")) {
+        try {
+          pos_send_credential_alerts([
+            "businessId" => $fields["business_id"],
+            "shopName" => $fields["business_name"],
+            "ownerName" => $fields["name"],
+            "email" => $fields["email"],
+            "username" => $fields["username"],
+            "password" => $fields["password"],
+            "role" => $fields["role"],
+            "mobile" => $fields["mobile"],
+          ]);
+        } catch (Exception $e) { /* mail is optional */ }
+      }
+      pos_send(200, ["ok" => true, "id" => $id, "message" => "Staff saved.", "php" => true]);
+    }
+
+    if (preg_match("#^master/staff/([^/]+)$#", $path, $m) && ($method === "PUT" || $method === "POST")) {
+      $have = pos_q("SELECT id FROM staff_users WHERE id = ? LIMIT 1", "s", [$m[1]]);
+      if (!$have) pos_send(404, ["error" => "Staff not found"]);
+      $fields = pos_master_staff_fields($body, $m[1]);
+      pos_q(
+        "UPDATE staff_users SET email=?, first_name=?, last_name=?, role=?, status=?, business_id=?, branch_id=?, permissions_json=?, username=?, mobile=? WHERE id=?",
+        "sssssssssss",
+        [
+          $fields["email"],
+          $fields["name"],
+          "",
+          $fields["role"],
+          $fields["status"],
+          $fields["business_id"],
+          $fields["branch_id"],
+          json_encode(pos_default_perms($fields["role"])),
+          $fields["username"],
+          $fields["mobile"],
+          $m[1],
+        ]
+      );
+      if ($fields["password"] !== "") pos_set_staff_password($m[1], $fields["password"]);
+      pos_audit($auth["admin"], "Staff Updated", [
+        "module" => "staff",
+        "target_id" => $m[1],
+        "target_name" => $fields["email"],
+        "business_id" => $fields["business_id"],
+      ]);
+      pos_send(200, ["ok" => true, "id" => $m[1], "message" => "Staff saved.", "php" => true]);
     }
 
     if ($path === "master/branches" && $method === "GET") {

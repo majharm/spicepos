@@ -189,7 +189,7 @@ function showLogin(on) {
 const NAV_FAMILIES = {
   main: ["dash", "profile", "biz", "users", "plans", "dsa-sales"],
   alerts: ["expiry", "alert-log"],
-  people: ["managers", "support"],
+  people: ["managers", "staff", "support"],
   advance: ["advance", "backup", "languages", "notes", "branches", "devices", "audit", "customers"],
   analytics: ["analytics"],
   seo: ["seo"],
@@ -206,6 +206,7 @@ const PAGE_HINTS = {
   expiry: "WhatsApp and email alerts",
   "alert-log": "Delivery history",
   managers: "Assign shops to support staff",
+  staff: "Shop logins, roles, and passwords",
   support: "Fallback helpline",
   advance: "Settings, backup, and logs",
   backup: "Download or restore data",
@@ -271,6 +272,7 @@ const MASTER_PAGES = [
   { tab: "expiry", title: "Send alerts", keywords: "whatsapp email renewal" },
   { tab: "alert-log", title: "WA & Email log", keywords: "whatsapp email delivery" },
   { tab: "managers", title: "Account managers", keywords: "support assign" },
+  { tab: "staff", title: "Staff master", keywords: "staff user password role cashier login" },
   { tab: "support", title: "Support helpline", keywords: "phone email" },
   { tab: "advance", title: "Advanced", keywords: "tools hub" },
   { tab: "backup", pane: "settings", title: "Settings", keywords: "whatsapp smtp messages" },
@@ -1888,6 +1890,7 @@ async function render() {
     biz: "Businesses",
     managers: "Account managers",
     users: "Users",
+    staff: "Staff master",
     plans: "Subscription plans",
     "dsa-sales": "DSA Sales",
     branches: "Branches",
@@ -2458,6 +2461,188 @@ async function render() {
       const shops = await api("/api/master/businesses");
       body.innerHTML = expiryAlertsPageHtml(shops);
       bindExpiryAlertsPage(shops);
+    } else if (tab === "staff") {
+      const STAFF_ROLES = [
+        ["business_admin", "Business admin"],
+        ["branch_manager", "Branch manager"],
+        ["manager", "Manager"],
+        ["cashier", "Cashier"],
+        ["captain", "Captain"],
+        ["kitchen", "Kitchen"],
+        ["stock_manager", "Stock manager"],
+        ["accountant", "Accountant"],
+        ["staff", "Staff"],
+        ["bartender", "Bartender"],
+        ["receptionist", "Receptionist"],
+        ["reservation_executive", "Reservation"],
+        ["housekeeping", "Housekeeping"],
+        ["maintenance", "Maintenance"],
+        ["property_manager", "Property manager"],
+        ["resort_owner", "Resort owner"],
+        ["restaurant_manager", "Restaurant manager"],
+        ["restaurant_staff", "Restaurant staff"],
+      ];
+      const roleLabel = (role) => STAFF_ROLES.find(([value]) => value === role)?.[1] || role || "Staff";
+      const [rows, shops] = await Promise.all([api("/api/master/users"), api("/api/master/businesses")]);
+      const q = "";
+      const activeN = rows.filter((u) => u.status !== "inactive").length;
+      const lockedN = rows.filter((u) => /lock/i.test(accountStatusLabel(u))).length;
+      const shopOptions = [`<option value="">Choose shop</option>`]
+        .concat((shops || []).map((b) => `<option value="${attr(b.id)}">${attr(b.name)}</option>`))
+        .join("");
+      const roleOptions = STAFF_ROLES.map(([value, label]) => `<option value="${attr(value)}"${value === "staff" ? " selected" : ""}>${attr(label)}</option>`).join("");
+      body.innerHTML = masterDesk(
+        "People",
+        "Staff master",
+        "Add a shop login, then set the role, mobile, and password. The same person can be opened in that shop’s POS.",
+        [
+          { label: "Staff", value: rows.length },
+          { label: "Active", value: activeN },
+          { label: "Locked", value: lockedN, warn: lockedN > 0 },
+          { label: "Shops", value: (shops || []).length },
+        ],
+        `<div class="items-split master-staff-desk">
+          <form class="settings item-composer master-staff-form" id="staff-form" autocomplete="off">
+            <input type="hidden" name="staff_id" />
+            <div class="item-composer-top">
+              <p class="item-mode" id="staff-mode">Add staff</p>
+              <p class="item-composer-note">Password is required for a new login. Leave it blank when you only change the name, role, or shop.</p>
+            </div>
+            <fieldset class="item-block">
+              <legend>Login</legend>
+              <label class="full">Shop
+                <select name="business_id" required>${shopOptions}</select>
+              </label>
+              <label>Name <input name="name" required maxlength="120" placeholder="Staff name" /></label>
+              <label>Mobile <input name="mobile" type="tel" inputmode="numeric" maxlength="15" placeholder="10-digit mobile" /></label>
+              <label>Email <input name="email" type="email" required maxlength="160" autocomplete="off" /></label>
+              <label>Username <input name="username" maxlength="32" placeholder="Till login" autocomplete="off" /></label>
+              <label>Role
+                <select name="role">${roleOptions}</select>
+              </label>
+              <label>Status
+                <select name="status">
+                  <option value="active">Active</option>
+                  <option value="inactive">Inactive</option>
+                </select>
+              </label>
+              <label class="full">Password <input name="password" type="password" minlength="8" autocomplete="new-password" placeholder="At least 8 characters" /></label>
+            </fieldset>
+            <div class="item-composer-actions">
+              <button class="btn primary" type="submit">Save staff</button>
+              <button class="btn" type="button" id="staff-clear">Clear</button>
+              <p class="hint" id="staff-hint" role="status"></p>
+            </div>
+          </form>
+          <div class="items-library">
+            <label class="master-shop-search">Search staff
+              <input id="staff-q" type="search" placeholder="Name, shop, role, or mobile" autocomplete="off" />
+            </label>
+            <div class="master-staff-list" id="staff-list"></div>
+          </div>
+        </div>`,
+      );
+      const form = $("staff-form");
+      const hint = $("staff-hint");
+      const paintList = () => {
+        const query = String($("staff-q")?.value || "").trim().toLowerCase();
+        const editing = form.staff_id.value;
+        const visible = rows.filter((u) => {
+          if (!query) return true;
+          const name = `${u.first_name || ""} ${u.last_name || ""}`.trim();
+          return `${name} ${u.email || ""} ${u.username || ""} ${u.mobile || ""} ${u.role || ""} ${u.business_name || ""}`.toLowerCase().includes(query);
+        });
+        $("staff-list").innerHTML = visible.length
+          ? visible
+              .map((u) => {
+                const name = `${u.first_name || ""} ${u.last_name || ""}`.trim() || u.email || "Staff";
+                const off = u.status === "inactive";
+                return `<article class="master-staff-card${editing === u.id ? " is-editing" : ""}${off ? " is-off" : ""}">
+                  <div class="master-staff-copy">
+                    <strong>${attr(name)}</strong>
+                    <span>${attr(roleLabel(u.role))} · ${attr(u.business_name || "No shop")}</span>
+                    <span>${attr(u.email || "—")}${u.mobile ? ` · ${attr(u.mobile)}` : ""}${u.username ? ` · ${attr(u.username)}` : ""}</span>
+                    <span>${off ? "Inactive" : "Active"}${/lock/i.test(accountStatusLabel(u)) ? ` · ${attr(accountStatusLabel(u))}` : ""}</span>
+                  </div>
+                  <div class="master-staff-actions">
+                    <button class="btn" type="button" data-edit-staff="${attr(u.id)}">Edit</button>
+                    <button class="btn" type="button" data-unlock="${attr(u.id)}">Unlock</button>
+                    ${u.status === "active" ? `<button class="btn primary" type="button" data-enter-user="${attr(u.id)}">Open POS</button>` : ""}
+                  </div>
+                </article>`;
+              })
+              .join("")
+          : `<div class="item-empty-card"><strong>${query ? "No staff matches that search" : "No staff yet"}</strong><p>${query ? "Try a name, shop, or mobile." : "Add a login for a shop."}</p></div>`;
+      };
+      const fillStaff = (u) => {
+        form.staff_id.value = u?.id || "";
+        form.business_id.value = u?.business_id || "";
+        form.name.value = `${u?.first_name || ""} ${u?.last_name || ""}`.trim();
+        form.mobile.value = u?.mobile || "";
+        form.email.value = u?.email || "";
+        form.username.value = u?.username || "";
+        form.role.value = STAFF_ROLES.some(([value]) => value === u?.role) ? u.role : "staff";
+        form.status.value = u?.status === "inactive" ? "inactive" : "active";
+        form.password.value = "";
+        form.password.required = !u;
+        $("staff-mode").textContent = u ? `Editing ${form.name.value || u.email}` : "Add staff";
+        paintList();
+        form.name.focus();
+      };
+      paintList();
+      $("staff-q").addEventListener("input", paintList);
+      $("staff-clear").onclick = () => fillStaff(null);
+      form.onsubmit = async (e) => {
+        e.preventDefault();
+        const fields = Object.fromEntries(new FormData(form).entries());
+        const id = fields.staff_id;
+        delete fields.staff_id;
+        if (!id && String(fields.password || "").length < 8) {
+          hint.textContent = "Password must be 8+ characters";
+          hint.className = "hint error";
+          return;
+        }
+        hint.className = "hint";
+        hint.textContent = "Saving…";
+        try {
+          const saved = id
+            ? await api(`/api/master/staff/${id}`, { method: "PUT", body: JSON.stringify(fields) })
+            : await api("/api/master/staff", { method: "POST", body: JSON.stringify(fields) });
+          hint.textContent = saved.message || "Saved";
+          hint.className = "hint ok";
+          panelFlash = saved.message || "Staff saved.";
+          render();
+        } catch (err) {
+          hint.textContent = err.message;
+          hint.className = "hint error";
+        }
+      };
+      $("staff-list").addEventListener("click", async (e) => {
+        const edit = e.target.closest("[data-edit-staff]");
+        const unlock = e.target.closest("[data-unlock]");
+        if (edit) {
+          const staff = rows.find((u) => u.id === edit.dataset.editStaff);
+          if (staff) fillStaff(staff);
+          return;
+        }
+        if (!unlock) return;
+        unlock.disabled = true;
+        try {
+          await api(`/api/master/users/${unlock.dataset.unlock}/unlock`, { method: "POST" });
+          panelFlash = "Account unlocked. The user can sign in again.";
+          render();
+        } catch (err) {
+          hint.textContent = err.message;
+          hint.className = "hint error";
+          unlock.disabled = false;
+        }
+      });
+      bindEnterPosButtons(body);
+      if (panelFlash) {
+        hint.textContent = panelFlash;
+        hint.className = "hint ok";
+        panelFlash = "";
+      }
     } else if (tab === "users") {
       const rows = await api("/api/master/users");
       const lockedN = rows.filter((u) => /lock/i.test(accountStatusLabel(u))).length;
