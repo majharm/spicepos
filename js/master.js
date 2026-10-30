@@ -74,6 +74,11 @@ function categoriesForType(type) {
   return BIZ_CATEGORIES_FOR_TYPE[String(type || "").trim()] || BIZ_CATEGORIES;
 }
 
+function isRestaurantCafeModule(type) {
+  const t = String(type || "").trim().toLowerCase();
+  return t === "restaurant" || t === "cafe";
+}
+
 function fillCategorySelect(sel, type, current) {
   if (!sel) return;
   const list = categoriesForType(type);
@@ -2686,22 +2691,24 @@ async function render() {
                     <option value="inactive">Inactive</option>
                   </select>
                 </label>
-                <label class="full">
-                  <input type="checkbox" name="barEnabled" />
-                  Enable Bar Business Model — bottle/peg billing, bar inventory, and bar tables for this shop
-                </label>
-                <label class="full">
-                  <input type="checkbox" name="resortEnabled" />
-                  Enable Resort Business Model — room booking, front desk, housekeeping, and room folio for this shop
-                </label>
-                <label class="full">
-                  <input type="checkbox" name="zomatoAllowed" />
-                  Allow Zomato integration — Business Admin can activate it only after Master Admin checks this
-                </label>
-                <label class="full">
-                  <input type="checkbox" name="swiggyAllowed" />
-                  Allow Swiggy integration — Business Admin can activate it only after Master Admin checks this
-                </label>
+                <div id="biz-food-flags" hidden>
+                  <label class="full">
+                    <input type="checkbox" name="barEnabled" />
+                    Enable Bar Business Model — bottle/peg billing, bar inventory, and bar tables for this shop
+                  </label>
+                  <label class="full">
+                    <input type="checkbox" name="resortEnabled" />
+                    Enable Resort Business Model — room booking, front desk, housekeeping, and room folio for this shop
+                  </label>
+                  <label class="full">
+                    <input type="checkbox" name="zomatoAllowed" />
+                    Allow Zomato integration — Business Admin can activate it only after Master Admin checks this
+                  </label>
+                  <label class="full">
+                    <input type="checkbox" name="swiggyAllowed" />
+                    Allow Swiggy integration — Business Admin can activate it only after Master Admin checks this
+                  </label>
+                </div>
               </fieldset>
               <fieldset class="item-block">
                 <legend>Owner</legend>
@@ -2895,15 +2902,23 @@ async function render() {
         hint.textContent = editing
           ? `Editing ${b.name}. Leave password blank to keep the current login.`
           : "";
+        syncBizFoodFlags();
         form.scrollIntoView({ block: "start" });
+      }
+      function syncBizFoodFlags() {
+        const box = $("biz-food-flags");
+        if (box) box.hidden = !isRestaurantCafeModule(form.businessType.value);
       }
       $("biz-cancel").onclick = () => fillBusiness(null);
       form.businessType.addEventListener("change", () => {
         fillCategorySelect(form.businessCategory, form.businessType.value, form.businessCategory.value);
+        syncBizFoodFlags();
       });
       form.businessType.addEventListener("input", () => {
         fillCategorySelect(form.businessCategory, form.businessType.value, form.businessCategory.value);
+        syncBizFoodFlags();
       });
+      syncBizFoodFlags();
       form.businessCategory.addEventListener("focus", () => {
         fillCategorySelect(form.businessCategory, form.businessType.value, form.businessCategory.value);
       });
@@ -2921,10 +2936,11 @@ async function render() {
         hint.className = "hint";
         const fd = new FormData(form);
         const payload = Object.fromEntries(fd);
-        payload.barEnabled = form.barEnabled?.checked ? 1 : 0;
-        payload.resortEnabled = form.resortEnabled?.checked ? 1 : 0;
-        payload.zomatoAllowed = form.zomatoAllowed?.checked ? 1 : 0;
-        payload.swiggyAllowed = form.swiggyAllowed?.checked ? 1 : 0;
+        const foodModule = isRestaurantCafeModule(form.businessType.value);
+        payload.barEnabled = foodModule && form.barEnabled?.checked ? 1 : 0;
+        payload.resortEnabled = foodModule && form.resortEnabled?.checked ? 1 : 0;
+        payload.zomatoAllowed = foodModule && form.zomatoAllowed?.checked ? 1 : 0;
+        payload.swiggyAllowed = foodModule && form.swiggyAllowed?.checked ? 1 : 0;
         const id = payload.business_id;
         delete payload.business_id;
         delete payload.logo;

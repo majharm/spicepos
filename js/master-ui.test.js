@@ -17,8 +17,8 @@ test("Master Admin desk collapses nested nav and uses a shop board", () => {
   assert.match(html, /data-nav-family="analytics"/);
   assert.match(html, /data-nav-family="seo"/);
   assert.match(html, /nav-group-label"[^>]*>Advanced</);
-  assert.match(html, /master\.js\?v=20261030theme1/);
-  assert.match(html, /master-theme\.css\?v=20261030theme1/);
+  assert.match(html, /master\.js\?v=20261031food1/);
+  assert.match(html, /master-theme\.css\?v=20261031food1/);
   assert.match(html, /data-tab="live"/);
   assert.match(html, /data-tab="profile"/);
   assert.match(html, /data-tab="staff"/);
@@ -83,6 +83,9 @@ test("Master Admin desk collapses nested nav and uses a shop board", () => {
   assert.match(html, /id="master-theme"/);
   assert.match(html, /data-tab="fees"/);
   assert.match(html, /data-tab="health"/);
+  assert.match(js, /function isRestaurantCafeModule/);
+  assert.match(js, /id="biz-food-flags" hidden/);
+  assert.match(js, /syncBizFoodFlags/);
   assert.doesNotMatch(js, /1,248/);
   assert.doesNotMatch(theme, /1,248/);
 });
