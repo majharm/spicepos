@@ -110,10 +110,13 @@ function pos_analyze_growth($snap) {
   $returning = (int) ($snap["returningCustomers"] ?? 0);
   $inactive = array_values(array_filter($customers, function ($c) { return pos_growth_num($c["daysSince"] ?? 0) >= 45; }));
   $vip = array_values(array_filter($customers, function ($c) { return in_array($c["segment"] ?? "", ["VIP", "High Value"], true); }));
+  $customerTotal = array_key_exists("customerTotal", $snap) ? (int) $snap["customerTotal"] : count($customers);
+  $inactiveCount = array_key_exists("inactiveCount", $snap) ? (int) $snap["inactiveCount"] : count($inactive);
+  $vipCount = array_key_exists("vipCount", $snap) ? (int) $snap["vipCount"] : count($vip);
   $expenseShare = pos_growth_num($month["takings"] ?? 0) ? pos_growth_round((pos_growth_num($month["expenses"] ?? 0) / pos_growth_num($month["takings"])) * 100) : 0;
   $inventoryHealth = max(20, 90 - count($low) * 4 - count($out) * 8);
   $expenseControl = max(15, 90 - max(0, $expenseShare - 8) * 3);
-  $retention = count($customers) ? pos_growth_round(($returning / max(1, count($customers))) * 100) : 0;
+  $retention = $customerTotal ? pos_growth_round(($returning / max(1, $customerTotal)) * 100) : 0;
   $score = pos_growth_score([
     "salesGrowth" => $salesGrowth,
     "profitGrowth" => $profitGrowth,
@@ -142,7 +145,7 @@ function pos_analyze_growth($snap) {
       "itemIds" => array_values(array_filter(array_map(function ($p) { return $p["itemId"] ?? ""; }, array_slice($slow, 0, 12)))),
     ];
   }
-  if (count($inactive) >= 5) $actions[] = ["level" => "attention", "title" => count($inactive) . " customers have not purchased in 45 days", "detail" => "A re-engagement offer can lift repeat sales.", "jump" => "customers", "action" => "View customers"];
+  if ($inactiveCount >= 5) $actions[] = ["level" => "attention", "title" => $inactiveCount . " customers have not purchased in 45 days", "detail" => "A re-engagement offer can lift repeat sales.", "jump" => "customers", "action" => "View customers"];
   if ($margin > 0 && $margin < 12) $actions[] = ["level" => "attention", "title" => "Gross margin is thin", "detail" => "This month's margin is {$margin}%.", "jump" => "items", "action" => "Adjust price"];
   if ($topRev && count($topRev) > 1) {
     $actions[] = [
@@ -167,7 +170,7 @@ function pos_analyze_growth($snap) {
     : "This week is " . abs($salesGrowth) . "% vs last week. Run a weekend offer on " . ($topRev[0]["name"] ?? "your best seller") . "."];
   if ($weakMargin) $recs[] = ["kind" => "profit", "title" => "Increase profit", "text" => $weakMargin[0]["name"] . " has only a " . pos_growth_round($weakMargin[0]["margin"]) . "% margin. A small price adjustment could improve monthly profit."];
   if ($low || $out) $recs[] = ["kind" => "stock", "title" => "Prevent lost sales", "text" => (count($out) + count($low)) . " high-demand products may run out soon. Reorder now."];
-  if ($inactive) $recs[] = ["kind" => "retention", "title" => "Customer retention", "text" => count($inactive) . " customers have not purchased in the last 45 days. Send them a re-engagement offer."];
+  if ($inactiveCount) $recs[] = ["kind" => "retention", "title" => "Customer retention", "text" => $inactiveCount . " customers have not purchased in the last 45 days. Send them a re-engagement offer."];
   if ($topRev && count($topRev) > 1) $recs[] = ["kind" => "cross", "title" => "Cross-selling", "text" => "Customers purchasing " . $topRev[0]["name"] . " often also buy other fast movers. Suggest " . $topRev[1]["name"] . " during billing."];
 
   $promos = [];
@@ -225,7 +228,7 @@ function pos_analyze_growth($snap) {
   $expansion = [];
   if ($topCat) $expansion[] = ["source" => "shop", "text" => "Your customers frequently purchase " . $topCat["name"] . " products. Consider adding related variants or a dedicated section."];
   if ($fast) $expansion[] = ["source" => "shop", "text" => "Fast-moving items can become weekly refill or subscription products if the same customers buy them often."];
-  if ($vip) $expansion[] = ["source" => "shop", "text" => "High-value customers may buy larger packs or wholesale if you offer a B2B price list."];
+  if ($vipCount) $expansion[] = ["source" => "shop", "text" => "High-value customers may buy larger packs or wholesale if you offer a B2B price list."];
   $expansion[] = ["source" => "shop", "text" => "QR ordering and delivery can add a sales channel without opening a second counter."];
   $market = [
     ["source" => "market", "text" => "Festival weeks in India often lift grocery and gift baskets — plan stock 10–14 days ahead. This is a general market estimate, not this shop's billed data."],
@@ -234,7 +237,7 @@ function pos_analyze_growth($snap) {
 
   return [
     "summary" => $summary,
-    "opportunity" => ($out || $low) ? "Improve inventory availability for your top products and reorder before they stock out." : (count($inactive) ? "Increase repeat-customer campaigns for shoppers who have gone quiet." : "Protect margin on high-volume items and keep evening hours fully staffed."),
+    "opportunity" => ($out || $low) ? "Improve inventory availability for your top products and reorder before they stock out." : ($inactiveCount ? "Increase repeat-customer campaigns for shoppers who have gone quiet." : "Protect margin on high-volume items and keep evening hours fully staffed."),
     "score" => $score,
     "compare" => ["todayVsYesterday" => $todayGrowth, "weekVsLast" => $salesGrowth, "monthVsLast" => $monthGrowth, "yearVsLast" => $yearGrowth],
     "kpis" => [
@@ -255,13 +258,21 @@ function pos_analyze_growth($snap) {
       "score" => $score["score"],
     ],
     "products" => ["top" => $topRev, "profit" => $topProfit, "slow" => array_slice($slow, 0, 8), "dead" => [], "weakMargin" => array_slice($weakMargin, 0, 5)],
-    "inventory" => ["low" => $low, "out" => $out, "over" => [], "reorders" => $reorders],
+    "inventory" => [
+      "low" => array_slice($low, 0, 12),
+      "out" => array_slice($out, 0, 12),
+      "lowCount" => count($low),
+      "outCount" => count($out),
+      "over" => [],
+      "overCount" => 0,
+      "reorders" => $reorders,
+    ],
     "customers" => [
-      "total" => count($customers),
+      "total" => $customerTotal,
       "new" => $newCust,
       "returning" => $returning,
-      "inactive" => count($inactive),
-      "vip" => count($vip),
+      "inactive" => $inactiveCount,
+      "vip" => $vipCount,
       "top" => pos_growth_top($customers, "takings", 5),
       "segments" => $snap["segments"] ?? [],
     ],
@@ -355,9 +366,16 @@ function pos_growth_windows($bid, $windows) {
     $profitSelects[] = "SUM(CASE WHEN o.created_at >= ? AND o.created_at < DATE_ADD(?, INTERVAL 1 DAY) THEN COALESCE(l.profit, l.amount - COALESCE(l.cost,0)) ELSE 0 END) AS profit_$i";
     array_push($profitParams, $w["start"], $w["end"]);
   }
+  $profitWindows = array_slice($windows, 0, 6);
+  $profitSpanStart = $profitWindows[0]["start"];
+  $profitSpanEnd = $profitWindows[0]["end"];
+  foreach ($profitWindows as $w) {
+    if ($w["start"] < $profitSpanStart) $profitSpanStart = $w["start"];
+    if ($w["end"] > $profitSpanEnd) $profitSpanEnd = $w["end"];
+  }
   $profitParams[] = $bid;
-  $profitParams[] = $start;
-  $profitParams[] = $end;
+  $profitParams[] = $profitSpanStart;
+  $profitParams[] = $profitSpanEnd;
   $profit = pos_q(
     "SELECT " . implode(", ", $profitSelects) . " FROM sales_order_lines l JOIN sales_orders o ON o.id = l.order_id WHERE o.business_id = ? AND " . pos_created_between("o") . " AND l.cancelled = 0",
     str_repeat("s", count($profitParams)),
@@ -478,26 +496,70 @@ function pos_build_growth($bid) {
     $damage = pos_growth_num($d[0]["loss"] ?? 0);
   } catch (Throwable $e) { $damage = 0; }
 
+  $orderAgg = "SELECT customer_id, COUNT(*) AS bills, COALESCE(SUM(total),0) AS takings, MAX(created_at) AS last_sale FROM sales_orders WHERE business_id = ? AND " . pos_created_between() . " AND customer_id IS NOT NULL AND customer_id <> '' GROUP BY customer_id";
+  $custStats = pos_q(
+    "SELECT COUNT(*) AS total,
+      SUM(CASE WHEN bills >= 2 THEN 1 ELSE 0 END) AS returning_n,
+      SUM(CASE WHEN seg = 'Inactive' THEN 1 ELSE 0 END) AS inactive_n,
+      SUM(CASE WHEN seg = 'VIP' OR seg = 'High Value' THEN 1 ELSE 0 END) AS vip_n,
+      SUM(CASE WHEN seg = 'VIP' THEN 1 ELSE 0 END) AS n_vip,
+      SUM(CASE WHEN seg = 'High Value' THEN 1 ELSE 0 END) AS n_high,
+      SUM(CASE WHEN seg = 'Regular' THEN 1 ELSE 0 END) AS n_regular,
+      SUM(CASE WHEN seg = 'New' THEN 1 ELSE 0 END) AS n_new,
+      SUM(CASE WHEN seg = 'Occasional' THEN 1 ELSE 0 END) AS n_occasional,
+      SUM(CASE WHEN seg = 'At-Risk' THEN 1 ELSE 0 END) AS n_risk,
+      SUM(CASE WHEN seg = 'Inactive' THEN 1 ELSE 0 END) AS n_inactive
+    FROM (
+      SELECT bills, CASE
+        WHEN days_since >= 45 AND bills > 0 THEN 'Inactive'
+        WHEN days_since >= 30 AND bills > 0 THEN 'At-Risk'
+        WHEN bills <= 1 AND days_since <= 30 THEN 'New'
+        WHEN takings >= 25000 OR bills >= 12 THEN 'VIP'
+        WHEN takings >= 8000 OR bills >= 6 THEN 'High Value'
+        WHEN bills >= 3 THEN 'Regular'
+        ELSE 'Occasional'
+      END AS seg
+      FROM (
+        SELECT COALESCE(o.bills,0) AS bills, COALESCE(o.takings,0) AS takings,
+          CASE WHEN o.last_sale IS NULL THEN 90 ELSE GREATEST(0, DATEDIFF(?, o.last_sale)) END AS days_since
+        FROM customers c
+        LEFT JOIN ($orderAgg) o ON o.customer_id = c.id
+        WHERE c.business_id = ?
+      ) per
+    ) segs",
+    "sssss",
+    [$today, $bid, $last90, $today, $bid]
+  );
+  $stats = $custStats[0] ?? [];
   $customers = [];
   foreach (pos_q(
-    "SELECT c.name, c.mobile, c.outstanding, COUNT(o.id) AS bills, COALESCE(SUM(o.total),0) AS takings, MAX(o.created_at) AS last_sale FROM customers c LEFT JOIN sales_orders o ON o.customer_id = c.id AND o.business_id = c.business_id AND " . pos_created_between("o") . " WHERE c.business_id = ? GROUP BY c.id, c.name, c.mobile, c.outstanding ORDER BY takings DESC",
-    "sss",
-    [$last90, $today, $bid]
+    "SELECT c.name, c.mobile, c.outstanding, COALESCE(o.bills,0) AS bills, COALESCE(o.takings,0) AS takings, o.last_sale
+     FROM customers c
+     LEFT JOIN ($orderAgg) o ON o.customer_id = c.id
+     WHERE c.business_id = ?
+     ORDER BY takings DESC
+     LIMIT 5",
+    "ssss",
+    [$bid, $last90, $today, $bid]
   ) as $c) {
     $last = $c["last_sale"] ? substr($c["last_sale"], 0, 10) : "";
     $days = $last ? (int) round((strtotime($today) - strtotime($last)) / 86400) : 90;
     $seg = pos_growth_segment(pos_growth_num($c["bills"]), pos_growth_num($c["takings"]), $days);
     $customers[] = ["name" => $c["name"], "mobile" => $c["mobile"], "bills" => pos_growth_num($c["bills"]), "takings" => pos_growth_num($c["takings"]), "outstanding" => pos_growth_num($c["outstanding"]), "daysSince" => $days, "segment" => $seg];
   }
-  $segNames = ["VIP", "High Value", "Regular", "New", "Occasional", "At-Risk", "Inactive"];
   $segments = [];
-  foreach ($segNames as $name) $segments[] = ["name" => $name, "count" => count(array_filter($customers, function ($c) use ($name) { return ($c["segment"] ?? "") === $name; }))];
-  $newN = count(array_filter($customers, function ($c) { return ($c["segment"] ?? "") === "New"; }));
+  foreach (["VIP" => "n_vip", "High Value" => "n_high", "Regular" => "n_regular", "New" => "n_new", "Occasional" => "n_occasional", "At-Risk" => "n_risk", "Inactive" => "n_inactive"] as $name => $key) {
+    $segments[] = ["name" => $name, "count" => (int) ($stats[$key] ?? 0)];
+  }
+  $newN = (int) ($stats["n_new"] ?? 0);
   try {
     $nr = pos_q("SELECT COUNT(*) AS n FROM customers WHERE business_id = ? AND " . pos_created_between() . "", "sss", [$bid, $monthStart, $today]);
     if ($nr) $newN = (int) ($nr[0]["n"] ?? $newN);
   } catch (Throwable $e) {}
-  $returning = count(array_filter($customers, function ($c) { return pos_growth_num($c["bills"]) >= 2; }));
+  $returning = (int) ($stats["returning_n"] ?? 0);
+  $customerTotal = (int) ($stats["total"] ?? 0);
+  $inactiveCount = (int) ($stats["inactive_n"] ?? 0);
+  $vipCount = (int) ($stats["vip_n"] ?? 0);
   $overdue = 0;
   try {
     $ov = pos_q("SELECT COUNT(*) AS n FROM sales_orders WHERE business_id = ? AND LOWER(COALESCE(payment_status,'')) IN ('unpaid','partial','credit') AND created_at < ?", "ss", [$bid, pos_ymd_add($today, -7)]);
@@ -520,7 +582,7 @@ function pos_build_growth($bid) {
   } catch (Throwable $e) {}
 
   $thisMonth["expenses"] = pos_growth_num($exp[0]["total"] ?? 0);
-  $lastMonth["customers"] = count($customers);
+  $lastMonth["customers"] = $customerTotal;
   $snap = [
     "today" => $thisToday,
     "yesterday" => $thisYest,
@@ -539,6 +601,9 @@ function pos_build_growth($bid) {
     "outstanding" => pos_growth_num($out[0]["outstanding"] ?? 0),
     "damageLoss" => $damage,
     "customers" => $customers,
+    "customerTotal" => $customerTotal,
+    "inactiveCount" => $inactiveCount,
+    "vipCount" => $vipCount,
     "segments" => $segments,
     "newCustomers" => $newN,
     "returningCustomers" => $returning,

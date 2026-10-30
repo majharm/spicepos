@@ -1,6 +1,7 @@
 <?php
 @set_time_limit(180);
 @ini_set("memory_limit", "256M");
+@ini_set("display_errors", "0");
 header("Access-Control-Allow-Credentials: true");
 if (!empty($_SERVER["HTTP_ORIGIN"])) {
   header("Access-Control-Allow-Origin: " . $_SERVER["HTTP_ORIGIN"]);
@@ -100,6 +101,11 @@ function pos_is_login_fast_path($path, $method) {
   if ($m === "GET" && ($p === "health" || $p === "login-page" || strpos($p, "login-page/") === 0)) return true;
   if ($m === "POST" && ($p === "auth/login" || $p === "auth/master-login" || $p === "auth/signup")) return true;
   return false;
+}
+
+function pos_is_growth_path($path) {
+  $p = strtolower((string) $path);
+  return $p === "growth" || strpos($p, "growth/") === 0;
 }
 
 function pos_curl($url, $method, $body, $cookie, $hostHeader = "", &$dispatched = null, $timeoutSec = 5, $connectMs = 250) {
@@ -286,6 +292,8 @@ if ($fastLogin) {
     }
     pos_mark_node_down();
   }
+} elseif (pos_is_growth_path($path)) {
+  $start = "skipped growth fast-path";
 } elseif (!pos_node_down_fresh()) {
   $got = pos_try_proxy($suffix, $method, $body, $cookie, $dispatched);
   if ($got && pos_looks_json($got[3])) {
@@ -357,6 +365,15 @@ if (!preg_match('/function\s+pos_send\s*\(/', $coreSrc)) {
 }
 
 require_once $coreFile;
+register_shutdown_function(function () {
+  $e = error_get_last();
+  if (!$e || !in_array($e["type"], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR], true)) return;
+  if (headers_sent()) return;
+  http_response_code(500);
+  header("Content-Type: application/json; charset=utf-8");
+  $msg = trim((string) preg_replace("/\s+/", " ", (string) ($e["message"] ?? "")));
+  echo json_encode(["error" => $msg !== "" ? $msg : "PHP stopped while answering", "php" => true]);
+});
 try {
   pos_php_dispatch($path, $method, $body);
 } catch (Throwable $e) {

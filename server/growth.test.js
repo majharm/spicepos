@@ -103,6 +103,28 @@ test("growth comparison windows share one indexed sales scan", () => {
   assert.doesNotMatch(readFileSync(path.join(root, "pos-growth.php"), "utf8"), /function pos_growth_period/);
 });
 
+test("growth answers from PHP without scanning every customer order", () => {
+  const node = readFileSync(path.join(root, "server/growth.js"), "utf8");
+  const php = readFileSync(path.join(root, "pos-growth.php"), "utf8");
+  const api = readFileSync(path.join(root, "pos-api.php"), "utf8");
+  const client = readFileSync(path.join(root, "js/pos-api.js"), "utf8");
+  const core = readFileSync(path.join(root, "pos-php-core.php"), "utf8");
+  assert.match(node, /windows\.slice\(0,\s*6\)/);
+  assert.match(node, /GROUP BY customer_id/);
+  assert.match(node, /LIMIT 5/);
+  assert.doesNotMatch(node, /LEFT JOIN sales_orders o ON o\.customer_id/);
+  assert.match(php, /array_slice\(\$windows,\s*0,\s*6\)/);
+  assert.match(php, /GROUP BY customer_id/);
+  assert.match(php, /LIMIT 5/);
+  assert.doesNotMatch(php, /LEFT JOIN sales_orders o ON o\.customer_id/);
+  assert.match(api, /function pos_is_growth_path/);
+  assert.match(api, /skipped growth fast-path/);
+  assert.match(client, /Growth reply was not JSON/);
+  assert.match(client, /closed the request before Growth finished/);
+  assert.match(core, /JSON_INVALID_UTF8_SUBSTITUTE/);
+  assert.match(readFileSync(path.join(root, "js/growth.js"), "utf8"), /growthListCount/);
+});
+
 test("shop UI and PHP wire the AI Growth dashboard", () => {
   const index = readFileSync(path.join(root, "index.html"), "utf8");
   const app = readFileSync(path.join(root, "js/app.js"), "utf8");

@@ -105,10 +105,13 @@ export function analyzeGrowth(snap = {}) {
   const returning = num(snap.returningCustomers);
   const inactive = customers.filter((c) => num(c.daysSince) >= 45);
   const vip = customers.filter((c) => c.segment === "VIP" || c.segment === "High Value");
+  const inactiveCount = snap.inactiveCount != null ? num(snap.inactiveCount) : inactive.length;
+  const vipCount = snap.vipCount != null ? num(snap.vipCount) : vip.length;
+  const customerTotal = snap.customerTotal != null ? num(snap.customerTotal) : customers.length;
   const expenseShare = num(month.takings) ? round2((num(month.expenses) / num(month.takings)) * 100) : 0;
   const inventoryHealth = Math.max(20, 90 - low.length * 4 - out.length * 8 - dead.length * 2);
   const expenseControl = Math.max(15, 90 - Math.max(0, expenseShare - 8) * 3);
-  const retention = customers.length ? round2((returning / Math.max(1, customers.length)) * 100) : 0;
+  const retention = customerTotal ? round2((returning / Math.max(1, customerTotal)) * 100) : 0;
   const score = growthScore({
     salesGrowth,
     profitGrowth,
@@ -176,10 +179,10 @@ export function analyzeGrowth(snap = {}) {
       itemIds: slow.slice(0, 12).map((p) => p.itemId || p.id).filter(Boolean),
     });
   }
-  if (inactive.length >= 5) {
+  if (inactiveCount >= 5) {
     actions.push({
       level: "attention",
-      title: `${inactive.length} customers have not purchased in 45 days`,
+      title: `${inactiveCount} customers have not purchased in 45 days`,
       detail: "A re-engagement offer can lift repeat sales.",
       jump: "customers",
       action: "View customers",
@@ -235,11 +238,11 @@ export function analyzeGrowth(snap = {}) {
       action: "Adjust price",
     });
   }
-  if (vip.length) {
+  if (vipCount) {
     actions.push({
       level: "growth",
       title: "Look after high-value customers",
-      detail: `${vip.length} VIP / high-value customer${vip.length === 1 ? "" : "s"} drive a large share of takings.`,
+      detail: `${vipCount} VIP / high-value customer${vipCount === 1 ? "" : "s"} drive a large share of takings.`,
       jump: "loyalty",
       action: "View royalty",
     });
@@ -273,11 +276,11 @@ export function analyzeGrowth(snap = {}) {
       text: `${out.length + low.length} high-demand products may run out soon. Reorder now.`,
     });
   }
-  if (inactive.length) {
+  if (inactiveCount) {
     recommendations.push({
       kind: "retention",
       title: "Customer retention",
-      text: `${inactive.length} customers have not purchased in the last 45 days. Send them a re-engagement offer.`,
+      text: `${inactiveCount} customers have not purchased in the last 45 days. Send them a re-engagement offer.`,
     });
   }
   if (topRev[0] && topRev[1]) {
@@ -375,7 +378,7 @@ export function analyzeGrowth(snap = {}) {
   const opportunity =
     out.length || low.length
       ? "Improve inventory availability for your top products and reorder before they stock out."
-      : inactive.length
+      : inactiveCount
         ? "Increase repeat-customer campaigns for shoppers who have gone quiet."
         : "Protect margin on high-volume items and keep evening hours fully staffed.";
 
@@ -392,7 +395,7 @@ export function analyzeGrowth(snap = {}) {
       text: "Fast-moving items can become weekly refill or subscription products if the same customers buy them often.",
     });
   }
-  if (vip.length) {
+  if (vipCount) {
     expansion.push({
       source: "shop",
       text: "High-value customers may buy larger packs or wholesale if you offer a B2B price list.",
@@ -447,13 +450,21 @@ export function analyzeGrowth(snap = {}) {
       dead: dead.slice(0, 8),
       weakMargin: weakMargin.slice(0, 5),
     },
-    inventory: { low, out, over: over.slice(0, 8), reorders },
+    inventory: {
+      low: low.slice(0, 12),
+      out: out.slice(0, 12),
+      over: over.slice(0, 8),
+      lowCount: low.length,
+      outCount: out.length,
+      overCount: over.length,
+      reorders,
+    },
     customers: {
-      total: customers.length,
+      total: customerTotal,
       new: newCust,
       returning,
-      inactive: inactive.length,
-      vip: vip.length,
+      inactive: inactiveCount,
+      vip: vipCount,
       top: pickTop(customers, "takings", 5),
       segments: snap.segments || [],
     },
@@ -645,7 +656,8 @@ export function growthProfitWindowQuery(tenant, windows) {
 
 async function loadSalesWindows(tenant, windows) {
   const orders = growthOrderWindowQuery(tenant, windows);
-  const profits = growthProfitWindowQuery(tenant, windows);
+  // Year takings stay on the order scan. Line profit only needs the recent windows.
+  const profits = growthProfitWindowQuery(tenant, windows.slice(0, 6));
   const [[row], [profit]] = await Promise.all([query(orders.sql, orders.params), query(profits.sql, profits.params)]);
   return windows.map((_, i) => ({
     bills: num(row?.[`bills_${i}`]),
@@ -809,18 +821,55 @@ export async function buildGrowthDashboard() {
     damageLoss = 0;
   }
 
+  const orderAgg = `SELECT customer_id, COUNT(*) AS bills, COALESCE(SUM(total),0) AS takings, MAX(created_at) AS last_sale
+     FROM sales_orders
+     WHERE business_id = ? AND ${createdBetween()} AND customer_id IS NOT NULL AND customer_id <> ''
+     GROUP BY customer_id`;
+  const [custStats] = await query(
+    `SELECT COUNT(*) AS total,
+            SUM(CASE WHEN bills >= 2 THEN 1 ELSE 0 END) AS returning_n,
+            SUM(CASE WHEN seg = 'Inactive' THEN 1 ELSE 0 END) AS inactive_n,
+            SUM(CASE WHEN seg = 'VIP' OR seg = 'High Value' THEN 1 ELSE 0 END) AS vip_n,
+            SUM(CASE WHEN seg = 'VIP' THEN 1 ELSE 0 END) AS n_vip,
+            SUM(CASE WHEN seg = 'High Value' THEN 1 ELSE 0 END) AS n_high,
+            SUM(CASE WHEN seg = 'Regular' THEN 1 ELSE 0 END) AS n_regular,
+            SUM(CASE WHEN seg = 'New' THEN 1 ELSE 0 END) AS n_new,
+            SUM(CASE WHEN seg = 'Occasional' THEN 1 ELSE 0 END) AS n_occasional,
+            SUM(CASE WHEN seg = 'At-Risk' THEN 1 ELSE 0 END) AS n_risk,
+            SUM(CASE WHEN seg = 'Inactive' THEN 1 ELSE 0 END) AS n_inactive
+     FROM (
+       SELECT bills,
+              CASE
+                WHEN days_since >= 45 AND bills > 0 THEN 'Inactive'
+                WHEN days_since >= 30 AND bills > 0 THEN 'At-Risk'
+                WHEN bills <= 1 AND days_since <= 30 THEN 'New'
+                WHEN takings >= 25000 OR bills >= 12 THEN 'VIP'
+                WHEN takings >= 8000 OR bills >= 6 THEN 'High Value'
+                WHEN bills >= 3 THEN 'Regular'
+                ELSE 'Occasional'
+              END AS seg
+       FROM (
+         SELECT COALESCE(o.bills, 0) AS bills,
+                COALESCE(o.takings, 0) AS takings,
+                CASE WHEN o.last_sale IS NULL THEN 90 ELSE GREATEST(0, DATEDIFF(?, o.last_sale)) END AS days_since
+         FROM customers c
+         LEFT JOIN (${orderAgg}) o ON o.customer_id = c.id
+         WHERE c.business_id = ?
+       ) per
+     ) segs`,
+    [today, tenant, last90, today, tenant],
+  );
   const custRows = await query(
-    `SELECT c.id, c.name, c.mobile, c.outstanding,
-            COUNT(o.id) AS bills,
-            COALESCE(SUM(o.total),0) AS takings,
-            MAX(o.created_at) AS last_sale
+    `SELECT c.name, c.mobile, c.outstanding,
+            COALESCE(o.bills,0) AS bills,
+            COALESCE(o.takings,0) AS takings,
+            o.last_sale
      FROM customers c
-     LEFT JOIN sales_orders o ON o.customer_id = c.id AND o.business_id = c.business_id
-       AND ${createdBetween("o")}
+     LEFT JOIN (${orderAgg}) o ON o.customer_id = c.id
      WHERE c.business_id = ?
-     GROUP BY c.id, c.name, c.mobile, c.outstanding
-     ORDER BY takings DESC`,
-    [last90, today, tenant],
+     ORDER BY takings DESC
+     LIMIT 5`,
+    [tenant, last90, today, tenant],
   );
   const customers = custRows.map((c) => {
     const last = c.last_sale ? String(c.last_sale).slice(0, 10) : "";
@@ -829,15 +878,20 @@ export async function buildGrowthDashboard() {
     row.segment = segmentCustomer(row);
     return row;
   });
-  const segments = ["VIP", "High Value", "Regular", "New", "Occasional", "At-Risk", "Inactive"].map((name) => ({
-    name,
-    count: customers.filter((c) => c.segment === name).length,
-  }));
+  const segments = [
+    ["VIP", "n_vip"],
+    ["High Value", "n_high"],
+    ["Regular", "n_regular"],
+    ["New", "n_new"],
+    ["Occasional", "n_occasional"],
+    ["At-Risk", "n_risk"],
+    ["Inactive", "n_inactive"],
+  ].map(([name, key]) => ({ name, count: num(custStats?.[key]) }));
   const [newCust] = await query(
     `SELECT COUNT(*) AS n FROM customers WHERE business_id = ? AND ${createdBetween()}`,
     [tenant, monthStart, today],
-  ).catch(() => [{ n: customers.filter((c) => c.segment === "New").length }]);
-  const returning = customers.filter((c) => num(c.bills) >= 2).length;
+  ).catch(() => [{ n: num(custStats?.n_new) }]);
+  const returning = num(custStats?.returning_n);
 
   const [overdue] = await query(
     `SELECT COUNT(*) AS n FROM sales_orders
@@ -870,7 +924,7 @@ export async function buildGrowthDashboard() {
   }
 
   thisMonth.expenses = num(expRow?.total);
-  lastMonth.customers = customers.length;
+  lastMonth.customers = num(custStats?.total);
 
   const snap = {
     today: thisToday,
@@ -890,8 +944,11 @@ export async function buildGrowthDashboard() {
     outstanding: num(outRow?.outstanding),
     damageLoss,
     customers,
+    customerTotal: num(custStats?.total),
+    inactiveCount: num(custStats?.inactive_n),
+    vipCount: num(custStats?.vip_n),
     segments,
-    newCustomers: num(newCust?.n ?? customers.filter((c) => c.segment === "New").length),
+    newCustomers: num(newCust?.n ?? custStats?.n_new),
     returningCustomers: returning,
     overdueInvoices: num(overdue?.n),
     categories,

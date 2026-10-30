@@ -47,6 +47,10 @@
     return /not available in PHP fallback/i.test(String(data.error || ""));
   }
 
+  function isGrowthCall(path) {
+    return /\/growth(?:\/|\?|$)/.test(String(path || ""));
+  }
+
   function isMutating(method) {
     const m = String(method || "GET").toUpperCase();
     return m !== "GET" && m !== "HEAD" && m !== "OPTIONS";
@@ -219,9 +223,19 @@
           if (mutating && res.status >= 200 && res.status < 300) {
             throw new Error("POS saved but the reply was not JSON. Refresh the catalog before saving again.");
           }
+          if (isGrowthCall(path)) {
+            const snippet = String(text || "").replace(/\s+/g, " ").trim().slice(0, 140);
+            throw new Error(snippet ? `Growth reply was not JSON (${res.status}): ${snippet}` : `Growth reply was not JSON (${res.status}).`);
+          }
           continue;
         }
-        const data = text ? JSON.parse(text) : {};
+        let data;
+        try {
+          data = text ? JSON.parse(text) : {};
+        } catch {
+          const snippet = String(text || "").replace(/\s+/g, " ").trim().slice(0, 140);
+          throw new Error(snippet ? `POS API reply was not valid JSON (${res.status}): ${snippet}` : "POS API reply was not valid JSON.");
+        }
         if (isDeadBridge(data, res)) continue;
         if (isPhpUnimplemented(data, res)) {
           lastUnimplemented = { res, data, text };
@@ -231,9 +245,18 @@
         return { res, data, text };
       } catch (err) {
         if (mutating && err && /refresh the catalog/i.test(String(err.message || err))) throw err;
+        if (err && /not valid JSON|Growth reply was not JSON/i.test(String(err.message || err))) throw err;
         const aborted = err && (err.name === "AbortError" || /aborted/i.test(String(err.message || err)));
         if (aborted && Number(options.timeoutMs) > 0 && !options.signal) {
           throw new Error("The POS API took too long to answer. Wait a moment and open Growth again.");
+        }
+        if (isGrowthCall(path)) {
+          const why = String(err?.message || err || "");
+          throw new Error(
+            /failed to fetch|networkerror|load failed|network error/i.test(why)
+              ? "The POS server closed the request before Growth finished. Open Growth again in a moment."
+              : why || "Could not reach the POS API. Redeploy and Restart the Node.js app in hPanel.",
+          );
         }
         /* try next */
       } finally {

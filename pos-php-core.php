@@ -2970,7 +2970,14 @@ function pos_record_credit_purchase($supplier, $total, $purchaseId, $purchaseNum
 function pos_send($status, $payload) {
   http_response_code((int) $status);
   header("Content-Type: application/json; charset=utf-8");
-  echo json_encode($payload, JSON_UNESCAPED_UNICODE);
+  $flags = JSON_UNESCAPED_UNICODE;
+  if (defined("JSON_INVALID_UTF8_SUBSTITUTE")) $flags |= JSON_INVALID_UTF8_SUBSTITUTE;
+  if (defined("JSON_PARTIAL_OUTPUT_ON_ERROR")) $flags |= JSON_PARTIAL_OUTPUT_ON_ERROR;
+  $json = json_encode($payload, $flags);
+  if ($json === false) {
+    $json = json_encode(["error" => "POS could not encode the reply", "php" => true]);
+  }
+  echo $json === false ? '{"error":"POS could not encode the reply","php":true}' : $json;
   exit;
 }
 

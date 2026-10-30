@@ -1,6 +1,12 @@
 let growthBound = false;
 let growthData = null;
 
+function growthListCount(list, count) {
+  const n = Number(count);
+  if (Number.isFinite(n)) return n;
+  return (list || []).length;
+}
+
 function growthPct(n) {
   const v = Number(n) || 0;
   const sign = v > 0 ? "+" : "";
@@ -224,9 +230,9 @@ function renderGrowthInventory(data) {
   const reorders = data.inventory?.reorders || [];
   $("growth-inventory").innerHTML = `
     <div class="report-grid growth-mini-grid">
-      <div class="report-card"><span>Out of stock</span><strong>${(data.inventory?.out || []).length}</strong></div>
-      <div class="report-card"><span>Low stock</span><strong>${(data.inventory?.low || []).length}</strong></div>
-      <div class="report-card"><span>Overstock</span><strong>${(data.inventory?.over || []).length}</strong></div>
+      <div class="report-card"><span>Out of stock</span><strong>${growthListCount(data.inventory?.out, data.inventory?.outCount)}</strong></div>
+      <div class="report-card"><span>Low stock</span><strong>${growthListCount(data.inventory?.low, data.inventory?.lowCount)}</strong></div>
+      <div class="report-card"><span>Overstock</span><strong>${growthListCount(data.inventory?.over, data.inventory?.overCount)}</strong></div>
     </div>
     ${
       reorders.length
