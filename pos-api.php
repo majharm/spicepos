@@ -34,6 +34,11 @@ if ($path === "health" && $method === "GET") {
   exit;
 }
 
+if ($path === "cron" || $path === "cron/automation") {
+  require __DIR__ . "/api/cron/index.php";
+  exit;
+}
+
 function pos_send_result($status, $contentType, $setCookies, $body) {
   http_response_code($status > 0 ? $status : 502);
   header("Content-Type: " . ($contentType ?: "application/json; charset=utf-8"));

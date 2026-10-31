@@ -1924,7 +1924,7 @@ export function startAlertScheduler() {
     if (ticking) return;
     ticking = true;
     try {
-      await tickAllClosingAlerts();
+      // PHP health and /api/cron drive scheduled reports. This process only keeps backup email.
       await runBackupEmailTick();
     } catch (err) {
       console.error("alert scheduler:", err.message);
@@ -1941,6 +1941,6 @@ export function scheduleAlertTick() {
   const now = Date.now();
   if (now - lastHealthTick < 45000) return;
   lastHealthTick = now;
-  void tickAllClosingAlerts().catch((err) => console.error("alert tick:", err.message));
+  // PHP health and /api/cron drive scheduled reports.
   void runBackupEmailTick();
 }

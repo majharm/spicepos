@@ -118,6 +118,7 @@ try {
         require_once $backup;
         if (function_exists("pos_tick_backup_email")) pos_tick_backup_email();
       }
+      if (health_automation_due($root)) health_automation_tick($root);
     } catch (Throwable $e) {
       error_log("backup email tick: " . $e->getMessage());
     }
@@ -127,4 +128,56 @@ try {
   health_out(503, $out + ["ok" => false, "error" => $e->getMessage()]);
 }
 
+$automationDue = health_automation_due($root);
+if ($automationDue) {
+  ignore_user_abort(true);
+  http_response_code(200);
+  header("Content-Type: application/json; charset=utf-8");
+  echo json_encode($out, JSON_UNESCAPED_UNICODE);
+  if (function_exists("fastcgi_finish_request")) {
+    @fastcgi_finish_request();
+  } else {
+    if (function_exists("ob_flush")) @ob_flush();
+    @flush();
+  }
+  try {
+    @set_time_limit(40);
+    health_automation_tick($root);
+  } catch (Throwable $e) {
+    error_log("automation tick: " . $e->getMessage());
+  }
+  exit;
+}
+
 health_out(200, $out);
+
+function health_automation_due($root) {
+  $dir = $root . "/pos-data";
+  if (!is_dir($dir)) @mkdir($dir, 0775, true);
+  $file = $dir . "/automation-tick.lock";
+  $fh = @fopen($file, "c+");
+  if (!$fh) return false;
+  if (!flock($fh, LOCK_EX | LOCK_NB)) {
+    fclose($fh);
+    return false;
+  }
+  $last = (int) trim((string) stream_get_contents($fh));
+  $due = $last <= 0 || (time() - $last) >= 300;
+  if ($due) {
+    ftruncate($fh, 0);
+    rewind($fh);
+    fwrite($fh, (string) time());
+    fflush($fh);
+  }
+  flock($fh, LOCK_UN);
+  fclose($fh);
+  return $due;
+}
+
+function health_automation_tick($root) {
+  if (!function_exists("pos_db")) require_once $root . "/pos-php-core.php";
+  $file = $root . "/pos-automation.php";
+  if (!is_file($file)) return;
+  require_once $file;
+  if (function_exists("pos_automation_tick")) pos_automation_tick();
+}

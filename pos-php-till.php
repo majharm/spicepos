@@ -12,7 +12,7 @@ function pos_php_till_dispatch($path, $method, $body) {
     "orders", "purchases", "stock", "staff", "branches", "devices", "holds",
     "checkout", "settings", "dining-tables", "tables", "table-shift", "table-shifts", "kots", "reports", "growth", "audit", "accounts", "backup", "units", "taxes", "brands",
     "barcodes", "damage", "loyalty", "batches", "qr-orders", "prescriptions", "combos", "offers", "aggregator",
-    "notifications",
+    "notifications", "automation",
   ];
   if (!in_array($head, $staff, true)) return false;
   $auth = pos_staff_session();
@@ -27,6 +27,11 @@ function pos_php_till_dispatch($path, $method, $body) {
     require_once __DIR__ . "/pos-notify.php";
     $ids = is_array($body["ids"] ?? null) ? $body["ids"] : [];
     pos_send(200, pos_notify_ack($bid, $ids, (string) ($body["push"] ?? "failed")));
+  }
+
+  if ($path === "automation/settings") {
+    require_once __DIR__ . "/pos-automation.php";
+    if (pos_automation_shop_dispatch($path, $method, $body, $bid)) return true;
   }
 
   if ($path === "backup" || $path === "backup/restore" || $path === "backup/clean") {

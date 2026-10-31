@@ -3237,6 +3237,7 @@ const SETTINGS_SECTIONS = [
   "email",
   "security",
   "backup",
+  "automation",
 ];
 
 function settingsSectionAllowed(name) {
@@ -3393,7 +3394,9 @@ function showSettingsTab(tab) {
   const hardware = name === "hardware";
   const security = name === "security";
   const email = name === "email";
-  if ($("settings-pane-profile")) $("settings-pane-profile").hidden = backup;
+  const automation = name === "automation";
+  if ($("settings-pane-automation")) $("settings-pane-automation").hidden = !automation;
+  if ($("settings-pane-profile")) $("settings-pane-profile").hidden = backup || automation;
   if ($("settings-pane-hardware")) $("settings-pane-hardware").hidden = !hardware;
   if ($("settings-pane-backup")) $("settings-pane-backup").hidden = !backup;
   if ($("settings-pane-email")) $("settings-pane-email").hidden = !email;
@@ -3436,6 +3439,7 @@ function showSettingsTab(tab) {
     bindBusinessEmail();
     void loadBusinessEmail();
   }
+  if (automation && typeof window.posLoadShopAutomation === "function") void window.posLoadShopAutomation();
   return true;
 }
 

@@ -3157,8 +3157,33 @@
               <button class="btn" type="button" data-settings-tab="email" data-settings-section="email">Email Settings</button>
               <button class="btn" type="button" data-settings-tab="security" data-settings-section="security">User Permissions &amp; Security</button>
               <button class="btn" type="button" role="tab" aria-selected="false" data-settings-tab="backup" data-view="backup" data-i18n="settings.backup">Backup</button>
+              <button class="btn" type="button" role="tab" aria-selected="false" data-settings-tab="automation">Automation</button>
             </nav>
             <div class="settings-hub-main">
+            <div class="settings-pane" id="settings-pane-automation" hidden>
+              <form id="shop-automation-form" class="item-composer">
+                <p class="item-mode">Automation</p>
+                <p class="item-composer-note">These reports use this shop's sales, receipts, stock, and expenses. WhatsApp stays in test mode until Master Admin turns it off.</p>
+                <fieldset class="item-block">
+                  <legend>Reports for this shop</legend>
+                  <label class="full"><input type="checkbox" name="low_stock" /> Low stock alerts</label>
+                  <label class="full"><input type="checkbox" name="daily_sales" /> Daily sales summary</label>
+                  <label class="full"><input type="checkbox" name="collections" /> Payment collection summary</label>
+                  <label class="full"><input type="checkbox" name="overdue" /> Customer overdue reminders</label>
+                  <label class="full"><input type="checkbox" name="eod" /> Day-end summary</label>
+                </fieldset>
+                <fieldset class="item-block">
+                  <legend>How to send them</legend>
+                  <label class="full"><input type="checkbox" name="channel_whatsapp" /> WhatsApp</label>
+                  <label class="full"><input type="checkbox" name="channel_in_app" /> In-app notification</label>
+                  <label class="full">Closing time <input name="close_time" value="21:00" /></label>
+                  <label class="full">Report time <input name="report_time" value="21:00" /></label>
+                  <label class="full">Low-stock reminder hours <input name="low_stock_hours" type="number" min="1" max="168" value="24" /></label>
+                </fieldset>
+                <button class="btn primary" type="submit">Save automation</button>
+                <p id="shop-automation-hint" class="hint"></p>
+              </form>
+            </div>
             <div class="settings-pane" id="settings-pane-profile">
               <div class="items-split settings-profile-split">
                 <form class="settings item-composer" id="settings-form" autocomplete="off">
@@ -3834,6 +3859,7 @@
     <script src="./js/recurring.js?v=20261027rec1" defer></script>
     <script src="./js/quotations.js?v=20261027qt1" defer></script>
     <script src="./js/app.js?v=20261031notice2" defer></script>
+    <script src="./js/automation-shop.js?v=20261031auto1" defer></script>
     <script src="./js/recurring-ui.js?v=20261027rec3" defer></script>
     <script src="./js/quotations-ui.js?v=20261027qt1" defer></script>
     <script src="./js/due-reminders-ui.js?v=20261027dues1" defer></script>

@@ -857,6 +857,67 @@ export async function ensureSchema() {
   } catch {
     /* advanced tables optional during early setup */
   }
+  await addColumn("customers", "whatsapp_consent", "TINYINT(1) NOT NULL DEFAULT 0");
+  await addColumn("customers", "whatsapp_opt_out", "TINYINT(1) NOT NULL DEFAULT 0");
+  await create(`CREATE TABLE IF NOT EXISTS automation_jobs (
+    job_key VARCHAR(32) PRIMARY KEY,
+    name VARCHAR(80) NOT NULL,
+    schedule VARCHAR(64) NOT NULL,
+    enabled TINYINT NOT NULL DEFAULT 0,
+    channels VARCHAR(32) NOT NULL DEFAULT 'whatsapp,in_app',
+    last_run_at DATETIME NULL,
+    last_status VARCHAR(16) NOT NULL DEFAULT 'pending',
+    last_error VARCHAR(255) NOT NULL DEFAULT '',
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+  )`);
+  await create(`CREATE TABLE IF NOT EXISTS automation_runs (
+    id VARCHAR(64) PRIMARY KEY,
+    job_key VARCHAR(32) NOT NULL,
+    started_at DATETIME NOT NULL,
+    finished_at DATETIME NULL,
+    status VARCHAR(16) NOT NULL,
+    enqueued INT NOT NULL DEFAULT 0,
+    sent INT NOT NULL DEFAULT 0,
+    failed INT NOT NULL DEFAULT 0,
+    error VARCHAR(255) NOT NULL DEFAULT '',
+    INDEX (job_key, started_at)
+  )`);
+  await create(`CREATE TABLE IF NOT EXISTS automation_queue (
+    id VARCHAR(64) PRIMARY KEY,
+    job_key VARCHAR(32) NOT NULL,
+    business_id VARCHAR(64) NOT NULL,
+    idempotency_key VARCHAR(191) NOT NULL,
+    channel VARCHAR(16) NOT NULL,
+    recipient VARCHAR(32) NOT NULL DEFAULT '',
+    title VARCHAR(180) NOT NULL DEFAULT '',
+    body MEDIUMTEXT NULL,
+    status VARCHAR(16) NOT NULL DEFAULT 'pending',
+    attempts INT NOT NULL DEFAULT 0,
+    next_attempt_at DATETIME NULL,
+    last_error VARCHAR(255) NOT NULL DEFAULT '',
+    provider_note VARCHAR(255) NOT NULL DEFAULT '',
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    sent_at DATETIME NULL,
+    UNIQUE KEY uniq_auto_msg (idempotency_key),
+    INDEX idx_auto_due (status, next_attempt_at)
+  )`);
+  await create(`CREATE TABLE IF NOT EXISTS automation_shop (
+    business_id VARCHAR(64) PRIMARY KEY,
+    low_stock TINYINT NOT NULL DEFAULT 0,
+    daily_sales TINYINT NOT NULL DEFAULT 0,
+    collections TINYINT NOT NULL DEFAULT 0,
+    overdue TINYINT NOT NULL DEFAULT 0,
+    eod TINYINT NOT NULL DEFAULT 0,
+    channel_whatsapp TINYINT NOT NULL DEFAULT 1,
+    channel_in_app TINYINT NOT NULL DEFAULT 1,
+    close_time CHAR(5) NOT NULL DEFAULT '21:00',
+    report_time CHAR(5) NOT NULL DEFAULT '21:00',
+    low_stock_hours INT NOT NULL DEFAULT 24,
+    low_signature VARCHAR(191) NOT NULL DEFAULT '',
+    low_sent_at DATETIME NULL,
+    low_checked_at DATETIME NULL,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+  )`);
   await ensureHotIndexes();
 }
 

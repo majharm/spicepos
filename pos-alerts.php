@@ -1163,9 +1163,22 @@ function pos_send_closing_alert($bid, $force = false) {
   $shop = pos_shop_alert_contacts($bid);
   if (!$shop["businessId"]) return ["skipped" => true];
   if (!$shop["phones"] && !$shop["emails"]) return ["skipped" => true, "reason" => "no-number"];
-  $hour = (int) date("G");
+  $tzName = "Asia/Kolkata";
+  try {
+    if (function_exists("pos_apply_business_timezone")) {
+      $meta = pos_apply_business_timezone($bid);
+      if (!empty($meta["timezone"])) $tzName = (string) $meta["timezone"];
+    }
+  } catch (Throwable $e) { /* keep Asia/Kolkata */ }
+  try {
+    $tz = new DateTimeZone($tzName);
+  } catch (Throwable $e) {
+    $tz = new DateTimeZone("Asia/Kolkata");
+  }
+  $now = new DateTime("now", $tz);
+  $hour = (int) $now->format("G");
   $close = (int) $cfg["alert_closing_hour"];
-  $today = date("Y-m-d");
+  $today = $now->format("Y-m-d");
   $day = $force ? $today : pos_closing_alert_day($hour, $close, $today);
   if ($day === "") return ["skipped" => true];
   if (!$force && pos_alert_sent($shop["businessId"], "closing", $day, "")) return ["skipped" => true, "reason" => "already-sent"];

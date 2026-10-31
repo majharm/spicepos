@@ -199,7 +199,7 @@ const NAV_FAMILIES = {
   main: ["dash", "live", "profile", "biz", "users", "plans", "fees", "dsa-sales", "health"],
   alerts: ["expiry", "alert-log"],
   people: ["managers", "staff", "support"],
-  advance: ["advance", "backup", "languages", "notes", "branches", "devices", "audit", "customers"],
+  advance: ["advance", "backup", "languages", "notes", "automation", "branches", "devices", "audit", "customers"],
   analytics: ["analytics"],
   seo: ["seo"],
   website: ["website"],
@@ -224,6 +224,7 @@ const PAGE_HINTS = {
   backup: "Download or restore data",
   languages: "India language pack",
   notes: "Shop dashboard notices",
+  automation: "Scheduled stock, sales, collections, and day-end reports",
   branches: "Every shop branch",
   devices: "Registered tills",
   audit: "Who changed what",
@@ -294,6 +295,7 @@ const MASTER_PAGES = [
   { tab: "backup", pane: "backup", title: "Backup", keywords: "download restore email" },
   { tab: "languages", title: "Languages", keywords: "i18n translation" },
   { tab: "notes", title: "Messages", keywords: "notification notice" },
+  { tab: "automation", title: "Automation", keywords: "cron jobs low stock sales collection overdue day end" },
   { tab: "branches", title: "Branches", keywords: "shop branch" },
   { tab: "devices", title: "POS devices", keywords: "till device code" },
   { tab: "audit", title: "Activity logs", keywords: "audit history changes" },
@@ -447,6 +449,7 @@ function backupFamilyTabs(active) {
     ${tabBtn("settings", "Settings")}
     ${tabBtn("backup", "Backup")}
     ${tabBtn("notes", "Messages")}
+    ${tabBtn("automation", "Automation")}
   </div>`;
 }
 
@@ -455,6 +458,7 @@ function bindBackupFamilyTabs(root) {
     btn.onclick = () => {
       const pane = btn.dataset.masterPane;
       if (pane === "notes") setMasterTab("notes");
+      else if (pane === "automation") setMasterTab("automation");
       else setMasterTab("backup", pane);
     };
   });
@@ -1471,6 +1475,7 @@ function advanceHubHtml() {
       ${advanceCard("backup", "settings", "Settings", "WhatsApp, Hostinger SMTP, and Active or Inactive auto-messages.")}
       ${advanceCard("backup", "backup", "Backup", "Download or restore one shop, or the full platform.")}
       ${advanceCard("notes", "", "Messages", "Post a notice to one shop or every business.")}
+      ${advanceCard("automation", "", "Automation", "Scheduled stock, sales, collection, and day-end reports.")}
       ${advanceCard("languages", "", "Languages", "India language pack coverage, missing keys, and import or export.")}
       ${advanceCard("branches", "", "Branches", "Every shop branch and its status.")}
       ${advanceCard("devices", "", "POS devices", "Registered tills and device codes.")}
@@ -2216,6 +2221,7 @@ async function render() {
     seo: "SEO Management",
     website: WEBSITE_TITLES[websitePane] || "Website Management",
     notes: "Messages",
+    automation: "Automation",
     languages: "Languages",
     alerts: "Settings",
     support: "Support helpline",
@@ -3894,6 +3900,11 @@ async function render() {
           panelFlash = "";
         }
       }
+    } else if (tab === "automation") {
+      const data = await api("/api/master/automation");
+      const businesses = await api("/api/master/businesses");
+      body.innerHTML = automationDeskHtml(data, businesses);
+      bindAutomationDesk(businesses);
     } else if (tab === "notes") {
       const [businesses, settings, campaignPack, contactPack] = await Promise.all([
         api("/api/master/businesses"),
@@ -4452,6 +4463,139 @@ function notifyCampaignCard(row) {
       ${open ? `<button class="btn" type="button" data-wa-act="cancel" data-wa-id="${attr(id)}">Cancel pending</button>` : ""}
     </div>
   </article>`;
+}
+
+function automationDeskHtml(data, businesses) {
+  const counts = data?.counts || {};
+  const jobs = Array.isArray(data?.jobs) ? data.jobs : [];
+  const queue = Array.isArray(data?.queue) ? data.queue : [];
+  const shopOptions = (Array.isArray(businesses) ? businesses : [])
+    .map((biz) => `<option value="${attr(biz.id)}">${attr(biz.name || biz.id)}</option>`)
+    .join("");
+  const rows = jobs
+    .map((job) => {
+      const on = Number(job.enabled) === 1;
+      const next = job.job_key === "low_stock"
+        ? "Every 30 minutes"
+        : job.job_key === "overdue"
+          ? "11:00 IST"
+          : job.job_key === "collections"
+            ? "21:15 IST"
+            : job.job_key === "eod"
+              ? "Shop closing time"
+              : job.schedule || "21:00 IST";
+      return `<tr>
+        <td>${attr(job.name || job.job_key)}</td>
+        <td>${attr(job.schedule || "")}</td>
+        <td>${attr(job.last_run_at || "—")}</td>
+        <td>${attr(next)}</td>
+        <td>${attr(job.last_status || "pending")}</td>
+        <td>
+          <button class="btn" type="button" data-auto-toggle="${attr(job.job_key)}" data-enabled="${on ? "0" : "1"}">${on ? "Disable" : "Enable"}</button>
+          <button class="btn" type="button" data-auto-run="${attr(job.job_key)}">Run now</button>
+        </td>
+      </tr>`;
+    })
+    .join("");
+  const logs = queue
+    .map(
+      (row) =>
+        `<article class="report-card item-card"><strong>${attr(row.title || row.job_key)}</strong><span>${attr(row.business_id)} · ${attr(row.channel)} · ${attr(row.status)}</span><span>${attr(row.last_error || row.provider_note || "")}</span></article>`,
+    )
+    .join("");
+  return `<div class="items-desk master-desk" id="automation-desk">
+    ${masterHero("Platform", "Automation", "Scheduled reports run from PHP. WhatsApp uses the connection already saved in Settings. Test mode sends WhatsApp only to the approved number.", [
+      { label: "Scheduled", value: counts.scheduled || jobs.length },
+      { label: "Enabled", value: counts.enabled || 0 },
+      { label: "Pending", value: counts.pending || 0 },
+      { label: "Sent", value: counts.sent || 0 },
+      { label: "Failed", value: counts.failed || 0 },
+    ])}
+    <p class="section-note">Low stock every 30 minutes. Overdue reminders at 11:00 IST. Daily sales at 21:00 or the shop report time. Collections at 21:15 IST. Day-end at each shop's closing time. Jobs stay off until you enable one and turn it on for a shop.</p>
+    <form id="auto-test-form" class="item-composer">
+      <label><input type="checkbox" name="test_mode" ${data?.testMode !== false ? "checked" : ""} /> Test mode</label>
+      <label>Test WhatsApp number <input name="test_number" value="${attr(data?.testNumber || "")}" placeholder="10-digit mobile" /></label>
+      <label>Shop
+        <select name="business_id"><option value="">All shops that enabled the job</option>${shopOptions}</select>
+      </label>
+      <button class="btn primary" type="submit">Save test settings</button>
+      <button class="btn" type="button" id="auto-retry">Retry failed</button>
+    </form>
+    <p id="auto-hint" class="hint${window.__autoFlash ? " ok" : ""}">${attr(window.__autoFlash || "")}</p>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Job</th><th>Schedule</th><th>Last run</th><th>Next run</th><th>Status</th><th>Actions</th></tr></thead>
+      <tbody>${rows || `<tr><td colspan="6">No jobs yet. Open this page again after the first cron tick.</td></tr>`}</tbody>
+    </table></div>
+    <h3>Recent queue</h3>
+    <div class="item-list">${logs || `<p class="hint">No messages queued.</p>`}</div>
+    <p class="hint">Cron URL: /api/cron/ every 5 minutes. Shop traffic to /api/health also ticks the queue. Last run ${attr(counts.lastRun || "—")}.</p>
+  </div>`;
+}
+
+function bindAutomationDesk() {
+  const root = $("automation-desk");
+  if (!root) return;
+  const hint = $("auto-hint");
+  window.__autoFlash = "";
+  const say = (text, kind) => {
+    window.__autoFlash = text || "";
+    if (!hint) return;
+    hint.textContent = text;
+    hint.className = kind ? `hint ${kind}` : "hint";
+  };
+  const form = $("auto-test-form");
+  form?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const data = new FormData(form);
+    try {
+      await api("/api/master/automation", {
+        method: "POST",
+        body: JSON.stringify({
+          test_mode: data.get("test_mode") ? 1 : 0,
+          test_number: String(data.get("test_number") || ""),
+          business_id: String(data.get("business_id") || ""),
+        }),
+      });
+      say("Test settings saved.", "ok");
+      setMasterTab("automation");
+    } catch (err) {
+      say(err.message, "error");
+    }
+  });
+  root.addEventListener("click", async (event) => {
+    const toggle = event.target.closest("[data-auto-toggle]");
+    const run = event.target.closest("[data-auto-run]");
+    const biz = String(new FormData(form || undefined).get("business_id") || "");
+    try {
+      if (toggle) {
+        await api("/api/master/automation", {
+          method: "POST",
+          body: JSON.stringify({ job: toggle.dataset.autoToggle, enabled: toggle.dataset.enabled === "1" ? 1 : 0, business_id: biz }),
+        });
+        say(toggle.dataset.enabled === "1" ? "Job enabled." : "Job disabled.", "ok");
+        setMasterTab("automation");
+      } else if (run) {
+        say("Running one batch…");
+        const out = await api("/api/master/automation/run", {
+          method: "POST",
+          body: JSON.stringify({ job: run.dataset.autoRun, business_id: biz }),
+        });
+        say(`Queued ${out.enqueued || 0}. Sent ${out.sent || 0}. Failed ${out.failed || 0}. Test mode ${out.testMode ? "on" : "off"}.`, "ok");
+        setMasterTab("automation");
+      }
+    } catch (err) {
+      say(err.message, "error");
+    }
+  });
+  $("auto-retry")?.addEventListener("click", async () => {
+    try {
+      const out = await api("/api/master/automation/retry", { method: "POST", body: "{}" });
+      say(`Retry sent ${out.sent || 0}, failed ${out.failed || 0}.`, "ok");
+      setMasterTab("automation");
+    } catch (err) {
+      say(err.message, "error");
+    }
+  });
 }
 
 function notifyCampaignHtml(businesses, campaigns, contacts) {

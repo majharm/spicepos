@@ -4860,6 +4860,11 @@ function pos_php_dispatch($path, $method, $rawBody) {
       if (function_exists("pos_notify_dispatch") && pos_notify_dispatch($path, $method, $body)) return;
     }
 
+    if (strpos($path, "master/automation") === 0) {
+      require_once __DIR__ . "/pos-automation.php";
+      if (function_exists("pos_automation_master_dispatch") && pos_automation_master_dispatch($path, $method, $body)) return;
+    }
+
     if (
       $path === "master/backup" ||
       $path === "master/backup/restore" ||
