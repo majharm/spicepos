@@ -211,4 +211,11 @@ test("the PHP runner reuses WAMaster, locks the tick, and does not count credit 
   assert.match(read("api/cron/index.php"), /jobsEnabled/);
   assert.match(read("api/cron/index.php"), /shopsOn/);
   assert.match(read("js/app.js"), /Daily sales\|Collections\|Day-end\|Low stock alert\|Payment reminder/);
+  assert.match(php, /function pos_auto_probe/);
+  assert.match(php, /test-number/);
+  assert.match(php, /provider_note, ''\) <> 'forced'/);
+  assert.match(read("js/master.js"), /Test WhatsApp sent to the saved test number/);
+  assert.match(read("master.html"), /master\.js\?v=20261031auto4/);
+  assert.doesNotMatch(read("api/cron/index.php"), /lastError/);
+  assert.match(php, /if \(\$testMode\) \{\s*\$mobile = \$testNumber;/);
 });

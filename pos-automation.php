@@ -719,7 +719,7 @@ function pos_auto_release_unwanted() {
         "SELECT q.id, q.business_id, q.title, q.channel, q.status
          FROM automation_queue q
          LEFT JOIN automation_shop s ON s.business_id = q.business_id
-         WHERE q.job_key = ? AND COALESCE(s.`$job`, 0) = 0 AND $statusSql",
+         WHERE q.job_key = ? AND COALESCE(q.provider_note, '') <> 'forced' AND COALESCE(s.`$job`, 0) = 0 AND $statusSql",
         "s",
         [$job]
       );
@@ -753,13 +753,14 @@ function pos_auto_release_unwanted() {
   return ["dropped" => $dropped, "removed" => $removed];
 }
 
-function pos_automation_consider($biz, $shop, $forceJob, $forceShop = false) {
+function pos_automation_consider($biz, $shop, $forceJob, $forceShop = false, $probe = false) {
   $zone = $biz["timezone"] ?? "Asia/Kolkata";
   if (function_exists("pos_apply_business_timezone")) {
     try { pos_apply_business_timezone($biz["id"]); } catch (Throwable $e) { /* keep the shop clock below */ }
   }
   $enqueued = 0;
   $ymd = pos_auto_now($zone)->format("Y-m-d");
+  $stamp = $probe ? ("|t" . gmdate("His") . bin2hex(random_bytes(2))) : "";
   $owner = trim((string) ($biz["owner_name"] ?? ""));
   $shopName = trim((string) ($biz["name"] ?? "Shop"));
   $want = function ($key) use ($forceJob, $shop, $forceShop) {
@@ -781,9 +782,9 @@ function pos_automation_consider($biz, $shop, $forceJob, $forceShop = false) {
       $due = $sig !== "" && (!$same || (int) ($sentGate[0]["due"] ?? 1) === 1);
       if ($due) {
         $body = pos_auto_low_message($owner, $items, pos_auto_out_count($biz["id"]));
-        $enqueued += pos_auto_queue_report("low_stock", $biz["id"], $sig, $shop, "Low stock alert", $body, "", $forceShop);
+        $enqueued += pos_auto_queue_report("low_stock", $biz["id"], $sig . $stamp, $shop, "Low stock alert", $body, "", $forceShop);
         $waOn = (int) ($shop["channel_whatsapp"] ?? 0) === 1;
-        if (!$waOn || !pos_auto_wa_held()) {
+        if (!$probe && (!$waOn || !pos_auto_wa_held())) {
           pos_q("UPDATE automation_shop SET low_signature = ?, low_sent_at = NOW() WHERE business_id = ?", "ss", [$sig, $biz["id"]]);
         }
       }
@@ -804,7 +805,7 @@ function pos_automation_consider($biz, $shop, $forceJob, $forceShop = false) {
     $sales = pos_auto_sales_summary($orders, $returns, $sold["qty"]);
     $col = pos_auto_collections(pos_auto_receipts($biz["id"], $ymd), $orders, $refunds);
     $body = pos_auto_sales_message($shopName, $ymd, $sales, $col["collected"]);
-    $enqueued += pos_auto_queue_report("daily_sales", $biz["id"], $ymd, $shop, "Daily sales " . $ymd, $body, "", $forceShop);
+    $enqueued += pos_auto_queue_report("daily_sales", $biz["id"], $ymd . $stamp, $shop, "Daily sales " . $ymd, $body, "", $forceShop);
   }
   if ($want("collections") && ($forceJob === "collections" || $payDue)) {
     $orders = pos_auto_orders($biz["id"], $ymd);
@@ -813,10 +814,10 @@ function pos_automation_consider($biz, $shop, $forceJob, $forceShop = false) {
     $col["pending"] = pos_auto_outstanding($biz["id"]);
     $col["supplierDue"] = pos_auto_supplier_due($biz["id"]);
     $body = pos_auto_collection_message($shopName, $ymd, $col);
-    $enqueued += pos_auto_queue_report("collections", $biz["id"], $ymd, $shop, "Collections " . $ymd, $body, "", $forceShop);
+    $enqueued += pos_auto_queue_report("collections", $biz["id"], $ymd . $stamp, $shop, "Collections " . $ymd, $body, "", $forceShop);
   }
   if ($want("overdue") && ($forceJob === "overdue" || $dueDue)) {
-    $enqueued += pos_auto_enqueue_overdue($biz, $shop, $ymd, $forceShop);
+    $enqueued += pos_auto_enqueue_overdue($biz, $shop, $ymd, $forceShop, $stamp);
   }
   if ($want("eod") && ($forceJob === "eod" || $eodDue)) {
     $orders = pos_auto_orders($biz["id"], $ymd);
@@ -851,12 +852,24 @@ function pos_automation_consider($biz, $shop, $forceJob, $forceShop = false) {
       "profitSupported" => $profit["cost"] > 0.004,
     ];
     $body = pos_auto_eod_message($shopName, $ymd, $report);
-    $enqueued += pos_auto_queue_report("eod", $biz["id"], $ymd, $shop, "Day-end " . $ymd, $body, "", $forceShop);
+    $enqueued += pos_auto_queue_report("eod", $biz["id"], $ymd . $stamp, $shop, "Day-end " . $ymd, $body, "", $forceShop);
   }
   return $enqueued;
 }
 
-function pos_auto_enqueue_overdue($biz, $shop, $today, $forceShop = false) {
+function pos_auto_probe($job, $biz) {
+  $shop = pos_auto_shop_row($biz["id"]);
+  $shop["channel_whatsapp"] = 1;
+  $shop["channel_in_app"] = 0;
+  $n = pos_automation_consider($biz, $shop, $job, true, true);
+  if ($n > 0) return $n;
+  $name = trim((string) ($biz["name"] ?? "Shop"));
+  $body = "ATAV POS test\n\n" . $name . "\nJob: " . $job . "\n\nNo matching rows for this report. This WhatsApp confirms delivery.\n\nTeam ATAV POS";
+  $scope = "probe" . gmdate("YmdHis") . bin2hex(random_bytes(2));
+  return pos_auto_enqueue($job, $biz["id"], $scope, "whatsapp", "Test " . $job, $body, "", true) ? 1 : 0;
+}
+
+function pos_auto_enqueue_overdue($biz, $shop, $today, $forceShop = false, $scopeSuffix = "") {
   $open = function_exists("pos_invoice_open_remainder_sql") ? pos_invoice_open_remainder_sql() : "GREATEST(0, COALESCE(o.total,0) - COALESCE(o.amount_paid,0))";
   $rows = pos_auto_q(
     "SELECT o.id, o.order_number, o.total, COALESCE(o.amount_paid,0) AS amount_paid, o.due_date, o.created_at,
@@ -888,7 +901,7 @@ function pos_auto_enqueue_overdue($biz, $shop, $today, $forceShop = false) {
       "dueDate" => $due,
       "daysOverdue" => max(0, (int) $days),
     ]);
-    if ((int) $shop["channel_whatsapp"] === 1 && !pos_auto_wa_held() && pos_auto_enqueue("overdue", $biz["id"], $row["id"] . "|" . $stage, "whatsapp", "Payment reminder", $body, $row["mobile"], $forceShop)) $n++;
+    if ((int) $shop["channel_whatsapp"] === 1 && !pos_auto_wa_held() && pos_auto_enqueue("overdue", $biz["id"], $row["id"] . "|" . $stage . $scopeSuffix, "whatsapp", "Payment reminder", $body, $row["mobile"], $forceShop)) $n++;
   }
   return $n;
 }
@@ -904,6 +917,7 @@ function pos_auto_mark_job($key, $status, $error = "") {
 function pos_automation_drain($deadline) {
   $sent = 0;
   $failed = 0;
+  $lastError = "";
   $testMode = pos_auto_test_mode();
   $testNumber = pos_auto_mobile(pos_auto_platform("automation_test_number", ""));
   $cfg = function_exists("pos_alert_settings") ? pos_alert_settings() : [];
@@ -912,7 +926,7 @@ function pos_automation_drain($deadline) {
   while (microtime(true) < $deadline && ($sent + $failed) < 25 && $whatsapp < 5 && $guard < 40) {
     $guard++;
     $rows = pos_q(
-      "SELECT * FROM automation_queue WHERE status = 'pending' AND (next_attempt_at IS NULL OR next_attempt_at <= NOW()) ORDER BY created_at LIMIT 1"
+      "SELECT * FROM automation_queue WHERE status = 'pending' AND (next_attempt_at IS NULL OR next_attempt_at <= NOW()) ORDER BY (provider_note = 'forced') DESC, created_at LIMIT 1"
     );
     if (!$rows) break;
     $row = $rows[0];
@@ -948,10 +962,11 @@ function pos_automation_drain($deadline) {
             if ($mobile === "") $error = "invalid-mobile";
           }
         } else {
-          if ($optOut) $error = "opt-out";
-          elseif ($testMode) {
+          if ($testMode) {
             $mobile = $testNumber;
             if ($mobile === "") $error = "test-number-missing";
+          } elseif ($optOut) {
+            $error = "opt-out";
           } else {
             $mobile = pos_auto_mobile($biz["mobile"] ?? "");
             if ($mobile === "") $error = "invalid-mobile";
@@ -984,18 +999,21 @@ function pos_automation_drain($deadline) {
       pos_q("UPDATE automation_queue SET status = ?, attempts = ?, sent_at = NOW(), provider_note = ?, last_error = '' WHERE id = ?", "siss", [$status, (int) $row["attempts"], substr($note, 0, 240), $row["id"]]);
       $sent++;
     } elseif (in_array($error, ["opt-out", "test-number-missing", "invalid-mobile", "no-consent"], true)) {
+      $lastError = substr($error, 0, 180);
       pos_q("UPDATE automation_queue SET status = 'skipped', attempts = ?, last_error = ? WHERE id = ?", "iss", [$attempts, substr($error, 0, 240), $row["id"]]);
       $failed++;
     } elseif ($attempts >= 4) {
+      $lastError = substr($error, 0, 180);
       pos_q("UPDATE automation_queue SET status = 'failed', attempts = ?, last_error = ? WHERE id = ?", "iss", [$attempts, substr($error, 0, 240), $row["id"]]);
       $failed++;
     } else {
+      $lastError = substr($error, 0, 180);
       $wait = (int) (60 * (2 ** $attempts));
       pos_q("UPDATE automation_queue SET status = 'pending', attempts = ?, last_error = ?, next_attempt_at = DATE_ADD(NOW(), INTERVAL ? SECOND) WHERE id = ?", "isis", [$attempts, substr($error, 0, 240), $wait, $row["id"]]);
       $failed++;
     }
   }
-  return ["sent" => $sent, "failed" => $failed];
+  return ["sent" => $sent, "failed" => $failed, "lastError" => $lastError];
 }
 
 function pos_automation_tick($opts = []) {
@@ -1021,6 +1039,8 @@ function pos_automation_tick($opts = []) {
     $forceBiz = trim((string) ($opts["business_id"] ?? ""));
     $shops = pos_auto_shops();
     $enqueued = 0;
+    $lastError = "";
+    $scope = $forceBiz !== "" ? "one-shop" : ($forceJob !== "" ? "enabled-shops" : "schedule");
     $deadline = $started + 18;
     foreach ($shops as $biz) {
       if (microtime(true) > $deadline) break;
@@ -1032,7 +1052,25 @@ function pos_automation_tick($opts = []) {
         error_log("automation shop " . $biz["id"] . ": " . $e->getMessage());
       }
     }
+    if ($forceJob !== "" && $forceBiz === "" && $enqueued === 0 && pos_auto_test_mode()) {
+      if (pos_auto_test_number() === "") {
+        $lastError = "Add a test WhatsApp number, then run the test again.";
+      } elseif ($shops) {
+        try {
+          $enqueued += pos_auto_probe($forceJob, $shops[0]);
+          $scope = "test-number";
+          if ($enqueued === 0) $lastError = "The test message could not be queued.";
+        } catch (Throwable $e) {
+          error_log("automation probe: " . $e->getMessage());
+          $lastError = "The test report could not be prepared.";
+          $scope = "test-number";
+        }
+      } else {
+        $lastError = "No active shop is available for a test report.";
+      }
+    }
     $drain = pos_automation_drain($started + 28);
+    if ($lastError === "" && !empty($drain["lastError"])) $lastError = (string) $drain["lastError"];
     $status = $drain["failed"] > 0 && $drain["sent"] === 0 ? "failed" : "ok";
     $runId = function_exists("pos_uuid") ? pos_uuid() : bin2hex(random_bytes(8));
     try {
@@ -1052,7 +1090,8 @@ function pos_automation_tick($opts = []) {
       "failed" => $drain["failed"],
       "dropped" => $released["dropped"],
       "removedNotices" => $released["removed"],
-      "scope" => $forceBiz !== "" ? "one-shop" : ($forceJob !== "" ? "enabled-shops" : "schedule"),
+      "scope" => $scope,
+      "lastError" => $lastError,
       "testMode" => pos_auto_test_mode(),
       "seoUpdated" => $seoUpdated,
     ] + pos_auto_gate_counts();

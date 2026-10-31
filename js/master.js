@@ -4521,7 +4521,7 @@ function automationDeskHtml(data, businesses) {
       <button class="btn primary" type="submit">Save test settings</button>
       <button class="btn" type="button" id="auto-retry">Retry failed</button>
     </form>
-    <p id="auto-hint" class="hint${window.__autoFlash ? " ok" : ""}">${attr(window.__autoFlash || "")}</p>
+    <p id="auto-hint" class="hint${window.__autoFlash ? (window.__autoFlashKind === "error" ? " error" : " ok") : ""}">${attr(window.__autoFlash || "")}</p>
     <div class="table-wrap"><table>
       <thead><tr><th>Job</th><th>Schedule</th><th>Last run</th><th>Next run</th><th>Status</th><th>Actions</th></tr></thead>
       <tbody>${rows || `<tr><td colspan="6">No jobs yet. Open this page again after the first cron tick.</td></tr>`}</tbody>
@@ -4537,8 +4537,10 @@ function bindAutomationDesk() {
   if (!root) return;
   const hint = $("auto-hint");
   window.__autoFlash = "";
+  window.__autoFlashKind = "";
   const say = (text, kind) => {
     window.__autoFlash = text || "";
+    window.__autoFlashKind = kind || "";
     if (!hint) return;
     hint.textContent = text;
     hint.className = kind ? `hint ${kind}` : "hint";
@@ -4580,8 +4582,18 @@ function bindAutomationDesk() {
           method: "POST",
           body: JSON.stringify({ job: run.dataset.autoRun, business_id: biz }),
         });
-        const scope = out.scope === "one-shop" ? "the selected shop" : "shops that turned this report on";
-        say(`Queued ${out.enqueued || 0} for ${scope}. Sent ${out.sent || 0}. Removed ${out.dropped || 0} from shops that had it off. Test mode ${out.testMode ? "on" : "off"}.`, "ok");
+        if (out.scope === "test-number") {
+          say(
+            out.sent
+              ? `Test WhatsApp sent to the saved test number. Sent ${out.sent}.`
+              : `Test WhatsApp was not delivered. ${out.lastError || "Sent 0."}`,
+            out.sent ? "ok" : "error",
+          );
+        } else {
+          const scope = out.scope === "one-shop" ? "the selected shop" : "shops that turned this report on";
+          const why = out.lastError ? ` ${out.lastError}` : "";
+          say(`Queued ${out.enqueued || 0} for ${scope}. Sent ${out.sent || 0}. Removed ${out.dropped || 0} from shops that had it off. Test mode ${out.testMode ? "on" : "off"}.${why}`, out.sent || !out.lastError ? "ok" : "error");
+        }
         setMasterTab("automation");
       }
     } catch (err) {
