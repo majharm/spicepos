@@ -4511,7 +4511,7 @@ function automationDeskHtml(data, businesses) {
       { label: "Sent", value: counts.sent || 0 },
       { label: "Failed", value: counts.failed || 0 },
     ])}
-    <p class="section-note">Low stock every 30 minutes. Overdue reminders at 11:00 IST. Daily sales at 21:00 or the shop report time. Collections at 21:15 IST. Day-end at each shop's closing time. A report is queued only for shops that turned it on. Run now with a shop selected sends that one shop.</p>
+    <p class="section-note">Low stock every 30 minutes. Overdue reminders at 11:00 IST. Daily sales at 21:00 or the shop report time. Collections at 21:15 IST. Day-end at each shop's closing time. A report is queued only for shops that turned it on. Run now with a shop selected sends that one shop. ${data?.waHeld ? "WhatsApp is waiting: add a test number, or turn test mode off to message the shop owner." : "Test mode sends WhatsApp only to the test number."} Shops with a report on: ${Number(data?.shopsOn) || 0}.</p>
     <form id="auto-test-form" class="item-composer">
       <label><input type="checkbox" name="test_mode" ${data?.testMode !== false ? "checked" : ""} /> Test mode</label>
       <label>Test WhatsApp number <input name="test_number" value="${attr(data?.testNumber || "")}" placeholder="10-digit mobile" /></label>

@@ -113,6 +113,11 @@ function pos_is_growth_path($path) {
   return $p === "growth" || strpos($p, "growth/") === 0;
 }
 
+function pos_is_automation_path($path) {
+  $p = strtolower((string) $path);
+  return $p === "automation/settings" || $p === "master/automation" || strpos($p, "master/automation/") === 0;
+}
+
 function pos_curl($url, $method, $body, $cookie, $hostHeader = "", &$dispatched = null, $timeoutSec = 5, $connectMs = 250) {
   if (!function_exists("curl_init")) return null;
   $ch = curl_init($url);
@@ -299,6 +304,8 @@ if ($fastLogin) {
   }
 } elseif (pos_is_growth_path($path)) {
   $start = "skipped growth fast-path";
+} elseif (pos_is_automation_path($path)) {
+  $start = "skipped automation fast-path";
 } elseif (!pos_node_down_fresh()) {
   $got = pos_try_proxy($suffix, $method, $body, $cookie, $dispatched);
   if ($got && pos_looks_json($got[3])) {

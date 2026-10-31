@@ -23,6 +23,9 @@ try {
     "removedNotices" => (int) ($result["removedNotices"] ?? 0),
     "testMode" => !empty($result["testMode"]),
     "seoUpdated" => !empty($result["seoUpdated"]),
+    "jobsEnabled" => (int) ($result["jobsEnabled"] ?? 0),
+    "shopsOn" => (int) ($result["shopsOn"] ?? 0),
+    "waHeld" => !empty($result["waHeld"]),
   ], JSON_UNESCAPED_UNICODE);
 } catch (Throwable $e) {
   http_response_code(500);

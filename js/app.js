@@ -18106,7 +18106,8 @@ function paintPlatformNotices(notes) {
     badge.hidden = list.length < 1;
     badge.textContent = list.length > 9 ? "9+" : String(list.length);
   }
-  const newest = list[0];
+  const report = list.find((note) => /^(Daily sales|Collections|Day-end|Low stock alert|Payment reminder)\b/.test(String(note?.title || "")) && !noticePopupClosed(note.id));
+  const newest = report || list[0];
   if (newest && !noticePopupClosed(newest.id) && document.getElementById("notice-popup")?.hidden !== false) {
     openNoticePopup(newest);
   }

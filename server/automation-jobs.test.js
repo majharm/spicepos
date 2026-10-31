@@ -203,4 +203,12 @@ test("the PHP runner reuses WAMaster, locks the tick, and does not count credit 
   assert.match(php, /\$forceJob === \$key && \$forceShop/);
   assert.doesNotMatch(php, /if \(\$forceJob === \$key\) return true;/);
   assert.match(read("js/master.js"), /Shops that turned this report on/);
+  assert.match(read("pos-api.php"), /function pos_is_automation_path/);
+  assert.match(read("pos-api.php"), /skipped automation fast-path/);
+  assert.match(php, /function pos_auto_arm_jobs_once/);
+  assert.match(php, /automation_jobs_armed/);
+  assert.match(php, /UPDATE automation_jobs SET enabled = 1/);
+  assert.match(read("api/cron/index.php"), /jobsEnabled/);
+  assert.match(read("api/cron/index.php"), /shopsOn/);
+  assert.match(read("js/app.js"), /Daily sales\|Collections\|Day-end\|Low stock alert\|Payment reminder/);
 });

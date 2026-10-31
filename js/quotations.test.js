@@ -92,7 +92,7 @@ test("quotation module stays off, isolated, and posts stock only on convert", ()
   assert.match(index, /js\/quotations\.js\?v=20261027qt1/);
   assert.match(index, /js\/quotations-ui\.js\?v=20261027qt1/);
   assert.match(index, /css\/quotations\.css\?v=20261027qt1/);
-  assert.match(index, /app\.js\?v=20261031welcome1/);
+  assert.match(index, /app\.js\?v=20261031auto3/);
   assert.match(app, /function quotationsOn/);
   assert.match(app, /view === "quotations"\) btn\.hidden = !can\("orders"\) \|\| !quotationsOn\(\)/);
   assert.match(app, /payload\.quotations_enabled = \$\("set-quotations"\)\.checked \? 1 : 0/);

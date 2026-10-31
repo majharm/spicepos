@@ -179,6 +179,17 @@ function pos_automation_ensure_schema() {
       /* already seeded */
     }
   }
+  pos_auto_arm_jobs_once();
+}
+
+function pos_auto_arm_jobs_once() {
+  if (pos_auto_platform("automation_jobs_armed", "") === "1") return;
+  try {
+    pos_q("UPDATE automation_jobs SET enabled = 1");
+    if (function_exists("pos_set_setting")) pos_set_setting("automation_jobs_armed", "1");
+  } catch (Throwable $e) {
+    /* the next tick can arm the jobs */
+  }
 }
 
 function pos_auto_flag($value) {
@@ -202,12 +213,30 @@ function pos_auto_test_mode() {
 }
 
 function pos_auto_jobs() {
+  static $cache = null;
+  if (is_array($cache)) return $cache;
   pos_automation_ensure_schema();
   try {
-    return pos_q("SELECT * FROM automation_jobs ORDER BY FIELD(job_key,'low_stock','overdue','daily_sales','collections','eod'), job_key");
+    $cache = pos_q("SELECT * FROM automation_jobs ORDER BY FIELD(job_key,'low_stock','overdue','daily_sales','collections','eod'), job_key");
   } catch (Throwable $e) {
-    return pos_q("SELECT * FROM automation_jobs ORDER BY job_key");
+    $cache = pos_q("SELECT * FROM automation_jobs ORDER BY job_key");
   }
+  return $cache;
+}
+
+function pos_auto_gate_counts() {
+  $enabled = 0;
+  foreach (pos_auto_jobs() as $job) {
+    if ((int) ($job["enabled"] ?? 0) === 1) $enabled++;
+  }
+  $shops = 0;
+  try {
+    $rows = pos_q("SELECT COUNT(*) AS n FROM automation_shop WHERE low_stock=1 OR daily_sales=1 OR collections=1 OR overdue=1 OR eod=1");
+    $shops = (int) ($rows[0]["n"] ?? 0);
+  } catch (Throwable $e) {
+    $shops = 0;
+  }
+  return ["jobsEnabled" => $enabled, "shopsOn" => $shops, "waHeld" => pos_auto_wa_held()];
 }
 
 function pos_auto_job_enabled($key) {
@@ -1026,7 +1055,7 @@ function pos_automation_tick($opts = []) {
       "scope" => $forceBiz !== "" ? "one-shop" : ($forceJob !== "" ? "enabled-shops" : "schedule"),
       "testMode" => pos_auto_test_mode(),
       "seoUpdated" => $seoUpdated,
-    ];
+    ] + pos_auto_gate_counts();
   } finally {
     @$db->query("SELECT RELEASE_LOCK('pos_automation_tick')");
   }
@@ -1046,6 +1075,8 @@ function pos_auto_summary() {
     "ok" => true,
     "testMode" => pos_auto_test_mode(),
     "testNumber" => pos_auto_platform("automation_test_number", ""),
+    "shopsOn" => pos_auto_gate_counts()["shopsOn"],
+    "waHeld" => pos_auto_wa_held(),
     "jobs" => $jobs,
     "counts" => [
       "scheduled" => count($jobs),
