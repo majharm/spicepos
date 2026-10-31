@@ -19,6 +19,8 @@ try {
     "enqueued" => (int) ($result["enqueued"] ?? 0),
     "sent" => (int) ($result["sent"] ?? 0),
     "failed" => (int) ($result["failed"] ?? 0),
+    "dropped" => (int) ($result["dropped"] ?? 0),
+    "removedNotices" => (int) ($result["removedNotices"] ?? 0),
     "testMode" => !empty($result["testMode"]),
   ], JSON_UNESCAPED_UNICODE);
 } catch (Throwable $e) {

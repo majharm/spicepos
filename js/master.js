@@ -4511,12 +4511,12 @@ function automationDeskHtml(data, businesses) {
       { label: "Sent", value: counts.sent || 0 },
       { label: "Failed", value: counts.failed || 0 },
     ])}
-    <p class="section-note">Low stock every 30 minutes. Overdue reminders at 11:00 IST. Daily sales at 21:00 or the shop report time. Collections at 21:15 IST. Day-end at each shop's closing time. Jobs stay off until you enable one and turn it on for a shop.</p>
+    <p class="section-note">Low stock every 30 minutes. Overdue reminders at 11:00 IST. Daily sales at 21:00 or the shop report time. Collections at 21:15 IST. Day-end at each shop's closing time. A report is queued only for shops that turned it on. Run now with a shop selected sends that one shop.</p>
     <form id="auto-test-form" class="item-composer">
       <label><input type="checkbox" name="test_mode" ${data?.testMode !== false ? "checked" : ""} /> Test mode</label>
       <label>Test WhatsApp number <input name="test_number" value="${attr(data?.testNumber || "")}" placeholder="10-digit mobile" /></label>
       <label>Shop
-        <select name="business_id"><option value="">All shops that enabled the job</option>${shopOptions}</select>
+        <select name="business_id"><option value="">Shops that turned this report on</option>${shopOptions}</select>
       </label>
       <button class="btn primary" type="submit">Save test settings</button>
       <button class="btn" type="button" id="auto-retry">Retry failed</button>
@@ -4580,7 +4580,8 @@ function bindAutomationDesk() {
           method: "POST",
           body: JSON.stringify({ job: run.dataset.autoRun, business_id: biz }),
         });
-        say(`Queued ${out.enqueued || 0}. Sent ${out.sent || 0}. Failed ${out.failed || 0}. Test mode ${out.testMode ? "on" : "off"}.`, "ok");
+        const scope = out.scope === "one-shop" ? "the selected shop" : "shops that turned this report on";
+        say(`Queued ${out.enqueued || 0} for ${scope}. Sent ${out.sent || 0}. Removed ${out.dropped || 0} from shops that had it off. Test mode ${out.testMode ? "on" : "off"}.`, "ok");
         setMasterTab("automation");
       }
     } catch (err) {
