@@ -22,6 +22,7 @@ try {
     "dropped" => (int) ($result["dropped"] ?? 0),
     "removedNotices" => (int) ($result["removedNotices"] ?? 0),
     "testMode" => !empty($result["testMode"]),
+    "seoUpdated" => !empty($result["seoUpdated"]),
   ], JSON_UNESCAPED_UNICODE);
 } catch (Throwable $e) {
   http_response_code(500);

@@ -979,6 +979,14 @@ function pos_automation_tick($opts = []) {
   if ((int) ($got["l"] ?? 0) !== 1) return ["ok" => true, "skipped" => true, "reason" => "locked"];
   $started = microtime(true);
   try {
+    $seoUpdated = false;
+    try {
+      require_once __DIR__ . "/pos-seo.php";
+      $seoDay = pos_seo_india_daily();
+      $seoUpdated = !empty($seoDay["applied"]);
+    } catch (Throwable $e) {
+      error_log("seo india daily: " . $e->getMessage());
+    }
     $released = pos_auto_release_unwanted();
     $forceJob = trim((string) ($opts["job"] ?? ""));
     $forceBiz = trim((string) ($opts["business_id"] ?? ""));
@@ -1017,6 +1025,7 @@ function pos_automation_tick($opts = []) {
       "removedNotices" => $released["removed"],
       "scope" => $forceBiz !== "" ? "one-shop" : ($forceJob !== "" ? "enabled-shops" : "schedule"),
       "testMode" => pos_auto_test_mode(),
+      "seoUpdated" => $seoUpdated,
     ];
   } finally {
     @$db->query("SELECT RELEASE_LOCK('pos_automation_tick')");

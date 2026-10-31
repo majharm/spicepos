@@ -92,6 +92,83 @@ function parseJson(v, fallback) {
   }
 }
 
+/** India search themes for ATAV POS. Rotated by the Asia/Kolkata date. Not live Google ranks. */
+export const INDIA_SEO_BANK = [
+  "GST billing software India",
+  "UPI billing software India",
+  "best billing software for retail shop India",
+  "pharmacy billing software India",
+  "medical store inventory software India",
+  "restaurant POS software India",
+  "kirana store billing software",
+  "garment billing software India",
+  "wholesale billing software India",
+  "salon billing software India",
+  "bakery POS software India",
+  "grocery billing software India",
+  "invoice software with GST India",
+  "stock management software India",
+  "barcode billing software India",
+  "mobile POS billing app India",
+  "multi store billing software India",
+  "e-invoice billing software India",
+  "small business billing software India",
+];
+
+export function kolkataDate(input) {
+  let date;
+  if (typeof input === "string" && /^\d{4}-\d{2}-\d{2}$/.test(input)) date = new Date(`${input}T12:00:00+05:30`);
+  else if (input instanceof Date && !Number.isNaN(input.getTime())) date = input;
+  else date = new Date();
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat("en-US", { timeZone: "Asia/Kolkata", year: "numeric", month: "2-digit", day: "2-digit" })
+      .formatToParts(date)
+      .map((p) => [p.type, p.value]),
+  );
+  const y = Number(parts.year);
+  const m = Number(parts.month);
+  const d = Number(parts.day);
+  const doy = Math.round((Date.UTC(y, m - 1, d) - Date.UTC(y, 0, 1)) / 86400000);
+  return { y, m, d, doy, ymd: `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}` };
+}
+
+export function indiaTrendingKeywords(input) {
+  const { doy } = kolkataDate(input);
+  const n = INDIA_SEO_BANK.length;
+  const start = doy % n;
+  return Array.from({ length: 8 }, (_, i) => INDIA_SEO_BANK[(start + i) % n]);
+}
+
+export function indiaTrendKeywordId(keyword) {
+  return crypto.createHash("md5").update(String(keyword)).digest("hex");
+}
+
+export function indiaTrendCategory(keyword) {
+  const k = String(keyword || "").toLowerCase();
+  if (k.includes("pharmacy") || k.includes("medical")) return "Pharmacy";
+  if (k.includes("restaurant")) return "Restaurant";
+  if (k.includes("garment")) return "Garment";
+  if (k.includes("salon")) return "Salon";
+  if (k.includes("bakery")) return "Bakery";
+  if (k.includes("grocery") || k.includes("kirana")) return "Grocery";
+  if (k.includes("wholesale")) return "Wholesale";
+  return "Retail";
+}
+
+export function indiaTrendNote(ymd) {
+  return `india-daily ${ymd} | India search theme for ATAV POS. Not a live Google rank.`;
+}
+
+export function indiaTrendingPack(input) {
+  const { ymd } = kolkataDate(input);
+  return {
+    date: ymd,
+    country: "India",
+    keywords: indiaTrendingKeywords(ymd),
+    note: "India search themes for ATAV POS. Not a live Google rank.",
+  };
+}
+
 export function suggestKeywords({ businessType = "", service = "POS software", location = "" }) {
   const biz = clip(businessType, 40).toLowerCase();
   const svc = clip(service, 40).toLowerCase() || "pos software";
@@ -395,6 +472,50 @@ function keywordPayload(body) {
   ];
 }
 
+async function applyIndiaTrending(input, req) {
+  await ensureSeoSchema();
+  const pack = indiaTrendingPack(input);
+  const note = indiaTrendNote(pack.date);
+  const ids = [];
+  let order = 1;
+  for (const keyword of pack.keywords) {
+    const id = indiaTrendKeywordId(keyword);
+    ids.push(id);
+    await query(
+      `INSERT INTO seo_keywords
+         (id, keyword, variations, keyword_type, search_intent, business_type, business_category,
+          target_page, target_url, country, state, city, area, language, priority, status, notes, sort_order, updated_at)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, CURRENT_TIMESTAMP(3))
+       ON DUPLICATE KEY UPDATE
+         keyword=VALUES(keyword), keyword_type=VALUES(keyword_type), search_intent=VALUES(search_intent),
+         business_category=VALUES(business_category), country=VALUES(country), priority=VALUES(priority),
+         status='active', notes=VALUES(notes), sort_order=VALUES(sort_order), updated_at=CURRENT_TIMESTAMP(3)`,
+      [
+        id, keyword, "[]", "Local", "Commercial Investigation", "", indiaTrendCategory(keyword),
+        "", "", "India", "", "", "", "en", "High", "active", note, order,
+      ],
+    );
+    order += 1;
+  }
+  const marks = ids.map(() => "?").join(",");
+  await query(
+    `UPDATE seo_keywords SET status='inactive', updated_at=CURRENT_TIMESTAMP(3)
+     WHERE notes LIKE 'india-daily%' AND id NOT IN (${marks})`,
+    ids,
+  );
+  await query(
+    "UPDATE seo_settings SET default_keywords=?, updated_at=CURRENT_TIMESTAMP(3) WHERE id='platform'",
+    [pack.keywords.join(", ").slice(0, 500)],
+  );
+  await query(
+    `INSERT INTO platform_settings (setting_key, setting_value) VALUES ('seo_india_trend_day', ?)
+     ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value), updated_at=CURRENT_TIMESTAMP(3)`,
+    [pack.date],
+  );
+  await logActivity(req, { action: "India trending keywords", keyword: pack.keywords[0] || "", new_value: pack.date });
+  return { ok: true, applied: true, ...pack };
+}
+
 async function saveKeyword(body, req) {
   if (!clip(body.keyword, 180)) throw new Error("Keyword is required");
   const id = clip(body.id, 36) || uid();
@@ -659,6 +780,7 @@ export function registerSeoMaster(app) {
     }),
   );
   app.post("/api/master/seo/keywords", requireMaster, (req, res) => send(res, () => saveKeyword(req.body || {}, req)));
+  app.post("/api/master/seo/trending", requireMaster, (req, res) => send(res, () => applyIndiaTrending(req.body?.date, req)));
   app.post("/api/master/seo/keywords/bulk", requireMaster, (req, res) =>
     send(res, async () => {
       const ids = Array.isArray(req.body?.ids) ? req.body.ids.map((id) => clip(id, 36)).filter(Boolean) : [];

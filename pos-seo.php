@@ -146,6 +146,130 @@ function pos_seo_cnt($sql) {
   return (int) ($rows[0]["n"] ?? 0);
 }
 
+function pos_seo_india_bank() {
+  return [
+    "GST billing software India",
+    "UPI billing software India",
+    "best billing software for retail shop India",
+    "pharmacy billing software India",
+    "medical store inventory software India",
+    "restaurant POS software India",
+    "kirana store billing software",
+    "garment billing software India",
+    "wholesale billing software India",
+    "salon billing software India",
+    "bakery POS software India",
+    "grocery billing software India",
+    "invoice software with GST India",
+    "stock management software India",
+    "barcode billing software India",
+    "mobile POS billing app India",
+    "multi store billing software India",
+    "e-invoice billing software India",
+    "small business billing software India",
+  ];
+}
+
+function pos_seo_india_stamp($date = null) {
+  $tz = new DateTimeZone("Asia/Kolkata");
+  if ($date instanceof DateTimeInterface) {
+    $dt = DateTimeImmutable::createFromInterface($date)->setTimezone($tz);
+  } elseif (is_string($date) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
+    $dt = new DateTimeImmutable($date . " 12:00:00", $tz);
+  } else {
+    $dt = new DateTimeImmutable("now", $tz);
+  }
+  return ["ymd" => $dt->format("Y-m-d"), "doy" => (int) $dt->format("z")];
+}
+
+function pos_seo_india_trending($date = null) {
+  $bank = pos_seo_india_bank();
+  $stamp = pos_seo_india_stamp($date);
+  $n = count($bank);
+  $start = $stamp["doy"] % $n;
+  $out = [];
+  for ($i = 0; $i < 8; $i++) $out[] = $bank[($start + $i) % $n];
+  return $out;
+}
+
+function pos_seo_india_category($keyword) {
+  $k = strtolower((string) $keyword);
+  if (strpos($k, "pharmacy") !== false || strpos($k, "medical") !== false) return "Pharmacy";
+  if (strpos($k, "restaurant") !== false) return "Restaurant";
+  if (strpos($k, "garment") !== false) return "Garment";
+  if (strpos($k, "salon") !== false) return "Salon";
+  if (strpos($k, "bakery") !== false) return "Bakery";
+  if (strpos($k, "grocery") !== false || strpos($k, "kirana") !== false) return "Grocery";
+  if (strpos($k, "wholesale") !== false) return "Wholesale";
+  return "Retail";
+}
+
+function pos_seo_apply_india_trending($date = null) {
+  pos_ensure_seo_schema();
+  $ymd = pos_seo_india_stamp($date)["ymd"];
+  $words = pos_seo_india_trending($ymd);
+  $note = "india-daily " . $ymd . " | India search theme for ATAV POS. Not a live Google rank.";
+  $ids = [];
+  $order = 1;
+  foreach ($words as $kw) {
+    $id = md5($kw);
+    $ids[] = $id;
+    pos_q(
+      "INSERT INTO seo_keywords (id, keyword, variations, keyword_type, search_intent, business_type, business_category, target_page, target_url, country, state, city, area, language, priority, status, notes, sort_order, updated_at)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, CURRENT_TIMESTAMP(3))
+       ON DUPLICATE KEY UPDATE keyword=VALUES(keyword), keyword_type=VALUES(keyword_type), search_intent=VALUES(search_intent),
+         business_category=VALUES(business_category), country=VALUES(country), priority=VALUES(priority), status='active',
+         notes=VALUES(notes), sort_order=VALUES(sort_order), updated_at=CURRENT_TIMESTAMP(3)",
+      "sssssssssssssssssi",
+      [$id, $kw, "[]", "Local", "Commercial Investigation", "", pos_seo_india_category($kw), "", "", "India", "", "", "", "en", "High", "active", $note, $order]
+    );
+    $order++;
+  }
+  $marks = implode(",", array_fill(0, count($ids), "?"));
+  pos_q(
+    "UPDATE seo_keywords SET status='inactive', updated_at=CURRENT_TIMESTAMP(3) WHERE notes LIKE 'india-daily%' AND id NOT IN ($marks)",
+    str_repeat("s", count($ids)),
+    $ids
+  );
+  pos_q(
+    "UPDATE seo_settings SET default_keywords=?, updated_at=CURRENT_TIMESTAMP(3) WHERE id='platform'",
+    "s",
+    [substr(implode(", ", $words), 0, 500)]
+  );
+  if (function_exists("pos_set_setting")) pos_set_setting("seo_india_trend_day", $ymd);
+  return [
+    "ok" => true,
+    "applied" => true,
+    "php" => true,
+    "date" => $ymd,
+    "country" => "India",
+    "keywords" => $words,
+    "note" => "India search themes for ATAV POS. Not a live Google rank.",
+  ];
+}
+
+function pos_seo_india_daily() {
+  $today = pos_seo_india_stamp(null)["ymd"];
+  $rows = [];
+  try {
+    $rows = pos_q("SELECT setting_value FROM platform_settings WHERE setting_key = ? LIMIT 1", "s", ["seo_india_trend_day"]);
+  } catch (Throwable $e) {
+    $rows = [];
+  }
+  $stamp = (string) ($rows[0]["setting_value"] ?? "");
+  if ($stamp === $today) {
+    return [
+      "ok" => true,
+      "applied" => false,
+      "date" => $today,
+      "country" => "India",
+      "keywords" => pos_seo_india_trending($today),
+      "note" => "India search themes for ATAV POS. Not a live Google rank.",
+    ];
+  }
+  return pos_seo_apply_india_trending($today);
+}
+
 function pos_seo_suggest($body) {
   $biz = strtolower(trim((string) ($body["businessType"] ?? $body["business_type"] ?? "")));
   $svc = strtolower(trim((string) ($body["service"] ?? "POS software"))) ?: "pos software";
@@ -195,6 +319,10 @@ function pos_seo_master_dispatch($path, $method, $body) {
   if ($path === "master/seo/overview" && $method === "GET") { pos_send(200, pos_seo_overview()); return true; }
   if ($path === "master/seo/catalog" && $method === "GET") {
     pos_send(200, ["categories" => pos_seo_categories(), "types" => ["Primary","Secondary","Long Tail","Local","Branded","Commercial","Informational","Transactional"], "intents" => ["Informational","Commercial Investigation","Transactional","Navigational","Local"], "php" => true]);
+    return true;
+  }
+  if ($path === "master/seo/trending" && $method === "POST") {
+    pos_send(200, pos_seo_apply_india_trending(null));
     return true;
   }
   if ($path === "master/seo/keywords" && $method === "GET") {

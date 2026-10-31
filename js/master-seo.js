@@ -22,6 +22,15 @@
   const TYPES = ["Primary", "Secondary", "Long Tail", "Local", "Branded", "Commercial", "Informational", "Transactional"];
   const INTENTS = ["Informational", "Commercial Investigation", "Transactional", "Navigational", "Local"];
   const CATS = ["Retail", "Pharmacy", "Restaurant", "Cafe", "Salon", "Spa", "Garment", "Grocery", "Supermarket", "Dairy", "Electronics", "Hardware", "Bakery", "Wholesale", "Service Business"];
+  let trendNote = "";
+
+  function indiaToday() {
+    try {
+      return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+    } catch (e) {
+      return "";
+    }
+  }
 
   function tabs(active) {
     return `<div class="settings-tabs seo-tabs" role="tablist">${PANES.map(
@@ -103,16 +112,18 @@
         <div class="seo-toolbar">
           <input id="seo-q" placeholder="Search keywords" />
           <button class="btn primary" type="button" id="seo-add">+ Add Keyword</button>
+          <button class="btn" type="button" id="seo-trend">India trending today</button>
           <button class="btn" type="button" id="seo-export">Export CSV</button>
           <button class="btn" type="button" data-bulk="activate">Activate</button>
           <button class="btn" type="button" data-bulk="deactivate">Deactivate</button>
           <button class="btn" type="button" data-bulk="delete">Delete</button>
         </div>
+        <p class="hint" id="seo-trend-note">${trendNote || `Today ${indiaToday()} (India, Asia/Kolkata). One click saves today's search themes. The server also refreshes them once per day. Not a live Google rank.`}</p>
         ${table(
           ["", "Keyword", "Type", "Business Category", "Location", "Search Intent", "Target Page", "Priority", "Status", "Actions"],
           rows.map((r) => [
             `<input type="checkbox" data-id="${r.id}" />`,
-            r.keyword,
+            `${r.keyword}${String(r.notes || "").startsWith("india-daily") && r.status === "active" ? ' <span class="seo-badge seo-active">India today</span>' : ""}`,
             r.keyword_type,
             r.business_category || "—",
             [r.city, r.state, r.country].filter(Boolean).join(", ") || "—",
@@ -169,6 +180,21 @@
           .filter(Boolean);
         await api("/api/master/seo/keywords", { method: "POST", body: JSON.stringify(o) });
         opts.setPane("keywords");
+      };
+      body.querySelector("#seo-trend").onclick = async () => {
+        const btn = body.querySelector("#seo-trend");
+        btn.disabled = true;
+        try {
+          const r = await api("/api/master/seo/trending", { method: "POST", body: "{}" });
+          const n = (r.keywords || []).length;
+          trendNote = `${r.date || indiaToday()} · ${n} India themes saved. ${r.note || "Not a live Google rank."}`;
+          opts.setPane?.("keywords");
+        } catch (err) {
+          trendNote = err?.message || "Could not update India themes";
+          const note = body.querySelector("#seo-trend-note");
+          if (note) note.textContent = trendNote;
+          btn.disabled = false;
+        }
       };
       body.querySelector("#seo-export").onclick = async () => {
         const r = await api("/api/master/seo/export");
