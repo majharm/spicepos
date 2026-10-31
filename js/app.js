@@ -8955,7 +8955,7 @@ function paintDashWelcome(dashSub) {
   if (meta) {
     const name = String(state.session.name || "").trim();
     const sub = subscriptionValidity(dashSub);
-    const bits = [name ? `Hello, ${name}` : "", dashRoleLabel(state.session.role), state.company?.name].filter(Boolean);
+    const bits = [name ? `Welcome, ${name}` : "", dashRoleLabel(state.session.role), state.company?.name].filter(Boolean);
     if (sub.ymd) bits.push(`Valid till ${sub.until}`, sub.daysLabel);
     meta.textContent = bits.join(" · ");
   }

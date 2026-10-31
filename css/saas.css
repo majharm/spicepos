@@ -2533,4 +2533,11 @@ body.master-dark .hint { color: #94a3b8; }
   .master-insight-grid { grid-template-columns: 1fr; }
   .master-live-table { min-width: 880px; }
 }
+.saas-dash-head .dash-hero-meta {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 650;
+  max-width: none;
+}
 
