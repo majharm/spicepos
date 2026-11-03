@@ -894,6 +894,19 @@ function pos_print_staff_dispatch($path, $method, $body, $bid, $auth) {
       if (!in_array($order["status"], ["paid", "production_pending", "printing"], true)) {
         pos_q("UPDATE print_orders SET status='payment_pending' WHERE id=?", "s", [$order["id"]]);
       }
+      if (function_exists("pos_deliver_invoice_whatsapp")) {
+        pos_deliver_invoice_whatsapp($bid, [
+          "id" => $invoiceId,
+          "order_number" => $order["order_number"] ?? "",
+          "customer_id" => $order["customer_id"] ?? "",
+          "customer_name" => $order["customer_name"] ?? "",
+          "customer_mobile" => $order["customer_mobile"] ?? "",
+          "subtotal" => $q["taxable"] ?? ($order["estimate_total"] ?? 0),
+          "discount" => $q["discount"] ?? ($order["discount"] ?? 0),
+          "gst" => $q["gst"] ?? ($order["gst"] ?? 0),
+          "total" => $q["total"] ?? ($order["quote_total"] ?? 0),
+        ]);
+      }
       pos_send(200, ["invoice_id" => $invoiceId, "order" => pos_print_order_bundle($order["id"], $bid)]);
     }
     if (preg_match("#^print/orders/([^/]+)/status$#", $path, $m) && $method === "POST") {

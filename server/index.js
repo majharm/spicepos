@@ -36,6 +36,7 @@ import { sendLowStockAlerts, tickShopAlerts, startAlertScheduler, scheduleAlertT
 import { registerRecurring, startRecurringScheduler, ensureRecurringSchema } from "./recurring.js";
 import { registerQuotations, ensureQuotationSchema } from "./quotations.js";
 import { registerMailbox, ensureMailboxSchema, deliverInvoiceCopy } from "./mail-box.js";
+import { deliverInvoiceWhatsApp } from "./invoice-whatsapp.js";
 import { registerAdvanced, computeSaleLine, billedPrintQty, applySaleStock, applyLoyaltyOnSale, pharmacyLineSnapshot, enrichCatalogPharmacy, enrichCatalogBarcodes, saleStockQty, persistSaleLineNote, persistPrintSaleLine, assertApparelSaleStock } from "./advanced.js";
 import { registerReturns } from "./returns.js";
 import { registerAnalyticsPublic, registerAnalyticsMaster } from "./analytics.js";
@@ -1361,6 +1362,9 @@ app.post("/api/checkout", requireStaff, requirePerm("counter"), async (req, res)
     void tickShopAlerts(businessId).catch((err) => console.error("closing alert failed:", err.message));
     void deliverInvoiceCopy({ businessId, order: result, source: "auto" }).catch((err) =>
       console.error("invoice email failed:", String(err?.message || err).slice(0, 180)),
+    );
+    void deliverInvoiceWhatsApp({ businessId, order: result }).catch((err) =>
+      console.error("invoice whatsapp failed:", String(err?.message || err).slice(0, 180)),
     );
     res.json({ ok: true, order: result });
   } catch (err) {

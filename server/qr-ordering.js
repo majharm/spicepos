@@ -10,6 +10,7 @@ import { nextSeq, itemBillName, round2 } from "./crud.js";
 import { applySaleStock, persistSaleLineNote } from "./advanced.js";
 import { recordCreditSale } from "./accounts.js";
 import { audit } from "./audit.js";
+import { deliverInvoiceWhatsApp } from "./invoice-whatsapp.js";
 
 const POSUnits = globalThis.POSUnits;
 const POSFootwear = globalThis.POSFootwear;
@@ -702,7 +703,7 @@ export async function linkQrOrderSale(conn, { businessId, qrOrderId, saleId }) {
 export async function ensureQrInvoice(qrOrderId, { paymentMethod = "cash" } = {}) {
   const businessId = bid();
   await ensureQrOrderSchema();
-  return withTransaction(async (conn) => {
+  const wrapped = await withTransaction(async (conn) => {
     const [orderRows] = await conn.query(
       "SELECT * FROM qr_orders WHERE id = ? AND business_id = ? LIMIT 1",
       [qrOrderId, businessId],
@@ -712,7 +713,7 @@ export async function ensureQrInvoice(qrOrderId, { paymentMethod = "cash" } = {}
     if (String(order.status) === "cancelled") throw new Error("Cancelled QR orders cannot be invoiced");
     if (order.sales_order_id) {
       const existing = await loadSaleWithLines(conn, order.sales_order_id, businessId);
-      if (existing) return existing;
+      if (existing) return { sale: existing, created: false };
     }
     const [qrLines] = await conn.query(
       "SELECT * FROM qr_order_lines WHERE order_id = ? ORDER BY created_at",
@@ -845,8 +846,14 @@ export async function ensureQrInvoice(qrOrderId, { paymentMethod = "cash" } = {}
       "UPDATE qr_orders SET status = 'completed', sales_order_id = ?, branch_id = COALESCE(branch_id, ?) WHERE id = ? AND business_id = ?",
       [orderId, branchId(), qrOrderId, businessId],
     );
-    return sale;
+    return { sale, created: true };
   });
+  if (wrapped?.created && wrapped.sale) {
+    void deliverInvoiceWhatsApp({ businessId, order: wrapped.sale }).catch((err) =>
+      console.error("invoice whatsapp failed:", String(err?.message || err).slice(0, 180)),
+    );
+  }
+  return wrapped?.sale || null;
 }
 
 export function registerQrPublic(app) {

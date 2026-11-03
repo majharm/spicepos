@@ -5,6 +5,7 @@ import { requirePerm } from "./auth.js";
 import { hashPassword, verifyPassword } from "./password.js";
 import { sendMail } from "./mail.js";
 import { sendWhatsApp } from "./alerts.js";
+import { deliverInvoiceWhatsApp } from "./invoice-whatsapp.js";
 import { settleCustomerInvoice } from "./accounts.js";
 import "../js/print.js";
 import "../js/footwear.js";
@@ -1168,6 +1169,20 @@ export function registerPrintStaff(app) {
       if (!["paid", "production_pending", "printing"].includes(order.status)) {
         await query("UPDATE print_orders SET status = 'payment_pending' WHERE id = ?", [order.id]);
       }
+      void deliverInvoiceWhatsApp({
+        businessId: bid(),
+        order: {
+          id: invoiceId,
+          order_number: order.order_number,
+          customer_id: order.customer_id,
+          customer_name: order.customer_name,
+          customer_mobile: order.customer_mobile,
+          subtotal: q.taxable,
+          discount: q.discount,
+          gst: q.gst,
+          total: q.total,
+        },
+      }).catch((err) => console.error("invoice whatsapp failed:", String(err?.message || err).slice(0, 180)));
       res.json({ invoice_id: invoiceId, order: await orderBundle(order.id, bid()) });
     } catch (err) {
       res.status(400).json({ error: err.message });

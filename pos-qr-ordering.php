@@ -286,14 +286,14 @@ function pos_qr_load_sale($bid, $saleId) {
 function pos_qr_ensure_invoice($bid, $branchId, $uid, $qrOrderId, $paymentMethod = "cash") {
   pos_qr_ensure_schema();
   pos_ensure_sales_schema();
-  return pos_with_transaction(function () use ($bid, $branchId, $uid, $qrOrderId, $paymentMethod) {
+  $wrapped = pos_with_transaction(function () use ($bid, $branchId, $uid, $qrOrderId, $paymentMethod) {
     $rows = pos_q("SELECT * FROM qr_orders WHERE id = ? AND business_id = ? LIMIT 1", "ss", [$qrOrderId, $bid]);
     $order = $rows[0] ?? null;
     if (!$order) throw new Exception("QR order not found");
     if (($order["status"] ?? "") === "cancelled") throw new Exception("Cancelled QR orders cannot be invoiced");
     if (!empty($order["sales_order_id"])) {
       $existing = pos_qr_load_sale($bid, $order["sales_order_id"]);
-      if ($existing) return $existing;
+      if ($existing) return ["sale" => $existing, "created" => false];
     }
     $qrLines = pos_q("SELECT * FROM qr_order_lines WHERE order_id = ? ORDER BY created_at", "s", [$qrOrderId]);
     if (!$qrLines) throw new Exception("This QR order has no items");
@@ -391,8 +391,12 @@ function pos_qr_ensure_invoice($bid, $branchId, $uid, $qrOrderId, $paymentMethod
       "ssss",
       [$orderId, $branchId, $qrOrderId, $bid]
     );
-    return $sale;
+    return ["sale" => $sale, "created" => true];
   });
+  if (!empty($wrapped["created"]) && function_exists("pos_deliver_invoice_whatsapp")) {
+    pos_deliver_invoice_whatsapp($bid, $wrapped["sale"] ?? []);
+  }
+  return $wrapped["sale"] ?? null;
 }
 
 function pos_qr_pack_menu_id($packId) {

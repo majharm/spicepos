@@ -141,6 +141,7 @@ function pos_shop_timezone() {
 
 require_once __DIR__ . "/pos-mail.php";
 if (is_file(__DIR__ . "/pos-alerts.php")) require_once __DIR__ . "/pos-alerts.php";
+if (is_file(__DIR__ . "/pos-invoice-whatsapp.php")) require_once __DIR__ . "/pos-invoice-whatsapp.php";
 
 function pos_shop_tz_offset() {
   return pos_env("POS_TZ_OFFSET", "+05:30");

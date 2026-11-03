@@ -12,8 +12,7 @@ import { itemBillName } from "./crud.js";
 import { settleCustomerInvoice } from "./accounts.js";
 import { postSaleJournal } from "./accounting.js";
 import { audit } from "./audit.js";
-import { getPlatformSettings } from "./settings.js";
-import { sendWhatsApp, waCfg } from "./alerts.js";
+import { deliverInvoiceWhatsApp } from "./invoice-whatsapp.js";
 
 const R = globalThis.POSRecurring;
 const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
@@ -475,20 +474,22 @@ async function claimRun(conn, businessId, scheduleId, period) {
 
 async function notifyGenerated(schedule, order, customer, dueDate) {
   const log = [];
-  const total = round2(order.total);
-  const dueBit = dueDate ? ` Payment is due by ${dueDate}.` : "";
-  const text = `Invoice ${order.order_number} for ${order.customer_name || customer.name} is ₹${total.toFixed(2)}.${dueBit} This invoice is unpaid until a payment is recorded.`;
-  const wantWa = R.flagOn(schedule.whatsapp_invoice) || R.flagOn(schedule.whatsapp_reminder);
-  if (wantWa) {
-    try {
-      const settings = await getPlatformSettings();
-      const mobile = customer.mobile || customer.phone || "";
-      const reminder = R.flagOn(schedule.whatsapp_reminder) ? `${text} Please pay the outstanding amount.` : text;
-      const wa = await sendWhatsApp(waCfg(settings), [mobile], reminder);
-      log.push({ channel: "whatsapp", status: wa?.ok ? "sent" : "failed", error: wa?.ok ? "" : wa?.reason || "not sent" });
-    } catch (err) {
-      log.push({ channel: "whatsapp", status: "failed", error: String(err.message || err).slice(0, 180) });
+  const extra = [
+    dueDate ? `Payment is due by ${dueDate}.` : "",
+    "This invoice is unpaid until a payment is recorded.",
+    R.flagOn(schedule.whatsapp_reminder) ? "Please pay the outstanding amount." : "",
+  ].filter(Boolean).join(" ");
+  try {
+    const wa = await deliverInvoiceWhatsApp({
+      businessId: schedule.business_id,
+      order: { ...order, customer_mobile: order.customer_mobile || customer.mobile || customer.phone || "" },
+      extra,
+    });
+    if (!wa?.skipped || wa?.reason === "already-sent") {
+      log.push({ channel: "whatsapp", status: wa?.ok ? "sent" : "failed", error: wa?.ok ? "" : wa?.error || wa?.reason || "not sent" });
     }
+  } catch (err) {
+    log.push({ channel: "whatsapp", status: "failed", error: String(err.message || err).slice(0, 180) });
   }
   try {
     const { deliverInvoiceCopy } = await import("./mail-box.js");

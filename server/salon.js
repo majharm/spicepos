@@ -5,6 +5,7 @@ import { requireStaff, requirePerm } from "./auth.js";
 import { hashPassword, verifyPassword } from "./password.js";
 import { sendMail } from "./mail.js";
 import { sendWhatsApp } from "./alerts.js";
+import { deliverInvoiceWhatsApp } from "./invoice-whatsapp.js";
 import { getPlatformSettings } from "./settings.js";
 import "../js/salon.js";
 import "../js/footwear.js";
@@ -705,6 +706,22 @@ export function registerSalonPublic(app) {
         }
         return { id, number, totals, due, paid: payAmt, status: body.waitlist ? "waitlist" : status, invoice_id: invoiceId };
       });
+      if (created.invoice_id) {
+        void deliverInvoiceWhatsApp({
+          businessId: shopId,
+          order: {
+            id: created.invoice_id,
+            order_number: created.number,
+            customer_id: c.id,
+            customer_name: c.name,
+            customer_mobile: c.mobile,
+            subtotal: created.totals?.subtotal,
+            discount: created.totals?.coupon,
+            gst: created.totals?.gst,
+            total: created.totals?.total,
+          },
+        }).catch((err) => console.error("invoice whatsapp failed:", String(err?.message || err).slice(0, 180)));
+      }
       await notify(shopId, {
         kind: "booking_confirm",
         customerId: c.id,

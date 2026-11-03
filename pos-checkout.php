@@ -71,7 +71,7 @@ function pos_checkout_sale($bid, $branchId, $uid, $auth, $body) {
       }
     } catch (Exception $e) { /* optional */ }
   }
-  return pos_with_transaction(function () use ($body, $bid, $branchId, $uid, $auth, $qrOrderId, $idemKey) {
+  $orderRow = pos_with_transaction(function () use ($body, $bid, $branchId, $uid, $auth, $qrOrderId, $idemKey) {
     $lines = $body["lines"] ?? [];
     if (!is_array($lines) || !$lines) throw new Exception("Cart is empty");
     $methodPay = pos_pay_normalize($body["paymentMethod"] ?? "cash");
@@ -362,6 +362,10 @@ function pos_checkout_sale($bid, $branchId, $uid, $auth, $body) {
     }
     return $orderRow;
   });
+  if (empty($orderRow["replay"]) && function_exists("pos_deliver_invoice_whatsapp")) {
+    pos_deliver_invoice_whatsapp($bid, $orderRow);
+  }
+  return $orderRow;
 }
 
 function pos_dispatch_checkout($path, $method, $body, $bid, $branchId, $uid, $auth) {

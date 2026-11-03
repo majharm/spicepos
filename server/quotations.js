@@ -13,6 +13,7 @@ import { loadMailbox, decryptSecret } from "./mail-box.js";
 import { sendMail } from "./mail.js";
 import { quotationPdfBuffer } from "./invoice-pdf.js";
 import { isInterStateSupply } from "./gst-supply.js";
+import { deliverInvoiceWhatsApp } from "./invoice-whatsapp.js";
 
 const Q = globalThis.POSQuotations;
 let schemaReady = false;
@@ -714,6 +715,10 @@ export function registerQuotations(app) {
         res.json({ ok: true, replay: true, orderId: result.orderId, orderNumber: result.orderNumber, quote: publicQuote(result.quote, today) });
         return;
       }
+      void deliverInvoiceWhatsApp({
+        businessId: bid(),
+        order: { id: result.orderId, order_number: result.orderNumber },
+      }).catch((err) => console.error("invoice whatsapp failed:", String(err?.message || err).slice(0, 180)));
       res.json({ ok: true, replay: false, orderId: result.orderId, orderNumber: result.orderNumber, quote: publicQuote(await loadQuote(bid(), result.quoteId), today) });
     } catch (err) {
       res.status(err.status || 400).json({ error: String(err.message) });

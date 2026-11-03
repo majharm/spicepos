@@ -981,6 +981,12 @@ function pos_quotations_dispatch($path, $method, $body, $bid, $auth) {
     }
     if (preg_match("#^quotations/([^/]+)/convert$#", $path, $m) && $method === "POST") {
       $result = pos_quote_convert($bid, $m[1], $auth);
+      if (empty($result["replay"]) && function_exists("pos_deliver_invoice_whatsapp")) {
+        pos_deliver_invoice_whatsapp($bid, [
+          "id" => $result["orderId"] ?? "",
+          "order_number" => $result["orderNumber"] ?? "",
+        ]);
+      }
       $result["ok"] = true;
       $result["php"] = true;
       pos_send(200, $result);
