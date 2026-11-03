@@ -483,6 +483,47 @@ test("AI suggestions use the peak hour and catalog rates", () => {
   assert.ok(noRate.some((i) => i.type === "time" && i.draft.start_time === "16:00" && i.draft.end_time === "19:00"));
 });
 
+test("advanced offer combines products, a time window, and a minimum bill", () => {
+  const offer = O.normalize({
+    name: "Evening tea 10%",
+    type: "advance",
+    status: "active",
+    discount_type: "pct",
+    discount_value: 10,
+    min_spend: 500,
+    min_qty: 1,
+    start_time: "16:00",
+    end_time: "19:00",
+    days_of_week: "5",
+    item_ids: ["tea"],
+  });
+  const cart = [line("tea", 200, { qty: 2 }), line("snack", 400)];
+  const now = new Date("2026-09-04T17:00:00");
+  assert.equal(now.getDay(), 5);
+  const hit = O.evaluateOffer(offer, { cart, now });
+  assert.equal(hit.discount, 20);
+  assert.equal(hit.scope, "lines");
+  assert.equal(hit.lineDiscounts.tea, 20);
+  assert.equal(O.evaluateOffer(offer, { cart, now: new Date("2026-09-04T10:00:00") }), null);
+  assert.equal(O.evaluateOffer(offer, { cart, now: new Date("2026-09-05T17:00:00") }), null);
+  assert.equal(O.evaluateOffer(offer, { cart: [line("tea", 200), line("snack", 100)], now }), null);
+  const wholeBill = O.normalize({
+    name: "Weekend bill ₹100",
+    type: "advance",
+    status: "active",
+    discount_type: "amt",
+    discount_value: 100,
+    min_spend: 999,
+    days_of_week: "0,6",
+  });
+  const weekend = O.evaluateOffer(wholeBill, {
+    cart: [line("tea", 600), line("snack", 500)],
+    now: new Date("2026-09-05T12:00:00"),
+  });
+  assert.equal(weekend.discount, 100);
+  assert.equal(weekend.scope, "bill");
+});
+
 test("legacy combo rows convert and AI suggest builds a combo draft", () => {
   const legacy = O.comboFromLegacy({ id: "c1", name: "Tea combo", item_a_id: "a", item_b_id: "b", discount_type: "pct", discount_value: 8, status: "active" });
   assert.equal(legacy.offer_type, "combo");

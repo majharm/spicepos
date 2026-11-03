@@ -53,9 +53,9 @@ function readOfferForm() {
       return { spend: Number(spend), type: type === "amt" ? "amt" : "pct", value: Number(value) };
     });
   const type = $("off-type")?.value || "product";
-  const productTypes = ["combo", "product", "bogo", "mix_match", "qty", "free_gift", "clearance"];
-  const scheduleTypes = ["time", "festival"];
-  const dayTypes = ["day", "festival"];
+  const productTypes = ["combo", "product", "bogo", "mix_match", "qty", "free_gift", "clearance", "advance"];
+  const scheduleTypes = ["time", "festival", "advance"];
+  const dayTypes = ["day", "festival", "advance"];
   return O?.normalize({
     name: $("off-name")?.value,
     description: $("off-desc")?.value,
@@ -71,7 +71,7 @@ function readOfferForm() {
     min_spend: $("off-min-spend")?.value,
     discount_type: $("off-disc-type")?.value,
     discount_value: $("off-disc-value")?.value,
-    offer_price: ["combo", "mix_match", "product", "clearance"].includes(type) ? $("off-price")?.value : "",
+    offer_price: ["combo", "mix_match", "product", "clearance", "advance"].includes(type) ? $("off-price")?.value : "",
     usage_limit: $("off-limit")?.value,
     customer_eligibility: $("off-elig")?.value,
     branch_id: $("off-branch")?.value,
@@ -79,7 +79,7 @@ function readOfferForm() {
     priority: $("off-priority")?.value,
     loyalty_multiplier: $("off-loyalty")?.value,
     item_ids: productTypes.includes(type) ? selectedOfferItems() : [],
-    category: type === "category" ? $("off-category")?.value : "",
+    category: type === "category" || type === "advance" ? $("off-category")?.value : "",
     buy_qty: $("off-buy-qty")?.value,
     get_qty: $("off-get-qty")?.value,
     get_item_id: $("off-get-item")?.value,

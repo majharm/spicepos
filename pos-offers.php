@@ -99,7 +99,7 @@ function pos_offer_conditions($body, $existing = []) {
 function pos_normalize_offer($body, $existing = []) {
   $name = trim((string) ($body["name"] ?? $existing["name"] ?? ""));
   if ($name === "") pos_send(400, ["error" => "Offer needs a name", "php" => true]);
-  $types = ["combo","product","category","bogo","mix_match","qty","spend","min_purchase","free_gift","customer","first_purchase","repeat","time","day","festival","clearance"];
+  $types = ["combo","product","category","bogo","mix_match","qty","spend","min_purchase","free_gift","customer","first_purchase","repeat","time","day","festival","clearance","advance"];
   $type = (string) ($body["offer_type"] ?? $body["type"] ?? $existing["offer_type"] ?? "product");
   if (!in_array($type, $types, true)) $type = "product";
   $statuses = ["draft","scheduled","active","paused","expired","completed"];
@@ -557,6 +557,16 @@ function pos_offer_qualifying_lines($o, $cart) {
   foreach ($cart as $line) {
     $id = (string) ($line["itemId"] ?? "");
     if ($id !== "" && in_array($id, $ex, true)) continue;
+    if ($type === "advance") {
+      if ($ids) {
+        if (in_array($id, $ids, true)) $out[] = $line;
+      } elseif ($cat !== "") {
+        if (strcasecmp((string) ($line["category"] ?? ""), $cat) === 0) $out[] = $line;
+      } else {
+        $out[] = $line;
+      }
+      continue;
+    }
     if ($billWide) {
       $out[] = $line;
       continue;
@@ -604,7 +614,7 @@ function pos_evaluate_offer($o, $cart, $ctx = []) {
     if ($maxQty > 0 && $qty > $maxQty) return null;
     $minSpend = (float) ($o["min_spend"] ?? 0);
     $billWide = in_array($type, ["spend", "min_purchase", "customer", "first_purchase", "repeat", "time", "day", "festival"], true);
-    $scope = $billWide ? $bill : $spend;
+    $scope = ($billWide || $type === "advance") ? $bill : $spend;
     if ($minSpend > 0 && $scope < $minSpend) return null;
   }
   $discount = 0;
@@ -726,6 +736,37 @@ function pos_evaluate_offer($o, $cart, $ctx = []) {
     }
     if ($discount <= 0) return null;
     $scope = "lines";
+  } elseif ($type === "advance") {
+    $scoped = $ids || trim((string) ($cond["category"] ?? "")) !== "";
+    $target = $scoped ? $lines : $cart;
+    if (!$target) return null;
+    $special = (float) ($o["offer_price"] ?? 0);
+    if (($o["discount_type"] ?? "") === "price" && $special > 0) {
+      foreach ($target as $line) {
+        $id = (string) ($line["itemId"] ?? "");
+        $gross = (float) ($line["gross"] ?? 0);
+        $d = pos_offer_r2(max(0, $gross - $special * max(1, pos_offer_piece_qty($line))));
+        if ($d > 0) {
+          $lineDiscounts[$id] = pos_offer_r2(($lineDiscounts[$id] ?? 0) + $d);
+          $discount = pos_offer_r2($discount + $d);
+        }
+      }
+      $scope = "lines";
+    } elseif ($scoped) {
+      foreach ($target as $line) {
+        $id = (string) ($line["itemId"] ?? "");
+        $d = pos_offer_discount_on($line["gross"] ?? 0, $o["discount_type"] ?? "pct", $o["discount_value"] ?? 0);
+        if ($d > 0) {
+          $lineDiscounts[$id] = pos_offer_r2(($lineDiscounts[$id] ?? 0) + $d);
+          $discount = pos_offer_r2($discount + $d);
+        }
+      }
+      $scope = "lines";
+    } else {
+      $discount = pos_offer_discount_on($bill, $o["discount_type"] ?? "pct", $o["discount_value"] ?? 0);
+      $scope = "bill";
+    }
+    if ($discount <= 0) return null;
   } else {
     $base = $billWide ? $bill : $spend;
     if ($base <= 0) return null;
