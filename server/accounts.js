@@ -843,6 +843,36 @@ async function recomputeOutstandingSetBased(conn, businessId) {
   }
 }
 
+export async function reverseCreditPurchase(conn, purchase) {
+  const purchaseId = purchase?.id;
+  if (!purchaseId) return;
+  let rows = [];
+  try {
+    const [found] = await conn.query(
+      `SELECT * FROM account_ledger
+       WHERE business_id = ? AND reference_type = 'purchase' AND reference_id = ?`,
+      [bid(), purchaseId],
+    );
+    rows = found || [];
+  } catch (err) {
+    const msg = String(err?.message || err);
+    if (!/doesn't exist|Unknown column|Unknown table/i.test(msg)) throw err;
+  }
+  for (const row of rows) {
+    try {
+      await deleteLedgerJournal(conn, row.id);
+    } catch {
+      /* journal tables are optional on older shops */
+    }
+    await conn.query("DELETE FROM account_ledger WHERE id = ? AND business_id = ?", [row.id, bid()]);
+  }
+  if (String(purchase.payment_method || "").toLowerCase() !== "credit") return;
+  await conn.query(
+    "UPDATE suppliers SET payable_balance = COALESCE(payable_balance, 0) - ? WHERE id = ? AND business_id = ?",
+    [round2(purchase.total), purchase.supplier_id, bid()],
+  );
+}
+
 export async function recordCreditPurchase(conn, { supplier, total, purchaseId, purchaseNumber, method }) {
   if (method !== "credit") return;
   const amt = round2(total);

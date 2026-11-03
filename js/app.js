@@ -7960,8 +7960,8 @@ function paintPurchaseLede() {
   const el = $("purchases-lede");
   if (!el) return;
   const base = isApparelShop()
-    ? "Find a garment and add it. Enter colour and size quantity on the bill. Stock updates when the purchase is saved."
-    : "Find an item and add it, then set the quantity. Rate, tax, and discount stay editable. Stock updates when the purchase is saved.";
+    ? "Find a garment and add it. Enter colour and size quantity on the bill. Stock updates when the purchase is saved. Edit a saved bill from the list."
+    : "Find an item and add it, then set the quantity. Rate, tax, and discount stay editable. Stock updates when the purchase is saved. Edit a saved bill from the list.";
   el.textContent = purchaseBarcodeOn()
     ? `${base} Piece items show Add Item Barcodes with camera. Scan or type one code per piece.`
     : base;
@@ -11940,6 +11940,157 @@ async function openQrOrderInCounter(order) {
 
 let purchaseCache = [];
 let selectedPurchaseId = null;
+let editingPurchaseId = "";
+
+function purchaseDateValue(value) {
+  const match = String(value || "").match(/^(\d{4}-\d{2}-\d{2})/);
+  return match ? match[1] : shopYmd();
+}
+
+function purchaseLineDiscount(line, item) {
+  const gross = POSUnits.lineAmount(Number(line.quantity_gm), Number(line.rate_per_kg), itemUnit(item));
+  const amount = Number(line.amount);
+  if (!Number.isFinite(gross) || !Number.isFinite(amount)) return "0";
+  const discount = Math.max(0, gross - amount);
+  return discount > 0.0000001 ? String(POSUnits.roundRate8?.(discount) ?? discount) : "0";
+}
+
+function resetPurchaseComposer() {
+  editingPurchaseId = "";
+  poLineDraft.clear();
+  $("purchase-form")?.reset();
+  if ($("po-lines")) $("po-lines").innerHTML = "";
+  if ($("po-save")) $("po-save").textContent = "Save purchase";
+  if ($("po-cancel-edit")) $("po-cancel-edit").hidden = true;
+  const summary = document.querySelector("#purchase-new > summary");
+  if (summary) summary.textContent = "New purchase";
+  if ($("po-date")) $("po-date").value = shopYmd();
+  const hint = $("po-hint");
+  if (hint && !hint.classList.contains("error")) {
+    hint.textContent = "";
+    hint.className = "hint";
+  }
+  renderPoLines({ capture: false });
+}
+
+function purchaseDraftFromLines(lines, batches) {
+  const codesByItem = new Map();
+  for (const row of batches || []) {
+    const code = String(row.barcode || "").trim();
+    if (!code || !row.item_id) continue;
+    const list = codesByItem.get(row.item_id) || [];
+    list.push(code);
+    codesByItem.set(row.item_id, list);
+  }
+  poLineDraft.clear();
+  if (isApparelShop()) {
+    const groups = new Map();
+    for (const line of lines) {
+      const item = (state.items || []).find((row) => row.id === line.item_id);
+      if (!item) continue;
+      const key = globalThis.POSGarmentPurchase?.styleKey?.(item) || item.id;
+      const color = line.color || item.color || "";
+      const size = line.size || item.size || "";
+      const qty = POSUnits.displayQty(line.quantity_gm, itemUnit(item));
+      let group = groups.get(key);
+      if (!group) {
+        group = {
+          kind: "apparel",
+          checked: true,
+          rate: String(POSUnits.rateInputValue?.(line.rate_per_kg) ?? line.rate_per_kg ?? ""),
+          gst: String(line.gst_rate ?? item.gst_rate ?? 0),
+          discount: purchaseLineDiscount(line, item),
+          colors: [],
+          sizes: [],
+          extras: [],
+          barcodes: {},
+          bcOpen: false,
+        };
+        groups.set(key, group);
+      }
+      if (color && !group.colors.includes(color)) group.colors.push(color);
+      group.sizes.push({ color, size, qty: String(qty) });
+      const codes = codesByItem.get(item.id) || (line.barcode ? [String(line.barcode)] : []);
+      if (codes.length) {
+        group.barcodes[apparelVariantBcKey(color, size)] = codes.join("\n");
+        group.bcOpen = true;
+      }
+    }
+    for (const [key, fields] of groups) poLineDraft.set(`apparel:${key}`, fields);
+    return;
+  }
+  for (const line of lines) {
+    const item = (state.items || []).find((row) => row.id === line.item_id);
+    if (!item) continue;
+    const qty = POSUnits.displayQty(line.quantity_gm, itemUnit(item));
+    const codes = codesByItem.get(item.id) || (line.barcode ? [String(line.barcode)] : []);
+    const existing = poLineDraft.get(item.id);
+    if (existing) {
+      existing.qty = String((Number(existing.qty) || 0) + (Number(qty) || 0));
+      if (codes.length) existing.barcodes = [existing.barcodes, codes.join("\n")].filter(Boolean).join("\n");
+      continue;
+    }
+    poLineDraft.set(item.id, {
+      kind: "classic",
+      checked: true,
+      qty: String(qty),
+      rate: String(POSUnits.rateInputValue?.(line.rate_per_kg) ?? line.rate_per_kg ?? ""),
+      gst: String(line.gst_rate ?? item.gst_rate ?? 0),
+      discount: purchaseLineDiscount(line, item),
+      expiry: String(line.expiry_date || "").slice(0, 10),
+      barcodes: codes.join("\n"),
+      bcOpen: codes.length > 0,
+    });
+  }
+}
+
+async function beginPurchaseEdit(purchase) {
+  if (!purchase?.id) return;
+  if (poLineDraft.size && editingPurchaseId !== purchase.id) {
+    if (!window.confirm("Replace the purchase you are writing with this bill?")) return;
+  }
+  const lines = Array.isArray(purchase.lines) ? purchase.lines : [];
+  if (!lines.length) {
+    setPoHint("This purchase has no lines to edit.", "error");
+    return;
+  }
+  let batches = [];
+  try {
+    const rows = await api(`/api/barcodes?purchase_id=${encodeURIComponent(purchase.id)}`);
+    batches = Array.isArray(rows) ? rows : [];
+  } catch {
+    batches = [];
+  }
+  purchaseDraftFromLines(lines, batches);
+  if (!poLineDraft.size) {
+    setPoHint("Items on this purchase are no longer in the catalog.", "error");
+    return;
+  }
+  editingPurchaseId = purchase.id;
+  const supplier = $("po-supplier");
+  if (supplier) {
+    const id = String(purchase.supplier_id || "");
+    if (id && ![...supplier.options].some((opt) => opt.value === id)) {
+      const opt = document.createElement("option");
+      opt.value = id;
+      opt.textContent = purchase.supplier_name || "Supplier";
+      supplier.appendChild(opt);
+    }
+    if (id) supplier.value = id;
+  }
+  if ($("po-invoice")) $("po-invoice").value = purchase.supplier_invoice_number || "";
+  if ($("po-date")) $("po-date").value = purchaseDateValue(purchase.purchase_date);
+  if ($("po-pay")) $("po-pay").value = purchase.payment_method || "cash";
+  if ($("po-save")) $("po-save").textContent = `Update ${purchase.purchase_number || "purchase"}`;
+  if ($("po-cancel-edit")) $("po-cancel-edit").hidden = false;
+  const summary = document.querySelector("#purchase-new > summary");
+  if (summary) summary.textContent = `Edit ${purchase.purchase_number || "purchase"}`;
+  const details = $("purchase-new");
+  if (details) details.open = true;
+  renderPoLines({ capture: false });
+  setPoHint(`Editing ${purchase.purchase_number || "this purchase"}. Saving replaces the bill and adjusts stock.`, "");
+  details?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+}
 
 async function showPurchase(p) {
   selectedPurchaseId = p.id;
@@ -11954,6 +12105,7 @@ async function showPurchase(p) {
     </div>
     <div class="thermal-preview">${InvoicePrint.purchaseBody(p, invoiceCtx())}</div>
     <div class="print-actions">
+      <button class="btn" type="button" data-edit-purchase="${escapeHtml(p.id)}">Edit purchase</button>
       <button class="btn primary" type="button" data-print-purchase="${escapeHtml(p.id)}">Print purchase bill</button>
       <button class="btn" type="button" data-print-po-barcodes="${escapeHtml(p.id)}">Print barcodes</button>
     </div>
@@ -11981,12 +12133,15 @@ async function loadPurchases() {
   $("purchases-list").innerHTML = purchaseCache.length
     ? purchaseCache
         .map(
-          (p) => `<button class="order-item${p.id === selectedPurchaseId ? " is-selected" : ""}" type="button" data-pid="${escapeHtml(p.id)}">
+          (p) => `<div class="purchase-row">
+        <button class="order-item${p.id === selectedPurchaseId ? " is-selected" : ""}" type="button" data-pid="${escapeHtml(p.id)}">
         <span>${escapeHtml(p.purchase_number)} · ${escapeHtml(p.supplier_name)}
         <span class="order-item-badges">${payStatusBadge(p.payment_status)}</span><br>
         <small>${escapeHtml(p.supplier_invoice_number ? `Bill: ${p.supplier_invoice_number}` : "No supplier bill")} · ${escapeHtml(p.payment_method)} · ${escapeHtml(formatShopDate(p.purchase_date))}</small></span>
         <span>${money(p.total)}</span>
-      </button>`,
+      </button>
+        <button class="btn purchase-edit" type="button" data-edit-purchase="${escapeHtml(p.id)}">Edit</button>
+      </div>`,
         )
         .join("")
     : '<p class="hint">No purchases yet. Use <strong>New purchase</strong> above.</p>';
@@ -12971,13 +13126,29 @@ $("orders").addEventListener("keydown", (e) => {
 });
 
 $("purchases-list").addEventListener("click", (e) => {
+  const edit = e.target.closest("[data-edit-purchase]");
+  if (edit) {
+    const purchase = purchaseCache.find((row) => row.id === edit.dataset.editPurchase);
+    if (purchase) beginPurchaseEdit(purchase);
+    return;
+  }
   const btn = e.target.closest("[data-pid]");
   if (!btn) return;
   const p = purchaseCache.find((row) => row.id === btn.dataset.pid);
   if (p) showPurchase(p);
 });
+$("po-cancel-edit")?.addEventListener("click", () => {
+  resetPurchaseComposer();
+  $("purchase-new").open = false;
+});
 
 $("purchase-pane").addEventListener("click", async (e) => {
+  const editBtn = e.target.closest("[data-edit-purchase]");
+  if (editBtn) {
+    const purchase = purchaseCache.find((row) => row.id === editBtn.dataset.editPurchase);
+    if (purchase) beginPurchaseEdit(purchase);
+    return;
+  }
   const printBtn = e.target.closest("[data-print-purchase]");
   if (printBtn) {
     const p = purchaseCache.find((row) => row.id === printBtn.dataset.printPurchase);
@@ -15113,8 +15284,9 @@ $("purchase-form").addEventListener("submit", async (e) => {
     if (!lines.length) {
       throw new Error(isApparelShop() ? "Add a garment and enter the size quantity" : "Add an item and enter the quantity");
     }
-    const saved = await api("/api/purchases", {
-      method: "POST",
+    const editingId = editingPurchaseId;
+    const saved = await api(editingId ? `/api/purchases/${encodeURIComponent(editingId)}` : "/api/purchases", {
+      method: editingId ? "PUT" : "POST",
       body: JSON.stringify({
         supplier_id: $("po-supplier").value,
         supplier_invoice_number: $("po-invoice").value,
@@ -15124,16 +15296,15 @@ $("purchase-form").addEventListener("submit", async (e) => {
       }),
     });
     const n = Number(saved?.purchase?.barcode_count || saved?.barcode_count) || 0;
-    $("po-hint").textContent = n ? `Saved — ${n} barcodes added` : "Saved";
+    const verb = editingId ? "Updated" : "Saved";
+    resetPurchaseComposer();
+    $("po-hint").textContent = n ? `${verb} — ${n} barcodes added` : verb;
     $("po-hint").className = "hint ok";
-    poLineDraft.clear();
-    $("purchase-form").reset();
-    if ($("po-lines")) $("po-lines").innerHTML = "";
     $("purchase-new").open = false;
-    renderPoLines();
     await loadBootstrap();
     await loadPurchases();
-    if (purchaseCache.length) showPurchase(purchaseCache[0]);
+    const shown = purchaseCache.find((row) => row.id === (saved?.purchase?.id || editingId)) || purchaseCache[0];
+    if (shown) showPurchase(shown);
   } catch (err) {
     $("po-hint").textContent = err.message;
     $("po-hint").className = "hint error";
