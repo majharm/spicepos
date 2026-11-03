@@ -109,6 +109,7 @@
     { id: "day", label: "Day-wise", scope: "bill" },
     { id: "festival", label: "Festival / seasonal", scope: "bill" },
     { id: "clearance", label: "Clearance", scope: "lines" },
+    { id: "advance", label: "Advanced offer", scope: "bill" },
   ];
 
   const STATUSES = ["draft", "scheduled", "active", "paused", "expired", "completed"];
@@ -149,6 +150,7 @@
     { id: "festival", name: "Festival sale", type: "festival", discount_type: "pct", discount_value: 15 },
     { id: "weekend", name: "Weekend sale", type: "day", discount_type: "pct", discount_value: 10, days_of_week: "0,6" },
     { id: "flash", name: "Flash sale", type: "time", discount_type: "pct", discount_value: 20, start_time: "14:00", end_time: "16:00" },
+    { id: "advance", name: "Advanced offer", type: "advance", discount_type: "pct", discount_value: 10, min_spend: 499, start_time: "16:00", end_time: "19:00", description: "10% off the chosen products when the bill reaches the minimum during this window." },
   ];
 
   function typeMeta(id) {
@@ -367,6 +369,14 @@
     return (cart || []).filter((line) => {
       const id = String(line.itemId || line.item_id || line.item?.id || "");
       if (cond.exclude_item_ids.includes(id)) return false;
+      if (type === "advance") {
+        if (cond.item_ids.length) return cond.item_ids.includes(id);
+        if (cond.category) {
+          const cat = String(line.category || line.item?.category || "");
+          return cat.toLowerCase() === cond.category.toLowerCase();
+        }
+        return true;
+      }
       if (billWide) return true;
       if (cond.item_ids.length && PRODUCT_SCOPED.has(type)) {
         if (type === "bogo" && cond.get_item_id && id === cond.get_item_id) return true;
@@ -428,7 +438,7 @@
       if (qtyBound(offer.min_qty) && qty < num(offer.min_qty)) return null;
       if (qtyBound(offer.max_qty) && qty > num(offer.max_qty)) return null;
       const minSpend = num(offer.min_spend);
-      const scopeSpend = BILL_WIDE.has(type) ? billSpend : spend;
+      const scopeSpend = BILL_WIDE.has(type) || type === "advance" ? billSpend : spend;
       if (minSpend > 0 && scopeSpend < minSpend) return null;
     }
 
@@ -599,6 +609,35 @@
       if (discount <= 0) return null;
       message = offer.name;
       scope = "lines";
+    } else if (type === "advance") {
+      const scoped = cond.item_ids.length > 0 || Boolean(cond.category);
+      const target = scoped ? lines : cart;
+      if (!target.length) return null;
+      const special = num(offer.offer_price);
+      if (offer.discount_type === "price" && special > 0) {
+        target.forEach((l) => {
+          const d = round2(Math.max(0, lineGrossOf(l) - special * (l.isCount ? pieceQty(l) : 1)));
+          if (d > 0) {
+            lineDiscounts[l.lineId || l.itemId] = d;
+            discount = round2(discount + d);
+          }
+        });
+        scope = "lines";
+      } else if (scoped) {
+        target.forEach((l) => {
+          const d = discountOn(lineGrossOf(l), offer.discount_type, offer.discount_value);
+          if (d > 0) {
+            lineDiscounts[l.lineId || l.itemId] = d;
+            discount = round2(discount + d);
+          }
+        });
+        scope = "lines";
+      } else {
+        discount = discountOn(billSpend, offer.discount_type, offer.discount_value);
+        scope = "bill";
+      }
+      if (discount <= 0) return null;
+      message = offer.name;
     } else {
       const base = billWide ? billSpend : spend;
       if (type === "first_purchase" && num((ctx.customer || {}).bills) > 0) return null;

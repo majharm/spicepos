@@ -2459,7 +2459,7 @@
               <div class="items-hero-copy">
                 <p class="items-kicker">Promotions</p>
                 <h3>Offers</h3>
-                <p class="lede">Create, schedule, and track product, combo, and bill offers. Counter applies matching offers automatically.</p>
+                <p class="lede">Create, schedule, and track product, combo, and bill offers. An advanced offer can mix products, a time window, days, and a minimum bill. Counter applies matching offers automatically.</p>
               </div>
               <div class="items-hero-stats offer-dash" id="offer-dash"></div>
             </header>
@@ -2508,9 +2508,9 @@
                   <legend>Schedule</legend>
                   <label>Start date <input id="off-start" type="date" /></label>
                   <label>End date <input id="off-end" type="date" /></label>
-                  <label data-offer-when="time,festival">Start time <input id="off-start-time" type="time" /></label>
-                  <label data-offer-when="time,festival">End time <input id="off-end-time" type="time" /></label>
-                  <label class="full" data-offer-when="day,festival">Days (0=Sun, 6=Sat) <input id="off-days" placeholder="0,6" /></label>
+                  <label data-offer-when="time,festival,advance">Start time <input id="off-start-time" type="time" /></label>
+                  <label data-offer-when="time,festival,advance">End time <input id="off-end-time" type="time" /></label>
+                  <label class="full" data-offer-when="day,festival,advance">Days (0=Sun, 6=Sat) <input id="off-days" placeholder="0,6" /></label>
                 </fieldset>
                 <fieldset class="item-block">
                   <legend>Discount</legend>
@@ -2525,19 +2525,19 @@
                       <input id="off-disc-value" type="number" min="0" step="0.01" />
                     </span>
                   </label>
-                  <label data-offer-when="combo,mix_match,product,clearance">Offer / combo price <input id="off-price" type="number" min="0" step="0.01" /></label>
-                  <label data-offer-when="qty,product,combo,clearance,mix_match">Min qty <input id="off-min-qty" type="number" min="0" step="1" /></label>
-                  <label data-offer-when="qty,product,combo,clearance,mix_match">Max qty <input id="off-max-qty" type="number" min="0" step="1" /></label>
-                  <label data-offer-when="spend,min_purchase,first_purchase,customer,repeat,festival">Min purchase ₹ <input id="off-min-spend" type="number" min="0" step="1" /></label>
+                  <label data-offer-when="combo,mix_match,product,clearance,advance">Offer / combo price <input id="off-price" type="number" min="0" step="0.01" /></label>
+                  <label data-offer-when="qty,product,combo,clearance,mix_match,advance">Min qty <input id="off-min-qty" type="number" min="0" step="1" /></label>
+                  <label data-offer-when="qty,product,combo,clearance,mix_match,advance">Max qty <input id="off-max-qty" type="number" min="0" step="1" /></label>
+                  <label data-offer-when="spend,min_purchase,first_purchase,customer,repeat,festival,advance">Min purchase ₹ <input id="off-min-spend" type="number" min="0" step="1" /></label>
                   <label class="full" data-offer-when="qty">Qty tiers (qty type value) <textarea id="off-qty-tiers" rows="3" placeholder="2 pct 5&#10;3 pct 10&#10;5 pct 15"></textarea></label>
                   <label class="full" data-offer-when="spend">Spend tiers (spend type value) <textarea id="off-spend-tiers" rows="3" placeholder="500 pct 5&#10;1000 pct 10"></textarea></label>
                 </fieldset>
-                <fieldset class="item-block" data-offer-when="combo,product,bogo,mix_match,qty,free_gift,clearance,category">
+                <fieldset class="item-block" data-offer-when="combo,product,bogo,mix_match,qty,free_gift,clearance,category,advance">
                   <legend>Products</legend>
-                  <label class="full" data-offer-when="combo,product,bogo,mix_match,qty,free_gift,clearance">Products
+                  <label class="full" data-offer-when="combo,product,bogo,mix_match,qty,free_gift,clearance,advance">Products
                     <select id="off-items" multiple size="6"></select>
                   </label>
-                  <label data-offer-when="category">Category <select id="off-category"></select></label>
+                  <label data-offer-when="category,advance">Category <select id="off-category"></select></label>
                   <label data-offer-when="bogo">Buy qty (X) <input id="off-buy-qty" type="number" min="1" step="1" value="1" /></label>
                   <label data-offer-when="bogo">Get qty (Y) <input id="off-get-qty" type="number" min="1" step="1" value="1" /></label>
                   <label class="full" data-offer-when="bogo">Get product <select id="off-get-item"></select></label>
@@ -3859,7 +3859,7 @@
     <script src="./js/pay-integrity.js?v=20261012table1" defer></script>
     <script src="./js/aggregator.js?v=20261012agg3" defer></script>
     <script src="./js/discount.js?v=20261103bill1" defer></script>
-    <script src="./js/offers.js?v=20261103off1" defer></script>
+    <script src="./js/offers.js?v=20261103adv1" defer></script>
     <script src="./js/loyalty.js?v=20260905deploy136" defer></script>
     <script src="./js/barcode.js?v=20261024bcdesk1" defer></script>
     <script src="./js/camera-scan.js?v=20261026poscan2" defer></script>
@@ -3899,6 +3899,6 @@
     <script src="./js/customer-master-ui.js?v=20261027cust1" defer></script>
     <script src="./js/mobile-app.js?v=20261023logo1" defer></script>
     <script src="./js/growth.js?v=20261103off1" defer></script>
-    <script src="./js/offers-ui.js?v=20261103off1" defer></script>
+    <script src="./js/offers-ui.js?v=20261103adv1" defer></script>
   </body>
 </html>

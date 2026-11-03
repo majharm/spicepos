@@ -403,7 +403,7 @@ test("POS boot skips API probe and slims catalog photos", () => {
   assert.match(index, /invoice\.js\?v=20261103bill1/);
   assert.doesNotMatch(index, /app\.js\?v=20260905deploy167/);
   assert.doesNotMatch(index, /app\.js\?v=20260905deploy166/);
-  assert.match(index, /offers\.js\?v=20261103off1/);
+  assert.match(index, /offers\.js\?v=20261103adv1/);
   assert.match(index, /restaurant\.js\?v=20261012set4/);
   assert.match(login, /x-pos-20260830e\.js\?v=20261030forgot1/);
   assert.match(loginJs, /saveLoginSpec/);
