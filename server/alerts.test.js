@@ -34,6 +34,13 @@ import {
   deliverSignupWhatsApp,
   notifySignupAdmin,
   SIGNUP_WA_DEFAULT,
+  clampLowStockThreshold,
+  itemIsLowStock,
+  formatStockQty,
+  lowStockLine,
+  lowStockText,
+  splitAlertMessages,
+  lowStockWhereSql,
 } from "./alerts.js";
 import { parseDataImage } from "./mail.js";
 
@@ -580,4 +587,67 @@ test("signup WhatsApp sends once, stores the provider id, and retries a temporar
   );
   assert.equal(blown.ok, false);
   assert.equal(typeof blown.error === "string" || blown.temporary === true || blown.ok === false, true);
+});
+
+test("low stock list includes empty shelves and piece-threshold items", () => {
+  assert.equal(clampLowStockThreshold(null), 5);
+  assert.equal(clampLowStockThreshold(0), 1);
+  assert.equal(itemIsLowStock({ stock_gm: 0, reorder_level_gm: 0, base_unit: "GM" }, 5), true);
+  assert.equal(itemIsLowStock({ stock_gm: 100, reorder_level_gm: 0, base_unit: "GM" }, 5), false);
+  assert.equal(itemIsLowStock({ stock_gm: 100, reorder_level_gm: 500, base_unit: "GM" }, 5), true);
+  assert.equal(itemIsLowStock({ stock_gm: 3, reorder_level_gm: 0, base_unit: "PCS" }, 5), true);
+  assert.equal(itemIsLowStock({ stock_gm: 8, reorder_level_gm: 0, base_unit: "PCS" }, 5), false);
+  assert.equal(itemIsLowStock({ stock_gm: 4, reorder_level_gm: 2, base_unit: "PCS" }, 5), false);
+  assert.equal(formatStockQty(1500, "GM"), "1.5 kg");
+  assert.equal(formatStockQty(2, "PCS"), "2 pcs");
+  const line = lowStockLine({ name: "Haldi", stock_gm: 200, reorder_level_gm: 500, base_unit: "GM" }, 5);
+  assert.equal(line.name, "Haldi");
+  assert.match(line.qtyLabel, /200 g on hand/);
+  assert.match(line.qtyLabel, /reorder 500 g/);
+  const named = lowStockLine({ name: "Kurti", color: "Red", size: "M", stock_gm: 0, reorder_level_gm: 0, base_unit: "PCS" }, 5);
+  assert.equal(named.name, "Kurti (Red / M)");
+  assert.match(named.qtyLabel, /out of stock/);
+
+  const items = [
+    { name: "Haldi", qtyLabel: "200 g on hand, reorder 500 g" },
+    { name: "Kurti (Red / M)", qtyLabel: "out of stock" },
+    { name: "Tea", qtyLabel: "2 pcs on hand, min 5 pcs" },
+  ];
+  const text = lowStockText({ shopName: "SWAMI MASALE", items });
+  for (const item of items) {
+    assert.ok(text.includes(item.name), item.name);
+    assert.ok(text.includes(item.qtyLabel), item.qtyLabel);
+  }
+  assert.doesNotMatch(text, /\+\d+ more/);
+
+  const lines = Array.from({ length: 80 }, (_, i) => `• Item ${String(i).padStart(3, "0")} (1 pcs on hand, min 5 pcs)`);
+  const parts = splitAlertMessages(lines.join("\n"), 400);
+  const joined = parts.join("\n");
+  assert.ok(parts.length > 1);
+  for (const line of lines) assert.ok(joined.includes(line), line);
+  assert.ok(parts.every((part) => part.length < 430));
+
+  const where = lowStockWhereSql();
+  assert.match(where, /stock_gm <= 0/);
+  assert.match(where, /reorder_level_gm,0\) > 0/);
+  assert.match(where, /stock_gm <= \?/);
+  assert.equal((where.match(/\?/g) || []).length, 1);
+
+  const nodeAlerts = readFileSync(path.join(root, "server/alerts.js"), "utf8");
+  const php = readFileSync(path.join(root, "pos-alerts.php"), "utf8");
+  const master = readFileSync(path.join(root, "js/master.js"), "utf8");
+  assert.match(nodeAlerts, /role = 'business_admin'/);
+  assert.match(nodeAlerts, /reason: "no-admin-number"/);
+  assert.match(php, /function pos_send_low_stock_now/);
+  assert.match(php, /function pos_business_admin_alert_contacts/);
+  assert.match(php, /role = 'business_admin'/);
+  assert.match(php, /pos_query_low_stock_items\(\$bid, \[\]\)/);
+  assert.doesNotMatch(php, /reorder_level_gm > 0 AND stock_gm <= reorder_level_gm/);
+  assert.match(master, /no-admin-number/);
+  assert.match(master, /full low-stock list on WhatsApp to the business admin/);
+  const auto = readFileSync(path.join(root, "pos-automation.php"), "utf8");
+  assert.match(auto, /pos_query_low_stock_items/);
+  assert.match(auto, /pos_business_admin_alert_contacts/);
+  assert.doesNotMatch(auto, /\$n >= 20/);
+  assert.doesNotMatch(auto, /more";/);
 });

@@ -475,10 +475,29 @@ function pos_auto_supplier_due($bid) {
 }
 
 function pos_auto_low_items($bid) {
+  if (!function_exists("pos_query_low_stock_items") && is_file(__DIR__ . "/pos-alerts.php")) {
+    require_once __DIR__ . "/pos-alerts.php";
+  }
+  if (function_exists("pos_query_low_stock_items")) {
+    $found = pos_query_low_stock_items($bid, []);
+    $items = [];
+    foreach ($found["items"] as $item) {
+      $line = function_exists("pos_low_stock_line") ? pos_low_stock_line($item, $found["threshold"]) : ["name" => $item["name"] ?? "", "qtyLabel" => ""];
+      $items[] = [
+        "id" => $item["id"] ?? "",
+        "name" => $line["name"] ?? ($item["name"] ?? ""),
+        "stock" => $item["stock_gm"] ?? 0,
+        "minimum" => $item["reorder_level_gm"] ?? 0,
+        "unit" => ($item["base_unit"] ?? "") !== "" ? $item["base_unit"] : ($item["unit"] ?? ""),
+        "qtyLabel" => $line["qtyLabel"] ?? "",
+      ];
+    }
+    return $items;
+  }
   return pos_auto_q(
     "SELECT id, name, stock_gm AS stock, reorder_level_gm AS minimum, COALESCE(unit,'') AS unit
-     FROM items WHERE business_id = ? AND status = 'active' AND reorder_level_gm > 0 AND stock_gm <= reorder_level_gm
-     ORDER BY stock_gm ASC, name LIMIT 40",
+     FROM items WHERE business_id = ? AND status = 'active' AND (stock_gm <= 0 OR (reorder_level_gm > 0 AND stock_gm <= reorder_level_gm))
+     ORDER BY stock_gm ASC, name",
     "s",
     [$bid]
   );
@@ -525,18 +544,19 @@ function pos_auto_line($label, $value) {
 
 function pos_auto_low_message($owner, $items, $out) {
   $lines = ["LOW STOCK ALERT – ATAV POS", "", "Hello " . ($owner !== "" ? $owner : "there") . ",", "", "The following products have low stock:", ""];
-  $n = 0;
   foreach ($items as $item) {
-    if ($n >= 20) break;
+    $label = trim((string) ($item["qtyLabel"] ?? ""));
+    if ($label !== "") {
+      $lines[] = ($item["name"] ?? "Item") . " — " . $label;
+      continue;
+    }
     $unit = trim((string) ($item["unit"] ?? ""));
     $suffix = $unit !== "" ? " " . $unit : "";
     $lines[] = "Product: " . $item["name"];
     $lines[] = "Available Stock: " . $item["stock"] . $suffix;
     $lines[] = "Minimum Stock: " . $item["minimum"] . $suffix;
     $lines[] = "";
-    $n++;
   }
-  if (count($items) > 20) $lines[] = "+" . (count($items) - 20) . " more";
   if ($out > 0) $lines[] = "Out of stock: " . $out;
   $lines[] = "Please arrange replenishment.";
   $lines[] = "";
@@ -782,7 +802,17 @@ function pos_automation_consider($biz, $shop, $forceJob, $forceShop = false, $pr
       $due = $sig !== "" && (!$same || (int) ($sentGate[0]["due"] ?? 1) === 1);
       if ($due) {
         $body = pos_auto_low_message($owner, $items, pos_auto_out_count($biz["id"]));
-        $enqueued += pos_auto_queue_report("low_stock", $biz["id"], $sig . $stamp, $shop, "Low stock alert", $body, "", $forceShop);
+        $chunks = function_exists("pos_split_alert_messages") ? pos_split_alert_messages($body, 3500) : [$body];
+        if (!$chunks) $chunks = [$body];
+        $adminPhone = "";
+        if (function_exists("pos_business_admin_alert_contacts")) {
+          $admin = pos_business_admin_alert_contacts($biz["id"]);
+          $adminPhone = $admin["phones"][0] ?? "";
+        }
+        foreach ($chunks as $i => $chunk) {
+          $partScope = $sig . $stamp . (count($chunks) > 1 ? "|p" . ($i + 1) : "");
+          $enqueued += pos_auto_queue_report("low_stock", $biz["id"], $partScope, $shop, "Low stock alert", $chunk, $adminPhone, $forceShop);
+        }
         $waOn = (int) ($shop["channel_whatsapp"] ?? 0) === 1;
         if (!$probe && (!$waOn || !pos_auto_wa_held())) {
           pos_q("UPDATE automation_shop SET low_signature = ?, low_sent_at = NOW() WHERE business_id = ?", "ss", [$sig, $biz["id"]]);
@@ -968,7 +998,15 @@ function pos_automation_drain($deadline) {
           } elseif ($optOut) {
             $error = "opt-out";
           } else {
-            $mobile = pos_auto_mobile($biz["mobile"] ?? "");
+            $mobile = "";
+            if (($row["job_key"] ?? "") === "low_stock") {
+              $mobile = pos_auto_mobile($row["recipient"] ?? "");
+              if ($mobile === "" && function_exists("pos_business_admin_alert_contacts")) {
+                $admin = pos_business_admin_alert_contacts($row["business_id"]);
+                $mobile = pos_auto_mobile($admin["phones"][0] ?? "");
+              }
+            }
+            if ($mobile === "") $mobile = pos_auto_mobile($biz["mobile"] ?? "");
             if ($mobile === "") $error = "invalid-mobile";
           }
         }

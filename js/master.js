@@ -1536,7 +1536,7 @@ const ALERT_DEFS = [
     key: "low_stock",
     flag: "alert_low_stock",
     title: "Low stock alert",
-    blurb: "After a sale when an item falls to or below reorder level. Once per item per day.",
+    blurb: "Sends the full low-stock list on WhatsApp to the business admin. Includes out-of-stock items, items at or below reorder, and piece items at or below the shop low-stock threshold.",
     channels: "WhatsApp · Email",
     placeholders: "{{shop}} {{lowStock}}",
   },
@@ -4950,7 +4950,9 @@ function alertSkipReason(row) {
     case "no-number":
       return `${name}: no mobile or email on file`;
     case "no-low-stock":
-      return `${name}: no items at reorder level`;
+      return `${name}: no low-stock or out-of-stock items`;
+    case "no-admin-number":
+      return `${name}: business admin has no WhatsApp number or email`;
     case "no-expiry":
       return `${name}: no expiry date`;
     case "not-due-yet":

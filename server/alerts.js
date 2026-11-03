@@ -1433,28 +1433,241 @@ export async function sendUpdateAlerts({ businessId, title, body, image, force =
   return { ok: true, results };
 }
 
+export const LOW_STOCK_MEASURED_UNITS = [
+  "G", "GM", "KG", "MG", "QTL", "TON", "LB", "OZ",
+  "ML", "L", "LTR", "KL", "CC", "CBM", "CFT", "GAL",
+  "HR", "DAY", "WEEK", "MONTH", "YEAR", "VISIT", "JOB", "SERVICE", "SESSION", "PROJECT", "CONSULT", "APPT",
+];
+
+const STOCK_SUFFIX = {
+  PCS: "pcs", NOS: "nos", UNT: "units", PR: "pr", SET: "set", DOZ: "doz", GRS: "grs", HDOZ: "hdoz",
+  BOX: "box", CTN: "ctn", PKT: "pkt", PACK: "pack", BAG: "bag", BTL: "btl", JAR: "jar", CAN: "can",
+  TIN: "tin", TUBE: "tube", PCH: "pch", BDL: "bdl", ROLL: "roll", CASE: "case", CRT: "crt",
+  TAB: "tab", CAP: "cap", STRIP: "strip", VIAL: "vial", AMP: "amp",
+};
+
+export function clampLowStockThreshold(raw) {
+  if (raw == null || raw === "") return 5;
+  const n = Number(raw);
+  if (!Number.isFinite(n)) return 5;
+  return Math.max(1, Math.min(9999, Math.round(n)));
+}
+
+export function stockUnitCode(item) {
+  const raw = item && typeof item === "object" ? item.base_unit || item.unit : item;
+  return String(raw || "GM").trim().toUpperCase().replace(/[^A-Z0-9]/g, "") || "GM";
+}
+
+export function usesPieceThreshold(unit) {
+  return !LOW_STOCK_MEASURED_UNITS.includes(stockUnitCode(unit));
+}
+
+export function lowStockWhereSql() {
+  const list = LOW_STOCK_MEASURED_UNITS.map((unit) => `'${unit}'`).join(",");
+  return `(stock_gm <= 0
+    OR (COALESCE(reorder_level_gm,0) > 0 AND stock_gm <= reorder_level_gm)
+    OR (
+      COALESCE(reorder_level_gm,0) <= 0
+      AND stock_gm > 0
+      AND stock_gm <= ?
+      AND UPPER(REPLACE(COALESCE(NULLIF(base_unit,''), NULLIF(unit,''), 'GM'), ' ', '')) NOT IN (${list})
+    ))`;
+}
+
+export function itemIsLowStock(item, threshold = 5) {
+  const stock = Number(item?.stock_gm);
+  const onHand = Number.isFinite(stock) ? stock : 0;
+  const reorder = Number(item?.reorder_level_gm) || 0;
+  if (onHand <= 0) return true;
+  if (reorder > 0) return onHand <= reorder;
+  if (!usesPieceThreshold(item)) return false;
+  return onHand <= clampLowStockThreshold(threshold);
+}
+
+function trimQty(n) {
+  const v = Number(n) || 0;
+  if (Math.abs(v - Math.round(v)) < 1e-9) return String(Math.round(v));
+  return String(parseFloat(v.toFixed(3)));
+}
+
+export function formatStockQty(qty, unit) {
+  const code = stockUnitCode(unit);
+  const n = Number(qty) || 0;
+  if (code === "KG") return `${trimQty(n / 1000)} kg`;
+  if (code === "G" || code === "GM") {
+    if (Math.abs(n) >= 1000) return `${trimQty(n / 1000)} kg`;
+    return `${trimQty(n)} g`;
+  }
+  if (code === "L" || code === "LTR") return `${trimQty(n / 1000)} L`;
+  if (code === "ML") return `${trimQty(n)} ml`;
+  const suffix = STOCK_SUFFIX[code] || code.toLowerCase();
+  return `${trimQty(n)} ${suffix}`;
+}
+
+export function lowStockItemName(item) {
+  const name = String(item?.name || "Item").trim() || "Item";
+  const extra = [item?.color, item?.size].map((part) => String(part || "").trim()).filter(Boolean);
+  return extra.length ? `${name} (${extra.join(" / ")})` : name;
+}
+
+export function lowStockLine(item, threshold = 5) {
+  const unit = item?.base_unit || item?.unit || "PCS";
+  const stock = Number(item?.stock_gm) || 0;
+  const reorder = Number(item?.reorder_level_gm) || 0;
+  const onHand = formatStockQty(stock, unit);
+  if (stock <= 0) {
+    const min = reorder > 0 ? `, reorder ${formatStockQty(reorder, unit)}` : "";
+    return { name: lowStockItemName(item), qtyLabel: `out of stock${min}` };
+  }
+  const min = reorder > 0
+    ? `reorder ${formatStockQty(reorder, unit)}`
+    : `min ${formatStockQty(clampLowStockThreshold(threshold), unit)}`;
+  return { name: lowStockItemName(item), qtyLabel: `${onHand} on hand, ${min}` };
+}
+
+export function splitAlertMessages(text, max = 3500) {
+  const src = String(text || "").trim();
+  if (!src) return [];
+  if (src.length <= max) return [src];
+  const parts = [];
+  let rest = src;
+  while (rest.length > max) {
+    let cut = rest.lastIndexOf("\n", max);
+    if (cut < Math.floor(max * 0.5)) cut = max;
+    parts.push(rest.slice(0, cut).trimEnd());
+    rest = rest.slice(cut).trimStart();
+  }
+  if (rest) parts.push(rest);
+  if (parts.length < 2) return parts;
+  return parts.map((part, index) => `${part}\n\n(${index + 1}/${parts.length})`);
+}
+
+async function loadLowStockThreshold(businessId) {
+  try {
+    const [row] = await query(
+      "SELECT low_stock_threshold FROM company_settings WHERE business_id = ? LIMIT 1",
+      [businessId],
+    );
+    return clampLowStockThreshold(row?.low_stock_threshold);
+  } catch {
+    return 5;
+  }
+}
+
+async function queryLowStockItems(businessId, itemIds = []) {
+  const threshold = await loadLowStockThreshold(businessId);
+  const ids = [...new Set((itemIds || []).filter(Boolean))];
+  const args = [businessId, threshold];
+  let idSql = "";
+  if (ids.length) {
+    idSql = ` AND id IN (${ids.map(() => "?").join(",")})`;
+    args.push(...ids);
+  }
+  const sql = `SELECT id, name, color, size, stock_gm, reorder_level_gm, base_unit, unit
+     FROM items
+     WHERE business_id = ? AND status = 'active' AND ${lowStockWhereSql()}${idSql}
+     ORDER BY stock_gm ASC, name ASC`;
+  try {
+    const items = await query(sql, args);
+    return { items, threshold };
+  } catch (err) {
+    if (!/color|size|unknown column/i.test(String(err.message || err))) throw err;
+    const items = await query(
+      `SELECT id, name, stock_gm, reorder_level_gm, base_unit, unit
+       FROM items
+       WHERE business_id = ? AND status = 'active' AND ${lowStockWhereSql()}${idSql}
+       ORDER BY stock_gm ASC, name ASC`,
+      args,
+    );
+    return { items, threshold };
+  }
+}
+
+async function businessAdminAlertContacts(businessId) {
+  const [biz] = businessId
+    ? await query("SELECT id, name, mobile, email, owner_name FROM businesses WHERE id = ? LIMIT 1", [businessId])
+    : [];
+  let co = {};
+  try {
+    const [row] = businessId
+      ? await query(
+          "SELECT phone, email, name, timezone, low_stock_threshold FROM company_settings WHERE business_id = ? LIMIT 1",
+          [businessId],
+        )
+      : [];
+    co = row || {};
+  } catch {
+    const [row] = businessId
+      ? await query("SELECT phone, email, name, timezone FROM company_settings WHERE business_id = ? LIMIT 1", [businessId])
+      : [];
+    co = row || {};
+  }
+  let admins = [];
+  try {
+    admins = businessId
+      ? await query(
+          "SELECT mobile, email, first_name FROM staff_users WHERE business_id = ? AND role = 'business_admin'",
+          [businessId],
+        )
+      : [];
+  } catch {
+    admins = [];
+  }
+  const phones = [];
+  const pushPhone = (raw) => {
+    const n = normalizeInMobile(raw);
+    if (n && !phones.includes(n)) phones.push(n);
+  };
+  for (const row of admins) pushPhone(row.mobile);
+  if (!phones.length) {
+    pushPhone(biz?.mobile);
+    pushPhone(co?.phone);
+  }
+  const emails = [];
+  const pushEmail = (raw) => {
+    const email = String(raw || "").trim().toLowerCase();
+    if (email.includes("@") && !emails.includes(email)) emails.push(email);
+  };
+  for (const row of admins) pushEmail(row.email);
+  if (!emails.length) {
+    pushEmail(biz?.email);
+    pushEmail(co?.email);
+  }
+  return {
+    businessId: biz?.id || businessId || "",
+    shopName: biz?.name || co?.name || "",
+    ownerName: biz?.owner_name || admins.find((row) => row.first_name)?.first_name || "",
+    timezone: co?.timezone || "Asia/Kolkata",
+    phones,
+    emails,
+    threshold: clampLowStockThreshold(co?.low_stock_threshold),
+  };
+}
+
+function combineLowStockDelivery(deliveries = []) {
+  const waResults = deliveries.flatMap((row) => row?.wa?.results || []);
+  const mail = deliveries.flatMap((row) => row?.mail || []);
+  const waOk = deliveries.some((row) => row?.wa?.ok);
+  return {
+    wa: {
+      ok: waOk,
+      to: deliveries.flatMap((row) => row?.wa?.to || []),
+      results: waResults,
+      skipped: !waOk && deliveries.every((row) => row?.wa?.skipped !== false && !row?.wa?.ok),
+      reason: waOk ? "" : deliveries.find((row) => row?.wa?.reason)?.wa?.reason || "",
+    },
+    mail,
+  };
+}
+
 export async function sendLowStockAlerts(businessId, itemIds = [], { force = false } = {}) {
   const settings = await loadAlertSettings();
   if (!force && !flagOn(settings.alert_low_stock, true)) return { skipped: true };
   if (!businessId) return { skipped: true };
-  let ids = [...new Set((itemIds || []).filter(Boolean))];
-  if (!ids.length && force) {
-    const all = await query(
-      `SELECT id FROM items
-       WHERE business_id = ? AND status = 'active' AND reorder_level_gm > 0 AND stock_gm <= reorder_level_gm`,
-      [businessId],
-    );
-    ids = all.map((r) => r.id);
-  }
-  if (!ids.length) return { skipped: true, reason: "no-low-stock" };
-  const ph = ids.map(() => "?").join(",");
-  const items = await query(
-    `SELECT id, name, stock_gm, reorder_level_gm FROM items
-     WHERE business_id = ? AND id IN (${ph}) AND status = 'active'
-       AND reorder_level_gm > 0 AND stock_gm <= reorder_level_gm`,
-    [businessId, ...ids],
-  );
-  if (!items.length) return { skipped: true };
+  const ids = [...new Set((itemIds || []).filter(Boolean))];
+  if (!ids.length && !force) return { skipped: true, reason: "no-low-stock" };
+  const { items, threshold } = await queryLowStockItems(businessId, ids);
+  if (!items.length) return { skipped: true, reason: "no-low-stock" };
   const day = new Date().toISOString().slice(0, 10);
   const fresh = [];
   for (const item of items) {
@@ -1466,23 +1679,45 @@ export async function sendLowStockAlerts(businessId, itemIds = [], { force = fal
     fresh.push(item);
   }
   if (!fresh.length) return { skipped: true, reason: "already-sent" };
-  const shop = await shopContacts(businessId);
-  const text = lowStockText(
-    {
-      shopName: shop.shopName,
-      items: fresh.map((i) => ({ name: i.name, qtyLabel: `${Number(i.stock_gm) || 0}` })),
-    },
-    settings,
-  );
-  return dispatchAlert({
-    phones: shop.phones,
-    emails: shop.emails,
-    subject: `Low stock · ${shop.shopName}`,
-    text,
-    kind: "low_stock",
-    businessId,
-    shopName: shop.shopName,
-  });
+  const admin = await businessAdminAlertContacts(businessId);
+  if (!admin.phones.length && !admin.emails.length) return { skipped: true, reason: "no-admin-number" };
+  const lines = fresh.map((item) => lowStockLine(item, threshold));
+  const listText = lines.map((line) => `• ${line.name} (${line.qtyLabel})`).join("\n");
+  let text = lowStockText({ shopName: admin.shopName, items: lines }, settings);
+  if (lines.length && !text.includes(lines[0].name)) text = `${text}\n\n${listText}`.trim();
+  const deliveries = [];
+  if (admin.phones.length) {
+    const parts = splitAlertMessages(text);
+    for (let i = 0; i < parts.length; i += 1) {
+      deliveries.push(
+        await dispatchAlert({
+          phones: admin.phones,
+          emails: [],
+          subject: parts.length > 1
+            ? `Low stock · ${admin.shopName} (${i + 1}/${parts.length})`
+            : `Low stock · ${admin.shopName}`,
+          text: parts[i],
+          kind: "low_stock",
+          businessId,
+          shopName: admin.shopName,
+        }),
+      );
+    }
+  }
+  if (admin.emails.length) {
+    deliveries.push(
+      await dispatchAlert({
+        phones: [],
+        emails: admin.emails,
+        subject: `Low stock · ${admin.shopName}`,
+        text,
+        kind: "low_stock",
+        businessId,
+        shopName: admin.shopName,
+      }),
+    );
+  }
+  return { ...combineLowStockDelivery(deliveries), items: fresh.length };
 }
 
 function ymdInZone(timeZone) {
@@ -1532,9 +1767,9 @@ export async function sendClosingAlerts(businessId, { force = false } = {}) {
   const low = flagOn(settings.alert_low_stock, true)
     ? await query(
         `SELECT name FROM items
-         WHERE business_id = ? AND status = 'active' AND reorder_level_gm > 0 AND stock_gm <= reorder_level_gm
+         WHERE business_id = ? AND status = 'active' AND ${lowStockWhereSql()}
          ORDER BY name LIMIT 12`,
-        [shop.businessId],
+        [shop.businessId, await loadLowStockThreshold(shop.businessId)],
       )
     : [];
   const text = closingText(

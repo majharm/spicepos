@@ -1114,20 +1114,221 @@ function pos_send_update_alerts($title, $body, $businessId = null, $image = "", 
   }
 }
 
+function pos_low_stock_measured_units() {
+  return ["G", "GM", "KG", "MG", "QTL", "TON", "LB", "OZ", "ML", "L", "LTR", "KL", "CC", "CBM", "CFT", "GAL", "HR", "DAY", "WEEK", "MONTH", "YEAR", "VISIT", "JOB", "SERVICE", "SESSION", "PROJECT", "CONSULT", "APPT"];
+}
+
+function pos_clamp_low_stock_threshold($raw) {
+  if ($raw === null || $raw === "") return 5;
+  if (!is_numeric($raw)) return 5;
+  return max(1, min(9999, (int) round((float) $raw)));
+}
+
+function pos_low_stock_where_sql() {
+  $list = "'" . implode("','", pos_low_stock_measured_units()) . "'";
+  return "(stock_gm <= 0
+    OR (COALESCE(reorder_level_gm,0) > 0 AND stock_gm <= reorder_level_gm)
+    OR (
+      COALESCE(reorder_level_gm,0) <= 0
+      AND stock_gm > 0
+      AND stock_gm <= ?
+      AND UPPER(REPLACE(COALESCE(NULLIF(base_unit,''), NULLIF(unit,''), 'GM'), ' ', '')) NOT IN ($list)
+    ))";
+}
+
+function pos_low_stock_threshold($bid) {
+  try {
+    $rows = pos_q("SELECT low_stock_threshold FROM company_settings WHERE business_id = ? LIMIT 1", "s", [$bid]);
+    return pos_clamp_low_stock_threshold($rows[0]["low_stock_threshold"] ?? null);
+  } catch (Throwable $e) {
+    return 5;
+  }
+}
+
+function pos_trim_qty($n) {
+  $v = (float) $n;
+  if (abs($v - round($v)) < 1e-9) return (string) (int) round($v);
+  return rtrim(rtrim(number_format($v, 3, ".", ""), "0"), ".");
+}
+
+function pos_format_stock_qty($qty, $unit) {
+  $code = strtoupper(preg_replace("/[^A-Z0-9]/", "", (string) $unit));
+  if ($code === "") $code = "GM";
+  $n = (float) $qty;
+  if ($code === "KG") return pos_trim_qty($n / 1000) . " kg";
+  if ($code === "G" || $code === "GM") {
+    if (abs($n) >= 1000) return pos_trim_qty($n / 1000) . " kg";
+    return pos_trim_qty($n) . " g";
+  }
+  if ($code === "L" || $code === "LTR") return pos_trim_qty($n / 1000) . " L";
+  if ($code === "ML") return pos_trim_qty($n) . " ml";
+  $suffix = [
+    "PCS" => "pcs", "NOS" => "nos", "UNT" => "units", "PR" => "pr", "SET" => "set", "DOZ" => "doz",
+    "BOX" => "box", "PKT" => "pkt", "PACK" => "pack", "BAG" => "bag", "BTL" => "btl", "TAB" => "tab", "CAP" => "cap", "STRIP" => "strip",
+  ];
+  $label = $suffix[$code] ?? strtolower($code);
+  return pos_trim_qty($n) . " " . $label;
+}
+
+function pos_low_stock_item_name($item) {
+  $name = trim((string) ($item["name"] ?? "Item"));
+  if ($name === "") $name = "Item";
+  $extra = [];
+  foreach (["color", "size"] as $key) {
+    $part = trim((string) ($item[$key] ?? ""));
+    if ($part !== "") $extra[] = $part;
+  }
+  return $extra ? ($name . " (" . implode(" / ", $extra) . ")") : $name;
+}
+
+function pos_low_stock_line($item, $threshold) {
+  $unit = ($item["base_unit"] ?? "") !== "" ? $item["base_unit"] : ($item["unit"] ?? "PCS");
+  $stock = (float) ($item["stock_gm"] ?? 0);
+  $reorder = (float) ($item["reorder_level_gm"] ?? 0);
+  if ($stock <= 0) {
+    $min = $reorder > 0 ? ", reorder " . pos_format_stock_qty($reorder, $unit) : "";
+    return ["name" => pos_low_stock_item_name($item), "qtyLabel" => "out of stock" . $min];
+  }
+  $min = $reorder > 0
+    ? "reorder " . pos_format_stock_qty($reorder, $unit)
+    : "min " . pos_format_stock_qty(pos_clamp_low_stock_threshold($threshold), $unit);
+  return ["name" => pos_low_stock_item_name($item), "qtyLabel" => pos_format_stock_qty($stock, $unit) . " on hand, " . $min];
+}
+
+function pos_split_alert_messages($text, $max = 3500) {
+  $src = trim((string) $text);
+  if ($src === "") return [];
+  if (strlen($src) <= $max) return [$src];
+  $parts = [];
+  $rest = $src;
+  while (strlen($rest) > $max) {
+    $cut = strrpos(substr($rest, 0, $max + 1), "\n");
+    if ($cut === false || $cut < (int) floor($max * 0.5)) $cut = $max;
+    $parts[] = rtrim(substr($rest, 0, $cut));
+    $rest = ltrim(substr($rest, $cut));
+  }
+  if ($rest !== "") $parts[] = $rest;
+  if (count($parts) < 2) return $parts;
+  $n = count($parts);
+  foreach ($parts as $i => $part) $parts[$i] = $part . "\n\n(" . ($i + 1) . "/" . $n . ")";
+  return $parts;
+}
+
+function pos_query_low_stock_items($bid, $itemIds = []) {
+  $threshold = pos_low_stock_threshold($bid);
+  $ids = array_values(array_unique(array_filter((array) $itemIds)));
+  $sql = "SELECT id, name, color, size, stock_gm, reorder_level_gm, base_unit, unit FROM items
+          WHERE business_id = ? AND status = 'active' AND " . pos_low_stock_where_sql();
+  $types = "si";
+  $args = [$bid, $threshold];
+  if ($ids) {
+    $sql .= " AND id IN (" . implode(",", array_fill(0, count($ids), "?")) . ")";
+    $types .= str_repeat("s", count($ids));
+    $args = array_merge($args, $ids);
+  }
+  $sql .= " ORDER BY stock_gm ASC, name ASC";
+  try {
+    $items = pos_q($sql, $types, $args);
+  } catch (Throwable $e) {
+    $sql = "SELECT id, name, stock_gm, reorder_level_gm, base_unit, unit FROM items
+            WHERE business_id = ? AND status = 'active' AND " . pos_low_stock_where_sql();
+    if ($ids) $sql .= " AND id IN (" . implode(",", array_fill(0, count($ids), "?")) . ")";
+    $sql .= " ORDER BY stock_gm ASC, name ASC";
+    $items = pos_q($sql, $types, $args);
+  }
+  return ["items" => $items ?: [], "threshold" => $threshold];
+}
+
+function pos_business_admin_alert_contacts($bid) {
+  $bizRows = $bid ? pos_q("SELECT id, name, mobile, email, owner_name FROM businesses WHERE id = ? LIMIT 1", "s", [$bid]) : [];
+  $biz = $bizRows[0] ?? [];
+  $co = [];
+  try {
+    $coRows = $bid ? pos_q("SELECT phone, email, name, timezone, low_stock_threshold FROM company_settings WHERE business_id = ? LIMIT 1", "s", [$bid]) : [];
+    $co = $coRows[0] ?? [];
+  } catch (Throwable $e) {
+    try {
+      $coRows = $bid ? pos_q("SELECT phone, email, name, timezone FROM company_settings WHERE business_id = ? LIMIT 1", "s", [$bid]) : [];
+      $co = $coRows[0] ?? [];
+    } catch (Throwable $e2) {
+      $co = [];
+    }
+  }
+  $admins = [];
+  try {
+    $admins = $bid ? pos_q("SELECT mobile, email, first_name FROM staff_users WHERE business_id = ? AND role = 'business_admin'", "s", [$bid]) : [];
+  } catch (Throwable $e) {
+    $admins = [];
+  }
+  $phones = [];
+  $pushPhone = function ($raw) use (&$phones) {
+    $n = pos_normalize_in_mobile($raw);
+    if ($n !== "" && !in_array($n, $phones, true)) $phones[] = $n;
+  };
+  foreach ($admins as $row) $pushPhone($row["mobile"] ?? "");
+  if (!$phones) {
+    $pushPhone($biz["mobile"] ?? "");
+    $pushPhone($co["phone"] ?? "");
+  }
+  $emails = [];
+  $pushEmail = function ($raw) use (&$emails) {
+    $email = strtolower(trim((string) $raw));
+    if (strpos($email, "@") !== false && !in_array($email, $emails, true)) $emails[] = $email;
+  };
+  foreach ($admins as $row) $pushEmail($row["email"] ?? "");
+  if (!$emails) {
+    $pushEmail($biz["email"] ?? "");
+    $pushEmail($co["email"] ?? "");
+  }
+  return [
+    "businessId" => $biz["id"] ?? $bid,
+    "shopName" => $biz["name"] ?? ($co["name"] ?? ""),
+    "phones" => $phones,
+    "emails" => $emails,
+    "threshold" => pos_clamp_low_stock_threshold($co["low_stock_threshold"] ?? null),
+  ];
+}
+
+function pos_dispatch_low_stock_list($bid, $items, $threshold, $cfg) {
+  $admin = pos_business_admin_alert_contacts($bid);
+  if (!$admin["phones"] && !$admin["emails"]) return ["skipped" => true, "reason" => "no-admin-number"];
+  $lines = [];
+  foreach ($items as $item) $lines[] = pos_low_stock_line($item, $threshold);
+  $text = pos_alert_low_stock_text($admin["shopName"], $lines, $cfg);
+  if ($lines && strpos($text, $lines[0]["name"]) === false) {
+    $extra = [];
+    foreach ($lines as $line) $extra[] = "• " . $line["name"] . " (" . $line["qtyLabel"] . ")";
+    $text = trim($text . "\n\n" . implode("\n", $extra));
+  }
+  $meta = pos_alert_log_meta("low_stock", $admin);
+  $waOk = false;
+  $mail = [];
+  if ($admin["phones"]) {
+    $parts = pos_split_alert_messages($text);
+    $n = count($parts);
+    foreach ($parts as $i => $part) {
+      $subject = $n > 1
+        ? "Low stock · " . $admin["shopName"] . " (" . ($i + 1) . "/" . $n . ")"
+        : "Low stock · " . $admin["shopName"];
+      $out = pos_alert_dispatch($admin["phones"], [], $subject, $part, "", "", $meta);
+      if (!empty($out["wa"]["ok"])) $waOk = true;
+    }
+  }
+  if ($admin["emails"]) {
+    $mailOut = pos_alert_dispatch([], $admin["emails"], "Low stock · " . $admin["shopName"], $text, "", "", $meta);
+    $mail = $mailOut["mail"] ?? [];
+  }
+  return ["wa" => ["ok" => $waOk], "mail" => $mail, "items" => count($items)];
+}
+
 function pos_alert_low_stock($bid, $itemIds) {
   try {
     $cfg = pos_alert_settings();
     if (!pos_alert_flag($cfg["alert_low_stock"]) || !$bid || !$itemIds) return;
     $ids = array_values(array_unique(array_filter($itemIds)));
     if (!$ids) return;
-    $ph = implode(",", array_fill(0, count($ids), "?"));
-    $items = pos_q(
-      "SELECT id, name, stock_gm, reorder_level_gm FROM items
-       WHERE business_id = ? AND id IN ($ph) AND status = 'active'
-         AND reorder_level_gm > 0 AND stock_gm <= reorder_level_gm",
-      "s" . str_repeat("s", count($ids)),
-      array_merge([$bid], $ids)
-    );
+    $found = pos_query_low_stock_items($bid, $ids);
+    $items = $found["items"];
     if (!$items) return;
     $day = date("Y-m-d");
     $fresh = [];
@@ -1136,8 +1337,7 @@ function pos_alert_low_stock($bid, $itemIds) {
       if (pos_alert_mark($bid, "low_stock", $day, $item["id"])) $fresh[] = $item;
     }
     if (!$fresh) return;
-    $shop = pos_shop_alert_contacts($bid);
-    pos_alert_dispatch($shop["phones"], $shop["emails"], "Low stock · " . $shop["shopName"], pos_alert_low_stock_text($shop["shopName"], $fresh, $cfg), "", "", pos_alert_log_meta("low_stock", $shop));
+    pos_dispatch_low_stock_list($bid, $fresh, $found["threshold"], $cfg);
   } catch (Throwable $e) {
     error_log("low stock alert failed: " . $e->getMessage());
   }
@@ -1198,9 +1398,9 @@ function pos_send_closing_alert($bid, $force = false) {
   $low = [];
   if (pos_alert_flag($cfg["alert_low_stock"])) {
     $low = pos_q(
-      "SELECT name FROM items WHERE business_id = ? AND status = 'active' AND reorder_level_gm > 0 AND stock_gm <= reorder_level_gm ORDER BY name LIMIT 12",
-      "s",
-      [$shop["businessId"]]
+      "SELECT name FROM items WHERE business_id = ? AND status = 'active' AND " . pos_low_stock_where_sql() . " ORDER BY name LIMIT 12",
+      "si",
+      [$shop["businessId"], pos_low_stock_threshold($shop["businessId"])]
     );
   }
   $row = $sum[0] ?? [];
@@ -1341,15 +1541,9 @@ function pos_summarize_alert_results($results = []) {
 
 function pos_send_low_stock_now($bid) {
   $cfg = pos_alert_settings();
-  $items = pos_q(
-    "SELECT id, name, stock_gm, reorder_level_gm FROM items
-     WHERE business_id = ? AND status = 'active' AND reorder_level_gm > 0 AND stock_gm <= reorder_level_gm",
-    "s",
-    [$bid]
-  );
-  if (!$items) return ["skipped" => true, "reason" => "no-low-stock"];
-  $shop = pos_shop_alert_contacts($bid);
-  return pos_alert_dispatch($shop["phones"], $shop["emails"], "Low stock · " . $shop["shopName"], pos_alert_low_stock_text($shop["shopName"], $items, $cfg), "", "", pos_alert_log_meta("low_stock", $shop));
+  $found = pos_query_low_stock_items($bid, []);
+  if (!$found["items"]) return ["skipped" => true, "reason" => "no-low-stock"];
+  return pos_dispatch_low_stock_list($bid, $found["items"], $found["threshold"], $cfg);
 }
 
 function pos_send_manual_alerts($kinds = [], $bid = null, $title = "", $body = "") {
