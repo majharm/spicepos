@@ -334,6 +334,7 @@ async function createUnpaidSale(conn, { businessId, schedule, customer, period }
   const bill = globalThis.POSDiscount.computeBill(built, {
     discountType: schedule.discount_type || "amt",
     discountValue: schedule.discount_value || 0,
+    loyaltyDiscount: 0,
   });
   const orderNumber = await nextOrderNumber(conn, businessId);
   const orderId = crypto.randomUUID();

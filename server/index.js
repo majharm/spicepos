@@ -1035,17 +1035,14 @@ app.post("/api/checkout", requireStaff, requirePerm("counter"), async (req, res)
       await assertApparelSaleStock(conn, businessId, built);
 
       const D = globalThis.POSDiscount;
-      const bill = D.computeBill(built, {
+      const billInput = {
         discountType: discountType || (Number(discount) ? "amt" : "amt"),
         discountValue: discountValue ?? discount ?? 0,
-      });
-      const subtotal = bill.subtotal;
-      const gst = bill.gst;
-      let billDiscount = bill.billDiscount;
+      };
+      const preview = D.computeBill(built, billInput);
       let loyaltyDiscount = 0;
       let loyaltyEarn = 0;
       let loyaltyRedeem = 0;
-      let total = bill.total;
       const totalGm = built.reduce((s, l) => s + l.qty, 0);
 
       const [[seq]] = await conn.query(
@@ -1082,8 +1079,28 @@ app.post("/api/checkout", requireStaff, requirePerm("counter"), async (req, res)
       }
 
       const extraCharges = round2(Math.max(0, Number(req.body?.extraCharges ?? req.body?.extra_charges) || 0));
-      const afterBill = round2(Math.max(0, subtotal + gst - billDiscount + extraCharges));
-      total = afterBill;
+      try {
+        const loyalty = await applyLoyaltyOnSale(conn, {
+          businessId,
+          customer,
+          orderId,
+          total: preview.taxable,
+          taxableCap: preview.taxable,
+          wantRedeem: loyaltyPoints,
+          userId: authUser()?.id,
+          earnBase: (redeemRs) => round2(D.computeBill(built, { ...billInput, loyaltyDiscount: redeemRs }).total + extraCharges),
+        });
+        loyaltyDiscount = loyalty.rupees;
+        loyaltyEarn = loyalty.earned;
+        loyaltyRedeem = loyalty.points;
+      } catch {
+        /* loyalty optional */
+      }
+      const bill = D.computeBill(built, { ...billInput, loyaltyDiscount });
+      const subtotal = bill.subtotal;
+      const gst = bill.gst;
+      const billDiscount = bill.billDiscount;
+      const total = round2(bill.total + extraCharges);
       await conn.query(
         `INSERT INTO sales_orders (
            id, order_number, customer_id, customer_name, customer_type,
@@ -1240,24 +1257,12 @@ app.post("/api/checkout", requireStaff, requirePerm("counter"), async (req, res)
       }
 
       try {
-        const loyalty = await applyLoyaltyOnSale(conn, {
-          businessId,
-          customer,
-          orderId,
-          total: afterBill,
-          wantRedeem: loyaltyPoints,
-          userId: authUser()?.id,
-        });
-        loyaltyDiscount = loyalty.rupees;
-        loyaltyEarn = loyalty.earned;
-        loyaltyRedeem = loyalty.points;
-        total = round2(Math.max(0, afterBill - loyaltyDiscount));
         await conn.query(
-          `UPDATE sales_orders SET total=?, loyalty_points_redeemed=?, loyalty_points_earned=?, loyalty_discount=? WHERE id=?`,
-          [total, loyaltyRedeem, loyaltyEarn, loyaltyDiscount, orderId],
+          `UPDATE sales_orders SET loyalty_points_redeemed=?, loyalty_points_earned=?, loyalty_discount=? WHERE id=?`,
+          [loyaltyRedeem, loyaltyEarn, loyaltyDiscount, orderId],
         );
       } catch {
-        /* loyalty optional */
+        /* loyalty columns optional */
       }
 
       try {

@@ -20,14 +20,15 @@ test("quotation numbers, totals, expiry, and print label", () => {
   });
   assert.equal(priced.lines.length, 1);
   assert.equal(priced.subtotal, 190);
-  assert.equal(priced.gst, 34.2);
+  assert.equal(priced.taxable, 180);
+  assert.equal(priced.gst, 32.4);
   assert.equal(priced.discount, 10);
   assert.equal(priced.extraCharges, 5);
   assert.equal(priced.roundOff, -0.2);
-  assert.equal(priced.cgst, 17.1);
-  assert.equal(priced.sgst, 17.1);
+  assert.equal(priced.cgst, 16.2);
+  assert.equal(priced.sgst, 16.2);
   assert.equal(priced.igst, 0);
-  assert.equal(priced.total, 219);
+  assert.equal(priced.total, 217.2);
   const weight = Q.priceQuote({
     lines: [{ itemId: "item-2", name: "Rice", quantity: 500, rate: 200, unit: "GM", isCount: false, gstRate: 0 }],
   });
@@ -92,7 +93,7 @@ test("quotation module stays off, isolated, and posts stock only on convert", ()
   assert.match(index, /js\/quotations\.js\?v=20261027qt1/);
   assert.match(index, /js\/quotations-ui\.js\?v=20261027qt1/);
   assert.match(index, /css\/quotations\.css\?v=20261027qt1/);
-  assert.match(index, /app\.js\?v=20261103po1/);
+  assert.match(index, /app\.js\?v=20261103bill1/);
   assert.match(app, /function quotationsOn/);
   assert.match(app, /view === "quotations"\) btn\.hidden = !can\("orders"\) \|\| !quotationsOn\(\)/);
   assert.match(app, /payload\.quotations_enabled = \$\("set-quotations"\)\.checked \? 1 : 0/);

@@ -10,8 +10,79 @@ import {
 } from "./gst-supply.js";
 import { DEFAULT_DSA_CODE, normalizeDsaCode } from "./onboard.js";
 import "../js/footwear.js";
+import "../js/discount.js";
 
 const POSFootwear = globalThis.POSFootwear;
+
+function paise(n) {
+  return Math.round((Number(n) || 0) * 100) / 100;
+}
+
+function sqlDay(value) {
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    const y = value.getFullYear();
+    const m = String(value.getMonth() + 1).padStart(2, "0");
+    const d = String(value.getDate()).padStart(2, "0");
+    return `${y}-${m}-${d}`;
+  }
+  return String(value || "").slice(0, 10);
+}
+
+function scaleSaleGstLines(rows) {
+  const D = globalThis.POSDiscount;
+  const groups = new Map();
+  for (const row of rows || []) {
+    const id = String(row.order_id || "");
+    if (!groups.has(id)) groups.set(id, []);
+    groups.get(id).push(row);
+  }
+  const out = [];
+  for (const list of groups.values()) {
+    const lineGst = list.reduce((sum, row) => sum + ((Number(row.amount) || 0) * (Number(row.gst_rate) || 0)) / 100, 0);
+    const order = {
+      subtotal: list[0].order_subtotal,
+      discount: list[0].order_discount,
+      loyalty_discount: list[0].order_loyalty,
+      gst: list[0].order_gst,
+    };
+    if (!D?.orderUsesNetGst?.(order, lineGst) || !(Number(order.subtotal) > 0)) {
+      out.push(...list);
+      continue;
+    }
+    const bill = D.computeBill(
+      list.map((row) => ({ taxable: row.amount, amount: row.amount, gstRate: row.gst_rate })),
+      { discountType: "amt", discountValue: order.discount, loyaltyDiscount: order.loyalty_discount },
+    );
+    list.forEach((row, index) => {
+      out.push({
+        ...row,
+        amount: bill.lines[index]?.taxable ?? row.amount,
+        gst: bill.lines[index]?.gst ?? 0,
+      });
+    });
+  }
+  return out;
+}
+
+function hsnFromLines(rows) {
+  const map = new Map();
+  for (const row of rows || []) {
+    const key = `${row.hsn}|${row.item_name}|${row.gst_rate}`;
+    const cur = map.get(key) || {
+      hsn: row.hsn,
+      item_name: row.item_name,
+      gst_rate: row.gst_rate,
+      quantity_gm: 0,
+      taxable: 0,
+      gst: 0,
+    };
+    cur.quantity_gm += Number(row.quantity_gm) || 0;
+    cur.taxable = paise(cur.taxable + (Number(row.amount) || 0));
+    cur.gst = paise(cur.gst + (Number(row.gst) || ((Number(row.amount) || 0) * (Number(row.gst_rate) || 0)) / 100));
+    map.set(key, cur);
+  }
+  return [...map.values()].sort((a, b) => String(a.hsn).localeCompare(String(b.hsn)) || String(a.item_name).localeCompare(String(b.item_name)));
+}
 
 function taxCodeLabel(biz) {
   return POSFootwear?.taxCodeLabel(biz || {}) || "HSN";
@@ -329,7 +400,7 @@ export async function buildReports(from, to) {
     ),
     query(
       `SELECT id, order_number, customer_name, customer_type, pack_name, pack_count,
-              status, total_quantity_gm, subtotal, discount, gst, total, payment_method,
+              status, total_quantity_gm, subtotal, discount, loyalty_discount, gst, total, payment_method,
               payment_status, created_at
        FROM sales_orders WHERE ${salesWhere} ORDER BY created_at`,
       rangeParams,
@@ -422,7 +493,9 @@ export async function buildReports(from, to) {
     ),
     query("SELECT gstin, state FROM company_settings WHERE business_id = ? LIMIT 1", [tenant]),
     query(
-      `SELECT l.gst_rate, l.amount, o.id AS order_id,
+      `SELECT l.gst_rate, l.amount, l.quantity_gm, l.item_name, ${hsnExpr} AS hsn,
+              o.id AS order_id, o.subtotal AS order_subtotal, o.discount AS order_discount,
+              o.loyalty_discount AS order_loyalty, o.gst AS order_gst,
               c.gstin AS party_gstin, c.state AS party_state
        FROM sales_order_lines l
        JOIN sales_orders o ON o.id = l.order_id
@@ -454,8 +527,8 @@ export async function buildReports(from, to) {
       rangeParams,
     ),
     query(
-      `SELECT o.order_number, DATE(o.created_at) AS bill_date, o.customer_name, c.gstin,
-              c.state AS customer_state, o.subtotal AS taxable, o.gst, o.total
+      `SELECT o.id, o.order_number, DATE(o.created_at) AS bill_date, o.customer_name, c.gstin,
+              c.state AS customer_state, o.subtotal, o.discount, o.loyalty_discount, o.subtotal AS taxable, o.gst, o.total
        FROM sales_orders o
        LEFT JOIN customers c ON c.id = o.customer_id
        WHERE o.business_id = ? AND ${createdBetween("o")}
@@ -464,8 +537,8 @@ export async function buildReports(from, to) {
       rangeParams,
     ),
     query(
-      `SELECT o.order_number, DATE(o.created_at) AS bill_date, o.customer_name,
-              c.state AS customer_state, o.subtotal AS taxable, o.gst, o.total
+      `SELECT o.id, o.order_number, DATE(o.created_at) AS bill_date, o.customer_name,
+              c.state AS customer_state, o.subtotal, o.discount, o.loyalty_discount, o.subtotal AS taxable, o.gst, o.total
        FROM sales_orders o
        LEFT JOIN customers c ON c.id = o.customer_id
        WHERE o.business_id = ? AND ${createdBetween("o")}
@@ -484,7 +557,27 @@ export async function buildReports(from, to) {
     gstin: companyRows[0]?.gstin,
     state: companyRows[0]?.state,
   };
-  const gstByRate = aggregateGstByRate(gstOutputLines, shop);
+  const lineGstByOrder = new Map();
+  for (const row of gstOutputLines || []) {
+    const id = String(row.order_id);
+    lineGstByOrder.set(id, (lineGstByOrder.get(id) || 0) + ((Number(row.amount) || 0) * (Number(row.gst_rate) || 0)) / 100);
+  }
+  const taxableOf = (order) => globalThis.POSDiscount?.gstTaxableBase?.(order, lineGstByOrder.get(String(order.id)) || 0) ?? (Number(order.subtotal) || Number(order.taxable) || 0);
+  if (summary[0]) summary[0].taxable = paise((sales || []).reduce((sum, row) => sum + taxableOf(row), 0));
+  const dayTax = new Map();
+  for (const row of sales || []) {
+    const key = sqlDay(row.created_at);
+    dayTax.set(key, paise((dayTax.get(key) || 0) + taxableOf(row)));
+  }
+  for (const row of gst || []) {
+    const key = sqlDay(row.day);
+    if (dayTax.has(key)) row.taxable = dayTax.get(key);
+  }
+  for (const row of [...(gstB2B || []), ...(gstB2C || [])]) row.taxable = taxableOf(row);
+  const scaledOutput = scaleSaleGstLines(gstOutputLines);
+  const gstHsnScaled = hsnFromLines(scaledOutput);
+  if (gstHsnScaled.length) gstHsn.splice(0, gstHsn.length, ...gstHsnScaled);
+  const gstByRate = aggregateGstByRate(scaledOutput, shop);
   const gstInputByRate = aggregateGstByRate(
     gstInputLines.map((r) => ({ ...r, order_id: r.purchase_id })),
     shop,
@@ -492,9 +585,10 @@ export async function buildReports(from, to) {
   const outputGst = Number(summary[0]?.gst || 0);
   const inputGst = Number(purchaseGst[0]?.gst || 0) + Number(expenseSum[0]?.gst || 0);
   const outputSplit = sumSplitGst(
-    gstOutputLines.map((r) => ({
+    scaledOutput.map((r) => ({
       gst_rate: r.gst_rate,
       amount: r.amount,
+      gst: r.gst,
       party_gstin: r.party_gstin,
       party_state: r.party_state,
     })),

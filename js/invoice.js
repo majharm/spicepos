@@ -172,8 +172,55 @@
     return { ...l, amount, gst_amount: round2((amount * gstRate) / 100) };
   }
 
+  function discountApi() {
+    if (typeof globalThis !== "undefined" && globalThis.POSDiscount) return globalThis.POSDiscount;
+    return null;
+  }
+
+  function settledInvoiceFigures(order, rows) {
+    const D = discountApi();
+    if (!D?.computeBill) return null;
+    const discount = round2(order?.discount);
+    const loyalty = round2(order?.loyalty_discount);
+    if (!(discount > 0.009) && !(loyalty > 0.009)) return null;
+    const inputs = rows.map((line) => ({
+      taxable: num(line.amount),
+      amount: num(line.amount),
+      gross: num(line.amount) + num(line.discount),
+      discount: num(line.discount),
+      gstRate: num(line.gst_rate),
+      gstInclusive: line.gst_inclusive || line.gstInclusive,
+    }));
+    const bill = D.computeBill(inputs, { discountType: "amt", discountValue: discount, loyaltyDiscount: loyalty });
+    const lineGst = round2(rows.reduce((sum, line) => sum + num(line.gst_amount || (num(line.amount) * num(line.gst_rate)) / 100), 0));
+    if (!D.orderUsesNetGst?.(order, lineGst)) return null;
+    if (Math.abs(bill.gst - num(order?.gst)) > 0.08) return null;
+    const gstLines = rows.map((line, index) => ({
+      ...line,
+      amount: bill.lines[index]?.taxable ?? line.amount,
+      gst_amount: bill.lines[index]?.gst ?? line.gst_amount,
+    }));
+    const displayLines = rows.map((line, index) => ({
+      ...line,
+      gst_amount: bill.lines[index]?.gst ?? line.gst_amount,
+    }));
+    return {
+      lines: displayLines,
+      gstLines,
+      subtotal: bill.subtotal,
+      discount: bill.billDiscount,
+      loyalty: bill.loyaltyDiscount,
+      taxable: bill.taxable,
+      gst: bill.gst,
+      total: round2(order?.total),
+      settled: true,
+    };
+  }
+
   function invoiceFigures(order, lines) {
     const rows = (Array.isArray(lines) ? lines : []).map(repairCountLineAmount);
+    const settled = settledInvoiceFigures(order, rows);
+    if (settled) return settled;
     const discount = round2(order?.discount);
     const gst = round2(order?.gst);
     const total = round2(order?.total);
@@ -1102,9 +1149,12 @@ ${purchaseBody(purchase, ctx)}
   <div class="inv-rule"></div>
   <table class="inv-totals">
     <tbody>
-      <tr><td colspan="3">${escapeHtml(L(ctx, "invoice.taxable", "Taxable value"))}</td><td class="inv-num">${escapeHtml(money(subtotal))}</td></tr>
+      ${figures.settled ? `<tr><td colspan="3">Subtotal</td><td class="inv-num">${escapeHtml(money(subtotal))}</td></tr>
       ${discount > 0 ? `<tr><td colspan="3">${escapeHtml(L(ctx, "invoice.discount", "Discount"))}</td><td class="inv-num">-${escapeHtml(money(discount))}</td></tr>` : ""}
-      ${round2(order.loyalty_discount) > 0 ? `<tr><td colspan="3">Royalty</td><td class="inv-num">-${escapeHtml(money(order.loyalty_discount))}</td></tr>` : ""}
+      ${round2(figures.loyalty || order.loyalty_discount) > 0 ? `<tr><td colspan="3">Royalty points redeemed</td><td class="inv-num">-${escapeHtml(money(figures.loyalty || order.loyalty_discount))}</td></tr>` : ""}
+      <tr><td colspan="3">Taxable amount</td><td class="inv-num">${escapeHtml(money(figures.taxable))}</td></tr>` : `<tr><td colspan="3">${escapeHtml(L(ctx, "invoice.taxable", "Taxable value"))}</td><td class="inv-num">${escapeHtml(money(subtotal))}</td></tr>
+      ${discount > 0 ? `<tr><td colspan="3">${escapeHtml(L(ctx, "invoice.discount", "Discount"))}</td><td class="inv-num">-${escapeHtml(money(discount))}</td></tr>` : ""}
+      ${round2(order.loyalty_discount) > 0 ? `<tr><td colspan="3">Royalty points redeemed</td><td class="inv-num">-${escapeHtml(money(order.loyalty_discount))}</td></tr>` : ""}`}
       ${gstRows}
       <tr class="inv-gst-total"><td colspan="3">${escapeHtml(L(ctx, "invoice.total_gst", "Total GST"))}</td><td class="inv-num">${escapeHtml(money(gst))}</td></tr>
       ${round2(order.extra_charges) > 0 ? `<tr><td colspan="3">Additional charges</td><td class="inv-num">${escapeHtml(money(order.extra_charges))}</td></tr>` : ""}
@@ -1445,9 +1495,10 @@ ${invoiceBody(order, ctx)}
     </div>
     <table class="off-totals">
       <tbody>
-        <tr><td>Sub Total</td><td class="off-n">${escapeHtml(money(subtotal))}</td></tr>
+        <tr><td>Subtotal</td><td class="off-n">${escapeHtml(money(subtotal))}</td></tr>
         ${discount > 0 ? `<tr><td>Discount</td><td class="off-n">(-) ${escapeHtml(money(discount))}</td></tr>` : ""}
-        ${round2(order.loyalty_discount) > 0 ? `<tr><td>Royalty</td><td class="off-n">(-) ${escapeHtml(money(order.loyalty_discount))}</td></tr>` : ""}
+        ${round2(figures.loyalty || order.loyalty_discount) > 0 ? `<tr><td>Royalty points redeemed</td><td class="off-n">(-) ${escapeHtml(money(figures.loyalty || order.loyalty_discount))}</td></tr>` : ""}
+        ${figures.settled ? `<tr><td>Taxable amount</td><td class="off-n">${escapeHtml(money(figures.taxable))}</td></tr>` : ""}
         ${round2(order.extra_charges) > 0 ? `<tr><td>Additional charges</td><td class="off-n">${escapeHtml(money(order.extra_charges))}</td></tr>` : ""}
         <tr><td>Tax</td><td class="off-n">${escapeHtml(money(gst))}</td></tr>
         <tr class="off-grand"><td>Invoice total</td><td class="off-n">${escapeHtml(money(total))}</td></tr>

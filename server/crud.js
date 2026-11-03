@@ -8,7 +8,7 @@ import { bid, authUser } from "./context.js";
 import { recordCreditPurchase, reverseCreditPurchase, reverseCreditSale, recomputeCustomerOutstanding, settleCustomerInvoice, invoiceOpenDueByCustomer, hydrateCustomerOutstandingRows, persistHydratedOutstanding, collectOrderPayment } from "./accounts.js";
 import { postPurchaseJournal, deleteJournalRef } from "./accounting.js";
 import { audit } from "./audit.js";
-import { onItemSaved, onPurchaseLineSaved, pharmacyLineSnapshot, computeSaleLine, saleStockQty, persistSaleLineNote, persistPrintSaleLine, reverseLoyaltyOnSale, assertApparelSaleStock } from "./advanced.js";
+import { onItemSaved, onPurchaseLineSaved, pharmacyLineSnapshot, computeSaleLine, saleStockQty, persistSaleLineNote, persistPrintSaleLine, reverseLoyaltyOnSale, applyLoyaltyOnSale, assertApparelSaleStock } from "./advanced.js";
 import {
   decodeImportUpload,
   itemBodyFromImportRow,
@@ -1571,16 +1571,39 @@ export function registerCrud(app) {
         }
         await assertApparelSaleStock(conn, bid(), built);
         const D = globalThis.POSDiscount;
-        const bill = D
-          ? D.computeBill(built, {
-              discountType: discountType || (Number(discount) ? "amt" : "amt"),
-              discountValue: discountValue ?? discount ?? 0,
-            })
-          : null;
+        const billInput = {
+          discountType: discountType || (Number(discount) ? "amt" : "amt"),
+          discountValue: discountValue ?? discount ?? 0,
+        };
+        const preview = D ? D.computeBill(built, billInput) : null;
+        const extraCharges = round2(Math.max(0, Number(req.body?.extraCharges ?? req.body?.extra_charges) || 0));
+        let loyaltyDiscount = 0;
+        let loyaltyEarn = 0;
+        let loyaltyRedeem = 0;
+        try {
+          await reverseLoyaltyOnSale(conn, bid(), existing.id);
+          if (preview && customer.id) {
+            const loyalty = await applyLoyaltyOnSale(conn, {
+              businessId: bid(),
+              customer,
+              orderId: existing.id,
+              total: preview.taxable,
+              taxableCap: preview.taxable,
+              wantRedeem: req.body?.loyaltyPoints ?? req.body?.loyalty_points ?? existing.loyalty_points_redeemed,
+              userId: authUser()?.id,
+              earnBase: (redeemRs) => round2(D.computeBill(built, { ...billInput, loyaltyDiscount: redeemRs }).total + extraCharges),
+            });
+            loyaltyDiscount = loyalty.rupees;
+            loyaltyEarn = loyalty.earned;
+            loyaltyRedeem = loyalty.points;
+          }
+        } catch {
+          /* loyalty optional */
+        }
+        const bill = D ? D.computeBill(built, { ...billInput, loyaltyDiscount }) : null;
         const subtotal = bill ? bill.subtotal : round2(built.reduce((s, l) => s + l.amount, 0));
         const gst = bill ? bill.gst : round2(built.reduce((s, l) => s + (l.amount * l.gstRate) / 100, 0));
         const billDiscount = bill ? bill.billDiscount : 0;
-        const extraCharges = round2(Math.max(0, Number(req.body?.extraCharges ?? req.body?.extra_charges) || 0));
         const total = round2((bill ? bill.total : round2(subtotal + gst)) + extraCharges);
         const totalGm = built.reduce((s, l) => s + l.qty, 0);
         const method = globalThis.POSPay?.normalize?.(paymentMethod || existing.payment_method) || String(paymentMethod || existing.payment_method).toLowerCase();
@@ -1626,11 +1649,18 @@ export function registerCrud(app) {
         );
         try {
           await conn.query(
-            `UPDATE sales_orders SET discount_type=?, discount_value=? WHERE id=? AND business_id=?`,
-            [bill?.discountType || "amt", bill?.discountValue || billDiscount, existing.id, bid()],
+            `UPDATE sales_orders SET discount_type=?, discount_value=?, loyalty_points_redeemed=?, loyalty_points_earned=?, loyalty_discount=? WHERE id=? AND business_id=?`,
+            [bill?.discountType || "amt", bill?.discountValue || billDiscount, loyaltyRedeem, loyaltyEarn, loyaltyDiscount, existing.id, bid()],
           );
         } catch {
-          /* optional columns */
+          try {
+            await conn.query(
+              `UPDATE sales_orders SET discount_type=?, discount_value=? WHERE id=? AND business_id=?`,
+              [bill?.discountType || "amt", bill?.discountValue || billDiscount, existing.id, bid()],
+            );
+          } catch {
+            /* optional columns */
+          }
         }
         try {
           await conn.query("UPDATE sales_orders SET extra_charges=? WHERE id=? AND business_id=?", [
@@ -1837,6 +1867,7 @@ export function registerCrud(app) {
             await conn.query("UPDATE sales_order_lines SET cancelled = 1 WHERE id = ?", [line.id]);
           }
           await reverseCreditSale(conn, existing);
+          await reverseLoyaltyOnSale(conn, bid(), existing.id);
           await recomputeCustomerOutstanding(conn, existing.customer_id);
         } else if (oldStatus === "cancelled" && newStatus !== "cancelled") {
           const [allLines] = await conn.query(
@@ -1875,6 +1906,23 @@ export function registerCrud(app) {
               paymentReference: existing.payment_reference,
               paymentDate: existing.payment_date,
             });
+            if (Number(existing.loyalty_points_redeemed) > 0 || Number(existing.loyalty_points_earned) > 0) {
+              try {
+                const cap = round2(Math.max(0, Number(existing.subtotal) - Number(existing.discount || 0)));
+                await applyLoyaltyOnSale(conn, {
+                  businessId: bid(),
+                  customer: custRows[0],
+                  orderId: existing.id,
+                  total: Number(existing.total) || cap,
+                  taxableCap: cap,
+                  wantRedeem: existing.loyalty_points_redeemed,
+                  userId: authUser()?.id,
+                  earnBase: () => Number(existing.total) || 0,
+                });
+              } catch {
+                /* loyalty optional */
+              }
+            }
           }
         }
 

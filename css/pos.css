@@ -2674,11 +2674,23 @@ body.bill-collapsed .bill-toggle[data-count]:not([data-count="0"])::after {
 }
 .ticket-due[hidden],
 #due-row[hidden],
+#subtotal-row[hidden],
 #taxable-row[hidden],
 #gst-row[hidden],
+#cgst-row[hidden],
+#sgst-row[hidden],
 #disc-row[hidden],
 #loyalty-row[hidden],
+#balance-row[hidden],
+#extra-row[hidden],
 #face-due-row[hidden] { display: none; }
+.totals-balance {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 4px;
+  font-weight: 800;
+}
 #due-row span:last-child,
 #face-due { color: #b45309; }
 .counter-lane #customer.has-due {
@@ -3007,9 +3019,8 @@ body.printing-mode.counter-mode .print-line .line-amt {
 }
 .totals-meta {
   display: grid;
+  grid-template-columns: 1fr;
   gap: 4px;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 6px 10px;
 }
 .totals-meta > div,
 .totals .grand {
@@ -3027,9 +3038,10 @@ body.printing-mode.counter-mode .print-line .line-amt {
 .pay { padding: 10px 14px 14px; display: grid; gap: 8px; background: linear-gradient(180deg, #fff 0%, var(--bg-tint-soft) 100%); flex: 0 0 auto; }
 .pay-row { display: grid; grid-template-columns: 1fr 1.1fr; gap: 10px; }
 .totals-meta > div {
-  flex-direction: column;
-  gap: 1px;
-  align-items: flex-start;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
 }
 .totals .grand span:last-child {
   background: none;
@@ -3037,7 +3049,7 @@ body.printing-mode.counter-mode .print-line .line-amt {
   -webkit-background-clip: unset;
   background-clip: unset;
 }
-.totals-meta > div { color: var(--muted); font-size: 11px; font-weight: 600; }
+.totals-meta > div { color: var(--muted); font-size: 13px; font-weight: 600; }
 .totals-meta > div span:last-child { color: var(--text); font-weight: 700; }
 .totals .grand { font-size: 18px; font-weight: 800; color: var(--text); font-variant-numeric: tabular-nums; align-items: baseline; padding-top: 4px; border-top: 1px dashed var(--line); }
 #profit-row { display: none; }
@@ -6641,7 +6653,7 @@ body.apparel-mode #item-size-wrap { display: none; }
     grid-template-columns: 1fr;
     margin: 0;
   }
-  .stage.is-counter .totals-meta,
+  .stage.is-counter .totals-meta { display: grid; }
   .stage.is-counter .customer-face { display: none; }
   .stage.is-counter .totals { padding: 4px 12px 0; }
   .stage.is-counter .totals .grand { font-size: 16px; }

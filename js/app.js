@@ -772,6 +772,16 @@ function clampLoyaltyRedeem() {
   let want = Math.max(0, Math.floor(Number($("loyalty-redeem")?.value) || 0));
   if (walk || pts <= 0) want = 0;
   else if (want > pts) want = pts;
+  const L = globalThis.POSLoyalty;
+  const D = globalThis.POSDiscount;
+  if (L && D && want > 0 && typeof cartBillLines === "function") {
+    const preview = D.computeBill(cartBillLines(), {
+      discountType: state.billDiscountType || "amt",
+      discountValue: state.billDiscountValue,
+    });
+    const maxPts = L.pointsForRupees(preview.taxable, state.loyaltySettings);
+    if (want > maxPts) want = maxPts;
+  }
   if ($("loyalty-redeem")) $("loyalty-redeem").value = String(want);
   state.loyaltyRedeem = want;
   return want;
@@ -1640,6 +1650,10 @@ function paintCounterDue(c) {
   const row = $("due-row");
   if (row) row.hidden = !(due > 0);
   if ($("due-total")) $("due-total").textContent = money(due);
+  if ($("balance-due")) $("balance-due").textContent = money(after);
+  if ($("balance-row")) $("balance-row").hidden = !(bill > 0 || due > 0);
+  if ($("face-balance")) $("face-balance").textContent = money(after);
+  if ($("face-paid")) $("face-paid").textContent = money(paid);
   const faceRow = $("face-due-row");
   if (faceRow) faceRow.hidden = !(due > 0);
   if ($("face-due")) $("face-due").textContent = money(due);
@@ -5256,36 +5270,73 @@ function renderCatalog() {
     .join("")}`;
 }
 
-function cartTotals() {
-  const lines = state.cart.map((line) => {
+function cartBillLines() {
+  return state.cart.map((line) => {
     const item = state.items.find((i) => i.id === line.itemId);
     return item ? lineCalc(item, line) : null;
   }).filter(Boolean);
+}
+
+function cartLoyaltyRupees(lines) {
   const D = globalThis.POSDiscount;
   const L = globalThis.POSLoyalty;
+  if (!D || !L || !state.loyaltySettings || !(state.loyaltyRedeem > 0)) return 0;
+  const check = L.canRedeem(state.loyaltyAccount?.points_balance || 0, state.loyaltyRedeem, state.loyaltySettings);
+  if (!check.ok) return 0;
+  const preview = D.computeBill(lines, {
+    discountType: state.billDiscountType || "amt",
+    discountValue: state.billDiscountValue,
+  });
+  return Math.min(preview.taxable, check.rupees);
+}
+
+function billTaxSplit(gst) {
+  const G = globalThis.GstSupply;
+  const cust = typeof customer === "function" ? customer() : null;
+  const inter = G?.isInterStateSupply
+    ? G.isInterStateSupply(
+        { gstin: state.company?.gstin, state: state.company?.state },
+        { gstin: cust?.gstin, state: cust?.state },
+      )
+    : false;
+  const split = G?.splitGstAmount
+    ? G.splitGstAmount(gst, inter)
+    : inter
+      ? { cgst: 0, sgst: 0, igst: round2safe(gst) }
+      : { cgst: round2safe(Number(gst) / 2), sgst: round2safe(Number(gst) / 2), igst: 0 };
+  return { inter, ...split };
+}
+
+function cartTotals() {
+  const lines = cartBillLines();
+  const D = globalThis.POSDiscount;
+  const loyaltyDiscount = cartLoyaltyRupees(lines);
   const bill = D
     ? D.computeBill(lines, {
         discountType: state.billDiscountType || "amt",
         discountValue: state.billDiscountValue,
+        loyaltyDiscount,
       })
-    : { subtotal: lines.reduce((s, l) => s + l.taxable, 0), gst: lines.reduce((s, l) => s + l.gst, 0), billDiscount: 0, total: 0, profit: 0 };
-  let loyaltyDiscount = 0;
-  if (L && state.loyaltySettings && state.loyaltyRedeem > 0) {
-    const check = L.canRedeem(state.loyaltyAccount?.points_balance || 0, state.loyaltyRedeem, state.loyaltySettings);
-    if (check.ok) loyaltyDiscount = Math.min(bill.total, check.rupees);
-  }
+    : { subtotal: lines.reduce((s, l) => s + l.taxable, 0), gross: 0, gst: lines.reduce((s, l) => s + l.gst, 0), billDiscount: 0, taxable: 0, total: 0, profit: 0, loyaltyDiscount: 0 };
   const extra = isPrintShop() ? round2safe(Number(state.extraCharges) || 0) : 0;
-  const total = D.round2(Math.max(0, bill.total - loyaltyDiscount + extra));
+  const total = D.round2(Math.max(0, bill.total + extra));
   const qty = state.cart.reduce((s, l) => s + (Number(l.qtyGm) || 0), 0);
+  const split = billTaxSplit(bill.gst);
   return {
     qty,
-    taxable: bill.subtotal,
+    gross: bill.gross || bill.subtotal,
+    subtotal: bill.subtotal,
+    taxable: bill.taxable,
     tax: bill.gst,
+    cgst: split.cgst,
+    sgst: split.sgst,
+    igst: split.igst,
+    interState: split.inter,
     discount: bill.billDiscount,
     extra,
-    lineDiscount: lines.reduce((s, l) => s + (l.discount || 0), 0),
-    loyalty: loyaltyDiscount,
-    profit: D.round2((bill.profit || 0) - loyaltyDiscount),
+    lineDiscount: bill.lineDiscount != null ? bill.lineDiscount : lines.reduce((s, l) => s + (l.discount || 0), 0),
+    loyalty: bill.loyaltyDiscount || 0,
+    profit: bill.profit || 0,
     total,
   };
 }
@@ -5505,18 +5556,7 @@ function renderCart() {
     : families.length > 1
       ? `${state.cart.length} lines`
       : "0";
-  $("taxable").textContent = money(t.taxable);
-  $("tax").textContent = money(t.tax);
-  if ($("disc-total")) $("disc-total").textContent = money((t.discount || 0) + (t.lineDiscount || 0));
-  if ($("extra-total")) $("extra-total").textContent = money(t.extra || 0);
-  if ($("loyalty-total")) $("loyalty-total").textContent = money(t.loyalty || 0);
-  if ($("profit-total")) $("profit-total").textContent = money(t.profit || 0);
-  if ($("disc-row")) $("disc-row").hidden = !(((t.discount || 0) + (t.lineDiscount || 0)) > 0);
-  if ($("extra-row")) $("extra-row").hidden = !(Number(t.extra) > 0);
-  if ($("loyalty-row")) $("loyalty-row").hidden = !(Number(t.loyalty) > 0);
-  if ($("taxable-row")) $("taxable-row").hidden = !(Number(t.taxable) > 0);
-  if ($("gst-row")) $("gst-row").hidden = !(Number(t.tax) > 0);
-  $("total").textContent = money(t.total != null ? t.total : t.taxable + t.tax);
+  paintBillFigures();
   if ($("ticket-sub")) {
     if (isRestaurantShop() && !state.cart?.length) {
       $("ticket-sub").textContent = restaurantTicketHint();
@@ -5560,9 +5600,7 @@ function renderCart() {
   const face = $("customer-face");
   if (face) {
     face.hidden = true;
-    if ($("face-subtotal")) $("face-subtotal").textContent = money(t.taxable);
-    if ($("face-discount")) $("face-discount").textContent = money((t.discount || 0) + (t.lineDiscount || 0));
-    if ($("face-total")) $("face-total").textContent = money(t.total != null ? t.total : t.taxable + t.tax);
+    paintCustomerFace(t);
   }
   renderHeldBills();
   renderEditOrderBanner();
@@ -6594,7 +6632,7 @@ function pickBestOfferForCart() {
   const val = Number(match.discount_value) || 0;
   const already =
     state.billDiscountType === (pct ? "pct" : "amt") && Number(state.billDiscountValue) === val;
-  const base = Number(cartTotals().taxable || 0);
+  const base = Number(cartTotals().subtotal || 0);
   const round2 = globalThis.POSDiscount?.round2 || ((n) => Math.round(Number(n) * 100) / 100);
   const save = pct ? round2((base * val) / 100) : round2(val);
   return {
@@ -12795,6 +12833,17 @@ function paintPayAction() {
   paintCounterDue();
 }
 
+function paintCustomerFace(t) {
+  const gross = t?.gross || t?.subtotal || 0;
+  const discount = (t?.discount || 0) + (t?.lineDiscount || 0);
+  if ($("face-subtotal")) $("face-subtotal").textContent = money(gross);
+  if ($("face-discount")) $("face-discount").textContent = money(discount);
+  if ($("face-loyalty")) $("face-loyalty").textContent = money(t?.loyalty || 0);
+  if ($("face-taxable")) $("face-taxable").textContent = money(t?.taxable || 0);
+  if ($("face-gst")) $("face-gst").textContent = money(t?.tax || 0);
+  if ($("face-total")) $("face-total").textContent = money(t?.total != null ? t.total : (t?.taxable || 0) + (t?.tax || 0));
+}
+
 function paintBillFigures() {
   const t = cartTotals();
   const families = [...new Set(state.cart.map((l) => POSUnits.typeOf(itemUnit(state.items.find((i) => i.id === l.itemId))).family))];
@@ -12806,18 +12855,29 @@ function paintBillFigures() {
         ? `${state.cart.length} lines`
         : "0";
   }
-  if ($("taxable")) $("taxable").textContent = money(t.taxable);
-  if ($("tax")) $("tax").textContent = money(t.tax);
-  if ($("disc-total")) $("disc-total").textContent = money((t.discount || 0) + (t.lineDiscount || 0));
+  const has = state.cart.length > 0;
+  const discount = (t.discount || 0) + (t.lineDiscount || 0);
+  const showTax = has && Number(t.tax) > 0;
+  if ($("subtotal")) $("subtotal").textContent = money(t.gross || t.subtotal || 0);
+  if ($("subtotal-row")) $("subtotal-row").hidden = !has;
+  if ($("taxable")) $("taxable").textContent = money(t.taxable || 0);
+  if ($("tax")) $("tax").textContent = money(t.tax || 0);
+  if ($("cgst-total")) $("cgst-total").textContent = money(t.cgst || 0);
+  if ($("sgst-total")) $("sgst-total").textContent = money(t.interState ? t.igst || 0 : t.sgst || 0);
+  if ($("sgst-lab")) $("sgst-lab").textContent = t.interState ? "IGST" : "SGST";
+  if ($("disc-total")) $("disc-total").textContent = money(discount);
   if ($("extra-total")) $("extra-total").textContent = money(t.extra || 0);
   if ($("loyalty-total")) $("loyalty-total").textContent = money(t.loyalty || 0);
   if ($("profit-total")) $("profit-total").textContent = money(t.profit || 0);
-  if ($("disc-row")) $("disc-row").hidden = !(((t.discount || 0) + (t.lineDiscount || 0)) > 0);
+  if ($("disc-row")) $("disc-row").hidden = !has;
   if ($("extra-row")) $("extra-row").hidden = !(Number(t.extra) > 0);
-  if ($("loyalty-row")) $("loyalty-row").hidden = !(Number(t.loyalty) > 0);
-  if ($("taxable-row")) $("taxable-row").hidden = !(Number(t.taxable) > 0);
-  if ($("gst-row")) $("gst-row").hidden = !(Number(t.tax) > 0);
-  if ($("total")) $("total").textContent = money(t.total != null ? t.total : t.taxable + t.tax);
+  if ($("loyalty-row")) $("loyalty-row").hidden = !has;
+  if ($("taxable-row")) $("taxable-row").hidden = !has;
+  if ($("cgst-row")) $("cgst-row").hidden = !showTax || Boolean(t.interState);
+  if ($("sgst-row")) $("sgst-row").hidden = !showTax;
+  if ($("gst-row")) $("gst-row").hidden = true;
+  if ($("total")) $("total").textContent = money(t.total != null ? t.total : (t.taxable || 0) + (t.tax || 0));
+  paintCustomerFace(t);
   paintPayAction();
 }
 

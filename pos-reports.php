@@ -324,6 +324,51 @@ function pos_ensure_report_columns() {
   pos_ensure_columns("suppliers", ["gstin" => "VARCHAR(32) NULL"]);
 }
 
+function pos_report_taxable_base($order, $lineGst) {
+  $sub = (float) ($order["subtotal"] ?? 0);
+  $gst = (float) ($order["gst"] ?? 0);
+  $discount = (float) ($order["discount"] ?? 0);
+  $loyalty = (float) ($order["loyalty_discount"] ?? 0);
+  if (($discount > 0.009 || $loyalty > 0.009) && (float) $lineGst > $gst + 0.05) {
+    return round(max(0, $sub - $discount - $loyalty), 2);
+  }
+  return round($sub, 2);
+}
+
+function pos_scale_sale_gst_lines($rows) {
+  $groups = [];
+  foreach ($rows as $row) {
+    $id = (string) ($row["order_id"] ?? "");
+    if (!isset($groups[$id])) $groups[$id] = [];
+    $groups[$id][] = $row;
+  }
+  $out = [];
+  foreach ($groups as $list) {
+    $lineGst = 0.0;
+    foreach ($list as $row) $lineGst += ((float) ($row["amount"] ?? 0) * (float) ($row["gst_rate"] ?? 0)) / 100;
+    $order = [
+      "subtotal" => $list[0]["order_subtotal"] ?? 0,
+      "discount" => $list[0]["order_discount"] ?? 0,
+      "loyalty_discount" => $list[0]["order_loyalty"] ?? 0,
+      "gst" => $list[0]["order_gst"] ?? 0,
+    ];
+    $base = pos_report_taxable_base($order, $lineGst);
+    if (abs($base - (float) $order["subtotal"]) < 0.02 || !function_exists("pos_sale_bill")) {
+      foreach ($list as $row) $out[] = $row;
+      continue;
+    }
+    $inputs = [];
+    foreach ($list as $row) $inputs[] = ["amount" => $row["amount"] ?? 0, "gstRate" => $row["gst_rate"] ?? 0];
+    $bill = pos_sale_bill($inputs, "amt", $order["discount"], $order["loyalty_discount"]);
+    foreach ($list as $i => $row) {
+      $row["amount"] = $bill["lines"][$i]["taxable"] ?? $row["amount"];
+      $row["gst"] = $bill["lines"][$i]["gst"] ?? 0;
+      $out[] = $row;
+    }
+  }
+  return $out;
+}
+
 function pos_build_reports($bid, $from, $to) {
   if (function_exists("pos_ensure_accounts_schema")) pos_ensure_accounts_schema();
   pos_ensure_report_columns();
@@ -342,8 +387,8 @@ function pos_build_reports($bid, $from, $to) {
   );
   $sales = pos_q(
     "SELECT id, order_number, customer_name, customer_type, pack_name, pack_count,
-            status, total_quantity_gm, subtotal, discount, gst, total, payment_method,
-            payment_status, created_at
+            status, total_quantity_gm, subtotal, discount, loyalty_discount, gst, total, payment_method,
+            payment_status, created_at, DATE(created_at) AS bill_day
      FROM sales_orders WHERE $salesWhere ORDER BY created_at",
     "sss",
     [$bid, $start, $end]
@@ -513,6 +558,7 @@ function pos_build_reports($bid, $from, $to) {
   ];
   $gstOutputLines = pos_q(
     "SELECT l.gst_rate, l.amount, o.id AS order_id,
+            o.subtotal AS order_subtotal, o.discount AS order_discount, o.loyalty_discount AS order_loyalty, o.gst AS order_gst,
             c.gstin AS party_gstin, c.state AS party_state
      FROM sales_order_lines l
      JOIN sales_orders o ON o.id = l.order_id
@@ -532,6 +578,28 @@ function pos_build_reports($bid, $from, $to) {
     "sss",
     [$bid, $start, $end]
   );
+  $lineGstByOrder = [];
+  foreach ($gstOutputLines as $row) {
+    $id = (string) ($row["order_id"] ?? "");
+    $lineGstByOrder[$id] = ($lineGstByOrder[$id] ?? 0) + (((float) ($row["amount"] ?? 0) * (float) ($row["gst_rate"] ?? 0)) / 100);
+  }
+  $taxableSum = 0.0;
+  foreach ($sales as $sale) {
+    $taxableSum += pos_report_taxable_base($sale, $lineGstByOrder[(string) ($sale["id"] ?? "")] ?? 0);
+  }
+  if (isset($summary[0])) $summary[0]["taxable"] = round($taxableSum, 2);
+  $dayTax = [];
+  foreach ($sales as $sale) {
+    $day = substr((string) ($sale["bill_day"] ?? $sale["created_at"] ?? ""), 0, 10);
+    if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $day)) continue;
+    $dayTax[$day] = round(($dayTax[$day] ?? 0) + pos_report_taxable_base($sale, $lineGstByOrder[(string) ($sale["id"] ?? "")] ?? 0), 2);
+  }
+  foreach ($gst as &$gstRow) {
+    $day = substr((string) ($gstRow["day"] ?? ""), 0, 10);
+    if (isset($dayTax[$day])) $gstRow["taxable"] = $dayTax[$day];
+  }
+  unset($gstRow);
+  $gstOutputLines = pos_scale_sale_gst_lines($gstOutputLines);
   $gstByRate = pos_aggregate_gst_by_rate($gstOutputLines, $shop);
   $gstInputByRate = pos_aggregate_gst_by_rate(
     array_map(function ($r) {
@@ -557,7 +625,7 @@ function pos_build_reports($bid, $from, $to) {
   );
   $gstB2B = pos_q(
     "SELECT o.order_number, DATE(o.created_at) AS bill_date, o.customer_name, c.gstin,
-            c.state AS customer_state, o.subtotal AS taxable, o.gst, o.total
+            c.state AS customer_state, o.id, o.subtotal, o.discount, o.loyalty_discount, o.subtotal AS taxable, o.gst, o.total
      FROM sales_orders o
      LEFT JOIN customers c ON c.id = o.customer_id
      WHERE o.business_id = ? AND " . pos_created_between("o") . "
@@ -568,7 +636,7 @@ function pos_build_reports($bid, $from, $to) {
   );
   $gstB2C = pos_q(
     "SELECT o.order_number, DATE(o.created_at) AS bill_date, o.customer_name,
-            c.state AS customer_state, o.subtotal AS taxable, o.gst, o.total
+            c.state AS customer_state, o.id, o.subtotal, o.discount, o.loyalty_discount, o.subtotal AS taxable, o.gst, o.total
      FROM sales_orders o
      LEFT JOIN customers c ON c.id = o.customer_id
      WHERE o.business_id = ? AND " . pos_created_between("o") . "
@@ -608,6 +676,14 @@ function pos_build_reports($bid, $from, $to) {
       "total" => pos_gst_round2($outputSplit["total"] - $inputSplit["total"]),
     ],
   ];
+  foreach ($gstB2B as &$b2bRow) {
+    $b2bRow["taxable"] = pos_report_taxable_base($b2bRow, $lineGstByOrder[(string) ($b2bRow["id"] ?? "")] ?? 0);
+  }
+  unset($b2bRow);
+  foreach ($gstB2C as &$b2cRow) {
+    $b2cRow["taxable"] = pos_report_taxable_base($b2cRow, $lineGstByOrder[(string) ($b2cRow["id"] ?? "")] ?? 0);
+  }
+  unset($b2cRow);
   $gstB2BRows = array_map(function ($row) use ($shop) {
     $split = pos_split_order_gst(array_merge($row, ["customer_gstin" => $row["gstin"] ?? null]), $shop);
     return array_merge($row, $split);

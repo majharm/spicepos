@@ -1387,17 +1387,22 @@ export async function applyLoyaltyOnSale(conn, ctx) {
   let redeemPts = 0;
   let redeemRs = 0;
   const want = Math.floor(Number(ctx.wantRedeem) || 0);
+  const cap = ctx.taxableCap != null && ctx.taxableCap !== "" ? Math.max(0, Number(ctx.taxableCap) || 0) : Math.max(0, Number(ctx.total) || 0);
   if (settings.enabled && want > 0) {
     const check = POSLoyalty.canRedeem(acc.points_balance, want, settings);
     if (check.ok) {
-      redeemRs = Math.min(ctx.total, check.rupees);
+      redeemRs = Math.min(cap, check.rupees);
       redeemPts = settings.rupees_per_point > 0 ? Math.floor(redeemRs / settings.rupees_per_point) : 0;
       if (redeemPts > 0) {
         await postLoyalty(ctx.businessId, ctx.customer.id, "redeem", -redeemPts, redeemRs, "Bill redeem", ctx.orderId, ctx.userId, null, conn);
+      } else {
+        redeemRs = 0;
       }
     }
   }
-  const paid = POSDiscount.round2(Math.max(0, ctx.total - redeemRs));
+  const paid = POSDiscount.round2(
+    Math.max(0, typeof ctx.earnBase === "function" ? Number(ctx.earnBase(redeemRs)) || 0 : (Number(ctx.total) || 0) - redeemRs),
+  );
   let earned = 0;
   if (settings.enabled) {
     earned = POSLoyalty.earnPoints(paid, settings);
@@ -1428,6 +1433,46 @@ export async function applyLoyaltyOnSale(conn, ctx) {
   await sqlExec(conn, "UPDATE loyalty_accounts SET lifetime_spend = lifetime_spend + ? WHERE customer_id=?", [paid, ctx.customer.id]);
   await recomputeLoyalty(ctx.businessId, ctx.customer.id, conn);
   return { points: redeemPts, rupees: redeemRs, earned };
+}
+
+export async function reverseLoyaltyOnRefund(conn, businessId, order, refundAmount, full = false) {
+  if (!order?.id) return;
+  const total = Number(order.total) || 0;
+  const refund = Math.max(0, Number(refundAmount) || 0);
+  if (full || (total > 0 && refund + 0.05 >= total)) {
+    await reverseLoyaltyOnSale(conn, businessId, order.id);
+    return;
+  }
+  if (!(refund > 0) || !(total > 0)) return;
+  await ensureAdvancedSchema();
+  const share = Math.min(1, refund / total);
+  const rows = await sqlAll(conn, "SELECT * FROM loyalty_ledger WHERE business_id=? AND order_id=?", [businessId, order.id]);
+  let priorRedeem = 0;
+  let priorEarn = 0;
+  for (const row of rows || []) {
+    if (String(row.kind || "") !== "adjust") continue;
+    const pts = Number(row.points) || 0;
+    if (pts > 0) priorRedeem += pts;
+    if (pts < 0) priorEarn += Math.abs(pts);
+  }
+  const redeemLeft = Math.max(0, (Number(order.loyalty_points_redeemed) || 0) - priorRedeem);
+  const earnLeft = Math.max(0, (Number(order.loyalty_points_earned) || 0) - priorEarn);
+  const redeemBack = Math.min(redeemLeft, Math.floor((Number(order.loyalty_points_redeemed) || 0) * share));
+  const earnBack = Math.min(earnLeft, Math.floor((Number(order.loyalty_points_earned) || 0) * share));
+  const customerId = order.customer_id;
+  if (!customerId || (redeemBack <= 0 && earnBack <= 0)) return;
+  if (redeemBack > 0) {
+    await postLoyalty(businessId, customerId, "adjust", redeemBack, POSDiscount.round2(refund), "Refund royalty", order.id, null, null, conn);
+  }
+  if (earnBack > 0) {
+    await postLoyalty(businessId, customerId, "adjust", -earnBack, POSDiscount.round2(refund), "Refund earn reversal", order.id, null, null, conn);
+  }
+  await sqlExec(
+    conn,
+    "UPDATE loyalty_accounts SET lifetime_spend = GREATEST(0, lifetime_spend - ?) WHERE customer_id=? AND business_id=?",
+    [POSDiscount.round2(total * share), customerId, businessId],
+  );
+  await recomputeLoyalty(businessId, customerId, conn);
 }
 
 export async function reverseLoyaltyOnSale(conn, businessId, orderId) {

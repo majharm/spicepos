@@ -32,6 +32,106 @@ function pos_adv_discount_amount($base, $type, $value) {
   return pos_adv_round2(min($amount, $v));
 }
 
+function pos_paise($n) {
+  return round((float) $n, 2);
+}
+
+function pos_sale_bill($lines, $discountType, $discountValue, $loyaltyDiscount = 0) {
+  $rows = [];
+  foreach (is_array($lines) ? $lines : [] as $line) {
+    if (!is_array($line)) continue;
+    $rate = (float) ($line["gstRate"] ?? $line["gst_rate"] ?? 0);
+    $inclusive = !empty($line["gstInclusive"]) || !empty($line["gst_inclusive"]) || !empty($line["priceIncludesGst"]);
+    $lineDiscount = max(0, (float) ($line["discount"] ?? 0));
+    $gross = (float) ($line["gross"] ?? ((float) ($line["taxable"] ?? $line["amount"] ?? 0) + $lineDiscount));
+    $face = max(0, $gross - $lineDiscount);
+    $net = $inclusive ? $face : max(0, (float) ($line["taxable"] ?? $line["amount"] ?? $face));
+    $rows[] = ["net" => pos_adv_round2($net), "gstRate" => $rate, "inclusive" => $inclusive, "gross" => pos_adv_round2(max(0, $gross)), "lineDiscount" => pos_adv_round2($lineDiscount)];
+  }
+  $subtotal = 0.0;
+  foreach ($rows as $row) $subtotal += $row["net"];
+  $subtotal = pos_paise($subtotal);
+  $billDiscount = pos_paise(pos_adv_discount_amount($subtotal, $discountType, $discountValue));
+  $afterDiscount = pos_paise(max(0, $subtotal - $billDiscount));
+  $loyalty = pos_paise(max(0, (float) $loyaltyDiscount));
+  if ($loyalty > $afterDiscount) $loyalty = $afterDiscount;
+  $reduction = pos_paise($billDiscount + $loyalty);
+  $used = 0.0;
+  $count = count($rows);
+  foreach ($rows as $i => &$row) {
+    $share = 0.0;
+    if ($reduction > 0 && $subtotal > 0) {
+      $share = $i === $count - 1 ? pos_paise($reduction - $used) : pos_paise(($reduction * $row["net"]) / $subtotal);
+      $share = pos_paise(min(max(0, $share), $row["net"]));
+      $used = pos_paise($used + $share);
+    }
+    $row["share"] = $share;
+  }
+  unset($row);
+  $leftover = pos_paise($reduction - $used);
+  for ($i = $count - 1; $i >= 0 && $leftover > 0; $i--) {
+    $room = pos_paise($rows[$i]["net"] - $rows[$i]["share"]);
+    $add = pos_paise(min($room, $leftover));
+    if ($add <= 0) continue;
+    $rows[$i]["share"] = pos_paise($rows[$i]["share"] + $add);
+    $leftover = pos_paise($leftover - $add);
+  }
+  $taxable = 0.0;
+  $gst = 0.0;
+  $total = 0.0;
+  foreach ($rows as &$row) {
+    $base = pos_paise(max(0, $row["net"] - $row["share"]));
+    if ($row["inclusive"] && $row["gstRate"] > 0) {
+      $rowTax = pos_paise($base / (1 + $row["gstRate"] / 100));
+      $rowGst = pos_paise($base - $rowTax);
+      $rowTotal = pos_paise($base);
+    } else {
+      $rowTax = $base;
+      $rowGst = pos_paise(($base * $row["gstRate"]) / 100);
+      $rowTotal = pos_paise($rowTax + $rowGst);
+    }
+    $row["taxable"] = $rowTax;
+    $row["gst"] = $rowGst;
+    $row["total"] = $rowTotal;
+    $taxable += $rowTax;
+    $gst += $rowGst;
+    $total += $rowTotal;
+  }
+  unset($row);
+  return [
+    "subtotal" => $subtotal,
+    "billDiscount" => $billDiscount,
+    "loyaltyDiscount" => $loyalty,
+    "taxable" => pos_paise($taxable),
+    "gst" => pos_paise($gst),
+    "total" => pos_paise($total),
+    "discountType" => pos_adv_is_pct($discountType) ? "pct" : "amt",
+    "discountValue" => (float) $discountValue,
+    "lines" => $rows,
+  ];
+}
+
+function pos_loyalty_redeem_quote($bid, $customer, $wantRedeem, $cap) {
+  $customerId = $customer["id"] ?? "";
+  $name = (string) ($customer["name"] ?? "");
+  $code = (string) ($customer["code"] ?? "");
+  if ($customerId === "" || $code === "CUS-001" || preg_match('/^walk-?in$/i', $name)) {
+    return ["points" => 0, "rupees" => 0.0];
+  }
+  $settings = pos_loyalty_settings($bid);
+  if (empty($settings["enabled"]) || (int) $wantRedeem <= 0) return ["points" => 0, "rupees" => 0.0];
+  $acc = pos_loyalty_account($bid, $customerId);
+  $want = (int) $wantRedeem;
+  $min = (int) ($settings["min_redeem"] ?? 10);
+  $bal = (int) ($acc["points_balance"] ?? 0);
+  if ($want < $min || $want > $bal) return ["points" => 0, "rupees" => 0.0];
+  $rate = (float) ($settings["rupees_per_point"] ?? 1);
+  $redeemRs = pos_paise(min(max(0, (float) $cap), $want * $rate));
+  $redeemPts = $rate > 0 ? (int) floor($redeemRs / $rate) : 0;
+  if ($redeemPts <= 0) return ["points" => 0, "rupees" => 0.0];
+  return ["points" => $redeemPts, "rupees" => $redeemRs];
+}
+
 function pos_ensure_advanced_schema() {
   static $done = false;
   if ($done) return;
@@ -1328,7 +1428,7 @@ function pos_loyalty_post($bid, $customerId, $kind, $points, $rupees, $note, $or
   );
 }
 
-function pos_loyalty_apply_sale($bid, $customer, $orderId, $total, $wantRedeem, $uid) {
+function pos_loyalty_apply_sale($bid, $customer, $orderId, $total, $wantRedeem, $uid, $taxableCap = null, $earnBase = null) {
   $customerId = $customer["id"] ?? "";
   $name = (string) ($customer["name"] ?? "");
   $code = (string) ($customer["code"] ?? "");
@@ -1336,23 +1436,16 @@ function pos_loyalty_apply_sale($bid, $customer, $orderId, $total, $wantRedeem, 
     return ["points" => 0, "rupees" => 0, "earned" => 0];
   }
   $settings = pos_loyalty_settings($bid);
-  $acc = pos_loyalty_account($bid, $customerId);
-  $redeemPts = 0;
-  $redeemRs = 0.0;
-  if (!empty($settings["enabled"]) && (int) $wantRedeem > 0) {
-    $want = (int) $wantRedeem;
-    $min = (int) ($settings["min_redeem"] ?? 10);
-    $bal = (int) ($acc["points_balance"] ?? 0);
-    if ($want >= $min && $want <= $bal) {
-      $rate = (float) ($settings["rupees_per_point"] ?? 1);
-      $redeemRs = pos_adv_round2(min($total, $want * $rate));
-      $redeemPts = $rate > 0 ? (int) floor($redeemRs / $rate) : 0;
-      if ($redeemPts > 0) {
-        pos_loyalty_post($bid, $customerId, "redeem", -$redeemPts, $redeemRs, "Bill redeem", $orderId, $uid, null);
-      }
-    }
+  $cap = $taxableCap === null ? (float) $total : max(0, (float) $taxableCap);
+  $quote = pos_loyalty_redeem_quote($bid, $customer, $wantRedeem, $cap);
+  $redeemPts = (int) ($quote["points"] ?? 0);
+  $redeemRs = (float) ($quote["rupees"] ?? 0);
+  if ($redeemPts > 0) {
+    pos_loyalty_post($bid, $customerId, "redeem", -$redeemPts, $redeemRs, "Bill redeem", $orderId, $uid, null);
   }
-  $paid = pos_adv_round2(max(0, $total - $redeemRs));
+  $paid = $earnBase === null
+    ? pos_adv_round2(max(0, (float) $total - $redeemRs))
+    : pos_adv_round2(max(0, (float) $earnBase));
   $earn = 0;
   if (!empty($settings["enabled"])) {
     $earn = (int) floor(($paid * (float) ($settings["earn_per_100"] ?? 1)) / 100);
@@ -1390,6 +1483,46 @@ function pos_loyalty_apply_sale($bid, $customer, $orderId, $total, $wantRedeem, 
   );
   pos_loyalty_recompute($bid, $customerId);
   return ["points" => $redeemPts, "rupees" => $redeemRs, "earned" => $earn];
+}
+
+function pos_loyalty_reverse_refund($bid, $order, $refundAmount, $full = false) {
+  $orderId = (string) ($order["id"] ?? "");
+  if ($orderId === "") return;
+  $total = (float) ($order["total"] ?? 0);
+  $refund = max(0, (float) $refundAmount);
+  if ($full || ($total > 0 && $refund + 0.05 >= $total)) {
+    pos_loyalty_reverse_sale($bid, $orderId);
+    return;
+  }
+  if ($refund <= 0 || $total <= 0) return;
+  $share = min(1, $refund / $total);
+  try {
+    $rows = pos_q("SELECT * FROM loyalty_ledger WHERE business_id = ? AND order_id = ?", "ss", [$bid, $orderId]);
+  } catch (Exception $e) {
+    return;
+  }
+  $priorRedeem = 0;
+  $priorEarn = 0;
+  foreach ($rows as $row) {
+    if (($row["kind"] ?? "") !== "adjust") continue;
+    $pts = (int) ($row["points"] ?? 0);
+    if ($pts > 0) $priorRedeem += $pts;
+    if ($pts < 0) $priorEarn += abs($pts);
+  }
+  $redeemed = (int) ($order["loyalty_points_redeemed"] ?? 0);
+  $earned = (int) ($order["loyalty_points_earned"] ?? 0);
+  $redeemBack = min(max(0, $redeemed - $priorRedeem), (int) floor($redeemed * $share));
+  $earnBack = min(max(0, $earned - $priorEarn), (int) floor($earned * $share));
+  $customerId = (string) ($order["customer_id"] ?? "");
+  if ($customerId === "" || ($redeemBack <= 0 && $earnBack <= 0)) return;
+  if ($redeemBack > 0) pos_loyalty_post($bid, $customerId, "adjust", $redeemBack, $refund, "Refund royalty", $orderId, null);
+  if ($earnBack > 0) pos_loyalty_post($bid, $customerId, "adjust", -$earnBack, $refund, "Refund earn reversal", $orderId, null);
+  pos_q(
+    "UPDATE loyalty_accounts SET lifetime_spend = GREATEST(0, lifetime_spend - ?) WHERE customer_id = ? AND business_id = ?",
+    "dss",
+    [round($total * $share, 2), $customerId, $bid]
+  );
+  pos_loyalty_recompute($bid, $customerId);
 }
 
 function pos_loyalty_reverse_sale($bid, $orderId) {

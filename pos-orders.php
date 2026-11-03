@@ -49,6 +49,7 @@ function pos_deduct_order_stock($bid, $lines) {
 }
 
 function pos_patch_order($bid, $orderId, $body, $auth) {
+  if (is_file(__DIR__ . "/pos-advanced.php")) require_once __DIR__ . "/pos-advanced.php";
   $existing = pos_order_with_lines($bid, $orderId);
   if (!$existing) pos_send(404, ["error" => "Order not found", "php" => true]);
 
@@ -76,6 +77,7 @@ function pos_patch_order($bid, $orderId, $body, $auth) {
       pos_q("UPDATE sales_order_lines SET cancelled = 1 WHERE id = ?", "s", [$l["id"]]);
     }
     pos_reverse_credit_sale($bid, $existing);
+    if (function_exists("pos_loyalty_reverse_sale")) pos_loyalty_reverse_sale($bid, $orderId);
     pos_recompute_customer_outstanding($bid, $existing["customer_id"] ?? "");
   } elseif ($oldStatus === "cancelled" && $newStatus !== "cancelled") {
     $allLines = $existing["lines"] ?? [];
@@ -180,17 +182,29 @@ function pos_update_order($bid, $orderId, $body, $auth) {
   }
   pos_q("DELETE FROM sales_order_lines WHERE order_id = ?", "s", [$orderId]);
 
-  $subtotal = pos_round2(array_sum(array_column($built, "amount")));
-  $gst = 0;
-  foreach ($built as $l) $gst += isset($l["gst"]) ? (float) $l["gst"] : (($l["amount"] * $l["gstRate"]) / 100);
-  $gst = pos_round2($gst);
   $billType = $body["discountType"] ?? $body["discount_type"] ?? "amt";
   $billValue = $body["discountValue"] ?? $body["discount_value"] ?? $body["discount"] ?? 0;
-  $billDiscount = function_exists("pos_adv_discount_amount")
-    ? pos_adv_discount_amount($subtotal + $gst, $billType, $billValue)
-    : pos_round2((float) ($body["discount"] ?? 0));
   $extraCharges = pos_round2(max(0, (float) ($body["extraCharges"] ?? $body["extra_charges"] ?? 0)));
-  $total = pos_round2(max(0, $subtotal + $gst - $billDiscount + $extraCharges));
+  $preview = function_exists("pos_sale_bill") ? pos_sale_bill($built, $billType, $billValue, 0) : ["taxable" => 0, "subtotal" => 0, "gst" => 0, "billDiscount" => 0, "total" => 0];
+  $loyaltyDiscount = 0.0;
+  $loyaltyRedeem = 0;
+  $loyaltyEarn = 0;
+  if (function_exists("pos_loyalty_reverse_sale")) pos_loyalty_reverse_sale($bid, $orderId);
+  $wantRedeem = $body["loyaltyPoints"] ?? $body["loyalty_points"] ?? ($existing["loyalty_points_redeemed"] ?? 0);
+  if (function_exists("pos_loyalty_redeem_quote") && function_exists("pos_loyalty_apply_sale")) {
+    $quote = pos_loyalty_redeem_quote($bid, $customer, $wantRedeem, $preview["taxable"] ?? 0);
+    $priced = pos_sale_bill($built, $billType, $billValue, $quote["rupees"] ?? 0);
+    $earnOn = pos_round2(max(0, ($priced["total"] ?? 0) + $extraCharges));
+    $loy = pos_loyalty_apply_sale($bid, $customer, $orderId, $earnOn, $wantRedeem, $auth["user"]["id"] ?? null, $preview["taxable"] ?? 0, $earnOn);
+    $loyaltyDiscount = (float) ($loy["rupees"] ?? 0);
+    $loyaltyRedeem = (int) ($loy["points"] ?? 0);
+    $loyaltyEarn = (int) ($loy["earned"] ?? 0);
+    $preview = pos_sale_bill($built, $billType, $billValue, $loyaltyDiscount);
+  }
+  $subtotal = pos_round2($preview["subtotal"] ?? 0);
+  $gst = pos_round2($preview["gst"] ?? 0);
+  $billDiscount = pos_round2($preview["billDiscount"] ?? 0);
+  $total = pos_round2(max(0, ($preview["total"] ?? 0) + $extraCharges));
   $totalGm = array_sum(array_column($built, "qty"));
   $methodPay = pos_pay_normalize($body["paymentMethod"] ?? $existing["payment_method"] ?? "cash");
   if (!pos_pay_is_sale($methodPay)) {
@@ -238,6 +252,11 @@ function pos_update_order($bid, $orderId, $body, $auth) {
       "UPDATE sales_orders SET discount_type = ?, discount_value = ? WHERE id = ? AND business_id = ?",
       "ssss",
       [$dtype, (string) ((float) $billValue), $orderId, $bid]
+    );
+    pos_q(
+      "UPDATE sales_orders SET loyalty_points_redeemed = ?, loyalty_points_earned = ?, loyalty_discount = ? WHERE id = ? AND business_id = ?",
+      "iidss",
+      [$loyaltyRedeem, $loyaltyEarn, $loyaltyDiscount, $orderId, $bid]
     );
   } catch (Exception $e) { /* optional columns */ }
 
