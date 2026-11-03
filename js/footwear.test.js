@@ -329,6 +329,16 @@ test("Counter has a dedicated scan lane and Pay action", () => {
   assert.match(css, /packs-desk: composer \+ library/);
 });
 
+test("counter totals keep qty, subtotal, and grand total, and hide empty discount lines", () => {
+  const app = readFileSync(path.join(root, "js/app.js"), "utf8");
+  const css = readFileSync(path.join(root, "css/pos.css"), "utf8");
+  assert.match(app, /\$\("disc-row"\)\.hidden = !shown\(discount\)/);
+  assert.match(app, /\$\("loyalty-row"\)\.hidden = !shown\(t\.loyalty\)/);
+  assert.match(app, /\$\("taxable-row"\)\.hidden = true/);
+  assert.match(app, /\$\("face-taxable-row"\)\.hidden = true/);
+  assert.match(css, /\.customer-face-row\[hidden\] \{ display: none; \}/);
+});
+
 test("Medical shops show pharmacy medicine fields on the item form", () => {
   const index = readFileSync(path.join(root, "index.html"), "utf8");
   const app = readFileSync(path.join(root, "js/app.js"), "utf8");
