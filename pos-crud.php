@@ -454,6 +454,137 @@ function pos_customer_email_field($raw) {
   return ["email" => strtolower($s)];
 }
 
+function pos_purchase_query($sql, $types, $params) {
+  try {
+    return pos_q($sql, $types, $params);
+  } catch (Exception $e) {
+    $msg = $e->getMessage();
+    if (stripos($msg, "doesn't exist") !== false || stripos($msg, "Unknown column") !== false || stripos($msg, "Unknown table") !== false) return [];
+    throw $e;
+  }
+}
+
+function pos_prepare_purchase_lines($bid, $lines) {
+  $bizRows = pos_q("SELECT category, business_type, name FROM businesses WHERE id = ? LIMIT 1", "s", [$bid]);
+  $expanded = pos_expand_garment_purchase_lines($bid, $lines, $bizRows[0] ?? []);
+  $built = [];
+  foreach ($expanded as $line) {
+    $it = pos_q("SELECT * FROM items WHERE id = ? AND business_id = ? LIMIT 1", "ss", [$line["item_id"] ?? "", $bid]);
+    $item = $it[0] ?? null;
+    if (!$item) throw new Exception("Unknown item");
+    $qty = (float) ($line["quantity_gm"] ?? 0);
+    $rate = pos_round8($line["rate_per_kg"] ?? $item["purchase_rate"]);
+    $fig = pos_purchase_line_figures(pos_line_amount_for_item($qty, $rate, $item), $item["gst_rate"] ?? 0, $line);
+    $built[] = [
+      "item" => $item,
+      "qty" => $qty,
+      "rate" => $rate,
+      "amount" => $fig["amount"],
+      "gstRate" => $fig["gstRate"],
+      "gstAmount" => $fig["gstAmount"],
+      "total" => $fig["total"],
+    ];
+  }
+  $subtotal = pos_round8(array_sum(array_column($built, "amount")));
+  $gst = pos_round8(array_sum(array_column($built, "gstAmount")));
+  return [$expanded, $built, $subtotal, $gst, pos_round8($subtotal + $gst)];
+}
+
+function pos_insert_purchase_stock($bid, $branchId, $uid, $purchaseId, $purchaseNumber, $supplier, $built, $expanded) {
+  if (is_file(__DIR__ . "/pos-advanced.php")) require_once __DIR__ . "/pos-advanced.php";
+  $barcodeCount = 0;
+  foreach ($built as $idx => $line) {
+    $lineId = pos_uuid();
+    $src = $expanded[$idx] ?? [];
+    $size = pos_garment_normalize_size($src["size"] ?? ($line["item"]["size"] ?? ""));
+    $color = trim((string) ($src["color"] ?? ($line["item"]["color"] ?? "")));
+    try {
+      pos_q(
+        "INSERT INTO purchase_lines (
+           id, purchase_id, item_id, item_name, quantity_gm, rate_per_kg,
+           gst_rate, amount, gst_amount, total_amount, business_id, size, color
+         ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        "ssssddddddsss",
+        [
+          $lineId, $purchaseId, $line["item"]["id"], pos_item_bill_name($line["item"]), $line["qty"], $line["rate"],
+          $line["gstRate"], $line["amount"], $line["gstAmount"], $line["total"], $bid,
+          $size !== "" ? $size : null, $color !== "" ? $color : null,
+        ]
+      );
+    } catch (Exception $e) {
+      pos_q(
+        "INSERT INTO purchase_lines (
+           id, purchase_id, item_id, item_name, quantity_gm, rate_per_kg,
+           gst_rate, amount, gst_amount, total_amount, business_id
+         ) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+        "ssssdddddds",
+        [
+          $lineId, $purchaseId, $line["item"]["id"], pos_item_bill_name($line["item"]), $line["qty"], $line["rate"],
+          $line["gstRate"], $line["amount"], $line["gstAmount"], $line["total"], $bid,
+        ]
+      );
+    }
+    pos_q("UPDATE items SET stock_gm = stock_gm + ? WHERE id = ? AND business_id = ?", "dss", [$line["qty"], $line["item"]["id"], $bid]);
+    if (function_exists("pos_create_purchase_batch")) {
+      $batch = pos_create_purchase_batch($bid, $branchId ?? null, $uid, [
+        "id" => $purchaseId, "purchase_number" => $purchaseNumber, "supplier_id" => $supplier["id"],
+      ], $lineId, $line["item"], $line["qty"], $line["rate"], $src);
+      if (is_array($batch["barcodes"] ?? null)) {
+        foreach ($batch["barcodes"] as $bcRow) {
+          if (!empty($bcRow["barcode"])) $barcodeCount++;
+        }
+      } elseif (!empty($batch["barcode"])) {
+        $barcodeCount++;
+      }
+    }
+  }
+  return $barcodeCount;
+}
+
+function pos_unwind_purchase($bid, $purchase, $oldLines) {
+  $id = $purchase["id"];
+  $batches = pos_purchase_query(
+    "SELECT id, qty_gm, remaining_gm FROM stock_batches WHERE business_id = ? AND purchase_id = ?",
+    "ss",
+    [$bid, $id]
+  );
+  foreach ($batches as $batch) {
+    if ((float) ($batch["remaining_gm"] ?? 0) + 0.0001 < (float) ($batch["qty_gm"] ?? 0)) {
+      throw new Exception("Some of this purchase was already sold or adjusted. It cannot be edited.");
+    }
+  }
+  $used = pos_purchase_query(
+    "SELECT id FROM item_barcodes WHERE business_id = ? AND purchase_id = ? AND used_at IS NOT NULL LIMIT 1",
+    "ss",
+    [$bid, $id]
+  );
+  if ($used) throw new Exception("Barcodes from this purchase were already used. It cannot be edited.");
+  $need = [];
+  foreach ($oldLines as $line) {
+    $qty = (float) ($line["quantity_gm"] ?? 0);
+    if ($qty == 0.0) continue;
+    $itemId = (string) ($line["item_id"] ?? "");
+    $need[$itemId] = ($need[$itemId] ?? 0) + $qty;
+  }
+  foreach ($need as $itemId => $qty) {
+    $rows = pos_q("SELECT name, stock_gm FROM items WHERE id = ? AND business_id = ? LIMIT 1", "ss", [$itemId, $bid]);
+    $item = $rows[0] ?? null;
+    if (!$item) throw new Exception("Unknown item");
+    if ((float) ($item["stock_gm"] ?? 0) + 0.0001 < $qty) {
+      throw new Exception(($item["name"] ?? "Item") . " no longer has this purchase on hand. It cannot be edited.");
+    }
+  }
+  foreach ($need as $itemId => $qty) {
+    pos_q("UPDATE items SET stock_gm = stock_gm - ? WHERE id = ? AND business_id = ?", "dss", [$qty, $itemId, $bid]);
+  }
+  pos_purchase_query("DELETE FROM stock_batches WHERE business_id = ? AND purchase_id = ?", "ss", [$bid, $id]);
+  pos_purchase_query("DELETE FROM stock_movements WHERE business_id = ? AND ref_type = 'purchase' AND ref_id = ?", "ss", [$bid, $id]);
+  pos_purchase_query("DELETE FROM item_barcodes WHERE business_id = ? AND purchase_id = ?", "ss", [$bid, $id]);
+  pos_q("DELETE FROM purchase_lines WHERE purchase_id = ? AND business_id = ?", "ss", [$id, $bid]);
+  pos_reverse_credit_purchase($bid, $purchase);
+  if (function_exists("pos_delete_journal_ref")) pos_delete_journal_ref($bid, "purchase", $id);
+}
+
 function pos_crud_dispatch($path, $method, $body, $bid, $auth, $branchId, $uid) {
   if ($path === "items/import" || $path === "items/import/template") {
     require_once __DIR__ . "/pos-item-import.php";
@@ -844,24 +975,7 @@ function pos_crud_dispatch($path, $method, $body, $bid, $auth, $branchId, $uid) 
         $sup = pos_q("SELECT * FROM suppliers WHERE id = ? AND business_id = ? LIMIT 1", "ss", [$supplierId, $bid]);
         $supplier = $sup[0] ?? null;
         if (!$supplier) throw new Exception("Supplier not found");
-        $bizRows = pos_q("SELECT category, business_type, name FROM businesses WHERE id = ? LIMIT 1", "s", [$bid]);
-        $expanded = pos_expand_garment_purchase_lines($bid, $lines, $bizRows[0] ?? []);
-        $built = [];
-        foreach ($expanded as $line) {
-          $it = pos_q("SELECT * FROM items WHERE id = ? AND business_id = ? LIMIT 1", "ss", [$line["item_id"] ?? "", $bid]);
-          $item = $it[0] ?? null;
-          if (!$item) throw new Exception("Unknown item");
-          $qty = (float) ($line["quantity_gm"] ?? 0);
-          $rate = pos_round8($line["rate_per_kg"] ?? $item["purchase_rate"]);
-          $fig = pos_purchase_line_figures(pos_line_amount_for_item($qty, $rate, $item), $item["gst_rate"] ?? 0, $line);
-          $amount = $fig["amount"];
-          $gstRate = $fig["gstRate"];
-          $gstAmount = $fig["gstAmount"];
-          $built[] = ["item" => $item, "qty" => $qty, "rate" => $rate, "amount" => $amount, "gstRate" => $gstRate, "gstAmount" => $gstAmount, "total" => $fig["total"]];
-        }
-        $subtotal = pos_round8(array_sum(array_column($built, "amount")));
-        $gst = pos_round8(array_sum(array_column($built, "gstAmount")));
-        $total = pos_round8($subtotal + $gst);
+        [$expanded, $built, $subtotal, $gst, $total] = pos_prepare_purchase_lines($bid, $lines);
         $n = pos_next_seq("purchase", $bid, 10002);
         $id = pos_uuid();
         $purchaseNumber = "PO-{$n}";
@@ -879,53 +993,7 @@ function pos_crud_dispatch($path, $method, $body, $bid, $auth, $branchId, $uid) 
             $body["purchase_date"] ?? date("Y-m-d"), $body["notes"] ?? null, $subtotal, $gst, $total, $method, $payStatus, $bid,
           ]
         );
-        if (is_file(__DIR__ . "/pos-advanced.php")) require_once __DIR__ . "/pos-advanced.php";
-        $barcodeCount = 0;
-        foreach ($built as $idx => $line) {
-          $lineId = pos_uuid();
-          $src = $expanded[$idx] ?? [];
-          $size = pos_garment_normalize_size($src["size"] ?? ($line["item"]["size"] ?? ""));
-          $color = trim((string) ($src["color"] ?? ($line["item"]["color"] ?? "")));
-          try {
-            pos_q(
-              "INSERT INTO purchase_lines (
-                 id, purchase_id, item_id, item_name, quantity_gm, rate_per_kg,
-                 gst_rate, amount, gst_amount, total_amount, business_id, size, color
-               ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
-              "ssssddddddsss",
-              [
-                $lineId, $id, $line["item"]["id"], pos_item_bill_name($line["item"]), $line["qty"], $line["rate"],
-                $line["gstRate"], $line["amount"], $line["gstAmount"], $line["total"], $bid,
-                $size !== "" ? $size : null, $color !== "" ? $color : null,
-              ]
-            );
-          } catch (Exception $e) {
-            pos_q(
-              "INSERT INTO purchase_lines (
-                 id, purchase_id, item_id, item_name, quantity_gm, rate_per_kg,
-                 gst_rate, amount, gst_amount, total_amount, business_id
-               ) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
-              "ssssdddddds",
-              [
-                $lineId, $id, $line["item"]["id"], pos_item_bill_name($line["item"]), $line["qty"], $line["rate"],
-                $line["gstRate"], $line["amount"], $line["gstAmount"], $line["total"], $bid,
-              ]
-            );
-          }
-          pos_q("UPDATE items SET stock_gm = stock_gm + ? WHERE id = ? AND business_id = ?", "dss", [$line["qty"], $line["item"]["id"], $bid]);
-          if (function_exists("pos_create_purchase_batch")) {
-            $batch = pos_create_purchase_batch($bid, $branchId ?? null, $uid, [
-              "id" => $id, "purchase_number" => $purchaseNumber, "supplier_id" => $supplier["id"],
-            ], $lineId, $line["item"], $line["qty"], $line["rate"], $src);
-            if (is_array($batch["barcodes"] ?? null)) {
-              foreach ($batch["barcodes"] as $bcRow) {
-                if (!empty($bcRow["barcode"])) $barcodeCount++;
-              }
-            } elseif (!empty($batch["barcode"])) {
-              $barcodeCount++;
-            }
-          }
-        }
+        $barcodeCount = pos_insert_purchase_stock($bid, $branchId, $uid, $id, $purchaseNumber, $supplier, $built, $expanded);
         $rows = pos_q("SELECT * FROM purchases WHERE id = ? LIMIT 1", "s", [$id]);
         $purchase = $rows[0] ?? null;
         $purchase["lines"] = pos_q("SELECT * FROM purchase_lines WHERE purchase_id = ?", "s", [$id]);
@@ -937,6 +1005,57 @@ function pos_crud_dispatch($path, $method, $body, $bid, $auth, $branchId, $uid) 
       pos_send(200, ["ok" => true, "purchase" => $purchase]);
     } catch (Exception $e) {
       pos_send(400, ["error" => $e->getMessage(), "php" => true]);
+    }
+  }
+
+  if (preg_match('#^purchases/([A-Za-z0-9-]+)$#', $path, $poEdit) && ($method === "PUT" || $method === "PATCH")) {
+    $purchaseId = $poEdit[1];
+    $supplierId = $body["supplier_id"] ?? "";
+    $lines = $body["lines"] ?? [];
+    if (!$supplierId || !is_array($lines) || !$lines) pos_send(400, ["error" => "Supplier and purchase lines are required"]);
+    if (function_exists("pos_ensure_rate_precision")) pos_ensure_rate_precision();
+    require_once __DIR__ . "/pos-accounting.php";
+    try {
+      $purchase = pos_with_transaction(function () use ($body, $bid, $uid, $supplierId, $lines, $branchId, $purchaseId) {
+        $found = pos_q("SELECT * FROM purchases WHERE id = ? AND business_id = ? LIMIT 1", "ss", [$purchaseId, $bid]);
+        $existing = $found[0] ?? null;
+        if (!$existing) throw new Exception("Purchase not found");
+        $oldLines = pos_q("SELECT * FROM purchase_lines WHERE purchase_id = ? AND business_id = ?", "ss", [$existing["id"], $bid]);
+        $sup = pos_q("SELECT * FROM suppliers WHERE id = ? AND business_id = ? LIMIT 1", "ss", [$supplierId, $bid]);
+        $supplier = $sup[0] ?? null;
+        if (!$supplier) throw new Exception("Supplier not found");
+        $payMethod = pos_pay_normalize($body["payment_method"] ?? ($existing["payment_method"] ?? "cash"));
+        if (!pos_pay_is_sale($payMethod)) throw new Exception("Invalid payment method");
+        [$expanded, $built, $subtotal, $gst, $total] = pos_prepare_purchase_lines($bid, $lines);
+        pos_unwind_purchase($bid, $existing, $oldLines);
+        $payStatus = $payMethod === "credit" ? "unpaid" : "paid";
+        $notes = array_key_exists("notes", $body) ? $body["notes"] : ($existing["notes"] ?? null);
+        pos_q(
+          "UPDATE purchases SET
+             supplier_id=?, supplier_name=?, supplier_invoice_number=?,
+             purchase_date=?, notes=?, subtotal=?, gst=?, total=?,
+             payment_method=?, payment_status=?
+           WHERE id=? AND business_id=?",
+          "sssssdddssss",
+          [
+            $supplier["id"], $supplier["name"], $body["supplier_invoice_number"] ?? null,
+            $body["purchase_date"] ?? ($existing["purchase_date"] ?? date("Y-m-d")), $notes,
+            $subtotal, $gst, $total, $payMethod, $payStatus, $existing["id"], $bid,
+          ]
+        );
+        $barcodeCount = pos_insert_purchase_stock($bid, $branchId, $uid, $existing["id"], $existing["purchase_number"], $supplier, $built, $expanded);
+        $rows = pos_q("SELECT * FROM purchases WHERE id = ? AND business_id = ? LIMIT 1", "ss", [$existing["id"], $bid]);
+        $saved = $rows[0] ?? null;
+        $saved["lines"] = pos_q("SELECT * FROM purchase_lines WHERE purchase_id = ?", "s", [$existing["id"]]);
+        $saved["barcode_count"] = $barcodeCount;
+        pos_record_credit_purchase($supplier, $total, $existing["id"], $existing["purchase_number"], $payMethod, $bid, $uid);
+        pos_post_purchase_journal($bid, $uid, $saved);
+        return $saved;
+      });
+      pos_send(200, ["ok" => true, "purchase" => $purchase]);
+    } catch (Exception $e) {
+      $missing = stripos($e->getMessage(), "not found") !== false;
+      pos_send($missing ? 404 : 400, ["error" => $e->getMessage(), "php" => true]);
     }
   }
 

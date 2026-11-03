@@ -6077,6 +6077,14 @@ body.apparel-mode #item-size-wrap { display: none; }
   text-transform: uppercase;
   color: var(--muted, #667);
 }
+.purchase-row {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+  margin-bottom: 8px;
+}
+.purchase-row .order-item { margin-bottom: 0; flex: 1; }
+.purchase-row .purchase-edit { align-self: center; white-space: nowrap; }
 .held-item, .order-item {
   display: flex;
   justify-content: space-between;

@@ -2947,6 +2947,32 @@ function pos_recompute_outstanding_set($businessId = null) {
   }
 }
 
+function pos_reverse_credit_purchase($businessId, $purchase) {
+  if (!is_array($purchase) || empty($purchase["id"])) return;
+  $purchaseId = $purchase["id"];
+  $rows = [];
+  try {
+    $rows = pos_q(
+      "SELECT * FROM account_ledger WHERE business_id = ? AND reference_type = 'purchase' AND reference_id = ?",
+      "ss",
+      [$businessId, $purchaseId]
+    );
+  } catch (Exception $e) {
+    $msg = $e->getMessage();
+    if (stripos($msg, "account_ledger") === false && stripos($msg, "Unknown table") === false && stripos($msg, "doesn't exist") === false) throw $e;
+  }
+  foreach ($rows as $row) {
+    if (function_exists("pos_delete_ledger_journal")) pos_delete_ledger_journal($businessId, $row["id"]);
+    pos_q("DELETE FROM account_ledger WHERE id = ? AND business_id = ?", "ss", [$row["id"], $businessId]);
+  }
+  if (strtolower((string) ($purchase["payment_method"] ?? "")) !== "credit") return;
+  pos_q(
+    "UPDATE suppliers SET payable_balance = COALESCE(payable_balance,0) - ? WHERE id = ? AND business_id = ?",
+    "dss",
+    [pos_round2($purchase["total"] ?? 0), $purchase["supplier_id"] ?? "", $businessId]
+  );
+}
+
 function pos_record_credit_purchase($supplier, $total, $purchaseId, $purchaseNumber, $method, $businessId, $uid = null) {
   if ($method !== "credit") return;
   $amt = pos_round2($total);

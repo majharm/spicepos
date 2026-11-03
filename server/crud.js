@@ -5,7 +5,7 @@ import "../js/garment-purchase.js";
 import "../js/garment-counter.js";
 import { query, withTransaction } from "./db.js";
 import { bid, authUser } from "./context.js";
-import { recordCreditPurchase, reverseCreditSale, recomputeCustomerOutstanding, settleCustomerInvoice, invoiceOpenDueByCustomer, hydrateCustomerOutstandingRows, persistHydratedOutstanding, collectOrderPayment } from "./accounts.js";
+import { recordCreditPurchase, reverseCreditPurchase, reverseCreditSale, recomputeCustomerOutstanding, settleCustomerInvoice, invoiceOpenDueByCustomer, hydrateCustomerOutstandingRows, persistHydratedOutstanding, collectOrderPayment } from "./accounts.js";
 import { postPurchaseJournal, deleteJournalRef } from "./accounting.js";
 import { audit } from "./audit.js";
 import { onItemSaved, onPurchaseLineSaved, pharmacyLineSnapshot, computeSaleLine, saleStockQty, persistSaleLineNote, persistPrintSaleLine, reverseLoyaltyOnSale, assertApparelSaleStock } from "./advanced.js";
@@ -691,6 +691,180 @@ function supplierWriteFields(body) {
   };
 }
 
+async function optionalRows(conn, sql, params) {
+  try {
+    const [rows] = await conn.query(sql, params);
+    return rows || [];
+  } catch (err) {
+    const msg = String(err?.message || err);
+    if (/doesn't exist|Unknown column|Unknown table|ER_NO_SUCH_TABLE|ER_BAD_FIELD/i.test(msg)) return [];
+    throw err;
+  }
+}
+
+async function preparePurchaseLines(conn, lines) {
+  const [bizRows] = await conn.query("SELECT category, business_type, name FROM businesses WHERE id = ?", [bid()]);
+  const expanded = await expandGarmentPurchaseLines(conn, lines, bizRows[0] || {});
+  const built = [];
+  for (const line of expanded) {
+    const [itemRows] = await conn.query(
+      "SELECT * FROM items WHERE id = ? AND business_id = ?",
+      [line.item_id, bid()],
+    );
+    const item = itemRows[0];
+    if (!item) throw new Error("Unknown item");
+    const qty = Number(line.quantity_gm);
+    const rate = rate4(line.rate_per_kg ?? item.purchase_rate);
+    const fig = POSUnits.purchaseLineFigures(lineAmount(qty, rate, item), item.gst_rate, line);
+    built.push({
+      item,
+      qty,
+      rate,
+      amount: fig.amount,
+      gstRate: fig.gstRate,
+      gstAmount: fig.gstAmount,
+      total: fig.total,
+    });
+  }
+  const subtotal = round2(built.reduce((s, l) => s + l.amount, 0));
+  const gst = round2(built.reduce((s, l) => s + l.gstAmount, 0));
+  const total = round2(subtotal + gst);
+  return { expanded, built, subtotal, gst, total };
+}
+
+async function insertPurchaseStock(conn, { id, purchaseNumber, supplier, built, expanded }) {
+  let barcodeCount = 0;
+  for (let i = 0; i < built.length; i++) {
+    const line = built[i];
+    const lineId = crypto.randomUUID();
+    const src = expanded[i] || {};
+    const size = POSGarmentPurchase?.normalizeSize?.(src.size || line.item.size) || line.item.size || null;
+    const color = String(src.color || line.item.color || "").trim() || null;
+    try {
+      await conn.query(
+        `INSERT INTO purchase_lines (
+           id, purchase_id, item_id, item_name, quantity_gm, rate_per_kg,
+           gst_rate, amount, gst_amount, total_amount, business_id, size, color
+         ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        [
+          lineId,
+          id,
+          line.item.id,
+          itemBillName(line.item),
+          line.qty,
+          line.rate,
+          line.gstRate,
+          line.amount,
+          line.gstAmount,
+          line.total,
+          bid(),
+          size,
+          color,
+        ],
+      );
+    } catch {
+      await conn.query(
+        `INSERT INTO purchase_lines (
+           id, purchase_id, item_id, item_name, quantity_gm, rate_per_kg,
+           gst_rate, amount, gst_amount, total_amount, business_id
+         ) VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+        [
+          lineId,
+          id,
+          line.item.id,
+          itemBillName(line.item),
+          line.qty,
+          line.rate,
+          line.gstRate,
+          line.amount,
+          line.gstAmount,
+          line.total,
+          bid(),
+        ],
+      );
+    }
+    await conn.query(
+      "UPDATE items SET stock_gm = stock_gm + ? WHERE id = ? AND business_id = ?",
+      [line.qty, line.item.id, bid()],
+    );
+    const batch = await onPurchaseLineSaved(conn, {
+      businessId: bid(),
+      branchId: null,
+      userId: null,
+      purchaseId: id,
+      purchaseNumber,
+      supplierId: supplier.id,
+      lineId,
+      item: line.item,
+      qty: line.qty,
+      rate: line.rate,
+      barcode: src.barcode,
+      barcodes: src.barcodes,
+      generate_barcodes: src.generate_barcodes || src.generateBarcodes,
+      allow_empty_barcodes: src.allow_empty_barcodes || src.allowEmptyBarcodes,
+      batchNo: src.batch_no || src.batchNo,
+      expiry: src.expiry_date || src.expiryDate,
+      mrp: src.mrp,
+      size,
+      color,
+    });
+    barcodeCount += Array.isArray(batch?.barcodes)
+      ? batch.barcodes.filter((r) => r.barcode).length
+      : (batch?.barcode ? 1 : 0);
+  }
+  return barcodeCount;
+}
+
+async function unwindPurchase(conn, purchase, oldLines) {
+  const batches = await optionalRows(
+    conn,
+    "SELECT id, qty_gm, remaining_gm FROM stock_batches WHERE business_id = ? AND purchase_id = ?",
+    [bid(), purchase.id],
+  );
+  if (batches.some((row) => Number(row.remaining_gm) + 0.0001 < Number(row.qty_gm))) {
+    throw new Error("Some of this purchase was already sold or adjusted. It cannot be edited.");
+  }
+  const used = await optionalRows(
+    conn,
+    "SELECT id FROM item_barcodes WHERE business_id = ? AND purchase_id = ? AND used_at IS NOT NULL LIMIT 1",
+    [bid(), purchase.id],
+  );
+  if (used.length) throw new Error("Barcodes from this purchase were already used. It cannot be edited.");
+  const need = new Map();
+  for (const line of oldLines) {
+    const qty = Number(line.quantity_gm) || 0;
+    if (qty === 0) continue;
+    need.set(line.item_id, (need.get(line.item_id) || 0) + qty);
+  }
+  for (const [itemId, qty] of need) {
+    const [rows] = await conn.query(
+      "SELECT name, stock_gm FROM items WHERE id = ? AND business_id = ?",
+      [itemId, bid()],
+    );
+    const item = rows[0];
+    if (!item) throw new Error("Unknown item");
+    if (Number(item.stock_gm) + 0.0001 < qty) {
+      throw new Error(`${item.name || "Item"} no longer has this purchase on hand. It cannot be edited.`);
+    }
+  }
+  for (const [itemId, qty] of need) {
+    await conn.query(
+      "UPDATE items SET stock_gm = stock_gm - ? WHERE id = ? AND business_id = ?",
+      [qty, itemId, bid()],
+    );
+  }
+  await optionalRows(conn, "DELETE FROM stock_batches WHERE business_id = ? AND purchase_id = ?", [bid(), purchase.id]);
+  await optionalRows(
+    conn,
+    "DELETE FROM stock_movements WHERE business_id = ? AND ref_type = 'purchase' AND ref_id = ?",
+    [bid(), purchase.id],
+  );
+  await optionalRows(conn, "DELETE FROM item_barcodes WHERE business_id = ? AND purchase_id = ?", [bid(), purchase.id]);
+  await conn.query("DELETE FROM purchase_lines WHERE purchase_id = ? AND business_id = ?", [purchase.id, bid()]);
+  await reverseCreditPurchase(conn, purchase);
+  await deleteJournalRef(conn, "purchase", purchase.id);
+}
+
 export function registerCrud(app) {
   app.get("/api/customers", async (_req, res) => {
     try {
@@ -1196,32 +1370,8 @@ export function registerCrud(app) {
         );
         const supplier = supRows[0];
         if (!supplier) throw new Error("Supplier not found");
-        const [bizRows] = await conn.query("SELECT category, business_type, name FROM businesses WHERE id = ?", [bid()]);
-        const expanded = await expandGarmentPurchaseLines(conn, lines, bizRows[0] || {});
-        const built = [];
-        for (const line of expanded) {
-          const [itemRows] = await conn.query(
-            "SELECT * FROM items WHERE id = ? AND business_id = ?",
-            [line.item_id, bid()],
-          );
-          const item = itemRows[0];
-          if (!item) throw new Error("Unknown item");
-          const qty = Number(line.quantity_gm);
-          const rate = rate4(line.rate_per_kg ?? item.purchase_rate);
-          const fig = POSUnits.purchaseLineFigures(lineAmount(qty, rate, item), item.gst_rate, line);
-          built.push({
-            item,
-            qty,
-            rate,
-            amount: fig.amount,
-            gstRate: fig.gstRate,
-            gstAmount: fig.gstAmount,
-            total: fig.total,
-          });
-        }
-        const subtotal = round2(built.reduce((s, l) => s + l.amount, 0));
-        const gst = round2(built.reduce((s, l) => s + l.gstAmount, 0));
-        const total = round2(subtotal + gst);
+        const prepared = await preparePurchaseLines(conn, lines);
+        const { built, expanded, subtotal, gst, total } = prepared;
         const n = await nextSeq(conn, "purchase", 10002);
         const id = crypto.randomUUID();
         const purchaseNumber = `PO-${n}`;
@@ -1251,85 +1401,7 @@ export function registerCrud(app) {
             bid(),
           ],
         );
-        let barcodeCount = 0;
-        for (let i = 0; i < built.length; i++) {
-          const line = built[i];
-          const lineId = crypto.randomUUID();
-          const src = expanded[i] || {};
-          const size = POSGarmentPurchase?.normalizeSize?.(src.size || line.item.size) || line.item.size || null;
-          const color = String(src.color || line.item.color || "").trim() || null;
-          try {
-            await conn.query(
-              `INSERT INTO purchase_lines (
-                 id, purchase_id, item_id, item_name, quantity_gm, rate_per_kg,
-                 gst_rate, amount, gst_amount, total_amount, business_id, size, color
-               ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-              [
-                lineId,
-                id,
-                line.item.id,
-                itemBillName(line.item),
-                line.qty,
-                line.rate,
-                line.gstRate,
-                line.amount,
-                line.gstAmount,
-                line.total,
-                bid(),
-                size,
-                color,
-              ],
-            );
-          } catch {
-            await conn.query(
-              `INSERT INTO purchase_lines (
-                 id, purchase_id, item_id, item_name, quantity_gm, rate_per_kg,
-                 gst_rate, amount, gst_amount, total_amount, business_id
-               ) VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
-              [
-                lineId,
-                id,
-                line.item.id,
-                itemBillName(line.item),
-                line.qty,
-                line.rate,
-                line.gstRate,
-                line.amount,
-                line.gstAmount,
-                line.total,
-                bid(),
-              ],
-            );
-          }
-          await conn.query(
-            "UPDATE items SET stock_gm = stock_gm + ? WHERE id = ? AND business_id = ?",
-            [line.qty, line.item.id, bid()],
-          );
-          const batch = await onPurchaseLineSaved(conn, {
-            businessId: bid(),
-            branchId: null,
-            userId: null,
-            purchaseId: id,
-            purchaseNumber,
-            supplierId: supplier.id,
-            lineId,
-            item: line.item,
-            qty: line.qty,
-            rate: line.rate,
-            barcode: src.barcode,
-            barcodes: src.barcodes,
-            generate_barcodes: src.generate_barcodes || src.generateBarcodes,
-            allow_empty_barcodes: src.allow_empty_barcodes || src.allowEmptyBarcodes,
-            batchNo: src.batch_no || src.batchNo,
-            expiry: src.expiry_date || src.expiryDate,
-            mrp: src.mrp,
-            size,
-            color,
-          });
-          barcodeCount += Array.isArray(batch?.barcodes)
-            ? batch.barcodes.filter((r) => r.barcode).length
-            : (batch?.barcode ? 1 : 0);
-        }
+        const barcodeCount = await insertPurchaseStock(conn, { id, purchaseNumber, supplier, built, expanded });
         const [rows] = await conn.query("SELECT * FROM purchases WHERE id = ?", [id]);
         const purchase = rows[0];
         purchase.barcode_count = barcodeCount;
@@ -1347,6 +1419,102 @@ export function registerCrud(app) {
     } catch (err) {
       const msg = String(err.message);
       const status = /barcodes for|Duplicate barcode|Max 500|Quantity required|already in stock/i.test(msg) ? 400 : 500;
+      res.status(status).json({ error: msg });
+    }
+  });
+
+  app.put("/api/purchases/:id", async (req, res) => {
+    const { supplier_id, supplier_invoice_number, purchase_date, payment_method, lines, notes } = req.body || {};
+    if (!supplier_id || !Array.isArray(lines) || lines.length === 0) {
+      res.status(400).json({ error: "Supplier and purchase lines are required" });
+      return;
+    }
+    try {
+      const purchase = await withTransaction(async (conn) => {
+        const [existRows] = await conn.query(
+          "SELECT * FROM purchases WHERE id = ? AND business_id = ?",
+          [req.params.id, bid()],
+        );
+        const existing = existRows[0];
+        if (!existing) throw new Error("Purchase not found");
+        const [oldLines] = await conn.query(
+          "SELECT * FROM purchase_lines WHERE purchase_id = ? AND business_id = ?",
+          [existing.id, bid()],
+        );
+        const [supRows] = await conn.query(
+          "SELECT * FROM suppliers WHERE id = ? AND business_id = ?",
+          [supplier_id, bid()],
+        );
+        const supplier = supRows[0];
+        if (!supplier) throw new Error("Supplier not found");
+        const method = globalThis.POSPay?.normalize?.(payment_method || existing.payment_method || "cash") || String(payment_method || existing.payment_method || "cash").toLowerCase();
+        if (globalThis.POSPay?.isPurchaseMode && !globalThis.POSPay.isPurchaseMode(method)) {
+          throw new Error("Invalid payment method");
+        }
+        const prepared = await preparePurchaseLines(conn, lines);
+        const { built, expanded, subtotal, gst, total } = prepared;
+        await unwindPurchase(conn, existing, oldLines || []);
+        const payStatus = method === "credit" ? "unpaid" : "paid";
+        await conn.query(
+          `UPDATE purchases SET
+             supplier_id=?, supplier_name=?, supplier_invoice_number=?,
+             purchase_date=?, notes=?, subtotal=?, gst=?, total=?,
+             payment_method=?, payment_status=?
+           WHERE id=? AND business_id=?`,
+          [
+            supplier.id,
+            supplier.name,
+            supplier_invoice_number || null,
+            purchase_date || existing.purchase_date,
+            notes ?? existing.notes ?? null,
+            subtotal,
+            gst,
+            total,
+            method,
+            payStatus,
+            existing.id,
+            bid(),
+          ],
+        );
+        const barcodeCount = await insertPurchaseStock(conn, {
+          id: existing.id,
+          purchaseNumber: existing.purchase_number,
+          supplier,
+          built,
+          expanded,
+        });
+        const [rows] = await conn.query("SELECT * FROM purchases WHERE id = ? AND business_id = ?", [existing.id, bid()]);
+        const saved = rows[0];
+        saved.barcode_count = barcodeCount;
+        await recordCreditPurchase(conn, {
+          supplier,
+          total,
+          purchaseId: existing.id,
+          purchaseNumber: existing.purchase_number,
+          method,
+        });
+        await postPurchaseJournal(conn, saved);
+        const [freshLines] = await conn.query(
+          "SELECT * FROM purchase_lines WHERE purchase_id = ?",
+          [existing.id],
+        );
+        return { ...saved, lines: freshLines };
+      });
+      await audit("Purchase Updated", {
+        module: "purchases",
+        target_id: purchase.id,
+        target_name: purchase.purchase_number,
+        total: purchase.total,
+        payment_method: purchase.payment_method,
+      }, req);
+      res.json({ ok: true, purchase });
+    } catch (err) {
+      const msg = String(err.message);
+      const status = /not found/i.test(msg)
+        ? 404
+        : /cannot be edited|Supplier and purchase|Invalid payment|Unknown item|barcodes for|Duplicate barcode|Max 500|Quantity required|already in stock|no longer has/i.test(msg)
+          ? 400
+          : 500;
       res.status(status).json({ error: msg });
     }
   });
