@@ -51,6 +51,14 @@ const state = {
   expiryFilter: "all",
   stockRows: [],
   stockLowOnly: false,
+  stockLayout: "",
+  stockExpiryFilter: "all",
+  stockPage: 1,
+  stockPageSize: 25,
+  stockSort: "name",
+  stockSortDir: "asc",
+  stockColumns: null,
+  stockPrefsLoaded: false,
   activeQrOrderId: "",
   activeTable: "",
   activeFloor: "",
@@ -897,9 +905,9 @@ function applyFootwearMode() {
     $("item-catalog-search").placeholder = copy.catalogSearch || copy.search || `Search name, ${taxCodeLabel()}, barcode…`;
   }
   if ($("stock-search")) {
-    $("stock-search").placeholder = pharm
-      ? "Search name, batch no, expiry…"
-      : "Search name, code, barcode…";
+    $("stock-search").placeholder = ap
+      ? "Search item, barcode, SKU, colour, size"
+      : "Search name, batch no, expiry…";
   }
   if ($("pack-item-search")) $("pack-item-search").placeholder = `Search spice or ${taxCodeLabel()}…`;
   if ($("po-items-title")) $("po-items-title").textContent = "On this bill";
@@ -9169,33 +9177,23 @@ function setStockHint(msg, kind) {
 function paintStockHero(rows) {
   const stats = $("stock-hero-stats");
   if (!stats) return;
-  const list = Array.isArray(rows) ? rows : [];
-  let value = 0;
-  let low = 0;
-  for (const r of list) {
-    const item = state.items.find((i) => i.id === r.id) || r;
-    value += POSUnits.lineAmount(r.stock_gm, r.purchase_rate, itemUnit(item));
-    if (stockIsLow(r)) low += 1;
-  }
-  const batchCount = isPharmacyShop()
-    ? (Array.isArray(state.stockBatches) ? state.stockBatches : []).filter((b) => (Number(b.remaining_gm) || 0) > 0).length
-    : 0;
-  let expired = 0;
-  if (isPharmacyShop()) {
-    for (const b of Array.isArray(state.stockBatches) ? state.stockBatches : []) {
-      if ((Number(b.remaining_gm) || 0) <= 0) continue;
-      const days = expiryDaysLeft({ expiry_date: stockExpiryYmd(b, list.find((r) => r.id === b.item_id)) });
-      if (Number.isFinite(days) && days < 0) expired += 1;
-    }
-  }
-  const skuLabel = isPharmacyShop() ? "Medicines" : isApparelShop() ? "Variants" : "SKUs";
-  stats.innerHTML = `<div class="items-stat"><span>${skuLabel}</span><strong>${list.length}</strong></div>
-    ${isPharmacyShop() ? `<div class="items-stat"><span>Batches</span><strong>${batchCount}</strong></div>` : ""}
-    ${isPharmacyShop() ? `<div class="items-stat${expired ? " is-warn" : ""}"><span>Expired</span><strong>${expired}</strong></div>` : ""}
-    <div class="items-stat"><span>On-hand value</span><strong>${money(value)}</strong></div>
-    <button class="items-stat${low ? " is-warn" : ""}${state.stockLowOnly ? " is-active" : ""}" type="button" data-stock-low>
-      <span>Low / out</span><strong>${low}</strong>
-    </button>`;
+  const summary = stockSummaryFor(rows);
+  const exp = state.stockExpiryFilter || "all";
+  const qtyTitle = summary.quantityMixed
+    ? "Sum of on-hand quantities across mixed units"
+    : `On hand${summary.quantitySuffix ? ` in ${summary.quantitySuffix}` : ""}`;
+  stats.innerHTML = `<div class="items-stat"><span>Total products</span><strong>${summary.products}</strong></div>
+    <div class="items-stat" title="${escapeHtml(qtyTitle)}"><span>Total stock quantity</span><strong>${formatStockTotalQty(summary.quantity)}</strong></div>
+    <button class="items-stat${summary.low ? " is-warn" : ""}${state.stockLowOnly ? " is-active" : ""}" type="button" data-stock-low>
+      <span>Low stock products</span><strong>${summary.low}</strong>
+    </button>
+    <button class="items-stat${summary.expired ? " is-warn" : ""}${exp === "expired" ? " is-active" : ""}" type="button" data-stock-expiry="expired">
+      <span>Expired products</span><strong>${summary.expired}</strong>
+    </button>
+    <button class="items-stat${summary.expiringSoon ? " is-warn" : ""}${exp === "soon" ? " is-active" : ""}" type="button" data-stock-expiry="soon">
+      <span>Expiring soon</span><strong>${summary.expiringSoon}</strong>
+    </button>
+    <div class="items-stat"><span>Total stock valuation</span><strong>${money(summary.valuation)}</strong></div>`;
 }
 
 function stockListFilters() {
@@ -9220,6 +9218,7 @@ function stockStatusMatches(have, want) {
 
 function filterStockList() {
   const f = stockListFilters();
+  const expiry = state.stockExpiryFilter || "all";
   let shown = 0;
   document.querySelectorAll("#stock-table .garment-stock-style, #stock-table .garment-barcode-row, #stock-table .stock-card, #stock-table .stock-batch-row, #stock-table .garment-stock-card").forEach((card) => {
     const hay = card.dataset.stockSearch || "";
@@ -9227,6 +9226,7 @@ function filterStockList() {
     const sizes = String(card.dataset.stockSizes || "").toUpperCase().split("|").filter(Boolean);
     const suppliers = String(card.dataset.stockSupplier || "").toLowerCase();
     const hide = (Boolean(f.q) && !hay.includes(f.q))
+      || (expiry !== "all" && (card.dataset.stockExpiry || "safe") !== expiry)
       || (f.category && (card.dataset.stockCategory || "") !== f.category)
       || (f.color && !colors.includes(f.color) && String(card.dataset.stockColor || "").toLowerCase() !== f.color)
       || (f.size && !sizes.includes(f.size) && String(card.dataset.stockSize || "").toUpperCase() !== f.size)
@@ -9261,16 +9261,15 @@ function stockExpiryYmd(batch, sku) {
 
 function paintStockExpiryCell(ymdStr) {
   if (!ymdStr) {
-    return `<span class="stock-exp is-none"><strong>—</strong><small>No expiry date</small></span>`;
+    return `<span class="stock-exp is-none"><strong>N/A</strong><small>No expiry date</small></span>`;
   }
   const days = expiryDaysLeft({ expiry_date: ymdStr });
-  const tone = Number.isFinite(days) ? expiryTone(days) : "ok";
+  const tone = stockDeskApi()?.stockExpiryTone(days) || (Number.isFinite(days) ? expiryTone(days) : "none");
   const long = formatShopDate(ymdStr) || ymdStr;
-  const short = formatExpiryShort(ymdStr);
-  const label = Number.isFinite(days) ? expiryDaysLabel(days) : "";
+  const label = stockDeskApi()?.expiryLabel(days, tone) || (Number.isFinite(days) ? expiryDaysLabel(days) : "N/A");
   return `<span class="stock-exp is-${tone}">
     <strong>${escapeHtml(long)}</strong>
-    <small>${escapeHtml([short, label].filter(Boolean).join(" · "))}</small>
+    <small>${escapeHtml(label)}</small>
   </span>`;
 }
 
@@ -9396,7 +9395,8 @@ function paintGarmentStockList(el, all, selected) {
       const search = [row.barcode, row.name, row.color, row.size, row.code, row.category, row.supplier, row.wearer].join(" ").toLowerCase();
       const tone = row.status === "out" ? " is-out" : row.status === "low" ? " is-low" : "";
       const variant = [row.color, row.size, row.code].filter(Boolean).join(" · ");
-      return `<article class="garment-bc-card garment-barcode-row${tone}${selected === row.itemId ? " is-editing" : ""}" data-stock-item="${escapeHtml(row.itemId)}" data-stock-barcode="${escapeHtml(row.barcode)}" data-stock-search="${escapeHtml(search)}" data-stock-status="${escapeHtml(row.status)}" data-stock-low="${row.status === "ok" ? "0" : "1"}" data-stock-category="${escapeHtml(row.category || "")}" data-stock-color="${escapeHtml(row.color || "")}" data-stock-size="${escapeHtml(row.size || "")}" data-stock-supplier="${escapeHtml(row.supplier || "")}">
+      const expiryBucket = itemExpiryBucket((state.stockRows || []).find((item) => item.id === row.itemId) || row);
+      return `<article class="garment-bc-card garment-barcode-row${tone}${selected === row.itemId ? " is-editing" : ""}" data-stock-item="${escapeHtml(row.itemId)}" data-stock-barcode="${escapeHtml(row.barcode)}" data-stock-search="${escapeHtml(search)}" data-stock-status="${escapeHtml(row.status)}" data-stock-low="${row.status === "ok" ? "0" : "1"}" data-stock-expiry="${escapeHtml(expiryBucket)}" data-stock-category="${escapeHtml(row.category || "")}" data-stock-color="${escapeHtml(row.color || "")}" data-stock-size="${escapeHtml(row.size || "")}" data-stock-supplier="${escapeHtml(row.supplier || "")}">
         <strong class="garment-bc-code">${escapeHtml(row.barcode || "No barcode")}</strong>
         <span class="garment-bc-meta"><strong>${escapeHtml(row.name)}</strong><small>${garmentSwatchHtml(row.color)}${escapeHtml(variant || "—")}</small></span>
         <span class="garment-bc-qty"><em>${escapeHtml(String(row.onHand))}</em>${garmentStockPill(row.status)}</span>
@@ -9447,7 +9447,8 @@ function paintGarmentStockList(el, all, selected) {
       style.name, style.category, style.wearer_type, ...(style.suppliers || []),
       ...(style.colors || []).flatMap((color) => [color.color, ...(color.sizes || []).flatMap((size) => [size.size, size.code, size.supplier, ...(size.barcodes || []).map((code) => code.barcode)])]),
     ].join(" ").toLowerCase();
-    return `<article class="garment-stock-style${style.status === "out" ? " is-out" : style.status === "low" ? " is-low" : ""}" data-stock-style="${escapeHtml(style.key)}" data-stock-search="${escapeHtml(search)}" data-stock-status="${escapeHtml(style.status)}" data-stock-low="${style.status === "ok" ? "0" : "1"}" data-stock-category="${escapeHtml(style.category || "")}" data-stock-colors="${escapeHtml((style.colors || []).map((color) => color.color).join("|"))}" data-stock-sizes="${escapeHtml((style.colors || []).flatMap((color) => color.sizes.map((size) => size.size)).join("|"))}" data-stock-supplier="${escapeHtml((style.suppliers || []).join("|"))}">
+    const expiryBucket = stockDeskApi()?.worstExpiryBucket((style.colors || []).flatMap((color) => (color.sizes || []).map((size) => itemExpiryBucket(size.item)))) || "safe";
+    return `<article class="garment-stock-style${style.status === "out" ? " is-out" : style.status === "low" ? " is-low" : ""}" data-stock-style="${escapeHtml(style.key)}" data-stock-search="${escapeHtml(search)}" data-stock-status="${escapeHtml(style.status)}" data-stock-low="${style.status === "ok" ? "0" : "1"}" data-stock-expiry="${escapeHtml(expiryBucket)}" data-stock-category="${escapeHtml(style.category || "")}" data-stock-colors="${escapeHtml((style.colors || []).map((color) => color.color).join("|"))}" data-stock-sizes="${escapeHtml((style.colors || []).flatMap((color) => color.sizes.map((size) => size.size)).join("|"))}" data-stock-supplier="${escapeHtml((style.suppliers || []).join("|"))}">
       <button type="button" class="garment-stock-style-head" data-stock-toggle="${escapeHtml(style.key)}" aria-expanded="${expanded ? "true" : "false"}">
         <span><strong>${escapeHtml(style.name)}</strong><small>${escapeHtml([wear, `${(style.colors || []).length} colour${(style.colors || []).length === 1 ? "" : "s"}`, `On hand ${fmtQty(style.totalStock, style.anchor)}`].filter(Boolean).join(" · "))}</small></span>
         ${garmentStockPill(style.status)}
@@ -9461,11 +9462,313 @@ function paintGarmentStockList(el, all, selected) {
   filterStockList();
 }
 
+function stockDeskApi() {
+  return globalThis.POSStockDesk || null;
+}
+
+function stockShelfQty(qty, unit) {
+  const t = POSUnits.typeOf(unit);
+  const n = Number(qty) || 0;
+  if (t.family === "weight" || t.family === "volume") return n / 1000;
+  return POSUnits.displayQty(n, unit);
+}
+
+function stockShelfSuffix(unit) {
+  const t = POSUnits.typeOf(unit);
+  if (t.family === "weight") return "kg";
+  if (t.family === "volume") return "L";
+  return POSUnits.qtySuffix(unit);
+}
+
+function stockMeasure() {
+  const U = globalThis.POSUnits;
+  return {
+    today: ymd(),
+    lineAmount: (qty, rate, unit) => U.lineAmount(qty, rate, unit),
+    displayQty: (qty, unit) => stockShelfQty(qty, unit),
+    qtySuffix: (unit) => stockShelfSuffix(unit),
+  };
+}
+
+function loadStockDeskPrefs() {
+  if (state.stockPrefsLoaded) return;
+  state.stockPrefsLoaded = true;
+  try {
+    const layout = localStorage.getItem("pos_stock_layout");
+    if (layout === "list" || layout === "grid") state.stockLayout = layout;
+    const size = Number(localStorage.getItem("pos_stock_page_size"));
+    if (stockDeskApi()?.PAGE_SIZES?.includes(size)) state.stockPageSize = size;
+    const cols = JSON.parse(localStorage.getItem("pos_stock_columns") || "null");
+    if (Array.isArray(cols)) state.stockColumns = cols;
+  } catch {
+    /* keep the default layout */
+  }
+  if (state.stockLayout !== "list" && state.stockLayout !== "grid") {
+    state.stockLayout = isPharmacyShop() ? "list" : "grid";
+  }
+}
+
+function stockTableMode() {
+  loadStockDeskPrefs();
+  if (isApparelShop() && state.stockLayout !== "list") return "garment";
+  return state.stockLayout === "list" ? "list" : "grid";
+}
+
+function stockItemRecord(row) {
+  const item = (state.items || []).find((entry) => entry.id === row.id) || {};
+  return {
+    ...item,
+    ...row,
+    batches: Array.isArray(row?.batches) ? row.batches : (Array.isArray(item.batches) ? item.batches : []),
+  };
+}
+
+function stockBatchOption() {
+  return isPharmacyShop() && Array.isArray(state.stockBatches) && state.stockBatches.length ? state.stockBatches : null;
+}
+
+function stockCatalog(rows) {
+  const full = (Array.isArray(rows) ? rows : []).map(stockItemRecord);
+  return isApparelShop() ? garmentStockSource(full) : full;
+}
+
+function itemExpiryBucket(item) {
+  const desk = stockDeskApi();
+  if (!desk || !item) return "safe";
+  const today = ymd();
+  const batches = Array.isArray(item.batches) ? item.batches.filter((batch) => Number(batch.remaining_gm) > 0) : [];
+  const dates = batches.length ? batches.map((batch) => stockExpiryYmd(batch, item)) : [stockExpiryYmd(null, item)];
+  return desk.worstExpiryBucket(dates.map((date) => desk.stockExpiryBucket(desk.stockExpiryTone(desk.daysUntilExpiry(date, today)))));
+}
+
+function stockSummaryFor(rows) {
+  const list = Array.isArray(rows) ? rows : [];
+  const desk = stockDeskApi();
+  if (!desk) {
+    return {
+      products: list.length,
+      quantity: 0,
+      quantityMixed: false,
+      valuation: 0,
+      low: list.filter((row) => stockIsLow(row)).length,
+      expired: 0,
+      expiringSoon: 0,
+    };
+  }
+  const measure = stockMeasure();
+  const source = stockCatalog(list);
+  const lines = desk.buildStockLines(source, { ...measure, batches: stockBatchOption() });
+  return desk.summarizeStock(source, lines, measure);
+}
+
+function formatStockTotalQty(n) {
+  return new Intl.NumberFormat("en-IN", { maximumFractionDigits: 3 }).format(Number(n) || 0);
+}
+
+let stockToastTimer = 0;
+function showStockToast(message, kind) {
+  const el = $("stock-toast");
+  const tone = kind === "error" ? "error" : "ok";
+  setStockHint(message, tone);
+  if (!el) return;
+  el.hidden = false;
+  el.className = `stock-toast is-${tone}`;
+  el.textContent = message || "";
+  window.clearTimeout(stockToastTimer);
+  stockToastTimer = window.setTimeout(() => {
+    el.hidden = true;
+  }, 3400);
+}
+
+function syncStockDeskControls() {
+  loadStockDeskPrefs();
+  const layout = state.stockLayout === "list" ? "list" : "grid";
+  document.querySelectorAll("#stock-layout [data-stock-layout]").forEach((btn) => {
+    const on = btn.dataset.stockLayout === layout;
+    btn.classList.toggle("primary", on);
+    btn.setAttribute("aria-pressed", on ? "true" : "false");
+  });
+  const expiry = state.stockExpiryFilter || "all";
+  document.querySelectorAll("#stock-expiry-filters [data-stock-expiry]").forEach((btn) => {
+    const on = btn.dataset.stockExpiry === expiry;
+    btn.classList.toggle("primary", on);
+    btn.setAttribute("aria-pressed", on ? "true" : "false");
+  });
+  const panel = $("stock-columns-panel");
+  const desk = stockDeskApi();
+  if (!panel || !desk) return;
+  const visible = new Set(desk.visibleColumnIds(state.stockColumns));
+  panel.innerHTML = desk.STOCK_COLUMNS.map((col) => {
+    const locked = col.locked ? " disabled" : "";
+    const checked = visible.has(col.id) ? " checked" : "";
+    return `<label class="stock-col-opt"><input type="checkbox" data-stock-col="${col.id}"${checked}${locked} /> ${escapeHtml(col.label)}</label>`;
+  }).join("");
+}
+
+function apparelNarrow(list) {
+  if (!isApparelShop()) return list;
+  const f = stockListFilters();
+  return list.filter((row) => {
+    if (f.category && String(row.category || "") !== f.category) return false;
+    if (f.color && String(row.color || "").toLowerCase() !== f.color) return false;
+    if (f.size && String(row.size || "").toUpperCase() !== f.size) return false;
+    if (f.supplier && !String(row.supplier_name || "").toLowerCase().includes(f.supplier)) return false;
+    return true;
+  });
+}
+
+function stockViewModel(rows) {
+  const desk = stockDeskApi();
+  const measure = stockMeasure();
+  const full = stockCatalog(rows);
+  const narrowed = apparelNarrow(full);
+  const filters = stockListFilters();
+  const model = desk.prepareStockView(narrowed, {
+    ...measure,
+    batches: stockBatchOption(),
+    filters: {
+      q: filters.q,
+      expiry: state.stockExpiryFilter || "all",
+      status: filters.status,
+    },
+    sort: state.stockSort,
+    dir: state.stockSortDir,
+    page: state.stockPage,
+    pageSize: state.stockPageSize,
+  });
+  if (narrowed.length !== full.length) {
+    const lines = desk.buildStockLines(full, { ...measure, batches: stockBatchOption() });
+    model.summary = desk.summarizeStock(full, lines, measure);
+  }
+  return model;
+}
+
+function stockLineDetail(line) {
+  return [line.color, line.size].filter(Boolean).join(" · ");
+}
+
+function stockSkuHtml(line) {
+  const primary = line.sku || line.barcode || "—";
+  const extra = line.sku && line.barcode ? `<small>${escapeHtml(line.barcode)}</small>` : "";
+  return `<span class="stock-sku"><strong>${escapeHtml(primary)}</strong>${extra}</span>`;
+}
+
+function stockPagerHtml(page) {
+  const desk = stockDeskApi();
+  const nums = desk.pageList(page.page, page.pages);
+  const buttons = nums.map((n) => (
+    n === "gap"
+      ? `<span class="stock-page-gap" aria-hidden="true">…</span>`
+      : `<button class="btn${n === page.page ? " primary" : ""}" type="button" data-stock-page="${n}"${n === page.page ? ` aria-current="page"` : ""}>${n}</button>`
+  )).join("");
+  const sizes = desk.PAGE_SIZES.map((size) => `<option value="${size}"${size === page.pageSize ? " selected" : ""}>${size}</option>`).join("");
+  return `<div class="stock-pager">
+    <p>Showing ${page.from}–${page.to} of ${page.total}</p>
+    <div class="stock-pager-nav">
+      <button class="btn" type="button" data-stock-page="prev"${page.page <= 1 ? " disabled" : ""}>Prev</button>
+      ${buttons}
+      <button class="btn" type="button" data-stock-page="next"${page.page >= page.pages ? " disabled" : ""}>Next</button>
+    </div>
+    <label>Rows <select id="stock-page-size" aria-label="Rows per page">${sizes}</select></label>
+  </div>`;
+}
+
+function stockListHead(columns) {
+  const labels = new Map(stockDeskApi().STOCK_COLUMNS.map((col) => [col.id, col.label]));
+  return `<thead><tr>${columns.map((id) => {
+    if (id === "expiry") return `<th>Expiry Date</th>`;
+    if (id === "action") return `<th>Action</th>`;
+    const dir = state.stockSort === id ? (state.stockSortDir === "desc" ? "descending" : "ascending") : "none";
+    const numeric = ["purchase", "selling", "stock", "minimum", "value"].includes(id) ? ` class="num"` : "";
+    return `<th${numeric} data-stock-sort="${id}" aria-sort="${dir}">${escapeHtml(labels.get(id) || id)}</th>`;
+  }).join("")}</tr></thead>`;
+}
+
+function stockGridCard(line, selected, colSet) {
+  const detail = stockLineDetail(line);
+  const tone = line.expiryTone && line.expiryTone !== "none" ? ` is-exp-${line.expiryTone}` : "";
+  const editing = selected === line.itemId ? " is-editing" : "";
+  const level = line.status === "out" ? " is-out" : line.status === "low" ? " is-low" : "";
+  const chips = [];
+  if (colSet.has("sku")) chips.push(`<span class="item-chip">${escapeHtml(line.sku || line.barcode || "No SKU")}</span>`);
+  if (colSet.has("category")) chips.push(`<span class="item-chip">${escapeHtml(line.category || "No category")}</span>`);
+  if (colSet.has("batch")) chips.push(`<span class="item-chip">Batch ${escapeHtml(line.batchNo || "—")}</span>`);
+  if (colSet.has("stock")) chips.push(`<span class="item-chip ${line.status === "ok" ? "stock ok" : "stock low"}">On hand ${escapeHtml(POSUnits.formatQty(line.availableGm, line.unit))}</span>`);
+  if (colSet.has("minimum")) chips.push(`<span class="item-chip">Min ${escapeHtml(POSUnits.formatQty(line.minimumGm, line.unit))}</span>`);
+  if (colSet.has("purchase")) chips.push(`<span class="item-chip">Buy ${money(line.purchasePrice)}</span>`);
+  if (colSet.has("selling")) chips.push(`<span class="item-chip">Sell ${money(line.sellingPrice)}</span>`);
+  if (colSet.has("value")) chips.push(`<span class="item-chip">${money(line.stockValue)}</span>`);
+  const expiry = colSet.has("expiry") ? `<div class="stock-exp-cell">${paintStockExpiryCell(line.expiryYmd)}</div>` : "";
+  const status = colSet.has("status") ? garmentStockPill(line.status) : "";
+  return `<article class="report-card item-card stock-card${editing}${level}${tone}" data-stock-item="${escapeHtml(line.itemId)}" data-stock-batch="${escapeHtml(line.batchId)}" data-stock-barcode="${escapeHtml(line.barcode || "")}" data-stock-search="${escapeHtml(line.search)}" data-stock-status="${escapeHtml(line.status)}" data-stock-low="${line.status === "ok" ? "0" : "1"}" data-stock-expiry="${escapeHtml(line.expiryBucket)}">
+    <div class="item-card-head">
+      <div class="item-card-copy">
+        <strong>${escapeHtml(line.name)}</strong>
+        <span>${escapeHtml(detail || line.category || line.sku || "")}</span>
+      </div>
+      ${status}
+    </div>
+    ${expiry}
+    <div class="item-card-meta">${chips.join("")}</div>
+    <div class="item-card-foot"><button class="btn stock-act" type="button" data-stock-item="${escapeHtml(line.itemId)}" data-stock-batch="${escapeHtml(line.batchId)}" data-stock-barcode="${escapeHtml(line.barcode || "")}">Adjust</button></div>
+  </article>`;
+}
+
+function stockListRow(line, selected, colSet) {
+  const detail = stockLineDetail(line);
+  const tone = line.expiryTone && line.expiryTone !== "none" ? ` is-exp-${line.expiryTone}` : "";
+  const editing = selected === line.itemId ? " is-editing" : "";
+  const level = line.status === "out" ? " is-out" : line.status === "low" ? " is-low" : "";
+  const cells = [];
+  if (colSet.has("name")) cells.push(`<td class="stock-name"><strong>${escapeHtml(line.name)}</strong>${detail ? `<small>${escapeHtml(detail)}</small>` : ""}</td>`);
+  if (colSet.has("sku")) cells.push(`<td>${stockSkuHtml(line)}</td>`);
+  if (colSet.has("category")) cells.push(`<td>${escapeHtml(line.category || "—")}</td>`);
+  if (colSet.has("batch")) cells.push(`<td class="stock-batch-no">${escapeHtml(line.batchNo || "—")}</td>`);
+  if (colSet.has("purchase")) cells.push(`<td class="num">${money(line.purchasePrice)}</td>`);
+  if (colSet.has("selling")) cells.push(`<td class="num">${money(line.sellingPrice)}</td>`);
+  if (colSet.has("stock")) cells.push(`<td class="num">${escapeHtml(POSUnits.formatQty(line.availableGm, line.unit))}</td>`);
+  if (colSet.has("minimum")) cells.push(`<td class="num">${escapeHtml(POSUnits.formatQty(line.minimumGm, line.unit))}</td>`);
+  if (colSet.has("expiry")) cells.push(`<td class="stock-exp-cell">${paintStockExpiryCell(line.expiryYmd)}</td>`);
+  if (colSet.has("value")) cells.push(`<td class="num">${money(line.stockValue)}</td>`);
+  if (colSet.has("status")) cells.push(`<td>${garmentStockPill(line.status)}</td>`);
+  if (colSet.has("action")) cells.push(`<td><button class="btn stock-act" type="button" data-stock-item="${escapeHtml(line.itemId)}" data-stock-batch="${escapeHtml(line.batchId)}" data-stock-barcode="${escapeHtml(line.barcode || "")}">Adjust</button></td>`);
+  return `<tr class="stock-batch-row${editing}${level}${tone}" data-stock-item="${escapeHtml(line.itemId)}" data-stock-batch="${escapeHtml(line.batchId)}" data-stock-barcode="${escapeHtml(line.barcode || "")}" data-stock-search="${escapeHtml(line.search)}" data-stock-status="${escapeHtml(line.status)}" data-stock-low="${line.status === "ok" ? "0" : "1"}" data-stock-expiry="${escapeHtml(line.expiryBucket)}">${cells.join("")}</tr>`;
+}
+
+function paintInventoryStock(el, rows, selected, mode) {
+  const desk = stockDeskApi();
+  if (!desk) {
+    el.innerHTML = `<div class="item-empty-card"><strong>Stock view unavailable</strong><p>Reload the page and open Stock again.</p></div>`;
+    return;
+  }
+  const model = stockViewModel(rows);
+  state.stockPage = model.page.page;
+  const columns = desk.visibleColumnIds(state.stockColumns);
+  const colSet = new Set(columns);
+  if (!model.page.total) {
+    el.innerHTML = `<div class="item-empty-card">
+      <strong>${model.lines.length ? "No matching stock" : "No stock rows"}</strong>
+      <p>${model.lines.length ? "Clear search or filters to see the rest of the catalog." : "Add items first. Their on-hand quantity shows here."}</p>
+    </div>`;
+    return;
+  }
+  const cards = model.page.rows.map((line) => (
+    mode === "list" ? stockListRow(line, selected, colSet) : stockGridCard(line, selected, colSet)
+  )).join("");
+  const pager = stockPagerHtml(model.page);
+  el.innerHTML = mode === "list"
+    ? `<table class="stock-batch-table stock-list-table">${stockListHead(columns)}<tbody>${cards}</tbody></table>${pager}`
+    : `${cards}${pager}`;
+}
+
 function paintStockList(rows) {
   const el = $("stock-table");
   if (!el) return;
+  syncStockDeskControls();
   const selected = $("stk-item")?.value || "";
   const all = Array.isArray(rows) ? rows : [];
+  const mode = stockTableMode();
+  el.classList.toggle("is-table", mode === "list");
   if (!all.length) {
     el.innerHTML = `<div class="item-empty-card">
       <strong>No stock rows</strong>
@@ -9473,91 +9776,35 @@ function paintStockList(rows) {
     </div>`;
     return;
   }
-  if (isPharmacyShop()) {
-    const allCards = pharmacyStockCards(all, state.stockBatches);
-    const cards = allCards.slice(0, fastModeOn() ? 80 : STOCK_PAGE_LIMIT);
-    el.innerHTML = `${listRenderHint(cards.length, allCards.length)}<table class="stock-batch-table"><thead><tr>
-      <th>Medicine</th><th>Batch No.</th><th>Expiry Date</th>
-      <th class="pharm-n">On hand</th><th class="pharm-n">Value</th><th>Status</th>
-    </tr></thead><tbody>${cards
-      .map(({ sku, batch }) => {
-        const item = state.items.find((i) => i.id === sku.id) || sku;
-        const low = stockIsLow(sku);
-        const out = stockIsOut(sku);
-        const qtySrc = batch ? batch.remaining_gm : sku.stock_gm;
-        const rate = Number(batch?.unit_cost ?? sku.purchase_rate) || 0;
-        const value = POSUnits.lineAmount(qtySrc, rate, itemUnit(item));
-        const batchNo = batch ? batch.batch_no || batch.barcode || "—" : sku.batch_no || "—";
-        const expYmd = stockExpiryYmd(batch, { ...item, ...sku, item_default_expiry: batch?.item_default_expiry });
-        const days = expYmd ? expiryDaysLeft({ expiry_date: expYmd }) : null;
-        const expTone = Number.isFinite(days) ? expiryTone(days) : "";
-        const search = `${itemSearchHay(item)} ${batchNo} ${expYmd} ${batch?.barcode || ""} ${formatShopDate(expYmd)}`.toLowerCase();
-        const pill = out
-          ? `<span class="stock-pill is-out">Out</span>`
-          : low
-            ? `<span class="stock-pill is-low">Low</span>`
-            : `<span class="stock-pill is-ok">OK</span>`;
-        return `<tr class="stock-batch-row${selected === sku.id ? " is-editing" : ""}${out ? " is-out" : low ? " is-low" : ""}${expTone ? ` is-exp-${expTone}` : ""}" data-stock-item="${escapeHtml(sku.id)}" data-stock-batch="${escapeHtml(batch?.id || "")}" data-stock-search="${escapeHtml(search)}" data-stock-low="${low ? "1" : "0"}">
-          <td class="pharm-med">${escapeHtml(sku.name || item.name || "Medicine")}<small>${escapeHtml(sku.code || item.code || "")}${item.barcode ? ` · ${escapeHtml(item.barcode)}` : ""}</small></td>
-          <td class="stock-batch-no">${escapeHtml(batchNo)}</td>
-          <td class="stock-exp-cell">${paintStockExpiryCell(expYmd)}</td>
-          <td class="pharm-n"><span class="item-chip ${low ? "stock low" : "stock ok"}">${escapeHtml(fmtQty(qtySrc, item))}</span></td>
-          <td class="pharm-n">${money(value)}</td>
-          <td>${pill}</td>
-        </tr>`;
-      })
-      .join("")}</tbody></table>
-      <div class="item-empty-card" id="stock-filter-empty" hidden>
-        <strong>No matching batches</strong>
-        <p>Clear search or turn off Low stock to see the rest of the catalog.</p>
-      </div>`;
-    filterStockList();
-    return;
-  }
-  if (isApparelShop()) {
+  if (mode === "garment") {
     paintGarmentStockList(el, all, selected);
     return;
   }
-  const list = all.slice(0, fastModeOn() ? 80 : STOCK_PAGE_LIMIT);
-  el.innerHTML = `${listRenderHint(list.length, all.length)}${list
-    .map((r) => {
-      const item = state.items.find((i) => i.id === r.id) || r;
-      const low = stockIsLow(r);
-      const out = stockIsOut(r);
-      const value = POSUnits.lineAmount(r.stock_gm, r.purchase_rate, itemUnit(item));
-      const search = itemSearchHay(item);
-      const pill = out
-        ? `<span class="stock-pill is-out">Out</span>`
-        : low
-          ? `<span class="stock-pill is-low">Low</span>`
-          : `<span class="stock-pill is-ok">OK</span>`;
-      return `<article class="report-card item-card stock-card${selected === r.id ? " is-editing" : ""}${out ? " is-out" : low ? " is-low" : ""}" data-stock-item="${escapeHtml(r.id)}" data-stock-search="${escapeHtml(search)}" data-stock-low="${low ? "1" : "0"}">
-        <div class="item-card-head">
-          <div class="item-card-copy">
-            <strong>${escapeHtml(r.name)}</strong>
-            <span>${escapeHtml(r.code || "")}${item.barcode ? ` · ${escapeHtml(item.barcode)}` : ""}</span>
-          </div>
-          ${pill}
-        </div>
-        <div class="item-card-meta">
-          <span class="item-chip">${escapeHtml(itemUnit(item))}</span>
-          <span class="item-chip ${low ? "stock low" : "stock ok"}">On hand ${escapeHtml(fmtQty(r.stock_gm, item))}</span>
-          <span class="item-chip">Reorder ${escapeHtml(fmtQty(r.reorder_level_gm, item))}</span>
-          <span class="item-chip">${money(value)}</span>
-        </div>
-      </article>`;
-    })
-    .join("")}
-    <div class="item-empty-card" id="stock-filter-empty" hidden>
-      <strong>No matching SKUs</strong>
-      <p>Clear search or turn off Low stock to see the rest of the catalog.</p>
-    </div>`;
-  filterStockList();
+  paintInventoryStock(el, all, selected, mode);
 }
 
-async function loadStock() {
+function repaintStockFilters() {
+  state.stockPage = 1;
+  paintStockHero(state.stockRows);
+  if (stockTableMode() === "garment") {
+    syncStockDeskControls();
+    filterStockList();
+    return;
+  }
+  paintStockList(state.stockRows);
+}
+
+async function loadStock(opts = {}) {
   fillItemPicker("stk-item-list", "stk-item-search", "stk-item");
   paintStockExcelLink();
+  const refreshBtn = $("stock-refresh");
+  const table = $("stock-table");
+  if (opts.refresh) {
+    refreshBtn?.classList.add("is-loading");
+    if (refreshBtn) refreshBtn.disabled = true;
+    refreshBtn?.setAttribute("aria-busy", "true");
+    table?.setAttribute("aria-busy", "true");
+  }
   try {
     const rows = await api("/api/stock");
     state.stockRows = Array.isArray(rows) ? rows : [];
@@ -9567,7 +9814,8 @@ async function loadStock() {
         const batches = await api("/api/batches?on_hand=1");
         state.stockBatches = Array.isArray(batches) ? batches : [];
       } catch (batchErr) {
-        setStockHint(batchErr.message, "error");
+        state.stockBatches = [];
+        if (!opts.refresh) setStockHint(batchErr.message, "error");
       }
     }
     paintStockHero(state.stockRows);
@@ -9577,15 +9825,24 @@ async function loadStock() {
       const next = state.stockRows.find((r) => r.id === selectedId);
       if (next) paintStockSelected(next);
     }
+    if (opts.refresh) showStockToast("Stock updated with the latest quantities and values.", "ok");
   } catch (err) {
-    setStockHint(err.message, "error");
-    const el = $("stock-table");
-    if (el) {
-      el.innerHTML = `<div class="item-empty-card">
-        <strong>Could not load stock</strong>
-        <p>${escapeHtml(err.message)}</p>
-      </div>`;
+    if (opts.refresh) showStockToast(err.message || "Could not refresh stock", "error");
+    else {
+      setStockHint(err.message, "error");
+      const el = $("stock-table");
+      if (el) {
+        el.innerHTML = `<div class="item-empty-card">
+          <strong>Could not load stock</strong>
+          <p>${escapeHtml(err.message)}</p>
+        </div>`;
+      }
     }
+  } finally {
+    refreshBtn?.classList.remove("is-loading");
+    if (refreshBtn) refreshBtn.disabled = false;
+    refreshBtn?.removeAttribute("aria-busy");
+    table?.removeAttribute("aria-busy");
   }
 }
 
@@ -16476,15 +16733,30 @@ $("stk-kind")?.addEventListener("change", () => {
   syncStockQtyField(item || null);
 });
 
-$("stock-search")?.addEventListener("input", filterStockList);
+$("stock-refresh")?.addEventListener("click", () => {
+  void loadStock({ refresh: true });
+});
+$("stock-search")?.addEventListener("input", () => {
+  if (stockTableMode() === "garment") filterStockList();
+  else {
+    state.stockPage = 1;
+    paintStockList(state.stockRows);
+  }
+});
 ["stock-filter-category", "stock-filter-color", "stock-filter-size", "stock-filter-supplier", "stock-filter-status"].forEach((id) => {
   $(id)?.addEventListener("change", () => {
     if (id === "stock-filter-status") {
       state.stockLowOnly = $("stock-filter-status")?.value === "low";
       if ($("stock-low-only")) $("stock-low-only").checked = state.stockLowOnly;
     }
-    filterStockList();
-    paintStockHero(state.stockRows);
+    if (stockTableMode() === "garment") {
+      filterStockList();
+      paintStockHero(state.stockRows);
+    } else {
+      state.stockPage = 1;
+      paintStockHero(state.stockRows);
+      paintStockList(state.stockRows);
+    }
   });
 });
 $("stock-garment-view")?.addEventListener("click", (e) => {
@@ -16496,18 +16768,73 @@ $("stock-garment-view")?.addEventListener("click", (e) => {
 });
 $("stock-low-only")?.addEventListener("change", () => {
   state.stockLowOnly = Boolean($("stock-low-only")?.checked);
-  paintStockHero(state.stockRows);
-  filterStockList();
+  repaintStockFilters();
+});
+$("stock-layout")?.addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-stock-layout]");
+  if (!btn) return;
+  state.stockLayout = btn.dataset.stockLayout === "list" ? "list" : "grid";
+  state.stockPage = 1;
+  try { localStorage.setItem("pos_stock_layout", state.stockLayout); } catch { /* ignore */ }
+  paintStockList(state.stockRows);
+});
+$("stock-expiry-filters")?.addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-stock-expiry]");
+  if (!btn) return;
+  state.stockExpiryFilter = btn.dataset.stockExpiry || "all";
+  repaintStockFilters();
+});
+$("stock-columns-btn")?.addEventListener("click", () => {
+  const panel = $("stock-columns-panel");
+  if (!panel) return;
+  panel.hidden = !panel.hidden;
+  $("stock-columns-btn")?.setAttribute("aria-expanded", panel.hidden ? "false" : "true");
+});
+$("stock-columns")?.addEventListener("change", (e) => {
+  const input = e.target.closest("[data-stock-col]");
+  if (!input || input.disabled) return;
+  state.stockColumns = [...document.querySelectorAll("#stock-columns-panel [data-stock-col]")].filter((el) => el.checked).map((el) => el.dataset.stockCol);
+  try { localStorage.setItem("pos_stock_columns", JSON.stringify(state.stockColumns)); } catch { /* ignore */ }
+  paintStockList(state.stockRows);
 });
 $("stock-hero-stats")?.addEventListener("click", (e) => {
+  const exp = e.target.closest("[data-stock-expiry]");
+  if (exp) {
+    const next = exp.dataset.stockExpiry || "all";
+    state.stockExpiryFilter = state.stockExpiryFilter === next ? "all" : next;
+    repaintStockFilters();
+    return;
+  }
   const btn = e.target.closest("[data-stock-low]");
   if (!btn) return;
   state.stockLowOnly = !state.stockLowOnly;
   if ($("stock-low-only")) $("stock-low-only").checked = state.stockLowOnly;
-  paintStockHero(state.stockRows);
-  filterStockList();
+  repaintStockFilters();
 });
 $("stock-table")?.addEventListener("click", (e) => {
+  const pageBtn = e.target.closest("[data-stock-page]");
+  if (pageBtn) {
+    if (pageBtn.disabled) return;
+    const raw = pageBtn.dataset.stockPage;
+    if (raw === "prev") state.stockPage -= 1;
+    else if (raw === "next") state.stockPage += 1;
+    else state.stockPage = Number(raw) || 1;
+    paintStockList(state.stockRows);
+    return;
+  }
+  const th = e.target.closest(".stock-list-table th");
+  if (th) {
+    const key = th.dataset.stockSort || (th.textContent.trim() === "Expiry Date" ? "expiry" : "");
+    if (!key) return;
+    if (state.stockSort === key) state.stockSortDir = state.stockSortDir === "asc" ? "desc" : "asc";
+    else {
+      state.stockSort = key;
+      state.stockSortDir = "asc";
+    }
+    state.stockPage = 1;
+    paintStockList(state.stockRows);
+    return;
+  }
   const toggle = e.target.closest("[data-stock-toggle]");
   if (toggle) {
     const key = toggle.dataset.stockToggle;
@@ -16526,6 +16853,16 @@ $("stock-table")?.addEventListener("click", (e) => {
   selectStockItem(card.dataset.stockItem, card.dataset.stockBarcode || "");
 });
 $("stock-table")?.addEventListener("change", async (e) => {
+  if (e.target?.id === "stock-page-size") {
+    const size = Number(e.target.value);
+    if (stockDeskApi()?.PAGE_SIZES?.includes(size)) {
+      state.stockPageSize = size;
+      state.stockPage = 1;
+      try { localStorage.setItem("pos_stock_page_size", String(size)); } catch { /* ignore */ }
+      paintStockList(state.stockRows);
+    }
+    return;
+  }
   const input = e.target.closest("[data-stock-reorder]");
   if (!input) return;
   const itemId = input.dataset.stockReorder;

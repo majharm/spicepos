@@ -164,8 +164,8 @@ test("Item Master desk keeps search and save inside scrolling panes", () => {
   assert.match(css, /items-desk: phone tablet scroll 2026/);
   assert.match(css, /max-height:\s*none/);
   assert.match(index, /css\/item-master\.css\?v=20261027items2/);
-  assert.match(index, /app\.js\?v=20261031auto3/);
+  assert.match(index, /app\.js\?v=20261103stock1/);
   assert.match(app, /form\.scrollTop = 0/);
   assert.match(app, /preventScroll:\s*true/);
-  assert.match(index, /css\/pos\.css\?v=20261027invui7/);
+  assert.match(index, /css\/pos\.css\?v=20261103stock1/);
 });
