@@ -528,7 +528,7 @@ async function saveComboOffer(e) {
       if (typeof paintComboBar === "function") paintComboBar();
     }
     paintSavedCombos();
-    $("combo-hint").textContent = `${data.combo?.name || name} saved. Open Counter and tap the combo to add both items with ${pct}% off.`;
+    $("combo-hint").textContent = `${data.combo?.name || name} saved. The counter applies this combo when both items are on the bill, with ${pct}% off.`;
     $("combo-hint").className = "hint ok";
     $("growth-hint").textContent = "Combo offer saved — use it on the next bill.";
     $("growth-hint").className = "hint ok";

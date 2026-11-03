@@ -201,6 +201,7 @@ function pos_apply_business_timezone($businessId) {
   }
   $rows = pos_q("SELECT timezone, tz_offset FROM company_settings WHERE business_id = ? LIMIT 1", "s", [$businessId]);
   $meta = pos_company_timezone($rows[0] ?? []);
+  $GLOBALS["pos_active_timezone"] = $meta["timezone"];
   $db = pos_db();
   $off = $meta["tz_offset"];
   if ($off !== "") @$db->query("SET time_zone = '" . $db->real_escape_string($off) . "'");

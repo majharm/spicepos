@@ -52,30 +52,34 @@ function readOfferForm() {
       const [spend, type, value] = line.split(/[,\s]+/);
       return { spend: Number(spend), type: type === "amt" ? "amt" : "pct", value: Number(value) };
     });
+  const type = $("off-type")?.value || "product";
+  const productTypes = ["combo", "product", "bogo", "mix_match", "qty", "free_gift", "clearance"];
+  const scheduleTypes = ["time", "festival"];
+  const dayTypes = ["day", "festival"];
   return O?.normalize({
     name: $("off-name")?.value,
     description: $("off-desc")?.value,
-    type: $("off-type")?.value,
+    type,
     status: $("off-status")?.value || "draft",
     start_date: $("off-start")?.value,
     end_date: $("off-end")?.value,
-    start_time: $("off-start-time")?.value,
-    end_time: $("off-end-time")?.value,
-    days_of_week: $("off-days")?.value,
+    start_time: scheduleTypes.includes(type) ? $("off-start-time")?.value : "",
+    end_time: scheduleTypes.includes(type) ? $("off-end-time")?.value : "",
+    days_of_week: dayTypes.includes(type) ? $("off-days")?.value : "",
     min_qty: $("off-min-qty")?.value,
     max_qty: $("off-max-qty")?.value,
     min_spend: $("off-min-spend")?.value,
     discount_type: $("off-disc-type")?.value,
     discount_value: $("off-disc-value")?.value,
-    offer_price: $("off-price")?.value,
+    offer_price: ["combo", "mix_match", "product", "clearance"].includes(type) ? $("off-price")?.value : "",
     usage_limit: $("off-limit")?.value,
     customer_eligibility: $("off-elig")?.value,
     branch_id: $("off-branch")?.value,
     stacking: $("off-stack")?.value,
     priority: $("off-priority")?.value,
     loyalty_multiplier: $("off-loyalty")?.value,
-    item_ids: selectedOfferItems(),
-    category: $("off-category")?.value,
+    item_ids: productTypes.includes(type) ? selectedOfferItems() : [],
+    category: type === "category" ? $("off-category")?.value : "",
     buy_qty: $("off-buy-qty")?.value,
     get_qty: $("off-get-qty")?.value,
     get_item_id: $("off-get-item")?.value,
@@ -256,6 +260,18 @@ function filteredOfferRows() {
   });
 }
 
+function offerValueLabel(o) {
+  const type = String(o.discount_type || "pct");
+  const price = Number(o.offer_price);
+  const value = Number(o.discount_value);
+  if (type === "pct") return `${Number.isFinite(value) ? value : 0}% off`;
+  if (type === "combo_price" && price > 0) return `combo ${money(price)}`;
+  if (type === "price" && price > 0) return `special ${money(price)}`;
+  if (type === "amt") return `${money(value)} off`;
+  if (price > 0) return `${money(price)} off`;
+  return `${money(value)} off`;
+}
+
 function paintOfferList() {
   const rows = filteredOfferRows();
   const emptyCopy =
@@ -275,7 +291,7 @@ function paintOfferList() {
           <span class="offer-status">${escapeHtml(label)}</span>
         </header>
         <p>${escapeHtml(o.description || o.offer_type)} ${items.length ? `· ${escapeHtml(items.slice(0, 3).join(" + "))}` : ""}</p>
-        <p class="hint">${escapeHtml(o.offer_type)} · ${o.discount_type === "pct" ? `${o.discount_value}%` : money(o.offer_price || o.discount_value)} off · used ${o.used_count || 0}${o.usage_limit ? `/${o.usage_limit}` : ""}</p>
+        <p class="hint">${escapeHtml(offerValueLabel(o))} · used ${o.used_count || 0}${o.usage_limit ? `/${o.usage_limit}` : ""}</p>
         <div class="item-card-actions dash-actions">
           <button class="btn" type="button" data-offer-edit="${escapeHtml(o.id)}">Edit</button>
           <button class="btn" type="button" data-offer-status="${escapeHtml(o.id)}" data-status="${st === "active" ? "paused" : "active"}">${st === "active" ? "Inactive" : "Activate"}</button>
@@ -303,7 +319,9 @@ async function loadOffersDesk(force) {
     offerStats = stats;
     paintOfferDash(stats);
     paintOfferList();
-    paintOfferIdeas(ideas?.ideas || offerEngine()?.suggestFromGrowth({}, state.items) || []);
+    const remoteIdeas = Array.isArray(ideas?.ideas) ? ideas.ideas : [];
+    const fallbackIdeas = offerEngine()?.suggestFromGrowth({}, state.items) || [];
+    paintOfferIdeas(remoteIdeas.length ? remoteIdeas : fallbackIdeas);
     if (settings && $("off-shop-stack")) $("off-shop-stack").value = settings.stacking || "product_and_bill";
     if (typeof paintComboBar === "function") paintComboBar();
     if (typeof paintOfferBar === "function") paintOfferBar();
@@ -480,8 +498,19 @@ function bindOffersUi() {
   $("offer-ai-btn")?.addEventListener("click", async () => {
     const panel = document.querySelector(".offer-ai-panel");
     if (panel) panel.open = true;
-    const data = await api("/api/offers/suggest");
-    paintOfferIdeas(data.ideas || []);
+    const fallback = () => offerEngine()?.suggestFromGrowth({}, state.items) || [];
+    try {
+      const data = await api("/api/offers/suggest");
+      const ideas = Array.isArray(data?.ideas) && data.ideas.length ? data.ideas : fallback();
+      paintOfferIdeas(ideas);
+    } catch (err) {
+      paintOfferIdeas(fallback());
+      const hint = $("offers-hint");
+      if (hint) {
+        hint.textContent = err?.message || "Could not load AI suggestions. Showing catalog ideas instead.";
+        hint.className = "hint error";
+      }
+    }
     $("offer-ai")?.scrollIntoView({ block: "nearest" });
   });
   $("offer-form")?.addEventListener("submit", (e) => void saveOfferForm(e));

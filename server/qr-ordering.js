@@ -314,7 +314,7 @@ export function qrOfferCart(built) {
   });
 }
 
-export function applyQrOffers(built, { offers = [], stacking = "product_and_bill", items = [], now, customer } = {}) {
+export function applyQrOffers(built, { offers = [], stacking = "product_and_bill", items = [], now, customer, timeZone } = {}) {
   const O = POSOffers || globalThis.POSOffers;
   const source = Array.isArray(built) ? built.map((line) => ({ ...line })) : [];
   if (!O || !source.length) {
@@ -325,6 +325,7 @@ export function applyQrOffers(built, { offers = [], stacking = "product_and_bill
   const live = (offers || []).filter((offer) => (O.liveStatus?.(offer) || offer.live_status || offer.status) === "active");
   const result = O.evaluateAll(live, {
     now: now || new Date(),
+    timeZone: timeZone || "Asia/Kolkata",
     cart: qrOfferCart(source),
     items: items.length ? items : source.map((line) => line.item).filter(Boolean),
     stacking,
@@ -371,7 +372,7 @@ async function businessForPublic(shop) {
   if (!key) return null;
   const rows = await query(
     `SELECT b.*, c.name AS company_name, c.address AS company_address, c.phone AS company_phone,
-            c.logo_url AS company_logo
+            c.logo_url AS company_logo, c.timezone AS company_timezone
      FROM businesses b
      LEFT JOIN company_settings c ON c.business_id = b.id
      WHERE (b.id = ? OR b.code = ?) AND b.status = 'active' LIMIT 1`,
@@ -1020,6 +1021,7 @@ export function registerQrPublic(app) {
           stacking: settings?.stacking || "product_and_bill",
           items: built.map((line) => line.item),
           customer: { bills },
+          timeZone: business.company_timezone || business.timezone || "Asia/Kolkata",
         });
         const { subtotal, gst, total, discount, message } = priced;
         const pricedLines = priced.built;

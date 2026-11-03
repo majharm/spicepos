@@ -46,6 +46,51 @@
     if (Number.isNaN(dt.getTime())) return "00:00";
     return `${String(dt.getHours()).padStart(2, "0")}:${String(dt.getMinutes()).padStart(2, "0")}`;
   }
+  function firstPositive(...vals) {
+    for (const v of vals) {
+      if (v == null || v === "") continue;
+      const n = Number(v);
+      if (Number.isFinite(n) && n > 0) return n;
+    }
+    return 0;
+  }
+  const WEEKDAYS = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+  function zonedClock(now, timeZone) {
+    const dt = now instanceof Date ? now : new Date(now);
+    if (Number.isNaN(dt.getTime())) return { day: "", hm: "00:00", dow: 0 };
+    const zone = String(timeZone || "").trim();
+    if (!zone) {
+      const p = (n) => String(n).padStart(2, "0");
+      return {
+        day: `${dt.getFullYear()}-${p(dt.getMonth() + 1)}-${p(dt.getDate())}`,
+        hm: `${p(dt.getHours())}:${p(dt.getMinutes())}`,
+        dow: dt.getDay(),
+      };
+    }
+    try {
+      const fmt = new Intl.DateTimeFormat("en-US", {
+        timeZone: zone,
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        hourCycle: "h23",
+        weekday: "short",
+      });
+      const parts = Object.fromEntries(fmt.formatToParts(dt).map((part) => [part.type, part.value]));
+      const hour = parts.hour === "24" ? "00" : parts.hour;
+      return {
+        day: `${parts.year}-${parts.month}-${parts.day}`,
+        hm: `${hour}:${parts.minute}`,
+        dow: WEEKDAYS[parts.weekday] ?? dt.getDay(),
+      };
+    } catch {
+      return zonedClock(dt, "");
+    }
+  }
+  const BILL_WIDE = new Set(["spend", "min_purchase", "customer", "first_purchase", "repeat", "time", "day", "festival"]);
+  const PRODUCT_SCOPED = new Set(["combo", "product", "bogo", "mix_match", "qty", "clearance", "free_gift"]);
 
   const TYPES = [
     { id: "combo", label: "Combo / bundle", scope: "lines" },
@@ -210,10 +255,10 @@
     return n;
   }
 
-  function liveStatus(offer, now = new Date()) {
+  function liveStatus(offer, now = new Date(), timeZone) {
     const st = String(offer?.status || "draft");
     if (st === "paused" || st === "completed" || st === "draft") return st;
-    const day = ymd(now);
+    const day = timeZone ? zonedClock(now, timeZone).day : ymd(now);
     const end = ymd(offer?.end_date);
     const start = ymd(offer?.start_date);
     if (end && day > end) return "expired";
@@ -223,7 +268,7 @@
     return "active";
   }
 
-  function dayMatches(offer, now) {
+  function dayMatches(offer, now, timeZone) {
     const raw = String(offer?.days_of_week || "").trim();
     if (!raw) return true;
     const map = { sun: 0, mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6 };
@@ -233,7 +278,8 @@
       .map((x) => x.trim())
       .filter(Boolean)
       .map((x) => (map[x.slice(0, 3)] != null ? map[x.slice(0, 3)] : Number(x)));
-    return want.includes(now.getDay());
+    const dow = timeZone ? zonedClock(now, timeZone).dow : (now instanceof Date ? now : new Date(now)).getDay();
+    return want.includes(dow);
   }
 
   function offerClock(raw) {
@@ -244,21 +290,21 @@
     return hm;
   }
 
-  function timeMatches(offer, now) {
+  function timeMatches(offer, now, timeZone) {
     const start = offerClock(offer?.start_time);
     const end = offerClock(offer?.end_time);
     if ((!start && !end) || (start === "00:00" && end === "00:00")) return true;
-    const cur = hm(now);
+    const cur = timeZone ? zonedClock(now, timeZone).hm : hm(now);
     if (start && end && start > end) return cur >= start || cur <= end;
     if (start && cur < start) return false;
     if (end && cur > end) return false;
     return true;
   }
 
-  function inWindow(offer, now = new Date()) {
-    if (liveStatus(offer, now) !== "active") return false;
-    if (!dayMatches(offer, now)) return false;
-    if (!timeMatches(offer, now)) return false;
+  function inWindow(offer, now = new Date(), timeZone) {
+    if (liveStatus(offer, now, timeZone) !== "active") return false;
+    if (!dayMatches(offer, now, timeZone)) return false;
+    if (!timeMatches(offer, now, timeZone)) return false;
     const limit = offer?.usage_limit;
     if (limit != null && Number(limit) > 0 && num(offer.used_count) >= Number(limit)) return false;
     return true;
@@ -317,10 +363,12 @@
   function qualifyingLines(offer, cart) {
     const cond = parseConditions(offer);
     const type = offer.offer_type || offer.type;
+    const billWide = BILL_WIDE.has(type);
     return (cart || []).filter((line) => {
       const id = String(line.itemId || line.item_id || line.item?.id || "");
       if (cond.exclude_item_ids.includes(id)) return false;
-      if (cond.item_ids.length && ["combo", "product", "bogo", "mix_match", "qty", "clearance", "free_gift"].includes(type)) {
+      if (billWide) return true;
+      if (cond.item_ids.length && PRODUCT_SCOPED.has(type)) {
         if (type === "bogo" && cond.get_item_id && id === cond.get_item_id) return true;
         if (type === "free_gift" && cond.free_item_id && id === cond.free_item_id) return true;
         return cond.item_ids.includes(id);
@@ -363,7 +411,8 @@
 
   function evaluateOffer(offer, ctx = {}) {
     const now = ctx.now instanceof Date ? ctx.now : new Date(ctx.now || Date.now());
-    if (!inWindow(offer, now)) return null;
+    const timeZone = String(ctx.timeZone || ctx.timezone || "").trim();
+    if (!inWindow(offer, now, timeZone)) return null;
     if (ctx.branchId && offer.branch_id && String(offer.branch_id) !== String(ctx.branchId)) return null;
     if (!eligibleCustomer(offer, ctx.customer || {})) return null;
     const cond = parseConditions(offer);
@@ -379,9 +428,7 @@
       if (qtyBound(offer.min_qty) && qty < num(offer.min_qty)) return null;
       if (qtyBound(offer.max_qty) && qty > num(offer.max_qty)) return null;
       const minSpend = num(offer.min_spend);
-      const scopeSpend = ["spend", "min_purchase", "customer", "first_purchase", "repeat", "time", "day", "festival"].includes(type)
-        ? (cond.item_ids.length || cond.category ? spend : billSpend)
-        : spend;
+      const scopeSpend = BILL_WIDE.has(type) ? billSpend : spend;
       if (minSpend > 0 && scopeSpend < minSpend) return null;
     }
 
@@ -390,32 +437,54 @@
     let scope = typeMeta(type).scope;
     const lineDiscounts = {};
 
+    const billWide = BILL_WIDE.has(type);
     if (type === "combo") {
-      const ids = cond.item_ids;
+      const ids = cond.item_ids.map(String);
       if (ids.length < 2) return null;
-      const have = new Set(cart.map((l) => String(l.itemId || l.item_id)));
-      if (!ids.every((id) => have.has(String(id)))) return null;
       const comboLines = cart.filter((l) => ids.includes(String(l.itemId || l.item_id)));
+      const qtyById = {};
+      const unitById = {};
+      ids.forEach((id) => {
+        qtyById[id] = 0;
+      });
+      comboLines.forEach((l) => {
+        const id = String(l.itemId || l.item_id);
+        const q = pieceQty(l);
+        qtyById[id] = (qtyById[id] || 0) + q;
+        if (q > 0 && unitById[id] == null) unitById[id] = lineGrossOf(l) / q;
+      });
+      const sets = Math.floor(Math.min(...ids.map((id) => qtyById[id] || 0)));
+      if (sets < 1) return null;
       const total = round2(comboLines.reduce((s, l) => s + lineGrossOf(l), 0));
       if (offer.discount_type === "combo_price" || (offer.discount_type === "price" && num(offer.offer_price) > 0)) {
-        const price = num(offer.offer_price ?? cond.bundle_price ?? offer.discount_value);
-        discount = round2(Math.max(0, total - price));
+        const price = firstPositive(offer.offer_price, cond.bundle_price, offer.discount_value);
+        if (!(price > 0)) return null;
+        const setRegular = ids.reduce((s, id) => s + num(unitById[id]), 0);
+        discount = round2(sets * Math.max(0, setRegular - price));
       } else {
         discount = discountOn(total, offer.discount_type, offer.discount_value);
       }
       message = `${offer.name}: combo save ${discount}`;
       scope = "bill";
     } else if (type === "mix_match") {
-      const n = Math.max(1, cond.pick_count);
-      const price = num(cond.bundle_price || offer.offer_price || offer.discount_value);
-      if (lines.length < n || price <= 0) return null;
-      const priced = lines
-        .map((l) => ({ id: String(l.itemId || l.lineId || ""), gross: lineGrossOf(l), qty: pieceQty(l) }))
-        .sort((a, b) => b.gross - a.gross);
-      const sets = Math.floor(priced.length / n);
+      const n = Math.max(1, Math.floor(cond.pick_count) || 1);
+      const price = firstPositive(cond.bundle_price, offer.offer_price, offer.discount_value);
+      if (!(price > 0)) return null;
+      const units = [];
+      lines.forEach((l) => {
+        const pieces = pieceQty(l);
+        const count = Math.max(0, Math.min(500, Math.floor(pieces)));
+        const gross = lineGrossOf(l);
+        if (count <= 0 || gross <= 0) return;
+        const unit = gross / Math.max(pieces, 1);
+        for (let i = 0; i < count; i += 1) units.push(unit);
+      });
+      if (units.length < n) return null;
+      units.sort((a, b) => b - a);
+      const sets = Math.floor(units.length / n);
       if (!sets) return null;
       let regular = 0;
-      for (let i = 0; i < sets * n; i += 1) regular += priced[i].gross;
+      for (let i = 0; i < sets * n; i += 1) regular += units[i];
       discount = round2(Math.max(0, regular - price * sets));
       message = `${offer.name}: pick ${n} for ₹${price}`;
       scope = "bill";
@@ -489,7 +558,7 @@
       scope = "lines";
     } else if (type === "spend") {
       const tiers = (cond.spend_tiers || []).slice().sort((a, b) => num(b.spend) - num(a.spend));
-      const base = cond.item_ids.length || cond.category ? spend : billSpend;
+      const base = billWide ? billSpend : spend;
       const tier = tiers.find((t) => base >= num(t.spend));
       if (!tier) return null;
       discount = discountOn(base, tier.type || offer.discount_type, tier.value);
@@ -531,7 +600,7 @@
       message = offer.name;
       scope = "lines";
     } else {
-      const base = cond.item_ids.length || cond.category ? spend : billSpend;
+      const base = billWide ? billSpend : spend;
       if (type === "first_purchase" && num((ctx.customer || {}).bills) > 0) return null;
       if (type === "repeat" && num((ctx.customer || {}).bills) < cond.repeat_bills) return null;
       if (base <= 0) return null;
@@ -666,15 +735,30 @@
     };
   }
 
+  function catalogUnitRate(row) {
+    return firstPositive(row?.retail_rate, row?.rate_per_kg, row?.mrp);
+  }
+
+  function peakHourRow(growth = {}) {
+    const direct = growth.bestHour || (Array.isArray(growth.hours) ? growth.hours[0] : null);
+    if (direct && (direct.hour != null || direct.label) && num(direct.takings ?? direct.amount ?? direct.sales ?? 1) > 0) return direct;
+    const series = growth.charts?.hourwise || growth.hourwise || [];
+    const ranked = (Array.isArray(series) ? series : [])
+      .filter((row) => num(row?.takings ?? row?.amount ?? row?.sales) > 0)
+      .slice()
+      .sort((a, b) => num(b.takings ?? b.amount ?? b.sales) - num(a.takings ?? a.amount ?? a.sales) || num(b.bills) - num(a.bills));
+    return ranked[0] || null;
+  }
+
   function suggestFromGrowth(growth = {}, items = []) {
     const top = growth.products?.top || [];
     const slow = growth.products?.slow || growth.inventory?.slow || [];
-    const hour = growth.bestHour || growth.hours?.[0];
+    const hour = peakHourRow(growth);
     const out = [];
     if (top[0] && top[1]) {
       const a = items.find((i) => i.id === (top[0].itemId || top[0].id)) || top[0];
       const b = items.find((i) => i.id === (top[1].itemId || top[1].id)) || top[1];
-      const regular = num(a.retail_rate || a.amount) + num(b.retail_rate || b.amount);
+      const regular = catalogUnitRate(a) + catalogUnitRate(b);
       const combo = regular > 0 ? round2(regular * 0.92) : 0;
       out.push({
         goal: "sales",
@@ -737,26 +821,30 @@
         customer_eligibility: "inactive",
       }),
     });
-    if (hour?.hour != null || hour?.label) {
-      const h = num(hour.hour, 16);
-      const start = `${String(h).padStart(2, "0")}:00`;
-      const end = `${String((h + 3) % 24).padStart(2, "0")}:00`;
-      out.push({
-        goal: "sales",
-        type: "time",
-        name: "Happy hours",
-        text: `${hour.label || start} is a strong window. A 15% happy-hour offer can lift the average bill.`,
-        draft: normalize({
-          name: "Happy hours 15% off",
-          type: "time",
-          status: "draft",
-          discount_type: "pct",
-          discount_value: 15,
-          start_time: start,
-          end_time: end,
-        }),
-      });
+    let start = "16:00";
+    let end = "19:00";
+    let windowLabel = "16:00–19:00";
+    if (hour && (hour.hour != null || hour.label)) {
+      const h = Math.max(0, Math.min(23, Math.floor(num(hour.hour, 16))));
+      start = `${String(h).padStart(2, "0")}:00`;
+      end = `${String((h + 3) % 24).padStart(2, "0")}:00`;
+      windowLabel = hour.label || start;
     }
+    out.push({
+      goal: "sales",
+      type: "time",
+      name: "Happy hours",
+      text: `${windowLabel} is a strong window. A 15% happy-hour offer can lift the average bill.`,
+      draft: normalize({
+        name: "Happy hours 15% off",
+        type: "time",
+        status: "draft",
+        discount_type: "pct",
+        discount_value: 15,
+        start_time: start,
+        end_time: end,
+      }),
+    });
     return out;
   }
 

@@ -6514,7 +6514,8 @@ function applyComboOffer(id) {
     item_a_id: o.conditions?.item_ids?.[0],
     item_b_id: o.conditions?.item_ids?.[1],
     discount_type: o.discount_type,
-    discount_value: o.offer_price || o.discount_value,
+    discount_value: o.discount_value,
+    offer_price: o.offer_price,
     status: o.status,
   })).find((c) => c.id === id);
   if (!combo) return;
@@ -6532,7 +6533,15 @@ function applyComboOffer(id) {
     renderCart();
     return;
   }
-  state.billDiscountType = String(combo.discount_type || "pct") === "amt" ? "amt" : "pct";
+  const comboType = String(combo.discount_type || "pct").toLowerCase();
+  if (comboType === "combo_price" || comboType === "price") {
+    state.offerAuto = true;
+    state.offerBillLocked = false;
+    setHint(`Combo ${combo.name} added. The counter applies the combo price when both items are on the bill.`, "ok");
+    renderCart();
+    return;
+  }
+  state.billDiscountType = comboType === "amt" ? "amt" : "pct";
   state.billDiscountValue = Number(combo.discount_value) || 0;
   if ($("bill-disc-type")) $("bill-disc-type").value = state.billDiscountType;
   if ($("bill-disc-value")) $("bill-disc-value").value = state.billDiscountValue;
@@ -6547,6 +6556,7 @@ function offerCartContext() {
   const loy = state.loyaltyAccount || {};
   return {
     now: new Date(),
+    timeZone: state.company?.timezone || "Asia/Kolkata",
     cart: state.cart.map((line) => {
       const item = state.items.find((i) => i.id === line.itemId);
       const calc = item ? lineCalc(item, { ...line, discountType: "amt", discountValue: 0 }) : { gross: 0, taxable: 0 };
@@ -6581,8 +6591,9 @@ function applyOffersToCart() {
     state.appliedOffers = null;
     return;
   }
-  const offers = (state.offers || []).filter((o) => ["active", "scheduled"].includes(O.liveStatus(o)));
-  const result = O.evaluateAll(offers, offerCartContext());
+  const ctx = offerCartContext();
+  const offers = (state.offers || []).filter((o) => ["active", "scheduled"].includes(O.liveStatus(o, ctx.now, ctx.timeZone)));
+  const result = O.evaluateAll(offers, ctx);
   state.appliedOffers = result;
   state.cart.forEach((line) => {
     if (isClassicBillShop()) return;
@@ -6635,7 +6646,9 @@ function pickBestOfferForCart() {
   if (best) return best;
   const match = findLegacyComboOnBill();
   if (!match) return null;
-  const pct = String(match.discount_type || "pct") !== "amt";
+  const dtype = String(match.discount_type || "pct").toLowerCase();
+  if (dtype === "combo_price" || dtype === "price") return null;
+  const pct = dtype !== "amt";
   const val = Number(match.discount_value) || 0;
   const already =
     state.billDiscountType === (pct ? "pct" : "amt") && Number(state.billDiscountValue) === val;

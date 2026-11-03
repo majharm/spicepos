@@ -368,6 +368,121 @@ test("PHP-shaped percent offer ignores leftover offer_price 0 so the discount ap
   assert.equal(hit.lineDiscounts.vase, 50);
 });
 
+test("combo price applies once per complete set and ignores a zero price", () => {
+  const offer = O.normalize({
+    name: "Tea + Biscuits",
+    type: "combo",
+    status: "active",
+    discount_type: "combo_price",
+    offer_price: 179,
+    item_ids: ["tea", "biscuits"],
+  });
+  const now = new Date("2026-09-05T10:00:00");
+  const two = O.evaluateOffer(offer, {
+    cart: [line("tea", 300, { qty: 2 }), line("biscuits", 100, { qty: 2 })],
+    now,
+  });
+  assert.equal(two.discount, 42);
+  const partial = O.evaluateOffer(offer, {
+    cart: [line("tea", 300, { qty: 2 }), line("biscuits", 50, { qty: 1 })],
+    now,
+  });
+  assert.equal(partial.discount, 21);
+  const free = O.normalize({
+    name: "Free combo",
+    type: "combo",
+    status: "active",
+    discount_type: "combo_price",
+    offer_price: 0,
+    discount_value: 0,
+    item_ids: ["tea", "biscuits"],
+  });
+  assert.equal(O.evaluateOffer(free, { cart: [line("tea", 150), line("biscuits", 50)], now }), null);
+});
+
+test("mix and match counts quantity on one line", () => {
+  const offer = O.normalize({
+    name: "Pick any 3",
+    type: "mix_match",
+    status: "active",
+    item_ids: ["a"],
+    pick_count: 3,
+    bundle_price: 299,
+  });
+  const hit = O.evaluateOffer(offer, {
+    cart: [line("a", 360, { qty: 3 })],
+    now: new Date("2026-09-05T10:00:00"),
+  });
+  assert.equal(hit.discount, 61);
+});
+
+test("happy hours discount the whole bill even when products were saved on the offer", () => {
+  const offer = O.normalize({
+    name: "Happy hours",
+    type: "time",
+    status: "active",
+    discount_type: "pct",
+    discount_value: 10,
+    start_time: "16:00",
+    end_time: "19:00",
+    item_ids: ["tea"],
+  });
+  const hit = O.evaluateOffer(offer, {
+    cart: [line("tea", 100), line("snack", 100)],
+    now: new Date("2026-09-05T17:00:00"),
+  });
+  assert.equal(hit.discount, 20);
+  assert.equal(hit.scope, "bill");
+});
+
+test("happy hours follow the shop timezone when one is supplied", () => {
+  const offer = O.normalize({
+    name: "Happy hours",
+    type: "time",
+    status: "active",
+    discount_type: "pct",
+    discount_value: 10,
+    start_time: "16:00",
+    end_time: "19:00",
+  });
+  const cart = [line("tea", 200)];
+  const inside = O.evaluateOffer(offer, { cart, now: new Date("2026-09-05T12:00:00Z"), timeZone: "Asia/Kolkata" });
+  assert.equal(inside.discount, 20);
+  assert.equal(O.evaluateOffer(offer, { cart, now: new Date("2026-09-05T10:00:00Z"), timeZone: "Asia/Kolkata" }), null);
+});
+
+test("AI suggestions use the peak hour and catalog rates", () => {
+  const ideas = O.suggestFromGrowth(
+    {
+      products: { top: [{ itemId: "a", name: "Tea", amount: 90000 }, { itemId: "b", name: "Biscuits", amount: 80000 }] },
+      charts: {
+        hourwise: [
+          { hour: 18, label: "18:00", takings: 5000, bills: 12 },
+          { hour: 11, label: "11:00", takings: 100, bills: 1 },
+        ],
+      },
+    },
+    [
+      { id: "a", name: "Tea", retail_rate: 40 },
+      { id: "b", name: "Biscuits", retail_rate: 20 },
+    ],
+  );
+  const combo = ideas.find((i) => i.type === "combo");
+  assert.equal(combo.draft.discount_type, "combo_price");
+  assert.equal(combo.draft.offer_price, 55.2);
+  const happy = ideas.find((i) => i.type === "time");
+  assert.equal(happy.draft.start_time, "18:00");
+  assert.equal(happy.draft.end_time, "21:00");
+  const noRate = O.suggestFromGrowth(
+    { products: { top: [{ itemId: "a", name: "Tea", amount: 90000 }, { itemId: "b", name: "Biscuits", amount: 80000 }] } },
+    [],
+  );
+  const pct = noRate.find((i) => i.type === "combo");
+  assert.equal(pct.draft.discount_type, "pct");
+  assert.equal(pct.draft.discount_value, 8);
+  assert.ok(noRate.some((i) => i.type === "time" && i.draft.start_time === "16:00" && i.draft.end_time === "19:00"));
+});
+
 test("legacy combo rows convert and AI suggest builds a combo draft", () => {
   const legacy = O.comboFromLegacy({ id: "c1", name: "Tea combo", item_a_id: "a", item_b_id: "b", discount_type: "pct", discount_value: 8, status: "active" });
   assert.equal(legacy.offer_type, "combo");

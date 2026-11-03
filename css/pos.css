@@ -8252,6 +8252,12 @@ body.pharmacy-mode .stock-desk .items-library-list {
 .offer-toolbar {
   align-items: center;
 }
+.offers-desk .offer-toolbar > #offers-hint {
+  align-self: stretch;
+  flex: 1 1 auto;
+  margin: 0;
+  min-width: 0;
+}
 .offer-toolbar .offer-filters { margin: 0; }
 .offer-toolbar .offer-stack-label {
   margin: 0;
@@ -8309,6 +8315,7 @@ body.pharmacy-mode .stock-desk .items-library-list {
   gap: 12px;
   grid-template-columns: 1fr;
 }
+#offer-form [data-offer-when][hidden] { display: none !important; }
 .offers-desk .disc-pair { grid-template-columns: minmax(128px, 0.85fr) 1fr; }
 .offers-desk .items-library-head { grid-template-columns: auto minmax(0, 1fr); }
 .offer-form select[multiple] { min-height: 120px; }

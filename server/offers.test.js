@@ -60,7 +60,7 @@ test("shop UI wires the Offers desk and Counter auto-apply", () => {
   assert.match(php, /0000-00-00/);
   assert.match(php, /combo_price.*price.*\$special/);
   assert.match(engine, /0000-00-00/);
-  assert.match(app, /O\.liveStatus\(o\)/);
+  assert.match(app, /O\.liveStatus\(o, ctx\.now, ctx\.timeZone\)/);
   assert.match(php, /pos_find_offer/);
   assert.match(till, /pos_offers_dispatch/);
 });

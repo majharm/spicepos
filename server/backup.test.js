@@ -343,7 +343,7 @@ test("HTML and CSS cache stickers match deploy136", () => {
     assert.doesNotMatch(html, /20260901deploy59/);
   }
   const orderSticker = readFileSync(path.join(root, "order.html"), "utf8");
-  assert.match(orderSticker, /20260917food1/);
+  assert.match(orderSticker, /20261103food1/);
   assert.doesNotMatch(orderSticker, /20260905deploy170/);
   assert.doesNotMatch(orderSticker, /20260905deploy139/);
   assert.doesNotMatch(orderSticker, /20260905deploy136/);

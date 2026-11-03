@@ -394,7 +394,7 @@ test("POS boot skips API probe and slims catalog photos", () => {
   assert.match(index, /qrcode\.iife\.js[^>]+defer/);
   assert.match(index, /preload="auto"/);
   assert.match(index, /pos-api\.js\?v=20261031growth2/);
-  assert.match(index, /app\.js\?v=20261103cart1/);
+  assert.match(index, /app\.js\?v=20261103off1/);
   assert.match(index, /class="dialog-head"/);
   assert.match(index, /id="modal-close"/);
   assert.match(read("css/pos.css"), /#modal-close,/);
@@ -403,7 +403,7 @@ test("POS boot skips API probe and slims catalog photos", () => {
   assert.match(index, /invoice\.js\?v=20261103bill1/);
   assert.doesNotMatch(index, /app\.js\?v=20260905deploy167/);
   assert.doesNotMatch(index, /app\.js\?v=20260905deploy166/);
-  assert.match(index, /offers\.js\?v=20260905deploy170/);
+  assert.match(index, /offers\.js\?v=20261103off1/);
   assert.match(index, /restaurant\.js\?v=20261012set4/);
   assert.match(login, /x-pos-20260830e\.js\?v=20261030forgot1/);
   assert.match(loginJs, /saveLoginSpec/);
@@ -504,9 +504,9 @@ test("Restaurant Counter can create named dining tables", () => {
   assert.match(index, /id="btn-shift-table"/);
   assert.match(index, /id="set-table-shifting"/);
   assert.match(restaurant, /function canShiftTable/);
-  assert.match(index, /pos\.css\?v=20261103cart1/);
+  assert.match(index, /pos\.css\?v=20261103off1/);
   assert.match(index, /restaurant\.js\?v=20261012set4/);
-  assert.match(index, /app\.js\?v=20261103cart1/);
+  assert.match(index, /app\.js\?v=20261103off1/);
   assert.match(index, /footwear\.js\?v=20261012print1/);
   assert.match(app, /function resolveKitchenKot/);
   assert.match(app, /function paintKotTimers/);

@@ -361,6 +361,7 @@ function pos_offer_stats($bid) {
 
 function pos_suggest_offers($bid) {
   $ideas = [];
+  $peak = null;
   try {
     require_once __DIR__ . "/pos-growth.php";
     $g = pos_build_growth($bid);
@@ -381,6 +382,12 @@ function pos_suggest_offers($bid) {
           "item_ids" => [$top[0]["itemId"] ?? "", $top[1]["itemId"] ?? ""],
         ]),
       ];
+    }
+    $hourwise = $g["charts"]["hourwise"] ?? ($g["hourwise"] ?? []);
+    foreach ($hourwise as $row) {
+      $takings = (float) ($row["takings"] ?? 0);
+      if ($takings <= 0) continue;
+      if ($peak === null || $takings > (float) ($peak["takings"] ?? 0)) $peak = $row;
     }
     if ($slow) {
       $ideas[] = [
@@ -405,6 +412,30 @@ function pos_suggest_offers($bid) {
     "name" => "Welcome offer",
     "text" => "₹100 OFF on the first purchase above ₹999.",
     "draft" => pos_normalize_offer(["name" => "Welcome ₹100 off", "type" => "first_purchase", "status" => "draft", "discount_type" => "amt", "discount_value" => 100, "min_spend" => 999, "customer_eligibility" => "new"]),
+  ];
+  $hour = ($peak && isset($peak["hour"])) ? (int) $peak["hour"] : 16;
+  if ($hour < 0 || $hour > 23) $hour = 16;
+  $start = str_pad((string) $hour, 2, "0", STR_PAD_LEFT) . ":00";
+  $end = str_pad((string) (($hour + 3) % 24), 2, "0", STR_PAD_LEFT) . ":00";
+  $label = ($peak && !empty($peak["label"])) ? $peak["label"] : ($peak ? $start : "16:00–19:00");
+  if (!$peak) {
+    $start = "16:00";
+    $end = "19:00";
+  }
+  $ideas[] = [
+    "goal" => "sales",
+    "type" => "time",
+    "name" => "Happy hours",
+    "text" => $label . " is a strong window. A 15% happy-hour offer can lift the average bill.",
+    "draft" => pos_normalize_offer([
+      "name" => "Happy hours 15% off",
+      "type" => "time",
+      "status" => "draft",
+      "discount_type" => "pct",
+      "discount_value" => 15,
+      "start_time" => $start,
+      "end_time" => $end,
+    ]),
   ];
   return $ideas;
 }
@@ -450,8 +481,30 @@ function pos_offer_clock($raw) {
   return $s;
 }
 
+function pos_offer_now_parts() {
+  $tzName = trim((string) ($GLOBALS["pos_active_timezone"] ?? ""));
+  if ($tzName === "") $tzName = function_exists("pos_shop_timezone") ? pos_shop_timezone() : "Asia/Kolkata";
+  try {
+    $tz = new DateTimeZone($tzName);
+  } catch (Exception $e) {
+    $tz = new DateTimeZone("Asia/Kolkata");
+  }
+  $now = new DateTime("now", $tz);
+  return ["hm" => $now->format("H:i"), "w" => (int) $now->format("w"), "day" => $now->format("Y-m-d")];
+}
+
+function pos_offer_positive(...$vals) {
+  foreach ($vals as $v) {
+    if ($v === null || $v === "") continue;
+    $n = (float) $v;
+    if ($n > 0) return $n;
+  }
+  return 0;
+}
+
 function pos_offer_in_window($o) {
   if (($o["live_status"] ?? $o["status"] ?? "") !== "active") return false;
+  $clock = pos_offer_now_parts();
   $days = trim((string) ($o["days_of_week"] ?? ""));
   if ($days !== "") {
     $map = ["sun" => 0, "mon" => 1, "tue" => 2, "wed" => 3, "thu" => 4, "fri" => 5, "sat" => 6];
@@ -461,11 +514,11 @@ function pos_offer_in_window($o) {
       if ($bit === "") continue;
       $want[] = array_key_exists(substr($bit, 0, 3), $map) ? $map[substr($bit, 0, 3)] : (int) $bit;
     }
-    if ($want && !in_array((int) date("w"), $want, true)) return false;
+    if ($want && !in_array((int) $clock["w"], $want, true)) return false;
   }
   $start = pos_offer_clock($o["start_time"] ?? "");
   $end = pos_offer_clock($o["end_time"] ?? "");
-  $cur = date("H:i");
+  $cur = $clock["hm"];
   if (!(($start === "" && $end === "") || ($start === "00:00" && $end === "00:00"))) {
     if ($start !== "" && $end !== "" && $start > $end) {
       if ($cur < $start && $cur > $end) return false;
@@ -499,10 +552,15 @@ function pos_offer_qualifying_lines($o, $cart) {
   $cat = trim((string) ($cond["category"] ?? $o["category"] ?? ""));
   $ex = array_map("strval", $cond["exclude_item_ids"] ?? []);
   $type = (string) ($o["offer_type"] ?? $o["type"] ?? "product");
+  $billWide = in_array($type, ["spend", "min_purchase", "customer", "first_purchase", "repeat", "time", "day", "festival"], true);
   $out = [];
   foreach ($cart as $line) {
     $id = (string) ($line["itemId"] ?? "");
     if ($id !== "" && in_array($id, $ex, true)) continue;
+    if ($billWide) {
+      $out[] = $line;
+      continue;
+    }
     if ($ids && in_array($type, ["combo", "product", "bogo", "mix_match", "qty", "clearance", "free_gift"], true)) {
       if ($type === "bogo" && !empty($cond["get_item_id"]) && $id === (string) $cond["get_item_id"]) {
         $out[] = $line;
@@ -545,20 +603,35 @@ function pos_evaluate_offer($o, $cart, $ctx = []) {
     if ($minQty > 0 && $qty < $minQty) return null;
     if ($maxQty > 0 && $qty > $maxQty) return null;
     $minSpend = (float) ($o["min_spend"] ?? 0);
-    $scope = in_array($type, ["spend", "min_purchase", "customer", "first_purchase", "repeat", "time", "day", "festival"], true)
-      ? ((!empty($cond["item_ids"]) || !empty($cond["category"])) ? $spend : $bill)
-      : $spend;
+    $billWide = in_array($type, ["spend", "min_purchase", "customer", "first_purchase", "repeat", "time", "day", "festival"], true);
+    $scope = $billWide ? $bill : $spend;
     if ($minSpend > 0 && $scope < $minSpend) return null;
   }
   $discount = 0;
   $scope = "lines";
   $lineDiscounts = [];
   $ids = array_map("strval", $cond["item_ids"] ?? []);
+  $billWide = in_array($type, ["spend", "min_purchase", "customer", "first_purchase", "repeat", "time", "day", "festival"], true);
   if ($type === "combo") {
     if (count($ids) < 2) return null;
-    $have = [];
-    foreach ($cart as $line) $have[(string) ($line["itemId"] ?? "")] = true;
-    foreach ($ids as $id) if (empty($have[$id])) return null;
+    $qtyBy = [];
+    $unitBy = [];
+    foreach ($ids as $id) $qtyBy[$id] = 0;
+    foreach ($cart as $line) {
+      $id = (string) ($line["itemId"] ?? "");
+      if (!in_array($id, $ids, true)) continue;
+      $q = pos_offer_piece_qty($line);
+      $qtyBy[$id] = ($qtyBy[$id] ?? 0) + $q;
+      $g = (float) ($line["gross"] ?? 0);
+      if ($q > 0 && !isset($unitBy[$id])) $unitBy[$id] = $g / $q;
+    }
+    $sets = null;
+    foreach ($ids as $id) {
+      $haveQty = (float) ($qtyBy[$id] ?? 0);
+      $sets = $sets === null ? $haveQty : min($sets, $haveQty);
+    }
+    $sets = (int) floor((float) $sets);
+    if ($sets < 1) return null;
     $total = 0;
     foreach ($cart as $line) {
       if (in_array((string) ($line["itemId"] ?? ""), $ids, true)) $total += (float) ($line["gross"] ?? 0);
@@ -566,11 +639,37 @@ function pos_evaluate_offer($o, $cart, $ctx = []) {
     $dtype = (string) ($o["discount_type"] ?? "pct");
     $special = (float) ($o["offer_price"] ?? 0);
     if ($dtype === "combo_price" || ($dtype === "price" && $special > 0)) {
-      $price = (float) ($o["offer_price"] ?? $cond["bundle_price"] ?? $o["discount_value"] ?? 0);
-      $discount = pos_offer_r2(max(0, $total - $price));
+      $price = pos_offer_positive($o["offer_price"] ?? null, $cond["bundle_price"] ?? null, $o["discount_value"] ?? null);
+      if ($price <= 0) return null;
+      $setRegular = 0;
+      foreach ($ids as $id) $setRegular += (float) ($unitBy[$id] ?? 0);
+      $discount = pos_offer_r2($sets * max(0, $setRegular - $price));
     } else {
       $discount = pos_offer_discount_on($total, $dtype, $o["discount_value"] ?? 0);
     }
+    $scope = "bill";
+  } elseif ($type === "mix_match") {
+    $n = max(1, (int) ($cond["pick_count"] ?? 3));
+    $price = pos_offer_positive($cond["bundle_price"] ?? null, $o["offer_price"] ?? null, $o["discount_value"] ?? null);
+    if ($price <= 0) return null;
+    $units = [];
+    foreach ($lines as $line) {
+      $pieces = pos_offer_piece_qty($line);
+      $count = (int) floor($pieces);
+      if ($count > 500) $count = 500;
+      $gross = (float) ($line["gross"] ?? 0);
+      if ($count <= 0 || $gross <= 0) continue;
+      $unit = $gross / max($pieces, 1);
+      for ($i = 0; $i < $count; $i++) $units[] = $unit;
+    }
+    if (count($units) < $n) return null;
+    rsort($units, SORT_NUMERIC);
+    $setCount = (int) floor(count($units) / $n);
+    if ($setCount < 1) return null;
+    $regular = 0;
+    for ($i = 0; $i < $setCount * $n; $i++) $regular += $units[$i];
+    $discount = pos_offer_r2(max(0, $regular - $price * $setCount));
+    if ($discount <= 0) return null;
     $scope = "bill";
   } elseif ($type === "bogo") {
     $buyIds = $ids;
@@ -628,7 +727,7 @@ function pos_evaluate_offer($o, $cart, $ctx = []) {
     if ($discount <= 0) return null;
     $scope = "lines";
   } else {
-    $base = (!empty($cond["item_ids"]) || !empty($cond["category"])) ? $spend : $bill;
+    $base = $billWide ? $bill : $spend;
     if ($base <= 0) return null;
     $discount = pos_offer_discount_on($base, $o["discount_type"] ?? "pct", $o["discount_value"] ?? 0);
     if ($discount <= 0) return null;
