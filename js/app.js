@@ -6999,7 +6999,7 @@ function renderItemsTable() {
   if (isPharmacyShop()) {
     el.innerHTML = `${moreHint}<table class="items-pharm-table"><thead><tr>
       <th>Medicine</th><th>Generic</th><th>Type</th><th>Pack</th><th>Batch</th><th>Expiry</th>
-      <th class="pharm-n">MRP</th><th class="pharm-n">Rate</th><th>Stock</th><th></th>
+      <th class="pharm-n">MRP</th><th class="pharm-n">Purchase price</th><th class="pharm-n">Retail price</th><th>Stock</th><th></th>
     </tr></thead><tbody>${items
       .map((i) => {
         const low = Number(i.stock_gm) <= Number(i.reorder_level_gm);
@@ -7016,6 +7016,7 @@ function renderItemsTable() {
         <td>${escapeHtml(i.batch_no || "—")}</td>
         <td>${escapeHtml(expiry)}</td>
         <td class="pharm-n">${money(i.mrp || i.retail_rate)}</td>
+        <td class="pharm-n">${money(i.purchase_rate)}</td>
         <td class="pharm-n">${money(i.retail_rate)}</td>
         <td><span class="item-chip ${low ? "stock low" : "stock ok"}">${escapeHtml(fmtQty(i.stock_gm, i))}</span></td>
         <td><div class="item-card-actions">
@@ -7066,7 +7067,8 @@ function renderItemsTable() {
         </div>
         <div class="item-card-foot">
           <div class="item-card-rates">
-            <span>${isPharmacyShop() ? "Selling" : "Retail"} <em>${money(i.retail_rate)}${escapeHtml(suffix)}</em></span>
+            <span>Purchase price <em>${money(i.purchase_rate)}${escapeHtml(suffix)}</em></span>
+            <span>Retail price <em>${money(i.retail_rate)}${escapeHtml(suffix)}</em></span>
             <span>B2B <em>${money(i.b2b_rate)}${escapeHtml(suffix)}</em></span>
           </div>
           <div class="item-card-actions">

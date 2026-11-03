@@ -230,6 +230,12 @@ body.pharmacy-mode #view-items #items-table.table-wrap {
   font-size: 12px;
   font-weight: 700;
 }
+#view-items .item-card-rates {
+  gap: 6px 14px;
+}
+#view-items .items-pharm-table {
+  min-width: 980px;
+}
 #view-items .item-card .btn,
 #view-items .items-pharm-table .btn {
   min-height: 40px;
