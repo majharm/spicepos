@@ -381,7 +381,7 @@ function refreshCartLineLive(key) {
   }
   const calc = lineCalc(item, line);
   const amtEl = document.querySelector(`[data-line-amt="${CSS.escape(String(key))}"]`);
-  if (amtEl) amtEl.textContent = money(calc.taxable + calc.gst);
+  if (amtEl) amtEl.textContent = money(lineFaceAmount(calc));
   paintBillFigures();
 }
 
@@ -518,7 +518,7 @@ function printAreaLineHtml(item, line, key, calc) {
         <div class="pack print-line-summary">${escapeHtml(cap)}</div>
       </div>
       <div class="line-ops">
-        <div class="line-amt" data-line-amt="${escapeHtml(key)}">${need ? "—" : money(calc.taxable + calc.gst)}</div>
+        <div class="line-amt" data-line-amt="${escapeHtml(key)}">${need ? "—" : money(lineFaceAmount(calc))}</div>
         <button type="button" class="classic-del" data-del-line="${escapeHtml(key)}" aria-label="Remove ${escapeHtml(item.name)}">×</button>
       </div>
     </div>
@@ -683,7 +683,7 @@ function cafeBillLinesHtml() {
             </div>
           </td>
           <td class="cafe-n cafe-rate">${lineRateFieldHtml(item, line, key)}</td>
-          <td class="cafe-n cafe-amt" data-line-amt="${escapeHtml(key)}">${escapeHtml(money(calc.taxable + calc.gst))}</td>
+          <td class="cafe-n cafe-amt" data-line-amt="${escapeHtml(key)}">${escapeHtml(money(lineFaceAmount(calc)))}</td>
           <td class="cafe-del"><button type="button" class="classic-del cafe-del-btn" data-del-line="${escapeHtml(key)}" aria-label="Remove ${escapeHtml(item.name)}">×</button></td>
         </tr>
         ${note ? `<tr class="cafe-note-row"><td colspan="5">${note}</td></tr>` : ""}`;
@@ -723,7 +723,7 @@ function cafeMobileOrderHtml() {
             <button type="button" data-chg="${escapeHtml(key)}" data-d="${step}">+</button>
           </div>
           <div class="cafe-rate">${lineRateFieldHtml(item, line, key)}</div>
-          <div class="cafe-amt" data-line-amt="${escapeHtml(key)}">${escapeHtml(money(calc.taxable + calc.gst))}</div>
+          <div class="cafe-amt" data-line-amt="${escapeHtml(key)}">${escapeHtml(money(lineFaceAmount(calc)))}</div>
         </div>
         ${lineDescriptionHtml(line, key)}
       </article>`;
@@ -1824,6 +1824,13 @@ function detachClassicUnknownCustomer() {
   paintBillCustomer();
   paintClassicLoyalty();
   paintClassicCustomerStatus();
+}
+
+function lineFaceAmount(calc) {
+  const gross = Number(calc?.gross);
+  const discount = Number(calc?.discount) || 0;
+  if (Number.isFinite(gross)) return Math.max(0, gross - discount);
+  return Math.max(0, Number(calc?.taxable) || 0);
 }
 
 function lineCalc(item, line) {
@@ -5441,7 +5448,7 @@ function renderCart() {
           </td>
           <td class="pharm-n pharm-rate">${lineRateFieldHtml(item, line, key)}</td>
           <td class="line-disc-cell">${classicLineDiscHtml(line, key)}</td>
-          <td class="pharm-n" data-line-amt="${escapeHtml(key)}">${escapeHtml(money(calc.taxable + calc.gst))}</td>
+          <td class="pharm-n" data-line-amt="${escapeHtml(key)}">${escapeHtml(money(lineFaceAmount(calc)))}</td>
           <td><button type="button" class="classic-del" data-del-line="${escapeHtml(key)}" aria-label="Remove ${escapeHtml(item.name)}">×</button></td>
         </tr>`;
       }).join("")}</tbody>
@@ -5496,7 +5503,7 @@ function renderCart() {
           <td class="line-disc-cell">${classicLineDiscHtml(line, key)}</td>
           <td class="pharm-n stock-cell">${escapeHtml(alert.stock.label)}</td>
           <td class="pharm-n">${escapeHtml(itemTaxLabel(item))}</td>
-          <td class="pharm-n" data-line-amt="${escapeHtml(key)}">${escapeHtml(money(calc.taxable + calc.gst))}</td>
+          <td class="pharm-n" data-line-amt="${escapeHtml(key)}">${escapeHtml(money(lineFaceAmount(calc)))}</td>
           <td><button type="button" class="classic-del" data-del-line="${escapeHtml(key)}" aria-label="Remove ${escapeHtml(item.name)}">×</button></td>
         </tr>`;
       }).join("")}</tbody>
@@ -5533,7 +5540,7 @@ function renderCart() {
                 ${POSUnits.isCount(unitCode) || !isScaleEnabled() ? "" : `<button type="button" class="scale-line-btn" data-scale-line="${escapeHtml(key)}" title="Read scale">⚖</button>`}
               </div>
               <div class="line-rate">${lineRateFieldHtml(item, line, key)}</div>
-              <div class="line-amt" data-line-amt="${escapeHtml(key)}">${money(calc.taxable + calc.gst)}</div>
+              <div class="line-amt" data-line-amt="${escapeHtml(key)}">${money(lineFaceAmount(calc))}</div>
             </div>
           </div>
           ${canDiscount() ? `<div class="line-disc">
@@ -12896,7 +12903,7 @@ function refreshPrintLineLive(key) {
     const chip = root.querySelector("[data-print-area]");
     root.classList.toggle("is-need-size", need);
     if (summary) summary.textContent = need ? "Enter width × height" : printLineCaptionText(item, line);
-    if (amt) amt.textContent = need ? "—" : money(calc.taxable + calc.gst);
+    if (amt) amt.textContent = need ? "—" : money(lineFaceAmount(calc));
     if (chip) chip.textContent = printAreaChipText(item, line);
     const ta = root.querySelector("[data-line-note]");
     if (ta && isAutoPrintSpecNote(ta.value)) ta.value = line.notes || "";

@@ -2748,19 +2748,54 @@ body.bill-collapsed .bill-toggle[data-count]:not([data-count="0"])::after {
   border-bottom: 1px solid var(--line);
 }
 .line-main {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 8px;
-  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 6px 8px;
+}
+.line-info {
+  flex: 1 1 100%;
+  min-width: 0;
 }
 /* bill-type: compact till scale */
-.line .who { font-weight: 700; font-size: 14px; line-height: 1.3; }
-.line .pack { color: var(--muted); font-size: 11px; line-height: 1.3; }
+.line .who {
+  font-weight: 700;
+  font-size: 14px;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+.line .pack {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .line-ops {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: flex-start;
+  flex-wrap: wrap;
   gap: 8px;
+  flex: 1 1 100%;
+  width: 100%;
+  min-width: 0;
+}
+.bill-panel .line .qty-input,
+.ticket .line .qty-input {
+  width: 3.4em;
+  min-width: 2.8em;
+}
+.bill-panel .line-rate-input,
+.ticket .line-rate-input {
+  width: 5.2em;
+  min-width: 4.4em;
+}
+.bill-panel .line-amt,
+.ticket .line-amt {
+  margin-left: auto;
+  white-space: nowrap;
 }
 .line-rate,
 .cafe-rate,
