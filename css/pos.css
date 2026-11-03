@@ -8511,6 +8511,7 @@ html[dir="rtl"] select {
   gap: 8px;
   font-size: 14px;
 }
+.customer-face-row[hidden] { display: none; }
 .customer-face-thanks {
   margin: 8px 0 0;
   font-weight: 700;

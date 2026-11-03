@@ -12862,6 +12862,11 @@ function paintCustomerFace(t) {
   if ($("face-taxable")) $("face-taxable").textContent = money(t?.taxable || 0);
   if ($("face-gst")) $("face-gst").textContent = money(t?.tax || 0);
   if ($("face-total")) $("face-total").textContent = money(t?.total != null ? t.total : (t?.taxable || 0) + (t?.tax || 0));
+  const shown = (n) => Number(n) > 0.009;
+  if ($("face-discount-row")) $("face-discount-row").hidden = !shown(discount);
+  if ($("face-loyalty-row")) $("face-loyalty-row").hidden = !shown(t?.loyalty);
+  if ($("face-taxable-row")) $("face-taxable-row").hidden = true;
+  if ($("face-gst-row")) $("face-gst-row").hidden = !shown(t?.tax);
 }
 
 function paintBillFigures() {
@@ -12889,10 +12894,11 @@ function paintBillFigures() {
   if ($("extra-total")) $("extra-total").textContent = money(t.extra || 0);
   if ($("loyalty-total")) $("loyalty-total").textContent = money(t.loyalty || 0);
   if ($("profit-total")) $("profit-total").textContent = money(t.profit || 0);
-  if ($("disc-row")) $("disc-row").hidden = !has;
-  if ($("extra-row")) $("extra-row").hidden = !(Number(t.extra) > 0);
-  if ($("loyalty-row")) $("loyalty-row").hidden = !has;
-  if ($("taxable-row")) $("taxable-row").hidden = !has;
+  const shown = (n) => Number(n) > 0.009;
+  if ($("disc-row")) $("disc-row").hidden = !shown(discount);
+  if ($("extra-row")) $("extra-row").hidden = !shown(t.extra);
+  if ($("loyalty-row")) $("loyalty-row").hidden = !shown(t.loyalty);
+  if ($("taxable-row")) $("taxable-row").hidden = true;
   if ($("cgst-row")) $("cgst-row").hidden = !showTax || Boolean(t.interState);
   if ($("sgst-row")) $("sgst-row").hidden = !showTax;
   if ($("gst-row")) $("gst-row").hidden = true;
