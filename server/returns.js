@@ -4,7 +4,7 @@ import "../js/footwear.js";
 import { query, withTransaction } from "./db.js";
 import { bid, branchId, authUser } from "./context.js";
 import { requireStaff, requirePerm } from "./auth.js";
-import { saleStockQty, writeMovement, restorePieceBarcode } from "./advanced.js";
+import { saleStockQty, writeMovement, restorePieceBarcode, reverseLoyaltyOnRefund } from "./advanced.js";
 
 const POSDiscount = globalThis.POSDiscount;
 const POSFootwear = globalThis.POSFootwear;
@@ -333,6 +333,11 @@ export function registerReturns(app) {
             returnId,
             returnNumber,
           });
+        }
+        try {
+          await reverseLoyaltyOnRefund(conn, businessId, order, refund, returnType === "full");
+        } catch {
+          /* loyalty optional */
         }
         const [saved] = await conn.query("SELECT * FROM sales_returns WHERE id=?", [returnId]);
         const [savedLines] = await conn.query("SELECT * FROM sales_return_lines WHERE return_id=?", [returnId]);

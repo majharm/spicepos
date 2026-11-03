@@ -325,6 +325,11 @@ function pos_dispatch_returns($path, $method, $body, $bid, $branchId, $uid, $aut
         "return_number" => $returnNumber,
       ]);
     }
+    if (function_exists("pos_loyalty_reverse_refund")) {
+      pos_loyalty_reverse_refund($bid, $order, $refund, $full);
+    } elseif (function_exists("pos_loyalty_reverse_sale") && $full) {
+      pos_loyalty_reverse_sale($bid, $order["id"]);
+    }
     $saved = pos_q("SELECT * FROM sales_returns WHERE id = ? LIMIT 1", "s", [$returnId]);
     $savedLines = pos_q("SELECT * FROM sales_return_lines WHERE return_id = ?", "s", [$returnId]);
     $row = $saved[0] ?? [];

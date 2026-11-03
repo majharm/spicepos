@@ -109,8 +109,12 @@
     const lines = (Array.isArray(input.lines) ? input.lines : []).map(lineOf).filter(Boolean);
     const D = root.POSDiscount;
     const bill = D?.computeBill
-      ? D.computeBill(lines, { discountType: input.discountType || input.discount_type, discountValue: input.discountValue ?? input.discount_value })
-      : { subtotal: 0, gst: 0, billDiscount: 0, total: 0, discountType: "amt", discountValue: 0 };
+      ? D.computeBill(lines, {
+          discountType: input.discountType || input.discount_type,
+          discountValue: input.discountValue ?? input.discount_value,
+          loyaltyDiscount: input.loyaltyDiscount ?? input.loyalty_discount ?? 0,
+        })
+      : { subtotal: 0, gst: 0, billDiscount: 0, taxable: 0, total: 0, discountType: "amt", discountValue: 0 };
     const charges = roundMoney(Math.max(0, num(input.extraCharges ?? input.extra_charges)));
     const roundOff = roundMoney(num(input.roundOff ?? input.round_off));
     const tax = splitTax(bill.gst, Boolean(input.interState));
@@ -118,6 +122,7 @@
     return {
       lines,
       subtotal: bill.subtotal,
+      taxable: bill.taxable,
       discount: bill.billDiscount,
       discountType: bill.discountType,
       discountValue: bill.discountValue,
@@ -277,6 +282,7 @@
   <table class="totals">
     <tr><td>Subtotal</td><td class="num">${escapeHtml(moneyLabel(quote?.subtotal))}</td></tr>
     <tr><td>Discount</td><td class="num">${escapeHtml(moneyLabel(quote?.discount))}</td></tr>
+    <tr><td>Taxable amount</td><td class="num">${escapeHtml(moneyLabel(quote?.taxable ?? Math.max(0, num(quote?.subtotal) - num(quote?.discount))))}</td></tr>
     <tr><td>Charges</td><td class="num">${escapeHtml(moneyLabel(quote?.extra_charges ?? quote?.extraCharges))}</td></tr>
     <tr><td>Tax ${taxBits.length ? `<span class="muted">${escapeHtml(taxBits.join(" · "))}</span>` : ""}</td><td class="num">${escapeHtml(moneyLabel(quote?.gst))}</td></tr>
     <tr><td>Round off</td><td class="num">${escapeHtml(moneyLabel(quote?.round_off ?? quote?.roundOff))}</td></tr>

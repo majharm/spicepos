@@ -102,18 +102,12 @@ function pos_checkout_sale($bid, $branchId, $uid, $auth, $body) {
       }
     }
     pos_assert_apparel_sale_stock($bid, $built);
-    $subtotal = pos_round8(array_sum(array_column($built, "amount")));
-    $gst = 0;
-    foreach ($built as $l) $gst += isset($l["gst"]) ? (float) $l["gst"] : (($l["amount"] * $l["gstRate"]) / 100);
-    $gst = pos_round8($gst);
     $billType = $body["discountType"] ?? $body["discount_type"] ?? "amt";
     $billValue = $body["discountValue"] ?? $body["discount_value"] ?? $body["discount"] ?? 0;
-    $billDiscount = function_exists("pos_adv_discount_amount")
-      ? pos_adv_discount_amount($subtotal + $gst, $billType, $billValue)
-      : pos_round8((float) ($body["discount"] ?? 0));
     $extraCharges = pos_round8(max(0, (float) ($body["extraCharges"] ?? $body["extra_charges"] ?? 0)));
-    $afterBill = pos_round8(max(0, $subtotal + $gst - $billDiscount + $extraCharges));
-    $total = $afterBill;
+    $preview = function_exists("pos_sale_bill")
+      ? pos_sale_bill($built, $billType, $billValue, 0)
+      : ["subtotal" => 0, "gst" => 0, "billDiscount" => 0, "taxable" => 0, "total" => 0];
     $loyaltyDiscount = 0;
     $loyaltyEarn = 0;
     $loyaltyRedeem = 0;
@@ -121,6 +115,16 @@ function pos_checkout_sale($bid, $branchId, $uid, $auth, $body) {
     $next = pos_next_seq("order", $bid, 10001);
     $orderNumber = "SO-" . $next;
     $orderId = pos_uuid();
+    $redeemQuote = function_exists("pos_loyalty_redeem_quote")
+      ? pos_loyalty_redeem_quote($bid, $customer, $body["loyaltyPoints"] ?? $body["loyalty_points"] ?? 0, $preview["taxable"] ?? 0)
+      : ["points" => 0, "rupees" => 0];
+    $bill = function_exists("pos_sale_bill")
+      ? pos_sale_bill($built, $billType, $billValue, $redeemQuote["rupees"] ?? 0)
+      : $preview;
+    $subtotal = pos_round8($bill["subtotal"] ?? 0);
+    $gst = pos_round8($bill["gst"] ?? 0);
+    $billDiscount = pos_round8($bill["billDiscount"] ?? 0);
+    $total = pos_round8(max(0, ($bill["total"] ?? 0) + $extraCharges));
     $payStatus = $methodPay === "credit" ? "unpaid" : "paid";
     $packId = $body["packId"] ?? null;
     $packName = null;
@@ -261,20 +265,38 @@ function pos_checkout_sale($bid, $branchId, $uid, $auth, $body) {
       }
     }
     if (function_exists("pos_loyalty_apply_sale")) {
-      $loy = pos_loyalty_apply_sale($bid, $customer, $orderId, $afterBill, $body["loyaltyPoints"] ?? $body["loyalty_points"] ?? 0, $uid);
+      $loy = pos_loyalty_apply_sale(
+        $bid,
+        $customer,
+        $orderId,
+        $total,
+        $body["loyaltyPoints"] ?? $body["loyalty_points"] ?? 0,
+        $uid,
+        $preview["taxable"] ?? 0,
+        $total
+      );
       $loyaltyDiscount = (float) ($loy["rupees"] ?? 0);
       $loyaltyEarn = (int) ($loy["earned"] ?? 0);
       $loyaltyRedeem = (int) ($loy["points"] ?? 0);
-      $total = pos_round8(max(0, $afterBill - $loyaltyDiscount));
+      if (abs($loyaltyDiscount - (float) ($redeemQuote["rupees"] ?? 0)) > 0.009 && function_exists("pos_sale_bill")) {
+        $bill = pos_sale_bill($built, $billType, $billValue, $loyaltyDiscount);
+        $subtotal = pos_round8($bill["subtotal"] ?? $subtotal);
+        $gst = pos_round8($bill["gst"] ?? $gst);
+        $billDiscount = pos_round8($bill["billDiscount"] ?? $billDiscount);
+        $total = pos_round8(max(0, ($bill["total"] ?? 0) + $extraCharges));
+        pos_q(
+          "UPDATE sales_orders SET subtotal = ?, discount = ?, gst = ?, total = ? WHERE id = ?",
+          "sssss",
+          [(string) $subtotal, (string) $billDiscount, (string) $gst, (string) $total, $orderId]
+        );
+      }
       try {
         pos_q(
-          "UPDATE sales_orders SET total = ?, discount_type = ?, discount_value = ?, loyalty_points_redeemed = ?, loyalty_points_earned = ?, loyalty_discount = ? WHERE id = ?",
-          "sssiids",
-          [(string) $total, pos_adv_is_pct($billType) ? "pct" : "amt", (string) pos_adv_round2($billValue), $loyaltyRedeem, $loyaltyEarn, $loyaltyDiscount, $orderId]
+          "UPDATE sales_orders SET discount_type = ?, discount_value = ?, loyalty_points_redeemed = ?, loyalty_points_earned = ?, loyalty_discount = ? WHERE id = ?",
+          "ssiids",
+          [pos_adv_is_pct($billType) ? "pct" : "amt", (string) pos_adv_round2($billValue), $loyaltyRedeem, $loyaltyEarn, $loyaltyDiscount, $orderId]
         );
-      } catch (Exception $e) {
-        pos_q("UPDATE sales_orders SET total = ? WHERE id = ?", "ss", [(string) $total, $orderId]);
-      }
+      } catch (Exception $e) { /* optional loyalty columns */ }
     }
     if (function_exists("pos_record_offer_redemptions")) {
       try {

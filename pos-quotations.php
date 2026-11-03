@@ -259,17 +259,24 @@ function pos_quote_prepare_lines($bid, $rawLines) {
 
 function pos_quote_price($bid, $body, $shop, $customer) {
   $lines = pos_quote_prepare_lines($bid, $body["lines"] ?? []);
-  $subtotal = 0.0;
-  $gst = 0.0;
-  foreach ($lines as $line) {
-    $subtotal += (float) $line["taxable"];
-    $gst += (float) $line["gst"];
-  }
-  $subtotal = pos_round8($subtotal);
-  $gst = pos_round8($gst);
   $dtype = pos_quote_is_pct($body["discount_type"] ?? $body["discountType"] ?? "amt") ? "pct" : "amt";
   $dval = pos_quote_num($body["discount_value"] ?? $body["discountValue"] ?? 0);
-  $billDiscount = pos_quote_discount($subtotal + $gst, $dtype, $dval);
+  if (function_exists("pos_sale_bill")) {
+    $priced = pos_sale_bill($lines, $dtype, $dval, pos_quote_num($body["loyalty_discount"] ?? $body["loyaltyDiscount"] ?? 0));
+    $subtotal = pos_round8($priced["subtotal"] ?? 0);
+    $gst = pos_round8($priced["gst"] ?? 0);
+    $billDiscount = pos_round8($priced["billDiscount"] ?? 0);
+  } else {
+    $subtotal = 0.0;
+    $gst = 0.0;
+    foreach ($lines as $line) {
+      $subtotal += (float) $line["taxable"];
+      $gst += (float) $line["gst"];
+    }
+    $subtotal = pos_round8($subtotal);
+    $gst = pos_round8($gst);
+    $billDiscount = pos_quote_discount($subtotal, $dtype, $dval);
+  }
   $charges = pos_round8(max(0, pos_quote_num($body["extra_charges"] ?? $body["extraCharges"] ?? 0)));
   $roundOff = pos_round8(pos_quote_num($body["round_off"] ?? $body["roundOff"] ?? 0));
   $inter = false;
@@ -281,10 +288,14 @@ function pos_quote_price($bid, $body, $shop, $customer) {
     );
   }
   $tax = pos_quote_split($gst, $inter);
-  $total = pos_round8(max(0, pos_round8($subtotal + $gst - $billDiscount) + $charges + $roundOff));
+  $taxable = function_exists("pos_sale_bill")
+    ? pos_round8($priced["taxable"] ?? max(0, $subtotal - $billDiscount))
+    : pos_round8(max(0, $subtotal - $billDiscount));
+  $total = pos_round8(max(0, pos_round8($taxable + $gst) + $charges + $roundOff));
   return array_merge([
     "lines" => $lines,
     "subtotal" => $subtotal,
+    "taxable" => $taxable,
     "discount" => $billDiscount,
     "discountType" => $dtype,
     "discountValue" => $dval,

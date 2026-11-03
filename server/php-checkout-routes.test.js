@@ -394,13 +394,13 @@ test("POS boot skips API probe and slims catalog photos", () => {
   assert.match(index, /qrcode\.iife\.js[^>]+defer/);
   assert.match(index, /preload="auto"/);
   assert.match(index, /pos-api\.js\?v=20261031growth2/);
-  assert.match(index, /app\.js\?v=20261103po1/);
+  assert.match(index, /app\.js\?v=20261103bill1/);
   assert.match(index, /class="dialog-head"/);
   assert.match(index, /id="modal-close"/);
   assert.match(read("css/pos.css"), /#modal-close,/);
   assert.match(appJs, /id="modal-print-close"/);
   assert.match(index, /invoice-share\.js\?v=20261023cemail1/);
-  assert.match(index, /invoice\.js\?v=20261030sup2/);
+  assert.match(index, /invoice\.js\?v=20261103bill1/);
   assert.doesNotMatch(index, /app\.js\?v=20260905deploy167/);
   assert.doesNotMatch(index, /app\.js\?v=20260905deploy166/);
   assert.match(index, /offers\.js\?v=20260905deploy170/);
@@ -504,9 +504,9 @@ test("Restaurant Counter can create named dining tables", () => {
   assert.match(index, /id="btn-shift-table"/);
   assert.match(index, /id="set-table-shifting"/);
   assert.match(restaurant, /function canShiftTable/);
-  assert.match(index, /pos\.css\?v=20261103po1/);
+  assert.match(index, /pos\.css\?v=20261103bill1/);
   assert.match(index, /restaurant\.js\?v=20261012set4/);
-  assert.match(index, /app\.js\?v=20261103po1/);
+  assert.match(index, /app\.js\?v=20261103bill1/);
   assert.match(index, /footwear\.js\?v=20261012print1/);
   assert.match(app, /function resolveKitchenKot/);
   assert.match(app, /function paintKotTimers/);
@@ -589,7 +589,7 @@ test("editing a saved bill keeps line and bill discounts on Save changes", () =>
   assert.match(crud, /discount_type=\?, discount_value=\?/);
   assert.match(crud, /billDiscount/);
   assert.match(phpOrders, /pos_compute_sale_line/);
-  assert.match(phpOrders, /pos_adv_discount_amount/);
+  assert.match(phpOrders, /pos_sale_bill/);
   assert.match(phpOrders, /discount_type = \?, discount_value = \?/);
 });
 

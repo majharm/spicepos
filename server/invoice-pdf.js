@@ -44,10 +44,16 @@ export function invoicePdfLines(company = {}, order = {}, lines = []) {
   }
   if (items.length > shown.length) rows.push(`+ ${items.length - shown.length} more lines on the shop invoice`);
   rows.push("");
-  if (Number(order.subtotal)) rows.push(`Subtotal ${money(order.subtotal)}`);
-  if (Number(order.discount)) rows.push(`Discount ${money(order.discount)}`);
-  if (Number(order.gst)) rows.push(`Tax ${money(order.gst)}`);
-  rows.push(`Total ${money(order.total)}`);
+  const subtotal = Number(order.subtotal) || 0;
+  const discount = Number(order.discount) || 0;
+  const loyalty = Number(order.loyalty_discount) || 0;
+  const taxable = Math.max(0, Math.round((subtotal - discount - loyalty) * 100) / 100);
+  if (subtotal) rows.push(`Subtotal ${money(subtotal)}`);
+  if (discount) rows.push(`Discount ${money(discount)}`);
+  if (loyalty) rows.push(`Royalty points redeemed ${money(loyalty)}`);
+  if (discount || loyalty) rows.push(`Taxable amount ${money(taxable)}`);
+  if (Number(order.gst)) rows.push(`GST ${money(order.gst)}`);
+  rows.push(`Grand total ${money(order.total)}`);
   rows.push("");
   rows.push(order.payment_status ? `Payment ${ascii(order.payment_status)}` : "");
   rows.push("This is a computer-generated invoice.");
