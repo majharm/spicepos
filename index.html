@@ -6,7 +6,7 @@
     <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
     <title>ATAV POS</title>
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./css/pos.css?v=20261027invui7" />
+    <link rel="stylesheet" href="./css/pos.css?v=20261103stock1" />
     <link rel="stylesheet" href="./css/barcode-desk.css?v=20261024bcdesk1" />
     <link rel="stylesheet" href="./css/saas.css?v=20261031welcome1" />
     <link rel="stylesheet" href="./css/bar.css?v=20261011bar2" />
@@ -2192,7 +2192,7 @@
               <div class="items-hero-copy">
                 <p class="items-kicker">Inventory</p>
                 <h3>Stock</h3>
-                <p class="lede pharmacy-hide apparel-hide">Search a SKU, tap it, then post + or − quantity. Low-stock items are highlighted.</p>
+                <p class="lede pharmacy-hide apparel-hide">Search a SKU, tap it, then post + or − quantity. Refresh pulls the latest quantities, and expiry is highlighted by batch.</p>
                 <p class="lede apparel-only" hidden>Browse by product, then colour and size. Tap a size to adjust that variant, or switch to barcode view to find one code.</p>
                 <p class="lede pharmacy-only" hidden>On-hand by batch number and expiry date. Tap a row, then post + or − quantity.</p>
               </div>
@@ -2203,6 +2203,10 @@
               <p class="item-import-copy apparel-only" hidden>Download Excel with every variant, plus a Barcode stock sheet for each code and on-hand quantity.</p>
               <p class="item-import-copy pharmacy-only" hidden>Download Excel with every field: SKU, batch no, expiry, pack, rates, and a Batches sheet.</p>
               <div class="item-import-actions">
+                <button class="btn primary" type="button" id="stock-refresh" aria-label="Refresh stock">
+                  <svg class="stock-refresh-ico" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" d="M20 12a8 8 0 1 1-2.3-5.6M20 4v5h-5"/></svg>
+                  Refresh stock
+                </button>
                 <a class="btn" id="stock-excel" href="#">Download Excel</a>
               </div>
             </div>
@@ -2282,6 +2286,23 @@
                   </div>
                   <label class="item-toggle stock-low-toggle"><input type="checkbox" id="stock-low-only" /> Low stock</label>
                 </div>
+                <div class="stock-desk-tools">
+                  <div class="mode-toggle" id="stock-layout" role="group" aria-label="Stock display">
+                    <button class="btn primary" type="button" data-stock-layout="grid" aria-pressed="true">Grid</button>
+                    <button class="btn" type="button" data-stock-layout="list" aria-pressed="false">List</button>
+                  </div>
+                  <div class="stock-expiry-filters" id="stock-expiry-filters" role="group" aria-label="Expiry filter">
+                    <button class="btn primary" type="button" data-stock-expiry="all" aria-pressed="true">All</button>
+                    <button class="btn" type="button" data-stock-expiry="expired" aria-pressed="false">Expired</button>
+                    <button class="btn" type="button" data-stock-expiry="soon" aria-pressed="false">Expiring soon</button>
+                    <button class="btn" type="button" data-stock-expiry="safe" aria-pressed="false">Safe stock</button>
+                  </div>
+                  <div class="stock-columns" id="stock-columns">
+                    <button class="btn" type="button" id="stock-columns-btn" aria-expanded="false" aria-controls="stock-columns-panel">Columns</button>
+                    <div class="stock-columns-panel" id="stock-columns-panel" hidden></div>
+                  </div>
+                </div>
+                <p class="stock-toast" id="stock-toast" role="status" hidden></p>
                 <div class="table-wrap items-library-list" id="stock-table"></div>
               </aside>
             </div>
@@ -3858,7 +3879,8 @@
     <script src="./js/due-reminders.js?v=20261027dues1" defer></script>
     <script src="./js/recurring.js?v=20261027rec1" defer></script>
     <script src="./js/quotations.js?v=20261027qt1" defer></script>
-    <script src="./js/app.js?v=20261031auto3" defer></script>
+    <script src="./js/stock-desk.js?v=20261103stock1" defer></script>
+    <script src="./js/app.js?v=20261103stock1" defer></script>
     <script src="./js/automation-shop.js?v=20261031auto1" defer></script>
     <script src="./js/recurring-ui.js?v=20261027rec3" defer></script>
     <script src="./js/quotations-ui.js?v=20261027qt1" defer></script>

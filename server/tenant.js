@@ -644,7 +644,30 @@ export function registerTenant(app) {
       } catch {
         /* supplier filter stays empty */
       }
-      return (rows || []).map((row) => ({ ...row, supplier_name: suppliers.get(row.id) || "" }));
+      const byItem = new Map();
+      try {
+        const batches = await query(
+          `SELECT b.id, b.item_id, b.batch_no, b.barcode, b.remaining_gm, b.unit_cost, b.mrp,
+                  DATE_FORMAT(b.expiry_date, '%Y-%m-%d') AS expiry_date
+           FROM stock_batches b
+           WHERE b.business_id = ? AND b.remaining_gm > 0
+           ORDER BY (b.expiry_date IS NULL) ASC, b.expiry_date ASC, b.batch_no ASC, b.id ASC
+           LIMIT 10000`,
+          [bid()],
+        );
+        for (const batch of batches || []) {
+          const list = byItem.get(batch.item_id) || [];
+          list.push(batch);
+          byItem.set(batch.item_id, list);
+        }
+      } catch {
+        /* batch expiry stays empty when the table is not ready */
+      }
+      return (rows || []).map((row) => ({
+        ...row,
+        supplier_name: suppliers.get(row.id) || "",
+        batches: byItem.get(row.id) || [],
+      }));
     }),
   );
 
