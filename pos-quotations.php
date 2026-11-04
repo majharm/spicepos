@@ -653,56 +653,381 @@ function pos_quote_pdf_escape($value) {
   return str_replace(["\\", "(", ")"], ["\\\\", "\\(", "\\)"], pos_quote_ascii($value));
 }
 
+function pos_quote_pdf_num($value) {
+  $text = number_format(round(((float) $value) * 100) / 100, 2, ".", "");
+  $text = rtrim(rtrim($text, "0"), ".");
+  return ($text === "" || $text === "-" || $text === "-0") ? "0" : $text;
+}
+
+function pos_quote_pdf_width($value, $size, $bold = false) {
+  $units = 0;
+  $text = pos_quote_ascii($value);
+  $len = strlen($text);
+  for ($i = 0; $i < $len; $i++) {
+    $ch = $text[$i];
+    if ($ch === " " || strpos("ilj.,'`:;!", $ch) !== false) $units += 278;
+    elseif (strpos("ftrI", $ch) !== false) $units += 333;
+    elseif (strpos("mwMW@", $ch) !== false) $units += 833;
+    elseif ($ch >= "0" && $ch <= "9") $units += 556;
+    elseif ($ch >= "A" && $ch <= "Z") $units += 667;
+    else $units += 500;
+  }
+  return ($units / 1000) * $size * ($bold ? 1.04 : 1);
+}
+
+function pos_quote_pdf_wrap($value, $maxWidth, $size, $bold = false) {
+  $words = array_values(array_filter(explode(" ", pos_quote_ascii($value)), function ($word) { return $word !== ""; }));
+  $lines = [];
+  $current = "";
+  foreach ($words as $word) {
+    $next = $current === "" ? $word : $current . " " . $word;
+    if (pos_quote_pdf_width($next, $size, $bold) <= $maxWidth) $current = $next;
+    else {
+      if ($current !== "") $lines[] = $current;
+      $current = $word;
+    }
+  }
+  if ($current !== "") $lines[] = $current;
+  return $lines;
+}
+
+function pos_quote_inr($value) {
+  $neg = (float) $value < 0;
+  $parts = explode(".", number_format(abs((float) $value), 2, ".", ""));
+  $whole = $parts[0];
+  $dec = $parts[1] ?? "00";
+  if (strlen($whole) > 3) {
+    $rest = preg_replace('/\B(?=(?:\d{2})+(?!\d))/', ",", substr($whole, 0, -3));
+    $whole = $rest . "," . substr($whole, -3);
+  }
+  return ($neg ? "-" : "") . "Rs " . $whole . "." . $dec;
+}
+
+function pos_quote_pretty_date($value) {
+  if (preg_match('/^(\d{4})-(\d{2})-(\d{2})/', (string) $value, $match)) {
+    $months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    return trim($match[3] . " " . ($months[(int) $match[2] - 1] ?? "") . " " . $match[1]);
+  }
+  return pos_quote_ascii($value);
+}
+
+function pos_quote_words($value) {
+  $ones = ["", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten", "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen", "Sixteen", "Seventeen", "Eighteen", "Nineteen"];
+  $tens = ["", "", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eighty", "Ninety"];
+  $two = function ($n) use ($ones, $tens) {
+    $n = (int) $n;
+    if ($n < 20) return $ones[$n];
+    return trim($tens[(int) floor($n / 10)] . ($n % 10 ? " " . $ones[$n % 10] : ""));
+  };
+  $three = function ($n) use ($two, $ones) {
+    $n = (int) $n;
+    if ($n < 100) return $two($n);
+    return trim($ones[(int) floor($n / 100)] . " Hundred" . ($n % 100 ? " " . $two($n % 100) : ""));
+  };
+  $rounded = round(((float) $value) * 100) / 100;
+  $rupees = (int) floor(abs($rounded));
+  $paise = (int) round((abs($rounded) - $rupees) * 100);
+  if (!$rupees && !$paise) return "Rupees Zero Only";
+  $rest = $rupees;
+  $crore = (int) floor($rest / 10000000);
+  $rest %= 10000000;
+  $lakh = (int) floor($rest / 100000);
+  $rest %= 100000;
+  $thousand = (int) floor($rest / 1000);
+  $rest %= 1000;
+  $parts = [];
+  if ($crore) $parts[] = $two($crore) . " Crore";
+  if ($lakh) $parts[] = $two($lakh) . " Lakh";
+  if ($thousand) $parts[] = $two($thousand) . " Thousand";
+  if ($rest) $parts[] = $three($rest);
+  $out = "Rupees " . ($parts ? implode(" ", $parts) : "Zero");
+  if ($paise) $out .= " and " . $two($paise) . " Paise";
+  return $out . " Only";
+}
+
 function pos_quote_pdf($company, $quote) {
+  $teal = "0.102 0.478 0.427";
+  $mint = "0.929 0.969 0.961";
+  $ink = "0.129 0.129 0.129";
+  $muted = "0.333 0.333 0.333";
+  $hair = "0.9 0.9 0.9";
+  $white = "1 1 1";
+  $left = 36;
+  $right = 559;
+  $width = $right - $left;
   $shop = pos_quote_ascii($company["name"] ?? "") ?: "Shop";
-  $rows = [
-    $shop,
+  $items = is_array($quote["lines"] ?? null) ? array_values($quote["lines"]) : [];
+  $ctx = (object) ["ops" => [], "pages" => [], "y" => 806];
+  $text = function ($font, $size, $x, $baseline, $value, $color) use ($ctx) {
+    $safe = substr(pos_quote_pdf_escape($value), 0, 180);
+    if ($safe === "") return;
+    $ctx->ops[] = $color . " rg";
+    $ctx->ops[] = "BT";
+    $ctx->ops[] = "/" . $font . " " . pos_quote_pdf_num($size) . " Tf";
+    $ctx->ops[] = "1 0 0 1 " . pos_quote_pdf_num($x) . " " . pos_quote_pdf_num($baseline) . " Tm";
+    $ctx->ops[] = "(" . $safe . ") Tj";
+    $ctx->ops[] = "ET";
+  };
+  $rightText = function ($font, $size, $edge, $baseline, $value, $color, $bold) use ($text) {
+    $shown = pos_quote_ascii($value);
+    $text($font, $size, $edge - pos_quote_pdf_width($shown, $size, $bold), $baseline, $shown, $color);
+  };
+  $fill = function ($color, $x, $top, $w, $h) use ($ctx) {
+    $ctx->ops[] = $color . " rg";
+    $ctx->ops[] = pos_quote_pdf_num($x) . " " . pos_quote_pdf_num($top - $h) . " " . pos_quote_pdf_num($w) . " " . pos_quote_pdf_num($h) . " re f";
+  };
+  $rule = function ($x, $top, $w) use ($ctx, $hair) {
+    $ctx->ops[] = $hair . " RG";
+    $ctx->ops[] = "0.6 w";
+    $ctx->ops[] = pos_quote_pdf_num($x) . " " . pos_quote_pdf_num($top) . " m " . pos_quote_pdf_num($x + $w) . " " . pos_quote_pdf_num($top) . " l S";
+  };
+  $finish = function () use ($ctx, $text, $rightText, $left, $right, $muted) {
+    $text("F1", 8, $left, 28, "QUOTATION - NOT A TAX INVOICE", $muted);
+    $rightText("F1", 8, $right, 28, "Page " . (count($ctx->pages) + 1), $muted, false);
+    $ctx->pages[] = implode("\n", $ctx->ops);
+    $ctx->ops = [];
+    $ctx->y = 806;
+  };
+  $room = function ($need) use ($ctx, $finish, $text, $rightText, $left, $right, $shop, $quote, $teal, $muted) {
+    if ($ctx->y - $need >= 52) return;
+    $finish();
+    $text("F2", 11, $left, $ctx->y - 12, $shop, $teal);
+    $rightText("F1", 9, $right, $ctx->y - 12, pos_quote_ascii($quote["quotation_number"] ?? "") ?: "Quotation", $muted, false);
+    $ctx->y -= 28;
+  };
+  $text("F2", 16, $left, $ctx->y - 16, $shop, $teal);
+  $rightText("F2", 16, $right, $ctx->y - 16, "QUOTATION", $teal, true);
+  $ctx->y -= 22;
+  $rightText("F1", 8, $right, $ctx->y - 8, "QUOTATION - NOT A TAX INVOICE", $muted, false);
+  $ctx->y -= 16;
+  $sellerBits = array_values(array_filter([
     pos_quote_ascii($company["address"] ?? ""),
-    trim(implode("   ", array_filter([
-      !empty($company["phone"]) ? "Phone " . pos_quote_ascii($company["phone"]) : "",
-      !empty($company["gstin"]) ? "GSTIN " . pos_quote_ascii($company["gstin"]) : "",
+    trim(implode(", ", array_filter([pos_quote_ascii($company["city"] ?? ""), pos_quote_ascii($company["state"] ?? "")]))),
+    trim(implode("  ", array_filter([
+      !empty($company["phone"]) ? "Ph: " . pos_quote_ascii($company["phone"]) : "",
+      !empty($company["email"]) ? "Email: " . pos_quote_ascii($company["email"]) : "",
     ]))),
-    "QUOTATION",
-    "QUOTATION - NOT A TAX INVOICE",
-    "Number " . (pos_quote_ascii($quote["quotation_number"] ?? "") ?: "Quotation"),
-    "Date " . pos_quote_ascii($quote["quotation_date"] ?? ""),
-    "Valid until " . pos_quote_ascii($quote["valid_until"] ?? ""),
-    "Customer " . (pos_quote_ascii($quote["customer_name"] ?? "") ?: "Customer"),
-    !empty($quote["billing_address"]) ? pos_quote_ascii($quote["billing_address"]) : "",
-    "Item                          Qty        Rate       Amount",
+    trim(implode("  ", array_filter([
+      !empty($company["gstin"]) ? "GSTIN: " . pos_quote_ascii($company["gstin"]) : "",
+      !empty($company["pan"]) ? "PAN: " . pos_quote_ascii($company["pan"]) : "",
+    ]))),
+  ]));
+  $seller = [];
+  foreach ($sellerBits as $bit) foreach (array_slice(pos_quote_pdf_wrap($bit, 280, 9), 0, 6 - count($seller)) as $line) $seller[] = $line;
+  $meta = [
+    ["Quotation#", pos_quote_ascii($quote["quotation_number"] ?? "") ?: "Quotation"],
+    ["Quotation Date", pos_quote_pretty_date($quote["quotation_date"] ?? "")],
+    ["Valid until", pos_quote_pretty_date($quote["valid_until"] ?? "") ?: "-"],
   ];
-  $items = is_array($quote["lines"] ?? null) ? $quote["lines"] : [];
-  $shown = array_slice($items, 0, 18);
-  foreach ($shown as $line) {
-    $name = str_pad(substr(pos_quote_ascii($line["name"] ?? "Item"), 0, 28), 28, " ");
-    $qty = str_pad(substr(pos_quote_ascii($line["quantity"] ?? ""), 0, 8), 8, " ", STR_PAD_LEFT);
-    $rate = str_pad("Rs " . number_format((float) ($line["rate"] ?? 0), 2, ".", ""), 12, " ", STR_PAD_LEFT);
-    $amount = str_pad("Rs " . number_format((float) ($line["total"] ?? $line["amount"] ?? 0), 2, ".", ""), 12, " ", STR_PAD_LEFT);
-    $rows[] = $name . $qty . $rate . $amount;
+  if (pos_quote_ascii($quote["reference_no"] ?? "") !== "") $meta[] = ["Reference", pos_quote_ascii($quote["reference_no"])];
+  if (pos_quote_ascii($quote["salesperson"] ?? "") !== "") $meta[] = ["Salesperson", pos_quote_ascii($quote["salesperson"])];
+  $sellerY = $ctx->y;
+  foreach ($seller as $line) {
+    $text("F1", 9, $left, $sellerY - 9, $line, $muted);
+    $sellerY -= 12;
   }
-  if (count($items) > count($shown)) $rows[] = "+ " . (count($items) - count($shown)) . " more lines on the printed quotation";
-  if ((float) ($quote["subtotal"] ?? 0)) $rows[] = "Subtotal Rs " . number_format((float) $quote["subtotal"], 2, ".", "");
-  if ((float) ($quote["discount"] ?? 0)) $rows[] = "Discount Rs " . number_format((float) $quote["discount"], 2, ".", "");
-  if ((float) ($quote["gst"] ?? 0)) $rows[] = "Tax Rs " . number_format((float) $quote["gst"], 2, ".", "");
-  $rows[] = "Grand total Rs " . number_format((float) ($quote["total"] ?? 0), 2, ".", "");
-  $rows[] = "This document is a quotation, not a tax invoice.";
-  $rows[] = "Stock and payment are unchanged until a sales invoice is posted.";
-  $rows[] = "Page 1";
-  $rows = array_values(array_filter($rows, function ($line) { return $line !== ""; }));
-  $commands = ["BT", "/F1 11 Tf", "48 800 Td", "14 TL"];
-  foreach ($rows as $index => $line) {
-    $text = "(" . substr(pos_quote_pdf_escape($line), 0, 110) . ")";
-    $commands[] = $index === 0 ? "{$text} Tj" : "{$text} '";
+  $metaY = $ctx->y;
+  foreach ($meta as $row) {
+    $text("F1", 9, 360, $metaY - 9, $row[0], $muted);
+    $rightText("F2", 9, $right, $metaY - 9, $row[1], $ink, true);
+    $metaY -= 13;
   }
-  $commands[] = "ET";
-  $stream = implode("\n", $commands);
+  $metaY -= 4;
+  $fill($mint, 360, $metaY, 199, 22);
+  $fill($teal, 360, $metaY, 4, 22);
+  $text("F2", 9, 370, $metaY - 15, "Quoted total", $teal);
+  $rightText("F2", 11, $right - 6, $metaY - 15, pos_quote_inr($quote["total"] ?? 0), $teal, true);
+  $metaY -= 30;
+  $ctx->y = min($sellerY, $metaY) - 6;
+  $room(16);
+  $text("F2", 8, $left, $ctx->y - 8, "BILL TO", $muted);
+  $text("F2", 8, 310, $ctx->y - 8, pos_quote_ascii($quote["shipping_address"] ?? "") !== "" ? "SHIP TO" : "PLACE OF SUPPLY", $muted);
+  $ctx->y -= 14;
+  $buyer = array_values(array_filter(array_merge([
+    pos_quote_ascii($quote["customer_name"] ?? "") ?: "Customer",
+    pos_quote_ascii($quote["customer_phone"] ?? ""),
+    !empty($quote["customer_email"]) ? "Email: " . pos_quote_ascii($quote["customer_email"]) : "",
+  ], pos_quote_pdf_wrap($quote["billing_address"] ?? "", 250, 9))));
+  $otherSource = pos_quote_ascii($quote["shipping_address"] ?? "");
+  if ($otherSource === "") $otherSource = implode(", ", array_filter([pos_quote_ascii($company["address"] ?? ""), pos_quote_ascii($company["city"] ?? ""), pos_quote_ascii($company["state"] ?? "")]));
+  $other = pos_quote_pdf_wrap($otherSource, 230, 9);
+  $partyRows = max(count($buyer), count($other), 1);
+  for ($i = 0; $i < $partyRows; $i++) {
+    $room(12);
+    if (!empty($buyer[$i])) $text($i === 0 ? "F2" : "F1", 9, $left, $ctx->y - 9, $buyer[$i], $i === 0 ? $ink : $muted);
+    if (!empty($other[$i])) $text("F1", 9, 310, $ctx->y - 9, $other[$i], $muted);
+    $ctx->y -= 12;
+  }
+  $ctx->y -= 8;
+  $drawHead = function () use ($ctx, $room, $fill, $text, $rightText, $left, $right, $width, $teal, $white) {
+    $room(20);
+    $fill($teal, $left, $ctx->y, $width, 18);
+    $text("F2", 9, $left + 6, $ctx->y - 13, "#", $white);
+    $text("F2", 9, $left + 28, $ctx->y - 13, "Item & Description", $white);
+    $rightText("F2", 9, 400, $ctx->y - 13, "Qty", $white, true);
+    $rightText("F2", 9, 470, $ctx->y - 13, "Rate", $white, true);
+    $rightText("F2", 9, $right - 6, $ctx->y - 13, "Amount", $white, true);
+    $ctx->y -= 18;
+  };
+  $drawHead();
+  if (!$items) {
+    $room(18);
+    $text("F1", 9, $left + 28, $ctx->y - 13, "No line items", $muted);
+    $ctx->y -= 18;
+  }
+  foreach ($items as $index => $line) {
+    $name = pos_quote_ascii($line["name"] ?? ($line["item_name"] ?? "Item"));
+    $extra = implode(" · ", array_filter(array_map("pos_quote_ascii", [
+      $line["sku"] ?? "",
+      $line["size"] ?? "",
+      $line["color"] ?? "",
+      $line["description"] ?? "",
+      "GST " . (float) ($line["gstRate"] ?? ($line["gst_rate"] ?? 0)) . "%",
+    ])));
+    $nameLines = array_slice(pos_quote_pdf_wrap($name, 230, 9, true), 0, 2);
+    $extraLines = array_slice(pos_quote_pdf_wrap($extra, 230, 8), 0, 2);
+    $rowH = 8 + count($nameLines) * 11 + count($extraLines) * 10;
+    if ($ctx->y - $rowH < 52) {
+      $finish();
+      $drawHead();
+    }
+    $top = $ctx->y;
+    $text("F1", 9, $left + 6, $top - 14, (string) ($index + 1), $muted);
+    foreach ($nameLines as $i => $part) $text("F2", 9, $left + 28, $top - 14 - $i * 11, $part, $ink);
+    foreach ($extraLines as $i => $part) $text("F1", 8, $left + 28, $top - 14 - count($nameLines) * 11 - $i * 10, $part, $muted);
+    $unit = strtoupper(pos_quote_ascii($line["unit"] ?? ""));
+    $qtyNum = (float) ($line["quantity"] ?? ($line["qty"] ?? 0));
+    $measured = array_key_exists("isCount", $line) ? !$line["isCount"] : in_array($unit, ["GM", "G", "KG"], true);
+    if ($measured && ($unit === "GM" || $unit === "G" || $unit === "") && $qtyNum >= 1000) $qty = number_format($qtyNum / 1000, 2, ".", "") . " kg";
+    elseif ($measured && $unit === "KG") $qty = number_format($qtyNum, 2, ".", "") . " kg";
+    else $qty = trim(pos_quote_ascii($line["quantity"] ?? ($line["qty"] ?? "")) . " " . pos_quote_ascii($line["unit"] ?? ""));
+    $rightText("F1", 9, 400, $top - 14, $qty, $ink, false);
+    $rightText("F1", 9, 470, $top - 14, pos_quote_inr($line["rate"] ?? 0) . ($measured ? "/kg" : ""), $ink, false);
+    $rightText("F2", 9, $right - 6, $top - 14, pos_quote_inr($line["taxable"] ?? ($line["total"] ?? ($line["amount"] ?? 0))), $ink, true);
+    $ctx->y -= $rowH;
+    $rule($left, $ctx->y, $width);
+    $ctx->y -= 2;
+  }
+  $groups = [];
+  foreach ($items as $line) {
+    $rate = (float) ($line["gstRate"] ?? ($line["gst_rate"] ?? 0));
+    $key = number_format($rate, 2, ".", "");
+    if (!isset($groups[$key])) $groups[$key] = ["rate" => $rate, "taxable" => 0, "gst" => 0];
+    $groups[$key]["taxable"] += (float) ($line["taxable"] ?? 0);
+    $groups[$key]["gst"] += (float) ($line["gst"] ?? 0);
+  }
+  $rawGst = 0;
+  $rawTaxable = 0;
+  foreach ($groups as $group) {
+    $rawGst += $group["gst"];
+    $rawTaxable += $group["taxable"];
+  }
+  $billGst = isset($quote["gst"]) ? (float) $quote["gst"] : null;
+  $billTaxable = isset($quote["taxable"]) ? (float) $quote["taxable"] : null;
+  $gstScale = ($rawGst > 0.009 && $billGst !== null) ? $billGst / $rawGst : 1;
+  $taxScale = ($rawTaxable > 0.009 && $billTaxable !== null) ? $billTaxable / $rawTaxable : 1;
+  foreach ($groups as $key => $group) {
+    $groups[$key]["taxable"] *= $taxScale;
+    $groups[$key]["gst"] *= $gstScale;
+  }
+  $inter = (float) ($quote["igst"] ?? 0) > 0.009 && !((float) ($quote["cgst"] ?? 0) > 0.009);
+  $totals = [["Subtotal", pos_quote_inr($quote["subtotal"] ?? 0)]];
+  if ((float) ($quote["discount"] ?? 0) > 0.009) $totals[] = ["Discount", "(-) " . pos_quote_inr($quote["discount"])];
+  if ((float) ($quote["discount"] ?? 0) > 0.009 || (float) ($quote["subtotal"] ?? 0)) {
+    $taxable = $quote["taxable"] ?? max(0, (float) ($quote["subtotal"] ?? 0) - (float) ($quote["discount"] ?? 0));
+    $totals[] = ["Taxable amount", pos_quote_inr($taxable)];
+  }
+  $charges = (float) ($quote["extra_charges"] ?? ($quote["extraCharges"] ?? 0));
+  if ($charges > 0.009) $totals[] = ["Additional charges", pos_quote_inr($charges)];
+  $totals[] = ["Tax", pos_quote_inr($quote["gst"] ?? 0)];
+  $roundOff = (float) ($quote["round_off"] ?? ($quote["roundOff"] ?? 0));
+  if (abs($roundOff) > 0.009) $totals[] = ["Round off", pos_quote_inr($roundOff)];
+  $totals[] = ["Quotation total", pos_quote_inr($quote["total"] ?? 0)];
+  $words = pos_quote_pdf_wrap("Amount in words: " . pos_quote_words($quote["total"] ?? 0), 300, 9);
+  $notes = array_slice(pos_quote_pdf_wrap($quote["notes"] ?? "", 300, 8), 0, 4);
+  $terms = array_slice(pos_quote_pdf_wrap($quote["terms"] ?? "", 300, 8), 0, 6);
+  $summaryH = 16 + count($groups) * 14 + count($words) * 12 + ($notes ? 24 + count($notes) * 10 : 0) + ($terms ? 24 + count($terms) * 10 : 0) + 70;
+  if ($ctx->y - max($summaryH, count($totals) * 14 + 80) < 52) $finish();
+  $summaryTop = $ctx->y;
+  if ($groups) {
+    $text("F2", 8, $left, $ctx->y - 12, "Rate", $muted);
+    $text("F2", 8, $left + 50, $ctx->y - 12, "Taxable", $muted);
+    $text("F2", 8, $left + 120, $ctx->y - 12, $inter ? "IGST" : "CGST", $muted);
+    if (!$inter) $text("F2", 8, $left + 180, $ctx->y - 12, "SGST", $muted);
+    $text("F2", 8, $left + 240, $ctx->y - 12, "Tax", $muted);
+    $ctx->y -= 16;
+    foreach ($groups as $group) {
+      $half = $inter ? 0 : $group["gst"] / 2;
+      $text("F1", 8, $left, $ctx->y - 10, $group["rate"] . "%", $ink);
+      $text("F1", 8, $left + 50, $ctx->y - 10, pos_quote_inr($group["taxable"]), $ink);
+      $text("F1", 8, $left + 120, $ctx->y - 10, pos_quote_inr($inter ? $group["gst"] : $half), $ink);
+      if (!$inter) $text("F1", 8, $left + 180, $ctx->y - 10, pos_quote_inr($group["gst"] - $half), $ink);
+      $text("F1", 8, $left + 240, $ctx->y - 10, pos_quote_inr($group["gst"]), $ink);
+      $ctx->y -= 13;
+    }
+  }
+  $ctx->y -= 4;
+  foreach ($words as $line) {
+    $text("F1", 9, $left, $ctx->y - 10, $line, $ink);
+    $ctx->y -= 12;
+  }
+  if ($notes) {
+    $ctx->y -= 4;
+    $text("F2", 9, $left, $ctx->y - 10, "Notes", $teal);
+    $ctx->y -= 14;
+    foreach ($notes as $line) {
+      $text("F1", 8, $left, $ctx->y - 9, $line, $muted);
+      $ctx->y -= 10;
+    }
+  }
+  if ($terms) {
+    $ctx->y -= 4;
+    $text("F2", 9, $left, $ctx->y - 10, "Terms & conditions", $teal);
+    $ctx->y -= 14;
+    foreach ($terms as $line) {
+      $text("F1", 8, $left, $ctx->y - 9, $line, $muted);
+      $ctx->y -= 10;
+    }
+  }
+  $ty = $summaryTop;
+  foreach ($totals as $row) {
+    $grand = $row[0] === "Quotation total";
+    if ($grand) {
+      $fill($mint, 360, $ty, 199, 18);
+      $fill($teal, 360, $ty, 4, 18);
+    }
+    $text($grand ? "F2" : "F1", $grand ? 10 : 9, 370, $ty - ($grand ? 13 : 11), $row[0], $grand ? $teal : $muted);
+    $rightText($grand ? "F2" : "F1", $grand ? 10 : 9, $right - 4, $ty - ($grand ? 13 : 11), $row[1], $grand ? $teal : $ink, $grand);
+    $ty -= $grand ? 20 : 14;
+  }
+  $ctx->y = min($ctx->y, $ty) - 18;
+  $room(46);
+  $text("F1", 10, $left, $ctx->y - 12, "Thanks for your business.", $teal);
+  $ctx->y -= 36;
+  $rule($left, $ctx->y + 16, 150);
+  $rule(390, $ctx->y + 16, 150);
+  $text("F1", 8, $left, $ctx->y, "Customer acceptance", $muted);
+  $rightText("F1", 8, $right, $ctx->y, "For " . $shop, $muted, false);
+  $ctx->y -= 16;
+  foreach (pos_quote_pdf_wrap("This is a computer-generated quotation. No signature is required. Stock and payment are unchanged until a sales invoice is posted.", $width, 8) as $line) {
+    $room(11);
+    $text("F1", 8, $left, $ctx->y - 8, $line, $muted);
+    $ctx->y -= 11;
+  }
+  $finish();
+  $streams = $ctx->pages ?: ["BT ET"];
+  $fontRegular = count($streams) * 2 + 3;
+  $fontBold = $fontRegular + 1;
   $objects = [
     "<< /Type /Catalog /Pages 2 0 R >>",
-    "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
-    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>",
-    "<< /Length " . strlen($stream) . " >>\nstream\n{$stream}\nendstream",
-    "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+    "<< /Type /Pages /Kids [" . implode(" ", array_map(function ($index) { return ($index * 2 + 3) . " 0 R"; }, array_keys($streams))) . "] /Count " . count($streams) . " >>",
   ];
+  foreach ($streams as $stream) {
+    $objects[] = "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Contents " . (count($objects) + 2) . " 0 R /Resources << /Font << /F1 " . $fontRegular . " 0 R /F2 " . $fontBold . " 0 R >> >> >>";
+    $objects[] = "<< /Length " . strlen($stream) . " >>\nstream\n" . $stream . "\nendstream";
+  }
+  $objects[] = "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>";
+  $objects[] = "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>";
   $body = "%PDF-1.4\n";
   $offsets = [0];
   foreach ($objects as $index => $obj) {
@@ -712,8 +1037,7 @@ function pos_quote_pdf($company, $quote) {
   $xrefAt = strlen($body);
   $xref = "xref\n0 " . (count($objects) + 1) . "\n0000000000 65535 f \n";
   for ($i = 1; $i < count($offsets); $i++) $xref .= str_pad((string) $offsets[$i], 10, "0", STR_PAD_LEFT) . " 00000 n \n";
-  $body .= $xref . "trailer << /Size " . (count($objects) + 1) . " /Root 1 0 R >>\nstartxref\n{$xrefAt}\n%%EOF";
-  return $body;
+  return $body . $xref . "trailer << /Size " . (count($objects) + 1) . " /Root 1 0 R >>\nstartxref\n{$xrefAt}\n%%EOF";
 }
 
 function pos_quote_subject($number, $shop) {
@@ -738,7 +1062,7 @@ function pos_quote_email($bid, $id, $toRaw, $uid) {
   $subject = pos_quote_subject($quote["quotation_number"] ?? "", $shop["name"] ?? "");
   $text = $subject . "\n\nThis quotation is not a tax invoice. Total " . number_format((float) ($quote["total"] ?? 0), 2, ".", "") . ". Valid until " . ($quote["valid_until"] ?? "") . ".";
   $pdf = pos_quote_pdf(
-    ["name" => $shop["name"] ?? "", "address" => $shop["address"] ?? "", "phone" => $shop["phone"] ?? "", "gstin" => ($shop["gstin"] ?? "") !== "" ? $shop["gstin"] : ($shop["settings_gstin"] ?? "")],
+    ["name" => $shop["name"] ?? "", "address" => $shop["address"] ?? "", "phone" => $shop["phone"] ?? "", "email" => $shop["email"] ?? "", "gstin" => ($shop["gstin"] ?? "") !== "" ? $shop["gstin"] : ($shop["settings_gstin"] ?? ""), "state" => $shop["state"] ?? ""],
     $quote
   );
   $cfg = function_exists("pos_bizmail_smtp") ? pos_bizmail_smtp($mailbox, $shop) : [];
@@ -964,7 +1288,7 @@ function pos_quotations_dispatch($path, $method, $body, $bid, $auth) {
       if (!$row) throw new PosQuoteHttp(404, "Quotation not found");
       $quote = pos_quote_public($row, pos_quote_today());
       $pdf = pos_quote_pdf(
-        ["name" => $shop["name"] ?? "", "address" => $shop["address"] ?? "", "phone" => $shop["phone"] ?? "", "email" => $shop["email"] ?? "", "gstin" => ($shop["gstin"] ?? "") !== "" ? $shop["gstin"] : ($shop["settings_gstin"] ?? "")],
+        ["name" => $shop["name"] ?? "", "address" => $shop["address"] ?? "", "phone" => $shop["phone"] ?? "", "email" => $shop["email"] ?? "", "gstin" => ($shop["gstin"] ?? "") !== "" ? $shop["gstin"] : ($shop["settings_gstin"] ?? ""), "state" => $shop["state"] ?? ""],
         $quote
       );
       pos_send(200, [

@@ -202,7 +202,29 @@
   function amountWords(value) {
     const fn = root.POSInvoice?.amountInWords;
     if (typeof fn === "function") return fn(value);
-    return `Rupees ${num(value).toFixed(2)} Only`;
+    const ones = ["", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten", "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen", "Sixteen", "Seventeen", "Eighteen", "Nineteen"];
+    const tens = ["", "", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eighty", "Ninety"];
+    const two = (n) => (n < 20 ? ones[n] : `${tens[Math.floor(n / 10)]}${n % 10 ? ` ${ones[n % 10]}` : ""}`.trim());
+    const three = (n) => (n < 100 ? two(n) : `${ones[Math.floor(n / 100)]} Hundred${n % 100 ? ` ${two(n % 100)}` : ""}`.trim());
+    const rounded = Math.round(num(value) * 100) / 100;
+    const rupees = Math.floor(Math.abs(rounded));
+    const paise = Math.round((Math.abs(rounded) - rupees) * 100);
+    if (!rupees && !paise) return "Rupees Zero Only";
+    let rest = rupees;
+    const crore = Math.floor(rest / 10000000);
+    rest %= 10000000;
+    const lakh = Math.floor(rest / 100000);
+    rest %= 100000;
+    const thousand = Math.floor(rest / 1000);
+    rest %= 1000;
+    const parts = [];
+    if (crore) parts.push(`${two(crore)} Crore`);
+    if (lakh) parts.push(`${two(lakh)} Lakh`);
+    if (thousand) parts.push(`${two(thousand)} Thousand`);
+    if (rest) parts.push(three(rest));
+    let out = `Rupees ${parts.join(" ") || "Zero"}`;
+    if (paise) out += ` and ${two(paise)} Paise`;
+    return `${out} Only`;
   }
 
   function safeLogo(value) {
@@ -216,15 +238,22 @@
     const shop = company.name || "Shop";
     const logo = safeLogo(company.logo_url || company.logoUrl);
     const rows = lines
-      .map((line) => {
-        const extra = [line.sku, line.size, line.color].filter(Boolean).join(" · ");
+      .map((line, index) => {
+        const extra = [line.sku, line.size, line.color, line.description, `GST ${line.gstRate || 0}%`].filter(Boolean).join(" · ");
+        const unit = String(line.unit || "").toUpperCase();
+        const measured = line.isCount === false || unit === "GM" || unit === "G" || unit === "KG";
+        const qtyNum = num(line.quantity);
+        const qtyText = measured && (unit === "GM" || unit === "G" || unit === "") && qtyNum >= 1000
+          ? `${(qtyNum / 1000).toFixed(2)} kg`
+          : measured && unit === "KG"
+            ? `${qtyNum.toFixed(2)} kg`
+            : `${line.quantity} ${line.unit || ""}`.trim();
         return `<tr>
-          <td>${escapeHtml(line.name || "Item")}${line.description ? `<div class="muted">${escapeHtml(line.description)}</div>` : ""}${extra ? `<div class="muted">${escapeHtml(extra)}</div>` : ""}</td>
-          <td class="num">${escapeHtml(line.quantity)} ${escapeHtml(line.unit || "")}</td>
-          <td class="num">${escapeHtml(moneyLabel(line.rate))}</td>
-          <td class="num">${escapeHtml(moneyLabel(line.discount))}</td>
-          <td class="num">${escapeHtml(line.gstRate || 0)}%</td>
-          <td class="num">${escapeHtml(moneyLabel(line.total))}</td>
+          <td class="off-c">${index + 1}</td>
+          <td><div class="off-item-name">${escapeHtml(line.name || "Item")}</div>${extra ? `<div class="off-item-desc">${escapeHtml(extra)}</div>` : ""}</td>
+          <td class="off-n">${escapeHtml(qtyText)}</td>
+          <td class="off-n">${escapeHtml(moneyLabel(line.rate))}${measured ? "/kg" : ""}</td>
+          <td class="off-n">${escapeHtml(moneyLabel(line.taxable ?? line.total))}</td>
         </tr>`;
       })
       .join("");
@@ -233,66 +262,158 @@
       num(quote?.sgst) ? `SGST ${moneyLabel(quote.sgst)}` : "",
       num(quote?.igst) ? `IGST ${moneyLabel(quote.igst)}` : "",
     ].filter(Boolean);
+    const gstMap = new Map();
+    lines.forEach((line) => {
+      const rate = num(line.gstRate);
+      const row = gstMap.get(rate) || { rate, taxable: 0, gst: 0 };
+      row.taxable += num(line.taxable);
+      row.gst += num(line.gst);
+      gstMap.set(rate, row);
+    });
+    const gstRows = [...gstMap.values()];
+    const rawGst = gstRows.reduce((sum, row) => sum + row.gst, 0);
+    const rawTaxable = gstRows.reduce((sum, row) => sum + row.taxable, 0);
+    const billGst = num(quote?.gst);
+    const billTaxable = num(quote?.taxable ?? Math.max(0, num(quote?.subtotal) - num(quote?.discount)));
+    const gstScale = rawGst > 0.009 ? billGst / rawGst : 1;
+    const taxScale = rawTaxable > 0.009 ? billTaxable / rawTaxable : 1;
+    const inter = num(quote?.igst) > 0.009 && !(num(quote?.cgst) > 0.009);
+    const gstTable = gstRows.map((row) => {
+      const taxable = row.taxable * taxScale;
+      const gst = row.gst * gstScale;
+      const half = inter ? 0 : gst / 2;
+      return `<tr>
+        <td class="off-n">${escapeHtml(row.rate)}%</td>
+        <td class="off-n">${escapeHtml(moneyLabel(taxable))}</td>
+        <td class="off-n">${escapeHtml(moneyLabel(inter ? 0 : half))}</td>
+        <td class="off-n">${escapeHtml(moneyLabel(inter ? 0 : gst - half))}</td>
+        <td class="off-n">${escapeHtml(moneyLabel(inter ? gst : 0))}</td>
+        <td class="off-n">${escapeHtml(moneyLabel(gst))}</td>
+      </tr>`;
+    }).join("");
+    const discount = num(quote?.discount);
+    const charges = num(quote?.extra_charges ?? quote?.extraCharges);
+    const roundOff = num(quote?.round_off ?? quote?.roundOff);
+    const taxable = num(quote?.taxable ?? Math.max(0, num(quote?.subtotal) - discount));
     return `<!DOCTYPE html>
 <html lang="en-IN">
 <head>
   <meta charset="utf-8" />
   <title>${escapeHtml(quote?.quotation_number || "Quotation")}</title>
-  <style>
-    body { font: 13px/1.4 "Segoe UI", sans-serif; color: #0f172a; margin: 24px; }
-    h1 { margin: 0; font-size: 22px; letter-spacing: 0.04em; }
-    .banner { margin: 8px 0 16px; padding: 8px 10px; border: 1px solid #b45309; color: #9a3412; font-weight: 800; }
-    .top { display: flex; justify-content: space-between; gap: 16px; }
-    .muted { color: #64748b; font-size: 12px; }
-    table { width: 100%; border-collapse: collapse; margin-top: 12px; }
-    th, td { border-bottom: 1px solid #e2e8f0; padding: 6px 4px; text-align: left; vertical-align: top; }
-    th { font-size: 11px; text-transform: uppercase; color: #64748b; }
-    .num { text-align: right; white-space: nowrap; }
-    .totals { margin-left: auto; width: min(280px, 100%); }
-    .sign { display: flex; justify-content: space-between; gap: 24px; margin-top: 28px; }
-    .sign div { min-width: 180px; border-top: 1px solid #94a3b8; padding-top: 6px; }
-    @media print { body { margin: 12px; } }
+    <style>
+    @page { size: A4 portrait; margin: 12mm 12mm 14mm; }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; color: #212121; background: #fff; font-family: "Segoe UI", Calibri, Arial, sans-serif; font-size: 11px; line-height: 1.4; }
+    .office-invoice { width: 100%; color: #212121; }
+    .off-head { display: flex; justify-content: space-between; gap: 18px; align-items: flex-start; padding-bottom: 10px; }
+    .off-seller { flex: 1 1 auto; min-width: 0; }
+    .off-logo { max-height: 48px; max-width: 42mm; display: block; margin-bottom: 6px; object-fit: contain; }
+    .off-shop { margin: 0 0 4px; font-size: 18px; font-weight: 700; color: #1a7a6d; letter-spacing: -0.02em; }
+    .off-seller-meta { font-size: 10.5px; color: #555; overflow-wrap: anywhere; }
+    .off-doc { flex: 0 0 72mm; max-width: 78mm; }
+    .off-title { margin: 0; font-size: 18px; font-weight: 700; color: #1a7a6d; letter-spacing: 0.04em; text-align: right; }
+    .off-copy { margin: 1px 0 6px; font-size: 10px; color: #777; text-align: right; }
+    .off-meta { width: 100%; border-collapse: collapse; font-size: 10.5px; }
+    .off-meta td { padding: 1px 0; }
+    .off-meta td:first-child { color: #666; width: 42%; }
+    .off-meta td:last-child { text-align: right; font-weight: 600; }
+    .off-balance { margin-top: 6px; display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 6px 8px; background: #edf7f5; border-left: 4px solid #1a7a6d; font-size: 12px; }
+    .off-balance span, .off-balance strong { color: #1a7a6d; font-weight: 700; }
+    .off-balance strong { font-size: 15px; }
+    .off-parties { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 4px 0 8px; }
+    .off-parties h2 { margin: 0 0 3px; font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; color: #888; font-weight: 700; }
+    .off-parties strong { font-size: 12px; }
+    .off-items, .off-gst, .off-totals { width: 100%; border-collapse: collapse; }
+    .off-items { table-layout: fixed; }
+    .off-items thead th { background: #1a7a6d; color: #fff; font-size: 10px; font-weight: 700; padding: 6px 8px; border: 0; text-align: left; }
+    .off-items tbody td { border: 0; border-bottom: 1px solid #e6e6e6; padding: 6px 8px; vertical-align: top; }
+    .off-items th:nth-child(1), .off-items td:nth-child(1) { width: 8%; }
+    .off-items th:nth-child(3), .off-items td:nth-child(3) { width: 14%; }
+    .off-items th:nth-child(4), .off-items td:nth-child(4) { width: 18%; }
+    .off-items th:nth-child(5), .off-items td:nth-child(5) { width: 18%; }
+    .off-item-name { font-weight: 600; overflow-wrap: anywhere; }
+    .off-item-desc { margin-top: 2px; font-size: 10px; color: #666; overflow-wrap: anywhere; }
+    .off-gst { table-layout: fixed; }
+    .off-gst th, .off-gst td { border: 0; border-bottom: 1px solid #eee; padding: 4px 4px; font-size: 10px; }
+    .off-gst thead th { background: #f4f8f7; color: #555; font-size: 9px; text-transform: uppercase; text-align: right; }
+    .off-c { text-align: center; }
+    .off-n { text-align: right; white-space: nowrap; }
+    .off-bottom { display: grid; grid-template-columns: 1.3fr 0.7fr; gap: 16px; margin-top: 6px; align-items: start; }
+    .off-words { margin: 8px 0 4px; font-size: 10.5px; }
+    .off-notes h3, .off-tnc h3 { margin: 6px 0 2px; font-size: 11px; color: #1a7a6d; }
+    .off-note { margin: 0; font-size: 10px; color: #444; }
+    .off-totals td { border: 0; padding: 3px 0 3px 10px; }
+    .off-totals td:first-child { color: #555; }
+    .off-grand td { font-weight: 800; font-size: 12px; color: #1a7a6d; border-top: 2px solid #1a7a6d; background: #edf7f5; }
+    .off-thanks { margin: 14px 0 10px; font-size: 12px; color: #1a7a6d; }
+    .off-sign { display: flex; justify-content: space-between; align-items: flex-end; gap: 24px; margin-top: 16px; }
+    .off-auth { text-align: right; }
+    .off-sign-line { display: inline-block; min-width: 42mm; border-top: 1px solid #ccc; padding-top: 4px; font-size: 10px; color: #555; }
+    .off-generated { margin: 16px 0 0; padding-top: 8px; border-top: 1px solid #e6e6e6; text-align: center; font-size: 10.5px; color: #555; }
+    @media print { body { print-color-adjust: exact; -webkit-print-color-adjust: exact; } }
   </style>
 </head>
 <body>
-  <div class="top">
+<article class="office-invoice">
+  <header class="off-head">
+    <div class="off-seller">
+      ${logo ? `<img class="off-logo" src="${escapeHtml(logo)}" alt="" />` : ""}
+      <h1 class="off-shop">${escapeHtml(shop)}</h1>
+      <div class="off-seller-meta">
+        ${[company.address, [company.city, company.state].filter(Boolean).join(", ")].filter(Boolean).map((line) => `<div>${escapeHtml(line)}</div>`).join("")}
+        <div>${escapeHtml([company.phone ? `Ph: ${company.phone}` : "", company.email ? `Email: ${company.email}` : "", company.gstin ? `GSTIN: ${company.gstin}` : ""].filter(Boolean).join(" · "))}</div>
+      </div>
+    </div>
+    <div class="off-doc">
+      <p class="off-title">QUOTATION</p>
+      <p class="off-copy">QUOTATION — NOT A TAX INVOICE</p>
+      <table class="off-meta">
+        <tr><td>Quotation#</td><td>${escapeHtml(quote?.quotation_number || "")}</td></tr>
+        <tr><td>Quotation Date</td><td>${escapeHtml(ymd(quote?.quotation_date))}</td></tr>
+        <tr><td>Valid until</td><td>${escapeHtml(ymd(quote?.valid_until) || "—")}</td></tr>
+        ${quote?.reference_no ? `<tr><td>Reference</td><td>${escapeHtml(quote.reference_no)}</td></tr>` : ""}
+      </table>
+      <div class="off-balance"><span>Quoted total</span><strong>${escapeHtml(moneyLabel(quote?.total))}</strong></div>
+    </div>
+  </header>
+  <section class="off-parties">
     <div>
-      ${logo ? `<img src="${escapeHtml(logo)}" alt="" style="max-height:64px;max-width:180px" />` : ""}
-      <strong>${escapeHtml(shop)}</strong>
-      <div class="muted">${escapeHtml(company.address || "")}</div>
-      <div class="muted">${escapeHtml([company.phone, company.email, company.gstin ? `GSTIN ${company.gstin}` : ""].filter(Boolean).join(" · "))}</div>
+      <h2>Bill To</h2>
+      <strong>${escapeHtml(quote?.customer_name || "Customer")}</strong>
+      <div class="muted">${escapeHtml([quote?.customer_phone, quote?.customer_email].filter(Boolean).join(" · "))}</div>
+      <div>${escapeHtml(quote?.billing_address || "")}</div>
     </div>
     <div>
-      <h1>QUOTATION</h1>
-      <div>${escapeHtml(quote?.quotation_number || "")}</div>
-      <div class="muted">Date ${escapeHtml(ymd(quote?.quotation_date))}</div>
-      <div class="muted">Valid until ${escapeHtml(ymd(quote?.valid_until) || "—")}</div>
+      <h2>${quote?.shipping_address ? "Ship to" : "Place of supply"}</h2>
+      <div>${escapeHtml(quote?.shipping_address || company.address || "—")}</div>
     </div>
+  </section>
+  <table class="off-items">
+    <thead><tr><th class="off-c">#</th><th>Item &amp; Description</th><th class="off-n">Qty</th><th class="off-n">Rate</th><th class="off-n">Amount</th></tr></thead>
+    <tbody>${rows || `<tr><td colspan="5">No line items</td></tr>`}</tbody>
+  </table>
+  <div class="off-bottom">
+    <div>
+      ${gstTable ? `<table class="off-gst"><thead><tr><th>Rate</th><th>Taxable</th><th>CGST</th><th>SGST</th><th>IGST</th><th>Tax</th></tr></thead><tbody>${gstTable}</tbody></table>` : ""}
+      <p class="off-words"><strong>Amount in words:</strong> ${escapeHtml(amountWords(quote?.total))}</p>
+      ${taxBits.length ? `<p class="off-note">${escapeHtml(taxBits.join(" · "))}</p>` : ""}
+      ${quote?.notes ? `<div class="off-notes"><h3>Notes</h3><p class="off-note">${escapeHtml(quote.notes)}</p></div>` : ""}
+      ${quote?.terms ? `<div class="off-tnc"><h3>Terms &amp; conditions</h3><p class="off-note">${escapeHtml(quote.terms)}</p></div>` : ""}
+    </div>
+    <table class="off-totals">
+      <tr><td>Subtotal</td><td class="off-n">${escapeHtml(moneyLabel(quote?.subtotal))}</td></tr>
+      ${discount ? `<tr><td>Discount</td><td class="off-n">(-) ${escapeHtml(moneyLabel(discount))}</td></tr>` : ""}
+      <tr><td>Taxable amount</td><td class="off-n">${escapeHtml(moneyLabel(taxable))}</td></tr>
+      ${charges ? `<tr><td>Additional charges</td><td class="off-n">${escapeHtml(moneyLabel(charges))}</td></tr>` : ""}
+      <tr><td>Tax</td><td class="off-n">${escapeHtml(moneyLabel(quote?.gst))}</td></tr>
+      ${roundOff ? `<tr><td>Round off</td><td class="off-n">${escapeHtml(moneyLabel(roundOff))}</td></tr>` : ""}
+      <tr class="off-grand"><td>Quotation total</td><td class="off-n">${escapeHtml(moneyLabel(quote?.total))}</td></tr>
+    </table>
   </div>
-  <p class="banner">QUOTATION — NOT A TAX INVOICE</p>
-  <p><strong>${escapeHtml(quote?.customer_name || "Customer")}</strong><br />
-    <span class="muted">${escapeHtml([quote?.customer_phone, quote?.customer_email].filter(Boolean).join(" · "))}</span><br />
-    ${escapeHtml(quote?.billing_address || "")}
-    ${quote?.shipping_address ? `<br /><span class="muted">Ship to ${escapeHtml(quote.shipping_address)}</span>` : ""}
-  </p>
-  <table>
-    <thead><tr><th>Item</th><th class="num">Qty</th><th class="num">Rate</th><th class="num">Discount</th><th class="num">Tax</th><th class="num">Amount</th></tr></thead>
-    <tbody>${rows || `<tr><td colspan="6">No items</td></tr>`}</tbody>
-  </table>
-  <table class="totals">
-    <tr><td>Subtotal</td><td class="num">${escapeHtml(moneyLabel(quote?.subtotal))}</td></tr>
-    <tr><td>Discount</td><td class="num">${escapeHtml(moneyLabel(quote?.discount))}</td></tr>
-    <tr><td>Taxable amount</td><td class="num">${escapeHtml(moneyLabel(quote?.taxable ?? Math.max(0, num(quote?.subtotal) - num(quote?.discount))))}</td></tr>
-    <tr><td>Charges</td><td class="num">${escapeHtml(moneyLabel(quote?.extra_charges ?? quote?.extraCharges))}</td></tr>
-    <tr><td>Tax ${taxBits.length ? `<span class="muted">${escapeHtml(taxBits.join(" · "))}</span>` : ""}</td><td class="num">${escapeHtml(moneyLabel(quote?.gst))}</td></tr>
-    <tr><td>Round off</td><td class="num">${escapeHtml(moneyLabel(quote?.round_off ?? quote?.roundOff))}</td></tr>
-    <tr><td><strong>Grand total</strong></td><td class="num"><strong>${escapeHtml(moneyLabel(quote?.total))}</strong></td></tr>
-  </table>
-  <p class="muted">Amount in words: ${escapeHtml(amountWords(quote?.total))}</p>
-  ${quote?.notes ? `<p><strong>Notes</strong><br />${escapeHtml(quote.notes)}</p>` : ""}
-  ${quote?.terms ? `<p><strong>Terms and conditions</strong><br />${escapeHtml(quote.terms)}</p>` : ""}
-  <div class="sign"><div>Customer acceptance</div><div>For ${escapeHtml(shop)}</div></div>
-  <p class="muted">Page 1</p>
+  <p class="off-thanks">Thanks for your business.</p>
+  <footer class="off-sign"><div><span class="off-sign-line">Customer acceptance</span></div><div class="off-auth"><span class="off-sign-line">For ${escapeHtml(shop)}</span></div></footer>
+  <p class="off-generated">Page 1. This is a computer-generated quotation. No signature is required. Stock and payment are unchanged until a sales invoice is posted.</p>
+</article>
 </body>
 </html>`;
   }

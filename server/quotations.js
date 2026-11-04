@@ -514,7 +514,7 @@ export function registerQuotations(app) {
       }
       const quote = publicQuote(row, Q.todayYmd());
       const pdf = quotationPdfBuffer(
-        { name: shop.name, address: shop.address, phone: shop.phone, email: shop.email, gstin: shop.gstin || shop.settings_gstin },
+        { name: shop.name, address: shop.address, phone: shop.phone, email: shop.email, gstin: shop.gstin || shop.settings_gstin, state: shop.state },
         quote,
       );
       res.json({
@@ -559,7 +559,7 @@ export function registerQuotations(app) {
       const subject = Q.emailSubject(quote.quotation_number, shop.name);
       const text = `${subject}\n\nThis quotation is not a tax invoice. Total ${Number(quote.total || 0).toFixed(2)}. Valid until ${quote.valid_until || ""}.`;
       const pdf = quotationPdfBuffer(
-        { name: shop.name, address: shop.address, phone: shop.phone, gstin: shop.gstin || shop.settings_gstin },
+        { name: shop.name, address: shop.address, phone: shop.phone, email: shop.email, gstin: shop.gstin || shop.settings_gstin, state: shop.state },
         quote,
       );
       const sent = await sendMail({
