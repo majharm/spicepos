@@ -119,6 +119,10 @@ test("quotation module stays off, isolated, and posts stock only on convert", ()
   assert.match(php.slice(phpConvert), /pos_settle_customer_invoice/);
   assert.match(php.slice(phpConvert), /order_id IS NULL AND status = 'accepted'/);
   assert.match(php, /function pos_quotations_dispatch/);
+  assert.match(node, /COALESCE\(NULLIF\(TRIM\(s\.phone\), ''\), b\.mobile\) AS phone/);
+  assert.match(php, /COALESCE\(NULLIF\(TRIM\(s\.phone\), ''\), b\.mobile\) AS phone/);
+  assert.doesNotMatch(node, /b\.phone/);
+  assert.doesNotMatch(php, /b\.phone/);
   assert.match(php, /QUOTATION - NOT A TAX INVOICE/);
   assert.doesNotMatch(php, /pos_checkout_sale/);
   assert.match(read("js/quotations-ui.js"), /does not mark this quotation accepted|was not marked accepted/);

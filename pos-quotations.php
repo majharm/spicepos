@@ -308,7 +308,7 @@ function pos_quote_price($bid, $body, $shop, $customer) {
 
 function pos_quote_shop($bid) {
   $rows = pos_q(
-    "SELECT b.name, b.phone, b.email, b.gstin, b.address, b.state, b.category, b.logo_url,
+    "SELECT b.name, COALESCE(NULLIF(TRIM(s.phone), ''), b.mobile) AS phone, b.email, b.gstin, b.address, b.state, b.category, b.logo_url,
             s.quotations_enabled, s.quotation_valid_days, s.quotation_terms, s.invoice_terms, s.timezone, s.gstin AS settings_gstin
      FROM businesses b
      LEFT JOIN company_settings s ON s.business_id = b.id

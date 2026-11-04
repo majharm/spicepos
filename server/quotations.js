@@ -104,7 +104,7 @@ function flagOn(raw) {
 
 async function shopRow(businessId) {
   const rows = await query(
-    `SELECT b.name, b.phone, b.email, b.gstin, b.address, b.state, b.category,
+    `SELECT b.name, COALESCE(NULLIF(TRIM(s.phone), ''), b.mobile) AS phone, b.email, b.gstin, b.address, b.state, b.category,
             s.quotations_enabled, s.quotation_valid_days, s.quotation_terms, s.invoice_terms, s.timezone, s.gstin AS settings_gstin
      FROM businesses b
      LEFT JOIN company_settings s ON s.business_id = b.id
