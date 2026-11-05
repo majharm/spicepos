@@ -73,6 +73,10 @@ test("CRM stays off until enabled and links the customer master", () => {
   assert.match(node, /UNIQUE KEY uq_crm_customer/);
   assert.match(node, /Turn on Enable CRM/);
   assert.match(node, /allowsMessage/);
+  assert.match(node, /first_name/);
+  assert.match(php, /first_name/);
+  assert.doesNotMatch(node, /SELECT id, name, role FROM staff_users/);
+  assert.doesNotMatch(php, /SELECT id, name, role FROM staff_users/);
   assert.match(read("server/crud.js"), /noteCrmCustomer/);
   assert.match(read("api/cron/index.php"), /pos_crm_automation_tick/);
   assert.doesNotMatch(read("api/cron/index.php"), /lastError/);

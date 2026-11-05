@@ -556,7 +556,12 @@ export function registerCrm(app) {
         query("SELECT stage_key AS `key`, label, sort_order, is_won, is_lost FROM crm_pipeline_stages WHERE business_id = ? ORDER BY sort_order", [bid()]),
         query("SELECT id, name FROM crm_customer_segments WHERE business_id = ? ORDER BY name", [bid()]),
         query("SELECT auto_key AS `key`, enabled, channel, template, wait_days FROM crm_automations WHERE business_id = ? ORDER BY auto_key", [bid()]),
-        query("SELECT id, name, role FROM staff_users WHERE business_id = ? ORDER BY name LIMIT 200", [bid()]).catch(() => []),
+        query(
+          `SELECT id, role,
+                  COALESCE(NULLIF(TRIM(CONCAT(COALESCE(first_name, ''), ' ', COALESCE(last_name, ''))), ''), NULLIF(email, ''), username) AS name
+           FROM staff_users WHERE business_id = ? ORDER BY first_name, last_name LIMIT 200`,
+          [bid()],
+        ).catch(() => []),
       ]);
       const customers = await query("SELECT id, outstanding FROM customers WHERE business_id = ? AND COALESCE(status,'') <> 'merged' AND merged_into IS NULL", [bid()]);
       const leads = await query("SELECT stage FROM crm_leads WHERE business_id = ?", [bid()]);

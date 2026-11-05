@@ -186,7 +186,7 @@ function pos_crm_dispatch($path, $method, $body, $bid, $auth) {
         "stages" => pos_q("SELECT stage_key AS `key`, label, sort_order, is_won, is_lost FROM crm_pipeline_stages WHERE business_id = ? ORDER BY sort_order", "s", [$bid]),
         "segments" => pos_q("SELECT id, name FROM crm_customer_segments WHERE business_id = ? ORDER BY name", "s", [$bid]),
         "automations" => pos_q("SELECT auto_key AS `key`, enabled, channel, template, wait_days FROM crm_automations WHERE business_id = ?", "s", [$bid]),
-        "staff" => pos_q("SELECT id, name, role FROM staff_users WHERE business_id = ? ORDER BY name LIMIT 200", "s", [$bid]),
+        "staff" => pos_q("SELECT id, role, COALESCE(NULLIF(TRIM(CONCAT(COALESCE(first_name, ''), ' ', COALESCE(last_name, ''))), ''), NULLIF(email, ''), username) AS name FROM staff_users WHERE business_id = ? ORDER BY first_name, last_name LIMIT 200", "s", [$bid]),
         "kpis" => [
           "customers" => (int) (pos_q("SELECT COUNT(*) AS n FROM customers WHERE business_id = ? AND merged_into IS NULL", "s", [$bid])[0]["n"] ?? 0),
           "leads" => (int) (pos_q("SELECT COUNT(*) AS n FROM crm_leads WHERE business_id = ? AND stage NOT IN ('converted','lost')", "s", [$bid])[0]["n"] ?? 0),
