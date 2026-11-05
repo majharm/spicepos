@@ -77,6 +77,13 @@ test("CRM stays off until enabled and links the customer master", () => {
   assert.match(php, /first_name/);
   assert.doesNotMatch(node, /SELECT id, name, role FROM staff_users/);
   assert.doesNotMatch(php, /SELECT id, name, role FROM staff_users/);
+  assert.match(node, /ensureColumn\("customers", name, def\)/);
+  assert.match(node, /merged_into: "VARCHAR\(255\) NULL"/);
+  assert.match(node, /activeCustomerSql/);
+  assert.doesNotMatch(node, /AND merged_into IS NULL/);
+  assert.match(php, /"merged_into" => "VARCHAR\(255\) NULL"/);
+  assert.match(php, /pos_crm_active_customer_sql/);
+  assert.doesNotMatch(php, /AND merged_into IS NULL/);
   assert.match(read("server/crud.js"), /noteCrmCustomer/);
   assert.match(read("api/cron/index.php"), /pos_crm_automation_tick/);
   assert.doesNotMatch(read("api/cron/index.php"), /lastError/);

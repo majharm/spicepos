@@ -7,6 +7,18 @@ function pos_crm_ensure() {
   $done = true;
   if (function_exists("pos_ensure_columns")) {
     pos_ensure_columns("company_settings", ["crm_enabled" => "TINYINT(1) NOT NULL DEFAULT 0"]);
+    pos_ensure_columns("customers", [
+      "email" => "VARCHAR(160) NULL",
+      "merged_into" => "VARCHAR(255) NULL",
+      "status" => "VARCHAR(16) NOT NULL DEFAULT 'active'",
+      "mobile_norm" => "VARCHAR(16) NULL",
+      "email_norm" => "VARCHAR(160) NULL",
+      "gstin_norm" => "VARCHAR(32) NULL",
+      "whatsapp_consent" => "TINYINT(1) NOT NULL DEFAULT 0",
+      "whatsapp_opt_out" => "TINYINT(1) NOT NULL DEFAULT 0",
+      "dob" => "DATE NULL",
+      "address" => "VARCHAR(500) NULL",
+    ]);
   }
   $tables = [
     "CREATE TABLE IF NOT EXISTS crm_lead_sources (id VARCHAR(36) PRIMARY KEY, business_id VARCHAR(36) NOT NULL, name VARCHAR(80) NOT NULL, active TINYINT(1) NOT NULL DEFAULT 1, created_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3), UNIQUE KEY uq_crm_source (business_id, name))",
@@ -26,6 +38,30 @@ function pos_crm_ensure() {
     "CREATE TABLE IF NOT EXISTS crm_automations (id VARCHAR(36) PRIMARY KEY, business_id VARCHAR(36) NOT NULL, auto_key VARCHAR(32) NOT NULL, enabled TINYINT(1) NOT NULL DEFAULT 0, channel VARCHAR(16) NOT NULL DEFAULT 'whatsapp', template TEXT NULL, wait_days INT NOT NULL DEFAULT 0, UNIQUE KEY uq_crm_auto (business_id, auto_key))",
   ];
   foreach ($tables as $sql) pos_q($sql);
+}
+
+function pos_crm_customer_has($column) {
+  static $have = null;
+  if ($have === null) {
+    $have = [];
+    $db = function_exists("pos_db") ? pos_db() : ($GLOBALS["pos_db"] ?? null);
+    if ($db) {
+      $res = @$db->query("SHOW COLUMNS FROM customers");
+      if ($res) {
+        while ($row = $res->fetch_assoc()) $have[$row["Field"]] = true;
+        $res->free();
+      }
+    }
+  }
+  return !empty($have[$column]);
+}
+
+function pos_crm_active_customer_sql($alias = "") {
+  $prefix = $alias !== "" ? $alias . "." : "";
+  $parts = [];
+  if (pos_crm_customer_has("status")) $parts[] = "COALESCE({$prefix}status,'') <> 'merged'";
+  if (pos_crm_customer_has("merged_into")) $parts[] = "{$prefix}merged_into IS NULL";
+  return $parts ? " AND " . implode(" AND ", $parts) : "";
 }
 
 function pos_crm_on($bid) {
@@ -188,7 +224,7 @@ function pos_crm_dispatch($path, $method, $body, $bid, $auth) {
         "automations" => pos_q("SELECT auto_key AS `key`, enabled, channel, template, wait_days FROM crm_automations WHERE business_id = ?", "s", [$bid]),
         "staff" => pos_q("SELECT id, role, COALESCE(NULLIF(TRIM(CONCAT(COALESCE(first_name, ''), ' ', COALESCE(last_name, ''))), ''), NULLIF(email, ''), username) AS name FROM staff_users WHERE business_id = ? ORDER BY first_name, last_name LIMIT 200", "s", [$bid]),
         "kpis" => [
-          "customers" => (int) (pos_q("SELECT COUNT(*) AS n FROM customers WHERE business_id = ? AND merged_into IS NULL", "s", [$bid])[0]["n"] ?? 0),
+          "customers" => (int) (pos_q("SELECT COUNT(*) AS n FROM customers WHERE business_id = ?" . pos_crm_active_customer_sql(), "s", [$bid])[0]["n"] ?? 0),
           "leads" => (int) (pos_q("SELECT COUNT(*) AS n FROM crm_leads WHERE business_id = ? AND stage NOT IN ('converted','lost')", "s", [$bid])[0]["n"] ?? 0),
           "followups" => (int) (pos_q("SELECT COUNT(*) AS n FROM crm_followups WHERE business_id = ? AND status = 'pending'", "s", [$bid])[0]["n"] ?? 0),
           "outstanding" => (float) (pos_q("SELECT COALESCE(SUM(outstanding),0) AS n FROM customers WHERE business_id = ?", "s", [$bid])[0]["n"] ?? 0),
@@ -242,7 +278,7 @@ function pos_crm_dispatch($path, $method, $body, $bid, $auth) {
     }
     if ($path === "crm/customers" && $method === "GET") {
       pos_crm_on($bid);
-      pos_send(200, ["customers" => pos_q("SELECT c.id, c.code, c.name, c.business_name, c.mobile, c.email, c.gstin, c.outstanding, c.credit_limit, c.whatsapp_consent, c.whatsapp_opt_out, p.assigned_to, p.sms_consent, p.email_consent, p.custom_json FROM customers c LEFT JOIN crm_customers p ON p.customer_id = c.id AND p.business_id = c.business_id WHERE c.business_id = ? AND c.merged_into IS NULL ORDER BY c.name LIMIT 300", "s", [$bid]), "php" => true]);
+      pos_send(200, ["customers" => pos_q("SELECT c.id, c.code, c.name, c.business_name, c.mobile, c.email, c.gstin, c.outstanding, c.credit_limit, c.whatsapp_consent, c.whatsapp_opt_out, p.assigned_to, p.sms_consent, p.email_consent, p.custom_json FROM customers c LEFT JOIN crm_customers p ON p.customer_id = c.id AND p.business_id = c.business_id WHERE c.business_id = ?" . pos_crm_active_customer_sql("c") . " ORDER BY c.name LIMIT 300", "s", [$bid]), "php" => true]);
     }
     if (preg_match("#^crm/customers/([^/]+)$#", $path, $m) && $method === "GET") {
       pos_crm_on($bid);

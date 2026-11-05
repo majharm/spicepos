@@ -11,6 +11,21 @@ import { sendMail } from "./mail.js";
 
 const CRM = globalThis.POSCRM;
 let schemaReady = false;
+let customerColsReady = false;
+let customerColumnSet = null;
+
+const CUSTOMER_COLUMNS = {
+  email: "VARCHAR(160) NULL",
+  merged_into: "VARCHAR(255) NULL",
+  status: "VARCHAR(16) NOT NULL DEFAULT 'active'",
+  mobile_norm: "VARCHAR(16) NULL",
+  email_norm: "VARCHAR(160) NULL",
+  gstin_norm: "VARCHAR(32) NULL",
+  whatsapp_consent: "TINYINT(1) NOT NULL DEFAULT 0",
+  whatsapp_opt_out: "TINYINT(1) NOT NULL DEFAULT 0",
+  dob: "DATE NULL",
+  address: "VARCHAR(500) NULL",
+};
 
 async function ensureColumn(table, column, def) {
   const tables = await query(
@@ -35,7 +50,10 @@ function id() {
 }
 
 export async function ensureCrmSchema() {
-  if (schemaReady) return;
+  if (schemaReady) {
+    await ensureCustomerColumns();
+    return;
+  }
   await ensureColumn("company_settings", "crm_enabled", "TINYINT(1) NOT NULL DEFAULT 0");
   const tables = [
     `CREATE TABLE IF NOT EXISTS crm_lead_sources (
@@ -240,6 +258,42 @@ export async function ensureCrmSchema() {
   ];
   for (const sql of tables) await query(sql);
   schemaReady = true;
+  await ensureCustomerColumns();
+}
+
+async function ensureCustomerColumns() {
+  if (customerColsReady) return;
+  let ready = true;
+  for (const [name, def] of Object.entries(CUSTOMER_COLUMNS)) {
+    try {
+      await ensureColumn("customers", name, def);
+      if (customerColumnSet) customerColumnSet.add(name);
+    } catch (err) {
+      ready = false;
+      console.error(`crm customers.${name}:`, err.message);
+    }
+  }
+  customerColsReady = ready;
+}
+
+async function loadCustomerColumns() {
+  if (customerColumnSet) return customerColumnSet;
+  const rows = await query(
+    `SELECT COLUMN_NAME AS name FROM INFORMATION_SCHEMA.COLUMNS
+     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'customers'`,
+  );
+  customerColumnSet = new Set(rows.map((row) => row.name));
+  return customerColumnSet;
+}
+
+async function activeCustomerSql(alias = "") {
+  await ensureCustomerColumns();
+  const have = await loadCustomerColumns();
+  const prefix = alias ? `${alias}.` : "";
+  const parts = [];
+  if (have.has("status")) parts.push(`COALESCE(${prefix}status,'') <> 'merged'`);
+  if (have.has("merged_into")) parts.push(`${prefix}merged_into IS NULL`);
+  return parts.length ? ` AND ${parts.join(" AND ")}` : "";
 }
 
 async function shopRow(businessId) {
@@ -431,7 +485,7 @@ async function runBusiness(businessId) {
   };
   if (byKey.birthday) {
     const rows = await query(
-      "SELECT id, name, mobile, email, whatsapp_consent, whatsapp_opt_out, dob FROM customers WHERE business_id = ? AND dob IS NOT NULL AND status <> 'merged' LIMIT 300",
+      `SELECT id, name, mobile, email, whatsapp_consent, whatsapp_opt_out, dob FROM customers WHERE business_id = ? AND dob IS NOT NULL${await activeCustomerSql()} LIMIT 300`,
       [businessId],
     );
     for (const row of rows) {
@@ -449,7 +503,7 @@ async function runBusiness(businessId) {
   }
   if (byKey.payment) {
     const rows = await query(
-      "SELECT id, name, mobile, email, whatsapp_consent, whatsapp_opt_out, outstanding FROM customers WHERE business_id = ? AND outstanding > 0.5 AND status <> 'merged' LIMIT 80",
+      `SELECT id, name, mobile, email, whatsapp_consent, whatsapp_opt_out, outstanding FROM customers WHERE business_id = ? AND outstanding > 0.5${await activeCustomerSql()} LIMIT 80`,
       [businessId],
     );
     for (const row of rows) {
@@ -487,7 +541,7 @@ async function runBusiness(businessId) {
     const rows = await query(
       `SELECT c.id, c.name, c.mobile, c.email, c.whatsapp_consent, c.whatsapp_opt_out, MAX(o.created_at) AS last_sale
        FROM customers c JOIN sales_orders o ON o.customer_id = c.id AND o.business_id = c.business_id
-       WHERE c.business_id = ? AND c.status <> 'merged'
+       WHERE c.business_id = ?${await activeCustomerSql("c")}
        GROUP BY c.id, c.name, c.mobile, c.email, c.whatsapp_consent, c.whatsapp_opt_out
        HAVING MAX(o.created_at) < DATE_SUB(?, INTERVAL ? DAY) LIMIT 40`,
       [businessId, today, days],
@@ -563,7 +617,7 @@ export function registerCrm(app) {
           [bid()],
         ).catch(() => []),
       ]);
-      const customers = await query("SELECT id, outstanding FROM customers WHERE business_id = ? AND COALESCE(status,'') <> 'merged' AND merged_into IS NULL", [bid()]);
+      const customers = await query(`SELECT id, outstanding FROM customers WHERE business_id = ?${await activeCustomerSql()}`, [bid()]);
       const leads = await query("SELECT stage FROM crm_leads WHERE business_id = ?", [bid()]);
       const followups = await query("SELECT status, due_on FROM crm_followups WHERE business_id = ?", [bid()]);
       const tasks = await query("SELECT status FROM crm_tasks WHERE business_id = ?", [bid()]);
@@ -663,7 +717,7 @@ export function registerCrm(app) {
         res.json({ ok: true, customerId: lead.customer_id, linked: true });
         return;
       }
-      const customers = await query("SELECT id, name, mobile, mobile_norm, email, email_norm, gstin, gstin_norm FROM customers WHERE business_id = ? AND COALESCE(status,'') <> 'merged'", [bid()]);
+      const customers = await query(`SELECT id, name, mobile, mobile_norm, email, email_norm, gstin, gstin_norm FROM customers WHERE business_id = ?${await activeCustomerSql()}`, [bid()]);
       const match = CRM.sameCustomer(customers, lead);
       let customerId = match?.id || "";
       if (!customerId) {
@@ -700,7 +754,7 @@ export function registerCrm(app) {
       let sql = `SELECT c.id, c.code, c.name, c.business_name, c.mobile, c.email, c.gstin, c.outstanding, c.credit_limit, c.dob, c.address,
                         p.assigned_to, p.segment_id, p.sms_consent, p.email_consent, c.whatsapp_consent, c.whatsapp_opt_out, p.custom_json
                  FROM customers c LEFT JOIN crm_customers p ON p.customer_id = c.id AND p.business_id = c.business_id
-                 WHERE c.business_id = ? AND COALESCE(c.status,'') <> 'merged' AND c.merged_into IS NULL`;
+                 WHERE c.business_id = ?${await activeCustomerSql("c")}`;
       const params = [bid()];
       if (clip(req.query.q, 80)) {
         sql += " AND (c.name LIKE ? OR c.mobile LIKE ? OR c.business_name LIKE ?)";
