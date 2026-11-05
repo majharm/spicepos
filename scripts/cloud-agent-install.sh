@@ -22,26 +22,52 @@ else
   npm install
 fi
 
+# load-env.js keeps the first assignment of each key, so appending after
+# .env.example placeholders never reaches the process. Rewrite those keys.
+apply_local_env() {
+  local tmp
+  tmp="$(mktemp)"
+  awk '
+    BEGIN {
+      repl["NODE_ENV"] = "development"
+      repl["DB_HOST"] = "localhost"
+      repl["DB_PORT"] = "3306"
+      repl["DB_NAME"] = "spicepos"
+      repl["DB_USER"] = "spicepos"
+      repl["DB_PASSWORD"] = "spicepos_test"
+      repl["MASTER_ADMIN_EMAIL"] = "master@atavpos.local"
+      repl["MASTER_ADMIN_PASSWORD"] = "Master@12345"
+      repl["DEMO_TENANT_PASSWORD"] = "Demo@12345"
+      repl["CASHIER_PASSWORD"] = "Cashier@12345"
+      repl["BUSINESS_ID"] = "00000000-0000-4000-8000-000000000001"
+    }
+    {
+      line = $0
+      if (line ~ /^[[:space:]]*#/ || line ~ /^[[:space:]]*$/) { print line; next }
+      key = line
+      sub(/^export[[:space:]]+/, "", key)
+      sub(/=.*/, "", key)
+      if (key in repl && !(key in seen)) {
+        print key "=" repl[key]
+        seen[key] = 1
+        next
+      }
+      print line
+    }
+    END {
+      if (!("PORT" in seen)) print "PORT=5173"
+      if (!("COOKIE_SECURE" in seen)) print "COOKIE_SECURE=0"
+    }
+  ' .env > "$tmp"
+  mv "$tmp" .env
+}
+
 if [[ ! -f .env && -f .env.example ]]; then
   cp .env.example .env
-  if ! grep -q '^DB_NAME=spicepos$' .env 2>/dev/null; then
-    cat >> .env <<'EOF'
+fi
 
-# Cloud Agent local defaults (override with dashboard secrets)
-NODE_ENV=development
-PORT=5173
-DB_HOST=localhost
-DB_PORT=3306
-DB_NAME=spicepos
-DB_USER=spicepos
-DB_PASSWORD=spicepos_test
-MASTER_ADMIN_EMAIL=master@atavpos.local
-MASTER_ADMIN_PASSWORD=Master@12345
-DEMO_TENANT_PASSWORD=Demo@12345
-CASHIER_PASSWORD=Cashier@12345
-COOKIE_SECURE=0
-EOF
-  fi
+if [[ -f .env ]] && grep -q '^DB_NAME=your-db-name$' .env; then
+  apply_local_env
 fi
 
 echo "Install complete."
