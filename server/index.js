@@ -35,6 +35,7 @@ import { getPlatformSettings, shopSupportContact } from "./settings.js";
 import { sendLowStockAlerts, tickShopAlerts, startAlertScheduler, scheduleAlertTick } from "./alerts.js";
 import { registerRecurring, startRecurringScheduler, ensureRecurringSchema } from "./recurring.js";
 import { registerQuotations, ensureQuotationSchema } from "./quotations.js";
+import { registerCrm, ensureCrmSchema } from "./crm.js";
 import { registerMailbox, ensureMailboxSchema, deliverInvoiceCopy } from "./mail-box.js";
 import { deliverInvoiceWhatsApp } from "./invoice-whatsapp.js";
 import { registerAdvanced, computeSaleLine, billedPrintQty, applySaleStock, applyLoyaltyOnSale, pharmacyLineSnapshot, enrichCatalogPharmacy, enrichCatalogBarcodes, saleStockQty, persistSaleLineNote, persistPrintSaleLine, assertApparelSaleStock } from "./advanced.js";
@@ -817,6 +818,10 @@ app.post("/api/settings", requireStaff, requirePerm("settings"), async (req, res
     langSql += ", quotations_enabled = ?";
     params.push(Number(body.quotations_enabled) === 1 ? 1 : 0);
   }
+  if (Object.prototype.hasOwnProperty.call(body, "crm_enabled")) {
+    langSql += ", crm_enabled = ?";
+    params.push(Number(body.crm_enabled) === 1 ? 1 : 0);
+  }
   if (Object.prototype.hasOwnProperty.call(body, "quotation_valid_days")) {
     const days = Math.max(1, Math.min(365, Number(body.quotation_valid_days) || 15));
     langSql += ", quotation_valid_days = ?";
@@ -961,6 +966,7 @@ registerAccounts(app);
 registerDueReminders(app);
 registerRecurring(app);
 registerQuotations(app);
+registerCrm(app);
 registerMailbox(app);
 
 app.post("/api/checkout", requireStaff, requirePerm("counter"), async (req, res) => {
@@ -1480,6 +1486,7 @@ ensureSchema()
     .then(() => ensureLoginPageSchema())
     .then(() => ensureRecurringSchema())
     .then(() => ensureQuotationSchema())
+    .then(() => ensureCrmSchema())
     .then(() => ensureMailboxSchema())
     .then(() => {
       setTimeout(() => {

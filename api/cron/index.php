@@ -12,6 +12,12 @@ try {
   require_once $root . "/pos-php-core.php";
   require_once $root . "/pos-automation.php";
   $result = pos_automation_tick();
+  try {
+    require_once $root . "/pos-crm.php";
+    if (function_exists("pos_crm_automation_tick")) pos_crm_automation_tick();
+  } catch (Throwable $crmError) {
+    error_log("crm cron: " . $crmError->getMessage());
+  }
   echo json_encode([
     "ok" => true,
     "php" => true,

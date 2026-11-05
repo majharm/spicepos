@@ -2925,6 +2925,10 @@ function quotationsOn(company = state.company) {
   return hardwareFlagOn(company?.quotations_enabled);
 }
 
+function crmOn(company = state.company) {
+  return hardwareFlagOn(company?.crm_enabled);
+}
+
 function purchaseBarcodeEntryOn(item) {
   return purchaseBarcodeOn() && POSUnits.isCount(itemUnit(item || {}));
 }
@@ -3118,6 +3122,7 @@ function applyNav() {
     btn.hidden = map[view] ? !can(map[view]) : false;
     if (view === "recurring") btn.hidden = !can("orders");
     if (view === "quotations") btn.hidden = !can("orders") || !quotationsOn();
+    if (view === "crm") btn.hidden = !can("customers") || !crmOn();
     if (view === "growth") btn.hidden = !(can("growth") || can("reports"));
     if (view === "offers") btn.hidden = !(can("discount") || can("items") || can("growth"));
     if (view === "packs" && !isSpiceShop()) btn.hidden = true;
@@ -3478,6 +3483,7 @@ function showView(name) {
   if (name === "kot" && (!isRestaurantShop() || !can("kot"))) name = can("counter") ? "counter" : landingView();
   if (name === "recurring" && !can("orders")) name = landingView();
   if (name === "quotations" && !can("orders")) name = landingView();
+  if (name === "crm" && (!can("customers") || !crmOn())) name = landingView();
   const requested = name;
   state.currentView = name === "backup" || name === "devices" ? (name === "devices" ? "devices" : "settings") : name;
   if (name === "backup" || name === "devices") name = "settings";
@@ -3514,6 +3520,7 @@ function showView(name) {
   if (name === "orders") loadOrders();
   if (name === "recurring") globalThis.POSRecurringUi?.load?.();
   if (name === "quotations") globalThis.POSQuotationsUi?.load?.();
+  if (name === "crm") globalThis.POSCRMUi?.load?.();
   if (name === "dues") globalThis.POSDueRemindersUi?.load?.();
   if (name === "returns") loadReturnsView();
   if (name === "qr-orders") loadQrOrders();
@@ -8646,6 +8653,8 @@ function renderSettings() {
   if ($("recurring-invoices-status")) $("recurring-invoices-status").textContent = `Recurring invoices: ${recurringInvoicesOn() ? "On" : "Off"}`;
   if ($("set-quotations")) $("set-quotations").checked = quotationsOn();
   if ($("quotations-status")) $("quotations-status").textContent = `Quotations: ${quotationsOn() ? "On" : "Off"}`;
+  if ($("set-crm")) $("set-crm").checked = crmOn();
+  if ($("crm-status")) $("crm-status").textContent = `CRM: ${crmOn() ? "On" : "Off"}`;
   if ($("purchase-barcode-status")) $("purchase-barcode-status").textContent = `Barcode-wise purchase: ${purchaseBarcodeOn() ? "On" : "Off"}`;
   if ($("set-receipt-printer")) $("set-receipt-printer").checked = receiptPrinterEnabled();
   if ($("set-cash-drawer")) $("set-cash-drawer").checked = cashDrawerEnabled();
@@ -15718,6 +15727,9 @@ $("settings-form").addEventListener("submit", async (e) => {
     if ($("set-quotations")) {
       payload.quotations_enabled = $("set-quotations").checked ? 1 : 0;
     }
+    if ($("set-crm")) {
+      payload.crm_enabled = $("set-crm").checked ? 1 : 0;
+    }
     payload.invoice_signature_enabled = $("set-signature-print")?.checked ? 1 : 0;
     payload.invoice_stamp_enabled = $("set-stamp-print")?.checked ? 1 : 0;
     payload.receipt_printer_enabled = $("set-receipt-printer")?.checked ? 1 : 0;
@@ -15751,6 +15763,9 @@ $("settings-form").addEventListener("submit", async (e) => {
     }
     if (Object.prototype.hasOwnProperty.call(payload, "quotations_enabled")) {
       state.company.quotations_enabled = payload.quotations_enabled;
+    }
+    if (Object.prototype.hasOwnProperty.call(payload, "crm_enabled")) {
+      state.company.crm_enabled = payload.crm_enabled;
     }
     if (Object.prototype.hasOwnProperty.call(payload, "invoice_signature_enabled")) {
       state.company.invoice_signature_enabled = payload.invoice_signature_enabled;

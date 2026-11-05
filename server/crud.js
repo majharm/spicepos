@@ -961,6 +961,12 @@ export function registerCrud(app) {
         await stampCustomerNorms(conn, created);
         return created;
       });
+      try {
+        const { noteCrmCustomer } = await import("./crm.js");
+        await noteCrmCustomer(customer);
+      } catch {
+        /* a welcome message must not block the customer master */
+      }
       res.json({ ok: true, customer });
     } catch (err) {
       res.status(500).json({ error: String(err.message) });
