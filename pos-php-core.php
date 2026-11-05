@@ -3673,6 +3673,11 @@ function pos_php_dispatch($path, $method, $rawBody) {
       pos_public_invoice_send($m[1]);
       return;
     }
+    if (preg_match("#^quotations/public/([^/]+)(/pdf)?$#", $path, $m) && $method === "GET") {
+      require_once __DIR__ . "/pos-quotations.php";
+      pos_quote_public_send($m[1], !empty($m[2]));
+      return;
+    }
     if ($path === "install") {
       if ($method === "GET") {
         $c = pos_db_cfg();

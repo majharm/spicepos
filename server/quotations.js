@@ -10,7 +10,7 @@ import { applySaleStock, assertApparelSaleStock, computeSaleLine } from "./advan
 import { settleCustomerInvoice } from "./accounts.js";
 import { postSaleJournal } from "./accounting.js";
 import { loadMailbox, decryptSecret } from "./mail-box.js";
-import { sendMail } from "./mail.js";
+import { publicAppUrl, sendMail } from "./mail.js";
 import { quotationPdfBuffer } from "./invoice-pdf.js";
 import { isInterStateSupply } from "./gst-supply.js";
 import { deliverInvoiceWhatsApp } from "./invoice-whatsapp.js";
@@ -104,7 +104,9 @@ function flagOn(raw) {
 
 async function shopRow(businessId) {
   const rows = await query(
-    `SELECT b.name, COALESCE(NULLIF(TRIM(s.phone), ''), b.mobile) AS phone, b.email, b.gstin, b.address, b.state, b.category,
+    `SELECT b.name, COALESCE(NULLIF(TRIM(s.phone), ''), b.mobile) AS phone, b.email, b.gstin, b.address,
+            COALESCE(NULLIF(TRIM(s.city), ''), b.city) AS city, b.state, b.category,
+            COALESCE(NULLIF(TRIM(s.logo_url), ''), b.logo_url) AS logo_url,
             s.quotations_enabled, s.quotation_valid_days, s.quotation_terms, s.invoice_terms, s.timezone, s.gstin AS settings_gstin
      FROM businesses b
      LEFT JOIN company_settings s ON s.business_id = b.id
@@ -235,7 +237,84 @@ function readInput(body, shop, customer) {
   };
 }
 
+const PUBLIC_QUOTE_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function shopBrand(shop) {
+  return {
+    name: shop?.name || "Shop",
+    address: shop?.address || "",
+    city: shop?.city || "",
+    state: shop?.state || "",
+    phone: shop?.phone || "",
+    email: shop?.email || "",
+    gstin: shop?.gstin || shop?.settings_gstin || "",
+    logo_url: shop?.logo_url || "",
+  };
+}
+
+function quoteLinks(req, id) {
+  const base = (publicAppUrl(req) || "https://pos.atavtelecom.in").replace(/\/+$/, "");
+  const safe = encodeURIComponent(id);
+  return {
+    viewUrl: `${base}/quotation.html?id=${safe}`,
+    pdfUrl: `${base}/api/quotations/public/${safe}/pdf`,
+  };
+}
+
+function quotePdfName(number) {
+  const safe = String(number || "quote").replace(/[^A-Za-z0-9._-]/g, "");
+  return `Quotation-${safe || "quote"}.pdf`;
+}
+
 export function registerQuotations(app) {
+  app.get("/api/quotations/public/:id/pdf", async (req, res) => {
+    try {
+      const id = String(req.params.id || "");
+      if (!PUBLIC_QUOTE_ID.test(id)) {
+        res.status(400).json({ error: "Invalid quotation id" });
+        return;
+      }
+      await ensureQuotationSchema();
+      const [row] = await query("SELECT * FROM quotations WHERE id = ? LIMIT 1", [id]);
+      if (!row) {
+        res.status(404).json({ error: "Quotation not found" });
+        return;
+      }
+      const shop = shopBrand(await shopRow(row.business_id));
+      const quote = Q.customerView(publicQuote(row, Q.todayYmd()));
+      const pdf = quotationPdfBuffer(shop, quote);
+      res.setHeader("Cache-Control", "no-store");
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename="${quotePdfName(quote.quotation_number)}"`);
+      res.send(pdf);
+    } catch (err) {
+      res.status(err.status || 500).json({ error: String(err.message) });
+    }
+  });
+
+  app.get("/api/quotations/public/:id", async (req, res) => {
+    try {
+      const id = String(req.params.id || "");
+      if (!PUBLIC_QUOTE_ID.test(id)) {
+        res.status(400).json({ error: "Invalid quotation id" });
+        return;
+      }
+      await ensureQuotationSchema();
+      const [row] = await query("SELECT * FROM quotations WHERE id = ? LIMIT 1", [id]);
+      if (!row) {
+        res.status(404).json({ error: "Quotation not found" });
+        return;
+      }
+      res.setHeader("Cache-Control", "no-store");
+      res.json({
+        quote: Q.customerView(publicQuote(row, Q.todayYmd())),
+        company: shopBrand(await shopRow(row.business_id)),
+      });
+    } catch (err) {
+      res.status(err.status || 500).json({ error: String(err.message) });
+    }
+  });
+
   app.get("/api/quotations", requireStaff, requirePerm("orders"), async (req, res) => {
     try {
       await ensureQuotationSchema();
@@ -563,16 +642,16 @@ export function registerQuotations(app) {
         pass = "";
       }
       const subject = Q.emailSubject(quote.quotation_number, shop.name);
-      const text = `${subject}\n\nThis quotation is not a tax invoice. Total ${Number(quote.total || 0).toFixed(2)}. Valid until ${quote.valid_until || ""}.`;
-      const pdf = quotationPdfBuffer(
-        { name: shop.name, address: shop.address, phone: shop.phone, email: shop.email, gstin: shop.gstin || shop.settings_gstin, state: shop.state },
-        quote,
-      );
+      const brand = shopBrand(shop);
+      const links = quoteLinks(req, existing.id);
+      const text = Q.emailText(quote, brand, links);
+      const html = Q.emailHtml(quote, brand, links);
+      const pdf = quotationPdfBuffer(brand, quote);
       const sent = await sendMail({
         to,
         subject,
         text,
-        html: `<p>${subject}</p><p>This quotation is not a tax invoice.</p>`,
+        html,
         replyTo: mailbox.reply_to || "",
         smtp: {
           host: mailbox.smtp_host,

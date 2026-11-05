@@ -231,6 +231,7 @@ app.use((req, res, next) => {
     url.startsWith("/api/print/public") ||
     url.startsWith("/api/gym/public") ||
     url.startsWith("/api/invoices") ||
+    url.startsWith("/api/quotations/public") ||
     url.startsWith("/api/health") ||
     url.startsWith("/api/master") ||
     url.startsWith("/api/analytics") ||

@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Quotation</title>
+    <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
+    <style>
+      body { margin: 0; background: #eef3f2; color: #212121; font-family: "Segoe UI", Calibri, Arial, sans-serif; }
+      .bar { display: flex; gap: 12px; align-items: center; justify-content: space-between; padding: 12px 16px; background: #fff; border-bottom: 1px solid #d7e6e3; }
+      .bar strong { color: #1a7a6d; }
+      .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+      .actions a, .actions button { appearance: none; border: 1px solid #1a7a6d; background: #1a7a6d; color: #fff; text-decoration: none; border-radius: 4px; padding: 8px 12px; font: inherit; cursor: pointer; }
+      .actions a.secondary, .actions button.secondary { background: #fff; color: #1a7a6d; }
+      .status { padding: 28px 16px; }
+      iframe { width: 100%; height: calc(100vh - 58px); border: 0; background: #fff; }
+      @media print { .bar { display: none; } iframe { height: auto; } }
+    </style>
+  </head>
+  <body>
+    <div class="bar" id="bar" hidden>
+      <strong id="title">Quotation</strong>
+      <div class="actions">
+        <a id="download" href="#">Download PDF</a>
+        <button type="button" id="print" class="secondary">Print</button>
+      </div>
+    </div>
+    <p class="status" id="status">Loading quotation…</p>
+    <iframe id="sheet" hidden title="Quotation"></iframe>
+    <script src="./js/discount.js?v=20261103bill1" defer></script>
+    <script src="./js/units.js?v=20260919unit1" defer></script>
+    <script src="./js/quotations.js?v=20261105mail1" defer></script>
+    <script src="./js/quotation-page.js?v=20261105mail1" defer></script>
+  </body>
+</html>

@@ -308,7 +308,9 @@ function pos_quote_price($bid, $body, $shop, $customer) {
 
 function pos_quote_shop($bid) {
   $rows = pos_q(
-    "SELECT b.name, COALESCE(NULLIF(TRIM(s.phone), ''), b.mobile) AS phone, b.email, b.gstin, b.address, b.state, b.category, b.logo_url,
+    "SELECT b.name, COALESCE(NULLIF(TRIM(s.phone), ''), b.mobile) AS phone, b.email, b.gstin, b.address,
+            COALESCE(NULLIF(TRIM(s.city), ''), b.city) AS city, b.state, b.category,
+            COALESCE(NULLIF(TRIM(s.logo_url), ''), b.logo_url) AS logo_url,
             s.quotations_enabled, s.quotation_valid_days, s.quotation_terms, s.invoice_terms, s.timezone, s.gstin AS settings_gstin
      FROM businesses b
      LEFT JOIN company_settings s ON s.business_id = b.id
@@ -1058,6 +1060,317 @@ function pos_quote_subject($number, $shop) {
   return "Quotation " . trim((string) $number) . " – " . $name;
 }
 
+function pos_quote_http_url($url) {
+  $url = trim((string) $url);
+  if (!preg_match("#^https?://#i", $url)) return "";
+  return str_replace(["\r", "\n", "\"", "'", "<", ">", " "], "", $url);
+}
+
+function pos_quote_email_logo($url) {
+  $url = trim((string) $url);
+  if (preg_match("#^https?://#i", $url)) return pos_quote_http_url($url);
+  if (preg_match("#^data:image/(png|jpe?g|webp);base64,#i", $url) && strlen($url) <= 120000) return $url;
+  return "";
+}
+
+function pos_quote_email_money($value, $rate = false) {
+  $label = $rate ? pos_quote_rate_inr($value) : pos_quote_inr($value, 2);
+  return str_replace("Rs ", "₹", $label);
+}
+
+function pos_quote_email_qty($line) {
+  $unit = strtoupper(trim((string) ($line["unit"] ?? "")));
+  $measured = (($line["isCount"] ?? true) === false) || $unit === "GM" || $unit === "G" || $unit === "KG";
+  $qty = (float) ($line["quantity"] ?? 0);
+  if ($measured && ($unit === "GM" || $unit === "G" || $unit === "") && $qty >= 1000) return number_format($qty / 1000, 2, ".", "") . " kg";
+  if ($measured && $unit === "KG") return number_format($qty, 2, ".", "") . " kg";
+  return trim((string) ($line["quantity"] ?? "") . " " . (string) ($line["unit"] ?? ""));
+}
+
+function pos_quote_public_base() {
+  $base = function_exists("pos_public_app_url") ? pos_public_app_url() : "";
+  if ($base === "") $base = "https://pos.atavtelecom.in";
+  return rtrim($base, "/");
+}
+
+function pos_quote_public_links($id) {
+  $base = pos_quote_public_base();
+  $safe = rawurlencode((string) $id);
+  return [
+    "viewUrl" => $base . "/quotation.html?id=" . $safe,
+    "pdfUrl" => $base . "/api/quotations/public/" . $safe . "/pdf",
+  ];
+}
+
+function pos_quote_email_text($quote, $company, $links) {
+  $shop = trim((string) ($company["name"] ?? "")) ?: "Shop";
+  $number = trim((string) ($quote["quotation_number"] ?? "")) ?: "Quotation";
+  $lines = is_array($quote["lines"] ?? null) ? $quote["lines"] : [];
+  $shown = array_slice($lines, 0, 8);
+  $taxable = isset($quote["taxable"]) ? (float) $quote["taxable"] : max(0, (float) ($quote["subtotal"] ?? 0) - (float) ($quote["discount"] ?? 0));
+  $items = [];
+  foreach ($shown as $line) {
+    if (!is_array($line)) continue;
+    $name = trim((string) ($line["name"] ?? ($line["item_name"] ?? "Item"))) ?: "Item";
+    $items[] = "- " . $name . " | " . pos_quote_email_qty($line) . " | " . pos_quote_email_money($line["rate"] ?? 0, true) . " | " . pos_quote_email_money($line["taxable"] ?? ($line["total"] ?? 0));
+  }
+  if (count($lines) > count($shown)) $items[] = "- " . (count($lines) - count($shown)) . " more item(s) are in the attached PDF.";
+  $blocks = [
+    "Quotation " . $number . " from " . $shop,
+    "This quotation is not a tax invoice.",
+    "",
+    "Customer: " . (trim((string) ($quote["customer_name"] ?? "")) ?: "Customer"),
+    trim(implode(" · ", array_filter([$quote["customer_phone"] ?? "", $quote["customer_email"] ?? ""]))),
+    trim((string) ($quote["billing_address"] ?? "")),
+    "Quotation date: " . pos_quote_pretty_date($quote["quotation_date"] ?? ""),
+    "Valid until: " . pos_quote_pretty_date($quote["valid_until"] ?? ""),
+    "",
+    "Items",
+    implode("\n", $items),
+    "",
+    "Subtotal: " . pos_quote_email_money($quote["subtotal"] ?? 0),
+    (float) ($quote["discount"] ?? 0) > 0.009 ? "Discount: " . pos_quote_email_money($quote["discount"]) : "",
+    "Taxable amount: " . pos_quote_email_money($taxable),
+    (float) ($quote["extra_charges"] ?? 0) > 0.009 ? "Additional charges: " . pos_quote_email_money($quote["extra_charges"]) : "",
+    "GST: " . pos_quote_email_money($quote["gst"] ?? 0),
+    "Grand total: " . pos_quote_email_money($quote["total"] ?? 0),
+    "",
+    "Payment terms: " . (trim((string) ($quote["terms"] ?? "")) ?: "As agreed with the customer."),
+    trim((string) ($quote["notes"] ?? "")) !== "" ? "Notes: " . trim((string) $quote["notes"]) : "",
+    "",
+    !empty($links["viewUrl"]) ? "View quotation: " . $links["viewUrl"] : "",
+    !empty($links["pdfUrl"]) ? "Download PDF: " . $links["pdfUrl"] : "",
+    "The quotation PDF is attached.",
+    "",
+    implode("\n", array_filter([
+      $shop,
+      trim((string) ($company["address"] ?? "")),
+      trim(implode(", ", array_filter([trim((string) ($company["city"] ?? "")), trim((string) ($company["state"] ?? ""))]))),
+      trim((string) ($company["phone"] ?? "")) !== "" ? "Ph: " . trim((string) $company["phone"]) : "",
+      trim((string) ($company["email"] ?? "")),
+      trim((string) ($company["gstin"] ?? "")) !== "" ? "GSTIN: " . trim((string) $company["gstin"]) : "",
+    ])),
+  ];
+  $text = implode("\n", array_filter($blocks, function ($line) { return $line !== null; }));
+  return trim(preg_replace("/\n{3,}/", "\n\n", $text));
+}
+
+function pos_quote_email_html($quote, $company, $links) {
+  $h = function ($value) { return htmlspecialchars((string) $value, ENT_QUOTES, "UTF-8"); };
+  $shop = trim((string) ($company["name"] ?? "")) ?: "Shop";
+  $number = trim((string) ($quote["quotation_number"] ?? "")) ?: "Quotation";
+  $lines = is_array($quote["lines"] ?? null) ? $quote["lines"] : [];
+  $shown = array_slice($lines, 0, 8);
+  $logo = pos_quote_email_logo($company["logo_url"] ?? "");
+  $view = pos_quote_http_url($links["viewUrl"] ?? "");
+  $pdf = pos_quote_http_url($links["pdfUrl"] ?? "");
+  $taxable = isset($quote["taxable"]) ? (float) $quote["taxable"] : max(0, (float) ($quote["subtotal"] ?? 0) - (float) ($quote["discount"] ?? 0));
+  $discount = (float) ($quote["discount"] ?? 0);
+  $charges = (float) ($quote["extra_charges"] ?? 0);
+  $roundOff = (float) ($quote["round_off"] ?? 0);
+  $gst = (float) ($quote["gst"] ?? 0);
+  $cgst = (float) ($quote["cgst"] ?? 0);
+  $sgst = (float) ($quote["sgst"] ?? 0);
+  $igst = (float) ($quote["igst"] ?? 0);
+  $terms = trim((string) ($quote["terms"] ?? "")) ?: "As agreed with the customer.";
+  $font = "Arial, Helvetica, sans-serif";
+  $rows = "";
+  foreach ($shown as $line) {
+    if (!is_array($line)) continue;
+    $name = trim((string) ($line["name"] ?? ($line["item_name"] ?? "Item"))) ?: "Item";
+    $extraBits = array_filter([$line["sku"] ?? "", $line["description"] ?? "", !empty($line["gstRate"]) ? "GST " . $line["gstRate"] . "%" : ""]);
+    $extra = implode(" · ", $extraBits);
+    $rows .= "<tr>"
+      . "<td style=\"padding:10px 8px;border-bottom:1px solid #e6eeec;font-family:{$font};font-size:13px;color:#212121;line-height:1.4;\"><strong>" . $h($name) . "</strong>"
+      . ($extra !== "" ? "<br><span style=\"color:#66716f;font-size:12px;\">" . $h($extra) . "</span>" : "")
+      . "</td>"
+      . "<td style=\"padding:10px 8px;border-bottom:1px solid #e6eeec;font-family:{$font};font-size:13px;color:#212121;text-align:right;white-space:nowrap;\">" . $h(pos_quote_email_qty($line)) . "</td>"
+      . "<td style=\"padding:10px 8px;border-bottom:1px solid #e6eeec;font-family:{$font};font-size:13px;color:#212121;text-align:right;white-space:nowrap;\">" . $h(pos_quote_email_money($line["rate"] ?? 0, true)) . "</td>"
+      . "<td style=\"padding:10px 8px;border-bottom:1px solid #e6eeec;font-family:{$font};font-size:13px;color:#212121;text-align:right;white-space:nowrap;\">" . $h(pos_quote_email_money($line["taxable"] ?? ($line["total"] ?? 0))) . "</td>"
+      . "</tr>";
+  }
+  if ($rows === "") $rows = "<tr><td colspan=\"4\" style=\"padding:10px 8px;font-family:{$font};font-size:13px;color:#66716f;\">No line items</td></tr>";
+  $more = count($lines) > count($shown)
+    ? "<tr><td colspan=\"4\" style=\"padding:10px 8px;font-family:{$font};font-size:12px;color:#66716f;\">" . (count($lines) - count($shown)) . " more item(s) are listed in the attached PDF.</td></tr>"
+    : "";
+  $totalRow = function ($label, $value) use ($font, $h) {
+    return "<tr><td style=\"padding:4px 0;font-family:{$font};font-size:13px;color:#3d4a48;\">{$label}</td>"
+      . "<td style=\"padding:4px 0;font-family:{$font};font-size:13px;color:#212121;text-align:right;\">" . $h($value) . "</td></tr>";
+  };
+  $totals = $totalRow("Subtotal", pos_quote_email_money($quote["subtotal"] ?? 0));
+  if ($discount > 0.009) $totals .= $totalRow("Discount", pos_quote_email_money($discount));
+  $totals .= $totalRow("Taxable amount", pos_quote_email_money($taxable));
+  if ($charges > 0.009) $totals .= $totalRow("Additional charges", pos_quote_email_money($charges));
+  $totals .= $totalRow($igst > 0.009 && !($cgst > 0.009) ? "IGST" : "GST", pos_quote_email_money($gst));
+  if (abs($roundOff) > 0.009) $totals .= $totalRow("Round off", pos_quote_email_money($roundOff));
+  $taxBits = array_filter([
+    $cgst > 0.009 ? "CGST " . pos_quote_email_money($cgst) : "",
+    $sgst > 0.009 ? "SGST " . pos_quote_email_money($sgst) : "",
+    $igst > 0.009 ? "IGST " . pos_quote_email_money($igst) : "",
+  ]);
+  $buttons = "";
+  if ($view !== "" || $pdf !== "") {
+    $buttons = "<tr><td style=\"padding:8px 28px 22px;\"><table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\"><tr>";
+    if ($view !== "") $buttons .= "<td bgcolor=\"#1a7a6d\" style=\"background:#1a7a6d;border-radius:4px;\"><a href=\"" . $h($view) . "\" style=\"display:inline-block;padding:12px 18px;color:#ffffff;text-decoration:none;font-family:{$font};font-size:14px;font-weight:bold;\">View Quotation</a></td>";
+    if ($view !== "" && $pdf !== "") $buttons .= "<td width=\"10\" style=\"width:10px;font-size:0;line-height:0;\">&nbsp;</td>";
+    if ($pdf !== "") $buttons .= "<td style=\"border:1px solid #1a7a6d;border-radius:4px;\"><a href=\"" . $h($pdf) . "\" style=\"display:inline-block;padding:11px 18px;color:#1a7a6d;text-decoration:none;font-family:{$font};font-size:14px;font-weight:bold;\">Download PDF</a></td>";
+    $buttons .= "</tr></table></td></tr>";
+  }
+  $customer = trim((string) ($quote["customer_name"] ?? "")) ?: "Customer";
+  $bits = "";
+  foreach ([$quote["customer_phone"] ?? "", $quote["customer_email"] ?? "", $quote["billing_address"] ?? ""] as $bit) {
+    if (trim((string) $bit) !== "") $bits .= "<div style=\"color:#3d4a48;\">" . $h($bit) . "</div>";
+  }
+  $contact = "";
+  $place = trim(implode(", ", array_filter([trim((string) ($company["city"] ?? "")), trim((string) ($company["state"] ?? ""))])));
+  foreach ([
+    $company["address"] ?? "",
+    $place,
+    trim((string) ($company["phone"] ?? "")) !== "" ? "Ph: " . trim((string) $company["phone"]) : "",
+    $company["email"] ?? "",
+    trim((string) ($company["gstin"] ?? "")) !== "" ? "GSTIN: " . trim((string) $company["gstin"]) : "",
+  ] as $line) {
+    if (trim((string) $line) !== "") $contact .= "<div>" . $h($line) . "</div>";
+  }
+  $logoHtml = $logo !== "" ? "<img src=\"" . $h($logo) . "\" alt=\"" . $h($shop) . "\" width=\"150\" style=\"display:block;border:0;outline:none;text-decoration:none;max-width:150px;height:auto;margin:0 0 8px;\">" : "";
+  $ref = trim((string) ($quote["reference_no"] ?? "")) !== "" ? "<div>Reference: " . $h($quote["reference_no"]) . "</div>" : "";
+  $notes = trim((string) ($quote["notes"] ?? "")) !== "" ? "<div style=\"padding-top:8px;color:#3d4a48;\">" . $h($quote["notes"]) . "</div>" : "";
+  $taxNote = $taxBits ? "<div style=\"font-size:12px;color:#d7f3ee;padding-top:4px;\">" . $h(implode(" · ", $taxBits)) . "</div>" : "";
+  return "<!DOCTYPE html>
+<html lang=\"en\">
+<head>
+<meta charset=\"utf-8\">
+<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">
+<title>" . $h($number) . "</title>
+</head>
+<body style=\"margin:0;padding:0;background:#eef3f2;\">
+<div style=\"display:none;max-height:0;overflow:hidden;mso-hide:all;\">Quotation " . $h($number) . " for " . $h($customer) . ". Total " . $h(pos_quote_email_money($quote["total"] ?? 0)) . ". Valid until " . $h(pos_quote_pretty_date($quote["valid_until"] ?? "")) . ".</div>
+<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" style=\"background:#eef3f2;margin:0;padding:0;\">
+<tr><td align=\"center\" style=\"padding:24px 8px;\">
+<table role=\"presentation\" width=\"640\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" style=\"width:100%;max-width:640px;background:#ffffff;border:1px solid #d7e6e3;\">
+<tr><td style=\"background:#1a7a6d;padding:22px 28px;\">
+<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\">
+<tr>
+<td valign=\"middle\" style=\"font-family:{$font};color:#ffffff;\">{$logoHtml}<div style=\"font-size:20px;font-weight:bold;line-height:1.2;\">" . $h($shop) . "</div><div style=\"font-size:12px;line-height:1.4;color:#d7f3ee;padding-top:4px;\">Quotation notification</div></td>
+<td valign=\"middle\" align=\"right\" style=\"font-family:{$font};color:#ffffff;text-align:right;\"><div style=\"font-size:12px;letter-spacing:1px;\">QUOTATION</div><div style=\"font-size:18px;font-weight:bold;padding-top:4px;\">" . $h($number) . "</div></td>
+</tr>
+</table>
+</td></tr>
+<tr><td style=\"padding:22px 28px 8px;font-family:{$font};font-size:14px;line-height:1.5;color:#212121;\">A quotation is ready for <strong>" . $h($customer) . "</strong>. This document is a quotation, not a tax invoice. The PDF copy is attached.</td></tr>
+<tr><td style=\"padding:8px 28px 16px;\">
+<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" style=\"background:#f4faf8;border:1px solid #d7e6e3;\">
+<tr>
+<td width=\"50%\" valign=\"top\" style=\"padding:12px 14px;font-family:{$font};font-size:13px;line-height:1.45;color:#212121;\"><div style=\"font-size:11px;letter-spacing:0.5px;color:#1a7a6d;font-weight:bold;\">CUSTOMER</div><strong>" . $h($customer) . "</strong>{$bits}</td>
+<td width=\"50%\" valign=\"top\" style=\"padding:12px 14px;font-family:{$font};font-size:13px;line-height:1.45;color:#212121;\"><div style=\"font-size:11px;letter-spacing:0.5px;color:#1a7a6d;font-weight:bold;\">QUOTATION</div><div>Date: " . $h(pos_quote_pretty_date($quote["quotation_date"] ?? "")) . "</div><div>Valid until: " . $h(pos_quote_pretty_date($quote["valid_until"] ?? "")) . "</div>{$ref}</td>
+</tr>
+</table>
+</td></tr>
+<tr><td style=\"padding:0 28px 8px;\"><table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\">
+<tr>
+<td style=\"padding:8px;background:#1a7a6d;color:#ffffff;font-family:{$font};font-size:12px;font-weight:bold;\">Item</td>
+<td align=\"right\" style=\"padding:8px;background:#1a7a6d;color:#ffffff;font-family:{$font};font-size:12px;font-weight:bold;\">Qty</td>
+<td align=\"right\" style=\"padding:8px;background:#1a7a6d;color:#ffffff;font-family:{$font};font-size:12px;font-weight:bold;\">Rate</td>
+<td align=\"right\" style=\"padding:8px;background:#1a7a6d;color:#ffffff;font-family:{$font};font-size:12px;font-weight:bold;\">Amount</td>
+</tr>
+{$rows}{$more}
+</table></td></tr>
+<tr><td align=\"right\" style=\"padding:8px 28px 12px;\"><table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" width=\"280\" style=\"width:280px;max-width:100%;\">{$totals}</table></td></tr>
+<tr><td style=\"padding:0 28px 16px;\"><table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\"><tr><td bgcolor=\"#1a7a6d\" style=\"background:#1a7a6d;padding:14px 16px;font-family:{$font};color:#ffffff;\"><div style=\"font-size:12px;letter-spacing:0.4px;\">GRAND TOTAL</div><div style=\"font-size:22px;font-weight:bold;line-height:1.2;padding-top:2px;\">" . $h(pos_quote_email_money($quote["total"] ?? 0)) . "</div>{$taxNote}</td></tr></table></td></tr>
+{$buttons}
+<tr><td style=\"padding:0 28px 18px;font-family:{$font};font-size:13px;line-height:1.5;color:#212121;\"><div style=\"font-size:11px;letter-spacing:0.5px;color:#1a7a6d;font-weight:bold;padding-bottom:4px;\">VALIDITY AND PAYMENT TERMS</div><div>This quotation is valid until " . $h(pos_quote_pretty_date($quote["valid_until"] ?? "")) . ".</div><div style=\"padding-top:4px;\">" . $h($terms) . "</div>{$notes}</td></tr>
+<tr><td style=\"padding:16px 28px 22px;background:#f7fbfa;border-top:1px solid #d7e6e3;font-family:{$font};font-size:12px;line-height:1.5;color:#3d4a48;\"><strong style=\"color:#1a7a6d;font-size:13px;\">" . $h($shop) . "</strong>{$contact}<div style=\"padding-top:8px;\">This is a computer-generated quotation, not a tax invoice. Stock and payment stay unchanged until a sales invoice is posted.</div></td></tr>
+</table>
+</td></tr>
+</table>
+</body>
+</html>";
+}
+
+function pos_quote_customer_view($row) {
+  $quote = pos_quote_public($row, pos_quote_today());
+  $lines = [];
+  foreach (is_array($quote["lines"] ?? null) ? $quote["lines"] : [] as $line) {
+    if (!is_array($line)) continue;
+    $lines[] = [
+      "name" => $line["name"] ?? ($line["item_name"] ?? "Item"),
+      "description" => $line["description"] ?? "",
+      "sku" => $line["sku"] ?? "",
+      "size" => $line["size"] ?? "",
+      "color" => $line["color"] ?? "",
+      "hsn" => $line["hsn"] ?? "",
+      "quantity" => $line["quantity"] ?? 0,
+      "unit" => $line["unit"] ?? "",
+      "isCount" => array_key_exists("isCount", $line) ? $line["isCount"] : true,
+      "rate" => $line["rate"] ?? 0,
+      "gstRate" => $line["gstRate"] ?? ($line["gst_rate"] ?? 0),
+      "taxable" => $line["taxable"] ?? ($line["total"] ?? 0),
+      "gst" => $line["gst"] ?? 0,
+      "total" => $line["total"] ?? 0,
+    ];
+  }
+  $subtotal = (float) ($quote["subtotal"] ?? 0);
+  $discount = (float) ($quote["discount"] ?? 0);
+  return [
+    "id" => $quote["id"] ?? "",
+    "quotation_number" => $quote["quotation_number"] ?? "",
+    "status" => $quote["status"] ?? "",
+    "quotation_date" => substr((string) ($quote["quotation_date"] ?? ""), 0, 10),
+    "valid_until" => substr((string) ($quote["valid_until"] ?? ""), 0, 10),
+    "reference_no" => $quote["reference_no"] ?? "",
+    "customer_name" => $quote["customer_name"] ?? "",
+    "customer_phone" => $quote["customer_phone"] ?? "",
+    "customer_email" => $quote["customer_email"] ?? "",
+    "billing_address" => $quote["billing_address"] ?? "",
+    "shipping_address" => $quote["shipping_address"] ?? "",
+    "notes" => $quote["notes"] ?? "",
+    "terms" => $quote["terms"] ?? "",
+    "subtotal" => $subtotal,
+    "discount" => $discount,
+    "extra_charges" => (float) ($quote["extra_charges"] ?? 0),
+    "taxable" => isset($quote["taxable"]) ? (float) $quote["taxable"] : max(0, $subtotal - $discount),
+    "gst" => (float) ($quote["gst"] ?? 0),
+    "cgst" => (float) ($quote["cgst"] ?? 0),
+    "sgst" => (float) ($quote["sgst"] ?? 0),
+    "igst" => (float) ($quote["igst"] ?? 0),
+    "round_off" => (float) ($quote["round_off"] ?? 0),
+    "total" => (float) ($quote["total"] ?? 0),
+    "lines" => $lines,
+  ];
+}
+
+function pos_quote_brand($shop) {
+  $gstin = trim((string) ($shop["gstin"] ?? ""));
+  if ($gstin === "") $gstin = trim((string) ($shop["settings_gstin"] ?? ""));
+  return [
+    "name" => trim((string) ($shop["name"] ?? "")) ?: "Shop",
+    "address" => $shop["address"] ?? "",
+    "city" => $shop["city"] ?? "",
+    "state" => $shop["state"] ?? "",
+    "phone" => $shop["phone"] ?? "",
+    "email" => $shop["email"] ?? "",
+    "gstin" => $gstin,
+    "logo_url" => $shop["logo_url"] ?? "",
+  ];
+}
+
+function pos_quote_public_send($id, $pdf) {
+  if (!preg_match("/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i", (string) $id)) {
+    pos_send(400, ["error" => "Invalid quotation id", "php" => true]);
+  }
+  $found = pos_q("SELECT * FROM quotations WHERE id = ? LIMIT 1", "s", [$id]);
+  $row = $found[0] ?? null;
+  if (!$row) pos_send(404, ["error" => "Quotation not found", "php" => true]);
+  $shop = pos_quote_brand(pos_quote_shop($row["business_id"]));
+  $quote = pos_quote_customer_view($row);
+  header("Cache-Control: no-store");
+  if ($pdf) {
+    $body = pos_quote_pdf($shop, $quote);
+    $name = "Quotation-" . (preg_replace("/[^A-Za-z0-9._-]/", "", (string) ($quote["quotation_number"] ?? "quote")) ?: "quote") . ".pdf";
+    pos_send_file(200, "application/pdf", $name, $body);
+  }
+  pos_send(200, ["quote" => $quote, "company" => $shop, "php" => true]);
+}
+
 function pos_quote_email($bid, $id, $toRaw, $uid) {
   $shop = pos_quote_require_on($bid);
   $existing = pos_quote_load($bid, $id);
@@ -1073,14 +1386,14 @@ function pos_quote_email($bid, $id, $toRaw, $uid) {
     throw new PosQuoteHttp(400, "Save the mailbox before sending a quotation");
   }
   $subject = pos_quote_subject($quote["quotation_number"] ?? "", $shop["name"] ?? "");
-  $text = $subject . "\n\nThis quotation is not a tax invoice. Total " . number_format((float) ($quote["total"] ?? 0), 2, ".", "") . ". Valid until " . ($quote["valid_until"] ?? "") . ".";
-  $pdf = pos_quote_pdf(
-    ["name" => $shop["name"] ?? "", "address" => $shop["address"] ?? "", "phone" => $shop["phone"] ?? "", "email" => $shop["email"] ?? "", "gstin" => ($shop["gstin"] ?? "") !== "" ? $shop["gstin"] : ($shop["settings_gstin"] ?? ""), "state" => $shop["state"] ?? ""],
-    $quote
-  );
+  $brand = pos_quote_brand($shop);
+  $links = pos_quote_public_links($existing["id"] ?? $id);
+  $text = pos_quote_email_text($quote, $brand, $links);
+  $html = pos_quote_email_html($quote, $brand, $links);
+  $pdf = pos_quote_pdf($brand, $quote);
   $cfg = function_exists("pos_bizmail_smtp") ? pos_bizmail_smtp($mailbox, $shop) : [];
   $sent = function_exists("pos_send_mail")
-    ? pos_send_mail($to, $subject, $text, "<p>" . htmlspecialchars($subject, ENT_QUOTES, "UTF-8") . "</p><p>This quotation is not a tax invoice.</p>", "", [
+    ? pos_send_mail($to, $subject, $text, $html, "", [
         ["filename" => "Quotation-" . ($quote["quotation_number"] ?? "quote") . ".pdf", "mimeType" => "application/pdf", "content" => $pdf],
       ], null, $cfg)
     : ["ok" => false, "error" => "Email is not available"];
