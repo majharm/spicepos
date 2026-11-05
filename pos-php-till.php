@@ -471,6 +471,11 @@ function pos_php_till_dispatch($path, $method, $body) {
       $params[] = ((int) ($body["quotations_enabled"] ?? 0) === 1) ? "1" : "0";
       $types .= "s";
     }
+    if (array_key_exists("crm_enabled", $body)) {
+      $langSql .= ", crm_enabled = ?";
+      $params[] = ((int) ($body["crm_enabled"] ?? 0) === 1) ? "1" : "0";
+      $types .= "s";
+    }
     if (array_key_exists("quotation_valid_days", $body)) {
       $langSql .= ", quotation_valid_days = ?";
       $params[] = (string) max(1, min(365, (int) ($body["quotation_valid_days"] ?? 15)));

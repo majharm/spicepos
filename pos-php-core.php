@@ -625,6 +625,7 @@ function pos_ensure_i18n_columns() {
     "invoice_stamp_enabled" => "TINYINT(1) NOT NULL DEFAULT 0",
     "recurring_invoices_enabled" => "TINYINT(1) NOT NULL DEFAULT 0",
     "quotations_enabled" => "TINYINT(1) NOT NULL DEFAULT 0",
+    "crm_enabled" => "TINYINT(1) NOT NULL DEFAULT 0",
     "quotation_valid_days" => "INT NOT NULL DEFAULT 15",
     "quotation_terms" => "TEXT NULL",
     "receipt_printer_enabled" => "TINYINT(1) NOT NULL DEFAULT 0",
@@ -5163,6 +5164,12 @@ function pos_php_dispatch($path, $method, $rawBody) {
           if (is_file(__DIR__ . "/pos-recurring.php")) {
             require_once __DIR__ . "/pos-recurring.php";
             if (function_exists("pos_recurring_dispatch") && pos_recurring_dispatch($path, $method, $body, $bid, $auth)) {
+              return;
+            }
+          }
+          if (is_file(__DIR__ . "/pos-crm.php")) {
+            require_once __DIR__ . "/pos-crm.php";
+            if (function_exists("pos_crm_dispatch") && pos_crm_dispatch($path, $method, $body, $bid, $auth)) {
               return;
             }
           }

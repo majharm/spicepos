@@ -157,6 +157,7 @@ export async function ensureSchema() {
   await addColumn("company_settings", "invoice_stamp_enabled", "TINYINT(1) NOT NULL DEFAULT 0");
   await addColumn("company_settings", "recurring_invoices_enabled", "TINYINT(1) NOT NULL DEFAULT 0");
   await addColumn("company_settings", "quotations_enabled", "TINYINT(1) NOT NULL DEFAULT 0");
+  await addColumn("company_settings", "crm_enabled", "TINYINT(1) NOT NULL DEFAULT 0");
   await addColumn("company_settings", "quotation_valid_days", "INT NOT NULL DEFAULT 15");
   await addColumn("company_settings", "quotation_terms", "TEXT NULL");
   await addColumn("sales_orders", "quotation_id", "VARCHAR(36) NULL");
