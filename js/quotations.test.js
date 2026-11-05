@@ -48,7 +48,13 @@ test("quotation numbers, totals, expiry, and print label", () => {
   assert.equal(Q.canConvert({ status: "accepted", valid_until: "2026-10-26" }, today), false);
   assert.equal(Q.canConvert({ status: "accepted", valid_until: "2026-11-01", order_id: "so-1" }, today), false);
   assert.equal(Q.canEdit({ status: "draft" }, today), true);
-  assert.equal(Q.canEdit({ status: "sent" }, today), false);
+  assert.equal(Q.canEdit({ status: "sent" }, today), true);
+  assert.equal(Q.canEdit({ status: "accepted", valid_until: "2026-11-01" }, today), true);
+  assert.equal(Q.canEdit({ status: "rejected" }, today), true);
+  assert.equal(Q.canEdit({ status: "expired" }, today), true);
+  assert.equal(Q.canEdit({ status: "sent", order_id: "so-1" }, today), false);
+  assert.equal(Q.canEdit({ status: "converted" }, today), false);
+  assert.equal(Q.canEdit({ status: "cancelled" }, today), false);
   assert.equal(Q.emailSubject("QT-00001", "Spice Shop"), "Quotation QT-00001 – Spice Shop");
   const html = Q.printHtml(
     { quotation_number: "QT-00001", quotation_date: today, valid_until: "2026-11-11", customer_name: "Asha", lines: priced.lines, subtotal: priced.subtotal, discount: priced.discount, gst: priced.gst, cgst: priced.cgst, sgst: priced.sgst, total: priced.total, terms: "Pay on acceptance" },
@@ -115,9 +121,9 @@ test("quotation module stays off, isolated, and posts stock only on convert", ()
   assert.match(index, /Create Quotation/);
   assert.match(index, /Quotation Settings/);
   assert.match(index, /Quotation Reports/);
-  assert.match(index, /js\/quotations\.js\?v=20261105qt1/);
-  assert.match(index, /js\/quotations-ui\.js\?v=20261027qt1/);
-  assert.match(index, /css\/quotations\.css\?v=20261027qt1/);
+  assert.match(index, /js\/quotations\.js\?v=20261105edit1/);
+  assert.match(index, /js\/quotations-ui\.js\?v=20261105edit1/);
+  assert.match(index, /css\/quotations\.css\?v=20261105edit1/);
   assert.match(index, /app\.js\?v=20261103tot1/);
   assert.match(app, /function quotationsOn/);
   assert.match(app, /view === "quotations"\) btn\.hidden = !can\("orders"\) \|\| !quotationsOn\(\)/);
@@ -154,5 +160,11 @@ test("quotation module stays off, isolated, and posts stock only on convert", ()
   assert.match(php, /Item & Description/);
   assert.doesNotMatch(php, /pos_checkout_sale/);
   assert.match(read("js/quotations-ui.js"), /does not mark this quotation accepted|was not marked accepted/);
+  assert.match(read("js/quotations-ui.js"), /data-quote-edit/);
+  assert.match(read("js/quotations-ui.js"), /Edit quotation /);
+  assert.match(node, /status IN \('draft','sent','accepted','rejected','expired'\)/);
+  assert.match(php, /function pos_quote_can_edit/);
+  assert.match(php, /status IN \('draft','sent','accepted','rejected','expired'\)/);
+  assert.doesNotMatch(node.slice(editAt, emailAt), /applySaleStock\(/);
   assert.match(read("css/quotations.css"), /quotations-desk: quotations 2026/);
 });

@@ -388,7 +388,7 @@ export function registerQuotations(app) {
       }
       const current = publicQuote(existing, today);
       if (!Q.canEdit(current, today)) {
-        res.status(400).json({ error: "Only a draft quotation can be edited" });
+        res.status(400).json({ error: "A converted or cancelled quotation cannot be edited" });
         return;
       }
       const body = req.body || {};
@@ -402,20 +402,26 @@ export function registerQuotations(app) {
       const input = readInput({ ...existing, ...body, lines: body.lines || current.lines }, shop, customer);
       await assertOwnItems(bid(), input.priced.lines);
       const priced = input.priced;
-      await query(
+      let nextStatus = Q.statusOf(existing.status);
+      if (nextStatus === "expired" && input.valid && input.valid >= today) nextStatus = "sent";
+      const updated = await query(
         `UPDATE quotations SET customer_id=?, customer_name=?, customer_phone=?, customer_email=?, billing_address=?, shipping_address=?,
           quotation_date=?, valid_until=?, reference_no=?, salesperson=?, subtotal=?, discount=?, discount_type=?, discount_value=?,
-          extra_charges=?, gst=?, cgst=?, sgst=?, igst=?, round_off=?, total=?, terms=?, notes=?, lines_json=?
-         WHERE id=? AND business_id=? AND status='draft'`,
+          extra_charges=?, gst=?, cgst=?, sgst=?, igst=?, round_off=?, total=?, terms=?, notes=?, lines_json=?, status=?
+         WHERE id=? AND business_id=? AND order_id IS NULL AND status IN ('draft','sent','accepted','rejected','expired')`,
         [
           customer.id, input.name, input.phone, input.email, input.billing, input.shipping || null,
           input.date, input.valid || null, input.reference || null, input.salesperson || null,
           priced.subtotal, priced.discount, priced.discountType, priced.discountValue, priced.extraCharges,
           priced.gst, priced.cgst, priced.sgst, priced.igst, priced.roundOff, priced.total,
-          input.terms || null, input.notes || null, JSON.stringify(priced.lines), existing.id, bid(),
+          input.terms || null, input.notes || null, JSON.stringify(priced.lines), nextStatus, existing.id, bid(),
         ],
       );
-      await recordEvent(null, bid(), existing.id, "updated", "draft", "draft", "");
+      if (!updated?.affectedRows) {
+        res.status(400).json({ error: "A converted or cancelled quotation cannot be edited" });
+        return;
+      }
+      await recordEvent(null, bid(), existing.id, "updated", Q.statusOf(existing.status), nextStatus, "");
       res.json({ ok: true, quote: publicQuote(await loadQuote(bid(), existing.id), today) });
     } catch (err) {
       res.status(err.status || 500).json({ error: String(err.message) });

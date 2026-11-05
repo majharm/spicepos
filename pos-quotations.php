@@ -531,22 +531,30 @@ function pos_quote_save_new($bid, $body, $uid) {
   return pos_quote_public(pos_quote_load($bid, $id), pos_quote_today());
 }
 
+function pos_quote_can_edit($row, $today) {
+  if (!$row || !empty($row["order_id"])) return false;
+  $status = pos_quote_effective($row, $today);
+  return in_array($status, ["draft", "sent", "accepted", "rejected", "expired"], true);
+}
+
 function pos_quote_update($bid, $id, $body, $uid) {
   $shop = pos_quote_require_on($bid);
   $today = pos_quote_today();
   $existing = pos_quote_load($bid, $id);
   if (!$existing) throw new PosQuoteHttp(404, "Quotation not found");
-  $current = pos_quote_public($existing, $today);
-  if (($current["status"] ?? "") !== "draft" || !empty($existing["order_id"])) {
-    throw new PosQuoteHttp(400, "Only a draft quotation can be edited");
+  if (!pos_quote_can_edit($existing, $today)) {
+    throw new PosQuoteHttp(400, "A converted or cancelled quotation cannot be edited");
   }
   $customerId = trim((string) ($body["customer_id"] ?? $body["customerId"] ?? $existing["customer_id"] ?? ""));
   $customers = pos_q("SELECT * FROM customers WHERE id = ? AND business_id = ? LIMIT 1", "ss", [$customerId, $bid]);
   $customer = $customers[0] ?? null;
   if (!$customer) throw new PosQuoteHttp(400, "Choose a customer");
+  $current = pos_quote_public($existing, $today);
   if (!isset($body["lines"])) $body["lines"] = $current["lines"];
   $input = pos_quote_input($bid, $body, $shop, $customer);
   $p = $input["priced"];
+  $nextStatus = pos_quote_status($existing["status"] ?? "");
+  if ($nextStatus === "expired" && ($input["valid"] ?? "") !== "" && $input["valid"] >= $today) $nextStatus = "sent";
   $params = [
     $customer["id"], $input["name"], $input["phone"], $input["email"] !== "" ? $input["email"] : null,
     $input["billing"] !== "" ? $input["billing"] : null, $input["shipping"] !== "" ? $input["shipping"] : null,
@@ -555,21 +563,18 @@ function pos_quote_update($bid, $id, $body, $uid) {
     (string) $p["subtotal"], (string) $p["discount"], $p["discountType"], (string) $p["discountValue"], (string) $p["extraCharges"],
     (string) $p["gst"], (string) $p["cgst"], (string) $p["sgst"], (string) $p["igst"], (string) $p["roundOff"], (string) $p["total"],
     $input["terms"] !== "" ? $input["terms"] : null, $input["notes"] !== "" ? $input["notes"] : null,
-    json_encode($p["lines"], JSON_UNESCAPED_UNICODE), $existing["id"], $bid,
+    json_encode($p["lines"], JSON_UNESCAPED_UNICODE), $nextStatus, $existing["id"], $bid,
   ];
   $n = pos_quote_exec(
     "UPDATE quotations SET customer_id=?, customer_name=?, customer_phone=?, customer_email=?, billing_address=?, shipping_address=?,
       quotation_date=?, valid_until=?, reference_no=?, salesperson=?, subtotal=?, discount=?, discount_type=?, discount_value=?,
-      extra_charges=?, gst=?, cgst=?, sgst=?, igst=?, round_off=?, total=?, terms=?, notes=?, lines_json=?
-     WHERE id=? AND business_id=? AND status='draft'",
+      extra_charges=?, gst=?, cgst=?, sgst=?, igst=?, round_off=?, total=?, terms=?, notes=?, lines_json=?, status=?
+     WHERE id=? AND business_id=? AND order_id IS NULL AND status IN ('draft','sent','accepted','rejected','expired')",
     str_repeat("s", count($params)),
     $params
   );
-  if ($n < 1) {
-    $still = pos_quote_load($bid, $existing["id"]);
-    if (!$still || ($still["status"] ?? "") !== "draft") throw new PosQuoteHttp(400, "Only a draft quotation can be edited");
-  }
-  pos_quote_event($bid, $existing["id"], "updated", "draft", "draft", "", $uid);
+  if ($n < 1) throw new PosQuoteHttp(400, "A converted or cancelled quotation cannot be edited");
+  pos_quote_event($bid, $existing["id"], "updated", pos_quote_status($existing["status"] ?? ""), $nextStatus, "", $uid);
   return pos_quote_public(pos_quote_load($bid, $existing["id"]), $today);
 }
 

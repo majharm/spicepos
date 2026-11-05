@@ -144,7 +144,9 @@
   }
 
   function canEdit(row, today) {
-    return effectiveStatus(row, today) === "draft" && !row?.order_id;
+    if (row?.order_id || row?.order_number) return false;
+    const status = effectiveStatus(row, today);
+    return status === "draft" || status === "sent" || status === "accepted" || status === "rejected" || status === "expired";
   }
 
   function canConvert(row, today) {
