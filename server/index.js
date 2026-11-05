@@ -54,6 +54,7 @@ import "../js/discount.js";
 import "../js/payment-methods.js";
 import { registerQrPublic, registerQrStaff, ensureQrOrderSchema, linkQrOrderSale } from "./qr-ordering.js";
 import { registerAggregatorPublic, registerAggregatorStaff } from "./aggregator.js";
+import { canonApiUrl, isAliasedApi, isApiUrl, rewriteToApi } from "./http-path.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.join(__dirname, "..");
