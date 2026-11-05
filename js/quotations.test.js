@@ -56,6 +56,67 @@ test("quotation numbers, totals, expiry, and print label", () => {
   assert.equal(Q.canEdit({ status: "converted" }, today), false);
   assert.equal(Q.canEdit({ status: "cancelled" }, today), false);
   assert.equal(Q.emailSubject("QT-00001", "Spice Shop"), "Quotation QT-00001 – Spice Shop");
+  const mailQuote = {
+    id: "11111111-1111-1111-1111-111111111111",
+    quotation_number: "QT-00001",
+    quotation_date: "2026-11-05",
+    valid_until: "2026-11-20",
+    customer_name: "QTECH ISP CONSULTANCY",
+    customer_phone: "9876543210",
+    customer_email: "accounts@qtech.example",
+    billing_address: "Kolkata",
+    terms: "100% advance before delivery",
+    notes: "SMS route as discussed",
+    lines: [{ name: "BULK SMS", quantity: 700000, unit: "NOS", rate: 0.135, taxable: 94500, gst: 17010, gstRate: 18, total: 111510 }],
+    subtotal: 94500,
+    taxable: 94500,
+    gst: 17010,
+    cgst: 8505,
+    sgst: 8505,
+    total: 111510,
+  };
+  const mailLinks = {
+    viewUrl: "https://pos.atavtelecom.in/quotation.html?id=11111111-1111-1111-1111-111111111111",
+    pdfUrl: "https://pos.atavtelecom.in/api/quotations/public/11111111-1111-1111-1111-111111111111/pdf",
+  };
+  const mailCompany = {
+    name: "ATAV TELECOM",
+    address: "Kolkata",
+    phone: "9000000000",
+    email: "accounts@atavtelecom.in",
+    gstin: "19AAAAA0000A1Z5",
+    logo_url: "https://pos.atavtelecom.in/favicon.svg",
+  };
+  const mailHtml = Q.emailHtml(mailQuote, mailCompany, mailLinks);
+  const mailText = Q.emailText(mailQuote, mailCompany, mailLinks);
+  assert.match(mailHtml, /role="presentation"/);
+  assert.match(mailHtml, /style="/);
+  assert.doesNotMatch(mailHtml, /<style/);
+  assert.doesNotMatch(mailHtml, /display:\s*flex|display:\s*grid/);
+  assert.match(mailHtml, /QT-00001/);
+  assert.match(mailHtml, /QTECH ISP CONSULTANCY/);
+  assert.match(mailHtml, /05 Nov 2026/);
+  assert.match(mailHtml, /20 Nov 2026/);
+  assert.match(mailHtml, /₹0\.135/);
+  assert.doesNotMatch(mailHtml, /₹0\.14/);
+  assert.match(mailHtml, /GST/);
+  assert.match(mailHtml, /GRAND TOTAL/);
+  assert.match(mailHtml, /₹1,11,510\.00/);
+  assert.match(mailHtml, /100% advance before delivery/);
+  assert.match(mailHtml, /VALIDITY AND PAYMENT TERMS/);
+  assert.match(mailHtml, /View Quotation/);
+  assert.match(mailHtml, /Download PDF/);
+  assert.match(mailHtml, /https:\/\/pos\.atavtelecom\.in\/quotation\.html\?id=/);
+  assert.match(mailHtml, /favicon\.svg/);
+  assert.match(mailHtml, /accounts@atavtelecom\.in/);
+  assert.doesNotMatch(Q.emailHtml(mailQuote, { ...mailCompany, logo_url: "javascript:alert(1)" }, { viewUrl: "javascript:alert(1)", pdfUrl: "javascript:alert(1)" }), /javascript:/);
+  assert.match(mailText, /View quotation: https:\/\/pos\.atavtelecom\.in\/quotation\.html/);
+  assert.match(mailText, /Download PDF: https:\/\/pos\.atavtelecom\.in\/api\/quotations\/public\//);
+  assert.match(mailText, /Grand total/);
+  const safeView = Q.customerView({ ...mailQuote, lines_json: "secret", business_id: "biz", created_by: "staff" });
+  assert.equal(safeView.business_id, undefined);
+  assert.equal(safeView.created_by, undefined);
+  assert.equal(safeView.lines[0].name, "BULK SMS");
   const html = Q.printHtml(
     { quotation_number: "QT-00001", quotation_date: today, valid_until: "2026-11-11", customer_name: "Asha", lines: priced.lines, subtotal: priced.subtotal, discount: priced.discount, gst: priced.gst, cgst: priced.cgst, sgst: priced.sgst, total: priced.total, terms: "Pay on acceptance" },
     { name: "Spice Shop", gstin: "27AAAAA0000A1Z5" },
@@ -129,7 +190,7 @@ test("quotation module stays off, isolated, and posts stock only on convert", ()
   assert.match(index, /Create Quotation/);
   assert.match(index, /Quotation Settings/);
   assert.match(index, /Quotation Reports/);
-  assert.match(index, /js\/quotations\.js\?v=20261105edit1/);
+  assert.match(index, /js\/quotations\.js\?v=20261105mail1/);
   assert.match(index, /js\/quotations-ui\.js\?v=20261105edit1/);
   assert.match(index, /css\/quotations\.css\?v=20261105edit1/);
   assert.match(index, /app\.js\?v=20261103tot1/);
@@ -149,6 +210,20 @@ test("quotation module stays off, isolated, and posts stock only on convert", ()
   assert.doesNotMatch(node.slice(createAt, editAt), /settleCustomerInvoice/);
   assert.doesNotMatch(node.slice(emailAt, convertAt), /status = 'accepted'/);
   assert.match(node.slice(emailAt, convertAt), /email_failed/);
+  assert.match(node.slice(emailAt, convertAt), /emailHtml/);
+  assert.match(node.slice(emailAt, convertAt), /Quotation-\$\{quote\.quotation_number\}\.pdf|filename: `Quotation-/);
+  assert.match(node, /\/api\/quotations\/public\/:id\/pdf/);
+  assert.match(read("server/index.js"), /\/api\/quotations\/public/);
+  assert.match(php, /function pos_quote_email_html/);
+  assert.match(php, /View Quotation/);
+  assert.match(php, /Download PDF/);
+  assert.match(php, /role=\\"presentation\\"|role="presentation"/);
+  assert.match(php, /GRAND TOTAL/);
+  assert.match(php, /VALIDITY AND PAYMENT TERMS/);
+  assert.match(php, /function pos_quote_public_send/);
+  assert.match(core, /quotations\/public/);
+  assert.match(read("quotation.html"), /quotation-page\.js/);
+  assert.match(read("js/quotation-page.js"), /credentials: "omit"/);
   assert.match(node.slice(convertAt), /applySaleStock\(/);
   assert.match(node.slice(convertAt), /amountPaid: 0/);
   assert.match(node.slice(convertAt), /order_id IS NULL AND status = 'accepted'/);
