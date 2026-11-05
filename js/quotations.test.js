@@ -48,13 +48,23 @@ test("quotation numbers, totals, expiry, and print label", () => {
   assert.equal(Q.canConvert({ status: "accepted", valid_until: "2026-10-26" }, today), false);
   assert.equal(Q.canConvert({ status: "accepted", valid_until: "2026-11-01", order_id: "so-1" }, today), false);
   assert.equal(Q.canEdit({ status: "draft" }, today), true);
-  assert.equal(Q.canEdit({ status: "sent" }, today), false);
+  assert.equal(Q.canEdit({ status: "sent" }, today), true);
+  assert.equal(Q.canEdit({ status: "accepted", valid_until: "2026-11-01" }, today), true);
+  assert.equal(Q.canEdit({ status: "rejected" }, today), true);
+  assert.equal(Q.canEdit({ status: "expired" }, today), true);
+  assert.equal(Q.canEdit({ status: "sent", order_id: "so-1" }, today), false);
+  assert.equal(Q.canEdit({ status: "converted" }, today), false);
+  assert.equal(Q.canEdit({ status: "cancelled" }, today), false);
   assert.equal(Q.emailSubject("QT-00001", "Spice Shop"), "Quotation QT-00001 – Spice Shop");
   const html = Q.printHtml(
     { quotation_number: "QT-00001", quotation_date: today, valid_until: "2026-11-11", customer_name: "Asha", lines: priced.lines, subtotal: priced.subtotal, discount: priced.discount, gst: priced.gst, cgst: priced.cgst, sgst: priced.sgst, total: priced.total, terms: "Pay on acceptance" },
     { name: "Spice Shop", gstin: "27AAAAA0000A1Z5" },
   );
   assert.match(html, /QUOTATION — NOT A TAX INVOICE/);
+  assert.match(html, /class="office-invoice"/);
+  assert.match(html, /Bill To/);
+  assert.match(html, /Item &amp; Description/);
+  assert.match(html, /Quoted total/);
   assert.match(html, /Customer acceptance/);
   assert.match(html, /Page 1/);
   assert.match(html, /Amount in words/);
@@ -70,9 +80,30 @@ test("quotation numbers, totals, expiry, and print label", () => {
   assert.equal(stats.expired, 1);
   assert.equal(stats.converted, 1);
   assert.equal(stats.acceptedValue, 50);
-  const pdf = quotationPdfBuffer({ name: "Spice Shop" }, { quotation_number: "QT-00001", lines: [], total: 219 });
+  const pdf = quotationPdfBuffer(
+    { name: "Spice Shop", address: "Pune", phone: "9876543210", gstin: "27AAAAA0000A1Z5" },
+    { quotation_number: "QT-00001", quotation_date: today, valid_until: "2026-11-11", customer_name: "Asha", lines: priced.lines, subtotal: priced.subtotal, discount: priced.discount, gst: priced.gst, taxable: priced.taxable, total: priced.total, terms: "Pay on acceptance" },
+  );
+  const pdfText = pdf.toString("latin1");
   assert.equal(pdf.subarray(0, 5).toString(), "%PDF-");
-  assert.match(pdf.toString("latin1"), /NOT A TAX INVOICE/);
+  assert.match(pdfText, /QUOTATION - NOT A TAX INVOICE/);
+  assert.match(pdfText, /Helvetica-Bold/);
+  assert.match(pdfText, /0\.102 0\.478 0\.427/);
+  assert.match(pdfText, /Bill To|BILL TO/);
+  assert.match(pdfText, /Item & Description/);
+  assert.match(pdfText, /Quoted total/);
+  assert.match(pdfText, /QT-00001/);
+  assert.match(pdfText, /Masala/);
+  assert.match(pdfText, /Amount in words/);
+  const xrefAt = Number(pdfText.match(/startxref\n(\d+)/)[1]);
+  assert.equal(pdfText.slice(xrefAt, xrefAt + 4), "xref");
+  assert.match(pdfText, /\/Count 1/);
+  const manyLines = Array.from({ length: 28 }, (_, index) => ({ name: `Spice ${index + 1}`, quantity: 1, unit: "PCS", rate: 10, total: 11.8, taxable: 10, gst: 1.8, gstRate: 18 }));
+  const many = quotationPdfBuffer({ name: "Spice Shop" }, { quotation_number: "QT-00002", lines: manyLines, subtotal: 280, gst: 50.4, total: 330.4 });
+  const manyText = many.toString("latin1");
+  assert.match(manyText, /\/Count 2/);
+  assert.match(manyText, /Page 2/);
+  assert.equal(manyText.slice(Number(manyText.match(/startxref\n(\d+)/)[1]), Number(manyText.match(/startxref\n(\d+)/)[1]) + 4), "xref");
 });
 
 test("quotation module stays off, isolated, and posts stock only on convert", () => {
@@ -90,9 +121,9 @@ test("quotation module stays off, isolated, and posts stock only on convert", ()
   assert.match(index, /Create Quotation/);
   assert.match(index, /Quotation Settings/);
   assert.match(index, /Quotation Reports/);
-  assert.match(index, /js\/quotations\.js\?v=20261027qt1/);
-  assert.match(index, /js\/quotations-ui\.js\?v=20261027qt1/);
-  assert.match(index, /css\/quotations\.css\?v=20261027qt1/);
+  assert.match(index, /js\/quotations\.js\?v=20261105edit1/);
+  assert.match(index, /js\/quotations-ui\.js\?v=20261105edit1/);
+  assert.match(index, /css\/quotations\.css\?v=20261105edit1/);
   assert.match(index, /app\.js\?v=20261103tot1/);
   assert.match(app, /function quotationsOn/);
   assert.match(app, /view === "quotations"\) btn\.hidden = !can\("orders"\) \|\| !quotationsOn\(\)/);
@@ -124,7 +155,16 @@ test("quotation module stays off, isolated, and posts stock only on convert", ()
   assert.doesNotMatch(node, /b\.phone/);
   assert.doesNotMatch(php, /b\.phone/);
   assert.match(php, /QUOTATION - NOT A TAX INVOICE/);
+  assert.match(php, /Helvetica-Bold/);
+  assert.match(php, /Quoted total/);
+  assert.match(php, /Item & Description/);
   assert.doesNotMatch(php, /pos_checkout_sale/);
   assert.match(read("js/quotations-ui.js"), /does not mark this quotation accepted|was not marked accepted/);
+  assert.match(read("js/quotations-ui.js"), /data-quote-edit/);
+  assert.match(read("js/quotations-ui.js"), /Edit quotation /);
+  assert.match(node, /status IN \('draft','sent','accepted','rejected','expired'\)/);
+  assert.match(php, /function pos_quote_can_edit/);
+  assert.match(php, /status IN \('draft','sent','accepted','rejected','expired'\)/);
+  assert.doesNotMatch(node.slice(editAt, emailAt), /applySaleStock\(/);
   assert.match(read("css/quotations.css"), /quotations-desk: quotations 2026/);
 });

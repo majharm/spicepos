@@ -5,6 +5,7 @@
   let tab = "all";
   let last = null;
   let editingId = "";
+  let editingStatus = "";
   let lineSeq = 1;
   let lines = [];
   let busy = false;
@@ -150,12 +151,15 @@
       el.innerHTML = `<p class="hint">No quotations match these filters.</p>`;
       return;
     }
-    el.innerHTML = quotes.map((row) => `<button type="button" class="quote-card" data-quote-open="${esc(row.id)}">
-      <strong>${esc(row.quotation_number)}</strong>
-      <span>${esc(row.customer_name || "Customer")}${row.salesperson ? `<span class="sku"> · ${esc(row.salesperson)}</span>` : ""}</span>
-      <span class="quote-status is-${esc(row.status)}">${esc(Q().statusLabel(row.status))}</span>
-      <span>${esc(rupee(row.total))}</span>
-    </button>`).join("");
+    el.innerHTML = quotes.map((row) => `<article class="quote-card">
+      <button type="button" class="quote-card-main" data-quote-open="${esc(row.id)}">
+        <strong>${esc(row.quotation_number)}</strong>
+        <span>${esc(row.customer_name || "Customer")}${row.salesperson ? `<span class="sku"> · ${esc(row.salesperson)}</span>` : ""}</span>
+        <span class="quote-status is-${esc(row.status)}">${esc(Q().statusLabel(row.status))}</span>
+        <span>${esc(rupee(row.total))}</span>
+      </button>
+      ${Q().canEdit(row, today()) ? `<button class="btn quote-edit" type="button" data-quote-edit="${esc(row.id)}">Edit</button>` : ""}
+    </article>`).join("");
   }
 
   function paintReports() {
@@ -378,6 +382,7 @@
 
   function paintForm(quote) {
     editingId = quote?.id || "";
+    editingStatus = quote?.status || "";
     const date = String(quote?.quotation_date || today()).slice(0, 10);
     const valid = String(quote?.valid_until || Q()?.addDays?.(date, validDays()) || "").slice(0, 10);
     lines = (quote?.lines || []).map(lineFromQuote);
@@ -386,7 +391,7 @@
     if (!host) return;
     host.hidden = false;
     host.innerHTML = `<form class="quote-form" id="quote-form">
-      <h3>${editingId ? "Edit draft quotation" : "Create quotation"}</h3>
+      <h3>${editingId ? `Edit quotation ${esc(quote?.quotation_number || "")}` : "Create quotation"}</h3>
       <p class="quote-shop">${esc(shopBlurb())}</p>
       <p class="quote-banner">QUOTATION — NOT A TAX INVOICE</p>
       <div class="quote-form-grid">
@@ -419,10 +424,11 @@
       </div>
       <div class="quote-totals" id="quote-totals"></div>
       <div class="quote-detail-tools">
-        <button class="btn primary" type="submit">Save draft</button>
-        <button class="btn" type="button" id="quote-save-sent">Save and mark sent</button>
+        <button class="btn primary" type="submit">${editingId ? "Save quotation" : "Save draft"}</button>
+        ${!editingId || editingStatus === "draft" ? `<button class="btn" type="button" id="quote-save-sent">Save and mark sent</button>` : ""}
         <button class="btn" type="button" data-quote-tab="all">Back to all quotations</button>
       </div>
+      ${editingId && editingStatus !== "draft" ? `<p class="hint">Saving keeps this quotation ${esc(Q().statusLabel(editingStatus).toLowerCase())}. Stock and payments stay unchanged.</p>` : ""}
     </form>`;
     tab = "create";
     if ($("quote-all")) $("quote-all").hidden = true;
@@ -461,9 +467,9 @@
     busy = true;
     try {
       const data = editingId
-        ? await root.api(`/api/quotations/${editingId}`, { method: "POST", body: JSON.stringify(payload("draft")) })
+        ? await root.api(`/api/quotations/${editingId}`, { method: "POST", body: JSON.stringify(payload(editingStatus || "draft")) })
         : await root.api("/api/quotations", { method: "POST", body: JSON.stringify(payload(status)) });
-      if (editingId && status === "sent") {
+      if (editingId && editingStatus === "draft" && status === "sent") {
         await root.api(`/api/quotations/${editingId}/status`, { method: "POST", body: JSON.stringify({ status: "sent" }) });
       }
       hint(`${data.quote?.quotation_number || "Quotation"} saved. Stock and payments are unchanged.`, "ok");
@@ -502,7 +508,7 @@
     const company = { ...(root.state?.company || {}), name: data.shopName || root.state?.company?.name };
     const events = data.events || [];
     const buttons = [];
-    if (Q().canEdit(quote, today())) buttons.push(`<button class="btn" type="button" data-quote-edit="${esc(quote.id)}">Edit draft</button>`);
+    if (Q().canEdit(quote, today())) buttons.push(`<button class="btn" type="button" data-quote-edit="${esc(quote.id)}">Edit</button>`);
     buttons.push(`<button class="btn" type="button" data-quote-do="duplicate" data-id="${esc(quote.id)}">Duplicate</button>`);
     buttons.push(`<button class="btn" type="button" data-quote-do="print" data-id="${esc(quote.id)}">Print</button>`);
     buttons.push(`<button class="btn" type="button" data-quote-do="pdf" data-id="${esc(quote.id)}">Download PDF</button>`);
@@ -628,8 +634,13 @@
     }
     const edit = event.target.closest("[data-quote-edit]");
     if (edit) {
-      const data = await root.api(`/api/quotations/${encodeURIComponent(edit.dataset.quoteEdit)}`);
-      paintForm(data.quote);
+      try {
+        const data = await root.api(`/api/quotations/${encodeURIComponent(edit.dataset.quoteEdit)}`);
+        if (!Q().canEdit(data.quote, today())) throw new Error("A converted or cancelled quotation cannot be edited");
+        paintForm(data.quote);
+      } catch (err) {
+        hint(err.message || "Could not open this quotation", "bad");
+      }
       return;
     }
     const action = event.target.closest("[data-quote-do]");
