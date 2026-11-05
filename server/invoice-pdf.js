@@ -151,13 +151,14 @@ function qtyLabel(line) {
 }
 
 function rateLabel(line) {
-  return `${inr(line?.rate)}${measuredLine(line) ? "/kg" : ""}`;
+  return `${rateInr(line?.rate)}${measuredLine(line) ? "/kg" : ""}`;
 }
 
-function inr(value) {
+function inrDigits(value, digits) {
   const n = Number(value);
   const neg = Number.isFinite(n) && n < 0;
-  const abs = (Number.isFinite(n) ? Math.abs(n) : 0).toFixed(2);
+  const places = Math.max(2, Math.min(4, digits));
+  const abs = (Number.isFinite(n) ? Math.abs(n) : 0).toFixed(places);
   const [whole, dec] = abs.split(".");
   let grouped = whole;
   if (whole.length > 3) {
@@ -166,6 +167,16 @@ function inr(value) {
     grouped = `${rest},${last}`;
   }
   return `${neg ? "-" : ""}Rs ${grouped}.${dec}`;
+}
+
+function inr(value) {
+  return inrDigits(value, 2);
+}
+
+function rateInr(value) {
+  const scaled = Math.round(Math.abs(Number(value) || 0) * 10000);
+  const digits = scaled % 100 === 0 ? 2 : scaled % 10 === 0 ? 3 : 4;
+  return inrDigits(value, digits);
 }
 
 function prettyDate(value) {

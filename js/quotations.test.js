@@ -103,6 +103,14 @@ test("quotation numbers, totals, expiry, and print label", () => {
   const manyText = many.toString("latin1");
   assert.match(manyText, /\/Count 2/);
   assert.match(manyText, /Page 2/);
+  const sms = quotationPdfBuffer(
+    { name: "ATAV TELECOM" },
+    { quotation_number: "QT-00001", lines: [{ name: "BULK SMS", quantity: 700000, unit: "NOS", rate: 0.135, taxable: 94500, total: 94500, gstRate: 18 }], subtotal: 94500, total: 94500 },
+  );
+  const smsText = sms.toString("latin1");
+  assert.match(smsText, /Rs 0\.135/);
+  assert.doesNotMatch(smsText, /Rs 0\.14/);
+  assert.match(smsText, /Rs 94,500\.00/);
   assert.equal(manyText.slice(Number(manyText.match(/startxref\n(\d+)/)[1]), Number(manyText.match(/startxref\n(\d+)/)[1]) + 4), "xref");
 });
 
@@ -157,6 +165,7 @@ test("quotation module stays off, isolated, and posts stock only on convert", ()
   assert.match(php, /QUOTATION - NOT A TAX INVOICE/);
   assert.match(php, /Helvetica-Bold/);
   assert.match(php, /Quoted total/);
+  assert.match(php, /function pos_quote_rate_inr/);
   assert.match(php, /Item & Description/);
   assert.doesNotMatch(php, /pos_checkout_sale/);
   assert.match(read("js/quotations-ui.js"), /does not mark this quotation accepted|was not marked accepted/);

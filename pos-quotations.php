@@ -696,16 +696,24 @@ function pos_quote_pdf_wrap($value, $maxWidth, $size, $bold = false) {
   return $lines;
 }
 
-function pos_quote_inr($value) {
+function pos_quote_inr($value, $digits = 2) {
+  $digits = max(2, min(4, (int) $digits));
   $neg = (float) $value < 0;
-  $parts = explode(".", number_format(abs((float) $value), 2, ".", ""));
+  $parts = explode(".", number_format(abs((float) $value), $digits, ".", ""));
   $whole = $parts[0];
-  $dec = $parts[1] ?? "00";
+  $dec = $parts[1] ?? str_repeat("0", $digits);
   if (strlen($whole) > 3) {
     $rest = preg_replace('/\B(?=(?:\d{2})+(?!\d))/', ",", substr($whole, 0, -3));
     $whole = $rest . "," . substr($whole, -3);
   }
   return ($neg ? "-" : "") . "Rs " . $whole . "." . $dec;
+}
+
+function pos_quote_rate_inr($value) {
+  $scaled = (int) round(abs((float) $value) * 10000);
+  $digits = 2;
+  if ($scaled % 100 !== 0) $digits = ($scaled % 10 !== 0) ? 4 : 3;
+  return pos_quote_inr($value, $digits);
 }
 
 function pos_quote_pretty_date($value) {
@@ -907,7 +915,7 @@ function pos_quote_pdf($company, $quote) {
     elseif ($measured && $unit === "KG") $qty = number_format($qtyNum, 2, ".", "") . " kg";
     else $qty = trim(pos_quote_ascii($line["quantity"] ?? ($line["qty"] ?? "")) . " " . pos_quote_ascii($line["unit"] ?? ""));
     $rightText("F1", 9, 400, $top - 14, $qty, $ink, false);
-    $rightText("F1", 9, 470, $top - 14, pos_quote_inr($line["rate"] ?? 0) . ($measured ? "/kg" : ""), $ink, false);
+    $rightText("F1", 9, 470, $top - 14, pos_quote_rate_inr($line["rate"] ?? 0) . ($measured ? "/kg" : ""), $ink, false);
     $rightText("F2", 9, $right - 6, $top - 14, pos_quote_inr($line["taxable"] ?? ($line["total"] ?? ($line["amount"] ?? 0))), $ink, true);
     $ctx->y -= $rowH;
     $rule($left, $ctx->y, $width);
