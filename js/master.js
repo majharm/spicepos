@@ -13,6 +13,14 @@ let alertLogFocus = "";
 let dsaCode = "0001";
 let dsaFrom = "";
 let dsaTo = "";
+let opFrom = "";
+let opTo = "";
+let opPreset = "month";
+let opBusiness = "";
+let opBranch = "";
+let opOffer = "";
+let opProduct = "";
+let opCategory = "";
 
 async function api(path, options) {
   const { res, data } = await posRequest(path, options);
@@ -196,7 +204,7 @@ function showLogin(on) {
 }
 
 const NAV_FAMILIES = {
-  main: ["dash", "live", "profile", "biz", "users", "plans", "fees", "dsa-sales", "health"],
+  main: ["dash", "live", "profile", "biz", "users", "plans", "fees", "dsa-sales", "offer-profit", "health"],
   alerts: ["expiry", "alert-log"],
   people: ["managers", "staff", "support"],
   advance: ["advance", "backup", "languages", "notes", "automation", "branches", "devices", "audit", "customers"],
@@ -215,6 +223,7 @@ const PAGE_HINTS = {
   users: "Passwords and locked accounts",
   plans: "Yearly fees and limits",
   "dsa-sales": "Invoice-wise sales by DSA code",
+  "offer-profit": "Offer sales and profit for every business",
   expiry: "WhatsApp and email alerts",
   "alert-log": "Delivery history",
   managers: "Assign shops to support staff",
@@ -285,6 +294,7 @@ const MASTER_PAGES = [
   { tab: "users", title: "Users", keywords: "password unlock login" },
   { tab: "plans", title: "Plans", keywords: "subscription fee yearly" },
   { tab: "dsa-sales", title: "Revenue analytics", keywords: "dsa 0001 agent invoice sales report revenue" },
+  { tab: "offer-profit", title: "Offer and profit", keywords: "offer discount profit margin gst sales report" },
   { tab: "expiry", title: "Send alerts", keywords: "whatsapp email renewal" },
   { tab: "alert-log", title: "WA & Email log", keywords: "whatsapp email delivery" },
   { tab: "managers", title: "Account managers", keywords: "support assign" },
@@ -2210,6 +2220,7 @@ async function render() {
     staff: "Staff master",
     plans: "Subscription plans",
     "dsa-sales": "Revenue analytics",
+    "offer-profit": "Offer and profit",
     branches: "Branches",
     devices: "POS devices",
     audit: "Activity logs",
@@ -3562,6 +3573,63 @@ async function render() {
         };
       });
       $("dsa-print")?.addEventListener("click", () => window.print());
+    } else if (tab === "offer-profit") {
+      if (!window.POSOfferProfit?.masterPageHtml) {
+        body.innerHTML = `<p class="hint error">Offer profit report did not load. Upload js/offer-profit.js.</p>`;
+      } else {
+        if (!opFrom || !opTo) {
+          const range = window.POSOfferProfit.presetRange(opPreset || "month", todayYmdIst());
+          opFrom = range.from;
+          opTo = range.to;
+        }
+        const q = new URLSearchParams({ from: opFrom, to: opTo, preset: opPreset || "custom" });
+        if (opBusiness) q.set("business", opBusiness);
+        if (opBranch) q.set("branch", opBranch);
+        if (opOffer) q.set("offer", opOffer);
+        if (opProduct) q.set("product", opProduct);
+        if (opCategory) q.set("category", opCategory);
+        const data = await api(`/api/master/offer-profit?${q}`);
+        body.innerHTML = window.POSOfferProfit.masterPageHtml(data, {
+          excel: `/api/master/offer-profit/excel?${q}`,
+          pdf: `/api/master/offer-profit/pdf?${q}`,
+          product: opProduct,
+          category: opCategory,
+        });
+        const offerSel = $("op-offer");
+        if (offerSel && opOffer) offerSel.value = opOffer;
+        const readFilters = () => {
+          opFrom = $("op-from")?.value || opFrom;
+          opTo = $("op-to")?.value || opTo;
+          opBusiness = $("op-business")?.value || "";
+          opBranch = $("op-branch")?.value || "";
+          opOffer = $("op-offer")?.value || "";
+          opProduct = $("op-product")?.value || "";
+          opCategory = $("op-category")?.value || "";
+        };
+        $("offer-profit-form")?.addEventListener("submit", (e) => {
+          e.preventDefault();
+          opPreset = "custom";
+          readFilters();
+          render();
+        });
+        body.querySelectorAll("[data-op-preset]").forEach((btn) => {
+          btn.onclick = () => {
+            opPreset = btn.dataset.opPreset || "custom";
+            if (opPreset === "custom") {
+              $("op-from")?.focus();
+              return;
+            }
+            const range = window.POSOfferProfit.presetRange(opPreset, todayYmdIst());
+            opFrom = range.from;
+            opTo = range.to;
+            render();
+          };
+        });
+        $("op-print")?.addEventListener("click", () => window.print());
+        body.querySelectorAll("[data-print-report]").forEach((btn) => {
+          btn.onclick = () => window.print();
+        });
+      }
     } else if (tab === "analytics") {
       if (!window.POSMasterAnalytics?.render) {
         body.innerHTML = `<p class="hint error">Analytics UI did not load. Upload js/master-analytics.js.</p>`;

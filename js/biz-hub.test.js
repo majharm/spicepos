@@ -18,6 +18,9 @@ test("Reports Center lists common reports plus pharmacy extras only for pharmaci
   const grocery = H.reportsFor({ category: "Grocery" });
   const pharm = H.reportsFor({ category: "Medical / Pharmacy" });
   assert.ok(grocery.some((r) => r.id === "daily-sales"));
+  assert.equal(grocery.find((r) => r.id === "offer-wise-sales").title, "Offer Wise Sales Report");
+  assert.equal(grocery.find((r) => r.id === "sales-wise-profit").sheet, "Sales Wise Profit");
+  assert.equal(grocery.find((r) => r.id === "profit-loss-summary").tab, "profit");
   assert.equal(grocery.find((r) => r.id === "daily-sales").sheet, "Daily Sales");
   assert.ok(grocery.some((r) => r.id === "tax-summary"));
   assert.ok(grocery.some((r) => r.id === "expiry-report"));
@@ -53,7 +56,7 @@ test("Dashboard uses a SaaS business control center", () => {
   assert.match(app, /function paintDashChrome/);
   assert.match(app, /applyColorScheme/);
   assert.match(index, /id="dash-plan-kpis"/);
-  assert.match(index, /biz-hub-ui\.js\?v=20261027rec2/);
+  assert.match(index, /biz-hub-ui\.js\?v=20261107profit1/);
   assert.match(css, /saas-kpi-grid/);
   assert.match(ui, /function kpiCard/);
   assert.match(ui, /Today's Sales/);
@@ -77,7 +80,7 @@ test("POS shell wires Reports Center, payments, audit, and hub scripts", () => {
   assert.match(index, /id="view-hub-sales"/);
   assert.match(index, /id="dash-kpis"/);
   assert.match(ui, /id="dash-sales-graph"/);
-  assert.match(index, /biz-hub\.js\?v=20261030tax1/);
+  assert.match(index, /biz-hub\.js\?v=20261107profit1/);
   assert.match(index, /id="rep-pdf"/);
   assert.match(index, /id="rep-pay-mode"/);
   assert.match(app, /POSBizHubUi\?\.paintDashboard/);

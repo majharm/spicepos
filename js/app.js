@@ -2696,7 +2696,7 @@ function reportBlock(title, sheet, headers, rows, group) {
 
 function setReportTab(tab) {
   const next = String(tab || "summary");
-  state.reportTab = ["summary", "sales", "gst", "payment", "stock", "books"].includes(next) ? next : "summary";
+  state.reportTab = ["summary", "sales", "profit", "gst", "payment", "stock", "books"].includes(next) ? next : "summary";
   applyReportsFilter();
 }
 
@@ -2896,6 +2896,7 @@ function can(module) {
   if (state.session?.role === "business_admin") return true;
   return state.perms?.[module] === true;
 }
+globalThis.can = can;
 
 function canManageDiningLayout() {
   return isRestaurantShop() && state.session?.role === "business_admin";
@@ -10063,6 +10064,79 @@ async function loadToday() {
   if ($("topbar-count")) $("topbar-count").textContent = count;
 }
 
+function offerProfitQuery() {
+  const params = new URLSearchParams();
+  const from = $("rep-from")?.value || "";
+  const to = $("rep-to")?.value || "";
+  if (from) params.set("from", from);
+  if (to) params.set("to", to);
+  for (const [id, key] of [
+    ["rep-offer", "offer"],
+    ["rep-product", "product"],
+    ["rep-category", "category"],
+    ["rep-branch", "branch"],
+  ]) {
+    const value = String($(id)?.value || "").trim();
+    if (value) params.set(key, value);
+  }
+  return params.toString();
+}
+
+function syncReportPresetChips() {
+  const from = $("rep-from")?.value || "";
+  const to = $("rep-to")?.value || "";
+  const today = ymd();
+  const presets = globalThis.POSOfferProfit;
+  let on = "custom";
+  if (presets && today) {
+    for (const key of ["today", "yesterday", "week", "month"]) {
+      const range = presets.presetRange(key, today);
+      if (range.from === from && range.to === to) on = key;
+    }
+  }
+  document.querySelectorAll("#rep-range-chips [data-rep-preset]").forEach((btn) => {
+    const active = btn.dataset.repPreset === on;
+    btn.classList.toggle("is-on", active);
+    btn.setAttribute("aria-pressed", active ? "true" : "false");
+  });
+}
+
+let fillingOfferFilters = false;
+
+function fillOfferProfitFilters(report) {
+  fillingOfferFilters = true;
+  try {
+    const branch = $("rep-branch");
+    if (branch && Array.isArray(report?.branches)) {
+      const current = branch.value;
+      branch.innerHTML = [`<option value="">All branches</option>`]
+        .concat((report.branches || []).map((b) => `<option value="${escapeHtml(b.id)}">${escapeHtml(b.name || b.id)}</option>`))
+        .join("");
+      const locked = report.scope?.locked && report.scope.branchId;
+      if (locked) branch.value = report.scope.branchId;
+      else if ([...branch.options].some((opt) => opt.value === current)) branch.value = current;
+      branch.disabled = Boolean(locked);
+    }
+    const offer = $("rep-offer");
+    if (!offer || !report) return;
+    const current = offer.value;
+    const seen = new Set();
+    const rows = [];
+    for (const row of [...(report.catalog || []), ...(report.offers || [])]) {
+      const id = String(row?.id || "");
+      if (!id || seen.has(id)) continue;
+      seen.add(id);
+      rows.push(row);
+    }
+    offer.innerHTML = [`<option value="">All offers</option>`]
+      .concat(rows.map((row) => `<option value="${escapeHtml(row.id)}">${escapeHtml(row.name || "Offer")}${row.code ? ` · ${escapeHtml(row.code)}` : ""}</option>`))
+      .join("");
+    if ([...offer.options].some((opt) => opt.value === current)) offer.value = current;
+  } finally {
+    fillingOfferFilters = false;
+  }
+}
+
 async function loadReports() {
   if (!$("rep-from").value || !$("rep-to").value) applyFyRange("rep-from", "rep-to", null, "rep-fy-year");
   else fillFyYearSelect("rep-fy-year", indianFinancialYear($("rep-from").value || ymd()).startYear);
@@ -10071,7 +10145,11 @@ async function loadReports() {
   $("rep-excel-all").href = excelHref();
   $("reports-hint").textContent = "Loading…";
   try {
-    const data = await api(`/api/reports?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`);
+    const offerQuery = offerProfitQuery();
+    const [data, offerProfit] = await Promise.all([
+      api(`/api/reports?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`),
+      api(`/api/reports/offer-profit?${offerQuery}`).catch(() => null),
+    ]);
     const s = data.summary || {};
     const gs = s.gstSummary || {};
     const out = gs.output || {};
@@ -10098,7 +10176,16 @@ async function loadReports() {
       .map(([k, v]) => `<div class="report-card"><span>${k}</span><strong>${v}</strong></div>`)
       .join("");
     globalThis.__mLastReports = data;
+    fillOfferProfitFilters(offerProfit);
+    syncReportPresetChips();
+    const profitHtml = offerProfit && globalThis.POSOfferProfit?.reportSectionsHtml
+      ? globalThis.POSOfferProfit.reportSectionsHtml(offerProfit, {
+          excel: posUrl(`/api/reports/offer-profit/excel?${offerQuery}`),
+          pdf: posUrl(`/api/reports/offer-profit/pdf?${offerQuery}`),
+        })
+      : "";
     $("reports").innerHTML = [
+      profitHtml,
       dailySalesBlock(data),
       reportBlock("GST summary (India)", "GST summary", ["Type", "CGST", "SGST", "IGST", "Total GST"], gstSummaryRows(s), "gst"),
       reportBlock("Sales bills", "Sales bills", ["Order", "Customer", "Type", "Pack", "Pack count", "Status", "Qty g", "Taxable", "GST", "Total", "Pay", "Pay status", "Date"], (data.sales || []).map((o) => [o.order_number, o.customer_name, o.customer_type, o.pack_name || "Loose items", Number(o.pack_count) || 0, orderStatusLabel(o.status), Number(o.total_quantity_gm) || 0, Number(o.subtotal) || 0, Number(o.gst) || 0, Number(o.total) || 0, o.payment_method, o.payment_status, formatShopDateTime(o.created_at)]), "sales"),
@@ -15916,12 +16003,39 @@ $("rep-fy-year")?.addEventListener("change", async () => {
   applyFyYear($("rep-fy-year").value, "rep-from", "rep-to");
   await loadReports();
 });
-$("rep-from")?.addEventListener("change", () => syncFySelectFromDates("rep-fy-year", "rep-from"));
-$("rep-to")?.addEventListener("change", () => syncFySelectFromDates("rep-fy-year", "rep-from"));
+$("rep-from")?.addEventListener("change", () => {
+  syncFySelectFromDates("rep-fy-year", "rep-from");
+  syncReportPresetChips();
+});
+$("rep-to")?.addEventListener("change", () => {
+  syncFySelectFromDates("rep-fy-year", "rep-from");
+  syncReportPresetChips();
+});
+$("rep-range-chips")?.addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-rep-preset]");
+  if (!btn) return;
+  const preset = btn.dataset.repPreset;
+  if (preset && preset !== "custom") {
+    const range = globalThis.POSOfferProfit?.presetRange(preset, ymd());
+    if (range?.from && $("rep-from")) $("rep-from").value = range.from;
+    if (range?.to && $("rep-to")) $("rep-to").value = range.to;
+    syncFySelectFromDates("rep-fy-year", "rep-from");
+    $("report-form")?.requestSubmit();
+  } else {
+    $("rep-from")?.focus();
+  }
+  syncReportPresetChips();
+});
 $("rep-search")?.addEventListener("input", () => applyReportsFilter());
 ["rep-customer", "rep-supplier", "rep-product", "rep-category", "rep-user", "rep-pay-mode", "rep-branch"].forEach((id) => {
   $(id)?.addEventListener("input", () => applyReportsFilter());
   $(id)?.addEventListener("change", () => applyReportsFilter());
+});
+["rep-offer", "rep-product", "rep-category", "rep-branch"].forEach((id) => {
+  $(id)?.addEventListener("change", () => {
+    if (fillingOfferFilters) return;
+    if ($("view-reports") && !$("view-reports").hidden) loadReports();
+  });
 });
 $("reports-tabs")?.addEventListener("click", (e) => {
   const btn = e.target.closest("[data-report-tab]");

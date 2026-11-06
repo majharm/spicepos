@@ -10,6 +10,7 @@ import { lineAmount, round2, registerCrud, itemBillName, stampSaleLineVariant } 
 import { fyRangeForToday } from "./fy.js";
 import { createdToday, saleNotVoidSql } from "./sql-time.js";
 import { buildReports, reportsToSheets } from "./reports.js";
+import { registerOfferProfit } from "./offer-profit.js";
 import { buildGrowthDashboard, answerGrowthQuestion, growthToSheets } from "./growth.js";
 import { listCombos, createCombo } from "./combos.js";
 import { listOffers, createOffer, updateOffer, getOffer, setOfferStatus, deleteOffer, duplicateOffer, offerStats, suggestOffers, getPromoSettings, savePromoSettings, recordOfferRedemptions } from "./offers.js";
@@ -251,6 +252,7 @@ registerSeoMaster(app);
 registerLoginPageMaster(app);
 registerTenant(app);
 registerHub(app);
+registerOfferProfit(app);
 registerAdvanced(app);
 registerReturns(app);
 registerBackup(app);

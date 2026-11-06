@@ -58,6 +58,7 @@ test("today and Master shop sales skip voided invoices", () => {
 test("hot sales queries no longer wrap created_at in DATE()", () => {
   const files = [
     "server/reports.js",
+    "server/offer-profit.js",
     "server/hub.js",
     "server/index.js",
     "server/tenant.js",

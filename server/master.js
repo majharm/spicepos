@@ -16,6 +16,7 @@ import {
 } from "./subscription.js";
 import { createdToday, createdBetween, saleNotVoidSql } from "./sql-time.js";
 import { assembleDsaSales, dsaSalesToSheets } from "./reports.js";
+import { registerMasterOfferProfit } from "./offer-profit.js";
 import { workbookXml } from "./excel.js";
 import { getPlatformSettings, setPlatformSetting } from "./settings.js";
 import { normalizeLocale } from "./i18n.js";
@@ -233,6 +234,7 @@ function masterProfilePublic(row) {
 
 export function registerMaster(app) {
   app.use("/api/master", requireMaster);
+  registerMasterOfferProfit(app);
   registerNotifyCampaigns(app);
   registerMasterLive(app);
   registerMasterBackup(app);

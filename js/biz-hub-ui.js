@@ -214,6 +214,7 @@
     ["alerts", "Alert center"],
     ["activity", "Recent activity"],
     ["industry", "Business widgets"],
+    ["offer-profit", "Sales & profit"],
   ];
 
   let lastDash = null;
@@ -224,8 +225,8 @@
 
   function roleHidden() {
     const role = String(root.state?.session?.role || "").toLowerCase();
-    if (role === "cashier" || role === "waiter" || role === "kitchen") {
-      return new Set(["pay", "exp", "recv"]);
+    if (role === "cashier" || role === "waiter" || role === "kitchen" || role === "bartender" || role === "captain" || role === "receptionist") {
+      return new Set(["pay", "exp", "recv", "offer-profit", "gross", "net"]);
     }
     return new Set();
   }
@@ -383,8 +384,15 @@
     const tops = (h.topCustomers || []).map(
       (r) => `<li><strong>${escapeHtml(r.name)}</strong><span>${inr(r.amount)} · ${Number(r.bills) || 0} bills</span></li>`,
     );
+    const canProfit = typeof root.can === "function"
+      ? root.can("reports")
+      : ["business_admin", "resort_owner", "accountant", "branch_manager", "manager"].includes(String(root.state?.session?.role || ""));
+    const offerCard = canProfit && d.offerProfit && root.POSOfferProfit?.dashboardHtml
+      ? root.POSOfferProfit.dashboardHtml(d.offerProfit)
+      : "";
     $("dash-kpis").innerHTML = `
       <div class="saas-kpi-grid">${kpis.join("")}</div>
+      ${offerCard}
       <div class="saas-analytics">
         <section class="saas-card saas-wide" data-widget="overview">
           <header class="saas-card-head">
@@ -1168,6 +1176,7 @@
       }
       return;
     }
+    if (r.tab && typeof root.setReportTab === "function") root.setReportTab(r.tab);
     if (typeof root.showView === "function") root.showView("reports");
     if (String(id) === "daily-sales") {
       const from = $("rep-from");
