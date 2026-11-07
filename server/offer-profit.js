@@ -26,6 +26,14 @@ async function safeQuery(sql, params) {
   }
 }
 
+async function firstRows(attempts) {
+  for (const attempt of attempts) {
+    const rows = await safeQuery(attempt.sql, attempt.params);
+    if (rows) return rows;
+  }
+  return [];
+}
+
 function orderWhere(scope, from, to) {
   const parts = [];
   const params = [];
@@ -45,46 +53,60 @@ function orderWhere(scope, from, to) {
 
 export async function loadOfferProfitSource(scope, from, to) {
   const where = orderWhere(scope, from, to);
-  let orders = await safeQuery(
-    `SELECT o.id, o.order_number, o.business_id, o.branch_id, o.status, o.created_at,
-            o.subtotal, o.discount, o.loyalty_discount, o.gst, o.total, o.extra_charges,
-            b.name AS business_name, br.name AS branch_name
-     FROM sales_orders o
-     LEFT JOIN businesses b ON b.id = o.business_id
-     LEFT JOIN branches br ON br.id = o.branch_id
-     WHERE ${where.sql}
-     ORDER BY o.created_at`,
-    where.params,
-  );
-  if (!orders) {
-    orders = await query(
-      `SELECT o.id, o.order_number, o.business_id, o.branch_id, o.status, o.created_at,
-              o.subtotal, o.discount, o.gst, o.total, b.name AS business_name
-       FROM sales_orders o
-       LEFT JOIN businesses b ON b.id = o.business_id
-       WHERE ${where.sql}
-       ORDER BY o.created_at`,
-      where.params,
-    );
-  }
-  let lines = await safeQuery(
-    `SELECT l.order_id, l.item_name, l.quantity_gm, l.amount, l.discount, l.cost, l.gst_rate, l.cancelled,
-            COALESCE(NULLIF(TRIM(i.category), ''), 'Uncategorised') AS category, i.purchase_rate
-     FROM sales_order_lines l
-     JOIN sales_orders o ON o.id = l.order_id
-     LEFT JOIN items i ON i.id = l.item_id AND i.business_id = o.business_id
-     WHERE ${where.sql} AND COALESCE(l.cancelled, 0) = 0`,
-    where.params,
-  );
-  if (!lines) {
-    lines = await query(
-      `SELECT l.order_id, l.item_name, l.quantity_gm, l.amount, l.discount, l.gst_rate, l.cancelled
-       FROM sales_order_lines l
-       JOIN sales_orders o ON o.id = l.order_id
-       WHERE ${where.sql} AND COALESCE(l.cancelled, 0) = 0`,
-      where.params,
-    );
-  }
+  const orders = await firstRows([
+    {
+      sql: `SELECT o.id, o.order_number, o.business_id, o.branch_id, o.status, o.created_at,
+                   o.subtotal, o.discount, o.loyalty_discount, o.gst, o.total, o.extra_charges,
+                   b.name AS business_name, br.name AS branch_name
+            FROM sales_orders o
+            LEFT JOIN businesses b ON b.id = o.business_id
+            LEFT JOIN branches br ON br.id = o.branch_id
+            WHERE ${where.sql}
+            ORDER BY o.created_at`,
+      params: where.params,
+    },
+    {
+      sql: `SELECT o.id, o.order_number, o.business_id, o.branch_id, o.status, o.created_at,
+                   o.subtotal, o.discount, o.loyalty_discount, o.gst, o.total, b.name AS business_name
+            FROM sales_orders o
+            LEFT JOIN businesses b ON b.id = o.business_id
+            WHERE ${where.sql}
+            ORDER BY o.created_at`,
+      params: where.params,
+    },
+    {
+      sql: `SELECT id, order_number, business_id, status, created_at, subtotal, discount, gst, total
+            FROM sales_orders o
+            WHERE ${where.sql}
+            ORDER BY created_at`,
+      params: where.params,
+    },
+  ]);
+  const lines = await firstRows([
+    {
+      sql: `SELECT l.order_id, l.item_name, l.quantity_gm, l.amount, l.discount, l.cost, l.gst_rate, l.cancelled,
+                   COALESCE(NULLIF(TRIM(i.category), ''), 'Uncategorised') AS category, i.purchase_rate
+            FROM sales_order_lines l
+            JOIN sales_orders o ON o.id = l.order_id
+            LEFT JOIN items i ON i.id = l.item_id
+            WHERE ${where.sql} AND COALESCE(l.cancelled, 0) = 0`,
+      params: where.params,
+    },
+    {
+      sql: `SELECT l.order_id, l.item_name, l.quantity_gm, l.amount, l.discount, l.gst_rate, l.cancelled
+            FROM sales_order_lines l
+            JOIN sales_orders o ON o.id = l.order_id
+            WHERE ${where.sql} AND COALESCE(l.cancelled, 0) = 0`,
+      params: where.params,
+    },
+    {
+      sql: `SELECT l.order_id, l.item_name, l.quantity_gm, l.amount, l.gst_rate
+            FROM sales_order_lines l
+            JOIN sales_orders o ON o.id = l.order_id
+            WHERE ${where.sql}`,
+      params: where.params,
+    },
+  ]);
   const redemptions = [];
   const ids = (orders || []).map((row) => row.id).filter(Boolean);
   for (let i = 0; i < ids.length; i += 400) {

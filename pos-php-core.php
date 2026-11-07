@@ -4143,6 +4143,11 @@ function pos_php_dispatch($path, $method, $rawBody) {
       ]);
     }
 
+    if ($method === "GET" && ($path === "master/offer-profit" || $path === "master/offer-profit/excel" || $path === "master/offer-profit/pdf")) {
+      require_once __DIR__ . "/pos-offer-profit.php";
+      pos_offer_profit_master($path);
+    }
+
     if (($path === "master/dsa-sales" || $path === "master/dsa-sales/excel") && $method === "GET") {
       require_once __DIR__ . "/pos-reports.php";
       $from = $_GET["from"] ?? date("Y-m-d");

@@ -4,7 +4,20 @@
   if (typeof module !== "undefined" && module.exports) module.exports = api;
 })(typeof globalThis !== "undefined" ? globalThis : this, function () {
   const PRESETS = ["today", "yesterday", "week", "month", "custom"];
-  const ALL_BRANCH_ROLES = new Set(["business_admin", "resort_owner", "accountant", "manager", "property_manager"]);
+  const BRANCH_LOCKED_ROLES = new Set([
+    "branch_manager",
+    "cashier",
+    "captain",
+    "kitchen",
+    "bartender",
+    "receptionist",
+    "reservation_executive",
+    "housekeeping",
+    "maintenance",
+    "restaurant_staff",
+    "stock_manager",
+    "staff",
+  ]);
 
   function round2(n) {
     const v = Number(n);
@@ -326,7 +339,7 @@
     const isMaster = Boolean(actor.master);
     const ownBusiness = String(actor.businessId || "").trim();
     const ownBranch = String(actor.branchId || "").trim();
-    const role = String(actor.role || "");
+    const role = String(actor.role || "").trim().toLowerCase().replace(/\s+/g, "_");
     const askedBusiness = String(query.business || query.businessId || "").trim();
     const askedBranch = String(query.branch || query.branchId || "").trim();
     if (isMaster) {
@@ -348,7 +361,7 @@
       err.status = 403;
       throw err;
     }
-    const canPickBranch = ALL_BRANCH_ROLES.has(role) || !ownBranch;
+    const canPickBranch = !BRANCH_LOCKED_ROLES.has(role) || !ownBranch;
     return {
       master: false,
       businessId: ownBusiness,

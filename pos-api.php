@@ -216,14 +216,21 @@ function pos_read_ports() {
   return array_values($out);
 }
 
+function pos_offer_profit_retry($suffix, $got) {
+  if (strpos((string) $suffix, "offer-profit") === false) return false;
+  $status = (int) ($got[0] ?? 0);
+  return $status === 404 || $status >= 500;
+}
+
 function pos_try_proxy($suffix, $method, $body, $cookie, &$dispatched = null) {
   $mutating = pos_is_mutating($method);
   foreach (pos_read_ports() as $port) {
     $sent = false;
-    $got = pos_curl("http://127.0.0.1:" . $port . "/api/" . $suffix, $method, $body, $cookie, "", $sent);
+    $timeout = strpos($suffix, "offer-profit") !== false ? 20 : 5;
+    $got = pos_curl("http://127.0.0.1:" . $port . "/api/" . $suffix, $method, $body, $cookie, "", $sent, $timeout);
     if ($sent) $dispatched = true;
     if ($got && pos_looks_json($got[3])) {
-      pos_remember_port($port);
+      if (!pos_offer_profit_retry($suffix, $got)) pos_remember_port($port);
       return $got;
     }
     if ($mutating && $sent) return $got;
@@ -308,7 +315,7 @@ if ($fastLogin) {
   $start = "skipped automation fast-path";
 } elseif (!pos_node_down_fresh()) {
   $got = pos_try_proxy($suffix, $method, $body, $cookie, $dispatched);
-  if ($got && pos_looks_json($got[3])) {
+  if ($got && pos_looks_json($got[3]) && !pos_offer_profit_retry($suffix, $got)) {
     pos_clear_node_down();
     pos_send_result($got[0], $got[1], $got[2], $got[3]);
     exit;
@@ -323,27 +330,31 @@ if ($fastLogin) {
     exit;
   }
 
-  if (!$mutating && $canExec) {
+  $offerFallback = is_array($got) && pos_offer_profit_retry($suffix, $got);
+  if (!$offerFallback && !$mutating && $canExec) {
     $start = pos_try_start_node();
-    $got = pos_curl("http://127.0.0.1:38473/api/" . $suffix, $method, $body, $cookie);
-    if ($got && pos_looks_json($got[3])) {
+    $sent = false;
+    $got = pos_curl("http://127.0.0.1:38473/api/" . $suffix, $method, $body, $cookie, "", $sent, strpos($suffix, "offer-profit") !== false ? 20 : 5);
+    if ($got && pos_looks_json($got[3]) && !pos_offer_profit_retry($suffix, $got)) {
       pos_remember_port(38473);
       pos_clear_node_down();
       pos_send_result($got[0], $got[1], $got[2], $got[3]);
       exit;
     }
     $got = pos_try_proxy($suffix, $method, $body, $cookie);
-    if ($got && pos_looks_json($got[3])) {
+    if ($got && pos_looks_json($got[3]) && !pos_offer_profit_retry($suffix, $got)) {
       pos_clear_node_down();
       pos_send_result($got[0], $got[1], $got[2], $got[3]);
       exit;
     }
+  } elseif ($offerFallback) {
+    $start = "offer-profit php";
   } elseif (!$canExec) {
     $start = "PHP exec is disabled";
   } else {
     $start = "skipped mutating";
   }
-  pos_mark_node_down();
+  if (!$offerFallback) pos_mark_node_down();
 } else {
   $start = "skipped node-down";
 }

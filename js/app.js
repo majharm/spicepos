@@ -2727,15 +2727,16 @@ function applyReportsFilter() {
     const group = block.dataset.reportGroup;
     const sheet = block.dataset.reportSheet;
     const rows = block.querySelectorAll("tbody tr");
+    const profitBlock = group === "profit";
     let rowHits = 0;
     rows.forEach((tr) => {
       const hay = (tr.getAttribute("data-report-row") || tr.textContent || "").toLowerCase();
-      const hit = (!q || hay.includes(q)) && extra.every((bit) => hay.includes(bit)) && (!pay || hay.includes(pay));
+      const hit = (!q || hay.includes(q)) && (profitBlock || (extra.every((bit) => hay.includes(bit)) && (!pay || hay.includes(pay))));
       tr.hidden = !hit;
       if (hit) rowHits += 1;
     });
     let visible;
-    const narrowed = Boolean(q || extra.length || pay);
+    const narrowed = profitBlock ? Boolean(q) : Boolean(q || extra.length || pay);
     if (narrowed) {
       visible = rowHits > 0 || (!rows.length && String(block.dataset.reportTitle || "").toLowerCase().includes(q));
     } else if (tab === "summary") {
@@ -10148,7 +10149,7 @@ async function loadReports() {
     const offerQuery = offerProfitQuery();
     const [data, offerProfit] = await Promise.all([
       api(`/api/reports?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`),
-      api(`/api/reports/offer-profit?${offerQuery}`).catch(() => null),
+      api(`/api/reports/offer-profit?${offerQuery}`, { timeoutMs: 25000 }).catch((err) => ({ error: err?.message || "Profit report did not load" })),
     ]);
     const s = data.summary || {};
     const gs = s.gstSummary || {};
@@ -10178,12 +10179,15 @@ async function loadReports() {
     globalThis.__mLastReports = data;
     fillOfferProfitFilters(offerProfit);
     syncReportPresetChips();
-    const profitHtml = offerProfit && globalThis.POSOfferProfit?.reportSectionsHtml
-      ? globalThis.POSOfferProfit.reportSectionsHtml(offerProfit, {
-          excel: posUrl(`/api/reports/offer-profit/excel?${offerQuery}`),
-          pdf: posUrl(`/api/reports/offer-profit/pdf?${offerQuery}`),
-        })
-      : "";
+    const profitLinks = {
+      excel: posUrl(`/api/reports/offer-profit/excel?${offerQuery}`),
+      pdf: posUrl(`/api/reports/offer-profit/pdf?${offerQuery}`),
+    };
+    const profitHtml = offerProfit?.error
+      ? `<section class="report-block offer-profit-block" data-report-title="Offer Wise Sales" data-report-group="profit" data-report-sheet="Offer Wise Sales"><h3>Offer Wise Sales Report</h3><p class="hint error">${escapeHtml(offerProfit.error)}</p></section>`
+      : offerProfit && globalThis.POSOfferProfit?.reportSectionsHtml
+        ? globalThis.POSOfferProfit.reportSectionsHtml(offerProfit, profitLinks)
+        : `<section class="report-block offer-profit-block" data-report-title="Offer Wise Sales" data-report-group="profit" data-report-sheet="Offer Wise Sales"><h3>Offer Wise Sales Report</h3><p class="hint">No sales in this range.</p></section>`;
     $("reports").innerHTML = [
       profitHtml,
       dailySalesBlock(data),

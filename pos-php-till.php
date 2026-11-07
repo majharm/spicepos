@@ -878,6 +878,12 @@ function pos_php_till_dispatch($path, $method, $body) {
     pos_growth_excel_response($bid);
   }
 
+  if ($method === "GET" && ($path === "reports/offer-profit" || $path === "reports/offer-profit/excel" || $path === "reports/offer-profit/pdf")) {
+    require_once __DIR__ . "/pos-offer-profit.php";
+    pos_offer_profit_shop($path, $bid, $auth);
+    return true;
+  }
+
   if (($path === "reports" || $path === "reports/excel") && $method === "GET") {
     require_once __DIR__ . "/pos-reports.php";
     $from = $_GET["from"] ?? (function_exists("pos_indian_fy") ? pos_indian_fy()["from"] : date("Y-m-d"));

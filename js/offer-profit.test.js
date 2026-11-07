@@ -223,6 +223,9 @@ test("owners cannot cross businesses; master admin can consolidate and filter", 
     /own business/,
   );
   assert.throws(() => P.resolveReportScope({ role: "business_admin" }, {}), /own business/);
+  const titled = P.resolveReportScope({ businessId: "shop-1", role: "Business Admin", branchId: "b1" }, {});
+  assert.equal(titled.branchId, null);
+  assert.equal(titled.locked, false);
   const owner = P.resolveReportScope({ businessId: "shop-1", role: "business_admin", branchId: "b1" }, { branch: "b9" });
   assert.equal(owner.businessId, "shop-1");
   assert.equal(owner.branchId, "b9");

@@ -42,4 +42,11 @@ test("shop and master routes stay tenant-safe and skip voided bills", () => {
   assert.doesNotMatch(server, /DATE\(\s*o\.created_at\s*\)\s*(=|BETWEEN|>=|<=)/);
   assert.match(index, /registerOfferProfit\(app\)/);
   assert.match(master, /registerMasterOfferProfit\(app\)/);
+  const till = read("pos-php-till.php");
+  const php = read("pos-offer-profit.php");
+  const app = read("js/app.js");
+  assert.match(till, /pos_offer_profit_shop/);
+  assert.match(php, /pos_build_offer_profit/);
+  assert.match(app, /profitBlock/);
+  assert.match(app, /timeoutMs: 25000/);
 });
