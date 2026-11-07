@@ -377,7 +377,7 @@ test("QR menu page paints a visible offer board from live offers", () => {
   const js = readFileSync(path.join(root, "js/qr-order.js"), "utf8");
   const css = readFileSync(path.join(root, "css/qr-order.css"), "utf8");
   assert.match(html, /id="offer-board"/);
-  assert.match(html, /qr-order\.js\?v=20261103food2/);
+  assert.match(html, /qr-order\.js\?v=20261107gift1/);
   assert.doesNotMatch(html, /qr-order\.js\?v=20260905deploy175/);
   assert.doesNotMatch(html, /offers\.js\?v=20260905deploy168/);
   assert.equal([...html.matchAll(/qr-order\.js\?v=/g)].length, 1);
@@ -385,6 +385,8 @@ test("QR menu page paints a visible offer board from live offers", () => {
   assert.match(js, /let sending = false/);
   assert.match(js, /function renderOffers/);
   assert.match(js, /function offerAppliesToItem/);
+  assert.match(js, /type === "free_gift"/);
+  assert.doesNotMatch(js, /"free_gift", "category"/);
   assert.match(js, /pickBest/);
   assert.match(css, /\.offer-board/);
   assert.match(css, /\.offer-card/);

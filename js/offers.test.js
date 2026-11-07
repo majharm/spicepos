@@ -524,6 +524,39 @@ test("advanced offer combines products, a time window, and a minimum bill", () =
   assert.equal(weekend.scope, "bill");
 });
 
+test("free gift auto-applies only to the selected product", () => {
+  const now = new Date("2026-09-05T10:00:00");
+  const offer = O.normalize({
+    name: "Soap free",
+    type: "free_gift",
+    status: "active",
+    discount_type: "pct",
+    discount_value: 100,
+    free_item_id: "soap",
+  });
+  assert.equal(
+    O.evaluateOffer(offer, {
+      cart: [line("rice", 100), line("oil", 80)],
+      now,
+      items: [{ id: "soap", retail_rate: 40 }],
+    }),
+    null,
+  );
+  const hit = O.evaluateAll([offer], { cart: [line("rice", 100), line("soap", 40)], now });
+  assert.equal(hit.discount, 40);
+  assert.equal(hit.billDiscount, 0);
+  assert.equal(hit.lineDiscounts.soap, 40);
+  assert.equal(hit.lineDiscounts.rice, undefined);
+  const open = O.normalize({
+    name: "Open gift",
+    type: "free_gift",
+    status: "active",
+    discount_type: "pct",
+    discount_value: 100,
+  });
+  assert.equal(O.evaluateOffer(open, { cart: [line("rice", 100), line("oil", 80)], now }), null);
+});
+
 test("legacy combo rows convert and AI suggest builds a combo draft", () => {
   const legacy = O.comboFromLegacy({ id: "c1", name: "Tea combo", item_a_id: "a", item_b_id: "b", discount_type: "pct", discount_value: 8, status: "active" });
   assert.equal(legacy.offer_type, "combo");

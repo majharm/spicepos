@@ -130,9 +130,14 @@
       return true;
     }
     if (["min_purchase", "spend", "first_purchase", "time", "day", "festival", "customer", "repeat"].includes(type)) return true;
+    if (type === "free_gift") {
+      const giftId = String(cond.free_item_id || "");
+      if (giftId) return String(item.id) === giftId;
+      return ids.includes(String(item.id));
+    }
     if (ids.length) return ids.includes(String(item.id)) || String(cond.get_item_id || "") === String(item.id);
     if (cat) return String(item.category || "").toLowerCase() === cat.toLowerCase();
-    if (["product", "clearance", "qty", "bogo", "mix_match", "free_gift", "category"].includes(type)) return true;
+    if (["product", "clearance", "qty", "bogo", "mix_match", "category"].includes(type)) return true;
     return ["min_purchase", "spend", "first_purchase", "time", "day", "festival", "combo", "customer", "repeat"].includes(type);
   }
 

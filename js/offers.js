@@ -369,6 +369,11 @@
     return (cart || []).filter((line) => {
       const id = String(line.itemId || line.item_id || line.item?.id || "");
       if (cond.exclude_item_ids.includes(id)) return false;
+      if (type === "free_gift") {
+        const giftId = String(cond.free_item_id || "");
+        if (giftId) return id === giftId;
+        return cond.item_ids.includes(id);
+      }
       if (type === "advance") {
         if (cond.item_ids.length) return cond.item_ids.includes(id);
         if (cond.category) {
@@ -575,20 +580,19 @@
       message = `${offer.name}: spend ₹${tier.spend}+`;
       scope = "bill";
     } else if (type === "free_gift") {
-      const needQty = num(offer.min_qty, cond.buy_qty || 1);
-      const needSpend = num(offer.min_spend);
-      if (needSpend > 0 && billSpend < needSpend && qty < needQty) return null;
-      if (needSpend <= 0 && qty < needQty && !cond.free_item_id) return null;
-      const giftId = cond.free_item_id || cond.item_ids[0];
-      const gift = cart.find((l) => String(l.itemId || l.item_id) === String(giftId));
-      if (gift) {
-        discount = discountOn(lineGrossOf(gift), offer.discount_type || "pct", offer.discount_value || 100);
-        lineDiscounts[gift.lineId || gift.itemId] = discount;
-      } else {
-        const catalog = (ctx.items || []).find((i) => i.id === giftId);
-        discount = catalog ? num(catalog.retail_rate || catalog.rate_per_kg) : 0;
-      }
-      if (discount <= 0 && !giftId) return null;
+      const giftId = String(cond.free_item_id || "");
+      const targets = giftId ? [giftId] : cond.item_ids.map(String).filter(Boolean);
+      if (!targets.length) return null;
+      const gifts = cart.filter((l) => targets.includes(String(l.itemId || l.item_id)));
+      if (!gifts.length) return null;
+      gifts.forEach((gift) => {
+        const d = discountOn(lineGrossOf(gift), offer.discount_type || "pct", offer.discount_value || 100);
+        if (d <= 0) return;
+        const key = gift.lineId || gift.itemId;
+        lineDiscounts[key] = round2((lineDiscounts[key] || 0) + d);
+        discount = round2(discount + d);
+      });
+      if (discount <= 0) return null;
       message = `${offer.name}: free gift`;
       scope = "lines";
     } else if (["product", "category", "clearance"].includes(type)) {

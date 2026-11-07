@@ -53,7 +53,7 @@ function readOfferForm() {
       return { spend: Number(spend), type: type === "amt" ? "amt" : "pct", value: Number(value) };
     });
   const type = $("off-type")?.value || "product";
-  const productTypes = ["combo", "product", "bogo", "mix_match", "qty", "free_gift", "clearance", "advance"];
+  const productTypes = ["combo", "product", "bogo", "mix_match", "qty", "clearance", "advance"];
   const scheduleTypes = ["time", "festival", "advance"];
   const dayTypes = ["day", "festival", "advance"];
   return O?.normalize({
@@ -417,6 +417,13 @@ async function saveOfferForm(e) {
   if (!draft) {
     if (hint) {
       hint.textContent = "Give the offer a name.";
+      hint.className = "hint error";
+    }
+    return;
+  }
+  if (draft.offer_type === "free_gift" && !draft.conditions?.free_item_id) {
+    if (hint) {
+      hint.textContent = "Choose the gift product. Only that product is free.";
       hint.className = "hint error";
     }
     return;

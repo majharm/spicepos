@@ -43,6 +43,9 @@ test("shop UI wires the Offers desk and Counter auto-apply", () => {
   assert.match(php, /pos_duplicate_offer/);
   assert.match(php, /function pos_apply_qr_offers/);
   assert.match(php, /function pos_evaluate_offers/);
+  assert.match(php, /\$type === "free_gift"/);
+  assert.match(engine, /type === "free_gift"/);
+  assert.match(engine, /if \(!targets\.length\) return null/);
   assert.match(php, /\$type === "repeat"/);
   assert.match(php, /repeat_bills/);
   const qrPhp = readFileSync(path.join(root, "pos-qr-ordering.php"), "utf8");

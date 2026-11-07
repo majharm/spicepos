@@ -567,11 +567,20 @@ function pos_offer_qualifying_lines($o, $cart) {
       }
       continue;
     }
+    if ($type === "free_gift") {
+      $giftId = trim((string) ($cond["free_item_id"] ?? ""));
+      if ($giftId !== "") {
+        if ($id === $giftId) $out[] = $line;
+      } elseif ($ids && in_array($id, $ids, true)) {
+        $out[] = $line;
+      }
+      continue;
+    }
     if ($billWide) {
       $out[] = $line;
       continue;
     }
-    if ($ids && in_array($type, ["combo", "product", "bogo", "mix_match", "qty", "clearance", "free_gift"], true)) {
+    if ($ids && in_array($type, ["combo", "product", "bogo", "mix_match", "qty", "clearance"], true)) {
       if ($type === "bogo" && !empty($cond["get_item_id"]) && $id === (string) $cond["get_item_id"]) {
         $out[] = $line;
         continue;
@@ -733,6 +742,21 @@ function pos_evaluate_offer($o, $cart, $ctx = []) {
         $lineDiscounts[$id] = pos_offer_r2(($lineDiscounts[$id] ?? 0) + $d);
         $discount = pos_offer_r2($discount + $d);
       }
+    }
+    if ($discount <= 0) return null;
+    $scope = "lines";
+  } elseif ($type === "free_gift") {
+    $giftId = trim((string) ($cond["free_item_id"] ?? ""));
+    $targets = $giftId !== "" ? [$giftId] : $ids;
+    if (!$targets) return null;
+    foreach ($cart as $line) {
+      $id = (string) ($line["itemId"] ?? "");
+      if (!in_array($id, $targets, true)) continue;
+      $d = pos_offer_discount_on($line["gross"] ?? 0, $o["discount_type"] ?? "pct", ($o["discount_value"] ?? "") === "" ? 100 : ($o["discount_value"] ?? 100));
+      if ($d <= 0) continue;
+      $key = (string) ($line["lineId"] ?? $id);
+      $lineDiscounts[$key] = pos_offer_r2(($lineDiscounts[$key] ?? 0) + $d);
+      $discount = pos_offer_r2($discount + $d);
     }
     if ($discount <= 0) return null;
     $scope = "lines";
