@@ -274,10 +274,9 @@ function offerValueLabel(o) {
 
 function paintOfferList() {
   const rows = filteredOfferRows();
-  const emptyCopy =
-    offerSearch || offerFilter !== "all"
-      ? `<div class="item-empty-card"><strong>No offers match</strong><p>Clear search or pick All to see every promotion.</p></div>`
-      : `<div class="item-empty-card"><strong>No offers yet</strong><p>Create one on the left, or tap a template above.</p></div>`;
+  const emptyCopy = !offerList.length
+    ? `<div class="item-empty-card"><strong>No offers yet</strong><p>Create one on the left, or tap a template above.</p></div>`
+    : `<div class="item-empty-card"><strong>No offers match</strong><p>Clear search or pick All to see every promotion.</p></div>`;
   $("offer-list").innerHTML =
     rows
       .map((o) => {
@@ -432,11 +431,18 @@ async function saveOfferForm(e) {
       ? await api(`/api/offers/${encodeURIComponent(id)}`, { method: "PUT", body: JSON.stringify(draft) })
       : await api("/api/offers", { method: "POST", body: JSON.stringify(draft) });
     const offer = data.offer || data;
+    const st = offer?.live_status || offer?.status || draft.status || "draft";
+    const shown = st === "paused" || st === "completed" ? "paused" : ["active", "scheduled", "draft", "expired"].includes(st) ? st : "all";
+    setOfferFilter(shown);
+    await loadOffersDesk(true);
     if (hint) {
-      hint.textContent = `${offer.name} saved. Counter will apply it when the cart matches.`;
+      const name = offer?.name || "Offer";
+      hint.textContent =
+        st === "active" || st === "scheduled"
+          ? `${name} saved. Counter will apply it when the cart matches.`
+          : `${name} saved as ${offerStatusLabel(st)}. Set it to Active for the Counter to apply it.`;
       hint.className = "hint ok";
     }
-    await loadOffersDesk(true);
   } catch (err) {
     if (hint) {
       hint.textContent = err.message;

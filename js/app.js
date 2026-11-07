@@ -6537,11 +6537,6 @@ function applyComboOffer(id) {
   const ids = state.cart.map((l) => l.itemId);
   if (!ids.includes(combo.item_a_id)) addItem(combo.item_a_id);
   if (!ids.includes(combo.item_b_id)) addItem(combo.item_b_id);
-  if (isClassicBillShop()) {
-    setHint(`Combo ${combo.name}: use Disc on each item (no whole-bill discount)`, "ok");
-    renderCart();
-    return;
-  }
   const comboType = String(combo.discount_type || "pct").toLowerCase();
   if (comboType === "combo_price" || comboType === "price") {
     state.offerAuto = true;
@@ -6605,7 +6600,7 @@ function applyOffersToCart() {
   const result = O.evaluateAll(offers, ctx);
   state.appliedOffers = result;
   state.cart.forEach((line) => {
-    if (isClassicBillShop()) return;
+    if (isClassicBillShop() && !line.offerId && Number(line.discountValue) > 0) return;
     const byLine = result.lineDiscounts?.[line.lineId] ?? result.lineDiscounts?.[String(line.lineId || "")];
     const byItem = result.lineDiscounts?.[line.itemId] ?? result.lineDiscounts?.[String(line.itemId || "")];
     const d = Number(byLine != null ? byLine : byItem || 0);
@@ -6623,11 +6618,7 @@ function applyOffersToCart() {
     }
   });
   if (!state.offerBillLocked) {
-    if (isClassicBillShop()) {
-      state.billDiscountType = "amt";
-      state.billDiscountValue = 0;
-      state.offerDroveBill = false;
-    } else if (result.billDiscount > 0) {
+    if (result.billDiscount > 0) {
       state.billDiscountType = "amt";
       state.billDiscountValue = result.billDiscount;
       state.offerDroveBill = true;
@@ -13158,14 +13149,20 @@ $("lines").addEventListener("change", (e) => {
   const disc = e.target.closest("[data-line-disc]");
   if (disc) {
     const line = findCartLine(disc.dataset.lineDisc);
-    if (line) line.discountValue = Number(disc.value) || 0;
+    if (line) {
+      line.discountValue = Number(disc.value) || 0;
+      line.offerId = "";
+    }
     renderCart();
     return;
   }
   const dtype = e.target.closest("[data-line-disc-type]");
   if (dtype) {
     const line = findCartLine(dtype.dataset.lineDiscType);
-    if (line) line.discountType = dtype.value === "pct" ? "pct" : "amt";
+    if (line) {
+      line.discountType = dtype.value === "pct" ? "pct" : "amt";
+      line.offerId = "";
+    }
     renderCart();
   }
 });
