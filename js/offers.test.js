@@ -524,37 +524,64 @@ test("advanced offer combines products, a time window, and a minimum bill", () =
   assert.equal(weekend.scope, "bill");
 });
 
-test("free gift auto-applies only to the selected product", () => {
+test("free gift is earned from eligible products and priced only on the free line", () => {
   const now = new Date("2026-09-05T10:00:00");
   const offer = O.normalize({
+    id: "g1",
     name: "Soap free",
     type: "free_gift",
     status: "active",
     discount_type: "pct",
     discount_value: 100,
     free_item_id: "soap",
+    item_ids: ["rice"],
+    buy_qty: 1,
+    get_qty: 1,
   });
-  assert.equal(
-    O.evaluateOffer(offer, {
-      cart: [line("rice", 100), line("oil", 80)],
-      now,
-      items: [{ id: "soap", retail_rate: 40 }],
-    }),
-    null,
-  );
-  const hit = O.evaluateAll([offer], { cart: [line("rice", 100), line("soap", 40)], now });
+  offer.id = "g1";
+  assert.equal(O.evaluateOffer(offer, { cart: [line("oil", 80)], now }), null);
+  const waiting = O.freeGiftPlan(offer, [line("rice", 100, { qty: 1 })], { now });
+  assert.equal(waiting.qty, 1);
+  const short = O.normalize({
+    id: "g2",
+    name: "Buy 2 soaps",
+    type: "free_gift",
+    status: "active",
+    discount_type: "pct",
+    discount_value: 100,
+    free_item_id: "soap",
+    item_ids: ["rice"],
+    buy_qty: 2,
+    get_qty: 1,
+  });
+  short.id = "g2";
+  const needMore = O.evaluateOffer(short, { cart: [line("rice", 100, { qty: 1 })], now });
+  assert.equal(needMore.pending, true);
+  assert.equal(needMore.discount, 0);
+  const earned = O.freeGiftPlan(short, [line("rice", 200, { qty: 3 })], { now });
+  assert.equal(earned.qty, 1);
+  const paid = line("soap-paid", 80, { qty: 2 });
+  paid.itemId = "soap";
+  const free = line("soap-free", 40, { qty: 1 });
+  free.itemId = "soap";
+  free.freeGiftOfferId = "g1";
+  const hit = O.evaluateAll([offer], { cart: [line("rice", 100, { qty: 1 }), paid, free], now });
   assert.equal(hit.discount, 40);
   assert.equal(hit.billDiscount, 0);
-  assert.equal(hit.lineDiscounts.soap, 40);
+  assert.equal(hit.lineDiscounts["soap-free"], 40);
+  assert.equal(hit.lineDiscounts["soap-paid"], undefined);
   assert.equal(hit.lineDiscounts.rice, undefined);
   const open = O.normalize({
+    id: "g3",
     name: "Open gift",
     type: "free_gift",
     status: "active",
     discount_type: "pct",
     discount_value: 100,
+    free_item_id: "soap",
   });
-  assert.equal(O.evaluateOffer(open, { cart: [line("rice", 100), line("oil", 80)], now }), null);
+  open.id = "g3";
+  assert.equal(O.freeGiftPlan(open, [line("rice", 100)], { now }), null);
 });
 
 test("legacy combo rows convert and AI suggest builds a combo draft", () => {

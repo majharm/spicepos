@@ -615,7 +615,7 @@ function pos_evaluate_offer($o, $cart, $ctx = []) {
   }
   $bill = 0;
   foreach ($cart as $line) $bill += (float) ($line["gross"] ?? 0);
-  $skipGates = in_array($type, ["bogo", "combo", "mix_match"], true);
+  $skipGates = in_array($type, ["bogo", "combo", "mix_match", "free_gift"], true);
   if (!$skipGates) {
     $minQty = (float) ($o["min_qty"] ?? 0);
     $maxQty = (float) ($o["max_qty"] ?? 0);
@@ -747,16 +747,48 @@ function pos_evaluate_offer($o, $cart, $ctx = []) {
     $scope = "lines";
   } elseif ($type === "free_gift") {
     $giftId = trim((string) ($cond["free_item_id"] ?? ""));
-    $targets = $giftId !== "" ? [$giftId] : $ids;
-    if (!$targets) return null;
+    if ($giftId === "" || !$ids) return null;
+    $buyQty = max(1.0, (float) ($cond["buy_qty"] ?? 1));
+    $getQty = max(0.0, (float) ($cond["get_qty"] ?? 1));
+    if ($getQty <= 0) return null;
+    $purchased = 0.0;
     foreach ($cart as $line) {
+      if (!empty($line["freeGiftOfferId"])) continue;
       $id = (string) ($line["itemId"] ?? "");
-      if (!in_array($id, $targets, true)) continue;
-      $d = pos_offer_discount_on($line["gross"] ?? 0, $o["discount_type"] ?? "pct", ($o["discount_value"] ?? "") === "" ? 100 : ($o["discount_value"] ?? 100));
+      if (!in_array($id, $ids, true)) continue;
+      $purchased += pos_offer_piece_qty($line);
+    }
+    $freePieces = floor($purchased / $buyQty) * $getQty;
+    if ($freePieces <= 0) return null;
+    $left = $freePieces;
+    $offerId = (string) ($o["id"] ?? "");
+    $pool = [];
+    foreach ($cart as $line) {
+      $flag = (string) ($line["freeGiftOfferId"] ?? "");
+      if ($flag !== "" && $flag === $offerId) $pool[] = $line;
+    }
+    if (!$pool) {
+      foreach ($cart as $line) {
+        if (!empty($line["freeGiftOfferId"])) continue;
+        if ((string) ($line["itemId"] ?? "") === $giftId) $pool[] = $line;
+      }
+    }
+    $dtype = (string) ($o["discount_type"] ?? "pct");
+    $dvalue = (float) ($o["discount_value"] ?? 0);
+    if ($dtype !== "amt" && $dvalue <= 0) $dvalue = 100;
+    foreach ($pool as $line) {
+      if ($left <= 0) break;
+      $pieces = pos_offer_piece_qty($line);
+      $take = min($pieces, $left);
+      if ($take <= 0) continue;
+      $gross = (float) ($line["gross"] ?? 0);
+      $share = $pieces > 0 ? $gross * ($take / $pieces) : 0;
+      $d = pos_offer_discount_on($share, $dtype, $dvalue);
       if ($d <= 0) continue;
-      $key = (string) ($line["lineId"] ?? $id);
+      $key = (string) ($line["lineId"] ?? ($line["itemId"] ?? ""));
       $lineDiscounts[$key] = pos_offer_r2(($lineDiscounts[$key] ?? 0) + $d);
       $discount = pos_offer_r2($discount + $d);
+      $left -= $take;
     }
     if ($discount <= 0) return null;
     $scope = "lines";

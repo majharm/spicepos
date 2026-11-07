@@ -362,6 +362,66 @@
     return Math.min(sets * getNeed, Math.max(0, num(getCount)));
   }
 
+  function freeGiftPlan(offer, cart, ctx = {}) {
+    const type = offer?.offer_type || offer?.type;
+    if (type !== "free_gift") return null;
+    const now = ctx.now instanceof Date ? ctx.now : new Date(ctx.now || Date.now());
+    const timeZone = String(ctx.timeZone || ctx.timezone || "").trim();
+    if (!inWindow(offer, now, timeZone)) return null;
+    if (ctx.branchId && offer.branch_id && String(offer.branch_id) !== String(ctx.branchId)) return null;
+    if (!eligibleCustomer(offer, ctx.customer || {})) return null;
+    const cond = parseConditions(offer);
+    const giftId = String(cond.free_item_id || "");
+    const eligibleIds = cond.item_ids.map(String).filter(Boolean);
+    if (!giftId || !eligibleIds.length || !offer.id) return null;
+    const buyQty = Math.max(1, num(cond.buy_qty, 1) || 1);
+    const getQty = Math.max(0, num(cond.get_qty, 1));
+    if (!(getQty > 0)) return null;
+    let purchased = 0;
+    let spend = 0;
+    (cart || []).forEach((line) => {
+      if (line.freeGiftOfferId) return;
+      const id = String(line.itemId || line.item_id || "");
+      if (!eligibleIds.includes(id)) return;
+      purchased += pieceQty(line);
+      spend += lineGrossOf(line);
+    });
+    const minQty = num(offer.min_qty);
+    const minSpend = num(offer.min_spend);
+    const sets = Math.floor(purchased / buyQty);
+    const freeQty = sets * getQty;
+    const plan = {
+      offerId: offer.id,
+      name: offer.name || "Free gift",
+      giftId,
+      eligibleIds,
+      buyQty,
+      getQty,
+      purchased,
+      qty: 0,
+      pending: false,
+      needQty: 0,
+      needSpend: 0,
+    };
+    if (minQty > 0 && purchased < minQty) {
+      plan.pending = purchased > 0;
+      plan.needQty = round2(minQty - purchased);
+      return plan;
+    }
+    if (minSpend > 0 && spend < minSpend) {
+      plan.pending = purchased > 0 || spend > 0;
+      plan.needSpend = round2(minSpend - spend);
+      return plan;
+    }
+    if (freeQty <= 0) {
+      plan.pending = purchased > 0;
+      plan.needQty = purchased > 0 ? round2(buyQty - (purchased % buyQty)) : buyQty;
+      return plan;
+    }
+    plan.qty = freeQty;
+    return plan;
+  }
+
   function qualifyingLines(offer, cart) {
     const cond = parseConditions(offer);
     const type = offer.offer_type || offer.type;
@@ -438,7 +498,7 @@
     const spend = round2(lines.reduce((s, l) => s + lineGrossOf(l), 0));
     const billSpend = round2(cart.reduce((s, l) => s + lineGrossOf(l), 0));
     const qtyBound = (v) => v != null && v !== "" && num(v) > 0;
-    const skipQtySpendGates = type === "bogo" || type === "combo" || type === "mix_match";
+    const skipQtySpendGates = type === "bogo" || type === "combo" || type === "mix_match" || type === "free_gift";
     if (!skipQtySpendGates) {
       if (qtyBound(offer.min_qty) && qty < num(offer.min_qty)) return null;
       if (qtyBound(offer.max_qty) && qty > num(offer.max_qty)) return null;
@@ -580,20 +640,48 @@
       message = `${offer.name}: spend ₹${tier.spend}+`;
       scope = "bill";
     } else if (type === "free_gift") {
-      const giftId = String(cond.free_item_id || "");
-      const targets = giftId ? [giftId] : cond.item_ids.map(String).filter(Boolean);
-      if (!targets.length) return null;
-      const gifts = cart.filter((l) => targets.includes(String(l.itemId || l.item_id)));
-      if (!gifts.length) return null;
-      gifts.forEach((gift) => {
-        const d = discountOn(lineGrossOf(gift), offer.discount_type || "pct", offer.discount_value || 100);
+      const plan = freeGiftPlan(offer, cart, ctx);
+      if (!plan) return null;
+      if (plan.qty <= 0) {
+        if (!plan.pending) return null;
+        return {
+          id: offer.id,
+          name: offer.name,
+          offer_type: type,
+          scope: "lines",
+          discount: 0,
+          savings: 0,
+          message: plan.needSpend > 0 ? `Add ₹${plan.needSpend} more for ${offer.name}` : `Add ${plan.needQty} more for ${offer.name}`,
+          lineDiscounts: {},
+          priority: num(offer.priority, 50),
+          stacking: offer.stacking || "stack",
+          loyalty_multiplier: num(offer.loyalty_multiplier, 1),
+          exclusive: false,
+          pending: true,
+          needQty: plan.needQty,
+          itemIds: plan.eligibleIds,
+        };
+      }
+      let left = plan.qty;
+      cart.forEach((line) => {
+        if (left <= 0) return;
+        if (String(line.freeGiftOfferId || "") !== String(offer.id)) return;
+        if (String(line.itemId || line.item_id || "") !== plan.giftId) return;
+        const pieces = Math.max(0, pieceQty(line));
+        const take = Math.min(pieces, left);
+        if (take <= 0) return;
+        const gross = lineGrossOf(line);
+        const share = pieces > 0 ? round2((gross * take) / pieces) : 0;
+        const rate = String(offer.discount_type || "pct") === "amt" ? num(offer.discount_value) : num(offer.discount_value) > 0 ? num(offer.discount_value) : 100;
+        const d = discountOn(share, offer.discount_type || "pct", rate);
         if (d <= 0) return;
-        const key = gift.lineId || gift.itemId;
+        const key = line.lineId || line.itemId;
         lineDiscounts[key] = round2((lineDiscounts[key] || 0) + d);
         discount = round2(discount + d);
+        left = round2(left - take);
       });
       if (discount <= 0) return null;
-      message = `${offer.name}: free gift`;
+      message = `${offer.name}: free item`;
       scope = "lines";
     } else if (["product", "category", "clearance"].includes(type)) {
       if (!lines.length) return null;
@@ -919,6 +1007,7 @@
     customerGroup,
     eligibleCustomer,
     bogoFreeQty,
+    freeGiftPlan,
     qualifyingLines,
     comboFromLegacy,
     evaluateOffer,

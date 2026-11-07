@@ -44,8 +44,8 @@ test("shop UI wires the Offers desk and Counter auto-apply", () => {
   assert.match(php, /function pos_apply_qr_offers/);
   assert.match(php, /function pos_evaluate_offers/);
   assert.match(php, /\$type === "free_gift"/);
-  assert.match(engine, /type === "free_gift"/);
-  assert.match(engine, /if \(!targets\.length\) return null/);
+  assert.match(engine, /function freeGiftPlan/);
+  assert.match(app, /function syncFreeGiftLines/);
   assert.match(php, /\$type === "repeat"/);
   assert.match(php, /repeat_bills/);
   const qrPhp = readFileSync(path.join(root, "pos-qr-ordering.php"), "utf8");
@@ -69,7 +69,7 @@ test("shop UI wires the Offers desk and Counter auto-apply", () => {
   assert.match(app, /O\.liveStatus\(o, ctx\.now, ctx\.timeZone\)/);
   assert.match(php, /pos_find_offer/);
   assert.match(till, /pos_offers_dispatch/);
-  assert.match(app, /isClassicBillShop\(\) && !line\.offerId && Number\(line\.discountValue\) > 0/);
+  assert.match(app, /isClassicBillShop\(\) && !line\.freeGiftOfferId && !line\.offerId && Number\(line\.discountValue\) > 0/);
   assert.match(ui, /!offerList\.length/);
   assert.match(ui, /Set it to Active for the Counter to apply it/);
   const save = ui.slice(ui.indexOf("async function saveOfferForm"), ui.indexOf("function bindOffersUi"));
@@ -145,6 +145,100 @@ test("classic Counter applies offers and keeps a typed line discount", () => {
   assert.equal(state.billDiscountValue, 10);
   assert.equal(state.offerDroveBill, true);
   assert.equal(inputs["bill-disc-value"].value, 10);
+});
+
+test("Counter adds the configured free item when an eligible product is billed", () => {
+  const engine = readFileSync(path.join(root, "js/offers.js"), "utf8");
+  const app = readFileSync(path.join(root, "js/app.js"), "utf8");
+  const fns = app.slice(app.indexOf("function offerCartContext"), app.indexOf("function findLegacyComboOnBill"));
+  const state = {
+    company: { timezone: "Asia/Kolkata", business_type: "retail" },
+    items: [
+      { id: "rice", name: "Rice" },
+      { id: "soap", name: "Soap" },
+    ],
+    cart: [{ lineId: "l1", itemId: "rice", qtyGm: 2, discountType: "amt", discountValue: 0, offerId: "" }],
+    offers: [
+      {
+        id: "g1",
+        name: "Soap free",
+        status: "active",
+        offer_type: "free_gift",
+        discount_type: "pct",
+        discount_value: 100,
+        conditions: { item_ids: ["rice"], free_item_id: "soap", buy_qty: 1, get_qty: 1 },
+      },
+    ],
+    offerSettings: { stacking: "product_and_bill" },
+    offerAuto: true,
+    offerBillLocked: false,
+    offerDroveBill: false,
+    billDiscountType: "amt",
+    billDiscountValue: 0,
+    loyaltyAccount: null,
+    session: {},
+  };
+  let classic = false;
+  const ctx = createContext({
+    state,
+    console,
+    customer: () => null,
+    itemUnit: () => "PCS",
+    POSUnits: {
+      isCount: () => true,
+      clampQty: (n) => Math.round(Number(n) || 0),
+      toBase: (n) => n,
+    },
+    lineCalc: (item, line) => {
+      const rate = item.id === "soap" ? 40 : 100;
+      const gross = rate * (Number(line.qtyGm) || 0);
+      return { gross, taxable: gross };
+    },
+    isClassicBillShop: () => classic,
+    clampBillQty: (_item, want) => Math.round(Number(want) || 0),
+    newCartLineId: () => `free-${state.cart.length}`,
+    cartLineKey: (line) => String(line?.lineId || line?.itemId || ""),
+    $: () => null,
+  });
+  runInContext(`${engine}\n${fns}`, ctx);
+  runInContext("applyOffersToCart()", ctx);
+  const gift = state.cart.find((line) => line.freeGiftOfferId === "g1");
+  const rice = state.cart.find((line) => line.itemId === "rice");
+  assert.ok(gift);
+  assert.equal(gift.itemId, "soap");
+  assert.equal(gift.qtyGm, 2);
+  assert.equal(gift.discountValue, 80);
+  assert.equal(rice.discountValue, 0);
+  assert.equal(state.cart.filter((line) => line.freeGiftOfferId).length, 1);
+  runInContext("applyOffersToCart()", ctx);
+  assert.equal(state.cart.filter((line) => line.freeGiftOfferId).length, 1);
+  assert.equal(state.cart.find((line) => line.freeGiftOfferId).qtyGm, 2);
+
+  state.cart = [{ lineId: "paid", itemId: "soap", qtyGm: 2, discountType: "amt", discountValue: 0, offerId: "" }];
+  state.offers[0].conditions = { item_ids: ["soap"], free_item_id: "soap", buy_qty: 1, get_qty: 1 };
+  runInContext("applyOffersToCart()", ctx);
+  const paid = state.cart.find((line) => line.lineId === "paid");
+  const sameGift = state.cart.find((line) => line.freeGiftOfferId === "g1");
+  assert.equal(paid.discountValue, 0);
+  assert.equal(sameGift.qtyGm, 2);
+  assert.equal(sameGift.discountValue, 80);
+  runInContext("applyOffersToCart()", ctx);
+  assert.equal(state.cart.filter((line) => line.freeGiftOfferId).length, 1);
+  assert.equal(state.cart.find((line) => line.lineId === "paid").qtyGm, 2);
+
+  state.offers[0].conditions.buy_qty = 2;
+  state.cart = [{ lineId: "l1", itemId: "rice", qtyGm: 1, discountType: "amt", discountValue: 0, offerId: "" }];
+  state.offers[0].conditions.item_ids = ["rice"];
+  runInContext("applyOffersToCart()", ctx);
+  assert.equal(state.cart.some((line) => line.freeGiftOfferId), false);
+
+  classic = true;
+  state.offers[0].conditions.buy_qty = 1;
+  state.cart = [{ lineId: "l1", itemId: "rice", qtyGm: 1, discountType: "amt", discountValue: 0, offerId: "" }];
+  runInContext("applyOffersToCart()", ctx);
+  const classicGift = state.cart.find((line) => line.freeGiftOfferId === "g1");
+  assert.equal(classicGift.qtyGm, 1);
+  assert.equal(classicGift.discountValue, 40);
 });
 
 test("Offers page shows an empty shop instead of a failed filter", () => {

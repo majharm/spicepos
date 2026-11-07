@@ -5497,7 +5497,7 @@ function renderCart() {
         return `<tr class="tone-${alert.stock.tone} exp-${alert.exp.tone}">
           <td class="pharm-n">${idx + 1}</td>
           <td>${escapeHtml(item.code || item.hsn || "—")}</td>
-          <td class="pharm-med">${escapeHtml(item.name)}${garmentCartCaptionHtml(item)}${lineDescriptionHtml(line, key)}</td>
+          <td class="pharm-med">${escapeHtml(item.name)}${line.freeGiftOfferId ? " · Free" : ""}${garmentCartCaptionHtml(item)}${lineDescriptionHtml(line, key)}</td>
           <td class="classic-barcode">${barcode ? escapeHtml(barcode) : "—"}</td>
           <td>${garmentSwatchHtml(item.color, item.color_image)}${escapeHtml(variant || "—")}${alert.exp.expired ? ` · EXPIRED ${escapeHtml(classicDateOnly(alert.exp.date) || alert.exp.short)}` : ""}</td>
           <td class="pharm-n pharm-rate">${lineRateFieldHtml(item, line, key)}</td>
@@ -5534,11 +5534,12 @@ function renderCart() {
         const qtyStep = POSUnits.displayQty(step, unitCode) || 1;
         const bc = String(line.barcode || "").trim();
         const wait = (state.appliedOffers?.pending || []).find((o) => !o.itemIds?.length || o.itemIds.includes(String(line.itemId)));
+        const giftNote = line.freeGiftOfferId ? "Free item" : "";
         return `<div class="line">
           <div class="line-main">
             <div class="line-info">
               <div class="who">${escapeHtml(itemVariantText(item) ? `${item.name} · ${itemVariantText(item)}` : item.name)}</div>
-              <div class="pack">${escapeHtml(wait?.message || bc || itemVariantText(item) || item.hsn || "")}</div>
+              <div class="pack">${escapeHtml(wait?.message || giftNote || bc || itemVariantText(item) || item.hsn || "")}</div>
             </div>
             <div class="line-ops">
               <div class="qty">
@@ -6574,6 +6575,7 @@ function offerCartContext() {
         taxable: calc.gross || calc.taxable,
         category: item?.category,
         item,
+        freeGiftOfferId: line.freeGiftOfferId || "",
       };
     }),
     customer: {
@@ -6589,18 +6591,81 @@ function offerCartContext() {
   };
 }
 
+function freeGiftBaseQty(item, pieces) {
+  const unit = itemUnit(item);
+  const count = POSUnits.isCount(unit);
+  const base = count ? Number(pieces) || 0 : POSUnits.toBase(pieces, unit);
+  return POSUnits.clampQty(base);
+}
+
+function syncFreeGiftLines() {
+  const O = globalThis.POSOffers;
+  if (!O?.freeGiftPlan || state.offerAuto === false) {
+    const next = state.cart.filter((line) => !line.freeGiftOfferId);
+    if (next.length !== state.cart.length) state.cart = next;
+    return;
+  }
+  const ctx = offerCartContext();
+  const offers = (state.offers || []).filter(
+    (offer) => (offer.offer_type || offer.type) === "free_gift" && ["active", "scheduled"].includes(O.liveStatus(offer, ctx.now, ctx.timeZone)),
+  );
+  const wanted = new Map();
+  offers.forEach((offer) => {
+    const plan = O.freeGiftPlan(offer, ctx.cart, ctx);
+    if (plan?.qty > 0) wanted.set(String(plan.offerId), plan);
+  });
+  for (let i = state.cart.length - 1; i >= 0; i -= 1) {
+    const line = state.cart[i];
+    if (!line.freeGiftOfferId) continue;
+    const plan = wanted.get(String(line.freeGiftOfferId));
+    const item = plan ? state.items.find((row) => String(row.id) === String(plan.giftId)) : null;
+    if (!plan || !item || String(line.itemId) !== String(plan.giftId)) {
+      state.cart.splice(i, 1);
+      continue;
+    }
+    const qty = clampBillQty(item, freeGiftBaseQty(item, plan.qty), cartLineKey(line));
+    if (qty <= 0) {
+      state.cart.splice(i, 1);
+      wanted.delete(String(plan.offerId));
+      continue;
+    }
+    line.qtyGm = qty;
+    line.itemId = item.id;
+    wanted.delete(String(plan.offerId));
+  }
+  wanted.forEach((plan) => {
+    const item = state.items.find((row) => String(row.id) === String(plan.giftId));
+    if (!item) return;
+    const qty = clampBillQty(item, freeGiftBaseQty(item, plan.qty));
+    if (qty <= 0) return;
+    state.cart.push({
+      lineId: newCartLineId(),
+      itemId: item.id,
+      qtyGm: qty,
+      discountType: "amt",
+      discountValue: 0,
+      barcode: "",
+      notes: "",
+      freeGiftOfferId: plan.offerId,
+      offerId: "",
+    });
+  });
+}
+
 function applyOffersToCart() {
   const O = globalThis.POSOffers;
   if (!O || state.offerAuto === false) {
     state.appliedOffers = null;
+    state.cart = state.cart.filter((line) => !line.freeGiftOfferId);
     return;
   }
+  syncFreeGiftLines();
   const ctx = offerCartContext();
   const offers = (state.offers || []).filter((o) => ["active", "scheduled"].includes(O.liveStatus(o, ctx.now, ctx.timeZone)));
   const result = O.evaluateAll(offers, ctx);
   state.appliedOffers = result;
   state.cart.forEach((line) => {
-    if (isClassicBillShop() && !line.offerId && Number(line.discountValue) > 0) return;
+    if (isClassicBillShop() && !line.freeGiftOfferId && !line.offerId && Number(line.discountValue) > 0) return;
     const byLine = result.lineDiscounts?.[line.lineId] ?? result.lineDiscounts?.[String(line.lineId || "")];
     const byItem = result.lineDiscounts?.[line.itemId] ?? result.lineDiscounts?.[String(line.itemId || "")];
     const d = Number(byLine != null ? byLine : byItem || 0);

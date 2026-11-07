@@ -53,7 +53,7 @@ function readOfferForm() {
       return { spend: Number(spend), type: type === "amt" ? "amt" : "pct", value: Number(value) };
     });
   const type = $("off-type")?.value || "product";
-  const productTypes = ["combo", "product", "bogo", "mix_match", "qty", "clearance", "advance"];
+  const productTypes = ["combo", "product", "bogo", "mix_match", "qty", "free_gift", "clearance", "advance"];
   const scheduleTypes = ["time", "festival", "advance"];
   const dayTypes = ["day", "festival", "advance"];
   return O?.normalize({
@@ -198,6 +198,7 @@ function syncOfferFormFields(type) {
     const show = offerWhenList(el.dataset.offerWhen).includes(t);
     el.hidden = !show;
   });
+  if ($("off-items-label")) $("off-items-label").textContent = t === "free_gift" ? "Eligible products" : "Products";
 }
 
 function resetOfferForm() {
@@ -421,9 +422,16 @@ async function saveOfferForm(e) {
     }
     return;
   }
+  if (draft.offer_type === "free_gift" && !draft.conditions?.item_ids?.length) {
+    if (hint) {
+      hint.textContent = "Choose the products the customer must buy.";
+      hint.className = "hint error";
+    }
+    return;
+  }
   if (draft.offer_type === "free_gift" && !draft.conditions?.free_item_id) {
     if (hint) {
-      hint.textContent = "Choose the gift product. Only that product is free.";
+      hint.textContent = "Choose the free item. It is added to the Counter at ₹0.";
       hint.className = "hint error";
     }
     return;
