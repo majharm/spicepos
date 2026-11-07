@@ -2879,6 +2879,8 @@
               </header>
               <div class="m-chips m-rep-range">
                 <button type="button" data-m-range="today">Today</button>
+                <button type="button" data-m-range="yesterday">Yesterday</button>
+                <button type="button" data-m-range="week">This week</button>
                 <button type="button" class="is-on" data-m-range="month">This month</button>
                 <button type="button" data-m-range="fy">This FY</button>
               </div>
@@ -2912,6 +2914,13 @@
               <div class="items-hero-stats" id="reports-hero-stats"></div>
             </header>
             <form class="report-toolbar reports-toolbar item-import-bar" id="report-form">
+              <div class="reports-range-chips" id="rep-range-chips">
+                <button class="btn" type="button" data-rep-preset="today">Today</button>
+                <button class="btn" type="button" data-rep-preset="yesterday">Yesterday</button>
+                <button class="btn" type="button" data-rep-preset="week">This Week</button>
+                <button class="btn" type="button" data-rep-preset="month">This Month</button>
+                <button class="btn" type="button" data-rep-preset="custom">Custom Date</button>
+              </div>
               <label>FY year
                 <select id="rep-fy-year" aria-label="Financial year"></select>
               </label>
@@ -2942,6 +2951,9 @@
                   </label>
                   <label>Category
                     <input id="rep-category" placeholder="All" autocomplete="off" />
+                  </label>
+                  <label>Offer
+                    <select id="rep-offer"><option value="">All offers</option></select>
                   </label>
                   <label>User
                     <input id="rep-user" placeholder="All" autocomplete="off" />
@@ -2995,6 +3007,7 @@
             <div class="reports-tabs" id="reports-tabs" role="tablist" aria-label="Report sections">
               <button class="reports-tab is-on" type="button" role="tab" aria-selected="true" data-report-tab="summary">Summary</button>
               <button class="reports-tab" type="button" role="tab" aria-selected="false" data-report-tab="sales">Sales</button>
+              <button class="reports-tab" type="button" role="tab" aria-selected="false" data-report-tab="profit">Profit</button>
               <button class="reports-tab" type="button" role="tab" aria-selected="false" data-report-tab="gst">GST</button>
               <button class="reports-tab" type="button" role="tab" aria-selected="false" data-report-tab="payment">Payment</button>
               <button class="reports-tab" type="button" role="tab" aria-selected="false" data-report-tab="stock">Stock</button>
@@ -3895,8 +3908,9 @@
     <script src="./js/qr-notify.js?v=20260922deploy205" defer></script>
     <script src="./js/payment-methods.js?v=20260918pay1" defer></script>
     <script src="./js/tax-master.js?v=20261030tax1" defer></script>
-    <script src="./js/biz-hub.js?v=20261030tax1" defer></script>
-    <script src="./js/biz-hub-ui.js?v=20261027rec2" defer></script>
+    <script src="./js/offer-profit.js?v=20261107profit1" defer></script>
+    <script src="./js/biz-hub.js?v=20261107profit1" defer></script>
+    <script src="./js/biz-hub-ui.js?v=20261107profit1" defer></script>
     <script src="./js/salon.js?v=20260919salon1" defer></script>
     <script src="./js/salon-ui.js?v=20260919salon1" defer></script>
     <script src="./js/print.js?v=20261016sales1" defer></script>
@@ -3914,7 +3928,7 @@
     <script src="./js/quotations.js?v=20261105mail1" defer></script>
     <script src="./js/stock-desk.js?v=20261103stock1" defer></script>
     <script src="./js/crm.js?v=20261105crm1" defer></script>
-    <script src="./js/app.js?v=20261105crm1" defer></script>
+    <script src="./js/app.js?v=20261107profit1" defer></script>
     <script src="./js/automation-shop.js?v=20261031auto1" defer></script>
     <script src="./js/recurring-ui.js?v=20261027rec3" defer></script>
     <script src="./js/quotations-ui.js?v=20261105edit1" defer></script>
@@ -3922,7 +3936,7 @@
     <script src="./js/due-reminders-ui.js?v=20261027dues1" defer></script>
     <script src="./js/item-master-ui.js?v=20261012brand1" defer></script>
     <script src="./js/customer-master-ui.js?v=20261027cust1" defer></script>
-    <script src="./js/mobile-app.js?v=20261023logo1" defer></script>
+    <script src="./js/mobile-app.js?v=20261107profit1" defer></script>
     <script src="./js/growth.js?v=20261103off1" defer></script>
     <script src="./js/offers-ui.js?v=20261103adv1" defer></script>
   </body>

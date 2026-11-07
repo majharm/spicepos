@@ -438,6 +438,10 @@
       if (kind === "today") {
         from.value = today;
         to.value = today;
+      } else if (kind === "yesterday" || kind === "week") {
+        const range = root.POSOfferProfit?.presetRange?.(kind, today);
+        from.value = range?.from || today;
+        to.value = range?.to || today;
       } else if (kind === "month") {
         const d = new Date(`${today}T00:00:00`);
         from.value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;

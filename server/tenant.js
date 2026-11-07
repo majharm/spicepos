@@ -3,7 +3,7 @@ import { clipIdempotencyKey, ensureIdempotencyTable, findIdempotent, saveIdempot
 import { bid, branchId, authUser } from "./context.js";
 import { requireStaff, requirePerm, requirePermAny, requireBusinessAdmin, parsePerms, hashPassword, publicStatus } from "./auth.js";
 import { shopTodayYmd } from "./subscription.js";
-import { defaultPerms, ROLES, MODULES } from "./roles.js";
+import { can, defaultPerms, ROLES, MODULES } from "./roles.js";
 import { audit } from "./audit.js";
 import { sendWelcomeStaff, publicLoginUrl } from "./mail.js";
 import { sendCredentialAlerts } from "./alerts.js";
@@ -14,6 +14,7 @@ import { recomputeBusinessOutstanding } from "./accounts.js";
 import { attachQrKitchenTicket, ensureKitchenTicketTable, nextKotNumber, syncQrFromKot } from "./qr-ordering.js";
 import { createdToday, saleNotVoidSql } from "./sql-time.js";
 import { buildHubDashboard } from "./hub.js";
+import { buildOfferProfitReport, POSOfferProfit } from "./offer-profit.js";
 
 function send(res, fn) {
   return Promise.resolve()
@@ -389,6 +390,24 @@ export function registerTenant(app) {
       const [stock] = stockRows;
       const [out] = outRows;
       const [biz] = bizRows;
+      let offerProfit = null;
+      const user = req.auth?.user || authUser() || {};
+      if (user.role === "business_admin" || user.role === "resort_owner" || can(parsePerms(user), "reports")) {
+        try {
+          const scope = POSOfferProfit.resolveReportScope(
+            {
+              businessId,
+              branchId: user.branch_id || branchId() || "",
+              role: user.role || "",
+            },
+            {},
+          );
+          const month = await buildOfferProfitReport(scope, { preset: "month", today: shopTodayYmd() }, { lineLimit: 1 });
+          offerProfit = month.dashboard;
+        } catch {
+          offerProfit = null;
+        }
+      }
       const expiresAt = biz?.subscription_expires_at
         ? String(biz.subscription_expires_at).slice(0, 10)
         : null;
@@ -399,6 +418,7 @@ export function registerTenant(app) {
         stockValue: stock.value,
         outstanding: out.outstanding,
         hub,
+        offerProfit,
         branches,
         notes,
         subscription: {

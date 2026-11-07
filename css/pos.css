@@ -10816,6 +10816,29 @@ body.fast-mode .master-topbar {
 .mail-status.is-ok { color: #0f766e; }
 .mail-status.is-bad { color: #b91c1c; }
 
+.reports-range-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.reports-range-chips .btn.is-on {
+  border-color: #0f766e;
+  color: #0f766e;
+  font-weight: 700;
+}
+.offer-profit-kpis {
+  padding: 0;
+  margin: 8px 0 12px;
+}
+.offer-profit-sub {
+  margin: 16px 0 8px;
+  font-size: 14px;
+}
+.offer-profit-block .report-block-head {
+  align-items: flex-start;
+}
+
 
 
 
