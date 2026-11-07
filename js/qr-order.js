@@ -112,6 +112,7 @@
     const v = Number(offer.discount_value) || 0;
     const dt = String(offer.discount_type || "pct");
     if (type === "bogo") return "Buy & get free";
+    if (type === "free_gift") return "Free item";
     if (type === "combo") return "Combo price";
     if (dt === "pct" && v) return `${v}% off`;
     if ((dt === "amt" || dt === "flat") && v) return `₹${v} off`;
@@ -132,7 +133,7 @@
     if (["min_purchase", "spend", "first_purchase", "time", "day", "festival", "customer", "repeat"].includes(type)) return true;
     if (type === "free_gift") {
       const giftId = String(cond.free_item_id || "");
-      if (giftId) return String(item.id) === giftId;
+      if (giftId && String(item.id) === giftId) return true;
       return ids.includes(String(item.id));
     }
     if (ids.length) return ids.includes(String(item.id)) || String(cond.get_item_id || "") === String(item.id);
@@ -206,6 +207,53 @@
     return O.evaluateAll(activeOffers(), offerCtx(cart || cartLines()));
   }
 
+  function freeGiftRows() {
+    const O = globalThis.POSOffers;
+    if (!O?.freeGiftPlan) return [];
+    const lines = cartLines();
+    const ctx = offerCtx(lines);
+    const rows = [];
+    activeOffers().forEach((offer) => {
+      if ((offer.offer_type || offer.type) !== "free_gift") return;
+      const plan = O.freeGiftPlan(offer, lines, ctx);
+      if (!plan || !(plan.qty > 0)) return;
+      const item = findItem(plan.giftId);
+      if (!item || isPack(item)) return;
+      let qty = plan.qty;
+      const stock = item.stock_gm;
+      if (stock != null && stock !== "" && Number.isFinite(Number(stock))) {
+        const unit = String(item.base_unit || item.unit || "PCS").toUpperCase();
+        const weight = ["GM", "KG", "ML", "LTR"].includes(unit);
+        const paid = Number(state.cart.get(item.id) || 0);
+        const paidBase = weight ? paid * 1000 : paid;
+        const room = Math.max(0, Number(stock) - paidBase);
+        qty = Math.min(qty, weight ? room / 1000 : room);
+        if (isCountItem(item)) qty = Math.floor(qty + 1e-9);
+      }
+      qty = Math.round(qty * 1000) / 1000;
+      if (!(qty > 0)) return;
+      rows.push({ offerId: String(plan.offerId), name: plan.name || offer.name || "Free item", item, qty });
+    });
+    return rows;
+  }
+
+  function orderLines() {
+    const lines = [...state.cart].map(([item_id, quantity]) => ({
+      item_id,
+      quantity,
+      notes: clipNote(cartNote(item_id)),
+    }));
+    freeGiftRows().forEach((gift) => {
+      lines.push({
+        item_id: gift.item.id,
+        quantity: gift.qty,
+        notes: `Free item:${gift.offerId}`,
+        free_gift: gift.offerId,
+      });
+    });
+    return lines;
+  }
+
   function totals() {
     const priced = offerResult();
     let itemsTotal = 0;
@@ -225,6 +273,7 @@
       count += 1;
       lines.push({ id, item, qty, gross, amount, lineOff });
     }
+    const gifts = freeGiftRows();
     itemsTotal = Math.round(itemsTotal * 100) / 100;
     subtotal = Math.round(subtotal * 100) / 100;
     const bill = Math.min(Math.max(0, Number(priced.billDiscount) || 0), subtotal);
@@ -240,7 +289,25 @@
       gst = lines.reduce((sum, line) => sum + line.amount * (Number(line.item.gst_rate) || 0) / 100, 0);
     }
     gst = Math.round(gst * 100) / 100;
-    const discount = Math.round((Number(priced.discount) || lines.reduce((sum, line) => sum + line.lineOff, 0)) * 100) / 100;
+    gifts.forEach((gift) => {
+      const gross = lineAmount(gift.item, gift.qty);
+      itemsTotal = Math.round((itemsTotal + gross) * 100) / 100;
+      count += 1;
+      lines.push({
+        id: `free:${gift.offerId}`,
+        item: gift.item,
+        qty: gift.qty,
+        gross,
+        amount: 0,
+        lineOff: gross,
+        free: true,
+        name: gift.name,
+      });
+    });
+    const giftSave = lines.filter((line) => line.free).reduce((sum, line) => sum + line.lineOff, 0);
+    const paidSave = Number(priced.discount) || lines.filter((line) => !line.free).reduce((sum, line) => sum + line.lineOff, 0);
+    const discount = Math.round((paidSave + giftSave) * 100) / 100;
+    const giftName = gifts[0]?.name ? `${gifts[0].name}: free item` : "";
     return {
       count,
       itemsTotal,
@@ -248,7 +315,7 @@
       gst,
       total: Math.round((subtotal + gst) * 100) / 100,
       discount,
-      message: priced.message || priced.applied?.[0]?.name || "",
+      message: priced.message || giftName,
       pending: priced.pending?.[0]?.message || "",
       wouldSave: Math.round((Number(priced.pending?.[0]?.wouldSave) || 0) * 100) / 100,
       lines,
@@ -345,6 +412,9 @@
       : money(summary.total);
     const rows = (summary.lines || []).map((line) => {
       const id = String(line.id);
+      if (line.free) {
+        return `<div class="cart-line"><strong>${esc(line.item.name)} · Free</strong><span>${line.qty} ${esc(orderUnit(line.item).label)} · Free item</span><strong>${esc(money(0))}</strong></div>`;
+      }
       const note = cartNote(id);
       const open = state.noteOpen.has(id) || Boolean(note.trim());
       const field = open
@@ -637,11 +707,7 @@
           customer_name: form.get("customer_name"),
           mobile: form.get("mobile"),
           table_no: tablePrefill || form.get("table_no"),
-          lines: [...state.cart].map(([item_id, quantity]) => ({
-            item_id,
-            quantity,
-            notes: clipNote(cartNote(item_id)),
-          })),
+          lines: orderLines(),
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -658,9 +724,14 @@
             status: data.order.status || "pending",
             stage: "Order Placed",
             message: "Your order has been successfully placed.",
-            items: [...state.cart].map(([id, qty]) => {
-              const item = findItem(id);
-              return { name: item?.name || "Item", quantity: qty, unit: item?.unit || "PCS", amount: lineAmount(item || {}, qty) };
+            items: orderLines().map((line) => {
+              const item = findItem(line.item_id);
+              return {
+                name: item?.name || "Item",
+                quantity: line.quantity,
+                unit: item?.unit || "PCS",
+                amount: line.free_gift ? 0 : lineAmount(item || {}, line.quantity),
+              };
             }),
             steps: [
               { id: "pending", label: "Order Placed", done: true, current: true },

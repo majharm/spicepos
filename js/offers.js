@@ -429,6 +429,7 @@
     return (cart || []).filter((line) => {
       const id = String(line.itemId || line.item_id || line.item?.id || "");
       if (cond.exclude_item_ids.includes(id)) return false;
+      if (type !== "free_gift" && line.freeGiftOfferId) return false;
       if (type === "free_gift") {
         const giftId = String(cond.free_item_id || "");
         if (giftId) return id === giftId;
@@ -496,7 +497,7 @@
     const lines = qualifyingLines(offer, cart);
     const qty = lines.reduce((s, l) => s + pieceQty(l), 0);
     const spend = round2(lines.reduce((s, l) => s + lineGrossOf(l), 0));
-    const billSpend = round2(cart.reduce((s, l) => s + lineGrossOf(l), 0));
+    const billSpend = round2(cart.reduce((s, l) => s + (l.freeGiftOfferId ? 0 : lineGrossOf(l)), 0));
     const qtyBound = (v) => v != null && v !== "" && num(v) > 0;
     const skipQtySpendGates = type === "bogo" || type === "combo" || type === "mix_match" || type === "free_gift";
     if (!skipQtySpendGates) {
@@ -516,7 +517,7 @@
     if (type === "combo") {
       const ids = cond.item_ids.map(String);
       if (ids.length < 2) return null;
-      const comboLines = cart.filter((l) => ids.includes(String(l.itemId || l.item_id)));
+      const comboLines = cart.filter((l) => !l.freeGiftOfferId && ids.includes(String(l.itemId || l.item_id)));
       const qtyById = {};
       const unitById = {};
       ids.forEach((id) => {
@@ -567,9 +568,9 @@
       const buyIds = cond.item_ids.map(String);
       const getId = String(cond.get_item_id || buyIds[0] || "");
       if (!buyIds.length && !getId) return null;
-      const buyLines = cart.filter((l) => buyIds.includes(String(l.itemId || l.item_id)));
+      const buyLines = cart.filter((l) => !l.freeGiftOfferId && buyIds.includes(String(l.itemId || l.item_id)));
       const getLines = getId
-        ? cart.filter((l) => String(l.itemId || l.item_id) === getId)
+        ? cart.filter((l) => !l.freeGiftOfferId && String(l.itemId || l.item_id) === getId)
         : buyLines;
       const sameItem = !getId || !buyIds.length || buyIds.includes(getId);
       const poolLines = sameItem ? (buyLines.length ? buyLines : getLines) : buyLines;

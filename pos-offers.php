@@ -546,6 +546,12 @@ function pos_offer_piece_qty($line) {
   return $q > 200 ? pos_offer_r2($q / 1000) : $q;
 }
 
+function pos_offer_line_key($line) {
+  $key = trim((string) ($line["lineId"] ?? ""));
+  if ($key !== "") return $key;
+  return (string) ($line["itemId"] ?? "");
+}
+
 function pos_offer_qualifying_lines($o, $cart) {
   $cond = is_array($o["conditions"] ?? null) ? $o["conditions"] : [];
   $ids = array_map("strval", $cond["item_ids"] ?? []);
@@ -557,6 +563,7 @@ function pos_offer_qualifying_lines($o, $cart) {
   foreach ($cart as $line) {
     $id = (string) ($line["itemId"] ?? "");
     if ($id !== "" && in_array($id, $ex, true)) continue;
+    if ($type !== "free_gift" && !empty($line["freeGiftOfferId"])) continue;
     if ($type === "advance") {
       if ($ids) {
         if (in_array($id, $ids, true)) $out[] = $line;
@@ -614,7 +621,10 @@ function pos_evaluate_offer($o, $cart, $ctx = []) {
     $spend += (float) ($line["gross"] ?? 0);
   }
   $bill = 0;
-  foreach ($cart as $line) $bill += (float) ($line["gross"] ?? 0);
+  foreach ($cart as $line) {
+    if (!empty($line["freeGiftOfferId"])) continue;
+    $bill += (float) ($line["gross"] ?? 0);
+  }
   $skipGates = in_array($type, ["bogo", "combo", "mix_match", "free_gift"], true);
   if (!$skipGates) {
     $minQty = (float) ($o["min_qty"] ?? 0);
@@ -637,6 +647,7 @@ function pos_evaluate_offer($o, $cart, $ctx = []) {
     $unitBy = [];
     foreach ($ids as $id) $qtyBy[$id] = 0;
     foreach ($cart as $line) {
+      if (!empty($line["freeGiftOfferId"])) continue;
       $id = (string) ($line["itemId"] ?? "");
       if (!in_array($id, $ids, true)) continue;
       $q = pos_offer_piece_qty($line);
@@ -653,6 +664,7 @@ function pos_evaluate_offer($o, $cart, $ctx = []) {
     if ($sets < 1) return null;
     $total = 0;
     foreach ($cart as $line) {
+      if (!empty($line["freeGiftOfferId"])) continue;
       if (in_array((string) ($line["itemId"] ?? ""), $ids, true)) $total += (float) ($line["gross"] ?? 0);
     }
     $dtype = (string) ($o["discount_type"] ?? "pct");
@@ -697,6 +709,7 @@ function pos_evaluate_offer($o, $cart, $ctx = []) {
     $getQ = 0;
     $poolGross = 0;
     foreach ($cart as $line) {
+      if (!empty($line["freeGiftOfferId"])) continue;
       $id = (string) ($line["itemId"] ?? "");
       $q = pos_offer_piece_qty($line);
       $g = (float) ($line["gross"] ?? 0);
@@ -718,13 +731,14 @@ function pos_evaluate_offer($o, $cart, $ctx = []) {
     if ($discount <= 0) return null;
     $getLines = [];
     foreach ($cart as $line) {
+      if (!empty($line["freeGiftOfferId"])) continue;
       $id = (string) ($line["itemId"] ?? "");
       if ($same ? ($buyIds && in_array($id, $buyIds, true)) : $id === $getId) $getLines[] = $line;
     }
     $n = max(1, count($getLines));
     foreach ($getLines as $line) {
-      $id = (string) ($line["itemId"] ?? "");
-      $lineDiscounts[$id] = pos_offer_r2(($lineDiscounts[$id] ?? 0) + min((float) ($line["gross"] ?? 0), $discount / $n));
+      $key = pos_offer_line_key($line);
+      $lineDiscounts[$key] = pos_offer_r2(($lineDiscounts[$key] ?? 0) + min((float) ($line["gross"] ?? 0), $discount / $n));
     }
     $scope = "lines";
   } elseif (in_array($type, ["product", "category", "clearance"], true)) {
@@ -739,7 +753,8 @@ function pos_evaluate_offer($o, $cart, $ctx = []) {
         $d = pos_offer_discount_on($gross, $o["discount_type"] ?? "pct", $o["discount_value"] ?? 0);
       }
       if ($d > 0) {
-        $lineDiscounts[$id] = pos_offer_r2(($lineDiscounts[$id] ?? 0) + $d);
+        $key = pos_offer_line_key($line);
+        $lineDiscounts[$key] = pos_offer_r2(($lineDiscounts[$key] ?? 0) + $d);
         $discount = pos_offer_r2($discount + $d);
       }
     }
@@ -803,17 +818,18 @@ function pos_evaluate_offer($o, $cart, $ctx = []) {
         $gross = (float) ($line["gross"] ?? 0);
         $d = pos_offer_r2(max(0, $gross - $special * max(1, pos_offer_piece_qty($line))));
         if ($d > 0) {
-          $lineDiscounts[$id] = pos_offer_r2(($lineDiscounts[$id] ?? 0) + $d);
+          $key = pos_offer_line_key($line);
+          $lineDiscounts[$key] = pos_offer_r2(($lineDiscounts[$key] ?? 0) + $d);
           $discount = pos_offer_r2($discount + $d);
         }
       }
       $scope = "lines";
     } elseif ($scoped) {
       foreach ($target as $line) {
-        $id = (string) ($line["itemId"] ?? "");
+        $key = pos_offer_line_key($line);
         $d = pos_offer_discount_on($line["gross"] ?? 0, $o["discount_type"] ?? "pct", $o["discount_value"] ?? 0);
         if ($d > 0) {
-          $lineDiscounts[$id] = pos_offer_r2(($lineDiscounts[$id] ?? 0) + $d);
+          $lineDiscounts[$key] = pos_offer_r2(($lineDiscounts[$key] ?? 0) + $d);
           $discount = pos_offer_r2($discount + $d);
         }
       }
@@ -891,9 +907,123 @@ function pos_evaluate_offers($offers, $cart, $stacking = "product_and_bill", $ct
   ];
 }
 
+function pos_qr_stored_free_offer($line) {
+  $flag = trim((string) ($line["freeGiftOfferId"] ?? ""));
+  if ($flag !== "") return $flag;
+  $notes = (string) ($line["notes"] ?? "");
+  if (preg_match('/^Free item:(.+)$/', $notes, $m)) return trim((string) $m[1]);
+  return "";
+}
+
+function pos_qr_pieces_to_base($pieces, $item) {
+  $n = (float) $pieces;
+  if ($n <= 0) return 0.0;
+  $code = pos_item_unit($item);
+  if (in_array($code, ["GM", "KG", "ML", "LTR"], true)) return round($n * 1000, 3);
+  return round($n, 3);
+}
+
+function pos_qr_gift_item($bid, $itemId, $built) {
+  foreach ($built as $line) {
+    if ((string) ($line["item"]["id"] ?? "") === (string) $itemId) return $line["item"];
+  }
+  $rows = pos_q(
+    "SELECT id, name, category, base_unit, unit, retail_rate, gst_rate, stock_gm, status FROM items WHERE id = ? AND business_id = ? LIMIT 1",
+    "ss",
+    [(string) $itemId, (string) $bid]
+  );
+  return $rows[0] ?? null;
+}
+
+function pos_qr_attach_free_gifts($built, $offers, $bid) {
+  $out = [];
+  $present = [];
+  foreach ($built as $line) {
+    $offerId = pos_qr_stored_free_offer($line);
+    if ($offerId !== "") {
+      $line["freeGiftOfferId"] = $offerId;
+      $line["lineId"] = "free:" . $offerId;
+      $present[$offerId] = true;
+    }
+    $out[] = $line;
+  }
+  $paid = [];
+  foreach ($out as $line) {
+    if (empty($line["freeGiftOfferId"])) $paid[] = $line;
+  }
+  $cart = [];
+  foreach ($paid as $line) {
+    $item = $line["item"];
+    $unit = strtoupper((string) ($line["unit"] ?? $item["base_unit"] ?? $item["unit"] ?? "PCS"));
+    $cart[] = [
+      "itemId" => (string) $item["id"],
+      "qty" => $line["qty"],
+      "isCount" => !in_array($unit, ["GM", "KG", "ML", "LTR"], true),
+      "gross" => (float) $line["amount"],
+    ];
+  }
+  foreach ($offers as $o) {
+    if ((string) ($o["offer_type"] ?? $o["type"] ?? "") !== "free_gift") continue;
+    if (!pos_offer_in_window($o)) continue;
+    $need = (string) ($o["customer_eligibility"] ?? "all");
+    if ($need !== "" && $need !== "all" && $need !== "new") continue;
+    $offerId = (string) ($o["id"] ?? "");
+    if ($offerId === "" || !empty($present[$offerId])) continue;
+    $cond = is_array($o["conditions"] ?? null) ? $o["conditions"] : [];
+    $giftId = trim((string) ($cond["free_item_id"] ?? ""));
+    $ids = array_values(array_filter(array_map("strval", $cond["item_ids"] ?? [])));
+    if ($giftId === "" || !$ids) continue;
+    $buyQty = max(1.0, (float) ($cond["buy_qty"] ?? 1));
+    $getQty = max(0.0, (float) ($cond["get_qty"] ?? 1));
+    if ($getQty <= 0) continue;
+    $purchased = 0.0;
+    $spend = 0.0;
+    foreach ($cart as $line) {
+      if (!in_array((string) $line["itemId"], $ids, true)) continue;
+      $purchased += pos_offer_piece_qty($line);
+      $spend += (float) $line["gross"];
+    }
+    $minQty = (float) ($o["min_qty"] ?? 0);
+    $minSpend = (float) ($o["min_spend"] ?? 0);
+    if ($minQty > 0 && $purchased < $minQty) continue;
+    if ($minSpend > 0 && $spend < $minSpend) continue;
+    $freePieces = floor($purchased / $buyQty) * $getQty;
+    if ($freePieces <= 0) continue;
+    $item = pos_qr_gift_item($bid, $giftId, $paid);
+    if (!$item || strtolower((string) ($item["status"] ?? "active")) === "inactive") continue;
+    $unit = pos_item_unit($item);
+    $qty = pos_qr_pieces_to_base($freePieces, $item);
+    if (array_key_exists("stock_gm", $item) && $item["stock_gm"] !== "" && $item["stock_gm"] !== null) {
+      $used = 0.0;
+      foreach ($paid as $line) {
+        if ((string) ($line["item"]["id"] ?? "") === (string) $item["id"]) $used += (float) ($line["qty"] ?? 0);
+      }
+      $qty = min($qty, max(0, (float) $item["stock_gm"] - $used));
+      if (!in_array($unit, ["GM", "KG", "ML", "LTR"], true)) $qty = floor($qty + 0.0000001);
+    }
+    if ($qty <= 0) continue;
+    $amount = pos_round2(pos_line_amount_for_item($qty, (float) ($item["retail_rate"] ?? 0), $item));
+    $gstRate = (float) ($item["gst_rate"] ?? 0);
+    $out[] = [
+      "item" => $item,
+      "unit" => $unit,
+      "qty" => $qty,
+      "amount" => $amount,
+      "gst_rate" => $gstRate,
+      "gst" => pos_round2($amount * $gstRate / 100),
+      "notes" => "Free item:" . $offerId,
+      "freeGiftOfferId" => $offerId,
+      "lineId" => "free:" . $offerId,
+    ];
+    $present[$offerId] = true;
+  }
+  return $out;
+}
+
 function pos_apply_qr_offers($built, $bid, $customer = null) {
   $offers = pos_qr_live_offers($bid);
   $settings = pos_get_promo_settings($bid);
+  $built = pos_qr_attach_free_gifts($built, $offers, $bid);
   $cart = [];
   foreach ($built as $line) {
     $item = $line["item"];
@@ -901,18 +1031,22 @@ function pos_apply_qr_offers($built, $bid, $customer = null) {
     $isCount = !in_array($unit, ["GM", "KG", "ML", "LTR"], true);
     $cart[] = [
       "itemId" => $item["id"],
+      "lineId" => $line["lineId"] ?? $item["id"],
       "qty" => $line["qty"],
       "isCount" => $isCount,
       "gross" => (float) $line["amount"],
       "category" => $item["category"] ?? "",
+      "freeGiftOfferId" => $line["freeGiftOfferId"] ?? "",
     ];
   }
   $ctx = ["customer" => ["bills" => (int) (($customer ?? [])["bills"] ?? 0)]];
   $result = pos_evaluate_offers($offers, $cart, $settings["stacking"] ?? "product_and_bill", $ctx);
   $next = [];
   foreach ($built as $line) {
+    $key = trim((string) ($line["lineId"] ?? ""));
     $id = (string) $line["item"]["id"];
-    $d = min(max(0, (float) ($result["lineDiscounts"][$id] ?? 0)), (float) $line["amount"]);
+    $raw = ($key !== "" && isset($result["lineDiscounts"][$key])) ? $result["lineDiscounts"][$key] : ($result["lineDiscounts"][$id] ?? 0);
+    $d = min(max(0, (float) $raw), (float) $line["amount"]);
     $amount = pos_offer_r2($line["amount"] - $d);
     $gstRate = (float) ($line["gst_rate"] ?? 0);
     $line["amount"] = $amount;
@@ -924,8 +1058,12 @@ function pos_apply_qr_offers($built, $bid, $customer = null) {
   $bill = min(max(0, (float) $result["billDiscount"]), $subtotal);
   if ($bill > 0 && $subtotal > 0) {
     $left = $bill;
-    $last = count($next) - 1;
+    $last = 0;
+    foreach ($next as $i => $line) {
+      if ((float) $line["amount"] > 0) $last = $i;
+    }
     foreach ($next as $i => &$line) {
+      if ((float) $line["amount"] <= 0) continue;
       $share = $i === $last ? $left : pos_offer_r2($bill * $line["amount"] / $subtotal);
       $left = pos_offer_r2($left - $share);
       $line["amount"] = pos_offer_r2($line["amount"] - $share);

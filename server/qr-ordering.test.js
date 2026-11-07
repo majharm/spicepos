@@ -50,6 +50,12 @@ test("QR order payload normalizes public customer fields and valid lines", () =>
   assert.equal(row.tableNo, "Table 4");
   assert.equal(row.lines.length, 1);
   assert.deepEqual(row.lines[0], { item_id: "i1", quantity: 1.5, notes: "No onion, extra cheese" });
+  const flagged = normalizeQrOrderPayload({
+    customer_name: "A",
+    mobile: "9876543210",
+    lines: [{ item_id: "soap", quantity: 1, free_gift: "g1", notes: "Free item:g1" }],
+  });
+  assert.equal(flagged.lines[0].free_gift, "g1");
 });
 
 test("QR based orders apply a PHP-shaped combo percent even when offer_price is 0", () => {
@@ -187,6 +193,113 @@ test("QR based orders apply an active product offer to the line total", () => {
   assert.equal(priced.gst, 81);
   assert.equal(priced.total, 531);
   assert.match(priced.message, /Vase 10% off/);
+});
+
+function giftOffer(extra = {}) {
+  return {
+    id: "g1",
+    name: "Soap free",
+    offer_type: "free_gift",
+    status: "active",
+    discount_type: "pct",
+    discount_value: 100,
+    conditions: { item_ids: ["rice"], free_item_id: "soap", buy_qty: 1, get_qty: 1, ...extra },
+  };
+}
+
+const riceLine = {
+  item: { id: "rice", name: "Rice", category: "Grocery", base_unit: "PCS", retail_rate: 100, gst_rate: 0, stock_gm: 20 },
+  unit: "PCS",
+  quantityBase: 2,
+  amount: 200,
+  gstRate: 0,
+  gstAmount: 0,
+};
+const soapItem = { id: "soap", name: "Soap", category: "Grocery", base_unit: "PCS", retail_rate: 40, gst_rate: 5, stock_gm: 20 };
+
+test("QR orders add the configured free item at ₹0 when an eligible product is ordered", () => {
+  const priced = applyQrOffers([riceLine], { offers: [giftOffer()], items: [riceLine.item, soapItem] });
+  assert.equal(priced.built.length, 2);
+  const rice = priced.built.find((line) => line.item.id === "rice");
+  const soap = priced.built.find((line) => line.item.id === "soap");
+  assert.equal(rice.amount, 200);
+  assert.equal(soap.quantityBase, 2);
+  assert.equal(soap.amount, 0);
+  assert.equal(soap.gstAmount, 0);
+  assert.equal(soap.freeGiftOfferId, "g1");
+  assert.equal(soap.lineId, "free:g1");
+  assert.equal(priced.subtotal, 200);
+  assert.equal(priced.discount, 80);
+  assert.equal(priced.gst, 0);
+  const again = applyQrOffers(priced.built, { offers: [giftOffer()], items: [riceLine.item, soapItem] });
+  assert.equal(again.built.filter((line) => line.freeGiftOfferId === "g1").length, 1);
+  assert.equal(again.built.find((line) => line.item.id === "soap").amount, 0);
+  assert.equal(again.built.find((line) => line.item.id === "rice").amount, 200);
+});
+
+test("QR free item keeps a paid line of the same product at full price", () => {
+  const paid = {
+    item: { ...soapItem, stock_gm: 20 },
+    unit: "PCS",
+    quantityBase: 2,
+    amount: 80,
+    gstRate: 5,
+    gstAmount: 4,
+  };
+  const offer = giftOffer();
+  offer.conditions = { item_ids: ["soap"], free_item_id: "soap", buy_qty: 1, get_qty: 1 };
+  const priced = applyQrOffers([paid], { offers: [offer], items: [paid.item], stacking: "stack" });
+  const rows = priced.built.filter((line) => line.item.id === "soap");
+  assert.equal(rows.length, 2);
+  const free = rows.find((line) => line.freeGiftOfferId === "g1");
+  const bought = rows.find((line) => !line.freeGiftOfferId);
+  assert.equal(bought.amount, 80);
+  assert.equal(free.quantityBase, 2);
+  assert.equal(free.amount, 0);
+  assert.equal(priced.subtotal, 80);
+  assert.equal(priced.discount, 80);
+});
+
+test("QR free item waits until the buy quantity is met and ignores an open gift", () => {
+  const one = {
+    ...riceLine,
+    quantityBase: 1,
+    amount: 100,
+  };
+  const waiting = applyQrOffers([one], {
+    offers: [giftOffer({ buy_qty: 2, get_qty: 1 })],
+    items: [one.item, soapItem],
+  });
+  assert.equal(waiting.built.length, 1);
+  assert.equal(waiting.built[0].amount, 100);
+  const open = giftOffer();
+  open.conditions = { free_item_id: "soap", buy_qty: 1, get_qty: 1 };
+  const unscoped = applyQrOffers([riceLine], { offers: [open], items: [riceLine.item, soapItem] });
+  assert.equal(unscoped.built.length, 1);
+  assert.equal(unscoped.discount, 0);
+  const missing = applyQrOffers([riceLine], { offers: [giftOffer()], items: [] });
+  assert.equal(missing.built.length, 1);
+});
+
+test("QR free item quantity follows stock and weight units", () => {
+  const tight = applyQrOffers([riceLine], {
+    offers: [giftOffer()],
+    items: [riceLine.item, { ...soapItem, stock_gm: 1 }],
+  });
+  const soap = tight.built.find((line) => line.item.id === "soap");
+  assert.equal(soap.quantityBase, 1);
+  assert.equal(soap.amount, 0);
+  assert.equal(tight.discount, 40);
+  const oil = { id: "oil", name: "Oil", base_unit: "KG", retail_rate: 200, gst_rate: 0, stock_gm: 5000 };
+  const kg = applyQrOffers(
+    [{ ...riceLine, quantityBase: 1, amount: 100 }],
+    { offers: [{ ...giftOffer(), conditions: { item_ids: ["rice"], free_item_id: "oil", buy_qty: 1, get_qty: 1 } }], items: [riceLine.item, oil] },
+  );
+  const freeOil = kg.built.find((line) => line.item.id === "oil");
+  assert.equal(freeOil.quantityBase, 1000);
+  assert.equal(freeOil.amount, 0);
+  assert.equal(kg.subtotal, 100);
+  assert.equal(kg.discount, 200);
 });
 
 test("QR based orders apply Buy 1 Get 1 when two packs are in the cart", () => {
@@ -377,7 +490,7 @@ test("QR menu page paints a visible offer board from live offers", () => {
   const js = readFileSync(path.join(root, "js/qr-order.js"), "utf8");
   const css = readFileSync(path.join(root, "css/qr-order.css"), "utf8");
   assert.match(html, /id="offer-board"/);
-  assert.match(html, /qr-order\.js\?v=20261107gift2/);
+  assert.match(html, /qr-order\.js\?v=20261107qrfree1/);
   assert.doesNotMatch(html, /qr-order\.js\?v=20260905deploy175/);
   assert.doesNotMatch(html, /offers\.js\?v=20260905deploy168/);
   assert.equal([...html.matchAll(/qr-order\.js\?v=/g)].length, 1);
@@ -385,7 +498,15 @@ test("QR menu page paints a visible offer board from live offers", () => {
   assert.match(js, /let sending = false/);
   assert.match(js, /function renderOffers/);
   assert.match(js, /function offerAppliesToItem/);
+  assert.match(js, /function freeGiftRows/);
+  assert.match(js, /function orderLines/);
+  assert.match(js, /free_gift: gift.offerId/);
   assert.match(js, /type === "free_gift"/);
+  const offersPhp = readFileSync(path.join(root, "pos-offers.php"), "utf8");
+  const qrPhp = readFileSync(path.join(root, "pos-qr-ordering.php"), "utf8");
+  assert.match(offersPhp, /function pos_qr_attach_free_gifts/);
+  assert.match(offersPhp, /freeGiftOfferId/);
+  assert.match(qrPhp, /if \(!empty\(\$line\["free_gift"\]\)\) continue;/);
   assert.doesNotMatch(js, /"free_gift", "category"/);
   assert.match(js, /pickBest/);
   assert.match(css, /\.offer-board/);

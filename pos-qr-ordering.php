@@ -101,7 +101,12 @@ function pos_qr_validate_order($body) {
     $itemId = pos_qr_clean($line["item_id"] ?? $line["itemId"] ?? "", 255);
     $quantity = (float) ($line["quantity"] ?? 0);
     $note = pos_qr_clean($line["notes"] ?? $line["special_instruction"] ?? $line["specialInstruction"] ?? "", 240);
-    if ($itemId !== "" && $quantity > 0) $lines[] = ["item_id" => $itemId, "quantity" => $quantity, "notes" => $note];
+    $gift = pos_qr_clean($line["free_gift"] ?? $line["freeGiftOfferId"] ?? "", 64);
+    if ($itemId !== "" && $quantity > 0) {
+      $row = ["item_id" => $itemId, "quantity" => $quantity, "notes" => $note];
+      if ($gift !== "") $row["free_gift"] = $gift;
+      $lines[] = $row;
+    }
   }
   if (!$lines) throw new Exception("Add at least one item");
   return ["customer_name" => $name, "mobile" => $mobile, "table_no" => $table, "notes" => $notes, "lines" => $lines];
@@ -184,7 +189,38 @@ function pos_qr_reprice_open_order($bid, $order) {
   );
   foreach ($next as $i => $row) {
     $line = $lines[$i] ?? null;
-    if (!$line) continue;
+    if (!$line) {
+      $lid = pos_uuid();
+      $note = $row["notes"] ?? null;
+      try {
+        pos_q(
+          "INSERT INTO qr_order_lines
+           (id, order_id, business_id, item_id, item_name, unit, quantity_gm, rate_per_kg, gst_rate, amount, gst_amount, notes)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+          "ssssssddddds",
+          [$lid, $order["id"], $bid, $row["item"]["id"], $row["item"]["name"], $row["unit"], $row["qty"], (float) ($row["item"]["retail_rate"] ?? 0), $row["gst_rate"], $row["amount"], $row["gst"], $note]
+        );
+      } catch (Exception $e) {
+        pos_q(
+          "INSERT INTO qr_order_lines
+           (id, order_id, business_id, item_id, item_name, unit, quantity_gm, rate_per_kg, gst_rate, amount, gst_amount)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+          "ssssssddddd",
+          [$lid, $order["id"], $bid, $row["item"]["id"], $row["item"]["name"], $row["unit"], $row["qty"], (float) ($row["item"]["retail_rate"] ?? 0), $row["gst_rate"], $row["amount"], $row["gst"]]
+        );
+      }
+      $lines[] = [
+        "id" => $lid,
+        "item_id" => $row["item"]["id"],
+        "item_name" => $row["item"]["name"],
+        "unit" => $row["unit"],
+        "quantity_gm" => $row["qty"],
+        "amount" => $row["amount"],
+        "gst_amount" => $row["gst"],
+        "notes" => $note,
+      ];
+      continue;
+    }
     pos_q(
       "UPDATE qr_order_lines SET amount = ?, gst_amount = ? WHERE id = ? AND order_id = ?",
       "ssss",
@@ -789,6 +825,7 @@ function pos_qr_public_dispatch($path, $method, $body) {
     foreach (pos_qr_load_packs($business["id"]) as $pack) $packById[(string) $pack["id"]] = $pack;
     $built = [];
     foreach ($input["lines"] as $line) {
+      if (!empty($line["free_gift"])) continue;
       $packId = pos_qr_parse_pack_id($line["item_id"]);
       if ($packId !== "") {
         foreach (pos_qr_expand_pack_line($line, $packById[$packId] ?? null, $byId) as $row) $built[] = $row;
@@ -811,7 +848,8 @@ function pos_qr_public_dispatch($path, $method, $body) {
         "notes" => $line["notes"] ?? "",
       ];
     }
-    if (!$built || count($built) > 200) throw new Exception("That pack order is too large.");
+    if (!$built) throw new Exception("Add at least one item");
+    if (count($built) > 200) throw new Exception("That pack order is too large.");
     require_once __DIR__ . "/pos-offers.php";
     $priced = pos_apply_qr_offers($built, $business["id"], ["bills" => pos_qr_customer_bills($business["id"], $input["mobile"])]);
     $built = $priced["built"];

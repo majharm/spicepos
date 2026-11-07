@@ -139,11 +139,16 @@ export function normalizeQrOrderPayload(raw = {}) {
   const source = Array.isArray(raw.lines) ? raw.lines : [];
   const lines = source
     .slice(0, 50)
-    .map((line) => ({
-      item_id: cleanText(line.item_id || line.itemId, 255),
-      quantity: Number(line.quantity),
-      notes: cleanText(line.notes || line.special_instruction || line.specialInstruction, 240),
-    }))
+    .map((line) => {
+      const row = {
+        item_id: cleanText(line.item_id || line.itemId, 255),
+        quantity: Number(line.quantity),
+        notes: cleanText(line.notes || line.special_instruction || line.specialInstruction, 240),
+      };
+      const gift = cleanText(line.free_gift || line.freeGiftOfferId, 64);
+      if (gift) row.free_gift = gift;
+      return row;
+    })
     .filter((line) => line.item_id && Number.isFinite(line.quantity) && line.quantity > 0);
   if (!customerName) throw new Error("Customer name is required");
   if (mobile.replace(/\D/g, "").length < 10) throw new Error("Valid mobile number is required");
@@ -303,7 +308,8 @@ export function qrOfferCart(built) {
     const isCount = POSUnits.isCount(unit);
     return {
       itemId: item.id,
-      lineId: item.id,
+      lineId: line.lineId || item.id,
+      freeGiftOfferId: line.freeGiftOfferId || "",
       qty: line.quantityBase ?? line.qty,
       qtyGm: line.quantityBase ?? line.qty,
       isCount,
@@ -315,9 +321,91 @@ export function qrOfferCart(built) {
   });
 }
 
+function qrStoredFreeOfferId(line) {
+  if (line?.freeGiftOfferId) return String(line.freeGiftOfferId);
+  const notes = String(line?.notes || "");
+  const match = /^Free item:(.+)$/.exec(notes);
+  return match ? match[1] : "";
+}
+
+function qrGiftBaseQty(item, pieces) {
+  const unit = POSUnits.normalize(item?.base_unit || item?.unit);
+  if (POSUnits.isCount(unit)) return POSUnits.clampQty(pieces);
+  return POSUnits.clampQty(POSUnits.toBase(pieces, unit));
+}
+
+function attachQrFreeGifts(source, { offers = [], items = [], now, customer, timeZone, stacking } = {}) {
+  const O = POSOffers || globalThis.POSOffers;
+  const rows = (source || []).map((line) => ({ ...line }));
+  const present = new Set();
+  rows.forEach((line) => {
+    const offerId = qrStoredFreeOfferId(line);
+    if (!offerId) return;
+    line.freeGiftOfferId = offerId;
+    line.lineId = line.lineId || `free:${offerId}`;
+    present.add(offerId);
+  });
+  if (!O?.freeGiftPlan) return rows;
+  const catalog = new Map();
+  (items || []).forEach((item) => {
+    if (item?.id != null) catalog.set(String(item.id), item);
+  });
+  rows.forEach((line) => {
+    if (line.item?.id != null) catalog.set(String(line.item.id), line.item);
+  });
+  const paid = rows.filter((line) => !line.freeGiftOfferId);
+  const live = (offers || []).filter((offer) => (O.liveStatus?.(offer) || offer.live_status || offer.status) === "active");
+  const cart = qrOfferCart(paid);
+  const ctx = {
+    now: now || new Date(),
+    timeZone: timeZone || "Asia/Kolkata",
+    customer,
+    stacking,
+  };
+  live.forEach((offer) => {
+    if ((offer.offer_type || offer.type) !== "free_gift") return;
+    const offerId = String(offer.id || "");
+    if (!offerId || present.has(offerId)) return;
+    const plan = O.freeGiftPlan(offer, cart, ctx);
+    if (!plan || !(plan.qty > 0)) return;
+    const item = catalog.get(String(plan.giftId));
+    if (!item || String(item.status || "active") !== "active") return;
+    const unit = POSUnits.normalize(item.base_unit || item.unit);
+    let qty = qrGiftBaseQty(item, plan.qty);
+    const rawStock = item.stock_gm;
+    if (rawStock != null && rawStock !== "" && Number.isFinite(Number(rawStock))) {
+      const used = paid
+        .filter((line) => String(line.item?.id) === String(item.id))
+        .reduce((sum, line) => sum + (Number(line.quantityBase ?? line.qty) || 0), 0);
+      qty = Math.min(qty, Math.max(0, Number(rawStock) - used));
+      if (POSUnits.isCount(unit)) qty = Math.floor(qty + 1e-9);
+    }
+    if (!(qty > 0)) return;
+    const amount = qrLineAmount(qty, item.retail_rate, unit);
+    const gstRate = Number(item.gst_rate) || 0;
+    const gstAmount = qrRound2((amount * gstRate) / 100);
+    rows.push({
+      item,
+      unit,
+      quantityBase: qty,
+      qty,
+      amount,
+      gstRate,
+      gst_rate: gstRate,
+      gstAmount,
+      gst: gstAmount,
+      notes: `Free item:${plan.offerId}`,
+      freeGiftOfferId: String(plan.offerId),
+      lineId: `free:${plan.offerId}`,
+    });
+    present.add(offerId);
+  });
+  return rows;
+}
+
 export function applyQrOffers(built, { offers = [], stacking = "product_and_bill", items = [], now, customer, timeZone } = {}) {
   const O = POSOffers || globalThis.POSOffers;
-  const source = Array.isArray(built) ? built.map((line) => ({ ...line })) : [];
+  const source = attachQrFreeGifts(Array.isArray(built) ? built : [], { offers, stacking, items, now, customer, timeZone });
   if (!O || !source.length) {
     const subtotal = qrRound2(source.reduce((sum, line) => sum + (Number(line.amount) || 0), 0));
     const gst = qrRound2(source.reduce((sum, line) => sum + (Number(line.gstAmount ?? line.gst) || 0), 0));
@@ -333,7 +421,7 @@ export function applyQrOffers(built, { offers = [], stacking = "product_and_bill
     customer: { bills: Number(customer?.bills) || 0, lifetime_spend: Number(customer?.lifetime_spend) || 0 },
   });
   const next = source.map((line) => {
-    const id = String(line.item?.id || "");
+    const id = String(line.lineId || line.item?.id || "");
     const d = Math.min(Math.max(0, Number(result.lineDiscounts?.[id] || 0)), Number(line.amount) || 0);
     const amount = qrRound2((Number(line.amount) || 0) - d);
     const gstRate = Number(line.gstRate ?? line.gst_rate) || 0;
@@ -343,8 +431,11 @@ export function applyQrOffers(built, { offers = [], stacking = "product_and_bill
   const bill = Math.min(Math.max(0, Number(result.billDiscount) || 0), subtotal);
   if (bill > 0 && subtotal > 0) {
     let left = bill;
-    next.forEach((line, index) => {
-      const share = index === next.length - 1 ? left : qrRound2((bill * (Number(line.amount) || 0)) / subtotal);
+    const payable = next.filter((line) => (Number(line.amount) || 0) > 0);
+    const lastPayable = payable[payable.length - 1];
+    next.forEach((line) => {
+      if ((Number(line.amount) || 0) <= 0) return;
+      const share = line === lastPayable ? left : qrRound2((bill * (Number(line.amount) || 0)) / subtotal);
       left = qrRound2(left - share);
       line.amount = qrRound2((Number(line.amount) || 0) - share);
       line.discount = qrRound2((Number(line.discount) || 0) + share);
@@ -984,6 +1075,7 @@ export function registerQrPublic(app) {
         const packs = await loadQrPacks(business.id, conn);
         const packById = new Map(packs.map((pack) => [String(pack.id), pack]));
         for (const line of input.lines) {
+          if (line.free_gift) continue;
           const packId = parsePackMenuId(line.item_id);
           if (packId) {
             built.push(...expandQrPackLine(line, packById.get(packId), itemById));
@@ -1006,6 +1098,7 @@ export function registerQrPublic(app) {
             notes: line.notes || "",
           });
         }
+        if (!built.length) throw new Error("Add at least one item");
         const [offers, settings] = await Promise.all([
           listOffers(business.id).catch(() => []),
           getPromoSettings(business.id).catch(() => ({ stacking: "product_and_bill" })),
@@ -1026,7 +1119,7 @@ export function registerQrPublic(app) {
         const priced = applyQrOffers(built, {
           offers,
           stacking: settings?.stacking || "product_and_bill",
-          items: built.map((line) => line.item),
+          items: catalogRows,
           customer: { bills },
           timeZone: business.company_timezone || business.timezone || "Asia/Kolkata",
         });
