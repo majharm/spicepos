@@ -225,7 +225,7 @@ const PAGE_HINTS = {
   health: "Database and process status from this server",
   live: "Online only after a real click or keypress",
   profile: "Your name, address, password, and preferences",
-  biz: "Create and open shops",
+  biz: "Shops, plans, and module permissions",
   users: "Passwords and locked accounts",
   plans: "Yearly fees and limits",
   "dsa-sales": "Invoice-wise sales by DSA code",
@@ -2645,38 +2645,22 @@ async function render() {
       const activeN = rows.filter((b) => String(b.computed_status || b.status).toLowerCase() === "active").length;
       const expiredN = rows.filter((b) => /expir/.test(String(b.computed_status || "").toLowerCase())).length;
       const trialN = rows.filter((b) => /trial/.test(String(b.computed_status || b.plan_name || "").toLowerCase())).length;
+      const storeOnN = storeRows.filter((b) => Number(b.online_store) === 1).length;
       body.innerHTML = `<div class="items-desk master-desk">
-        <p class="master-export-row"><a class="btn" href="/api/master/businesses/export">Export CSV</a></p>
-        ${masterHero("Platform", "Business management", "Add or edit a shop, set login, and open POS. Status and plan sit on each shop card.", [
+        ${masterHero("Platform", "Business management", "Create a shop, open its POS, and allow Online Store from Module Permissions.", [
           { label: "Shops", value: rows.length },
           { label: "Active", value: activeN },
           { label: "Expired", value: expiredN, warn: expiredN > 0 },
-          { label: "Trial", value: trialN },
+          { label: "Store on", value: storeOnN },
         ])}
-        <section class="item-block" id="store-perms">
-          <h3>Module Permissions</h3>
-          <p class="hint">Online Store stays off until you allow it. Each business keeps its own store, URL, products, orders, and login banner.</p>
-          <label class="full"><input type="checkbox" id="store-for-all" ${Number(storePerm?.forAll) === 1 ? "checked" : ""} /> Enable Online Store for All Existing and New Businesses</label>
-          <div class="item-composer-actions">
-            <button class="btn primary" type="button" id="store-enable-all">Enable for All Businesses</button>
-            <button class="btn" type="button" id="store-disable-all">Disable for All Businesses</button>
-            <p class="hint" id="store-perm-hint"></p>
+        <div class="biz-pane-bar">
+          <div class="settings-tabs" role="tablist" aria-label="Business management">
+            <button class="btn primary" type="button" data-biz-pane="shops" aria-selected="true">Shops</button>
+            <button class="btn" type="button" data-biz-pane="modules" aria-selected="false">Module Permissions</button>
           </div>
-          <div class="table-wrap">
-            <table class="master-data data">
-              <thead><tr><th>Business</th><th>Type</th><th>Online Store</th><th>Enable</th><th>Login banner</th></tr></thead>
-              <tbody id="store-perm-body">
-                ${storeRows.map((b) => `<tr>
-                  <td>${attr(b.name)}</td>
-                  <td>${attr(b.business_type || b.category || "")}</td>
-                  <td data-store-status="${attr(b.id)}">${Number(b.online_store) === 1 ? "Enabled" : "Disabled"}</td>
-                  <td><input type="checkbox" data-store-toggle="${attr(b.id)}" ${Number(b.online_store) === 1 ? "checked" : ""} aria-label="Online Store for ${attr(b.name)}" /></td>
-                  <td><input type="checkbox" data-banner-toggle="${attr(b.id)}" ${Number(b.store_banner_allowed) === 1 ? "checked" : ""} aria-label="Login banner for ${attr(b.name)}" /></td>
-                </tr>`).join("")}
-              </tbody>
-            </table>
-          </div>
-        </section>
+          <a class="btn" href="/api/master/businesses/export">Export CSV</a>
+        </div>
+        <div id="biz-pane-shops">
         <div class="items-split">
           <div class="master-compose">
             <form class="settings item-composer" id="biz-pw-form" hidden>
@@ -2762,18 +2746,18 @@ async function render() {
               </fieldset>
               <fieldset class="item-block" id="biz-module-flags">
                 <legend>Module Settings</legend>
-                <label class="full">
+                <label class="full biz-check">
                   <input type="checkbox" name="qrModule" />
-                  QR Module — show QR ordering on this business owner's dashboard. New businesses stay off until Master Admin enables it. Turning it off hides the module and blocks new QR orders. Saved QR codes and past orders stay on file.
+                  <span><strong>QR Module</strong><small>Show QR ordering on this owner's dashboard. Turning it off hides the module. Saved QR codes and orders stay.</small></span>
                 </label>
                 <p class="hint" id="biz-qr-module-note" hidden>Pharmacy, printing, and gym shops do not use the QR module.</p>
-                <label class="full">
+                <label class="full biz-check">
                   <input type="checkbox" name="onlineStore" />
-                  Online Store — let this business create a store, share its URL, and sell from the owner dashboard. New businesses stay off unless you enable them or turn on Online Store for all businesses.
+                  <span><strong>Online Store</strong><small>Let this business publish a store URL and sell from the owner dashboard.</small></span>
                 </label>
-                <label class="full">
+                <label class="full biz-check">
                   <input type="checkbox" name="storeBannerAllowed" checked />
-                  Login banner management — let this business upload the banner customers see on its Online Store login page.
+                  <span><strong>Login banner</strong><small>Let this business upload the banner on its own Online Store login page.</small></span>
                 </label>
               </fieldset>
               <fieldset class="item-block">
@@ -2879,21 +2863,27 @@ async function render() {
                     ${Number(b.resort_enabled) === 1 || String(b.business_type || "").toLowerCase().includes("resort") ? `<span class="item-chip">Resort model</span>` : ""}
                     ${Number(b.zomato_allowed) === 1 ? `<span class="item-chip">Zomato allowed</span>` : ""}
                     ${Number(b.swiggy_allowed) === 1 ? `<span class="item-chip">Swiggy allowed</span>` : ""}
-                    ${Number(b.qr_module) === 1 ? `<span class="item-chip">QR module</span>` : ""}
-                    ${Number(b.online_store) === 1 ? `<span class="item-chip">Online store</span>` : ""}
+                    ${Number(b.qr_module) === 1 ? `<span class="item-chip is-ok">QR module</span>` : ""}
+                    <span class="item-chip${Number(b.online_store) === 1 ? " is-ok" : " is-muted"}" data-store-chip="${attr(b.id)}">${Number(b.online_store) === 1 ? "Online store" : "Store off"}</span>
                   </div>
                   <div class="item-card-foot">
-                    <div class="item-card-actions">
+                    <div class="item-card-actions biz-card-primary">
                       <button class="btn primary" type="button" data-enter="${attr(b.id)}">Open POS</button>
                       <button class="btn" type="button" data-edit="${attr(b.id)}">Edit</button>
-                      <button class="btn" type="button" data-reset-biz="${attr(b.id)}">Password</button>
-                      <button class="btn" type="button" data-send-expiry="${attr(b.id)}">Expiry alert</button>
-                      <button class="btn danger" type="button" data-clean-biz="${attr(b.id)}">Clean data</button>
-                      <button class="btn" type="button" data-renew="${attr(b.id)}">Renew 1 year</button>
-                      <button class="btn" type="button" data-history="${attr(b.id)}">History</button>
-                      <button class="btn" type="button" data-act="suspend" data-id="${attr(b.id)}">Suspend</button>
-                      <button class="btn" type="button" data-act="activate" data-id="${attr(b.id)}">Activate</button>
                     </div>
+                    <details class="biz-more">
+                      <summary>More</summary>
+                      <div class="item-card-actions biz-more-actions">
+                        <button class="btn" type="button" data-renew="${attr(b.id)}">Renew 1 year</button>
+                        <button class="btn" type="button" data-reset-biz="${attr(b.id)}">Password</button>
+                        <button class="btn" type="button" data-send-expiry="${attr(b.id)}">Expiry alert</button>
+                        <button class="btn" type="button" data-history="${attr(b.id)}">History</button>
+                        ${/suspend|inactiv|lock/.test(String(b.computed_status || b.status || "").toLowerCase())
+                          ? `<button class="btn" type="button" data-act="activate" data-id="${attr(b.id)}">Activate</button>`
+                          : `<button class="btn" type="button" data-act="suspend" data-id="${attr(b.id)}">Suspend</button>`}
+                        <button class="btn danger" type="button" data-clean-biz="${attr(b.id)}">Clean data</button>
+                      </div>
+                    </details>
                   </div>
                 </article>`;
               })
@@ -2901,6 +2891,50 @@ async function render() {
             </div>
           </aside>
         </div>
+        </div>
+        <section class="master-panel biz-perm-card" id="biz-pane-modules" hidden>
+          <div class="ma-section-head">
+            <div>
+              <h3>Online Store</h3>
+              <p class="hint"><span id="store-perm-count">${storeOnN} of ${storeRows.length} businesses enabled.</span> Each business keeps its own store, URL, products, orders, and login banner.</p>
+            </div>
+          </div>
+          <div class="biz-perm-global">
+            <label class="biz-switch">
+              <input type="checkbox" id="store-for-all" ${Number(storePerm?.forAll) === 1 ? "checked" : ""} />
+              <span><strong>Enable Online Store for All Existing and New Businesses</strong><small>New shops get the store while this is on. You can still turn one shop off.</small></span>
+            </label>
+          </div>
+          <div class="biz-perm-toolbar">
+            <label>Search businesses
+              <input id="store-perm-q" type="search" placeholder="Name or type" autocomplete="off" />
+            </label>
+            <button class="btn primary" type="button" id="store-enable-all">Enable for All Businesses</button>
+            <button class="btn" type="button" id="store-disable-all">Disable for All Businesses</button>
+            <p class="hint" id="store-perm-hint"></p>
+          </div>
+          <div class="biz-perm-list" id="store-perm-body">
+            ${storeRows.length ? storeRows.map((b) => {
+              const on = Number(b.online_store) === 1;
+              const hay = `${b.name || ""} ${b.business_type || ""} ${b.category || ""}`.toLowerCase();
+              return `<article class="biz-perm-row" data-store-row data-store-search="${attr(hay)}">
+                <div class="biz-perm-who">
+                  <strong>${attr(b.name)}</strong>
+                  <span>${attr(b.business_type || b.category || "—")}</span>
+                </div>
+                <span class="item-chip${on ? " is-ok" : " is-muted"}" data-store-status="${attr(b.id)}">${on ? "Enabled" : "Disabled"}</span>
+                <label class="biz-switch">
+                  <input type="checkbox" data-store-toggle="${attr(b.id)}" ${on ? "checked" : ""} aria-label="Online Store for ${attr(b.name)}" />
+                  <span>Online Store</span>
+                </label>
+                <label class="biz-switch">
+                  <input type="checkbox" data-banner-toggle="${attr(b.id)}" ${Number(b.store_banner_allowed) === 1 ? "checked" : ""} aria-label="Login banner for ${attr(b.name)}" />
+                  <span>Login banner</span>
+                </label>
+              </article>`;
+            }).join("") : `<div class="item-empty-card"><strong>No businesses yet</strong><p>Create a shop on the Shops tab, then allow its Online Store here.</p></div>`}
+          </div>
+        </section>
         <section class="item-composer" id="biz-sub-history" hidden>
           <div class="item-composer-top">
             <p class="item-mode" id="biz-sub-history-title">Subscription history</p>
@@ -2915,15 +2949,47 @@ async function render() {
           el.hidden = Boolean(q) && !String(el.dataset.bizSearch || "").includes(q);
         });
       });
+      body.querySelectorAll("[data-biz-pane]").forEach((btn) => {
+        btn.onclick = () => {
+          const pane = btn.dataset.bizPane;
+          body.querySelectorAll("[data-biz-pane]").forEach((el) => {
+            const on = el.dataset.bizPane === pane;
+            el.classList.toggle("primary", on);
+            el.setAttribute("aria-selected", on ? "true" : "false");
+          });
+          const shops = $("biz-pane-shops");
+          const modules = $("biz-pane-modules");
+          if (shops) shops.hidden = pane !== "shops";
+          if (modules) modules.hidden = pane !== "modules";
+        };
+      });
+      $("store-perm-q")?.addEventListener("input", () => {
+        const q = String($("store-perm-q").value || "").trim().toLowerCase();
+        body.querySelectorAll("[data-store-row]").forEach((el) => {
+          el.hidden = Boolean(q) && !String(el.dataset.storeSearch || "").includes(q);
+        });
+      });
       const form = $("biz-form");
       const permHint = $("store-perm-hint");
       function paintStoreStatus(id, on) {
         const cell = body.querySelector(`[data-store-status="${CSS.escape(id)}"]`);
-        if (cell) cell.textContent = on ? "Enabled" : "Disabled";
+        if (cell) {
+          cell.textContent = on ? "Enabled" : "Disabled";
+          cell.classList.toggle("is-ok", on);
+          cell.classList.toggle("is-muted", !on);
+        }
+        const chip = body.querySelector(`[data-store-chip="${CSS.escape(id)}"]`);
+        if (chip) {
+          chip.textContent = on ? "Online store" : "Store off";
+          chip.classList.toggle("is-ok", on);
+          chip.classList.toggle("is-muted", !on);
+        }
         const row = rows.find((r) => r.id === id);
         if (row) row.online_store = on ? 1 : 0;
         const listed = storeRows.find((r) => r.id === id);
         if (listed) listed.online_store = on ? 1 : 0;
+        const count = $("store-perm-count");
+        if (count) count.textContent = `${storeRows.filter((r) => Number(r.online_store) === 1).length} of ${storeRows.length} businesses enabled.`;
       }
       async function saveStorePerm(id, patch) {
         permHint.textContent = "Saving…";

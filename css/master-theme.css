@@ -670,6 +670,7 @@ body.master-dark #master-app {
 #master-app .item-chip.is-ok { background: var(--ma-ok-bg); color: var(--ma-ok); }
 #master-app .item-chip.is-warn { background: var(--ma-warn-bg); color: var(--ma-warn); }
 #master-app .item-chip.is-bad { background: var(--ma-danger-bg); color: var(--ma-danger); }
+#master-app .item-chip.is-muted { background: var(--ma-bg); color: var(--ma-muted); }
 
 #master-app .item-empty-card,
 #master-app .master-advance-card { padding: 16px; }
@@ -755,4 +756,135 @@ body.master-dark #master-app {
   #master-app .master-main { padding: 12px 12px 28px; }
   #master-app .master-kpi-grid { grid-template-columns: 1fr 1fr; }
   #master-app .ma-quick-btn span { display: none; }
+}
+
+#master-app .biz-pane-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+#master-app .biz-pane-bar .settings-tabs {
+  margin: 0;
+  padding: 4px;
+  border: 1px solid var(--ma-line);
+  border-radius: 12px;
+  background: var(--ma-bg);
+}
+#master-app #biz-pane-shops,
+#master-app #biz-pane-modules { min-width: 0; }
+#master-app #biz-pane-shops[hidden],
+#master-app #biz-pane-modules[hidden] { display: none !important; }
+#master-app .biz-perm-card {
+  display: grid;
+  gap: 14px;
+}
+#master-app .biz-perm-global {
+  padding: 12px 14px;
+  border: 1px solid var(--ma-line);
+  border-radius: 12px;
+  background: var(--ma-bg);
+}
+#master-app .biz-switch {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 0;
+  color: var(--ma-text);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+#master-app .biz-switch input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  margin-top: 2px;
+  flex: none;
+  accent-color: var(--ma-blue);
+}
+#master-app .biz-switch small,
+#master-app .biz-check small {
+  display: block;
+  margin-top: 2px;
+  color: var(--ma-muted);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+#master-app .biz-perm-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 10px;
+}
+#master-app .biz-perm-toolbar label {
+  display: grid;
+  gap: 4px;
+  flex: 1 1 220px;
+  min-width: min(100%, 220px);
+  font-size: 12px;
+  font-weight: 700;
+}
+#master-app .biz-perm-toolbar .hint { flex: 1 1 160px; margin: 0; }
+#master-app .biz-perm-list { display: grid; gap: 8px; }
+#master-app .biz-perm-row {
+  display: grid;
+  grid-template-columns: minmax(140px, 1.4fr) auto auto auto;
+  gap: 12px 16px;
+  align-items: center;
+  padding: 12px 14px;
+  border: 1px solid var(--ma-line);
+  border-radius: 12px;
+  background: var(--ma-card);
+}
+#master-app .biz-perm-row[hidden] { display: none !important; }
+#master-app .biz-perm-who { min-width: 0; }
+#master-app .biz-perm-who strong {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+#master-app .biz-perm-who span { color: var(--ma-muted); font-size: 12px; font-weight: 600; }
+#master-app #biz-module-flags .biz-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  color: var(--ma-text);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.45;
+}
+#master-app #biz-module-flags .biz-check strong { display: block; font-weight: 800; }
+#master-app #biz-module-flags .biz-check input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  margin-top: 2px;
+  flex: none;
+}
+#master-app [data-biz-card] .item-card-foot {
+  display: grid;
+  gap: 8px;
+  width: 100%;
+}
+#master-app .biz-card-primary { display: flex; flex-wrap: nowrap; gap: 8px; }
+#master-app .biz-card-primary .btn { flex: 1 1 auto; white-space: nowrap; }
+#master-app .biz-more:not([open]) > :not(summary) { display: none; }
+#master-app .biz-more summary {
+  width: fit-content;
+  cursor: pointer;
+  color: var(--ma-blue);
+  font-size: 12px;
+  font-weight: 800;
+}
+#master-app .biz-more-actions { padding-top: 8px; }
+#master-app #biz-library {
+  max-height: min(72vh, 820px);
+  overflow: auto;
+  padding-right: 2px;
+}
+@media (max-width: 800px) {
+  #master-app .biz-perm-row { grid-template-columns: 1fr 1fr; }
+  #master-app .biz-perm-who { grid-column: 1 / -1; }
 }
