@@ -2660,9 +2660,71 @@ async function render() {
           </div>
           <a class="btn" href="/api/master/businesses/export">Export CSV</a>
         </div>
-        <div id="biz-pane-shops">
-        <div class="items-split">
-          <div class="master-compose">
+        <div id="biz-pane-shops" class="biz-shops">
+          <section class="biz-shop-board">
+            <div class="biz-shop-toolbar">
+              <div>
+                <h3>Shops</h3>
+                <p class="hint">${rows.length} businesses</p>
+              </div>
+              <label>Search
+                <input id="biz-search" type="search" placeholder="Name, city, or owner" autocomplete="off" />
+              </label>
+              <button class="btn primary" type="button" id="biz-add">Add business</button>
+            </div>
+            <div class="biz-shop-list" id="biz-library">${rows
+              .map((b) => {
+                const hay = `${b.name || ""} ${b.owner_name || ""} ${b.city || ""} ${b.category || ""} ${b.plan_name || ""} ${b.account_manager_name || ""} ${b.dsa_code || ""}`.toLowerCase();
+                const src = String(b.logo_url || "").trim();
+                const mark = src
+                  ? `<img class="biz-shop-logo" src="${attr(src)}" alt="">`
+                  : `<div class="biz-shop-mark" aria-hidden="true">${attr(letterMark(b.name))}</div>`;
+                return `<article class="biz-shop-row" data-biz-card data-biz-search="${attr(hay)}">
+                  ${mark}
+                  <div class="biz-shop-main">
+                    <div class="biz-shop-title">
+                      <strong>${attr(b.name)}</strong>
+                      ${statusChip(b.computed_status || b.status)}
+                    </div>
+                    <p class="biz-shop-sub">${attr(b.owner_name || "—")} · ${attr(b.city || "—")}</p>
+                    <div class="biz-shop-meta">
+                      <span class="item-chip">${attr(b.category || b.business_type || "—")}</span>
+                      <span class="item-chip">${attr(b.plan_name || b.plan_id || "—")}</span>
+                      <span class="item-chip">${money(b.fee_monthly)} / year</span>
+                      <span class="item-chip">Exp ${attr(ymd(b.subscription_expires_at) || "—")}</span>
+                      <span class="item-chip">${attr(b.account_manager_name || "No account manager")}</span>
+                      ${b.dsa_code ? `<span class="item-chip">DSA ${attr(b.dsa_code)}</span>` : ""}
+                      ${Number(b.bar_enabled) === 1 || String(b.business_type || "").toLowerCase() === "bar" ? `<span class="item-chip">Bar model</span>` : ""}
+                      ${Number(b.resort_enabled) === 1 || String(b.business_type || "").toLowerCase().includes("resort") ? `<span class="item-chip">Resort model</span>` : ""}
+                      ${Number(b.zomato_allowed) === 1 ? `<span class="item-chip">Zomato allowed</span>` : ""}
+                      ${Number(b.swiggy_allowed) === 1 ? `<span class="item-chip">Swiggy allowed</span>` : ""}
+                      ${Number(b.qr_module) === 1 ? `<span class="item-chip is-ok">QR module</span>` : ""}
+                      <span class="item-chip${Number(b.online_store) === 1 ? " is-ok" : " is-muted"}" data-store-chip="${attr(b.id)}">${Number(b.online_store) === 1 ? "Online store" : "Store off"}</span>
+                    </div>
+                  </div>
+                  <div class="biz-shop-actions">
+                    <button class="btn primary" type="button" data-enter="${attr(b.id)}">Open POS</button>
+                    <button class="btn" type="button" data-edit="${attr(b.id)}">Edit</button>
+                    <details class="biz-more">
+                      <summary>More</summary>
+                      <div class="biz-more-actions">
+                        <button class="btn" type="button" data-renew="${attr(b.id)}">Renew 1 year</button>
+                        <button class="btn" type="button" data-reset-biz="${attr(b.id)}">Password</button>
+                        <button class="btn" type="button" data-send-expiry="${attr(b.id)}">Expiry alert</button>
+                        <button class="btn" type="button" data-history="${attr(b.id)}">History</button>
+                        ${/suspend|inactiv|lock/.test(String(b.computed_status || b.status || "").toLowerCase())
+                          ? `<button class="btn" type="button" data-act="activate" data-id="${attr(b.id)}">Activate</button>`
+                          : `<button class="btn" type="button" data-act="suspend" data-id="${attr(b.id)}">Suspend</button>`}
+                        <button class="btn danger" type="button" data-clean-biz="${attr(b.id)}">Clean data</button>
+                      </div>
+                    </details>
+                  </div>
+                </article>`;
+              })
+              .join("") || `<div class="item-empty-card"><strong>No shops yet</strong><p>Create the first business in the form below.</p></div>`}
+            </div>
+          </section>
+          <div class="master-compose" id="biz-editor">
             <form class="settings item-composer" id="biz-pw-form" hidden>
               <div class="item-composer-top">
                 <p class="item-mode">Set login password</p>
@@ -2831,66 +2893,6 @@ async function render() {
               </div>
             </form>
           </div>
-          <aside class="items-library">
-            <div class="items-library-head">
-              <h4>Shops</h4>
-              <input id="biz-search" type="search" placeholder="Search name, city, owner…" autocomplete="off" />
-            </div>
-            <div class="items-library-list" id="biz-library">${rows
-              .map((b) => {
-                const hay = `${b.name || ""} ${b.owner_name || ""} ${b.city || ""} ${b.category || ""} ${b.plan_name || ""} ${b.account_manager_name || ""} ${b.dsa_code || ""}`.toLowerCase();
-                const src = String(b.logo_url || "").trim();
-                const thumb = src
-                  ? `<img class="item-thumb" src="${attr(src)}" alt="">`
-                  : `<span class="item-thumb-empty" aria-hidden="true">${attr(letterMark(b.name))}</span>`;
-                return `<article class="report-card item-card" data-biz-card data-biz-search="${attr(hay)}">
-                  <div class="item-card-head">
-                    ${thumb}
-                    <div class="item-card-copy">
-                      <strong>${attr(b.name)}</strong>
-                      <span>${attr(b.owner_name || "—")} · ${attr(b.city || "—")}</span>
-                    </div>
-                    ${statusChip(b.computed_status || b.status)}
-                  </div>
-                  <div class="item-card-meta">
-                    <span class="item-chip">${attr(b.category || b.business_type || "—")}</span>
-                    <span class="item-chip">${attr(b.plan_name || b.plan_id || "—")}</span>
-                    <span class="item-chip">${money(b.fee_monthly)} / year</span>
-                    <span class="item-chip">Exp ${attr(ymd(b.subscription_expires_at) || "—")}</span>
-                    <span class="item-chip">${attr(b.account_manager_name || "No account manager")}</span>
-                    ${b.dsa_code ? `<span class="item-chip">DSA ${attr(b.dsa_code)}</span>` : ""}
-                    ${Number(b.bar_enabled) === 1 || String(b.business_type || "").toLowerCase() === "bar" ? `<span class="item-chip">Bar model</span>` : ""}
-                    ${Number(b.resort_enabled) === 1 || String(b.business_type || "").toLowerCase().includes("resort") ? `<span class="item-chip">Resort model</span>` : ""}
-                    ${Number(b.zomato_allowed) === 1 ? `<span class="item-chip">Zomato allowed</span>` : ""}
-                    ${Number(b.swiggy_allowed) === 1 ? `<span class="item-chip">Swiggy allowed</span>` : ""}
-                    ${Number(b.qr_module) === 1 ? `<span class="item-chip is-ok">QR module</span>` : ""}
-                    <span class="item-chip${Number(b.online_store) === 1 ? " is-ok" : " is-muted"}" data-store-chip="${attr(b.id)}">${Number(b.online_store) === 1 ? "Online store" : "Store off"}</span>
-                  </div>
-                  <div class="item-card-foot">
-                    <div class="item-card-actions biz-card-primary">
-                      <button class="btn primary" type="button" data-enter="${attr(b.id)}">Open POS</button>
-                      <button class="btn" type="button" data-edit="${attr(b.id)}">Edit</button>
-                    </div>
-                    <details class="biz-more">
-                      <summary>More</summary>
-                      <div class="item-card-actions biz-more-actions">
-                        <button class="btn" type="button" data-renew="${attr(b.id)}">Renew 1 year</button>
-                        <button class="btn" type="button" data-reset-biz="${attr(b.id)}">Password</button>
-                        <button class="btn" type="button" data-send-expiry="${attr(b.id)}">Expiry alert</button>
-                        <button class="btn" type="button" data-history="${attr(b.id)}">History</button>
-                        ${/suspend|inactiv|lock/.test(String(b.computed_status || b.status || "").toLowerCase())
-                          ? `<button class="btn" type="button" data-act="activate" data-id="${attr(b.id)}">Activate</button>`
-                          : `<button class="btn" type="button" data-act="suspend" data-id="${attr(b.id)}">Suspend</button>`}
-                        <button class="btn danger" type="button" data-clean-biz="${attr(b.id)}">Clean data</button>
-                      </div>
-                    </details>
-                  </div>
-                </article>`;
-              })
-              .join("") || `<div class="item-empty-card"><strong>No shops yet</strong><p>Create the first business on the left.</p></div>`}
-            </div>
-          </aside>
-        </div>
         </div>
         <section class="master-panel biz-perm-card" id="biz-pane-modules" hidden>
           <div class="ma-section-head">
@@ -3139,6 +3141,7 @@ async function render() {
         }
       }
       $("biz-cancel").onclick = () => fillBusiness(null);
+      $("biz-add")?.addEventListener("click", () => fillBusiness(null));
       form.businessType.addEventListener("change", () => {
         fillCategorySelect(form.businessCategory, form.businessType.value, form.businessCategory.value);
         syncBizFoodFlags();
