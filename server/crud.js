@@ -236,6 +236,14 @@ function spreadPurchaseDiscount(rows, parent, discount) {
   return rows;
 }
 
+function placePurchaseFreeQty(rows, freeQty) {
+  const free = Math.max(0, Number(freeQty) || 0);
+  rows.forEach((row, index) => {
+    row.free_qty = index === 0 ? free : 0;
+  });
+  return rows;
+}
+
 function garmentSizeOf(item) {
   return POSGarmentPurchase?.normalizeSize?.(item?.size) || String(item?.size || "").trim();
 }
@@ -367,7 +375,7 @@ export async function expandGarmentPurchaseLines(conn, lines, biz) {
         }
       }
       if (!any) throw new Error(`${parent.name}: enter colour and size quantity`);
-      out.push(...spreadPurchaseDiscount(made, parent, line.discount));
+      out.push(...placePurchaseFreeQty(spreadPurchaseDiscount(made, parent, line.discount), line.free_qty));
       continue;
     }
     const sizeQtys = line.size_qtys || line.sizeQtys;
@@ -401,7 +409,7 @@ export async function expandGarmentPurchaseLines(conn, lines, biz) {
         discount: 0,
       });
     }
-    out.push(...spreadPurchaseDiscount(made, parent, line.discount));
+    out.push(...placePurchaseFreeQty(spreadPurchaseDiscount(made, parent, line.discount), line.free_qty));
   }
   if (!out.length) throw new Error("Enter at least one product with size-wise quantity");
   return out;
@@ -721,6 +729,8 @@ async function preparePurchaseLines(conn, lines) {
       qty,
       rate,
       amount: fig.amount,
+      discount: fig.discount,
+      freeQty: Math.max(0, Number(line.free_qty) || 0),
       gstRate: fig.gstRate,
       gstAmount: fig.gstAmount,
       total: fig.total,
@@ -740,12 +750,15 @@ async function insertPurchaseStock(conn, { id, purchaseNumber, supplier, built, 
     const src = expanded[i] || {};
     const size = POSGarmentPurchase?.normalizeSize?.(src.size || line.item.size) || line.item.size || null;
     const color = String(src.color || line.item.color || "").trim() || null;
+    const freeQty = Math.max(0, Number(line.freeQty) || 0);
+    const discount = Math.max(0, Number(line.discount) || 0);
+    let storedFree = freeQty;
     try {
       await conn.query(
         `INSERT INTO purchase_lines (
            id, purchase_id, item_id, item_name, quantity_gm, rate_per_kg,
-           gst_rate, amount, gst_amount, total_amount, business_id, size, color
-         ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+           gst_rate, amount, gst_amount, total_amount, discount, free_qty, business_id, size, color
+         ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         [
           lineId,
           id,
@@ -757,12 +770,15 @@ async function insertPurchaseStock(conn, { id, purchaseNumber, supplier, built, 
           line.amount,
           line.gstAmount,
           line.total,
+          discount,
+          freeQty,
           bid(),
           size,
           color,
         ],
       );
     } catch {
+      storedFree = 0;
       await conn.query(
         `INSERT INTO purchase_lines (
            id, purchase_id, item_id, item_name, quantity_gm, rate_per_kg,
@@ -785,7 +801,7 @@ async function insertPurchaseStock(conn, { id, purchaseNumber, supplier, built, 
     }
     await conn.query(
       "UPDATE items SET stock_gm = stock_gm + ? WHERE id = ? AND business_id = ?",
-      [line.qty, line.item.id, bid()],
+      [line.qty + storedFree, line.item.id, bid()],
     );
     const batch = await onPurchaseLineSaved(conn, {
       businessId: bid(),
@@ -832,7 +848,7 @@ async function unwindPurchase(conn, purchase, oldLines) {
   if (used.length) throw new Error("Barcodes from this purchase were already used. It cannot be edited.");
   const need = new Map();
   for (const line of oldLines) {
-    const qty = Number(line.quantity_gm) || 0;
+    const qty = (Number(line.quantity_gm) || 0) + Math.max(0, Number(line.free_qty) || 0);
     if (qty === 0) continue;
     need.set(line.item_id, (need.get(line.item_id) || 0) + qty);
   }

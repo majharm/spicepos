@@ -7812,6 +7812,7 @@ function classicDraftDirty(item, fields) {
   if (String(fields.barcodes || "").trim()) return true;
   if (fields.expiry) return true;
   if (Number(fields.discount) > 0) return true;
+  if (Number(fields.free) > 0) return true;
   const unit = itemUnit(item || {});
   const defaultQty = POSUnits.isCount(unit) ? 1 : 1000;
   if (String(fields.qty ?? "") !== "" && Number(fields.qty) !== defaultQty) return true;
@@ -7824,6 +7825,7 @@ function apparelDraftDirty(fields) {
   if (fields.checked) return true;
   if (fields.bcOpen) return true;
   if (Number(fields.discount) > 0) return true;
+  if (Number(fields.free) > 0) return true;
   if ((fields.sizes || []).some((row) => Number(row.qty) > 0)) return true;
   if ((fields.extras || []).some((row) => String(row.name || "").trim() || Number(row.qty) > 0)) return true;
   if (Object.values(fields.barcodes || {}).some((value) => String(value || "").trim())) return true;
@@ -7842,6 +7844,7 @@ function capturePoDraft() {
       rate: document.querySelector(`[data-po-rate="${CSS.escape(id)}"]`)?.value ?? "",
       gst: document.querySelector(`[data-po-gst="${CSS.escape(id)}"]`)?.value ?? "",
       discount: document.querySelector(`[data-po-discount="${CSS.escape(id)}"]`)?.value ?? "",
+      free: document.querySelector(`[data-po-free="${CSS.escape(id)}"]`)?.value ?? "",
       expiry: document.querySelector(`[data-po-expiry="${CSS.escape(id)}"]`)?.value ?? "",
       barcodes: document.querySelector(`[data-po-barcodes="${CSS.escape(id)}"]`)?.value ?? "",
       bcOpen: document.querySelector(`[data-po-bc-editor="${CSS.escape(id)}"]`)?.hidden === false,
@@ -7872,6 +7875,7 @@ function capturePoDraft() {
       rate: card.querySelector("[data-po-rate]")?.value ?? "",
       gst: card.querySelector("[data-po-gst]")?.value ?? "",
       discount: card.querySelector("[data-po-discount]")?.value ?? "",
+      free: card.querySelector("[data-po-free]")?.value ?? "",
       colors: [...card.querySelectorAll("[data-po-color-block]")].map((row) => row.dataset.poColorBlock || ""),
       sizes,
       extras,
@@ -7904,6 +7908,7 @@ function restoreClassicDraft() {
     set(`[data-po-rate="${CSS.escape(id)}"]`, fields.rate);
     set(`[data-po-gst="${CSS.escape(id)}"]`, fields.gst);
     set(`[data-po-discount="${CSS.escape(id)}"]`, fields.discount);
+    set(`[data-po-free="${CSS.escape(id)}"]`, fields.free);
     set(`[data-po-expiry="${CSS.escape(id)}"]`, fields.expiry);
     set(`[data-po-barcodes="${CSS.escape(id)}"]`, fields.barcodes);
     const editor = document.querySelector(`[data-po-bc-editor="${CSS.escape(id)}"]`);
@@ -7928,6 +7933,8 @@ function restoreApparelDraft() {
     if (gst && fields.gst != null) gst.value = fields.gst;
     const discount = card.querySelector("[data-po-discount]");
     if (discount && fields.discount != null) discount.value = fields.discount;
+    const free = card.querySelector("[data-po-free]");
+    if (free && fields.free != null) free.value = fields.free;
     const sizes = String(card.dataset.poSizes || "").split(/\s+/).filter(Boolean);
     for (const color of fields.colors || []) {
       if (!color) continue;
@@ -8082,6 +8089,7 @@ function addPoItemById(id) {
       rate: String(POSUnits.rateInputValue?.(item.purchase_rate) ?? item.purchase_rate ?? ""),
       gst: String(Number(item.gst_rate) || 0),
       discount: "0",
+      free: "0",
       expiry: "",
       barcodes: "",
     };
@@ -8105,6 +8113,7 @@ function addPoStyle(key) {
       rate: String(POSUnits.rateInputValue?.(sample?.purchase_rate) ?? sample?.purchase_rate ?? ""),
       gst: String(Number(sample?.gst_rate) || 0),
       discount: "0",
+      free: "0",
       colors: [],
       sizes: [],
       extras: [],
@@ -8129,8 +8138,8 @@ function paintPurchaseLede() {
   const el = $("purchases-lede");
   if (!el) return;
   const base = isApparelShop()
-    ? "Find a garment and add it. Enter colour and size quantity on the bill. Stock updates when the purchase is saved. Edit a saved bill from the list."
-    : "Find an item and add it, then set the quantity. Rate, tax, and discount stay editable. Stock updates when the purchase is saved. Edit a saved bill from the list.";
+    ? "Find a garment and add it. Enter colour and size quantity on the bill. Free quantity adds stock and is not billed. Stock updates when the purchase is saved. Edit a saved bill from the list."
+    : "Find an item and add it, then set the quantity. Rate, tax, discount, and free quantity stay editable. Free quantity adds stock and is not billed. Stock updates when the purchase is saved. Edit a saved bill from the list.";
   el.textContent = purchaseBarcodeOn()
     ? `${base} Piece items show Add Item Barcodes with camera. Scan or type one code per piece.`
     : base;
@@ -8188,6 +8197,7 @@ function renderClassicPoLines(el, shown, moreHint) {
         <td class="po-name">${escapeHtml(i.name)}</td>
         <td class="po-hsn">${escapeHtml(i.hsn || "—")}</td>
         <td class="po-qty"><div class="po-qty-cell"><input type="number" min="${POSUnits.qtyMin()}" max="${POSUnits.qtyMax()}" step="1" value="${qty}" data-po-qty="${escapeHtml(i.id)}" aria-label="Quantity for ${escapeHtml(i.name)}" /></div></td>
+        <td class="po-qty"><input type="number" min="0" step="1" value="0" data-po-free="${escapeHtml(i.id)}" aria-label="Free quantity for ${escapeHtml(i.name)}" /></td>
         <td class="po-unit">${escapeHtml(poUnitLabel(i))}</td>
         <td><div class="po-rate-cell"><input type="number" min="0" step="0.00000001" inputmode="decimal" value="${escapeHtml(POSUnits.rateInputValue?.(i.purchase_rate) ?? i.purchase_rate)}" data-po-rate="${escapeHtml(i.id)}" /><span class="po-suffix">₹${escapeHtml(POSUnits.rateSuffix(unit))}</span></div></td>
         <td><input type="number" min="0" step="0.01" inputmode="decimal" value="${escapeHtml(String(Number(i.gst_rate) || 0))}" data-po-gst="${escapeHtml(i.id)}" aria-label="GST percent for ${escapeHtml(i.name)}" /></td>
@@ -8197,7 +8207,7 @@ function renderClassicPoLines(el, shown, moreHint) {
       </tr>`);
   }
   el.innerHTML = `${moreHint}<div class="po-table-wrap"><table class="po-table"><thead><tr>
-    <th class="po-check"></th><th>Item</th><th>${taxCodeLabel()}</th><th>Qty</th><th>Unit</th><th>Rate</th><th>GST %</th><th>Disc</th><th>Expiry</th><th class="num">Amount</th>
+    <th class="po-check"></th><th>Item</th><th>${taxCodeLabel()}</th><th>Qty</th><th>Free</th><th>Unit</th><th>Rate</th><th>GST %</th><th>Disc</th><th>Expiry</th><th class="num">Amount</th>
   </tr></thead><tbody>${rows.join("")}</tbody></table></div>
     <div id="po-barcode-panels">${panels.join("")}</div>`;
   paintPoTotals();
@@ -8294,6 +8304,9 @@ function renderApparelPoLines(el, shown, moreHint) {
         </label>
         <label>Discount ₹
           <input type="number" min="0" step="0.01" inputmode="decimal" value="0" data-po-discount="${key}" aria-label="Discount amount for ${escapeHtml(g.name)}" />
+        </label>
+        <label>Free qty
+          <input type="number" min="0" step="1" value="0" data-po-free="${key}" aria-label="Free quantity for ${escapeHtml(g.name)}" />
         </label>
         <button class="btn" type="button" data-po-add-size="${key}">Add size</button>
         ${purchaseBarcodeOn() && POSUnits.isCount(unit) ? `<button class="btn" type="button" data-po-add-barcodes="${key}" hidden>Add Item Barcodes with camera</button>` : ""}
@@ -8586,6 +8599,7 @@ function collectApparelPoLines() {
       rate_per_kg: POSUnits.roundRate8?.(card.querySelector("[data-po-rate]")?.value) ?? Number(card.querySelector("[data-po-rate]")?.value),
       gst_rate: card.querySelector("[data-po-gst]")?.value,
       discount: card.querySelector("[data-po-discount]")?.value,
+      free_qty: POSUnits.toBase(Number(card.querySelector("[data-po-free]")?.value) || 0, card.dataset.poUnit || "PCS"),
       generate_barcodes: false,
       barcodes_by_variant: barcodesByVariant,
       allow_empty_barcodes: true,
@@ -10250,9 +10264,13 @@ async function loadReports() {
   $("reports-hint").textContent = "Loading…";
   try {
     const offerQuery = offerProfitQuery();
-    const [data, offerProfit] = await Promise.all([
+    const pir = globalThis.POSPurchaseItemReport;
+    pir?.captureFilters?.();
+    const itemQuery = pir?.queryString?.() || `from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`;
+    const [data, offerProfit, itemPurchase] = await Promise.all([
       api(`/api/reports?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`),
       api(`/api/reports/offer-profit?${offerQuery}`, { timeoutMs: 25000 }).catch((err) => ({ error: err?.message || "Profit report did not load" })),
+      api(`/api/reports/item-purchases?${itemQuery}`, { timeoutMs: 25000 }).catch((err) => ({ error: err?.message || "Item-wise purchase report did not load" })),
     ]);
     const s = data.summary || {};
     const gs = s.gstSummary || {};
@@ -10321,6 +10339,7 @@ async function loadReports() {
           ? [i.code, i.name, i.color || "—", i.size || "—", Number(i.stock_gm) || 0, Number(i.reorder_level_gm) || 0]
           : [i.code, i.name, Number(i.stock_gm) || 0, Number(i.reorder_level_gm) || 0]
       )), "stock"),
+      globalThis.POSPurchaseItemReport?.sectionHtml?.(itemPurchase) || "",
       reportBlock("Purchases", "Purchases", ["PO", "Supplier", "Invoice", "Date", "Taxable", "GST", "Total", "Pay", "Status"], (data.purchases || []).map((p) => [p.purchase_number, p.supplier_name, p.supplier_invoice_number, p.purchase_date, Number(p.subtotal) || 0, Number(p.gst) || 0, Number(p.total) || 0, p.payment_method, p.payment_status]), "books"),
       ...(isApparelShop() ? [reportBlock("Purchase lines", "Purchase lines", ["PO", "Date", "Supplier", "Item", "Colour", "Size", "Qty g", "Amount"], (data.purchaseLines || []).map((r) => [r.purchase_number, r.purchase_date, r.supplier_name, r.item_name, r.color || "—", r.size || "—", Number(r.quantity_gm) || 0, Number(r.amount) || 0]), "books")] : []),
       reportBlock("Expenses", "Expenses", ["No.", "Date", "Category", "Amount", "GST", "Total", "Pay", "Notes"], (data.expenses || []).map((e) => [e.expense_number, e.expense_date, e.category, Number(e.amount) || 0, Number(e.gst) || 0, Number(e.total) || (Number(e.amount) || 0) + (Number(e.gst) || 0), e.payment_method, e.notes]), "books"),
@@ -12292,6 +12311,7 @@ function purchaseDraftFromLines(lines, batches) {
           rate: String(POSUnits.rateInputValue?.(line.rate_per_kg) ?? line.rate_per_kg ?? ""),
           gst: String(line.gst_rate ?? item.gst_rate ?? 0),
           discount: purchaseLineDiscount(line, item),
+          free: "0",
           colors: [],
           sizes: [],
           extras: [],
@@ -12301,6 +12321,7 @@ function purchaseDraftFromLines(lines, batches) {
         groups.set(key, group);
       }
       if (color && !group.colors.includes(color)) group.colors.push(color);
+      group.free = String((Number(group.free) || 0) + (Number(POSUnits.displayQty(Number(line.free_qty) || 0, itemUnit(item))) || 0));
       group.sizes.push({ color, size, qty: String(qty) });
       const codes = codesByItem.get(item.id) || (line.barcode ? [String(line.barcode)] : []);
       if (codes.length) {
@@ -12319,6 +12340,7 @@ function purchaseDraftFromLines(lines, batches) {
     const existing = poLineDraft.get(item.id);
     if (existing) {
       existing.qty = String((Number(existing.qty) || 0) + (Number(qty) || 0));
+      existing.free = String((Number(existing.free) || 0) + (Number(POSUnits.displayQty(Number(line.free_qty) || 0, itemUnit(item))) || 0));
       if (codes.length) existing.barcodes = [existing.barcodes, codes.join("\n")].filter(Boolean).join("\n");
       continue;
     }
@@ -12326,6 +12348,7 @@ function purchaseDraftFromLines(lines, batches) {
       kind: "classic",
       checked: true,
       qty: String(qty),
+      free: String(POSUnits.displayQty(Number(line.free_qty) || 0, itemUnit(item)) || 0),
       rate: String(POSUnits.rateInputValue?.(line.rate_per_kg) ?? line.rate_per_kg ?? ""),
       gst: String(line.gst_rate ?? item.gst_rate ?? 0),
       discount: purchaseLineDiscount(line, item),
@@ -15601,6 +15624,7 @@ $("purchase-form").addEventListener("submit", async (e) => {
         rate_per_kg: POSUnits.roundRate8?.(document.querySelector(`[data-po-rate="${box.dataset.poItem}"]`)?.value) ?? Number(document.querySelector(`[data-po-rate="${box.dataset.poItem}"]`)?.value),
         gst_rate: document.querySelector(`[data-po-gst="${box.dataset.poItem}"]`)?.value,
         discount: document.querySelector(`[data-po-discount="${box.dataset.poItem}"]`)?.value,
+        free_qty: POSUnits.toBase(Number(document.querySelector(`[data-po-free="${box.dataset.poItem}"]`)?.value) || 0, unit),
         expiry_date: document.querySelector(`[data-po-expiry="${box.dataset.poItem}"]`)?.value || "",
         barcodes,
         generate_barcodes: false,

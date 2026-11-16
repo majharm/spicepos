@@ -321,6 +321,9 @@ export async function ensureSchema() {
   await addColumn("purchase_lines", "mrp", "DECIMAL(12,2) NULL");
   await addColumn("purchase_lines", "size", "VARCHAR(32) NULL");
   await addColumn("purchase_lines", "color", "VARCHAR(64) NULL");
+  await addColumn("purchase_lines", "discount", "DECIMAL(20,8) NOT NULL DEFAULT 0");
+  await addColumn("purchase_lines", "free_qty", "DECIMAL(14,3) NOT NULL DEFAULT 0");
+  await addColumn("purchases", "status", "VARCHAR(32) NOT NULL DEFAULT 'posted'");
   await addColumn("item_barcodes", "purchase_id", "VARCHAR(255) NULL");
   await addColumn("item_barcodes", "size", "VARCHAR(32) NULL");
   await addColumn("item_barcodes", "color", "VARCHAR(64) NULL");

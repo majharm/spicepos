@@ -436,6 +436,7 @@ function pos_ensure_rate_precision($force = false) {
   pos_widen_decimal("purchases", "subtotal", $money8);
   pos_widen_decimal("purchases", "gst", $money8);
   pos_widen_decimal("purchases", "total", $money8);
+  if (function_exists("pos_ensure_purchase_line_columns")) pos_ensure_purchase_line_columns();
   pos_widen_decimal("sales_order_lines", "rate_per_kg", $money8);
   pos_widen_decimal("sales_order_lines", "amount", $money8);
   pos_widen_decimal("sales_order_lines", "discount", $money8);
@@ -2158,6 +2159,20 @@ function pos_ensure_sales_schema() {
     ]);
   }
   if (function_exists("pos_ensure_rate_precision")) pos_ensure_rate_precision(true);
+}
+
+function pos_ensure_purchase_line_columns() {
+  static $done = false;
+  if ($done) return;
+  $done = true;
+  if (!function_exists("pos_ensure_columns")) return;
+  pos_ensure_columns("purchase_lines", [
+    "discount" => "DECIMAL(20,8) NOT NULL DEFAULT 0",
+    "free_qty" => "DECIMAL(14,3) NOT NULL DEFAULT 0",
+  ]);
+  pos_ensure_columns("purchases", [
+    "status" => "VARCHAR(32) NOT NULL DEFAULT 'posted'",
+  ]);
 }
 
 function pos_ensure_supplier_profile_columns() {

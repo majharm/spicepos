@@ -209,6 +209,7 @@
     { id: "monthly-purchase", center: "purchase", title: "Monthly Purchase", tab: "books", sheet: "Purchases" },
     { id: "supplier-purchase", center: "purchase", title: "Supplier-wise Purchase", tab: "books", sheet: "Purchases" },
     { id: "product-purchase", center: "purchase", title: "Product-wise Purchase", tab: "books", sheet: "Purchases" },
+    { id: "item-wise-purchase", center: "purchase", title: "Item-Wise Purchase Report", tab: "books", sheet: "Item-Wise Purchase" },
     { id: "category-purchase", center: "purchase", title: "Category-wise Purchase", tab: "books", sheet: "Purchases" },
     { id: "purchase-return", center: "purchase", title: "Purchase Return", tab: "books", sheet: "Purchases" },
     { id: "purchase-tax", center: "purchase", title: "Purchase Tax", tab: "gst", sheet: "GST input by rate" },

@@ -288,10 +288,20 @@ function pos_purchase_line_figures($gross, $itemGst, $line) {
   $gstAmount = pos_round8(($amount * $gstRate) / 100);
   return [
     "amount" => $amount,
+    "discount" => $discount,
     "gstRate" => $gstRate,
     "gstAmount" => $gstAmount,
     "total" => pos_round8($amount + $gstAmount),
   ];
+}
+
+function pos_place_purchase_free_qty($rows, $freeQty) {
+  $free = max(0, (float) $freeQty);
+  foreach ($rows as $i => &$row) {
+    $row["free_qty"] = $i === 0 ? $free : 0;
+  }
+  unset($row);
+  return $rows;
 }
 
 function pos_spread_purchase_discount($rows, $parent, $discount) {
@@ -344,7 +354,7 @@ function pos_expand_garment_purchase_lines($bid, $lines, $biz) {
         }
       }
       if (!$any) throw new Exception(($parent["name"] ?? "Item") . ": enter colour and size quantity");
-      foreach (pos_spread_purchase_discount($made, $parent, $line["discount"] ?? 0) as $spread) $out[] = $spread;
+      foreach (pos_place_purchase_free_qty(pos_spread_purchase_discount($made, $parent, $line["discount"] ?? 0), $line["free_qty"] ?? 0) as $spread) $out[] = $spread;
       continue;
     }
     $sizeQtys = $line["size_qtys"] ?? $line["sizeQtys"] ?? null;
@@ -387,7 +397,7 @@ function pos_expand_garment_purchase_lines($bid, $lines, $biz) {
         "discount" => 0,
       ]);
     }
-    foreach (pos_spread_purchase_discount($made, $parent, $line["discount"] ?? 0) as $spread) $out[] = $spread;
+    foreach (pos_place_purchase_free_qty(pos_spread_purchase_discount($made, $parent, $line["discount"] ?? 0), $line["free_qty"] ?? 0) as $spread) $out[] = $spread;
   }
   if (!$out) throw new Exception("Enter at least one product with size-wise quantity");
   return $out;
@@ -480,6 +490,8 @@ function pos_prepare_purchase_lines($bid, $lines) {
       "qty" => $qty,
       "rate" => $rate,
       "amount" => $fig["amount"],
+      "discount" => $fig["discount"] ?? 0,
+      "freeQty" => max(0, (float) ($line["free_qty"] ?? 0)),
       "gstRate" => $fig["gstRate"],
       "gstAmount" => $fig["gstAmount"],
       "total" => $fig["total"],
@@ -492,26 +504,31 @@ function pos_prepare_purchase_lines($bid, $lines) {
 
 function pos_insert_purchase_stock($bid, $branchId, $uid, $purchaseId, $purchaseNumber, $supplier, $built, $expanded) {
   if (is_file(__DIR__ . "/pos-advanced.php")) require_once __DIR__ . "/pos-advanced.php";
+  if (function_exists("pos_ensure_purchase_line_columns")) pos_ensure_purchase_line_columns();
   $barcodeCount = 0;
   foreach ($built as $idx => $line) {
     $lineId = pos_uuid();
     $src = $expanded[$idx] ?? [];
     $size = pos_garment_normalize_size($src["size"] ?? ($line["item"]["size"] ?? ""));
     $color = trim((string) ($src["color"] ?? ($line["item"]["color"] ?? "")));
+    $freeQty = max(0, (float) ($line["freeQty"] ?? 0));
+    $discount = max(0, (float) ($line["discount"] ?? 0));
+    $storedFree = $freeQty;
     try {
       pos_q(
         "INSERT INTO purchase_lines (
            id, purchase_id, item_id, item_name, quantity_gm, rate_per_kg,
-           gst_rate, amount, gst_amount, total_amount, business_id, size, color
-         ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
-        "ssssddddddsss",
+           gst_rate, amount, gst_amount, total_amount, discount, free_qty, business_id, size, color
+         ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        "ssssddddddddsss",
         [
           $lineId, $purchaseId, $line["item"]["id"], pos_item_bill_name($line["item"]), $line["qty"], $line["rate"],
-          $line["gstRate"], $line["amount"], $line["gstAmount"], $line["total"], $bid,
+          $line["gstRate"], $line["amount"], $line["gstAmount"], $line["total"], $discount, $freeQty, $bid,
           $size !== "" ? $size : null, $color !== "" ? $color : null,
         ]
       );
     } catch (Exception $e) {
+      $storedFree = 0;
       pos_q(
         "INSERT INTO purchase_lines (
            id, purchase_id, item_id, item_name, quantity_gm, rate_per_kg,
@@ -524,7 +541,7 @@ function pos_insert_purchase_stock($bid, $branchId, $uid, $purchaseId, $purchase
         ]
       );
     }
-    pos_q("UPDATE items SET stock_gm = stock_gm + ? WHERE id = ? AND business_id = ?", "dss", [$line["qty"], $line["item"]["id"], $bid]);
+    pos_q("UPDATE items SET stock_gm = stock_gm + ? WHERE id = ? AND business_id = ?", "dss", [$line["qty"] + $storedFree, $line["item"]["id"], $bid]);
     if (function_exists("pos_create_purchase_batch")) {
       $batch = pos_create_purchase_batch($bid, $branchId ?? null, $uid, [
         "id" => $purchaseId, "purchase_number" => $purchaseNumber, "supplier_id" => $supplier["id"],
@@ -561,7 +578,7 @@ function pos_unwind_purchase($bid, $purchase, $oldLines) {
   if ($used) throw new Exception("Barcodes from this purchase were already used. It cannot be edited.");
   $need = [];
   foreach ($oldLines as $line) {
-    $qty = (float) ($line["quantity_gm"] ?? 0);
+    $qty = (float) ($line["quantity_gm"] ?? 0) + max(0, (float) ($line["free_qty"] ?? 0));
     if ($qty == 0.0) continue;
     $itemId = (string) ($line["item_id"] ?? "");
     $need[$itemId] = ($need[$itemId] ?? 0) + $qty;
