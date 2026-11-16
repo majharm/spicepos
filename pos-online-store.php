@@ -99,19 +99,29 @@ function pos_online_store_master_dispatch($path, $method, $body) {
   return false;
 }
 
-function pos_online_store_staff_dispatch($path, $method, $body, $bid) {
+function pos_online_store_staff_allowed($auth) {
+  $user = is_array($auth["user"] ?? null) ? $auth["user"] : [];
+  $role = (string) ($user["role"] ?? "");
+  if ($role === "business_admin" || $role === "resort_owner") return true;
+  return pos_can($user, "settings") || pos_can($user, "items") || pos_can($user, "orders");
+}
+
+function pos_online_store_staff_dispatch($path, $method, $body, $bid, $auth = null) {
   if ($path !== "online-store" && strpos($path, "online-store/") !== 0) return false;
   pos_ensure_business_columns();
   $rows = pos_q("SELECT id, name, status, online_store, store_banner_allowed FROM businesses WHERE id = ? LIMIT 1", "s", [$bid]);
   $biz = $rows[0] ?? [];
-  if ((int) ($biz["online_store"] ?? 0) !== 1) {
+  if (pos_online_store_flag($biz["online_store"] ?? 0) !== 1) {
     pos_send(403, ["error" => "Online Store is turned off for this shop", "php" => true]);
+  }
+  if (!pos_online_store_staff_allowed($auth)) {
+    pos_send(403, ["error" => "You do not have permission for this module", "php" => true]);
   }
   if ($path === "online-store" && $method === "GET") {
     $store = pos_q("SELECT * FROM online_stores WHERE business_id = ? LIMIT 1", "s", [$bid]);
     $row = $store[0] ?? null;
     pos_send(200, [
-      "business" => ["id" => $bid, "name" => $biz["name"] ?? "", "store_banner_allowed" => (int) ($biz["store_banner_allowed"] ?? 0) === 1 ? 1 : 0],
+      "business" => ["id" => $bid, "name" => $biz["name"] ?? "", "store_banner_allowed" => pos_online_store_flag($biz["store_banner_allowed"] ?? 0)],
       "store" => $row ? [
         "store_name" => $row["store_name"],
         "slug" => $row["slug"],
@@ -125,7 +135,7 @@ function pos_online_store_staff_dispatch($path, $method, $body, $bid) {
     ]);
   }
   if ($path === "online-store/banner" && $method === "DELETE") {
-    if ((int) ($biz["store_banner_allowed"] ?? 0) !== 1) pos_send(403, ["error" => "Login banner management is turned off for this shop", "php" => true]);
+    if (pos_online_store_flag($biz["store_banner_allowed"] ?? 0) !== 1) pos_send(403, ["error" => "Login banner management is turned off for this shop", "php" => true]);
     pos_q("UPDATE online_stores SET banner_desktop = NULL, banner_mobile = NULL, banner_enabled = 0 WHERE business_id = ?", "s", [$bid]);
     pos_send(200, ["ok" => true, "php" => true]);
   }

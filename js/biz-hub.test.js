@@ -34,6 +34,10 @@ test("Industry modules stay off grocery shops", () => {
   const grocery = H.modulesFor({ category: "Grocery" });
   const resto = H.modulesFor({ category: "Restaurant" });
   assert.ok(!grocery.some((m) => m.id === "resto-kot"));
+  assert.equal(grocery.some((m) => m.id === "online-store"), false);
+  assert.equal(H.modulesFor({ category: "Grocery", online_store: 1 }).find((m) => m.id === "online-store").view, "online-store");
+  assert.equal(H.modulesFor({ category: "Grocery", online_store: "1" }).some((m) => m.id === "online-store"), true);
+  assert.ok(H.SALES_SECTIONS.some((s) => s.id === "online" && s.ids.includes("online-store")));
   assert.ok(resto.some((m) => m.id === "resto-kot"));
   assert.ok(grocery.some((m) => m.id === "counter"));
   assert.ok(H.PAY_MODES.includes("upi") && H.PAY_MODES.includes("neft"));
@@ -80,7 +84,7 @@ test("POS shell wires Reports Center, payments, audit, and hub scripts", () => {
   assert.match(index, /id="view-hub-sales"/);
   assert.match(index, /id="dash-kpis"/);
   assert.match(ui, /id="dash-sales-graph"/);
-  assert.match(index, /biz-hub\.js\?v=20261116qrmod1/);
+  assert.match(index, /biz-hub\.js\?v=20261116storemenu1/);
   assert.match(index, /id="rep-pdf"/);
   assert.match(index, /id="rep-pay-mode"/);
   assert.match(app, /POSBizHubUi\?\.paintDashboard/);

@@ -27,6 +27,7 @@
     { id: "dashboard", group: "home", title: "Dashboard", view: "dashboard", perm: "dashboard" },
     { id: "counter", group: "sales", title: "Counter POS", view: "counter", perm: "counter", blurb: "Till for a new tax invoice" },
     { id: "invoices", group: "sales", title: "Sales Invoice", view: "orders", perm: "orders", blurb: "Tax invoices billed on Counter" },
+    { id: "online-store", group: "sales", title: "Online Store", view: "online-store", perm: "orders", blurb: "Store link, products, stock, and online orders" },
     { id: "new-invoice", group: "sales", title: "New Invoice", view: "counter", perm: "counter", blurb: "Open Counter and bill now" },
     { id: "quotation", group: "sales", title: "Quotation", view: "hub-sales", perm: "orders", desk: "quotation", blurb: "Price offer — no stock, no GST invoice" },
     { id: "sales-order", group: "sales", title: "Sales Order", view: "hub-sales", perm: "orders", desk: "sales-order", blurb: "Confirmed order before challan or invoice" },
@@ -408,6 +409,7 @@
 
   const SALES_SECTIONS = [
     { id: "billing", title: "Tax invoices", ids: ["counter", "invoices", "new-invoice", "cancelled", "recurring"] },
+    { id: "online", title: "Online", ids: ["online-store"] },
     { id: "docs", title: "Other invoice types", ids: ["quotation", "sales-order", "challan"] },
     { id: "returns", title: "Returns", ids: ["credit-note", "sales-return"] },
     { id: "money", title: "Collections", ids: ["receipt", "customer-due", "customer-ledger"] },
@@ -433,8 +435,14 @@
     { key: "outstandingSuppliers", label: "Outstanding Suppliers", view: "accounts", money: false },
   ];
 
+  function storeModuleOn(biz) {
+    const value = biz?.online_store;
+    return value === true || value === 1 || value === "1" || value === "true" || value === "yes" || value === "on";
+  }
+
   function modulesFor(biz) {
     return MODULES.filter((m) => matchKinds(m.kinds, kindsFor(biz))).filter((m) => {
+      if (m.id === "online-store") return storeModuleOn(biz);
       if (m.view !== "qr-orders") return true;
       return Number(biz?.qr_module) === 1;
     });

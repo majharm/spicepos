@@ -31,6 +31,15 @@ function wantsRemember(body) {
   return v === true || v === "true" || v === "1" || v === "on";
 }
 
+function moduleBit(value) {
+  if (Buffer.isBuffer(value)) {
+    if (value.length === 1) return value[0] === 1 ? 1 : 0;
+    return value.toString("utf8").trim() === "1" ? 1 : 0;
+  }
+  if (typeof value === "bigint") return value === 1n ? 1 : 0;
+  return value === true || value === 1 || value === "1" || value === "true" || value === "yes" || value === "on" ? 1 : 0;
+}
+
 function cookies(req) {
   const out = {};
   for (const part of String(req.headers.cookie || "").split(";")) {
@@ -422,8 +431,8 @@ export function registerAuth(app) {
           zomato_allowed: Number(business?.zomato_allowed) === 1 ? 1 : 0,
           swiggy_allowed: Number(business?.swiggy_allowed) === 1 ? 1 : 0,
           qr_module: Number(business?.qr_module) === 1 ? 1 : 0,
-          online_store: Number(business?.online_store) === 1 ? 1 : 0,
-          store_banner_allowed: Number(business?.store_banner_allowed) === 1 ? 1 : 0,
+          online_store: moduleBit(business?.online_store),
+          store_banner_allowed: moduleBit(business?.store_banner_allowed),
           subscription_expires_at: business?.subscription_expires_at,
         },
       });
@@ -699,8 +708,8 @@ export function registerAuth(app) {
           zomato_allowed: Number(req.auth.business?.zomato_allowed) === 1 ? 1 : 0,
           swiggy_allowed: Number(req.auth.business?.swiggy_allowed) === 1 ? 1 : 0,
           qr_module: Number(req.auth.business?.qr_module) === 1 ? 1 : 0,
-          online_store: Number(req.auth.business?.online_store) === 1 ? 1 : 0,
-          store_banner_allowed: Number(req.auth.business?.store_banner_allowed) === 1 ? 1 : 0,
+          online_store: moduleBit(req.auth.business?.online_store),
+          store_banner_allowed: moduleBit(req.auth.business?.store_banner_allowed),
           plan_id: req.auth.business?.plan_id,
           subscription_expires_at: req.auth.business?.subscription_expires_at,
         },

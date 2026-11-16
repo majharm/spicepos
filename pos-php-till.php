@@ -11,7 +11,7 @@ function pos_php_till_dispatch($path, $method, $body) {
     "bootstrap", "dashboard", "today", "suppliers", "items", "customers", "packs",
     "orders", "purchases", "stock", "staff", "branches", "devices", "holds",
     "checkout", "settings", "dining-tables", "tables", "table-shift", "table-shifts", "kots", "reports", "growth", "audit", "accounts", "backup", "units", "taxes", "brands",
-    "barcodes", "damage", "loyalty", "batches", "qr-orders", "prescriptions", "combos", "offers", "aggregator",
+    "barcodes", "damage", "loyalty", "batches", "qr-orders", "prescriptions", "combos", "offers", "aggregator", "online-store",
     "notifications", "automation",
   ];
   if (!in_array($head, $staff, true)) return false;
@@ -76,7 +76,7 @@ function pos_php_till_dispatch($path, $method, $body) {
 
   if ($path === "online-store" || strpos($path, "online-store/") === 0) {
     require_once __DIR__ . "/pos-online-store.php";
-    if (pos_online_store_staff_dispatch($path, $method, $body, $bid)) return true;
+    if (pos_online_store_staff_dispatch($path, $method, $body, $bid, $auth)) return true;
   }
 
   if ($path === "qr-orders" || strpos($path, "qr-orders/") === 0) {

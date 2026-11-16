@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
 import { query, withTransaction } from "./db.js";
 import { bid } from "./context.js";
-import { requirePerm } from "./auth.js";
+import { requirePerm, requirePermAny } from "./auth.js";
 import { hashPassword, verifyPassword } from "./password.js";
 import { setPlatformSetting } from "./settings.js";
 import { qrLineAmount, qrQuantityToBase } from "./qr-ordering.js";
@@ -12,7 +12,16 @@ const BANNER_OFF = "Login banner management is turned off for this shop";
 const SESSION_TTL = 60 * 60 * 24 * 14;
 
 export function normalizeOnlineStore(val) {
+  if (typeof Buffer !== "undefined" && Buffer.isBuffer(val)) {
+    if (val.length === 1) return val[0] === 1 ? 1 : 0;
+    return val.toString("utf8").trim() === "1" ? 1 : 0;
+  }
+  if (typeof val === "bigint") return val === 1n ? 1 : 0;
   return val === true || val === 1 || val === "1" || val === "on" || val === "true" || val === "yes" ? 1 : 0;
+}
+
+function storeBit(value) {
+  return normalizeOnlineStore(value) === 1;
 }
 
 export function onlineStoreForSignup(raw, forAll) {
@@ -211,7 +220,7 @@ function storeUrl(req, slug) {
 }
 
 function assertModule(biz) {
-  if (!biz || Number(biz.online_store) !== 1 || biz.status === "inactive") {
+  if (!biz || !storeBit(biz.online_store) || biz.status === "inactive") {
     const err = new Error(STORE_OFF);
     err.status = 403;
     throw err;
@@ -292,9 +301,9 @@ export function registerOnlineStoreMaster(app) {
         forAll,
         businesses: businesses.map((b) => ({
           ...b,
-          online_store: Number(b.online_store) === 1 ? 1 : 0,
-          store_banner_allowed: Number(b.store_banner_allowed) === 1 ? 1 : 0,
-          status_label: Number(b.online_store) === 1 ? "Enabled" : "Disabled",
+          online_store: storeBit(b.online_store) ? 1 : 0,
+          store_banner_allowed: storeBit(b.store_banner_allowed) ? 1 : 0,
+          status_label: storeBit(b.online_store) ? "Enabled" : "Disabled",
         })),
       });
     } catch (err) {
@@ -341,10 +350,10 @@ export function registerOnlineStoreMaster(app) {
       if (!biz) return res.status(404).json({ error: "Business not found" });
       const online = Object.prototype.hasOwnProperty.call(req.body || {}, "online_store")
         ? normalizeOnlineStore(req.body.online_store)
-        : Number(biz.online_store) === 1 ? 1 : 0;
+        : storeBit(biz.online_store) ? 1 : 0;
       const banner = Object.prototype.hasOwnProperty.call(req.body || {}, "store_banner_allowed")
         ? normalizeOnlineStore(req.body.store_banner_allowed)
-        : Number(biz.store_banner_allowed) === 1 ? 1 : 0;
+        : storeBit(biz.store_banner_allowed) ? 1 : 0;
       await query("UPDATE businesses SET online_store = ?, store_banner_allowed = ? WHERE id = ?", [online, banner, biz.id]);
       res.json({ ok: true, id: biz.id, online_store: online, store_banner_allowed: banner, status_label: online ? "Enabled" : "Disabled" });
     } catch (err) {
@@ -354,14 +363,14 @@ export function registerOnlineStoreMaster(app) {
 }
 
 export function registerOnlineStoreStaff(app) {
-  app.get("/api/online-store", requirePerm("settings"), async (req, res) => {
+  app.get("/api/online-store", requirePermAny("settings", "items", "orders"), async (req, res) => {
     try {
       await ensureOnlineStoreSchema();
       const biz = await businessById(bid());
       assertModule(biz);
       const store = await loadStore(biz.id);
       res.json({
-        business: { id: biz.id, name: biz.name, store_banner_allowed: Number(biz.store_banner_allowed) === 1 ? 1 : 0 },
+        business: { id: biz.id, name: biz.name, store_banner_allowed: storeBit(biz.store_banner_allowed) ? 1 : 0 },
         store: store
           ? {
               store_name: store.store_name,
@@ -524,7 +533,7 @@ export function registerOnlineStoreStaff(app) {
       await ensureOnlineStoreSchema();
       const biz = await businessById(bid());
       assertModule(biz);
-      if (Number(biz.store_banner_allowed) !== 1) return res.status(403).json({ error: BANNER_OFF });
+      if (!storeBit(biz.store_banner_allowed)) return res.status(403).json({ error: BANNER_OFF });
       const store = await loadStore(biz.id);
       if (!store) return res.status(400).json({ error: "Create the online store before adding a banner" });
       const desktop = Object.prototype.hasOwnProperty.call(req.body || {}, "banner_desktop")
@@ -551,7 +560,7 @@ export function registerOnlineStoreStaff(app) {
       await ensureOnlineStoreSchema();
       const biz = await businessById(bid());
       assertModule(biz);
-      if (Number(biz.store_banner_allowed) !== 1) return res.status(403).json({ error: BANNER_OFF });
+      if (!storeBit(biz.store_banner_allowed)) return res.status(403).json({ error: BANNER_OFF });
       await query(
         "UPDATE online_stores SET banner_desktop = NULL, banner_mobile = NULL, banner_enabled = 0, updated_at = CURRENT_TIMESTAMP(3) WHERE business_id = ?",
         [biz.id],
@@ -625,7 +634,7 @@ export function registerOnlineStorePublic(app) {
       await ensureOnlineStoreSchema();
       const slug = normalizeSlug(req.params.slug);
       const row = await publicBusiness(slug);
-      if (!row || Number(row.online_store) !== 1 || row.status !== "active") {
+      if (!row || !storeBit(row.online_store) || row.status !== "active") {
         return res.status(404).json({ error: "Online store is not available" });
       }
       const banner = storefrontBanner(row);
@@ -646,7 +655,7 @@ export function registerOnlineStorePublic(app) {
     try {
       await ensureOnlineStoreSchema();
       const row = await publicBusiness(normalizeSlug(req.params.slug));
-      if (!row || Number(row.online_store) !== 1 || Number(row.published) !== 1) {
+      if (!row || !storeBit(row.online_store) || Number(row.published) !== 1) {
         return res.status(403).json({ error: STORE_OFF });
       }
       const name = clean(req.body?.name, 160);
@@ -674,7 +683,7 @@ export function registerOnlineStorePublic(app) {
     try {
       await ensureOnlineStoreSchema();
       const row = await publicBusiness(normalizeSlug(req.params.slug));
-      if (!row || Number(row.online_store) !== 1 || Number(row.published) !== 1) {
+      if (!row || !storeBit(row.online_store) || Number(row.published) !== 1) {
         return res.status(403).json({ error: STORE_OFF });
       }
       const mobile = digits(req.body?.mobile).slice(-10);
@@ -705,7 +714,7 @@ export function registerOnlineStorePublic(app) {
     try {
       await ensureOnlineStoreSchema();
       const row = await publicBusiness(normalizeSlug(req.params.slug));
-      if (!row || Number(row.online_store) !== 1 || Number(row.published) !== 1) {
+      if (!row || !storeBit(row.online_store) || Number(row.published) !== 1) {
         return res.status(403).json({ error: STORE_OFF });
       }
       const customer = await customerFromCookie(req, row.id);
@@ -720,7 +729,7 @@ export function registerOnlineStorePublic(app) {
     try {
       await ensureOnlineStoreSchema();
       const row = await publicBusiness(normalizeSlug(req.params.slug));
-      if (!row || Number(row.online_store) !== 1 || Number(row.published) !== 1) {
+      if (!row || !storeBit(row.online_store) || Number(row.published) !== 1) {
         return res.status(403).json({ error: STORE_OFF });
       }
       const customer = await customerFromCookie(req, row.id);
@@ -736,7 +745,7 @@ export function registerOnlineStorePublic(app) {
     try {
       await ensureOnlineStoreSchema();
       const row = await publicBusiness(normalizeSlug(req.params.slug));
-      if (!row || Number(row.online_store) !== 1) return res.status(403).json({ error: STORE_OFF });
+      if (!row || !storeBit(row.online_store)) return res.status(403).json({ error: STORE_OFF });
       const customer = await customerFromCookie(req, row.id);
       if (!customer) return res.status(401).json({ error: "Sign in required" });
       const orders = await query(

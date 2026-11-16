@@ -564,8 +564,36 @@ function qrModuleOn() {
   return Number(state.businessMeta?.qr_module) === 1;
 }
 
+function moduleBitOn(value) {
+  return value === true || value === 1 || value === "1" || value === "true" || value === "yes" || value === "on";
+}
+
 function onlineStoreOn() {
-  return Number(state.businessMeta?.online_store) === 1;
+  return moduleBitOn(state.businessMeta?.online_store);
+}
+
+function onlineStoreAllowed() {
+  if (!onlineStoreOn()) return false;
+  const role = String(state.session?.role || "").trim();
+  if (role === "business_admin" || role === "resort_owner") return true;
+  return can("settings") || can("items") || can("orders");
+}
+
+function paintOnlineStoreNav() {
+  const show = onlineStoreAllowed();
+  document.querySelectorAll('[data-view="online-store"], [data-m-view="online-store"], [data-online-store]').forEach((el) => {
+    el.hidden = !show;
+  });
+  const sales = document.getElementById("view-hub-sales");
+  if (sales && !sales.hidden) globalThis.POSBizHubUi?.paintSalesDesk?.();
+}
+
+function applyBusinessFlags(row) {
+  if (!row || typeof row !== "object") return;
+  if (!state.businessMeta) state.businessMeta = {};
+  if (Object.prototype.hasOwnProperty.call(row, "online_store")) state.businessMeta.online_store = moduleBitOn(row.online_store) ? 1 : 0;
+  if (Object.prototype.hasOwnProperty.call(row, "store_banner_allowed")) state.businessMeta.store_banner_allowed = moduleBitOn(row.store_banner_allowed) ? 1 : 0;
+  if (Object.prototype.hasOwnProperty.call(row, "qr_module")) state.businessMeta.qr_module = moduleBitOn(row.qr_module) ? 1 : 0;
 }
 
 function isBarShop() {
@@ -3139,7 +3167,7 @@ function applyNav() {
     if (view === "offers") btn.hidden = !(can("discount") || can("items") || can("growth"));
     if (view === "packs" && !isSpiceShop()) btn.hidden = true;
     if (view === "qr-orders" && !qrModuleOn()) btn.hidden = true;
-    if (view === "online-store" && (!onlineStoreOn() || !(can("settings") || can("items") || can("orders")))) btn.hidden = true;
+    if (view === "online-store") btn.hidden = !onlineStoreAllowed();
     if (view === "online-orders") btn.hidden = !aggregatorDeskAllowed() || !can("orders");
     if (view === "prescriptions") btn.hidden = !isPharmacyShop() || !can("orders");
     if (view === "returns") btn.hidden = !isClassicBillShop() || !can("orders");
@@ -3157,11 +3185,7 @@ function applyNav() {
       btn.hidden = true;
     });
   }
-  if (!onlineStoreOn()) {
-    document.querySelectorAll('.nav-btn[data-view="online-store"]').forEach((btn) => {
-      btn.hidden = true;
-    });
-  }
+  paintOnlineStoreNav();
   paintStaffRoleOptions();
   const growthBtn = $("open-growth");
   if (growthBtn) growthBtn.hidden = !(can("growth") || can("reports"));
@@ -3501,7 +3525,7 @@ function showSettingsTab(tab) {
 function showView(name) {
   if (name === "qr-orders" && isPharmacyShop()) name = "prescriptions";
   else if (name === "qr-orders" && !qrModuleOn()) name = landingView();
-  if (name === "online-store" && !onlineStoreOn()) name = landingView();
+  if (name === "online-store" && !onlineStoreAllowed()) name = landingView();
   if (name === "prescriptions" && !isPharmacyShop()) name = can("counter") ? "counter" : landingView();
   if (name === "kot" && (!isRestaurantShop() || !can("kot"))) name = can("counter") ? "counter" : landingView();
   if (name === "recurring" && !can("orders")) name = landingView();
@@ -9028,6 +9052,7 @@ async function loadBootstrap() {
     }
   }
   state.company = data.company;
+  applyBusinessFlags(data.business);
   applyNav();
   state.support = data.support || {};
   state.plan = data.plan || null;
@@ -11612,11 +11637,11 @@ function startQrModuleWatch() {
       if (!me?.business || !state.businessMeta) return;
       const next = Number(me.business.qr_module) === 1 ? 1 : 0;
       const prev = Number(state.businessMeta.qr_module) === 1 ? 1 : 0;
-      const nextStore = Number(me.business.online_store) === 1 ? 1 : 0;
-      const prevStore = Number(state.businessMeta.online_store) === 1 ? 1 : 0;
+      const nextStore = moduleBitOn(me.business.online_store) ? 1 : 0;
+      const prevStore = moduleBitOn(state.businessMeta.online_store) ? 1 : 0;
       state.businessMeta.qr_module = next;
       state.businessMeta.online_store = nextStore;
-      state.businessMeta.store_banner_allowed = Number(me.business.store_banner_allowed) === 1 ? 1 : 0;
+      state.businessMeta.store_banner_allowed = moduleBitOn(me.business.store_banner_allowed) ? 1 : 0;
       if (next === prev && nextStore === prevStore) return;
       applyNav();
       if (next) startQrOrderWatch();
@@ -11631,6 +11656,8 @@ function startQrModuleWatch() {
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "visible") void pull();
   });
+  window.addEventListener("focus", () => void pull());
+  void pull();
 }
 
 function startQrOrderWatch() {

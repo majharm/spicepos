@@ -1,3 +1,6 @@
+.nav-btn[data-view="online-store"][hidden],
+[data-m-view="online-store"][hidden],
+[data-online-store][hidden] { display: none !important; }
 .online-store-desk { display: grid; gap: 16px; }
 .online-store-hero, .store-card { background: #fff; border: 1px solid #e6e1d8; border-radius: 16px; padding: 16px; }
 .store-tabs { display: flex; gap: 8px; flex-wrap: wrap; }

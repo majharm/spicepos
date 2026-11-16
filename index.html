@@ -7,7 +7,7 @@
     <title>ATAV POS</title>
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="./css/pos.css?v=20261103tot1" />
-    <link rel="stylesheet" href="./css/online-store.css?v=20261116store1" />
+    <link rel="stylesheet" href="./css/online-store.css?v=20261116storemenu1" />
     <link rel="stylesheet" href="./css/crm.css?v=20261105crm1" />
     <link rel="stylesheet" href="./css/barcode-desk.css?v=20261024bcdesk1" />
     <link rel="stylesheet" href="./css/saas.css?v=20261031welcome1" />
@@ -42,6 +42,7 @@
           <div class="nav-group">
             <p class="nav-group-label" data-i18n="nav.main">Home</p>
             <button class="nav-btn active" type="button" data-view="dashboard"><span class="nav-icon" aria-hidden="true">⌂</span><span data-i18n="nav.dashboard">Dashboard</span></button>
+            <button class="nav-btn" type="button" data-view="online-store" hidden><span class="nav-icon" aria-hidden="true">▣</span>Online Store</button>
             <button class="nav-btn" type="button" data-view="growth"><span class="nav-icon" aria-hidden="true">◈</span><span data-i18n="nav.growth">AI Growth</span></button>
             <button class="nav-btn" type="button" data-view="counter"><span class="nav-icon" aria-hidden="true">⊞</span><span data-i18n="nav.counter">Counter</span></button>
             <button class="nav-btn" type="button" data-view="kot"><span class="nav-icon" aria-hidden="true">▣</span>Kitchen KOT <span class="nav-badge" id="kot-badge" hidden></span></button>
@@ -55,7 +56,7 @@
             <button class="nav-btn" type="button" data-view="crm" hidden><span class="nav-icon" aria-hidden="true">☺</span>CRM</button>
             <button class="nav-btn classic-bill-only" type="button" data-view="returns"><span class="nav-icon" aria-hidden="true">↺</span><span data-i18n="nav.returns">Manage Returns</span></button>
             <button class="nav-btn pharmacy-hide" type="button" data-view="qr-orders"><span class="nav-icon" aria-hidden="true">▦</span><span data-i18n="nav.qr_orders">QR Orders</span> <span class="nav-badge" id="qr-order-badge" hidden></span></button>
-            <button class="nav-btn" type="button" data-view="online-store"><span class="nav-icon" aria-hidden="true">▣</span>Online Store</button>
+            <button class="nav-btn" type="button" data-view="online-store" hidden><span class="nav-icon" aria-hidden="true">▣</span>Online Store</button>
             <button class="nav-btn pharmacy-hide" type="button" data-view="online-orders"><span class="nav-icon" aria-hidden="true">▢</span>Online orders <span class="nav-badge" id="agg-order-badge" hidden></span></button>
             <button class="nav-btn pharmacy-only" type="button" data-view="prescriptions"><span class="nav-icon" aria-hidden="true">▦</span>Prescriptions <span class="nav-badge" id="rx-badge" hidden></span></button>
             <button class="nav-btn" type="button" data-view="offers"><span class="nav-icon" aria-hidden="true">%</span><span data-i18n="nav.offers">Offers</span></button>
@@ -171,6 +172,7 @@
                 <button type="button" data-view-jump="items">Items</button>
                 <button type="button" data-view-jump="customers">Customers</button>
                 <button type="button" data-view-jump="reports">Reports</button>
+                <button type="button" data-view-jump="online-store" data-online-store hidden>Online Store</button>
               </div>
             </details>
             <button type="button" class="btn icon-btn" id="dash-notify" title="Notifications" aria-label="Notifications">🔔<span class="nav-badge" id="dash-notify-count" hidden></span></button>
@@ -218,6 +220,7 @@
               <button type="button" data-m-view="items"><span class="m-tile-ico is-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 8.2 12 4.4l8 3.8-8 3.8-8-3.8z"/><path d="M4 8.2v7.4L12 19.4l8-3.8V8.2"/><path d="M12 12v7.4"/></svg></span>Items / Services</button>
               <button type="button" data-m-view="expenses"><span class="m-tile-ico is-exp"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M8 3.5h8l.8 2H19a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-13a1 1 0 0 1 1-1h2.2L8 3.5z"/><path d="M9 11h6M9 14.5h4"/></svg></span>Expenses</button>
               <button type="button" data-m-view="payments"><span class="m-tile-ico is-inc"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3.5" y="7" width="17" height="11.5" rx="2.2"/><path d="M3.5 11h17"/><circle cx="16.2" cy="14.6" r="1.3"/></svg></span>Income</button>
+              <button type="button" data-m-view="online-store" data-online-store hidden><span class="m-tile-ico is-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 8.2 12 4.4l8 3.8-8 3.8-8-3.8z"/><path d="M4 8.2v7.4L12 19.4l8-3.8V8.2"/></svg></span>Online Store</button>
             </div>
             <section class="m-home-notes" id="m-home-notes" hidden aria-live="polite"></section>
             <section class="m-recent">
@@ -240,6 +243,7 @@
               <p class="dash-actions">
                 <button class="btn" type="button" id="dash-customize" title="Show or hide widgets">Widgets</button>
                 <button class="btn primary" type="button" data-view-jump="counter" id="open-pos">New bill</button>
+                <button class="btn" type="button" id="open-online-store" data-view-jump="online-store" data-online-store hidden>Online Store</button>
                 <button class="btn" type="button" data-view-jump="reports">Reports</button>
                 <button class="btn" type="button" id="open-growth">AI Growth</button>
               </p>
@@ -3914,7 +3918,7 @@
     <script src="./js/payment-methods.js?v=20260918pay1" defer></script>
     <script src="./js/tax-master.js?v=20261030tax1" defer></script>
     <script src="./js/offer-profit.js?v=20261107profit2" defer></script>
-    <script src="./js/biz-hub.js?v=20261116qrmod1" defer></script>
+    <script src="./js/biz-hub.js?v=20261116storemenu1" defer></script>
     <script src="./js/biz-hub-ui.js?v=20261116qrmod1" defer></script>
     <script src="./js/salon.js?v=20260919salon1" defer></script>
     <script src="./js/salon-ui.js?v=20260919salon1" defer></script>
@@ -3933,7 +3937,7 @@
     <script src="./js/quotations.js?v=20261105mail1" defer></script>
     <script src="./js/stock-desk.js?v=20261103stock1" defer></script>
     <script src="./js/crm.js?v=20261105crm1" defer></script>
-    <script src="./js/app.js?v=20261116store1" defer></script>
+    <script src="./js/app.js?v=20261116storemenu1" defer></script>
     <script src="./js/online-store-desk.js?v=20261116store1" defer></script>
     <script src="./js/automation-shop.js?v=20261031auto1" defer></script>
     <script src="./js/recurring-ui.js?v=20261027rec3" defer></script>

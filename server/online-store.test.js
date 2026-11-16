@@ -5,6 +5,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   buildStoreLine,
+  normalizeOnlineStore,
   normalizeSlug,
   onlineStoreForSignup,
   storefrontBanner,
@@ -21,6 +22,10 @@ test("Online Store stays off for a new business unless Master Admin allows it", 
   assert.equal(onlineStoreForSignup({ onlineStore: 0 }, 1), 0);
   assert.equal(onlineStoreForSignup({ online_store: 1 }, 0), 1);
   assert.equal(onlineStoreForSignup({ onlineStore: "yes" }, 0), 1);
+  assert.equal(normalizeOnlineStore(Buffer.from([1])), 1);
+  assert.equal(normalizeOnlineStore(Buffer.from([0])), 0);
+  assert.equal(normalizeOnlineStore("1"), 1);
+  assert.equal(normalizeOnlineStore(true), 1);
 });
 
 test("store URL and login banner stay specific to one business", () => {
@@ -51,7 +56,16 @@ test("Master Admin and the owner dashboard wire the Online Store permission", ()
   assert.match(master, /Disable for All Businesses/);
   assert.match(master, /data-store-toggle/);
   assert.match(app, /function onlineStoreOn/);
+  assert.match(app, /function onlineStoreAllowed/);
+  assert.match(app, /function paintOnlineStoreNav/);
+  assert.match(app, /function applyBusinessFlags/);
+  assert.match(app, /window\.addEventListener\("focus", \(\) => void pull\(\)\)/);
+  assert.match(app, /void pull\(\);/);
   assert.match(app, /data-view="online-store"/);
+  assert.match(read("index.html"), /id="open-online-store"/);
+  assert.match(read("server/online-store.js"), /requirePermAny\("settings", "items", "orders"\)/);
+  assert.match(read("pos-php-till.php"), /"online-store"/);
+  assert.match(read("pos-online-store.php"), /function pos_online_store_staff_allowed/);
   assert.match(read("index.html"), /data-view="online-store"/);
   assert.match(read("js/online-store-desk.js"), /Login page banner/);
   assert.match(read("js/storefront.js"), /store-banner-default/);
