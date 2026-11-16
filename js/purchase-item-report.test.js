@@ -140,4 +140,12 @@ test("purchase entry stores free quantity once and adds it to stock", () => {
   assert.match(app, /data-po-free=/);
   assert.match(app, /free_qty: POSUnits\.toBase/);
   assert.match(app, /Item-Wise Purchase Report|sectionHtml/);
+  const till = fs.readFileSync(new URL("../pos-php-till.php", import.meta.url), "utf8");
+  const reportPhp = fs.readFileSync(new URL("../pos-item-purchases.php", import.meta.url), "utf8");
+  assert.match(till, /reports\/item-purchases/);
+  assert.match(till, /pos_item_purchases_shop/);
+  assert.ok(till.indexOf("reports/item-purchases") < till.indexOf('($path === "reports" || $path === "reports/excel")'));
+  assert.match(reportPhp, /function pos_item_purchases_shop/);
+  assert.match(reportPhp, /NOT IN \('cancelled','canceled','void','voided'\)/);
+  assert.match(reportPhp, /purchase_return/);
 });

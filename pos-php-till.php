@@ -889,6 +889,12 @@ function pos_php_till_dispatch($path, $method, $body) {
     return true;
   }
 
+  if ($method === "GET" && ($path === "reports/item-purchases" || $path === "reports/item-purchases/excel" || $path === "reports/item-purchases/pdf" || $path === "reports/item-purchases/csv")) {
+    require_once __DIR__ . "/pos-item-purchases.php";
+    pos_item_purchases_shop($path, $bid, $auth);
+    return true;
+  }
+
   if (($path === "reports" || $path === "reports/excel") && $method === "GET") {
     require_once __DIR__ . "/pos-reports.php";
     $from = $_GET["from"] ?? (function_exists("pos_indian_fy") ? pos_indian_fy()["from"] : date("Y-m-d"));
