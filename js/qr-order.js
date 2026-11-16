@@ -107,6 +107,36 @@
     });
   }
 
+  function offerYmd(value) {
+    const raw = String(value ?? "").trim();
+    const match = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (!match) return "";
+    const day = `${match[1]}-${match[2]}-${match[3]}`;
+    if (day.startsWith("0000") || Number(match[1]) < 1990) return "";
+    return day;
+  }
+
+  function offerDateLabel(value) {
+    const day = offerYmd(value);
+    if (!day) return "";
+    const [year, month, date] = day.split("-").map(Number);
+    return new Intl.DateTimeFormat("en-IN", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+      timeZone: "UTC",
+    }).format(new Date(Date.UTC(year, month - 1, date)));
+  }
+
+  function offerDateRange(offer) {
+    const start = offerDateLabel(offer?.start_date || offer?.startDate);
+    const end = offerDateLabel(offer?.end_date || offer?.endDate);
+    if (start && end) return `${start} to ${end}`;
+    if (start) return `From ${start}`;
+    if (end) return `Until ${end}`;
+    return "";
+  }
+
   function offerBlurb(offer) {
     const type = String(offer.offer_type || offer.type || "");
     const v = Number(offer.discount_value) || 0;
@@ -153,14 +183,21 @@
       return;
     }
     if (board.id === "offer-strip") {
-      board.textContent = `Offers on this menu: ${offers.map((offer) => offer.name).filter(Boolean).join(" · ")}`;
+      board.textContent = `Offers on this menu: ${offers
+        .map((offer) => {
+          const name = offer.name || "Offer";
+          const range = offerDateRange(offer);
+          return range ? `${name} (${range})` : name;
+        })
+        .join(" · ")}`;
       return;
     }
     board.innerHTML =
       `<p class="offer-kicker">Offers today</p><div class="offer-cards">${offers
         .map((offer) => {
           const blurb = offerBlurb(offer);
-          return `<article class="offer-card"><strong>${esc(offer.name || "Offer")}</strong>${blurb ? `<span>${esc(blurb)}</span>` : ""}</article>`;
+          const range = offerDateRange(offer);
+          return `<article class="offer-card"><strong>${esc(offer.name || "Offer")}</strong>${blurb ? `<span>${esc(blurb)}</span>` : ""}${range ? `<span class="offer-dates">${esc(range)}</span>` : ""}</article>`;
         })
         .join("")}</div>`;
   }
@@ -384,7 +421,7 @@
             ? `<p class="item-price"><s>${esc(money(item.retail_rate))}</s> ${esc(money(Math.max(0, Number(item.retail_rate) - info.save)))} / ${esc(unit.label)}</p>`
             : `<p class="item-price">${esc(money(item.retail_rate))} / ${esc(unit.label)}</p>`;
           const offerHtml = info.name
-            ? `<p class="item-offer">${esc(info.name)}${info.save > 0 ? ` · save ${esc(money(info.save))}` : info.wouldSave > 0 ? ` · add more, save ${esc(money(info.wouldSave))}` : ""}</p>`
+            ? `<p class="item-offer">${esc(info.name)}${info.save > 0 ? ` · save ${esc(money(info.save))}` : info.wouldSave > 0 ? ` · add more, save ${esc(money(info.wouldSave))}` : ""}${info.dates ? `<span class="item-offer-dates">${esc(info.dates)}</span>` : ""}</p>`
             : "";
           return `<article class="menu-card">
             ${photo}
@@ -455,6 +492,7 @@
     return {
       name: hit.name || best?.offer?.name || "",
       save,
+      dates: offerDateRange(hit),
       pending: one.pending?.[0]?.message || "",
       wouldSave: Math.round((Number(more.discount || one.pending?.[0]?.wouldSave) || 0) * 100) / 100,
     };
