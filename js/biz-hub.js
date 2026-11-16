@@ -434,7 +434,10 @@
   ];
 
   function modulesFor(biz) {
-    return MODULES.filter((m) => matchKinds(m.kinds, kindsFor(biz)));
+    return MODULES.filter((m) => matchKinds(m.kinds, kindsFor(biz))).filter((m) => {
+      if (m.view !== "qr-orders") return true;
+      return Number(biz?.qr_module) === 1;
+    });
   }
 
   function reportsFor(biz) {

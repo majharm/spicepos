@@ -421,6 +421,7 @@ export function registerAuth(app) {
           resort_enabled: Number(business?.resort_enabled) === 1 ? 1 : 0,
           zomato_allowed: Number(business?.zomato_allowed) === 1 ? 1 : 0,
           swiggy_allowed: Number(business?.swiggy_allowed) === 1 ? 1 : 0,
+          qr_module: Number(business?.qr_module) === 1 ? 1 : 0,
           subscription_expires_at: business?.subscription_expires_at,
         },
       });
@@ -695,6 +696,7 @@ export function registerAuth(app) {
           resort_enabled: Number(req.auth.business?.resort_enabled) === 1 ? 1 : 0,
           zomato_allowed: Number(req.auth.business?.zomato_allowed) === 1 ? 1 : 0,
           swiggy_allowed: Number(req.auth.business?.swiggy_allowed) === 1 ? 1 : 0,
+          qr_module: Number(req.auth.business?.qr_module) === 1 ? 1 : 0,
           plan_id: req.auth.business?.plan_id,
           subscription_expires_at: req.auth.business?.subscription_expires_at,
         },

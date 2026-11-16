@@ -518,7 +518,8 @@ test("Medical shops show pharmacy medicine fields on the item form", () => {
   assert.match(index, /data-view="qr-orders"/);
   assert.match(index, /nav-btn pharmacy-hide[^>]*data-view="qr-orders"/);
   assert.match(index, /data-view="prescriptions"/);
-  assert.match(app, /view === "qr-orders" && isPharmacyShop\(\)/);
+  assert.match(app, /view === "qr-orders" && !qrModuleOn\(\)/);
+  assert.match(app, /function qrModuleOn\(\) \{\n  if \(isPharmacyShop\(\) \|\| isPrintShop\(\) \|\| isGymShop\(\)\) return false;/);
   assert.match(app, /function loadPrescriptions/);
   assert.match(app, /function pharmacyStockCards/);
   assert.match(app, /function stockExpiryYmd/);

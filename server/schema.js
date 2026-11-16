@@ -147,6 +147,11 @@ export async function ensureSchema() {
   await addColumn("company_settings", "dining_tables_json", "TEXT NULL");
   await addColumn("businesses", "zomato_allowed", "TINYINT(1) NOT NULL DEFAULT 0");
   await addColumn("businesses", "swiggy_allowed", "TINYINT(1) NOT NULL DEFAULT 0");
+  const qrModuleWasNew = !(await hasColumn("businesses", "qr_module"));
+  await addColumn("businesses", "qr_module", "TINYINT(1) NOT NULL DEFAULT 0");
+  if (qrModuleWasNew && (await hasColumn("businesses", "qr_module"))) {
+    await query("UPDATE businesses SET qr_module = 1");
+  }
   await addColumn("company_settings", "table_shifting_enabled", "TINYINT(1) NOT NULL DEFAULT 0");
   await addColumn("company_settings", "scale_enabled", "TINYINT(1) NOT NULL DEFAULT 0");
   await addColumn("company_settings", "camera_scanner_enabled", "TINYINT(1) NOT NULL DEFAULT 0");

@@ -15,6 +15,7 @@ import {
   qrMobileDigits,
   qrInvoiceTotals,
   qrOrderingBlocked,
+  qrOrderingBlockMessage,
   qrCustomerTrack,
 } from "./qr-ordering.js";
 import "../js/offers.js";
@@ -474,15 +475,24 @@ test("QR invoice totals lift offer discount onto the header so Invoices print gr
   assert.equal(offered.total, 94.5);
 });
 
-test("QR ordering is blocked for pharmacy shops", () => {
-  assert.equal(qrOrderingBlocked({ category: "Medical" }), true);
-  assert.equal(qrOrderingBlocked({ name: "ABC MEDICAL" }), true);
-  assert.equal(qrOrderingBlocked({ category: "Spices & masala" }), false);
+test("QR ordering stays off until Master Admin enables the module", () => {
+  assert.equal(qrOrderingBlocked({ category: "Medical", qr_module: 1 }), true);
+  assert.equal(qrOrderingBlocked({ name: "ABC MEDICAL", qr_module: 1 }), true);
+  assert.equal(qrOrderingBlocked({ category: "Spices & masala" }), true);
+  assert.equal(qrOrderingBlocked({ category: "Spices & masala", qr_module: 0 }), true);
+  assert.equal(qrOrderingBlocked({ business_type: "Restaurant", qr_module: 1 }), false);
+  assert.equal(qrOrderingBlocked({ business_type: "Cafe", qr_module: "1" }), false);
+  assert.match(qrOrderingBlockMessage({ category: "Medical", qr_module: 1 }), /pharmacy shops/);
+  assert.match(qrOrderingBlockMessage({ business_type: "Restaurant", qr_module: 0 }), /turned off/);
   const php = readFileSync(path.join(root, "pos-qr-ordering.php"), "utf8");
   const app = readFileSync(path.join(root, "js/app.js"), "utf8");
   assert.match(php, /function pos_qr_ordering_blocked/);
+  assert.match(php, /function pos_qr_ordering_block_message/);
   assert.match(php, /QR ordering is not available for pharmacy shops/);
-  assert.match(app, /isPharmacyShop\(\)\) return/);
+  assert.match(php, /QR ordering is turned off for this shop/);
+  assert.match(app, /function qrModuleOn/);
+  assert.match(app, /function startQrModuleWatch/);
+  assert.doesNotMatch(readFileSync(path.join(root, "server/schema.js"), "utf8"), /DROP TABLE qr_orders/);
 });
 
 test("QR menu page paints a visible offer board from live offers", () => {

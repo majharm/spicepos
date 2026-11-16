@@ -37,9 +37,16 @@ const QR_TIME_COLS = {
 };
 const QR_TIME_FIELDS = ["accepted_at", "kot_created_at", "preparing_at", "ready_at", "served_at", "completed_at", "cancelled_at", "rejected_at"];
 const QR_PHARMACY_OFF = "QR ordering is not available for pharmacy shops";
+const QR_MODULE_OFF = "QR ordering is turned off for this shop";
 
 export function qrOrderingBlocked(biz) {
-  return POSFootwear?.isPharmacyShop?.(biz) === true;
+  if (POSFootwear?.isPharmacyShop?.(biz) === true) return true;
+  return Number(biz?.qr_module) !== 1;
+}
+
+export function qrOrderingBlockMessage(biz) {
+  if (POSFootwear?.isPharmacyShop?.(biz) === true) return QR_PHARMACY_OFF;
+  return QR_MODULE_OFF;
 }
 
 export async function ensureQrOrderSchema(conn = null) {
@@ -953,7 +960,7 @@ export function registerQrPublic(app) {
       await ensureQrOrderSchema();
       const business = await businessForPublic(req.query.shop);
       if (!business) return res.status(404).json({ error: "Shop not found" });
-      if (qrOrderingBlocked(business)) return res.status(403).json({ error: QR_PHARMACY_OFF });
+      if (qrOrderingBlocked(business)) return res.status(403).json({ error: qrOrderingBlockMessage(business) });
       const items = await query(
         `SELECT id, code, name, category, subcategory, base_unit, unit, retail_rate, gst_rate,
                 hsn, image_url, stock_gm, status
@@ -1062,7 +1069,7 @@ export function registerQrPublic(app) {
       const input = normalizeQrOrderPayload(req.body || {});
       const business = await businessForPublic(req.body?.shop);
       if (!business) return res.status(404).json({ error: "Shop not found" });
-      if (qrOrderingBlocked(business)) return res.status(403).json({ error: QR_PHARMACY_OFF });
+      if (qrOrderingBlocked(business)) return res.status(403).json({ error: qrOrderingBlockMessage(business) });
       const result = await withTransaction(async (conn) => {
         await ensureQrOrderSchema(conn);
         const built = [];
@@ -1192,8 +1199,8 @@ export function registerQrPublic(app) {
 export function registerQrStaff(app) {
   app.get("/api/qr-orders", requirePerm("orders"), async (req, res) => {
     try {
-      const bizRows = await query("SELECT name, category, business_type FROM businesses WHERE id=?", [bid()]);
-      if (qrOrderingBlocked(bizRows[0] || {})) return res.status(403).json({ error: QR_PHARMACY_OFF });
+      const bizRows = await query("SELECT name, category, business_type, qr_module FROM businesses WHERE id=?", [bid()]);
+      if (qrOrderingBlocked(bizRows[0] || {})) return res.status(403).json({ error: qrOrderingBlockMessage(bizRows[0] || {}) });
       await ensureQrOrderSchema();
       res.json(await qrOrdersWithLines(bid(), cleanText(req.query.status, 24).toLowerCase()));
     } catch (err) {
@@ -1203,8 +1210,8 @@ export function registerQrStaff(app) {
 
   app.patch("/api/qr-orders/:id", requirePerm("orders"), async (req, res) => {
     try {
-      const bizRows = await query("SELECT name, category, business_type FROM businesses WHERE id=?", [bid()]);
-      if (qrOrderingBlocked(bizRows[0] || {})) return res.status(403).json({ error: QR_PHARMACY_OFF });
+      const bizRows = await query("SELECT name, category, business_type, qr_module FROM businesses WHERE id=?", [bid()]);
+      if (qrOrderingBlocked(bizRows[0] || {})) return res.status(403).json({ error: qrOrderingBlockMessage(bizRows[0] || {}) });
       const status = cleanText(req.body?.status, 24).toLowerCase();
       if (!QR_STATUSES.includes(status)) return res.status(400).json({ error: "Invalid QR order status" });
       await ensureQrOrderSchema();

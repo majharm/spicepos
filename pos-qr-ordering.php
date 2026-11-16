@@ -64,10 +64,19 @@ function pos_qr_clean($value, $max) {
 }
 
 function pos_qr_ordering_blocked($biz) {
-  return function_exists("pos_shop_kind") && pos_shop_kind($biz ?: []) === "pharmacy";
+  if (function_exists("pos_shop_kind") && pos_shop_kind($biz ?: []) === "pharmacy") return true;
+  return (int) ($biz["qr_module"] ?? 0) !== 1;
+}
+
+function pos_qr_ordering_block_message($biz) {
+  if (function_exists("pos_shop_kind") && pos_shop_kind($biz ?: []) === "pharmacy") {
+    return "QR ordering is not available for pharmacy shops";
+  }
+  return "QR ordering is turned off for this shop";
 }
 
 function pos_qr_business($shop) {
+  if (function_exists("pos_ensure_business_columns")) pos_ensure_business_columns();
   $key = pos_qr_clean($shop, 255);
   if ($key === "") return null;
   $rows = pos_q(
@@ -762,7 +771,7 @@ function pos_qr_public_dispatch($path, $method, $body) {
     pos_qr_ensure_schema();
     $business = pos_qr_business($_GET["shop"] ?? "");
     if (!$business) pos_send(404, ["error" => "Shop not found", "php" => true]);
-    if (pos_qr_ordering_blocked($business)) pos_send(403, ["error" => "QR ordering is not available for pharmacy shops", "php" => true]);
+    if (pos_qr_ordering_blocked($business)) pos_send(403, ["error" => pos_qr_ordering_block_message($business), "php" => true]);
     $items = pos_q(
       "SELECT id, code, name, category, subcategory, base_unit, unit, retail_rate, gst_rate,
               hsn, image_url, stock_gm
@@ -812,7 +821,7 @@ function pos_qr_public_dispatch($path, $method, $body) {
     $input = pos_qr_validate_order(is_array($body) ? $body : []);
     $business = pos_qr_business($body["shop"] ?? "");
     if (!$business) pos_send(404, ["error" => "Shop not found", "php" => true]);
-    if (pos_qr_ordering_blocked($business)) pos_send(403, ["error" => "QR ordering is not available for pharmacy shops", "php" => true]);
+    if (pos_qr_ordering_blocked($business)) pos_send(403, ["error" => pos_qr_ordering_block_message($business), "php" => true]);
     $catalog = pos_q(
       "SELECT id, name, category, base_unit, unit, retail_rate, gst_rate, stock_gm, status
        FROM items WHERE business_id = ?",
@@ -914,12 +923,13 @@ function pos_qr_public_dispatch($path, $method, $body) {
 
 function pos_qr_staff_dispatch($path, $method, $body, $bid, $branchId, $uid = "") {
   pos_qr_ensure_schema();
+  if (function_exists("pos_ensure_business_columns")) pos_ensure_business_columns();
   $bizRows = [];
   try {
-    $bizRows = pos_q("SELECT name, category, business_type FROM businesses WHERE id = ? LIMIT 1", "s", [$bid]);
+    $bizRows = pos_q("SELECT name, category, business_type, qr_module FROM businesses WHERE id = ? LIMIT 1", "s", [$bid]);
   } catch (Exception $e) { $bizRows = []; }
   if (pos_qr_ordering_blocked($bizRows[0] ?? [])) {
-    pos_send(403, ["error" => "QR ordering is not available for pharmacy shops", "php" => true]);
+    pos_send(403, ["error" => pos_qr_ordering_block_message($bizRows[0] ?? []), "php" => true]);
   }
   if ($path === "qr-orders" && $method === "GET") {
     $status = strtolower(pos_qr_clean($_GET["status"] ?? "", 24));

@@ -559,6 +559,11 @@ function isGymShop() {
   return Boolean(globalThis.POSGym?.isGymShop?.(state.businessMeta) || globalThis.POSFootwear?.isGymShop?.(state.businessMeta) || globalThis.POSFootwear?.shopKind?.(state.businessMeta) === "gym");
 }
 
+function qrModuleOn() {
+  if (isPharmacyShop() || isPrintShop() || isGymShop()) return false;
+  return Number(state.businessMeta?.qr_module) === 1;
+}
+
 function isBarShop() {
   return Boolean(globalThis.POSBar?.isBarShop?.(state.businessMeta) || globalThis.POSFootwear?.isBarShop?.(state.businessMeta) || globalThis.POSFootwear?.shopKind?.(state.businessMeta) === "bar" || Number(state.businessMeta?.bar_enabled) === 1);
 }
@@ -3128,8 +3133,7 @@ function applyNav() {
     if (view === "growth") btn.hidden = !(can("growth") || can("reports"));
     if (view === "offers") btn.hidden = !(can("discount") || can("items") || can("growth"));
     if (view === "packs" && !isSpiceShop()) btn.hidden = true;
-    if (view === "qr-orders" && isPharmacyShop()) btn.hidden = true;
-    if (view === "qr-orders" && isPrintShop()) btn.hidden = true;
+    if (view === "qr-orders" && !qrModuleOn()) btn.hidden = true;
     if (view === "online-orders") btn.hidden = !aggregatorDeskAllowed() || !can("orders");
     if (view === "prescriptions") btn.hidden = !isPharmacyShop() || !can("orders");
     if (view === "returns") btn.hidden = !isClassicBillShop() || !can("orders");
@@ -3139,10 +3143,14 @@ function applyNav() {
     if ((view === "gym-board" || view === "gym-members" || view === "gym-attendance" || view === "gym-trainers" || view === "gym-plans") && !isGymShop()) btn.hidden = true;
     if ((view === "bar-board" || view === "bar-counter" || view === "bar-products" || view === "bar-tables" || view === "bar-stock" || view === "bar-reports" || view === "bar-settings") && !isBarShop()) btn.hidden = true;
     if ((view === "resort-board" || view === "resort-rooms" || view === "resort-bookings" || view === "resort-desk" || view === "resort-housekeeping" || view === "resort-settings") && !isResortShop()) btn.hidden = true;
-    if (view === "qr-orders" && isGymShop()) btn.hidden = true;
     if (view === "online-orders" && (isGymShop() || isPrintShop() || isPharmacyShop())) btn.hidden = true;
   });
   globalThis.POSBizHubUi?.paintIndustryNav?.();
+  if (!qrModuleOn()) {
+    document.querySelectorAll('.nav-btn[data-view="qr-orders"]').forEach((btn) => {
+      btn.hidden = true;
+    });
+  }
   paintStaffRoleOptions();
   const growthBtn = $("open-growth");
   if (growthBtn) growthBtn.hidden = !(can("growth") || can("reports"));
@@ -3481,6 +3489,7 @@ function showSettingsTab(tab) {
 
 function showView(name) {
   if (name === "qr-orders" && isPharmacyShop()) name = "prescriptions";
+  else if (name === "qr-orders" && !qrModuleOn()) name = landingView();
   if (name === "prescriptions" && !isPharmacyShop()) name = can("counter") ? "counter" : landingView();
   if (name === "kot" && (!isRestaurantShop() || !can("kot"))) name = can("counter") ? "counter" : landingView();
   if (name === "recurring" && !can("orders")) name = landingView();
@@ -4018,7 +4027,7 @@ function renderTableBoard() {
             </button>
             ${manage ? `<button class="table-seat-edit" type="button" data-edit-table-btn="${escapeHtml(t.id)}" title="Rename table" aria-label="Rename ${escapeHtml(t.name || t.id)}">✎</button>` : ""}
             ${tableShiftingEnabled() && busy && t.id !== R.PARCEL ? `<button class="table-seat-shift" type="button" data-shift-table="${escapeHtml(t.id)}" title="Shift table">Shift</button>` : ""}
-            <button class="table-seat-qr" type="button" data-table-qr="${escapeHtml(t.id)}" title="Print table QR" aria-label="Print QR for ${escapeHtml(t.name || t.id)}">QR</button>
+            ${qrModuleOn() ? `<button class="table-seat-qr" type="button" data-table-qr="${escapeHtml(t.id)}" title="Print table QR" aria-label="Print QR for ${escapeHtml(t.name || t.id)}">QR</button>` : ""}
             ${manage && !busy ? `<button class="table-seat-x" type="button" data-remove-table="${escapeHtml(t.id)}" aria-label="Remove ${escapeHtml(t.name || t.id)}">×</button>` : ""}
           </div>`;
         })
@@ -11573,7 +11582,7 @@ function applyQrOrderSnapshot(rows, { announce = false } = {}) {
 }
 
 async function pollQrOrders({ announce = true } = {}) {
-  if (!can("orders") || isPharmacyShop()) return;
+  if (!can("orders") || !qrModuleOn()) return;
   try {
     const rows = await api("/api/qr-orders");
     applyQrOrderSnapshot(rows, { announce });
@@ -11582,8 +11591,31 @@ async function pollQrOrders({ announce = true } = {}) {
   }
 }
 
+function startQrModuleWatch() {
+  if (startQrModuleWatch.timer) return;
+  const pull = async () => {
+    try {
+      const me = await api("/api/auth/me");
+      if (!me?.business || !state.businessMeta) return;
+      const next = Number(me.business.qr_module) === 1 ? 1 : 0;
+      const prev = Number(state.businessMeta.qr_module) === 1 ? 1 : 0;
+      state.businessMeta.qr_module = next;
+      if (next === prev) return;
+      applyNav();
+      if (next) startQrOrderWatch();
+      else if (state.currentView === "qr-orders") showView(landingView());
+    } catch {
+      /* keep the last flag until the next check */
+    }
+  };
+  startQrModuleWatch.timer = setInterval(() => void pull(), 8000);
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") void pull();
+  });
+}
+
 function startQrOrderWatch() {
-  if (qrPollTimer || !can("orders") || isPharmacyShop()) return;
+  if (qrPollTimer || !can("orders") || !qrModuleOn()) return;
   paintQrSoundToggle();
   const kick = () => void pollQrOrders({ announce: false });
   if (typeof requestIdleCallback === "function") requestIdleCallback(kick, { timeout: 2500 });
@@ -16641,6 +16673,7 @@ $("table-board")?.addEventListener("click", async (e) => {
   if (printTableQr) {
     e.preventDefault();
     e.stopPropagation();
+    if (!qrModuleOn()) return;
     await printQrTableStickers([printTableQr.getAttribute("data-table-qr")]);
     return;
   }
@@ -19051,7 +19084,8 @@ async function boot() {
         cartLines: state.cart.length,
       });
     }
-    startQrOrderWatch();
+    startQrModuleWatch();
+    if (qrModuleOn()) startQrOrderWatch();
     startKotWatch();
     startRxWatch();
     refreshItemUnitLabels();

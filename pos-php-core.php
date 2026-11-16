@@ -849,6 +849,10 @@ function pos_ensure_business_columns() {
   if ($done) return;
   $done = true;
   if (pos_schema_stamp_fresh()) return;
+  $db = pos_db();
+  $qrRes = $db->query("SHOW COLUMNS FROM `businesses` LIKE 'qr_module'");
+  $qrModuleWasNew = !$qrRes || $qrRes->num_rows === 0;
+  if ($qrRes) $qrRes->free();
   pos_ensure_columns("businesses", [
     "owner_name" => "VARCHAR(255) NULL",
     "mobile" => "VARCHAR(32) NULL",
@@ -877,9 +881,13 @@ function pos_ensure_business_columns() {
     "resort_enabled" => "TINYINT(1) NOT NULL DEFAULT 0",
     "zomato_allowed" => "TINYINT(1) NOT NULL DEFAULT 0",
     "swiggy_allowed" => "TINYINT(1) NOT NULL DEFAULT 0",
+    "qr_module" => "TINYINT(1) NOT NULL DEFAULT 0",
     "created_at" => "TIMESTAMP(3) NULL",
     "updated_at" => "TIMESTAMP(3) NULL",
   ]);
+  if ($qrModuleWasNew) {
+    @$db->query("UPDATE businesses SET qr_module = 1");
+  }
 }
 
 function pos_ensure_account_managers() {
@@ -1737,6 +1745,7 @@ function pos_staff_me_payload($staff) {
       "resort_enabled" => (int) ($staff["business"]["resort_enabled"] ?? 0),
       "zomato_allowed" => ((int) ($staff["business"]["zomato_allowed"] ?? 0)) === 1 ? 1 : 0,
       "swiggy_allowed" => ((int) ($staff["business"]["swiggy_allowed"] ?? 0)) === 1 ? 1 : 0,
+      "qr_module" => ((int) ($staff["business"]["qr_module"] ?? 0)) === 1 ? 1 : 0,
       "plan_id" => $staff["business"]["plan_id"] ?? null,
       "subscription_expires_at" => $staff["business"]["subscription_expires_at"] ?? null,
     ],
@@ -3233,6 +3242,11 @@ function pos_normalize_aggregator_allowed($val) {
   return 0;
 }
 
+function pos_normalize_qr_module($val) {
+  if ($val === true || $val === 1 || $val === "1" || $val === "on" || $val === "true" || $val === "yes") return 1;
+  return 0;
+}
+
 function pos_normalize_bar_enabled($val, $type = "", $category = "") {
   $t = strtolower(trim((string) $type));
   $c = strtolower(trim((string) $category));
@@ -3278,6 +3292,7 @@ function pos_validate_signup($raw, $requireAdmin = true) {
     "resort_enabled" => pos_pick($raw, "resort_enabled", "resortEnabled"),
     "zomato_allowed" => pos_pick($raw, "zomato_allowed", "zomatoAllowed"),
     "swiggy_allowed" => pos_pick($raw, "swiggy_allowed", "swiggyAllowed"),
+    "qr_module" => pos_pick($raw, "qr_module", "qrModule"),
   ];
   $required = ["name", "business_type", "category", "owner_name", "mobile", "email", "address", "city", "state", "pin_code"];
   if ($requireAdmin) {
@@ -3335,6 +3350,7 @@ function pos_validate_signup($raw, $requireAdmin = true) {
     "resort_enabled" => pos_normalize_resort_enabled($b["resort_enabled"] ?? 0, $b["business_type"] ?? "", $b["category"] ?? ""),
     "zomato_allowed" => pos_normalize_aggregator_allowed($b["zomato_allowed"] ?? 0),
     "swiggy_allowed" => pos_normalize_aggregator_allowed($b["swiggy_allowed"] ?? 0),
+    "qr_module" => pos_normalize_qr_module($b["qr_module"] ?? 0),
   ];
 }
 
@@ -3378,6 +3394,9 @@ function pos_register_business($raw, $yearly = false) {
   try {
     pos_q("UPDATE businesses SET zomato_allowed = ?, swiggy_allowed = ? WHERE id = ?", "iis", [$b["zomato_allowed"], $b["swiggy_allowed"], $id]);
   } catch (Exception $e) { /* columns added on first aggregator boot */ }
+  try {
+    pos_q("UPDATE businesses SET qr_module = ? WHERE id = ?", "is", [$b["qr_module"], $id]);
+  } catch (Exception $e) { /* column added on schema boot; missing means the shop stays off */ }
   $amId = trim((string) ($b["account_manager_id"] ?? ""));
   if ($amId !== "") {
     pos_ensure_account_managers();
@@ -3466,6 +3485,9 @@ function pos_update_business($id, $raw) {
   try {
     pos_q("UPDATE businesses SET zomato_allowed = ?, swiggy_allowed = ? WHERE id = ?", "iis", [$b["zomato_allowed"], $b["swiggy_allowed"], $id]);
   } catch (Exception $e) { /* columns added on first aggregator boot */ }
+  try {
+    pos_q("UPDATE businesses SET qr_module = ? WHERE id = ?", "is", [$b["qr_module"], $id]);
+  } catch (Exception $e) { /* column added on schema boot; missing means the shop stays off */ }
   try {
     pos_q(
       "UPDATE company_settings SET name=?, address=?, phone=?, email=?, gstin=?, pan=?, city=?, state=?, pincode=?, logo_url=? WHERE business_id=?",
@@ -3870,6 +3892,7 @@ function pos_php_dispatch($path, $method, $rawBody) {
           "resort_enabled" => (int) ($business["resort_enabled"] ?? 0),
           "zomato_allowed" => ((int) ($business["zomato_allowed"] ?? 0)) === 1 ? 1 : 0,
           "swiggy_allowed" => ((int) ($business["swiggy_allowed"] ?? 0)) === 1 ? 1 : 0,
+          "qr_module" => ((int) ($business["qr_module"] ?? 0)) === 1 ? 1 : 0,
           "subscription_expires_at" => $business["subscription_expires_at"] ?? null,
         ],
       ]);

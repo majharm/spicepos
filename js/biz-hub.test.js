@@ -56,7 +56,7 @@ test("Dashboard uses a SaaS business control center", () => {
   assert.match(app, /function paintDashChrome/);
   assert.match(app, /applyColorScheme/);
   assert.match(index, /id="dash-plan-kpis"/);
-  assert.match(index, /biz-hub-ui\.js\?v=20261107profit1/);
+  assert.match(index, /biz-hub-ui\.js\?v=20261116qrmod1/);
   assert.match(css, /saas-kpi-grid/);
   assert.match(ui, /function kpiCard/);
   assert.match(ui, /Today's Sales/);
@@ -80,7 +80,7 @@ test("POS shell wires Reports Center, payments, audit, and hub scripts", () => {
   assert.match(index, /id="view-hub-sales"/);
   assert.match(index, /id="dash-kpis"/);
   assert.match(ui, /id="dash-sales-graph"/);
-  assert.match(index, /biz-hub\.js\?v=20261107profit1/);
+  assert.match(index, /biz-hub\.js\?v=20261116qrmod1/);
   assert.match(index, /id="rep-pdf"/);
   assert.match(index, /id="rep-pay-mode"/);
   assert.match(app, /POSBizHubUi\?\.paintDashboard/);

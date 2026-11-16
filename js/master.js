@@ -87,6 +87,12 @@ function isRestaurantCafeModule(type) {
   return t === "restaurant" || t === "cafe";
 }
 
+function qrModuleTypeAllowed(type, category) {
+  const text = `${type || ""} ${category || ""}`.toLowerCase();
+  if (/(pharmacy|medical|printing|flex\s*&\s*printing|gym|fitness)/.test(text)) return false;
+  return true;
+}
+
 function fillCategorySelect(sel, type, current) {
   if (!sel) return;
   const list = categoriesForType(type);
@@ -2727,6 +2733,14 @@ async function render() {
                   </label>
                 </div>
               </fieldset>
+              <fieldset class="item-block" id="biz-module-flags">
+                <legend>Module Settings</legend>
+                <label class="full">
+                  <input type="checkbox" name="qrModule" />
+                  QR Module — show QR ordering on this business owner's dashboard. New businesses stay off until Master Admin enables it. Turning it off hides the module and blocks new QR orders. Saved QR codes and past orders stay on file.
+                </label>
+                <p class="hint" id="biz-qr-module-note" hidden>Pharmacy, printing, and gym shops do not use the QR module.</p>
+              </fieldset>
               <fieldset class="item-block">
                 <legend>Owner</legend>
                 <label>Owner name *
@@ -2830,6 +2844,7 @@ async function render() {
                     ${Number(b.resort_enabled) === 1 || String(b.business_type || "").toLowerCase().includes("resort") ? `<span class="item-chip">Resort model</span>` : ""}
                     ${Number(b.zomato_allowed) === 1 ? `<span class="item-chip">Zomato allowed</span>` : ""}
                     ${Number(b.swiggy_allowed) === 1 ? `<span class="item-chip">Swiggy allowed</span>` : ""}
+                    ${Number(b.qr_module) === 1 ? `<span class="item-chip">QR module</span>` : ""}
                   </div>
                   <div class="item-card-foot">
                     <div class="item-card-actions">
@@ -2908,6 +2923,7 @@ async function render() {
         }
         if (form.zomatoAllowed) form.zomatoAllowed.checked = Number(b?.zomato_allowed) === 1;
         if (form.swiggyAllowed) form.swiggyAllowed.checked = Number(b?.swiggy_allowed) === 1;
+        if (form.qrModule) form.qrModule.checked = Number(b?.qr_module) === 1;
         const editing = Boolean(b);
         setAdminRequired(!editing);
         $("biz-title").textContent = editing ? "Edit business" : "Add business";
@@ -2920,22 +2936,36 @@ async function render() {
           ? `Editing ${b.name}. Leave password blank to keep the current login.`
           : "";
         syncBizFoodFlags();
+        syncBizModuleFlags();
         form.scrollIntoView({ block: "start" });
       }
       function syncBizFoodFlags() {
         const box = $("biz-food-flags");
         if (box) box.hidden = !isRestaurantCafeModule(form.businessType.value);
       }
+      function syncBizModuleFlags() {
+        const ok = qrModuleTypeAllowed(form.businessType.value, form.businessCategory.value);
+        const note = $("biz-qr-module-note");
+        if (note) note.hidden = ok;
+        if (form.qrModule) {
+          form.qrModule.disabled = !ok;
+          if (!ok) form.qrModule.checked = false;
+        }
+      }
       $("biz-cancel").onclick = () => fillBusiness(null);
       form.businessType.addEventListener("change", () => {
         fillCategorySelect(form.businessCategory, form.businessType.value, form.businessCategory.value);
         syncBizFoodFlags();
+        syncBizModuleFlags();
       });
       form.businessType.addEventListener("input", () => {
         fillCategorySelect(form.businessCategory, form.businessType.value, form.businessCategory.value);
         syncBizFoodFlags();
+        syncBizModuleFlags();
       });
+      form.businessCategory.addEventListener("change", () => syncBizModuleFlags());
       syncBizFoodFlags();
+      syncBizModuleFlags();
       form.businessCategory.addEventListener("focus", () => {
         fillCategorySelect(form.businessCategory, form.businessType.value, form.businessCategory.value);
       });
@@ -2958,6 +2988,7 @@ async function render() {
         payload.resortEnabled = foodModule && form.resortEnabled?.checked ? 1 : 0;
         payload.zomatoAllowed = foodModule && form.zomatoAllowed?.checked ? 1 : 0;
         payload.swiggyAllowed = foodModule && form.swiggyAllowed?.checked ? 1 : 0;
+        payload.qrModule = qrModuleTypeAllowed(form.businessType.value, form.businessCategory.value) && form.qrModule?.checked ? 1 : 0;
         const id = payload.business_id;
         delete payload.business_id;
         delete payload.logo;

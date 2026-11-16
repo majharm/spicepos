@@ -1135,6 +1135,7 @@
         .map((s) => s.trim())
         .filter(Boolean);
       el.hidden = kinds.length ? !kinds.some((k) => active.includes(k)) : false;
+      if (el.dataset.view === "qr-orders" && Number(biz().qr_module) !== 1) el.hidden = true;
     });
     const group = $("nav-industry-group");
     if (group) {
