@@ -1,5 +1,81 @@
 <?php
 
+function pos_ensure_online_store_schema() {
+  static $done = false;
+  if ($done) return;
+  pos_ensure_business_columns();
+  $tables = [
+    "CREATE TABLE IF NOT EXISTS online_stores (
+      business_id VARCHAR(255) PRIMARY KEY,
+      slug VARCHAR(40) NOT NULL,
+      store_name VARCHAR(160) NOT NULL,
+      published TINYINT(1) NOT NULL DEFAULT 0,
+      banner_enabled TINYINT(1) NOT NULL DEFAULT 0,
+      banner_desktop MEDIUMTEXT NULL,
+      banner_mobile MEDIUMTEXT NULL,
+      updated_at TIMESTAMP(3) NULL,
+      UNIQUE KEY uq_online_store_slug (slug)
+    )",
+    "CREATE TABLE IF NOT EXISTS online_store_listings (
+      business_id VARCHAR(255) NOT NULL,
+      item_id VARCHAR(255) NOT NULL,
+      listed TINYINT(1) NOT NULL DEFAULT 1,
+      PRIMARY KEY (business_id, item_id)
+    )",
+    "CREATE TABLE IF NOT EXISTS online_customers (
+      id VARCHAR(255) PRIMARY KEY,
+      business_id VARCHAR(255) NOT NULL,
+      name VARCHAR(160) NOT NULL,
+      mobile VARCHAR(32) NOT NULL,
+      email VARCHAR(160) NULL,
+      password_hash VARCHAR(255) NOT NULL,
+      created_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+      UNIQUE KEY uq_online_customer_mobile (business_id, mobile)
+    )",
+    "CREATE TABLE IF NOT EXISTS online_customer_sessions (
+      id VARCHAR(255) PRIMARY KEY,
+      business_id VARCHAR(255) NOT NULL,
+      customer_id VARCHAR(255) NOT NULL,
+      token_hash CHAR(64) NOT NULL,
+      expires_at TIMESTAMP(3) NOT NULL,
+      UNIQUE KEY uq_store_token (token_hash),
+      INDEX idx_store_session (business_id, customer_id)
+    )",
+    "CREATE TABLE IF NOT EXISTS online_orders (
+      id VARCHAR(255) PRIMARY KEY,
+      business_id VARCHAR(255) NOT NULL,
+      customer_id VARCHAR(255) NOT NULL,
+      order_number VARCHAR(32) NOT NULL,
+      status VARCHAR(16) NOT NULL DEFAULT 'pending',
+      customer_name VARCHAR(160) NOT NULL,
+      mobile VARCHAR(32) NOT NULL,
+      address VARCHAR(255) NULL,
+      subtotal DECIMAL(12,2) NOT NULL DEFAULT 0,
+      gst DECIMAL(12,2) NOT NULL DEFAULT 0,
+      total DECIMAL(12,2) NOT NULL DEFAULT 0,
+      created_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+      INDEX idx_online_orders_biz (business_id, created_at)
+    )",
+    "CREATE TABLE IF NOT EXISTS online_order_lines (
+      id VARCHAR(255) PRIMARY KEY,
+      order_id VARCHAR(255) NOT NULL,
+      business_id VARCHAR(255) NOT NULL,
+      item_id VARCHAR(255) NOT NULL,
+      item_name VARCHAR(180) NOT NULL,
+      quantity DECIMAL(12,3) NOT NULL,
+      quantity_base DECIMAL(14,3) NOT NULL,
+      rate DECIMAL(12,2) NOT NULL,
+      gst_rate DECIMAL(8,2) NOT NULL DEFAULT 0,
+      amount DECIMAL(12,2) NOT NULL,
+      gst_amount DECIMAL(12,2) NOT NULL DEFAULT 0,
+      INDEX idx_online_lines_order (order_id),
+      INDEX idx_online_lines_biz (business_id)
+    )",
+  ];
+  foreach ($tables as $sql) pos_q($sql);
+  $done = true;
+}
+
 function pos_online_store_banner($row) {
   if (!$row || (int) ($row["banner_enabled"] ?? 0) !== 1) return ["desktop" => "", "mobile" => ""];
   return [
@@ -32,7 +108,7 @@ function pos_online_store_public_row($slug) {
 
 function pos_online_store_public_dispatch($path, $method) {
   if (!preg_match("#^store/([^/]+)$#", $path, $m) || $method !== "GET") return false;
-  pos_ensure_business_columns();
+  pos_ensure_online_store_schema();
   $row = pos_online_store_public_row(pos_online_store_slug($m[1]));
   if (!$row || (int) ($row["online_store"] ?? 0) !== 1 || ($row["status"] ?? "") !== "active") {
     pos_send(404, ["error" => "Online store is not available", "php" => true]);
@@ -49,7 +125,7 @@ function pos_online_store_public_dispatch($path, $method) {
 
 function pos_online_store_master_dispatch($path, $method, $body) {
   if (strpos($path, "master/online-store") !== 0) return false;
-  pos_ensure_business_columns();
+  pos_ensure_online_store_schema();
   if ($path === "master/online-store" && $method === "GET") {
     $forAll = pos_online_store_for_all();
     $rows = pos_q(
@@ -108,7 +184,7 @@ function pos_online_store_staff_allowed($auth) {
 
 function pos_online_store_staff_dispatch($path, $method, $body, $bid, $auth = null) {
   if ($path !== "online-store" && strpos($path, "online-store/") !== 0) return false;
-  pos_ensure_business_columns();
+  pos_ensure_online_store_schema();
   $rows = pos_q("SELECT id, name, status, online_store, store_banner_allowed FROM businesses WHERE id = ? LIMIT 1", "s", [$bid]);
   $biz = $rows[0] ?? [];
   if (pos_online_store_flag($biz["online_store"] ?? 0) !== 1) {

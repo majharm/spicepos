@@ -66,6 +66,8 @@ test("Master Admin and the owner dashboard wire the Online Store permission", ()
   assert.match(read("server/online-store.js"), /requirePermAny\("settings", "items", "orders"\)/);
   assert.match(read("pos-php-till.php"), /"online-store"/);
   assert.match(read("pos-online-store.php"), /function pos_online_store_staff_allowed/);
+  assert.match(read("pos-online-store.php"), /function pos_ensure_online_store_schema/);
+  assert.match(read("pos-online-store.php"), /CREATE TABLE IF NOT EXISTS online_stores/);
   assert.match(read("index.html"), /data-view="online-store"/);
   assert.match(read("js/online-store-desk.js"), /Login page banner/);
   assert.match(read("js/storefront.js"), /store-banner-default/);
