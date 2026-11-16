@@ -564,6 +564,10 @@ function qrModuleOn() {
   return Number(state.businessMeta?.qr_module) === 1;
 }
 
+function onlineStoreOn() {
+  return Number(state.businessMeta?.online_store) === 1;
+}
+
 function isBarShop() {
   return Boolean(globalThis.POSBar?.isBarShop?.(state.businessMeta) || globalThis.POSFootwear?.isBarShop?.(state.businessMeta) || globalThis.POSFootwear?.shopKind?.(state.businessMeta) === "bar" || Number(state.businessMeta?.bar_enabled) === 1);
 }
@@ -1112,6 +1116,7 @@ const VIEW_META = {
   returns: { title: "Manage Returns", subtitle: "Pharmacy and garment returns against a sales invoice" },
   "qr-orders": { title: "QR Orders", subtitle: "Incoming customer self-orders" },
   "online-orders": { title: "Online orders", subtitle: "Zomato and Swiggy kitchen tickets" },
+  "online-store": { title: "Online Store", subtitle: "Your shop on the web" },
   prescriptions: { title: "Prescription Orders", subtitle: "Customer QR uploads for this pharmacy" },
   kot: { title: "Kitchen KOT", subtitle: "Captain fires tickets; kitchen marks preparing and ready" },
   purchases: { title: "Purchases", subtitle: "Search and select items for a purchase bill" },
@@ -3134,6 +3139,7 @@ function applyNav() {
     if (view === "offers") btn.hidden = !(can("discount") || can("items") || can("growth"));
     if (view === "packs" && !isSpiceShop()) btn.hidden = true;
     if (view === "qr-orders" && !qrModuleOn()) btn.hidden = true;
+    if (view === "online-store" && (!onlineStoreOn() || !(can("settings") || can("items") || can("orders")))) btn.hidden = true;
     if (view === "online-orders") btn.hidden = !aggregatorDeskAllowed() || !can("orders");
     if (view === "prescriptions") btn.hidden = !isPharmacyShop() || !can("orders");
     if (view === "returns") btn.hidden = !isClassicBillShop() || !can("orders");
@@ -3148,6 +3154,11 @@ function applyNav() {
   globalThis.POSBizHubUi?.paintIndustryNav?.();
   if (!qrModuleOn()) {
     document.querySelectorAll('.nav-btn[data-view="qr-orders"]').forEach((btn) => {
+      btn.hidden = true;
+    });
+  }
+  if (!onlineStoreOn()) {
+    document.querySelectorAll('.nav-btn[data-view="online-store"]').forEach((btn) => {
       btn.hidden = true;
     });
   }
@@ -3490,6 +3501,7 @@ function showSettingsTab(tab) {
 function showView(name) {
   if (name === "qr-orders" && isPharmacyShop()) name = "prescriptions";
   else if (name === "qr-orders" && !qrModuleOn()) name = landingView();
+  if (name === "online-store" && !onlineStoreOn()) name = landingView();
   if (name === "prescriptions" && !isPharmacyShop()) name = can("counter") ? "counter" : landingView();
   if (name === "kot" && (!isRestaurantShop() || !can("kot"))) name = can("counter") ? "counter" : landingView();
   if (name === "recurring" && !can("orders")) name = landingView();
@@ -3535,6 +3547,7 @@ function showView(name) {
   if (name === "dues") globalThis.POSDueRemindersUi?.load?.();
   if (name === "returns") loadReturnsView();
   if (name === "qr-orders") loadQrOrders();
+  if (name === "online-store") globalThis.POSOnlineStore?.open?.();
   if (name === "online-orders") loadAggregatorOrders();
   if (name === "prescriptions") loadPrescriptions();
   if (name === "kot") {
@@ -11599,11 +11612,17 @@ function startQrModuleWatch() {
       if (!me?.business || !state.businessMeta) return;
       const next = Number(me.business.qr_module) === 1 ? 1 : 0;
       const prev = Number(state.businessMeta.qr_module) === 1 ? 1 : 0;
+      const nextStore = Number(me.business.online_store) === 1 ? 1 : 0;
+      const prevStore = Number(state.businessMeta.online_store) === 1 ? 1 : 0;
       state.businessMeta.qr_module = next;
-      if (next === prev) return;
+      state.businessMeta.online_store = nextStore;
+      state.businessMeta.store_banner_allowed = Number(me.business.store_banner_allowed) === 1 ? 1 : 0;
+      if (next === prev && nextStore === prevStore) return;
       applyNav();
       if (next) startQrOrderWatch();
       else if (state.currentView === "qr-orders") showView(landingView());
+      if (!nextStore && state.currentView === "online-store") showView(landingView());
+      if (nextStore && state.currentView === "online-store") globalThis.POSOnlineStore?.open?.();
     } catch {
       /* keep the last flag until the next check */
     }

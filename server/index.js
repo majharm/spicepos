@@ -55,6 +55,7 @@ import { registerCustomerDedupeStaff, registerCustomerDedupeMaster, ensureCustom
 import "../js/discount.js";
 import "../js/payment-methods.js";
 import { registerQrPublic, registerQrStaff, ensureQrOrderSchema, linkQrOrderSale } from "./qr-ordering.js";
+import { registerOnlineStorePublic, registerOnlineStoreStaff, registerOnlineStoreMaster, ensureOnlineStoreSchema } from "./online-store.js";
 import { registerAggregatorPublic, registerAggregatorStaff } from "./aggregator.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -102,6 +103,7 @@ app.use((req, res, next) => {
 app.use(attachAuth);
 registerAuth(app);
 registerQrPublic(app);
+registerOnlineStorePublic(app);
 registerAggregatorPublic(app);
 registerRxPublic(app);
 registerSalonPublic(app);
@@ -246,6 +248,7 @@ app.use((req, res, next) => {
   return requireStaff(req, res, next);
 });
 registerMaster(app);
+registerOnlineStoreMaster(app);
 registerCustomerDedupeMaster(app);
 registerAnalyticsMaster(app);
 registerSeoMaster(app);
@@ -259,6 +262,7 @@ registerBackup(app);
 registerUnits(app);
 registerTaxes(app);
 registerQrStaff(app);
+registerOnlineStoreStaff(app);
 registerAggregatorStaff(app);
 registerRxStaff(app);
 registerSalonStaff(app);
@@ -1486,6 +1490,7 @@ ensureSchema()
     .then(() => ensureBrandSchema())
     .then(() => ensureCustomerDedupeSchema())
     .then(() => ensureLoginPageSchema())
+    .then(() => ensureOnlineStoreSchema())
     .then(() => ensureRecurringSchema())
     .then(() => ensureQuotationSchema())
     .then(() => ensureCrmSchema())

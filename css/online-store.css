@@ -1,0 +1,24 @@
+.online-store-desk { display: grid; gap: 16px; }
+.online-store-hero, .store-card { background: #fff; border: 1px solid #e6e1d8; border-radius: 16px; padding: 16px; }
+.store-tabs { display: flex; gap: 8px; flex-wrap: wrap; }
+.store-tabs button.is-on { background: #1f6b4a; color: #fff; }
+.store-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+.store-banner-preview { width: 100%; max-height: 220px; object-fit: cover; border-radius: 12px; background: #f4efe6; }
+.store-table-wrap { overflow: auto; }
+.store-table { width: 100%; border-collapse: collapse; }
+.store-table th, .store-table td { text-align: left; padding: 8px; border-bottom: 1px solid #eee; vertical-align: top; }
+
+.store-page { max-width: 1080px; margin: 0 auto; padding: 16px; font-family: "Segoe UI", sans-serif; color: #1c1915; }
+.store-banner, .store-banner-default { width: 100%; min-height: 180px; border-radius: 18px; object-fit: cover; display: block; }
+.store-banner-default { display: grid; place-items: center; padding: 28px; background: linear-gradient(135deg, #1f6b4a, #e8b15a); color: #fff; text-align: center; }
+.store-banner-default strong { font-size: 32px; }
+.store-auth, .store-shop { margin-top: 16px; display: grid; gap: 12px; }
+.store-auth form, .store-card { background: #fff; border: 1px solid #eadfce; border-radius: 16px; padding: 16px; }
+.store-auth label, .store-shop label { display: grid; gap: 4px; margin-bottom: 8px; }
+.store-items { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
+.store-item { border: 1px solid #eadfce; border-radius: 14px; padding: 12px; background: #fff; }
+.store-item button, .store-auth button, .store-shop button { background: #1f6b4a; color: #fff; border: 0; border-radius: 10px; padding: 8px 12px; }
+@media (max-width: 720px) {
+  .store-banner, .store-banner-default { min-height: 120px; }
+  .store-banner-default strong { font-size: 22px; }
+}

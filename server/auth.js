@@ -422,6 +422,8 @@ export function registerAuth(app) {
           zomato_allowed: Number(business?.zomato_allowed) === 1 ? 1 : 0,
           swiggy_allowed: Number(business?.swiggy_allowed) === 1 ? 1 : 0,
           qr_module: Number(business?.qr_module) === 1 ? 1 : 0,
+          online_store: Number(business?.online_store) === 1 ? 1 : 0,
+          store_banner_allowed: Number(business?.store_banner_allowed) === 1 ? 1 : 0,
           subscription_expires_at: business?.subscription_expires_at,
         },
       });
@@ -697,6 +699,8 @@ export function registerAuth(app) {
           zomato_allowed: Number(req.auth.business?.zomato_allowed) === 1 ? 1 : 0,
           swiggy_allowed: Number(req.auth.business?.swiggy_allowed) === 1 ? 1 : 0,
           qr_module: Number(req.auth.business?.qr_module) === 1 ? 1 : 0,
+          online_store: Number(req.auth.business?.online_store) === 1 ? 1 : 0,
+          store_banner_allowed: Number(req.auth.business?.store_banner_allowed) === 1 ? 1 : 0,
           plan_id: req.auth.business?.plan_id,
           subscription_expires_at: req.auth.business?.subscription_expires_at,
         },

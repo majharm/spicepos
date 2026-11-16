@@ -7,6 +7,7 @@
     <title>ATAV POS</title>
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="./css/pos.css?v=20261103tot1" />
+    <link rel="stylesheet" href="./css/online-store.css?v=20261116store1" />
     <link rel="stylesheet" href="./css/crm.css?v=20261105crm1" />
     <link rel="stylesheet" href="./css/barcode-desk.css?v=20261024bcdesk1" />
     <link rel="stylesheet" href="./css/saas.css?v=20261031welcome1" />
@@ -54,6 +55,7 @@
             <button class="nav-btn" type="button" data-view="crm" hidden><span class="nav-icon" aria-hidden="true">☺</span>CRM</button>
             <button class="nav-btn classic-bill-only" type="button" data-view="returns"><span class="nav-icon" aria-hidden="true">↺</span><span data-i18n="nav.returns">Manage Returns</span></button>
             <button class="nav-btn pharmacy-hide" type="button" data-view="qr-orders"><span class="nav-icon" aria-hidden="true">▦</span><span data-i18n="nav.qr_orders">QR Orders</span> <span class="nav-badge" id="qr-order-badge" hidden></span></button>
+            <button class="nav-btn" type="button" data-view="online-store"><span class="nav-icon" aria-hidden="true">▣</span>Online Store</button>
             <button class="nav-btn pharmacy-hide" type="button" data-view="online-orders"><span class="nav-icon" aria-hidden="true">▢</span>Online orders <span class="nav-badge" id="agg-order-badge" hidden></span></button>
             <button class="nav-btn pharmacy-only" type="button" data-view="prescriptions"><span class="nav-icon" aria-hidden="true">▦</span>Prescriptions <span class="nav-badge" id="rx-badge" hidden></span></button>
             <button class="nav-btn" type="button" data-view="offers"><span class="nav-icon" aria-hidden="true">%</span><span data-i18n="nav.offers">Offers</span></button>
@@ -1196,6 +1198,9 @@
             <p class="hint" id="qr-orders-hint"></p>
             <div class="qr-order-list" id="qr-order-list"></div>
           </div>
+        </section>
+        <section class="view" id="view-online-store" hidden>
+          <div id="online-store-desk" class="online-store-desk"></div>
         </section>
         <section class="view" id="view-online-orders" hidden>
           <div class="qr-orders-page agg-desk">
@@ -3928,7 +3933,8 @@
     <script src="./js/quotations.js?v=20261105mail1" defer></script>
     <script src="./js/stock-desk.js?v=20261103stock1" defer></script>
     <script src="./js/crm.js?v=20261105crm1" defer></script>
-    <script src="./js/app.js?v=20261116qrmod1" defer></script>
+    <script src="./js/app.js?v=20261116store1" defer></script>
+    <script src="./js/online-store-desk.js?v=20261116store1" defer></script>
     <script src="./js/automation-shop.js?v=20261031auto1" defer></script>
     <script src="./js/recurring-ui.js?v=20261027rec3" defer></script>
     <script src="./js/quotations-ui.js?v=20261105edit1" defer></script>

@@ -2627,11 +2627,14 @@ async function render() {
         </div>`,
       );
     } else if (tab === "biz") {
-      const [rows, plans, managers] = await Promise.all([
+      const [rows, plans, managers, storePerm] = await Promise.all([
         api("/api/master/businesses"),
         api("/api/master/plans"),
         api("/api/master/account-managers").catch(() => []),
+        api("/api/master/online-store").catch(() => ({ forAll: 0, businesses: [] })),
       ]);
+      window.__storeForAll = Number(storePerm?.forAll) === 1 ? 1 : 0;
+      const storeRows = Array.isArray(storePerm?.businesses) && storePerm.businesses.length ? storePerm.businesses : rows;
       const planOptions = plans
         .map((p) => `<option value="${p.id}">${p.name} · ${money(p.fee_monthly)} / year</option>`)
         .join("");
@@ -2650,6 +2653,30 @@ async function render() {
           { label: "Expired", value: expiredN, warn: expiredN > 0 },
           { label: "Trial", value: trialN },
         ])}
+        <section class="item-block" id="store-perms">
+          <h3>Module Permissions</h3>
+          <p class="hint">Online Store stays off until you allow it. Each business keeps its own store, URL, products, orders, and login banner.</p>
+          <label class="full"><input type="checkbox" id="store-for-all" ${Number(storePerm?.forAll) === 1 ? "checked" : ""} /> Enable Online Store for All Existing and New Businesses</label>
+          <div class="item-composer-actions">
+            <button class="btn primary" type="button" id="store-enable-all">Enable for All Businesses</button>
+            <button class="btn" type="button" id="store-disable-all">Disable for All Businesses</button>
+            <p class="hint" id="store-perm-hint"></p>
+          </div>
+          <div class="table-wrap">
+            <table class="master-data data">
+              <thead><tr><th>Business</th><th>Type</th><th>Online Store</th><th>Enable</th><th>Login banner</th></tr></thead>
+              <tbody id="store-perm-body">
+                ${storeRows.map((b) => `<tr>
+                  <td>${attr(b.name)}</td>
+                  <td>${attr(b.business_type || b.category || "")}</td>
+                  <td data-store-status="${attr(b.id)}">${Number(b.online_store) === 1 ? "Enabled" : "Disabled"}</td>
+                  <td><input type="checkbox" data-store-toggle="${attr(b.id)}" ${Number(b.online_store) === 1 ? "checked" : ""} aria-label="Online Store for ${attr(b.name)}" /></td>
+                  <td><input type="checkbox" data-banner-toggle="${attr(b.id)}" ${Number(b.store_banner_allowed) === 1 ? "checked" : ""} aria-label="Login banner for ${attr(b.name)}" /></td>
+                </tr>`).join("")}
+              </tbody>
+            </table>
+          </div>
+        </section>
         <div class="items-split">
           <div class="master-compose">
             <form class="settings item-composer" id="biz-pw-form" hidden>
@@ -2740,6 +2767,14 @@ async function render() {
                   QR Module — show QR ordering on this business owner's dashboard. New businesses stay off until Master Admin enables it. Turning it off hides the module and blocks new QR orders. Saved QR codes and past orders stay on file.
                 </label>
                 <p class="hint" id="biz-qr-module-note" hidden>Pharmacy, printing, and gym shops do not use the QR module.</p>
+                <label class="full">
+                  <input type="checkbox" name="onlineStore" />
+                  Online Store — let this business create a store, share its URL, and sell from the owner dashboard. New businesses stay off unless you enable them or turn on Online Store for all businesses.
+                </label>
+                <label class="full">
+                  <input type="checkbox" name="storeBannerAllowed" checked />
+                  Login banner management — let this business upload the banner customers see on its Online Store login page.
+                </label>
               </fieldset>
               <fieldset class="item-block">
                 <legend>Owner</legend>
@@ -2845,6 +2880,7 @@ async function render() {
                     ${Number(b.zomato_allowed) === 1 ? `<span class="item-chip">Zomato allowed</span>` : ""}
                     ${Number(b.swiggy_allowed) === 1 ? `<span class="item-chip">Swiggy allowed</span>` : ""}
                     ${Number(b.qr_module) === 1 ? `<span class="item-chip">QR module</span>` : ""}
+                    ${Number(b.online_store) === 1 ? `<span class="item-chip">Online store</span>` : ""}
                   </div>
                   <div class="item-card-foot">
                     <div class="item-card-actions">
@@ -2880,6 +2916,88 @@ async function render() {
         });
       });
       const form = $("biz-form");
+      const permHint = $("store-perm-hint");
+      function paintStoreStatus(id, on) {
+        const cell = body.querySelector(`[data-store-status="${CSS.escape(id)}"]`);
+        if (cell) cell.textContent = on ? "Enabled" : "Disabled";
+        const row = rows.find((r) => r.id === id);
+        if (row) row.online_store = on ? 1 : 0;
+        const listed = storeRows.find((r) => r.id === id);
+        if (listed) listed.online_store = on ? 1 : 0;
+      }
+      async function saveStorePerm(id, patch) {
+        permHint.textContent = "Saving…";
+        const saved = await api(`/api/master/online-store/businesses/${id}`, { method: "PUT", body: JSON.stringify(patch) });
+        if (Object.prototype.hasOwnProperty.call(patch, "online_store")) paintStoreStatus(id, Number(saved.online_store) === 1);
+        permHint.textContent = "Saved";
+      }
+      body.querySelectorAll("[data-store-toggle]").forEach((box) => {
+        box.onchange = async () => {
+          const on = box.checked;
+          try {
+            await saveStorePerm(box.dataset.storeToggle, { online_store: on ? 1 : 0 });
+          } catch (err) {
+            box.checked = !on;
+            permHint.textContent = err.message;
+          }
+        };
+      });
+      body.querySelectorAll("[data-banner-toggle]").forEach((box) => {
+        box.onchange = async () => {
+          const on = box.checked;
+          try {
+            await saveStorePerm(box.dataset.bannerToggle, { store_banner_allowed: on ? 1 : 0 });
+          } catch (err) {
+            box.checked = !on;
+            permHint.textContent = err.message;
+          }
+        };
+      });
+      $("store-for-all")?.addEventListener("change", async () => {
+        const box = $("store-for-all");
+        const on = box.checked;
+        if (on && !confirm("Enable Online Store for every existing business, and for businesses registered after this?")) {
+          box.checked = false;
+          return;
+        }
+        try {
+          permHint.textContent = "Saving…";
+          await api("/api/master/online-store/for-all", { method: "PUT", body: JSON.stringify({ enabled: on ? 1 : 0 }) });
+          window.__storeForAll = on ? 1 : 0;
+          if (on) {
+            body.querySelectorAll("[data-store-toggle]").forEach((el) => { el.checked = true; });
+            storeRows.forEach((r) => paintStoreStatus(r.id, true));
+          }
+          permHint.textContent = on ? "Online Store is on for every business, including new ones." : "New businesses stay off until you enable them.";
+        } catch (err) {
+          box.checked = !on;
+          permHint.textContent = err.message;
+        }
+      });
+      $("store-enable-all")?.addEventListener("click", async () => {
+        if (!confirm("Enable Online Store for every existing business?")) return;
+        try {
+          permHint.textContent = "Saving…";
+          await api("/api/master/online-store/enable-all", { method: "POST", body: "{}" });
+          body.querySelectorAll("[data-store-toggle]").forEach((el) => { el.checked = true; });
+          storeRows.forEach((r) => paintStoreStatus(r.id, true));
+          permHint.textContent = "Online Store enabled for every business.";
+        } catch (err) {
+          permHint.textContent = err.message;
+        }
+      });
+      $("store-disable-all")?.addEventListener("click", async () => {
+        if (!confirm("Disable Online Store for every existing business? Saved stores and orders stay on file.")) return;
+        try {
+          permHint.textContent = "Saving…";
+          await api("/api/master/online-store/disable-all", { method: "POST", body: "{}" });
+          body.querySelectorAll("[data-store-toggle]").forEach((el) => { el.checked = false; });
+          storeRows.forEach((r) => paintStoreStatus(r.id, false));
+          permHint.textContent = "Online Store disabled for every business. Saved store data is still kept.";
+        } catch (err) {
+          permHint.textContent = err.message;
+        }
+      });
       const hint = $("biz-hint");
       function setAdminRequired(on) {
         form.adminUsername.required = on;
@@ -2924,6 +3042,8 @@ async function render() {
         if (form.zomatoAllowed) form.zomatoAllowed.checked = Number(b?.zomato_allowed) === 1;
         if (form.swiggyAllowed) form.swiggyAllowed.checked = Number(b?.swiggy_allowed) === 1;
         if (form.qrModule) form.qrModule.checked = Number(b?.qr_module) === 1;
+        if (form.onlineStore) form.onlineStore.checked = b ? Number(b.online_store) === 1 : Number(window.__storeForAll) === 1;
+        if (form.storeBannerAllowed) form.storeBannerAllowed.checked = b ? Number(b.store_banner_allowed) === 1 : true;
         const editing = Boolean(b);
         setAdminRequired(!editing);
         $("biz-title").textContent = editing ? "Edit business" : "Add business";
@@ -2989,6 +3109,8 @@ async function render() {
         payload.zomatoAllowed = foodModule && form.zomatoAllowed?.checked ? 1 : 0;
         payload.swiggyAllowed = foodModule && form.swiggyAllowed?.checked ? 1 : 0;
         payload.qrModule = qrModuleTypeAllowed(form.businessType.value, form.businessCategory.value) && form.qrModule?.checked ? 1 : 0;
+        payload.onlineStore = form.onlineStore?.checked ? 1 : 0;
+        payload.storeBannerAllowed = form.storeBannerAllowed?.checked ? 1 : 0;
         const id = payload.business_id;
         delete payload.business_id;
         delete payload.logo;

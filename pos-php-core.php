@@ -882,6 +882,8 @@ function pos_ensure_business_columns() {
     "zomato_allowed" => "TINYINT(1) NOT NULL DEFAULT 0",
     "swiggy_allowed" => "TINYINT(1) NOT NULL DEFAULT 0",
     "qr_module" => "TINYINT(1) NOT NULL DEFAULT 0",
+    "online_store" => "TINYINT(1) NOT NULL DEFAULT 0",
+    "store_banner_allowed" => "TINYINT(1) NOT NULL DEFAULT 1",
     "created_at" => "TIMESTAMP(3) NULL",
     "updated_at" => "TIMESTAMP(3) NULL",
   ]);
@@ -1746,6 +1748,8 @@ function pos_staff_me_payload($staff) {
       "zomato_allowed" => ((int) ($staff["business"]["zomato_allowed"] ?? 0)) === 1 ? 1 : 0,
       "swiggy_allowed" => ((int) ($staff["business"]["swiggy_allowed"] ?? 0)) === 1 ? 1 : 0,
       "qr_module" => ((int) ($staff["business"]["qr_module"] ?? 0)) === 1 ? 1 : 0,
+      "online_store" => ((int) ($staff["business"]["online_store"] ?? 0)) === 1 ? 1 : 0,
+      "store_banner_allowed" => ((int) ($staff["business"]["store_banner_allowed"] ?? 0)) === 1 ? 1 : 0,
       "plan_id" => $staff["business"]["plan_id"] ?? null,
       "subscription_expires_at" => $staff["business"]["subscription_expires_at"] ?? null,
     ],
@@ -3354,6 +3358,27 @@ function pos_validate_signup($raw, $requireAdmin = true) {
   ];
 }
 
+function pos_online_store_flag($val) {
+  return ($val === true || $val === 1 || $val === "1" || $val === "on" || $val === "true" || $val === "yes") ? 1 : 0;
+}
+
+function pos_online_store_for_all() {
+  try {
+    $rows = pos_q("SELECT setting_value FROM platform_settings WHERE setting_key = 'online_store_for_all' LIMIT 1");
+    return pos_online_store_flag($rows[0]["setting_value"] ?? 0);
+  } catch (Exception $e) {
+    return 0;
+  }
+}
+
+function pos_online_store_for_signup($raw) {
+  if (!is_array($raw) || (!array_key_exists("online_store", $raw) && !array_key_exists("onlineStore", $raw))) {
+    return pos_online_store_for_all();
+  }
+  $val = array_key_exists("online_store", $raw) ? $raw["online_store"] : $raw["onlineStore"];
+  return pos_online_store_flag($val);
+}
+
 function pos_register_business($raw, $yearly = false) {
   pos_ensure_business_columns();
   $b = pos_validate_signup($raw, true);
@@ -3396,6 +3421,9 @@ function pos_register_business($raw, $yearly = false) {
   } catch (Exception $e) { /* columns added on first aggregator boot */ }
   try {
     pos_q("UPDATE businesses SET qr_module = ? WHERE id = ?", "is", [$b["qr_module"], $id]);
+  } catch (Exception $e) { /* column added on schema boot; missing means the shop stays off */ }
+  try {
+    pos_q("UPDATE businesses SET online_store = ? WHERE id = ?", "is", [pos_online_store_for_signup($raw), $id]);
   } catch (Exception $e) { /* column added on schema boot; missing means the shop stays off */ }
   $amId = trim((string) ($b["account_manager_id"] ?? ""));
   if ($amId !== "") {
@@ -3488,6 +3516,17 @@ function pos_update_business($id, $raw) {
   try {
     pos_q("UPDATE businesses SET qr_module = ? WHERE id = ?", "is", [$b["qr_module"], $id]);
   } catch (Exception $e) { /* column added on schema boot; missing means the shop stays off */ }
+  if (is_array($raw) && (array_key_exists("online_store", $raw) || array_key_exists("onlineStore", $raw))) {
+    try {
+      pos_q("UPDATE businesses SET online_store = ? WHERE id = ?", "is", [pos_online_store_for_signup($raw), $id]);
+    } catch (Exception $e) { /* column added on schema boot */ }
+  }
+  if (is_array($raw) && (array_key_exists("store_banner_allowed", $raw) || array_key_exists("storeBannerAllowed", $raw))) {
+    $banner = array_key_exists("store_banner_allowed", $raw) ? $raw["store_banner_allowed"] : $raw["storeBannerAllowed"];
+    try {
+      pos_q("UPDATE businesses SET store_banner_allowed = ? WHERE id = ?", "is", [pos_online_store_flag($banner), $id]);
+    } catch (Exception $e) { /* column added on schema boot */ }
+  }
   try {
     pos_q(
       "UPDATE company_settings SET name=?, address=?, phone=?, email=?, gstin=?, pan=?, city=?, state=?, pincode=?, logo_url=? WHERE business_id=?",
@@ -3654,6 +3693,10 @@ function pos_php_dispatch($path, $method, $rawBody) {
     if ($path === "webhooks/zomato" || $path === "webhooks/swiggy") {
       require_once __DIR__ . "/pos-aggregator.php";
       if (pos_agg_public_dispatch($path, $method, $body)) return;
+    }
+    if (strpos($path, "store/") === 0) {
+      require_once __DIR__ . "/pos-online-store.php";
+      if (pos_online_store_public_dispatch($path, $method)) return;
     }
     if ($path === "qr/menu" || $path === "qr/orders" || $path === "qr/order" || $path === "qr/table") {
       require_once __DIR__ . "/pos-qr-ordering.php";
@@ -3893,6 +3936,8 @@ function pos_php_dispatch($path, $method, $rawBody) {
           "zomato_allowed" => ((int) ($business["zomato_allowed"] ?? 0)) === 1 ? 1 : 0,
           "swiggy_allowed" => ((int) ($business["swiggy_allowed"] ?? 0)) === 1 ? 1 : 0,
           "qr_module" => ((int) ($business["qr_module"] ?? 0)) === 1 ? 1 : 0,
+          "online_store" => ((int) ($business["online_store"] ?? 0)) === 1 ? 1 : 0,
+          "store_banner_allowed" => ((int) ($business["store_banner_allowed"] ?? 0)) === 1 ? 1 : 0,
           "subscription_expires_at" => $business["subscription_expires_at"] ?? null,
         ],
       ]);
@@ -4069,6 +4114,11 @@ function pos_php_dispatch($path, $method, $rawBody) {
     }
 
     $auth = pos_require_master($path);
+
+    if (strpos($path, "master/online-store") === 0) {
+      require_once __DIR__ . "/pos-online-store.php";
+      if (pos_online_store_master_dispatch($path, $method, $body)) return;
+    }
 
     if (is_file(__DIR__ . "/pos-master-live.php")) {
       require_once __DIR__ . "/pos-master-live.php";

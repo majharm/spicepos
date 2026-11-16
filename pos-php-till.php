@@ -74,6 +74,11 @@ function pos_php_till_dispatch($path, $method, $body) {
     if (pos_agg_staff_dispatch($path, $method, $body, $bid, $auth)) return true;
   }
 
+  if ($path === "online-store" || strpos($path, "online-store/") === 0) {
+    require_once __DIR__ . "/pos-online-store.php";
+    if (pos_online_store_staff_dispatch($path, $method, $body, $bid)) return true;
+  }
+
   if ($path === "qr-orders" || strpos($path, "qr-orders/") === 0) {
     require_once __DIR__ . "/pos-qr-ordering.php";
     if (pos_qr_staff_dispatch($path, $method, $body, $bid, $branchId, $uid)) return true;

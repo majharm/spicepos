@@ -1,4 +1,5 @@
 import { query, withTransaction } from "./db.js";
+import { normalizeOnlineStore, onlineStoreForAll, onlineStoreForSignup } from "./online-store.js";
 import { hashPassword } from "./password.js";
 import { defaultPerms } from "./roles.js";
 
@@ -234,6 +235,12 @@ export async function registerBusiness(raw, opts = {}) {
     } catch {
       /* column added on schema boot; missing means the shop stays off */
     }
+    try {
+      const forAll = await onlineStoreForAll();
+      await conn.query("UPDATE businesses SET online_store = ? WHERE id = ?", [onlineStoreForSignup(raw, forAll), id]);
+    } catch {
+      /* column added on schema boot; missing means the shop stays off */
+    }
     if (!expiry) {
       await conn.query(
         opts.yearly
@@ -387,6 +394,20 @@ export async function updateBusiness(id, raw) {
     await query("UPDATE businesses SET qr_module = ? WHERE id = ?", [b.qr_module, id]);
   } catch {
     /* column added on schema boot; missing means the shop stays off */
+  }
+  if (Object.prototype.hasOwnProperty.call(raw || {}, "online_store") || Object.prototype.hasOwnProperty.call(raw || {}, "onlineStore")) {
+    try {
+      await query("UPDATE businesses SET online_store = ? WHERE id = ?", [normalizeOnlineStore(raw.online_store ?? raw.onlineStore), id]);
+    } catch {
+      /* column added on schema boot */
+    }
+  }
+  if (Object.prototype.hasOwnProperty.call(raw || {}, "store_banner_allowed") || Object.prototype.hasOwnProperty.call(raw || {}, "storeBannerAllowed")) {
+    try {
+      await query("UPDATE businesses SET store_banner_allowed = ? WHERE id = ?", [normalizeOnlineStore(raw.store_banner_allowed ?? raw.storeBannerAllowed), id]);
+    } catch {
+      /* column added on schema boot */
+    }
   }
   await query(
     `UPDATE company_settings
